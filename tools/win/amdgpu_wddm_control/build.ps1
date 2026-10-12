@@ -143,6 +143,9 @@ if ($NagiArt) {
 # desktop shortcuts the installer writes, which take the icon from this exe.
 $icon = Join-Path $here 'art\icon\nagi.ico'
 if (-not (Test-Path -LiteralPath $icon -PathType Leaf)) { throw "application icon: no $icon" }
+# The same file as a resource as well (MainForm): the window's icon is then the authored image for the size Windows
+# asks for, instead of one 32x32 image rescaled on a high-resolution screen.
+$resources += "/resource:$icon,nagi.ico"
 & $csc /nologo /noconfig /nostdlib+ @refs /target:winexe /platform:x64 /optimize+ /warnaserror+ /langversion:7.3 /deterministic+ `
     "/win32manifest:$here\app.manifest" "/win32icon:$icon" "/out:$Out\amdgpu_wddm_control.exe" @resources @((Get-ChildItem "$here\src\*.cs").FullName | Sort-Object)
 if ($LASTEXITCODE -ne 0) { throw "csc failed ($LASTEXITCODE)" }
@@ -162,6 +165,8 @@ if ($artResourceNames.Count) {
     if ($missing.Count) { throw "guide art: the built exe has no resource $($missing -join ', ')" }
     Write-Host "  guide art: $($artResourceNames.Count) resources in the image ($(($artResourceNames | Sort-Object)[0]) .. $(($artResourceNames | Sort-Object)[-1]))"
 }
+if (-not $image.Contains('nagi.ico')) { throw 'application icon: the built exe has no resource nagi.ico' }
+Write-Host '  application icon: nagi.ico as the Win32 icon and as a resource with every authored size'
 
 # 4. Smoke run: no window, exits by itself. The DWM observations of the gates go to obj\state, not to this PC's profile.
 $env:AMDGPU_WDDM_CONTROL_STATE = Join-Path $obj 'state'

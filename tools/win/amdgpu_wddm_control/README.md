@@ -395,7 +395,9 @@ every string table: each id in each language, no stale translation (G-STR), no i
 release's single setup file. It holds the guide character's head at 16, 20, 24, 32, 40, 48, 64, 128 and 256 pixels,
 built from her `@256` art by `art/icon/make-icon.py`. `PROVENANCE.md` beside it records the source picture and the
 bytes of the file. `build.ps1` passes it to the compiler (`/win32icon`) and stops when the file is missing, so a
-build without the icon cannot ship.
+build without the icon cannot ship. It is embedded as the resource `nagi.ico` as well, which `MainForm` reads for
+the window, the taskbar and Alt+Tab: those take the size that was drawn for them instead of one 32 x 32 image
+rescaled on a 150 % or 200 % screen. The build stops when the resource is not in the built image.
 
 ### The guide character
 

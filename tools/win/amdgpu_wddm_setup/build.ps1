@@ -89,6 +89,9 @@ Write-Host "  guide art: $($setupExpressions.Count) expressions ($($setupExpress
 # icon of the single-file installer that carries this exe, and the icon the Start menu and desktop shortcuts show.
 $icon = Join-Path $repo 'tools\win\amdgpu_wddm_control\art\icon\nagi.ico'
 if (-not (Test-Path -LiteralPath $icon -PathType Leaf)) { throw "application icon: no $icon" }
+# The same file as a resource as well (SetWindowIcon): the window's icon is then the authored 16, 20, 24, ... 256
+# image for the size Windows asks for, instead of one 32x32 image rescaled on a high-resolution screen.
+$resources += "/resource:$icon,nagi.ico"
 & $csc /nologo /noconfig /nostdlib+ @refs /target:winexe /platform:x64 /optimize+ /warnaserror+ /langversion:7.3 /deterministic+ `
     "/win32manifest:$here\app.manifest" "/win32icon:$icon" "/out:$exe" @resources @((Get-ChildItem "$here\src\*.cs").FullName | Sort-Object)
 if ($LASTEXITCODE -ne 0) { throw "csc failed ($LASTEXITCODE)" }
@@ -97,6 +100,8 @@ if (-not $image.Contains('.NETFramework,Version=v4.8')) { throw 'amdgpu_wddm_set
 Write-Host '  target framework: .NETFramework,Version=v4.8 declared'
 $missingArt = @($artResourceNames | Where-Object { -not $image.Contains($_) })
 if ($missingArt.Count) { throw "guide art: the built exe has no resource $($missingArt -join ', ')" }
+if (-not $image.Contains('nagi.ico')) { throw 'application icon: the built exe has no resource nagi.ico' }
+Write-Host '  application icon: nagi.ico as the Win32 icon and as a resource with every authored size'
 Write-Host "  guide art: $($artResourceNames.Count) resources in the image"
 
 if (-not $NoSmoke) {

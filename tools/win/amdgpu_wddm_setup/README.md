@@ -104,8 +104,10 @@ own, reads it back, and refuses seven damaged or empty exes.
 
 The icon of the window, and of the release's single setup file, is
 `tools/win/amdgpu_wddm_control/art/icon/nagi.ico`, the icon of the control application as well. `build.ps1` passes
-it to the compiler (`/win32icon`) and stops when the file is missing. The window also takes its own icon from the
-running program (`SetupForm.SetWindowIcon`), so the taskbar and Alt+Tab show it for the single file as well.
+it to the compiler (`/win32icon`) and stops when the file is missing. The same file is embedded as the resource
+`nagi.ico`, which `SetupForm.SetWindowIcon` reads, so the taskbar and Alt+Tab show the size that was drawn for them
+(16 to 256 px) instead of one 32 x 32 image rescaled on a 150 % or 200 % screen. The build stops when the resource
+is not in the built image.
 
 The guide panel on the right shows the guide character, from the art of
 `tools/win/amdgpu_wddm_control/art/nagi`: the build embeds the expressions this window's causes can ask for

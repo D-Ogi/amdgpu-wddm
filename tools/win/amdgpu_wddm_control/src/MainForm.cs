@@ -75,7 +75,20 @@ namespace AmdgpuWddmControl
             StartPosition = FormStartPosition.CenterScreen;
             ApplyScreenSize();
             KeyPreview = true;
-            try { Icon = Icon.ExtractAssociatedIcon(System.Reflection.Assembly.GetExecutingAssembly().Location); } catch (Exception) { }
+            // The application's own icon (art\icon\nagi.ico), embedded by build.ps1 twice: as the Win32 icon of the
+            // exe and as the resource read here. The resource carries every authored size, so the task bar and
+            // Alt+Tab take the image drawn for the size they need; ExtractAssociatedIcon hands out one 32x32 image,
+            // which a 150 % or 200 % screen rescales. An icon that cannot be read is no reason not to start.
+            try
+            {
+                var iconAsm = System.Reflection.Assembly.GetExecutingAssembly();
+                using (var iconStream = iconAsm.GetManifestResourceStream("nagi.ico"))
+                {
+                    if (iconStream != null) Icon = new Icon(iconStream);
+                    else Icon = Icon.ExtractAssociatedIcon(iconAsm.Location);
+                }
+            }
+            catch (Exception) { }
             BuildShell();
             _timer.Tick += (s, e) => Tick();
             if (!_smoke)
