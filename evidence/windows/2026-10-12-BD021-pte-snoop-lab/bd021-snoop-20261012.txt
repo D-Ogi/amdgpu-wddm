@@ -1,0 +1,69 @@
+stop rings: 14
+=== 2026-10-12T05:27:35Z ring-20261012-052735-965-stop.log lines 0
+  first version line: 39      1.143 wddm: the 500 ms budget of every build before 0.7.216.27 tripped on legitimate compute packets (BD-114); the OS TDR owns recovery
+=== 2026-10-12T05:21:30Z ring-20261012-052130-504-stop.log lines 0
+  first version line: 39      1.305 wddm: the 500 ms budget of every build before 0.7.216.27 tripped on legitimate compute packets (BD-114); the OS TDR owns recovery
+=== 2026-10-12T04:18:49Z ring-20261012-041849-859-stop.log lines 0
+  first version line: 39      1.158 wddm: the 500 ms budget of every build before 0.7.216.27 tripped on legitimate compute packets (BD-114); the OS TDR owns recovery
+=== 2026-10-12T04:14:02Z ring-20261012-041402-715-stop.log lines 0
+  first version line: 39      1.331 wddm: the 500 ms budget of every build before 0.7.216.27 tripped on legitimate compute packets (BD-114); the OS TDR owns recovery
+=== 2026-10-12T03:05:22Z ring-20261012-030522-422-stop.log lines 0
+  first version line: 39      1.158 wddm: the 500 ms budget of every build before 0.7.216.27 tripped on legitimate compute packets (BD-114); the OS TDR owns recovery
+=== 2026-10-12T03:00:01Z ring-20261012-030001-619-stop.log lines 0
+  first version line: 39      1.174 wddm: the 500 ms budget of every build before 0.7.216.27 tripped on legitimate compute packets (BD-114); the OS TDR owns recovery
+=== 2026-10-12T01:48:26Z ring-20261012-014826-908-stop.log lines 0
+  first version line: 40      1.143 wddm: the 500 ms budget of every build before 0.7.216.27 tripped on legitimate compute packets (BD-114); the OS TDR owns recovery
+=== 2026-10-12T01:35:43Z ring-20261012-013543-084-stop.log lines 0
+  first version line: 40      1.174 wddm: the 500 ms budget of every build before 0.7.216.27 tripped on legitimate compute packets (BD-114); the OS TDR owns recovery
+=== 2026-10-12T01:31:41Z ring-20261012-013141-437-stop.log lines 0
+  first version line: 39      1.142 wddm: the 500 ms budget of every build before 0.7.216.27 tripped on legitimate compute packets (BD-114); the OS TDR owns recovery
+=== 2026-10-12T01:10:41Z ring-20261012-011040-891-stop.log lines 0
+  first version line: 39      1.305 wddm: the 500 ms budget of every build before 0.7.216.27 tripped on legitimate compute packets (BD-114); the OS TDR owns recovery
+=== 2026-10-11T18:22:55Z ring-20261011-182255-521-stop.log lines 0
+  first version line: 39      1.158 wddm: the 500 ms budget of every build before 0.7.216.27 tripped on legitimate compute packets (BD-114); the OS TDR owns recovery
+=== 2026-10-11T16:44:30Z ring-20261011-164430-619-stop.log lines 0
+  first version line: 39      1.158 wddm: the 500 ms budget of every build before 0.7.216.27 tripped on legitimate compute packets (BD-114); the OS TDR owns recovery
+=== 2026-10-11T16:34:43Z ring-20261011-163443-057-stop.log lines 40
+  first version line: 39      1.158 wddm: the 500 ms budget of every build before 0.7.216.27 tripped on legitimate compute packets (BD-114); the OS TDR owns recovery
+  1260     92.551 vidmm summary: level 0: 1026 calls, 262688 entries, 544 valid
+  1261     92.551 vidmm summary: level 1: 2 calls, 1024 entries, 512 valid
+  1262     92.551 vidmm summary: level 2: 1 calls, 512 entries, 2 valid
+  1263     92.551 vidmm summary: level 3: 1 calls, 512 entries, 1 valid
+  1264     92.551 vidmm summary: segment 0 named by 700744 valid entries, 0 refused
+  1265     92.551 vidmm summary: segment 1 named by 611216 valid entries, 0 refused
+  1266     92.551 vidmm summary: segment 3 named by 2891 valid entries, 0 refused
+  1267     92.551 vidmm summary: PTE encoding level 0 segment 0 snoop mismatches 0
+  1268     92.551 vidmm summary: PTE encoding level 0 segment 0 coherent 29126 noncoherent 671618
+  1269     92.551 vidmm summary: PTE encoding level 0 segment 1 snoop mismatches 0
+  1270     92.551 vidmm summary: PTE encoding level 0 segment 1 coherent 0 noncoherent 611216
+  1271     92.551 vidmm summary: PTE encoding level 0 segment 3 snoop mismatches 0
+  1272     92.551 vidmm summary: PTE encoding level 0 segment 3 coherent 0 noncoherent 512
+  1273     92.551 vidmm summary: PTE encoding level 1 segment 3 snoop mismatches 0
+  1274     92.551 vidmm summary: PTE encoding level 1 segment 3 coherent 0 noncoherent 2302
+  1275     92.551 vidmm summary: PTE encoding level 2 segment 3 snoop mismatches 0
+  1276     92.551 vidmm summary: PTE encoding level 2 segment 3 coherent 0 noncoherent 54
+  1277     92.551 vidmm summary: PTE encoding level 3 segment 3 snoop mismatches 0
+  1278     92.551 vidmm summary: PTE encoding level 3 segment 3 coherent 0 noncoherent 23
+  1279     92.551 vidmm summary: 1030 cpu-virtual calls, 0 gpu-physical calls, 0 gpu-physical refusals
+  1602    236.088 vidmm summary: level 0: 1026 calls, 262688 entries, 544 valid
+  1603    236.088 vidmm summary: level 1: 2 calls, 1024 entries, 512 valid
+  1604    236.088 vidmm summary: level 2: 1 calls, 512 entries, 2 valid
+  1605    236.088 vidmm summary: level 3: 1 calls, 512 entries, 1 valid
+  1606    236.088 vidmm summary: segment 0 named by 857266 valid entries, 0 refused
+  1607    236.088 vidmm summary: segment 1 named by 759790 valid entries, 0 refused
+  1608    236.089 vidmm summary: segment 3 named by 3213 valid entries, 0 refused
+  1609    236.089 vidmm summary: PTE encoding level 0 segment 0 snoop mismatches 0
+  1610    236.089 vidmm summary: PTE encoding level 0 segment 0 coherent 37518 noncoherent 819748
+  1611    236.089 vidmm summary: PTE encoding level 0 segment 1 snoop mismatches 0
+  1612    236.089 vidmm summary: PTE encoding level 0 segment 1 coherent 0 noncoherent 759790
+  1613    236.089 vidmm summary: PTE encoding level 0 segment 3 snoop mismatches 0
+  1614    236.089 vidmm summary: PTE encoding level 0 segment 3 coherent 0 noncoherent 512
+  1615    236.089 vidmm summary: PTE encoding level 1 segment 3 snoop mismatches 0
+  1616    236.089 vidmm summary: PTE encoding level 1 segment 3 coherent 0 noncoherent 2584
+  1617    236.089 vidmm summary: PTE encoding level 2 segment 3 snoop mismatches 0
+  1618    236.089 vidmm summary: PTE encoding level 2 segment 3 coherent 0 noncoherent 84
+  1619    236.089 vidmm summary: PTE encoding level 3 segment 3 snoop mismatches 0
+  1620    236.089 vidmm summary: PTE encoding level 3 segment 3 coherent 0 noncoherent 33
+  1621    236.089 vidmm summary: 1030 cpu-virtual calls, 0 gpu-physical calls, 0 gpu-physical refusals
+=== 2026-10-11T15:54:58Z ring-20261011-155457-785-stop.log lines 0
+  first version line: 39      1.158 wddm: the 500 ms budget of every build before 0.7.216.27 tripped on legitimate compute packets (BD-114); the OS TDR owns recovery

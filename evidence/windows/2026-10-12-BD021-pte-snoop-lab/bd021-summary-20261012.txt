@@ -1,0 +1,34 @@
+bc250kmd_cli.exe : unknown command version
+At C:\BC250\tmp\bd021-summary-now.ps1:10 char:1
++ & $cli.FullName version 2>&1 | Select-Object -First 3
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (unknown command version:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+cli: C:\BC250\tmp\b37\c6\bc250kmd_cli.exe
+utc: 2026-10-12T05:47:03Z
+last boot: 2026-10-12T05:28:09Z
+summary lines: 1074
+    39      1.142 wddm: the 500 ms budget of every build before 0.7.216.27 tripped on legitimate compute packets (BD-114); the OS TDR owns recovery
+  1450   1134.743 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+  1452   1134.743 vidmm summary: level 0: 1026 calls, 262688 entries, 544 valid
+  1453   1134.743 vidmm summary: level 1: 2 calls, 1024 entries, 512 valid
+  1454   1134.743 vidmm summary: level 2: 1 calls, 512 entries, 2 valid
+  1455   1134.743 vidmm summary: level 3: 1 calls, 512 entries, 1 valid
+  1456   1134.743 vidmm summary: segment 0 named by 1322472 valid entries, 0 refused
+  1457   1134.743 vidmm summary: segment 1 named by 874172 valid entries, 0 refused
+  1458   1134.743 vidmm summary: segment 3 named by 4025 valid entries, 0 refused
+  1459   1134.743 vidmm summary: PTE encoding level 0 segment 0 snoop mismatches 0
+  1460   1134.743 vidmm summary: PTE encoding level 0 segment 0 coherent 53618 noncoherent 1268854
+  1461   1134.743 vidmm summary: PTE encoding level 0 segment 1 snoop mismatches 0
+  1462   1134.743 vidmm summary: PTE encoding level 0 segment 1 coherent 0 noncoherent 874172
+  1463   1134.743 vidmm summary: PTE encoding level 0 segment 3 snoop mismatches 0
+  1464   1134.743 vidmm summary: PTE encoding level 0 segment 3 coherent 0 noncoherent 512
+  1465   1134.743 vidmm summary: PTE encoding level 1 segment 3 snoop mismatches 0
+  1466   1134.743 vidmm summary: PTE encoding level 1 segment 3 coherent 0 noncoherent 3284
+  1467   1134.743 vidmm summary: PTE encoding level 2 segment 3 snoop mismatches 0
+  1468   1134.743 vidmm summary: PTE encoding level 2 segment 3 coherent 0 noncoherent 164
+  1469   1134.743 vidmm summary: PTE encoding level 3 segment 3 snoop mismatches 0
+  1470   1134.743 vidmm summary: PTE encoding level 3 segment 3 coherent 0 noncoherent 65
+  1471   1134.743 vidmm summary: 1030 cpu-virtual calls, 0 gpu-physical calls, 0 gpu-physical refusals
+  1472   1134.743 vidmm summary: 264736 entries written (EnableGpuVa open), 0 refused, 0 bad calls, 26 roots
