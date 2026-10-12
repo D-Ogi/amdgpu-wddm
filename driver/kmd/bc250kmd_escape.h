@@ -527,6 +527,15 @@ typedef struct _BC250_ESCAPE {
 // READ: HardwareAccess=0, NoAdapterSynchronization=1; the embedded SMU owner
 // serializes transactions and joins stop before BAR unmap. SET: HardwareAccess=1,
 // NoAdapterSynchronization=0 for Level Two synchronization; administrator only.
+// READ is open to every caller (BD-062, issue 7). Up to 0.7.216 the driver refused it to an ordinary user as
+// well, so the game runtime read no temperature and no non-elevated tool or control application could show a
+// clock. An administrator's READ is one live reading: one BAR read and two getters under the owner lock, with no
+// settle pause. Any other caller's READ is answered from the last reading while it is younger than
+// BC250_CLOCK_SNAP_US (smu.h, one second), so the open operation cannot send mailbox messages faster than the
+// governor's own readback already does, however many callers ask. A value so answered is therefore up to a
+// second old; the reply carries no age field, and a caller that needs the moment itself asks elevated.
+// An operation this ABI does not name, a flag word that is not the one the operation takes, and a READ that
+// carries a requested point are all refused by number before the token is looked at.
 #define BC250_CLOCK_ABI 1u
 #define BC250_CLOCK_OP_READ 0u
 #define BC250_CLOCK_OP_SET 1u

@@ -238,6 +238,122 @@ int main(void) {
         r.Op=BC250_CLOCK_OP_READ;r.RequestedMHz=r.RequestedMv=0;
         SmuClockRequest(&owner,&r,TRUE,FALSE,TRUE);
         CHECK(r.Status==BC250_ESCAPE_STATUS_DONE && r.Ready && r.ObservedMHz==1000 && r.ObservedVid==116);
+        // ---- BD-062: who may read, and who may write ----------------------------------------------
+        // The ABI has said it since the first typed clock escape (bc250kmd_escape.h, BC250_CLOCK_ABI):
+        // "READ: HardwareAccess=0, NoAdapterSynchronization=1 ... SET: ... administrator only". Up to
+        // 0.7.216 the refusal sat ahead of the operation split, so an ordinary user was refused a read as
+        // well: the game runtime read no temperature and refused to launch, and every non-elevated tool
+        // lost the clock (GitHub issue 7). A SET stays an administrator's, like every other mailbox write.
+        // What makes the READ admissible is its bound, not the cheapness of a reading: an administrator reads
+        // live, and every other caller is answered from the last published reading while that is younger than
+        // BC250_CLOCK_SNAP_US, so no number of unprivileged callers can send more mailbox messages than the
+        // governor's own readback already sends. The counted messages below are that bound.
+        {
+            ULONG op;
+            // The administrator's READ above published its reading, so this one answers from it and sends
+            // nothing. Two in a row, and still nothing: the rate belongs to the driver, not to the caller.
+            before=calls;
+            SmuClockRequest(&owner,&r,FALSE,FALSE,TRUE);
+            CHECK(r.Status==BC250_ESCAPE_STATUS_DONE && r.Ready && r.NtStatus==(ULONG)STATUS_SUCCESS &&
+                  r.ObservedMHz==1000 && r.ObservedVid==116 && r.TemperatureMc==67000 && calls==before);
+            SmuClockRequest(&owner,&r,FALSE,FALSE,TRUE);
+            CHECK(r.Status==BC250_ESCAPE_STATUS_DONE && r.Ready && r.ObservedMHz==1000 &&
+                  r.TemperatureMc==67000 && calls==before);
+            // An administrator keeps the live reading the lab's tools always had: two messages, every time.
+            SmuClockRequest(&owner,&r,TRUE,FALSE,TRUE);
+            CHECK(r.Status==BC250_ESCAPE_STATUS_DONE && r.Ready && r.ObservedMHz==1000 && calls==before+2);
+            // Past the bound the user's own read takes a live one and publishes it, so a caller that waits is
+            // never served a stale number: two messages for that read, none for the one after it.
+            before=calls;
+            Sleep(BC250_CLOCK_SNAP_US/1000u+100u);
+            SmuClockRequest(&owner,&r,FALSE,FALSE,TRUE);
+            CHECK(r.Status==BC250_ESCAPE_STATUS_DONE && r.Ready && r.ObservedMHz==1000 && r.ObservedVid==116 &&
+                  r.TemperatureMc==67000 && calls==before+2);
+            before=calls;
+            SmuClockRequest(&owner,&r,FALSE,FALSE,TRUE);
+            CHECK(r.Status==BC250_ESCAPE_STATUS_DONE && r.Ready && calls==before);
+            // A user's READ keeps the ABI's flag word: Level Two, or the adapter lock, is still refused.
+            before=calls;
+            SmuClockRequest(&owner,&r,FALSE,TRUE,TRUE);
+            CHECK(r.Status==BC250_ESCAPE_STATUS_REFUSED && r.NtStatus==(ULONG)STATUS_INVALID_PARAMETER &&
+                  !r.Ready && !r.ObservedMHz && calls==before);
+            SmuClockRequest(&owner,&r,FALSE,FALSE,FALSE);
+            CHECK(r.Status==BC250_ESCAPE_STATUS_REFUSED && r.NtStatus==(ULONG)STATUS_INVALID_PARAMETER &&
+                  !r.Ready && calls==before);
+            // A read that asks for a point is a write in disguise: refused for a user as for an administrator.
+            r.RequestedMHz=1500;
+            SmuClockRequest(&owner,&r,FALSE,FALSE,TRUE);
+            CHECK(r.Status==BC250_ESCAPE_STATUS_REFUSED && r.NtStatus==(ULONG)STATUS_INVALID_PARAMETER &&
+                  !r.Ready && calls==before);
+            SmuClockRequest(&owner,&r,TRUE,FALSE,TRUE);
+            CHECK(r.Status==BC250_ESCAPE_STATUS_REFUSED && r.NtStatus==(ULONG)STATUS_INVALID_PARAMETER &&
+                  !r.Ready && calls==before);
+            // The write itself: refused by the token, and nothing reaches the mailbox.
+            r.Op=BC250_CLOCK_OP_SET;r.RequestedMHz=1000;r.RequestedMv=820;
+            SmuClockRequest(&owner,&r,FALSE,TRUE,FALSE);
+            CHECK(r.Status==BC250_ESCAPE_STATUS_NOT_ADMIN && r.NtStatus==(ULONG)STATUS_ACCESS_DENIED &&
+                  !r.Ready && !r.ObservedMHz && calls==before);
+            // The structural rejections are the ABI's, not the token's: a malformed request is answered as
+            // malformed for either operation and for either caller, and no answer depends on the token. Field 6
+            // is the flag word of the other operation, which the 0.7.216 review found answering a user's
+            // malformed write with its token (NOT_ADMIN) and an administrator's with its mistake.
+            for(op=BC250_CLOCK_OP_READ;op<=BC250_CLOCK_OP_SET;op++) {
+                const BOOLEAN write=op==BC250_CLOCK_OP_SET;
+                int admin,field;
+                for(admin=0;admin<2;admin++)for(field=0;field<7;field++) {
+                    BC250_ESCAPE_CLOCK m={0};
+                    BOOLEAN hardware=write,noAdapter=(BOOLEAN)!write;
+                    m.Magic=BC250_ESCAPE_MAGIC;m.Command=BC250_ESCAPE_RUN_CLOCK;m.AbiVersion=BC250_CLOCK_ABI;
+                    m.Op=op;
+                    if(write) { m.RequestedMHz=1000;m.RequestedMv=820; }
+                    switch(field) {
+                    case 0:m.Magic=BC250_ESCAPE_MAGIC+1u;break;
+                    case 1:m.Command=BC250_ESCAPE_GET_INFO;break;
+                    case 2:m.AbiVersion=BC250_CLOCK_ABI+1u;break;
+                    case 6:hardware=(BOOLEAN)!write;noAdapter=write;break;
+                    default:m.Reserved[field-3]=1u;break;
+                    }
+                    SmuClockRequest(&owner,&m,(BOOLEAN)admin,hardware,noAdapter);
+                    CHECK(m.Status==BC250_ESCAPE_STATUS_REFUSED && m.NtStatus==(ULONG)STATUS_INVALID_PARAMETER &&
+                          !m.Ready && !m.ObservedMHz && !m.TemperatureMc && calls==before);
+                }
+            }
+            // An operation this ABI does not have is refused by number, for either caller, before the token.
+            { int admin;
+              for(admin=0;admin<2;admin++) {
+                  BC250_ESCAPE_CLOCK m={0};
+                  m.Magic=BC250_ESCAPE_MAGIC;m.Command=BC250_ESCAPE_RUN_CLOCK;m.AbiVersion=BC250_CLOCK_ABI;
+                  m.Op=BC250_CLOCK_OP_SET+1u;
+                  SmuClockRequest(&owner,&m,(BOOLEAN)admin,TRUE,FALSE);
+                  CHECK(m.Status==BC250_ESCAPE_STATUS_REFUSED && m.NtStatus==(ULONG)STATUS_INVALID_PARAMETER &&
+                        !m.Ready && calls==before);
+              } }
+            // The administrator's own read and write are where they were.
+            r.Op=BC250_CLOCK_OP_SET;r.RequestedMHz=1000;r.RequestedMv=820;
+            SmuClockRequest(&owner,&r,TRUE,TRUE,FALSE);
+            CHECK(r.Status==BC250_ESCAPE_STATUS_DONE && r.Ready && r.ObservedMHz==1000 && r.ObservedVid==116);
+            r.Op=BC250_CLOCK_OP_READ;r.RequestedMHz=r.RequestedMv=0;
+            SmuClockRequest(&owner,&r,TRUE,FALSE,TRUE);
+            CHECK(r.Status==BC250_ESCAPE_STATUS_DONE && r.Ready && r.ObservedMHz==1000 && r.ObservedVid==116);
+            // A new owner start has no reading of its own, so the first unprivileged read after a power
+            // transition is live and nobody is served a clock from before it. The start itself sends the one
+            // version message of SmuOwnerStart.
+            SmuOwnerStop(&owner);
+            before=calls;
+            CHECK(SmuOwnerStart(&owner,registers)==STATUS_SUCCESS && calls==before+1 && !owner.SnapValid);
+            before=calls;
+            SmuClockRequest(&owner,&r,FALSE,FALSE,TRUE);
+            CHECK(r.Status==BC250_ESCAPE_STATUS_DONE && r.Ready && r.ObservedMHz==1000 && r.ObservedVid==116 &&
+                  r.TemperatureMc==67000 && calls==before+2);
+            // An offline owner answers the unprivileged read as it answers every other caller: no reading, and
+            // no published one is handed out after the stop either.
+            SmuOwnerStop(&owner);
+            before=calls;
+            SmuClockRequest(&owner,&r,FALSE,FALSE,TRUE);
+            CHECK(r.Status==BC250_ESCAPE_STATUS_REFUSED && r.NtStatus==(ULONG)STATUS_DEVICE_NOT_READY &&
+                  !r.Ready && !r.ObservedMHz && !r.TemperatureMc && calls==before);
+            CHECK(SmuOwnerStart(&owner,registers)==STATUS_SUCCESS);
+        }
         SmuOwnerStop(&owner);
     }
     // ---- the CPU domain, queue 3 (0.7.210, docs/design/tuner.md) ---------------------------------------
