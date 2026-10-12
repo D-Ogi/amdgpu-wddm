@@ -614,8 +614,56 @@ static void RecordDerivation(void)
     CHECK(!Bc250SurfaceResourceIntent(w, v3, &version, NULL));
 }
 
-int main(void)
+// Follow the standard-allocation answer through the real resource parser and allocation admission.
+// A shadow can be CPU-read and blitted, but must never become a scan-out primary. The old OS answer,
+// the primary, and all other standard kinds retain their exact private-data sizes and placement.
+static void ShadowBacking(int LegacyControl)
 {
+    static const unsigned long builds[] = { 22621, 22631, 26099, 26100, 26200, 26300 };
+    unsigned long b, kind, type;
+    for (b = 0; b < sizeof(builds) / sizeof(builds[0]); b++) for (kind = 1; kind <= 4; kind++) {
+        BC250_STDALLOC_REQUEST r = Gdi(1, 1920, 1080, FMT_A8R8G8B8, 0);
+        BC250_STDALLOC_ANSWER a, fill;
+        BC250_GDI_ALLOCATION_POLICY p, admitted;
+        int changed = kind == BC250_STDALLOC_SHADOW && builds[b] >= 26100;
+        r.Kind = kind;
+        r.OsBuild = LegacyControl ? 22621 : builds[b];
+        CHECK(Bc250StdAllocDecide(&r, &a) == BC250_STDALLOC_OK && !a.PublishPitch);
+        CHECK(a.PrivateBytes == (kind == BC250_STDALLOC_GDI ? 48u : 32u));
+        CHECK(a.ResourceBytes == (changed ? 16u : 0u));
+        CHECK(WddmGdiRecordPolicy(a.ResourceBytes ? a.Resource : NULL, a.ResourceBytes, &p));
+        CHECK(p.CpuVisible == 1 && p.Aperture == changed && p.Cached == changed);
+        CHECK(p.AccessedPhysically == !changed);
+        CHECK(!Bc250SurfaceResourceScanout(a.ResourceBytes ? a.Resource : NULL, a.ResourceBytes));
+        if (changed) CHECK(!WddmGdiScannable(&p));
+        if (kind != BC250_STDALLOC_GDI) {
+            CHECK(Bc250Lb7aAdmit(&a.Surface, a.PrivateBytes, p.Aperture, p.Cached, 1,
+                                &type, &admitted) == BC250_LB7A_ADMITTED);
+            CHECK(type == 0 && memcmp(&p, &admitted, sizeof(p)) == 0);
+        }
+        r.Fill = 1; r.Bytes = a.PrivateBytes;
+        r.ResourceFill = a.ResourceBytes != 0; r.ResourceBytes = a.ResourceBytes;
+        CHECK(Bc250StdAllocDecide(&r, &fill) == BC250_STDALLOC_OK);
+        CHECK(memcmp(&fill.Surface, &a.Surface, sizeof(a.Surface)) == 0);
+        CHECK(fill.ResourceBytes == a.ResourceBytes && memcmp(fill.Resource, a.Resource, sizeof(a.Resource)) == 0);
+        if (a.ResourceBytes) {
+            r.ResourceFill = 0;
+            CHECK(Bc250StdAllocDecide(&r, &fill) == BC250_STDALLOC_BUFFER && !fill.PublishPitch);
+            r.ResourceFill = 1; r.ResourceBytes--;
+            CHECK(Bc250StdAllocDecide(&r, &fill) == BC250_STDALLOC_BUFFER && !fill.PublishPitch);
+            r.ResourceBytes++; r.Bytes--;
+            CHECK(Bc250StdAllocDecide(&r, &fill) == BC250_STDALLOC_BUFFER && !fill.PublishPitch);
+        }
+    }
+}
+
+int main(int argc, char** argv)
+{
+    if (argc == 2 && strcmp(argv[1], "--legacy-shadow-control") == 0) {
+        ShadowBacking(1);  // must fail: the pre-BD-135 placement cannot meet the new shadow contract
+        return g_failures ? 1 : 0;
+    }
+    ShadowBacking(0);
     SameAsBefore();
     ScanoutPlacement();
     RecordDerivation();

@@ -78,7 +78,7 @@ typedef struct {
  STANDARD_DATA *pCreateSharedPrimarySurfaceData,*pCreateShadowSurfaceData,*pCreateStagingSurfaceData,*pCreateGdiSurfaceData;
  PVOID pAllocationPrivateDriverData,pResourcePrivateDriverData;
 } DXGKARG_GETSTANDARDALLOCATIONDRIVERDATA;
-typedef struct {volatile LONG GdiSurfaceTypesLogged;BC250_STDALLOC_COUNTERS StdAlloc;} BC250_WDDM;
+typedef struct {volatile LONG GdiSurfaceTypesLogged;BC250_STDALLOC_COUNTERS StdAlloc;ULONG OsBuildNumber;} BC250_WDDM;
 #define D3DKMDT_STANDARDALLOCATION_SHAREDPRIMARYSURFACE 1
 #define D3DKMDT_STANDARDALLOCATION_SHADOWSURFACE 2
 #define D3DKMDT_STANDARDALLOCATION_STAGINGSURFACE 3
@@ -132,6 +132,40 @@ static void GdiChecks(void){
   data.Type=1;data.Format=AMDGPU_WDDM_D3DDDI_A8;CHECK(GdiRequest(&data,&gdi,sizeof(gdi))==STATUS_INVALID_PARAMETER);
   data.Type=2;data.Format=0;CHECK(GdiRequest(&data,&gdi,sizeof(gdi))==STATUS_INVALID_PARAMETER);
  }
+}
+static void ShadowDdiChecks(void){
+ const ULONG builds[]={22631,26100,26200,26300};unsigned i;
+ for(i=0;i<sizeof(builds)/sizeof(builds[0]);i++){
+  STANDARD_DATA data={0};DXGKARG_GETSTANDARDALLOCATIONDRIVERDATA request={0};
+  BC250_WDDM_ALLOCATION_PRIVATE allocation,before;ULONG resource[6];
+  ULONG expected=builds[i]>=26100?16u:0u;
+  adapter.OsBuildNumber=builds[i];data.Width=1920;data.Height=1080;data.Format=D3DDDIFMT_A8R8G8B8;
+  data.Pitch=123;request.StandardAllocationType=D3DKMDT_STANDARDALLOCATION_SHADOWSURFACE;
+  request.pCreateShadowSurfaceData=&data;
+  CHECK(Bc250WddmGetStandardAllocationDriverData(&adapter,&request)==STATUS_SUCCESS);
+  CHECK(data.Pitch==123 && request.AllocationPrivateDriverDataSize==32);
+  CHECK(request.ResourcePrivateDriverDataSize==expected);
+  memset(&allocation,0xcd,sizeof(allocation));before=allocation;
+  memset(resource,0xcd,sizeof(resource));request.pAllocationPrivateDriverData=&allocation;
+  if(expected){
+   CHECK(Bc250WddmGetStandardAllocationDriverData(&adapter,&request)==STATUS_INVALID_PARAMETER);
+   CHECK(data.Pitch==123 && memcmp(&before,&allocation,sizeof(allocation))==0);
+   request.pResourcePrivateDriverData=&resource[1];request.ResourcePrivateDriverDataSize=expected-1;
+   CHECK(Bc250WddmGetStandardAllocationDriverData(&adapter,&request)==STATUS_INVALID_PARAMETER);
+   CHECK(data.Pitch==123 && memcmp(&before,&allocation,sizeof(allocation))==0 && resource[1]==0xcdcdcdcdul);
+   request.ResourcePrivateDriverDataSize=expected;
+  }
+  CHECK(Bc250WddmGetStandardAllocationDriverData(&adapter,&request)==STATUS_SUCCESS);
+  CHECK(data.Pitch==7680 && allocation.Pitch==7680 && allocation.Size==8294400);
+  CHECK(request.ResourcePrivateDriverDataSize==expected);
+  CHECK(resource[0]==0xcdcdcdcdul && resource[5]==0xcdcdcdcdul);
+  if(expected){
+   CHECK(request.pResourcePrivateDriverData==&resource[1]);
+   CHECK(resource[1]==BC250_SURFACE_RESOURCE_MAGIC && resource[2]==2 && resource[3]==1 &&
+         resource[4]==BC250_SURFACE_RESOURCE_CPU_READ);
+  }else CHECK(request.pResourcePrivateDriverData==NULL && resource[1]==0xcdcdcdcdul);
+ }
+ adapter.OsBuildNumber=0;
 }
 int main(void){
  const ULONG widths[]={1366,1440,1680,1920,2560};
@@ -206,7 +240,7 @@ int main(void){
    free(src);free(dst);
   }
  }
- GdiChecks();
+ GdiChecks();ShadowDdiChecks();
  free(buffer);CHECK(maps==unmaps);
  printf("scanout geometry: %u checks, %u failures\n",checks,failures);return failures?1:0;
 }

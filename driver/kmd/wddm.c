@@ -543,6 +543,7 @@ typedef struct _BC250_WDDM {
     // E20 (ADR 0011): the diagnostic CPU blit of a Blt present into the firmware framebuffer, behind EnablePresentBlit.
     volatile LONG GdiSurfaceTypesLogged;       // first size/fill request per GDI type, bounded to20 lines
     BC250_STDALLOC_COUNTERS StdAlloc;          // BD-060: standard allocation requests/answers, LB7A create/open
+    ULONG OsBuildNumber;                     // BD-135: standard-shadow placement on 24H2 and later
     BOOLEAN BlitGate;
     BOOLEAN HandleIdentityProbe;
     volatile LONG HandleIdentityProbeCalls[2]; // at most16 non-BC2A and16 BC2A opens per start
@@ -3023,6 +3024,7 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     BOOLEAN vidmmPrepared=FALSE;
     NTSTATUS status;
     ULONGLONG segmentOffset, segmentLength, tableOffset, tableLength;
+    RTL_OSVERSIONINFOW osVersion;
 
     Device->FullWddm = g_FullWddm;
     Device->Wddm = NULL;
@@ -3031,6 +3033,10 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     Device->ComposedSourceModes = FALSE;
     Device->CommittedSourceFormat = 0;
     if (!g_FullWddm) return STATUS_SUCCESS;                            // gate closed: this file does nothing at all
+    RtlZeroMemory(&osVersion, sizeof(osVersion));
+    osVersion.dwOSVersionInfoSize = sizeof(osVersion);
+    status = RtlGetVersion(&osVersion);
+    if (!NT_SUCCESS(status)) return status;
     // 0.7.201: source modes of the composed formats (display_modes.h), on unless the value is 0.
     Device->ComposedSourceModes = GuardReadSetting(L"OfferComposedSourceModes", 1) != 0;
     GuardLog("wddm: composed source modes %s", Device->ComposedSourceModes ? "offered" : "off");
@@ -3052,6 +3058,9 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     }
     Bc250ObjectIndexInit(&wddm->ObjectIndex,buckets,(unsigned long)FIELD_OFFSET(BC250_WDDM_OBJECT,HashNext));
     wddm->Device = Device;
+    wddm->OsBuildNumber = osVersion.dwBuildNumber;
+    GuardLog("wddm: OS build %lu, CDD shadow backing %s", wddm->OsBuildNumber,
+             wddm->OsBuildNumber >= 26100 ? "coherent aperture" : "local memory");
     wddm->NativePteCopies=(GuardReadSetting(L"EnableNativePteCopy",0)==1);
     wddm->TraceUmdProbes = (GuardReadSetting(L"TraceUmdProbes", 0) == 1);
     (void)KeQueryPerformanceCounter(&wddm->UmdProfileFrequency);
@@ -4405,6 +4414,9 @@ static NTSTATUS Bc250WddmGetStandardAllocationDriverData(_In_ const HANDLE hAdap
     request.Kind = (ULONG)pData->StandardAllocationType;
     request.Fill = pData->pAllocationPrivateDriverData != NULL;
     request.Bytes = request.Fill ? pData->AllocationPrivateDriverDataSize : 0;
+    request.OsBuild = wddm != NULL ? wddm->OsBuildNumber : 0;
+    request.ResourceFill = pData->pResourcePrivateDriverData != NULL;
+    request.ResourceBytes = request.ResourceFill ? pData->ResourcePrivateDriverDataSize : 0;
     switch (pData->StandardAllocationType)
     {
     case D3DKMDT_STANDARDALLOCATION_SHAREDPRIMARYSURFACE:
@@ -4472,7 +4484,7 @@ static NTSTATUS Bc250WddmGetStandardAllocationDriverData(_In_ const HANDLE hAdap
             pData->pCreateGdiSurfaceData->Pitch = answer.Surface.Pitch;
     }
 
-    // Two passes: a NULL buffer asks only for the size. The resource blob stays empty in stage A.
+    // Two passes: a NULL buffer asks only for the size. Only a 24H2+ shadow gets an E26R resource record.
     if (request.Fill)
     {
         if (answer.PrivateBytes == sizeof(gdi)) {
@@ -4483,10 +4495,12 @@ static NTSTATUS Bc250WddmGetStandardAllocationDriverData(_In_ const HANDLE hAdap
             gdi.Flags = request.GdiFlags;
             RtlCopyMemory(pData->pAllocationPrivateDriverData, &gdi, sizeof(gdi));
         } else RtlCopyMemory(pData->pAllocationPrivateDriverData, &answer.Surface, sizeof(answer.Surface));
+        if (answer.ResourceBytes)
+            RtlCopyMemory(pData->pResourcePrivateDriverData, answer.Resource, answer.ResourceBytes);
     }
     pData->AllocationPrivateDriverDataSize = answer.PrivateBytes;
-    pData->pResourcePrivateDriverData = NULL;
-    pData->ResourcePrivateDriverDataSize = 0;
+    if (!answer.ResourceBytes) pData->pResourcePrivateDriverData = NULL;
+    pData->ResourcePrivateDriverDataSize = answer.ResourceBytes;
 
     if (WddmFirstCalls(wddm, WddmDdiGetStandardAllocationDriverData))
         GuardLog("wddm: GetStandardAllocationDriverData type %u %ux%u format %u -> %llu bytes",
@@ -4666,6 +4680,11 @@ static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Sl
                      pCreateAllocation->NumAllocations, info->PrivateDriverDataSize);
         return BC250_CREATE_STEP_REFUSED;
     }
+
+    // Resource records can also request the aperture for type 0 (including the BD-135 CDD shadow).
+    // Refuse before publishing any object if QUERYSEGMENT4 did not offer that segment.
+    if (!gdiType && call->RecordPolicy.Aperture && !g_ApertureOffered)
+        return BC250_CREATE_STEP_REFUSED;
 
     object = WddmNewObject(device, BC250_WDDM_MAGIC_ALLOCATION);
     if (object == NULL) return BC250_CREATE_STEP_NO_MEMORY;

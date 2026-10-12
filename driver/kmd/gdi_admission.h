@@ -45,19 +45,25 @@ typedef struct _BC250_STDALLOC_REQUEST {
     unsigned long GdiType, GdiFlags;    // GDISURFACE only
     int Fill;                       // pAllocationPrivateDriverData != NULL; NULL is the size query
     unsigned long Bytes;            // AllocationPrivateDriverDataSize, read in the fill phase only
+    unsigned long OsBuild;          // start-latched RtlGetVersion build
+    int ResourceFill;               // pResourcePrivateDriverData != NULL
+    unsigned long ResourceBytes;
 } BC250_STDALLOC_REQUEST;
 
 typedef struct _BC250_STDALLOC_ANSWER {
     BC250_WDDM_ALLOCATION_PRIVATE Surface;  // LB7A v1; Pitch and Size are valid on success
     unsigned long PrivateBytes;     // 32 (LB7A) or, for a GDI surface, 48 (LB7A + GDI1)
+    unsigned long Resource[4];      // existing E26R v2 placement contract, when ResourceBytes != 0
+    unsigned long ResourceBytes;
     // Write Surface.Pitch to the union's public Pitch. The size query must not change the union
     // (ref/ddi-display/d3dkmddi.md:32953, DXGKARG_GETSTANDARDALLOCATIONDRIVERDATA remarks), so only a fill that
     // succeeds publishes it. The shared primary's union has no output pitch.
     int PublishPitch;
 } BC250_STDALLOC_ANSWER;
 
-// The one decision. Same checks in the same order as the code before BD-060; the only behaviour change is
-// PublishPitch.
+// BD-135: a 24H2 CDD shadow keeps CPU backing in the coherent aperture. It is not a primary: CDD locks it,
+// then blits to the primary. Protected local-memory locks can reach Rotate without a process heap on 26100.
+// E26R v2 already expresses this placement, so the LB7A allocation and all UMD parsers stay unchanged.
 static __inline int Bc250StdAllocDecide(const BC250_STDALLOC_REQUEST* R, BC250_STDALLOC_ANSWER* A)
 {
     BC250_GDI_ALLOCATION_POLICY policy;
@@ -69,7 +75,16 @@ static __inline int Bc250StdAllocDecide(const BC250_STDALLOC_REQUEST* R, BC250_S
     s->Size = 0;
     A->PrivateBytes = sizeof(BC250_WDDM_ALLOCATION_PRIVATE);
     A->PublishPitch = 0;
+    A->ResourceBytes = 0;
+    A->Resource[0] = A->Resource[1] = A->Resource[2] = A->Resource[3] = 0;
     if (R->Kind < BC250_STDALLOC_PRIMARY || R->Kind > BC250_STDALLOC_GDI || !R->Described) return BC250_STDALLOC_INPUT;
+    if (R->Kind == BC250_STDALLOC_SHADOW && R->OsBuild >= 26100) {
+        A->Resource[0] = BC250_SURFACE_RESOURCE_MAGIC;
+        A->Resource[1] = 2;
+        A->Resource[2] = 1;  // aperture placement, not a request to change OS sharing/protection
+        A->Resource[3] = BC250_SURFACE_RESOURCE_CPU_READ;
+        A->ResourceBytes = sizeof(A->Resource);
+    }
     s->Width = R->Width;
     s->Height = R->Height;
     s->Format = R->Kind == BC250_STDALLOC_STAGING ? AMDGPU_WDDM_D3DDDI_A8R8G8B8 : R->Format;
@@ -89,6 +104,8 @@ static __inline int Bc250StdAllocDecide(const BC250_STDALLOC_REQUEST* R, BC250_S
         if (!DcnSurfaceBytes(s->Width, s->Height, s->Pitch, &s->Size)) return BC250_STDALLOC_GEOMETRY;
     }
     if (R->Fill && R->Bytes < A->PrivateBytes) return BC250_STDALLOC_BUFFER;
+    if (R->Fill && A->ResourceBytes && (!R->ResourceFill || R->ResourceBytes < A->ResourceBytes))
+        return BC250_STDALLOC_BUFFER;
     A->PublishPitch = R->Fill && R->Kind != BC250_STDALLOC_PRIMARY;
     return BC250_STDALLOC_OK;
 }
