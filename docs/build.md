@@ -230,11 +230,11 @@ files in `experiments/E33-m12-applications/`.
 ```
 
 Targets `src/gallium/targets/wgl/amdgpu_wddm_gl.dll` and `src/gallium/targets/libgl-gdi/opengl32.dll`.
-The first file is the OpenGL installable client driver: the display adapter's driver key names it in
+The first file is the OpenGL installable client driver: the graphics adapter's driver key names it in
 `OpenGLDriverName` (x64) and `OpenGLDriverNameWow` (x86), and the system `opengl32.dll` reads those values
 through `D3DKMTQueryAdapterInfo` with `KMTQAITYPE_UMOPENGLINFO` and then resolves the `Drv*` exports of the
 named file. The second file is Mesa's application-local `opengl32.dll` replacement, which the ICD route does
-not use; it stays a target because it is the comparison path.
+not use. It stays a target because it is the comparison path.
 
 The set is `zink-gl` plus three options. `-Db_ndebug=true` keeps NDEBUG defined, so no assert is live in a DLL
 that loads into every OpenGL application. `-Db_vscrt=mt` links the static C runtime for the same reason: an

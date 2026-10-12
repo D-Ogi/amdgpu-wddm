@@ -61,7 +61,9 @@ Check (@($planSz | Where-Object { $_.type -eq 'String' }).Count -eq 2) 'with REG
 Check ((Format-OpenGlRegistrationPlan $plan) -match 'OpenGLDriverName = \[C:\\Program Files\\amdgpu-wddm\\opengl\\amdgpu_wddm_gl\.dll\]; OpenGLVersion = 1; OpenGLFlags = 1; OpenGLDriverNameWow = ') "the dry run line names every value ($(Format-OpenGlRegistrationPlan $plan))"
 
 'the ICD file check (machine, the Drv entry points)'
-Check (@($script:OpenGlDrvExports).Count -eq 12) "12 Drv entry points in the contract ($(@($script:OpenGlDrvExports) -join ', '))"
+Check (@($script:OpenGlDrvExports).Count -eq 19) "19 Drv entry points in the contract ($(@($script:OpenGlDrvExports) -join ', '))"
+Check (@('DrvCopyContext', 'DrvDescribeLayerPlane', 'DrvPresentBuffers', 'DrvRealizeLayerPalette', 'DrvSwapLayerBuffers', 'DrvGetLayerPaletteEntries', 'DrvSetLayerPaletteEntries' | Where-Object { $script:OpenGlDrvExports -notcontains $_ }).Count -eq 0) 'the contract holds the seven entry points beyond the twelve a context needs, which every shipping ICD exports'
+Check ($script:OpenGlDrvExports -notcontains 'DrvSwapMultipleBuffers') 'DrvSwapMultipleBuffers is not required: Windows names it, and the shipping NVIDIA ICD does not export it either'
 $work = Join-Path $env:TEMP ('amdgpu-wddm-gl-test-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ'))
 $key = 'HKCU:\Software\amdgpu-wddm-installer-test-gl'
 if (Test-Path -LiteralPath $key) { Remove-Item -LiteralPath $key -Recurse -Force }
@@ -79,7 +81,7 @@ try {
     # the right machine, so the finding has to be the export list and nothing else.
     $host64 = Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
     $p = @(Test-OpenGlIcdFile -Path $host64 -Machine 0x8664)
-    Check (@($p | Where-Object { $_ -match 'does not export DrvValidateVersion' }).Count -eq 1) "an image without the Drv entry points is a finding ($($p -join '; '))"
+    Check ((@($p | Where-Object { $_ -match 'does not export DrvCopyContext' }).Count -eq 1) -and (@($script:OpenGlDrvExports | Where-Object { $p[0] -notmatch $_ }).Count -eq 0)) "an image without the Drv entry points is a finding that names all 19 ($($p -join '; '))"
     $p = @(Test-OpenGlIcdFile -Path $host64 -Machine 0x14C)
     Check (@($p | Where-Object { $_ -match 'is machine 0x8664, expected 0x14C' }).Count -eq 1) "the wrong machine is a finding ($($p -join '; '))"
 
@@ -140,6 +142,56 @@ try {
     Check ((@($rp | Where-Object { $_.name -eq 'OpenGLDriverName' })[0].action -eq 'remove') -and (@($rp | Where-Object { $_.name -eq 'OpenGLDriverNameWow' })[0].action -eq 'keep')) 'without a record only a value that names the install root is ours'
     Check ((@($rp | Where-Object { $_.action -eq 'none' }).Count -eq 4)) 'a value that is not there needs no change'
     Check ((Format-OpenGlRestorePlan @(Get-OpenGlRestorePlan -Previous @() -Wrote @() -Current @{} -InstallRoot $work)) -eq 'nothing of ours') 'an empty key: nothing of ours'
+    # Without a record the four numbers go with the name value of their own half, so an uninstall is symmetrical with
+    # the install: all six values of our own registration go, not the two name values alone. A number alone is kept.
+    $noRecord2 = @{ OpenGLDriverName = @((Join-Path $work 'opengl\amdgpu_wddm_gl.dll')); OpenGLVersion = 1; OpenGLFlags = 1
+        OpenGLDriverNameWow = @((Join-Path $work 'wow64\opengl\amdgpu_wddm_gl.dll')); OpenGLVersionWow = 1; OpenGLFlagsWow = 1 }
+    $rp2 = @(Get-OpenGlRestorePlan -Previous @() -Wrote @() -Current $noRecord2 -InstallRoot $work)
+    Check ((@($rp2 | Where-Object { $_.action -eq 'remove' }).Count -eq 6)) "without a record, all six values of our own registration go ($(@($rp2 | ForEach-Object { "$($_.name)=$($_.action)" }) -join ' '))"
+    $noRecord3 = @{ OpenGLDriverName = @('C:\Windows\System32\foreign.dll'); OpenGLVersion = 1; OpenGLFlags = 3 }
+    $rp3 = @(Get-OpenGlRestorePlan -Previous @() -Wrote @() -Current $noRecord3 -InstallRoot $work)
+    Check ((@($rp3 | Where-Object { $_.action -eq 'keep' }).Count -eq 3)) "a foreign name value keeps the numbers of its own half ($(@($rp3 | Where-Object { $_.action -ne 'none' } | ForEach-Object { "$($_.name)=$($_.action)" }) -join ' '))"
+    # The line the operator and the evidence file read. Inside a switch statement $_ is the switch's own input, so a
+    # formatter that reads $_.name there prints a line with no value name in it at all.
+    $fmt = Format-OpenGlRestorePlan @([pscustomobject]@{ name = 'OpenGLDriverName'; action = 'restore'; value = @('C:\Windows\System32\otherdriver.dll'); kind = 'MultiString'; why = 'the value from before the install' },
+        [pscustomobject]@{ name = 'OpenGLVersion'; action = 'restore'; value = 7; kind = 'DWord'; why = 'the value from before the install' },
+        [pscustomobject]@{ name = 'OpenGLFlags'; action = 'remove'; value = $null; kind = $null; why = 'there was none before the install' },
+        [pscustomobject]@{ name = 'OpenGLDriverNameWow'; action = 'keep'; value = 'foreign.dll'; kind = $null; why = 'no record of this release writing it' },
+        [pscustomobject]@{ name = 'OpenGLVersionWow'; action = 'none'; value = $null; kind = $null; why = 'absent' })
+    Check ($fmt -eq 'OpenGLDriverName back to [C:\Windows\System32\otherdriver.dll] (MultiString); OpenGLVersion back to 7 (DWord); remove OpenGLFlags; OpenGLDriverNameWow kept (no record of this release writing it)') "the restore line names every value, its new value and its type ($fmt)"
+    Check ((@('OpenGLDriverName', 'OpenGLVersion', 'OpenGLFlags', 'OpenGLDriverNameWow' | Where-Object { $fmt -match [regex]::Escape($_) }).Count -eq 4) -and ($fmt -notmatch 'OpenGLVersionWow')) 'the restore line leaves out the values it does not touch'
+
+    'the restore keeps the registry type of each value'
+    # Another vendor's registration, or a repair tool's, may use any registry type. A restore that guesses the type
+    # from the .NET type of the recorded value turns a REG_EXPAND_SZ path into a literal REG_SZ one, four bytes into
+    # four strings, and a REG_QWORD above 2^31 into an error.
+    [void](New-Item -Path "$key\types" -Force)
+    New-ItemProperty -LiteralPath "$key\types" -Name OpenGLDriverName -Value 'atio6axx.dll' -PropertyType String -Force | Out-Null
+    New-ItemProperty -LiteralPath "$key\types" -Name OpenGLDriverNameWow -Value '%SystemRoot%\System32\x.dll' -PropertyType ExpandString -Force | Out-Null
+    New-ItemProperty -LiteralPath "$key\types" -Name OpenGLVersion -Value ([byte[]]@(1, 0, 0, 0)) -PropertyType Binary -Force | Out-Null
+    New-ItemProperty -LiteralPath "$key\types" -Name OpenGLFlags -Value ([long]4294967299) -PropertyType QWord -Force | Out-Null
+    $kinds0 = @{}
+    foreach ($n in 'OpenGLDriverName', 'OpenGLDriverNameWow', 'OpenGLVersion', 'OpenGLFlags') { $kinds0[$n] = [string](Get-Item -LiteralPath "$key\types").GetValueKind($n) }
+    $rec = @(Get-OpenGlValueRecord -ClassKey "$key\types")
+    Check ((@($rec | Where-Object { $_.present -and $_.kind }).Count -eq 4) -and ((@($rec | Where-Object { $_.name -eq 'OpenGLFlags' })[0].kind) -eq 'QWord')) "the record of a key carries the registry type of each value ($(@($rec | Where-Object { $_.present } | ForEach-Object { "$($_.name)=$($_.kind)" }) -join ' '))"
+    # The record survives the installer state file, which is JSON.
+    $recJson = @((($rec | ConvertTo-Json -Depth 6) | ConvertFrom-Json))
+    Write-OpenGlRegistration -ClassKey "$key\types" -Plan $workPlan
+    $rpT = @(Get-OpenGlRestorePlan -Previous $recJson -Wrote @($workPlan | ForEach-Object { [pscustomobject]@{ name = $_.name; value = $_.value } }) -Current (Read-RegistryValues "$key\types") -InstallRoot $work)
+    Write-OpenGlRestore -ClassKey "$key\types" -Plan $rpT
+    $kinds1 = @{}
+    foreach ($n in 'OpenGLDriverName', 'OpenGLDriverNameWow', 'OpenGLVersion', 'OpenGLFlags') { $kinds1[$n] = [string](Get-Item -LiteralPath "$key\types").GetValueKind($n) }
+    Check ((@('OpenGLDriverName', 'OpenGLDriverNameWow', 'OpenGLVersion', 'OpenGLFlags' | Where-Object { $kinds1[$_] -ne $kinds0[$_] }).Count -eq 0)) "every value comes back with the type it had ($(@($kinds1.Keys | Sort-Object | ForEach-Object { "$_=$($kinds1[$_])" }) -join ' '))"
+    Check (((Get-ItemProperty -LiteralPath "$key\types" -Name OpenGLDriverNameWow).OpenGLDriverNameWow -ne '%SystemRoot%\System32\x.dll') -and ($kinds1['OpenGLDriverNameWow'] -eq 'ExpandString')) 'the expandable path is expandable again, not a literal REG_SZ'
+    Check (([long](Get-ItemProperty -LiteralPath "$key\types" -Name OpenGLFlags).OpenGLFlags) -eq 4294967299) 'a REG_QWORD above 2^31 comes back whole, instead of throwing in the uninstall step'
+    Check (((Get-ItemProperty -LiteralPath "$key\types" -Name OpenGLVersion).OpenGLVersion -join ',') -eq '1,0,0,0') 'the four bytes are four bytes, not four strings'
+
+    'the display class keys the uninstaller works from'
+    # The uninstaller finds the registration by what a key holds, not by the device: the GPU can be missing, disabled
+    # or doubled, and the files go whatever the device looks like.
+    [void](New-Item -Path "$key\empty" -Force)
+    Check ((@(Get-OpenGlRegisteredClassKeys -PreferredKey "$key\types") | Where-Object { $_ -eq "$key\types" }).Count -eq 1) 'a key that carries an OpenGL value is in the list'
+    Check ((@(Get-OpenGlRegisteredClassKeys -PreferredKey "$key\empty") | Where-Object { $_ -eq "$key\empty" }).Count -eq 0) 'a key that carries none is not'
 
     'the action of a run'
     Check ((Get-OpenGlAction -Switch $on) -eq 'register') 'register true: register'
@@ -164,7 +216,28 @@ $posKeys = $src.IndexOf('Write-OpenGlRestore -ClassKey $classKey')
 $posFiles = $src.IndexOf('Remove-PathOrSchedule $glDir')
 Check (($posKeys -gt 0) -and ($posKeys -lt $posFiles)) 'the rollback removes the values before the files they name'
 Check ($src -match "Add-Result 'OpenGL ICD'") 'verify reports the OpenGL ICD'
-Check ($un -match 'Write-OpenGlRestore -ClassKey \$key -Plan \$glPlan') 'uninstall.ps1 restores or removes the six values'
+Check ($un -match 'Write-OpenGlRestore -ClassKey \$glKey -Plan \$glPlan') 'uninstall.ps1 restores or removes the six values'
+# The registration must go even when Get-Bc250Device does not return exactly one device (the GPU disabled or hidden
+# in Device Manager, a ghost entry, a WMI hiccup), because the files below go whatever the device looks like. The
+# OpenGL step is therefore outside the one-device block, and before the Files step.
+Check ($un -match 'Get-OpenGlRegisteredClassKeys -PreferredKey') 'uninstall.ps1 finds the registration by what a display class key holds, not by the device'
+$posGlWrite = $un.IndexOf('Write-OpenGlRestore -ClassKey $glKey')
+$posRoot = $un.IndexOf('Invoke-Change "remove $root"')
+# Read from the parse tree, not from the text: every call of the OpenGL functions must sit outside the if statement
+# that asks for exactly one device.
+$unAst = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $Installer 'uninstall.ps1'), [ref]$null, [ref]$null)
+$glCalls = @($unAst.FindAll({ param($n) ($n -is [System.Management.Automation.Language.CommandAst]) -and ($n.GetCommandName() -match '^(Get-OpenGlRegisteredClassKeys|Get-OpenGlRestorePlan|Write-OpenGlRestore)$') }, $true))
+$guarded = @($glCalls | Where-Object {
+    $p = $_.Parent
+    $inGuard = $false
+    while ($p) {
+        if (($p -is [System.Management.Automation.Language.IfStatementAst]) -and ($p.Extent.Text -match 'Get-Bc250Device|\$dev\.Count')) { $inGuard = $true }
+        $p = $p.Parent
+    }
+    $inGuard
+})
+Check (($glCalls.Count -ge 3) -and ($guarded.Count -eq 0)) "the OpenGL step is outside the one-device guard of the Graphics step ($($glCalls.Count) calls, $($guarded.Count) inside it)"
+Check (($posGlWrite -gt 0) -and ($posRoot -gt $posGlWrite)) 'the registration goes before the install root it names is removed'
 if ($fail) { "$fail check(s) failed"; exit 1 }
 if ($Package) {
     'the ICD files of this package'

@@ -415,7 +415,9 @@ if ($sources.PSObject.Properties['opengl_icd']) {
         $glProblems += @(Test-OpenGlIcdFile -Path $gl.source -Machine 0x8664)
         $glProblems += @(Test-OpenGlIcdFile -Path $gl.source_wow -Machine 0x14C)
         if ($glProblems.Count) { throw ('OpenGL ICD payload: ' + ($glProblems -join '; ')) }
-        '  OpenGL ICD: {0} (x64) and {1} (x86), {2} Drv entry points each, {3}, version {4}, flags {5}' -f $gl.package_path, $gl.package_path_wow, @($script:OpenGlDrvExports).Count, $gl.value_type, $gl.version, $gl.flags
+        # The counted exports of each file, not the length of the contract list: the line says what the package holds.
+        $glDrv = @($gl.source, $gl.source_wow | ForEach-Object { @(Get-PeExportNames $_ | Where-Object { $_ -like 'Drv*' }).Count })
+        '  OpenGL ICD: {0} (x64, {1} Drv entry points) and {2} (x86, {3}), all {4} of the contract, {5}, version {6}, flags {7}' -f $gl.package_path, $glDrv[0], $gl.package_path_wow, $glDrv[1], @($script:OpenGlDrvExports).Count, $gl.value_type, $gl.version, $gl.flags
     } else {
         '  OpenGL ICD: not registered by this release'
     }

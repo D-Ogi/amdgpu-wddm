@@ -133,22 +133,30 @@ if ($dev.Count -eq 1) {
         Invoke-Change "remove UserModeDriverName, UserModeDriverNameWow, VulkanDriverName and VulkanDriverNameWow from $key" {
             foreach ($n in 'UserModeDriverName', 'UserModeDriverNameWow', 'VulkanDriverName', 'VulkanDriverNameWow') { Remove-ItemProperty -LiteralPath $key -Name $n -ErrorAction SilentlyContinue }
         } | Out-Null
-        # The OpenGL ICD (BD-076): exactly what the install wrote goes, and a value that was there before the first
-        # install of ours comes back. A value that is not the one this release wrote belongs to whoever wrote it and
-        # stays, the rule TdrDelay follows above. Without a record in the installer state (an older release, or a
-        # state file that is gone) a value is ours only when it names the install root.
-        $glNow = Read-RegistryValues $key
-        if (@($script:OpenGlValueNames | Where-Object { $glNow.ContainsKey($_) }).Count) {
-            $glPrev = @()
-            if ($state -and $state.PSObject.Properties['opengl_icd_previous'] -and $state.opengl_icd_previous) { $glPrev = @($state.opengl_icd_previous) }
-            $glWrote = @()
-            if ($state -and $state.PSObject.Properties['opengl_icd'] -and $state.opengl_icd) { $glWrote = @($state.opengl_icd) }
-            $glPlan = @(Get-OpenGlRestorePlan -Previous $glPrev -Wrote $glWrote -Current $glNow -InstallRoot $root)
-            Invoke-Change "the OpenGL ICD registration in ${key}: $(Format-OpenGlRestorePlan $glPlan)" {
-                Write-OpenGlRestore -ClassKey $key -Plan $glPlan
-            } | Out-Null
-        } else { Write-Info 'the OpenGL ICD registration: no value of ours in the GPU key' }
     }
+}
+# The OpenGL ICD (BD-076): exactly what the install wrote goes, and a value that was there before the first install of
+# ours comes back. A value that is not the one this release wrote belongs to whoever wrote it and stays, the rule
+# TdrDelay follows above. Without a record in the installer state (an older release, or a state file that is gone) the
+# two name values are judged by the install root they name and the four numbers go with the name value of their half.
+# This step is outside the one-device guard above on purpose, and before the Files step below, because the files go
+# whatever the device looks like: a registration kept while its DLL is deleted leaves every OpenGL application of the
+# computer without an ICD and without the software renderer that no registration at all gives it. A stale
+# UserModeDriverName only concerns our own device; a stale OpenGLDriverName concerns every OpenGL program.
+$glKeys = @(Get-OpenGlRegisteredClassKeys -PreferredKey $(if ($dev.Count -eq 1) { Get-DeviceDriverKey -InstanceId $dev[0].DeviceID } else { $null }))
+if (-not $glKeys.Count) { Write-Info 'the OpenGL ICD registration: no OpenGL value in any display class key' }
+foreach ($glKey in $glKeys) {
+    $glNow = Read-RegistryValues $glKey
+    $glPrev = @()
+    if ($state -and $state.PSObject.Properties['opengl_icd_previous'] -and $state.opengl_icd_previous) { $glPrev = @($state.opengl_icd_previous) }
+    $glWrote = @()
+    if ($state -and $state.PSObject.Properties['opengl_icd'] -and $state.opengl_icd) { $glWrote = @($state.opengl_icd) }
+    $glPlan = @(Get-OpenGlRestorePlan -Previous $glPrev -Wrote $glWrote -Current $glNow -InstallRoot $root)
+    if (@($glPlan | Where-Object { $_.action -eq 'restore' -or $_.action -eq 'remove' }).Count) {
+        Invoke-Change "the OpenGL ICD registration in ${glKey}: $(Format-OpenGlRestorePlan $glPlan)" {
+            Write-OpenGlRestore -ClassKey $glKey -Plan $glPlan
+        } | Out-Null
+    } else { Write-Info "the OpenGL ICD registration in ${glKey}: $(Format-OpenGlRestorePlan $glPlan)" }
 }
 $icdJson = Join-Path $root 'vulkan\radeon_icd.json'
 Invoke-Change "remove '$icdJson' from $($script:KhronosKey)" { Remove-ItemProperty -LiteralPath $script:KhronosKey -Name $icdJson -ErrorAction SilentlyContinue } | Out-Null

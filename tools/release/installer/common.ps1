@@ -1078,7 +1078,17 @@ function Test-WowRegistration {
 # 10.0.26100; ref\ddi-display\d3dkmthk.md section _D3DKMT_OPENGLINFO). The three fields come out of the registry: the
 # operating system reads OpenGLDriverName, OpenGLVersion and OpenGLFlags from the display adapter's own software
 # (class) key, and the ...Wow names for a 32-bit process
-# (ref\windows-driver-docs\windows-driver-docs-pr\display\loading-an-opengl-installable-client-driver.md lines 24-47).
+# (ref\windows-driver-docs\windows-driver-docs-pr\display\loading-an-opengl-installable-client-driver.md: line 28
+# gives the key as HKLM/System/CurrentControlSet/Control/Class/{Adapter GUID}/0000/, lines 31-40 the two tables).
+# Read that page exactly: it introduces the first table as the entries "for 32-bit Windows Vista display drivers
+# that are used on 32-bit Windows Vista" and the second as the same drivers "used on 64-bit Windows Vista", and it
+# says nothing about a 64-bit ICD on 64-bit Windows. That the non-Wow triple is the native one and the Wow triple
+# the one a WoW64 process gets is read from three other places, not from that page: the WDDM 2.1 driver-store
+# example, which writes OpenGLDriverName with a 64-bit DLL and OpenGLDriverNameWoW beside it
+# (display\wddm-2-1-features.md lines 214-215), AMD's shipping INF, which does the same on an x64-only package, and
+# this installer's own UserModeDriverName / UserModeDriverNameWow pair, which the same query path reads and which
+# works on the lab. The index in the page is 0000; the real key is whichever four-digit subkey the device has, and
+# Get-DeviceDriverKey below takes it from the device instead of guessing.
 # No DDI of ours takes part, and the driver is not asked: these values are the whole registration. Every OpenGL
 # application of the computer then gets our ICD, with no DLL beside its executable.
 #
@@ -1096,6 +1106,17 @@ function Test-WowRegistration {
 # installer writes as a REG_MULTI_SZ, is read by the same query path and works on the lab, so the ICD name is written
 # the same way. release-sources.json can say "value_type": "REG_SZ" instead, which is the one-line fallback if a lab
 # run ever shows that the runtime does not load the ICD.
+#
+# The absolute path is the part of this registration that no reference writes: Microsoft's example writes %13%
+# (the driver store), AMD's primary INF a bare atio6axx.dll, and VirtualBox a bare VBoxGL with no extension at all.
+# So if a lab run shows the ICD is never loaded, the order to try is: value_type REG_SZ (this file, one edit), and
+# then the driver store with an INF AddReg line, which means the ICD files have to ride in the driver package.
+# A bare file name is NOT a step of that chain for this release: the runtime would then load it through the loader
+# search path of an arbitrary application, and %ProgramFiles%\amdgpu-wddm\opengl is not on anybody's search path.
+# The directory that is would be System32 and SysWOW64, and this installer deliberately writes nothing there
+# (docs\testing\INSTALL.md). The same query also carries a componentized-driver form, where the value name is
+# prefixed with D3DKMT_COMPONENTIZED_INDICATOR (L'#') and the subkey D3DKMT_SUBKEY_OPENGL (L"OpenGL") holds the
+# values (d3dkmthk.h lines 1847 and 1849); our driver package is not componentized, so the plain key is the one read.
 #
 # The Wow spelling: the Learn table spells it OpenGLDriverNameWow, the WDDM 2.1 example OpenGLDriverNameWoW, and
 # AMD's one INF uses both spellings in different sections of itself. Registry value names are not case sensitive, so
@@ -1119,9 +1140,16 @@ $script:OpenGlValueNames = @('OpenGLDriverName', 'OpenGLVersion', 'OpenGLFlags',
 # (src\gallium\targets\wgl\gallium_wgl.def.in; the @N suffixes of that file are stripped for a Visual C++ build, so
 # the names are undecorated in both architectures). A file that lacks one of these is no ICD, whatever its name says,
 # and the release gate refuses the package.
-$script:OpenGlDrvExports = @('DrvValidateVersion', 'DrvSetCallbackProcs', 'DrvDescribePixelFormat', 'DrvSetPixelFormat',
-    'DrvCreateContext', 'DrvCreateLayerContext', 'DrvSetContext', 'DrvReleaseContext', 'DrvDeleteContext',
-    'DrvShareLists', 'DrvSwapBuffers', 'DrvGetProcAddress')
+# All nineteen, not the twelve a context needs: Windows' own opengl32.dll holds twenty Drv names in its string table
+# (the nineteen below and DrvSwapMultipleBuffers), and every shipping ICD measured here exports the same nineteen -
+# NVIDIA's nvoglv64.dll and this project's own build - so a file that is short of one of them is a file whose module
+# definition file was cut, not a driver the runtime can be trusted to drive. DrvSwapMultipleBuffers is the one name
+# that is optional: nvoglv64.dll does not export it either.
+$script:OpenGlDrvExports = @('DrvCopyContext', 'DrvCreateContext', 'DrvCreateLayerContext', 'DrvDeleteContext',
+    'DrvDescribeLayerPlane', 'DrvDescribePixelFormat', 'DrvGetLayerPaletteEntries', 'DrvGetProcAddress',
+    'DrvPresentBuffers', 'DrvRealizeLayerPalette', 'DrvReleaseContext', 'DrvSetCallbackProcs', 'DrvSetContext',
+    'DrvSetLayerPaletteEntries', 'DrvSetPixelFormat', 'DrvShareLists', 'DrvSwapBuffers', 'DrvSwapLayerBuffers',
+    'DrvValidateVersion')
 
 # What this release does about the OpenGL ICD: manifest.json "opengl_icd" (release-sources.json in the build), the
 # same switch shape as the H.264 encoder's. Pure but for the two file probes, which only run with a package root.
@@ -1247,14 +1275,33 @@ function Test-OpenGlRegistration {
     $problems += @(Test-OpenGlIcdFile -Path (Join-Path $InstallRoot $Switch.install_path_wow) -Machine 0x14C)
     return $problems
 }
-# Which of the six values a key carries now, with the value itself: the record install.ps1 keeps once (the values
-# from before the first install of ours) and the list uninstall.ps1 works from.
+# Which of the six values a key carries now, with the value itself and its registry type: the record install.ps1
+# keeps once (the values from before the first install of ours) and the list uninstall.ps1 works from.
+# The type is recorded because a value cannot be put back without it. The .NET type of the value does not carry it:
+# a REG_EXPAND_SZ path and a REG_SZ path are both a String, a REG_BINARY value and a REG_MULTI_SZ list are both an
+# array, and a REG_QWORD and a REG_DWORD are both a number. Another vendor's registration, or a repair tool's, may
+# use any of them, and a restore that changes the type corrupts the value it claims to have put back: an expandable
+# path stops being expanded, and four bytes come back as four strings.
 function Get-OpenGlValueRecord {
     param([Parameter(Mandatory)][string]$ClassKey)
     $c = Read-RegistryValues $ClassKey
+    $k = Get-Item -LiteralPath $ClassKey -ErrorAction SilentlyContinue
     return @($script:OpenGlValueNames | ForEach-Object {
-        [pscustomobject]@{ name = $_; present = $c.ContainsKey($_); previous = $(if ($c.ContainsKey($_)) { $c[$_] } else { $null }) }
+        $has = $c.ContainsKey($_)
+        $kind = $null
+        if ($has -and $k) { try { $kind = [string]$k.GetValueKind($_) } catch { $kind = $null } }
+        [pscustomobject]@{ name = $_; present = $has; previous = $(if ($has) { $c[$_] } else { $null }); kind = $kind }
     })
+}
+# The registry type a restore writes: the recorded one when the record carries it, otherwise the type the value's own
+# .NET type suggests, which is what a state file of an earlier release holds. Pure.
+function Get-OpenGlRestoreKind {
+    param($Value, [string]$Kind)
+    $known = @('String', 'ExpandString', 'MultiString', 'Binary', 'DWord', 'QWord')
+    if ($Kind -and ($known -contains $Kind)) { return $Kind }
+    if ($Value -is [array]) { return 'MultiString' }
+    if ($Value -is [string]) { return 'String' }
+    return 'DWord'
 }
 # What the uninstaller does with each of the six values. Pure: the record from before the first install, what this
 # release wrote, and what the key holds now in; one row per value out.
@@ -1263,14 +1310,28 @@ function Get-OpenGlValueRecord {
 #   keep      the value is not the one this release wrote: it belongs to whoever wrote it (the same rule TdrDelay
 #             and the HD Audio interrupt follow)
 #   none      there is nothing there and nothing was recorded
-# Without a record of this release's own writes (an install by an older release, or a lost state file) a value is
-# ours only when it names the install root, and anything else is kept.
+# Without a record of this release's own writes (an install by an older release, or a lost state file) the two name
+# values are judged by the install root they name, and the four numbers are judged with the name value of their own
+# half: OpenGLVersion and OpenGLFlags belong to OpenGLDriverName, and the Wow three to OpenGLDriverNameWow. A number
+# alone says nothing (every registration writes 1 and 1), so without the name value of its half it is kept. This is
+# what makes an uninstall without a state record symmetrical with the install: all six values of our own registration
+# go, not the two name values alone, which is also what docs\testing\INSTALL.md tells the tester.
 function Get-OpenGlRestorePlan {
     param([AllowEmptyCollection()]$Previous = @(), [AllowEmptyCollection()]$Wrote = @(), [hashtable]$Current = @{}, [string]$InstallRoot)
     $prev = @{}
     foreach ($p in @($Previous)) { if ($p -and $p.name) { $prev[[string]$p.name] = $p } }
     $wroteMap = @{}
     foreach ($w in @($Wrote)) { if ($w -and $w.name) { $wroteMap[[string]$w.name] = $w.value } }
+    # The name value of each half, and whether it names the install root. Used only where there is no record.
+    $halfName = @{ OpenGLDriverName = 'OpenGLDriverName'; OpenGLVersion = 'OpenGLDriverName'; OpenGLFlags = 'OpenGLDriverName'
+        OpenGLDriverNameWow = 'OpenGLDriverNameWow'; OpenGLVersionWow = 'OpenGLDriverNameWow'; OpenGLFlagsWow = 'OpenGLDriverNameWow' }
+    $halfIsOurs = @{}
+    foreach ($nm in @('OpenGLDriverName', 'OpenGLDriverNameWow')) {
+        $halfIsOurs[$nm] = $false
+        if ($InstallRoot -and $Current.ContainsKey($nm)) {
+            $halfIsOurs[$nm] = [bool](@($Current[$nm] | ForEach-Object { [string]$_ }) -match [regex]::Escape($InstallRoot))
+        }
+    }
     $rows = @()
     foreach ($n in $script:OpenGlValueNames) {
         $has = $Current.ContainsKey($n)
@@ -1281,43 +1342,79 @@ function Get-OpenGlRestorePlan {
             $ours = Test-RegistryValueSame $now $wroteMap[$n]
             if (-not $ours) { $why = 'not the value this release wrote' }
         } elseif ($has -and $InstallRoot) {
-            # No record: a name value that names the install root is ours, a number without a name value is not
-            # judged on its own.
-            $ours = [bool](@($now | ForEach-Object { [string]$_ }) -match [regex]::Escape($InstallRoot))
-            if (-not $ours) { $why = 'no record of this release writing it' }
+            $ours = [bool]$halfIsOurs[$halfName[$n]]
+            if (-not $ours) {
+                $why = 'no record of this release writing it'
+                if ($n -ne $halfName[$n]) { $why = "no record of this release writing it, and $($halfName[$n]) does not name the install root" }
+            }
         } elseif ($has) {
             $why = 'no record of this release writing it'
         }
         # The value is gone already (another driver install, or a tester): there is nothing to take away.
-        if (-not $has) { $rows += [pscustomobject]@{ name = $n; action = 'none'; value = $null; why = 'absent' }; continue }
-        if (-not $ours) { $rows += [pscustomobject]@{ name = $n; action = 'keep'; value = $now; why = $why }; continue }
-        if ($prev.ContainsKey($n) -and $prev[$n].present) { $rows += [pscustomobject]@{ name = $n; action = 'restore'; value = $prev[$n].previous; why = 'the value from before the install' }; continue }
-        $rows += [pscustomobject]@{ name = $n; action = 'remove'; value = $null; why = 'there was none before the install' }
+        if (-not $has) { $rows += [pscustomobject]@{ name = $n; action = 'none'; value = $null; kind = $null; why = 'absent' }; continue }
+        if (-not $ours) { $rows += [pscustomobject]@{ name = $n; action = 'keep'; value = $now; kind = $null; why = $why }; continue }
+        if ($prev.ContainsKey($n) -and $prev[$n].present) {
+            $k = $null
+            if ($prev[$n].PSObject.Properties['kind']) { $k = [string]$prev[$n].kind }
+            $rows += [pscustomobject]@{ name = $n; action = 'restore'; value = $prev[$n].previous; kind = (Get-OpenGlRestoreKind -Value $prev[$n].previous -Kind $k); why = 'the value from before the install' }
+            continue
+        }
+        $rows += [pscustomobject]@{ name = $n; action = 'remove'; value = $null; kind = $null; why = 'there was none before the install' }
     }
     return $rows
 }
+# One line for Invoke-Change, the dry run and the evidence of a lab arm. The row is held in a variable of its own:
+# inside a switch statement $_ is the switch's own input, so $_.name would be empty and the line would name no value.
 function Format-OpenGlRestorePlan {
     param([AllowEmptyCollection()]$Plan)
     $rows = @($Plan | Where-Object { $_.action -ne 'none' })
     if (-not $rows.Count) { return 'nothing of ours' }
     return (@($rows | ForEach-Object {
-        switch ($_.action) {
-            'restore' { "$($_.name) back to $(Format-RegistryValue $_.value)" }
-            'remove' { "remove $($_.name)" }
-            default { "$($_.name) kept ($($_.why))" }
+        $r = $_
+        switch ($r.action) {
+            'restore' { "$($r.name) back to $(Format-RegistryValue $r.value)$(if ($r.PSObject.Properties['kind'] -and $r.kind) { " ($($r.kind))" })" }
+            'remove' { "remove $($r.name)" }
+            default { "$($r.name) kept ($($r.why))" }
         }
     }) -join '; ')
 }
+# Every display class key that carries one of the six values: the adapter's own key when the device is there, and
+# every other display class key, because the registration must be taken away even when the device is not.
+# The uninstaller needs this: a registration left behind names a DLL the uninstaller has just deleted, and then every
+# OpenGL application of the computer gets neither our driver nor the software renderer that no registration gives it.
+# The device can be missing or doubled (the GPU disabled in Device Manager, a ghost entry, a WMI hiccup), so the keys
+# are found by what they hold, not by the device. Which values of a key are ours is still decided by
+# Get-OpenGlRestorePlan, from the installer's own record and the install root the name value carries, so another
+# vendor's registration on another adapter's key is seen and kept.
+function Get-OpenGlRegisteredClassKeys {
+    param([string]$PreferredKey)
+    $keys = @()
+    if ($PreferredKey) { $keys += $PreferredKey }
+    $root = "HKLM:\SYSTEM\CurrentControlSet\Control\Class\$($script:DisplayClassGuid)"
+    foreach ($k in @(Get-ChildItem -LiteralPath $root -ErrorAction SilentlyContinue)) {
+        $p = 'HKLM:\' + ($k.Name -replace '^HKEY_LOCAL_MACHINE\\', '')
+        if ($keys -notcontains $p) { $keys += $p }
+    }
+    return @($keys | Where-Object {
+        $c = Read-RegistryValues $_
+        @($script:OpenGlValueNames | Where-Object { $c.ContainsKey($_) }).Count -gt 0
+    })
+}
+# Puts each value back with the registry type it had, which Get-OpenGlValueRecord recorded. Without a recorded type
+# (a state file of an earlier release) the type follows the value, as it did before.
 function Write-OpenGlRestore {
     param([Parameter(Mandatory)][string]$ClassKey, [AllowEmptyCollection()]$Plan)
     foreach ($r in @($Plan)) {
         if ($r.action -eq 'restore') {
-            $type = 'String'
-            if ($r.value -is [array]) { $type = 'MultiString' }
-            elseif ($r.value -isnot [string]) { $type = 'DWord' }
+            $kind = $null
+            if ($r.PSObject.Properties['kind']) { $kind = [string]$r.kind }
+            $type = Get-OpenGlRestoreKind -Value $r.value -Kind $kind
             switch ($type) {
-                'MultiString' { New-ItemProperty -LiteralPath $ClassKey -Name $r.name -Value ([string[]]$r.value) -PropertyType MultiString -Force | Out-Null }
+                'MultiString' { New-ItemProperty -LiteralPath $ClassKey -Name $r.name -Value ([string[]]@($r.value | ForEach-Object { [string]$_ })) -PropertyType MultiString -Force | Out-Null }
+                'Binary' { New-ItemProperty -LiteralPath $ClassKey -Name $r.name -Value ([byte[]]@($r.value | ForEach-Object { [byte]$_ })) -PropertyType Binary -Force | Out-Null }
                 'DWord' { New-ItemProperty -LiteralPath $ClassKey -Name $r.name -Value ([int]$r.value) -PropertyType DWord -Force | Out-Null }
+                'QWord' { New-ItemProperty -LiteralPath $ClassKey -Name $r.name -Value ([long]$r.value) -PropertyType QWord -Force | Out-Null }
+                'ExpandString' { New-ItemProperty -LiteralPath $ClassKey -Name $r.name -Value ([string]$r.value) -PropertyType ExpandString -Force | Out-Null }
                 default { New-ItemProperty -LiteralPath $ClassKey -Name $r.name -Value ([string]$r.value) -PropertyType String -Force | Out-Null }
             }
         } elseif ($r.action -eq 'remove') {
