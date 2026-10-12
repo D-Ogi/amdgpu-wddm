@@ -130,7 +130,7 @@ plan.change.vcruntime|mt|65d68876|ドライバーのプログラムが必要と�
 shortcuts.title|mt-safe|3af62f49|amdgpu-wddm Control の場所
 shortcuts.start-menu|mt-safe|f7bdc16b|スタート メニュー
 shortcuts.desktop|mt-safe|b1e0eb2c|デスクトップ
-shortcuts.note|mt|f98bdcf0|どちらもオンです。不要なものはオフにしてください。どちらにしてもドライバーはインストールされます。
+shortcuts.note|mt|dc373b0d|スタート メニューには復旧用の項目も追加されます。不要なオプションはオフにしてください。どちらにしてもドライバーはインストールされます。
 plan.firmware.download|mt|7051aa7f|GPU ファームウェアは Linux の公式ファームウェア アーカイブからダウンロードされ、確認されます。
 plan.firmware.folder|mt|3afc555b|GPU ファームウェアは選んだフォルダーから取得され、確認されます。
 plan.firmware.package-folder|mt|576cf803|GPU ファームウェアは準備済みのフォルダーから取得されます。インターネットは不要です。

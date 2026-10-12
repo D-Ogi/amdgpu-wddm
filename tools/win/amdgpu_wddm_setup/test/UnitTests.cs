@@ -40,7 +40,7 @@ static class UnitTests
             Guide();
             Arguments();
             SmallScreens();
-            NoConfirmations();
+            NoConfirmations(repo);
             SingleFile();
             LocaleContracts();
             Quoting();
@@ -129,6 +129,11 @@ static class UnitTests
         Equal(2, r.Decision.Consents.Length, "model: consents");
         Equal("package-folder", r.Decision.FirmwareSource, "model: firmware source");
         Check(r.Decision.CompatibilityOk, "model: compatibility");
+        Check(r.Decision.StartMenuShortcut && r.Decision.DesktopShortcut, "model: an engine that says nothing about the shortcuts means both of them");
+        var shRun = new EngineRun(Id);
+        shRun.Apply(Ev(1, "start", "\"mode\":\"run\",\"gui\":true,\"dry_run\":false,\"package\":\"P\",\"contract\":\"" + EngineRun.Contract + "\",\"phase\":null"));
+        shRun.Apply(Ev(2, "decision", "\"action\":\"resume\",\"start_menu_shortcut\":true,\"desktop_shortcut\":false"));
+        Check(shRun.Decision.StartMenuShortcut && !shRun.Decision.DesktopShortcut, "model: the decision carries the two shortcut answers of this run");
         Check(!r.CancelAvailable, "model: cancel withdrawn");
         Check(r.MayHaveChanged && r.InstallActionSeen && r.RealSteps == 1, "model: the install action and the real step count");
         Equal(3, r.Ignored, "model: other run, other schema and broken line ignored");
@@ -438,7 +443,7 @@ static class UnitTests
     // Pressing Install is the consent. These cases hold the rules of InstallFlow.cs, the words of the four tables,
     // and the absence of the words the removed controls used. The window's own side of it is a render finding
     // (--smoke-render G-CONSENT), and the engine's side is tools/release/test-engine-units.ps1.
-    static void NoConfirmations()
+    static void NoConfirmations(string repo)
     {
         // Every run carries the switches that used to carry the answers, so an older engine asks nothing either.
         Check(InstallFlow.ConsentArguments(null).SequenceEqual(new[] { "-AcceptTestSigning" }),
@@ -479,17 +484,38 @@ static class UnitTests
         Check(InstallFlow.ShortcutArguments(false, true).SequenceEqual(new[] { "-NoStartMenuShortcut", "-DesktopShortcut" }), "shortcuts: no Start menu entry");
         Check(InstallFlow.ShortcutArguments(true, false).SequenceEqual(new[] { "-StartMenuShortcut", "-NoDesktopShortcut" }), "shortcuts: no desktop icon");
         Check(InstallFlow.ShortcutArguments(false, false).SequenceEqual(new[] { "-NoStartMenuShortcut", "-NoDesktopShortcut" }), "shortcuts: neither place");
+        // An answer nobody stated passes no switch, so the engine keeps the answer of the first run of this install.
+        // The run that continues an install after a restart is exactly this case: it has no screen and no answer.
+        Check(InstallFlow.ShortcutArguments(null, null).Length == 0, "shortcuts: an answer nobody stated passes no switch");
+        Check(InstallFlow.ShortcutArguments(null, false).SequenceEqual(new[] { "-NoDesktopShortcut" }), "shortcuts: one answer stated passes one switch");
+        Check(InstallFlow.ShortcutArguments(true, null).SequenceEqual(new[] { "-StartMenuShortcut" }), "shortcuts: the other answer alone passes its own switch");
+        var cont = SetupArgs.Parse(new[] { "--continue" });
+        Check(cont.Mode == "continue" && InstallFlow.ShortcutArguments(cont.StartMenuShortcut, cont.DesktopShortcut).Length == 0,
+            "shortcuts: the run that continues after a restart states no answer, so a desktop icon turned off stays off");
+        var contNo = SetupArgs.Parse(new[] { "--continue", "--no-desktop-shortcut" });
+        Check(InstallFlow.ShortcutArguments(contNo.StartMenuShortcut, contNo.DesktopShortcut).SequenceEqual(new[] { "-NoDesktopShortcut" }),
+            "shortcuts: a continuation started with the switch still states it");
         foreach (var id in InstallFlow.PlanOptionIds) Check(Strings.Has(id), "shortcuts: the plan option " + id + " has words");
         foreach (var id in new[] { "shortcuts.title", "shortcuts.note" }) Check(Strings.Has(id), "shortcuts: " + id + " has words");
         foreach (var id in InstallFlow.PlanOptionsOnByDefault) Check(InstallFlow.PlanOptionIds.Contains(id), "shortcuts: " + id + " is one of the plan options");
         Check(!InstallFlow.PlanOptionsOnByDefault.Contains("tuning.opt-in"), "shortcuts: the optional Windows tuning stays off by default");
         // The window's own switches, so a scripted run can preset the two options.
-        Check(SetupArgs.Parse(new string[0]).StartMenuShortcut && SetupArgs.Parse(new string[0]).DesktopShortcut,
-            "shortcuts: a window started with no argument offers both");
-        Check(!SetupArgs.Parse(new[] { "--no-start-menu-shortcut" }).StartMenuShortcut && SetupArgs.Parse(new[] { "--no-start-menu-shortcut" }).DesktopShortcut,
-            "shortcuts: --no-start-menu-shortcut turns one option off and leaves the other on");
-        Check(!SetupArgs.Parse(new[] { "--no-desktop-shortcut" }).DesktopShortcut, "shortcuts: --no-desktop-shortcut turns the desktop option off");
+        Check(!SetupArgs.Parse(new string[0]).StartMenuShortcut.HasValue && !SetupArgs.Parse(new string[0]).DesktopShortcut.HasValue,
+            "shortcuts: a window started with no argument states no answer and offers both");
+        Check(SetupArgs.Parse(new[] { "--no-start-menu-shortcut" }).StartMenuShortcut == false && !SetupArgs.Parse(new[] { "--no-start-menu-shortcut" }).DesktopShortcut.HasValue,
+            "shortcuts: --no-start-menu-shortcut turns one option off and leaves the other alone");
+        Check(SetupArgs.Parse(new[] { "--no-desktop-shortcut" }).DesktopShortcut == false, "shortcuts: --no-desktop-shortcut turns the desktop option off");
+        Check(SetupArgs.Parse(new[] { "--start-menu-shortcut", "--desktop-shortcut" }).StartMenuShortcut == true && SetupArgs.Parse(new[] { "--start-menu-shortcut", "--desktop-shortcut" }).DesktopShortcut == true,
+            "shortcuts: the positive switches state the answer explicitly");
         Check(SetupArgs.Parse(new[] { "--no-desktop-shortcut" }).Error == null, "shortcuts: the switch is accepted by the welcome mode");
+        // The window keeps the two answers as "not stated yet" until a switch or the plan screen states one: a plain
+        // bool would be true again in the run that continues the install, which would put back a shortcut that was
+        // turned off.
+        var formSource = File.ReadAllText(Path.Combine(repo, "tools", "win", "amdgpu_wddm_setup", "src", "SetupForm.cs"));
+        Check(Regex.IsMatch(formSource, @"bool\?\s+_startMenuShortcut,\s*_desktopShortcut;"), "shortcuts: the window holds both answers as \"not stated yet\" until one is given");
+        Check(Regex.IsMatch(formSource, @"_startMenuShortcut\s*\?\?\s*\(d == null \|\| d\.StartMenuShortcut\)") &&
+              Regex.IsMatch(formSource, @"_desktopShortcut\s*\?\?\s*\(d == null \|\| d\.DesktopShortcut\)"),
+            "shortcuts: the boxes open on the answer the engine reports, both on where it reports none");
         // The words of the removed controls are gone from every table, so neither can come back by itself.
         foreach (var id in InstallFlow.RemovedConsentIds)
             Check(!Strings.Has(id), "no confirmations: " + id + " is gone from the string tables");

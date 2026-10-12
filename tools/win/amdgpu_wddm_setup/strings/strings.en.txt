@@ -132,7 +132,7 @@ plan.change.vcruntime|src|-|The Microsoft Visual C++ 2015-2022 runtime (x64) is 
 shortcuts.title|src|-|Where to find amdgpu-wddm Control
 shortcuts.start-menu|src|-|In the Start menu
 shortcuts.desktop|src|-|On the desktop
-shortcuts.note|src|-|Both are on. Turn one off if you do not want it. The driver is installed either way.
+shortcuts.note|src|-|The Start menu also gets an entry for recovery. Turn an option off if you do not want it. The driver is installed either way.
 plan.firmware.download|src|-|The GPU firmware is downloaded from the official Linux firmware archive and checked.
 plan.firmware.folder|src|-|The GPU firmware comes from the folder you chose and is checked.
 plan.firmware.package-folder|src|-|The GPU firmware comes from the prepared folder. No internet is needed.

@@ -131,7 +131,7 @@ plan.change.vcruntime|rev|65d68876|Najpierw instalowane jest środowisko uruchom
 shortcuts.title|rev|3af62f49|Gdzie znaleźć amdgpu-wddm Control
 shortcuts.start-menu|rev|f7bdc16b|W menu Start
 shortcuts.desktop|rev|b1e0eb2c|Na pulpicie
-shortcuts.note|rev|f98bdcf0|Obie opcje są włączone. Wyłącz jedną, jeśli jej nie chcesz. Na instalację sterownika to nie wpływa.
+shortcuts.note|rev|dc373b0d|Menu Start dostaje też wpis do odzyskiwania. Wyłącz opcję, jeśli jej nie chcesz. Na instalację sterownika to nie wpływa.
 plan.firmware.download|rev|7051aa7f|Firmware GPU zostanie pobrany z oficjalnego archiwum firmware Linuksa i sprawdzony.
 plan.firmware.folder|rev|3afc555b|Firmware GPU pochodzi z wybranego folderu i zostanie sprawdzony.
 plan.firmware.package-folder|rev|576cf803|Firmware GPU pochodzi z przygotowanego folderu. Internet nie jest potrzebny.

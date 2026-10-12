@@ -130,7 +130,7 @@ plan.change.vcruntime|mt|65d68876|드라이버 프로그램에 필요하므로 M
 shortcuts.title|mt-safe|3af62f49|amdgpu-wddm Control 위치
 shortcuts.start-menu|mt-safe|f7bdc16b|시작 메뉴
 shortcuts.desktop|mt-safe|b1e0eb2c|바탕 화면
-shortcuts.note|mt|f98bdcf0|둘 다 켜져 있습니다. 원하지 않는 항목은 끄세요. 어느 쪽이든 드라이버는 설치됩니다.
+shortcuts.note|mt|dc373b0d|시작 메뉴에는 복구용 항목도 추가됩니다. 원하지 않는 옵션은 끄세요. 어느 쪩이든 드라이버는 설치됩니다.
 plan.firmware.download|mt|7051aa7f|GPU 펌웨어는 Linux 공식 펌웨어 보관소에서 다운로드되고 확인됩니다.
 plan.firmware.folder|mt|3afc555b|GPU 펌웨어는 선택한 폴더에서 가져와 확인됩니다.
 plan.firmware.package-folder|mt|576cf803|GPU 펌웨어는 준비된 폴더에서 가져옵니다. 인터넷이 필요 없습니다.

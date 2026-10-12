@@ -26,6 +26,9 @@ namespace AmdgpuWddmSetup
         public string[] Consents = new string[0], Notes = new string[0], CompatibilityReasons = new string[0];
         public int Restarts;
         public bool CompatibilityOk, SystemTuning;
+        // The two shortcut answers the engine would act on: its own command line, or the answer an earlier run of
+        // the same install saved. Both are on where the engine says nothing about them.
+        public bool StartMenuShortcut = true, DesktopShortcut = true;
     }
 
     public sealed class SettingsPlan
@@ -123,6 +126,7 @@ namespace AmdgpuWddmSetup
                         FirmwareSource = Json.Str(e, "firmware_source"), FirmwareDir = Json.Str(e, "firmware_dir"), Notes = Json.Strs(e, "notes"),
                         SecureBoot = Json.Str(e, "secure_boot"), BitLocker = Json.Str(e, "bitlocker"),
                         SystemTuning = Json.Bool(e, "system_tuning"),
+                        StartMenuShortcut = Json.BoolOr(e, "start_menu_shortcut", true), DesktopShortcut = Json.BoolOr(e, "desktop_shortcut", true),
                         CompatibilityOk = c != null && Json.Bool(c, "ok"), CompatibilityReasons = Json.Strs(c, "reasons"),
                     };
                     break;

@@ -60,16 +60,18 @@ namespace AmdgpuWddmSetup
 
         // The shortcuts of the control application (owner, 2026-10-12: "pytajmy tez czy zrobic skrot na pulpicie
         // (domyslnie i menu start i pulpit)"). Both are on, and neither answer holds the install back: the switches
-        // below only choose where the shortcuts go. The window states both answers, as it does for the Windows
-        // tuning, so this run decides over the answer an earlier run of the same install saved.
+        // below only choose where the shortcuts go. An answer the window shows is stated on the command line, so
+        // this run decides over the answer an earlier run of the same install saved.
+        // An answer nobody stated (null) passes no switch, exactly as the Windows tuning does: the run that
+        // continues an install after a restart has no screen and no answer of its own, and a positive switch would
+        // clear the saved negative one, which would put back a shortcut the tester turned off.
         // Get-ControlShortcutPlan in installer\common.ps1 is the engine's side.
-        public static string[] ShortcutArguments(bool startMenu, bool desktop)
+        public static string[] ShortcutArguments(bool? startMenu, bool? desktop)
         {
-            return new[]
-            {
-                startMenu ? "-StartMenuShortcut" : "-NoStartMenuShortcut",
-                desktop ? "-DesktopShortcut" : "-NoDesktopShortcut"
-            };
+            var args = new List<string>();
+            if (startMenu.HasValue) args.Add(startMenu.Value ? "-StartMenuShortcut" : "-NoStartMenuShortcut");
+            if (desktop.HasValue) args.Add(desktop.Value ? "-DesktopShortcut" : "-NoDesktopShortcut");
+            return args.ToArray();
         }
 
         // The options the plan screen may carry, as string ids. They are choices between good outcomes, not

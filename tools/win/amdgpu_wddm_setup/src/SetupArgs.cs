@@ -43,8 +43,11 @@ namespace AmdgpuWddmSetup
         // the window removes when the run ends with no restart pending. Never a command-line option.
         public string PayloadPackage;
         public bool DryRun, ApplySystemTuning;
-        // The two shortcut options of the plan screen, both on unless a switch leaves one out (owner, 2026-10-12).
-        public bool StartMenuShortcut = true, DesktopShortcut = true;
+        // The two shortcut options of the plan screen, both on unless a switch states otherwise (owner, 2026-10-12).
+        // null is "nothing was stated": the screen opens the box on the answer the engine reports, and the run that
+        // continues an install after a restart passes no switch at all, so the saved answer stands (BD: a positive
+        // switch clears the saved negative one, which turned an unticked box back on at the restart).
+        public bool? StartMenuShortcut, DesktopShortcut;
         public readonly List<string> EngineArgs = new List<string>();
         // smoke entries
         public string SmokeDir, Language = "en", Script = "install.ps1";
@@ -72,7 +75,9 @@ namespace AmdgpuWddmSetup
                     case "--version": a.SetMode("version"); break;
                     case "--apply-system-tuning": a.ApplySystemTuning = true; break;
                     case "--no-start-menu-shortcut": a.StartMenuShortcut = false; break;
+                    case "--start-menu-shortcut": a.StartMenuShortcut = true; break;
                     case "--no-desktop-shortcut": a.DesktopShortcut = false; break;
+                    case "--desktop-shortcut": a.DesktopShortcut = true; break;
                     case "--continue": a.SetMode("continue"); break;
                     case "--repair": a.SetMode("repair"); break;
                     case "--prepare-offline": a.SetMode("prepare-offline"); break;

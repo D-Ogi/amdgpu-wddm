@@ -47,7 +47,9 @@ namespace AmdgpuWddmSetup
         ResultView _view;
         bool? _systemTuningChoice;
         // The two shortcut options of the plan screen (owner, 2026-10-12), both on unless the command line says no.
-        bool _startMenuShortcut = true, _desktopShortcut = true;
+        // The two shortcut answers: null until a switch or the person on the plan screen states one. A run with no
+        // answer of its own passes no switch, so the answer an earlier run of the same install saved stands.
+        bool? _startMenuShortcut, _desktopShortcut;
         // True while the plan screen shown is the one that offers an install, with its options (G-SHORTCUT).
         bool _planOffersInstall;
         bool _restartLater;
@@ -116,14 +118,22 @@ namespace AmdgpuWddmSetup
             }
         }
 
-        // The application's own icon (art\icon\nagi.ico, embedded by build.ps1 as the Win32 icon of this exe): the
-        // icon Windows shows in the task bar and in Alt+Tab, and the icon of the file itself. The window draws its
-        // own title bar, so it shows no icon of its own. A file that cannot be read leaves the WinForms default
-        // icon in place: an icon is never a reason for a setup not to start.
+        // The application's own icon (art\icon\nagi.ico): the icon Windows shows in the task bar and in Alt+Tab, and
+        // the icon of the file itself. The window draws its own title bar, so it shows no icon of its own.
+        // The file travels twice in this exe: as its Win32 icon (build.ps1, /win32icon, the icon Explorer draws) and
+        // as the resource read here. The resource carries all nine sizes, so Windows takes the size it needs from the
+        // ones that were drawn for it; Icon.ExtractAssociatedIcon would hand out one 32x32 image, which a 150 % or
+        // 200 % screen then rescales. A resource that cannot be read leaves the WinForms default icon in place: an
+        // icon is never a reason for a setup not to start.
         void SetWindowIcon()
         {
             try
             {
+                var asm = Assembly.GetExecutingAssembly();
+                using (var s = asm.GetManifestResourceStream("nagi.ico"))
+                {
+                    if (s != null) { Icon = new Icon(s); return; }
+                }
                 var path = Assembly.GetEntryAssembly() != null ? Assembly.GetEntryAssembly().Location : null;
                 if (!string.IsNullOrEmpty(path) && File.Exists(path)) Icon = Icon.ExtractAssociatedIcon(path);
             }
@@ -924,11 +934,11 @@ namespace AmdgpuWddmSetup
             // the driver by pressing Install.
             var shortcuts = Card(Strings.T("shortcuts.title"), Icons.Sparkle);
             var startMenu = Ui.Check(Strings.T("shortcuts.start-menu"), shortcuts.Inner);
-            startMenu.Checked = _startMenuShortcut;
+            startMenu.Checked = _startMenuShortcut ?? (d == null || d.StartMenuShortcut);
             startMenu.CheckedChanged += (s, e) => { _startMenuShortcut = startMenu.Checked; };
             shortcuts.Add(startMenu);
             var desktop = Ui.Check(Strings.T("shortcuts.desktop"), shortcuts.Inner);
-            desktop.Checked = _desktopShortcut;
+            desktop.Checked = _desktopShortcut ?? (d == null || d.DesktopShortcut);
             desktop.CheckedChanged += (s, e) => { _desktopShortcut = desktop.Checked; };
             shortcuts.Add(desktop);
             shortcuts.Add(Ui.Label(Strings.T("shortcuts.note"), Theme.Small, Theme.Dim, shortcuts.Inner));

@@ -22,7 +22,7 @@ The window starts `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy By
 | `-ResultFile <path>` | the terminal result, written once (section 3); a stale file is deleted at the start |
 | `-Plan` | checks and the decision only; changes nothing |
 | `-AcceptTestSigning`, `-BitLocker HaveKey\|Suspend` | passed by every run the window starts, and accepted from a script. The window asks nobody for them (owner, 2026-10-12) |
-| `-StartMenuShortcut\|-NoStartMenuShortcut`, `-DesktopShortcut\|-NoDesktopShortcut` | the two places of the shortcut, one pair each, passed by every install run the window starts |
+| `-StartMenuShortcut\|-NoStartMenuShortcut`, `-DesktopShortcut\|-NoDesktopShortcut` | the two places of the shortcut, one pair each. The window passes the switch of an answer it has. A run with no answer of its own passes neither switch, so the answer the first run saved stands. The continuation after a restart is such a run. |
 | `-Repair`, `-FirmwareDir <dir>`, `-Verify` | as on the command line |
 | `-DeadlineUtc <ISO 8601 UTC>` | stop at the first stop point after this time (section 10) |
 | `-HoldWindow` | command line only (the RunOnce continuation, section 4): wait for Enter before the console window closes; ignored with `-Gui` |
@@ -57,14 +57,18 @@ like a damaged package - a new try in the same session cannot fix it.
 (below build 22000) and a 32-bit Windows are refused, as before (`windows.too-old`, `windows.not-x64`). A Windows
 11 below 22631 is one line that names the supported versions and advises an update
 (`windows.below-supported`), and the installation continues (owner, 2026-10-12: "tylko warning, nie blokada"). An
-Insider build, by the channel in `HKLM\SOFTWARE\Microsoft\WindowsSelfHost\Applicability` or a build at or above
-27000, adds `windows.insider`. An LTSC edition, by `EditionID` `EnterpriseS` or `IoTEnterpriseS`, adds
+Insider build adds `windows.insider`. The channel comes from
+`HKLM\SOFTWARE\Microsoft\WindowsSelfHost\Applicability`. A PC in the Insider programme gets that line on a build
+outside the three tested ones. Any build at or above 27000 gets it as well. A PC enrolled on one of the three
+tested builds, as Release Preview can be, runs the version this driver is tested on and reads no such line. An LTSC edition, by `EditionID` `EnterpriseS` or `IoTEnterpriseS`, adds
 `windows.ltsc`. All three are `warn`: information on the plan screen, no question and no checkbox. A refused
 Windows gets its refusal alone.
 
 **Where to find the application afterwards** (owner, 2026-10-12: "pytajmy tez czy zrobic skrot na pulpicie
 (domyslnie i menu start i pulpit)"). The plan screen has a card with two boxes, the Start menu and the desktop,
-both on. Neither holds the Install button back. The window states both answers on the command line
+both on. Neither holds the Install button back. A box opens on the answer the decision event reports
+(`start_menu_shortcut`, `desktop_shortcut`). Both are on where the engine reports neither. A run with no answer
+passes neither switch. The window states each answer it has on the command line
 (`InstallFlow.ShortcutArguments`), the engine writes the shortcuts of that plan and removes a shortcut an earlier
 install wrote in a place this one leaves out, and the uninstall removes every one of them. `interfaces.md` section
 4 lists the three shortcuts. The render gate G-SHORTCUT refuses an install plan screen without the two boxes, a box
@@ -112,7 +116,7 @@ One JSON object per line, UTF-8 without BOM, appended; the reader takes complete
 | `start` | `mode` (plan, dry-run, run, verify, prepare-offline), `gui`, `dry_run`, `package`, `contract`, `phase`, `deadline_utc`, `job` (`kill-on-close`, or `none: <reason>`) | first |
 | `stage` | `id`, `text` | a stage begins: `preflight`, `test-signing`, `install`, `firmware`, `files`, `driver`, `settings`, `finish`, `verify`; prepare-offline: `prepare-check`, `firmware`, `components`, `copy`, `finish`. Two more come from a package that carries `installer/components.json`. `extras` asks the questions, after the preflight and before any change. `components` installs the chosen extras, after `settings`. A run that can choose no extra opens neither, which is every run with `-Gui` and no `-Components` |
 | `check` | `id` (`<area>.<finding>`, for example `gpu.missing`, `firmware.folder-bad`), `result` (ok, warn, fail), `name`, `detail` | each preflight check |
-| `decision` | `action` (install, upgrade, resume, repair, verify, already), `installed_version`, `package_version`, `phase`, `consents` (always empty: nothing is asked of the user), `consents_given`, `restarts` (0, 1, 2), `firmware_source` (download, folder, package-folder), `firmware_dir`, `notes` (release-notes files in the package), `secure_boot`, `bitlocker`, `compatibility` (`ok`, `reasons`) | once, before any change |
+| `decision` | `action` (install, upgrade, resume, repair, verify, already), `installed_version`, `package_version`, `phase`, `consents` (always empty: nothing is asked of the user), `consents_given`, `restarts` (0, 1, 2), `firmware_source` (download, folder, package-folder), `firmware_dir`, `notes` (release-notes files in the package), `secure_boot`, `bitlocker`, `compatibility` (`ok`, `reasons`), `system_tuning`, `start_menu_shortcut`, `desktop_shortcut` (the two shortcut answers this run would act on: its own command line, or the answer an earlier run of the same install saved) | once, before any change |
 | `settings-plan` | `summary` (`kept`, `updated`, `added`, `unchanged`, `command`, `reopened`, `driver_closed`), `rows` [`group`, `name`, `decision` (set, same, update, kept, command, reopened, driver-closed), `current`, `value`, `default`, `present`, `closure` (the driver's own act in plain words, null when there is none: BD-069)] | after the decision, before the first `step` (WU-006, WU-044) |
 | `cancel` | `available`, `where` | a safe point opens or closes |
 | `deadline` | `passed`, `where`, `deadline_utc`, `action` (`finishing`) | the deadline has passed inside a part that cannot stop; the run stops at the next stop point (section 10) |
