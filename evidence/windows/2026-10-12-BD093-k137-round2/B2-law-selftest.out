@@ -1,0 +1,10 @@
+selftest emit_executes=yes iters=1000000
+clock imul16_ns=14.0929 imul16_mhz=3406.0 fp8_ns=7.0155 fp8_mhz_at_3cyc=3421.0 fp_over_imul=1.0044 tsc_mhz=3194.06 qpc_hz=10000000
+selftest clock_plausible=yes imul_mhz=3406.0
+selftest fp_over_imul=1.0044 ratio_means_addsd_latency=1.00->3cyc(zen2,lab) 1.50->2cyc 0.75->4cyc
+selftest tsc_plausible=yes tsc_mhz=3194.06
+selftest alu_cyc_per_instr=1.7477 healthy_band=0.15..0.45 verdict=capped-like
+selftest dep4_cyc=14.449 ind4_cyc=9.773 dep_over_ind=1.479 healthy_expect=about_3
+selftest dep4_is_12_cycles=NO
+selftest avx2=1 osxsave=1 avx=1 avx2=1 xcr0_ymm=1
+selftest failures=1

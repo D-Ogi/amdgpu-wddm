@@ -37,6 +37,8 @@ flowchart LR
   M812["M812"]
   M813["M813"]
   M870["M870<br/>kmd"]
+  M880["M880<br/>kmd"]
+  M896["M896"]
   S1["S1"]
   S2["S2"]
   S3["S3"]
@@ -58,13 +60,14 @@ flowchart LR
   M807 ==>|supports| M789
   M812 ==>|supports| M19
   M813 ==>|supports| M6
+  M896 ==>|supports| M880
   M870 ==>|supports| M13
   M870 ==>|supports| M14
   M5 -.->|refutes| S3
   M12 -.->|refutes| R3
   M333 ==>|supersedes| M35
   classDef other stroke-dasharray:4 3
-  class M5,M12,M90,M241,M333,M870 other
+  class M5,M12,M90,M241,M333,M870,M880 other
 ```
 
 ## References
@@ -83,7 +86,6 @@ flowchart LR
   M18["M18"]
   M19["M19"]
   M20["M20"]
-  M21["M21"]
   M24["M24<br/>linux"]
   M25["M25"]
   M30["M30"]
@@ -122,7 +124,6 @@ flowchart LR
   M812["M812"]
   M813["M813"]
   M814["M814"]
-  M815["M815"]
   M828["M828"]
   M829["M829"]
   M847["M847<br/>icd"]
@@ -132,6 +133,9 @@ flowchart LR
   M871["M871<br/>games"]
   M872["M872"]
   M884["M884"]
+  M887["M887<br/>kmd"]
+  M894["M894<br/>kmd"]
+  M896["M896"]
   M2 --> M1
   M3 --> M4
   M18 --> M4
@@ -162,7 +166,6 @@ flowchart LR
   M813 --> M812
   M814 --> M6
   M814 --> M812
-  M815 --> M21
   M828 --> M806
   M829 --> M785
   M829 --> M828
@@ -172,11 +175,13 @@ flowchart LR
   M872 --> M806
   M872 --> M871
   M884 --> M812
+  M896 --> M887
   M37 --> M33
   M37 --> M39
   M81 --> M30
   M81 --> M57
   M81 --> M60
+  M894 --> M896
   M85 --> M31
   M117 --> M20
   M118 --> M31
@@ -186,13 +191,14 @@ flowchart LR
   M55 --> M44
   M805 --> M47
   classDef other stroke-dasharray:4 3
-  class M5,M24,M37,M41,M46,M48,M54,M55,M81,M85,M117,M118,M776,M801,M805,M847,M867,M871 other
+  class M5,M24,M37,M41,M46,M48,M54,M55,M81,M85,M117,M118,M776,M801,M805,M847,M867,M871,M887,M894 other
 ```
 
 ### Part 2
 
 ```mermaid
 flowchart LR
+  M21["M21"]
   M22["M22"]
   M35["M35"]
   M40["M40<br/>linux"]
@@ -208,6 +214,7 @@ flowchart LR
   M429["M429"]
   M433["M433"]
   M791["M791"]
+  M815["M815"]
   M816["M816<br/>games"]
   M817["M817"]
   M822["M822<br/>linux"]
@@ -219,6 +226,7 @@ flowchart LR
   M349 --> M348
   M433 --> M429
   M791 --> M22
+  M815 --> M21
   M823 --> M822
   M833 --> M817
   M106 --> M79

@@ -1,0 +1,25 @@
+cpuid_begin pinned_cpu=2 on=2 processors=12
+cpuid leaf=0x00000000 sub=0 eax=0x00000010 ebx=0x68747541 ecx=0x444D4163 edx=0x69746E65
+cpuid leaf=0x00000001 sub=0 eax=0x00840F70 ebx=0x020C0800 ecx=0x7ED8320B edx=0x178BFBFF
+cpuid leaf=0x00000007 sub=0 eax=0x00000000 ebx=0x219C91A9 ecx=0x00400004 edx=0x00000000
+cpuid leaf=0x0000000B sub=0 eax=0x00000001 ebx=0x00000002 ecx=0x00000100 edx=0x00000002
+cpuid leaf=0x0000000D sub=0 eax=0x00000207 ebx=0x00000340 ecx=0x00000400 edx=0x40000000
+cpuid leaf=0x80000000 sub=0 eax=0x80000020 ebx=0x68747541 ecx=0x444D4163 edx=0x69746E65
+cpuid leaf=0x80000001 sub=0 eax=0x00840F70 ebx=0x00000000 ecx=0xF5C2B7FF edx=0x2FD3FBFF
+cpuid leaf=0x80000002 sub=0 eax=0x20444D41 ebx=0x322D4342 ecx=0x00003035 edx=0x00000000
+cpuid leaf=0x80000003 sub=0 eax=0x00000000 ebx=0x00000000 ecx=0x00000000 edx=0x00000000
+cpuid leaf=0x80000004 sub=0 eax=0x00000000 ebx=0x00000000 ecx=0x00000000 edx=0x00000000
+cpuid leaf=0x80000007 sub=0 eax=0x00000000 ebx=0x0000001B ecx=0x00000000 edx=0x00006599
+cpuid leaf=0x80000008 sub=0 eax=0x00003030 ebx=0x01023EFF ecx=0x0000700B edx=0x000100FF
+cpuid leaf=0x8000001E sub=0 eax=0x00000002 ebx=0x00000101 ecx=0x00000000 edx=0x00000000
+cpuid leaf=0x8000001F sub=0 eax=0x0001000F ebx=0x0000012F ecx=0x0000000E edx=0x00000001
+cpuid percpu pinned_cpu=2 apic_id_leaf1_ebx_31_24=0x00000002 x2apic_id_leaf0xB_edx=0x00000002 ext_apic_id_leaf8000001E_eax=0x00000002 (these three follow the logical CPU, not the state: compare them only at the same pinned_cpu)
+cpuid core_invariant leaf1_ebx_masked=0x000C0800 (leaf 1 EBX without the initial APIC ID byte: this one is comparable between A and B)
+cpuid leaf=0x8000001D sub=0 eax=0x00004121 ebx=0x01C0003F ecx=0x0000003F edx=0x00000000
+cpuid leaf=0x8000001D sub=1 eax=0x00004122 ebx=0x01C0003F ecx=0x0000003F edx=0x00000000
+cpuid leaf=0x8000001D sub=2 eax=0x00004143 ebx=0x01C0003F ecx=0x000003FF edx=0x00000002
+cpuid leaf=0x8000001D sub=3 eax=0x00014163 ebx=0x03C0003F ecx=0x00000FFF edx=0x00000001
+cpuid leaf=0x00000007 sub=0 eax=0x00000000 ebx=0x219C91A9 ecx=0x00400004 edx=0x00000000
+cpuid leaf=0x00000007 sub=1 eax=0x00000000 ebx=0x00000000 ecx=0x00000000 edx=0x00000000
+cpuid brand="AMD BC-250" osxsave=1 avx=1 avx2=1 xcr0_ymm=1 avx2_usable=1
+cpuid xcr0=0x0000000000000007

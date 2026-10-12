@@ -1,0 +1,24 @@
+12:21:28.584 enter device before status=OK instance=PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\4&19CAF403&0&0041
+12:21:28.615 enter dpm before driver 0x000700D8, requested dpm, reason none, generation 28093727, ticks 18162, uptime 570180 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release below 83.0 C for 4000 ms (default), soft zone from 86.0 C per 1500 ms, lead 15000 ms (default)
+12:21:28.617 enter dpm before idle: 500 MHz (now) after 3000 ms under 2 permille busy; entries 2 exits 1 refusals 0, 536470 ms at the point
+12:21:31.072 enter pnputil Microsoft PnP Utility
+12:21:31.088 enter pnputil 
+12:21:31.104 enter pnputil Restarting device:         PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\4&19caf403&0&0041
+12:21:31.135 enter pnputil Device restarted successfully.
+12:21:31.150 enter pnputil 
+12:21:34.312 enter device after status=OK
+12:21:34.345 enter dpm after driver 0x000700D8, requested dpm, reason none, generation 5760220120, ticks 89, uptime 2777 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release below 83.0 C for 4000 ms (default), soft zone from 86.0 C per 1500 ms, lead 15000 ms (default)
+12:21:34.347 enter dpm after idle: 500 MHz after 3000 ms under 2 permille busy; entries 0 exits 0 refusals 0, 0 ms at the point
+12:21:34.417 enter END the device has been stopped and started once in this boot
+12:26:22.321 enter device before status=OK instance=PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\4&19CAF403&0&0041
+12:26:22.389 enter dpm before driver 0x000700D8, requested dpm, reason none, generation 5760220120, ticks 9172, uptime 290821 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release below 83.0 C for 4000 ms (default), soft zone from 86.0 C per 1500 ms, lead 15000 ms (default)
+12:26:22.392 enter dpm before idle: 500 MHz (now) after 3000 ms under 2 permille busy; entries 3 exits 2 refusals 0, 239784 ms at the point
+12:26:26.007 enter pnputil Microsoft PnP Utility
+12:26:26.023 enter pnputil 
+12:26:26.039 enter pnputil Restarting device:         PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\4&19caf403&0&0041
+12:26:26.039 enter pnputil Device restarted successfully.
+12:26:26.054 enter pnputil 
+12:26:29.220 enter device after status=OK
+12:26:29.256 enter dpm after driver 0x000700D8, requested dpm, reason none, generation 8712492255, ticks 80, uptime 2478 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release below 83.0 C for 4000 ms (default), soft zone from 86.0 C per 1500 ms, lead 15000 ms (default)
+12:26:29.259 enter dpm after idle: 500 MHz after 3000 ms under 2 permille busy; entries 0 exits 0 refusals 0, 0 ms at the point
+12:26:29.321 enter END the device has been stopped and started once in this boot

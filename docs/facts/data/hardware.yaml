@@ -821,6 +821,16 @@ facts:
     evidence: "[K137 state A and B](../evidence/windows/2026-10-12-k137-state-ab/README.md)"
     edges:
       - {"type": "uses", "to": "M812"}
+  - id: M896
+    status: MEASURED
+    date: "2026-10-12"
+    claim: "On unit A logical CPUs 0 and 1 are the two threads of one core, and every other logical CPU is on another core than CPU 0. Two pinned threads of an emitted ALU loop sum to 1.076 and 1.077 solo rates on CPUs 0 and 1, and to 2.006 to 2.008 solo rates on CPU 0 with each of CPUs 2 to 11, in two runs after a boot. In the same boot one core issues an independent `add r64, imm8` at a fitted 0.2639 to 0.2657 cycles, modelled at the latency clock, and 24 instructions of one kind plus 2 loop instructions cost 0.268 (`add`), 0.923 (`imul`, scalar FP, store) and 0.462 (128-bit vector, 256-bit vector, load) cycles an instruction."
+    status_text: "MEASURED (unit A, one boot, 2 pairs runs and 6 runs of the cost rows)"
+    detail: "Probe `bd093law` (`bd093law.exe` SHA-256 `97ACE083`), pinned to logical CPU 2 for the cost rows and to the named CPUs for the pairs, under the kernel driver of M887. Solo CPU 0 reads 11952.48 and 11953.32 work/us in the two runs, and the pair 0-1 reads 6405.71 and 6463.23 work/us in the second. Cycles are modelled from the clock of a chain of 16 dependent `imul` in the same run, 3489.5 to 3490.8 MHz. A chain of 8 dependent `addsd` agrees with it to 0.03 %, and both sit 0.3 % under the 3500 MHz that SMU message 0x43 reads on core index 1 under load, so the latencies of 3 cycles that the chains assume agree with the grant. The `imm32` form costs 0.994 to 1.008 times the `imm8` form. Nops of 1 and 8 bytes cost 0.200 cycles and nops of 15 bytes 0.21 to 0.27 cycles. A chain of 8 dependent `addsd` beside up to 40 independent adds holds 23.99 to 24.02 cycles. Four dependent `imul` cost 11.995 to 12.001 cycles and four independent ones 3.998 to 4.001 cycles. The 256-bit row costs 0.999 to 1.000 times the 128-bit row. This row is the healthy reference for the K137 rows M889, M890 and M894, and it makes the per-core reading of M880 a measurement, which the first arm had to leave as an assumption of the topology. It does not read which cores share an L3"
+    evidence: "[K137 round 2](../evidence/windows/2026-10-12-BD093-k137-round2/RESULT.md)"
+    edges:
+      - {"type": "uses", "to": "M887"}
+      - {"type": "supports", "to": "M880"}
   - id: S1
     status: HYPOTHESIS
     date: "2026-09-21"
