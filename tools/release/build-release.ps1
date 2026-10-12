@@ -200,6 +200,16 @@ foreach ($t in Get-ChildItem -LiteralPath $notesDir -File -Filter "$Version.*.md
     Copy-Item -LiteralPath $t.FullName -Destination (Join-Path $pkg "RELEASE-NOTES.$lang.md")
 }
 '  release notes: RELEASE-NOTES.md{0}' -f $(if (@(Get-ChildItem -LiteralPath $pkg -Filter 'RELEASE-NOTES.*.md').Count) { ' + ' + ((Get-ChildItem -LiteralPath $pkg -Filter 'RELEASE-NOTES.*.md' | ForEach-Object { $_.Name }) -join ', ') } else { '' })
+# docs\testing\release-notes\pending holds tester-facing lines written before the release that carries them. Nothing
+# reads that folder, so a note left there ships nowhere: the file 0.7.208-log-lines.md sat through tester.24 to
+# tester.28 unread. Name every pending file in the build log, so the release step either folds the lines into
+# <version>.md and deletes the file, or decides out loud to leave it for the next release.
+$pendingDir = Join-Path $notesDir 'pending'
+if (Test-Path -LiteralPath $pendingDir) {
+    foreach ($p in Get-ChildItem -LiteralPath $pendingDir -File -Filter '*.md') {
+        Write-Warning ("pending release-notes lines not folded into ${Version}.md: docs\testing\release-notes\pending\{0}" -f $p.Name)
+    }
+}
 # The setup window (required, checked at the start): setup\amdgpu_wddm_setup.exe (its string tables are embedded). The
 # installer's continuation runs it from the staged closure after each restart that a setup-window run asked for.
 $setupExe = Join-Path $SetupApp 'amdgpu_wddm_setup.exe'

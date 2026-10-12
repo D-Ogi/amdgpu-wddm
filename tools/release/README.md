@@ -137,7 +137,9 @@ the previous one) and `Release\RepairSetup` names its setup window. `prepare-off
 package and the firmware for a BC-250 without internet. `build-release.ps1` writes `compatibility.json` (engine
 contract, the INF `Reboot` directive, firmware list, settings table schema, the continuation) and refuses a package
 whose record does not verify; it takes the release notes from `docs/testing/release-notes/<version>.md` (sections New,
-Fixed, Known issues, Settings affected required) as `RELEASE-NOTES.md`. Verify and the start-confirm task write the
+Fixed, Known issues, Settings affected required) as `RELEASE-NOTES.md`. Before a release build, fold every file of
+`docs/testing/release-notes/pending/` into `<version>.md` and delete the file: nothing else reads that folder, so
+lines left there reach no tester. `build-release.ps1` names each remaining pending file as a warning in its log. Verify and the start-confirm task write the
 running-release witness `%ProgramData%\amdgpu-wddm\installer\running-release.json` (the loaded KMD image, its reply
 and the boot).
 
