@@ -150,7 +150,7 @@ function Get-DwmReplacementFinding($Record, $Current, $Epoch) {
     if (($Epoch.session -eq 0) -or ($null -eq $Epoch.logon_utc)) { return [pscustomobject]@{ state = 'unknown'; detail = 'unknown: no desktop session with a logon' } }
     $now = @($Current)
     if (-not $now.Count) { return [pscustomobject]@{ state = 'unknown'; detail = "unknown: no DWM in session $($Epoch.session)" } }
-    if (-not (Test-DwmBaselineRecord $Record)) { return [pscustomobject]@{ state = 'unknown'; detail = "unknown history: no DWM of session $($Epoch.session) was recorded since the logon at $(Format-DwmTime $Epoch.logon_utc) (the start-confirm task records it after each logon of an administrator)" } }
+    if (-not (Test-DwmBaselineRecord $Record)) { return [pscustomobject]@{ state = 'unknown'; detail = "unknown history: no DWM of session $($Epoch.session) was recorded since the logon at $(Format-DwmTime $Epoch.logon_utc) (the start-confirm task records it after each logon)" } }
     $base = [pscustomobject]@{ pid = [int]$Record.dwm_pid; created_utc = (ConvertFrom-DwmTime $Record.dwm_created_utc) }
     $recorded = Format-DwmTime (ConvertFrom-DwmTime $Record.recorded_utc)
     $running = @($now | Where-Object { Test-SameDwm $_ $base })

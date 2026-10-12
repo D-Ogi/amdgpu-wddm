@@ -227,6 +227,107 @@ else {
     Check ((Get-DwmReplacementFinding $null $mine $ep).state -eq 'unknown') 'this computer without a record: unknown history (no false restart)'
 }
 
+# BD-080: the logon tasks, as the plan install.ps1 registers (common.ps1 Get-LogonTaskPlan, Test-LogonTaskPlan).
+# Nothing here registers, starts or reads a scheduled task: the plan is data, and the rules are read from it. The
+# defect was the principal of the one task that existed, the Administrators group, which never runs at the logon of
+# a standard user, so that user's machine counted unconfirmed starts until the driver refused to start.
+'BD-080: the logon tasks'
+$confirmScript = 'C:\Program Files\amdgpu-wddm\tools\start-confirm.ps1'
+$windowScript = 'C:\Program Files\amdgpu-wddm\tools\start-window.ps1'
+$plan = $null
+if (Get-Command Get-LogonTaskPlan -ErrorAction SilentlyContinue) { $plan = @(Get-LogonTaskPlan -ConfirmScript $confirmScript -WindowScript $windowScript) }
+Check ($null -ne $plan) 'common.ps1 states the logon tasks as a plan (Get-LogonTaskPlan)'
+if ($plan) {
+    $problems = @(Test-LogonTaskPlan $plan)
+    Check ($problems.Count -eq 0) "the plan holds every rule$(if ($problems.Count) { ': ' + ($problems -join '; ') } else { '' })"
+    $c = @($plan | Where-Object { $_.role -eq 'confirm' })[0]
+    $w = @($plan | Where-Object { $_.role -eq 'window' })[0]
+    Check (($c.principal.id -eq 'S-1-5-18') -and ($c.principal.logon_type -eq 'ServiceAccount') -and ($c.principal.run_level -eq 'Highest')) "the confirmation runs as Local System with the highest run level: $($c.principal.id), $($c.principal.logon_type), $($c.principal.run_level)"
+    Check ((@($plan | Where-Object { $_.trigger.kind -eq 'at-logon' -and -not $_.trigger.user }).Count) -eq $plan.Count) 'both tasks trigger at the logon of any user (no account on the trigger)'
+    Check (($w.principal.id -eq 'S-1-5-32-545') -and ($w.principal.run_level -eq 'Limited')) "the window runs with the logged-on user's own rights: $($w.principal.id), $($w.principal.run_level)"
+    Check (($c.arguments -match '(?i)\s-NoWindow(\s|$)') -and ($c.arguments -like "*`"$confirmScript`"*")) "the confirmation runs $($c.execute) headless over the installed script: $($c.arguments)"
+    Check (($w.arguments -like "*`"$windowScript`"*") -and ($w.arguments -notmatch '(?i)start-confirm')) "the window runs its own script: $($w.arguments)"
+    Check ((@($plan | ForEach-Object { [string]$_.name } | Sort-Object -Unique).Count -eq 2) -and ($plan[0].name -eq $script:TaskName) -and ($plan[1].name -eq $script:WindowTaskName)) "two tasks, both named after the release: '$($plan[0].name)', '$($plan[1].name)'"
+    # The negative controls: each one is the plan with one rule broken, and every one of them must be reported.
+    function Copy-Plan($Source) {
+        $out = @()
+        foreach ($t in @($Source)) {
+            $r = [ordered]@{}
+            foreach ($k in $t.Keys) { if ($t[$k] -is [System.Collections.IDictionary]) { $r[$k] = [ordered]@{}; foreach ($k2 in $t[$k].Keys) { $r[$k][$k2] = $t[$k][$k2] } } else { $r[$k] = $t[$k] } }
+            $out += $r
+        }
+        return $out
+    }
+    $controls = @(
+        @{ name = 'the principal of the defect: the Administrators group'; break = { param($p) $p[0].principal = [ordered]@{ kind = 'group'; id = 'S-1-5-32-544'; logon_type = 'Group'; run_level = 'Highest' } }; says = 'S-1-5-32-544' }
+        @{ name = 'a trigger bound to one account'; break = { param($p) $p[0].trigger.user = 'BC250-A\bc250' }; says = 'every logon' }
+        @{ name = 'the confirmation without an administrator token'; break = { param($p) $p[0].principal.run_level = 'Limited' }; says = 'not an administrator' }
+        @{ name = 'the confirmation with a window in session 0'; break = { param($p) $p[0].arguments = $p[0].arguments -replace '(?i)\s-NoWindow', '' }; says = 'headless' }
+        @{ name = 'the confirmation read-only'; break = { param($p) $p[0].arguments = $p[0].arguments + ' -Probe' }; says = 'confirm no start' }
+        @{ name = 'the fallback hold moved from the command line'; break = { param($p) $p[0].arguments = $p[0].arguments + ' -FallbackHoldSeconds 5' }; says = 'boot-loop fallback' }
+        @{ name = 'the window asking for rights'; break = { param($p) $p[1].principal.run_level = 'Highest' }; says = 'needs no rights' }
+        @{ name = 'the window for administrators only'; break = { param($p) $p[1].principal = [ordered]@{ kind = 'group'; id = 'S-1-5-32-544'; logon_type = 'Group'; run_level = 'Limited' } }; says = 'S-1-5-32-544' }
+        @{ name = 'a task not named after the release'; break = { param($p) $p[1].name = 'start window' }; says = "uninstaller's sweep" }
+        @{ name = 'a task without a time limit'; break = { param($p) $p[0].minutes = 0 }; says = 'no execution time limit' }
+        @{ name = 'only the window registered'; break = { param($p) $p[0].role = 'window' }; says = '0 confirmation tasks' }
+    )
+    foreach ($ctl in $controls) {
+        $broken = Copy-Plan $plan
+        & $ctl.break $broken
+        $said = @(Test-LogonTaskPlan $broken)
+        Check (($said.Count -ge 1) -and (($said -join '; ') -like "*$($ctl.says)*")) "negative control, $($ctl.name): refused ($(if ($said.Count) { $said -join '; ' } else { 'nothing said' }))"
+    }
+}
+# install.ps1 registers that plan and nothing else: one principal in the source, built from the plan, and the group
+# of the defect nowhere in the installer.
+foreach ($f in @('install.ps1', 'common.ps1', 'uninstall.ps1')) {
+    $src = [IO.File]::ReadAllText((Join-Path $Installer $f))
+    Check ($src -notmatch 'New-ScheduledTaskPrincipal[^\r\n]*S-1-5-32-544') "$f registers no task for the Administrators group (BD-080)"
+}
+$installSrc = [IO.File]::ReadAllText((Join-Path $Installer 'install.ps1'))
+Check ($installSrc -match 'Get-LogonTaskPlan') 'install.ps1 registers the tasks from the plan'
+$principals = @([regex]::Matches($installSrc, 'New-ScheduledTaskPrincipal[^\r\n]*'))
+Check (($principals.Count -ge 1) -and (@($principals | Where-Object { $_.Value -notmatch '\$\w+\.principal\.' }).Count -eq 0) -and (@($principals | Where-Object { $_.Value -match 'S-1-' }).Count -eq 0)) "install.ps1 takes every principal from the plan and names no account of its own ($($principals.Count) call(s))"
+# The trigger is the other half of the defect: a task that runs at the logon of one account only is BD-080 again,
+# whatever its principal says. The installer reads the plan's trigger and refuses any plan it cannot register as
+# "at the logon of any user", and it holds the plan against Test-LogonTaskPlan before it registers anything, so the
+# rules the controls above exercise are not a property of the test alone.
+Check ($installSrc -match '(?s)Test-LogonTaskPlan[^\r\n]*\r?\n[^\r\n]*throw') 'install.ps1 runs the rules over the plan it registers and stops the install on a plan that breaks them'
+$planCall = [regex]::Match($installSrc, '(?s)Get-LogonTaskPlan.{0,2600}?Register-ScheduledTask[^\r\n]*')
+Check ($planCall.Success -and ($planCall.Value -match '\$logonTask\.trigger\.kind') -and ($planCall.Value -match '\$logonTask\.trigger\.user')) "install.ps1 reads the plan's trigger: a plan that is not at-logon, or that binds the trigger to one account, is refused and not registered as this one"
+$triggers = @([regex]::Matches($installSrc, '(?m)^(?!\s*#)[^\r\n]*New-ScheduledTaskTrigger[^\r\n]*'))
+Check (($triggers.Count -eq 1) -and ($triggers[0].Value -match '(?i)-AtLogOn') -and ($triggers[0].Value -notmatch '(?i)-User')) "install.ps1 registers one trigger, at any logon and bound to no account: $(if ($triggers.Count) { ($triggers | ForEach-Object { $_.Value.Trim() }) -join ' | ' } else { 'no call at all' })"
+
+# BD-080: the two scripts behind those tasks. The confirmation takes the same decisions headless as behind the
+# window (one poll function, reached from one place), and the window script is the unprivileged half: it must not
+# call the driver at all, because a standard user's CONFIRM would be refused by the kernel anyway.
+'BD-080: the scripts behind the logon tasks'
+$confirmFile = Join-Path $Installer 'start-confirm.ps1'
+$windowFile = Join-Path $Installer 'start-window.ps1'
+$confirmText = [IO.File]::ReadAllText($confirmFile)
+Check (Test-Path -LiteralPath $windowFile) "the window script ships with the installer ($windowFile)"
+Check ($confirmText -match '(?m)^param\([^\r\n]*\[switch\]\$NoWindow') 'start-confirm.ps1 takes -NoWindow'
+Check ((@([regex]::Matches($confirmText, '(?m)^function Invoke-Poll')).Count -eq 1) -and (@([regex]::Matches($confirmText, '\$step = Invoke-Poll')).Count -eq 1)) 'one poll function, called from one place: the headless run decides what the window run decides (guard and DPM coupling unchanged)'
+Check ((@([regex]::Matches($confirmText, 'Invoke-Tick')).Count -ge 3) -and ($confirmText -match '(?s)if \(\$NoWindow\).*Invoke-Tick.*\} else \{.*Invoke-Tick')) 'both runs, headless and windowed, go through the same tick'
+Check ($confirmText -match 'Confirm-Health' -and $confirmText -match 'Complete-WithFallback' -and $confirmText -match "Invoke-Cli @\('confirm'\)") 'the confirmation keeps the KMD start-health confirm and the boot-loop fallback'
+if (Test-Path -LiteralPath $windowFile) {
+    $windowText = [IO.File]::ReadAllText($windowFile)
+    $kmd = @('bc250control', 'bc250kmd_cli', 'Bc250StartHealth', 'CurrentControlSet', 'New-ItemProperty', 'Set-ItemProperty', 'Microsoft.Win32.Registry', 'HKLM', 'Add-Type -TypeDefinition') | Where-Object { $windowText -cmatch [regex]::Escape($_) }
+    Check ($kmd.Count -eq 0) "the window script touches neither the driver nor the registry$(if ($kmd.Count) { ": $($kmd -join ', ')" } else { '' })"
+    Check ($windowText -match '(?m)^param\([^\r\n]*\[int\]\$Seconds') 'the window script takes its own bound (-Seconds)'
+    Check ($windowText -match 'System.Windows.Forms' -and $windowText -match 'TopMost') 'the window script shows the top-most window that keeps DWM presenting'
+    # The window runs in a session this project never watches, and it writes no file (a standard user may write
+    # nowhere of ours), so its exit code is its whole report. A catch that exits 0 would make a window that never
+    # opened indistinguishable from one that ran its two minutes.
+    Check ($windowText -notmatch '(?s)catch\s*\{[^{}]*exit\s+0') 'the window script does not report success from its catch: a window that cannot be shown is not exit 0'
+    Check ($windowText -match '(?s)catch\s*\{[^{}]*exit\s+2') 'a window that cannot be shown exits 2, which the task keeps as LastTaskResult'
+    # The confirmation runs as Local System and can read that result, which is the only place the window half
+    # becomes observable at all.
+    Check ($confirmText -match "(?m)^\`$windowTaskName = '$([regex]::Escape($script:WindowTaskName))'") "start-confirm.ps1 names the same window task as the plan ('$($script:WindowTaskName)')"
+    Check ((@([regex]::Matches($confirmText, '(?m)^function Format-WindowTask')).Count -eq 1) -and ($confirmText -match 'Get-ScheduledTaskInfo')) 'start-confirm.ps1 reads the window task (state, last run, last result)'
+    Check ($confirmText -match '(?m)^Write-StartConfirmLog "exit [^\r\n]*Format-WindowTask') 'the exit line of every logon reports what the window task did, so a window half that never ran is in the log'
+}
+
 if ($fail) { "FAILED: $fail check(s)"; exit 1 }
 'session checks: all checks passed'
 exit 0

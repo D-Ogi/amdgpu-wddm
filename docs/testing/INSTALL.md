@@ -149,14 +149,29 @@ Without internet on the BC-250:
 
 ## The small blue window after logon
 
-After each logon, a small blue window with a clock is shown in the top-left corner for up to two minutes. It is
-the "amdgpu-wddm start confirm" scheduled task. The driver counts each start that is not confirmed. After two
-unconfirmed starts, Windows uses Microsoft Basic Display Adapter again, to prevent a start loop. The task keeps the
-desktop drawing for at least one minute and then confirms the start. The same confirmation keeps the automatic
-clock control (DPM) on: if a start is not confirmed, the next start runs at the fixed 1000 MHz clock, and DPM stays
-off until you set it again in the control application. Do not close the window. If you log on with an account that
-is not an administrator, the task does not run, and the driver falls back after two restarts. The task writes its
-results to `C:\ProgramData\amdgpu-wddm\start-confirm.log`.
+After each logon, a small blue window with a clock is shown in the top-left corner for two minutes. The driver
+counts each start that is not confirmed. After two unconfirmed starts, Windows uses Microsoft Basic Display Adapter
+again, to prevent a start loop. The window keeps the desktop drawing for at least one minute, and the confirmation
+then confirms the start. The same confirmation keeps the automatic clock control (DPM) on: if a start is not
+confirmed, the next start runs at the fixed 1000 MHz clock, and DPM stays off until you set it again in the control
+application. Do not close the window.
+
+Two scheduled tasks do this work, and both run at the logon of any user, so an account without administrator rights
+confirms a start as well:
+
+- "amdgpu-wddm start confirm" runs as the Local System account (`S-1-5-18`), with the highest run level and no
+  window of its own. It reads the driver's start health and confirms the start. The driver accepts a confirmation
+  only from an administrator, which is why this task does not run as the user who logs on.
+- "amdgpu-wddm start window" runs as the user who logs on, with that user's own rights (the Users group,
+  `S-1-5-32-545`, limited run level). It shows the small blue window and nothing else: it never opens the driver
+  and changes no setting. The window stays for the full two minutes, because this task does not read the
+  confirmation's progress. Earlier releases closed it as soon as the start was confirmed, usually after about one
+  minute. If it does not run, the confirmation still keeps the computer off Microsoft Basic Display, and the next
+  start runs at the fixed clock.
+
+The confirmation writes its results to `C:\ProgramData\amdgpu-wddm\start-confirm.log`. Its last line of each logon
+also reports the state, the last run time and the last result of the window task, so a window that did not run or
+could not open is visible there (`last result 0` the window was shown and closed, `2` it could not be shown).
 
 ## What the installer changes
 
@@ -172,7 +187,7 @@ results to `C:\ProgramData\amdgpu-wddm\start-confirm.log`.
 | Graphics registration | the GPU's software key (`UserModeDriverName`, `VulkanDriverName`, and for 32-bit applications `UserModeDriverNameWow`, `VulkanDriverNameWow`; the first entry of each `UserModeDriverName` value, the Direct3D 9 entry, is empty), `HKLM\SOFTWARE\Khronos\Vulkan\Drivers`, `HKLM\SOFTWARE\WOW6432Node\Khronos\Vulkan\Drivers` |
 | Router policy and profiles | `HKLM\SOFTWARE\amdgpu-wddm` |
 | GPU firmware | `C:\BC250\firmware` (8 files and `LICENSE.amdgpu`, downloaded from linux-firmware; see "GPU firmware"). A new folder is writable by administrators only; the access rights of `C:\BC250` itself do not change. Download staging: `C:\ProgramData\amdgpu-wddm\installer\firmware-staging`, removed after the copy |
-| Start confirmation | scheduled task "amdgpu-wddm start confirm" |
+| Start confirmation | two scheduled tasks, both at the logon of any user. "amdgpu-wddm start confirm" runs as the Local System account. "amdgpu-wddm start window" runs as the user who logs on |
 | Installer state and logs | `C:\ProgramData\amdgpu-wddm` (the Control application keeps its setting backups and action log in its `control` folder) |
 
 Default driver settings: automatic clock control (DPM) on, maximum 1500 MHz. The thermal limits of the driver do not
@@ -241,7 +256,7 @@ change. The driver writes no debug log files. To change the maximum clock at ins
 ## Uninstall
 
 1. Run `uninstall.cmd` as administrator (in the package folder or in `C:\Program Files\amdgpu-wddm`).
-2. Type `YES`. The uninstaller removes the driver, the files, the registry values, the task and the certificate.
+2. Type `YES`. The uninstaller removes the driver, the files, the registry values, the tasks and the certificate.
    The GPU goes back to Microsoft Basic Display Adapter. The uninstaller keeps `C:\ProgramData\amdgpu-wddm\control`
    (the Control application's setting backups and action log). Delete it yourself if you do not need it.
 3. If the installer turned on test signing, the uninstaller asks if it must turn it off. Use

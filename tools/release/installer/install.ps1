@@ -1441,18 +1441,37 @@ Invoke-Change "$($script:SoftwareKey)\Release: RepairSetup = $repairSetup (when 
     else { Remove-ItemProperty -LiteralPath $k -Name RepairSetup -ErrorAction SilentlyContinue }
 } | Out-Null
 
-# The start-confirm task: after every logon it confirms the boot's driver start, so the boot-loop guard does not
-# fall back to Basic Display at the third start (see INSTALL.md, "The small blue window after logon").
+# The logon tasks: after every logon the confirmation confirms the boot's driver start, so the boot-loop guard does
+# not fall back to Basic Display at the third start (see INSTALL.md, "The small blue window after logon"). BD-080:
+# two tasks, because the confirmation needs an administrator's token and the window needs the user's session. The
+# plan and the reasons are in common.ps1 (Get-LogonTaskPlan). The installer decides nothing here: it holds the plan
+# against the plan's own rules (Test-LogonTaskPlan) and then registers exactly what the plan says.
 $sc = Join-Path $InstallRoot 'tools\start-confirm.ps1'
-Invoke-Change "scheduled task '$($script:TaskName)': at logon of an administrator, runs $sc (at most 2 minutes)" {
-    $old = Get-ScheduledTask -TaskName $script:TaskName -ErrorAction SilentlyContinue
-    if ($old) { Unregister-ScheduledTask -TaskName $script:TaskName -Confirm:$false }
-    $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$sc`""
-    $trigger = New-ScheduledTaskTrigger -AtLogOn
-    $principal = New-ScheduledTaskPrincipal -GroupId 'S-1-5-32-544' -RunLevel Highest
-    $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 3) -MultipleInstances IgnoreNew -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
-    Register-ScheduledTask -TaskName $script:TaskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings | Out-Null
-} | Out-Null
+$sw = Join-Path $InstallRoot 'tools\start-window.ps1'
+$logonPlan = @(Get-LogonTaskPlan -ConfirmScript $sc -WindowScript $sw)
+# The rules of the plan run here, over the plan this install registers, and not only in the host test: a plan that
+# breaks them (the Administrators principal of the defect, a trigger bound to one account, a confirmation without
+# an administrator token) stops the install instead of leaving behind a task that never runs at a standard user's
+# logon. A dry run reaches this line as well, because nothing of it changes the computer.
+$logonPlanProblems = @(Test-LogonTaskPlan $logonPlan)
+if ($logonPlanProblems.Count) { throw "the logon task plan of common.ps1 (Get-LogonTaskPlan) breaks its own rules: $($logonPlanProblems -join '; ')" }
+foreach ($logonTask in $logonPlan) {
+    # The trigger comes from the plan too, so "at the logon of any user" - the half of BD-080 that the principal
+    # does not cover - cannot differ between the plan and what is registered. New-ScheduledTaskTrigger -AtLogOn
+    # without -User is that trigger; any other plan is refused here rather than silently registered as this one.
+    if ([string]$logonTask.trigger.kind -ne 'at-logon') { throw "scheduled task '$($logonTask.name)': the plan asks for the trigger kind '$($logonTask.trigger.kind)', and the installer registers only 'at-logon'" }
+    if ($logonTask.trigger.user) { throw "scheduled task '$($logonTask.name)': the plan binds the trigger to the logon of '$($logonTask.trigger.user)'; every logon has to run it (BD-080)" }
+    Invoke-Change "scheduled task '$($logonTask.name)': $($logonTask.what) (at most $($logonTask.minutes) minutes)" {
+        $old = Get-ScheduledTask -TaskName $logonTask.name -ErrorAction SilentlyContinue
+        if ($old) { Unregister-ScheduledTask -TaskName $logonTask.name -Confirm:$false }
+        $action = New-ScheduledTaskAction -Execute $logonTask.execute -Argument $logonTask.arguments
+        $trigger = New-ScheduledTaskTrigger -AtLogOn
+        if ($logonTask.principal.kind -eq 'user') { $principal = New-ScheduledTaskPrincipal -UserId $logonTask.principal.id -LogonType $logonTask.principal.logon_type -RunLevel $logonTask.principal.run_level }
+        else { $principal = New-ScheduledTaskPrincipal -GroupId $logonTask.principal.id -RunLevel $logonTask.principal.run_level }
+        $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes $logonTask.minutes) -MultipleInstances IgnoreNew -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+        Register-ScheduledTask -TaskName $logonTask.name -Action $action -Trigger $trigger -Principal $principal -Settings $settings | Out-Null
+    } | Out-Null
+}
 
 # The control application: a Start menu entry, nothing resident.
 $controlExe = $null
