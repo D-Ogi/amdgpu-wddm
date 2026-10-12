@@ -6,7 +6,9 @@ by hand, like the vendor's control panel: a normal window, no service, no autost
 The window speaks to ordinary users (GUI-PLAN-v7, phase 1): plain words, no driver internals, error codes or internal
 versions. A unit test and the render gate check every visible text against `PlainWords.Internals`; technical detail
 goes only into the support report and the Support page (shown when "Show support options" is on). Texts come from
-`strings/strings.<lang>.txt` (English is the source; Polish, Japanese and Korean are machine translations marked `mt`).
+`strings/strings.<lang>.txt` (English is the source). A Polish speaker read every Polish line against one
+terminology, where one English term keeps one Polish word, so each line carries the status `rev` (2026-10-12). Japanese and Korean are machine translations marked
+`mt`, or `mt-safe` where the English is a name or a number.
 
 | Page | What it shows or changes |
 |---|---|

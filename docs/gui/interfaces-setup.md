@@ -307,7 +307,9 @@ never show a window:
 
 Strings: `strings.<lang>.txt` (`en`, `pl`, `ja`, `ko`) embedded in the exe, the control app's format
 (`id|status|hash8|text`, status `mt`, `mt-safe` or `rev`, hash of the English text a line translates; English is
-the source; `stamp.ps1` refreshes the hashes). The window's language is the control app's choice
+the source; `stamp.ps1` refreshes the hashes). Every Polish line of both apps carries `rev`: a Polish speaker
+read them all against one terminology, where one English term keeps one Polish word in the installer and in the
+control app (2026-10-12). The window's language is the control app's choice
 (`HKCU\Software\amdgpu-wddm\Control`, read only), else the Windows display language, else English; the title bar
 switches it. The tip panel follows the control app's guide setting: the guide character and her tip in a speech
 bubble with her, the same tip text with a plain title without her.

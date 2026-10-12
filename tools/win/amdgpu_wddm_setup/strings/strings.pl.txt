@@ -1,313 +1,314 @@
-# Polish strings of amdgpu-wddm Setup. Machine translation (mt / mt-safe) until a named review. Format: src/Strings.cs.
+# Polish strings of amdgpu-wddm Setup. Every line was read by a Polish speaker (status rev, 2026-10-12)
+# against one terminology: one English term keeps one Polish word in both apps. Format: src/Strings.cs.
 
 # ---- frame ----
-ui.close|mt-safe|7d9eb7ac|Zamknij
-ui.back|mt-safe|76900f1b|Wstecz
-ui.cancel|mt-safe|19766ed6|Anuluj
-ui.choose-folder|mt-safe|826c7dcd|Wybierz folder...
-ui.language|mt-safe|a6567634|Język: {0}
-ui.minimise|mt-safe|20f082e9|Minimalizuj
-ui.close-window|mt-safe|8b9de9c0|Zamknij okno
-ui.unexpected|mt|88790f84|Instalator zatrzymał się, bo coś poszło nie tak w jego oknie. Nic więcej nie zmienił. Uruchom go ponownie.
-rail.welcome|mt-safe|0e2226b5|Start
-rail.check|mt-safe|9d60841e|Sprawdzenie
-rail.plan|mt-safe|aff0766a|Przegląd
-rail.install|mt-safe|569ca49f|Instalacja
-rail.finish|mt-safe|a6c7a84b|Koniec
-rail.folder|mt-safe|74ccd433|Folder
-rail.prepare|mt-safe|ee820467|Przygotowanie
-rail.current|mt-safe|3d59ee1e|bieżący krok
-rail.done|mt-safe|a4c3ed04|gotowe
-rail.failed|mt-safe|a1f6bdb2|zatrzymano tutaj
-elevation.declined|mt|0a586e33|Instalator potrzebuje uprawnień administratora, aby zainstalować lub naprawić sterownik. Nic nie zostało zmienione. Uruchom instalator ponownie i wybierz Tak, gdy Windows zapyta.
-payload.damaged|mt|44795d7b|Ten plik instalatora jest uszkodzony: pliki instalacyjne, które zawiera, nie są tymi, z którymi został zbudowany. Nic nie zostało zmienione. Pobierz wydanie ponownie.
-payload.already-running|mt|45dca71f|Instalator jest już uruchomiony na tym komputerze. Zakończ instalację w otwartym oknie; tutaj nic nie zostało zmienione.
-payload.folder|mt|78be926d|Instalator nie może przygotować folderu, w którym trzyma pliki instalacyjne: należy on do innego konta na tym komputerze albo nie jest zwykłym folderem. Nic nie zostało zmienione. Usuń ten folder, który jest wymieniony w pliku pomocy, i uruchom ten plik ponownie.
+ui.close|rev|7d9eb7ac|Zamknij
+ui.back|rev|76900f1b|Wstecz
+ui.cancel|rev|19766ed6|Anuluj
+ui.choose-folder|rev|826c7dcd|Wybierz folder...
+ui.language|rev|a6567634|Język: {0}
+ui.minimise|rev|20f082e9|Minimalizuj
+ui.close-window|rev|8b9de9c0|Zamknij okno
+ui.unexpected|rev|88790f84|Instalator zatrzymał się, bo coś poszło nie tak w jego oknie. Nic więcej nie zmienił. Uruchom go ponownie.
+rail.welcome|rev|0e2226b5|Start
+rail.check|rev|9d60841e|Sprawdzenie
+rail.plan|rev|aff0766a|Przegląd
+rail.install|rev|569ca49f|Instalacja
+rail.finish|rev|a6c7a84b|Koniec
+rail.folder|rev|74ccd433|Folder
+rail.prepare|rev|ee820467|Przygotowanie
+rail.current|rev|3d59ee1e|bieżący krok
+rail.done|rev|a4c3ed04|gotowe
+rail.failed|rev|a1f6bdb2|zatrzymano tutaj
+elevation.declined|rev|0a586e33|Instalator potrzebuje uprawnień administratora, aby zainstalować lub naprawić sterownik. Nic nie zostało zmienione. Uruchom go ponownie i wybierz Tak, gdy Windows zapyta.
+payload.damaged|rev|44795d7b|Ten plik instalatora jest uszkodzony: pliki instalacyjne w jego środku nie zgadzają się z tymi, z których go zbudowano. Nic nie zostało zmienione. Pobierz wydanie ponownie.
+payload.already-running|rev|45dca71f|Instalator już działa na tym komputerze. Zakończ instalację w otwartym oknie; tutaj nic nie zostało zmienione.
+payload.folder|rev|78be926d|Instalator nie może przygotować folderu, w którym trzyma pliki instalacyjne: folder należy do innego konta na tym komputerze albo nie jest zwykłym folderem. Nic nie zostało zmienione. Usuń go, a potem uruchom ten plik ponownie. Jego ścieżkę znajdziesz w pliku diagnostycznym.
 
 # ---- welcome ----
-welcome.title|mt|f6dd913f|Instalacja sterownika grafiki dla ASRock BC-250
-welcome.body|mt|e4fa6ee2|Instalator instaluje sterownik grafiki i amdgpu-wddm Control. Najpierw sprawdza ten komputer i pokazuje wszystko, co zmieni, zanim cokolwiek zmieni.
-welcome.repair.title|mt|a29b2205|Naprawa sterownika grafiki
-welcome.repair.body|mt|25153ac9|Instalator instaluje tę samą wersję ponownie, z kopii zachowanej na tym komputerze. Twoje ustawienia zostają zachowane.
-welcome.dry-run|mt|42af2b21|Przebieg próbny: instalator przechodzi przez wszystkie kroki, ale niczego nie zmienia.
-welcome.version|mt-safe|9699394c|Wersja {0}
-welcome.files-missing|mt|938e9bd4|Brakuje plików tej wersji. Rozpakuj cały plik zip do folderu, a potem uruchom setup.exe z tego folderu: obok niego musi leżeć folder files.
-welcome.source.title|mt|1623a97a|Skąd pochodzą pliki
-welcome.source.package|mt|61e09644|Pliki tego instalatora
-welcome.source.kept|mt|9ea897ba|Kopia zachowana na tym komputerze
-welcome.source.prepared|mt|1c2cec8d|Folder przygotowany dla komputera bez internetu
-welcome.prepared.path|mt-safe|a79aab12|Przygotowany folder
-welcome.prepared.choose|mt|40e8823f|Wybierz przygotowany folder.
-welcome.prepared.ok|mt|6203a8e5|Przygotowany folder z wersją {0}. Internet nie jest potrzebny.
-welcome.prepare-link|mt|5868e4fc|Przygotuj folder dla komputera bez internetu...
-welcome.check|mt-safe|7c97d062|Sprawdź ten komputer
-welcome.promise.driver|mt|82ad81d1|Sterownik graficzny i amdgpu-wddm Control instalowane razem.
-welcome.promise.shown|mt|0f886d7e|Każda zmiana jest pokazana, zanim cokolwiek zmieni się na tym komputerze.
-welcome.promise.offline|mt|bb2a3e49|Przygotowany folder instaluje to samo wydanie bez internetu.
-folder.missing|mt|219fdbbd|Ten folder nie istnieje.
-folder.not-prepared|mt|c9f12282|To nie jest przygotowany folder. Wybierz folder przygotowany przez instalator albo najpierw go przygotuj.
-folder.unknown|mt|6c91a6f6|Ten folder przygotowała inna wersja instalatora i nie można go użyć. Przygotuj go ponownie.
-folder.incomplete|mt|73bc7acc|Ten przygotowany folder jest niekompletny. Przygotuj go ponownie.
+welcome.title|rev|f6dd913f|Instalacja sterownika grafiki dla ASRock BC-250
+welcome.body|rev|e4fa6ee2|Instalator instaluje sterownik grafiki i amdgpu-wddm Control. Najpierw sprawdza ten komputer i pokazuje wszystkie zmiany, zanim cokolwiek na nim zmieni.
+welcome.repair.title|rev|a29b2205|Naprawa sterownika grafiki
+welcome.repair.body|rev|25153ac9|Instalator instaluje tę samą wersję ponownie, z kopii przechowywanej na tym komputerze. Twoje ustawienia zostają zachowane.
+welcome.dry-run|rev|42af2b21|Przebieg próbny: instalator przechodzi przez wszystkie kroki, ale niczego nie zmienia.
+welcome.version|rev|9699394c|Wersja {0}
+welcome.files-missing|rev|938e9bd4|Brakuje plików tego wydania. Rozpakuj cały plik zip do folderu, a potem uruchom setup.exe z tego folderu: obok niego musi leżeć folder files.
+welcome.source.title|rev|1623a97a|Skąd pochodzą pliki
+welcome.source.package|rev|61e09644|Pliki tego instalatora
+welcome.source.kept|rev|9ea897ba|Kopia przechowywana na tym komputerze
+welcome.source.prepared|rev|1c2cec8d|Folder przygotowany dla komputera bez internetu
+welcome.prepared.path|rev|a79aab12|Przygotowany folder
+welcome.prepared.choose|rev|40e8823f|Wybierz przygotowany folder.
+welcome.prepared.ok|rev|6203a8e5|Przygotowany folder z wersją {0}. Internet nie jest potrzebny.
+welcome.prepare-link|rev|5868e4fc|Przygotuj folder dla komputera bez internetu...
+welcome.check|rev|7c97d062|Sprawdź ten komputer
+welcome.promise.driver|rev|82ad81d1|Sterownik grafiki i amdgpu-wddm Control instalowane razem.
+welcome.promise.shown|rev|0f886d7e|Instalator pokazuje wszystkie zmiany, zanim wprowadzi je na tym komputerze.
+welcome.promise.offline|rev|bb2a3e49|Z przygotowanego folderu zainstalujesz to samo wydanie bez internetu.
+folder.missing|rev|219fdbbd|Ten folder nie istnieje.
+folder.not-prepared|rev|c9f12282|To nie jest przygotowany folder. Wybierz folder przygotowany przez instalator albo najpierw go przygotuj.
+folder.unknown|rev|6c91a6f6|Ten folder przygotowała inna wersja instalatora i nie można go użyć. Przygotuj go ponownie.
+folder.incomplete|rev|73bc7acc|Ten przygotowany folder jest niekompletny. Przygotuj go ponownie.
 
 # ---- checking ----
-checking.title|mt-safe|cae3765d|Sprawdzanie tego komputera
-checking.body|mt|8fff775a|To może potrwać do minuty. Nic nie jest zmieniane.
-checking.list|mt-safe|de07d072|Sprawdzenia
-checking.waiting|mt|db75f750|Rozpoczynanie sprawdzeń...
+checking.title|rev|cae3765d|Sprawdzanie tego komputera
+checking.body|rev|8fff775a|To może potrwać do minuty. Nic nie jest zmieniane.
+checking.list|rev|de07d072|Sprawdzenia
+checking.waiting|rev|db75f750|Rozpoczynanie sprawdzeń...
 
 # ---- checks ----
-check.other|mt|6b757578|Inne sprawdzenie (szczegóły w pliku dla pomocy technicznej).
-check.mark.ok|mt-safe|436fe71b|Zaliczone
-check.mark.warn|mt-safe|d8da2c49|Uwaga
-check.mark.fail|mt-safe|cb5b28f8|Niezaliczone
-check.package.ok|mt|3a077fcf|Pliki instalatora są kompletne.
-check.package.damaged|mt|8eaa1e54|Pliki instalatora są uszkodzone lub niekompletne.
-check.admin.ok|mt|a3e85529|Instalator działa z uprawnieniami administratora.
-check.admin.dry-run|mt|83161cfe|Instalator działa bez uprawnień administratora, więc części ustawień nie dało się odczytać.
-check.admin.missing|mt|3da431e1|Instalator potrzebuje uprawnień administratora.
-check.windows.ok|mt|7d1c4fbb|Ta wersja Windows jest obsługiwana.
-check.windows.not-x64|mt|1c9550cb|Ten Windows nie jest 64-bitowy. Sterownik wymaga 64-bitowego Windows 11.
-check.windows.too-old|mt|b44ce700|Ta wersja Windows jest za stara. Sterownik wymaga Windows 11.
-check.windows.below-supported|rev|71688b75|Ta wersja Windows jest starsza niż wersje, na których sterownik jest testowany: Windows 11 23H2, 24H2 i 25H2. Zaktualizuj Windows. Instalacja jest kontynuowana.
-check.windows.insider|rev|2b892990|To jest wersja Insider systemu Windows, która nie jest obsługiwana. Sterownik jest testowany na Windows 11 23H2, 24H2 i 25H2. Instalacja jest kontynuowana.
-check.windows.ltsc|rev|346c19f0|Ta edycja Windows (LTSC) nie jest testowana z tym sterownikiem. Instalacja jest kontynuowana.
-check.gpu.ok|mt|f61b25ac|Znaleziono układ graficzny ASRock BC-250.
-check.gpu.missing|mt|7ac6bcb8|Nie znaleziono układu graficznego ASRock BC-250. Ten sterownik działa tylko na BC-250.
-check.gpu.several|mt|57bff6a6|Znaleziono więcej niż jeden układ graficzny BC-250. Obsługiwany jest tylko jeden.
-check.gpu.ignored|mt|cced4549|Nie znaleziono układu graficznego BC-250; ten przebieg próbny i tak jest kontynuowany.
-check.secureboot.off|mt|a107f361|Secure Boot jest wyłączony.
-check.secureboot.on|mt|1a594fe8|Secure Boot jest włączony. Wyłącz go w ustawieniach firmware komputera przed instalacją.
-check.secureboot.unknown|mt|349a2c6d|Instalator nie mógł odczytać, czy Secure Boot jest włączony.
-check.testsigning.active|mt|f6138193|Tryb testowy Windows jest włączony.
-check.testsigning.inactive|mt|1f2ea753|Tryb testowy Windows jest wyłączony. Instalator włączy go w ramach instalacji.
-check.bitlocker.ok|mt|f6019261|BitLocker nie wymaga uwagi.
-check.bitlocker.on|mt|833d9bbb|BitLocker jest włączony. Instalator wstrzyma go na czas ponownych uruchomień instalacji, a potem sam się włączy.
-check.bitlocker.unknown|mt|74c5d56a|Instalator nie mógł odczytać stanu BitLockera. Jeśli BitLocker jest włączony, przygotuj klucz odzyskiwania.
-check.hvci.off|mt|c5375084|Integralność pamięci jest wyłączona.
-check.hvci.on|mt|038dce93|Integralność pamięci jest włączona. Jeśli sterownik się nie uruchomi, wyłącz ją w Zabezpieczeniach Windows (Izolacja rdzenia).
-check.vcruntime.ok|mt|da7b7ffe|Środowisko Microsoft Visual C++ jest zainstalowane.
+check.other|rev|6b757578|Inne sprawdzenie (szczegóły w pliku diagnostycznym).
+check.mark.ok|rev|436fe71b|Zaliczone
+check.mark.warn|rev|d8da2c49|Uwaga
+check.mark.fail|rev|cb5b28f8|Niezaliczone
+check.package.ok|rev|3a077fcf|Pliki instalatora są kompletne.
+check.package.damaged|rev|8eaa1e54|Pliki instalatora są uszkodzone lub niekompletne.
+check.admin.ok|rev|a3e85529|Instalator działa z uprawnieniami administratora.
+check.admin.dry-run|rev|83161cfe|Instalator działa bez uprawnień administratora, więc części ustawień nie dało się odczytać.
+check.admin.missing|rev|3da431e1|Instalator potrzebuje uprawnień administratora.
+check.windows.ok|rev|7d1c4fbb|Ta wersja systemu Windows jest obsługiwana.
+check.windows.not-x64|rev|1c9550cb|Ten system Windows nie jest 64-bitowy. Sterownik wymaga 64-bitowego systemu Windows 11.
+check.windows.too-old|rev|b44ce700|Ta wersja systemu Windows jest za stara. Sterownik wymaga systemu Windows 11.
+check.windows.below-supported|rev|71688b75|Ta wersja systemu Windows jest starsza niż te, na których sterownik jest testowany: Windows 11 23H2, 24H2 i 25H2. Zaktualizuj system Windows. Instalacja jest kontynuowana.
+check.windows.insider|rev|2b892990|Ta wersja Insider systemu Windows nie jest obsługiwana. Sterownik jest testowany na Windows 11 23H2, 24H2 i 25H2. Instalacja jest kontynuowana.
+check.windows.ltsc|rev|346c19f0|Ta edycja systemu Windows (LTSC) nie jest testowana z tym sterownikiem. Instalacja jest kontynuowana.
+check.gpu.ok|rev|f61b25ac|Znaleziono układ graficzny ASRock BC-250.
+check.gpu.missing|rev|7ac6bcb8|Nie znaleziono układu graficznego ASRock BC-250. Ten sterownik działa tylko na BC-250.
+check.gpu.several|rev|57bff6a6|Znaleziono więcej niż jeden układ graficzny BC-250. Obsługiwany jest tylko jeden.
+check.gpu.ignored|rev|cced4549|Nie znaleziono układu graficznego BC-250; ten przebieg próbny i tak jest kontynuowany.
+check.secureboot.off|rev|a107f361|Secure Boot jest wyłączony.
+check.secureboot.on|rev|1a594fe8|Secure Boot jest włączony. Przed instalacją wyłącz go w ustawieniach firmware komputera.
+check.secureboot.unknown|rev|349a2c6d|Instalator nie mógł odczytać, czy Secure Boot jest włączony.
+check.testsigning.active|rev|f6138193|Tryb testowy Windows jest włączony.
+check.testsigning.inactive|rev|1f2ea753|Tryb testowy Windows jest wyłączony. Instalator włączy go w ramach instalacji.
+check.bitlocker.ok|rev|f6019261|BitLocker nie wymaga żadnych działań.
+check.bitlocker.on|rev|833d9bbb|BitLocker jest włączony. Instalator wstrzyma go na czas ponownych uruchomień instalacji, a potem BitLocker włączy się sam.
+check.bitlocker.unknown|rev|74c5d56a|Instalator nie mógł odczytać stanu funkcji BitLocker. Jeśli BitLocker jest włączony, przygotuj klucz odzyskiwania.
+check.hvci.off|rev|c5375084|Integralność pamięci jest wyłączona.
+check.hvci.on|rev|038dce93|Integralność pamięci jest włączona. Jeśli sterownik się nie uruchomi, wyłącz ją w Zabezpieczeniach Windows (Izolacja rdzenia).
+check.vcruntime.ok|rev|da7b7ffe|Środowisko uruchomieniowe Microsoft Visual C++ jest zainstalowane.
 check.vcruntime.missing|rev|e96604a7|Brakuje środowiska uruchomieniowego Microsoft Visual C++ 2015-2022 (x64) albo jest ono za stare. Instalator zainstaluje je z pliku, który ma przy sobie.
 check.vcruntime.no-installer|rev|a1670c32|Trzeba zainstalować środowisko uruchomieniowe Microsoft Visual C++ 2015-2022 (x64), a ten zestaw plików nie ma programu firmy Microsoft, który to robi. Pobierz wydanie ponownie.
-check.space.ok|mt|fc218428|Jest wystarczająco dużo wolnego miejsca na dysku.
-check.space.low|mt|e473eee3|Na dysku C: jest za mało wolnego miejsca. Instalator potrzebuje 2 GB.
-check.firmware.download-ok|mt|11f01474|Firmware GPU można pobrać.
-check.firmware.unreachable|mt|2126305d|Nie można pobrać firmware GPU. Podłącz ten komputer do internetu albo użyj przygotowanego folderu.
-check.firmware.folder-ok|mt|1703f1b6|Pliki firmware GPU w folderze są kompletne.
-check.firmware.folder-bad|mt|e11eec4f|Brakuje części plików firmware GPU w folderze albo się różnią.
-check.firmware.no-list|mt|de36633a|Pliki instalatora nie mówią, jakie firmware GPU jest potrzebne. Pobierz wydanie ponownie.
-check.lab-install.present|mt|c4ebe135|Na tym komputerze jest deweloperska instalacja sterownika. Instalator jej nie zmienia.
-check.lab-install.forced|mt|711bb1d9|Na tym komputerze jest deweloperska instalacja sterownika; instalator kontynuuje, bo o to poproszono.
-check.state.ok|mt|63bdb478|Znaleziono wcześniejszą instalację amdgpu-wddm.
-check.existing.no-state|mt|a46215ab|Sterownik jest zainstalowany bez zapisów instalatora. Najpierw go odinstaluj, potem uruchom instalator ponownie.
-check.prepare.destination-inside|mt|08b96974|Folder jest wewnątrz plików instalatora. Wybierz folder w innym miejscu.
-check.prepare.destination-file|mt|3d875a78|Tę nazwę ma plik. Wybierz folder.
-check.prepare.destination-not-empty|mt|5a6961d7|Folder nie jest pusty. Wybierz pusty folder albo folder przygotowany wcześniej.
+check.space.ok|rev|fc218428|Jest wystarczająco dużo wolnego miejsca na dysku.
+check.space.low|rev|e473eee3|Na dysku C: jest za mało wolnego miejsca. Instalator potrzebuje 2 GB.
+check.firmware.download-ok|rev|11f01474|Firmware GPU można pobrać.
+check.firmware.unreachable|rev|2126305d|Nie można pobrać firmware GPU. Podłącz ten komputer do internetu albo użyj przygotowanego folderu.
+check.firmware.folder-ok|rev|1703f1b6|Pliki firmware GPU w folderze są kompletne.
+check.firmware.folder-bad|rev|e11eec4f|W folderze brakuje części plików firmware GPU albo różnią się one od oczekiwanych.
+check.firmware.no-list|rev|de36633a|Pliki instalatora nie mówią, jaki firmware GPU jest potrzebny. Pobierz wydanie ponownie.
+check.lab-install.present|rev|c4ebe135|Na tym komputerze jest deweloperska instalacja sterownika. Instalator jej nie zmienia.
+check.lab-install.forced|rev|711bb1d9|Na tym komputerze jest deweloperska instalacja sterownika; instalator kontynuuje na Twoje żądanie.
+check.state.ok|rev|63bdb478|Znaleziono wcześniejszą instalację amdgpu-wddm.
+check.existing.no-state|rev|a46215ab|Sterownik jest zainstalowany, ale instalator nie ma o tym żadnych zapisów. Najpierw go odinstaluj, potem uruchom instalator ponownie.
+check.prepare.destination-inside|rev|08b96974|Folder jest wewnątrz plików instalatora. Wybierz folder w innym miejscu.
+check.prepare.destination-file|rev|3d875a78|Taką nazwę ma już plik. Wybierz folder.
+check.prepare.destination-not-empty|rev|5a6961d7|Folder nie jest pusty. Wybierz pusty folder albo folder przygotowany wcześniej.
 
 # ---- plan ----
-plan.install.title|mt|6dd7ca20|Gotowe do instalacji wersji {0}
-plan.upgrade.title|mt|8222a9d0|Gotowe do aktualizacji z wersji {0} do {1}
-plan.repair.title|mt|2dbf2997|Gotowe do naprawy wersji {0}
-plan.resume.title|mt|f105505d|Gotowe do dokończenia instalacji wersji {0}
-plan.already.title|mt|92b25209|Wersja {0} jest już zainstalowana i sprawdzona
-plan.already.body|mt|9ea445c4|Nic nie trzeba robić. Wybierz Napraw, aby zainstalować tę samą wersję ponownie.
-plan.verify.title|mt|e593d4b9|Wersja {0} jest zainstalowana i czeka na ponowne uruchomienie
-plan.verify.body|mt|1deb5208|Po ponownym uruchomieniu Windows instalator sprawdzi, czy sterownik działa.
-plan.repair-again|mt-safe|1196b6c5|Napraw
-plan.checks.title|mt-safe|de07d072|Sprawdzenia
-plan.checks.ok|mt|eb2f3d98|Wszystkie sprawdzenia zakończone pomyślnie.
-plan.checks.attention|mt|e6885bff|Sprawdzenia wymagające uwagi: {0}
-plan.what.title|mt-safe|70fbb54b|Co się stanie
-plan.restarts.0|mt|b0a2c82a|Ponowne uruchomienie Windows nie jest potrzebne.
-plan.restarts.1|mt|2ae11afb|Windows uruchomi się ponownie raz. Po ponownym zalogowaniu instalator będzie kontynuował sam.
-plan.restarts.2|mt|efc32bc9|Windows uruchomi się ponownie dwa razy. Po każdym zalogowaniu instalator będzie kontynuował sam.
-plan.restarts.choice|mt|e2801100|Każde ponowne uruchomienie zaczyna się samo po krótkim odliczaniu. Możesz uruchomić od razu lub odłożyć to na później.
-plan.change.test-mode|mt|7c5a1301|Windows przełącza się w tryb testowy, aby móc wczytać ten sterownik.
-plan.change.test-mode.note|mt|9a9c5086|W rogu pulpitu pojawi się wtedy napis „Tryb testowy”. Usunięcie sterownika wyłącza go ponownie.
-plan.change.test-mode.on|mt|cf315297|Windows już działa w trybie testowym, więc nic się tu nie zmienia.
-plan.change.bitlocker|mt|f43553fa|Ochrona BitLocker zostaje wstrzymana na czas ponownych uruchomień tej instalacji i potem sama się włącza, więc Windows nie poprosi o klucz odzyskiwania.
-plan.change.bitlocker.unknown|mt|67f2277e|Instalator nie mógł odczytać stanu BitLockera na tym komputerze. Mimo to kontynuuje: miej klucz odzyskiwania pod ręką, jeśli Windows o niego poprosi po ponownym uruchomieniu.
-plan.change.vcruntime|rev|65d68876|Najpierw instalowane jest środowisko uruchomieniowe Microsoft Visual C++ 2015-2022 (x64), bo programy sterownika go potrzebują.
+plan.install.title|rev|6dd7ca20|Gotowe do instalacji wersji {0}
+plan.upgrade.title|rev|8222a9d0|Gotowe do aktualizacji z wersji {0} do {1}
+plan.repair.title|rev|2dbf2997|Gotowe do naprawy wersji {0}
+plan.resume.title|rev|f105505d|Gotowe do dokończenia instalacji wersji {0}
+plan.already.title|rev|92b25209|Wersja {0} jest już zainstalowana i sprawdzona
+plan.already.body|rev|9ea445c4|Nie trzeba nic robić. Wybierz Napraw, aby zainstalować tę samą wersję ponownie.
+plan.verify.title|rev|e593d4b9|Wersja {0} jest zainstalowana i czeka na ponowne uruchomienie
+plan.verify.body|rev|1deb5208|Po ponownym uruchomieniu systemu Windows instalator sprawdzi, czy sterownik działa.
+plan.repair-again|rev|1196b6c5|Napraw
+plan.checks.title|rev|de07d072|Sprawdzenia
+plan.checks.ok|rev|eb2f3d98|Wszystkie sprawdzenia zakończone pomyślnie.
+plan.checks.attention|rev|e6885bff|Sprawdzenia wymagające Twojej uwagi: {0}
+plan.what.title|rev|70fbb54b|Co się stanie
+plan.restarts.0|rev|b0a2c82a|Ponowne uruchomienie systemu Windows nie jest potrzebne.
+plan.restarts.1|rev|2ae11afb|Windows uruchomi się ponownie raz. Po ponownym zalogowaniu instalator sam wznowi pracę.
+plan.restarts.2|rev|efc32bc9|Windows uruchomi się ponownie dwa razy. Po każdym zalogowaniu instalator sam wznowi pracę.
+plan.restarts.choice|rev|e2801100|Każde ponowne uruchomienie zaczyna się samo po krótkim odliczaniu. Możesz uruchomić ponownie od razu albo odłożyć to na później.
+plan.change.test-mode|rev|7c5a1301|Windows przełącza się w tryb testowy, aby móc wczytać ten sterownik.
+plan.change.test-mode.note|rev|9a9c5086|W rogu pulpitu pojawi się wtedy napis „Tryb testowy”. Usunięcie sterownika wyłącza ten tryb.
+plan.change.test-mode.on|rev|cf315297|Windows już działa w trybie testowym, więc nic się tu nie zmienia.
+plan.change.bitlocker|rev|f43553fa|Ochrona BitLocker zostaje wstrzymana na czas ponownych uruchomień tej instalacji i potem włącza się sama, więc Windows nie poprosi o klucz odzyskiwania.
+plan.change.bitlocker.unknown|rev|67f2277e|Instalator nie mógł odczytać stanu funkcji BitLocker na tym komputerze. Mimo to kontynuuje pracę: miej klucz odzyskiwania pod ręką, jeśli Windows poprosi o niego po ponownym uruchomieniu.
+plan.change.vcruntime|rev|65d68876|Najpierw instalowane jest środowisko uruchomieniowe Microsoft Visual C++ 2015-2022 (x64), którego potrzebują programy sterownika.
 shortcuts.title|rev|3af62f49|Gdzie znaleźć amdgpu-wddm Control
 shortcuts.start-menu|rev|f7bdc16b|W menu Start
 shortcuts.desktop|rev|b1e0eb2c|Na pulpicie
-shortcuts.note|rev|f98bdcf0|Obie opcje są włączone. Wyłącz jedną, jeśli jej nie chcesz. Sterownik zostanie zainstalowany tak samo.
-plan.firmware.download|mt|7051aa7f|Firmware GPU zostanie pobrane z oficjalnego archiwum firmware Linuksa i sprawdzone.
-plan.firmware.folder|mt|3afc555b|Firmware GPU pochodzi z wybranego folderu i zostanie sprawdzone.
-plan.firmware.package-folder|mt|576cf803|Firmware GPU pochodzi z przygotowanego folderu. Internet nie jest potrzebny.
-plan.notes.title|mt|3a048d0b|Co nowego w tej wersji
-plan.notes.english|mt|e9981e5c|Te informacje są po angielsku.
-plan.notes.none|mt|e9bf28c9|Ta wersja nie ma informacji o wydaniu.
-plan.settings.title|mt-safe|7760b023|Twoje ustawienia
-plan.settings.summary|mt|e3ba042c|Zachowane: {0}, nowe: {1}, zmienione na nową zalecaną wartość: {2}, bez zmian: {3}.
-plan.settings.none|mt|5fa2509b|Instalator nie mógł wypisać ustawień, które zmienia. Nic nie zostanie zmienione, zanim przejdziesz dalej.
-plan.settings.note|mt|d7133201|Ustawienia zmienione przez Ciebie zostają zachowane.
-plan.go.install|mt-safe|569ca49f|Zainstaluj
-plan.go.upgrade|mt-safe|c1c1009d|Aktualizuj
-plan.go.repair|mt-safe|1196b6c5|Napraw
-plan.go.resume|mt-safe|31fbef16|Kontynuuj
-settings.clock-limit|mt|9d16b4b1|Limit taktowania grafiki: {0} MHz
-settings.auto-clock.on|mt|499702fd|Automatyczne taktowanie grafiki: włączone
-settings.auto-clock.off|mt|3df7a04f|Automatyczne taktowanie grafiki: wyłączone
-settings.cores|mt|36cd7560|Rdzenie graficzne: {0}
-settings.desktop-path|mt|b1b92ad5|Pulpit na układzie graficznym
-settings.desktop.gpu|mt|7befc32c|Pulpit rysowany przez układ graficzny
-settings.desktop.cpu|mt|0fcc82b2|Pulpit rysowany przez procesor (tryb bezpieczny)
-settings.desktop.cpu-until-repair|mt|ed1263ad|Pulpit rysowany przez procesor, dopóki sterownik nie zacznie go znowu rysować
-settings.d3d11.gpu|mt|c45dd50d|Gry i aplikacje Direct3D 11 i 10.1 rysowane przez układ graficzny (aplikacje samego Windows i aplikacje Direct3D 10.0 zostają na procesorze)
-settings.d3d11.listed|mt|747f87a0|Gry i aplikacje Direct3D 11 rysowane przez procesor, z wyjątkiem tych z listy
-settings.game|mt|f203abf1|Zalecane ustawienia dla {0}
-settings.other|mt|b4abd830|Inne ustawienia sterownika: {0}, w tym nowe lub zmienione: {1}
-settings.decision.set|mt-safe|11507a0e|nowe
-settings.decision.same|mt-safe|aaa8d3c8|bez zmian
-settings.decision.update|mt|bae122db|nowa zalecana wartość
-settings.decision.kept|mt|b4865f1f|Twoja wartość zostaje zachowana
-settings.decision.command|mt|898239d8|tak, jak wybrano dla tej instalacji
-settings.decision.reopened|mt|4342e37e|przywrócone przez tę naprawę (sterownik to wyłączył)
-settings.decision.driver-closed|mt|cff55d7f|wyłączone przez sterownik. Naprawa to przywróci
+shortcuts.note|rev|f98bdcf0|Obie opcje są włączone. Wyłącz jedną, jeśli jej nie chcesz. Na instalację sterownika to nie wpływa.
+plan.firmware.download|rev|7051aa7f|Firmware GPU zostanie pobrany z oficjalnego archiwum firmware Linuksa i sprawdzony.
+plan.firmware.folder|rev|3afc555b|Firmware GPU pochodzi z wybranego folderu i zostanie sprawdzony.
+plan.firmware.package-folder|rev|576cf803|Firmware GPU pochodzi z przygotowanego folderu. Internet nie jest potrzebny.
+plan.notes.title|rev|3a048d0b|Co nowego w tej wersji
+plan.notes.english|rev|e9981e5c|Te informacje są po angielsku.
+plan.notes.none|rev|e9bf28c9|Ta wersja nie ma informacji o wydaniu.
+plan.settings.title|rev|7760b023|Twoje ustawienia
+plan.settings.summary|rev|e3ba042c|Zachowane: {0}, nowe: {1}, zmienione na nową zalecaną wartość: {2}, bez zmian: {3}.
+plan.settings.none|rev|5fa2509b|Instalator nie mógł wyświetlić listy ustawień, które zmienia. Dopóki nie przejdziesz dalej, nic nie zostanie zmienione.
+plan.settings.note|rev|d7133201|Ustawienia zmienione przez Ciebie zostają zachowane.
+plan.go.install|rev|569ca49f|Zainstaluj
+plan.go.upgrade|rev|c1c1009d|Aktualizuj
+plan.go.repair|rev|1196b6c5|Napraw
+plan.go.resume|rev|31fbef16|Kontynuuj
+settings.clock-limit|rev|9d16b4b1|Limit taktowania grafiki: {0} MHz
+settings.auto-clock.on|rev|499702fd|Automatyczne taktowanie grafiki: włączone
+settings.auto-clock.off|rev|3df7a04f|Automatyczne taktowanie grafiki: wyłączone
+settings.cores|rev|36cd7560|Rdzenie graficzne: {0}
+settings.desktop-path|rev|b1b92ad5|Pulpit na układzie graficznym
+settings.desktop.gpu|rev|7befc32c|Pulpit rysowany przez układ graficzny
+settings.desktop.cpu|rev|0fcc82b2|Pulpit rysowany przez procesor (tryb bezpieczny)
+settings.desktop.cpu-until-repair|rev|ed1263ad|Pulpit rysowany przez procesor, dopóki sterownik nie zacznie go znowu rysować
+settings.d3d11.gpu|rev|c45dd50d|Gry i aplikacje Direct3D 11 i 10.1 rysowane przez układ graficzny (aplikacje samego Windows i aplikacje Direct3D 10.0 zostają na procesorze)
+settings.d3d11.listed|rev|747f87a0|Gry i aplikacje Direct3D 11 rysowane przez procesor, z wyjątkiem tych z listy
+settings.game|rev|f203abf1|Zalecane ustawienia dla {0}
+settings.other|rev|b4abd830|Inne ustawienia sterownika: {0}, w tym nowe lub zmienione: {1}
+settings.decision.set|rev|11507a0e|nowe
+settings.decision.same|rev|aaa8d3c8|bez zmian
+settings.decision.update|rev|bae122db|nowa zalecana wartość
+settings.decision.kept|rev|b4865f1f|Twoja wartość zostaje zachowana
+settings.decision.command|rev|898239d8|zgodnie z Twoim wyborem dla tej instalacji
+settings.decision.reopened|rev|4342e37e|przywrócone przez tę naprawę (sterownik je wyłączył)
+settings.decision.driver-closed|rev|cff55d7f|wyłączone przez sterownik. Naprawa przywróci to ustawienie
 
 # ---- consents ----
 
 # ---- working ----
-working.title|mt-safe|8749b169|Instalowanie
-working.repair.title|mt-safe|e2c5201c|Naprawianie
-working.continue.title|mt|d0432a88|Kontynuowanie instalacji
-working.prepare.title|mt|28edcf49|Przygotowywanie folderu
-working.body|mt|dccb0ab7|Proszę czekać. Nie wyłączaj komputera.
-working.prepare.body|mt|aa356215|Instalator kopiuje swoje pliki i firmware GPU i sprawdza każdy z nich.
-working.stages|mt-safe|1de3df70|Kroki
-working.elapsed|mt-safe|409cb488|Czas od startu: {0}
-working.cancel.available|mt|0031d59c|Nadal możesz anulować. Nic jeszcze nie zostało zmienione.
-working.cancel.unavailable|mt|42461b9b|Teraz nie można anulować: instalator musi najpierw dokończyć ten etap.
-working.cancel.requested|mt|3caf86ac|Zatrzymywanie w najbliższym bezpiecznym miejscu...
-working.close-blocked|mt|10e529bd|Instalator pracuje. Okno można zamknąć, gdy ten etap się zakończy.
-stage.other|mt-safe|80de8143|Inny krok
-stage.preflight|mt-safe|de07d072|Sprawdzenia
-stage.test-signing|mt-safe|61d7aae4|Tryb testowy Windows
-stage.install|mt|c9fb4313|Przygotowanie instalacji
-stage.firmware|mt-safe|46d4dd63|Firmware GPU
-stage.files|mt-safe|3ffd2d35|Pliki sterownika
-stage.driver|mt-safe|fc465aa6|Sterownik grafiki
-stage.settings|mt-safe|74a883a0|Ustawienia
-stage.extras|mt-safe|800ae5e9|Programy dodatkowe
-stage.components|mt-safe|5f69dcb7|Instalowanie programów dodatkowych
-stage.finish|mt-safe|0052205c|Kończenie
-stage.verify|mt|11d4d5ab|Sprawdzanie sterownika
-stage.prepare-check|mt|0f35d10d|Pliki instalatora i folder
-stage.copy|mt-safe|ff9e3c81|Kopiowanie plików
+working.title|rev|8749b169|Instalowanie
+working.repair.title|rev|e2c5201c|Naprawianie
+working.continue.title|rev|d0432a88|Kontynuowanie instalacji
+working.prepare.title|rev|28edcf49|Przygotowywanie folderu
+working.body|rev|dccb0ab7|Proszę czekać. Nie wyłączaj komputera.
+working.prepare.body|rev|aa356215|Instalator kopiuje swoje pliki i firmware GPU i sprawdza każdy z nich.
+working.stages|rev|1de3df70|Kroki
+working.elapsed|rev|409cb488|Czas pracy: {0}
+working.cancel.available|rev|0031d59c|Nadal możesz anulować. Nic jeszcze nie zostało zmienione.
+working.cancel.unavailable|rev|42461b9b|Teraz nie można anulować: instalator musi najpierw dokończyć ten etap.
+working.cancel.requested|rev|3caf86ac|Zatrzymywanie w najbliższym bezpiecznym miejscu...
+working.close-blocked|rev|10e529bd|Instalator pracuje. Okno można zamknąć, gdy ten etap się zakończy.
+stage.other|rev|80de8143|Inny krok
+stage.preflight|rev|de07d072|Sprawdzenia
+stage.test-signing|rev|61d7aae4|Tryb testowy Windows
+stage.install|rev|c9fb4313|Przygotowanie instalacji
+stage.firmware|rev|46d4dd63|Firmware GPU
+stage.files|rev|3ffd2d35|Pliki sterownika
+stage.driver|rev|fc465aa6|Sterownik grafiki
+stage.settings|rev|74a883a0|Ustawienia
+stage.extras|rev|800ae5e9|Programy dodatkowe
+stage.components|rev|5f69dcb7|Instalowanie programów dodatkowych
+stage.finish|rev|0052205c|Kończenie
+stage.verify|rev|11d4d5ab|Sprawdzanie sterownika
+stage.prepare-check|rev|0f35d10d|Pliki instalatora i folder
+stage.copy|rev|ff9e3c81|Kopiowanie plików
 
 # ---- restart ----
-restart.now|mt-safe|09af1002|Uruchom ponownie teraz
-restart.later|mt-safe|73b6e48a|Później
-restart.save-work|mt|16909f23|Najpierw zapisz swoją pracę. Windows poprosi otwarte programy o zamknięcie; nie wymusza tego.
-restart.countdown|mt|e8ce24a7|Windows uruchomi się ponownie sam za {0} s.
-restart.countdown.over|mt|7af75060|Odliczanie się skończyło. Instalator nie uruchomi już Windows ponownie samodzielnie.
-restart.later.done|mt|a38787ae|Instalator będzie kontynuował sam po następnym ponownym uruchomieniu Windows. Możesz zamknąć to okno.
-restart.failed|mt|56d3b9cd|Windows nie rozpoczął ponownego uruchomienia. Uruchom komputer ponownie z menu Start.
+restart.now|rev|09af1002|Uruchom ponownie teraz
+restart.later|rev|73b6e48a|Później
+restart.save-work|rev|16909f23|Najpierw zapisz swoją pracę. Windows poprosi otwarte programy o zamknięcie, ale ich do tego nie zmusi.
+restart.countdown|rev|e8ce24a7|Windows uruchomi się ponownie sam za {0} s.
+restart.countdown.over|rev|7af75060|Odliczanie się skończyło. Instalator sam nie uruchomi już ponownie systemu Windows.
+restart.later.done|rev|a38787ae|Instalator sam wznowi pracę po następnym ponownym uruchomieniu systemu Windows. Możesz zamknąć to okno.
+restart.failed|rev|56d3b9cd|Windows nie rozpoczął ponownego uruchomienia. Uruchom komputer ponownie z menu Start.
 
 # ---- results ----
-result.none.title|mt|58c58ece|Instalator zatrzymał się niespodziewanie
-result.none.body|mt|8ae282a1|Instalator nie podał, jak się zakończył.
-result.other.title|mt-safe|493698ce|Instalator zakończył pracę
-result.other.body|mt|3cf8a086|Szczegóły są w pliku dla pomocy technicznej.
-result.planned.title|mt-safe|5fa7aac5|Gotowe
-result.planned.body|mt|d714c256|Instalator sprawdził ten komputer.
-result.needs-consent.title|mt|b2f19443|Potrzebna jest Twoja zgoda
-result.needs-consent.body|mt|ecacb024|Instalator potrzebuje Twojej zgody, zanim będzie kontynuował.
-result.dry-run-complete.title|mt|f54c1b03|Przebieg próbny zakończony
-result.dry-run-complete.body|mt|9ea5d7b2|Instalator przeszedł przez wszystkie kroki i niczego nie zmienił.
-result.dry-run-verify.title|mt|f54c1b03|Przebieg próbny zakończony
-result.dry-run-verify.body|mt|d1555a0f|Ta wersja czeka na ponowne uruchomienie. Po nim prawdziwy przebieg sprawdzi sterownik.
-result.already.title|mt|eb0999fb|Ta wersja jest już zainstalowana i sprawdzona
-result.already.body|mt|886b4b43|Nic nie trzeba robić. Wybierz Napraw, aby zainstalować ją ponownie.
-result.restart-test-signing.title|mt|14fc8bc7|Uruchom ponownie Windows, aby kontynuować
-result.restart-test-signing.body|mt|2258d814|Tryb testowy Windows włączy się przy ponownym uruchomieniu. Po ponownym zalogowaniu instalator będzie kontynuował sam.
-result.restart-driver.title|mt|14fc8bc7|Uruchom ponownie Windows, aby kontynuować
-result.restart-driver.body|mt|de5ef092|Sterownik jest zainstalowany i uruchomi się przy ponownym starcie. Po ponownym zalogowaniu instalator będzie kontynuował sam.
-result.installed-restart.title|mt|93aab4b5|Uruchom ponownie Windows, aby zakończyć
-result.installed-restart.body|mt|42a56d9a|Wszystko jest zainstalowane. Po ponownym uruchomieniu instalator sprawdzi, czy sterownik działa.
-result.testsigning-not-active.title|mt|7fcee967|Tryb testowy Windows nie jest jeszcze włączony
-result.testsigning-not-active.body|mt|3213b661|Windows nie włączył trybu testowego przy ostatnim starcie. Uruchom Windows ponownie jeszcze raz. Jeśli ten komunikat wróci, sprawdź, czy Secure Boot jest wyłączony.
-result.testsigning-secureboot.title|mt|e160b4ae|Secure Boot blokuje tryb testowy Windows
-result.testsigning-secureboot.body|mt|5ab0b106|Windows zgłasza, że Secure Boot jest włączony. Dopóki jest włączony, Windows nie pozwala na tryb testowy, którego wymaga ten sterownik. Standardowy firmware BC-250 nie ma ustawienia Secure Boot, więc ten komputer ma zmieniony firmware: wyłącz Secure Boot w jego ustawieniach, zwykle w Security > Secure Boot, a potem uruchom instalator ponownie. Niektóre zmienione wersje nie mają takiego przełącznika: ustaw OS Type na "Other OS" albo usuń klucze Secure Boot. Aby samodzielnie sprawdzić stan, otwórz Informacje o systemie z menu Start i znajdź wiersz o Secure Boot.
-result.restart-still-pending.title|mt|9676613e|Windows nie został jeszcze uruchomiony ponownie
-result.restart-still-pending.body|mt|e79d291f|Instalator będzie kontynuował po następnym ponownym uruchomieniu Windows.
-result.verify-before-restart.title|mt|93aab4b5|Uruchom ponownie Windows, aby zakończyć
-result.verify-before-restart.body|mt|ff335b2d|Sterownik zostanie sprawdzony po ponownym uruchomieniu Windows.
-result.install-unfinished.title|mt|905e1ac5|Instalacja nie jest jeszcze zakończona
-result.install-unfinished.body|mt|0e894d61|Uruchom instalator ponownie, aby dokończyć instalację. Sterownik zostanie sprawdzony potem.
-result.verified.title|mt|9756a569|Sterownik jest zainstalowany i działa
-result.verified.body|mt|5542d882|Wszystko gotowe. amdgpu-wddm Control jest w menu Start.
-result.verified-with-warnings.title|mt|c50059a2|Sterownik jest zainstalowany i działa, z uwagami
-result.verified-with-warnings.body|mt|687cef5d|Wszystko gotowe. Niektóre sprawdzenia miały uwagi; szczegóły są w pliku dla pomocy technicznej.
-result.preflight-refused.title|mt|6a7ab8d2|Instalator nie może teraz instalować na tym komputerze
-result.preflight-refused.body|mt|435efe20|Te sprawdzenia nie przeszły. Popraw je, potem uruchom instalator ponownie.
-result.preflight-error.title|mt|7f549710|Instalator nie mógł sprawdzić tego komputera
-result.preflight-error.body|mt|0cdc865d|Spróbuj ponownie. Jeśli to się powtórzy, zapisz plik dla pomocy technicznej i zgłoś problem.
-result.needs-admin.title|mt|a7547d5e|Instalator potrzebuje uprawnień administratora
-result.needs-admin.body|mt|c300742e|Uruchom instalator ponownie i wybierz Tak, gdy Windows zapyta.
-result.package-damaged.title|mt|9605d07e|Pliki instalatora są uszkodzone
-result.package-damaged.body|mt|3b352587|Pobierz wydanie ponownie, rozpakuj je i uruchom instalator z nowego folderu.
-result.firmware-folder-bad.title|mt|7a0ca40b|Pliki firmware GPU są niekompletne
-result.firmware-folder-bad.body|mt|8e7f3bf0|Brakuje części plików firmware w folderze albo się różnią. Przygotuj folder ponownie albo pozwól instalatorowi pobrać pliki.
-result.firmware-unreachable.title|mt|9a30fe38|Nie można pobrać firmware GPU
-result.firmware-unreachable.body|mt|f36a7aec|Sprawdź połączenie z internetem i spróbuj ponownie albo użyj folderu przygotowanego na innym komputerze.
-result.prepare-destination.title|mt|80d7e19c|Tego folderu nie można użyć
-result.prepare-destination.body|mt|537024c6|Wybierz pusty folder albo folder przygotowany wcześniej, poza plikami instalatora.
-result.busy.title|mt|2a14eee7|Instalator już działa
-result.busy.body|mt|f31e735e|Na tym komputerze działa inna instalacja lub naprawa. Poczekaj, aż się zakończy, potem spróbuj ponownie.
-result.verify-failed.title|mt|dd7e4790|Sterownik nie działa tak, jak powinien
-result.verify-failed.body|mt|ffe45976|Instalator sprawdził sterownik po ponownym uruchomieniu i znalazł problem. Napraw go albo zapisz plik dla pomocy technicznej i zgłoś problem.
-result.step-failed.title|mt|aac11030|Instalator zatrzymał się przed końcem
-result.step-failed.body|mt|bda9b715|Jeden krok się nie powiódł.
-result.cancelled.title|mt|5efba629|Instalacja została anulowana
-result.cancelled.body|mt|60ecbf18|Instalator zatrzymał się w bezpiecznym miejscu.
-result.cancelled-after-changes.title|mt|5efba629|Instalacja została anulowana
-result.cancelled-after-changes.body|mt|7e3e0e36|Instalator zatrzymał się w bezpiecznym miejscu, po tym jak zaczął zmieniać ten komputer.
-result.deadline.title|mt|37bea89c|Instalator zatrzymał się: minął limit czasu
-result.deadline.body|mt|99cbc2bc|Instalator osiągnął wyznaczony limit czasu i zatrzymał się w bezpiecznym miejscu.
-result.deadline-after-changes.title|mt|37bea89c|Instalator zatrzymał się: minął limit czasu
-result.deadline-after-changes.body|mt|b329d221|Instalator osiągnął wyznaczony limit czasu i zatrzymał się w bezpiecznym miejscu, po tym jak zaczął zmieniać ten komputer.
-result.offline-prepared.title|mt-safe|58c76c43|Folder jest gotowy
-result.offline-prepared.body|mt|2a59d535|Skopiuj folder na komputer bez internetu i uruchom z niego instalator. Wybierz tam „Folder przygotowany dla komputera bez internetu”.
-result.failed-checks|mt|ecefee18|Sprawdzenia, które nie przeszły
-result.nothing-changed|mt|54ca5460|Nic nie zostało zmienione.
-result.already-installed|mt|c90b9352|Ten komputer ma już wersję {0} sterownika.
-result.changes-made|mt|8e3dd6e8|Przed zatrzymaniem instalator wprowadził część zmian i pozostają one bez zmian. Uruchom instalator ponownie, aby dokończyć, albo użyj Napraw w amdgpu-wddm Control.
-result.changes-unknown|mt|88bf7384|Instalator nie wie, czy cokolwiek zostało zmienione. Uruchom go ponownie; będzie kontynuował tam, gdzie to możliwe.
-result.support|mt|3e9e40b3|Plik dla pomocy technicznej zawiera szczegóły do zgłoszenia problemu. Nic nie jest wysyłane automatycznie.
-result.support.diagnostics|mt|a739d1a9|Szczegóły układu graficznego, który się nie uruchomił, zostały już zebrane. Są w tym pliku.
-result.support.saved|mt-safe|73cd7e8c|Zapisano: {0}
-result.support.failed|mt|d2f9f531|Nie udało się zapisać pliku dla pomocy technicznej. Wybierz inne miejsce.
-result.save-support|mt|884d47cb|Zapisz plik dla pomocy technicznej...
-result.retry|mt-safe|d8b8392e|Spróbuj ponownie
-result.repair|mt-safe|1196b6c5|Napraw
+result.none.title|rev|58c58ece|Instalator zatrzymał się niespodziewanie
+result.none.body|rev|8ae282a1|Instalator nie podał, jak się zakończył.
+result.other.title|rev|493698ce|Instalator zakończył pracę
+result.other.body|rev|3cf8a086|Szczegóły są w pliku diagnostycznym.
+result.planned.title|rev|5fa7aac5|Gotowe
+result.planned.body|rev|d714c256|Instalator sprawdził ten komputer.
+result.needs-consent.title|rev|b2f19443|Potrzebna jest Twoja zgoda
+result.needs-consent.body|rev|ecacb024|Instalator potrzebuje Twojej zgody, aby przejść dalej.
+result.dry-run-complete.title|rev|f54c1b03|Przebieg próbny zakończony
+result.dry-run-complete.body|rev|9ea5d7b2|Instalator przeszedł przez wszystkie kroki i niczego nie zmienił.
+result.dry-run-verify.title|rev|f54c1b03|Przebieg próbny zakończony
+result.dry-run-verify.body|rev|d1555a0f|Ta wersja czeka na ponowne uruchomienie. Po nim sterownik zostanie sprawdzony w zwykłym przebiegu.
+result.already.title|rev|eb0999fb|Ta wersja jest już zainstalowana i sprawdzona
+result.already.body|rev|886b4b43|Nie trzeba nic robić. Wybierz Napraw, aby zainstalować ją ponownie.
+result.restart-test-signing.title|rev|14fc8bc7|Uruchom ponownie system Windows, aby kontynuować
+result.restart-test-signing.body|rev|2258d814|Tryb testowy Windows włączy się przy ponownym uruchomieniu. Po ponownym zalogowaniu instalator sam wznowi pracę.
+result.restart-driver.title|rev|14fc8bc7|Uruchom ponownie system Windows, aby kontynuować
+result.restart-driver.body|rev|de5ef092|Sterownik jest zainstalowany i zacznie działać po ponownym uruchomieniu systemu Windows. Po zalogowaniu instalator sam wznowi pracę.
+result.installed-restart.title|rev|93aab4b5|Uruchom ponownie system Windows, aby zakończyć
+result.installed-restart.body|rev|42a56d9a|Wszystko jest zainstalowane. Po ponownym uruchomieniu instalator sprawdzi, czy sterownik działa.
+result.testsigning-not-active.title|rev|7fcee967|Tryb testowy Windows nie jest jeszcze włączony
+result.testsigning-not-active.body|rev|3213b661|Windows nie włączył trybu testowego przy ostatnim uruchomieniu. Jeszcze raz uruchom ponownie system Windows. Jeśli ten komunikat wróci, sprawdź, czy Secure Boot jest wyłączony.
+result.testsigning-secureboot.title|rev|e160b4ae|Secure Boot blokuje tryb testowy Windows
+result.testsigning-secureboot.body|rev|5ab0b106|Windows zgłasza, że Secure Boot jest włączony. Dopóki jest włączony, Windows nie pozwala na tryb testowy, którego wymaga ten sterownik. Standardowy firmware BC-250 nie ma ustawienia Secure Boot, więc ten komputer ma zmieniony firmware: wyłącz Secure Boot w jego ustawieniach, zwykle w Security > Secure Boot, a potem uruchom instalator ponownie. Niektóre zmienione wersje nie mają takiego przełącznika: ustaw OS Type na „Other OS” albo usuń klucze Secure Boot. Aby samodzielnie sprawdzić stan, otwórz Informacje o systemie z menu Start i odczytaj wiersz Secure Boot.
+result.restart-still-pending.title|rev|9676613e|Windows nie został jeszcze uruchomiony ponownie
+result.restart-still-pending.body|rev|e79d291f|Instalator wznowi pracę po następnym ponownym uruchomieniu systemu Windows.
+result.verify-before-restart.title|rev|93aab4b5|Uruchom ponownie system Windows, aby zakończyć
+result.verify-before-restart.body|rev|ff335b2d|Sterownik zostanie sprawdzony po ponownym uruchomieniu systemu Windows.
+result.install-unfinished.title|rev|905e1ac5|Instalacja nie jest jeszcze zakończona
+result.install-unfinished.body|rev|0e894d61|Uruchom instalator ponownie, aby dokończyć instalację. Potem sterownik zostanie sprawdzony.
+result.verified.title|rev|9756a569|Sterownik jest zainstalowany i działa
+result.verified.body|rev|5542d882|Wszystko gotowe. amdgpu-wddm Control jest w menu Start.
+result.verified-with-warnings.title|rev|c50059a2|Sterownik jest zainstalowany i działa, z uwagami
+result.verified-with-warnings.body|rev|687cef5d|Wszystko gotowe. Niektóre sprawdzenia miały uwagi; szczegóły są w pliku diagnostycznym.
+result.preflight-refused.title|rev|6a7ab8d2|Instalator nie może teraz instalować na tym komputerze
+result.preflight-refused.body|rev|435efe20|Te sprawdzenia nie zostały zaliczone. Napraw wskazane problemy, a potem uruchom instalator ponownie.
+result.preflight-error.title|rev|7f549710|Instalator nie mógł sprawdzić tego komputera
+result.preflight-error.body|rev|0cdc865d|Spróbuj ponownie. Jeśli to się powtórzy, zapisz plik diagnostyczny i zgłoś problem.
+result.needs-admin.title|rev|a7547d5e|Instalator potrzebuje uprawnień administratora
+result.needs-admin.body|rev|c300742e|Uruchom instalator ponownie i wybierz Tak, gdy Windows zapyta.
+result.package-damaged.title|rev|9605d07e|Pliki instalatora są uszkodzone
+result.package-damaged.body|rev|3b352587|Pobierz wydanie ponownie, rozpakuj je i uruchom instalator z nowego folderu.
+result.firmware-folder-bad.title|rev|7a0ca40b|Pliki firmware GPU są niekompletne
+result.firmware-folder-bad.body|rev|8e7f3bf0|W folderze brakuje części plików firmware albo różnią się one od oczekiwanych. Przygotuj folder ponownie albo pozwól instalatorowi pobrać pliki.
+result.firmware-unreachable.title|rev|9a30fe38|Nie można pobrać firmware GPU
+result.firmware-unreachable.body|rev|f36a7aec|Sprawdź połączenie z internetem i spróbuj ponownie albo użyj folderu przygotowanego na innym komputerze.
+result.prepare-destination.title|rev|80d7e19c|Tego folderu nie można użyć
+result.prepare-destination.body|rev|537024c6|Wybierz pusty folder albo folder przygotowany wcześniej, poza plikami instalatora.
+result.busy.title|rev|2a14eee7|Instalator już działa
+result.busy.body|rev|f31e735e|Na tym komputerze działa inna instalacja lub naprawa. Poczekaj, aż się zakończy, potem spróbuj ponownie.
+result.verify-failed.title|rev|dd7e4790|Sterownik nie działa tak, jak powinien
+result.verify-failed.body|rev|ffe45976|Instalator sprawdził sterownik po ponownym uruchomieniu i znalazł problem. Napraw go albo zapisz plik diagnostyczny i zgłoś problem.
+result.step-failed.title|rev|aac11030|Instalator zatrzymał się przed końcem
+result.step-failed.body|rev|bda9b715|Jeden z kroków nie został ukończony.
+result.cancelled.title|rev|5efba629|Instalacja została anulowana
+result.cancelled.body|rev|60ecbf18|Instalator zatrzymał się w bezpiecznym miejscu.
+result.cancelled-after-changes.title|rev|5efba629|Instalacja została anulowana
+result.cancelled-after-changes.body|rev|7e3e0e36|Instalator zatrzymał się w bezpiecznym miejscu, po tym jak zaczął zmieniać ten komputer.
+result.deadline.title|rev|37bea89c|Instalator zatrzymał się: minął limit czasu
+result.deadline.body|rev|99cbc2bc|Instalator osiągnął wyznaczony limit czasu i zatrzymał się w bezpiecznym miejscu.
+result.deadline-after-changes.title|rev|37bea89c|Instalator zatrzymał się: minął limit czasu
+result.deadline-after-changes.body|rev|b329d221|Instalator osiągnął wyznaczony limit czasu i zatrzymał się w bezpiecznym miejscu, po tym jak zaczął zmieniać ten komputer.
+result.offline-prepared.title|rev|58c76c43|Folder jest gotowy
+result.offline-prepared.body|rev|2a59d535|Skopiuj folder na komputer bez internetu i uruchom z niego instalator. Wybierz tam „Folder przygotowany dla komputera bez internetu”.
+result.failed-checks|rev|ecefee18|Sprawdzenia, które nie zostały zaliczone
+result.nothing-changed|rev|54ca5460|Nic nie zostało zmienione.
+result.already-installed|rev|c90b9352|Ten komputer ma już wersję {0} sterownika.
+result.changes-made|rev|8e3dd6e8|Instalator wprowadził część zmian, zanim się zatrzymał, i nie wycofuje ich. Uruchom go ponownie, aby dokończyć, albo użyj funkcji Napraw w aplikacji amdgpu-wddm Control.
+result.changes-unknown|rev|88bf7384|Instalator nie potrafi ustalić, czy cokolwiek zostało zmienione. Uruchom go ponownie; podejmie pracę tam, gdzie to możliwe.
+result.support|rev|3e9e40b3|Plik diagnostyczny zawiera szczegóły potrzebne do zgłoszenia problemu. Nic nie jest wysyłane automatycznie.
+result.support.diagnostics|rev|a739d1a9|Szczegóły układu graficznego, który się nie uruchomił, zostały już zebrane. Są w tym pliku.
+result.support.saved|rev|73cd7e8c|Zapisano: {0}
+result.support.failed|rev|d2f9f531|Nie udało się zapisać pliku diagnostycznego. Wybierz inne miejsce.
+result.save-support|rev|884d47cb|Zapisz plik diagnostyczny...
+result.retry|rev|d8b8392e|Spróbuj ponownie
+result.repair|rev|1196b6c5|Napraw
 
 # ---- prepare ----
-prepare.title|mt|27a6234d|Przygotowanie folderu dla komputera bez internetu
-prepare.body|mt|7cd7fbff|Instalator kopiuje swoje pliki i firmware GPU do folderu. Skopiuj ten folder na komputer bez internetu i tam uruchom instalator.
-prepare.destination|mt-safe|7788ee99|Folder do przygotowania
-prepare.destination.hint|mt|d7d3d807|Wybierz pusty folder albo folder przygotowany wcześniej (zostanie zastąpiony).
-prepare.firmware.title|mt-safe|46d4dd63|Firmware GPU
-prepare.use-firmware|mt|d8e7a9bd|Mam już pliki firmware GPU w folderze
-prepare.firmware.folder|mt-safe|5c1a3bc9|Folder z firmware
-prepare.firmware.download-note|mt|6ec53a34|Bez folderu instalator pobierze firmware, więc ten komputer potrzebuje teraz internetu.
-prepare.firmware.folder-note|mt|bb8b6a97|Instalator sprawdza każdy plik firmware z listą w tym wydaniu.
-prepare.go|mt-safe|ee820467|Przygotuj
+prepare.title|rev|27a6234d|Przygotowanie folderu dla komputera bez internetu
+prepare.body|rev|7cd7fbff|Instalator kopiuje swoje pliki i firmware GPU do folderu. Skopiuj ten folder na komputer bez internetu i tam uruchom instalator.
+prepare.destination|rev|7788ee99|Folder do przygotowania
+prepare.destination.hint|rev|d7d3d807|Wybierz pusty folder albo folder przygotowany wcześniej (zostanie zastąpiony).
+prepare.firmware.title|rev|46d4dd63|Firmware GPU
+prepare.use-firmware|rev|d8e7a9bd|Mam już pliki firmware GPU w folderze
+prepare.firmware.folder|rev|5c1a3bc9|Folder z firmware
+prepare.firmware.download-note|rev|6ec53a34|Bez folderu instalator pobierze firmware, więc ten komputer potrzebuje teraz internetu.
+prepare.firmware.folder-note|rev|bb8b6a97|Instalator porównuje każdy plik firmware z listą w tym wydaniu.
+prepare.go|rev|ee820467|Przygotuj
 
 # ---- guide panel ----
-guide.title|mt-safe|5506739a|Wskazówka Nagi
-guide.title.plain|mt-safe|a4245a3c|Wskazówka
-guide.welcome|mt|65339917|Nic się nie zmieni, dopóki nie naciśniesz Zainstaluj. Instalator najpierw pokazuje każdą zmianę.
-guide.prepare|mt|9ee5d83f|Przygotowany folder działa na każdym BC-250 bez internetu, także przy późniejszej naprawie.
-guide.page-tip|mt|70da7524|Ustawienia zmienione w amdgpu-wddm Control zostają zachowane przy aktualizacji.
-guide.work-in-progress|mt|f3e8ef82|Pracuję nad tym. To może potrwać kilka minut.
-guide.checking|mt|687b400d|Sprawdzam ten komputer. To może potrwać do minuty.
-guide.pending-restart|mt|d31250df|Twoje zmiany są zapisane. Instalator będzie kontynuował po następnym ponownym uruchomieniu Windows.
-guide.install-stopped|mt|47319a31|Instalator nie dokończył pracy. Strona mówi, co zrobić dalej.
-guide.verification-failed|mt|1abe91c5|Sterownik nie przeszedł sprawdzeń. Naprawa zwykle pomaga.
-guide.upgrade-done|mt|7ed192a1|Gotowe! Sterownik jest zainstalowany i sprawdzony. Miłej zabawy!
+guide.title|rev|5506739a|Wskazówka Nagi
+guide.title.plain|rev|a4245a3c|Wskazówka
+guide.welcome|rev|65339917|Nic się nie zmieni, dopóki nie naciśniesz Zainstaluj. Instalator najpierw pokazuje każdą zmianę.
+guide.prepare|rev|9ee5d83f|Przygotowany folder działa na każdym BC-250 bez internetu, także przy późniejszej naprawie.
+guide.page-tip|rev|70da7524|Ustawienia zmienione w amdgpu-wddm Control zostają zachowane przy aktualizacji.
+guide.work-in-progress|rev|f3e8ef82|Pracuję nad tym. To może potrwać kilka minut.
+guide.checking|rev|687b400d|Sprawdzam ten komputer. To może potrwać do minuty.
+guide.pending-restart|rev|d31250df|Twoje zmiany są zapisane. Instalator wznowi pracę po następnym ponownym uruchomieniu systemu Windows.
+guide.install-stopped|rev|47319a31|Instalator nie dokończył pracy. Na tej stronie jest napisane, co zrobić dalej.
+guide.verification-failed|rev|1abe91c5|Sterownik nie przeszedł sprawdzeń. Naprawa zwykle pomaga.
+guide.upgrade-done|rev|7ed192a1|Gotowe! Sterownik jest zainstalowany i sprawdzony. Miłej zabawy!
 # Optional Windows tuning
-tuning.title|mt|a1f6198e|Ustawienia Windows
-tuning.opt-in|mt|d229d14d|Zastosuj opcjonalne zmiany ustawień Windows
-tuning.details|mt|36ae26fb|Zastosuj zalecane ustawienia, aby ograniczyć aktywność Windows w tle.
-tuning.restore|mt|387d1d61|Przejrzyj poszczególne ustawienia i przywróć zapisane wartości w aplikacji sterownika. Deinstalator oferuje też przywracanie ustawień całego komputera.
+tuning.title|rev|a1f6198e|Optymalizacja systemu Windows
+tuning.opt-in|rev|d229d14d|Zastosuj opcjonalną optymalizację systemu Windows
+tuning.details|rev|36ae26fb|Zastosuj zalecane ustawienia, które ograniczą aktywność systemu Windows w tle.
+tuning.restore|rev|387d1d61|Poszczególne ustawienia przejrzysz, a zapisane wartości przywrócisz w aplikacji amdgpu-wddm Control. Odinstalowanie proponuje też przywrócenie ustawień obejmujących cały komputer.
