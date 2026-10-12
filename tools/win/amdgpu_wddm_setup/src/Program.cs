@@ -90,8 +90,12 @@ namespace AmdgpuWddmSetup
                         if (form.GuideArtWanted != form.GuideArtShown)
                             w.AppendLine(f.Name + ": G-ART the guide art " + (form.GuideArtShown ? "shows but was not wanted" : "is wanted but does not show") +
                                 " (cause " + form.GuideCause + ", expression " + SetupGuide.Expression(form.GuideCause) + ")");
-                        if (a.NoNagi == form.GuideArtShown)
+                        if (form.GuidePanelShown && a.NoNagi == form.GuideArtShown)
                             w.AppendLine(f.Name + ": G-ART the guide art " + (form.GuideArtShown ? "shows with --no-nagi" : "does not show although the guide character is on"));
+                        // G-SMALL, the owner's rule of 2026-10-12: no guide panel at all on a small screen
+                        // (--work-area), the panel with its card on a screen that has room for it, and the page
+                        // column inside the room the window really has.
+                        foreach (var p in form.SmallScreenFindings()) w.AppendLine(f.Name + ": G-SMALL " + p);
                         var text = form.VisibleText(false);
                         foreach (var hit in NoInternals.Find(text)) w.AppendLine(f.Name + ": G-NOINT \"" + hit + "\"");
                         if (text.Contains("[")) foreach (var m in System.Text.RegularExpressions.Regex.Matches(text, @"\[[a-z0-9.-]+\]")) w.AppendLine(f.Name + ": missing string " + m);

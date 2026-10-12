@@ -18,6 +18,8 @@
 # with her off, and a language switch at run time; every page is drawn to PNG without a window and checked for
 # overlap, overflow, internals in the text and accessible names. The guide panel must draw her picture wherever the
 # side panel is in the window, and must not draw it with "Show Nagi" off.
+# G-SMALL (owner, 2026-10-12): six runs name the screen the window is drawn for (--work-area, in logical units) and
+# hold the rule that a 1024x768, 800x600 or smaller screen draws no right-hand panel, and a larger one draws it.
 # The smoke run passes on a PC without a BC-250 when it reports the driver as not found.
 #
 # The guide character (plan v7 section 6) is embedded by default from art\nagi of this directory, as the resources
@@ -504,6 +506,13 @@ if (-not $NoSmoke) {
     $runs += , @('ko-2-tuner', '2', '--lang', 'ko', '--fixture', "`"$tuner`"")
     $runs += , @('en-1-tuner-off', '1', '--fixture', "`"$tunerOff`"")
     $runs += , @('pl-1-tuner-off', '1', '--lang', 'pl', '--fixture', "`"$tunerOff`"")
+    # G-SMALL, the owner's rule of 2026-10-12: the five working areas of a tester's screen, in logical units. The
+    # four small ones must draw no right-hand panel and the 1920x1080 one must draw it; overlap, overflow and the
+    # page width are checked in every one of them, which is what an 800x600 screen needed (GitHub #38).
+    foreach ($work in '800x600', '1024x768', '1280x720', '1366x768', '1920x1080') {
+        $runs += , @("en-1-work$work", '1', '--work-area', $work, '--fixture', "`"$fixture`"")
+    }
+    $runs += , @('pl-1.5-work1920x1080', '1.5', '--lang', 'pl', '--work-area', '1920x1080', '--fixture', "`"$fixture`"")
     $failed = @()
     foreach ($r in $runs) {
         $dir = Join-Path $obj "render\$($r[0])"
@@ -519,7 +528,7 @@ if (-not $NoSmoke) {
         if ($p.ExitCode -ne 0) { $failed += "$($r[0]): $(Get-Content (Join-Path $dir 'layout.txt') -Raw -ErrorAction SilentlyContinue)" }
     }
     if ($failed.Count) { throw "render gates:`n$($failed -join "`n")" }
-    Write-Host "  render: $($runs.Count) runs (9 pages, 96-192 DPI, 4 languages, text 150 %, Nagi on by default and two runs with her off, language switch, tuning states): no findings ($obj\render)"
+    Write-Host "  render: $($runs.Count) runs (9 pages, 96-192 DPI, 4 languages, text 150 %, Nagi on by default and two runs with her off, language switch, tuning states, 6 runs over five screen sizes from 800x600 up): no findings ($obj\render)"
 }
 Get-ChildItem $Out -File | ForEach-Object {
     '{0,9}  {1}  {2}' -f $_.Length, (Get-FileHash $_.FullName -Algorithm SHA256).Hash.Substring(0, 8), $_.Name

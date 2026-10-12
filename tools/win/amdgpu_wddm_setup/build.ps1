@@ -20,8 +20,10 @@
 #      the support file without this PC's user or computer name; then --smoke-start-failure: plan, install and
 #      prepare with an engine that cannot start end on the result screen;
 #   4. --smoke-render: every setup screen from fixtures at 96, 120, 144 and 192 DPI in EN, PL, JA, KO, at a 150 %
-#      text size, without the guide character and with the high-contrast palette: no overlap, nothing outside the
-#      window, G-A11Y (names, Tab reach, tab order, Enter and Escape), G-CHROME and G-NOINT.
+#      text size, without the guide character, with the high-contrast palette, and for six screen sizes from
+#      800x600 up (--work-area, in logical units): no overlap, nothing outside the window, G-A11Y (names, Tab reach,
+#      tab order, Enter and Escape), G-CHROME, G-NOINT, and G-SMALL, the owner's rule of 2026-10-12 that a 1024x768,
+#      800x600 or smaller screen draws no right-hand panel and a larger one draws it.
 # None of them shows a window; nothing is installed and nothing outside -Out is written (the runs' temporary files are
 # under -Out\obj).
 
@@ -42,7 +44,7 @@ $exe = Join-Path $Out 'amdgpu_wddm_setup.exe'
 
 $refs = 'mscorlib.dll', 'System.dll', 'System.Core.dll', 'System.Drawing.dll', 'System.Windows.Forms.dll', 'System.IO.Compression.dll',
     'System.IO.Compression.FileSystem.dll', 'System.Web.Extensions.dll' | ForEach-Object { "/reference:$fx\$_" }
-$pure = 'Strings.cs', 'Json.cs', 'EngineModel.cs', 'PlanText.cs', 'SetupArgs.cs', 'NoInternals.cs', 'Redactor.cs' | ForEach-Object { Join-Path $here "src\$_" }
+$pure = 'Strings.cs', 'Json.cs', 'EngineModel.cs', 'PlanText.cs', 'SetupArgs.cs', 'NoInternals.cs', 'Redactor.cs', 'SmallScreen.cs' | ForEach-Object { Join-Path $here "src\$_" }
 
 # 1. Unit tests of the pure parts.
 & $csc /nologo /noconfig /nostdlib+ @refs /target:exe /platform:x64 /warnaserror+ /langversion:7.3 /deterministic+ `
@@ -184,15 +186,23 @@ if (-not $NoSmoke) {
     # nothing would see a tint drawn on a tint or text that the high-contrast colours make unreadable.
     $renders += , @('1', 'en', '1', '--high-contrast')
     $renders += , @('1.5', 'pl', '1', '--high-contrast')
+    # G-SMALL, the owner's rule of 2026-10-12: five working areas of a tester's screen, in logical units. The four
+    # small ones must draw no right-hand panel and the 1920x1080 one must draw it; overlap, overflow and the page
+    # column are checked in every one of them, which is what the tester's 800x600 screen needed (GitHub #38).
+    foreach ($work in '800x600', '1024x768', '1280x720', '1366x768', '1920x1080') {
+        $renders += , @('1', 'en', '1', '--work-area', $work)
+    }
+    $renders += , @('1.5', 'pl', '1', '--work-area', '1920x1080')
     foreach ($r in $renders) {
-        $dir = Join-Path $obj "render-$($r[0])-$($r[1])-text$($r[2])$(if ($r[3]) { $r[3] -replace '^--', '-' })"
+        $extra = @($r[3..($r.Count - 1)] | Where-Object { $_ })
+        $dir = Join-Path $obj "render-$($r[0])-$($r[1])-text$($r[2])$(if ($extra.Count) { '-' + (($extra -replace '^--', '') -join '-') })"
         Remove-Item -Recurse -Force $dir -ErrorAction SilentlyContinue
-        $renderArgs = @('--smoke-render', $dir, $r[0], $r[1], '--text-scale', $r[2]) + @(if ($r[3]) { $r[3] }) + @('--package', $fake)
+        $renderArgs = @('--smoke-render', $dir, $r[0], $r[1], '--text-scale', $r[2]) + $extra + @('--package', $fake)
         $code = Invoke-Exe $renderArgs 300
         $layout = Get-Content (Join-Path $dir 'layout.txt') -Raw -ErrorAction SilentlyContinue
-        if ($code -ne 0 -or $layout -notmatch '^ok: ') { throw "render at scale $($r[0]), $($r[1]), text $($r[2]) $($r[3]) (exit $code):`n$layout" }
+        if ($code -ne 0 -or $layout -notmatch '^ok: ') { throw "render at scale $($r[0]), $($r[1]), text $($r[2]) $($extra -join ' ') (exit $code):`n$layout" }
     }
-    Write-Host "  render: $(@(Get-ChildItem (Join-Path $obj 'render-1-en-text1') -Filter *.png).Count) screens x $($renders.Count) (4 DPIs x 4 languages + 150 % text + 2 without the guide character + 2 in high contrast), no overlap or overflow, the guide art where it belongs, G-A11Y, G-CHROME and G-NOINT clean ($obj\render-*)"
+    Write-Host "  render: $(@(Get-ChildItem (Join-Path $obj 'render-1-en-text1') -Filter *.png).Count) screens x $($renders.Count) (4 DPIs x 4 languages + 150 % text + 2 without the guide character + 2 in high contrast + 6 runs over five screen sizes from 800x600 up), no overlap or overflow, the guide art and the right-hand panel where they belong, G-A11Y, G-CHROME, G-SMALL and G-NOINT clean ($obj\render-*)"
 }
 
 Get-ChildItem $Out -File | ForEach-Object {

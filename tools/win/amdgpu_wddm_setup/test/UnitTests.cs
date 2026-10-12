@@ -39,6 +39,7 @@ static class UnitTests
             Prepared();
             Guide();
             Arguments();
+            SmallScreens();
             LocaleContracts();
             Quoting();
             NativeLayout();
@@ -393,6 +394,41 @@ static class UnitTests
         a = SetupArgs.Parse(new[] { "--smoke-engine", "p", "o", "--cancel", "--", "-DryRun", "-FirmwareDir", "f" });
         Check(a.Mode == "smoke-engine" && a.Cancel && a.EngineArgs.SequenceEqual(new[] { "-DryRun", "-FirmwareDir", "f" }), "args: --smoke-engine with engine arguments");
         Check(SetupArgs.Parse(new[] { "--", "-Force" }).Error != null, "args: engine arguments refused for the window");
+        a = SetupArgs.Parse(new[] { "--smoke-render", "d", "1", "en", "--work-area", "800x600" });
+        Check(a.WorkWidth == 800 && a.WorkHeight == 600 && a.Error == null, "args: --work-area 800x600");
+        foreach (var bad in new[] { "800", "800x", "x600", "0x600", "800x0", "100x100", "abcxdef", "99999x600" })
+            Check(SetupArgs.Parse(new[] { "--smoke-render", "d", "1", "en", "--work-area", bad }).Error != null, "args: --work-area refuses " + bad);
+        Check(SetupArgs.Parse(new[] { "--repair", "--work-area", "800x600" }).Error != null, "args: --work-area only with --smoke-render");
+    }
+
+    // The owner's rule of 2026-10-12: on a 1024x768 or 800x600 working area, and on every smaller one, the guide
+    // character and the whole right-hand panel she sits in do not show (GitHub #38: on the tester's 800x600 screen the
+    // panel covered the text of the screen). The screen comes in through the rule's arguments, so these cases never
+    // read the screen this test runs on; the window's own side of it is a render finding (--smoke-render G-SMALL, at
+    // the same five working areas).
+    static void SmallScreens()
+    {
+        foreach (var c in new[] {
+                new { W = 800, H = 600, Small = true },
+                new { W = 1024, H = 768, Small = true },
+                new { W = 1280, H = 720, Small = true },       // 720 high: under the 768 of the rule
+                new { W = 1366, H = 768, Small = true },       // exactly 768 high
+                new { W = 1920, H = 1080, Small = false },
+                new { W = 640, H = 480, Small = true },
+                new { W = 1024, H = 1200, Small = true },      // exactly 1024 wide
+                new { W = 1025, H = 769, Small = false } })    // one pixel over the rule in both directions
+            Check(SmallScreen.Is(c.W, c.H) == c.Small, "small screen: " + c.W + "x" + c.H + " is " + (c.Small ? "small" : "not small"));
+        Check(!SmallScreen.Is(0, 0) && !SmallScreen.Is(-1, 600) && !SmallScreen.Is(800, 0),
+            "small screen: a working area that is not known is not small, so the panel stays where it was");
+        // Logical units, not device pixels: the same monitor is a small screen at a large text size.
+        Check(!SmallScreen.IsDevice(1920, 1032, 1f), "small screen: 1920x1032 at 100 % is not small");
+        Check(SmallScreen.IsDevice(1920, 1032, 1.5f), "small screen: 1920x1032 at 150 % is 1280x688 logical, which is small");
+        Check(SmallScreen.IsDevice(1600, 1200, 2f), "small screen: 1600x1200 at 200 % is 800x600 logical, which is small");
+        Check(SmallScreen.IsDevice(2048, 1536, 2f), "small screen: 2048x1536 at 200 % is 1024x768 logical, which is small");
+        Check(!SmallScreen.IsDevice(2100, 1600, 2f), "small screen: 2100x1600 at 200 % is 1050x800 logical, which is not small");
+        Check(!SmallScreen.IsDevice(1920, 1080, 0f), "small screen: a scale that is not known decides nothing");
+        Equal(1024, SmallScreen.MaxWidth, "small screen: the width of the rule the owner gave");
+        Equal(768, SmallScreen.MaxHeight, "small screen: the height of the rule the owner gave");
     }
 
     static void LocaleContracts()

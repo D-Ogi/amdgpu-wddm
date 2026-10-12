@@ -75,7 +75,7 @@
 36	docs/design/wsi-engine-present.md
 2	docs/dxvk-engine-commit-map.md
 21	docs/facts/README.md
-66	docs/gui/interfaces-setup.md
+65	docs/gui/interfaces-setup.md
 38	docs/gui/interfaces.md
 20	docs/hardware.md
 8	docs/init-sequence.md

@@ -12,6 +12,9 @@
 # firmware folder and another engine contract are refused. The engine lock: one mutating engine at a time; a first
 # change whose record cannot be saved does not run. Pending restarts (Get-PendingRestart). Child closure from the
 # job's own count (this process joins a kill-on-close job in the last section).
+# GitHub #38: the start state verify reads before it waits for the start-confirm task and before it probes the
+# adapter (Get-VerifyStartState), and install.ps1's verify holding to it: a failed start skips the wait and the
+# probes that need a started adapter, records each of them, and still writes its report.
 # BD-125: Secure Boot from the UEFI variable with stand-in readers (no variable = off, not built into the firmware;
 # the fallbacks answer only when the read fails), one real read of the variable on this host, and the certificate
 # step's error (store, HRESULT, certutil commands), also through the shipped step with a stand-in Import-Certificate.
@@ -669,6 +672,37 @@ $c1 = Close-EngineChildren
 Check (($c1.closure -eq 'complete') -and ($c1.remaining -eq 0) -and ($c1.left_at_exit -ge 3) -and ($c1.ended -eq $c1.left_at_exit) -and ([AmdgpuWddmEngine.Job]::ActiveProcesses() -eq 1) -and $k1.HasExited -and $k2.HasExited) "every child and grandchild ended, the job holds only this process ($($c1 | ConvertTo-Json -Compress))"
 $c2 = Close-EngineChildren
 Check (($c2.closure -eq 'complete') -and ($c2.left_at_exit -eq 0)) 'nothing left: complete with 0'
+
+'[#38] the start state verify reads before it waits and before it probes the adapter'
+$ok = Get-VerifyStartState -ProblemCode 0 -Status 'OK'
+Check ($ok.started -and ($null -eq $ok.reason)) "problem code 0: the driver started, no reason text ($($ok | ConvertTo-Json -Compress))"
+# Code 43 is what the tester's device reported in #38; the others are codes a failed start also shows.
+foreach ($code in 43, 10, 28, 31, 39) {
+    $bad = Get-VerifyStartState -ProblemCode $code -Status 'Error'
+    Check ((-not $bad.started) -and ($bad.reason -match "problem code $code") -and ($bad.reason -match 'Windows reports it as Error')) `
+        "problem code ${code}: the driver did not start, and the reason names the code and the status ($($bad.reason))"
+}
+$noStatus = Get-VerifyStartState -ProblemCode 43
+Check ((-not $noStatus.started) -and ($noStatus.reason -match 'problem code 43') -and ($noStatus.reason -notmatch 'Windows reports')) `
+    "a device status that is not known: the reason names the code alone ($($noStatus.reason))"
+$okButOdd = Get-VerifyStartState -ProblemCode 0 -Status 'Unknown'
+Check ($okButOdd.started) 'problem code 0 decides on its own: a status this check does not know is not a failed start'
+
+'[#38] install.ps1 verify: a failed start skips the wait and the probes that need a started adapter'
+$verify = [IO.File]::ReadAllText((Join-Path $Installer 'install.ps1'))
+Check ($verify -match '\$startState = Get-VerifyStartState -ProblemCode \(\[int\]\$dev\[0\]\.ConfigManagerErrorCode\)') 'the start state comes from the device verify already read'
+Check ($verify -match '\$noWaitWhy = \$\(if \(\$startState\.started\)') 'the wait reads that one state'
+Check ($verify -match 'while \(\$null -eq \$noWaitWhy\)') 'a started driver still waits for the start-confirm task of this logon'
+Check ($verify -match 'the wait was skipped because \$noWaitWhy') 'and a verify line says why nothing was waited for'
+# Each probe that needs a started adapter: guarded by the same state, recorded under its own name, never a failure.
+foreach ($probe in 'D3D12 FL 12_1', 'Vulkan', 'GPU desktop path') {
+    Check ($verify -match ("Add-Skipped '" + [regex]::Escape($probe) + "'")) "$probe is recorded as skipped when the driver did not start"
+}
+Check ($verify -match "function Add-Skipped") 'the skip has one writer'
+Check ($verify -match "Add-Info \`$Name \('skipped: the driver did not start'") 'a skipped probe is an info line, so it is not an extra failure'
+Check (@([regex]::Matches($verify, 'if \(-not \$startState\.started\)')).Count -ge 3) 'three probes ask the state before they run'
+Check ($verify -match '\(Test-Path -LiteralPath \$cli\) -and \$startState\.started') 'the driver is not asked for its interop state when it did not start'
+Check ($verify -match 'Write-VerifyReport \$results') 'the report is still written on every path'
 
 Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 if ($fail) { "$fail check(s) failed"; exit 1 }

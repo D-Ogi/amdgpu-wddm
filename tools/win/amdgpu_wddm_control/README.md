@@ -372,16 +372,18 @@ refused; one dry run of this PC; where the build is not elevated, one real run t
 write `--out`), `--smoke-recovery <file>` (the recovery view built without a window; fails when `bc250control.dll`
 is loaded), `--smoke-perf <file>` (the window built hidden: no live timer, no ticks, no animation frame, start under
 5 s, private memory under 300 MB) and `--smoke-render <dir> <scale> [--lang xx] [--text-scale f] [--no-nagi]
-[--switch-to xx] [--fixture <snapshot.json>]` in 33 runs: four languages at 1, 1.25, 1.5 and 2, with
+[--switch-to xx] [--fixture <snapshot.json>] [--work-area <w>x<h>]` in 39 runs: four languages at 1, 1.25, 1.5 and 2, with
 `test/snapshot-bd059.json` and the tuning snapshots as the fixtures, text at 150 %, two runs with the guide
-character off (she is on in every other run, as she is after an install), and two language
-switches. Every page is drawn to a PNG without a window at the default size and at the minimum size, and the whole
+character off (she is on in every other run, as she is after an install), two language
+switches, and six runs that name the screen the window is drawn for (`--work-area`, in logical units: 800x600,
+1024x768, 1280x720, 1366x768 and 1920x1080), so that a render never reads the screen of the PC it runs on. Every page is drawn to a PNG without a window at the default size and at the minimum size, and the whole
 page as `<page>-full.png`. The build fails when two sibling controls overlap, a text is cut, a page is wider than
 the page column it was built at (`LayoutRules.PageWidthFinding`: the column width of this moment is not the measure,
 because the window manager clamps a client size larger than the desktop), its last control
 lies outside the scroll range, a visible text names a driver internal, a control lacks an accessible name or tab
 stop, the art shows while "Show Nagi" is off, the guide panel draws no picture while "Show Nagi" is on and the side
-panel is in the window, or a language switch leaves old texts behind. The unit tests also check
+panel is in the window, the side panel shows on a small screen or is missing on a screen with room for it
+(G-SMALL), or a language switch leaves old texts behind. The unit tests also check
 every string table: each id in each language, no stale translation (G-STR), no internals in the texts (G-NOINT).
 
 ### The guide character
@@ -407,6 +409,13 @@ animation setting first.
 Her picture lives in the side panel, which the window drops below a client width of 1000 logical pixels
 (`MainForm.SideShown`), as the nav bar and the page column need that room. A narrower window therefore has no guide
 panel at all, with her picture and its text, and the pages carry that help in their own cards and dialogs instead.
+
+The panel also goes on a small screen, whatever "Show Nagi" says (owner, 2026-10-12, after GitHub #38 from a tester
+on an 800x600 screen): a working area of at most 1024 logical pixels wide or at most 768 high has no room for a
+300 px column beside the page. The rule is `LayoutRules.SmallScreen`, the measure is the working area of the screen
+the window stands on in logical units, and the window asks it again when it is moved to another monitor and after a
+display or DPI change. The setting itself is not written: on a larger screen it decides as before, and Settings
+carries one line under it that says the guide is hidden on a small screen.
 
 The output folder holds `amdgpu_wddm_control.exe`, `bc250control.dll` and `bc250kmd_cli.exe` (the same translation unit
 as the DLL, without `BC250_CONTROL_DLL`, so the CLI and the DLL of a release come from one build); the release

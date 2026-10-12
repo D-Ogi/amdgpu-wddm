@@ -495,6 +495,7 @@ settings.recent.busy|mt|fd22dbb3|Nie udało się teraz wyczyścić listy, poniew
 settings.recent.failed|mt|26db6f1a|Nie udało się wyczyścić listy. Spróbuj ponownie za chwilę.
 settings.guide.title|mt|8e02ab12|Wskazówki i przewodniczka
 settings.guide.note|mt|529531e4|Bez Nagi wskazówki są wyświetlane jako tekst. Nic innego się nie zmienia.
+settings.nagi.small|mt|6fd13869|Na małym ekranie, 1024 na 768 lub mniejszym, przewodniczka jest ukryta, aby zrobić miejsce dla strony.
 settings.animations.windows-off|mt|0962c940|Animacje w systemie Windows są wyłączone, więc ta aplikacja też nie używa animacji.
 settings.support.title|mt-safe|be91940b|Pomoc techniczna
 settings.support.note|mt|97dadddd|Pokazuje szczegóły techniczne i dodatkowe akcje na stronie Pomoc, na wypadek gdyby poprosili o nie twórcy.

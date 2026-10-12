@@ -89,7 +89,33 @@ namespace AmdgpuWddmControl
 
         int NavWidth { get { return Theme.S(210); } }
         int SideWidth { get { return Theme.S(300); } }
-        bool SideShown { get { return ClientSize.Width >= Theme.S(1000); } }
+
+        // The working area of the screen that holds the window, in device pixels. A test and a render set it through
+        // WorkAreaForLayout (logical units), so that neither reads the screen of the PC it happens to run on; the
+        // live window asks Windows for the screen the window is on now.
+        public Size WorkAreaForLayout { get; set; }
+
+        Size ScreenWorkArea()
+        {
+            if (WorkAreaForLayout.Width > 0 && WorkAreaForLayout.Height > 0) return Theme.Sz(WorkAreaForLayout.Width, WorkAreaForLayout.Height);
+            if (_smoke) return Theme.Sz(LargeScreenWidth, LargeScreenHeight);
+            try
+            {
+                var screen = IsHandleCreated ? Screen.FromHandle(Handle) : Screen.FromPoint(Cursor.Position);
+                return screen.WorkingArea.Size;
+            }
+            catch (Exception) { return Theme.Sz(LargeScreenWidth, LargeScreenHeight); }
+        }
+
+        // What a render or a test that says nothing about the screen gets: a screen with room for the whole window,
+        // which is the screen every render until this rule assumed.
+        const int LargeScreenWidth = 2560, LargeScreenHeight = 1440;
+
+        // The owner's rule of 2026-10-12 (LayoutRules.SmallScreen): no side panel at all on a small screen.
+        public bool SmallScreen { get { var w = ScreenWorkArea(); return LayoutRules.SmallScreen.IsDevice(w.Width, w.Height, Theme.Scale); } }
+
+        // The side panel: never on a small screen, and on a larger one only while the window is wide enough for it.
+        public bool SideShown { get { return !SmallScreen && ClientSize.Width >= Theme.S(1000); } }
 
         // The page column: what is left between the bar and the side panel, at most 780 px at 96 DPI.
         public int ColumnWidth
@@ -102,6 +128,7 @@ namespace AmdgpuWddmControl
         }
 
         int _builtWidth;
+        bool _builtSmall;           // the answer of the small-screen rule the shell in the window was built with
 
         // The column width the page now in the content panel was built at. ColumnWidth above is the width of this
         // moment, and the two differ whenever ClientSize changed after the page was built: the window manager clamps a
@@ -117,8 +144,23 @@ namespace AmdgpuWddmControl
             if (Math.Abs(ColumnWidth - _builtWidth) > Theme.S(8)) { BuildShell(); }
         }
 
+        // The screen under the window can change while it is open: the person drags the window to another monitor, or
+        // Windows changes the desktop under it. The small-screen rule is answered again then, and the shell is rebuilt
+        // only when the answer changed, because a rebuild throws away every control of the page.
+        void RebuildIfScreenChanged()
+        {
+            if (_smoke || IsDisposed || _building || !IsHandleCreated) return;
+            if (SmallScreen == _builtSmall) return;
+            BuildShell();
+        }
+
+        bool _building;
+
         void BuildShell()
         {
+            _building = true;
+            try
+            {
             SuspendLayout();
             var old = Controls.Cast<Control>().ToList();
             Controls.Clear();
@@ -209,7 +251,10 @@ namespace AmdgpuWddmControl
             Font = Theme.Body;
             ResumeLayout(true);
             _builtWidth = ColumnWidth;
+            _builtSmall = SmallScreen;
             ShowPage(_page, null, false);
+            }
+            finally { _building = false; }
         }
 
         static string LanguageName(string lang)
@@ -631,12 +676,22 @@ namespace AmdgpuWddmControl
             if (fitted != Bounds) { WindowState = FormWindowState.Normal; Bounds = fitted; }
         }
 
-        const int WM_DISPLAYCHANGE = 0x007E;
+        const int WM_DISPLAYCHANGE = 0x007E, WM_DPICHANGED = 0x02E0;
 
         protected override void WndProc(ref Message m)
         {
             base.WndProc(ref m);
-            if (m.Msg == WM_DISPLAYCHANGE && !_smoke) BeginInvoke((Action)FitToScreens);
+            // A display or DPI change can turn the screen under the window into a small one, or back: the window fits
+            // itself to the new desktop and then asks the small-screen rule again.
+            if ((m.Msg == WM_DISPLAYCHANGE || m.Msg == WM_DPICHANGED) && !_smoke)
+                BeginInvoke((Action)(() => { FitToScreens(); RebuildIfScreenChanged(); }));
+        }
+
+        // The window was moved, possibly onto another monitor: the small-screen rule decides again.
+        protected override void OnMove(EventArgs e)
+        {
+            base.OnMove(e);
+            RebuildIfScreenChanged();
         }
 
         // ---- keyboard ----------------------------------------------------------------------------------------------

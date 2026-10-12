@@ -9,9 +9,12 @@
 //   [--dry-run]                               the install run is an engine dry run: every screen, no change (L4)
 //   amdgpu_wddm_setup.exe --version
 //   amdgpu_wddm_setup.exe --smoke-render <dir> <scale> <lang> [--text-scale <f>] [--no-nagi] [--high-contrast]
+//                         [--work-area <w>x<h>]
 //                         [--package <dir>]    no window: every screen from fixtures drawn to <dir>, checked
 //                                             (--no-nagi: the guide panel without the guide character;
-//                                             --high-contrast: the high-contrast palette on a PC without it)
+//                                             --high-contrast: the high-contrast palette on a PC without it;
+//                                             --work-area: the working area of the screen the window is drawn for,
+//                                             in logical units, so that a render never reads this PC's screen)
 //   amdgpu_wddm_setup.exe --smoke-engine <package> <out-dir> [--script <name>] [--cancel] [--plan] -- <engine args>
 //                                             no window: one engine run, its model and screens summarised
 //   amdgpu_wddm_setup.exe --smoke-start-failure <out-dir>
@@ -36,6 +39,9 @@ namespace AmdgpuWddmSetup
         public bool Cancel, PlanRun;
         public bool NoNagi;             // render the guide panel without the guide character (she is on by default)
         public bool HighContrast;       // draw with the system colours of high contrast, which this PC may not have on
+        // The working area of the screen the window is drawn for, in logical units; 0x0 = ask this PC's screen. The
+        // small-screen rule and the window's own size read it, so one render is the same picture on any PC.
+        public int WorkWidth, WorkHeight;
 
         public bool Headless { get { return Mode == "smoke-render" || Mode == "smoke-engine" || Mode == "smoke-start-failure" || Mode == "version"; } }
 
@@ -87,6 +93,14 @@ namespace AmdgpuWddmSetup
                         break;
                     case "--script": a.Script = next(); if (a.Script != "install.ps1" && a.Script != "prepare-offline.ps1") a.Error = "--script install.ps1 or prepare-offline.ps1"; break;
                     case "--no-nagi": a.NoNagi = true; break;
+                    case "--work-area":
+                        var area = (next() ?? "").Split('x');
+                        int aw, ah;
+                        if (area.Length != 2 || !int.TryParse(area[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out aw) ||
+                            !int.TryParse(area[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out ah) || aw < 320 || ah < 240 || aw > 16384 || ah > 16384)
+                            a.Error = "--work-area <width>x<height>, at least 320x240";
+                        else { a.WorkWidth = aw; a.WorkHeight = ah; }
+                        break;
                     case "--high-contrast": a.HighContrast = true; break;
                     case "--cancel": a.Cancel = true; break;
                     case "--plan": a.PlanRun = true; break;
@@ -103,6 +117,7 @@ namespace AmdgpuWddmSetup
             if (a.Error == null && (a.Cancel || a.PlanRun) && a.Mode != "smoke-engine") a.Error = "--cancel and --plan only with --smoke-engine";
             if (a.Error == null && a.NoNagi && a.Mode != "smoke-render") a.Error = "--no-nagi only with --smoke-render";
             if (a.Error == null && a.HighContrast && a.Mode != "smoke-render") a.Error = "--high-contrast only with --smoke-render";
+            if (a.Error == null && a.WorkWidth > 0 && a.Mode != "smoke-render") a.Error = "--work-area only with --smoke-render";
             return a;
         }
 

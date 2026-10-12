@@ -495,6 +495,7 @@ settings.recent.busy|mt|fd22dbb3|ゲームの起動中のため、現在は一�
 settings.recent.failed|mt|26db6f1a|一覧を消去できませんでした。しばらくしてからもう一度お試しください。
 settings.guide.title|mt-safe|8e02ab12|ヒントとガイド
 settings.guide.note|mt|529531e4|Nagi を表示しない場合、ヒントはテキストで表示されます。それ以外は何も変わりません。
+settings.nagi.small|mt|6fd13869|1024 x 768 以下の小さい画面では、ページの場所を確保するためにガイドは表示されません。
 settings.animations.windows-off|mt|0962c940|Windows のアニメーションがオフのため、このアプリもアニメーションを表示しません。
 settings.support.title|mt-safe|be91940b|サポート
 settings.support.note|mt|97dadddd|開発者から依頼されたときのために、ヘルプに技術的な詳細と追加の操作を表示します。

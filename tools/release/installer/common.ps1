@@ -849,6 +849,27 @@ function Get-FirmwareStaged {
 
 # ---------------------------------------------------------------------------------------------------------------
 # System facts. Each returns data; the preflight decides.
+# Whether the driver of a device verify found actually started, and why not (GitHub #38).
+#
+# A device that carries a problem code (Code 43 and the rest) has no running driver. Verify then skips the work that
+# cannot succeed on it: the wait for the start-confirm task, which confirms a start that did not happen and would
+# only spend its whole 120 s bound, and every probe that needs a started adapter (D3D12 through DXGI, Vulkan through
+# the loader, the driver's own interop state). On the tester's PC of #38 a failed start took 2 min 43 s to report,
+# 110 s of it in that wait. The verdict does not change: 'driver bound' and 'driver start' carry it, as they always
+# did, and each skipped probe is still recorded under its own name with the reason.
+#
+# ProblemCode: ConfigManagerErrorCode of the device. Status: the Windows device status, for the reason text only.
+function Get-VerifyStartState {
+    param([int]$ProblemCode = 0, [string]$Status = '')
+    $started = ($ProblemCode -eq 0)
+    $reason = $null
+    if (-not $started) {
+        $reason = "the device reports problem code $ProblemCode"
+        if ($Status -and $Status -ne 'OK') { $reason = "$reason and Windows reports it as $Status" }
+    }
+    return [pscustomobject]@{ started = $started; reason = $reason }
+}
+
 function Get-Bc250Device {
     # Present devices only, matched on the hardware ID the INF matches.
     $all = @(Get-CimInstance Win32_PnPEntity -ErrorAction SilentlyContinue | Where-Object { $_.DeviceID -like ($script:HardwareIdPrefix + '*') })

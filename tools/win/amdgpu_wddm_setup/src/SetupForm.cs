@@ -29,6 +29,7 @@ namespace AmdgpuWddmSetup
         // Only a render fixture sets this: whether this setup.exe has its own package beside it. null = ask the disk.
         bool? _ownPackagePresent;
         readonly bool _showNagi;
+        bool _small;                    // the answer of the small-screen rule the frame in the window was built with
 
         public Screen Current { get; private set; }
         string _package;
@@ -109,16 +110,35 @@ namespace AmdgpuWddmSetup
         Size WindowSize()
         {
             var want = Theme.Sz(DesignWidth, DesignHeight);
-            if (_smoke) return want;
+            var work = WorkArea();
+            if (work.Width <= 0 || work.Height <= 0) return want;
+            int margin = Theme.S(24);
+            return new Size(Math.Max(Theme.S(640), Math.Min(want.Width, work.Width - margin)),
+                            Math.Max(Theme.S(480), Math.Min(want.Height, work.Height - margin)));
+        }
+
+        // The working area of the screen the window is on, in device pixels. --work-area gives it in logical units, so
+        // that a headless render draws the same picture on any PC; without it a render takes a screen with room for
+        // the whole window, which is the screen every render until this rule assumed.
+        Size WorkArea()
+        {
+            if (_args.WorkWidth > 0 && _args.WorkHeight > 0) return Theme.Sz(_args.WorkWidth, _args.WorkHeight);
+            if (_smoke) return Theme.Sz(LargeScreenWidth, LargeScreenHeight);
             try
             {
-                var work = System.Windows.Forms.Screen.FromPoint(Cursor.Position).WorkingArea;
-                int margin = Theme.S(24);
-                return new Size(Math.Max(Theme.S(640), Math.Min(want.Width, work.Width - margin)),
-                                Math.Max(Theme.S(480), Math.Min(want.Height, work.Height - margin)));
+                var screen = IsHandleCreated ? System.Windows.Forms.Screen.FromHandle(Handle) : System.Windows.Forms.Screen.FromPoint(Cursor.Position);
+                return screen.WorkingArea.Size;
             }
-            catch (Exception) { return want; }
+            catch (Exception) { return Theme.Sz(LargeScreenWidth, LargeScreenHeight); }
         }
+
+        const int LargeScreenWidth = 2560, LargeScreenHeight = 1440;
+
+        // The owner's rule of 2026-10-12 (SmallScreen.cs): a small screen gets no guide panel at all.
+        public bool SmallScreenNow { get { var w = WorkArea(); return SmallScreen.IsDevice(w.Width, w.Height, Theme.Scale); } }
+
+        // Whether the right-hand panel, with or without the guide character, is in the window at all.
+        public bool GuidePanelShown { get { return !_small; } }
 
         // The folder that holds the package, next to the exe. The unpacked release holds setup.exe in its top folder
         // and the whole package in files\ beside it (owner, 2026-10-11), so that is where this looks first. The kept
@@ -203,7 +223,7 @@ namespace AmdgpuWddmSetup
             _content.AutoScrollPosition = new Point(0, Math.Max(0, Math.Min(_content.VerticalScroll.Maximum, y)));
         }
 
-        const int WM_DPICHANGED = 0x02E0;
+        const int WM_DPICHANGED = 0x02E0, WM_DISPLAYCHANGE = 0x007E;
 
         // The window is per-monitor DPI aware (app.manifest) and every size in it is a pixel count taken at the scale
         // the process started with: a move to a screen of another scale rebuilds the window at the new one.
@@ -217,8 +237,10 @@ namespace AmdgpuWddmSetup
                     Theme.Init(dpi / 96f, Theme.SystemTextScale());
                     var suggested = (Native.Rect)System.Runtime.InteropServices.Marshal.PtrToStructure(m.LParam, typeof(Native.Rect));
                     SuspendLayout();
-                    BuildFrame();
+                    // The bounds first, then the frame: the frame measures its page column against the client size it
+                    // really has, and the small-screen rule against the screen the window now stands on.
                     Bounds = new Rectangle(suggested.Left, suggested.Top, Math.Max(1, suggested.Right - suggested.Left), Math.Max(1, suggested.Bottom - suggested.Top));
+                    BuildFrame();
                     ResumeLayout(true);
                     Show(Current);
                     Theme.DropRetired();
@@ -227,6 +249,31 @@ namespace AmdgpuWddmSetup
                 }
             }
             base.WndProc(ref m);
+            // The desktop changed under the window: another resolution can turn the screen into a small one, or back.
+            if (m.Msg == WM_DISPLAYCHANGE && !_smoke) BeginInvoke(new Action(RebuildIfScreenChanged));
+        }
+
+        // The window was moved, possibly onto another monitor of the same scale: the small-screen rule decides again.
+        protected override void OnMove(EventArgs e)
+        {
+            base.OnMove(e);
+            RebuildIfScreenChanged();
+        }
+
+        bool _building;
+
+        // The screen under the window can change while it is open. The frame is rebuilt only when the rule's answer
+        // changed, because a rebuild throws away every control of the screen that is shown.
+        void RebuildIfScreenChanged()
+        {
+            if (_smoke || IsDisposed || _building || !IsHandleCreated) return;
+            if (SmallScreenNow == _small) return;
+            SuspendLayout();
+            var want = WindowSize();
+            if (want != ClientSize) ClientSize = want;
+            BuildFrame();
+            ResumeLayout(true);
+            Show(Current);
         }
 
         // ---- frame ------------------------------------------------------------------------------------------------
@@ -246,13 +293,21 @@ namespace AmdgpuWddmSetup
 
         void BuildFrame()
         {
+            _building = true;
+            try
+            {
             SuspendLayout();
             ClearAndDispose(this);
             var languages = new[] { new[] { "en", "EN", "English" }, new[] { "pl", "PL", "Polski" }, new[] { "ja", "日本語", "日本語" }, new[] { "ko", "한국어", "한국어" } };
             _chrome = new ChromeBar(this, "amdgpu-wddm Setup", Theme.S(ChromeHeight), code => Strings.Language = code, languages,
                 Strings.T("ui.minimise"), Strings.T("ui.close-window"));
             _rail = new Panel { Dock = DockStyle.Left, Width = Theme.S(RailWidth), BackColor = Theme.Nav, Padding = Theme.Pad(0, 22, 0, 0) };
-            _guide = new Panel { Dock = DockStyle.Right, Width = Theme.S(GuideWidth), BackColor = Theme.Back, Padding = Theme.Pad(0, 24, 24, 20) };
+            // The owner's rule of 2026-10-12: on a small screen the guide panel is not in the window at all, and the
+            // width it would have taken goes to the screen's own column. The panel object stays (the tab order and
+            // the frame read it), with no width and not visible, so nothing of it is drawn or reached.
+            _small = SmallScreenNow;
+            int guideWidth = _small ? 0 : Theme.S(GuideWidth);
+            _guide = new Panel { Dock = DockStyle.Right, Width = guideWidth, BackColor = Theme.Back, Padding = Theme.Pad(0, 24, 24, 20), Visible = !_small };
             _column = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Back };
             // The bar wraps: a long translation at a 150 % text size needs a second line of buttons, and a button that
             // does not fit cannot be pressed (the render gate refuses one that leaves the bar).
@@ -277,13 +332,21 @@ namespace AmdgpuWddmSetup
             _column.Controls.Add(_content);
             _column.Controls.Add(divider);
             _column.Controls.Add(_buttons);
-            _contentWidth = Theme.S(DesignWidth - RailWidth - GuideWidth) - _content.Padding.Horizontal - SystemInformation.VerticalScrollBarWidth;
+            // The column the screen is built at: what this window really has between the rail and the guide panel,
+            // never more than the design width gives. The two differ on a screen too small for the design size, where
+            // the window itself is smaller (WindowSize): a column measured from the design width drew text wider than
+            // the column it sits in, which is what the tester's 800x600 screen showed (GitHub #38).
+            int frameWidth = Math.Min(Theme.S(DesignWidth), ClientSize.Width > 0 ? ClientSize.Width : Theme.S(DesignWidth));
+            _contentWidth = Math.Max(Theme.S(260), frameWidth - Theme.S(RailWidth) - guideWidth - _content.Padding.Horizontal - SystemInformation.VerticalScrollBarWidth);
             Controls.Add(_column);
             Controls.Add(_guide);
             Controls.Add(_rail);
             Controls.Add(_chrome);
-            BuildGuide();
+            if (!_small) BuildGuide();
+            else { _guideTitle = null; _guideBubble = null; _guideArt = null; _guideCard = null; _guideInner = 0; }
             ResumeLayout(true);
+            }
+            finally { _building = false; }
         }
 
         void BuildGuide()
@@ -1107,10 +1170,13 @@ namespace AmdgpuWddmSetup
                     break;
             }
             var cause = SetupGuide.Pick(causes);
-            _guideTitle.Text = Strings.T(_showNagi ? "guide.title" : "guide.title.plain");
+            // On a small screen there is no panel to fill: the cause is still picked and kept, so that a move to a
+            // larger screen fills the panel with this screen's tip and not with the first one of the window.
+            if (_guideTitle != null) _guideTitle.Text = Strings.T(_showNagi ? "guide.title" : "guide.title.plain");
             // The words first, then the picture: the tip's height decides how much room is left for her.
             // The checks take less than a minute; an installation can take minutes. The guide says the same as the page.
-            _guideBubble.Say(Strings.T(cause == SetupCause.Welcome && _flow == "prepare" ? "guide.prepare" : cause == SetupCause.WorkInProgress && Current == Screen.Checking ? "guide.checking" : SetupGuide.TextId(cause)));
+            if (_guideBubble != null)
+                _guideBubble.Say(Strings.T(cause == SetupCause.Welcome && _flow == "prepare" ? "guide.prepare" : cause == SetupCause.WorkInProgress && Current == Screen.Checking ? "guide.checking" : SetupGuide.TextId(cause)));
             ShowGuideArt(cause);
             GuideCause = cause;
         }
@@ -1148,7 +1214,34 @@ namespace AmdgpuWddmSetup
 
         // For the render gate: whether the guide panel drew the picture, and whether it was meant to.
         public bool GuideArtShown { get { return _guideArt != null && HasVisibleFlag(_guideArt) && _guideArt.Image != null; } }
-        public bool GuideArtWanted { get { return _showNagi && NagiArt.Has(SetupGuide.Expression(GuideCause), SetupGuide.ArtSize(Theme.Scale)); } }
+        public bool GuideArtWanted { get { return GuidePanelShown && _showNagi && NagiArt.Has(SetupGuide.Expression(GuideCause), SetupGuide.ArtSize(Theme.Scale)); } }
+
+        // The owner's rule of 2026-10-12, as the render gate reads it: on a small screen the right-hand panel takes no
+        // width, is not visible and holds nothing; on a larger screen it is there with its card. Both directions are
+        // findings, so neither can drift.
+        public IEnumerable<string> SmallScreenFindings()
+        {
+            var work = WorkArea();
+            bool small = SmallScreen.IsDevice(work.Width, work.Height, Theme.Scale);
+            if (small != _small)
+                yield return "the frame was built for a " + (_small ? "small" : "large") + " screen, the rule says " + (small ? "small" : "large");
+            if (small)
+            {
+                if (_guide != null && (_guide.Width > 0 || HasVisibleFlag(_guide) || _guide.Controls.Count > 0))
+                    yield return "the guide panel is in the window on a " + work.Width + "x" + work.Height + " screen (width " + (_guide == null ? 0 : _guide.Width) + ")";
+                if (_guideArt != null || _guideCard != null) yield return "the guide card was built on a small screen";
+                if (GuideArtShown) yield return "the guide art shows on a small screen";
+            }
+            else
+            {
+                if (_guide == null || !HasVisibleFlag(_guide) || _guide.Width <= 0) yield return "the guide panel is missing on a screen that has room for it";
+                if (_guideCard == null) yield return "the guide card is missing on a screen that has room for it";
+            }
+            // Whatever the screen, the column the page was built at must fit the room the window really has.
+            int room = _content == null ? 0 : _content.ClientSize.Width - _content.Padding.Horizontal;
+            if (_content != null && _contentWidth > room + Theme.S(2))
+                yield return "the page column is " + _contentWidth + " px, the window has room for " + room;
+        }
 
         void SetGuideNote(string text) { if (_guideBubble != null) _guideBubble.Say(text); }
 

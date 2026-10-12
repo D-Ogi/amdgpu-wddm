@@ -334,7 +334,7 @@ Stop points, where the engine acts on 1 and 2 (the cancel file is read only ther
 
 | Run | Stop points | Parts that do not stop (finished first) |
 |---|---|---|
-| plan, dry run, verify (`install.ps1 -Plan`, `-DryRun`, `-Verify`) | every stage boundary, plus `before-changes`, `after-staging`, `before-driver-install` | none; verify's wait for the start-confirm task (up to 120 s) also ends at the deadline |
+| plan, dry run, verify (`install.ps1 -Plan`, `-DryRun`, `-Verify`) | every stage boundary, plus `before-changes`, `after-staging`, `before-driver-install` | none. Verify's wait for the start-confirm task (up to 120 s) also ends at the deadline. A device that already reports a problem code is not waited for at all |
 | install, repair, upgrade (real run) | `before-changes` (after preflight and the decision), `after-staging` (restore point and BitLocker done, closure staged, before test signing), `before-driver-install` (phase 1 done, before files, driver package and settings) | phase 1 from `after-staging` to its restart (test signing, the state, RunOnce); phase 2 from `before-driver-install` to the end (files, `pnputil`, settings, task, finish) |
 | prepare-offline | every stage boundary before `finish`, `before-copy`, `after-copy` (each removes `<destination>.partial`) | `finish` (the rename) |
 

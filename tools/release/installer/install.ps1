@@ -497,6 +497,13 @@ function Invoke-Verify {
         Write-Host ('   [info] {0,-20} {1}' -f $Name, $Detail)
         Write-Log ('   verify {0}: info {1}' -f $Name, $Detail)
     }
+    # A probe that cannot answer on a device whose driver did not start (Get-VerifyStartState). It keeps its own name
+    # in the report, with the reason, and it is not a failure of its own: the failed start is already the verdict of
+    # the 'driver bound' and 'driver start' results. Without this a failed start reported several checks that only
+    # restated it, and spent minutes doing so (GitHub #38).
+    function Add-Skipped([string]$Name, [string]$Detail) {
+        Add-Info $Name ('skipped: the driver did not start' + $(if ($Detail) { "; $Detail" } else { '' }))
+    }
     # Every verify run ends with its report (Write-VerifyReport), also when a check throws or the GPU is missing: the
     # control application counts a verification only from a report with a non-empty result list for the installed
     # package, never from the phase label.
@@ -519,6 +526,8 @@ function Invoke-Verify {
     $svc = Get-DeviceServiceName -InstanceId $id
     $pnp = Get-PnpDevice -InstanceId $id
     Add-Result 'driver bound' (($svc -eq $script:ServiceName) -and ($pnp.Status -eq 'OK')) "service $svc, status $($pnp.Status), problem code $($dev[0].ConfigManagerErrorCode)"
+    # Everything below that needs a running driver asks this first.
+    $startState = Get-VerifyStartState -ProblemCode ([int]$dev[0].ConfigManagerErrorCode) -Status ([string]$pnp.Status)
     $drv = Get-CimInstance Win32_PnPSignedDriver -Filter "DeviceID='$($id -replace '\\', '\\')'" -ErrorAction SilentlyContinue
     $want = $null
     if ($script:Manifest) { $want = $script:Manifest.kmd_version }
@@ -535,13 +544,18 @@ function Invoke-Verify {
     # registry state. The task itself runs at the same logon and may still be waiting for its 60 s.
     # Verify starts at the same logon as the start-confirm task, which needs about a minute: wait for this boot's run
     # of the task to end (at most 120 s), so that the confirmation and DPM lines below are final.
+    #
+    # Not on a device that did not start: the task confirms a start, it has nothing to confirm here, and the wait
+    # would spend its whole bound before saying so (GitHub #38: 110 s of a 2 min 43 s verification). Its last result
+    # is read at once instead, and the line below says why nothing was waited for.
     $taskNote = 'start-confirm task: not registered'
     $task = Get-ScheduledTask -TaskName $script:TaskName -ErrorAction SilentlyContinue
     if ($task) {
         $boot = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime
         $waited = [Diagnostics.Stopwatch]::StartNew()
         $announced = $false
-        while ($true) {
+        $noWaitWhy = $(if ($startState.started) { $null } else { $startState.reason })
+        while ($null -eq $noWaitWhy) {
             $ti = Get-ScheduledTaskInfo -TaskName $script:TaskName -ErrorAction SilentlyContinue
             $running = (Get-ScheduledTask -TaskName $script:TaskName -ErrorAction SilentlyContinue).State -eq 'Running'
             $ranThisBoot = $ti -and $ti.LastRunTime -and ($ti.LastRunTime -ge $boot)
@@ -551,9 +565,13 @@ function Invoke-Verify {
             if (-not $announced) { Write-Info 'waiting for the start-confirm task of this logon to finish (at most 120 s)...'; $announced = $true }
             Start-Sleep -Seconds 2
         }
+        if ($null -ne $noWaitWhy) { $ti = Get-ScheduledTaskInfo -TaskName $script:TaskName -ErrorAction SilentlyContinue }
         $code = $ti.LastTaskResult
         $meaning = switch ($code) { 0 { 'confirmed through the KMD start health' } 6 { 'fallback: boot-loop guard reset only, DPM not confirmed' } 1 { 'bound reached unconfirmed' } 5 { 'no start-health reading' } 267009 { 'still running' } default { 'see C:\ProgramData\amdgpu-wddm\start-confirm.log' } }
         $taskNote = "start-confirm task: last run $($ti.LastRunTime), result $code ($meaning), waited $([int]$waited.Elapsed.TotalSeconds) s"
+        if ($null -ne $noWaitWhy) {
+            $taskNote = "$taskNote; the wait was skipped because $noWaitWhy, so this logon's task cannot confirm a start that did not happen"
+        }
     }
     Write-Info $taskNote
     $sc = Join-Path $InstallRoot 'tools\start-confirm.ps1'
@@ -602,7 +620,8 @@ function Invoke-Verify {
     # DWM to the CPU route by itself when the switches are off, so a closed path shows here, not as a black desktop.
     $cli = Join-Path $InstallRoot 'tools\bc250kmd_cli.exe'
     $io = ''
-    if (Test-Path -LiteralPath $cli) { $io = [string](Invoke-Native $cli @('interop')).text }
+    # The driver answers for its own interop state. A device that did not start cannot, so it is not asked.
+    if ((Test-Path -LiteralPath $cli) -and $startState.started) { $io = [string](Invoke-Native $cli @('interop')).text }
     Write-Log $io
     $ioFirst = (($io -split "`n") | Select-Object -First 1)
     $ioOk = ($io -match 'effective blit\+cdd') -and ($io -notmatch 'died in a session')
@@ -632,7 +651,11 @@ function Invoke-Verify {
         if (-not $ioRemedy) { $ioRemedy = '; a repair changes nothing here, because the driver left no record of a closure: open the GPU desktop path in amdgpu-wddm Control' }
     }
     $ioClosed += $ioRemedy
-    Add-Result 'GPU desktop path' ($ioOk -and $dwmOk) $(if ($io) { "$($ioFirst.Trim())$ioClosed; $dwmNote" } else { "no reading from $cli; $dwmNote" })
+    if (-not $startState.started) {
+        Add-Skipped 'GPU desktop path' "$($startState.reason); the driver cannot be asked for its interop state. $dwmNote"
+    } else {
+        Add-Result 'GPU desktop path' ($ioOk -and $dwmOk) $(if ($io) { "$($ioFirst.Trim())$ioClosed; $dwmNote" } else { "no reading from $cli; $dwmNote" })
+    }
 
     # BD-060: a replacement of the session's DWM that was observed against the start-confirm task's record of this
     # logon (dwm-session.ps1). A warning with its remedy that helps to attribute a failure; unknown history is reported
@@ -647,36 +670,46 @@ function Invoke-Verify {
         default { Add-Info 'DWM restarted in this session' $dwmFinding.detail }
     }
 
-    # D3D12 through the system runtime, as an application sees it.
+    # D3D12 through the system runtime, as an application sees it. Not on a device that did not start: no D3D12
+    # device can be created on an adapter whose driver is not running, so the probe would only restate the start.
     $caps = Join-Path $InstallRoot 'tools\amdgpu_wddm_d3d12caps.exe'
     $vdir = Join-Path $script:StateDir 'verify'
     [void][IO.Directory]::CreateDirectory($vdir)
     $index = $null
-    try {
-        $first = Join-Path $vdir 'd3d12caps-0.json'
-        [void](Invoke-Native $caps @('0', $first))
-        $j = Get-Content -LiteralPath $first -Raw | ConvertFrom-Json
-        foreach ($p in $j.dxgi.adapters.PSObject.Properties) {
-            $d = $p.Value.GetDesc1
-            if ($d.VendorId -eq '0x1002' -and $d.DeviceId -eq '0x13FE') { $index = [int]$p.Name; break }
-        }
-        if ($null -eq $index) { Add-Result 'D3D12 FL 12_1' $false 'no DXGI adapter 1002:13FE' }
-        else {
-            $out = Join-Path $vdir "d3d12caps-$index.json"
-            if ($index -ne 0) { [void](Invoke-Native $caps @([string]$index, $out)) } else { $out = $first }
-            $j = Get-Content -LiteralPath $out -Raw | ConvertFrom-Json
-            $fl = $j.device.features.FEATURE_LEVELS.list_all.MaxSupportedFeatureLevel
-            $created = $j.device.created_at
-            $ok = ($created -and ($fl -eq '12_1' -or $fl -eq '12_2'))
-            Add-Result 'D3D12 FL 12_1' $ok "adapter $index, device created at $created, max feature level $fl"
-        }
-    } catch { Add-Result 'D3D12 FL 12_1' $false $_.Exception.Message }
+    if (-not $startState.started) {
+        Add-Skipped 'D3D12 FL 12_1' "$($startState.reason); no D3D12 device can be created on an adapter without a running driver"
+    } else {
+        try {
+            $first = Join-Path $vdir 'd3d12caps-0.json'
+            [void](Invoke-Native $caps @('0', $first))
+            $j = Get-Content -LiteralPath $first -Raw | ConvertFrom-Json
+            foreach ($p in $j.dxgi.adapters.PSObject.Properties) {
+                $d = $p.Value.GetDesc1
+                if ($d.VendorId -eq '0x1002' -and $d.DeviceId -eq '0x13FE') { $index = [int]$p.Name; break }
+            }
+            if ($null -eq $index) { Add-Result 'D3D12 FL 12_1' $false 'no DXGI adapter 1002:13FE' }
+            else {
+                $out = Join-Path $vdir "d3d12caps-$index.json"
+                if ($index -ne 0) { [void](Invoke-Native $caps @([string]$index, $out)) } else { $out = $first }
+                $j = Get-Content -LiteralPath $out -Raw | ConvertFrom-Json
+                $fl = $j.device.features.FEATURE_LEVELS.list_all.MaxSupportedFeatureLevel
+                $created = $j.device.created_at
+                $ok = ($created -and ($fl -eq '12_1' -or $fl -eq '12_2'))
+                Add-Result 'D3D12 FL 12_1' $ok "adapter $index, device created at $created, max feature level $fl"
+            }
+        } catch { Add-Result 'D3D12 FL 12_1' $false $_.Exception.Message }
+    }
 
     # Vulkan through the system loader, in a child process so that a failing ICD cannot take the installer down.
+    # Not on a device that did not start: the loader can enumerate no physical device of an adapter without a driver.
     $vk = Join-Path $here 'vk-check.ps1'
-    $vkOut = (Invoke-Native powershell.exe @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $vk)).text.Trim()
-    if ($vkOut -match '^SKIP') { Write-Host "   [skip] Vulkan               $vkOut" -ForegroundColor Yellow; Write-Log "   verify Vulkan: $vkOut" }
-    else { Add-Result 'Vulkan' ($vkOut -match '(?m)^device 0x1002:0x13FE') $vkOut }
+    if (-not $startState.started) {
+        Add-Skipped 'Vulkan' "$($startState.reason); the loader enumerates no device of an adapter without a running driver"
+    } else {
+        $vkOut = (Invoke-Native powershell.exe @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $vk)).text.Trim()
+        if ($vkOut -match '^SKIP') { Write-Host "   [skip] Vulkan               $vkOut" -ForegroundColor Yellow; Write-Log "   verify Vulkan: $vkOut" }
+        else { Add-Result 'Vulkan' ($vkOut -match '(?m)^device 0x1002:0x13FE') $vkOut }
+    }
 
     # The 64-bit registration: the four UserModeDriverName slots (the D3D9 slot empty, so that D3D9 goes through
     # D3D9On12) and VulkanDriverName. Registration only: the D3D12 and Vulkan checks above create the devices.

@@ -510,6 +510,7 @@ settings.recent.busy|src|-|The list could not be cleared now because a game is s
 settings.recent.failed|src|-|The list could not be cleared. Try again in a moment.
 settings.guide.title|src|-|Tips and guide
 settings.guide.note|src|-|Without Nagi, the tips show as text. Nothing else changes.
+settings.nagi.small|src|-|On a small screen, 1024 by 768 or smaller, the guide is hidden to leave room for the page.
 settings.animations.windows-off|src|-|Windows animations are off, so this app does not animate either.
 settings.support.title|src|-|Support
 settings.support.note|src|-|Shows technical details and extra actions on Help, for when the developers ask for them.

@@ -3,7 +3,10 @@
 //   RenderPages(...)  --smoke-render (G-RENDER, G-NOINT, G-A11Y): every page drawn to PNG at the default and the
 //                     minimum window size; overlap, horizontal overflow, scroll range and page width checked; the text
 //                     of every page outside the support view checked for internals; every interactive control checked
-//                     for an accessible name; the guide panel's text present with and without the character.
+//                     for an accessible name; the guide panel's text present with and without the character; and
+//                     G-SMALL, the owner's rule of 2026-10-12: the right-hand panel is out of the window on a small
+//                     screen (RenderOptions.WorkArea, so the render never reads the screen it runs on) and in it on a
+//                     screen with room for it.
 //   UseFixture(...)   a recorded snapshot and demo games instead of this PC's state, so that the cards with
 //                     warnings, games and the CU section are drawn too. Nothing is written in any of them.
 using System;
@@ -212,15 +215,29 @@ namespace AmdgpuWddmControl
         {
             public string Directory, SwitchTo;
             public bool Nagi = true;        // the default of an installed application; --no-nagi turns it off
+            // The working area of the screen the window is drawn for, in logical units. Empty: a screen with room for
+            // the whole window, which is what every render assumed before the small-screen rule.
+            public Size WorkArea;
         }
 
         public string RenderPages(RenderOptions o)
         {
             var w = new StringBuilder();
+            WorkAreaForLayout = o.WorkArea;
+            // A window never wider or taller than the screen it is drawn for: the window manager clamps a client size
+            // larger than the desktop, and a render must draw what the person on that screen sees.
+            var room = o.WorkArea.Width > 0 ? Theme.Sz(Math.Max(320, o.WorkArea.Width - 24), Math.Max(240, o.WorkArea.Height - 24)) : Size.Empty;
             foreach (var size in new[] { new { Name = "", Size = Theme.Sz(1240, 760) }, new { Name = "-min", Size = MinimumSize } })
             {
-                ClientSize = size.Size;
+                var want = size.Size;
+                if (room.Width > 0) want = new Size(Math.Min(want.Width, room.Width), Math.Min(want.Height, room.Height));
+                ClientSize = want;
                 BuildShell();
+                // The owner's rule of 2026-10-12: the right-hand panel is out of the window on a small screen, and in
+                // it on a screen that has room for it. Both directions are findings, so neither can drift.
+                bool sideInWindow = _side != null && HasVisibleFlag(_side);
+                if (SmallScreen && sideInWindow) w.AppendLine("G-SMALL" + size.Name + ": the side panel shows on a small screen");
+                if (!SmallScreen && ClientSize.Width >= Theme.S(1000) && !sideInWindow) w.AppendLine("G-SMALL" + size.Name + ": the side panel is missing on a screen that has room for it");
                 foreach (var page in PageNames)
                 {
                     ShowPage(page, null, false);

@@ -75,6 +75,14 @@ resource could never be drawn. Her pictures are stills, and the setup window nev
 `ShowNagi` is the DWORD 0, so she is on the Welcome screen of a first install. Two render runs use `--no-nagi`, and
 every other run must draw her picture.
 
+A small screen gets no guide panel at all. The content column then takes the width the panel would have had. The
+owner asked for this on 2026-10-12, after GitHub #38 from a tester whose 800x600 screen let the picture cover the
+text. Small is a working area of at most 1024 logical pixels wide, or at most 768 high (`SmallScreen.cs`). A screen
+that small has no room for a 300 px column beside the page. The window asks the rule again when it moves to another
+monitor, and after a screen or DPI change. Six render runs name the screen the window is drawn for
+(`--work-area <w>x<h>`, in logical units: 800x600, 1024x768, 1280x720, 1366x768 and 1920x1080). G-SMALL holds both
+directions of the rule.
+
 Translations: `strings/strings.<lang>.txt`. A new or redone translation gets `?` as its hash and `strings/stamp.ps1`
 stamps it; a line whose English text changed fails G-STR until it is retranslated. Polish, Japanese and Korean are
 machine-translated (`mt`) until a reviewer marks them `rev`.
