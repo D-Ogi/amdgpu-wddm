@@ -1470,6 +1470,12 @@ Set-StateValue $state 'khronos_wow_value' $icdJsonWow
 # here, the rule TdrDelay and the HD Audio interrupt follow.
 if ($gl.register) {
     $glPlan = Get-OpenGlRegistrationPlan -Switch $gl -InstallRoot $InstallRoot
+    # What the release installed here wrote, read before this run's record replaces it: the step below works on the
+    # values of the architectures this release does not register, and that record is the only exact answer to
+    # whether they are ours. Read after the replacement it would hold this run's values alone, and those values
+    # would have to be judged by the install root they name, which is a weaker test.
+    $glWroteBefore = @()
+    if ($state.PSObject.Properties['opengl_icd'] -and $state.opengl_icd) { $glWroteBefore = @($state.opengl_icd) }
     [void](Set-StateValueOnce $state 'opengl_icd_previous' (Get-OpenGlValueRecord -ClassKey $classKey))
     Save-InstallState $state
     Invoke-Change ("$classKey " + (Format-OpenGlRegistrationPlan $glPlan) + " ($($gl.value_type), $(@($gl.architectures) -join ' and '))") {
@@ -1486,7 +1492,7 @@ if ($gl.register) {
     if ($glOff.Count) {
         $glNowOff = Read-RegistryValues $classKey
         $glOffPlan = @(Get-OpenGlRestorePlan -Previous $(if ($state.PSObject.Properties['opengl_icd_previous']) { $state.opengl_icd_previous } else { @() }) `
-            -Wrote $(if ($state.PSObject.Properties['opengl_icd']) { $state.opengl_icd } else { @() }) -Current $glNowOff -InstallRoot $InstallRoot -Names $glOff)
+            -Wrote $glWroteBefore -Current $glNowOff -InstallRoot $InstallRoot -Names $glOff)
         $glOffAct = @($glOffPlan | Where-Object { $_.action -eq 'restore' -or $_.action -eq 'remove' })
         if ($glOffAct.Count) {
             Invoke-Change ("$classKey OpenGL ICD values of an architecture this release does not register ($(@($script:OpenGlArchitecturesKnown | Where-Object { @($gl.architectures) -notcontains $_ }) -join ', ')): " + (Format-OpenGlRestorePlan $glOffPlan)) {
