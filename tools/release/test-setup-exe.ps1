@@ -19,7 +19,9 @@
 #   4. a file of the zip removed                   - the list names a file the payload does not hold
 #   5. the magic of the trailer changed            - not a package: the exe behaves as a setup.exe without one
 #   6. the payload length of the trailer enlarged  - the section does not fit the file
-#   7. the plain setup window, with nothing appended - no package, which is the ordinary setup.exe beside files\
+#   7. a file added to the zip                     - the payload holds a file the list does not name
+#   8. a zip entry named out of the folder         - the path leaves the folder, and nothing is written outside it
+#   9. the plain setup window, with nothing appended - no package, which is the ordinary setup.exe beside files\
 #
 # Exit 0 = every case behaved. A failure prints FAIL and what was expected.
 [CmdletBinding()]
@@ -133,22 +135,16 @@ Test-Damaged 'length' { param($b)
 
 # A file of the zip replaced, and a file removed: the payload is rebuilt, so its own hash is right and only the file
 # list can catch it. This is the case a plain hash of the whole payload would miss.
-function New-RepackedExe([string]$Name, [scriptblock]$Change) {
-    $stage = Join-Path $root "repack-$Name"
-    Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
-    Copy-Item -LiteralPath $top -Destination $stage -Recurse
-    & $Change $stage
+#
+# One exe around a payload of our own: the program image of the real setup window, then these payload bytes, then
+# the file list and trailer of the GOOD package, with this payload's offsets and hash. The payload is therefore
+# self-consistent and the list is the only thing left that can refuse it.
+function New-ExeWithPayload([string]$Name, [byte[]]$Payload) {
     $exe = Join-Path $root "repacked-$Name.exe"
-    # Pack the changed folder, then put the file list and trailer of the GOOD package back: the payload is now
-    # self-consistent but no longer the one the list describes.
-    & (Join-Path $PSScriptRoot 'make-setup-exe.ps1') -PackageTop $stage -Out $exe | Out-Null
-    $changed = [IO.File]::ReadAllBytes($exe)
-    $cOff = $changed.Length - $trailerSize
-    $cPayloadOffset = [BitConverter]::ToInt64($changed, $cOff + 24)
-    $cPayloadLength = [BitConverter]::ToInt64($changed, $cOff + 32)
     $out = New-Object IO.MemoryStream
-    $out.Write($changed, 0, [int]($cPayloadOffset + $cPayloadLength))
-    # The good list and trailer, with the offsets of this payload.
+    $out.Write($plainBytes, 0, $plainBytes.Length)
+    $out.Write($Payload, 0, $Payload.Length)
+    $payloadOffsetHere = [int64]$plainBytes.Length
     $good = [IO.File]::ReadAllBytes($packed)
     $gOff = $good.Length - $trailerSize
     $gListOffset = [BitConverter]::ToInt64($good, $gOff + 40)
@@ -156,20 +152,51 @@ function New-RepackedExe([string]$Name, [scriptblock]$Change) {
     $out.Write($good, [int]$gListOffset, [int]$gListLength)
     $trailer = New-Object byte[] $trailerSize
     [Array]::Copy($good, $gOff, $trailer, 0, $trailerSize)
-    [Array]::Copy([BitConverter]::GetBytes([int64]$cPayloadOffset), 0, $trailer, 24, 8)
-    [Array]::Copy([BitConverter]::GetBytes([int64]$cPayloadLength), 0, $trailer, 32, 8)
-    [Array]::Copy([BitConverter]::GetBytes([int64]($cPayloadOffset + $cPayloadLength)), 0, $trailer, 40, 8)
-    # The payload hash of this payload, so only the file list is left to refuse it.
+    [Array]::Copy([BitConverter]::GetBytes([int64]$payloadOffsetHere), 0, $trailer, 24, 8)
+    [Array]::Copy([BitConverter]::GetBytes([int64]$Payload.Length), 0, $trailer, 32, 8)
+    [Array]::Copy([BitConverter]::GetBytes([int64]($payloadOffsetHere + $Payload.Length)), 0, $trailer, 40, 8)
     $sha = [Security.Cryptography.SHA256]::Create()
-    try {
-        $section = New-Object byte[] $cPayloadLength
-        [Array]::Copy($changed, [int]$cPayloadOffset, $section, 0, [int]$cPayloadLength)
-        [Array]::Copy($sha.ComputeHash($section), 0, $trailer, 56, 32)
-    } finally { $sha.Dispose() }
+    try { [Array]::Copy($sha.ComputeHash($Payload), 0, $trailer, 56, 32) } finally { $sha.Dispose() }
     $out.Write($trailer, 0, $trailerSize)
     [IO.File]::WriteAllBytes($exe, $out.ToArray())
     $out.Dispose()
     $exe
+}
+
+function New-RepackedExe([string]$Name, [scriptblock]$Change) {
+    $stage = Join-Path $root "repack-$Name"
+    Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
+    Copy-Item -LiteralPath $top -Destination $stage -Recurse
+    & $Change $stage
+    # Pack the changed folder with the real packer, take its payload section out, and put the good list around it.
+    $tmpExe = Join-Path $root "repack-$Name.exe"
+    & (Join-Path $PSScriptRoot 'make-setup-exe.ps1') -PackageTop $stage -Out $tmpExe | Out-Null
+    $changed = [IO.File]::ReadAllBytes($tmpExe)
+    $cOff = $changed.Length - $trailerSize
+    $cPayloadOffset = [BitConverter]::ToInt64($changed, $cOff + 24)
+    $cPayloadLength = [BitConverter]::ToInt64($changed, $cOff + 32)
+    $section = New-Object byte[] $cPayloadLength
+    [Array]::Copy($changed, [int]$cPayloadOffset, $section, 0, [int]$cPayloadLength)
+    New-ExeWithPayload $Name $section
+}
+
+# A payload written here entry by entry, so that it can hold a name the packer would never write: a zip entry whose
+# path climbs out of the folder. Every good file is in it, and the crafted entry comes last.
+function New-EscapingExe([string]$Name, [string]$EntryName) {
+    $mem = New-Object IO.MemoryStream
+    $zip = [IO.Compression.ZipArchive]::new($mem, [IO.Compression.ZipArchiveMode]::Create, $true)
+    try {
+        foreach ($f in $packageFiles) {
+            $rel = ($f.FullName.Substring($top.Length + 1)) -replace '\\', '/'
+            $s = $zip.CreateEntry($rel, [IO.Compression.CompressionLevel]::Optimal).Open()
+            try { $bytes = [IO.File]::ReadAllBytes($f.FullName); $s.Write($bytes, 0, $bytes.Length) } finally { $s.Dispose() }
+        }
+        $s = $zip.CreateEntry($EntryName, [IO.Compression.CompressionLevel]::Optimal).Open()
+        try { $bytes = [Text.Encoding]::UTF8.GetBytes('a program this release never shipped'); $s.Write($bytes, 0, $bytes.Length) } finally { $s.Dispose() }
+    } finally { $zip.Dispose() }
+    $out = New-ExeWithPayload $Name $mem.ToArray()
+    $mem.Dispose()
+    $out
 }
 $swapped = New-RepackedExe 'file-swapped' { param($stage)
     'a driver this release never built' | Set-Content -LiteralPath (Join-Path $stage 'files\driver\amdgpu_wddm.sys') -Encoding utf8 }
@@ -179,6 +206,22 @@ $removed = New-RepackedExe 'file-removed' { param($stage)
     Remove-Item -LiteralPath (Join-Path $stage 'files\driver\amdgpu_wddm.cat') -Force }
 $r = Invoke-Smoke $removed 'file-removed'
 Check ($r.code -eq 4) "a file of the payload removed is refused (exit $($r.code): $($r.text))"
+# A file the list does not name, added to the payload: only the walk of the unpacked folder can catch this one, and
+# it is what keeps a program somebody else put in the package out of the folder the install runs from.
+$added = New-RepackedExe 'file-added' { param($stage)
+    'a file this release never shipped' | Set-Content -LiteralPath (Join-Path $stage 'files\extra.bin') -Encoding utf8 }
+$r = Invoke-Smoke $added 'file-added'
+Check ($r.code -eq 4) "a file the list does not name is refused (exit $($r.code): $($r.text))"
+Check (($r.text + $r.report) -match 'the list does not name') "the reason names the file that is not in the list ($($r.text))"
+# A zip entry whose name leaves the folder. The reader must refuse it before it writes the file, so nothing of a
+# doctored payload lands beside the folder it unpacks into.
+$escaping = New-EscapingExe 'escaping-entry' '../evil.exe'
+$r = Invoke-Smoke $escaping 'escaping-entry'
+Check ($r.code -eq 4) "a payload whose entry climbs out of the folder is refused (exit $($r.code): $($r.text))"
+Check (($r.text + $r.report) -match 'outside the folder') "the reason names the path outside the folder ($($r.text))"
+foreach ($where in (Join-Path $r.dir 'evil.exe'), (Join-Path $r.dir 'unpacked\evil.exe'), (Join-Path $root 'evil.exe')) {
+    Check (-not (Test-Path -LiteralPath $where)) "nothing was written outside the unpacked folder ($where)"
+}
 
 # 7. The plain window, with nothing appended: no package, which is what the setup.exe of an unpacked release is.
 $r = Invoke-Smoke $setupExe 'plain'
@@ -189,4 +232,4 @@ if ($failed) { Write-Host "$passed checks passed, $failed FAILED" -ForegroundCol
 # The summary goes to the output stream, not to the host: tools\win\amdgpu_wddm_setup\build.ps1 runs this test as
 # its last gate and reads this exact line.
 "single-file installer: $passed checks passed, 0 failed"
-"  the payload was read, checked and unpacked, and 7 damaged or empty exes were refused"
+"  the payload was read, checked and unpacked, and 9 damaged, doctored or empty exes were refused"

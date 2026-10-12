@@ -41,7 +41,10 @@ namespace AmdgpuWddmSetup
             // A single file that carries the whole package (Payload.cs, owner 2026-10-12). It has to unpack itself
             // into a folder only administrators may write, so it needs the administrator prompt whatever it was
             // started for; a setup.exe that has its files\ folder beside it carries no payload and is unchanged.
-            bool carries = Payload.Present() && !SetupForm.HasPackage(SetupForm.DefaultPackage());
+            // --package names another release than the one in the file, and a folder beside the exe is the zip
+            // layout: in both cases the payload is not used, because the layout the user prepared is the one they
+            // asked for ("behaves as today", owner 2026-10-12). a.Package is read before it is overwritten below.
+            bool carries = Payload.Carries(Payload.Present(), a.Package, SetupForm.HasPackage(SetupForm.DefaultPackage()));
             if ((a.Mode != "prepare-offline" || carries) && !Native.IsElevated())
             {
                 if (Native.RelaunchElevated(argv)) return 0;
@@ -50,11 +53,25 @@ namespace AmdgpuWddmSetup
             }
             if (carries)
             {
+                // One unpacking at a time (Payload.RunMutexName): a second copy of the same file would reset the
+                // folder the first one is installing from, and the first install would die on a missing file.
+                bool mine;
+                _run = new Mutex(true, Payload.RunMutexName, out mine);
+                if (!mine)
+                {
+                    try { mine = _run.WaitOne(0); } catch (AbandonedMutexException) { mine = true; }
+                    if (!mine)
+                    {
+                        MessageBox.Show(Strings.T("payload.already-running"), "amdgpu-wddm Setup", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        return 8;
+                    }
+                }
                 try { a.Package = Payload.Extract(); }
                 catch (Exception e)
                 {
-                    // The package in the file is damaged, or it does not match the list it came with. Nothing is
-                    // installed from it: the words say so, the detail goes where every unexpected detail goes.
+                    // The package in the file is damaged, it does not match the list it came with, or the folder it
+                    // unpacks into cannot be made safe. Nothing is installed from it: the words say so, the detail
+                    // goes where every unexpected detail goes.
                     try
                     {
                         var dir = a.RunRoot ?? Path.Combine(Path.GetTempPath(), "amdgpu-wddm-setup");
@@ -63,7 +80,8 @@ namespace AmdgpuWddmSetup
                             DateTime.UtcNow.ToString("o") + " " + VersionText + " payload: " + e + Environment.NewLine, new UTF8Encoding(false));
                     }
                     catch (Exception) { }
-                    MessageBox.Show(Strings.T("payload.damaged"), "amdgpu-wddm Setup", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    MessageBox.Show(Strings.T(e is Payload.FolderException ? "payload.folder" : "payload.damaged"),
+                        "amdgpu-wddm Setup", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return 7;
                 }
                 a.PayloadPackage = a.Package;
@@ -104,6 +122,10 @@ namespace AmdgpuWddmSetup
                 return 4;
             }
         }
+
+        // The mutex of this run, held until the process ends: a field, so that nothing collects it while the
+        // install is still going on.
+        static Mutex _run;
 
         static int _unexpected;
 

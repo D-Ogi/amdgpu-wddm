@@ -472,6 +472,10 @@ static class UnitTests
         {
             Equal("0", Strings.Placeholders(Strings.In(lang, "restart.countdown")), "no confirmations: " + lang + " restart.countdown names the seconds");
             Check(Strings.In(lang, "restart.countdown.over").Trim().Length > 0, "no confirmations: " + lang + " says when the countdown is over");
+            // The line is drawn with every number down to 1, so the unit cannot be a plural form: "in 1 seconds"
+            // was on the last second of every English countdown. The short unit reads right at any number.
+            Check(!Strings.In(lang, "restart.countdown").Contains("seconds"),
+                "no confirmations: " + lang + " restart.countdown says the unit in a form that fits the last second");
         }
         // The restart screen keeps both offers, and neither is required: the countdown ends in a restart by itself.
         foreach (var id in new[] { "restart.now", "restart.later", "restart.countdown", "restart.countdown.over" })
@@ -574,6 +578,53 @@ static class UnitTests
         catch (UnauthorizedAccessException) { removed = true; }   // a test that may not write there proves the rest
         catch (IOException) { removed = true; }
         Check(removed, "single file: Cleanup removes the version folder it unpacked");
+        // The same removal by version name, which is what the window that finishes an install after the restart has
+        // in its hand (the folder was unpacked by a window that is long gone). Anything that is not a plain version
+        // name is left alone.
+        foreach (var outside in new[] { null, "", ".", "..", @"..\..\Windows", @"x\y", "C:", @"C:\Windows" })
+            Payload.CleanupVersion(outside);
+        Check(Directory.Exists(Path.GetTempPath()), "single file: CleanupVersion touches nothing outside its own root");
+        try
+        {
+            Directory.CreateDirectory(inside);
+            File.WriteAllText(Path.Combine(inside, "manifest.json"), "{}");
+            Payload.CleanupVersion("0.0.0-unit-test");
+            removed = !Directory.Exists(fake);
+        }
+        catch (UnauthorizedAccessException) { removed = true; }
+        catch (IOException) { removed = true; }
+        Check(removed, "single file: CleanupVersion removes the folder of the version it is given");
+        // Which package a run installs from. A layout the person prepared always wins over the payload.
+        Check(Payload.Carries(true, null, false), "single file: a file with a payload and nothing beside it installs from the payload");
+        Check(!Payload.Carries(false, null, false), "single file: a file without a payload installs from the folder beside it");
+        Check(!Payload.Carries(true, null, true), "single file: a release folder beside the exe wins over the payload");
+        foreach (var named in new[] { @"D:\amdgpu-wddm-offline", @"D:\empty" })
+        {
+            Check(!Payload.Carries(true, named, false), "single file: --package " + named + " wins over the payload");
+            Check(!Payload.Carries(true, named, true), "single file: --package " + named + " wins over both");
+        }
+        // One unpacking at a time, for the whole computer: a second copy of the same file would reset the folder the
+        // first one installs from.
+        Check(Payload.RunMutexName.StartsWith(@"Global\"), "single file: the run is held against every session, not only this one");
+        // The accounts a folder on the way to the unpacked package may belong to.
+        var owners = Payload.Access.TrustedOwners();
+        foreach (var sid in new[] { "S-1-5-18", "S-1-5-32-544" })
+            Check(owners.Contains(sid), "single file: " + sid + " may own the setup folder");
+        Check(owners.Any(s => s.StartsWith("S-1-5-80-")), "single file: TrustedInstaller may own the setup folder");
+        Check(owners.Contains(System.Security.Principal.WindowsIdentity.GetCurrent().User.Value),
+            "single file: the account that runs setup may own the setup folder");
+        // A folder that is not there, and one that is: the first is refused, the second is accepted because this
+        // account owns it. A folder of somebody else cannot be made in a unit test, and the refusal of one is the
+        // same code path as the refusal below.
+        var missing = Path.Combine(tmp, "not-there");
+        bool refusedMissing = false;
+        try { Payload.Access.AssertLocation(missing); } catch (Payload.FolderException) { refusedMissing = true; }
+        Check(refusedMissing, "single file: a setup folder that is not a folder is refused");
+        var ours = Path.Combine(tmp, "ours");
+        Directory.CreateDirectory(ours);
+        bool accepted = true;
+        try { Payload.Access.AssertLocation(ours); } catch (Payload.FolderException) { accepted = false; }
+        Check(accepted, "single file: a setup folder this account owns is accepted");
         try { Directory.Delete(tmp, true); } catch (Exception) { }
     }
 

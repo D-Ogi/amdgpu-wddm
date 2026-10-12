@@ -21,6 +21,8 @@ rail.done|mt-safe|a4c3ed04|gotowe
 rail.failed|mt-safe|a1f6bdb2|zatrzymano tutaj
 elevation.declined|mt|0a586e33|Instalator potrzebuje uprawnień administratora, aby zainstalować lub naprawić sterownik. Nic nie zostało zmienione. Uruchom instalator ponownie i wybierz Tak, gdy Windows zapyta.
 payload.damaged|mt|44795d7b|Ten plik instalatora jest uszkodzony: pliki instalacyjne, które zawiera, nie są tymi, z którymi został zbudowany. Nic nie zostało zmienione. Pobierz wydanie ponownie.
+payload.already-running|mt|45dca71f|Instalator jest już uruchomiony na tym komputerze. Zakończ instalację w otwartym oknie; tutaj nic nie zostało zmienione.
+payload.folder|mt|78be926d|Instalator nie może przygotować folderu, w którym trzyma pliki instalacyjne: należy on do innego konta na tym komputerze albo nie jest zwykłym folderem. Nic nie zostało zmienione. Usuń ten folder, który jest wymieniony w pliku pomocy, i uruchom ten plik ponownie.
 
 # ---- welcome ----
 welcome.title|mt|f6dd913f|Instalacja sterownika grafiki dla ASRock BC-250
@@ -188,7 +190,7 @@ stage.copy|mt-safe|ff9e3c81|Kopiowanie plików
 restart.now|mt-safe|09af1002|Uruchom ponownie teraz
 restart.later|mt-safe|73b6e48a|Później
 restart.save-work|mt|16909f23|Najpierw zapisz swoją pracę. Windows poprosi otwarte programy o zamknięcie; nie wymusza tego.
-restart.countdown|mt|60c980c1|Windows uruchomi się ponownie sam za {0} s.
+restart.countdown|mt|e8ce24a7|Windows uruchomi się ponownie sam za {0} s.
 restart.countdown.over|mt|7af75060|Odliczanie się skończyło. Instalator nie uruchomi już Windows ponownie samodzielnie.
 restart.later.done|mt|a38787ae|Instalator będzie kontynuował sam po następnym ponownym uruchomieniu Windows. Możesz zamknąć to okno.
 restart.failed|mt|56d3b9cd|Windows nie rozpoczął ponownego uruchomienia. Uruchom komputer ponownie z menu Start.

@@ -211,10 +211,18 @@ namespace AmdgpuWddmSetup
         // (Payload.cs). That folder goes when the run is over, and stays while a restart is pending: the engine
         // staged its own copy for the continuation, but a person who starts the file again before the restart
         // should still find the release it came from.
+        //
+        // Every fresh install ends its first phase with a restart, and the phase after it runs from the
+        // continuation closure, whose setup.exe is the plain window and carries no payload. So the window that ends
+        // the install - the one with no payload of its own - removes the folder of the version it just installed,
+        // by name; otherwise the whole unpacked release would stay in %ProgramData% for good, which is what every
+        // install of a single file used to do.
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
             base.OnFormClosed(e);
-            if (!_smoke && !string.IsNullOrEmpty(_args.PayloadPackage) && !RestartPending()) Payload.Cleanup(_args.PayloadPackage);
+            if (_smoke || _args.DryRun || RestartPending()) return;
+            if (!string.IsNullOrEmpty(_args.PayloadPackage)) { Payload.Cleanup(_args.PayloadPackage); return; }
+            Payload.CleanupVersion(PackageVersion(_package));
         }
 
         // The window lets go of everything it owns here, and not in OnFormClosing: a close that is cancelled (by
@@ -271,13 +279,28 @@ namespace AmdgpuWddmSetup
             base.WndProc(ref m);
             // The desktop changed under the window: another resolution can turn the screen into a small one, or back.
             if (m.Msg == WM_DISPLAYCHANGE && !_smoke) BeginInvoke(new Action(RebuildIfScreenChanged));
+            // The person is dragging the window. Nothing is rebuilt while that lasts: Windows runs its own message
+            // loop for a drag, and a rebuild started from inside it would dispose the title bar that the drag began
+            // on. The rule is answered once, when the drag ends.
+            if (m.Msg == WM_ENTERSIZEMOVE) _moving = true;
+            if (m.Msg == WM_EXITSIZEMOVE && !_smoke)
+            {
+                _moving = false;
+                BeginInvoke(new Action(RebuildIfScreenChanged));
+            }
         }
 
+        const int WM_ENTERSIZEMOVE = 0x0231, WM_EXITSIZEMOVE = 0x0232;
+        bool _moving;                   // Windows is running the loop of a window drag
+
         // The window was moved, possibly onto another monitor of the same scale: the small-screen rule decides again.
+        // A move the person is making waits for the end of the drag (WM_EXITSIZEMOVE above); a move the program
+        // itself made is answered at once, after this message, never inside it.
         protected override void OnMove(EventArgs e)
         {
             base.OnMove(e);
-            RebuildIfScreenChanged();
+            if (_moving || _smoke || IsDisposed || !IsHandleCreated) return;
+            BeginInvoke(new Action(RebuildIfScreenChanged));
         }
 
         bool _building;
@@ -286,7 +309,7 @@ namespace AmdgpuWddmSetup
         // changed, because a rebuild throws away every control of the screen that is shown.
         void RebuildIfScreenChanged()
         {
-            if (_smoke || IsDisposed || _building || !IsHandleCreated) return;
+            if (_smoke || IsDisposed || _building || _moving || !IsHandleCreated) return;
             if (SmallScreenNow == _small) return;
             SuspendLayout();
             var want = WindowSize();

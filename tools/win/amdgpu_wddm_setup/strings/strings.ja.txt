@@ -21,6 +21,8 @@ rail.done|mt-safe|a4c3ed04|完了
 rail.failed|mt-safe|a1f6bdb2|ここで停止
 elevation.declined|mt|0a586e33|ドライバーのインストールまたは修復には管理者のアクセス許可が必要です。何も変更されていません。セットアップをもう一度起動し、Windows の確認で [はい] を選んでください。
 payload.damaged|mt|44795d7b|このセットアップ ファイルは壊れています。中に入っているインストール用ファイルが、作成時のものと一致しません。何も変更していません。リリースをもう一度ダウンロードしてください。
+payload.already-running|mt|45dca71f|セットアップはこの PC ですでに実行中です。開いているウィンドウでインストールを終わらせてください。ここでは何も変更していません。
+payload.folder|mt|78be926d|セットアップはインストール用ファイルを置くフォルダーを準備できません。そのフォルダーはこの PC の別のアカウントのものか、通常のフォルダーではありません。何も変更していません。サポート ファイルに書かれているそのフォルダーを削除して、このファイルをもう一度開いてください。
 
 # ---- welcome ----
 welcome.title|mt|f6dd913f|ASRock BC-250 用グラフィックス ドライバーのインストール
@@ -188,7 +190,7 @@ stage.copy|mt-safe|ff9e3c81|ファイルのコピー
 restart.now|mt-safe|09af1002|今すぐ再起動
 restart.later|mt-safe|73b6e48a|後で
 restart.save-work|mt|16909f23|先に作業を保存してください。Windows は開いているプログラムに終了を求めますが、強制はしません。
-restart.countdown|mt|60c980c1|あと {0} 秒で Windows が自動的に再起動します。
+restart.countdown|mt|e8ce24a7|あと {0} 秒で Windows が自動的に再起動します。
 restart.countdown.over|mt|7af75060|カウントダウンが終わりました。セットアップがこれ以上自動で Windows を再起動することはありません。
 restart.later.done|mt|a38787ae|次に Windows を再起動すると、セットアップは自動的に続行します。このウィンドウは閉じてかまいません。
 restart.failed|mt|56d3b9cd|Windows が再起動を開始しませんでした。[スタート] メニューから PC を再起動してください。

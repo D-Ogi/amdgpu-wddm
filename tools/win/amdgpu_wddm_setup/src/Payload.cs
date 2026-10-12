@@ -38,8 +38,28 @@ namespace AmdgpuWddmSetup
         // Where the window unpacks a single-file setup: one folder per release version.
         public static string Root { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), @"amdgpu-wddm\setup"); } }
 
+        // One unpacking of a single file at a time, for the whole computer. The folder of a version is reset before
+        // it is written, so a second copy of the same file started while the first one installs would delete the
+        // files the first one is installing from: the second window says setup is already running and ends instead.
+        // Global\, not Local\: the two runs can be in different sessions.
+        public const string RunMutexName = @"Global\amdgpu-wddm-setup-payload";
+
         // The folder of the package inside the unpacked release, beside setup.exe. SetupForm uses the same name.
         public const string FilesDir = "files";
+
+        // Whether this run installs from the package inside the file. Three answers decide it:
+        //   present:          the file carries a payload at all;
+        //   explicitPackage:  --package, a folder the person named themselves (null when they named none);
+        //   packageBesideExe: a files\ folder of a release stands beside the exe (the unpacked zip, a prepared
+        //                     offline folder, a repair set).
+        // A layout the person prepared wins over the payload, in both of its forms: that is the layout they asked
+        // for, and it "behaves as today" (owner, 2026-10-12). --package is honoured even when the folder holds no
+        // release, so that the window says what is wrong with the folder the person named instead of quietly
+        // installing another one.
+        public static bool Carries(bool present, string explicitPackage, bool packageBesideExe)
+        {
+            return present && explicitPackage == null && !packageBesideExe;
+        }
 
         // A folder that holds a release's files: the manifest and the installer the window starts.
         public static bool HasPackage(string dir)
@@ -47,6 +67,13 @@ namespace AmdgpuWddmSetup
             if (string.IsNullOrEmpty(dir)) return false;
             try { return File.Exists(Path.Combine(dir, "manifest.json")) && File.Exists(Path.Combine(dir, "installer", "install.ps1")); }
             catch (Exception) { return false; }
+        }
+
+        // The folder this file unpacks into cannot be made safe on this computer (Access.AssertLocation). It is not
+        // a damaged download, so the window says something else about it.
+        public sealed class FolderException : Exception
+        {
+            public FolderException(string message) : base(message) { }
         }
 
         public sealed class Entry
@@ -175,7 +202,7 @@ namespace AmdgpuWddmSetup
             if (protect) { Access.PrepareRoot(root); Access.ResetFolder(dir); }
             else
             {
-                if (Directory.Exists(dir)) Directory.Delete(dir, true);
+                Remove(dir);
                 Directory.CreateDirectory(dir);
             }
             using (var f = new FileStream(OwnFile, FileMode.Open, FileAccess.Read, FileShare.Read))
@@ -228,9 +255,43 @@ namespace AmdgpuWddmSetup
                 if (string.IsNullOrEmpty(dir)) return;
                 var parent = Path.GetDirectoryName(dir.TrimEnd('\\'));
                 if (parent == null || !parent.TrimEnd('\\').Equals(Root.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)) return;
-                if (Directory.Exists(dir)) Directory.Delete(dir, true);
+                Remove(dir);
             }
             catch (Exception) { }
+        }
+
+        // The same removal from the release version alone, for a run that did not unpack the folder itself. Every
+        // install of a single file is finished by a later phase, after a restart, and that phase runs from the
+        // continuation closure: the window of the phase that unpacked the folder is long gone, so the window that
+        // ends the install removes the folder of the version it installed. Without this the whole unpacked release
+        // stayed in %ProgramData% for good, which is the one path every fresh install takes.
+        //
+        // A version that is not a plain name, or a folder that is not inside Root, is left alone: this is given a
+        // version read from a manifest on the disk, and a name like ..\.. must not reach Directory.Delete.
+        public static void CleanupVersion(string version)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(version) || !SafeRelative(version) || version.IndexOf('\\') >= 0) return;
+                var dir = Path.Combine(Root, version);
+                var parent = Path.GetDirectoryName(dir.TrimEnd('\\'));
+                if (parent == null || !parent.TrimEnd('\\').Equals(Root.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)) return;
+                Remove(dir);
+                // The folder that held the versions goes with the last of them, so an uninstall leaves nothing of
+                // the single file behind; a folder that still holds another version stays.
+                try { if (Directory.Exists(Root) && Directory.GetFileSystemEntries(Root).Length == 0) Directory.Delete(Root, false); }
+                catch (Exception) { }
+            }
+            catch (Exception) { }
+        }
+
+        // Removes one directory, and never through a link: a junction or a symbolic link is unlinked, not followed,
+        // so a link somebody put where our folder belongs cannot turn a cleanup into a removal somewhere else.
+        static void Remove(string dir)
+        {
+            if (!Directory.Exists(dir)) return;
+            if ((File.GetAttributes(dir) & FileAttributes.ReparsePoint) != 0) { Directory.Delete(dir, false); return; }
+            Directory.Delete(dir, true);
         }
 
         // ---- bytes -------------------------------------------------------------------------------------------------
@@ -350,15 +411,73 @@ namespace AmdgpuWddmSetup
                 return s;
             }
 
+            // The accounts a folder on the way to the unpacked package may belong to: SYSTEM, the Administrators
+            // group (which owns everything an elevated process creates), TrustedInstaller, and the account running
+            // this setup, which is an administrator because setup runs elevated. Anybody else owning one of these
+            // folders is the finding: an owner may rename a folder aside, so a standard user who owns the parent
+            // could put their own directory where the checked files stand, between the check and their use.
+            public static string[] TrustedOwners()
+            {
+                var list = new List<string>
+                {
+                    new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null).Value,
+                    new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null).Value,
+                    "S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464",   // NT SERVICE\TrustedInstaller
+                };
+                try { var me = WindowsIdentity.GetCurrent().User; if (me != null) list.Add(me.Value); }
+                catch (Exception) { }
+                return list.ToArray();
+            }
+
+            // One folder on the way to the unpacked package, checked as a location: a regular directory, no link,
+            // and an owner of the list above. The sentence it throws names the folder, so a person can remove it.
+            //
+            // The access rules of %ProgramData%\amdgpu-wddm itself are not touched. That folder is shared: the
+            // installer state, the start-confirm record, the DWM baseline and the control application's own folder
+            // all live in it, and a strict permission list on it refused every uninstall of 0.7.216.100-tester.28
+            // (BD-129; tools/release/installer/system-tuning.ps1 keeps the same stance for the same folder). The
+            // folders of the package below it carry the permission list instead.
+            public static void AssertLocation(string dir)
+            {
+                var info = new DirectoryInfo(dir);
+                if (!info.Exists || (info.Attributes & FileAttributes.ReparsePoint) != 0)
+                    throw new FolderException("the setup folder " + dir + " is not a regular folder; remove it and start this file again");
+                string owner;
+                try { owner = info.GetAccessControl().GetOwner(typeof(SecurityIdentifier)).Value; }
+                catch (Exception e) { throw new FolderException("the setup folder " + dir + " cannot be read: " + e.Message); }
+                foreach (var trusted in TrustedOwners()) if (owner == trusted) return;
+                throw new FolderException("the setup folder " + dir + " belongs to another account (" + owner
+                    + "), which could replace the files of this installation; remove it and start this file again,"
+                    + " or install from the unpacked zip");
+            }
+
             // The folder that holds the version folders. It gets the permission list above whether it is new or was
             // already there: a folder a standard user created before us stops being writable the moment this runs,
-            // and the version folder inside it therefore cannot be planted either.
+            // and the version folder inside it therefore cannot be planted either. Its parent, the shared
+            // %ProgramData%\amdgpu-wddm, is created where it is missing and checked as a location (AssertLocation):
+            // a folder owned by another account can be renamed aside by that account, whatever the rules of the
+            // folders inside it say.
             public static void PrepareRoot(string root)
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(root.TrimEnd('\\')));
+                var shared = Path.GetDirectoryName(root.TrimEnd('\\'));
+                if (!Directory.Exists(shared))
+                {
+                    Directory.CreateDirectory(shared);
+                    SetOwnerToAdministrators(new DirectoryInfo(shared));
+                }
+                AssertLocation(shared);
                 var info = new DirectoryInfo(root);
                 if (!info.Exists) info.Create(Rules());
-                else info.SetAccessControl(Rules());
+                else
+                {
+                    AssertLocation(root);
+                    info.SetAccessControl(Rules());
+                }
+                SetOwnerToAdministrators(info);
+            }
+
+            static void SetOwnerToAdministrators(DirectoryInfo info)
+            {
                 try
                 {
                     var own = new DirectorySecurity();
@@ -369,10 +488,11 @@ namespace AmdgpuWddmSetup
             }
 
             // The version folder, empty and ours: whatever stood there is removed first, so no file of an earlier
-            // run and nothing a standard user left behind can survive into this one.
+            // run and nothing a standard user left behind can survive into this one. A link where the folder
+            // belongs is unlinked, never followed.
             public static void ResetFolder(string dir)
             {
-                if (Directory.Exists(dir)) Directory.Delete(dir, true);
+                Remove(dir);
                 new DirectoryInfo(dir).Create(Rules());
             }
         }

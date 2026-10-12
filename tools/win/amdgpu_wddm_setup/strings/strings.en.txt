@@ -23,6 +23,8 @@ rail.done|src|-|done
 rail.failed|src|-|stopped here
 elevation.declined|src|-|Setup needs administrator permission to install or repair the driver. Nothing was changed. Start setup again and choose Yes when Windows asks.
 payload.damaged|src|-|This setup file is damaged: the installation files it carries are not the ones it was built with. Nothing was changed. Download the release again.
+payload.already-running|src|-|Setup is already running on this PC. Finish the installation in the window that is open; nothing was changed here.
+payload.folder|src|-|Setup cannot prepare the folder it keeps the installation files in: it belongs to another account on this PC, or it is not a normal folder. Nothing was changed. Remove that folder, which the support file names, and start this file again.
 
 # ---- welcome ----
 welcome.title|src|-|Install the graphics driver for the ASRock BC-250
@@ -190,7 +192,7 @@ stage.copy|src|-|Copying the files
 restart.now|src|-|Restart now
 restart.later|src|-|Later
 restart.save-work|src|-|Save your work first. Windows asks open programs to close; it does not force them.
-restart.countdown|src|-|Windows restarts by itself in {0} seconds.
+restart.countdown|src|-|Windows restarts by itself in {0} s.
 restart.countdown.over|src|-|The countdown has ended. Setup does not restart Windows by itself any more.
 restart.later.done|src|-|Setup continues by itself after the next restart of Windows. You can close this window.
 restart.failed|src|-|Windows did not start the restart. Restart the PC from the Start menu.
