@@ -72,7 +72,9 @@ static uint32_t block_count(const bc250hsa_launch* launch, uint32_t dim)
 
 /* The AQL kernel dispatch packet of the HSA interface, 64 bytes, field by field. The
  * offsets come from the HSA Platform System Architecture specification, version 1.2,
- * table 2-9 (hsa_kernel_dispatch_packet_t), and LLVM reads the same offsets:
+ * section 2.9.6, table 2-7 (hsa_kernel_dispatch_packet_t; table 2-9 is the barrier-AND
+ * packet), with the header bits of table 2-4 and the fence scope codes of tables 2-5 and
+ * 2-6 (2 = agent and system scope). LLVM reads the same offsets:
  * AMDGPUUsage.rst, "Kernel Dispatch", gives the workgroup size at bytes 4 to 9 and the
  * grid size in work items at bytes 12 to 23. */
 #define AQL_OFF_HEADER            0u
