@@ -166,9 +166,17 @@ struct AllocationRequest final {
     // primary=false (present-noprimary): the allocation is not a primary; whether the runtime and a
     // windowed flip-model Present accept that is what the experiment measures.
     // GPU writes to the aperture are snooped (CacheCoherent), so a cached CPU reader stays coherent.
+    // driverSurface (BD-133): the surface is the driver's own - the Present copy's destination, which names no
+    // runtime resource, is opened by no other component and is never scanned out. Such a surface may also have
+    // the one format the kernel driver admits as a type-0 surface without a COMPOSED row: a SCANOUT_PRIMARY row
+    // (driver\kmd\surface_format.h, WddmSurfaceFormatBpp at BC250_SURFACE_COMPOSED), which is X8R8G8B8. The
+    // Present copy of a D3D9 X8R8G8B8 back buffer does not ask for it: since lab arm B of 2026-10-12 18:35Z it
+    // carries the A8R8G8B8 tag of the same bytes, a COMPOSED row, because the kernel present refused X8R8G8B8
+    // against the A8R8G8B8 redirection surface (present-copy.h, present_copy_alpha_tag). The record of every format
+    // is unchanged by it, and every other caller passes false and gets exactly the rule it had.
     HRESULT prepare_surface(uint32_t width,uint32_t height,uint32_t pitch,D3DDDIFORMAT format,
                             uint64_t size,HANDLE runtimeOwner=nullptr,bool cpuRead=false,
-                            bool primary=true,bool scanout=false) noexcept {
+                            bool primary=true,bool scanout=false,bool driverSurface=false) noexcept {
         blob={};surface={};resource={};texture={};info={};args={};held=0;
         constexpr uint32_t edge=8192;
         // Scan-out needs the SCANOUT_PRIMARY policy bit (BGRA8, RGBA8 and RGB10A2 today; the caller has
@@ -176,9 +184,15 @@ struct AllocationRequest final {
         // primary of video present source 0: a scanned-out buffer with no source is a contradiction.
         // Composition keeps the COMPOSED bit and every row that has it.
         if(scanout && (!primary || cpuRead))return E_INVALIDARG;
+        // A surface of the driver's own has no runtime resource and is never scanned out; a request that says
+        // otherwise is two contracts at once.
+        if(driverSurface && (scanout || runtimeOwner))return E_INVALIDARG;
         const auto* row=amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_d3dddi(uint32_t(format)),
                                                   scanout?AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY
                                                          :AMDGPU_WDDM_SURFACE_COMPOSED);
+        if(!row && driverSurface)
+            row=amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_d3dddi(uint32_t(format)),
+                                          AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY);
         if(!row)return E_NOTIMPL;
         // A scan-out surface must also be one the compositor can open, because the OS asks the
         // compositor's driver about the pair before it flips: the v3 record names a DXGI format and the

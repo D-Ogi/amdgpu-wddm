@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include "queue-engine.h"
+#include "present-copy-sync.h"
 #include <limits>
 #include <new>
 
@@ -20,6 +21,7 @@ struct QueueEngineOwner {
 QueueEngineOps QueueEngineOps::native() noexcept {
     QueueEngineOps ops{engine_ddi::create_engine_queue, engine_ddi::execute_command_lists};
     ops.update_tiles = engine_ddi::update_tile_mappings; ops.copy_tiles = engine_ddi::copy_tile_mappings;
+    ops.present_copy = engine_ddi::present_copy_list_mark;
     return ops;
 }
 QueueEngineRegistry::QueueEngineRegistry(Device& device, engine_ddi::DeviceContext* engine,
@@ -153,7 +155,59 @@ HRESULT QueueEngineRegistry::execute(const QueueEngineSlot& slot, UINT count,
     const D3D12DDI_HCOMMANDLIST* lists) noexcept {
     if (count && !lists) return E_INVALIDARG;
     QueueEngineOwner* q; const HRESULT hr = admit(slot, q);
-    return hr != S_OK ? hr : leave(q, ops_.execute(q->engine, count, lists));
+    if (hr != S_OK) return hr;
+    return leave(q, execute_lists(q, count, lists));
+}
+// BD-133 (present-copy-sync.h): a list that a present recorded a copy on carries a ticket, its surface's completion
+// fence C_S and the value k the present context waits for before that present's kernel present. Its execute submits
+// the work up to and including that list and then signals C_S = k on this queue's own context, so the signal follows
+// the copy on the context that executed it: the engine submits everything to the queue's bound context before it
+// returns (engine-ddi.h, execute_command_lists, INLINE mode), and a software signal needs the work before it flushed
+// (nc-d3dumddi-pfnd3dddi_signalsynchronizationobjectfromgpu2cb.md). The batch is split after each list with a
+// ticket; unmarked lists keep their order, and an execute with none is the engine call alone, as before. No wait is
+// queued here at all, for anything: a copy surface is taken only when its last reader retired (present_copy_reuse).
+// Refused before anything is submitted, with one line and a removed device (leave): a list that carries a ticket
+// already executed, or the same ticket twice in one call, because a ticket is signaled once and never reused. A
+// failed signal is returned and removes the device too: its present waits for that value and nothing else signals it.
+HRESULT QueueEngineRegistry::execute_lists(QueueEngineOwner* q, UINT count,
+    const D3D12DDI_HCOMMANDLIST* lists) noexcept {
+    if (!ops_.present_copy || !count) return ops_.execute(q->engine, count, lists);
+    UINT tickets = 0;
+    for (UINT i = 0; i < count; ++i) {
+        PresentCopyListMark* mark = nullptr;
+        // A handle that is no list of this device is the engine's to refuse, as before.
+        if (ops_.present_copy(engine_, lists[i], &mark) != S_OK || !mark) continue;
+        const PresentCopyListMark::State state = mark->state();
+        if (state == PresentCopyListMark::Empty) continue;
+        bool again = state == PresentCopyListMark::Executed;
+        for (UINT j = 0; !again && j < i; ++j) {
+            PresentCopyListMark* earlier = nullptr;
+            again = ops_.present_copy(engine_, lists[j], &earlier) == S_OK && earlier == mark;
+        }
+        if (again) {
+            ddi_refusal("present copy: a command list that carried a Present copy was executed again before its "
+                        "Reset: its copy would write a surface that a later present may read, and its ticket is "
+                        "signaled once; nothing of this execute is submitted and the device is removed");
+            return D3DDDIERR_DEVICEREMOVED;
+        }
+        ++tickets;
+    }
+    if (!tickets) return ops_.execute(q->engine, count, lists);
+    UINT from = 0;
+    for (UINT i = 0; i < count; ++i) {
+        PresentCopyListMark* mark = nullptr;
+        if (ops_.present_copy(engine_, lists[i], &mark) != S_OK || !mark ||
+            mark->state() != PresentCopyListMark::Pending)
+            continue;
+        HRESULT hr = ops_.execute(q->engine, i + 1 - from, lists + from);
+        if (hr != S_OK) return hr;
+        from = i + 1;
+        PresentCopyTicket ticket{};
+        if (!mark->take(&ticket)) return E_UNEXPECTED;    // checked above under the queue domain
+        hr = device_.present.copy_signal(q->context.handle(), ticket);
+        if (hr != S_OK) return FAILED(hr) ? hr : E_UNEXPECTED;
+    }
+    return from < count ? ops_.execute(q->engine, count - from, lists + from) : S_OK;
 }
 HRESULT QueueEngineRegistry::update_tiles(const QueueEngineSlot& slot, D3D12DDI_HRESOURCE resource, UINT region_count,
     const D3D12DDI_TILED_RESOURCE_COORDINATE* region_starts, const D3D12DDI_TILE_REGION_SIZE* region_sizes,

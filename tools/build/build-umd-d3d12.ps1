@@ -155,6 +155,11 @@ try {
   if($LASTEXITCODE){throw 'Queue engine test build failed'}
   & .\queue-engine-test.exe
   if($LASTEXITCODE){throw 'Queue engine tests failed'}
+  # BD-133: the order of a copied Present against a dependency model of the GPU scheduler (no GPU).
+  & cl.exe @flags /analyze /analyze:external- /Fe:present-copy-order-test.exe "$repo\driver\umd\d3d12\present-copy-order-test.cpp" "$repo\driver\umd\d3d12\queue-engine.cpp" $engineLib
+  if($LASTEXITCODE){throw 'Present copy order test build failed'}
+  & .\present-copy-order-test.exe
+  if($LASTEXITCODE){throw 'Present copy order tests failed'}
   & cl.exe @flags /analyze /analyze:external- /Fe:hosted-queue-test.exe "$repo\driver\umd\d3d12\hosted-queue-test.cpp" "$repo\driver\umd\d3d12\hosted-queue.cpp" "$repo\driver\umd\d3d12\queue-engine.cpp" $engineLib
   if($LASTEXITCODE){throw 'Hosted queue test build failed'}
   & .\hosted-queue-test.exe

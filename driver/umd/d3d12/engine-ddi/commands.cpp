@@ -183,6 +183,9 @@ void APIENTRY destroy_list(D3D12DDI_HDEVICE device, D3D12DDI_HCOMMANDLIST h) {
     }
     drain_list(l, Drain::Destroy);
     if (l->pool) leave_pool(l);
+    // BD-133: a destroyed list carries no Present copy. One that still carries an unexecuted ticket removes the
+    // device here and keeps its copy surface (present-copy-sync.h, rule D): its present waits for that copy.
+    l->present_copy.release();
     release_engine(l->h);
     poison(l->h);
     c->live.fetch_sub(1);
@@ -252,6 +255,10 @@ void APIENTRY reset_list(D3D12DDI_HCOMMANDLIST h, const D3D12DDIARG_RESETCOMMAND
     }
     if (l->pool) leave_pool(l);                 // a Reset without a Close: the list leaves its earlier pool
     l->root_signatures[0] = l->root_signatures[1] = nullptr;   // the engine's Reset unbound them
+    // BD-133: the engine's Reset dropped the list's commands, a Present copy among them, so the list carries no ticket
+    // any more. A ticket that was never executed removes the device here (present-copy-sync.h, rule D). A Reset that
+    // failed above keeps the ticket: the old commands are still there.
+    l->present_copy.release();
     l->recording = true;
     l->pool = p;
     p->open_lists.fetch_add(1, std::memory_order_release);

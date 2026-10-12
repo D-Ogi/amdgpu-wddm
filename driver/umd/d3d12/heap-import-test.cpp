@@ -93,8 +93,14 @@ static HRESULT reserve_result=S_OK;
 static UINT64 map_answer=0;                          // the address the map mock answers, 0: the ordinary one
 // What the allocation holds: the request's 4096 bytes rounded up to the alignment asked for.
 static UINT64 held_bytes(){return msaa_alignment?msaa_alignment:UINT64_C(65536);}
+// BD-133: the Present copy's surface is allocated on the driver's own request, with no runtime resource.
+static bool driver_surface_request=false;
+// BD-133, the D3D9 back buffer: the shared form of the driver's own copy surface of a B8G8R8X8 source (tagged
+// A8R8G8B8), counted apart from the shared surfaces of the wire's v3 record.
+static unsigned own_shared_surfaces=0;
 static HRESULT APIENTRY allocate_cb(D3D12DDI_HRTDEVICE d,D3D12DDICB_ALLOCATE_0022* a){
- assert(d.handle==handle<void*>(1) && a->hResource==handle<void*>(2) && !a->hKMResource);
+ assert(d.handle==handle<void*>(1) && !a->hKMResource);
+ assert(a->hResource==(driver_surface_request?nullptr:handle<void*>(2)));
  assert(a->NumAllocations==1);
  if(a->pAllocationInfo->PrivateDriverDataSize==32 && a->PrivateDriverDataSize==64 &&
     a->pAllocationInfo->Flags==D3D12DDI_ALLOCATION_INFO_FLAGS_0022_PRIMARY){
@@ -124,6 +130,19 @@ static HRESULT APIENTRY allocate_cb(D3D12DDI_HRTDEVICE d,D3D12DDICB_ALLOCATE_002
   assert(r[4]==shared_width && r[5]==shared_height && r[6]==1 && r[7]==1 && r[8]==shared_dxgi);
   assert(r[9]==1 && !r[10] && !r[11] && r[12]==shared_bind && !r[13] && !r[14] && !r[15]);
   ++shared_created;events+='A';a->pAllocationInfo->hAllocation=++next_allocation;return S_OK;
+ }
+ if(a->pAllocationInfo->PrivateDriverDataSize==32 && a->PrivateDriverDataSize==12 &&
+    a->pAllocationInfo->Flags==D3D12DDI_ALLOCATION_INFO_FLAGS_0022_NONE){
+  // BD-133, the shared form of the driver's own copy surface: the LB7A v1 description under the 12-byte
+  // E26R v1 record with shared 1, without PRIMARY, on video present source 0 - what the runtime sees of the shared
+  // surface, under the record the format has - and only ever with no runtime resource.
+  assert(driver_surface_request && a->pPrivateDriverData && !a->pAllocationInfo->VidPnSourceId);
+  uint32_t e[3];std::memcpy(e,a->pPrivateDriverData,sizeof(e));
+  assert(e[0]==0x52363245u && e[1]==1 && e[2]==1);
+  uint32_t w[8];std::memcpy(w,a->pAllocationInfo->pPrivateDriverData,sizeof(w));
+  assert(w[0]==0x4137424Cu && w[1]==1 && w[2]==shared_width && w[3]==shared_height && w[4]==shared_pitch);
+  assert(w[5]==surface_format && w[6]==uint32_t(shared_size) && !w[7]);
+  ++own_shared_surfaces;events+='A';a->pAllocationInfo->hAllocation=++next_allocation;return S_OK;
  }
  if(a->pAllocationInfo->PrivateDriverDataSize==32){
   // The primary: the 32-byte LB7A v1 description, PRIMARY, no video present source, under the
@@ -454,6 +473,34 @@ int main(){
   // Bc250SharedSurfaceFormat and the primary did not).
   target.Format=DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;refused(E_NOTIMPL);
   target.Format=DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;refused(E_NOTIMPL);target.Format=DXGI_FORMAT_B8G8R8A8_UNORM;
+  // BD-133, the D3D9 back buffer (lab arms B and C, 2026-10-12: format 88 refused). The primary form of the
+  // Present copy's own surface for a B8G8R8X8 source and for its sRGB view: LB7A A8R8G8B8 (the A tag of the X8
+  // bytes, lab arm B of 2026-10-12 18:35Z: the kernel present refused X8R8G8B8 against the A8R8G8B8 redirection
+  // surface), the composed primary's v1 record and flags, no runtime resource, released by handle. The same request
+  // with a runtime resource is refused by "primary format" as before: 88 and 93 have no row of their own, so no
+  // primary of an application ever finds one.
+  {
+   engine_ddi::MemoryRequest own=s;own.rt_owner={};
+   for(const DXGI_FORMAT f:{DXGI_FORMAT_B8G8R8X8_UNORM,DXGI_FORMAT_B8G8R8X8_UNORM_SRGB}){
+    target.Format=f;surface_format=D3DDDIFMT_A8R8G8B8;driver_surface_request=true;
+    const auto before=surfaces;events.clear();
+    assert(owner.allocate(&own,&memory)==S_OK && events=="AMZI" && surfaces==before+1);
+    assert(owner.free(&memory)==S_OK && events=="AMZIVEUD");
+    assert(owner.last_free_report().driver_surface && owner.last_free_report().surface);
+    driver_surface_request=false;
+    refused(E_NOTIMPL);
+    assert(owner.last_report().refusal && !std::strcmp(owner.last_report().refusal,"primary format"));
+   }
+   // The widening is the X8 pair and nothing else: the typeless family of B8G8R8X8 is refused for the driver's
+   // own surface as well, before any callback.
+   target.Format=DXGI_FORMAT_B8G8R8X8_TYPELESS;driver_surface_request=true;
+   {
+    const auto before=next_allocation;events.clear();
+    assert(owner.allocate(&own,&memory)==E_NOTIMPL && !memory.memory && events.empty() && next_allocation==before);
+    assert(owner.last_report().refusal && !std::strcmp(owner.last_report().refusal,"primary format"));
+   }
+   driver_surface_request=false;target.Format=DXGI_FORMAT_B8G8R8A8_UNORM;surface_format=D3DDDIFMT_A8B8G8R8;
+  }
   target.MipLevels=2;refused(E_NOTIMPL);target.MipLevels=1;
   target.SampleDesc.Count=4;refused(E_NOTIMPL);target.SampleDesc.Count=1;
   target.DepthOrArraySize=2;refused(E_NOTIMPL);target.DepthOrArraySize=1;
@@ -592,6 +639,70 @@ int main(){
    assert(owner.allocate(&s,&memory)==E_INVALIDARG && events.empty() && next_allocation==before);
    s.surface_row_pitch=1024;
   }
+  // BD-133: the Present copy's own surface. engine-ddi asks for this same shared linear surface with no
+  // runtime resource of its own (resources.cpp, make_present_copy leaves rt_owner empty), because no resource
+  // of the runtime's owns it: the shell created it inside pfnPresent to copy a back buffer into. So the
+  // allocation is this driver's alone, the runtime destroys nothing of it, and the release goes by handle list
+  // (D) and not by the resource (R) - outside any owner scope, which is where a Present's release happens.
+  {
+   engine_ddi::MemoryRequest own=s;own.rt_owner={};
+   driver_surface_request=true;
+   const auto before=shared_created;events.clear();
+   assert(owner.allocate(&own,&memory)==S_OK && events=="AMZI" && shared_created==before+1);
+   assert(owner.owns_allocation(memory.allocation));
+   assert(owner.free(&memory)==S_OK && events=="AMZIVEUD");
+   {
+    const auto& report=owner.last_free_report();
+    assert(report.driver_surface && report.surface && !report.adopted && !report.owner_expired &&
+           report.stage==FreeStage::Done);
+   }
+   // The owner rule of a linear primary is the runtime resource's; a surface with no resource takes no
+   // authority from a create scope it happens to run inside, and its release is the same by-handle release
+   // there as anywhere else. Before BD-133 the authority was given by the scope alone, so such a surface
+   // could only ever be released on that one thread inside that one DDI, and never by a Present.
+   events.clear();
+   {OwnerScope create(&owner,0);assert(owner.allocate(&own,&memory)==S_OK && events=="AMZI");}
+   assert(owner.free(&memory)==S_OK && events=="AMZIVEUD" && owner.last_free_report().driver_surface);
+   // The negative control: the same surface request with a runtime resource is unchanged - released by that
+   // resource, inside its own destroy, and never marked a driver surface.
+   driver_surface_request=false;events.clear();
+   {OwnerScope create(&owner,0);assert(owner.allocate(&s,&memory)==S_OK && events=="AMZI");}
+   {OwnerScope destroy(&owner,memory.allocation);
+    assert(owner.free(&memory)==S_OK && events=="AMZIVEUR");
+    const auto& report=owner.last_free_report();
+    assert(report.surface && !report.driver_surface && !report.adopted && !report.owner_expired);}
+  }
+  // BD-133, the D3D9 back buffer (lab arms B and C, 2026-10-12: "format has no linear surface", format 88). The
+  // shared form of the Present copy's own surface for a B8G8R8X8 source and for its sRGB view. The wire has no
+  // record for a B8G8R8X8 source (no row has its DXGI number), so the surface goes out as LB7A A8R8G8B8, the A tag
+  // of its bytes, under the 12-byte v1 record, without PRIMARY and on video present source 0, and never as a v3
+  // record that would name a DXGI format the record's LB7A format does not have. With a runtime resource the same
+  // request is refused by "shared surface format", exactly as before: a shared surface of an application never
+  // has this format.
+  {
+   engine_ddi::MemoryRequest own=s;own.rt_owner={};
+   for(const DXGI_FORMAT f:{DXGI_FORMAT_B8G8R8X8_UNORM,DXGI_FORMAT_B8G8R8X8_UNORM_SRGB}){
+    target.Format=f;surface_format=D3DDDIFMT_A8R8G8B8;driver_surface_request=true;
+    const auto before_own=own_shared_surfaces,before_wire=shared_created;events.clear();
+    assert(owner.allocate(&own,&memory)==S_OK && events=="AMZI");
+    assert(own_shared_surfaces==before_own+1 && shared_created==before_wire);
+    assert(owner.owns_allocation(memory.allocation));
+    assert(owner.free(&memory)==S_OK && events=="AMZIVEUD");
+    assert(owner.last_free_report().driver_surface && owner.last_free_report().surface &&
+           owner.last_free_report().stage==FreeStage::Done);
+    driver_surface_request=false;
+    refused(E_NOTIMPL,"shared surface format");
+   }
+   // The typeless family of B8G8R8X8 has no surface for the driver's own request either.
+   target.Format=DXGI_FORMAT_B8G8R8X8_TYPELESS;driver_surface_request=true;
+   {
+    const auto before=next_allocation;events.clear();
+    assert(owner.allocate(&own,&memory)==E_NOTIMPL && !memory.memory && events.empty() && next_allocation==before);
+    assert(owner.last_report().refusal && !std::strcmp(owner.last_report().refusal,"shared surface format"));
+   }
+   driver_surface_request=false;target.Format=DXGI_FORMAT_B8G8R8A8_UNORM;
+   surface_format=D3DDDIFMT_A8R8G8B8;shared_dxgi=DXGI_FORMAT_B8G8R8A8_UNORM;
+  }
   // 4. The open path. The allocation exists, the runtime opened it for this device and destroys it itself:
   // no allocate callback runs, and the record that holds the mapping and the import is borrowed.
   engine_ddi::AdoptRequest adopt{};adopt.size=sizeof(adopt);adopt.flags=shared_flags;
@@ -712,7 +823,9 @@ int main(){
  // eviction, and the three borrowed allocations of the BD-075 section (two opens of one handle and the
  // quarantine instance's one), whose residency is dropped without a callback because the runtime destroys the
  // allocation itself and the handle may already be gone.
- assert(makes_resident==evictions+5);assert(surfaces==5);
+ // Seven primaries: the five of the linear primary section and the two primary forms of BD-133's X8 copy surface
+ // (88 and 93); the two shared forms of that surface are counted apart.
+ assert(makes_resident==evictions+5);assert(surfaces==7);assert(own_shared_surfaces==2);
  // The owner's authority ends with its DDI. Records that outlive it keep the allocation and never
  // reach the runtime again, in either form. A second owner, so that the first one's closure above
  // stays what it was.
@@ -779,7 +892,7 @@ int main(){
   assert(late.discard_metadata()==5 && events.empty());
   heap.Flags=D3D12DDI_HEAP_FLAG_BUFFERS;heap.MemoryPool=D3D12DDI_MEMORY_POOL_L0;
  }
- assert(surfaces==12);
+ assert(surfaces==14);                        // 12, and the two primary forms of BD-133's X8 copy surface
  {
   // present-cached: the 16-byte E26R v2 record, shared 1, CPU_READ without the PRIMARY intent bit; the
   // allocation itself is unchanged (LB7A v1, PRIMARY, no video present source). Default stays v1.
@@ -1062,7 +1175,7 @@ int main(){
           defaults.quarantine_age_ms==250 && defaults.quarantine_byte_cap==(64ull<<20) && defaults.holds());
    assert(!ImportReleasePolicy::off().holds());
   }
-  assert(surfaces==13+scanout_block_composed);
+  assert(surfaces==15+scanout_block_composed);  // 13, and the two primary forms of BD-133's X8 copy surface
  }
  // ---- BD-101: a heap that asks for the 4 MiB MSAA placement alignment -----------------------------------------
  // The request DXRPathTracer makes for a 4x MSAA 1536x864 R16G16B16A16_FLOAT render target: the runtime's heap
