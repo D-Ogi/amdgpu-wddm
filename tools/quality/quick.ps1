@@ -140,6 +140,15 @@ try {
  Check 'paging-queue-no-quota' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_queue.ps1" -Root $Workspace -Out "$Out\paging-queue-no-quota" -Mutation '--drop-quota' -ExpectFailure }
  # BD-114 7.1: node 1's deadline and timer priced from the old flat 500 ms again must fail by a CHECK.
  Check 'paging-queue-flat-budget' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_queue.ps1" -Root $Workspace -Out "$Out\paging-queue-flat-budget" -Mutation '--flat-paging-budget' -ExpectFailure }
+ # BD-085: the same queue harness plus the actual preempt/report pass - the DMA boundary, the completion-before-
+ # preemption order, same-fence scheduler replay and the native root gate. It was in no gate and rotted twice
+ # (KMD172 renamed the report pass, KMD231 gave it the hang-recovery node state), so it is here now.
+ Check 'paging-preemption' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_preemption.ps1" -Root $Workspace -Out "$Out\paging-preemption" }
+ Check 'paging-preemption-old-drain' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_preemption.ps1" -Root $Workspace -Out "$Out\paging-preemption-old-drain" -Mutation '--old-drain' -ExpectFailure }
+ Check 'paging-preemption-any-root' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_preemption.ps1" -Root $Workspace -Out "$Out\paging-preemption-any-root" -AnyRootNative -ExpectFailure }
+ # One control per half of the native root gate: dropping only the 4 KiB alignment check left the whole suite
+ # green until the misaligned-root check was added (BD-085 review finding 2).
+ Check 'paging-preemption-any-align' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_preemption.ps1" -Root $Workspace -Out "$Out\paging-preemption-any-align" -AnyAlignNative -ExpectFailure }
  Check 'surface-layout' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_dcn_translate.ps1" -Root $Workspace -Out "$Out\surface-layout" -Kits "$Kits" }
  Check 'gdi-admission' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_gdi_admission.ps1" -Root $Workspace -Out "$Out\gdi-admission" -Kits "$Kits" }
  Check 'display-modes' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_display_modes.ps1" -Root $Workspace -Out "$Out\display-modes" -Kits "$Kits" }

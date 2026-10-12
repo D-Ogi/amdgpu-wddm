@@ -27,7 +27,9 @@ if 'static void WddmRingGapEdgeLocked(' in s:
  # passes NULL here, so in a harness that never runs WddmStart every gap would measure 0 us and the arithmetic
  # would go unexercised. The stand-in clock reports its frequency through that argument, so hand it the field.
  edge=extract('static void WddmRingGapEdgeLocked(')
- assert edge.count('KeQueryPerformanceCounter(NULL)')==1
+ # Not an assert: python -O and PYTHONOPTIMIZE strip one, and this generator's silence is what BD-085 cost.
+ if edge.count('KeQueryPerformanceCounter(NULL)')!=1:
+  raise SystemExit('generate-paging-queue-test: the deadline edge no longer reads the counter exactly once')
  code+=edge.replace('KeQueryPerformanceCounter(NULL)','KeQueryPerformanceCounter(&Wddm->RingGapFrequency)')+'\n'
 # KMD172: the quota requeue is called by the drain and armed on the actual timer.
 code+=extract('static void WddmRequeuePagingDrain(')+'\n'
@@ -64,6 +66,7 @@ mutations={
 }
 for m in sys.argv[3:]:
  old,new=mutations[m]
- assert code.count(old)==1,m
+ if code.count(old)!=1:
+  raise SystemExit('generate-paging-queue-test: the anchor of mutation %s moved (%d hits)' % (m,code.count(old)))
  code=code.replace(old,new)
 Path(sys.argv[2]).write_text(code)

@@ -9,6 +9,27 @@ static DXGKARGCB_NOTIFY_INTERRUPT_DATA events[16];
 static unsigned eventCount;
 static const void* replayData;
 static ULONG replayBytes;
+// BD-085: the page-directory root a native span resolves against. A native paging record carries GPU virtual
+// addresses, and the GPU's own walker resolves them: PagingWriteRing (gfx.c:4011-4019) emits an SDMA VM flush
+// that writes the record's root into the page-directory base register pair of BC250_SDMA_PAGING_VMID, VMID 2
+// (bc250_sdma.h:154-155, vmid_pool.h:37), invalidates that VMID and then emits the span's IB. No CPU
+// translation happens on this route; the VidMmTranslate software walk of docs/design/paging-node.md:34-38
+// belongs to the direct route, which that note's decision (:31-32) binds to physical MC addresses and to
+// reprogramming no VMID. So the root has to be a page-directory base the hardware accepts:
+// bc250_sdma_emit_vm_flush itself refuses a root that is not a multiple of AMDGPU_GPU_PAGE_SIZE, 4096
+// (bc250_sdma.c:1248, amdgpu.h:450), and a root of zero is a VMID that was given no root in this engine
+// instance (vmid_pool.h:43). paging_private.c's RootUsable (paging_private.c:201-205) is that contract at
+// admission: it refuses a native span whose root is zero or not 4 KiB aligned. The one DDI that submits
+// virtual paging work, Bc250WddmSubmitCommandVirtual, hands WddmSubmitPagingHardwareRoot the submitting
+// context's RootPhysical (wddm.c:6228-6231). The fixtures below therefore submit through the Root entry point,
+// as that DDI does, with one root: non-zero, 4 KiB aligned, never dereferenced, and the same value the record
+// is built with, so that binding it at admission rewrites what the builder already wrote and the detachment
+// check below can still compare a snapshot taken before the submit.
+#define PREEMPT_ROOT 0x4000ull
+// The same base plus 8 bytes: non-zero, so it passes the zero half of the gate, and misaligned, so it must
+// fail the 4 KiB half. Without this value the alignment half of RootUsable is untested - dropping it from the
+// parser left the whole suite green (BD-085 review finding 2).
+#define PREEMPT_ROOT_MISALIGNED (PREEMPT_ROOT|8ull)
 static BC250_PAGING_JOB *preemptedOne,*preemptedTwo;
 static BOOLEAN WddmStopping(BC250_WDDM* w) {return (BOOLEAN)w->Stopping;}
 static LONG InterlockedExchange(LONG* p,LONG value) {LONG old=*p;*p=value;return old;}
@@ -27,7 +48,7 @@ static BOOLEAN WddmReport(BC250_DEVICE* d,DXGKARGCB_NOTIFY_INTERRUPT_DATA* data,
   check(!d->Wddm || !((BC250_WDDM*)d->Wddm)->PagingHead,"preempt notification releases private FIFO");
   check(!preemptedOne->Borrowed&&!preemptedTwo->Borrowed,"unexecuted slots released before scheduler callback");
   if(replayData) {
-   check(WddmSubmitPagingHardware(d,d->Wddm,replayData,replayBytes,0x20000,192,TRUE,52),"scheduler may replay same fence during callback");
+   check(WddmSubmitPagingHardwareRoot(d,d->Wddm,replayData,replayBytes,0x20000,192,TRUE,52,PREEMPT_ROOT),"scheduler may replay same fence during callback");
    replayData=NULL;
   }
  }
@@ -48,7 +69,7 @@ static void preemption(void)
  reset();eventCount=0;
  a[6]=11;c[6]=33;
  check(PagingPrivateQueuedHeader(a,sizeof(a),0,0x10000,4),"preempt direct A");
- check(PagingPrivateQueuedNativeHeader(b,sizeof(b),0,0x20000,192,0x4000,64,8,0),"preempt native B");
+ check(PagingPrivateQueuedNativeHeader(b,sizeof(b),0,0x20000,192,PREEMPT_ROOT,64,8,0),"preempt native B");
  check(PagingPrivateQueuedHeader(c,sizeof(c),0,0x30000,4),"preempt direct C");
  one=PagingPrivateQueueSlot(a,direct,0x10000,4,TRUE);
  two=PagingPrivateQueueSlot(b,native,0x20000,192,TRUE);
@@ -58,9 +79,23 @@ static void preemption(void)
  preemptedOne=two;preemptedTwo=three;
  memcpy(beforeB,b,sizeof(beforeB));memcpy(beforeC,c,sizeof(beforeC));
  completionSlots[51]=one;completionSlots[52]=two;completionSlots[53]=three;
- check(WddmSubmitPagingHardware(&d,&w,a,direct,0x10000,4,TRUE,51),"preempt first executing");
- check(WddmSubmitPagingHardware(&d,&w,b,native,0x20000,192,TRUE,52),"preempt second accepted");
- check(WddmSubmitPagingHardware(&d,&w,c,direct,0x30000,4,TRUE,53),"preempt third accepted");
+ check(WddmSubmitPagingHardwareRoot(&d,&w,a,direct,0x10000,4,TRUE,51,PREEMPT_ROOT),"preempt first executing");
+ // The root gate, stated both ways before the queue is built on top of it. Offered with no root, this native
+ // span cannot be resolved to a physical address and must be refused outright: nothing is borrowed, nothing is
+ // queued, no submission is counted. This is the control that fails if RootUsable ever admits a rootless native
+ // span again, which is what this fixture asked for until BD-085.
+ check(!WddmSubmitPagingHardwareRoot(&d,&w,b,native,0x20000,192,TRUE,52,0),"native span without a root is refused");
+ check(!two->Borrowed&&w.PagingHead==one&&w.PagingTail==one&&submitted==1,"a refused native span leaves the queue untouched");
+ // The other half of the same gate. A misaligned root is not a page-directory base: bc250_sdma_emit_vm_flush
+ // would refuse to write it (bc250_sdma.c:1248), and if admission bound it anyway the dispatch walk would
+ // refuse the record it was bound into (NativeValid, paging_private.c:18-28, from gfx.c:4059), which leaves an
+ // admitted paging job that can never reach the ring and a node closed with no completion.
+ check(!WddmSubmitPagingHardwareRoot(&d,&w,b,native,0x20000,192,TRUE,52,PREEMPT_ROOT_MISALIGNED),
+   "native span with a misaligned root is refused");
+ check(!two->Borrowed&&w.PagingHead==one&&w.PagingTail==one&&submitted==1,"a misaligned native root leaves the queue untouched");
+ check(!memcmp(beforeB,b,sizeof(beforeB)),"a refused native span keeps the root the builder wrote");
+ check(WddmSubmitPagingHardwareRoot(&d,&w,b,native,0x20000,192,TRUE,52,PREEMPT_ROOT),"preempt second accepted with its context root");
+ check(WddmSubmitPagingHardwareRoot(&d,&w,c,direct,0x30000,4,TRUE,53,PREEMPT_ROOT),"preempt third accepted");
  WddmPreemptFence(&d,91,1);
  WddmReportDpcRoutine(NULL,&d,NULL,NULL);
  check(!eventCount&&two->Borrowed&&three->Borrowed,"active DMA prevents preempt report or ownership release");
@@ -77,7 +112,7 @@ static void preemption(void)
   "preemption names only actual completed fence");
  check(submitted==2&&w.PagingHead==two&&two->Fence==52&&!three->Borrowed,"only scheduler replay launches B");
  check(!memcmp(beforeB,b,sizeof(beforeB))&&!memcmp(beforeC,c,sizeof(beforeC)),"command metadata and payload survive queue detachment");
- check(WddmSubmitPagingHardware(&d,&w,c,direct,0x30000,4,TRUE,53),"scheduler replays C unchanged fence");
+ check(WddmSubmitPagingHardwareRoot(&d,&w,c,direct,0x30000,4,TRUE,53,PREEMPT_ROOT),"scheduler replays C unchanged fence");
  arrived=activeSeq;WddmGpuFencePaging(&d);
  arrived=activeSeq;WddmGpuFencePaging(&d);
  WddmReportDpcRoutine(NULL,&d,NULL,NULL);
@@ -92,16 +127,16 @@ static void preemption(void)
  PagingPrivateQueuedHeader(c,sizeof(c),0,0x30000,4);
  preemptedOne=one;preemptedTwo=three;
  WddmPreemptFence(&d,92,1);w.ActiveSubmissions[1]=1;
- check(WddmSubmitPagingHardware(&d,&w,a,direct,0x10000,4,TRUE,61),"racing submit retains ownership while preempt pending");
- check(WddmSubmitPagingHardware(&d,&w,c,direct,0x30000,4,TRUE,62),"racing second submit retained");
+ check(WddmSubmitPagingHardwareRoot(&d,&w,a,direct,0x10000,4,TRUE,61,PREEMPT_ROOT),"racing submit retains ownership while preempt pending");
+ check(WddmSubmitPagingHardwareRoot(&d,&w,c,direct,0x30000,4,TRUE,62,PREEMPT_ROOT),"racing second submit retained");
  WddmReportDpcRoutine(NULL,&d,NULL,NULL);
  check(!submitted&&!eventCount&&one->Borrowed&&three->Borrowed,"active admission blocks notification and hardware launch");
  w.ActiveSubmissions[1]=0;WddmReportDpcRoutine(NULL,&d,NULL,NULL);
  check(eventCount==1&&!completionCount&&events[0].DmaPreempted.LastCompletedFenceId==0,"idle boundary preempts all queued work without completion");
  check(!w.PagingHead&&!one->Borrowed&&!three->Borrowed,"racing admissions returned to scheduler");
  completionSlots[61]=one;completionSlots[62]=three;
- check(WddmSubmitPagingHardware(&d,&w,a,direct,0x10000,4,TRUE,61),"idle-boundary same-fence replay");
- check(WddmSubmitPagingHardware(&d,&w,c,direct,0x30000,4,TRUE,62),"idle-boundary second replay");
+ check(WddmSubmitPagingHardwareRoot(&d,&w,a,direct,0x10000,4,TRUE,61,PREEMPT_ROOT),"idle-boundary same-fence replay");
+ check(WddmSubmitPagingHardwareRoot(&d,&w,c,direct,0x30000,4,TRUE,62,PREEMPT_ROOT),"idle-boundary second replay");
  arrived=activeSeq;WddmGpuFencePaging(&d);arrived=activeSeq;WddmGpuFencePaging(&d);
  check(completionCount==2&&!w.PagingHead&&!failureCount,"idle-boundary replay completes normally");
 
@@ -111,8 +146,8 @@ static void preemption(void)
  a[6]=11;c[6]=33;PagingPrivateQueuedHeader(a,sizeof(a),0,0x10000,4);
  PagingPrivateQueuedHeader(c,sizeof(c),0,0x30000,4);
  completionSlots[71]=one;completionSlots[72]=three;
- check(WddmSubmitPagingHardware(&d,&w,a,direct,0x10000,4,TRUE,71),"fault control executing");
- check(WddmSubmitPagingHardware(&d,&w,c,direct,0x30000,4,TRUE,72),"fault control accepted tail");
+ check(WddmSubmitPagingHardwareRoot(&d,&w,a,direct,0x10000,4,TRUE,71,PREEMPT_ROOT),"fault control executing");
+ check(WddmSubmitPagingHardwareRoot(&d,&w,c,direct,0x30000,4,TRUE,72,PREEMPT_ROOT),"fault control accepted tail");
  WddmPreemptFence(&d,93,1);w.WatchdogFaulted[1]=1;
  arrived=activeSeq;WddmGpuFencePaging(&d);WddmReportDpcRoutine(NULL,&d,NULL,NULL);
  check(eventCount==1&&events[0].InterruptType==DXGK_INTERRUPT_DMA_COMPLETED&&
