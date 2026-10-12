@@ -60,22 +60,32 @@ namespace AmdgpuWddmControl
 
         public MainForm() : this(false) { }
 
-        public MainForm(bool smoke, AppPrefs prefs = null)
+        // workArea: the working area of the screen this window is drawn for, in logical units, for a render or a
+        // test. It is given to the constructor, because the window takes its own size and builds its first page
+        // there - exactly as the live window does on the screen it opens on.
+        public MainForm(bool smoke, AppPrefs prefs = null, Size workArea = default(Size))
         {
             _smoke = smoke;
+            WorkAreaForLayout = workArea;
             _prefs = prefs ?? (smoke ? new AppPrefs(new MemoryPrefStore()) : AppPrefs.Live());
             Strings.Language = _prefs.EffectiveLanguage;
             Theme.Fonts();
             Text = Program.ProductName;
             BackColor = Theme.Back; ForeColor = Theme.Text; Font = Theme.Body;
-            ClientSize = Theme.Sz(1240, 760); MinimumSize = Theme.Sz(900, 560); StartPosition = FormStartPosition.CenterScreen;
+            StartPosition = FormStartPosition.CenterScreen;
+            ApplyScreenSize();
             KeyPreview = true;
             try { Icon = Icon.ExtractAssociatedIcon(System.Reflection.Assembly.GetExecutingAssembly().Location); } catch (Exception) { }
             BuildShell();
             _timer.Tick += (s, e) => Tick();
             if (!_smoke)
             {
-                Load += (s, e) => { FitToScreens(); RefreshAll(); StartUpdateCheck(false); UpdateTimer(); };
+                // The shell is built before the handle exists, from the screen the window is about to open on
+                // (ApplyScreenSize). The window manager may still clamp the window to the desktop, and FitToScreens
+                // can move it: whatever column is left after that is the column the page is built for, so the page
+                // is rebuilt here when the two differ. Without it a 1240 px page stood in a 650 px column on the
+                // owner's 800x600 screen and was cut on the right, which is the finding of GitHub #38.
+                Load += (s, e) => { FitToScreens(); RebuildIfWidthChanged(); RefreshAll(); StartUpdateCheck(false); UpdateTimer(); };
                 VisibleChanged += (s, e) => UpdateTimer();
                 Resize += (s, e) => { UpdateTimer(); if (_guide != null) _guide.Paused = WindowState == FormWindowState.Minimized; };
                 ResizeEnd += (s, e) => RebuildIfWidthChanged();
@@ -110,6 +120,29 @@ namespace AmdgpuWddmControl
         // What a render or a test that says nothing about the screen gets: a screen with room for the whole window,
         // which is the screen every render until this rule assumed.
         const int LargeScreenWidth = 2560, LargeScreenHeight = 1440;
+
+        // The size the window opens at, and the smallest size a person may drag it to: the design size on a screen
+        // that has room for it, and the screen itself where it has not. Both have to come from the screen. A fixed
+        // 900 px smallest width made the window wider than an 800x600 screen, Windows could not clamp it, and the
+        // page lost its right-hand edge however the small-screen rule answered (GitHub #38).
+        public static Size DesignSize { get { return Theme.Sz(1240, 760); } }
+        public static Size SmallestSize { get { return Theme.Sz(900, 560); } }
+
+        void ApplyScreenSize()
+        {
+            var want = DesignSize;
+            var least = SmallestSize;
+            var work = ScreenWorkArea();
+            if (work.Width > 0 && work.Height > 0)
+            {
+                int margin = Theme.S(24);
+                want = new Size(Math.Max(Theme.S(640), Math.Min(want.Width, work.Width - margin)),
+                                Math.Max(Theme.S(440), Math.Min(want.Height, work.Height - margin)));
+                least = new Size(Math.Min(least.Width, want.Width), Math.Min(least.Height, want.Height));
+            }
+            MinimumSize = least;
+            ClientSize = want;
+        }
 
         // The owner's rule of 2026-10-12 (LayoutRules.SmallScreen): no side panel at all on a small screen.
         public bool SmallScreen { get { var w = ScreenWorkArea(); return LayoutRules.SmallScreen.IsDevice(w.Width, w.Height, Theme.Scale); } }
@@ -149,8 +182,11 @@ namespace AmdgpuWddmControl
         // only when the answer changed, because a rebuild throws away every control of the page.
         void RebuildIfScreenChanged()
         {
-            if (_smoke || IsDisposed || _building || !IsHandleCreated) return;
+            if (_smoke || IsDisposed || _building || _moving || !IsHandleCreated) return;
             if (SmallScreen == _builtSmall) return;
+            // The window may now stand on a screen of another size: its own size and the smallest size a person may
+            // drag it to are the new screen's, and the page is built for the column that leaves.
+            ApplyScreenSize();
             BuildShell();
         }
 
@@ -685,13 +721,28 @@ namespace AmdgpuWddmControl
             // itself to the new desktop and then asks the small-screen rule again.
             if ((m.Msg == WM_DISPLAYCHANGE || m.Msg == WM_DPICHANGED) && !_smoke)
                 BeginInvoke((Action)(() => { FitToScreens(); RebuildIfScreenChanged(); }));
+            // A drag of the window runs a message loop of its own inside Windows. Nothing is rebuilt while it
+            // lasts: a page thrown away and built again on every message of a drag costs the person the page they
+            // were reading, and a rebuild from inside that loop disposes controls it is still working with. The
+            // rule is answered once, when the drag ends.
+            if (m.Msg == WM_ENTERSIZEMOVE) _moving = true;
+            if (m.Msg == WM_EXITSIZEMOVE && !_smoke)
+            {
+                _moving = false;
+                BeginInvoke((Action)RebuildIfScreenChanged);
+            }
         }
 
-        // The window was moved, possibly onto another monitor: the small-screen rule decides again.
+        const int WM_ENTERSIZEMOVE = 0x0231, WM_EXITSIZEMOVE = 0x0232;
+        bool _moving;               // Windows is running the loop of a window drag
+
+        // The window was moved, possibly onto another monitor: the small-screen rule decides again. A move the
+        // person is making waits for the end of the drag; a move the program made is answered after this message.
         protected override void OnMove(EventArgs e)
         {
             base.OnMove(e);
-            RebuildIfScreenChanged();
+            if (_moving || _smoke || IsDisposed || !IsHandleCreated) return;
+            BeginInvoke((Action)RebuildIfScreenChanged);
         }
 
         // ---- keyboard ----------------------------------------------------------------------------------------------

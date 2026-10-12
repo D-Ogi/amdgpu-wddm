@@ -235,7 +235,7 @@ namespace AmdgpuWddmControl
                 Strings.Language = lang;
                 Theme.Init(scale, textScale);
                 string problems;
-                using (var form = new MainForm(true, prefs))
+                using (var form = new MainForm(true, prefs, o.WorkArea))
                 {
                     form.CreateControlTree();
                     if (fixture != null) form.UseFixture(new System.Web.Script.Serialization.JavaScriptSerializer().Deserialize<RecoverySnapshot>(File.ReadAllText(fixture)));

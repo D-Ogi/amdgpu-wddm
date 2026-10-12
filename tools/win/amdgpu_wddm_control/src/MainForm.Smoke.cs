@@ -298,6 +298,36 @@ namespace AmdgpuWddmControl
                 }
             }
             if (!ThreeWayDialog.EscapeKeepsEditing()) w.AppendLine("G-A11Y: Escape in Save / Discard / Keep editing does not keep editing");
+            // G-ORDER: the sizes the window gave itself in its constructor, for the screen it is drawn for, and the
+            // order it really works in. The loop above sets the client size and builds after it; the live window
+            // does the opposite - it takes its sizes and builds its page before it has a handle, and only then does
+            // Windows clamp the window to the desktop and FitToScreens place it. Two things follow, and both were
+            // wrong on the owner's 800x600 screen (GitHub #38): the smallest size the window allows must fit that
+            // screen, or Windows cannot clamp the window at all and the page loses its right edge; and the page
+            // must be built again for the column that is left after the clamp, which the Load handler does with
+            // RebuildIfWidthChanged.
+            if (o.WorkArea.Width > 0 && o.WorkArea.Height > 0)
+            {
+                var screen = Theme.Sz(o.WorkArea.Width, o.WorkArea.Height);
+                if (MinimumSize.Width > screen.Width || MinimumSize.Height > screen.Height)
+                    w.AppendLine("G-ORDER: the smallest size the window allows is " + MinimumSize.Width + "x" + MinimumSize.Height
+                        + ", the screen it is drawn for has " + screen.Width + "x" + screen.Height);
+                ClientSize = DesignSize;        // what the constructor asks for, before Windows clamps anything
+                BuildShell();
+                ShowPage("home", null, false);
+                ClientSize = new Size(Math.Min(ClientSize.Width, room.Width), Math.Min(ClientSize.Height, room.Height));
+                RebuildIfWidthChanged();
+                ShowPage("home", null, false);
+                PerformLayout();
+                CreateHandles(this);
+                var page = _content.Controls.Count > 0 ? _content.Controls[0] : null;
+                if (page == null) w.AppendLine("G-ORDER: empty page after the window was clamped to the screen");
+                else
+                {
+                    var cut = LayoutRules.PageWidthFinding("G-ORDER", page.Width, ColumnWidth, Theme.S(2));
+                    if (cut != null) w.AppendLine(cut + " after the window was clamped to the screen");
+                }
+            }
             if (o.SwitchTo != null)
             {
                 SwitchLanguageForTest(o.SwitchTo);

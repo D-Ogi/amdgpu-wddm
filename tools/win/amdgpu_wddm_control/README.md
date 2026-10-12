@@ -383,7 +383,8 @@ because the window manager clamps a client size larger than the desktop), its la
 lies outside the scroll range, a visible text names a driver internal, a control lacks an accessible name or tab
 stop, the art shows while "Show Nagi" is off, the guide panel draws no picture while "Show Nagi" is on and the side
 panel is in the window, the side panel shows on a small screen or is missing on a screen with room for it
-(G-SMALL), or a language switch leaves old texts behind. The unit tests also check
+(G-SMALL), the window is wider or taller than the screen it is drawn for or its page does not follow the column
+left after the window was clamped (G-ORDER), or a language switch leaves old texts behind. The unit tests also check
 every string table: each id in each language, no stale translation (G-STR), no internals in the texts (G-NOINT).
 
 ### The guide character
@@ -416,6 +417,15 @@ on an 800x600 screen): a working area of at most 1024 logical pixels wide or at 
 the window stands on in logical units, and the window asks it again when it is moved to another monitor and after a
 display or DPI change. The setting itself is not written: on a larger screen it decides as before, and Settings
 carries one line under it that says the guide is hidden on a small screen.
+
+The window's own size comes from that screen as well (`MainForm.ApplyScreenSize`): the design size of 1240x760
+logical pixels where the screen has room for it, the screen's working area less a margin where it has not, and the
+smallest size a person may drag the window to never larger than the size it opens at. A fixed smallest width of
+900 px made the window wider than an 800x600 screen, which Windows could not clamp, so the page lost its right
+edge whatever the small-screen rule answered. The shell is built before the window has a handle, and the window
+rebuilds the page for the column that is left after Windows clamps it and `FitToScreens` places it. The render gate
+G-ORDER holds that order: the page is built first and the client clamped afterwards, as in the live window, and a
+page wider than the column it ends up in is a finding.
 
 The output folder holds `amdgpu_wddm_control.exe`, `bc250control.dll` and `bc250kmd_cli.exe` (the same translation unit
 as the DLL, without `BC250_CONTROL_DLL`, so the CLI and the DLL of a release come from one build); the release
