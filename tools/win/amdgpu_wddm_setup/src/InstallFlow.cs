@@ -58,6 +58,29 @@ namespace AmdgpuWddmSetup
             return ids.ToArray();
         }
 
+        // The shortcuts of the control application (owner, 2026-10-12: "pytajmy tez czy zrobic skrot na pulpicie
+        // (domyslnie i menu start i pulpit)"). Both are on, and neither answer holds the install back: the switches
+        // below only choose where the shortcuts go. The window states both answers, as it does for the Windows
+        // tuning, so this run decides over the answer an earlier run of the same install saved.
+        // Get-ControlShortcutPlan in installer\common.ps1 is the engine's side.
+        public static string[] ShortcutArguments(bool startMenu, bool desktop)
+        {
+            return new[]
+            {
+                startMenu ? "-StartMenuShortcut" : "-NoStartMenuShortcut",
+                desktop ? "-DesktopShortcut" : "-NoDesktopShortcut"
+            };
+        }
+
+        // The options the plan screen may carry, as string ids. They are choices between good outcomes, not
+        // permissions: each has a default, and the Install button never waits for one (G-CONSENT allows exactly
+        // these controls and no other).
+        public static readonly string[] PlanOptionIds = new[] { "tuning.opt-in", "shortcuts.start-menu", "shortcuts.desktop" };
+
+        // The options that are on when the screen opens: a person who installs the driver wants to find it
+        // afterwards. The optional Windows tuning is not one of them.
+        public static readonly string[] PlanOptionsOnByDefault = new[] { "shortcuts.start-menu", "shortcuts.desktop" };
+
         // The ids of the controls the plan screen must never carry again: the test-signing check box, the two
         // BitLocker option buttons and the sentence that told the user to answer them. A table that still has words
         // for one of them is a finding of the unit tests, so the words cannot come back without the control.

@@ -86,7 +86,7 @@ try { $componentManifest = Read-ComponentsManifest $here } catch { Write-Log "  
 Invoke-ComponentUnregister $state $componentManifest
 Remove-ComponentRegistrations $state
 
-Write-Step 'Scheduled task, RunOnce entry, shortcut'
+Write-Step 'Scheduled task, RunOnce entry, shortcuts'
 # Every task of ours, not only the one this release registers: a task that an older release named differently would
 # otherwise stay and run a script that is gone.
 $tasks = @(Get-OurScheduledTasks)
@@ -100,9 +100,11 @@ Invoke-Change "unregister our scheduled task(s): $(if ($tasks.Count) { $tasks -j
     }
 } | Out-Null
 Invoke-Change "remove the RunOnce entry '$($script:RunOnceName)'" { Remove-ItemProperty -LiteralPath $script:RunOnceKey -Name $script:RunOnceName -ErrorAction SilentlyContinue } | Out-Null
-foreach ($name in 'amdgpu-wddm Control.lnk', 'amdgpu-wddm Control (recovery).lnk') {
-    $lnk = Join-Path $env:ProgramData "Microsoft\Windows\Start Menu\Programs\$name"
-    Invoke-Change "remove the Start menu shortcut $lnk" { Remove-Item -LiteralPath $lnk -Force -ErrorAction SilentlyContinue } | Out-Null
+# Every shortcut this installer can write, in the Start menu and on the desktop (common.ps1,
+# Get-ControlShortcutPaths): one list for the install and the uninstall, so an icon the install put on the desktop
+# cannot stay behind.
+foreach ($sc in @(Get-ControlShortcutPaths)) {
+    Invoke-Change "remove the $($sc.where) shortcut $($sc.path)" { Remove-Item -LiteralPath $sc.path -Force -ErrorAction SilentlyContinue } | Out-Null
 }
 
 Write-Step 'DisplayPort audio interrupt'

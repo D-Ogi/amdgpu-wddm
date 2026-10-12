@@ -47,6 +47,13 @@ param(
     [ValidateSet(0, 24, 40)][int]$CuMode = 0,  # 0 = leave unset (driver default, 24 CUs)
     [string]$InstallRoot = (Join-Path $env:ProgramFiles 'amdgpu-wddm'),
     [switch]$NoControlApp,
+    # The shortcuts of the control application (owner, 2026-10-12). Both places are written by default. The two No
+    # switches leave one out, and the two positive ones state the default explicitly, so a later run can put back a
+    # shortcut that an earlier one left out (the state keeps the first answer, as it does for the Windows tuning).
+    [switch]$NoStartMenuShortcut,
+    [switch]$StartMenuShortcut,
+    [switch]$NoDesktopShortcut,
+    [switch]$DesktopShortcut,
     [switch]$ApplySystemTuning,              # optional reversible Windows tuning; absent = keep Windows settings
     [switch]$SkipSystemTuning,               # explicitly clear an earlier opt-in when resuming
     [switch]$Repair,                        # install the same, already verified version again
@@ -368,6 +375,10 @@ $NoReboot = [switch](@($installInputs.switches) -contains 'NoReboot')
 $Force = [switch](@($installInputs.switches) -contains 'Force')
 $Repair = [switch](@($installInputs.switches) -contains 'Repair')
 $ApplySystemTuning = [switch](@($installInputs.switches) -contains 'ApplySystemTuning')
+# The run after a restart keeps the shortcut answers of the first run, and a positive switch on this command line
+# (-StartMenuShortcut, -DesktopShortcut) clears the saved negative one (Get-InstallInputs).
+$NoStartMenuShortcut = [switch](@($installInputs.switches) -contains 'NoStartMenuShortcut')
+$NoDesktopShortcut = [switch](@($installInputs.switches) -contains 'NoDesktopShortcut')
 # BD-069: a repair that the tester asked for writes the release default again over a switch that the driver closed
 # itself (the tester asked for the release as it ships). Only the -Repair switch asks for that. Every other install
 # keeps the closure and reports it with its remedy, and so does the automatic 'repair' action of an unfinished or
@@ -1609,22 +1620,32 @@ Invoke-Change "scheduled task '$($script:TaskName)': at logon of an administrato
     Register-ScheduledTask -TaskName $script:TaskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings | Out-Null
 } | Out-Null
 
-# The control application: a Start menu entry, nothing resident.
+# The control application: a Start menu entry and a desktop icon, both on unless a switch leaves one out (owner,
+# 2026-10-12: "domyslnie i menu start i pulpit"). The recovery entry (docs/gui/interfaces.md section 4; it never
+# loads bc250control.dll) belongs to the Start menu alone. Nothing resident is installed either way.
 $controlExe = $null
 if ($script:Manifest -and $script:Manifest.control_app_exe) { $controlExe = Join-Path $InstallRoot ('control\' + $script:Manifest.control_app_exe) }
 if ($controlExe -and $dirs -contains 'control') {
-    $lnk = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\amdgpu-wddm Control.lnk'
-    Invoke-Change "Start menu shortcut $lnk -> $controlExe" {
-        $sh = New-Object -ComObject WScript.Shell
-        $s = $sh.CreateShortcut($lnk); $s.TargetPath = $controlExe; $s.WorkingDirectory = (Split-Path $controlExe); $s.Save()
-    } | Out-Null
-    Set-StateValue $state 'shortcut' $lnk
-    # The recovery view (docs/gui/interfaces.md section 4): it never loads bc250control.dll.
-    $rlnk = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\amdgpu-wddm Control (recovery).lnk'
-    Invoke-Change "Start menu shortcut $rlnk -> $controlExe --recovery" {
-        $sh = New-Object -ComObject WScript.Shell
-        $s = $sh.CreateShortcut($rlnk); $s.TargetPath = $controlExe; $s.Arguments = '--recovery'; $s.WorkingDirectory = (Split-Path $controlExe); $s.Save()
-    } | Out-Null
+    $shortcutPlan = @(Get-ControlShortcutPlan -NoStartMenu ([bool]$NoStartMenuShortcut) -NoDesktop ([bool]$NoDesktopShortcut))
+    $shortcutLeft = @(@(Get-ControlShortcutPaths) | Where-Object { $p = $_.path; -not (@($shortcutPlan | ForEach-Object { $_.path }) -contains $p) })
+    Write-Info ("shortcuts: $(if ($shortcutPlan.Count) { @($shortcutPlan | ForEach-Object { "$($_.where) $($_.kind)" }) -join ', ' } else { 'none' })" +
+        $(if ($shortcutLeft.Count) { "; left out: $(@($shortcutLeft | ForEach-Object { "$($_.where) $($_.kind)" }) -join ', ')" } else { '' }))
+    foreach ($sc in $shortcutPlan) {
+        $link = $sc.path
+        $arguments = [string]$sc.arguments
+        Invoke-Change "$($sc.where) shortcut $link -> $controlExe$(if ($arguments) { " $arguments" } else { '' })" {
+            [void](New-ControlShortcut -Link $link -Target $controlExe -Arguments $arguments)
+        } | Out-Null
+    }
+    # A shortcut the tester asked to leave out goes when an earlier install wrote it.
+    foreach ($sc in $shortcutLeft) {
+        if (-not (Test-Path -LiteralPath $sc.path -PathType Leaf)) { continue }
+        Invoke-Change "remove the $($sc.where) shortcut $($sc.path): this install was asked for no $($sc.where) shortcut" {
+            Remove-Item -LiteralPath $sc.path -Force -ErrorAction SilentlyContinue
+        } | Out-Null
+    }
+    Set-StateValue $state 'shortcut' $(if ($shortcutPlan.Count) { @($shortcutPlan | ForEach-Object { $_.path })[0] } else { $null })
+    Set-StateValue $state 'shortcuts' @($shortcutPlan | ForEach-Object { $_.path })
 } else { Write-Info 'control application: not in this package (or -NoControlApp); skipped' }
 
 # ---- the extras ------------------------------------------------------------------------------------------------

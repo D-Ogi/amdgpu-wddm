@@ -387,6 +387,14 @@ panel is in the window, the side panel shows on a small screen or is missing on 
 left after the window was clamped (G-ORDER), or a language switch leaves old texts behind. The unit tests also check
 every string table: each id in each language, no stale translation (G-STR), no internals in the texts (G-NOINT).
 
+### The icon of the application
+
+`art/icon/nagi.ico` is the icon of `amdgpu_wddm_control.exe`, of the shortcuts the installer writes and of the
+release's single setup file. It holds the guide character's head at 16, 20, 24, 32, 40, 48, 64, 128 and 256 pixels,
+built from her `@256` art by `art/icon/make-icon.py`. `PROVENANCE.md` beside it records the source picture and the
+bytes of the file. `build.ps1` passes it to the compiler (`/win32icon`) and stops when the file is missing, so a
+build without the icon cannot ship.
+
 ### The guide character
 
 `art/nagi` holds her art: nine expressions at `@128` and `@256`, the files that `Guide.ArtFile` names, with their

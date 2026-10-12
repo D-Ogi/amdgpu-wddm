@@ -84,7 +84,13 @@ Check $frontSame 'the program image at the front of the single file is the setup
 function Invoke-Smoke([string]$Exe, [string]$Name) {
     $dir = Join-Path $root "smoke-$Name"
     Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue
-    $out = & $Exe --smoke-payload $dir 2>&1 | ForEach-Object { [string]$_ }
+    # A negative control writes its message to the error stream. Windows PowerShell 5.1 wraps the error stream of a
+    # native program in error records, and under $ErrorActionPreference = 'Stop' it ends the script as soon as the
+    # output of this script goes to a file. The two lines below keep the message as text in every host.
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try { $out = & $Exe --smoke-payload $dir 2>&1 | ForEach-Object { [string]$_ } }
+    finally { $ErrorActionPreference = $prev }
     $code = $LASTEXITCODE
     $report = Join-Path $dir 'payload.txt'
     $text = ''

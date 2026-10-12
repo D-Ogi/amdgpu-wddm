@@ -152,6 +152,19 @@ is merged). The app follows its reader, Clear and switch rules; in short:
 - Start-menu shortcut "amdgpu-wddm Control (recovery)" -> `amdgpu_wddm_control.exe --recovery`. The recovery view
   never loads `bc250control.dll`.
 
+Shortcuts of the application (one writer, `Get-ControlShortcutPaths` in `installer\common.ps1`):
+
+| Place | Name | Arguments | Left out by |
+|---|---|---|---|
+| Start menu (all users) | `amdgpu-wddm Control.lnk` | - | `-NoStartMenuShortcut` |
+| Start menu (all users) | `amdgpu-wddm Control (recovery).lnk` | `--recovery` | `-NoStartMenuShortcut` |
+| Desktop (all users) | `amdgpu-wddm Control.lnk` | - | `-NoDesktopShortcut` |
+
+Both places are written by default. Each shortcut takes its icon from the application (`IconLocation` =
+`<exe>,0`) and its working directory is the install folder. The setup window offers the two places as checked
+boxes and states both answers on the command line, so a run after a restart can put back a shortcut the first run
+left out (`-StartMenuShortcut`, `-DesktopShortcut`). The uninstall removes all three.
+
 ## 5. Control app preferences (HKCU, app state only; the installer never writes them)
 
 `HKCU\Software\amdgpu-wddm\Control` (all REG_DWORD unless noted). Rule R4: the default is "value absent".

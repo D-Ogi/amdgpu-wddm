@@ -137,8 +137,14 @@ if ($NagiArt) {
         $artResourceNames += $a.Resource
     }
 }
+# The application icon (owner, 2026-10-12: "ikonke zrob z biustu Nagi"): art\icon\nagi.ico, the guide character's
+# bust as a round badge, with its own PROVENANCE.md. csc takes it as /win32icon, which is what an ApplicationIcon of
+# a project file compiles to. It is the icon of this window, of its task-bar button, and of the Start menu and
+# desktop shortcuts the installer writes, which take the icon from this exe.
+$icon = Join-Path $here 'art\icon\nagi.ico'
+if (-not (Test-Path -LiteralPath $icon -PathType Leaf)) { throw "application icon: no $icon" }
 & $csc /nologo /noconfig /nostdlib+ @refs /target:winexe /platform:x64 /optimize+ /warnaserror+ /langversion:7.3 /deterministic+ `
-    "/win32manifest:$here\app.manifest" "/out:$Out\amdgpu_wddm_control.exe" @resources @((Get-ChildItem "$here\src\*.cs").FullName | Sort-Object)
+    "/win32manifest:$here\app.manifest" "/win32icon:$icon" "/out:$Out\amdgpu_wddm_control.exe" @resources @((Get-ChildItem "$here\src\*.cs").FullName | Sort-Object)
 if ($LASTEXITCODE -ne 0) { throw "csc failed ($LASTEXITCODE)" }
 $systemTuningOutput = Join-Path $Out 'system-tuning'
 New-Item -ItemType Directory -Force -Path $systemTuningOutput | Out-Null

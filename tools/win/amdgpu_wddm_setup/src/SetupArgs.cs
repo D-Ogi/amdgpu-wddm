@@ -4,6 +4,8 @@
 //   amdgpu_wddm_setup.exe --continue          after a restart (RunOnce): the engine continues at once
 //   amdgpu_wddm_setup.exe --repair            from the control app's Help (Release\RepairSetup): repair
 //   amdgpu_wddm_setup.exe --prepare-offline   prepare a folder for a PC without internet (no administrator needed)
+//   [--no-start-menu-shortcut]                the Start menu option of the plan screen starts off (default: on)
+//   [--no-desktop-shortcut]                   the desktop option of the plan screen starts off (default: on)
 //   [--package <dir>]                         another package folder than the one the exe is in
 //   [--run-root <dir>]                        where the engine runs keep their files (default %TEMP%\amdgpu-wddm-setup)
 //   [--dry-run]                               the install run is an engine dry run: every screen, no change (L4)
@@ -41,6 +43,8 @@ namespace AmdgpuWddmSetup
         // the window removes when the run ends with no restart pending. Never a command-line option.
         public string PayloadPackage;
         public bool DryRun, ApplySystemTuning;
+        // The two shortcut options of the plan screen, both on unless a switch leaves one out (owner, 2026-10-12).
+        public bool StartMenuShortcut = true, DesktopShortcut = true;
         public readonly List<string> EngineArgs = new List<string>();
         // smoke entries
         public string SmokeDir, Language = "en", Script = "install.ps1";
@@ -67,6 +71,8 @@ namespace AmdgpuWddmSetup
                 {
                     case "--version": a.SetMode("version"); break;
                     case "--apply-system-tuning": a.ApplySystemTuning = true; break;
+                    case "--no-start-menu-shortcut": a.StartMenuShortcut = false; break;
+                    case "--no-desktop-shortcut": a.DesktopShortcut = false; break;
                     case "--continue": a.SetMode("continue"); break;
                     case "--repair": a.SetMode("repair"); break;
                     case "--prepare-offline": a.SetMode("prepare-offline"); break;

@@ -179,6 +179,9 @@ namespace AmdgpuWddmSetup
                         // G-CONSENT, the owner's instruction of 2026-10-12: no screen asks the user for a
                         // permission, and the primary action is never off waiting for one.
                         foreach (var p in form.ConsentFindings()) w.AppendLine(f.Name + ": G-CONSENT " + p);
+                        // G-SHORTCUT, the owner's instruction of 2026-10-12: the plan screen offers the Start menu
+                        // and the desktop shortcut, and both are on when it opens.
+                        foreach (var p in form.ShortcutFindings()) w.AppendLine(f.Name + ": G-SHORTCUT " + p);
                         var text = form.VisibleText(false);
                         foreach (var hit in NoInternals.Find(text)) w.AppendLine(f.Name + ": G-NOINT \"" + hit + "\"");
                         if (text.Contains("[")) foreach (var m in System.Text.RegularExpressions.Regex.Matches(text, @"\[[a-z0-9.-]+\]")) w.AppendLine(f.Name + ": missing string " + m);

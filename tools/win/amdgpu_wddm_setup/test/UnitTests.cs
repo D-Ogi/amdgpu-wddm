@@ -474,6 +474,22 @@ static class UnitTests
             "runtime: the runtime line comes after the start options");
         Check(!InstallFlow.PlanChangeIds(true, "off", false).Contains("plan.change.vcruntime") && !InstallFlow.PlanChangeIds(false, "off").Contains("plan.change.vcruntime"),
             "runtime: a PC that has the runtime reads no line about it");
+        // The shortcuts of the control application (owner, 2026-10-12): both on, and the switches only leave one out.
+        Check(InstallFlow.ShortcutArguments(true, true).SequenceEqual(new[] { "-StartMenuShortcut", "-DesktopShortcut" }), "shortcuts: both places, the default, stated on the command line");
+        Check(InstallFlow.ShortcutArguments(false, true).SequenceEqual(new[] { "-NoStartMenuShortcut", "-DesktopShortcut" }), "shortcuts: no Start menu entry");
+        Check(InstallFlow.ShortcutArguments(true, false).SequenceEqual(new[] { "-StartMenuShortcut", "-NoDesktopShortcut" }), "shortcuts: no desktop icon");
+        Check(InstallFlow.ShortcutArguments(false, false).SequenceEqual(new[] { "-NoStartMenuShortcut", "-NoDesktopShortcut" }), "shortcuts: neither place");
+        foreach (var id in InstallFlow.PlanOptionIds) Check(Strings.Has(id), "shortcuts: the plan option " + id + " has words");
+        foreach (var id in new[] { "shortcuts.title", "shortcuts.note" }) Check(Strings.Has(id), "shortcuts: " + id + " has words");
+        foreach (var id in InstallFlow.PlanOptionsOnByDefault) Check(InstallFlow.PlanOptionIds.Contains(id), "shortcuts: " + id + " is one of the plan options");
+        Check(!InstallFlow.PlanOptionsOnByDefault.Contains("tuning.opt-in"), "shortcuts: the optional Windows tuning stays off by default");
+        // The window's own switches, so a scripted run can preset the two options.
+        Check(SetupArgs.Parse(new string[0]).StartMenuShortcut && SetupArgs.Parse(new string[0]).DesktopShortcut,
+            "shortcuts: a window started with no argument offers both");
+        Check(!SetupArgs.Parse(new[] { "--no-start-menu-shortcut" }).StartMenuShortcut && SetupArgs.Parse(new[] { "--no-start-menu-shortcut" }).DesktopShortcut,
+            "shortcuts: --no-start-menu-shortcut turns one option off and leaves the other on");
+        Check(!SetupArgs.Parse(new[] { "--no-desktop-shortcut" }).DesktopShortcut, "shortcuts: --no-desktop-shortcut turns the desktop option off");
+        Check(SetupArgs.Parse(new[] { "--no-desktop-shortcut" }).Error == null, "shortcuts: the switch is accepted by the welcome mode");
         // The words of the removed controls are gone from every table, so neither can come back by itself.
         foreach (var id in InstallFlow.RemovedConsentIds)
             Check(!Strings.Has(id), "no confirmations: " + id + " is gone from the string tables");

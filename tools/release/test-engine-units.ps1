@@ -346,7 +346,7 @@ $saveProfiles = $script:ProfilePathsOverride
 $script:ProfilePathsOverride = @((Join-Path $work 'footprint\profiles\a'), (Join-Path $work 'footprint\profiles\b'))
 $fp = @(Get-ReleaseFootprint -InstallRoot $fpRoot -State ([pscustomobject]@{ firmware_dir_existed = $true }) -MftKeys @('HKLM:\SOFTWARE\Classes\CLSID\{test}'))
 $items = @($fp | ForEach-Object { $_.item })
-$wantItems = @('install root', 'System32 stub', 'SysWOW64 stub', 'driver store', 'driver service', 'DP audio interrupt', 'policy keys', 'Vulkan registration', 'H.264 encoder keys', 'scheduled task', 'RunOnce entry', 'Start menu', 'installer state', 'per-user data', 'per-user tuning recovery', 'certificates', 'GPU firmware', 'control application data', 'system-tuning', 'system-tuning-recovery')
+$wantItems = @('install root', 'System32 stub', 'SysWOW64 stub', 'driver store', 'driver service', 'DP audio interrupt', 'policy keys', 'Vulkan registration', 'H.264 encoder keys', 'scheduled task', 'RunOnce entry', 'shortcuts', 'installer state', 'per-user data', 'per-user tuning recovery', 'certificates', 'GPU firmware', 'control application data', 'system-tuning', 'system-tuning-recovery')
 Check ((($items -join ' | ') -eq ($wantItems -join ' | '))) "every item of the release is checked: $($items -join ', ')"
 Check (-not @($fp | Where-Object { $_.detail -match '^not read' }).Count) "every probe read its item$(if (@($fp | Where-Object { $_.detail -match '^not read' }).Count) { ': ' + (@($fp | Where-Object { $_.detail -match '^not read' } | ForEach-Object { "$($_.item) $($_.detail)" }) -join '; ') })"
 $byItem = @{}; foreach ($row in $fp) { $byItem[$row.item] = $row }
@@ -799,6 +799,67 @@ Check ($installText -match 'Invoke-VcRuntimeInstall -Path \$vcExe') 'phase 2 run
 $vcStep = [regex]::Match($installText, "(?s)Enter-Stage 'install' 'Phase 2: install'.{0,2400}")
 Check ($vcStep.Success -and $vcStep.Value -match 'Invoke-VcRuntimeInstall' -and $vcStep.Value -match 'Test-VcRuntimeInstaller') 'the runtime step is the first of phase 2 and checks the file again before it runs it'
 Check ($installText.IndexOf('Invoke-VcRuntimeInstall') -lt $installText.IndexOf("Enter-Stage 'files' 'Files'")) 'the runtime is installed before our own files are copied'
+
+'the shortcuts of the control application: Start menu and desktop, both by default (owner, 2026-10-12)'
+$scAll = @(Get-ControlShortcutPaths)
+Check ($scAll.Count -eq 3) "three shortcuts the installer knows ($($scAll.Count))"
+Check ((@($scAll | Where-Object { $_.where -eq 'start-menu' }).Count -eq 2) -and (@($scAll | Where-Object { $_.where -eq 'desktop' }).Count -eq 1)) 'two in the Start menu (the application and its recovery view), one on the desktop'
+Check (@($scAll | Where-Object { $_.kind -eq 'recovery' })[0].where -eq 'start-menu') 'the recovery entry stays in the Start menu only'
+Check (@($scAll | Where-Object { $_.kind -eq 'recovery' })[0].arguments -eq '--recovery') 'the recovery entry carries its own argument'
+Check (@($scAll | Where-Object { $_.where -eq 'desktop' })[0].path -match '[\\/]Desktop[\\/]amdgpu-wddm Control\.lnk$') "the desktop icon goes to the desktop of every user ($(@($scAll | Where-Object { $_.where -eq 'desktop' })[0].path))"
+Check (@($scAll | ForEach-Object { $_.path } | Select-Object -Unique).Count -eq 3) 'the three paths differ'
+$scBoth = @(Get-ControlShortcutPlan -NoStartMenu $false -NoDesktop $false)
+Check ($scBoth.Count -eq 3) 'by default the install writes all three'
+$scNoDesk = @(Get-ControlShortcutPlan -NoStartMenu $false -NoDesktop $true)
+Check ($scNoDesk.Count -eq 2 -and -not (@($scNoDesk | Where-Object { $_.where -eq 'desktop' }).Count)) '-NoDesktopShortcut leaves the desktop icon out and keeps the Start menu'
+$scNoMenu = @(Get-ControlShortcutPlan -NoStartMenu $true -NoDesktop $false)
+Check ($scNoMenu.Count -eq 1 -and @($scNoMenu)[0].where -eq 'desktop') '-NoStartMenuShortcut leaves both Start menu entries out and keeps the desktop icon'
+Check (@(Get-ControlShortcutPlan -NoStartMenu $true -NoDesktop $true).Count -eq 0) 'both switches together write no shortcut at all'
+# A shortcut really written, read back, and removed again: the target, the arguments and the icon.
+$scWork = Join-Path $work 'shortcuts'
+[void][IO.Directory]::CreateDirectory($scWork)
+$scTarget = Join-Path $scWork 'amdgpu_wddm_control.exe'
+Write-Text $scTarget 'not a real program'
+$scLink = Join-Path $scWork 'sub\amdgpu-wddm Control (recovery).lnk'
+[void](New-ControlShortcut -Link $scLink -Target $scTarget -Arguments '--recovery')
+$scRead = (New-Object -ComObject WScript.Shell).CreateShortcut($scLink)
+Check ($scRead.TargetPath -eq $scTarget) 'a written shortcut points at the control application'
+Check ($scRead.Arguments -eq '--recovery') 'it carries the arguments it was given'
+Check ($scRead.IconLocation -like "$scTarget,0*") "it takes its icon from the application ($($scRead.IconLocation))"
+Check ($scRead.WorkingDirectory -eq $scWork) 'its working directory is the application folder'
+# The engine's own side: both switches survive a restart, the install writes by the plan, the uninstall removes all three.
+$installText = [IO.File]::ReadAllText((Join-Path $Installer 'install.ps1'))
+$uninstallText = [IO.File]::ReadAllText((Join-Path $Installer 'uninstall.ps1'))
+foreach ($switch in 'NoStartMenuShortcut', 'NoDesktopShortcut') {
+    Check ($script:InstallSwitches -contains $switch) "-$switch is an install switch the state keeps over a restart"
+    Check ($installText -match "\[switch\]\`$$switch") "install.ps1 takes -$switch"
+}
+Check ($installText -match 'Get-ControlShortcutPlan -NoStartMenu \(\[bool\]\$NoStartMenuShortcut\) -NoDesktop \(\[bool\]\$NoDesktopShortcut\)') 'the install writes the shortcuts of the plan'
+Check ($installText -match 'New-ControlShortcut -Link \$link -Target \$controlExe') 'it writes them through the one writer'
+Check ($installText -notmatch "Join-Path \`$env:ProgramData 'Microsoft\\\\Windows\\\\Start Menu") 'no second place in install.ps1 builds a shortcut path of its own'
+Check ($uninstallText -match 'foreach \(\$sc in @\(Get-ControlShortcutPaths\)\)') 'the uninstall removes every shortcut the install can write'
+Check ($uninstallText -notmatch "amdgpu-wddm Control \(recovery\)\.lnk'") 'the uninstall names no shortcut of its own any more'
+# The switches an install carries over the restart that follows it.
+$scState = [pscustomobject]@{ phase = 'testsigning-pending'; package_version = '1.0'; install_switches = @('NoDesktopShortcut') }
+$scInputs = Get-InstallInputs -Bound @{} -State $scState -PackageVersion '1.0'
+Check (@($scInputs.switches) -contains 'NoDesktopShortcut') 'the run after the restart leaves the desktop icon out again'
+# The window states both answers (InstallFlow.ShortcutArguments), so a later run of the same install can put back a
+# shortcut the first run left out: the positive switch clears the saved negative one.
+$scInputs2 = Get-InstallInputs -Bound @{ NoStartMenuShortcut = $true; DesktopShortcut = $true } -State $scState -PackageVersion '1.0'
+Check ((@($scInputs2.switches) -contains 'NoStartMenuShortcut') -and -not (@($scInputs2.switches) -contains 'NoDesktopShortcut')) 'a switch on the command line decides over the saved one'
+$scInputs3 = Get-InstallInputs -Bound @{ StartMenuShortcut = $true; DesktopShortcut = $true } -State $scState -PackageVersion '1.0'
+Check (-not (@($scInputs3.switches) -contains 'NoDesktopShortcut')) 'both places asked for again puts the desktop icon back'
+foreach ($pair in @(@('NoStartMenuShortcut', 'StartMenuShortcut'), @('NoDesktopShortcut', 'DesktopShortcut'))) {
+    $bad = $null
+    try { [void](Get-InstallInputs -Bound @{ $pair[0] = $true; $pair[1] = $true } -State $scState -PackageVersion '1.0') }
+    catch { $bad = $_.Exception.Message }
+    Check ($bad -and $bad -match "-$($pair[0]) and -$($pair[1]) cannot be used together") "-$($pair[0]) with -$($pair[1]) is a usage error ($bad)"
+}
+foreach ($switch in 'StartMenuShortcut', 'DesktopShortcut') {
+    Check ($installText -match "\[switch\]\`$$switch") "install.ps1 takes -$switch"
+    Check (-not ($script:InstallSwitches -contains $switch)) "-$switch is not saved itself: it only clears the saved No switch"
+}
+Check ($installText -match '\$NoStartMenuShortcut = \[switch\]\(@\(\$installInputs\.switches\)') 'the install reads the shortcut answers back from the state'
 
 'the installer and the uninstaller ask nothing (owner, 2026-10-12)'
 # The function that asked is gone from the engine, so a new question cannot be added by calling it, and no script of

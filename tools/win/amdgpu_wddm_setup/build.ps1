@@ -25,7 +25,9 @@
 #      tab order, Enter and Escape), G-CHROME, G-NOINT, G-SMALL, the owner's rule of 2026-10-12 that a 1024x768,
 #      800x600 or smaller screen draws no right-hand panel and a larger one draws it, and G-CONSENT, the owner's
 #      instruction of the same day that no screen asks the user for a permission: the plan screen carries no check
-#      box or option button of its own and its Install button is never off.
+#      box or option button of its own and its Install button is never off. G-SHORTCUT holds the two shortcut
+#      options of the same instruction: the plan screen offers the Start menu and the desktop, and both are on when
+#      it opens.
 #   5. tools\release\test-setup-exe.ps1: the exe is packed around a small package of its own (the single-file
 #      installer the release ships, owner 2026-10-12) and reads it back through --smoke-payload, and nine damaged, doctored
 #      or empty exes are offered to the reader and every one of them is refused.
@@ -82,8 +84,13 @@ foreach ($a in & (Join-Path $repo 'tools\win\amdgpu_wddm_control\art\check-art.p
     $artResourceNames += $a.Resource
 }
 Write-Host "  guide art: $($setupExpressions.Count) expressions ($($setupExpressions -join ', ')) at @256 embedded from $artDir"
+# The application icon (owner, 2026-10-12: "ikonke zrob z biustu Nagi"): the guide character's bust as a round badge,
+# art\icon\nagi.ico with its PROVENANCE.md, the same file the control application uses. It is the window's icon, the
+# icon of the single-file installer that carries this exe, and the icon the Start menu and desktop shortcuts show.
+$icon = Join-Path $repo 'tools\win\amdgpu_wddm_control\art\icon\nagi.ico'
+if (-not (Test-Path -LiteralPath $icon -PathType Leaf)) { throw "application icon: no $icon" }
 & $csc /nologo /noconfig /nostdlib+ @refs /target:winexe /platform:x64 /optimize+ /warnaserror+ /langversion:7.3 /deterministic+ `
-    "/win32manifest:$here\app.manifest" "/out:$exe" @resources @((Get-ChildItem "$here\src\*.cs").FullName | Sort-Object)
+    "/win32manifest:$here\app.manifest" "/win32icon:$icon" "/out:$exe" @resources @((Get-ChildItem "$here\src\*.cs").FullName | Sort-Object)
 if ($LASTEXITCODE -ne 0) { throw "csc failed ($LASTEXITCODE)" }
 $image = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($exe))
 if (-not $image.Contains('.NETFramework,Version=v4.8')) { throw 'amdgpu_wddm_setup.exe does not declare TargetFramework .NETFramework,Version=v4.8' }
@@ -210,7 +217,7 @@ if (-not $NoSmoke) {
         $layout = Get-Content (Join-Path $dir 'layout.txt') -Raw -ErrorAction SilentlyContinue
         if ($code -ne 0 -or $layout -notmatch '^ok: ') { throw "render at scale $($r[0]), $($r[1]), text $($r[2]) $($extra -join ' ') (exit $code):`n$layout" }
     }
-    Write-Host "  render: $(@(Get-ChildItem (Join-Path $obj 'render-1-en-text1') -Filter *.png).Count) screens x $($renders.Count) (4 DPIs x 4 languages + 150 % text + 2 without the guide character + 2 in high contrast + 6 runs over five screen sizes from 800x600 up), no overlap or overflow, the guide art and the right-hand panel where they belong, G-A11Y, G-CHROME, G-SMALL, G-CONSENT and G-NOINT clean ($obj\render-*)"
+    Write-Host "  render: $(@(Get-ChildItem (Join-Path $obj 'render-1-en-text1') -Filter *.png).Count) screens x $($renders.Count) (4 DPIs x 4 languages + 150 % text + 2 without the guide character + 2 in high contrast + 6 runs over five screen sizes from 800x600 up), no overlap or overflow, the guide art and the right-hand panel where they belong, G-A11Y, G-CHROME, G-SMALL, G-CONSENT, G-SHORTCUT and G-NOINT clean ($obj\render-*)"
 
     # 5. The single-file installer (Payload.cs): the exe just built is packed around a small package of its own and
     #    read back through its --smoke-payload mode, then nine damaged, doctored or empty exes are offered to it and every one

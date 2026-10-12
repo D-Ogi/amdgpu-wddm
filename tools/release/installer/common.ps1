@@ -287,11 +287,17 @@ function Get-PendingRestart($State, $Boot) {
 $script:ResumePhases = @('testsigning-pending', 'driver-pending-restart')
 # -Repair is one of them (BD-069): the run after the restart has to know that this install is a repair, or it keeps a
 # closure that the tester asked to reopen.
-$script:InstallSwitches = @('NoControlApp', 'NoReboot', 'Force', 'Repair', 'ApplySystemTuning')
+$script:InstallSwitches = @('NoControlApp', 'NoReboot', 'Force', 'Repair', 'ApplySystemTuning', 'NoStartMenuShortcut', 'NoDesktopShortcut')
+# A switch of the list above, and the switch that clears it explicitly. A choice the setup window or a script makes
+# must be able to turn a saved choice off again, not only on: without the second switch an install that once left
+# the desktop icon out would leave it out for ever, because the state keeps the first answer over every later run.
+# The Windows tuning has had this pair from the start (-ApplySystemTuning / -SkipSystemTuning).
+$script:InstallSwitchClears = @{ ApplySystemTuning = 'SkipSystemTuning'; NoStartMenuShortcut = 'StartMenuShortcut'; NoDesktopShortcut = 'DesktopShortcut' }
 function Get-InstallInputs($Bound, $State, [string]$PackageVersion) {
-    if ($Bound.ContainsKey('ApplySystemTuning') -and [bool]$Bound['ApplySystemTuning'] -and
-        $Bound.ContainsKey('SkipSystemTuning') -and [bool]$Bound['SkipSystemTuning']) {
-        throw '-ApplySystemTuning and -SkipSystemTuning cannot be used together'
+    foreach ($pair in $script:InstallSwitchClears.GetEnumerator()) {
+        if ($Bound.ContainsKey($pair.Key) -and [bool]$Bound[$pair.Key] -and $Bound.ContainsKey($pair.Value) -and [bool]$Bound[$pair.Value]) {
+            throw "-$($pair.Key) and -$($pair.Value) cannot be used together"
+        }
     }
     $resume = $State -and ([string]$State.phase -in $script:ResumePhases) -and ([string]$State.package_version -eq $PackageVersion)
     $resumeTuning = $State -and ([string]$State.package_version -eq $PackageVersion) -and
@@ -318,7 +324,8 @@ function Get-InstallInputs($Bound, $State, [string]$PackageVersion) {
         foreach ($p in $State.command_line_parameters.PSObject.Properties) { $in.parameters[$p.Name] = [int]$p.Value; $in.restored += "-$($p.Name) $([int]$p.Value)" }
     }
     foreach ($s in $script:InstallSwitches) {
-        if ($s -eq 'ApplySystemTuning' -and $Bound.ContainsKey('SkipSystemTuning') -and [bool]$Bound['SkipSystemTuning']) { continue }
+        $clear = [string]$script:InstallSwitchClears[$s]
+        if ($clear -and $Bound.ContainsKey($clear) -and [bool]$Bound[$clear]) { continue }
         if ($Bound.ContainsKey($s)) { if ([bool]$Bound[$s]) { $in.switches += $s } }
         elseif (($resume -or ($s -eq 'ApplySystemTuning' -and $resumeTuning)) -and (@($State.install_switches) -contains $s)) { $in.switches += $s; $in.restored += "-$s" }
     }
@@ -1256,6 +1263,56 @@ function Get-VcRuntimeMissing {
     return $missing
 }
 
+# ---- the shortcuts of the control application -------------------------------------------------------------------
+# The owner's instruction of 2026-10-12: "pytajmy tez czy zrobic skrot na pulpicie (domyslnie i menu start i
+# pulpit)". The setup window offers both, both on by default, and neither of them gates the Install button. On the
+# command line -NoStartMenuShortcut and -NoDesktopShortcut leave one or the other out.
+#
+# One list, used by the install, by the uninstall and by the footprint probe, so a shortcut the install writes
+# cannot be one the uninstall does not know. The recovery entry stays in the Start menu only: it is a repair tool,
+# not a second icon on the desktop.
+#   kind      'control', 'recovery' or 'desktop'
+#   where     'start-menu' or 'desktop'
+#   switch     the install switch that leaves it out
+#   arguments  the arguments of the shortcut's target
+function Get-ControlShortcutPaths {
+    $startMenu = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs'
+    $desktop = [Environment]::GetFolderPath('CommonDesktopDirectory')
+    if (-not $desktop) { $desktop = Join-Path $env:Public 'Desktop' }
+    return @(
+        [pscustomobject]@{ kind = 'control'; where = 'start-menu'; switch = 'NoStartMenuShortcut'; arguments = ''; path = (Join-Path $startMenu 'amdgpu-wddm Control.lnk') }
+        [pscustomobject]@{ kind = 'recovery'; where = 'start-menu'; switch = 'NoStartMenuShortcut'; arguments = '--recovery'; path = (Join-Path $startMenu 'amdgpu-wddm Control (recovery).lnk') }
+        [pscustomobject]@{ kind = 'desktop'; where = 'desktop'; switch = 'NoDesktopShortcut'; arguments = ''; path = (Join-Path $desktop 'amdgpu-wddm Control.lnk') }
+    )
+}
+
+# Pure: which shortcuts an install writes, for the two switches. Both absent = both places.
+function Get-ControlShortcutPlan {
+    param([bool]$NoStartMenu, [bool]$NoDesktop, $Shortcuts = (Get-ControlShortcutPaths))
+    $out = @()
+    foreach ($s in @($Shortcuts)) {
+        if ($s.switch -eq 'NoStartMenuShortcut' -and $NoStartMenu) { continue }
+        if ($s.switch -eq 'NoDesktopShortcut' -and $NoDesktop) { continue }
+        $out += $s
+    }
+    return $out
+}
+
+# Writes one shortcut to the control application, and returns the path it wrote.
+function New-ControlShortcut {
+    param([Parameter(Mandatory)][string]$Link, [Parameter(Mandatory)][string]$Target, [string]$Arguments = '')
+    [void][IO.Directory]::CreateDirectory((Split-Path $Link))
+    $sh = New-Object -ComObject WScript.Shell
+    $s = $sh.CreateShortcut($Link)
+    $s.TargetPath = $Target
+    if ($Arguments) { $s.Arguments = $Arguments }
+    $s.WorkingDirectory = (Split-Path $Target)
+    # The application's own icon, the one its window and its task-bar button show (art\icon\nagi.ico).
+    $s.IconLocation = "$Target,0"
+    $s.Save()
+    return $Link
+}
+
 # ---- the Microsoft Visual C++ runtime our programs need ---------------------------------------------------------
 # Our control application, the CLI and the user-mode drivers are built against the Microsoft Visual C++ 2015-2022
 # runtime. Until now a PC without it was refused at the preflight and the tester had to fetch the runtime from
@@ -1642,9 +1699,9 @@ function Get-ReleaseFootprint {
     & $probe 'H.264 encoder keys' { @{ present = (@($MftKeys).Count -gt 0); detail = $(if (@($MftKeys).Count) { @($MftKeys) -join ', ' } else { 'no key of ours' }) } }
     & $probe 'scheduled task' { $t = @(Get-OurScheduledTasks); @{ present = ($t.Count -gt 0); detail = $(if ($t.Count) { $t -join ', ' } else { 'no task of ours' }) } }
     & $probe 'RunOnce entry' { $p = [bool](Get-ItemProperty -LiteralPath $script:RunOnceKey -Name $script:RunOnceName -ErrorAction SilentlyContinue); @{ present = $p; detail = "$($script:RunOnceKey) $($script:RunOnceName)$(if ($p) { ' is there' } else { ' is gone' })" } }
-    & $probe 'Start menu' {
-        $lnks = @(@('amdgpu-wddm Control.lnk', 'amdgpu-wddm Control (recovery).lnk') | ForEach-Object { Join-Path $env:ProgramData "Microsoft\Windows\Start Menu\Programs\$_" } | Where-Object { Test-Path -LiteralPath $_ })
-        @{ present = ($lnks.Count -gt 0); detail = $(if ($lnks.Count) { @($lnks | ForEach-Object { Split-Path $_ -Leaf }) -join ', ' } else { 'no shortcut of ours' }) }
+    & $probe 'shortcuts' {
+        $lnks = @(@(Get-ControlShortcutPaths) | Where-Object { Test-Path -LiteralPath $_.path })
+        @{ present = ($lnks.Count -gt 0); detail = $(if ($lnks.Count) { @($lnks | ForEach-Object { "$($_.where): $(Split-Path $_.path -Leaf)" }) -join ', ' } else { 'no shortcut of ours in the Start menu or on the desktop' }) }
     }
     & $probe 'installer state' { $p = (Test-Path -LiteralPath $script:StateDir); @{ present = $p; detail = "$($script:StateDir)$(if ($p) { ' is there (state, kept repair sets, verify reports)' } else { ' is gone' })" } }
     & $probe 'per-user data' {

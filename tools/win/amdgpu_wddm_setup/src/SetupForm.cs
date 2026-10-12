@@ -46,6 +46,10 @@ namespace AmdgpuWddmSetup
         EngineResult _planResult, _result;
         ResultView _view;
         bool? _systemTuningChoice;
+        // The two shortcut options of the plan screen (owner, 2026-10-12), both on unless the command line says no.
+        bool _startMenuShortcut = true, _desktopShortcut = true;
+        // True while the plan screen shown is the one that offers an install, with its options (G-SHORTCUT).
+        bool _planOffersInstall;
         bool _restartLater;
         string _restartError, _supportSaved, _supportError;
         string _prepDestination = "", _prepFirmware = "";
@@ -76,6 +80,8 @@ namespace AmdgpuWddmSetup
         {
             _args = args;
             _systemTuningChoice = args.ApplySystemTuning ? (bool?)true : null;
+            _startMenuShortcut = args.StartMenuShortcut;
+            _desktopShortcut = args.DesktopShortcut;
             _smoke = smoke;
             _ownPackage = args.Package ?? DefaultPackage();
             _package = _ownPackage;
@@ -83,6 +89,7 @@ namespace AmdgpuWddmSetup
             // PC's registry, so it takes the same default and --no-nagi draws the panel without her.
             _showNagi = smoke ? !args.NoNagi : Native.ShowNagi();
             Text = "amdgpu-wddm Setup";
+            SetWindowIcon();
             AutoScaleMode = AutoScaleMode.None;
             // The window draws its own title bar (ChromeBar): no caption of Windows, and the corners and the frame
             // come from DWM where Windows draws them.
@@ -107,6 +114,20 @@ namespace AmdgpuWddmSetup
                 _anim.Tick += (s, e) => Animate();
                 _anim.Start();
             }
+        }
+
+        // The application's own icon (art\icon\nagi.ico, embedded by build.ps1 as the Win32 icon of this exe): the
+        // icon Windows shows in the task bar and in Alt+Tab, and the icon of the file itself. The window draws its
+        // own title bar, so it shows no icon of its own. A file that cannot be read leaves the WinForms default
+        // icon in place: an icon is never a reason for a setup not to start.
+        void SetWindowIcon()
+        {
+            try
+            {
+                var path = Assembly.GetEntryAssembly() != null ? Assembly.GetEntryAssembly().Location : null;
+                if (!string.IsNullOrEmpty(path) && File.Exists(path)) Icon = Icon.ExtractAssociatedIcon(path);
+            }
+            catch (Exception) { }
         }
 
         // The window at this screen's scale, never larger than the screen it is on. The window has no frame of
@@ -801,6 +822,7 @@ namespace AmdgpuWddmSetup
 
         void BuildPlan()
         {
+            _planOffersInstall = false;
             var d = _plan != null ? _plan.Decision : null;
             var version = d != null ? d.PackageVersion : PackageVersion(_package);
             var action = d != null ? d.Action : "install";
@@ -830,6 +852,7 @@ namespace AmdgpuWddmSetup
                 return;
             }
 
+            _planOffersInstall = true;
             // Checks: all passed, or the ones that need attention. Nothing on this screen asks the user for a
             // permission any more (owner, 2026-10-12): the Install button is enabled from the first moment, and
             // pressing it is the consent for what the card below states.
@@ -896,6 +919,20 @@ namespace AmdgpuWddmSetup
                 sc.Row(Icons.Lock, Theme.Dim, Strings.T("plan.settings.note"), null, false, Theme.Small);
             }
 
+            // Where the control application can be started from afterwards (owner, 2026-10-12). Both options are on
+            // when the screen opens, and neither holds the install back: a person who turns both off still installs
+            // the driver by pressing Install.
+            var shortcuts = Card(Strings.T("shortcuts.title"), Icons.Sparkle);
+            var startMenu = Ui.Check(Strings.T("shortcuts.start-menu"), shortcuts.Inner);
+            startMenu.Checked = _startMenuShortcut;
+            startMenu.CheckedChanged += (s, e) => { _startMenuShortcut = startMenu.Checked; };
+            shortcuts.Add(startMenu);
+            var desktop = Ui.Check(Strings.T("shortcuts.desktop"), shortcuts.Inner);
+            desktop.Checked = _desktopShortcut;
+            desktop.CheckedChanged += (s, e) => { _desktopShortcut = desktop.Checked; };
+            shortcuts.Add(desktop);
+            shortcuts.Add(Ui.Label(Strings.T("shortcuts.note"), Theme.Small, Theme.Dim, shortcuts.Inner));
+
             var tuning = Card(Strings.T("tuning.title"), Icons.Gear);
             var tune = Ui.Check(Strings.T("tuning.opt-in"), tuning.Inner);
             tune.Checked = _systemTuningChoice ?? (d != null && d.SystemTuning);
@@ -920,15 +957,34 @@ namespace AmdgpuWddmSetup
         public IEnumerable<string> ConsentFindings()
         {
             if (Current != Screen.Plan) yield break;
+            // The check boxes the plan screen may carry are the ones of InstallFlow.PlanOptionIds: the optional
+            // Windows tuning and the two shortcuts. Each has a default, none of them holds the install back, and no
+            // other control of this kind may appear.
+            var allowed = InstallFlow.PlanOptionIds.Select(id => Strings.T(id)).ToList();
             foreach (var c in Descendants(_content))
             {
                 if (c is RadioButton) yield return "the plan screen has an option button: \"" + c.Text + "\"";
-                // The one check box the plan screen may carry is the optional Windows tuning, which is off by
-                // default and changes nothing about the install itself.
-                else if (c is CheckBox && c.Text != Strings.T("tuning.opt-in")) yield return "the plan screen has a check box: \"" + c.Text + "\"";
+                else if (c is CheckBox && !allowed.Contains(c.Text)) yield return "the plan screen has a check box: \"" + c.Text + "\"";
             }
             var primary = AcceptButton as Control;
             if (primary != null && !primary.Enabled) yield return "the primary action \"" + primary.Text + "\" is off";
+        }
+
+        // G-SHORTCUT (owner, 2026-10-12): the plan screen offers both shortcut options, both of them on when the
+        // screen opens, and the Install button does not depend on either. The render gate reports what is wrong.
+        public IEnumerable<string> ShortcutFindings()
+        {
+            // Only the plan screen that offers an install: the screens for a version that is already installed and
+            // checked, or that waits for a restart, carry no options at all.
+            if (Current != Screen.Plan || !_planOffersInstall) yield break;
+            var boxes = Descendants(_content).OfType<CheckBox>().ToList();
+            foreach (var id in new[] { "shortcuts.start-menu", "shortcuts.desktop" })
+            {
+                var box = boxes.FirstOrDefault(b => b.Text == Strings.T(id));
+                if (box == null) { yield return "the plan screen has no option for " + id; continue; }
+                if (!box.Checked) yield return id + " is off when the screen opens";
+                if (!box.Enabled) yield return id + " cannot be changed";
+            }
         }
 
         static IEnumerable<Control> Descendants(Control parent)
@@ -1125,6 +1181,7 @@ namespace AmdgpuWddmSetup
         {
             var args = new List<string>();
             args.AddRange(SetupArgs.TuningArguments(_systemTuningChoice));
+            args.AddRange(InstallFlow.ShortcutArguments(_startMenuShortcut, _desktopShortcut));
             if (_flow == "repair") args.Add("-Repair");
             // Pressing Install is the consent (owner, 2026-10-12), so the switches that used to carry a user's answer
             // are given on every run. The engine of this package no longer needs them; an engine of an older release,

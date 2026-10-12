@@ -182,7 +182,7 @@ Without internet on the BC-250:
 2. Copy them to one folder on the BC-250, for example `C:\amdgpu-wddm-firmware`.
 3. Run `install.cmd -FirmwareDir C:\amdgpu-wddm-firmware`. The installer checks the SHA256 of each file the same
    way and uses the folder also after the restarts during the installation. The same goes for `-DpmMaxMHz`,
-   `-CuMode`, `-NoControlApp` and `-NoReboot`.
+   `-CuMode`, `-NoControlApp`, `-NoStartMenuShortcut`, `-NoDesktopShortcut` and `-NoReboot`.
 
 ## The small blue window after logon
 
@@ -210,6 +210,7 @@ results to `C:\ProgramData\amdgpu-wddm\start-confirm.log`.
 | Graphics registration | the GPU's software key (`UserModeDriverName`, `VulkanDriverName`, and for 32-bit applications `UserModeDriverNameWow`, `VulkanDriverNameWow`; the first entry of each `UserModeDriverName` value, the Direct3D 9 entry, is empty), `HKLM\SOFTWARE\Khronos\Vulkan\Drivers`, `HKLM\SOFTWARE\WOW6432Node\Khronos\Vulkan\Drivers` |
 | Router policy and profiles | `HKLM\SOFTWARE\amdgpu-wddm` |
 | GPU firmware | `C:\BC250\firmware` (8 files and `LICENSE.amdgpu`, downloaded from linux-firmware; see "GPU firmware"). A new folder is writable by administrators only; the access rights of `C:\BC250` itself do not change. Download staging: `C:\ProgramData\amdgpu-wddm\installer\firmware-staging`, removed after the copy |
+| Shortcuts of amdgpu-wddm Control | Start menu and desktop, for all users: "amdgpu-wddm Control", "amdgpu-wddm Control (recovery)" in the Start menu and "amdgpu-wddm Control" on the desktop. Both places are written by default. The setup window has a box for each place, and on the command line `-NoStartMenuShortcut` and `-NoDesktopShortcut` leave one out. `uninstall.cmd` removes all three |
 | Start confirmation | scheduled task "amdgpu-wddm start confirm" |
 | Installer state and logs | `C:\ProgramData\amdgpu-wddm` (the Control application keeps its setting backups and action log in its `control` folder) |
 

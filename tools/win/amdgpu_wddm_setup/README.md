@@ -27,7 +27,9 @@ causes as transient, so the window decides by check id.
 The owner, 2026-10-12, seeing a greyed-out Install button under a consent check box: "nie mozna wymagac, ze
 uzytkownik zaznaczy ten checkbox! ... Oczywiste jest, ze uzytkownik chce wlaczyc test mode i wlasnie robi tym
 instalatorem! Przestan wymagac potwierdzen od uzytkownika!" A person who opened this installer wants to install, so
-no screen has a check box or an option button of its own, and the primary action is never off. The Review screen
+no screen asks for a permission, and the primary action is never off. The Review screen does carry choices between
+good outcomes, each already answered: the optional Windows tuning and the two places of the shortcut of
+amdgpu-wddm Control (both on). `InstallFlow.PlanOptionIds` names every control a screen may grow. The Review screen
 states what will change as information. `src/InstallFlow.cs` holds the rules the window and the engine share: the
 arguments every run carries (`-AcceptTestSigning`, and `-BitLocker Suspend` when BitLocker protects the system
 volume), the information lines, and the ids no string table may carry again. The render gate G-CONSENT refuses a
@@ -99,6 +101,11 @@ against the real engine (plan and dry run). Every release package carries the wi
 `build-release.ps1` refuses to build without `-SetupApp`, and `test-dryrun.ps1` fails a package without it. The
 last step of the build is `tools/release/test-setup-exe.ps1`: the exe just built is packed around a package of its
 own, reads it back, and refuses seven damaged or empty exes.
+
+The icon of the window, and of the release's single setup file, is
+`tools/win/amdgpu_wddm_control/art/icon/nagi.ico`, the icon of the control application as well. `build.ps1` passes
+it to the compiler (`/win32icon`) and stops when the file is missing. The window also takes its own icon from the
+running program (`SetupForm.SetWindowIcon`), so the taskbar and Alt+Tab show it for the single file as well.
 
 The guide panel on the right shows the guide character, from the art of
 `tools/win/amdgpu_wddm_control/art/nagi`: the build embeds the expressions this window's causes can ask for

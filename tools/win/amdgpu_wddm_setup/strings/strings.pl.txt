@@ -124,6 +124,10 @@ plan.change.test-mode.on|mt|cf315297|Windows już działa w trybie testowym, wi�
 plan.change.bitlocker|mt|f43553fa|Ochrona BitLocker zostaje wstrzymana na czas ponownych uruchomień tej instalacji i potem sama się włącza, więc Windows nie poprosi o klucz odzyskiwania.
 plan.change.bitlocker.unknown|mt|67f2277e|Instalator nie mógł odczytać stanu BitLockera na tym komputerze. Mimo to kontynuuje: miej klucz odzyskiwania pod ręką, jeśli Windows o niego poprosi po ponownym uruchomieniu.
 plan.change.vcruntime|rev|65d68876|Najpierw instalowane jest środowisko uruchomieniowe Microsoft Visual C++ 2015-2022 (x64), bo programy sterownika go potrzebują.
+shortcuts.title|rev|3af62f49|Gdzie znaleźć amdgpu-wddm Control
+shortcuts.start-menu|rev|f7bdc16b|W menu Start
+shortcuts.desktop|rev|b1e0eb2c|Na pulpicie
+shortcuts.note|rev|f98bdcf0|Obie opcje są włączone. Wyłącz jedną, jeśli jej nie chcesz. Sterownik zostanie zainstalowany tak samo.
 plan.firmware.download|mt|7051aa7f|Firmware GPU zostanie pobrane z oficjalnego archiwum firmware Linuksa i sprawdzone.
 plan.firmware.folder|mt|3afc555b|Firmware GPU pochodzi z wybranego folderu i zostanie sprawdzone.
 plan.firmware.package-folder|mt|576cf803|Firmware GPU pochodzi z przygotowanego folderu. Internet nie jest potrzebny.

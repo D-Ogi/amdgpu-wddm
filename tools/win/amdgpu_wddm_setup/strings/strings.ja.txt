@@ -124,6 +124,10 @@ plan.change.test-mode.on|mt|cf315297|Windows はすでにテスト モードで�
 plan.change.bitlocker|mt|f43553fa|BitLocker の保護はこのインストールの再起動の間だけ一時停止し、その後は自動的に再開するので、Windows が回復キーを求めることはありません。
 plan.change.bitlocker.unknown|mt|67f2277e|この PC の BitLocker の状態を読み取れませんでした。処理は続行します。再起動後に Windows が求めた場合に備えて、回復キーを用意しておいてください。
 plan.change.vcruntime|mt|65d68876|ドライバーのプログラムが必要とするため、最初に Microsoft Visual C++ 2015-2022 ランタイム (x64) をインストールします。
+shortcuts.title|mt-safe|3af62f49|amdgpu-wddm Control の場所
+shortcuts.start-menu|mt-safe|f7bdc16b|スタート メニュー
+shortcuts.desktop|mt-safe|b1e0eb2c|デスクトップ
+shortcuts.note|mt|f98bdcf0|どちらもオンです。不要なものはオフにしてください。どちらにしてもドライバーはインストールされます。
 plan.firmware.download|mt|7051aa7f|GPU ファームウェアは Linux の公式ファームウェア アーカイブからダウンロードされ、確認されます。
 plan.firmware.folder|mt|3afc555b|GPU ファームウェアは選んだフォルダーから取得され、確認されます。
 plan.firmware.package-folder|mt|576cf803|GPU ファームウェアは準備済みのフォルダーから取得されます。インターネットは不要です。

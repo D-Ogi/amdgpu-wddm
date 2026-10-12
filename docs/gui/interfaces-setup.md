@@ -22,13 +22,16 @@ The window starts `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy By
 | `-ResultFile <path>` | the terminal result, written once (section 3); a stale file is deleted at the start |
 | `-Plan` | checks and the decision only; changes nothing |
 | `-AcceptTestSigning`, `-BitLocker HaveKey\|Suspend` | passed by every run the window starts, and accepted from a script. The window asks nobody for them (owner, 2026-10-12) |
+| `-StartMenuShortcut\|-NoStartMenuShortcut`, `-DesktopShortcut\|-NoDesktopShortcut` | the two places of the shortcut, one pair each, passed by every install run the window starts |
 | `-Repair`, `-FirmwareDir <dir>`, `-Verify` | as on the command line |
 | `-DeadlineUtc <ISO 8601 UTC>` | stop at the first stop point after this time (section 10) |
 | `-HoldWindow` | command line only (the RunOnce continuation, section 4): wait for Enter before the console window closes; ignored with `-Gui` |
 
 **Nothing is asked of the user** (owner, 2026-10-12: "Przestan wymagac potwierdzen od uzytkownika!"). The plan
-screen carries no check box and no option button of its own, and its Install button is never off. Pressing it is
-the decision. Every run the window starts therefore carries `-AcceptTestSigning`, and `-BitLocker Suspend` when
+screen carries no permission control, and its Install button is never off. Pressing it is
+the decision. The boxes it does carry are choices between good outcomes, each with a default that needs no
+attention: the optional Windows tuning and the two places of the shortcut. `InstallFlow.PlanOptionIds`
+names them, and G-CONSENT refuses every other control. Every run the window starts therefore carries `-AcceptTestSigning`, and `-BitLocker Suspend` when
 BitLocker protects the system volume, so an engine of an older repair set asks nothing either. `src\InstallFlow.cs`
 holds those rules, the information lines of the plan screen and the ids no string table may carry again. The
 render gate G-CONSENT refuses a screen that grows a permission control or a disabled primary action. A restart
@@ -47,6 +50,14 @@ makes anyway, and any other code stops the install with the code in the message 
 prints the step and runs nothing. The one refusal left is `vcruntime.no-installer`: the runtime has to be installed
 and the package does not carry Microsoft's installer, or carries a changed copy of it. The window treats that id
 like a damaged package - a new try in the same session cannot fix it.
+
+**Where to find the application afterwards** (owner, 2026-10-12: "pytajmy tez czy zrobic skrot na pulpicie
+(domyslnie i menu start i pulpit)"). The plan screen has a card with two boxes, the Start menu and the desktop,
+both on. Neither holds the Install button back. The window states both answers on the command line
+(`InstallFlow.ShortcutArguments`), the engine writes the shortcuts of that plan and removes a shortcut an earlier
+install wrote in a place this one leaves out, and the uninstall removes every one of them. `interfaces.md` section
+4 lists the three shortcuts. The render gate G-SHORTCUT refuses an install plan screen without the two boxes, a box
+that is off when the screen opens and a box that is not a system option control.
 
 **The window may carry the package inside itself.** A release ships `amdgpu-wddm-setup-<version>.exe`: the same
 window with the package appended after the end of its program image (`src\Payload.cs`,
