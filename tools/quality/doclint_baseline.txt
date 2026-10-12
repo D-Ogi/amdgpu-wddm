@@ -16,7 +16,7 @@
 # document has to be rewritten; a document that is touched anyway should come out lower.
 #
 # To look at one document: python tools/quality/doclint.py --files <path>
-42	README.md
+34	README.md
 62	docs/00-goal-and-roadmap.md
 8	docs/01-evidence-rules.md
 4	docs/02-register-addressing.md
@@ -75,9 +75,9 @@
 36	docs/design/wsi-engine-present.md
 2	docs/dxvk-engine-commit-map.md
 21	docs/facts/README.md
-67	docs/gui/interfaces-setup.md
+66	docs/gui/interfaces-setup.md
 38	docs/gui/interfaces.md
-21	docs/hardware.md
+20	docs/hardware.md
 8	docs/init-sequence.md
 138	docs/linux-session-wishlist.md
 27	docs/m13-accelerated-desktop-roadmap.md
@@ -133,7 +133,7 @@
 6	driver/shim/test/README.md
 26	driver/shim/test/sdma_faults_report.md
 24	driver/umd/d3d12/README.md
-210	driver/umd/d3d12/engine-ddi/INTEGRATION.md
+209	driver/umd/d3d12/engine-ddi/INTEGRATION.md
 29	driver/umd/d3d12/engine-ddi/README.md
 31	driver/umd/d3d12/engine-ddi/SLOTS.md
 28	driver/umd/d3d12/engine-ddi/shader-container/README.md
@@ -174,5 +174,4 @@
 6	tools/win/triage/README.md
 1	tools/win/vkfillcheck/README.md
 1	tools/win/vkmembw/README.md
-1	tools/win/wsi-dxgi/README.md
 2	tools/wininstall/README.md
