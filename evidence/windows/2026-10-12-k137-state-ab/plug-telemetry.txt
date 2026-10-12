@@ -1,0 +1,29 @@
+BD-093 / K137 arm, T4 and T9 of LAB-PLAN.md section 4 (C-J). Three plug telemetry samples per state,
+about 13 s apart, each with the last `bc250kmd_cli dpm` line read right after it. One boot, one
+operating point (idle 500 MHz / 820 mV, DpmIdle 500), state B entered by one pnputil /restart-device
+of the GPU (enter-state.txt). Plug scales are the TinyTuya convention and are not calibrated for this
+model; the comparison is state A against state B, not an absolute wall figure.
+
+--- 08:29:19Z state=A sample=0
+plug {"queried_utc": "2026-10-12T08:29:22.300651+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 535, "19": 815, "20": 2428}, "current_a": 0.535, "power_w": 81.5, "voltage_v": 242.8}
+dpm 10:29:24.961 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  61.5 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle idle confirmed  up 41 down 78 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  40.5 W avg  37.9 W (gfx 10.2 W soc  4.8 W)
+--- 08:29:33Z state=A sample=1
+plug {"queried_utc": "2026-10-12T08:29:35.610305+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 532, "19": 804, "20": 2428}, "current_a": 0.532, "power_w": 80.4, "voltage_v": 242.8}
+dpm 10:29:38.485 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  60.2 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle idle confirmed  up 41 down 78 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  36.7 W avg  36.4 W (gfx 10.2 W soc  1.0 W)
+--- 08:29:46Z state=A sample=2
+plug {"queried_utc": "2026-10-12T08:29:48.956303+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 531, "19": 804, "20": 2428}, "current_a": 0.531, "power_w": 80.4, "voltage_v": 242.8}
+dpm 10:29:51.580 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  59.5 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle idle confirmed  up 41 down 78 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  35.4 W avg  36.3 W (gfx  9.0 W soc  0.9 W)
+
+--- 08:33:15Z state=B sample=0
+plug {"queried_utc": "2026-10-12T08:33:17.804987+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 607, "19": 911, "20": 2428}, "current_a": 0.607, "power_w": 91.1, "voltage_v": 242.8}
+dpm 10:33:21.107 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  63.8 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle idle confirmed  up 6 down 17 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  47.7 W avg  46.0 W (gfx 17.2 W soc  4.8 W)
+--- 08:33:29Z state=B sample=1
+plug {"queried_utc": "2026-10-12T08:33:31.615141+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 611, "19": 908, "20": 2428}, "current_a": 0.611, "power_w": 90.8, "voltage_v": 242.8}
+dpm 10:33:34.881 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  63.9 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle idle confirmed  up 6 down 17 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  46.4 W avg  47.2 W (gfx 17.2 W soc  3.5 W)
+--- 08:33:43Z state=B sample=2
+plug {"queried_utc": "2026-10-12T08:33:45.398820+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 613, "19": 910, "20": 2428}, "current_a": 0.613, "power_w": 91.0, "voltage_v": 242.8}
+dpm 10:33:48.682 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  63.9 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle idle confirmed  up 6 down 17 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  47.6 W avg  45.7 W (gfx 17.2 W soc  4.7 W)
+
+Readings: wall 80.4-81.5 W in state A against 90.8-91.1 W in state B, so +9.9 W at the same idle
+point inside one boot. Gfx rail 9.0-10.2 W against 17.2 W in all three state-B samples, so +7.0 W.
+Tctl 59.5-61.5 C against 63.8-63.9 C. C-J / Q8: E5 reproduces inside one boot.

@@ -1,0 +1,31 @@
+08:30:01.830 A/control BEGIN tag= host=BC250-A phase=control state=A
+08:30:02.013 A/control boot lastboot=2026-10-12T07:49:14 uptime_s=2447
+08:30:03.062 A/control topology name=AMD BC-250 cores=6 logical=12 max_clock_mhz=3194 current_clock_mhz=3194
+08:30:03.246 A/control gpu device status=OK instance=PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\4&19CAF403&0&0041
+08:30:06.601 A/control meter kernel cpu=2 on=2 rep=0 name=loop_add ops=1588742256 us=455224.2 ops_per_us=3490.02
+08:30:06.602 A/control meter kernel cpu=2 on=2 rep=0 name=mix_xoradd ops=1604256368 us=459806.6 ops_per_us=3488.98
+08:30:06.610 A/control meter kernel cpu=2 on=2 rep=0 name=dep_imul ops=534853160 us=459834.1 ops_per_us=1163.14
+08:30:06.617 A/control meter kernel cpu=2 on=2 rep=0 name=dep_mix ops=267831418 us=460438.0 ops_per_us=581.69
+08:30:06.623 A/control meter kernel cpu=2 on=2 rep=0 name=tput_add ops=5135945688 us=459922.4 ops_per_us=11166.98
+08:30:06.630 A/control meter kernel cpu=2 on=2 rep=0 name=tput_imul ops=1606707860 us=460397.6 ops_per_us=3489.83
+08:30:06.658 A/control meter kernel cpu=2 on=2 rep=0 name=dep_fpadd ops=534425960 us=459429.5 ops_per_us=1163.24
+08:30:06.688 A/control control meter-before dep_mix_ops_per_us=581.7
+08:30:07.128 A/control control ssh_interface_index=17
+08:30:08.496 A/control control skip (carries this session) Realtek PCIe GbE Family Controller
+08:30:08.521 A/control control picked Microsoft Kernel Debug Network Adapter instance=ROOT\KDNIC\0000 ifindex=9
+08:30:08.679 A/control control pnputil Microsoft PnP Utility
+08:30:08.680 A/control control pnputil 
+08:30:08.688 A/control control pnputil Restarting device:         ROOT\KDNIC\0000
+08:30:08.696 A/control control pnputil Device restarted successfully.
+08:30:08.704 A/control control pnputil 
+08:30:08.716 A/control control pnputil exit=0 seconds=0.1
+08:30:18.784 A/control control device status=OK
+08:30:22.136 A/control meter kernel cpu=2 on=2 rep=0 name=loop_add ops=1606988512 us=460454.1 ops_per_us=3490.01
+08:30:22.137 A/control meter kernel cpu=2 on=2 rep=0 name=mix_xoradd ops=1605446160 us=460105.1 ops_per_us=3489.30
+08:30:22.146 A/control meter kernel cpu=2 on=2 rep=0 name=dep_imul ops=534728812 us=459764.3 ops_per_us=1163.05
+08:30:22.154 A/control meter kernel cpu=2 on=2 rep=0 name=dep_mix ops=267831418 us=460490.8 ops_per_us=581.62
+08:30:22.169 A/control meter kernel cpu=2 on=2 rep=0 name=tput_add ops=5134859552 us=463393.6 ops_per_us=11080.99
+08:30:22.176 A/control meter kernel cpu=2 on=2 rep=0 name=tput_imul ops=1606988508 us=460429.5 ops_per_us=3490.19
+08:30:22.185 A/control meter kernel cpu=2 on=2 rep=0 name=dep_fpadd ops=534402680 us=459373.7 ops_per_us=1163.33
+08:30:22.192 A/control control meter-after dep_mix_ops_per_us=581.6 ratio=1.000
+08:30:22.200 A/control END phase=control state=A log=C:\BC250\tmp\bd093\A-control.txt

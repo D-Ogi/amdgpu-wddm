@@ -6,6 +6,12 @@ This is an investigation record of 2026-10-07 (defect BD-093). Its measured rows
 the constraints, the hypotheses, what killed each one, and the next tests. Read it before you plan another K137
 measurement on the lab.
 
+**Sections 1 to 8 are the record of 2026-10-07. [Section 9](#9-the-arm-of-2026-10-12) is the arm of
+2026-10-12. It answers two of the four open questions of [section 6](#6-what-holds-now) and narrows the other
+two, runs three of the six next tests of [section 7](#7-the-next-tests), and refutes one inference of
+[section 5](#5-the-measurement-that-changed-the-picture). Read section 9 first, then the section you need.**
+The marks `REFUTED 2026-10-12` and `ANSWERED 2026-10-12` in the older sections point at it.
+
 The source references are to the KMD 0.7.216.15 tree (branch `kmd/k137-cpu-baseline`). Line numbers change, so
 this note names files and functions only.
 
@@ -38,10 +44,18 @@ Every hypothesis must fit these. Each one has its file.
 | C7 | A fixed GPU workload takes longer too. DWM's composition packet has the same size in both states. Its median GPU time goes from 0.190 ms to 0.259 ms at a higher reported clock | ETW comparison of sessions 406 and 447, not in this repository |
 | C8 | `EnableNativeSmu` 0 is not a clean control. That start failed, so the arm also removed the GFX, PSP, RLC and GART bring-up | `k137-4-nosmu.txt`, `SmuPrepareClock` in `driver/kmd/startup.c` |
 | C9 | A warm Windows restart is the only way back to the good state, and it is a risk. Two of four warm restarts in the bisect hung and needed an AC cycle | `boot-events-1.txt` |
+| C10 | The state keeps the cost of a dependent chain and loses instruction-level parallelism. Seven kernels calibrate one clock before the stop and seven clocks after it. The two pure latency chains keep 3.0 cycles an operation at about 2782 MHz. `tput_imul` falls to the `dep_imul` rate and `tput_add` keeps 0.149 of its rate | M877 |
+| C11 | A PnP stop and start of a device that is not the GPU leaves the work rate unchanged (ratio 1.000). The device was root-enumerated software, so this excludes the OS PnP path and not a PCI function teardown | M885 |
+| C12 | Main-memory latency does not change (64 MiB chase flat to 0.4 %) and L1 load-to-use costs 2.33 cycles more | M881 |
 
 C7 needs a correction of the lab notes. They quote "+71 % cycles" for the DWM packet and "+47 %" for the game
 packet. The source files give +36 % and +33 % of wall time. Normalised to the reported clock, the GPU delivers
 0.64 of the work per MHz on the DWM packet and 0.69 on the game packet.
+
+The arm of 2026-10-12 adds C10 to C12 and strengthens three of the older rows. C4 and C5 now hold inside one
+boot and on two instruments ([M882](../facts/kmd.md#m882)). C9 gained a further hung warm restart
+([M886](../facts/kmd.md#m886)). Section 9 states the new rows with their numbers. C10 is the one every
+hypothesis now has to fit.
 
 ## 3. What the stop does
 
@@ -92,6 +106,12 @@ More detail on each:
 - **H5.** It needed the work rate to stay the same while the counter fell. The work rate fell much more than the
   counter.
 
+The arm of 2026-10-12 touches three of these verdicts. H1 keeps its verdict and now has a register witness for
+its own condition ([M883](../facts/kmd.md#m883)). H4 keeps its verdict and gains the latency half that the
+bandwidth result could not give ([M881](../facts/kmd.md#m881)). **H5 was refuted for the wrong reason.** The
+counter is right in both states, and the work rate of a throughput-bound kernel falls further because the cost
+of an operation also rose ([M878](../facts/kmd.md#m878)).
+
 These ideas died before the ranking:
 
 - **The extra power is a telemetry fiction.** The smart plug sees it (C5).
@@ -128,6 +148,11 @@ An inference from the chain, not a measurement: the chain has a dependency of ab
 with the 3481 MHz of the counter probe in a fresh boot. 259.5 times 6 is 1557 MHz. The SMU metrics list 1555 MHz
 as a clock of some cores in both states. Section 7 gives the test for this.
 
+**REFUTED 2026-10-12.** The chain costs about 10.7 cycles an iteration in the K137 state, not 6
+([M877](../facts/kmd.md#m877)). The 1557 MHz of the paragraph above is the artefact of holding that cost fixed.
+The core runs at about 2782 MHz in the K137 state, which the Windows counter reported all along
+([M878](../facts/kmd.md#m878)). Section 9 has the numbers.
+
 ## 6. What holds now
 
 - The state is made by the stop and stays until a Windows restart.
@@ -138,14 +163,22 @@ as a clock of some cores in both states. Section 7 gives the test for this.
 
 Open:
 
-1. Do the CPU loss, the GPU loss of C7 and the extra gfx power have one cause?
+1. Do the CPU loss, the GPU loss of C7 and the extra gfx power have one cause? **Still open 2026-10-12.** The
+   CPU loss and the extra power have one trigger inside one boot ([M882](../facts/kmd.md#m882)). One trigger is
+   not one cause, and the GPU half has no instrument that has worked yet (section 9).
 2. Does SMU message `0x43` report a delivered clock? The header of `driver/shim/include/bc250_cpu.h` calls it the
    effective clock, and the undervolt guard (`BC250_CPU_STRETCH_MHZ`) depends on that meaning. Its answers come in
    a few steps only (3500, 1555, 1400, 933 and 900 MHz), which looks like a table of grants.
+   **ANSWERED 2026-10-12:** no. `0x43` prints the same per-core pattern in both states, so the guard is blind to
+   this state ([M879](../facts/kmd.md#m879)).
 3. Is the core clock in the K137 state near 1555 MHz, or does the core run at its target with stalls?
+   **ANSWERED 2026-10-12:** neither of the two. The core runs at about 2782 MHz, which is 0.8 of the healthy
+   clock, and the cost of an operation rises on top of that ([M877](../facts/kmd.md#m877)).
 4. Is the state in the GFX or PSP teardown, or in the SMU owner? No clean control exists. `EnableNativeSmu` 0
    failed to start (C8). `EnableFullWddm` 0 with the owner on is no control either, because a start without full WDDM
-   sends no clock message.
+   sends no clock message. **Still open 2026-10-12.** The non-GPU control fired and read a ratio of 1.000, so the
+   OS PnP path alone is excluded, but the control was a software device
+   ([M885](../facts/kmd.md#m885)).
 
 ## 7. The next tests
 
@@ -156,20 +189,34 @@ restart leaves it and carries the hang risk of C9, so plan one warm restart for 
    per-core answer beside the metrics table. Add `% Processor Time` of instance (0,2). If `0x43` reads about 1555
    MHz or 2780 MHz on the loaded core in the K137 state, it is a delivered clock. If it reads 3500 MHz in both states
    while the chain runs 2.2 times slower, our stretch guard is blind.
+   **DONE 2026-10-12.** The second branch held ([M879](../facts/kmd.md#m879)). The verb is `cpu readback`, not
+   a bare `cpu` call, which prints the cached start-time snapshot.
 2. **Two chain lengths.** Run the fixed-work chain with a 6-cycle and a 12-cycle dependency in both states. A
    clock loss scales both by the same factor. Stalls or duty cycling can scale them differently.
+   **DONE 2026-10-12, and widened.** Seven kernels ran instead of two chain lengths, and they scale by seven
+   different factors ([M877](../facts/kmd.md#m877)).
 3. **The start log, unfiltered.** `smu-log.ps1` filters out the `cumode:` line, which prints `RLC_PG_CNTL` and
    its power-gating enables at every start. Capture it in both states. If both read the same, H1 is dead by its
    own condition.
+   **DONE 2026-10-12.** The value after the RLC stage is the same in both states, so H1 is dead by its own
+   condition ([M883](../facts/kmd.md#m883)).
 4. **A runtime release of the GFX force.** In the K137 state, send `RequestGfxclk` 1500 MHz and then
    `UnforceGfxVid` from an escape, with a `GetGfxVid` readback. This needs one allowlist entry for that escape
    only. If the state stays, H2 is dead without a stop-path change. Do not test the release in the stop path first:
    the last stop-path arm (`StopDpmFloor` 0) made the next start fail, and the warm restart after it hung.
+   **Not run. Still the test it was.**
 5. **Fixed GPU work at a fixed clock.** Write `DpmMaxMHz` 1000 before the warm restart (the KMD reads it at each
    device start), then time one fixed compute dispatch in both states. Read `RLC_GPU_CLOCK_COUNT` against
    `RLC_REFCLOCK_TIMESTAMP` beside it, which needs these names in the CLI read list.
+   **The MMIO instrument of this test is gone.** `RLC_GPU_CLOCK_32` counted the 100 MHz reference at both GFX
+   clock points sampled, 500 and 1700 MHz, with `RES_SEL` at its reset value, and the `RLC_GPU_CLOCK_COUNT` pair
+   read zero without a capture write ([M884](../facts/hardware.md#m884)). Rebuild this test around a timed
+   dispatch at a pinned clock with no counter, and try the one instrument that is left untried: the
+   subgroup-scope clock of `VK_KHR_shader_clock`, which compiles to `s_memtime` on gfx1013, counted over a known
+   wall interval from inside the dispatch.
 6. **A free baseline at every boot.** Run the measurement part of the bundle from the lab's startup task. Then
    every boot that the lab takes for another reason records a fresh state, and a test needs only a device restart.
+   **Not run. Still worth the startup task, now with the seven-kernel probe of section 9.**
 
 Safety: the 87 C and 89 C thermal stops and the 300 W PSU limit apply. The KMD stays the only SMU owner. Do not
 send the droop calibration messages.
@@ -178,3 +225,145 @@ send the droop calibration messages.
 
 BD-094 is a separate defect: a revert of the CPU surface restored 3200 MHz, the top P-state, below the
 firmware's boost. Branch `kmd/k137-cpu-baseline` fixes the restore value. Keep the two defects apart.
+
+## 9. The arm of 2026-10-12
+
+Ten steps ran on unit A between 08:25Z and 08:34Z on 2026-10-12, all inside one boot. State A is the healthy
+state after the boot of 07:49:14. State B is the state after one `pnputil /restart-device` of the GPU at
+08:30:35Z. The raw files are in
+[the 2026-10-12 evidence directory](../../evidence/windows/2026-10-12-k137-state-ab/README.md), which gives the
+order of the steps, the instruments and the per-step verdicts. The measured rows are facts
+[M877 to M883, M885 and M886](../facts/kmd.md) and [M884](../facts/hardware.md#m884).
+
+The arm wrote no register, sent no SMU setter and changed no clock, voltage or firmware setting. It spent one
+GPU device restart, one non-GPU device restart and one warm Windows restart. Every call stayed under three
+minutes. The highest temperature was 67.2 C.
+
+### 9.1 What it measured
+
+**The CPU half is not a clock deficit.** Seven kernels of one pinned thread calibrate one clock in state A, 3488.5
+to 3489.8 MHz over all seven, a spread of 0.04 %. In state B the same arithmetic gives seven clocks between
+520.4 and 2790.2 MHz, so at least one cost an operation changed. The reading that fits every row is a clock of
+about 2782 MHz with a collapse of instruction-level parallelism on top of it.
+
+| Kernel | cycles/op | A ops/us | B ops/us | B over A | modelled cycles/op in B at 2782 MHz |
+|---|---|---|---|---|---|
+| `loop_add` | 1 | 3488.82 | 1817.83 | 0.521 | 1.53 |
+| `mix_xoradd` | 1 | 3489.71 | 1274.62 | 0.365 | 2.18 |
+| `dep_imul` | 3 | 1162.91 | 927.43 | 0.798 | 3.00 |
+| `dep_fpadd` | 3 | 1163.27 | 930.08 | 0.800 | 2.99 |
+| `dep_mix` | 6 | 581.55 | 259.40 | 0.446 | 10.72 |
+| `tput_imul` | 1 | 3488.73 | 929.30 | 0.266 | 2.99 |
+| `tput_add` | 0.3125 | 11163.24 | 1665.33 | 0.149 | 1.67 |
+
+The `cycles/op` column is the design of each kernel on a 4-wide integer core, and `tput_add` is the one entry
+that needs its loop counted: 8 independent adds plus the index increment and the compare are 10 operations, so
+2.5 cycles an iteration over 8 counted operations is 0.3125. The low end of the state-B span, 520.4 MHz, is
+that column times the measured rate, so it is modelled and not read.
+
+The two pure latency chains keep 3.0 cycles an operation each. `tput_imul` falls to the `dep_imul` rate, so no
+two independent multiplies overlap any more. `tput_add` keeps 0.149 of its healthy rate, the worst loss of the
+seven. Every state-B rate is one run, and the same `dep_mix` kernel spans 253.16 to 296.18 operations/us over
+the five modes of this leg in state B, a spread of 17 %, against 1.8 % in state A: read the state-B column to
+one decimal of a cycle, not two. The ratios are far outside that spread. Keep this table. It is the signature of
+the state ([M877](../facts/kmd.md#m877)).
+
+**The clock itself is 0.8 of the healthy one, and Windows reported it all along.** The APERF over MPERF counter
+reads 108 % under load in state A, which is 3449.5 MHz against the kernels' 3488.8 MHz, and 91, 86 and 87 % in
+state B, which is 2906.5, 2746.8 and 2778.8 MHz against the latency chains' 2782.3 MHz. One counter step is
+32 MHz. In state A the two instruments are 39 MHz apart, which is 1.2 steps, so they agree to about 1 % and not
+exactly. In state B the three samples bracket the kernel figure ([M878](../facts/kmd.md#m878)).
+
+**Our own effective-clock instrument is blind.** Three `bc250kmd_cli cpu readback` calls inside the load window
+print `cores 1555 3500 1555 1555 1400 1400 1400 933 MHz` byte for byte in both states. SMU message `0x43` does
+not see the state, and the undervolt stretch guard gates on it ([M879](../facts/kmd.md#m879)).
+
+**The state is chip-wide and it makes the core throughput-bound.** `dep_mix` reads 577.70 to 581.60 operations/us
+on each of the 12 logical CPUs in state A and 257.64 to 287.30 in state B. Two threads on logical CPUs 0 and 1
+then deliver 128.10 operations/us each and sum to 256.20, which is 0.865 of the 296.18 that one thread of that
+same pair reads: in state B the aggregate does not rise at all when the second thread starts. In state A the
+same pair sums to 1.89 times one thread's rate, so a second thread there costs 5.6 % of it. The pair is the two
+threads of one core if the topology is the usual one, which no file of this arm proves
+([M880](../facts/kmd.md#m880)).
+
+**Memory is untouched and L1 is not.** The 64 MiB pointer chase reads 152.452 ns an access in state A and
+153.104 ns in state B, flat to 0.4 %. The 16 KiB chase goes 2.086 to 3.455 ns, a modelled 7.28 to 9.61 cycles.
+The 256 KiB chase costs the same number of cycles in both states ([M881](../facts/kmd.md#m881)).
+
+**The extra GFX power reproduces inside one boot.** At 500 MHz, 820 mV and busy 0.0 % the gfx rail reads 9.0 to
+10.2 W in state A and 17.2 W in all three state-B samples. The smart plug reads 80.4 to 81.5 W against 90.8 to
+91.1 W at the wall ([M882](../facts/kmd.md#m882)).
+
+**The RLC gating state after the KMD's RLC stage is identical.** `RLC_PG_CNTL` before the stage reads `0x8`
+after a boot and `0x00800000` after a device restart. After the stage both read `0x00800000`
+([M883](../facts/kmd.md#m883)).
+
+**The OS PnP path alone does not make the state.** A restart of `ROOT\KDNIC\0000` in state A left the work meter
+at a ratio of 1.000 ([M885](../facts/kmd.md#m885)).
+
+### 9.2 What it refuted
+
+1. **The 1.55 GHz reading of section 5.** The 6-cycle chain costs about 10.7 cycles an operation in state B, so
+   the quotient that gave 1557 MHz was built on a cost that had changed.
+2. **A uniform factor.** No one factor fits the seven kernels. The ratios run from 0.149 to 0.800.
+3. **Stolen time.** With 2000 operations a chunk the mean over the median is 0.988 in state A and 0.967 in
+   state B, and with 500 operations a chunk 0.933 and 0.890, while the `steal` control drove the 2000-operation
+   figure to 0.503 and 0.493. The median itself fell 2.26 times, so the loss is inside the chunks and not
+   between them. The distribution is not untouched: the share of slow chunks rises from 0.03 % to 0.27 % at
+   2000 operations and from 0.02 % to 0.36 % at 500. Those shares are too small to carry a loss of this size.
+4. **One or two slow CPUs.** All 12 logical CPUs lose the same way.
+5. **A memory or fabric path that got slower.** The 64 MiB latency is flat and the GPU bandwidth is 1.3 % to
+   2.8 % better in state B (copy 383.9 against 388.7 GB/s, read 374.3 against 384.7 GB/s).
+6. **A moving time base.** The GPU golden counter reads 99.801 MHz in state A and 99.769 MHz in state B against
+   its 100.000 MHz reference, so every wall-clock number of this defect stands.
+7. **`RLC_GPU_CLOCK_32` as a GFX clock counter.** It advanced at 99.9 to 100.1 MHz in 15 of 15 samples, at a
+   500 MHz idle point and under load at 1700 MHz, in both states, with `RES_SEL` 0
+   ([M884](../facts/hardware.md#m884)). The arm caught this with its own positive control, so it drew no GPU
+   clock conclusion.
+
+### 9.3 What stays open
+
+1. **The mechanism of the CPU half.** The shape is a core that still retires a dependent chain at its full
+   3.00 cycles but issues far fewer independent operations a cycle. Dispatch or issue throttling fits that
+   shape. So does a di/dt or electrical-design-current management mode that holds the issue width down. No
+   counter on this part shows either to us, and the arm added none.
+2. **The GPU half.** The project knows no host-readable counter of the delivered GFX clock on this part, so C7
+   and the 0.64 of work per MHz stay an inference from wall time. Next test: one fixed compute dispatch at a
+   pinned `DpmMaxMHz`, timed in both states, with no clock counter. The untried instrument is the subgroup-scope
+   clock of `VK_KHR_shader_clock` ([M884](../facts/hardware.md#m884)).
+3. **One cause or two.** The CPU loss and the extra 7.0 W have one trigger inside one boot. Nothing shows one
+   cause.
+4. **A PCI control.** The non-GPU control was a root-enumerated software device. A PnP stop and start of a
+   non-GPU PCI function, which does tear down a function and move a D-state, is still owed.
+5. **Why a warm restart out of state B hangs.** The restart after this arm hung after a clean OS shutdown and
+   before POST, and an AC cycle recovered the machine in 16 s ([M886](../facts/kmd.md#m886)). That is at least
+   the third such hang in this defect's work, after the two of C9. It is not every restart: the lead's record of
+   the same day has one more hang after a plain driver uninstall and a later warm restart out of a stop state
+   that booted normally (lab record, not in this repository). Treat a warm restart out of state B as a risk and
+   plan one for a whole set of tests.
+
+### 9.4 Lessons for the next arm
+
+- **Keep the seven-kernel meter.** One kernel cannot tell a clock change from a cost change. Seven can, and the
+  table is cheap: both legs took about 40 s.
+- **Bring a positive control for every new instrument.** The GPU clock counter failed its own control, which is
+  the only reason the arm reported no GPU clock.
+- **Run the theft control in both legs.** The `contend` arm recorded `noise_ops` 0 in state A and never fired,
+  so only the `steal` control was valid in both.
+- **A probe that answers after a timeout proves only that the machine is up now.** It does not show how the
+  machine got there. The System log and the recovery timeline are the evidence of a boot.
+
+### 9.5 What this changes in the CPU part of the driver
+
+Two decisions in `driver/shim` rest on the quantity this arm measured, and both need a second look.
+
+- **The release clock bound.** The header `driver/shim/include/bc250_cpu.h` keeps "an effective 2.74 to
+  2.79 GHz" as the project's record for unit A and asks the release for no more than stock until a trial settles
+  it. That figure is the K137 state: the same unit reads 3488.8 MHz healthy, and 2.78 GHz is what one device
+  restart leaves behind ([M877](../facts/kmd.md#m877), [M878](../facts/kmd.md#m878)). The bound itself may still
+  be the right one, but the measurement behind it was taken in the defect state and has to be retaken after a
+  boot.
+- **The undervolt stretch guard.** `BC250_CPU_STRETCH_MHZ` compares SMU message `0x43` with the target, and
+  `0x43` prints the same per-core pattern in both states ([M879](../facts/kmd.md#m879)). So the guard cannot see
+  a state that costs 0.8 of the clock and more of the throughput. It still protects against the stretch it was
+  written for. It is not a witness of this one.

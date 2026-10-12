@@ -1,0 +1,50 @@
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x88ac
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+radv_wddm2_winsys_create
+allocation handle=0x40000600
+bc250: gfx preamble inlined (no gfx_init IB)
+allocation handle=0x40000680
+allocation handle=0x40000700
+allocation handle=0x400007c0
+allocation handle=0x40000840
+allocation handle=0x400008c0
+allocation handle=0x40000940
+allocation handle=0x400009c0
+allocation handle=0x40000a40
+allocation handle=0x40000ac0
+allocation handle=0x40000b40
+allocation handle=0x40000bc0
+allocation handle=0x40000c40
+bc250: progress before submit previous=0 observed=0 slot=0 retire=0 waits=0 signals=1
+allocation handle=0x40000cc0
+bc250: gather capacity=4096 bytes required=896 ibs=2
+allocation handle=0x40000d40
+bc250: gather capacity=4096 bytes required=2048 ibs=2
+allocation handle=0x40000dc0
+bc250: gather capacity=4096 bytes required=2048 ibs=2
+allocation handle=0x40000e40
+bc250: gather capacity=4096 bytes required=2048 ibs=2
+allocation handle=0x40000ec0
+bc250: gather capacity=4096 bytes required=2048 ibs=2
+allocation handle=0x40000f40
+bc250: gather capacity=4096 bytes required=2048 ibs=2
+allocation handle=0x40000fc0
+bc250: gather capacity=4096 bytes required=2048 ibs=2
+allocation handle=0x40001040
+bc250: gather capacity=8192 bytes required=5344 ibs=2
+allocation handle=0x400010c0
+bc250: gather capacity=8192 bytes required=5248 ibs=2
+allocation handle=0x40001140
+bc250: gather capacity=8192 bytes required=5248 ibs=2
+allocation handle=0x40001200
+allocation handle=0x40001280
+allocation handle=0x40001300
+allocation handle=0x40001380
+allocation handle=0x40001400
+bc250: gather capacity=8192 bytes required=5344 ibs=2
+allocation handle=0x40001480
+bc250: gather capacity=8192 bytes required=5248 ibs=2
