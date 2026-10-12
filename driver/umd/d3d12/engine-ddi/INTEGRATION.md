@@ -155,18 +155,20 @@ which this revision reports as unsupported (fail-safe slots in SLOTS.md).
 | 1006 | | CopyQueueTimestampQueriesSupported, BarycentricsSupported | same value | OPTIONS3 |
 | 1006 | | ReservedBufferPlacementSupported | MSAA64KBAlignedTextureSupported | OPTIONS4; "Actually just 64KB aligned MSAA support", H:11094 |
 | 1006 | | SRVOnlyTiledResourceTier3 | same value | OPTIONS5 |
-| 1006 | | DepthBoundsTestSupported | FALSE | pfnOMSetDepthBounds is a fail-safe |
-| 1006 | | ProgrammableSamplePositionsTier | NOT_SUPPORTED | pfnSetSamplePositions is a fail-safe |
-| 1006 | | WriteBufferImmediateQueueFlags | NONE | pfnWriteBufferImmediate is a fail-safe |
-| 1006 | | ViewInstancingTier | NOT_SUPPORTED | pfnSetViewInstanceMask is a fail-safe |
-| 1006 | | RenderPassTier | NOT_SUPPORTED | engine-ddi fills no render pass table; the runtime emulates render passes |
+| 1006 | | DepthBoundsTestSupported | the engine answer | OPTIONS2, which is the engine's Vulkan device depthBounds feature (vkd3d-proton device.c, d3d12_device_caps_init_feature_options2). Both halves of the feature are implemented: pfnOMSetDepthBounds (L52) and DepthBoundsTestEnable in the pipeline's DEPTH_STENCIL1 subobject ("Shaders and pipelines" below). An engine that does not answer OPTIONS2 leaves the zeroed structure, which is FALSE. The engine itself refuses such a pipeline with E_INVALIDARG on a Vulkan device without the feature. The reported value cannot promise a test that does not work |
+| 1006 | | ProgrammableSamplePositionsTier | NOT_SUPPORTED | pfnSetSamplePositions forwards to the engine, whose implementation behind it is a stub |
+| 1006 | | WriteBufferImmediateQueueFlags | the engine's list types as queue flags | OPTIONS3 `WriteBufferImmediateSupportFlags`. The pinned engine answers DIRECT, COMPUTE, COPY and BUNDLE with no condition (vkd3d-proton device.c, d3d12_device_caps_init_feature_options3). The engine's answer is a list-type mask. This field is a queue-flag mask (H:11091, values H:1435-1445). DIRECT, COMPUTE and COPY map one by one. The BUNDLE bit has no queue flag to go to. The result is narrowed to the queues engine-ddi creates. L56 `pfnWriteBufferImmediate` is filled in both command list tables, so every reported flag has a slot behind it. An engine that does not answer OPTIONS3 leaves the zeroed structure, which is NONE |
+| 1006 | | ViewInstancingTier | 2, or NOT_SUPPORTED for older engines | Requires optional full-domain contract revision 1, contract tier 2 and OPTIONS3 tier 2 or 3. The engine uses multiview where it fits and per-view draws elsewhere. It admits repeated layers, independent viewports and shader offsets. This path does not claim tier 3 |
+| 1006 | | RenderPassTier | the engine's tier, clamped to TIER_2 | OPTIONS5 `RenderPassesTier`. The pinned engine answers TIER_0 (vkd3d-proton device.c, "Currently not supported"). The DDI enumeration stops at TIER_2 (H:7645-7652, field H:11097). A later engine that answers a higher tier is reported as TIER_2, not as a value the runtime does not know. The shell publishes `D3D12DDI_TABLE_TYPE_0043_RENDER_PASS` only while this answer is above NOT_SUPPORTED, so the tier and the table agree. Below that the runtime emulates render passes over the ordinary slots |
 | 1006 | | RaytracingTier | the engine's 1_1 or higher as 1_1, else NOT_SUPPORTED | the acceleration structure, state object, pfnSetPipelineState1 and pfnDispatchRays slots reach the engine, collections and pfnAddToStateObject included ("Acceleration structures" and "Ray tracing state objects" below), and so does indirect ray dispatch (a DISPATCH_RAYS command signature), which the pinned engine traces up to the count (upstream traces the first record alone). One gap the tier promises: a collection imported with an export list is refused (E_NOTIMPL on the refusal line). The runtime's description of a collection import is measured on the development PC's WARP (fact M837), not yet on unit A's runtime. `set_raytracing_tier_reporting(caps,false)` takes the answer back to NOT_SUPPORTED (the shell's experiment raytracing-tier-off) |
 | 1006 | | VariableShadingRateTier, PerPrimitiveShadingRateSupportedWithViewportIndexing, AdditionalShadingRatesSupported, ShadingRateImageTileSize, VariableRateShadingSumCombinerSupported, MeshShaderPerPrimitiveShadingRateSupported | NOT_SUPPORTED, FALSE, 0 | pfnRSSetShadingRate and pfnRSSetShadingRateImage are fail-safes |
-| 1006 | | MeshShaderTier, MeshShaderSupportsFullRangeRenderTargetArrayIndex, MSPrimitivesPipelineStatisticIncludesCulledPrimitives | NOT_SUPPORTED, FALSE, FALSE | pfnDispatchMesh and the mesh shader slots are fail-safes |
-| 1006 | | SamplerFeedbackTier | NOT_SUPPORTED | pfnCreateSamplerFeedbackUnorderedAccessView is a fail-safe |
-| 1006 | | EnhancedBarriersSupported | FALSE | pfnBarrier is a fail-safe |
-| 1006 | | BackgroundProcessingSupported | FALSE | pfnSetBackgroundProcessingMode is the shell's slot; engine-ddi claims nothing for it |
-| 1006 | | DriverManagedShaderCachePresent | FALSE | engine-ddi keeps no driver-managed shader cache |
+| 1006 | | MeshShaderTier | tier 1 when the engine answers tier 1 or higher and 1012 ends at 6_5 or higher, else NOT_SUPPORTED | OPTIONS7. The engine answers tier 1 exactly when its Vulkan device has VK_EXT_mesh_shader with meshShader and taskShader (vkd3d-proton device.c, d3d12_device_determine_mesh_shader_tier). An engine that does not answer OPTIONS7 leaves the zeroed structure, which is NOT_SUPPORTED. Tier 1 is the only tier at 0092 (H:9353-9357), so a higher answer is reported as 1. The shader model condition is the API side. A mesh or an amplification program is a DXIL program of shader model 6.5. Below 6_5 the tier would name a path no application can take. pfnDispatchMesh, pfnCreateMeshShader, pfnCreateAmplificationShader and mesh pipelines are implemented ("Shaders and pipelines" below) |
+| 1006 | | MeshShaderSupportsFullRangeRenderTargetArrayIndex | the engine answer, FALSE without mesh shaders | OPTIONS9 |
+| 1006 | | MSPrimitivesPipelineStatisticIncludesCulledPrimitives | FALSE | no engine answer: no D3D12_FEATURE field carries it |
+| 1006 | | SamplerFeedbackTier | NOT_SUPPORTED | pfnCreateSamplerFeedbackUnorderedAccessView is a fail-safe, and as a creation slot it refuses with E_OUTOFMEMORY (SLOTS.md) |
+| 1006 | | EnhancedBarriersSupported | the engine answer | OPTIONS12 `EnhancedBarriersSupported` (vkd3d-proton device.c, d3d12_device_caps_init_feature_options12), field H:11111. L68 `pfnBarrier` is filled in both command list tables, so the report has a slot behind it (SLOTS.md). The three resource callbacks the feature needs carry the initial barrier layout already: pfnCreateHeapAndResource, pfnCalcPrivateHeapAndResourceSizes and pfnCheckResourceAllocationInfo at 0088. The report is not free. With it the runtime routes a legacy `ResourceBarrier` call through pfnBarrier as well. The slot therefore admits every barrier type and layout the DDI defines rather than refusing one. An engine that does not answer OPTIONS12 leaves the zeroed structure, which is FALSE |
+| 1006 | | BackgroundProcessingSupported | FALSE | D114 pfnSetBackgroundProcessingMode is the shell's slot. The engine has nothing behind it. It answers `BackgroundProcessingSupported` FALSE itself (vkd3d-proton device.c, d3d12_device_caps_init_feature_options6). Its own `SetBackgroundProcessingMode` is a FIXME stub that returns E_NOTIMPL (device.c, d3d12_device_SetBackgroundProcessingMode). The slot therefore accepts the mode and applies nothing. It answers that no further measurements are wanted, and leaves the device alone. A void slot has no error channel to report with (SLOTS.md) |
+| 1006 | | DriverManagedShaderCachePresent | FALSE | engine-ddi keeps no driver-managed shader cache. D85 to D90 are implemented, but an application's `ID3D12PipelineLibrary` is the application's cache. The application creates it, fills it and serializes it. D121 pfnImplicitShaderCacheControl has nothing of this driver's to disable or clear. Reporting TRUE would promise the runtime a cache it could control. The pinned engine answers `D3D12_FEATURE_SHADER_CACHE` with SINGLE_PSO, LIBRARY, AUTOMATIC_INPROC_CACHE and AUTOMATIC_DISK_CACHE (device.c). That is the engine's own claim at the API, made without a query of the Vulkan driver, and not this field |
 | 1006 | | Deterministic64KBUndefinedSwizzle | FALSE | no engine answer |
 | 1006 | | - | not in the DDI | `D3D12_FEATURE_DATA_D3D12_OPTIONS4::SharedResourceCompatibilityTier` and `D3D12_FEATURE_DATA_DISPLAYABLE::SharedResourceCompatibilityTier` have no DDI field: `SharedResourceCompatibilityTier` appears nowhere in `d3d12umddi.h`, and `D3D12DDI_D3D12_OPTIONS_DATA_0089` does not carry it. The D3D12 runtime synthesises the value from the WDDM/DDI level the driver reports (tier 1 "support is built into WDDM 2.4", `ref/sdk-api-docs` `ne-d3d12-d3d12_shared_resource_compatibility_tier.md`), so a driver that does not implement shared resources cannot withdraw the promise, and the enum has no "unsupported" value to report. On unit A the runtime answers tier 2 while every shared create and open fails (BD-075). What the driver can do honestly is refuse those calls without taking the device with it; `docs/d3d12-shared-resources.md` holds the plan that would make the reported tier true |
 | 1004 SHADER | `D3D12DDI_SHADER_CAPS_0084`, 64, H:10515-10534 | MinPrecision, DoubleOps, ShaderSpecifiedStencilRef, TypedUAVLoadAdditionalFormats, ROVs | MinPrecisionSupport, DoublePrecisionFloatShaderOps, PSSpecifiedStencilRefSupported, TypedUAVLoadAdditionalFormats, ROVsSupported | OPTIONS |
@@ -174,7 +176,7 @@ which this revision reports as unsupported (fail-safe slots in SLOTS.md).
 | 1004 | | Native16BitOps | Native16BitShaderOpsSupported | OPTIONS4 |
 | 1004 | | AtomicInt64OnTypedResource, AtomicInt64OnGroupShared | the ...Supported fields | OPTIONS9 |
 | 1004 | | AtomicInt64OnDescriptorHeapResource | AtomicInt64OnDescriptorHeapResourceSupported | OPTIONS11 |
-| 1004 | | DerivativesInMeshAndAmplificationShaders | FALSE | mesh shaders are not reported (above) |
+| 1004 | | DerivativesInMeshAndAmplificationShaders | the engine answer, FALSE without mesh shaders (above) | OPTIONS9 |
 | 1004 | | WaveMMATier | NOT_SUPPORTED | the only other tier at 0092 is experimental, H:10436-10439 |
 | 1005 ARCHITECTURE_INFO | `D3D12DDI_ARCHITECTURE_INFO_DATA`, 4, H:2916-2920 | TileBasedDeferredRenderer | TileBasedRenderer | ARCHITECTURE1 |
 | 1002 MEMORY_ARCHITECTURE | `D3D12DDI_MEMORY_ARCHITECTURE_CAPS_0041`, 20, H:6806-6814; pInfo NULL or node 0 (H:152-155), else E_INVALIDARG | UMA, CacheCoherent | the policy's explicit value; with Default or no policy UMA, CacheCoherentUMA | ARCHITECTURE1, overridden by the shell's memory architecture policy (below) |
@@ -373,6 +375,10 @@ shared-resource plan in `docs/d3d12-shared-resources.md` names the audit.
 
 - FillDDITable: `fill_device_core` and `fill_command_list` (table 0 compute, 1 graphics) first, then the shell's
   own slots over the 18 core slots engine-ddi leaves NULL, and the shell's `pfnPresent`.
+  `D3D12DDI_TABLE_TYPE_0043_RENDER_PASS` (H:2507) goes to `fill_render_pass`. The shell asks for it only while the
+  adapter's own RenderPassTier is above NOT_SUPPORTED (`adapter_render_pass_supported`). Below that the table
+  returns E_NOTIMPL and the runtime emulates render passes. OPEN: the table is also an extended feature
+  (`D3D12DDI_FEATURE_0043_RENDER_PASS`, H:4069), which the shell's queue DDI module does not yet advertise.
 - CreateDevice: the engine's `CreateDevice` with the adapter's create info, then `create_device_context`
   (`MemoryMode::RuntimeBacked`, the shell's hooks, the engine's ABI 1.2 function table: it refuses one without
   CreateHeapFromMemory, MapHeap and UnmapHeap). Ordering: the context is created and registered, so that the
@@ -419,12 +425,13 @@ engine-ddi does not resolve yet. A placeholder is not completed integration.
 | CheckResourceAllocationInfo, CheckExistingResourceAllocationInfo | the engine's GetResourceAllocationInfo for the description (for a stored packed video format, the description of its storage); no additional data. A description CheckResourceAllocationInfo cannot size gets ResourceDataSize UINT64_MAX, the API's error answer, with the default alignment for its sample count. Measured on unit A (native-caps284, 285, 64 x 64 YUY2 and R8G8_B8G8_UNORM textures): with E_INVALIDARG reported instead, the runtime removed the device at GetResourceAllocationInfo (DXGI_ERROR_DRIVER_INTERNAL_ERROR, SizeInBytes 0); with UINT64_MAX it answered SizeInBytes 0xFFFFFFFFFFFF0000 (UINT64_MAX aligned down to 64 KiB, no wrap), CreateCommittedResource E_OUTOFMEMORY, CreatePlacedResource E_INVALIDARG, and the device stayed | engine answer |
 | EnumerateMetaCommands | count 0, S_OK | exact: engine-ddi has no meta commands |
 | CheckDriverMatchingIdentifier | UNRECOGNIZED | exact: engine-ddi serializes nothing |
-| ImplicitShaderCacheControl | no-op | exact: 1006 D3D12_OPTIONS reports DriverManagedShaderCachePresent FALSE |
+| ImplicitShaderCacheControl | no-op | exact: 1006 D3D12_OPTIONS reports DriverManagedShaderCachePresent FALSE, and the pipeline libraries of D85 to D90 are the application's cache, not one this slot could clear |
+| RetrieveShaderComment | the empty comment: a character count of 1 and the terminator alone | exact: engine-ddi puts no comment in a pipeline. A count without a buffer is the size query, a buffer with no room for the terminator is E_INVALIDARG with the needed count left in place |
+| CheckSubresourceInfo | a buffer answers the resource width as both strides. A linear primary answers its surface row pitch and a plane of Height rows. Any other image gets zeroes and no error code at all. The slot reports only when it has no answer to give, and the reference documents no error category for it. One log line names the format once. A malformed call has no answer and keeps E_INVALIDARG: an unknown handle, no out structure, or a subresource index the resource does not have | the layouts engine-ddi itself knows |
 
 Every other engine-ddi slot is implemented (SLOTS.md) or a fail-safe. A void fail-safe whose non-const pointers
-are all `_Out_` zeroes them before it reports E_NOTIMPL, and each of these is a placeholder: returns 0 (the
-E_NOTIMPL report is the difference from the table above): CheckSubresourceInfo,
-GetMetaCommandRequiredParameterInfo. The first lab log of
+are all `_Out_` zeroes them before it reports E_NOTIMPL, and this one is a placeholder: returns 0 (the
+E_NOTIMPL report is the difference from the table above): GetMetaCommandRequiredParameterInfo. The first lab log of
 D3D12CreateDevice on the native path (the engine-ddi log line "fail-safe slot D+0x... called") settles the list.
 
 ### Packed video formats
@@ -629,6 +636,59 @@ Inferences, none measured against the runtime: CreateGeometryShaderWithStreamOut
 (stream output of the vertex or domain program, as in the D3D11 DDI); a null blend, rasterizer or depth-stencil
 handle means the API default; FrontEnable and BackEnable FALSE leave that face's stencil untouched; ScissorEnable
 is TRUE (D3D12 has no such flag).
+
+Pipelines. Every rasterizing pipeline, graphics or mesh, reaches the engine through
+`ID3D12Device2::CreatePipelineState` and a subobject stream, and never through a
+`D3D12_GRAPHICS_PIPELINE_STATE_DESC`. That structure carries neither the AS and MS stages of a mesh pipeline, nor
+`DepthBoundsTestEnable` (L52), nor the view instancing description (L57). A compute pipeline keeps
+`CreateComputePipelineState`, which has no stream form. The subobject layout is the engine's own: the type word and
+the value packed together, the pair's size rounded up to a pointer, the pairs laid out end to end. The stride is a
+multiple of `sizeof(void*)` and not of 8, because the 32-bit shell of a WoW64 process builds the same file, where a
+pointer is 4 bytes. A subobject the stream leaves out keeps the engine's own default, which is the D3D12 API
+default, and the states both kinds share are written in one place, so the two paths cannot drift apart. The
+depth-stencil state always travels as DEPTH_STENCIL1, the only subobject that carries `DepthBoundsTestEnable`,
+because the engine promotes DEPTH_STENCIL and DEPTH_STENCIL1 into one internal state. VIEW_INSTANCING is written
+only for a pipeline that has view instances, and a count above `D3D12_MAX_VIEW_INSTANCE_COUNT` or a count without
+an array is refused with E_INVALIDARG. `tests/pipeline-stream-test.cpp` is the host gate on the stream, with a
+fake engine device that reads it the way the engine reads it.
+
+Mesh pipelines. `pfnCreateMeshShader` and `pfnCreateAmplificationShader` take DXIL program kinds 13 and 14 through
+the same `BuildContainer`, with the mesh union of `D3D12DDIARG_CREATE_SHADER_0026::IOSignatures`: the vertex output
+signature becomes OSG1 and the primitive output signature PSG1, which is where dxc writes it and where the engine
+reads it. Both containers, and the pixel container of a mesh pipeline, carry the semantic names of the program's
+own `dx.entryPoints` metadata instead of the synthetic register names of the vertex path, because the engine
+checks a mesh pipeline's linkage by semantic name and index alone (`libs/vkd3d/state.c`,
+`vkd3d_validate_mesh_shader_io_signatures`) and a mesh shader's primitive outputs have a register space of their
+own: in a measured example the primitive output on register 0 is the pixel input on register 2, so no name
+computed from registers can link them. The pixel container is rebuilt for the pipeline
+(`BuildMeshLinkContainer`), so the vertex path keeps the container it has today. `pfnCreatePipelineState` then
+writes a `D3D12_PIPELINE_STATE_STREAM_DESC` for the engine's `ID3D12Device2::CreatePipelineState`, which is the
+only entry that carries the AS and MS subobjects. No INPUT_LAYOUT, IB_STRIP_CUT_VALUE or PRIMITIVE_TOPOLOGY
+subobject is written, because a mesh pipeline has no vertex input and names its topology in the program.
+`pfnDispatchMesh` (L67, graphics table) forwards to `ID3D12GraphicsCommandList6::DispatchMesh`, and indirect mesh
+dispatch is `ExecuteIndirect` with a DISPATCH_MESH command signature, which `create_command_signature` already
+translates. Which union member the runtime fills for an amplification program is not measured, so none is read:
+its container gets empty signature chunks, as dxc writes for one.
+
+Pipeline libraries. D85 to D90 carry an `ID3D12PipelineLibrary1` of the engine's, which the engine builds from the
+blob `pfnCreatePipelineLibrary` hands it unchanged and writes back in its own shape (`libs/vkd3d/cache.c`,
+`d3d12_pipeline_library_init` and `d3d12_pipeline_library_serialize`). The DDI names a pipeline inside a library by
+a `UINT` index and the engine names one by a string, so the index travels as eight upper-case hexadecimal digits:
+total over `UINT`, injective, and the same mapping on both sides of a serialize and a reload. A create payload
+whose `LibraryReference` names a library (H:3192-3196, H:9917) becomes a load out of it under that name:
+`LoadPipeline` with the same subobject stream the ordinary path builds, or `LoadComputePipeline` with the compute
+description, so a library saves the application the compile and nothing else about the payload changes. The engine
+answers E_INVALIDARG both for a name the library does not hold and for a description whose compatibility hash
+differs from the stored pipeline's (`d3d12_pipeline_library_load_pipeline`), which is what D3D12 shows an
+application for either mistake. `pfnSerializeLibrary` is given no buffer size (H:3343-3348), so the library
+remembers the size D89 answered to each calling thread, a store forgets all of them, and a serialize with no size
+of its own thread behind it is refused before the engine sees the buffer. The size belongs to the thread because
+`ID3D12PipelineLibrary` is free-threaded and the runtime makes both DDI calls inside one `Serialize` of the calling
+thread: with one value per library, a store and a second query on another thread between one thread's pair would
+raise the remembered size and the engine would write that many bytes into the first thread's smaller buffer. A library that the engine does not serialize as one blob answers 0 from D89, and
+a serialize after that is refused the same way. The host gate is the last two sections of
+`tests/pipeline-stream-test.cpp`, over a fake engine library that records the blob, the names and the capacity it
+was given.
 
 ### Committed render targets
 

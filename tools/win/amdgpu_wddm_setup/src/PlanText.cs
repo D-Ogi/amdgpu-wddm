@@ -99,9 +99,51 @@ namespace AmdgpuWddmSetup
         }
     }
 
+    public enum NoteKind { Title, Heading, Bullet, Paragraph }
+
+    public sealed class NoteBlock
+    {
+        public NoteKind Kind;
+        public string Text;
+    }
+
+    // The release notes as blocks the window draws: the title, the headings, the bullets and the paragraphs. The
+    // window reads them instead of the raw text, so the notes look like a page and not like a file (WU-044). The
+    // wrapped lines of a paragraph or a bullet join; the window wraps them again to its own width.
+    public static class NotesDoc
+    {
+        public static List<NoteBlock> Parse(string markdown)
+        {
+            var blocks = new List<NoteBlock>();
+            NoteBlock open = null;      // the last block a following line continues
+            foreach (var raw in (markdown ?? "").Replace("\r\n", "\n").Split('\n'))
+            {
+                var t = raw.TrimEnd().Replace("`", "").Replace("**", "");
+                if (t.Trim().Length == 0) { open = null; continue; }
+                if (t.StartsWith("#", StringComparison.Ordinal))
+                {
+                    var level = t.Length - t.TrimStart('#').Length;
+                    blocks.Add(new NoteBlock { Kind = level <= 1 ? NoteKind.Title : NoteKind.Heading, Text = t.TrimStart('#').Trim() });
+                    open = null;
+                    continue;
+                }
+                if (Regex.IsMatch(t, @"^\s*[-*] "))
+                {
+                    open = new NoteBlock { Kind = NoteKind.Bullet, Text = Regex.Replace(t, @"^\s*[-*] ", "") };
+                    blocks.Add(open);
+                    continue;
+                }
+                if (open != null) { open.Text += " " + t.Trim(); continue; }
+                open = new NoteBlock { Kind = NoteKind.Paragraph, Text = t.Trim() };
+                blocks.Add(open);
+            }
+            return blocks;
+        }
+    }
+
     public sealed class ReleaseNotes
     {
-        public string File, Language, Text;
+        public string File, Language, Text, Source;
         public bool EnglishFallback;    // the window's language has no notes file: the English text, labelled
 
         public static readonly string[] Sections = { "New", "Fixed", "Known issues", "Settings affected" };
@@ -112,11 +154,17 @@ namespace AmdgpuWddmSetup
             if (language != "en")
             {
                 var local = Path.Combine(packageDir, "RELEASE-NOTES." + language + ".md");
-                if (System.IO.File.Exists(local)) return new ReleaseNotes { File = local, Language = language, Text = Plain(System.IO.File.ReadAllText(local, Encoding.UTF8)) };
+                if (System.IO.File.Exists(local)) return Read(local, language, false);
             }
             var en = Path.Combine(packageDir, "RELEASE-NOTES.md");
             if (!System.IO.File.Exists(en)) return null;
-            return new ReleaseNotes { File = en, Language = "en", EnglishFallback = language != "en", Text = Plain(System.IO.File.ReadAllText(en, Encoding.UTF8)) };
+            return Read(en, "en", language != "en");
+        }
+
+        static ReleaseNotes Read(string path, string language, bool englishFallback)
+        {
+            var source = System.IO.File.ReadAllText(path, Encoding.UTF8);
+            return new ReleaseNotes { File = path, Language = language, EnglishFallback = englishFallback, Source = source, Text = Plain(source) };
         }
 
         // Markdown as plain text: headings without '#', list items with a bullet, code marks and emphasis removed,

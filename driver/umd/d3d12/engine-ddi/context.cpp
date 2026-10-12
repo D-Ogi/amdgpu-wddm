@@ -515,6 +515,25 @@ template <class R, class... A, char Table, size_t Offset> struct FailSafe<R(APIE
             if constexpr (!std::is_void_v<R>) return R{};
         }
     }
+    // A creation slot's fail-safe. A creation function of a user-mode display driver is in the runtime's
+    // AllowOutOfMemory category: any status other than E_OUTOFMEMORY or D3DDDIERR_DEVICEREMOVED is a critical
+    // driver failure, so the runtime removes the device and reports DXGI_ERROR_DRIVER_INTERNAL_ERROR over the
+    // real reason (engine-ddi.h, admitted_create_failure; measured on pfnOpenHeapAndResource in BD-075, where
+    // E_NOTIMPL cost the device in all 13 shared-resource cells of capture-share). An unfilled creation slot
+    // must therefore refuse like a creation that ran out of memory, in its return value and in what it reports,
+    // and the note() line above keeps the real reason in the log.
+    static R APIENTRY create(A... args) noexcept {
+        note();
+        constexpr HRESULT hr = admitted_create_failure(E_NOTIMPL);
+        static_assert(hr == E_OUTOFMEMORY, "a refused create answers a code the AllowOutOfMemory category admits");
+        if constexpr (std::is_same_v<R, HRESULT>) {
+            ((void)args, ...);
+            return hr;
+        } else {
+            report(hr, args...);
+            if constexpr (!std::is_void_v<R>) return R{};
+        }
+    }
     // A void query slot whose non-const pointer arguments are all _Out_ (checked per slot against the WDK header):
     // each is zeroed, so the caller never reads what was in its memory before, then E_NOTIMPL is reported.
     template <class P> static void zero_out(P p) noexcept {
@@ -560,18 +579,25 @@ HRESULT APIENTRY enumerate_no_meta_commands(D3D12DDI_HDEVICE, UINT* count, D3D12
 // engine-ddi reports no driver-managed shader cache (1006 D3D12_OPTIONS DriverManagedShaderCachePresent FALSE,
 // d3d12umddi.h D3D12DDI_D3D12_OPTIONS_DATA_0089; INTEGRATION.md), so
 // there is no cache of engine-ddi's to disable, enable or clear: the control is accepted as a no-op, never an error.
+// The pipeline libraries of D85-D90 do not change that. A pipeline library is the application's own cache: the
+// application creates it, decides what goes into it and serializes it, and this control may not touch it. A
+// driver-managed cache would be one of ours that the runtime can disable and clear through this very slot, and
+// there is none: the engine's disk cache is not ours to switch and no engine entry reaches it (pipelines.cpp,
+// "Pipeline libraries"; caps.cpp, fill_options).
 void APIENTRY no_implicit_shader_cache(D3D12DDI_HDEVICE, D3D12DDI_IMPLICIT_SHADER_CACHE_CONTROL_FLAGS_0080) {}
 } // namespace
 
 #define ENGINE_DDI_FS(t, T, m) (t)->m = FailSafe<decltype((t)->m), 'D', offsetof(T, m)>::slot
 #define ENGINE_DDI_CALC(t, T, m) (t)->m = FailSafe<decltype((t)->m), 'D', offsetof(T, m)>::calc
 #define ENGINE_DDI_ZERO(t, T, m) (t)->m = FailSafe<decltype((t)->m), 'D', offsetof(T, m)>::zeroing
+#define ENGINE_DDI_CREATE(t, T, m) (t)->m = FailSafe<decltype((t)->m), 'D', offsetof(T, m)>::create
 
 void fill_core_failsafe(D3D12DDI_DEVICE_FUNCS_CORE_0088* t) noexcept {
     using T = D3D12DDI_DEVICE_FUNCS_CORE_0088;
 #define FS(m) ENGINE_DDI_FS(t, T, m)
 #define CALC(m) ENGINE_DDI_CALC(t, T, m)
 #define ZERO(m) ENGINE_DDI_ZERO(t, T, m)
+#define CREATE(m) ENGINE_DDI_CREATE(t, T, m)
     FS(pfnCheckFormatSupport); ZERO(pfnCheckMultisampleQualityLevels); ZERO(pfnGetMipPacking);
     CALC(pfnCalcPrivateElementLayoutSize); FS(pfnCreateElementLayout); FS(pfnDestroyElementLayout);
     CALC(pfnCalcPrivateBlendStateSize); FS(pfnCreateBlendState); FS(pfnDestroyBlendState);
@@ -600,24 +626,29 @@ void fill_core_failsafe(D3D12DDI_DEVICE_FUNCS_CORE_0088* t) noexcept {
     FS(pfnCheckResourceVirtualAddress); ZERO(pfnCheckResourceAllocationInfo); ZERO(pfnCheckSubresourceInfo);
     ZERO(pfnCheckExistingResourceAllocationInfo);
     FS(pfnRetrieveShaderComment); FS(pfnCheckResourceAllocationHandle);
-    CALC(pfnCalcPrivatePipelineLibrarySize); FS(pfnCreatePipelineLibrary); FS(pfnDestroyPipelineLibrary);
-    FS(pfnAddPipelineStateToLibrary); FS(pfnCalcSerializedLibrarySize); FS(pfnSerializeLibrary);
+    // D85-D90, the pipeline library, are filled by fill_core_pipelines below; these entries are the net that
+    // leaves no slot NULL before it runs. D86, D88 and D90 are creation slots (CREATE, not FS): see
+    // FailSafe::create.
+    CALC(pfnCalcPrivatePipelineLibrarySize); CREATE(pfnCreatePipelineLibrary); FS(pfnDestroyPipelineLibrary);
+    CREATE(pfnAddPipelineStateToLibrary); FS(pfnCalcSerializedLibrarySize); CREATE(pfnSerializeLibrary);
     CALC(pfnCalcPrivateCommandRecorderSize); FS(pfnCreateCommandRecorder); FS(pfnDestroyCommandRecorder);
     FS(pfnCommandRecorderSetCommandPoolAsTarget);
     t->pfnEnumerateMetaCommands = enumerate_no_meta_commands;
-    FS(pfnEnumerateMetaCommandParameters); CALC(pfnCalcPrivateMetaCommandSize); FS(pfnCreateMetaCommand);
+    FS(pfnEnumerateMetaCommandParameters); CALC(pfnCalcPrivateMetaCommandSize); CREATE(pfnCreateMetaCommand);
     FS(pfnDestroyMetaCommand); ZERO(pfnGetMetaCommandRequiredParameterInfo);
     CALC(pfnCalcPrivateStateObjectSize); FS(pfnCreateStateObject); FS(pfnDestroyStateObject);
     ZERO(pfnGetRaytracingAccelerationStructurePrebuildInfo);
     t->pfnCheckDriverMatchingIdentifier = unrecognized_identifier;
     FS(pfnGetShaderIdentifier); FS(pfnGetShaderStackSize); FS(pfnGetPipelineStackSize); FS(pfnSetPipelineStackSize);
     CALC(pfnCalcPrivateAddToStateObjectSize); FS(pfnAddToStateObject);
-    FS(pfnCreateSamplerFeedbackUnorderedAccessView); FS(pfnCreateAmplificationShader); FS(pfnCreateMeshShader);
+    CREATE(pfnCreateSamplerFeedbackUnorderedAccessView);   // D117, a view create: void, so it reports the code
+    FS(pfnCreateAmplificationShader); FS(pfnCreateMeshShader);
     CALC(pfnCalcPrivateMeshShaderSize);
     t->pfnImplicitShaderCacheControl = no_implicit_shader_cache;
 #undef FS
 #undef CALC
 #undef ZERO
+#undef CREATE
 }
 
 void fill_list_failsafe(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* t, uint32_t table_index) noexcept {
@@ -684,6 +715,18 @@ HRESULT fill_command_list(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* table, SIZE_T tab
     fill_list_commands(table, table_index);
     fill_list_queries(table, table_index);
     fill_list_tiles(table, table_index);
+    return S_OK;
+}
+
+// The render pass table (D3D12DDI_TABLE_TYPE_0043_RENDER_PASS, H:2507) has two slots and no fail-safe: both are
+// filled or the table is not published at all. The shell publishes it only while 1006 reports a render pass tier
+// (caps.cpp, render_pass_supported).
+HRESULT fill_render_pass(D3D12DDI_RENDER_PASS_FUNCS_0053* table, SIZE_T table_size, const FillInfo* info) noexcept {
+    if (!table || table_size != sizeof(D3D12DDI_RENDER_PASS_FUNCS_0053)) return E_INVALIDARG;
+    HRESULT hr = install_resolver(info);
+    if (FAILED(hr)) return hr;
+    *table = D3D12DDI_RENDER_PASS_FUNCS_0053{};
+    fill_render_pass_commands(table);
     return S_OK;
 }
 

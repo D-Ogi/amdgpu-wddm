@@ -95,8 +95,9 @@ namespace AmdgpuWddmControl
 
         public static readonly string[] Expressions = { "01-wave", "02-curious", "03-surprised", "04-wink", "05-thinking", "06-warning", "07-hopeful", "08-giggle", "09-thumbs-up" };
 
-        // The v3 art (scratch\gui\mascot\v3\final, owner-supplied, never committed) for each expression id. Two ids share
-        // a file until the set has its own: 05-thinking uses the curious face, 02-curious the same.
+        // The art file of each expression id, in art\nagi of this directory (PROVENANCE.md there). build.ps1 embeds
+        // that directory by default, for this application and for the setup window, and both read this one map. Two
+        // ids share a file until the set has its own: 05-thinking uses the curious face, 02-curious the same.
         public static readonly Dictionary<string, string> ArtFile = new Dictionary<string, string>
         {
             { "01-wave", "sheet-welcome" }, { "02-curious", "sheet-curious" }, { "03-surprised", "qwen-surprised" }, { "04-wink", "sheet-wink" },
@@ -145,7 +146,8 @@ namespace AmdgpuWddmControl
         }
 
         // Whether a frame sequence may play: only with Nagi shown, reduced animation not in force (the app's setting or
-        // Windows' "Animation effects" off), no rank 1-3 verdict, the window visible, and a complete frame set.
+        // Windows' "Animation effects" off), no rank 1-3 verdict, the window visible, and a complete frame set. The
+        // art that ships is stills (no -fNN files), so frames is 1 there and nothing animates until a set has frames.
         public static bool MayAnimate(bool showNagi, bool reduceAnimations, bool? windowsAnimations, int rank, bool windowVisible, int frames)
         {
             return showNagi && !reduceAnimations && windowsAnimations != false && rank > 3 && windowVisible && frames > 1;
@@ -158,7 +160,7 @@ namespace AmdgpuWddmControl
         // text, asked-for help, results and warnings always show.
         public static bool ShowUnaskedTip(bool showTipsAutomatically) { return showTipsAutomatically; }
 
-        // The art's resource name in the exe for an expression and a slot size: build.ps1 -NagiArt embeds
+        // The art's resource name in the exe for an expression and a slot size: build.ps1 embeds
         // nagi.<expression>@<size>.png (and nagi.<expression>-fNN@<size>.png frames when the art has them).
         public static string Resource(string expression, int size) { return "nagi." + expression + "@" + size + ".png"; }
         public static string FrameResource(string expression, int frame, int size) { return "nagi." + expression + "-f" + frame.ToString("00") + "@" + size + ".png"; }

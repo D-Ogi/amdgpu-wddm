@@ -34,6 +34,8 @@ typedef struct {
     unsigned long log[LOG_MAX][2];
     unsigned long logCount;
     unsigned long failOffset;
+    unsigned long readAttempts, writeAttempts, failReadAt, failWriteAt;
+    int failAfterWrite;
     unsigned long nowUs;
 } FILE_MODEL;
 
@@ -44,6 +46,10 @@ static FILE_MODEL g_f;
 static void FirmwareState(void)
 {
     memset(&g_f, 0, sizeof(g_f));
+    REG(BC250_REG_DMU_OTG0_OTG_CONTROL) = OTG0_OTG_CONTROL__OTG_MASTER_EN_MASK;
+    REG(BC250_REG_DMU_OTG0_OTG_CLOCK_CONTROL) = OTG0_OTG_CLOCK_CONTROL__OTG_BUSY_MASK;
+    REG(BC250_REG_DMU_OTG0_OTG_GLOBAL_CONTROL0) =
+        Bc250DispField(OTG0_OTG_GLOBAL_CONTROL0__OTG_MASTER_UPDATE_LOCK_SEL_MASK, 7);
     // The shape the GOP leaves (E03, before amdgpu): 1920x1200 viewport, recout and MPC size, DSCL_MODE 1 at 1:1.
     REG(BC250_REG_DMU_HUBP0_DCSURF_PRI_VIEWPORT_DIMENSION) = 0x04B00780ul;
     REG(BC250_REG_DMU_DSCL0_RECOUT_SIZE) = 0x04B00780ul;
@@ -55,9 +61,13 @@ static void FirmwareState(void)
 static long FRead(void* C, unsigned long Offset, unsigned long* Value)
 {
     (void)C;
+    if (++g_f.readAttempts == g_f.failReadAt) return (long)0xC0000185L;
     if (Offset == BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK) {
-        unsigned long v = REG(Offset) & OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK;
-        if (v && g_f.lockDelay >= 0 && g_f.lockReads++ >= g_f.lockDelay) v |= OTG0_OTG_MASTER_UPDATE_LOCK__UPDATE_LOCK_STATUS_MASK;
+        unsigned long v = REG(Offset);
+        if (v && (REG(BC250_REG_DMU_OTG0_OTG_CONTROL) & OTG0_OTG_CONTROL__OTG_MASTER_EN_MASK) &&
+            !(REG(BC250_REG_DMU_OTG0_OTG_GLOBAL_CONTROL0) & OTG0_OTG_GLOBAL_CONTROL0__OTG_MASTER_UPDATE_LOCK_SEL_MASK) &&
+            g_f.lockDelay >= 0 && g_f.lockReads++ >= g_f.lockDelay)
+            v |= OTG0_OTG_MASTER_UPDATE_LOCK__UPDATE_LOCK_STATUS_MASK;
         *Value = v;
         return 0;
     }
@@ -68,7 +78,9 @@ static long FRead(void* C, unsigned long Offset, unsigned long* Value)
 static long FWrite(void* C, unsigned long Offset, unsigned long Value)
 {
     (void)C;
-    if (g_f.failOffset == Offset) return (long)0xC0000185L;
+    g_f.writeAttempts++;
+    if (g_f.failOffset == Offset || (g_f.writeAttempts == g_f.failWriteAt && !g_f.failAfterWrite))
+        return (long)0xC0000185L;
     if (g_f.logCount < LOG_MAX) { g_f.log[g_f.logCount][0] = Offset; g_f.log[g_f.logCount][1] = Value; g_f.logCount++; }
     if (Offset == BC250_REG_DMU_DSCL0_SCL_COEF_RAM_TAP_SELECT) {
         g_f.coefType = (Value & DSCL0_SCL_COEF_RAM_TAP_SELECT__SCL_COEF_RAM_FILTER_TYPE_MASK) >> 16;
@@ -93,11 +105,11 @@ static long FWrite(void* C, unsigned long Offset, unsigned long Value)
         // SCL_COEF_RAM_SELECT_CURRENT is read only.
         REG(Offset) = (Value & ~DSCL0_SCL_MODE__SCL_COEF_RAM_SELECT_CURRENT_MASK) |
                       (REG(Offset) & DSCL0_SCL_MODE__SCL_COEF_RAM_SELECT_CURRENT_MASK);
-        return 0;
+        return g_f.writeAttempts == g_f.failWriteAt ? (long)0xC0000185L : 0;
     }
     if (Offset == BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK) g_f.lockReads = 0;
     if (Offset != BC250_REG_DMU_OTG0_OTG_TRIGA_MANUAL_TRIG) REG(Offset) = Value;
-    return 0;
+    return g_f.writeAttempts == g_f.failWriteAt ? (long)0xC0000185L : 0;
 }
 
 static void FStall(void* C, unsigned long Us) { (void)C; g_f.nowUs += Us; }
@@ -290,8 +302,11 @@ static void TestProgram(void)
     CHECK(Bc250ScalerPlan(1920, 1080, 1920, 1200, BC250_SCALING_STRETCHED, &p) == 0);
     CHECK(Bc250ScalerProgram(&io, &p, &res) == 0);
     CHECK(io.Refusals == 0 && res.LockWaitUs == 2);
-    // The lock first, the unlock and the trigger last.
-    CHECK(g_f.log[0][0] == BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK && g_f.log[0][1] == 1);
+    CHECK(res.LockStatusValid && res.LockStatus == (OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK |
+        OTG0_OTG_MASTER_UPDATE_LOCK__UPDATE_LOCK_STATUS_MASK));
+    // Select pipe 0 before the lock; the unlock and trigger remain last.
+    CHECK(g_f.log[0][0] == BC250_REG_DMU_OTG0_OTG_GLOBAL_CONTROL0 && g_f.log[0][1] == 0);
+    CHECK(g_f.log[1][0] == BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK && g_f.log[1][1] == 1);
     CHECK(g_f.log[g_f.logCount - 2][0] == BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK && g_f.log[g_f.logCount - 2][1] == 0);
     CHECK(g_f.log[g_f.logCount - 1][0] == BC250_REG_DMU_OTG0_OTG_TRIGA_MANUAL_TRIG);
     CHECK(CountWrites(BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK) == 2);
@@ -372,19 +387,21 @@ static void TestProgramRefusals(void)
     BC250_SCALER_RESULT res;
 
     CHECK(Bc250ScalerPlan(1600, 900, 1920, 1200, BC250_SCALING_ASPECT, &p) == 0);
-    // The lock is never acknowledged: lock, unlock, nothing else, no trigger.
+    // The lock is never acknowledged: select, lock, unlock, no pipe writes or trigger.
     FirmwareState();
     g_f.lockDelay = -1;
     IoInit(&io, 100);
     CHECK(Bc250ScalerProgram(&io, &p, &res) == BC250_DISP_STATUS_TIMEOUT);
-    CHECK(g_f.logCount == 2 && g_f.log[1][0] == BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK && g_f.log[1][1] == 0);
+    CHECK(g_f.logCount == 3 && g_f.log[2][0] == BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK && g_f.log[2][1] == 0);
     CHECK(res.LockWaitUs == 10 && io.StalledUs == 10);
+    CHECK(res.LockStatusValid && res.LockStatus == OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK);
     CHECK(REG(BC250_REG_DMU_DSCL0_RECOUT_SIZE) == 0x04B00780ul);
     // A budget of 0 and a lock that needs one poll more: the same, without a single stall.
     FirmwareState();
     g_f.lockDelay = 1;
     IoInit(&io, 0);
-    CHECK(Bc250ScalerProgram(&io, &p, &res) == BC250_DISP_STATUS_BUDGET && g_f.logCount == 2 && io.StalledUs == 0);
+    CHECK(Bc250ScalerProgram(&io, &p, &res) == BC250_DISP_STATUS_BUDGET && g_f.logCount == 3 && io.StalledUs == 0);
+    CHECK(res.LockStatusValid && res.LockStatus == OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK);
     // A write that fails in the middle: the sequence stops, unlocks, no trigger.
     FirmwareState();
     g_f.failOffset = BC250_REG_DMU_DSCL0_SCL_TAP_CONTROL;
@@ -401,6 +418,91 @@ static void TestProgramRefusals(void)
     CHECK(Bc250ScalerRestoreNative(&io, 0, 1200, &res) == BC250_DISP_STATUS_INVALID && g_f.logCount == 0);
 }
 
+static void StoppedState(void)
+{
+    FirmwareState();
+    REG(BC250_REG_DMU_OTG0_OTG_CONTROL) = 0;
+    REG(BC250_REG_DMU_OTG0_OTG_CLOCK_CONTROL) = 0;
+    g_f.lockDelay = -1; // no active CRTC exists to acknowledge a live update lock
+}
+
+static void TestStoppedProgram(void)
+{
+    BC250_DISP_IO io;BC250_SCALER_PLAN p;BC250_SCALER_RESULT res;
+    unsigned long i,n;int post;
+    CHECK(Bc250ScalerPlan(1280,1024,1920,1200,BC250_SCALING_ASPECT,&p)==0);
+    StoppedState();IoInit(&io,0);
+    CHECK(Bc250ScalerProgramStopped(&io,&p,&res)==0);
+    CHECK(res.CoefWrites==132 && res.LockWaitUs==0 && res.LockStatusValid && res.LockStatus==0);
+    CHECK(REG(BC250_REG_DMU_DSCL0_RECOUT_START)==210 &&
+          REG(BC250_REG_DMU_DSCL0_RECOUT_SIZE)==0x04B005DCul);
+    CHECK(REG(BC250_REG_DMU_HUBP0_DCSURF_PRI_VIEWPORT_DIMENSION)==0x04000500ul);
+    CHECK(!CountWrites(BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK) &&
+          !CountWrites(BC250_REG_DMU_OTG0_OTG_GLOBAL_CONTROL0) &&
+          !CountWrites(BC250_REG_DMU_OTG0_OTG_TRIGA_MANUAL_TRIG) && !io.StalledUs);
+    n=g_f.writeAttempts;
+    // Each write of the real stopped sequence fails both before and after
+    // reaching the modeled register. No lock or trigger is introduced by cleanup.
+    for(post=0;post<2;++post)for(i=1;i<=n;++i) {
+        StoppedState();IoInit(&io,0);g_f.failWriteAt=i;g_f.failAfterWrite=post;
+        CHECK(Bc250ScalerProgramStopped(&io,&p,&res)==(long)0xC0000185L);
+        CHECK(g_f.writeAttempts==i && !io.StalledUs);
+        CHECK(!CountWrites(BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK) &&
+              !CountWrites(BC250_REG_DMU_OTG0_OTG_TRIGA_MANUAL_TRIG));
+    }
+    // Both zero bits are necessary: disable request alone is not completed stop.
+    for(i=0;i<4;++i) {
+        StoppedState();IoInit(&io,0);
+        if(i==0)REG(BC250_REG_DMU_OTG0_OTG_CONTROL)=OTG0_OTG_CONTROL__OTG_MASTER_EN_MASK;
+        if(i==1)REG(BC250_REG_DMU_OTG0_OTG_CLOCK_CONTROL)=OTG0_OTG_CLOCK_CONTROL__OTG_BUSY_MASK;
+        if(i==2)REG(BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK)=OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK;
+        if(i==3)REG(BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK)=OTG0_OTG_MASTER_UPDATE_LOCK__UPDATE_LOCK_STATUS_MASK;
+        CHECK(Bc250ScalerProgramStopped(&io,&p,&res)==BC250_DISP_STATUS_MISMATCH);
+        CHECK(g_f.writeAttempts==0 && !io.StalledUs);
+        CHECK(i<2?!res.LockStatusValid:res.LockStatusValid && res.LockStatus!=0);
+    }
+    for(i=1;i<=4;++i) {
+        StoppedState();IoInit(&io,0);g_f.failReadAt=i;
+        CHECK(Bc250ScalerProgramStopped(&io,&p,&res)==(long)0xC0000185L);
+        CHECK(!g_f.writeAttempts && !res.LockStatusValid && !io.StalledUs);
+    }
+    StoppedState();IoInit(&io,100);
+    CHECK(Bc250ScalerProgram(&io,&p,&res)==BC250_DISP_STATUS_MISMATCH && !g_f.writeAttempts);
+    CHECK(!res.LockStatusValid && !io.StalledUs);
+    FirmwareState();IoInit(&io,100);
+    CHECK(Bc250ScalerProgramStopped(&io,&p,&res)==BC250_DISP_STATUS_MISMATCH && !g_f.writeAttempts);
+    StoppedState();IoInit(&io,0);
+    CHECK(Bc250ScalerPlan(1920,1200,1920,1200,BC250_SCALING_IDENTITY,&p)==0);
+    CHECK(Bc250ScalerProgramStopped(&io,&p,&res)==0 && res.CoefWrites==0);
+    CHECK((res.SclModeAfter&DSCL0_SCL_MODE__DSCL_MODE_MASK)==0);
+}
+
+static void TestLiveAccessFailures(void)
+{
+    BC250_DISP_IO io;BC250_SCALER_PLAN p;BC250_SCALER_RESULT res;
+    unsigned long i,n;int post;
+    CHECK(Bc250ScalerPlan(1280,1024,1920,1200,BC250_SCALING_ASPECT,&p)==0);
+    FirmwareState();IoInit(&io,100);CHECK(Bc250ScalerProgram(&io,&p,&res)==0);n=g_f.writeAttempts;
+    for(post=0;post<2;++post)for(i=1;i<=n;++i) {
+        FirmwareState();IoInit(&io,100);g_f.failWriteAt=i;g_f.failAfterWrite=post;
+        CHECK(Bc250ScalerProgram(&io,&p,&res)==(long)0xC0000185L);
+        CHECK(i==n-1 && !post?REG(BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK)!=0:
+            REG(BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK)==0);
+        CHECK(CountWrites(BC250_REG_DMU_OTG0_OTG_TRIGA_MANUAL_TRIG)==(unsigned long)(i==n && post));
+    }
+    // Terminal failed lock read is unavailable, not an invented zero/ack.
+    FirmwareState();IoInit(&io,100);g_f.failReadAt=3;
+    CHECK(Bc250ScalerProgram(&io,&p,&res)==(long)0xC0000185L);
+    CHECK(!res.LockStatusValid && res.LockStatus==0 && res.LockWaitUs==0);
+    CHECK(REG(BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK)==0 &&
+          !CountWrites(BC250_REG_DMU_OTG0_OTG_TRIGA_MANUAL_TRIG));
+    // A later failed poll invalidates the preceding successful sample as well.
+    FirmwareState();IoInit(&io,100);g_f.lockDelay=2;g_f.failReadAt=4;
+    CHECK(Bc250ScalerProgram(&io,&p,&res)==(long)0xC0000185L);
+    CHECK(!res.LockStatusValid && res.LockStatus==0 && res.LockWaitUs==1);
+    CHECK(REG(BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK)==0);
+}
+
 int main(void)
 {
     TestFilterTable();
@@ -410,6 +512,8 @@ int main(void)
     TestShape();
     TestProgram();
     TestProgramRefusals();
+    TestStoppedProgram();
+    TestLiveAccessFailures();
     printf("dcn_scale_test: %d checks, %d failures\n", g_checks, g_failures);
     return g_failures ? 1 : 0;
 }

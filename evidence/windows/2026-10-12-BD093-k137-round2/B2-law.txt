@@ -1,0 +1,113 @@
+12:26:38.026 B2/law BEGIN tag= host=BC250-A phase=law state=B2 ms=50 cpu=2
+12:26:38.328 B2/law boot lastboot=2026-10-12T12:11:55 uptime_s=883
+12:26:38.788 B2/law gpu device status=OK instance=PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\4&19CAF403&0&0041
+12:26:38.999 B2/law thermal tctl_c=63.9 gate_c=85.0 source=telemetry live=yes
+12:26:39.090 B2/law dpm before driver 0x000700D8, requested dpm, reason none, generation 8712492255, ticks 391, uptime 12294 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release below 83.0 C for 4000 ms (default), soft zone from 86.0 C per 1500 ms, lead 15000 ms (default)
+12:26:39.124 B2/law dpm before idle: 500 MHz (now) after 3000 ms under 2 permille busy; entries 1 exits 0 refusals 0, 6056 ms at the point
+12:26:39.137 B2/law dpm before smu metrics: ok, 12 tables, 0 failures, last 156 ms ago: gfx 818 mV 500 MHz 60.25 C, soc 1199 mV 61.75 C, throttler 0x0000
+12:26:39.155 B2/law dpm before 14:26:39.049 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  63.9 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle idle confirmed  up 0 down 1 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  48.5 W avg  47.0 W (gfx 17.2 W soc  5.5 W)
+12:26:39.233 B2/law cpu before cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+12:26:39.236 B2/law cpu before cpu: applied clock 0 MHz, undervolt 0 steps, cap 0 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+12:26:39.250 B2/law cpu before cpu: 1193 mV (GPU 824 mV), firmware cap 100 C, features 0xDD602C7D, 63.7 C
+12:26:39.267 B2/law cpu before cpu: cores 3500 3500 1555 1555 3500 3500 3500 1555 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+12:26:39.284 B2/law cpu before cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+12:26:39.299 B2/law cpu before cpu: reads 20 writes 0 refusals 0 reverts 0 (retries 0, refused 0); last queue 0 message 0x3D argument 0x00000000 status 0x00000001
+12:26:40.413 B2/law selftest selftest emit_executes=yes iters=1000000
+12:26:40.416 B2/law selftest clock imul16_ns=14.0929 imul16_mhz=3406.0 fp8_ns=7.0155 fp8_mhz_at_3cyc=3421.0 fp_over_imul=1.0044 tsc_mhz=3194.06 qpc_hz=10000000
+12:26:40.435 B2/law selftest selftest clock_plausible=yes imul_mhz=3406.0
+12:26:40.449 B2/law selftest selftest fp_over_imul=1.0044 ratio_means_addsd_latency=1.00->3cyc(zen2,lab) 1.50->2cyc 0.75->4cyc
+12:26:40.465 B2/law selftest selftest tsc_plausible=yes tsc_mhz=3194.06
+12:26:40.507 B2/law selftest selftest alu_cyc_per_instr=1.7477 healthy_band=0.15..0.45 verdict=capped-like
+12:26:40.523 B2/law selftest selftest dep4_cyc=14.449 ind4_cyc=9.773 dep_over_ind=1.479 healthy_expect=about_3
+12:26:40.538 B2/law selftest selftest dep4_is_12_cycles=NO
+12:26:40.558 B2/law selftest selftest avx2=1 osxsave=1 avx=1 avx2=1 xcr0_ymm=1
+12:26:40.574 B2/law selftest selftest failures=1
+12:26:40.597 B2/law selftest exit=1 seconds=1.0
+12:26:40.610 B2/law selftest FAILED: the lines below are recorded but may not be quoted as measurements
+12:26:40.739 B2/law cpuid cpuid_begin pinned_cpu=2 on=2 processors=12
+12:26:40.741 B2/law cpuid cpuid leaf=0x00000000 sub=0 eax=0x00000010 ebx=0x68747541 ecx=0x444D4163 edx=0x69746E65
+12:26:40.757 B2/law cpuid cpuid leaf=0x00000001 sub=0 eax=0x00840F70 ebx=0x020C0800 ecx=0x7ED8320B edx=0x178BFBFF
+12:26:40.773 B2/law cpuid cpuid leaf=0x00000007 sub=0 eax=0x00000000 ebx=0x219C91A9 ecx=0x00400004 edx=0x00000000
+12:26:40.792 B2/law cpuid cpuid leaf=0x0000000B sub=0 eax=0x00000001 ebx=0x00000002 ecx=0x00000100 edx=0x00000002
+12:26:40.808 B2/law cpuid cpuid leaf=0x0000000D sub=0 eax=0x00000207 ebx=0x00000340 ecx=0x00000400 edx=0x40000000
+12:26:40.828 B2/law cpuid cpuid leaf=0x80000000 sub=0 eax=0x80000020 ebx=0x68747541 ecx=0x444D4163 edx=0x69746E65
+12:26:40.844 B2/law cpuid cpuid leaf=0x80000001 sub=0 eax=0x00840F70 ebx=0x00000000 ecx=0xF5C2B7FF edx=0x2FD3FBFF
+12:26:40.859 B2/law cpuid cpuid leaf=0x80000002 sub=0 eax=0x20444D41 ebx=0x322D4342 ecx=0x00003035 edx=0x00000000
+12:26:40.877 B2/law cpuid cpuid leaf=0x80000003 sub=0 eax=0x00000000 ebx=0x00000000 ecx=0x00000000 edx=0x00000000
+12:26:40.892 B2/law cpuid cpuid leaf=0x80000004 sub=0 eax=0x00000000 ebx=0x00000000 ecx=0x00000000 edx=0x00000000
+12:26:40.910 B2/law cpuid cpuid leaf=0x80000007 sub=0 eax=0x00000000 ebx=0x0000001B ecx=0x00000000 edx=0x00006599
+12:26:40.926 B2/law cpuid cpuid leaf=0x80000008 sub=0 eax=0x00003030 ebx=0x01023EFF ecx=0x0000700B edx=0x000100FF
+12:26:40.942 B2/law cpuid cpuid leaf=0x8000001E sub=0 eax=0x00000002 ebx=0x00000101 ecx=0x00000000 edx=0x00000000
+12:26:40.959 B2/law cpuid cpuid leaf=0x8000001F sub=0 eax=0x0001000F ebx=0x0000012F ecx=0x0000000E edx=0x00000001
+12:26:40.974 B2/law cpuid cpuid percpu pinned_cpu=2 apic_id_leaf1_ebx_31_24=0x00000002 x2apic_id_leaf0xB_edx=0x00000002 ext_apic_id_leaf8000001E_eax=0x00000002 (these three follow the logical CPU, not the state: compare them only at the same pinned_cpu)
+12:26:40.991 B2/law cpuid cpuid core_invariant leaf1_ebx_masked=0x000C0800 (leaf 1 EBX without the initial APIC ID byte: this one is comparable between A and B)
+12:26:41.009 B2/law cpuid cpuid leaf=0x8000001D sub=0 eax=0x00004121 ebx=0x01C0003F ecx=0x0000003F edx=0x00000000
+12:26:41.025 B2/law cpuid cpuid leaf=0x8000001D sub=1 eax=0x00004122 ebx=0x01C0003F ecx=0x0000003F edx=0x00000000
+12:26:41.040 B2/law cpuid cpuid leaf=0x8000001D sub=2 eax=0x00004143 ebx=0x01C0003F ecx=0x000003FF edx=0x00000002
+12:26:41.058 B2/law cpuid cpuid leaf=0x8000001D sub=3 eax=0x00014163 ebx=0x03C0003F ecx=0x00000FFF edx=0x00000001
+12:26:41.073 B2/law cpuid cpuid leaf=0x00000007 sub=0 eax=0x00000000 ebx=0x219C91A9 ecx=0x00400004 edx=0x00000000
+12:26:41.092 B2/law cpuid cpuid leaf=0x00000007 sub=1 eax=0x00000000 ebx=0x00000000 ecx=0x00000000 edx=0x00000000
+12:26:41.107 B2/law cpuid cpuid brand="AMD BC-250" osxsave=1 avx=1 avx2=1 xcr0_ymm=1 avx2_usable=1
+12:26:41.123 B2/law cpuid cpuid xcr0=0x0000000000000007
+12:26:50.147 B2/law law law_begin cpu=2 on=2 ms=50 full=1 processors=12
+12:26:50.149 B2/law law law_isa osxsave=1 avx=1 avx2=1 xcr0_ymm=1 vec256=run
+12:26:50.167 B2/law law clock imul16_ns=14.0928 imul16_mhz=3406.0 fp8_ns=7.0408 fp8_mhz_at_3cyc=3408.7 fp_over_imul=1.0008 tsc_mhz=3194.05 qpc_hz=10000000
+12:26:50.181 B2/law law sweep8 name=add_x6 instr=8 bytes=30 iters=15303558 us=56962.0 ns_per_iter=3.7221 cyc_per_iter=12.678 cyc_per_instr=1.5847 cyc_per_byte=0.4226 latency_cyc=1.0 work_per_us=1611.98 tsc_per_iter=11.8887
+12:26:50.200 B2/law law sweep32 name=add32_x6 instr=8 bytes=48 iters=15303966 us=57005.4 ns_per_iter=3.7249 cyc_per_iter=12.687 cyc_per_instr=1.5859 cyc_per_byte=0.2643 latency_cyc=1.0 work_per_us=1610.79 tsc_per_iter=11.8975
+12:26:50.215 B2/law law sweep8 name=add_x12 instr=14 bytes=54 iters=8378880 us=57878.7 ns_per_iter=6.9077 cyc_per_iter=23.528 cyc_per_instr=1.6805 cyc_per_byte=0.4357 latency_cyc=1.0 work_per_us=1737.19 tsc_per_iter=22.0636
+12:26:50.230 B2/law law sweep32 name=add32_x12 instr=14 bytes=90 iters=8233349 us=57181.5 ns_per_iter=6.9451 cyc_per_iter=23.655 cyc_per_instr=1.6896 cyc_per_byte=0.2628 latency_cyc=1.0 work_per_us=1727.83 tsc_per_iter=22.1831
+12:26:50.249 B2/law law sweep8 name=add_x18 instr=20 bytes=78 iters=5638145 us=56754.4 ns_per_iter=10.0661 cyc_per_iter=34.285 cyc_per_instr=1.7143 cyc_per_byte=0.4396 latency_cyc=1.0 work_per_us=1788.17 tsc_per_iter=32.1520
+12:26:50.264 B2/law law sweep32 name=add32_x18 instr=20 bytes=136 iters=5624468 us=56503.2 ns_per_iter=10.0460 cyc_per_iter=34.217 cyc_per_instr=1.7108 cyc_per_byte=0.2516 latency_cyc=1.0 work_per_us=1791.76 tsc_per_iter=32.0873
+12:26:50.282 B2/law law sweep8 name=add_x24 instr=26 bytes=102 iters=4276878 us=57416.8 ns_per_iter=13.4249 cyc_per_iter=45.725 cyc_per_instr=1.7587 cyc_per_byte=0.4483 latency_cyc=1.0 work_per_us=1787.72 tsc_per_iter=42.8807
+12:26:50.297 B2/law law sweep32 name=add32_x24 instr=26 bytes=178 iters=4275988 us=57138.6 ns_per_iter=13.3627 cyc_per_iter=45.513 cyc_per_instr=1.7505 cyc_per_byte=0.2557 latency_cyc=1.0 work_per_us=1796.05 tsc_per_iter=42.6810
+12:26:50.316 B2/law law sweep8 name=add_x36 instr=38 bytes=154 iters=2870855 us=56589.1 ns_per_iter=19.7116 cyc_per_iter=67.138 cyc_per_instr=1.7668 cyc_per_byte=0.4360 latency_cyc=1.0 work_per_us=1826.34 tsc_per_iter=62.9598
+12:26:50.330 B2/law law sweep32 name=add32_x36 instr=38 bytes=262 iters=2931747 us=57770.0 ns_per_iter=19.7050 cyc_per_iter=67.115 cyc_per_instr=1.7662 cyc_per_byte=0.2562 latency_cyc=1.0 work_per_us=1826.95 tsc_per_iter=62.9396
+12:26:50.348 B2/law law sweep8 name=add_x48 instr=50 bytes=202 iters=2208153 us=57583.2 ns_per_iter=26.0775 cyc_per_iter=88.820 cyc_per_instr=1.7764 cyc_per_byte=0.4397 latency_cyc=1.0 work_per_us=1840.66 tsc_per_iter=83.2930
+12:26:50.363 B2/law law sweep32 name=add32_x48 instr=50 bytes=346 iters=2187080 us=57249.8 ns_per_iter=26.1764 cyc_per_iter=89.157 cyc_per_instr=1.7831 cyc_per_byte=0.2577 latency_cyc=1.0 work_per_us=1833.72 tsc_per_iter=83.6086
+12:26:50.381 B2/law law slope_imm8 points=6 slope_cyc_per_instr=1.8146 intercept_cyc=-1.818 r2=0.99996 instr_per_cyc=0.551
+12:26:50.395 B2/law law slope_imm32 points=6 slope_cyc_per_instr=1.8199 intercept_cyc=-1.928 r2=0.99997 instr_per_cyc=0.549
+12:26:50.414 B2/law law knee name=knee_m0 instr=10 bytes=38 iters=8218404 us=57596.8 ns_per_iter=7.0083 cyc_per_iter=23.870 cyc_per_instr=2.3870 cyc_per_byte=0.6282 latency_cyc=24.0 work_per_us=1141.51 tsc_per_iter=22.3848
+12:26:50.430 B2/law law knee name=knee_m4 instr=14 bytes=54 iters=8197782 us=57610.8 ns_per_iter=7.0276 cyc_per_iter=23.936 cyc_per_instr=1.7097 cyc_per_byte=0.4433 latency_cyc=24.0 work_per_us=1138.37 tsc_per_iter=22.4465
+12:26:50.448 B2/law law knee name=knee_m8 instr=18 bytes=70 iters=8173776 us=57578.3 ns_per_iter=7.0443 cyc_per_iter=23.993 cyc_per_instr=1.3329 cyc_per_byte=0.3428 latency_cyc=24.0 work_per_us=1135.67 tsc_per_iter=22.4997
+12:26:50.463 B2/law law knee name=knee_m12 instr=22 bytes=86 iters=6529349 us=57516.0 ns_per_iter=8.8088 cyc_per_iter=30.003 cyc_per_instr=1.3638 cyc_per_byte=0.3489 latency_cyc=24.0 work_per_us=908.18 tsc_per_iter=28.1359
+12:26:50.481 B2/law law knee name=knee_m16 instr=26 bytes=102 iters=5437307 us=57532.2 ns_per_iter=10.5810 cyc_per_iter=36.039 cyc_per_instr=1.3861 cyc_per_byte=0.3533 latency_cyc=24.0 work_per_us=756.07 tsc_per_iter=33.7963
+12:26:50.496 B2/law law knee name=knee_m20 instr=30 bytes=118 iters=4606565 us=56823.2 ns_per_iter=12.3353 cyc_per_iter=42.014 cyc_per_instr=1.4005 cyc_per_byte=0.3561 latency_cyc=24.0 work_per_us=648.55 tsc_per_iter=39.3995
+12:26:50.516 B2/law law knee name=knee_m24 instr=34 bytes=138 iters=4086249 us=57613.1 ns_per_iter=14.0993 cyc_per_iter=48.022 cyc_per_instr=1.4124 cyc_per_byte=0.3480 latency_cyc=24.0 work_per_us=567.41 tsc_per_iter=45.0337
+12:26:50.530 B2/law law knee name=knee_m32 instr=42 bytes=170 iters=3227331 us=56818.3 ns_per_iter=17.6054 cyc_per_iter=59.964 cyc_per_instr=1.4277 cyc_per_byte=0.3527 latency_cyc=24.0 work_per_us=454.41 tsc_per_iter=56.2324
+12:26:50.547 B2/law law knee name=knee_m40 instr=50 bytes=202 iters=2716727 us=57409.8 ns_per_iter=21.1320 cyc_per_iter=71.976 cyc_per_instr=1.4395 cyc_per_byte=0.3563 latency_cyc=24.0 work_per_us=378.57 tsc_per_iter=67.4966
+12:26:50.564 B2/law law port name=port_alu_x24 instr=26 bytes=102 iters=4270874 us=56844.7 ns_per_iter=13.3099 cyc_per_iter=45.333 cyc_per_instr=1.7436 cyc_per_byte=0.4444 latency_cyc=1.0 work_per_us=1803.18 tsc_per_iter=42.5126
+12:26:50.580 B2/law law port name=port_mul_x24 instr=26 bytes=102 iters=3341609 us=57536.8 ns_per_iter=17.2183 cyc_per_iter=58.646 cyc_per_instr=2.2556 cyc_per_byte=0.5750 latency_cyc=3.0 work_per_us=1393.87 tsc_per_iter=54.9968
+12:26:50.598 B2/law law port name=port_fp_x24 instr=26 bytes=102 iters=5474737 us=57628.8 ns_per_iter=10.5263 cyc_per_iter=35.853 cyc_per_instr=1.3789 cyc_per_byte=0.3515 latency_cyc=3.0 work_per_us=2280.00 tsc_per_iter=33.6216
+12:26:50.614 B2/law law port name=port_vec128_x24 instr=26 bytes=102 iters=5439261 us=57283.4 ns_per_iter=10.5315 cyc_per_iter=35.870 cyc_per_instr=1.3796 cyc_per_byte=0.3517 latency_cyc=1.0 work_per_us=4557.77 tsc_per_iter=33.6381
+12:26:50.632 B2/law law port name=port_vec256_x24 instr=26 bytes=102 iters=4517285 us=57578.6 ns_per_iter=12.7463 cyc_per_iter=43.414 cyc_per_instr=1.6698 cyc_per_byte=0.4256 latency_cyc=1.0 work_per_us=7531.61 tsc_per_iter=40.7125
+12:26:50.648 B2/law law port name=port_load_x24 instr=26 bytes=126 iters=4447096 us=57410.1 ns_per_iter=12.9096 cyc_per_iter=43.970 cyc_per_instr=1.6912 cyc_per_byte=0.3490 latency_cyc=1.0 work_per_us=1859.09 tsc_per_iter=41.2339
+12:26:50.666 B2/law law port name=port_store_x24 instr=26 bytes=126 iters=4274557 us=57476.6 ns_per_iter=13.4462 cyc_per_iter=45.798 cyc_per_instr=1.7615 cyc_per_byte=0.3635 latency_cyc=1.0 work_per_us=1784.89 tsc_per_iter=42.9479
+12:26:50.681 B2/law law pair name=dep_imul_x4 instr=6 bytes=22 iters=13367133 us=56847.0 ns_per_iter=4.2527 cyc_per_iter=14.485 cyc_per_instr=2.4141 cyc_per_byte=0.6584 latency_cyc=12.0 work_per_us=940.57 tsc_per_iter=13.5836
+12:26:50.699 B2/law law pair name=ind_imul_x4 instr=6 bytes=22 iters=20085252 us=57595.7 ns_per_iter=2.8676 cyc_per_iter=9.767 cyc_per_instr=1.6278 cyc_per_byte=0.4440 latency_cyc=3.0 work_per_us=1394.91 tsc_per_iter=9.1591
+12:26:50.715 B2/law law nop name=nop1_x8 instr=11 bytes=18 iters=14918031 us=57584.3 ns_per_iter=3.8600 cyc_per_iter=13.147 cyc_per_instr=1.1952 cyc_per_byte=0.7304 latency_cyc=1.0 work_per_us=259.06 tsc_per_iter=12.3292
+12:26:50.733 B2/law law nop name=nop1_x16 instr=19 bytes=26 iters=8623155 us=57438.7 ns_per_iter=6.6610 cyc_per_iter=22.687 cyc_per_instr=1.1941 cyc_per_byte=0.8726 latency_cyc=1.0 work_per_us=150.13 tsc_per_iter=21.2757
+12:26:50.748 B2/law law nop name=nop1_x32 instr=35 bytes=42 iters=4680205 us=57332.8 ns_per_iter=12.2501 cyc_per_iter=41.724 cyc_per_instr=1.1921 cyc_per_byte=0.9934 latency_cyc=1.0 work_per_us=81.63 tsc_per_iter=39.1273
+12:26:50.764 B2/law law nop name=nop8_x8 instr=11 bytes=74 iters=14994279 us=57879.9 ns_per_iter=3.8601 cyc_per_iter=13.148 cyc_per_instr=1.1952 cyc_per_byte=0.1777 latency_cyc=1.0 work_per_us=259.06 tsc_per_iter=12.3294
+12:26:50.783 B2/law law nop name=nop8_x16 instr=19 bytes=142 iters=7405984 us=49249.1 ns_per_iter=6.6499 cyc_per_iter=22.650 cyc_per_instr=1.1921 cyc_per_byte=0.1595 latency_cyc=1.0 work_per_us=150.38 tsc_per_iter=21.2402
+12:26:50.797 B2/law law nop name=nop8_x32 instr=35 bytes=270 iters=4697257 us=57556.6 ns_per_iter=12.2532 cyc_per_iter=41.735 cyc_per_instr=1.1924 cyc_per_byte=0.1546 latency_cyc=1.0 work_per_us=81.61 tsc_per_iter=39.1375
+12:26:50.817 B2/law law nop name=nop15_x8 instr=11 bytes=134 iters=14903724 us=57527.6 ns_per_iter=3.8599 cyc_per_iter=13.147 cyc_per_instr=1.1952 cyc_per_byte=0.0981 latency_cyc=1.0 work_per_us=259.07 tsc_per_iter=12.3289
+12:26:50.831 B2/law law nop name=nop15_x16 instr=19 bytes=254 iters=8397725 us=55874.5 ns_per_iter=6.6535 cyc_per_iter=22.662 cyc_per_instr=1.1927 cyc_per_byte=0.0892 latency_cyc=1.0 work_per_us=150.30 tsc_per_iter=21.2517
+12:26:50.850 B2/law law nop name=nop15_x32 instr=35 bytes=494 iters=4690705 us=57446.2 ns_per_iter=12.2468 cyc_per_iter=41.713 cyc_per_instr=1.1918 cyc_per_byte=0.0844 latency_cyc=1.0 work_per_us=81.65 tsc_per_iter=39.1170
+12:26:50.866 B2/law law deplen name=dep_imul_x8 instr=10 bytes=38 iters=8153493 us=57430.9 ns_per_iter=7.0437 cyc_per_iter=23.991 cyc_per_instr=2.3991 cyc_per_byte=0.6313 latency_cyc=24.0 work_per_us=1135.76 tsc_per_iter=22.4980
+12:26:50.883 B2/law law deplen name=dep_imul_x16 instr=18 bytes=70 iters=4087382 us=57532.1 ns_per_iter=14.0755 cyc_per_iter=47.941 cyc_per_instr=2.6634 cyc_per_byte=0.6849 latency_cyc=48.0 work_per_us=1136.72 tsc_per_iter=44.9580
+12:26:50.899 B2/law law deplen name=dep_imul_x32 instr=34 bytes=138 iters=2037745 us=57437.4 ns_per_iter=28.1867 cyc_per_iter=96.004 cyc_per_instr=2.8236 cyc_per_byte=0.6957 latency_cyc=96.0 work_per_us=1135.29 tsc_per_iter=90.0300
+12:26:50.917 B2/law law deplen name=dep_imul_x48 instr=50 bytes=202 iters=2000003 us=84732.6 ns_per_iter=42.3662 cyc_per_iter=144.299 cyc_per_instr=2.8860 cyc_per_byte=0.7144 latency_cyc=144.0 work_per_us=1132.98 tsc_per_iter=135.3199
+12:26:50.933 B2/law law clock imul16_ns=14.0858 imul16_mhz=3407.7 fp8_ns=7.0122 fp8_mhz_at_3cyc=3422.6 fp_over_imul=1.0044 tsc_mhz=3194.05 qpc_hz=10000000
+12:26:50.951 B2/law law law_end cpu=2 clock_start_mhz=3406.0 clock_end_mhz=3407.7 drift_pct=0.050
+12:26:50.967 B2/law law exit=0 seconds=9.0
+12:26:51.044 B2/law dpm after driver 0x000700D8, requested dpm, reason none, generation 8712492255, ticks 769, uptime 24234 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release below 83.0 C for 4000 ms (default), soft zone from 86.0 C per 1500 ms, lead 15000 ms (default)
+12:26:51.046 B2/law dpm after idle: 500 MHz (now) after 3000 ms under 2 permille busy; entries 1 exits 0 refusals 0, 17734 ms at the point
+12:26:51.062 B2/law dpm after smu metrics: ok, 23 tables, 0 failures, last 992 ms ago: gfx 818 mV 500 MHz 60.75 C, soc 1187 mV 62.25 C, throttler 0x0000
+12:26:51.081 B2/law dpm after 14:26:51.016 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  64.0 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle idle confirmed  up 0 down 1 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  46.9 W avg  46.1 W (gfx 17.2 W soc  4.0 W)
+12:26:51.138 B2/law cpu after cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+12:26:51.140 B2/law cpu after cpu: applied clock 0 MHz, undervolt 0 steps, cap 0 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+12:26:51.159 B2/law cpu after cpu: 1193 mV (GPU 824 mV), firmware cap 100 C, features 0xDD602C7D, 63.7 C
+12:26:51.176 B2/law cpu after cpu: cores 3500 3500 1555 1555 3500 3500 3500 1555 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+12:26:51.194 B2/law cpu after cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+12:26:51.211 B2/law cpu after cpu: reads 20 writes 0 refusals 0 reverts 0 (retries 0, refused 0); last queue 0 message 0x3D argument 0x00000000 status 0x00000001
+12:26:51.242 B2/law END phase=law state=B2 exit=0

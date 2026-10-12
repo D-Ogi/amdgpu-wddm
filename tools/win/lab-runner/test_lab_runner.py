@@ -26,6 +26,8 @@ POLICIES = {'untouched', 'record', 'backup-restore'}
 SESSION_BOUND = 1200
 # Owner, 2026-10-01: no FSR and no dynamic resolution in a measured session.
 UPSCALER = re.compile(r'\b(fsr|dlss|xess|fidelityfx|dynamicres|resolutionscale|upscal)', re.I)
+# Before readiness the channel takes only these keys (scan codes Space, Esc, Enter), and an intro skip presses one.
+INTRO_KEYS = {'39', '01', '1C'}
 
 
 class Profiles(unittest.TestCase):
@@ -53,6 +55,22 @@ class Profiles(unittest.TestCase):
                 self.assertIn(p['settings']['policy'], POLICIES)
                 self.assertTrue(p['events_filter'])
 
+    def test_an_intro_skip_presses_an_intro_key_within_its_bounds(self):
+        for path in PROFILES:
+            skip = json.loads(path.read_text(encoding='utf-8'))['readiness'].get('intro_skip')
+            if skip is None:
+                continue
+            with self.subTest(profile=path.name):
+                self.assertIn(skip['key'], INTRO_KEYS, 'the channel takes no other key before readiness')
+                self.assertTrue(2 <= skip['every_seconds'] <= 30)
+                self.assertTrue(0 <= skip['after_window_seconds'] <= 120)
+                self.assertTrue(1 <= skip['max_presses'] <= 100)
+
+    def test_the_witcher3_profile_skips_its_intro_with_space(self):
+        # b29 native-caps549: the intro video waited for Space from about 78 s to 183 s after the launch.
+        profile = json.loads((HERE / 'profiles/witcher3.json').read_text(encoding='utf-8'))
+        self.assertEqual(profile['readiness']['intro_skip']['key'], '39')
+
     def test_no_session_exceeds_the_owners_bound(self):
         for path in PROFILES:
             with self.subTest(profile=path.name):
@@ -74,6 +92,20 @@ class OwnerRules(unittest.TestCase):
     def test_an_unreadable_temperature_does_not_clear_the_hot_run(self):
         # A failed read is -1, never a temperature: only a readable sample below 87 C ends the hot stretch.
         self.assertRegex(RUNTIME, r'elseif\(\$temp\s+-ge\s+0\)\{\$hotSince=\$null\}')
+
+    def test_every_temperature_note_says_which_source_answered(self):
+        # BD-062: the runner reads the temperature through the KMD client and falls back to the overlay. The
+        # driver reports the same version with and without the fix, so only the session's own evidence can say
+        # which path produced a number. Both branches set the source, and no note credits the client blindly.
+        self.assertIn("$script:TempSource='clock-read'", RUNTIME, 'the client branch names no source')
+        self.assertIn("$script:TempSource='overlay'", RUNTIME, 'the overlay branch names no source')
+        self.assertIn('$result.temperature_source=$script:TempSource', RUNTIME,
+                      'the result record carries no temperature source')
+        self.assertIn(" tsrc='+$script:TempSource", RUNTIME, 'a sample note without its temperature source')
+        self.assertNotRegex(RUNTIME, r"temperature_before '\+\$result\.temperature_before\+' through '\+\$script:ClockCli",
+                            'a note that credits the client whichever source answered')
+        for note in re.findall(r"'(?:tctl|temperature_before|temperature_after) .*?through '\+([^+\n]+)", RUNTIME):
+            self.assertIn('Temp-Where', note, 'a temperature note must name the source that answered')
 
     def test_the_walk_marker_says_whether_anything_verified_the_world(self):
         # BD-107, and H1 of the 2026-10-10 audit: the marker that opens ETW measurement window B must say what
@@ -120,6 +152,20 @@ class OwnerRules(unittest.TestCase):
             with self.subTest(script=name):
                 text = (HERE / name).read_text(encoding='utf-8', errors='replace')
                 self.assertIn('[Math]::Min([Math]::Max($Seconds, 10), 1200)', text)
+
+
+class BeforeReadiness(unittest.TestCase):
+    """The channel before readiness. intro-skip-check.ps1 runs the functions themselves under Windows PowerShell
+    5.1; these tests hold the key list and the world-mark refusal in the text of the script."""
+
+    def test_the_channel_takes_only_space_esc_and_enter_before_readiness(self):
+        keys = re.search(r"\$script:PreReadyKeys=@\(([^)]*)\)", RUNTIME)
+        self.assertTrue(keys, 'the list of the keys before readiness is gone')
+        self.assertEqual({key.strip().strip("'") for key in keys.group(1).split(',')}, INTRO_KEYS)
+        self.assertIn('$bad=PreReady-Refusal $actions', RUNTIME, 'Control-Step no longer checks before readiness')
+
+    def test_a_world_mark_is_refused_before_readiness(self):
+        self.assertIn("if($a -match '^(world|note:world)$'){return $a}", RUNTIME)
 
 
 class LogStream(unittest.TestCase):

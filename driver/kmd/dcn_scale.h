@@ -23,6 +23,7 @@ enum bc250_scaling {
     BC250_SCALING_CENTERED,             // 1:1 pixels in the middle, black around (no scaler ratio)
     BC250_SCALING_STRETCHED,            // the whole active area, aspect ratio not kept
     BC250_SCALING_ASPECT,               // as large as fits with the aspect ratio kept, centered, black bars
+    BC250_SCALING_CUSTOM,               // retained firmware transform only; never programmed by ScalerPlan
     BC250_SCALING_COUNT
 };
 #define BC250_SCALING_BIT(s) (1ul << (s))
@@ -94,6 +95,28 @@ enum bc250_pipe_verdict {
 };
 
 long Bc250PipeShapeRead(BC250_DISP_IO* Io, BC250_PIPE_SHAPE* Shape);
+
+// BD-124: read-only admission of a firmware-scaled surface. Valid is a per-read
+// bit mask, so an unreadable register is distinguishable from a measured zero.
+typedef struct _BC250_INHERITED_PIPE {
+    BC250_PIPE_SHAPE Shape;
+    unsigned long RatioH, RatioV, Taps, SurfaceConfig, TilingConfig, Pitch, Otg1;
+    unsigned long SurfaceControl, MpccBottom, MpccControl, MpcOut;
+    unsigned long Autocal, DsclControl;
+    unsigned long Valid;
+} BC250_INHERITED_PIPE;
+#define BC250_INHERITED_PIPE_READS 23ul
+#define BC250_INHERITED_PIPE_ALL ((1ul << BC250_INHERITED_PIPE_READS) - 1ul)
+long Bc250InheritedPipeRead(BC250_DISP_IO* Io, BC250_INHERITED_PIPE* Pipe);
+int Bc250InheritedPipeSame(const BC250_INHERITED_PIPE* A, const BC250_INHERITED_PIPE* B);
+// A set of equivalent VidPN transformations for exactly the saved tuple.
+// Custom preserves the firmware image without claiming a standard scaling
+// transform (automatic ratio calculation or a unity-ratio enlarged recout).
+// It never grants permission to program a different pipe. Return 0 if
+// the readback does not prove a linear, unrotated RGB source feeding OTG0.
+unsigned long Bc250InheritedPipeSupport(const BC250_INHERITED_PIPE* Pipe,
+    unsigned long SourceWidth, unsigned long SourceHeight, unsigned long Pitch,
+    unsigned long TargetWidth, unsigned long TargetHeight);
 // The verdict for a native active size; *MaxLevel is the highest display-modes level the shape allows.
 unsigned long Bc250PipeShapeCheck(const BC250_PIPE_SHAPE* Shape, unsigned long NativeWidth,
                                   unsigned long NativeHeight, unsigned long* MaxLevel);
@@ -101,8 +124,8 @@ const char* Bc250PipeVerdictText(unsigned long Verdict);
 
 // ---- the register writes ---------------------------------------------------------------------------------------
 //
-// One pipe update under OTG0_OTG_MASTER_UPDATE_LOCK, the lock and its acknowledgement as dcn.c's
-// DcnFlipWriteSequence takes them (at most ten 1 us stalls), then the unlock and the manual trigger. Every write
+// A live pipe update selects OTG0 then takes OTG_MASTER_UPDATE_LOCK as optc1_lock
+// does (at most ten 1 us stalls), then unlocks and triggers. Every write
 // is to a register of gen_regs.py's display write table. The underflow status of HUBP0 is read after the trigger
 // and returned (it is the first sign of a DCHUB request setting this code does not program; the design names it).
 typedef struct _BC250_SCALER_RESULT {
@@ -110,9 +133,15 @@ typedef struct _BC250_SCALER_RESULT {
     unsigned long CoefWrites;           // SCL_COEF_RAM_TAP_DATA writes
     unsigned long SclModeBefore, SclModeAfter;
     unsigned long HubpCntlAfter;        // HUBP0_DCHUBP_CNTL after the trigger
+    unsigned long LockStatus;          // raw register at wait termination or stopped-pipe admission
+    unsigned long LockStatusValid;     // zero when no sample was taken or the final read failed
 } BC250_SCALER_RESULT;
 
 long Bc250ScalerProgram(BC250_DISP_IO* Io, const BC250_SCALER_PLAN* Plan, BC250_SCALER_RESULT* Result);
+// Caller owns the pipe and has completed optc1_disable_crtc. Verify MASTER_EN=0,
+// OTG_BUSY=0 and no held update lock before programming. No lock, stall or
+// manual trigger: the caller programs timing and enables the OTG afterwards.
+long Bc250ScalerProgramStopped(BC250_DISP_IO* Io, const BC250_SCALER_PLAN* Plan, BC250_SCALER_RESULT* Result);
 // The 1:1 shape for the native size (Linux's shape for a source of the native size: 444 bypass, full viewport
 // and recout). The quiet restore at stop, reset and bugcheck uses this.
 long Bc250ScalerRestoreNative(BC250_DISP_IO* Io, unsigned long NativeWidth, unsigned long NativeHeight,

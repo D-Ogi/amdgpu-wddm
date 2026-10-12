@@ -16,7 +16,7 @@
 # document has to be rewritten; a document that is touched anyway should come out lower.
 #
 # To look at one document: python tools/quality/doclint.py --files <path>
-42	README.md
+34	README.md
 62	docs/00-goal-and-roadmap.md
 8	docs/01-evidence-rules.md
 4	docs/02-register-addressing.md
@@ -75,9 +75,9 @@
 36	docs/design/wsi-engine-present.md
 2	docs/dxvk-engine-commit-map.md
 21	docs/facts/README.md
-67	docs/gui/interfaces-setup.md
+66	docs/gui/interfaces-setup.md
 38	docs/gui/interfaces.md
-21	docs/hardware.md
+20	docs/hardware.md
 8	docs/init-sequence.md
 138	docs/linux-session-wishlist.md
 27	docs/m13-accelerated-desktop-roadmap.md
@@ -115,7 +115,6 @@
 2	docs/testing/release-notes/0.7.204.100-tester.11.md
 3	docs/testing/release-notes/0.7.204.101-tester.11.md
 3	docs/testing/release-notes/0.7.205.100-tester.11.md
-1	docs/testing/release-notes/pending/0.7.208-log-lines.md
 62	docs/wddm_contract_matrix.md
 9	driver/README.md
 45	driver/amdgpu-import/PROVENANCE.md
@@ -133,7 +132,7 @@
 6	driver/shim/test/README.md
 26	driver/shim/test/sdma_faults_report.md
 24	driver/umd/d3d12/README.md
-211	driver/umd/d3d12/engine-ddi/INTEGRATION.md
+209	driver/umd/d3d12/engine-ddi/INTEGRATION.md
 29	driver/umd/d3d12/engine-ddi/README.md
 31	driver/umd/d3d12/engine-ddi/SLOTS.md
 28	driver/umd/d3d12/engine-ddi/shader-container/README.md
@@ -149,7 +148,7 @@
 48	tools/release/README.md
 18	tools/runcompare/README.md
 25	tools/win/README.md
-64	tools/win/amdgpu_wddm_control/README.md
+63	tools/win/amdgpu_wddm_control/README.md
 7	tools/win/amdgpu_wddm_setup/README.md
 14	tools/win/bc250kmd_cli/README.md
 39	tools/win/bc250mon/README.md
@@ -159,7 +158,7 @@
 3	tools/win/d3d11errors/README.md
 2	tools/win/d3d11mt/README.md
 20	tools/win/d3d12caps/README.md
-57	tools/win/d3d12queue/README.md
+56	tools/win/d3d12queue/README.md
 1	tools/win/dxgimodes/README.md
 53	tools/win/frameloop/README.md
 3	tools/win/gpu-timeline/README.md
@@ -174,5 +173,4 @@
 6	tools/win/triage/README.md
 1	tools/win/vkfillcheck/README.md
 1	tools/win/vkmembw/README.md
-1	tools/win/wsi-dxgi/README.md
 2	tools/wininstall/README.md

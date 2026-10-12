@@ -13,11 +13,22 @@ flowchart LR
   M253["M253"]
   M509["M509"]
   M510["M510<br/>linux"]
+  M795["M795"]
   M816["M816<br/>games"]
   M847["M847"]
   M849["M849"]
+  M857["M857"]
+  M859["M859"]
+  M864["M864"]
+  M868["M868"]
+  M869["M869"]
+  M876["M876"]
   M253 ==>|supersedes| M251
   M849 ==>|supersedes| M847
+  M864 ==>|supersedes| M857
+  M868 ==>|supersedes| M859
+  M869 ==>|supports| M868
+  M876 ==>|supersedes| M795
   M816 ==>|supersedes| M166
   M510 ==>|supports| M509
   classDef other stroke-dasharray:4 3
@@ -55,6 +66,23 @@ flowchart LR
   M847["M847"]
   M848["M848"]
   M849["M849"]
+  M853["M853"]
+  M854["M854"]
+  M855["M855"]
+  M856["M856"]
+  M857["M857"]
+  M858["M858"]
+  M859["M859"]
+  M860["M860"]
+  M861["M861"]
+  M862["M862"]
+  M863["M863"]
+  M865["M865<br/>hardware"]
+  M868["M868"]
+  M869["M869"]
+  M873["M873"]
+  M874["M874"]
+  M865 --> M847
   M139 --> M50
   M252 --> M253
   M253 --> M166
@@ -69,10 +97,27 @@ flowchart LR
   M846 --> M845
   M848 --> M847
   M849 --> M848
+  M853 --> M846
+  M854 --> M853
+  M855 --> M854
+  M856 --> M854
+  M857 --> M854
+  M858 --> M846
+  M859 --> M846
+  M860 --> M859
+  M861 --> M846
+  M862 --> M854
+  M863 --> M856
+  M868 --> M858
+  M868 --> M860
+  M869 --> M868
+  M873 --> M846
+  M873 --> M869
+  M874 --> M873
   M842 --> M795
   M510 --> M508
   M516 --> M515
   classDef other stroke-dasharray:4 3
-  class M50,M496,M510,M516,M546,M842 other
+  class M50,M496,M510,M516,M546,M842,M865 other
 ```
 

@@ -4,13 +4,19 @@
 # the installer turned it on). A restart finishes the removal of files that DWM still has loaded.
 # -Force removes the release also from a development-lab machine (as install.ps1 -Force installs on one); the lab's
 # own folders (C:\BC250\m10, m14, m15) are not ours to remove and stay.
+# The extras (llama.cpp, Ollama) go with the install root, and every registration they made is removed. The models
+# that were downloaded are the user's own data and stay: -RemoveModels deletes them too.
 [CmdletBinding()]
-param([switch]$DryRun, [switch]$Yes, [switch]$DisableTestSigning, [switch]$KeepTestSigning, [switch]$NoReboot, [switch]$Force)
+param([switch]$DryRun, [switch]$Yes, [switch]$DisableTestSigning, [switch]$KeepTestSigning, [switch]$NoReboot, [switch]$Force,
+    [switch]$RestoreSystemTuning, [switch]$KeepSystemTuning, [switch]$RemoveModels)
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $package = Split-Path -Parent $here
 . (Join-Path $here 'common.ps1')
 . (Join-Path $here 'mft-h264.ps1')
+. (Join-Path $here 'system-tuning.ps1')
+if ($RestoreSystemTuning -and $KeepSystemTuning) { throw 'Choose either -RestoreSystemTuning or -KeepSystemTuning.' }
+. (Join-Path $here 'components.ps1')
 $script:DryRunMode = [bool]$DryRun
 # Host tests only: a dry run can read its installer state from a test folder (as install.ps1).
 if ($DryRun -and $env:AMDGPU_WDDM_TEST_STATE_DIR) {
@@ -35,25 +41,47 @@ Write-Info "install root: $root"
 $lab = @(Get-LabInstallPaths)
 if ($lab.Count -and -not $Force) { Write-Fail "a development-lab installation ($($lab -join ', ')) is present: this uninstaller does not change a lab machine (-Force removes the release anyway)"; exit 2 }
 if ($lab.Count) { Write-Warn2 "a development-lab installation ($($lab -join ', ')) is present; -Force given: the release is removed, those folders stay" }
-if (-not $state -and -not (Test-Path -LiteralPath $root) -and -not @(Get-OurDriverPackages).Count) {
+# Inventory must succeed before the first change. A failed read is not an empty driver store.
+try { $pkgs = @(Get-OurDriverPackages) }
+catch { Write-Fail "Driver-store inventory could not be read. No removal was started: $($_.Exception.Message)"; exit 6 }
+if (-not $Yes -and -not (Read-Confirmation -Question 'Remove the amdgpu-wddm driver and return the GPU to Microsoft Basic Display Adapter?' -Expect 'YES')) { Write-Host 'Stopped. Nothing was changed.'; exit 4 }
+# Restore runs before removing any release files. Failure aborts removal and keeps the recovery tools.
+if (-not $RestoreSystemTuning -and -not $KeepSystemTuning -and -not $Yes -and -not $DryRun) {
+    $RestoreSystemTuning = [switch](Read-Confirmation -Question 'Restore machine-wide Windows settings managed by our optional tuning before removal? Press Enter to keep them. Per-user settings remain available for recovery in each account.' -Expect 'YES')
+}
+if ($RestoreSystemTuning) { Invoke-SelectedSystemTuning -Selected $true -Action RestoreAll -PackageRoot $package }
+else { Write-Info 'Windows tuning is kept. Use -RestoreSystemTuning to restore managed settings.' }
+Write-Info 'The Windows tuning recovery journal in ProgramData\amdgpu-wddm\system-tuning is retained.'
+$hasTuning = Test-Path -LiteralPath (Join-Path $package 'payload\system-tuning\system-tuning.ps1')
+if (-not $hasTuning) { $hasTuning = Test-Path -LiteralPath (Join-Path $package 'system-tuning\system-tuning.ps1') }
+if ($hasTuning) {
+    Invoke-Change 'keep the verified Windows tuning recovery tools for this and other accounts after removal' { Save-SystemTuningRecovery -PackageRoot $package } | Out-Null
+}
+if (-not $state -and -not (Test-Path -LiteralPath $root) -and -not $pkgs.Count) {
     # No installation, but an earlier release (or an uninstaller older than this one) can have left per-user data.
     $userData = @(Get-OurUserDataDirs)
     if ($userData.Count) {
         Write-Step 'Per-user data'
         Invoke-Change "remove the per-user data an earlier release left (shader caches, the recent-launch list, DWM observations): $($userData -join ', ')" {
-            foreach ($d in $userData) { Remove-PathOrSchedule $d }
+            foreach ($d in $userData) { Remove-UserDataExceptTuning $d }
         } | Out-Null
         Write-Host 'No amdgpu-wddm installation found; the per-user data of an earlier release is removed.' -ForegroundColor Green; exit 0
     }
     Write-Host 'Nothing to remove: no amdgpu-wddm installation found.' -ForegroundColor Green; exit 0
 }
-if (-not $Yes -and -not (Read-Confirmation -Question 'Remove the amdgpu-wddm driver and return the GPU to Microsoft Basic Display Adapter?' -Expect 'YES')) { Write-Host 'Stopped. Nothing was changed.'; exit 4 }
+Write-Step 'Extras: llama.cpp, Ollama'
+# First, while its own folder is still there, each extra undoes what it registered itself; then the registrations the
+# installer made for it. Its files go with the install root further down.
+$componentManifest = $null
+try { $componentManifest = Read-ComponentsManifest $here } catch { Write-Log "   components.json: $($_.Exception.Message)" }
+Invoke-ComponentUnregister $state $componentManifest
+Remove-ComponentRegistrations $state
 
 Write-Step 'Scheduled task, RunOnce entry, shortcut'
 # Every task of ours, not only the one this release registers: a task that an older release named differently would
 # otherwise stay and run a script that is gone.
 $tasks = @(Get-OurScheduledTasks)
-Invoke-Change "unregister our scheduled task(s): $(if ($tasks.Count) { $tasks -join ', ' } else { "none on this computer (this release registers '$($script:TaskName)')" })" {
+Invoke-Change "unregister our scheduled task(s): $(if ($tasks.Count) { $tasks -join ', ' } else { "none on this computer (this release registers '$($script:TaskName)' and '$($script:WindowTaskName)')" })" {
     # Safe Mode runs no Task Scheduler service: then the task stays, and running uninstall.cmd again later removes it.
     foreach ($name in $tasks) {
         try {
@@ -194,14 +222,27 @@ Invoke-Change "remove the H.264 encoder MFT registration ($(if ($mftKeys.Count) 
 # The GPU leaves the driver now, under the running desktop: pnputil has no documented way to defer the removal of a
 # driver from a started device to the next restart, and a package kept until then could leave the GPU without a
 # driver at that start. The restart that ends the uninstall gives a fresh session (BD-060, common.ps1).
-$pkgs = @(Get-OurDriverPackages)
 if (-not $pkgs.Count) { Write-Info 'no bc250kmd driver package in the driver store' }
+$packageRestart = $false
 foreach ($p in $pkgs) {
-    Invoke-Change "pnputil /delete-driver $p /uninstall /force (the GPU falls back to Microsoft Basic Display Adapter)" {
-        $n = Invoke-Native pnputil.exe @('/delete-driver', $p, '/uninstall', '/force')
-        Write-Log $n.text
-        if ($n.code -ne 0 -and $n.code -ne 3010) { Write-Warn2 "pnputil /delete-driver $p exit $($n.code): $($n.text)" }
-    } | Out-Null
+    try {
+        $deleteResult = Invoke-Change "pnputil /delete-driver $p /uninstall /force (the GPU falls back to Microsoft Basic Display Adapter)" {
+            $n = Invoke-Native pnputil.exe @('/delete-driver', $p, '/uninstall', '/force')
+            Write-Log $n.text
+            if ($n.code -ne 0 -and $n.code -ne 3010) { throw "pnputil /delete-driver $p exit $($n.code): $($n.text)" }
+            return $n.code
+        }
+        if ($deleteResult -eq 3010) { $packageRestart = $true }
+    } catch { Write-Fail "Driver removal failed. Driver files and service are kept. Run uninstall again after resolving this error: $($_.Exception.Message)"; exit 6 }
+}
+if (-not $DryRun) {
+    try { $packagesLeft = @(Get-OurDriverPackages) }
+    catch { Write-Fail "Driver removal could not be verified. Driver files and service are kept: $($_.Exception.Message)"; exit 6 }
+    if ($packagesLeft.Count) {
+        Write-Warn2 "Driver packages remain ($($packagesLeft -join ', ')). Driver files and service are kept. Restart if requested, then run uninstall again."
+        if ($packageRestart) { exit 3010 }
+        exit 6
+    }
 }
 Invoke-Change 'pnputil /scan-devices (bind the GPU to its inbox driver now)' { [void](Invoke-Native pnputil.exe @('/scan-devices')) } | Out-Null
 $serviceKey = Split-Path $script:ParametersKey
@@ -218,6 +259,17 @@ Invoke-Change "remove the bc250kmd service entry and its settings in $serviceKey
 } | Out-Null
 
 Write-Step 'Files'
+# The HIP folder's entry of the machine PATH that install.ps1 appended, and no other entry (common.ps1).
+$hipEntries = @(@((Get-HipPathEntry $root), $(if ($state -and $state.PSObject.Properties['hip_path_entry']) { [string]$state.hip_path_entry })) | Where-Object { $_ } | Select-Object -Unique)
+$hipOnPath = @($hipEntries | Where-Object { Test-PathEntry (Get-MachinePath).value $_ })
+if ($hipOnPath.Count) {
+    Invoke-Change "remove $($hipOnPath -join ', ') from the machine PATH (the HIP runtime folder of this release)" {
+        $p = Get-MachinePath
+        $v = $p.value
+        foreach ($e in $hipOnPath) { $v = Remove-PathEntry $v $e }
+        Set-MachinePath $v $p.kind
+    } | Out-Null
+}
 Invoke-Change "remove $root" { Remove-PathOrSchedule $root } | Out-Null
 # The D3D9 stub in System32 and its x86 copy in SysWOW64 (BD-064), each kept when it was there before the install.
 # This release installs no stub (D3D9 goes through D3D9On12). The releases up to 0.7.213.102-tester.17 did; an install
@@ -245,6 +297,9 @@ if (-not $fwExisted) {
         } | Out-Null
     }
 } else { Write-Info "$($script:FirmwareInstallDir) was there before the install: kept" }
+
+Write-Step 'Downloaded models'
+Remove-ComponentModels $state ([bool]$RemoveModels)
 
 Write-Step 'Certificate'
 $thumb = $null
@@ -275,7 +330,7 @@ if (-not $off -and -not $KeepTestSigning -and $setByUs) {
     $off = Read-Confirmation -Question 'The installer turned test signing on. Turn it off again?' -Expect 'YES'
 }
 if ($off) {
-    Invoke-Change 'bcdedit /set {current} testsigning off' {
+    Invoke-Change "bcdedit /set '{current}' testsigning off" {
         $n = Invoke-Native bcdedit.exe @('/set', '{current}', 'testsigning', 'off')
         if ($n.code -ne 0) { Write-Warn2 "bcdedit failed: $($n.text)" }
     } | Out-Null
@@ -298,7 +353,7 @@ Write-Step 'Per-user data'
 $userData = @(Get-OurUserDataDirs)
 if ($userData.Count) {
     Invoke-Change "remove the per-user data of this release (shader caches, the recent-launch list, DWM observations): $($userData -join ', ')" {
-        foreach ($d in $userData) { Remove-PathOrSchedule $d }
+        foreach ($d in $userData) { Remove-UserDataExceptTuning $d }
     } | Out-Null
 } else { Write-Info 'no per-user data of ours' }
 if (Test-Path -LiteralPath $controlData) { Write-Info "kept: $controlData (the control application's setting backups and action log; delete it by hand if you do not need them)" }
@@ -307,18 +362,21 @@ if (Test-Path -LiteralPath $controlData) { Write-Info "kept: $controlData (the c
 # support report reads it from. Reads only, and a probe that cannot read says so instead of claiming the item is gone.
 Write-Step 'What is left of this release'
 $footprint = @(Get-ReleaseFootprint -InstallRoot $root -State $state -MftKeys @(Get-MftRegistrationKeysPresent -ClassesKey $script:ClassesKey))
+$footprint += @(Get-ComponentFootprint $state ([bool]$RemoveModels))
 foreach ($f in $footprint) {
     $mark = 'gone'
-    if ($f.present -and $f.kept) { $mark = 'kept' } elseif ($f.present) { $mark = 'LEFT' }
+    if (-not $f.known) { $mark = 'UNKNOWN' } elseif ($f.present -and $f.kept) { $mark = 'kept' } elseif ($f.present) { $mark = 'LEFT' }
     Write-Host ('   [{0,-4}] {1,-24} {2}' -f $mark, $f.item, $f.detail) -ForegroundColor $(if ($mark -eq 'LEFT') { 'Yellow' } else { 'Gray' })
     Write-Log ('   footprint {0}: {1} {2}' -f $f.item, $mark, $f.detail)
 }
 $left = @($footprint | Where-Object { $_.present -and -not $_.kept })
+$unknown = @($footprint | Where-Object { -not $_.known })
 if ($DryRun) {
     Write-Host ''
     Write-Host "Dry run complete: nothing was changed, so the list above is this computer as it is now ($($left.Count) item(s) of this release)." -ForegroundColor Green
     exit 0
 }
+if ($unknown.Count) { Write-Fail "Uninstall verification is incomplete: $($unknown.Count) item(s) could not be read. Resolve the reading errors and run uninstall again."; exit 6 }
 if ($left.Count) { Write-Warn2 "$($left.Count) item(s) above are marked LEFT. A file or a registry key that Windows still holds goes at the restart below; run uninstall.cmd again afterwards if one of them stays." }
 else { Write-Info 'nothing of this release is left, apart from the items marked kept' }
 Write-Host ''

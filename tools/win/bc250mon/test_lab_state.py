@@ -38,9 +38,24 @@ def text(path):
     return path.read_text(encoding='utf-8')
 
 
+def header(path, seen=None):
+    """A header with the quoted #includes of its own directory inlined, as the compiler sees it. The DPM modes and
+    the absent ceiling moved from bc250_dpm.h to bc250_board_envelope.h (1bbdd894), which bc250_dpm.h includes."""
+    seen = set() if seen is None else seen
+    if path in seen:
+        return ''
+    seen.add(path)
+
+    def inline(m):
+        inner = path.parent / m.group(1)
+        return header(inner, seen) if inner.is_file() else m.group(0)
+    return re.sub(r'#include\s+"([^"]+)"', inline, text(path))
+
+
 def define(path, name):
     """A #define of a plain decimal number, with or without a u/ull suffix."""
-    found = re.search(r'#define\s+%s\s+(\d+)u?(?:ll)?\b' % re.escape(name), text(path))
+    source = header(path) if path.suffix == '.h' else text(path)
+    found = re.search(r'#define\s+%s\s+(\d+)u?(?:ll)?\b' % re.escape(name), source)
     assert found, '#define %s not found in %s' % (name, path)
     return int(found.group(1))
 
@@ -341,7 +356,7 @@ class AbsentDefaultTest(unittest.TestCase):
         self.assertEqual(table['DpmMaxMHz'], define(DPM_HEADER, 'BC250_DPM_DEFAULT_MAX_MHZ'))
         self.assertEqual(table['CuMode'], define(CU_HEADER, 'BC250_CU_MODE_STOCK'))
         # BC250_DPM_DEFAULT_MODE is BC250_DPM_MODE_FIXED, which the escape header numbers.
-        self.assertRegex(text(DPM_HEADER), r'#define\s+BC250_DPM_DEFAULT_MODE\s+BC250_DPM_MODE_FIXED')
+        self.assertRegex(header(DPM_HEADER), r'#define\s+BC250_DPM_DEFAULT_MODE\s+BC250_DPM_MODE_FIXED')
         self.assertEqual(table['DpmMode'], define(DPM_HEADER, 'BC250_DPM_MODE_FIXED'))
 
     def test_every_installer_default_is_known(self):

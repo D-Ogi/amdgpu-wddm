@@ -88,31 +88,29 @@ static int is_hidden(uint16_t kind)
     return kind >= (uint16_t)BC250HSA_ARG_HIDDEN_BLOCK_COUNT_X;
 }
 
-/* A copy of a metadata string into a fixed buffer. Refuses a string that does not
- * fit, so a long name can never truncate silently into a wrong lookup. */
-static int copy_fixed(char* dst, size_t dst_bytes, const bc250hsa_mp_value* v)
+/* AMDGPUUsage defines .name and .symbol as strings without a fixed length.
+ * Own their complete bytes: truncating a descriptor symbol could bind another
+ * kernel, and a fixed buffer rejects valid long C++ mangled names (BD-110).
+ * ELF symbol lookup uses C strings, so embedded NULs are not admissible. */
+static bc250hsa_status copy_string(char** dst, const bc250hsa_mp_value* v)
 {
-    if (v->kind != BC250HSA_MP_STR || (size_t)v->as.str.bytes + 1u > dst_bytes) {
-        return 0;
-    }
-    memcpy(dst, v->as.str.text, v->as.str.bytes);
-    dst[v->as.str.bytes] = '\0';
-    return 1;
-}
-
-static char* copy_alloc(const bc250hsa_mp_value* v)
-{
+    size_t bytes;
     char* out;
     if (v->kind != BC250HSA_MP_STR) {
-        return NULL;
+        return BC250HSA_EBADMETADATA;
     }
-    out = (char*)malloc((size_t)v->as.str.bytes + 1u);
+    bytes = (size_t)v->as.str.bytes;
+    if (bytes == 0u || bytes == SIZE_MAX || memchr(v->as.str.text, '\0', bytes) != NULL) {
+        return BC250HSA_EBADMETADATA;
+    }
+    out = (char*)malloc(bytes + 1u);
     if (out == NULL) {
-        return NULL;
+        return BC250HSA_ENOMEM;
     }
-    memcpy(out, v->as.str.text, v->as.str.bytes);
-    out[v->as.str.bytes] = '\0';
-    return out;
+    memcpy(out, v->as.str.text, bytes);
+    out[bytes] = '\0';
+    *dst = out;
+    return BC250HSA_OK;
 }
 
 /* --------------------------------------------------------------------------
@@ -239,20 +237,26 @@ static bc250hsa_status parse_kernel(bc250hsa_mp_reader* r, bc250hsa_kernel_inter
             continue;
         }
         if (bc250hsa_mp_str_is(&key, ".name")) {
-            if (!bc250hsa_mp_next(r, &value)) {
+            bc250hsa_status status;
+            if (have_name || !bc250hsa_mp_next(r, &value)) {
                 return BC250HSA_EBADMETADATA;
             }
-            k->name = copy_alloc(&value);
-            if (k->name == NULL) {
-                return BC250HSA_ENOMEM;
+            status = copy_string(&k->name, &value);
+            if (status != BC250HSA_OK) {
+                return status;
             }
             k->pub.name = k->name;
             have_name = 1;
             continue;
         }
         if (bc250hsa_mp_str_is(&key, ".symbol")) {
-            if (!bc250hsa_mp_next(r, &value) || !copy_fixed(k->symbol, sizeof(k->symbol), &value)) {
+            bc250hsa_status status;
+            if (have_symbol || !bc250hsa_mp_next(r, &value)) {
                 return BC250HSA_EBADMETADATA;
+            }
+            status = copy_string(&k->symbol, &value);
+            if (status != BC250HSA_OK) {
+                return status;
             }
             have_symbol = 1;
             continue;
@@ -266,10 +270,12 @@ static bc250hsa_status parse_kernel(bc250hsa_mp_reader* r, bc250hsa_kernel_inter
              * bc250hsa_mp_next already consumed a scalar, and a container needs
              * its children stepped over. */
             if (value.kind == BC250HSA_MP_ARRAY || value.kind == BC250HSA_MP_MAP) {
-                const uint32_t children = (value.kind == BC250HSA_MP_MAP)
-                                              ? value.as.count * 2u
-                                              : value.as.count;
-                uint32_t       i;
+                uint32_t children;
+                uint32_t i;
+                if (value.kind == BC250HSA_MP_MAP && value.as.count > UINT32_MAX / 2u) {
+                    return BC250HSA_EBADMETADATA;
+                }
+                children = (value.kind == BC250HSA_MP_MAP) ? value.as.count * 2u : value.as.count;
                 for (i = 0; i < children; i++) {
                     if (!bc250hsa_mp_skip(r)) {
                         return BC250HSA_EBADMETADATA;

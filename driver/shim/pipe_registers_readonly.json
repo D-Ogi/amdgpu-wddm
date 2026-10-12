@@ -1,0 +1,12 @@
+{
+  "CLK": [
+    "mmCLK4_0_CLK4_CLK_PLL_REQ",
+    "mmCLK4_0_CLK4_CLK2_CURRENT_CNT"
+  ],
+  "DMU": [
+    "mmREFCLK_CNTL",
+    "mmDCHUBBUB_GLOBAL_TIMER_CNTL",
+    "mmDIG0_DIG_FIFO_STATUS",
+    "mmDPG0_DPG_STATUS"
+  ]
+}

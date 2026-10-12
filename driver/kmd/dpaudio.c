@@ -40,6 +40,8 @@
 // (the settings are registry reads).
 #include "bc250kmd.h"
 #include "dpaudio_seq.h"
+#include "dcn_2_0_1_sh_mask.h" // Decode the saved observation for the log only.
+#include "../shim/bc250_hdmi_audio.h"
 
 #define DPAUDIO_SETTING_ENABLE L"EnableDpAudio"
 #define DPAUDIO_SETTING_ENDPOINT L"EnableDpAudioEndpoint"
@@ -148,14 +150,46 @@ static void LogStopSequence(_In_z_ const char* What, ULONG Stream, ULONG Endpoin
                  Stop->Endpoint.HotPlugBefore, Stop->Endpoint.HotPlugAfter, (ULONG)Stop->EndpointStatus);
 }
 
-static void LogStart(_In_ const DPAUDIO_START* Start, _In_z_ const char* What)
+static const char* HdmiStartReason(_In_ const DPAUDIO_START* Start, BOOLEAN Sink, ULONG Clock)
+{
+    ULONG reason = Start->Gate != BC250_DPAUDIO_REASON_OK ? Start->Gate : Start->Reason;
+
+    if (reason == BC250_DPAUDIO_REASON_NO_STREAM) {
+        if (!Sink) return "DDC EDID does not admit HDMI LPCM";
+        if (!Clock) return "inherited TMDS pixel clock is not valid";
+        return "no eligible HDMI back end: need DIG_MODE 3, one front end and OTG0";
+    }
+    if (reason == BC250_DPAUDIO_REASON_TWO_STREAMS) return "more than one HDMI back end is enabled";
+    if (reason == BC250_DPAUDIO_REASON_REFCLK) return "TMDS clock or HDMI color/scrambling mode is not supported";
+    return Bc250DpAudioReasonText(reason);
+}
+
+static void LogHdmiBackEnds(_In_ const BC250_DPAUDIO_OBSERVATION* Obs)
+{
+    static const ULONG slots[] = { BC250_DPAUDIO_OBS_DIG0_BE_CNTL, BC250_DPAUDIO_OBS_DIG1_BE_CNTL };
+    static const ULONG masks[] = { DIG0_DIG_BE_CNTL__DIG_MODE_MASK, DIG1_DIG_BE_CNTL__DIG_MODE_MASK };
+    static const ULONG shifts[] = { DIG0_DIG_BE_CNTL__DIG_MODE__SHIFT, DIG1_DIG_BE_CNTL__DIG_MODE__SHIFT };
+    ULONG i;
+
+    // No extra hardware reads. DIG_ENABLE is not in this snapshot, so do not infer that a back end is active.
+    for (i = 0; i < RTL_NUMBER_OF(slots); i++) {
+        if (Obs->ValidMask & (1ull << slots[i])) {
+            ULONG mode = (Obs->Regs[slots[i]] & masks[i]) >> shifts[i];
+            GuardLog("hdmiaudio: inherited DIG%lu snapshot DIG_MODE %lu (%s), BE_CNTL 0x%08lX; audio requires HDMI mode 3",
+                     i, mode, mode == 2 ? "TMDS-DVI" : mode == 3 ? "TMDS-HDMI" : "other", Obs->Regs[slots[i]]);
+        }
+    }
+}
+
+static void LogStart(_In_ const DPAUDIO_START* Start, _In_z_ const char* What, BOOLEAN Hdmi,
+                     _In_z_ const char* ReasonText)
 {
     const BC250_DPAUDIO_RUN* run = &Start->Seq;
     const BC250_DPAUDIO_STREAM_RESULT* s = &run->Stream;
     const ULONG* r = run->Obs.Regs;
 
     if (Start->Gate != BC250_DPAUDIO_REASON_OK) {
-        GuardLog("dpaudio: %s refused: %s; no audio register read or written", What, Bc250DpAudioReasonText(Start->Gate));
+        GuardLog("%saudio: %s refused: %s; no audio register read or written", Hdmi ? "hdmi" : "dp", What, ReasonText);
         return;
     }
     GuardLog("dpaudio: codec 0x%08lX rev 0x%08lX straps 0x%08lX vid 0x%08lX/0x%08lX be 0x%08lX/0x%08lX hpd 0x%lX/0x%lX",
@@ -172,11 +206,14 @@ static void LogStart(_In_ const DPAUDIO_START* Start, _In_z_ const char* What)
              r[BC250_DPAUDIO_OBS_DTO1_PHASE], r[BC250_DPAUDIO_OBS_DTO1_MODULE],
              r[BC250_DPAUDIO_OBS_DIG0_AFMT_CNTL], r[BC250_DPAUDIO_OBS_DIG1_AFMT_CNTL],
              r[BC250_DPAUDIO_OBS_DIG0_AFMT_AUDIO_PACKET_CONTROL], r[BC250_DPAUDIO_OBS_DIG1_AFMT_AUDIO_PACKET_CONTROL]);
-    GuardLog("dpaudio: DP reference clock count %lu (100 kHz units): DTO1 module %lu, phase %lu, for a 24 MHz wall clock",
-             run->Plan.RefClock, run->Plan.DtoModule, (ULONG)BC250_DPAUDIO_DTO1_PHASE);
+    if (!Hdmi)
+        GuardLog("dpaudio: DP reference clock count %lu (100 kHz units): DTO1 module %lu, phase %lu, for a 24 MHz wall clock",
+                 run->Plan.RefClock, run->Plan.DtoModule, (ULONG)BC250_DPAUDIO_DTO1_PHASE);
     if (!run->Wrote) {
-        GuardLog("dpaudio: %s refused, nothing written: %s (DP%lu ep %lu notes 0x%lX)", What,
-                 Bc250DpAudioReasonText(Start->Reason), run->Plan.Stream, run->Plan.Endpoint, run->Plan.Notes);
+        GuardLog("%saudio: %s refused: %s", Hdmi ? "hdmi" : "dp", What, ReasonText);
+        GuardLog("dpaudio: refusal stream %lu ep %lu notes 0x%lX; no writes",
+                 run->Plan.Stream, run->Plan.Endpoint, run->Plan.Notes);
+        if (Hdmi && Start->Reason == BC250_DPAUDIO_REASON_NO_STREAM) LogHdmiBackEnds(&run->Obs);
         return;
     }
     GuardLog("dpaudio: preconditions hold: stream DP%lu, endpoint %lu, notes 0x%lX", run->Plan.Stream,
@@ -213,6 +250,22 @@ static void LogStart(_In_ const DPAUDIO_START* Start, _In_z_ const char* What)
     LogStopSequence("undo", run->Plan.Stream, run->Plan.Endpoint, &run->Undo, (BOOLEAN)(run->StreamWrote != 0), TRUE);
 }
 
+// Caller holds the audio leaf lock, beneath ConnectorOperation for dynamic links.
+// A repeated start must not erase the original protocol/endpoint stop obligation.
+static BOOLEAN BeginStartLocked(BC250_DPAUDIO* audio,BOOLEAN Resume,ULONG enable,
+                                ULONG endpointSwitch,ULONG streamSwitch,ULONG containerSwitch)
+{
+    if(audio->Written || audio->StreamWritten)return FALSE;
+    if (Resume) audio->Resumes++; else audio->Starts++;
+    audio->SwitchEnable=enable;audio->SwitchEndpoint=endpointSwitch;
+    audio->SwitchStream=streamSwitch;audio->SwitchContainerId=containerSwitch;
+    audio->Notes=0;audio->LastStatus=0;
+    audio->StreamState=BC250_DPAUDIO_STREAM_OFF;
+    audio->StreamStep=BC250_DPAUDIO_STEP_NONE;audio->StreamStatus=0;
+    audio->MismatchOffset=audio->MismatchExpected=audio->MismatchActual=0;
+    return TRUE;
+}
+
 static void StartCore(_Inout_ BC250_DEVICE* Device, BOOLEAN Resume)
 {
     BC250_DPAUDIO* audio = &Device->DpAudio;
@@ -224,6 +277,13 @@ static void StartCore(_Inout_ BC250_DEVICE* Device, BOOLEAN Resume)
     ULONG containerSwitch = GuardReadSetting(DPAUDIO_SETTING_CONTAINER, 1);
     ULONGLONG portId = 0;
     ULONG osManufacturer = 0, osProduct = 0, identityDiffers = 0;
+    ULONG hdmiClock = 0;
+    BOOLEAN hdmiSink = FALSE;
+    BOOLEAN tmds=Device->InheritedTmds, dynamic=ConnectorIsEnabled(Device);
+    BOOLEAN linkReady=TRUE;
+    BC250_CONNECTOR_SNAPSHOT* snapshot=NULL;
+    const BC250_EDID_INFO* edid;
+    D3DKMDT_VIDEO_SIGNAL_INFO signal=Device->InheritedSignal;
     KIRQL irql;
 
     // From pool: the observation alone is 270 bytes, and a start already runs deep in dxgkrnl's stack (M104).
@@ -233,30 +293,40 @@ static void StartCore(_Inout_ BC250_DEVICE* Device, BOOLEAN Resume)
         return;
     }
     IoOpen(Device, &io);
+    if (dynamic) {
+        ConnectorOperationAcquire(Device);
+        snapshot=ConnectorSnapshotAcquire(Device);
+        linkReady=snapshot && snapshot->Sink.Kind!=BC250_SINK_NONE &&
+            NT_SUCCESS(ConnectorLinkCurrentSignal(Device,&signal));
+        tmds=snapshot && snapshot->Sink.Kind!=BC250_SINK_DP;
+        edid=snapshot ? &snapshot->Sink.Info : NULL;
+    } else edid=ModesetEdidForAudio(Device);
     // Step 4: the EDID that modeset.c read at this start, or the fixed set of step 1 without one (dpaudio_seq.h).
-    (void)Bc250DpAudioSinkFromEdid(ModesetEdidForAudio(Device), &start->Sink);
+    if (tmds) {
+        hdmiSink = Bc250HdmiAudioSinkFromEdid(edid, &start->Sink) != 0;
+        if ((dynamic?linkReady:Device->InheritedSignalValid) && signal.PixelRate >= 25000000 &&
+            signal.PixelRate <= 300000000)
+            hdmiClock = (ULONG)((signal.PixelRate + 50) / 100);
+    } else {
+        (void)Bc250DpAudioSinkFromEdid(edid, &start->Sink);
+    }
     // The container ID of a boot's first start is not known yet: the operating system calls
     // DxgkDdiGetChildContainerId only after DxgkDdiStartDevice returns, and DpAudioContainerId then refreshes the
     // ELD. Every later start (a resume, the monitor's path power coming back) has it and writes it at once.
     KeAcquireSpinLock(&audio->Lock, &irql);
-    audio->SwitchContainerId = containerSwitch;
     if (containerSwitch == 1) { portId = audio->PortId; osManufacturer = audio->OsManufacturer; osProduct = audio->OsProduct; }
     KeReleaseSpinLock(&audio->Lock, irql);
     identityDiffers = (ULONG)Bc250DpAudioSinkContainer(&start->Sink, portId, osManufacturer, osProduct);
     start->Seq.Sink = &start->Sink;
     start->Gate = Bc250DpAudioGate(Device->Mmio != NULL, enable, endpointSwitch, streamSwitch);
+    if (start->Gate == BC250_DPAUDIO_REASON_OK && (!linkReady || (tmds && (!hdmiSink || !hdmiClock))))
+        start->Gate = BC250_DPAUDIO_REASON_NO_STREAM;
     KeAcquireSpinLock(&audio->Lock, &irql);
-    if (Resume) audio->Resumes++; else audio->Starts++;
-    audio->SwitchEnable = enable;
-    audio->SwitchEndpoint = endpointSwitch;
-    audio->SwitchStream = streamSwitch;
-    audio->Written = audio->StreamWritten = FALSE;
-    audio->Notes = 0;
-    audio->LastStatus = 0;
-    audio->StreamState = BC250_DPAUDIO_STREAM_OFF;
-    audio->StreamStep = BC250_DPAUDIO_STEP_NONE;
-    audio->StreamStatus = 0;
-    audio->MismatchOffset = audio->MismatchExpected = audio->MismatchActual = 0;
+    if(!BeginStartLocked(audio,Resume,enable,endpointSwitch,streamSwitch,containerSwitch)) {
+        KeReleaseSpinLock(&audio->Lock,irql);
+        GuardLog("dpaudio: %s deferred: existing audio stop obligation retained",Resume?"resume":"start");
+        goto done;
+    }
     if (start->Gate != BC250_DPAUDIO_REASON_OK) {
         audio->State = BC250_DPAUDIO_STATE_REFUSED;
         audio->Reason = start->Gate;
@@ -264,7 +334,8 @@ static void StartCore(_Inout_ BC250_DEVICE* Device, BOOLEAN Resume)
     } else {
         const BC250_DPAUDIO_RUN* run = &start->Seq;
 
-        start->Reason = Bc250DpAudioRun(&io, &start->Seq);
+        start->Reason = tmds ? Bc250HdmiAudioRun(&io, &start->Seq, hdmiClock)
+                                            : Bc250DpAudioRun(&io, &start->Seq);
         audio->Reason = start->Reason;
         audio->Notes = run->Plan.Notes;
         audio->SinkFromEdid = start->Sink.FromEdid;
@@ -281,6 +352,10 @@ static void StartCore(_Inout_ BC250_DEVICE* Device, BOOLEAN Resume)
         // From the first write on, the stop path owes the endpoint an AUDIO_ENABLED 0. A failed start already ran
         // the stop sequence; the stop path runs its endpoint half once more, which changes nothing.
         audio->Written = run->Wrote != 0;
+        // Undo is best effort. Keep stream debt even after a failed start; Stop
+        // retries both halves and clears the flags only on verified success.
+        audio->StreamWritten = run->StreamWrote != 0;
+        audio->TmdsMode=tmds;
         audio->LastStatus = run->Status;
         if (!run->Wrote) {
             audio->State = BC250_DPAUDIO_STATE_REFUSED;
@@ -312,8 +387,26 @@ static void StartCore(_Inout_ BC250_DEVICE* Device, BOOLEAN Resume)
     }
     IoClose(audio, &io);
     KeReleaseSpinLock(&audio->Lock, irql);
-    LogStart(start, Resume ? "resume" : "start");
+    LogStart(start, Resume ? "resume" : "start", tmds,
+             tmds ? HdmiStartReason(start, hdmiSink, hdmiClock) :
+             Bc250DpAudioReasonText(start->Gate != BC250_DPAUDIO_REASON_OK ? start->Gate : start->Reason));
+    if (tmds) {
+        ULONG n[3], cts[3];
+        ULONG reason = start->Gate != BC250_DPAUDIO_REASON_OK ? start->Gate : start->Reason;
+        const char* result = start->Gate != BC250_DPAUDIO_REASON_OK || !start->Seq.Wrote ? "refused" :
+            start->Reason == BC250_DPAUDIO_REASON_OK ? "admitted" : "failed";
+        GuardLog("hdmiaudio: result %s reason %lu (%s); gate %lu", result, reason,
+                 HdmiStartReason(start, hdmiSink, hdmiClock), start->Gate);
+        GuardLog("hdmiaudio: CTA LPCM %u pixel100Hz %lu ELD source DDC", hdmiSink, hdmiClock);
+        if (start->Gate == BC250_DPAUDIO_REASON_OK && start->Reason == BC250_DPAUDIO_REASON_OK &&
+            bc250_hdmi_audio_clock(hdmiClock, n, cts))
+            GuardLog("hdmiaudio: ACR readback verified N/CTS 32=%lu/%lu 44=%lu/%lu 48=%lu/%lu", n[0], cts[0],
+                     n[1], cts[1], n[2], cts[2]);
+    }
+done:
     ExFreePoolWithTag(start, BC250_TAG);
+    ConnectorSnapshotRelease(snapshot);
+    if (dynamic) ConnectorOperationRelease(Device);
 }
 
 void DpAudioStart(_Inout_ BC250_DEVICE* Device)
@@ -339,7 +432,9 @@ static BOOLEAN StopLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_AZ_IO* Io,
     *StreamWritten = audio->StreamWritten;
     *EndpointWritten = audio->Written;
     if ((!audio->StreamWritten && !audio->Written) || Device->Mmio == NULL) return FALSE;
-    status = Bc250DpAudioStopSequence(Io, audio->Stream, audio->Endpoint, audio->StreamWritten, audio->Written, Stop);
+    status = audio->TmdsMode ?
+        Bc250HdmiAudioStopSequence(Io, audio->Stream, audio->Endpoint, audio->StreamWritten, audio->Written, Stop) :
+        Bc250DpAudioStopSequence(Io, audio->Stream, audio->Endpoint, audio->StreamWritten, audio->Written, Stop);
     if (audio->StreamWritten) {
         audio->StreamOff++;
         audio->StreamState = Stop->StreamStatus >= 0 ? BC250_DPAUDIO_STREAM_OFF : BC250_DPAUDIO_STREAM_UNDONE;
@@ -355,6 +450,16 @@ static BOOLEAN StopLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_AZ_IO* Io,
     if (status < 0) audio->Failures++;
     else audio->StreamWritten = audio->Written = FALSE;
     return TRUE;
+}
+
+BOOLEAN DpAudioQuiesced(_Inout_ BC250_DEVICE* Device)
+{
+    BC250_DPAUDIO* audio=&Device->DpAudio;
+    BOOLEAN quiesced;KIRQL irql;
+    KeAcquireSpinLock(&audio->Lock,&irql);
+    quiesced=!audio->Written && !audio->StreamWritten;
+    KeReleaseSpinLock(&audio->Lock,irql);
+    return quiesced;
 }
 
 void DpAudioStop(_Inout_ BC250_DEVICE* Device)

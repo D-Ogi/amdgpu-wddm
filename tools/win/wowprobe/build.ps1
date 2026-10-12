@@ -27,7 +27,7 @@ $env:TEMP = Join-Path $root 'scratch\tmp'; $env:TMP = $env:TEMP
 New-Item -ItemType Directory -Force $env:TEMP | Out-Null
 
 $env:INCLUDE = ''; $env:LIB = ''
-& $cl @('/nologo', '/W4', '/WX', '/O2', '/MT', '/EHsc', '/std:c++17', '/DUNICODE', '/D_UNICODE',
+& $cl @('/nologo', '/W4', '/we4229', '/we4440', '/WX', '/O2', '/MT', '/EHsc', '/std:c++17', '/DUNICODE', '/D_UNICODE',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\winrt", "/Fo$Out\wowprobe.obj",
     "/Fe$Out\wowprobe.exe", (Join-Path $here 'wowprobe.cpp'), '/link',

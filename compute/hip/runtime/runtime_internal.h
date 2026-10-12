@@ -11,8 +11,15 @@
 // (bc250hip::Guard::wait), take the lock again and update the state. Layer 1 has one hardware
 // queue, so submissions stay serialised whatever the threads do; the rule is about the waits,
 // which are the long part. Everything a thread still needs after a wait is either held with a
-// reference count (a stream, an event) or looked up again (a function, an allocation), because
-// another thread owns the state while the wait runs.
+// reference count (a stream, an event), pinned (an allocation that a GPU copy or fill names,
+// Allocation::pins) or looked up again (a function, an allocation), because another thread
+// owns the state while the wait runs.
+//
+// A GPU copy or fill of bc250hsa.h section 5.1 submits and waits inside one layer-1 call, so
+// the runtime cannot read a fence value first and wait for it second. It pins the allocations
+// the call names, copies their handles, and makes the whole call with the lock released
+// (Guard::unlocked). hipFree waits until no such call pins the allocation and until the last
+// fence value one of them submitted has retired (hip_memory.cpp, free_allocation).
 
 #ifndef BC250_HIP_RUNTIME_INTERNAL_H
 #define BC250_HIP_RUNTIME_INTERNAL_H
@@ -20,6 +27,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <condition_variable>
 #include <map>
 #include <mutex>
 #include <string>
@@ -93,10 +101,23 @@ struct Function {
     Module*                 module = nullptr;
     std::string             device_name;
     const bc250hsa_kernel*  kernel = nullptr;
+    // The largest dynamic group memory this kernel may ask for, as hipFuncSetAttribute set it.
+    // -1 means that no program set it. The value is advice on this part: there is no 48 KiB
+    // default ceiling to lift, and layer 1 checks the real dispatch against the hardware. It is
+    // kept and reported, so that a program which sets a value above the hardware limit learns
+    // it at the call that sets it and not at the launch.
+    int                     dynamic_group_max = -1;
 };
 
+// pins and busy_fence are the lifetime of a GPU copy or fill that names this allocation and
+// runs with the process lock released: how many such calls have not returned yet, and the
+// last fence value one of them left with the device (bc250hsa_op_receipt, also when its wait
+// failed). They change under the process lock only. They are mutable because the table hands
+// out const pointers, and neither of them is part of what the allocation holds.
 struct Allocation {
-    bc250hsa_mem mem{};
+    bc250hsa_mem     mem{};
+    mutable int      pins = 0;
+    mutable uint64_t busy_fence = 0;
 };
 
 // A kernel argument buffer of the pool. The buffer stays in the pool after the launch and is
@@ -120,7 +141,11 @@ struct KernargBuffer {
 
 struct State {
     std::mutex                              lock;
+    // Woken when a GPU copy or fill lets go of its allocations, for a hipFree that waits for
+    // the pins of one of them to reach zero.
+    std::condition_variable                 unpinned;
     bc250hsa_device*                        dev = nullptr;
+    uint64_t                                journal_dispatch_id = 0;
     bool                                    open_tried = false;
     bc250hsa_status                         open_status = BC250HSA_OK;
     bc250hsa_props                          props{};
@@ -140,6 +165,44 @@ struct State {
     // two minutes per wait (design decision 10).
     uint32_t                                wait_slice_ms = 0;
     uint32_t                                wait_total_ms = 0;
+    // The BC250HSA_DISPATCH_* bits every launch of this process carries. It is 0 for a product
+    // build; BC250_HIP_PM4_STATE_CACHE=0 adds BC250HSA_DISPATCH_FULL_STATE, which writes the
+    // whole compute state for every dispatch of a batch (section 8.8 of the design). The
+    // switch exists so that a lab arm can measure the state cache against the build without
+    // it, and so that a wrong assumption about persistent register state can be turned off in
+    // one environment variable instead of a new build.
+    uint32_t                                dispatch_flags = 0;
+    // The GPU copy route (scratch/hip-gpu-copy/CONTRACT.md). A device-to-host copy and a
+    // device-to-device copy read device memory, which the host processor does at a
+    // MEASURED 0.21 GB/s, so from gpu_copy_min_bytes upwards they go to the command
+    // processor instead. The numbers arrive in the environment:
+    //
+    //   BC250_HIP_GPU_COPY=0|1      the whole route; the default is on
+    //   BC250_HIP_GPU_COPY_MIN=<n>  bytes from which the GPU route is taken, default 4096.
+    //                               0 is a value and not an absent variable: it puts every
+    //                               copy on the GPU route
+    //   BC250_HIP_GPU_FILL=0|1      hipMemset of a device allocation that has a host mapping
+    //
+    // The threshold is derived in CONTRACT.md section 10 from two measured rates: a
+    // submission with its fence costs 14.2 us, and the host-processor read it replaces
+    // runs at 0.21 GB/s, so the two meet near 4 KB.
+    //
+    // gpu_fill_mapped is off by default, and that is not an oversight: a host-processor
+    // fill of device memory is a write, and a write of this mapping is MEASURED at
+    // 15.6 GB/s (evidence/m16/perf-rerun-2026-10-09), so there is nothing to win. An
+    // allocation with no host mapping has no host-processor path at all and always takes
+    // the GPU fill; on this part hipMalloc produces no such allocation, because it falls
+    // back to host-visible memory when the mapping fails (hip_memory.cpp, allocate_device),
+    // so the switch is the only way the GPU fill runs here at all.
+    //
+    // BC250_HIP_GPU_FILL=1 turns the GPU fill on for every device allocation, so that the
+    // lab can measure the two against each other. It does not reach a hipHostMalloc
+    // pointer: that fill stays a host-processor write of memory the program already holds a
+    // pointer to, and sending it to the engine would put the program's next read of it
+    // behind the coherence control of CONTRACT.md section 8 for nothing.
+    bool                                    gpu_copy_enabled = true;
+    bool                                    gpu_fill_mapped = false;
+    uint32_t                                gpu_copy_min_bytes = 4096;
     // Streams and events that exist now, the null stream apart. A host test reads them to see
     // that an object destroyed while another thread waited on it is freed one time and not
     // twice, which a reference count that counted wrong would show here as a number that never
@@ -162,6 +225,17 @@ State& state();
 #endif
 bool waits_under_lock();
 
+// The negative control of the dispatch packet (section 7.1 of bc250hsa.h, defect BD-110). A
+// build with BC250_HIP_NO_DISPATCH_PACKET=1 passes no packet address, so every kernel that
+// reads its own blockDim is refused exactly as the build of 2026-10-09 refused it. It exists
+// so that the fix can be shown to be the fix, offline, against the mock backend, and nothing
+// but that control build defines the macro.
+#if defined(BC250_HIP_NO_DISPATCH_PACKET) && BC250_HIP_NO_DISPATCH_PACKET
+#define BC250_HIP_NO_DISPATCH_PACKET_BUILD 1
+#else
+#define BC250_HIP_NO_DISPATCH_PACKET_BUILD 0
+#endif
+
 // The process lock, and the only way to wait for the device.
 //
 // An entry point writes `Guard guard;` and holds the state. When it has to wait, it reads the
@@ -179,6 +253,28 @@ public:
     // device has passed. The caller must assume that the state changed under it.
     hipError_t wait(bc250hsa_device* dev, uint64_t value);
 
+    // Runs f with the lock released and holds the lock again when this returns. It is for a
+    // layer-1 call that submits and waits for its own work, a GPU copy or fill of bc250hsa.h
+    // section 5.1. f touches nothing of the state: the caller copies what f needs and pins the
+    // allocations it names before it calls this. The negative-control build keeps the lock, as
+    // it does for every other wait.
+    template <typename F>
+    void unlocked(F&& f) {
+#if BC250_HIP_WAIT_UNDER_LOCK_BUILD
+        f();
+#else
+        held_.unlock();
+        f();
+        held_.lock();
+#endif
+    }
+
+    // Waits on cv with the lock released until ready(), which runs with the lock held.
+    template <typename P>
+    void wait_until(std::condition_variable& cv, P ready) {
+        cv.wait(held_, ready);
+    }
+
 private:
     std::unique_lock<std::mutex> held_;
 };
@@ -195,6 +291,13 @@ hipError_t last_error_peek();
 hipError_t last_error_take();
 void       last_error_set(hipError_t err);
 
+// The diagnostic log of this runtime (hip_log.cpp). BC250_HIP_LOG turns it on, and with it on
+// every refusal of this runtime and every bc250hsa_log line of layer 1 names itself. It is off
+// by default and then costs one read of a local static per call.
+void log_start();
+bool log_on();
+void log_line(uint32_t level, const char* format, ...);
+
 // Records an error and returns it, so that an entry point can write `return fail(...)`.
 inline hipError_t fail(hipError_t err) {
     if (err != hipSuccess) {
@@ -203,6 +306,13 @@ inline hipError_t fail(hipError_t err) {
     return err;
 }
 inline hipError_t fail_status(bc250hsa_status status) { return fail(translate(status)); }
+
+// A refusal that says which call refused what and why. It records the error exactly as fail()
+// does, and with the log off it costs the same. Every path of this runtime that answers "this
+// build cannot do that" goes through one of the two, so that a lab session never again has to
+// guess which of them spoke (defect BD-110).
+hipError_t refuse(const char* call, const char* kernel, const char* why, hipError_t err);
+hipError_t refuse_status(const char* call, const char* kernel, bc250hsa_status status);
 
 // The allocation table. find_allocation accepts an interior pointer, because a HIP program
 // passes `buffer + offset` to hipMemcpy.
@@ -295,11 +405,23 @@ void       kernarg_release(KernargBuffer* buffer, uint64_t fence);
 // Loads the code object of a module, once. The caller holds the lock.
 bc250hsa_status module_ensure_loaded(Module* module);
 
+// Caller holds state lock; output owns every byte through recorded submit.
+hipError_t prepare_dispatch_record(const bc250hsa_dispatch& dispatch,
+                                  const void* packed, uint32_t packed_bytes,
+                                  uint64_t dispatch_id,
+                                  const std::map<uint64_t, Allocation>& allocations,
+                                  std::vector<unsigned char>& output);
+
 // A monotonic host clock in milliseconds, for hipEventElapsedTime.
 double host_now_ms();
 
 // The free and total device memory, from the properties and the allocation table.
 void memory_info(size_t* free_bytes, size_t* total_bytes);
+
+// The text of BC250_HIP_GPU_COPY_MIN as a number of bytes: decimal digits only, at most
+// 4294967295. A sign, a space, a suffix or a value out of range is false and *out is not
+// written, so the default stands.
+bool parse_copy_min(const char* text, uint32_t* out);
 
 }  // namespace bc250hip
 

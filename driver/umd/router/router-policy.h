@@ -83,6 +83,7 @@ enum class AppReason {
     Protected,    // a logon or secure-desktop process (built-in list below), never routed to the GPU UMD
     RenderOnCpu,  // the per-application graphics setting RenderOnCpu is 1 (docs/design/per-app-graphics-settings.md)
     Denied,       // listed in Deny (both modes; Deny wins over Allow)
+    DialogHost,   // gpu-default, on the router's built-in default Deny list (IsCpuOnlyDialogHost below), not in Allow
     NotAllowed,   // allowlist mode and not listed in Allow
     ComponentUnknown, // gpu-default mode, the image or the Windows directory could not be resolved, not in Allow
     D3d10Entry,   // OpenAdapter10: the application GPU UMD exports OpenAdapter10_2 only. No Windows 11 runtime calls
@@ -118,6 +119,30 @@ struct AppDecision {
 inline bool IsProtectedApp(const wchar_t *exe_base)
 {
     static const wchar_t list[] = L"logonui.exe\0consent.exe\0lockapp.exe\0credentialuibroker.exe\0winlogon.exe\0";
+    return InList(exe_base, list);
+}
+
+// The router's built-in default Deny list: images kept on the CPU UMD without any registry entry, because the
+// application GPU UMD was measured not to show their window. One image per measured failure, never a class of
+// images: the 2026-10-04 mitigation that sent every Windows component to the CPU UMD cost those processes FL 12_1
+// (BD-088). BD-061, the WinUI/DirectComposition defect behind that mitigation, is VERIFIED fixed since b20, so an
+// entry here is a new failure of its own and not an instance of a known class.
+//  - PickerHost.exe, the File Picker UI Host, hosts FirewallNotificationDialogServer and
+//    FirewallWarningDialogServer, the Windows firewall notification dialogs, and on current builds the modern file
+//    open and save dialogs as well. On 2026-10-12 (tester.28, gpu-default) the firewall notification showed an
+//    empty white window with only the application icon and did not paint in two minutes, while the overlay read
+//    "PickerHost.exe D3D11 GPU" (BD-126). This entry changes the route and nothing else: whether that dialog
+//    paints on the CPU UMD is not measured yet, the CPU UMD offers FL 10_0 only (BD-088), so content that demands
+//    FL 11_0 gets no device there, and every window of this image moves with it, the file dialogs included.
+// The route decision is taken at OpenAdapter10_2, before any device or window exists, so the process image name is
+// all the router has to go by; the entry is therefore a base name, matched exactly and case-insensitively.
+// An Allow entry names an image explicitly, which a default cannot, so Allow lifts this list: under gpu-default
+// here, and under allowlist through the allowlist's own answer. The GPU route can be measured again (the open
+// BD-126 question) without a new router build. A registry Deny entry, the protected list, RenderOnCpu and, under
+// allowlist, "not listed in Allow" answer before it and keep their own reasons.
+inline bool IsCpuOnlyDialogHost(const wchar_t *exe_base)
+{
+    static const wchar_t list[] = L"pickerhost.exe\0";
     return InList(exe_base, list);
 }
 
@@ -175,6 +200,11 @@ inline AppDecision DecideApp(const AppInputs &in)
     if (in.render_on_cpu) return {AppRoute::Cpu, AppReason::RenderOnCpu};
     if (InList(in.exe_base, in.deny)) return {AppRoute::Cpu, AppReason::Denied};
     if (in.mode == AppMode::Allowlist && !InList(in.exe_base, in.allow)) return {AppRoute::Cpu, AppReason::NotAllowed};
+    // The built-in default Deny list (BD-126): a default, so an explicit Allow entry lifts it. It is tested after
+    // the allowlist, which already keeps every unlisted image on the CPU UMD and keeps its own reason, so this
+    // test answers under gpu-default only.
+    if (IsCpuOnlyDialogHost(in.exe_base) && !InList(in.exe_base, in.allow))
+        return {AppRoute::Cpu, AppReason::DialogHost};
     if (in.mode == AppMode::GpuDefault && in.component == Component::Unknown && !InList(in.exe_base, in.allow))
         return {AppRoute::Cpu, AppReason::ComponentUnknown};
     if (!in.entry_10_2) return {AppRoute::Cpu, AppReason::D3d10Entry};
@@ -202,6 +232,7 @@ inline const char *AppReasonName(AppReason r)
     case AppReason::Protected: return "app-protected";
     case AppReason::RenderOnCpu: return "app-render-on-cpu";
     case AppReason::Denied: return "app-denied";
+    case AppReason::DialogHost: return "app-dialog-host";
     case AppReason::NotAllowed: return "app-not-allowed";
     case AppReason::ComponentUnknown: return "app-component-unknown";
     case AppReason::D3d10Entry: return "app-d3d10-entry";

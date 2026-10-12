@@ -1,0 +1,1867 @@
+﻿utc 2026-10-09T22:39:17Z tag rr-before
+--- info ---
+# adapter    BC-250 GPU (amdgpu-wddm)
+# hardware   PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00
+# interface  <device instance redacted>
+D3DKMTOpenAdapterFromDeviceName -> 0x00000000 STATUS_SUCCESS
+# adapter    handle 0x40000000 luid 00000000-00007F93
+D3DKMTEscape(D3DKMT_ESCAPE_DRIVERPRIVATE, BC250_ESCAPE_GET_INFO) -> 0x00000000 STATUS_SUCCESS
+version      0x000700D8 (milestone 7 revision 216)
+last stage   50 first CommitVidPn
+mode         1920x1200 pitch 7680 format 22 (FULL WDDM TABLE)
+presents     0
+counters     blits 0, flips 52661 (the full table's own present counters; both stay 0 in display-only mode)
+gates        mmio open, mmio writes off, vram open, vram writes on, gart open, psp open, gfx open, ih open
+
+--- clock read ---
+clock backend=kmd-smu abi=1 MHz=500 VID=116 temperature_mc=59625 ready=1
+
+--- log summary ---
+log          31633 lines since this driver load, 30609 lost to the wrap, 7 dropped above DISPATCH_LEVEL; ring 1024 lines of which the first 256 are kept; table FULL WDDM (the gate was open at DriverEntry)
+     0      0.000 interop: \Callback\PowerState registration 0x00000000
+     1      0.000 stage 10
+     2      0.000 gate: EnableFullWddm 2
+     3      0.000 stage 20
+     4      1.155 stage 30
+     5      1.155 guard: count 1 -> 2 flushed, durable required 1
+     6      1.155 stage 31
+     7      1.155 stage 32
+     8      1.155 post display 1920x1200 pitch 7680 format 22 target 4294967295
+     9      1.158 stage 33
+    10      1.158 stage 34
+    11      1.158 interrupt resource 1: message, vector 0x51, flags 0x3
+    12      1.158 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes allowed, vidpn flip allowed
+    13      1.158 hwmon: base 0x0A20 ec 1.0 build 07/28/21 customer 0x162B -> ok
+    14      1.158 hwmon: base 0x0A20 cfg 0x80 fans 0x1F duties 0x1F temps 3 volts 6 mode 0xE0 eng 0x60
+    15      1.158 hwmon: customer ID 0x162B is not pinned (HwmonExpectId absent): pin it after this trial
+    16      1.158 smu: native owner start status 0x00000000
+    17      1.158 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    18      1.158 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    19      1.158 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    20      1.158 gart: ready, dummy page at 0x26529E000
+    21      1.158 psp: ready
+    22      1.158 gpumem: ready, doorbells at 0xD0000000
+    23      1.158 gfx: ready, GPU submission allowed, paging node allowed, hot submit log off
+    24      1.158 gfx: VMID pool on (EnableVmidPool)
+    25      1.158 gfx: VM flush by MMIO before the frame (EnableRingVmFlush 0), engine 17
+    26      1.158 ih: ready
+    27      1.158 wddm: composed source modes offered
+    28      1.158 interop: requested 0x3 effective 0x3 reason 0 (none) closed-reason 0 flags 0x801 blit 1 cdd 1 previous-end 3
+    29      1.158 wddm: scan-out admission on
+    30      1.158 wddm: DirectFlip handshake on
+    31      1.158 wddm: DirectFlip handshake inputs: asked 1 gate 1 flip 1 vram 1 mmio 1 aligned 1 post 1
+    32      1.158 dcnflip: plane format: firmware argb8888 config 0x00000008 crossbar 0x00E40000 cnvc 0x00000008
+    33      1.158 dcnflip: plane format: cnvc control 0x00000000 alpha lut 0xFFAA5500 mpcc control 0xFFFF0461 (blend mode 2)
+    34      1.158 wddm: plane formats on
+    35      1.158 wddm: shared residency on (UMD VRAM allocations may be demoted to the aperture)
+    36      1.158 wddm: completion report pairs its own notify dpc: yes
+    37      1.158 wddm: HangRecoveryMode 1: a node-0 ResetEngine tries stage-1 soft recovery, verdicts in Parameters\HangRecovery
+    38      1.158 wddm: POST display target 4294967295 is not ours, vsync reports name child 0x250001
+    39      1.158 wddm: OS aperture asked 384 MiB, using 384 MiB (only MAP_APERTURE_SEGMENT uses it)
+    40      1.158 wddm: OS aperture 384 MiB at gpu 0x4002000, PTE slice 0xF5FFE20010
+    41      1.158 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+    42      1.158 vidmm: table segment 3 at physical 0x45E150000 + 0xFEB0000, host memory below 0x270000000, updates are WRITTEN
+    43      1.158 startup: entering interrupt connection
+    44      1.158 startup: entering firmware preparation
+    45      1.158 startup: entering native clock preparation
+    46      1.158 startup: clock status 0x00000000 ready 1 request 1000MHz/820mV initial 1500MHz/VID101 observed 1000MHz/VID116 temp 68000mc staged 0
+    47      1.158 gfx: CP_ME_CNTL 0x15000000, CP_MEC_CNTL 0x50000000, SDMA0/1_F32_CNTL 0x1 0x1
+    48      1.158 gfx: unpublished translation bootstrap entered with engines halted
+    49      1.158 gfx: RLC before-gart-initialization CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    50      1.158 gfx: GRBM before-gart-initialization STATUS 0x00003028 read 0x00000000
+    51      1.158 startup: entering GART initialization
+    52      1.174 gart: startup startup-after-gfxhub-enable sample 0x00000000 fault 0x00000000
+    53      1.174 gfx: RLC startup-after-gfxhub-enable CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    54      1.174 gfx: GRBM startup-after-gfxhub-enable STATUS 0x00003028 read 0x00000000
+    55      1.174 gart: startup startup-after-mmhub-enable sample 0x00000000 fault 0x00000000
+    56      1.174 gfx: RLC startup-after-mmhub-enable CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    57      1.174 gfx: GRBM startup-after-mmhub-enable STATUS 0x00003028 read 0x00000000
+    58      1.174 gart: startup startup-after-fault-defaults sample 0x00000000 fault 0x00000000
+    59      1.174 gfx: RLC startup-after-fault-defaults CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    60      1.174 gfx: GRBM startup-after-fault-defaults STATUS 0x00003028 read 0x00000000
+    61      1.174 gart: startup bootstrap-after-mmhub-flush sample 0x00000000 fault 0x00000000
+    62      1.174 gfx: RLC bootstrap-after-mmhub-flush CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    63      1.174 gfx: GRBM bootstrap-after-mmhub-flush STATUS 0x00003028 read 0x00000000
+    64      1.174 gart: op 1 -> 0x00000000 (-), result 0, 284 writes, fault offset 0x00000
+    65      1.174 gfx: RLC before-psp CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    66      1.174 gfx: GRBM before-psp STATUS 0x00003028 read 0x00000000
+    67      1.174 startup: entering PSP initialization
+    68      1.221 gfx: RLC before-psp-ring-create CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    69      1.221 gfx: GRBM before-psp-ring-create STATUS 0x00003028 read 0x00000000
+    70      1.252 gfx: RLC after-psp-ring-create CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    71      1.252 gfx: GRBM after-psp-ring-create STATUS 0x00003028 read 0x00000000
+    72      1.252 amdgpu[0]: reserve 0x400000 from 0xf5ff800000 for PSP TMR
+
+    73      1.252 psp: command 1 (id 5, type 0, 4194304 bytes): rc 0, status 0x0, 251 us, in TMR at 0x0
+    74      1.252 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    75      1.252 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    76      1.252 psp: command 2 (id 6, type 9, 33536 bytes): rc 0, status 0x0, 1952 us, in TMR at 0x0
+    77      1.252 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    78      1.252 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    79      1.252 psp: command 3 (id 6, type 10, 33536 bytes): rc 0, status 0x0, 1937 us, in TMR at 0x0
+    80      1.252 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    81      1.252 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    82      1.252 psp: command 4 (id 6, type 3, 263040 bytes): rc 0, status 0x0, 5904 us, in TMR at 0xF5FF842000
+    83      1.252 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    84      1.252 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    85      1.268 psp: command 5 (id 6, type 2, 263168 bytes): rc 0, status 0x0, 5903 us, in TMR at 0xF5FF883000
+    86      1.268 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    87      1.268 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    88      1.268 psp: command 6 (id 6, type 1, 263168 bytes): rc 0, status 0x0, 5903 us, in TMR at 0xF5FF8C4000
+    89      1.268 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    90      1.268 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    91      1.268 psp: command 7 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5954 us, in TMR at 0xF5FF800000
+    92      1.268 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    93      1.268 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    94      1.268 psp: command 8 (id 6, type 5, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    95      1.268 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    96      1.268 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    97      1.283 psp: command 9 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5954 us, in TMR at 0xF5FF800000
+    98      1.283 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    99      1.283 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+   100      1.283 psp: command 10 (id 6, type 6, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+   101      1.283 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   102      1.283 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+   103      1.283 psp: command 11 (id 6, type 8, 25088 bytes): rc 0, status 0x0, 1737 us, in TMR at 0x0
+   104      1.283 gfx: RLC after-psp-command CNTL 0x00000001 read 0x00000000 STATUS2 0x01004008 read 0x00000000
+   105      1.283 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+   106      1.283 psp: op 1 -> 0x00000000, result 0, 15 writes, 11 of 11 commands
+   107      1.283 gfx: RLC after-psp CNTL 0x00000001 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   108      1.283 gfx: GRBM after-psp STATUS 0x00003028 read 0x00000000
+   109      1.283 startup: entering IH initialization
+   110      1.283 ih: init: rc 0, 18 writes
+   111      1.283 ih: op 1 -> 0x00000000, result 0, 19 writes; 0 interrupt routine calls, 0 ours, 0 DPCs, 0 vectors; status idle 1 input_idle 1 bif_interrupt_line 0
+   112      1.283 startup: entering GFX initialization
+   113      1.283 cumode: CuMode 40 disable 0x00000 -> mode 40 reason 0, confirmed earlier
+   114      1.283 gfx: RLC startup policy pp_gfxoff 0
+   115      1.290 gfx: stage 1 (doorbell aperture): rc 0, 49 writes so far, 1 us
+   116      1.290 gfx: stage 2 (golden registers): rc 0, 83 writes so far, 24 us
+   117      1.290 gfx: stage 3 (GRBM CAM probe): rc 0, 86 writes so far, 2 us
+   118      1.292 cumode: stage run: mode 40 applied 40 reason 0 wrote 1
+   119      1.292 gfx: stage 4 (constants): rc 0, 264 writes so far, 83 us
+   120      1.292 gpumem: GFXHUB after-invalidate-request sample 0x00F80001 fault 0x00000000
+   121      1.292 gpumem: GFXHUB after-invalidate-request-read sample 0x00F80001 fault 0x00000000
+   122      1.292 gpumem: GFXHUB after-invalidate-ack sample 0x00000001 fault 0x00000000
+   123      1.292 gpumem: startup GFX translations committed after RLC, before CP
+   124      1.292 gfx: RLC after-bootstrap-translation-commit CNTL 0x00000001 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   125      1.292 gfx: GRBM after-bootstrap-translation-commit STATUS 0x00003028 read 0x00000000
+   126      1.292 gfx: stage 5 (RLC): rc 0, 276 writes so far, 148 us
+   127      1.292 amdgpu[0]: CP resume kiq-init begin
+
+   128      1.292 amdgpu[0]: CP resume kiq-init end result=0
+
+   129      1.292 amdgpu[0]: CP resume compute-unhalt begin
+
+   130      1.292 amdgpu[0]: CP resume compute-unhalt end
+
+   131      1.292 amdgpu[0]: CP resume kcq-init ring=0 begin
+
+   132      1.292 amdgpu[0]: CP resume kcq-init ring=0 end result=0
+
+   133      1.292 amdgpu[0]: CP resume kcq-init ring=1 begin
+
+   134      1.292 amdgpu[0]: CP resume kcq-init ring=1 end result=0
+
+   135      1.292 amdgpu[0]: CP resume kcq-init ring=2 begin
+
+   136      1.292 amdgpu[0]: CP resume kcq-init ring=2 end result=0
+
+   137      1.292 amdgpu[0]: CP resume kcq-init ring=3 begin
+
+   138      1.292 amdgpu[0]: CP resume kcq-init ring=3 end result=0
+
+   139      1.292 amdgpu[0]: CP resume kcq-init ring=4 begin
+
+   140      1.292 amdgpu[0]: CP resume kcq-init ring=4 end result=0
+
+   141      1.292 amdgpu[0]: CP resume kcq-init ring=5 begin
+
+   142      1.292 amdgpu[0]: CP resume kcq-init ring=5 end result=0
+
+   143      1.292 amdgpu[0]: CP resume kcq-init ring=6 begin
+
+   144      1.292 amdgpu[0]: CP resume kcq-init ring=6 end result=0
+
+   145      1.292 amdgpu[0]: CP resume kcq-init ring=7 begin
+
+   146      1.292 amdgpu[0]: CP resume kcq-init ring=7 end result=0
+
+   147      1.292 amdgpu[0]: CP resume kcq-enable begin
+
+   148      1.292 amdgpu[0]: CP resume kcq-enable end result=0
+
+   149      1.292 amdgpu[0]: CP resume kgq-init ring=0 begin
+
+   150      1.292 amdgpu[0]: CP resume kgq-init ring=0 end result=0
+
+   151      1.292 amdgpu[0]: CP resume kgq-enable begin
+
+   152      1.292 amdgpu[0]: CP resume kgq-enable end result=0
+
+   153      1.292 amdgpu[0]: CP resume gfx-start begin
+
+   154      1.292 amdgpu[0]: CP resume gfx-start end result=0
+
+   155      1.292 amdgpu[0]: CP resume gfx-test ring=0 begin
+
+   156      1.292 amdgpu[0]: CP resume gfx-test ring=0 end result=0
+
+   157      1.292 amdgpu[0]: CP resume compute-test ring=0 begin
+
+   158      1.292 amdgpu[0]: CP resume compute-test ring=0 end result=0
+
+   159      1.292 amdgpu[0]: CP resume compute-test ring=1 begin
+
+   160      1.292 amdgpu[0]: CP resume compute-test ring=1 end result=0
+
+   161      1.292 amdgpu[0]: CP resume compute-test ring=2 begin
+
+   162      1.292 amdgpu[0]: CP resume compute-test ring=2 end result=0
+
+   163      1.292 amdgpu[0]: CP resume compute-test ring=3 begin
+
+   164      1.292 amdgpu[0]: CP resume compute-test ring=3 end result=0
+
+   165      1.292 amdgpu[0]: CP resume compute-test ring=4 begin
+
+   166      1.292 amdgpu[0]: CP resume compute-test ring=4 end result=0
+
+   167      1.292 amdgpu[0]: CP resume compute-test ring=5 begin
+
+   168      1.292 amdgpu[0]: CP resume compute-test ring=5 end result=0
+
+   169      1.292 amdgpu[0]: CP resume compute-test ring=6 begin
+
+   170      1.292 amdgpu[0]: CP resume compute-test ring=6 end result=0
+
+   171      1.292 amdgpu[0]: CP resume compute-test ring=7 begin
+
+   172      1.292 amdgpu[0]: CP resume compute-test ring=7 end result=0
+
+   173      1.292 gfx: stage 6 (CP): rc 0, 338 writes so far, 403 us
+   174      1.292 gfx: stage 7 (SDMA): rc 0, 431 writes so far, 244 us
+   175      1.292 gfx: stage 8 (interrupt sources): rc 0, 466 writes so far, 21 us
+   176      1.292 gfx: paging node ready, SDMA0 doorbell 0x200, per-buffer private commands
+   177      1.292 gfx: op 1 to stage 8 -> 0x00000000, result 0, 466 writes, 16 doorbells
+   178      1.292 cumode: applied 40 CUs (40 counted), reason 0, consistent 1, wrote 1, RLC_PG_CNTL 0x00000008 (PG enables 0x8), after the RLC stage 0x00800000 (PG enables 0x0)
+   179      1.292 cumode: SA0-3 CC 0xFFE00000 0xFFE00000 0xFFE00000 0xFFE00000 SPI 0x1F 0x1F 0x1F 0x1F
+   180      1.348 startup: both engines ready
+   181      1.348 startup: attempted 0x1F completed 0x1F status 0x00000000 ready 1 unwind 0 quarantine 0
+   182      1.348 wddm: GPU initialized before adapter admission
+   183      1.348 wddm: callbacks sync 1 notify 1 queuedpc 1 notifydpc 1, interface 576 of 568 bytes
+   184      1.348 wddm: handle callbacks size 576 get@104=FFFFF8045E87E910 acquire@288=FFFFF8045E764100 release@296=FFFFF8045E764760
+   185      1.365 display modes: AUX 25 transactions 25 attempts, 0 defers 0 timeouts 0 invalid 0 nacks 0 busy
+   186      1.365 display modes: AUX 20450 us stalled, EDID 256 bytes, status 0x00000000 close 0x00000000
+   187      1.365 display modes: DPCD rev 0x11 max link rate 0x0A max lanes 4 (0x84) downspread 0x01
+   188      1.365 display modes: EDID ok, 256 bytes, 2 blocks, version 1.4
+   189      1.365 display modes: monitor LEN product 0x1144 name 'LEN LT2452pwC'
+   190      1.365 display modes: preferred 1920x1200 59.950 Hz, pixel clock 154000 kHz; native (firmware) 1920x1200
+   191      1.365 display modes: pipe 0 ok (0x00000000): viewport 0x00000000/0x04B00780 recout 0x00000000/0x04B00780 mpc 0x04B00780
+   192      1.365 display modes: pipe 0 scl 0x00000001 mem 0x00000000 top 0 odm 0 hubp 0x000F1002
+   193      1.365 display modes: requested 2 level 2, 16 source modes, descriptor served
+   194      1.365 display modes: list 0..5: 1920x1200/0x03 1920x1080/0x36 1680x1050/0x24 1600x1200/0x04 1600x900/0x20 1440x900/0x24
+   195      1.365 display modes: list 6..11: 1400x1050/0x20 1280x1024/0x2C 1280x960/0x20 1280x800/0x20 1280x720/0x32 1152x864/0x20
+   196      1.365 display modes: list 12..15: 1024x768/0x28 800x600/0x28 720x480/0x02 640x480/0x3C
+   197      1.365 dpaudio: codec 0x1002AA01 rev 0x00100700 straps 0x00008000 vid 0x00010201/0x00100200 be 0x00000100/0x00010000 hpd 0x12/0x0
+   198      1.365 dpaudio: ep0 cfg 0x185600F0 hpc 0x00000000 unsol 0x80 sense 0x7FFFFFFF; ep1 cfg 0x185600F0 hpc 0x00000000; first fail 0x00000000
+   199      1.365 dpaudio: sec 0x00000000/0x00000000 dto src 0x00000030 dto1 0/1 afmt 0x00000100/0x00000000 pkt 0x04000800/0x04000800
+   200      1.365 dpaudio: DP reference clock count 6000 (100 kHz units): DTO1 module 6000000, phase 240000, for a 24 MHz wall clock
+   201      1.365 dpaudio: preconditions hold: stream DP0, endpoint 0, notes 0x8
+   202      1.365 dpaudio: hw_init done on endpoint 0: rates 0x00020070 power 0xC0000009 hpc 0x00000000, 4 writes
+   203      1.365 dpaudio: configure done on endpoint 0 (EDID), 27 writes, speakers 0x01
+   204      1.365 dpaudio: LPCM 2 ch rates 0x7F sizes 0x7, sink 0xAE30/0x1144 'LEN LT2452pwC'
+   205      1.365 dpaudio: ELD port id 0x0D9894495558859E (Linux's constant: no container ID yet)
+   206      1.365 dpaudio: stream on DP0: DTO_SOURCE 0x00100010 DTO1 240000/6000000, AUD_N 0x00008000 timestamp 0x1, 18 writes
+   207      1.365 dpaudio: stream on DP0: AFMT_CNTL 0x00000101 SRC 0x0 PACKET 0x04000801 PACKET2 0x00000300 SEC_CNTL 0x00001111
+   208      1.365 dpaudio: AUDIO_ENABLED set on endpoint 0: hpc 0x00000000 -> 0x80000000
+   209      1.365 stage 35
+   210      1.365 fan: control on: mode curve profile standard
+   211      1.365 fan: restore record taken at the first change, bugcheck callback on
+   212      1.365 smu metrics: table page MC 0xF5FFFEC000, physical 0x46FFEC000, one read every 1000 ms
+   213      1.365 dpm: thermal zone DpmThermalZone 0 (absent) -> on, error 0
+   214      1.365 dpm: thermal zone: steps from 86000 mC, no raise from 83000 mC
+   215      1.365 dpm: idle DpmIdleMHz 500 hold 3000 ms (absent) under 2 permille (absent) -> on (error 0)
+   216      1.365 dpm: idle DpmIdleLeavePermille 150 (absent): leaves at 150 permille over the window, or 500 in one tick
+   217      1.365 dpm: joint power arm DpmJointGovernor 0 (absent) -> off
+   218      1.365 dpm: DpmMode 1 DpmMaxMHz 1500 -> DPM, ceiling 1500 MHz, reason 0, confirmed earlier
+   219      1.376 dpm: hardware busy sampler running, every 1000 us
+   220      1.376 dpm: telemetry in the log every 5000 ms, every 120000 ms at the idle point
+   221      1.376 cpu: the surface is on (CpuTune 1), trial window 25000 ms
+   222      1.376 cpu: the surface sees 12 processors, core mask 0x77
+   223      1.376 stage 39
+   224      1.376 wddm: display QueryChildRelations call 1 detail 0x38 -> 0x00000000
+   225      1.377 wddm: DRIVERCAPS reply started1 interop1 extent-shifts2/2
+   226      1.377 wddm: DRIVERCAPS into 592 bytes: wddm 8192 sched 0x45 mm 0x60 flip 0x12 slots 0 tdr 1 dflip 1 rot 1
+   227      1.377 wddm: QueryAdapterInfo type 1 in 0 out 592 -> 0x00000000
+   228      1.377 wddm: QueryAdapterInfo type 15 in 4 out 32 -> 0xC00000BB
+   229      1.385 wddm: QueryAdapterInfo type 47 in 0 out 4 -> 0xC00000BB
+   230      1.385 wddm: QueryAdapterInfo type 13 in 4 out 24 -> 0x00000000
+   231      1.385 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   232      1.385 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   233      1.385 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   234      1.385 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   235      1.385 wddm: GetNodeMetadata node 0 adapter 0
+   236      1.385 wddm: GetNodeMetadata node 1 adapter 0
+   237      1.385 wddm: QUERYSEGMENT4 pass 1: 3 segment(s)
+   238      1.385 wddm: QUERYSEGMENT4 pass 2: 3 segment(s), stride 104, paging buffer segment 2, 65536 bytes
+   239      1.385 wddm: segment 1 flags 0x00080404 gpu 0xF4008D0000 cpu 0x2708D0000 size 0x1ED880000
+   240      1.386 wddm: QueryAdapterInfo type 16 in 0 out 4 -> 0xC00000BB
+   241      1.386 wddm: CreateProcess flags 0x00000001 pasids 1
+   242      1.386 wddm: CreateDevice flags 0x00000001 pasid 0 pid 792
+   243      1.386 wddm: CreateDevice flags 0x00000001 pasid 0 pid 792
+   244      1.388 wddm: capture reservation ready 22020400 bytes
+   245      1.388 wddm: context FFFFC6074E3355B0 pid 792 node 1 umd 0 system 1 ip 0
+   246      1.388 wddm: CreateContext node 1 engine 0x1 flags 0x00000005 private 0
+   247      1.388 wddm: CreateContext answered dma 65536 bytes segment set 0x2, lists 256/0, caps 0x00000001
+   248      1.388 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+   249      1.388 vidmm: table physical cache query pa 0x45E153000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+   250      1.388 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   251      1.388 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+   252      1.388 vidmm: table physical cache query pa 0x45E154000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+   253      1.388 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   254      1.389 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+   255      1.389 vidmm: table physical cache query pa 0x45E155000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+ 30865  20924.393 dpm: 1100 -> 1000 MHz/820 mV VID 116, 0 settle reads (load, busy 0 permille, 62.7 C, throttle none)
+ 30866  20925.240 dpm: 1000 -> 1300 MHz/880 mV VID 107 staged, 1 settle reads (load, busy 967 permille, 62.7 C, throttle none)
+ 30867  20925.429 dpm: 1300 -> 1200 MHz/860 mV VID 110, 0 settle reads (load, busy 0 permille, 62.7 C, throttle none)
+ 30868  20925.646 dpm: 1200 -> 1100 MHz/840 mV VID 113, 0 settle reads (load, busy 0 permille, 62.7 C, throttle none)
+ 30869  20925.865 dpm: 1100 -> 1000 MHz/820 mV VID 116, 0 settle reads (load, busy 867 permille, 62.7 C, throttle none)
+ 30870  20927.197 dpm: 1000 -> 1200 MHz/860 mV VID 110 staged, 1 settle reads (load, busy 933 permille, 62.7 C, throttle none)
+ 30871  20927.385 dpm: 1200 -> 1100 MHz/840 mV VID 113, 0 settle reads (load, busy 0 permille, 62.7 C, throttle none)
+ 30872  20927.607 dpm: 1100 -> 1000 MHz/820 mV VID 116, 0 settle reads (load, busy 0 permille, 62.7 C, throttle none)
+ 30873  20928.766 dpm: telemetry dpm 1000 MHz/820 mV (SMU 1000 MHz VID 116) 62.7 C busy 63.3% avg 19.5% want 1000 cap 1500 max 1500 throttle none, raises 108 lowers 185 thermal 
+ 30874  20928.766 dpm: telemetry idle 500 MHz, hold 3000 ms under 2 permille, entries 42 exits 42 refusals 0, 19140639 ms at the point
+ 30875  20928.766 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 30876  20928.766 hwmon: telemetry fan2 1325 rpm (1/5 turn) duty 780 permille, mode 0xE0 eng 0x60
+ 30877  20928.766 hwmon: telemetry apu 62.0 C, duty read-back unproven
+ 30878  20928.766 hwmon: telemetry 20666 samples 0 errors 0 retries 0 refusals
+ 30879  20928.766 smu metrics: telemetry 43.6 W avg 46.9 W, gfx 16.6 W soc 1.2 W
+ 30880  20928.766 smu metrics: telemetry gfx 818 mV 1000 MHz 59.0 C soc 806 mV 60.0 C thr 0
+ 30881  20928.766 fan: telemetry curve curve/standard
+ 30882  20928.766 fan: telemetry target 78% applied 78% raw 199 rb 199, 1325 rpm
+ 30883  20928.766 fan: telemetry 1 takeovers 0 handbacks 127 writes
+ 30884  20928.766 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 30885  20930.377 dpm: 1000 -> 1200 MHz/860 mV VID 110 staged, 1 settle reads (load, busy 900 permille, 62.7 C, throttle none)
+ 30886  20930.565 dpm: 1200 -> 1100 MHz/840 mV VID 113, 0 settle reads (load, busy 0 permille, 62.7 C, throttle none)
+ 30887  20930.784 dpm: 1100 -> 1000 MHz/820 mV VID 116, 0 settle reads (load, busy 0 permille, 62.7 C, throttle none)
+ 30888  20930.937 wddm: preemption queued fence 1995 node 0 hardware pending 1 active submits 0
+ 30889  20930.946 wddm: preemption report fence 1995 node 0 last completed 1337506 at DMA boundary
+ 30890  20933.786 dpm: telemetry dpm 1000 MHz/820 mV (SMU 1000 MHz VID 116) 62.6 C busy 0.0% avg 10.1% want 1000 cap 1500 max 1500 throttle none, raises 109 lowers 187 thermal 0
+ 30891  20933.786 dpm: telemetry idle 500 MHz, hold 3000 ms under 2 permille, entries 42 exits 42 refusals 0, 19140639 ms at the point
+ 30892  20933.786 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 30893  20933.786 hwmon: telemetry fan2 1327 rpm (1/5 turn) duty 780 permille, mode 0xE0 eng 0x60
+ 30894  20933.786 hwmon: telemetry apu 62.0 C, duty read-back unproven
+ 30895  20933.786 hwmon: telemetry 20671 samples 0 errors 0 retries 0 refusals
+ 30896  20933.786 smu metrics: telemetry 44.2 W avg 46.0 W, gfx 17.2 W soc 1.2 W
+ 30897  20933.786 smu metrics: telemetry gfx 818 mV 1000 MHz 60.0 C soc 806 mV 60.2 C thr 0
+ 30898  20933.786 fan: telemetry curve curve/standard
+ 30899  20933.786 fan: telemetry target 78% applied 78% raw 199 rb 199, 1327 rpm
+ 30900  20933.786 fan: telemetry 1 takeovers 0 handbacks 127 writes
+ 30901  20933.786 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 30902  20934.458 gfx: paging submit, seq 2065509 at 0x400978: 13416 submits in 60113 ms, 727164 of 727837 with no line
+ 30903  20935.523 dpm: 1000 -> 1300 MHz/880 mV VID 107 staged, 1 settle reads (load, busy 967 permille, 62.6 C, throttle none)
+ 30904  20935.710 dpm: 1300 -> 1200 MHz/860 mV VID 110, 0 settle reads (load, busy 0 permille, 62.6 C, throttle none)
+ 30905  20935.929 dpm: 1200 -> 1100 MHz/840 mV VID 113, 0 settle reads (load, busy 0 permille, 62.7 C, throttle none)
+ 30906  20936.147 dpm: 1100 -> 1000 MHz/820 mV VID 116, 0 settle reads (load, busy 0 permille, 62.7 C, throttle none)
+ 30907  20936.978 dpm: 1000 -> 1200 MHz/860 mV VID 110 staged, 1 settle reads (load, busy 933 permille, 62.7 C, throttle none)
+ 30908  20937.166 dpm: 1200 -> 1100 MHz/840 mV VID 113, 0 settle reads (load, busy 0 permille, 62.7 C, throttle none)
+ 30909  20937.386 dpm: 1100 -> 1000 MHz/820 mV VID 116, 0 settle reads (load, busy 0 permille, 62.7 C, throttle none)
+ 30910  20937.589 dpm: 1000 -> 1200 MHz/860 mV VID 110 staged, 1 settle reads (load, busy 900 permille, 62.7 C, throttle none)
+ 30911  20937.778 dpm: 1200 -> 1100 MHz/840 mV VID 113, 0 settle reads (load, busy 0 permille, 62.7 C, throttle none)
+ 30912  20937.997 dpm: 1100 -> 1000 MHz/820 mV VID 116, 0 settle reads (load, busy 0 permille, 62.7 C, throttle none)
+ 30913  20938.513 dpm: 1000 -> 1200 MHz/860 mV VID 110 staged, 1 settle reads (load, busy 900 permille, 62.7 C, throttle none)
+ 30914  20938.701 dpm: 1200 -> 1100 MHz/840 mV VID 113, 0 settle reads (load, busy 0 permille, 62.7 C, throttle none)
+ 30915  20938.796 dpm: telemetry dpm 1100 MHz/840 mV (SMU 1100 MHz VID 113) 62.7 C busy 0.0% avg 2.9% want 1100 cap 1500 max 1500 throttle none, raises 113 lowers 195 thermal 0 
+ 30916  20938.796 dpm: telemetry idle 500 MHz, hold 3000 ms under 2 permille, entries 42 exits 42 refusals 0, 19140639 ms at the point
+ 30917  20938.796 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 30918  20938.796 hwmon: telemetry fan2 1363 rpm (1/5 turn) duty 780 permille, mode 0xE0 eng 0x60
+ 30919  20938.796 hwmon: telemetry apu 62.0 C, duty read-back unproven
+ 30920  20938.796 hwmon: telemetry 20676 samples 0 errors 0 retries 0 refusals
+ 30921  20938.796 smu metrics: telemetry 44.2 W avg 48.2 W, gfx 17.2 W soc 1.2 W
+ 30922  20938.796 smu metrics: telemetry gfx 818 mV 1000 MHz 59.7 C soc 806 mV 60.0 C thr 0
+ 30923  20938.796 fan: telemetry curve curve/standard
+ 30924  20938.796 fan: telemetry target 78% applied 78% raw 199 rb 199, 1363 rpm
+ 30925  20938.796 fan: telemetry 1 takeovers 0 handbacks 127 writes
+ 30926  20938.796 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 30927  20938.922 dpm: 1100 -> 1000 MHz/820 mV VID 116, 0 settle reads (load, busy 767 permille, 62.7 C, throttle none)
+ 30928  20939.013 gfx: paging submit, seq 2065719 at 0x400B40: 16 submits in 4555 ms, 727179 of 727853 with no line
+ 30929  20939.502 dpm: 1000 -> 1200 MHz/860 mV VID 110 staged, 1 settle reads (load, busy 900 permille, 62.7 C, throttle none)
+ 30930  20939.689 dpm: 1200 -> 1100 MHz/840 mV VID 113, 0 settle reads (load, busy 33 permille, 62.7 C, throttle none)
+ 30931  20939.908 dpm: 1100 -> 1000 MHz/820 mV VID 116, 0 settle reads (load, busy 0 permille, 62.7 C, throttle none)
+ 30932  20943.807 dpm: telemetry dpm 1000 MHz/820 mV (SMU 1000 MHz VID 116) 63.0 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle none, raises 114 lowers 198 thermal 0 
+ 30933  20943.807 dpm: telemetry idle 500 MHz, hold 3000 ms under 2 permille, entries 42 exits 42 refusals 0, 19140639 ms at the point
+ 30934  20943.807 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 30935  20943.807 hwmon: telemetry fan2 1327 rpm (1/5 turn) duty 780 permille, mode 0xE0 eng 0x60
+ 30936  20943.807 hwmon: telemetry apu 62.0 C, duty read-back unproven
+ 30937  20943.807 hwmon: telemetry 20680 samples 0 errors 0 retries 0 refusals
+ 30938  20943.807 smu metrics: telemetry 48.7 W avg 50.9 W, gfx 17.2 W soc 5.8 W
+ 30939  20943.807 smu metrics: telemetry gfx 818 mV 1000 MHz 60.2 C soc 1187 mV 60.2 C thr 0
+ 30940  20943.807 fan: telemetry curve curve/standard
+ 30941  20943.807 fan: telemetry target 78% applied 78% raw 199 rb 199, 1327 rpm
+ 30942  20943.807 fan: telemetry 1 takeovers 0 handbacks 127 writes
+ 30943  20943.807 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 30944  20948.823 dpm: telemetry dpm 1000 MHz/820 mV (SMU 1000 MHz VID 116) 65.8 C busy 0.0% avg 0.4% want 1000 cap 1500 max 1500 throttle none, raises 114 lowers 198 thermal 0 
+ 30945  20948.823 dpm: telemetry idle 500 MHz, hold 3000 ms under 2 permille, entries 42 exits 42 refusals 0, 19140639 ms at the point
+ 30946  20948.823 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 30947  20948.823 hwmon: telemetry fan2 1365 rpm (1/5 turn) duty 780 permille, mode 0xE0 eng 0x60
+ 30948  20948.823 hwmon: telemetry apu 65.0 C, duty read-back unproven
+ 30949  20948.823 hwmon: telemetry 20685 samples 0 errors 0 retries 0 refusals
+ 30950  20948.823 smu metrics: telemetry 51.0 W avg 50.6 W, gfx 17.3 W soc 7.7 W
+ 30951  20948.823 smu metrics: telemetry gfx 824 mV 1000 MHz 59.2 C soc 1193 mV 60.0 C thr 0
+ 30952  20948.823 fan: telemetry curve curve/standard
+ 30953  20948.823 fan: telemetry target 79% applied 79% raw 201 rb 199, 1365 rpm
+ 30954  20948.823 fan: telemetry 1 takeovers 0 handbacks 128 writes
+ 30955  20948.823 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 30956  20952.268 dpm: 1000 -> 500 MHz/820 mV VID 116, 0 settle reads (load, busy 0 permille, 65.5 C, throttle idle)
+ 30957  20959.442 log: summary of 315 lines beside the ring at seq 30957: 11 taken in 61490 ms, 3309 of 3992 silent
+ 30958  20964.498 log: summary of 315 lines beside the ring at seq 30958 (0 did not fit), read from 4028575744
+ 30959  20995.033 gfx: paging submit, seq 2080889 at 0x410738: 13405 submits in 60575 ms, 740583 of 741258 with no line
+ 30960  20997.054 gfx: paging submit, seq 2080898 at 0x400C30: 6 submits in 2021 ms, 740588 of 741264 with no line
+ 30961  21020.138 log: summary of 315 lines beside the ring at seq 30961: 11 taken in 60696 ms, 3319 of 4004 silent
+ 30962  21025.198 log: summary of 315 lines beside the ring at seq 30962 (0 did not fit), read from 4028581888
+ 30963  21069.351 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 60.6 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 114 lowers 199 thermal 0 wa
+ 30964  21069.351 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 43 exits 42 refusals 0, 19255526 ms at the point
+ 30965  21069.351 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 30966  21069.351 hwmon: telemetry fan2 1305 rpm (1/5 turn) duty 761 permille, mode 0xE0 eng 0x60
+ 30967  21069.351 hwmon: telemetry apu 60.0 C, duty read-back unproven
+ 30968  21069.351 hwmon: telemetry 20804 samples 0 errors 0 retries 0 refusals
+ 30969  21069.351 smu metrics: telemetry 36.4 W avg 36.4 W, gfx 10.1 W soc 0.7 W
+ 30970  21069.351 smu metrics: telemetry gfx 824 mV 500 MHz 56.5 C soc 806 mV 57.7 C thr 0
+ 30971  21069.351 fan: telemetry curve curve/standard
+ 30972  21069.351 fan: telemetry target 76% applied 76% raw 194 rb 194, 1305 rpm
+ 30973  21069.351 fan: telemetry 1 takeovers 0 handbacks 131 writes
+ 30974  21069.351 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 30975  21080.846 log: summary of 315 lines beside the ring at seq 30975: 11 taken in 60708 ms, 3329 of 4016 silent
+ 30976  21084.554 gfx: paging submit, seq 2081143 at 0x400AF8: 84 submits in 89521 ms, 740671 of 741348 with no line
+ 30977  21085.910 log: summary of 315 lines beside the ring at seq 30977 (0 did not fit), read from 4028588032
+ 30978  21087.064 gfx: paging submit, seq 2081152 at 0x4104F8: 5 submits in 2510 ms, 740675 of 741353 with no line
+ 30979  21141.595 log: summary of 315 lines beside the ring at seq 30979: 11 taken in 60748 ms, 3339 of 4028 silent
+ 30980  21146.657 log: summary of 315 lines beside the ring at seq 30980 (0 did not fit), read from 4028594176
+ 30981  21146.769 gfx: paging submit, seq 2081359 at 0x400A20: 100 submits in 62215 ms, 740774 of 741453 with no line
+ 30982  21148.809 gfx: paging submit, seq 2081366 at 0x410F38: 3 submits in 2040 ms, 740776 of 741456 with no line
+ 30983  21190.023 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 59.7 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 114 lowers 199 thermal 0 wa
+ 30984  21190.023 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 43 exits 42 refusals 0, 19373719 ms at the point
+ 30985  21190.023 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 30986  21190.023 hwmon: telemetry fan2 1325 rpm (1/5 turn) duty 749 permille, mode 0xE0 eng 0x60
+ 30987  21190.023 hwmon: telemetry apu 59.0 C, duty read-back unproven
+ 30988  21190.023 hwmon: telemetry 20923 samples 0 errors 0 retries 0 refusals
+ 30989  21190.023 smu metrics: telemetry 36.4 W avg 36.3 W, gfx 10.1 W soc 0.7 W
+ 30990  21190.023 smu metrics: telemetry gfx 824 mV 500 MHz 56.2 C soc 806 mV 57.0 C thr 0
+ 30991  21190.023 fan: telemetry curve curve/standard
+ 30992  21190.023 fan: telemetry target 75% applied 75% raw 191 rb 191, 1325 rpm
+ 30993  21190.023 fan: telemetry 1 takeovers 0 handbacks 132 writes
+ 30994  21190.023 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 30995  21202.344 log: summary of 315 lines beside the ring at seq 30995: 11 taken in 60750 ms, 3349 of 4040 silent
+ 30996  21207.406 log: summary of 315 lines beside the ring at seq 30996 (0 did not fit), read from 4028600320
+ 30997  21212.992 gfx: paging submit, seq 2081628 at 0x410C80: 146 submits in 66223 ms, 740921 of 741602 with no line
+ 30998  21215.512 gfx: paging submit, seq 2081640 at 0x410348: 7 submits in 2520 ms, 740927 of 741609 with no line
+ 30999  21263.110 log: summary of 315 lines beside the ring at seq 30999: 11 taken in 60766 ms, 3359 of 4052 silent
+ 31000  21268.172 log: summary of 315 lines beside the ring at seq 31000 (0 did not fit), read from 4028606464
+ 31001  21290.383 gfx: paging submit, seq 2081855 at 0x400348: 98 submits in 77391 ms, 741024 of 741707 with no line
+ 31002  21294.396 gfx: paging submit, seq 2081866 at 0x4007C8: 6 submits in 4013 ms, 741029 of 741713 with no line
+ 31003  21310.684 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 59.5 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 114 lowers 199 thermal 0 wa
+ 31004  21310.684 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 43 exits 42 refusals 0, 19491906 ms at the point
+ 31005  21310.684 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 31006  21310.684 hwmon: telemetry fan2 1310 rpm (1/5 turn) duty 741 permille, mode 0xE0 eng 0x60
+ 31007  21310.684 hwmon: telemetry apu 59.0 C, duty read-back unproven
+ 31008  21310.684 hwmon: telemetry 21043 samples 0 errors 0 retries 0 refusals
+ 31009  21310.684 smu metrics: telemetry 36.3 W avg 36.4 W, gfx 10.1 W soc 0.5 W
+ 31010  21310.684 smu metrics: telemetry gfx 824 mV 500 MHz 56.0 C soc 806 mV 57.0 C thr 0
+ 31011  21310.684 fan: telemetry curve curve/standard
+ 31012  21310.684 fan: telemetry target 74% applied 74% raw 189 rb 189, 1310 rpm
+ 31013  21310.684 fan: telemetry 1 takeovers 0 handbacks 133 writes
+ 31014  21310.684 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 31015  21323.843 log: summary of 315 lines beside the ring at seq 31015: 11 taken in 60733 ms, 3369 of 4064 silent
+ 31016  21328.905 log: summary of 315 lines beside the ring at seq 31016 (0 did not fit), read from 4028612608
+ 31017  21354.110 gfx: paging submit, seq 2082002 at 0x400348: 52 submits in 63727 ms, 741080 of 741765 with no line
+ 31018  21357.593 gfx: paging submit, seq 2082014 at 0x4107B8: 6 submits in 3483 ms, 741085 of 741771 with no line
+ 31019  21384.592 log: summary of 315 lines beside the ring at seq 31019: 11 taken in 60749 ms, 3379 of 4076 silent
+ 31020  21389.655 log: summary of 315 lines beside the ring at seq 31020 (0 did not fit), read from 4028618752
+ 31021  21414.557 gfx: paging submit, seq 2082205 at 0x400348: 91 submits in 60447 ms, 741175 of 741862 with no line
+ 31022  21421.596 gfx: paging submit, seq 2082226 at 0x400D00: 9 submits in 7039 ms, 741183 of 741871 with no line
+ 31023  21431.328 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 59.3 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 114 lowers 199 thermal 0 wa
+ 31024  21431.328 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 43 exits 42 refusals 0, 19610059 ms at the point
+ 31025  21431.328 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 31026  21431.328 hwmon: telemetry fan2 1275 rpm (1/5 turn) duty 741 permille, mode 0xE0 eng 0x60
+ 31027  21431.328 hwmon: telemetry apu 59.0 C, duty read-back unproven
+ 31028  21431.328 hwmon: telemetry 21162 samples 0 errors 0 retries 0 refusals
+ 31029  21431.328 smu metrics: telemetry 36.0 W avg 36.2 W, gfx 9.5 W soc 0.8 W
+ 31030  21431.328 smu metrics: telemetry gfx 824 mV 500 MHz 55.7 C soc 806 mV 57.2 C thr 0
+ 31031  21431.328 fan: telemetry curve curve/standard
+ 31032  21431.328 fan: telemetry target 74% applied 74% raw 189 rb 189, 1275 rpm
+ 31033  21431.328 fan: telemetry 1 takeovers 0 handbacks 133 writes
+ 31034  21431.328 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 31035  21445.291 log: summary of 315 lines beside the ring at seq 31035: 11 taken in 60699 ms, 3389 of 4088 silent
+ 31036  21450.338 log: summary of 315 lines beside the ring at seq 31036 (0 did not fit), read from 4028624896
+ 31037  21478.820 gfx: paging submit, seq 2082453 at 0x4005F8: 131 submits in 64263 ms, 741313 of 742002 with no line
+ 31038  21481.842 gfx: paging submit, seq 2082462 at 0x410B40: 3 submits in 3022 ms, 741315 of 742005 with no line
+ 31039  21505.867 log: summary of 315 lines beside the ring at seq 31039: 11 taken in 60576 ms, 3399 of 4100 silent
+ 31040  21510.914 log: summary of 315 lines beside the ring at seq 31040 (0 did not fit), read from 4028631040
+ 31041  21551.898 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 59.2 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 114 lowers 199 thermal 0 wa
+ 31042  21551.898 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 43 exits 42 refusals 0, 19728141 ms at the point
+ 31043  21551.898 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 31044  21551.898 hwmon: telemetry fan2 1312 rpm (1/5 turn) duty 741 permille, mode 0xE0 eng 0x60
+ 31045  21551.898 hwmon: telemetry apu 59.0 C, duty read-back unproven
+ 31046  21551.898 hwmon: telemetry 21281 samples 0 errors 0 retries 0 refusals
+ 31047  21551.898 smu metrics: telemetry 36.6 W avg 36.6 W, gfx 10.1 W soc 0.8 W
+ 31048  21551.898 smu metrics: telemetry gfx 824 mV 500 MHz 55.5 C soc 806 mV 57.0 C thr 0
+ 31049  21551.898 fan: telemetry curve curve/standard
+ 31050  21551.898 fan: telemetry target 74% applied 74% raw 189 rb 189, 1312 rpm
+ 31051  21551.898 fan: telemetry 1 takeovers 0 handbacks 133 writes
+ 31052  21551.898 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 31053  21566.445 log: summary of 315 lines beside the ring at seq 31053: 11 taken in 60578 ms, 3409 of 4112 silent
+ 31054  21571.510 log: summary of 315 lines beside the ring at seq 31054 (0 did not fit), read from 4028637184
+ 31055  21573.726 gfx: paging submit, seq 2082701 at 0x400F70: 99 submits in 94906 ms, 741413 of 742104 with no line
+ 31056  21575.738 gfx: paging submit, seq 2082709 at 0x400690: 4 submits in 2012 ms, 741416 of 742108 with no line
+ 31057  21627.184 log: summary of 315 lines beside the ring at seq 31057: 11 taken in 60739 ms, 3419 of 4124 silent
+ 31058  21632.243 log: summary of 315 lines beside the ring at seq 31058 (0 did not fit), read from 4028643328
+ 31059  21634.967 gfx: paging submit, seq 2082962 at 0x410348: 141 submits in 61241 ms, 741556 of 742249 with no line
+ 31060  21637.475 gfx: paging submit, seq 2082972 at 0x4007B8: 6 submits in 2508 ms, 741561 of 742255 with no line
+ 31061  21672.530 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 59.3 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 114 lowers 199 thermal 0 wa
+ 31062  21672.530 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 43 exits 42 refusals 0, 19846335 ms at the point
+ 31063  21672.530 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 31064  21672.530 hwmon: telemetry fan2 1312 rpm (1/5 turn) duty 741 permille, mode 0xE0 eng 0x60
+ 31065  21672.530 hwmon: telemetry apu 59.0 C, duty read-back unproven
+ 31066  21672.530 hwmon: telemetry 21400 samples 0 errors 0 retries 0 refusals
+ 31067  21672.530 smu metrics: telemetry 35.8 W avg 36.2 W, gfx 9.5 W soc 0.7 W
+ 31068  21672.530 smu metrics: telemetry gfx 824 mV 500 MHz 55.5 C soc 806 mV 57.0 C thr 0
+ 31069  21672.530 fan: telemetry curve curve/standard
+ 31070  21672.530 fan: telemetry target 74% applied 74% raw 189 rb 189, 1312 rpm
+ 31071  21672.530 fan: telemetry 1 takeovers 0 handbacks 133 writes
+ 31072  21672.530 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 31073  21687.898 log: summary of 315 lines beside the ring at seq 31073: 11 taken in 60714 ms, 3429 of 4136 silent
+ 31074  21692.961 log: summary of 315 lines beside the ring at seq 31074 (0 did not fit), read from 4028649472
+ 31075  21695.193 gfx: paging submit, seq 2083255 at 0x400CF8: 179 submits in 60226 ms, 741739 of 742434 with no line
+ 31076  21699.684 gfx: paging submit, seq 2083272 at 0x410880: 10 submits in 4491 ms, 741748 of 742444 with no line
+ 31077  21748.628 log: summary of 315 lines beside the ring at seq 31077: 11 taken in 60730 ms, 3439 of 4148 silent
+ 31078  21753.691 log: summary of 315 lines beside the ring at seq 31078 (0 did not fit), read from 4028655616
+ 31079  21755.386 gfx: paging submit, seq 2083481 at 0x410690: 111 submits in 60193 ms, 741858 of 742555 with no line
+ 31080  21758.408 gfx: paging submit, seq 2083491 at 0x400AF8: 6 submits in 3022 ms, 741863 of 742561 with no line
+ 31081  21793.165 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 59.2 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 114 lowers 199 thermal 0 wa
+ 31082  21793.165 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 43 exits 42 refusals 0, 19964496 ms at the point
+ 31083  21793.165 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 31084  21793.165 hwmon: telemetry fan2 1277 rpm (1/5 turn) duty 741 permille, mode 0xE0 eng 0x60
+ 31085  21793.165 hwmon: telemetry apu 59.0 C, duty read-back unproven
+ 31086  21793.165 hwmon: telemetry 21519 samples 0 errors 0 retries 0 refusals
+ 31087  21793.165 smu metrics: telemetry 36.4 W avg 36.2 W, gfx 10.1 W soc 0.7 W
+ 31088  21793.165 smu metrics: telemetry gfx 824 mV 500 MHz 56.0 C soc 806 mV 57.0 C thr 0
+ 31089  21793.165 fan: telemetry curve curve/standard
+ 31090  21793.165 fan: telemetry target 74% applied 74% raw 189 rb 189, 1277 rpm
+ 31091  21793.165 fan: telemetry 1 takeovers 0 handbacks 133 writes
+ 31092  21793.165 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 31093  21809.378 log: summary of 315 lines beside the ring at seq 31093: 11 taken in 60750 ms, 3449 of 4160 silent
+ 31094  21814.441 log: summary of 315 lines beside the ring at seq 31094 (0 did not fit), read from 4028661760
+ 31095  21822.115 gfx: paging submit, seq 2083624 at 0x400000: 30 submits in 66729 ms, 741892 of 742591 with no line
+ 31096  21825.643 gfx: paging submit, seq 2083638 at 0x410D78: 8 submits in 3528 ms, 741899 of 742599 with no line
+ 31097  21870.097 log: summary of 315 lines beside the ring at seq 31097: 11 taken in 60719 ms, 3459 of 4172 silent
+ 31098  21875.160 log: summary of 315 lines beside the ring at seq 31098 (0 did not fit), read from 4028667904
+ 31099  21883.409 gfx: paging submit, seq 2083841 at 0x410F70: 106 submits in 61294 ms, 742004 of 742705 with no line
+ 31100  21890.443 gfx: paging submit, seq 2083857 at 0x410690: 4 submits in 7034 ms, 742007 of 742709 with no line
+ 31101  21913.828 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 59.2 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 114 lowers 199 thermal 0 wa
+ 31102  21913.828 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 43 exits 42 refusals 0, 20082670 ms at the point
+ 31103  21913.828 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 31104  21913.828 hwmon: telemetry fan2 1315 rpm (1/5 turn) duty 741 permille, mode 0xE0 eng 0x60
+ 31105  21913.828 hwmon: telemetry apu 59.0 C, duty read-back unproven
+ 31106  21913.828 hwmon: telemetry 21638 samples 0 errors 0 retries 0 refusals
+ 31107  21913.828 smu metrics: telemetry 36.8 W avg 36.2 W, gfx 10.1 W soc 1.1 W
+ 31108  21913.828 smu metrics: telemetry gfx 824 mV 500 MHz 55.5 C soc 806 mV 56.5 C thr 0
+ 31109  21913.828 fan: telemetry curve curve/standard
+ 31110  21913.828 fan: telemetry target 74% applied 74% raw 189 rb 189, 1315 rpm
+ 31111  21913.828 fan: telemetry 1 takeovers 0 handbacks 133 writes
+ 31112  21913.828 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 31113  21930.845 log: summary of 315 lines beside the ring at seq 31113: 11 taken in 60748 ms, 3469 of 4184 silent
+ 31114  21935.908 log: summary of 315 lines beside the ring at seq 31114 (0 did not fit), read from 4028674048
+ 31115  21943.598 gfx: paging submit, seq 2084108 at 0x400500: 162 submits in 60189 ms, 742168 of 742871 with no line
+ 31116  21947.110 gfx: paging submit, seq 2084122 at 0x400348: 8 submits in 3512 ms, 742175 of 742879 with no line
+ 31117  21991.579 log: summary of 315 lines beside the ring at seq 31117: 11 taken in 60734 ms, 3479 of 4196 silent
+ 31118  21996.642 log: summary of 315 lines beside the ring at seq 31118 (0 did not fit), read from 4028680192
+ 31119  22006.958 gfx: paging submit, seq 2084340 at 0x410348: 113 submits in 63359 ms, 742287 of 742992 with no line
+ 31120  22012.002 gfx: paging submit, seq 2084356 at 0x410DC0: 6 submits in 5045 ms, 742292 of 742998 with no line
+ 31121  22034.529 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 59.2 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 114 lowers 199 thermal 0 wa
+ 31122  22034.529 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 43 exits 42 refusals 0, 20200902 ms at the point
+ 31123  22034.529 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 31124  22034.529 hwmon: telemetry fan2 1312 rpm (1/5 turn) duty 741 permille, mode 0xE0 eng 0x60
+ 31125  22034.529 hwmon: telemetry apu 59.0 C, duty read-back unproven
+ 31126  22034.529 hwmon: telemetry 21758 samples 0 errors 0 retries 0 refusals
+ 31127  22034.529 smu metrics: telemetry 36.6 W avg 36.1 W, gfx 10.1 W soc 0.8 W
+ 31128  22034.529 smu metrics: telemetry gfx 824 mV 500 MHz 55.2 C soc 806 mV 57.2 C thr 0
+ 31129  22034.529 fan: telemetry curve curve/standard
+ 31130  22034.529 fan: telemetry target 74% applied 74% raw 189 rb 189, 1312 rpm
+ 31131  22034.529 fan: telemetry 1 takeovers 0 handbacks 133 writes
+ 31132  22034.529 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 31133  22052.322 log: summary of 315 lines beside the ring at seq 31133: 11 taken in 60743 ms, 3489 of 4208 silent
+ 31134  22057.385 log: summary of 315 lines beside the ring at seq 31134 (0 did not fit), read from 4028686336
+ 31135  22069.671 gfx: paging submit, seq 2084478 at 0x410EB8: 37 submits in 62714 ms, 742328 of 743035 with no line
+ 31136  22071.718 gfx: paging submit, seq 2084486 at 0x410000: 3 submits in 2047 ms, 742330 of 743038 with no line
+ 31137  22113.054 log: summary of 315 lines beside the ring at seq 31137: 11 taken in 60732 ms, 3499 of 4220 silent
+ 31138  22118.117 log: summary of 315 lines beside the ring at seq 31138 (0 did not fit), read from 4028692480
+ 31139  22130.442 gfx: paging submit, seq 2084716 at 0x400C30: 121 submits in 60771 ms, 742450 of 743159 with no line
+ 31140  22135.428 gfx: paging submit, seq 2084729 at 0x400348: 3 submits in 4986 ms, 742452 of 743162 with no line
+ 31141  22155.231 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 59.3 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 114 lowers 199 thermal 0 wa
+ 31142  22155.231 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 43 exits 42 refusals 0, 20319131 ms at the point
+ 31143  22155.231 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 31144  22155.231 hwmon: telemetry fan2 1275 rpm (1/5 turn) duty 741 permille, mode 0xE0 eng 0x60
+ 31145  22155.231 hwmon: telemetry apu 59.0 C, duty read-back unproven
+ 31146  22155.231 hwmon: telemetry 21877 samples 0 errors 0 retries 0 refusals
+ 31147  22155.231 smu metrics: telemetry 35.8 W avg 36.1 W, gfx 9.5 W soc 0.7 W
+ 31148  22155.231 smu metrics: telemetry gfx 824 mV 500 MHz 55.5 C soc 806 mV 56.5 C thr 0
+ 31149  22155.231 fan: telemetry curve curve/standard
+ 31150  22155.231 fan: telemetry target 74% applied 74% raw 189 rb 189, 1275 rpm
+ 31151  22155.231 fan: telemetry 1 takeovers 0 handbacks 133 writes
+ 31152  22155.231 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 31153  22173.783 log: summary of 315 lines beside the ring at seq 31153: 11 taken in 60729 ms, 3509 of 4232 silent
+ 31154  22178.847 log: summary of 315 lines beside the ring at seq 31154 (0 did not fit), read from 4028698624
+ 31155  22195.462 gfx: paging submit, seq 2084990 at 0x410000: 151 submits in 65020 ms, 742602 of 743313 with no line
+ 31156  22197.469 gfx: paging submit, seq 2084996 at 0x400690: 3 submits in 2007 ms, 742604 of 743316 with no line
+ 31157  22234.533 log: summary of 315 lines beside the ring at seq 31157: 11 taken in 60750 ms, 3519 of 4244 silent
+ 31158  22239.595 log: summary of 315 lines beside the ring at seq 31158 (0 did not fit), read from 4028704768
+ 31159  22256.713 gfx: paging submit, seq 2085216 at 0x400738: 124 submits in 61251 ms, 742727 of 743440 with no line
+ 31160  22258.721 gfx: paging submit, seq 2085226 at 0x410BB0: 6 submits in 2008 ms, 742732 of 743446 with no line
+ 31161  22275.904 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 59.2 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 114 lowers 199 thermal 0 wa
+ 31162  22275.904 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 43 exits 42 refusals 0, 20437339 ms at the point
+ 31163  22275.904 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 31164  22275.904 hwmon: telemetry fan2 1275 rpm (1/5 turn) duty 741 permille, mode 0xE0 eng 0x60
+ 31165  22275.904 hwmon: telemetry apu 59.0 C, duty read-back unproven
+ 31166  22275.904 hwmon: telemetry 21996 samples 0 errors 0 retries 0 refusals
+ 31167  22275.904 smu metrics: telemetry 38.1 W avg 36.4 W, gfx 10.1 W soc 2.4 W
+ 31168  22275.904 smu metrics: telemetry gfx 824 mV 500 MHz 55.7 C soc 806 mV 57.2 C thr 0
+ 31169  22275.904 fan: telemetry curve curve/standard
+ 31170  22275.904 fan: telemetry target 74% applied 74% raw 189 rb 189, 1275 rpm
+ 31171  22275.904 fan: telemetry 1 takeovers 0 handbacks 133 writes
+ 31172  22275.904 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 31173  22295.280 log: summary of 315 lines beside the ring at seq 31173: 11 taken in 60747 ms, 3529 of 4256 silent
+ 31174  22300.342 log: summary of 315 lines beside the ring at seq 31174 (0 did not fit), read from 4028710912
+ 31175  22318.725 gfx: paging submit, seq 2085428 at 0x4107B8: 97 submits in 62012 ms, 742828 of 743543 with no line
+ 31176  22356.011 log: summary of 315 lines beside the ring at seq 31176: 11 taken in 60731 ms, 3539 of 4268 silent
+ 31177  22361.074 log: summary of 315 lines beside the ring at seq 31177 (0 did not fit), read from 4028717056
+ 31178  22370.334 gfx: paging submit, seq 2085519 at 0x400900: 7 submits in 51609 ms, 742834 of 743550 with no line
+ 31179  22384.849 gfx: paging submit, seq 2085576 at 0x410348: 32 submits in 66124 ms, 742865 of 743582 with no line
+ 31180  22390.327 gfx: paging submit, seq 2085594 at 0x410CF8: 9 submits in 5478 ms, 742873 of 743591 with no line
+ 31181  22396.605 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 59.1 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 114 lowers 199 thermal 0 wa
+ 31182  22396.605 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 43 exits 42 refusals 0, 20555568 ms at the point
+ 31183  22396.605 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 31184  22396.605 hwmon: telemetry fan2 1275 rpm (1/5 turn) duty 741 permille, mode 0xE0 eng 0x60
+ 31185  22396.605 hwmon: telemetry apu 59.0 C, duty read-back unproven
+ 31186  22396.605 hwmon: telemetry 22115 samples 0 errors 0 retries 0 refusals
+ 31187  22396.605 smu metrics: telemetry 36.7 W avg 36.1 W, gfx 9.5 W soc 1.5 W
+ 31188  22396.605 smu metrics: telemetry gfx 824 mV 500 MHz 55.5 C soc 806 mV 56.5 C thr 0
+ 31189  22396.605 fan: telemetry curve curve/standard
+ 31190  22396.605 fan: telemetry target 74% applied 74% raw 189 rb 189, 1275 rpm
+ 31191  22396.605 fan: telemetry 1 takeovers 0 handbacks 133 writes
+ 31192  22396.605 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 31193  22416.741 log: summary of 315 lines beside the ring at seq 31193: 11 taken in 60730 ms, 3549 of 4280 silent
+ 31194  22421.805 log: summary of 315 lines beside the ring at seq 31194 (0 did not fit), read from 4028723200
+ 31195  22447.594 gfx: paging submit, seq 2085763 at 0x4105B8: 86 submits in 62745 ms, 742958 of 743677 with no line
+ 31196  22453.605 gfx: paging submit, seq 2085779 at 0x400000: 8 submits in 6011 ms, 742965 of 743685 with no line
+ 31197  22477.485 log: summary of 315 lines beside the ring at seq 31197: 11 taken in 60744 ms, 3559 of 4292 silent
+ 31198  22482.546 log: summary of 315 lines beside the ring at seq 31198 (0 did not fit), read from 4028729344
+ 31199  22509.225 gfx: paging submit, seq 2085949 at 0x400400: 81 submits in 61631 ms, 743045 of 743766 with no line
+ 31200  22511.768 gfx: paging submit, seq 2085956 at 0x410940: 3 submits in 2543 ms, 743047 of 743769 with no line
+ 31201  22517.275 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 59.1 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 114 lowers 199 thermal 0 wa
+ 31202  22517.275 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 43 exits 42 refusals 0, 20673771 ms at the point
+ 31203  22517.275 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 31204  22517.275 hwmon: telemetry fan2 1311 rpm (1/5 turn) duty 741 permille, mode 0xE0 eng 0x60
+ 31205  22517.275 hwmon: telemetry apu 59.0 C, duty read-back unproven
+ 31206  22517.275 hwmon: telemetry 22234 samples 0 errors 0 retries 0 refusals
+ 31207  22517.275 smu metrics: telemetry 35.8 W avg 36.3 W, gfx 9.5 W soc 0.7 W
+ 31208  22517.275 smu metrics: telemetry gfx 824 mV 500 MHz 55.7 C soc 806 mV 56.5 C thr 0
+ 31209  22517.275 fan: telemetry curve curve/standard
+ 31210  22517.275 fan: telemetry target 74% applied 74% raw 189 rb 189, 1311 rpm
+ 31211  22517.275 fan: telemetry 1 takeovers 0 handbacks 133 writes
+ 31212  22517.275 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 31213  22538.231 log: summary of 315 lines beside the ring at seq 31213: 11 taken in 60746 ms, 3569 of 4304 silent
+ 31214  22543.293 log: summary of 315 lines beside the ring at seq 31214 (0 did not fit), read from 4028735488
+ 31215  22570.977 gfx: paging submit, seq 2086194 at 0x410000: 122 submits in 61752 ms, 743168 of 743891 with no line
+ 31216  22573.983 gfx: paging submit, seq 2086202 at 0x410F10: 2 submits in 3006 ms, 743169 of 743893 with no line
+ 31217  22598.962 log: summary of 315 lines beside the ring at seq 31217: 11 taken in 60731 ms, 3579 of 4316 silent
+ 31218  22604.024 log: summary of 315 lines beside the ring at seq 31218 (0 did not fit), read from 4028741632
+ 31219  22631.139 gfx: paging submit, seq 2086451 at 0x410348: 140 submits in 60162 ms, 743308 of 744033 with no line
+ 31220  22637.182 gfx: paging submit, seq 2086479 at 0x410348: 17 submits in 6043 ms, 743324 of 744050 with no line
+ 31221  22638.008 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 59.2 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 114 lowers 199 thermal 0 wa
+ 31222  22638.008 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 43 exits 42 refusals 0, 20792023 ms at the point
+ 31223  22638.008 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 31224  22638.008 hwmon: telemetry fan2 1275 rpm (1/5 turn) duty 741 permille, mode 0xE0 eng 0x60
+ 31225  22638.008 hwmon: telemetry apu 59.0 C, duty read-back unproven
+ 31226  22638.008 hwmon: telemetry 22354 samples 0 errors 0 retries 0 refusals
+ 31227  22638.008 smu metrics: telemetry 36.8 W avg 36.2 W, gfx 10.1 W soc 1.1 W
+ 31228  22638.008 smu metrics: telemetry gfx 824 mV 500 MHz 55.2 C soc 806 mV 56.5 C thr 0
+ 31229  22638.008 fan: telemetry curve curve/standard
+ 31230  22638.008 fan: telemetry target 74% applied 74% raw 189 rb 189, 1275 rpm
+ 31231  22638.008 fan: telemetry 1 takeovers 0 handbacks 133 writes
+ 31232  22638.008 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 31233  22659.709 log: summary of 315 lines beside the ring at seq 31233: 11 taken in 60747 ms, 3589 of 4328 silent
+ 31234  22664.771 log: summary of 315 lines beside the ring at seq 31234 (0 did not fit), read from 4028747776
+ 31235  22691.837 gfx: paging submit, seq 2086696 at 0x410DC0: 117 submits in 60698 ms, 743440 of 744167 with no line
+ 31236  22695.381 gfx: paging submit, seq 2086713 at 0x410978: 11 submits in 3543 ms, 743450 of 744178 with no line
+ 31237  22720.452 log: summary of 315 lines beside the ring at seq 31237: 11 taken in 60743 ms, 3599 of 4340 silent
+ 31238  22725.516 log: summary of 315 lines beside the ring at seq 31238 (0 did not fit), read from 4028753920
+ 31239  22753.646 gfx: paging submit, seq 2086981 at 0x400888: 161 submits in 61809 ms, 743610 of 744339 with no line
+ 31240  22757.141 gfx: paging submit, seq 2086993 at 0x410CF8: 6 submits in 3495 ms, 743615 of 744345 with no line
+ 31241  22758.677 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 59.2 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 114 lowers 199 thermal 0 wa
+ 31242  22758.677 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 43 exits 42 refusals 0, 20910209 ms at the point
+ 31243  22758.677 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 31244  22758.677 hwmon: telemetry fan2 1275 rpm (1/5 turn) duty 741 permille, mode 0xE0 eng 0x60
+ 31245  22758.677 hwmon: telemetry apu 59.0 C, duty read-back unproven
+ 31246  22758.677 hwmon: telemetry 22473 samples 0 errors 0 retries 0 refusals
+ 31247  22758.677 smu metrics: telemetry 36.1 W avg 36.2 W, gfx 10.1 W soc 0.4 W
+ 31248  22758.677 smu metrics: telemetry gfx 824 mV 500 MHz 56.0 C soc 806 mV 56.7 C thr 0
+ 31249  22758.677 fan: telemetry curve curve/standard
+ 31250  22758.677 fan: telemetry target 74% applied 74% raw 189 rb 189, 1275 rpm
+ 31251  22758.677 fan: telemetry 1 takeovers 0 handbacks 133 writes
+ 31252  22758.677 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 31253  22781.200 log: summary of 315 lines beside the ring at seq 31253: 11 taken in 60748 ms, 3609 of 4352 silent
+ 31254  22786.256 log: summary of 315 lines beside the ring at seq 31254 (0 did not fit), read from 4028760064
+ 31255  22841.927 log: summary of 315 lines beside the ring at seq 31255: 11 taken in 60727 ms, 3619 of 4364 silent
+ 31256  22846.988 log: summary of 315 lines beside the ring at seq 31256 (0 did not fit), read from 4028766208
+ 31257  22850.391 gfx: paging submit, seq 2087249 at 0x400C80: 105 submits in 96745 ms, 743719 of 744450 with no line
+ 31258  22854.394 gfx: paging submit, seq 2087258 at 0x400348: 3 submits in 4003 ms, 743721 of 744453 with no line
+ 31259  22879.337 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 59.2 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 114 lowers 199 thermal 0 wa
+ 31260  22879.337 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 43 exits 42 refusals 0, 21028407 ms at the point
+ 31261  22879.337 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 31262  22879.337 hwmon: telemetry fan2 1312 rpm (1/5 turn) duty 741 permille, mode 0xE0 eng 0x60
+ 31263  22879.337 hwmon: telemetry apu 59.0 C, duty read-back unproven
+ 31264  22879.337 hwmon: telemetry 22592 samples 0 errors 0 retries 0 refusals
+ 31265  22879.337 smu metrics: telemetry 36.7 W avg 36.4 W, gfx 10.1 W soc 0.9 W
+ 31266  22879.337 smu metrics: telemetry gfx 824 mV 500 MHz 55.2 C soc 806 mV 56.5 C thr 0
+ 31267  22879.337 fan: telemetry curve curve/standard
+ 31268  22879.337 fan: telemetry target 74% applied 74% raw 189 rb 189, 1312 rpm
+ 31269  22879.337 fan: telemetry 1 takeovers 0 handbacks 133 writes
+ 31270  22879.337 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 31271  22902.668 log: summary of 315 lines beside the ring at seq 31271: 11 taken in 60741 ms, 3629 of 4376 silent
+ 31272  22907.729 log: summary of 315 lines beside the ring at seq 31272 (0 did not fit), read from 4028772352
+ 31273  22910.633 gfx: paging submit, seq 2087427 at 0x4007B8: 79 submits in 60242 ms, 743799 of 744532 with no line
+ 31274  22913.145 gfx: paging submit, seq 2087437 at 0x400948: 6 submits in 2512 ms, 743804 of 744538 with no line
+ 31275  22963.398 log: summary of 315 lines beside the ring at seq 31275: 11 taken in 60730 ms, 3639 of 4388 silent
+ 31276  22968.448 log: summary of 315 lines beside the ring at seq 31276 (0 did not fit), read from 4028778496
+ 31277  22973.891 gfx: paging submit, seq 2087648 at 0x400690: 111 submits in 63258 ms, 743914 of 744649 with no line
+ 31278  22981.390 gfx: paging submit, seq 2087679 at 0x410840: 19 submits in 7499 ms, 743932 of 744668 with no line
+ 31279  23000.074 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 59.2 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 114 lowers 199 thermal 0 wa
+ 31280  23000.074 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 43 exits 42 refusals 0, 21146670 ms at the point
+ 31281  23000.074 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 31282  23000.074 hwmon: telemetry fan2 1279 rpm (1/5 turn) duty 741 permille, mode 0xE0 eng 0x60
+ 31283  23000.074 hwmon: telemetry apu 59.0 C, duty read-back unproven
+ 31284  23000.074 hwmon: telemetry 22711 samples 0 errors 0 retries 0 refusals
+ 31285  23000.074 smu metrics: telemetry 36.6 W avg 36.5 W, gfx 10.1 W soc 0.8 W
+ 31286  23000.074 smu metrics: telemetry gfx 824 mV 500 MHz 55.7 C soc 806 mV 56.7 C thr 0
+ 31287  23000.074 fan: telemetry curve curve/standard
+ 31288  23000.074 fan: telemetry target 74% applied 74% raw 189 rb 189, 1279 rpm
+ 31289  23000.074 fan: telemetry 1 takeovers 0 handbacks 133 writes
+ 31290  23000.074 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 31291  23024.132 log: summary of 315 lines beside the ring at seq 31291: 11 taken in 60734 ms, 3649 of 4400 silent
+ 31292  23029.192 log: summary of 315 lines beside the ring at seq 31292 (0 did not fit), read from 4028784640
+ 31293  23034.166 gfx: paging submit, seq 2087850 at 0x4107B8: 85 submits in 60275 ms, 744016 of 744753 with no line
+ 31294  23037.669 gfx: paging submit, seq 2087865 at 0x410348: 8 submits in 3503 ms, 744023 of 744761 with no line
+ 31295  23084.789 log: summary of 315 lines beside the ring at seq 31295: 11 taken in 60657 ms, 3659 of 4412 silent
+ 31296  23089.852 log: summary of 315 lines beside the ring at seq 31296 (0 did not fit), read from 4028790784
+ 31297  23094.519 gfx: paging submit, seq 2088022 at 0x400C40: 64 submits in 60353 ms, 744086 of 744825 with no line
+ 31298  23120.598 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 59.8 C busy 0.0% avg 0.8% want 1000 cap 1500 max 1500 throttle idle, raises 114 lowers 199 thermal 0 wa
+ 31299  23120.598 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 43 exits 42 refusals 0, 21264908 ms at the point
+ 31300  23120.598 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 31301  23120.598 hwmon: telemetry fan2 1312 rpm (1/5 turn) duty 741 permille, mode 0xE0 eng 0x60
+ 31302  23120.598 hwmon: telemetry apu 60.0 C, duty read-back unproven
+ 31303  23120.598 hwmon: telemetry 22830 samples 0 errors 0 retries 0 refusals
+ 31304  23120.598 smu metrics: telemetry 36.6 W avg 36.1 W, gfx 10.1 W soc 0.8 W
+ 31305  23120.598 smu metrics: telemetry gfx 824 mV 500 MHz 55.7 C soc 806 mV 57.2 C thr 0
+ 31306  23120.598 fan: telemetry curve curve/standard
+ 31307  23120.598 fan: telemetry target 74% applied 74% raw 189 rb 189, 1312 rpm
+ 31308  23120.598 fan: telemetry 1 takeovers 0 handbacks 133 writes
+ 31309  23120.598 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 31310  23127.555 gfx: paging submit, seq 2088072 at 0x400348: 7 submits in 33036 ms, 744092 of 744832 with no line
+ 31311  23145.516 log: summary of 315 lines beside the ring at seq 31311: 11 taken in 60727 ms, 3669 of 4424 silent
+ 31312  23150.578 log: summary of 315 lines beside the ring at seq 31312 (0 did not fit), read from 4028796928
+ 31313  23155.746 gfx: paging submit, seq 2088143 at 0x400348: 24 submits in 61227 ms, 744115 of 744856 with no line
+ 31314  23161.763 gfx: paging submit, seq 2088172 at 0x400348: 19 submits in 6017 ms, 744133 of 744875 with no line
+ 31315  23206.200 log: summary of 315 lines beside the ring at seq 31315: 11 taken in 60684 ms, 3679 of 4436 silent
+ 31316  23211.246 log: summary of 315 lines beside the ring at seq 31316 (0 did not fit), read from 4028803072
+ 31317  23216.932 gfx: paging submit, seq 2088386 at 0x4109F0: 112 submits in 61186 ms, 744244 of 744987 with no line
+ 31318  23226.678 vsync snapshot: 100ns begin 232281533689 end 232281533689 valid 1F
+ 31319  23226.678 vsync snapshot: frame 00154156 sync 00101104 control 80011311 lock 00000000 position 056001DD
+ 31320  23226.678 dpm: summary dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 59.6 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 114 lowers 199 thermal 0 warm
+ 31321  23226.678 dpm: summary idle 500 MHz (now), hold 3000 ms under 2 permille, entries 43 exits 42 refusals 0, 21368858 ms at the point
+ 31322  23226.678 dpm: summary idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 31323  23226.678 hwmon: summary fan2 1276 rpm (1/5 turn) duty 741 permille, mode 0xE0 eng 0x60
+ 31324  23226.678 hwmon: summary apu 59.0 C, duty read-back unproven
+ 31325  23226.678 hwmon: summary 22935 samples 0 errors 0 retries 0 refusals
+ 31326  23226.678 smu metrics: summary 40.1 W avg 40.5 W, gfx 9.5 W soc 5.0 W
+ 31327  23226.678 smu metrics: summary gfx 824 mV 500 MHz 55.7 C soc 1187 mV 57.0 C thr 0
+ 31328  23226.678 fan: summary curve curve/standard
+ 31329  23226.678 fan: summary target 74% applied 74% raw 189 rb 189, 1276 rpm
+ 31330  23226.678 fan: summary 1 takeovers 0 handbacks 133 writes
+ 31331  23226.678 fan: summary 0 failures 0 emergencies 0 doubts
+ 31332  23226.678 dpm: summary tune up 900 target 800 down 650 permille, hold 200 ms, floor 0 MHz, serial 0 applied 0, floor ticks 0
+ 31333  23226.678 dpm: summary tune thermal: hot step 500 ms, soft release delta 4000 mC step 4000 ms, soft raises 0
+ 31334  23226.678 dpm: summary tune zone: at 86000 mC (delta 1000) step 1500 ms, no raise from 83000 mC
+ 31335  23226.678 dpm: summary tune zone lead: 15000 ms over 5000 ms, now +0 mC, 172 ticks with none
+ 31336  23226.678 dpm: summary tune zone: 0 steps, 0 ticks, 0 idle holds, slope measured
+ 31337  23226.678 interop summary: requested 0x3 effective 0x3 reason 0 (none) closed-reason 0 flags 0x803 users 1 marks 1 unmarks 0 mark-failures 0 last-end 0
+ 31338  23226.678 wddm summary: ---- DDI calls: name, count, first log line ----
+ 31339  23226.678 wddm summary: QueryAdapterInfo                  322  first at 227
+ 31340  23226.678 wddm summary: GetNodeMetadata                     2  first at 235
+ 31341  23226.678 wddm summary: CreateDevice                      194  first at 242
+ 31342  23226.678 wddm summary: DestroyDevice                     179  first at 879
+ 31343  23226.678 wddm summary: CreateContext                     253  first at 246
+ 31344  23226.678 wddm summary: DestroyContext                    230  first at 878
+ 31345  23226.678 wddm summary: CreateProcess                     120  first at 241
+ 31346  23226.678 wddm summary: DestroyProcess                    107  first at 880
+ 31347  23226.678 wddm summary: SetRootPageTable                   93  first at 271
+ 31348  23226.678 wddm summary: CreateAllocation                12535  first at 328
+ 31349  23226.678 wddm summary: DestroyAllocation               15984  first at 677
+ 31350  23226.678 wddm summary: DescribeAllocation              52667  first at 341
+ 31351  23226.678 wddm summary: GetStandardAllocationDriverData      4  first at 325
+ 31352  23226.678 wddm summary: OpenAllocation                  12674  first at 331
+ 31353  23226.678 wddm summary: CloseAllocation                 12278  first at 676
+ 31354  23226.678 wddm summary: BuildPagingBuffer              1270498  first at 248
+ 31355  23226.678 wddm summary: SubmitCommandVirtual           2088428  first at 303
+ 31356  23226.678 wddm summary: PreemptCommand                   1995  first at 385
+ 31357  23226.678 wddm summary: CalibrateGpuClock               28908  first at 6245
+ 31358  23226.678 wddm summary: Present                         52785  first at 363
+ 31359  23226.678 wddm summary: SetVidPnSourceAddress           52668  first at 355
+ 31360  23226.678 wddm summary: ControlInterrupt                    3  first at 361
+ 31361  23226.678 wddm summary: ---- QueryAdapterInfo types: type, count, first log line ----
+ 31362  23226.678 wddm summary: adapter info type   1       1  first at 227
+ 31363  23226.678 wddm summary: adapter info type  15       1  first at 228
+ 31364  23226.678 wddm summary: adapter info type  47       1  first at 229
+ 31365  23226.678 wddm summary: adapter info type  13       1  first at 230
+ 31366  23226.678 wddm summary: adapter info type  14       4  first at 231
+ 31367  23226.678 wddm summary: adapter info type  11       2  first at 238
+ 31368  23226.678 wddm summary: adapter info type  10       1  first at 240
+ 31369  23226.678 wddm summary: adapter info type  16       1  first at 240
+ 31370  23226.678 wddm summary: adapter info type  20       1  first at 278
+ 31371  23226.678 wddm summary: adapter info type   0     309  first at 602
+ 31372  23226.678 wddm summary: capture plans reserved 0 heap 0
+ 31373  23226.678 wddm summary: capture context peaks plans 0 reserved-bytes 0
+ 31374  23226.678 wddm summary: ---- BuildPagingBuffer operations: operation, count, first log line ----
+ 31375  23226.678 wddm summary: paging operation  11  1191130  first at 248
+ 31376  23226.678 wddm summary: paging operation  12   73037  first at 316
+ 31377  23226.678 wddm summary: paging operation   9    3565  first at 338
+ 31378  23226.678 wddm summary: paging operation   2     181  first at 675
+ 31379  23226.678 wddm summary: paging operation   8    2585  first at 680
+ 31380  23226.678 wddm summary: objects created/destroyed: alloc 12535/15984
+ 31381  23226.678 wddm summary: objects created/destroyed: dev 194/179 ctx 253/230 proc 120/107, 879 alive
+ 31382  23226.678 wddm summary: allocations opened/closed: 12674/12278 calls
+ 31383  23226.678 wddm summary: ---- standard allocations; refused flags/type/geom/buf/input ----
+ 31384  23226.678 wddm summary: stdalloc primary size/fill 1/1 ok 2 refused 0/0/0/0/0
+ 31385  23226.678 wddm summary: stdalloc shadow size/fill 1/1 ok 2 refused 0/0/0/0/0
+ 31386  23226.678 wddm summary: lb7a type 0 create ok/refused/rolled-back 255/0/0 open ok/refused 394/0
+ 31387  23226.678 wddm summary: CreateAllocation calls ok 12535 resource-data 0 invalid 0 no-memory 0
+ 31388  23226.678 wddm summary: gdi type masks requested 0x000 refused 0x000 create-refused 0x000 rolled-back 0x000 open-refused 0x000
+ 31389  23226.678 wddm summary: submissions 0 physical + 2088428 virtual, 1995 preemptions, last completed fence 1343416
+ 31390  23226.678 wddm summary: node 0 hardware: 1343416 submitted, 1332129 completed, 0 timeouts, 0 refused, 0 soft-recovered
+ 31391  23226.678 wddm summary: umd: 12280 allocs (0 refused), 161 contexts, 1343289 submits on the ring, 0 not run
+ 31392  23226.678 wddm summary: umd placement (shared residency on): local 0, local+aperture 2803, aperture 9477
+ 31393  23226.678 wddm profile: umd calls 1343289, elapsed ticks 114041618, QPC frequency 10000000
+ 31394  23226.678 wddm profile: probe enabled 0, calls 0, elapsed ticks 0 (included in umd)
+ 31395  23226.678 wddm profile: holds 0 (spin-only 0), held 0 us worst 0, 0 spins
+ 31396  23226.678 wddm profile: hold wakes 0 event, 0 timeout
+ 31397  23226.678 wddm profile: held us <100:0 100:0 200:0 500:0 1k:0 2k:0 5k:0 10k:0 20k+:0
+ 31398  23226.678 wddm profile: node 0 ring idle 23073340688 us in 799180 gaps, worst 6872795 us, lost 0, 1391745 vsyncs
+ 31399  23226.678 wddm profile: node 0 ring >=4ms 87797/22827291056 us, vsync-ended 1430/427067762 us, 306857 ns/frame
+ 31400  23226.678 wddm profile: node 0 ring gap us <16:98931 16:143537 32:183159 64:181440 128:18407
+ 31401  23226.678 wddm profile: node 0 ring gap us 512:26875 2k:59034 4k:24517 8k+:63280
+ 31402  23226.678 wddm profile: node 1 ring idle 23194492481 us in 745011 gaps, worst 56244886 us, lost 0, 1391745 vsyncs
+ 31403  23226.678 wddm profile: node 1 ring >=4ms 13159/23162401660 us, vsync-ended 262/440485183 us, 316498 ns/frame
+ 31404  23226.678 wddm profile: node 1 ring gap us <16:75077 16:346395 32:238815 64:55919 128:12645
+ 31405  23226.678 wddm profile: node 1 ring gap us 512:2216 2k:785 4k:1314 8k+:11845
+ 31406  23226.678 wddm profile: ring gap vblank stamps: 1392302 hardware, 0 software timer
+ 31407  23226.678 wddm profile: notify pairing gate 1, 2079076 reports: 2061916 same pass, 17160 deferred
+ 31408  23226.678 wddm profile: notify pairing 0 waiting now (worst 3), 3466289 notifications carried no report
+ 31409  23226.678 wddm profile: notify pairing 1391745 vsync reports (0 waiting, worst 1), 64689 contended
+ 31410  23226.678 wddm profile: reports not delivered: node 0 retried 0 dropped 0
+ 31411  23226.678 wddm profile: reports not delivered: node 1 retried 0 dropped 0, 0 preemption acks lost
+ 31412  23226.678 wddm profile: hot submit log lines left out: 4030248 (HotSubmitLog off)
+ 31413  23226.678 wddm profile: paging submit lines: 745012 submits, 744269 with no line, 735 summary lines
+ 31414  23226.678 wddm summary: VMID pool on, members 0xFFFA, excluded 0x0000
+ 31415  23226.678 wddm summary: VMID pool: 49 claims, 1343367 reuses, 0 busy, 0 rule refusals
+ 31416  23226.678 wddm summary: VMID pool FLUSH_TLB: 60711 built, 849850 VMID invalidations
+ 31417  23226.678 wddm summary: ring VM flush off: 0 frames, 0 of them on a root the VMID held
+ 31418  23226.678 wddm summary: node 1 (paging, open): 745012 hardware submitted, 745012 completed, 0 timeouts, 0 refused
+ 31419  23226.678 wddm: paging OS-private queue admissions=745012 (no submit allocation)
+ 31420  23226.678 wddm summary: SubmitCommandVirtual by node: 0: 1343416, 1: 745012, 0 private-buffer refusals
+ 31421  23226.678 wddm summary: paging DMA VA nonzero 1269469 zero 1029, mapping observations 8
+ 31422  23226.678 wddm summary: native DMA transfers 2491 fills 3394 bytes 301909831680
+ 31423  23226.678 wddm: native PTE copies gate1 ranges0
+ 31424  23226.678 wddm summary: native DMA exact disjoint checks 1082
+ 31425  23226.678 wddm summary: DMA mapping matches 8/8 last VA0x400000 root0x45E150000 PA0x260ED6000 CPU_PA0x260ED6000
+ 31426  23226.678 wddm summary: BuildPagingBuffer: 2491 transfers, 3394 fills, 301909831680 bytes, 591409 insufficient-buffer
+ 31427  23226.678 wddm summary: virtual transfers (count/bytes) to system 2488/148326776832, from system 3/27648000, other 0/0
+ 31428  23226.678 wddm summary: physical transfers (count/bytes) to system 0/0, from system 0/0, other 0/0
+ 31429  23226.678 wddm summary: aperture map batches 0, unmap batches 0
+ 31430  23226.678 wddm summary: paging fills 3394/153555406848 bytes, aperture pages mapped 0 unmapped 0
+ 31431  23226.678 wddm summary: paging TLB invalidations 60711, PTE update batches 1188008
+ 31432  23226.678 wddm summary: paging unsupported (not ready/no root/no translation/system memory/not contiguous) 0/0/0/0/0
+ 31433  23226.678 wddm summary: presents 52785, flips 52661 of 52668 address calls (52658 arrived above DISPATCH_LEVEL)
+ 31434  23226.678 wddm summary: scan-out flips 0 of 0 requested candidates; admission ok/no-alloc/not-requested 52668/0/0
+ 31435  23226.678 wddm summary: scan-out refusals format/geom/pitch/size/segment/align/gated 0/0/0/0/0/0/0
+ 31436  23226.678 wddm summary: type0 creates asked/not by record none 0/2 v1 0/0 v2 0/24 v3 12/217
+ 31437  23226.678 wddm summary: type0 creates other 0/0, PRIMARY records 21, in a resource group 255
+ 31438  23226.678 wddm summary: flip flags mode/immediate/shared-transition/independent 10/0/0/0, redirected presents 0
+ 31439  23226.678 wddm summary: plane formats 1, flips argb8888/abgr8888/abgr2101010 52661/0/0, changes 0 refused 0
+ 31440  23226.678 wddm summary: DirectFlip handshake on
+ 31441  23226.678 wddm: CDD interop1 GPU Present gate1 identity probe1
+ 31442  23226.678 wddm: DRIVERCAPS returned interop0 0 interop1 1
+ 31443  23226.678 wddm: DRIVERCAPS interop0 first100ns0 last100ns0
+ 31444  23226.678 wddm: DRIVERCAPS interop1 first100ns28522401 last100ns28522401
+ 31445  23226.678 wddm: Blt observation calls127 capacity16
+ 31446  23226.678 wddm: Blt obs0 interrupt100ns29327221 qpc30823028
+ 31447  23226.678 wddm: Blt obs0 ctxFFFFC6074F7F5010 devFFFFC6074F7F5910 flags1 node0 umd0 system0
+ 31448  23226.678 wddm: Blt obs0 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+ 31449  23226.678 wddm: Blt obs0 src 936,916,984,966 dst 936,916,984,966
+ 31450  23226.678 wddm: Blt obs0 side0 handleFFFFC6074F7F7250 adapter0 va8DC000
+ 31451  23226.678 wddm: Blt obs0 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 31452  23226.678 wddm: Blt obs0 side1 handleFFFFC6074F7F45F0 adapter0 va12000
+ 31453  23226.678 wddm: Blt obs0 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 31454  23226.678 wddm: Blt obs1 interrupt100ns29763539 qpc31251202
+ 31455  23226.678 wddm: Blt obs1 ctxFFFFC6074F7F5010 devFFFFC6074F7F5910 flags1 node0 umd0 system0
+ 31456  23226.678 wddm: Blt obs1 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+ 31457  23226.678 wddm: Blt obs1 src 936,916,984,966 dst 936,916,984,966
+ 31458  23226.678 wddm: Blt obs1 side0 handleFFFFC6074F7F7250 adapter0 va8DC000
+ 31459  23226.678 wddm: Blt obs1 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 31460  23226.678 wddm: Blt obs1 side1 handleFFFFC6074F7F45F0 adapter0 va12000
+ 31461  23226.678 wddm: Blt obs1 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 31462  23226.678 wddm: Blt obs2 interrupt100ns30223729 qpc31711807
+ 31463  23226.678 wddm: Blt obs2 ctxFFFFC6074F7F5010 devFFFFC6074F7F5910 flags1 node0 umd0 system0
+ 31464  23226.678 wddm: Blt obs2 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+ 31465  23226.678 wddm: Blt obs2 src 936,916,984,966 dst 936,916,984,966
+ 31466  23226.678 wddm: Blt obs2 side0 handleFFFFC6074F7F7250 adapter0 va8DC000
+ 31467  23226.678 wddm: Blt obs2 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 31468  23226.678 wddm: Blt obs2 side1 handleFFFFC6074F7F45F0 adapter0 va12000
+ 31469  23226.678 wddm: Blt obs2 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 31470  23226.678 wddm: Blt obs3 interrupt100ns30679346 qpc32166844
+ 31471  23226.678 wddm: Blt obs3 ctxFFFFC6074F7F5010 devFFFFC6074F7F5910 flags1 node0 umd0 system0
+ 31472  23226.678 wddm: Blt obs3 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+ 31473  23226.678 wddm: Blt obs3 src 936,916,984,966 dst 936,916,984,966
+ 31474  23226.678 wddm: Blt obs3 side0 handleFFFFC6074F7F7250 adapter0 va8DC000
+ 31475  23226.678 wddm: Blt obs3 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 31476  23226.678 wddm: Blt obs3 side1 handleFFFFC6074F7F45F0 adapter0 va12000
+ 31477  23226.678 wddm: Blt obs3 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 31478  23226.678 wddm: Blt obs4 interrupt100ns31134033 qpc32621561
+ 31479  23226.678 wddm: Blt obs4 ctxFFFFC6074F7F5010 devFFFFC6074F7F5910 flags1 node0 umd0 system0
+ 31480  23226.678 wddm: Blt obs4 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+ 31481  23226.678 wddm: Blt obs4 src 936,916,984,966 dst 936,916,984,966
+ 31482  23226.678 wddm: Blt obs4 side0 handleFFFFC6074F7F7250 adapter0 va8DC000
+ 31483  23226.678 wddm: Blt obs4 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 31484  23226.678 wddm: Blt obs4 side1 handleFFFFC6074F7F45F0 adapter0 va12000
+ 31485  23226.678 wddm: Blt obs4 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 31486  23226.678 wddm: Blt obs5 interrupt100ns31596869 qpc33084852
+ 31487  23226.678 wddm: Blt obs5 ctxFFFFC6074F7F5010 devFFFFC6074F7F5910 flags1 node0 umd0 system0
+ 31488  23226.678 wddm: Blt obs5 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+ 31489  23226.678 wddm: Blt obs5 src 936,916,984,966 dst 936,916,984,966
+ 31490  23226.678 wddm: Blt obs5 side0 handleFFFFC6074F7F7250 adapter0 va8DC000
+ 31491  23226.678 wddm: Blt obs5 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 31492  23226.678 wddm: Blt obs5 side1 handleFFFFC6074F7F45F0 adapter0 va12000
+ 31493  23226.678 wddm: Blt obs5 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 31494  23226.678 wddm: Blt obs6 interrupt100ns32069976 qpc33557272
+ 31495  23226.678 wddm: Blt obs6 ctxFFFFC6074F7F5010 devFFFFC6074F7F5910 flags1 node0 umd0 system0
+ 31496  23226.678 wddm: Blt obs6 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+ 31497  23226.678 wddm: Blt obs6 src 936,916,984,966 dst 936,916,984,966
+ 31498  23226.678 wddm: Blt obs6 side0 handleFFFFC6074F7F7250 adapter0 va8DC000
+ 31499  23226.678 wddm: Blt obs6 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 31500  23226.678 wddm: Blt obs6 side1 handleFFFFC6074F7F45F0 adapter0 va12000
+ 31501  23226.678 wddm: Blt obs6 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 31502  23226.678 wddm: Blt obs7 interrupt100ns32541490 qpc34029401
+ 31503  23226.678 wddm: Blt obs7 ctxFFFFC6074F7F5010 devFFFFC6074F7F5910 flags1 node0 umd0 system0
+ 31504  23226.678 wddm: Blt obs7 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+ 31505  23226.678 wddm: Blt obs7 src 936,916,984,966 dst 936,916,984,966
+ 31506  23226.678 wddm: Blt obs7 side0 handleFFFFC6074F7F7250 adapter0 va8DC000
+ 31507  23226.678 wddm: Blt obs7 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 31508  23226.678 wddm: Blt obs7 side1 handleFFFFC6074F7F45F0 adapter0 va12000
+ 31509  23226.678 wddm: Blt obs7 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 31510  23226.678 wddm: Blt obs8 interrupt100ns33013193 qpc34500890
+ 31511  23226.678 wddm: Blt obs8 ctxFFFFC6074F7F5010 devFFFFC6074F7F5910 flags1 node0 umd0 system0
+ 31512  23226.678 wddm: Blt obs8 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+ 31513  23226.678 wddm: Blt obs8 src 936,916,984,966 dst 936,916,984,966
+ 31514  23226.678 wddm: Blt obs8 side0 handleFFFFC6074F7F7250 adapter0 va8DC000
+ 31515  23226.678 wddm: Blt obs8 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 31516  23226.678 wddm: Blt obs8 side1 handleFFFFC6074F7F45F0 adapter0 va12000
+ 31517  23226.678 wddm: Blt obs8 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 31518  23226.678 wddm: Blt obs9 interrupt100ns33483944 qpc34971667
+ 31519  23226.678 wddm: Blt obs9 ctxFFFFC6074F7F5010 devFFFFC6074F7F5910 flags1 node0 umd0 system0
+ 31520  23226.678 wddm: Blt obs9 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+ 31521  23226.678 wddm: Blt obs9 src 936,916,984,966 dst 936,916,984,966
+ 31522  23226.678 wddm: Blt obs9 side0 handleFFFFC6074F7F7250 adapter0 va8DC000
+ 31523  23226.678 wddm: Blt obs9 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 31524  23226.678 wddm: Blt obs9 side1 handleFFFFC6074F7F45F0 adapter0 va12000
+ 31525  23226.678 wddm: Blt obs9 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 31526  23226.678 wddm: Blt obs10 interrupt100ns33952753 qpc35440556
+ 31527  23226.678 wddm: Blt obs10 ctxFFFFC6074F7F5010 devFFFFC6074F7F5910 flags1 node0 umd0 system0
+ 31528  23226.678 wddm: Blt obs10 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+ 31529  23226.678 wddm: Blt obs10 src 936,916,984,966 dst 936,916,984,966
+ 31530  23226.678 wddm: Blt obs10 side0 handleFFFFC6074F7F7250 adapter0 va8DC000
+ 31531  23226.678 wddm: Blt obs10 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 31532  23226.678 wddm: Blt obs10 side1 handleFFFFC6074F7F45F0 adapter0 va12000
+ 31533  23226.678 wddm: Blt obs10 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 31534  23226.678 wddm: Blt obs11 interrupt100ns34422558 qpc35910194
+ 31535  23226.678 wddm: Blt obs11 ctxFFFFC6074F7F5010 devFFFFC6074F7F5910 flags1 node0 umd0 system0
+ 31536  23226.678 wddm: Blt obs11 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+ 31537  23226.678 wddm: Blt obs11 src 936,916,984,966 dst 936,916,984,966
+ 31538  23226.678 wddm: Blt obs11 side0 handleFFFFC6074F7F7250 adapter0 va8DC000
+ 31539  23226.678 wddm: Blt obs11 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 31540  23226.678 wddm: Blt obs11 side1 handleFFFFC6074F7F45F0 adapter0 va12000
+ 31541  23226.678 wddm: Blt obs11 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 31542  23226.678 wddm: Blt obs12 interrupt100ns36796788 qpc38287484
+ 31543  23226.678 wddm: Blt obs12 ctxFFFFC6074F7F5010 devFFFFC6074F7F5910 flags1 node0 umd0 system0
+ 31544  23226.678 wddm: Blt obs12 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+ 31545  23226.678 wddm: Blt obs12 src 0,0,1920,1200 dst 0,0,1920,1200
+ 31546  23226.678 wddm: Blt obs12 side0 handleFFFFC6074F7F7250 adapter0 va8DC000
+ 31547  23226.678 wddm: Blt obs12 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 31548  23226.678 wddm: Blt obs12 side1 handleFFFFC6074F7F45F0 adapter0 va12000
+ 31549  23226.678 wddm: Blt obs12 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 31550  23226.678 wddm: Blt obs13 interrupt100ns36796788 qpc38288249
+ 31551  23226.678 wddm: Blt obs13 ctxFFFFC6074F7F5010 devFFFFC6074F7F5910 flags1 node0 umd0 system0
+ 31552  23226.678 wddm: Blt obs13 dma4096 private2184 offset145 rects1 list256 valid1 snapshot1
+ 31553  23226.678 wddm: Blt obs13 src 0,0,1920,1200 dst 0,0,1920,1200
+ 31554  23226.678 wddm: Blt obs13 side0 handleFFFFC6074F7F7250 adapter0 va8DC000
+ 31555  23226.678 wddm: Blt obs13 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 31556  23226.678 wddm: Blt obs13 side1 handleFFFFC6074F7F45F0 adapter0 va12000
+ 31557  23226.678 wddm: Blt obs13 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 31558  23226.678 wddm: Blt obs14 interrupt100ns36796788 qpc38292255
+ 31559  23226.678 wddm: Blt obs14 ctxFFFFC6074F7F5010 devFFFFC6074F7F5910 flags1 node0 umd0 system0
+ 31560  23226.678 wddm: Blt obs14 dma4096 private2184 offset290 rects1 list256 valid1 snapshot1
+ 31561  23226.678 wddm: Blt obs14 src 0,0,1920,1200 dst 0,0,1920,1200
+ 31562  23226.678 wddm: Blt obs14 side0 handleFFFFC6074F7F7250 adapter0 va8DC000
+ 31563  23226.678 wddm: Blt obs14 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 31564  23226.678 wddm: Blt obs14 side1 handleFFFFC6074F7F45F0 adapter0 va12000
+ 31565  23226.678 wddm: Blt obs14 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 31566  23226.678 wddm: Blt obs15 interrupt100ns36796788 qpc38292727
+ 31567  23226.678 wddm: Blt obs15 ctxFFFFC6074F7F5010 devFFFFC6074F7F5910 flags1 node0 umd0 system0
+ 31568  23226.678 wddm: Blt obs15 dma4096 private2184 offset435 rects1 list256 valid1 snapshot1
+ 31569  23226.678 wddm: Blt obs15 src 0,0,1920,1200 dst 0,0,1920,1200
+ 31570  23226.678 wddm: Blt obs15 side0 handleFFFFC6074F7F7250 adapter0 va8DC000
+ 31571  23226.678 wddm: Blt obs15 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 31572  23226.678 wddm: Blt obs15 side1 handleFFFFC6074F7F45F0 adapter0 va12000
+ 31573  23226.678 wddm: Blt obs15 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 31574  23226.678 wddm: GPU Present calls127 records127 rotate96 refused0
+ 31575  23226.678 wddm: GPU Present submits127 rejected0 failed0
+ 31576  23226.678 wddm: GPU Present errors parameter0 handle0 color0 other0
+ 31577  23226.678 wddm: GPU Present snapshot refused stopping0 unopened0 owner0 umdopen0 unbound0 gone0 umdbacking0 descriptor0 same0 format0
+ 31578  23226.678 wddm summary: blit gate open, 0 blits, 0 skips, 0 sources translated contiguous
+ 31579  23226.678 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback)
+ 31580  23226.678 wddm summary: blit destination: 0 scanout remaps (0 failed), last blit 0 rows, 0 seeds
+ 31581  23226.678 wddm summary: widest blit 0 rows
+ 31582  23226.678 wddm summary: last blit reading 0, 0x0 pitch 0, 0 rectangles, source physical 0x0
+ 31583  23226.678 wddm summary: vsync enabled, 0 ticks, 1391745 reported to dxgkrnl
+ 31584  23226.678 wddm summary: visibility calls 14 source 0x00000000 requested 1 status 0x00000000 current 1
+ 31585  23226.678 wddm summary: display mode 1 blanked 0 write 1 commit calls 1 power-transition 0 powered-off 0
+ 31586  23226.678 wddm visibility: true 10 false 4 failures 0 first-true 0x00000000 last-true 0x00000000 QPC 10000000
+ 31587  23226.678 wddm visibility event: 1 src 0 req 1 status 00000000 visible 1 blank 0 qpc 30783929..30783968
+ 31588  23226.678 wddm visibility event: 2 src 0 req 1 status 00000000 visible 1 blank 0 qpc 31142796..31142850
+ 31589  23226.678 wddm visibility event: 3 src 0 req 1 status 00000000 visible 1 blank 0 qpc 32763692..32763789
+ 31590  23226.678 wddm visibility event: 4 src 0 req 1 status 00000000 visible 1 blank 0 qpc 123314051..123314119
+ 31591  23226.678 wddm visibility event: 5 src 0 req 0 status 00000000 visible 0 blank 1 qpc 137559051..137559166
+ 31592  23226.678 wddm visibility event: 6 src 0 req 0 status 00000000 visible 0 blank 1 qpc 137589878..137589980
+ 31593  23226.678 wddm visibility event: 7 src 0 req 1 status 00000000 visible 1 blank 0 qpc 137702592..137702715
+ 31594  23226.678 wddm visibility event: 8 src 0 req 1 status 00000000 visible 1 blank 0 qpc 138007889..138007967
+ 31595  23226.678 wddm visibility event: 9 src 0 req 0 status 00000000 visible 0 blank 1 qpc 2438838920..2438839013
+ 31596  23226.678 wddm visibility event: 10 src 0 req 1 status 00000000 visible 1 blank 0 qpc 2444365315..2444365417
+ 31597  23226.678 wddm visibility event: 11 src 0 req 1 status 00000000 visible 1 blank 0 qpc 2444701493..2444701626
+ 31598  23226.678 wddm visibility event: 12 src 0 req 0 status 00000000 visible 0 blank 1 qpc 2447679959..2447680111
+ 31599  23226.678 wddm visibility event: 13 src 0 req 1 status 00000000 visible 1 blank 0 qpc 2451931475..2451931618
+ 31600  23226.678 wddm visibility event: 14 src 0 req 1 status 00000000 visible 1 blank 0 qpc 2452266714..2452266845
+ 31601  23226.678 wddm summary: dcn lock acknowledgement timeouts 0
+ 31602  23226.678 wddm summary: vidpn flip open: 52661 hardware flips, 0 refused
+ 31603  23226.678 wddm summary: vidpn flip vsyncs 1 armed, 1392325 acked, 0 refused, 36 completion-deferred, 35 old-buffer-reports
+ 31604  23226.678 vsync skip: odd 1 read 0 same 0 changed 0
+ 31605  23226.678 vsync skip100ns: odd 143000659908 read 0 same 0 changed 0
+ 31606  23226.678 vsync vector: DPC polls 1392302 ACKs 249 sync-failures 0
+ 31607  23226.678 vsync diagnostic: irq 3467616 no-mmio 0 flip-off 0 unarmed 47
+ 31608  23226.678 vsync diagnostic: no-event 3467546 read-fail 0 ack-fail 0
+ 31609  23226.678 vsync diagnostic: 100ns irq 232281472682 entry 232281472682 ack 232281472682 notify 232281472682 status 00101104
+ 31610  23226.678 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 31611  23226.678 wddm summary: CollectDbgInfo called 0 time(s) since the driver was loaded
+ 31612  23226.678 vidmm summary: level 0: 1026 calls, 262688 entries, 544 valid
+ 31613  23226.678 vidmm summary: level 1: 2 calls, 1024 entries, 512 valid
+ 31614  23226.678 vidmm summary: level 2: 1 calls, 512 entries, 2 valid
+ 31615  23226.678 vidmm summary: level 3: 1 calls, 512 entries, 1 valid
+ 31616  23226.678 vidmm summary: segment 0 named by 105053350 valid entries, 0 refused
+ 31617  23226.678 vidmm summary: segment 1 named by 222432636 valid entries, 0 refused
+ 31618  23226.678 vidmm summary: segment 3 named by 207581 valid entries, 0 refused
+ 31619  23226.678 vidmm summary: PTE encoding level 0 segment 0 snoop mismatches 0
+ 31620  23226.678 vidmm summary: PTE encoding level 0 segment 0 coherent 1243126 noncoherent 103810224
+ 31621  23226.678 vidmm summary: PTE encoding level 0 segment 1 snoop mismatches 0
+ 31622  23226.678 vidmm summary: PTE encoding level 0 segment 1 coherent 0 noncoherent 222432636
+ 31623  23226.678 vidmm summary: PTE encoding level 0 segment 3 snoop mismatches 0
+ 31624  23226.678 vidmm summary: PTE encoding level 0 segment 3 coherent 0 noncoherent 512
+ 31625  23226.678 vidmm summary: PTE encoding level 1 segment 3 snoop mismatches 0
+ 31626  23226.678 vidmm summary: PTE encoding level 1 segment 3 coherent 0 noncoherent 205876
+ 31627  23226.678 vidmm summary: PTE encoding level 2 segment 3 snoop mismatches 0
+ 31628  23226.678 vidmm summary: PTE encoding level 2 segment 3 coherent 0 noncoherent 948
+ 31629  23226.678 vidmm summary: PTE encoding level 3 segment 3 snoop mismatches 0
+ 31630  23226.678 vidmm summary: PTE encoding level 3 segment 3 coherent 0 noncoherent 245
+ 31631  23226.678 vidmm summary: 1030 cpu-virtual calls, 0 gpu-physical calls, 0 gpu-physical refusals
+ 31632  23226.678 vidmm summary: 264736 entries written (EnableGpuVa open), 0 refused, 0 bad calls, 93 roots
+             1024 lines printed
+             escapes: 16 without adapter synchronization, 1 with HardwareAccess
+
+--- log tail 400 ---
+log          31633 lines since this driver load, 30609 lost to the wrap, 7 dropped above DISPATCH_LEVEL; ring 1024 lines of which the first 256 are kept; table FULL WDDM (the gate was open at DriverEntry)
+ 30865  20924.393 dpm: 1100 -> 1000 MHz/820 mV VID 116, 0 settle reads (load, busy 0 permille, 62.7 C, throttle none)
+ 30866  20925.240 dpm: 1000 -> 1300 MHz/880 mV VID 107 staged, 1 settle reads (load, busy 967 permille, 62.7 C, throttle none)
+ 30867  20925.429 dpm: 1300 -> 1200 MHz/860 mV VID 110, 0 settle reads (load, busy 0 permille, 62.7 C, throttle none)
+ 30868  20925.646 dpm: 1200 -> 1100 MHz/840 mV VID 113, 0 settle reads (load, busy 0 permille, 62.7 C, throttle none)
+ 30869  20925.865 dpm: 1100 -> 1000 MHz/820 mV VID 116, 0 settle reads (load, busy 867 permille, 62.7 C, throttle none)
+ 30870  20927.197 dpm: 1000 -> 1200 MHz/860 mV VID 110 staged, 1 settle reads (load, busy 933 permille, 62.7 C, throttle none)
+ 30871  20927.385 dpm: 1200 -> 1100 MHz/840 mV VID 113, 0 settle reads (load, busy 0 permille, 62.7 C, throttle none)
+ 30872  20927.607 dpm: 1100 -> 1000 MHz/820 mV VID 116, 0 settle reads (load, busy 0 permille, 62.7 C, throttle none)
+ 30873  20928.766 dpm: telemetry dpm 1000 MHz/820 mV (SMU 1000 MHz VID 116) 62.7 C busy 63.3% avg 19.5% want 1000 cap 1500 max 1500 throttle none, raises 108 lowers 185 thermal 
+ 30874  20928.766 dpm: telemetry idle 500 MHz, hold 3000 ms under 2 permille, entries 42 exits 42 refusals 0, 19140639 ms at the point
+ 30875  20928.766 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 30876  20928.766 hwmon: telemetry fan2 1325 rpm (1/5 turn) duty 780 permille, mode 0xE0 eng 0x60
+ 30877  20928.766 hwmon: telemetry apu 62.0 C, duty read-back unproven
+ 30878  20928.766 hwmon: telemetry 20666 samples 0 errors 0 retries 0 refusals
+ 30879  20928.766 smu metrics: telemetry 43.6 W avg 46.9 W, gfx 16.6 W soc 1.2 W
+ 30880  20928.766 smu metrics: telemetry gfx 818 mV 1000 MHz 59.0 C soc 806 mV 60.0 C thr 0
+ 30881  20928.766 fan: telemetry curve curve/standard
+ 30882  20928.766 fan: telemetry target 78% applied 78% raw 199 rb 199, 1325 rpm
+ 30883  20928.766 fan: telemetry 1 takeovers 0 handbacks 127 writes
+ 30884  20928.766 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 30885  20930.377 dpm: 1000 -> 1200 MHz/860 mV VID 110 staged, 1 settle reads (load, busy 900 permille, 62.7 C, throttle none)
+ 30886  20930.565 dpm: 1200 -> 1100 MHz/840 mV VID 113, 0 settle reads (load, busy 0 permille, 62.7 C, throttle none)
+ 30887  20930.784 dpm: 1100 -> 1000 MHz/820 mV VID 116, 0 settle reads (load, busy 0 permille, 62.7 C, throttle none)
+ 30888  20930.937 wddm: preemption queued fence 1995 node 0 hardware pending 1 active submits 0
+ 30889  20930.946 wddm: preemption report fence 1995 node 0 last completed 1337506 at DMA boundary
+ 30890  20933.786 dpm: telemetry dpm 1000 MHz/820 mV (SMU 1000 MHz VID 116) 62.6 C busy 0.0% avg 10.1% want 1000 cap 1500 max 1500 throttle none, raises 109 lowers 187 thermal 0
+ 30891  20933.786 dpm: telemetry idle 500 MHz, hold 3000 ms under 2 permille, entries 42 exits 42 refusals 0, 19140639 ms at the point
+ 30892  20933.786 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 30893  20933.786 hwmon: telemetry fan2 1327 rpm (1/5 turn) duty 780 permille, mode 0xE0 eng 0x60
+ 30894  20933.786 hwmon: telemetry apu 62.0 C, duty read-back unproven
+ 30895  20933.786 hwmon: telemetry 20671 samples 0 errors 0 retries 0 refusals
+ 30896  20933.786 smu metrics: telemetry 44.2 W avg 46.0 W, gfx 17.2 W soc 1.2 W
+ 30897  20933.786 smu metrics: telemetry gfx 818 mV 1000 MHz 60.0 C soc 806 mV 60.2 C thr 0
+ 30898  20933.786 fan: telemetry curve curve/standard
+ 30899  20933.786 fan: telemetry target 78% applied 78% raw 199 rb 199, 1327 rpm
+ 30900  20933.786 fan: telemetry 1 takeovers 0 handbacks 127 writes
+ 30901  20933.786 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 30902  20934.458 gfx: paging submit, seq 2065509 at 0x400978: 13416 submits in 60113 ms, 727164 of 727837 with no line
+ 30903  20935.523 dpm: 1000 -> 1300 MHz/880 mV VID 107 staged, 1 settle reads (load, busy 967 permille, 62.6 C, throttle none)
+ 30904  20935.710 dpm: 1300 -> 1200 MHz/860 mV VID 110, 0 settle reads (load, busy 0 permille, 62.6 C, throttle none)
+ 30905  20935.929 dpm: 1200 -> 1100 MHz/840 mV VID 113, 0 settle reads (load, busy 0 permille, 62.7 C, throttle none)
+ 30906  20936.147 dpm: 1100 -> 1000 MHz/820 mV VID 116, 0 settle reads (load, busy 0 permille, 62.7 C, throttle none)
+ 30907  20936.978 dpm: 1000 -> 1200 MHz/860 mV VID 110 staged, 1 settle reads (load, busy 933 permille, 62.7 C, throttle none)
+ 30908  20937.166 dpm: 1200 -> 1100 MHz/840 mV VID 113, 0 settle reads (load, busy 0 permille, 62.7 C, throttle none)
+ 30909  20937.386 dpm: 1100 -> 1000 MHz/820 mV VID 116, 0 settle reads (load, busy 0 permille, 62.7 C, throttle none)
+ 30910  20937.589 dpm: 1000 -> 1200 MHz/860 mV VID 110 staged, 1 settle reads (load, busy 900 permille, 62.7 C, throttle none)
+ 30911  20937.778 dpm: 1200 -> 1100 MHz/840 mV VID 113, 0 settle reads (load, busy 0 permille, 62.7 C, throttle none)
+ 30912  20937.997 dpm: 1100 -> 1000 MHz/820 mV VID 116, 0 settle reads (load, busy 0 permille, 62.7 C, throttle none)
+ 30913  20938.513 dpm: 1000 -> 1200 MHz/860 mV VID 110 staged, 1 settle reads (load, busy 900 permille, 62.7 C, throttle none)
+ 30914  20938.701 dpm: 1200 -> 1100 MHz/840 mV VID 113, 0 settle reads (load, busy 0 permille, 62.7 C, throttle none)
+ 30915  20938.796 dpm: telemetry dpm 1100 MHz/840 mV (SMU 1100 MHz VID 113) 62.7 C busy 0.0% avg 2.9% want 1100 cap 1500 max 1500 throttle none, raises 113 lowers 195 thermal 0 
+ 30916  20938.796 dpm: telemetry idle 500 MHz, hold 3000 ms under 2 permille, entries 42 exits 42 refusals 0, 19140639 ms at the point
+ 30917  20938.796 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 30918  20938.796 hwmon: telemetry fan2 1363 rpm (1/5 turn) duty 780 permille, mode 0xE0 eng 0x60
+ 30919  20938.796 hwmon: telemetry apu 62.0 C, duty read-back unproven
+ 30920  20938.796 hwmon: telemetry 20676 samples 0 errors 0 retries 0 refusals
+ 30921  20938.796 smu metrics: telemetry 44.2 W avg 48.2 W, gfx 17.2 W soc 1.2 W
+ 30922  20938.796 smu metrics: telemetry gfx 818 mV 1000 MHz 59.7 C soc 806 mV 60.0 C thr 0
+ 30923  20938.796 fan: telemetry curve curve/standard
+ 30924  20938.796 fan: telemetry target 78% applied 78% raw 199 rb 199, 1363 rpm
+ 30925  20938.796 fan: telemetry 1 takeovers 0 handbacks 127 writes
+ 30926  20938.796 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 30927  20938.922 dpm: 1100 -> 1000 MHz/820 mV VID 116, 0 settle reads (load, busy 767 permille, 62.7 C, throttle none)
+ 30928  20939.013 gfx: paging submit, seq 2065719 at 0x400B40: 16 submits in 4555 ms, 727179 of 727853 with no line
+ 30929  20939.502 dpm: 1000 -> 1200 MHz/860 mV VID 110 staged, 1 settle reads (load, busy 900 permille, 62.7 C, throttle none)
+ 30930  20939.689 dpm: 1200 -> 1100 MHz/840 mV VID 113, 0 settle reads (load, busy 33 permille, 62.7 C, throttle none)
+ 30931  20939.908 dpm: 1100 -> 1000 MHz/820 mV VID 116, 0 settle reads (load, busy 0 permille, 62.7 C, throttle none)
+ 30932  20943.807 dpm: telemetry dpm 1000 MHz/820 mV (SMU 1000 MHz VID 116) 63.0 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle none, raises 114 lowers 198 thermal 0 
+ 30933  20943.807 dpm: telemetry idle 500 MHz, hold 3000 ms under 2 permille, entries 42 exits 42 refusals 0, 19140639 ms at the point
+ 30934  20943.807 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 30935  20943.807 hwmon: telemetry fan2 1327 rpm (1/5 turn) duty 780 permille, mode 0xE0 eng 0x60
+ 30936  20943.807 hwmon: telemetry apu 62.0 C, duty read-back unproven
+ 30937  20943.807 hwmon: telemetry 20680 samples 0 errors 0 retries 0 refusals
+ 30938  20943.807 smu metrics: telemetry 48.7 W avg 50.9 W, gfx 17.2 W soc 5.8 W
+ 30939  20943.807 smu metrics: telemetry gfx 818 mV 1000 MHz 60.2 C soc 1187 mV 60.2 C thr 0
+ 30940  20943.807 fan: telemetry curve curve/standard
+ 30941  20943.807 fan: telemetry target 78% applied 78% raw 199 rb 199, 1327 rpm
+ 30942  20943.807 fan: telemetry 1 takeovers 0 handbacks 127 writes
+ 30943  20943.807 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 30944  20948.823 dpm: telemetry dpm 1000 MHz/820 mV (SMU 1000 MHz VID 116) 65.8 C busy 0.0% avg 0.4% want 1000 cap 1500 max 1500 throttle none, raises 114 lowers 198 thermal 0 
+ 30945  20948.823 dpm: telemetry idle 500 MHz, hold 3000 ms under 2 permille, entries 42 exits 42 refusals 0, 19140639 ms at the point
+ 30946  20948.823 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 30947  20948.823 hwmon: telemetry fan2 1365 rpm (1/5 turn) duty 780 permille, mode 0xE0 eng 0x60
+ 30948  20948.823 hwmon: telemetry apu 65.0 C, duty read-back unproven
+ 30949  20948.823 hwmon: telemetry 20685 samples 0 errors 0 retries 0 refusals
+ 30950  20948.823 smu metrics: telemetry 51.0 W avg 50.6 W, gfx 17.3 W soc 7.7 W
+ 30951  20948.823 smu metrics: telemetry gfx 824 mV 1000 MHz 59.2 C soc 1193 mV 60.0 C thr 0
+ 30952  20948.823 fan: telemetry curve curve/standard
+ 30953  20948.823 fan: telemetry target 79% applied 79% raw 201 rb 199, 1365 rpm
+ 30954  20948.823 fan: telemetry 1 takeovers 0 handbacks 128 writes
+ 30955  20948.823 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 30956  20952.268 dpm: 1000 -> 500 MHz/820 mV VID 116, 0 settle reads (load, busy 0 permille, 65.5 C, throttle idle)
+ 30957  20959.442 log: summary of 315 lines beside the ring at seq 30957: 11 taken in 61490 ms, 3309 of 3992 silent
+ 30958  20964.498 log: summary of 315 lines beside the ring at seq 30958 (0 did not fit), read from 4028575744
+ 30959  20995.033 gfx: paging submit, seq 2080889 at 0x410738: 13405 submits in 60575 ms, 740583 of 741258 with no line
+ 30960  20997.054 gfx: paging submit, seq 2080898 at 0x400C30: 6 submits in 2021 ms, 740588 of 741264 with no line
+ 30961  21020.138 log: summary of 315 lines beside the ring at seq 30961: 11 taken in 60696 ms, 3319 of 4004 silent
+ 30962  21025.198 log: summary of 315 lines beside the ring at seq 30962 (0 did not fit), read from 4028581888
+ 30963  21069.351 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 60.6 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 114 lowers 199 thermal 0 wa
+ 30964  21069.351 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 43 exits 42 refusals 0, 19255526 ms at the point
+ 30965  21069.351 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 30966  21069.351 hwmon: telemetry fan2 1305 rpm (1/5 turn) duty 761 permille, mode 0xE0 eng 0x60
+ 30967  21069.351 hwmon: telemetry apu 60.0 C, duty read-back unproven
+ 30968  21069.351 hwmon: telemetry 20804 samples 0 errors 0 retries 0 refusals
+ 30969  21069.351 smu metrics: telemetry 36.4 W avg 36.4 W, gfx 10.1 W soc 0.7 W
+ 30970  21069.351 smu metrics: telemetry gfx 824 mV 500 MHz 56.5 C soc 806 mV 57.7 C thr 0
+ 30971  21069.351 fan: telemetry curve curve/standard
+ 30972  21069.351 fan: telemetry target 76% applied 76% raw 194 rb 194, 1305 rpm
+ 30973  21069.351 fan: telemetry 1 takeovers 0 handbacks 131 writes
+ 30974  21069.351 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 30975  21080.846 log: summary of 315 lines beside the ring at seq 30975: 11 taken in 60708 ms, 3329 of 4016 silent
+ 30976  21084.554 gfx: paging submit, seq 2081143 at 0x400AF8: 84 submits in 89521 ms, 740671 of 741348 with no line
+ 30977  21085.910 log: summary of 315 lines beside the ring at seq 30977 (0 did not fit), read from 4028588032
+ 30978  21087.064 gfx: paging submit, seq 2081152 at 0x4104F8: 5 submits in 2510 ms, 740675 of 741353 with no line
+ 30979  21141.595 log: summary of 315 lines beside the ring at seq 30979: 11 taken in 60748 ms, 3339 of 4028 silent
+ 30980  21146.657 log: summary of 315 lines beside the ring at seq 30980 (0 did not fit), read from 4028594176
+ 30981  21146.769 gfx: paging submit, seq 2081359 at 0x400A20: 100 submits in 62215 ms, 740774 of 741453 with no line
+ 30982  21148.809 gfx: paging submit, seq 2081366 at 0x410F38: 3 submits in 2040 ms, 740776 of 741456 with no line
+ 30983  21190.023 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 59.7 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 114 lowers 199 thermal 0 wa
+ 30984  21190.023 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 43 exits 42 refusals 0, 19373719 ms at the point
+ 30985  21190.023 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 30986  21190.023 hwmon: telemetry fan2 1325 rpm (1/5 turn) duty 749 permille, mode 0xE0 eng 0x60
+ 30987  21190.023 hwmon: telemetry apu 59.0 C, duty read-back unproven
+ 30988  21190.023 hwmon: telemetry 20923 samples 0 errors 0 retries 0 refusals
+ 30989  21190.023 smu metrics: telemetry 36.4 W avg 36.3 W, gfx 10.1 W soc 0.7 W
+ 30990  21190.023 smu metrics: telemetry gfx 824 mV 500 MHz 56.2 C soc 806 mV 57.0 C thr 0
+ 30991  21190.023 fan: telemetry curve curve/standard
+ 30992  21190.023 fan: telemetry target 75% applied 75% raw 191 rb 191, 1325 rpm
+ 30993  21190.023 fan: telemetry 1 takeovers 0 handbacks 132 writes
+ 30994  21190.023 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 30995  21202.344 log: summary of 315 lines beside the ring at seq 30995: 11 taken in 60750 ms, 3349 of 4040 silent
+ 30996  21207.406 log: summary of 315 lines beside the ring at seq 30996 (0 did not fit), read from 4028600320
+ 30997  21212.992 gfx: paging submit, seq 2081628 at 0x410C80: 146 submits in 66223 ms, 740921 of 741602 with no line
+ 30998  21215.512 gfx: paging submit, seq 2081640 at 0x410348: 7 submits in 2520 ms, 740927 of 741609 with no line
+ 30999  21263.110 log: summary of 315 lines beside the ring at seq 30999: 11 taken in 60766 ms, 3359 of 4052 silent
+ 31000  21268.172 log: summary of 315 lines beside the ring at seq 31000 (0 did not fit), read from 4028606464
+ 31001  21290.383 gfx: paging submit, seq 2081855 at 0x400348: 98 submits in 77391 ms, 741024 of 741707 with no line
+ 31002  21294.396 gfx: paging submit, seq 2081866 at 0x4007C8: 6 submits in 4013 ms, 741029 of 741713 with no line
+ 31003  21310.684 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 59.5 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 114 lowers 199 thermal 0 wa
+ 31004  21310.684 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 43 exits 42 refusals 0, 19491906 ms at the point
+ 31005  21310.684 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 31006  21310.684 hwmon: telemetry fan2 1310 rpm (1/5 turn) duty 741 permille, mode 0xE0 eng 0x60
+ 31007  21310.684 hwmon: telemetry apu 59.0 C, duty read-back unproven
+ 31008  21310.684 hwmon: telemetry 21043 samples 0 errors 0 retries 0 refusals
+ 31009  21310.684 smu metrics: telemetry 36.3 W avg 36.4 W, gfx 10.1 W soc 0.5 W
+ 31010  21310.684 smu metrics: telemetry gfx 824 mV 500 MHz 56.0 C soc 806 mV 57.0 C thr 0
+ 31011  21310.684 fan: telemetry curve curve/standard
+ 31012  21310.684 fan: telemetry target 74% applied 74% raw 189 rb 189, 1310 rpm
+ 31013  21310.684 fan: telemetry 1 takeovers 0 handbacks 133 writes
+ 31014  21310.684 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 31015  21323.843 log: summary of 315 lines beside the ring at seq 31015: 11 taken in 60733 ms, 3369 of 4064 silent
+ 31016  21328.905 log: summary of 315 lines beside the ring at seq 31016 (0 did not fit), read from 4028612608
+ 31017  21354.110 gfx: paging submit, seq 2082002 at 0x400348: 52 submits in 63727 ms, 741080 of 741765 with no line
+ 31018  21357.593 gfx: paging submit, seq 2082014 at 0x4107B8: 6 submits in 3483 ms, 741085 of 741771 with no line
+ 31019  21384.592 log: summary of 315 lines beside the ring at seq 31019: 11 taken in 60749 ms, 3379 of 4076 silent
+ 31020  21389.655 log: summary of 315 lines beside the ring at seq 31020 (0 did not fit), read from 4028618752
+ 31021  21414.557 gfx: paging submit, seq 2082205 at 0x400348: 91 submits in 60447 ms, 741175 of 741862 with no line
+ 31022  21421.596 gfx: paging submit, seq 2082226 at 0x400D00: 9 submits in 7039 ms, 741183 of 741871 with no line
+ 31023  21431.328 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 59.3 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 114 lowers 199 thermal 0 wa
+ 31024  21431.328 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 43 exits 42 refusals 0, 19610059 ms at the point
+ 31025  21431.328 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 31026  21431.328 hwmon: telemetry fan2 1275 rpm (1/5 turn) duty 741 permille, mode 0xE0 eng 0x60
+ 31027  21431.328 hwmon: telemetry apu 59.0 C, duty read-back unproven
+ 31028  21431.328 hwmon: telemetry 21162 samples 0 errors 0 retries 0 refusals
+ 31029  21431.328 smu metrics: telemetry 36.0 W avg 36.2 W, gfx 9.5 W soc 0.8 W
+ 31030  21431.328 smu metrics: telemetry gfx 824 mV 500 MHz 55.7 C soc 806 mV 57.2 C thr 0
+ 31031  21431.328 fan: telemetry curve curve/standard
+ 31032  21431.328 fan: telemetry target 74% applied 74% raw 189 rb 189, 1275 rpm
+ 31033  21431.328 fan: telemetry 1 takeovers 0 handbacks 133 writes
+ 31034  21431.328 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 31035  21445.291 log: summary of 315 lines beside the ring at seq 31035: 11 taken in 60699 ms, 3389 of 4088 silent
+ 31036  21450.338 log: summary of 315 lines beside the ring at seq 31036 (0 did not fit), read from 4028624896
+ 31037  21478.820 gfx: paging submit, seq 2082453 at 0x4005F8: 131 submits in 64263 ms, 741313 of 742002 with no line
+ 31038  21481.842 gfx: paging submit, seq 2082462 at 0x410B40: 3 submits in 3022 ms, 741315 of 742005 with no line
+ 31039  21505.867 log: summary of 315 lines beside the ring at seq 31039: 11 taken in 60576 ms, 3399 of 4100 silent
+ 31040  21510.914 log: summary of 315 lines beside the ring at seq 31040 (0 did not fit), read from 4028631040
+ 31041  21551.898 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 59.2 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 114 lowers 199 thermal 0 wa
+ 31042  21551.898 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 43 exits 42 refusals 0, 19728141 ms at the point
+ 31043  21551.898 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 31044  21551.898 hwmon: telemetry fan2 1312 rpm (1/5 turn) duty 741 permille, mode 0xE0 eng 0x60
+ 31045  21551.898 hwmon: telemetry apu 59.0 C, duty read-back unproven
+ 31046  21551.898 hwmon: telemetry 21281 samples 0 errors 0 retries 0 refusals
+ 31047  21551.898 smu metrics: telemetry 36.6 W avg 36.6 W, gfx 10.1 W soc 0.8 W
+ 31048  21551.898 smu metrics: telemetry gfx 824 mV 500 MHz 55.5 C soc 806 mV 57.0 C thr 0
+ 31049  21551.898 fan: telemetry curve curve/standard
+ 31050  21551.898 fan: telemetry target 74% applied 74% raw 189 rb 189, 1312 rpm
+ 31051  21551.898 fan: telemetry 1 takeovers 0 handbacks 133 writes
+ 31052  21551.898 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 31053  21566.445 log: summary of 315 lines beside the ring at seq 31053: 11 taken in 60578 ms, 3409 of 4112 silent
+ 31054  21571.510 log: summary of 315 lines beside the ring at seq 31054 (0 did not fit), read from 4028637184
+ 31055  21573.726 gfx: paging submit, seq 2082701 at 0x400F70: 99 submits in 94906 ms, 741413 of 742104 with no line
+ 31056  21575.738 gfx: paging submit, seq 2082709 at 0x400690: 4 submits in 2012 ms, 741416 of 742108 with no line
+ 31057  21627.184 log: summary of 315 lines beside the ring at seq 31057: 11 taken in 60739 ms, 3419 of 4124 silent
+ 31058  21632.243 log: summary of 315 lines beside the ring at seq 31058 (0 did not fit), read from 4028643328
+ 31059  21634.967 gfx: paging submit, seq 2082962 at 0x410348: 141 submits in 61241 ms, 741556 of 742249 with no line
+ 31060  21637.475 gfx: paging submit, seq 2082972 at 0x4007B8: 6 submits in 2508 ms, 741561 of 742255 with no line
+ 31061  21672.530 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 59.3 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 114 lowers 199 thermal 0 wa
+ 31062  21672.530 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 43 exits 42 refusals 0, 19846335 ms at the point
+ 31063  21672.530 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 31064  21672.530 hwmon: telemetry fan2 1312 rpm (1/5 turn) duty 741 permille, mode 0xE0 eng 0x60
+ 31065  21672.530 hwmon: telemetry apu 59.0 C, duty read-back unproven
+ 31066  21672.530 hwmon: telemetry 21400 samples 0 errors 0 retries 0 refusals
+ 31067  21672.530 smu metrics: telemetry 35.8 W avg 36.2 W, gfx 9.5 W soc 0.7 W
+ 31068  21672.530 smu metrics: telemetry gfx 824 mV 500 MHz 55.5 C soc 806 mV 57.0 C thr 0
+ 31069  21672.530 fan: telemetry curve curve/standard
+ 31070  21672.530 fan: telemetry target 74% applied 74% raw 189 rb 189, 1312 rpm
+ 31071  21672.530 fan: telemetry 1 takeovers 0 handbacks 133 writes
+ 31072  21672.530 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 31073  21687.898 log: summary of 315 lines beside the ring at seq 31073: 11 taken in 60714 ms, 3429 of 4136 silent
+ 31074  21692.961 log: summary of 315 lines beside the ring at seq 31074 (0 did not fit), read from 4028649472
+ 31075  21695.193 gfx: paging submit, seq 2083255 at 0x400CF8: 179 submits in 60226 ms, 741739 of 742434 with no line
+ 31076  21699.684 gfx: paging submit, seq 2083272 at 0x410880: 10 submits in 4491 ms, 741748 of 742444 with no line
+ 31077  21748.628 log: summary of 315 lines beside the ring at seq 31077: 11 taken in 60730 ms, 3439 of 4148 silent
+ 31078  21753.691 log: summary of 315 lines beside the ring at seq 31078 (0 did not fit), read from 4028655616
+ 31079  21755.386 gfx: paging submit, seq 2083481 at 0x410690: 111 submits in 60193 ms, 741858 of 742555 with no line
+ 31080  21758.408 gfx: paging submit, seq 2083491 at 0x400AF8: 6 submits in 3022 ms, 741863 of 742561 with no line
+ 31081  21793.165 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 59.2 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 114 lowers 199 thermal 0 wa
+ 31082  21793.165 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 43 exits 42 refusals 0, 19964496 ms at the point
+ 31083  21793.165 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 31084  21793.165 hwmon: telemetry fan2 1277 rpm (1/5 turn) duty 741 permille, mode 0xE0 eng 0x60
+ 31085  21793.165 hwmon: telemetry apu 59.0 C, duty read-back unproven
+ 31086  21793.165 hwmon: telemetry 21519 samples 0 errors 0 retries 0 refusals
+ 31087  21793.165 smu metrics: telemetry 36.4 W avg 36.2 W, gfx 10.1 W soc 0.7 W
+ 31088  21793.165 smu metrics: telemetry gfx 824 mV 500 MHz 56.0 C soc 806 mV 57.0 C thr 0
+ 31089  21793.165 fan: telemetry curve curve/standard
+ 31090  21793.165 fan: telemetry target 74% applied 74% raw 189 rb 189, 1277 rpm
+ 31091  21793.165 fan: telemetry 1 takeovers 0 handbacks 133 writes
+ 31092  21793.165 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 31093  21809.378 log: summary of 315 lines beside the ring at seq 31093: 11 taken in 60750 ms, 3449 of 4160 silent
+ 31094  21814.441 log: summary of 315 lines beside the ring at seq 31094 (0 did not fit), read from 4028661760
+ 31095  21822.115 gfx: paging submit, seq 2083624 at 0x400000: 30 submits in 66729 ms, 741892 of 742591 with no line
+ 31096  21825.643 gfx: paging submit, seq 2083638 at 0x410D78: 8 submits in 3528 ms, 741899 of 742599 with no line
+ 31097  21870.097 log: summary of 315 lines beside the ring at seq 31097: 11 taken in 60719 ms, 3459 of 4172 silent
+ 31098  21875.160 log: summary of 315 lines beside the ring at seq 31098 (0 did not fit), read from 4028667904
+ 31099  21883.409 gfx: paging submit, seq 2083841 at 0x410F70: 106 submits in 61294 ms, 742004 of 742705 with no line
+ 31100  21890.443 gfx: paging submit, seq 2083857 at 0x410690: 4 submits in 7034 ms, 742007 of 742709 with no line
+ 31101  21913.828 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 59.2 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 114 lowers 199 thermal 0 wa
+ 31102  21913.828 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 43 exits 42 refusals 0, 20082670 ms at the point
+ 31103  21913.828 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 31104  21913.828 hwmon: telemetry fan2 1315 rpm (1/5 turn) duty 741 permille, mode 0xE0 eng 0x60
+ 31105  21913.828 hwmon: telemetry apu 59.0 C, duty read-back unproven
+ 31106  21913.828 hwmon: telemetry 21638 samples 0 errors 0 retries 0 refusals
+ 31107  21913.828 smu metrics: telemetry 36.8 W avg 36.2 W, gfx 10.1 W soc 1.1 W
+ 31108  21913.828 smu metrics: telemetry gfx 824 mV 500 MHz 55.5 C soc 806 mV 56.5 C thr 0
+ 31109  21913.828 fan: telemetry curve curve/standard
+ 31110  21913.828 fan: telemetry target 74% applied 74% raw 189 rb 189, 1315 rpm
+ 31111  21913.828 fan: telemetry 1 takeovers 0 handbacks 133 writes
+ 31112  21913.828 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 31113  21930.845 log: summary of 315 lines beside the ring at seq 31113: 11 taken in 60748 ms, 3469 of 4184 silent
+ 31114  21935.908 log: summary of 315 lines beside the ring at seq 31114 (0 did not fit), read from 4028674048
+ 31115  21943.598 gfx: paging submit, seq 2084108 at 0x400500: 162 submits in 60189 ms, 742168 of 742871 with no line
+ 31116  21947.110 gfx: paging submit, seq 2084122 at 0x400348: 8 submits in 3512 ms, 742175 of 742879 with no line
+ 31117  21991.579 log: summary of 315 lines beside the ring at seq 31117: 11 taken in 60734 ms, 3479 of 4196 silent
+ 31118  21996.642 log: summary of 315 lines beside the ring at seq 31118 (0 did not fit), read from 4028680192
+ 31119  22006.958 gfx: paging submit, seq 2084340 at 0x410348: 113 submits in 63359 ms, 742287 of 742992 with no line
+ 31120  22012.002 gfx: paging submit, seq 2084356 at 0x410DC0: 6 submits in 5045 ms, 742292 of 742998 with no line
+ 31121  22034.529 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 59.2 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 114 lowers 199 thermal 0 wa
+ 31122  22034.529 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 43 exits 42 refusals 0, 20200902 ms at the point
+ 31123  22034.529 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 31124  22034.529 hwmon: telemetry fan2 1312 rpm (1/5 turn) duty 741 permille, mode 0xE0 eng 0x60
+ 31125  22034.529 hwmon: telemetry apu 59.0 C, duty read-back unproven
+ 31126  22034.529 hwmon: telemetry 21758 samples 0 errors 0 retries 0 refusals
+ 31127  22034.529 smu metrics: telemetry 36.6 W avg 36.1 W, gfx 10.1 W soc 0.8 W
+ 31128  22034.529 smu metrics: telemetry gfx 824 mV 500 MHz 55.2 C soc 806 mV 57.2 C thr 0
+ 31129  22034.529 fan: telemetry curve curve/standard
+ 31130  22034.529 fan: telemetry target 74% applied 74% raw 189 rb 189, 1312 rpm
+ 31131  22034.529 fan: telemetry 1 takeovers 0 handbacks 133 writes
+ 31132  22034.529 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 31133  22052.322 log: summary of 315 lines beside the ring at seq 31133: 11 taken in 60743 ms, 3489 of 4208 silent
+ 31134  22057.385 log: summary of 315 lines beside the ring at seq 31134 (0 did not fit), read from 4028686336
+ 31135  22069.671 gfx: paging submit, seq 2084478 at 0x410EB8: 37 submits in 62714 ms, 742328 of 743035 with no line
+ 31136  22071.718 gfx: paging submit, seq 2084486 at 0x410000: 3 submits in 2047 ms, 742330 of 743038 with no line
+ 31137  22113.054 log: summary of 315 lines beside the ring at seq 31137: 11 taken in 60732 ms, 3499 of 4220 silent
+ 31138  22118.117 log: summary of 315 lines beside the ring at seq 31138 (0 did not fit), read from 4028692480
+ 31139  22130.442 gfx: paging submit, seq 2084716 at 0x400C30: 121 submits in 60771 ms, 742450 of 743159 with no line
+ 31140  22135.428 gfx: paging submit, seq 2084729 at 0x400348: 3 submits in 4986 ms, 742452 of 743162 with no line
+ 31141  22155.231 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 59.3 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 114 lowers 199 thermal 0 wa
+ 31142  22155.231 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 43 exits 42 refusals 0, 20319131 ms at the point
+ 31143  22155.231 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 31144  22155.231 hwmon: telemetry fan2 1275 rpm (1/5 turn) duty 741 permille, mode 0xE0 eng 0x60
+ 31145  22155.231 hwmon: telemetry apu 59.0 C, duty read-back unproven
+ 31146  22155.231 hwmon: telemetry 21877 samples 0 errors 0 retries 0 refusals
+ 31147  22155.231 smu metrics: telemetry 35.8 W avg 36.1 W, gfx 9.5 W soc 0.7 W
+ 31148  22155.231 smu metrics: telemetry gfx 824 mV 500 MHz 55.5 C soc 806 mV 56.5 C thr 0
+ 31149  22155.231 fan: telemetry curve curve/standard
+ 31150  22155.231 fan: telemetry target 74% applied 74% raw 189 rb 189, 1275 rpm
+ 31151  22155.231 fan: telemetry 1 takeovers 0 handbacks 133 writes
+ 31152  22155.231 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 31153  22173.783 log: summary of 315 lines beside the ring at seq 31153: 11 taken in 60729 ms, 3509 of 4232 silent
+ 31154  22178.847 log: summary of 315 lines beside the ring at seq 31154 (0 did not fit), read from 4028698624
+ 31155  22195.462 gfx: paging submit, seq 2084990 at 0x410000: 151 submits in 65020 ms, 742602 of 743313 with no line
+ 31156  22197.469 gfx: paging submit, seq 2084996 at 0x400690: 3 submits in 2007 ms, 742604 of 743316 with no line
+ 31157  22234.533 log: summary of 315 lines beside the ring at seq 31157: 11 taken in 60750 ms, 3519 of 4244 silent
+ 31158  22239.595 log: summary of 315 lines beside the ring at seq 31158 (0 did not fit), read from 4028704768
+ 31159  22256.713 gfx: paging submit, seq 2085216 at 0x400738: 124 submits in 61251 ms, 742727 of 743440 with no line
+ 31160  22258.721 gfx: paging submit, seq 2085226 at 0x410BB0: 6 submits in 2008 ms, 742732 of 743446 with no line
+ 31161  22275.904 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 59.2 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 114 lowers 199 thermal 0 wa
+ 31162  22275.904 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 43 exits 42 refusals 0, 20437339 ms at the point
+ 31163  22275.904 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 31164  22275.904 hwmon: telemetry fan2 1275 rpm (1/5 turn) duty 741 permille, mode 0xE0 eng 0x60
+ 31165  22275.904 hwmon: telemetry apu 59.0 C, duty read-back unproven
+ 31166  22275.904 hwmon: telemetry 21996 samples 0 errors 0 retries 0 refusals
+ 31167  22275.904 smu metrics: telemetry 38.1 W avg 36.4 W, gfx 10.1 W soc 2.4 W
+ 31168  22275.904 smu metrics: telemetry gfx 824 mV 500 MHz 55.7 C soc 806 mV 57.2 C thr 0
+ 31169  22275.904 fan: telemetry curve curve/standard
+ 31170  22275.904 fan: telemetry target 74% applied 74% raw 189 rb 189, 1275 rpm
+ 31171  22275.904 fan: telemetry 1 takeovers 0 handbacks 133 writes
+ 31172  22275.904 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 31173  22295.280 log: summary of 315 lines beside the ring at seq 31173: 11 taken in 60747 ms, 3529 of 4256 silent
+ 31174  22300.342 log: summary of 315 lines beside the ring at seq 31174 (0 did not fit), read from 4028710912
+ 31175  22318.725 gfx: paging submit, seq 2085428 at 0x4107B8: 97 submits in 62012 ms, 742828 of 743543 with no line
+ 31176  22356.011 log: summary of 315 lines beside the ring at seq 31176: 11 taken in 60731 ms, 3539 of 4268 silent
+ 31177  22361.074 log: summary of 315 lines beside the ring at seq 31177 (0 did not fit), read from 4028717056
+ 31178  22370.334 gfx: paging submit, seq 2085519 at 0x400900: 7 submits in 51609 ms, 742834 of 743550 with no line
+ 31179  22384.849 gfx: paging submit, seq 2085576 at 0x410348: 32 submits in 66124 ms, 742865 of 743582 with no line
+ 31180  22390.327 gfx: paging submit, seq 2085594 at 0x410CF8: 9 submits in 5478 ms, 742873 of 743591 with no line
+ 31181  22396.605 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 59.1 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 114 lowers 199 thermal 0 wa
+ 31182  22396.605 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 43 exits 42 refusals 0, 20555568 ms at the point
+ 31183  22396.605 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 31184  22396.605 hwmon: telemetry fan2 1275 rpm (1/5 turn) duty 741 permille, mode 0xE0 eng 0x60
+ 31185  22396.605 hwmon: telemetry apu 59.0 C, duty read-back unproven
+ 31186  22396.605 hwmon: telemetry 22115 samples 0 errors 0 retries 0 refusals
+ 31187  22396.605 smu metrics: telemetry 36.7 W avg 36.1 W, gfx 9.5 W soc 1.5 W
+ 31188  22396.605 smu metrics: telemetry gfx 824 mV 500 MHz 55.5 C soc 806 mV 56.5 C thr 0
+ 31189  22396.605 fan: telemetry curve curve/standard
+ 31190  22396.605 fan: telemetry target 74% applied 74% raw 189 rb 189, 1275 rpm
+ 31191  22396.605 fan: telemetry 1 takeovers 0 handbacks 133 writes
+ 31192  22396.605 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 31193  22416.741 log: summary of 315 lines beside the ring at seq 31193: 11 taken in 60730 ms, 3549 of 4280 silent
+ 31194  22421.805 log: summary of 315 lines beside the ring at seq 31194 (0 did not fit), read from 4028723200
+ 31195  22447.594 gfx: paging submit, seq 2085763 at 0x4105B8: 86 submits in 62745 ms, 742958 of 743677 with no line
+ 31196  22453.605 gfx: paging submit, seq 2085779 at 0x400000: 8 submits in 6011 ms, 742965 of 743685 with no line
+ 31197  22477.485 log: summary of 315 lines beside the ring at seq 31197: 11 taken in 60744 ms, 3559 of 4292 silent
+ 31198  22482.546 log: summary of 315 lines beside the ring at seq 31198 (0 did not fit), read from 4028729344
+ 31199  22509.225 gfx: paging submit, seq 2085949 at 0x400400: 81 submits in 61631 ms, 743045 of 743766 with no line
+ 31200  22511.768 gfx: paging submit, seq 2085956 at 0x410940: 3 submits in 2543 ms, 743047 of 743769 with no line
+ 31201  22517.275 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 59.1 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 114 lowers 199 thermal 0 wa
+ 31202  22517.275 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 43 exits 42 refusals 0, 20673771 ms at the point
+ 31203  22517.275 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 31204  22517.275 hwmon: telemetry fan2 1311 rpm (1/5 turn) duty 741 permille, mode 0xE0 eng 0x60
+ 31205  22517.275 hwmon: telemetry apu 59.0 C, duty read-back unproven
+ 31206  22517.275 hwmon: telemetry 22234 samples 0 errors 0 retries 0 refusals
+ 31207  22517.275 smu metrics: telemetry 35.8 W avg 36.3 W, gfx 9.5 W soc 0.7 W
+ 31208  22517.275 smu metrics: telemetry gfx 824 mV 500 MHz 55.7 C soc 806 mV 56.5 C thr 0
+ 31209  22517.275 fan: telemetry curve curve/standard
+ 31210  22517.275 fan: telemetry target 74% applied 74% raw 189 rb 189, 1311 rpm
+ 31211  22517.275 fan: telemetry 1 takeovers 0 handbacks 133 writes
+ 31212  22517.275 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 31213  22538.231 log: summary of 315 lines beside the ring at seq 31213: 11 taken in 60746 ms, 3569 of 4304 silent
+ 31214  22543.293 log: summary of 315 lines beside the ring at seq 31214 (0 did not fit), read from 4028735488
+ 31215  22570.977 gfx: paging submit, seq 2086194 at 0x410000: 122 submits in 61752 ms, 743168 of 743891 with no line
+ 31216  22573.983 gfx: paging submit, seq 2086202 at 0x410F10: 2 submits in 3006 ms, 743169 of 743893 with no line
+ 31217  22598.962 log: summary of 315 lines beside the ring at seq 31217: 11 taken in 60731 ms, 3579 of 4316 silent
+ 31218  22604.024 log: summary of 315 lines beside the ring at seq 31218 (0 did not fit), read from 4028741632
+ 31219  22631.139 gfx: paging submit, seq 2086451 at 0x410348: 140 submits in 60162 ms, 743308 of 744033 with no line
+ 31220  22637.182 gfx: paging submit, seq 2086479 at 0x410348: 17 submits in 6043 ms, 743324 of 744050 with no line
+ 31221  22638.008 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 59.2 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 114 lowers 199 thermal 0 wa
+ 31222  22638.008 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 43 exits 42 refusals 0, 20792023 ms at the point
+ 31223  22638.008 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 31224  22638.008 hwmon: telemetry fan2 1275 rpm (1/5 turn) duty 741 permille, mode 0xE0 eng 0x60
+ 31225  22638.008 hwmon: telemetry apu 59.0 C, duty read-back unproven
+ 31226  22638.008 hwmon: telemetry 22354 samples 0 errors 0 retries 0 refusals
+ 31227  22638.008 smu metrics: telemetry 36.8 W avg 36.2 W, gfx 10.1 W soc 1.1 W
+ 31228  22638.008 smu metrics: telemetry gfx 824 mV 500 MHz 55.2 C soc 806 mV 56.5 C thr 0
+ 31229  22638.008 fan: telemetry curve curve/standard
+ 31230  22638.008 fan: telemetry target 74% applied 74% raw 189 rb 189, 1275 rpm
+ 31231  22638.008 fan: telemetry 1 takeovers 0 handbacks 133 writes
+ 31232  22638.008 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 31233  22659.709 log: summary of 315 lines beside the ring at seq 31233: 11 taken in 60747 ms, 3589 of 4328 silent
+ 31234  22664.771 log: summary of 315 lines beside the ring at seq 31234 (0 did not fit), read from 4028747776
+ 31235  22691.837 gfx: paging submit, seq 2086696 at 0x410DC0: 117 submits in 60698 ms, 743440 of 744167 with no line
+ 31236  22695.381 gfx: paging submit, seq 2086713 at 0x410978: 11 submits in 3543 ms, 743450 of 744178 with no line
+ 31237  22720.452 log: summary of 315 lines beside the ring at seq 31237: 11 taken in 60743 ms, 3599 of 4340 silent
+ 31238  22725.516 log: summary of 315 lines beside the ring at seq 31238 (0 did not fit), read from 4028753920
+ 31239  22753.646 gfx: paging submit, seq 2086981 at 0x400888: 161 submits in 61809 ms, 743610 of 744339 with no line
+ 31240  22757.141 gfx: paging submit, seq 2086993 at 0x410CF8: 6 submits in 3495 ms, 743615 of 744345 with no line
+ 31241  22758.677 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 59.2 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 114 lowers 199 thermal 0 wa
+ 31242  22758.677 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 43 exits 42 refusals 0, 20910209 ms at the point
+ 31243  22758.677 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 31244  22758.677 hwmon: telemetry fan2 1275 rpm (1/5 turn) duty 741 permille, mode 0xE0 eng 0x60
+ 31245  22758.677 hwmon: telemetry apu 59.0 C, duty read-back unproven
+ 31246  22758.677 hwmon: telemetry 22473 samples 0 errors 0 retries 0 refusals
+ 31247  22758.677 smu metrics: telemetry 36.1 W avg 36.2 W, gfx 10.1 W soc 0.4 W
+ 31248  22758.677 smu metrics: telemetry gfx 824 mV 500 MHz 56.0 C soc 806 mV 56.7 C thr 0
+ 31249  22758.677 fan: telemetry curve curve/standard
+ 31250  22758.677 fan: telemetry target 74% applied 74% raw 189 rb 189, 1275 rpm
+ 31251  22758.677 fan: telemetry 1 takeovers 0 handbacks 133 writes
+ 31252  22758.677 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 31253  22781.200 log: summary of 315 lines beside the ring at seq 31253: 11 taken in 60748 ms, 3609 of 4352 silent
+ 31254  22786.256 log: summary of 315 lines beside the ring at seq 31254 (0 did not fit), read from 4028760064
+ 31255  22841.927 log: summary of 315 lines beside the ring at seq 31255: 11 taken in 60727 ms, 3619 of 4364 silent
+ 31256  22846.988 log: summary of 315 lines beside the ring at seq 31256 (0 did not fit), read from 4028766208
+ 31257  22850.391 gfx: paging submit, seq 2087249 at 0x400C80: 105 submits in 96745 ms, 743719 of 744450 with no line
+ 31258  22854.394 gfx: paging submit, seq 2087258 at 0x400348: 3 submits in 4003 ms, 743721 of 744453 with no line
+ 31259  22879.337 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 59.2 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 114 lowers 199 thermal 0 wa
+ 31260  22879.337 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 43 exits 42 refusals 0, 21028407 ms at the point
+ 31261  22879.337 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 31262  22879.337 hwmon: telemetry fan2 1312 rpm (1/5 turn) duty 741 permille, mode 0xE0 eng 0x60
+ 31263  22879.337 hwmon: telemetry apu 59.0 C, duty read-back unproven
+ 31264  22879.337 hwmon: telemetry 22592 samples 0 errors 0 retries 0 refusals
+ 31265  22879.337 smu metrics: telemetry 36.7 W avg 36.4 W, gfx 10.1 W soc 0.9 W
+ 31266  22879.337 smu metrics: telemetry gfx 824 mV 500 MHz 55.2 C soc 806 mV 56.5 C thr 0
+ 31267  22879.337 fan: telemetry curve curve/standard
+ 31268  22879.337 fan: telemetry target 74% applied 74% raw 189 rb 189, 1312 rpm
+ 31269  22879.337 fan: telemetry 1 takeovers 0 handbacks 133 writes
+ 31270  22879.337 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 31271  22902.668 log: summary of 315 lines beside the ring at seq 31271: 11 taken in 60741 ms, 3629 of 4376 silent
+ 31272  22907.729 log: summary of 315 lines beside the ring at seq 31272 (0 did not fit), read from 4028772352
+ 31273  22910.633 gfx: paging submit, seq 2087427 at 0x4007B8: 79 submits in 60242 ms, 743799 of 744532 with no line
+ 31274  22913.145 gfx: paging submit, seq 2087437 at 0x400948: 6 submits in 2512 ms, 743804 of 744538 with no line
+ 31275  22963.398 log: summary of 315 lines beside the ring at seq 31275: 11 taken in 60730 ms, 3639 of 4388 silent
+ 31276  22968.448 log: summary of 315 lines beside the ring at seq 31276 (0 did not fit), read from 4028778496
+ 31277  22973.891 gfx: paging submit, seq 2087648 at 0x400690: 111 submits in 63258 ms, 743914 of 744649 with no line
+ 31278  22981.390 gfx: paging submit, seq 2087679 at 0x410840: 19 submits in 7499 ms, 743932 of 744668 with no line
+ 31279  23000.074 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 59.2 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 114 lowers 199 thermal 0 wa
+ 31280  23000.074 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 43 exits 42 refusals 0, 21146670 ms at the point
+ 31281  23000.074 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 31282  23000.074 hwmon: telemetry fan2 1279 rpm (1/5 turn) duty 741 permille, mode 0xE0 eng 0x60
+ 31283  23000.074 hwmon: telemetry apu 59.0 C, duty read-back unproven
+ 31284  23000.074 hwmon: telemetry 22711 samples 0 errors 0 retries 0 refusals
+ 31285  23000.074 smu metrics: telemetry 36.6 W avg 36.5 W, gfx 10.1 W soc 0.8 W
+ 31286  23000.074 smu metrics: telemetry gfx 824 mV 500 MHz 55.7 C soc 806 mV 56.7 C thr 0
+ 31287  23000.074 fan: telemetry curve curve/standard
+ 31288  23000.074 fan: telemetry target 74% applied 74% raw 189 rb 189, 1279 rpm
+ 31289  23000.074 fan: telemetry 1 takeovers 0 handbacks 133 writes
+ 31290  23000.074 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 31291  23024.132 log: summary of 315 lines beside the ring at seq 31291: 11 taken in 60734 ms, 3649 of 4400 silent
+ 31292  23029.192 log: summary of 315 lines beside the ring at seq 31292 (0 did not fit), read from 4028784640
+ 31293  23034.166 gfx: paging submit, seq 2087850 at 0x4107B8: 85 submits in 60275 ms, 744016 of 744753 with no line
+ 31294  23037.669 gfx: paging submit, seq 2087865 at 0x410348: 8 submits in 3503 ms, 744023 of 744761 with no line
+ 31295  23084.789 log: summary of 315 lines beside the ring at seq 31295: 11 taken in 60657 ms, 3659 of 4412 silent
+ 31296  23089.852 log: summary of 315 lines beside the ring at seq 31296 (0 did not fit), read from 4028790784
+ 31297  23094.519 gfx: paging submit, seq 2088022 at 0x400C40: 64 submits in 60353 ms, 744086 of 744825 with no line
+ 31298  23120.598 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 59.8 C busy 0.0% avg 0.8% want 1000 cap 1500 max 1500 throttle idle, raises 114 lowers 199 thermal 0 wa
+ 31299  23120.598 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 43 exits 42 refusals 0, 21264908 ms at the point
+ 31300  23120.598 dpm: telemetry idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 31301  23120.598 hwmon: telemetry fan2 1312 rpm (1/5 turn) duty 741 permille, mode 0xE0 eng 0x60
+ 31302  23120.598 hwmon: telemetry apu 60.0 C, duty read-back unproven
+ 31303  23120.598 hwmon: telemetry 22830 samples 0 errors 0 retries 0 refusals
+ 31304  23120.598 smu metrics: telemetry 36.6 W avg 36.1 W, gfx 10.1 W soc 0.8 W
+ 31305  23120.598 smu metrics: telemetry gfx 824 mV 500 MHz 55.7 C soc 806 mV 57.2 C thr 0
+ 31306  23120.598 fan: telemetry curve curve/standard
+ 31307  23120.598 fan: telemetry target 74% applied 74% raw 189 rb 189, 1312 rpm
+ 31308  23120.598 fan: telemetry 1 takeovers 0 handbacks 133 writes
+ 31309  23120.598 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 31310  23127.555 gfx: paging submit, seq 2088072 at 0x400348: 7 submits in 33036 ms, 744092 of 744832 with no line
+ 31311  23145.516 log: summary of 315 lines beside the ring at seq 31311: 11 taken in 60727 ms, 3669 of 4424 silent
+ 31312  23150.578 log: summary of 315 lines beside the ring at seq 31312 (0 did not fit), read from 4028796928
+ 31313  23155.746 gfx: paging submit, seq 2088143 at 0x400348: 24 submits in 61227 ms, 744115 of 744856 with no line
+ 31314  23161.763 gfx: paging submit, seq 2088172 at 0x400348: 19 submits in 6017 ms, 744133 of 744875 with no line
+ 31315  23206.200 log: summary of 315 lines beside the ring at seq 31315: 11 taken in 60684 ms, 3679 of 4436 silent
+ 31316  23211.246 log: summary of 315 lines beside the ring at seq 31316 (0 did not fit), read from 4028803072
+ 31317  23216.932 gfx: paging submit, seq 2088386 at 0x4109F0: 112 submits in 61186 ms, 744244 of 744987 with no line
+ 31318  23226.678 vsync snapshot: 100ns begin 232281533689 end 232281533689 valid 1F
+ 31319  23226.678 vsync snapshot: frame 00154156 sync 00101104 control 80011311 lock 00000000 position 056001DD
+ 31320  23226.678 dpm: summary dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 59.6 C busy 0.0% avg 0.2% want 1000 cap 1500 max 1500 throttle idle, raises 114 lowers 199 thermal 0 warm
+ 31321  23226.678 dpm: summary idle 500 MHz (now), hold 3000 ms under 2 permille, entries 43 exits 42 refusals 0, 21368858 ms at the point
+ 31322  23226.678 dpm: summary idle leave at 150 permille, exits 42 by a busy tick, 0 by the window
+ 31323  23226.678 hwmon: summary fan2 1276 rpm (1/5 turn) duty 741 permille, mode 0xE0 eng 0x60
+ 31324  23226.678 hwmon: summary apu 59.0 C, duty read-back unproven
+ 31325  23226.678 hwmon: summary 22935 samples 0 errors 0 retries 0 refusals
+ 31326  23226.678 smu metrics: summary 40.1 W avg 40.5 W, gfx 9.5 W soc 5.0 W
+ 31327  23226.678 smu metrics: summary gfx 824 mV 500 MHz 55.7 C soc 1187 mV 57.0 C thr 0
+ 31328  23226.678 fan: summary curve curve/standard
+ 31329  23226.678 fan: summary target 74% applied 74% raw 189 rb 189, 1276 rpm
+ 31330  23226.678 fan: summary 1 takeovers 0 handbacks 133 writes
+ 31331  23226.678 fan: summary 0 failures 0 emergencies 0 doubts
+ 31332  23226.678 dpm: summary tune up 900 target 800 down 650 permille, hold 200 ms, floor 0 MHz, serial 0 applied 0, floor ticks 0
+ 31333  23226.678 dpm: summary tune thermal: hot step 500 ms, soft release delta 4000 mC step 4000 ms, soft raises 0
+ 31334  23226.678 dpm: summary tune zone: at 86000 mC (delta 1000) step 1500 ms, no raise from 83000 mC
+ 31335  23226.678 dpm: summary tune zone lead: 15000 ms over 5000 ms, now +0 mC, 172 ticks with none
+ 31336  23226.678 dpm: summary tune zone: 0 steps, 0 ticks, 0 idle holds, slope measured
+ 31337  23226.678 interop summary: requested 0x3 effective 0x3 reason 0 (none) closed-reason 0 flags 0x803 users 1 marks 1 unmarks 0 mark-failures 0 last-end 0
+ 31338  23226.678 wddm summary: ---- DDI calls: name, count, first log line ----
+ 31339  23226.678 wddm summary: QueryAdapterInfo                  322  first at 227
+ 31340  23226.678 wddm summary: GetNodeMetadata                     2  first at 235
+ 31341  23226.678 wddm summary: CreateDevice                      194  first at 242
+ 31342  23226.678 wddm summary: DestroyDevice                     179  first at 879
+ 31343  23226.678 wddm summary: CreateContext                     253  first at 246
+ 31344  23226.678 wddm summary: DestroyContext                    230  first at 878
+ 31345  23226.678 wddm summary: CreateProcess                     120  first at 241
+ 31346  23226.678 wddm summary: DestroyProcess                    107  first at 880
+ 31347  23226.678 wddm summary: SetRootPageTable                   93  first at 271
+ 31348  23226.678 wddm summary: CreateAllocation                12535  first at 328
+ 31349  23226.678 wddm summary: DestroyAllocation               15984  first at 677
+ 31350  23226.678 wddm summary: DescribeAllocation              52667  first at 341
+ 31351  23226.678 wddm summary: GetStandardAllocationDriverData      4  first at 325
+ 31352  23226.678 wddm summary: OpenAllocation                  12674  first at 331
+ 31353  23226.678 wddm summary: CloseAllocation                 12278  first at 676
+ 31354  23226.678 wddm summary: BuildPagingBuffer              1270498  first at 248
+ 31355  23226.678 wddm summary: SubmitCommandVirtual           2088428  first at 303
+ 31356  23226.678 wddm summary: PreemptCommand                   1995  first at 385
+ 31357  23226.678 wddm summary: CalibrateGpuClock               28908  first at 6245
+ 31358  23226.678 wddm summary: Present                         52785  first at 363
+ 31359  23226.678 wddm summary: SetVidPnSourceAddress           52668  first at 355
+ 31360  23226.678 wddm summary: ControlInterrupt                    3  first at 361
+ 31361  23226.678 wddm summary: ---- QueryAdapterInfo types: type, count, first log line ----
+ 31362  23226.678 wddm summary: adapter info type   1       1  first at 227
+ 31363  23226.678 wddm summary: adapter info type  15       1  first at 228
+ 31364  23226.678 wddm summary: adapter info type  47       1  first at 229
+ 31365  23226.678 wddm summary: adapter info type  13       1  first at 230
+ 31366  23226.678 wddm summary: adapter info type  14       4  first at 231
+ 31367  23226.678 wddm summary: adapter info type  11       2  first at 238
+ 31368  23226.678 wddm summary: adapter info type  10       1  first at 240
+ 31369  23226.678 wddm summary: adapter info type  16       1  first at 240
+ 31370  23226.678 wddm summary: adapter info type  20       1  first at 278
+ 31371  23226.678 wddm summary: adapter info type   0     309  first at 602
+ 31372  23226.678 wddm summary: capture plans reserved 0 heap 0
+ 31373  23226.678 wddm summary: capture context peaks plans 0 reserved-bytes 0
+ 31374  23226.678 wddm summary: ---- BuildPagingBuffer operations: operation, count, first log line ----
+ 31375  23226.678 wddm summary: paging operation  11  1191130  first at 248
+ 31376  23226.678 wddm summary: paging operation  12   73037  first at 316
+ 31377  23226.678 wddm summary: paging operation   9    3565  first at 338
+ 31378  23226.678 wddm summary: paging operation   2     181  first at 675
+ 31379  23226.678 wddm summary: paging operation   8    2585  first at 680
+ 31380  23226.678 wddm summary: objects created/destroyed: alloc 12535/15984
+ 31381  23226.678 wddm summary: objects created/destroyed: dev 194/179 ctx 253/230 proc 120/107, 879 alive
+ 31382  23226.678 wddm summary: allocations opened/closed: 12674/12278 calls
+ 31383  23226.678 wddm summary: ---- standard allocations; refused flags/type/geom/buf/input ----
+ 31384  23226.678 wddm summary: stdalloc primary size/fill 1/1 ok 2 refused 0/0/0/0/0
+ 31385  23226.678 wddm summary: stdalloc shadow size/fill 1/1 ok 2 refused 0/0/0/0/0
+ 31386  23226.678 wddm summary: lb7a type 0 create ok/refused/rolled-back 255/0/0 open ok/refused 394/0
+ 31387  23226.678 wddm summary: CreateAllocation calls ok 12535 resource-data 0 invalid 0 no-memory 0
+ 31388  23226.678 wddm summary: gdi type masks requested 0x000 refused 0x000 create-refused 0x000 rolled-back 0x000 open-refused 0x000
+ 31389  23226.678 wddm summary: submissions 0 physical + 2088428 virtual, 1995 preemptions, last completed fence 1343416
+ 31390  23226.678 wddm summary: node 0 hardware: 1343416 submitted, 1332129 completed, 0 timeouts, 0 refused, 0 soft-recovered
+ 31391  23226.678 wddm summary: umd: 12280 allocs (0 refused), 161 contexts, 1343289 submits on the ring, 0 not run
+ 31392  23226.678 wddm summary: umd placement (shared residency on): local 0, local+aperture 2803, aperture 9477
+ 31393  23226.678 wddm profile: umd calls 1343289, elapsed ticks 114041618, QPC frequency 10000000
+ 31394  23226.678 wddm profile: probe enabled 0, calls 0, elapsed ticks 0 (included in umd)
+ 31395  23226.678 wddm profile: holds 0 (spin-only 0), held 0 us worst 0, 0 spins
+ 31396  23226.678 wddm profile: hold wakes 0 event, 0 timeout
+ 31397  23226.678 wddm profile: held us <100:0 100:0 200:0 500:0 1k:0 2k:0 5k:0 10k:0 20k+:0
+ 31398  23226.678 wddm profile: node 0 ring idle 23073340688 us in 799180 gaps, worst 6872795 us, lost 0, 1391745 vsyncs
+ 31399  23226.678 wddm profile: node 0 ring >=4ms 87797/22827291056 us, vsync-ended 1430/427067762 us, 306857 ns/frame
+ 31400  23226.678 wddm profile: node 0 ring gap us <16:98931 16:143537 32:183159 64:181440 128:18407
+ 31401  23226.678 wddm profile: node 0 ring gap us 512:26875 2k:59034 4k:24517 8k+:63280
+ 31402  23226.678 wddm profile: node 1 ring idle 23194492481 us in 745011 gaps, worst 56244886 us, lost 0, 1391745 vsyncs
+ 31403  23226.678 wddm profile: node 1 ring >=4ms 13159/23162401660 us, vsync-ended 262/440485183 us, 316498 ns/frame
+ 31404  23226.678 wddm profile: node 1 ring gap us <16:75077 16:346395 32:238815 64:55919 128:12645
+ 31405  23226.678 wddm profile: node 1 ring gap us 512:2216 2k:785 4k:1314 8k+:11845
+ 31406  23226.678 wddm profile: ring gap vblank stamps: 1392302 hardware, 0 software timer
+ 31407  23226.678 wddm profile: notify pairing gate 1, 2079076 reports: 2061916 same pass, 17160 deferred
+ 31408  23226.678 wddm profile: notify pairing 0 waiting now (worst 3), 3466289 notifications carried no report
+ 31409  23226.678 wddm profile: notify pairing 1391745 vsync reports (0 waiting, worst 1), 64689 contended
+ 31410  23226.678 wddm profile: reports not delivered: node 0 retried 0 dropped 0
+ 31411  23226.678 wddm profile: reports not delivered: node 1 retried 0 dropped 0, 0 preemption acks lost
+ 31412  23226.678 wddm profile: hot submit log lines left out: 4030248 (HotSubmitLog off)
+ 31413  23226.678 wddm profile: paging submit lines: 745012 submits, 744269 with no line, 735 summary lines
+ 31414  23226.678 wddm summary: VMID pool on, members 0xFFFA, excluded 0x0000
+ 31415  23226.678 wddm summary: VMID pool: 49 claims, 1343367 reuses, 0 busy, 0 rule refusals
+ 31416  23226.678 wddm summary: VMID pool FLUSH_TLB: 60711 built, 849850 VMID invalidations
+ 31417  23226.678 wddm summary: ring VM flush off: 0 frames, 0 of them on a root the VMID held
+ 31418  23226.678 wddm summary: node 1 (paging, open): 745012 hardware submitted, 745012 completed, 0 timeouts, 0 refused
+ 31419  23226.678 wddm: paging OS-private queue admissions=745012 (no submit allocation)
+ 31420  23226.678 wddm summary: SubmitCommandVirtual by node: 0: 1343416, 1: 745012, 0 private-buffer refusals
+ 31421  23226.678 wddm summary: paging DMA VA nonzero 1269469 zero 1029, mapping observations 8
+ 31422  23226.678 wddm summary: native DMA transfers 2491 fills 3394 bytes 301909831680
+ 31423  23226.678 wddm: native PTE copies gate1 ranges0
+ 31424  23226.678 wddm summary: native DMA exact disjoint checks 1082
+ 31425  23226.678 wddm summary: DMA mapping matches 8/8 last VA0x400000 root0x45E150000 PA0x260ED6000 CPU_PA0x260ED6000
+ 31426  23226.678 wddm summary: BuildPagingBuffer: 2491 transfers, 3394 fills, 301909831680 bytes, 591409 insufficient-buffer
+ 31427  23226.678 wddm summary: virtual transfers (count/bytes) to system 2488/148326776832, from system 3/27648000, other 0/0
+ 31428  23226.678 wddm summary: physical transfers (count/bytes) to system 0/0, from system 0/0, other 0/0
+ 31429  23226.678 wddm summary: aperture map batches 0, unmap batches 0
+ 31430  23226.678 wddm summary: paging fills 3394/153555406848 bytes, aperture pages mapped 0 unmapped 0
+ 31431  23226.678 wddm summary: paging TLB invalidations 60711, PTE update batches 1188008
+ 31432  23226.678 wddm summary: paging unsupported (not ready/no root/no translation/system memory/not contiguous) 0/0/0/0/0
+ 31433  23226.678 wddm summary: presents 52785, flips 52661 of 52668 address calls (52658 arrived above DISPATCH_LEVEL)
+ 31434  23226.678 wddm summary: scan-out flips 0 of 0 requested candidates; admission ok/no-alloc/not-requested 52668/0/0
+ 31435  23226.678 wddm summary: scan-out refusals format/geom/pitch/size/segment/align/gated 0/0/0/0/0/0/0
+ 31436  23226.678 wddm summary: type0 creates asked/not by record none 0/2 v1 0/0 v2 0/24 v3 12/217
+ 31437  23226.678 wddm summary: type0 creates other 0/0, PRIMARY records 21, in a resource group 255
+ 31438  23226.678 wddm summary: flip flags mode/immediate/shared-transition/independent 10/0/0/0, redirected presents 0
+ 31439  23226.678 wddm summary: plane formats 1, flips argb8888/abgr8888/abgr2101010 52661/0/0, changes 0 refused 0
+ 31440  23226.678 wddm summary: DirectFlip handshake on
+ 31441  23226.678 wddm: CDD interop1 GPU Present gate1 identity probe1
+ 31442  23226.678 wddm: DRIVERCAPS returned interop0 0 interop1 1
+ 31443  23226.678 wddm: DRIVERCAPS interop0 first100ns0 last100ns0
+ 31444  23226.678 wddm: DRIVERCAPS interop1 first100ns28522401 last100ns28522401
+ 31445  23226.678 wddm: Blt observation calls127 capacity16
+ 31446  23226.678 wddm: Blt obs0 interrupt100ns29327221 qpc30823028
+ 31447  23226.678 wddm: Blt obs0 ctxFFFFC6074F7F5010 devFFFFC6074F7F5910 flags1 node0 umd0 system0
+ 31448  23226.678 wddm: Blt obs0 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+ 31449  23226.678 wddm: Blt obs0 src 936,916,984,966 dst 936,916,984,966
+ 31450  23226.678 wddm: Blt obs0 side0 handleFFFFC6074F7F7250 adapter0 va8DC000
+ 31451  23226.678 wddm: Blt obs0 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 31452  23226.678 wddm: Blt obs0 side1 handleFFFFC6074F7F45F0 adapter0 va12000
+ 31453  23226.678 wddm: Blt obs0 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 31454  23226.678 wddm: Blt obs1 interrupt100ns29763539 qpc31251202
+ 31455  23226.678 wddm: Blt obs1 ctxFFFFC6074F7F5010 devFFFFC6074F7F5910 flags1 node0 umd0 system0
+ 31456  23226.678 wddm: Blt obs1 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+ 31457  23226.678 wddm: Blt obs1 src 936,916,984,966 dst 936,916,984,966
+ 31458  23226.678 wddm: Blt obs1 side0 handleFFFFC6074F7F7250 adapter0 va8DC000
+ 31459  23226.678 wddm: Blt obs1 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 31460  23226.678 wddm: Blt obs1 side1 handleFFFFC6074F7F45F0 adapter0 va12000
+ 31461  23226.678 wddm: Blt obs1 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 31462  23226.678 wddm: Blt obs2 interrupt100ns30223729 qpc31711807
+ 31463  23226.678 wddm: Blt obs2 ctxFFFFC6074F7F5010 devFFFFC6074F7F5910 flags1 node0 umd0 system0
+ 31464  23226.678 wddm: Blt obs2 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+ 31465  23226.678 wddm: Blt obs2 src 936,916,984,966 dst 936,916,984,966
+ 31466  23226.678 wddm: Blt obs2 side0 handleFFFFC6074F7F7250 adapter0 va8DC000
+ 31467  23226.678 wddm: Blt obs2 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 31468  23226.678 wddm: Blt obs2 side1 handleFFFFC6074F7F45F0 adapter0 va12000
+ 31469  23226.678 wddm: Blt obs2 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 31470  23226.678 wddm: Blt obs3 interrupt100ns30679346 qpc32166844
+ 31471  23226.678 wddm: Blt obs3 ctxFFFFC6074F7F5010 devFFFFC6074F7F5910 flags1 node0 umd0 system0
+ 31472  23226.678 wddm: Blt obs3 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+ 31473  23226.678 wddm: Blt obs3 src 936,916,984,966 dst 936,916,984,966
+ 31474  23226.678 wddm: Blt obs3 side0 handleFFFFC6074F7F7250 adapter0 va8DC000
+ 31475  23226.678 wddm: Blt obs3 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 31476  23226.678 wddm: Blt obs3 side1 handleFFFFC6074F7F45F0 adapter0 va12000
+ 31477  23226.678 wddm: Blt obs3 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 31478  23226.678 wddm: Blt obs4 interrupt100ns31134033 qpc32621561
+ 31479  23226.678 wddm: Blt obs4 ctxFFFFC6074F7F5010 devFFFFC6074F7F5910 flags1 node0 umd0 system0
+ 31480  23226.678 wddm: Blt obs4 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+ 31481  23226.678 wddm: Blt obs4 src 936,916,984,966 dst 936,916,984,966
+ 31482  23226.678 wddm: Blt obs4 side0 handleFFFFC6074F7F7250 adapter0 va8DC000
+ 31483  23226.678 wddm: Blt obs4 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 31484  23226.678 wddm: Blt obs4 side1 handleFFFFC6074F7F45F0 adapter0 va12000
+ 31485  23226.678 wddm: Blt obs4 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 31486  23226.678 wddm: Blt obs5 interrupt100ns31596869 qpc33084852
+ 31487  23226.678 wddm: Blt obs5 ctxFFFFC6074F7F5010 devFFFFC6074F7F5910 flags1 node0 umd0 system0
+ 31488  23226.678 wddm: Blt obs5 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+ 31489  23226.678 wddm: Blt obs5 src 936,916,984,966 dst 936,916,984,966
+ 31490  23226.678 wddm: Blt obs5 side0 handleFFFFC6074F7F7250 adapter0 va8DC000
+ 31491  23226.678 wddm: Blt obs5 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 31492  23226.678 wddm: Blt obs5 side1 handleFFFFC6074F7F45F0 adapter0 va12000
+ 31493  23226.678 wddm: Blt obs5 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 31494  23226.678 wddm: Blt obs6 interrupt100ns32069976 qpc33557272
+ 31495  23226.678 wddm: Blt obs6 ctxFFFFC6074F7F5010 devFFFFC6074F7F5910 flags1 node0 umd0 system0
+ 31496  23226.678 wddm: Blt obs6 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+ 31497  23226.678 wddm: Blt obs6 src 936,916,984,966 dst 936,916,984,966
+ 31498  23226.678 wddm: Blt obs6 side0 handleFFFFC6074F7F7250 adapter0 va8DC000
+ 31499  23226.678 wddm: Blt obs6 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 31500  23226.678 wddm: Blt obs6 side1 handleFFFFC6074F7F45F0 adapter0 va12000
+ 31501  23226.678 wddm: Blt obs6 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 31502  23226.678 wddm: Blt obs7 interrupt100ns32541490 qpc34029401
+ 31503  23226.678 wddm: Blt obs7 ctxFFFFC6074F7F5010 devFFFFC6074F7F5910 flags1 node0 umd0 system0
+ 31504  23226.678 wddm: Blt obs7 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+ 31505  23226.678 wddm: Blt obs7 src 936,916,984,966 dst 936,916,984,966
+ 31506  23226.678 wddm: Blt obs7 side0 handleFFFFC6074F7F7250 adapter0 va8DC000
+ 31507  23226.678 wddm: Blt obs7 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 31508  23226.678 wddm: Blt obs7 side1 handleFFFFC6074F7F45F0 adapter0 va12000
+ 31509  23226.678 wddm: Blt obs7 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 31510  23226.678 wddm: Blt obs8 interrupt100ns33013193 qpc34500890
+ 31511  23226.678 wddm: Blt obs8 ctxFFFFC6074F7F5010 devFFFFC6074F7F5910 flags1 node0 umd0 system0
+ 31512  23226.678 wddm: Blt obs8 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+ 31513  23226.678 wddm: Blt obs8 src 936,916,984,966 dst 936,916,984,966
+ 31514  23226.678 wddm: Blt obs8 side0 handleFFFFC6074F7F7250 adapter0 va8DC000
+ 31515  23226.678 wddm: Blt obs8 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 31516  23226.678 wddm: Blt obs8 side1 handleFFFFC6074F7F45F0 adapter0 va12000
+ 31517  23226.678 wddm: Blt obs8 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 31518  23226.678 wddm: Blt obs9 interrupt100ns33483944 qpc34971667
+ 31519  23226.678 wddm: Blt obs9 ctxFFFFC6074F7F5010 devFFFFC6074F7F5910 flags1 node0 umd0 system0
+ 31520  23226.678 wddm: Blt obs9 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+ 31521  23226.678 wddm: Blt obs9 src 936,916,984,966 dst 936,916,984,966
+ 31522  23226.678 wddm: Blt obs9 side0 handleFFFFC6074F7F7250 adapter0 va8DC000
+ 31523  23226.678 wddm: Blt obs9 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 31524  23226.678 wddm: Blt obs9 side1 handleFFFFC6074F7F45F0 adapter0 va12000
+ 31525  23226.678 wddm: Blt obs9 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 31526  23226.678 wddm: Blt obs10 interrupt100ns33952753 qpc35440556
+ 31527  23226.678 wddm: Blt obs10 ctxFFFFC6074F7F5010 devFFFFC6074F7F5910 flags1 node0 umd0 system0
+ 31528  23226.678 wddm: Blt obs10 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+ 31529  23226.678 wddm: Blt obs10 src 936,916,984,966 dst 936,916,984,966
+ 31530  23226.678 wddm: Blt obs10 side0 handleFFFFC6074F7F7250 adapter0 va8DC000
+ 31531  23226.678 wddm: Blt obs10 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 31532  23226.678 wddm: Blt obs10 side1 handleFFFFC6074F7F45F0 adapter0 va12000
+ 31533  23226.678 wddm: Blt obs10 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 31534  23226.678 wddm: Blt obs11 interrupt100ns34422558 qpc35910194
+ 31535  23226.678 wddm: Blt obs11 ctxFFFFC6074F7F5010 devFFFFC6074F7F5910 flags1 node0 umd0 system0
+ 31536  23226.678 wddm: Blt obs11 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+ 31537  23226.678 wddm: Blt obs11 src 936,916,984,966 dst 936,916,984,966
+ 31538  23226.678 wddm: Blt obs11 side0 handleFFFFC6074F7F7250 adapter0 va8DC000
+ 31539  23226.678 wddm: Blt obs11 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 31540  23226.678 wddm: Blt obs11 side1 handleFFFFC6074F7F45F0 adapter0 va12000
+ 31541  23226.678 wddm: Blt obs11 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 31542  23226.678 wddm: Blt obs12 interrupt100ns36796788 qpc38287484
+ 31543  23226.678 wddm: Blt obs12 ctxFFFFC6074F7F5010 devFFFFC6074F7F5910 flags1 node0 umd0 system0
+ 31544  23226.678 wddm: Blt obs12 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+ 31545  23226.678 wddm: Blt obs12 src 0,0,1920,1200 dst 0,0,1920,1200
+ 31546  23226.678 wddm: Blt obs12 side0 handleFFFFC6074F7F7250 adapter0 va8DC000
+ 31547  23226.678 wddm: Blt obs12 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 31548  23226.678 wddm: Blt obs12 side1 handleFFFFC6074F7F45F0 adapter0 va12000
+ 31549  23226.678 wddm: Blt obs12 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 31550  23226.678 wddm: Blt obs13 interrupt100ns36796788 qpc38288249
+ 31551  23226.678 wddm: Blt obs13 ctxFFFFC6074F7F5010 devFFFFC6074F7F5910 flags1 node0 umd0 system0
+ 31552  23226.678 wddm: Blt obs13 dma4096 private2184 offset145 rects1 list256 valid1 snapshot1
+ 31553  23226.678 wddm: Blt obs13 src 0,0,1920,1200 dst 0,0,1920,1200
+ 31554  23226.678 wddm: Blt obs13 side0 handleFFFFC6074F7F7250 adapter0 va8DC000
+ 31555  23226.678 wddm: Blt obs13 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 31556  23226.678 wddm: Blt obs13 side1 handleFFFFC6074F7F45F0 adapter0 va12000
+ 31557  23226.678 wddm: Blt obs13 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 31558  23226.678 wddm: Blt obs14 interrupt100ns36796788 qpc38292255
+ 31559  23226.678 wddm: Blt obs14 ctxFFFFC6074F7F5010 devFFFFC6074F7F5910 flags1 node0 umd0 system0
+ 31560  23226.678 wddm: Blt obs14 dma4096 private2184 offset290 rects1 list256 valid1 snapshot1
+ 31561  23226.678 wddm: Blt obs14 src 0,0,1920,1200 dst 0,0,1920,1200
+ 31562  23226.678 wddm: Blt obs14 side0 handleFFFFC6074F7F7250 adapter0 va8DC000
+ 31563  23226.678 wddm: Blt obs14 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 31564  23226.678 wddm: Blt obs14 side1 handleFFFFC6074F7F45F0 adapter0 va12000
+ 31565  23226.678 wddm: Blt obs14 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 31566  23226.678 wddm: Blt obs15 interrupt100ns36796788 qpc38292727
+ 31567  23226.678 wddm: Blt obs15 ctxFFFFC6074F7F5010 devFFFFC6074F7F5910 flags1 node0 umd0 system0
+ 31568  23226.678 wddm: Blt obs15 dma4096 private2184 offset435 rects1 list256 valid1 snapshot1
+ 31569  23226.678 wddm: Blt obs15 src 0,0,1920,1200 dst 0,0,1920,1200
+ 31570  23226.678 wddm: Blt obs15 side0 handleFFFFC6074F7F7250 adapter0 va8DC000
+ 31571  23226.678 wddm: Blt obs15 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 31572  23226.678 wddm: Blt obs15 side1 handleFFFFC6074F7F45F0 adapter0 va12000
+ 31573  23226.678 wddm: Blt obs15 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 31574  23226.678 wddm: GPU Present calls127 records127 rotate96 refused0
+ 31575  23226.678 wddm: GPU Present submits127 rejected0 failed0
+ 31576  23226.678 wddm: GPU Present errors parameter0 handle0 color0 other0
+ 31577  23226.678 wddm: GPU Present snapshot refused stopping0 unopened0 owner0 umdopen0 unbound0 gone0 umdbacking0 descriptor0 same0 format0
+ 31578  23226.678 wddm summary: blit gate open, 0 blits, 0 skips, 0 sources translated contiguous
+ 31579  23226.678 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback)
+ 31580  23226.678 wddm summary: blit destination: 0 scanout remaps (0 failed), last blit 0 rows, 0 seeds
+ 31581  23226.678 wddm summary: widest blit 0 rows
+ 31582  23226.678 wddm summary: last blit reading 0, 0x0 pitch 0, 0 rectangles, source physical 0x0
+ 31583  23226.678 wddm summary: vsync enabled, 0 ticks, 1391745 reported to dxgkrnl
+ 31584  23226.678 wddm summary: visibility calls 14 source 0x00000000 requested 1 status 0x00000000 current 1
+ 31585  23226.678 wddm summary: display mode 1 blanked 0 write 1 commit calls 1 power-transition 0 powered-off 0
+ 31586  23226.678 wddm visibility: true 10 false 4 failures 0 first-true 0x00000000 last-true 0x00000000 QPC 10000000
+ 31587  23226.678 wddm visibility event: 1 src 0 req 1 status 00000000 visible 1 blank 0 qpc 30783929..30783968
+ 31588  23226.678 wddm visibility event: 2 src 0 req 1 status 00000000 visible 1 blank 0 qpc 31142796..31142850
+ 31589  23226.678 wddm visibility event: 3 src 0 req 1 status 00000000 visible 1 blank 0 qpc 32763692..32763789
+ 31590  23226.678 wddm visibility event: 4 src 0 req 1 status 00000000 visible 1 blank 0 qpc 123314051..123314119
+ 31591  23226.678 wddm visibility event: 5 src 0 req 0 status 00000000 visible 0 blank 1 qpc 137559051..137559166
+ 31592  23226.678 wddm visibility event: 6 src 0 req 0 status 00000000 visible 0 blank 1 qpc 137589878..137589980
+ 31593  23226.678 wddm visibility event: 7 src 0 req 1 status 00000000 visible 1 blank 0 qpc 137702592..137702715
+ 31594  23226.678 wddm visibility event: 8 src 0 req 1 status 00000000 visible 1 blank 0 qpc 138007889..138007967
+ 31595  23226.678 wddm visibility event: 9 src 0 req 0 status 00000000 visible 0 blank 1 qpc 2438838920..2438839013
+ 31596  23226.678 wddm visibility event: 10 src 0 req 1 status 00000000 visible 1 blank 0 qpc 2444365315..2444365417
+ 31597  23226.678 wddm visibility event: 11 src 0 req 1 status 00000000 visible 1 blank 0 qpc 2444701493..2444701626
+ 31598  23226.678 wddm visibility event: 12 src 0 req 0 status 00000000 visible 0 blank 1 qpc 2447679959..2447680111
+ 31599  23226.678 wddm visibility event: 13 src 0 req 1 status 00000000 visible 1 blank 0 qpc 2451931475..2451931618
+ 31600  23226.678 wddm visibility event: 14 src 0 req 1 status 00000000 visible 1 blank 0 qpc 2452266714..2452266845
+ 31601  23226.678 wddm summary: dcn lock acknowledgement timeouts 0
+ 31602  23226.678 wddm summary: vidpn flip open: 52661 hardware flips, 0 refused
+ 31603  23226.678 wddm summary: vidpn flip vsyncs 1 armed, 1392325 acked, 0 refused, 36 completion-deferred, 35 old-buffer-reports
+ 31604  23226.678 vsync skip: odd 1 read 0 same 0 changed 0
+ 31605  23226.678 vsync skip100ns: odd 143000659908 read 0 same 0 changed 0
+ 31606  23226.678 vsync vector: DPC polls 1392302 ACKs 249 sync-failures 0
+ 31607  23226.678 vsync diagnostic: irq 3467616 no-mmio 0 flip-off 0 unarmed 47
+ 31608  23226.678 vsync diagnostic: no-event 3467546 read-fail 0 ack-fail 0
+ 31609  23226.678 vsync diagnostic: 100ns irq 232281472682 entry 232281472682 ack 232281472682 notify 232281472682 status 00101104
+ 31610  23226.678 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 31611  23226.678 wddm summary: CollectDbgInfo called 0 time(s) since the driver was loaded
+ 31612  23226.678 vidmm summary: level 0: 1026 calls, 262688 entries, 544 valid
+ 31613  23226.678 vidmm summary: level 1: 2 calls, 1024 entries, 512 valid
+ 31614  23226.678 vidmm summary: level 2: 1 calls, 512 entries, 2 valid
+ 31615  23226.678 vidmm summary: level 3: 1 calls, 512 entries, 1 valid
+ 31616  23226.678 vidmm summary: segment 0 named by 105053350 valid entries, 0 refused
+ 31617  23226.678 vidmm summary: segment 1 named by 222432636 valid entries, 0 refused
+ 31618  23226.678 vidmm summary: segment 3 named by 207581 valid entries, 0 refused
+ 31619  23226.678 vidmm summary: PTE encoding level 0 segment 0 snoop mismatches 0
+ 31620  23226.678 vidmm summary: PTE encoding level 0 segment 0 coherent 1243126 noncoherent 103810224
+ 31621  23226.678 vidmm summary: PTE encoding level 0 segment 1 snoop mismatches 0
+ 31622  23226.678 vidmm summary: PTE encoding level 0 segment 1 coherent 0 noncoherent 222432636
+ 31623  23226.678 vidmm summary: PTE encoding level 0 segment 3 snoop mismatches 0
+ 31624  23226.678 vidmm summary: PTE encoding level 0 segment 3 coherent 0 noncoherent 512
+ 31625  23226.678 vidmm summary: PTE encoding level 1 segment 3 snoop mismatches 0
+ 31626  23226.678 vidmm summary: PTE encoding level 1 segment 3 coherent 0 noncoherent 205876
+ 31627  23226.678 vidmm summary: PTE encoding level 2 segment 3 snoop mismatches 0
+ 31628  23226.678 vidmm summary: PTE encoding level 2 segment 3 coherent 0 noncoherent 948
+ 31629  23226.678 vidmm summary: PTE encoding level 3 segment 3 snoop mismatches 0
+ 31630  23226.678 vidmm summary: PTE encoding level 3 segment 3 coherent 0 noncoherent 245
+ 31631  23226.678 vidmm summary: 1030 cpu-virtual calls, 0 gpu-physical calls, 0 gpu-physical refusals
+ 31632  23226.678 vidmm summary: 264736 entries written (EnableGpuVa open), 0 refused, 0 bad calls, 93 roots
+             768 lines printed
+             escapes: 13 without adapter synchronization, 0 with HardwareAccess
+

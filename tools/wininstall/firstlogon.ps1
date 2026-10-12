@@ -20,7 +20,7 @@ Step 'Wi-Fi profile' {
 }
 
 Step 'OpenSSH server' {
-    $dst = 'C:\Program Files\OpenSSH'
+    $dst = Join-Path ([Environment]::GetFolderPath('ProgramFiles')) 'OpenSSH'
     if (-not (Test-Path "$dst\sshd.exe")) {
         Expand-Archive -Path "$root\OpenSSH-Win64.zip" -DestinationPath "$root\ssh-unpack" -Force
         New-Item -ItemType Directory -Force $dst | Out-Null
@@ -67,7 +67,8 @@ Step 'Crash handling: keep the bugcheck on screen, write a kernel dump' {
 }
 
 Step 'State report' {
-    bcdedit /enum '{current}' | Select-String 'testsigning|description'
+    # This is a diagnostic listing, not a parser: keep translated labels too.
+    bcdedit /enum '{current}'
     Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -notlike '127.*' } |
         Select-Object InterfaceAlias, IPAddress | Format-Table -AutoSize
     Get-Service sshd | Format-Table -AutoSize

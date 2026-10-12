@@ -289,6 +289,19 @@ each item at the next free `COMPUTE_USER_DATA` register. Do not hard-code `s[0:3
 is right for the three measured kernels only because they enable exactly the first and the fourth
 item. An enabled item that this build does not program is refused with `BC250HSA_EUNSUPPORTED`.
 
+The dispatch pointer is programmed, and it was not until 2026-10-09. MEASURED on llama.cpp's built
+`ggml-hip.dll`: 1752 of its 7105 gfx1013 kernels enable `ENABLE_SGPR_DISPATCH_PTR` and the other
+5353 do not, and the reason is one builtin. `__builtin_amdgcn_workgroup_size_x`, which is what HIP's
+`blockDim.x` becomes, is a 16-bit load from the AQL kernel dispatch packet, so a kernel with a
+run-time block size reads the packet while a kernel with a compile-time one does not. A PM4 dispatch
+has no packet, and all 1752 were refused by name: every `k_get_rows`, every `soft_max_f32`, half of
+the `k_bin_bcast` set and half of the `mul_mat_q` set, which is defect BD-110 and the whole reason
+no model ran in part 3B. Section 7.1 of the header is the answer: the packet goes at the end of the
+kernel argument buffer the caller already allocates for each dispatch, it states that dispatch and
+nothing else, and the two registers hold its address. The queue pointer and dispatch id remain refused. ABI 1.3 supplies fixed-private scratch,
+flat scratch init and the DWORD-rounded private segment size. The implementation contract and
+validation limits are in [m16-fixed-private-scratch.md](m16-fixed-private-scratch.md).
+
 The private segment buffer is a requirement even when `PRIVATE_SEGMENT_FIXED_SIZE` is 0, because
 clang always requests it. Layer 1 points it at one zeroed, resident 4 KiB allocation per device. RADV
 does the same with its own zero buffer object. The 128-bit resource for a raw buffer on gfx10.1 is
@@ -475,8 +488,8 @@ of the constant checks in `tools/win/monfence/build.ps1`.
  * submission path. The hipBLAS shim and the step-1 host tool use it as well.
  *
  * What this layer owns: one WDDM device on the BC-250 adapter, its memory, the code
- * object loader, the kernel argument packer, the PM4 dispatch stream, one monitored
- * fence and one bounded wait.
+ * object loader, the kernel argument packer, the PM4 dispatch stream, the batching of
+ * dispatches into one indirect buffer, one monitored fence and one bounded wait.
  *
  * What this layer does not own: HIP semantics, streams, events, modules per process,
  * and the offload bundle policy of a compiler. Those belong to layer 2.
@@ -514,7 +527,28 @@ extern "C" {
  * that reports another major value. bc250hsa_abi_version() returns the value that the
  * library was built with. */
 #define BC250HSA_ABI_VERSION_MAJOR 1u
-#define BC250HSA_ABI_VERSION_MINOR 0u
+#define BC250HSA_ABI_VERSION_MINOR 8u   /* 1.1 added section 8.1, batching;
+                                         * 1.2 added section 7.1, the AQL dispatch packet
+                                         * that ENABLE_SGPR_DISPATCH_PTR needs;
+                                         * 1.3 adds fixed-private scratch PM4 environments;
+                                         * 1.4 adds retained dispatch records;
+                                         * 1.5 adds section 5.1, the GPU copy and fill:
+                                         * bc250hsa_copy_device_to_device,
+                                         * bc250hsa_copy_from_device_gpu,
+                                         * bc250hsa_fill_device,
+                                         * bc250hsa_gpu_copy_ready, and the copy
+                                         * counters of bc250hsa_counters;
+                                         * 1.6 adds the duration counters of
+                                         * bc250hsa_counters, bc250hsa_ticks, and the
+                                         * ticks argument of
+                                         * bc250hsa_count_cpu_copy_fallback;
+                                         * 1.7 adds bc250hsa_op_receipt, the last
+                                         * argument of the three calls of section 5.1;
+                                         * 1.8 adds the exclusion of an unretired copy:
+                                         * bc250hsa_copy_unretired,
+                                         * bc250hsa_count_cpu_copy_exclusion_refusal,
+                                         * and the counters after
+                                         * cpu_copy_fallback_ticks */
 
 uint32_t bc250hsa_abi_version_major(void);
 uint32_t bc250hsa_abi_version_minor(void);
@@ -591,10 +625,133 @@ typedef struct bc250hsa_counters {
     uint64_t unknown_arg_kinds;
     uint64_t hostcall_buffer_requests;
     uint64_t dynamic_stack_refusals;
+    /* Section 8.1. submissions / dispatches_built is the number this interface is
+     * measured by: one submission per dispatch is one user-to-kernel transition per
+     * kernel. batches_submitted counts the submissions that carried more than one
+     * dispatch, and dispatches_batched the dispatches that rode in them. */
+    uint64_t batches_submitted;
+    uint64_t dispatches_batched;
+    /* Section 5.1, the GPU copy and fill. A call of section 5.1 that succeeds lands on
+     * exactly one of gpu_copy_d2h, gpu_copy_d2h_staged, gpu_copy_d2d and gpu_fill.
+     * cpu_copy_fallback is what a caller reports through
+     * bc250hsa_count_cpu_copy_fallback: a device-to-host or device-to-device copy, or a
+     * fill, that the caller did with the host processor. The five lines are not the whole
+     * copy traffic: a host-to-device copy, a host-to-host copy and a host-processor fill
+     * that was never sent to the GPU route are on none of them. A cpu_copy_fallback above
+     * zero is expected below a caller's size threshold and with the route switched off;
+     * the caller's log names the reason one time per reason.
+     *
+     * gpu_copy_packets over the three GPU lines is bytes per packet, which is how a
+     * chunked copy becomes visible. gpu_copy_forced_flushes counts the open batches a
+     * copy submitted before they were full: a copy waits for everything submitted before
+     * it, so a batch still open goes out first. gpu_copy_control_failed is 0 or 1: the
+     * coherence control of bc250hsa_gpu_copy_ready. */
+    uint64_t gpu_copy_d2h;
+    uint64_t gpu_copy_d2h_bytes;
+    uint64_t gpu_copy_d2h_staged;
+    uint64_t gpu_copy_d2h_staged_bytes;
+    uint64_t gpu_copy_d2d;
+    uint64_t gpu_copy_d2d_bytes;
+    uint64_t gpu_fill;
+    uint64_t gpu_fill_bytes;
+    uint64_t cpu_copy_fallback;
+    uint64_t cpu_copy_fallback_bytes;
+    uint64_t gpu_copy_packets;
+    uint64_t gpu_copy_forced_flushes;
+    uint64_t gpu_copy_control_failed;
+    /* Durations, in ticks of bc250hsa_ticks. ticks_per_second converts them, so one read
+     * is enough to turn every total into time. A total divided by its count is the mean
+     * cost of one call.
+     *
+     * The waits are the waits counted in waits, split as waits_fast splits them:
+     * waits_fast_ticks is the time of the waits the fence mapping answered, and
+     * waits_other_ticks the time of every other wait, which includes the timed-out and
+     * the lost ones. A wait that has to submit the open batch first carries that
+     * submission in its own time. Each of the two has its longest single wait beside it.
+     *
+     * submit_calls and submit_ticks are the D3DKMTSubmitCommand calls, the refused ones
+     * included, and the time spent inside them and nothing else: the user-to-kernel
+     * transition and the kernel driver's work for one indirect buffer.
+     *
+     * The five copy totals belong to the five copy counts above and are added where those
+     * are: one call, from its entry to its return, its submission and its fence wait
+     * included. The first call of a process that writes a host-readable destination
+     * carries the coherence control of section 5.1. A call that fails adds nothing; when
+     * layer 2 then
+     * takes the host-processor path, the time of the failed attempt is part of the
+     * cpu_copy_fallback_ticks that bc250hsa_count_cpu_copy_fallback reports. */
+    uint64_t ticks_per_second;
+    uint64_t waits_fast_ticks;
+    uint64_t waits_fast_ticks_max;
+    uint64_t waits_other_ticks;
+    uint64_t waits_other_ticks_max;
+    uint64_t submit_calls;
+    uint64_t submit_ticks;
+    uint64_t gpu_copy_d2h_ticks;
+    uint64_t gpu_copy_d2h_staged_ticks;
+    uint64_t gpu_copy_d2d_ticks;
+    uint64_t gpu_fill_ticks;
+    uint64_t cpu_copy_fallback_ticks;
+    /* What a GPU copy costs the other threads of the process. A copy of section 5.1 holds
+     * the device lock from the submission of the open batch to the retirement of its own
+     * fence value, because both of the device's contexts write one fence. gpu_copy_lock_holds
+     * counts those holds (a staged copy is one hold for all its rounds), and
+     * gpu_copy_lock_ticks is their time, the longest beside it. gpu_copy_lock_waits counts
+     * the calls of another thread that found the lock held by a copy and waited for it, and
+     * gpu_copy_lock_wait_ticks is the time they waited, the longest beside it. A process that
+     * calls layer 1 from one thread only has 0 waits whatever it copies.
+     *
+     * journal_guard_refusals counts the indirect buffers that layer 1 refused itself because
+     * they carry no dispatch record and were meant for the main context while its journal is
+     * on. Each one is also an error line that names the context and the buffer. It is 0 in a
+     * correct build.
+     *
+     * gpu_copy_unretired counts the copies of section 5.1 whose wait ended without
+     * establishing retirement on a device that still lives (receipt SUBMITTED). Each one holds
+     * every later submission of the device until the fence shows that it retired.
+     * gpu_copy_exclusion_refusals counts the dispatches and copies refused because such a copy
+     * still had not retired after a wait for it under the device's bound, and
+     * gpu_copy_late_retirements the unretired copies that a later submission or a
+     * bc250hsa_copy_unretired found retired, after which submissions went on. Each of the
+     * three is also a "copy exclusion:" line.
+     *
+     * cpu_copy_exclusion_refusals counts the host-processor copies and fills that a caller
+     * refused, with no byte moved, because such a copy had not retired or the device was
+     * lost (bc250hsa_copy_unretired, section 5.1). The caller reports each one through
+     * bc250hsa_count_cpu_copy_exclusion_refusal. */
+    uint64_t gpu_copy_lock_holds;
+    uint64_t gpu_copy_lock_ticks;
+    uint64_t gpu_copy_lock_ticks_max;
+    uint64_t gpu_copy_lock_waits;
+    uint64_t gpu_copy_lock_wait_ticks;
+    uint64_t gpu_copy_lock_wait_ticks_max;
+    uint64_t journal_guard_refusals;
+    uint64_t gpu_copy_unretired;
+    uint64_t gpu_copy_exclusion_refusals;
+    uint64_t gpu_copy_late_retirements;
+    uint64_t cpu_copy_exclusion_refusals;
 } bc250hsa_counters;
 
 bc250hsa_status bc250hsa_counters_read(bc250hsa_counters* out);
 void            bc250hsa_counters_reset(void);
+
+/* The clock of every duration counter: QueryPerformanceCounter, in its own ticks.
+ * bc250hsa_counters::ticks_per_second is its frequency. A caller that reports a duration
+ * of its own (bc250hsa_count_cpu_copy_fallback) measures it with this clock. */
+uint64_t bc250hsa_ticks(void);
+
+/* The caller says that a copy or a fill of this many bytes took the host-processor path
+ * of section 5 instead of the command processor of section 5.1, and that it took this
+ * many ticks of bc250hsa_ticks from the caller's decision to its last byte. The choice
+ * belongs to the caller, so the count has to as well; without this call cpu_copy_fallback
+ * could never reach the number of bytes that a run moved slowly. A caller reports a copy
+ * here only after the host processor finished it: a host-processor copy that failed moved
+ * nothing and is not counted. */
+void bc250hsa_count_cpu_copy_fallback(uint64_t bytes, uint64_t ticks);
+
+/* The caller refused a host-processor copy or fill because bc250hsa_copy_unretired did not
+ * return BC250HSA_OK, and moved no byte (section 5.1). */
+void bc250hsa_count_cpu_copy_exclusion_refusal(void);
 
 /* ---------------------------------------------------------------------------------
  * 4. Device
@@ -631,6 +788,9 @@ bc250hsa_status bc250hsa_open(const bc250hsa_open_params* params, bc250hsa_devic
 
 /* Waits for the last submission under the default bound, frees every allocation this
  * device still owns, and closes the adapter. Safe with dev NULL. */
+/* Consumes the handle. If flush or retirement cannot be proved, resources stay
+ * quarantined until process exit rather than being unmapped under GPU work.
+ * Repeated failed closes can retain multiple devices. */
 void bc250hsa_close(bc250hsa_device* dev);
 
 typedef struct bc250hsa_props {
@@ -713,6 +873,196 @@ bc250hsa_status bc250hsa_copy_to_device(bc250hsa_device* dev, const bc250hsa_mem
 bc250hsa_status bc250hsa_copy_from_device(bc250hsa_device* dev, void* dst,
                                           const bc250hsa_mem* src, uint64_t src_offset,
                                           uint64_t bytes);
+
+/* ---------------------------------------------------------------------------------
+ * 5.1 The GPU copy and fill
+ * -------------------------------------------------------------------------------
+ *
+ * The three calls above move bytes with the host processor through a mapping. A read of
+ * device local memory that way is an uncached read stream: MEASURED on unit A,
+ * evidence/m16/perf-rerun-2026-10-09, 0.21 GB/s out of an allocation that takes writes
+ * at 15.6 GB/s. The three calls below move the bytes with the command processor instead,
+ * as one PM4 DMA_DATA packet per 67,108,832 bytes in an indirect buffer of their own,
+ * which goes to a second context of the device. That buffer holds no dispatch and so no
+ * dispatch record, and the kernel driver refuses a buffer without a record on a context
+ * whose dispatch journal is on (driver/kmd/hip_journal.c, HipJournalBind), which the main
+ * context is from its first recorded dispatch; the operating system then puts the whole
+ * device in an error state. Nothing reads or writes the memory with the host processor,
+ * so the direction of the mapping stops mattering.
+ *
+ * All three are ordered and complete: the open batch is submitted, everything this device
+ * submitted retires, the copy's buffer is submitted, and the call returns after the fence
+ * of that submission, all under one hold of the device lock, so that no work of the main
+ * context runs beside it (both contexts write the one fence). A caller therefore needs no
+ * wait of its own, and a program may read the destination the moment the call returns.
+ * Another thread that calls this library on the same device during that hold waits for
+ * it; gpu_copy_lock_waits and gpu_copy_lock_wait_ticks of section 3 count those waits.
+ *
+ * A copy whose wait ends without retirement (receipt SUBMITTED on a device that still lives)
+ * keeps that order after the call returns. Until the fence shows that it retired, every
+ * submission of the device, a dispatch, a batch or another copy, first waits for it under
+ * the device's wait bound (bc250hsa_wait_policy_set). If it still has not retired, the
+ * submission is refused with the status of that wait (BC250HSA_ETIMEOUT, BC250HSA_EOS or
+ * BC250HSA_EDEVICELOST), and nothing is submitted, no fence value is handed out and no batch
+ * is opened. Once it has retired, submissions go on as before. This library holds back only
+ * its own submissions: a caller that moves bytes with the host processor reads the same state
+ * through bc250hsa_copy_unretired (below) and moves nothing while such a copy is unretired.
+ *
+ * Alignment: a copy is byte granular. A fill of a range that starts or ends between two
+ * dword boundaries carries those one to three bytes in a copy packet of their own, out of
+ * a staging slot this library writes, so a caller needs no alignment of its own.
+ *
+ * An allocation needs no host mapping for any of them: the packet needs an address.
+ * That is why a device-to-device copy and a fill of device local memory, which the three
+ * calls above refuse with BC250HSA_EUNSUPPORTED, work here.
+ *
+ * The coherence gate. A destination that the host processor can read is written by the
+ * command processor only after bc250hsa_gpu_copy_ready reported 1. The library decides
+ * that from the destination allocation itself and not from the name of the operation: an
+ * allocation with a host mapping, or one made with BC250HSA_MEM_HOST, BC250HSA_MEM_HOST_WC,
+ * BC250HSA_MEM_EXEC or BC250HSA_MEM_MAPPABLE, is such a destination. A device-to-device
+ * copy into the GPU address of a host allocation is therefore gated exactly as a
+ * device-to-host copy is. While the answer is 0 each of the three calls refuses such a
+ * destination with BC250HSA_EUNSUPPORTED before it submits anything. */
+
+/* The bytes one DMA_DATA packet carries, so that a caller can read bytes per packet off
+ * the counters. Mesa cp_dma_max_byte_count for GFX9 and later. */
+#define BC250HSA_GPU_COPY_MAX_BYTES 67108832u
+
+/* What became of the GPU work of one call of this section. The status of a call says
+ * whether the call did its work; the receipt says whether the device may still be doing
+ * some of it, and a caller needs both. A wait that could not establish retirement is not a
+ * completion (CONTRACT.md section 7), and the memory such work names stays in use until
+ * its fence value retires.
+ *
+ *   BC250HSA_OP_NOT_SUBMITTED  nothing of this call is outstanding: either nothing was
+ *                              submitted, or every submission of it retired before the
+ *                              call stopped. A failed call with this state refused before
+ *                              any outstanding work, and on a device that is not lost
+ *                              (status other than BC250HSA_EDEVICELOST) the caller may do
+ *                              the work another way.
+ *   BC250HSA_OP_SUBMITTED      the device accepted work of this call and its retirement was
+ *                              not established. fence_value is the value to wait for. The
+ *                              caller must not do the work another way, must not report it
+ *                              done, and must not free, reuse or read either range until
+ *                              that value retires.
+ *   BC250HSA_OP_RETIRED        every submission of this call retired. The status is then
+ *                              BC250HSA_OK.
+ *
+ * A failed call on a device this library marked lost always answers BC250HSA_EDEVICELOST,
+ * whatever Windows call failed first; the first failure is in the log. */
+#define BC250HSA_OP_NOT_SUBMITTED 0u
+#define BC250HSA_OP_SUBMITTED     1u
+#define BC250HSA_OP_RETIRED       2u
+
+typedef struct bc250hsa_op_receipt {
+    uint32_t struct_bytes;   /* sizeof(bc250hsa_op_receipt) */
+    uint32_t state;          /* BC250HSA_OP_* */
+    uint64_t fence_value;    /* the last value this call submitted, or 0 */
+} bc250hsa_op_receipt;
+
+/* A copy between two allocations of this device, in either direction and within one
+ * allocation as well, as long as the two ranges do not overlap. An overlapping copy is
+ * BC250HSA_EINVAL and never a half-done packet.
+ *
+ * This is also the call for a device-to-host copy whose destination is one of this
+ * library's own host-visible allocations: that destination has a GPU address, so the
+ * copy needs no staging buffer at all. */
+/* The one flag of bc250hsa_copy_device_to_device: the host processor is going to read the
+ * destination of this copy. It says which counter the bytes go to, gpu_copy_d2h and not
+ * gpu_copy_d2d, and it gates the call as a host-readable destination would. It is not the
+ * only thing that gates it: a destination the host processor can read is gated with or
+ * without the flag (the coherence gate above). */
+#define BC250HSA_COPY_HOST_READS_DST 0x1u
+
+/* receipt: a caller's bc250hsa_op_receipt with struct_bytes set, or NULL for a caller that
+ * waits for everything this device owes before it touches either range again. A receipt
+ * whose struct_bytes this library does not know is BC250HSA_EINVAL and stays untouched;
+ * every other return of the three calls below writes it. */
+bc250hsa_status bc250hsa_copy_device_to_device(bc250hsa_device* dev, const bc250hsa_mem* dst,
+                                              uint64_t dst_offset, const bc250hsa_mem* src,
+                                              uint64_t src_offset, uint64_t bytes,
+                                              uint32_t flags, bc250hsa_op_receipt* receipt);
+
+/* A device-to-host copy into memory that is not this library's: a program's own buffer.
+ * The bytes go through a ring of host-visible staging allocations, one 1 MiB round at a
+ * time: the command processor writes a staging slot, and the host processor copies that
+ * slot into the caller's destination with ordinary cached reads. The ring is allocated
+ * on the first call that needs it and freed with the device.
+ *
+ * It refuses with BC250HSA_EUNSUPPORTED when bc250hsa_gpu_copy_ready reports 0.
+ *
+ * A round whose wait fails keeps its slot until the round's fence value retires, and the
+ * receipt names that value. The rounds before it retired and wrote part of dst; a caller
+ * that sees BC250HSA_OP_NOT_SUBMITTED and does the copy another way writes all of dst
+ * again.
+ *
+ * Concurrency: this call holds the device lock for the whole copy, every round's
+ * submission and every round's wait included. A 64 MiB copy is 64 rounds, so another
+ * thread's bc250hsa_flush or dispatch, and a bc250hsa_wait for a value that is not yet
+ * submitted, waits behind all of them. The call above holds the lock for one packet and
+ * one wait, which is the shorter hold, so a caller that needs a device-to-host copy to
+ * block other threads as briefly as possible keeps its destination in one of this
+ * library's own host-visible allocations and uses that call. */
+bc250hsa_status bc250hsa_copy_from_device_gpu(bc250hsa_device* dev, void* dst,
+                                              const bc250hsa_mem* src, uint64_t src_offset,
+                                              uint64_t bytes, bc250hsa_op_receipt* receipt);
+
+/* A fill of an allocation with one byte value, as memset defines it. The 4-byte aligned
+ * interior is one DMA_DATA per chunk, and the one to three bytes at either end of a range
+ * that does not begin or end on a dword boundary are copied out of a staging slot this
+ * library writes, in the same list and under the same fence, so a fill is never partial
+ * and no byte outside the range is touched.
+ *
+ * A destination the host processor can read is gated as the coherence gate above says. */
+bc250hsa_status bc250hsa_fill_device(bc250hsa_device* dev, const bc250hsa_mem* dst,
+                                     uint64_t dst_offset, uint8_t value, uint64_t bytes,
+                                     bc250hsa_op_receipt* receipt);
+
+/* Is a copy of this device unretired (the exclusion above)? Such a copy may still read its
+ * source and write its destination. A host-processor copy or fill of the caller is no
+ * submission, so this library cannot hold it back: it could read the destination before the
+ * copy's bytes land, or write over the source the copy still reads, and report success with
+ * wrong bytes. A caller asks this before every copy or fill it does with the host processor,
+ * the ones it does after a refusal of the three calls above included, and moves no byte
+ * unless the answer is BC250HSA_OK.
+ *
+ * BC250HSA_EDEVICELOST on a device this library marked lost, whether a copy is unretired or
+ * not and whatever the fence reads: a loss is the end, and no host-processor copy goes on
+ * after it. *pending is then the unretired copy's fence value, or 0 when there is none.
+ * Otherwise BC250HSA_OK with *pending 0: no copy is unretired, or the fence has reached the
+ * one that was, which this call then retires as the next submission would. Otherwise
+ * *pending is the copy's fence value and the status is the one the last wait for it ended
+ * with (BC250HSA_ETIMEOUT or BC250HSA_EOS). The call takes the device lock and reads the
+ * fence. It never waits for a fence and never submits, so it costs one compare while no copy
+ * is unretired; it can wait for the device lock behind a copy in progress. */
+bc250hsa_status bc250hsa_copy_unretired(bc250hsa_device* dev, uint64_t* pending);
+
+/* May the host processor read what the command processor wrote into a host-visible
+ * allocation of this library, with no cache maintenance of its own?
+ *
+ * The page table entry of such an allocation is expected to snoop the host caches, but
+ * the chain that produces it runs through the video memory manager and is not proved by
+ * reading our own source. This call answers the question by measurement, once per device:
+ * it writes a pattern into a device local buffer, reads the host buffer first so that its
+ * lines are in the host cache, copies the one into the other with the command processor,
+ * waits for the fence and compares, and then does it again with a second pattern.
+ *
+ * *ready is 1 on a match and 0 otherwise. A mismatch is the one coherence answer: it writes
+ * one line at BC250HSA_LOG_ERROR naming the first differing offset, raises the counter
+ * gpu_copy_control_failed, keeps the answer for the life of the device, and the call
+ * returns BC250HSA_OK. A caller that sees 0 then keeps the host-processor path for every
+ * host-readable destination, which is correct and slow.
+ *
+ * A control that could not ask the question is not an answer. When an allocation, a
+ * mapping, a submission or a wait of the control fails, the call returns that status with
+ * *ready 0, the counter stays, and the next call tries again. The control's buffers are
+ * freed only once no submission of the control is outstanding; after a wait that could
+ * not establish that, the device keeps them, the next call waits for their fence value
+ * first under the device's wait bound, and bc250hsa_close frees or quarantines them with
+ * every other allocation. A device-to-device copy into memory the host processor cannot
+ * read never asks this question. */
+bc250hsa_status bc250hsa_gpu_copy_ready(bc250hsa_device* dev, uint32_t* ready);
 
 /* An allocator seam, so that the loader runs with no device. The device path passes
  * its own implementation. A host test passes one over malloc with a synthetic base
@@ -865,10 +1215,43 @@ typedef struct bc250hsa_pack_result {
     uint32_t hidden_args_zeroed;
     uint32_t unknown_arg_kinds;
     uint32_t hostcall_buffer_requested; /* 1: the kernel asks for a host call service */
+    uint32_t dispatch_packet_requested; /* 1: the kernel enables ENABLE_SGPR_DISPATCH_PTR,
+                                         * and the packet was written at the offset below */
+    uint32_t dispatch_packet_offset;    /* where in the buffer the 64-byte packet is */
     char     first_unknown_kind[32];    /* the metadata key, for the log */
 } bc250hsa_pack_result;
 
-/* The size and the alignment that the caller must allocate for one launch. */
+/* ---------------------------------------------------------------------------------
+ * 7.1 The AQL dispatch packet
+ *
+ * A kernel may enable ENABLE_SGPR_DISPATCH_PTR, and the compiler does so for every
+ * kernel that reads its own workgroup size: `__builtin_amdgcn_workgroup_size_x`, which
+ * is what HIP's blockDim becomes, is a 16-bit load from the AQL kernel dispatch packet
+ * and not an implicit kernel argument. MEASURED on the ggml-hip backend of llama.cpp:
+ * 1752 of its 7105 gfx1013 kernels enable the bit, among them every k_get_rows kernel,
+ * which is the first launch of a decode (evidence/m16/step3b-2026-10-09, defect BD-110).
+ *
+ * A PM4 dispatch has no packet of its own, so this layer writes one. It belongs to the
+ * launch, so it goes at the end of the kernel argument buffer the caller already
+ * allocates per launch: bc250hsa_kernarg_requirements adds the 64 bytes and the
+ * alignment, bc250hsa_kernarg_pack fills it from the same bc250hsa_launch the kernel
+ * arguments come from, and the caller passes its address in bc250hsa_dispatch. One
+ * allocation, one lifetime, and the packet retires with the dispatch that reads it.
+ *
+ * Every field the packet holds is one this layer knows: the workgroup size, the grid in
+ * work items, the two segment sizes, the kernel object and the kernel argument address.
+ * completion_signal is 0, because this layer completes through its own fence and not
+ * through an HSA signal, and the two reserved fields are 0.
+ * ------------------------------------------------------------------------------- */
+
+#define BC250HSA_AQL_PACKET_BYTES 64u
+#define BC250HSA_AQL_PACKET_ALIGN 64u
+
+/* The size and the alignment that the caller must allocate for one launch. It covers
+ * the kernel arguments and, for a kernel that enables ENABLE_SGPR_DISPATCH_PTR, the
+ * AQL dispatch packet behind them. A kernel whose arguments and that packet do not fit
+ * in the uint32_t of this interface is refused with BC250HSA_EINVAL and bytes 0: a size
+ * that wrapped would defeat the capacity check of bc250hsa_kernarg_pack. */
 bc250hsa_status bc250hsa_kernarg_requirements(const bc250hsa_kernel* kernel,
                                               uint32_t* bytes, uint32_t* alignment);
 
@@ -877,11 +1260,17 @@ bc250hsa_status bc250hsa_kernarg_requirements(const bc250hsa_kernel* kernel,
  * in declaration order. The packer walks the list and the array in step, writes every
  * hidden field it knows from launch, and zeroes every hidden field it does not know.
  * It never computes an offset of its own. kernarg may be a plain host buffer, which is
- * what the host test uses. */
+ * what the host test uses.
+ *
+ * kernarg_va is the GPU address that this buffer will have in bc250hsa_dispatch. It is
+ * written into the AQL dispatch packet of section 7.1 and used for nothing else, so a
+ * caller that packs into a plain host buffer passes 0 and the packet's kernarg_address
+ * field reads 0. */
 bc250hsa_status bc250hsa_kernarg_pack(const bc250hsa_kernel* kernel,
                                       const bc250hsa_launch* launch,
                                       void* const* args, uint32_t arg_count,
                                       void* kernarg, uint32_t kernarg_bytes,
+                                      uint64_t kernarg_va,
                                       bc250hsa_pack_result* result);
 
 /* ---------------------------------------------------------------------------------
@@ -896,27 +1285,120 @@ bc250hsa_status bc250hsa_kernarg_pack(const bc250hsa_kernel* kernel,
 #define BC250HSA_DISPATCH_START_AT_000 0x4u /* add FORCE_START_AT_000 to the initiator */
 #define BC250HSA_DISPATCH_NO_ACQUIRE 0x8u /* leave out ACQUIRE_MEM; diagnosis only */
 #define BC250HSA_DISPATCH_NO_FENCE   0x10u/* leave out RELEASE_MEM; the caller fences */
+#define BC250HSA_DISPATCH_LIGHT_BARRIER 0x20u /* between two dispatches of one batch, emit
+                                               * the level-0 and level-1 invalidate only.
+                                               * Section 8.1 */
+#define BC250HSA_DISPATCH_FULL_STATE 0x40u /* write the whole compute state for every
+                                            * dispatch of a batch, not only the registers
+                                            * that changed since the one before it.
+                                            * Section 8.8; the switch a lab arm compares
+                                            * against */
 
 typedef struct bc250hsa_dispatch {
     uint32_t struct_bytes;
     uint32_t flags;
     const bc250hsa_kernel* kernel;
     uint64_t kernarg_va;            /* a resident buffer of kernarg_bytes, already filled */
+    /* The AQL dispatch packet of section 7.1, where bc250hsa_kernarg_pack wrote it:
+     * kernarg_va + bc250hsa_pack_result.dispatch_packet_offset. It is needed only by a
+     * kernel that enables ENABLE_SGPR_DISPATCH_PTR, and such a kernel with 0 here is
+     * refused rather than started with a register that points nowhere. */
+    uint64_t dispatch_packet_va;
     bc250hsa_launch launch;
 } bc250hsa_dispatch;
 
 /* Builds the indirect buffer into a free slot of this device's command ring, submits it
  * on the node-0 context and returns the fence value that this dispatch writes. It does
  * not wait for the dispatch. It may wait for a free ring slot, under the bound of
- * bc250hsa_wait's defaults, and returns BC250HSA_EBUSY if none frees.
+ * bc250hsa_wait's defaults, and returns BC250HSA_EBUSY if none frees. It may also wait for
+ * a GPU copy of section 5.1 whose own wait failed, and refuses as that section says when
+ * the copy still has not retired.
+ *
+ * With batching on (section 8.1) the dispatch is appended to the indirect buffer this
+ * device is building and the submission happens at a flush point. The returned fence
+ * value is then the value of the whole batch: it is a value this device has promised
+ * and not yet submitted, every wait for it submits the batch first, and a caller
+ * cannot tell the difference apart from the timing.
  *
  * It refuses, and submits nothing: a zero grid or block, a block product above
  * max_flat_workgroup_size, local memory above the device limit, uses_dynamic_stack,
- * a kernarg_va that is not aligned to kernarg_align, and a kernel whose enabled user
- * SGPRs this build does not program (BC250HSA_EUNSUPPORTED in the last two cases). */
+ * a kernarg_va that is not aligned to kernarg_align, a kernel that enables
+ * ENABLE_SGPR_DISPATCH_PTR with no dispatch_packet_va, and a kernel whose enabled user
+ * SGPRs this build does not program (BC250HSA_EUNSUPPORTED in the last three cases). */
 bc250hsa_status bc250hsa_dispatch_submit(bc250hsa_device* dev,
                                          const bc250hsa_dispatch* dispatch,
                                          uint64_t* fence_value_out);
+
+/* HIP runtime submissions carry an immutable BC250_HIP_DISPATCH_RECORD from
+ * driver/shim/include/bc250_hip_journal.h. The backend copies it before it
+ * returns and uploads the batch to the KMD journal before SubmitCommand.
+ * An upload refusal prevents that batch from reaching the GPU. The record
+ * is required even when diagnostic logging is disabled. The legacy entry
+ * above remains available to the standalone layer-1 measurement tools. */
+bc250hsa_status bc250hsa_dispatch_submit_recorded(bc250hsa_device* dev,
+                                                  const bc250hsa_dispatch* dispatch,
+                                                  const void* record,
+                                                  uint32_t record_bytes,
+                                                  uint64_t* fence_value_out);
+
+/* ---------------------------------------------------------------------------------
+ * 8.1 Batching
+ *
+ * One dispatch per indirect buffer is one D3DKMTSubmitCommand, and therefore one
+ * user-to-kernel transition and one kernel driver submission, per kernel. A decode step
+ * of a language model issues hundreds of small kernels, so that cost is paid hundreds of
+ * times per token. The kernel driver runs one indirect buffer at a time
+ * (driver/kmd/wddm.c refuses a blob whose num_ibs is not 1), so the answer is not more
+ * indirect buffers per submission: it is more dispatches per indirect buffer.
+ *
+ * With batching on, consecutive dispatches of this device append into one indirect
+ * buffer, separated by the barrier of BC250HSA_DISPATCH_LIGHT_BARRIER or by the full
+ * acquire, and one RELEASE_MEM at the end writes one fence value for the whole buffer.
+ * Every dispatch of the batch therefore reports that one value, which keeps the rule a
+ * caller needs: when the fence reaches the value a dispatch reported, that dispatch has
+ * finished.
+ *
+ * The batch is submitted at the first of these:
+ *   - bc250hsa_flush, bc250hsa_close, or a bc250hsa_wait for a value the device has not
+ *     submitted yet;
+ *   - bc250hsa_free, bc250hsa_map, bc250hsa_unmap, a copy through the host mapping, or a
+ *     module load or unload, because each of them changes memory a dispatch of the open
+ *     batch may name;
+ *   - max_dispatches dispatches, or max_ib_dwords dwords, in the buffer;
+ *   - a dispatch that arrives max_hold_us or more after the batch was opened.
+ * The library runs no thread of its own, so the time cap is read when a call arrives.
+ * Nothing a program can observe stays behind an open batch: every read of the device
+ * goes through one of the flush points above.
+ *
+ * A submission that fails with an open batch loses work this library already promised.
+ * It therefore marks the device lost, where the next call reports it, instead of
+ * returning an error to a caller that did not make that dispatch.
+ * ------------------------------------------------------------------------------- */
+
+#define BC250HSA_BATCH_DISPATCHES_MAX     256u
+#define BC250HSA_BATCH_DISPATCHES_DEFAULT  32u
+#define BC250HSA_BATCH_HOLD_US_DEFAULT   1000u
+
+typedef struct bc250hsa_batch_policy {
+    uint32_t struct_bytes;
+    uint32_t enabled;         /* 0: one submission per dispatch, as build 1 did */
+    uint32_t max_dispatches;  /* 0 takes BC250HSA_BATCH_DISPATCHES_DEFAULT */
+    uint32_t max_ib_dwords;   /* 0 takes what one command ring slot holds */
+    uint32_t max_hold_us;     /* 0 takes BC250HSA_BATCH_HOLD_US_DEFAULT */
+    uint32_t light_barrier;   /* 1: BC250HSA_DISPATCH_LIGHT_BARRIER between dispatches */
+} bc250hsa_batch_policy;
+
+/* Rule 6 of this header keeps policy out of the library: the caller decides. A change
+ * submits an open batch first, so the policy of a dispatch is the policy its buffer was
+ * opened with. */
+bc250hsa_status bc250hsa_batch_policy_set(bc250hsa_device* dev,
+                                          const bc250hsa_batch_policy* policy);
+bc250hsa_status bc250hsa_batch_policy_get(bc250hsa_device* dev, bc250hsa_batch_policy* out);
+
+/* Submits the open batch, if there is one. fence_value_out, when it is not NULL,
+ * receives the value of that submission, or the last submitted value when nothing was
+ * open. It is BC250HSA_OK with batching off and with an empty batch. */
+bc250hsa_status bc250hsa_flush(bc250hsa_device* dev, uint64_t* fence_value_out);
 
 /* --- the pure builder, for the golden test and for a failure report --------------- */
 
@@ -929,15 +1411,33 @@ typedef struct bc250hsa_pm4_env {
     uint64_t fence_value;
     uint32_t private_segment_rsrc[4];   /* the 128-bit buffer resource for s[0:3] */
     uint32_t ib_pad_dwords;             /* 8 on the graphics ring, 0 takes 8 */
+    /* Optional extension: old 48-byte environments remain valid for zero-private
+     * kernels. Fixed-private dispatches require the complete structure. The buffer
+     * is device-local, 4096-aligned, resident, and owned until this IB retires. */
+    uint64_t scratch_va;
+    uint64_t scratch_bytes;
 } bc250hsa_pm4_env;
 
 /* Writes the dispatch of section 8 of the design as PM4 dwords into the caller's
- * buffer. It touches no device and no operating system, so a host test compares the
+ * buffer. The 48-byte ABI 1.2 environment remains accepted for zero-private kernels.
+ * Fixed-private kernels require scratch_va/scratch_bytes in the full environment.
+ * It touches no device and no operating system, so a host test compares the
  * result with a golden stream. */
 bc250hsa_status bc250hsa_pm4_build_dispatch(const bc250hsa_dispatch* dispatch,
                                             const bc250hsa_pm4_env* env,
                                             uint32_t* dwords, uint32_t dword_capacity,
                                             uint32_t* dwords_written);
+
+/* The same stream for count dispatches in one indirect buffer: one head (the graphics
+ * ring CONTEXT_CONTROL and the full acquire), count dispatch bodies with the barrier of
+ * env->flags between them, and one completion write at the end. count 1 writes exactly
+ * what bc250hsa_pm4_build_dispatch writes, dword for dword. A batch of n dispatches
+ * needs at most n * BC250HSA_PM4_MAX_DWORDS dwords. Fixed-private kernels are
+ * accepted only with count 1, so one live BO never changes its ring stride. */
+bc250hsa_status bc250hsa_pm4_build_batch(const bc250hsa_dispatch* dispatches, uint32_t count,
+                                         const bc250hsa_pm4_env* env,
+                                         uint32_t* dwords, uint32_t dword_capacity,
+                                         uint32_t* dwords_written);
 
 /* COMPUTE_PGM_RSRC2.LDS_SIZE for this part: align(bytes, 512) / 512. The command
  * processor writes this field from the AQL packet, and a PM4 path must write it by
@@ -958,8 +1458,11 @@ typedef struct bc250hsa_user_sgpr_plan {
 
 /* Walks the ENABLE_SGPR_* bits of the kernel in the order of the AMDGPU documentation
  * and places each item at the next free COMPUTE_USER_DATA register. It refuses an
- * enabled item that this build does not program, with BC250HSA_EUNSUPPORTED. */
+ * enabled item that this build does not program, with BC250HSA_EUNSUPPORTED, and it
+ * refuses ENABLE_SGPR_DISPATCH_PTR with dispatch_packet_va 0 for the same reason: a
+ * register that points nowhere is worse than a stated refusal. */
 bc250hsa_status bc250hsa_plan_user_sgprs(const bc250hsa_kernel* kernel, uint64_t kernarg_va,
+                                         uint64_t dispatch_packet_va,
                                          const uint32_t private_segment_rsrc[4],
                                          bc250hsa_user_sgpr_plan* out);
 
@@ -971,11 +1474,15 @@ bc250hsa_status bc250hsa_plan_user_sgprs(const bc250hsa_kernel* kernel, uint64_t
  * never enters the kernel and it never fails. UINT64_MAX means a lost device. */
 uint64_t bc250hsa_fence_read(bc250hsa_device* dev);
 
-/* The value of the last submission of this device. 0 before the first one. */
+/* The value the last dispatch of this device writes. 0 before the first one. With
+ * batching on it covers a dispatch that is still in the open batch, because that is what
+ * a caller means by "everything this device owes"; bc250hsa_wait for it submits the
+ * batch. */
 uint64_t bc250hsa_fence_last_submitted(bc250hsa_device* dev);
 
-/* Waits until the fence reaches value. It reads the host mapping first, and most waits
- * end there. It then waits in slices of slice_ms, up to total_ms in all, and between
+/* Waits until the fence reaches value. A value this device has promised and not yet
+ * submitted submits the open batch first (section 8.1). It reads the host mapping
+ * first, and most waits end there. It then waits in slices of slice_ms, up to total_ms in all, and between
  * two slices it re-reads the fence and asks the operating system whether the device
  * still runs. slice_ms 0 takes 1000 and total_ms 0 takes 120000, which are the
  * measured defaults of our Vulkan driver: one long wait turns a healthy wait behind
@@ -986,6 +1493,14 @@ uint64_t bc250hsa_fence_last_submitted(bc250hsa_device* dev);
  * BC250HSA_EDEVICELOST. */
 bc250hsa_status bc250hsa_wait(bc250hsa_device* dev, uint64_t value,
                               uint32_t slice_ms, uint32_t total_ms);
+
+/* The same two numbers for the waits this library performs for itself. A GPU copy of
+ * section 5.1 returns after its own fence, so that wait is inside the library and the
+ * caller never sees its value. This call tells the library which bound to use, and 0 and
+ * 0 restore the defaults above. Nothing else of this interface waits on its own, so a
+ * caller that never uses section 5.1 never needs it. */
+bc250hsa_status bc250hsa_wait_policy_set(bc250hsa_device* dev, uint32_t slice_ms,
+                                         uint32_t total_ms);
 
 /* ---------------------------------------------------------------------------------
  * 10. Diagnosis
@@ -1060,6 +1575,10 @@ acceptance path: llama.cpp's integer matrix multiply kernels refuse themselves b
 prompt matrix multiply then falls back to hipBLAS. 32 is MEASURED: every kernel of the spike reports
 wave size 32. The error state is per thread. `hipGetLastError` clears it and `hipPeekAtLastError` does
 not.
+
+Section 4.9 holds the measured step-3 set, which is 13 names and not the 14 of the estimate below.
+The paragraph that follows is the estimate of the spike, and it is kept because the difference is
+the useful part.
 
 Step 3 adds 14 names, which the spike measured from the application: `hipDeviceGetAttribute`,
 `hipDeviceGetPCIBusId`, `hipFuncSetAttribute`, `hipOccupancyMaxActiveBlocksPerMultiprocessor` (on the
@@ -1288,10 +1807,361 @@ blocks the other threads' submissions in layer 1 anyway. The fix belongs to laye
 free slot without holding the device lock. It is open work of step 3 and is not needed before a
 multithreaded application queues eight dispatches.
 
+A second wait came with the copy context of the GPU copy (`scratch/hip-gpu-copy` deviation
+13.23). Both contexts of the device signal one fence, so a copy holds layer 1's device lock from
+the submission of the open batch to the retirement of its own value. Layer 2 calls the copy with
+its process lock open, so the copying thread itself blocks nobody in layer 2. A thread that
+submits a kernel, records an event or allocates meanwhile enters layer 1 with the process lock
+held. It waits there for the copy, and a third thread then waits for the process lock. The cost is
+0 for a process that calls the runtime from one thread, as llama.cpp, vadd and hipbench do.
+Otherwise a call waits for the copy in progress, and for more only when several threads copy at
+once. Layer 1 counts each such wait (`gpu_copy_lock_waits`, `gpu_copy_lock_wait_ticks`), and its
+`fence check: copy lock` lines report them. A fence object of the copy context's own would let the
+copy wait with the device lock open. It changes what a receipt's fence value names, so it is open
+work and not part of that fix. A copy whose own wait fails keeps this order after it returns: its
+fence value holds every later submission of the device until the fence reaches it (`bc250hsa.h`
+section 5.1). Until then layer 2 moves no byte with the host processor either. It asks
+`bc250hsa_copy_unretired` before every host-processor copy or fill and fails the call with the
+copy's error. On a device that layer 1 marked lost, the answer is the loss whatever the fence
+reads, so no host-processor copy or fill goes on after a loss either.
+
 The owner's instruction of 2026-09-29 is that multithreading is measured with our own clients
 before an application is asked to exercise it. `compute/hip/tests/host/hip_threads_client.h` is
 that client, with a negative control that restores the lock over the wait. Section 5.4 lists what
 each of the two builds must measure.
+
+#### 4.7a What threads can and cannot buy on this device
+
+One hardware queue is not a detail of the lock. It is the shape of the device, and it decides what
+a second thread can win. Our node-0 context submits one indirect buffer at a time, the kernel
+driver runs one at a time (`driver/kmd/wddm.c`, "One IB is already the ring's whole capacity"),
+and two dispatches inside one batched buffer have a barrier between them (section 8.1). So a
+compute-bound dispatch has the whole device to itself, and *n* of them cost *n* times their own
+device time whatever the thread count. What threads buy is the host side: the packing, the
+submission and the waiting of one thread overlap the device time of another's work, which is why
+the lock must stay open across a wait.
+
+MEASURED, unit A, 2026-10-09 (`hipthreads` phase B, three policies): four threads with four waits
+each took 578.9, 583.8 and 585.5 ms where a serialised runtime takes 591.0 to 592.1 ms. That is
+the device time of sixteen 37 ms dispatches, with about 1 % of host cost on top of it instead of a
+penalty, and it is the right answer for one queue. The mock backend measures 812 ms against
+3239 ms, because it retires every dispatch on a timer of its own and therefore has as many in
+flight as the threads give it. The two numbers do not compare, and phase B's "four times" verdict
+belonged to the mock alone: it asked the hardware for parallelism that one queue cannot give
+(defect BD-111). The client now takes `device_overlaps_dispatches` from its caller: the host test
+and the mock-DLL run of the sample set it and keep the four-times check, which is a real test of
+the lock there, and the lab run leaves it off and checks instead that the threads cost nothing on
+top of the serialised device time. Phase A is what proves the lock property on the hardware, and
+it passed in all three runs: 8, 29 and 48 operations of the other threads completed inside one
+thread's wait.
+
+What would buy real concurrency on this part is a second queue, not a better lock: the
+asynchronous compute pipes of the MEC, which this kernel driver does not expose to user mode
+today. That is open work with its own cost measurement, and nothing in layer 2 has to change for
+it. Until then the honest statement is the one above, and a performance claim about thread count
+on a compute-bound workload is a claim about the host side only.
+
+### 4.8 What llama.cpp's ggml-hip backend asks of the host
+
+MEASURED 2026-10-09, offline, with two tools in `scratch\m16-hip\step3\tools`. `inventory.py`
+reads every `.cu` and `.cuh` file of `ggml/src/ggml-cuda`, keeps each call of a name of the CUDA
+or HIP host interface, resolves the CUDA name to the HIP name through the backend's own
+`ggml-cuda/vendors/hip.h`, and compares the result with `amdhip64.def`. `device_scan.py` does the
+same for the device side. The checkout is llama.cpp `b86d2f07`, which is the revision that the
+Vulkan measurements of fact M816 and the Strata work already use.
+
+The host interface of the backend is 95 distinct calls. They divide like this.
+
+| Group | Count | What we do |
+|---|---|---|
+| Already exported by `amdhip64.dll` after step 2 | 25 | nothing |
+| Removed by a build option | 19 | `GGML_HIP_GRAPHS=OFF` removes 8 graph and capture names, `GGML_HIP_NO_VMM=ON` removes 10 virtual memory names, `GGML_CUDA_FA=OFF` removes `hipOccupancyMaxActiveBlocksPerMultiprocessor` |
+| Compiled out by the backend itself | 1 | `hipLaunchHostFunc`, which sits inside `#if 0` |
+| Added in step 3 (section 4.9) | 13 | implemented |
+| hipBLAS and rocBLAS | 11 | open work, section 4.10 |
+| The CUDA-only paths and the macro names of the backend | 26 | nothing: they never reach a HIP build |
+
+Two names of the spike's estimate are therefore not needed, and two more are needed only with
+FlashAttention on. `hipDeviceDisablePeerAccess` is named in `vendors/hip.h` and called nowhere,
+and `hipOccupancyMaxPotentialBlockSize` is the same.
+
+### 4.9 The entry points of step 3
+
+DECIDED. 13 names, which take the HIP part of `amdhip64.def` from 38 to 51. Each one is in the link line of
+ggml-hip, so each one must exist, and five of them say no.
+
+| Name | What it does here |
+|---|---|
+| `hipDeviceGetAttribute` | 13 attributes, each one the same value as the field of `hipGetDeviceProperties` that carries it. An attribute this build does not know is `hipErrorInvalidValue` and never a guessed zero |
+| `hipDeviceGetPCIBusId` | the bus identifier of the adapter, from the three numbers layer 1 reads. A short buffer truncates and reports success, as CUDA and HIP both do |
+| `hipDeviceCanAccessPeer` | one device, so the answer is 0 and a second device number is `hipErrorInvalidDevice` |
+| `hipDeviceEnablePeerAccess` | `hipErrorInvalidDevice`: a device cannot peer with itself, and there is no other |
+| `hipFuncSetAttribute` | records a dynamic group memory ceiling for one kernel, and refuses a value above the hardware limit at the call that asks for it. The ceiling is advice on this part: there is no 48 KiB default to lift, and layer 1 checks each dispatch |
+| `hipLaunchCooperativeKernel` | `hipErrorNotSupported`. One hardware queue, so nothing can start every workgroup of a grid at the same time |
+| `hipHostGetDevicePointer` | the GPU address of memory `hipHostMalloc` returned, interior pointers included |
+| `hipHostRegister` | `hipErrorNotSupported`. Layer 1 has no entry point that takes a range of a program's own memory |
+| `hipHostUnregister` | `hipErrorHostMemoryNotRegistered` |
+| `hipMallocManaged` | `hipErrorNotSupported`, which is the code the backend falls back on |
+| `hipMemAdvise` | `hipErrorNotSupported`, and the backend ignores the result |
+| `hipMemcpy2DAsync` | a real row-by-row copy under one wait. The bytes between the rows stay as they were |
+| `hipMemcpyPeerAsync` | within device 0 it is a device-to-device copy. Any other device number is `hipErrorInvalidDevice` |
+
+Each refusal was chosen against the code that receives it, not against the specification alone:
+
+- `hipMallocManaged` must answer exactly `hipErrorNotSupported`. With that code
+  `ggml_cuda_device_malloc` falls back to `hipMalloc` and writes one warning line. Any other
+  error code becomes an abort of the program.
+- `hipHostRegister` is called only with `GGML_CUDA_REGISTER_HOST` in the environment.
+  `ggml_backend_cuda_register_host_buffer` clears the error and runs without registered host
+  memory, which costs one copy through a staging buffer per upload.
+- `hipLaunchCooperativeKernel` is guarded at run time by the attribute
+  `hipDeviceAttributeCooperativeLaunch`, which this runtime answers 0. The entry point exists
+  because the backend links against it.
+
+Two more things belong to the same step. `hipStreamPerThread` and `hipStreamLegacy` are handle
+values that no stream object can have, and the backend passes `hipStreamPerThread` to
+`hipMemcpyPeerAsync`. Both now resolve to the one default stream of the process, which is
+stricter than HIP asks and is legal. And `hipDeviceProp_t` already carries every field the
+backend reads, `gcnArchName` first of all: the backend parses `gfx1013` out of it to pick its
+kernels.
+
+### 4.10 What stops the backend from building today
+
+Two walls, both MEASURED 2026-10-09 with `scratch\m16-hip\step3\probe\try-ggml-hip.py`.
+
+**Wall 1, the package files.** The CMake configure stops at `ggml/src/ggml-hip/CMakeLists.txt`
+line 46, `find_package(hip REQUIRED)`: "Could not find a package configuration file provided by
+hip". Lines 47 and 48 ask for `hipblas` and `rocblas` in the same way. So our tree needs
+`hip-config.cmake`, `hipblas-config.cmake` and `rocblas-config.cmake` of its own, with the
+targets `hip::host`, `hip::device`, `roc::hipblas` and `roc::rocblas`, and a `hip_VERSION` of at
+least 6.1, which line 55 enforces.
+
+**Wall 2, the device headers.** One translation unit compiled by hand, with no CMake, stops at
+`ggml/src/ggml-common.h` line 51: `'hip/hip_fp16.h' file not found`. Our `include/hip` holds one
+header, `hip_runtime.h`. The backend needs `hip/hip_fp16.h`, `hip/hip_bf16.h` and
+`hipblas/hipblas.h` as well.
+
+The size of wall 2 is measured and not estimated. `device_scan.py` finds 134 device-side names in
+the backend's kernels, and 30 of them are the C library of mathematics. Those 30 are no longer
+work: see section 4.6 and the probe below. The rest divides like this.
+
+| Group | Names | Note |
+|---|---|---|
+| half and bfloat16 types, operators and conversions | 26 | `_Float16` and `__bf16` are native types of this compiler, so these are our own small header and not new hardware |
+| vector types and their makers (`float2`, `int4`, `make_float4`) | 16 | our own header. `dim3` is the one of them we already have |
+| cross-lane functions (`__shfl`, `__shfl_xor`, `__all`, `__any`, `__ballot`, `__popc`, `__byte_perm`) | 9 | MEASURED below: every one of them compiles for gfx1013 |
+| atomics (`atomicAdd` and its system form) | 2 | MEASURED below |
+| cached and non-temporal loads, fast-math names, the CUDA 4-bit float types | 13 | the three `__nv_fp4` names belong to a CUDA-only path |
+| matrix core and wave matrix instructions | 22 | not for this part, and the backend already guards them by architecture |
+| dot product (`__dp4a`) | 3 | MEASURED below: gfx1013 has no dot instruction, so the backend's integer fallback is the only path |
+| scheduling and barrier builtins | 13 | clang supplies them, as the probe proves. `__syncthreads` is already in our header |
+
+So the remaining work of step 3 is a HIP device header set of about 100 names and a hipBLAS shim
+of 11 entry points. It is not a hardware question and it is not a compiler question.
+
+### 4.11 What the device probes measured
+
+Four probes, `scratch\m16-hip\step3\probe\run-probe.py`, all offline, all for gfx1013, all
+against the device library of section 4.6 and clang's own HIP math headers. Nothing of AMD's
+product stack is installed on the machine that ran them.
+
+| Probe | Result |
+|---|---|
+| 48 names of the mathematics library, and the half-precision set | a 14256-byte code object, 0 undefined symbols |
+| the same source with `-nogpulib` | the link fails on `__ocml_expm1_f32`, `__ocml_log1p_f32` and `__ocml_rsqrt_f32`. This is the negative control: it proves the device library carries the work and that clang does not expand it in place |
+| cross-lane, atomic, permute and scheduling builtins | a 6208-byte code object, 0 undefined symbols |
+| `__builtin_amdgcn_sdot4` | "needs target feature dot1-insts". gfx1013 has no dot-product instruction |
+
+One result of the third probe is a number for the roadmap. The generated instructions of that
+code object are `ds_bpermute_b32` for a cross-lane move, `v_perm_b32` for a byte permute, one
+native `global_atomic_add` for the integer addition, and `global_atomic_cmpswap` for the float
+addition. So every floating-point `atomicAdd` on this part is a compare-and-swap loop. The
+backend uses that operation in its split-k matrix multiply paths, so the loop is on the hot path
+of a prompt and not in a corner.
+
+Two names of the CUDA interface are missing from clang's HIP math headers and belong to ours:
+`__float_as_int` and `__float_as_uint`, with their two inverses. One builtin each.
+
+How the probes reach those math headers is worth one paragraph, because it decides the shape of
+our include tree. clang holds the HIP mathematics itself, in
+`lib/clang/22/include/__clang_hip_math.h`, and `__clang_hip_runtime_wrapper.h` pulls it in. clang
+force-includes that wrapper only when it recognises a ROCm installation, so the probes name the
+wrapper on the command line with `-include`. The wrapper then includes `"hip/hip_version.h"`,
+which a ROCm installation supplies. Ours supplies it as well: the probe tree holds a
+`hip/hip_version.h` of 24 lines that states the interface version our runtime implements. With
+that one file, our include directory and the bitcode directory, `--rocm-path` makes clang behave
+as it does against a product installation, and the device library links by itself. The file
+belongs in `compute/hip/include/hip` as soon as the device headers of section 4.10 are written.
+
+### 4.12 Both walls of 4.10 are down, and the one wall that is left
+
+MEASURED 2026-10-09, offline, no lab unit.
+
+**Wall 1 is down.** `compute/hip/cmake` holds `hip-config.cmake`, `hip-config-version.cmake`,
+`hipblas-config.cmake` and `rocblas-config.cmake`, and `compute/hip/tools/make-rocm-root.py`
+assembles them with our include directory, our import library and the device library bitcode into
+one ROCm-shaped root. With `CMAKE_PREFIX_PATH` and `ROCM_PATH` on that root, llama.cpp's configure
+prints "HIP and hipBLAS found" and goes on. `hip_VERSION` is 6.2.0, which is what
+`include/hip/hip_version.h` states: above the 6.1 floor of `ggml/src/ggml-hip/CMakeLists.txt` line
+55, and below the 6.3 at which the backend starts to include `hip/hip_fp8.h`.
+
+One option of `hip::device` decides whether the whole backend compiles, and it is worth stating
+why. clang force-includes `__clang_hip_runtime_wrapper.h` only when it recognises the
+`--rocm-path` root as a product installation, and ours is not one: no `bin/hipconfig`, no
+`.hipVersion`. Without that wrapper every call of the mathematics library fails to resolve, which
+is 1431 of the 1993 errors of the first whole-tree build. `hip::device` therefore carries
+`-include __clang_hip_runtime_wrapper.h`, and the failing translation units fell from 144 to 44 on
+that one option alone.
+
+**Wall 2 is down.** `compute/hip/include/hip` now holds `hip_version.h`, `hip_vector_types.h`,
+`hip_fp16.h`, `hip_bf16.h` and `hip_cooperative_groups.h` beside `hip_runtime.h`, and
+`compute/hip/include/hipblas/hipblas.h` holds the BLAS interface. Every include of the backend
+resolves, and all 144 translation units of `ggml-hip` compile for gfx1013 (60 MB of objects). Five
+traps the headers had to answer, each one found by a failed build and written into the header that
+answers it:
+
+1. MSVC compiles the host half of the runtime, so the vector types need `__declspec(align(n))` and
+   not `__attribute__((aligned(n)))`, with the alignment of each type written out.
+2. `warpSize` is a `static constexpr int`, not a macro. As a macro it rewrote `prop.warpSize` in
+   our own sample.
+3. `__half` offers one implicit conversion, to `float`. With `operator _Float16()` as well,
+   `int32_t(x)` in `convert.cuh` is ambiguous.
+4. The host side of the float-to-half conversion is integer arithmetic, because this toolchain
+   ships no compiler-rt builtins for x86-64 Windows and `_Float16` arithmetic on the host asks for
+   `__truncsfhf2`. The device side still uses `v_cvt_f16_f32`.
+5. `__hgt2_mask` is absent on purpose. ggml defines it itself for HIP (`common.cuh:704`), so a
+   second definition is an error.
+
+Two host entry points joined the 13 of section 4.9 for reasons the backend does not state in its
+own guards. `hipOccupancyMaxActiveBlocksPerMultiprocessor` is called from
+`fattn-common.cuh:1137`, which compiles even with FlashAttention off. `hipStreamBeginCapture` is
+called at `ggml-cuda.cu:4598`, outside the `#ifdef USE_CUDA_GRAPH` block that ends at line 4589:
+an upstream portability defect, answered here with `hipErrorNotSupported`. HIP is therefore 53
+names, and the module definition file is 55: the two counter calls of section 8.7
+(`bc250hipGetCounters` and `bc250hipResetCounters`) are ours and not HIP, and they are exported
+from the same DLL. `build-runtime.ps1` gates that number.
+
+**The wall that is left: hipBLAS has no implementation.** The link of `ggml-hip.dll` asks for ten
+names: `hipblasCreate`, `hipblasDestroy`, `hipblasSetStream`, `hipblasGemmEx`,
+`hipblasGemmBatchedEx`, `hipblasGemmStridedBatchedEx`, `hipblasSgemm`, `hipblasSgemmBatched`,
+`hipblasSgemmStridedBatched` and `hipblasStrsmBatched`. The header answers the compiler, and
+nothing answers the linker yet. `compute/hipblas/README.md` holds the route chosen for it, the
+measurement behind the choice and the smallest next step. One note for that work, because it is
+easy to make a mistake with: with `GGML_CUDA_NO_FA=1` the attention matrix multiplies go through
+`hipblasGemmStridedBatchedEx`, so the GEMM must really compute. FlashAttention on moves attention
+onto ggml's own kernels instead.
+
+### 4.13 The hipBLAS wall is down: bc250hipblas
+
+MEASURED 2026-10-09, offline, no lab unit. `compute/hipblas` holds the library, and
+`compute/hipblas/README.md` holds the whole of it: the type table, the kernel shape, the tests
+and the open performance work. This section records the decisions that belong in the design and
+the two new walls the build found.
+
+**What was built.** `bc250hipblas.dll`, one translation unit of HIP C++ for gfx1013 over our own
+HIP runtime, 11 exported names (the ten the link asks for, plus `hipblasStatusToString`, which
+the header declares). Two kernels: a strided batched GEMM and one that takes arrays of pointers
+in device memory, because that is how ggml passes a batch (`ggml-cuda.cu:1588`,
+`out-prod.cu:100`). One workgroup of 16 x 16 work items per 16 x 16 tile of C, the reduction in
+steps of 16 through local memory, 2 KB of local memory, eight wave32 waves.
+
+**Three decisions worth keeping.**
+
+1. **One translation unit, because of `-fno-gpu-rdc`.** `hip::device` of our CMake package
+   compiles with `-fno-gpu-rdc`, so each translation unit's device code is self-contained and a
+   kernel in one file cannot be started from another. Everything three readers share is in a
+   header instead (`src/gemm_core.h`): the kernel, the host test and the device test all use the
+   same index arithmetic, the same tile phases and the same type table.
+2. **A refusal, never a guess.** Five type combinations are implemented and every other one
+   answers `HIPBLAS_STATUS_NOT_SUPPORTED`, as does `HIPBLAS_OP_C` and an unknown algorithm
+   selector. The reason is `GGML_CUDA_FORCE_MMQ=ON`: a quantized type that MMQ does not cover
+   still reaches `hipblasGemmEx` through `ggml_cuda_mul_mat_cublas`, so an unknown
+   `hipblasDatatype_t` read as f32 would be a wrong number in a model's output with no message,
+   while a refusal is a stated abort through ggml's own `CUBLAS_CHECK`.
+3. **The accumulator is f32 even when the compute type is `HIPBLAS_R_16F`.** More accurate than
+   the letter of the type, never less, and it is what this part wants: gfx1013 has no f16 dot
+   instruction. The result is rounded to f16 one time, on the store. `alpha` and `beta` are read
+   in the compute type, as hipBLAS states, so a `R_16F` call passes two `__half`
+   (`ggml-cuda.cu:1399-1402`).
+
+**What the tests can and cannot prove.** The mock backend of layer 2 records a dispatch and
+executes no instruction, so no kernel runs on the development PC. The host test therefore runs
+the kernel's own three phases serially over every work item of every workgroup, which is what
+the two `__syncthreads` of the kernel promise, and compares the result with an independent
+reference: 550 checks, 0 failures, over 8 shapes with odd sizes, 4 transpositions, both betas,
+three element combinations, batch counts 1, 3 and 5 in both batch modes, `k == 0`, and a
+negative control per case. The device test program runs through the interface instead: against
+the mock it checks every refusal and proves that a refused call builds no dispatch (446 checks,
+0 failures, 43 dispatches expected and 43 recorded, every one a 16 x 16 workgroup), and on unit
+A it checks the numbers. Until that lab arm runs, this library is proven on the processor and
+unproven on the GPU.
+
+**Two new walls, both in llama.cpp's own build and both down.**
+
+1. **`llama-cli` is not a target at b86d2f07, and neither is one single front end.** The command
+   line program of that revision is the target `llama-app` (`bin\llama.exe`), which carries the
+   old `llama-cli`, `llama-completion` and `llama-bench` front ends as subcommands. A separate
+   `llama-cli` target exists under `tools/cli`, and it is configured only with
+   `LLAMA_BUILD_SERVER=ON`, which also pulls in `tools/ui`, whose CMake file downloads prebuilt
+   assets from Hugging Face - which an offline build cannot do. `llama-app` does not link without
+   the server either: its CMake file links `llama-server-impl` and `llama-cli-impl`
+   unconditionally. The two programs that do build offline are `llama-completion` and
+   `llama-bench`, they are exactly the two the Vulkan comparison build already holds, and between
+   them they are the greedy generation and the benchmark the lab plan needs. The lab plan names
+   those two.
+2. **`LLAMA_OPENSSL=ON` breaks the host compilation on this machine.** cpp-httplib's
+   `find_package(OpenSSL)` finds the MSYS2 installation of the development PC, and CMake then
+   puts `-isystem C:/msys64/mingw64/include` on every `llama-common` translation unit. That
+   directory holds MinGW's `<stdint.h>`, which shadows the Windows SDK one, and MSVC's
+   `vcruntime.h` fails on "unknown type name 'uintptr_t'". `-DLLAMA_OPENSSL=OFF` is the answer
+   and costs nothing: a lab trial reads a local model file.
+
+### 4.14 What the whole stack does against the mock, and the one ceiling that stops it
+
+MEASURED 2026-10-09, offline. With `bc250hipblas.dll` and the mock build of `amdhip64.dll` beside
+them, `llama-completion.exe` and `llama-bench.exe` start, load `ggml-hip.dll`, open our runtime
+and enumerate the device:
+
+```
+ggml_cuda_init: found 1 ROCm devices (Total VRAM: 8192 MiB):
+  Device 0: AMD BC-250 (mock device), gfx1013 (0x1013), VMM: no, Wave Size: 32, VRAM: 8192 MiB
+```
+
+Two walls stood between the link and that line, and both are instructive.
+
+**The event contract, and it was ours.** `ggml_backend_cuda_device_event_synchronize` creates an
+event with `hipEventCreateWithFlags(hipEventDisableTiming)` and synchronizes it before anything
+records it. Our runtime answered `hipErrorInvalidHandle`, which is a stated abort through ggml's
+own `CUDA_CHECK`, and `llama-bench` stopped at its first HIP call. HIP returns success there: an
+event that nothing recorded is complete, waits for nothing and holds nothing back, which is what
+our own `hipStreamWaitEvent` already answered. The rule was in the wrong place, in the shared
+helper that waits for an event's value. It now lives in `hipEventElapsedTime` alone, which is the
+one path that really needs a record, because without one there is no timestamp to subtract. The
+host test covers all three calls on an unrecorded event (`test_hip_mock`, 232 checks).
+
+**The mock backend's ceiling, and it is only the mock's.** A bounded `llama-bench` run then
+reaches the start of a kernel and stops with `hipErrorInvalidImage`. The cause is not the code object
+and not the product loader: the mock backend is a fixed-size test double, with
+`MOCK_MAX_KERNELS 16`, `MOCK_MAX_SYMBOLS 128` and `MOCK_NAME_MAX 96`, and ggml's code objects are
+far above all three. MEASURED with `scratch\m16-hip\step3\probe\mock-ceiling.py` over the 144
+translation units of `ggml-hip`:
+
+| | ggml-hip, gfx1013 | the mock's ceiling |
+|---|---|---|
+| translation units with a gfx1013 image | 139 of 144 | - |
+| kernel descriptors in all | 7105 | - |
+| kernel descriptors in one translation unit, most | 352 (`mmvf.cu`) | 16 |
+| defined symbols in one image, most | 2476 (`mmvf.cu`) | 128 |
+| longest symbol name | 176 characters (`binbcast.cu`) | 96 |
+
+84 of those translation units carry more than 16 kernels, 84 more than 128 symbols and 89 a name
+longer than 96 characters. The product loader of layer 1 (`bc250hsa/co_loader.c`,
+`co_metadata.c`) allocates its kernel and symbol tables from the metadata's own counts and has no
+such ceiling, so this wall is between the development PC and a model, not between the driver and
+one. **Therefore: a model does not run against the mock, and the first inference of this route is
+a lab arm.** Raising the mock's tables to the metadata's counts is named work of its own. It buys
+an offline proof of the whole argument path of the backend, and it is not needed for the lab arms
+of part 3B.
 
 ---
 
@@ -1316,7 +2186,7 @@ compute/
       kernarg.c    pm4_dispatch.c  pm4_regs.h    submit.c  status.c
       internal.h
     runtime/
-      amdhip64.def                the 38 names of section 4.1
+      amdhip64.def                55 names: sections 4.1, 4.9 and 8.7
       hip_module.cpp  hip_launch.cpp  hip_memory.cpp  hip_stream.cpp
       hip_event.cpp   hip_device.cpp  hip_error.cpp   dllmain.cpp
       runtime_internal.h
@@ -1386,7 +2256,7 @@ DECIDED, and this is the same answer for both layers.
 
 `compute/hip/build-runtime.ps1` does the same for layer 2: it builds `amdhip64.dll` and
 `amdhip64.lib`, checks that the exported names equal `amdhip64.def` and that the def file holds exactly
-the 38 names of section 4.1, builds `test_hip_mock.exe` against `bc250hsa_mock.c`, runs it, and, when
+the 55 names of sections 4.1, 4.9 and 8.7, builds `test_hip_mock.exe` against `bc250hsa_mock.c`, runs it, and, when
 the AMDGPU clang is present, compiles and links the HIP sample and checks its import table. It also
 builds and runs the two multithreaded tests of section 5.4, the negative control among them, and the
 clang-built `hipthreads.exe` against the mock build of the DLL.
@@ -1552,7 +2422,258 @@ every entry point.
 
 ---
 
-## 8. What this design does not do
+## 8. The off-GPU cost of one dispatch: batching and the barrier
+
+Build 1 submits one kernel dispatch as one indirect buffer and one `D3DKMTSubmitCommand`. That is the
+simplest thing that can be right, and it was the right first step, but it makes the cost of a dispatch
+a fixed cost of the operating system: one user-to-kernel transition, one ring slot, one fence, one
+completion write, for a kernel that may run for two microseconds. A decode step of a language model is
+hundreds of such kernels per token, so this is the number that decides whether the route is usable.
+
+This section is a later addition to the design (interface minor version 1.1, section 8.1 of
+`bc250hsa.h`). It changes no interface that build 1 established: every call keeps its meaning, and a
+caller that does not know the new policy exists has the behaviour of build 1.
+
+### 8.1 What one dispatch costs, and what batching removes
+
+| Per dispatch, build 1 | Who pays | Removed by a batch of N |
+|---|---|---|
+| one `D3DKMTSubmitCommand` | the kernel driver, the scheduler, the ring | all but one of the N |
+| one ring slot and its fence value | the device | all but one of the N |
+| one `CONTEXT_CONTROL` and one full `ACQUIRE_MEM` at the head | the GPU front end and its caches | all but one of the N |
+| one `RELEASE_MEM` completion write | the GPU and the memory it writes | all but one of the N |
+| the state writes and `DISPATCH_DIRECT` | the GPU | nothing: this is the work itself |
+| the kernel argument buffer | the host | nothing |
+
+What a batch does not remove is the dispatch itself and the dependency between two dispatches. Section
+8.5 is about making that dependency cost what it has to cost, and no more.
+
+### 8.2 The mechanism lives in layer 1
+
+Batching is in `bc250hsa`, not in the HIP runtime, for one reason that is worth more than the lines it
+saves: layer 1 owns the wait. `bc250hsa_wait` submits an open buffer as soon as a caller asks for a
+fence value that was promised but not yet sent to the device. Every path by which a program can observe
+the device therefore flushes by construction, and layer 2 needed two insertions in all, not an audit of
+every entry point. A forgotten flush point is not a slow program: it is a wait that cannot end.
+
+The kernel driver takes exactly one indirect buffer per submission (`single_ib` in `umd_blob.h`, refused
+otherwise), so a batch is not several buffers in one submission. It is one larger buffer with several
+dispatches inside it.
+
+### 8.3 The fence, and the ring slot
+
+One submission carries one fence value, so the dispatches of one batch share it. That has two
+consequences, and both are handled where the value is produced:
+
+- Two numbers, not one. `fence_last_submitted` is what the device was given. `fence_last_assigned`
+  includes the value an open buffer has already promised to its dispatches. The public
+  `bc250hsa_fence_last_submitted` reports the promised value, because that is what a stream or an event
+  of layer 2 has to compare against.
+- The ring slot of an open buffer is held. Its slot fence is set to the promised value when the buffer
+  opens, and the device fence can never reach a value that was never submitted, so the slot cannot be
+  handed out again while the buffer is still being filled.
+
+When a submission fails, the dispatches in it already carry a value that nothing can ever deliver. The
+device is therefore marked lost by name at that point, as section 3.8 requires, and the slot fence is
+cleared.
+
+### 8.4 The flush points, and the caps
+
+A buffer is submitted at the first of these:
+
+| Flush point | Why |
+|---|---|
+| a wait for a value above `fence_last_submitted` | the value cannot retire until the device has the work |
+| an event record | an event answers a question about time, so it must cover the work asked for by then |
+| a copy through the host mapping, a map, an unmap | the bytes the caller reads or writes are the bytes the open work produces |
+| a GPU copy or fill of section 5.1 | its buffer goes to the second context of the device. That context must not run beside the main one, so the open buffer goes out and retires first (counted in `gpu_copy_forced_flushes`) |
+| a free | the range may be named by a dispatch of the open buffer |
+| a code object load | the instruction cache invalidate of the new object must not be behind older work |
+| the device closing | nothing may be left unsubmitted |
+| the dispatch count cap (default 32, hard maximum 256) | a bound on how far the host runs ahead |
+| the dword cap (one ring slot, less the completion write) | the buffer must fit the slot |
+| the hold time cap (default 1000 us) | see the honest note below |
+
+There is a sixth one, and it is not in layer 1 at all: the kernel argument pool of layer 2
+(`kKernargPoolMax` in `runtime/hip_launch.cpp`, 64 buffers). A kernel argument buffer may not be
+written again until the dispatch that reads it has retired, so dispatch 65 of a run waits for the
+oldest buffer, and a wait for a value an open buffer has promised is the first flush point of the
+table. MEASURED on unit A (`evidence/m16/perf-2026-10-09`): at a dispatch cap of 256 with the
+time cap effectively off, 2000 dispatches became exactly 32 submissions and 1000 chained dispatches
+exactly 16, which is 2000/64 and 1000/64 rounded up, and the wait count of each arm equals its
+submission count. **That pool, and not the dword cap, is what makes a dispatch cap above 64
+unreachable today.** The dword cap is nowhere near it: one dispatch and its barrier is 72 dwords
+without the state cache of section 8.8 and 23 with it, so a 65536-byte ring slot holds 227 or 711
+of them. The default cap of 32 is below the pool and the pool therefore never binds. A cap above 64
+would need the pool raised with it, which is 4096 bytes of host-visible memory per entry and a
+decision nothing yet needs.
+
+A batch trades the cost of a submission against the time to the first instruction: while the host
+fills a buffer, the device has nothing of that buffer to run. For a program that runs ahead of the
+device, which is what a decode loop does, that is free. For a program that sends one kernel and waits
+for it, it is not, and that program keeps the behaviour of build 1 anyway, because its wait flushes.
+The dispatch cap and the hold time cap bound the trade in between, and the `chain` measurement of
+hipbench is end to end on purpose, so an arm that holds work back too long is visible there and
+not only in the submission count.
+
+The library runs no thread of its own, so the hold time cap is checked when the next call arrives and
+not by a timer. This is stated plainly because it would be easy to present it as a guarantee: the
+guarantee is the one above it. Nothing a program can observe stays behind an open buffer, because every
+observation flushes it. The time cap only keeps a program that dispatches slowly from holding its own
+work in the buffer for longer than it meant to.
+
+### 8.5 The barrier between two dispatches of one buffer
+
+Every dispatch of build 1 has a full `ACQUIRE_MEM` at its head: every cache level invalidated, L2
+written back. At the head of an indirect buffer that is right, because the host has written kernel arguments and
+possibly code since the last submission. Between two dispatches of the same buffer, where the only new
+writer is the GPU itself, it asks the hardware for work nothing needs.
+
+What a compute-to-compute buffer dependency needs on GFX10 is taken from Mesa, not invented
+(`ref/mesa` at `05e6c9622e1`):
+
+- `src/amd/common/ac_barrier.c:89-103` builds the cache operation of a dependency: the scalar and
+  vector level-0 caches from their own flags, and, below GFX12, L1 whenever either of them is
+  invalidated. `src/amd/vulkan/radv_cmd_buffer.c:8133-8147` is the destination side that asks for
+  both for a storage buffer read, because ACO reads a storage buffer through the scalar unit.
+- `src/amd/common/ac_barrier.c:289-291` is the wait itself, `CS_PARTIAL_FLUSH` under
+  `AC_BARRIER_SYNC_CS`, which build 1 already writes after every dispatch.
+  `src/amd/vulkan/radv_cmd_buffer.c:7879-7881` is where a dependency on earlier compute work asks
+  for it.
+- The L2 part is a separate decision: `src/amd/vulkan/radv_cmd_buffer.c:7910-7914`
+  (`can_skip_buffer_l2_flushes`), with `:7969-7982` and `:8094` as its use. A buffer dependency on
+  GFX10 can skip the L2 write-back and invalidate when L2 is coherent for the writers involved.
+- `src/amd/common/ac_gpu_info.c:1236` is the condition under which that skip is unsafe
+  (`tcc_rb_non_coherent`).
+
+The light barrier is therefore `GL1_INV | GLV_INV | GLK_INV`, written in `pm4_regs.h` beside the full
+value, with the bits it drops named: `GL2_INV`, `GL2_WB`, `GLM_INV`, `GLM_WB`, `GLI_INV`. The
+instruction invalidate is dropped because a code object load is a flush point, so no buffer can hold a
+dispatch of code that was written after the buffer opened. `test_pm4.c` checks the exact dwords of both
+values and asserts the dropped bits as its negative control.
+
+Deviation from Linux, stated as repo rule 7 requires: radv decides the L2 part per barrier from the
+resources involved, and we decide it once per buffer from a policy switch. Whether gfx1013 reports a
+power-of-two L2 block count, which is what makes the skip safe for a buffer dependency, is not measured
+on this part yet. That is why the default is the full acquire and why the light one is a switch: the lab
+arm of section 8.7 is what may change the default, and nothing else.
+
+### 8.6 The switches, and the defaults
+
+| Switch | Values | Default |
+|---|---|---|
+| `BC250_HIP_BATCH` | `0`, `1` | `1`, several dispatches in one indirect buffer |
+| `BC250_HIP_BATCH_MAX` | 1 to 256 dispatches | 32 when batching is on |
+| `BC250_HIP_BATCH_HOLD_US` | microseconds | 1000 |
+| `BC250_HIP_BARRIER` | `full`, `light` | `light` |
+| `BC250_HIP_PM4_STATE_CACHE` | `0`, `1` | `1`, write only the state that changed |
+
+The first two defaults were the conservative value until the hardware had spoken. It has
+(`evidence/m16/perf-2026-10-09`, facts M853 to M857): batching with the light barrier is exact over
+two chains of 1000 dependent kernels, 2.2 times faster than build 1 on the `launch` line and 3.8
+times faster on the `chain` line, and it cuts submissions per dispatch from 1.000 to 0.032. The
+defaults are therefore the measured arm P3 of that session. `BC250_HIP_BATCH=0` with
+`BC250_HIP_BARRIER=full` is exactly build 1, and `hipbench --batch 0 --barrier full` is the control
+arm the build gate runs on every build.
+
+The copy route of header section 5.1 has three switches of its own, `BC250_HIP_GPU_COPY`,
+`BC250_HIP_GPU_COPY_MIN` and `BC250_HIP_GPU_FILL`, read in the same place and for the same reason.
+`compute/hip/runtime/README.md` states their defaults and the two measured rates each default comes
+from.
+
+Layer 1 reads no environment variable: `hip_device.cpp` reads these five and calls
+`bc250hsa_batch_policy_set`, so the policy stays the caller's (header rule 6), and a program that
+embeds layer 1 directly sets the same structure itself. The state cache is not part of the policy
+structure, because it is a property of one indirect buffer and not of the device: it is the
+`BC250HSA_DISPATCH_FULL_STATE` flag of a dispatch, and `BC250_HIP_PM4_STATE_CACHE=0` is what sets
+it on every dispatch of a process.
+
+### 8.6a What the measurement cost, and the one line it did not explain
+
+Two numbers of that session are worth carrying in the design, because both are easy to read wrongly.
+
+- **The gain is in the caller's own time, not in GPU time.** What fell from 14.6-16.5 us to 3.8 us
+  on the chain line is the enqueue-loop wall time of one dispatch: the interval the benchmark times
+  is the loop of enqueue calls, and one of those calls can wait for the kernel argument pool or
+  for a free ring slot (`bc250hsa.h` section 8). The `waits` counters of those arms say that it did
+  wait. The figure is therefore the cost a caller sees before it waits for a result, and not the
+  time one processor core is busy. To separate those two, an arm must measure the thread's active
+  time and its blocked time apart, and no arm has done that (audit finding HIP-F3, 2026-10-10). At
+  400 kernels a token the chain figure is about 6.2 ms a token before batching and 1.5 ms after it,
+  which is an illustration of the scale and not a measured processor budget. It decides the result for a small model, a long kernel
+  chain, or a build that wants the processor for its own host side.
+- **One line got slower, and it is not in this code path.** A 4 KB device-to-host `hipMemcpy` is
+  19.2-19.4 us with batching off and 28.8-28.9 us with it on, while the same arms' 1 MiB and
+  64 MiB device-to-host copies do not split with the policy at all: all six arms are within
+  0.8 % of each other on the 1 MiB line and within 0.1 % on the 64 MiB line, and the batched and
+  the unbatched arms are mixed through both of those spreads. The host path of a
+  copy is one function per direction and it does not look at the policy: one `bc250hsa_flush`
+  (which returns at once with no buffer open), one lookup and one `memcpy`. The host-to-device
+  line of the same arms is 0.264-0.333 us in every arm, which bounds that whole shared path well
+  under one microsecond, and that path does not move with the policy. `test_hip_batch` section 5
+  asserts the flush, submission and wait counts of a copy are equal under both policies. So the
+  difference is a read rate of the write-combining mapping (203 MiB/s against 135 MiB/s at 4 KB),
+  not a fixed host cost, and what sets that rate is not established.
+  The [copy-control record](../testing/m16-hip-dispatch-cost.md) links the later measurements and their correction.
+  M864 records that this difference did not reproduce on the merged build. Its cause remains unestablished.
+
+### 8.7 What is measured, and what the lab must answer
+
+`samples/hipbench.hip` is the measurement: the dispatch rate of an empty kernel, a dependent chain of tiny
+kernels in the shape of a decode step, host copies at 4 KB, 1 MiB and 64 MiB, the cost of synchronising
+an already retired stream, and an event round. It reads the submission counters of the driver through
+`bc250hipGetCounters`, so it prints submissions per dispatch beside its timings. No HIP entry point
+answers that question, which is why those two calls exist.
+
+The host tests prove the harness and the mechanism, and they cannot prove the gain: the mock backend
+runs no instruction. The lab answered it on 2026-10-09 in six arms of 3.4 to 3.8 s each
+(`evidence/m16/perf-2026-10-09`, facts M853 to M857), and section 8.6 states the defaults that
+follow. The [repeat record](../testing/m16-hip-dispatch-cost.md) covers the state cache, cap 64 and copy controls.
+It also preserves the audit's timing limits: elapsed enqueue-loop time does not isolate processor-active time.
+The [step-3 record](../testing/m16-hip-step3.md) covers the thread client and application controls.
+
+### 8.8 The compute state a dispatch repeats
+
+A `SET_SH_REG` write is persistent register state. `DISPATCH_DIRECT` does not clear it, and this
+build programs nothing at the ring frame, so inside one indirect buffer the second dispatch of the
+same kernel does not have to say the same thing again. Build 1 said it anyway, 64 dwords per
+dispatch, because build 1 had one dispatch per buffer and there was nothing to repeat.
+
+`bc250hsa_pm4_ib_append` now takes a `bc250hsa_pm4_state` cache (`bc250hsa/internal.h`, not public)
+and writes only what differs from the dispatch before it in the same buffer. What is in the cache:
+the program address, the two resource registers, RSRC3, the workgroup size and the user data run.
+What is left out of every dispatch but the first: the three start registers, the shader checksum,
+the six request-control registers, the coherency start delay, the two compute-unit masks, the
+scratch ring size and the resource limits, none of which this build ever varies.
+
+Three rules, and each one is a test in `tests/host/test_pm4.c` section 2c:
+
+1. **The first dispatch of every buffer is complete.** Another context's buffer runs between two of
+   ours, so nothing may be assumed across a submission. `submit.c` clears the cache when it opens
+   a buffer, and `bc250hsa_pm4_build_batch` starts a fresh one per call.
+2. **A dispatch that overflowed the buffer did not write its dwords, so it does not touch the
+   cache.** `submit.c` appends it again into the next buffer with `first` set.
+3. **A field that changed is written.** This is the negative control, one changed field at a time:
+   the block, the kernel argument pointer, the local memory a dispatch asks for, and a second
+   kernel. A cache that skipped any of them would dispatch a kernel with the previous dispatch's
+   value, which is the whole risk of the mechanism.
+
+MEASURED on the development machine, by the pure builder with no device in it: one dispatch and its
+barrier is **72 dwords** without the cache and **23** with it, for the shape a real dispatch has (the
+same kernel, the same block, a new kernel argument buffer each time, which is what layer 2 hands
+out). A 65536-byte command ring slot holds 16368 usable dwords, so it holds 227 such dispatches
+without the cache and 711 with it. Neither number is the ceiling that binds: the kernel argument
+pool of section 8.4 closes a buffer at 64. What the cache buys is therefore not a deeper cap. It is
+3.1 times fewer dwords for the host to write and for the command processor to read on every
+dispatch after the first, inside the cap we already use.
+
+`BC250HSA_DISPATCH_FULL_STATE` turns it off, dispatch by dispatch, and the stream is then dword for
+dword the one the builder wrote before this section existed. That flag is the control arm, on the
+development machine and on the lab.
+
+---
+
+## 9. What this design does not do
 
 It does not design the hipBLAS shim. It does not change any driver component. It does not add a
 hardware queue display driver interface, and it does not need one. It does not plan Strata. It

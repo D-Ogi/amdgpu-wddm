@@ -10,10 +10,10 @@
 //     EnableVmidPool   REG_DWORD  0 = every WDDM job at VMID 1, a job of another root waits for the ring to drain
 //                                 (0.7.213.1). Absent or 1 = a VMID per page-table root from a pool (vmid_pool.h,
 //                                 docs/design/gfx-submit-root-serialization.md). Default 1 from 0.7.214.1.
-//     EnableRingVmFlush  REG_DWORD  1 = a job's root write and invalidation are packets in front of its frame
-//                                 (option (b) of docs/design/gfx-submit-root-serialization.md), on the gfx ring's
-//                                 own invalidation engine. Absent or 0 = the MMIO flush ahead of the frame, byte
-//                                 for byte as 0.7.216.24. Default 0.
+//     EnableRingVmFlush  REG_DWORD  Absent or 1 = a job's root write and invalidation are packets in front of its
+//                                 frame (option (b) of docs/design/gfx-submit-root-serialization.md), on the gfx
+//                                 ring's own invalidation engine. 0 = the MMIO flush ahead of the frame, byte for
+//                                 byte as 0.7.216.24: the rollback. Default 1 from train b31.
 //
 // One escape (BC250_ESCAPE_RUN_GFX), four operations:
 //   PLAN    set up (allocates memory and zeroes it, the GART table untouched; reads registers), run stages 1..LastStage against the real registers
@@ -44,6 +44,7 @@
 #include "regs.generated.h"
 #include "bc250_gmc.h"
 #include "bc250_gfx.h"
+#include "bc250_wave.h"
 #include "bc250_sdma.h"
 #include "bc250_sdma_paging.h"
 #include "bc250_pte.h"
@@ -55,6 +56,7 @@
 #include "bc250_dispatch.h"
 #include "bc250_nbio.h"
 #include "bc250_irq.h"
+#include "adapter_owner.h"
 
 #define BC250_GFX_TAG 'xG2B'
 
@@ -169,9 +171,9 @@ typedef struct _BC250_GFX {
     BOOLEAN VmidPoolGate;           // EnableVmidPool, read once at GfxStart; absent = on
     // Option (b) of docs/design/gfx-submit-root-serialization.md: the root change and the invalidation of a job
     // whose root differs from the VMID's current root go into the command stream instead of MMIO ahead of it.
-    // Read once at GfxStart; absent or 0 = the MMIO flush of 0.7.216.24, byte for byte. The admission decision
+    // Read once at GfxStart; 0 = the MMIO flush of 0.7.216.24, byte for byte (the rollback). The admission decision
     // (Bc250VmidAdmit) does not change with the gate: only how the root reaches the register.
-    BOOLEAN RingVmFlushGate;        // EnableRingVmFlush, read once at GfxStart; absent = off
+    BOOLEAN RingVmFlushGate;        // EnableRingVmFlush, read once at GfxStart; absent = on, 0 = off
     volatile LONG RingVmFlushes;    // jobs whose flush was emitted on the ring
     volatile LONG RingVmFlushSame;  // of those, the ones whose VMID already held the root
     BOOLEAN VmidProbed;             // the bring-up read ran; once per device start, a teardown does not clear it
@@ -1018,11 +1020,11 @@ static void GfxSubmitFailAccess(_Inout_ BC250_DEVICE* Device)
     // pointer is left where it stands, because facts M59/M60 say a hardware pointer only counts up and a re-init has
     // to adopt it, so abandoning the ring is the safe act and rewinding it is not.
     if (InterlockedExchange(&gfx->SubmitFailed, 1) == 0)
-        GuardLog("gfx: submission path failed, no further ring writes this device start (seq %lu in flight, slot 0x%X)",
+        GuardLog("gfx: submission gate closed pending recovery (seq %lu in flight, slot 0x%X)",
                  gfx->SubmitSeq, gfx->SubmitAdev != NULL ? (ULONG)bc250_gfx_fence_read(gfx->SubmitAdev, BC250_SUBMIT_FENCE_SLOT) : 0);
-    // KMD196: unconditionally, not only on the first call. A held submission is waiting for a fence that will
-    // now never come; GfxSubmitArmed is false from here, so it wakes, fails its submission and lets the OS TDR
-    // path have the fence. Before this it sat out its whole 500 ms bound after the ring was already abandoned.
+    // KMD196: signal on every closure, so a held submission retests the closed
+    // gate rather than waiting out its whole 500 ms budget. A recovery admission
+    // has already drained those callers; its extra wake is harmless.
     GfxRetireSignal(Device);
 }
 
@@ -1057,15 +1059,22 @@ void GfxPagingLogCounts(_In_ const BC250_DEVICE* Device, _Out_ ULONG* Submits, _
     GfxAccessRelease(Device);
 }
 
-void GfxSubmitFail(_Inout_ BC250_DEVICE* Device)
+// Temporary admission closure for an OS-requested engine reset. A successful
+// reset need not fault StartHealth; a prior real fault is never cleared here.
+void GfxSubmitClose(_Inout_ BC250_DEVICE* Device)
 {
-    StartHealthFault(Device);
     if (GfxAccessAcquire(Device) == NULL)
     {
         return;
     }
     GfxSubmitFailAccess(Device);
     GfxAccessRelease(Device);
+}
+
+void GfxSubmitFail(_Inout_ BC250_DEVICE* Device)
+{
+    StartHealthFault(Device);
+    GfxSubmitClose(Device);
 }
 
 // KMD196. The generation is bumped before the event is set, so a waiter that cleared the event and then found
@@ -1077,9 +1086,10 @@ void GfxRetireSignal(_Inout_ BC250_DEVICE* Device)
     KeSetEvent(&Device->GfxRetireEvent, IO_NO_INCREMENT, FALSE);
 }
 
-// M15.12 stage 1 (docs/design/hang-recovery.md). The one place that undoes GfxSubmitFail, and only
-// when the ring has provably drained: this is called from DxgkDdiResetEngine (PASSIVE_LEVEL, GPU-scheduler class,
-// so no concurrent submit) under HangRecoveryMode, never on the normal path, after the caller has put a pending
+// M15.12 stage 1 (docs/design/hang-recovery.md). Drain only: the WDDM reset transaction
+// reopens both gates together later. Called from DxgkDdiResetEngine at PASSIVE_LEVEL,
+// with WDDM submission admission frozen and active submitters drained, under HangRecoveryMode,
+// never on the normal path, after the caller has put a pending
 // record on the disk (GuardRecordHangRecovery).
 //
 // amdgpu_ring_soft_recovery's loop (hang_recovery.h Bc250HangKillLoop): while the fence has not signalled and the
@@ -1100,11 +1110,9 @@ void GfxRetireSignal(_Inout_ BC250_DEVICE* Device)
 //
 // Vmid is the hung job's VMID, chosen by the caller out of the completion-queue entry and checked against
 // Bc250KillVmidValid: with the VMID pool (0.7.214, vmid_pool.h) there is no single application VMID any more, so
-// this function must not assume one. On ALREADY_RETIRED or DRAINED it clears SubmitInFlight (the ring is idle),
-// un-sticks SubmitFailed (the gate reopens), ends the DPM busy share the way GfxFenceArrived would have (DpmBusyEnd
-// is a no-op if that already ran) and signals the retire waiters, because a submission held in GfxSubmitWait is
-// waiting for exactly this gate to reopen (KMD196). On NOT_DRAINED it changes nothing: the sticky state stands and
-// the caller falls back to today's refusal.
+// this function must not assume one. ALREADY_RETIRED or DRAINED means the newest
+// sequence retired. The caller must still validate and commit both gates under
+// WDDM Lock, then signal held submissions. NOT_DRAINED leaves the gates closed.
 typedef struct _GFX_KILL_CONTEXT {
     BC250_GFX* Gfx;
     struct amdgpu_device* Adev;
@@ -1209,15 +1217,8 @@ ULONG GfxSoftRecover(_Inout_ BC250_DEVICE* Device, ULONG Vmid, _Out_ ULONG* Seq,
     *Kills = kills;
     *Micros = (ULONG)((KeQueryInterruptTime() - start) / 10ull);
 
-    if (verdict != BC250_HANG_VERDICT_NOT_DRAINED) {
-        // The ring went idle: clear the in-flight marker if it is still this sequence, and reopen the gate.
-        LONG pending = InterlockedCompareExchange(&gfx->SubmitInFlight, 0, 0);
-        if (pending != 0 && bc250_fence_reached((ULONG)bc250_gfx_fence_read(adev, BC250_SUBMIT_FENCE_SLOT), (ULONG)pending))
-            InterlockedCompareExchange(&gfx->SubmitInFlight, 0, pending);
-        InterlockedExchange(&gfx->SubmitFailed, 0);     // the one un-stick, only on the proven-drained path
-        DpmBusyEnd(&Device->Dpm);                       // match the retirement the normal fence path would have reported
-        GfxRetireSignal(Device);                        // KMD196: a held submission is waiting for this gate
-    }
+    // Do not reopen or signal here. ResetEngine still has to commit its WDDM queue
+    // and scheduler boundary under the same lock as the private timeout latch.
     ExReleaseFastMutex(&Device->GartLock);
 
     // A refusal says which register and why, because a refused kill and a kill the waves outlived look the same
@@ -1226,12 +1227,229 @@ ULONG GfxSoftRecover(_Inout_ BC250_DEVICE* Device, ULONG Vmid, _Out_ ULONG* Seq,
         GuardLog("gfx: soft recovery kill refused: register 0x%05lX (0x%08lX) after %lu kill(s) of VMID %lu",
                  faultOffset, (ULONG)fault, *Kills, Vmid);
     if (verdict != BC250_HANG_VERDICT_NOT_DRAINED)
-        GuardLog("gfx: soft recovery: seq %lu retired after %lu kill(s) of VMID %lu waves in %lu us; ring reopened",
+        GuardLog("gfx: soft recovery: seq %lu retired after %lu kill(s) of VMID %lu waves in %lu us; awaiting commit",
                  *Seq, *Kills, Vmid, *Micros);
     else
         GuardLog("gfx: soft recovery of seq %lu did not drain: %lu kill(s) of VMID %lu in %lu us; ring stays closed",
                  *Seq, *Kills, Vmid, *Micros);
     return verdict;
+}
+
+// Wave observation never uses the live submission sequence: a refused debug read
+// must not poison later GPU work. The only writes select registers, not wave state.
+// A counted reader gate protects the watchdog's lockless samples against bank
+// changes. Samplers never wait. The capture takes the writer only after readers
+// drain, and releases it only after both selector restoration attempts.
+static void GfxWaveSamplingReset(BC250_DEVICE* Device)
+{
+    // Only a new device start, after prior consumers have drained, may clear a
+    // failed-restore quarantine. A later diagnostic request cannot clear it.
+    InterlockedExchange(&Device->WaveRegisterAccess, 0);
+}
+
+BOOLEAN GfxWaveSampleBegin(BC250_DEVICE* Device)
+{
+    LONG readers = InterlockedCompareExchange(&Device->WaveRegisterAccess, 0, 0);
+    for (;;) {
+        LONG observed;
+        if (readers < 0 || readers == MAXLONG) return FALSE;
+        observed = InterlockedCompareExchange(&Device->WaveRegisterAccess, readers + 1, readers);
+        if (observed == readers) return TRUE;
+        readers = observed;
+    }
+}
+
+void GfxWaveSampleEnd(BC250_DEVICE* Device)
+{
+    LONG remaining = InterlockedDecrement(&Device->WaveRegisterAccess);
+    NT_ASSERT(remaining >= 0);
+    UNREFERENCED_PARAMETER(remaining);
+}
+
+BOOLEAN GfxWaveCaptureActive(const BC250_DEVICE* Device)
+{
+    return InterlockedCompareExchange((volatile LONG*)&Device->WaveRegisterAccess, 0, 0) < 0;
+}
+
+typedef struct GFX_WAVE_CONTEXT {
+    BC250_SEQUENCE Sequence;
+    ULONGLONG Deadline;
+} GFX_WAVE_CONTEXT;
+
+static NTSTATUS GfxWaveWrite(const BC250_DEVICE* Device, ULONG Offset, ULONG Value)
+{
+    if (Offset != BC250_REG_GC_GRBM_GFX_INDEX && Offset != BC250_REG_GC_SQ_IND_INDEX)
+        return STATUS_ACCESS_DENIED;
+    return MmioGfxWrite(Device, Offset, Value);
+}
+
+static unsigned int GfxWaveStop(void* Context)
+{
+    GFX_WAVE_CONTEXT* c = (GFX_WAVE_CONTEXT*)Context;
+    if (!NT_SUCCESS(c->Sequence.Fault)) return BC250_WAVE_READ_ERROR;
+    if (KeQueryInterruptTime() >= c->Deadline) return BC250_WAVE_BUDGET_EXPIRED;
+    return 0;
+}
+
+static NTSTATUS GfxWaveRestore(BC250_DEVICE* Device, ULONG Offset, ULONG Value)
+{
+    ULONG readback = 0;
+    BOOLEAN read = FALSE;
+    NTSTATUS status = GfxWaveWrite(Device, Offset, Value);
+    if (NT_SUCCESS(status)) {
+        status = MmioGfxRead(Device, Offset, &readback);
+        read = NT_SUCCESS(status);
+    }
+    if (NT_SUCCESS(status) && readback != Value) status = STATUS_DEVICE_DATA_ERROR;
+    GuardLog("waves: restore reg 0x%05lX requested 0x%08lX read %u value 0x%08lX status 0x%08lX",
+             Offset, Value, (ULONG)read, readback, (ULONG)status);
+    return status;
+}
+
+NTSTATUS GfxCaptureWaves(BC250_DEVICE* Device, BC250_WAVE_SNAPSHOT* Snapshot)
+{
+    GFX_WAVE_CONTEXT context = {0};
+    BC250_GFX* gfx;
+    struct amdgpu_device* adev = NULL;
+    void* backend;
+    BOOLEAN enabled = FALSE;
+    ULONG savedIndex = 0;
+    BOOLEAN indexSaved = FALSE, captureOwned = FALSE, broadcastRestored = TRUE;
+    NTSTATUS status = STATUS_DEVICE_NOT_READY, cleanup;
+    BC250_WAVE_HEADER* h = &Snapshot->Header;
+
+    h->AbiVersion = BC250_WAVE_ABI_VERSION;
+    h->DriverVersion = BC250_KMD_VERSION;
+    h->Bytes = sizeof(*h);
+    h->Flags = BC250_WAVE_READ_ERROR;
+    h->StartTime100ns = KeQueryInterruptTime();
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL) {
+        h->EndTime100ns = h->StartTime100ns;
+        h->Result = STATUS_INVALID_DEVICE_STATE;
+        return STATUS_INVALID_DEVICE_STATE;
+    }
+    // Lifecycle takes these in this order, exclusively for GFX teardown. GartLock
+    // also excludes the SQ_CMD kill, the other shim sequences and selector users.
+    // Do not acquire GfxAccess here: its holder may never wait for GartLock.
+    KeEnterCriticalRegion();
+    ExAcquirePushLockShared(&Device->GfxPagingLock);
+    ExAcquireFastMutex(&Device->GartLock);
+    gfx = (BC250_GFX*)Device->Gfx;
+    if (!AdapterOwnerIs(Device->PhysicalDeviceObject) || !Device->Started ||
+        gfx == NULL || Device->GpuMem == NULL ||
+        InterlockedCompareExchange(&Device->RetainedPowerPhase, 0, 0) != 0)
+        goto Unlock;
+    status = GartDevice(Device, &adev, &enabled);
+    if (!NT_SUCCESS(status)) goto Unlock;
+    if (!enabled || !gfx->SetUp || gfx->PowerSuspended || gfx->Failed ||
+        gfx->StagesDone < BC250_GFX_STAGE_INTERRUPTS) {
+        status = STATUS_DEVICE_NOT_READY; goto Unlock;
+    }
+
+    context.Sequence.Name = "waves";
+    context.Sequence.Read = MmioGfxRead;
+    context.Sequence.Write = GfxWaveWrite;
+    SequenceBegin(&context.Sequence, Device, FALSE, NULL, 0);
+    // The deadline includes sampler drain and the register loop, not mutex
+    // admission or registry I/O. Readers never acquire GartLock while admitted.
+    context.Deadline = KeQueryInterruptTime() + 250ull * 10000ull;
+    while (InterlockedCompareExchange(&Device->WaveRegisterAccess, -1, 0) != 0) {
+        // GartLock excludes another capture here: a negative state belongs to
+        // a prior failed restore, and remains quarantined until a new start.
+        if (GfxWaveCaptureActive(Device)) {
+            status = STATUS_DEVICE_DATA_ERROR;
+            GuardLog("waves: refused after failed bank restore; device restart required");
+            goto Unlock;
+        }
+        if (KeQueryInterruptTime() >= context.Deadline) {
+            h->Flags = BC250_WAVE_BUDGET_EXPIRED;
+            status = STATUS_IO_TIMEOUT;
+            goto Unlock;
+        }
+        KeStallExecutionProcessor(1);
+    }
+    captureOwned = TRUE;
+    backend = adev->backend;
+    adev->backend = &context.Sequence;
+    status = MmioGfxRead(Device, BC250_REG_GC_SQ_IND_INDEX, &savedIndex);
+    if (NT_SUCCESS(status) && savedIndex == MAXULONG) status = STATUS_DEVICE_DATA_ERROR;
+    if (NT_SUCCESS(status)) {
+        indexSaved = TRUE;
+        status = bc250_gfx_read_waves(adev, Snapshot, GfxWaveStop, &context) == 0
+                     ? STATUS_SUCCESS : STATUS_DEVICE_DATA_ERROR;
+        if (!NT_SUCCESS(context.Sequence.Fault)) status = context.Sequence.Fault;
+        else if (h->Flags & BC250_WAVE_BUDGET_EXPIRED) status = STATUS_IO_TIMEOUT;
+        h->FaultOffset = context.Sequence.FaultOffset;
+    }
+    // Sequence writes stop after a fault. Cleanup therefore uses the same checked
+    // MMIO backend directly. Restore the bank before the indirect selector:
+    // the saved selector was read at entry, when the driver owned broadcast.
+    cleanup = GfxWaveRestore(Device, BC250_REG_GC_GRBM_GFX_INDEX, bc250_gfx_wave_broadcast_value());
+    if (!NT_SUCCESS(cleanup)) {
+        broadcastRestored = FALSE;
+        h->Flags |= BC250_WAVE_READ_ERROR;
+        if (NT_SUCCESS(status)) { status = cleanup; h->FaultOffset = BC250_REG_GC_GRBM_GFX_INDEX; }
+    }
+    if (indexSaved) {
+        cleanup = GfxWaveRestore(Device, BC250_REG_GC_SQ_IND_INDEX, savedIndex);
+        if (!NT_SUCCESS(cleanup)) {
+            h->Flags |= BC250_WAVE_READ_ERROR;
+            if (NT_SUCCESS(status)) { status = cleanup; h->FaultOffset = BC250_REG_GC_SQ_IND_INDEX; }
+        }
+    }
+    adev->backend = backend;
+Unlock:
+    if (captureOwned) {
+        if (broadcastRestored) InterlockedExchange(&Device->WaveRegisterAccess, 0);
+        else GuardLog("waves: bank restore failed; sampler admission retained until device restart");
+    }
+    ExReleaseFastMutex(&Device->GartLock);
+    ExReleasePushLockShared(&Device->GfxPagingLock);
+    KeLeaveCriticalRegion();
+    if (!NT_SUCCESS(status)) {
+        h->Flags &= ~BC250_WAVE_COMPLETE;
+        if (!(h->Flags & (BC250_WAVE_TRUNCATED | BC250_WAVE_BUDGET_EXPIRED)))
+            h->Flags |= BC250_WAVE_READ_ERROR;
+    }
+    h->Result = status;
+    h->Bytes = (ULONG)(sizeof(*h) + h->WaveCount * sizeof(Snapshot->Waves[0]));
+    h->EndTime100ns = KeQueryInterruptTime();
+    return status;
+}
+
+void GfxRecordWavesBeforeKill(BC250_DEVICE* Device, ULONG Seq, ULONG Fence, ULONG Vmid)
+{
+    BC250_WAVE_SNAPSHOT* snapshot;
+    BC250_WAVE_HEADER failure = {0};
+    ULONGLONG now;
+    NTSTATUS status;
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL) return;
+    snapshot = ExAllocatePool2(POOL_FLAG_NON_PAGED, sizeof(*snapshot), BC250_GFX_TAG);
+    if (snapshot != NULL) {
+        snapshot->Header.Kind = BC250_WAVE_KIND_PRE_KILL;
+        snapshot->Header.Seq = Seq;
+        snapshot->Header.Fence = Fence;
+        snapshot->Header.Vmid = Vmid;
+        (void)GfxCaptureWaves(Device, snapshot);
+        status = GuardRecordWaveSnapshot(&snapshot->Header);
+        GuardLog("waves: pre-kill seq %lu vmid %lu count %u flags 0x%X read 0x%08X persisted 0x%08X",
+                 Seq, Vmid, snapshot->Header.WaveCount, snapshot->Header.Flags,
+                 snapshot->Header.Result, status);
+        ExFreePoolWithTag(snapshot, BC250_GFX_TAG);
+        return;
+    }
+    // A fresh error record replaces the last successful dump on allocation failure.
+    failure.AbiVersion = BC250_WAVE_ABI_VERSION;
+    failure.Bytes = sizeof(failure);
+    failure.DriverVersion = BC250_KMD_VERSION;
+    failure.Kind = BC250_WAVE_KIND_PRE_KILL;
+    failure.Result = STATUS_INSUFFICIENT_RESOURCES;
+    failure.Flags = BC250_WAVE_READ_ERROR;
+    failure.Seq = Seq; failure.Fence = Fence; failure.Vmid = Vmid;
+    now = KeQueryInterruptTime();
+    failure.StartTime100ns = failure.EndTime100ns = now;
+    status = GuardRecordWaveSnapshot(&failure);
+    GuardLog("waves: allocation failed for pre-kill seq %lu; error persisted 0x%08X", Seq, status);
 }
 
 static BOOLEAN GfxFenceArrivedAccess(_Inout_ BC250_DEVICE* Device, ULONG Seq)
@@ -1271,6 +1489,74 @@ BOOLEAN GfxFenceArrived(_Inout_ BC250_DEVICE* Device, ULONG Seq)
     result = GfxFenceArrivedAccess(Device, Seq);
     GfxAccessRelease(Device);
     return result;
+}
+
+// BD-114 (ANALYSIS.md 7.2): the raw submission fence slot, for the submit watchdog's progress token. The same
+// read GfxFenceArrivedAccess does, without its comparison and without any of its side effects: a progress check
+// must not retire anything, end a DPM busy share or wake a waiter. FALSE means there was nothing to read (no
+// device, no fence page yet), which the caller reads as "no progress observed from this source".
+BOOLEAN GfxFenceObserved(_Inout_ BC250_DEVICE* Device, _Out_ ULONG* Value)
+{
+    BC250_GFX* gfx;
+    BOOLEAN observed;
+
+    *Value = 0;
+    if (GfxAccessAcquire(Device) == NULL) return FALSE;
+    gfx = (BC250_GFX*)Device->Gfx;
+    observed = gfx != NULL && gfx->SubmitAdev != NULL;
+    if (observed)
+        *Value = (ULONG)bc250_gfx_fence_read(gfx->SubmitAdev, BC250_SUBMIT_FENCE_SLOT);
+    GfxAccessRelease(Device);
+    return observed;
+}
+
+// BD-114: final stage of every successful ResetEngine, after a late completion or
+// a proven drain. Caller holds WDDM Lock across this gate change and its own gate
+// change. This helper cannot wait, take GartLock or call back into the scheduler.
+// WatchdogFaulted[3D] is still TRUE when SubmitFailed is cleared: every node-0
+// WDDM ring entry tests that gate under this same lock. ResetActive also excludes
+// new submit Impl calls until both gates and the queue are committed together.
+//
+// Refused unless the ring is provably idle: either nothing is marked in flight, or the marked sequence's fence
+// has arrived. A ring that still holds work is never reopened, because the next submission would then share a
+// VMID with a job this driver has not accounted for. TRUE: the gate is open again.
+//
+// Neither this helper nor GfxSoftRecover wakes waiters. The caller signals only
+// after both gates and the queue have committed and its lock has been released.
+//
+// The other difference from GfxSoftRecover is the lock, and it is deliberate too: that function takes GartLock
+// because it installs the GFX register path and writes SQ_CMD, and a holder of the GfxAccess reference must not
+// take GartLock. This one writes no register at all - one fence-page read, one interlocked compare-exchange on
+// SubmitInFlight and one on SubmitFailed - so the lifetime reference is the whole protection it needs, and the
+// CAS is what makes the one dangerous write (clearing the in-flight marker) safe against a concurrent observer.
+BOOLEAN GfxReopenAfterAbort(_Inout_ BC250_DEVICE* Device)
+{
+    BC250_GFX* gfx;
+    struct amdgpu_device* adev;
+    LONG pending;
+    BOOLEAN idle;
+
+    if (GfxAccessAcquire(Device) == NULL) return FALSE;
+    gfx = (BC250_GFX*)Device->Gfx;
+    adev = (gfx != NULL) ? gfx->SubmitAdev : NULL;
+    if (gfx == NULL || adev == NULL) { GfxAccessRelease(Device); return FALSE; }
+    pending = InterlockedCompareExchange(&gfx->SubmitInFlight, 0, 0);
+    idle = pending == 0 ||
+           bc250_fence_reached((ULONG)bc250_gfx_fence_read(adev, BC250_SUBMIT_FENCE_SLOT), (ULONG)pending);
+    if (idle && pending != 0 &&
+        InterlockedCompareExchange(&gfx->SubmitInFlight, 0, pending) == pending)
+        DpmBusyEnd(&Device->Dpm);       // the ring went idle: the share the normal fence path would have ended
+    if (idle)
+    {
+        InterlockedExchange(&gfx->SubmitFailed, 0);      // only the locked recovery commit reopens admission
+        GuardLog("gfx: ring reopened after an aborted fence was reported (seq %lu was in flight, slot 0x%X)",
+                 (ULONG)pending, (ULONG)bc250_gfx_fence_read(adev, BC250_SUBMIT_FENCE_SLOT));
+    }
+    else
+        GuardLog("gfx: ring NOT reopened after an aborted fence: seq %lu is still in flight (slot 0x%X)",
+                 (ULONG)pending, (ULONG)bc250_gfx_fence_read(adev, BC250_SUBMIT_FENCE_SLOT));
+    GfxAccessRelease(Device);
+    return idle;
 }
 
 // The bring-up read's reader. The gfx table holds the page-table base pairs of VMIDs 1..15 and the GART table the
@@ -4019,6 +4305,7 @@ NTSTATUS GfxStart(_Inout_ BC250_DEVICE* Device)
 {
     BC250_GFX* gfx;
 
+    GfxWaveSamplingReset(Device);
     Device->Gfx = NULL;
     Device->GfxStopQuiet = TRUE;
     Device->GfxStopPrepared = FALSE;
@@ -4048,11 +4335,12 @@ NTSTATUS GfxStart(_Inout_ BC250_DEVICE* Device)
     //                              page-table root from a pool (vmid_pool.h). Until the bring-up read at the first
     //                              pool submit, the pool is VMID 1 alone.
     gfx->VmidPoolGate = (GuardReadSetting(L"EnableVmidPool", 1) != 0);
-    //   EnableRingVmFlush  REG_DWORD  1 = the root write and the invalidation of a job are packets in front of
-    //                                 its frame (option (b) of docs/design/gfx-submit-root-serialization.md).
-    //                                 Absent or 0 = the MMIO flush of 0.7.216.24 ahead of the frame, byte for
-    //                                 byte. Independent of EnableVmidPool; both on is the recommended pair.
-    gfx->RingVmFlushGate = (GuardReadSetting(L"EnableRingVmFlush", 0) != 0);
+    //   EnableRingVmFlush  REG_DWORD  Absent or any value but 0 = the root write and the invalidation of a job are
+    //                                 packets in front of its frame (option (b) of
+    //                                 docs/design/gfx-submit-root-serialization.md). 0 = the MMIO flush of
+    //                                 0.7.216.24 ahead of the frame, byte for byte: the rollback. Independent of
+    //                                 EnableVmidPool; both on is the recommended pair and the default.
+    gfx->RingVmFlushGate = (GuardReadSetting(L"EnableRingVmFlush", 1) != 0);
     gfx->VmidMembers = (USHORT)(1u << BC250_VMID_LEGACY);
     KeInitializeSpinLock(&gfx->VmidLock);
     KeInitializeSpinLock(&gfx->Sdma0RingLock);

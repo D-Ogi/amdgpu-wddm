@@ -31,6 +31,11 @@ namespace AmdgpuWddmSetup
                     AddFile(zip, p + "result.json", r.ResultFile, redactor);
                     Add(zip, p + "engine-output.txt", r.Output, redactor);
                     if (r.Result != null && !string.IsNullOrEmpty(r.Result.Log)) AddFile(zip, p + "engine-log.txt", r.Result.Log, redactor);
+                    // The engine's own diagnostics of a driver start that did not pass: it collects the driver's
+                    // start and stop records, the device state, this boot's System log entries, the setup log
+                    // sections of this device and the driver's own log files by itself, so nobody has to ask the
+                    // tester for them. Only a run whose verify found such a failure names one.
+                    if (r.Result != null && !string.IsNullOrEmpty(r.Result.Diagnostics)) AddFile(zip, p + "diagnostics.txt", r.Result.Diagnostics, redactor);
                 }
             }
             if (File.Exists(zipPath)) File.Delete(zipPath);

@@ -11,7 +11,7 @@ Use this package only on a BC-250. The installer stops on every other computer a
 - An ASRock BC-250 with Windows 11 x64 (build 22000 or later) installed and working on Microsoft Basic Display
   Adapter.
 - A local account with administrator rights.
-- Secure Boot set to off in the BIOS setup (see "Secure Boot" below).
+- Secure Boot off. The stock BC-250 BIOS has no Secure Boot option, so it is already off (see "Secure Boot" below).
 - If BitLocker is on: your BitLocker recovery key, or permission to suspend BitLocker for two restarts.
 - The Microsoft Visual C++ 2015-2022 Redistributable (x64). If it is missing, the installer stops and tells you.
   Get it from Microsoft: https://aka.ms/vs/17/release/vc_redist.x64.exe (download it on any computer and copy it to the BC-250).
@@ -26,24 +26,68 @@ Use this package only on a BC-250. The installer stops on every other computer a
 2. Write down your BitLocker recovery key if BitLocker is on: open a command prompt as administrator and type
    `manage-bde -protectors -get C:`.
 3. Unpack the zip file to a local folder, for example `C:\amdgpu-wddm-tester`. Do not run the installer from the
-   zip file or from a network drive.
-4. Optional: do a dry run first. In the unpacked folder, open a command prompt and type `install.cmd -DryRun`.
+   zip file or from a network drive. Unpack the whole zip: the folder it makes holds `setup.exe` and the folder
+   `files`, and `setup.exe` needs `files` next to it. To carry the package to another computer or to a memory
+   stick, copy that whole folder, not the folder `files` alone: the package checks `setup.exe` too, and `files`
+   on its own reports `missing setup.exe`.
+4. Optional: do a dry run first. In the folder `files`, open a command prompt and type `install.cmd -DryRun`.
    The dry run does all checks and shows all changes, but it changes nothing.
 
 ## Secure Boot
 
-Windows does not load test-signed drivers while Secure Boot is on. To turn it off:
+Windows does not load a test-signed driver while Secure Boot is on.
+
+The stock BC-250 BIOS versions P2.00, P3.00 and P5.00 have no Secure Boot option. Secure Boot is not built into
+that firmware, so it is always off and you do nothing here. The preflight shows Secure Boot
+`off (not built into the firmware)` and names where it read that answer.
+
+A modified BIOS can have the option. If the preflight shows Secure Boot `on`, turn it off:
 
 1. Restart the BC-250 and push `Del` (or `F2`) to open the BIOS setup.
-2. Find the Secure Boot setting (on most firmware versions: Security > Secure Boot).
-3. Set Secure Boot to Disabled.
-4. Save and exit (usually `F10`).
+2. Find the Secure Boot setting. It is usually under Security > Secure Boot. Set it to Disabled. Some modified
+   BIOS versions have no switch for it: set OS Type to "Other OS", or delete the Secure Boot keys.
+3. Save and exit (usually `F10`).
+
+To read the setting yourself, open PowerShell as administrator and type `Confirm-SecureBootUEFI`:
+
+- `True`: Secure Boot is on.
+- `False`: Secure Boot is off.
+- The red error "Variable is currently undefined": Secure Boot is off. The firmware does not hold the setting
+  at all. The stock BC-250 BIOS gives this error. The installer reads the firmware itself and shows
+  `off (not built into the firmware)` for the same board.
+- "not supported": Secure Boot is off. The computer started from a legacy BIOS.
+
+`msinfo32` shows the same value as "Secure Boot State".
 
 The installer does not change BIOS or firmware settings.
 
 ## Install
 
-1. In the unpacked folder, right-click `install.cmd` and select "Run as administrator".
+The usual way is the setup window:
+
+1. In the unpacked folder, double-click `setup.exe`. It is the only file there. Everything else is in the folder
+   `files` beside it. The window asks for administrator rights itself: accept the prompt. (`install.cmd` in the
+   folder `files`, started with no switch, opens the same window.)
+2. The window checks the computer first. The check changes nothing. Then the window shows the checks that need
+   attention, what it will change, the restarts and the release notes.
+3. Give the consents that the window asks for: Windows test mode, and, if BitLocker is on, whether you have the
+   recovery key or whether setup must pause BitLocker for two restarts.
+4. The window installs the driver and shows each stage. Before each restart of Windows it asks "Restart now" or
+   "Later", so you can save your work first. After you log on again, the window starts by itself and continues
+   (accept the administrator prompt).
+5. At the end the window shows the result. On a problem it offers to try again or to repair, and it can save a
+   support file for your report.
+
+The setup window installs the driver only. It does not install llama.cpp, Ollama or a model. For these, install
+with `install.cmd` on the command line (see "The extras" below).
+
+On the command line, `install.cmd` with any switch installs the same release in the console window, as before.
+`install.cmd -Console` does the same with no other switch, and you can put `-Console` beside the other switches,
+for example `install.cmd -Console -DryRun`:
+
+1. In the folder `files` of the unpacked folder, open a command prompt as administrator and type `install.cmd`
+   with the switches you want. With no switch `install.cmd` opens the setup window instead, so type
+   `install.cmd -Console` when you want the console.
 2. Read the preflight table. Every line must show `ok` or `warn`. A `fail` line stops the installer, and the
    installer tells you what to correct. When it stops at preflight, it has changed nothing.
 3. Phase 1: the installer makes a System Restore point (if System Protection is on) and asks for permission to
@@ -58,19 +102,39 @@ The installer does not change BIOS or firmware settings.
 
 You can run the verification again at any time with `verify.cmd` in `C:\Program Files\amdgpu-wddm`.
 
-To install a newer package, unpack it to a new folder and run its `install.cmd`. You do not have to uninstall
-first. The installer shows `upgrading <old> -> <new>`, keeps the files that did not change, replaces the others and
-restarts the computer. Running `install.cmd` of the version that is already installed and verified does nothing;
+To install a newer package, unpack it to a new folder and start its setup window or its `install.cmd`. You do not
+have to uninstall first. The installer shows `upgrading <old> -> <new>`, keeps the files that did not change,
+replaces the others and restarts the computer. Running `install.cmd` of the version that is already installed and verified does nothing;
 use `install.cmd -Repair` to install it again.
 
-An upgrade keeps the settings you changed: the driver settings (for example `DpmMaxMHz`), `DwmForceCpu`, the D3D11
-allowlist and the application profiles. The installer writes a new default only over a value that the previous
-installer wrote and that you did not change. The upgrade output shows each value as `new`, `unchanged`, `KEPT`
+An upgrade keeps the settings you changed: the driver settings (for example `DpmMaxMHz` and `CuMode`), `DwmForceCpu`,
+the D3D11 allowlist and the application profiles. The installer writes a new default only over a value that the
+previous installer wrote and that you did not change. The upgrade output shows each value as `new`, `unchanged`, `KEPT`
 (your value) or `->` (new default). A value given on the command line (`-DpmMaxMHz`) is always written. The
 installer always writes its own values: the file paths, the graphics registration and the start counter
 `UnconfirmedStarts`. The Control application can set the defaults again.
 
 "Test Mode" is shown in the lower-right corner of the desktop while test signing is on. This is normal.
+
+## The extras: llama.cpp, Ollama and the models
+
+Before phase 1 the installer asks whether it shall also install the two programs that run language models on the
+board: our build of llama.cpp and our build of Ollama. The answer `yes` is the default, so Enter is enough. After
+the two questions it shows a short list of models with their size and their licence. The answer for the models is
+none.
+
+Both programs go into `C:\Program Files\amdgpu-wddm\tools`. The model files go into
+`C:\Users\Public\Documents\amdgpu-wddm\models`. Every download is checked against the SHA-256 in this package. A
+download that does not match is refused, and the driver installation goes on without it.
+
+Ollama keeps models in its own format, in `%LOCALAPPDATA%\bc250-ollama\models`, so a model chosen while both
+programs are installed is downloaded twice and kept twice. The question gives both numbers and the sum. Use
+`bc250-ollama.cmd` in the Ollama folder to talk to our Ollama server. A bare `ollama.exe` uses the Ollama
+defaults.
+
+An installation without a window uses `-Components llama,ollama` or `-NoComponents`, and `-Models gemma12b` or
+`-NoModels`. `uninstall.cmd` removes the programs and keeps the models. `uninstall.cmd -RemoveModels` removes the
+models as well. The page `docs/testing/llm-components.md` of the project has the whole list of switches.
 
 ## GPU firmware
 
@@ -110,20 +174,35 @@ Without internet on the BC-250:
 
 ## The small blue window after logon
 
-After each logon, a small blue window with a clock is shown in the top-left corner for up to two minutes. It is
-the "amdgpu-wddm start confirm" scheduled task. The driver counts each start that is not confirmed. After two
-unconfirmed starts, Windows uses Microsoft Basic Display Adapter again, to prevent a start loop. The task keeps the
-desktop drawing for at least one minute and then confirms the start. The same confirmation keeps the automatic
-clock control (DPM) on: if a start is not confirmed, the next start runs at the fixed 1000 MHz clock, and DPM stays
-off until you set it again in the control application. Do not close the window. If you log on with an account that
-is not an administrator, the task does not run, and the driver falls back after two restarts. The task writes its
-results to `C:\ProgramData\amdgpu-wddm\start-confirm.log`.
+After each logon, a small blue window with a clock is shown in the top-left corner for two minutes. The driver
+counts each start that is not confirmed. After two unconfirmed starts, Windows uses Microsoft Basic Display Adapter
+again, to prevent a start loop. The window keeps the desktop drawing for at least one minute, and the confirmation
+then confirms the start. The same confirmation keeps the automatic clock control (DPM) on: if a start is not
+confirmed, the next start runs at the fixed 1000 MHz clock, and DPM stays off until you set it again in the control
+application. Do not close the window.
+
+Two scheduled tasks do this work, and both run at the logon of any user, so an account without administrator rights
+confirms a start as well:
+
+- "amdgpu-wddm start confirm" runs as the Local System account (`S-1-5-18`), with the highest run level and no
+  window of its own. It reads the driver's start health and confirms the start. The driver accepts a confirmation
+  only from an administrator, which is why this task does not run as the user who logs on.
+- "amdgpu-wddm start window" runs as the user who logs on, with that user's own rights (the Users group,
+  `S-1-5-32-545`, limited run level). It shows the small blue window and nothing else: it never opens the driver
+  and changes no setting. The window stays for the full two minutes, because this task does not read the
+  confirmation's progress. Earlier releases closed it as soon as the start was confirmed, usually after about one
+  minute. If it does not run, the confirmation still keeps the computer off Microsoft Basic Display, and the next
+  start runs at the fixed clock.
+
+The confirmation writes its results to `C:\ProgramData\amdgpu-wddm\start-confirm.log`. Its last line of each logon
+also reports the state, the last run time and the last result of the window task, so a window that did not run or
+could not open is visible there (`last result 0` the window was shown and closed, `2` it could not be shown).
 
 ## What the installer changes
 
 | Item | Location |
 |---|---|
-| Test signing | `bcdedit /set {current} testsigning on` (only after you type YES) |
+| Test signing | `bcdedit /set '{current}' testsigning on` (only after you type YES) |
 | Test certificate | LocalMachine Root and TrustedPublisher stores |
 | Kernel-mode driver | driver package `bc250kmd.inf` (driver store, service `bc250kmd`) |
 | Driver settings | `HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters` |
@@ -133,12 +212,25 @@ results to `C:\ProgramData\amdgpu-wddm\start-confirm.log`.
 | Graphics registration | the GPU's software key: `UserModeDriverName`, `VulkanDriverName`, `OpenGLDriverName`, `OpenGLVersion`, `OpenGLFlags`. For 32-bit applications: `UserModeDriverNameWow`, `VulkanDriverNameWow`, `OpenGLDriverNameWow`, `OpenGLVersionWow`, `OpenGLFlagsWow`. The first entry of each `UserModeDriverName` value, the Direct3D 9 entry, is empty. Also `HKLM\SOFTWARE\Khronos\Vulkan\Drivers` and `HKLM\SOFTWARE\WOW6432Node\Khronos\Vulkan\Drivers`. `uninstall.cmd` puts back an `OpenGL` value from before the install, with the registry type it had. It removes the ones it added, all six of them, even when the installer state file is gone. It does that whether or not Windows still shows the GPU, because the files the values name go with the install |
 | Router policy and profiles | `HKLM\SOFTWARE\amdgpu-wddm` |
 | GPU firmware | `C:\BC250\firmware` (8 files and `LICENSE.amdgpu`, downloaded from linux-firmware; see "GPU firmware"). A new folder is writable by administrators only; the access rights of `C:\BC250` itself do not change. Download staging: `C:\ProgramData\amdgpu-wddm\installer\firmware-staging`, removed after the copy |
-| Start confirmation | scheduled task "amdgpu-wddm start confirm" |
+| Start confirmation | two scheduled tasks, both at the logon of any user. "amdgpu-wddm start confirm" runs as the Local System account. "amdgpu-wddm start window" runs as the user who logs on |
 | Installer state and logs | `C:\ProgramData\amdgpu-wddm` (the Control application keeps its setting backups and action log in its `control` folder) |
 
-Default driver settings: automatic clock control (DPM) on, maximum 1500 MHz. The thermal limits of the driver do not
+If you type the `bcdedit` command yourself, keep the quotation marks around `'{current}'` in PowerShell.
+PowerShell reads `{current}` without them as a command of its own. In a command prompt (`cmd`) the quotation
+marks are not necessary.
+
+Default driver settings: automatic clock control (DPM) on, maximum 2000 MHz. The thermal limits of the driver do not
 change. The driver writes no debug log files. To change the maximum clock at install time, use
 `install.cmd -DpmMaxMHz <1000-2000>`. An upgrade keeps a maximum clock that you set (see "Install").
+
+Graphics cores: the driver uses 24 of the 40 compute units of the GPU after a normal install. That is the number
+the board's firmware switches on. To get all 40 at install time, use `install.cmd -CuMode 40`. After the install,
+the Graphics page of amdgpu-wddm Control holds the same choice: "Standard (24)" or "All (40)". A new number applies
+at the next restart of Windows. The first start with 40 cores needs the confirmation of the small blue window after
+logon. Without that confirmation the next start goes back to 24, records the reason and puts the choice back to
+"Standard (24)", so you choose 40 again. The change writes one registry value and no firmware. All 40 cores give
+more performance in many games, and also more power and more heat. The game results that we publish are measured
+with all 40 cores. The page `docs/design/cu-mode.md` of the project has the whole description.
 
 ## What works and what does not
 
@@ -153,13 +245,17 @@ change. The driver writes no debug log files. To change the maximum clock at ins
   every OpenGL program of the computer, 64-bit and 32-bit, with no file beside the program. `verify.cmd`
   shows the line `OpenGL ICD` with the registration and both driver files. Without this driver Windows gives
   an OpenGL program its own software renderer, which is OpenGL 1.1.
-- Direct3D 11 applications and games run on the GPU. The value `Mode` in
-  `HKLM\SOFTWARE\amdgpu-wddm\AppRouter` holds `gpu-default`. These programs stay on the CPU route (software
-  rendering): the components of Windows and the packaged Microsoft applications, the processes of the logon and lock
-  screens, a program whose image the router cannot resolve, and a program in the `Deny` list (by default
-  `witcher3.exe`, which has a Direct3D 12 mode). An entry in the `Allow` list puts a Windows component on the GPU
-  (by default `dxdiag.exe`). `Mode` `allowlist` gives the behaviour of the earlier releases: the CPU route for every
-  program, and the GPU only for the programs in `Allow`. Use the Direct3D 12 mode of a game if it has one.
+- Direct3D 11 applications and games run on the GPU, and so do the components of Windows and the packaged
+  Microsoft applications. The value `Mode` in `HKLM\SOFTWARE\amdgpu-wddm\AppRouter` holds `gpu-default`, and the
+  `Allow` and `Deny` lists beside it are empty in a new install. These programs stay on the CPU route (software
+  rendering): the processes of the logon and lock screens, a program whose image the router cannot resolve, a
+  program you put in the `Deny` list, a program you set to processor rendering in amdgpu-wddm Control, and
+  `PickerHost.exe`, which the driver keeps there by itself. `PickerHost.exe` is the program behind the Windows
+  firewall notification window ("Windows Security") and behind the file open and save windows. That firewall
+  window stayed white and empty on the GPU route, so the driver sends that program to the processor. An entry in
+  the `Allow` list puts a program back on the GPU, `PickerHost.exe` included. `Mode` `allowlist` gives the
+  behaviour of the earlier releases: the CPU route for every program, and the GPU only for the programs in
+  `Allow`. Use the Direct3D 12 mode of a game if it has one.
 - Direct3D 9 applications run on the GPU through D3D9On12, the Direct3D 9 layer of Windows on top of our Direct3D 12
   driver. The installer leaves the Direct3D 9 entry of `UserModeDriverName` empty, and Windows then loads
   `d3d9on12.dll` by itself.
@@ -178,8 +274,13 @@ change. The driver writes no debug log files. To change the maximum clock at ins
   download addresses, or a file has a different SHA256. Connect the computer to the internet, or use
   `-FirmwareDir` (see "GPU firmware").
 - The installer stops with `stopped at step: ...`: the message names the step and the cause. Correct the cause if
-  you can, then run `install.cmd` again from the same package folder. The installer skips the steps that are
+  you can, then run `install.cmd` again from the same `files` folder of the package. The installer skips the steps that are
   complete and continues at the step that failed.
+- The installer stops at the step that adds the release test certificate, with `Windows refused to add the
+  certificate to LocalMachine\Root` (or `TrustedPublisher`): setup runs as administrator, so Windows itself refused
+  the change. Usually an antivirus program protects the certificate store, or a policy locks the store. Allow the
+  change in the antivirus program, or run the `certutil -addstore` commands that the message shows in an
+  administrator command prompt. Then run setup again.
 - A file that Windows uses (for example a user-mode driver that the desktop has loaded) cannot be overwritten. The
   installer renames it to `<name>.old-<time>`, copies the new file and deletes the old copy at the next restart.
 - The screen stays black after a restart: wait two minutes. If it stays black, restart the computer with the power
@@ -190,6 +291,12 @@ change. The driver writes no debug log files. To change the maximum clock at ins
 - To start Windows without the driver: hold `Shift` and select Restart, then Troubleshoot > Advanced options >
   Startup Settings > Restart > `3` (Enable low-resolution video), or `4` (Safe Mode). Then run `uninstall.cmd`.
 - Verification fails: run `verify.cmd`, then make a diagnostics bundle (see "How to report a bug").
+- Verification says that the driver did not start: the installer collects the readings itself. It writes one
+  file, `diagnostics-<time>.txt`, next to its log in `C:\ProgramData\amdgpu-wddm\installer`, and the setup
+  window puts the same file into the support file it saves. The console route prints the path of both files in
+  its last lines. Send them with the report: they hold the problem code of the device, the driver's own record
+  of the start and of the stop, the event-log entries of that start, and the setup log sections of the
+  graphics device. Nothing is sent by itself.
 - After an installation, `verify.cmd` fails `GPU desktop path` with `closed by the driver` or `last boot died in a
   session`, and the desktop runs on the CPU route: run `install.cmd -Repair`. It sets the switches of the release back
   and restarts Windows. You can also open amdgpu-wddm Control, select "Reopen the GPU desktop path" on its Recovery
@@ -205,8 +312,8 @@ change. The driver writes no debug log files. To change the maximum clock at ins
 
 ## Uninstall
 
-1. Run `uninstall.cmd` as administrator (in the package folder or in `C:\Program Files\amdgpu-wddm`).
-2. Type `YES`. The uninstaller removes the driver, the files, the registry values, the task and the certificate.
+1. Run `uninstall.cmd` as administrator (in the package's `files` folder or in `C:\Program Files\amdgpu-wddm`).
+2. Type `YES`. The uninstaller removes the driver, the files, the registry values, the tasks and the certificate.
    The GPU goes back to Microsoft Basic Display Adapter. The uninstaller keeps `C:\ProgramData\amdgpu-wddm\control`
    (the Control application's setting backups and action log). Delete it yourself if you do not need it.
 3. If the installer turned on test signing, the uninstaller asks if it must turn it off. Use
@@ -242,6 +349,36 @@ The zip file contains these files:
 
 Before the preview, the application removes from every file: your user name, your profile path (shown as
 `%USERPROFILE%`), the computer name, MAC addresses, e-mail addresses, and every value on a line that names a serial
-number, machine ID, product ID or UUID. Versions, hashes and hardware IDs stay, because we need them.
+number, machine ID, product ID or UUID. It also removes the account name of every other `C:\Users\<name>` path,
+the security identifiers, and the computer name of an event entry. Versions, hashes and hardware IDs stay, because
+we need them.
 If you find personal data in the preview, do not send the file, and tell us in the bug report so that we can
 correct the application.
+
+## Optional Windows tuning
+
+The setup window offers Windows tuning. This option starts unchecked.
+Select it to apply the control application's recommended background settings through its shared backend.
+The package manifest and command-line plan list the choices from that application's catalog.
+Use the control application's Windows settings page for individual changes and recovery.
+
+For a command-line installation, add `-ApplySystemTuning` to `install.cmd`.
+The choice survives an installation restart or a failed attempt.
+Use `-SkipSystemTuning` to cancel a saved choice when retrying.
+The setup executable accepts `--apply-system-tuning`.
+Plan and dry-run modes show the choice without running the tuning backend.
+
+The uninstaller offers to restore machine-wide settings before removal.
+Use `uninstall.cmd -RestoreSystemTuning` to select this action or `-KeepSystemTuning` to keep the settings.
+A failed restoration stops removal.
+The uninstaller preserves machine and user recovery records, including those belonging to other accounts.
+It also keeps verified recovery scripts under `%ProgramData%\amdgpu-wddm\system-tuning-recovery`.
+
+After removal, restore each account's settings from that account:
+
+```powershell
+powershell -NoProfile -File "$env:ProgramData\amdgpu-wddm\system-tuning-recovery\system-tuning.ps1" -Action RestoreAll -Scope User
+```
+
+Elevation with another account does not restore the original account's settings.
+Machine-wide recovery uses the same command with `-Scope Machine` from an administrator terminal.

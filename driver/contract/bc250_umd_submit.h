@@ -53,6 +53,9 @@ extern "C" {
 #define BC250_UMD_ALLOC_VERSION_SCANOUT 3u
 /* 2: version 1 plus node_ordinal, appended - ADR 0013's node layout, see the struct below. */
 #define BC250_UMD_CONTEXT_VERSION   2u
+/* 3: same wire size as version 2. BC250_UMD_C_COMPUTE is read, and only then, so a version 2 producer's
+ * flags word keeps its old meaning and no bit of it can turn a kernel policy on by accident. BD-127. */
+#define BC250_UMD_CONTEXT_VERSION_COMPUTE 3u
 #define BC250_UMD_SUBMIT_VERSION    1u
 
 /* ---------------------------------------------------------------------------------------------
@@ -177,6 +180,21 @@ struct bc250_umd_alloc_private {
 #define BC250_UMD_C_RESERVE_VMID    0x00000002u  /* ac_drm_vm_reserve_vmid,
                                                   * radv_amdgpu_winsys.c:211. OPEN QUESTION:
                                                   * VidMm owns VMIDs on Windows. */
+#define BC250_UMD_C_COMPUTE         0x00000004u  /* the work of this context is compute, not graphics: a HIP
+                                                  * or OpenCL runtime created it. It has no amdgpu original -
+                                                  * there the IP type says so - and it exists because GFX1013
+                                                  * publishes no compute ring (fact M50), so every compute
+                                                  * context asks for AMDGPU_HW_IP_GFX on node 0 and the kernel
+                                                  * driver cannot tell the two apart by node or IP type.
+                                                  * The kernel driver counts the live contexts that carry this
+                                                  * flag and, while the count is above zero, the DPM governor
+                                                  * uses its compute threshold set (docs/design/dpm.md, BD-127):
+                                                  * compute fills the GPU in bursts between CPU work, so a
+                                                  * graphics busy share never reaches the raise threshold while
+                                                  * the clock is still the limit. It is a statement of intent
+                                                  * and asks for nothing the kernel driver must honour: it
+                                                  * changes a clock policy and nothing a submission may do.
+                                                  * Read only from BC250_UMD_CONTEXT_VERSION_COMPUTE up. */
 
 struct bc250_umd_context_private {
     __u32 magic;                        /* BC250_UMD_CONTEXT_MAGIC */
@@ -353,6 +371,13 @@ BC250_SUBMIT_CTASSERT(sizeof(struct bc250_umd_submit_private)  == BC250_UMD_SUBM
  * stopped, so a version-1 reader (there are none yet, but the rule is the same as the caps blob's)
  * still finds every field it knows where it expects it. */
 BC250_SUBMIT_CTASSERT(offsetof(struct bc250_umd_context_private, node_ordinal) == BC250_UMD_CONTEXT_SIZE_V1);
+/* Version 3 appends no field at all: it only admits one more flag bit, so the wire size is version 2's and a
+ * version 3 blob reaches a version 2 reader with every field where that reader expects it (BD-127). */
+#define BC250_UMD_CONTEXT_SIZE_V3   BC250_UMD_CONTEXT_SIZE_V2
+BC250_SUBMIT_CTASSERT(BC250_UMD_CONTEXT_SIZE_V3 == BC250_UMD_CONTEXT_SIZE_V2);
+/* Each context flag is its own bit, or the acceptance test for one of them answers for another. */
+BC250_SUBMIT_CTASSERT((BC250_UMD_C_COMPUTE & (BC250_UMD_C_STABLE_PSTATE | BC250_UMD_C_RESERVE_VMID)) == 0);
+BC250_SUBMIT_CTASSERT((BC250_UMD_C_STABLE_PSTATE & BC250_UMD_C_RESERVE_VMID) == 0);
 
 /* A submission blob is copied per submit, on the hot path. Keep it small enough that the copy is
  * never the reason a submission is slow.

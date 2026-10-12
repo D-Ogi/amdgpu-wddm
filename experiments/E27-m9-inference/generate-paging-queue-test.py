@@ -27,7 +27,9 @@ if 'static void WddmRingGapEdgeLocked(' in s:
  # passes NULL here, so in a harness that never runs WddmStart every gap would measure 0 us and the arithmetic
  # would go unexercised. The stand-in clock reports its frequency through that argument, so hand it the field.
  edge=extract('static void WddmRingGapEdgeLocked(')
- assert edge.count('KeQueryPerformanceCounter(NULL)')==1
+ # Not an assert: python -O and PYTHONOPTIMIZE strip one, and this generator's silence is what BD-085 cost.
+ if edge.count('KeQueryPerformanceCounter(NULL)')!=1:
+  raise SystemExit('generate-paging-queue-test: the deadline edge no longer reads the counter exactly once')
  code+=edge.replace('KeQueryPerformanceCounter(NULL)','KeQueryPerformanceCounter(&Wddm->RingGapFrequency)')+'\n'
 # KMD172: the quota requeue is called by the drain and armed on the actual timer.
 code+=extract('static void WddmRequeuePagingDrain(')+'\n'
@@ -55,9 +57,16 @@ mutations={
                  'next=completed?PagingDrainContinue:PagingDrainReturn;'),
  # A quota without the requeue: the yield leaves the head with nothing to pick it up.
  '--drop-requeue':('            WddmRequeuePagingDrain(wddm);\n','            (void)WddmRequeuePagingDrain;\n'),
+ # BD-114 7.1: node 1 prices its deadline and its timer from the flat 500 ms of every build before 0.7.216.27
+ # again, instead of the budget the start latched from TdrDelay.
+ '--flat-paging-budget':('wddm->PagingDeadline=KeQueryInterruptTime()+10000ull*wddm->SubmitBudgetMs;\n'
+                         '                    due.QuadPart=-10000ll*(LONGLONG)wddm->SubmitBudgetMs;',
+                         'wddm->PagingDeadline=KeQueryInterruptTime()+10000ull*BC250_WDDM_SUBMIT_TIMEOUT_MS;\n'
+                         '                    due.QuadPart=-10000ll*(LONGLONG)BC250_WDDM_SUBMIT_TIMEOUT_MS;'),
 }
 for m in sys.argv[3:]:
  old,new=mutations[m]
- assert code.count(old)==1,m
+ if code.count(old)!=1:
+  raise SystemExit('generate-paging-queue-test: the anchor of mutation %s moved (%d hits)' % (m,code.count(old)))
  code=code.replace(old,new)
 Path(sys.argv[2]).write_text(code)

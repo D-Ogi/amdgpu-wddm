@@ -49,6 +49,7 @@ namespace AmdgpuWddmControl
             if (GraphicsSettings.Owns(w)) return GraphicsSettings.PlainLine(w);
             var id = LineId(w);
             if (id == null) return Strings.T("plan.line.other");
+            if (id == "plan.line.ceiling-default") return Strings.T(id, DpmSettings.DefaultMaxMHz.ToString(CultureInfo.InvariantCulture));
             return id == "plan.line.ceiling" || id == "plan.line.tdr" ? Strings.T(id, w.Number.ToString(CultureInfo.InvariantCulture)) : Strings.T(id);
         }
 

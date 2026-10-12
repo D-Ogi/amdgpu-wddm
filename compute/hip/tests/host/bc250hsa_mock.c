@@ -121,6 +121,9 @@ bc250hsa_status bc250hsa_props_read(bc250hsa_device* dev, bc250hsa_props* out)
     out->max_workgroups_per_dim = 0xFFFFFFFFu;
     out->lds_bytes_per_workgroup = 65536u;
     out->waves_per_cu = 16u;
+    out->pci_bus = 3u;      /* not zero, so a reader of this field is measured against a value */
+    out->pci_device = 0u;
+    out->pci_function = 0u;
     out->vram_bytes = 1024ull * 1024ull * 1024ull;
     out->visible_vram_bytes = out->vram_bytes;
     out->gtt_bytes = out->vram_bytes;
@@ -374,6 +377,42 @@ bc250hsa_status bc250hsa_dispatch_submit(bc250hsa_device* dev, const bc250hsa_di
         dev->fence = env.fence_value;
     }
     *fence_value_out = env.fence_value;
+    return BC250HSA_OK;
+}
+
+/* Section 8.1. This mock submits every dispatch at once, so a flush has nothing to do
+ * and a policy that asks for batching is refused by name instead of being accepted and
+ * ignored: a test that believed it batched here would measure nothing. The layer-2 mock
+ * (hipmock_backend.c) does emulate a batch. */
+bc250hsa_status bc250hsa_batch_policy_set(bc250hsa_device* dev,
+                                          const bc250hsa_batch_policy* policy)
+{
+    if (dev == NULL || policy == NULL || policy->struct_bytes != (uint32_t)sizeof(*policy)) {
+        return BC250HSA_EINVAL;
+    }
+    return (policy->enabled != 0u) ? BC250HSA_EUNSUPPORTED : BC250HSA_OK;
+}
+
+bc250hsa_status bc250hsa_batch_policy_get(bc250hsa_device* dev, bc250hsa_batch_policy* out)
+{
+    if (dev == NULL || out == NULL || out->struct_bytes != (uint32_t)sizeof(*out)) {
+        return BC250HSA_EINVAL;
+    }
+    memset(out, 0, sizeof(*out));
+    out->struct_bytes = (uint32_t)sizeof(*out);
+    out->max_dispatches = BC250HSA_BATCH_DISPATCHES_DEFAULT;
+    out->max_hold_us = BC250HSA_BATCH_HOLD_US_DEFAULT;
+    return BC250HSA_OK;
+}
+
+bc250hsa_status bc250hsa_flush(bc250hsa_device* dev, uint64_t* fence_value_out)
+{
+    if (dev == NULL) {
+        return BC250HSA_EINVAL;
+    }
+    if (fence_value_out != NULL) {
+        *fence_value_out = dev->last_submitted;
+    }
     return BC250HSA_OK;
 }
 

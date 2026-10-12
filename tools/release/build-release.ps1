@@ -1,6 +1,16 @@
-# Builds the tester release package: one folder and its zip that a tester unpacks and runs (install.cmd).
+# Builds the tester release package: one folder and its zip that a tester unpacks and runs (the setup window
+# setup.exe, or files\install.cmd on the command line).
 #
-#   pwsh -File tools\release\build-release.ps1 [-Root <BC250_ROOT>] [-Out <dir>] [-Version <v>]
+# Layout of the unpacked release (owner, 2026-10-11): the top folder holds setup.exe and nothing else but one folder,
+# files\, which holds the whole package (manifest.json, install.cmd and the other command-line entries, installer\,
+# payload\, licenses\, the documents). files\ is therefore the package root that manifest.json describes and that
+# every installer script works from, and setup.exe is the only file outside that list: manifest.json records it under
+# "setup", so verify covers it too.
+#
+#   pwsh -File tools\release\build-release.ps1 -SetupApp <dir> [-Root <BC250_ROOT>] [-Out <dir>] [-Version <v>]
+#
+# -SetupApp is required from 0.7.216.100-tester.28 on: the output folder of tools\win\amdgpu_wddm_setup\build.ps1,
+# whose own gates (unit tests, compile, fake-engine and render smokes) must have passed.
 #
 # Inputs are the artifacts listed in release-sources.json (registered lab drivers, control application, tools,
 # licence texts), each refused unless its SHA256 matches. The AMD GPU firmware is not packaged: manifest.json carries
@@ -14,10 +24,14 @@
 # override with -AllowLedgerDebt -LedgerDebtReason, or -NoLedger -NoLedgerReason in a workspace without the
 # ledger; manifest.json records which of the three happened), every source hash, the provenance of every payload file
 # (provenance.py: a published commit and a recipe, or a download record; -RebuildCheck also rebuilds the files with
-# rebuild-check.ps1 and compares the bytes), signer of .sys and .cat = the release certificate, no private-key material in the
-# package, the OpenGL ICD payload (BD-076: with opengl_icd.register the package carries both architectures and each
-# file is an image of the right machine that exports every Drv entry point), every installer script parses under Windows PowerShell 5.1, every form of cli-commands.json answered by the
-# packaged CLI, the marker guard (no fix lost its comment on the way into this release: test-marker-guard.ps1) and the
+# rebuild-check.ps1 and compares the bytes; -NoProvenance -NoProvenanceReason builds a lab candidate from a work tree
+# whose commits are not published yet, and manifest.json records that), signer of .sys and .cat = the release certificate, no private-key material in the
+# package, the OpenGL ICD payload (BD-076: every architecture of opengl_icd.architectures is carried, and each of its
+# files is an image of the right machine that exports every Drv entry point), every installer script parses under
+# Windows PowerShell 5.1, every form of cli-commands.json answered by the
+# packaged CLI, the guide character's art in the packaged control application (nine expressions at both sizes) and in
+# the setup window (the expressions its own screens reach), under the names of the repository's own
+# map, the marker guard (no fix lost its comment on the way into this release: test-marker-guard.ps1) and the
 # kernel compile (driver\kmd and driver\shim build with the WDK of this workspace: test-kmd-compile.ps1). Nothing here
 # opens a window: child processes run with CreateNoWindow and redirected output.
 [CmdletBinding()]
@@ -27,20 +41,28 @@ param(
     [string]$DriverVer = '0.7.216.100',          # the release's own 4th field: ranks above the lab's x.y.z.1, names the package
     [string]$Version = '0.7.216.100-tester.21',
     [string]$KitVersion = '10.0.26100.0',
-    [string]$SetupApp,                           # optional: the built setup window (tools\win\amdgpu_wddm_setup\build.ps1 output), copied to setup\
+    [string]$SetupApp,                           # required: the built setup window (build.ps1 output), copied to the top folder as setup.exe
     [switch]$AllowLedgerDebt,                    # build although finished work for a release component is unlanded
     [string]$LedgerDebtReason,                   # required with -AllowLedgerDebt: recorded in the build log and manifest
     [switch]$NoLedger,                           # build in a workspace that has no work ledger at all
     [string]$NoLedgerReason,                     # required with -NoLedger: recorded in the build log and manifest
+    [switch]$NoProvenance,                       # lab candidate: build although the payload commits are not published yet
+    [string]$NoProvenanceReason,                 # required with -NoProvenance: recorded in the build log and manifest
     [switch]$RebuildCheck                        # also rebuild every payload file that claims a bit-identical rebuild (slow)
 )
+# Release and provenance rebuilds always execute the gates, including nested analysis.
+$env:BC250_GATE_NOCACHE = '1'
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'headless.ps1')
+# The setup window is the default entry of an ordinary user, so a package without it is not a release.
+if (-not $SetupApp) { throw '-SetupApp is required: build the setup window with tools\win\amdgpu_wddm_setup\build.ps1 -Out <dir> and pass that folder' }
+if (-not (Test-Path -LiteralPath (Join-Path $SetupApp 'amdgpu_wddm_setup.exe'))) { throw "-SetupApp ${SetupApp}: no amdgpu_wddm_setup.exe" }
 if (-not $Out) { $Out = Join-Path $Root 'scratch\release\out' }
 $repo = Split-Path (Split-Path $PSScriptRoot)
 $name = "amdgpu-wddm-tester-$Version"
-$pkg = Join-Path $Out $name
-$zip = "$pkg.zip"
+$pkgRoot = Join-Path $Out $name      # what the zip unpacks to: setup.exe and files\
+$pkg = Join-Path $pkgRoot 'files'    # the package root: manifest.json and everything the installer reads
+$zip = "$pkgRoot.zip"
 $sources = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'release-sources.json') -Raw | ConvertFrom-Json
 $secrets = Join-Path $Root 'secrets\release'
 $pfx = Join-Path $secrets 'amdgpu-wddm-release.pfx'
@@ -102,7 +124,7 @@ if (-not (Test-Path -LiteralPath $ledgerTool)) {
     }
 }
 
-if (Test-Path -LiteralPath $pkg) { Remove-Item -LiteralPath $pkg -Recurse -Force }
+if (Test-Path -LiteralPath $pkgRoot) { Remove-Item -LiteralPath $pkgRoot -Recurse -Force }
 if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
 [void][IO.Directory]::CreateDirectory($pkg)
 
@@ -124,9 +146,24 @@ Write-Host 'provenance'
 $pythonExe = (Get-Command python -ErrorAction SilentlyContinue).Source
 if (-not $pythonExe) { throw 'python is not on PATH: the provenance gate cannot run' }
 $provenanceArgs = @((Join-Path $PSScriptRoot 'provenance.py'), 'check', '--sources', (Join-Path $PSScriptRoot 'release-sources.json'), '--root', $Root, '--repo', $repo)
-$r = Invoke-Headless -File $pythonExe -Arguments $provenanceArgs -TimeoutSeconds 300
-$r.text
-if ($r.code -ne 0) { throw 'provenance: a payload file has no published commit, recipe or download record (see above)' }
+# A lab candidate is built from a work tree on purpose: the lab test comes before the commit (owner rule), so the
+# commit that the payload rows would name does not exist yet and no remote-tracking branch can contain it. The gate
+# is then off for this build, the reason is required, and manifest.json carries both, so a package that nobody could
+# tie to published commits cannot look like a gated release. A shipping package is built again after the commit,
+# with the gate on.
+$script:provenanceGate = 'enforced'
+$script:provenanceGateReason = ''
+if ($NoProvenance) {
+    if (-not $NoProvenanceReason) { throw '-NoProvenance needs -NoProvenanceReason "<why this build cannot name published commits>"' }
+    $script:provenanceGate = 'skipped'
+    $script:provenanceGateReason = $NoProvenanceReason
+    Write-Host 'provenance: GATE OFF for this build by -NoProvenance. This package is a candidate, not a release.'
+    Write-Host "provenance: reason: $NoProvenanceReason"
+} else {
+    $r = Invoke-Headless -File $pythonExe -Arguments $provenanceArgs -TimeoutSeconds 300
+    $r.text
+    if ($r.code -ne 0) { throw 'provenance: a payload file has no published commit, recipe or download record (see above)' }
+}
 if ($RebuildCheck) {
     $pwshExe = (Get-Process -Id $PID).Path
     $r = Invoke-Headless -File $pwshExe -Arguments @('-NoProfile', '-File', (Join-Path $PSScriptRoot 'rebuild-check.ps1'), '-Root', $Root, '-Report', (Join-Path $Out 'rebuild-check.json')) -TimeoutSeconds 21600
@@ -148,8 +185,9 @@ foreach ($cfg in Get-ChildItem -LiteralPath (Join-Path $pkg 'payload') -Recurse 
 }
 
 Write-Host 'installer and documents'
-# The start-confirm task's scripts: it also writes the running-release witness (release-witness.ps1).
-$taskScripts = @('start-confirm.ps1', 'start-confirm-core.ps1', 'dwm-session.ps1', 'release-witness.ps1')
+# The logon tasks' scripts: the confirmation also writes the running-release witness (release-witness.ps1), and
+# start-window.ps1 is the window task's own script (BD-080), which the logged-on user runs with their own rights.
+$taskScripts = @('start-confirm.ps1', 'start-confirm-core.ps1', 'start-window.ps1', 'dwm-session.ps1', 'release-witness.ps1')
 $inst = Join-Path $pkg 'installer'
 [void][IO.Directory]::CreateDirectory($inst)
 foreach ($f in Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'installer') -File) {
@@ -157,6 +195,20 @@ foreach ($f in Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'installer') 
 }
 # The installed copy of the start-confirm task runs from <install root>\tools next to bc250kmd_cli.exe.
 foreach ($f in $taskScripts) { Copy-Item -LiteralPath (Join-Path $inst $f) -Destination (Join-Path $pkg "payload\tools\$f") }
+# Source-owned scripts accompany every package, including installations without the control app.
+. (Join-Path $PSScriptRoot 'installer\system-tuning.ps1')
+. (Join-Path $PSScriptRoot 'system-tuning-manifest.ps1')
+$tuningManifest = New-SystemTuningManifest -CoreModule (Join-Path $repo 'tools\win\system-tuning\SystemTuning.Core.psm1')
+$tuningRows = @()
+$tuningDestinations = @('payload/system-tuning')
+if (Test-Path -LiteralPath (Join-Path $pkg 'payload\control')) { $tuningDestinations += 'payload/control/system-tuning' }
+foreach ($destination in $tuningDestinations) {
+    [void][IO.Directory]::CreateDirectory((Join-Path $pkg $destination))
+    foreach ($tuningFile in $script:SystemTuningFiles) {
+        Copy-Item -LiteralPath (Join-Path $repo "tools\win\system-tuning\$tuningFile") -Destination (Join-Path $pkg "$destination/$tuningFile")
+        $tuningRows += [pscustomobject]@{ component = 'system-tuning'; path = "$destination/$tuningFile" }
+    }
+}
 Copy-Item -LiteralPath (Join-Path $repo 'docs\testing\INSTALL.md') -Destination (Join-Path $pkg 'INSTALL.md')
 # TESTERS.md is not shipped any more. It named one package version of its own ("0.7.199.100-tester.11") in every
 # package up to tester.12, it read as the tester-facing note, and no gate held it to the release that carried it. The
@@ -171,6 +223,12 @@ $notesText = Get-Content -LiteralPath $notes -Raw
 foreach ($h in 'New', 'Fixed', 'Known issues', 'Settings affected') {
     if ($notesText -notmatch ('(?m)^## ' + [regex]::Escape($h) + '\s*$')) { throw "release notes $notes lack the section '## $h'" }
 }
+# The notes ship as RELEASE-NOTES.md and the setup window shows them, so they may not send a tester to a path this
+# package does not have. The unpacked release holds setup.exe in its top folder and everything else in files\
+# (owner, 2026-10-11), so the setup path of the notes up to 0.7.216.100-tester.28 is gone.
+if ($notesText -match 'setup\\amdgpu_wddm_setup\.exe') {
+    throw "release notes $notes still name setup\amdgpu_wddm_setup.exe: a tester double-clicks setup.exe in the unpacked folder, and the command line is files\install.cmd"
+}
 Copy-Item -LiteralPath $notes -Destination (Join-Path $pkg 'RELEASE-NOTES.md')
 foreach ($t in Get-ChildItem -LiteralPath $notesDir -File -Filter "$Version.*.md") {
     $lang = $t.Name.Substring($Version.Length + 1) -replace '\.md$', ''
@@ -178,16 +236,26 @@ foreach ($t in Get-ChildItem -LiteralPath $notesDir -File -Filter "$Version.*.md
     Copy-Item -LiteralPath $t.FullName -Destination (Join-Path $pkg "RELEASE-NOTES.$lang.md")
 }
 '  release notes: RELEASE-NOTES.md{0}' -f $(if (@(Get-ChildItem -LiteralPath $pkg -Filter 'RELEASE-NOTES.*.md').Count) { ' + ' + ((Get-ChildItem -LiteralPath $pkg -Filter 'RELEASE-NOTES.*.md' | ForEach-Object { $_.Name }) -join ', ') } else { '' })
-# The setup window (optional until it ships): setup\amdgpu_wddm_setup.exe (its string tables are embedded). The installer's
-# continuation runs it from the staged closure after each restart that a setup-window run asked for.
-if ($SetupApp) {
-    $setupExe = Join-Path $SetupApp 'amdgpu_wddm_setup.exe'
-    if (-not (Test-Path -LiteralPath $setupExe)) { throw "-SetupApp ${SetupApp}: no amdgpu_wddm_setup.exe" }
-    $setupDst = Join-Path $pkg 'setup'
-    [void][IO.Directory]::CreateDirectory($setupDst)
-    foreach ($f in Get-ChildItem -LiteralPath $SetupApp -File | Where-Object { $_.Extension -in '.exe', '.config' }) { Copy-Item -LiteralPath $f.FullName -Destination $setupDst }
-    '  setup window: {0} ({1})' -f $setupExe, (Get-FileHash -LiteralPath $setupExe -Algorithm SHA256).Hash.Substring(0, 8)
+# docs\testing\release-notes\pending holds tester-facing lines written before the release that carries them. Nothing
+# reads that folder, so a note left there ships nowhere: the file 0.7.208-log-lines.md sat through tester.24 to
+# tester.28 unread. Name every pending file in the build log, so the release step either folds the lines into
+# <version>.md and deletes the file, or decides out loud to leave it for the next release.
+$pendingDir = Join-Path $notesDir 'pending'
+if (Test-Path -LiteralPath $pendingDir) {
+    foreach ($p in Get-ChildItem -LiteralPath $pendingDir -File -Filter '*.md') {
+        Write-Warning ("pending release-notes lines not folded into ${Version}.md: docs\testing\release-notes\pending\{0}" -f $p.Name)
+    }
 }
+# The setup window (required, checked at the start): the one file in the unpacked release's top folder, named
+# setup.exe because that is what a tester double-clicks. The installer's continuation runs it from the staged closure
+# after each restart that a setup-window run asked for; its copy there is next to the manifest (common.ps1).
+$setupSrc = Join-Path $SetupApp 'amdgpu_wddm_setup.exe'
+$setupPkg = Join-Path $pkgRoot 'setup.exe'
+Copy-Item -LiteralPath $setupSrc -Destination $setupPkg
+# A .NET application configuration file, when the build makes one, belongs to the exe under its new name.
+foreach ($f in Get-ChildItem -LiteralPath $SetupApp -File -Filter 'amdgpu_wddm_setup.exe.config') { Copy-Item -LiteralPath $f.FullName -Destination "$setupPkg.config" }
+$setupHash = (Get-FileHash -LiteralPath $setupPkg -Algorithm SHA256).Hash
+'  setup window: {0} -> {1} ({2})' -f $setupSrc, $setupPkg, $setupHash.Substring(0, 8)
 foreach ($f in 'LICENSE.md', 'NOTICE') { Copy-Item -LiteralPath (Join-Path $repo $f) -Destination $pkg }
 # The release's own third-party list (each bundled file and its licence file) and the licence texts, each from the
 # source that release-sources.json records (repository, path, commit) and refused unless its SHA256 matches.
@@ -240,6 +308,49 @@ foreach ($f in Get-ChildItem -LiteralPath $lic -File) {
     if ((Get-Content -LiteralPath $f.FullName -TotalCount 3) -match '(?i)<!DOCTYPE|<html') { throw "licenses\$($f.Name) is a web page, not a licence text" }
 }
 
+# The guide character has to be in the shipped programs. Every package up to 0.7.216.100-tester.21 was built by a
+# recipe that passed no art directory at all, so the guide panel was the text-only panel on every install: the
+# expressions are named in the exe only when the art was embedded. The names come from the repository's own map, so
+# a renamed expression is a finding here and not a silent text-only panel on a tester's PC.
+$guideMap = [regex]::Matches((Get-Content -LiteralPath (Join-Path $repo 'tools\win\amdgpu_wddm_control\src\Guide.cs') -Raw),
+    '\{ "(?<expr>\d\d-[a-z-]+)", "(?<file>[a-z-]+)" \}')
+if ($guideMap.Count -ne 9) { throw "Guide.ArtFile: $($guideMap.Count) expressions found, 9 expected" }
+$guideResources = @(foreach ($m in $guideMap) { foreach ($size in 128, 256) { "nagi.$($m.Groups['expr'].Value)@$size.png" } })
+# The setup window embeds only the expressions its own causes reach (SetupGuide.ArtExpressions), so this gate asks it
+# for the expression ids its source names and for nothing more. A new expression there is covered by that alone.
+$setupExpressions = @([regex]::Matches((Get-Content -LiteralPath (Join-Path $repo 'tools\win\amdgpu_wddm_setup\src\EngineModel.cs') -Raw),
+        '"(?<expr>\d\d-[a-z-]+)"') | ForEach-Object { $_.Groups['expr'].Value } | Sort-Object -Unique)
+if (-not $setupExpressions.Count) { throw 'SetupGuide: no guide expression found in EngineModel.cs' }
+$unknown = @($setupExpressions | Where-Object { $e = $_; -not ($guideMap | Where-Object { $_.Groups['expr'].Value -eq $e }) })
+if ($unknown.Count) { throw "SetupGuide names the expression $($unknown -join ', '), which Guide.ArtFile does not have" }
+# The setup window embeds the @256 picture alone, by its own contract: its smallest slot is 176 device pixels at 96
+# DPI, larger than the @128 picture, so a @128 resource could never be drawn (EngineModel.cs, SetupGuide.ArtPixels,
+# and the -Sizes 256 of tools\win\amdgpu_wddm_setup\build.ps1). Asking for both sizes here refused every setup
+# window ever built, this release's included. The control application above keeps both sizes: it draws the small one.
+$setupResources = @(foreach ($e in $setupExpressions) { "nagi.$e@256.png" })
+# The control application is a component of every package: its path comes from release-sources.json, so a renamed
+# payload path cannot make this gate match nothing. The setup window is required too (-SetupApp, checked at the start).
+$controlFiles = @($sources.files | Where-Object { $_.component -eq 'control' -and $_.path -like '*amdgpu_wddm_control.exe' })
+if ($controlFiles.Count -ne 1) { throw "release-sources.json: $($controlFiles.Count) control-application exe entries, 1 expected" }
+$checkedPrograms = 0
+foreach ($program in @(
+        @{ name = 'control application'; path = (Join-Path $pkg ($controlFiles[0].path -replace '/', '\')); want = $guideResources; required = $true },
+        @{ name = 'setup window'; path = $setupPkg; want = $setupResources; required = $true })) {
+    if (-not (Test-Path -LiteralPath $program.path)) {
+        if ($program.required) { throw "guide art: the package has no $($program.name) at $($program.path)" }
+        continue
+    }
+    $exeText = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($program.path))
+    $missingArt = @($program.want | Where-Object { -not $exeText.Contains($_) })
+    if ($missingArt.Count) {
+        throw ("guide art: the packaged $($program.name) has no resource $($missingArt -join ', '). " +
+               'Build it with tools\win\amdgpu_wddm_control\build.ps1 (the art of tools\win\amdgpu_wddm_control\art\nagi is embedded by default).')
+    }
+    $checkedPrograms++
+    '  guide art: {0} resources in the {1}' -f @($program.want).Count, $program.name
+}
+if ($checkedPrograms -eq 0) { throw 'guide art: no packaged program was checked' }
+
 Write-Host 'driver version'
 # Two changes to the packaged INF, nothing else; the catalog below is made from this INF.
 #  - DriverVer = <date>,$DriverVer.
@@ -286,16 +397,27 @@ foreach ($f in 'bc250kmd.sys', 'bc250kmd.cat') {
 }
 
 Write-Host 'gates'
-$forbidden = @(Get-ChildItem -LiteralPath $pkg -Recurse -File | Where-Object { $_.Extension -in '.pfx', '.pass', '.pem', '.key', '.p12', '.pvk' })
+$forbidden = @(Get-ChildItem -LiteralPath $pkgRoot -Recurse -File | Where-Object { $_.Extension -in '.pfx', '.pass', '.pem', '.key', '.p12', '.pvk' })
 if ($forbidden.Count) { throw "private-key material in the package: $($forbidden.FullName -join ', ')" }
-$blobs = @(Get-ChildItem -LiteralPath $pkg -Recurse -File | Where-Object { $_.Extension -eq '.bin' -or $_.FullName -like '*\payload\firmware\*' })
+$blobs = @(Get-ChildItem -LiteralPath $pkgRoot -Recurse -File | Where-Object { $_.Extension -eq '.bin' -or $_.FullName -like '*\payload\firmware\*' })
 if ($blobs.Count) { throw "AMD firmware in the package (the installer downloads it): $($blobs.FullName -join ', ')" }
 '  no private-key material, no firmware file'
+# The unpacked release's top folder: setup.exe (with its configuration file, when there is one) and the one folder
+# files\, nothing else (owner, 2026-10-11). A document or a script that creeps back into the top folder is a finding
+# here, not something a tester has to sort out.
+$topFiles = @(Get-ChildItem -LiteralPath $pkgRoot -File | ForEach-Object { $_.Name } | Where-Object { $_ -notin 'setup.exe', 'setup.exe.config' })
+$topDirs = @(Get-ChildItem -LiteralPath $pkgRoot -Directory | ForEach-Object { $_.Name } | Where-Object { $_ -ne 'files' })
+if ($topFiles.Count -or $topDirs.Count) { throw "the unpacked package's top folder may hold only setup.exe and files\: it also holds $(@($topFiles + $topDirs) -join ', ')" }
+'  top folder: setup.exe and files\ only'
 # The packaged copies against release-sources.json: each is its source byte for byte, the re-signed kernel driver keeps
 # its recorded Authenticode digest, and only an entry that names its "release_edits" (the INF) differs otherwise.
-$r = Invoke-Headless -File $pythonExe -Arguments ($provenanceArgs + @('--package', $pkg)) -TimeoutSeconds 300
-$r.text -split "`r?`n" | Where-Object { $_ -match '^(FAIL|provenance: (FAIL|PASS))' } | ForEach-Object { "  package $_" }
-if ($r.code -ne 0) { throw 'provenance: a packaged file is not the recorded one (see above)' }
+if ($NoProvenance) {
+    '  package provenance: GATE OFF by -NoProvenance (the commits of this candidate are not published yet)'
+} else {
+    $r = Invoke-Headless -File $pythonExe -Arguments ($provenanceArgs + @('--package', $pkg)) -TimeoutSeconds 300
+    $r.text -split "`r?`n" | Where-Object { $_ -match '^(FAIL|provenance: (FAIL|PASS))' } | ForEach-Object { "  package $_" }
+    if ($r.code -ne 0) { throw 'provenance: a packaged file is not the recorded one (see above)' }
+}
 $ps51 = Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
 $r = Invoke-Headless -File $ps51 -Arguments @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $PSScriptRoot 'test-parse51.ps1'), '-Directory', $inst) -TimeoutSeconds 120
 $r.text
@@ -326,6 +448,13 @@ $r = Invoke-Headless -File $pwshExe -Arguments @('-NoProfile', '-File', (Join-Pa
 $r.text
 if ($r.code -ne 0) { throw 'the kernel driver of this repository does not compile and link (see above)' }
 
+# Full owns the controls removed from the incremental KMD profile. No cache can
+# supply a PASS here; the receipt identifies every executed check and its deadline.
+$qualityCmd = Join-Path $repo 'tools\quality\quick.cmd'
+$qualityOut = Join-Path $Out 'quality-full'
+& $qualityCmd $Root $qualityOut $repo 'Full' (Join-Path $Root 'toolchain\nuget')
+if ($LASTEXITCODE -ne 0) { throw 'Full uncached release quality gates failed' }
+
 Write-Host 'manifest'
 # Where each payload directory lands on the tester PC (install.ps1 does the copying).
 function Get-InstallLocation([string]$PackagePath) {
@@ -337,12 +466,12 @@ function Get-InstallLocation([string]$PackagePath) {
         '^payload/wow64/(\w+)/' { return "<InstallDir>\wow64\$($Matches[1])\$leaf" }
         '^payload/firmware/' { return "C:\BC250\firmware\$leaf" }
         '^payload/cert/' { return 'LocalMachine Root and TrustedPublisher' }
-        '^payload/(\w+)/' { return "<InstallDir>\$($Matches[1])\$leaf" }
+        '^payload/(.+)$' { return ('<InstallDir>\' + $Matches[1].Replace('/', '\')) }
     }
     return $null
 }
 $components = @()
-$extra = @($taskScripts | ForEach-Object { [pscustomobject]@{ component = 'tool'; path = "payload/tools/$_" } }) + @([pscustomobject]@{ component = 'certificate'; path = 'payload/cert/amdgpu-wddm-release.cer' })
+$extra = @($taskScripts | ForEach-Object { [pscustomobject]@{ component = 'tool'; path = "payload/tools/$_" } }) + @([pscustomobject]@{ component = 'certificate'; path = 'payload/cert/amdgpu-wddm-release.cer' }) + $tuningRows
 foreach ($f in $sources.files + $extra) {
     $p = Join-Path $pkg ($f.path -replace '/', '\')
     $ver = (Get-Item -LiteralPath $p).VersionInfo.FileVersion
@@ -350,6 +479,53 @@ foreach ($f in $sources.files + $extra) {
 }
 # Downloaded at install time: no package path, the same install path and SHA256 check in the control application.
 foreach ($f in $fwFiles) { $components += [ordered]@{ role = 'firmware'; package_path = $null; install_path = "$($firmware.install_dir)\$($f.name)"; version = $null; sha256 = $f.sha256 } }
+# The optional components of this release (installer\components.ps1): our llama.cpp build and our Ollama build are
+# release assets, not package files. tools\release\components.json is the pinned list; this writes it into the package
+# as installer\components.json with {release} expanded, and manifest.json names it under optional_components, so the
+# existing package-integrity check covers it like every other file. A component whose asset SHA-256 is not filled in
+# has no pin: it stays in the list, the installer refuses it with a plain message and downloads nothing. A package can
+# therefore be built before its component zips are uploaded, and it will not install one unchecked.
+. (Join-Path $PSScriptRoot 'installer\components.ps1')
+$optionalComponents = $null
+$componentSource = Join-Path $PSScriptRoot 'components.json'
+if (Test-Path -LiteralPath $componentSource -PathType Leaf) {
+    $cmJson = Get-Content -LiteralPath $componentSource -Raw | ConvertFrom-Json
+    $cmJson.release = $Version
+    if ($cmJson.PSObject.Properties['comment']) { $cmJson.PSObject.Properties.Remove('comment') }
+    foreach ($c in @($cmJson.components)) {
+        if ($c.PSObject.Properties['comment']) { $c.PSObject.Properties.Remove('comment') }
+        $c.asset.name = ([string]$c.asset.name).Replace('{release}', $Version)
+        $c.asset.url_templates = @(@($c.asset.url_templates) | ForEach-Object { ([string]$_).Replace('{release}', $Version) })
+    }
+    $cmProblems = @(Test-ComponentsManifest $cmJson)
+    if ($cmProblems.Count) { throw "tools\release\components.json: $($cmProblems -join '; ')" }
+    # An asset name that carries no {release} is the literal name of one release's asset. When it names another
+    # release's train than this build, its address is a 404 at install time, and only a tester would find out. The
+    # asset is downloaded by its SHA-256, so the name is the one thing nothing else checks.
+    if ($Version -match 'tester\.(\d+)') {
+        $thisTrain = $Matches[1]
+        foreach ($c in @($cmJson.components)) {
+            $assetName = [string]$c.asset.name
+            if ($assetName -match 'tester\.(\d+)' -and $Matches[1] -ne $thisTrain) {
+                "  WARNING: component '$([string]$c.id)' names the asset $assetName, which carries tester.$($Matches[1]) while this release is tester.$thisTrain. Upload the asset under that name, or write the new name, size and sha256 into tools\release\components.json."
+            }
+        }
+    }
+    [IO.File]::WriteAllText((Join-Path $pkg 'installer\components.json'), ($cmJson | ConvertTo-Json -Depth 8))
+    $cmPinned = @(@($cmJson.components) | Where-Object { -not (Get-ComponentPinProblem $_) } | ForEach-Object { [string]$_.id })
+    $cmUnpinned = @(@($cmJson.components) | Where-Object { Get-ComponentPinProblem $_ } | ForEach-Object { [string]$_.id })
+    $optionalComponents = [ordered]@{
+        file = 'installer/components.json'
+        models_dir = [string]$cmJson.models_dir
+        offered = @(@($cmJson.components) | ForEach-Object { [string]$_.id })
+        pinned = $cmPinned
+        unpinned = $cmUnpinned
+        models = @(@($cmJson.models) | ForEach-Object { [string]$_.id })
+    }
+    '  components: {0} offered ({1}), {2} with a pinned download, {3} models offered' -f @($cmJson.components).Count, (@($optionalComponents.offered) -join ', '), $cmPinned.Count, @($cmJson.models).Count
+    foreach ($id in $cmUnpinned) { "  WARNING: component '$id' has no SHA-256 in tools\release\components.json: this package will refuse it. Upload its zip as a release asset and fill size and sha256." }
+} else { '  components: tools\release\components.json is not in this workspace: this package offers no optional component' }
+
 # The compatibility record (installer\compatibility.ps1, GUI plan C7): written from the final INF, installer and payload,
 # listed in manifest.json like every other file, and verified below once the manifest exists.
 . (Join-Path $PSScriptRoot 'installer\engine.ps1')
@@ -392,6 +568,9 @@ if ($sources.PSObject.Properties['mft_h264']) {
     }
     '  H.264 encoder MFT: {0} ({1} {2})' -f $(if ($mftRelease.register) { 'registered by the installer' } else { 'not registered by this release' }), $mftRelease.package_path, $mftRelease.clsid
 }
+# The package names itself after its folder. A loop that took $name for its own variable once named tester.28 r1
+# after the Ollama asset, and the validation suite then found no zip beside the folder.
+if ($name -ne (Split-Path -Leaf $pkgRoot)) { throw "build-release: the package name is '$name', its folder is '$(Split-Path -Leaf $pkgRoot)'" }
 # The OpenGL ICD (BD-076, GitHub issue #8): manifest.json carries the switch, so the package itself says whether the
 # installer registers an OpenGL driver, and this gate holds the payload to the contract. A release that registers the
 # ICD must carry both architectures, each an image of the right machine that exports every Drv entry point the OpenGL
@@ -435,10 +614,20 @@ $manifest = [ordered]@{
     # The package states it itself, so a build that waved the gate cannot look like a gated one.
     work_ledger_gate = $script:ledgerGate
     work_ledger_gate_reason = $script:ledgerGateReason
+    # enforced, or skipped by -NoProvenance in a lab candidate whose commits are not published yet.
+    provenance_gate = $script:provenanceGate
+    provenance_gate_reason = $script:provenanceGateReason
     release_certificate = $release.Thumbprint
+    # The setup window: the one file of the zip that is not under the package root, because the unpacked release puts
+    # it in the top folder (owner, 2026-10-11). "file" is a name, not a path: the unpacked release keeps it beside
+    # files\, a kept repair set and a prepared folder keep their copy in the package root (common.ps1,
+    # Get-PackageSetupExe). Test-PackageManifest hashes it wherever it is, so verify covers it like every other file.
+    setup = [ordered]@{ file = 'setup.exe'; sha256 = $setupHash; size = (Get-Item -LiteralPath $setupPkg).Length }
     control_app_exe = $sources.control_app_exe
+    system_tuning = $tuningManifest
     mft_h264 = $mftRelease        # the H.264 encoder MFT switch; absent in a release that has no encoder at all
     opengl_icd = $glRelease       # the OpenGL ICD switch (BD-076); absent in a release that has no GL ICD at all
+    optional_components = $optionalComponents   # the extras (installer/components.json); $null in a release without any
     sources = $sources.sources
     firmware = $firmware
     defaults = $regDefaults.defaults
@@ -450,6 +639,6 @@ $manifest = [ordered]@{
 $cv = Test-CompatibilityRecord -PackageRoot $pkg
 if (-not $cv.ok) { throw "compatibility record does not verify: $($cv.detail)" }
 '  compatibility record verifies against the package'
-Compress-Archive -Path $pkg -DestinationPath $zip
-'{0} files, package {1}' -f $files.Count, $pkg
+Compress-Archive -Path $pkgRoot -DestinationPath $zip
+'{0} files under files\ plus setup.exe, package {1}' -f $files.Count, $pkgRoot
 'zip {0} SHA256 {1}' -f $zip, (Get-FileHash -LiteralPath $zip).Hash

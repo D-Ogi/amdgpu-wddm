@@ -5,7 +5,7 @@ repositories. Naming the revision turned out to be the easy half. The hard half 
 revision does not give the same file, so "this deployed driver is that commit" cannot be checked by comparing
 hashes. This note says exactly why, what to change, and what the signing step can and cannot be asked to do.
 
-Everything below is measured on this tree with WDK/SDK 10.0.26100, 2026-10-03.
+The first measurements below used WDK/SDK 10.0.26100 on one host, 2026-10-03. They do not prove that every later revision reproduces across build environments.
 
 ## What was measured, before the change
 
@@ -44,7 +44,7 @@ list because nothing in `Get-ChildItem` promises that.
 
 ## What was measured, after the change
 
-Both artifacts reproduce bit for bit, including the signature:
+The two builds measured on that host were identical, including the signature:
 
 | artifact | build 1 | build 2 |
 |---|---|---|
@@ -106,16 +106,41 @@ tests pass with it.
    signing time and the private key as inputs (`osslsigncode -time`). That is a change of trust model for a
    test certificate and it buys nothing over steps 1 and 2. Not proposed.
 
-## The gate
+## The implemented gates
 
-- `build.ps1` writes `reproducible.json` next to `source-manifest.json`: the unsigned image hash, the
-  Authenticode PE hash of the signed image, the catalog hash, the toolset and kit versions, and the flags that
-  were used.
-- A new `tools/quality/reproducible.py`, wired into `quick.ps1`, rebuilds nothing. It checks that the flags are
-  present, that `bc250kmd.unsigned.sys` exists, and, when given a pinned expectation, that the unsigned hash
-  matches it.
-- The promotion path gains one step: before a candidate is registered on the lab, rebuild it in a second
-  directory and compare the unsigned hashes. Two directories is the case that caught the embedded PDB path.
+`build.ps1` saves `bc250kmd.unsigned.sys` before catalog creation and signing. Its package path captures
+`source-manifest.start.json`, verifies that source identity did not change, and writes `source-manifest.json`
+with package hashes and the hash of `compile_commands.json`. It does not write `reproducible.json`, and there
+is no `tools/quality/reproducible.py` gate.
+
+`tools/quality/test_kmd_reproducible.py` checks the production ordinal ordering helper under PowerShell 5.1
+and 7, with three cultures. Its negative control restores `Sort-Object Name` and must fail a behavioral check.
+The named `kmd-order` gate in `quick.ps1` runs this check before other quality gates. The `quality-controls`
+gate also discovers `test_kmd_package.py`, which runs the positive and negative controls. These gates check
+input ordering. They do not compile two drivers or certify their binary equality.
+
+The 2026-10-10 review of BD-114 found that the two PowerShell versions ordered nine object name families
+differently, at 22 positions. These include `bc250_sdma` and `dcn`. The effect is not specific to SDMA.
+Relinking the same objects in those two orders reproduced the two reported unsigned hashes, `69111A1C` and
+`D1D2F1A9`. The recipe now orders source and object paths with `StringComparer.Ordinal`. A promotion must still
+compare complete unsigned rebuilds with recorded compiler, linker, kits and environment inputs. Ambient
+compiler options, different tool binaries and untested environments are outside the ordering gate.
+
+## Package builds from reviewed worktrees
+
+The package path resolves its workspace from explicit `-QualityWorkspace`, then `BC250_ROOT`, then the
+local repository configuration `bc250.workspace`, then a `-Kits` path of the form `<workspace>/toolchain/nuget`.
+A relative repository setting is relative to the repository root. An invalid selected setting fails. It does
+not fall back to a different workspace. Because some host tests accept only a workspace root, both quality
+profiles refuse kits outside that workspace's `toolchain/nuget`. `package-context.json` records the package
+choice, and the quality result records the context its gates used.
+
+The default quality profile remains `Full`. It requires the tracked status maps to match the current source
+and WDK headers. A package uses `KmdPackage`: the same generator checks current source and headers, but
+writes its maps below the quality output directory. Its receipt records differences from tracked maps and
+marks only tracked presentation freshness as a profile exclusion. It does not edit the reviewed commit.
+The status-map tests, source identity checks, compiler and contract gates, and other quality checks still run.
+A generator error remains a package failure.
 
 ## One thing to be careful about
 

@@ -14,7 +14,9 @@ Only the steps marked LAB touch unit A. Every lab trial stays within three minut
   `driver/kmd/build.ps1` on a clean checkout, in the plain `package` flavor.
 - `--rollback DIR`: the KMD deployed now, in the same form. Either the candidate directory of the attempt that
   promoted it, or its build package directory. When the lab runs a tester release, give the release package
-  directory (`manifest.json`, `payload/kmd`, `payload/cert`). See "A release package as the rollback".
+  directory (`manifest.json`, `payload/kmd`, `payload/cert`): either the folder the release zip unpacks to or the
+  `files` folder under it, which is where those entries are in a package with the `setup.exe` top folder. See
+  "A release package as the rollback".
 - `--rollback-build DIR`: only with a release package as `--rollback`. The build package directory that the
   release packages: the `source` of `payload/kmd` in the release's `release-sources.json`.
 - `--repo DIR`: the git repository that holds both commits. The default is `<BC250_ROOT>/bc250-win`.
@@ -283,9 +285,15 @@ environment variables.
 `BC250_KMD_DEPLOY_WORK` moves the attempts and the host-test output elsewhere. Nothing is written to drive C: of
 the development PC.
 
-The kit also reads two directories of recorded history, by their hashes, and refuses to continue if either
-changed: `<BC250_ROOT>/scratch/m14/kmd171-deploy001` holds the stage manifest of the measured 170 to 171
-promotion and the `bounded-child.exe` and `select-driver.exe` that every transition reuses byte for byte.
+The kit also reads two sets of recorded history, by their hashes, and refuses to continue if either changed. One
+is `<BC250_ROOT>/scratch/kmd-deploy/hist171/`: the nine helpers of the measured 170 to 171 promotion, the kmd168
+transition helpers plus the `bounded-child.exe` and `select-driver.exe` that every transition reuses byte for
+byte. Their digests and their provenance are in `hist171-manifest.json` in this directory, which is tracked and
+hash pinned in turn. `tools/test_hist171.py` is its gate. The set used to be read from the frozen 171 attempt in
+the closed M14 milestone tree, which the workspace cleanup of 2026-10-12 deleted. The bytes were recovered from
+four later frozen attempts that all record the same 171 stage manifest, so the set now lives beside the kit's default
+work directory. It is input, not output: a relocated `BC250_KMD_DEPLOY_WORK` (the package gate sets one) does not
+move it, and only `BC250_KMD_DEPLOY_HIST` points the kit at another verified copy.
 
 ## The operator copy
 

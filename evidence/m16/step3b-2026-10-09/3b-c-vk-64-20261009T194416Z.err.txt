@@ -1,0 +1,144 @@
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x7f93
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+0.00.039.742 I llama_completion: llama backend init
+0.00.039.749 I llama_completion: load the model and apply lora adapter, if any
+radv_wddm2_winsys_create
+allocation handle=0x40001300
+bc250: gfx preamble inlined (no gfx_init IB)
+allocation handle=0x40001740
+allocation handle=0x40001ec0
+allocation handle=0x40002040
+allocation handle=0x400021c0
+allocation handle=0x40002200
+allocation handle=0x80000280
+allocation handle=0x40002300
+allocation handle=0x80000480
+allocation handle=0x40002440
+allocation handle=0x400024c0
+allocation handle=0x40002540
+allocation handle=0x400025c0
+allocation handle=0x80000700
+allocation handle=0x80000780
+bc250: progress before submit previous=0 observed=0 slot=0 retire=0 waits=0 signals=1
+allocation handle=0x40002640
+bc250: gather capacity=4096 bytes required=1024 ibs=2
+allocation handle=0x400026c0
+allocation handle=0x40002740
+allocation handle=0x400027c0
+allocation handle=0x80000800
+bc250: gather capacity=4096 bytes required=1024 ibs=2
+allocation handle=0x80000a80
+allocation handle=0x80000b00
+allocation handle=0x80000b80
+allocation handle=0x80000c00
+bc250: gather capacity=4096 bytes required=1024 ibs=2
+allocation handle=0x80000c80
+allocation handle=0x80000d00
+allocation handle=0x80000d80
+allocation handle=0x80000e00
+bc250: gather capacity=4096 bytes required=1024 ibs=2
+allocation handle=0x80000e80
+allocation handle=0x80000f00
+bc250: gather capacity=4096 bytes required=1024 ibs=2
+allocation handle=0x80000f80
+allocation handle=0x80001000
+bc250: gather capacity=4096 bytes required=1024 ibs=2
+allocation handle=0x80001080
+allocation handle=0x80001100
+bc250: gather capacity=4096 bytes required=1024 ibs=2
+allocation handle=0x80001180
+allocation handle=0x80000a00
+allocation handle=0x40002840
+allocation handle=0x80001380
+allocation handle=0x80001400
+0.00.687.290 I cmn          init: llama threadpool init, n_threads = 6
+allocation handle=0x80001480
+allocation handle=0x80001500
+allocation handle=0x80001580
+allocation handle=0x80001600
+allocation handle=0x400028c0
+allocation handle=0x40002940
+allocation handle=0x80001780
+allocation handle=0x80001800
+bc250: gather capacity=28672 bytes required=24960 ibs=2
+allocation handle=0x80001880
+allocation handle=0x80001680
+allocation handle=0x80001980
+allocation handle=0x80001a00
+bc250: gather capacity=28672 bytes required=26912 ibs=2
+allocation handle=0x80001a80
+allocation handle=0x80001b00
+allocation handle=0x80001b80
+bc250: gather capacity=24576 bytes required=21600 ibs=2
+allocation handle=0x80001c00
+allocation handle=0x80001c80
+allocation handle=0x80001d00
+bc250: gather capacity=20480 bytes required=19360 ibs=2
+allocation handle=0x80001d80
+allocation handle=0x80001e00
+0.00.831.023 I 
+0.00.831.058 I system_info: n_threads = 6 (n_threads_batch = 6) / 12 | CPU : SSE3 = 1 | SSSE3 = 1 | AVX = 1 | AVX2 = 1 | F16C = 1 | FMA = 1 | BMI2 = 1 | LLAMAFILE = 1 | OPENMP = 1 | REPACK = 1 | 
+0.00.831.058 I 
+0.00.831.132 I sampler seed: 4294967295
+0.00.831.152 I sampler params: 
+	repeat_last_n = 64, repeat_penalty = 1.000, frequency_penalty = 0.000, presence_penalty = 0.000
+	dry_multiplier = 0.000, dry_base = 1.750, dry_allowed_length = 2, dry_penalty_last_n = 64
+	top_k = 40, top_p = 0.950, min_p = 0.050, xtc_probability = 0.000, xtc_threshold = 0.100, typical_p = 1.000, top_n_sigma = -1.000, temp = 0.000
+	mirostat = 0, mirostat_lr = 0.100, mirostat_ent = 5.000, adaptive_target = -1.000, adaptive_decay = 0.900
+0.00.831.160 I sampler chain: logits -> ?penalties -> ?dry -> ?top-n-sigma -> top-k -> ?typical -> top-p -> min-p -> ?xtc -> temp-ext -> greedy 
+0.00.831.161 I generate: n_ctx = 2048, n_batch = 2048, n_predict = 64, n_keep = 1
+0.00.831.161 I 
+allocation handle=0x80001940
+allocation handle=0x80001f00
+allocation handle=0x80001f80
+bc250: gather capacity=8192 bytes required=4896 ibs=2
+allocation handle=0x40002980
+allocation handle=0x80002080
+allocation handle=0x80002100
+bc250: gather capacity=8192 bytes required=5088 ibs=2
+allocation handle=0x40002a00
+allocation handle=0x40002a80
+allocation handle=0x40002b00
+bc250: gather capacity=8192 bytes required=7776 ibs=2
+allocation handle=0x40002b80
+allocation handle=0x40002c00
+allocation handle=0x40002c80
+allocation handle=0x40002d00
+allocation handle=0x40002d80
+allocation handle=0x40002e00
+allocation handle=0x40002e80
+allocation handle=0x40002f00
+allocation handle=0x40002f80
+allocation handle=0x40003000
+allocation handle=0x40003080
+allocation handle=0x40003100
+allocation handle=0x40003180
+allocation handle=0x40003200
+allocation handle=0x40003280
+allocation handle=0x40003300
+allocation handle=0x40003380
+allocation handle=0x40003400
+allocation handle=0x40003480
+allocation handle=0x40003500
+allocation handle=0x40003580
+allocation handle=0x40003600
+allocation handle=0x40003680
+bc250: gather capacity=16384 bytes required=13984 ibs=2
+allocation handle=0x40003700
+bc250: gather capacity=24576 bytes required=22336 ibs=2
+allocation handle=0x40003780
+bc250: gather capacity=28672 bytes required=26400 ibs=2
+allocation handle=0x40003800
+bc250: gather capacity=20480 bytes required=16512 ibs=2
+0.01.307.453 I common_perf_print:    sampling time =       7.39 ms
+0.01.307.454 I common_perf_print:    samplers time =       3.93 ms /    70 tokens
+0.01.307.455 I common_perf_print:        load time =     585.15 ms
+0.01.307.458 I common_perf_print: prompt eval time =     233.93 ms /     6 tokens (   38.99 ms per token,    25.65 tokens per second)
+0.01.307.460 I common_perf_print:        eval time =     232.99 ms /    63 runs   (    3.70 ms per token,   270.40 tokens per second)
+0.01.307.461 I common_perf_print:       total time =     476.44 ms /    69 tokens
+0.01.307.463 I common_perf_print: unaccounted time =       2.13 ms /   0.4 %      (total - sampling - prompt eval - eval) / (total)
+0.01.307.463 I common_perf_print:    graphs reused =         62

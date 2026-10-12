@@ -14,14 +14,22 @@
 //     behaviour of the first build of layer 2. No worker may finish anything, and the test
 //     refuses to run as a control unless the runtime it links really waits with the lock held.
 //
+// After the client, both builds run a GPU copy that waits for its own fence inside layer 1: the
+// product form must answer a query on another thread while the copy waits and the negative
+// control must not, and in both a hipFree racing the copy must wait for it.
+//
 // The mock backend holds each dispatch for a measured time (bc250hsa_mock_set_hold_ms), because
 // a backend that retires a fence at once has no wait to measure.
 //
 // Usage: test_hip_threads.exe [<path of the fatbin fixture>] [--negative-control] [--hold <ms>]
 
+#include <atomic>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <thread>
+#include <vector>
 
 #include "bc250hsa.h"
 #include "hip/hip_runtime.h"
@@ -195,6 +203,11 @@ int main(int argc, char** argv) {
 
     bc250hipthreads::Options options = bc250hipthreads::default_options(launch_vadd, nullptr);
     options.negative_control = negative_control;
+    // This test links the mock backend, which retires every dispatch on a timer of its own and
+    // therefore has as many in flight as the threads give it. That is what makes phase B's "four
+    // times" verdict a test of the process lock here, and it is also why the hardware does not
+    // meet it: the ring runs one indirect buffer at a time (defect BD-111).
+    options.device_overlaps_dispatches = 1;
     bc250hipthreads::Result result;
     (void)bc250hipthreads::run(options, &result);
     check(result.api_failures == 0, "every HIP call of the client answered hipSuccess");
@@ -250,6 +263,131 @@ int main(int argc, char** argv) {
               "out twice");
         bc250hip::kernarg_release(first, 0);
         bc250hip::kernarg_release(second, 0);
+    }
+
+    // A GPU copy waits for its own fence inside layer 1 (bc250hsa.h section 5.1), so the runtime
+    // makes the whole call with the process lock released and pins the allocations it names
+    // (the review of 2026-10-11). Two questions, for the direct route (a hipHostMalloc
+    // destination) and the staged one (a program's own buffer):
+    //   * progress: does a metadata query on another thread finish while the copy still waits?
+    //     The product build must; the negative control holds the lock and must not;
+    //   * lifetime: does a hipFree of memory the copy names, made while the copy has not even
+    //     submitted yet, wait for it? The mock counts a free of memory a GPU call still names,
+    //     and that count must stay where it was in both builds.
+    {
+        const size_t   copy_bytes = 65536;
+        const uint32_t copy_hold_ms = 300;
+        const uint32_t copy_delay_ms = 150;
+        unsigned char* device_src = nullptr;
+        unsigned char* pinned_dst = nullptr;
+        unsigned char* spare_src = nullptr;
+        std::vector<unsigned char> pattern(copy_bytes, 0u);
+        for (size_t i = 0; i < copy_bytes; ++i) {
+            pattern[i] = static_cast<unsigned char>(i * 31u + 7u);
+        }
+        check(hipMalloc(reinterpret_cast<void**>(&device_src), copy_bytes) == hipSuccess,
+              "hipMalloc the copy source");
+        check(hipMalloc(reinterpret_cast<void**>(&spare_src), copy_bytes) == hipSuccess,
+              "hipMalloc a second copy source");
+        check(hipMemcpy(device_src, pattern.data(), copy_bytes, hipMemcpyHostToDevice) ==
+                  hipSuccess,
+              "the copy source holds the pattern");
+        check(hipMemcpy(spare_src, pattern.data(), copy_bytes, hipMemcpyHostToDevice) ==
+                  hipSuccess,
+              "the second copy source holds the pattern");
+        const uint32_t violations_before = bc250hsa_mock_free_violations();
+
+        // Waits until the worker's GPU call has started; false after 5 s.
+        auto copy_started = []() {
+            for (int i = 0; i < 5000; ++i) {
+                if (bc250hsa_mock_gpu_in_flight() != 0u) {
+                    return true;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+            return false;
+        };
+
+        for (int route = 0; route < 2; ++route) {
+            const char* const name = route == 0 ? "direct" : "staged";
+            char what[160];
+            std::vector<unsigned char> pageable(copy_bytes, 0u);
+            unsigned char* fresh_pinned = nullptr;
+            check(hipHostMalloc(reinterpret_cast<void**>(&fresh_pinned), copy_bytes,
+                                hipHostMallocDefault) == hipSuccess,
+                  "hipHostMalloc a copy destination");
+            pinned_dst = fresh_pinned;
+            void* const destination = route == 0 ? static_cast<void*>(pinned_dst)
+                                                 : static_cast<void*>(pageable.data());
+
+            // Progress.
+            bc250hsa_mock_set_hold_ms(copy_hold_ms);
+            std::atomic<int> copied{ -1 };
+            std::thread worker([&]() {
+                copied = static_cast<int>(hipMemcpy(destination, device_src, copy_bytes,
+                                                    hipMemcpyDeviceToHost));
+            });
+            const bool started = copy_started();
+            size_t free_bytes = 0;
+            size_t total_bytes = 0;
+            const hipError_t queried = hipMemGetInfo(&free_bytes, &total_bytes);
+            const bool still_copying = bc250hsa_mock_gpu_in_flight() != 0u;
+            worker.join();
+            std::snprintf(what, sizeof(what), "%s: the copy started", name);
+            check(started, what);
+            std::snprintf(what, sizeof(what), "%s: the query on the other thread answered", name);
+            check(queried == hipSuccess, what);
+            std::snprintf(what, sizeof(what),
+                          negative_control
+                              ? "%s: the negative control blocks the query until the copy ends"
+                              : "%s: the query finished while the copy still waited",
+                          name);
+            check(still_copying == (negative_control == 0), what);
+            std::snprintf(what, sizeof(what), "%s: the copy succeeded", name);
+            check(copied.load() == static_cast<int>(hipSuccess), what);
+            std::snprintf(what, sizeof(what), "%s: the copy moved the bytes", name);
+            check(std::memcmp(destination, pattern.data(), copy_bytes) == 0, what);
+
+            // Lifetime: free the memory the copy names while the copy is inside its delay,
+            // before its submission. The direct route frees its destination, the staged route
+            // its source (the program's own buffer is the program's to keep).
+            bc250hsa_mock_set_gpu_delay_ms(copy_delay_ms);
+            std::memset(pageable.data(), 0, copy_bytes);
+            void* const doomed = route == 0 ? static_cast<void*>(pinned_dst)
+                                            : static_cast<void*>(spare_src);
+            const void* const source = route == 0 ? static_cast<const void*>(device_src)
+                                                  : static_cast<const void*>(spare_src);
+            copied = -1;
+            std::thread racer([&]() {
+                copied = static_cast<int>(hipMemcpy(destination, source, copy_bytes,
+                                                    hipMemcpyDeviceToHost));
+            });
+            const bool raced = copy_started();
+            const hipError_t freed = route == 0 ? hipHostFree(doomed) : hipFree(doomed);
+            const bool copy_over = bc250hsa_mock_gpu_in_flight() == 0u;
+            racer.join();
+            bc250hsa_mock_set_gpu_delay_ms(0u);
+            std::snprintf(what, sizeof(what), "%s: the racing copy started", name);
+            check(raced, what);
+            std::snprintf(what, sizeof(what), "%s: the free answered", name);
+            check(freed == hipSuccess, what);
+            std::snprintf(what, sizeof(what), "%s: the free returned after the copy", name);
+            check(copy_over, what);
+            std::snprintf(what, sizeof(what), "%s: the copy the free raced succeeded", name);
+            check(copied.load() == static_cast<int>(hipSuccess), what);
+            if (route == 1) {
+                check(std::memcmp(pageable.data(), pattern.data(), copy_bytes) == 0,
+                      "staged: the raced copy moved the bytes");
+                spare_src = nullptr;
+                check(hipHostFree(pinned_dst) == hipSuccess,
+                      "staged: hipHostFree the destination the route did not use");
+            }
+            std::snprintf(what, sizeof(what), "%s: no memory was freed under the copy", name);
+            check(bc250hsa_mock_free_violations() == violations_before, what);
+        }
+        bc250hsa_mock_set_hold_ms(hold_ms);
+        check(hipFree(device_src) == hipSuccess, "hipFree the copy source");
+        (void)hipGetLastError();
     }
 
     // A counter of layer 1 for the same waits, which is the second witness of the measurement.

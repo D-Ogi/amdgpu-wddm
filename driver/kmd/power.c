@@ -10,12 +10,30 @@ static NTSTATUS PowerRestoreDisplay(BC250_DEVICE* Device)
     RtlZeroMemory(&post,sizeof(post));
     status=Device->Dxgk.DxgkCbAcquirePostDisplayOwnership(Device->Dxgk.DeviceHandle,&post);
     if (!NT_SUCCESS(status)) return status;
+    if (ConnectorIsEnabled(Device)) {
+        // The cold path reinitializes a positively identified sink using its
+        // private reserved surface, never the OS-returned address. POST may
+        // describe a different firmware mode or have Width zero on resume.
+        status=ConnectorResumeDisplay(Device);
+        if (!NT_SUCCESS(status)) return status;
+        if (InterlockedCompareExchange(&Device->RuntimeDisplayChanged,0,0) ||
+            InterlockedCompareExchange(&Device->Connector.Pending,0,0)) {
+            // A changed or unreadable sink must not replay its old timing, but
+            // WDDM still needs a confirmed black output before reopening work.
+            status=DcnSetVisibility(Device,FALSE);
+            if (!NT_SUCCESS(status)) return status;
+            Device->SourceVisible=FALSE;
+            return STATUS_SUCCESS;
+        }
+    }
     // Current inherited-mode implementation: never change allocation geometry
     // underneath retained OS handles. General mode initialization remains separate.
     if (post.Width!=Device->Post.Width || post.Height!=Device->Post.Height ||
         post.Pitch!=Device->Post.Pitch || post.ColorFormat!=Device->Post.ColorFormat ||
         post.PhysicAddress.QuadPart!=Device->Post.PhysicAddress.QuadPart)
         return STATUS_GRAPHICS_INVALID_VIDPN;
+    status=ModesetValidateInherited(Device);
+    if (!NT_SUCCESS(status)) return status;
     status=DcnSetVisibility(Device,FALSE);
     if (!NT_SUCCESS(status)) return status;
     Device->SourceVisible=FALSE;
@@ -82,6 +100,10 @@ NTSTATUS GpuSetPowerRetained(BC250_DEVICE* Device, DEVICE_POWER_STATE State, POW
     if (!NT_SUCCESS(status)) goto Failed;
     StartHealthResumeReady(Device,Device->ModeActive);
     InterlockedExchange(&Device->RetainedPowerPhase,0);
+    if (ConnectorIsEnabled(Device)) {
+        status=ConnectorResumeNotifications(Device);
+        if (!NT_SUCCESS(status)) goto Failed;
+    }
     goto Done;
 Failed:
     // No destructive PnP unwind and no synthetic completion of accepted work.

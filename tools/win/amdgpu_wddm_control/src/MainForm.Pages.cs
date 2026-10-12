@@ -73,6 +73,7 @@ namespace AmdgpuWddmControl
             }
             var result = ResultLine(status.Inner);
             if (result != null) status.Add(result);
+            if (_autoReportStatus != null) status.Add(Ui.Label(_autoReportStatus, null, Theme.Dim, status.Inner));
             p.Controls.Add(status);
 
             if (!_prefs.GettingStartedDismissed)
@@ -209,6 +210,7 @@ namespace AmdgpuWddmControl
             now.Add(Ui.Dim(Strings.T("perf.now.note"), now.Inner));
             p.Controls.Add(now);
             p.Controls.Add(BuildFanCard(width));
+            p.Controls.Add(BuildBenchmarkCard(width));
 
             var caches = new CardPanel(Strings.T("perf.cache.title"), width);
             Mark("perf.cache", caches);

@@ -24,7 +24,20 @@ $next.app_router.Deny = @('witcher3.exe', 'other.exe')
 'fresh install: every value is new'
 $plan = Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current @{}
 Check (@($plan | Where-Object { $_.decision -ne 'set' }).Count -eq 0) "all $(@($plan).Count) parameters 'set'"
-Check (((Get-Decision $plan 'DpmMaxMHz').value -eq 1500) -and (Get-Decision $plan 'DpmMaxMHz').write) 'DpmMaxMHz 1500 written'
+Check (((Get-Decision $plan 'DpmMaxMHz').value -eq 2000) -and (Get-Decision $plan 'DpmMaxMHz').write) 'DPM ceiling 2000 written; base clock remains 1000'
+
+'ceiling migration: old 1500 becomes 2000, other choices stay'
+Check ($legacy.parameters.DpmMaxMHz -eq 1500) 'legacy_applied retains the historical 1500 default'
+foreach ($previous in @($legacy.parameters, [pscustomobject]@{ DpmMaxMHz = 2000 }, $null)) {
+    $p = Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $previous -Current @{ DpmMaxMHz = 1500 }
+    Check (((Get-Decision $p 'DpmMaxMHz').decision -eq 'update') -and (Get-Decision $p 'DpmMaxMHz').value -eq 2000) 'stored 1500 migrates regardless of the previous defaults record'
+}
+foreach ($kept in @(1000, 1200, 1700)) {
+    $p = Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous ([pscustomobject]@{ DpmMaxMHz = $kept }) -Current @{ DpmMaxMHz = $kept } -After @{}
+    Check (((Get-Decision $p 'DpmMaxMHz').value -eq $kept) -and (Get-Decision $p 'DpmMaxMHz').decision -eq 'kept' -and (Get-Decision $p 'DpmMaxMHz').write) 'a different stored ceiling survives even when pnputil resets the key'
+}
+$p = Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current @{ DpmMaxMHz = 1500 } -Explicit @{ DpmMaxMHz = 1500 }
+Check (((Get-Decision $p 'DpmMaxMHz').decision -eq 'command') -and (Get-Decision $p 'DpmMaxMHz').value -eq 1500) 'an explicit installer argument wins over migration'
 
 'upgrade from tester.7 (no record): installer values follow the new defaults, tester values stay'
 $cur = @{ DwmForceCpu = 1; RequireKmdSwitches = 0 }
@@ -282,7 +295,7 @@ try {
     $plan = Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current $before -Owned ([ordered]@{ UnconfirmedStarts = 0 }) -After (Read-RegistryValues $k) -Restore $infNames
     Write-RegistryPlan $k $plan
     $v = Read-RegistryValues $k
-    Check (($v.EnableFullWddm -eq 2) -and ($v.EnableMmio -eq 1) -and ($v.DpmMaxMHz -eq 1500) -and ($v.EnableMmioWrite -eq 0)) "fresh install: EnableFullWddm $($v.EnableFullWddm), EnableMmio $($v.EnableMmio), DpmMaxMHz $($v.DpmMaxMHz), EnableMmioWrite $($v.EnableMmioWrite) (INF)"
+    Check (($v.EnableFullWddm -eq 2) -and ($v.EnableMmio -eq 1) -and ($v.DpmMaxMHz -eq 2000) -and ($v.EnableMmioWrite -eq 0)) "fresh install: EnableFullWddm $($v.EnableFullWddm), EnableMmio $($v.EnableMmio), DpmMaxMHz $($v.DpmMaxMHz), EnableMmioWrite $($v.EnableMmioWrite) (INF)"
 
     # The whole key, as install.ps1 takes it now: a value that this release's table and the INF do not name goes back
     # as it was. Unit A lost CuMode 40 at every release install before this one, because the snapshot kept the judged

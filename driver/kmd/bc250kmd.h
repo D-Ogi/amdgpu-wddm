@@ -79,6 +79,8 @@
 #include "interop.h"
 #include "dpaudio.h"
 #include "modeset.h"
+#include "connector.h"
+#include "board_memory_service.h"
 
 C_ASSERT(DXGKDDI_INTERFACE_VERSION == DXGKDDI_INTERFACE_VERSION_WDDM2_9);
 
@@ -170,6 +172,8 @@ typedef struct _BC250_DEVICE {
     BC250_SMU_METRICS SmuMetrics;      // smu_metrics.c: the SMU metrics table, its page and its reader
     BC250_DPAUDIO DpAudio;             // dpaudio.c: the DP stream's Azalia endpoint, its switches and record
     BC250_MODESET Modeset;             // modeset.c: the EDID, the source modes, pipe 0's scaler and viewport
+    BC250_CONNECTOR Connector;         // ISR/DPC/passive owner of the single physical connector
+    PVOID ConnectorLink;               // PASSIVE-only clock/PHY/timing transaction, connector_link.c
     volatile LONG RetainedPowerPhase; // 0 active, 1 suspending, 2 suspended, 3 restoring, 4 failed
     DEVICE_POWER_STATE RetainedDownState;
     POWER_ACTION RetainedDownAction;
@@ -179,6 +183,9 @@ typedef struct _BC250_DEVICE {
     DXGK_DEVICE_INFO DeviceInfo;
 
     BOOLEAN Started;
+    // >= 0 counts watchdog MMIO samplers; -1 owns the wave selectors or retains
+    // failed-restore quarantine until a new device start.
+    volatile LONG WaveRegisterAccess;
     BOOLEAN SourceVisible;
     BOOLEAN ModeActive;         // a commit has validated that the source surface is exactly the firmware's mode
     BOOLEAN PresentSeen;
@@ -199,8 +206,19 @@ typedef struct _BC250_DEVICE {
     DXGK_DISPLAY_INFORMATION Post;
     D3DKMDT_VIDEO_SIGNAL_INFO InheritedSignal;
     BOOLEAN InheritedSignalValid;     // immutable from successful start until stop
+    BOOLEAN InheritedTmds;            // validated OTG0 TMDS route; DP operations stay off on this start
+    PVOID HdmiLinkContext;            // PnP-owned saved inherited encoder state, hdmi_link.c
     PVOID Framebuffer;                  // mapping of Post.PhysicAddress
     SIZE_T FramebufferLength;
+    // Reserved before VidMm sees its segments. Never an application allocation.
+    ULONGLONG DisplayReservationEnd;
+    PHYSICAL_ADDRESS RuntimeFramebufferPhysical;
+    PUCHAR RuntimeFramebuffer;
+    SIZE_T RuntimeFramebufferLength;
+    DXGK_DISPLAY_INFORMATION RuntimePost;
+    volatile LONG RuntimePostValid;
+    volatile LONG RuntimeDisplayChanged;
+    volatile LONG RuntimePlaneBlank;
     BOOLEAN SystemDisplayReady;        // bugcheck CPU writes only after verified scanout restore
     BOOLEAN PostDisplayStopAttempted;  // WddmStop restores before freeing scanout objects
     NTSTATUS PostDisplayStopStatus;    // separate from the ordinary StopDevice completion result
@@ -296,6 +314,15 @@ typedef struct _BC250_DEVICE {
     BOOLEAN VramWriteEnabled;
     PHYSICAL_ADDRESS VramPhysical;      // system physical address of VRAM byte 0
     ULONGLONG VramLength;
+    volatile LONG BoardMemoryProviderId; // immutable after start capture until stop
+    ULONG BoardMemoryReason;
+    volatile LONG64 UmaActiveBytes; // atomic software view; zero outside a successful VRAM start
+    UCHAR BoardMemoryMachineId[16];
+    ULONG BoardMemoryBiosId;
+    ULONG BoardMemoryMapping;
+    BOOLEAN BoardMemoryStarted;
+    KSPIN_LOCK BoardMemorySnapshotLock;
+    struct board_memory_state BoardMemoryState;
     ULONGLONG VramMcBase;               // GPU physical (MC) address of VRAM byte 0
     PHYSICAL_ADDRESS Bar0Physical;
     ULONGLONG Bar0Length;
@@ -332,6 +359,7 @@ typedef struct _BC250_DEVICE {
     volatile LONG LastMessageNumber;
     BOOLEAN InterruptIsMessage;         // what Windows assigned (pnp.c, from the translated resources)
     ULONG InterruptVector;
+    KMUTEX PspSessionLock;             // PASSIVE owner: Connector.Operation -> this -> GartLock
     FAST_MUTEX GartLock;                // serializes every bring-up sequence (gart.c, psp.c, gfx.c) and the stop;
                                         // initialized in AddDevice
     // KMD196: the wake of a held submission. gfx.c never changes the root of a VMID whose job is still running
@@ -371,7 +399,16 @@ void StartHealthBegin(BC250_DEVICE* Device, BOOLEAN Full);
 void StartHealthReady(BC250_DEVICE* Device, BOOLEAN Ready);
 void StartHealthResumeReady(BC250_DEVICE* Device, BOOLEAN Mode);
 void StartHealthClose(BC250_DEVICE* Device);
+void StartHealthStop(BC250_DEVICE* Device, BC250_ESCAPE_START_HEALTH* Snapshot);
 void StartHealthFault(BC250_DEVICE* Device);
+// BD-120. The two halves of a node-0 hardware fence timeout that the OS TDR is about to answer with an engine
+// reset: the close the reset owns, and the re-arm a recovered reset performs. Both take only the StartHealth
+// spin lock, so wddm->Lock may be held over them, as it is for StartHealthFault; never the reverse.
+void StartHealthFaultPendingReset(BC250_DEVICE* Device);
+BC250_START_HEALTH_RECOVERY StartHealthRecovered(BC250_DEVICE* Device, _Out_ ULONGLONG* Epoch);
+// BD-120. The close of a ResetEngine refusal on a node that is not node 0: it leaves the answer node 0's own
+// reset is owed. Takes the Lifecycle mutex, like StartHealthClose, so PASSIVE_LEVEL and no wddm->Lock.
+void StartHealthCloseKeepPendingReset(BC250_DEVICE* Device);
 void StartHealthRemove(BC250_DEVICE* Device);
 void StartHealthEnter(BC250_DEVICE* Device);
 void StartHealthLeave(BC250_DEVICE* Device);
@@ -401,6 +438,11 @@ void DpmStop(BC250_DEVICE* Device);
 void DpmPause(BC250_DEVICE* Device);
 void DpmResume(BC250_DEVICE* Device);
 void DpmSetStable(BC250_DEVICE* Device, BOOLEAN Enabled);
+// BD-127: one more, or one fewer, live compute context of this adapter (a BC2C blob with
+// BC250_UMD_C_COMPUTE; wddm.c CreateContext and DestroyContext). Interlocked, any IRQL, no lock: the
+// governor thread reads the count at its next tick and selects the compute threshold set while it is above
+// zero. Delta is +1 or -1 and the count never goes under zero.
+void DpmComputeContextAdd(BC250_DEVICE* Device, LONG Delta);
 NTSTATUS DpmConfirm(BC250_DEVICE* Device, _In_z_ const char* Why);
 void DpmLogSummary(BC250_DEVICE* Device);
 void DpmRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_DPM* Data, ULONG Size, BOOLEAN Admin, ULONG EscapeFlags);
@@ -423,6 +465,28 @@ void CpuRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_CPU* Data, ULONG Size
 
 // driver_version.c: the per-application graphics setting ReportAmdDriverVersion, at each adapter start
 void DriverVersionStart(BC250_DEVICE* Device);
+
+typedef struct BC250_BOARD_MEMORY_PROVIDER {
+    void (*Query)(BC250_DEVICE*, BC250_ESCAPE_BOARD_MEMORY*);
+    NTSTATUS (*Set)(BC250_DEVICE*, const BC250_ESCAPE_BOARD_MEMORY*);
+    NTSTATUS (*Restore)(BC250_DEVICE*, const BC250_ESCAPE_BOARD_MEMORY*);
+    void (*Probe)(BC250_DEVICE*, BC250_ESCAPE_BOARD_MEMORY_PROBE*, BOOLEAN, ULONG);
+} BC250_BOARD_MEMORY_PROVIDER;
+const BC250_BOARD_MEMORY_PROVIDER* BoardMemoryProvider(BC250_DEVICE* Device);
+void BoardMemoryIdentityClear(BC250_DEVICE* Device);
+void BoardMemoryIdentityCapture(BC250_DEVICE* Device);
+void BoardMemoryInitialize(BC250_DEVICE* Device);
+void BoardMemoryStart(BC250_DEVICE* Device);
+void BoardMemoryStop(BC250_DEVICE* Device);
+void BoardMemoryWriteQuery(BC250_DEVICE* Device, BC250_ESCAPE_BOARD_MEMORY* Data);
+NTSTATUS AblBoardMemorySet(BC250_DEVICE* Device, const BC250_ESCAPE_BOARD_MEMORY* Data);
+NTSTATUS AblBoardMemoryRestore(BC250_DEVICE* Device, const BC250_ESCAPE_BOARD_MEMORY* Data);
+void AblBoardMemoryProbeRequest(BC250_DEVICE*, BC250_ESCAPE_BOARD_MEMORY_PROBE*, BOOLEAN, ULONG);
+// uma.c: capability query only until a supported CMOS transport is established.
+void BoardMemoryRequest(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_BOARD_MEMORY* Data,
+                _In_ BOOLEAN Admin, _In_ ULONG EscapeFlags);
+void BoardMemoryProbeRequest(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_BOARD_MEMORY_PROBE* Data,
+                    _In_ BOOLEAN Admin, _In_ ULONG EscapeFlags);
 
 // hwmon.c
 struct _BC250_ESCAPE_HWMON;
@@ -509,14 +573,46 @@ void GuardReleaseStart(void);       // orderly stop of a started device: give th
 void GuardLog(_In_z_ const char* Format, ...);                  // DbgPrintEx and the log ring; IRQL <= DISPATCH_LEVEL
 ULONG GuardReadSetting(_In_z_ PCWSTR Name, ULONG Default);     // REG_DWORD under Parameters, PASSIVE_LEVEL
 ULONG GuardConsumeSetting(_In_z_ PCWSTR Name, ULONG Default);  // the same, and a value of 1 is written back as 0
+// BD-114: a REG_DWORD under Windows' own HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers, read only. The
+// one value this driver reads there is TdrDelay, the OS's own timeout budget, which our private submit watchdog
+// must never undercut (submit_watchdog.h). Read-only: nothing in this driver writes that key - the installer
+// does (tools/release/installer/install.ps1, BD-079).
+ULONG GuardReadGraphicsSetting(_In_z_ PCWSTR Name, ULONG Default);
 NTSTATUS GuardQuerySetting(_In_z_ PCWSTR Name, _Out_ ULONG* Value); // absent is STATUS_OBJECT_NAME_NOT_FOUND
 NTSTATUS GuardStoreSetting(_In_z_ PCWSTR Name, ULONG Value);        // written and flushed
 NTSTATUS GuardDeleteSetting(_In_z_ PCWSTR Name);                    // deleted and flushed; absent is success
 NTSTATUS GuardVolatileQuery(_In_z_ PCWSTR Subkey, _In_z_ PCWSTR Name, _Out_ ULONG* Value); // gone at reboot
 NTSTATUS GuardVolatileStore(_In_z_ PCWSTR Subkey, _In_z_ PCWSTR Name, ULONG Value);
+// BD-122: why a start failed, in Parameters\StartRecord, with no gate at all - a device with Code 43 answers no
+// escape, so the log ring is unreadable exactly when the reason is wanted. GuardStartStep names the step of
+// Bc250StartDevice that is about to run and GuardStartSubStep the step inside WddmStart / GpuStartupInitialize
+// (both take a literal of this image, take no lock and are safe at any IRQL). The four recorders write the record
+// at PASSIVE_LEVEL and never return a failure: see the rule above GuardRecordStartAttempt in guard.c, which also
+// lists the value names. Call order of one start: Attempt, then Refused or Failed or Started.
+void GuardStartStep(_In_opt_z_ PCWSTR Step);
+void GuardStartSubStep(_In_opt_z_ PCWSTR SubStep);
+// The earliest point of a failure path, before its cleanup runs: the ring lines the record keeps end there, so the
+// teardown's own lines cannot push the refusing step's out. The first call of a start wins; any IRQL.
+void GuardStartFailureMark(void);
+// GitHub #38: one line of measured values kept as Detail with a failure (integer conversions only, any IRQL).
+void GuardStartDetail(_In_z_ _Printf_format_string_ PCWSTR Format, ...);
+void GuardRecordStartAttempt(void);
+void GuardRecordStartRefused(NTSTATUS Status);
+void GuardRecordStartFailed(NTSTATUS Status);
+void GuardRecordStartStarted(void);
+void GuardRecordStopBegin(BC250_DEVICE* Device);
+void GuardRecordStopDone(void);
 // M15.12: one ResetEngine verdict (hang_recovery.h) into Parameters\HangRecovery, counters and Last* values, flushed
 // so it outlives a 0x116 and the reboot. PASSIVE_LEVEL; failures are logged, never returned.
-void GuardRecordHangRecovery(ULONG Verdict, ULONG Seq, ULONG Fence, ULONG Kills, ULONG Micros);
+void GuardRecordHangRecovery(ULONG Verdict, ULONG Seq, ULONG Fence, ULONG Kills, ULONG Micros, BOOLEAN WavesPending);
+struct BC250_WAVE_HEADER;
+struct BC250_WAVE_SNAPSHOT;
+NTSTATUS GuardRecordWaveSnapshot(const struct BC250_WAVE_HEADER* Header);
+NTSTATUS GfxCaptureWaves(BC250_DEVICE* Device, struct BC250_WAVE_SNAPSHOT* Snapshot);
+BOOLEAN GfxWaveSampleBegin(BC250_DEVICE* Device);
+void GfxWaveSampleEnd(BC250_DEVICE* Device);
+BOOLEAN GfxWaveCaptureActive(const BC250_DEVICE* Device);
+void GfxRecordWavesBeforeKill(BC250_DEVICE* Device, ULONG Seq, ULONG Fence, ULONG Vmid);
 
 // The log ring, read back through BC250_ESCAPE_GET_LOG. BC250_LOG_LINE comes from bc250kmd_escape.h, which only
 // the two files that touch the ring include; a forward declaration keeps it out of everybody else's way.
@@ -629,6 +725,7 @@ void DcnFlipEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_DC
 NTSTATUS DcnStop(_Inout_ BC250_DEVICE* Device);
 NTSTATUS DcnSetVisibility(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible);
 NTSTATUS DcnRestorePostDisplay(_Inout_ BC250_DEVICE* Device); // any IRQL; no allocation/log/lock
+NTSTATUS DcnRuntimeSurface(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible);
 NTSTATUS DcnFlipToFirmwareSurface(_Inout_ BC250_DEVICE* Device);   // the same without the unblank (modeset.c)
 
 // dcn.c (0.7.24, ADR 0011 point 3 step 3): SetVidPnSourceAddress's own path - the same M87 write sequence
@@ -722,6 +819,10 @@ NTSTATUS GartCaptureAperture(BC250_DEVICE* Device, PAGING_APERTURE* Aperture);
 struct _BC250_ESCAPE_PSP;
 NTSTATUS PspStart(_Inout_ BC250_DEVICE* Device);
 void PspStop(_Inout_ BC250_DEVICE* Device);
+// PASSIVE session excludes display clock firmware from PSP commands and teardown.
+// TimeoutUs=0 is reserved for ordinary PSP lifecycle owners; display uses its deadline.
+NTSTATUS PspSessionAcquire(BC250_DEVICE* Device,ULONG TimeoutUs);
+void PspSessionRelease(BC250_DEVICE* Device);
 void PspEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_PSP* Data);
 // PASSIVE_LEVEL; caller supplies nonpaged report storage, retained through completion.
 NTSTATUS PspInitializeHardware(BC250_DEVICE* Device, struct _BC250_ESCAPE_PSP* Report);
@@ -784,9 +885,10 @@ void SdmaCopyEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_S
 //   GfxSubmitReady   whether a submission would be taken: stage 8 done, nothing failed, nothing in flight and the
 //                    EnableGpuSubmit gate open. Advisory - GfxSubmitIb checks the same things under the lock.
 //   GfxSubmitBusy    the same gates, but the one in-flight IB has not arrived. Advisory, same as Ready.
-//   GfxSubmitFail    sticky, callable at DISPATCH_LEVEL: nothing is written to the ring through GfxSubmitIb again in
-//                    this device start. There is no GPU reset on this part (facts M53), so abandoning the path is the
-//                    only safe answer to a submission that never completed.
+//   GfxSubmitClose   closes ring admission at DISPATCH_LEVEL until a validated engine recovery commits.
+//                    Does not fault StartHealth. Used when preparing an OS-requested reset.
+//   GfxSubmitFail    closes admission and faults StartHealth for the rest of this device start.
+//                    A later successful engine recovery never clears that health fault.
 // KMD193 (bsod-245 item 4): who the submission belongs to, as values. gfx.c does not know what a WDDM context
 // is and must not learn; it copies these three words into the journal's BC250_PJ_GFX_SUBMIT record and into its
 // own job-frame log line, and dereferences nothing. NULL from a caller with no context (the IB_AT escape).
@@ -803,6 +905,7 @@ NTSTATUS GfxSubmitIb(_Inout_ BC250_DEVICE* Device, ULONG Vmid, ULONGLONG RootPhy
 BOOLEAN GfxFenceArrived(_Inout_ BC250_DEVICE* Device, ULONG Seq);
 BOOLEAN GfxSubmitReady(_In_ const BC250_DEVICE* Device);
 BOOLEAN GfxSubmitBusy(_In_ const BC250_DEVICE* Device);
+void GfxSubmitClose(_Inout_ BC250_DEVICE* Device);
 void GfxSubmitFail(_Inout_ BC250_DEVICE* Device);
 //   GfxSoftRecover   M15.12 stage 1 (docs/design/hang-recovery.md). PASSIVE_LEVEL, from DxgkDdiResetEngine only,
 //                    under the HangRecoveryMode switch: kill the waves on Vmid (amdgpu's
@@ -810,11 +913,21 @@ void GfxSubmitFail(_Inout_ BC250_DEVICE* Device);
 //                    Vmid is the hung job's own VMID, which the caller reads out of the completion-queue entry
 //                    (since the VMID pool of 0.7.214 there is no single application VMID to assume).
 //                    Returns a BC250_HANG_VERDICT_* (hang_recovery.h): ALREADY_RETIRED or DRAINED = the ring is idle
-//                    and reopened (SubmitInFlight and the sticky SubmitFailed cleared); NOT_DRAINED = nothing changed,
+//                    but gates remain closed until the WDDM reset commit; NOT_DRAINED = nothing changed,
 //                    the caller keeps today's refusal. *Seq is the sequence waited for, *Kills the SQ_CMD writes
 //                    issued, *Micros the time spent.
 ULONG GfxSoftRecover(_Inout_ BC250_DEVICE* Device, ULONG Vmid, _Out_ ULONG* Seq, _Out_ ULONG* Kills,
                      _Out_ ULONG* Micros);
+//   GfxFenceObserved BD-114: the raw submission fence slot for the submit watchdog's progress token
+//                    (submit_watchdog.h). DISPATCH_LEVEL, read-only, no side effect at all - unlike
+//                    GfxFenceArrived it retires nothing and wakes nobody. FALSE: there was nothing to read.
+//   GfxReopenAfterAbort
+//                    BD-114: final reset commit, at DISPATCH_LEVEL under WDDM Lock.
+//                    Proves the ring idle and clears SubmitInFlight/SubmitFailed; no wake.
+//                    FALSE if work remains in flight. The caller opens its WDDM gate
+//                    in the same critical section, then signals after releasing the lock.
+BOOLEAN GfxFenceObserved(_Inout_ BC250_DEVICE* Device, _Out_ ULONG* Value);
+BOOLEAN GfxReopenAfterAbort(_Inout_ BC250_DEVICE* Device);
 // D5: how many per-submit guard-log lines HotSubmitLog left out, so that the wddm summary can say it and a quiet
 // log is never read as a quiet ring. 0 with the gate open, and 0 before anything submitted.
 ULONG GfxHotSubmitLinesSkipped(_In_ const BC250_DEVICE* Device);
@@ -830,7 +943,7 @@ typedef struct _BC250_GFX_VMID_COUNTERS {
     USHORT Members;             // the pool, a VMID bit mask
     USHORT Excluded;            // found programmed at bring-up
     ULONG Claims, Reuses, Busy, RuleRefusals, Flushes, FlushVmids;
-    BOOLEAN RingFlushGate;      // EnableRingVmFlush (docs/design/gfx-submit-root-serialization.md section 3)
+    BOOLEAN RingFlushGate;      // EnableRingVmFlush, absent = on, 0 = off (gfx-submit-root-serialization.md section 3)
     ULONG RingFlushes;          // jobs whose root write and invalidation were packets, not MMIO
     ULONG RingFlushSame;        // of those, the jobs whose VMID already held the root
 } BC250_GFX_VMID_COUNTERS;
@@ -1033,6 +1146,7 @@ DXGKDDI_SYSTEM_DISPLAY_ENABLE Bc250SystemDisplayEnable;
 DXGKDDI_SYSTEM_DISPLAY_WRITE Bc250SystemDisplayWrite;
 
 NTSTATUS DisplayPrepareInheritedTiming(_Inout_ BC250_DEVICE* Device);
+NTSTATUS DisplayValidateInheritedSignal(BC250_DEVICE* Device);
 NTSTATUS DisplayMapFramebuffer(_Inout_ BC250_DEVICE* Device);
 void DisplayLogFramebufferSample(_In_ BC250_DEVICE* Device);
 void DisplayUnmapFramebuffer(_Inout_ BC250_DEVICE* Device);
@@ -1102,3 +1216,7 @@ BOOLEAN VidMmPagingRootTracked(ULONGLONG Root);
 NTSTATUS GfxPagingBuildVirtualPtes(BC250_DEVICE* Device, ULONGLONG Source,
     ULONGLONG Destination, ULONG Entries, PVOID Buffer, ULONGLONG DmaBase,
     ULONG Offset, ULONG Free, struct PAGING_NATIVE_RESULT* Built);
+
+void BoardProviderBind(BC250_DEVICE* Device);
+void BoardProviderUnbind(BC250_DEVICE* Device);
+void BoardProviderCaps(BC250_DEVICE* Device, BC250_ESCAPE_BOARD_CAPS* Data, ULONG Flags);

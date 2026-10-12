@@ -1,0 +1,19 @@
+hipbench: batch 0, barrier full, budget 150000 ms, results checked
+hipbench: 1 device(s), 'AMD BC-250' arch 'gfx1013', 40 multiprocessors at 2000000 kHz
+hipbench: the first launch and its synchronisation took 0.580 ms (the code object load is inside it)
+hipbench: launch   1 empty kernels: 8.100 us each on the host, wall 0.0 ms, 1.000 submissions per launch
+{"tool":"hipbench","measurement":"launch","count":1,"us_each":8.100,"wall_ms":0.045,"rate":1.000,"rate_unit":"submissions/launch","dispatches":1,"submissions":1,"batches":0,"dispatches_batched":0,"waits":1,"waits_fast":0}
+hipbench: chain    1 dependent kernels: 5.200 us each on the host, 0.0402 ms each end to end, wall 0.0 ms, 1 submissions, exact yes
+{"tool":"hipbench","measurement":"chain","count":1,"us_each":5.200,"wall_ms":0.040,"rate":1.000,"rate_unit":"submissions/launch","dispatches":1,"submissions":1,"batches":0,"dispatches_batched":0,"waits":1,"waits_fast":0}
+hipbench: copy         4096 bytes x 2048: to device 14047.4 MiB/s (0.278 us each), from device 201.6 MiB/s (19.376 us each)
+{"tool":"hipbench","measurement":"copy","bytes":4096,"iterations":2048,"h2d_mib_s":14047.410,"d2h_mib_s":201.603,"h2d_us":0.278,"d2h_us":19.376,"waits":4096,"waits_fast":4096}
+hipbench: copy      1048576 bytes x 64: to device 33527.2 MiB/s (29.827 us each), from device 203.5 MiB/s (4912.903 us each)
+{"tool":"hipbench","measurement":"copy","bytes":1048576,"iterations":64,"h2d_mib_s":33527.162,"d2h_mib_s":203.546,"h2d_us":29.827,"d2h_us":4912.903,"waits":128,"waits_fast":128}
+hipbench: copy     67108864 bytes x 64: to device 14845.2 MiB/s (4311.156 us each), from device 176.9 MiB/s (361715.847 us each)
+{"tool":"hipbench","measurement":"copy","bytes":67108864,"iterations":64,"h2d_mib_s":14845.205,"d2h_mib_s":176.934,"h2d_us":4311.156,"d2h_us":361715.847,"waits":128,"waits_fast":128}
+hipbench: sync     1 synchronisations of a retired stream: 0.100 us each, 1 of 1 waits answered by the fence mapping
+{"tool":"hipbench","measurement":"sync","count":1,"us_each":0.100,"wall_ms":0.000,"rate":1.000,"rate_unit":"fast waits","dispatches":0,"submissions":0,"batches":0,"dispatches_batched":0,"waits":1,"waits_fast":1}
+hipbench: event    1 record and wait rounds on retired work: 1.700 us each
+{"tool":"hipbench","measurement":"event","count":1,"us_each":1.700,"wall_ms":0.002,"rate":0.000,"rate_unit":"none","dispatches":0,"submissions":0,"batches":0,"dispatches_batched":0,"waits":0,"waits_fast":0}
+hipbench: 24191 ms in all, api failures 0
+hipbench: ok

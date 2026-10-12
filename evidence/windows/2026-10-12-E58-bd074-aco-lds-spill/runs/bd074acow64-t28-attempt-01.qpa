@@ -1,0 +1,35 @@
+#sessionInfo releaseName vulkan-cts-1.4.6.2-0-gf6a29701220f34dd1407513bfe80d74ca7b392ce
+#sessionInfo releaseId 0xf6a29701
+#sessionInfo targetName "Default"
+#sessionInfo logFormatVersion "0.3.4"
+#sessionInfo vendorID 0x1002
+#sessionInfo deviceID 0x13fe
+#sessionInfo deviceName AMD BC-250 (RADV GFX1013)
+#sessionInfo commandLineParameters "--deqp-caselist-file=C:\BC250\cts\results\bd074acow64-t28\list-rt-k97-di1\attempt-01.caselist.txt --deqp-log-filename=C:\BC250\cts\results\bd074acow64-t28\list-rt-k97-di1\attempt-01.qpa --deqp-archive-dir=C:\BC250\cts\bin --deqp-log-images=disable --deqp-log-shader-sources=disable --deqp-shadercache=disable --deqp-watchdog=enable --deqp-crashhandler=enable --deqp-terminate-on-device-lost=enable --deqp-vk-library-path=C:\BC250\cts\results\bd074acow64-t28\icd-FE3455FB\cts-direct.dll"
+
+#beginSession
+
+#beginTestCaseResult dEQP-VK.ray_query.misc.dynamic_indexing
+<?xml version="1.0" encoding="UTF-8"?>
+<TestCaseResult CasePath="dEQP-VK.ray_query.misc.dynamic_indexing" Version="0.3.4" CaseType="SelfValidate">
+ <Section Name="comp" Description="Program: comp">
+  <ShaderProgram LinkStatus="OK">
+   <InfoLog></InfoLog>
+   <ComputeShader CompileStatus="OK">
+    <ShaderSource></ShaderSource>
+    <InfoLog></InfoLog>
+</ComputeShader>
+</ShaderProgram>
+  <Number Name="ComputeCompileTime" Description="Compute shader compile time" Tag="Time" Unit="ms">144.337006</Number>
+  <Number Name="LinkTime" Description="Link time" Tag="Time" Unit="ms">0.009000</Number>
+</Section>
+ <Text>Unexpected value found at position 0 in the output buffer: expected 1 but found 0 at vktRayQueryMiscTests.cpp:394</Text>
+ <Number Name="TestDuration" Description="Test case duration in microseconds" Tag="Time" Unit="us">7673236</Number>
+ <Result StatusCode="Fail">Unexpected value found at position 0 in the output buffer: expected 1 but found 0 at vktRayQueryMiscTests.cpp:394</Result>
+</TestCaseResult>
+
+#endTestCaseResult
+
+Run took 8.45 seconds
+
+#endSession

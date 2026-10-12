@@ -21,7 +21,7 @@ static int OwnerBegin(void* context)
     BC250_SMU_OWNER* owner=context;
     if(KeGetCurrentIrql()!=PASSIVE_LEVEL)return -22;
     OwnerLock(owner);
-    if(!owner->Online || !owner->Registers) { OwnerUnlock(owner);return -19; }
+    if(!owner->BoardAllowed || !owner->Online || !owner->Registers) { OwnerUnlock(owner);return -19; }
     owner->Caller=PsGetCurrentThread();
     return 0;
 }
@@ -35,7 +35,7 @@ static void OwnerEnd(void* context)
 static int OwnerHeld(void* context)
 {
     BC250_SMU_OWNER* owner=context;
-    return owner->Caller==PsGetCurrentThread() && owner->Online && owner->Registers;
+    return owner->BoardAllowed && owner->Caller==PsGetCurrentThread() && owner->Online && owner->Registers;
 }
 // The six mailbox offsets of the two queues, by name, and nothing else. Queue 3's three (0.7.210) come from the
 // firmware's own queue descriptor table through bc250_cpu_queue3(); all three are already in the escape read
@@ -274,6 +274,7 @@ NTSTATUS SmuOwnerStart(BC250_SMU_OWNER* owner,volatile ULONG* registers)
 {
     struct bc250_smu_io io={owner,OwnerHeld,MailboxRead,MailboxWrite,MailboxNow,MailboxDelay};
     int result;
+    if(!owner->BoardAllowed)return STATUS_NOT_SUPPORTED;
     if(KeGetCurrentIrql()!=PASSIVE_LEVEL || !registers)return STATUS_INVALID_PARAMETER;
     OwnerLock(owner);
     if(owner->Online) { OwnerUnlock(owner);return STATUS_INVALID_DEVICE_STATE; }
@@ -284,6 +285,10 @@ NTSTATUS SmuOwnerStart(BC250_SMU_OWNER* owner,volatile ULONG* registers)
         unsigned version=0;
         owner->Registers=registers;owner->Online=TRUE;
         owner->MetricsTableMc=0;    // a new owner start names the metrics page again before its first transfer
+        // A new owner start has no reading of its own: no caller is served a clock from before the transition
+        // that stopped the last one (BD-062).
+        owner->SnapValid=FALSE;owner->SnapAt=0;
+        owner->SnapMHz=owner->SnapVid=0;owner->SnapTemperatureMc=0;
         owner->Caller=PsGetCurrentThread();
         // The BIOS owns this image. Query once per owner start, through the
         // same transport/lock as clock control (smu_cmn_get_smc_version).
@@ -350,18 +355,57 @@ NTSTATUS SmuReadTemperature(BC250_SMU_OWNER* owner,LONG* temperature)
     if(!result)*temperature=degrees;
     return ResultStatus(result);
 }
-NTSTATUS SmuReadClock(BC250_SMU_OWNER* owner,ULONG* mhz,ULONG* vid,LONG* temperature)
+// One live reading with the owner lock already held: one BAR read and the two getters, which is the whole of
+// this driver's clock read traffic. Every successful reading is published in the owner (BD-062), so a caller
+// that may not send messages has a number to be given, and so the governor's own readback (dpm.c, once per
+// BC250_DPM_VERIFY_MS) keeps that number fresh without any traffic of its own.
+static int ClockReadLocked(BC250_SMU_OWNER* owner,ULONG* mhz,ULONG* vid,LONG* temperature)
 {
     unsigned frequency=0,voltage=0;
     int degrees=0,result;
-    *mhz=0;*vid=0;*temperature=0;
-    result=OwnerBegin(owner);
-    if(result)return ResultStatus(result);
     result=Temperature(owner,&degrees);
     if(!result)result=Message(owner,PPSMC_MSG_GetGfxFrequency,0,&frequency);
     if(!result)result=Message(owner,PPSMC_MSG_GetGfxVid,0,&voltage);
+    if(result)return result;
+    *mhz=frequency;*vid=voltage;*temperature=degrees;
+    owner->SnapMHz=frequency;owner->SnapVid=voltage;owner->SnapTemperatureMc=degrees;
+    owner->SnapAt=MailboxNow(owner);owner->SnapValid=TRUE;
+    return 0;
+}
+NTSTATUS SmuReadClock(BC250_SMU_OWNER* owner,ULONG* mhz,ULONG* vid,LONG* temperature)
+{
+    int result;
+    *mhz=0;*vid=0;*temperature=0;
+    result=OwnerBegin(owner);
+    if(result)return ResultStatus(result);
+    result=ClockReadLocked(owner,mhz,vid,temperature);
     OwnerEnd(owner);
-    if(!result) { *mhz=frequency;*vid=voltage;*temperature=degrees; }
+    return ResultStatus(result);
+}
+// The same reading for a caller who is not an administrator (BD-062). The published reading answers while it is
+// younger than BC250_CLOCK_SNAP_US; a reading older than that is taken live and published in its turn. So every
+// unprivileged caller together adds at most one clock transaction per BC250_CLOCK_SNAP_US, the rate the
+// governor's readback already keeps, and under a running governor they add none: this is the bound that lets the
+// operation be open at all, and it is why a loop of reads puts no further mailbox traffic on the part, whatever
+// the compute load (the line driver/kmd/cpu.c draws for the CPU rail in its own words). Such a loop does enter
+// OwnerBegin for each read, so it takes the owner lock for the copy of a published reading; that critical section
+// carries no mailbox message and no settle pause.
+// An administrator still reads live, because the lab's tools measure a moment rather than watch a number.
+static NTSTATUS SmuReadClockPublished(BC250_SMU_OWNER* owner,ULONG* mhz,ULONG* vid,LONG* temperature)
+{
+    ULONGLONG now;
+    int result;
+    *mhz=0;*vid=0;*temperature=0;
+    result=OwnerBegin(owner);
+    if(result)return ResultStatus(result);
+    now=MailboxNow(owner);
+    if(owner->SnapValid && now-owner->SnapAt<(ULONGLONG)BC250_CLOCK_SNAP_US) {
+        *mhz=owner->SnapMHz;*vid=owner->SnapVid;*temperature=owner->SnapTemperatureMc;
+        OwnerEnd(owner);
+        return STATUS_SUCCESS;
+    }
+    result=ClockReadLocked(owner,mhz,vid,temperature);
+    OwnerEnd(owner);
     return ResultStatus(result);
 }
 
@@ -371,20 +415,42 @@ void SmuClockRequest(BC250_SMU_OWNER* owner, BC250_ESCAPE_CLOCK* data,
     NTSTATUS status=STATUS_INVALID_PARAMETER;
     struct bc250_clock_report report;
     struct bc250_clock_io io={owner,OwnerBegin,OwnerEnd,Temperature,Message,ClockDelay};
+    // Read once: the structure is the caller's request, so the operation this answers is the operation the
+    // gates below were applied to (driver/kmd/cpu.c does the same with its own Op).
+    const ULONG op=data->Op;
+    const BOOLEAN write=op!=BC250_CLOCK_OP_READ;
     data->Version=BC250_KMD_VERSION;
     data->Status=BC250_ESCAPE_STATUS_REFUSED;
     data->ObservedMHz=data->ObservedVid=0;
     data->TemperatureMc=0;
     data->InitialMHz=data->InitialVid=data->ExpectedVid=data->VoltageStaged=data->Ready=0;
-    if(!administrator) { data->Status=BC250_ESCAPE_STATUS_NOT_ADMIN;status=STATUS_ACCESS_DENIED;goto Done; }
+    // Every malformed request is answered as malformed, per operation, before the token is looked at, so that no
+    // answer this function gives depends on who asked: the ABI's own fields, an operation this ABI does not
+    // name, the flag word that operation takes (READ the owner's lock alone, SET the Level Two exclusion), and a
+    // READ that carries an operating point, which is a write in disguise. driver/kmd/cpu.c folds its own flag
+    // words into the same condition for the same reason.
     if(data->Magic!=BC250_ESCAPE_MAGIC || data->Command!=BC250_ESCAPE_RUN_CLOCK ||
-       data->AbiVersion!=BC250_CLOCK_ABI || data->Reserved[0] || data->Reserved[1] || data->Reserved[2])goto Done;
-    if(data->Op==BC250_CLOCK_OP_READ) {
-        if(hardwareAccess || !noAdapterSynchronization || data->RequestedMHz || data->RequestedMv)goto Done;
-        status=SmuReadClock(owner,&data->ObservedMHz,&data->ObservedVid,&data->TemperatureMc);
+       data->AbiVersion!=BC250_CLOCK_ABI || (op!=BC250_CLOCK_OP_READ && op!=BC250_CLOCK_OP_SET) ||
+       data->Reserved[0] || data->Reserved[1] || data->Reserved[2] ||
+       (!write && (hardwareAccess || !noAdapterSynchronization || data->RequestedMHz || data->RequestedMv)) ||
+       (write && (!hardwareAccess || noAdapterSynchronization)))goto Done;
+    // Who may do what, and why (BD-062, GitHub issue 7). The ABI has said it since this escape was typed
+    // (bc250kmd_escape.h, BC250_CLOCK_ABI): READ is open, SET is "administrator only". Up to 0.7.216 the token
+    // check sat above the operation split, so an ordinary user was refused the read as well - the game runtime
+    // read no temperature and refused to launch, and no non-elevated tool or control application could show a
+    // clock. A read is one BAR read and two getters under the owner lock, with no settle pause, and an
+    // unprivileged one is answered from the published reading while that is fresh (SmuReadClockPublished), so
+    // the open operation can never send more than the governor's own readback already sends. That bound is the
+    // whole of the argument: it is the line ADR 0020 drew for the CPU rail, whose READBACK asks for an
+    // administrator because it holds the shared mailbox for nineteen messages and about 1.9 s, not because
+    // reading a number is a privilege. Every write stays an administrator's: it moves the operating point of
+    // the whole part.
+    if(write && !administrator) { data->Status=BC250_ESCAPE_STATUS_NOT_ADMIN;status=STATUS_ACCESS_DENIED;goto Done; }
+    if(op==BC250_CLOCK_OP_READ) {
+        status=administrator?SmuReadClock(owner,&data->ObservedMHz,&data->ObservedVid,&data->TemperatureMc)
+                            :SmuReadClockPublished(owner,&data->ObservedMHz,&data->ObservedVid,&data->TemperatureMc);
         data->Ready=NT_SUCCESS(status)?1u:0u;
-    } else if(data->Op==BC250_CLOCK_OP_SET) {
-        if(!hardwareAccess || noAdapterSynchronization)goto Done;
+    } else if(op==BC250_CLOCK_OP_SET) {
         // The DPM governor owns the operating point while it runs (dpm.c); two writers would fight.
         if(InterlockedCompareExchange(&owner->GovernorActive,0,0)) { status=STATUS_DEVICE_BUSY;goto Done; }
         status=ResultStatus(bc250_clock_prepare(&io,data->RequestedMHz,data->RequestedMv,&report));

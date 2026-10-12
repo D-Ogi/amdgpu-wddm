@@ -10,6 +10,12 @@ $base = 'C:\BC250\emergency'
 $task = 'Lab emergency channel'
 $oldTask = 'BC250 emergency channel'
 $rule = 'BC250 emergency 8722'
+function Protect-EmergencyKey([string]$Path) {
+    # Numeric well-known SIDs work with renamed groups and every Windows language.
+    # https://learn.microsoft.com/windows-server/administration/windows-commands/icacls
+    & icacls.exe $Path /inheritance:r /grant:r '*S-1-5-18:F' '*S-1-5-32-544:F' | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Key ACL update failed (icacls exit $LASTEXITCODE); channel not started" }
+}
 if ($Uninstall) {
     Unregister-ScheduledTask -TaskName $task -Confirm:$false -ErrorAction SilentlyContinue
     Unregister-ScheduledTask -TaskName $oldTask -Confirm:$false -ErrorAction SilentlyContinue
@@ -26,7 +32,7 @@ if (Test-Path $tmpKey) {
     Move-Item $tmpKey (Join-Path $base 'key.bin') -Force
 }
 if (-not (Test-Path (Join-Path $base 'key.bin'))) { throw 'no key' }
-& icacls.exe (Join-Path $base 'key.bin') /inheritance:r /grant:r 'SYSTEM:F' 'Administrators:F' | Out-Null
+Protect-EmergencyKey (Join-Path $base 'key.bin')
 Get-NetFirewallRule -DisplayName $rule -ErrorAction SilentlyContinue | Remove-NetFirewallRule
 New-NetFirewallRule -DisplayName $rule -Direction Inbound -Protocol TCP -LocalPort 8722 -RemoteAddress LocalSubnet -Action Allow -Profile Any | Out-Null
 # Stop an older listener (and the task under its former name) before the new task starts.
@@ -36,7 +42,7 @@ Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" | Where-Object { $
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
 $a = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + (Join-Path $base 'listener.ps1') + '"')
 $t = New-ScheduledTaskTrigger -AtStartup
-$p = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+$p = New-ScheduledTaskPrincipal -UserId 'S-1-5-18' -LogonType ServiceAccount -RunLevel Highest
 $s = New-ScheduledTaskSettingsSet -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
 Register-ScheduledTask -TaskName $task -Action $a -Trigger $t -Principal $p -Settings $s -Force | Out-Null
 Start-ScheduledTask -TaskName $task

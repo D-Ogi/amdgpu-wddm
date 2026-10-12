@@ -1,0 +1,5 @@
+{
+  "exit": 0,
+  "stdout": "[\n    {\n        \"Path\":  \"C:\\\\BC250\\\\tmp\\\\bd117-fa-r3\\\\runs\\\\hipcost-trace-gemma-hip-1dd8d5ee540a4406ab02827fef305588\\\\etw\\\\gpu-B.etl\",\n        \"Absent\":  true\n    },\n    {\n        \"Path\":  \"C:\\\\BC250\\\\tmp\\\\bd117-fa-r3\\\\hipcost-trace-gemma-hip-1dd8d5ee540a4406ab02827fef305588.tar.gz\",\n        \"Absent\":  true\n    }\n]\n",
+  "stderr": ""
+}

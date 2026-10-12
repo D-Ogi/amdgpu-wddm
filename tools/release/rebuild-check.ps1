@@ -22,7 +22,9 @@
 # and {tool:<name>} (-Tool, then the environment variable BC250_TOOL_<NAME>, then PATH).
 # Outputs are compared by SHA-256; a signed file also by "unsigned_sha256" against the recipe's "unsigned_output" and
 # by its Authenticode digest. MESON_PACKAGE_CACHE_DIR points at -PackageCache, so a Meson wrap (Mesa's zlib) needs
-# no download. The work trees are removed at the end unless -Keep.
+# no download. The work trees are removed at the end unless -Keep. The directory of a build with an entry that does
+# not match keeps its build-*.log files (a setup failure writes its message there), so the path in the FAIL line can
+# still be read; -Keep keeps the trees and outputs too.
 #
 # -Twice builds each group a second time from new work trees in <recipe>-<hash>\bb (other paths, another path
 # length) and compares the two builds too: this is the determinism measurement of docs/design/reproducible-builds.md.
@@ -44,6 +46,8 @@ param(
     [string]$PackageCache,
     [string]$Report
 )
+# Release and provenance rebuilds always execute the gates, including nested analysis.
+$env:BC250_GATE_NOCACHE = '1'
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path (Split-Path $PSScriptRoot)
 if (-not $Work) { $Work = Join-Path $Root 'scratch\repro-builds\rb' }
@@ -69,6 +73,7 @@ function Get-Checkout([string]$Name, [string]$Commit) {
 
 $script:trees = [Collections.Generic.List[object]]::new()
 $script:dirs = [Collections.Generic.List[string]]::new()
+$script:keepLogs = [Collections.Generic.HashSet[string]]::new()
 # A detached work tree of the commit, and its submodules from the module repositories of the checkout. The URL of each
 # submodule is overridden on the command line only (-c), so no configuration of the checkout changes.
 function New-Tree([string]$Name, [string]$Commit, [string]$Dest) {
@@ -93,12 +98,15 @@ function Initialize-Submodules([string]$Tree, [string]$ModuleBase) {
         Initialize-Submodules (Join-Path $Tree $sub) (Join-Path $module 'modules')
     }
 }
-# The listed paths of a commit, as plain files (an input is read, never built in place).
+# The listed paths of a commit, as plain files (an input is read, never built in place). The export is the committed
+# bytes: core.autocrlf=false, because the checkout's own setting must not change an input. A checkout with
+# core.autocrlf=true gave the CRLF form of a header whose LF blob a recipe pins (the engine header of the D3D12 shell,
+# train b30), so the same commit gave two inputs on two checkouts.
 function Export-Input([string]$Name, [string]$Commit, [string[]]$Paths, [string]$Dest) {
     $checkout = Get-Checkout $Name $Commit
     New-Item -ItemType Directory -Force $Dest | Out-Null
     $tar = Join-Path $Dest '..\input.tar'
-    & git -C $checkout archive --format=tar -o $tar $Commit @Paths
+    & git -C $checkout -c core.autocrlf=false archive --format=tar -o $tar $Commit @Paths
     if ($LASTEXITCODE -ne 0) { throw "git archive $Commit $($Paths -join ' ') in $checkout failed" }
     & "$env:SystemRoot\System32\tar.exe" -x -f $tar -C $Dest
     if ($LASTEXITCODE -ne 0) { throw "tar -x $tar failed" }
@@ -229,7 +237,8 @@ try {
                 $built[$r.tag] = @{ code = $code; out = $r.map.out; log = $log }
             } catch {
                 "  $($r.tag) build setup failed: $($_.Exception.Message)"
-                $built[$r.tag] = @{ code = -1; out = $null; log = $_.Exception.Message }
+                Add-Content -LiteralPath $log -Value "build setup failed: $($_.Exception.Message)"
+                $built[$r.tag] = @{ code = -1; out = $null; log = $log }
             }
         }
         foreach ($f in $entries) {
@@ -264,6 +273,7 @@ try {
                     }
                 }
             }
+            if ($res.status -notin 'match', 'match-image' -or ($Twice -and -not $res.deterministic)) { [void]$script:keepLogs.Add($dir) }
             $results.Add([pscustomobject]$res)
         }
     }
@@ -276,7 +286,11 @@ try {
             & git -C $t.checkout worktree remove --force $t.tree 2>&1 | Out-Null
             if ($LASTEXITCODE -ne 0 -and (Test-Path -LiteralPath $t.tree)) { Remove-Item -LiteralPath $t.tree -Recurse -Force -ErrorAction SilentlyContinue; & git -C $t.checkout worktree prune }
         }
-        foreach ($d in $script:dirs) { Remove-Item -LiteralPath $d -Recurse -Force -ErrorAction SilentlyContinue }
+        foreach ($d in $script:dirs) {
+            if ($script:keepLogs.Contains($d)) {
+                Get-ChildItem -LiteralPath $d -Force | Where-Object { $_.Name -notlike 'build-*.log' } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+            } else { Remove-Item -LiteralPath $d -Recurse -Force -ErrorAction SilentlyContinue }
+        }
     }
 }
 if ($Plan) { return }

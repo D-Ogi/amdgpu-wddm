@@ -14,6 +14,8 @@ namespace AmdgpuWddmSetup
         public string[] PlanEvents, Events;
         public string PlanResult, Result;
         public bool NoResult, ConsentTestSigning, RestartLater;
+        // The welcome screen of a setup.exe whose files\ folder is not there (somebody copied the exe out of the zip).
+        public bool FilesMissing;
         public string BitLocker, PreparedDir, PreparedProblem, PreparedVersion, PrepareDestination, PrepareFirmware, SupportSaved;
     }
 
@@ -82,7 +84,9 @@ namespace AmdgpuWddmSetup
             return list.ToArray();
         }
 
-        static string[] RunEvents(string lastStage, bool cancel, bool mutated, string mode = "run")
+        // outcome: the engine's result event, written before its process ends. The stage screen is drawn once more
+        // with it, so the fixtures cover both sides of that branch: an ending that finished and one that stopped.
+        static string[] RunEvents(string lastStage, bool cancel, bool mutated, string mode = "run", string outcome = null)
         {
             _seq = 0;
             var list = new List<string> { Ev("start", "\"mode\":\"" + mode + "\",\"gui\":true,\"dry_run\":false,\"package\":\"P\",\"contract\":\"" + EngineRun.Contract + "\",\"phase\":\"new\"") };
@@ -94,6 +98,8 @@ namespace AmdgpuWddmSetup
                 if (s == lastStage) break;
             }
             if (mutated) { list.Add(Ev("install-action", "\"action\":\"install\",\"boot_id\":41")); list.Add(Ev("step", "\"description\":\"x\",\"dry_run\":false")); }
+            if (outcome != null)
+                list.Add(Ev("result", "\"outcome\":\"" + outcome + "\",\"exit_code\":0,\"message_id\":\"result.other\",\"mutated\":" + (mutated ? "true" : "false")));
             return list.ToArray();
         }
 
@@ -122,6 +128,10 @@ namespace AmdgpuWddmSetup
                 new Fixture { Name = "welcome-prepared", Screen = Screen.Welcome, PreparedDir = @"D:\amdgpu-wddm-offline", PreparedVersion = Version },
                 new Fixture { Name = "welcome-prepared-bad", Screen = Screen.Welcome, PreparedDir = @"D:\Downloads", PreparedProblem = "folder.not-prepared" },
                 new Fixture { Name = "welcome-repair", Flow = "repair", Screen = Screen.Welcome },
+                new Fixture { Name = "welcome-files-missing", Screen = Screen.Welcome, FilesMissing = true },
+                // setup.exe without its files\ folder, but a prepared folder is chosen: that folder brings the files,
+                // so the screen must not say they are missing while the check button is on.
+                new Fixture { Name = "welcome-files-missing-prepared", Screen = Screen.Welcome, FilesMissing = true, PreparedDir = @"D:\amdgpu-wddm-offline", PreparedVersion = Version },
                 new Fixture { Name = "checking", RunKind = "plan", Screen = Screen.Checking, Events = PlanEvents("install", null, "", "download", false).Take(8).ToArray() },
                 new Fixture { Name = "plan-install", RunKind = "plan", Screen = Screen.Plan, PlanEvents = planInstall, PlanResult = planned },
                 new Fixture { Name = "plan-upgrade", RunKind = "plan", Screen = Screen.Plan, PlanEvents = planUpgrade, PlanResult = planned, ConsentTestSigning = true, BitLocker = "Suspend" },
@@ -129,6 +139,12 @@ namespace AmdgpuWddmSetup
                 new Fixture { Name = "working", Screen = Screen.Working, Events = RunEvents("files", false, true) },
                 new Fixture { Name = "working-cancel", Screen = Screen.Working, Events = RunEvents("preflight", true, false) },
                 new Fixture { Name = "continue", Flow = "continue", Screen = Screen.Working, Events = RunEvents("driver", false, true) },
+                // The stage screen after the engine wrote its result and before its process ended: a restart is a
+                // normal ending (the stage is done), a failure is not (the stage carries the stopped mark).
+                new Fixture { Name = "working-restart", Screen = Screen.Working, Events = RunEvents("test-signing", false, true, "run", "restart-required"),
+                    Result = ResultJson("run", "restart-required", 0, "result.restart-test-signing", true, ",\"restart\":{\"required\":true,\"reason_id\":\"restart.test-signing\"}") },
+                new Fixture { Name = "working-stopped", Screen = Screen.Working, Events = RunEvents("driver", false, true, "run", "failed"),
+                    Result = ResultJson("run", "failed", 6, "result.step-failed", true, ",\"step\":\"x\",\"detail\":\"x\"") },
                 new Fixture { Name = "restart", Screen = Screen.Restart, Events = RunEvents("test-signing", false, true), Result = ResultJson("run", "restart-required", 0, "result.restart-test-signing", true, ",\"restart\":{\"required\":true,\"reason_id\":\"restart.test-signing\"}") },
                 new Fixture { Name = "restart-later", Screen = Screen.Restart, RestartLater = true, Events = RunEvents("finish", false, true), Result = ResultJson("run", "restart-required", 0, "result.installed-restart", true) },
                 new Fixture { Name = "result-verified", Flow = "continue", Screen = Screen.Result, Events = RunEvents("preflight", false, false, "verify"), Result = ResultJson("verify", "verified", 0, "result.verified", false) },

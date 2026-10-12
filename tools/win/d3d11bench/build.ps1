@@ -55,7 +55,7 @@ $env:INCLUDE = ''; $env:LIB = ''
 # MSVC gives an anonymous namespace (a hash of the source path) see only the path below the repository. Two builds
 # of one commit in two directories give the same bytes (docs/design/reproducible-builds.md).
 $repro = @('/Brepro', '/FC', "/d1trimfile:$((Resolve-Path (Join-Path $here '..\..\..')).Path)")
-& $cl @repro @('/nologo', '/W4', '/WX', '/O2', '/MT', '/EHsc', '/std:c++17', '/DUNICODE', '/D_UNICODE',
+& $cl @repro @('/nologo', '/W4', '/we4229', '/we4440', '/WX', '/O2', '/MT', '/EHsc', '/std:c++17', '/DUNICODE', '/D_UNICODE',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\winrt", "/Fo$Out\d3d11bench.obj",
     "/Fe$Out\d3d11bench.exe", (Join-Path $here 'd3d11bench.cpp'), '/link', '/Brepro',

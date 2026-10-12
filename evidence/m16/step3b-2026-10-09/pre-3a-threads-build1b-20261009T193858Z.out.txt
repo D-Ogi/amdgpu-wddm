@@ -1,0 +1,12 @@
+hipthreads: every wait of the runtime is bounded to 20000 ms in all
+hipthreads: device 'AMD BC-250' arch 'gfx1013', 4 threads, 4 iterations, spin 2000000, grid 256
+hipthreads: phase A, the wait of thread 0 took 69.7 ms
+hipthreads:   thread 1 finished 0 operations inside that wait
+hipthreads:   thread 2 finished 8 operations inside that wait
+hipthreads:   thread 3 finished 0 operations inside that wait
+hipthreads:   8 operations in all
+hipthreads: phase B, one wait 37.0 ms, 4 threads x 4 waits took 585.5 ms, serialised that is 592.1 ms
+hipthreads: FAIL 4 threads took as long as one thread would have
+hipthreads: phase C, 6 rounds of a stream and an event destroyed inside a wait
+hipthreads: 0 API failures, 1 verdicts failed
+hipthreads: failed

@@ -26,6 +26,12 @@ namespace AmdgpuWddmControl
 
         public BugReport(Redactor redact) { _redact = redact; }
 
+        public void AddStartupDiagnostics(string text)
+        {
+            string clean = StartupDiagnosticData.Fit(_redact.Apply(text), StartupDiagnosticData.Limit);
+            Entries.Add(new ReportEntry { Name = "startup-diagnostics.txt", Description = "Automatic start and stop diagnostics", Data = Encoding.UTF8.GetBytes(clean) });
+        }
+
         void Add(string name, string description, string text)
         {
             Entries.Add(new ReportEntry { Name = name, Description = description, Data = Encoding.UTF8.GetBytes(_redact.Apply(text)) });
@@ -37,8 +43,9 @@ namespace AmdgpuWddmControl
             return Path.Combine(desktop, "amdgpu-wddm-report-" + now.ToString("yyyyMMdd-HHmmss") + ".zip");
         }
 
-        public void Collect(bool dxdiag, bool caps, bool events, Action<string> progress)
+        public void Collect(bool dxdiag, bool caps, bool events, Action<string> progress, bool startup = true)
         {
+            if (startup) AddStartupDiagnostics(StartupDiagnostics.Collect());
             progress("Reading the driver state");
             Add("driver-state.txt", "Driver snapshots: clocks, temperature, DPM, desktop composition, start health", DriverState());
             Add("recovery-states.txt", "The Recovery states, with the DWM replacements seen in this session (BD-060)", RecoveryStates());

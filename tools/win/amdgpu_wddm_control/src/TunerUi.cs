@@ -25,7 +25,8 @@ namespace AmdgpuWddmControl
         public event EventHandler Picked;           // the selection moved
 
         // The drawn voltage band, a little wider than the admitted one so that a knot at either end is still visible.
-        const int LowMv = 800, HighMv = 1010;
+        static int LowMv { get { return (int)Tuner.FloorMv - 20; } }
+        static int HighMv { get { return (int)Tuner.CeilingMv + 20; } }
 
         public CurveChart(int width, int height)
         {
@@ -138,14 +139,14 @@ namespace AmdgpuWddmControl
             using (var grid = new Pen(Theme.Line))
             using (var text = new SolidBrush(Theme.Dim))
             {
-                for (int mv = 820; mv <= 1000; mv += 60)
+                for (int mv = (int)Tuner.FloorMv; mv <= Tuner.CeilingMv; mv += Math.Max(1, (int)(Tuner.CeilingMv - Tuner.FloorMv) / 3))
                 {
                     int y = At(r, 0, (uint)mv).Y;
                     g.DrawLine(grid, r.Left, y, r.Right, y);
                     g.DrawString(mv.ToString(CultureInfo.CurrentCulture), Theme.MonoSmall, text, Theme.S(2), y - Theme.S(7));
                 }
-                g.DrawString("1000", Theme.MonoSmall, text, r.Left, r.Bottom + Theme.S(3));
-                var last = "2000 MHz";
+                g.DrawString(Tuner.FirstMHz.ToString(CultureInfo.CurrentCulture), Theme.MonoSmall, text, r.Left, r.Bottom + Theme.S(3));
+                var last = Tuner.MHzAt(Tuner.Points - 1).ToString(CultureInfo.CurrentCulture) + " MHz";
                 var w = g.MeasureString(last, Theme.MonoSmall);
                 g.DrawString(last, Theme.MonoSmall, text, r.Right - w.Width, r.Bottom + Theme.S(3));
             }

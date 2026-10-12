@@ -30,6 +30,7 @@
 #include "regs.generated.h"
 #include "dcn_2_0_1_sh_mask.h"
 #include "dpaudio_seq.h"
+#include "../../shim/bc250_hdmi_audio.h"
 #include "edid_lab_redacted.h"
 
 static unsigned checks, failures;
@@ -767,10 +768,9 @@ static void Tables(void)
     BC250_AZ_IO io;
     unsigned long value = 0, i, writable = 0;
 
-    // 27 offsets take a write: the two INDEX/DATA pairs, the two function parameters of hw_init, and step 2's DTO
-    // source, DTO1 module and phase, and nine AFMT/DP_SEC registers per stream encoder.
+    // DP and HDMI share the endpoint; each transport has its own DTO/packet offsets.
     for (i = 0; i < BC250_MMIO_AUDIO_ALLOW_COUNT; i++) writable += (unsigned long)Bc250AzWriteAllowed(g_MmioAudioAllow[i]);
-    CHECK(writable == BC250_MMIO_AUDIO_WRITE_ALLOW_COUNT && writable == 28);
+    CHECK(writable == BC250_MMIO_AUDIO_WRITE_ALLOW_COUNT && writable == 54);
     CHECK(Bc250AzWriteAllowed(BC250_REG_DMU_AZALIA_F0_CODEC_FUNCTION_PARAMETER_POWER_STATES));
     for (i = 0; i < 2; i++) {
         CHECK(Bc250AzWriteAllowed(g_S[i].Sec) && Bc250AzWriteAllowed(g_S[i].AudN) && Bc250AzWriteAllowed(g_S[i].Timestamp));
@@ -779,8 +779,9 @@ static void Tables(void)
     }
     CHECK(Bc250AzWriteAllowed(DTO_SOURCE) && Bc250AzWriteAllowed(DTO1_MODULE) && Bc250AzWriteAllowed(DTO1_PHASE));
     CHECK(!Bc250AzWriteAllowed(BC250_REG_DMU_DC_PINSTRAPS));
-    CHECK(!Bc250AzWriteAllowed(BC250_REG_DMU_DCCG_AUDIO_DTO0_MODULE));     // DTO0 is HDMI's: read only
-    CHECK(!Bc250AzWriteAllowed(BC250_REG_DMU_DCCG_AUDIO_DTO0_PHASE));
+    CHECK(Bc250AzWriteAllowed(BC250_REG_DMU_DCCG_AUDIO_DTO0_MODULE));
+    CHECK(Bc250AzWriteAllowed(BC250_REG_DMU_DCCG_AUDIO_DTO0_PHASE));
+    CHECK(!Bc250AzWriteAllowed(BC250_REG_DMU_DIG0_HDMI_CONTROL));
     CHECK(!Bc250AzWriteAllowed(BC250_REG_DMU_DP0_DP_SEC_AUD_M_READBACK));
     CHECK(!Bc250AzWriteAllowed(BC250_REG_DMU_DIG0_AFMT_STATUS));
     CHECK(!Bc250AzWriteAllowed(BC250_REG_DMU_DP0_DP_VID_STREAM_CNTL));
@@ -1098,6 +1099,116 @@ typedef char ContainerSlotsAppended[(BC250_DPAUDIO_OBS_DIG1_AFMT_60958_0 == 57 &
                                      BC250_DPAUDIO_OBS_EP0_SINK_INFO2 == 58 &&
                                      BC250_DPAUDIO_OBS_EP1_SINK_INFO3 == 61) ? 1 : -1];
 
+// HDMI uses the same endpoint contract, but neither its start nor its undo may
+// write the DP secondary packet or DTO1 registers.
+static BC250_DPAUDIO_SINK g_HdmiSink;
+static void HdmiUnit(unsigned long stream)
+{
+    BC250_EDID_INFO info;
+    UnitA(&g_Fake);
+    memset(&info, 0, sizeof(info));
+    info.Reason = BC250_EDID_OK; info.Hdmi = 1; info.BasicAudio = 1;
+    CHECK(Bc250HdmiAudioSinkFromEdid(&info, &g_HdmiSink));
+    memset(&g_Run, 0, sizeof(g_Run)); g_Run.Sink = &g_HdmiSink;
+    Set(&g_Fake, BC250_REG_DMU_DP0_DP_VID_STREAM_CNTL, 0);
+    Set(&g_Fake, BC250_REG_DMU_DIG0_DIG_BE_CNTL, (3ul << DIG0_DIG_BE_CNTL__DIG_MODE__SHIFT) |
+        ((stream + 1) << DIG0_DIG_BE_CNTL__DIG_FE_SOURCE_SELECT__SHIFT));
+    Set(&g_Fake, BC250_REG_DMU_DIG0_DIG_BE_EN_CNTL, DIG0_DIG_BE_EN_CNTL__DIG_ENABLE_MASK);
+}
+static void HdmiNoDpWrites(void)
+{
+    unsigned long i, s;
+    for (i = 0; i < g_Fake.Traced; i++) {
+        const TRACE* t = &g_Fake.Trace[i];
+        if (t->Op != OP_DIRECT) continue;
+        CHECK(t->Where != DTO1_MODULE && t->Where != DTO1_PHASE);
+        for (s = 0; s < 2; s++)
+            CHECK(t->Where != g_S[s].Sec && t->Where != g_S[s].AudN && t->Where != g_S[s].Timestamp);
+    }
+}
+static int HdmiSilent(unsigned long stream)
+{
+    return !(Get(&g_Fake, g_S[stream].Pkt) & DIG0_AFMT_AUDIO_PACKET_CONTROL__AFMT_AUDIO_SAMPLE_SEND_MASK) &&
+        !(Get(&g_Fake, g_S[stream].Afmt) & DIG0_AFMT_CNTL__AFMT_AUDIO_CLOCK_EN_MASK) &&
+        !(g_Fake.Ix[stream][BC250_AZ_IX_HOT_PLUG_CONTROL] & HPC_AE);
+}
+static void Hdmi(void)
+{
+    BC250_AZ_IO io;
+    BC250_DPAUDIO_STOP stop;
+    BC250_EDID_INFO info;
+    BC250_DPAUDIO_SINK sink;
+    unsigned long n[3], cts[3], k, calls, observe, s;
+    static const unsigned long badRegs[] = { BC250_REG_DMU_DIG0_HDMI_ACR_48_1,
+        BC250_REG_DMU_DIG0_HDMI_INFOFRAME_CONTROL0, BC250_REG_DMU_DCCG_AUDIO_DTO0_MODULE };
+    static const unsigned long badMasks[] = { DIG0_HDMI_ACR_48_1__HDMI_ACR_N_48_MASK,
+        DIG0_HDMI_INFOFRAME_CONTROL0__HDMI_AUDIO_INFO_SEND_MASK, DCCG_AUDIO_DTO0_MODULE__DCCG_AUDIO_DTO0_MODULE_MASK };
+
+    CHECK(bc250_hdmi_audio_clock(1485000, n, cts));
+    CHECK(n[0] == 4096 && n[1] == 6272 && n[2] == 6144);
+    CHECK(cts[0] == 148500 && cts[1] == 165000 && cts[2] == 148500);
+    CHECK(bc250_hdmi_audio_clock(1745000, n, cts));
+    CHECK(cts[0] == 174500 && cts[1] == 174500 && cts[2] == 174500);
+    CHECK(!bc250_hdmi_audio_clock(0, n, cts) && !bc250_hdmi_audio_clock(3000001, n, cts));
+    memset(&info, 0, sizeof(info)); info.Reason = BC250_EDID_OK; info.BasicAudio = 1;
+    CHECK(!Bc250HdmiAudioSinkFromEdid(&info, &sink)); // DVI has no HDMI VSDB
+    info.Hdmi = 1; info.BasicAudio = 0;
+    CHECK(!Bc250HdmiAudioSinkFromEdid(&info, &sink)); // HDMI does not imply audio
+    info.SadCount = 1; info.Sads[0].Format = 1; info.Sads[0].Channels = 2;
+    info.Sads[0].Rates = 0x7f; info.Sads[0].Byte2 = 1;
+    CHECK(Bc250HdmiAudioSinkFromEdid(&info, &sink) && sink.LpcmRates == 7 && sink.LpcmChannels == 2);
+    info.Sads[0].Byte2 = 4; CHECK(!Bc250HdmiAudioSinkFromEdid(&info, &sink));
+    for (s = 0; s < 2; s++) {
+        HdmiUnit(s); Io(&io, &g_Fake);
+        CHECK(Bc250HdmiAudioRun(&io, &g_Run, 1485000) == BC250_DPAUDIO_REASON_OK);
+        CHECK(g_Run.Groups == 4 && g_Run.Plan.Stream == s && g_Run.Plan.Endpoint == s && io.Refusals == 0);
+        CHECK(g_Run.Stream.DtoModule == 1485000 && g_Run.Stream.DtoPhase == 240000);
+        CHECK(Get(&g_Fake, DTO_SOURCE) == 0 && Get(&g_Fake, DTO1_MODULE) == 1);
+        CHECK(Get(&g_Fake, s ? BC250_REG_DMU_DIG1_HDMI_ACR_48_1 : BC250_REG_DMU_DIG0_HDMI_ACR_48_1) == 6144);
+        CHECK((Get(&g_Fake, s ? BC250_REG_DMU_DIG1_HDMI_INFOFRAME_CONTROL1 : BC250_REG_DMU_DIG0_HDMI_INFOFRAME_CONTROL1) &
+            DIG0_HDMI_INFOFRAME_CONTROL1__HDMI_AUDIO_INFO_LINE_MASK) == (2ul << DIG0_HDMI_INFOFRAME_CONTROL1__HDMI_AUDIO_INFO_LINE__SHIFT));
+        CHECK(g_Fake.Ix[s][BC250_AZ_IX_HOT_PLUG_CONTROL] & HPC_AE);
+        CHECK(Bc250HdmiAudioStopSequence(&io, s, s, 1, 1, &stop) == 0 && HdmiSilent(s));
+        HdmiNoDpWrites(); CHECK(g_Fake.Protocol == 0);
+    }
+    // Refuse DP, OTG1, deep colour, missing EDID and missing clock before any
+    // mutating write. INDEX selects are the only writes needed to observe.
+    for (k = 0; k < 6; k++) {
+        HdmiUnit(0);
+        if (k == 0) Set(&g_Fake, BC250_REG_DMU_DIG0_DIG_BE_CNTL, 1ul << DIG0_DIG_BE_CNTL__DIG_FE_SOURCE_SELECT__SHIFT);
+        if (k == 1) Set(&g_Fake, BC250_REG_DMU_DIG0_DIG_FE_CNTL, 1ul << DIG0_DIG_FE_CNTL__DIG_SOURCE_SELECT__SHIFT);
+        if (k == 2) Set(&g_Fake, BC250_REG_DMU_DIG0_HDMI_CONTROL, DIG0_HDMI_CONTROL__HDMI_DEEP_COLOR_ENABLE_MASK);
+        if (k == 3) g_Run.Sink = NULL;
+        if (k == 5) Set(&g_Fake, BC250_REG_DMU_DIG0_DIG_BE_EN_CNTL, 0);
+        Io(&io, &g_Fake);
+        CHECK(Bc250HdmiAudioRun(&io, &g_Run, k == 4 ? 0 : 1745000) != BC250_DPAUDIO_REASON_OK);
+        CHECK(!g_Run.Wrote && g_Fake.Traced == 0);
+    }
+    HdmiUnit(0); Io(&io, &g_Fake); Bc250DpAudioObserve(&io, &g_Run.Obs); observe = g_Fake.Writes;
+    HdmiUnit(0); Io(&io, &g_Fake);
+    CHECK(Bc250HdmiAudioRun(&io, &g_Run, 1745000) == BC250_DPAUDIO_REASON_OK); calls = g_Fake.Writes;
+    for (k = observe + 1; k <= calls; k++) {
+        HdmiUnit(0); Io(&io, &g_Fake); g_Fake.FailWriteAt = k;
+        CHECK(Bc250HdmiAudioRun(&io, &g_Run, 1745000) == BC250_DPAUDIO_REASON_WRITE_FAILED);
+        CHECK(g_Run.UndoStatus == 0 && !(g_Fake.Ix[0][BC250_AZ_IX_HOT_PLUG_CONTROL] & HPC_AE));
+        if (g_Run.StreamWrote) CHECK(HdmiSilent(0));
+        HdmiNoDpWrites();
+    }
+    for (k = 0; k < sizeof(badRegs) / sizeof(badRegs[0]); k++) {
+        HdmiUnit(0); Io(&io, &g_Fake); g_Fake.StuckOffset = badRegs[k]; g_Fake.StuckMask = badMasks[k];
+        CHECK(Bc250HdmiAudioRun(&io, &g_Run, 1745000) == BC250_DPAUDIO_REASON_STREAM_MISMATCH);
+        CHECK(g_Run.Stream.MismatchOffset == badRegs[k] && HdmiSilent(0));
+        CHECK(g_Fake.AudioEnabledWrites == 0); HdmiNoDpWrites();
+    }
+    HdmiUnit(0); Io(&io, &g_Fake);
+    CHECK(Bc250HdmiAudioRun(&io, &g_Run, 1745000) == BC250_DPAUDIO_REASON_OK);
+    g_Fake.FailWriteAt = g_Fake.Writes + 1;
+    CHECK(Bc250HdmiAudioStopSequence(&io, 0, 0, 1, 1, &stop) == FAKE_FAIL);
+    CHECK(!(g_Fake.Ix[0][BC250_AZ_IX_HOT_PLUG_CONTROL] & HPC_AE) &&
+        !(Get(&g_Fake, g_S[0].Afmt) & DIG0_AFMT_CNTL__AFMT_AUDIO_CLOCK_EN_MASK));
+    g_Run.Sink = NULL;
+}
+
 int main(void)
 {
     Gate();
@@ -1114,6 +1225,7 @@ int main(void)
     Texts();
     StepFour();
     ContainerId();
+    Hdmi();
     printf("dpaudio: %u checks, %u failures\n", checks, failures);
     return failures ? 1 : 0;
 }

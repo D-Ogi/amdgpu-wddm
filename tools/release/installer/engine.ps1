@@ -33,6 +33,10 @@ $script:EngineDeadlineText = $null
 $script:EngineStop     = $null          # the result's 'stop' record when a stop point ended the run
 $script:EngineJob      = 'none'         # 'kill-on-close' once the engine runs in its own job object
 $script:OnStop         = $null          # clean-up before a stop point ends the run (prepare-offline: its .partial folder)
+# The diagnostics file of a driver start that did not pass (install.ps1 Invoke-VerifyDiagnostics, diagnostics.ps1),
+# written next to the installer's log and named in the result. $null when nothing was collected, which is the
+# normal case: it exists only for a run whose verify found a driver that did not start.
+$script:EngineDiagnostics = $null
 $script:HoldWindow     = $false         # install.ps1 -HoldWindow: wait for Enter before the console closes
 
 function Initialize-Engine {
@@ -340,6 +344,7 @@ function Exit-Engine {
         step = $(if ($Step) { $Step } else { $null })
         detail = $Detail
         log = $script:LogPath
+        diagnostics = $script:EngineDiagnostics
         deadline_utc = $script:EngineDeadlineText
         stop = $script:EngineStop
         children = $children

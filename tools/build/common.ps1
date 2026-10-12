@@ -76,6 +76,15 @@ function Import-VsDevEnvironment([string]$VsInstall, [string]$TempDir, [Validate
     }
     if (-not (Get-Command cl.exe -ErrorAction SilentlyContinue)) { throw "cl.exe is not on PATH after $vcvars" }
     if ($env:VSCMD_ARG_TGT_ARCH -ne $Arch) { throw "$vcvars set VSCMD_ARG_TGT_ARCH=$($env:VSCMD_ARG_TGT_ARCH), wanted $Arch" }
+    # A calling-convention modifier on the wrong declarator can silently become cdecl
+    # on x86. /WX alone is not a gate when a dependency selects /W0 or /WX-.
+    # _CL_ is appended after command-line flags and also reaches nested builds.
+    # External level 0 suppresses even /we; level 1 admits these two diagnostics.
+    if ($Arch -eq 'x86') {
+        $policy = (@($env:_CL_, '/external:W1 /we4229 /we4440') | Where-Object { $_ }) -join ' '
+        if ($policy.Length -gt 1024) { throw 'x86 compiler policy exceeds the MSVC _CL_ limit' }
+        $env:_CL_ = $policy
+    }
     return $install
 }
 
@@ -198,11 +207,12 @@ function Get-RecipeIdentity([string]$Repo, [string[]]$Files) {
 # namespace start below the source or the build directory, not at the drive. The switches go at the end of an option
 # the set already has, because a second -D for the same option replaces the first. The configure gate then compares
 # the Build Options line with the merged set.
-function Add-ReproducibleMesonOptions([string[]]$Options, [string]$Source, [string]$Build) {
+function Add-ReproducibleMesonOptions([string[]]$Options, [string]$Source, [string]$Build, [ValidateSet('x64', 'x86')][string]$Arch = 'x64') {
     foreach ($dir in $Source, $Build) {
         if ($dir -match '\s') { throw "$dir contains white space: meson splits c_args at white space, so /d1trimfile cannot name it" }
     }
     $compile = "/Brepro /FC /d1trimfile:$Source /d1trimfile:$Build"
+    if ($Arch -eq 'x86') { $compile += ' /external:W1 /we4229 /we4440' }
     $add = [ordered]@{ c_args = $compile; cpp_args = $compile; c_link_args = '/Brepro /PDBALTPATH:%_PDB%'; cpp_link_args = '/Brepro /PDBALTPATH:%_PDB%' }
     $merged = [Collections.Generic.List[string]]::new()
     foreach ($o in $Options) { $merged.Add($o) }

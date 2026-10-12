@@ -1,0 +1,1 @@
+PROVENANCE: Mesa, MIT, https://gitlab.freedesktop.org/mesa/mesa/-/blob/05e6c9622e135ac2aeaf56ec70222642627e2162/src/amd/registers/gfx10-rsrc.json:319-342; gfx10-scratch-reference.json preserves the two named register types and their fields, with JSON whitespace changed. 1928 bytes, sha256 6058e728d010d695e06f8ecb6b67309b5be8a8b04f7a1b80179a78afabd853c7.

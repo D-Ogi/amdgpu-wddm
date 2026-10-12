@@ -1,0 +1,50 @@
+gemm_check: numeric on
+  ok  hipblasSgemm 1x1x1 op NN beta 0 batch 1
+  ok  hipblasSgemm 1x1x1 op NN beta 1 batch 1
+  ok  hipblasSgemm 1x1x1 op NT beta 0 batch 1
+  ok  hipblasSgemm 1x1x1 op NT beta 1 batch 1
+  ok  hipblasSgemm 1x1x1 op TN beta 0 batch 1
+  ok  hipblasSgemm 1x1x1 op TN beta 1 batch 1
+  ok  hipblasSgemm 1x1x1 op TT beta 0 batch 1
+  ok  hipblasSgemm 1x1x1 op TT beta 1 batch 1
+  ok  hipblasSgemm 17x33x7 op NN beta 0 batch 1
+  ok  hipblasSgemm 17x33x7 op NN beta 1 batch 1
+  ok  hipblasSgemm 17x33x7 op NT beta 0 batch 1
+  ok  hipblasSgemm 17x33x7 op NT beta 1 batch 1
+  ok  hipblasSgemm 17x33x7 op TN beta 0 batch 1
+  ok  hipblasSgemm 17x33x7 op TN beta 1 batch 1
+  ok  hipblasSgemm 17x33x7 op TT beta 0 batch 1
+  ok  hipblasSgemm 17x33x7 op TT beta 1 batch 1
+  ok  hipblasSgemm 64x48x32 op NN beta 0 batch 1
+  ok  hipblasSgemm 64x48x32 op NN beta 1 batch 1
+  ok  hipblasSgemm 64x48x32 op NT beta 0 batch 1
+  ok  hipblasSgemm 64x48x32 op NT beta 1 batch 1
+  ok  hipblasSgemm 64x48x32 op TN beta 0 batch 1
+  ok  hipblasSgemm 64x48x32 op TN beta 1 batch 1
+  ok  hipblasSgemm 64x48x32 op TT beta 0 batch 1
+  ok  hipblasSgemm 64x48x32 op TT beta 1 batch 1
+  ok  hipblasSgemmStridedBatched 17x9x33 op NT beta 0.25 batch 3
+  ok  hipblasSgemmBatched 17x9x33 op NT beta 0.25 batch 5
+  ok  hipblasGemmEx 17x33x7 op NN beta 0 batch 1
+  ok  hipblasGemmEx 16x16x64 op NN beta 1 batch 1
+  ok  hipblasGemmEx 5x7x129 op NN beta 0 batch 1
+  ok  hipblasGemmEx 17x33x7 op NT beta 0 batch 1
+  ok  hipblasGemmEx 16x16x64 op NT beta 1 batch 1
+  ok  hipblasGemmEx 5x7x129 op NT beta 0 batch 1
+  ok  hipblasGemmEx 17x33x7 op TN beta 0 batch 1
+  ok  hipblasGemmEx 16x16x64 op TN beta 1 batch 1
+  ok  hipblasGemmEx 5x7x129 op TN beta 0 batch 1
+  ok  hipblasGemmEx 17x33x7 op TT beta 0 batch 1
+  ok  hipblasGemmEx 16x16x64 op TT beta 1 batch 1
+  ok  hipblasGemmEx 5x7x129 op TT beta 0 batch 1
+  ok  hipblasGemmStridedBatchedEx 33x17x64 op TN beta 0 batch 3
+  ok  hipblasGemmBatchedEx 16x7x16 op TN beta 0 batch 3
+  ok  hipblasGemmBatchedEx 17x5x31 op TN beta 0 batch 3
+  ok  hipblasSgemm 17x5x0 op NN beta 1 batch 1
+     hipblasSgemm 17x33x7 op TN beta 0 batch 1 [negative control]: C[0,0,0] is 1.96067, reference 1.05442 (tol 7.06586e-05)
+     hipblasSgemm 17x33x7 op TN beta 0 batch 1 [negative control]: C[0,1,0] is 1.18474, reference 0.943534 (tol 7.06586e-05)
+     hipblasSgemm 17x33x7 op TN beta 0 batch 1 [negative control]: C[0,2,0] is 0.183264, reference 0.305334 (tol 7.06586e-05)
+  ok  hipblasSgemm 17x33x7 op TN beta 0 batch 1 [negative control]: 33 elements differ, as they must
+gemm_check: expected dispatches 43
+gemm_check: 532 checks, 0 failed
+gemm_check: ok

@@ -196,6 +196,54 @@ static void PolicyTests()
     for (const PathCase &p : paths)
         CHECK(IsWindowsComponentPath(p.image, p.windows) == p.component, "IsWindowsComponentPath(%ls, %ls) != %d",
               p.image ? p.image : L"(null)", p.windows, p.component);
+    // BD-126: the router's built-in default Deny list. The Windows firewall notification dialog (PickerHost.exe,
+    // the File Picker UI Host, which hosts FirewallNotificationDialogServer) stayed an empty white window with the
+    // application icon for two minutes on the application GPU UMD under gpu-default, observed on 2026-10-12 on
+    // tester.28, so the image takes the CPU UMD with no registry entry and with its own reason. The decision table
+    // below is the whole claim of this change: a route, not a painted window. One image, not a class of images:
+    // routing every Windows component to the CPU UMD cost FL 12_1 (the mitigation of 2026-10-04, BD-088); BD-061,
+    // the defect behind that mitigation, is fixed since b20, so this failure is a new one.
+    // An Allow entry is an explicit operator decision and lifts the built-in default, so the GPU route can be
+    // measured again without a new router build. A registry Deny entry, the protected list, RenderOnCpu and the
+    // allowlist's own "not in Allow" keep their answers over it.
+    CHECK(IsCpuOnlyDialogHost(L"PickerHost.exe"), "PickerHost.exe is not on the built-in default Deny list");
+    CHECK(IsCpuOnlyDialogHost(L"pickerhost.EXE"), "the built-in default Deny list is case-sensitive");
+    CHECK(!IsCpuOnlyDialogHost(L"notepad.exe") && !IsCpuOnlyDialogHost(L"") && !IsCpuOnlyDialogHost(nullptr),
+          "the built-in default Deny list matches an image it must not");
+    const wchar_t allowPicker[] = L"other.exe\0PICKERHOST.EXE\0";
+    const wchar_t denyPicker[] = L"pickerhost.exe\0";
+    struct DialogCase { const wchar_t *exe; AppMode mode; const wchar_t *allow, *deny; Component component; bool cpu;
+                        AppRoute route; AppReason reason; };
+    const DialogCase dialogs[] = {
+        {L"PickerHost.exe", Gd, nullptr, nullptr, Y, false, AppRoute::Cpu, AppReason::DialogHost},
+        {L"pickerhost.exe", Gd, nullptr, nullptr, N, false, AppRoute::Cpu, AppReason::DialogHost},
+        {L"PICKERHOST.EXE", Gd, allowDx, deny, Y, false, AppRoute::Cpu, AppReason::DialogHost},
+        {L"PickerHost.exe", Gd, nullptr, nullptr, U, false, AppRoute::Cpu, AppReason::DialogHost},
+        // Allowlist mode answers first and keeps its own reason: the built-in list adds nothing there, because
+        // every unlisted image is already on the CPU UMD.
+        {L"PickerHost.exe", Al, allowDx, nullptr, Y, false, AppRoute::Cpu, AppReason::NotAllowed},
+        {L"PickerHost.exe", Al, nullptr, nullptr, Y, false, AppRoute::Cpu, AppReason::NotAllowed},
+        // Allow lifts it; a registry Deny entry and RenderOnCpu still answer first, with their own reason.
+        {L"PickerHost.exe", Gd, allowPicker, nullptr, Y, false, AppRoute::Gpu, AppReason::Default},
+        {L"PickerHost.exe", Al, allowPicker, nullptr, Y, false, AppRoute::Gpu, AppReason::Allowed},
+        {L"PickerHost.exe", Gd, allowPicker, denyPicker, Y, false, AppRoute::Cpu, AppReason::Denied},
+        {L"PickerHost.exe", Gd, allowPicker, nullptr, Y, true, AppRoute::Cpu, AppReason::RenderOnCpu},
+        {L"PickerHost.exe", AppMode::Cpu, allowPicker, nullptr, Y, false, AppRoute::Cpu, AppReason::ModeCpu},
+        // Negative controls: the match is the exact base name, so a neighbouring image keeps the GPU route. Each of
+        // these fails if the built-in list ever becomes a prefix or substring test.
+        {L"picker.exe", Gd, nullptr, nullptr, Y, false, AppRoute::Gpu, AppReason::Default},
+        {L"xpickerhost.exe", Gd, nullptr, nullptr, Y, false, AppRoute::Gpu, AppReason::Default},
+        {L"PickerHost.exe.exe", Gd, nullptr, nullptr, Y, false, AppRoute::Gpu, AppReason::Default},
+        {L"pickerhost", Gd, nullptr, nullptr, Y, false, AppRoute::Gpu, AppReason::Default},
+    };
+    for (const DialogCase &c : dialogs) {
+        AppDecision d = DecideApp({c.exe, c.mode, c.allow, c.deny, true, true, c.component, c.cpu});
+        CHECK(d.route == c.route && d.reason == c.reason, "dialog-host exe=%ls mode=%d comp=%d cpu=%d got %s",
+              c.exe, (int)c.mode, (int)c.component, c.cpu, AppReasonName(d.reason));
+    }
+    CHECK(!strcmp(AppReasonName(AppReason::DialogHost), "app-dialog-host"), "reason name %s",
+          AppReasonName(AppReason::DialogHost));
+
     struct ModeCase { const wchar_t *text; AppMode mode; };
     const ModeCase modes[] = {
         {L"cpu", AppMode::Cpu}, {L"CPU", AppMode::Cpu}, {L"allowlist", AppMode::Allowlist}, {L"AllowList", AppMode::Allowlist},
@@ -1426,7 +1474,8 @@ static void FrontAnswerChecks(const D3D11_1DDI_DEVICEFUNCS &device, D3D10DDI_HDE
                                        "record_v=3 record_access=1";
     CHECK(Has(yes, clientPart.c_str()), "the client's half of the line: %s", yes.c_str());
     CHECK(Has(yes, compositorPart.c_str()), "the compositor's half of the line: %s", yes.c_str());
-    // IMMEDIATE changes nothing in the rule.
+    // IMMEDIATE changes nothing for a pair of one and the same row: both buffers here are BGRA8, so no
+    // swizzle has to change and the IMMEDIATE clause of audit finding K4 does not apply to them.
     CHECK(ask(client, compositor, D3D11_1DDI_CHECK_DIRECT_FLIP_IMMEDIATE) == TRUE, "TRUE refused for IMMEDIATE");
     // The pair the other way round is never a flip of the wrong buffer.
     CHECK(ask(compositor, client, 0) == FALSE, "TRUE for the pair given the other way round");
@@ -1482,7 +1531,24 @@ static void FrontAnswerChecks(const D3D11_1DDI_DEVICEFUNCS &device, D3D10DDI_HDE
     CHECK(ask(other, compositor, 0) == TRUE, "RGBA8 with PLANE_FORMATS refused: %s", lastLine().c_str());
     CHECK(Has(lastLine(), "answer=1 rule=supported") && Has(lastLine(), "caps_flags=00000003") &&
           Has(lastLine(), "pitch=7680 fmt=28"), "RGBA8 with flag: %s", lastLine().c_str());
-    CHECK(ask(other, compositor, D3D11_1DDI_CHECK_DIRECT_FLIP_IMMEDIATE) == TRUE, "RGBA8 IMMEDIATE refused");
+    // The same pair under IMMEDIATE is refused (audit finding K4, 0.7.216.26): the client's row is RGBA8 and
+    // the compositor's is BGRA8, so the plane's pixel format and its red/blue crossbar have to change, and
+    // this hardware changes them at VUPDATE alone. The contract: "If the swizzle can only be changed at every
+    // VSync interval, ensure that the CheckDirectFlipFlags parameter does not have a value of
+    // D3D11_1DDI_CHECK_DIRECT_FLIP_IMMEDIATE" (ref/ddi-display/d3d10umddi.md:8833-8838).
+    const BOOL immediateAnswer = ask(other, compositor, D3D11_1DDI_CHECK_DIRECT_FLIP_IMMEDIATE);
+    CHECK(immediateAnswer == FALSE, "RGBA8 IMMEDIATE answered %d", immediateAnswer);
+    const std::string immediateLine = lastLine();
+    CHECK(Has(immediateLine, "answer=0 rule=immediate-swizzle") && Has(immediateLine, "flags=00000001") &&
+              Has(immediateLine, "fmt=28"),
+          "RGBA8 IMMEDIATE: %s", immediateLine.c_str());
+    // The negative check of the expectation this gate carried until 0.7.216.26 (BD-115): it asked for TRUE
+    // here, which the rule now refuses. Both halves of that stale answer must fail, so a revert of the clause
+    // cannot pass this suite in silence.
+    CHECK(immediateAnswer != TRUE, "the stale expectation holds again: RGBA8 IMMEDIATE answered TRUE");
+    CHECK(!Has(immediateLine, "answer=1 rule=supported"),
+          "the stale expectation holds again: the RGBA8 IMMEDIATE line says supported: %s",
+          immediateLine.c_str());
     // The sRGB view of the same storage in the record is the same row.
     e26r.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
     device.pfnOpenResource(hDevice, &open, other, rt);
@@ -2218,16 +2284,24 @@ static void Child(const std::string &s)
             if (s == "front-log") {
                 // The destroy summary counts every answer of both suites under its rule: the 300 questions above
                 // are pitch (250) and source-geometry (50), and the lines the change log held back are 0. The
-                // TRUE answers are front-answer's three and the four of its PLANE_FORMATS block (RGBA8, RGBA8
-                // IMMEDIATE, the RGBA8 sRGB record and RGB10A2).
+                // TRUE answers are front-answer's three and the three of its PLANE_FORMATS block (RGBA8, the
+                // RGBA8 sRGB record and RGB10A2). The fourth question of that block carried IMMEDIATE and is
+                // the one immediate-swizzle answer (audit finding K4): it counted as a seventh TRUE until
+                // 0.7.216.26, which is what BD-115 was.
                 const std::string frontLog = ReadAll(Layout + L"\\routelogs\\front-" + ExeBase() + L"-" +
                                                 std::to_wstring(GetCurrentProcessId()) + L".log");
                 const size_t at = frontLog.find("check_direct_flip summary");
                 const std::string line = at == std::string::npos ? std::string()
                                                                  : frontLog.substr(at, frontLog.find('\n', at) - at);
-                CHECK(Has(line, "at=destroy") && Has(line, "suppressed=0") && Has(line, "true=7 ") &&
-                          Has(line, "source-geometry:51") && Has(line, "pitch:252"),
+                CHECK(Has(line, "at=destroy") && Has(line, "suppressed=0") && Has(line, "true=6 ") &&
+                          Has(line, "immediate-swizzle:1") && Has(line, "source-geometry:51") &&
+                          Has(line, "pitch:252"),
                       "the destroy summary: %s", line.c_str());
+                // The negative check of the stale expectation (BD-115): the seventh TRUE is gone for good, and
+                // a summary that counts one again is a revert of the IMMEDIATE clause, not a passing gate.
+                CHECK(!Has(line, "true=7 "),
+                      "the stale expectation holds again: the summary counts the IMMEDIATE answer as a TRUE: %s",
+                      line.c_str());
                 CHECK(frontLog.find("check_direct_flip summary", at + 1) == std::string::npos,
                       "more than one summary line: %s", frontLog.c_str());
             }
@@ -2450,6 +2524,18 @@ static void Child(const std::string &s)
             AppBase(L"gpu-default"); SetMulti(AppKey, L"Deny", {self});
             SetDw((std::wstring(GraphicsKey) + L"\\Applications\\" + self).c_str(), L"RenderOnCpu", 0);
             lines = {"route=cpu reason=app-denied fallback=0", "render_on_cpu=0/application"};
+        } else if (s == "app-dialog-host-builtin") {
+            // BD-126, run from <layout>\pickerhost\PickerHost.exe: gpu-default with empty lists, the release
+            // default, and the built-in default Deny list keeps the dialog host on the CPU UMD.
+            CHECK(!_wcsicmp(self.c_str(), L"PickerHost.exe"), "not running as PickerHost.exe but as %ls", self.c_str());
+            AppBase(L"gpu-default");
+            lines = {"route=cpu reason=app-dialog-host fallback=0", "app_mode=gpu-default mode_source=registry"};
+        } else if (s == "app-dialog-host-allow") {
+            // The negative control for the same image: an Allow entry lifts the built-in default, so the lab can
+            // put the dialog back on the GPU route (the BD-126 diagnosis step) without a new router build.
+            AppBase(L"gpu-default"); SetMulti(AppKey, L"Allow", {self});
+            expect = AppTag102;
+            lines = {"route=gpu reason=app-default fallback=0 gpu_hr=00000000"};
         } else if (s == "app-deny-wrong-type") {
             // A Deny list that cannot be read must not widen the GPU route.
             AppBase(L"gpu-default"); SetSz(AppKey, L"Deny", L"other.exe");
@@ -2658,6 +2744,9 @@ static int RunAll(const std::wstring &out)
         {"app-render-on-cpu-app-off", nullptr, {}},
         {"app-render-on-cpu-env", nullptr, {{L"AMDGPU_WDDM_RENDER_ON_CPU", L"1"}}},
         {"app-render-on-cpu-invalid", nullptr, {}}, {"app-render-on-cpu-deny", nullptr, {}},
+        // BD-126: the built-in default Deny list, run as the image it names, and the Allow entry that lifts it.
+        {"app-dialog-host-builtin", "pickerhost\\PickerHost.exe", {}},
+        {"app-dialog-host-allow", "pickerhost\\PickerHost.exe", {}},
         {"protected-logonui", "logonui\\logonui.exe", {}},
         {"desktop-dwm-unchanged", "dwm\\dwm.exe", {}}, {"desktop-client-unchanged", nullptr, {}},
         {"stack-app-real", nullptr, {}}, {"stack-app-real-noconfig", nullptr, {}}, {"stack-app-real-no-identity", nullptr, {}},

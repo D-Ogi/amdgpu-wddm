@@ -1,0 +1,21 @@
+trial 561: window B trigger "world: walk 253s: start, 120 s", trace zero 20:58:59Z, held 120.0 s, first present at 0.1 s
+  span  UTC                     n  rate/s  p50 ms     p95     p99     max    MHz  per GHz  Tctl  busy%     W dpm n
+  all   20:58:59-21:00:58  1615   13.60   72.47   83.57   86.88   89.28   1225    11.10  83.8   98.9  84.6   117
+  q1    20:58:59-20:59:28   379   13.10   76.87   85.02   87.08   87.82   1164    11.25  83.3   99.8  83.7    28
+  q2    20:59:28-20:59:58   427   14.20   70.01   75.56   78.10   79.56   1300    10.92  83.9   98.6  86.7    30
+  q3    20:59:58-21:00:28   427   14.20   70.27   75.41   77.89   79.81   1300    10.92  84.5   99.1  88.9    30
+  q4    21:00:28-21:00:58   382   12.70   79.00   86.26   88.35   89.28   1128    11.26  83.6   98.3  78.6    29
+  clock min 1100 max 1300 MHz, Tctl max 85.0 C, mV 840-880
+
+trace zero 2026-10-11T20:58:59.552457Z, span 120.7 s, first present at 0.1 s
+== all (0.4..119.4 s, 119 s): GPU busy (DMA union) 99.6 %
+  "Unknown" (1448)               n= 1615 rate=  13.6/s median=  72.47 ms p95=  83.57 p99=  86.88 max=  89.28 >50ms=1614
+== q1 (0.4..29.4 s, 29 s): GPU busy (DMA union) 99.6 %
+  "Unknown" (1448)               n=  379 rate=  13.1/s median=  76.87 ms p95=  85.02 p99=  87.08 max=  87.82 >50ms=378
+== q2 (29.4..59.4 s, 30 s): GPU busy (DMA union) 99.5 %
+  "Unknown" (1448)               n=  427 rate=  14.2/s median=  70.01 ms p95=  75.56 p99=  78.10 max=  79.56 >50ms=426
+== q3 (59.4..89.4 s, 30 s): GPU busy (DMA union) 99.5 %
+  "Unknown" (1448)               n=  427 rate=  14.2/s median=  70.27 ms p95=  75.41 p99=  77.89 max=  79.81 >50ms=426
+== q4 (89.4..119.4 s, 30 s): GPU busy (DMA union) 99.6 %
+  "Unknown" (1448)               n=  382 rate=  12.7/s median=  79.00 ms p95=  86.26 p99=  88.35 max=  89.28 >50ms=381
+

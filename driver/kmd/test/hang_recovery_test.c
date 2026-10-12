@@ -260,20 +260,24 @@ int main(void)
         CHECK(model_pre_kill(&f, 0, 41, 12) == BC250_HANG_VERDICT_FENCE_GUARD);
     }
 
-    /* Only DRAINED and ALREADY_RETIRED report a reset; every other verdict keeps today's refusal. */
+    /* DRAINED, ALREADY_RETIRED and ABORT_REPORTED report a reset; every other verdict keeps today's refusal.
+     * ABORT_REPORTED is BD-114's: nothing of the node is on the ring, so its last reported fence is named as
+     * aborted and no kill runs (submit_watchdog_test.c holds its guards). */
     CHECK(Bc250HangVerdictRecovered(BC250_HANG_VERDICT_DRAINED));
     CHECK(Bc250HangVerdictRecovered(BC250_HANG_VERDICT_ALREADY_RETIRED));
+    CHECK(Bc250HangVerdictRecovered(BC250_HANG_VERDICT_ABORT_REPORTED));
     CHECK(!Bc250HangVerdictRecovered(BC250_HANG_VERDICT_PENDING));
     CHECK(!Bc250HangVerdictRecovered(BC250_HANG_VERDICT_NOT_DRAINED));
     CHECK(!Bc250HangVerdictRecovered(BC250_HANG_VERDICT_NOTHING_ON_RING));
     CHECK(!Bc250HangVerdictRecovered(BC250_HANG_VERDICT_FENCE_GUARD));
     CHECK(!Bc250HangVerdictRecovered(BC250_HANG_VERDICT_VMID_GUARD));
-    CHECK(!Bc250HangVerdictRecovered(7u));
+    CHECK(!Bc250HangVerdictRecovered(8u));
 
     /* The values the LAB-PLAN tells the operator to read must not move. */
     CHECK(BC250_HANG_VERDICT_PENDING == 0u && BC250_HANG_VERDICT_DRAINED == 1u && BC250_HANG_VERDICT_NOT_DRAINED == 2u);
     CHECK(BC250_HANG_VERDICT_NOTHING_ON_RING == 3u && BC250_HANG_VERDICT_FENCE_GUARD == 4u);
     CHECK(BC250_HANG_VERDICT_ALREADY_RETIRED == 5u && BC250_HANG_VERDICT_VMID_GUARD == 6u);
+    CHECK(BC250_HANG_VERDICT_ABORT_REPORTED == 7u);
 
     /* The kill's register: SQ_CMD is in the GFX sequence's table and not in the GART sequence's. Lab trial D1 of
      * 0.7.216.16 (2026-10-07) issued the kill with the GART sequence installed and logged

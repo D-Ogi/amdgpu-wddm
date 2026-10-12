@@ -17,7 +17,10 @@
  * From the warm threshold up no raise happens at all, and from RAMP_KNEE_MC
  * (70 C) a raise goes one level per ramp interval (0.7.203). The thresholds and a runtime floor can change at run
  * time (struct bc250_dpm_tune, 0.7.185); the runtime floor lifts only what the load asks for, below
- * every limit. Kto wysoko lata, ten nisko upada - who flies high falls low; here it is the clock, on purpose.
+ * every limit. Since BD-127 the three load thresholds have a second set, the compute set, in force while a
+ * compute context is open: a compute client waits on the CPU between dispatches, so its busy share measures
+ * the split and not the headroom, and the graphics thresholds held the lab floor through a whole LLM run that
+ * ran 31 % faster at 2000 MHz. Kto wysoko lata, ten nisko upada - who flies high falls low; here it is the clock, on purpose.
  */
 #include <string.h>
 #include "bc250_dpm.h"
@@ -236,6 +239,48 @@ enum bc250_dpm_tune_error bc250_dpm_tune_check(const struct bc250_dpm_tune *t, u
 	return BC250_DPM_TUNE_OK;
 }
 
+/* ---- the compute threshold set (BD-127) ------------------------------------------------------ */
+
+void bc250_dpm_compute_default(struct bc250_dpm_compute *c)
+{
+	c->on = BC250_DPM_COMPUTE_PROFILE ? 1 : 0;
+	c->up_permille = BC250_DPM_COMPUTE_UP_PERMILLE;
+	c->target_permille = BC250_DPM_COMPUTE_TARGET_PERMILLE;
+	c->down_permille = BC250_DPM_COMPUTE_DOWN_PERMILLE;
+}
+
+enum bc250_dpm_tune_error bc250_dpm_compute_check(const struct bc250_dpm_compute *c,
+						  const struct bc250_dpm_tune *t, unsigned int max_level)
+{
+	/* The candidate the governor would really run with: the tune in force with the three load thresholds
+	 * replaced. One rule set for both, so a compute set cannot break an invariant a tune could not break,
+	 * and an administrator reading an error number finds it in one enum. */
+	struct bc250_dpm_tune candidate = *t;
+	candidate.up_permille = c->up_permille;
+	candidate.target_permille = c->target_permille;
+	candidate.down_permille = c->down_permille;
+	return bc250_dpm_tune_check(&candidate, max_level);
+}
+
+enum bc250_dpm_tune_error bc250_dpm_set_compute(struct bc250_dpm_governor *g,
+						const struct bc250_dpm_compute *c)
+{
+	enum bc250_dpm_tune_error e = bc250_dpm_compute_check(c, &g->tune, g->max_level);
+	/* The switch always lands; only the three thresholds can be refused. One key carries both, so refusing
+	 * them together would let a typo in a threshold hold a default-on power policy ON against an explicit
+	 * off, which is the opposite of what a refusal is for: an operator who writes DpmComputeProfile 0 to
+	 * bisect a regression gets the graphics thresholds, whatever else is in the key (BD-127 review).
+	 * A refused triple leaves the measured defaults of bc250_dpm_init, which is what the caller logs. */
+	if (e == BC250_DPM_TUNE_OK) g->compute = *c;
+	g->compute.on = c->on ? 1 : 0;
+	return e;
+}
+
+int bc250_dpm_compute_on(const struct bc250_dpm_governor *g)
+{
+	return g->compute.on && g->compute_contexts != 0u;
+}
+
 void bc250_dpm_init(struct bc250_dpm_governor *g, unsigned int max_level)
 {
 	memset(g, 0, sizeof(*g));
@@ -258,6 +303,10 @@ void bc250_dpm_init(struct bc250_dpm_governor *g, unsigned int max_level)
 	g->idle_busy_permille = BC250_DPM_IDLE_BUSY_PERMILLE;
 	g->idle_leave_permille = BC250_DPM_IDLE_LEAVE_PERMILLE;
 	bc250_dpm_tune_default(&g->tune);
+	/* The compute set is on by default (BD-127) and selects nothing by itself: without an open compute
+	 * context every tick reads the graphics thresholds, so a governor built here and stepped with the
+	 * default input behaves exactly as 0.7.216.7. */
+	bc250_dpm_compute_default(&g->compute);
 }
 
 enum bc250_dpm_idle_error bc250_dpm_idle_config(struct bc250_dpm_governor *g, unsigned int idle_mhz,
@@ -698,6 +747,12 @@ unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm
 	unsigned int thermal = BC250_DPM_THROTTLE_NONE;
 	int left = 0, idle_exit = 0;	/* the idle state ended in this tick / this tick returns from under the floor */
 	const struct bc250_dpm_tune *t = &g->tune;
+	/* The compute threshold set of this tick (BD-127): the tune in force with the three load thresholds
+	 * replaced, selected below. Every initializer in this block that reads t reads a field the set leaves
+	 * alone (the runtime floor and the zone's lead), so the copy is made before the selection without
+	 * changing either one. */
+	struct bc250_dpm_tune compute_tune = g->tune;
+	int compute = g->compute.on && in->compute_contexts != 0u;
 	/* bc250_dpm_set_tune admits no floor above the ceiling; a caller that wrote g->tune itself gets it clamped. */
 	unsigned int floor = t->floor_level < g->max_level ? t->floor_level : g->max_level;
 	/* The reading the soft rules are judged on (0.7.213): this tick's, or its straight-line extrapolation over
@@ -707,6 +762,20 @@ unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm
 	int lead_mc = in->temperature_valid ? zone_lead_mc(g, t->zone_lead_ms, &lead_ok) : 0;
 	int teff = in->temperature_mc + lead_mc;
 
+	/* The compute set (BD-127). It replaces the three load thresholds of this tick and nothing else: the
+	 * thermal rules, the runtime floor, SetStablePowerState, the ceiling and the idle state below all read
+	 * the values they always read, so a hot part is held by the cap and a quiet GPU still reaches the idle
+	 * point while a compute process keeps a context open. */
+	g->compute_contexts = in->compute_contexts;
+	if (compute) {
+		compute_tune.up_permille = g->compute.up_permille;
+		compute_tune.target_permille = g->compute.target_permille;
+		compute_tune.down_permille = g->compute.down_permille;
+		t = &compute_tune;
+		if (!g->compute_set) g->compute_entries++;
+		g->compute_ticks++;
+	}
+	g->compute_set = compute;
 	g->zone_lead_mc = lead_mc;
 	g->zone_lead_ok = lead_ok;
 	if (t->zone_delta_mc && t->zone_lead_ms && !lead_ok) g->zone_lead_gaps++;

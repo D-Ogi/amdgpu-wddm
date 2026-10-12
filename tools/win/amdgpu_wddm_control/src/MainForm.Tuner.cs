@@ -47,6 +47,13 @@ namespace AmdgpuWddmControl
 
         void AddTuning(Control page, int width, bool installed)
         {
+            if (!BoardCapabilities.Current.Allows(BoardCapabilities.Gpu | BoardCapabilities.Cpu))
+            {
+                var unsupported = new CardPanel(Strings.T("graphics.tuning.title"), width);
+                unsupported.Add(Ui.Dim(Strings.T("board.unsupported"), unsupported.Inner));
+                page.Controls.Add(unsupported);
+                return;
+            }
             var c = CurveNow; var u = CpuNow;
             _trials.Observe(c, u);
             bool must = TunerView.MustShow(c, u);

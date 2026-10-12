@@ -1,0 +1,9 @@
+# adapter luid 00000000-00007F4F, 4 segment(s), dedicated 12842106880 bytes (KMTQAITYPE_GETSEGMENTSIZE)
+segment 0 memory   resident 240992256 committed 187895808 limit 12440829952
+segment 1 aperture resident 0 committed 0 limit 402653184
+segment 2 memory   resident 3149824 committed 3149824 limit 401276928
+segment 3 aperture resident 169644032 committed 169644032 limit 18446744073709551615
+memory   resident 244142080 committed 191045632 limit 12842106880
+aperture resident 169644032 limit 18446744073709551615
+sizes dedicated video 12842106880 dedicated system 0 shared system 2000941056 (KMTQAITYPE_GETSEGMENTSIZE)
+# segment 3 has no commit limit, so the summed aperture limit saturates

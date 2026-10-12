@@ -25,7 +25,11 @@
 /* BC2A version 2 makes the cache intent explicit; version 1 always gave write
  * combined backing. gem_flags is then authoritative. */
 #define BC250HSA_ALLOC_VERSION   2u
-#define BC250HSA_CONTEXT_VERSION 2u
+/* BC2C version 3 is the version from which the kernel driver reads
+ * BC250HSA_CTX_COMPUTE. It appends no field, so the blob is version 2's
+ * 80 bytes and an older kernel driver reads every field where it
+ * expects it and ignores the flag (BD-127). */
+#define BC250HSA_CONTEXT_VERSION 3u
 #define BC250HSA_SUBMIT_VERSION  1u
 
 /* AMDGPU_GEM_DOMAIN_GTT and _VRAM. */
@@ -39,6 +43,15 @@
 #define BC250HSA_GEM_CPU_GTT_USWC        (1ull << 2)
 /* bc250_umd_alloc_private::flags */
 #define BC250HSA_A_EXACT_VA 0x1u
+/* bc250_umd_context_private::flags. BC250_UMD_C_COMPUTE (BD-127): the work of
+ * this context is compute. gfx1013 publishes no compute ring (fact M50), so a
+ * compute context asks for GFX on node 0 like a graphics one and the kernel
+ * driver has no other way to tell them apart. While one is open the kernel
+ * driver's clock governor uses its compute threshold set, which raises from a
+ * lower busy share: a compute client waits on the CPU between dispatches, so
+ * its busy share measures that split and not the headroom. This library sets
+ * the flag on every context it creates. */
+#define BC250HSA_CTX_COMPUTE 0x4u
 
 struct bc250hsa_alloc_blob {
     uint32_t magic, version, size, flags;

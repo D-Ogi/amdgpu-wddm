@@ -20,7 +20,8 @@
 #define UMD_BLOB_ALLOC_VERSION_SCANOUT 3u     // the version that put scanout_* in the reserved tail
 #define UMD_BLOB_ALLOC_SCANOUT_AT 148u        // offset of scanout_width; the four words follow it
 #define UMD_BLOB_CONTEXT_V1     64u           // version 1 ended here; node_ordinal starts at this offset
-#define UMD_BLOB_CONTEXT_BYTES  80u           // version 2
+#define UMD_BLOB_CONTEXT_BYTES  80u           // version 2, and version 3: that version appends no field
+#define UMD_BLOB_CONTEXT_VERSION_COMPUTE 3u   // the version from which UMD_BLOB_C_COMPUTE is read
 #define UMD_BLOB_SUBMIT_BYTES   576u          // the whole struct, reserved tail included: what CreateContext
                                               // must offer as DmaBufferPrivateDataSize
 #define UMD_BLOB_SUBMIT_PREFIX  40u           // bytes before ib[0]
@@ -42,6 +43,11 @@
 #define UMD_BLOB_A_SPARSE       0x00000002u
 #define UMD_BLOB_A_USERPTR      0x00000004u
 #define UMD_BLOB_A_SCANOUT      0x00000010u
+
+// bc250_umd_context_private::flags. BD-127: a compute runtime says so here, because GFX1013 has no compute
+// ring and every context of both kinds asks for GFX on node 0 (fact M50). The DPM governor reads the count of
+// live contexts that carry it; nothing else in the driver changes.
+#define UMD_BLOB_C_COMPUTE      0x00000004u
 
 // alloc_size above this does not round up to a page inside 64 bits. Larger is refused, not truncated.
 #define UMD_BLOB_ALLOC_MAX      0xFFFFFFFFFFFFF000ull
@@ -90,6 +96,11 @@ struct umd_context_view {
     unsigned long ip_type;
     unsigned long node_ordinal;
     unsigned long priority;
+    unsigned long flags;              // the blob's own flags word, recorded as written
+    // BD-127: the context says its work is compute. 1 only for a blob of at least
+    // UMD_BLOB_CONTEXT_VERSION_COMPUTE that set UMD_BLOB_C_COMPUTE, so an older producer's flags word cannot
+    // turn the governor's compute set on. A refused blob leaves it 0, like every other field of this view.
+    int compute;
 };
 
 // ib_va / ib_bytes are ib[0]. single_ib is 1 only when num_ibs is 1: the one shape the gfx ring
@@ -100,6 +111,7 @@ struct umd_submit_view {
     unsigned long long ib_va;
     unsigned long ib_bytes;
     int single_ib;
+    unsigned long long fence_va, fence_value; /* existing BC2S prefix at 24/32, diagnostic join only */
 };
 
 // Cached backing store is requested only for CPU-accessible GTT without USWC.

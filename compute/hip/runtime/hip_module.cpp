@@ -277,6 +277,9 @@ void __hipRegisterManagedVar(void** modules, void* pointer, void* initValue, con
     std::snprintf(line, sizeof(line), "managed variable '%s' needs managed memory, which this build does not support",
                   name != nullptr ? name : "?");
     report(line);
+    bc250hip::log_line(BC250HSA_LOG_ERROR, "__hipRegisterManagedVar refuses variable '%s':"
+                                           " managed memory needs page migration",
+                       name != nullptr ? name : "?");
     bc250hip::last_error_set(hipErrorNotSupported);
 }
 

@@ -48,7 +48,7 @@ One JSON object per line, UTF-8 without BOM, appended; the reader takes complete
 | `type` | Fields | When |
 |---|---|---|
 | `start` | `mode` (plan, dry-run, run, verify, prepare-offline), `gui`, `dry_run`, `package`, `contract`, `phase`, `deadline_utc`, `job` (`kill-on-close`, or `none: <reason>`) | first |
-| `stage` | `id`, `text` | a stage begins: `preflight`, `test-signing`, `install`, `firmware`, `files`, `driver`, `settings`, `finish`, `verify`; prepare-offline: `prepare-check`, `firmware`, `copy`, `finish` |
+| `stage` | `id`, `text` | a stage begins: `preflight`, `test-signing`, `install`, `firmware`, `files`, `driver`, `settings`, `finish`, `verify`; prepare-offline: `prepare-check`, `firmware`, `components`, `copy`, `finish`. Two more come from a package that carries `installer/components.json`. `extras` asks the questions, after the preflight and before any change. `components` installs the chosen extras, after `settings`. A run that can choose no extra opens neither, which is every run with `-Gui` and no `-Components` |
 | `check` | `id` (`<area>.<finding>`, for example `gpu.missing`, `firmware.folder-bad`), `result` (ok, warn, fail), `name`, `detail` | each preflight check |
 | `decision` | `action` (install, upgrade, resume, repair, verify, already), `installed_version`, `package_version`, `phase`, `consents` (test-signing, bitlocker), `consents_given`, `restarts` (0, 1, 2), `firmware_source` (download, folder, package-folder), `firmware_dir`, `notes` (release-notes files in the package), `secure_boot`, `bitlocker`, `compatibility` (`ok`, `reasons`) | once, before any change |
 | `settings-plan` | `summary` (`kept`, `updated`, `added`, `unchanged`, `command`, `reopened`, `driver_closed`), `rows` [`group`, `name`, `decision` (set, same, update, kept, command, reopened, driver-closed), `current`, `value`, `default`, `present`, `closure` (the driver's own act in plain words, null when there is none: BD-069)] | after the decision, before the first `step` (WU-006, WU-044) |
@@ -59,6 +59,7 @@ One JSON object per line, UTF-8 without BOM, appended; the reader takes complete
 | `step` | `description`, `dry_run` | each change (in a dry run: each change that would be made) |
 | `restart-required` | `reason_id` (restart.test-signing, restart.driver-package, restart.complete), `continuation` | a restart is needed |
 | `witness` | `written`, `reason` | verify tried to write the running-release witness |
+| `diagnostics` | `collected`, `path`, `bytes`, `seconds`, `cut`, `reasons` | verify found a driver that did not start and collected one diagnostics file for this run |
 | `result` | `outcome`, `exit_code`, `message_id`, `mutated`, `stop` (`cancel`, `deadline` or null) | last |
 
 ## 3. Terminal result
@@ -83,6 +84,7 @@ the exit code alone is never the outcome.
                "continuation": { "kind": "continue", "exe": "...", "arguments": ["..."], "command": "...", "closure": "..." } },
   "consents_needed": [], "failed_checks": [],
   "message_id": "result.restart-test-signing", "step": null, "detail": "...", "log": "C:\\ProgramData\\...\\install-....log",
+  "diagnostics": null,
   "deadline_utc": null,
   "stop": null,
   "children": { "job": "kill-on-close", "closure": "complete", "left_at_exit": 0, "ended": 0, "remaining": 0 }
@@ -106,6 +108,17 @@ the exit code alone is never the outcome.
 | cancelled | 8 | result.cancelled, result.cancelled-after-changes (`stop.by` cancel), result.deadline, result.deadline-after-changes (`stop.by` deadline) |
 | prepared | 0 | result.offline-prepared |
 
+`diagnostics` is the path of one text file the engine wrote next to its log, and `null` for every run that
+did not write one. It exists only when verify found a driver that did not start (owner, 2026-10-12: the
+installer collects the logs itself when the install does not pass). The file holds the driver's start and
+stop records, the device state with its problem code and name, this boot's entries of the display, PnP and
+service-control providers in the System log and of the DirectX kernel in its own two channels (that provider
+writes nothing to the System log), the setup log sections of this device and the driver's own log files, under a
+bound of 20 s and 4 MiB in total. The window adds the file to the support file as `run-<n>-diagnostics.txt`,
+through the same redaction as every other entry, and the console route prints its path in its last lines. A
+collection that fails in part or altogether writes its reason into the file and changes no `outcome`, no
+`message_id` and no exit code.
+
 The engine never restarts Windows in a `-Gui` run. The window offers "Restart now" or "Later"; "Restart now" calls
 `ExitWindowsEx(EWX_REBOOT, SHTDN_REASON_FLAG_PLANNED | MAJOR_APPLICATION | MINOR_RECONFIG)`, never `EWX_FORCE`.
 
@@ -126,8 +139,10 @@ becoming active confirms.
 
 Before the first restart that an install asks for, every file that `manifest.json` lists, `manifest.json` itself
 and, for an offline install, the firmware files are copied to
-`%ProgramData%\amdgpu-wddm\installer\packages\<version>` and each SHA256 is checked there. RunOnce
-(`HKLM\...\RunOnce\amdgpu-wddm-installer`) then names that copy: `"<closure>\setup\amdgpu_wddm_setup.exe" --continue`
+`%ProgramData%\amdgpu-wddm\installer\packages\<version>` and each SHA256 is checked there, `setup.exe` with them.
+The closure and a prepared folder keep the package root as their own folder, so their copy of `setup.exe` sits in it,
+not one level above as in the unpacked release (section 8). RunOnce
+(`HKLM\...\RunOnce\amdgpu-wddm-installer`) then names that copy: `"<closure>\setup.exe" --continue`
 for a run of the window (when the package has the window). Otherwise it starts Windows PowerShell directly, with no
 `cmd.exe` in between:
 
@@ -177,7 +192,7 @@ folder is replaced as a whole; another non-empty folder is refused.
   "settings": { "table": "installer/registry-defaults.json", "table_schema": 1, "table_sha256": "...",
                 "groups": ["parameters", "desktop_router", "app_router", "d3d12_applications"] },
   "kmd": { "build": "0.7.199.1", "abi": "0x000700C7", "driver_ver": "0.7.199.100", "sys_sha256": "..." },
-  "continuation": { "closure": true, "setup_exe": "setup/amdgpu_wddm_setup.exe" }
+  "continuation": { "closure": true, "setup_exe": "setup.exe" }
 }
 ```
 
@@ -188,35 +203,64 @@ tester.11 included), `compat.unreadable`, `compat.unknown-schema`, `compat.other
 
 ## 7. Release notes (WU-044, C16)
 
-`RELEASE-NOTES.md` at the package root, English, from `docs/testing/release-notes/<version>.md`, with the sections
+`RELEASE-NOTES.md` at the package root (`files\` of the unpacked release, section 8), English, from `docs/testing/release-notes/<version>.md`, with the sections
 `## New`, `## Fixed`, `## Known issues`, `## Settings affected` (the build refuses notes without them). A
 translation `RELEASE-NOTES.<lang>.md` is used when present; otherwise the window shows the English text with an
 "in English" label.
 
 ## 8. Setup window
 
-`<package>\setup\amdgpu_wddm_setup.exe` (WinForms, .NET Framework 4.8, `asInvoker`; it relaunches itself elevated
+The zip unpacks to one folder that holds `setup.exe` and one folder, `files\` (owner, 2026-10-11). `files\` is the
+package root: `manifest.json`, `install.cmd`, `uninstall.cmd`, `verify.cmd`, `prepare-offline.cmd`, `installer\`,
+`payload\`, `licenses\` and the documents. `setup.exe` is the only file outside it, and `manifest.json` carries its
+SHA256 and size under `setup` (a name, not a path), so the integrity check covers it wherever the copy sits.
+The window takes `<its own folder>\files` as its package when that folder holds the manifest and
+`installer\install.ps1`, else its own folder (the kept repair set). With neither, the welcome screen says to unpack
+the whole zip (`welcome.files-missing`, four languages) and the check button stays off.
+
+`<package>\..\setup.exe` (WinForms, .NET Framework 4.8, `asInvoker`; it relaunches itself elevated
 with `runas` when it has to change the system). Arguments: none (welcome), `--continue` (from RunOnce),
 `--repair` (from the control app's Help, section 4 of interfaces.md), `--prepare-offline` (no elevation; it only
 copies), and the options `--package <dir>` (another package than the exe's own), `--run-root <dir>` (where each
 engine run keeps its events, result and log; default `%TEMP%\amdgpu-wddm-setup`, one `<utc>-<id8>` folder per run,
 Administrators and SYSTEM only when elevated) and `--dry-run` (welcome or `--repair` only: the install run passes
 `-DryRun` to the engine, so every screen is reached and nothing changes; lab item L4). `--version` prints the
-version. Two headless test entries never show a window:
+version. A tester clicks `setup.exe` in the unpacked folder, which is the window itself. The package root's
+`install.cmd` also starts the window when it is given no argument, so an advanced user who opens `files\` reaches
+the window and not a console: it looks for `setup.exe` in its own folder first and in the folder above it only when
+its own folder is named `files`, the same order as `Get-PackageSetupExe` in `installer\common.ps1`. With any
+argument, and with `-Console`, `install.cmd` runs the engine in its console as before. Three headless test entries
+never show a window:
 
-- `--smoke-render <dir> <scale> <lang> [--text-scale <f>] [--package <dir>]`: every screen from recorded engine
-  output, drawn to `<dir>\<screen>.png` with its visible text, and `<dir>\layout.txt` starting with `ok: ` or listing
-  overlaps, controls outside the window or the scroll range, G-A11Y and G-NOINT findings and missing strings;
+- `--smoke-render <dir> <scale> <lang> [--text-scale <f>] [--no-nagi] [--high-contrast] [--package <dir>]`: every
+  screen from recorded engine output, drawn to `<dir>\<screen>.png` with its visible text, and `<dir>\layout.txt`
+  starting with `ok: ` or listing overlaps, controls outside the window or the scroll range, G-A11Y, G-CHROME and
+  G-NOINT findings and missing strings (`--high-contrast` draws the system palette on a PC that does not have high
+  contrast on).
 - `--smoke-engine <package> <out-dir> [--script <name>] [--cancel] [--plan] -- <engine args>`: one real engine run
   through the same client as the window, `<out-dir>\summary.txt` (model, result binding, chosen screen, the screen
   in each language checked for internals) and `<out-dir>\support.zip`.
+- `--smoke-start-failure <out-dir>`: a plan, an install and a prepare run whose engine cannot start, each of which
+  must end on the result screen.
 
 Strings: `strings.<lang>.txt` (`en`, `pl`, `ja`, `ko`) embedded in the exe, the control app's format
 (`id|status|hash8|text`, status `mt`, `mt-safe` or `rev`, hash of the English text a line translates; English is
 the source; `stamp.ps1` refreshes the hashes). The window's language is the control app's choice
-(`HKCU\Software\amdgpu-wddm\Control`, read only), else the Windows display language, else English; the header
-switches it. The tip panel follows the control app's guide setting: no character art in the setup window yet, the
-same tip text with a plain title.
+(`HKCU\Software\amdgpu-wddm\Control`, read only), else the Windows display language, else English; the title bar
+switches it. The tip panel follows the control app's guide setting: the guide character and her tip in a speech
+bubble with her, the same tip text with a plain title without her.
+
+The window draws its own frame (`FormBorderStyle.None`): a title bar with the mark, the product name, the language
+choice and the minimise and close glyphs, with the rounded corners, the dark frame and the border colour that DWM
+gives a window on Windows 11. The colours, radii, spacing, fonts and icon glyphs are the design tokens of
+`tools/win/amdgpu_wddm_setup/src/Theme.cs`, which follow the accepted mockup of the control application. The icons
+are Segoe Fluent Icons, with Segoe MDL2 Assets on Windows 10 and plain shapes without either font. Every control a
+user can reach is a system button, option control or text box, so its role, its state and its default action are
+Windows' own, and the first Tab of the window lands on the screen, never on a glyph of the title bar. The window is
+never larger than the work area of the screen it opens on, because it cannot be resized or moved above the top of
+the screen. The render gate checks the frame as well (G-CHROME: a caption of Windows, a missing or unnamed window
+glyph, a glyph outside the bar, a language choice that runs into the glyphs and a rail step wider than the rail all
+fail the build).
 
 ## 9. Running-release witness and verify report: how each value is obtained (writer side)
 

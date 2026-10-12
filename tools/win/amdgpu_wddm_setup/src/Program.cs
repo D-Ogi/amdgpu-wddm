@@ -29,6 +29,12 @@ namespace AmdgpuWddmSetup
             if (a.Mode == "smoke-engine") return SmokeEngine(a);
             if (a.Mode == "smoke-start-failure") return SmokeStartFailure(a);
 
+            // Nothing in a window may end setup with the crash dialog of .NET: every widget draws itself, and a GDI+
+            // failure in any of them reaches the message loop. The detail goes into a file the support file carries,
+            // the user is told in plain words, and the window ends. The engine is not killed: a tool stopped in the
+            // middle of a change is worse than a window that is gone, and the engine writes its own result.
+            Application.ThreadException += (s, e) => Unexpected(a, e.Exception);
+            AppDomain.CurrentDomain.UnhandledException += (s, e) => Unexpected(a, e.ExceptionObject as Exception);
             Strings.Language = Native.ChosenLanguage() ?? Strings.SystemLanguage();
             Theme.Fonts();
             if (a.Mode != "prepare-offline" && !Native.IsElevated())
@@ -41,6 +47,26 @@ namespace AmdgpuWddmSetup
             return 0;
         }
 
+        static int _unexpected;
+
+        // An exception no screen caught. It is written where this run keeps its files, said in words a tester can
+        // read, and the process ends; a second one never opens a second message box.
+        static void Unexpected(SetupArgs a, Exception e)
+        {
+            if (System.Threading.Interlocked.Exchange(ref _unexpected, 1) != 0) return;
+            try
+            {
+                var dir = a.RunRoot ?? Path.Combine(Path.GetTempPath(), "amdgpu-wddm-setup");
+                Directory.CreateDirectory(dir);
+                File.AppendAllText(Path.Combine(dir, "setup-window-problem.txt"),
+                    DateTime.UtcNow.ToString("o") + " " + VersionText + Environment.NewLine + e + Environment.NewLine, new UTF8Encoding(false));
+            }
+            catch (Exception) { }
+            try { MessageBox.Show(Strings.T("ui.unexpected"), "amdgpu-wddm Setup", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+            catch (Exception) { }
+            Environment.Exit(9);
+        }
+
         // Every fixture screen drawn at one scale and language: <dir>\<screen>.png, <dir>\<screen>.txt (its text) and
         // <dir>\layout.txt (overlaps, overflow, G-A11Y and G-NOINT findings; "ok" when there are none).
         static int SmokeRender(SetupArgs a)
@@ -50,7 +76,7 @@ namespace AmdgpuWddmSetup
             {
                 Directory.CreateDirectory(a.SmokeDir);
                 Strings.Language = a.Language;
-                Theme.Init(a.Scale, a.TextScale);
+                Theme.Init(a.Scale, a.TextScale, a.HighContrast ? (bool?)true : null);
                 var w = new StringBuilder();
                 int screens = 0;
                 foreach (var f in Fixtures.All())
@@ -60,6 +86,12 @@ namespace AmdgpuWddmSetup
                         form.ShowFixture(f);
                         foreach (var line in form.Render(Path.Combine(a.SmokeDir, f.Name + ".png")).Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries)) w.AppendLine(f.Name + ": " + line);
                         foreach (var p in form.Accessibility()) w.AppendLine(f.Name + ": G-A11Y " + p);
+                        // The guide character: her picture shows on every screen unless --no-nagi, and never with it.
+                        if (form.GuideArtWanted != form.GuideArtShown)
+                            w.AppendLine(f.Name + ": G-ART the guide art " + (form.GuideArtShown ? "shows but was not wanted" : "is wanted but does not show") +
+                                " (cause " + form.GuideCause + ", expression " + SetupGuide.Expression(form.GuideCause) + ")");
+                        if (a.NoNagi == form.GuideArtShown)
+                            w.AppendLine(f.Name + ": G-ART the guide art " + (form.GuideArtShown ? "shows with --no-nagi" : "does not show although the guide character is on"));
                         var text = form.VisibleText(false);
                         foreach (var hit in NoInternals.Find(text)) w.AppendLine(f.Name + ": G-NOINT \"" + hit + "\"");
                         if (text.Contains("[")) foreach (var m in System.Text.RegularExpressions.Regex.Matches(text, @"\[[a-z0-9.-]+\]")) w.AppendLine(f.Name + ": missing string " + m);

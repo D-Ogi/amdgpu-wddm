@@ -1,0 +1,7 @@
+ggml_cuda_init: found 1 ROCm devices (Total VRAM: 8192 MiB):
+  Device 0: AMD BC-250, gfx1013 (0x1013), VMM: no, Wave Size: 32, VRAM: 8192 MiB
+ggml_cuda_compute_forward: MUL_MAT failed
+ROCm error: this build does not support the operation
+  current device: 0, in function ggml_cuda_compute_forward at <llama-source>/ggml/src/ggml-cuda/ggml-cuda.cu:2508
+  err
+<llama-source>/ggml/src/ggml-cuda/ggml-cuda.cu:109: ROCm error

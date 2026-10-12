@@ -1,0 +1,13 @@
+pairs_begin processors=12 ms=25
+pairs solo cpu=0 work_per_us=2088.33 ns_per_iter=11.4925
+pairs cpu_a=0 cpu_b=1 a_work_per_us=2060.98 b_work_per_us=893.43 sum=2954.41 sum_over_solo=1.415 verdict=shares_a_core
+pairs cpu_a=0 cpu_b=2 a_work_per_us=1766.18 b_work_per_us=1782.78 sum=3548.96 sum_over_solo=1.699 verdict=unclear
+pairs cpu_a=0 cpu_b=3 a_work_per_us=1766.73 b_work_per_us=1785.44 sum=3552.17 sum_over_solo=1.701 verdict=unclear
+pairs cpu_a=0 cpu_b=4 a_work_per_us=1765.91 b_work_per_us=1784.74 sum=3550.65 sum_over_solo=1.700 verdict=unclear
+pairs cpu_a=0 cpu_b=5 a_work_per_us=1765.58 b_work_per_us=1784.71 sum=3550.28 sum_over_solo=1.700 verdict=unclear
+pairs cpu_a=0 cpu_b=6 a_work_per_us=2047.48 b_work_per_us=1797.18 sum=3844.66 sum_over_solo=1.841 verdict=separate_cores
+pairs cpu_a=0 cpu_b=7 a_work_per_us=2065.88 b_work_per_us=1785.51 sum=3851.39 sum_over_solo=1.844 verdict=separate_cores
+pairs cpu_a=0 cpu_b=8 a_work_per_us=2064.80 b_work_per_us=1800.96 sum=3865.75 sum_over_solo=1.851 verdict=separate_cores
+pairs cpu_a=0 cpu_b=9 a_work_per_us=2058.65 b_work_per_us=1805.12 sum=3863.78 sum_over_solo=1.850 verdict=separate_cores
+pairs cpu_a=0 cpu_b=10 a_work_per_us=2054.30 b_work_per_us=1900.79 sum=3955.09 sum_over_solo=1.894 verdict=separate_cores
+pairs cpu_a=0 cpu_b=11 a_work_per_us=2058.88 b_work_per_us=1912.62 sum=3971.50 sum_over_solo=1.902 verdict=separate_cores

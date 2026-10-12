@@ -1,0 +1,33 @@
+Tctl 59.625 C
+wrote C:\BC250\tmp\m16-perf\kmd-rr-before.txt, 772 tail lines
+SUSPECT LINES: 34
+  30878  20928.766 hwmon: telemetry 20666 samples 0 errors 0 retries 0 refusals
+  30895  20933.786 hwmon: telemetry 20671 samples 0 errors 0 retries 0 refusals
+  30920  20938.796 hwmon: telemetry 20676 samples 0 errors 0 retries 0 refusals
+  30937  20943.807 hwmon: telemetry 20680 samples 0 errors 0 retries 0 refusals
+  30949  20948.823 hwmon: telemetry 20685 samples 0 errors 0 retries 0 refusals
+  30968  21069.351 hwmon: telemetry 20804 samples 0 errors 0 retries 0 refusals
+  30988  21190.023 hwmon: telemetry 20923 samples 0 errors 0 retries 0 refusals
+  31008  21310.684 hwmon: telemetry 21043 samples 0 errors 0 retries 0 refusals
+  31028  21431.328 hwmon: telemetry 21162 samples 0 errors 0 retries 0 refusals
+  31046  21551.898 hwmon: telemetry 21281 samples 0 errors 0 retries 0 refusals
+  31066  21672.530 hwmon: telemetry 21400 samples 0 errors 0 retries 0 refusals
+  31086  21793.165 hwmon: telemetry 21519 samples 0 errors 0 retries 0 refusals
+  31106  21913.828 hwmon: telemetry 21638 samples 0 errors 0 retries 0 refusals
+  31126  22034.529 hwmon: telemetry 21758 samples 0 errors 0 retries 0 refusals
+  31146  22155.231 hwmon: telemetry 21877 samples 0 errors 0 retries 0 refusals
+  31166  22275.904 hwmon: telemetry 21996 samples 0 errors 0 retries 0 refusals
+  31186  22396.605 hwmon: telemetry 22115 samples 0 errors 0 retries 0 refusals
+  31206  22517.275 hwmon: telemetry 22234 samples 0 errors 0 retries 0 refusals
+  31226  22638.008 hwmon: telemetry 22354 samples 0 errors 0 retries 0 refusals
+  31246  22758.677 hwmon: telemetry 22473 samples 0 errors 0 retries 0 refusals
+  31264  22879.337 hwmon: telemetry 22592 samples 0 errors 0 retries 0 refusals
+  31284  23000.074 hwmon: telemetry 22711 samples 0 errors 0 retries 0 refusals
+  31303  23120.598 hwmon: telemetry 22830 samples 0 errors 0 retries 0 refusals
+  31325  23226.678 hwmon: summary 22935 samples 0 errors 0 retries 0 refusals
+  31390  23226.678 wddm summary: node 0 hardware: 1343416 submitted, 1332129 completed, 0 timeouts, 0 refused, 0 soft-recovered
+  31391  23226.678 wddm summary: umd: 12280 allocs (0 refused), 161 contexts, 1343289 submits on the ring, 0 not run
+  31396  23226.678 wddm profile: hold wakes 0 event, 0 timeout
+  31418  23226.678 wddm summary: node 1 (paging, open): 745012 hardware submitted, 745012 completed, 0 timeouts, 0 refused
+  31439  23226.678 wddm summary: plane formats 1, flips argb8888/abgr8888/abgr2101010 52661/0/0, changes 0 refused 0
+  31576  23226.678 wddm: GPU Present errors parameter0 handle0 color0 other0

@@ -1,0 +1,20 @@
+{
+  "removed": [
+    "ETW computer label replaced by unit-a",
+    "Artifact manifest keys reduced to basenames",
+    "Model path replaced in selected stdout"
+  ],
+  "private": [
+    "Raw ETL and full archive",
+    "OS binaries",
+    "Model weights",
+    "Full internal mapping records"
+  ],
+  "retained": [
+    "Technical PE/PDB identity",
+    "Provider GUID",
+    "PID/TID and timestamps",
+    "Probe address and return values"
+  ],
+  "manifest_verified_files": 2616
+}

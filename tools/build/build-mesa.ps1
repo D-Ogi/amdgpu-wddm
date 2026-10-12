@@ -79,7 +79,7 @@ if (-not $Glslang) { $Glslang = Join-Path $root 'scratch\glslang\bin' }
 if (-not $Temp) { $Temp = Join-Path $root 'scratch\tmp' }
 $Source = [IO.Path]::GetFullPath($Source)
 $Build = [IO.Path]::GetFullPath($Build)
-$options = Add-ReproducibleMesonOptions $options $Source $Build
+$options = Add-ReproducibleMesonOptions $options $Source $Build -Arch $Arch
 
 if (-not (Test-Path -LiteralPath (Join-Path $Source 'meson.build'))) { throw "$Source is not a Mesa source tree (no meson.build)" }
 $llvmConfig = $null

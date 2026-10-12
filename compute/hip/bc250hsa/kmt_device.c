@@ -36,20 +36,41 @@ void bc250hsa_mark_lost(struct bc250hsa_device* dev, const char* why)
     bc250hsa_log(BC250HSA_LOG_ERROR, "device lost: %s", why);
 }
 
-int bc250hsa_device_executing(struct bc250hsa_device* dev)
+bc250hsa_status bc250hsa_context_create(struct bc250hsa_device* dev, D3DKMT_HANDLE* out)
 {
-    D3DKMT_GETDEVICESTATE state;
-    NTSTATUS              status;
+    struct bc250hsa_context_blob context_blob;
+    D3DKMT_CREATECONTEXTVIRTUAL  create_context;
+    NTSTATUS                     status;
 
-    memset(&state, 0, sizeof(state));
-    state.hDevice = dev->device;
-    state.StateType = D3DKMT_DEVICESTATE_EXECUTION;
-    status = D3DKMTGetDeviceState(&state);
-    /* An unanswered query is no evidence of a loss. */
-    if (!NT_SUCCESS(status)) {
-        return 1;
+    *out = 0u;
+    memset(&context_blob, 0, sizeof(context_blob));
+    context_blob.magic = BC250HSA_CONTEXT_MAGIC;
+    context_blob.version = BC250HSA_CONTEXT_VERSION;
+    context_blob.size = (uint32_t)sizeof(context_blob);
+    /* Every context of this library is compute (BD-127): the kernel driver counts
+     * them and its clock governor raises from a lower busy share while one is
+     * open. An older kernel driver ignores both the version and the flag. */
+    context_blob.flags = BC250HSA_CTX_COMPUTE;
+    context_blob.ip_type = BC250HSA_IP_GFX;
+    context_blob.node_ordinal = 0u;
+
+    memset(&create_context, 0, sizeof(create_context));
+    create_context.hDevice = dev->device;
+    create_context.NodeOrdinal = 0;
+    create_context.EngineAffinity = 1;
+    /* The kernel driver has no hardware-queue display driver interfaces:
+     * SubmitCommand is the packet path. */
+    create_context.Flags.HwQueueSupported = 0;
+    create_context.pPrivateDriverData = &context_blob;
+    create_context.PrivateDriverDataSize = (UINT)sizeof(context_blob);
+    create_context.ClientHint = D3DKMT_CLIENTHINT_UNKNOWN;
+    status = D3DKMTCreateContextVirtual(&create_context);
+    if (!NT_SUCCESS(status) || create_context.hContext == 0u) {
+        return bc250hsa_os_status("CreateContextVirtual",
+                                  NT_SUCCESS(status) ? STATUS_UNSUCCESSFUL : status);
     }
-    return state.ExecutionState == D3DKMT_DEVICEEXECUTION_ACTIVE;
+    *out = create_context.hContext;
+    return BC250HSA_OK;
 }
 
 static uint32_t caps_u32(const uint8_t* caps, uint32_t offset)
@@ -174,6 +195,13 @@ static void device_teardown(struct bc250hsa_device* dev)
         (void)D3DKMTDestroySynchronizationObject(&destroy);
         dev->fence = 0u;
     }
+    if (dev->copy_context != 0u) {
+        D3DKMT_DESTROYCONTEXT destroy;
+        memset(&destroy, 0, sizeof(destroy));
+        destroy.hContext = dev->copy_context;
+        (void)D3DKMTDestroyContext(&destroy);
+        dev->copy_context = 0u;
+    }
     if (dev->context != 0u) {
         D3DKMT_DESTROYCONTEXT destroy;
         memset(&destroy, 0, sizeof(destroy));
@@ -200,10 +228,14 @@ static void device_teardown(struct bc250hsa_device* dev)
     }
     close_adapter(dev->adapter);
     dev->adapter = 0u;
+    free(dev->slot_scratch);
+    dev->slot_scratch = NULL;
     free(dev->slot_fence);
     dev->slot_fence = NULL;
     free(dev->last_ib);
     dev->last_ib = NULL;
+    free(dev->journal_upload);
+    dev->journal_upload = NULL;
 }
 
 bc250hsa_status bc250hsa_open(const bc250hsa_open_params* params, struct bc250hsa_device** out)
@@ -250,6 +282,16 @@ bc250hsa_status bc250hsa_open(const bc250hsa_open_params* params, struct bc250hs
     dev->ring_slot_bytes = ring_slot_bytes;
     dev->va_window_start = BC250HSA_VA_WINDOW_START;
     dev->va_window_end = BC250HSA_VA_WINDOW_START + ((uint64_t)va_window_gib << 30);
+    /* Batching is off until the caller asks for it, which keeps the behaviour of
+     * build 1 for a caller that does not know section 8.1 exists. The two numbers are
+     * the defaults a caller gets when it passes 0. */
+    dev->batch.struct_bytes = (uint32_t)sizeof(dev->batch);
+    dev->batch.enabled = 0u;
+    dev->batch.max_dispatches = BC250HSA_BATCH_DISPATCHES_DEFAULT;
+    dev->batch.max_hold_us = BC250HSA_BATCH_HOLD_US_DEFAULT;
+    /* The local memory limit of this part, which bc250hsa_props_read also reports. One
+     * read at open in place of one property structure per dispatch. */
+    dev->lds_bytes_per_workgroup = BC250HSA_LDS_BYTES_PER_WORKGROUP;
 
     result = find_adapter(params, dev);
     if (result != BC250HSA_OK) {
@@ -296,33 +338,12 @@ bc250hsa_status bc250hsa_open(const bc250hsa_open_params* params, struct bc250hs
     dev->paging_fence = create_paging.hSyncObject;
 
     if ((dev->flags & BC250HSA_OPEN_NO_GPU_SUBMIT) == 0u) {
-        struct bc250hsa_context_blob     context_blob;
-        D3DKMT_CREATECONTEXTVIRTUAL      create_context;
         D3DKMT_CREATESYNCHRONIZATIONOBJECT2 create_fence;
 
-        memset(&context_blob, 0, sizeof(context_blob));
-        context_blob.magic = BC250HSA_CONTEXT_MAGIC;
-        context_blob.version = BC250HSA_CONTEXT_VERSION;
-        context_blob.size = (uint32_t)sizeof(context_blob);
-        context_blob.ip_type = BC250HSA_IP_GFX;
-        context_blob.node_ordinal = 0u;
-
-        memset(&create_context, 0, sizeof(create_context));
-        create_context.hDevice = dev->device;
-        create_context.NodeOrdinal = 0;
-        create_context.EngineAffinity = 1;
-        /* The kernel driver has no hardware-queue display driver interfaces:
-         * SubmitCommand is the packet path. */
-        create_context.Flags.HwQueueSupported = 0;
-        create_context.pPrivateDriverData = &context_blob;
-        create_context.PrivateDriverDataSize = (UINT)sizeof(context_blob);
-        create_context.ClientHint = D3DKMT_CLIENTHINT_UNKNOWN;
-        status = D3DKMTCreateContextVirtual(&create_context);
-        if (!NT_SUCCESS(status) || create_context.hContext == 0u) {
-            result = bc250hsa_os_status("CreateContextVirtual", status);
+        result = bc250hsa_context_create(dev, &dev->context);
+        if (result != BC250HSA_OK) {
             goto failed;
         }
-        dev->context = create_context.hContext;
 
         memset(&create_fence, 0, sizeof(create_fence));
         create_fence.hDevice = dev->device;
@@ -337,6 +358,8 @@ bc250hsa_status bc250hsa_open(const bc250hsa_open_params* params, struct bc250hs
         dev->fence_cpu =
             (volatile uint64_t*)create_fence.Info.MonitoredFence.FenceValueCPUVirtualAddress;
         dev->fence_gpu_va = create_fence.Info.MonitoredFence.FenceValueGPUVirtualAddress;
+        dev->fence_type = (uint32_t)create_fence.Info.Type;
+        dev->fence_flags = (uint32_t)create_fence.Info.Flags.Value;
         if (dev->fence_cpu == NULL || dev->fence_gpu_va == 0u ||
             (dev->fence_gpu_va & 7u) != 0u) {
             bc250hsa_log(BC250HSA_LOG_ERROR,
@@ -345,6 +368,16 @@ bc250hsa_status bc250hsa_open(const bc250hsa_open_params* params, struct bc250hs
             goto failed;
         }
         dev->submit_capable = 1;
+        /* The fence checks of submit.c: the object every submission of this device signals
+         * and every wait reads, once, and how many submissions the device traces. */
+        dev->check_dispatch_left = 2u;
+        dev->check_copy_left = 2u;
+        bc250hsa_log(BC250HSA_LOG_INFO,
+                     "fence check: device open: monitored fence handle 0x%x type %u flags"
+                     " 0x%x, cpu va %p, gpu va 0x%llx, value %llu; context 0x%x",
+                     (unsigned)dev->fence, dev->fence_type, dev->fence_flags,
+                     (const void*)dev->fence_cpu, (unsigned long long)dev->fence_gpu_va,
+                     (unsigned long long)*dev->fence_cpu, (unsigned)dev->context);
 
         /* The command ring, and the zeroed page that backs the private segment
          * buffer. Both are host visible and cached: the loader and the dispatch
@@ -365,8 +398,12 @@ bc250hsa_status bc250hsa_open(const bc250hsa_open_params* params, struct bc250hs
             goto failed;
         }
         dev->slot_fence = (uint64_t*)calloc(ring_slots, sizeof(uint64_t));
-        dev->last_ib = (uint32_t*)calloc(BC250HSA_PM4_MAX_DWORDS, sizeof(uint32_t));
-        if (dev->slot_fence == NULL || dev->last_ib == NULL) {
+        dev->slot_scratch = (bc250hsa_mem*)calloc(ring_slots, sizeof(bc250hsa_mem));
+        /* One whole slot, because a batched buffer carries many dispatches and the
+         * failure report must hold all of it (section 8.1). */
+        dev->last_ib_capacity = ring_slot_bytes / 4u;
+        dev->last_ib = (uint32_t*)calloc(dev->last_ib_capacity, sizeof(uint32_t));
+        if (dev->slot_fence == NULL || dev->slot_scratch == NULL || dev->last_ib == NULL) {
             result = BC250HSA_ENOMEM;
             goto failed;
         }
@@ -382,17 +419,61 @@ failed:
     return result;
 }
 
-void bc250hsa_close(struct bc250hsa_device* dev)
+static bc250hsa_status close_flush(void* ctx)
 {
-    if (dev == NULL) {
-        return;
+    struct bc250hsa_device* dev = (struct bc250hsa_device*)ctx;
+    if (dev->device_lost) { return BC250HSA_EDEVICELOST; }
+    return bc250hsa_flush(dev, NULL);
+}
+
+static bc250hsa_status close_wait(void* ctx)
+{
+    struct bc250hsa_device* dev = (struct bc250hsa_device*)ctx;
+    if (dev->device_lost) { return BC250HSA_EDEVICELOST; }
+    if (dev->submit_capable && dev->fence_last_submitted != 0u) {
+        return bc250hsa_wait(dev, dev->fence_last_submitted, 0u, 0u);
     }
-    if (dev->submit_capable && !dev->device_lost && dev->fence_last_submitted != 0u) {
-        (void)bc250hsa_wait(dev, dev->fence_last_submitted, 0u, 0u);
-    }
+    return BC250HSA_OK;
+}
+
+static void close_release(void* ctx)
+{
+    struct bc250hsa_device* dev = (struct bc250hsa_device*)ctx;
+    LeaveCriticalSection(&dev->lock);
     device_teardown(dev);
     DeleteCriticalSection(&dev->lock);
     free(dev);
+}
+
+static void close_quarantine(void* ctx, bc250hsa_status status)
+{
+    struct bc250hsa_device* dev = (struct bc250hsa_device*)ctx;
+    /* No destroy/unmap/free: the OS owns final process cleanup. DestroyContext's
+     * public contract alone does not establish a drained-hardware witness after
+     * failed recovery. Repeated failures can retain more than one device. */
+    dev->device_lost = 1;
+    bc250hsa_log(BC250HSA_LOG_ERROR,
+        "close could not prove retirement (status %d); device and allocations retained until process exit",
+        (int)status);
+    LeaveCriticalSection(&dev->lock);
+}
+
+void bc250hsa_close(struct bc250hsa_device* dev)
+{
+    bc250hsa_close_ops ops;
+    if (dev == NULL) { return; }
+    bc250hsa_device_lock(dev);
+    if (dev->closing) {
+        LeaveCriticalSection(&dev->lock);
+        return;
+    }
+    dev->closing = 1;
+    ops.ctx = dev;
+    ops.flush = close_flush;
+    ops.wait = close_wait;
+    ops.release = close_release;
+    ops.quarantine = close_quarantine;
+    bc250hsa_finish_close(&ops);
 }
 
 bc250hsa_status bc250hsa_props_read(struct bc250hsa_device* dev, bc250hsa_props* out)
@@ -421,8 +502,9 @@ bc250hsa_status bc250hsa_props_read(struct bc250hsa_device* dev, bc250hsa_props*
     out->max_workgroup_size = 1024u;
     out->max_workgroups_per_dim = 0xFFFFFFFFu;
     /* The local memory a workgroup may ask for on this part. It is a property of
-     * gfx10.1 and not of the capability blob, which carries no local memory size. */
-    out->lds_bytes_per_workgroup = 65536u;
+     * gfx10.1 and not of the capability blob, which carries no local memory size. The
+     * dispatch path reads dev->lds_bytes_per_workgroup, which is this same number. */
+    out->lds_bytes_per_workgroup = dev->lds_bytes_per_workgroup;
     /* A property of gfx10.1 and not of the capability blob, which carries no wave
      * slot count: 32 wave32 slots per compute unit (16 per SIMD, two SIMDs). */
     out->waves_per_cu = 32u;

@@ -1,0 +1,8 @@
+halfblock: every wait of the runtime is bounded to 10000 ms in all
+halfblock: host checks 108, failed 0
+halfblock: device results are checked
+halfblock: block 32 collectives count_all 32 count_none 0 count_last 1 or_last 1 or_none 0 and_all 1 and_last 0
+halfblock: block 64 collectives count_all 64 count_none 0 count_last 1 or_last 1 or_none 0 and_all 1 and_last 0
+halfblock: block 256 collectives count_all 256 count_none 0 count_last 1 or_last 1 or_none 0 and_all 1 and_last 0
+halfblock: host checks 108, device checks 117, failures 0
+halfblock: ok

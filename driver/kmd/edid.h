@@ -46,6 +46,20 @@ typedef struct _BC250_EDID_MODE {
     unsigned long Source;               // BC250_MODE_SRC_*
 } BC250_EDID_MODE;
 
+// Full progressive target timing. CTA clocks use 1 kHz precision (25.175 MHz
+// must not be rounded to a DTD's 10 kHz unit). Flags retain the EDID separate
+// digital sync polarity bits. Source sizes and target timings are distinct.
+typedef struct _BC250_TARGET_TIMING {
+    unsigned long PixelClockKhz;
+    unsigned long HActive, HBlank, HSyncOffset, HSyncWidth;
+    unsigned long VActive, VBlank, VSyncOffset, VSyncWidth;
+    unsigned long Flags;
+} BC250_TARGET_TIMING;
+
+int Bc250TargetTimingValid(const BC250_TARGET_TIMING* Timing);
+int Bc250TargetTimingEqual(const BC250_TARGET_TIMING* A, const BC250_TARGET_TIMING* B);
+unsigned long Bc250TargetRefreshMilliHz(const BC250_TARGET_TIMING* Timing);
+
 // A CTA-861 short audio descriptor, decoded: format code (1 = LPCM), channels (count, not count - 1), the
 // sample-rate bit field (bit 0 = 32 kHz .. bit 6 = 192 kHz) and the third byte (LPCM: the sample-size bits).
 typedef struct _BC250_EDID_SAD {
@@ -69,7 +83,12 @@ typedef struct _BC250_EDID_INFO {
     unsigned long PreferredRefreshMilliHz;
     unsigned long ModeCount;
     BC250_EDID_MODE Modes[BC250_EDID_MAX_MODES];
+    unsigned long TargetCount;
+    BC250_TARGET_TIMING Targets[BC250_EDID_MAX_MODES];
     unsigned long CtaBlocks;
+    int Hdmi;                          // HDMI Licensing VSDB (OUI 000C03), not merely a CTA block
+    int BasicAudio;                    // CTA header bit 6: 2-channel LPCM 32/44.1/48 kHz, 16 bit
+    unsigned long MaxTmdsClockKhz;      // HDMI VSDB byte 7, 5 MHz units; 0 means not specified
     unsigned long SadCount;
     BC250_EDID_SAD Sads[BC250_EDID_MAX_SADS];
     int HasSpeaker;
@@ -83,6 +102,10 @@ unsigned long Bc250EdidTotalBytes(const unsigned char* Base);
 // Parses Length bytes. Info is always filled (zeroed first); the return value is Info->Reason.
 unsigned long Bc250EdidParse(const unsigned char* Bytes, unsigned long Length, BC250_EDID_INFO* Info);
 const char* Bc250EdidReasonText(unsigned long Reason);
+// EDID-derived timings only, within the smaller of the adapter/sink and caller
+// clock limits. An unknown (zero) link limit admits no targets. No CVT guesses.
+unsigned long Bc250EdidTargetList(const BC250_EDID_INFO* Info, unsigned long ClockLimitKhz,
+    unsigned long MaxWidth, unsigned long MaxHeight, BC250_TARGET_TIMING* Out, unsigned long Capacity);
 
 // ---- the desktop source modes ------------------------------------------------------------------------------------
 //

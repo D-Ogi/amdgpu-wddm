@@ -1,0 +1,4 @@
+clang version 22.1.8 (https://github.com/msys2/MINGW-packages d34feaaa1d0aff624c870910b6f2589aa40d20de)
+Target: x86_64-w64-windows-gnu
+Thread model: posix
+InstalledDir: P:/BC-250/toolchain/llvm-amdgpu-22.1.8/mingw64/bin

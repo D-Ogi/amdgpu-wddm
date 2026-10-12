@@ -47,6 +47,9 @@ host key covers both. Nothing else in the repository holds an address or an ssh 
 python tools/win/target.py info                     which address is in use, and the target's hostname
 python tools/win/target.py addr                     just the address (exit code 1 if nothing answers)
 python tools/win/target.py wait 600                 block until it answers again after a reboot
+python tools/win/target.py boot --os linux --after-now --bound 900
+                                                    wait for a boot of Windows or Linux: one line each
+                                                    round, then BOOT UP, BOOT WRONG-OS or BOOT TIMEOUT
 python tools/win/target.py ps script.ps1 [args]     copy a PowerShell script over and run it
 python tools/win/target.py push a.exe b.sys --to C:\BC250\bc250rd
 python tools/win/target.py pull C:\BC250\mon\log\2026-09-21.log $env:BC250_ROOT\scratch\

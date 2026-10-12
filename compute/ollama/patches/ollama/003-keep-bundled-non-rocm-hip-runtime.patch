@@ -1,0 +1,34 @@
+Subject: never replace a HIP runtime that is not ROCm with the system copy
+
+AMD's Windows driver also puts ROCm runtime DLLs in the system directory, and the runner's library
+path is reordered to prefer whichever amdhip64.dll has the higher file version. That comparison is
+right between two copies of ROCm's runtime. It is wrong for a HIP runtime that is not ROCm's: this
+one is our own, it talks to our own kernel driver, and a higher-versioned file of the same name in
+the system directory is a different product, not a newer copy.
+
+The condition is the one the install path and the compiler flags already use: a runner directory
+named rocm_v* is a ROCm build, anything else is not. Every upstream build is unchanged.
+
+Without this change the protection is accidental: our runtime carries no version resource, so the
+comparison cannot decide and keeps the bundled file. Adding a version resource to our runtime
+later would silently switch the HIP runtime on any machine that also has AMD's driver.
+diff --git a/llm/rocm_windows.go b/llm/rocm_windows.go
+index 75fb04be..c09520cb 100644
+--- a/llm/rocm_windows.go
++++ b/llm/rocm_windows.go
+@@ -67,6 +67,15 @@ func adjustWindowsROCmLibraryPaths(paths, gpuLibs []string) []string {
+ 		return paths
+ 	}
+ 
++	// A runner directory that is not one of the rocm_v* ones holds a HIP runtime that is not
++	// ROCm's. Such a runtime talks to its own kernel driver, so a higher-versioned amdhip64.dll
++	// in the system directory is a different product rather than a newer copy of it, and must
++	// never take its place.
++	if !strings.HasPrefix(strings.ToLower(filepath.Base(rocmDir)), "rocm_v") {
++		slog.Debug("keeping the bundled HIP runtime of a runner directory that is not ROCm", "dir", rocmDir)
++		return paths
++	}
++
+ 	choice, err := windowsROCmRuntimeDLLChoice(gpuLibs)
+ 	if err != nil {
+ 		slog.Debug("windows ROCm runtime selection unavailable", "error", err)

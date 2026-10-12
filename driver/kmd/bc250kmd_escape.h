@@ -40,6 +40,7 @@
 #define BC250_ESCAPE_RUN_CPU 29u                // CPU clock limit, undervolt, temperature cap, readbacks, core mask
 #define BC250_ESCAPE_RUN_FAN 30u                // case fan control: read, board, curve, fixed duty under a lease, renew
 #define BC250_ESCAPE_RUN_DPAUDIO 31u            // DP audio: step 0 observation, the state of steps 1, 2 and 4 (BC250_ESCAPE_DPAUDIO below)
+#define BC250_ESCAPE_RUN_BOARD_MEMORY 32u                // BC-250 board memory capability; writes require a qualified transport
 #define BC250_KMD_VERSION 0x000700D8u       // revision 216 (INF 0.7.216.1, on 215.1): DP audio step 2, the
                                             // stream half (dpaudio.c: wall DTO, AFMT, DP_SEC). One escape
                                             // grows, and that is why this word moves: RUN_DPAUDIO ABI 2,
@@ -443,6 +444,52 @@
 #define BC250_ESCAPE_STATUS_REFUSED 2u      // NtStatus says why: gate closed, offset not in the table
 #define BC250_ESCAPE_STATUS_NOT_ADMIN 3u
 
+// Board memory ABI 2. Provider 1 is the BC-250 ABL memory reservation.
+// READ is software-only. No raw port/offset/value operation exists.
+// SET/RESTORE are reserved and fail closed in this implementation.
+#define BC250_BOARD_MEMORY_ABI 2u
+#define BC250_BOARD_MEMORY_OP_READ 0u
+#define BC250_BOARD_MEMORY_OP_SET 1u
+#define BC250_BOARD_MEMORY_OP_RESTORE 2u
+#define BC250_BOARD_MEMORY_OP_PROBE 3u // administrator-only HAL reads, separate record, never a write
+#define BC250_BOARD_MEMORY_ACTIVE_VALID 1u
+#define BC250_BOARD_MEMORY_READ_VALID 2u
+#define BC250_BOARD_MEMORY_WRITE_ALLOWED 4u
+#define BC250_BOARD_MEMORY_BACKUP_VALID 8u
+#define BC250_BOARD_MEMORY_SUPPORTED 16u
+#define BC250_BOARD_MEMORY_PROVIDER_NONE 0u
+#define BC250_BOARD_MEMORY_PROVIDER_BC250_ABL 1u
+#define BC250_BOARD_MEMORY_REASON_READY 0u
+#define BC250_BOARD_MEMORY_REASON_NO_TRANSPORT 1u
+#define BC250_BOARD_MEMORY_REASON_BOARD 2u
+#define BC250_BOARD_MEMORY_REASON_FIRMWARE 3u
+#define BC250_BOARD_MEMORY_REASON_BLOCK 4u
+#define BC250_BOARD_MEMORY_REASON_READ 5u
+#define BC250_BOARD_MEMORY_REASON_UNKNOWN_STATE 6u
+typedef struct _BC250_ESCAPE_BOARD_MEMORY {
+    unsigned long Magic, Command, Status, NtStatus;
+    unsigned long AbiVersion, Op, Flags, Reason;
+    unsigned long long ActiveBytes; // complete GC/NBIO range captured at start; not the usable segment
+    unsigned long RequestedMiB;     // SET input; verified pending value on a future supported output
+    unsigned long PreviousMiB;
+    unsigned char ObservedBlock[28]; // expected snapshot input for SET/RESTORE; never replacement bytes
+    long ResultCode;
+    unsigned long ProviderId;       // zero on unsupported boards
+    unsigned long AllowedMiB[2];    // BC-250 provider: 8192, 12288
+    unsigned long NeedsRestart;    // applying a supported change needs a restart
+    unsigned long Reserved[8];
+} BC250_ESCAPE_BOARD_MEMORY; // 128 bytes; header is initialized, unused input fields are zero
+
+typedef struct _BC250_ESCAPE_BOARD_MEMORY_PROBE {
+    unsigned long Magic, Command, Status, NtStatus;
+    unsigned long AbiVersion, Op, Flags, Reason;
+    unsigned long SlotCount, OffsetCount;
+    unsigned char SlotBlock[28], OffsetBlock[28];
+    unsigned long RtcCount[4];
+    unsigned char RtcValue[4]; // register 0, 2, 4, D only; never read-to-clear register C
+    unsigned long Reserved[3];
+} BC250_ESCAPE_BOARD_MEMORY_PROBE; // 128 bytes; HAL return counts do not imply a valid memory profile
+
 #define BC250_ESCAPE_FLAG_MMIO_MAPPED 1u
 #define BC250_ESCAPE_FLAG_MMIO_WRITE 2u
 #define BC250_ESCAPE_FLAG_VRAM 4u           // the EnableVram gate was open at start and the carve-out was identified
@@ -480,6 +527,15 @@ typedef struct _BC250_ESCAPE {
 // READ: HardwareAccess=0, NoAdapterSynchronization=1; the embedded SMU owner
 // serializes transactions and joins stop before BAR unmap. SET: HardwareAccess=1,
 // NoAdapterSynchronization=0 for Level Two synchronization; administrator only.
+// READ is open to every caller (BD-062, issue 7). Up to 0.7.216 the driver refused it to an ordinary user as
+// well, so the game runtime read no temperature and no non-elevated tool or control application could show a
+// clock. An administrator's READ is one live reading: one BAR read and two getters under the owner lock, with no
+// settle pause. Any other caller's READ is answered from the last reading while it is younger than
+// BC250_CLOCK_SNAP_US (smu.h, one second), so the open operation cannot send mailbox messages faster than the
+// governor's own readback already does, however many callers ask. A value so answered is therefore up to a
+// second old; the reply carries no age field, and a caller that needs the moment itself asks elevated.
+// An operation this ABI does not name, a flag word that is not the one the operation takes, and a READ that
+// carries a requested point are all refused by number before the token is looked at.
 #define BC250_CLOCK_ABI 1u
 #define BC250_CLOCK_OP_READ 0u
 #define BC250_CLOCK_OP_SET 1u
@@ -595,6 +651,10 @@ typedef struct _BC250_ESCAPE_CU_MODE {
 // 16384 and 32768 (0.7.216.7), in every ABI: no field moves, so BC250_KMD_VERSION stays. 8192 is ABI 3's, below.
 #define BC250_DPM_FLAG_JOINT 16384u          // the joint power arm runs in this start (DpmJointGovernor 1)
 #define BC250_DPM_FLAG_JOINT_CAP 32768u      // the arm's CPU clock limit is in the chip now (the driver log says which)
+// 65536 (BD-127), in every ABI: no field moves, so BC250_KMD_VERSION stays and no tool has to change its size.
+// The count of open compute contexts and the set's three thresholds are in the driver log's telemetry block, not in
+// the escape: BC250_ESCAPE_DPM has no reserved field and RUN_DPM's three sizes may not change.
+#define BC250_DPM_FLAG_COMPUTE 65536u        // the compute threshold set governs this tick (a compute context is open)
 typedef struct _BC250_ESCAPE_DPM {
     unsigned long Magic, Command, Status, Version;
     unsigned long NtStatus, AbiVersion, Op, Flags;
@@ -1860,7 +1920,7 @@ enum bc250_dpaudio_reason { BC250_DPAUDIO_REASON_LIST(BC250_DPAUDIO_REASON_ENUM)
     X(CHANNEL_ENABLE) X(AUD_N) X(TIMESTAMP) X(CS_UPDATE) X(LAYOUT_OVRD) X(INFO_UPDATE) X(CLOCK_ACCURACY) \
     X(SEC_ASP_ON) X(SEC_ATP_AIP_ON) X(SEC_STREAM_ON) X(SAMPLE_SEND_ON) \
     X(SAMPLE_SEND_OFF) X(SEC_STREAM_OFF) X(SEC_ATP_AIP_OFF) X(SEC_ASP_OFF) X(SEC_STREAM_KEEP) X(AFMT_CLOCK_OFF) \
-    X(AFMT_MEM_POWER)
+    X(AFMT_MEM_POWER) X(HDMI_REGISTER)
 #define BC250_DPAUDIO_STEP_ENUM(n) BC250_DPAUDIO_STEP_##n,
 enum bc250_dpaudio_step { BC250_DPAUDIO_STEP_LIST(BC250_DPAUDIO_STEP_ENUM) BC250_DPAUDIO_STEP_COUNT };
 #undef BC250_DPAUDIO_STEP_ENUM
@@ -1917,3 +1977,31 @@ typedef struct _BC250_ESCAPE_DPAUDIO {
 } BC250_ESCAPE_DPAUDIO; // 536 bytes on Windows, ABI 3 (ABI 2: the first 480, ABI 1: the first 408)
 typedef char BC250_ESCAPE_DPAUDIO_SIZE_CHECK[(sizeof(BC250_ESCAPE_DPAUDIO) == 536) ? 1 : -1];
 typedef char BC250_DPAUDIO_OBS_FIT_CHECK[(BC250_DPAUDIO_OBS_COUNT <= BC250_DPAUDIO_OBS_SLOTS) ? 1 : -1];
+
+// Board provider ABI 1. Query only; all reserved input and output words are zero.
+#define BC250_ESCAPE_RUN_BOARD_CAPS 33u
+#define BC250_BOARD_CAPS_ABI 1u
+#define BC250_BOARD_CAPS_SUPPORTED 1u
+#define BC250_BOARD_CAPS_FAN 2u
+#define BC250_BOARD_CAPS_GPU 4u
+#define BC250_BOARD_CAPS_CPU 8u
+#define BC250_BOARD_CAPS_MEMORY 16u
+#define BC250_BOARD_CAPS_REASON_NONE 0u
+#define BC250_BOARD_CAPS_REASON_BOARD 1u
+#define BC250_BOARD_CAPS_REASON_INACTIVE 2u
+typedef struct _BC250_BOARD_GPU_POINT { unsigned long MHz, Mv, Vid; } BC250_BOARD_GPU_POINT;
+typedef struct _BC250_BOARD_FAN_POINT { unsigned long TempC, DutyPct; } BC250_BOARD_FAN_POINT;
+typedef struct _BC250_ESCAPE_BOARD_CAPS {
+    unsigned long Magic, Command, Status, NtStatus, AbiVersion, ProviderId, Flags, Reason;
+    unsigned long GpuMinMHz, GpuFloorMHz, GpuMaxMHz, GpuStepMHz, GpuPointCount;
+    unsigned long GpuMinMv, GpuMaxMv, GpuUndervoltMv, GpuHotMc;
+    unsigned long CpuMinMHz, CpuMaxMHz, CpuLabMaxMHz, CpuStepMHz, CpuUvMaxSteps;
+    unsigned long CpuTempMinC, CpuTempMaxC, CpuRefuseMv, CpuStockMask, CpuFullMask, CpuCoreCount;
+    unsigned long FanMinC, FanMaxC, FanFloorPct, FanFullPct, FanEmergencyMc;
+    unsigned long FanPointMin, FanPointMax, FanLeaseMinMs, FanLeaseMaxMs, FanLeaseDefaultMs;
+    BC250_BOARD_GPU_POINT GpuPoints[16];
+    unsigned long FanPresetCounts[3]; // Standard, Quiet, Performance.
+    BC250_BOARD_FAN_POINT FanPresets[3][8];
+    unsigned long GpuDefaultMaxMHz, CpuStockCoreCount;
+    unsigned long Reserved[53];
+} BC250_ESCAPE_BOARD_CAPS;

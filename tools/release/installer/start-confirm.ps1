@@ -1,6 +1,7 @@
-# Logon start-confirm of a tester PC: the scheduled task "amdgpu-wddm start confirm" (install.ps1 registers it: at
-# logon of an administrator, highest privileges) runs this once per logon. The release variant of the lab's
-# start-confirm.ps1; the decision rules are the lab's, unchanged, in start-confirm-core.ps1.
+# Logon start-confirm of a tester PC: the scheduled task "amdgpu-wddm start confirm" (install.ps1 registers it from
+# the plan of common.ps1: at the logon of any user, as Local System, highest run level, -NoWindow) runs this once per
+# logon. The release variant of the lab's start-confirm.ps1; the decision rules are the lab's, unchanged, in
+# start-confirm-core.ps1.
 #
 # Why it exists: every driver start counts against the KMD's boot-loop guard (guard.c GuardCheckAndCountStart,
 # BC250_MAX_UNCONFIRMED_STARTS 2): at the third start nobody confirmed, the driver refuses to start and Windows uses
@@ -12,6 +13,15 @@
 # presenting, and confirms the start once the KMD's milestone is met. Then it exits: at health flags 15, or after
 # -Seconds (120). Nothing stays resident.
 #
+# BD-080: with -NoWindow this script only reads and confirms, and shows nothing. That is the run of the task above,
+# because the Local System account that confirms at the logon of any user has no desktop in that session. The window
+# is a second task of its own, start-window.ps1, which runs in the session of the user who logged on, with that
+# user's rights and no access to the driver. Both runs take their decisions through the same poll (Invoke-Tick ->
+# Invoke-Poll): the boot-loop guard, the DPM coupling and the fallback are the same in either mode. Where no window
+# runs at all (nobody is logged on behind the confirmation, or the window task was removed), an idle desktop may
+# present too rarely for the KMD's milestone, and the fallback below resets the boot-loop guard alone: the machine
+# stays off Basic Display and the next start runs at the floor clock.
+#
 # Health reads and the confirmation go through bc250control.dll next to this script (Bc250StartHealth, the same
 # export the control application uses). If the KMD never reaches its milestone, a fallback resets only the
 # boot-loop guard (bc250kmd_cli confirm) after 60 s of a healthy-looking start: device OK, the driver answers with
@@ -22,7 +32,7 @@
 # DWM baseline of the logon (dwm-session.ps1) and, at its end, the running-release witness of this boot when the loaded
 # KMD is the installed release's (release-witness.ps1, read by the control application). -Probe prints one reading of
 # everything and exits (read-only; verify uses it).
-param([int]$Seconds = 120, [switch]$Probe, [string]$ExpectedVersion = '', [int]$FallbackHoldSeconds = 60)
+param([int]$Seconds = 120, [switch]$Probe, [switch]$NoWindow, [string]$ExpectedVersion = '', [int]$FallbackHoldSeconds = 60)
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 # The driver version the fallback expects: manifest.json kmd_abi of the installed release (the install root is the
@@ -32,6 +42,17 @@ if (-not $ExpectedVersion) {
     if (-not $ExpectedVersion) { $ExpectedVersion = '0x000700D8' }   # this release's kmd_abi; test-dryrun.ps1 gates it
 }
 . (Join-Path $here 'start-confirm-core.ps1')
+# The boot identity (Get-BootIdentity), loaded here and not only before the witness at the end: the start record's
+# reading needs this boot's start time from the one place that defines it (start-confirm-core.ps1
+# Get-StartRecordBootUtc), and -Probe exits before the witness block.
+# Guarded, because this script runs under $ErrorActionPreference = 'Stop' and release-witness.ps1 runs Add-Type at
+# its top level, which needs a writable TEMP and the CodeDom compiler. Unguarded, a failure there stopped this
+# script before it read anything: the task that keeps the PC out of Basic Display never ran its confirmation loop,
+# and -Probe printed no line at all, which is the text verify parses for the device, the driver version, LastStage
+# and the start health. A failure is a line in the log instead; the boot time then reads as unknown and the witness
+# block at the end says why.
+$script:witnessLoadError = $null
+try { . (Join-Path $here 'release-witness.ps1') } catch { $script:witnessLoadError = [string]$_.Exception.Message }
 $clock = [Diagnostics.Stopwatch]::StartNew()
 $cli = Join-Path $here 'bc250kmd_cli.exe'
 $dll = [IO.Path]::GetFullPath((Join-Path $here 'bc250control.dll'))
@@ -43,7 +64,7 @@ $script:lastReason = $null
 if (-not $Probe) {
     try {
         [void][IO.Directory]::CreateDirectory((Split-Path $log))
-        if (Test-Path -LiteralPath $log) { $keep = @(Get-Content -LiteralPath $log -Tail 200); [IO.File]::WriteAllLines($log, [string[]]$keep) }
+        if (Test-Path -LiteralPath $log) { $keep = @(Get-Content -LiteralPath $log -Tail 400); [IO.File]::WriteAllLines($log, [string[]]$keep) }
     } catch { }
 }
 function Write-StartConfirmLog([string]$Text) {
@@ -51,6 +72,9 @@ function Write-StartConfirmLog([string]$Text) {
     $line = [string]::Format($inv, '{0} +{1,6:F1}s {2}', [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.fffZ', $inv), $clock.Elapsed.TotalSeconds, $Text)
     if ($Probe) { $line; return }
     try { [IO.File]::AppendAllText($log, $line + "`r`n") } catch { }
+}
+if ($script:witnessLoadError) {
+    Write-StartConfirmLog "release-witness.ps1 did not load: $($script:witnessLoadError); this boot's start time reads as unknown and no witness is written"
 }
 # BD-060: the DWM instance of this logon's session, recorded once per logon as the baseline that verify and the control
 # application compare against (dwm-session.ps1). Never fails the task; -Probe writes nothing.
@@ -68,6 +92,24 @@ function Read-Parameter([string]$Name) {
     $k = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey($parametersKey)
     if (!$k) { return 'no key' }
     try { $v = $k.GetValue($Name, $null); if ($null -eq $v) { return 'absent' }; return [string]$v } finally { $k.Dispose() }
+}
+# BD-122: the KMD's record of the last start that did not reach a started device (Parameters\StartRecord,
+# guard.c). Read with no gate and without the driver, which is the point: a device with Code 43 answers no escape.
+# The record's own values only; the rule that makes them current is in start-confirm-core.ps1.
+function Read-StartRecord {
+    $k = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey("$parametersKey\$script:StartRecordKey")
+    if (!$k) { return $null }
+    try { return Read-StartRecordFromKey $k } finally { $k.Dispose() }
+}
+# One line for the log, and the kept ring lines under it when the record is a reason for this start. -Probe prints
+# every kept line; the task's own log keeps the last $Lines of them, so one logon cannot push the file out.
+# This boot's start time goes into both calls: a record older than this boot says so and keeps its lines to itself.
+$script:bootUtc = Get-StartRecordBootUtc
+function Write-StartRecordLog([int]$Lines = 24) {
+    $record = Read-StartRecord
+    Write-StartConfirmLog ('start record: ' + (Format-StartRecord -Record $record -BootUtc $script:bootUtc))
+    if (-not (Test-StartRecordIsReason -Record $record -BootUtc $script:bootUtc)) { return }
+    foreach ($line in (Get-StartRecordLogLines -Record $record -Max $Lines)) { Write-StartConfirmLog "start record log: $line" }
 }
 function Format-Dpm { return "DpmMode $(Read-Parameter 'DpmMode') DpmMaxMHz $(Read-Parameter 'DpmMaxMHz') DpmPending $(Read-Parameter 'DpmPending') DpmConfirmed $(Read-Parameter 'DpmConfirmed') DpmLastMode $(Read-Parameter 'DpmLastMode') DpmLastReason $(Read-Parameter 'DpmLastReason')" }
 # A native program's stdout and stderr as one text, and its exit code (stderr stays text under Stop in 5.1).
@@ -118,15 +160,35 @@ function Get-FallbackView {
     return [ordered]@{ ok = $ok; text = "device problem $problem, driver version $version (expected $ExpectedVersion), LastStage $stage" }
 }
 
+# ---- BD-080: the other half of this logon, the window task -------------------------------------------------------
+# The window runs as the user who logged on (start-window.ps1, the task below), where this script cannot see it: a
+# different session, and under Local System no desktop at all. What it can read is the task's own record, so the log
+# of this run says whether the window half ran and what it reported. start-window.ps1's exit codes: 0 shown and
+# closed, 2 could not be shown. 267009 is "running", and the task is absent on a machine where an older release
+# registered the single task only. This never throws and never changes the run's outcome; it is a log line.
+$windowTaskName = 'amdgpu-wddm start window'   # common.ps1 $script:WindowTaskName; test-session-checks.ps1 holds the two together
+function Format-WindowTask {
+    try {
+        $t = Get-ScheduledTask -TaskName $windowTaskName -ErrorAction SilentlyContinue
+        if (-not $t) { return "window task: '$windowTaskName' is not registered on this computer" }
+        $i = Get-ScheduledTaskInfo -TaskName $windowTaskName -ErrorAction Stop
+        $last = $(if ($i.LastRunTime) { ([DateTime]$i.LastRunTime).ToUniversalTime().ToString('o') } else { 'never' })
+        return "window task: state $($t.State), last run $last, last result $($i.LastTaskResult)"
+    } catch { return "window task: not read ($($_.Exception.Message))" }
+}
+
 if ($Probe) {
+    Write-StartConfirmLog "probe: $(Format-WindowTask)"
     Write-StartConfirmLog "probe: UnconfirmedStarts $(Read-Parameter 'UnconfirmedStarts')"
     Write-StartConfirmLog "probe: $(Format-Dpm)"
     Write-StartConfirmLog ('probe: fallback view: ' + (Get-FallbackView).text)
+    Write-StartRecordLog -Lines $script:StartRecordMaxLogLines
     try { Write-StartConfirmLog ('probe: start health ' + (Format-Reading (Read-Health))); exit 0 }
     catch { Write-StartConfirmLog "probe: start health no reading: $($_.Exception.Message)"; exit 5 }
 }
 
 Write-StartConfirmLog "start: bound $Seconds s, UnconfirmedStarts $(Read-Parameter 'UnconfirmedStarts'), $(Format-Dpm)"
+Write-StartRecordLog
 $state = New-StartConfirmState $Seconds
 $pollEvery = 5.0
 $script:nextPoll = 0.0
@@ -181,35 +243,54 @@ function Invoke-Poll {
     return $null
 }
 
-Add-Type -AssemblyName System.Windows.Forms, System.Drawing
-$form = New-Object Windows.Forms.Form
-$form.FormBorderStyle = 'None'; $form.TopMost = $true; $form.ShowInTaskbar = $false; $form.ShowIcon = $false
-$form.StartPosition = 'Manual'; $form.Size = New-Object Drawing.Size(250, 22); $form.Location = New-Object Drawing.Point(8, 34)
-$form.BackColor = [Drawing.Color]::Navy
-$label = New-Object Windows.Forms.Label
-$label.Dock = 'Fill'; $label.ForeColor = [Drawing.Color]::Cyan; $label.Font = New-Object Drawing.Font('Consolas', 9)
-$form.Controls.Add($label)
-$timer = New-Object Windows.Forms.Timer
-$timer.Interval = 250
-$timer.Add_Tick({
+# One step of the run: poll when the next poll is due, and answer with the step that ends the run, or $null. The
+# headless loop and the window's timer both call this and nothing else, so the two runs decide alike (BD-080).
+function Invoke-Tick {
     $now = $clock.Elapsed.TotalSeconds
-    $label.Text = 'amdgpu-wddm start check ' + [DateTime]::Now.ToString('HH:mm:ss.f')
-    if ($now -lt $script:nextPoll) { return }
+    if ($now -lt $script:nextPoll) { return $null }
     $step = $null
     try { $step = Invoke-Poll }
     catch { Write-StartConfirmLog "poll error: $($_.Exception.Message)"; $script:nextPoll = $now + $pollEvery }
     if (!$step -and $now -ge $Seconds + 10) { $step = [ordered]@{code = 1; reason = 'hard bound: polls kept failing' } }
-    if ($step) { $script:exitCode = [int]$step.code; $script:lastReason = $step.reason; $timer.Stop(); $form.Close() }
-})
-$timer.Start()
-[void]$form.ShowDialog()
-$timer.Dispose(); $form.Dispose()
-Write-StartConfirmLog "exit $($script:exitCode): $($script:lastReason); UnconfirmedStarts $(Read-Parameter 'UnconfirmedStarts'); $(Format-Dpm); confirm calls $($state.confirms)"
+    return $step
+}
+
+if ($NoWindow) {
+    # The run of the Local System task: no window, no form, no assembly to load. The window of this logon is
+    # start-window.ps1's, in the user's own session; this loop keeps the time bound of the task either way.
+    Write-StartConfirmLog "window: none (-NoWindow); the window of this logon is the task $windowTaskName, and the exit line below reports what that task did"
+    while ($true) {
+        $step = Invoke-Tick
+        if ($step) { $script:exitCode = [int]$step.code; $script:lastReason = $step.reason; break }
+        Start-Sleep -Milliseconds 250
+    }
+} else {
+    # The windowed run, as it has always been. Every variable here stays in the script's own scope, which an if or
+    # else block does not change: the timer's handler reads $label, $timer and $form while ShowDialog runs.
+    Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+    $form = New-Object Windows.Forms.Form
+    $form.FormBorderStyle = 'None'; $form.TopMost = $true; $form.ShowInTaskbar = $false; $form.ShowIcon = $false
+    $form.StartPosition = 'Manual'; $form.Size = New-Object Drawing.Size(250, 22); $form.Location = New-Object Drawing.Point(8, 34)
+    $form.BackColor = [Drawing.Color]::Navy
+    $label = New-Object Windows.Forms.Label
+    $label.Dock = 'Fill'; $label.ForeColor = [Drawing.Color]::Cyan; $label.Font = New-Object Drawing.Font('Consolas', 9)
+    $form.Controls.Add($label)
+    $timer = New-Object Windows.Forms.Timer
+    $timer.Interval = 250
+    $timer.Add_Tick({
+        $label.Text = 'amdgpu-wddm start check ' + [DateTime]::Now.ToString('HH:mm:ss.f')
+        $step = Invoke-Tick
+        if ($step) { $script:exitCode = [int]$step.code; $script:lastReason = $step.reason; $timer.Stop(); $form.Close() }
+    })
+    $timer.Start()
+    [void]$form.ShowDialog()
+    $timer.Dispose(); $form.Dispose()
+}
+Write-StartConfirmLog "exit $($script:exitCode): $($script:lastReason); $(Format-WindowTask); UnconfirmedStarts $(Read-Parameter 'UnconfirmedStarts'); $(Format-Dpm); confirm calls $($state.confirms); start record: $(Format-StartRecord -Record (Read-StartRecord) -BootUtc $script:bootUtc)"
 # The running-release witness of this boot: the loaded KMD image and its reply against the installed manifest. Written
 # whatever the confirmation's outcome (it names what runs, not how healthy it is); never fails the task. It takes the
 # installer's engine.lock for the whole reading and publication (up to 3 s wait): while an installer runs, no witness.
 try {
-    . (Join-Path $here 'release-witness.ps1')
     $why = Write-RunningReleaseWitness -InstallRoot (Split-Path $here) -RecordedBy 'start-confirm'
     Write-StartConfirmLog $(if ($why) { "running-release witness: not written, $why" } else { "running-release witness: written, $($script:WitnessPath)" })
 } catch { Write-StartConfirmLog "running-release witness: $($_.Exception.Message)" }

@@ -31,6 +31,7 @@ const char* Bc250ScalingName(unsigned long Scaling)
     case BC250_SCALING_CENTERED: return "centered";
     case BC250_SCALING_STRETCHED: return "stretched";
     case BC250_SCALING_ASPECT: return "aspect-ratio";
+    case BC250_SCALING_CUSTOM: return "inherited-custom";
     default: return "?";
     }
 }
@@ -47,7 +48,7 @@ long Bc250ScalingRecout(unsigned long SourceWidth, unsigned long SourceHeight, u
 
     Recout->X = Recout->Y = Recout->Width = Recout->Height = 0;
     if (!DimensionOk(SourceWidth) || !DimensionOk(SourceHeight) || !DimensionOk(TargetWidth) ||
-        !DimensionOk(TargetHeight) || Scaling >= BC250_SCALING_COUNT) return BC250_DISP_STATUS_INVALID;
+        !DimensionOk(TargetHeight) || Scaling >= BC250_SCALING_CUSTOM) return BC250_DISP_STATUS_INVALID;
     if (sw > tw || sh > th) return BC250_DISP_STATUS_NOT_SUPPORTED;     // no downscale in stage A
     switch (Scaling) {
     case BC250_SCALING_IDENTITY:
@@ -254,6 +255,153 @@ unsigned long Bc250PipeShapeCheck(const BC250_PIPE_SHAPE* S, unsigned long W, un
     return BC250_PIPE_OK;
 }
 
+// No writes, waits or allocation: the complete pair can be compared before it
+// is published. Keep reading after a failure for useful start diagnostics.
+long Bc250InheritedPipeRead(BC250_DISP_IO* Io, BC250_INHERITED_PIPE* P)
+{
+    static const unsigned long offsets[BC250_INHERITED_PIPE_READS] = {
+        BC250_REG_DMU_HUBP0_DCSURF_PRI_VIEWPORT_START,
+        BC250_REG_DMU_HUBP0_DCSURF_PRI_VIEWPORT_DIMENSION,
+        BC250_REG_DMU_DSCL0_RECOUT_START, BC250_REG_DMU_DSCL0_RECOUT_SIZE,
+        BC250_REG_DMU_DSCL0_MPC_SIZE, BC250_REG_DMU_DSCL0_SCL_MODE,
+        BC250_REG_DMU_DSCL0_DSCL_MEM_PWR_CTRL, BC250_REG_DMU_MPCC0_MPCC_TOP_SEL,
+        BC250_REG_DMU_ODM0_OPTC_DATA_SOURCE_SELECT, BC250_REG_DMU_HUBP0_DCHUBP_CNTL,
+        BC250_REG_DMU_DSCL0_SCL_HORZ_FILTER_SCALE_RATIO,
+        BC250_REG_DMU_DSCL0_SCL_VERT_FILTER_SCALE_RATIO,
+        BC250_REG_DMU_DSCL0_SCL_TAP_CONTROL, BC250_REG_DMU_HUBP0_DCSURF_SURFACE_CONFIG,
+        BC250_REG_DMU_HUBP0_DCSURF_TILING_CONFIG,
+        BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_PITCH, BC250_REG_DMU_OTG1_OTG_CONTROL,
+        BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_CONTROL, BC250_REG_DMU_MPCC0_MPCC_BOT_SEL,
+        BC250_REG_DMU_MPCC0_MPCC_CONTROL, BC250_REG_DMU_MPC_OUT0_MUX,
+        BC250_REG_DMU_DSCL0_DSCL_AUTOCAL, BC250_REG_DMU_DSCL0_DSCL_CONTROL
+    };
+    unsigned long* fields[BC250_INHERITED_PIPE_READS] = {
+        &P->Shape.ViewportStart, &P->Shape.ViewportDimension, &P->Shape.RecoutStart,
+        &P->Shape.RecoutSize, &P->Shape.MpcSize, &P->Shape.SclMode, &P->Shape.MemPwrCtrl,
+        &P->Shape.MpccTopSel, &P->Shape.OdmSource, &P->Shape.HubpCntl,
+        &P->RatioH, &P->RatioV, &P->Taps, &P->SurfaceConfig, &P->TilingConfig, &P->Pitch, &P->Otg1,
+        &P->SurfaceControl, &P->MpccBottom, &P->MpccControl, &P->MpcOut,
+        &P->Autocal, &P->DsclControl
+    };
+    unsigned long i;
+    long status = BC250_DISP_STATUS_SUCCESS;
+    P->Valid = 0;
+    for (i = 0; i < BC250_INHERITED_PIPE_READS; ++i) {
+        long step = Bc250DispRead(Io, offsets[i], fields[i]);
+        if (step >= 0) P->Valid |= 1ul << i;
+        else if (status >= 0) status = step;
+    }
+    return status;
+}
+
+int Bc250InheritedPipeSame(const BC250_INHERITED_PIPE* A, const BC250_INHERITED_PIPE* B)
+{
+    // These are all unsigned-long words (no padding). HUBP status may change
+    // without a modeset; compare only the stable programming bits in that word.
+    BC250_INHERITED_PIPE a = *A, b = *B;
+    const unsigned char* pa = (const unsigned char*)&a;
+    const unsigned char* pb = (const unsigned char*)&b;
+    unsigned long i;
+    a.Shape.HubpCntl &= HUBP0_DCHUBP_CNTL__HUBP_BLANK_EN_MASK;
+    b.Shape.HubpCntl &= HUBP0_DCHUBP_CNTL__HUBP_BLANK_EN_MASK;
+    a.MpcOut &= MPC_OUT0_MUX__MPC_OUT_MUX_MASK;
+    b.MpcOut &= MPC_OUT0_MUX__MPC_OUT_MUX_MASK;
+    for (i = 0; i < sizeof(a); ++i) if (pa[i] != pb[i]) return 0;
+    return 1;
+}
+
+unsigned long Bc250InheritedPipeSupport(const BC250_INHERITED_PIPE* P,
+    unsigned long W, unsigned long H, unsigned long Pitch, unsigned long TW, unsigned long TH)
+{
+    const BC250_PIPE_SHAPE* s = &P->Shape;
+    BC250_RECT recout, wanted;
+    unsigned long mode, scaling, support = 0, mpccMode, autocal;
+    unsigned long long ratio, actual;
+    int ratioMatches = 1;
+    if (P->Valid != BC250_INHERITED_PIPE_ALL || !DimensionOk(W) || !DimensionOk(H) ||
+        !DimensionOk(TW) || !DimensionOk(TH) || Pitch < W * 4ul || Pitch % 4ul) return 0;
+    if (s->ViewportStart != 0 ||
+        Bc250DispGet(s->ViewportDimension, HUBP0_DCSURF_PRI_VIEWPORT_DIMENSION__PRI_VIEWPORT_WIDTH_MASK) != W ||
+        Bc250DispGet(s->ViewportDimension, HUBP0_DCSURF_PRI_VIEWPORT_DIMENSION__PRI_VIEWPORT_HEIGHT_MASK) != H ||
+        Bc250DispGet(s->MpcSize, DSCL0_MPC_SIZE__MPC_WIDTH_MASK) != TW ||
+        Bc250DispGet(s->MpcSize, DSCL0_MPC_SIZE__MPC_HEIGHT_MASK) != TH ||
+        Bc250DispGet(s->MpccTopSel, MPCC0_MPCC_TOP_SEL__MPCC_TOP_SEL_MASK) != 0 ||
+        Bc250DispGet(P->MpcOut, MPC_OUT0_MUX__MPC_OUT_MUX_MASK) != 0 ||
+        (P->SurfaceControl & HUBPREQ0_DCSURF_SURFACE_CONTROL__PRIMARY_SURFACE_DCC_EN_MASK) ||
+        Bc250DispGet(s->OdmSource, ODM0_OPTC_DATA_SOURCE_SELECT__OPTC_SEG0_SRC_SEL_MASK) != 0 ||
+        (P->Otg1 & OTG1_OTG_CONTROL__OTG_MASTER_EN_MASK) ||
+        (P->SurfaceConfig & (HUBP0_DCSURF_SURFACE_CONFIG__ROTATION_ANGLE_MASK |
+                            HUBP0_DCSURF_SURFACE_CONFIG__H_MIRROR_EN_MASK)) ||
+        (P->TilingConfig & HUBP0_DCSURF_TILING_CONFIG__SW_MODE_MASK) ||
+        (Bc250DispGet(P->Pitch, HUBPREQ0_DCSURF_SURFACE_PITCH__PITCH_MASK) + 1ul) * 4ul != Pitch)
+        return 0;
+    // dc/inc/hw/mpc.h: mode 1 passes the top layer through; the bottom
+    // selector is unused. Mode 2 retains the established disconnected-bottom
+    // requirement. Mode 0 bypass and mode 3 two-layer blending are not ours.
+    mpccMode = Bc250DispGet(P->MpccControl, MPCC0_MPCC_CONTROL__MPCC_MODE_MASK);
+    if (mpccMode != 1ul && (mpccMode != 2ul ||
+        Bc250DispGet(P->MpccBottom, MPCC0_MPCC_BOT_SEL__MPCC_BOT_SEL_MASK) != 0xFul)) return 0;
+    // dcn10_hubp.c: RGB8888 uses surface format 8; no YUV or metadata decoding.
+    if (Bc250DispGet(P->SurfaceConfig, HUBP0_DCSURF_SURFACE_CONFIG__SURFACE_PIXEL_FORMAT_MASK) != 8ul) return 0;
+    recout.X = Bc250DispGet(s->RecoutStart, DSCL0_RECOUT_START__RECOUT_START_X_MASK);
+    recout.Y = Bc250DispGet(s->RecoutStart, DSCL0_RECOUT_START__RECOUT_START_Y_MASK);
+    recout.Width = Bc250DispGet(s->RecoutSize, DSCL0_RECOUT_SIZE__RECOUT_WIDTH_MASK);
+    recout.Height = Bc250DispGet(s->RecoutSize, DSCL0_RECOUT_SIZE__RECOUT_HEIGHT_MASK);
+    if (!recout.Width || !recout.Height || recout.X > TW || recout.Y > TH ||
+        recout.Width > TW - recout.X || recout.Height > TH - recout.Y) return 0;
+    mode = Bc250DispGet(s->SclMode, DSCL0_SCL_MODE__DSCL_MODE_MASK);
+    autocal = Bc250DispGet(P->Autocal, DSCL0_DSCL_AUTOCAL__AUTOCAL_MODE_MASK);
+    // Firmware automatic centering and replication (modes 2/3) need a
+    // separate geometry contract. NUM_PIPE/PIPE_ID are inactive when
+    // AUTOCAL_MODE_OFF selects manual calculation (dcn10_dpp_dscl.c).
+    if (autocal > 1ul) return 0;
+    if (autocal == 1ul) {
+        // dcn10_dpp_dscl.c enum dscl_autocal_mode: automatic scale computes
+        // ratio AND phase and requires DSCL_MODE=1. Manual ratio registers
+        // may be stale, including 1.0; do not validate them as active input.
+        // Nonzero automatic pipe fields have no verified encoding here.
+        if ((P->Autocal & (DSCL0_DSCL_AUTOCAL__AUTOCAL_NUM_PIPE_MASK |
+                          DSCL0_DSCL_AUTOCAL__AUTOCAL_PIPE_ID_MASK)) ||
+            mode != DSCL_MODE_444_RGB_ENABLE || W > recout.Width || H > recout.Height ||
+            Bc250DispGet(s->MemPwrCtrl, DSCL0_DSCL_MEM_PWR_CTRL__LUT_MEM_PWR_FORCE_MASK)) return 0;
+        // Equal source/recout/target computes unity. Classify that native
+        // geometry below, without consulting inactive manual ratios. Other
+        // automatic shapes remain fixed Custom; no new scaler programming.
+        if (W != TW || H != TH || recout.X || recout.Y ||
+            recout.Width != W || recout.Height != H) return BC250_SCALING_BIT(BC250_SCALING_CUSTOM);
+    } else if (mode == DSCL_MODE_444_BYPASS) {
+        if (recout.Width != W || recout.Height != H) return 0;
+    } else if (mode == DSCL_MODE_444_RGB_ENABLE) {
+        if (Bc250DispGet(s->MemPwrCtrl, DSCL0_DSCL_MEM_PWR_CTRL__LUT_MEM_PWR_FORCE_MASK)) return 0;
+        // dpp1_dscl_set_manual_ratio_init: Q3.19 ratio stored as Q3.24. Allow
+        // one Q3.19 unit for the firmware's rounding; never accept a zero ratio.
+        ratio = ((unsigned long long)W << 24) / recout.Width;
+        actual = P->RatioH & DSCL0_SCL_HORZ_FILTER_SCALE_RATIO__SCL_H_SCALE_RATIO_MASK;
+        if (!actual) return 0;
+        if ((actual > ratio ? actual - ratio : ratio - actual) > 32u) ratioMatches = 0;
+        ratio = ((unsigned long long)H << 24) / recout.Height;
+        actual = P->RatioV & DSCL0_SCL_VERT_FILTER_SCALE_RATIO__SCL_V_SCALE_RATIO_MASK;
+        if (!actual) return 0;
+        if ((actual > ratio ? actual - ratio : ratio - actual) > 32u) ratioMatches = 0;
+        if (!ratioMatches) {
+            // Retain a firmware unity-ratio pipe with a larger output as
+            // custom, not stretched. HUBP still fetches only the validated
+            // source viewport/stride. We neither enlarge the source nor
+            // change ratios, phases, boundary mode, coefficients or timing.
+            // This is image preservation, not proof of edge/black fill.
+            if (P->RatioH != (ONE19 << 5) || P->RatioV != (ONE19 << 5) ||
+                W > recout.Width || H > recout.Height) return 0;
+            return BC250_SCALING_BIT(BC250_SCALING_CUSTOM);
+        }
+    } else return 0;
+    for (scaling = 0; scaling < BC250_SCALING_CUSTOM; ++scaling) {
+        if (Bc250ScalingRecout(W, H, TW, TH, scaling, &wanted) >= 0 &&
+            wanted.X == recout.X && wanted.Y == recout.Y && wanted.Width == recout.Width &&
+            wanted.Height == recout.Height) support |= BC250_SCALING_BIT(scaling);
+    }
+    return support ? support : BC250_SCALING_BIT(BC250_SCALING_CUSTOM);
+}
+
 // ---- the register writes ---------------------------------------------------------------------------------------
 
 static unsigned long Pair(unsigned long LowMask, unsigned long Low, unsigned long HighMask, unsigned long High)
@@ -403,22 +551,73 @@ static long WritePipe(BC250_DISP_IO* Io, const BC250_SCALER_PLAN* P, BC250_SCALE
     return BC250_DISP_STATUS_SUCCESS;
 }
 
+static long ScalerBegin(BC250_DISP_IO* Io, const BC250_SCALER_PLAN* Plan, BC250_SCALER_RESULT* Result,
+                       int Stopped)
+{
+    BC250_SCALER_RESULT empty = {0};
+    unsigned long control, clock;
+    long status;
+    if (!Result) return BC250_DISP_STATUS_INVALID;
+    *Result = empty;
+    if (!Io || !Io->Read || !Io->Write || !Plan ||
+        Plan->Viewport.Width == 0 || Plan->Recout.Width == 0) return BC250_DISP_STATUS_INVALID;
+    TRY(Bc250DispRead(Io, BC250_REG_DMU_DSCL0_SCL_MODE, &Result->SclModeBefore));
+    TRY(Bc250DispRead(Io, BC250_REG_DMU_OTG0_OTG_CONTROL, &control));
+    if (Stopped) {
+        // optc1_disable_crtc clears MASTER_EN and waits for OTG_BUSY=0.
+        // dcn10_hwseq skips the TG lock for an already disabled controller.
+        if (control & OTG0_OTG_CONTROL__OTG_MASTER_EN_MASK) return BC250_DISP_STATUS_MISMATCH;
+        TRY(Bc250DispRead(Io, BC250_REG_DMU_OTG0_OTG_CLOCK_CONTROL, &clock));
+        if (clock & OTG0_OTG_CLOCK_CONTROL__OTG_BUSY_MASK) return BC250_DISP_STATUS_MISMATCH;
+        status = Bc250DispRead(Io, BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK, &Result->LockStatus);
+        Result->LockStatusValid = status >= 0;
+        if (status < 0) { Result->LockStatus = 0; return status; }
+        if (Result->LockStatus & (OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK |
+                                 OTG0_OTG_MASTER_UPDATE_LOCK__UPDATE_LOCK_STATUS_MASK))
+            return BC250_DISP_STATUS_MISMATCH;
+    } else if (!(control & OTG0_OTG_CONTROL__OTG_MASTER_EN_MASK)) {
+        return BC250_DISP_STATUS_MISMATCH;
+    }
+    return BC250_DISP_STATUS_SUCCESS;
+}
+
+static void ScalerAfter(BC250_DISP_IO* Io, BC250_SCALER_RESULT* Result)
+{
+    (void)Bc250DispRead(Io, BC250_REG_DMU_DSCL0_SCL_MODE, &Result->SclModeAfter);
+    (void)Bc250DispRead(Io, BC250_REG_DMU_HUBP0_DCHUBP_CNTL, &Result->HubpCntlAfter);
+}
+
+long Bc250ScalerProgramStopped(BC250_DISP_IO* Io, const BC250_SCALER_PLAN* Plan, BC250_SCALER_RESULT* Result)
+{
+    long status = ScalerBegin(Io, Plan, Result, 1);
+    if (status < 0) return status;
+    status = WritePipe(Io, Plan, Result);
+    ScalerAfter(Io, Result);
+    return status;
+}
+
 long Bc250ScalerProgram(BC250_DISP_IO* Io, const BC250_SCALER_PLAN* Plan, BC250_SCALER_RESULT* Result)
 {
     unsigned long value = 0, waited = 0;
-    long status;
+    long status = ScalerBegin(Io, Plan, Result, 0);
 
-    Result->LockWaitUs = Result->CoefWrites = Result->SclModeBefore = Result->SclModeAfter = 0;
-    Result->HubpCntlAfter = 0;
-    if (Plan->Viewport.Width == 0 || Plan->Recout.Width == 0) return BC250_DISP_STATUS_INVALID;
-    status = Bc250DispRead(Io, BC250_REG_DMU_DSCL0_SCL_MODE, &Result->SclModeBefore);
     if (status < 0) return status;
-    // optc1_lock: take the lock and wait for its acknowledgement before the first double-buffered write.
+    // optc1_lock selects this OTG before requesting the update lock. REG_SET
+    // uses an initial value of zero in AMD's implementation, including keepout.
+    status = Bc250DispWrite(Io, BC250_REG_DMU_OTG0_OTG_GLOBAL_CONTROL0,
+                           Bc250DispField(OTG0_OTG_GLOBAL_CONTROL0__OTG_MASTER_UPDATE_LOCK_SEL_MASK, 0));
+    if (status < 0) return status;
     status = Bc250DispWrite(Io, BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK,
                             OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK);
-    if (status < 0) return status;
+    if (status < 0) {
+        // A failed posted write may still have reached the device.
+        (void)Bc250DispWrite(Io, BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK, 0);
+        return status;
+    }
     for (;;) {
         status = Bc250DispRead(Io, BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK, &value);
+        Result->LockStatus = status >= 0 ? value : 0;
+        Result->LockStatusValid = status >= 0;
         if (status < 0 || (value & OTG0_OTG_MASTER_UPDATE_LOCK__UPDATE_LOCK_STATUS_MASK) != 0) break;
         if (waited == LOCK_WAIT_STEPS) { status = BC250_DISP_STATUS_TIMEOUT; break; }
         status = Bc250DispStall(Io, 1);
@@ -435,8 +634,7 @@ long Bc250ScalerProgram(BC250_DISP_IO* Io, const BC250_SCALER_PLAN* Plan, BC250_
     if (status >= 0)
         status = Bc250DispWrite(Io, BC250_REG_DMU_OTG0_OTG_TRIGA_MANUAL_TRIG,
                                 OTG0_OTG_TRIGA_MANUAL_TRIG__OTG_TRIGA_MANUAL_TRIG_MASK);
-    (void)Bc250DispRead(Io, BC250_REG_DMU_DSCL0_SCL_MODE, &Result->SclModeAfter);
-    (void)Bc250DispRead(Io, BC250_REG_DMU_HUBP0_DCHUBP_CNTL, &Result->HubpCntlAfter);
+    ScalerAfter(Io, Result);
     return status;
 }
 

@@ -257,6 +257,9 @@ NTSTATUS MmioGfxRead(_In_ const BC250_DEVICE* Device, ULONG Offset, _Out_ ULONG*
 
 NTSTATUS MmioGfxWrite(_In_ const BC250_DEVICE* Device, ULONG Offset, ULONG Value)
 {
+    // SQ_IND_DATA exposes wave state. It belongs to the legacy mixed table for
+    // reads only; no GFX sequence may use it as a write destination.
+    if (Offset == BC250_REG_GC_SQ_IND_DATA) return STATUS_ACCESS_DENIED;
     if (Device->Mmio == NULL || !Device->MmioGfxEnabled) return STATUS_DEVICE_NOT_READY;
     if ((Offset & 3) != 0 || Offset >= BC250_BAR5_LENGTH || !InTable(g_MmioGfxAllow, BC250_MMIO_GFX_ALLOW_COUNT, Offset))
         return STATUS_ACCESS_DENIED;

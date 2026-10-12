@@ -20,7 +20,7 @@ function New-CompatibilityRecord {
     $tableRel = 'installer/registry-defaults.json'
     $table = Join-Path $PackageRoot ($tableRel -replace '/', '\')
     $tbl = Get-Content -LiteralPath $table -Raw | ConvertFrom-Json
-    $setup = Join-Path $PackageRoot ($script:SetupExeRelative)
+    $setup = Get-PackageSetupExe $PackageRoot
     return [ordered]@{
         schema = $script:CompatibilitySchema
         version = $Version
@@ -33,7 +33,9 @@ function New-CompatibilityRecord {
         settings = [ordered]@{ table = $tableRel; table_schema = $tbl.schema; table_sha256 = (Get-Sha256 $table)
             groups = @($tbl.defaults.PSObject.Properties | ForEach-Object { $_.Name }) }
         kmd = [ordered]@{ build = $KmdBuild; abi = $KmdAbi; driver_ver = $DriverVer; sys_sha256 = (Get-Sha256 (Join-Path $PackageRoot 'payload\kmd\bc250kmd.sys')) }
-        continuation = [ordered]@{ closure = $true; setup_exe = $(if (Test-Path -LiteralPath $setup) { $script:SetupExeRelative -replace '\\', '/' } else { $null }) }
+        # The setup window's file name, not a path: the unpacked release keeps it in the top folder beside files\,
+        # the kept repair set keeps its copy in the package root itself (common.ps1, Get-PackageSetupExe).
+        continuation = [ordered]@{ closure = $true; setup_exe = $(if ($setup) { $script:SetupExeName } else { $null }) }
     }
 }
 

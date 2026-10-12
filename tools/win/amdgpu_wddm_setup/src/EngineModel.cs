@@ -25,7 +25,7 @@ namespace AmdgpuWddmSetup
         public string Action, InstalledVersion, PackageVersion, Phase, FirmwareSource, FirmwareDir, SecureBoot, BitLocker;
         public string[] Consents = new string[0], Notes = new string[0], CompatibilityReasons = new string[0];
         public int Restarts;
-        public bool CompatibilityOk;
+        public bool CompatibilityOk, SystemTuning;
     }
 
     public sealed class SettingsPlan
@@ -37,6 +37,8 @@ namespace AmdgpuWddmSetup
     public sealed class EngineResult
     {
         public string Invocation, Mode, Action, Outcome, MessageId, Step, Detail, Log, PhaseBefore, PhaseAfter, PackageVersion;
+        // The engine's automatic diagnostics file of a driver start that did not pass (null for every other run).
+        public string Diagnostics;
         public string RestartReason, ContinuationCommand;
         public int ExitCode;
         public bool DryRun, Mutated, NothingChanged, RestartRequired;
@@ -58,6 +60,7 @@ namespace AmdgpuWddmSetup
             {
                 Invocation = invocation, Mode = Json.Str(o, "mode"), Action = Json.Str(o, "action"), Outcome = outcome,
                 MessageId = Json.Str(o, "message_id"), Step = Json.Str(o, "step"), Detail = Json.Str(o, "detail"), Log = Json.Str(o, "log"),
+                Diagnostics = Json.Str(o, "diagnostics"),
                 PhaseBefore = Json.Str(o, "phase_before"), PhaseAfter = Json.Str(o, "phase_after"),
                 PackageVersion = Json.Str(Json.Obj(o, "engine"), "package_version"),
                 ExitCode = Json.Int(o, "exit_code", -1), DryRun = Json.Bool(o, "dry_run"), Mutated = Json.Bool(o, "mutated"),
@@ -119,6 +122,7 @@ namespace AmdgpuWddmSetup
                         Phase = Json.Str(e, "phase"), Consents = Json.Strs(e, "consents"), Restarts = Json.Int(e, "restarts"),
                         FirmwareSource = Json.Str(e, "firmware_source"), FirmwareDir = Json.Str(e, "firmware_dir"), Notes = Json.Strs(e, "notes"),
                         SecureBoot = Json.Str(e, "secure_boot"), BitLocker = Json.Str(e, "bitlocker"),
+                        SystemTuning = Json.Bool(e, "system_tuning"),
                         CompatibilityOk = c != null && Json.Bool(c, "ok"), CompatibilityReasons = Json.Strs(c, "reasons"),
                     };
                     break;
@@ -157,7 +161,11 @@ namespace AmdgpuWddmSetup
         // Whether the run may have changed this PC, as far as the events tell (a missing result cannot say more).
         public bool MayHaveChanged { get { return InstallActionSeen || RealSteps > 0; } }
 
-        // The stages a run of this mode goes through, in order, for the progress list.
+        // The stages a run of this mode goes through, in order, for the progress list. The optional stages are not
+        // here: 'extras' and 'components' (the llama.cpp and Ollama extras of install.cmd) happen only when a run can
+        // choose an extra, which this window's own runs cannot - it has no control for them and consents to nothing
+        // its command line did not name. A run that does reach them (a command line with -Components) reports them as
+        // stage events, and SetupForm puts such a stage into the list where the run reached it.
         public static string[] ExpectedStages(string mode, string action)
         {
             if (mode == "prepare-offline") return new[] { "prepare-check", "firmware", "copy", "finish" };
@@ -187,6 +195,16 @@ namespace AmdgpuWddmSetup
         // files, a development installation, and Secure Boot (it changes only in the firmware settings, after a restart).
         // The engine does not mark a cause as transient, so the window decides by check id. A refusal with one failed check
         // outside this list (free space, the Visual C++ runtime, the firmware download, ...) keeps Try again as the default.
+        // The engine outcomes that end a run without stopping it. The stage screen is drawn once more after the
+        // engine wrote its result and before its process ends: the stage the run reached is done for these, and only
+        // the others (refused, failed, cancelled, verify-failed, and anything newer than this window) are crossed out.
+        public static readonly HashSet<string> OutcomesThatFinish = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "verified", "completed", "prepared", "restart-required", "already", "planned", "needs-consent",
+        };
+
+        public static bool StoppedIn(string outcome) { return outcome != null && !OutcomesThatFinish.Contains(outcome); }
+
         public static readonly HashSet<string> RetryCannotFix = new HashSet<string>(StringComparer.Ordinal)
         {
             "gpu.missing", "gpu.several", "windows.not-x64", "windows.too-old", "package.damaged", "firmware.no-list",
@@ -313,6 +331,32 @@ namespace AmdgpuWddmSetup
             switch (Rank(c)) { case 1: return "03-surprised"; case 3: return "07-hopeful"; case 4: return "05-thinking"; case 5: return "04-wink"; }
             return c == SetupCause.Welcome ? "01-wave" : "02-curious";
         }
+
+        // The art of an expression in the exe, embedded by build.ps1 from the control application's art directory
+        // under the same names it uses (Guide.Resource): one map of expression to file, one set of resources. The
+        // window embeds the @256 pictures only: its smallest slot is 176 device pixels at 96 DPI, larger than the
+        // @128 picture, so a @128 resource could never be drawn and the exe would carry it for nothing.
+        public static string Resource(string expression, int size) { return "nagi." + expression + "@" + size + ".png"; }
+
+        // The art is drawn at most 1.25 times the @256 picture, so it never blurs: 320 device pixels. The welcome and
+        // prepare screens give her the whole width of the panel, every other screen a smaller slot beside its tip.
+        public const int MaxArtPixels = 320, HeroArtDesign = 244, ArtDesign = 176;
+
+        public static int ArtBox(float scale, bool hero)
+        {
+            return Math.Min(MaxArtPixels, (int)Math.Round((hero ? HeroArtDesign : ArtDesign) * (scale <= 0 ? 1 : scale)));
+        }
+
+        // The picture to load for that slot. The smallest slot is larger than the @128 picture at every scale
+        // (ArtBox(scale, false) >= 176), so the window asks for the @256 art and no other size is embedded.
+        public const int ArtPixels = 256;
+        public static int ArtSize(float scale) { return ArtPixels; }
+
+        // Every expression a screen of this window can ask for: Expression() of every cause there is. The build
+        // embeds these and no more, so the exe carries no picture it could never draw (the control application
+        // embeds all nine, because its verdicts reach all nine). The unit tests print this list for the build.
+        public static readonly string[] ArtExpressions = Enum.GetValues(typeof(SetupCause)).Cast<SetupCause>()
+            .Select(Expression).Distinct().OrderBy(e => e, StringComparer.Ordinal).ToArray();
 
         public static SetupCause Pick(IEnumerable<SetupCause> active)
         {

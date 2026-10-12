@@ -15,5 +15,25 @@ Get-ChildItem -LiteralPath $d -File -Recurse | Where-Object { $_.Name -match 've
 "--- registry"
 $k = 'HKLM:\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters'
 (Get-Item $k).Property | Where-Object { $_ -match '^(Unconfirmed|LastStage|StageHistory|KeepStatus|Dpm|Cu)' } | ForEach-Object { "$_ = $((Get-ItemProperty $k).$_)" }
+# BD-122: the KMD's reason for a start that did not reach a started device (guard.c, Parameters\StartRecord). The
+# step and the NTSTATUS are what LastStage 91 above cannot say, and the kept log lines are the ring a Code 43
+# device can no longer answer for. Read-only, and absent on a KMD before 0.7.216.30.
+$r = "$k\StartRecord"
+if (Test-Path -LiteralPath $r) {
+  "--- start record"
+  $sr = Get-ItemProperty -LiteralPath $r
+  foreach ($n in @('Result', 'Step', 'SubStep', 'TimeUtc', 'Stage', 'UnconfirmedStarts', 'Detail')) { "$n = $($sr.$n)" }
+  if ($null -ne $sr.Status) { 'Status = 0x{0:X8}' -f ([uint32]([int64]$sr.Status -band [int64]4294967295)) }
+  if ($null -ne $sr.Version) { 'Version = 0x{0:X8}' -f ([uint32]([int64]$sr.Version -band [int64]4294967295)) }
+  @($sr.Log) | Where-Object { $_ } | ForEach-Object { "log: $_" }
+} else { "--- start record: absent (KMD before 0.7.216.30)" }
 "--- driverstore"
-pnputil /enum-drivers | Select-String -Pattern 'oem\d+\.inf|Original Name|Driver Version' | ForEach-Object { $_.Line.Trim() } | Select-Object -Last 12
+# Keep the complete package record: field labels are localized, INF filenames are not.
+# This is a report only; it never selects a package for removal.
+function Select-DriverStoreRecords([string[]]$Lines) {
+  $blocks = (($Lines -join "`n") -split '(?:\r?\n)[\t ]*(?:\r?\n)')
+  @($blocks | Where-Object { $_ -match '(?i)(?<![\w.-])oem[0-9]+\.inf(?![\w.-])' } | Select-Object -Last 4)
+}
+$driverStore = @(& pnputil.exe /enum-drivers 2>&1)
+if ($LASTEXITCODE -ne 0) { throw "Driver-store query failed (pnputil exit $LASTEXITCODE)" }
+Select-DriverStoreRecords $driverStore | ForEach-Object { $_; '' }

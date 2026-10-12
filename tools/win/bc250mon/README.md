@@ -285,7 +285,7 @@ as it differs from the lab's expectation.
 | `CU snapshot` | why the escape gave no answer. The row appears only then | always | - |
 | `DPM` | the governor's snapshot: mode, `GOVERNING`, the confirmation, `PAUSED` and `STABLE` | `PAUSED`. `STABLE`: a D3D12 client called `SetStablePowerState` and pinned the clock to the floor. A snapshot older than 30 seconds, or a read that failed after it | `PENDING` without `CONFIRMED` (a restart falls back to fixed-lab), or mode DPM without `GOVERNING` |
 | `DPM cap` | `CapMHz` against `MaxMHz`, the throttle by the name of `enum bc250_dpm_throttle`, and the idle point in force (`idle 500 MHz`, with `(now)` while the clock sits there; `IdleMHz` 0 or an ABI 1 snapshot leaves it out) | the thermal cap sits under the ceiling, the throttle is one of the four thermal ones, or the start counts failed SMU transitions | throttle `SMU`: the governor gave up after `BC250_DPM_ERROR_LIMIT` failures in a row |
-| `Start health` | `BC250_ESCAPE_RUN_START_HEALTH` op READ: the flags by name, the generation and the epoch | `CONFIRMED` is absent, or no completed presentation for longer than `BC250_START_HEALTH_FRESH_MS` | the generation or the epoch changed inside this overlay session, or `FULL` without `READY` |
+| `Start health` | `BC250_ESCAPE_RUN_START_HEALTH` op READ: the flags by name, the generation and the epoch. A newer epoch of the same start adds `epoch +N since logon` and keeps the level. The driver raises the epoch at every mode change, visibility change and fault. Every game that switches the display mode raises it | `CONFIRMED` is absent, or no completed presentation for longer than `BC250_START_HEALTH_FRESH_MS` | the generation changed inside this overlay session, or `FULL` without `READY` |
 | `Interop` | `BC250_ESCAPE_RUN_INTEROP` op READ through `Bc250Interop`: the requested and the effective switches. Also the session marker this start found, and what it did about it. Without the export, `Parameters\InteropLastState`, marked as the registry mirror | `STALE`: a marker of this boot, from a start that ended without an unmark. A system power transition in progress. No full WDDM start decided the switches | the effective switches differ from the requested ones, so the driver closed the GPU desktop path. One switch alone. `UNCLEAN`: a marker of an earlier boot, so the machine died with the path in use. `CLOSED_BY_DRIVER`, or a failed durable close |
 
 A live session is not a fault, and this is the one place the panel had to be told so. `InteropSession` is on disk
@@ -501,6 +501,12 @@ registry value names the operating-point panel reads) and the host tests `test-v
 before it compiles. The telemetry line needs a `bc250control.dll` that exports `Bc250Dpm` and
 `Bc250VideoMemory`, and the `CU` row needs one that also exports `Bc250CuMode`, which the DLL of 2026-09-30
 does not. Deploy the executable and the DLL together.
+
+Before the tests, `test-control-dll.ps1` reads the export table of the `-ControlDll` file and does not load the DLL.
+The build stops when the DLL is not x64, or when an entry point of a `[DllImport("bc250control.dll")]` in
+`src\*.cs` is not exported. The error names each missing entry point. On success the build prints how many
+imports it checked. On 2026-10-11 the lab overlay was built against the lab's DLL of 2026-10-06, and its fan row
+showed "no Bc250Hwmon" until the installed DLL replaced that copy.
 
 Copy `bc250mon.exe` to `C:\BC250\mon\` and register a task "at logon of the lab user, interactive, highest
 privileges" that runs it. To replace a running one, stop the process, overwrite the file and start the task

@@ -14,7 +14,7 @@ constexpr engine_ddi::Tag kTags[] = {
     engine_ddi::Tag::StateBlend, engine_ddi::Tag::StateDepth, engine_ddi::Tag::StateRaster,
     engine_ddi::Tag::PipelineState, engine_ddi::Tag::CommandPool, engine_ddi::Tag::CommandRecorder,
     engine_ddi::Tag::CommandList, engine_ddi::Tag::QueryHeap, engine_ddi::Tag::CommandSignature,
-    engine_ddi::Tag::StateObject,
+    engine_ddi::Tag::StateObject, engine_ddi::Tag::PipelineLibrary,
 };
 constexpr bool tags_unique() {
     for (size_t i = 0; i < std::size(kTags); ++i) {

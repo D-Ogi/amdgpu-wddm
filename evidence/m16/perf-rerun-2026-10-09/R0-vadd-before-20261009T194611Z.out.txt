@@ -1,0 +1,12 @@
+vadd: every wait of the runtime is bounded to 10000 ms in all
+vadd: sums are checked
+vadd: devices 1
+vadd: props name 'AMD BC-250' arch 'gfx1013' warp 32 shared 65536 cu 40
+vadd: memory free 8589934592 total 8589934592
+vadd: the first launch returned at 3.0 ms after start
+vadd: pass 1 mismatches 0 of 65536
+vadd: pass 1 memory free 8589926400 of 8589934592 after the teardown
+vadd: pass 2 mismatches 0 of 65536
+vadd: pass 2 memory free 8589926400 of 8589934592 after the teardown
+vadd: api failures 0
+vadd: ok

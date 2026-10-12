@@ -1,0 +1,65 @@
+12:27:03.673 B2/smu BEGIN tag= host=BC250-A phase=smu state=B2 ms=50 cpu=2
+12:27:03.970 B2/smu boot lastboot=2026-10-12T12:11:55 uptime_s=908
+12:27:04.429 B2/smu gpu device status=OK instance=PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\4&19CAF403&0&0041
+12:27:04.637 B2/smu thermal tctl_c=64.1 gate_c=85.0 source=telemetry live=yes
+12:27:04.723 B2/smu info # adapter    BC-250 GPU (amdgpu-wddm)
+12:27:04.725 B2/smu info # hardware   PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00
+12:27:04.740 B2/smu info # interface  \\?\pci#ven_1002&dev_13fe&subsys_00001022&rev_00#4&19caf403&0&0041#{1ca05180-a699-450a-9a0c-de4fbe3ddd89}
+12:27:04.772 B2/smu info D3DKMTOpenAdapterFromDeviceName -> 0x00000000 STATUS_SUCCESS
+12:27:04.787 B2/smu info # adapter    handle 0x40000000 luid 00000000-0048BD95
+12:27:04.800 B2/smu info D3DKMTEscape(D3DKMT_ESCAPE_DRIVERPRIVATE, BC250_ESCAPE_GET_INFO) -> 0x00000000 STATUS_SUCCESS
+12:27:04.883 B2/smu dpm idle driver 0x000700D8, requested dpm, reason none, generation 8712492255, ticks 1206, uptime 38083 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release below 83.0 C for 4000 ms (default), soft zone from 86.0 C per 1500 ms, lead 15000 ms (default)
+12:27:04.885 B2/smu dpm idle idle: 500 MHz (now) after 3000 ms under 2 permille busy; entries 1 exits 0 refusals 0, 31396 ms at the point
+12:27:04.907 B2/smu dpm idle smu metrics: ok, 37 tables, 0 failures, last 554 ms ago: gfx 818 mV 500 MHz 60.75 C, soc 1187 mV 61.50 C, throttler 0x0000
+12:27:04.921 B2/smu dpm idle 14:27:04.859 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  64.1 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle idle confirmed  up 0 down 1 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  47.5 W avg  47.3 W (gfx 17.2 W soc  4.6 W)
+12:27:04.983 B2/smu cpu idle cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+12:27:04.985 B2/smu cpu idle cpu: applied clock 0 MHz, undervolt 0 steps, cap 0 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+12:27:05.001 B2/smu cpu idle cpu: 1193 mV (GPU 824 mV), firmware cap 100 C, features 0xDD602C7D, 63.7 C
+12:27:05.019 B2/smu cpu idle cpu: cores 3500 3500 1555 1555 3500 3500 3500 1555 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+12:27:05.035 B2/smu cpu idle cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+12:27:05.056 B2/smu cpu idle cpu: reads 20 writes 0 refusals 0 reverts 0 (retries 0, refused 0); last queue 0 message 0x3D argument 0x00000000 status 0x00000001
+12:27:05.135 B2/smu health health abi=1 version=0x000700D8 flags=7 generation=8712492255 epoch=5 completed=72 age_ms=588 ready_ms=35750
+12:27:05.508 B2/smu cpu readback idle cpu readback: done, serial 0
+12:27:05.510 B2/smu cpu readback idle cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+12:27:05.528 B2/smu cpu readback idle cpu: applied clock 0 MHz, undervolt 0 steps, cap 0 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+12:27:05.543 B2/smu cpu readback idle cpu: 1199 mV (GPU 824 mV), firmware cap 100 C, features 0xDD602C7D, 64.1 C
+12:27:05.560 B2/smu cpu readback idle cpu: cores 1400 1400 1400 900 1400 1400 1400 900 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+12:27:05.575 B2/smu cpu readback idle cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+12:27:05.592 B2/smu cpu readback idle cpu: reads 40 writes 0 refusals 0 reverts 0 (retries 0, refused 0); last queue 0 message 0x3D argument 0x00000000 status 0x00000001
+12:27:05.654 B2/smu features value=0xDD602C7D bits=32 of 64 (bits 32..63 are not in this answer)
+12:27:05.656 B2/smu features on= CCLK_CONTROLLER(0) DATA_CALCULATION(2) THERMAL(3) PLL_POWER_DOWN(4) FCLK_DPM(5) GFX_DPM(6) CORE_CSTATES(10) G6_SSC(11) SOC_DPM(13) PROCHOT(21) CPUOFF(22) DF_THROTTLE(24) DS_SHUBCLK(26) TDC(27) UMC_CAL_SHARING(28) EDC(30) DLDO(31)
+12:27:05.673 B2/smu features off= GFXCLK_EFFT_FREQ(1) DS_GFXCLK(7) DS_SOCCLK(8) DS_LCLK(9) RM(12) DS_SMNCLK(14) DS_MP1CLK(15) DS_MP0CLK(16) MGCG(17) DS_FUSE_SRAM(18) GFX_CKS(19) FP_THROTTLING(20) UMC_THROTTLE(23) DS_MP3CLK(25) DFLL_BTC_CALIBRATION(29)
+12:27:05.692 B2/smu features record_2026_09=0xDD602C7D same_as_record=yes (the record holds TWO samples with this same value, one from a K137 state and one from an apparently healthy one, so an identical mask is the expected answer, not a surprise)
+12:27:08.073 B2/smu cpu readback under-load cpu readback: done, serial 0
+12:27:08.081 B2/smu cpu readback under-load cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+12:27:08.097 B2/smu cpu readback under-load cpu: applied clock 0 MHz, undervolt 0 steps, cap 0 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+12:27:08.117 B2/smu cpu readback under-load cpu: 1199 mV (GPU 824 mV), firmware cap 100 C, features 0xDD602C7D, 64.1 C
+12:27:08.134 B2/smu cpu readback under-load cpu: cores 3500 3500 3500 1555 1555 1400 1400 933 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+12:27:08.155 B2/smu cpu readback under-load cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+12:27:08.171 B2/smu cpu readback under-load cpu: reads 60 writes 0 refusals 0 reverts 0 (retries 0, refused 0); last queue 0 message 0x3D argument 0x00000000 status 0x00000001
+12:27:23.322 B2/smu cpu-load kernel cpu=2 on=2 rep=0 name=loop_add ops=4225226968 us=2824471.5 ops_per_us=1495.94
+12:27:23.324 B2/smu cpu-load kernel cpu=2 on=2 rep=0 name=mix_xoradd ops=2658155536 us=2498253.6 ops_per_us=1064.01
+12:27:23.351 B2/smu cpu-load kernel cpu=2 on=2 rep=0 name=dep_imul ops=2033915328 us=2261209.0 ops_per_us=899.48
+12:27:23.367 B2/smu cpu-load kernel cpu=2 on=2 rep=0 name=dep_mix ops=594607767 us=2293196.3 ops_per_us=259.29
+12:27:23.382 B2/smu cpu-load kernel cpu=2 on=2 rep=0 name=tput_add ops=3881942320 us=2339422.7 ops_per_us=1659.36
+12:27:23.401 B2/smu cpu-load kernel cpu=2 on=2 rep=0 name=tput_imul ops=2111256016 us=2273848.2 ops_per_us=928.49
+12:27:23.416 B2/smu cpu-load kernel cpu=2 on=2 rep=0 name=dep_fpadd ops=2142551544 us=2303642.2 ops_per_us=930.07
+12:27:23.446 B2/smu cpu-load job_state=Completed lines=7 dep_mix_ops_per_us=259.3
+12:27:23.457 B2/smu features value=0xDD602C7D bits=32 of 64 (bits 32..63 are not in this answer)
+12:27:23.467 B2/smu features on= CCLK_CONTROLLER(0) DATA_CALCULATION(2) THERMAL(3) PLL_POWER_DOWN(4) FCLK_DPM(5) GFX_DPM(6) CORE_CSTATES(10) G6_SSC(11) SOC_DPM(13) PROCHOT(21) CPUOFF(22) DF_THROTTLE(24) DS_SHUBCLK(26) TDC(27) UMC_CAL_SHARING(28) EDC(30) DLDO(31)
+12:27:23.486 B2/smu features off= GFXCLK_EFFT_FREQ(1) DS_GFXCLK(7) DS_SOCCLK(8) DS_LCLK(9) RM(12) DS_SMNCLK(14) DS_MP1CLK(15) DS_MP0CLK(16) MGCG(17) DS_FUSE_SRAM(18) GFX_CKS(19) FP_THROTTLING(20) UMC_THROTTLE(23) DS_MP3CLK(25) DFLL_BTC_CALIBRATION(29)
+12:27:23.502 B2/smu features record_2026_09=0xDD602C7D same_as_record=yes (the record holds TWO samples with this same value, one from a K137 state and one from an apparently healthy one, so an identical mask is the expected answer, not a surprise)
+12:27:23.879 B2/smu cpu readback after-load cpu readback: done, serial 0
+12:27:23.881 B2/smu cpu readback after-load cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+12:27:23.900 B2/smu cpu readback after-load cpu: applied clock 0 MHz, undervolt 0 steps, cap 0 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+12:27:23.915 B2/smu cpu readback after-load cpu: 1199 mV (GPU 824 mV), firmware cap 100 C, features 0xDD602C7D, 64.3 C
+12:27:23.931 B2/smu cpu readback after-load cpu: cores 1400 1400 1400 900 1400 1400 1400 900 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+12:27:23.950 B2/smu cpu readback after-load cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+12:27:23.967 B2/smu cpu readback after-load cpu: reads 80 writes 0 refusals 0 reverts 0 (retries 0, refused 0); last queue 0 message 0x3D argument 0x00000000 status 0x00000001
+12:27:24.122 B2/smu kmdlog lines=832 file=C:\BC250\tmp\bd093law\B2-kmdlog.txt
+12:27:24.165 B2/smu kmdlog 49      0.484 startup: clock status 0x00000000 ready 1 request 1000MHz/820mV initial 1000MHz/VID116 observed 1000MHz/VID116 temp 63750mc staged 0
+12:27:24.167 B2/smu kmdlog 116      0.609 cumode: CuMode 40 disable 0x00000 -> mode 40 reason 0, confirmed earlier, stock from this boot's record
+12:27:24.183 B2/smu kmdlog 121      0.609 cumode: stage run: mode 40 applied 40 reason 0 wrote 1
+12:27:24.203 B2/smu kmdlog 181      0.609 cumode: applied 40 CUs (40 counted), reason 0, consistent 1, wrote 1, RLC_PG_CNTL 0x00800000 (PG enables 0x0), after the RLC stage 0x00800000 (PG enables 0x0)
+12:27:24.218 B2/smu kmdlog 182      0.609 cumode: SA0-3 CC 0xFFE00000 0xFFE00000 0xFFE00000 0xFFE00000 SPI 0x1F 0x1F 0x1F 0x1F
+12:27:24.260 B2/smu END phase=smu state=B2 exit=0

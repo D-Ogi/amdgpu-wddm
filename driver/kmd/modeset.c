@@ -69,6 +69,86 @@ void ModesetInitialize(_Inout_ BC250_DEVICE* Device)
     ExInitializeFastMutex(&Device->Modeset.Lock);
 }
 
+// Read before the signal becomes visible to dxgkrnl. In particular, the TMDS
+// path and EnableDisplayModes=0 must not skip the inherited transform check.
+NTSTATUS ModesetPrepareInherited(BC250_DEVICE* Device, const D3DKMDT_VIDEO_SIGNAL_INFO* Signal)
+{
+    BC250_MODESET* m = &Device->Modeset;
+    BC250_INHERITED_PIPE second;
+    BC250_DISP_IO io;
+    NTSTATUS status;
+    m->InheritedFixed = Device->Post.Width != Signal->ActiveSize.cx || Device->Post.Height != Signal->ActiveSize.cy;
+    m->InheritedSupport = 0;
+    RtlZeroMemory(&m->InheritedPipe, sizeof(m->InheritedPipe));
+    RtlZeroMemory(&second, sizeof(second));
+    IoOpen(Device, &io, 0);
+    status = Bc250InheritedPipeRead(&io, &m->InheritedPipe);
+    if (NT_SUCCESS(status)) status = Bc250InheritedPipeRead(&io, &second);
+    if (NT_SUCCESS(status) && !Bc250InheritedPipeSame(&m->InheritedPipe, &second)) status = STATUS_DEVICE_BUSY;
+    if (NT_SUCCESS(status))
+        m->InheritedSupport = Bc250InheritedPipeSupport(&m->InheritedPipe, Device->Post.Width, Device->Post.Height,
+            Device->Post.Pitch, Signal->ActiveSize.cx, Signal->ActiveSize.cy);
+    if (NT_SUCCESS(status) && !m->InheritedSupport) status = STATUS_NOT_SUPPORTED;
+    if (m->InheritedSupport && !(m->InheritedSupport & BC250_SCALING_BIT(BC250_SCALING_IDENTITY)))
+        m->InheritedFixed = TRUE;
+    m->InheritedPipeStatus = status;
+    GuardLog("inherited: source %ux%u pitch %u target %ux%u fixed %u support %lX status %08lX valid %lX",
+        Device->Post.Width, Device->Post.Height, Device->Post.Pitch, Signal->ActiveSize.cx, Signal->ActiveSize.cy,
+        (UINT)m->InheritedFixed, m->InheritedSupport, (ULONG)status, m->InheritedPipe.Valid);
+    GuardLog("display inherited: viewport %08lX/%08lX recout %08lX/%08lX mpc %08lX scl %08lX ratio %08lX/%08lX",
+        m->InheritedPipe.Shape.ViewportStart, m->InheritedPipe.Shape.ViewportDimension,
+        m->InheritedPipe.Shape.RecoutStart, m->InheritedPipe.Shape.RecoutSize, m->InheritedPipe.Shape.MpcSize,
+        m->InheritedPipe.Shape.SclMode, m->InheritedPipe.RatioH, m->InheritedPipe.RatioV);
+    GuardLog("display inherited: top %08lX odm %08lX hubp %08lX mem %08lX taps %08lX format %08lX tiling %08lX pitch %08lX otg1 %08lX",
+        m->InheritedPipe.Shape.MpccTopSel, m->InheritedPipe.Shape.OdmSource, m->InheritedPipe.Shape.HubpCntl,
+        m->InheritedPipe.Shape.MemPwrCtrl, m->InheritedPipe.Taps, m->InheritedPipe.SurfaceConfig,
+        m->InheritedPipe.TilingConfig, m->InheritedPipe.Pitch, m->InheritedPipe.Otg1);
+    GuardLog("display inherited: surface %08lX bottom %08lX mpcc %08lX out %08lX",
+        m->InheritedPipe.SurfaceControl,m->InheritedPipe.MpccBottom,m->InheritedPipe.MpccControl,m->InheritedPipe.MpcOut);
+    GuardLog("display inherited: autocal %08lX dscl control %08lX",
+        m->InheritedPipe.Autocal,m->InheritedPipe.DsclControl);
+    if (m->InheritedFixed) {
+        GuardStartDetail(L"inherited source %ux%u pitch %u target %ux%u total %ux%u pixel %Iu support %08X pipe %08X valid %08X",
+            Device->Post.Width,Device->Post.Height,Device->Post.Pitch,Signal->ActiveSize.cx,Signal->ActiveSize.cy,
+            Signal->TotalSize.cx,Signal->TotalSize.cy,Signal->PixelRate,m->InheritedSupport,(ULONG)status,m->InheritedPipe.Valid);
+        return status;
+    }
+    // Preserve the established 1:1 path. This admission extends it only to
+    // separately proven scaled tuples; a failed diagnostic read grants none.
+    return STATUS_SUCCESS;
+}
+
+static ULONG InheritedScalingDefault(ULONG Support)
+{
+    ULONG scaling;
+    for (scaling = 0; scaling < BC250_SCALING_COUNT; ++scaling)
+        if (Support & BC250_SCALING_BIT(scaling)) return scaling;
+    return BC250_SCALING_COUNT;
+}
+
+NTSTATUS ModesetValidateInherited(BC250_DEVICE* Device)
+{
+    BC250_MODESET* m = &Device->Modeset;
+    BC250_INHERITED_PIPE current, second, saved;
+    BC250_DISP_IO io;
+    NTSTATUS status;
+    if (!m->InheritedFixed) return STATUS_SUCCESS;
+    status = DisplayValidateInheritedSignal(Device);
+    if (!NT_SUCCESS(status)) return status;
+    RtlZeroMemory(&current,sizeof(current));RtlZeroMemory(&second,sizeof(second));
+    IoOpen(Device,&io,0);
+    status = Bc250InheritedPipeRead(&io,&current);
+    if (NT_SUCCESS(status)) status = Bc250InheritedPipeRead(&io,&second);
+    saved = m->InheritedPipe;
+    // D3 may have blanked the plane; visibility is independent of the transform.
+    saved.Shape.HubpCntl = current.Shape.HubpCntl;
+    if (NT_SUCCESS(status) && (!Bc250InheritedPipeSame(&current,&second) ||
+        !Bc250InheritedPipeSame(&saved,&current))) status = STATUS_DEVICE_BUSY;
+    if (!NT_SUCCESS(status))
+        GuardLog("display modes: D0 inherited transform refused 0x%08lX; no display write or VSync re-arm",(ULONG)status);
+    return status;
+}
+
 // The EDID and the DPCD receiver capabilities over AUX. Under the mutex, PASSIVE_LEVEL (APC_LEVEL in the mutex).
 static void ReadMonitor(_Inout_ BC250_DEVICE* Device)
 {
@@ -100,6 +180,34 @@ static void ReadMonitor(_Inout_ BC250_DEVICE* Device)
     if (m->DpcdValid)
         GuardLog("display modes: DPCD rev 0x%02X max link rate 0x%02X max lanes %u (0x%02X) downspread 0x%02X",
                  m->Dpcd[0], m->Dpcd[1], (UINT)(m->Dpcd[2] & 0x1Fu), m->Dpcd[2], m->Dpcd[3]);
+}
+
+// TMDS shares the DDC pins with AUX, not the AUX packet protocol. The session
+// restores the pad mux and engine state even when a monitor NACKs a block.
+static void ReadTmdsMonitor(_Inout_ BC250_DEVICE* Device)
+{
+    BC250_MODESET* m = &Device->Modeset;
+    BC250_DISP_IO io;
+    BC250_DDC_SESSION ddc;
+    unsigned long length = 0;
+    long status, close;
+    IoOpen(Device, &io, MODESET_AUX_BUDGET_US);
+    status = bc250_ddc_open(&ddc, &io);
+    if (status >= 0) {
+        // Read the monitor first; an adapter with no register bank must not
+        // prevent an EDID read. Identification failure remains "unknown".
+        status = bc250_ddc_read_edid(&ddc, m->Edid, sizeof(m->Edid), &length);
+        if (status >= 0) (void)bc250_ddc_read_adapter(&ddc, &m->Adapter);
+        close = bc250_ddc_close(&ddc);
+        if (status >= 0) status = close;
+    }
+    m->AuxStatus = status;
+    m->AuxStallUs = io.StalledUs;
+    m->EdidLength = length;
+    GuardLog("display modes: DDC EDID %lu bytes status 0x%08lX cleanup 0x%08lX, %lu transfers %lu us",
+        length, (ULONG)status, (ULONG)ddc.cleanup_failure, ddc.transactions, io.StalledUs);
+    GuardLog("display modes: adapter type %lu max TMDS %lu kHz query 0x%08lX (type 0 = not identified)",
+        m->Adapter.type, m->Adapter.max_tmds_khz, (ULONG)m->Adapter.status);
 }
 
 static void LogModes(_In_ const BC250_MODESET* Modes)
@@ -141,10 +249,12 @@ void ModesetStart(_Inout_ BC250_DEVICE* Device)
     RtlZeroMemory(m->Edid, sizeof(m->Edid));
     RtlZeroMemory(m->Dpcd, sizeof(m->Dpcd));
     RtlZeroMemory(&m->Info, sizeof(m->Info));
+    RtlZeroMemory(&m->Adapter, sizeof(m->Adapter));
+    m->Adapter.status = STATUS_NOT_SUPPORTED;
     RtlZeroMemory(&m->Plan, sizeof(m->Plan));
     RtlZeroMemory(&m->LastResult, sizeof(m->LastResult));
     m->LastStatus = STATUS_SUCCESS;
-    m->Scaling = BC250_SCALING_IDENTITY;
+    m->Scaling = m->InheritedFixed ? InheritedScalingDefault(m->InheritedSupport) : BC250_SCALING_IDENTITY;
     InterlockedExchange(&m->SourceWidth, (LONG)Device->Post.Width);
     InterlockedExchange(&m->SourceHeight, (LONG)Device->Post.Height);
 
@@ -159,7 +269,8 @@ void ModesetStart(_Inout_ BC250_DEVICE* Device)
         BC250_PIPE_SHAPE shape;
         long status;
 
-        ReadMonitor(Device);
+        if (Device->InheritedTmds) ReadTmdsMonitor(Device);
+        else ReadMonitor(Device);
         if (m->EdidLength >= BC250_EDID_BLOCK)
         {
             m->EdidReason = Bc250EdidParse(m->Edid, m->EdidLength, &m->Info);
@@ -180,6 +291,14 @@ void ModesetStart(_Inout_ BC250_DEVICE* Device)
                      Device->Post.Width, Device->Post.Height);
         m->DescriptorServed = m->EdidValid;
 
+        if (Device->InheritedTmds || m->InheritedFixed) {
+            GuardLog("display modes: EDID HDMI %u max sink TMDS %lu kHz; inherited output timing and transform retained",
+                (UINT)m->Info.Hdmi, m->Info.MaxTmdsClockKhz);
+            // The PLL/PHY and any firmware scaler still belong to the inherited mode. Do not claim
+            // output modesetting from a successful DDC read or touch DP state.
+            goto done;
+        }
+
         // The pipe the firmware lit. Reads only (no budget: no stall).
         RtlZeroMemory(&shape, sizeof(shape));
         IoOpen(Device, &io, 0);
@@ -194,6 +313,7 @@ void ModesetStart(_Inout_ BC250_DEVICE* Device)
         // Scaled modes need the full table (the display-only table copies 4-byte pixels at the firmware's pitch).
         if (Device->FullWddm) m->Level = m->Requested < maxLevel ? m->Requested : maxLevel;
     }
+done:
     Bc250ModeListBuild(Device->Post.Width, Device->Post.Height, m->EdidValid ? &m->Info : NULL, m->Level, &m->Modes);
     GuardLog("display modes: requested %lu level %lu, %lu source modes, descriptor %s",
              m->Requested, m->Level, m->Modes.Count, m->DescriptorServed ? "served" : "not served");
@@ -206,6 +326,9 @@ void ModesetStart(_Inout_ BC250_DEVICE* Device)
 ULONG ModesetScalingSupport(_In_ const BC250_DEVICE* Device, ULONG Width, ULONG Height)
 {
     const BC250_MODESET* m = &Device->Modeset;
+
+    if (m->InheritedFixed)
+        return Width == Device->Post.Width && Height == Device->Post.Height ? m->InheritedSupport : 0;
 
     if (Width == Device->Post.Width && Height == Device->Post.Height)
         return Bc250ScalingSupport(m->Level, Width, Height, Device->Post.Width, Device->Post.Height);
@@ -250,6 +373,20 @@ NTSTATUS ModesetCommit(_Inout_ BC250_DEVICE* Device, ULONG Width, ULONG Height, 
 
     support = ModesetScalingSupport(Device, Width, Height);
     if (support == 0) { m->Refusals++; return STATUS_GRAPHICS_INVALID_VIDEO_PRESENT_SOURCE_MODE; }
+    if (m->InheritedFixed) {
+        if (Scaling == BC250_SCALING_COUNT) Scaling = InheritedScalingDefault(support);
+        if (Scaling >= BC250_SCALING_COUNT || !(support & BC250_SCALING_BIT(Scaling))) {
+            m->Refusals++;
+            return STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED;
+        }
+        // This is an equivalent name for the existing transform, never a new
+        // scaler plan. No register, pipe size or restore obligation changes.
+        ExAcquireFastMutex(&m->Lock);
+        m->Scaling = Scaling;
+        m->Commits++;
+        ExReleaseFastMutex(&m->Lock);
+        return STATUS_SUCCESS;
+    }
     // At the native size every scaling is the 1:1 shape.
     if (native) Scaling = BC250_SCALING_IDENTITY;
     else if (Scaling >= BC250_SCALING_COUNT || !(support & BC250_SCALING_BIT(Scaling)))
@@ -330,6 +467,7 @@ void ModesetStop(_Inout_ BC250_DEVICE* Device)
     BC250_SCALER_RESULT result;
     long status;
 
+    if (InterlockedCompareExchange(&Device->RuntimeDisplayChanged,0,0)) return;
     ExAcquireFastMutex(&m->Lock);
     if (m->PipeChanged)
     {
@@ -354,7 +492,8 @@ void ModesetRestoreQuiet(_Inout_ BC250_DEVICE* Device)
 {
     BC250_SCALER_RESULT result;
 
-    if (!Device->Modeset.PipeChanged || Device->Mmio == NULL) return;
+    if (InterlockedCompareExchange(&Device->RuntimeDisplayChanged,0,0) ||
+        !Device->Modeset.PipeChanged || Device->Mmio == NULL) return;
     (void)RestoreNative(Device, &result);
     Device->Modeset.PipeChanged = FALSE;
     InterlockedExchange(&Device->Modeset.SourceWidth, (LONG)Device->Post.Width);
@@ -371,6 +510,7 @@ void ModesetPowerDown(_Inout_ BC250_DEVICE* Device)
     ULONG generation;
     long status = STATUS_SUCCESS, flip = STATUS_SUCCESS;
 
+    if (InterlockedCompareExchange(&Device->RuntimeDisplayChanged,0,0)) return;
     ExAcquireFastMutex(&m->Lock);
     if (m->PipeChanged && !m->Suspended)
     {
@@ -396,8 +536,14 @@ void ModesetPowerUp(_Inout_ BC250_DEVICE* Device)
     ULONG generation, maxLevel = BC250_DISPLAY_MODES_OFF, verdict = BC250_PIPE_VERDICT_COUNT;
     long status;
 
+    if (InterlockedCompareExchange(&Device->RuntimeDisplayChanged,0,0)) return;
     ExAcquireFastMutex(&m->Lock);
     m->Suspended = FALSE;
+    if (m->InheritedFixed) {
+        // PowerRestoreDisplay validated it before any display write or re-arm.
+        ExReleaseFastMutex(&m->Lock);
+        return;
+    }
     if (!m->PipeChanged)
     {
         ExReleaseFastMutex(&m->Lock);

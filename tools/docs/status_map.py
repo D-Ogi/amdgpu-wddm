@@ -15,7 +15,8 @@ lab. A slot is judged by the function that the table stores. A function whose on
 function of the same driver is judged by that function.
 
 Outputs (all under docs/status/): status.json (every slot, its function, source line and verdict), one treemap SVG
-per metric, one badge SVG per metric, and the block between the status-map markers of README.md.
+per metric, one badge SVG per metric, README.md with the maps and the rule, and the badge block between the
+status-map markers of the repository's README.md.
 
   python tools/docs/status_map.py --kits <WDK nuget dir>     write the outputs
   python tools/docs/status_map.py --kits <dir> --check       exit 1 when a committed output differs from a fresh run
@@ -823,6 +824,7 @@ def umd_metric(kits: Path | None, prior: dict | None) -> dict:
             ("Device core", "D3D12DDI_TABLE_TYPE_DEVICE_CORE"),
             ("Command list", "D3D12DDI_TABLE_TYPE_COMMAND_LIST_3D"),
             ("Command queue", "D3D12DDI_TABLE_TYPE_COMMAND_QUEUE_3D"),
+            ("Render pass", "D3D12DDI_TABLE_TYPE_0043_RENDER_PASS"),
             ("Extended features", "D3D12DDI_TABLE_TYPE_0020_EXTENDED_FEATURES"))]
     missing = sorted(set(case_type) - {t for _, _, t in tables})
     if missing:
@@ -908,6 +910,10 @@ def umd_metric(kits: Path | None, prior: dict | None) -> dict:
     # Command queue and extended features: the shell's fill functions behind the wrapping thunks.
     queue_fill = body_of(index, "fill_native_queue_table", "driver/umd/d3d12/native-queue-ddi.cpp")
     per_table["Command queue"] = {m: (rhs_function(r), f) for m, r, f in scan(queue_fill, "candidate")}
+    # Render pass: engine-ddi's own two slots, behind no entry thunk. The shell fills this table only while the
+    # engine reports a render pass tier; the map judges the functions the table holds when it is filled.
+    pass_fill = body_of(index, "fill_render_pass", "driver/umd/d3d12/engine-ddi/context.cpp")
+    per_table["Render pass"] = {m: (rhs_function(r), f) for m, r, f in scan(pass_fill, "table")}
     ext_fill = body_of(index, "fill_native_extended_table", "driver/umd/d3d12/native-queue-ddi.cpp")
     ext_agg = re.search(r"\*\s*output\s*=\s*\{([^{}]+)\}", ext_fill.body).group(1)
     per_table["Extended features"] = {}
@@ -1141,51 +1147,57 @@ def counts(metric: dict, every: bool = False) -> tuple[int, int, int]:
 
 
 def readme_block(kmd: dict, umd: dict) -> str:
-    kd, kt, kp = counts(kmd)
-    ud, ut, up = counts(umd)
-    ad, at, _ = counts(kmd, every=True)
-    newer = at - kt
-    first = sorted({s["since"] for g in kmd["groups"] for s in g["slots"] if not targeted(s)},
-                   key=lambda v: kmd["interface_versions"]["values"][v])
-    label = kmd["declared_label"]
-    fs = sum(1 for g in umd["groups"] for s in g["slots"] if s.get("function") == "FailSafe")
-    tables = ", ".join(f'`{g["struct"]}`' for g in umd["groups"])
+    kd, kt, _ = counts(kmd)
+    ud, ut, _ = counts(umd)
     return "\n".join([
         BEGIN,
         "",
+        '<a href="docs/status/README.md">'
         '<img src="docs/status/badge-kmd-ddi.svg" alt="kernel-mode DDI: ' + pct(kd, kt) + '"> '
-        '<img src="docs/status/badge-d3d12-ddi.svg" alt="D3D12 DDI: ' + pct(ud, ut) + '">',
-        "",
-        '<img src="docs/status/kmd-ddi.svg" width="860" alt="Treemap of the kernel-mode DDI slots">',
-        "",
-        f"Kernel-mode DDI: the driver fills {kd} of {kt} slots with a function that does work ({pct(kd, kt)}). "
-        f"The total is every function slot of `DRIVER_INITIALIZATION_DATA` in `{KMD_HEADER}` of "
-        f"WDK {WDK_VERSION[:-2]}, up to the interface version that the driver declares in `WddmBuildTable` "
-        f"(`{kmd['declared_version']}`, {label}). "
-        f"The map also shows the {newer} slots of {version_label(first[0]) if first else 'later versions'} "
-        f"and later as hatched cells. The driver does not target these versions yet. "
-        f"For all {at} slots of all interface versions, the driver fills {ad} ({pct(ad, at)}). "
-        "The header reserves the members of type `PVOID`, so they are not slots.",
-        "",
-        '<img src="docs/status/d3d12-ddi.svg" width="860" alt="Treemap of the D3D12 user-mode DDI slots">',
-        "",
-        f"D3D12 user-mode DDI: the driver fills {ud} of {ut} slots with a function that does work "
-        f"({pct(ud, ut)}). The total is every function slot of the tables that the driver gives the runtime "
-        f"at DDI build {umd['build']}: {tables}. "
-        "The command-list count is for the graphics table. "
-        f"The newer tables of `{UMD_HEADER}` are not in the total. "
-        f"Of the missing slots, {fs} hold a fail-safe entry of engine-ddi.",
-        "",
-        "The two maps use one rule. A slot counts as done when its function can return success and does work. "
-        "A function that only logs, counts, reports an error or writes zeros does no work. "
-        "A function that returns `E_NOTIMPL`, `STATUS_NOT_SUPPORTED` or another failure constant on every path "
-        "does no work. "
-        f"A done slot can refuse some inputs: {kp} kernel-mode and {up} user-mode slots do this. "
-        "The script `tools/docs/status_map.py` reads the source. It does not build or run the driver, so done "
-        "means that the code exists, not that a test passed. "
-        "The file `docs/status/status.json` gives each slot with its function, source line and reason.",
+        '<img src="docs/status/badge-d3d12-ddi.svg" alt="D3D12 DDI: ' + pct(ud, ut) + '"></a>',
         "",
         END,
+    ])
+
+
+def status_readme(kmd: dict, umd: dict) -> str:
+    """docs/status/README.md: the two maps and the counting rule behind the badges of the README."""
+    kd, kt, kp = counts(kmd)
+    ud, ut, up = counts(umd)
+    ad, at, _ = counts(kmd, every=True)
+    first = sorted({s["since"] for g in kmd["groups"] for s in g["slots"] if not targeted(s)},
+                   key=lambda v: kmd["interface_versions"]["values"][v])
+    fs = sum(1 for g in umd["groups"] for s in g["slots"] if s.get("function") == "FailSafe")
+    tables = ", ".join(f'`{g["struct"]}`' for g in umd["groups"])
+    return "\n".join([
+        "# DDI coverage",
+        "",
+        "Generated by `tools/docs/status_map.py` from the source. Do not edit.",
+        "",
+        f"## Kernel-mode DDI: {kd} of {kt} slots ({pct(kd, kt)})",
+        "",
+        '<img src="kmd-ddi.svg" width="860" alt="Treemap of the kernel-mode DDI slots">',
+        "",
+        f"Slots of `DRIVER_INITIALIZATION_DATA` (`{KMD_HEADER}`, WDK {WDK_VERSION[:-2]}) up to "
+        f"{kmd['declared_label']}, the version that `WddmBuildTable` declares. "
+        f"Hatched cells: the {at - kt} slots of {version_label(first[0]) if first else 'later versions'} "
+        f"and later, not counted. All versions: {ad} of {at} ({pct(ad, at)}).",
+        "",
+        f"## D3D12 user-mode DDI: {ud} of {ut} slots ({pct(ud, ut)})",
+        "",
+        '<img src="d3d12-ddi.svg" width="860" alt="Treemap of the D3D12 user-mode DDI slots">',
+        "",
+        f"Tables at DDI build {umd['build']}: {tables} (for command lists, the graphics table). "
+        f"{fs} of the missing slots hold a fail-safe entry of engine-ddi.",
+        "",
+        "## Counting rule",
+        "",
+        "A slot is done when its function can return success and does work. "
+        "Logs, counters, error reports, zero writes and a failure constant on every path are not work. "
+        f"{kp} kernel-mode and {up} user-mode done slots refuse some inputs. "
+        "The script reads the source and does not run the driver: done means that the code exists, "
+        "not that a test passed. `status.json` gives each slot with its function, source line and reason.",
+        "",
     ])
 
 
@@ -1213,6 +1225,7 @@ def build(kits: Path | None) -> dict[Path, str]:
         out[OUT_DIR / f'{metric["id"]}.svg'] = treemap_svg(metric)
         out[OUT_DIR / f'badge-{metric["id"]}.svg'] = badge_svg(label, 100.0 * d / t, pct(d, t))
     out[JSON_PATH] = json.dumps(doc, indent=1, sort_keys=False) + "\n"
+    out[OUT_DIR / "README.md"] = status_readme(kmd, umd)
     text = README.read_text(encoding="utf-8")
     block = readme_block(kmd, umd)
     if BEGIN in text and END in text:

@@ -42,18 +42,22 @@ foreach ($test in 'test-start-health.ps1', 'test-confirm.ps1', 'test-telemetry.p
 $env:INCLUDE = ''; $env:LIB = ''
 # log_test.c: the tool's log paging against a fake driver, i.e. which escapes take the adapter lock (BD-054).
 # Refuse to build a tool whose `log summary` would again idle the GPU once per page.
+# Both tests replace hardware access. The wave test also decodes fixed values
+# and checks damaged saved snapshots. Build no tool past a failing test.
 $testOut = Join-Path $Out 'test'
 New-Item -ItemType Directory -Force $testOut | Out-Null
+foreach ($source in 'log_test', 'waves_test') {
 & $cl @repro @('/nologo', '/W4', '/WX', '/Od', '/MT', '/D_CRT_SECURE_NO_WARNINGS',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
-    "/I$sdk\Include\$KitVersion\shared", "/Fo$testOut\log_test.obj", "/Fe$testOut\log_test.exe",
-    (Join-Path $here 'log_test.c'), '/link', '/Brepro', "/LIBPATH:$(Join-Path $msvc.FullName 'lib\x64')",
+    "/I$sdk\Include\$KitVersion\shared", "/Fo$testOut\$source.obj", "/Fe$testOut\$source.exe",
+    (Join-Path $here "$source.c"), '/link', '/Brepro', "/LIBPATH:$(Join-Path $msvc.FullName 'lib\x64')",
     "/LIBPATH:$sdkLib\ucrt\x64", "/LIBPATH:$sdkLib\um\x64",
     'gdi32.lib', 'setupapi.lib', 'advapi32.lib') |
     ForEach-Object { if ($_ -notmatch '^\s*$|^Microsoft|^Copyright|^\S+\.c$') { Write-Host "  $_" } }
-if ($LASTEXITCODE -ne 0) { throw "cl failed on log_test.c ($LASTEXITCODE)" }
-& "$testOut\log_test.exe" 2>&1 | ForEach-Object { Write-Host "  $_" }
-if ($LASTEXITCODE -ne 0) { throw 'log_test.c failed: the log paging no longer reads as the driver expects' }
+if ($LASTEXITCODE -ne 0) { throw "cl failed on $source.c ($LASTEXITCODE)" }
+& "$testOut\$source.exe" 2>&1 | ForEach-Object { Write-Host "  $_" }
+if ($LASTEXITCODE -ne 0) { throw "$source.c failed" }
+}
 
 & $cl @repro @('/nologo', '/W4', '/WX', '/O2', '/MT', '/D_CRT_SECURE_NO_WARNINGS',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",

@@ -1,0 +1,22 @@
+arm rr-3a-vadd clock before : clock backend=kmd-smu abi=1 MHz=500 VID=116 temperature_mc=59500 ready=1
+arm rr-3a-vadd start utc 2026-10-09T22:39:29Z
+arm rr-3a-vadd dir C:\BC250\tmp\m16-hip3
+arm rr-3a-vadd command vadd.exe --expect-compute --wait-total 10000
+arm rr-3a-vadd bound 120 s
+arm rr-3a-vadd argv --expect-compute | --wait-total | 10000
+| vadd: every wait of the runtime is bounded to 10000 ms in all
+| vadd: sums are checked
+| vadd: devices 1
+| vadd: props name 'AMD BC-250' arch 'gfx1013' warp 32 shared 65536 cu 40
+| vadd: memory free 8589934592 total 8589934592
+| vadd: the first launch returned at 4.0 ms after start
+| vadd: pass 1 mismatches 0 of 65536
+| vadd: pass 1 memory free 8589926400 of 8589934592 after the teardown
+| vadd: pass 2 mismatches 0 of 65536
+| vadd: pass 2 memory free 8589926400 of 8589934592 after the teardown
+| vadd: api failures 0
+| vadd: ok
+arm rr-3a-vadd exit 0 after 3.7 s
+arm rr-3a-vadd stdout C:\BC250\tmp\m16-hip3\rr-3a-vadd-20261009T223929Z.out.txt (12 lines), stderr C:\BC250\tmp\m16-hip3\rr-3a-vadd-20261009T223929Z.err.txt (0 lines)
+arm rr-3a-vadd clock after : clock backend=kmd-smu abi=1 MHz=500 VID=116 temperature_mc=59500 ready=1
+arm rr-3a-vadd end

@@ -43,7 +43,10 @@ typedef struct {void* Psp;int GartLock,GpuStopUnconfirmed,Smu;
     // M15.14 (0.7.216.20): whether this start captured the firmware's plane format (dcn.c), which the
     // trailer publishes as BC250_SCANOUT_CAPS_PLANE_FORMATS.
     BOOLEAN DcnPlaneFormats;
+    BOOLEAN ConnectorEnabled;
+    struct {BOOLEAN InheritedFixed;} Modeset;
 } BC250_DEVICE;
+static BOOLEAN ConnectorIsEnabled(BC250_DEVICE* d){return d->ConnectorEnabled;}
 /* bc250kmd.h: the committed source size, else the POST size. */
 static ULONG DisplaySourceWidth(const BC250_DEVICE* d){return d->SourceWidth?d->SourceWidth:d->Post.Width;}
 static ULONG DisplaySourceHeight(const BC250_DEVICE* d){return d->SourceHeight?d->SourceHeight:d->Post.Height;}
@@ -59,9 +62,18 @@ static NTSTATUS SmuReadFirmwareVersion(int* smu,ULONG* version)
 {(void)smu;smuReads++;*version=smuReady?testSmuVersion:0;return smuReady?STATUS_SUCCESS:STATUS_DEVICE_NOT_READY;}
 // cumode.c: the CU fields follow this start's registers. The branch must hand it the whole template,
 // after the template and the firmware section are in place.
-static unsigned cuPatches,cuActive;
+static unsigned cuPatches,cuActive,vramPatches;
 static void CuModePatchCaps(BC250_DEVICE* d,void* caps,ULONG bytes)
-{(void)d;CHECK(bytes==UMD_CAPS_BYTES);cuPatches++;if(cuActive)memcpy((PUCHAR)caps+UMD_CAPS_CU_ACTIVE_OFFSET,&cuActive,4);}
+{(void)d;CHECK(bytes==UMD_CAPS_BYTES);CHECK(cuPatches==vramPatches);cuPatches++;if(cuActive)memcpy((PUCHAR)caps+UMD_CAPS_CU_ACTIVE_OFFSET,&cuActive,4);}
+static void VramPatchCaps(const BC250_DEVICE* d,void* caps,ULONG bytes)
+{
+ ULONG observed=0;(void)d;CHECK(bytes==UMD_CAPS_BYTES);
+ CHECK(cuPatches==vramPatches+1);vramPatches++;
+ memcpy(&observed,(PUCHAR)caps+UMD_CAPS_CU_ACTIVE_OFFSET,4);
+ if(cuActive)CHECK(observed==cuActive);
+ CHECK(memcmp((PUCHAR)caps+UMD_CAPS_VRAM_TOTAL_OFFSET,
+              umd_caps_blob+UMD_CAPS_VRAM_TOTAL_OFFSET,8)==0);
+}
 #include "firmware_metadata_actual.inc"
 // Linking the real parser also links other shim functions. None may reach hardware.
 unsigned int bc250_shim_rreg(struct amdgpu_device* adev,unsigned int index)
@@ -120,7 +132,7 @@ int main(int argc,char**argv)
     fw.smc_version=testSmuVersion;memcpy(expected+UMD_CAPS_FIRMWARE_OFFSET,&fw,sizeof(fw));
     CHECK(!memcmp(out,expected,sizeof(out)) && smuReads==2);
     before=cuPatches;cuActive=40;
-    CHECK(QueryCaps(&d,&q)==STATUS_SUCCESS && cuPatches==before+1);
+    CHECK(QueryCaps(&d,&q)==STATUS_SUCCESS && cuPatches==before+1 && vramPatches==cuPatches);
     CHECK(!memcmp(out+UMD_CAPS_CU_ACTIVE_OFFSET,&cuActive,4));
     CHECK(!memcmp(out+UMD_CAPS_FIRMWARE_OFFSET,expected+UMD_CAPS_FIRMWARE_OFFSET,sizeof(fw)));
     cuActive=0;CHECK(QueryCaps(&d,&q)==STATUS_SUCCESS && !memcmp(out,expected,sizeof(out)));
@@ -206,6 +218,20 @@ int main(int argc,char**argv)
         CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
         memcpy(&scanout,extended+BC250_SCANOUT_CAPS_OFFSET,sizeof(scanout));
         CHECK(scanout.flags==(BC250_SCANOUT_CAPS_DIRECT_FLIP|BC250_SCANOUT_CAPS_PLANE_FORMATS));
+        // The runtime connector currently admits RGB8 ARGB only. It must not
+        // advertise the extended formats merely because GOP captured them.
+        d.ConnectorEnabled=1;
+        memset(extended,0xA5,sizeof(extended));
+        CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
+        memcpy(&scanout,extended+BC250_SCANOUT_CAPS_OFFSET,sizeof(scanout));
+        CHECK(scanout.flags==BC250_SCANOUT_CAPS_DIRECT_FLIP);
+        d.ConnectorEnabled=0;
+        d.Modeset.InheritedFixed=1;
+        memset(extended,0xA5,sizeof(extended));
+        CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
+        memcpy(&scanout,extended+BC250_SCANOUT_CAPS_OFFSET,sizeof(scanout));
+        CHECK(scanout.flags==BC250_SCANOUT_CAPS_DIRECT_FLIP);
+        d.Modeset.InheritedFixed=0;
         wddm->DirectFlipHandshake=0;
         memset(extended,0xA5,sizeof(extended));
         CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);

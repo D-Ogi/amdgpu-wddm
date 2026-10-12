@@ -1,0 +1,4 @@
+utc 2026-10-11T21:09:24.0670010Z
+running tasks:
+  BC250 monitor overlay
+  BC250 net watchdog

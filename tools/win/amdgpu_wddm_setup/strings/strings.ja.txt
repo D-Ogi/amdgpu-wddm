@@ -6,6 +6,9 @@ ui.back|mt-safe|76900f1b|戻る
 ui.cancel|mt-safe|19766ed6|キャンセル
 ui.choose-folder|mt-safe|826c7dcd|フォルダーを選択...
 ui.language|mt-safe|a6567634|言語: {0}
+ui.minimise|mt-safe|20f082e9|最小化
+ui.close-window|mt-safe|8b9de9c0|ウィンドウを閉じる
+ui.unexpected|mt|88790f84|セットアップのウィンドウで問題が起きたため、停止しました。これ以上は何も変更していません。もう一度起動してください。
 rail.welcome|mt-safe|0e2226b5|ようこそ
 rail.check|mt-safe|9d60841e|確認
 rail.plan|mt-safe|aff0766a|内容の確認
@@ -25,6 +28,7 @@ welcome.repair.title|mt|a29b2205|グラフィックス ドライバーの修復
 welcome.repair.body|mt|25153ac9|この PC に保存されているコピーから、同じバージョンをもう一度インストールします。設定はそのまま残ります。
 welcome.dry-run|mt|42af2b21|テスト実行: すべての手順を通りますが、何も変更しません。
 welcome.version|mt-safe|9699394c|バージョン {0}
+welcome.files-missing|mt|938e9bd4|このリリースのファイルがありません。zip ファイル全体をフォルダーに展開し、そのフォルダーから setup.exe を起動してください。setup.exe の隣に files フォルダーが必要です。
 welcome.source.title|mt|1623a97a|ファイルの入手元
 welcome.source.package|mt|61e09644|このセットアップのファイル
 welcome.source.kept|mt|9ea897ba|この PC に保存されているコピー
@@ -34,6 +38,9 @@ welcome.prepared.choose|mt|40e8823f|準備したフォルダーを選んでく�
 welcome.prepared.ok|mt|6203a8e5|バージョン {0} を含む準備済みフォルダーです。インターネットは不要です。
 welcome.prepare-link|mt|5868e4fc|インターネットのない PC 用のフォルダーを準備...
 welcome.check|mt-safe|7c97d062|この PC を確認
+welcome.promise.driver|mt|82ad81d1|グラフィックドライバーと amdgpu-wddm Control を一緒にインストールします。
+welcome.promise.shown|mt|0f886d7e|この PC を変更する前に、すべての変更内容を表示します。
+welcome.promise.offline|mt|bb2a3e49|準備済みフォルダーがあれば、インターネットなしで同じリリースをインストールできます。
 folder.missing|mt|219fdbbd|このフォルダーは存在しません。
 folder.not-prepared|mt|c9f12282|準備済みのフォルダーではありません。セットアップが準備したフォルダーを選ぶか、先に準備してください。
 folder.unknown|mt|6c91a6f6|このフォルダーは別のバージョンのセットアップで準備されたため使用できません。もう一度準備してください。
@@ -101,6 +108,8 @@ plan.verify.body|mt|1deb5208|Windows の再起動後、セットアップがド�
 plan.repair-again|mt-safe|1196b6c5|修復
 plan.checks.title|mt-safe|de07d072|確認項目
 plan.checks.ok|mt|eb2f3d98|すべての確認に合格しました。
+plan.checks.attention|mt|e6885bff|注意が必要な確認項目: {0}
+plan.consent.needed|mt|8c3cbc95|インストールの前に「{0}」の質問に答えてください。
 plan.what.title|mt-safe|70fbb54b|これから行うこと
 plan.restarts.0|mt|b0a2c82a|Windows の再起動は不要です。
 plan.restarts.1|mt|2ae11afb|Windows が 1 回再起動します。もう一度サインインすると、セットアップは自動的に続行します。
@@ -144,7 +153,7 @@ settings.decision.driver-closed|mt|cff55d7f|ドライバーが無効にしまし
 consent.title|mt-safe|34a195af|開始する前に
 consent.test-signing|mt|71d16537|Windows のテスト モードをオンにする
 consent.test-signing.note|mt|bebc2e37|ドライバーはテスト証明書で署名されているため、Windows をテスト モードで実行する必要があります。デスクトップの隅に「テスト モード」と表示されます。
-consent.bitlocker|mt|628faadf|BitLocker がドライブ C: を保護しています。起動オプションを変更すると、次回の起動時に回復キーを求められます。
+consent.bitlocker|mt|7b5d44a4|BitLocker がオンか、セットアップでその状態を読み取れませんでした。起動オプションを変更すると、次回の起動時に回復キーを求められる場合があります。
 consent.bitlocker.have-key|mt|081b65b7|回復キーを持っています
 consent.bitlocker.suspend|mt|dcf26b02|次の 2 回の再起動の間 BitLocker を一時停止する (自動的に再開します)
 
@@ -156,6 +165,7 @@ working.prepare.title|mt|28edcf49|フォルダーを準備しています
 working.body|mt|dccb0ab7|しばらくお待ちください。PC の電源を切らないでください。
 working.prepare.body|mt|aa356215|セットアップのファイルと GPU ファームウェアをコピーし、1 つずつ確認しています。
 working.stages|mt-safe|1de3df70|手順
+working.elapsed|mt-safe|409cb488|経過時間: {0}
 working.cancel.available|mt|0031d59c|まだキャンセルできます。まだ何も変更されていません。
 working.cancel.unavailable|mt|42461b9b|現在はキャンセルできません。この部分を先に完了する必要があります。
 working.cancel.requested|mt|3caf86ac|次の安全な時点で停止しています...
@@ -168,6 +178,8 @@ stage.firmware|mt-safe|46d4dd63|GPU ファームウェア
 stage.files|mt-safe|3ffd2d35|ドライバー ファイル
 stage.driver|mt-safe|fc465aa6|グラフィックス ドライバー
 stage.settings|mt-safe|74a883a0|設定
+stage.extras|mt-safe|800ae5e9|追加プログラム
+stage.components|mt-safe|5f69dcb7|追加プログラムのインストール
 stage.finish|mt-safe|0052205c|仕上げ
 stage.verify|mt|11d4d5ab|ドライバーの確認
 stage.prepare-check|mt|0f35d10d|セットアップ ファイルとフォルダー
@@ -204,7 +216,7 @@ result.installed-restart.body|mt|42a56d9a|すべてインストールされま�
 result.testsigning-not-active.title|mt|7fcee967|Windows のテスト モードがまだオンになっていません
 result.testsigning-not-active.body|mt|3213b661|前回の起動時に Windows がテスト モードをオンにしませんでした。もう一度 Windows を再起動してください。このメッセージが再び表示される場合は、セキュア ブートがオフになっているか確認してください。
 result.testsigning-secureboot.title|mt|e160b4ae|セキュア ブートが Windows のテスト モードを妨げています
-result.testsigning-secureboot.body|mt|79f331ae|PC のファームウェア設定でセキュア ブートをオフにしてから、セットアップをもう一度起動してください。手順はインストール ガイドにあります。
+result.testsigning-secureboot.body|mt|5ab0b106|Windows はセキュア ブートが有効であると報告しています。セキュア ブートが有効な間は、Windows はこのドライバーに必要なテスト モードを許可しません。BC-250 の標準のファームウェアにはセキュア ブートの設定がないため、この PC のファームウェアは変更されています。ファームウェアの設定でセキュア ブートをオフにして (通常は Security > Secure Boot)、セットアップをもう一度起動してください。切り替えがない変更版もあります。その場合は OS Type を「Other OS」にするか、セキュア ブートのキーを削除してください。状態を自分で確認するには、スタート メニューからシステム情報を開き、セキュア ブートの行を読んでください。
 result.restart-still-pending.title|mt|9676613e|Windows はまだ再起動していません
 result.restart-still-pending.body|mt|e79d291f|次に Windows を再起動すると、セットアップは続行します。
 result.verify-before-restart.title|mt|93aab4b5|完了するには Windows を再起動してください
@@ -251,6 +263,7 @@ result.already-installed|mt|c90b9352|この PC には、ドライバーのバー
 result.changes-made|mt|8e3dd6e8|セットアップが停止する前に一部の変更が行われ、その変更はそのまま残っています。完了するにはセットアップをもう一度起動するか、amdgpu-wddm Control の [修復] を使ってください。
 result.changes-unknown|mt|88bf7384|何かが変更されたかどうかを判断できません。セットアップをもう一度起動してください。可能なところから続行します。
 result.support|mt|3e9e40b3|サポート ファイルには問題の報告に必要な詳細が含まれます。自動的に送信されることはありません。
+result.support.diagnostics|mt|a739d1a9|起動しなかったグラフィック チップの詳細はすでに収集されています。そのファイルに含まれています。
 result.support.saved|mt-safe|73cd7e8c|保存しました: {0}
 result.support.failed|mt|d2f9f531|サポート ファイルを保存できませんでした。別の場所を選んでください。
 result.save-support|mt|884d47cb|サポート ファイルを保存...
@@ -281,3 +294,8 @@ guide.pending-restart|mt|d31250df|変更は保存されました。次に Window
 guide.install-stopped|mt|47319a31|セットアップは完了しませんでした。次に行うことは画面に表示されています。
 guide.verification-failed|mt|1abe91c5|ドライバーが確認に合格しませんでした。たいていは修復で直ります。
 guide.upgrade-done|mt|7ed192a1|完了です! ドライバーはインストールされ、確認も済みました。楽しんでください!
+# Optional Windows tuning
+tuning.title|mt|a1f6198e|Windows の設定調整
+tuning.opt-in|mt|d229d14d|任意の Windows 設定調整を適用する
+tuning.details|mt|36ae26fb|Windows のバックグラウンド動作を減らす推奨設定を適用します。
+tuning.restore|mt|387d1d61|制御アプリで個別の設定を確認し、保存した値を復元できます。アンインストール時にもコンピューター全体の設定を復元できます。

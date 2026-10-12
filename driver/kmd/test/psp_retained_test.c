@@ -18,6 +18,8 @@ typedef unsigned u32;
 #define TRUE 1
 #define FALSE 0
 #define PASSIVE_LEVEL 0
+#define Executive 0
+#define KernelMode 0
 #define PAGE_SIZE 4096
 #define POOL_FLAG_NON_PAGED 1
 #define BC250_PSP_TAG 123
@@ -58,15 +60,23 @@ struct bc250_psp_inputs {void *ring_mem,*cmd_buf,*fence_buf;ULONGLONG ring_mc,cm
 struct bc250_psp {struct {struct {void* ring_mem;} km_ring;void *cmd_buf_mem,*fence_buf;} psp;int ring_created;};
 typedef struct _BC250_DEVICE BC250_DEVICE;
 typedef struct {BC250_DEVICE* Device;NTSTATUS Fault;ULONG WriteCount,FaultOffset,MaxWrites;BC250_ESCAPE_WRITE* Writes;} BC250_SEQUENCE;
-struct _BC250_DEVICE {void* Psp;int GartLock,GpuStopUnconfirmed,MmioPspEnabled,FullWddm,GfxStopQuiet,PspStopQuiet;ULONGLONG VramMcBase,VramLength;LARGE_INTEGER VramPhysical;};
+struct _BC250_DEVICE {void* Psp;int GartLock,GpuStopUnconfirmed,MmioPspEnabled,FullWddm,GfxStopQuiet,PspStopQuiet,PspSessionLock;ULONGLONG VramMcBase,VramLength;LARGE_INTEGER VramPhysical;};
 /* ACTUAL_TYPES */
 static unsigned checks,failures,fileReads,allocs,frees,maps,unmaps,ringCreates,ringStops,tmrLoads,tmrStops,fwLoads;
 static int irq,gfxSuspended=1,model_gartEnabled=1,ringFail,tmrStopFail,allowFiles=1;
+static unsigned sessions,sessionAcquires,sessionReleases;
 static unsigned char pages[BC250_PSP_PAGES_LENGTH],model_staging[BC250_PSP_STAGING_LENGTH];
 static struct amdgpu_device model_adev;
 static ULONGLONG stagingMc;
 #define CHECK(x) do {checks++;if(!(x)){failures++;printf("FAIL %u: %s\n",__LINE__,#x);}}while(0)
 static int KeGetCurrentIrql(void){return irq;}
+static NTSTATUS KeWaitForSingleObject(int* p,int reason,int mode,int alert,LARGE_INTEGER* timeout)
+{
+    CHECK(!irq && !sessions && !*p && !reason && !mode && !alert && !timeout);
+    *p=1;++sessions;++sessionAcquires;return STATUS_SUCCESS;
+}
+static void KeReleaseMutex(int* p,int wait)
+{CHECK(*p==1 && sessions==1 && !wait);*p=0;--sessions;++sessionReleases;}
 static LONG InterlockedIncrement(volatile LONG*p){return ++*p;}
 static LONG InterlockedDecrement(volatile LONG*p){return --*p;}
 static void* ExAllocatePool2(int flags,SIZE_T n,int tag){(void)tag;CHECK(flags==POOL_FLAG_NON_PAGED);allocs++;return calloc(1,n);}
@@ -75,7 +85,7 @@ static void ExAcquireFastMutex(int*p){CHECK(!*p);*p=1;}
 static void ExReleaseFastMutex(int*p){CHECK(*p==1);*p=0;}
 static size_t RtlCompareMemory(void*a,const void*b,size_t n){return memcmp(a,b,n)?0:n;}
 static LARGE_INTEGER KeQueryPerformanceCounter(LARGE_INTEGER*f){static LONGLONG n=0;LARGE_INTEGER r;r.QuadPart=++n;if(f)f->QuadPart=1000000;return r;}
-static void SequenceBegin(BC250_SEQUENCE*s,BC250_DEVICE*d,int plan,BC250_ESCAPE_WRITE*w,ULONG max){(void)plan;s->Device=d;s->Fault=0;s->Writes=w;s->MaxWrites=max;s->WriteCount=0;}
+static void SequenceBegin(BC250_SEQUENCE*s,BC250_DEVICE*d,int plan,BC250_ESCAPE_WRITE*w,ULONG max){(void)plan;CHECK(sessions==1 && d->PspSessionLock && d->GartLock);s->Device=d;s->Fault=0;s->Writes=w;s->MaxWrites=max;s->WriteCount=0;}
 static NTSTATUS CheckWindow(const BC250_DEVICE*d){(void)d;return 0;}
 static BOOLEAN GfxIsActive(const BC250_DEVICE*d){(void)d;return !gfxSuspended;}
 static BOOLEAN GfxPowerIsSuspended(const BC250_DEVICE*d){CHECK(d->GartLock==1);return gfxSuspended;}
@@ -97,13 +107,20 @@ NTSTATUS PspInitializePrepared(BC250_DEVICE*,const BC250_PSP_FIRMWARE*,BC250_ESC
 int main(void)
 {
     BC250_DEVICE d={0};BC250_PSP* p;BC250_PSP_FIRMWARE* prepared=NULL;BC250_ESCAPE_PSP report;struct bc250_umd_firmware fw,original;void* identity;unsigned before,freeBefore;
+    CHECK(PspSetPowerRetained(&d,FALSE,&report)==STATUS_DEVICE_NOT_READY && !sessions);
+    CHECK(report.Status==BC250_ESCAPE_STATUS_REFUSED);
     d.Psp=ExAllocatePool2(1,sizeof(*p),123);p=d.Psp;identity=p;d.MmioPspEnabled=1;d.FullWddm=1;d.VramMcBase=0xF400000000ull;d.VramLength=0x200000000ull;d.GfxStopQuiet=1;
+    CHECK(PspSetPowerRetained(&d,TRUE,&report)==STATUS_DEVICE_NOT_READY && !sessions && !d.GartLock);
     CHECK(PspPrepareFirmware(&d,&report,&prepared)==0 && prepared && prepared->References==1);
     CHECK(PspInitializePrepared(&d,prepared,&report)==0 && p->Loaded && report.CommandsDone==11);
     CHECK(p->Retained==prepared && prepared->References==2);
     if(!p->Retained){PspReleaseFirmware(prepared);PspStop(&d);printf("retained PSP negative control: %u checks, %u failures\n",checks,failures);return 1;}
     PspReleaseFirmware(prepared);prepared=NULL;
     CHECK(p->Retained && p->Retained->References==1);CHECK(PspReadFirmware(&d,&original)==0 && original.me_version==100);
+    d.GpuStopUnconfirmed=1;
+    CHECK(PspSetPowerRetained(&d,FALSE,&report)==STATUS_DEVICE_NOT_READY && !sessions);d.GpuStopUnconfirmed=0;
+    d.MmioPspEnabled=0;
+    CHECK(PspSetPowerRetained(&d,FALSE,&report)==STATUS_DEVICE_NOT_READY && !sessions);d.MmioPspEnabled=1;
     allowFiles=0;before=fileReads;freeBefore=frees;
     CHECK(PspSetPowerRetained(&d,FALSE,&report)==0 && d.Psp==identity && PspPowerIsSuspended(&d));
     CHECK(!p->Loaded && !p->RingUp && !p->TmrUp && p->Pages==pages && frees==freeBefore);
@@ -123,6 +140,7 @@ int main(void)
     tmrStopFail=-1;CHECK(PspSetPowerRetained(&d,FALSE,&report)!=0 && p->TmrUp && !p->RingUp && !PspPowerIsSuspended(&d));tmrStopFail=0;
     // Test cleanup models explicit platform recovery, not an automatic retry.
     p->TmrUp=FALSE;PspStop(&d);CHECK(!d.Psp && frees==allocs);
+    CHECK(!sessions && !d.PspSessionLock && !d.GartLock && sessionAcquires==sessionReleases);
     printf("retained PSP actual-source: %u checks, %u failures; file reads %u\n",checks,failures,fileReads);
     return failures?1:0;
 }

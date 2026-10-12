@@ -95,17 +95,30 @@ function Write-UmdInf([string]$Source, [string]$Target) {
 }
 
 $env:INCLUDE = ''; $env:LIB = ''
-$sources = (Get-ChildItem (Join-Path $here '*.c')).FullName
+. (Join-Path $here '..\..\tools\quality\kmd-build-context.ps1')
+$sources = @(Get-OrdinalBuildFiles (Join-Path $here '*.c'))
 # M4, M5: AMD's imported code and the shim it compiles against (ADR 0002). Same flags; the imports get the warning
 # disables documented in driver\amdgpu-import\PROVENANCE.md, from the build line, never by editing them.
 $repo = Split-Path (Split-Path $here)
-if(!$QualityWorkspace){$QualityWorkspace=if($env:BC250_ROOT){$env:BC250_ROOT}else{Split-Path $repo}}
+if ((-not $CompileOnly) -and (-not $ExportCommandsOnly)) {
+    $packageContext = Resolve-Bc250PackageContext -Repo $repo -Kits $Kits -QualityWorkspace $QualityWorkspace
+    $QualityWorkspace = $packageContext.workspace
+    $packageContext | ConvertTo-Json | Set-Content (Join-Path $Out 'package-context.json') -Encoding utf8
+}
 $shimInc = @("/I$repo\driver\shim\include", "/I$repo\driver\amdgpu-import", "/I$repo\third_party\linux-amdgpu", "/I$repo\third_party\libdrm", '/DBC250_SHIM_KERNEL')
-$shimSources = @("$repo\driver\shim\shim.c", "$repo\driver\shim\bc250_gmc.c", "$repo\driver\shim\bc250_gart.c", "$repo\driver\shim\bc250_pte.c", "$repo\driver\shim\bc250_psp.c")
+$shimSources = @("$repo\driver\shim\shim.c", "$repo\driver\shim\bc250_gmc.c", "$repo\driver\shim\bc250_gart.c", "$repo\driver\shim\bc250_pte.c", "$repo\driver\shim\bc250_psp.c", "$repo\driver\shim\bc250_uma.c")
+$shimSources += @("$repo\driver\shim\bc250_ddc.c", "$repo\driver\shim\bc250_dual_mode.c")
+$shimSources += @("$repo\driver\shim\bc250_hdmi_audio.c")
+$shimSources += @('bc250_atom_image.c', 'bc250_atom_preflight.c', 'bc250_atom.c', 'bc250_atom_firmware.c') | ForEach-Object { "$repo\driver\shim\$_" }
+$shimSources += @("$repo\driver\shim\bc250_hdmi_link.c")
+$shimSources += @('bc250_hpd.c','bc250_dp_train.c','bc250_dp_phy.c','bc250_sink.c','bc250_optc.c','bc250_link_atom.c') | ForEach-Object { "$repo\driver\shim\$_" }
+$shimSources += @("$repo\driver\shim\bc250_dp_stream.c")
+$shimSources += @("$repo\driver\shim\bc250_link_regs.c", "$repo\driver\shim\bc250_dml201.c",
+    "$repo\driver\shim\bc250_dcn201_pipe.c")
 # M5 second part: amdgpu's gfx/SDMA bring-up transcribed against AMD's imported tables. C4245: AMD's PACKET3() in the
 # imported nvd.h is a signed int with bit 31 set (driver\shim\README.md).
 # M6: bc250_ih.c, the interrupt ring (navi10_ih.c), is in this group for its include path.
-$shimGfxSources = @('bc250_ring.c', 'bc250_gfx.c', 'bc250_sdma.c', 'bc250_sdma_copy.c', 'bc250_sdma_paging.c', 'bc250_sdma_virtual_ptes.c', 'bc250_nbio.c', 'bc250_irq.c', 'bc250_ih.c', 'bc250_dispatch.c', 'bc250_clock.c', 'bc250_smu.c', 'bc250_cu_mode.c', 'bc250_dpm.c', 'bc250_hwmon.c', 'bc250_fan.c', 'bc250_cpu.c', 'bc250_smu_metrics.c') | ForEach-Object { "$repo\driver\shim\$_" }
+$shimGfxSources = @('bc250_ring.c', 'bc250_gfx.c', 'bc250_wave.c', 'bc250_sdma.c', 'bc250_sdma_copy.c', 'bc250_sdma_paging.c', 'bc250_sdma_virtual_ptes.c', 'bc250_nbio.c', 'bc250_irq.c', 'bc250_ih.c', 'bc250_dispatch.c', 'bc250_clock.c', 'bc250_smu.c', 'bc250_cu_mode.c', 'bc250_dpm.c', 'bc250_hwmon.c', 'bc250_fan.c', 'bc250_cpu.c', 'bc250_smu_metrics.c') | ForEach-Object { "$repo\driver\shim\$_" }
 # Named, not globbed: only what this driver runs is compiled into it.
 $importSources = @('gfxhub_v2_0.c', 'mmhub_v2_0.c', 'cyan_skillfish_reg_init.c', 'psp_v11_0_8.c') | ForEach-Object { "$repo\driver\amdgpu-import\$_" }
 Write-Host 'compile'
@@ -138,7 +151,7 @@ if($ExportCommandsOnly) { Write-Host 'compile commands exported; no compilation 
 if(-not $CompileOnly) {
     & python (Join-Path $repo 'tools\quality\source_manifest.py') --repo $repo --out $Out --stage begin
     if($LASTEXITCODE -ne 0) { throw 'Source identity capture failed' }
-    & (Join-Path $repo 'tools\quality\quick.cmd') $QualityWorkspace (Join-Path $Out 'quality') $repo
+    & (Join-Path $repo 'tools\quality\quick.cmd') $QualityWorkspace (Join-Path $Out 'quality') $repo 'KmdPackage' $Kits
     if($LASTEXITCODE -ne 0) { throw 'Fast quality gates failed; KMD package not built' }
 }
 
@@ -149,9 +162,9 @@ Write-Host 'link'
 Invoke-Tool (Join-Path $bin 'link.exe') (@('/nologo', '/DRIVER', '/SUBSYSTEM:NATIVE,10.00', '/ENTRY:DriverEntry', '/NODEFAULTLIB', '/RELEASE',
     '/DEBUG', '/OPT:REF', '/OPT:ICF', '/MACHINE:X64', "/LIBPATH:$wdk\Lib\$KitVersion\km\x64",
     '/Brepro', '/PDBALTPATH:%_PDB%',  # a content hash instead of a timestamp, and the PDB by name, not by path
-    'displib.lib', 'ntoskrnl.lib', 'hal.lib', 'bufferoverflowfastfailk.lib', 'libcntpr.lib', 'ntstrsafe.lib',
+    'aux_klib.lib', 'displib.lib', 'ntoskrnl.lib', 'hal.lib', 'bufferoverflowfastfailk.lib', 'libcntpr.lib', 'ntstrsafe.lib',
     "/OUT:$pkg\bc250kmd.sys", "/PDB:$Out\bc250kmd.pdb", "/MAP:$Out\bc250kmd.map") +
-    (Get-ChildItem "$obj\*.obj" | Sort-Object -Property Name).FullName)   # fixed order: /OPT:ICF folds by input order
+    (Get-OrdinalBuildFiles "$obj\*.obj"))   # fixed order: /OPT:ICF folds by input order
 Copy-Item "$pkg\bc250kmd.sys" (Join-Path $Out 'bc250kmd.unsigned.sys') -Force
 
 # What does the prologue of each function take off rsp? A kernel thread has 24 KB and dxgmms2 has already

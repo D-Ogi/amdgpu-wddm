@@ -1,0 +1,7 @@
+kernel cpu=2 on=2 rep=0 name=loop_add ops=6026206904 us=1727290.6 ops_per_us=3488.82
+kernel cpu=2 on=2 rep=0 name=mix_xoradd ops=5971705312 us=1711233.9 ops_per_us=3489.71
+kernel cpu=2 on=2 rep=0 name=dep_imul ops=2008560216 us=1727188.4 ops_per_us=1162.91
+kernel cpu=2 on=2 rep=0 name=dep_mix ops=1000001001 us=1719543.0 ops_per_us=581.55
+kernel cpu=2 on=2 rep=0 name=tput_add ops=19264249232 us=1725686.7 ops_per_us=11163.24
+kernel cpu=2 on=2 rep=0 name=tput_imul ops=8000008012 us=2293100.6 ops_per_us=3488.73
+kernel cpu=2 on=2 rep=0 name=dep_fpadd ops=2001278184 us=1720395.1 ops_per_us=1163.27

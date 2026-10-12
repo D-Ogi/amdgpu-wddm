@@ -36,6 +36,11 @@ void PutTag(std::vector<uint8_t>& out, const char tag[4])
 // Name of every element without a system value; the semantic index encodes the register and first component.
 constexpr const char* RegisterSemantic = "BC250_R";
 
+// Of the DXIL program kinds beyond the six the tokenized format shares, only these two come through a
+// create-shader slot (shader-container.h).
+constexpr uint32_t kDxilKindMesh = kDxilProgramKindMesh;
+constexpr uint32_t kDxilKindAmplification = kDxilProgramKindAmplification;
+
 Result Fail(Status status, std::string detail)
 {
     Result r;
@@ -395,6 +400,31 @@ std::vector<Named> NameSignature(const Entry* entries, UINT count, bool pixelOut
     return named;
 }
 
+// Metadata naming (shader-container.h, Slot): each entry takes the semantic name and index of the program's own dx.entryPoints element on
+// its register and first component, which is what dxc wrote into the original container. Everything else in the
+// chunk entry stays the DDI's, so only the name changes. An entry with no element of this program keeps the
+// synthetic name NameSignature gave it: the DDI signature may be a superset of what this program declares, and an
+// element the program does not have takes part in no linkage.
+void MetadataNames(const std::vector<dxil::Element>& elements, std::vector<Named>& named)
+{
+    for (Named& n : named)
+    {
+        const uint32_t first = FirstComponent(n.entry.Mask);
+        for (const dxil::Element& e : elements)
+        {
+            if (e.startRow < 0 || e.startCol != int32_t(first) || e.stream != n.entry.Stream
+                    || n.entry.Register < uint32_t(e.startRow) || n.entry.Register - uint32_t(e.startRow) >= e.rows)
+                continue;
+            const uint32_t row = n.entry.Register - uint32_t(e.startRow);
+            if (row >= e.indices.size())
+                continue;
+            n.name = e.name;
+            n.index = e.indices[row];
+            break;
+        }
+    }
+}
+
 // The runtime's entries may carry no stream (the D3D11 DDI has none; whether the D3D12 runtime fills Stream is
 // not yet measured). When every entry of a gs_5 output signature says 0, each takes the first dcl_stream block
 // whose output declarations cover its register and components and have not given them to an earlier entry (DXIL:
@@ -426,14 +456,19 @@ void DeriveOutputStreams(ProgramInfo& program, std::vector<Entry>& entries)
 // The DXIL part as the DDI passes it: DxilProgramHeader (ProgramVersion, SizeInUint32 counting the whole part),
 // DxilBitcodeHeader ("DXIL", DxilVersion, BitcodeOffset from the "DXIL" magic, BitcodeSize), the bitcode.
 // dxil-spirv reads the same fields (dxil_parser.cpp, parse_dxil).
-Result CheckDxilProgram(const UINT* code, const ProgramInfo& program)
+Result CheckDxilProgram(const UINT* code, const ProgramInfo& program, Slot slot)
 {
     std::string version = std::to_string(program.major) + "." + std::to_string(program.minor);
     if (program.major != 6)
         return Fail(Status::Unsupported, "shader model " + version);
-    // Kinds 0 to 5 are pixel to compute, as in the tokenized format. 6 and up (libraries, ray tracing, mesh,
-    // amplification, node programs) do not come through CreateShader.
-    if (program.type > U(D3D11_SB_COMPUTE_SHADER))
+    // Kinds 0 to 5 are pixel to compute, as in the tokenized format, and each has a slot of its own. Mesh (13)
+    // and amplification (14) come only through pfnCreateMeshShader and pfnCreateAmplificationShader. The rest
+    // (libraries, ray tracing, node programs) do not come through a create-shader slot at all.
+    const uint32_t expected = slot == Slot::Mesh ? kDxilKindMesh
+                            : slot == Slot::Amplification ? kDxilKindAmplification
+                            : U(D3D11_SB_COMPUTE_SHADER);
+    const bool kind_ok = slot == Slot::Standard ? program.type <= expected : program.type == expected;
+    if (!kind_ok)
         return Fail(Status::Unsupported, "DXIL program kind " + std::to_string(program.type) + ", shader model " + version);
     if (program.length < 6)
         return Fail(Status::InvalidArgument, "DXIL program of " + std::to_string(program.length)
@@ -479,21 +514,32 @@ uint32_t Rd32(const uint8_t* p)
     return v;
 }
 
-// The semantic of an output entry of a DXIL container, from the metadata of its DXIL part. dxil-spirv passes the
-// stream-output remapper the metadata name and semantic index of each output element (dxil_converter.cpp,
-// emit_stage_output_variables), and vkd3d-proton compares the declaration with those (dxil.c, dxil_output_remap).
-Result DxilOutputSemantic(const Container& container, const Entry& entry, Semantic* semantic)
+// The DXIL part of a container BuildContainer wrote: its last chunk. Bounded by the container's own size.
+Result DxilPart(const Container& container, const uint8_t** part, uint32_t* size)
 {
-    // The DXIL part is the last chunk BuildContainer wrote.
     const std::vector<uint8_t>& b = container.bytes;
     uint32_t count = b.size() >= 32 ? Rd32(&b[28]) : 0u;
     uint64_t offset = count && 32ull + 4ull * count <= b.size() ? Rd32(&b[32 + 4 * (count - 1)]) : ~0ull;
     if (offset > b.size() || b.size() - offset < 8u || std::memcmp(&b[size_t(offset)], "DXIL", 4)
             || Rd32(&b[size_t(offset) + 4]) > b.size() - offset - 8u)
         return Fail(Status::InvalidArgument, "not a container of BuildContainer with a DXIL part");
+    *part = &b[size_t(offset) + 8];
+    *size = Rd32(&b[size_t(offset) + 4]);
+    return {};
+}
+
+// The semantic of an output entry of a DXIL container, from the metadata of its DXIL part. dxil-spirv passes the
+// stream-output remapper the metadata name and semantic index of each output element (dxil_converter.cpp,
+// emit_stage_output_variables), and vkd3d-proton compares the declaration with those (dxil.c, dxil_output_remap).
+Result DxilOutputSemantic(const Container& container, const Entry& entry, Semantic* semantic)
+{
+    const uint8_t* part = nullptr;
+    uint32_t partSize = 0;
+    if (Result r = DxilPart(container, &part, &partSize); !r)
+        return r;
 
     dxil::Signatures signatures;
-    if (Result r = ReadDxilSignatures(&b[size_t(offset) + 8], Rd32(&b[size_t(offset) + 4]), &signatures); !r)
+    if (Result r = ReadDxilSignatures(part, partSize, &signatures); !r)
         return r;
 
     uint32_t first = FirstComponent(entry.Mask);
@@ -785,13 +831,19 @@ Result BuildContainer(const ProgramDesc& desc, Container* container)
     // DXIL's program header has the same two DWORDs; its major version is 6 or more.
     program.dxil = program.major >= 6;
     bool tessellation = program.type == U(D3D11_SB_HULL_SHADER) || program.type == U(D3D11_SB_DOMAIN_SHADER);
+    // A mesh program's primitive output signature goes to PSG1, which is where dxc writes it and where the engine
+    // reads it (vkd3d-proton state.c, vkd3d_shader_parse_patch_constant_signature for the mesh stage).
+    bool primitiveOutput = desc.slot == Slot::Mesh;
     if (program.dxil)
     {
-        if (Result r = CheckDxilProgram(desc.code, program); !r)
+        if (Result r = CheckDxilProgram(desc.code, program, desc.slot); !r)
             return r;
     }
     else
     {
+        if (desc.slot != Slot::Standard)
+            return Fail(Status::Unsupported, "a mesh or amplification program is DXIL only, version "
+                    + std::to_string(program.major) + "." + std::to_string(program.minor));
         if (program.type > U(D3D11_SB_COMPUTE_SHADER))
             return Fail(Status::InvalidArgument, "program type " + std::to_string(program.type));
 
@@ -804,8 +856,9 @@ Result BuildContainer(const ProgramDesc& desc, Container* container)
 
     if (program.type == U(D3D11_SB_COMPUTE_SHADER) && (desc.input.count || desc.output.count || desc.patchConstant.count))
         return Fail(Status::InvalidArgument, "signatures on a compute program");
-    if (!tessellation && desc.patchConstant.count)
-        return Fail(Status::InvalidArgument, "patch-constant signature outside a hull or domain program");
+    if (!tessellation && !primitiveOutput && desc.patchConstant.count)
+        return Fail(Status::InvalidArgument,
+                "patch-constant signature outside a hull, domain or mesh program");
 
     // DXIL is not scanned: its signature chunks are not read by the engine's DXIL front end (README), so the
     // read masks of inputs stay "all components".
@@ -823,8 +876,10 @@ Result BuildContainer(const ProgramDesc& desc, Container* container)
     // Without streams, entries of different streams may share components; the overlap check waits for them.
     if (Result r = ValidateSignature(desc.output, SigRole::Output, program, "output", !deriveStreams); !r)
         return r;
-    SigRole pcRole = program.type == U(D3D11_SB_HULL_SHADER) ? SigRole::PatchConstantOutput : SigRole::PatchConstantInput;
-    if (Result r = ValidateSignature(desc.patchConstant, pcRole, program, "patch constant"); !r)
+    SigRole pcRole = program.type == U(D3D11_SB_HULL_SHADER) || primitiveOutput ? SigRole::PatchConstantOutput
+                                                                                 : SigRole::PatchConstantInput;
+    if (Result r = ValidateSignature(desc.patchConstant, pcRole, program,
+            primitiveOutput ? "primitive output" : "patch constant"); !r)
         return r;
 
     // Streams of a gs_5 output signature, unless the runtime passed them.
@@ -850,10 +905,22 @@ Result BuildContainer(const ProgramDesc& desc, Container* container)
     std::vector<Named> outputNames = NameSignature(output.data(), UINT(output.size()), isPixel);
     std::vector<Named> patchNames = NameSignature(desc.patchConstant.entries, desc.patchConstant.count, false);
 
+    // A mesh or amplification program is linked by semantic name (shader-container.h, Slot).
+    if (desc.slot != Slot::Standard)
+    {
+        dxil::Signatures signatures;
+        if (Result r = ReadDxilSignatures(reinterpret_cast<const uint8_t*>(desc.code), program.length * 4u,
+                &signatures); !r)
+            return r;
+        MetadataNames(signatures.input, inputNames);
+        MetadataNames(signatures.output, outputNames);
+        MetadataNames(signatures.patchConstant, patchNames);
+    }
+
     std::vector<std::vector<uint8_t>> chunks;
     chunks.push_back(WriteSignatureChunk("ISG1", inputNames, true, program.dxil ? nullptr : &program.inputUse));
     chunks.push_back(WriteSignatureChunk("OSG1", outputNames, false, nullptr));
-    if (tessellation)
+    if (tessellation || primitiveOutput)
         chunks.push_back(WriteSignatureChunk("PSG1", patchNames, program.type == U(D3D11_SB_DOMAIN_SHADER),
                 program.dxil ? nullptr : &program.patchUse));
 
@@ -873,6 +940,66 @@ Result BuildContainer(const ProgramDesc& desc, Container* container)
     for (const Named& n : outputNames)
         container->output.push_back(n.entry);
 
+    return {};
+}
+
+Result BuildMeshLinkContainer(const Container& source, const SignatureView& input, const SignatureView& output,
+        Container* container)
+{
+    container->bytes.clear();
+    container->output.clear();
+    container->programType = ~0u;
+    container->dxil = false;
+
+    const uint8_t* part = nullptr;
+    uint32_t partSize = 0;
+    if (Result r = DxilPart(source, &part, &partSize); !r)
+        return r;
+    if (partSize < 8)
+        return Fail(Status::InvalidArgument, "DXIL part of " + std::to_string(partSize) + " bytes");
+
+    ProgramInfo program;
+    program.dxil = true;
+    program.length = Rd32(part + 4);
+    program.type = uint32_t(DECODE_D3D10_SB_TOKENIZED_PROGRAM_TYPE(Rd32(part)));
+    program.major = uint32_t(DECODE_D3D10_SB_TOKENIZED_PROGRAM_MAJOR_VERSION(Rd32(part)));
+    program.minor = uint32_t(DECODE_D3D10_SB_TOKENIZED_PROGRAM_MINOR_VERSION(Rd32(part)));
+    if (program.length != partSize / 4u || partSize % 4u)
+        return Fail(Status::InvalidArgument, "SizeInUint32 " + std::to_string(program.length)
+                + " is not the DXIL part of " + std::to_string(partSize) + " bytes");
+    // Only the pixel stage needs it: a mesh pipeline has an amplification, a mesh and a pixel program, and the
+    // first two are already named from their metadata at their own create.
+    if (program.type != U(D3D10_SB_PIXEL_SHADER))
+        return Fail(Status::Unsupported, "mesh pipeline linkage of program kind " + std::to_string(program.type));
+    if (Result r = CheckDxilProgram(reinterpret_cast<const UINT*>(part), program, Slot::Standard); !r)
+        return r;
+    if (Result r = ValidateSignature(input, SigRole::Input, program, "input"); !r)
+        return r;
+    if (Result r = ValidateSignature(output, SigRole::Output, program, "output"); !r)
+        return r;
+
+    dxil::Signatures signatures;
+    if (Result r = ReadDxilSignatures(part, partSize, &signatures); !r)
+        return r;
+    std::vector<Named> inputNames = NameSignature(input.entries, input.count, false);
+    std::vector<Named> outputNames = NameSignature(output.entries, output.count, true);
+    MetadataNames(signatures.input, inputNames);
+    MetadataNames(signatures.output, outputNames);
+
+    std::vector<std::vector<uint8_t>> chunks;
+    chunks.push_back(WriteSignatureChunk("ISG1", inputNames, true, nullptr));
+    chunks.push_back(WriteSignatureChunk("OSG1", outputNames, false, nullptr));
+    std::vector<uint8_t> code;
+    PutTag(code, "DXIL");
+    Put32(code, partSize);
+    code.insert(code.end(), part, part + partSize);
+    chunks.push_back(std::move(code));
+
+    WriteContainer(chunks, container->bytes);
+    container->programType = program.type;
+    container->dxil = true;
+    for (const Named& n : outputNames)
+        container->output.push_back(n.entry);
     return {};
 }
 

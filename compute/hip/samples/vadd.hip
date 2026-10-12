@@ -19,8 +19,17 @@
 // first HIP call. A lab trial must stay inside three minutes, and the default of the library is
 // 120 seconds for one wait (design decision 10): a dispatch that never retires would hold the
 // lab far longer than the trial allows.
+//
+// --scale-order <after|before|omit> is the negative control of the event between the two
+// streams. The second kernel multiplies C by VADD_SCALE_FACTOR, which is not 1, so the expected
+// sum carries the factor: a scale that runs before the addition is overwritten and a scale that
+// does not run leaves the plain sum, and --expect-compute then fails. Until 2026-10-10 the
+// factor was 1.0, and all three orders passed (audit finding HS-3), which is why the step-2
+// criterion that cited this sample for event ordering proved nothing.
 
 #include "hip/hip_runtime.h"
+
+#include "vadd_expect.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -60,6 +69,7 @@ static void check(hipError_t err, const char* what) {
 static int g_expect_compute = 0;
 static clock_t g_start = 0;
 static int g_first_launch_reported = 0;
+static int g_scale_order = VADD_SCALE_AFTER;
 
 // The wait bound of the runtime, which it reads one time from the environment at its first
 // call. This runs before the first HIP call of the program.
@@ -117,6 +127,17 @@ static int run_once(int pass) {
     // The per-thread error state is sticky, so a failure of one of the calls above would be
     // read again as a launch failure. Discard it, then ask about the launch itself.
     (void)hipGetLastError();
+
+    if (g_scale_order == VADD_SCALE_BEFORE) {
+        // The negative control: the scale runs first, on the second stream, and the addition
+        // waits for it. The factor is then lost, because the addition writes C whole.
+        scale<<<N / BLOCK, BLOCK, 0, second>>>(device_c, VADD_SCALE_FACTOR, N);
+        check(hipGetLastError(), "scale launch (before)");
+        check(hipEventRecord(done, second), "hipEventRecord (before)");
+        check(hipStreamWaitEvent(stream, done, 0), "hipStreamWaitEvent (before)");
+        (void)hipGetLastError();
+    }
+
     vadd<<<N / BLOCK, BLOCK, 0, stream>>>(device_a, device_b, device_c, N);
     check(hipGetLastError(), "vadd launch");
     if (!g_first_launch_reported) {
@@ -124,19 +145,23 @@ static int run_once(int pass) {
         printf("vadd: the first launch returned at %.1f ms after start\n", elapsed_ms());
     }
 
-    // The event and the second stream: the scale kernel must run after the vadd kernel, on
-    // another stream, through an event wait.
-    check(hipEventRecord(done, stream), "hipEventRecord");
-    check(hipStreamWaitEvent(second, done, 0), "hipStreamWaitEvent");
-    (void)hipGetLastError();
-    scale<<<N / BLOCK, BLOCK, 0, second>>>(device_c, 1.0f, N);
-    check(hipGetLastError(), "scale launch");
+    if (g_scale_order == VADD_SCALE_AFTER) {
+        // The event and the second stream: the scale kernel must run after the vadd kernel, on
+        // another stream, through an event wait. The factor is in the expected sum, so a scale
+        // that did not wait, or did not run, is a mismatch and not a pass.
+        check(hipEventRecord(done, stream), "hipEventRecord");
+        check(hipStreamWaitEvent(second, done, 0), "hipStreamWaitEvent");
+        (void)hipGetLastError();
+        scale<<<N / BLOCK, BLOCK, 0, second>>>(device_c, VADD_SCALE_FACTOR, N);
+        check(hipGetLastError(), "scale launch");
+    }
 
     check(hipStreamSynchronize(second), "hipStreamSynchronize");
+    check(hipStreamSynchronize(stream), "hipStreamSynchronize 1");
     check(hipMemcpy(host_c, device_c, sizeof(float) * N, hipMemcpyDeviceToHost), "copy c");
 
     for (i = 0; i < N; ++i) {
-        const float want = host_a[i] + host_b[i];
+        const float want = vadd_expected(host_a[i], host_b[i]);
         if (host_c[i] != want) {
             if (mismatches < 3) {
                 printf("vadd: pass %d index %d is %f, expected %f\n", pass, i, (double)host_c[i],
@@ -182,6 +207,18 @@ int main(int argc, char** argv) {
     for (i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "--expect-compute") == 0) {
             g_expect_compute = 1;
+        } else if (strcmp(argv[i], "--scale-order") == 0 && i + 1 < argc) {
+            ++i;
+            if (strcmp(argv[i], "after") == 0) {
+                g_scale_order = VADD_SCALE_AFTER;
+            } else if (strcmp(argv[i], "before") == 0) {
+                g_scale_order = VADD_SCALE_BEFORE;
+            } else if (strcmp(argv[i], "omit") == 0) {
+                g_scale_order = VADD_SCALE_OMIT;
+            } else {
+                printf("vadd: --scale-order takes after, before or omit, not '%s'\n", argv[i]);
+                return 2;
+            }
         } else if (strcmp(argv[i], "--wait-total") == 0 && i + 1 < argc) {
             ++i;
             if (!set_wait_total(argv[i])) {
@@ -191,11 +228,18 @@ int main(int argc, char** argv) {
             printf("vadd: every wait of the runtime is bounded to %s ms in all\n", argv[i]);
         } else {
             printf("vadd: unknown argument '%s'\n", argv[i]);
-            printf("vadd: usage: vadd.exe [--expect-compute] [--wait-total <ms>]\n");
+            printf("vadd: usage: vadd.exe [--expect-compute] [--wait-total <ms>]"
+                   " [--scale-order after|before|omit]\n");
             return 2;
         }
     }
     printf("vadd: sums are %s\n", g_expect_compute ? "checked" : "not checked (no --expect-compute)");
+    printf("vadd: the scale of %.1f runs %s the addition, so each sum must be %.1f times a + b\n",
+           (double)VADD_SCALE_FACTOR, vadd_order_name(g_scale_order),
+           (double)VADD_SCALE_FACTOR);
+    if (g_scale_order != VADD_SCALE_AFTER) {
+        printf("vadd: this is a negative control: --expect-compute must fail in this order\n");
+    }
 
     check(hipInit(0), "hipInit");
     check(hipGetDeviceCount(&count), "hipGetDeviceCount");

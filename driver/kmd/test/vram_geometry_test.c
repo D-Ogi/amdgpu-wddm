@@ -2,9 +2,14 @@
 #include <string.h>
 #include <wchar.h>
 #include "regs.generated.h"
+#include "umd_caps.h"
+#include "paging_window.h"
+typedef void* PVOID;
+typedef unsigned char* PUCHAR;
+#define RtlCopyMemory(p,s,n) memcpy(p,s,n)
 typedef unsigned long ULONG;
 typedef unsigned long long ULONGLONG,u64;
-typedef long long LONGLONG;
+typedef long long LONGLONG,LONG64;
 typedef long NTSTATUS;
 typedef int BOOLEAN;
 #define TRUE 1
@@ -21,11 +26,16 @@ typedef int BOOLEAN;
 #define BC250_GART_SCRATCH_OFFSET 4096ull
 #define GuardLog(...) ((void)0)
 #define RtlZeroMemory(p,n) memset(p,0,n)
+/* vram.c publishes the active board memory size for the board memory card while it sets the geometry.
+   The host model keeps the written value so that nothing in the extracted code is a stub. */
+static LONG64 InterlockedExchange64(volatile LONG64*target,LONG64 value){LONG64 old=*target;*target=value;return old;}
 typedef struct {LONGLONG QuadPart;} PHYSICAL_ADDRESS;
 typedef struct {
+ struct {ULONGLONG bytes;} WddmAperture;
  void* Mmio;BOOLEAN VramEnabled,VramWriteEnabled;
- PHYSICAL_ADDRESS VramPhysical,Bar0Physical;ULONGLONG VramLength,VramMcBase,Bar0Length;
+ PHYSICAL_ADDRESS VramPhysical,Bar0Physical;ULONGLONG VramLength,VramMcBase,Bar0Length,DisplayReservationEnd;
  struct {ULONG Pitch,Height;PHYSICAL_ADDRESS PhysicAddress;} Post;
+ volatile LONG64 UmaActiveBytes;
 } BC250_DEVICE;
 struct fake_adev {void *dev,*backend;struct {ULONGLONG mc_vram_size,real_vram_size,vram_start;} gmc;};
 struct bc250_gmc_inputs {u64 gart_table_mc,mem_scratch_mc,dummy_page_dma;int noretry;};
@@ -60,17 +70,65 @@ static int bc250_gmc_setup(struct fake_adev* adev,const struct bc250_gmc_inputs*
 }
 /* ACTUAL_SOURCE */
 static void init(BC250_DEVICE* d,ULONG gib){
- memset(d,0,sizeof(*d));d->Mmio=d;d->Post.Pitch=7680;d->Post.Height=1200;
+ memset(d,0,sizeof(*d));d->WddmAperture.bytes=384ull<<20;d->Mmio=d;d->Post.Pitch=7680;d->Post.Height=1200;
  d->Post.PhysicAddress.QuadPart=0xc0000000ull;gc_gib=gib;nbio_mib=gib*1024;missing_bar=0;shim_mismatch=0;os_checks=0;
+}
+static void check_caps(BC250_DEVICE* d, ULONGLONG expected)
+{
+ unsigned char bytes[UMD_CAPS_BYTES+17], original[sizeof(bytes)];
+ ULONGLONG local=0,visible=0;unsigned i;
+ memset(bytes,0xA5,sizeof(bytes));memcpy(original,bytes,sizeof(bytes));
+ VramPatchCaps(d,bytes,UMD_CAPS_BYTES);
+ memcpy(&local,bytes+UMD_CAPS_VRAM_TOTAL_OFFSET,8);
+ memcpy(&visible,bytes+UMD_CAPS_VISIBLE_VRAM_TOTAL_OFFSET,8);
+ CHECK(local==expected && visible==expected);
+ CHECK((local>>32)==(expected>>32));
+ for(i=0;i<sizeof(bytes);i++)
+  if(!((i>=464 && i<472)||(i>=496 && i<504))) CHECK(bytes[i]==original[i]);
+ for(i=0;i<UMD_CAPS_BYTES;i++) {
+  memcpy(bytes,original,sizeof(bytes));VramPatchCaps(d,bytes,i);
+  CHECK(memcmp(bytes,original,sizeof(bytes))==0);
+ }
+ VramPatchCaps(d,NULL,UMD_CAPS_BYTES);
+}
+static void caps_cases(void)
+{
+ /* Independent fixtures: POST occupies 9,216,000 bytes, rounded to 9,240,576;
+    the 32 MiB tail and rounded 1/32 page-table reservation are excluded. */
+ static const struct {ULONG gib;ULONGLONG local;} cases[]={
+  {4,4119330816ull},{8,8280080384ull},{12,12440829952ull},{16,16601579520ull}};
+ unsigned i;BC250_DEVICE d;
+ for(i=0;i<sizeof(cases)/sizeof(cases[0]);i++) {
+  init(&d,cases[i].gib);CHECK(VramStart(&d)==0);check_caps(&d,cases[i].local);
+ }
+ init(&d,8);CHECK(VramStart(&d)==0);
+ d.Post.Pitch=8192;d.Post.Height=8192;check_caps(&d,8223981568ull);
+ d.WddmAperture.bytes=0;check_caps(&d,0);
+ d.WddmAperture.bytes=(384ull<<20)+4096;check_caps(&d,0);
+ d.WddmAperture.bytes=448ull<<20;check_caps(&d,0);
+ d.WddmAperture.bytes=256ull<<20;check_caps(&d,8223981568ull);
+ d.WddmAperture.bytes=447ull<<20;check_caps(&d,8223981568ull);
+ d.Post.Height=0;check_caps(&d,0);
+ init(&d,8);CHECK(VramStart(&d)==0);d.VramEnabled=FALSE;check_caps(&d,0);
+ init(&d,8);CHECK(VramStart(&d)==0);d.Post.PhysicAddress.QuadPart=1;check_caps(&d,0);
 }
 int main(void){
  ULONG gib;
+ caps_cases();
  for(gib=8;gib<=16;gib+=4){
   BC250_DEVICE d;BC250_GART g;ULONGLONG off,len,table,tablelen;int mismatch;
   init(&d,gib);CHECK(VramStart(&d)==0);CHECK(d.VramEnabled && d.VramWriteEnabled && d.VramLength==((ULONGLONG)gib<<30));
   CHECK(os_checks==1);CHECK(WddmMemoryLayout(&d,&off,&len,&table,&tablelen));
   CHECK(off>=((ULONGLONG)d.Post.Pitch*d.Post.Height) && len>0 && table==off+len);
   CHECK(table+tablelen<=d.VramLength-BC250_VRAM_TOP_RESERVED);
+  d.DisplayReservationEnd=64ull*1024*1024;
+  CHECK(WddmMemoryLayout(&d,&off,&len,&table,&tablelen));
+  CHECK(off==64ull*1024*1024 && table==off+len);
+  check_caps(&d,len);
+  d.DisplayReservationEnd=d.VramLength-BC250_VRAM_TOP_RESERVED;
+  CHECK(!WddmMemoryLayout(&d,&off,&len,&table,&tablelen));
+  CHECK(!off && !len && !table && !tablelen);
+  d.DisplayReservationEnd=0;
   memset(&g,0,sizeof(g));g.Device=&d;CHECK(RunSetup(&g)==0 && g.SetUp);
   for(mismatch=1;mismatch<=3;mismatch++) {shim_mismatch=mismatch;CHECK(RunSetup(&g)!=0 && !g.SetUp);}
   init(&d,gib);nbio_mib=(gib==8?12:8)*1024;

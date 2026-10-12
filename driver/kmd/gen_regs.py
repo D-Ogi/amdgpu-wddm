@@ -24,7 +24,9 @@ Nobody types an offset (docs/02-register-addressing.md). Two tables come out of 
 Run:  python driver/kmd/gen_regs.py
 """
 
+import json
 import re
+import json
 import sys
 from pathlib import Path
 
@@ -83,6 +85,11 @@ SEQUENCES = [
       # CHECK_VMID, VM_ID). Writable through the GFX table so the shim's bc250_gfx_soft_recover_vmid can issue it;
       # reached only from DxgkDdiResetEngine under the HangRecoveryMode switch. Already on the escape read list.
       ("GC", "mmSQ_CMD", "not traced: M15.12 soft-recovery wave kill, amdgpu gfx_v10_0_ring_soft_recovery"),
+      # Wave observations use only selector writes and data reads. This legacy GFX table is mixed;
+      # MmioGfxWrite refuses SQ_IND_DATA for every GFX sequence; the dedicated wave
+      # backend further restricts writes to GRBM_GFX_INDEX and SQ_IND_INDEX.
+      ("GC", "mmSQ_IND_INDEX", "not traced: amdgpu gfx_v10_0 wave_read_ind selector"),
+      ("GC", "mmSQ_IND_DATA", "not traced: amdgpu gfx_v10_0 wave_read_ind, MmioGfxWrite read-only filter"),
       ("GC", "mmGRBM_STATUS2", "read observation for opt-in RLC reload reset, M349"),
       ("GC", "mmGRBM_SOFT_RESET", "not traced: AMD RLC reset callback, opt-in M349"),
       ("GC", "mmRLC_SAFE_MODE", "not traced: AMD paired safe-mode scope, M370"),
@@ -129,6 +136,8 @@ NAMED = [("NBIO", "mmRCC_DEV0_EPF0_RCC_CONFIG_MEMSIZE"), ("GC", "mmSCRATCH_REG0"
          ("GC", "mmGRBM_GFX_CNTL"),
          # test/hang_recovery_test.c: the M15.12 wave kill's register, to check which sequence table holds it
          ("GC", "mmSQ_CMD"),
+         # The bounded live wave reader and its unconditional selector cleanup.
+         ("GC", "mmGRBM_GFX_INDEX"), ("GC", "mmSQ_IND_INDEX"), ("GC", "mmSQ_IND_DATA"),
          # gfx.c: the one write that passes a stopped sequence (gpumem.c flushes the TLB after its binds)
          ("MMHUB", "mmMMVM_INVALIDATE_ENG17_SEM"),
          # gfx.c: a PLAN answers the GRBM CAM probe, which writes one of these and reads the other
@@ -208,6 +217,9 @@ DCN_PRIVATE_READ_REGISTERS = ["mmHUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE",
 # BD-018: reference-derived readback; no timing/modeset writes.
 DCN_TIMING_READ_REGISTERS = ["mmOTG0_OTG_H_BLANK_START_END", "mmDP_DTO0_PHASE", "mmDP_DTO0_MODULO",
     "mmOTG0_PIXEL_RATE_CNTL", "mmOTG0_OTG_INTERLACE_CONTROL", "mmOTG0_OTG_V_TOTAL_CONTROL"]
+# BD-124: read the OTG-to-stream-to-enabled-backend route; no new write permission.
+DCN_TIMING_READ_REGISTERS += [f"mmDIG{n}_{r}" for n in range(2)
+    for r in ("DIG_FE_CNTL", "DIG_BE_CNTL", "DIG_BE_EN_CNTL")]
 DCN_PRIVATE_READ_REGISTERS += DCN_TIMING_READ_REGISTERS + ["mmOTG0_OTG_BLANK_CONTROL", "mmOTG0_OTG_DOUBLE_BUFFER_CONTROL"]
 # M15.14 (0.7.216.20): the plane's pixel format registers (plane_format.h), read at start to decode the firmware's
 # format and on restore to verify it; MPCC0_MPCC_CONTROL, CNVC_CFG0_FORMAT_CONTROL and CNVC_CFG0_ALPHA_2BIT_LUT
@@ -218,6 +230,9 @@ DCN_PRIVATE_READ_REGISTERS += ["mmHUBP0_DCSURF_SURFACE_CONFIG", "mmHUBPRET0_HUBP
     "mmCNVC_CFG0_ALPHA_2BIT_LUT"]
 NAMED += [("DMU", name) for name in DCN_PRIVATE_READ_REGISTERS + ["mmOTG0_OTG_STATUS_POSITION", "mmOTG0_OTG_GLOBAL_CONTROL0"]]
 NAMED += [("CLK", "mmCLK4_0_CLK4_CLK2_CURRENT_CNT")]
+# BD-122 (GitHub #38): a refused inherited timing logs whether the firmware drove OTG1 instead of OTG0. Read only,
+# and already on the 75-register dump list, so the DCN read allow-list does not change.
+NAMED += [("DMU", "mmOTG1_OTG_CONTROL")]
 
 BAR5_LENGTH = 0x80000     # BC250_BAR5_LENGTH in mmio.c
 
@@ -243,6 +258,12 @@ EXTRA_READS += TSC_REGISTERS
 NAMED += TSC_REGISTERS
 # Keep the timing inputs observable through READ_REG for pre-deployment control.
 EXTRA_READS += [("DMU", name) for name in DCN_TIMING_READ_REGISTERS + ["mmOTG0_OTG_V_BLANK_START_END"]]
+# BD-124: expose the same plain MMIO registers read by the inherited HDMI
+# transaction. Generate the diagnostic read set from its exhaustive policy;
+# this adds no escape write permission and no indexed endpoint/data-port reads.
+HDMI_POLICY_READS = sorted({"mm" + row["register"] for row in
+    json.loads((ROOT / "driver/shim/hdmi_link_policy.json").read_text())})
+EXTRA_READS += [("DMU", name) for name in HDMI_POLICY_READS]
 
 # ---- DP audio (dpaudio.c): step 0 observation, step 1 endpoint presence, step 2 stream ----------------------------
 # Step 0, read only, and on the READ_REG list as well so that `bc250kmd_cli read <name>` shows each one: the codec's
@@ -305,6 +326,18 @@ AUDIO_DIRECT_WRITES += [f"mm{r.format(n=n)}" for n in range(2) for r in (
     "DIG{n}_AFMT_AUDIO_SRC_CONTROL", "DIG{n}_AFMT_AUDIO_PACKET_CONTROL", "DIG{n}_AFMT_AUDIO_PACKET_CONTROL2",
     "DIG{n}_AFMT_INFOFRAME_CONTROL0", "DIG{n}_AFMT_60958_0")]
 AUDIO_DIRECT_WRITES += ["mmDIO_MEM_PWR_CTRL"]
+# HDMI audio only. HDMI_CONTROL is observed, never changed by audio: the
+# inherited link must already be 8bpc, with no scrambling or pixel repetition.
+HDMI_AUDIO_WRITES = ["mmDCCG_AUDIO_DTO0_MODULE", "mmDCCG_AUDIO_DTO0_PHASE"] + [
+    f"mmDIG{n}_{r}" for n in range(2) for r in (
+        "HDMI_AUDIO_PACKET_CONTROL", "HDMI_ACR_PACKET_CONTROL", "HDMI_INFOFRAME_CONTROL0", "HDMI_INFOFRAME_CONTROL1",
+        "HDMI_ACR_32_0", "HDMI_ACR_32_1", "HDMI_ACR_44_0", "HDMI_ACR_44_1", "HDMI_ACR_48_0", "HDMI_ACR_48_1",
+        "AFMT_60958_1", "AFMT_60958_2")]
+AUDIO_DIRECT_WRITES += HDMI_AUDIO_WRITES
+AUDIO_READ_REGISTERS += [n for n in HDMI_AUDIO_WRITES if n not in AUDIO_READ_REGISTERS]
+AUDIO_READ_REGISTERS += [f"mmDIG{n}_{r}" for n in range(2) for r in ("HDMI_CONTROL", "DIG_FE_CNTL", "DIG_BE_EN_CNTL")
+                         if f"mmDIG{n}_{r}" not in AUDIO_READ_REGISTERS]
+EXTRA_READS += [("DMU", n) for n in AUDIO_READ_REGISTERS if ("DMU", n) not in EXTRA_READS]
 # Indirect indices, by their ENDPOINT0 name in dcn_2_0_1_offset.h (regcalc: `lookup ix...`); the ENDPOINT1 name must
 # carry the same number, which main() checks. Read: the configuration and status registers dpaudio.c observes. The
 # interrupt-status indices (AUDIO_ENABLED_INT_STATUS and its neighbours) are left out: whether a read clears them is
@@ -331,7 +364,20 @@ AUDIO_IX_READ = AUDIO_IX_WRITE + [_AZ + r for r in ("UNSOLICITED_RESPONSE", "RES
 DISPLAY_AUX_WRITES = ["mmDP_AUX0_AUX_CONTROL", "mmDP_AUX0_AUX_SW_CONTROL", "mmDP_AUX0_AUX_ARB_CONTROL",
                       "mmDP_AUX0_AUX_INTERRUPT_CONTROL", "mmDP_AUX0_AUX_SW_DATA", "mmDC_GPIO_DDC1_MASK",
                       "mmDC_GPIO_AUX_CTRL_5"]
-DISPLAY_AUX_READS = ["mmDP_AUX0_AUX_SW_STATUS"]
+DISPLAY_AUX_READS = ["mmDP_AUX0_AUX_SW_STATUS", "mmHPD0_DC_HPD_INT_STATUS"]
+# Runtime HPD0, as irq_service_dcn201 hpd_int_entry(0). These are private
+# display-owner writes, never the general diagnostic write escape.
+DISPLAY_AUX_WRITES += ["mmHPD0_DC_HPD_INT_CONTROL", "mmHPD0_DC_HPD_CONTROL"]
+# AMD dcn10 link encoder training/passthrough, used by DCN201. Private display
+# owner only: no added general-purpose MMIO write escape.
+DISPLAY_AUX_WRITES += ["mmDP0_"+r for r in (
+    "DP_DPHY_CNTL", "DP_DPHY_PRBS_CNTL", "DP_LINK_CNTL", "DP_DPHY_TRAINING_PATTERN_SEL",
+    "DP_LINK_FRAMING_CNTL", "DP_DPHY_SCRAM_CNTL", "DP_CONFIG")]
+# Native DDC uses the same connector pads, but never emits AUX packets. DATA
+# advances the FIFO index on read and is private to the transaction engine.
+DISPLAY_DDC_WRITES = ["mmDC_I2C_CONTROL", "mmDC_I2C_ARBITRATION", "mmDC_I2C_DDC1_SETUP",
+                      "mmDC_I2C_DDC1_SPEED", "mmDC_I2C_DATA"] + [f"mmDC_I2C_TRANSACTION{i}" for i in range(4)]
+DISPLAY_DDC_READS = ["mmDC_I2C_SW_STATUS", "mmDC_I2C_DDC1_HW_STATUS", "mmMICROSECOND_TIME_BASE_DIV"]
 _DSCL_WRITES = ["SCL_COEF_RAM_TAP_SELECT", "SCL_COEF_RAM_TAP_DATA", "SCL_MODE", "SCL_TAP_CONTROL", "DSCL_CONTROL",
                 "DSCL_2TAP_CONTROL", "SCL_HORZ_FILTER_SCALE_RATIO", "SCL_HORZ_FILTER_INIT",
                 "SCL_HORZ_FILTER_SCALE_RATIO_C", "SCL_HORZ_FILTER_INIT_C", "SCL_VERT_FILTER_SCALE_RATIO",
@@ -341,17 +387,64 @@ _DSCL_WRITES = ["SCL_COEF_RAM_TAP_SELECT", "SCL_COEF_RAM_TAP_DATA", "SCL_MODE", 
 _VIEWPORT = ["DCSURF_PRI_VIEWPORT_START", "DCSURF_PRI_VIEWPORT_DIMENSION", "DCSURF_SEC_VIEWPORT_START",
              "DCSURF_SEC_VIEWPORT_DIMENSION", "DCSURF_PRI_VIEWPORT_START_C", "DCSURF_PRI_VIEWPORT_DIMENSION_C",
              "DCSURF_SEC_VIEWPORT_START_C", "DCSURF_SEC_VIEWPORT_DIMENSION_C"]
-DISPLAY_PIPE_WRITES = ([f"mmDSCL0_{r}" for r in _DSCL_WRITES] + [f"mmHUBP0_{r}" for r in _VIEWPORT] +
+DISPLAY_PIPE_WRITES = (["mmOTG0_OTG_GLOBAL_CONTROL0"] +  # AMD optc1_lock selects OTG0 before locking.
+                       [f"mmDSCL0_{r}" for r in _DSCL_WRITES] + [f"mmHUBP0_{r}" for r in _VIEWPORT] +
                        [f"mmMPCC0_MPCC_BG_{c}" for c in ("R_CR", "G_Y", "B_CB")] +
                        ["mmOTG0_OTG_MASTER_UPDATE_LOCK", "mmOTG0_OTG_TRIGA_MANUAL_TRIG"])
 # Read only: the update and memory power state of the scaler, the underflow status, and which DPP and OPP feed
 # MPCC 0 and OTG 0 (the precondition that pipe 0 alone drives the output).
-DISPLAY_PIPE_READS = ["mmDSCL0_DSCL_UPDATE", "mmDSCL0_DSCL_MEM_PWR_CTRL", "mmDSCL0_DSCL_MEM_PWR_STATUS",
-                      "mmHUBP0_DCHUBP_CNTL", "mmMPCC0_MPCC_TOP_SEL", "mmODM0_OPTC_DATA_SOURCE_SELECT"]
-DISPLAY_DATA_PORTS = ["mmDP_AUX0_AUX_SW_DATA", "mmDSCL0_SCL_COEF_RAM_TAP_DATA", "mmDSCL0_SCL_COEF_RAM_TAP_SELECT"]
-DISPLAY_NAMED = DISPLAY_AUX_WRITES + DISPLAY_AUX_READS + DISPLAY_PIPE_WRITES + DISPLAY_PIPE_READS
+DISPLAY_PIPE_READS = ["mmOTG0_OTG_V_TOTAL_CONTROL", "mmOTG0_OTG_STEREO_CONTROL", "mmDSCL0_DSCL_UPDATE", "mmDSCL0_DSCL_MEM_PWR_CTRL", "mmDSCL0_DSCL_MEM_PWR_STATUS",
+                      "mmHUBP0_DCHUBP_CNTL", "mmMPCC0_MPCC_TOP_SEL", "mmODM0_OPTC_DATA_SOURCE_SELECT",
+                      "mmHUBP0_DCSURF_SURFACE_CONFIG", "mmHUBP0_DCSURF_TILING_CONFIG",
+                      "mmHUBPREQ0_DCSURF_SURFACE_PITCH", "mmOTG1_OTG_CONTROL",
+                      "mmHUBPREQ0_DCSURF_SURFACE_CONTROL", "mmMPCC0_MPCC_BOT_SEL",
+                      "mmMPCC0_MPCC_CONTROL", "mmMPC_OUT0_MUX"]
+DISPLAY_DATA_PORTS = ["mmDP_AUX0_AUX_SW_DATA", "mmDSCL0_SCL_COEF_RAM_TAP_DATA", "mmDSCL0_SCL_COEF_RAM_TAP_SELECT",
+                      "mmDC_I2C_DATA"]
+# Exact DCN201 timing entry points, extracted from AMD DC. The clock-control
+# register is only polled by optc1_disable_crtc; no clock write is granted here.
+DISPLAY_OPTC_REGS = json.loads((ROOT / 'driver/shim/optc_registers.json').read_text())
+_pre_optc_display = set(DISPLAY_AUX_WRITES + DISPLAY_AUX_READS + DISPLAY_PIPE_WRITES + DISPLAY_PIPE_READS +
+                        DISPLAY_DDC_WRITES + DISPLAY_DDC_READS)
+DISPLAY_OPTC_NEW = [n for n in DISPLAY_OPTC_REGS if n not in _pre_optc_display]
+for _name in DISPLAY_OPTC_REGS:
+    if _name == 'mmOTG0_OTG_CLOCK_CONTROL':
+        if _name not in DISPLAY_PIPE_READS:
+            DISPLAY_PIPE_READS.append(_name)
+    elif _name not in DISPLAY_PIPE_WRITES + DISPLAY_AUX_WRITES + DISPLAY_DDC_WRITES:
+        if _name in DISPLAY_PIPE_READS:
+            DISPLAY_PIPE_READS.remove(_name)
+        DISPLAY_PIPE_WRITES.append(_name)
+DISPLAY_DP_STREAM = json.loads((ROOT / 'driver/shim/dp_stream_registers.json').read_text())
+DISPLAY_DP_STREAM_NEW = [n for n in DISPLAY_DP_STREAM if n not in
+                        DISPLAY_AUX_WRITES + DISPLAY_AUX_READS + DISPLAY_PIPE_WRITES + DISPLAY_PIPE_READS +
+                        DISPLAY_DDC_WRITES + DISPLAY_DDC_READS]
+for _name in DISPLAY_DP_STREAM:
+    if _name not in DISPLAY_PIPE_WRITES + DISPLAY_AUX_WRITES + DISPLAY_DDC_WRITES:
+        if _name in DISPLAY_PIPE_READS:
+            DISPLAY_PIPE_READS.remove(_name)
+        DISPLAY_PIPE_WRITES.append(_name)
+_pipe_all = json.loads((ROOT / 'driver/shim/pipe_registers.json').read_text())
+_pipe_ro = json.loads((ROOT / 'driver/shim/pipe_registers_readonly.json').read_text())
+DISPLAY_DCN201_PIPE = [n for n in _pipe_all['DMU'] if n not in _pipe_ro['DMU']]
+DISPLAY_DCN201_PIPE_RO = _pipe_ro['DMU']
+DISPLAY_OTHER_READS = [(ip, n) for ip, names in _pipe_ro.items() if ip != 'DMU' for n in names]
+assert all(ip == 'DMU' or set(names) <= set(_pipe_ro.get(ip, [])) for ip, names in _pipe_all.items())
+DISPLAY_DCN201_PIPE_NEW = [n for n in DISPLAY_DCN201_PIPE + DISPLAY_DCN201_PIPE_RO if n not in
+                         DISPLAY_AUX_WRITES + DISPLAY_AUX_READS + DISPLAY_PIPE_WRITES + DISPLAY_PIPE_READS +
+                         DISPLAY_DDC_WRITES + DISPLAY_DDC_READS]
+for _name in DISPLAY_DCN201_PIPE:
+    if _name not in DISPLAY_PIPE_WRITES + DISPLAY_AUX_WRITES + DISPLAY_DDC_WRITES:
+        if _name in DISPLAY_PIPE_READS:
+            DISPLAY_PIPE_READS.remove(_name)
+        DISPLAY_PIPE_WRITES.append(_name)
+for _name in DISPLAY_DCN201_PIPE_RO:
+    if _name not in DISPLAY_PIPE_READS + DISPLAY_PIPE_WRITES + DISPLAY_AUX_WRITES + DISPLAY_AUX_READS:
+        DISPLAY_PIPE_READS.append(_name)
+DISPLAY_NAMED = (DISPLAY_AUX_WRITES + DISPLAY_AUX_READS + DISPLAY_PIPE_WRITES + DISPLAY_PIPE_READS +
+                 DISPLAY_DDC_WRITES + DISPLAY_DDC_READS)
 EXTRA_READS += [("DMU", n) for n in DISPLAY_NAMED
-                if n not in DISPLAY_DATA_PORTS and ("DMU", n) not in EXTRA_READS and
+                if n not in DISPLAY_DATA_PORTS + DISPLAY_OPTC_NEW + DISPLAY_DP_STREAM_NEW + DISPLAY_DCN201_PIPE_NEW and ("DMU", n) not in EXTRA_READS and
                 n not in ("mmOTG0_OTG_MASTER_UPDATE_LOCK", "mmOTG0_OTG_TRIGA_MANUAL_TRIG")]
 
 LINE = re.compile(r"^([A-Z0-9]+)\.(\S+) (0x[0-9a-f]+)$")
@@ -396,7 +489,13 @@ def main():
     out = ["// Generated by gen_regs.py from the vendored amdgpu headers through tools/regcalc. Do not edit.",
            "#pragma once", ""]
     audio_pairs = [("DMU", reg) for pair in AUDIO_ENDPOINT_PAIRS for reg in pair]
-    for ip, name in dict.fromkeys(NAMED + EXTRA_READS + audio_pairs + [("DMU", n) for n in DISPLAY_NAMED]):
+    hdmi_link = ["mmDIG0_" + n for n in (
+        "TMDS_CTL_BITS", "DIG_CLOCK_PATTERN", "DIG_FE_CNTL", "DIG_BE_CNTL", "DIG_BE_EN_CNTL",
+        "HDMI_CONTROL", "HDMI_STATUS", "HDMI_VBI_PACKET_CONTROL", "HDMI_GC", "HDMI_DB_CONTROL",
+        "HDMI_GENERIC_PACKET_CONTROL0", "HDMI_GENERIC_PACKET_CONTROL1", "HDMI_GENERIC_PACKET_CONTROL2",
+        "HDMI_GENERIC_PACKET_CONTROL3", "HDMI_GENERIC_PACKET_CONTROL4", "AFMT_CNTL", "AFMT_VBI_PACKET_CONTROL", "AFMT_VBI_PACKET_CONTROL1",
+        "AFMT_GENERIC_HDR")] + [f"mmDIG0_AFMT_GENERIC_{n}" for n in range(8)]
+    for ip, name in dict.fromkeys(NAMED + EXTRA_READS + audio_pairs + DISPLAY_OTHER_READS + [("DMU", n) for n in DISPLAY_NAMED + hdmi_link]):
         out.append(f"#define BC250_REG_{ip}_{name[2:]} 0x{offset(maps, ip, name):05X}ul")
     # DP audio: the Azalia endpoint's indirect indices (dpaudio.c), by name, from dcn_2_0_1_offset.h's ix defines.
     out += ["", "// Azalia endpoint indirect indices (ixAZF0ENDPOINTn_AZALIA_F0_CODEC_PIN_CONTROL_*, the same for n = 0, 1):",
@@ -543,11 +642,12 @@ def main():
 
     # Display modes (dpaux.c, dcn_scale.c, modeset.c): their own read and write tables, in a block of their own like
     # the audio tables, so that nothing outside those files can reach these registers through them.
-    disp_write = sorted({offset(maps, "DMU", n) for n in DISPLAY_AUX_WRITES + DISPLAY_PIPE_WRITES})
-    disp_read = sorted({offset(maps, "DMU", n) for n in DISPLAY_NAMED})
-    if len(disp_write) != len(DISPLAY_AUX_WRITES) + len(DISPLAY_PIPE_WRITES):
+    disp_write = sorted({offset(maps, "DMU", n) for n in DISPLAY_AUX_WRITES + DISPLAY_PIPE_WRITES + DISPLAY_DDC_WRITES})
+    disp_read = sorted({offset(maps, "DMU", n) for n in DISPLAY_NAMED} |
+                       {offset(maps, ip, n) for ip, n in DISPLAY_OTHER_READS})
+    if len(disp_write) != len(DISPLAY_AUX_WRITES) + len(DISPLAY_PIPE_WRITES) + len(DISPLAY_DDC_WRITES):
         sys.exit("the display write lists have two names for one offset")
-    if len(disp_read) != len(DISPLAY_NAMED):
+    if len(disp_read) != len(DISPLAY_NAMED) + len(DISPLAY_OTHER_READS):
         sys.exit("the display lists have two names for one offset")
     if not set(disp_write) <= set(disp_read):
         sys.exit("a display write register is not on the display read table - a write must be verifiable")

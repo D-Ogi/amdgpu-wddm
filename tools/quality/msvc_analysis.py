@@ -66,7 +66,7 @@ def run(args):
             'tools':{str(p):digest(p) for p in tools},
             'include':os.environ.get('INCLUDE',''), 'headers':sorted(set(names)),
         },sort_keys=True).encode()).hexdigest()
-        if record.exists() and not args.force:
+        if record.exists() and not args.force and os.environ.get('BC250_GATE_NOCACHE') != '1':
             old = json.loads(record.read_text())
             if old['signature'] == signature and all(Path(p).is_file() and digest(p)==h for p,h in old['dependencies'].items()):
                 results.append({'file':str(source),'status':'CACHED','seconds':round(time.monotonic()-start,3)})

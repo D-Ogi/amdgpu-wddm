@@ -3,7 +3,9 @@
 Until 0.7.174 the native KMD clock owner pinned the GPU at the lab point, 1000 MHz / 820 mV, from start to stop.
 The Witcher 3 with RT then runs at 24-28 fps with DMA packets in flight 91.5-94 % of the time (ETW, trial 135): the
 clock looked like the limit ("Busy" below says what that figure is and is not). The owner decided on 2026-09-30 to let the driver scale clock and voltage with load up to
-2000 MHz, starting at 1500 MHz: the default ceiling is 1500, and `DpmMaxMHz` may raise it later to the hard ceiling of 2000. This document is the written reason `docs/hardware.md` asks for above 1500 MHz / 900 mV.
+2000 MHz, with an initial upper limit of 1500 MHz. The base and start clock stays at 1000 MHz. The automatic range is
+500-2000 MHz, with a default upper limit of 2000 MHz (owner decision 2026-10-10). `DpmMaxMHz` can select a lower
+ceiling. This document is the written reason `docs/hardware.md` asks for above 1500 MHz / 900 mV.
 
 ## Sources
 
@@ -42,9 +44,8 @@ table started at 1000 MHz up to 0.7.204 and at 800 MHz in 0.7.205.
 - The 2000 MHz ceiling is not a safe clock. The community reports a board-level over-current protection that
   hard-locks the machine between about 1850 and 2200 MHz on 40-CU boards, and on every tested board at 2400 MHz,
   with AC removal as the only exit ([M790](../facts/hardware.md#m790), third-party, no log). Our hard ceiling lies
-  inside that band and unit A has 24 CU, so where the band sits on our part is unknown. This is the standing reason
-  for the 1500 MHz release default, for `DpmMaxMHz` as a deliberate act, and for having the smart plug ready before
-  a run above 1500 MHz.
+  inside that band. The release upper limit is 2000 MHz by owner decision 2026-10-10. The report still supports
+  having the smart plug ready for runs near that band. It does not qualify any point above the hard ceiling.
 - `bc250_clock_prepare` accepts only table points: a clock on the 100 MHz grid with a voltage between the table's
   value and 1000 mV. The escape SET and the governor go through the same gate, so the administrator's `clock set` can
   also ask for a point from 500 to 900 MHz while the governor is not running.
@@ -114,6 +115,9 @@ it with the plug ready, and set `EnableSmuMetrics` 0 if the SMU stops answering.
   sweeps every constant demand from 100 to 2400 MHz and asserts no oscillation.
 - These four numbers are the defaults of every start; "Runtime tuning" below changes them, and adds a floor, until the
   next start.
+- The three load thresholds have a second set, the compute set (400 / 300 / 200 permille), in force while the GPU has
+  an open compute context. "The compute threshold set" below says why a compute client's busy share cannot be read
+  like a renderer's, and what the set leaves alone (every thermal rule, the ceiling, the floor, the idle state).
 - Each transition is RequestGfxclk + ForceGfxVid in the safe order (voltage first when raising, clock first when
   lowering), with readbacks; every 1000 ms the SMU's clock and VID are read back and a mismatch resyncs.
 - A raise ramps. In trial 140 (0.7.176.1) the clock read back 1028-1029 MHz right after 1000 -> 1200 and 1200 at
@@ -560,6 +564,101 @@ from 0.7.184.1 on. Release moved with it to keep the 5 C hysteresis; the 90 C fl
 Witcher 3 session 219 at native 1080p: the telemetry lines peaked at 84.8 C Tctl, and the governor, which samples
 every tick, went thermal-soft twice and capped the clock at 1800 MHz.
 
+### The compute threshold set (BD-127)
+
+The three load thresholds have a second set, the compute set, in force while the GPU has at least one open compute
+context. It is on by default (`DpmComputeProfile` absent or 1).
+
+**Why.** The graphics thresholds raise at 900 permille. A frame-bound renderer reaches that share whenever the clock
+is its limit, so the share is a good measure of the headroom there. A compute client does not work that way: it hands
+the GPU one dispatch, waits for it on the processor and hands over the next, so its busy share measures the split
+between the two and says nothing about the headroom. Measured on unit A on 2026-10-12 (BD-127, tester.29, KMD
+0.7.216.39), a Qwen3-1.7B Q4_K_M model generating through our HIP runtime:
+
+Every row below is the clock sweep of one run (arm 2 of the evidence), so the shares and the rates belong together:
+
+| GPU clock | busy share, mean | generation | prompt |
+|---|---|---|---|
+| 1000 MHz (the governor's own choice) | 59.7 % | 47.41 tokens/s | 350 tokens/s |
+| 1500 MHz (`bc250kmd_cli dpm floor 1500`) | 54.9 % | 59.56 tokens/s | 462 tokens/s |
+| 2000 MHz (`dpm floor 2000`) | 47.2 % | 61.98 tokens/s | 567 tokens/s |
+
+An earlier run of the same model (arm 1) sampled the governor every 200 ms: all forty samples read 1000 MHz, 60 to
+64 C, with no thermal event, and the share had a mean of 57.9 % in a range of 19 to 83 %. So the share never came
+near 900 permille, the governor never raised, and 31 % more tokens a second were there to be had (61.98 / 47.41).
+The share hardly moves with the clock, which is the whole point: each token waits on the processor.
+
+**What the set is.** Up 400, target 300, down 200 permille (`BC250_DPM_COMPUTE_*_PERMILLE`). The measured share at
+1000 MHz then asks for 1000 x 597 / 300 = 1990 MHz, and arm 1's 57.9 % asks for 1930 MHz. The 100 MHz grid and the
+2000 MHz ceiling make either one the top level, in one
+step. 47 % at 2000 MHz stays above the lowering threshold, so the clock holds there. The set goes through
+`bc250_dpm_tune_check` like the graphics one (`bc250_dpm_compute_check` puts the three values into the tune in force
+and checks the whole thing), so both invariants over the clock table hold for it: a one-step lowering never lands at
+or above up ((200 + 1) x 1100 / 1000 = 221.1 <= 400) and a raise never lands below down. The host test sweeps every
+constant compute demand from 300 to 2400 MHz and asserts no oscillation, exactly as it does for the graphics set.
+
+**What the set does not change.** It replaces the three load thresholds of a tick and nothing else. Every thermal
+rule keeps its own numbers and still wins: the hot cap, the warm zone, the soft zone with its lead, the hot step, the
+sub-floor, the 87 C and 90 C limits, a tick with no reading. So do the ceiling (`DpmMaxMHz`), `SetStablePowerState`, a
+runtime floor from `dpm floor`, and the idle state: a quiet GPU still goes to 500 MHz after its hold window although a
+compute process keeps a context open, so a model server with nothing to answer costs no power.
+
+**What it governs is the adapter, not the compute work.** The count is per adapter and per open context, so while any
+compute context lives the set governs every kind of work in that start, the desktop and a game included. The driver
+cannot do better here without a second measurement: GFX1013 has one ring and both kinds of work share it (fact M50),
+so there is no per-client busy share to govern from. The cost is power, never heat (every thermal rule above still
+bounds the clock), and it falls between the two sets' thresholds. A constant demand, measured on the policy itself
+(`scratch/bd127/review-fix/settle.c`, 2000 ticks of 25 ms at 60 C, the demand stated as the clock that would run it
+at a full busy share):
+
+| demand | the graphics set holds | the compute set holds |
+|---|---|---|
+| 300 MHz-equivalent and below | 1000 MHz | 1000 MHz |
+| 400 MHz-equivalent | 1000 MHz | 1400 MHz |
+| 500 MHz-equivalent | 1000 MHz | 1700 MHz |
+| 600 to 800 MHz-equivalent | 1000 MHz | 2000 MHz |
+
+So a resident model server with a loaded context and nothing to answer costs nothing, because the idle state still
+takes a quiet GPU to 500 MHz. The same server beside light graphics work in the 400 to 800 MHz-equivalent band holds
+the clock near the ceiling, where the graphics thresholds would have held the lab floor. An operator who does not
+want that closes the compute client or writes `DpmComputeProfile` 0. A later change can select the set from recent
+compute submissions instead of an open context, which would narrow the band to the work that needs it. That change
+is outside this one.
+
+**How the driver knows.** GFX1013 publishes no compute ring (fact M50), so a compute context asks for
+`AMDGPU_HW_IP_GFX` on node 0 like a graphics one and the node says nothing. The runtime states it instead: BC2C flag
+`BC250_UMD_C_COMPUTE` (`0x4`) at blob version `BC250_UMD_CONTEXT_VERSION_COMPUTE` (3), which appends no field, so the
+wire size stays 80 bytes. `compute/hip/bc250hsa` sets it on every context it creates. `wddm.c` raises an interlocked
+per-adapter count in `DxgkDdiCreateContext`, after the blob is accepted and after the last path that can still fail,
+and lowers it in `DxgkDdiDestroyContext`. Dxgkrnl destroys the contexts of a dying process, so a killed compute client
+needs no process tracking and no escape. The governor thread reads the count once per tick. A version 2 blob's flags
+word is recorded but never acted on, so no older producer can turn the set on, and an older driver ignores both the
+version and the flag.
+
+**Telemetry.** One line per change of the set:
+`dpm: compute set on, contexts 1, up 400 target 300 down 200 permille`. A change is an event, but a client that opens
+and closes a context per operation makes it a cadence of up to 40 a second, so the line goes through the rate limit
+of `log_rate.h`: the first eight changes of a start in full, then at most two a minute, each of those standing for
+the changes it accounts for (`dpm: compute set on, contexts 1: 37 changes in 61000 ms, 36 of 45 silent`).
+Two lines of the 5 s telemetry block, the stop
+and the summary, once the set has something to say:
+`dpm: telemetry compute on (now), contexts 1, entries 1 ticks 4913` and
+`dpm: telemetry compute thresholds up 400 target 300 down 200 permille`. The split is the rule of the
+guardlog-width gate, which holds a line to 159 characters. `RUN_DPM`
+carries one more flag bit in every ABI, `BC250_DPM_FLAG_COMPUTE` (65536, the compute set governs now). No field moves
+and no ABI size changes, so `BC250_KMD_VERSION` stays `0x000700D8`. The count and the thresholds are in the driver
+log and not in the escape, because `BC250_ESCAPE_DPM` has no reserved field. `bc250kmd_cli dpm` prints a `compute:` line
+for a start that governs the clock.
+
+**Tests.** `dpm_test.c` `test_compute`: the defaults and their legality at every ceiling, the measured 58 % case with
+and without an open context, the hold at 47 % at 2000 MHz, several contexts as one state, the graphics thresholds back
+when the last context closes, `DpmComputeProfile` 0, the idle point with a context open and the exit from it, the hot
+cap and its steps to 800 MHz, the critical rule, a blind tick, the warm zone, the soft zone, the ceiling,
+`SetStablePowerState`, a runtime floor, every refusal (ranges, the order, invariant 1) with the three defaults kept,
+a refused threshold beside an explicit `DpmComputeProfile` 0 and beside an explicit 1, and the
+oscillation sweep. `umd_blob_test.c` checks the flag against the contract header, the version gate, an unknown flag
+bit and a refused blob.
+
 ### The joint power arm (0.7.216.7, C62)
 
 Three loops control the package's heat, and each one runs alone: the GPU clock governor (`dpm.c`), the CPU surface
@@ -652,12 +751,16 @@ keeps its busy gate for the same message.
 | Value | Meaning |
 |---|---|
 | `DpmMode` | 0 fixed-lab (1000 MHz / 820 mV, the default until lab acceptance), 1 dpm. Anything else: fixed, reason INVALID_SETTING |
-| `DpmMaxMHz` | ceiling in dpm, 1000-2000, rounded down to the 100 MHz grid; absent = 1500 (`BC250_DPM_DEFAULT_MAX_MHZ`, owner 2026-09-30); 2000 is the hard ceiling |
+| `DpmMaxMHz` | ceiling in dpm, 1000-2000, rounded down to the 100 MHz grid; absent = 2000 (`BC250_DPM_DEFAULT_MAX_MHZ`, owner 2026-10-10); 2000 is the hard ceiling |
 | `DpmIdleMHz` | the idle point (0.7.207): a table clock from 500 to 900 MHz, or 0 for no idle state. Absent = 500 (`BC250_DPM_IDLE_MHZ`). Only a start that governs the clock reads it (`DpmMode` 1, past the guard, with an SMU owner). The thermal cap still bounds a point above the thermal floor |
 | `DpmIdleHoldMs` | how long the GPU must have no work before the idle point; absent = 3000, range 250 to 60000 |
 | `DpmIdleBusyPermille` | the mean busy share the entry's hold window still admits. Absent = 2, at most 100. The fast exit has its own threshold, `BC250_DPM_IDLE_EXIT_PERMILLE` (500 permille in one tick), which no setting changes |
 | `DpmIdleLeavePermille` | the slow exit (0.7.216.6). The idle point is left when its trailing window's work reaches this share. Absent = 150 (`BC250_DPM_IDLE_LEAVE_PERMILLE`), range 10 to 400. It must be above `DpmIdleBusyPermille`, else the idle state is off for the start |
 | `DpmThermalZone` | the soft thermal zone (0.7.213): absent or any other value runs it, 0 runs the 0.7.212 thermal rules for the whole start (the hot cap at 87 C alone, no soft release, the warm zone at 87 C). A runtime `dpm tune reset` turns the zone back on |
+| `DpmComputeProfile` | the compute threshold set (BD-127). Absent or any other value runs it, which is the default. 0 leaves the graphics thresholds in force at every tick. This switch always takes effect. A refused threshold value beside it does not hold the set on. The set is selected only while a compute context is open |
+| `DpmComputeUpPermille` | the compute set's raise threshold. Absent = 400 (`BC250_DPM_COMPUTE_UP_PERMILLE`) |
+| `DpmComputeTargetPermille` | the share a compute raise aims at. Absent = 300 (`BC250_DPM_COMPUTE_TARGET_PERMILLE`) |
+| `DpmComputeDownPermille` | the compute set's lowering threshold. Absent = 200 (`BC250_DPM_COMPUTE_DOWN_PERMILLE`). The three go through the same checks as the graphics thresholds. A refused set is logged and the start keeps the three defaults. `DpmComputeProfile` is not refused with them |
 | `DpmJointGovernor` | the joint power arm (0.7.216.7, C62). 1 runs it in a start that governs the clock. Absent or any other value leaves it off (the default). It also needs `CpuTune` 1 and a CPU read stage that answered. See "The joint power arm" above for what a lab trial must show before the default changes |
 | `DpmPending`, `DpmConfirmed` | guard marks, written by the driver |
 | `DpmSession` | written durably before the first raise above the floor, deleted after 10 s at the floor or on a clean stop |
@@ -670,6 +773,11 @@ request's encoding and deletes the pending mark. A start that finds `DpmPending`
 healthy) or `DpmSession` (the machine went down above the floor) writes `DpmMode = 0` and runs fixed-lab, reason
 UNCONFIRMED or UNCLEAN. Changing `DpmMaxMHz` changes the encoding and asks for confirmation again. Settings are read
 at device start: change them, then restart the device or reboot.
+
+The installer moves a stored 1500 MHz ceiling to 2000 MHz. Other stored limits stay as they are.
+An older release stored no record that distinguishes its default 1500 MHz from a manual choice of that value.
+If you set 1500 MHz yourself, set it again in the control app after the upgrade.
+An explicit `-DpmMaxMHz` installer argument takes precedence over this migration.
 
 ### The durable record of a fallback (0.7.208, BD-069)
 
@@ -875,7 +983,10 @@ that the machine does not survive costs the curve and not the machine, and the d
 - Display clocks (DCN) are independent of sclk. Unaffected.
 - The escape SET (the legacy manual owner) is refused with STATUS_DEVICE_BUSY while the governor runs; READ works.
 
-## Lab plan and risks
+## Original lab plan and risks
+
+The following is the original 2026-09-30 plan, retained as history. The current default upper limit is 2000 MHz
+and current lab-session limits follow the owner's standing instructions.
 
 The lead runs the lab steps (deploy through `scratch\kmd-deploy`, idle, load step, thermal, game); each has a
 three-minute bound (five for the game). The lab starts at the 1500 MHz default, the firmware's own operating point; 2000 comes only with an explicit `DpmMaxMHz` after that passes. Risks: 2000 MHz at 1000 mV has never run on unit A (M52 stops short of it);

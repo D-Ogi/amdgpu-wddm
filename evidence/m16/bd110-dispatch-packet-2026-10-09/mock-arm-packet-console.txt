@@ -1,0 +1,8 @@
+ggml_cuda_init: found 1 ROCm devices (Total VRAM: 8192 MiB):
+  Device 0: AMD BC-250 (mock device), gfx1013 (0x1013), VMM: no, Wave Size: 32, VRAM: 8192 MiB
+| model                          |       size |     params | backend    | ngl | threads |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | --: | ------: | --------------: | -------------------: |
+| llama 1B Q4_0                  | 606.53 MiB |     1.10 B | ROCm       |  99 |       2 |             pp8 |      13227.51 ± 0.00 |
+| llama 1B Q4_0                  | 606.53 MiB |     1.10 B | ROCm       |  99 |       2 |             tg4 |       3035.59 ± 0.00 |
+
+build: unknown (0)

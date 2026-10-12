@@ -39,7 +39,11 @@ namespace AmdgpuWddmControl
             // Full fan speed under a heavy load (fan.md rule 10): on the fan card, and the words a person types
             // about it ("loud", "noise") are not the words of the card itself.
             E("perf.fan-boost", "performance"),
+            // The ray tracing benchmark card (src/Benchmark.cs): the words a person types when they want a number
+            // for their own board ("benchmark", "fps", "score") lead to it.
+            E("perf.benchmark", "performance"),
             E("driver.version", "driver"), E("driver.update", "driver"),
+            E("system.background", "system"), E("system.updates", "system"), E("system.drivers", "system"), E("system.drive", "system"),
             E("settings.language", "settings"), E("settings.update-start", "settings"), E("settings.recent", "settings"), E("settings.nagi", "settings"),
             E("settings.tips", "settings"), E("settings.animations", "settings"), E("settings.support", "settings"), E("settings.data", "settings"),
             E("help.repair", "help"), E("help.report", "help"), E("help.restart", "help"), E("help.guides", "help"),

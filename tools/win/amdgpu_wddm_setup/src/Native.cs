@@ -25,6 +25,10 @@ namespace AmdgpuWddmSetup
         [StructLayout(LayoutKind.Sequential, Pack = 4)]
         public struct TokenPrivileges { public uint Count; public long Luid; public uint Attributes; }
 
+        // RECT (windef.h): the rectangle WM_DPICHANGED suggests for the window on its new screen.
+        [StructLayout(LayoutKind.Sequential)]
+        public struct Rect { public int Left, Top, Right, Bottom; }
+
         [DllImport("advapi32.dll", SetLastError = true)]
         static extern bool OpenProcessToken(IntPtr process, uint access, out IntPtr token);
 
@@ -78,11 +82,19 @@ namespace AmdgpuWddmSetup
 
         const string ControlKey = @"Software\amdgpu-wddm\Control";
 
-        // "Show Nagi" of the control app (unchecked = no value = false). Setup never writes it.
+        // "Show Nagi" of the control app, with the control app's own rule (AppSettings.OnUnlessZero): on unless the
+        // value is the DWORD 0, so a PC that never ran the control app shows her. Setup never writes it.
         public static bool ShowNagi()
         {
-            try { using (var k = Registry.CurrentUser.OpenSubKey(ControlKey)) return k != null && k.GetValue("ShowNagi") is int && (int)k.GetValue("ShowNagi") == 1; }
-            catch (Exception) { return false; }
+            try
+            {
+                using (var k = Registry.CurrentUser.OpenSubKey(ControlKey))
+                {
+                    var v = k == null ? null : k.GetValue("ShowNagi");
+                    return !(v is int) || (int)v != 0;
+                }
+            }
+            catch (Exception) { return true; }
         }
 
         // The language chosen in the control app, if any; else null (setup then uses Windows' language).

@@ -1,0 +1,1888 @@
+{
+  "schema": 1,
+  "note": "The standard validation set of a release train, as one list. Every arm names an entry point that already exists; this file holds the order, the bounds, the result line and the baseline, and nothing else. Change the set here, not in a per-train copy of a shell script.",
+  "config": {
+    "target": "{repo}/tools/win/target.py",
+    "mon": "{repo}/tools/win/bc250mon/mon.py",
+    "temp": "{repo}/tools/win/bc250rd/temp.py",
+    "kit": "{repo}/tools/win/train-validate/lab",
+    "caps": "{ws}/scratch/m15/native-caps001",
+    "gamecontrol": "{ws}/scratch/m15/game-recon/game-control.py",
+    "pathtrace": "{ws}/scratch/pathtrace",
+    "plug": "{ws}/scratch/smartplug/plug.py",
+    "adapter_dir": "adapter138",
+    "lab_root": "C:\\BC250\\tmp\\train-{release}",
+    "lab_pkg": "C:\\BC250\\tmp\\train-{release}\\{pkg_name}",
+    "lab_zip": "C:\\BC250\\tmp\\train-{release}\\{pkg_name}.zip"
+  },
+  "limits": {
+    "note": "Owner rules. The runner holds them; do not tune them here.",
+    "trial_bound_s": 170,
+    "game_bound_s": 1200,
+    "tctl_start_max_c": 80.0,
+    "tctl_poll_s": 20,
+    "tctl_cool_max_s": 420,
+    "host_grace_s": 45,
+    "game_evidence_s": 900,
+    "game_available_mb": 3500,
+    "min_poll_s": 10,
+    "restart_settle_s": 30,
+    "restart_poll_s": 30
+  },
+  "sets": {
+    "standard": [
+      "push-zip",
+      "zipcheck",
+      "uninstall",
+      "restart-1",
+      "install",
+      "restart-2",
+      "slots",
+      "kmdver",
+      "stop-record",
+      "restart-3",
+      "preflight",
+      "pin-baseline",
+      "clock-read-user",
+      "standard-user-logon",
+      "router-dialog",
+      "stage-clients",
+      "vk-smoke",
+      "vkheaps",
+      "vk-semaphore",
+      "x86-smoke",
+      "cache-0",
+      "q2rtx-pipeline",
+      "q2rtx-query",
+      "q2rtx-loop",
+      "cache-1",
+      "q2rtx-warm",
+      "cache-2",
+      "dxrpt",
+      "cts-rt",
+      "cts-rt-wave64",
+      "llm-dense",
+      "llm-text-vulkan",
+      "llm-q35",
+      "hip",
+      "d3d12-promote",
+      "bm-before",
+      "bm-set-8192",
+      "bm-restart-1",
+      "bm-at-8192",
+      "vkheaps-8192",
+      "rottr",
+      "w3-high-rt",
+      "bm-restore",
+      "bm-restart-2",
+      "bm-after"
+    ],
+    "install": [
+      "push-zip",
+      "zipcheck",
+      "uninstall",
+      "restart-1",
+      "install",
+      "restart-2",
+      "slots",
+      "kmdver",
+      "stop-record",
+      "restart-3",
+      "preflight",
+      "pin-baseline"
+    ],
+    "gates": [
+      "q2rtx-pipeline",
+      "q2rtx-query",
+      "q2rtx-loop",
+      "rottr"
+    ],
+    "smoke": [
+      "vk-smoke",
+      "vkheaps",
+      "x86-smoke",
+      "dxrpt",
+      "cts-rt",
+      "cts-rt-wave64"
+    ],
+    "cache": [
+      "cache-0",
+      "q2rtx-pipeline",
+      "cache-1",
+      "q2rtx-warm",
+      "cache-2"
+    ],
+    "llm": [
+      "llm-dense",
+      "llm-text-vulkan",
+      "llm-q35"
+    ],
+    "hip": [
+      "stage-clients",
+      "hip"
+    ],
+    "semaphore": [
+      "stage-clients",
+      "vk-semaphore"
+    ],
+    "board-memory": [
+      "bm-before",
+      "bm-set-8192",
+      "bm-restart-1",
+      "bm-at-8192",
+      "vkheaps-8192",
+      "bm-restore",
+      "bm-restart-2",
+      "bm-after"
+    ]
+  },
+  "arms": [
+    {
+      "id": "push-zip",
+      "title": "Push the package zip to the lab",
+      "kind": "transfer",
+      "bound_s": 900,
+      "why_not_a_trial": "A file copy over ssh, no GPU work and no trial: the three-minute trial bound does not apply, and a 95 MB copy needs more than it.",
+      "run": [
+        [
+          "python",
+          "{target}",
+          "run",
+          "New-Item -ItemType Directory -Force '{lab_root}' | Out-Null; 'ready'"
+        ],
+        [
+          "python",
+          "{target}",
+          "push",
+          "{zip}",
+          "--to",
+          "{lab_root}"
+        ]
+      ],
+      "expect": "ready",
+      "gate_after": false,
+      "note": "target.py push takes the files first and the lab directory after --to. Without --to it would read the lab path as a second local file and the copy would never start."
+    },
+    {
+      "id": "zipcheck",
+      "title": "The pushed zip is the development PC's zip",
+      "kind": "lab-read",
+      "bound_s": 90,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/zipcheck.ps1",
+          "-Zip",
+          "{lab_zip}",
+          "-Want",
+          "{zip_sha256}"
+        ]
+      ],
+      "expect": "zip OK",
+      "depends_on": [
+        "push-zip"
+      ],
+      "gate_after": false
+    },
+    {
+      "id": "uninstall",
+      "title": "Clean slate: the installed release removes itself",
+      "kind": "lab",
+      "bound_s": 170,
+      "needs_verified": "zipcheck",
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/clean-slate.ps1",
+          "-Step",
+          "uninstall",
+          "-Root",
+          "{lab_root}"
+        ]
+      ],
+      "expect": "uninstall exit 0",
+      "result": {
+        "regex": "driver store bc250kmd packages: (\\d+)",
+        "section": "--- after",
+        "pick": "last",
+        "name": "driver-store packages left",
+        "unit": "packages"
+      },
+      "baseline": {
+        "value": 0,
+        "tolerance_abs": 0,
+        "source": "b26 uninstall.txt, b25 the same"
+      },
+      "depends_on": [
+        "zipcheck"
+      ],
+      "gate_after": false,
+      "note": "The step prints the inventory before and after the uninstaller, so the result line is read after the '--- after' marker only. The adapter falls back to Microsoft Basic Display Adapter here, so the KMD gate cannot run until the install. This arm removes the driver: it does not run until zipcheck has proved the package on the lab."
+    },
+    {
+      "id": "restart-1",
+      "title": "Restart after the uninstall",
+      "kind": "restart",
+      "bound_s": 600,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/restart-now.ps1",
+          "-Reason",
+          "clean-slate uninstall"
+        ]
+      ],
+      "depends_on": [
+        "uninstall"
+      ],
+      "gate_after": false
+    },
+    {
+      "id": "install",
+      "title": "Install the package fresh, 40 CU",
+      "kind": "lab",
+      "bound_s": 170,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/clean-slate.ps1",
+          "-Step",
+          "install",
+          "-Name",
+          "{pkg_name}",
+          "-Sha",
+          "{zip_sha256}",
+          "-Root",
+          "{lab_root}"
+        ]
+      ],
+      "expect": "install exit 0",
+      "depends_on": [
+        "restart-1"
+      ],
+      "gate_after": false
+    },
+    {
+      "id": "restart-2",
+      "title": "Restart after the install",
+      "kind": "restart",
+      "bound_s": 600,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/restart-now.ps1",
+          "-Reason",
+          "package install"
+        ]
+      ],
+      "depends_on": [
+        "install"
+      ],
+      "gate_after": true
+    },
+    {
+      "id": "slots",
+      "title": "Every installed payload file against the package manifest",
+      "kind": "lab-read",
+      "bound_s": 150,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/slots.ps1",
+          "-Pkg",
+          "{lab_pkg}"
+        ]
+      ],
+      "result": {
+        "regex": "slot check: (\\d+) match, (\\d+) differ, (\\d+) absent",
+        "group": 2,
+        "name": "slots differing",
+        "unit": "files"
+      },
+      "baseline": {
+        "value": 0,
+        "tolerance_abs": 0,
+        "source": "b26 slots.txt: 36 match, 0 differ, 1 absent (the cert the installer does not lay down)"
+      },
+      "depends_on": [
+        "restart-2"
+      ],
+      "gate_after": false
+    },
+    {
+      "id": "kmdver",
+      "title": "Identity of the running driver, the ICD and the DWM modules",
+      "kind": "lab-read",
+      "bound_s": 150,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/kmdver.ps1"
+        ]
+      ],
+      "expect_all": [
+        "gfx: VMID pool on (EnableVmidPool)",
+        "gfx: VM flush on the ring (EnableRingVmFlush), engine 1"
+      ],
+      "note": "From train b31 the VM flush on the gfx ring is the release default (EnableRingVmFlush absent = on, 0 = the rollback; docs/design/gfx-submit-root-serialization.md section 3). A registry value only says what was asked; the GfxStart lines say what the running driver did, so the arm fails when the driver came up on the MMIO flush (engine 17) or without the VMID pool.",
+      "depends_on": [
+        "restart-2"
+      ],
+      "gate_after": false
+    },
+    {
+      "id": "stop-record",
+      "title": "BD-124: the stop record of a start that nothing confirmed, on hardware",
+      "kind": "lab-read",
+      "bound_s": 170,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/stop-record.ps1"
+        ]
+      ],
+      "expect": "stop record arm: ok",
+      "note": "From train b31 the driver writes Parameters\\StopRecord when Windows stops a device whose start this generation never confirmed, and writes nothing for a stop of a confirmed start or for the stop that unwinds a start which failed (guard.c GuardRecordStopBegin). The host suites prove the layout and the readers; this arm is the only place the driver's own write is read on hardware. It stops and starts the display adapter twice with pnputil and enables it again on every exit path.",
+      "depends_on": [
+        "kmdver"
+      ],
+      "gate_after": false
+    },
+    {
+      "id": "restart-3",
+      "title": "Restart after the stop record arm",
+      "kind": "restart",
+      "bound_s": 600,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/restart-now.ps1",
+          "-Reason",
+          "stop record arm"
+        ]
+      ],
+      "depends_on": [
+        "kmdver"
+      ],
+      "gate_after": true,
+      "note": "The stop record arm stops and starts the adapter, and only a logon confirms a start, so the start health stays at 7 until a restart (validation-r1 of b31: preflight refused). It depends on kmdver, not on stop-record, so it also runs when stop-record fails."
+    },
+    {
+      "id": "preflight",
+      "title": "Preflight: 40 CU confirmed, DPM, start health, TdrDelay, no competing trial",
+      "kind": "lab-read",
+      "bound_s": 150,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/preflight.ps1"
+        ]
+      ],
+      "expect": "preflight: ok",
+      "depends_on": [
+        "restart-2",
+        "restart-3"
+      ],
+      "gate_after": false
+    },
+    {
+      "id": "pin-baseline",
+      "title": "Pin the trial harness to this package",
+      "kind": "host",
+      "bound_s": 300,
+      "why_not_a_trial": "Runs on the development PC against the package files; it never reaches the lab.",
+      "run": [
+        [
+          "python",
+          "{repo}/tools/win/train-validate/pin-baseline.py",
+          "{caps}",
+          "{pkg}"
+        ]
+      ],
+      "result": {
+        "regex": "release \\S+: (\\d+) files verified",
+        "name": "files verified",
+        "unit": "files"
+      },
+      "expect": "files verified",
+      "depends_on": [
+        "slots"
+      ],
+      "gate_after": false
+    },
+    {
+      "id": "clock-read-user",
+      "title": "BD-062: the clock read answers a caller without administrator rights, the set still does not",
+      "kind": "lab-read",
+      "bound_s": 170,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/clock-read-user.ps1"
+        ]
+      ],
+      "expect": "clock read user arm: ok",
+      "depends_on": [
+        "preflight"
+      ],
+      "gate_after": false,
+      "note": "Every other call of this suite arrives over ssh and is elevated, so no existing arm can see this defect: it would read the clock as an administrator. The probe runs bc250kmd_cli clock read in the console session, as the user who is logged on there, at the limited run level, through a scheduled task that it removes again. mhz, vid and temperature_mc must all be in that answer. Then the same read from the elevated session must still give a live reading, and clock set 1000 820 from the non-elevated task must be refused. It ends on the health of the part: no GPU fault line and the fan still at state=curve controlling=1. It changes no setting and no clock, and the operating point it names in the refused set is the one the lab already runs at.",
+      "failure_classes": [
+        "BD-062"
+      ]
+    },
+    {
+      "id": "standard-user-logon",
+      "title": "BD-080: a logon that is not an administrator confirms the driver start",
+      "kind": "operator",
+      "bound_s": 1200,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/standard-user-logon.ps1",
+          "-Phase",
+          "prepare"
+        ],
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/restart-now.ps1",
+          "-Reason",
+          "BD-080 standard user logon"
+        ],
+        [
+          "python",
+          "{target}",
+          "boot",
+          "--os",
+          "windows",
+          "--after-now",
+          "--bound",
+          "600"
+        ],
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/standard-user-logon.ps1",
+          "-Phase",
+          "verify"
+        ]
+      ],
+      "post": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/standard-user-logon.ps1",
+          "-Phase",
+          "cleanup"
+        ],
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/restart-now.ps1",
+          "-Reason",
+          "BD-080 cleanup"
+        ],
+        [
+          "python",
+          "{target}",
+          "boot",
+          "--os",
+          "windows",
+          "--after-now",
+          "--bound",
+          "600"
+        ]
+      ],
+      "expect_all": [
+        "standard user logon arm (prepare): ok",
+        "standard user logon arm (verify): ok"
+      ],
+      "depends_on": [
+        "preflight"
+      ],
+      "gate_after": true,
+      "note": "The suite cannot reach this defect either: every installer arm logs on as the lab's administrator account, which the defect never affected. The arm makes a local account that is not in Administrators, arms the automatic logon for two starts, restarts, and then reads what the two logons left: a confirmation line and the window task's line in start-confirm.log, the window task's last result 0, UnconfirmedStarts back at 0, the clock control still on, both scheduled tasks registered, and no Microsoft Basic Display Adapter. The password is generated on the lab and never printed. Windows keeps it in plain text in the registry while the automatic logon is armed, which is why the cleanup step removes the value, the account and its profile, and why the cleanup runs as a post step on every exit path. The boot waits are target.py boot --after-now, as the owner's rule of 2026-10-11 requires. Why it is an operator arm and not a trial: it restarts the machine twice and waits for two logons, so no three-minute bound can hold it.",
+      "failure_classes": [
+        "BD-080"
+      ]
+    },
+    {
+      "id": "router-dialog",
+      "title": "BD-126: the firewall notification window on the processor route, and back on the adapter",
+      "kind": "operator",
+      "bound_s": 900,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/router-dialog.ps1",
+          "-Phase",
+          "default"
+        ],
+        {
+          "argv": [
+            "python",
+            "{mon}",
+            "screenshot",
+            "--out",
+            "{out}/router-dialog/dialog-cpu-route.png"
+          ],
+          "optional": true
+        },
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/router-dialog.ps1",
+          "-Phase",
+          "allow"
+        ],
+        {
+          "argv": [
+            "python",
+            "{mon}",
+            "screenshot",
+            "--out",
+            "{out}/router-dialog/dialog-gpu-route.png"
+          ],
+          "optional": true
+        }
+      ],
+      "post": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/router-dialog.ps1",
+          "-Phase",
+          "restore"
+        ]
+      ],
+      "expect_all": [
+        "router dialog arm: ok"
+      ],
+      "depends_on": [
+        "preflight"
+      ],
+      "gate_after": false,
+      "note": "The repro needs no game: a program that listens on a network port from a path with no firewall rule makes Windows raise the 'Windows Security' window, and svchost.exe starts PickerHost.exe to draw it. The listener is a copy of powershell.exe under a name of its own, started in the console session through a scheduled task, because no window of this kind appears in session 0. The default phase wants route=cpu with reason=app-dialog-host, the allow phase wants route=gpu with reason=app-default, and the restore phase puts the AppRouter values back from its own record. The two shots are the only evidence that the window paints its text and its two buttons, which no script can read: they are optional steps, so a missing shot fails nothing, and the operator looks at them. If the window stays empty on the processor route as well, the entry buys nothing and comes out (driver/umd/router/README.md). The application GPU UMD's own log of that process needs a machine-wide DXVK_LOG_PATH, because svchost.exe starts the dialog host.",
+      "failure_classes": [
+        "BD-126"
+      ]
+    },
+    {
+      "id": "stage-clients",
+      "title": "Stage the clients that are not in the package: vksemcheck, the HIP llama.cpp consumer, TinyLlama, the upstream llama-completion",
+      "kind": "transfer",
+      "bound_s": 900,
+      "why_not_a_trial": "File copies over ssh with a hash of every file on both sides, no GPU work and no trial. A file the lab already holds with the same hash is not sent again (the model, 637 MB, was staged by the M16 sessions).",
+      "run": [
+        [
+          "python",
+          "{repo}/tools/win/train-validate/stage.py",
+          "--to",
+          "{lab_root}\\vksemcheck",
+          "{ws}/scratch/build/vksemcheck/vksemcheck-x64.exe",
+          "{ws}/scratch/build/vksemcheck/vksemcheck-x86.exe"
+        ],
+        [
+          "python",
+          "{repo}/tools/win/train-validate/stage.py",
+          "--to",
+          "{lab_root}\\hip",
+          "{ws}/scratch/hip-consumer-b29/bin"
+        ],
+        [
+          "python",
+          "{repo}/tools/win/train-validate/stage.py",
+          "--to",
+          "C:\\BC250\\tmp\\models",
+          "{ws}/scratch/m9/models/tinyllama-1.1b-chat-v1.0.Q4_0.gguf"
+        ],
+        [
+          "python",
+          "{repo}/tools/win/train-validate/stage.py",
+          "--to",
+          "C:\\BC250\\llmvram\\bin-upstream",
+          "{ws}/scratch/llm-vram/upstream/b11539-vulkan-x64/llama-completion.exe"
+        ]
+      ],
+      "expect": "stage OK",
+      "depends_on": [
+        "preflight"
+      ],
+      "gate_after": false,
+      "note": "Every step must end with 'stage OK'. The HIP directory (scratch/hip-consumer-b29/bin) is the llama.cpp consumer that ran on the lab on 2026-10-11 with the rebuilt ggml-hip.dll 4928C0DD, without that run's runtime and test clients; its consumer-pins.json names every file, and the hip arm refuses a directory that differs from it or holds the ggml-hip.dll 1102A1DD of the BD-110 fault. It holds no amdhip64.dll on purpose: the benchmark must load the runtime from the installed tools\\hip on PATH, which the hip arm checks. llama-completion.exe of upstream b11539 joins the rest of that release, which the BD-114 round expanded in C:\\BC250\\llmvram\\bin-upstream; it is sent only when it is absent there or differs."
+    },
+    {
+      "id": "vk-smoke",
+      "title": "Vulkan smoke on the installed system ICD, x64 and x86",
+      "kind": "lab",
+      "bound_s": 170,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/vk-smoke.ps1",
+          "-Step",
+          "all"
+        ]
+      ],
+      "result": {
+        "regex": "driverInfo\\s*=\\s*(.+)",
+        "name": "ICD driverInfo",
+        "kind": "text"
+      },
+      "depends_on": [
+        "preflight"
+      ]
+    },
+    {
+      "id": "vkheaps",
+      "title": "The Vulkan memory heaps of the installed system driver, against the published segment",
+      "kind": "lab-read",
+      "bound_s": 150,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/vkheaps.ps1"
+        ]
+      ],
+      "result": {
+        "regex": "vk heaps: device-local (\\d+) MiB",
+        "name": "DEVICE_LOCAL heap",
+        "unit": "MiB"
+      },
+      "baseline": {
+        "value": 11865,
+        "tolerance_abs": 200,
+        "source": "the 12288 MiB carve-out of the lab from 2026-10-10 16:13Z on: the application segment is the carve-out less the POST framebuffer, the reserved tail and the page tables, and RADV's split mode advertises two thirds of local plus shared as its local heap (the host model of the vram-caps wagon of tester.27). Until tester.27 the heaps were frozen at 8017.5 MiB whatever the carve-out; the vkheaps-8192 arm reads the same heap at 8192 MiB, where it must be about 7897 MiB."
+      },
+      "depends_on": [
+        "vk-smoke"
+      ],
+      "gate_after": false
+    },
+    {
+      "id": "vk-semaphore",
+      "title": "Win32 semaphore export and import across two processes, on the installed Vulkan drivers",
+      "kind": "lab",
+      "bound_s": 170,
+      "kill": [
+        "vksemcheck-x64",
+        "vksemcheck-x86"
+      ],
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/vk-semaphore.ps1",
+          "-Dir",
+          "{lab_root}\\vksemcheck"
+        ]
+      ],
+      "expect": "vk-semaphore x64: PASS",
+      "result": {
+        "regex": "vk-semaphore x64 failures (\\d+)",
+        "name": "x64 runs that failed",
+        "unit": "runs"
+      },
+      "baseline": {
+        "value": 0,
+        "tolerance_abs": 0,
+        "source": "the first lab run of this check (tester.27, mesa 2fbc4913 in the system ICD). Its host gate drove the same paths against a KMT mock; the client passed every check on another vendor's driver at build time (tools/win/vksemcheck/build.ps1)."
+      },
+      "depends_on": [
+        "stage-clients",
+        "vk-smoke"
+      ],
+      "failure_classes": [
+        "BD-105"
+      ],
+      "note": "x64 in session 0 and in the interactive session decide. The x86 run is the negative control: the 32-bit ICD of tester.27 is the earlier build, so its named cell is expected to fail or to end the process, and the arm reports that and decides nothing on it."
+    },
+    {
+      "id": "x86-smoke",
+      "title": "A 32-bit D3D11 client on the installed wow64 stack",
+      "kind": "lab",
+      "bound_s": 170,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/x86-d3d11-smoke.ps1"
+        ]
+      ],
+      "depends_on": [
+        "preflight"
+      ]
+    },
+    {
+      "id": "cache-0",
+      "title": "The shader disk cache of the new Vulkan driver, before the first ray tracing run",
+      "kind": "lab-read",
+      "bound_s": 90,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/mesacache.ps1",
+          "-Step",
+          "read"
+        ]
+      ],
+      "result": {
+        "regex": "mesa_shader_cache: (\\d+) files",
+        "name": "cache files before",
+        "kind": "text"
+      },
+      "depends_on": [
+        "preflight"
+      ],
+      "note": "The first of three readings of the b25 B1 proof. A release whose Vulkan driver is a new build has a cache namespace of its own (BD-100), so this reading is the cold state of that namespace."
+    },
+    {
+      "id": "q2rtx-pipeline",
+      "title": "GATE Quake II RTX timedemo, VK_KHR_ray_tracing_pipeline",
+      "kind": "lab",
+      "bound_s": 170,
+      "gate": "q2rtx",
+      "plug": true,
+      "kill": [
+        "q2rtx"
+      ],
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{pathtrace}/lab/pt-run.ps1",
+          "-Demo",
+          "q2rtx-timedemo",
+          "-RtApi",
+          "pipeline",
+          "-Width",
+          "1280",
+          "-Height",
+          "720",
+          "-Seconds",
+          "150"
+        ]
+      ],
+      "expect": "Using VK_KHR_ray_tracing_pipeline",
+      "result": {
+        "regex": "(\\d+) frames, ([\\d.]+) seconds: ([\\d.]+) fps",
+        "group": 3,
+        "name": "timedemo",
+        "unit": "fps"
+      },
+      "baseline": {
+        "value": 56.87,
+        "tolerance_pct": 10,
+        "source": "b28 (0.7.216.100-tester.26) train validation of 2026-10-10, scratch/train/b28/validation/RESULTS.md: q2rtx-pipeline 56.87 fps. b28 ran at the 8192 MiB carve-out with the 1500 MHz DPM ceiling; tester.27 ships the 2000 MHz ceiling, so a reading above this one is expected and is not a regression."
+      },
+      "depends_on": [
+        "preflight"
+      ],
+      "failure_classes": [
+        "BD-102",
+        "BD-105"
+      ]
+    },
+    {
+      "id": "q2rtx-query",
+      "title": "GATE Quake II RTX timedemo, VK_KHR_ray_query",
+      "kind": "lab",
+      "bound_s": 170,
+      "gate": "q2rtx",
+      "plug": true,
+      "kill": [
+        "q2rtx"
+      ],
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{pathtrace}/lab/pt-run.ps1",
+          "-Demo",
+          "q2rtx-timedemo",
+          "-RtApi",
+          "query",
+          "-Width",
+          "1280",
+          "-Height",
+          "720",
+          "-Seconds",
+          "150"
+        ]
+      ],
+      "expect": "Using VK_KHR_ray_query",
+      "result": {
+        "regex": "(\\d+) frames, ([\\d.]+) seconds: ([\\d.]+) fps",
+        "group": 3,
+        "name": "timedemo",
+        "unit": "fps"
+      },
+      "baseline": {
+        "value": 56.78,
+        "tolerance_pct": 10,
+        "source": "b28 (0.7.216.100-tester.26) train validation of 2026-10-10, scratch/train/b28/validation/RESULTS.md: q2rtx-query 56.78 fps. b28 ran at the 8192 MiB carve-out with the 1500 MHz DPM ceiling; tester.27 ships the 2000 MHz ceiling, so a reading above this one is expected and is not a regression."
+      },
+      "depends_on": [
+        "preflight"
+      ],
+      "failure_classes": [
+        "BD-102",
+        "BD-105"
+      ]
+    },
+    {
+      "id": "q2rtx-loop",
+      "title": "GATE Quake II RTX, fullscreen play loop to the bound",
+      "kind": "lab",
+      "bound_s": 170,
+      "gate": "q2rtx",
+      "plug": true,
+      "kill": [
+        "q2rtx"
+      ],
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{pathtrace}/lab/pt-run.ps1",
+          "-Demo",
+          "q2rtx-loop",
+          "-Fullscreen",
+          "-Width",
+          "1920",
+          "-Height",
+          "1200",
+          "-Seconds",
+          "160"
+        ]
+      ],
+      "expect": "end: reason bound",
+      "result": {
+        "regex": "end: reason (\\w+), elapsed ([\\d.]+) s",
+        "group": 2,
+        "name": "run to the bound",
+        "unit": "s"
+      },
+      "baseline": {
+        "value": 160,
+        "tolerance_abs": 10,
+        "source": "the arm's own -Seconds 160: a loop that plays to the end reports its own request back, as b26 step7-dxgi-r2 did (end: reason bound, elapsed 133.2 s at -Seconds 130). The b27 round-3 value of 173.5 s was a run that hit the host bound, so it is not a baseline"
+      },
+      "depends_on": [
+        "q2rtx-pipeline"
+      ],
+      "failure_classes": [
+        "BD-102",
+        "BD-105"
+      ]
+    },
+    {
+      "id": "cache-1",
+      "title": "The shader disk cache after the first ray tracing runs: it grew",
+      "kind": "lab-read",
+      "bound_s": 90,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/mesacache.ps1",
+          "-Step",
+          "read"
+        ]
+      ],
+      "result": {
+        "regex": "mesa_shader_cache: (\\d+) files",
+        "name": "cache files after the cold runs",
+        "kind": "text"
+      },
+      "depends_on": [
+        "q2rtx-loop"
+      ],
+      "note": "The second reading of the b25 B1 proof: the cache of the new build exists and holds what the first runs compiled."
+    },
+    {
+      "id": "q2rtx-warm",
+      "title": "Quake II RTX timedemo again, warm shader cache",
+      "kind": "lab",
+      "bound_s": 170,
+      "plug": true,
+      "kill": [
+        "q2rtx"
+      ],
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{pathtrace}/lab/pt-run.ps1",
+          "-Demo",
+          "q2rtx-timedemo",
+          "-RtApi",
+          "pipeline",
+          "-Width",
+          "1280",
+          "-Height",
+          "720",
+          "-Seconds",
+          "150"
+        ]
+      ],
+      "expect": "Using VK_KHR_ray_tracing_pipeline",
+      "result": {
+        "regex": "(\\d+) frames, ([\\d.]+) seconds: ([\\d.]+) fps",
+        "group": 3,
+        "name": "warm timedemo",
+        "unit": "fps"
+      },
+      "baseline": {
+        "value": 56.66,
+        "tolerance_pct": 10,
+        "source": "b28 (0.7.216.100-tester.26) train validation of 2026-10-10, scratch/train/b28/validation/RESULTS.md: q2rtx-warm 56.66 fps. b28 ran at the 8192 MiB carve-out with the 1500 MHz DPM ceiling; tester.27 ships the 2000 MHz ceiling, so a reading above this one is expected and is not a regression."
+      },
+      "depends_on": [
+        "cache-1"
+      ],
+      "failure_classes": [
+        "BD-102",
+        "BD-105"
+      ],
+      "note": "The same timedemo as q2rtx-pipeline, with the cache that run wrote. This arm and the reading after it are what say the cache is read, and not only written."
+    },
+    {
+      "id": "cache-2",
+      "title": "The shader disk cache after the warm run: it did not grow",
+      "kind": "lab-read",
+      "bound_s": 90,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/mesacache.ps1",
+          "-Step",
+          "read"
+        ]
+      ],
+      "result": {
+        "regex": "mesa_shader_cache: (\\d+) files",
+        "name": "cache files after the warm run",
+        "kind": "text"
+      },
+      "depends_on": [
+        "q2rtx-warm"
+      ],
+      "note": "The third reading of the b25 B1 proof. The same file count, byte count and newest write time as cache-1 means that the warm run compiled nothing: it found everything."
+    },
+    {
+      "id": "dxrpt",
+      "title": "DXRPathTracer, Sponza, path tracing through D3D12",
+      "kind": "lab",
+      "bound_s": 150,
+      "plug": true,
+      "kill": [
+        "DXRPathTracer"
+      ],
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{pathtrace}/lab/pt-run.ps1",
+          "-Demo",
+          "dxrpt",
+          "-AlwaysReset",
+          "-Seconds",
+          "90",
+          "-Width",
+          "1536",
+          "-Height",
+          "864"
+        ]
+      ],
+      "result": {
+        "regex": "t=[\\d.]+ s frames=\\d+ fps=([\\d.]+)",
+        "group": 1,
+        "name": "steady path tracing",
+        "unit": "fps"
+      },
+      "baseline": {
+        "value": 18.78,
+        "tolerance_pct": 10,
+        "source": "b28 (0.7.216.100-tester.26) train validation of 2026-10-10, scratch/train/b28/validation/RESULTS.md: dxrpt 18.78 fps. b28 ran at the 8192 MiB carve-out with the 1500 MHz DPM ceiling; tester.27 ships the 2000 MHz ceiling, so a reading above this one is expected and is not a regression."
+      },
+      "depends_on": [
+        "preflight"
+      ],
+      "failure_classes": [
+        "BD-102"
+      ]
+    },
+    {
+      "id": "cts-rt",
+      "title": "Vulkan CTS, the 140 ray tracing cases, on the installed system driver",
+      "kind": "lab",
+      "bound_s": 170,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{repo}/tools/win/cts/run-batch.ps1",
+          "-CaseList",
+          "C:\\BC250\\cts\\batches\\rt-k97.txt",
+          "-RunId",
+          "train{release}",
+          "-Route",
+          "direct",
+          "-IcdPath",
+          "C:\\Program Files\\amdgpu-wddm\\vulkan\\vulkan_radeon.dll",
+          "-BoundSeconds",
+          "150"
+        ]
+      ],
+      "expect": "complete=True",
+      "allow_rc": [
+        1
+      ],
+      "result": {
+        "regex": "Pass=(\\d+)",
+        "name": "CTS ray tracing cases passed",
+        "unit": "cases"
+      },
+      "baseline": {
+        "value": 137,
+        "tolerance_abs": 0,
+        "source": "b28 (tester.26) cts-rt: 137 Pass and 3 NotRun of 140, case for case the same as b25, b26 and b27"
+      },
+      "depends_on": [
+        "preflight"
+      ],
+      "failure_classes": [
+        "BD-102"
+      ],
+      "note": "The CTS runner pins the route, the driver's hash and the case list per RunId and refuses a change, so the RunId carries the release. The three NotRun cases are the known ones of the pinned CTS revision, and the batch runner ends rc 1 because of them, which is why this arm names 1 among the exit codes it reads as an answer; the case count and 'complete=True' decide. The lab needs the CTS package at C:\\BC250\\cts."
+    },
+    {
+      "id": "cts-rt-wave64",
+      "title": "BD-074: the ray query dynamic indexing case under rtwave64, and in the default mode",
+      "kind": "lab",
+      "bound_s": 170,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{repo}/tools/win/cts/run-batch.ps1",
+          "-CaseList",
+          "C:\\BC250\\cts\\batches\\rt-k97-di1.txt",
+          "-RunId",
+          "train{release}-wave64",
+          "-Route",
+          "direct",
+          "-IcdPath",
+          "C:\\Program Files\\amdgpu-wddm\\vulkan\\vulkan_radeon.dll",
+          "-Perftest",
+          "rtwave64",
+          "-BoundSeconds",
+          "60"
+        ],
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{repo}/tools/win/cts/run-batch.ps1",
+          "-CaseList",
+          "C:\\BC250\\cts\\batches\\rt-k97-di1.txt",
+          "-RunId",
+          "train{release}-default",
+          "-Route",
+          "direct",
+          "-IcdPath",
+          "C:\\Program Files\\amdgpu-wddm\\vulkan\\vulkan_radeon.dll",
+          "-BoundSeconds",
+          "60"
+        ]
+      ],
+      "expect": "complete=True",
+      "result": {
+        "regex": "exit=(\\d+) complete=True",
+        "group": 1,
+        "pick": "first",
+        "name": "exit code of the rtwave64 run",
+        "unit": ""
+      },
+      "baseline": {
+        "value": 0,
+        "tolerance_abs": 0,
+        "source": "the batch runner's contract: 0 means every case of the list passed. On tester.28 the wave64 run of this one case failed twice with 'expected 1 but found 0 at position 0' (BD-074), so 0 is the fix answering and 1 is the defect."
+      },
+      "depends_on": [
+        "preflight"
+      ],
+      "note": "The same shape as cts-rt, on the one case the defect fails: dEQP-VK.ray_query.misc.dynamic_indexing, from batches/rt-k97-di1.txt. The first step sets RADV_PERFTEST=rtwave64, the second leaves it unset, and each step carries its own RunId because the runner pins the route, the driver's hash and the variable per RunId. Both steps must end rc 0: this arm names no exit code among the answers it reads, unlike cts-rt, because a list of one case has no NotRun case to end the runner at rc 1. The result line reads the exit code of the first step, the rtwave64 one. The existing cts-rt arm runs the default mode only and would not have caught this defect.",
+      "failure_classes": [
+        "BD-074"
+      ]
+    },
+    {
+      "id": "llm-dense",
+      "title": "The dense language model batch that stopped Windows with 0x116 (BD-114)",
+      "kind": "lab",
+      "bound_s": 170,
+      "plug": true,
+      "kill": [
+        "llama-bench"
+      ],
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/llm-dense.ps1",
+          "-Deadline",
+          "160",
+          "-WorkloadStop",
+          "120"
+        ]
+      ],
+      "expect": "verdict PASS",
+      "result": {
+        "regex": "pp512 ([\\d.]+) t/s",
+        "name": "prompt tokens a second",
+        "unit": "t/s"
+      },
+      "baseline": {
+        "value": 207.81,
+        "tolerance_pct": 10,
+        "source": "b28 (0.7.216.100-tester.26) train validation of 2026-10-10, scratch/train/b28/validation/RESULTS.md: llm-dense pp512 207.81 t/s, tg128 33.07 t/s, the first run of this arm on a shipped kernel image. b28 ran at the 8192 MiB carve-out with the 1500 MHz DPM ceiling; tester.27 ships the 2000 MHz ceiling, so a reading above this one is expected and is not a regression."
+      },
+      "depends_on": [
+        "preflight"
+      ],
+      "failure_classes": [
+        "BD-114"
+      ],
+      "note": "The regression of this release's own fix: the same model, batch and repeat count that stopped Windows on 0.7.216.100-tester.25. It runs through the seg0 supervisor kit on the lab, which owns the bound, the thermal rule and the cleanup."
+    },
+    {
+      "id": "llm-text-vulkan",
+      "title": "Gemma 12B answers one question in its chat template on the Vulkan driver",
+      "kind": "lab",
+      "bound_s": 170,
+      "plug": true,
+      "kill": [
+        "llama-completion"
+      ],
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/llm-text.ps1",
+          "-Tokens",
+          "160",
+          "-Deadline",
+          "100",
+          "-WorkloadStop",
+          "70"
+        ]
+      ],
+      "expect": "vulkan text PASS",
+      "result": {
+        "regex": "^vulkan text final answer: (.+)$",
+        "name": "final answer after the thought channel",
+        "kind": "text"
+      },
+      "depends_on": [
+        "stage-clients",
+        "preflight"
+      ],
+      "failure_classes": [
+        "BD-114"
+      ],
+      "note": "Owner, 2026-10-11: a text check uses the model's chat template. A raw prompt to an instruction model proves nothing: Gemma 12B gives 0111111111111111 on HIP, Vulkan, an RTX 4090 and the CPU alike, and with --jinja -cnv -st the 4090 answers 'The capital of France is Paris.' inside its thought channel (scratch/bd117-4090/RESULT.md). The pass is 'Paris' anywhere in the answer. -n 160 leaves room for a final answer after the thought channel; whether one appears is this arm's value (yes, no, or no thought channel), reported and not a gate. Upstream b11539 llama-completion.exe (FA3FBD92, staged by stage-clients) and model 93567E57, -ngl 99, no -fa argument (Vulkan picks Flash Attention itself). The supervisor kit owns the bound, the thermal rule and the cleanup; the model file is hashed against its pin before and after the run, outside the supervisor's 100 s deadline."
+    },
+    {
+      "id": "llm-q35",
+      "title": "Qwen3.6-35B-A3B IQ2_M fully offloaded at the 12 GiB carve-out",
+      "kind": "lab",
+      "bound_s": 170,
+      "plug": true,
+      "kill": [
+        "llama-bench"
+      ],
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/llm-dense.ps1",
+          "-Model",
+          "C:\\BC250\\strata\\models\\Qwen3.6-35B-A3B-UD-IQ2_M.gguf",
+          "-ModelSha",
+          "2BE7EF1ED7E1AF8B10D3829102CF9A6C2BD5DDB64D675B4ECE23A60799403D43",
+          "-Repeats",
+          "2",
+          "-Tag",
+          "train-llm-q35",
+          "-Deadline",
+          "100",
+          "-WorkloadStop",
+          "75"
+        ]
+      ],
+      "expect": "verdict PASS",
+      "result": {
+        "regex": "pp512 ([\\d.]+) t/s",
+        "name": "prompt tokens a second",
+        "unit": "t/s"
+      },
+      "baseline": {
+        "value": 491.88,
+        "tolerance_pct": 10,
+        "source": "scratch/llm-vram/RESULT-12g.md arm g35-up-ctl-512 of 2026-10-10 (12288 MiB, 1500 MHz ceiling, upstream b11539, -ub 512, r=2): pp512 491.88 +- 0.48, tg128 82.06 +- 1.95 t/s, 41 of 41 layers on the GPU. The 505 MiB that the full offload lacked was at the 8192 MiB carve-out (BD-096)."
+      },
+      "depends_on": [
+        "preflight"
+      ],
+      "failure_classes": [
+        "BD-114"
+      ],
+      "note": "Needs the 12288 MiB carve-out, so it runs before the board-memory arms move it. The model file (11.5 GB) is hashed against its pin before and after the run, about 20 s each way, outside the supervisor's 100 s deadline."
+    },
+    {
+      "id": "hip",
+      "title": "HIP runtime on PATH: vadd, then llama-bench and a chat-template answer of the HIP llama.cpp build (BD-110)",
+      "kind": "lab",
+      "bound_s": 170,
+      "plug": true,
+      "kill": [
+        "llama-bench",
+        "llama-completion",
+        "vadd"
+      ],
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/hip.ps1",
+          "-Bin",
+          "{lab_root}\\hip\\bin"
+        ]
+      ],
+      "expect": "BD-110 PASS",
+      "expect_all": [
+        "hip text PASS"
+      ],
+      "result": {
+        "regex": "pp512 ([\\d.]+) t/s",
+        "name": "HIP prompt tokens a second",
+        "unit": "t/s"
+      },
+      "depends_on": [
+        "stage-clients",
+        "preflight"
+      ],
+      "note": "The HIP llama.cpp backend on the released runtime (tools\\hip\\amdhip64.dll B0FEB14B of tester.27, with the dispatch journal). No baseline: the only completed run of this benchmark is the hand-staged lab run of 2026-10-11 (pp512 1868.00, tg128 122.31 t/s, scratch/hip-dispatch-journal/lab/final-tiny-host.txt), not an install. The text step asks TinyLlama one question in its chat template, and BD-110 passes only when the answer names Paris. Neither step passes -fa: the HIP build has no Flash Attention yet. The arm prints 'hip text PASS|FAIL <answer>' and 'BD-110 PASS' or 'BD-110 FAIL' with the first error line of the runtime log (BC250_HIP_LOG=1)."
+    },
+    {
+      "id": "d3d12-promote",
+      "title": "Promote the package D3D12 triplet to the registered baseline",
+      "kind": "promote",
+      "bound_s": 170,
+      "attempt": "native-caps",
+      "attempt_count": 2,
+      "promote": {
+        "shell": "{pkg}/payload/d3d12/amdgpu_wddm_d3d12.dll",
+        "engine": "{pkg}/payload/d3d12/amdgpu_wddm_vkd3d.dll",
+        "icd": "{pkg}/payload/d3d12/amdgpu_wddm_radv.dll"
+      },
+      "depends_on": [
+        "pin-baseline"
+      ],
+      "note": "Idempotent: a leftover attempt directory with no lab evidence is moved aside, and an already accepted triplet ends the step as satisfied instead of refusing. When it has to step over evidence, the game arms after it are given later numbers, so that two arms never write into one attempt."
+    },
+    {
+      "id": "bm-before",
+      "title": "Board memory before the change: the card's state, the probe, Windows RAM",
+      "kind": "lab-read",
+      "bound_s": 150,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/board-memory-op.ps1",
+          "-Step",
+          "read",
+          "-Render"
+        ],
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/board-memory.ps1",
+          "-Step",
+          "all"
+        ]
+      ],
+      "post": [
+        {
+          "argv": [
+            "python",
+            "{target}",
+            "pull",
+            "C:\\BC250\\tmp\\train-board-memory\\graphics-full.png",
+            "{out}/board-memory/graphics-before.png"
+          ],
+          "optional": true
+        }
+      ],
+      "result": {
+        "regex": "board memory state \\(before\\): active (\\d+) MiB",
+        "name": "active carve-out",
+        "unit": "MiB"
+      },
+      "depends_on": [
+        "slots"
+      ],
+      "gate_after": false,
+      "note": "The start of the operation: the lab is at 12288 MiB for the LLM work, so the change is 12288 -> 8192 and Restore brings it back. The game arms run inside this window, at 8192 MiB: at 12288 MiB Windows has about 1300 MB available and the game harness admits a session only at 3500 MB (b29 native-caps547)."
+    },
+    {
+      "id": "bm-set-8192",
+      "title": "Board memory 8192 MiB through the control application's elevated verb",
+      "kind": "lab",
+      "bound_s": 150,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/board-memory-op.ps1",
+          "-Step",
+          "set",
+          "-Target",
+          "8192",
+          "-Render"
+        ]
+      ],
+      "post": [
+        {
+          "argv": [
+            "python",
+            "{target}",
+            "pull",
+            "C:\\BC250\\tmp\\train-board-memory\\graphics-full.png",
+            "{out}/board-memory/graphics-pending-8192.png"
+          ],
+          "optional": true
+        }
+      ],
+      "expect": "verified True",
+      "result": {
+        "regex": "board memory set: exit (\\d+)",
+        "name": "verb exit code",
+        "unit": ""
+      },
+      "baseline": {
+        "value": 0,
+        "tolerance_abs": 0,
+        "source": "the verb's contract: 0 means written and read back"
+      },
+      "depends_on": [
+        "bm-before"
+      ],
+      "note": "Writes the board's memory block (extended CMOS) through the driver's RUN_BOARD_MEMORY escape, with the owner's consent of 2026-10-10 for this change. The token is computed by the application's own code. The click and the confirmation dialog of the card are not exercised. Recovery if the board does not start: the owner's CMOS clear, which also resets the boot order.",
+      "board_memory": "set"
+    },
+    {
+      "id": "bm-restart-1",
+      "title": "Restart: the board starts with 8192 MiB",
+      "kind": "restart",
+      "bound_s": 600,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/restart-now.ps1",
+          "-Reason",
+          "board memory 8192 MiB"
+        ]
+      ],
+      "depends_on": [
+        "bm-set-8192"
+      ],
+      "gate_after": true
+    },
+    {
+      "id": "bm-at-8192",
+      "title": "Board memory after the restart: 8192 MiB active, Windows RAM, segment size",
+      "kind": "lab-read",
+      "bound_s": 150,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/board-memory-op.ps1",
+          "-Step",
+          "read",
+          "-Render"
+        ],
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/board-memory.ps1",
+          "-Step",
+          "all"
+        ]
+      ],
+      "post": [
+        {
+          "argv": [
+            "python",
+            "{target}",
+            "pull",
+            "C:\\BC250\\tmp\\train-board-memory\\graphics-full.png",
+            "{out}/board-memory/graphics-after-8192.png"
+          ],
+          "optional": true
+        }
+      ],
+      "result": {
+        "regex": "board memory state \\(before\\): active (\\d+) MiB",
+        "name": "active carve-out",
+        "unit": "MiB"
+      },
+      "depends_on": [
+        "bm-restart-1"
+      ],
+      "gate_after": false,
+      "baseline": {
+        "value": 8192,
+        "tolerance_abs": 0,
+        "source": "the size bm-set-8192 asked for"
+      }
+    },
+    {
+      "id": "vkheaps-8192",
+      "title": "The Vulkan heaps at the 8192 MiB carve-out",
+      "kind": "lab-read",
+      "bound_s": 150,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/vkheaps.ps1",
+          "-Out",
+          "C:\\BC250\\tmp\\train-vkheaps-8192"
+        ]
+      ],
+      "result": {
+        "regex": "vk heaps: device-local (\\d+) MiB",
+        "name": "DEVICE_LOCAL heap",
+        "unit": "MiB"
+      },
+      "baseline": {
+        "value": 7897,
+        "tolerance_abs": 200,
+        "source": "the 8192 MiB carve-out: the host model of the vram-caps wagon of tester.27. With the vkheaps arm at 12288 MiB, the two readings must differ by about the 4096 MiB the board moved."
+      },
+      "depends_on": [
+        "bm-at-8192"
+      ],
+      "gate_after": false
+    },
+    {
+      "id": "rottr",
+      "title": "GATE Rise of the Tomb Raider, D3D12 benchmark, preset HIGH",
+      "kind": "game",
+      "bound_s": 1200,
+      "gate": "rottr",
+      "plug": true,
+      "attempt": "native-caps",
+      "profile": "rottr",
+      "kill": [
+        "ROTTR"
+      ],
+      "pre": [
+        [
+          "python",
+          "{repo}/tools/win/train-validate/adapter-check.py",
+          "{pkg}",
+          "{ws}/scratch/m15/{adapter_dir}"
+        ],
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{caps}/lab/rottr-vsync.ps1",
+          "-Value",
+          "0"
+        ],
+        {
+          "argv": [
+            "python",
+            "{mon}",
+            "action",
+            "overlay.hide"
+          ],
+          "optional": true
+        }
+      ],
+      "run": [
+        [
+          "python",
+          "{repo}/tools/win/train-validate/game-drive.py",
+          "--profile",
+          "rottr",
+          "--attempt",
+          "{attempt}",
+          "--control",
+          "{gamecontrol}",
+          "--",
+          "{bash}",
+          "{caps}/run-game.sh",
+          "{attempt_n}",
+          "rottr",
+          "{bound}"
+        ]
+      ],
+      "env": {
+        "M157_ENGINE": "{pkg}/payload/d3d12/amdgpu_wddm_vkd3d.dll",
+        "M157_ICD": "{pkg}/payload/d3d12/amdgpu_wddm_radv.dll",
+        "SESSION_ADAPTER": "{adapter_dir}",
+        "SESSION_ACCEPTED": "1",
+        "SESSION_SAMPLER": "1",
+        "SAMPLER_SAMPLES": "1100",
+        "SESSION_ETW_ARGS": "-Seconds 15 -LatestB 1000 -FpsSeconds 120"
+      },
+      "post": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{caps}/lab/rottr-vsync.ps1",
+          "-Value",
+          "1"
+        ],
+        {
+          "argv": [
+            "python",
+            "{mon}",
+            "action",
+            "overlay.show"
+          ],
+          "optional": true
+        }
+      ],
+      "result": {
+        "operator": true,
+        "name": "overall score",
+        "unit": "fps",
+        "how": "the benchmark result screen, read from a half-scale shot or an fbdump at the end of the session"
+      },
+      "baseline": {
+        "value": 56.65,
+        "tolerance_pct": 10,
+        "source": "b28 native-caps539 (tester.26), cold shader cache: 97.20 / 25.83 / 63.61, overall 56.65 (542 on the warm cache: 71.90). b28 ran at the 8192 MiB carve-out with the 1500 MHz DPM ceiling; tester.27 ships the 2000 MHz ceiling, so a reading above this one is expected and is not a regression."
+      },
+      "depends_on": [
+        "d3d12-promote"
+      ],
+      "failure_classes": [
+        "BD-114",
+        "BD-059"
+      ],
+      "note": "The owner gate is not met until the overall score is filled in: `summary --set rottr=<fps>`. The vsync step is load-bearing (a benchmark with vsync on measures the panel); the overlay calls are not, and they fail nothing. The run step wraps the session in game-drive.py: in b29 native-caps548 nothing selected START BENCHMARK and the game sat in its menu for eleven minutes at 84 C. The wrapper selects it, checks that the menu is gone (one retry, then 'menu not left') and ends the session after the result dialog.",
+      "operator_line": "{attempt}: game-drive.py selects START BENCHMARK once the menu shows and reads the result dialog; read the score from its '[drive] result:' lines or the shots in scratch/m15/control/{attempt}, then fill it in with summary --set rottr=<fps>"
+    },
+    {
+      "id": "w3-high-rt",
+      "title": "The Witcher 3 Remaster, HIGH with ray tracing, interactive",
+      "kind": "operator",
+      "bound_s": 1200,
+      "attempt": "native-caps",
+      "profile": "witcher3",
+      "pre": [
+        [
+          "python",
+          "{repo}/tools/win/train-validate/adapter-check.py",
+          "{pkg}",
+          "{ws}/scratch/m15/{adapter_dir}"
+        ]
+      ],
+      "run": [
+        [
+          "{bash}",
+          "{caps}/run-m157.sh",
+          "{attempt_n}",
+          "high-rt",
+          "{bound}"
+        ]
+      ],
+      "env": {
+        "M157_ENGINE": "{pkg}/payload/d3d12/amdgpu_wddm_vkd3d.dll",
+        "M157_ICD": "{pkg}/payload/d3d12/amdgpu_wddm_radv.dll",
+        "SESSION_ADAPTER": "{adapter_dir}",
+        "SESSION_ACCEPTED": "1",
+        "SESSION_SAMPLER": "1",
+        "SESSION_SAMPLER_SAMPLES": "600",
+        "SESSION_EXPERIMENT": "none",
+        "SESSION_VSYNC": "false",
+        "SESSION_LIMIT_FPS": "240",
+        "SESSION_ETW_ARGS": "-Seconds 40 -LatestB 900 -FpsSeconds 120"
+      },
+      "result": {
+        "operator": true,
+        "name": "world rate",
+        "unit": "present/s",
+        "how": "the rate of ETW window B, which the operator opens with the action note:world and holds for its 120 s, with the operator driving the game from half-scale shots"
+      },
+      "baseline": {
+        "value": 12.9,
+        "tolerance_pct": 12,
+        "source": "b28 native-caps540 (tester.26): window B 12.9 present/s over 120.4 s at a mean 1336 MHz, 9.66 per GHz; b27 530 12.8/s; b26 519 12.5/s. The 46.0 of the R102 40 CU baseline is HIGH without ray tracing, which is not this arm's workload."
+      },
+      "depends_on": [
+        "d3d12-promote"
+      ],
+      "note": "The runner never starts this one. The owner's rule is that the operator drives a Witcher 3 session itself, a shot every 10-15 s, and ends it when its goals are done. The suite writes its plan file and its command line, so the operator runs one line. M157_ENGINE and M157_ICD name the package's own files, as the rottr arm does: without them run-m157.sh stages its old defaults, and on a package with a new triplet the session swaps those in (2026-10-11, tester.28)."
+    },
+    {
+      "id": "bm-restore",
+      "title": "Board memory Restore through the control application's elevated verb",
+      "kind": "lab",
+      "bound_s": 150,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/board-memory-op.ps1",
+          "-Step",
+          "restore",
+          "-Render"
+        ]
+      ],
+      "post": [
+        {
+          "argv": [
+            "python",
+            "{target}",
+            "pull",
+            "C:\\BC250\\tmp\\train-board-memory\\graphics-full.png",
+            "{out}/board-memory/graphics-pending-restore.png"
+          ],
+          "optional": true
+        }
+      ],
+      "expect": "verified True",
+      "result": {
+        "regex": "board memory restore: exit (\\d+)",
+        "name": "verb exit code",
+        "unit": ""
+      },
+      "baseline": {
+        "value": 0,
+        "tolerance_abs": 0,
+        "source": "the verb's contract: 0 means written and read back"
+      },
+      "depends_on": [
+        "bm-at-8192"
+      ],
+      "note": "Restore writes back the block saved before the first write, which is 12288 MiB on this lab.",
+      "board_memory": "restore"
+    },
+    {
+      "id": "bm-restart-2",
+      "title": "Restart: the board starts with the restored size",
+      "kind": "restart",
+      "bound_s": 600,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/restart-now.ps1",
+          "-Reason",
+          "board memory restore"
+        ]
+      ],
+      "depends_on": [
+        "bm-restore"
+      ],
+      "gate_after": true
+    },
+    {
+      "id": "bm-after",
+      "title": "Board memory after Restore and the restart: 12288 MiB active again",
+      "kind": "lab-read",
+      "bound_s": 150,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/board-memory-op.ps1",
+          "-Step",
+          "read",
+          "-Render"
+        ],
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/board-memory.ps1",
+          "-Step",
+          "all"
+        ],
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/vkheaps.ps1",
+          "-Out",
+          "C:\\BC250\\tmp\\train-vkheaps-restored"
+        ]
+      ],
+      "post": [
+        {
+          "argv": [
+            "python",
+            "{target}",
+            "pull",
+            "C:\\BC250\\tmp\\train-board-memory\\graphics-full.png",
+            "{out}/board-memory/graphics-after-restore.png"
+          ],
+          "optional": true
+        }
+      ],
+      "result": {
+        "regex": "board memory state \\(before\\): active (\\d+) MiB",
+        "name": "active carve-out",
+        "unit": "MiB"
+      },
+      "depends_on": [
+        "bm-restart-2"
+      ],
+      "gate_after": false,
+      "baseline": {
+        "value": 12288,
+        "tolerance_abs": 0,
+        "source": "the size of the backup that Restore wrote, the lab's carve-out before the operation"
+      }
+    }
+  ],
+  "failure_classes": [
+    {
+      "id": "BD-102",
+      "symptom": "Quake II RTX hangs the GPU about 27 s in: the process stops presenting, the KMD reports a fence timeout or a ResetEngine, and the run ends on its bound with no frame rate.",
+      "match": [
+        "HARDWARE FENCE TIMEOUT",
+        "ResetEngine node",
+        "device lost on Vulkan",
+        "fence_timeouts=[1-9]"
+      ],
+      "needs_any": true
+    },
+    {
+      "id": "BD-105",
+      "symptom": "A Vulkan client freezes before its first present: the route and the swap chain are created, no present row is ever written, and the process stays alive with no fault and no TDR.",
+      "match": [
+        "0 present rows",
+        "no frame rate"
+      ],
+      "needs_any": true
+    },
+    {
+      "id": "BD-114",
+      "symptom": "A long compute packet ends in bugcheck 0x116 with parameter 3 0xC0000001: our own private submission budget trips on healthy work and the recovery after it fails.",
+      "match": [
+        "0x00000116",
+        "0xC0000001",
+        "bugchecks:\\s*[1-9]",
+        "bugchecks=[1-9]"
+      ],
+      "needs_any": true
+    },
+    {
+      "id": "BD-059",
+      "symptom": "A planned restart is read back as unclean: the arm after a restart reports an unexpected shutdown although the restart was this suite's own.",
+      "match": [
+        "unclean",
+        "unexpected shutdown"
+      ],
+      "needs_any": true
+    },
+    {
+      "id": "BD-061",
+      "symptom": "A WinUI window of the control application comes up blank: the window exists and its content never renders.",
+      "match": [
+        "blank",
+        "no content"
+      ],
+      "needs_any": true
+    },
+    {
+      "id": "BD-051",
+      "symptom": "The lab's sshd accepts nothing for minutes: the call itself returns no output, or fails at the banner exchange, while the machine is otherwise alive.",
+      "match": [
+        "banner exchange",
+        "Connection timed out",
+        "kex_exchange_identification"
+      ],
+      "needs_any": true
+    }
+  ]
+}

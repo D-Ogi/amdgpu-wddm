@@ -1,0 +1,64 @@
+{
+    "batch":  "list-rt-k97-di1",
+    "list":  "C:\\BC250\\cts\\batches\\rt-k97-di1.txt",
+    "total":  1,
+    "done":  1,
+    "remaining":  0,
+    "complete":  true,
+    "counts":  {
+                   "Fail":  1
+               },
+    "failing":  [
+                    "Fail dEQP-VK.ray_query.misc.dynamic_indexing"
+                ],
+    "warnings":  [
+
+                 ],
+    "attempts":  1,
+    "last_attempt":  {
+                         "batch":  "list-rt-k97-di1",
+                         "attempt":  1,
+                         "start_utc":  "2026-10-12T06:10:49.543Z",
+                         "remaining_before":  1,
+                         "route":  "direct",
+                         "icd_sha256":  "FE3455FB903B758800FC6F121669235F02C276C106F61C3FF669E31CE2151B28",
+                         "bound_s":  120,
+                         "host":  "BC250-A",
+                         "icd_cfg":  "absent",
+                         "tctl_start":  62.9,
+                         "arguments":  [
+                                           "--deqp-caselist-file=C:\\BC250\\cts\\results\\bd074acow64-t28\\list-rt-k97-di1\\attempt-01.caselist.txt",
+                                           "--deqp-log-filename=C:\\BC250\\cts\\results\\bd074acow64-t28\\list-rt-k97-di1\\attempt-01.qpa",
+                                           "--deqp-archive-dir=C:\\BC250\\cts\\bin",
+                                           "--deqp-log-images=disable",
+                                           "--deqp-log-shader-sources=disable",
+                                           "--deqp-shadercache=disable",
+                                           "--deqp-watchdog=enable",
+                                           "--deqp-crashhandler=enable",
+                                           "--deqp-terminate-on-device-lost=enable",
+                                           "--deqp-vk-library-path=C:\\BC250\\cts\\results\\bd074acow64-t28\\icd-FE3455FB\\cts-direct.dll"
+                                       ],
+                         "pid":  10248,
+                         "exit_code":  1,
+                         "killed":  null,
+                         "icd_witness":  true,
+                         "modules":  [
+                                         "C:\\BC250\\cts\\results\\bd074acow64-t28\\icd-FE3455FB\\cts-direct.dll",
+                                         "C:\\BC250\\cts\\results\\bd074acow64-t28\\icd-FE3455FB\\amdgpu_wddm_radv.dll"
+                                     ],
+                         "deqp_seconds":  9.1,
+                         "device_name":  "AMD BC-250 (RADV GFX1013)",
+                         "cases_begun":  1,
+                         "session_ended":  true,
+                         "end_utc":  "2026-10-12T06:10:58.389Z",
+                         "elapsed_s":  9.1,
+                         "stop_reason":  null,
+                         "exit":  1
+                     },
+    "route":  "direct",
+    "icd_sha256":  "FE3455FB903B758800FC6F121669235F02C276C106F61C3FF669E31CE2151B28",
+    "run_id":  "bd074acow64-t28",
+    "stop_reason":  null,
+    "exit":  1,
+    "utc":  "2026-10-12T06:10:58.391Z"
+}

@@ -13,12 +13,15 @@
 #include "internal.h"
 #include "pm4_regs.h"
 
-typedef struct writer {
-    uint32_t* dwords;
-    uint32_t  capacity;
-    uint32_t  count;
-    int       overflow;
-} writer;
+typedef bc250hsa_pm4_writer writer;
+
+void bc250hsa_pm4_writer_init(writer* w, uint32_t* dwords, uint32_t capacity, uint32_t count)
+{
+    w->dwords = dwords;
+    w->capacity = capacity;
+    w->count = count;
+    w->overflow = (count > capacity) ? 1 : 0;
+}
 
 static void put(writer* w, uint32_t value)
 {
@@ -64,7 +67,87 @@ bc250hsa_status bc250hsa_buffer_resource(uint64_t va, uint64_t bytes, uint32_t o
     return BC250HSA_OK;
 }
 
+/* LLVM AMDGPUUsage: private segment size is DWORD-rounded per work item.
+ * Mesa ac_shader_util.c: GFX10 WAVESIZE is in 1024-byte units, WAVES is global.
+ * Keep this pure so range and retirement controls need no adapter. */
+bc250hsa_status bc250hsa_plan_scratch(uint32_t private_bytes, uint32_t wave_size,
+                                      bc250hsa_scratch_plan* out)
+{
+    uint64_t thread_bytes, wave_bytes;
+    if (out == NULL || (wave_size != 32u && wave_size != 64u)) {
+        return BC250HSA_EINVAL;
+    }
+    memset(out, 0, sizeof(*out));
+    if (private_bytes == 0u) { return BC250HSA_OK; }
+    thread_bytes = ((uint64_t)private_bytes + 3u) & ~(uint64_t)3u;
+    wave_bytes = (thread_bytes * wave_size + 1023u) & ~(uint64_t)1023u;
+    if (thread_bytes > UINT32_MAX ||
+        wave_bytes / BC250HSA_SCRATCH_WAVESIZE_GRANULE > BC250HSA_SCRATCH_WAVESIZE_MASK) {
+        return BC250HSA_EUNSUPPORTED;
+    }
+    out->bytes_per_thread = (uint32_t)thread_bytes;
+    out->bytes_per_wave = (uint32_t)wave_bytes;
+    out->bytes = wave_bytes * BC250HSA_SCRATCH_WAVES;
+    out->tmpring_size = BC250HSA_SCRATCH_WAVES |
+        ((uint32_t)(wave_bytes / BC250HSA_SCRATCH_WAVESIZE_GRANULE)
+         << BC250HSA_SCRATCH_WAVESIZE_SHIFT);
+    return BC250HSA_OK;
+}
+
+bc250hsa_status bc250hsa_scratch_resource(uint64_t va, uint64_t bytes,
+                                          const bc250hsa_scratch_plan* plan,
+                                          uint32_t wave_size, uint32_t out[4])
+{
+    if (plan == NULL || out == NULL || (wave_size != 32u && wave_size != 64u) ||
+        plan->bytes == 0u || bytes < plan->bytes || va == 0u ||
+        (va & (BC250HSA_SCRATCH_ALIGNMENT - 1u)) != 0u || va >= (1ull << 48) ||
+        bytes > (1ull << 48) - va) {
+        return BC250HSA_EINVAL;
+    }
+    /* HSA preloads these four SGPRs; the prologue adds the SPI per-wave offset.
+     * NUM_RECORDS is the compiler's unbounded scratch descriptor, not BO bytes.
+     * TMPRING_SIZE bounds the ring allocation independently. */
+    out[0] = (uint32_t)va;
+    out[1] = (uint32_t)(va >> 32) | BC250HSA_SCRATCH_SWIZZLE_ENABLE;
+    out[2] = UINT32_MAX;
+    out[3] = (BC250HSA_SCRATCH_FORMAT_32_FLOAT << BC250HSA_SCRATCH_FORMAT_SHIFT) |
+        ((wave_size == 32u ? 2u : 3u) << BC250HSA_SCRATCH_INDEX_STRIDE_SHIFT) |
+        BC250HSA_SCRATCH_ADD_TID_ENABLE | BC250HSA_SCRATCH_RESOURCE_LEVEL |
+        BC250HSA_SCRATCH_OOB_SELECT;
+    return BC250HSA_OK;
+}
+
+bc250hsa_status bc250hsa_prepare_scratch(bc250hsa_mem* slot, uint64_t required_fence,
+                                         uint64_t observed_fence,
+                                         const bc250hsa_scratch_plan* plan,
+                                         const bc250hsa_allocator* allocator)
+{
+    bc250hsa_mem replacement;
+    bc250hsa_status status;
+    if (slot == NULL || plan == NULL || allocator == NULL ||
+        allocator->alloc == NULL || allocator->free == NULL || plan->bytes == 0u) {
+        return BC250HSA_EINVAL;
+    }
+    if (observed_fence == UINT64_MAX) { return BC250HSA_EDEVICELOST; }
+    if (observed_fence < required_fence) { return BC250HSA_EBUSY; }
+    if (slot->opaque != NULL && slot->bytes >= plan->bytes) { return BC250HSA_OK; }
+    memset(&replacement, 0, sizeof(replacement));
+    status = allocator->alloc(allocator->ctx, plan->bytes, BC250HSA_SCRATCH_ALIGNMENT,
+                                BC250HSA_MEM_DEVICE, &replacement);
+    if (status != BC250HSA_OK) { return status; }
+    if (replacement.bytes < plan->bytes || replacement.va == 0u ||
+        (replacement.va & (BC250HSA_SCRATCH_ALIGNMENT - 1u)) != 0u ||
+        replacement.va >= (1ull << 48) || replacement.bytes > (1ull << 48) - replacement.va) {
+        allocator->free(allocator->ctx, &replacement);
+        return BC250HSA_EINVAL;
+    }
+    if (slot->opaque != NULL) { allocator->free(allocator->ctx, slot); }
+    *slot = replacement;
+    return BC250HSA_OK;
+}
+
 bc250hsa_status bc250hsa_plan_user_sgprs(const bc250hsa_kernel* kernel, uint64_t kernarg_va,
+                                         uint64_t dispatch_packet_va,
                                          const uint32_t private_segment_rsrc[4],
                                          bc250hsa_user_sgpr_plan* out)
 {
@@ -77,16 +160,21 @@ bc250hsa_status bc250hsa_plan_user_sgprs(const bc250hsa_kernel* kernel, uint64_t
         return BC250HSA_EINVAL;
     }
     properties = kernel->kernel_code_properties;
-    /* Only the two items this build programs may be enabled. Everything else the
-     * compiler can ask for (dispatch pointer, queue pointer, dispatch id, flat
-     * scratch init, private segment size) needs a value this build does not have,
-     * so it is refused by name instead of programmed with a wrong one. */
-    if ((properties & (uint16_t)(BC250HSA_KCP_DISPATCH_PTR | BC250HSA_KCP_QUEUE_PTR |
-                                 BC250HSA_KCP_DISPATCH_ID | BC250HSA_KCP_FLAT_SCRATCH_INIT |
-                                 BC250HSA_KCP_PRIVATE_SEGMENT_SIZE)) != 0u) {
+    /* Queue pointers and dispatch IDs need an HSA queue contract this PM4 path
+     * does not expose. Fixed scratch values are supplied below in ABI order. */
+    if ((properties & (uint16_t)(BC250HSA_KCP_QUEUE_PTR | BC250HSA_KCP_DISPATCH_ID)) != 0u) {
         bc250hsa_log(BC250HSA_LOG_ERROR,
                      "kernel %s enables a user SGPR item this build does not program (0x%04x)",
                      kernel->name, (unsigned)properties);
+        return BC250HSA_EUNSUPPORTED;
+    }
+    /* The dispatch pointer is programmed from the AQL packet of section 7.1 of the
+     * header. Without a packet the register would point nowhere, and a kernel that
+     * reads its own blockDim through it would read rubbish, so that is refused. */
+    if ((properties & BC250HSA_KCP_DISPATCH_PTR) != 0u && dispatch_packet_va == 0u) {
+        bc250hsa_log(BC250HSA_LOG_ERROR,
+                     "kernel %s reads the AQL dispatch packet and this dispatch carries none",
+                     kernel->name);
         return BC250HSA_EUNSUPPORTED;
     }
 
@@ -104,12 +192,31 @@ bc250hsa_status bc250hsa_plan_user_sgprs(const bc250hsa_kernel* kernel, uint64_t
             out->value[out->count++] = private_segment_rsrc[i];
         }
     }
+    if ((properties & BC250HSA_KCP_DISPATCH_PTR) != 0u) {
+        if (out->count + 2u > BC250HSA_MAX_USER_SGPR) {
+            return BC250HSA_EUNSUPPORTED;
+        }
+        out->value[out->count++] = (uint32_t)dispatch_packet_va;
+        out->value[out->count++] = (uint32_t)(dispatch_packet_va >> 32);
+    }
     if ((properties & BC250HSA_KCP_KERNARG_SEGMENT_PTR) != 0u) {
         if (out->count + 2u > BC250HSA_MAX_USER_SGPR) {
             return BC250HSA_EUNSUPPORTED;
         }
         out->value[out->count++] = (uint32_t)kernarg_va;
         out->value[out->count++] = (uint32_t)(kernarg_va >> 32);
+    }
+    if ((properties & BC250HSA_KCP_FLAT_SCRATCH_INIT) != 0u) {
+        if (out->count + 2u > BC250HSA_MAX_USER_SGPR) { return BC250HSA_EUNSUPPORTED; }
+        out->value[out->count++] = private_segment_rsrc[0];
+        out->value[out->count++] = private_segment_rsrc[1] & 0xFFFFu;
+    }
+    if ((properties & BC250HSA_KCP_PRIVATE_SEGMENT_SIZE) != 0u) {
+        const uint64_t bytes = ((uint64_t)kernel->private_segment_bytes + 3u) & ~(uint64_t)3u;
+        if (out->count == BC250HSA_MAX_USER_SGPR || bytes > UINT32_MAX) {
+            return BC250HSA_EUNSUPPORTED;
+        }
+        out->value[out->count++] = (uint32_t)bytes;
     }
     /* COMPUTE_PGM_RSRC2.USER_SGPR tells the hardware how many registers the
      * prologue reads. A plan that does not fill exactly that many would leave the
@@ -140,12 +247,13 @@ bc250hsa_status bc250hsa_pm4_check_dispatch(const bc250hsa_dispatch* dispatch,
     }
     k = dispatch->kernel;
     for (i = 0; i < 3u; i++) {
-        if (dispatch->launch.grid[i] == 0u || dispatch->launch.block[i] == 0u) {
+        if (dispatch->launch.grid[i] == 0u || dispatch->launch.block[i] == 0u || dispatch->launch.block[i] > 1024u) {
             return BC250HSA_EINVAL;
         }
     }
     block_product = (uint64_t)dispatch->launch.block[0] * dispatch->launch.block[1] *
                     dispatch->launch.block[2];
+    if (block_product > 1024u) { return BC250HSA_EINVAL; }
     if (k->max_flat_workgroup_size != 0u && block_product > (uint64_t)k->max_flat_workgroup_size) {
         return BC250HSA_EINVAL;
     }
@@ -173,16 +281,19 @@ bc250hsa_status bc250hsa_pm4_check_dispatch(const bc250hsa_dispatch* dispatch,
                      " descriptor", k->name, (unsigned)k->wave_size);
         return BC250HSA_EUNSUPPORTED;
     }
-    /* A kernel that spills needs a scratch ring, the waves and wave size encoding of
-     * COMPUTE_TMPRING_SIZE at this part's 1024-byte granularity, and a private
-     * segment buffer with the right stride and swizzle bits. None of that is
-     * measured on this silicon yet (open question 4 of the design), so a spilling
-     * kernel is refused by name instead of dispatched with a guess. */
-    if (k->uses_dynamic_stack != 0u || k->private_segment_bytes != 0u) {
+    /* A fixed frame has a bounded ring. A dynamic stack needs a separate policy
+     * and remains refused instead of pretending the fixed metadata is a bound. */
+    if (k->uses_dynamic_stack != 0u) {
         bc250hsa_count_add(BC250HSA_C_DYNAMIC_STACK_REFUSALS, 1u);
-        bc250hsa_log(BC250HSA_LOG_ERROR, "kernel %s needs scratch, which this build does not program",
-                     k->name);
         return BC250HSA_EUNSUPPORTED;
+    }
+    if (k->private_segment_bytes != 0u) {
+        bc250hsa_scratch_plan scratch;
+        bc250hsa_status status = bc250hsa_plan_scratch(k->private_segment_bytes, k->wave_size, &scratch);
+        if (status != BC250HSA_OK) { return status; }
+        if ((k->compute_pgm_rsrc2 & BC250HSA_SCRATCH_EN) == 0u) {
+            return BC250HSA_EUNSUPPORTED;
+        }
     }
     if (dispatch->kernarg_va != 0u && k->kernarg_align != 0u &&
         (dispatch->kernarg_va % (uint64_t)k->kernarg_align) != 0u) {
@@ -191,104 +302,227 @@ bc250hsa_status bc250hsa_pm4_check_dispatch(const bc250hsa_dispatch* dispatch,
     if (k->kernarg_bytes != 0u && dispatch->kernarg_va == 0u) {
         return BC250HSA_EINVAL;
     }
+    /* Section 7.1 of the header: a kernel that reads the AQL dispatch packet needs the
+     * packet, and the refusal names the kernel here as well, so that the reason is in
+     * the log before the plan runs. */
+    if ((k->kernel_code_properties & BC250HSA_KCP_DISPATCH_PTR) != 0u &&
+        dispatch->dispatch_packet_va == 0u) {
+        bc250hsa_log(BC250HSA_LOG_ERROR,
+                     "kernel %s reads the AQL dispatch packet and this dispatch carries none",
+                     k->name);
+        return BC250HSA_EUNSUPPORTED;
+    }
+    if (dispatch->dispatch_packet_va != 0u &&
+        (dispatch->dispatch_packet_va % (uint64_t)BC250HSA_AQL_PACKET_ALIGN) != 0u) {
+        return BC250HSA_EINVAL;
+    }
     return BC250HSA_OK;
 }
 
-bc250hsa_status bc250hsa_pm4_build_dispatch(const bc250hsa_dispatch* dispatch,
-                                            const bc250hsa_pm4_env* env, uint32_t* dwords,
-                                            uint32_t dword_capacity, uint32_t* dwords_written)
+/* Packet 2 of the stream, with the acquire the caller asks for: the full one at the head
+ * of an indirect buffer, and the light one of BC250HSA_ACQUIRE_GCR_CNTL_LIGHT between two
+ * dispatches of one batch when BC250HSA_DISPATCH_LIGHT_BARRIER is set (section 8.1). */
+static void acquire_mem(writer* w, uint32_t gcr_cntl)
 {
-    writer                 w;
-    const bc250hsa_kernel* k;
-    bc250hsa_user_sgpr_plan plan;
-    bc250hsa_status        status;
-    const uint32_t         zero[6] = { 0, 0, 0, 0, 0, 0 };
-    uint32_t               pad_to;
-    uint32_t               values[4];
-    uint32_t               rsrc2;
-    uint32_t               initiator;
-    uint32_t               at;
+    put(w, BC250HSA_PACKET3(BC250HSA_PKT3_ACQUIRE_MEM, 6u));
+    put(w, 0u);                 /* CP_COHER_CNTL */
+    put(w, 0xFFFFFFFFu);        /* CP_COHER_SIZE */
+    put(w, 0x00FFFFFFu);        /* CP_COHER_SIZE_HI */
+    put(w, 0u);                 /* CP_COHER_BASE */
+    put(w, 0u);                 /* CP_COHER_BASE_HI */
+    put(w, BC250HSA_ACQUIRE_POLL_INTERVAL);
+    put(w, gcr_cntl);
+}
 
-    if (dispatch == NULL || env == NULL || dwords == NULL || dwords_written == NULL) {
+/* The head of an indirect buffer: packets 1 and 2. */
+void bc250hsa_pm4_ib_head(writer* w, const bc250hsa_pm4_env* env)
+{
+    /* 1. The graphics ring needs CONTEXT_CONTROL in front of the first state write
+     *    of an indirect buffer; it is a no-operation on a compute ring. */
+    if ((env->flags & BC250HSA_DISPATCH_GFX_RING) != 0u) {
+        put(w, BC250HSA_PACKET3(BC250HSA_PKT3_CONTEXT_CONTROL, 1u));
+        put(w, BC250HSA_CONTEXT_CONTROL_DW);
+        put(w, BC250HSA_CONTEXT_CONTROL_DW);
+    }
+
+    /* 2. The cache acquire the kernel driver's ring frame does not emit. Without it
+     *    the shader can be fetched through a stale instruction cache line. */
+    if ((env->flags & BC250HSA_DISPATCH_NO_ACQUIRE) == 0u) {
+        acquire_mem(w, BC250HSA_ACQUIRE_GCR_CNTL);
+    }
+}
+
+/* The barrier between dispatch i and dispatch i+1 of one indirect buffer. The wait for
+ * the waves is already behind dispatch i: it is packet 17 of its body. What is left is
+ * the acquire that makes dispatch i's writes visible to dispatch i+1. */
+static void build_inter_dispatch_barrier(writer* w, const bc250hsa_pm4_env* env)
+{
+    if ((env->flags & BC250HSA_DISPATCH_NO_ACQUIRE) != 0u) {
+        return;
+    }
+    acquire_mem(w, ((env->flags & BC250HSA_DISPATCH_LIGHT_BARRIER) != 0u)
+                       ? BC250HSA_ACQUIRE_GCR_CNTL_LIGHT
+                       : BC250HSA_ACQUIRE_GCR_CNTL);
+}
+
+/* The completion write, packet 18, and the padding of packet 19. */
+bc250hsa_status bc250hsa_pm4_ib_tail(writer* w, const bc250hsa_pm4_env* env)
+{
+    uint32_t pad_to;
+    uint32_t at;
+
+    if ((env->flags & BC250HSA_DISPATCH_NO_FENCE) == 0u) {
+        put(w, BC250HSA_PACKET3(BC250HSA_PKT3_RELEASE_MEM, 6u));
+        put(w, BC250HSA_RELEASE_MEM_DW1);
+        put(w, BC250HSA_RELEASE_MEM_DW2);
+        put(w, (uint32_t)env->fence_va);
+        put(w, (uint32_t)(env->fence_va >> 32));
+        put(w, (uint32_t)env->fence_value);
+        put(w, (uint32_t)(env->fence_value >> 32));
+        put(w, 0u);   /* INT_CTXID */
+    }
+
+    /* 19. The graphics ring pads an indirect buffer to its own granularity. */
+    pad_to = (env->ib_pad_dwords == 0u) ? BC250HSA_IB_PAD_DWORDS : env->ib_pad_dwords;
+    if (!bc250hsa_is_power_of_two_u64(pad_to)) {
         return BC250HSA_EINVAL;
     }
-    if (!bc250hsa_struct_bytes_ok(env->struct_bytes, sizeof(*env))) {
+    at = bc250hsa_align_up_u32(w->count, pad_to);
+    /* put() does not advance the count once the buffer is full, so this loop must stop
+     * on the overflow flag and not on the count alone. */
+    while (w->count < at && !w->overflow) {
+        put(w, BC250HSA_CP_NOP);
+    }
+    return BC250HSA_OK;
+}
+
+/* Does this dispatch need the run of user data registers written again? A different
+ * count, or any different value, and the whole run goes out: one SET_SH_REG names
+ * consecutive registers, so there is nothing to gain from writing part of it. */
+static int user_sgprs_differ(const bc250hsa_pm4_state* state,
+                             const bc250hsa_user_sgpr_plan* plan)
+{
+    uint32_t i;
+
+    if (state->user_sgpr_count != plan->count) {
+        return 1;
+    }
+    for (i = 0; i < plan->count; i++) {
+        if (state->user_sgpr[i] != plan->value[i]) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* Packets 3 to 17 of the stream: everything that belongs to one dispatch, the head of
+ * the indirect buffer and the completion write apart, with the barrier of section 8.1 in
+ * front of every dispatch but the first.
+ *
+ * With a `state` cache (section 8.8 of the design) a dispatch that follows another one
+ * in the same buffer writes only the registers whose value changed. The first dispatch
+ * of a buffer, a NULL cache and BC250HSA_DISPATCH_FULL_STATE all write the whole
+ * sequence, so the stream of one dispatch by itself is unchanged, dword for dword. */
+bc250hsa_status bc250hsa_pm4_ib_append(writer* w, const bc250hsa_dispatch* dispatch,
+                                       const bc250hsa_pm4_env* env, int first,
+                                       bc250hsa_pm4_state* state)
+{
+    const bc250hsa_kernel*  k;
+    bc250hsa_user_sgpr_plan plan;
+    bc250hsa_status         status;
+    const uint32_t          zero[6] = { 0, 0, 0, 0, 0, 0 };
+    uint32_t                values[4];
+    uint32_t                rsrc2;
+    uint32_t                scratch_rsrc[4];
+    uint32_t                tmpring_size = 0u;
+    uint32_t                initiator;
+    uint32_t                pgm_lo;
+    uint32_t                pgm_hi;
+    int                     full;
+    uint32_t                i;
+
+    if (w == NULL || dispatch == NULL || env == NULL) {
         return BC250HSA_EINVAL;
     }
     status = bc250hsa_pm4_check_dispatch(dispatch, 0u);
     if (status != BC250HSA_OK) {
         return status;
     }
-    if ((env->flags & BC250HSA_DISPATCH_NO_FENCE) == 0u &&
-        (env->fence_va == 0u || (env->fence_va & 7u) != 0u)) {
-        return BC250HSA_EINVAL;
-    }
     k = dispatch->kernel;
 
+    memcpy(scratch_rsrc, env->private_segment_rsrc, sizeof(scratch_rsrc));
+    if (k->private_segment_bytes != 0u) {
+        bc250hsa_scratch_plan scratch;
+        if (env->struct_bytes != sizeof(*env)) { return BC250HSA_EINVAL; }
+        status = bc250hsa_plan_scratch(k->private_segment_bytes, k->wave_size, &scratch);
+        if (status != BC250HSA_OK) { return status; }
+        status = bc250hsa_scratch_resource(env->scratch_va, env->scratch_bytes,
+                                             &scratch, k->wave_size, scratch_rsrc);
+        if (status != BC250HSA_OK) { return status; }
+        tmpring_size = scratch.tmpring_size;
+        /* Different fixed frames may not reinterpret one live scratch BO's stride.
+         * Production submits scratch alone; the public batch builder rejects it. */
+        if (!first) { return BC250HSA_EUNSUPPORTED; }
+    }
     plan.struct_bytes = (uint32_t)sizeof(plan);
-    status = bc250hsa_plan_user_sgprs(k, dispatch->kernarg_va, env->private_segment_rsrc, &plan);
+    status = bc250hsa_plan_user_sgprs(k, dispatch->kernarg_va, dispatch->dispatch_packet_va,
+                                      scratch_rsrc, &plan);
     if (status != BC250HSA_OK) {
         return status;
     }
 
-    w.dwords = dwords;
-    w.capacity = dword_capacity;
-    w.count = 0;
-    w.overflow = 0;
+    /* The whole sequence goes out when the hardware state behind this dispatch is not
+     * known: the first dispatch of the buffer, a caller that keeps no cache, and the
+     * switch that turns the mechanism off. */
+    full = first || state == NULL || state->valid == 0u ||
+           (env->flags & BC250HSA_DISPATCH_FULL_STATE) != 0u;
 
-    /* 1. The graphics ring needs CONTEXT_CONTROL in front of the first state write
-     *    of an indirect buffer; it is a no-operation on a compute ring. */
-    if ((env->flags & BC250HSA_DISPATCH_GFX_RING) != 0u) {
-        put(&w, BC250HSA_PACKET3(BC250HSA_PKT3_CONTEXT_CONTROL, 1u));
-        put(&w, BC250HSA_CONTEXT_CONTROL_DW);
-        put(&w, BC250HSA_CONTEXT_CONTROL_DW);
+    if (!first) {
+        build_inter_dispatch_barrier(w, env);
     }
 
-    /* 2. The cache acquire the kernel driver's ring frame does not emit. Without it
-     *    the shader can be fetched through a stale instruction cache line. */
-    if ((env->flags & BC250HSA_DISPATCH_NO_ACQUIRE) == 0u) {
-        put(&w, BC250HSA_PACKET3(BC250HSA_PKT3_ACQUIRE_MEM, 6u));
-        put(&w, 0u);                 /* CP_COHER_CNTL */
-        put(&w, 0xFFFFFFFFu);        /* CP_COHER_SIZE */
-        put(&w, 0x00FFFFFFu);        /* CP_COHER_SIZE_HI */
-        put(&w, 0u);                 /* CP_COHER_BASE */
-        put(&w, 0u);                 /* CP_COHER_BASE_HI */
-        put(&w, BC250HSA_ACQUIRE_POLL_INTERVAL);
-        put(&w, BC250HSA_ACQUIRE_GCR_CNTL);
-    }
+    if (full) {
+        /* 3 to 5. COMPUTE_START_X/Y/Z, the shader checksum and COMPUTE_REQ_CTRL with
+         *    the five registers behind it, all zero, as the reference writes them.
+         *    Constant for the life of the buffer, so only the first dispatch of it
+         *    writes them. */
+        set_sh(w, BC250HSA_REG_COMPUTE_START_X, zero, 3u);
+        set_sh1(w, BC250HSA_REG_COMPUTE_SHADER_CHKSUM, 0u);
+        set_sh(w, BC250HSA_REG_COMPUTE_REQ_CTRL, zero, 6u);
 
-    /* 3 to 5. COMPUTE_START_X/Y/Z, the shader checksum and COMPUTE_REQ_CTRL with the
-     *    five registers behind it, all zero, as the reference writes them. */
-    set_sh(&w, BC250HSA_REG_COMPUTE_START_X, zero, 3u);
-    set_sh1(&w, BC250HSA_REG_COMPUTE_SHADER_CHKSUM, 0u);
-    set_sh(&w, BC250HSA_REG_COMPUTE_REQ_CTRL, zero, 6u);
+        /* 6. The one uconfig write of the sequence, and the one packet with no
+         *    shader-type bit. A performance knob of ACQUIRE_MEM. */
+        put(w, BC250HSA_PACKET3(BC250HSA_PKT3_SET_UCONFIG_REG, 1u));
+        put(w, BC250HSA_REG_CP_COHER_START_DELAY);
+        put(w, BC250HSA_COHER_START_DELAY);
 
-    /* 6. The one uconfig write of the sequence, and the one packet with no
-     *    shader-type bit. A performance knob of ACQUIRE_MEM. */
-    put(&w, BC250HSA_PACKET3(BC250HSA_PKT3_SET_UCONFIG_REG, 1u));
-    put(&w, BC250HSA_REG_CP_COHER_START_DELAY);
-    put(&w, BC250HSA_COHER_START_DELAY);
-
-    /* 7 and 8. Every compute unit of all four shader engines, through the command
-     *    processor's own mask path. The first two packets to drop when the command
-     *    processor refuses the opcode (open question 2 of the design). */
-    if ((env->flags & BC250HSA_DISPATCH_NO_CU_MASK) == 0u) {
-        put(&w, BC250HSA_PACKET3_COMPUTE(BC250HSA_PKT3_SET_SH_REG_INDEX, 2u));
-        put(&w, (BC250HSA_SH_REG_INDEX_CU << 28) | BC250HSA_REG_COMPUTE_STATIC_THREAD_MGMT_SE0);
-        put(&w, 0xFFFFFFFFu);
-        put(&w, 0xFFFFFFFFu);
-        put(&w, BC250HSA_PACKET3_COMPUTE(BC250HSA_PKT3_SET_SH_REG_INDEX, 2u));
-        put(&w, (BC250HSA_SH_REG_INDEX_CU << 28) | BC250HSA_REG_COMPUTE_STATIC_THREAD_MGMT_SE2);
-        put(&w, 0xFFFFFFFFu);
-        put(&w, 0xFFFFFFFFu);
+        /* 7 and 8. Every compute unit of all four shader engines, through the command
+         *    processor's own mask path. The first two packets to drop when the command
+         *    processor refuses the opcode (open question 2 of the design). */
+        if ((env->flags & BC250HSA_DISPATCH_NO_CU_MASK) == 0u) {
+            put(w, BC250HSA_PACKET3_COMPUTE(BC250HSA_PKT3_SET_SH_REG_INDEX, 2u));
+            put(w,
+                (BC250HSA_SH_REG_INDEX_CU << 28) | BC250HSA_REG_COMPUTE_STATIC_THREAD_MGMT_SE0);
+            put(w, 0xFFFFFFFFu);
+            put(w, 0xFFFFFFFFu);
+            put(w, BC250HSA_PACKET3_COMPUTE(BC250HSA_PKT3_SET_SH_REG_INDEX, 2u));
+            put(w,
+                (BC250HSA_SH_REG_INDEX_CU << 28) | BC250HSA_REG_COMPUTE_STATIC_THREAD_MGMT_SE2);
+            put(w, 0xFFFFFFFFu);
+            put(w, 0xFFFFFFFFu);
+        }
     }
 
     /* 9. COMPUTE_PGM_LO and _HI: the entry address shifted right by 8, and bits
      *    47:40 of the byte address. The high half is not address32_hi; a build that
      *    kept a preamble value of 0x80 fetched a shader at the wrong address. */
-    values[0] = (uint32_t)(k->entry_va >> 8);
-    values[1] = (uint32_t)(k->entry_va >> 40) & 0xFFu;
-    set_sh(&w, BC250HSA_REG_COMPUTE_PGM_LO, values, 2u);
+    pgm_lo = (uint32_t)(k->entry_va >> 8);
+    pgm_hi = (uint32_t)(k->entry_va >> 40) & 0xFFu;
+    if (full || state->pgm_lo != pgm_lo || state->pgm_hi != pgm_hi) {
+        values[0] = pgm_lo;
+        values[1] = pgm_hi;
+        set_sh(w, BC250HSA_REG_COMPUTE_PGM_LO, values, 2u);
+    }
 
     /* 10. RSRC1 unchanged, RSRC2 with the computed LDS_SIZE written into bits 23:15.
      *     Decision 3 of section 2: the command processor normally writes that field
@@ -300,27 +534,41 @@ bc250hsa_status bc250hsa_pm4_build_dispatch(const bc250hsa_dispatch* dispatch,
                                       dispatch->launch.dynamic_group_bytes) &
               BC250HSA_RSRC2_LDS_SIZE_MASK)
              << BC250HSA_RSRC2_LDS_SIZE_SHIFT;
-    values[0] = k->compute_pgm_rsrc1;
-    values[1] = rsrc2;
-    set_sh(&w, BC250HSA_REG_COMPUTE_PGM_RSRC1, values, 2u);
-
-    /* 11. RSRC3, gfx10 and later, copied unchanged. */
-    set_sh1(&w, BC250HSA_REG_COMPUTE_PGM_RSRC3, k->compute_pgm_rsrc3);
-
-    /* 12. No scratch in this build, so COMPUTE_TMPRING_SIZE is 0. A spilling kernel
-     *     was already refused by bc250hsa_pm4_check_dispatch. */
-    set_sh1(&w, BC250HSA_REG_COMPUTE_TMPRING_SIZE, 0u);
-
-    /* 13. The workgroup size in work items. */
-    set_sh(&w, BC250HSA_REG_COMPUTE_NUM_THREAD_X, dispatch->launch.block, 3u);
-
-    /* 14. The user data plan, one packet for the whole run of registers. */
-    if (plan.count != 0u) {
-        set_sh(&w, BC250HSA_REG_COMPUTE_USER_DATA_0, plan.value, plan.count);
+    if (full || state->rsrc1 != k->compute_pgm_rsrc1 || state->rsrc2 != rsrc2) {
+        values[0] = k->compute_pgm_rsrc1;
+        values[1] = rsrc2;
+        set_sh(w, BC250HSA_REG_COMPUTE_PGM_RSRC1, values, 2u);
     }
 
-    /* 15. COMPUTE_RESOURCE_LIMITS, 0 as the reference writes it. */
-    set_sh1(&w, BC250HSA_REG_COMPUTE_RESOURCE_LIMITS, 0u);
+    /* 11. RSRC3, gfx10 and later, copied unchanged. */
+    if (full || state->rsrc3 != k->compute_pgm_rsrc3) {
+        set_sh1(w, BC250HSA_REG_COMPUTE_PGM_RSRC3, k->compute_pgm_rsrc3);
+    }
+
+    /* Each IB writes its ring size, and the cache tracks transitions explicitly. */
+    if (full || state->tmpring_size != tmpring_size) {
+        set_sh1(w, BC250HSA_REG_COMPUTE_TMPRING_SIZE, tmpring_size);
+    }
+
+    /* 13. The workgroup size in work items. */
+    if (full || state->block[0] != dispatch->launch.block[0] ||
+        state->block[1] != dispatch->launch.block[1] ||
+        state->block[2] != dispatch->launch.block[2]) {
+        set_sh(w, BC250HSA_REG_COMPUTE_NUM_THREAD_X, dispatch->launch.block, 3u);
+    }
+
+    /* 14. The user data plan, one packet for the whole run of registers. The kernel
+     *     argument pointer is in it, and layer 2 hands out another kernel argument
+     *     buffer per launch, so in practice this is the one packet that does go out
+     *     for every dispatch. */
+    if (plan.count != 0u && (full || user_sgprs_differ(state, &plan))) {
+        set_sh(w, BC250HSA_REG_COMPUTE_USER_DATA_0, plan.value, plan.count);
+    }
+
+    /* 15. COMPUTE_RESOURCE_LIMITS, 0 as the reference writes it. Constant. */
+    if (full) {
+        set_sh1(w, BC250HSA_REG_COMPUTE_RESOURCE_LIMITS, 0u);
+    }
 
     /* 16. The dispatch itself, in workgroups. CS_W32_EN comes from the kernel and not
      *     from the measured control dispatch, whose shader is wave64: this is the one
@@ -333,46 +581,351 @@ bc250hsa_status bc250hsa_pm4_build_dispatch(const bc250hsa_dispatch* dispatch,
     if ((env->flags & BC250HSA_DISPATCH_START_AT_000) != 0u) {
         initiator |= BC250HSA_DISPATCH_INITIATOR_FORCE_START_0;
     }
-    put(&w, BC250HSA_PACKET3_COMPUTE(BC250HSA_PKT3_DISPATCH_DIRECT, 3u));
-    put(&w, dispatch->launch.grid[0]);
-    put(&w, dispatch->launch.grid[1]);
-    put(&w, dispatch->launch.grid[2]);
-    put(&w, initiator);
+    put(w, BC250HSA_PACKET3_COMPUTE(BC250HSA_PKT3_DISPATCH_DIRECT, 3u));
+    put(w, dispatch->launch.grid[0]);
+    put(w, dispatch->launch.grid[1]);
+    put(w, dispatch->launch.grid[2]);
+    put(w, initiator);
 
     /* 17. The command processor waits for the waves before the completion write is
-     *     allowed to signal. */
-    put(&w, BC250HSA_PACKET3(BC250HSA_PKT3_EVENT_WRITE, 0u));
-    put(&w, BC250HSA_EVENT_TYPE(BC250HSA_EVENT_CS_PARTIAL_FLUSH) |
-                BC250HSA_EVENT_INDEX(BC250HSA_EVENT_INDEX_CS_PARTIAL_FLUSH));
-
-    /* 18. The 64-bit RELEASE_MEM that writes this dispatch's fence value. */
-    if ((env->flags & BC250HSA_DISPATCH_NO_FENCE) == 0u) {
-        put(&w, BC250HSA_PACKET3(BC250HSA_PKT3_RELEASE_MEM, 6u));
-        put(&w, BC250HSA_RELEASE_MEM_DW1);
-        put(&w, BC250HSA_RELEASE_MEM_DW2);
-        put(&w, (uint32_t)env->fence_va);
-        put(&w, (uint32_t)(env->fence_va >> 32));
-        put(&w, (uint32_t)env->fence_value);
-        put(&w, (uint32_t)(env->fence_value >> 32));
-        put(&w, 0u);   /* INT_CTXID */
+     *     allowed to signal, and before the next dispatch of a batch reads what this
+     *     one wrote. */
+    put(w, BC250HSA_PACKET3(BC250HSA_PKT3_EVENT_WRITE, 0u));
+    put(w, BC250HSA_EVENT_TYPE(BC250HSA_EVENT_CS_PARTIAL_FLUSH) |
+               BC250HSA_EVENT_INDEX(BC250HSA_EVENT_INDEX_CS_PARTIAL_FLUSH));
+    /* A dispatch the buffer had no room for was not built: put() dropped its dwords and
+     * submit.c is about to open another buffer and append it again. Counting it here
+     * would count it twice, and dispatches_built is the denominator of the ratio this
+     * route is judged by (submissions per dispatch), so the count follows the dwords. */
+    if (w->overflow) {
+        return BC250HSA_OK;
     }
+    /* The dwords are in the buffer, so the hardware state they leave behind is now
+     * known. A dispatch that overflowed wrote nothing, and submit.c appends it again
+     * into the next buffer with `first` set, so the cache must not be touched above. */
+    if (state != NULL) {
+        state->pgm_lo = pgm_lo;
+        state->pgm_hi = pgm_hi;
+        state->rsrc1 = k->compute_pgm_rsrc1;
+        state->rsrc2 = rsrc2;
+        state->rsrc3 = k->compute_pgm_rsrc3;
+        state->tmpring_size = tmpring_size;
+        state->block[0] = dispatch->launch.block[0];
+        state->block[1] = dispatch->launch.block[1];
+        state->block[2] = dispatch->launch.block[2];
+        state->user_sgpr_count = plan.count;
+        for (i = 0; i < plan.count; i++) {
+            state->user_sgpr[i] = plan.value[i];
+        }
+        state->valid = 1u;
+    }
+    bc250hsa_count_add(BC250HSA_C_DISPATCHES_BUILT, 1u);
+    return BC250HSA_OK;
+}
 
-    /* 19. The graphics ring pads an indirect buffer to its own granularity. */
-    pad_to = (env->ib_pad_dwords == 0u) ? BC250HSA_IB_PAD_DWORDS : env->ib_pad_dwords;
-    if (!bc250hsa_is_power_of_two_u64(pad_to)) {
+bc250hsa_status bc250hsa_pm4_build_batch(const bc250hsa_dispatch* dispatches, uint32_t count,
+                                         const bc250hsa_pm4_env* env, uint32_t* dwords,
+                                         uint32_t dword_capacity, uint32_t* dwords_written)
+{
+    writer             w;
+    bc250hsa_pm4_state state;
+    bc250hsa_status    status;
+    uint32_t           i;
+
+    if (dispatches == NULL || env == NULL || dwords == NULL || dwords_written == NULL ||
+        count == 0u) {
         return BC250HSA_EINVAL;
     }
-    at = bc250hsa_align_up_u32(w.count, pad_to);
-    /* put() does not advance the count once the buffer is full, so this loop must stop
-     * on the overflow flag and not on the count alone. */
-    while (w.count < at && !w.overflow) {
-        put(&w, BC250HSA_CP_NOP);
+    if (count > BC250HSA_BATCH_DISPATCHES_MAX) {
+        return BC250HSA_EINVAL;
+    }
+    if (env->struct_bytes != sizeof(*env) && env->struct_bytes != offsetof(bc250hsa_pm4_env, scratch_va)) {
+        return BC250HSA_EINVAL;
+    }
+    if ((env->flags & BC250HSA_DISPATCH_NO_FENCE) == 0u &&
+        (env->fence_va == 0u || (env->fence_va & 7u) != 0u)) {
+        return BC250HSA_EINVAL;
+    }
+
+    if (count > 1u) {
+        for (i = 0; i < count; i++) {
+            if (dispatches[i].kernel != NULL && dispatches[i].kernel->private_segment_bytes != 0u) {
+                return BC250HSA_EUNSUPPORTED;
+            }
+        }
+    }
+    bc250hsa_pm4_writer_init(&w, dwords, dword_capacity, 0u);
+    memset(&state, 0, sizeof(state));
+
+    bc250hsa_pm4_ib_head(&w, env);
+    for (i = 0; i < count; i++) {
+        status = bc250hsa_pm4_ib_append(&w, &dispatches[i], env, i == 0u, &state);
+        if (status != BC250HSA_OK) {
+            return status;
+        }
+    }
+    status = bc250hsa_pm4_ib_tail(&w, env);
+    if (status != BC250HSA_OK) {
+        return status;
     }
 
     if (w.overflow) {
         return BC250HSA_ENOMEM;
     }
     *dwords_written = w.count;
-    bc250hsa_count_add(BC250HSA_C_DISPATCHES_BUILT, 1u);
     return BC250HSA_OK;
+}
+
+bc250hsa_status bc250hsa_pm4_build_dispatch(const bc250hsa_dispatch* dispatch,
+                                            const bc250hsa_pm4_env* env, uint32_t* dwords,
+                                            uint32_t dword_capacity, uint32_t* dwords_written)
+{
+    if (dispatch == NULL) {
+        return BC250HSA_EINVAL;
+    }
+    /* One dispatch is a batch of one: the head, one body, the completion write and the
+     * padding. The golden stream of tests/host/test_pm4.c is the control that this
+     * refactoring changed no dword of it. */
+    return bc250hsa_pm4_build_batch(dispatch, 1u, env, dwords, dword_capacity, dwords_written);
+}
+
+/* --------------------------------------------------------------------------------
+ * The GPU copy and fill (scratch/hip-gpu-copy/CONTRACT.md sections 4 and 7)
+ *
+ * One PM4 DMA_DATA packet per chunk, through the level-2 cache. Nothing here touches a
+ * device: the three functions write dwords into a writer, so test_pm4.c compares the
+ * result with the encoding of pm4_regs.h and with the stream driver/kmd/gfx_copy.c
+ * builds for the same arguments.
+ * ------------------------------------------------------------------------------ */
+
+/* The level-2 path for both sides, which is the right one on gfx10.1:
+ * ac_gpu_info.c:1145-1146 of scratch/mesa-wddm2 sets cp_sdma_ge_use_system_memory_scope
+ * for GFX12 alone, so cp_dma_use_L2 is true here, and radv_cp_dma.c:249-251 emits the
+ * explicit level-2 invalidate only when that path is not used. */
+#define COPY_CONTROL_L2                                                                \
+    (BC250HSA_DMA_DST_SEL(BC250HSA_DMA_DST_ADDR_USING_L2) |                            \
+     BC250HSA_DMA_SRC_SEL(BC250HSA_DMA_SRC_ADDR_USING_L2))
+#define FILL_CONTROL_L2                                                                \
+    (BC250HSA_DMA_DST_SEL(BC250HSA_DMA_DST_ADDR_USING_L2) |                            \
+     BC250HSA_DMA_SRC_SEL(BC250HSA_DMA_SRC_DATA))
+
+uint32_t bc250hsa_pm4_copy_dwords(uint64_t bytes)
+{
+    uint64_t chunks;
+
+    if (bytes == 0u) {
+        return 0u;
+    }
+    chunks = bytes / BC250HSA_DMA_MAX_BYTES + ((bytes % BC250HSA_DMA_MAX_BYTES != 0u) ? 1u : 0u);
+    if (chunks > 0xFFFFFFFFu / BC250HSA_DMA_DATA_DWORDS) {
+        return 0u;
+    }
+    return (uint32_t)chunks * BC250HSA_DMA_DATA_DWORDS;
+}
+
+int bc250hsa_ranges_overlap(uint64_t a, uint64_t b, uint64_t bytes)
+{
+    if (bytes == 0u) {
+        return 0;
+    }
+    return (a <= b) ? (b - a < bytes) : (a - b < bytes);
+}
+
+/* The one address rule of this packet. Dword 6 carries the high half of the destination
+ * address; nvd.h:403 names it DST_ADDR_HI [7:0], so an address at or above 2^40 is not
+ * expressible, and bc250hsa_buffer_resource already refuses one at or above 2^48
+ * (pm4_dispatch.c, the private segment resource). This library's address window starts
+ * at 0x0000004000000000 and is 64 GiB wide (kmt_blobs.h), so the high half of every
+ * address it produces is at most 0x4F and both bounds hold. The check is here anyway,
+ * because a truncated address is a write into another process's pages. */
+static bc250hsa_status check_dma_address(uint64_t va, uint64_t bytes)
+{
+    if (bytes == 0u) {
+        return BC250HSA_EINVAL;
+    }
+    if (va == 0u || va > UINT64_MAX - (bytes - 1u)) {
+        return BC250HSA_EINVAL;
+    }
+    if (((va + bytes - 1u) >> 40) != 0u) {
+        return BC250HSA_EINVAL;
+    }
+    return BC250HSA_OK;
+}
+
+/* One operation, chunked. RAW_WAIT goes on the first chunk and CP_SYNC on the last, as
+ * radv_cp_dma_prepare does (radv_cp_dma.c:201-217) and as Bc250EmitGfxCopySpan of
+ * driver/kmd/gfx_copy.c does. A chunk that is not the last carries neither. */
+static bc250hsa_status append_dma(writer* w, uint32_t control, uint64_t src_or_pattern,
+                                 uint64_t dst_va, uint64_t bytes, int wait_before,
+                                 int sync_after, int is_fill)
+{
+    uint64_t remaining = bytes;
+    uint64_t src = src_or_pattern;
+    uint64_t dst = dst_va;
+    uint32_t packets = 0u;
+
+    if (w == NULL) {
+        return BC250HSA_EINVAL;
+    }
+    if (bc250hsa_pm4_copy_dwords(bytes) == 0u) {
+        return BC250HSA_EINVAL;
+    }
+    while (remaining != 0u) {
+        const uint64_t count =
+            (remaining > BC250HSA_DMA_MAX_BYTES) ? BC250HSA_DMA_MAX_BYTES : remaining;
+        uint32_t       header = control;
+        uint32_t       command = BC250HSA_DMA_BYTE_COUNT((uint32_t)count);
+
+        if (count == remaining && sync_after) {
+            header |= BC250HSA_DMA_CP_SYNC;
+        }
+        if (packets == 0u && wait_before) {
+            command |= BC250HSA_DMA_CMD_RAW_WAIT;
+        }
+        put(w, BC250HSA_PACKET3(BC250HSA_PKT3_DMA_DATA, 5u));
+        put(w, header);
+        put(w, (uint32_t)src);
+        put(w, (uint32_t)(src >> 32));
+        put(w, (uint32_t)dst);
+        put(w, (uint32_t)(dst >> 32));
+        put(w, command);
+        packets++;
+        remaining -= count;
+        if (remaining != 0u) {
+            dst += count;
+            if (!is_fill) {
+                src += count;
+            }
+        }
+    }
+    /* The packets are not counted here. An overflow makes the caller submit the open
+     * buffer and append the whole list again, so a count taken per emission would count
+     * the retried operations twice; submit.c counts them once, after the list fits. */
+    return BC250HSA_OK;
+}
+
+bc250hsa_status bc250hsa_pm4_append_copy(writer* w, uint64_t dst_va, uint64_t src_va,
+                                         uint64_t bytes, int wait_before, int sync_after)
+{
+    bc250hsa_status status = check_dma_address(dst_va, bytes);
+
+    if (status != BC250HSA_OK) {
+        return status;
+    }
+    status = check_dma_address(src_va, bytes);
+    if (status != BC250HSA_OK) {
+        return status;
+    }
+    if (bc250hsa_ranges_overlap(src_va, dst_va, bytes)) {
+        return BC250HSA_EINVAL;
+    }
+    return append_dma(w, COPY_CONTROL_L2, src_va, dst_va, bytes, wait_before, sync_after, 0);
+}
+
+bc250hsa_status bc250hsa_pm4_append_fill(writer* w, uint64_t dst_va, uint32_t pattern,
+                                         uint64_t bytes, int wait_before, int sync_after)
+{
+    const bc250hsa_status status = check_dma_address(dst_va, bytes);
+
+    if (status != BC250HSA_OK) {
+        return status;
+    }
+    /* radv_cp_dma_fill_memory asserts both of these (radv_cp_dma.c:334). The caller
+     * handles the leading and trailing partial dwords; a fill that silently dropped
+     * them would leave the destination half written. */
+    if ((dst_va % 4u) != 0u || (bytes % 4u) != 0u) {
+        return BC250HSA_EINVAL;
+    }
+    return append_dma(w, FILL_CONTROL_L2, pattern, dst_va, bytes, wait_before, sync_after, 1);
+}
+
+bc250hsa_status bc250hsa_pm4_append_ops(writer* w, const bc250hsa_copy_op* ops, uint32_t count)
+{
+    uint32_t i;
+
+    if (w == NULL || ops == NULL || count == 0u) {
+        return BC250HSA_EINVAL;
+    }
+    for (i = 0; i < count; i++) {
+        bc250hsa_status status;
+        if (ops[i].kind == BC250HSA_COPY_OP_FILL) {
+            status = bc250hsa_pm4_append_fill(w, ops[i].dst_va, ops[i].pattern, ops[i].bytes,
+                                              1, 1);
+        } else if (ops[i].kind == BC250HSA_COPY_OP_COPY) {
+            status = bc250hsa_pm4_append_copy(w, ops[i].dst_va, ops[i].src_va, ops[i].bytes,
+                                              1, 1);
+        } else {
+            status = BC250HSA_EINVAL;
+        }
+        if (status != BC250HSA_OK) {
+            return status;
+        }
+        if (w->overflow) {
+            /* The buffer is full. The caller submits it and appends the whole list
+             * again, so a partly written list is never submitted. */
+            return BC250HSA_OK;
+        }
+    }
+    return BC250HSA_OK;
+}
+
+bc250hsa_status bc250hsa_stage_pick(const uint64_t* slot_fence, uint32_t slot_count,
+                                   uint64_t observed_fence, uint32_t next_slot,
+                                   uint32_t* slot_out)
+{
+    uint32_t tried;
+
+    if (slot_fence == NULL || slot_out == NULL || slot_count == 0u) {
+        return BC250HSA_EINVAL;
+    }
+    if (observed_fence == UINT64_MAX) {
+        return BC250HSA_EDEVICELOST;
+    }
+    for (tried = 0; tried < slot_count; tried++) {
+        const uint32_t slot = (next_slot + tried) % slot_count;
+        if (slot_fence[slot] == 0u || observed_fence >= slot_fence[slot]) {
+            *slot_out = slot;
+            return BC250HSA_OK;
+        }
+    }
+    *slot_out = next_slot % slot_count;
+    return BC250HSA_EBUSY;
+}
+
+bc250hsa_status bc250hsa_fill_split(uint64_t va, uint64_t bytes, bc250hsa_fill_plan* out)
+{
+    uint64_t head;
+    uint64_t rest;
+
+    if (out == NULL) {
+        return BC250HSA_EINVAL;
+    }
+    memset(out, 0, sizeof(*out));
+    if (bytes == 0u || va == 0u || va > UINT64_MAX - (bytes - 1u)) {
+        return BC250HSA_EINVAL;
+    }
+    /* The bytes between the start and the next dword boundary, and never more than the
+     * range holds. The remainder then starts on a dword boundary, so its whole dwords are
+     * the interior and its last one, two or three bytes are the tail. The three parts tile
+     * the range in address order and no two of them share a byte. */
+    head = (4u - (va % 4u)) % 4u;
+    if (head > bytes) {
+        head = bytes;
+    }
+    rest = bytes - head;
+    out->head_va = va;
+    out->head_bytes = (uint32_t)head;
+    out->interior_va = va + head;
+    out->interior_bytes = rest & ~(uint64_t)3u;
+    out->tail_va = out->interior_va + out->interior_bytes;
+    out->tail_bytes = (uint32_t)(rest - out->interior_bytes);
+    return BC250HSA_OK;
+}
+
+uint64_t bc250hsa_stage_round(uint64_t remaining, uint64_t slot_bytes)
+{
+    if (slot_bytes == 0u) {
+        return 0u;
+    }
+    return (remaining > slot_bytes) ? slot_bytes : remaining;
 }

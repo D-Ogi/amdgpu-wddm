@@ -24,7 +24,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from kmdcommon import (ATTEMPTS, BASE, HIST, HIST_MANIFEST_SHA256, LAB_BASELINE, MODES, OPS, POWERSHELL,  # noqa: E402
+from kmdcommon import (ATTEMPTS, BASE, HIST, HIST171_STAGE_MANIFEST_SHA256, LAB_BASELINE, MODES, OPS, POWERSHELL,  # noqa: E402
                        REMOTE_BASE, REMOTE_TMP, REPO, TEMPLATE, TRANSITION, compare_packages, digest, fail,
                        historical_manifest, identity, label_suffix, next_receipt, ps_env, read_package, resolve_attempt,
                        target, verify_attempt)
@@ -205,7 +205,9 @@ def freeze(args):
             files[rel] = digest(path)
     runner = ''.join(f'{rel}\t{value}\n' for rel, value in sorted(files.items()) if rel.startswith(TRANSITION + '/'))
     manifest = {'schema': 1,
-                'runner': {'template_sha256': digest_text(runner), 'historical_stage_manifest': HIST_MANIFEST_SHA256,
+                # The value every earlier attempt recorded: the SHA256 of the 171 stage manifest the nine reused
+                # helpers come from. The kit now reads them through hist171-manifest.json, which names it too.
+                'runner': {'template_sha256': digest_text(runner), 'historical_stage_manifest': HIST171_STAGE_MANIFEST_SHA256,
                            'lab_baseline_sha256': digest(LAB_BASELINE)},
                 'candidate': {k: candidate[k] for k in ('version', 'abi', 'flavor', 'commit', 'tree', 'build_manifest_sha256')} |
                              {'label': ident['KmdCandidateLabel'], 'source': str(candidate['directory'])},

@@ -1,0 +1,180 @@
+dotprobe: start, lanes 256, grid 4, block 64, one kernel, one code object
+dotprobe: device 'AMD BC-250' arch 'gfx1013' warp 32 cu 40
+LAUNCH v_pk_fma_f16         op  0 control (gfx1013 has it)
+RESULT v_pk_fma_f16         EXECUTES-CORRECTLY lanes 256 mismatches 0 in 1.0 ms
+LAUNCH v_fma_mix_f32        op  1 control (gfx1013 has it)
+RESULT v_fma_mix_f32        EXECUTES-CORRECTLY lanes 256 mismatches 0 in 0.0 ms
+LAUNCH v_mul_i32_i24_sdwa   op  2 control (gfx1013 has it)
+RESULT v_mul_i32_i24_sdwa   EXECUTES-CORRECTLY lanes 256 mismatches 0 in 0.0 ms
+LAUNCH v_dot4_i32_i8        op  3 probe dot1-insts
+  lane   1 a ffffffff b ffffffff c 00000001 -> got 00000000 want 00000005
+  lane   2 a 80808080 b 80808080 c ffffffff -> got 00000000 want 0000ffff
+  lane   3 a 7f7f7f7f b 7f7f7f7f c 7fffffff -> got 00000000 want 8000fc03
+  lane   4 a 80808080 b 7f7f7f7f c 80000000 -> got 00000000 want 7fff0200
+  lane   5 a 7f80017f b 807f7f01 c 00010000 -> got 00000000 want 000081fe
+  lane   6 a 01020304 b 04030201 c 0000ffff -> got 00000000 want 00010013
+  lane   7 a fefdfcfb b 01010101 c 12345678 -> got 00000000 want 1234566a
+  lane   8 a 8000007f b 7f000080 c 00000000 -> got 00000000 want ffff8100
+RESULT v_dot4_i32_i8        WRONG-RESULT lanes 256 mismatches 255 first 1 sentinel 0 zero 256 equal-to-src2 2 in 0.0 ms
+  ALT v_dot4_i32_i8        zero               256 of 256   <= all lanes
+  ALT v_dot4_i32_i8        src0                 1 of 256
+  ALT v_dot4_i32_i8        src1                 0 of 256
+  ALT v_dot4_i32_i8        min-f32-lt-select    0 of 256
+  ALT v_dot4_i32_i8        min-f32-ieee         1 of 256
+  ALT v_dot4_i32_i8        min-f32-nanprop      0 of 256
+  ALT v_dot4_i32_i8        max-f32-gt-select    0 of 256
+  ALT v_dot4_i32_i8        min-i32              0 of 256
+  ALT v_dot4_i32_i8        min-u32              1 of 256
+LAUNCH v_dot2_f32_f16       op  4 probe dot10-insts
+  lane   0 a 3c000000 b 4000bc00 c 00000000 -> got 00000000 want 40000000
+  lane   1 a b8004000 b 40004800 c 3f800000 -> got 00000000 want 41800000
+  lane   2 a 0000b800 b 40003800 c c0400000 -> got 00000000 want c0500000
+  lane   3 a 38004800 b 40003c00 c 41800000 -> got 00000000 want 41c80000
+  lane   4 a c8003c00 b 4000c400 c 3e800000 -> got 00000000 want c19e0000
+  lane   5 a c000c000 b 4000c000 c bf000000 -> got 00000000 want bf000000
+  lane   6 a 48004400 b 40000000 c 42800000 -> got 00000000 want 42a00000
+  lane   7 a 4000c800 b 40004400 c 00000000 -> got 00000000 want c1e00000
+RESULT v_dot2_f32_f16       WRONG-RESULT lanes 256 mismatches 250 first 0 sentinel 0 zero 256 equal-to-src2 37 in 0.0 ms
+  ALT v_dot2_f32_f16       zero               256 of 256   <= all lanes
+  ALT v_dot2_f32_f16       src0                 0 of 256
+  ALT v_dot2_f32_f16       src1                 0 of 256
+  ALT v_dot2_f32_f16       min-f32-lt-select    0 of 256
+  ALT v_dot2_f32_f16       min-f32-ieee         0 of 256
+  ALT v_dot2_f32_f16       min-f32-nanprop      0 of 256
+  ALT v_dot2_f32_f16       max-f32-gt-select    0 of 256
+  ALT v_dot2_f32_f16       min-i32              0 of 256
+  ALT v_dot2_f32_f16       min-u32              0 of 256
+LAUNCH v_dot4_u32_u8        op  5 probe dot7-insts
+  lane   1 a ffffffff b ffffffff c 00000001 -> got 00000000 want 0003f805
+  lane   2 a 80808080 b 80808080 c ffffffff -> got 00000000 want 0000ffff
+  lane   3 a 7f7f7f7f b 7f7f7f7f c 7fffffff -> got 00000000 want 8000fc03
+  lane   4 a 80808080 b 7f7f7f7f c 80000000 -> got 00000000 want 8000fe00
+  lane   5 a 7f80017f b 807f7f01 c 00010000 -> got 00000000 want 00017ffe
+  lane   6 a 01020304 b 04030201 c 0000ffff -> got 00000000 want 00010013
+  lane   7 a fefdfcfb b 01010101 c 12345678 -> got 00000000 want 12345a6a
+  lane   8 a 8000007f b 7f000080 c 00000000 -> got 00000000 want 00007f00
+RESULT v_dot4_u32_u8        WRONG-RESULT lanes 256 mismatches 255 first 1 sentinel 0 zero 256 equal-to-src2 2 in 0.0 ms
+  ALT v_dot4_u32_u8        zero               256 of 256   <= all lanes
+  ALT v_dot4_u32_u8        src0                 1 of 256
+  ALT v_dot4_u32_u8        src1                 0 of 256
+  ALT v_dot4_u32_u8        min-f32-lt-select    0 of 256
+  ALT v_dot4_u32_u8        min-f32-ieee         1 of 256
+  ALT v_dot4_u32_u8        min-f32-nanprop      0 of 256
+  ALT v_dot4_u32_u8        max-f32-gt-select    0 of 256
+  ALT v_dot4_u32_u8        min-i32              0 of 256
+  ALT v_dot4_u32_u8        min-u32              1 of 256
+LAUNCH v_dot4c_i32_i8       op  6 probe dot6-insts
+  lane   0 a 00000000 b ffffffff c 00000000 -> got ffffffff want 00000000
+  lane   1 a ffffffff b ffffffff c 00000001 -> got ffffffff want 00000005
+  lane   2 a 80808080 b 80808080 c ffffffff -> got 80808080 want 0000ffff
+  lane   3 a 7f7f7f7f b 7f7f7f7f c 7fffffff -> got 7f7f7f7f want 8000fc03
+  lane   4 a 80808080 b 7f7f7f7f c 80000000 -> got 80808080 want 7fff0200
+  lane   5 a 7f80017f b 807f7f01 c 00010000 -> got 807f7f01 want 000081fe
+  lane   6 a 01020304 b 04030201 c 0000ffff -> got 01020304 want 00010013
+  lane   7 a fefdfcfb b 01010101 c 12345678 -> got fefdfcfb want 1234566a
+RESULT v_dot4c_i32_i8       WRONG-RESULT lanes 256 mismatches 256 first 0 sentinel 0 zero 0 equal-to-src2 0 in 0.0 ms
+  ALT v_dot4c_i32_i8       zero                 0 of 256
+  ALT v_dot4c_i32_i8       src0               142 of 256
+  ALT v_dot4c_i32_i8       src1               117 of 256
+  ALT v_dot4c_i32_i8       min-f32-lt-select  256 of 256   <= all lanes
+  ALT v_dot4c_i32_i8       min-f32-ieee       255 of 256
+  ALT v_dot4c_i32_i8       min-f32-nanprop    254 of 256
+  ALT v_dot4c_i32_i8       max-f32-gt-select    6 of 256
+  ALT v_dot4c_i32_i8       min-i32            207 of 256
+  ALT v_dot4c_i32_i8       min-u32             75 of 256
+LAUNCH v_dot2c_f32_f16      op  7 probe dot5-insts
+  lane   0 a 3c000000 b 4000bc00 c 00000000 -> got 00000000 want 40000000
+  lane   1 a b8004000 b 40004800 c 3f800000 -> got 00000000 want 41800000
+  lane   2 a 0000b800 b 40003800 c c0400000 -> got 00000000 want c0500000
+  lane   3 a 38004800 b 40003c00 c 41800000 -> got 00000000 want 41c80000
+  lane   4 a c8003c00 b 4000c400 c 3e800000 -> got 00000000 want c19e0000
+  lane   5 a c000c000 b 4000c000 c bf000000 -> got 00000000 want bf000000
+  lane   6 a 48004400 b 40000000 c 42800000 -> got 00000000 want 42a00000
+  lane   7 a 4000c800 b 40004400 c 00000000 -> got 00000000 want c1e00000
+RESULT v_dot2c_f32_f16      WRONG-RESULT lanes 256 mismatches 250 first 0 sentinel 0 zero 256 equal-to-src2 37 in 0.0 ms
+  ALT v_dot2c_f32_f16      zero               256 of 256   <= all lanes
+  ALT v_dot2c_f32_f16      src0                 0 of 256
+  ALT v_dot2c_f32_f16      src1                 0 of 256
+  ALT v_dot2c_f32_f16      min-f32-lt-select    0 of 256
+  ALT v_dot2c_f32_f16      min-f32-ieee         0 of 256
+  ALT v_dot2c_f32_f16      min-f32-nanprop      0 of 256
+  ALT v_dot2c_f32_f16      max-f32-gt-select    0 of 256
+  ALT v_dot2c_f32_f16      min-i32              0 of 256
+  ALT v_dot2c_f32_f16      min-u32              0 of 256
+LAUNCH v_dot2_i32_i16       op  8 probe dot2-insts
+  lane   1 a ffffffff b ffffffff c 00000001 -> got 00000000 want 00000003
+  lane   2 a 80808080 b 80808080 c ffffffff -> got 00000000 want 7f007fff
+  lane   3 a 7f7f7f7f b 7f7f7f7f c 7fffffff -> got 00000000 want fefe8201
+  lane   4 a 80808080 b 7f7f7f7f c 80000000 -> got 00000000 want 01007f00
+  lane   5 a 7f80017f b 807f7f01 c 00010000 -> got 00000000 want c13e42ff
+  lane   6 a 01020304 b 04030201 c 0000ffff -> got 00000000 want 000b1609
+  lane   7 a fefdfcfb b 01010101 c 12345678 -> got 00000000 want 12304a70
+  lane   8 a 8000007f b 7f000080 c 00000000 -> got 00000000 want c0803f80
+RESULT v_dot2_i32_i16       WRONG-RESULT lanes 256 mismatches 255 first 1 sentinel 0 zero 256 equal-to-src2 2 in 0.0 ms
+  ALT v_dot2_i32_i16       zero               256 of 256   <= all lanes
+  ALT v_dot2_i32_i16       src0                 1 of 256
+  ALT v_dot2_i32_i16       src1                 0 of 256
+  ALT v_dot2_i32_i16       min-f32-lt-select    0 of 256
+  ALT v_dot2_i32_i16       min-f32-ieee         1 of 256
+  ALT v_dot2_i32_i16       min-f32-nanprop      0 of 256
+  ALT v_dot2_i32_i16       max-f32-gt-select    0 of 256
+  ALT v_dot2_i32_i16       min-i32              0 of 256
+  ALT v_dot2_i32_i16       min-u32              1 of 256
+LAUNCH v_dot2_u32_u16       op  9 probe dot2-insts
+  lane   1 a ffffffff b ffffffff c 00000001 -> got 00000000 want fffc0003
+  lane   2 a 80808080 b 80808080 c ffffffff -> got 00000000 want 81007fff
+  lane   3 a 7f7f7f7f b 7f7f7f7f c 7fffffff -> got 00000000 want fefe8201
+  lane   4 a 80808080 b 7f7f7f7f c 80000000 -> got 00000000 want fffe7f00
+  lane   5 a 7f80017f b 807f7f01 c 00010000 -> got 00000000 want 40be42ff
+  lane   6 a 01020304 b 04030201 c 0000ffff -> got 00000000 want 000b1609
+  lane   7 a fefdfcfb b 01010101 c 12345678 -> got 00000000 want 14324a70
+  lane   8 a 8000007f b 7f000080 c 00000000 -> got 00000000 want 3f803f80
+RESULT v_dot2_u32_u16       WRONG-RESULT lanes 256 mismatches 255 first 1 sentinel 0 zero 256 equal-to-src2 2 in 0.0 ms
+  ALT v_dot2_u32_u16       zero               256 of 256   <= all lanes
+  ALT v_dot2_u32_u16       src0                 1 of 256
+  ALT v_dot2_u32_u16       src1                 0 of 256
+  ALT v_dot2_u32_u16       min-f32-lt-select    0 of 256
+  ALT v_dot2_u32_u16       min-f32-ieee         1 of 256
+  ALT v_dot2_u32_u16       min-f32-nanprop      0 of 256
+  ALT v_dot2_u32_u16       max-f32-gt-select    0 of 256
+  ALT v_dot2_u32_u16       min-i32              0 of 256
+  ALT v_dot2_u32_u16       min-u32              1 of 256
+LAUNCH v_dot8_i32_i4        op 10 probe dot1-insts
+  lane   1 a ffffffff b ffffffff c 00000001 -> got 00000000 want 00000009
+  lane   2 a 80808080 b 80808080 c ffffffff -> got 00000000 want 000000ff
+  lane   3 a 7f7f7f7f b 7f7f7f7f c 7fffffff -> got 00000000 want 800000c7
+  lane   4 a 80808080 b 7f7f7f7f c 80000000 -> got 00000000 want 7fffff20
+  lane   5 a 7f80017f b 807f7f01 c 00010000 -> got 00000000 want 0000ff8e
+  lane   6 a 01020304 b 04030201 c 0000ffff -> got 00000000 want 00010013
+  lane   7 a fefdfcfb b 01010101 c 12345678 -> got 00000000 want 1234566a
+  lane   8 a 8000007f b 7f000080 c 00000000 -> got 00000000 want ffffff90
+RESULT v_dot8_i32_i4        WRONG-RESULT lanes 256 mismatches 255 first 1 sentinel 0 zero 256 equal-to-src2 2 in 0.0 ms
+  ALT v_dot8_i32_i4        zero               256 of 256   <= all lanes
+  ALT v_dot8_i32_i4        src0                 1 of 256
+  ALT v_dot8_i32_i4        src1                 0 of 256
+  ALT v_dot8_i32_i4        min-f32-lt-select    0 of 256
+  ALT v_dot8_i32_i4        min-f32-ieee         1 of 256
+  ALT v_dot8_i32_i4        min-f32-nanprop      0 of 256
+  ALT v_dot8_i32_i4        max-f32-gt-select    0 of 256
+  ALT v_dot8_i32_i4        min-i32              0 of 256
+  ALT v_dot8_i32_i4        min-u32              1 of 256
+LAUNCH v_dot8_u32_u4        op 11 probe dot7-insts
+  lane   1 a ffffffff b ffffffff c 00000001 -> got 00000000 want 00000709
+  lane   2 a 80808080 b 80808080 c ffffffff -> got 00000000 want 000000ff
+  lane   3 a 7f7f7f7f b 7f7f7f7f c 7fffffff -> got 00000000 want 80000447
+  lane   4 a 80808080 b 7f7f7f7f c 80000000 -> got 00000000 want 800000e0
+  lane   5 a 7f80017f b 807f7f01 c 00010000 -> got 00000000 want 0001008e
+  lane   6 a 01020304 b 04030201 c 0000ffff -> got 00000000 want 00010013
+  lane   7 a fefdfcfb b 01010101 c 12345678 -> got 00000000 want 123456aa
+  lane   8 a 8000007f b 7f000080 c 00000000 -> got 00000000 want 00000070
+RESULT v_dot8_u32_u4        WRONG-RESULT lanes 256 mismatches 255 first 1 sentinel 0 zero 256 equal-to-src2 2 in 0.0 ms
+  ALT v_dot8_u32_u4        zero               256 of 256   <= all lanes
+  ALT v_dot8_u32_u4        src0                 1 of 256
+  ALT v_dot8_u32_u4        src1                 0 of 256
+  ALT v_dot8_u32_u4        min-f32-lt-select    0 of 256
+  ALT v_dot8_u32_u4        min-f32-ieee         1 of 256
+  ALT v_dot8_u32_u4        min-f32-nanprop      0 of 256
+  ALT v_dot8_u32_u4        max-f32-gt-select    0 of 256
+  ALT v_dot8_u32_u4        min-i32              0 of 256
+  ALT v_dot8_u32_u4        min-u32              1 of 256
+dotprobe: ran 12 of 12 instructions, worst WRONG-RESULT

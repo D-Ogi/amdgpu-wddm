@@ -1,0 +1,31 @@
+Redaction record for this directory.
+
+No file was edited. Every file is a copy of the raw file, except presents-559.csv and
+presents-561.csv, which are extracted from the ETW dumps (see the README).
+
+What was left out of the directory, and why:
+
+- The ETW dumps gpu-B-dump.txt of trials 559 and 561 (364769789 and 304230640 bytes). Their
+  SHA-256 values are in the README. The present times that the analysis reads from them are in
+  sessions/presents-N.csv.
+- The console output of the session runner (run-559.out, run-560.out, run-561.out). It lists the
+  deferred log files of the development PC with that PC's user name. The lines that matter are in
+  the trial logs, the ETW notes and the thermal guard output, which are here.
+- Every shot of the game's main menu. The menu shows the names of the game accounts. The four
+  shots here show the game world and its HUD only.
+- The plug samples taken during the refused trial 560, because no session ran.
+- The lab lock records and the promotion logs of the D3D12 files before the sessions. They hold no
+  measurement.
+
+A scan of every text file for IPv4 addresses, the lab host name, MAC addresses, SSIDs, the game
+account names and the development PC's user paths found none. The lab user's profile path does not
+occur in these files.
+
+What these files do hold, and why it stays:
+
+- Paths of the workspace (P:\BC-250\...) and of the lab's install root (C:\Program Files\amdgpu-wddm,
+  C:\BC250\...). They name the files that the harness used. They are not identifiers of a person or
+  of a device.
+- Truncated SHA-256 values of the driver files. These are build identifiers.
+- The board's fan controller identity line in the state files (EC version and build date, customer
+  id 0x162B). This identifies the EC firmware. It is not a serial number.

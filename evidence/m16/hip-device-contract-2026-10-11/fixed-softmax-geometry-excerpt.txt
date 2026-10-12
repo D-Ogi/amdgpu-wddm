@@ -1,0 +1,24 @@
+	s_branch 4                                                 // 0000000180B8: BF820004 <_ZL12soft_max_f32ILb1ELi512ELi512EfEvPKfPKT2_S1_Pf15soft_max_params+0x8cc>
+	s_branch 65115                                             // 0000000180BC: BF82FE5B <_ZL12soft_max_f32ILb1ELi512ELi512EfEvPKfPKT2_S1_Pf15soft_max_params+0x22c>
+	s_branch 65266                                             // 0000000180C0: BF82FEF2 <_ZL12soft_max_f32ILb1ELi512ELi512EfEvPKfPKT2_S1_Pf15soft_max_params+0x48c>
+	s_mov_b32 s0, 0xff800000                                   // 0000000180C4: BE8003FF FF800000
+	s_load_dwordx2 s[2:3], s[4:5], 0xa0                        // 0000000180CC: F4040082 FA0000A0
+	v_lshlrev_b32_e32 v1, 2, v0                                // 0000000180D4: 34020082
+	v_mov_b32_e32 v8, 0                                        // 0000000180D8: 7E100280
+	s_waitcnt lgkmcnt(0)                                       // 0000000180DC: BF8CC07F
+	s_mul_i32 s1, s3, s8                                       // 0000000180E0: 93010803
+	s_add_i32 s1, s1, s10                                      // 0000000180E4: 81010A01
+	s_mul_i32 s1, s1, s2                                       // 0000000180E8: 93010201
+	s_add_i32 s2, s1, s6                                       // 0000000180EC: 81020601
+	s_ashr_i32 s3, s2, 31                                      // 0000000180F0: 91039F02
+	s_lshl_b64 s[4:5], s[2:3], 11                              // 0000000180F4: 8F848B02
+	s_add_u32 s4, s20, s4                                      // 0000000180F8: 80040414
+	s_addc_u32 s5, s21, s5                                     // 0000000180FC: 82050515
+	s_cmp_eq_u64 s[22:23], 0                                   // 000000018100: BF128016
+	global_load_dword v3, v1, s[4:5]                           // 000000018104: DC308000 03040001
+	s_cselect_b32 s1, -1, 0                                    // 00000001810C: 850180C1
+	s_cmp_lg_u64 s[22:23], 0                                   // 000000018110: BF138016
+	s_cbranch_scc0 32                                          // 000000018114: BF840020 <_ZL12soft_max_f32ILb1ELi512ELi512EfEvPKfPKT2_S1_Pf15soft_max_params+0x998>
+	s_waitcnt_depctr depctr_vm_vsrc(0)                         // 000000018118: BFA3FF03
+	s_mul_i32 s4, s13, s6                                      // 00000001811C: 9304060D
+	s_mul_hi_u32 s5, s12, s6                                   // 000000018120: 9A85060C

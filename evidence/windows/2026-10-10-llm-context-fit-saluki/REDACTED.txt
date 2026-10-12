@@ -1,0 +1,23 @@
+Redaction record for this directory.
+
+Nothing in these files was edited. A reader went through every file before the commit.
+
+What was left out of the directory, and why:
+
+- The prompt text and its tokenization (prompt.txt, tokenize-body.json, tokenize-resp.json,
+  req-body.json). The prompt is 330077 bytes of this project's own public documentation and
+  driver headers, concatenated. It adds nothing to the fit or the power result.
+- The model file and every binary. No GGUF file, no DLL and no EXE is here. They are named by
+  their SHA-256 in each arm's supervisor.txt.
+- The run plan and the kit's prompt builder, which name the development PC's own paths.
+
+What these files do hold, and why it stays:
+
+- Working directories of the lab under C:\BC250\, which are paths of this project and carry no
+  user name.
+- An adapter LUID, which Windows assigns per boot.
+- Elapsed-time stamps of the llama.cpp log in the form 0.23.040.557. They are timestamps, not
+  addresses.
+
+No lab network address, no host name, no MAC address, no SSID, no serial number and no secret is
+in this directory.

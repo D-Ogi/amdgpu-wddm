@@ -8,6 +8,9 @@ ui.back|src|-|Back
 ui.cancel|src|-|Cancel
 ui.choose-folder|src|-|Choose folder...
 ui.language|src|-|Language: {0}
+ui.minimise|src|-|Minimise
+ui.close-window|src|-|Close window
+ui.unexpected|src|-|Setup stopped because something went wrong inside its window. It has changed nothing more. Please start it again.
 rail.welcome|src|-|Welcome
 rail.check|src|-|Check
 rail.plan|src|-|Review
@@ -27,6 +30,7 @@ welcome.repair.title|src|-|Repair the graphics driver
 welcome.repair.body|src|-|Setup installs the same version again, from the copy kept on this PC. Your settings are kept.
 welcome.dry-run|src|-|Test run: setup goes through every step but changes nothing.
 welcome.version|src|-|Version {0}
+welcome.files-missing|src|-|The files of this release are missing. Unpack the whole zip file to a folder, then start setup.exe from that folder: it needs the files folder next to it.
 welcome.source.title|src|-|Where the files come from
 welcome.source.package|src|-|The files of this setup
 welcome.source.kept|src|-|The copy kept on this PC
@@ -36,6 +40,9 @@ welcome.prepared.choose|src|-|Choose the prepared folder.
 welcome.prepared.ok|src|-|Prepared folder with version {0}. No internet is needed.
 welcome.prepare-link|src|-|Prepare a folder for a PC without internet...
 welcome.check|src|-|Check this PC
+welcome.promise.driver|src|-|The graphics driver and amdgpu-wddm Control, installed together.
+welcome.promise.shown|src|-|Every change is shown before anything on this PC changes.
+welcome.promise.offline|src|-|A prepared folder installs the same release without internet.
 folder.missing|src|-|This folder does not exist.
 folder.not-prepared|src|-|This is not a prepared folder. Choose the folder that setup prepared, or prepare one first.
 folder.unknown|src|-|This folder was prepared by another version of setup and cannot be used. Prepare it again.
@@ -103,6 +110,8 @@ plan.verify.body|src|-|After the restart of Windows, setup checks that the drive
 plan.repair-again|src|-|Repair
 plan.checks.title|src|-|Checks
 plan.checks.ok|src|-|All checks passed.
+plan.checks.attention|src|-|Checks that need your attention: {0}
+plan.consent.needed|src|-|Answer the questions under "{0}" before you install.
 plan.what.title|src|-|What happens
 plan.restarts.0|src|-|No restart of Windows is needed.
 plan.restarts.1|src|-|Windows restarts once. After you log on again, setup continues by itself.
@@ -146,7 +155,7 @@ settings.decision.driver-closed|src|-|switched off by the driver. A repair sets 
 consent.title|src|-|Before setup starts
 consent.test-signing|src|-|Turn on Windows test mode
 consent.test-signing.note|src|-|The driver is signed with a test certificate, so Windows must run in test mode. "Test Mode" then shows in a corner of the desktop.
-consent.bitlocker|src|-|BitLocker protects drive C:. Changing the start options makes Windows ask for the recovery key at the next start.
+consent.bitlocker|src|-|BitLocker is on, or Setup could not read its state. Changing the start options may make Windows ask for the recovery key at the next start.
 consent.bitlocker.have-key|src|-|I have the recovery key
 consent.bitlocker.suspend|src|-|Pause BitLocker for the next two restarts (it turns on again by itself)
 
@@ -158,6 +167,7 @@ working.prepare.title|src|-|Preparing the folder
 working.body|src|-|Please wait. Keep the PC on.
 working.prepare.body|src|-|Setup copies its files and the GPU firmware and checks each one.
 working.stages|src|-|Steps
+working.elapsed|src|-|Time so far: {0}
 working.cancel.available|src|-|You can still cancel. Nothing has been changed yet.
 working.cancel.unavailable|src|-|Cancel is not possible now: setup must finish this part first.
 working.cancel.requested|src|-|Stopping at the next safe point...
@@ -170,6 +180,8 @@ stage.firmware|src|-|GPU firmware
 stage.files|src|-|Driver files
 stage.driver|src|-|Graphics driver
 stage.settings|src|-|Settings
+stage.extras|src|-|Extra programs
+stage.components|src|-|Installing the extra programs
 stage.finish|src|-|Finishing
 stage.verify|src|-|Checking the driver
 stage.prepare-check|src|-|Setup files and folder
@@ -206,7 +218,7 @@ result.installed-restart.body|src|-|Everything is installed. After the restart, 
 result.testsigning-not-active.title|src|-|Windows test mode is not on yet
 result.testsigning-not-active.body|src|-|Windows did not turn on test mode at the last start. Restart Windows once more. If this message comes back, check that Secure Boot is off.
 result.testsigning-secureboot.title|src|-|Secure Boot blocks Windows test mode
-result.testsigning-secureboot.body|src|-|Turn off Secure Boot in the PC's firmware settings, then start setup again. The installation guide shows how.
+result.testsigning-secureboot.body|src|-|Windows reports Secure Boot as on. Windows does not allow the test mode this driver needs while Secure Boot is on. The standard BC-250 firmware has no Secure Boot setting, so this computer has a changed firmware: turn Secure Boot off in its settings, usually under Security > Secure Boot, then start setup again. Some changed versions have no switch for it: set OS Type to "Other OS", or delete the Secure Boot keys. To see the state yourself, open System Information from the Start menu and read the Secure Boot line.
 result.restart-still-pending.title|src|-|Windows has not restarted yet
 result.restart-still-pending.body|src|-|Setup continues after the next restart of Windows.
 result.verify-before-restart.title|src|-|Restart Windows to finish
@@ -253,6 +265,7 @@ result.already-installed|src|-|This PC already has version {0} of the driver.
 result.changes-made|src|-|Some changes were made before setup stopped, and they stay as they are. Start setup again to finish, or use Repair in amdgpu-wddm Control.
 result.changes-unknown|src|-|Setup cannot tell whether anything was changed. Start setup again; it continues where it can.
 result.support|src|-|The support file has the details for a problem report. Nothing is sent automatically.
+result.support.diagnostics|src|-|The details of the graphics chip that did not start were collected for you. They are in that file.
 result.support.saved|src|-|Saved: {0}
 result.support.failed|src|-|The support file could not be saved. Choose another place.
 result.save-support|src|-|Save support file...
@@ -283,3 +296,8 @@ guide.pending-restart|src|-|Your changes are saved. Setup continues after the ne
 guide.install-stopped|src|-|Setup did not finish. The page says what to do next.
 guide.verification-failed|src|-|The driver did not pass its checks. A repair usually helps.
 guide.upgrade-done|src|-|Done! The driver is installed and checked. Have fun!
+# Optional Windows tuning
+tuning.title|src|-|Windows tuning
+tuning.opt-in|src|-|Apply optional Windows tuning
+tuning.details|src|-|Apply recommended settings to reduce Windows background activity.
+tuning.restore|src|-|Review individual settings and restore saved values in the control app. Removal also offers restoration of machine-wide settings.

@@ -1,0 +1,38 @@
+{
+  "dxgmms2": {
+    "path": "dxgmms2.sys",
+    "sha256": "861d969a2d9d5e7cda8949b5978d80d8896ee68a8825fd015ee8193fb417b1a0",
+    "codeview": [
+      {
+        "guid": "420211de-7e2c-9da0-6866-001e6ab467f5",
+        "age": 1
+      }
+    ]
+  },
+  "dxgkrnl": {
+    "path": "dxgkrnl.sys",
+    "sha256": "aaf502ad1d6050c855480ae4057222a6375587de0d77aefbadf9039ef4dd72f9",
+    "codeview": [
+      {
+        "guid": "907fd0b6-7e57-2f54-163d-06dfd05487a7",
+        "age": 1
+      }
+    ]
+  },
+  "size_gate_string_rva": "0x54010",
+  "size_gate_string": "Can't create an allocation that uses more than 4GB-64kB of system memory.\n",
+  "report_triage_descriptor_rva": "0xac948",
+  "report_triage_raw": "ee0100110003ee010000004000000040",
+  "report_triage_event": {
+    "Id": 494,
+    "Version": 0,
+    "Channel": 17,
+    "Level": 0,
+    "Opcode": 3,
+    "Task": 494,
+    "Keyword": 4611686019501129728
+  },
+  "dxg_core_interface_rva": "0x8d6e0",
+  "dxg_core_triage_slot_target": "0x1c00058c0",
+  "dxg_core_triage_slot_symbol": "dxgkrnl!DxgkLogInternalTriageEvent"
+}

@@ -6,7 +6,19 @@
 #   pwsh -File tools\release\test-offline.ps1 -Package <unpacked package folder> [-WorkRoot <dir>] [-FirmwareDir <dir>]
 # -FirmwareDir: the release's firmware files (test-dryrun.ps1 passes the folder it downloaded). Without it the first
 # prepared folder is made by a real download (network needed for that one step only).
-param([Parameter(Mandatory)][string]$Package, [string]$WorkRoot = (Join-Path (Split-Path $Package) 'test-tmp'), [string]$FirmwareDir)
+param([Parameter(Mandatory)][string]$Package, [string]$WorkRoot, [string]$FirmwareDir)
+# -Package takes the folder the zip unpacks to or the files\ folder under it: the package root is the one that holds
+# manifest.json (owner, 2026-10-11). The release recipe and an operator may name either.
+if ((Test-Path -LiteralPath (Join-Path $Package 'files\manifest.json') -PathType Leaf) -and
+    -not (Test-Path -LiteralPath (Join-Path $Package 'manifest.json') -PathType Leaf)) {
+    $Package = (Join-Path $Package 'files')
+}
+# Default scratch: beside the folder the zip unpacks to, never inside it. The package root is files\ of that folder
+# (owner, 2026-10-11), so one more level up than it used to be; an older flat package keeps the old place.
+if (-not $PSBoundParameters.ContainsKey('WorkRoot')) {
+    $packageTop = $(if ((Split-Path $Package -Leaf) -eq 'files') { Split-Path $Package } else { $Package })
+    $WorkRoot = Join-Path (Split-Path $packageTop) 'test-tmp'
+}
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'headless.ps1')
 $ps51 = Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
@@ -30,6 +42,10 @@ function Invoke-Ps51([string[]]$ScriptArgs, [switch]$Offline, [string]$StateDir)
     return $r
 }
 # A copy of a folder: hard links (no second copy of 180 MB), except the subfolders named in -RealCopy.
+# The setup window travels with the copy. In an unpacked release it sits one level above the package root
+# (<root>\..\setup.exe, owner 2026-10-11) and the loop below would not see it; in a prepared folder or a kept
+# repair set it sits in the folder itself and the loop takes it. Either way the copy gets it in the folder, which
+# is where Get-PackageSetupExe looks for a package that is not an unpacked release.
 function Copy-Linked([string]$From, [string]$To, [string[]]$RealCopy = @()) {
     foreach ($f in Get-ChildItem -LiteralPath $From -Recurse -File) {
         $rel = $f.FullName.Substring($From.TrimEnd('\').Length + 1)
@@ -37,6 +53,11 @@ function Copy-Linked([string]$From, [string]$To, [string[]]$RealCopy = @()) {
         [void][IO.Directory]::CreateDirectory((Split-Path $dst))
         if (@($RealCopy | Where-Object { $rel -like "$_\*" }).Count) { Copy-Item -LiteralPath $f.FullName -Destination $dst }
         else { [void](New-Item -ItemType HardLink -Path $dst -Target $f.FullName) }
+    }
+    $own = Join-Path $To 'setup.exe'
+    $src = Join-Path $From '..\setup.exe'
+    if (-not (Test-Path -LiteralPath $own -PathType Leaf) -and (Test-Path -LiteralPath $src -PathType Leaf)) {
+        [void](New-Item -ItemType HardLink -Path $own -Target ([IO.Path]::GetFullPath($src)))
     }
 }
 $m = Get-Content -LiteralPath (Join-Path $Package 'manifest.json') -Raw | ConvertFrom-Json
@@ -64,7 +85,10 @@ else { $r = Invoke-Ps51 @((Join-Path $download 'installer\prepare-offline.ps1'),
 $j = Get-Content -LiteralPath $res1 -Raw | ConvertFrom-Json
 $ev = @(Get-Content -LiteralPath $ev1 | ForEach-Object { $_ | ConvertFrom-Json })
 Check (($r.code -eq 0) -and ($j.outcome -eq 'prepared') -and ($j.invocation -eq 'prepare-1') -and ($j.mode -eq 'prepare-offline') -and -not $j.mutated) "prepared ($($j.message_id)); not an install action"
-Check ((($ev | Where-Object { $_.type -eq 'stage' } | ForEach-Object { $_.id }) -join ',') -eq 'prepare-check,firmware,copy,finish') 'stages: prepare-check, firmware, copy, finish'
+# The extras stage (installer\components.ps1) appears only when this release has an extra with a pinned download or
+# the run asked for one; a release whose component zips are not yet release assets has the four stages it always had.
+$stageIds = (($ev | Where-Object { $_.type -eq 'stage' } | ForEach-Object { $_.id }) -join ',')
+Check ($stageIds -in @('prepare-check,firmware,copy,finish', 'prepare-check,firmware,components,copy,finish')) "stages: $stageIds"
 $set = Get-Content -LiteralPath (Join-Path $prepared 'offline-set.json') -Raw | ConvertFrom-Json
 Check (($set.schema -eq 'amdgpu-wddm.offline-set/1') -and ($set.version -eq $ver) -and (@($set.firmware.files).Count -eq @($m.firmware.files).Count)) "offline-set.json: $($set.schema), $($set.version), $(@($set.firmware.files).Count) firmware files"
 $okFiles = @($m.files | Where-Object { (Get-FileHash -LiteralPath (Join-Path $prepared ($_.path -replace '/', '\')) -Algorithm SHA256).Hash -eq $_.sha256 }).Count
@@ -74,7 +98,9 @@ Remove-Item -LiteralPath (Split-Path $download) -Recurse -Force
 Check (-not (Test-Path -LiteralPath $download)) 'the original download is removed'
 
 '[G-OFF] install from the prepared folder, network unavailable'
-$r = Invoke-Ps51 @((Join-Path $prepared 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard') -Offline
+# -NoComponents: the extras of a folder prepared without a network were not prepared either (the stage above says
+# so), and their licence and download addresses would break the "no address is tried" check below.
+$r = Invoke-Ps51 @((Join-Path $prepared 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard', '-NoComponents') -Offline
 Check ($r.code -eq 0) "dry run from the prepared folder: exit $($r.code)"
 Check (($r.text -match [regex]::Escape("firmware: the folder of this package, $prepared\firmware (no download)")) -and ($r.text -match '\[ok\s*\]\s+GPU firmware\s+9 files in .+ match the pinned SHA256')) 'the firmware comes from the folder''s own firmware\, every SHA256 checked in the preflight'
 Check (($r.text -match [regex]::Escape("would: stage the continuation closure: every file of this package and the firmware folder $prepared\firmware")) -and ($r.text -notmatch 'https://') -and ($r.text -notmatch 'network unavailable')) 'the folder and its firmware are staged into the closure; no address is tried'
@@ -105,7 +131,8 @@ Remove-Item -LiteralPath (Join-Path $kept 'offline-set.json')
 [IO.File]::WriteAllText((Join-Path $state 'packages\index.json'), ([ordered]@{ schema = 'amdgpu-wddm.repair-sets/1'; active = [ordered]@{ version = $ver; dir = $kept; firmware_complete = $true } } | ConvertTo-Json))
 [IO.File]::WriteAllText((Join-Path $state 'state.json'), ([ordered]@{ schema = 1; phase = 'verified'; package_version = $ver; install_root = (Join-Path $env:ProgramFiles 'amdgpu-wddm'); updated_utc = '2026-10-03T00:00:00Z' } | ConvertTo-Json))
 Remove-Item -LiteralPath $prepared -Recurse -Force
-$r = Invoke-Ps51 @((Join-Path $kept 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard', '-Repair') -Offline -StateDir $state
+# -NoComponents: as above, this case is about the kept set's own firmware and its closure.
+$r = Invoke-Ps51 @((Join-Path $kept 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard', '-Repair', '-NoComponents') -Offline -StateDir $state
 Check ($r.code -eq 0) "repair dry run from the kept set: exit $($r.code)"
 Check (($r.text -match "repairing $([regex]::Escape($ver)) \(-Repair, phase verified\)") -and ($r.text -match 'this run starts from its continuation closure') -and ($r.text -match [regex]::Escape("firmware: the folder of this package, $kept\firmware (no download)"))) 'repair: the kept set is its own closure and carries the firmware'
 Check (($r.text -notmatch 'https://') -and ($r.text -match 'would: pnputil /add-driver') -and ($r.text -notmatch 'would: bcdedit')) 'repair: phase 2 again, no download, no test-signing change'

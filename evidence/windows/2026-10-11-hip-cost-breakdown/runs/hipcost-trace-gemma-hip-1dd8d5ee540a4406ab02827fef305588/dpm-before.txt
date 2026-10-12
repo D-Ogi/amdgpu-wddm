@@ -1,0 +1,5 @@
+driver 0x000700D8, requested dpm, reason none, generation 28253903, ticks 142471, uptime 4470519 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release below 83.0 C for 4000 ms (default), soft zone from 86.0 C per 1500 ms, lead 15000 ms (default)
+idle: 500 MHz (now) after 3000 ms under 2 permille busy; entries 12 exits 11 refusals 0, 3505045 ms at the point
+smu metrics: ok, 4407 tables, 1 failures, last 811 ms ago: gfx 824 mV 500 MHz 56.50 C, soc 1187 mV 58.00 C, throttler 0x0000
+08:47:36.817 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  62.9 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle idle confirmed  up 58 down 100 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  39.2 W avg  40.5 W (gfx  9.6 W soc  4.0 W)
+08:47:37.333 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  62.8 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle idle confirmed  up 58 down 100 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  36.5 W avg  40.9 W (gfx 10.2 W soc  0.7 W)

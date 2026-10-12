@@ -1,0 +1,5 @@
+installed state before (22:36:03Z) against after (22:44:40Z)
+before 25 lines, after 25 lines
+=> state tag 99-after utc 2026-10-09T22:44:40Z
+<= state tag 00-before utc 2026-10-09T22:36:03Z
+equal lines 24

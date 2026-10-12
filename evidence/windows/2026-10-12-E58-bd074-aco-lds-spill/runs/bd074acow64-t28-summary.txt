@@ -1,0 +1,3 @@
+list-rt-k97-di1 run=bd074acow64-t28 route=direct icd=FE3455FB exit=1 complete=True done=1/1 attempts=1 elapsed=9.1s
+counts: Fail=1
+FAIL Fail dEQP-VK.ray_query.misc.dynamic_indexing

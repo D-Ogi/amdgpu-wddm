@@ -13,8 +13,10 @@
 // The registry part runs at PASSIVE_LEVEL. DDIs that can run higher (present is not one of them on a
 // display-only driver, the pointer and interrupt DDIs are) must not call in. GuardLog is the exception: since
 // 0.7.1 it is safe up to DISPATCH_LEVEL, because the M7 submission and DPC paths log.
+#include <ntifs.h>
 #include "bc250kmd.h"
 #include "bc250kmd_escape.h"
+#include "wave_snapshot.h"
 #include "guard_keep_prune.h"
 #include "hang_recovery.h"
 #include <ntstrsafe.h>
@@ -203,6 +205,30 @@ ULONG GuardReadSetting(_In_z_ PCWSTR Name, ULONG Default)
     if (KeGetCurrentIrql() != PASSIVE_LEVEL || !NT_SUCCESS(OpenParameters(&key))) return Default;
     status = ReadDword(key, Name, &value);
     ZwClose(key);
+    return NT_SUCCESS(status) ? value : Default;
+}
+
+// BD-114: the one value this driver reads outside its own Parameters key. Windows' graphics key holds TdrDelay,
+// the number of seconds the GPU scheduler waits for a preempt request before it declares a timeout
+// (tdr-registry-keys.md), and our private submit watchdog is priced against it (submit_watchdog.h). Opened for
+// KEY_READ alone, so a bug here cannot write to a key that belongs to the OS; an absent key or value leaves the
+// caller's default, which is Windows' own 2 seconds.
+ULONG GuardReadGraphicsSetting(_In_z_ PCWSTR Name, ULONG Default)
+{
+    static const WCHAR path[] = L"\\Registry\\Machine\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers";
+    UNICODE_STRING key;
+    OBJECT_ATTRIBUTES attributes;
+    HANDLE handle;
+    ULONG value;
+    NTSTATUS status;
+
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL) return Default;
+    RtlInitUnicodeString(&key, path);
+    InitializeObjectAttributes(&attributes, &key, OBJ_KERNEL_HANDLE | OBJ_CASE_INSENSITIVE, NULL, NULL);
+    status = ZwOpenKey(&handle, KEY_READ, &attributes);
+    if (!NT_SUCCESS(status)) return Default;
+    status = ReadDword(handle, Name, &value);
+    ZwClose(handle);
     return NT_SUCCESS(status) ? value : Default;
 }
 
@@ -845,9 +871,11 @@ NTSTATUS GuardVolatileStore(_In_z_ PCWSTR Subkey, _In_z_ PCWSTR Name, ULONG Valu
 //     Attempts, Recovered, NotDrained, Refused  REG_DWORD  counters (Bc250HangVerdictCounts), never reset here
 //     LastVerdict                               REG_DWORD  BC250_HANG_VERDICT_*; 0 = a kill was under way
 //     LastSeq, LastFence                        REG_DWORD  the newest ring sequence, the OS fence it would abort
+//                                               verdict 8: LastSeq is BC250_HANG_ADMISSION_*; LastFence is 0
 //     LastKills, LastMicros                     REG_DWORD  SQ_CMD writes issued, time spent in the kill loop
 //     LastTime                                  REG_QWORD  KeQuerySystemTime of this write (UTC FILETIME)
 //     LastVersion                               REG_DWORD  BC250_KMD_VERSION of the writer
+//     WavesPending                              REG_DWORD  capture admitted, no snapshot persisted yet
 //
 // The log ring tells the same story in prose, but it is about 1024 lines in memory and does not outlive the 0x116
 // that a refusal leads to; this does, because every write is flushed before the caller goes on (the pending one
@@ -864,7 +892,7 @@ static NTSTATUS AddOne(HANDLE Key, PCWSTR Name)
     return WriteDword(Key, Name, value + 1);
 }
 
-void GuardRecordHangRecovery(ULONG Verdict, ULONG Seq, ULONG Fence, ULONG Kills, ULONG Micros)
+void GuardRecordHangRecovery(ULONG Verdict, ULONG Seq, ULONG Fence, ULONG Kills, ULONG Micros, BOOLEAN WavesPending)
 {
     HANDLE parameters, key;
     UNICODE_STRING name;
@@ -897,6 +925,10 @@ void GuardRecordHangRecovery(ULONG Verdict, ULONG Seq, ULONG Fence, ULONG Kills,
     if (NT_SUCCESS(status)) status = WriteDword(key, L"LastKills", Kills);
     if (NT_SUCCESS(status)) status = WriteDword(key, L"LastMicros", Micros);
     if (NT_SUCCESS(status)) status = WriteDword(key, L"LastVersion", BC250_KMD_VERSION);
+    // A new attempt replaces the marker, including when capture is disabled.
+    // Final verdicts do not hide a failed or interrupted snapshot write.
+    if (NT_SUCCESS(status) && Verdict == BC250_HANG_VERDICT_PENDING)
+        status = WriteDword(key, L"WavesPending", WavesPending ? 1u : 0u);
     if (NT_SUCCESS(status)) {
         KeQuerySystemTime(&now);
         RtlInitUnicodeString(&name, L"LastTime");
@@ -907,6 +939,378 @@ void GuardRecordHangRecovery(ULONG Verdict, ULONG Seq, ULONG Fence, ULONG Kills,
     GuardLog("hang record: verdict %lu seq %lu fence %lu kills %lu %lu us, persisted 0x%08X", Verdict, Seq, Fence,
              Kills, Micros, status);
 }
+// The buffer is driver-owned and initialized, never an escape pointer. Keep the
+// failure header too: an empty partial read must not leave an old success visible.
+NTSTATUS GuardRecordWaveSnapshot(const BC250_WAVE_HEADER* Header)
+{
+    HANDLE parameters, recovery, key;
+    UNICODE_STRING name;
+    OBJECT_ATTRIBUTES attributes;
+    SECURITY_DESCRIPTOR descriptor;
+    union { ULONG Align; UCHAR Bytes[128]; } aclStorage;
+    PACL acl = (PACL)aclStorage.Bytes;
+    // S-1-5-18 (SYSTEM) and S-1-5-32-544 (Administrators). Shader instructions
+    // can belong to another client: keep the saved snapshot behind the live
+    // command's administrator boundary, without restricting existing counters.
+    static const ULONG systemSid[] = {0x00000101u, 0x05000000u, 18u};
+    static const ULONG adminSid[] = {0x00000201u, 0x05000000u, 32u, 544u};
+    NTSTATUS status;
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL || g_ParametersPath.Buffer == NULL)
+        return STATUS_INVALID_DEVICE_STATE;
+    if (Header->AbiVersion != BC250_WAVE_ABI_VERSION ||
+        Header->WaveCount > BC250_WAVE_MAX_RECORDS || Header->Kind != BC250_WAVE_KIND_PRE_KILL ||
+        Header->Bytes != sizeof(*Header) + Header->WaveCount * sizeof(BC250_WAVE_RECORD))
+        return STATUS_INVALID_PARAMETER;
+    RtlZeroMemory(&aclStorage, sizeof(aclStorage));
+    status = RtlCreateSecurityDescriptor(&descriptor, SECURITY_DESCRIPTOR_REVISION);
+    if (NT_SUCCESS(status)) status = RtlCreateAcl(acl, sizeof(aclStorage.Bytes), ACL_REVISION);
+    if (NT_SUCCESS(status)) status = RtlAddAccessAllowedAce(acl, ACL_REVISION, KEY_ALL_ACCESS, (PSID)systemSid);
+    if (NT_SUCCESS(status)) status = RtlAddAccessAllowedAce(acl, ACL_REVISION, KEY_READ | DELETE, (PSID)adminSid);
+    if (NT_SUCCESS(status)) status = RtlSetDaclSecurityDescriptor(&descriptor, TRUE, acl, FALSE);
+    if (NT_SUCCESS(status)) status = RtlSetOwnerSecurityDescriptor(&descriptor, (PSID)systemSid, FALSE);
+    if (!NT_SUCCESS(status)) return status;
+    descriptor.Control |= SE_DACL_PROTECTED;
+    status = OpenParameters(&parameters);
+    if (!NT_SUCCESS(status)) return status;
+    RtlInitUnicodeString(&name, L"HangRecovery");
+    InitializeObjectAttributes(&attributes, &name, OBJ_KERNEL_HANDLE | OBJ_CASE_INSENSITIVE, parameters, NULL);
+    status = ZwCreateKey(&recovery, KEY_READ | KEY_WRITE, &attributes, 0, NULL, REG_OPTION_NON_VOLATILE, NULL);
+    ZwClose(parameters);
+    if (!NT_SUCCESS(status)) return status;
+    RtlInitUnicodeString(&name, L"Waves");
+    InitializeObjectAttributes(&attributes, &name, OBJ_KERNEL_HANDLE | OBJ_CASE_INSENSITIVE, recovery, &descriptor);
+    status = ZwCreateKey(&key, KEY_READ | KEY_WRITE | WRITE_DAC | WRITE_OWNER, &attributes, 0, NULL,
+                         REG_OPTION_NON_VOLATILE, NULL);
+    if (!NT_SUCCESS(status)) { ZwClose(recovery); return status; }
+    status = ZwSetSecurityObject(key, OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION |
+                                PROTECTED_DACL_SECURITY_INFORMATION, &descriptor);
+    RtlInitUnicodeString(&name, L"Snapshot");
+    if (NT_SUCCESS(status)) status = ZwSetValueKey(key, &name, 0, REG_BINARY, (PVOID)Header, Header->Bytes);
+    // Data first: a failed write must retain the pending marker. One SYSTEM
+    // hive flush then persists both the snapshot and its completion marker.
+    if (NT_SUCCESS(status)) status = WriteDword(recovery, L"WavesPending", 0);
+    if (NT_SUCCESS(status)) status = ZwFlushKey(key);
+    ZwClose(key);
+    ZwClose(recovery);
+    return status;
+}
+
+// ---- BD-122: why a start failed, where a Code 43 device can still be read ------------------------------------
+//
+// GitHub #38: two testers get CM_PROB_FAILED_POST_START, and start-confirm.log said only "device problem 43,
+// LastStage 91" at every logon. Stage 91 is StageStartFailed, which Bc250StartDevice reaches from any of its
+// `goto failed` steps, and the NTSTATUS went to the log ring alone ("start failed 0x%08X"). A device with Code 43
+// answers no escape, so nothing could read that ring: the tester could not name the step and neither could we.
+// GuardLogKeep would have kept it in a file, but it is gated on Parameters\KeepLog (0 in every release) and is
+// not called on that path anyway.
+//
+// So every start attempt that does not end with a started device now leaves its reason in the registry, with no
+// gate at all. A subkey of Parameters, for the reason GuardRecordHangRecovery gives above: the kmd-deploy kit
+// compares the VALUE NAMES of Parameters against its capture and recover-after-boot.ps1 writes captured values
+// back, and neither walks subkeys, so this record is neither a postflight difference nor overwritten by a
+// recovery.
+//
+//   <service key>\Parameters\StartRecord
+//     Result             REG_SZ     attempt | started | failed | guard   (the only value a reader may trust)
+//     Step               REG_SZ     the step of Bc250StartDevice, "-" when none was named
+//     SubStep            REG_SZ     the step inside WddmStart / GpuStartupInitialize, "-" when none
+//     Status             REG_DWORD  the NTSTATUS of the failure (0 for attempt and started)
+//     Stage              REG_DWORD  BC250_STAGE at the record: 91 for a failure, 90 for the guard's refusal
+//     UnconfirmedStarts  REG_DWORD  the boot-loop count read from Parameters at the record
+//     Version            REG_DWORD  BC250_KMD_VERSION, so a reader knows which driver wrote this
+//     TimeUtc            REG_SZ     UTC, yyyy-mm-ddThh:mm:ss.fffZ
+//     Detail             REG_SZ     measured values of the refusing step (GuardStartDetail), failures only
+//     Log                REG_MULTI_SZ  the BC250_START_RECORD_LINES ring lines that run UP TO the failure point
+//                                   (GuardStartFailureMark), oldest first, failures only - not the teardown's own
+//
+// THE RULE THAT KEEPS THE RECORD CURRENT (requirement 2 of the defect, and what a consumer must implement):
+// `Result` is written as "attempt" by GuardRecordStartAttempt at the top of every Bc250StartDevice, flushed,
+// before any step of that start can fail - and `Log` is deleted in the same write. A failure then writes its
+// values and sets `Result` to "failed" or "guard" LAST; a started device sets it to "started". Therefore
+//   * Result "failed" or "guard" always belongs to the newest start attempt, and the step, status and lines next
+//     to it are that attempt's;
+//   * Result "started" means the newest attempt reached a started device, whatever an older boot had left here;
+//   * Result "attempt" means the newest attempt neither failed nor finished - the machine stopped inside the
+//     start (a bugcheck, a hang, AC loss), which is itself the answer. Such a record names NO step: it is written
+//     once, at the top of the start, before any step runs, so Step is "-" and Stage is StageStartEnter. How far
+//     that start got is in Parameters\LastStage and Parameters\StageHistory, which every stage flushes; the
+//     consumers point a reader there. "attempt" also stands where a write of the record itself was torn (below).
+// A stale failure can never be read as the current one, because the current attempt overwrote Result before it
+// could fail, every value of the record is written again beside it, and a value that cannot be written is deleted
+// rather than left standing. One case is outside this rule and cannot be inside it: a start refused above the
+// attempt record, which is a device object this driver does not own (pnp.c) and must leave no trace for. The
+// record then still belongs to the previous start, and the consumers compare TimeUtc with the boot's own time and
+// say so. A reader that finds no subkey at all is reading a KMD older than 0.7.216.30.
+//
+// PASSIVE_LEVEL only, like every other writer in this file, and called from the PnP start path, which dxgkrnl
+// serializes. A failure of any of these writes is logged in one line and otherwise ignored: this is evidence,
+// never a gate, and a start must not fail because the registry did (requirement 4).
+#define BC250_START_RECORD_LINES 64u            // the newest ring lines kept with a failure
+#define BC250_START_RECORD_CHUNK 8u             // lines per GuardLogRead call: 8 * sizeof(BC250_LOG_LINE) of stack
+
+// The step names. Written by the PnP start thread only (one start at a time, serialized by dxgkrnl) and read by
+// the record writer on that same thread, so no lock and no interlocked access: a pointer to a string literal of
+// this image, which the record writer cannot outlive. Safe at any IRQL - they are two stores.
+static PCWSTR volatile g_StartStep;
+static PCWSTR volatile g_StartSubStep;
+
+void GuardStartStep(_In_opt_z_ PCWSTR Step)
+{
+    g_StartStep = Step;
+    g_StartSubStep = NULL;      // a new step owns no sub-step until one names itself
+}
+
+void GuardStartSubStep(_In_opt_z_ PCWSTR SubStep)
+{
+    g_StartSubStep = SubStep;
+}
+
+// The ring sequence at the moment a failure became known, before any cleanup of that failure ran. The record is
+// written last on the failure path, and the teardown of a GPU that had already started writes dozens of GuardLog
+// lines of its own (WddmStop, GartStop, PspStop, GfxStop and the rest): without this mark the 64 kept lines would
+// hold that unwind and not the step that refused, which is the one thing the record exists for. The first caller
+// of a start wins, because the earliest failure point is where the lines must end. Same thread and lifetime as the
+// step names: one load and two stores, safe at any IRQL.
+static ULONG volatile g_StartLogMark;
+static BOOLEAN volatile g_StartLogMarked;
+
+void GuardStartFailureMark(void)
+{
+    if (g_StartLogMarked) return;
+    g_StartLogMark = GuardLogSequence();
+    g_StartLogMarked = TRUE;
+}
+
+// GitHub #38: one line of measured values for a step whose NTSTATUS alone does not say which rule refused it (the
+// inherited timing). Same thread and lifetime as the step names: every attempt clears it, a failure or a refusal
+// writes it as Detail, every other record deletes Detail. Integer conversions only, so any IRQL; a line too long
+// for the buffer is kept truncated.
+static WCHAR g_StartDetail[320];
+
+void GuardStartDetail(_In_z_ _Printf_format_string_ PCWSTR Format, ...)
+{
+    va_list args;
+    va_start(args, Format);
+    (void)RtlStringCchVPrintfW(g_StartDetail, RTL_NUMBER_OF(g_StartDetail), Format, args);
+    va_end(args);
+}
+
+static NTSTATUS WriteString(HANDLE Key, PCWSTR Name, PCWSTR Value)
+{
+    UNICODE_STRING name;
+
+    RtlInitUnicodeString(&name, Name);
+    return ZwSetValueKey(Key, &name, 0, REG_SZ, (PVOID)Value, (ULONG)((wcslen(Value) + 1) * sizeof(WCHAR)));
+}
+
+static void DeleteString(HANDLE Key, PCWSTR Name)
+{
+    UNICODE_STRING name;
+
+    RtlInitUnicodeString(&name, Name);
+    (void)ZwDeleteValueKey(Key, &name);     // absent is the wanted end state too: nothing depends on the result
+}
+
+// UTC, because that is the clock every log in this project uses. KeQuerySystemTime is already UTC.
+static void StartRecordTime(_Out_writes_(Chars) PWSTR Buffer, SIZE_T Chars)
+{
+    LARGE_INTEGER now;
+    TIME_FIELDS fields;
+
+    Buffer[0] = 0;
+    KeQuerySystemTime(&now);
+    RtlTimeToTimeFields(&now, &fields);
+    if (!NT_SUCCESS(RtlStringCchPrintfW(Buffer, Chars, L"%04d-%02d-%02dT%02d:%02d:%02d.%03dZ", (int)fields.Year,
+                                        (int)fields.Month, (int)fields.Day, (int)fields.Hour, (int)fields.Minute,
+                                        (int)fields.Second, (int)fields.Milliseconds)))
+        Buffer[0] = 0;
+}
+
+// The ring lines that run up to the failure as one REG_MULTI_SZ, oldest first: exactly the text GuardLog wrote, so
+// a line here never holds more than bc250kmd_cli log would print (at most 159 characters, BC250_LOG_TEXT). Mark is
+// the sequence the failure was noticed at, or 0 for the newest lines of all (a refusal that runs no cleanup); every
+// line at or above it belongs to the unwind that followed and is left out. The buffer comes from paged pool -
+// 64 * 160 WCHAR is far too much for a PnP stack - and the lines are read in small chunks.
+static NTSTATUS StartRecordLog(HANDLE Key, ULONG Mark, _Out_ ULONG* Written)
+{
+    const SIZE_T chars = (SIZE_T)BC250_START_RECORD_LINES * BC250_LOG_TEXT + 1;
+    BC250_LOG_LINE chunk[BC250_START_RECORD_CHUNK];
+    UNICODE_STRING name;
+    PWSTR buffer;
+    SIZE_T used = 0;
+    ULONG total, lost, above, from, next, got, i, lines = 0;
+    BOOLEAN past = FALSE;
+    NTSTATUS status;
+
+    *Written = 0;
+    buffer = (PWSTR)ExAllocatePool2(POOL_FLAG_PAGED, chars * sizeof(WCHAR), BC250_TAG);
+    if (buffer == NULL) return STATUS_INSUFFICIENT_RESOURCES;
+    GuardLogStats(&total, &lost, &above);
+    if (Mark != 0 && Mark < total) total = Mark;    // the failure point, not the end of the teardown's lines
+    from = (total > BC250_START_RECORD_LINES) ? total - BC250_START_RECORD_LINES : 0;
+    while (lines < BC250_START_RECORD_LINES && !past)
+    {
+        got = GuardLogRead(from, chunk, BC250_START_RECORD_CHUNK, &next);
+        if (got == 0) break;
+        for (i = 0; i < got && lines < BC250_START_RECORD_LINES; i++)
+        {
+            const char* text = chunk[i].Text;
+            SIZE_T j = 0;
+
+            // At or past the failure point: everything from here on is the cleanup that ran after the failure, and
+            // the ring may have wrapped past the mark while it ran. The sequence numbers only grow, so stop.
+            if (chunk[i].Sequence >= total) { past = TRUE; break; }
+            // An empty line would end the REG_MULTI_SZ in the middle of it. GuardLog never writes one; skip it
+            // rather than lose every line after it.
+            if (text[0] == '\0') continue;
+            // ANSI to WCHAR by hand: the ring holds printable ASCII that this driver printed itself, so there is
+            // no locale, no conversion table and no allocation in the way.
+            while (text[j] != '\0' && j + 1 < BC250_LOG_TEXT && used + j + 2 <= chars)
+            {
+                buffer[used + j] = (WCHAR)(UCHAR)text[j];
+                j++;
+            }
+            buffer[used + j] = L'\0';
+            used += j + 1;
+            lines++;
+        }
+        if (next == from) break;        // the ring gave what it has; do not spin on it
+        from = next;
+    }
+    buffer[used] = L'\0';               // the empty string that ends a REG_MULTI_SZ
+    RtlInitUnicodeString(&name, L"Log");
+    status = ZwSetValueKey(Key, &name, 0, REG_MULTI_SZ, buffer, (ULONG)((used + 1) * sizeof(WCHAR)));
+    ExFreePoolWithTag(buffer, BC250_TAG);
+    *Written = lines;
+    return status;
+}
+
+// A value this record could not write is removed instead of left behind: an older start's value beside a newer
+// Result is the one lie the record must never tell. A failed delete can only mean the hive is beyond our reach,
+// and the Result write below is then skipped anyway, so its status is nothing to act on.
+static NTSTATUS WriteStringOrClear(HANDLE Key, PCWSTR Name, PCWSTR Value)
+{
+    NTSTATUS status = WriteString(Key, Name, Value);
+
+    if (!NT_SUCCESS(status)) DeleteString(Key, Name);
+    return status;
+}
+
+static NTSTATUS WriteDwordOrClear(HANDLE Key, PCWSTR Name, ULONG Value)
+{
+    NTSTATUS status = WriteDword(Key, Name, Value);
+
+    if (!NT_SUCCESS(status)) DeleteString(Key, Name);
+    return status;
+}
+
+// The first failure of a record's writes, for the one decision that depends on it: whether the real Result may be
+// written at all. Every write is still attempted, whatever an earlier one answered.
+static void StartRecordKeep(_Inout_ NTSTATUS* First, NTSTATUS Status)
+{
+    if (NT_SUCCESS(*First) && !NT_SUCCESS(Status)) *First = Status;
+}
+
+// One record. Result is what a reader trusts (see the rule above); Failed says whether the ring lines belong with
+// it. Every failure here ends in one GuardLog line and nothing else: the caller's status is never touched.
+static void StartRecordWrite(_In_z_ PCWSTR Result, BOOLEAN Failed, NTSTATUS Reason)
+{
+    HANDLE parameters, key;
+    UNICODE_STRING name;
+    OBJECT_ATTRIBUTES attributes;
+    WCHAR time[32];
+    PCWSTR step = g_StartStep ? g_StartStep : L"-";
+    PCWSTR sub = g_StartSubStep ? g_StartSubStep : L"-";
+    ULONG mark = g_StartLogMark;        // 0 until a failure path marked one: then the lines end there
+    ULONG starts = 0, lines = 0;
+    NTSTATUS status, first = STATUS_SUCCESS, logStatus = STATUS_SUCCESS;
+
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL || g_ParametersPath.Buffer == NULL) {
+        GuardLog("start record %ws: not written, IRQL or no Parameters path", Result);
+        return;
+    }
+    status = OpenParameters(&parameters);
+    if (!NT_SUCCESS(status)) {
+        GuardLog("start record %ws: not written, Parameters open 0x%08X", Result, status);
+        return;
+    }
+    // The boot-loop count belongs with a guard refusal and tells a failure apart from a refusal; ReadDword sets
+    // it to 0 first, so an absent or unreadable value records 0 rather than a stale number.
+    (void)ReadDword(parameters, L"UnconfirmedStarts", &starts);
+    RtlInitUnicodeString(&name, L"StartRecord");
+    InitializeObjectAttributes(&attributes, &name, OBJ_KERNEL_HANDLE | OBJ_CASE_INSENSITIVE, parameters, NULL);
+    status = ZwCreateKey(&key, KEY_READ | KEY_WRITE, &attributes, 0, NULL, REG_OPTION_NON_VOLATILE, NULL);
+    ZwClose(parameters);
+    if (!NT_SUCCESS(status)) {
+        GuardLog("start record %ws: not written, subkey create 0x%08X", Result, status);
+        return;
+    }
+    StartRecordTime(time, RTL_NUMBER_OF(time));
+    // "attempt" first on every path: a torn or half-failed write then leaves a record nobody reads as a reason,
+    // instead of a reason belonging to another start. The real Result is the last value written.
+    //
+    // No write below is skipped because an earlier one failed, and a value that could not be written is deleted:
+    // a short-circuit here would leave an older boot's Step, Status or Log standing beside this start's fresh
+    // Result, which a reader would then print as the current reason (a damaged or full hive is exactly the kind of
+    // machine this record is for). `first` only decides whether the real Result may be written at all; if any value
+    // of the record is missing, Result stays "attempt", which no consumer reads as a reason.
+    StartRecordKeep(&first, WriteStringOrClear(key, L"Result", L"attempt"));
+    StartRecordKeep(&first, WriteStringOrClear(key, L"Step", step));
+    StartRecordKeep(&first, WriteStringOrClear(key, L"SubStep", sub));
+    StartRecordKeep(&first, WriteDwordOrClear(key, L"Status", (ULONG)Reason));
+    StartRecordKeep(&first, WriteDwordOrClear(key, L"Stage", (ULONG)GuardLastStage()));
+    StartRecordKeep(&first, WriteDwordOrClear(key, L"UnconfirmedStarts", starts));
+    StartRecordKeep(&first, WriteDwordOrClear(key, L"Version", BC250_KMD_VERSION));
+    StartRecordKeep(&first, WriteStringOrClear(key, L"TimeUtc", time));
+    if (Failed && g_StartDetail[0] != L'\0') StartRecordKeep(&first, WriteStringOrClear(key, L"Detail", g_StartDetail));
+    else DeleteString(key, L"Detail");
+    // The lines belong to the failure they were written for. An attempt or a started device deletes them, and so
+    // does a failed write of them, so that no reader can pair this start's Result with another start's log.
+    if (Failed) {
+        logStatus = StartRecordLog(key, mark, &lines);
+        if (!NT_SUCCESS(logStatus)) { DeleteString(key, L"Log"); lines = 0; }
+    } else DeleteString(key, L"Log");
+    status = first;
+    if (NT_SUCCESS(status)) status = WriteStringOrClear(key, L"Result", Result);
+    if (NT_SUCCESS(status)) status = ZwFlushKey(key);   // on the disk before the start returns Code 43 to dxgkrnl
+    ZwClose(key);
+    GuardLog("start record %ws %ws %ws 0x%08X, %u lines, write 0x%08X", Result, step, sub, Reason, lines, status);
+    if (!NT_SUCCESS(logStatus)) GuardLog("start record %ws: log lines not kept, 0x%08X", Result, logStatus);
+}
+
+// The top of Bc250StartDevice: this attempt owns the record from here on. Nothing of the last start is left to
+// pair with it - not its step, not its detail line and not its failure point.
+void GuardRecordStartAttempt(void)
+{
+    GuardStartStep(NULL);
+    g_StartDetail[0] = L'\0';
+    g_StartLogMark = 0;
+    g_StartLogMarked = FALSE;
+    StartRecordWrite(L"attempt", FALSE, STATUS_SUCCESS);
+}
+
+// The boot-loop guard refused the start (stage 90). UnconfirmedStarts in the record says how many starts nobody
+// confirmed; BC250_MAX_UNCONFIRMED_STARTS is the limit it reached.
+void GuardRecordStartRefused(NTSTATUS Status)
+{
+    StartRecordWrite(L"guard", TRUE, Status);
+}
+
+// A step of Bc250StartDevice failed (stage 91). Called after GuardStage(StageStartFailed) and after the existing
+// cleanup, so Stage is the stage a tester's start-confirm.log already prints; the lines still run up to the
+// failure and not through the unwind, because the failure path marked that point (GuardStartFailureMark).
+void GuardRecordStartFailed(NTSTATUS Status)
+{
+    StartRecordWrite(L"failed", TRUE, Status);
+}
+
+// The device is started (stage 39). Nothing in the record is a reason any more.
+void GuardRecordStartStarted(void)
+{
+    GuardStartStep(NULL);
+    StartRecordWrite(L"started", FALSE, STATUS_SUCCESS);
+}
+
 // ---- BD-090: a runtime restart in a confirmed boot -----------------------------------------------------------
 //
 // UnconfirmedStarts protects against a boot loop: a start that crashes the machine never reaches its stop, and
@@ -960,5 +1364,105 @@ void GuardReleaseStart(void)
         GuardLog("guard: orderly stop in a confirmed boot, count %u -> %u status 0x%08X", starts, starts - 1, status);
     }
     ZwClose(key);
+}
+
+// StopDevice can follow a successful StartDevice before Windows admits the
+// adapter. That one case is what this record is for, and Device->Started is
+// what separates it from the start-failure path, which unwinds through this
+// same StopDevice: see the Device->Started gate below.
+// KeepLog is not needed for this record. StartRecord remains intact.
+// Result=attempt is incomplete; stopping means the entry snapshot is complete;
+// stopped means StageStopDone was reached. This does not invent an OS refusal
+// status: StopDevice has no argument with dxgkrnl's reason for stopping it.
+// StartStage/HealthFlags precede teardown. Log ends at that same entry point,
+// not after cleanup has replaced the ring. BootId and generation identify it.
+static BOOLEAN g_StopRecordPending;
+
+static NTSTATUS StopRecordOpen(_Out_ HANDLE* Key)
+{
+    HANDLE parameters;
+    UNICODE_STRING name;
+    OBJECT_ATTRIBUTES attributes;
+    NTSTATUS status=OpenParameters(&parameters);
+    if (!NT_SUCCESS(status)) return status;
+    RtlInitUnicodeString(&name,L"StopRecord");
+    InitializeObjectAttributes(&attributes,&name,OBJ_KERNEL_HANDLE|OBJ_CASE_INSENSITIVE,parameters,NULL);
+    status=ZwCreateKey(Key,KEY_READ|KEY_WRITE,&attributes,0,NULL,REG_OPTION_NON_VOLATILE,NULL);
+    ZwClose(parameters);
+    return status;
+}
+
+void GuardRecordStopBegin(BC250_DEVICE* Device)
+{
+    BC250_ESCAPE_START_HEALTH health;
+    HANDLE key;
+    WCHAR time[32], generation[24], epoch[24];
+    ULONG stage=(ULONG)GuardLastStage(), lines=0, mark=GuardLogSequence();
+    NTSTATUS status, first=STATUS_SUCCESS;
+    g_StopRecordPending=FALSE;
+    if (KeGetCurrentIrql()!=PASSIVE_LEVEL) { StartHealthFault(Device); return; }
+    StartHealthStop(Device,&health);
+    // A previous confirmed boot/start is not this generation's confirmation.
+    // A normal confirmed stop writes nothing and preserves an older diagnostic.
+    if (!health.Generation || (health.Flags&BC250_START_HEALTH_CONFIRMED)) return;
+    // The start-failure path of Bc250StartDevice unwinds through this same StopDevice (pnp.c, the WddmStart and
+    // inherited-timing failures and the `failed:` label). Windows stopped nothing there: our own code did, to
+    // undo a start that failed, and StartRecord already names the step, the NTSTATUS and the stage of that
+    // failure. A record written here would say "Windows stopped the device" of our own cleanup, and it would
+    // overwrite the one case this record exists for when a retry of a stopped start then fails. Device->Started
+    // is set at the last point of a start that can fail, so a stop before it is always such an unwind.
+    if (!Device->Started) { GuardLog("stop record: none, this stop unwinds a start that did not reach a started device"); return; }
+    if (g_ParametersPath.Buffer==NULL) return;
+    status=StopRecordOpen(&key);
+    if (!NT_SUCCESS(status)) {
+        GuardLog("stop record: open failed 0x%08X",status);
+        return;
+    }
+    StartRecordTime(time,RTL_NUMBER_OF(time));
+    (void)RtlStringCchPrintfW(generation,RTL_NUMBER_OF(generation),L"%llu",health.Generation);
+    (void)RtlStringCchPrintfW(epoch,RTL_NUMBER_OF(epoch),L"%llu",health.Epoch);
+    StartRecordKeep(&first,WriteStringOrClear(key,L"Result",L"attempt"));
+    StartRecordKeep(&first,WriteStringOrClear(key,L"Step",L"StopDevice"));
+    StartRecordKeep(&first,WriteStringOrClear(key,L"SubStep",L"unconfirmed start"));
+    StartRecordKeep(&first,WriteStringOrClear(key,L"Detail",L"Windows stopped the device; StopDevice supplies no reason code."));
+    StartRecordKeep(&first,WriteDwordOrClear(key,L"Status",(ULONG)STATUS_SUCCESS));
+    StartRecordKeep(&first,WriteDwordOrClear(key,L"Stage",StageStopEnter));
+    StartRecordKeep(&first,WriteDwordOrClear(key,L"StartStage",stage));
+    StartRecordKeep(&first,WriteDwordOrClear(key,L"HealthFlags",health.Flags));
+    StartRecordKeep(&first,WriteDwordOrClear(key,L"BootId",SharedUserData->BootId));
+    StartRecordKeep(&first,WriteDwordOrClear(key,L"Version",BC250_KMD_VERSION));
+    StartRecordKeep(&first,WriteStringOrClear(key,L"Generation",generation));
+    StartRecordKeep(&first,WriteStringOrClear(key,L"Epoch",epoch));
+    StartRecordKeep(&first,WriteStringOrClear(key,L"TimeUtc",time));
+    DeleteString(key,L"StopTimeUtc");
+    status=StartRecordLog(key,mark,&lines);
+    if (!NT_SUCCESS(status)) DeleteString(key,L"Log");
+    StartRecordKeep(&first,status);
+    StartRecordKeep(&first,WriteDwordOrClear(key,L"LogLines",lines));
+    if (NT_SUCCESS(first)) first=WriteStringOrClear(key,L"Result",L"stopping");
+    if (NT_SUCCESS(first)) first=ZwFlushKey(key);
+    ZwClose(key);
+    g_StopRecordPending=NT_SUCCESS(first);
+    GuardLog("stop record: stage %lu health 0x%lX, %lu lines, write 0x%08X",stage,health.Flags,lines,first);
+}
+
+void GuardRecordStopDone(void)
+{
+    HANDLE key;
+    WCHAR time[32];
+    NTSTATUS status, first=STATUS_SUCCESS;
+    if (!g_StopRecordPending) return;
+    g_StopRecordPending=FALSE;
+    if (KeGetCurrentIrql()!=PASSIVE_LEVEL || g_ParametersPath.Buffer==NULL) return;
+    status=StopRecordOpen(&key);
+    if (!NT_SUCCESS(status)) { GuardLog("stop record: finish open failed 0x%08X",status); return; }
+    StartRecordTime(time,RTL_NUMBER_OF(time));
+    StartRecordKeep(&first,WriteStringOrClear(key,L"Result",L"attempt"));
+    StartRecordKeep(&first,WriteDwordOrClear(key,L"Stage",(ULONG)GuardLastStage()));
+    StartRecordKeep(&first,WriteStringOrClear(key,L"StopTimeUtc",time));
+    if (NT_SUCCESS(first)) first=WriteStringOrClear(key,L"Result",L"stopped");
+    if (NT_SUCCESS(first)) first=ZwFlushKey(key);
+    ZwClose(key);
+    if (!NT_SUCCESS(first)) GuardLog("stop record: finish failed 0x%08X",first);
 }
 

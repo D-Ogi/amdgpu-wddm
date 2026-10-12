@@ -130,3 +130,51 @@ pass, followed by hardware64MiB/1GiB and shader/model controls.30673 OS-private
 admissions match actual paging submissions/completions, with no errors/TDR.
 Full OS lifetime/forced preemption/cancellation/generation acceptance and capture
 fallback remain distinct gates. See [M426](../../evidence/windows/2026-09-24-E27-m9-recovery/candidate07133-os-private-queue/RESULT.md).
+
+## BD-085 - the root a native span is admitted with
+
+A native record carries GPU virtual addresses, and the GPU's own walker resolves
+them. `PagingWriteRing` (`driver/kmd/gfx.c:4011-4019`) emits an SDMA VM flush
+that writes the record's root into the page-directory base register pair of
+`BC250_SDMA_PAGING_VMID`, which is VMID 2, invalidates that VMID, and then emits
+the span's indirect buffer. The CPU does no address translation on this route.
+The software walk of `VidMmTranslate` belongs to the other route, the direct one,
+which carries physical MC addresses and reprograms no VMID
+([the paging node, decision 2](paging-node.md)).
+
+The root must therefore be a page-directory base the hardware accepts.
+`bc250_sdma_emit_vm_flush` (`driver/shim/bc250_sdma.c:1241-1265`) refuses a root
+that is not a multiple of `AMDGPU_GPU_PAGE_SIZE`, which is 4096
+(`driver/shim/include/amdgpu.h:450`). The fence escape refuses the same value for
+its own virtual IB (`driver/kmd/gfx.c:1989`). A root of zero is a VMID that was
+given no root in this engine instance (`driver/kmd/vmid_pool.h:43`). Admission
+binds the root into the selected spans and refuses a native span whose root is
+zero or not 4 KiB aligned (`RootUsable`, `driver/kmd/paging_private.c:201-205`).
+Both halves of that gate matter. A misaligned root that got past admission would
+be written into the record, and the dispatch walk would then refuse the same
+record (`NativeValid`, `driver/kmd/paging_private.c:18-28`, reached from
+`driver/kmd/gfx.c:4059`), which leaves an admitted paging job that can never
+reach the ring.
+
+One entry point carries the root. `Bc250WddmSubmitCommandVirtual` passes the
+context `RootPhysical` that `Bc250WddmSetRootPageTable` recorded
+(`driver/kmd/wddm.c:6228-6231`). The no-root wrapper beside it
+(`driver/kmd/wddm.c:2008-2013`) has two callers, and each one passes FALSE for
+the virtual-address flag, so no root is read: the physical `SubmitCommand` path
+(`driver/kmd/wddm.c:5973-5979`) and `WddmCompleteSoftware`
+(`driver/kmd/wddm.c:1089`). A caller that submits a native span through the
+wrapper is refused, and the refusal leaves the queue untouched.
+
+The `WddmCompleteSoftware` caller is a separate open defect, not a root question.
+It passes a byte count of zero, which the wrapper refuses before it reads
+anything else (`driver/kmd/wddm.c:1980`), so an empty paging DMA buffer on node 1
+always reaches `WddmFailSubmission` and closes the node with no completion. The
+`deferred` branch below it that was meant to wait for the packet in flight
+(`driver/kmd/wddm.c:1099`) is therefore unreachable for node 1.
+
+The paging-preemption host test states the gate in both directions, and the
+`paging-preemption` step of `tools/quality/quick.ps1` runs it. Its negative
+control `-AnyRootNative` admits any root at all, and its negative control
+`-AnyAlignNative` admits a misaligned one. Each control must fail by a named
+check of `experiments/E27-m9-inference/paging-preemption-test.c`, never by a
+build error.

@@ -1,0 +1,10 @@
+{
+    "route":  "direct",
+    "icd_source":  "C:\\BC250\\tmp\\bd074fix\\vulkan_radeon.dll",
+    "icd_sha256":  "E738ECE157DA9BE2D41A1375429461F7EB5BEC171663559DBC2B8322E059F3C0",
+    "experimental":  "sparse",
+    "perftest":  "",
+    "deqp_sha256":  "E3DABB44EB8D252083C33B80C3E18897301EB4F7E788F95F6070BCF0AC473183",
+    "list_sha256":  "EEBB43439BBF601FEE063D60E350F1C7117ACC0BF2A449EEC5B2F5A38767580D",
+    "list_count":  140
+}

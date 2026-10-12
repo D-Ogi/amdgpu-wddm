@@ -15,6 +15,7 @@
 #include "test_common.h"
 
 #include "co_internal.h"
+#include "internal.h"
 
 /* The measured numbers of tests/data/m16_kernels.gfx1013.co. PROVENANCE.txt beside it
  * names the compiler revision and the command that produced it. */
@@ -472,6 +473,147 @@ static void check_relocations(void)
     free(b);
 }
 
+
+/* BD-110: a sibling's 141-byte descriptor symbol rejected a whole real module.
+ * Test the production metadata parser, including partial-failure teardown. */
+static size_t metadata_string(uint8_t* b, size_t at, const char* text, size_t n)
+{
+    b[at++] = 0xDAu; /* str16, enough to exercise names beyond any old fixed cap */
+    b[at++] = (uint8_t)(n >> 8);
+    b[at++] = (uint8_t)n;
+    memcpy(b + at, text, n);
+    return at + n;
+}
+
+static void check_metadata_strings(void)
+{
+    static const size_t lengths[] = { 127u, 128u, 145u, 512u, 4096u };
+    uint8_t b[8192];
+    char symbol[4096];
+    uint32_t i;
+    memset(symbol, 's', sizeof(symbol));
+    for (i = 0; i < TEST_COUNT(lengths); i++) {
+        struct bc250hsa_module* mod = (struct bc250hsa_module*)calloc(1, sizeof(*mod));
+        size_t at = 0;
+        CHECK(mod != NULL);
+        if (mod == NULL) { return; }
+        b[at++] = 0x81u;
+        at = metadata_string(b, at, "amdhsa.kernels", 14u);
+        b[at++] = 0x91u;
+        b[at++] = 0x82u;
+        at = metadata_string(b, at, ".name", 5u);
+        at = metadata_string(b, at, "test", 4u);
+        at = metadata_string(b, at, ".symbol", 7u);
+        at = metadata_string(b, at, symbol, lengths[i]);
+        const bc250hsa_status status = bc250hsa_metadata_parse(b, at, mod);
+        CHECK_STATUS(status, BC250HSA_OK);
+        if (status == BC250HSA_OK) {
+            CHECK_U64(strlen(mod->kernels[0].symbol), lengths[i]);
+            CHECK(memcmp(mod->kernels[0].symbol, symbol, lengths[i]) == 0);
+        }
+        bc250hsa_module_unload(mod);
+    }
+    /* Both identifying strings reject duplicate keys, embedded NUL, non-string
+     * values and a declared str32 length that does not fit the note. */
+    for (i = 0; i < 10u; i++) {
+        struct bc250hsa_module* mod = (struct bc250hsa_module*)calloc(1, sizeof(*mod));
+        const char* key = (i & 1u) ? ".name" : ".symbol";
+        const size_t key_bytes = strlen(key);
+        const uint32_t mode = i / 2u;
+        size_t at = 0;
+        CHECK(mod != NULL);
+        if (mod == NULL) { return; }
+        b[at++] = 0x81u;
+        at = metadata_string(b, at, "amdhsa.kernels", 14u);
+        b[at++] = 0x91u;
+        b[at++] = mode == 0u ? 0x83u : 0x82u;
+        at = metadata_string(b, at, (i & 1u) ? ".symbol" : ".name", (i & 1u) ? 7u : 5u);
+        at = metadata_string(b, at, "good", 4u);
+        at = metadata_string(b, at, key, key_bytes);
+        if (mode == 0u) {
+            at = metadata_string(b, at, "first", 5u);
+            at = metadata_string(b, at, key, key_bytes);
+            at = metadata_string(b, at, "second", 6u);
+        } else if (mode == 1u) {
+            at = metadata_string(b, at, "prefix\0suffix", 13u);
+        } else if (mode == 2u) {
+            b[at++] = 0x01u; /* integer is not a name */
+        } else if (mode == 3u) {
+            b[at++] = 0xDBu;
+            memset(b + at, 0xFF, 4u); at += 4u;
+        } else {
+            at = metadata_string(b, at, "", 0u);
+        }
+        CHECK_STATUS(bc250hsa_metadata_parse(b, at, mod), BC250HSA_EBADMETADATA);
+        bc250hsa_module_unload(mod);
+    }
+    /* Unknown container sizes must not wrap children=count*2 to zero. */
+    {
+        struct bc250hsa_module* mod = (struct bc250hsa_module*)calloc(1, sizeof(*mod));
+        size_t at = 0;
+        CHECK(mod != NULL);
+        if (mod == NULL) { return; }
+        b[at++] = 0x81u;
+        at = metadata_string(b, at, "amdhsa.kernels", 14u);
+        b[at++] = 0x91u; b[at++] = 0x83u;
+        at = metadata_string(b, at, ".name", 5u);
+        at = metadata_string(b, at, "test", 4u);
+        at = metadata_string(b, at, ".symbol", 7u);
+        at = metadata_string(b, at, "test.kd", 7u);
+        at = metadata_string(b, at, ".future", 7u);
+        b[at++] = 0xDFu; b[at++] = 0x80u;
+        b[at++] = 0u; b[at++] = 0u; b[at++] = 0u;
+        CHECK_STATUS(bc250hsa_metadata_parse(b, at, mod), BC250HSA_EBADMETADATA);
+        bc250hsa_module_unload(mod);
+    }
+}
+
+
+/* Note offsets belong to the ELF image, not its host allocation address or its
+ * containing PE/bundle. The same note also remains valid through PT_NOTE. */
+static void check_note_locations(const char* dir)
+{
+    static const size_t offsets[] = { 0u, 1u, 7u, 4096u };
+    size_t bytes = 0;
+    uint8_t* original = (uint8_t*)test_read_file(dir, "m16_kernels.gfx1013.co", &bytes);
+    uint32_t pass, i;
+    if (original == NULL) { return; }
+    for (pass = 0; pass < 2u; pass++) {
+        for (i = 0; i < TEST_COUNT(offsets); i++) {
+            uint8_t* raw = (uint8_t*)malloc(bytes + offsets[i]);
+            struct bc250hsa_module* mod = NULL;
+            bc250hsa_allocator alloc;
+            uint8_t* image;
+            CHECK(raw != NULL);
+            if (raw == NULL) { free(original); return; }
+            image = raw + offsets[i];
+            memcpy(image, original, bytes);
+            if (pass != 0u) {
+                bc250hsa_elf64_ehdr eh;
+                uint32_t j, changed = 0;
+                memcpy(&eh, image, sizeof(eh));
+                for (j = 0; j < eh.e_shnum; j++) {
+                    bc250hsa_elf64_shdr sh;
+                    uint8_t* entry = image + eh.e_shoff + (uint64_t)j * eh.e_shentsize;
+                    memcpy(&sh, entry, sizeof(sh));
+                    if (sh.sh_type == BC250HSA_SHT_NOTE) {
+                        sh.sh_type = 0u;
+                        memcpy(entry, &sh, sizeof(sh));
+                        changed++;
+                    }
+                }
+                CHECK(changed != 0u);
+            }
+            test_allocator(&alloc);
+            CHECK_STATUS(bc250hsa_module_load_alloc(&alloc, image, bytes, &mod), BC250HSA_OK);
+            CHECK_U64(bc250hsa_module_kernel_count(mod), 3u);
+            bc250hsa_module_unload(mod);
+            free(raw);
+        }
+    }
+    free(original);
+}
+
 int main(int argc, char** argv)
 {
     const char* dir = test_data_dir(argc, argv);
@@ -479,5 +621,7 @@ int main(int argc, char** argv)
     check_committed_object(dir);
     check_header_rules(dir);
     check_relocations();
+    check_metadata_strings();
+    check_note_locations(dir);
     return test_report("test_loader");
 }

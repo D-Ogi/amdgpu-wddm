@@ -3,6 +3,8 @@
 #include "regs.generated.h"
 #include "dcn_2_0_1_sh_mask.h"      // field masks only; every offset and index comes from regs.generated.h
 #include "dpaudio_seq.h"
+#include "../shim/bc250_hdmi_audio.h"
+#include "display_io.h"
 
 // The two endpoints share one register layout. The driver takes every field from the ENDPOINT0 names; these checks
 // make the build fail if the ENDPOINT1 names of the fields it touches ever say otherwise.
@@ -368,6 +370,7 @@ void Bc250DpAudioSinkDefault(BC250_DPAUDIO_SINK* Sink)
     Sink->FromEdid = 0;
     Sink->PortId = 0;
     Sink->HasPortId = 0;
+    Sink->Hdmi = 0;
 }
 
 // dm_helpers_parse_edid_caps (amdgpu_dm_helpers.c:104-173) and is_audio_format_supported (dce_audio.c): the identity
@@ -395,6 +398,25 @@ int Bc250DpAudioSinkFromEdid(const BC250_EDID_INFO* Info, BC250_DPAUDIO_SINK* Si
     Sink->LpcmSizes = Info->Sads[best].Byte2 & 0x07ul;
     Sink->Speakers = Info->HasSpeaker ? Info->Speaker : BC250_DPAUDIO_DEFAULT_SPEAKERS;
     Sink->FromEdid = 1;
+    return 1;
+}
+
+int Bc250HdmiAudioSinkFromEdid(const BC250_EDID_INFO* Info, BC250_DPAUDIO_SINK* Sink)
+{
+    unsigned long i, rates = 0;
+    Bc250DpAudioSinkDefault(Sink);
+    if (!Info || Info->Reason != BC250_EDID_OK || !Info->Hdmi) return 0;
+    if (Info->BasicAudio) rates = 7;
+    for (i = 0; i < Info->SadCount && i < BC250_EDID_MAX_SADS; i++)
+        if (Info->Sads[i].Format == FORMAT_LPCM && Info->Sads[i].Channels >= 2 && (Info->Sads[i].Byte2 & 1))
+            rates |= Info->Sads[i].Rates & 7ul;
+    if (!rates) return 0;
+    Sink->Manufacturer = (unsigned long)Info->ManufacturerId[0] | ((unsigned long)Info->ManufacturerId[1] << 8);
+    Sink->Product = Info->ProductCode & 0xFFFFul;
+    for (i = 0; i < sizeof(Sink->Name); i++) Sink->Name[i] = 0;
+    for (i = 0; Info->HasName && i < BC250_EDID_NAME_CHARS && Info->Name[i]; i++) Sink->Name[i] = Info->Name[i];
+    Sink->LpcmRates = rates; Sink->LpcmChannels = 2; Sink->LpcmSizes = 1;
+    Sink->Speakers = 1; Sink->FromEdid = 1; Sink->Hdmi = 1;
     return 1;
 }
 
@@ -460,7 +482,8 @@ long Bc250DpAudioConfigureSink(BC250_AZ_IO* Io, unsigned long Endpoint, const BC
     value = SET(value, CHANNEL_SPEAKER, DP_CONNECTION, 0);
     value = SET(value, CHANNEL_SPEAKER, EXTRA_CONNECTION_INFO,
                 ((value & AZ0(CHANNEL_SPEAKER, EXTRA_CONNECTION_INFO_MASK)) >> AZ0(CHANNEL_SPEAKER, EXTRA_CONNECTION_INFO__SHIFT)) & ~1ul);
-    value = SET(value, CHANNEL_SPEAKER, DP_CONNECTION, 1);
+    value = SET(value, CHANNEL_SPEAKER, DP_CONNECTION, Sink->Hdmi ? 0 : 1);
+    value = SET(value, CHANNEL_SPEAKER, HDMI_CONNECTION, Sink->Hdmi ? 1 : 0);
     IW(CHANNEL_SPEAKER, value);
     // One descriptor per format code; only LPCM is supported.
     for (i = 0; i < 14; i++) {
@@ -833,16 +856,71 @@ long Bc250DpAudioStreamDisable(BC250_AZ_IO* Io, unsigned long Stream, BC250_DPAU
     return Result->Status;
 }
 
-long Bc250DpAudioStopSequence(BC250_AZ_IO* Io, unsigned long Stream, unsigned long Endpoint, int StreamWritten,
-                              int EndpointWritten, BC250_DPAUDIO_STOP* Stop)
+static long AudioStopSequence(BC250_AZ_IO* Io, unsigned long Stream, unsigned long Endpoint, int StreamWritten,
+                              int EndpointWritten, BC250_DPAUDIO_STOP* Stop, int Hdmi)
 {
     ClearStream(&Stop->Stream);
     Stop->Endpoint.HotPlugBefore = Stop->Endpoint.HotPlugAfter = Stop->Endpoint.SizeRates = 0;
     Stop->Endpoint.PowerStates = Stop->Endpoint.Writes = 0;
     Stop->StreamStatus = Stop->EndpointStatus = BC250_AZ_STATUS_SUCCESS;
-    if (StreamWritten) Stop->StreamStatus = Bc250DpAudioStreamDisable(Io, Stream, &Stop->Stream);
+    if (StreamWritten) Stop->StreamStatus = Hdmi ? bc250_hdmi_audio_disable(Io, Stream, &Stop->Stream)
+                                                : Bc250DpAudioStreamDisable(Io, Stream, &Stop->Stream);
     if (EndpointWritten) Stop->EndpointStatus = Bc250DpAudioSetEnabled(Io, Endpoint, 0, &Stop->Endpoint);
     return Stop->StreamStatus < 0 ? Stop->StreamStatus : Stop->EndpointStatus;
+}
+
+long Bc250DpAudioStopSequence(BC250_AZ_IO* Io, unsigned long Stream, unsigned long Endpoint, int StreamWritten,
+                              int EndpointWritten, BC250_DPAUDIO_STOP* Stop)
+{
+    return AudioStopSequence(Io, Stream, Endpoint, StreamWritten, EndpointWritten, Stop, 0);
+}
+long Bc250HdmiAudioStopSequence(BC250_AZ_IO* Io, unsigned long Stream, unsigned long Endpoint, int StreamWritten,
+                                int EndpointWritten, BC250_DPAUDIO_STOP* Stop)
+{
+    return AudioStopSequence(Io, Stream, Endpoint, StreamWritten, EndpointWritten, Stop, 1);
+}
+
+static unsigned long HdmiDecide(BC250_AZ_IO* Io, BC250_DPAUDIO_RUN* Run, unsigned long Clock)
+{
+    const BC250_DPAUDIO_OBSERVATION* o = &Run->Obs;
+    BC250_DPAUDIO_PLAN* p = &Run->Plan;
+    const unsigned long long required = BIT(CODEC_VENDOR_DEVICE) | BIT(DC_PINSTRAPS) | BIT(DIG0_BE_CNTL) |
+        BIT(DIG1_BE_CNTL) | BIT(EP0_CONFIG_DEFAULT) | BIT(EP1_CONFIG_DEFAULT);
+    unsigned long n, count = 0, stream = 0, be, fe, value;
+    static const unsigned long feRegs[] = { BC250_REG_DMU_DIG0_DIG_FE_CNTL, BC250_REG_DMU_DIG1_DIG_FE_CNTL };
+    static const unsigned long hdmiRegs[] = { BC250_REG_DMU_DIG0_HDMI_CONTROL, BC250_REG_DMU_DIG1_HDMI_CONTROL };
+    static const unsigned long enableRegs[] = { BC250_REG_DMU_DIG0_DIG_BE_EN_CNTL, BC250_REG_DMU_DIG1_DIG_BE_EN_CNTL };
+    p->Reason = BC250_DPAUDIO_REASON_OK; p->Stream = p->Endpoint = p->Notes = p->RefClock = p->DtoModule = 0;
+    if (!Run->Sink || !Run->Sink->Hdmi || !Run->Sink->FromEdid || !Clock)
+        return BC250_DPAUDIO_REASON_NO_STREAM;
+    if (Clock < 250000 || Clock > 3000000) return BC250_DPAUDIO_REASON_REFCLK;
+    if ((o->ValidMask & required) != required) return BC250_DPAUDIO_REASON_READ_FAILED;
+    if (o->Regs[BC250_DPAUDIO_OBS_CODEC_VENDOR_DEVICE] != BC250_DPAUDIO_CODEC_ID) return BC250_DPAUDIO_REASON_CODEC_ID;
+    if (!(o->Regs[BC250_DPAUDIO_OBS_DC_PINSTRAPS] & DC_PINSTRAPS__DC_PINSTRAPS_AUDIO_MASK)) return BC250_DPAUDIO_REASON_STRAPS;
+    for (n = 0; n < 2; n++) {
+        if (Bc250AzRead(Io, enableRegs[n], &value) < 0) return BC250_DPAUDIO_REASON_READ_FAILED;
+        if (!(value & DIG0_DIG_BE_EN_CNTL__DIG_ENABLE_MASK)) continue;
+        be = o->Regs[g_BeSlot[n]];
+        fe = (be & g_BeFeMask[n]) >> g_BeFeShift[n];
+        // DIG_MODE 3 is HDMI. Exactly one front end of one back end may be
+        // active; a DP/DVI companion would share the DTO owner and is refused.
+        if (((be & g_BeModeMask[n]) >> g_BeModeShift[n]) != 3 || (fe != 1 && fe != 2) ||
+            (be & DIG0_DIG_BE_CNTL__DIG_DUAL_LINK_ENABLE_MASK))
+            return BC250_DPAUDIO_REASON_NO_STREAM;
+        stream = fe == 1 ? 0 : 1;
+        count++;
+    }
+    if (count != 1) return count ? BC250_DPAUDIO_REASON_TWO_STREAMS : BC250_DPAUDIO_REASON_NO_STREAM;
+    if (Bc250AzRead(Io, feRegs[stream], &value) < 0) return BC250_DPAUDIO_REASON_READ_FAILED;
+    if ((value & DIG0_DIG_FE_CNTL__DIG_SOURCE_SELECT_MASK) != 0) return BC250_DPAUDIO_REASON_NO_STREAM; // only OTG0 validated
+    if (Bc250AzRead(Io, hdmiRegs[stream], &value) < 0) return BC250_DPAUDIO_REASON_READ_FAILED;
+    if (value & (DIG0_HDMI_CONTROL__HDMI_DEEP_COLOR_ENABLE_MASK | DIG0_HDMI_CONTROL__HDMI_DEEP_COLOR_DEPTH_MASK |
+        DIG0_HDMI_CONTROL__HDMI_DATA_SCRAMBLE_EN_MASK | DIG0_HDMI_CONTROL__HDMI_CLOCK_CHANNEL_RATE_MASK))
+        return BC250_DPAUDIO_REASON_REFCLK;
+    if (o->Regs[g_ConfigSlot[0]] != BC250_DPAUDIO_CONFIG_DEFAULT || o->Regs[g_ConfigSlot[stream]] != BC250_DPAUDIO_CONFIG_DEFAULT)
+        return BC250_DPAUDIO_REASON_CONFIG_DEFAULT;
+    p->Stream = p->Endpoint = stream; p->DtoModule = Clock;
+    return BC250_DPAUDIO_REASON_OK;
 }
 
 // The order of the groups. Linux enables the endpoint (az_enable) before the packets (dce110_enable_audio_stream).
@@ -850,7 +928,7 @@ long Bc250DpAudioStopSequence(BC250_AZ_IO* Io, unsigned long Stream, unsigned lo
 // the class driver may open a stream at once. With it last, Windows never sees an endpoint whose wall clock and DP
 // packets are not running yet, and a failure anywhere before it leaves no endpoint at all. The stop sequence is the
 // exact reverse, as Linux's disable is (packets off, then az_disable).
-unsigned long Bc250DpAudioRun(BC250_AZ_IO* Io, BC250_DPAUDIO_RUN* Run)
+static unsigned long AudioRun(BC250_AZ_IO* Io, BC250_DPAUDIO_RUN* Run, unsigned long HdmiClock)
 {
     unsigned long reason;
     long status;
@@ -863,7 +941,7 @@ unsigned long Bc250DpAudioRun(BC250_AZ_IO* Io, BC250_DPAUDIO_RUN* Run)
     Run->Undo.Endpoint.Writes = 0;
     Run->Undo.StreamStatus = Run->Undo.EndpointStatus = BC250_AZ_STATUS_SUCCESS;
     Bc250DpAudioObserve(Io, &Run->Obs);
-    reason = Bc250DpAudioDecide(&Run->Obs, &Run->Plan);
+    reason = HdmiClock ? HdmiDecide(Io, Run, HdmiClock) : Bc250DpAudioDecide(&Run->Obs, &Run->Plan);
     if (reason != BC250_DPAUDIO_REASON_OK) return reason;
     Run->Wrote = 1;
     status = Bc250DpAudioHwInit(Io, &Run->Init);
@@ -871,15 +949,23 @@ unsigned long Bc250DpAudioRun(BC250_AZ_IO* Io, BC250_DPAUDIO_RUN* Run)
     if (status >= 0) {
         Run->Groups = 2;
         Run->StreamWrote = 1;
-        status = Bc250DpAudioStreamEnable(Io, Run->Plan.Stream, Run->Plan.Endpoint, Run->Plan.DtoModule, &Run->Stream);
+        status = HdmiClock ? bc250_hdmi_audio_enable(Io, Run->Plan.Stream, HdmiClock, &Run->Stream) :
+            Bc250DpAudioStreamEnable(Io, Run->Plan.Stream, Run->Plan.Endpoint, Run->Plan.DtoModule, &Run->Stream);
     }
     if (status >= 0) { Run->Groups = 3; status = Bc250DpAudioSetEnabled(Io, Run->Plan.Endpoint, 1, &Run->Enable); }
     if (status >= 0) { Run->Groups = 4; return BC250_DPAUDIO_REASON_OK; }
     // Leave silence behind, whatever group failed: the stream off if its group began, AUDIO_ENABLED 0. A failed
     // AUDIO_ENABLED write turns the stream off as well: packets with no endpoint behind them serve nobody.
     Run->Status = status;
-    Run->UndoStatus = Bc250DpAudioStopSequence(Io, Run->Plan.Stream, Run->Plan.Endpoint, (int)Run->StreamWrote, 1, &Run->Undo);
+    Run->UndoStatus = AudioStopSequence(Io, Run->Plan.Stream, Run->Plan.Endpoint, (int)Run->StreamWrote, 1, &Run->Undo, HdmiClock != 0);
     return status == BC250_AZ_STATUS_MISMATCH ? BC250_DPAUDIO_REASON_STREAM_MISMATCH : BC250_DPAUDIO_REASON_WRITE_FAILED;
+}
+
+unsigned long Bc250DpAudioRun(BC250_AZ_IO* Io, BC250_DPAUDIO_RUN* Run) { return AudioRun(Io, Run, 0); }
+unsigned long Bc250HdmiAudioRun(BC250_AZ_IO* Io, BC250_DPAUDIO_RUN* Run, unsigned long Clock)
+{
+    if (!Clock) return BC250_DPAUDIO_REASON_REFCLK;
+    return AudioRun(Io, Run, Clock);
 }
 
 #define BC250_DPAUDIO_REASON_TEXT(n, t) t,

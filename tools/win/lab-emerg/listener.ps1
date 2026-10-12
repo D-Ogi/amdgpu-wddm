@@ -22,8 +22,15 @@ $maxBody = 16MB
 function Log([string]$t) { try { Add-Content -LiteralPath $logFile -Value ('{0:o} {1}' -f [DateTime]::UtcNow, $t) -Encoding ascii } catch {} }
 function Hex([byte[]]$b) { -join ($b | ForEach-Object { $_.ToString('x2') }) }
 function Full([string]$p) { if (-not $p) { throw 'path missing' }; [IO.Path]::GetFullPath($p) }
-function Acl([string]$p) { @(& icacls.exe $p 2>&1 | Select-Object -First 8 | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ }) }
-function Owner-Admins([string]$p) { & icacls.exe $p /setowner 'Administrators' 2>&1 | Out-Null }
+function Acl([string]$p) {
+    $lines = @(& icacls.exe $p 2>&1)
+    if ($LASTEXITCODE -ne 0) { throw "ACL read failed (icacls exit $LASTEXITCODE)" }
+    @($lines | Select-Object -First 8 | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
+}
+function Owner-Admins([string]$p) {
+    & icacls.exe $p /setowner '*S-1-5-32-544' 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Owner update failed (icacls exit $LASTEXITCODE); the file may already exist" }
+}
 
 function Status {
     $o = [ordered]@{}

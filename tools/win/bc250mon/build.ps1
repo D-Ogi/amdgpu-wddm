@@ -10,6 +10,8 @@ $csc = Join-Path $vs 'MSBuild\Current\Bin\Roslyn\csc.exe'
 $fx = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319"
 New-Item -ItemType Directory -Force $Out | Out-Null
 if (-not (Test-Path -LiteralPath $ControlDll -PathType Leaf)) { throw "Build bc250kmd_cli first and supply its bc250control.dll" }
+# The DLL ships beside the exe: refuse one that lacks an entry point the source imports.
+& (Join-Path $here 'test-control-dll.ps1') -ControlDll $ControlDll
 
 # KmdProvider.cs repeats the driver's BC250_STAGE numbers. Refuse to build a monitor that names them wrongly.
 if (Get-Command python -ErrorAction SilentlyContinue) {

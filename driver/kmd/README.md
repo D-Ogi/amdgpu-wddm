@@ -33,12 +33,12 @@ no code from Microsoft's MS-PL sample.
 | `gfx_completion_queue.h`, `present_range.h` | a bounded completion queue independent of CP fetch progress; the check of a CPU-mapped VRAM range against every GPU page |
 | `gfx_recovery.h` | the SDMA0 recovery admission at start-up (internal, not an escape) |
 | `dcn.c`, `dcn_translate.c/.h` | ADR 0011: the read-only DCN 2.0.1 register dump, the gated flip, the scan-out dump (`fbdump`) and the flip address conversion (host-tested) |
-| `display_timing.h`, `display_timing_snapshot.h` | read-only decoding of the timing the firmware left, after Linux's display code (provenance in the file) |
+| `display_timing.h`, `display_timing_snapshot.h`, `display_tmds.h` | read-only decoding of the firmware timing and measurement of an inherited TMDS clock |
 | `smu.c`, `smu.h` | the native SMU owner behind `EnableNativeSmu`: the fixed clock transaction only, after the legacy writer has handed over (`docs/design/startup-clock-ownership.md`) |
 | `power.c` | adapter power coordination |
 | `startup.c/.h`, `start_health.c/.h` | device-owned initialisation with phase bits, and the start-up health witness the monitor confirms (see below) |
 | `umd_blob.c/.h` | the reader of the three private-data blobs a user-mode driver hands the KMD (`driver/contract/bc250_umd_submit.h`), host-tested |
-| `umd_caps.c/.h`, `firmware_metadata.h` | the caps blob for `KMTQAITYPE_UMDRIVERPRIVATE`, generated from the contract's filler, with the firmware section filled from this session's PSP load and an identity trailer |
+| `umd_caps.c/.h`, `firmware_metadata.h` | the private caps template, patched with session firmware, CU masks and application VRAM capacity, plus an identity trailer |
 | `gdi_private.h`, `surface_resource_private.h` | allocation private data (`LB7A`), the GDI and the E26R resource-group contracts |
 | `bc250kmd.h` | the device structure, the stage table and the interface-version notes |
 | `pnp.c` | add/start/stop/remove, the single child (always-connected video output, no EDID), power |
@@ -78,12 +78,76 @@ no code from Microsoft's MS-PL sample.
   compared the hung node-0 fence with the newest fence of either node and refused. 0.7.216.16 compares it with the
   last reported fence of node 0 only. In trial D1 the kill of 0.7.216.16 used the GART register path, which
   refused `SQ_CMD`, so no kill reached the register. 0.7.216.17 issues it through the GFX sequence. In trial D1 of
-  0.7.216.17 one kill drained the ring, the client got `DXGI_ERROR_DEVICE_HUNG`, and the desktop stayed. See
-  `docs/design/hang-recovery.md`.
+  0.7.216.17 one kill drained the ring, the client got `DXGI_ERROR_DEVICE_HUNG`, and the desktop stayed. From
+  0.7.216.27 the driver admits an empty-ring recovery only when the per-node observed completion agrees with successful
+  publication, no report is pending/in flight/lost, the fence is in range and the GFX ring is proven idle.
+  Verdict 7 names that completed fence as aborted. Uncertain cases still refuse and can end in 0x116.
+  Recovery epochs serialize watchdog failure gates with reopen. An active submission alone gets a bounded
+  500 ms admission recheck. Other unstable states refuse with verdict 8 and a persisted reason mask.
+  Temporary admission closure does not fault StartHealth. Existing genuine faults remain sticky.
+  From 0.7.216.62 (BD-120) a recovered engine reset also re-arms the presentation start witness: the node-0
+  timeout latch marks its own close, the recovered commit undoes that one close on a new epoch, and a witness
+  the latch never closed gets the new epoch too, so no measured interval spans a hang. Every other fault, and a
+  refusal on node 0, still keep the witness closed for the rest of the device start, and the CU-mode and DPM
+  request of a start that needed a reset stay pending.
+  See `docs/design/hang-recovery.md`.
+- **Board memory size** (0.7.216.28). A positively identified BC-250 can report its memory reservation, and
+  change it between 8192 and 12288 MiB, through the `RUN_BOARD_MEMORY` escape. A change needs an
+  administrator. It runs as a guarded transaction over a protected backup. Every other board answers that the
+  control is not supported, and has no board-specific hardware access. A change takes effect at the next
+  start. The running segments are not resized. See
+  [docs/design/uma-reservation.md](../../docs/design/uma-reservation.md).
+- **Board memory transport** (0.7.216.29, BD-116). The board memory service reads and writes the ABL block
+  through the fixed extended-CMOS index and data ports 0x72/0x73, indices 0x90 to 0xAB, transport
+  identifier 3, after the board and firmware identity checks. The HAL forms of 0.7.216.28 returned no block
+  on the lab, so that driver refused every change. A backup of the legacy identifiers 1 and 2 is refused.
+  See [docs/design/uma-reservation.md](../../docs/design/uma-reservation.md).
+- **Board provider and one adapter owner** (0.7.216.29). Board operations (the EC and fan, the SMU limits, the
+  board memory) need a positive identification of a BC-250 board before the first access, and an unknown
+  board gets none of them. `RUN_BOARD_CAPS`, command 33, gives the control application and the tools one
+  query of the board's limits and capabilities. A second adapter is refused before it changes shared state
+  or touches the hardware. See
+  [docs/adr/0021-board-chip-adapter-separation.md](../../docs/adr/0021-board-chip-adapter-separation.md).
+- **Wave snapshots** (0.7.216.29). `GET_WAVES`, command 34, reads the live GFX10 wave registers for an
+  administrator, and `DxgkDdiResetEngine` saves a snapshot under `Parameters\HangRecovery\Waves` before its
+  first kill (`HangRecoveryWaves`, absent = 1). The reads do not stop a wave and are not atomic. See
+  [docs/design/wave-snapshot.md](../../docs/design/wave-snapshot.md).
+- **The submit watchdog's budget** (0.7.216.27, BD-114). `SubmitWatchdogMs` is how long node 0 may make no
+  observable progress before the driver closes the ring and takes a register snapshot. The INF does not write it.
+  Absent means Windows' own `TdrDelay` plus 2 s, which is 12 s on a machine where the control application wrote
+  `TdrDelay` 10, and a value an operator writes is clamped to five minutes and raised to `TdrDelay` if it is
+  shorter. This is a duration floor, not an ordering guarantee: Windows starts its timeout at the preemption
+  request. The private window starts at head admission or observed activity. Either may expire first.
+  The former 500 ms budget could close the ring during legitimate dense LLM work. The new activity token mixes
+  the fence, ring read pointer and `CP_IB*` fetch registers. Activity changes can extend its window, but an
+  alternating token need not represent useful progress. Activity, Prime, Gap and TimerRearms are separate
+  counters. The head high water is sampled software-head age, not measured GPU execution time. See
+  `docs/design/hang-recovery.md` for recovery guards and remaining refusal cases.
 - **Breadcrumbs.** `LastStage` (a `BC250_STAGE` number) and `StageHistory` in the same key are written and
   flushed at every step of start-up and at the first commit and first present. After a hang and a power
   cycle they say how far the driver got. `bc250mon`'s bc250kmd panel and `bc250kmd_cli stages` read them and
   name them; both keep a copy of the `BC250_STAGE` table that a test checks against this driver's header.
+- **Why a start failed** (BD-122, 0.7.216.30). `LastStage` 91 says that a step of `DxgkDdiStartDevice` failed. It
+  does not say which step. A device with Code 43 (`CM_PROB_FAILED_POST_START`) answers no escape, so the log ring
+  that holds the reason is unreadable exactly when it is wanted. The subkey `Parameters\StartRecord` therefore
+  keeps the reason, behind no gate at all. Its values are `Result` (`attempt`, `started`, `failed` or `guard`),
+  `Step` (the step of `Bc250StartDevice` by name), `SubStep` (the phase inside `WddmStart` and
+  `GpuStartupInitialize`), `Status` (the NTSTATUS), `Stage`, `UnconfirmedStarts`, `Version`, `TimeUtc` and `Log`.
+  `Log` is a `REG_MULTI_SZ` of 64 ring lines, oldest first. They are the lines that ran up to the failure, not the
+  ones after it: the failure path marks the ring's sequence before its cleanup (`GuardStartFailureMark`), because
+  the teardown of a GPU that had started writes dozens of lines of its own and the record is written after it.
+  Every start writes `Result` as `attempt` and flushes it before any step of that start can fail, writes every
+  value of the record again beside it, and removes a value it cannot write. What stands there is therefore always
+  the newest attempt's. `failed` or `guard` is that attempt's reason. `started` means it reached a started device.
+  `attempt` means the machine stopped inside the start, or the record's own write was torn. Such a record names no
+  step, and `LastStage` with `StageHistory` says how far that start got. One start exits above the record: a device
+  object this driver does not own, which leaves no trace at all, so the record is then the previous start's and the
+  readers compare `TimeUtc` with the boot's own time and say so. A subkey rather than values of `Parameters`, for
+  the reason the hang record gives above. The `kmd-deploy` capture and its write-back walk value names only.
+  `start-confirm.ps1` prints the record at every logon and in `-Probe`. The installer's `verify` step prints it
+  next to its driver-start line. `bc250kmd_cli stages` prints it, which works on a device with Code 43 because it
+  is a registry read. `ops\attempt-result.ps1` of `kmd-deploy` prints the whole of it. A write that fails leaves
+  one `GuardLog` line and nothing else. A start never fails because the registry did.
 - **A readable log** (0.7.1). `GuardLog` writes to `DbgPrintEx`, which on this lab machine - headless, over SSH,
   no kernel debugger, no DebugView - reaches nobody. Every line therefore also goes into a ring of 1024 lines
   inside the driver image, each with a sequence number and the milliseconds since `DriverEntry`, and
@@ -433,6 +497,29 @@ alone no longer identifies the process.
   the handshake is about. `tools\win\d3d12queue\scanout-trial.ps1` reads all four lines and names the state
   in its verdict.
 
+## Memory sizes in the private caps (0.7.216.28)
+
+`VramPatchCaps` replaces the captured local and CPU-visible VRAM totals with the application segment's size.
+It uses the same `WddmMemoryLayout` calculation as `QUERYSEGMENT4`.
+The POST framebuffer, reserved tail and page-table storage are excluded.
+CPU-visible VRAM describes the same pool, so it adds no capacity.
+If the segment layout or aperture admission is unavailable, both totals are zero.
+No registry setting changes this calculation.
+
+The historical GTT word in the template is not a current Windows memory measurement.
+The winsys must use the capacity from `KMTQAITYPE_GETSEGMENTSIZE.SharedSystemMemorySize`.
+An aperture window does not bound all system memory mapped through GPU page tables.
+See the WDDM 2.0 [GPU segments contract](https://learn.microsoft.com/windows-hardware/drivers/display/gpu-segments).
+
+This patch does not change the segment descriptors, DXGI memory totals or process budgets.
+Those values come from VidMm and can include private table storage or shared system memory.
+They need not equal the application's local heap.
+RADV's separate APU heap policy and dynamic budget reporting need their own validation.
+
+The VRAM geometry host suite extracts the production patch and layout functions.
+It checks changing carve-outs and refuses the old unpatched capture as a negative control.
+The caps suite checks byte offsets against the contract structures.
+
 ## Build
 
 ```powershell
@@ -457,6 +544,13 @@ worktree is the directory that holds the worktree: the kits, the Mesa sources an
 all missing, and `radv-contract` and `umd-contract` fail for a reason that has nothing to do with the change.
 
 ## What M3 had to show on hardware (acceptance, mirrors E05)
+
+The inherited TMDS path admits one enabled HDMI or single-link DVI encoder routed from OTG0.
+It measures eight frames with QPC, checks both halves, and caches one pixel rate for this start.
+The measurement stops after 0.5 seconds or 50,000 polls. A stalled counter or an uncertain result
+fails the start with the saved timing record. The DP DTO path keeps its existing clock calculation.
+TMDS offers only the firmware mode and skips DP AUX, scaling and DP audio. DDC, HDMI audio,
+TMDS mode changes and switching between DP and HDMI while running are not implemented here.
 
 Met in E06 (M28, M29); kept as the record of the criteria.
 

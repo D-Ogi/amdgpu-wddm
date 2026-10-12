@@ -62,6 +62,60 @@
 #define BC250HSA_PKT3_SET_UCONFIG_REG 0x79u
 #define BC250HSA_PKT3_SET_SH_REG_INDEX 0x9Bu
 
+/* ---- DMA_DATA, the command processor's copy and fill (nvd.h:397-442) --------- */
+/* The seven-dword CP DMA packet. Every field position below is nvd.h, cross-checked
+ * against the Mesa generated table src/amd/packets/cp_pm4_table_data_gfx11.json of
+ * scratch/mesa-wddm2 at 801c9763c6043f0de8408e905a5324eea06d81d7 (entry DMA_DATA) and
+ * against src/amd/registers/gfx10.json (register type CP_DMA_ME_COMMAND: BYTE_COUNT
+ * bits 25:0, SAS 26, DAS 27, SAIC 28, DAIC 29, RAW_WAIT 30, DIS_WC 31). The behaviour
+ * is Mesa's src/amd/vulkan/radv_cp_dma.c of the same revision: radv_cs_emit_cp_dma at
+ * :47-102 emits these seven dwords for GFX7 and later, cp_dma_max_byte_count at :34-41
+ * gives the per-packet maximum, radv_cp_dma_prepare at :201-217 sets RAW_WAIT on the
+ * first chunk and CP_SYNC on the last, and radv_cp_dma_fill_memory at :321-357 turns the
+ * same packet into a fill with SRC_SEL DATA.
+ *
+ * The same encoding already exists once in this repository, in driver/kmd/gfx_copy.c
+ * with driver/kmd/gfx_copy_fields.h, whose provenance note is
+ * driver/kmd/gfx-copy-provenance.md. That one is kernel-mode code and cannot be linked
+ * into a user-mode library, so the restatement here is a second statement of the same
+ * numbers; tests/host/test_pm4.c includes nvd.h and fails the build when any of them
+ * drifts. It also links gfx_copy.c itself (build.ps1) and compares the dwords the two
+ * emitters write for the same arguments, over eight sizes and both flags, so a divergence
+ * in the chunking or in the flag placement fails the build as well. The fill has no
+ * counterpart in gfx_copy.c, which copies only: its encoding is held by the field
+ * comparison and by the golden packets of the same test. */
+#define BC250HSA_PKT3_DMA_DATA 0x50u
+
+/* CONTROL, dword 2. */
+#define BC250HSA_DMA_ENGINE(x)           (((uint32_t)(x) & 0x1u) << 0)
+#define BC250HSA_DMA_SRC_CACHE_POLICY(x) (((uint32_t)(x) & 0x3u) << 13)
+#define BC250HSA_DMA_DST_SEL(x)          (((uint32_t)(x) & 0x3u) << 20)
+#define BC250HSA_DMA_DST_CACHE_POLICY(x) (((uint32_t)(x) & 0x3u) << 25)
+#define BC250HSA_DMA_SRC_SEL(x)          (((uint32_t)(x) & 0x3u) << 29)
+#define BC250HSA_DMA_CP_SYNC             (1u << 31)
+/* DST_SEL 3 and SRC_SEL 3 are "the address, through the level-2 cache". SRC_SEL 2 is
+ * "dword 3 is the pattern", which is what makes the packet a fill. */
+#define BC250HSA_DMA_DST_ADDR_USING_L2 3u
+#define BC250HSA_DMA_SRC_ADDR_USING_L2 3u
+#define BC250HSA_DMA_SRC_DATA          2u
+
+/* COMMAND, dword 7. */
+#define BC250HSA_DMA_BYTE_COUNT(x) (((uint32_t)(x) & 0x3FFFFFFu) << 0)
+#define BC250HSA_DMA_CMD_SAS       (1u << 26)
+#define BC250HSA_DMA_CMD_DAS       (1u << 27)
+#define BC250HSA_DMA_CMD_SAIC      (1u << 28)
+#define BC250HSA_DMA_CMD_DAIC      (1u << 29)
+#define BC250HSA_DMA_CMD_RAW_WAIT  (1u << 30)
+#define BC250HSA_DMA_CMD_DIS_WC    (1u << 31)
+
+#define BC250HSA_DMA_DATA_DWORDS 7u
+/* cp_dma_max_byte_count for GFX9 and later: the whole BYTE_COUNT field, aligned down to
+ * SI_CPDMA_ALIGNMENT, which radv_cp_dma.c:31 states as 32 and calls a performance
+ * alignment. 67,108,832 bytes, so one packet covers the 1 MiB logits copy of a decode
+ * step and a 64 MiB copy needs two. */
+#define BC250HSA_DMA_SI_CPDMA_ALIGNMENT 32u
+#define BC250HSA_DMA_MAX_BYTES (BC250HSA_DMA_BYTE_COUNT(~0u) & ~(BC250HSA_DMA_SI_CPDMA_ALIGNMENT - 1u))
+
 /* ---- register packet offsets ------------------------------------------------- */
 #define BC250HSA_SH_REG_BIAS      0x19A0u  /* 0x2C00 - 0x1260 */
 #define BC250HSA_UCONFIG_REG_BIAS 0x2000u  /* 0xC000 - 0xA000 */
@@ -102,6 +156,38 @@
     (BC250HSA_AM_GCR_GL2_INV | BC250HSA_AM_GCR_GL2_WB | BC250HSA_AM_GCR_GLM_INV | \
      BC250HSA_AM_GCR_GLM_WB | BC250HSA_AM_GCR_GL1_INV | BC250HSA_AM_GCR_GLV_INV | \
      BC250HSA_AM_GCR_GLK_INV | BC250HSA_AM_GCR_GLI_INV)
+/* The acquire between two dispatches of one batched indirect buffer, when the caller
+ * asks for the light barrier (BC250HSA_DISPATCH_LIGHT_BARRIER). It invalidates the
+ * level-0 caches of the reader and the level-1 read cache, and it touches neither the
+ * level-2 cache, nor the metadata cache, nor the instruction cache.
+ *
+ * Why those three bits and no others, from the Mesa radv path for a compute-to-compute
+ * buffer dependency on GFX10 (ref/mesa at 05e6c9622e1):
+ *   - the destination of a shader storage read asks for AC_BARRIER_INV_VMEM, and for
+ *     AC_BARRIER_INV_SMEM as well because ACO reads a storage buffer through the
+ *     scalar unit (src/amd/vulkan/radv_cmd_buffer.c:8133-8147);
+ *   - ac_gfx10_emit_barrier turns INV_VMEM into GLV_INV, INV_SMEM into GLK_INV, and
+ *     adds GL1_INV when either of them is set (src/amd/common/ac_barrier.c:89-103);
+ *   - the level-2 invalidate of that path is behind `if (!image_is_coherent)`, and
+ *     can_skip_buffer_l2_flushes() clears it for a buffer on GFX10 whose
+ *     tcc_rb_non_coherent is false (radv_cmd_buffer.c:7910-7914, 8094);
+ *   - the source of a shader storage write adds nothing else for a buffer
+ *     (radv_cmd_buffer.c:7969-7982);
+ *   - the wait for the waves is EVENT_WRITE(CS_PARTIAL_FLUSH), which the dispatch
+ *     body already emits (ac_barrier.c:289-291).
+ * The instruction cache invalidate stays at the head of the indirect buffer: no code
+ * object is loaded while one buffer is being built, which is why bc250hsa_module_load
+ * submits an open batch first.
+ *
+ * Deviation from Linux, stated as repo rule 7 asks: amdgpu emits the full acquire of
+ * BC250HSA_ACQUIRE_GCR_CNTL in front of every indirect buffer, because it cannot know
+ * what the previous buffer of another client did. This acquire sits inside one
+ * indirect buffer of one device, between two dispatches this library built, so it
+ * carries only the invalidations that dependency needs. Whether gfx1013 reports a
+ * level-2 cache that a buffer dependency may skip is not measured yet, so the light
+ * barrier is a switch and the full acquire stays the default. */
+#define BC250HSA_ACQUIRE_GCR_CNTL_LIGHT                                          \
+    (BC250HSA_AM_GCR_GL1_INV | BC250HSA_AM_GCR_GLV_INV | BC250HSA_AM_GCR_GLK_INV)
 #define BC250HSA_ACQUIRE_POLL_INTERVAL 0x0000000Au
 /* driver/shim/bc250_dispatch.c, BC250_DISPATCH_COHER_START_DELAY. */
 #define BC250HSA_COHER_START_DELAY 0x20u
@@ -158,6 +244,21 @@
  * (32_32_32_32 uint), RESOURCE_LEVEL 1 (gfx10.1 needs it), OOB_SELECT 1, TYPE 0
  * (buffer). driver/shim/bc250_dispatch.c, BC250_DISPATCH_VDESC_W3. */
 #define BC250HSA_BUFFER_RSRC_W3 0x1104BFACu
+
+/* LLVM SIInstrInfo::getScratchRsrcWords23, GFX10.1 descriptor format.
+ * FORMAT is BUF_FMT_32_FLOAT from navi10_enum.h, not pre-GFX10 DATA_FORMAT.
+ * Mesa gfx10-rsrc.json SQ_BUF_RSRC_WORD1/3 and LLVM SIInstrInfo.h define the shifts. */
+#define BC250HSA_SCRATCH_SWIZZLE_ENABLE (1u << 31)
+#define BC250HSA_SCRATCH_FORMAT_32_FLOAT 22u
+#define BC250HSA_SCRATCH_FORMAT_SHIFT 12u
+#define BC250HSA_SCRATCH_INDEX_STRIDE_SHIFT 21u
+#define BC250HSA_SCRATCH_ADD_TID_ENABLE (1u << 23)
+#define BC250HSA_SCRATCH_RESOURCE_LEVEL (1u << 24)
+#define BC250HSA_SCRATCH_OOB_SELECT (3u << 28)
+#define BC250HSA_SCRATCH_EN 1u
+#define BC250HSA_SCRATCH_WAVESIZE_SHIFT 12u
+#define BC250HSA_SCRATCH_WAVESIZE_MASK 8191u
+#define BC250HSA_SCRATCH_WAVESIZE_GRANULE 1024u
 
 /* ---- CONTEXT_CONTROL -------------------------------------------------------- */
 /* The graphics ring needs it in front of the first state write of an indirect

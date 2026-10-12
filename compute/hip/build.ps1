@@ -31,7 +31,11 @@ param(
     [string]$Clang = '',
     [switch]$Rebuild,
     [switch]$CheckDoc,
-    [switch]$SkipTests
+    [switch]$SkipTests,
+    # Preprocessor names for a diagnostic build, each passed as /D to the library and the tests:
+    # BC250HSA_NEGATIVE_CONTROL_COPY_ON_MAIN_CONTEXT is the compiled negative control of
+    # scratch\hip-gpu-copy (bc250hsa\submit.c). Never a product build; give it its own -Out.
+    [string[]]$Define = @()
 )
 
 $ErrorActionPreference = 'Stop'
@@ -56,6 +60,8 @@ New-Item -ItemType Directory -Force $env:TEMP | Out-Null
 $srcDir = Join-Path $here 'bc250hsa'
 $testDir = Join-Path $here 'tests\host'
 $dataDir = Join-Path $here 'tests\data'
+& python (Join-Path $testDir 'check_scratch_contract.py')
+if ($LASTEXITCODE -ne 0) { throw 'GFX10 scratch descriptor contract differs' }
 $toolDir = Join-Path $here 'tools'
 
 # ---------------------------------------------------------------------------------------------
@@ -113,6 +119,10 @@ Assert-Same $contract '#define\s+BC250_UMD_CONTEXT_SIZE_V2\s+(\d+)' $blobs '#def
 Assert-Same $contract '#define\s+BC250_UMD_SUBMIT_SIZE_V1\s+(\d+)' $blobs '#define\s+BC250HSA_SUBMIT_BLOB_BYTES\s+(\d+)u?' 'BC2S size'
 Assert-Same $contract '#define\s+BC250_UMD_SUBMIT_MAX_IBS\s+(\d+)u?' $blobs '#define\s+BC250HSA_SUBMIT_MAX_IBS\s+(\d+)u?' 'BC2S max IBs'
 Assert-Same $caps '#define\s+BC250_UMD_PRIVATE_SIZE_V3\s+(\d+)' $blobs '#define\s+BC250HSA_CAPS_BYTES\s+(\d+)u?' 'caps blob size'
+# BD-127: the compute statement and the BC2C version that admits it. The runtime sets the flag on every context it
+# creates, so a drift here would turn the kernel driver's compute clock policy off without a word.
+Assert-Same $contract '#define\s+BC250_UMD_C_COMPUTE\s+(0x[0-9A-Fa-f]+u?)' $blobs '#define\s+BC250HSA_CTX_COMPUTE\s+(0x[0-9A-Fa-f]+u?)' 'BC2C compute flag'
+Assert-Same $contract '#define\s+BC250_UMD_CONTEXT_VERSION_COMPUTE\s+(\d+)u?' $blobs '#define\s+BC250HSA_CONTEXT_VERSION\s+(\d+)u?' 'BC2C version'
 
 # tools\run-lab.ps1 runs under Windows PowerShell 5.1 on the lab: it must at least parse.
 $runner = Join-Path $toolDir 'run-lab.ps1'
@@ -130,7 +140,7 @@ Write-Host '  tools\run-lab.ps1 parses'
 $pinned = 0
 $leaves = @{}
 foreach ($file in Get-ChildItem -LiteralPath $dataDir -File) { $leaves[$file.Name] = $file.FullName }
-foreach ($note in @('PROVENANCE.txt', 'PROVENANCE-runtime.txt')) {
+foreach ($note in @('PROVENANCE.txt', 'PROVENANCE-runtime.txt', 'PROVENANCE-scratch.txt')) {
     $notePath = Join-Path $dataDir $note
     if (-not (Test-Path $notePath)) { throw "$notePath is missing" }
     $current = $null
@@ -160,7 +170,7 @@ foreach ($note in @('PROVENANCE.txt', 'PROVENANCE-runtime.txt')) {
     }
 }
 if ($pinned -eq 0) { throw 'the PROVENANCE notes of tests\data pin no fixture at all' }
-Write-Host "  $pinned fixture hashes of tests\data match PROVENANCE.txt and PROVENANCE-runtime.txt"
+Write-Host "  $pinned fixture hashes of tests\data match the PROVENANCE notes"
 
 # ---------------------------------------------------------------------------------------------
 # The test code objects. Committed under tests\data so the gate runs with no AMDGPU compiler.
@@ -224,8 +234,9 @@ $includes = @(
 )
 # /Brepro on both the compiler and the linker: the artifacts carry no timestamp, so the
 # SHA-256 printed at the end names the input and not the hour of the build.
+$defines = @($Define | Where-Object { $_ } | ForEach-Object { "/D$_" })
 $common = @('/nologo', '/W4', '/WX', '/O2', '/MT', '/std:c11', '/Brepro',
-    '/D_CRT_SECURE_NO_WARNINGS') + $includes
+    '/D_CRT_SECURE_NO_WARNINGS') + $defines + $includes
 $link = @('/Brepro', "/LIBPATH:$(Join-Path $msvc.FullName 'lib\x64')",
     "/LIBPATH:$sdkLib\ucrt\x64", "/LIBPATH:$sdkLib\um\x64")
 
@@ -277,13 +288,35 @@ Write-Host '  tests\host\bc250hsa_mock.c compiles against the frozen interface'
 # The host tests link the host half only, plus the vendored Linux headers for the PM4 gate.
 $hostObjects = @()
 foreach ($s in $hostSources) { $hostObjects += (Join-Path $objDir ([IO.Path]::ChangeExtension($s, 'obj'))) }
-$testIncludes = $includes + @("/I$(Join-Path $repo 'driver\amdgpu-import')", "/I$(Join-Path $repo 'third_party\linux-amdgpu')")
-$tests = @('test_loader.c', 'test_unbundle.c', 'test_kernarg.c', 'test_descriptor.c', 'test_pm4.c')
+# /I$here as well: test_vadd_oracle.c includes samples\vadd_expect.h, the oracle the HIP sample
+# of layer 2 uses, so the criterion and the sample cannot drift apart.
+# driver\kmd as well: test_pm4.c compares the DMA_DATA encoding of bc250hsa\pm4_regs.h with
+# the Mesa generated field macros of driver\kmd\gfx_copy_fields.h, which the kernel-mode
+# emitter already uses (scratch\hip-gpu-copy\CONTRACT.md section 4).
+$testIncludes = $includes + @("/I$(Join-Path $repo 'driver\amdgpu-import')", "/I$(Join-Path $repo 'third_party\linux-amdgpu')", "/I$(Join-Path $repo 'driver\kmd')", "/I$here")
+# driver\kmd\gfx_copy.c is the kernel-mode emitter of the same DMA_DATA packet, and the only
+# other statement of that encoding in this repository. It is plain C over nvd.h and the Mesa
+# field macros, with nothing from the kernel environment in it, so test_pm4.c links it and
+# compares the two dword streams instead of only the two sets of field macros
+# (scratch\hip-gpu-copy\CONTRACT.md section 4).
+$kmdEmitter = Join-Path $objDir 'gfx_copy.obj'
+Invoke-Cl (@('/nologo', '/W4', '/WX', '/O2', '/MT', '/std:c11', '/Brepro',
+        '/D_CRT_SECURE_NO_WARNINGS') + $testIncludes +
+    @('/c', "/Fo$kmdEmitter", (Join-Path $repo 'driver\kmd\gfx_copy.c'))) 'driver\kmd\gfx_copy.c'
+Write-Host '  driver\kmd\gfx_copy.c compiles for the stream comparison of test_pm4'
+$testExtra = @{ 'test_pm4.c' = @($kmdEmitter) }
+# test_copy_lifecycle.c includes kmt_memory.c and submit.c whole, with the kernel calls replaced
+# by a fake driver that runs DMA_DATA packets at retirement: the ownership rules of the GPU
+# copy (bc250hsa.h section 5.1, the receipt) through the code that runs on unit A.
+$tests = @('test_loader.c', 'test_unbundle.c', 'test_kernarg.c', 'test_descriptor.c', 'test_pm4.c',
+    'test_vadd_oracle.c', 'test_submit_journal.c', 'test_copy_lifecycle.c')
 foreach ($t in $tests) {
     $exe = Join-Path $Out ([IO.Path]::ChangeExtension($t, 'exe'))
+    $extra = if ($testExtra.ContainsKey($t)) { $testExtra[$t] } else { @() }
     Invoke-Cl (@('/nologo', '/W4', '/WX', '/O2', '/MT', '/std:c11', '/Brepro',
-            '/D_CRT_SECURE_NO_WARNINGS') + $testIncludes +
-        @("/Fo$objDir\", "/Fe$exe", (Join-Path $testDir $t)) + $hostObjects + @('/link') + $link) $t
+            '/D_CRT_SECURE_NO_WARNINGS') + $defines + $testIncludes +
+        @("/Fo$objDir\", "/Fe$exe", (Join-Path $testDir $t)) + $hostObjects + $extra +
+        @('/link') + $link) $t
 }
 
 # The step-1 tool.
@@ -300,8 +333,72 @@ if (-not $SkipTests) {
     & "$Out\hipprobe.exe" --selftest $dataDir
     if ($LASTEXITCODE -ne 0) { Write-Host "  FAIL hipprobe --selftest ($LASTEXITCODE)"; $failures++ }
     & "$Out\hipprobe.exe" --help | Select-Object -First 1 | ForEach-Object { Write-Host "  $_" }
+
+    # ------------------------------------------------------------------------------------------
+    # The negative control of the fake kernel driver (scratch\hip-gpu-copy\CONTRACT.md deviation
+    # 13.23). The fake of test_copy_lifecycle.c refuses a buffer with no dispatch record on a
+    # context whose journal is on, as HipJournalBind does, and then puts the device into its
+    # error state, as the WDK contract of DxgkDdiSubmitCommandVirtual says. The two tests that
+    # include submit.c whole are built once more with the copy on the main context, as the
+    # candidate of the first lab round (d77886b1) sent it, and with the guard of submit_ib
+    # compiled out. Both must fail, and the lifecycle test must print the device-loss line of
+    # that round. A fake that stops catching that shape fails this build. A diagnostic build
+    # (-Define) skips it: it is the negative control itself or another experiment.
+    # ------------------------------------------------------------------------------------------
+    if ($defines.Count -eq 0) {
+        $negDir = Join-Path $Out 'negative-control'
+        $negObj = Join-Path $negDir 'obj'
+        New-Item -ItemType Directory -Force $negObj | Out-Null
+        foreach ($t in @('test_submit_journal.c', 'test_copy_lifecycle.c')) {
+            $exe = Join-Path $negDir ([IO.Path]::ChangeExtension($t, 'exe'))
+            Invoke-Cl (@('/nologo', '/W4', '/WX', '/O2', '/MT', '/std:c11', '/Brepro',
+                    '/D_CRT_SECURE_NO_WARNINGS', '/DBC250HSA_NEGATIVE_CONTROL_COPY_ON_MAIN_CONTEXT') +
+                $testIncludes + @("/Fo$negObj\", "/Fe$exe", (Join-Path $testDir $t)) + $hostObjects +
+                @('/link') + $link) "$t (negative control)"
+            $negOut = @(& $exe $dataDir 2>&1 | ForEach-Object { "$_" })
+            $negExit = $LASTEXITCODE
+            $summary = @($negOut | Where-Object { $_ -match '^\S.*: \d+ checks, \d+ failures$' } | Select-Object -Last 1)
+            $missing = @()
+            if ($t -eq 'test_copy_lifecycle.c') {
+                $loss = @($negOut | Where-Object {
+                    $_.Contains('fence check: device lost: execution state 6;') -and
+                    $_.Contains('on the main context 0xd, 0 records') -and $_.Contains('; journal on;') })
+                if ($loss.Count -eq 0) { $missing += 'the device-loss line of a copy on the main context' }
+            }
+            if ($negExit -eq 0 -or $missing.Count -gt 0) {
+                $negOut | Select-Object -Last 20 | ForEach-Object { Write-Host "    $_" }
+                $why = if ($negExit -eq 0) { 'it passed' } else { "no $($missing -join ', ')" }
+                Write-Host "  FAIL negative control $t ($why): the Bind-shaped fake no longer catches a copy on the main context"
+                $failures++
+            } else {
+                Write-Host "  negative control $t fails as it must (exit $negExit; $($summary -join ''))"
+            }
+        }
+    }
+
+    # ------------------------------------------------------------------------------------------
+    # The lab wrappers of lab\ and their failure paths (audit finding HIP-F2, 2026-10-10). No
+    # GPU, no lab and no driver: each case replaces the sampler, the launcher or the terminator
+    # with a fake, among them a helper that hangs, a sampler that answers nothing and a child
+    # that never stops by itself. It runs under Windows PowerShell, which is the shell of the
+    # lab, so the scripts are exercised by the shell that will run them.
+    # ------------------------------------------------------------------------------------------
+    $labTest = Join-Path $here 'tests\lab\test-arm-bounds.ps1'
+    $labWork = Join-Path $Out 'lab-tests'
+    $labLines = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $labTest -WorkDir $labWork 2>&1
+    $labExit = $LASTEXITCODE
+    $labLines | ForEach-Object { if ($_ -match 'FAIL|checks,') { Write-Host "  $_" } }
+    if ($labExit -ne 0) { Write-Host "  FAIL test-arm-bounds ($labExit)"; $failures++ }
+
+    $stopTest = Join-Path $here 'tests\lab\test-arm-stop-bound.ps1'
+    $stopLines = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $stopTest `
+        -Library (Join-Path $here 'lab\armlib.ps1') -WorkDir (Join-Path $Out 'stop-bound-tests') 2>&1
+    $stopExit = $LASTEXITCODE
+    $stopLines | ForEach-Object { Write-Host "  $_" }
+    if ($stopExit -ne 0) { Write-Host "  FAIL test-arm-stop-bound ($stopExit)"; $failures++ }
+
     if ($failures -gt 0) { throw "$failures host check(s) failed" }
-    Write-Host '  every host test and hipprobe --selftest passed'
+    Write-Host '  every host test, hipprobe --selftest and the lab wrapper tests passed'
 }
 
 Write-Host "  artifacts in $Out (bc250hsa.lib's hash belongs to this directory, see above)"

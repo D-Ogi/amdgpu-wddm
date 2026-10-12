@@ -110,6 +110,45 @@ class ClaimShares(unittest.TestCase):
         rows = [('M903', 'the sweep holds the context in 419 of 418 stalls')]
         self.assertEqual(self.rules(rows), ['count-order'])
 
+    def test_decimal_measurements_are_not_partial_counts(self):
+        for pair in ('0.836 of 4.641', '0.836 of 4', '4 of 0.836',
+                     '4.641 of the 0.836', '836 of 4641.5'):
+            with self.subTest(pair=pair):
+                self.assertEqual(c.PAIR.findall(pair), [])
+                self.assertEqual(c.check_row('decimal', pair), [])
+
+    def test_decimal_share_uses_the_whole_measurements(self):
+        for pair, right, wrong in (('0.836 of 4.641', '18.0', '22.0'),
+                                  ('0.112 of the 0.297', '37.7', '25.0'),
+                                  ('0.5 of 4', '12.5', '125.0')):
+            with self.subTest(pair=pair):
+                self.assertEqual(c.check_row('decimal', pair + ' us (' + right + ' %)'), [])
+                findings = c.check_row('decimal', pair + ' us (' + wrong + ' %)')
+                self.assertEqual([f[0] for f in findings], ['share-arithmetic'])
+                self.assertIn(pair.replace('the ', ''), findings[0][2])
+
+    def test_count_boundaries_preserve_punctuation(self):
+        self.assertEqual([f[0] for f in c.check_row('count', '(419 of 418).')], ['count-order'])
+        for text in ('v419 of 418', '419 of 418v', '1,419 of 418', '419 of 1,418',
+                     '-419 of 418', '6420 of 416.5\'s counted gaps'):
+            with self.subTest(text=text):
+                self.assertEqual(c.PAIR.findall(text), [])
+                self.assertEqual(c.PAIR_PCT.findall(text + ' (1.0 %)'), [])
+
+    def test_m862_actual_decimal_claim_passes(self):
+        actual = dict(c.rows(REPO / 'docs/facts/data/icd.yaml'))['M862']
+        self.assertIn('0.836 of 4.641', actual)
+        self.assertEqual(c.check_row('M862', actual), [])
+    def test_decimal_measurements_are_not_counts(self):
+        """M862: "(0.836 of 4.641 us)" is a share of two times, not "836 of 4"."""
+        rows = [('M862', 'it is worth 0.836 us, which is 18.0 % of what that dispatch costs '
+                         'without the cache (0.836 of 4.641 us)')]
+        self.assertEqual(self.rules(rows), [])
+
+    def test_swapped_counts_at_the_end_of_a_sentence_fail(self):
+        rows = [('M904', 'the sweep holds the context in 419 of 418. The rest wait')]
+        self.assertEqual(self.rules(rows), ['count-order'])
+
     def test_unlabelled_clock_model_fails(self):
         self.assertEqual(self.rules([('M842', M842_ORIGINAL)]), ['clock-model-label'])
 

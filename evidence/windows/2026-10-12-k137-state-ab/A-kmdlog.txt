@@ -1,0 +1,1074 @@
+log          20335 lines since this driver load, 19311 lost to the wrap, 7 dropped above DISPATCH_LEVEL; ring 1024 lines of which the first 256 are kept; table FULL WDDM (the gate was open at DriverEntry)
+     0      0.000 interop: \Callback\PowerState registration 0x00000000
+     1      0.000 stage 10
+     2      0.000 gate: EnableFullWddm 2
+     3      0.000 stage 20
+     4      1.142 stage 30
+     5      1.142 start record attempt - - 0x00000000, 0 lines, write 0x00000000
+     6      1.142 guard: count 0 -> 1 flushed, durable required 1
+     7      1.142 stage 31
+     8      1.142 stage 32
+     9      1.142 post display 1920x1080 pitch 7680 format 22 target 4294967295
+    10      1.142 stage 33
+    11      1.142 stage 34
+    12      1.142 interrupt resource 1: message, vector 0x51, flags 0x3
+    13      1.142 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes allowed, vidpn flip allowed
+    14      1.142 hwmon: base 0x0A20 ec 1.0 build 07/28/21 customer 0x162B -> ok
+    15      1.142 hwmon: base 0x0A20 cfg 0x80 fans 0x1F duties 0x1F temps 3 volts 6 mode 0xE0 eng 0x60
+    16      1.142 hwmon: customer ID 0x162B is not pinned (HwmonExpectId absent): pin it after this trial
+    17      1.142 smu: native owner start status 0x00000000
+    18      1.142 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    19      1.142 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    20      1.142 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    21      1.142 gart: ready, dummy page at 0x265568000
+    22      1.142 psp: ready
+    23      1.142 gpumem: ready, doorbells at 0xD0000000
+    24      1.142 gfx: ready, GPU submission allowed, paging node allowed, hot submit log off
+    25      1.142 gfx: VMID pool on (EnableVmidPool)
+    26      1.142 gfx: VM flush on the ring (EnableRingVmFlush), engine 1
+    27      1.142 ih: ready
+    28      1.142 wddm: composed source modes offered
+    29      1.142 interop: requested 0x3 effective 0x3 reason 0 (none) closed-reason 0 flags 0x801 blit 1 cdd 1 previous-end 2
+    30      1.142 wddm: scan-out admission on
+    31      1.142 wddm: DirectFlip handshake on
+    32      1.142 wddm: DirectFlip handshake inputs: asked 1 gate 1 flip 1 vram 1 mmio 1 aligned 1 post 1
+    33      1.142 dcnflip: plane format: firmware argb8888 config 0x00000008 crossbar 0x00E40000 cnvc 0x00000008
+    34      1.142 dcnflip: plane format: cnvc control 0x00000000 alpha lut 0xFFAA5500 mpcc control 0xFFFF0461 (blend mode 2)
+    35      1.142 wddm: plane formats on
+    36      1.142 wddm: shared residency on (UMD VRAM allocations may be demoted to the aperture)
+    37      1.142 wddm: completion report pairs its own notify dpc: yes
+    38      1.142 wddm: submit watchdog 12000 ms (TdrDelay 10000 ms, setting 0, default), looks for progress every 250 ms
+    39      1.142 wddm: the 500 ms budget of every build before 0.7.216.27 tripped on legitimate compute packets (BD-114); the OS TDR owns recovery
+    40      1.142 wddm: pre-kill wave capture on
+    41      1.142 wddm: HangRecoveryMode 1: a node-0 ResetEngine tries stage-1 soft recovery, verdicts in Parameters\HangRecovery
+    42      1.142 wddm: POST display target 4294967295 is not ours, vsync reports name child 0x250001
+    43      1.158 wddm: OS aperture asked 384 MiB, using 384 MiB (only MAP_APERTURE_SEGMENT uses it)
+    44      1.158 wddm: OS aperture 384 MiB at gpu 0x4002000, PTE slice 0xF5FFE20010
+    45      1.158 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+    46      1.158 vidmm: table segment 3 at physical 0x45E140000 + 0xFEC0000, host memory below 0x270000000, updates are WRITTEN
+    47      1.158 startup: entering interrupt connection
+    48      1.158 startup: entering firmware preparation
+    49      1.165 startup: entering native clock preparation
+    50      1.165 startup: clock status 0x00000000 ready 1 request 1000MHz/820mV initial 1500MHz/VID101 observed 1000MHz/VID116 temp 68125mc staged 0
+    51      1.165 gfx: CP_ME_CNTL 0x15000000, CP_MEC_CNTL 0x50000000, SDMA0/1_F32_CNTL 0x1 0x1
+    52      1.165 gfx: unpublished translation bootstrap entered with engines halted
+    53      1.165 gfx: RLC before-gart-initialization CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    54      1.165 gfx: GRBM before-gart-initialization STATUS 0x00003028 read 0x00000000
+    55      1.165 startup: entering GART initialization
+    56      1.174 gart: startup startup-after-gfxhub-enable sample 0x00000000 fault 0x00000000
+    57      1.174 gfx: RLC startup-after-gfxhub-enable CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    58      1.174 gfx: GRBM startup-after-gfxhub-enable STATUS 0x00003028 read 0x00000000
+    59      1.174 gart: startup startup-after-mmhub-enable sample 0x00000000 fault 0x00000000
+    60      1.174 gfx: RLC startup-after-mmhub-enable CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    61      1.174 gfx: GRBM startup-after-mmhub-enable STATUS 0x00003028 read 0x00000000
+    62      1.174 gart: startup startup-after-fault-defaults sample 0x00000000 fault 0x00000000
+    63      1.174 gfx: RLC startup-after-fault-defaults CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    64      1.174 gfx: GRBM startup-after-fault-defaults STATUS 0x00003028 read 0x00000000
+    65      1.174 gart: startup bootstrap-after-mmhub-flush sample 0x00000000 fault 0x00000000
+    66      1.174 gfx: RLC bootstrap-after-mmhub-flush CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    67      1.174 gfx: GRBM bootstrap-after-mmhub-flush STATUS 0x00003028 read 0x00000000
+    68      1.174 gart: op 1 -> 0x00000000 (-), result 0, 284 writes, fault offset 0x00000
+    69      1.174 gfx: RLC before-psp CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    70      1.174 gfx: GRBM before-psp STATUS 0x00003028 read 0x00000000
+    71      1.174 startup: entering PSP initialization
+    72      1.221 gfx: RLC before-psp-ring-create CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    73      1.221 gfx: GRBM before-psp-ring-create STATUS 0x00003028 read 0x00000000
+    74      1.252 gfx: RLC after-psp-ring-create CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    75      1.252 gfx: GRBM after-psp-ring-create STATUS 0x00003028 read 0x00000000
+    76      1.252 amdgpu[0]: reserve 0x400000 from 0xf5ff800000 for PSP TMR
+
+    77      1.252 psp: command 1 (id 5, type 0, 4194304 bytes): rc 0, status 0x0, 251 us, in TMR at 0x0
+    78      1.252 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    79      1.252 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    80      1.252 psp: command 2 (id 6, type 9, 33536 bytes): rc 0, status 0x0, 1954 us, in TMR at 0x0
+    81      1.252 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    82      1.252 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    83      1.252 psp: command 3 (id 6, type 10, 33536 bytes): rc 0, status 0x0, 1887 us, in TMR at 0x0
+    84      1.252 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    85      1.252 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    86      1.261 psp: command 4 (id 6, type 3, 263040 bytes): rc 0, status 0x0, 5907 us, in TMR at 0xF5FF842000
+    87      1.261 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    88      1.261 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    89      1.261 psp: command 5 (id 6, type 2, 263168 bytes): rc 0, status 0x0, 5904 us, in TMR at 0xF5FF883000
+    90      1.261 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    91      1.261 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    92      1.268 psp: command 6 (id 6, type 1, 263168 bytes): rc 0, status 0x0, 5953 us, in TMR at 0xF5FF8C4000
+    93      1.268 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    94      1.268 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    95      1.268 psp: command 7 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 6004 us, in TMR at 0xF5FF800000
+    96      1.268 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    97      1.268 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    98      1.268 psp: command 8 (id 6, type 5, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    99      1.268 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   100      1.268 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+   101      1.284 psp: command 9 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5954 us, in TMR at 0xF5FF800000
+   102      1.284 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   103      1.284 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+   104      1.284 psp: command 10 (id 6, type 6, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+   105      1.284 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   106      1.284 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+   107      1.284 psp: command 11 (id 6, type 8, 25088 bytes): rc 0, status 0x0, 1737 us, in TMR at 0x0
+   108      1.284 gfx: RLC after-psp-command CNTL 0x00000001 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   109      1.284 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+   110      1.284 psp: op 1 -> 0x00000000, result 0, 15 writes, 11 of 11 commands
+   111      1.284 gfx: RLC after-psp CNTL 0x00000001 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   112      1.284 gfx: GRBM after-psp STATUS 0x00003028 read 0x00000000
+   113      1.284 startup: entering IH initialization
+   114      1.284 ih: init: rc 0, 18 writes
+   115      1.284 ih: op 1 -> 0x00000000, result 0, 19 writes; 0 interrupt routine calls, 0 ours, 0 DPCs, 0 vectors; status idle 1 input_idle 1 bif_interrupt_line 0
+   116      1.284 startup: entering GFX initialization
+   117      1.284 cumode: CuMode 40 disable 0x00000 -> mode 40 reason 0, confirmed earlier
+   118      1.284 gfx: RLC startup policy pp_gfxoff 0
+   119      1.293 gfx: stage 1 (doorbell aperture): rc 0, 49 writes so far, 1 us
+   120      1.293 gfx: stage 2 (golden registers): rc 0, 83 writes so far, 24 us
+   121      1.293 gfx: stage 3 (GRBM CAM probe): rc 0, 86 writes so far, 2 us
+   122      1.293 cumode: stage run: mode 40 applied 40 reason 0 wrote 1
+   123      1.293 gfx: stage 4 (constants): rc 0, 264 writes so far, 80 us
+   124      1.293 gpumem: GFXHUB after-invalidate-request sample 0x00F80001 fault 0x00000000
+   125      1.293 gpumem: GFXHUB after-invalidate-request-read sample 0x00F80001 fault 0x00000000
+   126      1.293 gpumem: GFXHUB after-invalidate-ack sample 0x00000001 fault 0x00000000
+   127      1.293 gpumem: startup GFX translations committed after RLC, before CP
+   128      1.293 gfx: RLC after-bootstrap-translation-commit CNTL 0x00000001 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   129      1.293 gfx: GRBM after-bootstrap-translation-commit STATUS 0x00003028 read 0x00000000
+   130      1.293 gfx: stage 5 (RLC): rc 0, 276 writes so far, 154 us
+   131      1.293 amdgpu[0]: CP resume kiq-init begin
+
+   132      1.293 amdgpu[0]: CP resume kiq-init end result=0
+
+   133      1.293 amdgpu[0]: CP resume compute-unhalt begin
+
+   134      1.293 amdgpu[0]: CP resume compute-unhalt end
+
+   135      1.293 amdgpu[0]: CP resume kcq-init ring=0 begin
+
+   136      1.293 amdgpu[0]: CP resume kcq-init ring=0 end result=0
+
+   137      1.293 amdgpu[0]: CP resume kcq-init ring=1 begin
+
+   138      1.293 amdgpu[0]: CP resume kcq-init ring=1 end result=0
+
+   139      1.293 amdgpu[0]: CP resume kcq-init ring=2 begin
+
+   140      1.293 amdgpu[0]: CP resume kcq-init ring=2 end result=0
+
+   141      1.293 amdgpu[0]: CP resume kcq-init ring=3 begin
+
+   142      1.293 amdgpu[0]: CP resume kcq-init ring=3 end result=0
+
+   143      1.293 amdgpu[0]: CP resume kcq-init ring=4 begin
+
+   144      1.293 amdgpu[0]: CP resume kcq-init ring=4 end result=0
+
+   145      1.293 amdgpu[0]: CP resume kcq-init ring=5 begin
+
+   146      1.293 amdgpu[0]: CP resume kcq-init ring=5 end result=0
+
+   147      1.293 amdgpu[0]: CP resume kcq-init ring=6 begin
+
+   148      1.293 amdgpu[0]: CP resume kcq-init ring=6 end result=0
+
+   149      1.293 amdgpu[0]: CP resume kcq-init ring=7 begin
+
+   150      1.293 amdgpu[0]: CP resume kcq-init ring=7 end result=0
+
+   151      1.293 amdgpu[0]: CP resume kcq-enable begin
+
+   152      1.293 amdgpu[0]: CP resume kcq-enable end result=0
+
+   153      1.293 amdgpu[0]: CP resume kgq-init ring=0 begin
+
+   154      1.293 amdgpu[0]: CP resume kgq-init ring=0 end result=0
+
+   155      1.293 amdgpu[0]: CP resume kgq-enable begin
+
+   156      1.293 amdgpu[0]: CP resume kgq-enable end result=0
+
+   157      1.293 amdgpu[0]: CP resume gfx-start begin
+
+   158      1.293 amdgpu[0]: CP resume gfx-start end result=0
+
+   159      1.293 amdgpu[0]: CP resume gfx-test ring=0 begin
+
+   160      1.293 amdgpu[0]: CP resume gfx-test ring=0 end result=0
+
+   161      1.293 amdgpu[0]: CP resume compute-test ring=0 begin
+
+   162      1.293 amdgpu[0]: CP resume compute-test ring=0 end result=0
+
+   163      1.293 amdgpu[0]: CP resume compute-test ring=1 begin
+
+   164      1.293 amdgpu[0]: CP resume compute-test ring=1 end result=0
+
+   165      1.293 amdgpu[0]: CP resume compute-test ring=2 begin
+
+   166      1.293 amdgpu[0]: CP resume compute-test ring=2 end result=0
+
+   167      1.293 amdgpu[0]: CP resume compute-test ring=3 begin
+
+   168      1.293 amdgpu[0]: CP resume compute-test ring=3 end result=0
+
+   169      1.293 amdgpu[0]: CP resume compute-test ring=4 begin
+
+   170      1.293 amdgpu[0]: CP resume compute-test ring=4 end result=0
+
+   171      1.293 amdgpu[0]: CP resume compute-test ring=5 begin
+
+   172      1.293 amdgpu[0]: CP resume compute-test ring=5 end result=0
+
+   173      1.293 amdgpu[0]: CP resume compute-test ring=6 begin
+
+   174      1.293 amdgpu[0]: CP resume compute-test ring=6 end result=0
+
+   175      1.293 amdgpu[0]: CP resume compute-test ring=7 begin
+
+   176      1.293 amdgpu[0]: CP resume compute-test ring=7 end result=0
+
+   177      1.293 gfx: stage 6 (CP): rc 0, 338 writes so far, 404 us
+   178      1.293 gfx: stage 7 (SDMA): rc 0, 431 writes so far, 242 us
+   179      1.293 gfx: stage 8 (interrupt sources): rc 0, 466 writes so far, 21 us
+   180      1.293 gfx: paging node ready, SDMA0 doorbell 0x200, per-buffer private commands
+   181      1.293 gfx: op 1 to stage 8 -> 0x00000000, result 0, 466 writes, 16 doorbells
+   182      1.293 cumode: applied 40 CUs (40 counted), reason 0, consistent 1, wrote 1, RLC_PG_CNTL 0x00000008 (PG enables 0x8), after the RLC stage 0x00800000 (PG enables 0x0)
+   183      1.293 cumode: SA0-3 CC 0xFFE00000 0xFFE00000 0xFFE00000 0xFFE00000 SPI 0x1F 0x1F 0x1F 0x1F
+   184      1.379 startup: both engines ready
+   185      1.379 startup: attempted 0x1F completed 0x1F status 0x00000000 ready 1 unwind 0 quarantine 0
+   186      1.379 wddm: GPU initialized before adapter admission
+   187      1.379 wddm: callbacks sync 1 notify 1 queuedpc 1 notifydpc 1, interface 576 of 568 bytes
+   188      1.379 wddm: handle callbacks size 576 get@104=FFFFF80680BCE910 acquire@288=FFFFF80680AB4100 release@296=FFFFF80680AB4760
+   189      1.490 display: TMDS inherited 1920x1080 total 2080x1119 measured 74.969 Hz over 8 frames, pixel 174490000 Hz, source measured
+   190      1.490 inherited: source 1920x1080 pitch 7680 target 1920x1080 fixed 0 support 0 status C00000BB valid 1FFFFF
+   191      1.490 display inherited: viewport 00000000/04380780 recout 00000000/04380780 mpc 04380780 scl 00000001 ratio 01000000/01000000
+   192      1.490 display inherited: top 00000000 odm 00000000 hubp 000F100A mem 00000000 taps 00000000 format 00000008 tiling 00000080 pitch 0000077F otg1 80000310
+   193      1.490 display inherited: surface 00000000 bottom 00000000 mpcc FFFF0461 out 01440000
+   194      1.538 display modes: DDC EDID 256 bytes status 0x00000000 cleanup 0x00000000, 3 transfers 54400 us
+   195      1.538 display modes: adapter type 2 max TMDS 300000 kHz query 0x00000000 (type 0 = not identified)
+   196      1.538 display modes: EDID ok, 256 bytes, 2 blocks, version 1.3
+   197      1.538 display modes: monitor GSM product 0x5C6A name 'LG FHD'
+   198      1.538 display modes: preferred 1920x1080 100.000 Hz, pixel clock 228800 kHz; native (firmware) 1920x1080
+   199      1.538 display modes: EDID HDMI 1 max sink TMDS 0 kHz; inherited output timing and transform retained
+   200      1.538 display modes: requested 2 level 0, 1 source modes, descriptor served
+   201      1.538 display modes: list 0..0: 1920x1080/0x01
+   202      1.538 dpaudio: codec 0x1002AA01 rev 0x00100700 straps 0x00008000 vid 0x00100200/0x00100200 be 0x00020100/0x00010000 hpd 0x12/0x0
+   203      1.538 dpaudio: ep0 cfg 0x185600F0 hpc 0x00000000 unsol 0x80 sense 0x7FFFFFFF; ep1 cfg 0x185600F0 hpc 0x00000000; first fail 0x00000000
+   204      1.538 dpaudio: sec 0x00000000/0x00000000 dto src 0x00000030 dto1 0/1 afmt 0x00000100/0x00000000 pkt 0x04000800/0x04000800
+   205      1.538 hdmi: start refused: no eligible HDMI back end: need DIG_MODE 3, one front end and OTG0 stream 0 ep 0 notes 0
+   206      1.538 hdmiaudio: inherited DIG0 snapshot DIG_MODE 2 (TMDS-DVI), BE_CNTL 0x00020100; audio requires HDMI mode 3
+   207      1.538 hdmiaudio: inherited DIG1 snapshot DIG_MODE 1 (other), BE_CNTL 0x00010000; audio requires HDMI mode 3
+   208      1.538 hdmiaudio: result refused reason 8 (no eligible HDMI back end: need DIG_MODE 3, one front end and OTG0); gate 0
+   209      1.538 hdmiaudio: CTA LPCM 1 pixel100Hz 1744900 ELD source DDC
+   210      1.538 stage 35
+   211      1.538 fan: control on: mode curve profile standard
+   212      1.538 fan: load boost on (FanLoadBoost)
+   213      1.538 fan: restore record taken at the first change, bugcheck callback on
+   214      1.538 fan: the watchdog's handback runs in a work item at PASSIVE_LEVEL
+   215      1.538 smu metrics: table page MC 0xF5FFFEC000, physical 0x46FFEC000, one read every 1000 ms
+   216      1.538 dpm: thermal zone DpmThermalZone 0 (absent) -> on, error 0
+   217      1.538 dpm: thermal zone: steps from 86000 mC, no raise from 83000 mC
+   218      1.538 dpm: idle DpmIdleMHz 500 hold 3000 ms (absent) under 2 permille (absent) -> on (error 0)
+   219      1.538 dpm: idle DpmIdleLeavePermille 150 (absent): leaves at 150 permille over the window, or 500 in one tick
+   220      1.538 dpm: joint power arm DpmJointGovernor 0 (absent) -> off
+   221      1.538 dpm: DpmMode 1 DpmMaxMHz 2000 -> DPM, ceiling 2000 MHz, reason 0, confirmed earlier
+   222      1.550 dpm: hardware busy sampler running, every 1000 us
+   223      1.550 dpm: telemetry in the log every 5000 ms, every 120000 ms at the idle point
+   224      1.550 cpu: the surface is on (CpuTune 1), trial window 25000 ms
+   225      1.550 cpu: the surface sees 12 processors, core mask 0x77
+   226      1.589 fan: now curve, duty 82% (raw 209), guard 68.0 C
+   227      1.589 fan: now reason none, doubt none
+   228      2.312 stage 39
+   229      2.313 start record started - - 0x00000000, 0 lines, write 0x00000000
+   230      2.313 wddm: display QueryChildRelations call 1 detail 0x38 -> 0x00000000
+   231      2.313 wddm: DRIVERCAPS reply started1 interop1 extent-shifts2/2
+   232      2.313 wddm: DRIVERCAPS into 592 bytes: wddm 8192 sched 0x45 mm 0x60 flip 0x12 slots 0 tdr 1 dflip 1 rot 1
+   233      2.313 wddm: QueryAdapterInfo type 1 in 0 out 592 -> 0x00000000
+   234      2.313 wddm: QueryAdapterInfo type 15 in 4 out 32 -> 0xC00000BB
+   235      2.327 wddm: QueryAdapterInfo type 47 in 0 out 4 -> 0xC00000BB
+   236      2.327 wddm: QueryAdapterInfo type 13 in 4 out 24 -> 0x00000000
+   237      2.327 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   238      2.327 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   239      2.327 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   240      2.327 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   241      2.327 wddm: GetNodeMetadata node 0 adapter 0
+   242      2.327 wddm: GetNodeMetadata node 1 adapter 0
+   243      2.327 wddm: QUERYSEGMENT4 pass 1: 3 segment(s)
+   244      2.327 wddm: QUERYSEGMENT4 pass 2: 3 segment(s), stride 104, paging buffer segment 2, 65536 bytes
+   245      2.327 wddm: segment 1 flags 0x00080404 gpu 0xF4007F0000 cpu 0x2707F0000 size 0x1ED950000
+   246      2.328 wddm: QueryAdapterInfo type 16 in 0 out 4 -> 0xC00000BB
+   247      2.328 wddm: CreateProcess flags 0x00000001 pasids 1
+   248      2.329 wddm: CreateDevice flags 0x00000001 pasid 0 pid 832
+   249      2.329 wddm: CreateDevice flags 0x00000001 pasid 0 pid 832
+   250      2.330 wddm: capture reservation ready 22020400 bytes
+   251      2.330 wddm: context FFFFD306836F3D30 pid 832 node 1 umd 0 system 1 ip 0
+   252      2.330 wddm: CreateContext node 1 engine 0x1 flags 0x00000005 private 0
+   253      2.330 wddm: CreateContext answered dma 65536 bytes segment set 0x2, lists 256/0, caps 0x00000001
+   254      2.330 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+   255      2.330 vidmm: table physical cache query pa 0x45E143000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+ 19567   1360.270 hip: batch 5742 pid 9780 seq 189791 fence 72187 vmid 4
+ 19568   1360.270 hip: batch 5743 pid 9780 seq 189793 fence 72189 vmid 4
+ 19569   1360.271 hip: batch 5744 pid 9780 seq 189795 fence 72191 vmid 4
+ 19570   1360.271 hip: batch 5745 pid 9780 seq 189797 fence 72193 vmid 4
+ 19571   1360.271 hip: batch 5746 pid 9780 seq 189799 fence 72195 vmid 4
+ 19572   1360.272 hip: batch 5747 pid 9780 seq 189801 fence 72197 vmid 4
+ 19573   1360.272 hip: batch 5748 pid 9780 seq 189803 fence 72199 vmid 4
+ 19574   1360.272 hip: batch 5749 pid 9780 seq 189805 fence 72201 vmid 4
+ 19575   1360.273 hip: batch 5750 pid 9780 seq 189807 fence 72203 vmid 4
+ 19576   1360.273 hip: batch 5751 pid 9780 seq 189809 fence 72205 vmid 4
+ 19577   1360.273 hip: batch 5752 pid 9780 seq 189811 fence 72207 vmid 4
+ 19578   1360.274 hip: batch 5753 pid 9780 seq 189813 fence 72209 vmid 4
+ 19579   1360.274 hip: batch 5754 pid 9780 seq 189815 fence 72211 vmid 4
+ 19580   1360.274 hip: batch 5755 pid 9780 seq 189817 fence 72213 vmid 4
+ 19581   1360.275 hip: batch 5756 pid 9780 seq 189819 fence 72215 vmid 4
+ 19582   1360.275 hip: batch 5757 pid 9780 seq 189821 fence 72217 vmid 4
+ 19583   1360.275 hip: batch 5758 pid 9780 seq 189823 fence 72219 vmid 4
+ 19584   1360.276 hip: batch 5759 pid 9780 seq 189825 fence 72221 vmid 4
+ 19585   1360.276 hip: batch 5760 pid 9780 seq 189827 fence 72223 vmid 4
+ 19586   1360.276 hip: batch 5761 pid 9780 seq 189829 fence 72225 vmid 4
+ 19587   1360.276 hip: batch 5762 pid 9780 seq 189831 fence 72227 vmid 4
+ 19588   1360.277 hip: batch 5763 pid 9780 seq 189833 fence 72229 vmid 4
+ 19589   1360.277 hip: batch 5764 pid 9780 seq 189835 fence 72231 vmid 4
+ 19590   1360.277 hip: batch 5765 pid 9780 seq 189837 fence 72233 vmid 4
+ 19591   1360.278 hip: batch 5766 pid 9780 seq 189839 fence 72235 vmid 4
+ 19592   1360.278 hip: batch 5767 pid 9780 seq 189841 fence 72237 vmid 4
+ 19593   1360.279 hip: batch 5768 pid 9780 seq 189843 fence 72239 vmid 4
+ 19594   1360.279 hip: batch 5769 pid 9780 seq 189845 fence 72241 vmid 4
+ 19595   1360.279 hip: batch 5770 pid 9780 seq 189847 fence 72243 vmid 4
+ 19596   1360.280 hip: batch 5771 pid 9780 seq 189849 fence 72245 vmid 4
+ 19597   1360.280 hip: batch 5772 pid 9780 seq 189851 fence 72247 vmid 4
+ 19598   1360.280 hip: batch 5773 pid 9780 seq 189853 fence 72249 vmid 4
+ 19599   1360.281 hip: batch 5774 pid 9780 seq 189855 fence 72251 vmid 4
+ 19600   1360.281 hip: batch 5775 pid 9780 seq 189857 fence 72253 vmid 4
+ 19601   1360.281 hip: batch 5776 pid 9780 seq 189859 fence 72255 vmid 4
+ 19602   1360.281 hip: batch 5777 pid 9780 seq 189861 fence 72257 vmid 4
+ 19603   1360.282 hip: batch 5778 pid 9780 seq 189863 fence 72259 vmid 4
+ 19604   1360.282 hip: batch 5779 pid 9780 seq 189865 fence 72261 vmid 4
+ 19605   1360.282 hip: batch 5780 pid 9780 seq 189867 fence 72263 vmid 4
+ 19606   1360.283 hip: batch 5781 pid 9780 seq 189869 fence 72265 vmid 4
+ 19607   1360.283 hip: batch 5782 pid 9780 seq 189871 fence 72267 vmid 4
+ 19608   1360.283 hip: batch 5783 pid 9780 seq 189873 fence 72269 vmid 4
+ 19609   1360.284 hip: batch 5784 pid 9780 seq 189875 fence 72271 vmid 4
+ 19610   1360.284 hip: batch 5785 pid 9780 seq 189877 fence 72273 vmid 4
+ 19611   1360.284 hip: batch 5786 pid 9780 seq 189879 fence 72275 vmid 4
+ 19612   1360.284 hip: batch 5787 pid 9780 seq 189881 fence 72277 vmid 4
+ 19613   1360.285 hip: batch 5788 pid 9780 seq 189883 fence 72279 vmid 4
+ 19614   1360.285 hip: batch 5789 pid 9780 seq 189885 fence 72281 vmid 4
+ 19615   1360.285 hip: batch 5790 pid 9780 seq 189887 fence 72283 vmid 4
+ 19616   1360.286 hip: batch 5791 pid 9780 seq 189889 fence 72285 vmid 4
+ 19617   1360.286 hip: batch 5792 pid 9780 seq 189891 fence 72287 vmid 4
+ 19618   1360.287 hip: batch 5793 pid 9780 seq 189893 fence 72289 vmid 4
+ 19619   1360.287 hip: batch 5794 pid 9780 seq 189895 fence 72291 vmid 4
+ 19620   1360.287 hip: batch 5795 pid 9780 seq 189897 fence 72293 vmid 4
+ 19621   1360.287 hip: batch 5796 pid 9780 seq 189899 fence 72295 vmid 4
+ 19622   1360.288 hip: batch 5797 pid 9780 seq 189901 fence 72297 vmid 4
+ 19623   1360.288 hip: batch 5798 pid 9780 seq 189903 fence 72299 vmid 4
+ 19624   1360.288 hip: batch 5799 pid 9780 seq 189905 fence 72301 vmid 4
+ 19625   1360.289 hip: batch 5800 pid 9780 seq 189907 fence 72303 vmid 4
+ 19626   1360.289 hip: batch 5801 pid 9780 seq 189909 fence 72305 vmid 4
+ 19627   1360.289 hip: batch 5802 pid 9780 seq 189911 fence 72307 vmid 4
+ 19628   1360.290 hip: batch 5803 pid 9780 seq 189913 fence 72309 vmid 4
+ 19629   1360.290 hip: batch 5804 pid 9780 seq 189915 fence 72311 vmid 4
+ 19630   1360.290 hip: batch 5805 pid 9780 seq 189917 fence 72313 vmid 4
+ 19631   1360.290 hip: batch 5806 pid 9780 seq 189919 fence 72315 vmid 4
+ 19632   1360.291 hip: batch 5807 pid 9780 seq 189921 fence 72317 vmid 4
+ 19633   1360.291 hip: batch 5808 pid 9780 seq 189923 fence 72319 vmid 4
+ 19634   1360.291 hip: batch 5809 pid 9780 seq 189925 fence 72321 vmid 4
+ 19635   1360.292 hip: batch 5810 pid 9780 seq 189927 fence 72323 vmid 4
+ 19636   1360.292 hip: batch 5811 pid 9780 seq 189929 fence 72325 vmid 4
+ 19637   1360.292 hip: batch 5812 pid 9780 seq 189931 fence 72327 vmid 4
+ 19638   1360.293 hip: batch 5813 pid 9780 seq 189933 fence 72329 vmid 4
+ 19639   1360.293 hip: batch 5814 pid 9780 seq 189935 fence 72331 vmid 4
+ 19640   1360.293 hip: batch 5815 pid 9780 seq 189937 fence 72333 vmid 4
+ 19641   1360.294 hip: batch 5816 pid 9780 seq 189939 fence 72335 vmid 4
+ 19642   1360.294 hip: batch 5817 pid 9780 seq 189941 fence 72337 vmid 4
+ 19643   1360.295 hip: batch 5818 pid 9780 seq 189943 fence 72339 vmid 4
+ 19644   1360.295 hip: batch 5819 pid 9780 seq 189945 fence 72341 vmid 4
+ 19645   1360.295 hip: batch 5820 pid 9780 seq 189947 fence 72343 vmid 4
+ 19646   1360.295 hip: batch 5821 pid 9780 seq 189949 fence 72345 vmid 4
+ 19647   1360.296 hip: batch 5822 pid 9780 seq 189951 fence 72347 vmid 4
+ 19648   1360.296 hip: batch 5823 pid 9780 seq 189953 fence 72349 vmid 4
+ 19649   1360.296 hip: batch 5824 pid 9780 seq 189955 fence 72351 vmid 4
+ 19650   1360.297 hip: batch 5825 pid 9780 seq 189957 fence 72353 vmid 4
+ 19651   1360.297 hip: batch 5826 pid 9780 seq 189959 fence 72355 vmid 4
+ 19652   1360.297 hip: batch 5827 pid 9780 seq 189961 fence 72357 vmid 4
+ 19653   1360.299 hip: batch 5828 pid 9780 seq 189963 fence 72359 vmid 4
+ 19654   1360.299 hip: batch 5829 pid 9780 seq 189965 fence 72361 vmid 4
+ 19655   1360.299 hip: batch 5830 pid 9780 seq 189967 fence 72363 vmid 4
+ 19656   1360.299 hip: batch 5831 pid 9780 seq 189969 fence 72365 vmid 4
+ 19657   1360.300 hip: batch 5832 pid 9780 seq 189971 fence 72367 vmid 4
+ 19658   1360.300 hip: batch 5833 pid 9780 seq 189973 fence 72369 vmid 4
+ 19659   1360.300 hip: batch 5834 pid 9780 seq 189975 fence 72371 vmid 4
+ 19660   1360.301 hip: batch 5835 pid 9780 seq 189977 fence 72373 vmid 4
+ 19661   1360.301 hip: batch 5836 pid 9780 seq 189979 fence 72375 vmid 4
+ 19662   1360.302 hip: batch 5837 pid 9780 seq 189981 fence 72377 vmid 4
+ 19663   1360.302 hip: batch 5838 pid 9780 seq 189983 fence 72379 vmid 4
+ 19664   1360.302 hip: batch 5839 pid 9780 seq 189985 fence 72381 vmid 4
+ 19665   1360.303 hip: batch 5840 pid 9780 seq 189987 fence 72383 vmid 4
+ 19666   1360.303 hip: batch 5841 pid 9780 seq 189989 fence 72385 vmid 4
+ 19667   1360.303 hip: batch 5842 pid 9780 seq 189991 fence 72387 vmid 4
+ 19668   1360.304 hip: batch 5843 pid 9780 seq 189993 fence 72389 vmid 4
+ 19669   1360.304 hip: batch 5844 pid 9780 seq 189995 fence 72391 vmid 4
+ 19670   1360.304 hip: batch 5845 pid 9780 seq 189997 fence 72393 vmid 4
+ 19671   1360.305 hip: batch 5846 pid 9780 seq 189999 fence 72395 vmid 4
+ 19672   1360.305 hip: batch 5847 pid 9780 seq 190001 fence 72397 vmid 4
+ 19673   1360.305 hip: batch 5848 pid 9780 seq 190003 fence 72399 vmid 4
+ 19674   1360.306 hip: batch 5849 pid 9780 seq 190005 fence 72401 vmid 4
+ 19675   1360.306 hip: batch 5850 pid 9780 seq 190007 fence 72403 vmid 4
+ 19676   1360.306 hip: batch 5851 pid 9780 seq 190009 fence 72405 vmid 4
+ 19677   1360.307 hip: batch 5852 pid 9780 seq 190011 fence 72407 vmid 4
+ 19678   1360.307 hip: batch 5853 pid 9780 seq 190013 fence 72409 vmid 4
+ 19679   1360.307 hip: batch 5854 pid 9780 seq 190015 fence 72411 vmid 4
+ 19680   1360.307 hip: batch 5855 pid 9780 seq 190017 fence 72413 vmid 4
+ 19681   1360.308 hip: batch 5856 pid 9780 seq 190019 fence 72415 vmid 4
+ 19682   1360.308 hip: batch 5857 pid 9780 seq 190021 fence 72417 vmid 4
+ 19683   1360.308 hip: batch 5858 pid 9780 seq 190023 fence 72419 vmid 4
+ 19684   1360.309 hip: batch 5859 pid 9780 seq 190025 fence 72421 vmid 4
+ 19685   1360.309 hip: batch 5860 pid 9780 seq 190027 fence 72423 vmid 4
+ 19686   1360.310 hip: batch 5861 pid 9780 seq 190029 fence 72425 vmid 4
+ 19687   1360.310 hip: batch 5862 pid 9780 seq 190031 fence 72427 vmid 4
+ 19688   1360.310 hip: batch 5863 pid 9780 seq 190033 fence 72429 vmid 4
+ 19689   1360.311 hip: batch 5864 pid 9780 seq 190035 fence 72431 vmid 4
+ 19690   1360.311 hip: batch 5865 pid 9780 seq 190037 fence 72433 vmid 4
+ 19691   1360.311 hip: batch 5866 pid 9780 seq 190039 fence 72435 vmid 4
+ 19692   1360.312 hip: batch 5867 pid 9780 seq 190041 fence 72437 vmid 4
+ 19693   1360.312 hip: batch 5868 pid 9780 seq 190043 fence 72439 vmid 4
+ 19694   1360.312 hip: batch 5869 pid 9780 seq 190045 fence 72441 vmid 4
+ 19695   1360.313 hip: batch 5870 pid 9780 seq 190047 fence 72443 vmid 4
+ 19696   1360.313 hip: batch 5871 pid 9780 seq 190049 fence 72445 vmid 4
+ 19697   1360.313 hip: batch 5872 pid 9780 seq 190051 fence 72447 vmid 4
+ 19698   1360.313 hip: batch 5873 pid 9780 seq 190053 fence 72449 vmid 4
+ 19699   1360.314 hip: batch 5874 pid 9780 seq 190055 fence 72451 vmid 4
+ 19700   1360.314 hip: batch 5875 pid 9780 seq 190057 fence 72453 vmid 4
+ 19701   1360.314 hip: batch 5876 pid 9780 seq 190059 fence 72455 vmid 4
+ 19702   1360.315 hip: batch 5877 pid 9780 seq 190061 fence 72457 vmid 4
+ 19703   1360.315 hip: batch 5878 pid 9780 seq 190063 fence 72459 vmid 4
+ 19704   1360.315 hip: batch 5879 pid 9780 seq 190065 fence 72461 vmid 4
+ 19705   1360.316 hip: batch 5880 pid 9780 seq 190067 fence 72463 vmid 4
+ 19706   1360.316 hip: batch 5881 pid 9780 seq 190069 fence 72465 vmid 4
+ 19707   1360.316 hip: batch 5882 pid 9780 seq 190071 fence 72467 vmid 4
+ 19708   1360.317 hip: batch 5883 pid 9780 seq 190073 fence 72469 vmid 4
+ 19709   1360.317 hip: batch 5884 pid 9780 seq 190075 fence 72471 vmid 4
+ 19710   1360.318 hip: batch 5885 pid 9780 seq 190077 fence 72473 vmid 4
+ 19711   1360.318 hip: batch 5886 pid 9780 seq 190079 fence 72475 vmid 4
+ 19712   1360.318 hip: batch 5887 pid 9780 seq 190081 fence 72477 vmid 4
+ 19713   1360.319 hip: batch 5888 pid 9780 seq 190083 fence 72479 vmid 4
+ 19714   1360.319 hip: batch 5889 pid 9780 seq 190085 fence 72481 vmid 4
+ 19715   1360.319 hip: batch 5890 pid 9780 seq 190087 fence 72483 vmid 4
+ 19716   1360.320 hip: batch 5891 pid 9780 seq 190089 fence 72485 vmid 4
+ 19717   1360.320 hip: batch 5892 pid 9780 seq 190091 fence 72487 vmid 4
+ 19718   1360.320 hip: batch 5893 pid 9780 seq 190093 fence 72489 vmid 4
+ 19719   1360.320 hip: batch 5894 pid 9780 seq 190095 fence 72491 vmid 4
+ 19720   1360.321 hip: batch 5895 pid 9780 seq 190097 fence 72493 vmid 4
+ 19721   1360.321 hip: batch 5896 pid 9780 seq 190099 fence 72495 vmid 4
+ 19722   1360.321 hip: batch 5897 pid 9780 seq 190101 fence 72497 vmid 4
+ 19723   1360.322 hip: batch 5898 pid 9780 seq 190103 fence 72499 vmid 4
+ 19724   1360.322 hip: batch 5899 pid 9780 seq 190105 fence 72501 vmid 4
+ 19725   1360.322 hip: batch 5900 pid 9780 seq 190107 fence 72503 vmid 4
+ 19726   1360.323 hip: batch 5901 pid 9780 seq 190109 fence 72505 vmid 4
+ 19727   1360.323 hip: batch 5902 pid 9780 seq 190111 fence 72507 vmid 4
+ 19728   1360.323 hip: batch 5903 pid 9780 seq 190113 fence 72509 vmid 4
+ 19729   1360.323 hip: batch 5904 pid 9780 seq 190115 fence 72511 vmid 4
+ 19730   1360.324 hip: batch 5905 pid 9780 seq 190117 fence 72513 vmid 4
+ 19731   1360.324 hip: batch 5906 pid 9780 seq 190119 fence 72515 vmid 4
+ 19732   1360.325 hip: batch 5907 pid 9780 seq 190121 fence 72517 vmid 4
+ 19733   1360.325 hip: batch 5908 pid 9780 seq 190123 fence 72519 vmid 4
+ 19734   1360.325 hip: batch 5909 pid 9780 seq 190125 fence 72521 vmid 4
+ 19735   1360.326 hip: batch 5910 pid 9780 seq 190127 fence 72523 vmid 4
+ 19736   1360.326 hip: batch 5911 pid 9780 seq 190129 fence 72525 vmid 4
+ 19737   1360.326 hip: batch 5912 pid 9780 seq 190131 fence 72527 vmid 4
+ 19738   1360.327 hip: batch 5913 pid 9780 seq 190133 fence 72529 vmid 4
+ 19739   1360.327 hip: batch 5914 pid 9780 seq 190135 fence 72531 vmid 4
+ 19740   1360.327 hip: batch 5915 pid 9780 seq 190137 fence 72533 vmid 4
+ 19741   1360.327 hip: batch 5916 pid 9780 seq 190139 fence 72535 vmid 4
+ 19742   1360.328 hip: batch 5917 pid 9780 seq 190141 fence 72537 vmid 4
+ 19743   1360.328 hip: batch 5918 pid 9780 seq 190143 fence 72539 vmid 4
+ 19744   1360.328 hip: batch 5919 pid 9780 seq 190145 fence 72541 vmid 4
+ 19745   1360.329 hip: batch 5920 pid 9780 seq 190147 fence 72543 vmid 4
+ 19746   1360.329 hip: batch 5921 pid 9780 seq 190149 fence 72545 vmid 4
+ 19747   1360.329 hip: batch 5922 pid 9780 seq 190151 fence 72547 vmid 4
+ 19748   1360.330 hip: batch 5923 pid 9780 seq 190153 fence 72549 vmid 4
+ 19749   1360.330 hip: batch 5924 pid 9780 seq 190155 fence 72551 vmid 4
+ 19750   1360.330 hip: batch 5925 pid 9780 seq 190157 fence 72553 vmid 4
+ 19751   1360.331 hip: batch 5926 pid 9780 seq 190159 fence 72555 vmid 4
+ 19752   1360.331 hip: batch 5927 pid 9780 seq 190161 fence 72557 vmid 4
+ 19753   1360.331 hip: batch 5928 pid 9780 seq 190163 fence 72559 vmid 4
+ 19754   1360.332 hip: batch 5929 pid 9780 seq 190165 fence 72561 vmid 4
+ 19755   1360.332 hip: batch 5930 pid 9780 seq 190167 fence 72563 vmid 4
+ 19756   1360.333 hip: batch 5931 pid 9780 seq 190169 fence 72565 vmid 4
+ 19757   1360.333 hip: batch 5932 pid 9780 seq 190171 fence 72567 vmid 4
+ 19758   1360.333 hip: batch 5933 pid 9780 seq 190173 fence 72569 vmid 4
+ 19759   1360.334 hip: batch 5934 pid 9780 seq 190175 fence 72571 vmid 4
+ 19760   1360.334 hip: batch 5935 pid 9780 seq 190177 fence 72573 vmid 4
+ 19761   1360.334 hip: batch 5936 pid 9780 seq 190179 fence 72575 vmid 4
+ 19762   1360.335 hip: batch 5937 pid 9780 seq 190181 fence 72577 vmid 4
+ 19763   1360.335 hip: batch 5938 pid 9780 seq 190183 fence 72579 vmid 4
+ 19764   1360.335 hip: batch 5939 pid 9780 seq 190185 fence 72581 vmid 4
+ 19765   1360.336 dpm: 1700 -> 1600 MHz/935 mV VID 98, 0 settle reads (load, busy 516 permille, 66.7 C, throttle none)
+ 19766   1360.336 hip: batch 5940 pid 9780 seq 190187 fence 72583 vmid 4
+ 19767   1360.336 hip: batch 5941 pid 9780 seq 190189 fence 72585 vmid 4
+ 19768   1360.336 hip: batch 5942 pid 9780 seq 190191 fence 72587 vmid 4
+ 19769   1360.337 hip: batch 5943 pid 9780 seq 190193 fence 72589 vmid 4
+ 19770   1360.337 hip: batch 5944 pid 9780 seq 190195 fence 72591 vmid 4
+ 19771   1360.337 hip: batch 5945 pid 9780 seq 190197 fence 72593 vmid 4
+ 19772   1360.338 hip: batch 5946 pid 9780 seq 190199 fence 72595 vmid 4
+ 19773   1360.338 hip: batch 5947 pid 9780 seq 190201 fence 72597 vmid 4
+ 19774   1360.338 hip: batch 5948 pid 9780 seq 190203 fence 72599 vmid 4
+ 19775   1360.339 hip: batch 5949 pid 9780 seq 190205 fence 72601 vmid 4
+ 19776   1360.339 hip: batch 5950 pid 9780 seq 190207 fence 72603 vmid 4
+ 19777   1360.339 hip: batch 5951 pid 9780 seq 190209 fence 72605 vmid 4
+ 19778   1360.340 hip: batch 5952 pid 9780 seq 190211 fence 72607 vmid 4
+ 19779   1360.340 hip: batch 5953 pid 9780 seq 190213 fence 72609 vmid 4
+ 19780   1360.340 hip: batch 5954 pid 9780 seq 190215 fence 72611 vmid 4
+ 19781   1360.341 hip: batch 5955 pid 9780 seq 190217 fence 72613 vmid 4
+ 19782   1360.341 hip: batch 5956 pid 9780 seq 190219 fence 72615 vmid 4
+ 19783   1360.341 hip: batch 5957 pid 9780 seq 190221 fence 72617 vmid 4
+ 19784   1360.342 hip: batch 5958 pid 9780 seq 190223 fence 72619 vmid 4
+ 19785   1360.342 hip: batch 5959 pid 9780 seq 190225 fence 72621 vmid 4
+ 19786   1360.342 hip: batch 5960 pid 9780 seq 190227 fence 72623 vmid 4
+ 19787   1360.343 hip: batch 5961 pid 9780 seq 190229 fence 72625 vmid 4
+ 19788   1360.343 hip: batch 5962 pid 9780 seq 190231 fence 72627 vmid 4
+ 19789   1360.343 hip: batch 5963 pid 9780 seq 190233 fence 72629 vmid 4
+ 19790   1360.344 hip: batch 5964 pid 9780 seq 190235 fence 72631 vmid 4
+ 19791   1360.344 hip: batch 5965 pid 9780 seq 190237 fence 72633 vmid 4
+ 19792   1360.344 hip: batch 5966 pid 9780 seq 190239 fence 72635 vmid 4
+ 19793   1360.345 hip: batch 5967 pid 9780 seq 190241 fence 72637 vmid 4
+ 19794   1360.345 hip: batch 5968 pid 9780 seq 190243 fence 72639 vmid 4
+ 19795   1360.345 hip: batch 5969 pid 9780 seq 190245 fence 72641 vmid 4
+ 19796   1360.345 hip: batch 5970 pid 9780 seq 190247 fence 72643 vmid 4
+ 19797   1360.346 hip: batch 5971 pid 9780 seq 190249 fence 72645 vmid 4
+ 19798   1360.346 hip: batch 5972 pid 9780 seq 190251 fence 72647 vmid 4
+ 19799   1360.346 hip: batch 5973 pid 9780 seq 190253 fence 72649 vmid 4
+ 19800   1360.347 hip: batch 5974 pid 9780 seq 190255 fence 72651 vmid 4
+ 19801   1360.347 hip: batch 5975 pid 9780 seq 190257 fence 72653 vmid 4
+ 19802   1360.348 hip: batch 5976 pid 9780 seq 190259 fence 72655 vmid 4
+ 19803   1360.348 hip: batch 5977 pid 9780 seq 190261 fence 72657 vmid 4
+ 19804   1360.348 hip: batch 5978 pid 9780 seq 190263 fence 72659 vmid 4
+ 19805   1360.349 hip: batch 5979 pid 9780 seq 190265 fence 72661 vmid 4
+ 19806   1360.349 hip: batch 5980 pid 9780 seq 190267 fence 72663 vmid 4
+ 19807   1360.349 hip: batch 5981 pid 9780 seq 190269 fence 72665 vmid 4
+ 19808   1360.350 hip: batch 5982 pid 9780 seq 190271 fence 72667 vmid 4
+ 19809   1360.350 hip: batch 5983 pid 9780 seq 190273 fence 72669 vmid 4
+ 19810   1360.350 hip: batch 5984 pid 9780 seq 190275 fence 72671 vmid 4
+ 19811   1360.351 hip: batch 5985 pid 9780 seq 190277 fence 72673 vmid 4
+ 19812   1360.351 hip: batch 5986 pid 9780 seq 190279 fence 72675 vmid 4
+ 19813   1360.351 hip: batch 5987 pid 9780 seq 190281 fence 72677 vmid 4
+ 19814   1360.352 hip: batch 5988 pid 9780 seq 190283 fence 72679 vmid 4
+ 19815   1360.352 hip: batch 5989 pid 9780 seq 190285 fence 72681 vmid 4
+ 19816   1360.352 hip: batch 5990 pid 9780 seq 190287 fence 72683 vmid 4
+ 19817   1360.353 hip: batch 5991 pid 9780 seq 190289 fence 72685 vmid 4
+ 19818   1360.353 hip: batch 5992 pid 9780 seq 190291 fence 72687 vmid 4
+ 19819   1360.353 hip: batch 5993 pid 9780 seq 190293 fence 72689 vmid 4
+ 19820   1360.354 hip: batch 5994 pid 9780 seq 190295 fence 72691 vmid 4
+ 19821   1360.354 hip: batch 5995 pid 9780 seq 190297 fence 72693 vmid 4
+ 19822   1360.354 hip: batch 5996 pid 9780 seq 190299 fence 72695 vmid 4
+ 19823   1360.355 hip: batch 5997 pid 9780 seq 190301 fence 72697 vmid 4
+ 19824   1360.355 hip: batch 5998 pid 9780 seq 190303 fence 72699 vmid 4
+ 19825   1360.356 hip: batch 5999 pid 9780 seq 190305 fence 72701 vmid 4
+ 19826   1360.356 hip: batch 6000 pid 9780 seq 190307 fence 72703 vmid 4
+ 19827   1360.356 hip: batch 6001 pid 9780 seq 190309 fence 72705 vmid 4
+ 19828   1360.357 hip: batch 6002 pid 9780 seq 190311 fence 72707 vmid 4
+ 19829   1360.357 hip: batch 6003 pid 9780 seq 190313 fence 72709 vmid 4
+ 19830   1360.357 hip: batch 6004 pid 9780 seq 190315 fence 72711 vmid 4
+ 19831   1360.357 hip: batch 6005 pid 9780 seq 190317 fence 72713 vmid 4
+ 19832   1360.358 hip: batch 6006 pid 9780 seq 190319 fence 72715 vmid 4
+ 19833   1360.358 hip: batch 6007 pid 9780 seq 190321 fence 72717 vmid 4
+ 19834   1360.358 hip: batch 6008 pid 9780 seq 190323 fence 72719 vmid 4
+ 19835   1360.359 hip: batch 6009 pid 9780 seq 190325 fence 72721 vmid 4
+ 19836   1360.359 hip: batch 6010 pid 9780 seq 190327 fence 72723 vmid 4
+ 19837   1360.359 hip: batch 6011 pid 9780 seq 190329 fence 72725 vmid 4
+ 19838   1360.360 hip: batch 6012 pid 9780 seq 190331 fence 72727 vmid 4
+ 19839   1360.360 hip: batch 6013 pid 9780 seq 190333 fence 72729 vmid 4
+ 19840   1360.360 hip: batch 6014 pid 9780 seq 190335 fence 72731 vmid 4
+ 19841   1360.361 hip: batch 6015 pid 9780 seq 190337 fence 72733 vmid 4
+ 19842   1360.361 hip: batch 6016 pid 9780 seq 190339 fence 72735 vmid 4
+ 19843   1360.361 hip: batch 6017 pid 9780 seq 190341 fence 72737 vmid 4
+ 19844   1360.362 hip: batch 6018 pid 9780 seq 190343 fence 72739 vmid 4
+ 19845   1360.362 hip: batch 6019 pid 9780 seq 190345 fence 72741 vmid 4
+ 19846   1360.362 hip: batch 6020 pid 9780 seq 190347 fence 72743 vmid 4
+ 19847   1360.363 hip: batch 6021 pid 9780 seq 190349 fence 72745 vmid 4
+ 19848   1360.363 hip: batch 6022 pid 9780 seq 190351 fence 72747 vmid 4
+ 19849   1360.363 hip: batch 6023 pid 9780 seq 190353 fence 72749 vmid 4
+ 19850   1360.364 hip: batch 6024 pid 9780 seq 190355 fence 72751 vmid 4
+ 19851   1360.364 hip: batch 6025 pid 9780 seq 190357 fence 72753 vmid 4
+ 19852   1360.364 hip: batch 6026 pid 9780 seq 190359 fence 72755 vmid 4
+ 19853   1360.365 hip: batch 6027 pid 9780 seq 190361 fence 72757 vmid 4
+ 19854   1360.365 hip: batch 6028 pid 9780 seq 190363 fence 72759 vmid 4
+ 19855   1360.365 hip: batch 6029 pid 9780 seq 190365 fence 72761 vmid 4
+ 19856   1360.366 hip: batch 6030 pid 9780 seq 190367 fence 72763 vmid 4
+ 19857   1360.366 hip: batch 6031 pid 9780 seq 190369 fence 72765 vmid 4
+ 19858   1360.366 hip: batch 6032 pid 9780 seq 190371 fence 72767 vmid 4
+ 19859   1360.367 hip: batch 6033 pid 9780 seq 190373 fence 72769 vmid 4
+ 19860   1360.367 hip: batch 6034 pid 9780 seq 190375 fence 72771 vmid 4
+ 19861   1360.367 hip: batch 6035 pid 9780 seq 190377 fence 72773 vmid 4
+ 19862   1360.368 hip: batch 6036 pid 9780 seq 190379 fence 72775 vmid 4
+ 19863   1360.368 hip: batch 6037 pid 9780 seq 190381 fence 72777 vmid 4
+ 19864   1360.368 hip: batch 6038 pid 9780 seq 190383 fence 72779 vmid 4
+ 19865   1360.369 hip: batch 6039 pid 9780 seq 190385 fence 72781 vmid 4
+ 19866   1360.369 hip: batch 6040 pid 9780 seq 190387 fence 72783 vmid 4
+ 19867   1360.369 hip: batch 6041 pid 9780 seq 190389 fence 72785 vmid 4
+ 19868   1360.370 hip: batch 6042 pid 9780 seq 190391 fence 72787 vmid 4
+ 19869   1360.370 hip: batch 6043 pid 9780 seq 190393 fence 72789 vmid 4
+ 19870   1360.370 hip: batch 6044 pid 9780 seq 190395 fence 72791 vmid 4
+ 19871   1360.371 hip: batch 6045 pid 9780 seq 190397 fence 72793 vmid 4
+ 19872   1360.371 hip: batch 6046 pid 9780 seq 190399 fence 72795 vmid 4
+ 19873   1360.371 hip: batch 6047 pid 9780 seq 190401 fence 72797 vmid 4
+ 19874   1360.372 hip: batch 6048 pid 9780 seq 190403 fence 72799 vmid 4
+ 19875   1360.372 hip: batch 6049 pid 9780 seq 190405 fence 72801 vmid 4
+ 19876   1360.372 hip: batch 6050 pid 9780 seq 190407 fence 72803 vmid 4
+ 19877   1360.373 hip: batch 6051 pid 9780 seq 190409 fence 72805 vmid 4
+ 19878   1360.373 hip: batch 6052 pid 9780 seq 190411 fence 72807 vmid 4
+ 19879   1360.373 hip: batch 6053 pid 9780 seq 190413 fence 72809 vmid 4
+ 19880   1360.374 hip: batch 6054 pid 9780 seq 190415 fence 72811 vmid 4
+ 19881   1360.374 hip: batch 6055 pid 9780 seq 190417 fence 72813 vmid 4
+ 19882   1360.374 hip: batch 6056 pid 9780 seq 190419 fence 72815 vmid 4
+ 19883   1360.375 hip: batch 6057 pid 9780 seq 190421 fence 72817 vmid 4
+ 19884   1360.375 hip: batch 6058 pid 9780 seq 190423 fence 72819 vmid 4
+ 19885   1360.375 hip: batch 6059 pid 9780 seq 190425 fence 72821 vmid 4
+ 19886   1360.376 hip: batch 6060 pid 9780 seq 190427 fence 72823 vmid 4
+ 19887   1360.376 hip: batch 6061 pid 9780 seq 190429 fence 72825 vmid 4
+ 19888   1360.376 hip: batch 6062 pid 9780 seq 190431 fence 72827 vmid 4
+ 19889   1360.376 hip: batch 6063 pid 9780 seq 190433 fence 72829 vmid 4
+ 19890   1360.377 hip: batch 6064 pid 9780 seq 190435 fence 72831 vmid 4
+ 19891   1360.377 hip: batch 6065 pid 9780 seq 190437 fence 72833 vmid 4
+ 19892   1360.377 hip: batch 6066 pid 9780 seq 190439 fence 72835 vmid 4
+ 19893   1360.378 hip: batch 6067 pid 9780 seq 190441 fence 72837 vmid 4
+ 19894   1360.378 hip: batch 6068 pid 9780 seq 190443 fence 72839 vmid 4
+ 19895   1360.379 hip: batch 6069 pid 9780 seq 190445 fence 72841 vmid 4
+ 19896   1360.379 hip: batch 6070 pid 9780 seq 190447 fence 72843 vmid 4
+ 19897   1360.379 hip: batch 6071 pid 9780 seq 190449 fence 72845 vmid 4
+ 19898   1360.381 hip: batch 6072 pid 9780 seq 190451 fence 72847 vmid 4
+ 19899   1360.381 hip: batch 6073 pid 9780 seq 190453 fence 72849 vmid 4
+ 19900   1360.381 hip: batch 6074 pid 9780 seq 190455 fence 72851 vmid 4
+ 19901   1360.382 hip: batch 6075 pid 9780 seq 190457 fence 72853 vmid 4
+ 19902   1360.382 hip: batch 6076 pid 9780 seq 190459 fence 72855 vmid 4
+ 19903   1360.383 hip: batch 6077 pid 9780 seq 190461 fence 72857 vmid 4
+ 19904   1360.383 hip: batch 6078 pid 9780 seq 190463 fence 72859 vmid 4
+ 19905   1360.383 hip: batch 6079 pid 9780 seq 190465 fence 72861 vmid 4
+ 19906   1360.384 hip: batch 6080 pid 9780 seq 190467 fence 72863 vmid 4
+ 19907   1360.384 hip: batch 6081 pid 9780 seq 190469 fence 72865 vmid 4
+ 19908   1360.384 hip: batch 6082 pid 9780 seq 190471 fence 72867 vmid 4
+ 19909   1360.385 hip: batch 6083 pid 9780 seq 190473 fence 72869 vmid 4
+ 19910   1360.385 hip: batch 6084 pid 9780 seq 190475 fence 72871 vmid 4
+ 19911   1360.385 hip: batch 6085 pid 9780 seq 190477 fence 72873 vmid 4
+ 19912   1360.386 hip: batch 6086 pid 9780 seq 190479 fence 72875 vmid 4
+ 19913   1360.386 hip: batch 6087 pid 9780 seq 190481 fence 72877 vmid 4
+ 19914   1360.387 hip: batch 6088 pid 9780 seq 190483 fence 72879 vmid 4
+ 19915   1360.387 hip: batch 6089 pid 9780 seq 190485 fence 72881 vmid 4
+ 19916   1360.388 hip: batch 6090 pid 9780 seq 190487 fence 72883 vmid 4
+ 19917   1360.388 hip: batch 6091 pid 9780 seq 190489 fence 72885 vmid 4
+ 19918   1360.388 hip: batch 6092 pid 9780 seq 190491 fence 72887 vmid 4
+ 19919   1360.389 hip: batch 6093 pid 9780 seq 190493 fence 72889 vmid 4
+ 19920   1360.389 hip: batch 6094 pid 9780 seq 190495 fence 72891 vmid 4
+ 19921   1360.389 hip: batch 6095 pid 9780 seq 190497 fence 72893 vmid 4
+ 19922   1360.390 hip: batch 6096 pid 9780 seq 190499 fence 72895 vmid 4
+ 19923   1360.390 hip: batch 6097 pid 9780 seq 190501 fence 72897 vmid 4
+ 19924   1360.390 hip: batch 6098 pid 9780 seq 190503 fence 72899 vmid 4
+ 19925   1360.391 hip: batch 6099 pid 9780 seq 190505 fence 72901 vmid 4
+ 19926   1360.391 hip: batch 6100 pid 9780 seq 190507 fence 72903 vmid 4
+ 19927   1360.391 hip: batch 6101 pid 9780 seq 190509 fence 72905 vmid 4
+ 19928   1360.392 hip: batch 6102 pid 9780 seq 190511 fence 72907 vmid 4
+ 19929   1360.392 hip: batch 6103 pid 9780 seq 190513 fence 72909 vmid 4
+ 19930   1360.392 hip: batch 6104 pid 9780 seq 190515 fence 72911 vmid 4
+ 19931   1360.392 hip: batch 6105 pid 9780 seq 190517 fence 72913 vmid 4
+ 19932   1360.393 hip: batch 6106 pid 9780 seq 190519 fence 72915 vmid 4
+ 19933   1360.393 hip: batch 6107 pid 9780 seq 190521 fence 72917 vmid 4
+ 19934   1360.393 hip: batch 6108 pid 9780 seq 190523 fence 72919 vmid 4
+ 19935   1360.394 hip: batch 6109 pid 9780 seq 190525 fence 72921 vmid 4
+ 19936   1360.394 hip: batch 6110 pid 9780 seq 190527 fence 72923 vmid 4
+ 19937   1360.394 hip: batch 6111 pid 9780 seq 190529 fence 72925 vmid 4
+ 19938   1360.395 hip: batch 6112 pid 9780 seq 190531 fence 72927 vmid 4
+ 19939   1360.395 hip: batch 6113 pid 9780 seq 190533 fence 72929 vmid 4
+ 19940   1360.396 hip: batch 6114 pid 9780 seq 190535 fence 72931 vmid 4
+ 19941   1360.396 hip: batch 6115 pid 9780 seq 190537 fence 72933 vmid 4
+ 19942   1360.396 hip: batch 6116 pid 9780 seq 190539 fence 72935 vmid 4
+ 19943   1360.396 hip: batch 6117 pid 9780 seq 190541 fence 72937 vmid 4
+ 19944   1360.397 hip: batch 6118 pid 9780 seq 190543 fence 72939 vmid 4
+ 19945   1360.397 hip: batch 6119 pid 9780 seq 190545 fence 72941 vmid 4
+ 19946   1360.397 hip: batch 6120 pid 9780 seq 190547 fence 72943 vmid 4
+ 19947   1360.398 hip: batch 6121 pid 9780 seq 190549 fence 72945 vmid 4
+ 19948   1360.398 hip: batch 6122 pid 9780 seq 190551 fence 72947 vmid 4
+ 19949   1360.398 hip: batch 6123 pid 9780 seq 190553 fence 72949 vmid 4
+ 19950   1360.399 hip: batch 6124 pid 9780 seq 190555 fence 72951 vmid 4
+ 19951   1360.399 hip: batch 6125 pid 9780 seq 190557 fence 72953 vmid 4
+ 19952   1360.399 hip: batch 6126 pid 9780 seq 190559 fence 72955 vmid 4
+ 19953   1360.400 hip: batch 6127 pid 9780 seq 190561 fence 72957 vmid 4
+ 19954   1360.400 hip: batch 6128 pid 9780 seq 190563 fence 72959 vmid 4
+ 19955   1360.400 hip: batch 6129 pid 9780 seq 190565 fence 72961 vmid 4
+ 19956   1360.400 hip: batch 6130 pid 9780 seq 190567 fence 72963 vmid 4
+ 19957   1360.401 hip: batch 6131 pid 9780 seq 190569 fence 72965 vmid 4
+ 19958   1360.401 hip: batch 6132 pid 9780 seq 190571 fence 72967 vmid 4
+ 19959   1360.401 hip: batch 6133 pid 9780 seq 190573 fence 72969 vmid 4
+ 19960   1360.402 hip: batch 6134 pid 9780 seq 190575 fence 72971 vmid 4
+ 19961   1360.402 hip: batch 6135 pid 9780 seq 190577 fence 72973 vmid 4
+ 19962   1360.403 hip: batch 6136 pid 9780 seq 190579 fence 72975 vmid 4
+ 19963   1360.403 hip: batch 6137 pid 9780 seq 190581 fence 72977 vmid 4
+ 19964   1360.403 hip: batch 6138 pid 9780 seq 190583 fence 72979 vmid 4
+ 19965   1360.404 hip: batch 6139 pid 9780 seq 190585 fence 72981 vmid 4
+ 19966   1360.404 hip: batch 6140 pid 9780 seq 190587 fence 72983 vmid 4
+ 19967   1360.404 hip: batch 6141 pid 9780 seq 190589 fence 72985 vmid 4
+ 19968   1360.405 hip: batch 6142 pid 9780 seq 190591 fence 72987 vmid 4
+ 19969   1360.405 hip: batch 6143 pid 9780 seq 190593 fence 72989 vmid 4
+ 19970   1360.405 hip: batch 6144 pid 9780 seq 190595 fence 72991 vmid 4
+ 19971   1360.406 hip: batch 6145 pid 9780 seq 190597 fence 72993 vmid 4
+ 19972   1360.406 hip: batch 6146 pid 9780 seq 190599 fence 72995 vmid 4
+ 19973   1360.406 hip: batch 6147 pid 9780 seq 190601 fence 72997 vmid 4
+ 19974   1360.407 hip: batch 6148 pid 9780 seq 190603 fence 72999 vmid 4
+ 19975   1360.407 hip: batch 6149 pid 9780 seq 190605 fence 73001 vmid 4
+ 19976   1360.407 hip: batch 6150 pid 9780 seq 190607 fence 73003 vmid 4
+ 19977   1360.407 hip: batch 6151 pid 9780 seq 190609 fence 73005 vmid 4
+ 19978   1360.408 hip: batch 6152 pid 9780 seq 190611 fence 73007 vmid 4
+ 19979   1360.408 hip: batch 6153 pid 9780 seq 190613 fence 73009 vmid 4
+ 19980   1360.408 hip: batch 6154 pid 9780 seq 190615 fence 73011 vmid 4
+ 19981   1360.409 hip: batch 6155 pid 9780 seq 190617 fence 73013 vmid 4
+ 19982   1360.409 hip: batch 6156 pid 9780 seq 190619 fence 73015 vmid 4
+ 19983   1360.409 hip: batch 6157 pid 9780 seq 190621 fence 73017 vmid 4
+ 19984   1360.410 hip: batch 6158 pid 9780 seq 190623 fence 73019 vmid 4
+ 19985   1360.550 dpm: 1600 -> 1500 MHz/919 mV VID 100, 0 settle reads (load, busy 0 permille, 66.7 C, throttle none)
+ 19986   1360.765 dpm: 1500 -> 1400 MHz/899 mV VID 104, 0 settle reads (load, busy 0 permille, 66.7 C, throttle none)
+ 19987   1360.772 fan: load boost on (power): full speed at guard 66.7 C, duty was 100%
+ 19988   1360.969 dpm: 1400 -> 1300 MHz/880 mV VID 107, 0 settle reads (load, busy 0 permille, 66.7 C, throttle none)
+ 19989   1361.186 dpm: 1300 -> 1200 MHz/860 mV VID 110, 0 settle reads (load, busy 0 permille, 66.7 C, throttle none)
+ 19990   1361.404 dpm: 1200 -> 1100 MHz/840 mV VID 113, 0 settle reads (load, busy 0 permille, 66.7 C, throttle none)
+ 19991   1361.622 dpm: 1100 -> 1000 MHz/820 mV VID 116, 0 settle reads (load, busy 0 permille, 66.6 C, throttle none)
+ 19992   1362.486 dpm: telemetry dpm 1000 MHz/820 mV (SMU 1000 MHz VID 116) 66.5 C busy 0.0% avg 0.2% want 1000 cap 2000 max 2000 throttle none, raises 34 lowers 61 thermal 0 wa
+ 19993   1362.486 dpm: telemetry idle 500 MHz, hold 3000 ms under 2 permille, entries 8 exits 8 refusals 0, 1013079 ms at the point
+ 19994   1362.486 dpm: telemetry idle leave at 150 permille, exits 8 by a busy tick, 0 by the window
+ 19995   1362.486 hwmon: telemetry fan2 1562 rpm (1/5 turn) duty 1000 permille, mode 0xE0 eng 0x60
+ 19996   1362.486 hwmon: telemetry apu 66.0 C, duty read-back unproven
+ 19997   1362.486 hwmon: telemetry 1345 samples 0 errors 0 retries 0 refusals
+ 19998   1362.486 smu metrics: telemetry 52.8 W avg 49.5 W, gfx 17.2 W soc 9.8 W
+ 19999   1362.486 smu metrics: telemetry gfx 818 mV 1000 MHz 58.7 C soc 1187 mV 59.5 C thr 0
+ 20000   1362.486 fan: telemetry curve curve/standard
+ 20001   1362.486 fan: telemetry target 100% applied 100% raw 255 rb 255, 1562 rpm
+ 20002   1362.486 fan: telemetry 1 takeovers 0 handbacks 40 writes
+ 20003   1362.486 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 20004   1362.486 fan: telemetry boost on (rise)
+ 20005   1362.486 fan: telemetry boost 4 times, 368334 ms
+ 20006   1366.501 dpm: 1000 -> 500 MHz/820 mV VID 116, 0 settle reads (load, busy 0 permille, 66.0 C, throttle idle)
+ 20007   1372.318 gfx: paging submit, seq 190794 at 0x400D30: 2211 submits in 60529 ms, 117701 of 117752 with no line
+ 20008   1374.336 gfx: paging submit, seq 190805 at 0x400348: 8 submits in 2018 ms, 117708 of 117760 with no line
+ 20009   1377.324 dpm: 500 -> 1000 MHz/820 mV VID 116, 1 settle reads (load, busy 0 permille, 64.6 C, throttle none)
+ 20010   1377.540 dpm: telemetry dpm 1000 MHz/820 mV (SMU 1000 MHz VID 116) 64.6 C busy 0.0% avg 0.2% want 1000 cap 2000 max 2000 throttle none, raises 35 lowers 62 thermal 0 wa
+ 20011   1377.540 dpm: telemetry idle 500 MHz, hold 3000 ms under 2 permille, entries 9 exits 9 refusals 0, 1023678 ms at the point
+ 20012   1377.540 dpm: telemetry idle leave at 150 permille, exits 9 by a busy tick, 0 by the window
+ 20013   1377.540 hwmon: telemetry fan2 1746 rpm (1/5 turn) duty 1000 permille, mode 0xE0 eng 0x60
+ 20014   1377.540 hwmon: telemetry apu 64.0 C, duty read-back unproven
+ 20015   1377.540 hwmon: telemetry 1360 samples 0 errors 0 retries 0 refusals
+ 20016   1377.540 smu metrics: telemetry 38.7 W avg 43.2 W, gfx 9.5 W soc 3.4 W
+ 20017   1377.540 smu metrics: telemetry gfx 824 mV 500 MHz 56.7 C soc 881 mV 58.7 C thr 0
+ 20018   1377.540 fan: telemetry curve curve/standard
+ 20019   1377.540 fan: telemetry target 100% applied 100% raw 255 rb 255, 1746 rpm
+ 20020   1377.540 fan: telemetry 1 takeovers 0 handbacks 40 writes
+ 20021   1377.540 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 20022   1377.540 fan: telemetry boost on (rise)
+ 20023   1377.540 fan: telemetry boost 4 times, 383614 ms
+ 20024   1377.667 hip: batch 6159 pid 9484 seq 192546 fence 73052 vmid 4
+ 20025   1377.668 hip: batch 6160 pid 9484 seq 192549 fence 73053 vmid 4
+ 20026   1377.673 hip: batch 6161 pid 9484 seq 192557 fence 73054 vmid 4
+ 20027   1377.675 hip: batch 6162 pid 9484 seq 192574 fence 73055 vmid 4
+ 20028   1377.675 hip: batch 6163 pid 9484 seq 192577 fence 73056 vmid 4
+ 20029   1377.676 hip: batch 6164 pid 9484 seq 192581 fence 73057 vmid 4
+ 20030   1377.681 hip: batch 6165 pid 9484 seq 192588 fence 73058 vmid 4
+ 20031   1377.682 hip: batch 6166 pid 9484 seq 192591 fence 73059 vmid 4
+ 20032   1377.686 hip: batch 6167 pid 9484 seq 192596 fence 73060 vmid 4
+ 20033   1377.687 hip: batch 6168 pid 9484 seq 192603 fence 73061 vmid 4
+ 20034   1377.688 hip: batch 6169 pid 9484 seq 192619 fence 73062 vmid 4
+ 20035   1377.690 hip: batch 6170 pid 9484 seq 192638 fence 73063 vmid 4
+ 20036   1377.691 hip: batch 6171 pid 9484 seq 192656 fence 73064 vmid 4
+ 20037   1377.693 hip: batch 6172 pid 9484 seq 192672 fence 73065 vmid 4
+ 20038   1377.693 hip: batch 6173 pid 9484 seq 192681 fence 73066 vmid 4
+ 20039   1377.694 hip: batch 6174 pid 9484 seq 192687 fence 73067 vmid 4
+ 20040   1377.694 hip: batch 6175 pid 9484 seq 192693 fence 73068 vmid 4
+ 20041   1377.695 hip: batch 6176 pid 9484 seq 192699 fence 73069 vmid 4
+ 20042   1377.695 hip: batch 6177 pid 9484 seq 192707 fence 73070 vmid 4
+ 20043   1377.696 hip: batch 6178 pid 9484 seq 192713 fence 73071 vmid 4
+ 20044   1377.696 hip: batch 6179 pid 9484 seq 192719 fence 73072 vmid 4
+ 20045   1377.697 hip: batch 6180 pid 9484 seq 192725 fence 73073 vmid 4
+ 20046   1377.697 hip: batch 6181 pid 9484 seq 192731 fence 73074 vmid 4
+ 20047   1377.698 hip: batch 6182 pid 9484 seq 192737 fence 73075 vmid 4
+ 20048   1377.698 hip: batch 6183 pid 9484 seq 192743 fence 73076 vmid 4
+ 20049   1377.699 hip: batch 6184 pid 9484 seq 192749 fence 73077 vmid 4
+ 20050   1377.699 hip: batch 6185 pid 9484 seq 192755 fence 73078 vmid 4
+ 20051   1377.700 hip: batch 6186 pid 9484 seq 192761 fence 73079 vmid 4
+ 20052   1377.700 hip: batch 6187 pid 9484 seq 192762 fence 73080 vmid 4
+ 20053   1377.702 hip: batch 6188 pid 9484 seq 192768 fence 73081 vmid 4
+ 20054   1377.716 hip: batch 6189 pid 9484 seq 192786 fence 73085 vmid 4
+ 20055   1377.716 hip: batch 6190 pid 9484 seq 192787 fence 73086 vmid 4
+ 20056   1377.718 hip: batch 6191 pid 9484 seq 192796 fence 73087 vmid 4
+ 20057   1377.719 hip: batch 6192 pid 9484 seq 192800 fence 73088 vmid 4
+ 20058   1377.719 hip: batch 6193 pid 9484 seq 192804 fence 73089 vmid 4
+ 20059   1377.720 hip: batch 6194 pid 9484 seq 192814 fence 73090 vmid 4
+ 20060   1377.720 hip: batch 6195 pid 9484 seq 192815 fence 73091 vmid 4
+ 20061   1377.721 hip: batch 6196 pid 9484 seq 192821 fence 73092 vmid 4
+ 20062   1377.723 hip: batch 6197 pid 9484 seq 192822 fence 73093 vmid 4
+ 20063   1377.726 hip: batch 6198 pid 9484 seq 192823 fence 73094 vmid 4
+ 20064   1377.728 hip: batch 6199 pid 9484 seq 192824 fence 73095 vmid 4
+ 20065   1377.731 hip: batch 6200 pid 9484 seq 192825 fence 73096 vmid 4
+ 20066   1377.733 hip: batch 6201 pid 9484 seq 192826 fence 73097 vmid 4
+ 20067   1377.735 hip: batch 6202 pid 9484 seq 192827 fence 73098 vmid 4
+ 20068   1377.737 hip: batch 6203 pid 9484 seq 192828 fence 73099 vmid 4
+ 20069   1377.740 hip: batch 6204 pid 9484 seq 192829 fence 73100 vmid 4
+ 20070   1377.742 hip: batch 6205 pid 9484 seq 192830 fence 73101 vmid 4
+ 20071   1377.744 hip: batch 6206 pid 9484 seq 192831 fence 73102 vmid 4
+ 20072   1377.746 hip: batch 6207 pid 9484 seq 192832 fence 73103 vmid 4
+ 20073   1377.749 hip: batch 6208 pid 9484 seq 192833 fence 73104 vmid 4
+ 20074   1377.751 hip: batch 6209 pid 9484 seq 192834 fence 73105 vmid 4
+ 20075   1377.753 hip: batch 6210 pid 9484 seq 192835 fence 73106 vmid 4
+ 20076   1377.756 hip: batch 6211 pid 9484 seq 192836 fence 73107 vmid 4
+ 20077   1377.758 hip: batch 6212 pid 9484 seq 192837 fence 73108 vmid 4
+ 20078   1377.760 hip: batch 6213 pid 9484 seq 192838 fence 73109 vmid 4
+ 20079   1377.762 hip: batch 6214 pid 9484 seq 192839 fence 73110 vmid 4
+ 20080   1377.764 hip: batch 6215 pid 9484 seq 192840 fence 73111 vmid 4
+ 20081   1377.766 hip: batch 6216 pid 9484 seq 192841 fence 73112 vmid 4
+ 20082   1377.769 hip: batch 6217 pid 9484 seq 192843 fence 73114 vmid 4
+ 20083   1377.770 dpm: 1000 -> 1300 MHz/880 mV VID 107 staged, 1 settle reads (load, busy 1000 permille, 64.6 C, throttle none)
+ 20084   1377.770 hip: batch 6218 pid 9484 seq 192845 fence 73116 vmid 4
+ 20085   1377.770 hip: batch 6219 pid 9484 seq 192847 fence 73118 vmid 4
+ 20086   1377.771 hip: batch 6220 pid 9484 seq 192849 fence 73120 vmid 4
+ 20087   1377.771 hip: batch 6221 pid 9484 seq 192851 fence 73122 vmid 4
+ 20088   1377.772 hip: batch 6222 pid 9484 seq 192853 fence 73124 vmid 4
+ 20089   1377.772 hip: batch 6223 pid 9484 seq 192855 fence 73126 vmid 4
+ 20090   1377.773 hip: batch 6224 pid 9484 seq 192857 fence 73128 vmid 4
+ 20091   1377.773 hip: batch 6225 pid 9484 seq 192859 fence 73130 vmid 4
+ 20092   1377.773 hip: batch 6226 pid 9484 seq 192861 fence 73132 vmid 4
+ 20093   1377.774 hip: batch 6227 pid 9484 seq 192863 fence 73134 vmid 4
+ 20094   1377.774 hip: batch 6228 pid 9484 seq 192865 fence 73136 vmid 4
+ 20095   1377.774 hip: batch 6229 pid 9484 seq 192867 fence 73138 vmid 4
+ 20096   1377.775 hip: batch 6230 pid 9484 seq 192869 fence 73140 vmid 4
+ 20097   1377.775 hip: batch 6231 pid 9484 seq 192871 fence 73142 vmid 4
+ 20098   1377.776 hip: batch 6232 pid 9484 seq 192873 fence 73144 vmid 4
+ 20099   1377.776 hip: batch 6233 pid 9484 seq 192875 fence 73146 vmid 4
+ 20100   1377.777 hip: batch 6234 pid 9484 seq 192877 fence 73148 vmid 4
+ 20101   1377.777 hip: batch 6235 pid 9484 seq 192879 fence 73150 vmid 4
+ 20102   1377.777 hip: batch 6236 pid 9484 seq 192881 fence 73152 vmid 4
+ 20103   1377.778 hip: batch 6237 pid 9484 seq 192883 fence 73154 vmid 4
+ 20104   1377.778 hip: batch 6238 pid 9484 seq 192885 fence 73156 vmid 4
+ 20105   1377.778 hip: batch 6239 pid 9484 seq 192887 fence 73158 vmid 4
+ 20106   1377.779 hip: batch 6240 pid 9484 seq 192889 fence 73160 vmid 4
+ 20107   1377.780 hip: batch 6241 pid 9484 seq 192891 fence 73162 vmid 4
+ 20108   1377.780 hip: batch 6242 pid 9484 seq 192893 fence 73164 vmid 4
+ 20109   1377.781 hip: batch 6243 pid 9484 seq 192895 fence 73166 vmid 4
+ 20110   1377.781 hip: batch 6244 pid 9484 seq 192897 fence 73168 vmid 4
+ 20111   1377.781 hip: batch 6245 pid 9484 seq 192899 fence 73170 vmid 4
+ 20112   1377.782 hip: batch 6246 pid 9484 seq 192901 fence 73172 vmid 4
+ 20113   1377.782 hip: batch 6247 pid 9484 seq 192903 fence 73174 vmid 4
+ 20114   1377.783 hip: batch 6248 pid 9484 seq 192905 fence 73176 vmid 4
+ 20115   1377.783 hip: batch 6249 pid 9484 seq 192907 fence 73178 vmid 4
+ 20116   1377.784 hip: batch 6250 pid 9484 seq 192909 fence 73180 vmid 4
+ 20117   1377.784 hip: batch 6251 pid 9484 seq 192911 fence 73182 vmid 4
+ 20118   1377.784 hip: batch 6252 pid 9484 seq 192913 fence 73184 vmid 4
+ 20119   1377.785 hip: batch 6253 pid 9484 seq 192915 fence 73186 vmid 4
+ 20120   1377.785 hip: batch 6254 pid 9484 seq 192917 fence 73188 vmid 4
+ 20121   1377.786 hip: batch 6255 pid 9484 seq 192919 fence 73190 vmid 4
+ 20122   1377.786 hip: batch 6256 pid 9484 seq 192921 fence 73192 vmid 4
+ 20123   1377.786 hip: batch 6257 pid 9484 seq 192923 fence 73194 vmid 4
+ 20124   1377.787 hip: batch 6258 pid 9484 seq 192925 fence 73196 vmid 4
+ 20125   1377.787 hip: batch 6259 pid 9484 seq 192927 fence 73198 vmid 4
+ 20126   1377.787 hip: batch 6260 pid 9484 seq 192929 fence 73200 vmid 4
+ 20127   1377.788 hip: batch 6261 pid 9484 seq 192931 fence 73202 vmid 4
+ 20128   1377.788 hip: batch 6262 pid 9484 seq 192933 fence 73204 vmid 4
+ 20129   1377.789 hip: batch 6263 pid 9484 seq 192935 fence 73206 vmid 4
+ 20130   1377.789 hip: batch 6264 pid 9484 seq 192937 fence 73208 vmid 4
+ 20131   1377.790 hip: batch 6265 pid 9484 seq 192939 fence 73210 vmid 4
+ 20132   1377.790 hip: batch 6266 pid 9484 seq 192941 fence 73212 vmid 4
+ 20133   1377.791 hip: batch 6267 pid 9484 seq 192943 fence 73214 vmid 4
+ 20134   1377.791 hip: batch 6268 pid 9484 seq 192945 fence 73216 vmid 4
+ 20135   1377.791 hip: batch 6269 pid 9484 seq 192947 fence 73218 vmid 4
+ 20136   1377.792 hip: batch 6270 pid 9484 seq 192949 fence 73220 vmid 4
+ 20137   1377.792 hip: batch 6271 pid 9484 seq 192951 fence 73222 vmid 4
+ 20138   1377.793 hip: batch 6272 pid 9484 seq 192953 fence 73224 vmid 4
+ 20139   1377.793 hip: batch 6273 pid 9484 seq 192955 fence 73226 vmid 4
+ 20140   1377.793 hip: batch 6274 pid 9484 seq 192957 fence 73228 vmid 4
+ 20141   1377.794 hip: batch 6275 pid 9484 seq 192959 fence 73230 vmid 4
+ 20142   1377.794 hip: batch 6276 pid 9484 seq 192961 fence 73232 vmid 4
+ 20143   1377.794 hip: batch 6277 pid 9484 seq 192963 fence 73234 vmid 4
+ 20144   1377.795 hip: batch 6278 pid 9484 seq 192965 fence 73236 vmid 4
+ 20145   1377.795 hip: batch 6279 pid 9484 seq 192967 fence 73238 vmid 4
+ 20146   1377.796 hip: batch 6280 pid 9484 seq 192969 fence 73240 vmid 4
+ 20147   1377.796 hip: batch 6281 pid 9484 seq 192971 fence 73242 vmid 4
+ 20148   1377.797 hip: batch 6282 pid 9484 seq 192973 fence 73244 vmid 4
+ 20149   1377.797 hip: batch 6283 pid 9484 seq 192975 fence 73246 vmid 4
+ 20150   1377.797 hip: batch 6284 pid 9484 seq 192977 fence 73248 vmid 4
+ 20151   1377.798 hip: batch 6285 pid 9484 seq 192979 fence 73250 vmid 4
+ 20152   1377.798 hip: batch 6286 pid 9484 seq 192981 fence 73252 vmid 4
+ 20153   1377.799 hip: batch 6287 pid 9484 seq 192983 fence 73254 vmid 4
+ 20154   1377.799 hip: batch 6288 pid 9484 seq 192985 fence 73256 vmid 4
+ 20155   1377.800 hip: batch 6289 pid 9484 seq 192987 fence 73258 vmid 4
+ 20156   1377.800 hip: batch 6290 pid 9484 seq 192989 fence 73260 vmid 4
+ 20157   1377.800 hip: batch 6291 pid 9484 seq 192991 fence 73262 vmid 4
+ 20158   1377.801 hip: batch 6292 pid 9484 seq 192993 fence 73264 vmid 4
+ 20159   1377.801 hip: batch 6293 pid 9484 seq 192995 fence 73266 vmid 4
+ 20160   1377.801 hip: batch 6294 pid 9484 seq 192997 fence 73268 vmid 4
+ 20161   1377.802 hip: batch 6295 pid 9484 seq 192999 fence 73270 vmid 4
+ 20162   1377.802 hip: batch 6296 pid 9484 seq 193001 fence 73272 vmid 4
+ 20163   1377.802 hip: batch 6297 pid 9484 seq 193003 fence 73274 vmid 4
+ 20164   1377.803 hip: batch 6298 pid 9484 seq 193005 fence 73276 vmid 4
+ 20165   1377.803 hip: batch 6299 pid 9484 seq 193007 fence 73278 vmid 4
+ 20166   1377.804 hip: batch 6300 pid 9484 seq 193009 fence 73280 vmid 4
+ 20167   1377.804 hip: batch 6301 pid 9484 seq 193011 fence 73282 vmid 4
+ 20168   1377.804 hip: batch 6302 pid 9484 seq 193013 fence 73284 vmid 4
+ 20169   1377.805 hip: batch 6303 pid 9484 seq 193015 fence 73286 vmid 4
+ 20170   1377.805 hip: batch 6304 pid 9484 seq 193017 fence 73288 vmid 4
+ 20171   1377.805 hip: batch 6305 pid 9484 seq 193019 fence 73290 vmid 4
+ 20172   1377.806 hip: batch 6306 pid 9484 seq 193021 fence 73292 vmid 4
+ 20173   1377.806 hip: batch 6307 pid 9484 seq 193023 fence 73294 vmid 4
+ 20174   1377.806 hip: batch 6308 pid 9484 seq 193025 fence 73296 vmid 4
+ 20175   1377.984 dpm: 1300 -> 1200 MHz/860 mV VID 110, 0 settle reads (load, busy 0 permille, 64.6 C, throttle none)
+ 20176   1378.199 dpm: 1200 -> 1100 MHz/840 mV VID 113, 0 settle reads (load, busy 0 permille, 64.6 C, throttle none)
+ 20177   1378.414 dpm: 1100 -> 1000 MHz/820 mV VID 116, 0 settle reads (load, busy 0 permille, 64.6 C, throttle none)
+ 20178   1382.555 dpm: telemetry dpm 1000 MHz/820 mV (SMU 1000 MHz VID 116) 64.2 C busy 0.0% avg 0.2% want 1000 cap 2000 max 2000 throttle none, raises 36 lowers 65 thermal 0 wa
+ 20179   1382.555 dpm: telemetry idle 500 MHz, hold 3000 ms under 2 permille, entries 9 exits 9 refusals 0, 1023678 ms at the point
+ 20180   1382.555 dpm: telemetry idle leave at 150 permille, exits 9 by a busy tick, 0 by the window
+ 20181   1382.555 hwmon: telemetry fan2 1699 rpm (1/5 turn) duty 1000 permille, mode 0xE0 eng 0x60
+ 20182   1382.555 hwmon: telemetry apu 64.0 C, duty read-back unproven
+ 20183   1382.555 hwmon: telemetry 1365 samples 0 errors 0 retries 0 refusals
+ 20184   1382.555 smu metrics: telemetry 47.8 W avg 47.4 W, gfx 16.6 W soc 5.6 W
+ 20185   1382.555 smu metrics: telemetry gfx 818 mV 1000 MHz 58.0 C soc 1181 mV 59.2 C thr 0
+ 20186   1382.555 fan: telemetry curve curve/standard
+ 20187   1382.555 fan: telemetry target 100% applied 100% raw 255 rb 255, 1699 rpm
+ 20188   1382.555 fan: telemetry 1 takeovers 0 handbacks 40 writes
+ 20189   1382.555 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 20190   1382.555 fan: telemetry boost on (rise)
+ 20191   1382.555 fan: telemetry boost 4 times, 388704 ms
+ 20192   1383.937 dpm: 1000 -> 500 MHz/820 mV VID 116, 0 settle reads (load, busy 0 permille, 64.2 C, throttle idle)
+ 20193   1395.411 fan: load boost off after 401955 ms, duty 100%, guard 63.1 C
+ 20194   1482.065 gfx: paging submit, seq 193276 at 0x410EF8: 2177 submits in 109747 ms, 119884 of 119937 with no line
+ 20195   1503.097 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 59.7 C busy 0.0% avg 0.2% want 1000 cap 2000 max 2000 throttle idle, raises 36 lowers 66 thermal 0 warm
+ 20196   1503.097 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 10 exits 9 refusals 0, 1140544 ms at the point
+ 20197   1503.097 dpm: telemetry idle leave at 150 permille, exits 9 by a busy tick, 0 by the window
+ 20198   1503.097 hwmon: telemetry fan2 1301 rpm (1/5 turn) duty 749 permille, mode 0xE0 eng 0x60
+ 20199   1503.097 hwmon: telemetry apu 59.0 C, duty read-back unproven
+ 20200   1503.097 hwmon: telemetry 1484 samples 0 errors 0 retries 0 refusals
+ 20201   1503.097 smu metrics: telemetry 37.0 W avg 36.3 W, gfx 10.1 W soc 1.2 W
+ 20202   1503.097 smu metrics: telemetry gfx 824 mV 500 MHz 55.5 C soc 806 mV 57.0 C thr 0
+ 20203   1503.097 fan: telemetry curve curve/standard
+ 20204   1503.097 fan: telemetry target 75% applied 75% raw 191 rb 191, 1301 rpm
+ 20205   1503.097 fan: telemetry 1 takeovers 0 handbacks 45 writes
+ 20206   1503.097 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 20207   1503.097 fan: telemetry boost off (none)
+ 20208   1503.097 fan: telemetry boost 4 times, 401955 ms
+ 20209   1602.083 gfx: paging submit, seq 193289 at 0x400778: 10 submits in 120018 ms, 119893 of 119947 with no line
+ 20210   1623.678 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 60.1 C busy 0.0% avg 0.2% want 1000 cap 2000 max 2000 throttle idle, raises 36 lowers 66 thermal 0 warm
+ 20211   1623.678 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 10 exits 9 refusals 0, 1258755 ms at the point
+ 20212   1623.678 dpm: telemetry idle leave at 150 permille, exits 9 by a busy tick, 0 by the window
+ 20213   1623.678 hwmon: telemetry fan2 1333 rpm (1/5 turn) duty 749 permille, mode 0xE0 eng 0x60
+ 20214   1623.678 hwmon: telemetry apu 60.0 C, duty read-back unproven
+ 20215   1623.678 hwmon: telemetry 1603 samples 0 errors 0 retries 0 refusals
+ 20216   1623.678 smu metrics: telemetry 36.4 W avg 36.2 W, gfx 10.1 W soc 0.7 W
+ 20217   1623.678 smu metrics: telemetry gfx 824 mV 500 MHz 56.2 C soc 806 mV 57.7 C thr 0
+ 20218   1623.678 fan: telemetry curve curve/standard
+ 20219   1623.678 fan: telemetry target 75% applied 75% raw 191 rb 191, 1333 rpm
+ 20220   1623.678 fan: telemetry 1 takeovers 0 handbacks 45 writes
+ 20221   1623.678 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 20222   1623.678 fan: telemetry boost off (none)
+ 20223   1623.678 fan: telemetry boost 4 times, 401955 ms
+ 20224   1662.094 gfx: paging submit, seq 193295 at 0x400478: 5 submits in 60011 ms, 119897 of 119952 with no line
+ 20225   1744.266 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 60.3 C busy 0.0% avg 0.2% want 1000 cap 2000 max 2000 throttle idle, raises 36 lowers 66 thermal 0 warm
+ 20226   1744.266 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 10 exits 9 refusals 0, 1376960 ms at the point
+ 20227   1744.266 dpm: telemetry idle leave at 150 permille, exits 9 by a busy tick, 0 by the window
+ 20228   1744.266 hwmon: telemetry fan2 1337 rpm (1/5 turn) duty 749 permille, mode 0xE0 eng 0x60
+ 20229   1744.266 hwmon: telemetry apu 60.0 C, duty read-back unproven
+ 20230   1744.266 hwmon: telemetry 1722 samples 0 errors 0 retries 0 refusals
+ 20231   1744.266 smu metrics: telemetry 35.7 W avg 36.7 W, gfx 9.5 W soc 0.5 W
+ 20232   1744.266 smu metrics: telemetry gfx 824 mV 500 MHz 56.2 C soc 806 mV 57.7 C thr 0
+ 20233   1744.266 fan: telemetry curve curve/standard
+ 20234   1744.266 fan: telemetry target 75% applied 75% raw 191 rb 191, 1337 rpm
+ 20235   1744.266 fan: telemetry 1 takeovers 0 handbacks 45 writes
+ 20236   1744.266 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 20237   1744.266 fan: telemetry boost off (none)
+ 20238   1744.266 fan: telemetry boost 4 times, 401955 ms
+ 20239   1864.830 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 60.5 C busy 0.0% avg 0.2% want 1000 cap 2000 max 2000 throttle idle, raises 36 lowers 66 thermal 0 warm
+ 20240   1864.830 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 10 exits 9 refusals 0, 1495141 ms at the point
+ 20241   1864.830 dpm: telemetry idle leave at 150 permille, exits 9 by a busy tick, 0 by the window
+ 20242   1864.830 hwmon: telemetry fan2 1294 rpm (1/5 turn) duty 749 permille, mode 0xE0 eng 0x60
+ 20243   1864.830 hwmon: telemetry apu 60.0 C, duty read-back unproven
+ 20244   1864.830 hwmon: telemetry 1841 samples 0 errors 0 retries 0 refusals
+ 20245   1864.830 smu metrics: telemetry 36.7 W avg 36.4 W, gfx 10.1 W soc 0.9 W
+ 20246   1864.830 smu metrics: telemetry gfx 824 mV 500 MHz 56.7 C soc 806 mV 57.7 C thr 0
+ 20247   1864.830 fan: telemetry curve curve/standard
+ 20248   1864.830 fan: telemetry target 75% applied 75% raw 191 rb 191, 1294 rpm
+ 20249   1864.830 fan: telemetry 1 takeovers 0 handbacks 45 writes
+ 20250   1864.830 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 20251   1864.830 fan: telemetry boost off (none)
+ 20252   1864.830 fan: telemetry boost 4 times, 401955 ms
+ 20253   1985.420 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 60.5 C busy 0.0% avg 0.2% want 1000 cap 2000 max 2000 throttle idle, raises 36 lowers 66 thermal 0 warm
+ 20254   1985.420 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 10 exits 9 refusals 0, 1613342 ms at the point
+ 20255   1985.420 dpm: telemetry idle leave at 150 permille, exits 9 by a busy tick, 0 by the window
+ 20256   1985.420 hwmon: telemetry fan2 1337 rpm (1/5 turn) duty 749 permille, mode 0xE0 eng 0x60
+ 20257   1985.420 hwmon: telemetry apu 60.0 C, duty read-back unproven
+ 20258   1985.420 hwmon: telemetry 1960 samples 0 errors 0 retries 0 refusals
+ 20259   1985.420 smu metrics: telemetry 36.6 W avg 36.2 W, gfx 10.1 W soc 0.8 W
+ 20260   1985.420 smu metrics: telemetry gfx 824 mV 500 MHz 56.2 C soc 806 mV 58.0 C thr 0
+ 20261   1985.420 fan: telemetry curve curve/standard
+ 20262   1985.420 fan: telemetry target 75% applied 75% raw 191 rb 191, 1337 rpm
+ 20263   1985.420 fan: telemetry 1 takeovers 0 handbacks 45 writes
+ 20264   1985.420 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 20265   1985.420 fan: telemetry boost off (none)
+ 20266   1985.420 fan: telemetry boost 4 times, 401955 ms
+ 20267   2106.094 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 60.5 C busy 0.0% avg 0.2% want 1000 cap 2000 max 2000 throttle idle, raises 36 lowers 66 thermal 0 warm
+ 20268   2106.094 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 10 exits 9 refusals 0, 1731599 ms at the point
+ 20269   2106.094 dpm: telemetry idle leave at 150 permille, exits 9 by a busy tick, 0 by the window
+ 20270   2106.094 hwmon: telemetry fan2 1337 rpm (1/5 turn) duty 749 permille, mode 0xE0 eng 0x60
+ 20271   2106.094 hwmon: telemetry apu 60.0 C, duty read-back unproven
+ 20272   2106.094 hwmon: telemetry 2080 samples 0 errors 0 retries 0 refusals
+ 20273   2106.094 smu metrics: telemetry 37.2 W avg 36.6 W, gfx 10.1 W soc 1.4 W
+ 20274   2106.094 smu metrics: telemetry gfx 824 mV 500 MHz 56.2 C soc 806 mV 58.0 C thr 0
+ 20275   2106.094 fan: telemetry curve curve/standard
+ 20276   2106.094 fan: telemetry target 75% applied 75% raw 191 rb 191, 1337 rpm
+ 20277   2106.094 fan: telemetry 1 takeovers 0 handbacks 45 writes
+ 20278   2106.094 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 20279   2106.094 fan: telemetry boost off (none)
+ 20280   2106.094 fan: telemetry boost 4 times, 401955 ms
+ 20281   2226.740 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 60.5 C busy 0.0% avg 0.2% want 1000 cap 2000 max 2000 throttle idle, raises 36 lowers 66 thermal 0 warm
+ 20282   2226.740 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 10 exits 9 refusals 0, 1849817 ms at the point
+ 20283   2226.740 dpm: telemetry idle leave at 150 permille, exits 9 by a busy tick, 0 by the window
+ 20284   2226.740 hwmon: telemetry fan2 1336 rpm (1/5 turn) duty 749 permille, mode 0xE0 eng 0x60
+ 20285   2226.740 hwmon: telemetry apu 60.0 C, duty read-back unproven
+ 20286   2226.740 hwmon: telemetry 2199 samples 0 errors 0 retries 0 refusals
+ 20287   2226.740 smu metrics: telemetry 36.4 W avg 36.2 W, gfx 10.1 W soc 0.7 W
+ 20288   2226.740 smu metrics: telemetry gfx 824 mV 500 MHz 56.5 C soc 806 mV 58.2 C thr 0
+ 20289   2226.740 fan: telemetry curve curve/standard
+ 20290   2226.740 fan: telemetry target 75% applied 75% raw 191 rb 191, 1336 rpm
+ 20291   2226.740 fan: telemetry 1 takeovers 0 handbacks 45 writes
+ 20292   2226.740 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 20293   2226.740 fan: telemetry boost off (none)
+ 20294   2226.740 fan: telemetry boost 4 times, 401955 ms
+ 20295   2337.599 fan: load boost on (rise): full speed at guard 65.5 C, duty was 100%
+ 20296   2347.175 dpm: telemetry dpm 500 MHz/820 mV (SMU 500 MHz VID 116) 64.1 C busy 0.0% avg 0.2% want 1000 cap 2000 max 2000 throttle idle, raises 36 lowers 66 thermal 0 warm
+ 20297   2347.175 dpm: telemetry idle 500 MHz (now), hold 3000 ms under 2 permille, entries 10 exits 9 refusals 0, 1968172 ms at the point
+ 20298   2347.175 dpm: telemetry idle leave at 150 permille, exits 9 by a busy tick, 0 by the window
+ 20299   2347.175 hwmon: telemetry fan2 1706 rpm (1/5 turn) duty 1000 permille, mode 0xE0 eng 0x60
+ 20300   2347.175 hwmon: telemetry apu 64.0 C, duty read-back unproven
+ 20301   2347.175 hwmon: telemetry 2318 samples 0 errors 0 retries 0 refusals
+ 20302   2347.175 smu metrics: telemetry 36.5 W avg 36.2 W, gfx 10.1 W soc 0.7 W
+ 20303   2347.175 smu metrics: telemetry gfx 824 mV 500 MHz 56.5 C soc 806 mV 58.2 C thr 0
+ 20304   2347.175 fan: telemetry curve curve/standard
+ 20305   2347.175 fan: telemetry target 100% applied 100% raw 255 rb 255, 1706 rpm
+ 20306   2347.175 fan: telemetry 1 takeovers 0 handbacks 48 writes
+ 20307   2347.175 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 20308   2347.175 fan: telemetry boost on (rise)
+ 20309   2347.175 fan: telemetry boost 5 times, 411058 ms
+ 20310   2362.406 gfx: paging submit, seq 193308 at 0x400808: 2 submits in 700312 ms, 119898 of 119954 with no line
+ 20311   2362.470 dpm: 500 -> 1000 MHz/820 mV VID 116, 1 settle reads (load, busy 0 permille, 62.3 C, throttle none)
+ 20312   2362.609 dpm: 1000 -> 1300 MHz/880 mV VID 107 staged, 1 settle reads (load, busy 1000 permille, 62.3 C, throttle none)
+ 20313   2362.656 dpm: 1300 -> 1600 MHz/935 mV VID 98 staged, 1 settle reads (load, busy 956 permille, 62.3 C, throttle none)
+ 20314   2362.704 dpm: 1600 -> 2000 MHz/1000 mV VID 88 staged, 1 settle reads (load, busy 978 permille, 62.3 C, throttle none)
+ 20315   2364.869 dpm: 2000 -> 1900 MHz/984 mV VID 90, 0 settle reads (load, busy 0 permille, 65.2 C, throttle none)
+ 20316   2364.977 dpm: 1900 -> 2000 MHz/1000 mV VID 88 staged, 1 settle reads (load, busy 1000 permille, 65.2 C, throttle none)
+ 20317   2366.931 gfx: paging submit, seq 196575 at 0x410DE8: 2911 submits in 4525 ms, 122808 of 122865 with no line
+ 20318   2367.253 dpm: 2000 -> 1900 MHz/984 mV VID 90, 0 settle reads (load, busy 0 permille, 67.2 C, throttle none)
+ 20319   2367.253 dpm: telemetry dpm 1900 MHz/984 mV (SMU 1900 MHz VID 90) 67.2 C busy 0.0% avg 8.9% want 1900 cap 2000 max 2000 throttle none, raises 41 lowers 68 thermal 0 war
+ 20320   2367.253 dpm: telemetry idle 500 MHz, hold 3000 ms under 2 permille, entries 10 exits 10 refusals 0, 1983126 ms at the point
+ 20321   2367.253 dpm: telemetry idle leave at 150 permille, exits 10 by a busy tick, 0 by the window
+ 20322   2367.253 hwmon: telemetry fan2 1714 rpm (1/5 turn) duty 1000 permille, mode 0xE0 eng 0x60
+ 20323   2367.253 hwmon: telemetry apu 67.0 C, duty read-back unproven
+ 20324   2367.253 hwmon: telemetry 2338 samples 0 errors 0 retries 0 refusals
+ 20325   2367.253 smu metrics: telemetry 100.5 W avg 103.2 W, gfx 58.7 W soc 0.5 W
+ 20326   2367.253 smu metrics: telemetry gfx 987 mV 2000 MHz 68.5 C soc 806 mV 63.2 C thr 0
+ 20327   2367.253 fan: telemetry curve curve/standard
+ 20328   2367.253 fan: telemetry target 100% applied 100% raw 255 rb 255, 1714 rpm
+ 20329   2367.253 fan: telemetry 1 takeovers 0 handbacks 48 writes
+ 20330   2367.253 fan: telemetry 0 failures 0 emergencies 0 doubts
+ 20331   2367.253 fan: telemetry boost on (busy+power+rise)
+ 20332   2367.253 fan: telemetry boost 5 times, 431288 ms
+ 20333   2367.474 dpm: 1900 -> 1800 MHz/968 mV VID 93, 0 settle reads (load, busy 0 permille, 67.2 C, throttle none)
+ 20334   2367.692 dpm: 1800 -> 1700 MHz/952 mV VID 95, 0 settle reads (load, busy 0 permille, 67.2 C, throttle none)
+             1024 lines printed
+             escapes: 17 without adapter synchronization, 0 with HardwareAccess

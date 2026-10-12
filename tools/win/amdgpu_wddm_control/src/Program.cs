@@ -4,7 +4,7 @@
 //   amdgpu_wddm_control.exe --smoke <file>           no window: build the pages once, write what they show, exit
 //   amdgpu_wddm_control.exe --smoke-report <zip>    no window: a bug report without dxdiag, the capability tools and
 //                                                    the event logs, written to <zip> (the build's check of that path)
-//   amdgpu_wddm_control.exe --smoke-render <dir> <scale> [--lang xx] [--text-scale f] [--nagi] [--switch-to xx]
+//   amdgpu_wddm_control.exe --smoke-render <dir> <scale> [--lang xx] [--text-scale f] [--no-nagi] [--switch-to xx]
 //                                [--fixture <snapshot.json>]
 //                                                    no window: every page drawn to <dir>\<page>.png as a screen at
 //                                                    <scale> x 96 DPI shows it; layout.txt lists what the render gates
@@ -13,6 +13,10 @@
 //   amdgpu_wddm_control.exe --smoke-recovery <file>  no window: the recovery view built; fails when the DLL got loaded
 //   amdgpu_wddm_control.exe --smoke-perf <file>      no window: start time, timer and frame ticks of a hidden window,
 //                                                    memory (G-PERF)
+//   amdgpu_wddm_control.exe --smoke-scroll <file> --fixture <snapshot.json>
+//                                                    no window: a rebuilt page keeps the place the person scrolled
+//                                                    to, and the buttons of a benchmark run stay where they are in
+//                                                    every state of the run; findings go to <file>
 //   amdgpu_wddm_control.exe --action <name> [--ceiling MHz] --dry-run [--snapshot <json>] [--out <file>]
 //                                                    no window: the Recovery states and the plan of one action, nothing
 //                                                    written (RecoveryActions.cs)
@@ -49,9 +53,12 @@ namespace AmdgpuWddmControl
         [STAThread]
         static int Main(string[] args)
         {
+            if (args.Length == 1 && args[0] == "--startup-diagnostics-worker") return StartupDiagnostics.Worker();
             if (args.Length == 1 && args[0] == "--version") { Console.WriteLine(ProductName + " " + VersionText); return 0; }
+            if (args.Length > 0 && args[0] == "--bc250-board-memory-action") return UmaActions.Run(args);
             if (args.Length > 0 && args[0] == "--status") return Status(args);
             if (args.Length > 0 && args[0] == "--action") return Dispatch(args);
+            if (args.Length > 0 && args[0] == "--system-tuning") return Dispatch(args);
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             if (args.Length == 2 && args[0] == "--smoke") return Smoke(args[1]);
@@ -59,6 +66,8 @@ namespace AmdgpuWddmControl
             if (args.Length >= 3 && args[0] == "--smoke-render") return SmokeRender(args);
             if (args.Length == 2 && args[0] == "--smoke-recovery") return SmokeRecovery(args[1]);
             if (args.Length == 2 && args[0] == "--smoke-perf") return SmokePerf(args[1]);
+            if ((args.Length == 4 || args.Length == 6 && args[4] == "--board-fixture") && args[0] == "--smoke-scroll" && args[2] == "--fixture")
+                return SmokeScroll(args[1], args[3], args.Length == 6 ? args[5] : null);
             if (args.Length == 1 && args[0] == "--recovery")
             {
                 Kmd.Blocked = true;
@@ -138,6 +147,30 @@ namespace AmdgpuWddmControl
             }
         }
 
+        // The place a rebuild of the same page keeps (F1 of the b23 lab round), without a window. Findings go to
+        // <file>; an empty file is a pass.
+        static int SmokeScroll(string path, string fixture, string boardFixture = null)
+        {
+            try
+            {
+                if (boardFixture != null) BoardCapabilities.Replace(BoardCapabilities.Parse(File.ReadAllBytes(boardFixture)));
+                string findings;
+                using (var form = new MainForm(true, new AppPrefs(new MemoryPrefStore())))
+                {
+                    form.CreateControlTree();
+                    form.UseFixture(new System.Web.Script.Serialization.JavaScriptSerializer().Deserialize<RecoverySnapshot>(File.ReadAllText(fixture)));
+                    findings = form.ScrollKeeping() + form.RunStateLayout();
+                }
+                File.WriteAllText(path, findings.Length == 0 ? "no findings" + Environment.NewLine : findings);
+                return findings.Length == 0 ? 0 : 1;
+            }
+            catch (Exception e)
+            {
+                try { File.WriteAllText(path, "smoke scroll failed: " + e); } catch (Exception) { }
+                return 1;
+            }
+        }
+
         // The window's pages built and refreshed once without being shown; their text goes to a file. For a build
         // gate on a PC with or without a BC-250. Nothing is written to the registry.
         static int Smoke(string path)
@@ -168,18 +201,23 @@ namespace AmdgpuWddmControl
                 Directory.CreateDirectory(dir);
                 var inv = System.Globalization.CultureInfo.InvariantCulture;
                 float scale = float.Parse(args[2], inv), textScale = 1;
-                string lang = "en", fixture = null;
+                string lang = "en", fixture = null, boardFixture = null;
                 var o = new MainForm.RenderOptions { Directory = dir };
                 for (int i = 3; i < args.Length; i++)
                 {
                     if (args[i] == "--lang" && i + 1 < args.Length) lang = args[++i];
                     else if (args[i] == "--text-scale" && i + 1 < args.Length) textScale = float.Parse(args[++i], inv);
-                    else if (args[i] == "--nagi") o.Nagi = true;
+                    else if (args[i] == "--nagi") o.Nagi = true;                  // the default; kept for older callers
+                    else if (args[i] == "--no-nagi") o.Nagi = false;
                     else if (args[i] == "--switch-to" && i + 1 < args.Length) o.SwitchTo = args[++i];
                     else if (args[i] == "--fixture" && i + 1 < args.Length) fixture = args[++i];
+                    else if (args[i] == "--board-fixture" && i + 1 < args.Length) boardFixture = args[++i];
                     else throw new ArgumentException("unknown option " + args[i]);
                 }
                 if (Array.IndexOf(Strings.Languages, lang) < 0) throw new ArgumentException("unknown language " + lang);
+                if (boardFixture != null && fixture == null) throw new ArgumentException("a board fixture requires a render snapshot");
+                // Explicit render-only fixture. Production admission never reads a file or environment override.
+                if (boardFixture != null) BoardCapabilities.Replace(BoardCapabilities.Parse(File.ReadAllBytes(boardFixture)));
                 var prefs = new AppPrefs(new MemoryPrefStore()) { Language = lang, ShowNagi = o.Nagi };
                 Strings.Language = lang;
                 Theme.Init(scale, textScale);
@@ -206,7 +244,7 @@ namespace AmdgpuWddmControl
             try
             {
                 var report = new BugReport(Redactor.ForThisPc());
-                report.Collect(false, false, false, _ => { });
+                report.Collect(false, false, false, _ => { }, false);
                 report.Write(path);
                 return 0;
             }
@@ -234,7 +272,9 @@ namespace AmdgpuWddmControl
 
         static int Dispatch(string[] args)
         {
-            // The only elevated verb. Game settings go through --action game-profile (planned, backed up, undoable); the
+            if (args.Length > 0 && args[0] == "--bc250-board-memory-action") return UmaActions.Run(args);
+            if (args.Length > 0 && args[0] == "--system-tuning") return SystemTuningProcess.Dispatch(args);
+            // Existing recovery verbs. Game settings go through --action game-profile (planned, backed up, undoable); the
             // old unplanned --apply-profiles verb is gone.
             return args.Length > 0 && args[0] == "--action" ? RecoveryRunner.Run(args) : RecoveryRunner.Usage;
         }
@@ -262,6 +302,12 @@ namespace AmdgpuWddmControl
             {
                 using (var p = Process.Start(psi))
                 {
+                    if (verb.Length > 0 && verb[0] == "--system-tuning")
+                    {
+                        // Its backend has its own 120 s deadline. A delayed child does not freeze the window.
+                        if (!p.WaitForExit(150000)) return SystemTuningProcess.Timeout;
+                        return p.ExitCode;
+                    }
                     p.WaitForExit();
                     return p.ExitCode;
                 }

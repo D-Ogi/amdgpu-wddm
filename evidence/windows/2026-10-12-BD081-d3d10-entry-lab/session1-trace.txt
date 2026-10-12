@@ -1,0 +1,62 @@
+done True after 1 s
+task last result 0
+=== x64
+d3d10probe pid 3392, x64 build
+entry trace: 6 GetProcAddress imports of the runtime DLLs replaced
+entry: the runtime asks C:\Program Files\amdgpu-wddm\desktop\bc250d3d_router.dll for OpenAdapter10_2: exported
+entry: OpenAdapter10_2 interface 000B0011 version 00060000 -> 0x00000000
+entry: CalcPrivateDeviceSize interface 000B0023 version 00050000
+entry: CreateDevice interface 000B0023 (11.35) version 00050000 pipeline level 12_1 -> 0x00000000
+D3D10CreateDeviceAndSwapChain(hardware) -> 0x00000000
+adapter "BC-250 GPU (amdgpu-wddm)" vendor 0x1002 device 0x13FE luid 00000000:00008349 dedicated 8152 MiB shared 3956 MiB
+UMD version 0.0.0.0
+shaders and input layout -> 0x00000000
+resources -> 0x00000000
+Map -> 0x00000000
+pixels: triangle 32640 (exact rule 32640), clear 32896, other 0, wrong samples 0
+swap chain buffer -> 0x00000000
+present: 60 frames, 60 presented, 0 occluded, 0 failed (first 0x00000000), window hidden
+module C:\BC250\tmp\bd081\x64\d3d10probe.exe
+module C:\Windows\SYSTEM32\d3d10.dll
+module C:\Windows\SYSTEM32\d3d10core.dll
+module C:\Windows\SYSTEM32\d3d11.dll
+module C:\Windows\SYSTEM32\dxgi.dll
+module C:\Windows\SYSTEM32\d3d10_1.dll
+module C:\Windows\SYSTEM32\d3d10_1core.dll
+module C:\Program Files\amdgpu-wddm\desktop\bc250d3d_router.dll
+module C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+module C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_dxvk.dll
+module C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_radv.dll
+served by: application GPU UMD (amdgpu_wddm_d3d11.dll)
+verdict PASS
+exit 0 
+=== x86
+d3d10probe pid 10780, x86 build
+entry trace: 6 GetProcAddress imports of the runtime DLLs replaced
+entry: the runtime asks C:\Program Files\amdgpu-wddm\wow64\desktop\bc250d3d_router.dll for OpenAdapter10_2: exported
+entry: OpenAdapter10_2 interface 000B0011 version 00060000 -> 0x00000000
+entry: CalcPrivateDeviceSize interface 000B0023 version 00050000
+entry: CreateDevice interface 000B0023 (11.35) version 00050000 pipeline level 12_1 -> 0x00000000
+D3D10CreateDeviceAndSwapChain(hardware) -> 0x00000000
+adapter "BC-250 GPU (amdgpu-wddm)" vendor 0x1002 device 0x13FE luid 00000000:00008349 dedicated 3072 MiB shared 1023 MiB
+UMD version 0.0.0.0
+shaders and input layout -> 0x00000000
+resources -> 0x00000000
+Map -> 0x00000000
+pixels: triangle 32640 (exact rule 32640), clear 32896, other 0, wrong samples 0
+swap chain buffer -> 0x00000000
+present: 60 frames, 60 presented, 0 occluded, 0 failed (first 0x00000000), window hidden
+module C:\BC250\tmp\bd081\x86\d3d10probe.exe
+module C:\Windows\SYSTEM32\d3d10.dll
+module C:\Windows\SYSTEM32\d3d10core.dll
+module C:\Windows\SYSTEM32\d3d11.dll
+module C:\Windows\SYSTEM32\dxgi.dll
+module C:\Windows\SYSTEM32\d3d10_1.dll
+module C:\Windows\SYSTEM32\d3d10_1core.dll
+module C:\Program Files\amdgpu-wddm\wow64\desktop\bc250d3d_router.dll
+module C:\Program Files\amdgpu-wddm\wow64\d3d11\amdgpu_wddm_d3d11.dll
+module C:\Program Files\amdgpu-wddm\wow64\d3d11\amdgpu_wddm_dxvk.dll
+module C:\Program Files\amdgpu-wddm\wow64\d3d11\amdgpu_wddm_radv.dll
+served by: application GPU UMD (amdgpu_wddm_d3d11.dll)
+verdict PASS
+exit 0 

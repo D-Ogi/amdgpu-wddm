@@ -27,6 +27,8 @@
 //   9. Diagnostics and priority: a worker at its owner's level, lifted one level above a drain that waits for it and
 //      back after; the long wait counted by kind with a line of its own, the held entry as the worker's stuck
 //      stretch, the summary at close 64 and at teardown, all through the policy's log hook.
+//  10. L68 pfnBarrier, with the policy off: the flat DDI array grouped by runs of one type, the values the
+//      translation produces, a call with more runs than one engine Barrier takes, and the refusals.
 #include "internal.h"
 #include "replay.h"
 #include <atomic>
@@ -166,9 +168,11 @@ private:
     bool text_;
 };
 
-class FakeList final : public Child<ID3D12GraphicsCommandList5> {
+class FakeList final : public Child<ID3D12GraphicsCommandList7> {
 public:
     static constexpr UINT kLatchStencil = 0xBAD;            // OMSetStencilRef(kLatchStencil) makes the next Close fail
+    static constexpr size_t kBarrierCalls = 8;              // Barrier calls whose group count is kept
+    static constexpr size_t kBarrierGroups = 16;            // groups of the last Barrier call that are kept
     D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT;
     uint32_t id = 0;
     std::string log;
@@ -183,6 +187,17 @@ public:
     std::atomic<uint64_t> gate_timeouts{0};
     std::atomic<int> inside{0};
     std::atomic<uint64_t> calls_at_release{UINT64_MAX};
+    // What the Barrier calls of ID3D12GraphicsCommandList7 carried (L68), decoded for the checks that read values
+    // rather than the log: how many calls, the group count of each, the groups of the last call, and the last
+    // barrier of each type.
+    std::atomic<uint64_t> barrier_calls{0};
+    UINT32 barrier_call_groups[kBarrierCalls]{};
+    UINT32 barrier_types[kBarrierGroups]{}, barrier_counts[kBarrierGroups]{};
+    unsigned barrier_layouts[2]{}, barrier_flags = 0;
+    const void* barrier_texture = nullptr;
+    unsigned barrier_global_sync = 0;
+    const void* barrier_buffer = nullptr;
+    UINT64 barrier_offset = 0, barrier_size = 0;
 
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** out) override {
         if (!out) return E_POINTER;
@@ -190,9 +205,10 @@ public:
             riid == __uuidof(ID3D12CommandList) || riid == __uuidof(ID3D12GraphicsCommandList) ||
             riid == __uuidof(ID3D12GraphicsCommandList1) || riid == __uuidof(ID3D12GraphicsCommandList2) ||
             riid == __uuidof(ID3D12GraphicsCommandList3) || riid == __uuidof(ID3D12GraphicsCommandList4) ||
-            riid == __uuidof(ID3D12GraphicsCommandList5)) {
+            riid == __uuidof(ID3D12GraphicsCommandList5) || riid == __uuidof(ID3D12GraphicsCommandList6) ||
+            riid == __uuidof(ID3D12GraphicsCommandList7)) {
             AddRef();
-            *out = static_cast<ID3D12GraphicsCommandList5*>(this);
+            *out = static_cast<ID3D12GraphicsCommandList7*>(this);
             return S_OK;
         }
         *out = nullptr;
@@ -464,20 +480,55 @@ public:
     }
     void STDMETHODCALLTYPE SetViewInstanceMask(UINT mask) override { Call(this, "SetViewInstanceMask").u(mask); }
     // ID3D12GraphicsCommandList2, 3
-    void STDMETHODCALLTYPE WriteBufferImmediate(UINT, const D3D12_WRITEBUFFERIMMEDIATE_PARAMETER*,
-                                                const D3D12_WRITEBUFFERIMMEDIATE_MODE*) override {
-        odd("WriteBufferImmediate");
+    void STDMETHODCALLTYPE WriteBufferImmediate(UINT count, const D3D12_WRITEBUFFERIMMEDIATE_PARAMETER* params,
+                                                const D3D12_WRITEBUFFERIMMEDIATE_MODE* modes) override {
+        Call(this, "WriteBufferImmediate").u(count).raw(params, size_t{count} * sizeof(*params))
+            .raw(modes, size_t{count} * sizeof(*modes));
     }
     void STDMETHODCALLTYPE SetProtectedResourceSession(ID3D12ProtectedResourceSession*) override {
         odd("SetProtectedResourceSession");
     }
-    // ID3D12GraphicsCommandList4
-    void STDMETHODCALLTYPE BeginRenderPass(UINT, const D3D12_RENDER_PASS_RENDER_TARGET_DESC*,
-                                           const D3D12_RENDER_PASS_DEPTH_STENCIL_DESC*,
-                                           D3D12_RENDER_PASS_FLAGS) override {
-        odd("BeginRenderPass");
+    // One beginning or one ending access, by content: its type, its parameters, and a resolve's two resources,
+    // its subresource count and the parameters it points at. A resolve's pSubresourceParameters is read here, so
+    // an entry that kept the caller's pointer instead of a copy shows up as the garbled bytes.
+    static void beginning(Call& c, const D3D12_RENDER_PASS_BEGINNING_ACCESS& a) {
+        c.u(a.Type);
+        if (a.Type == D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR) c.raw(&a.Clear, sizeof(a.Clear));
+        else c.raw(&a.PreserveLocal, sizeof(a.PreserveLocal));
     }
-    void STDMETHODCALLTYPE EndRenderPass() override { odd("EndRenderPass"); }
+    static void ending(Call& c, const D3D12_RENDER_PASS_ENDING_ACCESS& a) {
+        c.u(a.Type);
+        if (a.Type != D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_RESOLVE) {
+            c.raw(&a.PreserveLocal, sizeof(a.PreserveLocal));
+            return;
+        }
+        c.obj(a.Resolve.pSrcResource).obj(a.Resolve.pDstResource).u(a.Resolve.SubresourceCount)
+            .u(a.Resolve.Format).u(a.Resolve.ResolveMode).u(a.Resolve.PreserveResolveSource != FALSE)
+            .raw(a.Resolve.pSubresourceParameters,
+                 size_t{a.Resolve.SubresourceCount} * sizeof(*a.Resolve.pSubresourceParameters));
+    }
+    // ID3D12GraphicsCommandList4
+    void STDMETHODCALLTYPE BeginRenderPass(UINT count, const D3D12_RENDER_PASS_RENDER_TARGET_DESC* targets,
+                                           const D3D12_RENDER_PASS_DEPTH_STENCIL_DESC* depth_stencil,
+                                           D3D12_RENDER_PASS_FLAGS flags) override {
+        Call c(this, "BeginRenderPass");
+        c.u(count).u(flags);
+        for (UINT i = 0; i < (targets ? count : 0u); ++i) {
+            c.cpu(targets[i].cpuDescriptor, 1);
+            beginning(c, targets[i].BeginningAccess);
+            ending(c, targets[i].EndingAccess);
+        }
+        if (!depth_stencil) {
+            c.s("no depth stencil");
+            return;
+        }
+        c.cpu(depth_stencil->cpuDescriptor, 1);
+        beginning(c, depth_stencil->DepthBeginningAccess);
+        beginning(c, depth_stencil->StencilBeginningAccess);
+        ending(c, depth_stencil->DepthEndingAccess);
+        ending(c, depth_stencil->StencilEndingAccess);
+    }
+    void STDMETHODCALLTYPE EndRenderPass() override { Call(this, "EndRenderPass"); }
     void STDMETHODCALLTYPE InitializeMetaCommand(ID3D12MetaCommand*, const void*, SIZE_T) override {
         odd("InitializeMetaCommand");
     }
@@ -531,6 +582,53 @@ public:
     }
     void STDMETHODCALLTYPE RSSetShadingRateImage(ID3D12Resource* image) override {
         Call(this, "RSSetShadingRateImage").obj(image);
+    }
+    // ID3D12GraphicsCommandList6
+    void STDMETHODCALLTYPE DispatchMesh(UINT x, UINT y, UINT z) override {
+        Call(this, "DispatchMesh").u(x).u(y).u(z);
+    }
+    // ID3D12GraphicsCommandList7. Every group's own array is read here, so an entry that kept the caller's
+    // pointer instead of a copy shows up as garbled values; the resources go through obj(), which also checks
+    // that they are alive.
+    void STDMETHODCALLTYPE Barrier(UINT32 count, const D3D12_BARRIER_GROUP* groups) override {
+        Call c(this, "Barrier");
+        c.u(count);
+        const uint64_t call = barrier_calls.fetch_add(1);
+        if (call < kBarrierCalls) barrier_call_groups[call] = groups ? count : 0u;
+        for (UINT32 i = 0; i < (groups ? count : 0u); ++i) {
+            const D3D12_BARRIER_GROUP& g = groups[i];
+            c.u(g.Type).u(g.NumBarriers);
+            if (i < kBarrierGroups) {
+                barrier_types[i] = static_cast<UINT32>(g.Type);
+                barrier_counts[i] = g.NumBarriers;
+            }
+            for (UINT32 k = 0; k < g.NumBarriers; ++k) {
+                if (g.Type == D3D12_BARRIER_TYPE_GLOBAL) {
+                    const D3D12_GLOBAL_BARRIER& b = g.pGlobalBarriers[k];
+                    c.x(static_cast<unsigned>(b.SyncBefore)).x(static_cast<unsigned>(b.SyncAfter))
+                        .x(static_cast<unsigned>(b.AccessBefore)).x(static_cast<unsigned>(b.AccessAfter));
+                    barrier_global_sync = static_cast<unsigned>(b.SyncBefore);
+                } else if (g.Type == D3D12_BARRIER_TYPE_TEXTURE) {
+                    const D3D12_TEXTURE_BARRIER& b = g.pTextureBarriers[k];
+                    c.x(static_cast<unsigned>(b.SyncBefore)).x(static_cast<unsigned>(b.SyncAfter))
+                        .x(static_cast<unsigned>(b.AccessBefore)).x(static_cast<unsigned>(b.AccessAfter))
+                        .x(static_cast<unsigned>(b.LayoutBefore)).x(static_cast<unsigned>(b.LayoutAfter)).obj(b.pResource)
+                        .raw(&b.Subresources, sizeof(b.Subresources)).x(static_cast<unsigned>(b.Flags));
+                    barrier_layouts[0] = static_cast<unsigned>(b.LayoutBefore);
+                    barrier_layouts[1] = static_cast<unsigned>(b.LayoutAfter);
+                    barrier_flags = static_cast<unsigned>(b.Flags);
+                    barrier_texture = b.pResource;
+                } else {
+                    const D3D12_BUFFER_BARRIER& b = g.pBufferBarriers[k];
+                    c.x(static_cast<unsigned>(b.SyncBefore)).x(static_cast<unsigned>(b.SyncAfter))
+                        .x(static_cast<unsigned>(b.AccessBefore)).x(static_cast<unsigned>(b.AccessAfter))
+                        .obj(b.pResource).u(b.Offset).u(b.Size);
+                    barrier_buffer = b.pResource;
+                    barrier_offset = b.Offset;
+                    barrier_size = b.Size;
+                }
+            }
+        }
     }
 };
 
@@ -879,6 +977,7 @@ void APIENTRY replay_log(void* shell, const char* line) {
 
 D3D12DDI_DEVICE_FUNCS_CORE_0088 g_core{};
 D3D12DDI_COMMAND_LIST_FUNCS_3D_0092 g_list{};             // the graphics table
+D3D12DDI_RENDER_PASS_FUNCS_0053 g_pass{};                 // the render pass table (fill_render_pass)
 DeviceContext* APIENTRY resolve_device(D3D12DDI_HDEVICE device) {
     return static_cast<DeviceContext*>(device.pDrvPrivate);
 }
@@ -1043,11 +1142,17 @@ struct Data {
     D3D12DDI_BOX box;
     D3D12DDIARG_PHYSICAL_SUBRESOURCE_PITCHED_LAYOUT footprint;
     D3D12DDIARG_RESOURCE_BARRIER_0022 barriers[3];
+    D3D12DDIARG_BARRIER_0088 enhanced[6];
     D3D12DDI_RAYTRACING_GEOMETRY_DESC_0054 geometries[2];
     const D3D12DDI_RAYTRACING_GEOMETRY_DESC_0054* geometry_pointers[2];
     D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC_0054 postbuild[2];
     D3D12DDI_GPU_VIRTUAL_ADDRESS addresses[3];
     D3D12_DISPATCH_RAYS_DESC rays;
+    D3D12DDI_WRITEBUFFERIMMEDIATE_PARAMETER_0032 immediates[3];
+    D3D12DDI_WRITEBUFFERIMMEDIATE_MODE_0032 immediate_modes[3];
+    D3D12DDIARG_RENDER_PASS_RENDER_TARGET_DESC_0053 pass_targets[2];
+    D3D12DDIARG_RENDER_PASS_DEPTH_STENCIL_DESC_0053 pass_depth;
+    D3D12DDI_RENDER_PASS_ENDING_ACCESS_RESOLVE_SUBRESOURCE_PARAMETERS_0053 pass_resolves[4];
 };
 // prepare(n) fills the block with bytes that depend on n, then makes valid what the slots validate; garble()
 // overwrites all of it once the slot has returned.
@@ -1078,12 +1183,77 @@ struct Sources {
         d.barriers[2].Type = D3D12DDI_RESOURCE_BARRIER_TYPE_ALIASING;
         d.barriers[2].Flags = D3D12DDI_RESOURCE_BARRIER_FLAG_NONE;
         d.barriers[2].Ranged.hResource.pDrvPrivate = &o.texture2;
+        // L68: texture, texture, global, buffer, texture, ranged. A ranged barrier becomes a global one, so the
+        // six barriers fall into five runs and the third texture barrier starts the second texture run, at index
+        // 2 of the texture array. Only what the slot validates is set here - the type, a texture's two layouts
+        // and a resource handle - so every other field reaches the engine as the pattern bytes of this block, and
+        // a copy that was not made shows up as a difference.
+        d.enhanced[0].Type = D3D12DDI_BARRIER_TYPE_TEXTURE;
+        d.enhanced[0].TextureBarrier.LayoutBefore = D3D12DDI_BARRIER_LAYOUT_RENDER_TARGET;
+        d.enhanced[0].TextureBarrier.LayoutAfter = D3D12DDI_BARRIER_LAYOUT_SHADER_RESOURCE;
+        d.enhanced[0].TextureBarrier.hResource.pDrvPrivate = &o.texture;
+        d.enhanced[0].TextureBarrier.Flags = D3D12DDI_TEXTURE_BARRIER_FLAG_DISCARD;
+        d.enhanced[1].Type = D3D12DDI_BARRIER_TYPE_TEXTURE;
+        d.enhanced[1].TextureBarrier.LayoutBefore = D3D12DDI_BARRIER_LAYOUT_UNDEFINED;
+        // A DDI-only layout, which has no API value and is mapped (resources.cpp, api_barrier_layout).
+        d.enhanced[1].TextureBarrier.LayoutAfter = D3D12DDI_BARRIER_LAYOUT_LEGACY_PIXEL_SHADER_RESOURCE;
+        d.enhanced[1].TextureBarrier.hResource.pDrvPrivate = &o.texture2;
+        d.enhanced[1].TextureBarrier.Flags = D3D12DDI_TEXTURE_BARRIER_FLAG_NONE;
+        d.enhanced[2].Type = D3D12DDI_BARRIER_TYPE_GLOBAL;
+        d.enhanced[3].Type = D3D12DDI_BARRIER_TYPE_BUFFER;
+        d.enhanced[3].BufferBarrier.hResource.pDrvPrivate = &o.buffer;
+        d.enhanced[4].Type = D3D12DDI_BARRIER_TYPE_TEXTURE;
+        d.enhanced[4].TextureBarrier.LayoutBefore = D3D12DDI_BARRIER_LAYOUT_LEGACY_COPY_DEST;
+        d.enhanced[4].TextureBarrier.LayoutAfter = D3D12DDI_BARRIER_LAYOUT_COMPUTE_QUEUE_SHADER_RESOURCE;
+        d.enhanced[4].TextureBarrier.hResource.pDrvPrivate = &o.texture;
+        d.enhanced[4].TextureBarrier.Flags = D3D12DDI_TEXTURE_BARRIER_FLAG_NONE;
+        d.enhanced[5].Type = D3D12DDI_BARRIER_TYPE_RANGED;
+        d.enhanced[5].RangedBarrier.hResource.pDrvPrivate = &o.buffer2;
+        d.enhanced[5].RangedBarrier.Flags = D3D12DDI_RANGED_BARRIER_FLAG_ATOMIC_COPY;
         d.geometries[0].Type = D3D12DDI_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
         d.geometries[1].Type = D3D12DDI_RAYTRACING_GEOMETRY_TYPE_PROCEDURAL_PRIMITIVE_AABBS;
         d.geometry_pointers[0] = &d.geometries[1];
         d.geometry_pointers[1] = &d.geometries[0];
         d.postbuild[0].InfoType = D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_COMPACTED_SIZE;
         d.postbuild[1].InfoType = D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_CURRENT_SIZE;
+        d.immediate_modes[0] = D3D12DDI_WRITEBUFFERIMMEDIATE_MODE_DEFAULT;
+        d.immediate_modes[1] = D3D12DDI_WRITEBUFFERIMMEDIATE_MODE_MARKER_IN;
+        d.immediate_modes[2] = D3D12DDI_WRITEBUFFERIMMEDIATE_MODE_MARKER_OUT;
+        // A render pass with two render targets, one of them resolving two subresources of a texture into
+        // another, and a depth stencil whose depth ending access resolves two more. The two resolve arrays are
+        // one flat buffer in the entry, so the copy of the second one proves the offsets this slot records.
+        D3D12DDIARG_RENDER_PASS_RENDER_TARGET_DESC_0053& first = d.pass_targets[0];
+        first.cpuDescriptor = d.handles[0];
+        first.BeginningAccess.Type = D3D12DDI_RENDER_PASS_BEGINNING_ACCESS_TYPE_0053_CLEAR;
+        first.BeginningAccess.Clear.ClearValue.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        for (size_t k = 0; k < 4; ++k)
+            first.BeginningAccess.Clear.ClearValue.Color[k] = static_cast<FLOAT>(n + k);
+        first.EndingAccess.Type = D3D12DDI_RENDER_PASS_ENDING_ACCESS_TYPE_0053_RESOLVE;
+        first.EndingAccess.Resolve.hSrcResource.pDrvPrivate = &o.texture;
+        first.EndingAccess.Resolve.hDstResource.pDrvPrivate = &o.texture2;
+        first.EndingAccess.Resolve.SubresourceCount = 2;
+        first.EndingAccess.Resolve.pSubresourceParameters = &d.pass_resolves[0];
+        first.EndingAccess.Resolve.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        first.EndingAccess.Resolve.ResolveMode = D3D12DDI_RESOLVE_MODE_AVERAGE;
+        first.EndingAccess.Resolve.PreserveResolveSource = TRUE;
+        D3D12DDIARG_RENDER_PASS_RENDER_TARGET_DESC_0053& second = d.pass_targets[1];
+        second.cpuDescriptor = d.handles[1];
+        second.BeginningAccess.Type = D3D12DDI_RENDER_PASS_BEGINNING_ACCESS_TYPE_0101_PRESERVE_LOCAL_RENDER;
+        second.BeginningAccess.PreserveLocal.AdditionalWidth = n;
+        second.BeginningAccess.PreserveLocal.AdditionalHeight = n + 1;
+        second.EndingAccess.Type = D3D12DDI_RENDER_PASS_ENDING_ACCESS_TYPE_0053_PRESERVE;
+        d.pass_depth.cpuDescriptor = d.handles[7];
+        d.pass_depth.DepthBeginningAccess.Type = D3D12DDI_RENDER_PASS_BEGINNING_ACCESS_TYPE_0053_DISCARD;
+        d.pass_depth.StencilBeginningAccess.Type = D3D12DDI_RENDER_PASS_BEGINNING_ACCESS_TYPE_0053_NO_ACCESS;
+        d.pass_depth.DepthEndingAccess.Type = D3D12DDI_RENDER_PASS_ENDING_ACCESS_TYPE_0053_RESOLVE;
+        d.pass_depth.DepthEndingAccess.Resolve.hSrcResource.pDrvPrivate = &o.texture2;
+        d.pass_depth.DepthEndingAccess.Resolve.hDstResource.pDrvPrivate = &o.texture;
+        d.pass_depth.DepthEndingAccess.Resolve.SubresourceCount = 2;
+        d.pass_depth.DepthEndingAccess.Resolve.pSubresourceParameters = &d.pass_resolves[2];
+        d.pass_depth.DepthEndingAccess.Resolve.Format = DXGI_FORMAT_R32_FLOAT;
+        d.pass_depth.DepthEndingAccess.Resolve.ResolveMode = D3D12DDI_RESOLVE_MODE_MIN;
+        d.pass_depth.DepthEndingAccess.Resolve.PreserveResolveSource = FALSE;
+        d.pass_depth.StencilEndingAccess.Type = D3D12DDI_RENDER_PASS_ENDING_ACCESS_TYPE_0053_DISCARD;
     }
     void garble() { std::memset(&d, 0xA5, sizeof(d)); }
 };
@@ -1103,9 +1273,10 @@ constexpr const char* kMethods[] = {
     "IASetVertexBuffers", "SOSetTargets", "OMSetRenderTargets", "OMSetDepthBounds", "SetSamplePositions",
     "ResolveSubresourceRegion", "SetViewInstanceMask", "BuildRaytracingAccelerationStructure",
     "EmitRaytracingAccelerationStructurePostbuildInfo", "CopyRaytracingAccelerationStructure", "SetPipelineState1",
-    "DispatchRays", "RSSetShadingRate", "RSSetShadingRateImage",
+    "DispatchRays", "RSSetShadingRate", "RSSetShadingRateImage", "DispatchMesh", "Barrier", "WriteBufferImmediate",
+    "BeginRenderPass", "EndRenderPass",
 };
-static_assert(std::size(kMethods) == 55, "converted engine methods");
+static_assert(std::size(kMethods) == 60, "converted engine methods");
 
 // Every converted recording slot, some twice (with and without the optional pointers), on one list. Each call gets
 // fresh sources, garbled as soon as the slot returns.
@@ -1276,6 +1447,25 @@ void sequence(const ListBox& l, Objects& o, Sources& s) {
     step([&] { g_list.pfnRSSetShadingRate(h, D3D12DDI_SHADING_RATE_0062_1X1, nullptr); });
     step([&] { g_list.pfnRSSetShadingRateImage(h, res(o.rate_image)); });
     step([&] { g_list.pfnRSSetShadingRateImage(h, D3D12DDI_HRESOURCE{}); });
+    step([&] { g_list.pfnDispatchMesh(h, n, 2, 3); });
+    // L68: the six mixed barriers in five groups, then two of one type in one group.
+    step([&] { g_list.pfnBarrier(h, 6, d.enhanced); });
+    step([&] { g_list.pfnBarrier(h, 2, d.enhanced); });
+    step([&] { g_list.pfnWriteBufferImmediate(h, 3, d.immediates, d.immediate_modes); });
+    step([&] { g_list.pfnWriteBufferImmediate(h, 2, d.immediates, nullptr); });
+    // The render pass table's two slots, which are a table of their own (fill_render_pass): two render targets
+    // with a depth stencil and two resolve arrays, then render targets alone, then neither.
+    step([&] {
+        g_pass.pfnBeginRenderPass(h, 2, d.pass_targets, &d.pass_depth,
+                                  static_cast<D3D12DDIARG_RENDER_PASS_FLAGS_0053>(
+                                      D3D12DDI_RENDER_PASS_FLAG_0053_ALLOW_UAV_WRITES |
+                                      D3D12DDI_RENDER_PASS_FLAG_0053_SUSPENDING_PASS));
+    });
+    step([&] { g_pass.pfnBeginRenderPass(h, 1, d.pass_targets, nullptr, D3D12DDI_RENDER_PASS_FLAG_0053_NONE); });
+    step([&] {
+        g_pass.pfnBeginRenderPass(h, 0, nullptr, nullptr, D3D12DDI_RENDER_PASS_FLAG_0053_RESUMING_PASS);
+    });
+    step([&] { g_pass.pfnEndRenderPass(h); });
 }
 
 // Opens a gate once a drain waits on one of the replay's rings: a drain that stops spinning lowers its ring's
@@ -1359,8 +1549,10 @@ int main() {
 
     const FillInfo fill{sizeof(FillInfo), resolve_device};
     check(fill_device_core(&g_core, sizeof(g_core), &fill) == S_OK &&
-              fill_command_list(&g_list, sizeof(g_list), 1, &fill) == S_OK,
-          "tables filled");
+              fill_command_list(&g_list, sizeof(g_list), 1, &fill) == S_OK &&
+              fill_render_pass(&g_pass, sizeof(g_pass), &fill) == S_OK && g_pass.pfnBeginRenderPass &&
+              g_pass.pfnEndRenderPass,
+          "tables filled, the render pass table among them");
 
     // 1. The policy's refusals; on, off and on again.
     {
@@ -2224,6 +2416,116 @@ int main() {
                   !f.line("replay policy: on").empty() && !f.line("replay: ring 0 of 8 for thread ").empty(),
               "diagnostics: policy off; the policy, ring and teardown lines reached the hook");
         CloseHandle(gate);
+    }
+
+    // 10. L68 pfnBarrier: the grouping of the flat DDI array, the values the translation produces, the split of
+    //     more runs than one engine call takes, and the refusals. Made with the policy off, so every Barrier call
+    //     has run by the time the check reads the fake list; the deferred copy of the same calls is section 2.
+    {
+        Fixture f;
+        Objects o(&f.context);
+        Sources s(o);
+        ListBox& l = f.list();
+        const D3D12DDI_HCOMMANDLIST h = l.h;
+        f.reset(l);
+        Data& d = s.d;
+        s.prepare(1);
+        g_list.pfnBarrier(h, 6, d.enhanced);
+        check(l.engine.barrier_calls == 1 && l.engine.barrier_call_groups[0] == 5 &&
+                  l.engine.barrier_types[0] == D3D12_BARRIER_TYPE_TEXTURE && l.engine.barrier_counts[0] == 2 &&
+                  l.engine.barrier_types[1] == D3D12_BARRIER_TYPE_GLOBAL && l.engine.barrier_counts[1] == 1 &&
+                  l.engine.barrier_types[2] == D3D12_BARRIER_TYPE_BUFFER && l.engine.barrier_counts[2] == 1 &&
+                  l.engine.barrier_types[3] == D3D12_BARRIER_TYPE_TEXTURE && l.engine.barrier_counts[3] == 1 &&
+                  l.engine.barrier_types[4] == D3D12_BARRIER_TYPE_GLOBAL && l.engine.barrier_counts[4] == 1,
+              "L68: six barriers of four types become one Barrier call of five groups, in the order of the DDI "
+              "array (%u calls, %u groups)", static_cast<unsigned>(l.engine.barrier_calls.load()),
+              l.engine.barrier_call_groups[0]);
+        // The last barrier of each type the fake saw: the third texture barrier (the second texture run, so the
+        // group that names it points past the first two), the ranged barrier as a global one, and the buffer
+        // barrier with the whole-buffer range the DDI cannot express.
+        check(l.engine.barrier_layouts[0] == static_cast<unsigned>(D3D12_BARRIER_LAYOUT_COPY_DEST) &&
+                  l.engine.barrier_layouts[1] ==
+                      static_cast<unsigned>(D3D12_BARRIER_LAYOUT_COMPUTE_QUEUE_SHADER_RESOURCE) &&
+                  l.engine.barrier_texture == o.texture.h.engine && !l.engine.barrier_flags,
+              "L68: the DDI-only LEGACY_COPY_DEST becomes COPY_DEST, a shared layout passes through, and the "
+              "second texture run names the third texture barrier (layouts %u and %u)", l.engine.barrier_layouts[0],
+              l.engine.barrier_layouts[1]);
+        check(l.engine.barrier_buffer == o.buffer.h.engine && l.engine.barrier_offset == 0 &&
+                  l.engine.barrier_size == UINT64_MAX,
+              "L68: a buffer barrier names its resource with Offset 0 and Size UINT64_MAX, the only values the "
+              "API admits (offset %llu, size %llx)", ull(l.engine.barrier_offset), ull(l.engine.barrier_size));
+        // A discarding transition, and the DISCARD flag, on the first texture barrier of a call of its own.
+        g_list.pfnBarrier(h, 1, d.enhanced);
+        check(l.engine.barrier_calls == 2 && l.engine.barrier_call_groups[1] == 1 &&
+                  l.engine.barrier_layouts[0] == static_cast<unsigned>(D3D12_BARRIER_LAYOUT_RENDER_TARGET) &&
+                  l.engine.barrier_flags == static_cast<unsigned>(D3D12_TEXTURE_BARRIER_FLAG_DISCARD),
+              "L68: one texture barrier is one group, and the DISCARD flag reaches the engine (flags %u)",
+              l.engine.barrier_flags);
+        // More runs than one engine call carries: 200 barriers of alternating type are 200 groups, split into
+        // calls of at most 64 in order (64, 64, 64, 8).
+        {
+            static D3D12DDIARG_BARRIER_0088 many[200];
+            for (size_t k = 0; k < std::size(many); ++k) {
+                many[k] = D3D12DDIARG_BARRIER_0088{};
+                many[k].Type = (k % 2) ? D3D12DDI_BARRIER_TYPE_BUFFER : D3D12DDI_BARRIER_TYPE_GLOBAL;
+                many[k].BufferBarrier.hResource.pDrvPrivate = &o.buffer;
+            }
+            const uint64_t before = l.engine.barrier_calls.load();
+            g_list.pfnBarrier(h, static_cast<UINT32>(std::size(many)), many);
+            check(l.engine.barrier_calls == before + 4 && l.engine.barrier_call_groups[2] == 64 &&
+                      l.engine.barrier_call_groups[3] == 64 && l.engine.barrier_call_groups[4] == 64 &&
+                      l.engine.barrier_call_groups[5] == 8,
+                  "L68: 200 runs are split into four Barrier calls of 64, 64, 64 and 8 groups (%llu calls)",
+                  ull(l.engine.barrier_calls.load() - before));
+        }
+        // The refusals. Each is reported and makes no engine call; the type and the layout refusals are the two
+        // the slot decides itself, the resource ones the two the reference requires of it.
+        const uint64_t quiet = l.engine.calls.load();
+        const auto refused = [&](const char* what, auto build) {
+            D3D12DDIARG_BARRIER_0088 one{};
+            build(one);
+            f.shell.list_error = S_OK;
+            const uint64_t errors = f.shell.list_errors.load();
+            g_list.pfnBarrier(h, 1, &one);
+            check(f.shell.list_error == E_INVALIDARG && f.shell.list_errors == errors + 1 &&
+                      l.engine.calls.load() == quiet,
+                  "L68: %s is refused with E_INVALIDARG and no engine call (%08lx)", what,
+                  static_cast<unsigned long>(f.shell.list_error.load()));
+        };
+        refused("a barrier type the DDI does not define", [](D3D12DDIARG_BARRIER_0088& b) {
+            b.Type = static_cast<D3D12DDI_BARRIER_TYPE>(7);
+        });
+        refused("a texture barrier with no resource", [](D3D12DDIARG_BARRIER_0088& b) {
+            b.Type = D3D12DDI_BARRIER_TYPE_TEXTURE;
+            b.TextureBarrier.LayoutBefore = D3D12DDI_BARRIER_LAYOUT_COMMON;
+            b.TextureBarrier.LayoutAfter = D3D12DDI_BARRIER_LAYOUT_COMMON;
+        });
+        refused("a texture barrier with a layout the DDI does not define", [&](D3D12DDIARG_BARRIER_0088& b) {
+            b.Type = D3D12DDI_BARRIER_TYPE_TEXTURE;
+            b.TextureBarrier.LayoutBefore = D3D12DDI_BARRIER_LAYOUT_COMMON;
+            b.TextureBarrier.LayoutAfter = static_cast<D3D12DDI_BARRIER_LAYOUT>(0x80000010u);
+            b.TextureBarrier.hResource.pDrvPrivate = &o.texture;
+        });
+        refused("a buffer barrier with no resource", [](D3D12DDIARG_BARRIER_0088& b) {
+            b.Type = D3D12DDI_BARRIER_TYPE_BUFFER;
+        });
+        {
+            const uint64_t errors = f.shell.list_errors.load();
+            f.shell.list_error = S_OK;
+            g_list.pfnBarrier(h, 3, nullptr);
+            check(f.shell.list_error == E_INVALIDARG && f.shell.list_errors == errors + 1 &&
+                      l.engine.calls.load() == quiet,
+                  "L68: a count without an array is refused with E_INVALIDARG and no engine call");
+        }
+        {
+            const uint64_t errors = f.shell.list_errors.load();
+            g_list.pfnBarrier(h, 0, nullptr);
+            g_list.pfnBarrier(h, 0, d.enhanced);
+            check(f.shell.list_errors == errors && l.engine.calls.load() == quiet,
+                  "L68: no barriers at all is no engine call and no refusal");
+        }
+        f.close(l);
+        check(!l.engine.unexpected && !l.engine.stale, "L68: no unexpected engine method, no released object named");
     }
 
     std::printf("%s\n", failures ? "FAILED" : "PASSED");

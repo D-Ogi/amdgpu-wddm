@@ -28,6 +28,7 @@ $script:KhronosKeyWow    = 'HKLM:\SOFTWARE\WOW6432Node\Khronos\Vulkan\Drivers'
 $script:RunOnceKey       = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce'
 $script:RunOnceName      = 'amdgpu-wddm-installer'
 $script:TaskName         = 'amdgpu-wddm start confirm'
+$script:WindowTaskName   = 'amdgpu-wddm start window'          # BD-080: the part that needs a session, not rights
 $script:FirmwareInstallDir      = 'C:\BC250\firmware'                 # compiled into the KMD (psp.c BC250_PSP_FIRMWARE_DIR)
 $script:StateDir         = Join-Path $env:ProgramData 'amdgpu-wddm\installer'
 $script:StatePath        = Join-Path $script:StateDir 'state.json'
@@ -76,6 +77,26 @@ function Write-StepFailure($ErrorRecord) {
     Write-Host 'Fix the cause if the message names one, then run install.cmd again from the same package folder:' -ForegroundColor Yellow
     Write-Host 'it skips what is already in place and continues from here.' -ForegroundColor Yellow
     if ($script:LogPath) { Write-Host "Log: $($script:LogPath)" -ForegroundColor Yellow }
+}
+# The certificate step when a store refuses (BD-125: E_ACCESSDENIED in an elevated run on a tester's PC). The error
+# names the store, keeps the HRESULT, and gives the commands that add the certificate by hand. Nothing else is tried:
+# the step stops as before, and a run after the cause is fixed continues from here.
+function New-CertificateStoreError {
+    param([Parameter(Mandatory)][string]$Store, [Parameter(Mandatory)][string]$Certificate,
+          [Parameter(Mandatory)][Exception]$Exception, [string[]]$Done = @(), [string[]]$Remaining = @())
+    $hr = $Exception.HResult
+    $code = '0x{0:X8}' -f $hr
+    $names = @{ '0x80070005' = 'E_ACCESSDENIED' }
+    if ($names.ContainsKey($code)) { $code += " ($($names[$code]))" }
+    $text = "Windows refused to add the certificate to LocalMachine\$Store, HRESULT $code."
+    if ($Done.Count) { $text += " LocalMachine\$($Done -join ' and LocalMachine\') already has it." }
+    $text += ' Setup runs elevated, so Windows itself refused the change. The usual causes are antivirus protection' +
+        ' of the certificate store or a policy that locks the store.'
+    $commands = @(@($Store) + @($Remaining) | ForEach-Object { "certutil -addstore -f $_ `"$Certificate`"" })
+    $text += " To add it by hand, run in an administrator command prompt: $($commands -join ' and then ')."
+    $text += ' Then run setup again: it continues from here.'
+    $text += " Windows said: $($Exception.Message)"
+    return (New-Object Runtime.InteropServices.COMException -ArgumentList $text, $hr)
 }
 
 # A native program, its stdout and stderr as one text, and its exit code. Windows PowerShell 5.1 turns a stderr line
@@ -269,25 +290,48 @@ function Get-PendingRestart($State, $Boot) {
 $script:ResumePhases = @('testsigning-pending', 'driver-pending-restart')
 # -Repair is one of them (BD-069): the run after the restart has to know that this install is a repair, or it keeps a
 # closure that the tester asked to reopen.
-$script:InstallSwitches = @('NoControlApp', 'NoReboot', 'Force', 'Repair')
+$script:InstallSwitches = @('NoControlApp', 'NoReboot', 'Force', 'Repair', 'ApplySystemTuning')
 function Get-InstallInputs($Bound, $State, [string]$PackageVersion) {
+    if ($Bound.ContainsKey('ApplySystemTuning') -and [bool]$Bound['ApplySystemTuning'] -and
+        $Bound.ContainsKey('SkipSystemTuning') -and [bool]$Bound['SkipSystemTuning']) {
+        throw '-ApplySystemTuning and -SkipSystemTuning cannot be used together'
+    }
     $resume = $State -and ([string]$State.phase -in $script:ResumePhases) -and ([string]$State.package_version -eq $PackageVersion)
-    $in = [pscustomobject]@{ firmware_dir = $null; parameters = @{}; switches = @(); restored = @() }
+    $resumeTuning = $State -and ([string]$State.package_version -eq $PackageVersion) -and
+        ([string]$State.phase -in @('new', 'testsigning-pending', 'testsigning-active', 'files-copied',
+            'driver-pending-restart', 'driver-installed', 'install-incomplete'))
+    $in = [pscustomobject]@{ firmware_dir = $null; component_dir = $null; components = $null; models = $null; parameters = @{}; switches = @(); restored = @() }
     if ($Bound.ContainsKey('FirmwareDir') -and $Bound['FirmwareDir']) { $in.firmware_dir = [string]$Bound['FirmwareDir'] }
     elseif ($resume -and $State.firmware_source_dir) { $in.firmware_dir = [string]$State.firmware_source_dir; $in.restored += "-FirmwareDir $($in.firmware_dir)" }
+    if ($Bound.ContainsKey('ComponentDir') -and $Bound['ComponentDir']) { $in.component_dir = [string]$Bound['ComponentDir'] }
+    elseif ($resume -and $State.component_source_dir) { $in.component_dir = [string]$State.component_source_dir; $in.restored += "-ComponentDir $($in.component_dir)" }
+    # The component and model answers of the first run: the questions are asked once, before any change, and the
+    # argument-free continuation after a restart takes them from the state. $null means "not answered yet".
+    if ($resume -and $null -ne $State.PSObject.Properties['components_chosen'] -and $null -ne $State.components_chosen) {
+        $in.components = @($State.components_chosen)
+        $in.restored += "components: $(if (@($in.components).Count) { @($in.components) -join ',' } else { 'none' })"
+    }
+    if ($resume -and $null -ne $State.PSObject.Properties['models_chosen'] -and $null -ne $State.models_chosen) {
+        $in.models = @($State.models_chosen)
+        $in.restored += "models: $(if (@($in.models).Count) { @($in.models) -join ',' } else { 'none' })"
+    }
     if ($Bound.ContainsKey('DpmMaxMHz')) { $in.parameters['DpmMaxMHz'] = [int]$Bound['DpmMaxMHz'] }
     if ($Bound.ContainsKey('CuMode') -and [int]$Bound['CuMode']) { $in.parameters['CuMode'] = [int]$Bound['CuMode'] }
     if (-not $in.parameters.Count -and $resume -and $State.command_line_parameters) {
         foreach ($p in $State.command_line_parameters.PSObject.Properties) { $in.parameters[$p.Name] = [int]$p.Value; $in.restored += "-$($p.Name) $([int]$p.Value)" }
     }
     foreach ($s in $script:InstallSwitches) {
+        if ($s -eq 'ApplySystemTuning' -and $Bound.ContainsKey('SkipSystemTuning') -and [bool]$Bound['SkipSystemTuning']) { continue }
         if ($Bound.ContainsKey($s)) { if ([bool]$Bound[$s]) { $in.switches += $s } }
-        elseif ($resume -and (@($State.install_switches) -contains $s)) { $in.switches += $s; $in.restored += "-$s" }
+        elseif (($resume -or ($s -eq 'ApplySystemTuning' -and $resumeTuning)) -and (@($State.install_switches) -contains $s)) { $in.switches += $s; $in.restored += "-$s" }
     }
     return $in
 }
 function Save-InstallInputs($State, $Inputs) {
     Set-StateValue $State 'firmware_source_dir' $Inputs.firmware_dir
+    Set-StateValue $State 'component_source_dir' $Inputs.component_dir
+    if ($null -ne $Inputs.components) { Set-StateValue $State 'components_chosen' @($Inputs.components) }
+    if ($null -ne $Inputs.models) { Set-StateValue $State 'models_chosen' @($Inputs.models) }
     Set-StateValue $State 'command_line_parameters' $(if ($Inputs.parameters.Count) { [pscustomobject]$Inputs.parameters } else { $null })
     Set-StateValue $State 'install_switches' $(if (@($Inputs.switches).Count) { @($Inputs.switches) } else { $null })
 }
@@ -303,7 +347,7 @@ function Set-InstallPackage($State, [string]$PackageVersion) {
     return $was
 }
 function Clear-InstallInputs($State) {
-    foreach ($n in 'firmware_source_dir', 'command_line_parameters', 'install_switches') { Set-StateValue $State $n $null }
+    foreach ($n in 'firmware_source_dir', 'component_source_dir', 'components_chosen', 'models_chosen', 'command_line_parameters', 'install_switches') { Set-StateValue $State $n $null }
 }
 
 # A fact about the computer before the install (did this file exist?): the first run records it, a re-run over a
@@ -311,6 +355,51 @@ function Clear-InstallInputs($State) {
 function Set-StateValueOnce($State, [string]$Name, $Value) {
     if ($null -eq $State.PSObject.Properties[$Name]) { $State | Add-Member -NotePropertyName $Name -NotePropertyValue $Value }
     return $State.$Name
+}
+
+# ---------------------------------------------------------------------------------------------------------------
+# The HIP runtime (experimental) in <install root>\tools\hip is on by default: install.ps1 appends its folder to the
+# machine PATH, so an amdhip64.dll that comes earlier (AMD's own in System32, or an earlier PATH entry) still wins, and
+# uninstall.ps1 removes that one entry and no other. The value is read and written as Windows stores it (REG_EXPAND_SZ,
+# %SystemRoot% not expanded). A new process sees the entry after the restart that the install asks for.
+$script:EnvironmentKey = 'SYSTEM\CurrentControlSet\Control\Session Manager\Environment'
+# Host tests only: the hive the two functions below open. A test points it at HKEY_CURRENT_USER with a scratch
+# $script:EnvironmentKey, so no test of ours can write the machine PATH of the computer it runs on.
+$script:EnvironmentHive = $null
+function Get-EnvironmentHive {
+    if ($null -ne $script:EnvironmentHive) { return $script:EnvironmentHive }
+    return [Microsoft.Win32.Registry]::LocalMachine
+}
+function Get-HipPathEntry([string]$Root) { return (Join-Path $Root 'tools\hip') }
+# Pure: is $Entry one of the entries of $PathValue (case and a trailing backslash do not count)?
+function Test-PathEntry([string]$PathValue, [string]$Entry) {
+    $want = $Entry.TrimEnd('\')
+    foreach ($e in @($PathValue -split ';')) { if ($e.Trim().TrimEnd('\') -ieq $want) { return $true } }
+    return $false
+}
+# Pure: $PathValue with $Entry at the end, or unchanged when it is there already.
+function Add-PathEntry([string]$PathValue, [string]$Entry) {
+    if (Test-PathEntry $PathValue $Entry) { return $PathValue }
+    $v = $PathValue.TrimEnd(';')
+    if ($v) { return "$v;$Entry" }
+    return $Entry
+}
+# Pure: $PathValue without $Entry. Every other entry stays as it is written, empty ones included.
+function Remove-PathEntry([string]$PathValue, [string]$Entry) {
+    $want = $Entry.TrimEnd('\')
+    return ((@($PathValue -split ';') | Where-Object { $_.Trim().TrimEnd('\') -ine $want }) -join ';')
+}
+function Get-MachinePath {
+    $k = (Get-EnvironmentHive).OpenSubKey($script:EnvironmentKey, $false)
+    try {
+        $kind = [Microsoft.Win32.RegistryValueKind]::ExpandString
+        if ($k.GetValueNames() -contains 'Path') { $kind = $k.GetValueKind('Path') }
+        return [pscustomobject]@{ value = [string]$k.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames); kind = $kind }
+    } finally { $k.Close() }
+}
+function Set-MachinePath([string]$Value, $Kind) {
+    $k = (Get-EnvironmentHive).OpenSubKey($script:EnvironmentKey, $true)
+    try { $k.SetValue('Path', $Value, $Kind) } finally { $k.Close() }
 }
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -444,6 +533,11 @@ function Get-RegistryDefaultPlan {
         elseif (Test-RegistryValueSame $cur $d.Value) { $decision = 'same'; $value = $d.Value }
         elseif ($null -ne $closure) {
             if ($Reopen) { $decision = 'reopened'; $value = $d.Value } else { $decision = 'driver-closed'; $value = $cur }
+        }
+        # Move the old release ceiling, including a manual 1500 choice. Other ceilings stay.
+        elseif ($d.Name -eq 'DpmMaxMHz') {
+            if (Test-RegistryValueSame $cur 1500) { $decision = 'update'; $value = $d.Value }
+            else { $decision = 'kept'; $value = $cur }
         }
         elseif ($prev.ContainsKey($d.Name) -and (Test-RegistryValueSame $cur $prev[$d.Name])) { $decision = 'update'; $value = $d.Value }
         else { $decision = 'kept'; $value = $cur }
@@ -645,6 +739,9 @@ function Get-Sha256([string]$Path) {
     try { return ([BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($s)) -replace '-', '') } finally { $s.Dispose() }
 }
 # Package integrity: manifest.json lists every file of the package with its SHA256 (build-release.ps1 writes it).
+# The setup window is the one file outside that list, because it is the one file the unpacked release puts in the top
+# folder (manifest "setup", Get-PackageSetupExe); it is hashed here like every other file. A manifest from a release
+# before that layout has no "setup" block and is checked as before.
 function Test-PackageManifest {
     param([Parameter(Mandatory)][string]$PackageRoot)
     $path = Join-Path $PackageRoot 'manifest.json'
@@ -657,6 +754,12 @@ function Test-PackageManifest {
         $p = Join-Path $PackageRoot ($f.path -replace '/', '\')
         if (-not (Test-Path -LiteralPath $p -PathType Leaf)) { $bad += "missing $($f.path)"; continue }
         if ((Get-Sha256 $p) -ne $f.sha256) { $bad += "changed $($f.path)" }
+    }
+    if ($m.PSObject.Properties['setup'] -and $m.setup) {
+        $count++
+        $exe = Get-PackageSetupExe $PackageRoot
+        if (-not $exe) { $bad += "missing $([string]$m.setup.file)" }
+        elseif ((Get-Sha256 $exe) -ne ([string]$m.setup.sha256)) { $bad += "changed $([string]$m.setup.file)" }
     }
     if ($bad.Count) { return @{ ok = $false; detail = ($bad -join '; '); manifest = $m } }
     return @{ ok = $true; detail = "$count files match manifest.json (version $($m.version))"; manifest = $m }
@@ -907,37 +1010,162 @@ function Get-TestSigningActive {
     return ([string]$o -match 'TESTSIGNING')
 }
 function Get-TestSigningConfigured {
-    # What the next boot will use; needs elevation. $null when unknown.
+    # The explicit setting on the current loader entry; $null when the provider cannot read it.
+    # BCD WMI uses a Boolean, unlike the localized bcdedit display value.
+    # https://learn.microsoft.com/previous-versions/windows/desktop/bcd/bcdlibraryelementtypes
+    # https://learn.microsoft.com/previous-versions/windows/desktop/bcd/bcdbooleanelement
     if (-not (Test-IsAdmin)) { return $null }
-    $n = Invoke-Native bcdedit.exe @('/enum', '{current}')
-    if ($n.code -ne 0) { return $null }
-    return ($n.text -match '(?im)^\s*testsigning\s+Yes\s*$')
+    try {
+        $provider = Get-WmiObject -Namespace 'root\WMI' -Class BcdStore -List -EnableAllPrivileges -ErrorAction Stop
+        $opened = $provider.OpenStore('') # Empty path denotes the system store.
+        if ($opened.ReturnValue -isnot [bool] -or -not $opened.ReturnValue -or $null -eq $opened.Store) { return $null }
+        # GUID_CURRENT_BOOT_ENTRY from Microsoft's Windows-classic-samples BCD Constants.cs.
+        $current = $opened.Store.OpenObject('{fa926493-6f1c-4193-a414-58f0b2456d1e}')
+        if ($current.ReturnValue -isnot [bool] -or -not $current.ReturnValue -or $null -eq $current.Object) { return $null }
+        $enumerated = $current.Object.EnumerateElements()
+        if ($enumerated.ReturnValue -isnot [bool] -or -not $enumerated.ReturnValue) { return $null }
+        # BcdLibraryBoolean_AllowPrereleaseSignatures. Successful enumeration distinguishes
+        # an absent explicit setting from a failed GetElement call. Inherited options are separate.
+        $setting = @($enumerated.Elements | Where-Object { $_.Type -eq [uint32]0x16000049 })
+        if ($setting.Count -eq 0) { return $false }
+        if ($setting.Count -ne 1 -or $setting[0].Boolean -isnot [bool]) { return $null }
+        return $setting[0].Boolean
+    } catch { return $null }
 }
 function Get-SecureBootState {
     # 'on', 'off', 'legacy-bios' or 'unknown'
-    try { if (Confirm-SecureBootUEFI -ErrorAction Stop) { return 'on' } else { return 'off' } }
-    catch [System.PlatformNotSupportedException] { return 'legacy-bios' }
-    catch {
-        $v = (Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control\SecureBoot\State' -Name UEFISecureBootEnabled -ErrorAction SilentlyContinue).UEFISecureBootEnabled
-        if ($v -eq 1) { return 'on' }
-        if ($v -eq 0) { return 'off' }
-        return 'unknown'
+    return (Read-SecureBootState).state
+}
+# Secure Boot from the firmware variable that holds it: SecureBoot in the EFI global variable namespace, one byte,
+# 1 on and 0 off. A firmware without Secure Boot does not define the variable: the stock BC-250 firmware is one
+# (BD-125), where Confirm-SecureBootUEFI throws "Variable is currently undefined" and the SecureBoot\State key is
+# absent. Only the Win32 error number of the read decides, never the (translated) message text.
+# https://learn.microsoft.com/windows/win32/api/winbase/nf-winbase-getfirmwareenvironmentvariableexw
+# Confirm-SecureBootUEFI and the registry answer only when the variable read itself fails. The result names the
+# source that decided. The three readers are parameters for the host test (test-engine-units.ps1).
+function Read-SecureBootState {
+    param([scriptblock]$ReadVariable = { Read-SecureBootVariable },
+          [scriptblock]$ConfirmUefi = { Confirm-SecureBootUEFI -ErrorAction Stop },
+          [scriptblock]$ReadRegistry = { (Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control\SecureBoot\State' -Name UEFISecureBootEnabled -ErrorAction SilentlyContinue).UEFISecureBootEnabled })
+    function Result([string]$State, [string]$Detail, [string]$Source) { [pscustomobject]@{ state = $State; detail = $Detail; source = $Source } }
+    $variable = 'UEFI variable SecureBoot'
+    try {
+        $v = & $ReadVariable
+        if ($null -ne $v.bytes) {
+            $bytes = [byte[]]$v.bytes
+            if ($bytes.Length -eq 1 -and $bytes[0] -eq 1) { return (Result 'on' "on (source: $variable = 1)" 'uefi-variable') }
+            if ($bytes.Length -eq 1 -and $bytes[0] -eq 0) { return (Result 'off' "off (source: $variable = 0)" 'uefi-variable') }
+            $why = "$variable holds an unexpected value: $(([BitConverter]::ToString($bytes)) -replace '-', ' ')"
+        } elseif ($v.error -eq 203) {
+            # ERROR_ENVVAR_NOT_FOUND: the firmware does not define the variable.
+            return (Result 'off' "off (not built into the firmware; source: $variable not present, Win32 error 203)" 'uefi-variable')
+        } elseif ($v.error -eq 1) {
+            # ERROR_INVALID_FUNCTION: Windows started from a legacy BIOS, which has no UEFI variables.
+            return (Result 'legacy-bios' "legacy-bios (source: $variable, Win32 error 1: no UEFI variables)" 'uefi-variable')
+        } else {
+            $why = "$variable read failed with Win32 error $($v.error)"
+            if ($v.privilege_error) { $why += " (SeSystemEnvironmentPrivilege: Win32 error $($v.privilege_error))" }
+        }
+    } catch { $why = "$variable read did not run: $($_.Exception.GetType().FullName)" }
+    try {
+        $on = & $ConfirmUefi
+        if ($on -is [bool]) { return (Result $(if ($on) { 'on' } else { 'off' }) "$(if ($on) { 'on' } else { 'off' }) (source: Confirm-SecureBootUEFI, because the $why)" 'confirm-securebootuefi') }
+        $confirm = "Confirm-SecureBootUEFI returned no Boolean"
     }
+    catch [System.PlatformNotSupportedException] { return (Result 'legacy-bios' "legacy-bios (source: Confirm-SecureBootUEFI, because the $why)" 'confirm-securebootuefi') }
+    catch { $confirm = 'Confirm-SecureBootUEFI: {0} 0x{1:X8}' -f $_.Exception.GetType().FullName, $_.Exception.HResult }
+    $reg = & $ReadRegistry
+    if ($reg -eq 1) { return (Result 'on' "on (source: registry SecureBoot\State UEFISecureBootEnabled = 1, because the $why)" 'registry') }
+    if ($reg -eq 0) { return (Result 'off' "off (source: registry SecureBoot\State UEFISecureBootEnabled = 0, because the $why)" 'registry') }
+    return (Result 'unknown' "the $why; $confirm; no SecureBoot\State UEFISecureBootEnabled value" 'none')
+}
+# The raw read: bytes, or the Win32 error (and the error of enabling SeSystemEnvironmentPrivilege, which the read needs).
+function Read-SecureBootVariable {
+    if (-not ('AmdgpuWddmInstaller.FirmwareVariable' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+namespace AmdgpuWddmInstaller {
+public static class FirmwareVariable {
+    [StructLayout(LayoutKind.Sequential, Pack = 4)] struct TokenPrivilege { public uint Count; public long Luid; public uint Attributes; }
+    [DllImport("advapi32.dll", SetLastError = true)] static extern bool OpenProcessToken(IntPtr process, uint access, out IntPtr token);
+    [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)] static extern bool LookupPrivilegeValue(string system, string name, out long luid);
+    [DllImport("advapi32.dll", SetLastError = true)] static extern bool AdjustTokenPrivileges(IntPtr token, bool disableAll, ref TokenPrivilege state, uint length, out TokenPrivilege previous, out uint returned);
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)] static extern uint GetFirmwareEnvironmentVariableExW(string name, string guid, byte[] buffer, uint size, out uint attributes);
+    [DllImport("kernel32.dll")] static extern IntPtr GetCurrentProcess();
+    [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
+    // The variable's bytes, or null and the Win32 error. SeSystemEnvironmentPrivilege is enabled for the read and put
+    // back as it was; privilegeError is 0, or the error of enabling it (1300: the account does not hold it).
+    public static byte[] Read(string name, string guid, out int error, out int privilegeError) {
+        IntPtr token = IntPtr.Zero;
+        var previous = new TokenPrivilege();
+        bool adjusted = false;
+        privilegeError = 0;
+        // TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY; SE_PRIVILEGE_ENABLED.
+        if (!OpenProcessToken(GetCurrentProcess(), 0x28, out token)) { privilegeError = Marshal.GetLastWin32Error(); token = IntPtr.Zero; }
+        try {
+            if (token != IntPtr.Zero) {
+                var p = new TokenPrivilege { Count = 1, Attributes = 2 };
+                uint returned;
+                if (!LookupPrivilegeValue(null, "SeSystemEnvironmentPrivilege", out p.Luid)) privilegeError = Marshal.GetLastWin32Error();
+                else if (!AdjustTokenPrivileges(token, false, ref p, (uint)Marshal.SizeOf(typeof(TokenPrivilege)), out previous, out returned)) privilegeError = Marshal.GetLastWin32Error();
+                else { privilegeError = Marshal.GetLastWin32Error(); adjusted = privilegeError == 0; }
+            }
+            var buffer = new byte[64];
+            uint attributes;
+            uint size = GetFirmwareEnvironmentVariableExW(name, guid, buffer, (uint)buffer.Length, out attributes);
+            if (size == 0) { error = Marshal.GetLastWin32Error(); return null; }
+            error = 0;
+            Array.Resize(ref buffer, (int)size);
+            return buffer;
+        } finally {
+            if (adjusted && previous.Count != 0) {
+                TokenPrivilege ignored; uint returned;
+                AdjustTokenPrivileges(token, false, ref previous, (uint)Marshal.SizeOf(typeof(TokenPrivilege)), out ignored, out returned);
+            }
+            if (token != IntPtr.Zero) CloseHandle(token);
+        }
+    }
+}
+}
+'@
+    }
+    $err = 0
+    $privilegeErr = 0
+    # EFI_GLOBAL_VARIABLE (UEFI specification, section 3.3 Globally Defined Variables).
+    $bytes = [AmdgpuWddmInstaller.FirmwareVariable]::Read('SecureBoot', '{8BE4DF61-93CA-11D2-AA0D-00E098032B8C}', [ref]$err, [ref]$privilegeErr)
+    return [pscustomobject]@{ bytes = $bytes; error = $err; privilege_error = $privilegeErr }
 }
 function Get-BitLockerState {
     # 'off', 'on', 'suspended' or 'unknown'
+    # Read live method results, not the cached WMI properties or localized manage-bde output.
+    # https://learn.microsoft.com/windows/win32/secprov/getprotectionstatus-win32-encryptablevolume
+    # https://learn.microsoft.com/windows/win32/secprov/getconversionstatus-win32-encryptablevolume
     if (-not (Test-IsAdmin)) { return 'unknown' }
     try {
-        $v = Get-BitLockerVolume -MountPoint $env:SystemDrive -ErrorAction Stop
-        if ([string]$v.ProtectionStatus -eq 'On') { return 'on' }
-        if ([string]$v.VolumeStatus -eq 'FullyDecrypted') { return 'off' }
-        return 'suspended'
-    } catch {
-        $out = (Invoke-Native manage-bde.exe @('-status', $env:SystemDrive)).text
-        if ($out -match '(?im)Protection Status:\s+Protection On') { return 'on' }
-        if ($out -match '(?im)Protection Status:\s+Protection Off') { return 'off' }
-        return 'unknown'
-    }
+        if ($env:SystemDrive -notmatch '^[A-Za-z]:$') { return 'unknown' }
+        $volumes = @(Get-CimInstance -Namespace 'root\CIMV2\Security\MicrosoftVolumeEncryption' -ClassName Win32_EncryptableVolume -Filter "DriveLetter='$($env:SystemDrive)'" -ErrorAction Stop)
+        if ($volumes.Count -ne 1) { return 'unknown' }
+        $protection = Invoke-CimMethod -InputObject $volumes[0] -MethodName GetProtectionStatus -ErrorAction Stop
+        if ($null -eq $protection.ReturnValue -or [uint32]$protection.ReturnValue -ne 0 -or $null -eq $protection.ProtectionStatus) { return 'unknown' }
+        switch ([uint32]$protection.ProtectionStatus) {
+            1 { return 'on' }
+            0 {
+                $conversion = Invoke-CimMethod -InputObject $volumes[0] -MethodName GetConversionStatus -Arguments @{ PrecisionFactor = [uint32]0 } -ErrorAction Stop
+                if ($null -eq $conversion.ReturnValue -or [uint32]$conversion.ReturnValue -ne 0 -or $null -eq $conversion.ConversionStatus) { return 'unknown' }
+                if ([uint32]$conversion.ConversionStatus -eq 0) { return 'off' }
+                if ([uint32]$conversion.ConversionStatus -eq 1) { return 'suspended' }
+                # A conversion in progress/paused can change protection at completion.
+                return 'unknown'
+            }
+            default { return 'unknown' }
+        }
+    } catch { return 'unknown' }
+}
+function Test-BitLockerConsentRequired {
+    param([AllowNull()][string]$State)
+    # Only verified unencrypted or suspended protection can skip this boot-change decision.
+    return ($State -notin @('off', 'suspended'))
 }
 function Get-MemoryIntegrityState {
     $v = (Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity' -Name Enabled -ErrorAction SilentlyContinue).Enabled
@@ -1441,24 +1669,35 @@ function Get-DeviceServiceName {
 function Get-LabInstallPaths {
     @('C:\BC250\m15', 'C:\BC250\m14', 'C:\BC250\m10' | Where-Object { Test-Path -LiteralPath $_ })
 }
-# Our driver packages in the driver store (pnputil /enum-drivers), one row each: the published name (oem<n>.inf) and
-# the version of the package's DriverVer line, which pnputil prints as "<date> <version>". The version is $null when
-# this reading cannot take it from the block, as on a Windows that prints the labels in another language.
-function Get-OurDriverPackageList {
-    return (Get-OurDriverPackageRows (Invoke-Native pnputil.exe @('/enum-drivers')).text)
+# DISM returns package objects, including packages not bound to a device. Never parse translated pnputil labels.
+# https://learn.microsoft.com/powershell/module/dism/get-windowsdriver
+function Read-DriverStorePackages {
+    # A test inventory is accepted only by a dry run. A real uninstall always reads Windows.
+    if ($script:DryRunMode -and $env:AMDGPU_WDDM_TEST_DRIVER_STORE) {
+        $recorded = Get-Content -LiteralPath $env:AMDGPU_WDDM_TEST_DRIVER_STORE -Raw -ErrorAction Stop | ConvertFrom-Json
+        return $recorded
+    }
+    return @(Get-WindowsDriver -Online -ErrorAction Stop)
 }
-# Pure: the same rows from the text of pnputil /enum-drivers.
-function Get-OurDriverPackageRows([string]$Text) {
-    $blocks = $Text -split "(\r?\n){2,}"
+# One row per package of ours: published oem INF name and DriverVer version. An unreadable inventory throws.
+function Get-OurDriverPackageList {
+    return @(Get-OurDriverPackageRows -Packages @(Read-DriverStorePackages))
+}
+# Pure: validate the structured inventory before returning any removal candidate.
+function Get-OurDriverPackageRows {
+    param([AllowEmptyCollection()][object[]]$Packages)
     $r = @()
-    foreach ($b in $blocks) {
-        if ($b -notmatch '(?im)^\s*Original Name:\s*bc250kmd\.inf\s*$') { continue }
-        $published = $null
-        if ($b -match '(?im)^\s*Published Name:\s*(oem\d+\.inf)\s*$') { $published = $Matches[1] }
-        if (-not $published) { continue }
-        $version = $null
-        if ($b -match '(?im)^\s*Driver Version:\s*\S+\s+(\d+(?:\.\d+){1,3})\s*$') { $version = $Matches[1] }
-        $r += [pscustomobject]@{ published = $published; version = $version }
+    $seen = @{}
+    foreach ($p in $Packages) {
+        if (-not $p -or -not $p.OriginalFileName) { throw 'Driver-store inventory has a package without an original INF name' }
+        if (-not [string]::Equals([IO.Path]::GetFileName([string]$p.OriginalFileName), 'bc250kmd.inf', [StringComparison]::OrdinalIgnoreCase)) { continue }
+        $published = [string]$p.Driver
+        if ($published -notmatch '\Aoem[0-9]+\.inf\z') { throw 'Driver-store inventory has an invalid published INF name for our driver' }
+        if ($seen.ContainsKey($published)) { throw "Driver-store inventory repeats $published" }
+        $seen[$published] = $true
+        $version = [string]$p.Version
+        if (-not ($version -as [version])) { throw "Driver-store inventory has no valid version for $published" }
+        $r += [pscustomobject]@{ published = $published.ToLowerInvariant(); version = $version }
     }
     return $r
 }
@@ -1527,10 +1766,100 @@ function Get-OurVulkanIcdValues {
     }
     return $r
 }
-# Our scheduled tasks. The installer registers one ('amdgpu-wddm start confirm'); the sweep takes any task of ours,
+# Our scheduled tasks. The installer registers the two of Get-LogonTaskPlan below; the sweep takes any task of ours,
 # so a task that an older release named differently goes with it.
 function Get-OurScheduledTasks {
     try { return @(Get-ScheduledTask -ErrorAction Stop | Where-Object { $_.TaskName -like "$($script:ReleaseName)*" } | ForEach-Object { $_.TaskName }) } catch { return @() }
+}
+# BD-080: the logon tasks of a tester PC as data. install.ps1 registers exactly what this function returns, and
+# tools\release\test-session-checks.ps1 holds the rules of Test-LogonTaskPlan against it, so the account the
+# confirmation runs under is gated without a registration on the test PC.
+#
+# Why two tasks. The confirmation needs the KMD escape BC250_ESCAPE_RUN_START_HEALTH, and the kernel refuses its
+# CONFIRM operation to a caller who is not an administrator (driver\kmd\start_health.c StartHealthRequest, with
+# CallerIsAdmin of driver\kmd\display.c), so the confirmation runs with an administrator's token. Up to and
+# including 0.7.216.100-tester.28 the one task carried the Administrators group (S-1-5-32-544) as its principal,
+# which means it runs at the logon of an administrator and at no other logon. A standard user therefore confirmed
+# nothing, the boot-loop guard counted every start (BC250_MAX_UNCONFIRMED_STARTS 2, driver\kmd\guard.c) and the
+# third start of the machine refused to start the driver, which leaves Windows on Microsoft Basic Display with no
+# way back for the user who has no administrator account. That is BD-080.
+#
+# The confirmation itself needs no interactive account: it reads the start health and writes the confirmation
+# through an escape. It runs as Local System (S-1-5-18), whose token is an administrator's, with the trigger that
+# fires at the logon of any user, and headless (-NoWindow), because the account has no desktop in that session.
+# The window is the other half, and it is the half that needs the user's own session and no rights at all: a small
+# top-most window whose text changes keeps DWM presenting, so the KMD's milestone (ready for 60 s with a
+# presentation completion within 15 s, BC250_START_HEALTH_MIN_MS and BC250_START_HEALTH_FRESH_MS in
+# driver\kmd\bc250kmd_escape.h) is reached on an idle desktop. It is registered for the Users group
+# (S-1-5-32-545), which every interactive account belongs to, at the limited run level, and it touches neither
+# the driver nor the registry. Without it the confirmation still keeps the machine out of Basic Display through
+# the fallback of start-confirm.ps1, at the price of one start at the floor clock.
+#
+# The accounts are named by their SID here, never by a name: a name of a built-in account is translated on a German,
+# Polish or Japanese Windows, a SID is not, so this plan and the installer carry no translated text (the project's
+# rule against parsing translated OS text). The SID does not survive the registration: New-ScheduledTaskPrincipal
+# translates it into the local name before the task is stored, so a Polish Windows keeps the Users group as
+# 'Uzytkownicy' in the task itself. Whoever reads a registered task back (a lab check, a support report) therefore
+# translates the SID on that computer and compares the result, and never compares the string 'S-1-5-32-545'.
+# The logon type of a group principal is Windows' own ('Group'); the installer states it in this plan and does not
+# pass it to New-ScheduledTaskPrincipal, which takes it with -UserId.
+function Get-LogonTaskPlan {
+    param([Parameter(Mandatory)][string]$ConfirmScript, [Parameter(Mandatory)][string]$WindowScript, [int]$Seconds = 120)
+    $host51 = '-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File'
+    return @(
+        [ordered]@{
+            role      = 'confirm'
+            name      = $script:TaskName
+            execute   = 'powershell.exe'
+            arguments = "$host51 `"$ConfirmScript`" -NoWindow"
+            principal = [ordered]@{ kind = 'user'; id = 'S-1-5-18'; logon_type = 'ServiceAccount'; run_level = 'Highest' }
+            trigger   = [ordered]@{ kind = 'at-logon'; user = $null }
+            minutes   = 3
+            what      = "at the logon of any user, as Local System (S-1-5-18), headless: $ConfirmScript"
+        },
+        [ordered]@{
+            role      = 'window'
+            name      = $script:WindowTaskName
+            execute   = 'powershell.exe'
+            arguments = "$host51 `"$WindowScript`" -Seconds $Seconds"
+            principal = [ordered]@{ kind = 'group'; id = 'S-1-5-32-545'; logon_type = 'Group'; run_level = 'Limited' }
+            trigger   = [ordered]@{ kind = 'at-logon'; user = $null }
+            minutes   = 3
+            what      = "at the logon of any user, with that user's own rights (Users, S-1-5-32-545): $WindowScript"
+        }
+    )
+}
+# The rules of the plan above, as the list of what is wrong with a plan; an empty list is a plan that holds them.
+# The host test runs it over the installer's plan and over a plan with the principal of the defect, which must fail.
+function Test-LogonTaskPlan {
+    param([Parameter(Mandatory)]$Plan)
+    $bad = New-Object System.Collections.ArrayList
+    $tasks = @($Plan)
+    foreach ($t in $tasks) {
+        $n = [string]$t.name
+        if ($n -notlike "$($script:ReleaseName)*") { [void]$bad.Add("task '$n' is not named after the release: the uninstaller's sweep (Get-OurScheduledTasks) would leave it on the computer") }
+        if ([string]$t.trigger.kind -ne 'at-logon') { [void]$bad.Add("task '$n' triggers on '$($t.trigger.kind)', not at logon") }
+        if ($t.trigger.user) { [void]$bad.Add("task '$n' triggers at the logon of '$($t.trigger.user)' only; every logon has to run it") }
+        if ([string]$t.principal.id -eq 'S-1-5-32-544') { [void]$bad.Add("task '$n' is registered for the Administrators group (S-1-5-32-544): it never runs at the logon of a standard user (BD-080)") }
+        if ([int]$t.minutes -le 0) { [void]$bad.Add("task '$n' has no execution time limit") }
+        if ([string]$t.execute -ne 'powershell.exe') { [void]$bad.Add("task '$n' runs '$($t.execute)', not powershell.exe") }
+    }
+    $confirm = @($tasks | Where-Object { $_.role -eq 'confirm' })
+    if ($confirm.Count -ne 1) { [void]$bad.Add("the plan has $($confirm.Count) confirmation tasks, not one"); return @($bad) }
+    $c = $confirm[0]
+    if (([string]$c.principal.kind -ne 'user') -or ([string]$c.principal.id -ne 'S-1-5-18')) { [void]$bad.Add("the confirmation runs as $($c.principal.kind) $($c.principal.id), not as Local System (S-1-5-18)") }
+    if ([string]$c.principal.logon_type -ne 'ServiceAccount') { [void]$bad.Add("the confirmation asks for logon type '$($c.principal.logon_type)', not ServiceAccount") }
+    if ([string]$c.principal.run_level -ne 'Highest') { [void]$bad.Add("the confirmation asks for run level '$($c.principal.run_level)': the KMD refuses CONFIRM to a caller who is not an administrator") }
+    if ([string]$c.arguments -notmatch '(?i)(^|\s)-NoWindow(\s|$)') { [void]$bad.Add('the confirmation does not run headless (-NoWindow): its account has no desktop in the logon session') }
+    if ([string]$c.arguments -match '(?i)(^|\s)-Probe(\s|$)') { [void]$bad.Add('the confirmation runs read-only (-Probe): it would confirm no start') }
+    if ([string]$c.arguments -match '(?i)(^|\s)-FallbackHoldSeconds(\s|$)') { [void]$bad.Add('the confirmation changes the hold of the boot-loop fallback on its command line; the bound belongs to start-confirm.ps1') }
+    $window = @($tasks | Where-Object { $_.role -eq 'window' })
+    if ($window.Count -ne 1) { [void]$bad.Add("the plan has $($window.Count) window tasks, not one"); return @($bad) }
+    $w = $window[0]
+    if (([string]$w.principal.kind -ne 'group') -or ([string]$w.principal.id -ne 'S-1-5-32-545')) { [void]$bad.Add("the window is registered for $($w.principal.kind) $($w.principal.id), not for the Users group (S-1-5-32-545) that every interactive account belongs to") }
+    if ([string]$w.principal.run_level -ne 'Limited') { [void]$bad.Add("the window asks for run level '$($w.principal.run_level)': it needs no rights, and a standard user has none to give it") }
+    if ([string]$w.name -eq [string]$c.name) { [void]$bad.Add('both tasks carry the same name') }
+    return @($bad)
 }
 # Our test certificates in the two machine stores, by subject: the certificate of this release and of any older one.
 function Get-OurCertificates {
@@ -1547,14 +1876,22 @@ function Get-OurCertificates {
 #   present $true when something of ours is there
 #   detail  what was found, or why nothing could be read
 #   kept    $true when the uninstaller leaves it on purpose (then present is not a leftover)
+#   known   $false when the probe could not read; this never means that an item is gone
+function Read-ReleaseFootprintItem {
+    param([string]$Item, [scriptblock]$Read, [bool]$Kept = $false)
+    try {
+        $x = & $Read
+        return [pscustomobject]@{ item = $Item; present = [bool]$x.present; detail = [string]$x.detail; kept = $Kept; known = $true }
+    } catch {
+        return [pscustomobject]@{ item = $Item; present = $false; detail = "not read: $($_.Exception.Message)"; kept = $Kept; known = $false }
+    }
+}
 function Get-ReleaseFootprint {
     param([string]$InstallRoot, $State, [string[]]$MftKeys = @())
     $rows = New-Object System.Collections.ArrayList
-    function Add-Row([string]$Item, [bool]$Present, [string]$Detail, [bool]$Kept = $false) { [void]$rows.Add([pscustomobject]@{ item = $Item; present = $Present; detail = $Detail; kept = $Kept }) }
     $probe = {
         param([string]$Item, [scriptblock]$Read, [bool]$Kept = $false)
-        try { $x = & $Read; Add-Row $Item ([bool]$x.present) ([string]$x.detail) $Kept }
-        catch { Add-Row $Item $false "not read: $($_.Exception.Message)" $Kept }
+        [void]$rows.Add((Read-ReleaseFootprintItem -Item $Item -Read $Read -Kept $Kept))
     }
     & $probe 'install root' { $p = (Test-Path -LiteralPath $InstallRoot); @{ present = $p; detail = "$InstallRoot$(if ($p) { ' is there' } else { ' is gone' })" } }
     foreach ($d in 'System32', 'SysWOW64') {
@@ -1589,13 +1926,23 @@ function Get-ReleaseFootprint {
         @{ present = ($lnks.Count -gt 0); detail = $(if ($lnks.Count) { @($lnks | ForEach-Object { Split-Path $_ -Leaf }) -join ', ' } else { 'no shortcut of ours' }) }
     }
     & $probe 'installer state' { $p = (Test-Path -LiteralPath $script:StateDir); @{ present = $p; detail = "$($script:StateDir)$(if ($p) { ' is there (state, kept repair sets, verify reports)' } else { ' is gone' })" } }
-    & $probe 'per-user data' { $u = @(Get-OurUserDataDirs); @{ present = ($u.Count -gt 0); detail = $(if ($u.Count) { $u -join ', ' } else { 'no %LOCALAPPDATA%\amdgpu-wddm in any profile' }) } }
+    & $probe 'per-user data' {
+        $u = @(Get-OurUserDataDirs | Where-Object { @(Get-ChildItem -LiteralPath $_ -Force | Where-Object { $_.Name -ine 'system-tuning' }).Count -gt 0 })
+        @{ present = ($u.Count -gt 0); detail = $(if ($u.Count) { $u -join ', ' } else { 'no per-user release data other than retained tuning recovery journals' }) }
+    }
+    & $probe 'per-user tuning recovery' {
+        $u = @(Get-OurUserDataDirs | ForEach-Object { Join-Path $_ 'system-tuning' } | Where-Object { Test-Path -LiteralPath $_ })
+        @{ present = ($u.Count -gt 0); detail = $(if ($u.Count) { 'per-user tuning journals retained for their owners' } else { 'no per-user tuning journal' }) }
+    } $true
     & $probe 'certificates' { $c = @(Get-OurCertificates); @{ present = ($c.Count -gt 0); detail = $(if ($c.Count) { @($c | ForEach-Object { "$($_.store) $($_.thumbprint)" }) -join ', ' } else { 'no certificate of ours in Root or TrustedPublisher' }) } }
     # Kept on purpose: the firmware folder and C:\BC250 when they were there before the install, and the control
     # application's own files (the tester's setting backups and action log).
     $fwKept = [bool]($State -and $State.firmware_dir_existed)
     & $probe 'GPU firmware' { $p = (Test-Path -LiteralPath $script:FirmwareInstallDir); @{ present = $p; detail = "$($script:FirmwareInstallDir)$(if (-not $p) { ' is gone' } elseif ($fwKept) { ' is there, and it was there before the install' } else { ' is there' })" } } $fwKept
     & $probe 'control application data' { $d = Join-Path (Split-Path $script:StateDir) 'control'; $p = (Test-Path -LiteralPath $d); @{ present = $p; detail = "$d$(if ($p) { ' is there (the tester''s setting backups and action log)' } else { ' is gone' })" } } $true
+    foreach ($name in 'system-tuning','system-tuning-recovery') {
+        & $probe $name { $d = Join-Path (Split-Path $script:StateDir) $name; @{ present = (Test-Path -LiteralPath $d); detail = "$d is retained when present for optional Windows settings recovery" } } $true
+    }
     return $rows.ToArray()
 }
 
@@ -1845,8 +2192,32 @@ function Format-CommandLine([Parameter(Mandatory)][string]$Exe, [string[]]$Argum
 # downloaded folder, a USB stick or a temporary extraction may be gone by then. The state folder is writable by
 # administrators only (Set-StateDirAccess). When phase 2 completes, the closure of the installed package becomes the
 # active repair set (firmware included, also after a download) and the one before it is kept as the previous set;
-# older sets are removed. A prepared offline folder (prepare-offline.ps1) has the same layout.
-$script:SetupExeRelative = 'setup\amdgpu_wddm_setup.exe'
+# older sets are removed. A prepared offline folder (prepare-offline.ps1) has the same layout. Neither is the
+# unpacked release: both keep the package root as their own folder, with setup.exe in it (Get-PackageSetupExe).
+#
+# Where the setup window is (owner, 2026-10-11): the unpacked release holds setup.exe in its top folder and
+# everything else in files\, so the package root (the folder with manifest.json) is files\ and the exe is one level
+# above it. A kept repair set and a prepared folder are not unpacked by a tester: they keep the package root as
+# their own folder, with the setup copy in it. Get-PackageSetupExe answers both shapes, so nothing else has to know
+# which one it holds.
+#
+# The package root's own copy is answered first, and the folder above it is read only when the root is the files\
+# folder of an unpacked release. A closure, a repair set and a prepared folder hold their own copy, and their parent
+# folder is chosen by whoever made them (prepare-offline.ps1 takes any -Destination): a setup.exe of another build
+# lying there must neither hide the package's own copy (Test-PackageManifest would report a good folder as changed)
+# nor stand in for a tampered one (the integrity check would pass the file that RunOnce and Release\RepairSetup run).
+$script:SetupExeName = 'setup.exe'
+$script:PackageFilesDir = 'files'
+function Get-PackageSetupExe([string]$PackageRoot) {
+    if (-not $PackageRoot) { return $null }
+    $own = Join-Path $PackageRoot $script:SetupExeName
+    if (Test-Path -LiteralPath $own -PathType Leaf) { return ([IO.Path]::GetFullPath($own)) }
+    if ((Split-Path $PackageRoot -Leaf) -ieq $script:PackageFilesDir) {
+        $up = Join-Path $PackageRoot (Join-Path '..' $script:SetupExeName)
+        if (Test-Path -LiteralPath $up -PathType Leaf) { return ([IO.Path]::GetFullPath($up)) }
+    }
+    return $null
+}
 $script:RepairIndexSchema = 'amdgpu-wddm.repair-sets/1'
 function Get-PackagesDir { return (Join-Path $script:StateDir 'packages') }
 function Get-ClosureDir([string]$Version) { return (Join-Path (Get-PackagesDir) $Version) }
@@ -1901,6 +2272,10 @@ function Save-ContinuationClosure {
             [void](Copy-FileSafe -Source (Join-Path $src $rel) -Destination (Join-Path $dst $rel))
         }
         [void](Copy-FileSafe -Source (Join-Path $src 'manifest.json') -Destination (Join-Path $dst 'manifest.json'))
+        # The setup window travels with the package: in the unpacked release it is one level above the package root,
+        # in the closure it goes next to the manifest, where Get-ContinuationCommand and the repair entry look for it.
+        $setupSrc = Get-PackageSetupExe $src
+        if ($setupSrc) { [void](Copy-FileSafe -Source $setupSrc -Destination (Join-Path $dst $script:SetupExeName)) }
     }
     if ((Get-Sha256 (Join-Path $dst 'manifest.json')) -ne (Get-Sha256 (Join-Path $src 'manifest.json'))) { throw "continuation closure ${dst}: manifest.json is not this package's" }
     $check = Test-PackageManifest -PackageRoot $dst
@@ -1918,8 +2293,8 @@ function Save-ContinuationClosure {
 # the console open at the end, as the pause of install.cmd and verify.cmd does.
 function Get-ContinuationCommand {
     param([ValidateSet('continue', 'verify')][string]$Kind, [string]$Closure, [string]$InstallRoot, [bool]$Gui)
-    if ($Gui -and $Closure -and (Test-Path -LiteralPath (Join-Path $Closure $script:SetupExeRelative))) {
-        return [pscustomobject]@{ exe = (Join-Path $Closure $script:SetupExeRelative); arguments = @('--continue') }
+    if ($Gui -and $Closure -and (Test-Path -LiteralPath (Join-Path $Closure $script:SetupExeName))) {
+        return [pscustomobject]@{ exe = (Join-Path $Closure $script:SetupExeName); arguments = @('--continue') }
     }
     $ps = Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
     $common = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File')
@@ -1964,7 +2339,7 @@ function Complete-RepairSet {
         if (Test-Path -LiteralPath $m) { try { $own = Get-Content -LiteralPath $m -Raw | ConvertFrom-Json } catch { $own = $null } }
         $valid = ($own -is [pscustomobject]) -and ([string]$own.version -eq $Version) -and $own.firmware -and @($own.firmware.files).Count
         return [ordered]@{ version = $Version; dir = $d; manifest_sha256 = $(if (Test-Path -LiteralPath $m) { Get-Sha256 $m } else { $null }); manifest_valid = [bool]$valid
-            firmware_complete = [bool]($valid -and (Test-FirmwareFolder $own.firmware (Join-Path $d 'firmware')).Count -eq 0); setup = (Test-Path -LiteralPath (Join-Path $d $script:SetupExeRelative)) }
+            firmware_complete = [bool]($valid -and (Test-FirmwareFolder $own.firmware (Join-Path $d 'firmware')).Count -eq 0); setup = (Test-Path -LiteralPath (Join-Path $d $script:SetupExeName)) }
     }
     $index = [ordered]@{ schema = $script:RepairIndexSchema; updated_utc = [DateTime]::UtcNow.ToString('o'); active = (& $entry $plan.active); previous = (& $entry $plan.previous) }
     [IO.File]::WriteAllText((Join-Path $dir 'index.json'), ($index | ConvertTo-Json -Depth 4))

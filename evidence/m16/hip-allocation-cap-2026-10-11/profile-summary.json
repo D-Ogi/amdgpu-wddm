@@ -1,0 +1,1738 @@
+{
+  "assumptions": "Exact r1 pp512/tg128 run with default warmup: first prompt and first generation call are warmups. Full counters retained; no individual GPU kernel time measured.",
+  "fa_on": {
+    "sha256": {
+      "stderr.txt": "377cb2b917226d483fb831664ce799ba92e1fcb06c9efbd631244c6f7dcc9380",
+      "stdout.txt": "cdff0efcc15414b623ddc2d3d8def4736476efd94286f7f9f214043410455a5b",
+      "supervisor.json": "083e39975ff6faecbe4140e2c690a9e95a8ef61673aaf81ac905521095e3bd9c",
+      "001-Probe.result.json": "9cf4068df962f2923f7606fd59ec77994b92fcd3331ddb4c6e3e0762f11970fc",
+      "003-Probe.result.json": "9459d79ad7410f11c0a903d57485c41f2bdde04677c7d2d612e1d5df394c9262",
+      "006-Probe.result.json": "18d2ee28cf25b667ee29d28f8b481a92079bbbc01cc8f6fed1a9e5c1cfc621f6",
+      "017-Probe.result.json": "c80b04b10cce8fc0a51ebc176c7e53d4451f4d2581394a38e9f81f9374d005d2",
+      "027-Probe.result.json": "e1c4b3af4241fc1158d8eaf3d4c9fc7809c56e5e4fce51e445a44efcd00ad829",
+      "037-Probe.result.json": "58a0b73b2fa0b674f7b28d665c02f05ce616cb7a79a7621e9414a3f76beb3203",
+      "047-Probe.result.json": "4089d61676a57490306fd813e5789da27d270709a95e9302ca721cec15de3460",
+      "057-Probe.result.json": "401022c500709c4a78ee50d32c49c4a2b11df297ef392d1f92b55fd7284e7088",
+      "067-Probe.result.json": "82c1bc83acb6613f7cba8ff406c4832f9bdd127066a66ef75744c8c49f16a99c",
+      "078-Probe.result.json": "491600cbc3ca8cc2f4889ac4b9b82dcdf973bc019298056ba51afe3d938c43c2",
+      "088-Probe.result.json": "5a339fdb26d2b1d24577f0f21b13f8023d9ade74bce794c83982d16051d15fc6",
+      "098-Probe.result.json": "6892cab81946bbfa66736a9e0bbce115c068f7a011813ed457277393d54ec0e8",
+      "108-Probe.result.json": "56b42adddf0e11319c8bffe2318b2857810d7bb746e6843f0c1fef72c9581356",
+      "118-Probe.result.json": "a489ed21c061fee0f8f1b8e6d054a4984cd9e238d4cf89c6bca6254fddc4e2da",
+      "128-Probe.result.json": "7da9f07e90a6a377b106ed840f62bccf5943668865d5a82c122cb4abc71dbd71",
+      "138-Probe.result.json": "a8ebfe58eb6d89d81e0bc2ac8ae0eaaa10edee0908fe44f730176efe39a2c46d",
+      "148-Probe.result.json": "e7477abd91d3981e35ab8e6906df3741fb456dba782ec5d93ced2400a800ae87",
+      "158-Probe.result.json": "96517c048603c7a68fc9f7544f896bb1c42f0516e9bfb63f6c87ed149d85a0b4",
+      "168-Probe.result.json": "99c9c7788ed44a9b465b148ffb155660839234935400f91de34f39a1a33ede2d",
+      "178-Probe.result.json": "715abdbcd02af06aac58c322b17d1a7ea028e3cfa1730ac076d6c27c51085199",
+      "188-Probe.result.json": "cd80fb1bcd917430a7339f5edf63e3689c853ef07a0aca9c3428eb0cff64c2ae",
+      "198-Probe.result.json": "8e85feadd596824d03b0d2399f6783df26977b952c7ede3d9a0dd3cba8264d31"
+    },
+    "pid": [
+      6416
+    ],
+    "phases": {
+      "prompt_warmup": {
+        "count": 1,
+        "lines": [
+          3372
+        ],
+        "wall_ms_sum": 7227.3738,
+        "wall_ms_min": 7227.3738,
+        "wall_ms_median": 7227.3738,
+        "wall_ms_max": 7227.3738,
+        "dispatches": {
+          "sum": 1189,
+          "distribution": {
+            "1189": 1
+          }
+        },
+        "submissions": {
+          "sum": 60,
+          "distribution": {
+            "60": 1
+          }
+        },
+        "batches": {
+          "sum": 54,
+          "distribution": {
+            "54": 1
+          }
+        },
+        "dispatches_batched": {
+          "sum": 1183,
+          "distribution": {
+            "1183": 1
+          }
+        },
+        "waits": {
+          "sum": 634,
+          "distribution": {
+            "634": 1
+          }
+        },
+        "waits_fast": {
+          "sum": 585,
+          "distribution": {
+            "585": 1
+          }
+        },
+        "nonfast_waits": {
+          "sum": 49,
+          "distribution": {
+            "49": 1
+          }
+        }
+      },
+      "prompt_measured": {
+        "count": 1,
+        "lines": [
+          3375
+        ],
+        "wall_ms_sum": 7401.0587,
+        "wall_ms_min": 7401.0587,
+        "wall_ms_median": 7401.0587,
+        "wall_ms_max": 7401.0587,
+        "dispatches": {
+          "sum": 1189,
+          "distribution": {
+            "1189": 1
+          }
+        },
+        "submissions": {
+          "sum": 49,
+          "distribution": {
+            "49": 1
+          }
+        },
+        "batches": {
+          "sum": 49,
+          "distribution": {
+            "49": 1
+          }
+        },
+        "dispatches_batched": {
+          "sum": 1189,
+          "distribution": {
+            "1189": 1
+          }
+        },
+        "waits": {
+          "sum": 660,
+          "distribution": {
+            "660": 1
+          }
+        },
+        "waits_fast": {
+          "sum": 611,
+          "distribution": {
+            "611": 1
+          }
+        },
+        "nonfast_waits": {
+          "sum": 49,
+          "distribution": {
+            "49": 1
+          }
+        }
+      },
+      "generation_warmup": {
+        "count": 1,
+        "lines": [
+          5109
+        ],
+        "wall_ms_sum": 470.4889,
+        "wall_ms_min": 470.4889,
+        "wall_ms_median": 470.4889,
+        "wall_ms_max": 470.4889,
+        "dispatches": {
+          "sum": 1048,
+          "distribution": {
+            "1048": 1
+          }
+        },
+        "submissions": {
+          "sum": 51,
+          "distribution": {
+            "51": 1
+          }
+        },
+        "batches": {
+          "sum": 51,
+          "distribution": {
+            "51": 1
+          }
+        },
+        "dispatches_batched": {
+          "sum": 1048,
+          "distribution": {
+            "1048": 1
+          }
+        },
+        "waits": {
+          "sum": 651,
+          "distribution": {
+            "651": 1
+          }
+        },
+        "waits_fast": {
+          "sum": 602,
+          "distribution": {
+            "602": 1
+          }
+        },
+        "nonfast_waits": {
+          "sum": 49,
+          "distribution": {
+            "49": 1
+          }
+        }
+      },
+      "generation_measured": {
+        "count": 128,
+        "lines": [
+          5111,
+          5112,
+          5113,
+          5114,
+          5115,
+          5116,
+          5117,
+          5118,
+          5119,
+          5120,
+          5121,
+          5122,
+          5123,
+          5124,
+          5125,
+          5126,
+          5127,
+          5128,
+          5129,
+          5130,
+          5131,
+          5132,
+          5133,
+          5134,
+          5135,
+          5136,
+          5137,
+          5138,
+          5139,
+          5140,
+          5141,
+          5142,
+          5143,
+          5144,
+          5145,
+          5146,
+          5147,
+          5148,
+          5149,
+          5150,
+          5151,
+          5152,
+          5153,
+          5154,
+          5155,
+          5156,
+          5157,
+          5158,
+          5159,
+          5160,
+          5161,
+          5162,
+          5163,
+          5164,
+          5165,
+          5166,
+          5167,
+          5168,
+          5169,
+          5170,
+          5171,
+          5172,
+          5173,
+          5174,
+          5175,
+          5176,
+          5177,
+          5178,
+          5179,
+          5180,
+          5181,
+          5182,
+          5183,
+          5184,
+          5185,
+          5186,
+          5187,
+          5188,
+          5189,
+          5190,
+          5191,
+          5192,
+          5193,
+          5194,
+          5195,
+          5196,
+          5197,
+          5198,
+          5199,
+          5200,
+          5201,
+          5202,
+          5203,
+          5204,
+          5205,
+          5206,
+          5207,
+          5208,
+          5209,
+          5210,
+          5211,
+          5212,
+          5213,
+          5214,
+          5215,
+          5216,
+          5217,
+          5218,
+          5219,
+          5220,
+          5221,
+          5222,
+          5223,
+          5224,
+          5225,
+          5226,
+          5227,
+          5228,
+          5229,
+          5230,
+          5231,
+          5232,
+          5233,
+          5234,
+          5235,
+          5236,
+          5237,
+          5238
+        ],
+        "wall_ms_sum": 62494.6009,
+        "wall_ms_min": 473.1862,
+        "wall_ms_median": 487.33865000000003,
+        "wall_ms_max": 534.7601,
+        "dispatches": {
+          "sum": 134144,
+          "distribution": {
+            "1048": 128
+          }
+        },
+        "submissions": {
+          "sum": 6273,
+          "distribution": {
+            "49": 127,
+            "50": 1
+          }
+        },
+        "batches": {
+          "sum": 6273,
+          "distribution": {
+            "49": 127,
+            "50": 1
+          }
+        },
+        "dispatches_batched": {
+          "sum": 134144,
+          "distribution": {
+            "1048": 128
+          }
+        },
+        "waits": {
+          "sum": 84608,
+          "distribution": {
+            "661": 128
+          }
+        },
+        "waits_fast": {
+          "sum": 78336,
+          "distribution": {
+            "612": 128
+          }
+        },
+        "nonfast_waits": {
+          "sum": 6272,
+          "distribution": {
+            "49": 128
+          }
+        }
+      },
+      "prompt_sync": {
+        "count": 2,
+        "lines": [
+          3373,
+          3376
+        ],
+        "wall_ms_sum": 0.0079,
+        "wall_ms_min": 0.0039,
+        "wall_ms_median": 0.00395,
+        "wall_ms_max": 0.004,
+        "dispatches": {
+          "sum": 0,
+          "distribution": {
+            "0": 2
+          }
+        },
+        "submissions": {
+          "sum": 0,
+          "distribution": {
+            "0": 2
+          }
+        },
+        "batches": {
+          "sum": 0,
+          "distribution": {
+            "0": 2
+          }
+        },
+        "dispatches_batched": {
+          "sum": 0,
+          "distribution": {
+            "0": 2
+          }
+        },
+        "waits": {
+          "sum": 2,
+          "distribution": {
+            "1": 2
+          }
+        },
+        "waits_fast": {
+          "sum": 2,
+          "distribution": {
+            "1": 2
+          }
+        },
+        "nonfast_waits": {
+          "sum": 0,
+          "distribution": {
+            "0": 2
+          }
+        }
+      }
+    },
+    "logged_graphs_and_buffers": [
+      {
+        "line": 1642,
+        "text": "load_tensors:        ROCm0 model buffer size =  6637.69 MiB"
+      },
+      {
+        "line": 1643,
+        "text": "load_tensors:    ROCm_Host model buffer size =   787.50 MiB"
+      },
+      {
+        "line": 1654,
+        "text": "llama_context: flash_attn            = enabled"
+      },
+      {
+        "line": 3366,
+        "text": "sched_reserve:      ROCm0 compute buffer size =   542.02 MiB"
+      },
+      {
+        "line": 3367,
+        "text": "sched_reserve:  ROCm_Host compute buffer size =    48.03 MiB"
+      },
+      {
+        "line": 3368,
+        "text": "sched_reserve: graph: nodes = 1973, splits = 98, input objects = 4, input tensors = 13"
+      },
+      {
+        "line": 3382,
+        "text": "~llama_context:      ROCm0 compute buffer size is 542.0156 MiB, matches expectation of 542.0156 MiB"
+      },
+      {
+        "line": 3383,
+        "text": "~llama_context:  ROCm_Host compute buffer size is  48.0293 MiB, matches expectation of  48.0293 MiB"
+      },
+      {
+        "line": 3391,
+        "text": "llama_context: flash_attn            = enabled"
+      },
+      {
+        "line": 5103,
+        "text": "sched_reserve:      ROCm0 compute buffer size =   135.50 MiB"
+      },
+      {
+        "line": 5104,
+        "text": "sched_reserve:  ROCm_Host compute buffer size =    11.88 MiB"
+      },
+      {
+        "line": 5105,
+        "text": "sched_reserve: graph: nodes = 1973, splits = 98, input objects = 4, input tensors = 13"
+      },
+      {
+        "line": 5244,
+        "text": "~llama_context:      ROCm0 compute buffer size is 135.5039 MiB, matches expectation of 135.5039 MiB"
+      },
+      {
+        "line": 5245,
+        "text": "~llama_context:  ROCm_Host compute buffer size is  11.8823 MiB, matches expectation of  11.8823 MiB"
+      }
+    ],
+    "benchmark_stdout": "| model                          |       size |     params | backend    | ngl |  fa |            test |                  t/s |\n| ------------------------------ | ---------: | ---------: | ---------- | --: | --: | --------------: | -------------------: |\n| gemma4 ?B Q4_0                 |   6.48 GiB |    11.91 B | ROCm       |  99 |   1 |           pp512 |         69.17 \u00b1 0.00 |\n| gemma4 ?B Q4_0                 |   6.48 GiB |    11.91 B | ROCm       |  99 |   1 |           tg128 |          2.04 \u00b1 0.00 |\n\nbuild: unknown (0)\n",
+    "thermal": {
+      "samples": [
+        {
+          "file": "001-Probe.result.json",
+          "ok": true,
+          "tctl": 61.8,
+          "qpc": 56424328532,
+          "dpm_line": "04:55:25.592 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  61.8 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle idle confirmed  up 37 down 70 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  41.9 W avg  41.1 W (gfx 10.2 W soc  6.2 W)",
+          "mhz": 500,
+          "phases": []
+        },
+        {
+          "file": "003-Probe.result.json",
+          "ok": true,
+          "tctl": 61.8,
+          "qpc": 56437551116,
+          "dpm_line": "04:55:26.913 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  61.8 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle idle confirmed  up 37 down 70 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  44.1 W avg  42.0 W (gfx 10.2 W soc  8.2 W)",
+          "mhz": 500,
+          "phases": []
+        },
+        {
+          "file": "006-Probe.result.json",
+          "ok": true,
+          "tctl": 61.8,
+          "qpc": 56469006622,
+          "dpm_line": "04:55:30.060 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  61.8 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle idle confirmed  up 37 down 70 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  36.5 W avg  38.0 W (gfx 10.2 W soc  0.7 W)",
+          "mhz": 500,
+          "phases": []
+        },
+        {
+          "file": "017-Probe.result.json",
+          "ok": true,
+          "tctl": 63.2,
+          "qpc": 56517419005,
+          "dpm_line": "04:55:34.900 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  63.2 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle none confirmed  up 38 down 70 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  50.7 W avg  52.2 W (gfx 16.8 W soc  8.2 W)",
+          "mhz": 1000,
+          "phases": []
+        },
+        {
+          "file": "027-Probe.result.json",
+          "ok": true,
+          "tctl": 63.2,
+          "qpc": 56561839968,
+          "dpm_line": "04:55:39.342 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  63.2 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle idle confirmed  up 38 down 71 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  44.1 W avg  44.9 W (gfx 10.2 W soc  7.8 W)",
+          "mhz": 500,
+          "phases": []
+        },
+        {
+          "file": "037-Probe.result.json",
+          "ok": true,
+          "tctl": 64.8,
+          "qpc": 56606726614,
+          "dpm_line": "04:55:43.830 dpm 2000 MHz 1000 mV (SMU 2000 MHz VID  88)  64.8 C busy   0.0% avg  18.2% want 2000 cap 2000 max 2000 throttle none confirmed session  up 42 down 71 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  88.0 W avg  59.2 W (gfx 37.2 W soc 24.7 W)",
+          "mhz": 2000,
+          "phases": [
+            "prompt_warmup"
+          ]
+        },
+        {
+          "file": "047-Probe.result.json",
+          "ok": true,
+          "tctl": 74.1,
+          "qpc": 56652149857,
+          "dpm_line": "04:55:48.374 dpm 1900 MHz  984 mV (SMU 1900 MHz VID  90)  74.1 C busy   0.0% avg  21.1% want 1900 cap 2000 max 2000 throttle none confirmed session  up 47 down 77 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  85.8 W avg 108.5 W (gfx 45.3 W soc 14.3 W)",
+          "mhz": 1900,
+          "phases": [
+            "prompt_warmup"
+          ]
+        },
+        {
+          "file": "057-Probe.result.json",
+          "ok": true,
+          "tctl": 75.8,
+          "qpc": 56698276483,
+          "dpm_line": "04:55:52.987 dpm 1700 MHz  952 mV (SMU 1700 MHz VID  95)  75.8 C busy  53.3% avg  43.2% want 1700 cap 2000 max 2000 throttle none confirmed session  up 49 down 81 thermal 0 err 0  src grbm submit  53.3% sdma   0.0%  power  78.1 W avg  93.8 W (gfx 39.3 W soc 12.6 W)",
+          "mhz": 1700,
+          "phases": [
+            "prompt_measured"
+          ]
+        },
+        {
+          "file": "067-Probe.result.json",
+          "ok": true,
+          "tctl": 77,
+          "qpc": 56742739624,
+          "dpm_line": "04:55:57.433 dpm 1600 MHz  935 mV (SMU 1600 MHz VID  98)  77.0 C busy   0.0% avg  36.9% want 1600 cap 2000 max 2000 throttle none confirmed session  up 51 down 84 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  77.8 W avg  95.5 W (gfx 37.9 W soc 13.7 W)",
+          "mhz": 1600,
+          "phases": [
+            "prompt_measured"
+          ]
+        },
+        {
+          "file": "078-Probe.result.json",
+          "ok": true,
+          "tctl": 75.8,
+          "qpc": 56791260498,
+          "dpm_line": "04:56:02.281 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  75.8 C busy  10.0% avg   6.8% want 1000 cap 2000 max 2000 throttle none confirmed session  up 51 down 90 thermal 0 err 0  src grbm submit  10.0% sdma   0.0%  power  56.0 W avg  55.5 W (gfx 17.2 W soc 12.8 W)",
+          "mhz": 1000,
+          "phases": [
+            "generation_measured"
+          ]
+        },
+        {
+          "file": "088-Probe.result.json",
+          "ok": true,
+          "tctl": 74.8,
+          "qpc": 56838286507,
+          "dpm_line": "04:56:06.988 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  74.8 C busy   6.5% avg   6.4% want 1000 cap 2000 max 2000 throttle none confirmed session  up 51 down 90 thermal 0 err 0  src grbm submit   6.6% sdma   0.0%  power  56.8 W avg  57.8 W (gfx 17.4 W soc 13.1 W)",
+          "mhz": 1000,
+          "phases": [
+            "generation_measured"
+          ]
+        },
+        {
+          "file": "098-Probe.result.json",
+          "ok": true,
+          "tctl": 73.8,
+          "qpc": 56884428386,
+          "dpm_line": "04:56:11.597 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  73.8 C busy   0.0% avg   6.4% want 1000 cap 2000 max 2000 throttle none confirmed  up 51 down 90 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  53.5 W avg  57.6 W (gfx 17.2 W soc 10.4 W)",
+          "mhz": 1000,
+          "phases": [
+            "generation_measured"
+          ]
+        },
+        {
+          "file": "108-Probe.result.json",
+          "ok": true,
+          "tctl": 72.9,
+          "qpc": 56931085842,
+          "dpm_line": "04:56:16.268 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  72.9 C busy   0.0% avg   5.2% want 1000 cap 2000 max 2000 throttle none confirmed  up 51 down 90 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  59.0 W avg  56.7 W (gfx 17.2 W soc 15.5 W)",
+          "mhz": 1000,
+          "phases": [
+            "generation_measured"
+          ]
+        },
+        {
+          "file": "118-Probe.result.json",
+          "ok": true,
+          "tctl": 72.1,
+          "qpc": 56976982918,
+          "dpm_line": "04:56:20.854 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  72.1 C busy  10.0% avg   9.0% want 1000 cap 2000 max 2000 throttle none confirmed  up 51 down 90 thermal 0 err 0  src grbm submit   9.9% sdma   0.0%  power  90.4 W avg  58.3 W (gfx 46.6 W soc 10.2 W)",
+          "mhz": 1000,
+          "phases": [
+            "generation_measured"
+          ]
+        },
+        {
+          "file": "128-Probe.result.json",
+          "ok": true,
+          "tctl": 71.6,
+          "qpc": 57022403734,
+          "dpm_line": "04:56:25.400 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  71.6 C busy  10.3% avg   7.5% want 1000 cap 2000 max 2000 throttle none confirmed  up 51 down 90 thermal 0 err 0  src grbm submit  10.0% sdma   0.0%  power  51.8 W avg  56.9 W (gfx 17.8 W soc  8.3 W)",
+          "mhz": 1000,
+          "phases": [
+            "generation_measured"
+          ]
+        },
+        {
+          "file": "138-Probe.result.json",
+          "ok": true,
+          "tctl": 71.1,
+          "qpc": 57068420759,
+          "dpm_line": "04:56:30.000 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  71.1 C busy   3.3% avg   5.0% want 1000 cap 2000 max 2000 throttle none confirmed  up 51 down 90 thermal 0 err 0  src grbm submit   3.3% sdma   0.0%  power  58.4 W avg  57.0 W (gfx 18.4 W soc 14.0 W)",
+          "mhz": 1000,
+          "phases": [
+            "generation_measured"
+          ]
+        },
+        {
+          "file": "148-Probe.result.json",
+          "ok": true,
+          "tctl": 70.8,
+          "qpc": 57114367160,
+          "dpm_line": "04:56:34.590 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  70.8 C busy  10.0% avg   8.1% want 1000 cap 2000 max 2000 throttle none confirmed  up 51 down 90 thermal 0 err 0  src grbm submit   9.9% sdma   0.0%  power  55.2 W avg  57.7 W (gfx 17.2 W soc 12.1 W)",
+          "mhz": 1000,
+          "phases": [
+            "generation_measured"
+          ]
+        },
+        {
+          "file": "158-Probe.result.json",
+          "ok": true,
+          "tctl": 70.5,
+          "qpc": 57160122397,
+          "dpm_line": "04:56:39.165 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  70.5 C busy   6.7% avg   7.2% want 1000 cap 2000 max 2000 throttle none confirmed  up 51 down 90 thermal 0 err 0  src grbm submit   6.6% sdma   0.0%  power  61.3 W avg  57.8 W (gfx 17.2 W soc 13.0 W)",
+          "mhz": 1000,
+          "phases": [
+            "generation_measured"
+          ]
+        },
+        {
+          "file": "168-Probe.result.json",
+          "ok": true,
+          "tctl": 70.4,
+          "qpc": 57206685388,
+          "dpm_line": "04:56:43.827 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  70.4 C busy   6.7% avg   6.6% want 1000 cap 2000 max 2000 throttle none confirmed  up 51 down 90 thermal 0 err 0  src grbm submit   6.6% sdma   0.0%  power  57.6 W avg  58.1 W (gfx 17.2 W soc 14.4 W)",
+          "mhz": 1000,
+          "phases": [
+            "generation_measured"
+          ]
+        },
+        {
+          "file": "178-Probe.result.json",
+          "ok": true,
+          "tctl": 70.1,
+          "qpc": 57252989271,
+          "dpm_line": "04:56:48.457 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  70.1 C busy   6.9% avg   7.4% want 1000 cap 2000 max 2000 throttle none confirmed  up 51 down 90 thermal 0 err 0  src grbm submit   3.3% sdma   0.0%  power  52.7 W avg  57.7 W (gfx 17.2 W soc  9.6 W)",
+          "mhz": 1000,
+          "phases": [
+            "generation_measured"
+          ]
+        },
+        {
+          "file": "188-Probe.result.json",
+          "ok": true,
+          "tctl": 69.9,
+          "qpc": 57299461164,
+          "dpm_line": "04:56:53.105 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  69.9 C busy   3.3% avg   6.3% want 1000 cap 2000 max 2000 throttle none confirmed  up 51 down 90 thermal 0 err 0  src grbm submit   3.3% sdma   0.0%  power  53.2 W avg  56.0 W (gfx 17.2 W soc 10.2 W)",
+          "mhz": 1000,
+          "phases": [
+            "generation_measured"
+          ]
+        },
+        {
+          "file": "198-Probe.result.json",
+          "ok": true,
+          "tctl": 69.6,
+          "qpc": 57345593790,
+          "dpm_line": "04:56:57.719 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  69.6 C busy   3.3% avg   6.9% want 1000 cap 2000 max 2000 throttle none confirmed  up 51 down 90 thermal 0 err 0  src grbm submit   3.3% sdma   0.0%  power  53.8 W avg  57.1 W (gfx 17.4 W soc 10.4 W)",
+          "mhz": 1000,
+          "phases": [
+            "generation_measured"
+          ]
+        }
+      ],
+      "count": 22,
+      "min_c": 61.8,
+      "max_c": 77,
+      "clock_sample_counts": {
+        "500": 4,
+        "1000": 14,
+        "1600": 1,
+        "1700": 1,
+        "1900": 1,
+        "2000": 1
+      }
+    },
+    "supervisor": {
+      "Version": 3,
+      "Tag": "bd117-hip-profile",
+      "StartedUtc": "2026-10-11T02:55:22.2062261Z",
+      "DeadlineSeconds": 150,
+      "WorkloadStopSeconds": 120,
+      "Verdict": "PASS",
+      "Reason": null,
+      "ChildExit": 0,
+      "Finished": true,
+      "CleanupKnown": true,
+      "Leftovers": 0,
+      "TaskAbsent": true,
+      "ProfileClosed": true,
+      "HelpersClosed": true,
+      "Thermal": [
+        {
+          "Phase": "cooldown",
+          "Elapsed": 3.4938401,
+          "SampleReceiptQpc": 56424328532,
+          "DpmLine": "04:55:25.592 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  61.8 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle idle confirmed  up 37 down 70 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  41.9 W avg  41.1 W (gfx 10.2 W soc  6.2 W)",
+          "Tctl": 61.8
+        },
+        {
+          "Tctl": 61.8,
+          "DpmLine": "04:55:26.913 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  61.8 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle idle confirmed  up 37 down 70 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  44.1 W avg  42.0 W (gfx 10.2 W soc  8.2 W)",
+          "Stop": null,
+          "Elapsed": 4.8527629999999995,
+          "SampleReceiptQpc": 56437551116,
+          "Phase": "prelaunch"
+        },
+        {
+          "Elapsed": 7.977036,
+          "SampleReceiptQpc": 56469006622,
+          "Stop": null,
+          "DpmLine": "04:55:30.060 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  61.8 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle idle confirmed  up 37 down 70 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  36.5 W avg  38.0 W (gfx 10.2 W soc  0.7 W)",
+          "Tctl": 61.8
+        },
+        {
+          "Elapsed": 12.807745599999999,
+          "SampleReceiptQpc": 56517419005,
+          "Stop": null,
+          "DpmLine": "04:55:34.900 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  63.2 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle none confirmed  up 38 down 70 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  50.7 W avg  52.2 W (gfx 16.8 W soc  8.2 W)",
+          "Tctl": 63.2
+        },
+        {
+          "Elapsed": 17.2370973,
+          "SampleReceiptQpc": 56561839968,
+          "Stop": null,
+          "DpmLine": "04:55:39.342 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  63.2 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle idle confirmed  up 38 down 71 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  44.1 W avg  44.9 W (gfx 10.2 W soc  7.8 W)",
+          "Tctl": 63.2
+        },
+        {
+          "Elapsed": 21.7306223,
+          "SampleReceiptQpc": 56606726614,
+          "Stop": null,
+          "DpmLine": "04:55:43.830 dpm 2000 MHz 1000 mV (SMU 2000 MHz VID  88)  64.8 C busy   0.0% avg  18.2% want 2000 cap 2000 max 2000 throttle none confirmed session  up 42 down 71 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  88.0 W avg  59.2 W (gfx 37.2 W soc 24.7 W)",
+          "Tctl": 64.8
+        },
+        {
+          "Elapsed": 26.272945099999998,
+          "SampleReceiptQpc": 56652149857,
+          "Stop": null,
+          "DpmLine": "04:55:48.374 dpm 1900 MHz  984 mV (SMU 1900 MHz VID  90)  74.1 C busy   0.0% avg  21.1% want 1900 cap 2000 max 2000 throttle none confirmed session  up 47 down 77 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  85.8 W avg 108.5 W (gfx 45.3 W soc 14.3 W)",
+          "Tctl": 74.1
+        },
+        {
+          "Elapsed": 30.897619499999998,
+          "SampleReceiptQpc": 56698276483,
+          "Stop": null,
+          "DpmLine": "04:55:52.987 dpm 1700 MHz  952 mV (SMU 1700 MHz VID  95)  75.8 C busy  53.3% avg  43.2% want 1700 cap 2000 max 2000 throttle none confirmed session  up 49 down 81 thermal 0 err 0  src grbm submit  53.3% sdma   0.0%  power  78.1 W avg  93.8 W (gfx 39.3 W soc 12.6 W)",
+          "Tctl": 75.8
+        },
+        {
+          "Elapsed": 35.3457481,
+          "SampleReceiptQpc": 56742739624,
+          "Stop": null,
+          "DpmLine": "04:55:57.433 dpm 1600 MHz  935 mV (SMU 1600 MHz VID  98)  77.0 C busy   0.0% avg  36.9% want 1600 cap 2000 max 2000 throttle none confirmed session  up 51 down 84 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  77.8 W avg  95.5 W (gfx 37.9 W soc 13.7 W)",
+          "Tctl": 77
+        },
+        {
+          "Elapsed": 40.216088,
+          "SampleReceiptQpc": 56791260498,
+          "Stop": null,
+          "DpmLine": "04:56:02.281 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  75.8 C busy  10.0% avg   6.8% want 1000 cap 2000 max 2000 throttle none confirmed session  up 51 down 90 thermal 0 err 0  src grbm submit  10.0% sdma   0.0%  power  56.0 W avg  55.5 W (gfx 17.2 W soc 12.8 W)",
+          "Tctl": 75.8
+        },
+        {
+          "Elapsed": 44.8778903,
+          "SampleReceiptQpc": 56838286507,
+          "Stop": null,
+          "DpmLine": "04:56:06.988 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  74.8 C busy   6.5% avg   6.4% want 1000 cap 2000 max 2000 throttle none confirmed session  up 51 down 90 thermal 0 err 0  src grbm submit   6.6% sdma   0.0%  power  56.8 W avg  57.8 W (gfx 17.4 W soc 13.1 W)",
+          "Tctl": 74.8
+        },
+        {
+          "Elapsed": 49.5034043,
+          "SampleReceiptQpc": 56884428386,
+          "Stop": null,
+          "DpmLine": "04:56:11.597 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  73.8 C busy   0.0% avg   6.4% want 1000 cap 2000 max 2000 throttle none confirmed  up 51 down 90 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  53.5 W avg  57.6 W (gfx 17.2 W soc 10.4 W)",
+          "Tctl": 73.8
+        },
+        {
+          "Elapsed": 54.2049756,
+          "SampleReceiptQpc": 56931085842,
+          "Stop": null,
+          "DpmLine": "04:56:16.268 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  72.9 C busy   0.0% avg   5.2% want 1000 cap 2000 max 2000 throttle none confirmed  up 51 down 90 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  59.0 W avg  56.7 W (gfx 17.2 W soc 15.5 W)",
+          "Tctl": 72.9
+        },
+        {
+          "Elapsed": 58.7552653,
+          "SampleReceiptQpc": 56976982918,
+          "Stop": null,
+          "DpmLine": "04:56:20.854 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  72.1 C busy  10.0% avg   9.0% want 1000 cap 2000 max 2000 throttle none confirmed  up 51 down 90 thermal 0 err 0  src grbm submit   9.9% sdma   0.0%  power  90.4 W avg  58.3 W (gfx 46.6 W soc 10.2 W)",
+          "Tctl": 72.1
+        },
+        {
+          "Elapsed": 63.3046376,
+          "SampleReceiptQpc": 57022403734,
+          "Stop": null,
+          "DpmLine": "04:56:25.400 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  71.6 C busy  10.3% avg   7.5% want 1000 cap 2000 max 2000 throttle none confirmed  up 51 down 90 thermal 0 err 0  src grbm submit  10.0% sdma   0.0%  power  51.8 W avg  56.9 W (gfx 17.8 W soc  8.3 W)",
+          "Tctl": 71.6
+        },
+        {
+          "Elapsed": 67.8888806,
+          "SampleReceiptQpc": 57068420759,
+          "Stop": null,
+          "DpmLine": "04:56:30.000 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  71.1 C busy   3.3% avg   5.0% want 1000 cap 2000 max 2000 throttle none confirmed  up 51 down 90 thermal 0 err 0  src grbm submit   3.3% sdma   0.0%  power  58.4 W avg  57.0 W (gfx 18.4 W soc 14.0 W)",
+          "Tctl": 71.1
+        },
+        {
+          "Elapsed": 72.51757359999999,
+          "SampleReceiptQpc": 57114367160,
+          "Stop": null,
+          "DpmLine": "04:56:34.590 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  70.8 C busy  10.0% avg   8.1% want 1000 cap 2000 max 2000 throttle none confirmed  up 51 down 90 thermal 0 err 0  src grbm submit   9.9% sdma   0.0%  power  55.2 W avg  57.7 W (gfx 17.2 W soc 12.1 W)",
+          "Tctl": 70.8
+        },
+        {
+          "Elapsed": 77.10185349999999,
+          "SampleReceiptQpc": 57160122397,
+          "Stop": null,
+          "DpmLine": "04:56:39.165 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  70.5 C busy   6.7% avg   7.2% want 1000 cap 2000 max 2000 throttle none confirmed  up 51 down 90 thermal 0 err 0  src grbm submit   6.6% sdma   0.0%  power  61.3 W avg  57.8 W (gfx 17.2 W soc 13.0 W)",
+          "Tctl": 70.5
+        },
+        {
+          "Elapsed": 81.7338181,
+          "SampleReceiptQpc": 57206685388,
+          "Stop": null,
+          "DpmLine": "04:56:43.827 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  70.4 C busy   6.7% avg   6.6% want 1000 cap 2000 max 2000 throttle none confirmed  up 51 down 90 thermal 0 err 0  src grbm submit   6.6% sdma   0.0%  power  57.6 W avg  58.1 W (gfx 17.2 W soc 14.4 W)",
+          "Tctl": 70.4
+        },
+        {
+          "Elapsed": 86.3658122,
+          "SampleReceiptQpc": 57252989271,
+          "Stop": null,
+          "DpmLine": "04:56:48.457 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  70.1 C busy   6.9% avg   7.4% want 1000 cap 2000 max 2000 throttle none confirmed  up 51 down 90 thermal 0 err 0  src grbm submit   3.3% sdma   0.0%  power  52.7 W avg  57.7 W (gfx 17.2 W soc  9.6 W)",
+          "Tctl": 70.1
+        },
+        {
+          "Elapsed": 91.01059389999999,
+          "SampleReceiptQpc": 57299461164,
+          "Stop": null,
+          "DpmLine": "04:56:53.105 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  69.9 C busy   3.3% avg   6.3% want 1000 cap 2000 max 2000 throttle none confirmed  up 51 down 90 thermal 0 err 0  src grbm submit   3.3% sdma   0.0%  power  53.2 W avg  56.0 W (gfx 17.2 W soc 10.2 W)",
+          "Tctl": 69.9
+        },
+        {
+          "Elapsed": 95.609175,
+          "SampleReceiptQpc": 57345593790,
+          "Stop": null,
+          "DpmLine": "04:56:57.719 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  69.6 C busy   3.3% avg   6.9% want 1000 cap 2000 max 2000 throttle none confirmed  up 51 down 90 thermal 0 err 0  src grbm submit   3.3% sdma   0.0%  power  53.8 W avg  57.1 W (gfx 17.4 W soc 10.4 W)",
+          "Tctl": 69.6
+        }
+      ],
+      "CleanupErrors": [],
+      "ElapsedSeconds": 104.959993,
+      "WorkloadResult": {
+        "Pid": 6416,
+        "EndQpc": 57381669173,
+        "EndUtc": "2026-10-11T02:57:01.3522029Z",
+        "ExitCode": 0,
+        "StartQpc": 56464560894,
+        "StartUtc": "2026-10-11T02:55:30.5005806Z",
+        "StartTicks": 639272841305005806,
+        "Known": true
+      },
+      "WorkloadFinishObservedElapsed": 99.33113469999999,
+      "WorkloadStopRequestedElapsed": 99.3330642,
+      "WorkloadIdentity": {
+        "Workload": {
+          "StartQpc": 56464560894,
+          "Pid": 6416,
+          "StartTicks": 639272841305005806,
+          "StartUtc": "2026-10-11T02:55:30.5005806Z"
+        },
+        "Worker": {
+          "StartTicks": 639272841292728924,
+          "Pid": 5424
+        }
+      },
+      "WorkloadStoppedElapsed": 103.5585909,
+      "Postflight": {
+        "Hashes": {
+          "C:\\BC250\\tmp\\bd117\\candidate\\ggml-hip.dll": "FB0E315EDAC2478B50C43B7426BE10AA433DE1B8C417C1735CC0FA5428CEA450",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-bench-impl.dll": "FAA129B29624F53BCEFD90F81DD8175826A81FAEC11CD6FE41C21C5CB6A65C57",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-quantize-impl.dll": "B5E83539380E475CEA57EF3C86A101860E563D54BAAB7AF43927A4DD8BE9743D",
+          "C:\\BC250\\tmp\\bd117\\candidate\\geometry.exe": "5652B4A4CB05BA36C8DD34554088226F2E45FC175EDF43D4A882B95023A6DED3",
+          "C:\\BC250\\tmp\\bd117\\candidate\\vadd.exe": "185F7E1D4F054855BBA8D601ADED70445750D693473BEFF0DA5D6CAE71885B9C",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-bench.exe": "A89C9F1D86BBAB68E88E4CE901943E5A70ACC823FCFA7DE37DF75BE0F7CBC912",
+          "C:\\Program Files\\amdgpu-wddm\\vulkan\\vulkan_radeon.dll": "90515C36843DC22A242D34450E5D070E0F671B6D7203B7943A3104578EC0EA4A",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-completion-impl.dll": "15F0371F11370164467EE407835056A07F218C784F792B8ED335D4E2733613A9",
+          "C:\\BC250\\tmp\\bd117\\candidate\\ggml-cpu.dll": "0FC2FC13BE167C964A4D0717536ADE056CB2AC5DB686E7861DA7D417D5D96B3A",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-batched-bench-impl.dll": "5882DD612EC0DA89520BA9BD4154B7224AAB59E9F8E6E199658B852121B64DA2",
+          "C:\\BC250\\tmp\\bd117\\candidate\\gemm_check.exe": "5829109ED04069215C944F7E312DE9EF0C1BCE2EDA15C49F857044B04662F440",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-perplexity-impl.dll": "773B1AEA7730E5ADCFCAFFD2AC1252906962BB480CBE2643182CE0F198A43C09",
+          "C:\\BC250\\tmp\\bd117\\candidate\\ggml.dll": "C4283F4376D9C235F86517A879B0E26C18C39E206449139CD5236CF18B14290E",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama.dll": "CE3BD45B3F38250E1B70A2E78F12DCCA163CE65FF4483A2526A553234363D025",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-fit-params-impl.dll": "6D090898E83A6BB61B9C2EE751ABAA7C29B1110A1023D60EDDA9CB8EEFB171E0",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-bench-profile.exe": "49E7E78D6A142F63012F8520531E7F14A8BE271B7BEB602491D16DF9406CA02E",
+          "C:\\BC250\\tmp\\bd117\\candidate\\halfblock.exe": "45308029FFC745E0879C8D2E5A9315763B52A40183AB8237F1ECB44A03F2C8FC",
+          "C:\\BC250\\tmp\\bd117\\candidate\\amdhip64.dll": "B0FEB14BD34797DFBB866B504C13859AD0BD15935C62D3126AF019CA3311F106",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-completion.exe": "C027ADFB7BF3DF368516A90C47B1C190E776F24784C5F7087F63AE8B036B4826",
+          "C:\\BC250\\tmp\\bd117\\candidate\\builtins.exe": "DC60D9B8EBE9F29442F3BA8F947C86275202AC595FD07EDE8DCD22C7E035DC84",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-common.dll": "E0A0D7FB80ECABECCF89B6BBC55C27FC20C60AF8D45EC90BDE9F916874DC7EAB",
+          "C:\\BC250\\tmp\\bd117\\candidate\\hipbench.exe": "354CACAE3EDE36DD5304271306A4520260EEFBC04668758CFAE5AA98B786E64C",
+          "C:\\BC250\\tmp\\bd117\\candidate\\bc250hipblas.dll": "3E8AB7DF04B819AE8599FACC5CFD63A1CB9FC5607E56312B69B1E287305274E9",
+          "C:\\BC250\\tmp\\bd117\\candidate\\ggml-base.dll": "59A6169DDB84E0CB3217FA67F71578B9965F34671D99A7992E3E7192E40B05A8"
+        },
+        "Ok": true,
+        "BootUtc": "2026-10-11T01:21:23.5000000Z",
+        "FreeMiB": 4900.9453125
+      },
+      "TctlMax": 77,
+      "Preflight": {
+        "DpmMode": 1,
+        "DpmIdleMHz": 500,
+        "FreeMiB": 4942.86328125,
+        "DriverVersion": "0.7.216.100",
+        "Ok": true,
+        "BootUtc": "2026-10-11T01:21:23.5000000Z",
+        "Hashes": {
+          "C:\\BC250\\tmp\\bd117\\candidate\\ggml-hip.dll": "FB0E315EDAC2478B50C43B7426BE10AA433DE1B8C417C1735CC0FA5428CEA450",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-bench-impl.dll": "FAA129B29624F53BCEFD90F81DD8175826A81FAEC11CD6FE41C21C5CB6A65C57",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-quantize-impl.dll": "B5E83539380E475CEA57EF3C86A101860E563D54BAAB7AF43927A4DD8BE9743D",
+          "C:\\BC250\\tmp\\bd117\\candidate\\geometry.exe": "5652B4A4CB05BA36C8DD34554088226F2E45FC175EDF43D4A882B95023A6DED3",
+          "C:\\BC250\\tmp\\bd117\\candidate\\vadd.exe": "185F7E1D4F054855BBA8D601ADED70445750D693473BEFF0DA5D6CAE71885B9C",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-bench.exe": "A89C9F1D86BBAB68E88E4CE901943E5A70ACC823FCFA7DE37DF75BE0F7CBC912",
+          "C:\\Program Files\\amdgpu-wddm\\vulkan\\vulkan_radeon.dll": "90515C36843DC22A242D34450E5D070E0F671B6D7203B7943A3104578EC0EA4A",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-completion-impl.dll": "15F0371F11370164467EE407835056A07F218C784F792B8ED335D4E2733613A9",
+          "C:\\BC250\\tmp\\bd117\\candidate\\ggml-cpu.dll": "0FC2FC13BE167C964A4D0717536ADE056CB2AC5DB686E7861DA7D417D5D96B3A",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-batched-bench-impl.dll": "5882DD612EC0DA89520BA9BD4154B7224AAB59E9F8E6E199658B852121B64DA2",
+          "C:\\BC250\\tmp\\bd117\\candidate\\gemm_check.exe": "5829109ED04069215C944F7E312DE9EF0C1BCE2EDA15C49F857044B04662F440",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-perplexity-impl.dll": "773B1AEA7730E5ADCFCAFFD2AC1252906962BB480CBE2643182CE0F198A43C09",
+          "C:\\BC250\\tmp\\bd117\\candidate\\ggml.dll": "C4283F4376D9C235F86517A879B0E26C18C39E206449139CD5236CF18B14290E",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama.dll": "CE3BD45B3F38250E1B70A2E78F12DCCA163CE65FF4483A2526A553234363D025",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-fit-params-impl.dll": "6D090898E83A6BB61B9C2EE751ABAA7C29B1110A1023D60EDDA9CB8EEFB171E0",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-bench-profile.exe": "49E7E78D6A142F63012F8520531E7F14A8BE271B7BEB602491D16DF9406CA02E",
+          "C:\\BC250\\tmp\\bd117\\candidate\\halfblock.exe": "45308029FFC745E0879C8D2E5A9315763B52A40183AB8237F1ECB44A03F2C8FC",
+          "C:\\BC250\\tmp\\bd117\\candidate\\amdhip64.dll": "B0FEB14BD34797DFBB866B504C13859AD0BD15935C62D3126AF019CA3311F106",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-completion.exe": "C027ADFB7BF3DF368516A90C47B1C190E776F24784C5F7087F63AE8B036B4826",
+          "C:\\BC250\\tmp\\bd117\\candidate\\builtins.exe": "DC60D9B8EBE9F29442F3BA8F947C86275202AC595FD07EDE8DCD22C7E035DC84",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-common.dll": "E0A0D7FB80ECABECCF89B6BBC55C27FC20C60AF8D45EC90BDE9F916874DC7EAB",
+          "C:\\BC250\\tmp\\bd117\\candidate\\hipbench.exe": "354CACAE3EDE36DD5304271306A4520260EEFBC04668758CFAE5AA98B786E64C",
+          "C:\\BC250\\tmp\\bd117\\candidate\\bc250hipblas.dll": "3E8AB7DF04B819AE8599FACC5CFD63A1CB9FC5607E56312B69B1E287305274E9",
+          "C:\\BC250\\tmp\\bd117\\candidate\\ggml-base.dll": "59A6169DDB84E0CB3217FA67F71578B9965F34671D99A7992E3E7192E40B05A8"
+        },
+        "CuMode": 40,
+        "DpmMaxMHz": 2000,
+        "User": "BC250-A\\bc250"
+      },
+      "RunId": "8da406deeeee4559aaed0715bc77d1a5",
+      "ProfilerSession": "BC250-Seg0Profile-8da406deeeee4559aaed0715bc77d1a5",
+      "ExitCode": 0
+    }
+  },
+  "fa_off": {
+    "sha256": {
+      "stderr.txt": "5e9f49ad599806555c8e8ba72a23e7831516db75e702e21984f0c249e47167bf",
+      "stdout.txt": "e9c86adba235f8fac96d35485591776079079d5246785316020525f8846da8b9",
+      "supervisor.json": "35d6ebf88336a132ceec7c1ac0834412ac456a0198821e0a7e589b4ef76c6826",
+      "001-Probe.result.json": "f0d352bea7255e078a3e64385c76214f10c8eba1ddcb87f592768c41d8f105cf",
+      "003-Probe.result.json": "f40f58974b18824de4d593e8a03d48df41c8d9a5d632f09bceabb0c4e61b5cce",
+      "006-Probe.result.json": "4416f4ead456e4ac89ffc8a042943746f5f55b26b347e18acc718661062c06b3",
+      "016-Probe.result.json": "5d644e715ad15df6182316b6da49da00059746071ba1e3a9585d434625ab5631",
+      "026-Probe.result.json": "a80b9c0f4fd113154bf235b25bdae62a7373f7131458254b18db3dad8c386b47",
+      "036-Probe.result.json": "5e88e779a87ca024026247271918746a4ce2fc69a0348c306ae9466447ca6348",
+      "046-Probe.result.json": "9d2655ad1b2b26f58f17b8d8476ad8a797c080a02731c28a57daa959398b0a9f",
+      "056-Probe.result.json": "cef2c1358bf1e2d2a34d20bfc3a98b35ba444c09cff329ddbb68cff5eccb7026"
+    },
+    "pid": [
+      7224
+    ],
+    "phases": {
+      "prompt_warmup": {
+        "count": 1,
+        "lines": [
+          3374
+        ],
+        "wall_ms_sum": 2492.3213,
+        "wall_ms_min": 2492.3213,
+        "wall_ms_median": 2492.3213,
+        "wall_ms_max": 2492.3213,
+        "dispatches": {
+          "sum": 1632,
+          "distribution": {
+            "1632": 1
+          }
+        },
+        "submissions": {
+          "sum": 169,
+          "distribution": {
+            "169": 1
+          }
+        },
+        "batches": {
+          "sum": 159,
+          "distribution": {
+            "159": 1
+          }
+        },
+        "dispatches_batched": {
+          "sum": 1622,
+          "distribution": {
+            "1622": 1
+          }
+        },
+        "waits": {
+          "sum": 147,
+          "distribution": {
+            "147": 1
+          }
+        },
+        "waits_fast": {
+          "sum": 0,
+          "distribution": {
+            "0": 1
+          }
+        },
+        "nonfast_waits": {
+          "sum": 147,
+          "distribution": {
+            "147": 1
+          }
+        }
+      },
+      "prompt_measured": {
+        "count": 1,
+        "lines": [
+          3377
+        ],
+        "wall_ms_sum": 2441.8024,
+        "wall_ms_min": 2441.8024,
+        "wall_ms_median": 2441.8024,
+        "wall_ms_max": 2441.8024,
+        "dispatches": {
+          "sum": 1632,
+          "distribution": {
+            "1632": 1
+          }
+        },
+        "submissions": {
+          "sum": 51,
+          "distribution": {
+            "51": 1
+          }
+        },
+        "batches": {
+          "sum": 51,
+          "distribution": {
+            "51": 1
+          }
+        },
+        "dispatches_batched": {
+          "sum": 1632,
+          "distribution": {
+            "1632": 1
+          }
+        },
+        "waits": {
+          "sum": 91,
+          "distribution": {
+            "91": 1
+          }
+        },
+        "waits_fast": {
+          "sum": 41,
+          "distribution": {
+            "41": 1
+          }
+        },
+        "nonfast_waits": {
+          "sum": 50,
+          "distribution": {
+            "50": 1
+          }
+        }
+      },
+      "generation_warmup": {
+        "count": 1,
+        "lines": [
+          5113
+        ],
+        "wall_ms_sum": 61.713,
+        "wall_ms_min": 61.713,
+        "wall_ms_median": 61.713,
+        "wall_ms_max": 61.713,
+        "dispatches": {
+          "sum": 1203,
+          "distribution": {
+            "1203": 1
+          }
+        },
+        "submissions": {
+          "sum": 52,
+          "distribution": {
+            "52": 1
+          }
+        },
+        "batches": {
+          "sum": 52,
+          "distribution": {
+            "52": 1
+          }
+        },
+        "dispatches_batched": {
+          "sum": 1203,
+          "distribution": {
+            "1203": 1
+          }
+        },
+        "waits": {
+          "sum": 76,
+          "distribution": {
+            "76": 1
+          }
+        },
+        "waits_fast": {
+          "sum": 27,
+          "distribution": {
+            "27": 1
+          }
+        },
+        "nonfast_waits": {
+          "sum": 49,
+          "distribution": {
+            "49": 1
+          }
+        }
+      },
+      "generation_measured": {
+        "count": 128,
+        "lines": [
+          5115,
+          5116,
+          5117,
+          5118,
+          5119,
+          5120,
+          5121,
+          5122,
+          5123,
+          5124,
+          5125,
+          5126,
+          5127,
+          5128,
+          5129,
+          5130,
+          5131,
+          5132,
+          5133,
+          5134,
+          5135,
+          5136,
+          5137,
+          5138,
+          5139,
+          5140,
+          5141,
+          5142,
+          5143,
+          5144,
+          5145,
+          5146,
+          5147,
+          5148,
+          5149,
+          5150,
+          5151,
+          5152,
+          5153,
+          5154,
+          5155,
+          5156,
+          5157,
+          5158,
+          5159,
+          5160,
+          5161,
+          5162,
+          5163,
+          5164,
+          5165,
+          5166,
+          5167,
+          5168,
+          5169,
+          5170,
+          5171,
+          5172,
+          5173,
+          5174,
+          5175,
+          5176,
+          5177,
+          5178,
+          5179,
+          5180,
+          5181,
+          5182,
+          5183,
+          5184,
+          5185,
+          5186,
+          5187,
+          5188,
+          5189,
+          5190,
+          5191,
+          5192,
+          5193,
+          5194,
+          5195,
+          5196,
+          5197,
+          5198,
+          5199,
+          5200,
+          5201,
+          5202,
+          5203,
+          5204,
+          5205,
+          5206,
+          5207,
+          5208,
+          5209,
+          5210,
+          5211,
+          5212,
+          5213,
+          5214,
+          5215,
+          5216,
+          5217,
+          5218,
+          5219,
+          5220,
+          5221,
+          5222,
+          5223,
+          5224,
+          5225,
+          5226,
+          5227,
+          5228,
+          5229,
+          5230,
+          5231,
+          5232,
+          5233,
+          5234,
+          5235,
+          5236,
+          5237,
+          5238,
+          5239,
+          5240,
+          5241,
+          5242
+        ],
+        "wall_ms_sum": 6576.604,
+        "wall_ms_min": 45.1051,
+        "wall_ms_median": 50.98695,
+        "wall_ms_max": 59.4242,
+        "dispatches": {
+          "sum": 153984,
+          "distribution": {
+            "1203": 128
+          }
+        },
+        "submissions": {
+          "sum": 6272,
+          "distribution": {
+            "49": 128
+          }
+        },
+        "batches": {
+          "sum": 6272,
+          "distribution": {
+            "49": 128
+          }
+        },
+        "dispatches_batched": {
+          "sum": 153984,
+          "distribution": {
+            "1203": 128
+          }
+        },
+        "waits": {
+          "sum": 11648,
+          "distribution": {
+            "91": 128
+          }
+        },
+        "waits_fast": {
+          "sum": 5376,
+          "distribution": {
+            "42": 128
+          }
+        },
+        "nonfast_waits": {
+          "sum": 6272,
+          "distribution": {
+            "49": 128
+          }
+        }
+      },
+      "prompt_sync": {
+        "count": 2,
+        "lines": [
+          3375,
+          3378
+        ],
+        "wall_ms_sum": 0.007299999999999999,
+        "wall_ms_min": 0.0034,
+        "wall_ms_median": 0.0036499999999999996,
+        "wall_ms_max": 0.0039,
+        "dispatches": {
+          "sum": 0,
+          "distribution": {
+            "0": 2
+          }
+        },
+        "submissions": {
+          "sum": 0,
+          "distribution": {
+            "0": 2
+          }
+        },
+        "batches": {
+          "sum": 0,
+          "distribution": {
+            "0": 2
+          }
+        },
+        "dispatches_batched": {
+          "sum": 0,
+          "distribution": {
+            "0": 2
+          }
+        },
+        "waits": {
+          "sum": 2,
+          "distribution": {
+            "1": 2
+          }
+        },
+        "waits_fast": {
+          "sum": 2,
+          "distribution": {
+            "1": 2
+          }
+        },
+        "nonfast_waits": {
+          "sum": 0,
+          "distribution": {
+            "0": 2
+          }
+        }
+      }
+    },
+    "logged_graphs_and_buffers": [
+      {
+        "line": 1642,
+        "text": "load_tensors:        ROCm0 model buffer size =  6637.69 MiB"
+      },
+      {
+        "line": 1643,
+        "text": "load_tensors:    ROCm_Host model buffer size =   787.50 MiB"
+      },
+      {
+        "line": 1654,
+        "text": "llama_context: flash_attn            = disabled"
+      },
+      {
+        "line": 3368,
+        "text": "sched_reserve:      ROCm0 compute buffer size =   567.52 MiB"
+      },
+      {
+        "line": 3369,
+        "text": "sched_reserve:  ROCm_Host compute buffer size =    48.02 MiB"
+      },
+      {
+        "line": 3370,
+        "text": "sched_reserve: graph: nodes = 2221, splits = 2, input objects = 4, input tensors = 13"
+      },
+      {
+        "line": 3384,
+        "text": "~llama_context:      ROCm0 compute buffer size is 567.5176 MiB, matches expectation of 567.5176 MiB"
+      },
+      {
+        "line": 3385,
+        "text": "~llama_context:  ROCm_Host compute buffer size is  48.0215 MiB, matches expectation of  48.0215 MiB"
+      },
+      {
+        "line": 3393,
+        "text": "llama_context: flash_attn            = disabled"
+      },
+      {
+        "line": 5107,
+        "text": "sched_reserve:      ROCm0 compute buffer size =   141.63 MiB"
+      },
+      {
+        "line": 5108,
+        "text": "sched_reserve:  ROCm_Host compute buffer size =    11.76 MiB"
+      },
+      {
+        "line": 5109,
+        "text": "sched_reserve: graph: nodes = 2221, splits = 2, input objects = 4, input tensors = 13"
+      },
+      {
+        "line": 5248,
+        "text": "~llama_context:      ROCm0 compute buffer size is 141.6294 MiB, matches expectation of 141.6294 MiB"
+      },
+      {
+        "line": 5249,
+        "text": "~llama_context:  ROCm_Host compute buffer size is  11.7554 MiB, matches expectation of  11.7554 MiB"
+      }
+    ],
+    "benchmark_stdout": "| model                          |       size |     params | backend    | ngl |  fa |            test |                  t/s |\n| ------------------------------ | ---------: | ---------: | ---------- | --: | --: | --------------: | -------------------: |\n| gemma4 ?B Q4_0                 |   6.48 GiB |    11.91 B | ROCm       |  99 |   0 |           pp512 |        209.59 \u00b1 0.00 |\n| gemma4 ?B Q4_0                 |   6.48 GiB |    11.91 B | ROCm       |  99 |   0 |           tg128 |         19.20 \u00b1 0.00 |\n\nbuild: unknown (0)\n",
+    "thermal": {
+      "samples": [
+        {
+          "file": "001-Probe.result.json",
+          "ok": true,
+          "tctl": 62.6,
+          "qpc": 58701881395,
+          "dpm_line": "04:59:13.347 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  62.6 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle idle confirmed  up 56 down 102 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  40.3 W avg  41.2 W (gfx  9.6 W soc  5.2 W)",
+          "mhz": 500,
+          "phases": []
+        },
+        {
+          "file": "003-Probe.result.json",
+          "ok": true,
+          "tctl": 62.5,
+          "qpc": 58715363650,
+          "dpm_line": "04:59:14.695 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  62.5 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle idle confirmed  up 56 down 102 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  41.7 W avg  39.6 W (gfx 10.2 W soc  5.9 W)",
+          "mhz": 500,
+          "phases": []
+        },
+        {
+          "file": "006-Probe.result.json",
+          "ok": true,
+          "tctl": 62.4,
+          "qpc": 58746787760,
+          "dpm_line": "04:59:17.838 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  62.4 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle idle confirmed  up 56 down 102 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  46.1 W avg  40.7 W (gfx 10.2 W soc 10.2 W)",
+          "mhz": 500,
+          "phases": []
+        },
+        {
+          "file": "016-Probe.result.json",
+          "ok": true,
+          "tctl": 63.6,
+          "qpc": 58791466791,
+          "dpm_line": "04:59:22.304 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  63.6 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle none confirmed  up 57 down 102 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  52.6 W avg  51.7 W (gfx 16.6 W soc 10.2 W)",
+          "mhz": 1000,
+          "phases": []
+        },
+        {
+          "file": "026-Probe.result.json",
+          "ok": true,
+          "tctl": 63.4,
+          "qpc": 58837142372,
+          "dpm_line": "04:59:26.869 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  63.4 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle idle confirmed  up 57 down 103 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  45.3 W avg  44.7 W (gfx 10.2 W soc  8.9 W)",
+          "mhz": 500,
+          "phases": []
+        },
+        {
+          "file": "036-Probe.result.json",
+          "ok": true,
+          "tctl": 71.1,
+          "qpc": 58881770870,
+          "dpm_line": "04:59:31.336 dpm 2000 MHz 1000 mV (SMU 2000 MHz VID  88)  71.1 C busy 100.0% avg  99.9% want 2000 cap 2000 max 2000 throttle none confirmed session  up 61 down 103 thermal 0 err 0  src grbm submit 100.0% sdma   0.0%  power 157.1 W avg  92.7 W (gfx 123.6 W soc  5.9 W)",
+          "mhz": 2000,
+          "phases": [
+            "prompt_warmup"
+          ]
+        },
+        {
+          "file": "046-Probe.result.json",
+          "ok": true,
+          "tctl": 87.6,
+          "qpc": 58926197267,
+          "dpm_line": "04:59:35.777 dpm 1500 MHz  919 mV (SMU 1500 MHz VID 100)  87.6 C busy  56.7% avg  60.2% want 1500 cap 1700 max 2000 throttle none confirmed session  up 61 down 108 thermal 1 err 0  src grbm submit  63.4% sdma   0.0%  power 149.7 W avg 151.5 W (gfx 117.2 W soc  4.6 W)",
+          "mhz": 1500,
+          "phases": [
+            "generation_measured"
+          ]
+        },
+        {
+          "file": "056-Probe.result.json",
+          "ok": true,
+          "tctl": 85.2,
+          "qpc": 58970936268,
+          "dpm_line": "04:59:40.251 dpm 1200 MHz  860 mV (SMU 1200 MHz VID 110)  85.2 C busy  66.7% avg  66.9% want 1200 cap 1400 max 2000 throttle none confirmed session  up 61 down 111 thermal 1 err 0  src grbm submit  63.3% sdma   0.0%  power  91.1 W avg  81.2 W (gfx 52.0 W soc  7.8 W)",
+          "mhz": 1200,
+          "phases": [
+            "generation_measured"
+          ]
+        }
+      ],
+      "count": 8,
+      "min_c": 62.4,
+      "max_c": 87.6,
+      "clock_sample_counts": {
+        "500": 4,
+        "1000": 1,
+        "1200": 1,
+        "1500": 1,
+        "2000": 1
+      }
+    },
+    "supervisor": {
+      "Version": 3,
+      "Tag": "bd117-hip-profile-fa-off",
+      "StartedUtc": "2026-10-11T02:59:09.9281622Z",
+      "DeadlineSeconds": 150,
+      "WorkloadStopSeconds": 120,
+      "Verdict": "PASS",
+      "Reason": null,
+      "ChildExit": 0,
+      "Finished": true,
+      "CleanupKnown": true,
+      "Leftovers": 0,
+      "TaskAbsent": true,
+      "ProfileClosed": true,
+      "HelpersClosed": true,
+      "Thermal": [
+        {
+          "Phase": "cooldown",
+          "Elapsed": 3.5518691,
+          "SampleReceiptQpc": 58701881395,
+          "DpmLine": "04:59:13.347 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  62.6 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle idle confirmed  up 56 down 102 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  40.3 W avg  41.2 W (gfx  9.6 W soc  5.2 W)",
+          "Tctl": 62.6
+        },
+        {
+          "Tctl": 62.5,
+          "DpmLine": "04:59:14.695 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  62.5 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle idle confirmed  up 56 down 102 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  41.7 W avg  39.6 W (gfx 10.2 W soc  5.9 W)",
+          "Stop": null,
+          "Elapsed": 4.9159603,
+          "SampleReceiptQpc": 58715363650,
+          "Phase": "prelaunch"
+        },
+        {
+          "Elapsed": 8.0082034,
+          "SampleReceiptQpc": 58746787760,
+          "Stop": null,
+          "DpmLine": "04:59:17.838 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  62.4 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle idle confirmed  up 56 down 102 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  46.1 W avg  40.7 W (gfx 10.2 W soc 10.2 W)",
+          "Tctl": 62.4
+        },
+        {
+          "Elapsed": 12.473593699999999,
+          "SampleReceiptQpc": 58791466791,
+          "Stop": null,
+          "DpmLine": "04:59:22.304 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  63.6 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle none confirmed  up 57 down 102 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  52.6 W avg  51.7 W (gfx 16.6 W soc 10.2 W)",
+          "Tctl": 63.6
+        },
+        {
+          "Elapsed": 17.055128,
+          "SampleReceiptQpc": 58837142372,
+          "Stop": null,
+          "DpmLine": "04:59:26.869 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  63.4 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle idle confirmed  up 57 down 103 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  45.3 W avg  44.7 W (gfx 10.2 W soc  8.9 W)",
+          "Tctl": 63.4
+        },
+        {
+          "Elapsed": 21.5292127,
+          "SampleReceiptQpc": 58881770870,
+          "Stop": null,
+          "DpmLine": "04:59:31.336 dpm 2000 MHz 1000 mV (SMU 2000 MHz VID  88)  71.1 C busy 100.0% avg  99.9% want 2000 cap 2000 max 2000 throttle none confirmed session  up 61 down 103 thermal 0 err 0  src grbm submit 100.0% sdma   0.0%  power 157.1 W avg  92.7 W (gfx 123.6 W soc  5.9 W)",
+          "Tctl": 71.1
+        },
+        {
+          "Elapsed": 25.9674247,
+          "SampleReceiptQpc": 58926197267,
+          "Stop": null,
+          "DpmLine": "04:59:35.777 dpm 1500 MHz  919 mV (SMU 1500 MHz VID 100)  87.6 C busy  56.7% avg  60.2% want 1500 cap 1700 max 2000 throttle none confirmed session  up 61 down 108 thermal 1 err 0  src grbm submit  63.4% sdma   0.0%  power 149.7 W avg 151.5 W (gfx 117.2 W soc  4.6 W)",
+          "Tctl": 87.6
+        },
+        {
+          "Elapsed": 30.4245728,
+          "SampleReceiptQpc": 58970936268,
+          "Stop": null,
+          "DpmLine": "04:59:40.251 dpm 1200 MHz  860 mV (SMU 1200 MHz VID 110)  85.2 C busy  66.7% avg  66.9% want 1200 cap 1400 max 2000 throttle none confirmed session  up 61 down 111 thermal 1 err 0  src grbm submit  63.3% sdma   0.0%  power  91.1 W avg  81.2 W (gfx 52.0 W soc  7.8 W)",
+          "Tctl": 85.2
+        }
+      ],
+      "CleanupErrors": [],
+      "ElapsedSeconds": 38.0980552,
+      "WorkloadResult": {
+        "Pid": 7224,
+        "EndQpc": 58992887282,
+        "EndUtc": "2026-10-11T02:59:42.4740462Z",
+        "ExitCode": 0,
+        "StartQpc": 58742364917,
+        "StartUtc": "2026-10-11T02:59:17.4296534Z",
+        "StartTicks": 639272843574296534,
+        "Known": true
+      },
+      "WorkloadFinishObservedElapsed": 32.7333603,
+      "WorkloadStopRequestedElapsed": 32.734977799999996,
+      "WorkloadIdentity": {
+        "Workload": {
+          "StartQpc": 58742364917,
+          "Pid": 7224,
+          "StartTicks": 639272843574296534,
+          "StartUtc": "2026-10-11T02:59:17.4296534Z"
+        },
+        "Worker": {
+          "StartTicks": 639272843570606760,
+          "Pid": 7712
+        }
+      },
+      "WorkloadStoppedElapsed": 36.7491975,
+      "Postflight": {
+        "Hashes": {
+          "C:\\BC250\\tmp\\bd117\\candidate\\ggml-hip.dll": "FB0E315EDAC2478B50C43B7426BE10AA433DE1B8C417C1735CC0FA5428CEA450",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-bench-impl.dll": "FAA129B29624F53BCEFD90F81DD8175826A81FAEC11CD6FE41C21C5CB6A65C57",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-quantize-impl.dll": "B5E83539380E475CEA57EF3C86A101860E563D54BAAB7AF43927A4DD8BE9743D",
+          "C:\\BC250\\tmp\\bd117\\candidate\\geometry.exe": "5652B4A4CB05BA36C8DD34554088226F2E45FC175EDF43D4A882B95023A6DED3",
+          "C:\\BC250\\tmp\\bd117\\candidate\\vadd.exe": "185F7E1D4F054855BBA8D601ADED70445750D693473BEFF0DA5D6CAE71885B9C",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-bench.exe": "A89C9F1D86BBAB68E88E4CE901943E5A70ACC823FCFA7DE37DF75BE0F7CBC912",
+          "C:\\Program Files\\amdgpu-wddm\\vulkan\\vulkan_radeon.dll": "90515C36843DC22A242D34450E5D070E0F671B6D7203B7943A3104578EC0EA4A",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-completion-impl.dll": "15F0371F11370164467EE407835056A07F218C784F792B8ED335D4E2733613A9",
+          "C:\\BC250\\tmp\\bd117\\candidate\\ggml-cpu.dll": "0FC2FC13BE167C964A4D0717536ADE056CB2AC5DB686E7861DA7D417D5D96B3A",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-batched-bench-impl.dll": "5882DD612EC0DA89520BA9BD4154B7224AAB59E9F8E6E199658B852121B64DA2",
+          "C:\\BC250\\tmp\\bd117\\candidate\\gemm_check.exe": "5829109ED04069215C944F7E312DE9EF0C1BCE2EDA15C49F857044B04662F440",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-perplexity-impl.dll": "773B1AEA7730E5ADCFCAFFD2AC1252906962BB480CBE2643182CE0F198A43C09",
+          "C:\\BC250\\tmp\\bd117\\candidate\\ggml.dll": "C4283F4376D9C235F86517A879B0E26C18C39E206449139CD5236CF18B14290E",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama.dll": "CE3BD45B3F38250E1B70A2E78F12DCCA163CE65FF4483A2526A553234363D025",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-fit-params-impl.dll": "6D090898E83A6BB61B9C2EE751ABAA7C29B1110A1023D60EDDA9CB8EEFB171E0",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-bench-profile.exe": "49E7E78D6A142F63012F8520531E7F14A8BE271B7BEB602491D16DF9406CA02E",
+          "C:\\BC250\\tmp\\bd117\\candidate\\halfblock.exe": "45308029FFC745E0879C8D2E5A9315763B52A40183AB8237F1ECB44A03F2C8FC",
+          "C:\\BC250\\tmp\\bd117\\candidate\\amdhip64.dll": "B0FEB14BD34797DFBB866B504C13859AD0BD15935C62D3126AF019CA3311F106",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-completion.exe": "C027ADFB7BF3DF368516A90C47B1C190E776F24784C5F7087F63AE8B036B4826",
+          "C:\\BC250\\tmp\\bd117\\candidate\\builtins.exe": "DC60D9B8EBE9F29442F3BA8F947C86275202AC595FD07EDE8DCD22C7E035DC84",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-common.dll": "E0A0D7FB80ECABECCF89B6BBC55C27FC20C60AF8D45EC90BDE9F916874DC7EAB",
+          "C:\\BC250\\tmp\\bd117\\candidate\\hipbench.exe": "354CACAE3EDE36DD5304271306A4520260EEFBC04668758CFAE5AA98B786E64C",
+          "C:\\BC250\\tmp\\bd117\\candidate\\bc250hipblas.dll": "3E8AB7DF04B819AE8599FACC5CFD63A1CB9FC5607E56312B69B1E287305274E9",
+          "C:\\BC250\\tmp\\bd117\\candidate\\ggml-base.dll": "59A6169DDB84E0CB3217FA67F71578B9965F34671D99A7992E3E7192E40B05A8"
+        },
+        "Ok": true,
+        "BootUtc": "2026-10-11T01:21:23.5000000Z",
+        "FreeMiB": 4893.55859375
+      },
+      "TctlMax": 87.6,
+      "Preflight": {
+        "DpmMode": 1,
+        "DpmIdleMHz": 500,
+        "FreeMiB": 4899.1875,
+        "DriverVersion": "0.7.216.100",
+        "Ok": true,
+        "BootUtc": "2026-10-11T01:21:23.5000000Z",
+        "Hashes": {
+          "C:\\BC250\\tmp\\bd117\\candidate\\ggml-hip.dll": "FB0E315EDAC2478B50C43B7426BE10AA433DE1B8C417C1735CC0FA5428CEA450",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-bench-impl.dll": "FAA129B29624F53BCEFD90F81DD8175826A81FAEC11CD6FE41C21C5CB6A65C57",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-quantize-impl.dll": "B5E83539380E475CEA57EF3C86A101860E563D54BAAB7AF43927A4DD8BE9743D",
+          "C:\\BC250\\tmp\\bd117\\candidate\\geometry.exe": "5652B4A4CB05BA36C8DD34554088226F2E45FC175EDF43D4A882B95023A6DED3",
+          "C:\\BC250\\tmp\\bd117\\candidate\\vadd.exe": "185F7E1D4F054855BBA8D601ADED70445750D693473BEFF0DA5D6CAE71885B9C",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-bench.exe": "A89C9F1D86BBAB68E88E4CE901943E5A70ACC823FCFA7DE37DF75BE0F7CBC912",
+          "C:\\Program Files\\amdgpu-wddm\\vulkan\\vulkan_radeon.dll": "90515C36843DC22A242D34450E5D070E0F671B6D7203B7943A3104578EC0EA4A",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-completion-impl.dll": "15F0371F11370164467EE407835056A07F218C784F792B8ED335D4E2733613A9",
+          "C:\\BC250\\tmp\\bd117\\candidate\\ggml-cpu.dll": "0FC2FC13BE167C964A4D0717536ADE056CB2AC5DB686E7861DA7D417D5D96B3A",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-batched-bench-impl.dll": "5882DD612EC0DA89520BA9BD4154B7224AAB59E9F8E6E199658B852121B64DA2",
+          "C:\\BC250\\tmp\\bd117\\candidate\\gemm_check.exe": "5829109ED04069215C944F7E312DE9EF0C1BCE2EDA15C49F857044B04662F440",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-perplexity-impl.dll": "773B1AEA7730E5ADCFCAFFD2AC1252906962BB480CBE2643182CE0F198A43C09",
+          "C:\\BC250\\tmp\\bd117\\candidate\\ggml.dll": "C4283F4376D9C235F86517A879B0E26C18C39E206449139CD5236CF18B14290E",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama.dll": "CE3BD45B3F38250E1B70A2E78F12DCCA163CE65FF4483A2526A553234363D025",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-fit-params-impl.dll": "6D090898E83A6BB61B9C2EE751ABAA7C29B1110A1023D60EDDA9CB8EEFB171E0",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-bench-profile.exe": "49E7E78D6A142F63012F8520531E7F14A8BE271B7BEB602491D16DF9406CA02E",
+          "C:\\BC250\\tmp\\bd117\\candidate\\halfblock.exe": "45308029FFC745E0879C8D2E5A9315763B52A40183AB8237F1ECB44A03F2C8FC",
+          "C:\\BC250\\tmp\\bd117\\candidate\\amdhip64.dll": "B0FEB14BD34797DFBB866B504C13859AD0BD15935C62D3126AF019CA3311F106",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-completion.exe": "C027ADFB7BF3DF368516A90C47B1C190E776F24784C5F7087F63AE8B036B4826",
+          "C:\\BC250\\tmp\\bd117\\candidate\\builtins.exe": "DC60D9B8EBE9F29442F3BA8F947C86275202AC595FD07EDE8DCD22C7E035DC84",
+          "C:\\BC250\\tmp\\bd117\\candidate\\llama-common.dll": "E0A0D7FB80ECABECCF89B6BBC55C27FC20C60AF8D45EC90BDE9F916874DC7EAB",
+          "C:\\BC250\\tmp\\bd117\\candidate\\hipbench.exe": "354CACAE3EDE36DD5304271306A4520260EEFBC04668758CFAE5AA98B786E64C",
+          "C:\\BC250\\tmp\\bd117\\candidate\\bc250hipblas.dll": "3E8AB7DF04B819AE8599FACC5CFD63A1CB9FC5607E56312B69B1E287305274E9",
+          "C:\\BC250\\tmp\\bd117\\candidate\\ggml-base.dll": "59A6169DDB84E0CB3217FA67F71578B9965F34671D99A7992E3E7192E40B05A8"
+        },
+        "CuMode": 40,
+        "DpmMaxMHz": 2000,
+        "User": "BC250-A\\bc250"
+      },
+      "RunId": "936a12adc85844e4bc2900f2bf72c269",
+      "ProfilerSession": "BC250-Seg0Profile-936a12adc85844e4bc2900f2bf72c269",
+      "ExitCode": 0
+    }
+  }
+}

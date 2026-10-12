@@ -58,7 +58,7 @@ foreach ($a in $targets) {
 
     Write-Host "  cl $a"
     $env:INCLUDE = ''; $env:LIB = ''
-    & $cl @('/nologo', '/W4', '/WX', '/O2', '/MT', '/TC', '/std:c11', '/D_CRT_SECURE_NO_WARNINGS',
+    & $cl @('/nologo', '/W4', '/we4229', '/we4440', '/WX', '/O2', '/MT', '/TC', '/std:c11', '/D_CRT_SECURE_NO_WARNINGS',
         "/I$VulkanInclude",
         "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
         "/I$sdk\Include\$KitVersion\shared", "/Fo$Out\vkfillcheck-$a.obj", "/Fe$exe",

@@ -1,0 +1,119 @@
+{
+  "schema": "amdgpu-wddm.components/1",
+  "release": "{release}",
+  "models_dir": "C:\\Users\\Public\\Documents\\amdgpu-wddm\\models",
+  "comment": [
+    "The optional components of the tester release and the models offered with them.",
+    "build-release.ps1 reads this file, expands {release} in the release version, the asset names and the url",
+    "templates, and writes the result into the package as installer/components.json.",
+    "A component whose asset sha256 is not 64 hexadecimal characters has no pin: the installer refuses it with a",
+    "plain message and downloads nothing. Fill size and sha256 after the component zip is a release asset.",
+    "An asset name that carries no {release} is the literal name of the asset of one release: check it, and the",
+    "size and the sha256 with it, at every release. zip_root '*' takes the one folder the zip holds, whatever",
+    "its name, so a build folder that carries a commit needs no new name here.",
+    "The Ollama pin was read on 2026-10-11 from the built zip of scratch/llm-components/dist, which its own record",
+    "file states as well. Upload that file under this name: the name carries the Ollama version, not the release.",
+    "That zip was packed again the same day, after the client wrapper bc250-ollama.cmd and the stop of the model",
+    "runner went into the component, so size and sha256 are the ones of the 67-entry zip, not of the first one.",
+    "The llama pin was read from the published asset on 2026-10-11 (download, Get-FileHash, and the zip's own",
+    "entry list). That asset of tester.27 is uploaded again to tester.28 under the tester.28 name, with the same",
+    "bytes, so its size and sha256 do not change. The folder in the zip keeps its tester.27 name. The model pins were measured in this workspace: scratch\\llm-vram\\results-2026-10-10-newmodels\\",
+    "model-hashes.txt and scratch\\strata\\models\\SHA256SUMS.txt. The sizes match the Hugging Face HEAD",
+    "responses of 2026-10-11. The Ollama tags answer HTTP 200 in the registry, checked the same day."
+  ],
+  "components": [
+    {
+      "id": "llama",
+      "title": "llama.cpp for this board",
+      "summary": "Runs GGUF language models on the GPU. llama-server gives you a chat page in your browser; llama-cli and llama-bench run from a command prompt.",
+      "question": "Install llama.cpp for this board?",
+      "version": "b86d2f07 with our gfx1013 patches",
+      "default": true,
+      "install_dir": "tools\\llama",
+      "licence": "MIT",
+      "licence_url": "https://github.com/ggml-org/llama.cpp/blob/master/LICENSE",
+      "asset": {
+        "name": "llama.cpp-hip-gfx1013-b86d2f07-tester.28.zip",
+        "size": 20142294,
+        "sha256": "196403CE20AD3C90A0B93113A486A67862A22DE93990D68368DCC2545AE601FF",
+        "url_templates": [
+          "https://github.com/D-Ogi/amdgpu-wddm/releases/download/v{release}/{name}"
+        ]
+      },
+      "zip_root": "*",
+      "path_entry": true,
+      "models": ["gemma12b", "qwen3-1.7b", "qwen3.6-35b"]
+    },
+    {
+      "id": "ollama",
+      "title": "Ollama for this board",
+      "summary": "Keeps a model server running for you and gets models by name. Our build uses the GPU through this driver.",
+      "question": "Install Ollama for this board, set up for this GPU?",
+      "version": "0.40.3-bc250.27",
+      "default": true,
+      "install_dir": "tools\\ollama",
+      "licence": "MIT",
+      "licence_url": "https://github.com/ollama/ollama/blob/main/LICENSE",
+      "asset": {
+        "name": "bc250-ollama-0.40.3-bc250.27.zip",
+        "size": 52583879,
+        "sha256": "B5D337FC8F0883F4D32A8B8BC818292FB5C695F764CF276C2EC42A03A41235CD",
+        "url_templates": [
+          "https://github.com/D-Ogi/amdgpu-wddm/releases/download/v{release}/{name}"
+        ]
+      },
+      "zip_root": "ollama",
+      "path_entry": true,
+      "user_models_dir": "%LOCALAPPDATA%\\bc250-ollama\\models",
+      "hooks": {
+        "script": "bc250-ollama.ps1",
+        "register": ["register"],
+        "unregister": ["unregister"],
+        "status": ["status"],
+        "pull": ["pull", "-Model", "{tag}"]
+      },
+      "models": ["gemma12b", "qwen3-1.7b"]
+    }
+  ],
+  "models": [
+    {
+      "id": "gemma12b",
+      "title": "Gemma 12B (q4_0, trained for it)",
+      "file": "gemma-4-12b-it-qat-q4_0.gguf",
+      "size": 6975879296,
+      "sha256": "93567E57A8FE10B23569B9D9EC38CD005DEEDF71E29477C421A4B83F418A538B",
+      "url": "https://huggingface.co/google/gemma-4-12B-it-qat-q4_0-gguf/resolve/main/gemma-4-12b-it-qat-q4_0.gguf",
+      "licence": "Gemma Terms of Use",
+      "licence_url": "https://ai.google.dev/gemma/docs/gemma_4_license",
+      "ollama_tag": "gemma4:12b-it-qat",
+      "needs_12gb": false,
+      "note": "The model this board was measured with."
+    },
+    {
+      "id": "qwen3-1.7b",
+      "title": "Qwen3 1.7B (Q4_K_M)",
+      "file": "Qwen3-1.7B-Q4_K_M.gguf",
+      "size": 1107409472,
+      "sha256": "B139949C5BD74937AD8ED8C8CF3D9FFB1E99C866C823204DC42C0D91FA181897",
+      "url": "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf",
+      "licence": "Apache-2.0",
+      "licence_url": "https://huggingface.co/Qwen/Qwen3-1.7B/blob/main/LICENSE",
+      "ollama_tag": "qwen3:1.7b",
+      "needs_12gb": false,
+      "note": "Small and quick: a first answer that the board holds with room to spare."
+    },
+    {
+      "id": "qwen3.6-35b",
+      "title": "Qwen3.6 35B A3B (IQ2_M)",
+      "file": "Qwen3.6-35B-A3B-UD-IQ2_M.gguf",
+      "size": 11522702304,
+      "sha256": "2BE7EF1ED7E1AF8B10D3829102CF9A6C2BD5DDB64D675B4ECE23A60799403D43",
+      "url": "https://huggingface.co/unsloth/Qwen3.6-35B-A3B-GGUF/resolve/main/Qwen3.6-35B-A3B-UD-IQ2_M.gguf",
+      "licence": "Apache-2.0",
+      "licence_url": "https://huggingface.co/Qwen/Qwen3.6-35B-A3B/blob/main/LICENSE",
+      "ollama_tag": "",
+      "needs_12gb": true,
+      "note": "Fits only with the board memory set to 12 GB in the control application. The Ollama library holds no download of this model at this size, so this one is for llama.cpp."
+    }
+  ]
+}

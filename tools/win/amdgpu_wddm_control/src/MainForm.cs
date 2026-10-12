@@ -1,4 +1,4 @@
-// The window (WU-008): a header with search and the language switch, the eight pages in a navigation bar on the
+// The window (WU-008): a header with search and the language switch, the nine pages in a navigation bar on the
 // left, the page in the middle and a side panel on the right (the explanation of a setting, WU-064, and the guide
 // panel, section 6). Pages are built from the models below, so a language switch, a resize or a refresh rebuilds
 // them without losing unsaved edits. Live values come from Level-One escapes every 2 s, and only while Home or
@@ -16,7 +16,7 @@ namespace AmdgpuWddmControl
 {
     public sealed partial class MainForm : Form
     {
-        public static readonly string[] PageNames = { "home", "games", "graphics", "display", "performance", "driver", "settings", "help" };
+        public static readonly string[] PageNames = { "home", "games", "graphics", "display", "performance", "driver", "system", "settings", "help" };
 
         readonly bool _smoke;
         readonly AppPrefs _prefs;
@@ -263,6 +263,7 @@ namespace AmdgpuWddmControl
             if (page != _page) _back.Push(Here());
             _explainId = null;
             ShowPage(page, anchor, true);
+            if (page == "system") ReadSystemTuning();
         }
 
         void GoBack()
@@ -273,15 +274,31 @@ namespace AmdgpuWddmControl
             if (p.Game != null) _game = p.Game;
             _explainId = null;
             ShowPage(p.Page, null, true);
+            if (p.Page == "system") ReadSystemTuning();
             _content.AutoScrollPosition = new Point(0, p.Scroll);
         }
 
         void ShowPage(string page, string anchor, bool focus)
         {
-            // A rebuild of the same page keeps the keyboard focus on the control with the same name (G-A11Y).
-            string focusName = null;
-            if (page == _page && ActiveControl != null && _content.Contains(ActiveControl)) focusName = FocusKey(ActiveControl);
-            int scroll = page == _page ? -_content.AutoScrollPosition.Y : 0;
+            // A rebuild of the same page keeps the keyboard focus on the control with the same name (G-A11Y) and the
+            // place the person had scrolled to. The card that held the focus is kept as well: the control itself can
+            // be gone or disabled after the rebuild (the Start button of the benchmark card while its run goes on),
+            // and then the focus goes to the next control of the same card instead of leaving the page.
+            string focusName = null, focusCard = null;
+            if (page == _page && ActiveControl != null && _content.Contains(ActiveControl))
+            {
+                focusName = FocusKey(ActiveControl);
+                focusCard = CardOf(ActiveControl);
+            }
+            int at = -_content.AutoScrollPosition.Y;
+            int scroll = page == _page ? at : 0;
+            var cards = scroll > 0 ? Cards() : new List<CardBox>();
+            // Every page is built with the panel at its top. A panel measures its scroll range from where its
+            // children sit in the scrolled client, so a page built into a scrolled panel comes out with a range too
+            // large by the scroll offset: the view then stands past the end of the new content, and every further
+            // rebuild adds its offset again (b23 lab round, F1). A rebuild of the same page puts the place back at
+            // the end of this method; another page opens at its top, where a new page belongs.
+            if (at != 0) _content.AutoScrollPosition = Point.Empty;
             if (page == "graphics" && TuningAnchor(anchor)) _tuningOpen = true;
             _page = page;
             _anchors.Clear(); _live.Clear();
@@ -303,12 +320,10 @@ namespace AmdgpuWddmControl
             ShowExplain(_explainId);
             UpdateGuide();
             UpdateTimer();
-            if (anchor == null && scroll > 0) _content.AutoScrollPosition = new Point(0, scroll);
-            if (focusName != null && !_smoke)
-            {
-                var again = All(_content).FirstOrDefault(c => c.CanFocus && FocusKey(c) == focusName);
-                if (again != null) again.Focus();
-            }
+            // The focus goes back before the place: giving a control the focus scrolls it into view, which would move
+            // a view that had just been put back (b23 lab round, F1: the page moved by its own scroll offset).
+            KeepFocus(focusName, focusCard);
+            if (anchor == null && scroll > 0) _content.AutoScrollPosition = new Point(0, PagePlace.Keep(scroll, cards, Cards()));
             if (anchor != null)
             {
                 Control target;
@@ -322,6 +337,33 @@ namespace AmdgpuWddmControl
         }
 
         static string FocusKey(Control c) { return c.GetType().Name + "|" + (c.AccessibleName ?? c.Text); }
+
+        // The card that holds a control: the innermost marked anchor around it, because a page marks sections inside
+        // cards as well. null for a control that belongs to no marked card.
+        string CardOf(Control c)
+        {
+            string card = null;
+            int deepest = -1;
+            foreach (var kv in _anchors)
+            {
+                if (kv.Value != c && !kv.Value.Contains(c)) continue;
+                int depth = 0;
+                for (var p = kv.Value; p != null && p != _content; p = p.Parent) depth++;
+                if (depth > deepest) { deepest = depth; card = kv.Key; }
+            }
+            return card;
+        }
+
+        // The keyboard focus after a rebuild, by the rule of PageFocus.After. The gates build pages without a window,
+        // where no control can take the focus, so they never ask for it.
+        void KeepFocus(string focusName, string focusCard)
+        {
+            if (focusName == null || _smoke) return;
+            var controls = All(_content).ToList();
+            var page = controls.Select(c => new FocusCandidate(FocusKey(c), CardOf(c), c.CanFocus, c.CanSelect && c.TabStop)).ToList();
+            int at = PageFocus.After(focusName, focusCard, page);
+            if (at >= 0) controls[at].Focus();
+        }
 
         public static IEnumerable<Control> All(Control root)
         {
@@ -344,6 +386,7 @@ namespace AmdgpuWddmControl
                 case "performance": return BuildPerformance(width);
                 case "driver": return BuildDriver(width);
                 case "settings": return BuildSettings(width);
+                case "system": return BuildSystemTuning(width);
                 case "help": return BuildHelp(width);
                 default: return BuildHome(width);
             }
@@ -362,6 +405,43 @@ namespace AmdgpuWddmControl
         }
 
         void Mark(string id, Control c) { _anchors[id] = c; }
+
+        // Where the marked cards of the page stand, for the rule that keeps the place of a rebuilt page
+        // (PagePlace.Keep). A card that was built but never laid out has no place yet, and is left out.
+        List<CardBox> Cards()
+        {
+            var list = new List<CardBox>();
+            if (_content == null) return list;
+            foreach (var kv in _anchors)
+            {
+                var c = kv.Value;
+                if (c == null || c.IsDisposed || c.Parent == null) continue;
+                list.Add(new CardBox(kv.Key, ContentTop(c), c.Height));
+            }
+            return list;
+        }
+
+        // The top edge of a control in the page, which is the same number whatever the page is scrolled to: the
+        // panel moves the page it holds, so the place of the page inside the panel is its padding.
+        int ContentTop(Control c)
+        {
+            var page = _content.Controls.Count > 0 ? _content.Controls[0] : null;
+            int y = _content.Padding.Top;
+            for (var p = c; p != null && p != page && p != _content; p = p.Parent) y += p.Top;
+            return y;
+        }
+
+        // Brings a row of controls of a marked card into reach, without touching the side panel or the keyboard
+        // focus. The arithmetic is ours (PagePlace.Bring), not ScrollControlIntoView: the person must be able to
+        // tell where the page goes, and a gate without a window must measure the same thing the window does.
+        void BringIntoView(string card, string row)
+        {
+            Control c, r;
+            if (_content == null || !_anchors.TryGetValue(card, out c) || !_anchors.TryGetValue(row, out r)) return;
+            int scroll = -_content.AutoScrollPosition.Y;
+            int place = PagePlace.Bring(scroll, _content.ClientSize.Height, ContentTop(c), ContentTop(r), r.Height);
+            if (place != scroll) _content.AutoScrollPosition = new Point(0, place);
+        }
 
         // ---- the side panel ----------------------------------------------------------------------------------------
 
@@ -422,17 +502,22 @@ namespace AmdgpuWddmControl
 
         public void RefreshAll()
         {
+            if (_page == "system") { ReadSystemTuning(); return; }
             if (_fixture) { ComputeStatus(); ShowPage(_page, null, false); return; }
             try { _inv = Inventory.Read(false); } catch (Exception) { _inv = new InventoryState(); }
-            try { _snap = RecoveryProbe.Read("window"); } catch (Exception) { _snap = new RecoverySnapshot { DriverError = "unreadable", ReadFailed = true }; }
+            try { Kmd.RefreshBoardCapabilities();
+            _snap = RecoveryProbe.Read("window"); } catch (Exception) { _snap = new RecoverySnapshot { DriverError = "unreadable", ReadFailed = true }; }
             var vram = Kmd.VideoMemory();
             _vram = vram.Value;
+            _uma = Kmd.BoardMemoryQuery().Value;
             _fan = Kmd.Hwmon().Value;
             _upd = UpdateCheck.LoadCache();
             ReadRecent();
+            ReadBenchmark();
             ReadDriverCard(!_smoke && !ReadOnlyProbe);
             ComputeStatus();
             ShowPage(_page, null, false);
+            MaybeAutomaticDiagnostics();
         }
 
         int _drvRead;       // the newest Driver card read; an older one that ends later is dropped

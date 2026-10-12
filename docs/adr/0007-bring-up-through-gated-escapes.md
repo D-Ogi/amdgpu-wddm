@@ -1,11 +1,20 @@
 # ADR 0007: hardware bring-up (M4-M6) runs inside the display-only miniport, driven through gated escapes
 
-Date: 2026-09-21. Status: accepted; point 2 narrowed on 2026-09-27. The convention "every gate defaults to 0,
-every install resets it, opening one is an act of an experiment" was right for bring-up. From M12 on the
-driver has validated production paths (full WDDM, MMIO, DCN write and VidPN flip, native PTE copy) that must
-come up by themselves after an install: those gates become configuration with a documented production
-profile and defaults of "on" once a path is validated, the boot-loop guard of ADR 0006 point 3 stays the
-safety net, and the experiment convention keeps applying to paths not yet validated. Points 1, 3 to 6 stand.
+Date: 2026-09-21. Status: accepted; point 2 narrowed on 2026-09-27, point 4 narrowed on 2026-10-12. The
+convention "every gate defaults to 0, every install resets it, opening one is an act of an experiment" was right
+for bring-up. From M12 on the driver has validated production paths (full WDDM, MMIO, DCN write and VidPN flip,
+native PTE copy) that must come up by themselves after an install: those gates become configuration with a
+documented production profile and defaults of "on" once a path is validated, the boot-loop guard of ADR 0006
+point 3 stays the safety net, and the experiment convention keeps applying to paths not yet validated.
+
+Point 4 said every escape is for administrators. The driver has since grown reads that an ordinary program on
+this machine needs, so the rule now has two classes. A reply built from state the driver has already published
+(the DPM snapshot, start health, the log ring, interop and CU state, the fan reading) answers every caller. So
+does one bounded reading of the clock and the temperature, which the escape serves from the last published
+reading while that is fresh and refreshes at most at the rate the driver's own governor already reads
+(BD-062, `driver/kmd/smu.c`). Everything that changes the hardware, and every operation that holds a shared
+mailbox for a sequence of messages, still checks the caller's token - including the CPU readback, which is why
+it stayed an administrator's in 0.7.211. Points 1, 3, 5 and 6 stand.
 
 ## Context
 
@@ -30,7 +39,8 @@ safety net, and the experiment convention keeps applying to paths not yet valida
    takes offsets from `tools/regcalc`): reads are limited to the list that was read on this unit without harm
    and without side effects (facts M16, M25), writes to registers named in `WRITABLE` with the experiment that
    justified each. Code that needs a register uses its generated name. No literal offsets.
-4. **Escapes are the control channel and they are for administrators.** The handler checks the caller's token.
+4. **Escapes are the control channel and they are for administrators** (narrowed 2026-10-12: see the status
+   note above for the two classes of read that answer every caller). The handler checks the caller's token.
    Generic commands stay primitive (`READ_REG`, `WRITE_REG`); a multi-step hardware sequence that must not be
    interrupted half-way becomes its own command implemented in the kernel, not a script of register writes
    from user mode.

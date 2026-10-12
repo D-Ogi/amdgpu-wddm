@@ -1,0 +1,114 @@
+{
+  "register_types": {
+    "SQ_BUF_RSRC_WORD1": {
+      "fields": [
+        {
+          "bits": [
+            0,
+            15
+          ],
+          "name": "BASE_ADDRESS_HI"
+        },
+        {
+          "bits": [
+            16,
+            29
+          ],
+          "name": "STRIDE"
+        },
+        {
+          "bits": [
+            30,
+            30
+          ],
+          "name": "CACHE_SWIZZLE"
+        },
+        {
+          "bits": [
+            31,
+            31
+          ],
+          "name": "SWIZZLE_ENABLE"
+        }
+      ]
+    },
+    "SQ_BUF_RSRC_WORD3": {
+      "fields": [
+        {
+          "bits": [
+            0,
+            2
+          ],
+          "name": "DST_SEL_X"
+        },
+        {
+          "bits": [
+            3,
+            5
+          ],
+          "name": "DST_SEL_Y"
+        },
+        {
+          "bits": [
+            6,
+            8
+          ],
+          "name": "DST_SEL_Z"
+        },
+        {
+          "bits": [
+            9,
+            11
+          ],
+          "name": "DST_SEL_W"
+        },
+        {
+          "bits": [
+            12,
+            18
+          ],
+          "enum_ref": "GFX10_FORMAT",
+          "name": "FORMAT"
+        },
+        {
+          "bits": [
+            21,
+            22
+          ],
+          "name": "INDEX_STRIDE"
+        },
+        {
+          "bits": [
+            23,
+            23
+          ],
+          "name": "ADD_TID_ENABLE"
+        },
+        {
+          "bits": [
+            24,
+            24
+          ],
+          "comment": "must be 1",
+          "name": "RESOURCE_LEVEL"
+        },
+        {
+          "bits": [
+            28,
+            29
+          ],
+          "enum_ref": "SQ_BUF_RSRC_WORD3__OOB_SELECT",
+          "name": "OOB_SELECT"
+        },
+        {
+          "bits": [
+            30,
+            31
+          ],
+          "comment": "must be 0",
+          "name": "TYPE"
+        }
+      ]
+    }
+  }
+}

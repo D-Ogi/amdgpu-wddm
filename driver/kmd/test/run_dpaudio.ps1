@@ -34,6 +34,7 @@ $env:INCLUDE = ''; $env:LIB = ''
     "/I$kmd", "/I$repo\third_party\linux-amdgpu", "/I$($msvc.FullName)\include",
     "/I$sdk\Include\$KitVersion\ucrt", "/Fo$obj\", "/Fe$Out\dpaudio_test.exe",
     (Join-Path $here 'dpaudio_test.c'), (Join-Path $kmd 'dpaudio_seq.c'), (Join-Path $kmd 'edid.c'),
+    (Join-Path $repo 'driver\shim\bc250_hdmi_audio.c'), (Join-Path $kmd 'display_io.c'),
     '/link', "/LIBPATH:$($msvc.FullName)\lib\x64", "/LIBPATH:$sdklib\ucrt\x64", "/LIBPATH:$sdklib\um\x64")
 if ($LASTEXITCODE -ne 0) { throw 'Host build failed' }
 
