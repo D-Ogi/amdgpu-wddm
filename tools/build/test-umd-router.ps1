@@ -34,6 +34,11 @@
 # rule stands down over it. route-dwm-name, route-dwm-name-kill and desktop-dwm-unchanged read the record too.
 # With both wagons of train b24 the gate runs 90 scenarios; the count of the last run is in TRAIN-b24.md.
 #
+# BD-126 adds two scenarios that run the harness as <layout>\pickerhost\PickerHost.exe, the image on the router's
+# built-in default Deny list: app-dialog-host-builtin (gpu-default with empty lists, route=cpu
+# reason=app-dialog-host) and app-dialog-host-allow (the same image in Allow, route=gpu reason=app-default). The
+# policy suite carries the decision table for the list. 92 scenarios.
+#
 #   pwsh tools\build\test-umd-router.ps1 -HostedUmd <bc250d3d_zink.dll> -CpuUmd <bc250d3d.dll> -AppPackage <dir>
 #        [-Build <build-umd-router.ps1 output>] [-OutputDir <dir>]
 param(
@@ -54,7 +59,7 @@ $gate = Join-Path ([IO.Path]::GetFullPath($OutputDir)) $stamp
 $layout = Join-Path $gate 'layout'
 $out = Join-Path $gate 'results'
 foreach ($d in @('router','router-wow','cpu','cpu-real','fail','umd','umd-noicd','umd-diag','umd-diag\logs','umd-router','icd-alt','dwm','hives',
-                 'routelogs','diaglogs','diaglogs-env','app','app-noexport','app-real','app-real-noconfig','logonui','applogs')) {
+                 'routelogs','diaglogs','diaglogs-env','app','app-noexport','app-real','app-real-noconfig','logonui','pickerhost','applogs')) {
     [void](New-Item -ItemType Directory -Force -Path (Join-Path $layout $d))
 }
 [void](New-Item -ItemType Directory -Force -Path $out)
@@ -79,6 +84,8 @@ Placeholder 'icd-alt\alt-icd.dll'
 Put "$Build\bc250d3d_router.dll" 'umd-router\bc250d3d_router.dll'
 Put "$Build\test-router.exe" 'dwm\dwm.exe'
 Put "$Build\test-router.exe" 'logonui\logonui.exe'
+# BD-126: the harness under the name of the dialog host on the router's built-in default Deny list.
+Put "$Build\test-router.exe" 'pickerhost\PickerHost.exe'
 # The DXVK shell reads its config beside itself at OpenAdapter; engine and ICD are loaded (and hash-checked) only
 # at CreateDevice, so the host layout holds the shell and the config alone.
 Put $shell 'app-real\amdgpu_wddm_d3d11.dll'

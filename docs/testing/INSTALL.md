@@ -217,13 +217,17 @@ change. The driver writes no debug log files. To change the maximum clock at ins
   desktop on the CPU route. An upgrade keeps the value you set.
 - Direct3D 12 applications run on the GPU through the Windows Direct3D 12 runtime, at feature level 12_1.
 - Vulkan applications run on the GPU through the Vulkan ICD.
-- Direct3D 11 applications and games run on the GPU. The value `Mode` in
-  `HKLM\SOFTWARE\amdgpu-wddm\AppRouter` holds `gpu-default`. These programs stay on the CPU route (software
-  rendering): the components of Windows and the packaged Microsoft applications, the processes of the logon and lock
-  screens, a program whose image the router cannot resolve, and a program in the `Deny` list (by default
-  `witcher3.exe`, which has a Direct3D 12 mode). An entry in the `Allow` list puts a Windows component on the GPU
-  (by default `dxdiag.exe`). `Mode` `allowlist` gives the behaviour of the earlier releases: the CPU route for every
-  program, and the GPU only for the programs in `Allow`. Use the Direct3D 12 mode of a game if it has one.
+- Direct3D 11 applications and games run on the GPU, and so do the components of Windows and the packaged
+  Microsoft applications. The value `Mode` in `HKLM\SOFTWARE\amdgpu-wddm\AppRouter` holds `gpu-default`, and the
+  `Allow` and `Deny` lists beside it are empty in a new install. These programs stay on the CPU route (software
+  rendering): the processes of the logon and lock screens, a program whose image the router cannot resolve, a
+  program you put in the `Deny` list, a program you set to processor rendering in amdgpu-wddm Control, and
+  `PickerHost.exe`, which the driver keeps there by itself. `PickerHost.exe` is the program behind the Windows
+  firewall notification window ("Windows Security") and behind the file open and save windows. That firewall
+  window stayed white and empty on the GPU route, so the driver sends that program to the processor. An entry in
+  the `Allow` list puts a program back on the GPU, `PickerHost.exe` included. `Mode` `allowlist` gives the
+  behaviour of the earlier releases: the CPU route for every program, and the GPU only for the programs in
+  `Allow`. Use the Direct3D 12 mode of a game if it has one.
 - Direct3D 9 applications run on the GPU through D3D9On12, the Direct3D 9 layer of Windows on top of our Direct3D 12
   driver. The installer leaves the Direct3D 9 entry of `UserModeDriverName` empty, and Windows then loads
   `d3d9on12.dll` by itself.
