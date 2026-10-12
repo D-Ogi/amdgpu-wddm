@@ -385,6 +385,7 @@ void StartHealthBegin(BC250_DEVICE* Device, BOOLEAN Full);
 void StartHealthReady(BC250_DEVICE* Device, BOOLEAN Ready);
 void StartHealthResumeReady(BC250_DEVICE* Device, BOOLEAN Mode);
 void StartHealthClose(BC250_DEVICE* Device);
+void StartHealthStop(BC250_DEVICE* Device, BC250_ESCAPE_START_HEALTH* Snapshot);
 void StartHealthFault(BC250_DEVICE* Device);
 void StartHealthRemove(BC250_DEVICE* Device);
 void StartHealthEnter(BC250_DEVICE* Device);
@@ -572,6 +573,8 @@ void GuardRecordStartAttempt(void);
 void GuardRecordStartRefused(NTSTATUS Status);
 void GuardRecordStartFailed(NTSTATUS Status);
 void GuardRecordStartStarted(void);
+void GuardRecordStopBegin(BC250_DEVICE* Device);
+void GuardRecordStopDone(void);
 // M15.12: one ResetEngine verdict (hang_recovery.h) into Parameters\HangRecovery, counters and Last* values, flushed
 // so it outlives a 0x116 and the reboot. PASSIVE_LEVEL; failures are logged, never returned.
 void GuardRecordHangRecovery(ULONG Verdict, ULONG Seq, ULONG Fence, ULONG Kills, ULONG Micros, BOOLEAN WavesPending);
@@ -908,7 +911,7 @@ typedef struct _BC250_GFX_VMID_COUNTERS {
     USHORT Members;             // the pool, a VMID bit mask
     USHORT Excluded;            // found programmed at bring-up
     ULONG Claims, Reuses, Busy, RuleRefusals, Flushes, FlushVmids;
-    BOOLEAN RingFlushGate;      // EnableRingVmFlush (docs/design/gfx-submit-root-serialization.md section 3)
+    BOOLEAN RingFlushGate;      // EnableRingVmFlush, absent = on, 0 = off (gfx-submit-root-serialization.md section 3)
     ULONG RingFlushes;          // jobs whose root write and invalidation were packets, not MMIO
     ULONG RingFlushSame;        // of those, the jobs whose VMID already held the root
 } BC250_GFX_VMID_COUNTERS;
@@ -1111,6 +1114,7 @@ DXGKDDI_SYSTEM_DISPLAY_ENABLE Bc250SystemDisplayEnable;
 DXGKDDI_SYSTEM_DISPLAY_WRITE Bc250SystemDisplayWrite;
 
 NTSTATUS DisplayPrepareInheritedTiming(_Inout_ BC250_DEVICE* Device);
+NTSTATUS DisplayValidateInheritedSignal(BC250_DEVICE* Device);
 NTSTATUS DisplayMapFramebuffer(_Inout_ BC250_DEVICE* Device);
 void DisplayLogFramebufferSample(_In_ BC250_DEVICE* Device);
 void DisplayUnmapFramebuffer(_Inout_ BC250_DEVICE* Device);

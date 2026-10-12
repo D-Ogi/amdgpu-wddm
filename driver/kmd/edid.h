@@ -70,6 +70,9 @@ typedef struct _BC250_EDID_INFO {
     unsigned long ModeCount;
     BC250_EDID_MODE Modes[BC250_EDID_MAX_MODES];
     unsigned long CtaBlocks;
+    int Hdmi;                          // HDMI Licensing VSDB (OUI 000C03), not merely a CTA block
+    int BasicAudio;                    // CTA header bit 6: 2-channel LPCM 32/44.1/48 kHz, 16 bit
+    unsigned long MaxTmdsClockKhz;      // HDMI VSDB byte 7, 5 MHz units; 0 means not specified
     unsigned long SadCount;
     BC250_EDID_SAD Sads[BC250_EDID_MAX_SADS];
     int HasSpeaker;

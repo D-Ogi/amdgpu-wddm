@@ -435,3 +435,11 @@ it includes `transform.h` and the DC fixed-point type, so it does not compile he
 KMD uses, `filter_4tap_64p_upscale`, is cut out of it by `tools/import/extract_table.py` into
 `driver/kmd/scl_filter_4tap_64p_upscale.inc`, and `driver/kmd/test/run_modeset.ps1` runs the extraction
 again with `--check`. `driver/kmd/dcn_scale.c` names the upstream functions it follows.
+
+## HDMI DDC and audio
+
+PROVENANCE: Linux AMD DC (MIT), v6.18 commit `7d0a66e4bb9081d75c82ec4957c50034cb0ea449`.
+`reference/dce_i2c_hw.c`, `link_detection.c`, `hdmi_audio.c` and `hdmi_dto.c` are unchanged source files.
+The last two use the upstream names `dio/dcn10/dcn10_stream_encoder.c` and `dce/dce_audio.c`.
+`tools/import/extract_display.py --check` checks the extracted functions and ACR tables in `driver/shim/`.
+The wrappers add checked register access, finite waits and cleanup on failure.

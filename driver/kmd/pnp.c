@@ -263,7 +263,7 @@ NTSTATUS Bc250StopDevice(_In_ const PVOID MiniportDeviceContext)
     }
     wasStarted=device->Started;
     HangDetectorStop();     // first: a stop may legitimately wait, and the detector must not judge it
-    StartHealthClose(device);
+    GuardRecordStopBegin(device); // closes health and saves the pre-teardown log without KeepLog
     GuardStage(StageStopEnter);
     // The stop gets its own kept log file, so that it is not appended to the start's (guard.c GuardLogKeep). A stop
     // that unwinds a failed start therefore leaves two files, which is how it should read.
@@ -308,6 +308,7 @@ NTSTATUS Bc250StopDevice(_In_ const PVOID MiniportDeviceContext)
     // confirmed healthy (guard.c). A start that failed calls this function with Started still FALSE: it keeps it.
     if (wasStarted) GuardReleaseStart();
     GuardStage(StageStopDone);
+    GuardRecordStopDone();
     // Last, so that the file holds the stop as well. Does nothing unless Parameters\KeepLog is set: dxgkrnl may
     // end a full WDDM start by itself and unload the driver after, ring and all (E16 run 1).
     GuardLogKeep();

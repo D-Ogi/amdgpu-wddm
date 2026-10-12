@@ -906,6 +906,10 @@ NTSTATUS DcnFlipSourceAddress(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddres
     ULONG current;
 
     if (Device->Mmio == NULL || !Device->VidPnFlipEnabled) return STATUS_DEVICE_NOT_READY;
+    // The scaled inherited path retains the GOP viewport and surface layout.
+    // A new pitch or format needs a separately admitted pipe configuration.
+    if (Device->Modeset.InheritedFixed && (!Device->Modeset.InheritedSupport ||
+        Pitch != Device->Post.Pitch || PlaneFormat != BC250_PLANE_FORMAT_ARGB8888)) return STATUS_NOT_SUPPORTED;
     if (plane==NULL ||
         !DcnLinearSurfaceBytes(DisplaySourceWidth(Device),DisplaySourceHeight(Device),Pitch,plane->BytesPerPixel,
                                &bytes) ||

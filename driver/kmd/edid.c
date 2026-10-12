@@ -170,6 +170,7 @@ static void ParseCta(BC250_EDID_INFO* Info, const unsigned char* b)
 
     Info->CtaBlocks++;
     if (dtdStart > 127 || (dtdStart != 0 && dtdStart < 4)) return;
+    if (b[3] & 0x40u) Info->BasicAudio = 1;
     // Data block collection, revision 3 and later: from byte 4 up to the first detailed timing.
     if (b[1] >= 3 && dtdStart >= 4) {
         for (i = 4; i < dtdStart; ) {
@@ -190,6 +191,12 @@ static void ParseCta(BC250_EDID_INFO* Info, const unsigned char* b)
                     unsigned long svd = p[k];
                     AddVic(Info, (svd >= 129 && svd <= 192) ? (svd & 0x7Fu) : svd);     // bit 7 = native for 1-64
                 }
+            } else if (tag == 3 && len >= 5 && p[0] == 0x03 && p[1] == 0x0C && p[2] == 0x00) {
+                // HDMI 1.4b 8.3.2: HDMI VSDB includes OUI and physical address.
+                // The optional Max_TMDS_Clock octet is payload byte 6, in 5 MHz.
+                Info->Hdmi = 1;
+                if (len >= 7 && p[6] && (!Info->MaxTmdsClockKhz || (unsigned long)p[6] * 5000ul < Info->MaxTmdsClockKhz))
+                    Info->MaxTmdsClockKhz = (unsigned long)p[6] * 5000ul;
             } else if (tag == 4 && len >= 1 && !Info->HasSpeaker) {         // speaker allocation
                 Info->HasSpeaker = 1;
                 Info->Speaker = p[0];

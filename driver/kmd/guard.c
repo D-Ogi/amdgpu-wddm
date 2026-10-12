@@ -1366,3 +1366,103 @@ void GuardReleaseStart(void)
     ZwClose(key);
 }
 
+// StopDevice can follow a successful StartDevice before Windows admits the
+// adapter. That one case is what this record is for, and Device->Started is
+// what separates it from the start-failure path, which unwinds through this
+// same StopDevice: see the Device->Started gate below.
+// KeepLog is not needed for this record. StartRecord remains intact.
+// Result=attempt is incomplete; stopping means the entry snapshot is complete;
+// stopped means StageStopDone was reached. This does not invent an OS refusal
+// status: StopDevice has no argument with dxgkrnl's reason for stopping it.
+// StartStage/HealthFlags precede teardown. Log ends at that same entry point,
+// not after cleanup has replaced the ring. BootId and generation identify it.
+static BOOLEAN g_StopRecordPending;
+
+static NTSTATUS StopRecordOpen(_Out_ HANDLE* Key)
+{
+    HANDLE parameters;
+    UNICODE_STRING name;
+    OBJECT_ATTRIBUTES attributes;
+    NTSTATUS status=OpenParameters(&parameters);
+    if (!NT_SUCCESS(status)) return status;
+    RtlInitUnicodeString(&name,L"StopRecord");
+    InitializeObjectAttributes(&attributes,&name,OBJ_KERNEL_HANDLE|OBJ_CASE_INSENSITIVE,parameters,NULL);
+    status=ZwCreateKey(Key,KEY_READ|KEY_WRITE,&attributes,0,NULL,REG_OPTION_NON_VOLATILE,NULL);
+    ZwClose(parameters);
+    return status;
+}
+
+void GuardRecordStopBegin(BC250_DEVICE* Device)
+{
+    BC250_ESCAPE_START_HEALTH health;
+    HANDLE key;
+    WCHAR time[32], generation[24], epoch[24];
+    ULONG stage=(ULONG)GuardLastStage(), lines=0, mark=GuardLogSequence();
+    NTSTATUS status, first=STATUS_SUCCESS;
+    g_StopRecordPending=FALSE;
+    if (KeGetCurrentIrql()!=PASSIVE_LEVEL) { StartHealthFault(Device); return; }
+    StartHealthStop(Device,&health);
+    // A previous confirmed boot/start is not this generation's confirmation.
+    // A normal confirmed stop writes nothing and preserves an older diagnostic.
+    if (!health.Generation || (health.Flags&BC250_START_HEALTH_CONFIRMED)) return;
+    // The start-failure path of Bc250StartDevice unwinds through this same StopDevice (pnp.c, the WddmStart and
+    // inherited-timing failures and the `failed:` label). Windows stopped nothing there: our own code did, to
+    // undo a start that failed, and StartRecord already names the step, the NTSTATUS and the stage of that
+    // failure. A record written here would say "Windows stopped the device" of our own cleanup, and it would
+    // overwrite the one case this record exists for when a retry of a stopped start then fails. Device->Started
+    // is set at the last point of a start that can fail, so a stop before it is always such an unwind.
+    if (!Device->Started) { GuardLog("stop record: none, this stop unwinds a start that did not reach a started device"); return; }
+    if (g_ParametersPath.Buffer==NULL) return;
+    status=StopRecordOpen(&key);
+    if (!NT_SUCCESS(status)) {
+        GuardLog("stop record: open failed 0x%08X",status);
+        return;
+    }
+    StartRecordTime(time,RTL_NUMBER_OF(time));
+    (void)RtlStringCchPrintfW(generation,RTL_NUMBER_OF(generation),L"%llu",health.Generation);
+    (void)RtlStringCchPrintfW(epoch,RTL_NUMBER_OF(epoch),L"%llu",health.Epoch);
+    StartRecordKeep(&first,WriteStringOrClear(key,L"Result",L"attempt"));
+    StartRecordKeep(&first,WriteStringOrClear(key,L"Step",L"StopDevice"));
+    StartRecordKeep(&first,WriteStringOrClear(key,L"SubStep",L"unconfirmed start"));
+    StartRecordKeep(&first,WriteStringOrClear(key,L"Detail",L"Windows stopped the device; StopDevice supplies no reason code."));
+    StartRecordKeep(&first,WriteDwordOrClear(key,L"Status",(ULONG)STATUS_SUCCESS));
+    StartRecordKeep(&first,WriteDwordOrClear(key,L"Stage",StageStopEnter));
+    StartRecordKeep(&first,WriteDwordOrClear(key,L"StartStage",stage));
+    StartRecordKeep(&first,WriteDwordOrClear(key,L"HealthFlags",health.Flags));
+    StartRecordKeep(&first,WriteDwordOrClear(key,L"BootId",SharedUserData->BootId));
+    StartRecordKeep(&first,WriteDwordOrClear(key,L"Version",BC250_KMD_VERSION));
+    StartRecordKeep(&first,WriteStringOrClear(key,L"Generation",generation));
+    StartRecordKeep(&first,WriteStringOrClear(key,L"Epoch",epoch));
+    StartRecordKeep(&first,WriteStringOrClear(key,L"TimeUtc",time));
+    DeleteString(key,L"StopTimeUtc");
+    status=StartRecordLog(key,mark,&lines);
+    if (!NT_SUCCESS(status)) DeleteString(key,L"Log");
+    StartRecordKeep(&first,status);
+    StartRecordKeep(&first,WriteDwordOrClear(key,L"LogLines",lines));
+    if (NT_SUCCESS(first)) first=WriteStringOrClear(key,L"Result",L"stopping");
+    if (NT_SUCCESS(first)) first=ZwFlushKey(key);
+    ZwClose(key);
+    g_StopRecordPending=NT_SUCCESS(first);
+    GuardLog("stop record: stage %lu health 0x%lX, %lu lines, write 0x%08X",stage,health.Flags,lines,first);
+}
+
+void GuardRecordStopDone(void)
+{
+    HANDLE key;
+    WCHAR time[32];
+    NTSTATUS status, first=STATUS_SUCCESS;
+    if (!g_StopRecordPending) return;
+    g_StopRecordPending=FALSE;
+    if (KeGetCurrentIrql()!=PASSIVE_LEVEL || g_ParametersPath.Buffer==NULL) return;
+    status=StopRecordOpen(&key);
+    if (!NT_SUCCESS(status)) { GuardLog("stop record: finish open failed 0x%08X",status); return; }
+    StartRecordTime(time,RTL_NUMBER_OF(time));
+    StartRecordKeep(&first,WriteStringOrClear(key,L"Result",L"attempt"));
+    StartRecordKeep(&first,WriteDwordOrClear(key,L"Stage",(ULONG)GuardLastStage()));
+    StartRecordKeep(&first,WriteStringOrClear(key,L"StopTimeUtc",time));
+    if (NT_SUCCESS(first)) first=WriteStringOrClear(key,L"Result",L"stopped");
+    if (NT_SUCCESS(first)) first=ZwFlushKey(key);
+    ZwClose(key);
+    if (!NT_SUCCESS(first)) GuardLog("stop record: finish failed 0x%08X",first);
+}
+

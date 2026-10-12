@@ -41,8 +41,16 @@ typedef struct {long long QuadPart;} LARGE_INTEGER;
 typedef struct {UINT cx,cy;} REGION;
 typedef struct {UINT Numerator,Denominator;} RATIONAL;
 typedef struct {UINT VideoStandard;REGION TotalSize,ActiveSize;RATIONAL VSyncFreq,HSyncFreq;SIZE_T PixelRate;UINT ScanLineOrdering;} D3DKMDT_VIDEO_SIGNAL_INFO;
-typedef struct {void* Mmio;int FullWddm;struct {ULONG Width,Height,Pitch;} Post;
-    D3DKMDT_VIDEO_SIGNAL_INFO InheritedSignal;BOOLEAN InheritedSignalValid,InheritedTmds;} BC250_DEVICE;
+#include "dcn_scale.h"
+#include "edid.h"
+typedef struct {BC250_INHERITED_PIPE InheritedPipe;NTSTATUS InheritedPipeStatus;
+    ULONG InheritedSupport;BOOLEAN InheritedFixed;
+    ULONG Level,Refusals,Commits,Changes,Busy,Scaling;
+    NTSTATUS LastStatus;BOOLEAN Suspended,PipeChanged;int Lock;
+    long SourceWidth,SourceHeight;BC250_MODE_LIST Modes;
+    BC250_SCALER_PLAN Plan;BC250_SCALER_RESULT LastResult;} BC250_MODESET;
+typedef struct {void* Mmio;int FullWddm,ComposedSourceModes;struct {ULONG Width,Height,Pitch;} Post;
+    D3DKMDT_VIDEO_SIGNAL_INFO InheritedSignal;BOOLEAN InheritedSignalValid,InheritedTmds;BC250_MODESET Modeset;} BC250_DEVICE;
 typedef UINT D3DDDIFORMAT;
 typedef struct {struct {UINT Width,Height,Format;} Allocation;} BC250_WDDM_OBJECT;
 typedef struct {HANDLE hAllocation;UINT Width,Height;D3DDDIFORMAT Format;
@@ -67,8 +75,14 @@ static void GuardStartDetail(const wchar_t* format,...){va_list a;va_start(a,for
 #undef DisplayLogRefusedTiming
 static unsigned refusedLogs;static NTSTATUS lastRefusal;
 static void DisplayLogRefusedTiming(const BC250_DEVICE* d,NTSTATUS s){(void)d;refusedLogs++;lastRefusal=s;}
+NTSTATUS DisplayValidateInheritedSignal(BC250_DEVICE*);
+#include "inherited_timing_fixture.h"
+#include "inherited_commit_fixture.h"
+#include "inherited_actual.inc"
 #include "display_timing_actual.inc"
 #include "describe_timing_actual.inc"
+#include "inherited_vidpn_fixture.h"
+#include "inherited_vidpn_actual.inc"
 static NTSTATUS TestFillSignalInfo(BC250_DEVICE* d,D3DKMDT_VIDEO_SIGNAL_INFO* s)
 {
     NTSTATUS result=DisplayPrepareInheritedTiming(d);
@@ -130,6 +144,7 @@ static void Mode(BC250_DEVICE* d,ULONG w,ULONG h,ULONG ht,ULONG vt,ULONG pixel)
     stopped=unstable=routeTear=modeTear=skipEdge=frozenQpc=0;
     memset(routes,0,sizeof(routes));d->InheritedTmds=FALSE;
     d->Mmio=d;d->FullWddm=1;d->Post.Width=w;d->Post.Height=h;
+    d->Post.Pitch=w*4;PipeFixture(w,h,w,h);
     values[TimingControl]=OTG0_OTG_CONTROL__OTG_MASTER_EN_MASK;
     values[TimingPixelControl]=OTG0_PIXEL_RATE_CNTL__DP_DTO0_ENABLE_MASK;
     values[TimingHTotal]=ht-1;values[TimingVTotal]=vt-1;
@@ -147,6 +162,8 @@ static void Adapter(BC250_DEVICE* d)
     routes[TmdsBe0]=(1ul<<DIG0_DIG_BE_CNTL__DIG_FE_SOURCE_SELECT__SHIFT)|(3ul<<DIG0_DIG_BE_CNTL__DIG_MODE__SHIFT);
     routes[TmdsEnable0]=DIG0_DIG_BE_EN_CNTL__DIG_ENABLE_MASK;
 }
+#include "inherited_pipe_cases.h"
+#include "inherited_vidpn_cases.h"
 int main(int argc,char** argv)
 {
     BC250_DEVICE d={0};D3DKMDT_VIDEO_SIGNAL_INFO s;unsigned before;
@@ -168,6 +185,8 @@ int main(int argc,char** argv)
             (double)s.VSyncFreq.Numerator/s.VSyncFreq.Denominator);
         return result==STATUS_SUCCESS?0:1;
     }
+    InheritedPipeCases();
+    InheritedVidpnCases();refusedLogs=0;
     Mode(&d,1920,1200,2080,1235,154000000);
     CHECK(TestFillSignalInfo(&d,&s)==STATUS_SUCCESS && reads==2*TimingCount && refusedLogs==0);
     CHECK(s.TotalSize.cx==2080 && s.TotalSize.cy==1235 && s.ActiveSize.cx==1920 && s.ActiveSize.cy==1200);
@@ -213,7 +232,7 @@ int main(int argc,char** argv)
     values[TimingInterlace]=0;values[TimingVTotalControl]=OTG0_OTG_V_TOTAL_CONTROL__OTG_V_TOTAL_MIN_SEL_MASK;
     CHECK(TestFillSignalInfo(&d,&s)==STATUS_NOT_SUPPORTED);
     values[TimingVTotalControl]=0;d.Post.Width++;
-    CHECK(TestFillSignalInfo(&d,&s)==STATUS_DEVICE_DATA_ERROR);
+    CHECK(TestFillSignalInfo(&d,&s)==STATUS_NOT_SUPPORTED); // geometry decoded; inconsistent viewport refused
     d.Post.Width--;reads=0;readFailure=3;
     CHECK(TestFillSignalInfo(&d,&s)==STATUS_ACCESS_DENIED && reads==3);
     readFailure=0;before=reads;irql=1;
@@ -238,6 +257,29 @@ int main(int argc,char** argv)
     readFailure=reads+2;detail[0]=0;
     RealDisplayLogRefusedTiming(&d,STATUS_NOT_SUPPORTED);
     CHECK(wcsstr(detail,L"registers not read 0xFFFFFFFA")!=NULL);readFailure=0;
+    Adapter(&d);
+    // The field #38 class: GOP 1024x768 feeding a 1920x1080 TMDS target.
+    // No clock is inferred from these dimensions; the same QPC/frame-counter
+    // model as the adapter control supplies the measured target refresh.
+    d.Post.Width=1024;d.Post.Height=768;d.Post.Pitch=4096;
+    PipeFixture(1024,768,1920,1080);
+    CHECK(TestFillSignalInfo(&d,&s)==STATUS_SUCCESS && d.Modeset.InheritedFixed);
+    CHECK(s.ActiveSize.cx==1920 && s.ActiveSize.cy==1080 && s.PixelRate==139650000);
+    CHECK(d.Modeset.InheritedSupport==BC250_SCALING_BIT(BC250_SCALING_STRETCHED));
+    CHECK(pipeReads==2*BC250_INHERITED_PIPE_READS && pipeWrites==0);
+    {
+        unsigned n;
+        for(n=1;n<=2*BC250_INHERITED_PIPE_READS;n++) {
+            PipeFixture(1024,768,1920,1080);pipeReadFailure=n;
+            CHECK(TestFillSignalInfo(&d,&s)==STATUS_ACCESS_DENIED && !d.InheritedSignalValid);
+            CHECK(!d.Modeset.InheritedSupport && pipeWrites==0);
+        }
+        PipeFixture(1024,768,1920,1080);pipeTear=1;
+        CHECK(TestFillSignalInfo(&d,&s)==STATUS_DEVICE_BUSY && !d.InheritedSignalValid && pipeWrites==0);
+        PipeFixture(1024,768,1920,1080);
+        pipeRegisters[BC250_REG_DMU_MPCC0_MPCC_TOP_SEL/4]=1;
+        CHECK(TestFillSignalInfo(&d,&s)==STATUS_NOT_SUPPORTED && !d.InheritedSignalValid && pipeWrites==0);
+    }
     Adapter(&d);
     CHECK(TestFillSignalInfo(&d,&s)==STATUS_SUCCESS && d.InheritedTmds && d.InheritedSignalValid);
     CHECK(s.TotalSize.cx==2080 && s.TotalSize.cy==1119 && s.PixelRate==139650000);

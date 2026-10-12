@@ -8,6 +8,26 @@ $first=$source.IndexOf('NTSTATUS DisplayPrepareInheritedTiming(')
 $last=$source.IndexOf('static NTSTATUS OfferSourceMode(',$first)
 $code=$source.Substring($first,$last-$first)
 [IO.File]::WriteAllText((Join-Path $Out 'display_timing_actual.inc'),$code)
+$vidpn=''
+foreach($signature in @('static ULONG ScalingFromPath(','static BOOLEAN ScalingPinned(','static BOOLEAN DisplayInheritedModeMatches(','NTSTATUS Bc250UpdateActiveVidPnPresentPath(')){
+    $first=$source.IndexOf($signature)
+    $last=$source.IndexOf("`n}",$first)+3
+    if($first -lt 0 -or $last -lt $first){throw "Missing body: $signature"}
+    $vidpn+=$source.Substring($first,$last-$first)+"`n"
+}
+[IO.File]::WriteAllText((Join-Path $Out 'inherited_vidpn_actual.inc'),$vidpn)
+$modeset=Get-Content (Join-Path $repo 'driver\kmd\modeset.c') -Raw
+$first=$modeset.IndexOf('NTSTATUS ModesetPrepareInherited(')
+$last=$modeset.IndexOf('static ULONG InheritedScalingDefault(',$first)
+if($first -lt 0 -or $last -lt $first){throw 'inherited pipe admission not found'}
+$inherited=$modeset.Substring($first,$last-$first)
+foreach($signature in @('static ULONG InheritedScalingDefault(','NTSTATUS ModesetValidateInherited(','ULONG ModesetScalingSupport(','NTSTATUS ModesetCommit(')){
+    $first=$modeset.IndexOf($signature)
+    $last=$modeset.IndexOf("`n}",$first)+3
+    if($first -lt 0 -or $last -lt $first){throw "Missing body: $signature"}
+    $inherited+=$modeset.Substring($first,$last-$first)+"`n"
+}
+[IO.File]::WriteAllText((Join-Path $Out 'inherited_actual.inc'),$inherited)
 $wddm=Get-Content (Join-Path $repo 'driver\kmd\wddm.c') -Raw
 $first=$wddm.IndexOf('static NTSTATUS Bc250WddmDescribeAllocation(')
 # The function alone, to its closing brace: what follows it in wddm.c (an .inc of WDK-typed code since 0.7.192) is not
@@ -28,7 +48,7 @@ $msvc=Get-ChildItem "$vs\VC\Tools\MSVC" -Directory | Sort-Object Name | Select-O
 $sdk=Join-Path $Root 'toolchain\nuget\microsoft.windows.sdk.cpp\c'
 $libs=Join-Path $Root 'toolchain\nuget\microsoft.windows.sdk.cpp.x64\c'
 $cl=Join-Path $msvc.FullName 'bin\Hostx64\x64\cl.exe'
-& $cl /nologo /TC /W4 /WX /O2 /MT "/I$repo\driver\kmd" "/I$repo\third_party\linux-amdgpu" "/I$($msvc.FullName)\include" "/I$sdk\Include\10.0.26100.0\ucrt" "/Fo$Out\" "/Fe$Out\timing_test.exe" "$Out\test.c" /link "/LIBPATH:$($msvc.FullName)\lib\x64" "/LIBPATH:$libs\ucrt\x64" "/LIBPATH:$libs\um\x64"
+& $cl /nologo /TC /W4 /WX /O2 /MT "/I$repo\driver\kmd" "/I$repo\driver\kmd\test" "/I$repo\third_party\linux-amdgpu" "/I$($msvc.FullName)\include" "/I$sdk\Include\10.0.26100.0\ucrt" "/Fo$Out\" "/Fe$Out\timing_test.exe" "$Out\test.c" "$repo\driver\kmd\dcn_scale.c" "$repo\driver\kmd\display_io.c" "$repo\driver\kmd\edid.c" /link "/LIBPATH:$($msvc.FullName)\lib\x64" "/LIBPATH:$libs\ucrt\x64" "/LIBPATH:$libs\um\x64"
 if($LASTEXITCODE -ne 0){throw 'host build failed'}
 & "$Out\timing_test.exe"
 exit $LASTEXITCODE

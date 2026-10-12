@@ -113,6 +113,7 @@ typedef struct _BC250_DPAUDIO_SINK {
     // container. HasPortId 0 writes Linux DC's two constants instead.
     unsigned long long PortId;
     unsigned long HasPortId;
+    unsigned long Hdmi;                     // connection bit in the ELD; 0 keeps the DP contract
 } BC250_DPAUDIO_SINK;
 // The fixed "basic audio" set of step 1: 2-channel LPCM at 32, 44.1 and 48 kHz, 16 bit, FL/FR, "BC-250 DP".
 void Bc250DpAudioSinkDefault(BC250_DPAUDIO_SINK* Sink);
@@ -121,6 +122,9 @@ void Bc250DpAudioSinkDefault(BC250_DPAUDIO_SINK* Sink);
 // and has an LPCM descriptor; else 0 and the fixed set (a deviation: Linux gives such a sink no audio at all, this
 // driver keeps the endpoint it had before step 4, docs/design/dp-audio.md step 4).
 int Bc250DpAudioSinkFromEdid(const BC250_EDID_INFO* Info, BC250_DPAUDIO_SINK* Sink);
+// HDMI requires a checksum-validated HDMI VSDB and LPCM SAD or Basic Audio.
+// This stream implementation offers stereo 16-bit at the sink's 32/44.1/48 kHz rates.
+int Bc250HdmiAudioSinkFromEdid(const BC250_EDID_INFO* Info, BC250_DPAUDIO_SINK* Sink);
 // The container ID half of step 4, after the two calls above (both reset the whole sink). PortId 0 leaves Linux's
 // constants in place. Manufacturer and Product are the operating system's EldInfo values, taken only where the
 // EDID gave none, so an endpoint without an EDID still carries the monitor's identity; returns 1 when they differ
@@ -201,6 +205,9 @@ typedef struct _BC250_DPAUDIO_RUN {
     const BC250_DPAUDIO_SINK* Sink;         // in: step 4's sink for the configure group; NULL = the fixed set
 } BC250_DPAUDIO_RUN;
 unsigned long Bc250DpAudioRun(BC250_AZ_IO* Io, BC250_DPAUDIO_RUN* Run);
+unsigned long Bc250HdmiAudioRun(BC250_AZ_IO* Io, BC250_DPAUDIO_RUN* Run, unsigned long PixelClock100Hz);
+long Bc250HdmiAudioStopSequence(BC250_AZ_IO* Io, unsigned long Stream, unsigned long Endpoint, int StreamWritten,
+                                int EndpointWritten, BC250_DPAUDIO_STOP* Stop);
 
 const char* Bc250DpAudioReasonText(unsigned long Reason);
 const char* Bc250DpAudioStepText(unsigned long Step);

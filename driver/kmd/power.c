@@ -16,6 +16,8 @@ static NTSTATUS PowerRestoreDisplay(BC250_DEVICE* Device)
         post.Pitch!=Device->Post.Pitch || post.ColorFormat!=Device->Post.ColorFormat ||
         post.PhysicAddress.QuadPart!=Device->Post.PhysicAddress.QuadPart)
         return STATUS_GRAPHICS_INVALID_VIDPN;
+    status=ModesetValidateInherited(Device);
+    if (!NT_SUCCESS(status)) return status;
     status=DcnSetVisibility(Device,FALSE);
     if (!NT_SUCCESS(status)) return status;
     Device->SourceVisible=FALSE;

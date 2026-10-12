@@ -43,6 +43,7 @@ typedef struct {void* Psp;int GartLock,GpuStopUnconfirmed,Smu;
     // M15.14 (0.7.216.20): whether this start captured the firmware's plane format (dcn.c), which the
     // trailer publishes as BC250_SCANOUT_CAPS_PLANE_FORMATS.
     BOOLEAN DcnPlaneFormats;
+    struct {BOOLEAN InheritedFixed;} Modeset;
 } BC250_DEVICE;
 /* bc250kmd.h: the committed source size, else the POST size. */
 static ULONG DisplaySourceWidth(const BC250_DEVICE* d){return d->SourceWidth?d->SourceWidth:d->Post.Width;}

@@ -96,6 +96,9 @@ try {
  # BD-122: the consumers of the KMD's start record (start-confirm and the installer's verify), with fixtures in a
  # scratch key of HKCU that it removes again. Windows PowerShell 5.1, the shell a tester's installer runs in.
  Check 'start-record-consumers' { & powershell -NoProfile -File "$repo\tools\release\test-start-record.ps1" }
+ # Owner 2026-10-12: the installer's own diagnostics of a start that did not pass (the decision, the readers and
+ # the bounds), with the field case as a fixture. Windows PowerShell 5.1, the shell a tester runs.
+ Check 'installer-diagnostics' { & powershell -NoProfile -File "$repo\tools\release\test-diagnostics.ps1" }
  Check 'radv-contract' { & python "$repo\tools\quality\prototype_gate.py" --compile-commands "$radvBuild\compile_commands.json" --out "$Out\radv-contract" }
  Check 'umd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compile-commands "$umdBuild\compile_commands.json" --match '/src/gallium/(frontends/d3d10umd|targets/d3d10umd|drivers/zink)/' --out "$Out\umd-contract" }
  Check 'vsync-vector' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_vsync_vector.ps1" -Root $Workspace -Out "$Out\vsync-vector" }
@@ -232,6 +235,7 @@ try {
   @{n='guard-start';s='driver\kmd\test\run_guard_start.ps1';a=@('-Root',$Workspace)}
   # BD-122: the start record, and the four pre-fix behaviours as its controls, one per requirement.
   @{n='start-record';s='driver\kmd\test\run_start_record.ps1';a=@('-Root',$Workspace)}
+  @{n='stop-record';s='driver\kmd\test\run_stop_record.ps1';a=@('-Root',$Workspace)}
   @{n='start-record-keeplog-gate';s='driver\kmd\test\run_start_record.ps1';a=@('-Root',$Workspace,'-GateOnKeepLog');Fails=$true}
   @{n='start-record-no-attempt';s='driver\kmd\test\run_start_record.ps1';a=@('-Root',$Workspace,'-NoAttemptRecord');Fails=$true}
   @{n='start-record-before-cleanup';s='driver\kmd\test\run_start_record.ps1';a=@('-Root',$Workspace,'-RecordBeforeCleanup');Fails=$true}

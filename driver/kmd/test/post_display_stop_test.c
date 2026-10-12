@@ -82,6 +82,8 @@ static void*freedOrder[4];
 static void ExFreePoolWithTag(void*p,int tag){(void)tag;CHECK(model.restores==1 && model.vidmm==1);if(model.objects<4)freedOrder[model.objects]=p;model.objects++;}
 static void HangDetectorStop(void){CHECK(model.smu==0 && model.restores==0);}   /* KMD172: before any teardown */
 static void StartHealthClose(BC250_DEVICE*d){(void)d;}
+static void GuardRecordStopBegin(BC250_DEVICE*d){StartHealthClose(d);CHECK(model.unmaps==0);}
+static void GuardRecordStopDone(void){CHECK(model.unmaps==1);}
 /* board_memory_service.c, board_memory_identity.c: the stop path ends the board memory operation and
    drops the captured identity. Neither one is what this test is about. */
 static void BoardMemoryStop(BC250_DEVICE*d){(void)d;}

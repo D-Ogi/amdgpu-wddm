@@ -29,10 +29,13 @@ static NTSTATUS DisplayDecodeGeometry(const ULONG Values[TimingCount], ULONG Wid
     vstart=(Values[TimingVBlank]&OTG0_OTG_V_BLANK_START_END__OTG_V_BLANK_START_MASK)>>OTG0_OTG_V_BLANK_START_END__OTG_V_BLANK_START__SHIFT;
     vend=(Values[TimingVBlank]&OTG0_OTG_V_BLANK_START_END__OTG_V_BLANK_END_MASK)>>OTG0_OTG_V_BLANK_START_END__OTG_V_BLANK_END__SHIFT;
     if(hstart>=htotal || hend>=hstart || vstart>=vtotal || vend>=vstart ||
-       hstart-hend!=Width || vstart-vend!=Height || !Width || !Height)
+       !Width || !Height)
         return STATUS_DEVICE_DATA_ERROR;
     Signal->TotalSize.cx=htotal;Signal->TotalSize.cy=vtotal;
-    Signal->ActiveSize.cx=Width;Signal->ActiveSize.cy=Height;
+    // OTG describes the target, GOP describes the source surface. Firmware may
+    // scale one to the other. ModesetPrepareInherited admits that transform
+    // from the pipe registers before this signal can be published.
+    Signal->ActiveSize.cx=hstart-hend;Signal->ActiveSize.cy=vstart-vend;
     return STATUS_SUCCESS;
 }
 
@@ -90,7 +93,7 @@ static NTSTATUS DisplayReadInheritedTiming(BC250_DEVICE* Device, D3DKMDT_VIDEO_S
     status=DisplayTmdsRoute(Device,routeAfter);
     if(!NT_SUCCESS(status))return status;
     for(i=0;i<TmdsRouteCount;i++)if(route[i]!=routeAfter[i])return STATUS_DEVICE_BUSY;
-    pixel=DisplayTmdsPixel(pixel,Device->Post.Width,Device->Post.Height,
+    pixel=DisplayTmdsPixel(pixel,Signal->ActiveSize.cx,Signal->ActiveSize.cy,
                            Signal->TotalSize.cx,Signal->TotalSize.cy,NULL); // no DDC in this stage
     if(!pixel)return STATUS_DEVICE_DATA_ERROR;
     Signal->PixelRate=pixel;
@@ -98,7 +101,7 @@ static NTSTATUS DisplayReadInheritedTiming(BC250_DEVICE* Device, D3DKMDT_VIDEO_S
     Signal->VSyncFreq.Numerator=pixel;Signal->VSyncFreq.Denominator=Signal->TotalSize.cx*Signal->TotalSize.cy;
     Device->InheritedTmds=TRUE;
     GuardLog("display: TMDS inherited %ux%u total %ux%u measured %lu.%03lu Hz over 8 frames, pixel %lu Hz, source measured",
-             Device->Post.Width,Device->Post.Height,Signal->TotalSize.cx,Signal->TotalSize.cy,
+             Signal->ActiveSize.cx,Signal->ActiveSize.cy,Signal->TotalSize.cx,Signal->TotalSize.cy,
              refresh/1000u,refresh%1000u,pixel);
     return STATUS_SUCCESS;
 }
