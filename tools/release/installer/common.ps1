@@ -1014,6 +1014,37 @@ function Get-PeMachine([string]$Path) {
         return [int][BitConverter]::ToUInt16($b, $pe + 4)
     } finally { $fs.Dispose() }
 }
+# The undecorated export names of a PE image (x86 or x64), read from its export directory. The release gate and
+# verify use it on the OpenGL ICD (BD-076); test-wow64.ps1 carries the same reader for the x86 payload.
+function Get-PeExportNames([string]$Path) {
+    $b = [IO.File]::ReadAllBytes($Path)
+    $pe = [BitConverter]::ToInt32($b, 60)
+    $magic = [BitConverter]::ToUInt16($b, $pe + 24)
+    $dd = $pe + 24 + $(if ($magic -eq 0x20B) { 112 } else { 96 })
+    $rva = [BitConverter]::ToUInt32($b, $dd)
+    if (-not $rva) { return @() }
+    $nsec = [BitConverter]::ToUInt16($b, $pe + 6)
+    $sec = $pe + 24 + [BitConverter]::ToUInt16($b, $pe + 20)
+    $toOff = {
+        param([uint32]$r)
+        for ($i = 0; $i -lt $nsec; $i++) {
+            $s = $sec + 40 * $i
+            $va = [BitConverter]::ToUInt32($b, $s + 12); $sz = [BitConverter]::ToUInt32($b, $s + 8); $raw = [BitConverter]::ToUInt32($b, $s + 20)
+            if ($r -ge $va -and $r -lt $va + [Math]::Max($sz, [BitConverter]::ToUInt32($b, $s + 16))) { return [int]($r - $va + $raw) }
+        }
+        throw "RVA $r outside the sections of $Path"
+    }
+    $ed = & $toOff $rva
+    $n = [BitConverter]::ToUInt32($b, $ed + 24)
+    $names = & $toOff ([BitConverter]::ToUInt32($b, $ed + 32))
+    $out = @()
+    for ($i = 0; $i -lt $n; $i++) {
+        $o = & $toOff ([BitConverter]::ToUInt32($b, $names + 4 * $i))
+        $e = $o; while ($b[$e]) { $e++ }
+        $out += [Text.Encoding]::ASCII.GetString($b, $o, $e - $o)
+    }
+    return $out
+}
 # The 32-bit registration as verify checks it; returns the problems found (none: registered).
 function Test-WowRegistration {
     param([Parameter(Mandatory)][string]$InstallRoot, [Parameter(Mandatory)][string]$ClassKey, [string]$KhronosKey = $script:KhronosKeyWow,
@@ -1040,6 +1071,261 @@ function Test-WowRegistration {
     }
     return $problems
 }
+# ---------------------------------------------------------------------------------------------------------------
+# The OpenGL installable client driver (BD-076, GitHub issue #8). Windows' own opengl32.dll asks the adapter which
+# ICD to load with D3DKMTQueryAdapterInfo(KMTQAITYPE_UMOPENGLINFO) and gets a D3DKMT_OPENGLINFO back: the ICD's file
+# name, its version and its flags (d3dkmthk.h lines 1851-1856 and KMTQAITYPE_UMOPENGLINFO = 2 at line 2365, WDK
+# 10.0.26100; ref\ddi-display\d3dkmthk.md section _D3DKMT_OPENGLINFO). The three fields come out of the registry: the
+# operating system reads OpenGLDriverName, OpenGLVersion and OpenGLFlags from the display adapter's own software
+# (class) key, and the ...Wow names for a 32-bit process
+# (ref\windows-driver-docs\windows-driver-docs-pr\display\loading-an-opengl-installable-client-driver.md lines 24-47).
+# No DDI of ours takes part, and the driver is not asked: these values are the whole registration. Every OpenGL
+# application of the computer then gets our ICD, with no DLL beside its executable.
+#
+# Why the installer writes them and the INF does not: the ICD files live under the install root
+# (%ProgramFiles%\amdgpu-wddm\opengl and ...\wow64\opengl), which an INF AddReg line cannot name (it can only name
+# the driver store, %13%), and the installer already owns the neighbouring values of the same key
+# (UserModeDriverName, UserModeDriverNameWow, VulkanDriverName, VulkanDriverNameWow: install.ps1). The INF's own
+# user-mode AddReg block is the disabled M7 stage-A experiment (driver\kmd\bc250kmd.inf), not a registration route.
+#
+# The value type: the Learn page above calls OpenGLDriverName a REG_SZ, which predates WDDM; Microsoft's own WDDM 2.1
+# driver-store example writes a REG_MULTI_SZ
+# (ref\windows-driver-docs\windows-driver-docs-pr\display\wddm-2-1-features.md lines 214-215), and so does every
+# shipping WDDM display INF that was read for this (AMD's own Adrenalin INF writes OpenGLDriverName and
+# OpenGLDriverNameWoW as REG_MULTI_SZ with OpenGLVersion 1 and OpenGLFlags 3). UserModeDriverName, which this
+# installer writes as a REG_MULTI_SZ, is read by the same query path and works on the lab, so the ICD name is written
+# the same way. release-sources.json can say "value_type": "REG_SZ" instead, which is the one-line fallback if a lab
+# run ever shows that the runtime does not load the ICD.
+#
+# The Wow spelling: the Learn table spells it OpenGLDriverNameWow, the WDDM 2.1 example OpenGLDriverNameWoW, and
+# AMD's one INF uses both spellings in different sections of itself. Registry value names are not case sensitive, so
+# the two name one value; this installer writes the spelling of the Learn table.
+#
+# OpenGLVersion is the number the runtime compares before it loads the ICD. Mesa's WGL front end takes the number and
+# ignores it (DrvValidateVersion, src\gallium\frontends\wgl\stw_device.c), so the value only has to be the one the
+# runtime accepts: 1, which is what AMD's INF and VirtualBox's Mesa registration both write. OpenGLFlags is a bit
+# mask: bit 0 (0x1) "is set for compatibility", bit 1 (0x2) tells the runtime not to call the ICD's finish function
+# before its swap-buffers function (the Learn table above). This release writes 1: bit 0 only, so the runtime keeps
+# its finish call before every swap, which is the conservative half of AMD's 3.
+$script:OpenGlPackagePath    = 'payload/opengl/amdgpu_wddm_gl.dll'
+$script:OpenGlPackagePathWow = 'payload/wow64/opengl/amdgpu_wddm_gl.dll'
+$script:OpenGlVersion        = 1
+$script:OpenGlFlags          = 1
+$script:OpenGlValueType      = 'REG_MULTI_SZ'
+# The six values of the registration, the 64-bit three first. The order is the order the installer writes them in and
+# the dry run prints them in.
+$script:OpenGlValueNames = @('OpenGLDriverName', 'OpenGLVersion', 'OpenGLFlags', 'OpenGLDriverNameWow', 'OpenGLVersionWow', 'OpenGLFlagsWow')
+# The entry points the OpenGL runtime calls in an ICD, as Mesa's WGL front end exports them
+# (src\gallium\targets\wgl\gallium_wgl.def.in; the @N suffixes of that file are stripped for a Visual C++ build, so
+# the names are undecorated in both architectures). A file that lacks one of these is no ICD, whatever its name says,
+# and the release gate refuses the package.
+$script:OpenGlDrvExports = @('DrvValidateVersion', 'DrvSetCallbackProcs', 'DrvDescribePixelFormat', 'DrvSetPixelFormat',
+    'DrvCreateContext', 'DrvCreateLayerContext', 'DrvSetContext', 'DrvReleaseContext', 'DrvDeleteContext',
+    'DrvShareLists', 'DrvSwapBuffers', 'DrvGetProcAddress')
+
+# What this release does about the OpenGL ICD: manifest.json "opengl_icd" (release-sources.json in the build), the
+# same switch shape as the H.264 encoder's. Pure but for the two file probes, which only run with a package root.
+function Get-OpenGlReleaseSwitch {
+    param($Manifest, [string]$PackageRoot)
+    $s = $null
+    if ($Manifest -and $Manifest.PSObject.Properties['opengl_icd']) { $s = $Manifest.opengl_icd }
+    $register = $false
+    if ($s -and $s.register) { $register = $true }
+    $rel = $script:OpenGlPackagePath
+    if ($s -and $s.package_path) { $rel = [string]$s.package_path }
+    $relWow = $script:OpenGlPackagePathWow
+    if ($s -and $s.package_path_wow) { $relWow = [string]$s.package_path_wow }
+    if ($rel -notmatch '^payload/[A-Za-z0-9_-]+/[A-Za-z0-9_.-]+\.dll$') { throw "opengl_icd package_path '$rel': expected payload/<directory>/<name>.dll" }
+    if ($relWow -notmatch '^payload/wow64/[A-Za-z0-9_-]+/[A-Za-z0-9_.-]+\.dll$') { throw "opengl_icd package_path_wow '$relWow': expected payload/wow64/<directory>/<name>.dll" }
+    $version = $script:OpenGlVersion
+    if ($s -and $null -ne $s.version) { $version = [int]$s.version }
+    $flags = $script:OpenGlFlags
+    if ($s -and $null -ne $s.flags) { $flags = [int]$s.flags }
+    $type = $script:OpenGlValueType
+    if ($s -and $s.value_type) { $type = [string]$s.value_type }
+    if (@('REG_MULTI_SZ', 'REG_SZ') -notcontains $type) { throw "opengl_icd value_type '$type': expected REG_MULTI_SZ or REG_SZ" }
+    if ($version -lt 1) { throw "opengl_icd version '$version': expected 1 or more" }
+    if ($flags -lt 0) { throw "opengl_icd flags '$flags': expected 0 or more" }
+    $source = $null; $sourceWow = $null; $present = $false; $presentWow = $false
+    if ($PackageRoot) {
+        $source = Join-Path $PackageRoot ($rel -replace '/', '\')
+        $sourceWow = Join-Path $PackageRoot ($relWow -replace '/', '\')
+        $present = Test-Path -LiteralPath $source -PathType Leaf
+        $presentWow = Test-Path -LiteralPath $sourceWow -PathType Leaf
+    }
+    return [ordered]@{
+        register         = $register
+        package_path     = $rel
+        package_path_wow = $relWow
+        payload_dir      = ($rel -split '/')[1]                               # the payload directory install.ps1 copies
+        install_path     = ($rel -replace '^payload/', '') -replace '/', '\'  # under the install root
+        install_path_wow = ($relWow -replace '^payload/', '') -replace '/', '\'
+        source           = $source
+        source_wow       = $sourceWow
+        present          = $present
+        present_wow      = $presentWow
+        version          = $version
+        flags            = $flags
+        value_type       = $type
+    }
+}
+
+# What a run has to do about the ICD. Pure: the switch and what is on the computer in, the action out.
+#   register   this release registers it: the files and the six values go on
+#   rollback   this release does not register it, and an earlier install left values or files: they go
+#   none       this release does not register it and there is nothing to take away
+function Get-OpenGlAction {
+    param([Parameter(Mandatory)]$Switch, [AllowEmptyCollection()][string[]]$PresentValues = @(), [bool]$DirPresent = $false)
+    if ($Switch.register) { return 'register' }
+    if (@($PresentValues).Count -or $DirPresent) { return 'rollback' }
+    return 'none'
+}
+
+# The six values with their types and the values this release writes. Pure.
+function Get-OpenGlRegistrationPlan {
+    param([Parameter(Mandatory)]$Switch, [Parameter(Mandatory)][string]$InstallRoot)
+    $t = 'MultiString'
+    if ($Switch.value_type -eq 'REG_SZ') { $t = 'String' }
+    $p = Join-Path $InstallRoot $Switch.install_path
+    $pw = Join-Path $InstallRoot $Switch.install_path_wow
+    $name = $p; $nameWow = $pw
+    if ($t -eq 'MultiString') { $name = [string[]]@($p); $nameWow = [string[]]@($pw) }
+    return @(
+        [pscustomobject]@{ name = 'OpenGLDriverName'; type = $t; value = $name }
+        [pscustomobject]@{ name = 'OpenGLVersion'; type = 'DWord'; value = [int]$Switch.version }
+        [pscustomobject]@{ name = 'OpenGLFlags'; type = 'DWord'; value = [int]$Switch.flags }
+        [pscustomobject]@{ name = 'OpenGLDriverNameWow'; type = $t; value = $nameWow }
+        [pscustomobject]@{ name = 'OpenGLVersionWow'; type = 'DWord'; value = [int]$Switch.version }
+        [pscustomobject]@{ name = 'OpenGLFlagsWow'; type = 'DWord'; value = [int]$Switch.flags }
+    )
+}
+# One line for Invoke-Change and the dry run.
+function Format-OpenGlRegistrationPlan {
+    param([AllowEmptyCollection()]$Plan)
+    return (@($Plan | ForEach-Object { "$($_.name) = $(Format-RegistryValue $_.value)" }) -join '; ')
+}
+function Write-OpenGlRegistration {
+    param([Parameter(Mandatory)][string]$ClassKey, [Parameter(Mandatory)]$Plan)
+    foreach ($i in @($Plan)) {
+        switch ($i.type) {
+            'DWord' { New-ItemProperty -LiteralPath $ClassKey -Name $i.name -Value ([int]$i.value) -PropertyType DWord -Force | Out-Null }
+            'MultiString' { New-ItemProperty -LiteralPath $ClassKey -Name $i.name -Value ([string[]]$i.value) -PropertyType MultiString -Force | Out-Null }
+            default { New-ItemProperty -LiteralPath $ClassKey -Name $i.name -Value ([string]$i.value) -PropertyType String -Force | Out-Null }
+        }
+    }
+}
+# One ICD file: an image of the expected machine that exports every Drv* entry point. Returns the problems found
+# (none: usable). 0x8664 is x64, 0x14C is x86 (Get-PeMachine above).
+function Test-OpenGlIcdFile {
+    param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][int]$Machine)
+    $problems = @()
+    $m = Get-PeMachine $Path
+    if ($null -eq $m) { return @("$Path missing or not an image") }
+    if ($m -ne $Machine) { $problems += ('{0} is machine 0x{1:X}, expected 0x{2:X}' -f $Path, $m, $Machine) }
+    $x = @()
+    try { $x = @(Get-PeExportNames $Path) } catch { return ($problems + @("$Path exports cannot be read: $($_.Exception.Message)")) }
+    $missing = @($script:OpenGlDrvExports | Where-Object { $x -notcontains $_ })
+    if ($missing.Count) {
+        $hint = ''
+        if (@($x | Where-Object { $_ -match '^Drv.+@\d+$' }).Count) { $hint = ' (the file exports decorated Drv names, so its module definition file was not generated for Visual C++)' }
+        $problems += "$Path does not export $($missing -join ', ')$hint"
+    }
+    return $problems
+}
+# The registration as verify checks it: the six values of the class key and both ICD files. Returns the problems
+# found (none: registered).
+function Test-OpenGlRegistration {
+    param([Parameter(Mandatory)][string]$InstallRoot, [Parameter(Mandatory)][string]$ClassKey, [Parameter(Mandatory)]$Switch)
+    $problems = @()
+    $plan = Get-OpenGlRegistrationPlan -Switch $Switch -InstallRoot $InstallRoot
+    $c = Read-RegistryValues $ClassKey
+    foreach ($i in $plan) {
+        if (-not $c.ContainsKey($i.name)) { $problems += "$($i.name) is missing"; continue }
+        if (-not (Test-RegistryValueSame $c[$i.name] $i.value)) { $problems += "$($i.name) is $(Format-RegistryValue $c[$i.name]), expected $(Format-RegistryValue $i.value)" }
+    }
+    $problems += @(Test-OpenGlIcdFile -Path (Join-Path $InstallRoot $Switch.install_path) -Machine 0x8664)
+    $problems += @(Test-OpenGlIcdFile -Path (Join-Path $InstallRoot $Switch.install_path_wow) -Machine 0x14C)
+    return $problems
+}
+# Which of the six values a key carries now, with the value itself: the record install.ps1 keeps once (the values
+# from before the first install of ours) and the list uninstall.ps1 works from.
+function Get-OpenGlValueRecord {
+    param([Parameter(Mandatory)][string]$ClassKey)
+    $c = Read-RegistryValues $ClassKey
+    return @($script:OpenGlValueNames | ForEach-Object {
+        [pscustomobject]@{ name = $_; present = $c.ContainsKey($_); previous = $(if ($c.ContainsKey($_)) { $c[$_] } else { $null }) }
+    })
+}
+# What the uninstaller does with each of the six values. Pure: the record from before the first install, what this
+# release wrote, and what the key holds now in; one row per value out.
+#   restore   this release wrote the value and there was one before the install: the old value goes back
+#   remove    this release wrote the value and there was none before the install
+#   keep      the value is not the one this release wrote: it belongs to whoever wrote it (the same rule TdrDelay
+#             and the HD Audio interrupt follow)
+#   none      there is nothing there and nothing was recorded
+# Without a record of this release's own writes (an install by an older release, or a lost state file) a value is
+# ours only when it names the install root, and anything else is kept.
+function Get-OpenGlRestorePlan {
+    param([AllowEmptyCollection()]$Previous = @(), [AllowEmptyCollection()]$Wrote = @(), [hashtable]$Current = @{}, [string]$InstallRoot)
+    $prev = @{}
+    foreach ($p in @($Previous)) { if ($p -and $p.name) { $prev[[string]$p.name] = $p } }
+    $wroteMap = @{}
+    foreach ($w in @($Wrote)) { if ($w -and $w.name) { $wroteMap[[string]$w.name] = $w.value } }
+    $rows = @()
+    foreach ($n in $script:OpenGlValueNames) {
+        $has = $Current.ContainsKey($n)
+        $now = $(if ($has) { $Current[$n] } else { $null })
+        $ours = $false
+        $why = ''
+        if ($wroteMap.ContainsKey($n)) {
+            $ours = Test-RegistryValueSame $now $wroteMap[$n]
+            if (-not $ours) { $why = 'not the value this release wrote' }
+        } elseif ($has -and $InstallRoot) {
+            # No record: a name value that names the install root is ours, a number without a name value is not
+            # judged on its own.
+            $ours = [bool](@($now | ForEach-Object { [string]$_ }) -match [regex]::Escape($InstallRoot))
+            if (-not $ours) { $why = 'no record of this release writing it' }
+        } elseif ($has) {
+            $why = 'no record of this release writing it'
+        }
+        # The value is gone already (another driver install, or a tester): there is nothing to take away.
+        if (-not $has) { $rows += [pscustomobject]@{ name = $n; action = 'none'; value = $null; why = 'absent' }; continue }
+        if (-not $ours) { $rows += [pscustomobject]@{ name = $n; action = 'keep'; value = $now; why = $why }; continue }
+        if ($prev.ContainsKey($n) -and $prev[$n].present) { $rows += [pscustomobject]@{ name = $n; action = 'restore'; value = $prev[$n].previous; why = 'the value from before the install' }; continue }
+        $rows += [pscustomobject]@{ name = $n; action = 'remove'; value = $null; why = 'there was none before the install' }
+    }
+    return $rows
+}
+function Format-OpenGlRestorePlan {
+    param([AllowEmptyCollection()]$Plan)
+    $rows = @($Plan | Where-Object { $_.action -ne 'none' })
+    if (-not $rows.Count) { return 'nothing of ours' }
+    return (@($rows | ForEach-Object {
+        switch ($_.action) {
+            'restore' { "$($_.name) back to $(Format-RegistryValue $_.value)" }
+            'remove' { "remove $($_.name)" }
+            default { "$($_.name) kept ($($_.why))" }
+        }
+    }) -join '; ')
+}
+function Write-OpenGlRestore {
+    param([Parameter(Mandatory)][string]$ClassKey, [AllowEmptyCollection()]$Plan)
+    foreach ($r in @($Plan)) {
+        if ($r.action -eq 'restore') {
+            $type = 'String'
+            if ($r.value -is [array]) { $type = 'MultiString' }
+            elseif ($r.value -isnot [string]) { $type = 'DWord' }
+            switch ($type) {
+                'MultiString' { New-ItemProperty -LiteralPath $ClassKey -Name $r.name -Value ([string[]]$r.value) -PropertyType MultiString -Force | Out-Null }
+                'DWord' { New-ItemProperty -LiteralPath $ClassKey -Name $r.name -Value ([int]$r.value) -PropertyType DWord -Force | Out-Null }
+                default { New-ItemProperty -LiteralPath $ClassKey -Name $r.name -Value ([string]$r.value) -PropertyType String -Force | Out-Null }
+            }
+        } elseif ($r.action -eq 'remove') {
+            Remove-ItemProperty -LiteralPath $ClassKey -Name $r.name -ErrorAction SilentlyContinue
+        }
+    }
+}
+
 function Get-DeviceDriverKey {
     # The device's software (class) key, e.g. HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-...}\0001
     param([Parameter(Mandatory)][string]$InstanceId)

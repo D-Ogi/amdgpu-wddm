@@ -574,6 +574,23 @@ function Invoke-Verify {
         Add-Result '32-bit D3D/Vulkan' ($wow.Count -eq 0) $(if ($wow.Count) { $wow -join '; ' } else { 'UserModeDriverNameWow (D3D9 empty: D3D9On12; D3D10/11 router; D3D12), VulkanDriverNameWow, WOW6432Node Khronos entry, router Wow paths; x86 images in place' })
     }
 
+    # The OpenGL ICD (BD-076): the six values of the GPU's software key and both ICD files, x64 and x86. Registration
+    # and files only. No OpenGL context is created here: the installer runs in session 0, where there is no desktop
+    # to give a window a pixel format, so a context test belongs to a client of ours on a logged-on desktop
+    # (tools/win/gltest). A release that does not register the ICD says so and checks nothing.
+    try {
+        $glSwitch = Get-OpenGlReleaseSwitch -Manifest $script:Manifest -PackageRoot $null
+        if (-not $glSwitch.register) {
+            Add-Info 'OpenGL ICD' 'not registered by this release'
+        } elseif (-not $gpuSwKey) {
+            Add-Result 'OpenGL ICD' $false 'no software key for the GPU'
+        } else {
+            $glProblems = @(Test-OpenGlRegistration -InstallRoot $InstallRoot -ClassKey $gpuSwKey -Switch $glSwitch)
+            Add-Result 'OpenGL ICD' ($glProblems.Count -eq 0) $(if ($glProblems.Count) { $glProblems -join '; ' } else {
+                "OpenGLDriverName, OpenGLVersion $($glSwitch.version), OpenGLFlags $($glSwitch.flags) and the three Wow values ($($glSwitch.value_type)); x64 and x86 ICD in place with the Drv entry points" })
+        }
+    } catch { Add-Result 'OpenGL ICD' $false $_.Exception.Message }
+
     # The H.264 encoder MFT (M15.11). The result of this check is the only place a support report can read whether the
     # encoder is registered, which DLL the registration names and which bytes that DLL has (BugReport.cs collects
     # every verify report). The encoder is an extra, never a condition of the driver, so a registration that is not
@@ -925,6 +942,20 @@ if ($mft.register) {
     if (-not $mft.present) { throw "manifest.json registers the H.264 encoder MFT, but this package has no $($mft.package_path)" }
     $dirs += $mft.payload_dir
 }
+# The OpenGL ICD (BD-076, GitHub issue #8): the release decides whether it is registered at all (manifest.json
+# "opengl_icd"), and the decision is taken here, before the first change of this stage, so that the files of this
+# stage and the six registry values of the settings stage below follow one answer. A release that registers the ICD
+# has to carry both architectures: a 32-bit OpenGL application gets nothing from the 64-bit file. The x86 ICD rides
+# in the wow64 tree, which goes in anyway, so only the 64-bit directory joins the list.
+$gl = Get-OpenGlReleaseSwitch -Manifest $script:Manifest -PackageRoot $package
+$glDir = Split-Path (Join-Path $InstallRoot $gl.install_path)
+if ($gl.register) {
+    $glMissing = @()
+    if (-not $gl.present) { $glMissing += $gl.package_path }
+    if (-not $gl.present_wow) { $glMissing += $gl.package_path_wow }
+    if ($glMissing.Count) { throw "manifest.json registers the OpenGL ICD, but this package has no $($glMissing -join ' and ')" }
+    $dirs += $gl.payload_dir
+}
 # BD-089: what the release installed here installed and this one does not, before the new payload goes in. The rows
 # come from the plan that this run printed before any change (above); each removal names the file and the release that
 # installed it. The SHA256 is read again here, so a file that somebody changed between the plan and this step stays.
@@ -1192,6 +1223,53 @@ Invoke-Change "$($script:KhronosKeyWow) '$icdJsonWow' = 0 (32-bit system Vulkan 
     New-ItemProperty -LiteralPath $script:KhronosKeyWow -Name $icdJsonWow -Value 0 -PropertyType DWord -Force | Out-Null
 } | Out-Null
 Set-StateValue $state 'khronos_wow_value' $icdJsonWow
+
+# The OpenGL ICD (BD-076, GitHub issue #8): six values of the same key, so that every OpenGL application of the
+# computer runs on the GPU without a DLL beside its executable. Windows' opengl32.dll reads them through
+# D3DKMTQueryAdapterInfo(KMTQAITYPE_UMOPENGLINFO); common.ps1 holds the contract and the sources of it. The
+# registration is written here, with the Direct3D and Vulkan ones, because the ICD files live under the install root
+# and an INF can only name the driver store.
+# The values from before the first install of ours go into the state first, so the uninstaller can put them back; a
+# re-run must not record the values this installer itself wrote, hence Set-StateValueOnce. The values this release
+# writes go into the state too: the uninstaller only takes away a value that is still the one from here, the rule
+# TdrDelay and the HD Audio interrupt follow.
+if ($gl.register) {
+    $glPlan = Get-OpenGlRegistrationPlan -Switch $gl -InstallRoot $InstallRoot
+    [void](Set-StateValueOnce $state 'opengl_icd_previous' (Get-OpenGlValueRecord -ClassKey $classKey))
+    Save-InstallState $state
+    Invoke-Change ("$classKey " + (Format-OpenGlRegistrationPlan $glPlan) + " ($($gl.value_type))") {
+        Write-OpenGlRegistration -ClassKey $classKey -Plan $glPlan
+    } | Out-Null
+    Set-StateValue $state 'opengl_icd' @($glPlan | ForEach-Object { [pscustomobject]@{ name = $_.name; value = $_.value } })
+} else {
+    # A release that does not register the ICD takes the registration and the files of an earlier install away again,
+    # and in that order: a value that names a DLL which is gone would leave every OpenGL application without an ICD
+    # and without the software renderer that no registration at all gives it. The rollback is in this stage and not
+    # in the files stage above, because the key it writes is the GPU's own software key, which exists only after the
+    # driver package of this run.
+    $glNow = Read-RegistryValues $classKey
+    $glPresent = @($script:OpenGlValueNames | Where-Object { $glNow.ContainsKey($_) })
+    $glRollback = Get-OpenGlAction -Switch $gl -PresentValues $glPresent -DirPresent (Test-Path -LiteralPath $glDir)
+    if ($glRollback -eq 'rollback') {
+        # The same opening as the 'none' case below, so that one line of a run always says what this release does
+        # about the ICD, whatever it finds on the computer.
+        Write-Info ("OpenGL ICD: not registered by this release; the registration and the files of an earlier " +
+            "install go ($(if ($glPresent.Count) { $glPresent -join ', ' } else { 'no value of ours in the GPU key' }))")
+        if ($glPresent.Count) {
+            $glRestore = @(Get-OpenGlRestorePlan -Previous $(if ($state.PSObject.Properties['opengl_icd_previous']) { $state.opengl_icd_previous } else { @() }) `
+                -Wrote $(if ($state.PSObject.Properties['opengl_icd']) { $state.opengl_icd } else { @() }) -Current $glNow -InstallRoot $InstallRoot)
+            Invoke-Change ("$classKey OpenGL ICD registration of an earlier install (this release does not register it): " + (Format-OpenGlRestorePlan $glRestore)) {
+                Write-OpenGlRestore -ClassKey $classKey -Plan $glRestore
+            } | Out-Null
+        }
+        if (Test-Path -LiteralPath $glDir) {
+            Invoke-Change "remove $glDir (the OpenGL ICD of an earlier install; this release does not register it)" {
+                Remove-PathOrSchedule $glDir
+            } | Out-Null
+        }
+    } else { Write-Info 'OpenGL ICD: not registered by this release, and nothing of an earlier install on this computer' }
+    Set-StateValue $state 'opengl_icd' $null
+}
 
 # The H.264 encoder MFT (M15.11): route A of driver/umd/mft-h264/INSTALL.md, machine wide under
 # HKLM\SOFTWARE\Classes, which is what HKCR gives every process. A client that wants the encoder of one adapter asks

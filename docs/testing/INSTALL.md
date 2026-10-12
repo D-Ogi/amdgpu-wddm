@@ -127,10 +127,10 @@ results to `C:\ProgramData\amdgpu-wddm\start-confirm.log`.
 | Test certificate | LocalMachine Root and TrustedPublisher stores |
 | Kernel-mode driver | driver package `bc250kmd.inf` (driver store, service `bc250kmd`) |
 | Driver settings | `HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters` |
-| User-mode drivers | `C:\Program Files\amdgpu-wddm\` (`d3d12`, `desktop`, `d3d11`, `vulkan`, `wow64`, `tools`, `control`, `mft`). Nothing goes into `C:\Windows\System32` or `C:\Windows\SysWOW64`. An install over an earlier release removes the `bc250umd.dll` that it put there |
+| User-mode drivers | `C:\Program Files\amdgpu-wddm\` (`d3d12`, `desktop`, `d3d11`, `vulkan`, `opengl`, `wow64`, `tools`, `control`, `mft`). Nothing goes into `C:\Windows\System32` or `C:\Windows\SysWOW64`. An install over an earlier release removes the `bc250umd.dll` that it put there |
 | H.264 encoder (Media Foundation) | `HKLM\SOFTWARE\Classes\CLSID\{A32438F0-0D79-4CA9-A5BF-9F3C80837253}` with its `InprocServer32`, `HKLM\SOFTWARE\Classes\MediaFoundation\Transforms` (the encoder's own key and its membership in the video encoder category). These keys are for the whole computer. `uninstall.cmd` removes them, and so does a later release that does not install the encoder |
 | Licence texts | `C:\Program Files\amdgpu-wddm\licenses` (the package's `licenses\` and `THIRD-PARTY.md`) |
-| Graphics registration | the GPU's software key (`UserModeDriverName`, `VulkanDriverName`, and for 32-bit applications `UserModeDriverNameWow`, `VulkanDriverNameWow`; the first entry of each `UserModeDriverName` value, the Direct3D 9 entry, is empty), `HKLM\SOFTWARE\Khronos\Vulkan\Drivers`, `HKLM\SOFTWARE\WOW6432Node\Khronos\Vulkan\Drivers` |
+| Graphics registration | the GPU's software key: `UserModeDriverName`, `VulkanDriverName`, `OpenGLDriverName`, `OpenGLVersion`, `OpenGLFlags`. For 32-bit applications: `UserModeDriverNameWow`, `VulkanDriverNameWow`, `OpenGLDriverNameWow`, `OpenGLVersionWow`, `OpenGLFlagsWow`. The first entry of each `UserModeDriverName` value, the Direct3D 9 entry, is empty. Also `HKLM\SOFTWARE\Khronos\Vulkan\Drivers` and `HKLM\SOFTWARE\WOW6432Node\Khronos\Vulkan\Drivers`. `uninstall.cmd` puts back an `OpenGL` value from before the install and removes the ones it added |
 | Router policy and profiles | `HKLM\SOFTWARE\amdgpu-wddm` |
 | GPU firmware | `C:\BC250\firmware` (8 files and `LICENSE.amdgpu`, downloaded from linux-firmware; see "GPU firmware"). A new folder is writable by administrators only; the access rights of `C:\BC250` itself do not change. Download staging: `C:\ProgramData\amdgpu-wddm\installer\firmware-staging`, removed after the copy |
 | Start confirmation | scheduled task "amdgpu-wddm start confirm" |
@@ -149,6 +149,10 @@ change. The driver writes no debug log files. To change the maximum clock at ins
   desktop on the CPU route. An upgrade keeps the value you set.
 - Direct3D 12 applications run on the GPU through the Windows Direct3D 12 runtime, at feature level 12_1.
 - Vulkan applications run on the GPU through the Vulkan ICD.
+- OpenGL applications run on the GPU through the OpenGL driver (ICD) of this release. Windows loads it for
+  every OpenGL program of the computer, 64-bit and 32-bit, with no file beside the program. `verify.cmd`
+  shows the line `OpenGL ICD` with the registration and both driver files. Without this driver Windows gives
+  an OpenGL program its own software renderer, which is OpenGL 1.1.
 - Direct3D 11 applications and games run on the GPU. The value `Mode` in
   `HKLM\SOFTWARE\amdgpu-wddm\AppRouter` holds `gpu-default`. These programs stay on the CPU route (software
   rendering): the components of Windows and the packaged Microsoft applications, the processes of the logon and lock
