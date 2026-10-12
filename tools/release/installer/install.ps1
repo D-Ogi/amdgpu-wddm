@@ -13,13 +13,19 @@
 # own firmware\ folder, which is used when -FirmwareDir is not given. Nothing else uses the network.
 #
 # The setup window (tools\win\amdgpu_wddm_setup) drives this script with -Gui (docs/gui/interfaces-setup.md): the
-# engine writes events (-EventsFile) and one terminal result bound to -InvocationId (-ResultFile), decides the action
-# and the consents it needs, never asks, never elevates itself and never restarts Windows. -Plan runs the checks and
-# reports the decision, the consents, the restarts and the settings-impact plan, and changes nothing. Before the
+# engine writes events (-EventsFile) and one terminal result bound to -InvocationId (-ResultFile), decides the action,
+# asks the user nothing, never elevates itself and never restarts Windows. -Plan runs the checks and
+# reports the decision, the restarts and the settings-impact plan, and changes nothing. Before the
 # first restart it asks for, the whole package (and an offline firmware folder) is staged and checked in
 # %ProgramData%\amdgpu-wddm\installer\packages\<version>, and RunOnce runs the continuation from there; when phase 2
-# completes, that copy stays as the repair set. On the command line the installer asks "Restart now?" as before and
-# then asks Windows for a normal, planned restart (never a forced one).
+# completes, that copy stays as the repair set. On the command line a restart starts by itself after a visible 15 s
+# countdown (any key puts it off) and is a normal, planned restart (never a forced one).
+#
+# Nothing in this engine asks the user for a permission (owner, 2026-10-12): running it IS the consent for the test
+# mode the driver needs and for the BitLocker pause that the boot-option change needs (Get-BitLockerPlan). The
+# switches that used to carry those answers, -AcceptTestSigning and -BitLocker, are still accepted so that every
+# script that passes them keeps running. A preflight check that fails still refuses the install: a machine this
+# driver must not change is not a question.
 [CmdletBinding()]
 param(
     [switch]$DryRun,
@@ -33,7 +39,9 @@ param(
     [switch]$Verify,
     [switch]$Force,                         # install even over a development-lab installation (not supported)
     [switch]$NoReboot,                      # never restart; tell the tester to do it
-    [switch]$AcceptTestSigning,             # unattended: answer YES to the test-signing question
+    [switch]$AcceptTestSigning,             # accepted and not needed any more: no test-signing question is asked
+    # Accepted and not needed any more: BitLocker protection is suspended by itself for the restarts of the install.
+    # 'HaveKey' still means "do not touch protection, the recovery key is at hand" (Get-BitLockerPlan).
     [ValidateSet('', 'HaveKey', 'Suspend')][string]$BitLocker = '',
     [ValidateRange(1000, 2000)][int]$DpmMaxMHz,  # absent = the default (registry-defaults.json) or the tester's own value
     [ValidateSet(0, 24, 40)][int]$CuMode = 0,  # 0 = leave unset (driver default, 24 CUs)
@@ -190,8 +198,8 @@ function Invoke-Preflight {
 
     $bl = Get-BitLockerState
     $script:BitLockerState = $bl
-    if ($bl -eq 'on') { Add-Check 'BitLocker' 'warn' "protection on for $($env:SystemDrive): changing the boot options makes Windows ask for the recovery key at the next start. You must have the key, or let the installer suspend BitLocker for two restarts." 'bitlocker.on' }
-    elseif ($bl -eq 'unknown') { Add-Check 'BitLocker' 'warn' 'state unknown: changing boot options requires the recovery-key or suspension choice' 'bitlocker.unknown' }
+    if ($bl -eq 'on') { Add-Check 'BitLocker' 'warn' "protection on for $($env:SystemDrive): the installer suspends it for the restarts of this installation before it changes the boot options, so Windows does not ask for the recovery key (Get-BitLockerPlan)" 'bitlocker.on' }
+    elseif ($bl -eq 'unknown') { Add-Check 'BitLocker' 'warn' 'state unknown: the installation goes on; keep the recovery key at hand in case Windows asks for it after a restart' 'bitlocker.unknown' }
     else { Add-Check 'BitLocker' 'ok' $bl 'bitlocker.ok' }
 
     $hvci = Get-MemoryIntegrityState
@@ -422,7 +430,9 @@ function Request-Restart([string]$Why, [string]$ReasonId) {
     Write-Host "A restart is needed: $Why" -ForegroundColor White
     if ($script:GuiMode) { Write-Info 'the setup window offers the restart'; return }
     if ($script:DryRunMode -or $NoReboot) { Write-Info 'restart the computer yourself; the installer continues after you log on again'; return }
-    $go = Read-Confirmation -Question 'Restart now?' -Expect 'Y'
+    # The restart starts by itself after a visible countdown (owner, 2026-10-12): nothing waits for an answer here
+    # either. A key press during the countdown puts the restart off, Enter starts it at once.
+    $go = (Wait-RestartCountdown -Seconds $script:RestartCountdownSeconds) -eq 'now'
     if ($go) {
         $why = Request-PlannedRestart
         if ($why) { Write-Warn2 "Windows did not start the restart ($why): restart the computer yourself; the installer continues after you log on again" }
@@ -826,9 +836,9 @@ if ($script:VerifyOnly) {
 }
 
 # ---- the decision (GUI plan A2) ------------------------------------------------------------------------------------
-# Everything the user decides on comes from here, before any change: the action, the consents it needs, the restarts,
-# where the firmware comes from, and what happens to each setting (WU-006, WU-044). -Plan stops after it. A run of the
-# setup window that lacks a consent stops here too, with nothing changed.
+# Everything this run will do comes from here, before any change: the action, the restarts, where the firmware comes
+# from, and what happens to each setting (WU-006, WU-044). -Plan stops after it. Nothing here asks the user for a
+# permission (owner, 2026-10-12); the consent list of the decision event stays, empty, for the engine contract.
 function Get-InstallSettingsImpact {
     $tbl = Get-Content -LiteralPath (Join-Path $here 'registry-defaults.json') -Raw | ConvertFrom-Json
     $prev = Get-PreviousAppliedDefaults $tbl ((Get-ItemProperty -LiteralPath "$($script:SoftwareKey)\Release" -Name AppliedDefaults -ErrorAction SilentlyContinue).AppliedDefaults)
@@ -850,16 +860,18 @@ function Get-InstallSettingsImpact {
     }
     return (Get-SettingsImpact $groups)
 }
+# No consent is asked for any more (owner, 2026-10-12): starting this installer IS the consent for the test mode the
+# driver needs and for the BitLocker pause the boot-option change needs. The list stays in the decision event, empty,
+# because it is part of the engine contract (interfaces-setup.md A2) and because a future change that really needs an
+# answer belongs in it; the gate below still stops a window run that did not give one. What this install changes is
+# stated instead: the plan screen says it in words, and the console prints it.
 $consents = @()
 $restarts = 0
 if ($action.action -in @('install', 'upgrade', 'repair', 'resume')) {
     $restarts = 1
     if ($state.phase -in @('new', 'testsigning-pending') -and -not $script:TestSigningActive) { $restarts = 2 }
-    if ($state.phase -eq 'new' -and -not $script:TestSigningActive) {
-        $consents += 'test-signing'
-        if (Test-BitLockerConsentRequired $script:BitLockerState) { $consents += 'bitlocker' }
-    }
 }
+$script:PlannedRestarts = $restarts
 $firmwareSource = $(if (-not $FirmwareDir) { 'download' } elseif (Test-SamePath $FirmwareDir (Join-Path $package 'firmware')) { 'package-folder' } else { 'folder' })
 $notes = @(Get-ChildItem -LiteralPath $package -File -Filter 'RELEASE-NOTES*.md' -ErrorAction SilentlyContinue | ForEach-Object { $_.Name })
 # This package's own compatibility record (compatibility.ps1). Phase 1 only reports it; a rollback admits a package
@@ -912,15 +924,22 @@ if ($action.action -in @('install', 'upgrade', 'repair', 'resume')) {
 $script:EngineConsents = @($consents)
 if ($Plan) {
     Write-Host ''
-    Write-Host "Plan: $($action.action)$(if ($consents.Count) { "; consents needed: $($consents -join ', ')" }); restarts: $restarts; firmware: $firmwareSource. Nothing was changed." -ForegroundColor Green
+    Write-Host "Plan: $($action.action); restarts: $restarts; firmware: $firmwareSource. Nothing was changed." -ForegroundColor Green
+    if ($action.action -in @('install', 'upgrade', 'repair', 'resume') -and $state.phase -eq 'new' -and -not $script:TestSigningActive) {
+        # What the install changes about the way Windows starts, as information: the console says the same as the
+        # setup window's plan screen, and neither asks for an answer.
+        Write-Host '      Windows test mode is turned on, and "Test Mode" then shows on the desktop. Uninstall turns it off again.' -ForegroundColor White
+        Write-Host ('      ' + (Get-BitLockerPlan -State $script:BitLockerState -Requested $BitLocker -Restarts $restarts).message) -ForegroundColor White
+    }
     Exit-Engine -Code 0 -Outcome 'planned' -MessageId 'result.planned'
 }
-if ($script:GuiMode) {
-    $missing = @()
-    if ($consents -contains 'test-signing' -and -not $AcceptTestSigning) { $missing += 'test-signing' }
-    if ($consents -contains 'bitlocker' -and -not $BitLocker) { $missing += 'bitlocker' }
+# A consent the window did not give still stops a window run before any change. The list is empty today (nothing is
+# asked for any more), so this gate passes every install; it stays because the engine contract carries the field and
+# because a future change that really needs an answer must not be able to slip past the window.
+if ($script:GuiMode -and $consents.Count) {
+    $missing = @($consents)
     $script:EngineConsents = $missing
-    if ($missing.Count) { Exit-Engine -Code 4 -Outcome 'needs-consent' -MessageId 'result.needs-consent' -Detail "missing: $($missing -join ', ')" }
+    Exit-Engine -Code 4 -Outcome 'needs-consent' -MessageId 'result.needs-consent' -Detail "missing: $($missing -join ', ')"
 }
 # ---- the extras: llama.cpp, Ollama, and the models -------------------------------------------------------------
 # The questions are asked here, before any change, and the answers are saved with the install inputs: the run after a
@@ -1039,38 +1058,26 @@ if ($state.phase -eq 'new') {
         Set-StateValue $state 'testsigning_set_by_installer' $false
         Save-Phase 'testsigning-active'
     } else {
+        # No question here (owner, 2026-10-12): a person who started this installer wants the driver, and the driver
+        # needs the test mode. The two lines say what happens, and it happens. -AcceptTestSigning stays accepted so
+        # that every script that passes it still runs; it changes nothing now.
         Write-Host ''
-        Write-Host '   Windows must run in TEST MODE to load this driver. Test mode lets Windows load drivers that are' -ForegroundColor White
-        Write-Host '   signed with a test certificate, and shows "Test Mode" on the desktop. Uninstall can turn it off.' -ForegroundColor White
-        $ok = Read-Confirmation -Question 'Turn on test signing (bcdedit /set testsigning on)?' -Answer $(if ($AcceptTestSigning) { 'YES' } else { $null })
-        if (-not $ok) {
-            Write-Host 'Stopped: test signing not confirmed. Nothing else was changed.' -ForegroundColor Yellow
-            if (-not $script:DryRunMode) { Save-Phase 'new' }
-            $script:EngineConsents = @('test-signing')
-            Exit-Engine -Code 4 -Outcome 'needs-consent' -MessageId 'result.needs-consent' -Detail 'test signing not confirmed'
-        }
+        Write-Host '   Windows is switched to TEST MODE, so that it can load this driver. Test mode lets Windows load' -ForegroundColor White
+        Write-Host '   drivers signed with a test certificate, and shows "Test Mode" on the desktop. Uninstall turns it off.' -ForegroundColor White
+        Write-Info ('test signing: turning it on' + $(if ($AcceptTestSigning) { ' (-AcceptTestSigning was given; it is not needed any more)' } else { '' }))
         # Recheck before the boot change; preparation may have taken long enough for protection to change.
         $script:BitLockerState = Get-BitLockerState
-        if (Test-BitLockerConsentRequired $script:BitLockerState) {
-            $choice = $BitLocker
-            if (-not $choice) {
-                $question = if ($script:BitLockerState -eq 'on') { 'BitLocker is on. Do you have the recovery key for this drive (Windows may ask for it after the restart)?' } else { 'BitLocker protection could not be confirmed. Do you have the recovery key for this drive if Windows asks for it after the restart?' }
-                if (Read-Confirmation -Question $question -Answer $null) { $choice = 'HaveKey' }
-                elseif (Read-Confirmation -Question 'Suspend BitLocker for the next two restarts instead?' -Answer $null) { $choice = 'Suspend' }
-            }
-            if (-not $choice) {
-                Write-Host 'Stopped: BitLocker not handled. Nothing else was changed.' -ForegroundColor Yellow
-                $script:EngineConsents = @('bitlocker')
-                Exit-Engine -Code 4 -Outcome 'needs-consent' -MessageId 'result.needs-consent' -Detail 'BitLocker not handled'
-            }
-            if ($choice -eq 'Suspend') {
-                Invoke-Change "suspend BitLocker on $($env:SystemDrive) for two restarts" {
-                    Suspend-BitLocker -MountPoint $env:SystemDrive -RebootCount 2 -ErrorAction Stop | Out-Null
-                    if (Test-BitLockerConsentRequired (Get-BitLockerState)) { throw 'BitLocker suspension could not be verified; boot options were not changed.' }
-                } | Out-Null
-            }
-            Set-StateValue $state 'bitlocker' $choice
+        $blPlan = Get-BitLockerPlan -State $script:BitLockerState -Requested $BitLocker -Restarts $(if ($script:PlannedRestarts) { $script:PlannedRestarts } else { 2 })
+        Write-Info $blPlan.message
+        if ($blPlan.action -eq 'suspend') {
+            Invoke-Change "suspend BitLocker on $($env:SystemDrive) for $($blPlan.reboots) restart(s)" {
+                Suspend-BitLocker -MountPoint $env:SystemDrive -RebootCount $blPlan.reboots -ErrorAction Stop | Out-Null
+                # A suspension that did not take hold is the one case that still stops the install: the boot options
+                # are not touched, so Windows cannot ask for a recovery key the person may not have.
+                if (Test-BitLockerConsentRequired (Get-BitLockerState)) { throw 'BitLocker suspension could not be verified; boot options were not changed.' }
+            } | Out-Null
         }
+        if ($blPlan.action -ne 'none') { Set-StateValue $state 'bitlocker' $(if ($blPlan.action -eq 'suspend') { 'Suspend' } elseif ($blPlan.action -eq 'have-key') { 'HaveKey' } else { 'unknown' }) }
         # The continuation of this install runs after the restart from the staged closure. Its after-staging stop point
         # is the last one of phase 1: test signing, the state and RunOnce follow without a stop.
         Initialize-Closure

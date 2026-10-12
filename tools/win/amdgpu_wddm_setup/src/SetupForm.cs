@@ -23,6 +23,9 @@ namespace AmdgpuWddmSetup
     {
         public const int DesignWidth = 1160, DesignHeight = 740, RailWidth = 220, GuideWidth = 300, ChromeHeight = 48, ButtonBarHeight = 76;
 
+        // The countdown of the restart screen, in seconds (owner, 2026-10-12: "automatic after a visible countdown").
+        public const int RestartCountdownSeconds = InstallFlow.RestartCountdownSeconds;
+
         readonly SetupArgs _args;
         readonly bool _smoke;
         readonly string _ownPackage;
@@ -42,15 +45,19 @@ namespace AmdgpuWddmSetup
         EngineRun _active, _plan;
         EngineResult _planResult, _result;
         ResultView _view;
-        bool _consentTestSigning;
         bool? _systemTuningChoice;
-        string _bitLocker = "";
         bool _restartLater;
         string _restartError, _supportSaved, _supportError;
         string _prepDestination = "", _prepFirmware = "";
         bool _prepUseFirmware, _prepFromWelcome;
         DateTime? _runStarted;
         Timer _timer, _anim;
+        // The restart this install needs starts by itself after a visible countdown (owner, 2026-10-12): nothing on
+        // the restart screen waits for a click. Restart now takes the countdown's place and Later cancels it.
+        Timer _countdown;
+        int _restartLeft = RestartCountdownSeconds;
+        bool _countdownDone;
+        IconRow _countdownRow;
 
         ChromeBar _chrome;
         Panel _rail, _guide, _column;
@@ -205,9 +212,9 @@ namespace AmdgpuWddmSetup
             if (disposing)
             {
                 Strings.LanguageChanged -= OnLanguageChanged;
-                foreach (var t in new[] { _timer, _anim })
+                foreach (var t in new[] { _timer, _anim, _countdown })
                     if (t != null) { t.Stop(); t.Dispose(); }
-                _timer = _anim = null;
+                _timer = _anim = _countdown = null;
             }
             base.Dispose(disposing);
         }
@@ -460,6 +467,10 @@ namespace AmdgpuWddmSetup
             _resultMark = null;
             _elapsedRow = null;
             _centreContent = false;
+            // Every control of the screen that leaves is disposed below, the countdown's line among them: its timer
+            // stops here, and BuildRestart starts a new one when the restart screen is built again.
+            _countdownRow = null;
+            StopCountdown();
             SuspendLayout();
             _content.SuspendLayout();
             ClearAndDispose(_content);
@@ -783,16 +794,11 @@ namespace AmdgpuWddmSetup
                 return;
             }
 
-            // What this screen still wants from the user, before the page says anything else: the primary action is
-            // off until every consent is answered, and the headline of a first install promises readiness.
-            var consents = d != null ? d.Consents : new string[0];
-            if (_planResult != null && _planResult.ConsentsNeeded.Length > 0) consents = consents.Union(_planResult.ConsentsNeeded).ToArray();
-            bool wantsConsent = consents.Contains("test-signing") || consents.Contains("bitlocker");
-
-            // Checks: all passed, or the ones that need attention.
+            // Checks: all passed, or the ones that need attention. Nothing on this screen asks the user for a
+            // permission any more (owner, 2026-10-12): the Install button is enabled from the first moment, and
+            // pressing it is the consent for what the card below states.
             var warn = _plan == null ? new List<CheckRow>() : _plan.Checks.Where(c => c.Result != "ok").ToList();
-            if (wantsConsent && !ConsentsComplete(consents)) Status(Strings.T("plan.consent.needed", Strings.T("consent.title")), StatusLine.State.Warn);
-            else if (warn.Count == 0) Status(Strings.T("plan.checks.ok"), StatusLine.State.Good);
+            if (warn.Count == 0) Status(Strings.T("plan.checks.ok"), StatusLine.State.Good);
             else Status(Strings.T("plan.checks.attention", warn.Count), warn.Any(c => c.Result == "fail") ? StatusLine.State.Bad : StatusLine.State.Warn);
             if (warn.Count > 0)
             {
@@ -800,40 +806,27 @@ namespace AmdgpuWddmSetup
                 foreach (var c in warn) AddCheck(checks, c);
             }
 
-            // The consents come directly after the checks. At the end of the page, below five other cards, nothing in
-            // the first screenful said why the primary action was off.
             Button go = null;
-            if (wantsConsent)
-            {
-                var cc = Card(Strings.T("consent.title"), Icons.Shield);
-                if (consents.Contains("test-signing"))
-                {
-                    var box = Ui.Check(Strings.T("consent.test-signing"), cc.Inner);
-                    box.Checked = _consentTestSigning;
-                    box.CheckedChanged += (s, e) => { _consentTestSigning = box.Checked; ShowSoon(Screen.Plan); };
-                    cc.Add(box);
-                    cc.Add(Ui.Label(Strings.T("consent.test-signing.note"), Theme.Small, Theme.Dim, cc.Inner));
-                }
-                if (consents.Contains("bitlocker"))
-                {
-                    cc.Add(Ui.Label(Strings.T("consent.bitlocker"), null, null, cc.Inner));
-                    var key = Ui.Radio(Strings.T("consent.bitlocker.have-key"), cc.Inner);
-                    var pause = Ui.Radio(Strings.T("consent.bitlocker.suspend"), cc.Inner);
-                    key.Checked = _bitLocker == "HaveKey";
-                    pause.Checked = _bitLocker == "Suspend";
-                    key.CheckedChanged += (s, e) => { if (key.Checked && _bitLocker != "HaveKey") { _bitLocker = "HaveKey"; ShowSoon(Screen.Plan); } };
-                    pause.CheckedChanged += (s, e) => { if (pause.Checked && _bitLocker != "Suspend") { _bitLocker = "Suspend"; ShowSoon(Screen.Plan); } };
-                    // Directly in the card (the only option buttons there), not in a bare panel after the label above.
-                    cc.Add(key);
-                    cc.Add(pause);
-                }
-            }
-
             var steps = Card(Strings.T("plan.what.title"), Icons.Info);
             int restarts = d != null ? d.Restarts : 0;
             steps.Row(Icons.Restart, restarts > 0 ? Theme.Warn : Theme.Good,
                 Strings.T(restarts <= 0 ? "plan.restarts.0" : restarts == 1 ? "plan.restarts.1" : "plan.restarts.2"),
                 restarts > 0 ? Strings.T("plan.restarts.choice") : null);
+            // What the installation changes about the way Windows starts, as plain information (owner, 2026-10-12:
+            // "Przestan wymagac potwierdzen od uzytkownika"). The engine reads the same two states and acts on them
+            // by itself: test mode is turned on, and BitLocker protection is paused for the restarts of the install.
+            // The window states them here so that nothing happens to the PC that this screen did not say.
+            bool testModeOff = _plan != null && _plan.Checks.Any(c => c.Id == "testsigning.inactive");
+            foreach (var id in InstallFlow.PlanChangeIds(testModeOff, PlanBitLocker()))
+            {
+                switch (id)
+                {
+                    case "plan.change.test-mode": steps.Row(Icons.Lock, Theme.Teal, Strings.T(id), Strings.T("plan.change.test-mode.note")); break;
+                    case "plan.change.test-mode.on": steps.Row(Icons.Check, Theme.Good, Strings.T(id)); break;
+                    case "plan.change.bitlocker": steps.Row(Icons.Shield, Theme.Teal, Strings.T(id)); break;
+                    default: steps.Row(Icons.Shield, Theme.Warn, Strings.T(id)); break;
+                }
+            }
             var fw = d != null ? d.FirmwareSource : null;
             if (fw == "download" || fw == "folder" || fw == "package-folder") steps.Row(Icons.Download, Theme.Teal, Strings.T("plan.firmware." + fw));
 
@@ -874,14 +867,38 @@ namespace AmdgpuWddmSetup
             // The bar flows right to left, so the first button added is the rightmost: the primary action takes the
             // place the eye and the mouse go to first, and the dismissive one stands away from it.
             go = AddButton(action == "upgrade" ? "plan.go.upgrade" : action == "repair" ? "plan.go.repair" : action == "resume" ? "plan.go.resume" : "plan.go.install", (s, e) => RunInstall(), true, true);
-            go.Enabled = ConsentsComplete(consents);
+            // The primary action is never off: a person who opened this installer wants to install (owner,
+            // 2026-10-12). A machine the installer must not change is refused by the preflight, which fails a check
+            // and ends the run; it is not a question on this screen.
+            go.Enabled = true;
             CancelButton = AddButton("ui.close", (s, e) => Close());
             if (_flow != "continue") AddButton("ui.back", (s, e) => Show(Screen.Welcome));
         }
 
-        bool ConsentsComplete(string[] consents)
+        // For the render gate: the plan screen has no control that asks the user for a permission, and its primary
+        // action is enabled (owner, 2026-10-12). Both are findings, so neither can come back.
+        public IEnumerable<string> ConsentFindings()
         {
-            return (!consents.Contains("test-signing") || _consentTestSigning) && (!consents.Contains("bitlocker") || _bitLocker.Length > 0);
+            if (Current != Screen.Plan) yield break;
+            foreach (var c in Descendants(_content))
+            {
+                if (c is RadioButton) yield return "the plan screen has an option button: \"" + c.Text + "\"";
+                // The one check box the plan screen may carry is the optional Windows tuning, which is off by
+                // default and changes nothing about the install itself.
+                else if (c is CheckBox && c.Text != Strings.T("tuning.opt-in")) yield return "the plan screen has a check box: \"" + c.Text + "\"";
+            }
+            var primary = AcceptButton as Control;
+            if (primary != null && !primary.Enabled) yield return "the primary action \"" + primary.Text + "\" is off";
+        }
+
+        static IEnumerable<Control> Descendants(Control parent)
+        {
+            if (parent == null) yield break;
+            foreach (Control k in parent.Controls)
+            {
+                yield return k;
+                foreach (var deep in Descendants(k)) yield return deep;
+            }
         }
 
         void BuildRestart()
@@ -900,9 +917,53 @@ namespace AmdgpuWddmSetup
                 return;
             }
             Line(Icons.Info, Theme.Dim, Strings.T("restart.save-work"), Theme.Dim);
-            if (_view.OfferRestart) AddButton("restart.now", (s, e) => RestartNow(), true);
-            CancelButton = AddButton("restart.later", (s, e) => { _restartLater = true; Show(Screen.Restart); });
+            // The restart happens by itself (owner, 2026-10-12): a visible countdown runs down and Windows restarts
+            // at its end, whether anybody presses anything or not. The two buttons only shorten it or call it off.
+            // A screen that cannot restart Windows at all (no offer in the result view) shows no countdown.
+            if (_view.OfferRestart)
+            {
+                // Once it has run out it does not start again: a restart Windows refused would otherwise be asked
+                // for every second, and the line then says that the restart is up to the user.
+                if (_countdownDone) Line(Icons.Info, Theme.Dim, Strings.T("restart.countdown.over"), Theme.Dim);
+                else _countdownRow = Line(Icons.Restart, Theme.Teal, Strings.T("restart.countdown", _restartLeft), Theme.Teal);
+                AddButton("restart.now", (s, e) => RestartNow(), true);
+                if (!_countdownDone) StartCountdown();
+            }
+            CancelButton = AddButton("restart.later", (s, e) => { _restartLater = true; StopCountdown(); Show(Screen.Restart); });
         }
+
+        // The countdown of the restart screen. A headless render draws the first second and starts no timer, so a
+        // render is a picture and never a restart.
+        void StartCountdown()
+        {
+            StopCountdown();
+            if (_smoke || _args.DryRun) return;
+            _countdown = new Timer { Interval = 1000 };
+            _countdown.Tick += (s, e) =>
+            {
+                _restartLeft--;
+                if (_restartLeft <= 0) { _restartLeft = 0; _countdownDone = true; StopCountdown(); RestartNow(); return; }
+                if (_countdownRow != null && !_countdownRow.IsDisposed)
+                {
+                    _countdownRow.Head = Strings.T("restart.countdown", _restartLeft);
+                    _countdownRow.Done();
+                    _countdownRow.Invalidate();
+                }
+            };
+            _countdown.Start();
+        }
+
+        void StopCountdown()
+        {
+            if (_countdown == null) return;
+            _countdown.Stop();
+            _countdown.Dispose();
+            _countdown = null;
+        }
+
+        // For the render gate and the tests: the seconds the restart screen shows, and whether its countdown runs.
+        public int RestartSecondsLeft { get { return _restartLeft; } }
+        public bool CountdownRunning { get { return _countdown != null && _countdown.Enabled; } }
 
         // The result icon, with its entrance when the window is shown and may animate: it is at its full size at
         // once in a headless render and on a PC whose animation effects are off.
@@ -1025,11 +1086,19 @@ namespace AmdgpuWddmSetup
             var args = new List<string>();
             args.AddRange(SetupArgs.TuningArguments(_systemTuningChoice));
             if (_flow == "repair") args.Add("-Repair");
-            if (_consentTestSigning) args.Add("-AcceptTestSigning");
-            if (_bitLocker.Length > 0) { args.Add("-BitLocker"); args.Add(_bitLocker); }
+            // Pressing Install is the consent (owner, 2026-10-12), so the switches that used to carry a user's answer
+            // are given on every run. The engine of this package no longer needs them; an engine of an older release,
+            // which a kept repair set may still hold, reads them and asks nothing either.
+            args.AddRange(InstallFlow.ConsentArguments(PlanBitLocker()));
             if (_args.DryRun) args.Add("-DryRun");
             args.AddRange(_args.EngineArgs);
             StartRun("install", Path.Combine(_package, "installer", "install.ps1"), args, Screen.Working);
+        }
+
+        // The BitLocker state of the plan ('on', 'unknown', 'off', 'suspended' or null when no plan ran).
+        string PlanBitLocker()
+        {
+            return _plan != null && _plan.Decision != null ? _plan.Decision.BitLocker : null;
         }
 
         void RunPrepare()
@@ -1365,9 +1434,9 @@ namespace AmdgpuWddmSetup
             _preparedVersion = f.PreparedVersion;
             _package = f.Package ?? _ownPackage;
             _ownPackagePresent = f.FilesMissing ? (bool?)false : null;
-            _consentTestSigning = f.ConsentTestSigning;
-            _bitLocker = f.BitLocker ?? "";
             _restartLater = f.RestartLater;
+            // The second the countdown of the restart screen is drawn at, so a render is one fixed picture.
+            _restartLeft = f.RestartSecondsLeft > 0 ? f.RestartSecondsLeft : RestartCountdownSeconds;
             _prepDestination = f.PrepareDestination ?? "";
             _prepUseFirmware = f.PrepareFirmware != null;
             _prepFirmware = f.PrepareFirmware ?? "";

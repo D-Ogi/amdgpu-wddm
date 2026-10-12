@@ -20,6 +20,7 @@ rail.current|mt-safe|3d59ee1e|bieżący krok
 rail.done|mt-safe|a4c3ed04|gotowe
 rail.failed|mt-safe|a1f6bdb2|zatrzymano tutaj
 elevation.declined|mt|0a586e33|Instalator potrzebuje uprawnień administratora, aby zainstalować lub naprawić sterownik. Nic nie zostało zmienione. Uruchom instalator ponownie i wybierz Tak, gdy Windows zapyta.
+payload.damaged|mt|44795d7b|Ten plik instalatora jest uszkodzony: pliki instalacyjne, które zawiera, nie są tymi, z którymi został zbudowany. Nic nie zostało zmienione. Pobierz wydanie ponownie.
 
 # ---- welcome ----
 welcome.title|mt|f6dd913f|Instalacja sterownika grafiki dla ASRock BC-250
@@ -73,9 +74,9 @@ check.secureboot.off|mt|a107f361|Secure Boot jest wyłączony.
 check.secureboot.on|mt|1a594fe8|Secure Boot jest włączony. Wyłącz go w ustawieniach firmware komputera przed instalacją.
 check.secureboot.unknown|mt|349a2c6d|Instalator nie mógł odczytać, czy Secure Boot jest włączony.
 check.testsigning.active|mt|f6138193|Tryb testowy Windows jest włączony.
-check.testsigning.inactive|mt|3e61e840|Tryb testowy Windows jest wyłączony. Instalator włączy go po Twojej zgodzie.
+check.testsigning.inactive|mt|1f2ea753|Tryb testowy Windows jest wyłączony. Instalator włączy go w ramach instalacji.
 check.bitlocker.ok|mt|f6019261|BitLocker nie wymaga uwagi.
-check.bitlocker.on|mt|94912a08|BitLocker jest włączony. Instalator zapyta, co z nim zrobić, zanim cokolwiek zmieni.
+check.bitlocker.on|mt|833d9bbb|BitLocker jest włączony. Instalator wstrzyma go na czas ponownych uruchomień instalacji, a potem sam się włączy.
 check.bitlocker.unknown|mt|74c5d56a|Instalator nie mógł odczytać stanu BitLockera. Jeśli BitLocker jest włączony, przygotuj klucz odzyskiwania.
 check.hvci.off|mt|c5375084|Integralność pamięci jest wyłączona.
 check.hvci.on|mt|038dce93|Integralność pamięci jest włączona. Jeśli sterownik się nie uruchomi, wyłącz ją w Zabezpieczeniach Windows (Izolacja rdzenia).
@@ -109,12 +110,16 @@ plan.repair-again|mt-safe|1196b6c5|Napraw
 plan.checks.title|mt-safe|de07d072|Sprawdzenia
 plan.checks.ok|mt|eb2f3d98|Wszystkie sprawdzenia zakończone pomyślnie.
 plan.checks.attention|mt|e6885bff|Sprawdzenia wymagające uwagi: {0}
-plan.consent.needed|mt|8c3cbc95|Przed instalacją odpowiedz na pytania w sekcji "{0}".
 plan.what.title|mt-safe|70fbb54b|Co się stanie
 plan.restarts.0|mt|b0a2c82a|Ponowne uruchomienie Windows nie jest potrzebne.
 plan.restarts.1|mt|2ae11afb|Windows uruchomi się ponownie raz. Po ponownym zalogowaniu instalator będzie kontynuował sam.
 plan.restarts.2|mt|efc32bc9|Windows uruchomi się ponownie dwa razy. Po każdym zalogowaniu instalator będzie kontynuował sam.
-plan.restarts.choice|mt|7df5fea3|Instalator pyta przed każdym ponownym uruchomieniem, więc możesz najpierw zapisać swoją pracę.
+plan.restarts.choice|mt|e2801100|Każde ponowne uruchomienie zaczyna się samo po krótkim odliczaniu. Możesz uruchomić od razu lub odłożyć to na później.
+plan.change.test-mode|mt|7c5a1301|Windows przełącza się w tryb testowy, aby móc wczytać ten sterownik.
+plan.change.test-mode.note|mt|9a9c5086|W rogu pulpitu pojawi się wtedy napis „Tryb testowy”. Usunięcie sterownika wyłącza go ponownie.
+plan.change.test-mode.on|mt|cf315297|Windows już działa w trybie testowym, więc nic się tu nie zmienia.
+plan.change.bitlocker|mt|f43553fa|Ochrona BitLocker zostaje wstrzymana na czas ponownych uruchomień tej instalacji i potem sama się włącza, więc Windows nie poprosi o klucz odzyskiwania.
+plan.change.bitlocker.unknown|mt|67f2277e|Instalator nie mógł odczytać stanu BitLockera na tym komputerze. Mimo to kontynuuje: miej klucz odzyskiwania pod ręką, jeśli Windows o niego poprosi po ponownym uruchomieniu.
 plan.firmware.download|mt|7051aa7f|Firmware GPU zostanie pobrane z oficjalnego archiwum firmware Linuksa i sprawdzone.
 plan.firmware.folder|mt|3afc555b|Firmware GPU pochodzi z wybranego folderu i zostanie sprawdzone.
 plan.firmware.package-folder|mt|576cf803|Firmware GPU pochodzi z przygotowanego folderu. Internet nie jest potrzebny.
@@ -150,12 +155,6 @@ settings.decision.reopened|mt|4342e37e|przywrócone przez tę naprawę (sterowni
 settings.decision.driver-closed|mt|cff55d7f|wyłączone przez sterownik. Naprawa to przywróci
 
 # ---- consents ----
-consent.title|mt-safe|34a195af|Zanim instalator zacznie
-consent.test-signing|mt|71d16537|Włącz tryb testowy Windows
-consent.test-signing.note|mt|bebc2e37|Sterownik jest podpisany certyfikatem testowym, więc Windows musi działać w trybie testowym. W rogu pulpitu pojawi się wtedy napis „Tryb testowy”.
-consent.bitlocker|mt|7b5d44a4|BitLocker jest włączony lub instalator nie mógł odczytać jego stanu. Po zmianie opcji uruchamiania Windows może przy następnym starcie poprosić o klucz odzyskiwania.
-consent.bitlocker.have-key|mt|081b65b7|Mam klucz odzyskiwania
-consent.bitlocker.suspend|mt|dcf26b02|Wstrzymaj BitLockera na dwa następne uruchomienia (sam włączy się ponownie)
 
 # ---- working ----
 working.title|mt-safe|8749b169|Instalowanie
@@ -189,6 +188,8 @@ stage.copy|mt-safe|ff9e3c81|Kopiowanie plików
 restart.now|mt-safe|09af1002|Uruchom ponownie teraz
 restart.later|mt-safe|73b6e48a|Później
 restart.save-work|mt|16909f23|Najpierw zapisz swoją pracę. Windows poprosi otwarte programy o zamknięcie; nie wymusza tego.
+restart.countdown|mt|60c980c1|Windows uruchomi się ponownie sam za {0} s.
+restart.countdown.over|mt|7af75060|Odliczanie się skończyło. Instalator nie uruchomi już Windows ponownie samodzielnie.
 restart.later.done|mt|a38787ae|Instalator będzie kontynuował sam po następnym ponownym uruchomieniu Windows. Możesz zamknąć to okno.
 restart.failed|mt|56d3b9cd|Windows nie rozpoczął ponownego uruchomienia. Uruchom komputer ponownie z menu Start.
 

@@ -22,6 +22,7 @@ rail.current|src|-|current step
 rail.done|src|-|done
 rail.failed|src|-|stopped here
 elevation.declined|src|-|Setup needs administrator permission to install or repair the driver. Nothing was changed. Start setup again and choose Yes when Windows asks.
+payload.damaged|src|-|This setup file is damaged: the installation files it carries are not the ones it was built with. Nothing was changed. Download the release again.
 
 # ---- welcome ----
 welcome.title|src|-|Install the graphics driver for the ASRock BC-250
@@ -75,9 +76,9 @@ check.secureboot.off|src|-|Secure Boot is off.
 check.secureboot.on|src|-|Secure Boot is on. Turn it off in the PC's firmware settings before you install.
 check.secureboot.unknown|src|-|Setup could not read whether Secure Boot is on.
 check.testsigning.active|src|-|Windows test mode is on.
-check.testsigning.inactive|src|-|Windows test mode is off. Setup turns it on after you agree.
+check.testsigning.inactive|src|-|Windows test mode is off. Setup turns it on as part of the installation.
 check.bitlocker.ok|src|-|BitLocker needs no attention.
-check.bitlocker.on|src|-|BitLocker is on. Setup asks how to handle it before any change.
+check.bitlocker.on|src|-|BitLocker is on. Setup pauses it for the restarts of the installation and it turns itself on again.
 check.bitlocker.unknown|src|-|Setup could not read the BitLocker state. If BitLocker is on, have your recovery key ready.
 check.hvci.off|src|-|Memory integrity is off.
 check.hvci.on|src|-|Memory integrity is on. If the driver does not start, turn it off in Windows Security (Core isolation).
@@ -111,12 +112,16 @@ plan.repair-again|src|-|Repair
 plan.checks.title|src|-|Checks
 plan.checks.ok|src|-|All checks passed.
 plan.checks.attention|src|-|Checks that need your attention: {0}
-plan.consent.needed|src|-|Answer the questions under "{0}" before you install.
 plan.what.title|src|-|What happens
 plan.restarts.0|src|-|No restart of Windows is needed.
 plan.restarts.1|src|-|Windows restarts once. After you log on again, setup continues by itself.
 plan.restarts.2|src|-|Windows restarts twice. After each logon, setup continues by itself.
-plan.restarts.choice|src|-|Setup asks before each restart, so you can save your work first.
+plan.restarts.choice|src|-|Each restart starts by itself after a short countdown. You can restart at once or put it off.
+plan.change.test-mode|src|-|Windows switches to test mode, so it can load this driver.
+plan.change.test-mode.note|src|-|"Test Mode" then shows in a corner of the desktop. Removing the driver turns it off again.
+plan.change.test-mode.on|src|-|Windows already runs in test mode, so nothing changes there.
+plan.change.bitlocker|src|-|BitLocker protection is paused for the restarts of this installation and turns itself on again, so Windows does not ask for the recovery key.
+plan.change.bitlocker.unknown|src|-|Setup could not read the BitLocker state of this PC. It goes on anyway: keep your recovery key at hand in case Windows asks for it after a restart.
 plan.firmware.download|src|-|The GPU firmware is downloaded from the official Linux firmware archive and checked.
 plan.firmware.folder|src|-|The GPU firmware comes from the folder you chose and is checked.
 plan.firmware.package-folder|src|-|The GPU firmware comes from the prepared folder. No internet is needed.
@@ -152,12 +157,6 @@ settings.decision.reopened|src|-|set back by this repair (the driver had switche
 settings.decision.driver-closed|src|-|switched off by the driver. A repair sets it back
 
 # ---- consents ----
-consent.title|src|-|Before setup starts
-consent.test-signing|src|-|Turn on Windows test mode
-consent.test-signing.note|src|-|The driver is signed with a test certificate, so Windows must run in test mode. "Test Mode" then shows in a corner of the desktop.
-consent.bitlocker|src|-|BitLocker is on, or Setup could not read its state. Changing the start options may make Windows ask for the recovery key at the next start.
-consent.bitlocker.have-key|src|-|I have the recovery key
-consent.bitlocker.suspend|src|-|Pause BitLocker for the next two restarts (it turns on again by itself)
 
 # ---- working ----
 working.title|src|-|Installing
@@ -191,6 +190,8 @@ stage.copy|src|-|Copying the files
 restart.now|src|-|Restart now
 restart.later|src|-|Later
 restart.save-work|src|-|Save your work first. Windows asks open programs to close; it does not force them.
+restart.countdown|src|-|Windows restarts by itself in {0} seconds.
+restart.countdown.over|src|-|The countdown has ended. Setup does not restart Windows by itself any more.
 restart.later.done|src|-|Setup continues by itself after the next restart of Windows. You can close this window.
 restart.failed|src|-|Windows did not start the restart. Restart the PC from the Start menu.
 

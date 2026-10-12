@@ -40,6 +40,7 @@ static class UnitTests
             Guide();
             Arguments();
             SmallScreens();
+            NoConfirmations();
             LocaleContracts();
             Quoting();
             NativeLayout();
@@ -429,6 +430,51 @@ static class UnitTests
         Check(!SmallScreen.IsDevice(1920, 1080, 0f), "small screen: a scale that is not known decides nothing");
         Equal(1024, SmallScreen.MaxWidth, "small screen: the width of the rule the owner gave");
         Equal(768, SmallScreen.MaxHeight, "small screen: the height of the rule the owner gave");
+    }
+
+    // The owner's instruction of 2026-10-12: the installer asks the user for nothing. No test-mode check box, no
+    // BitLocker option buttons, no Install button that waits for an answer, and no "type YES" on the command line.
+    // Pressing Install is the consent. These cases hold the rules of InstallFlow.cs, the words of the four tables,
+    // and the absence of the words the removed controls used. The window's own side of it is a render finding
+    // (--smoke-render G-CONSENT), and the engine's side is tools/release/test-engine-units.ps1.
+    static void NoConfirmations()
+    {
+        // Every run carries the switches that used to carry the answers, so an older engine asks nothing either.
+        Check(InstallFlow.ConsentArguments(null).SequenceEqual(new[] { "-AcceptTestSigning" }),
+            "no confirmations: a PC without BitLocker protection installs with the test-signing switch alone");
+        foreach (var state in new[] { "off", "suspended", "unknown", "", null })
+            Check(!InstallFlow.ConsentArguments(state).Contains("-BitLocker"),
+                "no confirmations: BitLocker state '" + (state ?? "null") + "' is not suspended");
+        Check(InstallFlow.ConsentArguments("on").SequenceEqual(new[] { "-AcceptTestSigning", "-BitLocker", "Suspend" }),
+            "no confirmations: protection that is on is suspended for the restarts, without being asked about");
+        Check(InstallFlow.SuspendBitLocker("on") && !InstallFlow.SuspendBitLocker("unknown") && !InstallFlow.SuspendBitLocker("off"),
+            "no confirmations: only a state that was read and says on is suspendable");
+        // What the plan screen states instead of asking.
+        Check(InstallFlow.PlanChangeIds(true, "off").SequenceEqual(new[] { "plan.change.test-mode" }),
+            "no confirmations: the plan states the test mode change");
+        Check(InstallFlow.PlanChangeIds(true, "on").SequenceEqual(new[] { "plan.change.test-mode", "plan.change.bitlocker" }),
+            "no confirmations: the plan states the BitLocker pause as information");
+        Check(InstallFlow.PlanChangeIds(true, "unknown").SequenceEqual(new[] { "plan.change.test-mode", "plan.change.bitlocker.unknown" }),
+            "no confirmations: a state that could not be read is one information line, not a question");
+        Check(InstallFlow.PlanChangeIds(false, "on").SequenceEqual(new[] { "plan.change.test-mode.on" }),
+            "no confirmations: test mode already on says so and nothing about the start options");
+        foreach (var on in new[] { true, false })
+            foreach (var state in new[] { "off", "on", "unknown", "suspended", null })
+                foreach (var id in InstallFlow.PlanChangeIds(on, state))
+                    Check(Strings.Has(id), "no confirmations: " + id + " has words");
+        // The words of the removed controls are gone from every table, so neither can come back by itself.
+        foreach (var id in InstallFlow.RemovedConsentIds)
+            Check(!Strings.Has(id), "no confirmations: " + id + " is gone from the string tables");
+        // The countdown of the restart screen: 15 s, one sentence with the seconds in it, in all four languages.
+        Equal(15, InstallFlow.RestartCountdownSeconds, "no confirmations: the countdown the owner asked for");
+        foreach (var lang in Strings.Languages)
+        {
+            Equal("0", Strings.Placeholders(Strings.In(lang, "restart.countdown")), "no confirmations: " + lang + " restart.countdown names the seconds");
+            Check(Strings.In(lang, "restart.countdown.over").Trim().Length > 0, "no confirmations: " + lang + " says when the countdown is over");
+        }
+        // The restart screen keeps both offers, and neither is required: the countdown ends in a restart by itself.
+        foreach (var id in new[] { "restart.now", "restart.later", "restart.countdown", "restart.countdown.over" })
+            Check(Strings.Has(id), "no confirmations: the restart screen keeps " + id);
     }
 
     static void LocaleContracts()

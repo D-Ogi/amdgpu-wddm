@@ -13,10 +13,12 @@ namespace AmdgpuWddmSetup
         public Screen Screen;
         public string[] PlanEvents, Events;
         public string PlanResult, Result;
-        public bool NoResult, ConsentTestSigning, RestartLater;
+        public bool NoResult, RestartLater;
+        // The second the restart screen's countdown is drawn at; 0 = the full countdown.
+        public int RestartSecondsLeft;
         // The welcome screen of a setup.exe whose files\ folder is not there (somebody copied the exe out of the zip).
         public bool FilesMissing;
-        public string BitLocker, PreparedDir, PreparedProblem, PreparedVersion, PrepareDestination, PrepareFirmware, SupportSaved;
+        public string PreparedDir, PreparedProblem, PreparedVersion, PrepareDestination, PrepareFirmware, SupportSaved;
     }
 
     public static class Fixtures
@@ -53,7 +55,7 @@ namespace AmdgpuWddmSetup
                 Check("vcruntime.ok", "ok"), Check("space.ok", "ok"), Check(firmware == "package-folder" ? "firmware.folder-ok" : "firmware.download-ok", "ok"),
                 Ev("decision", "\"action\":\"" + action + "\",\"installed_version\":" + (installed == null ? "null" : "\"" + installed + "\"") + ",\"package_version\":\"" + Version +
                     "\",\"phase\":\"new\",\"consents\":[" + consents + "],\"consents_given\":{},\"restarts\":2,\"firmware_source\":\"" + firmware +
-                    "\",\"firmware_dir\":\"\",\"notes\":[\"RELEASE-NOTES.md\"],\"secure_boot\":\"off\",\"bitlocker\":\"unknown\",\"compatibility\":{\"ok\":true,\"reasons\":[]}"),
+                    "\",\"firmware_dir\":\"\",\"notes\":[\"RELEASE-NOTES.md\"],\"secure_boot\":\"off\",\"bitlocker\":\"" + (upgradeRows ? "on" : "unknown") + "\",\"compatibility\":{\"ok\":true,\"reasons\":[]}"),
             };
             var rows = upgradeRows
                 ? "{\"group\":\"parameters\",\"name\":\"DpmMaxMHz\",\"decision\":\"kept\",\"current\":1700,\"value\":1500,\"default\":1500,\"present\":true}," +
@@ -119,9 +121,13 @@ namespace AmdgpuWddmSetup
 
         public static List<Fixture> All()
         {
-            var planInstall = PlanEvents("install", null, "\"test-signing\"", "download", false);
-            var planUpgrade = PlanEvents("upgrade", "0.7.198.100-tester.10", "\"test-signing\",\"bitlocker\"", "package-folder", true);
-            var planned = ResultJson("plan", "planned", 0, "result.planned", false, ",\"consents_needed\":[\"test-signing\"]");
+            // No consent is asked for any more (owner, 2026-10-12), so the engine's decision names none: these
+            // fixtures carry the empty list the engine now writes, and the plan screens below hold no control that
+            // asks the user for one. A BitLocker state of "on" or "unknown" is information on the screen, not a
+            // question: the upgrade fixture carries "on", the install one "unknown" (PlanEvents).
+            var planInstall = PlanEvents("install", null, "", "download", false);
+            var planUpgrade = PlanEvents("upgrade", "0.7.198.100-tester.10", "", "package-folder", true);
+            var planned = ResultJson("plan", "planned", 0, "result.planned", false);
             return new List<Fixture>
             {
                 new Fixture { Name = "welcome", Screen = Screen.Welcome },
@@ -134,7 +140,7 @@ namespace AmdgpuWddmSetup
                 new Fixture { Name = "welcome-files-missing-prepared", Screen = Screen.Welcome, FilesMissing = true, PreparedDir = @"D:\amdgpu-wddm-offline", PreparedVersion = Version },
                 new Fixture { Name = "checking", RunKind = "plan", Screen = Screen.Checking, Events = PlanEvents("install", null, "", "download", false).Take(8).ToArray() },
                 new Fixture { Name = "plan-install", RunKind = "plan", Screen = Screen.Plan, PlanEvents = planInstall, PlanResult = planned },
-                new Fixture { Name = "plan-upgrade", RunKind = "plan", Screen = Screen.Plan, PlanEvents = planUpgrade, PlanResult = planned, ConsentTestSigning = true, BitLocker = "Suspend" },
+                new Fixture { Name = "plan-upgrade", RunKind = "plan", Screen = Screen.Plan, PlanEvents = planUpgrade, PlanResult = planned },
                 new Fixture { Name = "plan-already", RunKind = "plan", Screen = Screen.Plan, PlanEvents = PlanEvents("already", Version, "", "download", false), PlanResult = planned },
                 new Fixture { Name = "working", Screen = Screen.Working, Events = RunEvents("files", false, true) },
                 new Fixture { Name = "working-cancel", Screen = Screen.Working, Events = RunEvents("preflight", true, false) },
@@ -146,6 +152,9 @@ namespace AmdgpuWddmSetup
                 new Fixture { Name = "working-stopped", Screen = Screen.Working, Events = RunEvents("driver", false, true, "run", "failed"),
                     Result = ResultJson("run", "failed", 6, "result.step-failed", true, ",\"step\":\"x\",\"detail\":\"x\"") },
                 new Fixture { Name = "restart", Screen = Screen.Restart, Events = RunEvents("test-signing", false, true), Result = ResultJson("run", "restart-required", 0, "result.restart-test-signing", true, ",\"restart\":{\"required\":true,\"reason_id\":\"restart.test-signing\"}") },
+                // The countdown of the restart screen a few seconds in, so that a render shows the running number
+                // and not only its first value.
+                new Fixture { Name = "restart-countdown", Screen = Screen.Restart, RestartSecondsLeft = 7, Events = RunEvents("test-signing", false, true), Result = ResultJson("run", "restart-required", 0, "result.restart-test-signing", true, ",\"restart\":{\"required\":true,\"reason_id\":\"restart.test-signing\"}") },
                 new Fixture { Name = "restart-later", Screen = Screen.Restart, RestartLater = true, Events = RunEvents("finish", false, true), Result = ResultJson("run", "restart-required", 0, "result.installed-restart", true) },
                 new Fixture { Name = "result-verified", Flow = "continue", Screen = Screen.Result, Events = RunEvents("preflight", false, false, "verify"), Result = ResultJson("verify", "verified", 0, "result.verified", false) },
                 new Fixture { Name = "result-refused", RunKind = "plan", Screen = Screen.Result, Events = PlanEvents("install", null, "", "download", false).Take(6).ToArray(), Result = ResultJson("plan", "refused", 2, "result.preflight-refused", false, ",\"failed_checks\":[\"gpu.missing\",\"secureboot.on\",\"vcruntime.missing\"]") },

@@ -22,7 +22,7 @@ function Load-TestedFunctions([string]$Path, [string[]]$Names) {
         Set-Item -LiteralPath "Function:script:$name" -Value ([scriptblock]::Create($functions[0].Body.Extent.Text.Trim().Substring(1).TrimEnd().TrimEnd('}')))
     }
 }
-Load-TestedFunctions (Join-Path $Installer 'common.ps1') @('Get-TestSigningConfigured', 'Get-BitLockerState', 'Test-BitLockerConsentRequired')
+Load-TestedFunctions (Join-Path $Installer 'common.ps1') @('Get-TestSigningConfigured', 'Get-BitLockerState', 'Test-BitLockerConsentRequired', 'Get-BitLockerPlan')
 function Test-IsAdmin { return $script:Admin }
 function Invoke-Native { $script:NativeCalls++; throw 'A native process must never run in this test.' }
 function Get-BitLockerVolume { throw 'The BitLocker PowerShell module is unavailable in this fixture.' }
@@ -91,24 +91,35 @@ function Reset-BitLocker {
 $tokens = $null; $parseErrors = $null
 $installAst = [Management.Automation.Language.Parser]::ParseFile((Join-Path $Installer 'install.ps1'), [ref]$tokens, [ref]$parseErrors)
 Check ($parseErrors.Count -eq 0) 'installer parses'
-$gates = @($installAst.FindAll({ param($n)
-    $n -is [Management.Automation.Language.IfStatementAst] -and
-    $n.Clauses[0].Item1.Extent.Text -eq 'Test-BitLockerConsentRequired $script:BitLockerState'
+# The installer asks the user nothing (owner, 2026-10-12): there is no consent gate any more. One decision,
+# Get-BitLockerPlan, is taken from the live state before the boot options change, and the block below is the shipped
+# text of install.ps1 from that decision to the state it writes - not a copy of it.
+$planAssign = @($installAst.FindAll({ param($n)
+    $n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Extent.Text -like '$blPlan = Get-BitLockerPlan*'
 }, $true))
-Check ($gates.Count -eq 2) 'plan and execution share the BitLocker consent rule'
-$planGate = [scriptblock]::Create($gates[0].Extent.Text)
-$bootGate = [scriptblock]::Create($gates[1].Extent.Text)
+Check ($planAssign.Count -eq 1) 'one BitLocker decision before the boot change'
+$stateWrites = @($installAst.FindAll({ param($n)
+    $n -is [Management.Automation.Language.IfStatementAst] -and $n.Clauses[0].Item1.Extent.Text -eq "`$blPlan.action -ne 'none'"
+}, $true))
+Check ($stateWrites.Count -eq 1) 'one place writes the BitLocker decision into the install state'
+$installText = $installAst.Extent.Text
+$bootGate = [scriptblock]::Create($installText.Substring($planAssign[0].Extent.StartOffset,
+    $stateWrites[0].Extent.EndOffset - $planAssign[0].Extent.StartOffset))
+# No question is asked anywhere on the way to the boot change: a Read-Confirmation there would be a required answer.
+$asked = @($installAst.FindAll({ param($n)
+    $n -is [Management.Automation.Language.CommandAst] -and $n.GetCommandName() -eq 'Read-Confirmation'
+}, $true))
+Check ($asked.Count -eq 0) 'the installer asks no confirmation at all'
 $bcdWrites = @($installAst.FindAll({ param($n)
     $n -is [Management.Automation.Language.CommandAst] -and $n.GetCommandName() -eq 'Invoke-Change' -and
     $n.Extent.Text -match 'Invoke-Change "bcdedit /set ''\{current\}'' testsigning on"'
 }, $true))
-Check ($bcdWrites.Count -eq 1 -and $gates[1].Extent.EndOffset -lt $bcdWrites[0].Extent.StartOffset) 'consent precedes boot mutation'
+Check ($bcdWrites.Count -eq 1 -and $stateWrites[0].Extent.EndOffset -lt $bcdWrites[0].Extent.StartOffset) 'the BitLocker decision precedes the boot mutation'
 $refreshes = @($installAst.FindAll({ param($n)
     $n -is [Management.Automation.Language.AssignmentStatementAst] -and
     $n.Extent.Text -eq '$script:BitLockerState = Get-BitLockerState'
 }, $true))
-Check ($refreshes.Count -eq 1 -and $refreshes[0].Extent.EndOffset -lt $gates[1].Extent.StartOffset -and
-    $refreshes[0].Extent.StartOffset -gt $gates[0].Extent.EndOffset) 'protection refreshed before the boot decision'
+Check ($refreshes.Count -eq 1 -and $refreshes[0].Extent.EndOffset -lt $planAssign[0].Extent.StartOffset) 'protection refreshed before the boot decision'
 function Read-Confirmation { param($Question, $Answer) return $false }
 function Exit-Engine { param($Code, $Outcome, $MessageId, $Detail) throw "fixture-exit:$Code`:$Outcome" }
 function Invoke-Change {
@@ -118,10 +129,13 @@ function Invoke-Change {
 function Suspend-BitLocker {
     param($MountPoint, $RebootCount, $ErrorAction)
     $script:SuspendCalls++
-    Check ($MountPoint -ceq 'Q:' -and $RebootCount -eq 2 -and $ErrorAction -eq 'Stop') 'suspension uses two restarts'
+    Check ($MountPoint -ceq 'Q:' -and $RebootCount -eq $script:WantReboots -and $ErrorAction -eq 'Stop') "suspension uses $($script:WantReboots) restart(s)"
     if ($script:SuspendFails) { throw 'fixture-suspend-failed' }
     if (-not $script:SuspendUnverifiable) { Reset-BitLocker; $script:Protection = [uint32]0 }
 }
+function Write-Info { param($Text) }
+$script:WantReboots = 2
+$script:PlannedRestarts = 2
 function Set-StateValue { param($State, $Name, $Value) $State[$Name] = $Value }
 
 $priorCulture = [Threading.Thread]::CurrentThread.CurrentCulture
@@ -193,25 +207,53 @@ try {
         Check (($script:ProviderCalls + $script:CimCalls) -eq $callsBefore) "$($sample.tag) non-admin makes no provider calls"
         $script:Admin = $true
 
-        foreach ($status in @('on', 'unknown', 'unexpected', '', 'off', 'suspended')) {
-            $script:BitLockerState = $status
-            $consents = @()
-            . $planGate
-            Check (($consents -contains 'bitlocker') -eq ($status -notin @('off', 'suspended'))) "$($sample.tag) plan consent $status"
+        # The decision itself, under this culture: protection that is on is suspended without anybody being asked,
+        # a state nobody could read goes on with one sentence, and off or suspended needs nothing.
+        foreach ($case in @(
+                @{ state = 'on';        want = 'suspend'  },
+                @{ state = 'unknown';   want = 'unknown'  },
+                @{ state = 'unexpected';want = 'unknown'  },
+                @{ state = '';          want = 'unknown'  },
+                @{ state = 'off';       want = 'none'     },
+                @{ state = 'suspended'; want = 'none'     })) {
+            $plan = Get-BitLockerPlan -State $case.state -Requested '' -Restarts 2
+            Check ($plan.action -ceq $case.want) "$($sample.tag) BitLocker plan for '$($case.state)' is $($plan.action)"
+            Check ($plan.message -and $plan.message.Length -gt 10) "$($sample.tag) BitLocker plan for '$($case.state)' says why in words"
         }
-        foreach ($status in @('on', 'unknown')) {
-            $script:BitLockerState = $status; $BitLocker = ''; $state = @{}
-            $stopped = $false
-            try { . $bootGate } catch { $stopped = $_.Exception.Message -eq 'fixture-exit:4:needs-consent' }
-            Check ($stopped -and $state.Count -eq 0) "$($sample.tag) execution refuses $status without consent"
-            $BitLocker = 'HaveKey'
+        Check ((Get-BitLockerPlan -State 'on' -Requested 'HaveKey' -Restarts 2).action -ceq 'have-key') "$($sample.tag) the command line may keep protection as it is"
+        Check ((Get-BitLockerPlan -State 'on' -Requested '' -Restarts 1).reboots -eq 1 -and
+               (Get-BitLockerPlan -State 'on' -Requested '' -Restarts 99).reboots -eq 15 -and
+               (Get-BitLockerPlan -State 'on' -Requested '' -Restarts 0).reboots -eq 1) "$($sample.tag) the suspension covers the restarts of the install, 1 to 15"
+        # The shipped block: protection on is suspended and recorded, with no question in between.
+        foreach ($restarts in @(2, 1)) {
+            $script:BitLockerState = 'on'; $BitLocker = ''; $script:FakeDryRun = $false
+            $script:PlannedRestarts = $restarts; $script:WantReboots = $restarts
+            $script:SuspendCalls = 0; $script:SuspendFails = $false; $script:SuspendUnverifiable = $false; $state = @{}
+            Reset-BitLocker
             . $bootGate
-            Check ($state.bitlocker -ceq 'HaveKey') "$($sample.tag) recovery key decision accepted for $status"
+            Check ($script:SuspendCalls -eq 1 -and $state.bitlocker -ceq 'Suspend') "$($sample.tag) protection on is suspended for $restarts restart(s) and recorded"
         }
-        $script:BitLockerState = 'unknown'; $BitLocker = 'Suspend'; $script:FakeDryRun = $false
-        $script:SuspendCalls = 0; $script:SuspendFails = $false; $script:SuspendUnverifiable = $false; $state = @{}
+        $script:PlannedRestarts = 2; $script:WantReboots = 2
+        # A state nobody could read: the install goes on, nothing is suspended, and the state records it.
+        $script:BitLockerState = 'unknown'; $BitLocker = ''; $script:SuspendCalls = 0; $state = @{}
         . $bootGate
-        Check ($script:SuspendCalls -eq 1 -and $state.bitlocker -ceq 'Suspend') "$($sample.tag) verified suspension accepted"
+        Check ($script:SuspendCalls -eq 0 -and $state.bitlocker -ceq 'unknown') "$($sample.tag) an unreadable state goes on without suspending"
+        # The recovery key from the command line: nothing is touched.
+        foreach ($status in @('on', 'unknown')) {
+            $script:BitLockerState = $status; $BitLocker = 'HaveKey'; $script:SuspendCalls = 0; $state = @{}
+            Reset-BitLocker
+            . $bootGate
+            Check ($script:SuspendCalls -eq 0 -and $state.bitlocker -ceq 'HaveKey') "$($sample.tag) -BitLocker HaveKey keeps protection as it is for $status"
+        }
+        # Off or suspended: no decision is recorded at all.
+        foreach ($status in @('off', 'suspended')) {
+            $script:BitLockerState = $status; $BitLocker = ''; $script:SuspendCalls = 0; $state = @{}
+            . $bootGate
+            Check ($script:SuspendCalls -eq 0 -and $state.Count -eq 0) "$($sample.tag) $status needs nothing"
+        }
+        $script:BitLockerState = 'on'; $BitLocker = ''
+        $script:SuspendCalls = 0; $script:SuspendFails = $false; $script:SuspendUnverifiable = $false; $state = @{}
+        Reset-BitLocker
         $script:SuspendFails = $true; $state = @{}; $stopped = $false
         try { . $bootGate } catch { $stopped = $_.Exception.Message -eq 'fixture-suspend-failed' }
         Check ($stopped -and $state.Count -eq 0) "$($sample.tag) failed suspension stops before boot change"

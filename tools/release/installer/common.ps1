@@ -34,6 +34,10 @@ $script:StatePath        = Join-Path $script:StateDir 'state.json'
 $script:ProfileListKey   = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList'
 $script:ProfilePathsOverride = $null                           # host tests: fixture profile folders
 $script:DryRunMode       = $false
+# The visible countdown before a restart the installer makes (owner, 2026-10-12). The same 15 s as the setup
+# window's restart screen (tools\win\amdgpu_wddm_setup\src\InstallFlow.cs, RestartCountdownSeconds).
+$script:RestartCountdownSeconds = 15
+$script:PlannedRestarts  = 0                                   # install.ps1: the restarts the decision counted
 $script:LogPath          = $null
 $script:CurrentStep      = '(before the first change)'
 $script:ScheduleOldCopies = $true                              # host tests set $false: no MoveFileEx on the test PC
@@ -1186,6 +1190,64 @@ function Test-BitLockerConsentRequired {
     param([AllowNull()][string]$State)
     # Only verified unencrypted or suspended protection can skip this boot-change decision.
     return ($State -notin @('off', 'suspended'))
+}
+# What the installer does about BitLocker protection before it changes the start options, without asking anybody
+# (owner, 2026-10-12: "Przestan wymagac potwierdzen od uzytkownika"). The install needs test signing, test signing
+# needs a boot-option change, and a boot-option change on a protected volume makes Windows ask for the recovery key
+# at the next start. So the installer suspends protection itself for the restarts it makes, and BitLocker turns
+# itself on again afterwards (Suspend-BitLocker -RebootCount; Microsoft BitLocker PowerShell documentation).
+#
+# A decision only; the caller acts on it, so the rule is testable without a protected volume:
+#   action  'none'      nothing to do: protection off, or already suspended
+#           'suspend'   protection is on: suspend it for $Restarts restarts before the boot options change
+#           'have-key'  the command line said the person has the recovery key (-BitLocker HaveKey): change nothing
+#           'unknown'   the state could not be read: go on, and say so in one information line. A person who cannot
+#                       read the state cannot answer a question about it either, and refusing the install here left
+#                       every PC whose state is unreadable without a driver.
+#   reboots the -RebootCount of a 'suspend': the restarts this install makes, at least 1 and at most 15 (the limit
+#           of the cmdlet), so protection is back as soon as the install is through.
+#   message one plain sentence for the console and the log.
+# State: 'off', 'on', 'suspended' or 'unknown' (Get-BitLockerState). Requested: the -BitLocker switch, '' when absent.
+function Get-BitLockerPlan {
+    param([AllowNull()][string]$State, [AllowNull()][string]$Requested, [int]$Restarts = 2)
+    $reboots = [Math]::Max(1, [Math]::Min(15, $Restarts))
+    if (-not (Test-BitLockerConsentRequired $State)) {
+        return [pscustomobject]@{ action = 'none'; reboots = 0; message = "BitLocker: nothing to do (protection $State)" }
+    }
+    if ($Requested -eq 'HaveKey') {
+        return [pscustomobject]@{ action = 'have-key'; reboots = 0
+            message = 'BitLocker: the command line states that the recovery key is at hand, so protection stays as it is' }
+    }
+    if ($State -eq 'on') {
+        return [pscustomobject]@{ action = 'suspend'; reboots = $reboots
+            message = "BitLocker: protection is on, so it is paused for the $reboots restart(s) of this installation and turns itself on again afterwards" }
+    }
+    return [pscustomobject]@{ action = 'unknown'; reboots = 0
+        message = 'BitLocker: the protection state of this drive could not be read. The installation goes on; keep your recovery key at hand in case Windows asks for it after a restart' }
+}
+# A visible countdown that ends in a restart by itself (owner, 2026-10-12: automatic restarts, never a required
+# click). Enter restarts at once, any other key puts the restart off, and a console that has no key reader (a
+# scheduled run, redirected input) simply waits the countdown out and restarts. Returns 'now' or 'later'.
+function Wait-RestartCountdown {
+    param([int]$Seconds = 15)
+    $left = $Seconds
+    while ($left -gt 0) {
+        Write-Host ("`r   Windows restarts by itself in {0,2} s. Enter = restart now, any other key = later.   " -f $left) -NoNewline
+        $until = [DateTime]::UtcNow.AddSeconds(1)
+        while ([DateTime]::UtcNow -lt $until) {
+            $key = $null
+            try { if ([Console]::KeyAvailable) { $key = [Console]::ReadKey($true) } } catch { $key = $null }
+            if ($null -ne $key) {
+                Write-Host ''
+                if ($key.Key -eq 'Enter') { return 'now' }
+                return 'later'
+            }
+            Start-Sleep -Milliseconds 100
+        }
+        $left--
+    }
+    Write-Host ''
+    return 'now'
 }
 function Get-MemoryIntegrityState {
     $v = (Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity' -Name Enabled -ErrorAction SilentlyContinue).Enabled

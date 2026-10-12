@@ -20,6 +20,7 @@ rail.current|mt-safe|3d59ee1e|현재 단계
 rail.done|mt-safe|a4c3ed04|완료
 rail.failed|mt-safe|a1f6bdb2|여기서 중지됨
 elevation.declined|mt|0a586e33|드라이버를 설치하거나 복구하려면 관리자 권한이 필요합니다. 아무것도 변경되지 않았습니다. 설치 프로그램을 다시 시작하고 Windows가 물으면 [예]를 선택하세요.
+payload.damaged|mt|44795d7b|이 설치 파일이 손상되었습니다. 안에 들어 있는 설치 파일이 만들 때의 파일과 일치하지 않습니다. 아무것도 변경하지 않았습니다. 릴리스를 다시 다운로드하세요.
 
 # ---- welcome ----
 welcome.title|mt|f6dd913f|ASRock BC-250용 그래픽 드라이버 설치
@@ -73,9 +74,9 @@ check.secureboot.off|mt|a107f361|보안 부팅이 꺼져 있습니다.
 check.secureboot.on|mt|1a594fe8|보안 부팅이 켜져 있습니다. 설치하기 전에 PC의 펌웨어 설정에서 끄세요.
 check.secureboot.unknown|mt|349a2c6d|보안 부팅이 켜져 있는지 읽을 수 없었습니다.
 check.testsigning.active|mt|f6138193|Windows 테스트 모드가 켜져 있습니다.
-check.testsigning.inactive|mt|3e61e840|Windows 테스트 모드가 꺼져 있습니다. 동의하시면 설치 프로그램이 켭니다.
+check.testsigning.inactive|mt|1f2ea753|Windows 테스트 모드가 꺼져 있습니다. 설치 프로그램이 설치 과정에서 켭니다.
 check.bitlocker.ok|mt|f6019261|BitLocker에 대해 할 일은 없습니다.
-check.bitlocker.on|mt|94912a08|BitLocker가 켜져 있습니다. 무엇이든 변경하기 전에 처리 방법을 묻습니다.
+check.bitlocker.on|mt|833d9bbb|BitLocker가 켜져 있습니다. 설치 프로그램이 설치에 필요한 다시 시작 동안만 일시 중지하고, 이후 자동으로 다시 켜집니다.
 check.bitlocker.unknown|mt|74c5d56a|BitLocker 상태를 읽을 수 없었습니다. BitLocker가 켜져 있다면 복구 키를 준비하세요.
 check.hvci.off|mt|c5375084|메모리 무결성이 꺼져 있습니다.
 check.hvci.on|mt|038dce93|메모리 무결성이 켜져 있습니다. 드라이버가 시작되지 않으면 Windows 보안(코어 격리)에서 끄세요.
@@ -109,12 +110,16 @@ plan.repair-again|mt-safe|1196b6c5|복구
 plan.checks.title|mt-safe|de07d072|확인 항목
 plan.checks.ok|mt|eb2f3d98|모든 확인을 통과했습니다.
 plan.checks.attention|mt|e6885bff|주의가 필요한 확인 항목: {0}
-plan.consent.needed|mt|8c3cbc95|설치하기 전에 "{0}" 항목의 질문에 답하세요.
 plan.what.title|mt-safe|70fbb54b|진행할 내용
 plan.restarts.0|mt|b0a2c82a|Windows를 다시 시작할 필요가 없습니다.
 plan.restarts.1|mt|2ae11afb|Windows가 한 번 다시 시작됩니다. 다시 로그인하면 설치 프로그램이 자동으로 계속됩니다.
 plan.restarts.2|mt|efc32bc9|Windows가 두 번 다시 시작됩니다. 로그인할 때마다 설치 프로그램이 자동으로 계속됩니다.
-plan.restarts.choice|mt|7df5fea3|다시 시작하기 전에 매번 묻기 때문에 먼저 작업을 저장할 수 있습니다.
+plan.restarts.choice|mt|e2801100|다시 시작은 짧은 카운트다운 후에 저절로 시작됩니다. 바로 다시 시작하거나 나중으로 미룰 수 있습니다.
+plan.change.test-mode|mt|7c5a1301|이 드라이버를 불러올 수 있도록 Windows를 테스트 모드로 전환합니다.
+plan.change.test-mode.note|mt|9a9c5086|바탕 화면 구석에 "테스트 모드"가 표시됩니다. 드라이버를 제거하면 다시 꺼집니다.
+plan.change.test-mode.on|mt|cf315297|Windows가 이미 테스트 모드로 실행 중이므로 여기서는 바뀌는 것이 없습니다.
+plan.change.bitlocker|mt|f43553fa|BitLocker 보호는 이 설치의 다시 시작 동안만 일시 중지되고 이후 자동으로 다시 켜지므로 Windows가 복구 키를 묻지 않습니다.
+plan.change.bitlocker.unknown|mt|67f2277e|이 PC의 BitLocker 상태를 읽을 수 없었습니다. 설치는 계속합니다. 다시 시작한 후 Windows가 요청할 경우를 대비해 복구 키를 준비해 두세요.
 plan.firmware.download|mt|7051aa7f|GPU 펌웨어는 Linux 공식 펌웨어 보관소에서 다운로드되고 확인됩니다.
 plan.firmware.folder|mt|3afc555b|GPU 펌웨어는 선택한 폴더에서 가져와 확인됩니다.
 plan.firmware.package-folder|mt|576cf803|GPU 펌웨어는 준비된 폴더에서 가져옵니다. 인터넷이 필요 없습니다.
@@ -150,12 +155,6 @@ settings.decision.reopened|mt|4342e37e|이 복구로 되돌렸습니다 (드라�
 settings.decision.driver-closed|mt|cff55d7f|드라이버가 껐습니다. 복구하면 되돌아갑니다
 
 # ---- consents ----
-consent.title|mt-safe|34a195af|시작하기 전에
-consent.test-signing|mt|71d16537|Windows 테스트 모드 켜기
-consent.test-signing.note|mt|bebc2e37|드라이버가 테스트 인증서로 서명되어 있어 Windows를 테스트 모드로 실행해야 합니다. 바탕 화면 구석에 "테스트 모드"가 표시됩니다.
-consent.bitlocker|mt|7b5d44a4|BitLocker가 켜져 있거나 설치 프로그램이 상태를 읽지 못했습니다. 시작 옵션을 변경하면 다음 시작 때 Windows가 복구 키를 요청할 수 있습니다.
-consent.bitlocker.have-key|mt|081b65b7|복구 키가 있습니다
-consent.bitlocker.suspend|mt|dcf26b02|다음 두 번의 다시 시작 동안 BitLocker 일시 중지 (자동으로 다시 켜짐)
 
 # ---- working ----
 working.title|mt-safe|8749b169|설치하는 중
@@ -189,6 +188,8 @@ stage.copy|mt-safe|ff9e3c81|파일 복사
 restart.now|mt-safe|09af1002|지금 다시 시작
 restart.later|mt-safe|73b6e48a|나중에
 restart.save-work|mt|16909f23|먼저 작업을 저장하세요. Windows는 열려 있는 프로그램에 종료를 요청하지만 강제로 닫지는 않습니다.
+restart.countdown|mt|60c980c1|{0}초 후에 Windows가 자동으로 다시 시작됩니다.
+restart.countdown.over|mt|7af75060|카운트다운이 끝났습니다. 설치 프로그램이 Windows를 자동으로 다시 시작하지 않습니다.
 restart.later.done|mt|a38787ae|다음에 Windows를 다시 시작하면 설치 프로그램이 자동으로 계속됩니다. 이 창은 닫아도 됩니다.
 restart.failed|mt|56d3b9cd|Windows가 다시 시작을 시작하지 않았습니다. [시작] 메뉴에서 PC를 다시 시작하세요.
 

@@ -96,6 +96,9 @@ namespace AmdgpuWddmSetup
                         // (--work-area), the panel with its card on a screen that has room for it, and the page
                         // column inside the room the window really has.
                         foreach (var p in form.SmallScreenFindings()) w.AppendLine(f.Name + ": G-SMALL " + p);
+                        // G-CONSENT, the owner's instruction of 2026-10-12: no screen asks the user for a
+                        // permission, and the primary action is never off waiting for one.
+                        foreach (var p in form.ConsentFindings()) w.AppendLine(f.Name + ": G-CONSENT " + p);
                         var text = form.VisibleText(false);
                         foreach (var hit in NoInternals.Find(text)) w.AppendLine(f.Name + ": G-NOINT \"" + hit + "\"");
                         if (text.Contains("[")) foreach (var m in System.Text.RegularExpressions.Regex.Matches(text, @"\[[a-z0-9.-]+\]")) w.AppendLine(f.Name + ": missing string " + m);
