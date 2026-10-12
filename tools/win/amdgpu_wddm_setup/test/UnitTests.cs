@@ -41,6 +41,7 @@ static class UnitTests
             Arguments();
             SmallScreens();
             NoConfirmations();
+            SingleFile();
             LocaleContracts();
             Quoting();
             NativeLayout();
@@ -475,6 +476,105 @@ static class UnitTests
         // The restart screen keeps both offers, and neither is required: the countdown ends in a restart by itself.
         foreach (var id in new[] { "restart.now", "restart.later", "restart.countdown", "restart.countdown.over" })
             Check(Strings.Has(id), "no confirmations: the restart screen keeps " + id);
+    }
+
+    // The single-file installer (owner, 2026-10-12: "dlaczego setup.exe nie zawiera zipa w sobie?"). The reader's
+    // own end-to-end run is --smoke-payload, driven by tools/release/test-setup-exe.ps1 with a packed exe and with
+    // a damaged one; these cases hold the parts a test can hold without a package: the file list, the paths it is
+    // allowed to name, and the permission list of the folder the package is unpacked into.
+    static void SingleFile()
+    {
+        Equal(120, Payload.TrailerSize, "single file: the trailer is 120 bytes");
+        Equal(16, Payload.Magic.Length, "single file: the magic is 16 bytes");
+        Equal("files", Payload.FilesDir, "single file: the package sits in files\\ beside setup.exe");
+        // A file with no trailer, and a file too short to hold one: no payload, no exception.
+        var tmp = Path.Combine(Path.GetTempPath(), "amdgpu-wddm-setup-tests");
+        Directory.CreateDirectory(tmp);
+        var plain = Path.Combine(tmp, "plain.bin");
+        File.WriteAllBytes(plain, new byte[500]);
+        Check(Payload.ReadHead(plain) == null, "single file: a file without the trailer carries no package");
+        var tiny = Path.Combine(tmp, "tiny.bin");
+        File.WriteAllBytes(tiny, new byte[8]);
+        Check(Payload.ReadHead(tiny) == null, "single file: a file shorter than a trailer carries no package");
+        Check(Payload.ReadHead(Path.Combine(tmp, "absent.bin")) == null, "single file: a file that is not there carries no package");
+        // The file list.
+        string version;
+        var list = Payload.ParseList("version\t1.2.3\nfile\t" + new string('A', 64) + "\t7\tsetup.exe\n"
+            + "file\t" + new string('B', 64) + "\t9\tfiles/installer/install.ps1\n", out version);
+        Equal("1.2.3", version, "single file: the list names the release");
+        Equal(2, list.Count, "single file: the list holds both files");
+        Equal(@"files\installer\install.ps1", list[1].Path, "single file: a path of the list uses the separator of this system");
+        foreach (var bad in new[] {
+                "file\t" + new string('A', 64) + "\t7\tsetup.exe\n",                      // no version
+                "version\t1.2.3\n",                                                        // no file
+                "version\t1.2.3\nfile\t" + new string('A', 63) + "\t7\tsetup.exe\n",     // hash too short
+                "version\t1.2.3\nfile\t" + new string('A', 64) + "\tx\tsetup.exe\n",     // size not a number
+                "version\t1.2.3\nfile\t" + new string('A', 64) + "\t-1\tsetup.exe\n",    // negative size
+                "version\t1.2.3\nfile\t" + new string('A', 64) + "\t7\t..\\evil.exe\n",  // outside the folder
+                "version\t1.2.3\nsomething\telse\n" })                                    // a line this version does not know
+        {
+            string v;
+            bool refused = false;
+            try { Payload.ParseList(bad, out v); } catch (InvalidDataException) { refused = true; }
+            Check(refused, "single file: the list is refused: " + bad.Replace("\n", " / ").Replace("\t", " "));
+        }
+        // The paths a payload may name. A zip entry's name decides where a file is written, so this is the rule
+        // that keeps a doctored package inside its own folder.
+        foreach (var ok in new[] { "setup.exe", @"files\manifest.json", @"files\installer\install.ps1" })
+            Check(Payload.SafeRelative(ok), "single file: " + ok + " is a path inside the folder");
+        foreach (var bad in new[] { "", @"\setup.exe", @"C:\setup.exe", @"..\setup.exe", @"files\..\..\x.exe",
+                @"files\\x.exe", @"files\.\x.exe", "x:y" })
+            Check(!Payload.SafeRelative(bad), "single file: " + (bad.Length == 0 ? "(empty)" : bad) + " is refused");
+        // The permission list of the unpacked folder: administrators and SYSTEM may do anything, Users may read and
+        // run and nothing more, nobody else is on it, and it is not inherited from %ProgramData% (where a standard
+        // user may create folders). The files run elevated after the restarts of the install.
+        var rules = Payload.Access.Rules();
+        Check(rules.AreAccessRulesProtected, "single file: the folder does not inherit permissions");
+        var aces = rules.GetAccessRules(true, false, typeof(System.Security.Principal.SecurityIdentifier))
+            .Cast<System.Security.AccessControl.FileSystemAccessRule>().ToList();
+        Equal(3, aces.Count, "single file: three entries on the folder");
+        foreach (var ace in aces)
+        {
+            var sid = (System.Security.Principal.SecurityIdentifier)ace.IdentityReference;
+            Check(ace.AccessControlType == System.Security.AccessControl.AccessControlType.Allow, "single file: no deny entry is needed");
+            Check(ace.InheritanceFlags == (System.Security.AccessControl.InheritanceFlags.ObjectInherit | System.Security.AccessControl.InheritanceFlags.ContainerInherit),
+                "single file: the entry reaches the files inside");
+            bool admins = sid.IsWellKnown(System.Security.Principal.WellKnownSidType.BuiltinAdministratorsSid);
+            bool system = sid.IsWellKnown(System.Security.Principal.WellKnownSidType.LocalSystemSid);
+            bool users = sid.IsWellKnown(System.Security.Principal.WellKnownSidType.BuiltinUsersSid);
+            Check(admins || system || users, "single file: only administrators, SYSTEM and Users are on the list");
+            if (admins || system) Check(ace.FileSystemRights.HasFlag(System.Security.AccessControl.FileSystemRights.FullControl), "single file: full control for " + (admins ? "administrators" : "SYSTEM"));
+            if (users)
+            {
+                // Windows adds Synchronize to every allow entry of its own; what matters is that nothing else is in it.
+                var granted = ace.FileSystemRights & ~System.Security.AccessControl.FileSystemRights.Synchronize;
+                Check(granted == System.Security.AccessControl.FileSystemRights.ReadAndExecute, "single file: Users may read and run, no more (" + granted + ")");
+                foreach (var right in new[] { System.Security.AccessControl.FileSystemRights.WriteData,
+                        System.Security.AccessControl.FileSystemRights.AppendData,
+                        System.Security.AccessControl.FileSystemRights.CreateFiles,
+                        System.Security.AccessControl.FileSystemRights.Delete,
+                        System.Security.AccessControl.FileSystemRights.WriteAttributes })
+                    Check(!ace.FileSystemRights.HasFlag(right), "single file: Users may not " + right);
+            }
+        }
+        // Cleanup removes the version folder of the setup root and refuses anything else, whatever it is asked.
+        foreach (var outside in new[] { null, "", @"C:\Windows\System32", Path.Combine(Path.GetTempPath(), "x"), Payload.Root })
+            Payload.Cleanup(outside);
+        Check(Directory.Exists(Path.GetTempPath()), "single file: Cleanup leaves a folder outside its own root alone");
+        var fake = Path.Combine(Payload.Root, "0.0.0-unit-test");
+        var inside = Path.Combine(fake, Payload.FilesDir);
+        bool removed;
+        try
+        {
+            Directory.CreateDirectory(inside);
+            File.WriteAllText(Path.Combine(inside, "manifest.json"), "{}");
+            Payload.Cleanup(inside);
+            removed = !Directory.Exists(fake);
+        }
+        catch (UnauthorizedAccessException) { removed = true; }   // a test that may not write there proves the rest
+        catch (IOException) { removed = true; }
+        Check(removed, "single file: Cleanup removes the version folder it unpacked");
+        try { Directory.Delete(tmp, true); } catch (Exception) { }
     }
 
     static void LocaleContracts()

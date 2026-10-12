@@ -26,6 +26,9 @@
 #      800x600 or smaller screen draws no right-hand panel and a larger one draws it, and G-CONSENT, the owner's
 #      instruction of the same day that no screen asks the user for a permission: the plan screen carries no check
 #      box or option button of its own and its Install button is never off.
+#   5. tools\release\test-setup-exe.ps1: the exe is packed around a small package of its own (the single-file
+#      installer the release ships, owner 2026-10-12) and reads it back through --smoke-payload, and seven damaged
+#      or empty exes are offered to the reader and every one of them is refused.
 # None of them shows a window; nothing is installed and nothing outside -Out is written (the runs' temporary files are
 # under -Out\obj).
 
@@ -46,7 +49,7 @@ $exe = Join-Path $Out 'amdgpu_wddm_setup.exe'
 
 $refs = 'mscorlib.dll', 'System.dll', 'System.Core.dll', 'System.Drawing.dll', 'System.Windows.Forms.dll', 'System.IO.Compression.dll',
     'System.IO.Compression.FileSystem.dll', 'System.Web.Extensions.dll' | ForEach-Object { "/reference:$fx\$_" }
-$pure = 'Strings.cs', 'Json.cs', 'EngineModel.cs', 'PlanText.cs', 'SetupArgs.cs', 'NoInternals.cs', 'Redactor.cs', 'SmallScreen.cs', 'InstallFlow.cs' | ForEach-Object { Join-Path $here "src\$_" }
+$pure = 'Strings.cs', 'Json.cs', 'EngineModel.cs', 'PlanText.cs', 'SetupArgs.cs', 'NoInternals.cs', 'Redactor.cs', 'SmallScreen.cs', 'InstallFlow.cs', 'Payload.cs' | ForEach-Object { Join-Path $here "src\$_" }
 
 # 1. Unit tests of the pure parts.
 & $csc /nologo /noconfig /nostdlib+ @refs /target:exe /platform:x64 /warnaserror+ /langversion:7.3 /deterministic+ `
@@ -208,6 +211,16 @@ if (-not $NoSmoke) {
         if ($code -ne 0 -or $layout -notmatch '^ok: ') { throw "render at scale $($r[0]), $($r[1]), text $($r[2]) $($extra -join ' ') (exit $code):`n$layout" }
     }
     Write-Host "  render: $(@(Get-ChildItem (Join-Path $obj 'render-1-en-text1') -Filter *.png).Count) screens x $($renders.Count) (4 DPIs x 4 languages + 150 % text + 2 without the guide character + 2 in high contrast + 6 runs over five screen sizes from 800x600 up), no overlap or overflow, the guide art and the right-hand panel where they belong, G-A11Y, G-CHROME, G-SMALL, G-CONSENT and G-NOINT clean ($obj\render-*)"
+
+    # 5. The single-file installer (Payload.cs): the exe just built is packed around a small package of its own and
+    #    read back through its --smoke-payload mode, then seven damaged or empty exes are offered to it and every one
+    #    of them must be refused. This runs here, with the exe in hand, so a reader that would unpack a doctored
+    #    package cannot reach a release.
+    $one = @(& (Join-Path $repo 'tools\release\test-setup-exe.ps1') -Setup $exe -Out (Join-Path $obj 'setup-exe') |
+        ForEach-Object { [string]$_ })
+    $oneOk = @($one | Where-Object { $_ -match '^single-file installer: \d+ checks passed, 0 failed$' })
+    if ($oneOk.Count -ne 1) { throw "the single-file installer test did not pass:`n$($one -join "`n")" }
+    Write-Host "  $($oneOk[0]) (the payload read, checked and unpacked; 7 damaged or empty exes refused)"
 }
 
 Get-ChildItem $Out -File | ForEach-Object {

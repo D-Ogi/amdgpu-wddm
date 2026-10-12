@@ -589,3 +589,13 @@ if (-not $cv.ok) { throw "compatibility record does not verify: $($cv.detail)" }
 Compress-Archive -Path $pkgRoot -DestinationPath $zip
 '{0} files under files\ plus setup.exe, package {1}' -f $files.Count, $pkgRoot
 'zip {0} SHA256 {1}' -f $zip, (Get-FileHash -LiteralPath $zip).Hash
+
+# The single-file installer, beside the zip (owner, 2026-10-12: "dlaczego setup.exe nie zawiera zipa w sobie? to
+# lepsza metoda!"): one exe that carries this whole release inside it, for a tester who would rather download one
+# file than unpack an archive. The zip stays: it is the same release, and a tester who already has it changes
+# nothing. make-setup-exe.ps1 -Check is the gate - it reads the exe back and compares every file of the payload with
+# the file of this package, byte for byte, so an exe whose payload is not this release cannot be published.
+$setupOne = Join-Path $Out "amdgpu-wddm-setup-$Version.exe"
+& (Join-Path $PSScriptRoot 'make-setup-exe.ps1') -PackageTop $pkgRoot -Out $setupOne -Check | ForEach-Object { "  $_" }
+if (-not (Test-Path -LiteralPath $setupOne -PathType Leaf)) { throw "make-setup-exe.ps1 wrote no $setupOne" }
+'single exe {0} SHA256 {1}' -f $setupOne, (Get-FileHash -LiteralPath $setupOne).Hash

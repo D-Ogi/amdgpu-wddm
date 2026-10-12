@@ -19,6 +19,12 @@
 //                                             no window: one engine run, its model and screens summarised
 //   amdgpu_wddm_setup.exe --smoke-start-failure <out-dir>
 //                                             no window: plan, install and prepare with an engine that cannot start
+//   amdgpu_wddm_setup.exe --smoke-payload <out-dir>
+//                                             no window: the package this exe carries (Payload.cs) is read, checked
+//                                             and unpacked into <out-dir>, with a summary in <out-dir>\payload.txt.
+//                                             The folder is a plain one, so the reader can be tested without
+//                                             administrator rights; an install always unpacks into the protected
+//                                             %ProgramData%\amdgpu-wddm\setup instead
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -31,6 +37,9 @@ namespace AmdgpuWddmSetup
         public string[] Raw = new string[0];
         public string Mode = "welcome";
         public string Package, RunRoot, Error;
+        // Set by Program when this exe carried the package inside itself and unpacked it (Payload.cs): the folder
+        // the window removes when the run ends with no restart pending. Never a command-line option.
+        public string PayloadPackage;
         public bool DryRun, ApplySystemTuning;
         public readonly List<string> EngineArgs = new List<string>();
         // smoke entries
@@ -43,7 +52,7 @@ namespace AmdgpuWddmSetup
         // small-screen rule and the window's own size read it, so one render is the same picture on any PC.
         public int WorkWidth, WorkHeight;
 
-        public bool Headless { get { return Mode == "smoke-render" || Mode == "smoke-engine" || Mode == "smoke-start-failure" || Mode == "version"; } }
+        public bool Headless { get { return Mode == "smoke-render" || Mode == "smoke-engine" || Mode == "smoke-start-failure" || Mode == "smoke-payload" || Mode == "version"; } }
 
         public static SetupArgs Parse(string[] args)
         {
@@ -90,6 +99,11 @@ namespace AmdgpuWddmSetup
                         a.SetMode("smoke-start-failure");
                         a.SmokeDir = next();
                         if (a.SmokeDir == null) a.Error = "--smoke-start-failure <out-dir>";
+                        break;
+                    case "--smoke-payload":
+                        a.SetMode("smoke-payload");
+                        a.SmokeDir = next();
+                        if (a.SmokeDir == null) a.Error = "--smoke-payload <out-dir>";
                         break;
                     case "--script": a.Script = next(); if (a.Script != "install.ps1" && a.Script != "prepare-offline.ps1") a.Error = "--script install.ps1 or prepare-offline.ps1"; break;
                     case "--no-nagi": a.NoNagi = true; break;

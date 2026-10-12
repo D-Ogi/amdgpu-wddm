@@ -152,7 +152,7 @@ namespace AmdgpuWddmSetup
         // repair set keeps its copy of setup.exe in the package folder itself, so the exe's own folder is the second
         // place. Neither has a manifest when only setup.exe was copied out of the zip: files\ is then the answer, and
         // the welcome screen says to unpack the whole zip (PackageMissing).
-        public const string FilesDir = "files";
+        public const string FilesDir = Payload.FilesDir;
 
         // The package the exe belongs to: <package>\files\ beside setup.exe, or the exe's own folder.
         public static string DefaultPackage()
@@ -164,13 +164,9 @@ namespace AmdgpuWddmSetup
             return files;
         }
 
-        // A folder that holds this release's files: the manifest and the installer the window starts.
-        public static bool HasPackage(string dir)
-        {
-            if (string.IsNullOrEmpty(dir)) return false;
-            try { return File.Exists(Path.Combine(dir, "manifest.json")) && File.Exists(Path.Combine(dir, "installer", "install.ps1")); }
-            catch (Exception) { return false; }
-        }
+        // A folder that holds this release's files: the manifest and the installer the window starts (Payload.cs
+        // holds the rule, because a single-file setup checks the folder it unpacked with the same one).
+        public static bool HasPackage(string dir) { return Payload.HasPackage(dir); }
 
         protected override void OnHandleCreated(EventArgs e)
         {
@@ -202,6 +198,23 @@ namespace AmdgpuWddmSetup
                 return;
             }
             base.OnFormClosing(e);
+        }
+
+        // A restart of this install is still to come, so the files this run needs must stay where they are.
+        bool RestartPending()
+        {
+            if (_view != null && _view.Kind == ViewKind.Restart) return true;
+            return _result != null && _result.RestartRequired;
+        }
+
+        // A single-file setup unpacked the package it carries into %ProgramData%\amdgpu-wddm\setup\<version>
+        // (Payload.cs). That folder goes when the run is over, and stays while a restart is pending: the engine
+        // staged its own copy for the continuation, but a person who starts the file again before the restart
+        // should still find the release it came from.
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            base.OnFormClosed(e);
+            if (!_smoke && !string.IsNullOrEmpty(_args.PayloadPackage) && !RestartPending()) Payload.Cleanup(_args.PayloadPackage);
         }
 
         // The window lets go of everything it owns here, and not in OnFormClosing: a close that is cancelled (by

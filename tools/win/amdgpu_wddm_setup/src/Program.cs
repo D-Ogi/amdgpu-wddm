@@ -28,6 +28,7 @@ namespace AmdgpuWddmSetup
             if (a.Mode == "smoke-render") return SmokeRender(a);
             if (a.Mode == "smoke-engine") return SmokeEngine(a);
             if (a.Mode == "smoke-start-failure") return SmokeStartFailure(a);
+            if (a.Mode == "smoke-payload") return SmokePayload(a);
 
             // Nothing in a window may end setup with the crash dialog of .NET: every widget draws itself, and a GDI+
             // failure in any of them reaches the message loop. The detail goes into a file the support file carries,
@@ -37,14 +38,71 @@ namespace AmdgpuWddmSetup
             AppDomain.CurrentDomain.UnhandledException += (s, e) => Unexpected(a, e.ExceptionObject as Exception);
             Strings.Language = Native.ChosenLanguage() ?? Strings.SystemLanguage();
             Theme.Fonts();
-            if (a.Mode != "prepare-offline" && !Native.IsElevated())
+            // A single file that carries the whole package (Payload.cs, owner 2026-10-12). It has to unpack itself
+            // into a folder only administrators may write, so it needs the administrator prompt whatever it was
+            // started for; a setup.exe that has its files\ folder beside it carries no payload and is unchanged.
+            bool carries = Payload.Present() && !SetupForm.HasPackage(SetupForm.DefaultPackage());
+            if ((a.Mode != "prepare-offline" || carries) && !Native.IsElevated())
             {
                 if (Native.RelaunchElevated(argv)) return 0;
                 MessageBox.Show(Strings.T("elevation.declined"), "amdgpu-wddm Setup", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return 5;
             }
+            if (carries)
+            {
+                try { a.Package = Payload.Extract(); }
+                catch (Exception e)
+                {
+                    // The package in the file is damaged, or it does not match the list it came with. Nothing is
+                    // installed from it: the words say so, the detail goes where every unexpected detail goes.
+                    try
+                    {
+                        var dir = a.RunRoot ?? Path.Combine(Path.GetTempPath(), "amdgpu-wddm-setup");
+                        Directory.CreateDirectory(dir);
+                        File.AppendAllText(Path.Combine(dir, "setup-window-problem.txt"),
+                            DateTime.UtcNow.ToString("o") + " " + VersionText + " payload: " + e + Environment.NewLine, new UTF8Encoding(false));
+                    }
+                    catch (Exception) { }
+                    MessageBox.Show(Strings.T("payload.damaged"), "amdgpu-wddm Setup", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return 7;
+                }
+                a.PayloadPackage = a.Package;
+            }
             Application.Run(new SetupForm(a, false));
             return 0;
+        }
+
+        // --smoke-payload: the package this exe carries, read and checked exactly as an install reads it, and
+        // unpacked into a plain folder so that the whole reader can be tested without administrator rights (the
+        // permission list of the real folder is checked by the unit tests, Payload.Access). The summary says what
+        // was found; a payload that does not match its own file list ends this with a non-zero exit and the reason.
+        static int SmokePayload(SetupArgs a)
+        {
+            var report = Path.Combine(a.SmokeDir, "payload.txt");
+            try
+            {
+                Directory.CreateDirectory(a.SmokeDir);
+                var head = Payload.ReadHead(Assembly.GetExecutingAssembly().Location);
+                if (head == null) { File.WriteAllText(report, "no payload" + Environment.NewLine); Console.Error.WriteLine("no payload"); return 3; }
+                var package = Payload.Extract(Path.Combine(a.SmokeDir, "unpacked"), false);
+                var files = Directory.GetFiles(Path.GetDirectoryName(package.TrimEnd('\\')), "*", SearchOption.AllDirectories);
+                var w = new StringBuilder();
+                w.AppendLine("payload ok");
+                w.AppendLine("package " + package);
+                w.AppendLine("files " + files.Length);
+                w.AppendLine("payload-sha256 " + head.PayloadSha256);
+                w.AppendLine("list-sha256 " + head.ListSha256);
+                w.AppendLine("payload-bytes " + head.PayloadLength);
+                File.WriteAllText(report, w.ToString(), new UTF8Encoding(false));
+                Console.WriteLine(w.ToString().Trim());
+                return 0;
+            }
+            catch (Exception e)
+            {
+                try { Directory.CreateDirectory(a.SmokeDir); File.WriteAllText(report, "payload refused: " + e.Message + Environment.NewLine); } catch (Exception) { }
+                Console.Error.WriteLine("payload refused: " + e.Message);
+                return 4;
+            }
         }
 
         static int _unexpected;
