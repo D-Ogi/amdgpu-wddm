@@ -171,7 +171,6 @@ function Invoke-Preflight {
     else { Add-Check 'administrator' 'fail' 'not elevated' 'admin.missing' }
 
     $os = Get-CimInstance Win32_OperatingSystem
-    $build = [int]$os.BuildNumber
     # The support policy of the owner, 2026-10-11 (n-2) and 2026-10-12 (older Windows 11: a line, not a refusal).
     # Get-WindowsSupportFindings in common.ps1 decides; the ids below are the whole set it can return.
     $win = Get-WindowsSupportState -Os $os
@@ -182,7 +181,13 @@ function Invoke-Preflight {
             'windows.below-supported' { Add-Check 'Windows' 'warn' $f.detail 'windows.below-supported' }
             'windows.insider' { Add-Check 'Windows channel' 'warn' $f.detail 'windows.insider' }
             'windows.ltsc' { Add-Check 'Windows edition' 'warn' $f.detail 'windows.ltsc' }
-            default { Add-Check 'Windows' 'ok' $f.detail 'windows.ok' }
+            # An id this list does not know keeps its own severity: a finding that refuses the install must never
+            # read as a passed check because the list above was not extended with it.
+            default {
+                if ([string]$f.severity -eq 'fail') { Add-Check 'Windows' 'fail' "$($f.detail) ($($f.id))" $f.id }
+                elseif ([string]$f.severity -eq 'warn') { Add-Check 'Windows' 'warn' "$($f.detail) ($($f.id))" $f.id }
+                else { Add-Check 'Windows' 'ok' $f.detail 'windows.ok' }
+            }
         }
     }
 
@@ -227,7 +232,6 @@ function Invoke-Preflight {
     # "powinien byc auto-installer!!!"): the package carries Microsoft's own installer and phase 2 runs it. The only
     # refusal left is a package that does not carry that installer, or carries a changed copy of it.
     $vc = Get-VcRuntimeState
-    $script:VcRuntimeNeeded = [bool]$vc.install
     $vcExe = Join-Path $package $script:VcRuntimePackagePath
     if (-not $vc.install) { Add-Check 'Visual C++ runtime' 'ok' $vc.detail 'vcruntime.ok' }
     else {
@@ -913,7 +917,11 @@ if ($action.action -ne 'verify' -and $script:Manifest) {
 Write-EngineEvent 'decision' ([ordered]@{ action = $action.action; message = $action.message; installed_version = $installedVersion; package_version = $packageVersion; phase = [string]$state.phase
     consents = @($consents); consents_given = [ordered]@{ test_signing = [bool]$AcceptTestSigning; bitlocker = $BitLocker }; restarts = $restarts
     firmware_source = $firmwareSource; firmware_dir = $FirmwareDir; notes = @($notes); secure_boot = $script:SecureBoot; bitlocker = $script:BitLockerState
-    compatibility = $compat; system_tuning = [bool]$ApplySystemTuning })
+    compatibility = $compat; system_tuning = [bool]$ApplySystemTuning
+    # The two shortcut answers this run would act on (the command line, or the answer an earlier run of the same
+    # install saved). The setup window opens its two boxes on them, so the run after a restart and a repair run
+    # state the answer the tester gave, not the default (interfaces-setup.md A2).
+    start_menu_shortcut = (-not [bool]$NoStartMenuShortcut); desktop_shortcut = (-not [bool]$NoDesktopShortcut) })
 Write-SystemTuningPlan -Selected ([bool]$ApplySystemTuning) -Manifest $script:Manifest
 if ($action.action -in @('install', 'upgrade', 'repair', 'resume')) {
     $impact = Get-InstallSettingsImpact
@@ -1169,7 +1177,21 @@ else {
         if (-not $vcRun.ok) { throw $vcRun.message }
         Write-Info $vcRun.message
         $vcAfter = Get-VcRuntimeState
-        if ($vcAfter.install -and -not $vcRun.restart) { throw "Microsoft's installer reported success (code $($vcRun.code)), but the runtime is still not in place: $($vcAfter.detail). Install the Microsoft Visual C++ 2015-2022 Redistributable (x64) yourself, then run this installer again." }
+        # Code 1638 says a same or newer runtime is registered, so Microsoft's installer installed nothing. When a
+        # file of it is missing from System32 all the same, the registration is there and its files are not: the same
+        # program repairs that, and only a repair that does not help ends the installation.
+        if ($vcAfter.install -and $vcRun.code -eq 1638) {
+            Write-Info "the Microsoft Visual C++ runtime is registered on this PC and $($vcAfter.detail): the installer repairs it"
+            $vcRepair = Invoke-Change "repair the Microsoft Visual C++ 2015-2022 Redistributable (x64) from $($script:VcRuntimePackagePath) ($($script:VcRuntimeRepairArguments -join ' '))" {
+                Invoke-VcRuntimeInstall -Path $vcExe -Arguments $script:VcRuntimeRepairArguments
+            }
+            if ($null -ne $vcRepair) {
+                Write-Log ($vcRepair.text)
+                if (-not $vcRepair.ok) { throw $vcRepair.message }
+                $vcAfter = Get-VcRuntimeState
+            }
+        }
+        if ($vcAfter.install -and -not $vcRun.restart) { throw "Microsoft's installer reported success (code $($vcRun.code)), but the runtime is still not in place: $($vcAfter.detail). Repair the Microsoft Visual C++ 2015-2022 Redistributable (x64) in Windows Settings, Apps, Installed apps (or install it again from Microsoft), then run this installer again." }
         Write-Info "Microsoft Visual C++ runtime after the step: $($vcAfter.detail)"
     }
 }
@@ -1638,8 +1660,8 @@ if ($script:Manifest -and $script:Manifest.control_app_exe) { $controlExe = Join
 if ($controlExe -and $dirs -contains 'control') {
     $shortcutPlan = @(Get-ControlShortcutPlan -NoStartMenu ([bool]$NoStartMenuShortcut) -NoDesktop ([bool]$NoDesktopShortcut))
     $shortcutLeft = @(@(Get-ControlShortcutPaths) | Where-Object { $p = $_.path; -not (@($shortcutPlan | ForEach-Object { $_.path }) -contains $p) })
-    Write-Info ("shortcuts: $(if ($shortcutPlan.Count) { @($shortcutPlan | ForEach-Object { "$($_.where) $($_.kind)" }) -join ', ' } else { 'none' })" +
-        $(if ($shortcutLeft.Count) { "; left out: $(@($shortcutLeft | ForEach-Object { "$($_.where) $($_.kind)" }) -join ', ')" } else { '' }))
+    Write-Info ("shortcuts: $(if ($shortcutPlan.Count) { @($shortcutPlan | ForEach-Object { $_.label }) -join ', ' } else { 'none' })" +
+        $(if ($shortcutLeft.Count) { "; left out: $(@($shortcutLeft | ForEach-Object { $_.label }) -join ', ')" } else { '' }))
     foreach ($sc in $shortcutPlan) {
         $link = $sc.path
         $arguments = [string]$sc.arguments
@@ -1650,7 +1672,7 @@ if ($controlExe -and $dirs -contains 'control') {
     # A shortcut the tester asked to leave out goes when an earlier install wrote it.
     foreach ($sc in $shortcutLeft) {
         if (-not (Test-Path -LiteralPath $sc.path -PathType Leaf)) { continue }
-        Invoke-Change "remove the $($sc.where) shortcut $($sc.path): this install was asked for no $($sc.where) shortcut" {
+        Invoke-Change "remove the $($sc.label) $($sc.path): this install was asked for no $($sc.where) shortcut" {
             Remove-Item -LiteralPath $sc.path -Force -ErrorAction SilentlyContinue
         } | Out-Null
     }

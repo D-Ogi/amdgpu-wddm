@@ -17,7 +17,9 @@ unchanged, and so is the `setup.exe` inside it: an exe with a `files\` folder be
 
 The package also carries Microsoft's own installer for the Visual C++ 2015-2022 runtime (x64) as
 `payload\redist\vc_redist.x64.exe` (owner, 2026-10-12: "powinien byc auto-installer!!!"). It is a `third_party` row
-of `release-sources.json` with its SHA-256, its size and its Authenticode digest, and it is the one payload folder
+of `release-sources.json` with its SHA-256 and its size. The release never signs that file again, so its row carries
+no `authenticode_sha256`. The packaged copy is then compared with the source byte for byte, which is the stricter
+check. It is the one payload folder
 that the install never copies anywhere: `install.ps1` runs the file when the runtime is missing or older than 14.44,
 and Microsoft installs its own files in `System32`. The rule "every payload image is x64" does not cover it, because
 Microsoft builds that bootstrapper as a 32-bit program even in the x64 package (`test-wow64.ps1`).
@@ -204,7 +206,7 @@ and the release build fails when the record does not agree with the files. The r
 | `built_from` with `recipe` | `repo`, `commit`, `recipe`, `args` and `output`: a build of that commit by that recipe of this repository at `recipe_commit` (default: `commit`). `inputs` names the other trees that the recipe reads. `unsigned_output` names the image before the signature. |
 | `built_from` with `path` | `repo`, `commit` and `path`: a data file, the blob at that path as a checkout writes it. |
 | `third_party` | `url`, `version` and `sha256`. A file from an archive also has `archive_sha256` and `archive_path`. |
-| `sha256` | The hash of the source file. A signed file also has `unsigned_sha256` (the image before the signature) and `authenticode_sha256` (the Authenticode digest). |
+| `sha256` | The hash of the source file. A file that the release signs again also has `unsigned_sha256` and `authenticode_sha256`. `unsigned_sha256` is the image before the signature. `authenticode_sha256` is the digest the packaged copy is compared by. A file that travels unchanged has neither, so its packaged copy is compared byte for byte. |
 | `unverified` | Why no rebuild gave these bytes. The gate accepts this text in place of a matching rebuild and prints the count of such entries. |
 | `release_edits` | What `build-release.ps1` changes in the packaged copy. Only the INF has it. |
 

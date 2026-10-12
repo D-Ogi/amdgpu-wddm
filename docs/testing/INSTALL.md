@@ -11,8 +11,8 @@ Use this package only on a BC-250. The installer stops on every other computer a
 - An ASRock BC-250 with Windows 11 x64 installed and working on Microsoft Basic Display Adapter. The driver is
   tested on Windows 11 23H2 (build 22631), 24H2 (build 26100) and 25H2 (build 26200), and on the general builds
   after them. An older Windows 11 (build 22000 to 22630) gets a line that advises an update, and the installation
-  continues. An Insider build (Canary, Dev or Beta) and an LTSC edition each get a line of the same kind. Windows 10
-  and older are refused.
+  continues. An Insider build (Canary, Dev or Beta) and an LTSC edition each get a line of the same kind. A PC in the
+  Insider programme that runs one of the three tested builds reads no such line. Windows 10 and older are refused.
 - A local account with administrator rights.
 - Secure Boot off. The stock BC-250 BIOS has no Secure Boot option, so it is already off (see "Secure Boot" below).
 - If BitLocker is on: your BitLocker recovery key, in case something goes wrong. The installer pauses BitLocker
@@ -21,7 +21,8 @@ Use this package only on a BC-250. The installer stops on every other computer a
   and the package carries Microsoft's own installer for it. The installer runs it when this PC has no
   `vcruntime140.dll`, `vcruntime140_1.dll` or `msvcp140.dll` in `System32`, or when one of them is older than
   14.44. It checks the SHA-256 and the Microsoft signature of that file first, and it needs no internet for this
-  step. Nothing happens when the runtime is already there.
+  step. Nothing happens when the runtime is already there. If Windows answers that the runtime is registered but a
+  file of it is missing, the installer repairs it with the same file.
 - 2 GB of free space on the system drive.
 - A keyboard and a monitor on the BC-250.
 - An internet connection during the installation: the installer downloads the AMD GPU firmware (see "GPU firmware"
@@ -213,7 +214,7 @@ results to `C:\ProgramData\amdgpu-wddm\start-confirm.log`.
 | Graphics registration | the GPU's software key (`UserModeDriverName`, `VulkanDriverName`, and for 32-bit applications `UserModeDriverNameWow`, `VulkanDriverNameWow`; the first entry of each `UserModeDriverName` value, the Direct3D 9 entry, is empty), `HKLM\SOFTWARE\Khronos\Vulkan\Drivers`, `HKLM\SOFTWARE\WOW6432Node\Khronos\Vulkan\Drivers` |
 | Router policy and profiles | `HKLM\SOFTWARE\amdgpu-wddm` |
 | GPU firmware | `C:\BC250\firmware` (8 files and `LICENSE.amdgpu`, downloaded from linux-firmware; see "GPU firmware"). A new folder is writable by administrators only; the access rights of `C:\BC250` itself do not change. Download staging: `C:\ProgramData\amdgpu-wddm\installer\firmware-staging`, removed after the copy |
-| Shortcuts of amdgpu-wddm Control | Start menu and desktop, for all users: "amdgpu-wddm Control", "amdgpu-wddm Control (recovery)" in the Start menu and "amdgpu-wddm Control" on the desktop. Both places are written by default. The setup window has a box for each place, and on the command line `-NoStartMenuShortcut` and `-NoDesktopShortcut` leave one out. `uninstall.cmd` removes all three |
+| Shortcuts of amdgpu-wddm Control | Start menu and desktop, for all users: "amdgpu-wddm Control", "amdgpu-wddm Control (recovery)" in the Start menu and "amdgpu-wddm Control" on the desktop. Both places are written by default. The setup window has a box for each place. On the command line `-NoStartMenuShortcut` and `-NoDesktopShortcut` leave one out. `-StartMenuShortcut` and `-DesktopShortcut` ask for a place an earlier run left out. The box you clear holds over the restarts of the installation. `uninstall.cmd` removes all three |
 | Start confirmation | scheduled task "amdgpu-wddm start confirm" |
 | Installer state and logs | `C:\ProgramData\amdgpu-wddm` (the Control application keeps its setting backups and action log in its `control` folder) |
 

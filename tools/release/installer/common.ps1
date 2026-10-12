@@ -1255,14 +1255,6 @@ function Get-MemoryIntegrityState {
     if ($v -eq 1) { return 'on' }
     return 'off'
 }
-function Get-VcRuntimeMissing {
-    $missing = @()
-    foreach ($f in $script:VcRuntimeFiles) {
-        if (-not (Test-Path -LiteralPath (Join-Path $env:windir "System32\$f"))) { $missing += $f }
-    }
-    return $missing
-}
-
 # ---- the shortcuts of the control application -------------------------------------------------------------------
 # The owner's instruction of 2026-10-12: "pytajmy tez czy zrobic skrot na pulpicie (domyslnie i menu start i
 # pulpit)". The setup window offers both, both on by default, and neither of them gates the Install button. On the
@@ -1273,6 +1265,8 @@ function Get-VcRuntimeMissing {
 # not a second icon on the desktop.
 #   kind      'control', 'recovery' or 'desktop icon'
 #   where     'Start menu' or 'desktop', as the log and the dry run name the place
+#   label      the whole name of this shortcut as a person reads it; the one field a line prints, because
+#             "$where $kind" reads "desktop desktop icon" for the third row
 #   switch     the install switch that leaves it out
 #   arguments  the arguments of the shortcut's target
 function Get-ControlShortcutPaths {
@@ -1280,9 +1274,9 @@ function Get-ControlShortcutPaths {
     $desktop = [Environment]::GetFolderPath('CommonDesktopDirectory')
     if (-not $desktop) { $desktop = Join-Path $env:Public 'Desktop' }
     return @(
-        [pscustomobject]@{ kind = 'control'; where = 'Start menu'; switch = 'NoStartMenuShortcut'; arguments = ''; path = (Join-Path $startMenu 'amdgpu-wddm Control.lnk') }
-        [pscustomobject]@{ kind = 'recovery'; where = 'Start menu'; switch = 'NoStartMenuShortcut'; arguments = '--recovery'; path = (Join-Path $startMenu 'amdgpu-wddm Control (recovery).lnk') }
-        [pscustomobject]@{ kind = 'desktop icon'; where = 'desktop'; switch = 'NoDesktopShortcut'; arguments = ''; path = (Join-Path $desktop 'amdgpu-wddm Control.lnk') }
+        [pscustomobject]@{ kind = 'control'; where = 'Start menu'; label = 'Start menu entry'; switch = 'NoStartMenuShortcut'; arguments = ''; path = (Join-Path $startMenu 'amdgpu-wddm Control.lnk') }
+        [pscustomobject]@{ kind = 'recovery'; where = 'Start menu'; label = 'Start menu repair entry'; switch = 'NoStartMenuShortcut'; arguments = '--recovery'; path = (Join-Path $startMenu 'amdgpu-wddm Control (recovery).lnk') }
+        [pscustomobject]@{ kind = 'desktop icon'; where = 'desktop'; label = 'desktop icon'; switch = 'NoDesktopShortcut'; arguments = ''; path = (Join-Path $desktop 'amdgpu-wddm Control.lnk') }
     )
 }
 
@@ -1335,6 +1329,10 @@ $script:VcRuntimeSigner = 'Microsoft Corporation'
 #   3010, 1641  installed, and Windows wants a restart; this install restarts anyway
 #   anything else is a failure, and the install stops with the code in the message
 $script:VcRuntimeArguments = @('/install', '/quiet', '/norestart')
+# 1638 means "a same or newer runtime is registered", and Microsoft's bootstrapper then installs nothing. A PC whose
+# System32 lost one of the three files keeps that answer for ever, so the install runs the same file once more with
+# /repair, which puts the files of the registered runtime back.
+$script:VcRuntimeRepairArguments = @('/repair', '/quiet', '/norestart')
 $script:VcRuntimeTimeoutSeconds = 600
 
 # The file version of one System32 DLL as four numbers, or $null when the file is not there or has no version.
@@ -1367,7 +1365,21 @@ function Get-VcRuntimeDecision {
 }
 
 # The same decision for the running PC.
+# Host tests only, and only in a dry run (AMDGPU_WDDM_TEST_VCRUNTIME): 'missing' reads as a System32 without the three
+# files, 'old' as a 14.40 runtime, 'ok' as the current one. A dry run changes nothing, so this lets the host tests walk
+# the step that installs the runtime on a PC that already has it; a real install always reads System32.
 function Get-VcRuntimeState {
+    if ($script:DryRunMode -and $env:AMDGPU_WDDM_TEST_VCRUNTIME) {
+        $fake = @{}
+        foreach ($f in $script:VcRuntimeFiles) {
+            switch ([string]$env:AMDGPU_WDDM_TEST_VCRUNTIME) {
+                'missing' { $fake[$f] = $null }
+                'old' { $fake[$f] = [pscustomobject]@{ major = 14; minor = 40; build = 33810; revision = 0 } }
+                default { $fake[$f] = [pscustomobject]@{ major = 14; minor = 44; build = 35211; revision = 0 } }
+            }
+        }
+        return Get-VcRuntimeDecision -Readings $fake
+    }
     $readings = @{}
     foreach ($f in $script:VcRuntimeFiles) { $readings[$f] = Get-FileVersionNumbers (Join-Path $env:windir "System32\$f") }
     return Get-VcRuntimeDecision -Readings $readings
@@ -1415,11 +1427,12 @@ function Get-VcRuntimeOutcome([int]$Code) {
 # and returns the exit code); the default runs the program under a deadline, so a hung installer cannot hold the
 # installation for ever. Returns the object of Get-VcRuntimeOutcome with the code and the output in it.
 function Invoke-VcRuntimeInstall {
-    param([Parameter(Mandatory)][string]$Path, [scriptblock]$Runner, [double]$TimeoutSeconds = $script:VcRuntimeTimeoutSeconds)
+    param([Parameter(Mandatory)][string]$Path, [scriptblock]$Runner, [double]$TimeoutSeconds = $script:VcRuntimeTimeoutSeconds,
+          [string[]]$Arguments = $script:VcRuntimeArguments)
     $code = $null; $text = ''
-    if ($Runner) { $code = [int](& $Runner $Path $script:VcRuntimeArguments) }
+    if ($Runner) { $code = [int](& $Runner $Path $Arguments) }
     else {
-        $n = Invoke-NativeBounded -File $Path -Arguments $script:VcRuntimeArguments -TimeoutSeconds $TimeoutSeconds
+        $n = Invoke-NativeBounded -File $Path -Arguments $Arguments -TimeoutSeconds $TimeoutSeconds
         $text = [string]$n.text
         if ($n.timed_out) {
             return [pscustomobject]@{ ok = $false; restart = $false; code = $null; text = $text
@@ -1442,6 +1455,8 @@ $script:WindowsSupportedNames = '23H2, 24H2, 25H2'
 $script:WindowsMinimumBuild = 22000                            # below this: Windows 10 or older, refused
 $script:WindowsLowestSupportedBuild = 22631                    # 22000-22630: supported versions named, install goes on
 $script:WindowsInsiderBuild = 27000                            # at or above: a build Microsoft has not released yet
+# An Insider channel on one of the supported builds (Release Preview on 23H2, 24H2 or 25H2) is the version this
+# driver is tested on, so it gets no Insider line: only a build outside $script:WindowsSupportedBuilds does.
 $script:WindowsSelfHostKey = 'HKLM:\SOFTWARE\Microsoft\WindowsSelfHost\Applicability'
 $script:WindowsCurrentVersionKey = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
 $script:WindowsLtscEditions = @('EnterpriseS', 'IoTEnterpriseS')
@@ -1474,7 +1489,12 @@ function Get-WindowsSupportFindings {
     # Beyond the version itself: the channel and the edition. Both are information, whatever the version said, and
     # neither is asked of the user. A refused Windows gets no second line: nothing is going to be installed there.
     if ($standing -ne 'not-x64' -and $standing -ne 'too-old') {
-        if ($SelfHostBranch -or $Build -ge $script:WindowsInsiderBuild) {
+        # The channel alone is not the whole signal: a PC enrolled in the Insider programme (Release Preview above
+        # all) can still run one of the supported general builds, and that build is what this driver is tested on.
+        # The line is therefore for a build that is not one of the supported ones: an enrolled PC on a build of its
+        # own, or a build Microsoft has not released at all.
+        $enrolledOnOtherBuild = $SelfHostBranch -and (@($script:WindowsSupportedBuilds) -notcontains $Build)
+        if ($enrolledOnOtherBuild -or $Build -ge $script:WindowsInsiderBuild) {
             $which = if ($SelfHostBranch) { "Insider channel $SelfHostBranch" } else { "build $Build, which Microsoft has not released yet" }
             $findings += [pscustomobject]@{ id = 'windows.insider'; severity = 'warn'
                 detail = "${which}: an Insider build of Windows is not supported (Windows 11 $($script:WindowsSupportedNames)). The installation continues." }
@@ -1907,8 +1927,8 @@ function Remove-PathOrSchedule([string]$Path) {
 
 # Pure: where one file of a package lands on the computer, or $null when the installer copies it nowhere under the
 # install root. The driver package goes into the driver store, the certificate into two certificate stores, the GPU
-# firmware into its own folder, and install.cmd, the documents and the setup window's own folder are read from the
-# package and never copied.
+# firmware into its own folder, Microsoft's runtime installer (payload\redist) is run from the package, and
+# install.cmd, the documents and the setup window's own folder are read from the package and never copied.
 function Get-InstalledPathOfPackageFile {
     param([Parameter(Mandatory)][string]$PackagePath, [Parameter(Mandatory)][string]$InstallRoot,
         [string]$SystemDir = (Join-Path $env:windir 'System32'), [string]$SysWowDir = (Join-Path $env:windir 'SysWOW64'))
@@ -1918,7 +1938,9 @@ function Get-InstalledPathOfPackageFile {
     if ($p -match '\.\.') { return $null }
     if ($p -match '^payload\\system32\\(.+)$') { return (Join-Path $SystemDir $Matches[1]) }
     if ($p -match '^payload\\syswow64\\(.+)$') { return (Join-Path $SysWowDir $Matches[1]) }
-    if ($p -match '^payload\\(kmd|cert|firmware)\\') { return $null }
+    # payload\redist carries Microsoft's installer for the Visual C++ runtime: the install runs it from the package
+    # and copies no file of it, so nothing of this folder has an installed path either (BD-089 orphan plan).
+    if ($p -match '^payload\\(kmd|cert|firmware|redist)\\') { return $null }
     if ($p -match '^payload\\(.+\\.+)$') { return (Join-Path $InstallRoot $Matches[1]) }
     if ($p -match '^(installer|licenses)\\(.+)$') { return (Join-Path $InstallRoot $p) }
     if ($p -ieq 'THIRD-PARTY.md') { return (Join-Path $InstallRoot 'licenses\THIRD-PARTY.md') }

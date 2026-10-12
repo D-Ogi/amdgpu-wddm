@@ -1089,7 +1089,6 @@
       "path": "payload/redist/vc_redist.x64.exe",
       "source": "toolchain/vc-runtime/14.44.35211/vc_redist.x64.exe",
       "sha256": "CC0FF0EB1DC3F5188AE6300FAEF32BF5BEEBA4BDD6E8E445A9184072096B713B",
-      "authenticode_sha256": "636210491417519E9C73FBFDEA342932275DB988200EC92B38F90E0AF5286540",
       "third_party": {
         "url": "https://aka.ms/vs/17/release/vc_redist.x64.exe",
         "version": "14.44.35211.0",

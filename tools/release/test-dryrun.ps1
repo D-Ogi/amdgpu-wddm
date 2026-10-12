@@ -111,6 +111,28 @@ Check (@('EnableGpuPresentBlit', 'EnableCddDwmInterop', 'DpmMode', 'DpmMaxMHz' |
 
 Check ($r.text -match 'Dry run complete') 'walk-through completes'
 Check ($r.text -notmatch 'doing:|Administrator rights are needed') 'walk-through: no change, no elevation'
+Check ($r.text -match 'shortcuts: Start menu entry, Start menu repair entry, desktop icon') 'the summary names the three shortcuts as a person reads them'
+Check ($r.text -notmatch 'desktop desktop') 'no line says "desktop desktop"'
+Check ($r.text -match 'Microsoft Visual C\+\+ runtime: present: vcruntime140\.dll') 'this PC has the runtime, and phase 2 says so'
+
+# The two paths of the new steps that this PC would otherwise never walk: a PC without the Microsoft Visual C++
+# runtime (AMDGPU_WDDM_TEST_VCRUNTIME, a dry run only), and an install that was asked for no desktop icon. Both
+# print what they would do and change nothing.
+'install -DryRun with the runtime missing and no desktop icon'
+$env:AMDGPU_WDDM_TEST_VCRUNTIME = 'missing'
+try { $r2 = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard', '-NoDesktopShortcut') }
+finally { Remove-Item Env:\AMDGPU_WDDM_TEST_VCRUNTIME }
+$r2.text
+Check ($r2.code -eq 0) "walk-through without the runtime exit $($r2.code)"
+Check ($r2.text -match '\[warn\]\s+Visual C\+\+ runtime\s+missing in System32: vcruntime140\.dll, vcruntime140_1\.dll, msvcp140\.dll') 'the preflight states the missing runtime as a line, not a refusal'
+Check ($r2.text -match 'the installer installs 14\.44\.35211\.0 from payload\\redist\\vc_redist\.x64\.exe \(SHA256 CC0FF0EB1DC3F518, signature Valid, CN=Microsoft Corporation') 'the line names the file, its hash and its signature'
+Check ($r2.text -match 'would: install the Microsoft Visual C\+\+ 2015-2022 Redistributable \(x64\) 14\.44\.35211\.0 from payload\\redist\\vc_redist\.x64\.exe \(/install /quiet /norestart; SHA256 CC0FF0EB1DC3F518 and the Microsoft signature checked\)') 'phase 2 shows the runtime step before anything of ours is copied'
+$iVc = $r2.text.IndexOf('would: install the Microsoft Visual C++')
+$iCopy = $r2.text.IndexOf('would: copy payload\')
+Check ($iVc -ge 0 -and $iCopy -gt $iVc) "the runtime step comes before the first file of ours (runtime at $iVc, first copy at $iCopy)"
+Check ($r2.text -match 'shortcuts: Start menu entry, Start menu repair entry; left out: desktop icon') 'the run asked for no desktop icon leaves it out and says so'
+Check ($r2.text -notmatch 'would: desktop shortcut') 'no desktop icon is written in that run'
+Check ($r2.text -match 'Dry run complete' -and $r2.text -notmatch 'doing:') 'that walk-through changed nothing either'
 
 'registry defaults on upgrade (test-registry-defaults.ps1 under 5.1, HKCU scratch key)'
 $rr = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-registry-defaults.ps1'), '-Installer', (Join-Path $Package 'installer'))
