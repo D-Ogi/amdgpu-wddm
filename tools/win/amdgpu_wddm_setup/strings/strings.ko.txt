@@ -6,6 +6,9 @@ ui.back|mt-safe|76900f1b|뒤로
 ui.cancel|mt-safe|19766ed6|취소
 ui.choose-folder|mt-safe|826c7dcd|폴더 선택...
 ui.language|mt-safe|a6567634|언어: {0}
+ui.minimise|mt-safe|20f082e9|최소화
+ui.close-window|mt-safe|8b9de9c0|창 닫기
+ui.unexpected|mt|88790f84|설치 프로그램 창에서 문제가 발생하여 중지되었습니다. 더 이상 변경된 것은 없습니다. 다시 실행하세요.
 rail.welcome|mt-safe|0e2226b5|시작
 rail.check|mt-safe|9d60841e|확인
 rail.plan|mt-safe|aff0766a|검토
@@ -25,6 +28,7 @@ welcome.repair.title|mt|a29b2205|그래픽 드라이버 복구
 welcome.repair.body|mt|25153ac9|이 PC에 보관된 사본에서 같은 버전을 다시 설치합니다. 설정은 그대로 유지됩니다.
 welcome.dry-run|mt|42af2b21|테스트 실행: 모든 단계를 거치지만 아무것도 변경하지 않습니다.
 welcome.version|mt-safe|9699394c|버전 {0}
+welcome.files-missing|mt|938e9bd4|이 릴리스의 파일이 없습니다. zip 파일 전체를 폴더에 압축 해제한 다음 해당 폴더에서 setup.exe를 실행하세요. setup.exe 옆에 files 폴더가 있어야 합니다.
 welcome.source.title|mt|1623a97a|파일을 가져올 위치
 welcome.source.package|mt|61e09644|이 설치 프로그램의 파일
 welcome.source.kept|mt|9ea897ba|이 PC에 보관된 사본
@@ -34,6 +38,9 @@ welcome.prepared.choose|mt|40e8823f|준비한 폴더를 선택하세요.
 welcome.prepared.ok|mt|6203a8e5|버전 {0}이(가) 들어 있는 준비된 폴더입니다. 인터넷이 필요 없습니다.
 welcome.prepare-link|mt|5868e4fc|인터넷이 없는 PC용 폴더 준비...
 welcome.check|mt-safe|7c97d062|이 PC 확인
+welcome.promise.driver|mt|82ad81d1|그래픽 드라이버와 amdgpu-wddm Control을 함께 설치합니다.
+welcome.promise.shown|mt|0f886d7e|이 PC가 바뀌기 전에 모든 변경 내용을 보여 줍니다.
+welcome.promise.offline|mt|bb2a3e49|준비된 폴더가 있으면 인터넷 없이 같은 릴리스를 설치할 수 있습니다.
 folder.missing|mt|219fdbbd|이 폴더가 없습니다.
 folder.not-prepared|mt|c9f12282|준비된 폴더가 아닙니다. 설치 프로그램이 준비한 폴더를 선택하거나 먼저 폴더를 준비하세요.
 folder.unknown|mt|6c91a6f6|이 폴더는 다른 버전의 설치 프로그램이 준비한 것이어서 사용할 수 없습니다. 다시 준비하세요.
@@ -101,6 +108,8 @@ plan.verify.body|mt|1deb5208|Windows를 다시 시작한 후 설치 프로그램
 plan.repair-again|mt-safe|1196b6c5|복구
 plan.checks.title|mt-safe|de07d072|확인 항목
 plan.checks.ok|mt|eb2f3d98|모든 확인을 통과했습니다.
+plan.checks.attention|mt|e6885bff|주의가 필요한 확인 항목: {0}
+plan.consent.needed|mt|8c3cbc95|설치하기 전에 "{0}" 항목의 질문에 답하세요.
 plan.what.title|mt-safe|70fbb54b|진행할 내용
 plan.restarts.0|mt|b0a2c82a|Windows를 다시 시작할 필요가 없습니다.
 plan.restarts.1|mt|2ae11afb|Windows가 한 번 다시 시작됩니다. 다시 로그인하면 설치 프로그램이 자동으로 계속됩니다.
@@ -156,6 +165,7 @@ working.prepare.title|mt|28edcf49|폴더를 준비하는 중
 working.body|mt|dccb0ab7|잠시 기다려 주세요. PC를 끄지 마세요.
 working.prepare.body|mt|aa356215|설치 파일과 GPU 펌웨어를 복사하고 하나씩 확인하는 중입니다.
 working.stages|mt-safe|1de3df70|단계
+working.elapsed|mt-safe|409cb488|경과 시간: {0}
 working.cancel.available|mt|0031d59c|아직 취소할 수 있습니다. 아직 아무것도 변경되지 않았습니다.
 working.cancel.unavailable|mt|42461b9b|지금은 취소할 수 없습니다. 이 부분을 먼저 마쳐야 합니다.
 working.cancel.requested|mt|3caf86ac|다음 안전한 지점에서 멈추는 중...
@@ -206,7 +216,7 @@ result.installed-restart.body|mt|42a56d9a|모두 설치되었습니다. 다시 �
 result.testsigning-not-active.title|mt|7fcee967|Windows 테스트 모드가 아직 켜지지 않았습니다
 result.testsigning-not-active.body|mt|3213b661|지난번 시작 때 Windows가 테스트 모드를 켜지 않았습니다. Windows를 한 번 더 다시 시작하세요. 이 메시지가 다시 나타나면 보안 부팅이 꺼져 있는지 확인하세요.
 result.testsigning-secureboot.title|mt|e160b4ae|보안 부팅이 Windows 테스트 모드를 막고 있습니다
-result.testsigning-secureboot.body|mt|79f331ae|PC의 펌웨어 설정에서 보안 부팅을 끈 다음 설치 프로그램을 다시 시작하세요. 방법은 설치 안내서에 있습니다.
+result.testsigning-secureboot.body|mt|5ab0b106|Windows가 보안 부팅이 켜져 있다고 보고합니다. 보안 부팅이 켜져 있는 동안에는 Windows가 이 드라이버에 필요한 테스트 모드를 허용하지 않습니다. BC-250의 기본 펌웨어에는 보안 부팅 설정이 없으므로 이 컴퓨터의 펌웨어는 변경된 것입니다. 펌웨어 설정에서 보안 부팅을 끄고(보통 Security > Secure Boot) 설치 프로그램을 다시 시작하세요. 전환 항목이 없는 변경 버전도 있습니다. 그런 경우에는 OS Type을 "Other OS"로 설정하거나 보안 부팅 키를 삭제하세요. 상태를 직접 확인하려면 시작 메뉴에서 시스템 정보를 열고 보안 부팅 줄을 읽으세요.
 result.restart-still-pending.title|mt|9676613e|Windows가 아직 다시 시작되지 않았습니다
 result.restart-still-pending.body|mt|e79d291f|다음에 Windows를 다시 시작하면 설치 프로그램이 계속됩니다.
 result.verify-before-restart.title|mt|93aab4b5|마치려면 Windows를 다시 시작하세요
@@ -253,6 +263,7 @@ result.already-installed|mt|c90b9352|이 PC에는 이미 드라이버 버전 {0}
 result.changes-made|mt|8e3dd6e8|설치 프로그램이 멈추기 전에 일부 변경이 이루어졌고, 그 변경은 그대로 남아 있습니다. 마치려면 설치 프로그램을 다시 시작하거나 amdgpu-wddm Control의 [복구]를 사용하세요.
 result.changes-unknown|mt|88bf7384|무엇이 변경되었는지 알 수 없습니다. 설치 프로그램을 다시 시작하세요. 가능한 곳부터 계속합니다.
 result.support|mt|3e9e40b3|지원 파일에는 문제 보고에 필요한 자세한 내용이 들어 있습니다. 자동으로 전송되지 않습니다.
+result.support.diagnostics|mt|a739d1a9|시작되지 않은 그래픽 칩의 자세한 내용이 이미 수집되었습니다. 해당 파일에 들어 있습니다.
 result.support.saved|mt-safe|73cd7e8c|저장됨: {0}
 result.support.failed|mt|d2f9f531|지원 파일을 저장할 수 없었습니다. 다른 위치를 선택하세요.
 result.save-support|mt|884d47cb|지원 파일 저장...

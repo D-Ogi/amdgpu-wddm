@@ -1,8 +1,11 @@
-// The setup window: a header with the language choice, the steps on the left, the guide panel on the right and one
+// The setup window: a title bar of its own (Chrome.cs), the steps on the left, the guide panel on the right and one
 // screen in the middle (Welcome, Checking, Plan, Working, Restart, Result, Prepare). Every decision comes from the
 // engine (docs/gui/interfaces-setup.md): the window runs a plan, shows its checks, notes, settings-impact plan,
 // restarts and consents, runs the engine with the consents the user gave, and owns the restart (planned, never
 // forced). Plain words only; the engine's technical details go into the support file.
+//
+// The look is the control application's (the accepted mockup): the design tokens are in Theme.cs and the widgets in
+// Controls.cs, and this file only says which of them each screen uses.
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -18,11 +21,13 @@ namespace AmdgpuWddmSetup
 
     public sealed class SetupForm : Form
     {
-        public const int DesignWidth = 1060, DesignHeight = 700, RailWidth = 196, GuideWidth = 250;
+        public const int DesignWidth = 1160, DesignHeight = 740, RailWidth = 220, GuideWidth = 300, ChromeHeight = 48, ButtonBarHeight = 76;
 
         readonly SetupArgs _args;
         readonly bool _smoke;
         readonly string _ownPackage;
+        // Only a render fixture sets this: whether this setup.exe has its own package beside it. null = ask the disk.
+        bool? _ownPackagePresent;
         readonly bool _showNagi;
 
         public Screen Current { get; private set; }
@@ -43,12 +48,20 @@ namespace AmdgpuWddmSetup
         string _restartError, _supportSaved, _supportError;
         string _prepDestination = "", _prepFirmware = "";
         bool _prepUseFirmware, _prepFromWelcome;
-        Timer _timer;
+        DateTime? _runStarted;
+        Timer _timer, _anim;
 
-        Panel _header, _rail, _guide, _column;
+        ChromeBar _chrome;
+        Panel _rail, _guide, _column;
         FlowLayoutPanel _content, _buttons;
-        Label _guideTitle, _guideText;
+        Label _guideTitle;
+        Bubble _guideBubble;
         PictureBox _guideArt;
+        CardPanel _guideCard;
+        int _guideInner;
+        ProgressStrip _progress;
+        ResultMark _resultMark;
+        IconRow _elapsedRow;
         int _contentWidth;
 
         public SetupForm(SetupArgs args, bool smoke)
@@ -63,13 +76,15 @@ namespace AmdgpuWddmSetup
             _showNagi = smoke ? !args.NoNagi : Native.ShowNagi();
             Text = "amdgpu-wddm Setup";
             AutoScaleMode = AutoScaleMode.None;
-            FormBorderStyle = FormBorderStyle.FixedSingle;
+            // The window draws its own title bar (ChromeBar): no caption of Windows, and the corners and the frame
+            // come from DWM where Windows draws them.
+            FormBorderStyle = FormBorderStyle.None;
             MaximizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
             BackColor = Theme.Back;
             ForeColor = Theme.Text;
             KeyPreview = true;
-            ClientSize = Theme.Sz(DesignWidth, DesignHeight);
+            ClientSize = WindowSize();
             BuildFrame();
             Strings.LanguageChanged += OnLanguageChanged;
             if (args.Mode == "repair") _flow = "repair";
@@ -80,14 +95,60 @@ namespace AmdgpuWddmSetup
                 _timer = new Timer { Interval = 250 };
                 _timer.Tick += (s, e) => PollEngine();
                 _timer.Start();
+                _anim = new Timer { Interval = 33 };
+                _anim.Tick += (s, e) => Animate();
+                _anim.Start();
             }
         }
 
-        // The package the exe belongs to: <package>\setup\amdgpu_wddm_setup.exe.
+        // The window at this screen's scale, never larger than the screen it is on. The window has no frame of
+        // Windows and cannot be resized or maximised, so a client that is taller than the work area would put its
+        // button bar under the taskbar, out of reach: at a 150 % scale the design size is 1740 x 1110 device pixels,
+        // which does not fit the 1920 x 1032 work area of a 1080p screen. The content column scrolls, so a shorter
+        // window stays usable. A headless render keeps the design size, so every render is the same picture.
+        Size WindowSize()
+        {
+            var want = Theme.Sz(DesignWidth, DesignHeight);
+            if (_smoke) return want;
+            try
+            {
+                var work = System.Windows.Forms.Screen.FromPoint(Cursor.Position).WorkingArea;
+                int margin = Theme.S(24);
+                return new Size(Math.Max(Theme.S(640), Math.Min(want.Width, work.Width - margin)),
+                                Math.Max(Theme.S(480), Math.Min(want.Height, work.Height - margin)));
+            }
+            catch (Exception) { return want; }
+        }
+
+        // The folder that holds the package, next to the exe. The unpacked release holds setup.exe in its top folder
+        // and the whole package in files\ beside it (owner, 2026-10-11), so that is where this looks first. The kept
+        // repair set keeps its copy of setup.exe in the package folder itself, so the exe's own folder is the second
+        // place. Neither has a manifest when only setup.exe was copied out of the zip: files\ is then the answer, and
+        // the welcome screen says to unpack the whole zip (PackageMissing).
+        public const string FilesDir = "files";
+
+        // The package the exe belongs to: <package>\files\ beside setup.exe, or the exe's own folder.
         public static string DefaultPackage()
         {
             var dir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-            return Path.GetDirectoryName(dir);
+            var files = Path.Combine(dir, FilesDir);
+            if (HasPackage(files)) return files;
+            if (HasPackage(dir)) return dir;
+            return files;
+        }
+
+        // A folder that holds this release's files: the manifest and the installer the window starts.
+        public static bool HasPackage(string dir)
+        {
+            if (string.IsNullOrEmpty(dir)) return false;
+            try { return File.Exists(Path.Combine(dir, "manifest.json")) && File.Exists(Path.Combine(dir, "installer", "install.ps1")); }
+            catch (Exception) { return false; }
+        }
+
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            Dwm.Apply(this);
         }
 
         protected override void OnShown(EventArgs e)
@@ -113,121 +174,168 @@ namespace AmdgpuWddmSetup
                 SetGuideNote(Strings.T("working.close-blocked"));
                 return;
             }
-            Strings.LanguageChanged -= OnLanguageChanged;
             base.OnFormClosing(e);
+        }
+
+        // The window lets go of everything it owns here, and not in OnFormClosing: a close that is cancelled (by
+        // another handler) would otherwise leave a window whose language switch no longer rebuilds it, and a form
+        // that is disposed without being closed (every form of a headless run) would never let go at all.
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                Strings.LanguageChanged -= OnLanguageChanged;
+                foreach (var t in new[] { _timer, _anim })
+                    if (t != null) { t.Stop(); t.Dispose(); }
+                _timer = _anim = null;
+            }
+            base.Dispose(disposing);
+        }
+
+        // The wheel scrolls the page wherever the focus is. Windows sends the wheel to the focused window and it
+        // bubbles up the parent chain only: from a button of the title bar it never reaches the page.
+        protected override void OnMouseWheel(MouseEventArgs e)
+        {
+            base.OnMouseWheel(e);
+            if (_content == null || !_content.VerticalScroll.Visible) return;
+            int step = SystemInformation.MouseWheelScrollLines * Theme.S(20);
+            int y = -_content.AutoScrollPosition.Y - e.Delta * step / 120;
+            _content.AutoScrollPosition = new Point(0, Math.Max(0, Math.Min(_content.VerticalScroll.Maximum, y)));
+        }
+
+        const int WM_DPICHANGED = 0x02E0;
+
+        // The window is per-monitor DPI aware (app.manifest) and every size in it is a pixel count taken at the scale
+        // the process started with: a move to a screen of another scale rebuilds the window at the new one.
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == WM_DPICHANGED && !_smoke)
+            {
+                int dpi = (int)((uint)m.WParam.ToInt64() & 0xFFFF);
+                if (dpi >= 72 && dpi <= 480 && Math.Abs(dpi / 96f - Theme.Scale) > 0.01f)
+                {
+                    Theme.Init(dpi / 96f, Theme.SystemTextScale());
+                    var suggested = (Native.Rect)System.Runtime.InteropServices.Marshal.PtrToStructure(m.LParam, typeof(Native.Rect));
+                    SuspendLayout();
+                    BuildFrame();
+                    Bounds = new Rectangle(suggested.Left, suggested.Top, Math.Max(1, suggested.Right - suggested.Left), Math.Max(1, suggested.Bottom - suggested.Top));
+                    ResumeLayout(true);
+                    Show(Current);
+                    Theme.DropRetired();
+                    m.Result = IntPtr.Zero;
+                    return;
+                }
+            }
+            base.WndProc(ref m);
         }
 
         // ---- frame ------------------------------------------------------------------------------------------------
 
+        // Removes every child of a container and disposes it. A control that is only removed keeps its window handle
+        // until it is collected (WinForms parks it): a screen rebuilt on every engine event parked thousands of
+        // windows, and the process limit of 10 000 ends in "Error creating window handle".
+        static void ClearAndDispose(Control c)
+        {
+            while (c.Controls.Count > 0)
+            {
+                var k = c.Controls[0];
+                c.Controls.RemoveAt(0);
+                k.Dispose();
+            }
+        }
+
         void BuildFrame()
         {
             SuspendLayout();
-            Controls.Clear();
-            _header = new Panel { Dock = DockStyle.Top, Height = Theme.S(60), BackColor = Theme.Nav };
-            _rail = new Panel { Dock = DockStyle.Left, Width = Theme.S(RailWidth), BackColor = Theme.Nav, Padding = Theme.Pad(0, 18, 0, 0) };
-            _guide = new Panel { Dock = DockStyle.Right, Width = Theme.S(GuideWidth), BackColor = Theme.Back, Padding = Theme.Pad(0, 20, 20, 20) };
+            ClearAndDispose(this);
+            var languages = new[] { new[] { "en", "EN", "English" }, new[] { "pl", "PL", "Polski" }, new[] { "ja", "日本語", "日本語" }, new[] { "ko", "한국어", "한국어" } };
+            _chrome = new ChromeBar(this, "amdgpu-wddm Setup", Theme.S(ChromeHeight), code => Strings.Language = code, languages,
+                Strings.T("ui.minimise"), Strings.T("ui.close-window"));
+            _rail = new Panel { Dock = DockStyle.Left, Width = Theme.S(RailWidth), BackColor = Theme.Nav, Padding = Theme.Pad(0, 22, 0, 0) };
+            _guide = new Panel { Dock = DockStyle.Right, Width = Theme.S(GuideWidth), BackColor = Theme.Back, Padding = Theme.Pad(0, 24, 24, 20) };
             _column = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Back };
+            // The bar wraps: a long translation at a 150 % text size needs a second line of buttons, and a button that
+            // does not fit cannot be pressed (the render gate refuses one that leaves the bar).
             _buttons = new FlowLayoutPanel
             {
-                Dock = DockStyle.Bottom, FlowDirection = FlowDirection.RightToLeft, WrapContents = false, Height = Theme.S(64),
-                Padding = Theme.Pad(20, 10, 20, 10), BackColor = Theme.Back,
+                Dock = DockStyle.Bottom, FlowDirection = FlowDirection.RightToLeft, WrapContents = true, AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink, MinimumSize = new Size(0, Theme.S(ButtonBarHeight)),
+                Padding = Theme.Pad(24, 16, 24, 16), BackColor = Theme.Back,
             };
             _content = new FlowLayoutPanel
             {
                 Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true,
-                Padding = Theme.Pad(28, 0, 20, 0), BackColor = Theme.Back,
+                Padding = Theme.Pad(34, 0, 22, 8), BackColor = Theme.Back,
             };
             Theme.DarkScroll(_content);
+            // A line between the page and the buttons. Without it the viewport ended flush against the bar and cut a
+            // card title or a button in half at a 150 % text size, which reads as a drawing fault, not as "there is
+            // more below".
+            var divider = new Panel { Dock = DockStyle.Bottom, Height = Math.Max(1, Theme.S(1)), BackColor = Theme.Line, TabStop = false, AccessibleName = "" };
+            // Docking is resolved from the last child to the first: the buttons take the bottom edge, the divider the
+            // line above them, and the page what is left.
             _column.Controls.Add(_content);
+            _column.Controls.Add(divider);
             _column.Controls.Add(_buttons);
             _contentWidth = Theme.S(DesignWidth - RailWidth - GuideWidth) - _content.Padding.Horizontal - SystemInformation.VerticalScrollBarWidth;
             Controls.Add(_column);
             Controls.Add(_guide);
             Controls.Add(_rail);
-            Controls.Add(_header);
-            BuildHeader();
+            Controls.Add(_chrome);
             BuildGuide();
             ResumeLayout(true);
         }
 
-        void BuildHeader()
-        {
-            _header.Controls.Clear();
-            var logo = new Panel { Size = Theme.Sz(26, 26), Location = new Point(Theme.S(20), Theme.S(17)), BackColor = Color.Transparent };
-            logo.Paint += (s, e) =>
-            {
-                using (var red = new Pen(Theme.Accent, Theme.S(3))) e.Graphics.DrawRectangle(red, Theme.S(2), Theme.S(2), Theme.S(15), Theme.S(15));
-                using (var teal = new Pen(Theme.Teal, Theme.S(3))) e.Graphics.DrawRectangle(teal, Theme.S(9), Theme.S(9), Theme.S(15), Theme.S(15));
-            };
-            logo.AccessibleRole = AccessibleRole.Graphic;
-            logo.AccessibleName = "";
-            var brand = Ui.Label("amdgpu-wddm Setup", Theme.Brand, Theme.Text);
-            brand.Location = new Point(Theme.S(56), Theme.S(16));
-            var langs = Ui.Row();
-            langs.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            foreach (var l in new[] { new[] { "en", "EN", "English" }, new[] { "pl", "PL", "Polski" }, new[] { "ja", "日本語", "日本語" }, new[] { "ko", "한국어", "한국어" } })
-            {
-                var code = l[0];
-                var b = Ui.Button(l[1], (s, e) => Strings.Language = code);
-                b.Font = Theme.Small;
-                b.BackColor = Strings.Language == code ? Theme.CardHi : Theme.Nav;
-                b.FlatAppearance.BorderColor = Strings.Language == code ? Theme.Accent : Theme.Nav;
-                b.Margin = Theme.Pad(0, 0, 6, 0);
-                b.AccessibleName = Strings.T("ui.language", l[2]);
-                b.Tag = "lang";
-                langs.Controls.Add(b);
-            }
-            // The language row comes before the brand label in the parent: after it, Windows named the row after it.
-            _header.Controls.Add(logo);
-            _header.Controls.Add(langs);
-            _header.Controls.Add(brand);
-            langs.PerformLayout();
-            langs.Location = new Point(Theme.S(DesignWidth) - langs.PreferredSize.Width - Theme.S(14), (Theme.S(60) - langs.PreferredSize.Height) / 2);
-        }
-
         void BuildGuide()
         {
-            _guide.Controls.Clear();
-            var card = new CardPanel(null, Theme.S(GuideWidth - 20), Theme.GuideBack);
+            ClearAndDispose(_guide);
+            int width = Theme.S(GuideWidth) - _guide.Padding.Right;
+            // The card takes the whole height of the panel, as the accepted mockup fills its right column; the
+            // character sits on its bottom edge, so the hard cut of her picture is the card's edge and not an
+            // accidental clip in mid-card.
+            int height = Math.Max(Theme.S(200), ClientSize.Height - Theme.S(ChromeHeight) - _guide.Padding.Vertical);
+            var card = new CardPanel(null, width, Theme.GuideBack, null, Theme.Teal) { MinimumSize = new Size(width, height), MaximumSize = new Size(width, height) };
             _guideTitle = Ui.Label("", Theme.CardTitle, Theme.Teal, card.Inner);
-            // The picture is decorative: the guide text beneath it carries the meaning, and a screen reader is given
-            // the text, never the picture.
-            int slot = Math.Min(Theme.S(128), card.Inner);
+            _guideTitle.Margin = Theme.Pad(0, 0, 0, 10);
+            _guideBubble = new Bubble(card.Inner);
+            // The text block stays at the top of the card; the picture is placed against the bottom edge below it.
+            card.Body.Dock = DockStyle.None;
+            card.Body.Location = new Point(card.Padding.Left, card.Padding.Top);
+            // The picture is decorative: the tip beneath it carries the meaning, and a screen reader is given the
+            // text, never the picture.
             _guideArt = new PictureBox
             {
-                Size = new Size(slot, slot), SizeMode = PictureBoxSizeMode.Zoom, Visible = false, BackColor = Theme.GuideBack,
-                Margin = Theme.Pad(0, 6, 0, 6), AccessibleRole = AccessibleRole.None, AccessibleName = "", TabStop = false,
+                Size = new Size(card.Inner, card.Inner), SizeMode = PictureBoxSizeMode.Zoom, Visible = false, BackColor = Color.Transparent,
+                Margin = Theme.Pad(0), AccessibleRole = AccessibleRole.None, AccessibleName = "", TabStop = false,
             };
-            _guideText = Ui.Label("", Theme.Body, Theme.Text, card.Inner);
+            _guideInner = card.Inner;
             card.Add(_guideTitle);
-            card.Add(_guideArt);
-            card.Add(_guideText);
+            card.Add(_guideBubble);
+            card.Controls.Add(_guideArt);
             card.Location = new Point(0, _guide.Padding.Top);
+            _guideCard = card;
             _guide.Controls.Add(card);
         }
+
+        // The glyph of each step. The last one is a flag, not a check mark: a check is the mark the rail draws for a
+        // step that is done, and the same mark on the step that still waits reads as "already finished".
+        static readonly string[] StepGlyphs = { Icons.Welcome, Icons.Shield, Icons.Info, Icons.Download, Icons.Flag };
+        static readonly string[] PrepareGlyphs = { Icons.Folder, Icons.Download, Icons.Flag };
 
         void BuildRail()
         {
             _rail.Controls.Clear();
-            var steps = _flow == "prepare" ? new[] { "rail.folder", "rail.prepare", "rail.finish" } : new[] { "rail.welcome", "rail.check", "rail.plan", "rail.install", "rail.finish" };
+            bool prepare = _flow == "prepare";
+            var steps = prepare ? new[] { "rail.folder", "rail.prepare", "rail.finish" } : new[] { "rail.welcome", "rail.check", "rail.plan", "rail.install", "rail.finish" };
+            var glyphs = prepare ? PrepareGlyphs : StepGlyphs;
             var states = Rail.States(steps.Length, RailIndex(), Current == Screen.Result ? _view : null, _runKind);
             var stack = Ui.Stack(Theme.S(RailWidth));
             stack.Location = new Point(0, _rail.Padding.Top);
             for (int i = 0; i < steps.Length; i++)
             {
                 var state = states[i];
-                bool on = state == RailState.Current || state == RailState.Failed, done = state == RailState.Done;
-                var row = new Panel { Size = new Size(Theme.S(RailWidth - 16), Theme.S(40)), Margin = Theme.Pad(8, 0, 8, 4), BackColor = on ? Theme.CardHi : Theme.Nav };
-                if (on) row.Controls.Add(new Panel { Dock = DockStyle.Left, Width = Theme.S(4), BackColor = Theme.Accent });
-                var mark = done ? "✓" : state == RailState.Failed ? "✗" : (i + 1).ToString();
-                var color = state == RailState.Failed ? Theme.Accent : on ? Theme.Text : done ? Theme.Good : Theme.Dim;
-                var label = Ui.Label(mark + "  " + Strings.T(steps[i]), on ? Theme.Bold : Theme.Body, color, Theme.S(RailWidth - 40));
-                label.Location = new Point(Theme.S(16), (Theme.S(40) - label.PreferredSize.Height) / 2);
-                // One name per step for a screen reader: the label carries the step and its state, the row has none.
-                var said = done ? "rail.done" : state == RailState.Failed ? "rail.failed" : on ? "rail.current" : null;
-                label.AccessibleName = Strings.T(steps[i]) + (said != null ? " (" + Strings.T(said) + ")" : "");
-                row.Controls.Add(label);
-                stack.Controls.Add(row);
+                var said = state == RailState.Done ? "rail.done" : state == RailState.Failed ? "rail.failed" : state == RailState.Current ? "rail.current" : null;
+                stack.Controls.Add(new RailRow(Theme.S(RailWidth - 20), Theme.S(46), Strings.T(steps[i]), glyphs[i], state, said == null ? null : Strings.T(said)));
             }
             _rail.Controls.Add(stack);
         }
@@ -246,11 +354,22 @@ namespace AmdgpuWddmSetup
             }
         }
 
+        // The language was switched, usually by a button of the title bar: the frame is rebuilt after that button's
+        // own click has finished, because the rebuild disposes it.
         void OnLanguageChanged()
+        {
+            if (_smoke || !IsHandleCreated) { Relanguage(); return; }
+            BeginInvoke(new Action(() => { if (!IsDisposed) Relanguage(); }));
+        }
+
+        void Relanguage()
         {
             Theme.Fonts();
             BuildFrame();
             Show(Current);
+            // The fonts the frame used until a moment ago: they are disposed only now, when no control on the screen
+            // holds them any more.
+            Theme.DropRetired();
         }
 
         // ---- screens ----------------------------------------------------------------------------------------------
@@ -259,17 +378,35 @@ namespace AmdgpuWddmSetup
 
         public void Show(Screen screen)
         {
+            // A short crossfade over the screen that leaves (200 ms or less). Only when the screen really changes and
+            // never while an engine run is live: the window redraws the Working screen on every batch of engine
+            // events, and a fade per event cost a full-window picture every quarter second on a PC that has no
+            // driver yet. Off without Windows animation effects, and never in a headless render.
+            bool same = screen == Current && _content.Controls.Count > 0;
+            FadeOverlay fade = null;
+            if (!_smoke && !same && (_client == null || _client.Finished) && IsHandleCreated && Visible && Theme.Animations && _column != null && _column.Width > 0)
+            {
+                try { fade = new FadeOverlay(_column, 180); } catch (Exception) { fade = null; }
+            }
+            // A rebuild of the same screen (an engine event, an option the user chose) keeps the reading position and
+            // the control the keyboard was on: a user who tabbed to Cancel kept losing it several times a second.
+            string focused = same ? FocusKey(ActiveControl) : null;
+            int scroll = same ? -_content.AutoScrollPosition.Y : 0;
             Current = screen;
+            _progress = null;
+            _resultMark = null;
+            _elapsedRow = null;
+            _centreContent = false;
             SuspendLayout();
             _content.SuspendLayout();
-            _content.Controls.Clear();
-            _buttons.Controls.Clear();
+            ClearAndDispose(_content);
+            ClearAndDispose(_buttons);
             AcceptButton = null;
             CancelButton = null;
             // The space above the screen is a spacer, not panel padding: the scroll range of a FlowLayoutPanel does not
             // cover its top padding, which left the end of a long plan out of reach. The spacer is the first control,
             // so no label comes before it.
-            _content.Controls.Add(Spacer(22));
+            _content.Controls.Add(Spacer(26));
             switch (screen)
             {
                 case Screen.Welcome: BuildWelcome(); break;
@@ -283,69 +420,145 @@ namespace AmdgpuWddmSetup
             // The space below the screen is the last control's bottom margin: a spacer panel after a label took the
             // label's text as its name for a screen reader.
             var lastControl = _content.Controls[_content.Controls.Count - 1];
-            lastControl.Margin = new Padding(lastControl.Margin.Left, lastControl.Margin.Top, lastControl.Margin.Right, Math.Max(lastControl.Margin.Bottom, Theme.S(12)));
+            lastControl.Margin = new Padding(lastControl.Margin.Left, lastControl.Margin.Top, lastControl.Margin.Right, Math.Max(lastControl.Margin.Bottom, Theme.S(16)));
             BuildRail();
             UpdateGuide();
             AssignTabOrder();
             Unnamed(this);
             _content.ResumeLayout(true);
             ResumeLayout(true);
-            _content.AutoScrollPosition = new Point(0, 0);
+            CentreContent();
+            _content.AutoScrollPosition = new Point(0, Math.Max(0, scroll));
+            // The keyboard starts on the action the screen is about, not on the close glyph of the title bar.
+            var take = focused != null ? Find(_content, focused) ?? Find(_buttons, focused) : null;
+            if (take == null) take = AcceptButton as Control;
+            if (take == null) { var first = new List<Control>(); Walk(_content, first); take = first.FirstOrDefault(); }
+            if (!_smoke && take != null && take.CanSelect) try { ActiveControl = take; } catch (Exception) { }
+            if (fade != null) fade.Run(_column);
+        }
+
+        // A short screen (the result, the restart, a plan that has nothing to decide) stands in the middle of the
+        // page instead of leaving two thirds of the window empty under it.
+        bool _centreContent;
+
+        void CentreContent()
+        {
+            if (!_centreContent || _content.Controls.Count == 0) return;
+            var spacer = _content.Controls[0];
+            int extent = _content.Controls.Cast<Control>().Where(HasVisibleFlag).Select(c => c.Bottom + c.Margin.Bottom).DefaultIfEmpty(0).Max();
+            int room = _content.ClientSize.Height - _content.Padding.Vertical;
+            int extra = (room - extent) / 2;
+            if (extra <= Theme.S(8)) return;
+            spacer.Height = spacer.Height + extra;
+            _content.PerformLayout();
+        }
+
+        // A control the window can find again after it rebuilt the screen: what a screen reader would call it, and
+        // what kind of control it is. Two controls of one screen never share both.
+        static string FocusKey(Control c)
+        {
+            if (c == null) return null;
+            var name = string.IsNullOrEmpty(c.AccessibleName) ? c.Text : c.AccessibleName;
+            return string.IsNullOrEmpty(name) ? null : c.GetType().Name + "/" + name;
+        }
+
+        static Control Find(Control parent, string key)
+        {
+            foreach (Control k in parent.Controls)
+            {
+                if (k.CanSelect && FocusKey(k) == key) return k;
+                var deep = Find(k, key);
+                if (deep != null) return deep;
+            }
+            return null;
         }
 
         Label Title(string text)
         {
             var l = Ui.Label(text, Theme.Title, Theme.Text, _contentWidth);
-            l.Margin = Theme.Pad(0, 0, 0, 10);
+            l.Margin = Theme.Pad(0, 0, 0, 8);
             _content.Controls.Add(l);
             return l;
+        }
+
+        StatusLine Status(string text, StatusLine.State state)
+        {
+            var s = new StatusLine(text, state, _contentWidth);
+            _content.Controls.Add(s);
+            return s;
         }
 
         Label Para(string text, Color? color = null)
         {
             var l = Ui.Label(text, Theme.Body, color ?? Theme.Text, _contentWidth);
-            l.Margin = Theme.Pad(0, 2, 0, 8);
+            l.Margin = Theme.Pad(0, 2, 0, 10);
             _content.Controls.Add(l);
             return l;
         }
 
-        CardPanel Card(string title)
+        IconRow Line(string glyph, Color colour, string text, Color? textColour = null)
         {
-            var c = new CardPanel(title, _contentWidth);
+            var r = new IconRow(_contentWidth) { Glyph = glyph, GlyphColor = colour, Head = text, HeadColor = textColour ?? Theme.Text };
+            _content.Controls.Add(r.Done());
+            return r;
+        }
+
+        CardPanel Card(string title, string glyph = null)
+        {
+            var c = new CardPanel(title, _contentWidth, null, glyph);
             _content.Controls.Add(c);
             return c;
         }
 
-        Button AddButton(string id, EventHandler click, bool primary = false)
+        // The buttons are added in the order right to left, so the primary action comes first and ends up rightmost.
+        // chevron: only an action that leads to a next step; the action that ends the window carries none.
+        FlatButton AddButton(string id, EventHandler click, bool primary = false, bool chevron = false)
         {
-            var b = Ui.Button(Strings.T(id), click, primary);
+            var b = Ui.Button(Strings.T(id), click, primary, chevron);
             b.Margin = Theme.Pad(10, 4, 0, 4);
             _buttons.Controls.Add(b);
             if (primary) AcceptButton = b;
             return b;
         }
 
+        // A screen rebuilt from inside a control's own event (an option button, a check box): the event finishes
+        // first, because the rebuild disposes the control that raised it.
+        void ShowSoon(Screen screen)
+        {
+            if (_smoke || !IsHandleCreated) { Show(screen); return; }
+            BeginInvoke(new Action(() => { if (!IsDisposed) Show(screen); }));
+        }
+
         void BuildWelcome()
         {
             bool repair = _flow == "repair";
             Title(Strings.T(repair ? "welcome.repair.title" : "welcome.title"));
-            Para(Strings.T(repair ? "welcome.repair.body" : "welcome.body"));
-            if (_args.DryRun) Para(Strings.T("welcome.dry-run"), Theme.Warn);
             var version = PackageVersion(_ownPackage);
-            if (version != null) Para(Strings.T("welcome.version", version), Theme.Dim);
+            if (version != null) Status(Strings.T("welcome.version", version), StatusLine.State.Info);
+            Para(Strings.T(repair ? "welcome.repair.body" : "welcome.body"), Theme.Dim);
+            if (_args.DryRun) Line(Icons.Warning, Theme.Warn, Strings.T("welcome.dry-run"), Theme.Warn);
+            // setup.exe without its files\ folder: somebody copied the exe out of the zip, or opened it inside the
+            // zip viewer. Say so in words instead of letting the install run fail on a missing script.
+            // A prepared folder brings its own files, so the sentence appears only while the package beside setup.exe
+            // is the chosen source; otherwise it would contradict a valid folder and an enabled check button.
+            bool ownMissing = _ownPackagePresent.HasValue ? !_ownPackagePresent.Value : !HasPackage(_ownPackage);
+            if (ownMissing && !_usePrepared) Line(Icons.Warning, Theme.Warn, Strings.T("welcome.files-missing"), Theme.Warn);
+            // The hero promises: what the release brings, in three lines a reader takes in at a glance.
+            Line(Icons.Chip, Theme.Teal, Strings.T("welcome.promise.driver"));
+            Line(Icons.Lock, Theme.Teal, Strings.T("welcome.promise.shown"));
+            // The last promise carries the space before the card: a bare spacer panel after a row would take the text
+            // of the nearest label before it as its name (G-A11Y).
+            Line(Icons.Folder, Theme.Teal, Strings.T("welcome.promise.offline")).Margin = Theme.Pad(0, 3, 0, 18);
 
-            var source = Card(Strings.T("welcome.source.title"));
+            var source = Card(Strings.T("welcome.source.title"), Icons.Download);
             var own = Ui.Radio(Strings.T(repair ? "welcome.source.kept" : "welcome.source.package"), source.Inner);
             var prepared = Ui.Radio(Strings.T("welcome.source.prepared"), source.Inner);
             own.Checked = !_usePrepared;
             prepared.Checked = _usePrepared;
             source.Add(own);
             source.Add(prepared);
-            var path = new TextBox
-            {
-                Text = _preparedDir ?? "", ReadOnly = true, BackColor = Theme.Nav, ForeColor = Theme.Text, BorderStyle = BorderStyle.FixedSingle,
-                Font = Theme.Body, Width = source.Inner - Theme.S(170), Margin = Theme.Pad(0, 8, 8, 0), AccessibleName = Strings.T("welcome.prepared.path"), TabStop = true,
-            };
+            var path = new ThemeBox(source.Inner - Theme.S(190), Strings.T("welcome.prepared.path"), true);
+            path.Box.Text = _preparedDir ?? "";
             var browse = Ui.Button(Strings.T("ui.choose-folder"), (s, e) =>
             {
                 var dir = PickFolder(Strings.T("welcome.source.prepared"), _preparedDir);
@@ -353,33 +566,28 @@ namespace AmdgpuWddmSetup
                 SetPrepared(dir);
                 Show(Screen.Welcome);
             });
+            browse.Margin = Theme.Pad(0, 8, 0, 0);
             // The folder belongs to the prepared-folder choice only.
-            path.Enabled = browse.Enabled = _usePrepared;
+            path.Box.Enabled = browse.Enabled = _usePrepared;
             source.Add(Ui.Row(path, browse));
-            Label status = null;
             if (_usePrepared)
             {
-                status = _preparedProblem == null && _preparedDir != null
-                    ? Ui.Label(Strings.T("welcome.prepared.ok", _preparedVersion ?? "-"), null, Theme.Good, source.Inner)
-                    : Ui.Label(Strings.T(_preparedDir == null ? "welcome.prepared.choose" : _preparedProblem), null, _preparedDir == null ? Theme.Dim : Theme.Warn, source.Inner);
-                source.Add(status);
+                if (_preparedProblem == null && _preparedDir != null)
+                    source.Row(Icons.Check, Theme.Good, Strings.T("welcome.prepared.ok", _preparedVersion ?? "-"));
+                else if (_preparedDir == null)
+                    source.Row(Icons.Info, Theme.Dim, Strings.T("welcome.prepared.choose"));
+                else
+                    source.Row(Icons.Warning, Theme.Warn, Strings.T(_preparedProblem));
             }
-            own.CheckedChanged += (s, e) => { if (own.Checked && _usePrepared) { _usePrepared = false; _package = _ownPackage; Show(Screen.Welcome); } };
-            prepared.CheckedChanged += (s, e) => { if (prepared.Checked && !_usePrepared) { _usePrepared = true; _package = _preparedProblem == null && _preparedDir != null ? _preparedDir : _ownPackage; Show(Screen.Welcome); } };
+            own.CheckedChanged += (s, e) => { if (own.Checked && _usePrepared) { _usePrepared = false; _package = _ownPackage; ShowSoon(Screen.Welcome); } };
+            prepared.CheckedChanged += (s, e) => { if (prepared.Checked && !_usePrepared) { _usePrepared = true; _package = _preparedProblem == null && _preparedDir != null ? _preparedDir : _ownPackage; ShowSoon(Screen.Welcome); } };
 
-            if (!repair)
-            {
-                var link = Ui.Button(Strings.T("welcome.prepare-link"), (s, e) => { _prepFromWelcome = true; _flow = "prepare"; Show(Screen.Prepare); });
-                link.BackColor = Theme.Back;
-                link.ForeColor = Theme.Teal;
-                link.Margin = Theme.Pad(0, 4, 0, 0);
-                _content.Controls.Add(link);
-            }
+            // Preparing a folder for another PC copies this package, so it needs the files too.
+            if (!repair && !ownMissing) _content.Controls.Add(Ui.Quiet(Strings.T("welcome.prepare-link"), Icons.Folder, (s, e) => { _prepFromWelcome = true; _flow = "prepare"; Show(Screen.Prepare); }));
 
-            AddButton("ui.close", (s, e) => Close());
-            var check = AddButton("welcome.check", (s, e) => RunPlan(), true);
-            check.Enabled = !_usePrepared || (_preparedDir != null && _preparedProblem == null);
-            CancelButton = (IButtonControl)_buttons.Controls[0];
+            var check = AddButton("welcome.check", (s, e) => RunPlan(), true, true);
+            check.Enabled = _usePrepared ? (_preparedDir != null && _preparedProblem == null) : !ownMissing;
+            CancelButton = AddButton("ui.close", (s, e) => Close());
         }
 
         void SetPrepared(string dir)
@@ -398,22 +606,23 @@ namespace AmdgpuWddmSetup
             var run = _active;
             string titleId = checking ? "checking.title" : _flow == "prepare" ? "working.prepare.title" : _flow == "repair" ? "working.repair.title" : _flow == "continue" ? "working.continue.title" : "working.title";
             Title(Strings.T(titleId));
-            Para(Strings.T(checking ? "checking.body" : _flow == "prepare" ? "working.prepare.body" : "working.body"), Theme.Dim);
-            var bar = new ProgressBar { Style = ProgressBarStyle.Marquee, MarqueeAnimationSpeed = 30, Width = _contentWidth, Height = Theme.S(6), Margin = Theme.Pad(0, 4, 0, 14) };
-            bar.AccessibleName = Strings.T(titleId);
-            _content.Controls.Add(bar);
+            Status(Strings.T(checking ? "checking.body" : _flow == "prepare" ? "working.prepare.body" : "working.body"), StatusLine.State.Busy);
+            _progress = new ProgressStrip(_contentWidth);
+            _progress.AccessibleName = Strings.T(titleId);
+            _content.Controls.Add(_progress);
+            _elapsedRow = Line(Icons.Clock, Theme.Dim, Strings.T("working.elapsed", Elapsed()), Theme.Dim);
             if (checking)
             {
-                var card = Card(Strings.T("checking.list"));
+                var card = Card(Strings.T("checking.list"), Icons.Shield);
                 foreach (var c in run == null ? new List<CheckRow>() : run.Checks) AddCheck(card, c);
-                if (run == null || run.Checks.Count == 0) card.Add(Ui.Label(Strings.T("checking.waiting"), null, Theme.Dim, card.Inner));
+                if (run == null || run.Checks.Count == 0) card.Row(Icons.Ring, Theme.Dim, Strings.T("checking.waiting"));
                 return;
             }
-            var stages = Card(Strings.T("working.stages"));
+            var stages = Card(Strings.T("working.stages"), Icons.Gear);
             var mode = run != null && run.Mode != null ? run.Mode : (_flow == "prepare" ? "prepare-offline" : "run");
             var action = run != null && run.Decision != null ? run.Decision.Action : null;
             var expected = EngineRun.ExpectedStages(mode, action).ToList();
-            // A stage the fixed list does not know (an optional one, such as the extras of install.cmd) goes where the
+            // A stage the fixed list does not know (an optional one, such as the extras of the package) goes where the
             // run actually reached it: right after the stage before it. Appending it at the end would put the current
             // stage last and mark every real stage as finished (the index arithmetic below reads the order).
             int at = -1;
@@ -427,19 +636,32 @@ namespace AmdgpuWddmSetup
                 expected.Insert(at, s);
             }
             int current = run == null || run.CurrentStage == null ? -1 : expected.IndexOf(run.CurrentStage);
+            // Whether the run stopped in this stage. The engine writes its result event before its process ends, so
+            // this screen is drawn once more with an outcome already known: restart-required and already are normal
+            // endings of an install, and the stage the run reached in them is done, not crossed out in red.
+            bool stopped = run != null && ResultView.StoppedIn(run.ResultOutcome);
+            int finished = 0;
             for (int i = 0; i < expected.Count; i++)
             {
-                bool done = i < current || (run != null && run.ResultOutcome != null && i <= current);
-                bool on = i == current && !done;
-                var mark = done ? "✓" : on ? "▶" : "·";
+                bool done = i < current || (run != null && run.ResultOutcome != null && i <= current && !stopped);
+                bool failed = stopped && i == current;
+                bool on = i == current && !done && !failed;
+                if (done) finished++;
                 var text = Strings.Has("stage." + expected[i]) ? Strings.T("stage." + expected[i]) : Strings.T("stage.other");
-                stages.Add(Ui.Label(mark + "  " + text, on ? Theme.Bold : Theme.Body, done ? Theme.Good : on ? Theme.Text : Theme.Dim, stages.Inner));
+                stages.Row(done ? Icons.Check : failed ? Icons.Cancel : on ? Icons.Play : Icons.Ring,
+                    done ? Theme.Good : failed ? Theme.Accent : on ? Theme.Teal : Theme.Dim,
+                    text, null, on).HeadColor = done ? Theme.Text : failed ? Theme.Accent : on ? Theme.Text : Theme.Dim;
+            }
+            if (expected.Count > 0 && current >= 0)
+            {
+                _progress.Indeterminate = false;
+                _progress.Value = Math.Min(1f, (finished + 0.5f) / expected.Count);
             }
             string note;
             if (_client != null && _client.CancelRequested) note = "working.cancel.requested";
             else if (run != null && run.CancelAvailable) note = "working.cancel.available";
             else note = "working.cancel.unavailable";
-            Para(Strings.T(note), Theme.Dim);
+            Line(Icons.Info, Theme.Dim, Strings.T(note), Theme.Dim);
             if (_flow != "prepare")
             {
                 var cancel = AddButton("ui.cancel", (s, e) => { if (_client != null && _client.RequestCancel()) Show(Screen.Working); });
@@ -447,15 +669,19 @@ namespace AmdgpuWddmSetup
             }
         }
 
+        string Elapsed()
+        {
+            var since = _runStarted.HasValue ? DateTime.UtcNow - _runStarted.Value : TimeSpan.Zero;
+            if (since < TimeSpan.Zero) since = TimeSpan.Zero;
+            return ((int)since.TotalMinutes) + ":" + since.Seconds.ToString("00");
+        }
+
         void AddCheck(CardPanel card, CheckRow c)
         {
-            var mark = c.Result == "ok" ? "✓" : c.Result == "warn" ? "!" : "✗";
-            var color = c.Result == "ok" ? Theme.Good : c.Result == "warn" ? Theme.Warn : Theme.Accent;
-            var m = Ui.Label(mark, Theme.Bold, color);
-            m.MinimumSize = new Size(Theme.S(22), 0);
-            m.AccessibleName = Strings.T(c.Result == "ok" ? "check.mark.ok" : c.Result == "warn" ? "check.mark.warn" : "check.mark.fail");
-            var t = Ui.Label(CheckText(c.Id), null, Theme.Text, card.Inner - Theme.S(30));
-            card.Add(Ui.Row(m, t));
+            var glyph = c.Result == "ok" ? Icons.Check : c.Result == "warn" ? Icons.Warning : Icons.Cancel;
+            var colour = c.Result == "ok" ? Theme.Good : c.Result == "warn" ? Theme.Warn : Theme.Accent;
+            var row = card.Row(glyph, colour, CheckText(c.Id));
+            row.AccessibleName = Strings.T(c.Result == "ok" ? "check.mark.ok" : c.Result == "warn" ? "check.mark.warn" : "check.mark.fail") + ": " + CheckText(c.Id);
         }
 
         public static string CheckText(string id)
@@ -473,87 +699,55 @@ namespace AmdgpuWddmSetup
                 case "upgrade": Title(Strings.T("plan.upgrade.title", d.InstalledVersion ?? "-", version)); break;
                 case "repair": Title(Strings.T("plan.repair.title", version)); break;
                 case "resume": Title(Strings.T("plan.resume.title", version)); break;
-                case "already": Title(Strings.T("plan.already.title", version)); Para(Strings.T("plan.already.body")); break;
-                case "verify": Title(Strings.T("plan.verify.title", version)); Para(Strings.T("plan.verify.body")); break;
+                case "already": Title(Strings.T("plan.already.title", version)); break;
+                case "verify": Title(Strings.T("plan.verify.title", version)); break;
                 default: Title(Strings.T("plan.install.title", version)); break;
             }
             if (action == "already")
             {
-                AddButton("ui.close", (s, e) => Close());
-                AddButton("plan.repair-again", (s, e) => { _flow = "repair"; RunPlan(); }, true);
-                CancelButton = (IButtonControl)_buttons.Controls[0];
+                _centreContent = true;
+                Status(Strings.T("plan.already.body"), StatusLine.State.Good);
+                AddButton("plan.repair-again", (s, e) => { _flow = "repair"; RunPlan(); }, true, true);
+                CancelButton = AddButton("ui.close", (s, e) => Close());
                 return;
             }
             if (action == "verify")
             {
-                AddButton("ui.close", (s, e) => Close());
-                AddButton("restart.now", (s, e) => RestartNow(), true);
-                CancelButton = (IButtonControl)_buttons.Controls[0];
+                _centreContent = true;
+                Status(Strings.T("plan.verify.body"), StatusLine.State.Info);
+                AddButton("restart.now", (s, e) => RestartNow(), true, true);
+                CancelButton = AddButton("ui.close", (s, e) => Close());
                 return;
             }
 
-            // Checks: all passed, or the ones that need attention.
-            var warn = _plan == null ? new List<CheckRow>() : _plan.Checks.Where(c => c.Result != "ok").ToList();
-            var checks = Card(Strings.T("plan.checks.title"));
-            if (warn.Count == 0) checks.Add(Ui.Label(Strings.T("plan.checks.ok"), null, Theme.Good, checks.Inner));
-            foreach (var c in warn) AddCheck(checks, c);
-
-            var steps = Card(Strings.T("plan.what.title"));
-            int restarts = d != null ? d.Restarts : 0;
-            steps.Add(Ui.Label(Strings.T(restarts <= 0 ? "plan.restarts.0" : restarts == 1 ? "plan.restarts.1" : "plan.restarts.2"), null, null, steps.Inner));
-            if (restarts > 0) steps.Add(Ui.Label(Strings.T("plan.restarts.choice"), null, Theme.Dim, steps.Inner));
-            var fw = d != null ? d.FirmwareSource : null;
-            if (fw == "download" || fw == "folder" || fw == "package-folder") steps.Add(Ui.Label(Strings.T("plan.firmware." + fw), null, null, steps.Inner));
-
-            var notes = ReleaseNotes.Load(_package, Strings.Language);
-            var nc = Card(Strings.T("plan.notes.title"));
-            if (notes == null) nc.Add(Ui.Label(Strings.T("plan.notes.none"), null, Theme.Dim, nc.Inner));
-            else
-            {
-                if (notes.EnglishFallback) nc.Add(Ui.Label(Strings.T("plan.notes.english"), Theme.Small, Theme.Warn, nc.Inner));
-                var box = new TextBox
-                {
-                    Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Text = notes.Text, Width = nc.Inner, Height = Theme.S(150),
-                    BackColor = Theme.Nav, ForeColor = Theme.Text, BorderStyle = BorderStyle.None, Font = Theme.Body, Margin = Theme.Pad(0, 6, 0, 0),
-                    AccessibleName = Strings.T("plan.notes.title"), TabStop = true, Tag = "noint-exempt",
-                };
-                Theme.DarkScroll(box);
-                nc.Add(box);
-            }
-
-            var sc = Card(Strings.T("plan.settings.title"));
-            var s0 = _plan != null ? _plan.Settings : null;
-            if (s0 == null) sc.Add(Ui.Label(Strings.T("plan.settings.none"), null, Theme.Dim, sc.Inner));
-            else
-            {
-                sc.Add(Ui.Label(Strings.T("plan.settings.summary", s0.Kept, s0.Added, s0.Updated, s0.Unchanged + s0.Command), null, null, sc.Inner));
-                foreach (var line in SettingsView.Lines(s0))
-                {
-                    var text = Strings.T(line.TextId, line.Args) + (line.DecisionId != null && Strings.Has(line.DecisionId) ? ": " + Strings.T(line.DecisionId) : "");
-                    sc.Add(Ui.Label("• " + text, null, Theme.Dim, sc.Inner));
-                }
-                sc.Add(Ui.Label(Strings.T("plan.settings.note"), Theme.Small, Theme.Dim, sc.Inner));
-            }
-
-            var tuning = Card(Strings.T("tuning.title"));
-            var tune = Ui.Check(Strings.T("tuning.opt-in"), tuning.Inner);
-            tune.Checked = _systemTuningChoice ?? (d != null && d.SystemTuning);
-            tune.CheckedChanged += (s, e) => { _systemTuningChoice = tune.Checked; };
-            tuning.Add(tune);
-            tuning.Add(Ui.Label(Strings.T("tuning.details"), Theme.Small, Theme.Dim, tuning.Inner));
-            tuning.Add(Ui.Label(Strings.T("tuning.restore"), Theme.Small, Theme.Dim, tuning.Inner));
-
+            // What this screen still wants from the user, before the page says anything else: the primary action is
+            // off until every consent is answered, and the headline of a first install promises readiness.
             var consents = d != null ? d.Consents : new string[0];
             if (_planResult != null && _planResult.ConsentsNeeded.Length > 0) consents = consents.Union(_planResult.ConsentsNeeded).ToArray();
-            Button go = null;
-            if (consents.Contains("test-signing") || consents.Contains("bitlocker"))
+            bool wantsConsent = consents.Contains("test-signing") || consents.Contains("bitlocker");
+
+            // Checks: all passed, or the ones that need attention.
+            var warn = _plan == null ? new List<CheckRow>() : _plan.Checks.Where(c => c.Result != "ok").ToList();
+            if (wantsConsent && !ConsentsComplete(consents)) Status(Strings.T("plan.consent.needed", Strings.T("consent.title")), StatusLine.State.Warn);
+            else if (warn.Count == 0) Status(Strings.T("plan.checks.ok"), StatusLine.State.Good);
+            else Status(Strings.T("plan.checks.attention", warn.Count), warn.Any(c => c.Result == "fail") ? StatusLine.State.Bad : StatusLine.State.Warn);
+            if (warn.Count > 0)
             {
-                var cc = Card(Strings.T("consent.title"));
+                var checks = Card(Strings.T("plan.checks.title"), Icons.Shield);
+                foreach (var c in warn) AddCheck(checks, c);
+            }
+
+            // The consents come directly after the checks. At the end of the page, below five other cards, nothing in
+            // the first screenful said why the primary action was off.
+            Button go = null;
+            if (wantsConsent)
+            {
+                var cc = Card(Strings.T("consent.title"), Icons.Shield);
                 if (consents.Contains("test-signing"))
                 {
                     var box = Ui.Check(Strings.T("consent.test-signing"), cc.Inner);
                     box.Checked = _consentTestSigning;
-                    box.CheckedChanged += (s, e) => { _consentTestSigning = box.Checked; if (go != null) go.Enabled = ConsentsComplete(consents); };
+                    box.CheckedChanged += (s, e) => { _consentTestSigning = box.Checked; ShowSoon(Screen.Plan); };
                     cc.Add(box);
                     cc.Add(Ui.Label(Strings.T("consent.test-signing.note"), Theme.Small, Theme.Dim, cc.Inner));
                 }
@@ -564,19 +758,62 @@ namespace AmdgpuWddmSetup
                     var pause = Ui.Radio(Strings.T("consent.bitlocker.suspend"), cc.Inner);
                     key.Checked = _bitLocker == "HaveKey";
                     pause.Checked = _bitLocker == "Suspend";
-                    key.CheckedChanged += (s, e) => { if (key.Checked) _bitLocker = "HaveKey"; if (go != null) go.Enabled = ConsentsComplete(consents); };
-                    pause.CheckedChanged += (s, e) => { if (pause.Checked) _bitLocker = "Suspend"; if (go != null) go.Enabled = ConsentsComplete(consents); };
+                    key.CheckedChanged += (s, e) => { if (key.Checked && _bitLocker != "HaveKey") { _bitLocker = "HaveKey"; ShowSoon(Screen.Plan); } };
+                    pause.CheckedChanged += (s, e) => { if (pause.Checked && _bitLocker != "Suspend") { _bitLocker = "Suspend"; ShowSoon(Screen.Plan); } };
                     // Directly in the card (the only option buttons there), not in a bare panel after the label above.
                     cc.Add(key);
                     cc.Add(pause);
                 }
             }
 
-            AddButton("ui.close", (s, e) => Close());
-            go = AddButton(action == "upgrade" ? "plan.go.upgrade" : action == "repair" ? "plan.go.repair" : action == "resume" ? "plan.go.resume" : "plan.go.install", (s, e) => RunInstall(), true);
+            var steps = Card(Strings.T("plan.what.title"), Icons.Info);
+            int restarts = d != null ? d.Restarts : 0;
+            steps.Row(Icons.Restart, restarts > 0 ? Theme.Warn : Theme.Good,
+                Strings.T(restarts <= 0 ? "plan.restarts.0" : restarts == 1 ? "plan.restarts.1" : "plan.restarts.2"),
+                restarts > 0 ? Strings.T("plan.restarts.choice") : null);
+            var fw = d != null ? d.FirmwareSource : null;
+            if (fw == "download" || fw == "folder" || fw == "package-folder") steps.Row(Icons.Download, Theme.Teal, Strings.T("plan.firmware." + fw));
+
+            var notes = ReleaseNotes.Load(_package, Strings.Language);
+            var nc = Card(Strings.T("plan.notes.title"), Icons.Sparkle);
+            if (notes == null) nc.Row(Icons.Info, Theme.Dim, Strings.T("plan.notes.none"));
+            else
+            {
+                if (notes.EnglishFallback) nc.Row(Icons.Info, Theme.Warn, Strings.T("plan.notes.english"));
+                // The notes stand at their full height: the card already carries their title, so the block itself is
+                // unnamed and a screen reader does not read that title twice.
+                nc.Add(new NotesPanel(notes.Source, nc.Inner, ""));
+            }
+
+            var sc = Card(Strings.T("plan.settings.title"), Icons.Gear);
+            var s0 = _plan != null ? _plan.Settings : null;
+            if (s0 == null) sc.Row(Icons.Warning, Theme.Warn, Strings.T("plan.settings.none"));
+            else
+            {
+                sc.Row(Icons.Info, Theme.Teal, Strings.T("plan.settings.summary", s0.Kept, s0.Added, s0.Updated, s0.Unchanged + s0.Command), null, true);
+                foreach (var line in SettingsView.Lines(s0))
+                {
+                    var text = Strings.T(line.TextId, line.Args);
+                    var decision = line.DecisionId != null && Strings.Has(line.DecisionId) ? Strings.T(line.DecisionId) : null;
+                    sc.Row(Icons.Bullet, Theme.Dim, text, decision);
+                }
+                sc.Row(Icons.Lock, Theme.Dim, Strings.T("plan.settings.note"), null, false, Theme.Small);
+            }
+
+            var tuning = Card(Strings.T("tuning.title"), Icons.Gear);
+            var tune = Ui.Check(Strings.T("tuning.opt-in"), tuning.Inner);
+            tune.Checked = _systemTuningChoice ?? (d != null && d.SystemTuning);
+            tune.CheckedChanged += (s, e) => { _systemTuningChoice = tune.Checked; };
+            tuning.Add(tune);
+            tuning.Add(Ui.Label(Strings.T("tuning.details"), Theme.Small, Theme.Dim, tuning.Inner));
+            tuning.Add(Ui.Label(Strings.T("tuning.restore"), Theme.Small, Theme.Dim, tuning.Inner));
+
+            // The bar flows right to left, so the first button added is the rightmost: the primary action takes the
+            // place the eye and the mouse go to first, and the dismissive one stands away from it.
+            go = AddButton(action == "upgrade" ? "plan.go.upgrade" : action == "repair" ? "plan.go.repair" : action == "resume" ? "plan.go.resume" : "plan.go.install", (s, e) => RunInstall(), true, true);
             go.Enabled = ConsentsComplete(consents);
+            CancelButton = AddButton("ui.close", (s, e) => Close());
             if (_flow != "continue") AddButton("ui.back", (s, e) => Show(Screen.Welcome));
-            CancelButton = (IButtonControl)_buttons.Controls[0];
         }
 
         bool ConsentsComplete(string[] consents)
@@ -586,20 +823,29 @@ namespace AmdgpuWddmSetup
 
         void BuildRestart()
         {
+            _centreContent = true;
+            _resultMark = NewResultMark(Theme.Teal, Icons.Restart);
+            _content.Controls.Add(_resultMark);
             Title(Strings.T(_view.TitleId));
-            Para(Strings.T(_view.BodyId));
-            if (_restartError != null) Para(Strings.T("restart.failed"), Theme.Warn);
+            Para(Strings.T(_view.BodyId), Theme.Dim);
+            if (_restartError != null) Line(Icons.Warning, Theme.Warn, Strings.T("restart.failed"), Theme.Warn);
             if (_restartLater)
             {
-                Para(Strings.T("restart.later.done"), Theme.Teal);
+                Line(Icons.Check, Theme.Teal, Strings.T("restart.later.done"), Theme.Teal);
                 AddButton("ui.close", (s, e) => Close(), true);
                 CancelButton = AcceptButton;
                 return;
             }
-            Para(Strings.T("restart.save-work"), Theme.Dim);
-            AddButton("restart.later", (s, e) => { _restartLater = true; Show(Screen.Restart); });
+            Line(Icons.Info, Theme.Dim, Strings.T("restart.save-work"), Theme.Dim);
             if (_view.OfferRestart) AddButton("restart.now", (s, e) => RestartNow(), true);
-            CancelButton = (IButtonControl)_buttons.Controls[0];
+            CancelButton = AddButton("restart.later", (s, e) => { _restartLater = true; Show(Screen.Restart); });
+        }
+
+        // The result icon, with its entrance when the window is shown and may animate: it is at its full size at
+        // once in a headless render and on a PC whose animation effects are off.
+        ResultMark NewResultMark(System.Drawing.Color colour, string glyph)
+        {
+            return new ResultMark(colour, glyph, Theme.S(64)) { Grow = !_smoke && Theme.Animations ? 0f : 1f };
         }
 
         void RestartNow()
@@ -614,74 +860,76 @@ namespace AmdgpuWddmSetup
         void BuildResult()
         {
             var v = _view;
-            var color = v.Kind == ViewKind.Success ? Theme.Good : v.Kind == ViewKind.Problem ? Theme.Accent : v.Kind == ViewKind.Cancelled ? Theme.Warn : Theme.Teal;
-            var mark = new Panel { Width = Theme.S(48), Height = Theme.S(4), BackColor = color, Margin = Theme.Pad(0, 0, 0, 10) };
-            _content.Controls.Add(mark);
+            var colour = v.Kind == ViewKind.Success ? Theme.Good : v.Kind == ViewKind.Problem ? Theme.Accent : v.Kind == ViewKind.Cancelled ? Theme.Warn : Theme.Teal;
+            var glyph = v.Kind == ViewKind.Success ? Icons.Check : v.Kind == ViewKind.Problem ? Icons.Cancel : v.Kind == ViewKind.Cancelled ? Icons.Warning : Icons.Info;
+            _resultMark = NewResultMark(colour, glyph);
+            _content.Controls.Add(_resultMark);
+            _centreContent = v.FailedChecks.Length == 0;
             Title(Strings.T(v.TitleId));
             if (v.AlreadyInstalled) Para(Strings.T("result.already-installed", v.PackageVersion ?? "-"));
-            Para(Strings.T(v.BodyId));
+            Para(Strings.T(v.BodyId), Theme.Dim);
             if (v.FailedChecks.Length > 0)
             {
-                var card = Card(Strings.T("result.failed-checks"));
+                var card = Card(Strings.T("result.failed-checks"), Icons.Shield);
                 foreach (var id in v.FailedChecks) AddCheck(card, new CheckRow { Id = id, Result = "fail" });
             }
-            if (v.NothingChanged) Para(Strings.T("result.nothing-changed"), Theme.Good);
-            else if (v.ChangesUnknown) Para(Strings.T("result.changes-unknown"), Theme.Warn);
-            else if (v.ChangesMade && (v.Kind == ViewKind.Problem || v.Kind == ViewKind.Cancelled)) Para(Strings.T("result.changes-made"), Theme.Warn);
+            if (v.NothingChanged) Status(Strings.T("result.nothing-changed"), StatusLine.State.Good);
+            else if (v.ChangesUnknown) Status(Strings.T("result.changes-unknown"), StatusLine.State.Warn);
+            else if (v.ChangesMade && (v.Kind == ViewKind.Problem || v.Kind == ViewKind.Cancelled)) Status(Strings.T("result.changes-made"), StatusLine.State.Warn);
             if (v.Kind != ViewKind.Success || _flow == "prepare")
             {
-                Para(Strings.T("result.support"), Theme.Dim);
-                if (_supportSaved != null) Para(Strings.T("result.support.saved", _supportSaved), Theme.Good);
-                if (_supportError != null) Para(Strings.T("result.support.failed"), Theme.Warn);
+                Line(Icons.Info, Theme.Dim, Strings.T("result.support"), Theme.Dim);
+                // The engine collected the details of a graphics chip that did not start by itself: say so, so that
+                // the user knows the file below already holds them and nobody has to be asked for more.
+                if (_runs.Any(r => r.Result != null && !string.IsNullOrEmpty(r.Result.Diagnostics)))
+                    Line(Icons.Info, Theme.Dim, Strings.T("result.support.diagnostics"), Theme.Dim);
+                if (_supportSaved != null) Line(Icons.Check, Theme.Good, Strings.T("result.support.saved", _supportSaved), Theme.Good);
+                if (_supportError != null) Line(Icons.Warning, Theme.Warn, Strings.T("result.support.failed"), Theme.Warn);
             }
 
             // The default button: Repair for a problem that offers it, Try again when a new try can help, else Close.
             bool repairFirst = v.OfferRepair && v.Kind == ViewKind.Problem;
             bool retryFirst = v.OfferRetry && v.RetryHelps && !v.OfferRepair && v.Kind != ViewKind.Success && v.Kind != ViewKind.Information;
-            AddButton("ui.close", (s, e) => Close(), !repairFirst && !retryFirst);
-            if (v.OfferRepair) AddButton("result.repair", (s, e) => { _flow = "repair"; RunPlan(); }, repairFirst);
-            if (v.OfferRetry) AddButton("result.retry", (s, e) => { if (_flow == "prepare") Show(Screen.Prepare); else RunPlan(); }, retryFirst);
+            // Right to left: the action that leads on, then the other offers, then Close. Close ends the window, so
+            // it carries no chevron even when it is the default.
+            if (v.OfferRepair) AddButton("result.repair", (s, e) => { _flow = "repair"; RunPlan(); }, repairFirst, true);
+            if (v.OfferRetry) AddButton("result.retry", (s, e) => { if (_flow == "prepare") Show(Screen.Prepare); else RunPlan(); }, retryFirst, true);
+            CancelButton = AddButton("ui.close", (s, e) => Close(), !repairFirst && !retryFirst);
             if (v.Kind != ViewKind.Success || _flow == "prepare") AddButton("result.save-support", (s, e) => SaveSupport());
-            CancelButton = (IButtonControl)_buttons.Controls[0];
         }
 
         void BuildPrepare()
         {
             Title(Strings.T("prepare.title"));
-            Para(Strings.T("prepare.body"));
-            var card = Card(Strings.T("prepare.destination"));
-            var dest = new TextBox
-            {
-                Text = _prepDestination, BackColor = Theme.Nav, ForeColor = Theme.Text, BorderStyle = BorderStyle.FixedSingle, Font = Theme.Body,
-                Width = card.Inner - Theme.S(170), Margin = Theme.Pad(0, 8, 8, 0), AccessibleName = Strings.T("prepare.destination"), TabStop = true,
-            };
+            Status(Strings.T("prepare.body"), StatusLine.State.Info);
+            var card = Card(Strings.T("prepare.destination"), Icons.Folder);
+            var dest = new ThemeBox(card.Inner - Theme.S(190), Strings.T("prepare.destination"), false);
+            dest.Box.Text = _prepDestination;
             Button go = null;
-            dest.TextChanged += (s, e) => { _prepDestination = dest.Text.Trim(); if (go != null) go.Enabled = PrepareReady(); };
-            card.Add(Ui.Row(dest, Ui.Button(Strings.T("ui.choose-folder"), (s, e) => { var d = PickFolder(Strings.T("prepare.destination"), _prepDestination); if (d != null) { dest.Text = d; } })));
-            card.Add(Ui.Label(Strings.T("prepare.destination.hint"), Theme.Small, Theme.Dim, card.Inner));
+            dest.Box.TextChanged += (s, e) => { _prepDestination = dest.Box.Text.Trim(); if (go != null) go.Enabled = PrepareReady(); };
+            var pick = Ui.Button(Strings.T("ui.choose-folder"), (s, e) => { var d = PickFolder(Strings.T("prepare.destination"), _prepDestination); if (d != null) { dest.Box.Text = d; } });
+            pick.Margin = Theme.Pad(0, 8, 0, 0);
+            card.Add(Ui.Row(dest, pick));
+            card.Row(Icons.Info, Theme.Dim, Strings.T("prepare.destination.hint"), null, false, Theme.Small);
 
-            var fwCard = Card(Strings.T("prepare.firmware.title"));
+            var fwCard = Card(Strings.T("prepare.firmware.title"), Icons.Download);
             var use = Ui.Check(Strings.T("prepare.use-firmware"), fwCard.Inner);
             use.Checked = _prepUseFirmware;
             fwCard.Add(use);
-            var fw = new TextBox
-            {
-                Text = _prepFirmware, BackColor = Theme.Nav, ForeColor = Theme.Text, BorderStyle = BorderStyle.FixedSingle, Font = Theme.Body,
-                Width = fwCard.Inner - Theme.S(170), Margin = Theme.Pad(0, 8, 8, 0), AccessibleName = Strings.T("prepare.firmware.folder"), TabStop = true,
-                ReadOnly = !_prepUseFirmware,
-            };
-            fw.TextChanged += (s, e) => { _prepFirmware = fw.Text.Trim(); if (go != null) go.Enabled = PrepareReady(); };
-            var fwBrowse = Ui.Button(Strings.T("ui.choose-folder"), (s, e) => { var d = PickFolder(Strings.T("prepare.firmware.folder"), _prepFirmware); if (d != null) { fw.Text = d; use.Checked = true; } });
+            var fw = new ThemeBox(fwCard.Inner - Theme.S(190), Strings.T("prepare.firmware.folder"), !_prepUseFirmware);
+            fw.Box.Text = _prepFirmware;
+            fw.Box.TextChanged += (s, e) => { _prepFirmware = fw.Box.Text.Trim(); if (go != null) go.Enabled = PrepareReady(); };
+            var fwBrowse = Ui.Button(Strings.T("ui.choose-folder"), (s, e) => { var d = PickFolder(Strings.T("prepare.firmware.folder"), _prepFirmware); if (d != null) { fw.Box.Text = d; use.Checked = true; } });
+            fwBrowse.Margin = Theme.Pad(0, 8, 0, 0);
             fwBrowse.AccessibleName = Strings.T("prepare.firmware.folder") + ": " + Strings.T("ui.choose-folder");
             fwCard.Add(Ui.Row(fw, fwBrowse));
-            fwCard.Add(Ui.Label(Strings.T(_prepUseFirmware ? "prepare.firmware.folder-note" : "prepare.firmware.download-note"), Theme.Small, Theme.Dim, fwCard.Inner));
-            use.CheckedChanged += (s, e) => { _prepUseFirmware = use.Checked; Show(Screen.Prepare); };
+            fwCard.Row(Icons.Info, Theme.Dim, Strings.T(_prepUseFirmware ? "prepare.firmware.folder-note" : "prepare.firmware.download-note"), null, false, Theme.Small);
+            use.CheckedChanged += (s, e) => { _prepUseFirmware = use.Checked; ShowSoon(Screen.Prepare); };
 
-            AddButton("ui.close", (s, e) => Close());
-            go = AddButton("prepare.go", (s, e) => RunPrepare(), true);
+            go = AddButton("prepare.go", (s, e) => RunPrepare(), true, true);
             go.Enabled = PrepareReady();
+            CancelButton = AddButton("ui.close", (s, e) => Close());
             if (_prepFromWelcome) AddButton("ui.back", (s, e) => { _flow = "install"; Show(Screen.Welcome); });
-            CancelButton = (IButtonControl)_buttons.Controls[0];
         }
 
         bool PrepareReady() { return _prepDestination.Length > 0 && (!_prepUseFirmware || _prepFirmware.Length > 0); }
@@ -735,6 +983,7 @@ namespace AmdgpuWddmSetup
         {
             _runKind = kind;
             _supportSaved = _supportError = null;
+            _runStarted = DateTime.UtcNow;
             EngineClient client = null;
             try
             {
@@ -767,10 +1016,36 @@ namespace AmdgpuWddmSetup
 
         void PollEngine()
         {
-            if (_client == null) return;
+            if (_client == null || IsDisposed || !IsHandleCreated) return;
             if (!_client.Poll()) return;
             if (!_client.Finished) { Show(Current); return; }
             Finish(_client);
+        }
+
+        // The moving band of the progress strip, the entrance of the result icon and the elapsed time. Without the
+        // Windows animation effects the strip stands still and the icon is there at once.
+        void Animate()
+        {
+            if (IsDisposed) return;
+            if (_progress != null && !_progress.IsDisposed && _progress.IsHandleCreated)
+            {
+                if (Theme.Animations)
+                {
+                    _progress.Phase += 0.012f;
+                    if (_progress.Phase > 1f) _progress.Phase = 0f;
+                    _progress.Invalidate();
+                }
+                if (_elapsedRow != null)
+                {
+                    var text = Strings.T("working.elapsed", Elapsed());
+                    if (_elapsedRow.Head != text) { _elapsedRow.Head = text; _elapsedRow.AccessibleName = text; _elapsedRow.Invalidate(); }
+                }
+            }
+            if (_resultMark != null && !_resultMark.IsDisposed && _resultMark.IsHandleCreated && _resultMark.Grow < 1f)
+            {
+                _resultMark.Grow = Theme.Animations ? _resultMark.Grow + 0.12f : 1f;
+                _resultMark.Invalidate();
+            }
         }
 
         // --smoke-engine: a run made outside the window, shown as the window would show it.
@@ -833,31 +1108,49 @@ namespace AmdgpuWddmSetup
             }
             var cause = SetupGuide.Pick(causes);
             _guideTitle.Text = Strings.T(_showNagi ? "guide.title" : "guide.title.plain");
-            ShowGuideArt(cause);
+            // The words first, then the picture: the tip's height decides how much room is left for her.
             // The checks take less than a minute; an installation can take minutes. The guide says the same as the page.
-            _guideText.Text = Strings.T(cause == SetupCause.Welcome && _flow == "prepare" ? "guide.prepare" : cause == SetupCause.WorkInProgress && Current == Screen.Checking ? "guide.checking" : SetupGuide.TextId(cause));
+            _guideBubble.Say(Strings.T(cause == SetupCause.Welcome && _flow == "prepare" ? "guide.prepare" : cause == SetupCause.WorkInProgress && Current == Screen.Checking ? "guide.checking" : SetupGuide.TextId(cause)));
+            ShowGuideArt(cause);
             GuideCause = cause;
         }
 
         public SetupCause GuideCause { get; private set; }
 
         // The still picture of this screen's cause, with "Show Nagi" on and its resource in the exe. Without either
-        // one the slot is empty and the panel is the text-only panel.
+        // one the slot is empty and the panel is the text-only panel. The picture is drawn at most 1.25 times the
+        // @256 art, so it never blurs; the welcome screen gives her the whole width of the panel.
         void ShowGuideArt(SetupCause cause)
         {
-            if (_guideArt == null) return;
+            if (_guideArt == null || _guideCard == null) return;
+            // Never wider than the card's inner width: the slot of the two lowest scales was 4 to 5 px wider than the
+            // panel it sits in and its right edge was clipped.
+            int box = Math.Min(_guideInner, SetupGuide.ArtBox(Theme.Scale, Current == Screen.Welcome || Current == Screen.Prepare));
             int size = SetupGuide.ArtSize(Theme.Scale);
             var expression = SetupGuide.Expression(cause);
             var img = _showNagi && NagiArt.Has(expression, size) ? NagiArt.Load(expression, size) : null;
+            // Without her the tip is a plain card: a balloon with a tail would point at nobody.
+            if (_guideBubble != null) _guideBubble.WithTail = img != null;
+            // The picture stands on the bottom edge of the card and against its right edge, and never over the tip
+            // above it: a card too short for the whole slot gets a smaller picture, not an overlap.
+            _guideCard.PerformLayout();
+            int bottom = _guideCard.Height - _guideCard.Depth - 1;
+            int top = _guideCard.Body.Bottom + Theme.S(8);
+            box = Math.Max(0, Math.Min(box, bottom - top));
+            _guideArt.Size = new Size(box, box);
+            _guideArt.Location = new Point(Math.Max(_guideCard.Padding.Left, _guideCard.Width - _guideCard.Padding.Right - box), bottom - box);
             _guideArt.Image = img;
-            _guideArt.Visible = img != null;
+            _guideArt.Visible = img != null && box > Theme.S(40);
+            // The tail of the speech bubble points at her head, not at the background beside her.
+            if (_guideBubble != null && _guideArt.Visible)
+                _guideBubble.TailAt = (float)(_guideArt.Left - _guideCard.Padding.Left + box / 2) / Math.Max(1, _guideInner);
         }
 
         // For the render gate: whether the guide panel drew the picture, and whether it was meant to.
         public bool GuideArtShown { get { return _guideArt != null && HasVisibleFlag(_guideArt) && _guideArt.Image != null; } }
         public bool GuideArtWanted { get { return _showNagi && NagiArt.Has(SetupGuide.Expression(GuideCause), SetupGuide.ArtSize(Theme.Scale)); } }
 
-        void SetGuideNote(string text) { if (_guideText != null) _guideText.Text = text; }
+        void SetGuideNote(string text) { if (_guideBubble != null) _guideBubble.Say(text); }
 
         void SaveSupport()
         {
@@ -930,14 +1223,15 @@ namespace AmdgpuWddmSetup
             catch (Exception) { return null; }
         }
 
-        // Tab order: the language choice, the screen from top to bottom, then the buttons from left to right.
+        // Tab order: the screen from top to bottom, then its buttons from left to right, and the title bar last. The
+        // first Tab of the window must not land on the close glyph, which Space would then press.
         void AssignTabOrder()
         {
             int i = 0;
-            _header.TabIndex = i++;
-            _rail.TabIndex = i++; _rail.TabStop = false;
             _column.TabIndex = i++;
+            _rail.TabIndex = i++; _rail.TabStop = false;
             _guide.TabIndex = i++; _guide.TabStop = false;
+            _chrome.TabIndex = i++;
             _content.TabIndex = 0;
             _buttons.TabIndex = 1;
             int n = 0;
@@ -977,6 +1271,7 @@ namespace AmdgpuWddmSetup
             _preparedProblem = f.PreparedProblem;
             _preparedVersion = f.PreparedVersion;
             _package = f.Package ?? _ownPackage;
+            _ownPackagePresent = f.FilesMissing ? (bool?)false : null;
             _consentTestSigning = f.ConsentTestSigning;
             _bitLocker = f.BitLocker ?? "";
             _restartLater = f.RestartLater;
@@ -985,6 +1280,9 @@ namespace AmdgpuWddmSetup
             _prepFirmware = f.PrepareFirmware ?? "";
             _prepFromWelcome = f.Flow == "prepare";
             _supportSaved = f.SupportSaved;
+            // The elapsed time of a run in a drawn screen: a fixed 42 seconds, so every render of the same screen is
+            // the same picture.
+            _runStarted = DateTime.UtcNow - TimeSpan.FromSeconds(42);
             if (f.PlanEvents != null) { _plan = Fixtures.Run(f.PlanEvents); _planResult = Fixtures.Result(f.PlanResult); }
             _active = f.Events != null ? Fixtures.Run(f.Events) : _plan;
             if (f.Result != null)
@@ -1024,6 +1322,36 @@ namespace AmdgpuWddmSetup
             }
             foreach (Control b in _buttons.Controls)
                 if (b.Right > _buttons.ClientSize.Width || b.Left < 0) w.AppendLine("button outside the bar: " + Describe(b));
+            w.Append(ChromeCheck());
+            return w.ToString();
+        }
+
+        // G-CHROME: the window draws its own title bar and nothing of Windows' caption is left; the bar carries the
+        // minimise and close glyphs, both inside the window and beside the language choice, and the rail stays inside
+        // its column. A window that loses its own close button cannot be closed with the mouse at all.
+        public string ChromeCheck()
+        {
+            var w = new StringBuilder();
+            if (FormBorderStyle != FormBorderStyle.None) w.AppendLine("chrome: the window still has a caption of Windows (" + FormBorderStyle + ")");
+            if (_chrome == null || !HasVisibleFlag(_chrome) || _chrome.Top != 0 || _chrome.Height <= 0) w.AppendLine("chrome: no title bar of our own at the top of the window");
+            else
+            {
+                var glyphs = _chrome.Controls.Cast<Control>().OfType<FlatButton>().Where(b => b.Kind == ButtonKind.Chrome).ToList();
+                if (glyphs.Count != 2) w.AppendLine("chrome: " + glyphs.Count + " window glyphs, 2 expected (minimise, close)");
+                foreach (var b in glyphs)
+                {
+                    if (string.IsNullOrWhiteSpace(b.AccessibleName)) w.AppendLine("chrome: a window glyph has no accessible name");
+                    if (b.Right > _chrome.Width || b.Left < 0 || b.Bottom > _chrome.Height) w.AppendLine("chrome: a window glyph is outside the title bar");
+                }
+                var pills = _chrome.Controls.Cast<Control>().OfType<FlowLayoutPanel>().SelectMany(p => p.Controls.Cast<Control>())
+                    .Where(p => (p.Tag as string) == "lang").ToList();
+                if (pills.Count != Strings.Languages.Length) w.AppendLine("chrome: " + pills.Count + " language choices, " + Strings.Languages.Length + " expected");
+                if (glyphs.Count > 0 && pills.Count > 0 && pills.Max(p => p.Parent.Left + p.Right) > glyphs.Min(b => b.Left))
+                    w.AppendLine("chrome: the language choice runs into the window glyphs");
+            }
+            foreach (Control c in _rail.Controls)
+                foreach (Control row in c.Controls)
+                    if (row.Right > _rail.Width) w.AppendLine("chrome: a step of the rail is wider than the rail");
             return w.ToString();
         }
 
@@ -1040,6 +1368,11 @@ namespace AmdgpuWddmSetup
                 // Inside a group of option buttons Tab reaches the checked one and the arrow keys the others.
                 bool inGroup = c is RadioButton && c.Parent.Controls.OfType<RadioButton>().Any(o => o.TabStop || o.Checked);
                 if (!c.TabStop && !inGroup) problems.Add(Current + ": " + Describe(c) + " is not reachable with Tab");
+                // An owner-drawn button says what pressing it does, as a system button does. A button that is off
+                // offers no action, and Windows says so itself.
+                if (c.Enabled && c is ButtonBase && string.IsNullOrEmpty(c.AccessibleDefaultActionDescription) && c.AccessibilityObject.DefaultAction == null)
+                    problems.Add(Current + ": " + Describe(c) + " has no default action");
+                if (c is ButtonBase && c.AccessibilityObject.Role == AccessibleRole.None) problems.Add(Current + ": " + Describe(c) + " has no accessible role");
             }
             // A layout panel without a name of its own takes, from Windows' window proxy, the text of the nearest label
             // before it in its parent (an empty AccessibleName counts as no name; gui-L4-b13 trials): the text is read
@@ -1053,20 +1386,34 @@ namespace AmdgpuWddmSetup
             }
             var order = reachable.Select(TabPath).ToList();
             if (order.Distinct().Count() != order.Count) problems.Add(Current + ": two controls share a tab position");
+            // The first Tab of the window: the screen or its buttons, never a glyph of the title bar. Space on the
+            // first tab stop must not end setup. A screen that offers nothing at all (the engine is working and even
+            // Cancel is not available) has only the title bar, and then the title bar is where Tab starts.
+            var first = reachable.OrderBy(TabPath, StringComparer.Ordinal).FirstOrDefault();
+            if (first != null && Inside(_chrome, first) && reachable.Any(c => !Inside(_chrome, c)))
+                problems.Add(Current + ": the first control in the tab order is in the title bar (" + Describe(first) + ")");
             bool working = Current == Screen.Working || Current == Screen.Checking;
             if (!working && AcceptButton == null) problems.Add(Current + ": no default button for Enter");
             if (!working && CancelButton == null) problems.Add(Current + ": no button for Escape");
             return problems;
         }
 
+        // The controls a user can reach: the system's buttons, option controls and text boxes, and the owner-drawn
+        // controls that take the keyboard themselves (IFocusTarget).
         static void Walk(Control c, List<Control> into)
         {
             foreach (Control k in c.Controls)
             {
                 if (!HasVisibleFlag(k)) continue;
-                if (k is ButtonBase || k is TextBox || k is ListControl) into.Add(k);
+                if (k is ButtonBase || k is TextBox || k is ListControl || k is IFocusTarget) into.Add(k);
                 Walk(k, into);
             }
+        }
+
+        static bool Inside(Control parent, Control c)
+        {
+            for (var p = c; p != null; p = p.Parent) if (p == parent) return true;
+            return false;
         }
 
         static IEnumerable<Control> Panels(Control c)
@@ -1078,10 +1425,13 @@ namespace AmdgpuWddmSetup
             }
         }
 
+        // Where a control stands in the tab order: the chain of tab positions from the window down to it. It carries
+        // nothing of the control's identity, so two controls that share a position inside one parent give one path
+        // and the check below sees them.
         static string TabPath(Control c)
         {
             var parts = new List<string>();
-            for (var p = c; p != null; p = p.Parent) parts.Insert(0, p.TabIndex.ToString("D4") + p.GetHashCode());
+            for (var p = c; p != null; p = p.Parent) parts.Insert(0, p.TabIndex.ToString("D4"));
             return string.Join("/", parts);
         }
 
@@ -1102,6 +1452,11 @@ namespace AmdgpuWddmSetup
                 if (!exempt && (k.Tag as string) == "noint-exempt") continue;
                 if (!string.IsNullOrEmpty(k.Text) && !(k is Form)) w.AppendLine(k.Text);
                 if (!string.IsNullOrEmpty(k.AccessibleName)) w.AppendLine(k.AccessibleName);
+                // An owner-drawn row draws its text itself: the window checks the words it painted, not only a Text.
+                var row = k as IconRow;
+                if (row != null) { w.AppendLine(row.Head); if (row.Note != null) w.AppendLine(row.Note); }
+                var bubble = k as Bubble;
+                if (bubble != null) w.AppendLine(bubble.Text);
                 Texts(k, w, exempt);
             }
         }
@@ -1125,6 +1480,11 @@ namespace AmdgpuWddmSetup
             foreach (var k in kids) foreach (var o in Overlaps(k)) yield return o;
         }
 
-        static string Describe(Control c) { return c.GetType().Name + (string.IsNullOrEmpty(c.Text) ? "" : " \"" + (c.Text.Length > 40 ? c.Text.Substring(0, 40) : c.Text) + "\""); }
+        static string Describe(Control c)
+        {
+            var row = c as IconRow;
+            var text = row != null ? row.Head : c.Text;
+            return c.GetType().Name + (string.IsNullOrEmpty(text) ? "" : " \"" + (text.Length > 40 ? text.Substring(0, 40) : text) + "\"");
+        }
     }
 }

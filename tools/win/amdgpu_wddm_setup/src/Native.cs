@@ -25,6 +25,10 @@ namespace AmdgpuWddmSetup
         [StructLayout(LayoutKind.Sequential, Pack = 4)]
         public struct TokenPrivileges { public uint Count; public long Luid; public uint Attributes; }
 
+        // RECT (windef.h): the rectangle WM_DPICHANGED suggests for the window on its new screen.
+        [StructLayout(LayoutKind.Sequential)]
+        public struct Rect { public int Left, Top, Right, Bottom; }
+
         [DllImport("advapi32.dll", SetLastError = true)]
         static extern bool OpenProcessToken(IntPtr process, uint access, out IntPtr token);
 

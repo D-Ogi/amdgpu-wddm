@@ -10,15 +10,18 @@
 #      (A2), the A3 texts, settings-impact lines, notes, prepared folders, guide ranks, arguments, quoting, and the
 #      native TOKEN_PRIVILEGES layout of the planned restart;
 #   2. the compile with warnings as errors, the .NET 4.8 target in the image, and the guide character's art: the
-#      expressions this window's causes reach (SetupGuide.ArtExpressions, printed by the tests of step 1) at @128
-#      and @256 from tools\win\amdgpu_wddm_control\art\nagi, under the names that application's Guide.ArtFile map
-#      gives them, with the bytes its PROVENANCE.md records, every one of them in the built image;
+#      expressions this window's causes reach (SetupGuide.ArtExpressions, printed by the tests of step 1) at @256
+#      (SetupGuide.ArtPixels; the smallest slot of this window is larger than the @128 picture) from
+#      tools\win\amdgpu_wddm_control\art\nagi, under the names that application's Guide.ArtFile map gives them,
+#      with the bytes its PROVENANCE.md records, every one of them in the built image;
 #   3. --smoke-engine against a scripted fake engine (test/fake-engine.ps1): plan, noise, cancel, stale result, crash
-#      without a result, restart, refusal; the screen in four languages without internals; the support file without
-#      this PC's user or computer name; then --smoke-start-failure: plan, install and prepare with an engine that
-#      cannot start end on the result screen;
-#   4. --smoke-render: every setup screen from fixtures at 96, 120, 144 and 192 DPI in EN, PL, JA, KO, and at a 150 %
-#      text size: no overlap, nothing outside the window, G-A11Y (names, Tab reach, Enter and Escape) and G-NOINT.
+#      without a result, restart, refusal, and a verify that found a driver which did not start (its diagnostics
+#      file is named in the result and travels in the support file); the screen in four languages without internals;
+#      the support file without this PC's user or computer name; then --smoke-start-failure: plan, install and
+#      prepare with an engine that cannot start end on the result screen;
+#   4. --smoke-render: every setup screen from fixtures at 96, 120, 144 and 192 DPI in EN, PL, JA, KO, at a 150 %
+#      text size, without the guide character and with the high-contrast palette: no overlap, nothing outside the
+#      window, G-A11Y (names, Tab reach, tab order, Enter and Escape), G-CHROME and G-NOINT.
 # None of them shows a window; nothing is installed and nothing outside -Out is written (the runs' temporary files are
 # under -Out\obj).
 
@@ -39,7 +42,7 @@ $exe = Join-Path $Out 'amdgpu_wddm_setup.exe'
 
 $refs = 'mscorlib.dll', 'System.dll', 'System.Core.dll', 'System.Drawing.dll', 'System.Windows.Forms.dll', 'System.IO.Compression.dll',
     'System.IO.Compression.FileSystem.dll', 'System.Web.Extensions.dll' | ForEach-Object { "/reference:$fx\$_" }
-$pure = 'Strings.cs', 'Json.cs', 'EngineModel.cs', 'PlanText.cs', 'SetupArgs.cs', 'NoInternals.cs' | ForEach-Object { Join-Path $here "src\$_" }
+$pure = 'Strings.cs', 'Json.cs', 'EngineModel.cs', 'PlanText.cs', 'SetupArgs.cs', 'NoInternals.cs', 'Redactor.cs' | ForEach-Object { Join-Path $here "src\$_" }
 
 # 1. Unit tests of the pure parts.
 & $csc /nologo /noconfig /nostdlib+ @refs /target:exe /platform:x64 /warnaserror+ /langversion:7.3 /deterministic+ `
@@ -67,11 +70,11 @@ $resources = @(Get-ChildItem "$here\strings\strings.*.txt" | Sort-Object Name | 
 $artDir = Join-Path $repo 'tools\win\amdgpu_wddm_control\art\nagi'
 $artResourceNames = @()
 foreach ($a in & (Join-Path $repo 'tools\win\amdgpu_wddm_control\art\check-art.ps1') -ArtDir $artDir `
-        -GuideSource (Join-Path $repo 'tools\win\amdgpu_wddm_control\src\Guide.cs') -Expressions $setupExpressions) {
+        -GuideSource (Join-Path $repo 'tools\win\amdgpu_wddm_control\src\Guide.cs') -Expressions $setupExpressions -Sizes 256) {
     $resources += "/resource:$($a.Path),$($a.Resource)"
     $artResourceNames += $a.Resource
 }
-Write-Host "  guide art: $($setupExpressions.Count) expressions ($($setupExpressions -join ', ')) x 2 sizes embedded from $artDir"
+Write-Host "  guide art: $($setupExpressions.Count) expressions ($($setupExpressions -join ', ')) at @256 embedded from $artDir"
 & $csc /nologo /noconfig /nostdlib+ @refs /target:winexe /platform:x64 /optimize+ /warnaserror+ /langversion:7.3 /deterministic+ `
     "/win32manifest:$here\app.manifest" "/out:$exe" @resources @((Get-ChildItem "$here\src\*.cs").FullName | Sort-Object)
 if ($LASTEXITCODE -ne 0) { throw "csc failed ($LASTEXITCODE)" }
@@ -108,6 +111,9 @@ if (-not $NoSmoke) {
         crash   = @('-Scenario', 'crash'), @('exit: 6', 'result: none', 'view: Problem result.none.title changes-made changes-unknown')
         restart = @('-Scenario', 'restart'), @('outcome: restart-required', 'restart: restart.test-signing', 'view: Restart result.restart-test-signing.title changes-made offer-restart', 'restart event restart.test-signing')
         refused = @('-Scenario', 'refused'), @('outcome: refused', 'view: Problem result.preflight-refused.title nothing-changed offer-retry retry-secondary', 'No ASRock BC-250 graphics chip was found')
+        # A verify that found a driver which did not start: the engine's own diagnostics file is named in the
+        # result, the screen says the details were collected, and the support file carries them (below).
+        diagnostics = @('-Scenario', 'verify-failed'), @('outcome: verify-failed', 'view: Problem result.verify-failed.title nothing-changed', 'The details of the graphics chip that did not start were collected for you')
     }
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     foreach ($e in $expect.GetEnumerator()) {
@@ -128,11 +134,31 @@ if (-not $NoSmoke) {
         try {
             $names = @($archive.Entries | ForEach-Object Name)
             foreach ($want in 'setup.txt', 'run-1-command.txt', 'run-1-engine-output.txt') { if ($names -notcontains $want) { throw "smoke-engine $($e.Key): support file without $want" } }
+            # The engine's automatic diagnostics of a failed start travel in the support file as run-N-diagnostics.txt,
+            # and only for a run that named one.
+            if ($e.Key -eq 'diagnostics' -and $names -notcontains 'run-1-diagnostics.txt') { throw "smoke-engine $($e.Key): support file without run-1-diagnostics.txt" }
+            if ($e.Key -ne 'diagnostics' -and $names -contains 'run-1-diagnostics.txt') { throw "smoke-engine $($e.Key): a run that named no diagnostics file has one in the support file" }
             foreach ($entry in $archive.Entries) {
                 $reader = New-Object IO.StreamReader($entry.Open())
                 $body = $reader.ReadToEnd(); $reader.Dispose()
                 foreach ($secret in $env:USERNAME, $env:COMPUTERNAME) {
                     if ($secret.Length -ge 2 -and $body -match "(?<![A-Za-z0-9])$([regex]::Escape($secret))(?![A-Za-z0-9])") { throw "smoke-engine $($e.Key): $($entry.Name) names this PC's user or computer" }
+                }
+            }
+            # The new entry, against the promise of docs/testing/INSTALL.md: no serial number and no machine id
+            # of a line that names one, whatever prefix that line carries, and the hardware id and the decision
+            # still there, because a report without them is useless.
+            if ($e.Key -eq 'diagnostics') {
+                $entry = @($archive.Entries | Where-Object { $_.Name -eq 'run-1-diagnostics.txt' })[0]
+                $reader = New-Object IO.StreamReader($entry.Open())
+                $body = $reader.ReadToEnd(); $reader.Dispose()
+                foreach ($secret in 'SN-ABC123456789', '11111111-2222-3333-4444-555555555555',
+                    'otherperson', 'S-1-5-21-3623811015-3361044348-30300820-1013', 'SOMEBODY-ELSE-PC') {
+                    if ($body.Contains($secret)) { throw "smoke-engine diagnostics: run-1-diagnostics.txt still carries $secret" }
+                }
+                foreach ($keep in 'Device serial: <redacted>', 'MachineGuid: <redacted>', 'PCI\VEN_1002&DEV_13FE', 'problem code 43',
+                    'C:\Users\<user>\Downloads', '<sid>', '<Computer><computer></Computer>') {
+                    if (-not $body.Contains($keep)) { throw "smoke-engine diagnostics: run-1-diagnostics.txt without '$keep'" }
                 }
             }
         } finally { $archive.Dispose() }
@@ -154,15 +180,19 @@ if (-not $NoSmoke) {
     $renders += , @('1', 'ja', '1.5', '')
     $renders += , @('1', 'en', '1', '--no-nagi')
     $renders += , @('2', 'ko', '1', '--no-nagi')
+    # High contrast: this PC does not have it on, so the window is told to use the system palette. Without this run
+    # nothing would see a tint drawn on a tint or text that the high-contrast colours make unreadable.
+    $renders += , @('1', 'en', '1', '--high-contrast')
+    $renders += , @('1.5', 'pl', '1', '--high-contrast')
     foreach ($r in $renders) {
-        $dir = Join-Path $obj "render-$($r[0])-$($r[1])-text$($r[2])$(if ($r[3]) { '-no-nagi' })"
+        $dir = Join-Path $obj "render-$($r[0])-$($r[1])-text$($r[2])$(if ($r[3]) { $r[3] -replace '^--', '-' })"
         Remove-Item -Recurse -Force $dir -ErrorAction SilentlyContinue
         $renderArgs = @('--smoke-render', $dir, $r[0], $r[1], '--text-scale', $r[2]) + @(if ($r[3]) { $r[3] }) + @('--package', $fake)
         $code = Invoke-Exe $renderArgs 300
         $layout = Get-Content (Join-Path $dir 'layout.txt') -Raw -ErrorAction SilentlyContinue
         if ($code -ne 0 -or $layout -notmatch '^ok: ') { throw "render at scale $($r[0]), $($r[1]), text $($r[2]) $($r[3]) (exit $code):`n$layout" }
     }
-    Write-Host "  render: $(@(Get-ChildItem (Join-Path $obj 'render-1-en-text1') -Filter *.png).Count) screens x $($renders.Count) (4 DPIs x 4 languages + 150 % text + 2 without the guide character), no overlap or overflow, the guide art where it belongs, G-A11Y and G-NOINT clean ($obj\render-*)"
+    Write-Host "  render: $(@(Get-ChildItem (Join-Path $obj 'render-1-en-text1') -Filter *.png).Count) screens x $($renders.Count) (4 DPIs x 4 languages + 150 % text + 2 without the guide character + 2 in high contrast), no overlap or overflow, the guide art where it belongs, G-A11Y, G-CHROME and G-NOINT clean ($obj\render-*)"
 }
 
 Get-ChildItem $Out -File | ForEach-Object {

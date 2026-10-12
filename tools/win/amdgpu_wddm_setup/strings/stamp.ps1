@@ -47,6 +47,8 @@ foreach ($lang in $Language) {
         $out.Add($p -join '|')
     }
     foreach ($id in $en.Keys | Sort-Object) { if (-not $seen.ContainsKey($id)) { Write-Host "  $lang missing: $id" } }
-    [IO.File]::WriteAllText($path, (($out -join "`n") + "`n"), $utf8)
+    # The tables are CRLF files (.gitattributes keeps every other line ending out of them), so the stamp writes CRLF:
+    # joining with "`n" alone turned all 300 lines of each table into a whitespace change of its own.
+    [IO.File]::WriteAllText($path, (($out -join "`r`n") + "`r`n"), $utf8)
     Write-Host "$lang`: $stamped stamped"
 }

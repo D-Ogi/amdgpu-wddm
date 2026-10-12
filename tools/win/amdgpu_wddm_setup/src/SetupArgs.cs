@@ -8,9 +8,10 @@
 //   [--run-root <dir>]                        where the engine runs keep their files (default %TEMP%\amdgpu-wddm-setup)
 //   [--dry-run]                               the install run is an engine dry run: every screen, no change (L4)
 //   amdgpu_wddm_setup.exe --version
-//   amdgpu_wddm_setup.exe --smoke-render <dir> <scale> <lang> [--text-scale <f>] [--no-nagi] [--package <dir>]
-//                                             no window: every screen from fixtures drawn to <dir>, checked
-//                                             (--no-nagi: the guide panel without the guide character)
+//   amdgpu_wddm_setup.exe --smoke-render <dir> <scale> <lang> [--text-scale <f>] [--no-nagi] [--high-contrast]
+//                         [--package <dir>]    no window: every screen from fixtures drawn to <dir>, checked
+//                                             (--no-nagi: the guide panel without the guide character;
+//                                             --high-contrast: the high-contrast palette on a PC without it)
 //   amdgpu_wddm_setup.exe --smoke-engine <package> <out-dir> [--script <name>] [--cancel] [--plan] -- <engine args>
 //                                             no window: one engine run, its model and screens summarised
 //   amdgpu_wddm_setup.exe --smoke-start-failure <out-dir>
@@ -34,6 +35,7 @@ namespace AmdgpuWddmSetup
         public float Scale = 1f, TextScale = 1f;
         public bool Cancel, PlanRun;
         public bool NoNagi;             // render the guide panel without the guide character (she is on by default)
+        public bool HighContrast;       // draw with the system colours of high contrast, which this PC may not have on
 
         public bool Headless { get { return Mode == "smoke-render" || Mode == "smoke-engine" || Mode == "smoke-start-failure" || Mode == "version"; } }
 
@@ -85,6 +87,7 @@ namespace AmdgpuWddmSetup
                         break;
                     case "--script": a.Script = next(); if (a.Script != "install.ps1" && a.Script != "prepare-offline.ps1") a.Error = "--script install.ps1 or prepare-offline.ps1"; break;
                     case "--no-nagi": a.NoNagi = true; break;
+                    case "--high-contrast": a.HighContrast = true; break;
                     case "--cancel": a.Cancel = true; break;
                     case "--plan": a.PlanRun = true; break;
                     case "--":
@@ -99,6 +102,7 @@ namespace AmdgpuWddmSetup
             if (a.Error == null && a.DryRun && a.Mode != "welcome" && a.Mode != "repair") a.Error = "--dry-run only with the welcome or --repair";
             if (a.Error == null && (a.Cancel || a.PlanRun) && a.Mode != "smoke-engine") a.Error = "--cancel and --plan only with --smoke-engine";
             if (a.Error == null && a.NoNagi && a.Mode != "smoke-render") a.Error = "--no-nagi only with --smoke-render";
+            if (a.Error == null && a.HighContrast && a.Mode != "smoke-render") a.Error = "--high-contrast only with --smoke-render";
             return a;
         }
 
