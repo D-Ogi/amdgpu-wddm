@@ -1,0 +1,178 @@
+12:19:24.590 A/clockcap BEGIN tag= host=BC250-A phase=clockcap state=A ms=50 cpu=2
+12:19:24.740 A/clockcap boot lastboot=2026-10-12T12:11:55 uptime_s=449
+12:19:24.926 A/clockcap gpu device status=OK instance=PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\4&19CAF403&0&0041
+12:19:25.020 A/clockcap thermal tctl_c=61.2 gate_c=82.0 source=telemetry live=yes
+12:19:25.060 A/clockcap info # adapter    BC-250 GPU (amdgpu-wddm)
+12:19:25.061 A/clockcap info # hardware   PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00
+12:19:25.069 A/clockcap info # interface  \\?\pci#ven_1002&dev_13fe&subsys_00001022&rev_00#4&19caf403&0&0041#{1ca05180-a699-450a-9a0c-de4fbe3ddd89}
+12:19:25.075 A/clockcap info D3DKMTOpenAdapterFromDeviceName -> 0x00000000 STATUS_SUCCESS
+12:19:25.083 A/clockcap info # adapter    handle 0x40000000 luid 00000000-00008335
+12:19:25.090 A/clockcap info D3DKMTEscape(D3DKMT_ESCAPE_DRIVERPRIVATE, BC250_ESCAPE_GET_INFO) -> 0x00000000 STATUS_SUCCESS
+12:19:25.132 A/clockcap dpm before-cap driver 0x000700D8, requested dpm, reason none, generation 28093727, ticks 14228, uptime 446693 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release below 83.0 C for 4000 ms (default), soft zone from 86.0 C per 1500 ms, lead 15000 ms (default)
+12:19:25.133 A/clockcap dpm before-cap idle: 500 MHz (now) after 3000 ms under 2 permille busy; entries 1 exits 0 refusals 0, 432572 ms at the point
+12:19:25.140 A/clockcap dpm before-cap smu metrics: ok, 440 tables, 1 failures, last 99 ms ago: gfx 824 mV 500 MHz 56.75 C, soc 1175 mV 58.50 C, throttler 0x0000
+12:19:25.148 A/clockcap dpm before-cap 14:19:25.118 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  61.2 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle idle confirmed  up 0 down 1 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  39.5 W avg  41.2 W (gfx  9.6 W soc  4.4 W)
+12:19:25.186 A/clockcap cpu before-cap cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+12:19:25.187 A/clockcap cpu before-cap cpu: applied clock 0 MHz, undervolt 0 steps, cap 0 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+12:19:25.194 A/clockcap cpu before-cap cpu: 1199 mV (GPU 824 mV), firmware cap 100 C, features 0xDD602C7D, 62.1 C
+12:19:25.202 A/clockcap cpu before-cap cpu: cores 1400 1400 1400 900 1400 1400 1400 900 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+12:19:25.211 A/clockcap cpu before-cap cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+12:19:25.218 A/clockcap cpu before-cap cpu: reads 96 writes 0 refusals 0 reverts 0 (retries 0, refused 0); last queue 0 message 0x3D argument 0x00000000 status 0x00000001
+12:19:31.554 A/clockcap law baseline law_begin cpu=2 on=2 ms=50 full=0 processors=12
+12:19:31.555 A/clockcap law baseline law_isa osxsave=1 avx=1 avx2=1 xcr0_ymm=1 vec256=run
+12:19:31.564 A/clockcap law baseline clock imul16_ns=13.7523 imul16_mhz=3490.3 fp8_ns=6.8763 fp8_mhz_at_3cyc=3490.3 fp_over_imul=1.0000 tsc_mhz=3194.04 qpc_hz=10000000
+12:19:31.571 A/clockcap law baseline sweep8 name=add_x6 instr=8 bytes=30 iters=128002003 us=73329.0 ns_per_iter=0.5729 cyc_per_iter=2.000 cyc_per_instr=0.2499 cyc_per_byte=0.0667 latency_cyc=1.0 work_per_us=10473.51 tsc_per_iter=1.8298
+12:19:31.579 A/clockcap law baseline sweep32 name=add32_x6 instr=8 bytes=48 iters=128002003 us=73380.0 ns_per_iter=0.5733 cyc_per_iter=2.001 cyc_per_instr=0.2501 cyc_per_byte=0.0417 latency_cyc=1.0 work_per_us=10466.23 tsc_per_iter=1.8311
+12:19:31.587 A/clockcap law baseline sweep8 name=add_x12 instr=14 bytes=54 iters=54235105 us=57565.3 ns_per_iter=1.0614 cyc_per_iter=3.705 cyc_per_instr=0.2646 cyc_per_byte=0.0686 latency_cyc=1.0 work_per_us=11305.79 tsc_per_iter=3.3902
+12:19:31.595 A/clockcap law baseline sweep32 name=add32_x12 instr=14 bytes=90 iters=54178892 us=57503.0 ns_per_iter=1.0614 cyc_per_iter=3.704 cyc_per_instr=0.2646 cyc_per_byte=0.0412 latency_cyc=1.0 work_per_us=11306.31 tsc_per_iter=3.3900
+12:19:31.604 A/clockcap law baseline sweep8 name=add_x18 instr=20 bytes=78 iters=38001492 us=57716.6 ns_per_iter=1.5188 cyc_per_iter=5.301 cyc_per_instr=0.2651 cyc_per_byte=0.0680 latency_cyc=1.0 work_per_us=11851.48 tsc_per_iter=4.8512
+12:19:31.612 A/clockcap law baseline sweep32 name=add32_x18 instr=20 bytes=136 iters=37082457 us=53149.6 ns_per_iter=1.4333 cyc_per_iter=5.003 cyc_per_instr=0.2501 cyc_per_byte=0.0368 latency_cyc=1.0 work_per_us=12558.59 tsc_per_iter=4.5780
+12:19:31.619 A/clockcap law baseline sweep8 name=add_x24 instr=26 bytes=102 iters=28791777 us=57413.7 ns_per_iter=1.9941 cyc_per_iter=6.960 cyc_per_instr=0.2677 cyc_per_byte=0.0682 latency_cyc=1.0 work_per_us=12035.50 tsc_per_iter=6.3693
+12:19:31.628 A/clockcap law baseline sweep32 name=add32_x24 instr=26 bytes=178 iters=28708402 us=57240.4 ns_per_iter=1.9939 cyc_per_iter=6.959 cyc_per_instr=0.2677 cyc_per_byte=0.0391 latency_cyc=1.0 work_per_us=12036.98 tsc_per_iter=6.3685
+12:19:31.635 A/clockcap law baseline sweep8 name=add_x36 instr=38 bytes=154 iters=19836499 us=57538.7 ns_per_iter=2.9006 cyc_per_iter=10.124 cyc_per_instr=0.2664 cyc_per_byte=0.0657 latency_cyc=1.0 work_per_us=12411.02 tsc_per_iter=9.2648
+12:19:31.642 A/clockcap law baseline sweep32 name=add32_x36 instr=38 bytes=262 iters=19828974 us=57617.9 ns_per_iter=2.9057 cyc_per_iter=10.142 cyc_per_instr=0.2669 cyc_per_byte=0.0387 latency_cyc=1.0 work_per_us=12389.26 tsc_per_iter=9.2810
+12:19:31.651 A/clockcap law baseline sweep8 name=add_x48 instr=50 bytes=202 iters=15159920 us=57029.5 ns_per_iter=3.7619 cyc_per_iter=13.130 cyc_per_instr=0.2626 cyc_per_byte=0.0650 latency_cyc=1.0 work_per_us=12759.64 tsc_per_iter=12.0156
+12:19:31.660 A/clockcap law baseline sweep32 name=add32_x48 instr=50 bytes=346 iters=15112902 us=56450.6 ns_per_iter=3.7353 cyc_per_iter=13.037 cyc_per_instr=0.2607 cyc_per_byte=0.0377 latency_cyc=1.0 work_per_us=12850.52 tsc_per_iter=11.9306
+12:19:31.668 A/clockcap law baseline slope_imm8 points=6 slope_cyc_per_instr=0.2650 intercept_cyc=-0.020 r2=0.99960 instr_per_cyc=3.774
+12:19:31.675 A/clockcap law baseline slope_imm32 points=6 slope_cyc_per_instr=0.2648 intercept_cyc=-0.077 r2=0.99864 instr_per_cyc=3.776
+12:19:31.684 A/clockcap law baseline knee name=knee_m0 instr=10 bytes=38 iters=8360240 us=57475.0 ns_per_iter=6.8748 cyc_per_iter=23.995 cyc_per_instr=2.3995 cyc_per_byte=0.6315 latency_cyc=24.0 work_per_us=1163.67 tsc_per_iter=21.9584
+12:19:31.691 A/clockcap law baseline knee name=knee_m4 instr=14 bytes=54 iters=8368636 us=57558.6 ns_per_iter=6.8779 cyc_per_iter=24.006 cyc_per_instr=1.7147 cyc_per_byte=0.4446 latency_cyc=24.0 work_per_us=1163.15 tsc_per_iter=21.9683
+12:19:31.699 A/clockcap law baseline knee name=knee_m8 instr=18 bytes=70 iters=8367540 us=57526.3 ns_per_iter=6.8749 cyc_per_iter=23.996 cyc_per_instr=1.3331 cyc_per_byte=0.3428 latency_cyc=24.0 work_per_us=1163.65 tsc_per_iter=21.9589
+12:19:31.706 A/clockcap law baseline knee name=knee_m12 instr=22 bytes=86 iters=8368758 us=57548.0 ns_per_iter=6.8765 cyc_per_iter=24.001 cyc_per_instr=1.0910 cyc_per_byte=0.2791 latency_cyc=24.0 work_per_us=1163.38 tsc_per_iter=21.9639
+12:19:31.715 A/clockcap law baseline knee name=knee_m16 instr=26 bytes=102 iters=8360483 us=57502.4 ns_per_iter=6.8779 cyc_per_iter=24.006 cyc_per_instr=0.9233 cyc_per_byte=0.2354 latency_cyc=24.0 work_per_us=1163.15 tsc_per_iter=21.9684
+12:19:31.721 A/clockcap law baseline knee name=knee_m20 instr=30 bytes=118 iters=8369123 us=57547.6 ns_per_iter=6.8762 cyc_per_iter=24.000 cyc_per_instr=0.8000 cyc_per_byte=0.2034 latency_cyc=24.0 work_per_us=1163.44 tsc_per_iter=21.9628
+12:19:31.731 A/clockcap law baseline knee name=knee_m24 instr=34 bytes=138 iters=8361821 us=57508.9 ns_per_iter=6.8776 cyc_per_iter=24.005 cyc_per_instr=0.7060 cyc_per_byte=0.1739 latency_cyc=24.0 work_per_us=1163.20 tsc_per_iter=21.9672
+12:19:31.738 A/clockcap law baseline knee name=knee_m32 instr=42 bytes=170 iters=8369001 us=57573.1 ns_per_iter=6.8793 cyc_per_iter=24.011 cyc_per_instr=0.5717 cyc_per_byte=0.1412 latency_cyc=24.0 work_per_us=1162.90 tsc_per_iter=21.9729
+12:19:31.746 A/clockcap law baseline knee name=knee_m40 instr=50 bytes=202 iters=8366688 us=57545.5 ns_per_iter=6.8779 cyc_per_iter=24.006 cyc_per_instr=0.4801 cyc_per_byte=0.1188 latency_cyc=24.0 work_per_us=1163.14 tsc_per_iter=21.9686
+12:19:31.753 A/clockcap law baseline port name=port_alu_x24 instr=26 bytes=102 iters=28791777 us=57404.6 ns_per_iter=1.9938 cyc_per_iter=6.959 cyc_per_instr=0.2677 cyc_per_byte=0.0682 latency_cyc=1.0 work_per_us=12037.41 tsc_per_iter=6.3683
+12:19:31.761 A/clockcap law baseline port name=port_mul_x24 instr=26 bytes=102 iters=8355988 us=57455.3 ns_per_iter=6.8759 cyc_per_iter=23.999 cyc_per_instr=0.9230 cyc_per_byte=0.2353 latency_cyc=3.0 work_per_us=3490.43 tsc_per_iter=21.9620
+12:19:31.769 A/clockcap law baseline port name=port_fp_x24 instr=26 bytes=102 iters=8362672 us=57509.0 ns_per_iter=6.8769 cyc_per_iter=24.003 cyc_per_instr=0.9232 cyc_per_byte=0.2353 latency_cyc=3.0 work_per_us=3489.96 tsc_per_iter=21.9650
+12:19:31.778 A/clockcap law baseline port name=port_vec128_x24 instr=26 bytes=102 iters=16739464 us=57541.7 ns_per_iter=3.4375 cyc_per_iter=11.998 cyc_per_instr=0.4615 cyc_per_byte=0.1176 latency_cyc=1.0 work_per_us=13963.69 tsc_per_iter=10.9796
+12:19:31.786 A/clockcap law baseline port name=port_vec256_x24 instr=26 bytes=102 iters=16703965 us=57417.1 ns_per_iter=3.4373 cyc_per_iter=11.997 cyc_per_instr=0.4614 cyc_per_byte=0.1176 latency_cyc=1.0 work_per_us=27928.62 tsc_per_iter=10.9790
+12:19:31.793 A/clockcap law baseline port name=port_load_x24 instr=26 bytes=126 iters=16623319 us=57176.7 ns_per_iter=3.4395 cyc_per_iter=12.005 cyc_per_instr=0.4617 cyc_per_byte=0.0953 latency_cyc=1.0 work_per_us=6977.66 tsc_per_iter=10.9862
+12:19:31.801 A/clockcap law baseline port name=port_store_x24 instr=26 bytes=126 iters=8354653 us=57466.7 ns_per_iter=6.8784 cyc_per_iter=24.008 cyc_per_instr=0.9234 cyc_per_byte=0.1905 latency_cyc=1.0 work_per_us=3489.18 tsc_per_iter=21.9699
+12:19:31.809 A/clockcap law baseline pair name=dep_imul_x4 instr=6 bytes=22 iters=16713676 us=57463.6 ns_per_iter=3.4381 cyc_per_iter=12.000 cyc_per_instr=2.0000 cyc_per_byte=0.5455 latency_cyc=12.0 work_per_us=1163.43 tsc_per_iter=10.9815
+12:19:31.818 A/clockcap law baseline pair name=ind_imul_x4 instr=6 bytes=22 iters=50218391 us=57559.9 ns_per_iter=1.1462 cyc_per_iter=4.001 cyc_per_instr=0.6668 cyc_per_byte=0.1818 latency_cyc=3.0 work_per_us=3489.82 tsc_per_iter=3.6610
+12:19:31.825 A/clockcap law baseline clock imul16_ns=13.7532 imul16_mhz=3490.1 fp8_ns=6.8752 fp8_mhz_at_3cyc=3490.8 fp_over_imul=1.0002 tsc_mhz=3194.04 qpc_hz=10000000
+12:19:31.833 A/clockcap law baseline law_end cpu=2 clock_start_mhz=3490.3 clock_end_mhz=3490.1 drift_pct=-0.007
+12:19:31.844 A/clockcap law baseline exit=0 seconds=6.3
+12:19:31.852 A/clockcap law baseline SUMMARY clock_mhz=3490.3 k_cyc_per_instr=0.2650 (state A reference: clock about 3489, k about 0.23; state B 2026-10-12: clock about 2790, k about 1.1)
+12:19:32.010 A/clockcap cpu set cpu set: done, serial 1
+12:19:32.011 A/clockcap cpu set cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+12:19:32.022 A/clockcap cpu set cpu: ON TRIAL, 75000 ms left (default window 25000 ms); without a keep the settings before it come back
+12:19:32.031 A/clockcap cpu set cpu: applied clock 2800 MHz, undervolt 0 steps, cap 0 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+12:19:32.039 A/clockcap cpu set cpu: 806 mV (GPU 824 mV), firmware cap 100 C, features 0xDD602C7D, 61.3 C
+12:19:32.049 A/clockcap cpu set cpu: cores 1400 1400 1400 900 1400 1400 1400 900 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+12:19:32.058 A/clockcap cpu set cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+12:19:32.068 A/clockcap cpu set cpu: reads 97 writes 1 refusals 0 reverts 0 (retries 0, refused 0); last queue 3 message 0x36 argument 0x00000000 status 0x00000001
+12:19:32.079 A/clockcap clockcap set_accepted=True
+12:19:32.118 A/clockcap cpu after-set cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+12:19:32.120 A/clockcap cpu after-set cpu: ON TRIAL, 74888 ms left (default window 25000 ms); without a keep the settings before it come back
+12:19:32.128 A/clockcap cpu after-set cpu: applied clock 2800 MHz, undervolt 0 steps, cap 0 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+12:19:32.139 A/clockcap cpu after-set cpu: 806 mV (GPU 824 mV), firmware cap 100 C, features 0xDD602C7D, 61.3 C
+12:19:32.148 A/clockcap cpu after-set cpu: cores 1400 1400 1400 900 1400 1400 1400 900 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+12:19:32.157 A/clockcap cpu after-set cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+12:19:32.167 A/clockcap cpu after-set cpu: reads 97 writes 1 refusals 0 reverts 0 (retries 0, refused 0); last queue 3 message 0x36 argument 0x00000000 status 0x00000001
+12:19:32.522 A/clockcap cpu readback after-set cpu readback: done, serial 1
+12:19:32.523 A/clockcap cpu readback after-set cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+12:19:32.534 A/clockcap cpu readback after-set cpu: ON TRIAL, 74483 ms left (default window 25000 ms); without a keep the settings before it come back
+12:19:32.544 A/clockcap cpu readback after-set cpu: applied clock 2800 MHz, undervolt 0 steps, cap 0 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+12:19:32.553 A/clockcap cpu readback after-set cpu: 912 mV (GPU 824 mV), firmware cap 100 C, features 0xDD602C7D, 61.3 C
+12:19:32.562 A/clockcap cpu readback after-set cpu: cores 1400 1400 1400 900 1400 1400 1400 900 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+12:19:32.572 A/clockcap cpu readback after-set cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+12:19:32.581 A/clockcap cpu readback after-set cpu: reads 117 writes 1 refusals 0 reverts 0 (retries 0, refused 0); last queue 0 message 0x3D argument 0x00000000 status 0x00000001
+12:19:39.068 A/clockcap law capped law_begin cpu=2 on=2 ms=50 full=0 processors=12
+12:19:39.069 A/clockcap law capped law_isa osxsave=1 avx=1 avx2=1 xcr0_ymm=1 vec256=run
+12:19:39.080 A/clockcap law capped clock imul16_ns=17.1899 imul16_mhz=2792.3 fp8_ns=8.5947 fp8_mhz_at_3cyc=2792.4 fp_over_imul=1.0000 tsc_mhz=3194.05 qpc_hz=10000000
+12:19:39.088 A/clockcap law capped sweep8 name=add_x6 instr=8 bytes=30 iters=128002003 us=91717.7 ns_per_iter=0.7165 cyc_per_iter=2.001 cyc_per_instr=0.2501 cyc_per_byte=0.0667 latency_cyc=1.0 work_per_us=8373.65 tsc_per_iter=2.2886
+12:19:39.101 A/clockcap law capped sweep32 name=add32_x6 instr=8 bytes=48 iters=128002003 us=91697.4 ns_per_iter=0.7164 cyc_per_iter=2.000 cyc_per_instr=0.2500 cyc_per_byte=0.0417 latency_cyc=1.0 work_per_us=8375.50 tsc_per_iter=2.2882
+12:19:39.109 A/clockcap law capped sweep8 name=add_x12 instr=14 bytes=54 iters=43389721 us=57564.4 ns_per_iter=1.3267 cyc_per_iter=3.705 cyc_per_instr=0.2646 cyc_per_byte=0.0686 latency_cyc=1.0 work_per_us=9045.12 tsc_per_iter=4.2375
+12:19:39.117 A/clockcap law capped sweep32 name=add32_x12 instr=14 bytes=90 iters=43389721 us=57566.2 ns_per_iter=1.3267 cyc_per_iter=3.705 cyc_per_instr=0.2646 cyc_per_byte=0.0412 latency_cyc=1.0 work_per_us=9044.83 tsc_per_iter=4.2376
+12:19:39.127 A/clockcap law capped sweep8 name=add_x18 instr=20 bytes=78 iters=30402400 us=57640.9 ns_per_iter=1.8959 cyc_per_iter=5.294 cyc_per_instr=0.2647 cyc_per_byte=0.0679 latency_cyc=1.0 work_per_us=9494.01 tsc_per_iter=6.0559
+12:19:39.136 A/clockcap law capped sweep32 name=add32_x18 instr=20 bytes=136 iters=29662140 us=54001.4 ns_per_iter=1.8205 cyc_per_iter=5.084 cyc_per_instr=0.2542 cyc_per_byte=0.0374 latency_cyc=1.0 work_per_us=9887.12 tsc_per_iter=5.8151
+12:19:39.144 A/clockcap law capped sweep8 name=add_x24 instr=26 bytes=102 iters=22925744 us=57124.6 ns_per_iter=2.4917 cyc_per_iter=6.958 cyc_per_instr=0.2676 cyc_per_byte=0.0682 latency_cyc=1.0 work_per_us=9631.89 tsc_per_iter=7.9587
+12:19:39.155 A/clockcap law capped sweep32 name=add32_x24 instr=26 bytes=178 iters=23003704 us=57332.5 ns_per_iter=2.4923 cyc_per_iter=6.959 cyc_per_instr=0.2677 cyc_per_byte=0.0391 latency_cyc=1.0 work_per_us=9629.60 tsc_per_iter=7.9606
+12:19:39.163 A/clockcap law capped sweep8 name=add_x36 instr=38 bytes=154 iters=15870842 us=57590.4 ns_per_iter=3.6287 cyc_per_iter=10.133 cyc_per_instr=0.2666 cyc_per_byte=0.0658 latency_cyc=1.0 work_per_us=9920.93 tsc_per_iter=11.5902
+12:19:39.172 A/clockcap law capped sweep32 name=add32_x36 instr=38 bytes=262 iters=15755168 us=57248.4 ns_per_iter=3.6336 cyc_per_iter=10.146 cyc_per_instr=0.2670 cyc_per_byte=0.0387 latency_cyc=1.0 work_per_us=9907.46 tsc_per_iter=11.6060
+12:19:39.182 A/clockcap law capped sweep8 name=add_x48 instr=50 bytes=202 iters=12128000 us=56804.2 ns_per_iter=4.6837 cyc_per_iter=13.079 cyc_per_instr=0.2616 cyc_per_byte=0.0647 latency_cyc=1.0 work_per_us=10248.26 tsc_per_iter=14.9600
+12:19:39.191 A/clockcap law capped sweep32 name=add32_x48 instr=50 bytes=346 iters=12115223 us=56880.4 ns_per_iter=4.6950 cyc_per_iter=13.110 cyc_per_instr=0.2622 cyc_per_byte=0.0379 latency_cyc=1.0 work_per_us=10223.74 tsc_per_iter=14.9959
+12:19:39.201 A/clockcap law capped slope_imm8 points=6 slope_cyc_per_instr=0.2641 intercept_cyc=-0.005 r2=0.99946 instr_per_cyc=3.787
+12:19:39.210 A/clockcap law capped slope_imm32 points=6 slope_cyc_per_instr=0.2659 intercept_cyc=-0.079 r2=0.99917 instr_per_cyc=3.761
+12:19:39.219 A/clockcap law capped knee name=knee_m0 instr=10 bytes=38 iters=6691734 us=57518.1 ns_per_iter=8.5954 cyc_per_iter=24.001 cyc_per_instr=2.4001 cyc_per_byte=0.6316 latency_cyc=24.0 work_per_us=930.73 tsc_per_iter=27.4541
+12:19:39.229 A/clockcap law capped knee name=knee_m4 instr=14 bytes=54 iters=6685665 us=57459.9 ns_per_iter=8.5945 cyc_per_iter=23.999 cyc_per_instr=1.7142 cyc_per_byte=0.4444 latency_cyc=24.0 work_per_us=930.83 tsc_per_iter=27.4512
+12:19:39.237 A/clockcap law capped knee name=knee_m8 instr=18 bytes=70 iters=6684732 us=57443.7 ns_per_iter=8.5933 cyc_per_iter=23.995 cyc_per_instr=1.3331 cyc_per_byte=0.3428 latency_cyc=24.0 work_per_us=930.96 tsc_per_iter=27.4472
+12:19:39.248 A/clockcap law capped knee name=knee_m12 instr=22 bytes=86 iters=6685665 us=57454.9 ns_per_iter=8.5937 cyc_per_iter=23.997 cyc_per_instr=1.0908 cyc_per_byte=0.2790 latency_cyc=24.0 work_per_us=930.91 tsc_per_iter=27.4488
+12:19:39.256 A/clockcap law capped knee name=knee_m16 instr=26 bytes=102 iters=6684810 us=57440.0 ns_per_iter=8.5926 cyc_per_iter=23.993 cyc_per_instr=0.9228 cyc_per_byte=0.2352 latency_cyc=24.0 work_per_us=931.03 tsc_per_iter=27.4454
+12:19:39.265 A/clockcap law capped knee name=knee_m20 instr=30 bytes=118 iters=6684111 us=57449.1 ns_per_iter=8.5949 cyc_per_iter=24.000 cyc_per_instr=0.8000 cyc_per_byte=0.2034 latency_cyc=24.0 work_per_us=930.79 tsc_per_iter=27.4525
+12:19:39.275 A/clockcap law capped knee name=knee_m24 instr=34 bytes=138 iters=6684577 us=57451.7 ns_per_iter=8.5947 cyc_per_iter=23.999 cyc_per_instr=0.7059 cyc_per_byte=0.1739 latency_cyc=24.0 work_per_us=930.81 tsc_per_iter=27.4517
+12:19:39.283 A/clockcap law capped knee name=knee_m32 instr=42 bytes=170 iters=6694305 us=57542.3 ns_per_iter=8.5957 cyc_per_iter=24.002 cyc_per_instr=0.5715 cyc_per_byte=0.1412 latency_cyc=24.0 work_per_us=930.70 tsc_per_iter=27.4551
+12:19:39.292 A/clockcap law capped knee name=knee_m40 instr=50 bytes=202 iters=6695240 us=57547.6 ns_per_iter=8.5953 cyc_per_iter=24.001 cyc_per_instr=0.4800 cyc_per_byte=0.1188 latency_cyc=24.0 work_per_us=930.74 tsc_per_iter=27.4538
+12:19:39.302 A/clockcap law capped port name=port_alu_x24 instr=26 bytes=102 iters=23051659 us=57451.0 ns_per_iter=2.4923 cyc_per_iter=6.959 cyc_per_instr=0.2677 cyc_per_byte=0.0682 latency_cyc=1.0 work_per_us=9629.77 tsc_per_iter=7.9604
+12:19:39.311 A/clockcap law capped port name=port_mul_x24 instr=26 bytes=102 iters=6691734 us=57515.9 ns_per_iter=8.5951 cyc_per_iter=24.000 cyc_per_instr=0.9231 cyc_per_byte=0.2353 latency_cyc=3.0 work_per_us=2792.30 tsc_per_iter=27.4530
+12:19:39.320 A/clockcap law capped port name=port_fp_x24 instr=26 bytes=102 iters=6693448 us=57531.3 ns_per_iter=8.5952 cyc_per_iter=24.001 cyc_per_instr=0.9231 cyc_per_byte=0.2353 latency_cyc=3.0 work_per_us=2792.27 tsc_per_iter=27.4534
+12:19:39.330 A/clockcap law capped port name=port_vec128_x24 instr=26 bytes=102 iters=13391415 us=57540.8 ns_per_iter=4.2968 cyc_per_iter=11.998 cyc_per_instr=0.4615 cyc_per_byte=0.1176 latency_cyc=1.0 work_per_us=11170.99 tsc_per_iter=13.7246
+12:19:39.338 A/clockcap law capped port name=port_vec256_x24 instr=26 bytes=102 iters=13377084 us=57496.2 ns_per_iter=4.2981 cyc_per_iter=12.002 cyc_per_instr=0.4616 cyc_per_byte=0.1177 latency_cyc=1.0 work_per_us=22335.39 tsc_per_iter=13.7283
+12:19:39.348 A/clockcap law capped port name=port_load_x24 instr=26 bytes=126 iters=13373662 us=57489.9 ns_per_iter=4.2987 cyc_per_iter=12.004 cyc_per_instr=0.4617 cyc_per_byte=0.0953 latency_cyc=1.0 work_per_us=5583.03 tsc_per_iter=13.7304
+12:19:39.357 A/clockcap law capped port name=port_store_x24 instr=26 bytes=126 iters=6678909 us=57410.5 ns_per_iter=8.5958 cyc_per_iter=24.002 cyc_per_instr=0.9232 cyc_per_byte=0.1905 latency_cyc=1.0 work_per_us=2792.06 tsc_per_iter=27.4554
+12:19:39.365 A/clockcap law capped pair name=dep_imul_x4 instr=6 bytes=22 iters=13389233 us=57541.0 ns_per_iter=4.2976 cyc_per_iter=12.000 cyc_per_instr=2.0000 cyc_per_byte=0.5455 latency_cyc=12.0 work_per_us=930.76 tsc_per_iter=13.7268
+12:19:39.376 A/clockcap law capped pair name=ind_imul_x4 instr=6 bytes=22 iters=39814470 us=57039.8 ns_per_iter=1.4326 cyc_per_iter=4.000 cyc_per_instr=0.6667 cyc_per_byte=0.1818 latency_cyc=3.0 work_per_us=2792.05 tsc_per_iter=4.5759
+12:19:39.384 A/clockcap law capped clock imul16_ns=17.1895 imul16_mhz=2792.4 fp8_ns=8.5943 fp8_mhz_at_3cyc=2792.5 fp_over_imul=1.0001 tsc_mhz=3194.08 qpc_hz=10000000
+12:19:39.393 A/clockcap law capped law_end cpu=2 clock_start_mhz=2792.3 clock_end_mhz=2792.4 drift_pct=0.002
+12:19:39.402 A/clockcap law capped exit=0 seconds=6.4
+12:19:39.410 A/clockcap law capped SUMMARY clock_mhz=2792.3 k_cyc_per_instr=0.2641 (state A reference: clock about 3489, k about 0.23; state B 2026-10-12: clock about 2790, k about 1.1)
+12:19:39.425 A/clockcap clockcap capped_clock_followed=True target_mhz=2800 witness_mhz=2792.3
+12:19:39.576 A/clockcap cpu reset cpu reset: done, serial 1
+12:19:39.577 A/clockcap cpu reset cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+12:19:39.585 A/clockcap cpu reset cpu: applied clock 3500 MHz, undervolt 0 steps, cap 0 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+12:19:39.593 A/clockcap cpu reset cpu: 806 mV (GPU 824 mV), firmware cap 100 C, features 0xDD602C7D, 61.1 C
+12:19:39.600 A/clockcap cpu reset cpu: cores 1400 1400 1400 900 1400 1400 1400 900 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+12:19:39.608 A/clockcap cpu reset cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+12:19:39.617 A/clockcap cpu reset cpu: reads 118 writes 2 refusals 0 reverts 0 (retries 0, refused 0); last queue 3 message 0x36 argument 0x00000000 status 0x00000001
+12:19:41.661 A/clockcap cpu after-reset cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+12:19:41.662 A/clockcap cpu after-reset cpu: applied clock 3500 MHz, undervolt 0 steps, cap 0 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+12:19:41.670 A/clockcap cpu after-reset cpu: 806 mV (GPU 824 mV), firmware cap 100 C, features 0xDD602C7D, 61.1 C
+12:19:41.678 A/clockcap cpu after-reset cpu: cores 1400 1400 1400 900 1400 1400 1400 900 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+12:19:41.685 A/clockcap cpu after-reset cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+12:19:41.693 A/clockcap cpu after-reset cpu: reads 118 writes 2 refusals 0 reverts 0 (retries 0, refused 0); last queue 3 message 0x36 argument 0x00000000 status 0x00000001
+12:19:47.995 A/clockcap law released law_begin cpu=2 on=2 ms=50 full=0 processors=12
+12:19:47.997 A/clockcap law released law_isa osxsave=1 avx=1 avx2=1 xcr0_ymm=1 vec256=run
+12:19:48.005 A/clockcap law released clock imul16_ns=13.7550 imul16_mhz=3489.6 fp8_ns=6.8757 fp8_mhz_at_3cyc=3490.6 fp_over_imul=1.0003 tsc_mhz=3194.04 qpc_hz=10000000
+12:19:48.013 A/clockcap law released sweep8 name=add_x6 instr=8 bytes=30 iters=128002003 us=73358.8 ns_per_iter=0.5731 cyc_per_iter=2.000 cyc_per_instr=0.2500 cyc_per_byte=0.0667 latency_cyc=1.0 work_per_us=10469.26 tsc_per_iter=1.8305
+12:19:48.021 A/clockcap law released sweep32 name=add32_x6 instr=8 bytes=48 iters=128002003 us=73368.6 ns_per_iter=0.5732 cyc_per_iter=2.000 cyc_per_instr=0.2500 cyc_per_byte=0.0417 latency_cyc=1.0 work_per_us=10467.86 tsc_per_iter=1.8308
+12:19:48.028 A/clockcap law released sweep8 name=add_x12 instr=14 bytes=54 iters=53628109 us=56928.3 ns_per_iter=1.0615 cyc_per_iter=3.704 cyc_per_instr=0.2646 cyc_per_byte=0.0686 latency_cyc=1.0 work_per_us=11304.35 tsc_per_iter=3.3906
+12:19:48.037 A/clockcap law released sweep32 name=add32_x12 instr=14 bytes=90 iters=54132986 us=57456.3 ns_per_iter=1.0614 cyc_per_iter=3.704 cyc_per_instr=0.2646 cyc_per_byte=0.0412 latency_cyc=1.0 work_per_us=11305.91 tsc_per_iter=3.3902
+12:19:48.044 A/clockcap law released sweep8 name=add_x18 instr=20 bytes=78 iters=38001492 us=57597.1 ns_per_iter=1.5157 cyc_per_iter=5.289 cyc_per_instr=0.2645 cyc_per_byte=0.0678 latency_cyc=1.0 work_per_us=11876.06 tsc_per_iter=4.8411
+12:19:48.052 A/clockcap law released sweep32 name=add32_x18 instr=20 bytes=136 iters=40173310 us=57615.0 ns_per_iter=1.4342 cyc_per_iter=5.005 cyc_per_instr=0.2502 cyc_per_byte=0.0368 latency_cyc=1.0 work_per_us=12550.89 tsc_per_iter=4.5808
+12:19:48.059 A/clockcap law released sweep8 name=add_x24 instr=26 bytes=102 iters=28842325 us=57518.6 ns_per_iter=1.9942 cyc_per_iter=6.959 cyc_per_instr=0.2677 cyc_per_byte=0.0682 latency_cyc=1.0 work_per_us=12034.64 tsc_per_iter=6.3697
+12:19:48.066 A/clockcap law released sweep32 name=add32_x24 instr=26 bytes=178 iters=28796103 us=57431.6 ns_per_iter=1.9944 cyc_per_iter=6.960 cyc_per_instr=0.2677 cyc_per_byte=0.0391 latency_cyc=1.0 work_per_us=12033.56 tsc_per_iter=6.3703
+12:19:48.075 A/clockcap law released sweep8 name=add_x36 instr=38 bytes=154 iters=19828290 us=57448.7 ns_per_iter=2.8973 cyc_per_iter=10.111 cyc_per_instr=0.2661 cyc_per_byte=0.0657 latency_cyc=1.0 work_per_us=12425.32 tsc_per_iter=9.2544
+12:19:48.083 A/clockcap law released sweep32 name=add32_x36 instr=38 bytes=262 iters=19836499 us=57700.6 ns_per_iter=2.9088 cyc_per_iter=10.151 cyc_per_instr=0.2671 cyc_per_byte=0.0387 latency_cyc=1.0 work_per_us=12376.20 tsc_per_iter=9.2909
+12:19:48.091 A/clockcap law released sweep8 name=add_x48 instr=50 bytes=202 iters=15749126 us=59017.6 ns_per_iter=3.7474 cyc_per_iter=13.077 cyc_per_instr=0.2615 cyc_per_byte=0.0647 latency_cyc=1.0 work_per_us=12809.03 tsc_per_iter=11.9692
+12:19:48.099 A/clockcap law released sweep32 name=add32_x48 instr=50 bytes=346 iters=15754736 us=59106.6 ns_per_iter=3.7517 cyc_per_iter=13.092 cyc_per_instr=0.2618 cyc_per_byte=0.0378 latency_cyc=1.0 work_per_us=12794.30 tsc_per_iter=11.9832
+12:19:48.106 A/clockcap law released slope_imm8 points=6 slope_cyc_per_instr=0.2639 intercept_cyc=-0.004 r2=0.99950 instr_per_cyc=3.790
+12:19:48.114 A/clockcap law released slope_imm32 points=6 slope_cyc_per_instr=0.2660 intercept_cyc=-0.096 r2=0.99878 instr_per_cyc=3.760
+12:19:48.121 A/clockcap law released knee name=knee_m0 instr=10 bytes=38 iters=8338055 us=57334.1 ns_per_iter=6.8762 cyc_per_iter=23.996 cyc_per_instr=2.3996 cyc_per_byte=0.6315 latency_cyc=24.0 work_per_us=1163.43 tsc_per_iter=21.9628
+12:19:48.130 A/clockcap law released knee name=knee_m4 instr=14 bytes=54 iters=8356838 us=57458.0 ns_per_iter=6.8756 cyc_per_iter=23.993 cyc_per_instr=1.7138 cyc_per_byte=0.4443 latency_cyc=24.0 work_per_us=1163.54 tsc_per_iter=21.9608
+12:19:48.137 A/clockcap law released knee name=knee_m8 instr=18 bytes=70 iters=8349072 us=57399.0 ns_per_iter=6.8749 cyc_per_iter=23.991 cyc_per_instr=1.3328 cyc_per_byte=0.3427 latency_cyc=24.0 work_per_us=1163.65 tsc_per_iter=21.9587
+12:19:48.145 A/clockcap law released knee name=knee_m12 instr=22 bytes=86 iters=8357081 us=57454.4 ns_per_iter=6.8749 cyc_per_iter=23.991 cyc_per_instr=1.0905 cyc_per_byte=0.2790 latency_cyc=24.0 work_per_us=1163.65 tsc_per_iter=21.9588
+12:19:48.153 A/clockcap law released knee name=knee_m16 instr=26 bytes=102 iters=8367540 us=57544.8 ns_per_iter=6.8771 cyc_per_iter=23.999 cyc_per_instr=0.9230 cyc_per_byte=0.2353 latency_cyc=24.0 work_per_us=1163.27 tsc_per_iter=21.9660
+12:19:48.161 A/clockcap law released knee name=knee_m20 instr=30 bytes=118 iters=8363037 us=57518.8 ns_per_iter=6.8777 cyc_per_iter=24.001 cyc_per_instr=0.8000 cyc_per_byte=0.2034 latency_cyc=24.0 work_per_us=1163.17 tsc_per_iter=21.9678
+12:19:48.167 A/clockcap law released knee name=knee_m24 instr=34 bytes=138 iters=8367905 us=57549.5 ns_per_iter=6.8774 cyc_per_iter=24.000 cyc_per_instr=0.7059 cyc_per_byte=0.1739 latency_cyc=24.0 work_per_us=1163.23 tsc_per_iter=21.9668
+12:19:48.175 A/clockcap law released knee name=knee_m32 instr=42 bytes=170 iters=8368392 us=57558.5 ns_per_iter=6.8781 cyc_per_iter=24.002 cyc_per_instr=0.5715 cyc_per_byte=0.1412 latency_cyc=24.0 work_per_us=1163.11 tsc_per_iter=21.9689
+12:19:48.183 A/clockcap law released knee name=knee_m40 instr=50 bytes=202 iters=8361456 us=57516.3 ns_per_iter=6.8787 cyc_per_iter=24.004 cyc_per_instr=0.4801 cyc_per_byte=0.1188 latency_cyc=24.0 work_per_us=1163.00 tsc_per_iter=21.9710
+12:19:48.192 A/clockcap law released port name=port_alu_x24 instr=26 bytes=102 iters=28846666 us=57516.0 ns_per_iter=1.9939 cyc_per_iter=6.958 cyc_per_instr=0.2676 cyc_per_byte=0.0682 latency_cyc=1.0 work_per_us=12037.00 tsc_per_iter=6.3685
+12:19:48.199 A/clockcap law released port name=port_mul_x24 instr=26 bytes=102 iters=8360240 us=57475.2 ns_per_iter=6.8748 cyc_per_iter=23.991 cyc_per_instr=0.9227 cyc_per_byte=0.2352 latency_cyc=3.0 work_per_us=3491.00 tsc_per_iter=21.9585
+12:19:48.207 A/clockcap law released port name=port_fp_x24 instr=26 bytes=102 iters=8368392 us=57535.1 ns_per_iter=6.8753 cyc_per_iter=23.992 cyc_per_instr=0.9228 cyc_per_byte=0.2352 latency_cyc=3.0 work_per_us=3490.76 tsc_per_iter=21.9600
+12:19:48.214 A/clockcap law released port name=port_vec128_x24 instr=26 bytes=102 iters=16709790 us=57448.8 ns_per_iter=3.4380 cyc_per_iter=11.998 cyc_per_instr=0.4614 cyc_per_byte=0.1176 latency_cyc=1.0 work_per_us=13961.47 tsc_per_iter=10.9812
+12:19:48.222 A/clockcap law released port name=port_vec256_x24 instr=26 bytes=102 iters=16738977 us=57561.5 ns_per_iter=3.4388 cyc_per_iter=12.000 cyc_per_instr=0.4615 cyc_per_byte=0.1176 latency_cyc=1.0 work_per_us=27916.95 tsc_per_iter=10.9836
+12:19:48.229 A/clockcap law released port name=port_load_x24 instr=26 bytes=126 iters=16646419 us=57228.7 ns_per_iter=3.4379 cyc_per_iter=11.997 cyc_per_instr=0.4614 cyc_per_byte=0.0952 latency_cyc=1.0 work_per_us=6981.01 tsc_per_iter=10.9808
+12:19:48.237 A/clockcap law released port name=port_store_x24 instr=26 bytes=126 iters=8336604 us=57319.5 ns_per_iter=6.8756 cyc_per_iter=23.994 cyc_per_instr=0.9228 cyc_per_byte=0.1904 latency_cyc=1.0 work_per_us=3490.58 tsc_per_iter=21.9611
+12:19:48.244 A/clockcap law released pair name=dep_imul_x4 instr=6 bytes=22 iters=16715619 us=57457.5 ns_per_iter=3.4374 cyc_per_iter=11.995 cyc_per_instr=1.9992 cyc_per_byte=0.5452 latency_cyc=12.0 work_per_us=1163.69 tsc_per_iter=10.9791
+12:19:48.253 A/clockcap law released pair name=ind_imul_x4 instr=6 bytes=22 iters=50218391 us=57540.8 ns_per_iter=1.1458 cyc_per_iter=3.998 cyc_per_instr=0.6664 cyc_per_byte=0.1817 latency_cyc=3.0 work_per_us=3490.98 tsc_per_iter=3.6598
+12:19:48.261 A/clockcap law released clock imul16_ns=13.7529 imul16_mhz=3490.2 fp8_ns=6.8758 fp8_mhz_at_3cyc=3490.5 fp_over_imul=1.0001 tsc_mhz=3194.04 qpc_hz=10000000
+12:19:48.269 A/clockcap law released law_end cpu=2 clock_start_mhz=3489.6 clock_end_mhz=3490.2 drift_pct=0.015
+12:19:48.276 A/clockcap law released exit=0 seconds=6.3
+12:19:48.284 A/clockcap law released SUMMARY clock_mhz=3489.6 k_cyc_per_instr=0.2639 (state A reference: clock about 3489, k about 0.23; state B 2026-10-12: clock about 2790, k about 1.1)
+12:19:48.294 A/clockcap clockcap RESULT base_mhz=3490.3 capped_mhz=2792.3 released_mhz=3489.6 base_k=0.2650 capped_k=0.2641 released_k=0.2639
+12:19:48.299 A/clockcap clockcap READING a ceiling that moves the clock and leaves k alone is the positive control of the law
+12:19:48.315 A/clockcap END phase=clockcap state=A exit=0

@@ -1,0 +1,84 @@
+# 2026-10-12T12:17:22Z before-state-A
+{"queried_utc": "2026-10-12T12:17:22.159037+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 596, "19": 884, "20": 2374}, "current_a": 0.596, "power_w": 88.4, "voltage_v": 237.4, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:17:41Z after-state-A
+{"queried_utc": "2026-10-12T12:17:41.131882+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 573, "19": 838, "20": 2378}, "current_a": 0.573, "power_w": 83.8, "voltage_v": 237.8, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:17:47Z before-law-A
+{"queried_utc": "2026-10-12T12:17:47.250888+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 553, "19": 812, "20": 2378}, "current_a": 0.553, "power_w": 81.2, "voltage_v": 237.8, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:18:02Z after-law-A
+{"queried_utc": "2026-10-12T12:18:02.908809+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 578, "19": 845, "20": 2378}, "current_a": 0.578, "power_w": 84.5, "voltage_v": 237.8, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:18:08Z before-lawmap-A
+{"queried_utc": "2026-10-12T12:18:08.937759+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 554, "19": 812, "20": 2378}, "current_a": 0.554, "power_w": 81.2, "voltage_v": 237.8, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:18:16Z after-lawmap-A
+{"queried_utc": "2026-10-12T12:18:16.009550+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 598, "19": 862, "20": 2378}, "current_a": 0.598, "power_w": 86.2, "voltage_v": 237.8, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:18:21Z before-lawmap-A
+{"queried_utc": "2026-10-12T12:18:21.911206+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 553, "19": 810, "20": 2382}, "current_a": 0.553, "power_w": 81.0, "voltage_v": 238.2, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:18:29Z after-lawmap-A
+{"queried_utc": "2026-10-12T12:18:29.068274+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 601, "19": 870, "20": 2374}, "current_a": 0.601, "power_w": 87.0, "voltage_v": 237.4, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:18:36Z before-smu-A
+{"queried_utc": "2026-10-12T12:18:36.387073+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 556, "19": 810, "20": 2374}, "current_a": 0.556, "power_w": 81.0, "voltage_v": 237.4, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:19:03Z after-smu-A
+{"queried_utc": "2026-10-12T12:19:03.140804+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 572, "19": 843, "20": 2374}, "current_a": 0.572, "power_w": 84.3, "voltage_v": 237.4, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:19:09Z before-pmc-A
+{"queried_utc": "2026-10-12T12:19:09.327684+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 552, "19": 808, "20": 2374}, "current_a": 0.552, "power_w": 80.8, "voltage_v": 237.4, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:19:14Z after-pmc-A
+{"queried_utc": "2026-10-12T12:19:14.832745+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 601, "19": 855, "20": 2369}, "current_a": 0.601, "power_w": 85.5, "voltage_v": 236.9, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:19:21Z before-clockcap-A
+{"queried_utc": "2026-10-12T12:19:21.344348+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 553, "19": 809, "20": 2369}, "current_a": 0.553, "power_w": 80.9, "voltage_v": 236.9, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:19:49Z after-clockcap-A
+{"queried_utc": "2026-10-12T12:19:49.323215+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 578, "19": 842, "20": 2378}, "current_a": 0.578, "power_w": 84.2, "voltage_v": 237.8, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:19:56Z before-load-A
+{"queried_utc": "2026-10-12T12:19:56.569473+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 549, "19": 813, "20": 2378}, "current_a": 0.549, "power_w": 81.3, "voltage_v": 237.8, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:20:23Z after-load-A
+{"queried_utc": "2026-10-12T12:20:23.276403+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 701, "19": 1413, "20": 2365}, "current_a": 0.701, "power_w": 141.3, "voltage_v": 236.5, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:20:29Z before-cpu-A
+{"queried_utc": "2026-10-12T12:20:29.765323+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 566, "19": 848, "20": 2378}, "current_a": 0.566, "power_w": 84.8, "voltage_v": 237.8, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:21:15Z after-cpu-A
+{"queried_utc": "2026-10-12T12:21:15.074691+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 574, "19": 898, "20": 2374}, "current_a": 0.574, "power_w": 89.8, "voltage_v": 237.4, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:21:25Z before-enter
+{"queried_utc": "2026-10-12T12:21:25.176390+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 550, "19": 807, "20": 2369}, "current_a": 0.55, "power_w": 80.7, "voltage_v": 236.9, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:21:35Z after-enter
+{"queried_utc": "2026-10-12T12:21:35.474844+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 598, "19": 866, "20": 2369}, "current_a": 0.598, "power_w": 86.6, "voltage_v": 236.9, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:21:41Z before-smu-B
+{"queried_utc": "2026-10-12T12:21:41.051830+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 647, "19": 946, "20": 2360}, "current_a": 0.647, "power_w": 94.6, "voltage_v": 236.0, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:22:09Z after-smu-B
+{"queried_utc": "2026-10-12T12:22:09.423774+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 656, "19": 938, "20": 2378}, "current_a": 0.656, "power_w": 93.8, "voltage_v": 237.8, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:22:16Z before-law-B
+{"queried_utc": "2026-10-12T12:22:16.115294+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 654, "19": 949, "20": 2378}, "current_a": 0.654, "power_w": 94.9, "voltage_v": 237.8, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:22:35Z after-law-B
+{"queried_utc": "2026-10-12T12:22:35.812646+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 666, "19": 938, "20": 2378}, "current_a": 0.666, "power_w": 93.8, "voltage_v": 237.8, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:22:47Z before-lawmap-B
+{"queried_utc": "2026-10-12T12:22:46.980692+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 632, "19": 908, "20": 2378}, "current_a": 0.632, "power_w": 90.8, "voltage_v": 237.8, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:22:57Z after-lawmap-B
+{"queried_utc": "2026-10-12T12:22:57.450989+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 666, "19": 954, "20": 2374}, "current_a": 0.666, "power_w": 95.4, "voltage_v": 237.4, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:23:06Z before-cpu-B
+{"queried_utc": "2026-10-12T12:23:06.380653+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 633, "19": 911, "20": 2369}, "current_a": 0.633, "power_w": 91.1, "voltage_v": 236.9, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:23:54Z after-cpu-B
+{"queried_utc": "2026-10-12T12:23:54.205101+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 650, "19": 957, "20": 2374}, "current_a": 0.65, "power_w": 95.7, "voltage_v": 237.4, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:23:59Z before-load-B
+{"queried_utc": "2026-10-12T12:23:59.780016+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 630, "19": 914, "20": 2382}, "current_a": 0.63, "power_w": 91.4, "voltage_v": 238.2, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:24:30Z after-load-B
+{"queried_utc": "2026-10-12T12:24:30.971220+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 1208, "19": 1696, "20": 2378}, "current_a": 1.208, "power_w": 169.6, "voltage_v": 237.8, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:24:39Z before-clockcap-B
+{"queried_utc": "2026-10-12T12:24:39.575498+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 643, "19": 920, "20": 2378}, "current_a": 0.643, "power_w": 92.0, "voltage_v": 237.8, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:25:12Z after-clockcap-B
+{"queried_utc": "2026-10-12T12:25:12.642797+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 659, "19": 944, "20": 2378}, "current_a": 0.659, "power_w": 94.4, "voltage_v": 237.8, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:25:18Z before-force-B
+{"queried_utc": "2026-10-12T12:25:18.425755+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 637, "19": 912, "20": 2378}, "current_a": 0.637, "power_w": 91.2, "voltage_v": 237.8, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:26:08Z after-force-B
+{"queried_utc": "2026-10-12T12:26:08.670721+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 659, "19": 937, "20": 2378}, "current_a": 0.659, "power_w": 93.7, "voltage_v": 237.8, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:26:16Z before-enter
+{"queried_utc": "2026-10-12T12:26:16.764879+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 633, "19": 909, "20": 2378}, "current_a": 0.633, "power_w": 90.9, "voltage_v": 237.8, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:26:30Z after-enter
+{"queried_utc": "2026-10-12T12:26:30.372368+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 659, "19": 936, "20": 2378}, "current_a": 0.659, "power_w": 93.6, "voltage_v": 237.8, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:26:32Z before-law-B2
+{"queried_utc": "2026-10-12T12:26:32.846541+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 659, "19": 936, "20": 2378}, "current_a": 0.659, "power_w": 93.6, "voltage_v": 237.8, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:26:52Z after-law-B2
+{"queried_utc": "2026-10-12T12:26:52.296388+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 659, "19": 937, "20": 2378}, "current_a": 0.659, "power_w": 93.7, "voltage_v": 237.8, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:26:58Z before-smu-B2
+{"queried_utc": "2026-10-12T12:26:58.173872+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 633, "19": 910, "20": 2378}, "current_a": 0.633, "power_w": 91.0, "voltage_v": 237.8, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:27:25Z after-smu-B2
+{"queried_utc": "2026-10-12T12:27:25.323692+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 663, "19": 954, "20": 2378}, "current_a": 0.663, "power_w": 95.4, "voltage_v": 237.8, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:29:39Z before-state-A
+{"queried_utc": "2026-10-12T12:29:39.378107+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 563, "19": 817, "20": 2378}, "current_a": 0.563, "power_w": 81.7, "voltage_v": 237.8, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+# 2026-10-12T12:29:55Z after-state-A
+{"queried_utc": "2026-10-12T12:29:55.410906+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 607, "19": 867, "20": 2378}, "current_a": 0.607, "power_w": 86.7, "voltage_v": 237.8, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}

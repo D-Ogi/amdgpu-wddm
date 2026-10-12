@@ -1,0 +1,9 @@
+cache cpu=2 kib=16 steps=8200000 us=25215.1 ns_per_access=3.075
+cache cpu=2 kib=32 steps=8300000 us=25024.1 ns_per_access=3.015
+cache cpu=2 kib=512 steps=3100000 us=25074.2 ns_per_access=8.088
+cache cpu=2 kib=2048 steps=1600000 us=25213.5 ns_per_access=15.758
+cache cpu=2 kib=3072 steps=1600000 us=25745.0 ns_per_access=16.091
+cache cpu=2 kib=4096 steps=700000 us=26442.7 ns_per_access=37.775
+cache cpu=2 kib=6144 steps=300000 us=28824.2 ns_per_access=96.081
+cache cpu=2 kib=8192 steps=300000 us=35094.8 ns_per_access=116.983
+cache cpu=2 kib=65536 steps=200000 us=30568.8 ns_per_access=152.844

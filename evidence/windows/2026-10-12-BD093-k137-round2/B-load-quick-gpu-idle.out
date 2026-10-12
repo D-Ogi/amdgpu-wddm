@@ -1,0 +1,37 @@
+law_begin cpu=2 on=2 ms=50 full=0 processors=12
+law_isa osxsave=1 avx=1 avx2=1 xcr0_ymm=1 vec256=run
+clock imul16_ns=14.0747 imul16_mhz=3410.4 fp8_ns=7.0145 fp8_mhz_at_3cyc=3421.5 fp_over_imul=1.0033 tsc_mhz=3194.05 qpc_hz=10000000
+sweep8 name=add_x6 instr=8 bytes=30 iters=15282408 us=56975.4 ns_per_iter=3.7282 cyc_per_iter=12.714 cyc_per_instr=1.5893 cyc_per_byte=0.4238 latency_cyc=1.0 work_per_us=1609.37 tsc_per_iter=11.9080
+sweep32 name=add32_x6 instr=8 bytes=48 iters=15165517 us=56727.3 ns_per_iter=3.7405 cyc_per_iter=12.757 cyc_per_instr=1.5946 cyc_per_byte=0.2658 latency_cyc=1.0 work_per_us=1604.04 tsc_per_iter=11.9477
+sweep8 name=add_x12 instr=14 bytes=54 iters=8231934 us=56641.8 ns_per_iter=6.8807 cyc_per_iter=23.466 cyc_per_instr=1.6761 cyc_per_byte=0.4346 latency_cyc=1.0 work_per_us=1744.00 tsc_per_iter=21.9774
+sweep32 name=add32_x12 instr=14 bytes=90 iters=8222164 us=57076.4 ns_per_iter=6.9418 cyc_per_iter=23.674 cyc_per_instr=1.6910 cyc_per_byte=0.2630 latency_cyc=1.0 work_per_us=1728.66 tsc_per_iter=22.1724
+sweep8 name=add_x18 instr=20 bytes=78 iters=5626449 us=57133.1 ns_per_iter=10.1544 cyc_per_iter=34.630 cyc_per_instr=1.7315 cyc_per_byte=0.4440 latency_cyc=1.0 work_per_us=1772.63 tsc_per_iter=32.4336
+sweep32 name=add32_x18 instr=20 bytes=136 iters=5625899 us=56951.7 ns_per_iter=10.1231 cyc_per_iter=34.524 cyc_per_instr=1.7262 cyc_per_byte=0.2539 latency_cyc=1.0 work_per_us=1778.11 tsc_per_iter=32.3338
+sweep8 name=add_x24 instr=26 bytes=102 iters=4271382 us=57142.2 ns_per_iter=13.3779 cyc_per_iter=45.624 cyc_per_instr=1.7548 cyc_per_byte=0.4473 latency_cyc=1.0 work_per_us=1794.00 tsc_per_iter=42.7299
+sweep32 name=add32_x24 instr=26 bytes=178 iters=4276401 us=57157.7 ns_per_iter=13.3658 cyc_per_iter=45.583 cyc_per_instr=1.7532 cyc_per_byte=0.2561 latency_cyc=1.0 work_per_us=1795.62 tsc_per_iter=42.6913
+sweep8 name=add_x36 instr=38 bytes=154 iters=2883351 us=56469.8 ns_per_iter=19.5848 cyc_per_iter=66.791 cyc_per_instr=1.7577 cyc_per_byte=0.4337 latency_cyc=1.0 work_per_us=1838.16 tsc_per_iter=62.5548
+sweep32 name=add32_x36 instr=38 bytes=262 iters=2890860 us=57115.3 ns_per_iter=19.7572 cyc_per_iter=67.379 cyc_per_instr=1.7731 cyc_per_byte=0.2572 latency_cyc=1.0 work_per_us=1822.12 tsc_per_iter=63.1057
+sweep8 name=add_x48 instr=50 bytes=202 iters=2203338 us=57294.6 ns_per_iter=26.0035 cyc_per_iter=88.682 cyc_per_instr=1.7736 cyc_per_byte=0.4390 latency_cyc=1.0 work_per_us=1845.90 tsc_per_iter=83.0569
+sweep32 name=add32_x48 instr=50 bytes=346 iters=2192667 us=57166.5 ns_per_iter=26.0717 cyc_per_iter=88.914 cyc_per_instr=1.7783 cyc_per_byte=0.2570 latency_cyc=1.0 work_per_us=1841.08 tsc_per_iter=83.2746
+slope_imm8 points=6 slope_cyc_per_instr=1.8069 intercept_cyc=-1.661 r2=0.99995 instr_per_cyc=0.553
+slope_imm32 points=6 slope_cyc_per_instr=1.8151 intercept_cyc=-1.720 r2=0.99999 instr_per_cyc=0.551
+knee name=knee_m0 instr=10 bytes=38 iters=8161130 us=57189.7 ns_per_iter=7.0076 cyc_per_iter=23.898 cyc_per_instr=2.3898 cyc_per_byte=0.6289 latency_cyc=24.0 work_per_us=1141.62 tsc_per_iter=22.3826
+knee name=knee_m4 instr=14 bytes=54 iters=8202576 us=57649.9 ns_per_iter=7.0283 cyc_per_iter=23.969 cyc_per_instr=1.7121 cyc_per_byte=0.4439 latency_cyc=24.0 work_per_us=1138.26 tsc_per_iter=22.4486
+knee name=knee_m8 instr=18 bytes=70 iters=8184480 us=57651.3 ns_per_iter=7.0440 cyc_per_iter=24.023 cyc_per_instr=1.3346 cyc_per_byte=0.3432 latency_cyc=24.0 work_per_us=1135.72 tsc_per_iter=22.4990
+knee name=knee_m12 instr=22 bytes=86 iters=6503355 us=57223.1 ns_per_iter=8.7990 cyc_per_iter=30.008 cyc_per_instr=1.3640 cyc_per_byte=0.3489 latency_cyc=24.0 work_per_us=909.19 tsc_per_iter=28.1045
+knee name=knee_m16 instr=26 bytes=102 iters=5440805 us=57451.9 ns_per_iter=10.5594 cyc_per_iter=36.012 cyc_per_instr=1.3851 cyc_per_byte=0.3531 latency_cyc=24.0 work_per_us=757.62 tsc_per_iter=33.7274
+knee name=knee_m20 instr=30 bytes=118 iters=4652071 us=57372.0 ns_per_iter=12.3326 cyc_per_iter=42.059 cyc_per_instr=1.4020 cyc_per_byte=0.3564 latency_cyc=24.0 work_per_us=648.69 tsc_per_iter=39.3909
+knee name=knee_m24 instr=34 bytes=138 iters=4058074 us=57214.6 ns_per_iter=14.0990 cyc_per_iter=48.083 cyc_per_instr=1.4142 cyc_per_byte=0.3484 latency_cyc=24.0 work_per_us=567.42 tsc_per_iter=45.0328
+knee name=knee_m32 instr=42 bytes=170 iters=3249564 us=57792.8 ns_per_iter=17.7848 cyc_per_iter=60.653 cyc_per_instr=1.4441 cyc_per_byte=0.3568 latency_cyc=24.0 work_per_us=449.82 tsc_per_iter=56.8058
+knee name=knee_m40 instr=50 bytes=202 iters=2660464 us=56239.7 ns_per_iter=21.1391 cyc_per_iter=72.092 cyc_per_instr=1.4418 cyc_per_byte=0.3569 latency_cyc=24.0 work_per_us=378.45 tsc_per_iter=67.5192
+port name=port_alu_x24 instr=26 bytes=102 iters=4276433 us=57137.0 ns_per_iter=13.3609 cyc_per_iter=45.566 cyc_per_instr=1.7525 cyc_per_byte=0.4467 latency_cyc=1.0 work_per_us=1796.29 tsc_per_iter=42.6754
+port name=port_mul_x24 instr=26 bytes=102 iters=3335754 us=57409.5 ns_per_iter=17.2104 cyc_per_iter=58.694 cyc_per_instr=2.2575 cyc_per_byte=0.5754 latency_cyc=3.0 work_per_us=1394.51 tsc_per_iter=54.9707
+port name=port_fp_x24 instr=26 bytes=102 iters=5468384 us=57632.0 ns_per_iter=10.5391 cyc_per_iter=35.942 cyc_per_instr=1.3824 cyc_per_byte=0.3524 latency_cyc=3.0 work_per_us=2277.23 tsc_per_iter=33.6627
+port name=port_vec128_x24 instr=26 bytes=102 iters=8891237 us=93722.2 ns_per_iter=10.5410 cyc_per_iter=35.949 cyc_per_instr=1.3826 cyc_per_byte=0.3524 latency_cyc=1.0 work_per_us=4553.66 tsc_per_iter=33.6684
+port name=port_vec256_x24 instr=26 bytes=102 iters=4517959 us=57482.0 ns_per_iter=12.7230 cyc_per_iter=43.390 cyc_per_instr=1.6689 cyc_per_byte=0.4254 latency_cyc=1.0 work_per_us=7545.39 tsc_per_iter=40.6380
+port name=port_load_x24 instr=26 bytes=126 iters=4459997 us=57541.8 ns_per_iter=12.9018 cyc_per_iter=44.000 cyc_per_instr=1.6923 cyc_per_byte=0.3492 latency_cyc=1.0 work_per_us=1860.21 tsc_per_iter=41.2090
+port name=port_store_x24 instr=26 bytes=126 iters=4274335 us=57468.8 ns_per_iter=13.4451 cyc_per_iter=45.853 cyc_per_instr=1.7636 cyc_per_byte=0.3639 latency_cyc=1.0 work_per_us=1785.04 tsc_per_iter=42.9443
+pair name=dep_imul_x4 instr=6 bytes=22 iters=13346965 us=56728.5 ns_per_iter=4.2503 cyc_per_iter=14.495 cyc_per_instr=2.4158 cyc_per_byte=0.6589 latency_cyc=12.0 work_per_us=941.11 tsc_per_iter=13.5757
+pair name=ind_imul_x4 instr=6 bytes=22 iters=20085252 us=57614.2 ns_per_iter=2.8685 cyc_per_iter=9.783 cyc_per_instr=1.6304 cyc_per_byte=0.4447 latency_cyc=3.0 work_per_us=1394.47 tsc_per_iter=9.1621
+clock imul16_ns=14.0858 imul16_mhz=3407.7 fp8_ns=7.0142 fp8_mhz_at_3cyc=3421.6 fp_over_imul=1.0041 tsc_mhz=3194.05 qpc_hz=10000000
+law_end cpu=2 clock_start_mhz=3410.4 clock_end_mhz=3407.7 drift_pct=-0.079

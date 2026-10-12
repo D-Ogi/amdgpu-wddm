@@ -1,0 +1,832 @@
+log          782 lines since this driver load, 0 lost to the wrap, 7 dropped above DISPATCH_LEVEL; ring 1024 lines of which the first 256 are kept; table FULL WDDM (the gate was open at DriverEntry)
+     0      0.000 interop: \Callback\PowerState registration 0x00000000
+     1      0.000 stage 10
+     2      0.000 gate: EnableFullWddm 2
+     3      0.000 stage 20
+     4      0.468 stage 30
+     5      0.468 start record attempt - - 0x00000000, 0 lines, write 0x00000000
+     6      0.468 guard: count 0 -> 1 flushed, durable required 1
+     7      0.468 stage 31
+     8      0.468 stage 32
+     9      0.468 post display 1920x1080 pitch 7680 format 22 target 2424833
+    10      0.468 stage 33
+    11      0.468 stage 34
+    12      0.468 interrupt resource 1: message, vector 0x80, flags 0x3
+    13      0.468 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes allowed, vidpn flip allowed
+    14      0.468 hwmon: base 0x0A20 ec 1.0 build 07/28/21 customer 0x162B -> ok
+    15      0.468 hwmon: base 0x0A20 cfg 0x80 fans 0x1F duties 0x1F temps 3 volts 6 mode 0xE0 eng 0x60
+    16      0.468 hwmon: customer ID 0x162B is not pinned (HwmonExpectId absent): pin it after this trial
+    17      0.468 smu: native owner start status 0x00000000
+    18      0.468 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    19      0.468 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    20      0.468 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    21      0.468 gart: ready, dummy page at 0x26FF16000
+    22      0.468 psp: ready
+    23      0.468 gpumem: ready, doorbells at 0xD0000000
+    24      0.468 gfx: ready, GPU submission allowed, paging node allowed, hot submit log off
+    25      0.468 gfx: VMID pool on (EnableVmidPool)
+    26      0.468 gfx: VM flush on the ring (EnableRingVmFlush), engine 1
+    27      0.468 ih: ready
+    28      0.468 wddm: composed source modes offered
+    29      0.468 interop: requested 0x3 effective 0x3 reason 0 (none) closed-reason 0 flags 0x801 blit 1 cdd 1 previous-end 2
+    30      0.468 wddm: scan-out admission on
+    31      0.468 wddm: DirectFlip handshake on
+    32      0.468 wddm: DirectFlip handshake inputs: asked 1 gate 1 flip 1 vram 1 mmio 1 aligned 1 post 1
+    33      0.468 dcnflip: plane format: firmware argb8888 config 0x00000008 crossbar 0x00E40000 cnvc 0x00000008
+    34      0.468 dcnflip: plane format: cnvc control 0x02000000 alpha lut 0xFFAA5500 mpcc control 0xFFFF0461 (blend mode 2)
+    35      0.468 wddm: plane formats on
+    36      0.468 wddm: shared residency on (UMD VRAM allocations may be demoted to the aperture)
+    37      0.468 wddm: completion report pairs its own notify dpc: yes
+    38      0.468 wddm: submit watchdog 12000 ms (TdrDelay 10000 ms, setting 0, default), looks for progress every 250 ms
+    39      0.468 wddm: the 500 ms budget of every build before 0.7.216.27 tripped on legitimate compute packets (BD-114); the OS TDR owns recovery
+    40      0.468 wddm: pre-kill wave capture on
+    41      0.468 wddm: HangRecoveryMode 1: a node-0 ResetEngine tries stage-1 soft recovery, verdicts in Parameters\HangRecovery
+    42      0.468 wddm: OS aperture asked 384 MiB, using 384 MiB (only MAP_APERTURE_SEGMENT uses it)
+    43      0.468 wddm: OS aperture 384 MiB at gpu 0x4002000, PTE slice 0xF5FFE20010
+    44      0.484 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+    45      0.484 vidmm: table segment 3 at physical 0x45E140000 + 0xFEC0000, host memory below 0x270000000, updates are WRITTEN
+    46      0.484 startup: entering interrupt connection
+    47      0.484 startup: entering firmware preparation
+    48      0.484 startup: entering native clock preparation
+    49      0.484 startup: clock status 0x00000000 ready 1 request 1000MHz/820mV initial 1000MHz/VID116 observed 1000MHz/VID116 temp 63750mc staged 0
+    50      0.484 gfx: CP_ME_CNTL 0x15000000, CP_MEC_CNTL 0x50000000, SDMA0/1_F32_CNTL 0x1 0x1
+    51      0.484 gfx: unpublished translation bootstrap entered with engines halted
+    52      0.484 gfx: RLC before-gart-initialization CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    53      0.484 gfx: GRBM before-gart-initialization STATUS 0x00003028 read 0x00000000
+    54      0.484 startup: entering GART initialization
+    55      0.500 gart: startup startup-after-gfxhub-enable sample 0x00000000 fault 0x00000000
+    56      0.500 gfx: RLC startup-after-gfxhub-enable CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    57      0.500 gfx: GRBM startup-after-gfxhub-enable STATUS 0x00003028 read 0x00000000
+    58      0.500 gart: startup startup-after-mmhub-enable sample 0x00000000 fault 0x00000000
+    59      0.500 gfx: RLC startup-after-mmhub-enable CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    60      0.500 gfx: GRBM startup-after-mmhub-enable STATUS 0x00003028 read 0x00000000
+    61      0.500 gart: startup startup-after-fault-defaults sample 0x00000000 fault 0x00000000
+    62      0.500 gfx: RLC startup-after-fault-defaults CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    63      0.500 gfx: GRBM startup-after-fault-defaults STATUS 0x00003028 read 0x00000000
+    64      0.500 gart: startup bootstrap-after-mmhub-flush sample 0x00000000 fault 0x00000000
+    65      0.500 gfx: RLC bootstrap-after-mmhub-flush CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    66      0.500 gfx: GRBM bootstrap-after-mmhub-flush STATUS 0x00003028 read 0x00000000
+    67      0.500 gart: op 1 -> 0x00000000 (-), result 0, 284 writes, fault offset 0x00000
+    68      0.500 gfx: RLC before-psp CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    69      0.500 gfx: GRBM before-psp STATUS 0x00003028 read 0x00000000
+    70      0.500 startup: entering PSP initialization
+    71      0.547 gfx: RLC before-psp-ring-create CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    72      0.547 gfx: GRBM before-psp-ring-create STATUS 0x00003028 read 0x00000000
+    73      0.578 gfx: RLC after-psp-ring-create CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    74      0.578 gfx: GRBM after-psp-ring-create STATUS 0x00003028 read 0x00000000
+    75      0.578 amdgpu[0]: reserve 0x400000 from 0xf5ff800000 for PSP TMR
+
+    76      0.578 psp: command 1 (id 5, type 0, 4194304 bytes): rc 0, status 0x0, 261 us, in TMR at 0x0
+    77      0.578 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    78      0.578 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    79      0.578 psp: command 2 (id 6, type 9, 33536 bytes): rc 0, status 0x0, 1906 us, in TMR at 0x0
+    80      0.578 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    81      0.578 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    82      0.578 psp: command 3 (id 6, type 10, 33536 bytes): rc 0, status 0x0, 1893 us, in TMR at 0x0
+    83      0.578 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    84      0.578 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    85      0.578 psp: command 4 (id 6, type 3, 263040 bytes): rc 0, status 0x0, 5862 us, in TMR at 0xF5FF842000
+    86      0.578 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    87      0.578 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    88      0.593 psp: command 5 (id 6, type 2, 263168 bytes): rc 0, status 0x0, 5891 us, in TMR at 0xF5FF883000
+    89      0.593 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    90      0.593 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    91      0.593 psp: command 6 (id 6, type 1, 263168 bytes): rc 0, status 0x0, 5913 us, in TMR at 0xF5FF8C4000
+    92      0.593 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    93      0.593 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    94      0.593 psp: command 7 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5963 us, in TMR at 0xF5FF800000
+    95      0.593 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    96      0.593 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    97      0.593 psp: command 8 (id 6, type 5, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    98      0.593 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    99      0.593 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+   100      0.609 psp: command 9 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5980 us, in TMR at 0xF5FF800000
+   101      0.609 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+   102      0.609 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+   103      0.609 psp: command 10 (id 6, type 6, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+   104      0.609 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+   105      0.609 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+   106      0.609 psp: command 11 (id 6, type 8, 25088 bytes): rc 0, status 0x0, 1739 us, in TMR at 0x0
+   107      0.609 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+   108      0.609 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+   109      0.609 psp: op 1 -> 0x00000000, result 0, 15 writes, 11 of 11 commands
+   110      0.609 gfx: RLC after-psp CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+   111      0.609 gfx: GRBM after-psp STATUS 0x00003028 read 0x00000000
+   112      0.609 startup: entering IH initialization
+   113      0.609 ih: init: rc 0, 18 writes
+   114      0.609 ih: op 1 -> 0x00000000, result 0, 19 writes; 0 interrupt routine calls, 0 ours, 0 DPCs, 0 vectors; status idle 1 input_idle 1 bif_interrupt_line 0
+   115      0.609 startup: entering GFX initialization
+   116      0.609 cumode: CuMode 40 disable 0x00000 -> mode 40 reason 0, confirmed earlier, stock from this boot's record
+   117      0.609 gfx: RLC startup policy pp_gfxoff 0
+   118      0.609 gfx: stage 1 (doorbell aperture): rc 0, 49 writes so far, 2 us
+   119      0.609 gfx: stage 2 (golden registers): rc 0, 83 writes so far, 24 us
+   120      0.609 gfx: stage 3 (GRBM CAM probe): rc 0, 86 writes so far, 2 us
+   121      0.609 cumode: stage run: mode 40 applied 40 reason 0 wrote 1
+   122      0.609 gfx: stage 4 (constants): rc 0, 264 writes so far, 82 us
+   123      0.609 gpumem: GFXHUB after-invalidate-request sample 0x00F80001 fault 0x00000000
+   124      0.609 gpumem: GFXHUB after-invalidate-request-read sample 0x00F80001 fault 0x00000000
+   125      0.609 gpumem: GFXHUB after-invalidate-ack sample 0x00000001 fault 0x00000000
+   126      0.609 gpumem: startup GFX translations committed after RLC, before CP
+   127      0.609 gfx: RLC after-bootstrap-translation-commit CNTL 0x00000001 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   128      0.609 gfx: GRBM after-bootstrap-translation-commit STATUS 0x00003028 read 0x00000000
+   129      0.609 gfx: stage 5 (RLC): rc 0, 275 writes so far, 171 us
+   130      0.609 amdgpu[0]: CP resume kiq-init begin
+
+   131      0.609 amdgpu[0]: CP resume kiq-init end result=0
+
+   132      0.609 amdgpu[0]: CP resume compute-unhalt begin
+
+   133      0.609 amdgpu[0]: CP resume compute-unhalt end
+
+   134      0.609 amdgpu[0]: CP resume kcq-init ring=0 begin
+
+   135      0.609 amdgpu[0]: CP resume kcq-init ring=0 end result=0
+
+   136      0.609 amdgpu[0]: CP resume kcq-init ring=1 begin
+
+   137      0.609 amdgpu[0]: CP resume kcq-init ring=1 end result=0
+
+   138      0.609 amdgpu[0]: CP resume kcq-init ring=2 begin
+
+   139      0.609 amdgpu[0]: CP resume kcq-init ring=2 end result=0
+
+   140      0.609 amdgpu[0]: CP resume kcq-init ring=3 begin
+
+   141      0.609 amdgpu[0]: CP resume kcq-init ring=3 end result=0
+
+   142      0.609 amdgpu[0]: CP resume kcq-init ring=4 begin
+
+   143      0.609 amdgpu[0]: CP resume kcq-init ring=4 end result=0
+
+   144      0.609 amdgpu[0]: CP resume kcq-init ring=5 begin
+
+   145      0.609 amdgpu[0]: CP resume kcq-init ring=5 end result=0
+
+   146      0.609 amdgpu[0]: CP resume kcq-init ring=6 begin
+
+   147      0.609 amdgpu[0]: CP resume kcq-init ring=6 end result=0
+
+   148      0.609 amdgpu[0]: CP resume kcq-init ring=7 begin
+
+   149      0.609 amdgpu[0]: CP resume kcq-init ring=7 end result=0
+
+   150      0.609 amdgpu[0]: CP resume kcq-enable begin
+
+   151      0.609 amdgpu[0]: CP resume kcq-enable end result=0
+
+   152      0.609 amdgpu[0]: CP resume kgq-init ring=0 begin
+
+   153      0.609 amdgpu[0]: CP resume kgq-init ring=0 end result=0
+
+   154      0.609 amdgpu[0]: CP resume kgq-enable begin
+
+   155      0.609 amdgpu[0]: CP resume kgq-enable end result=0
+
+   156      0.609 amdgpu[0]: CP resume gfx-start begin
+
+   157      0.609 amdgpu[0]: CP resume gfx-start end result=0
+
+   158      0.609 amdgpu[0]: CP resume gfx-test ring=0 begin
+
+   159      0.609 amdgpu[0]: CP resume gfx-test ring=0 end result=0
+
+   160      0.609 amdgpu[0]: CP resume compute-test ring=0 begin
+
+   161      0.609 amdgpu[0]: CP resume compute-test ring=0 end result=0
+
+   162      0.609 amdgpu[0]: CP resume compute-test ring=1 begin
+
+   163      0.609 amdgpu[0]: CP resume compute-test ring=1 end result=0
+
+   164      0.609 amdgpu[0]: CP resume compute-test ring=2 begin
+
+   165      0.609 amdgpu[0]: CP resume compute-test ring=2 end result=0
+
+   166      0.609 amdgpu[0]: CP resume compute-test ring=3 begin
+
+   167      0.609 amdgpu[0]: CP resume compute-test ring=3 end result=0
+
+   168      0.609 amdgpu[0]: CP resume compute-test ring=4 begin
+
+   169      0.609 amdgpu[0]: CP resume compute-test ring=4 end result=0
+
+   170      0.609 amdgpu[0]: CP resume compute-test ring=5 begin
+
+   171      0.609 amdgpu[0]: CP resume compute-test ring=5 end result=0
+
+   172      0.609 amdgpu[0]: CP resume compute-test ring=6 begin
+
+   173      0.609 amdgpu[0]: CP resume compute-test ring=6 end result=0
+
+   174      0.609 amdgpu[0]: CP resume compute-test ring=7 begin
+
+   175      0.609 amdgpu[0]: CP resume compute-test ring=7 end result=0
+
+   176      0.609 gfx: stage 6 (CP): rc 0, 337 writes so far, 558 us
+   177      0.609 gfx: stage 7 (SDMA): rc 0, 430 writes so far, 537 us
+   178      0.609 gfx: stage 8 (interrupt sources): rc 0, 465 writes so far, 22 us
+   179      0.609 gfx: paging node ready, SDMA0 doorbell 0x200, per-buffer private commands
+   180      0.609 gfx: op 1 to stage 8 -> 0x00000000, result 0, 465 writes, 16 doorbells
+   181      0.609 cumode: applied 40 CUs (40 counted), reason 0, consistent 1, wrote 1, RLC_PG_CNTL 0x00800000 (PG enables 0x0), after the RLC stage 0x00800000 (PG enables 0x0)
+   182      0.609 cumode: SA0-3 CC 0xFFE00000 0xFFE00000 0xFFE00000 0xFFE00000 SPI 0x1F 0x1F 0x1F 0x1F
+   183      0.609 startup: both engines ready
+   184      0.609 startup: attempted 0x1F completed 0x1F status 0x00000000 ready 1 unwind 0 quarantine 0
+   185      0.609 wddm: GPU initialized before adapter admission
+   186      0.609 wddm: callbacks sync 1 notify 1 queuedpc 1 notifydpc 1, interface 576 of 568 bytes
+   187      0.609 wddm: handle callbacks size 576 get@104=FFFFF8054DD3E910 acquire@288=FFFFF8054DC24100 release@296=FFFFF8054DC24760
+   188      0.719 display: TMDS inherited 1920x1080 total 2080x1119 measured 74.974 Hz over 8 frames, pixel 174500000 Hz, source measured
+   189      0.719 inherited: source 1920x1080 pitch 7680 target 1920x1080 fixed 0 support 0 status C00000BB valid 1FFFFF
+   190      0.719 display inherited: viewport 00000000/04380780 recout 00000000/04380780 mpc 04380780 scl 00000001 ratio 01000000/01000000
+   191      0.719 display inherited: top 00000000 odm 00000000 hubp 000F100A mem 00000000 taps 00000000 format 00000008 tiling 00000080 pitch 0000077F otg1 80000310
+   192      0.719 display inherited: surface 00000000 bottom 00000000 mpcc FFFF0461 out 01440000
+   193      0.781 display modes: DDC EDID 256 bytes status 0x00000000 cleanup 0x00000000, 3 transfers 54010 us
+   194      0.781 display modes: adapter type 2 max TMDS 300000 kHz query 0x00000000 (type 0 = not identified)
+   195      0.781 display modes: EDID ok, 256 bytes, 2 blocks, version 1.3
+   196      0.781 display modes: monitor GSM product 0x5C6A name 'LG FHD'
+   197      0.781 display modes: preferred 1920x1080 100.000 Hz, pixel clock 228800 kHz; native (firmware) 1920x1080
+   198      0.781 display modes: EDID HDMI 1 max sink TMDS 0 kHz; inherited output timing and transform retained
+   199      0.781 display modes: requested 2 level 0, 1 source modes, descriptor served
+   200      0.781 display modes: list 0..0: 1920x1080/0x01
+   201      0.781 dpaudio: codec 0x1002AA01 rev 0x00100700 straps 0x00008000 vid 0x00100200/0x00100200 be 0x00020100/0x00010000 hpd 0x12/0x0
+   202      0.781 dpaudio: ep0 cfg 0x185600F0 hpc 0x00000000 unsol 0x80 sense 0x7FFFFFFF; ep1 cfg 0x185600F0 hpc 0x00000000; first fail 0x00000000
+   203      0.781 dpaudio: sec 0x00000000/0x00000000 dto src 0x00000030 dto1 0/1 afmt 0x00000100/0x00000000 pkt 0x04000800/0x04000800
+   204      0.781 hdmi: start refused: no eligible HDMI back end: need DIG_MODE 3, one front end and OTG0 stream 0 ep 0 notes 0
+   205      0.781 hdmiaudio: inherited DIG0 snapshot DIG_MODE 2 (TMDS-DVI), BE_CNTL 0x00020100; audio requires HDMI mode 3
+   206      0.781 hdmiaudio: inherited DIG1 snapshot DIG_MODE 1 (other), BE_CNTL 0x00010000; audio requires HDMI mode 3
+   207      0.781 hdmiaudio: result refused reason 8 (no eligible HDMI back end: need DIG_MODE 3, one front end and OTG0); gate 0
+   208      0.781 hdmiaudio: CTA LPCM 1 pixel100Hz 1745000 ELD source DDC
+   209      0.781 stage 35
+   210      0.781 fan: control on: mode curve profile standard
+   211      0.781 fan: load boost on (FanLoadBoost)
+   212      0.781 fan: restore record taken at the first change, bugcheck callback on
+   213      0.781 fan: the watchdog's handback runs in a work item at PASSIVE_LEVEL
+   214      0.781 smu metrics: table page MC 0xF5FFFEC000, physical 0x46FFEC000, one read every 1000 ms
+   215      0.781 dpm: thermal zone DpmThermalZone 0 (absent) -> on, error 0
+   216      0.781 dpm: thermal zone: steps from 86000 mC, no raise from 83000 mC
+   217      0.781 dpm: idle DpmIdleMHz 500 hold 3000 ms (absent) under 2 permille (absent) -> on (error 0)
+   218      0.781 dpm: idle DpmIdleLeavePermille 150 (absent): leaves at 150 permille over the window, or 500 in one tick
+   219      0.781 dpm: joint power arm DpmJointGovernor 0 (absent) -> off
+   220      0.781 dpm: DpmMode 1 DpmMaxMHz 2000 -> DPM, ceiling 2000 MHz, reason 0, confirmed earlier
+   221      0.781 dpm: hardware busy sampler running, every 1000 us
+   222      0.791 dpm: telemetry in the log every 5000 ms, every 120000 ms at the idle point
+   223      0.791 cpu: the surface is on (CpuTune 1), trial window 25000 ms
+   224      0.791 cpu: the surface sees 12 processors, core mask 0x77
+   225      0.834 fan: now curve, duty 76% (raw 194), guard 63.7 C
+   226      0.834 fan: now reason none, doubt none
+   227      1.868 stage 39
+   228      1.869 start record started - - 0x00000000, 0 lines, write 0x00000000
+   229      1.869 wddm: display QueryChildRelations call 1 detail 0x38 -> 0x00000000
+   230      1.869 wddm: DRIVERCAPS reply started1 interop1 extent-shifts2/2
+   231      1.869 wddm: DRIVERCAPS into 592 bytes: wddm 8192 sched 0x45 mm 0x60 flip 0x12 slots 0 tdr 1 dflip 1 rot 1
+   232      1.869 wddm: QueryAdapterInfo type 1 in 0 out 592 -> 0x00000000
+   233      1.869 wddm: QueryAdapterInfo type 15 in 4 out 32 -> 0xC00000BB
+   234      1.869 wddm: QueryAdapterInfo type 47 in 0 out 4 -> 0xC00000BB
+   235      1.869 wddm: QueryAdapterInfo type 13 in 4 out 24 -> 0x00000000
+   236      1.869 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   237      1.869 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   238      1.869 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   239      1.869 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   240      1.869 wddm: GetNodeMetadata node 0 adapter 0
+   241      1.869 wddm: GetNodeMetadata node 1 adapter 0
+   242      1.870 wddm: QUERYSEGMENT4 pass 1: 3 segment(s)
+   243      1.870 wddm: QUERYSEGMENT4 pass 2: 3 segment(s), stride 104, paging buffer segment 2, 65536 bytes
+   244      1.870 wddm: segment 1 flags 0x00080404 gpu 0xF4007F0000 cpu 0x2707F0000 size 0x1ED950000
+   245      1.871 wddm: QueryAdapterInfo type 16 in 0 out 4 -> 0xC00000BB
+   246      1.871 wddm: CreateProcess flags 0x00000001 pasids 1
+   247      1.871 wddm: CreateDevice flags 0x00000001 pasid 0 pid 4
+   248      1.871 wddm: CreateDevice flags 0x00000001 pasid 0 pid 4
+   249      1.873 wddm: capture reservation ready 22020400 bytes
+   250      1.873 wddm: context FFFFB903CE4E9A30 pid 4 node 1 umd 0 system 1 ip 0
+   251      1.873 wddm: CreateContext node 1 engine 0x1 flags 0x00000005 private 0
+   252      1.873 wddm: CreateContext answered dma 65536 bytes segment set 0x2, lists 256/0, caps 0x00000001
+   253      1.874 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+   254      1.874 vidmm: table physical cache query pa 0x45E143000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+   255      1.874 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   256      1.874 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+   257      1.874 vidmm: table physical cache query pa 0x45E144000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+   258      1.874 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   259      1.874 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+   260      1.874 vidmm: table physical cache query pa 0x45E145000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+   261      1.874 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   262      1.874 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+   263      1.874 vidmm: table physical cache query pa 0x45E146000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+   264      1.874 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   265      1.874 vidmm: table physical cache query pa 0x45E147000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+   266      1.874 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   267      1.874 vidmm: table physical cache query pa 0x45E148000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+   268      1.874 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   269      1.874 vidmm: table physical cache query pa 0x45E149000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+   270      1.874 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   271      1.875 vidmm: table physical cache query pa 0x45E14A000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+   272      1.875 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   273      1.925 wddm: paging DMA mapping op11 VA0x410000 root0x0 translated0 system0 PA0x0 CPU_PA0x21C420000 match0 offset0
+   274      1.925 wddm: SetRootPageTable segment 3 offset 0x0, 512 entries
+   275      1.925 vidmm: root page table 3:0x0 = physical 0x45E140000, 512 entries (the VMID is pointed at it by the first packet)
+   276      1.925 wddm: root binding handleFFFFB903CE4E9A30 ctxFFFFB903CE4E9A30 ownerFFFFB903CE4EA270 resolved1 physical45E140000 irql0
+   277      1.925 wddm: display QueryDeviceDescriptor call 1 detail 0x250001 -> 0x00000000
+   278      1.925 wddm: display QueryDeviceDescriptor call 2 detail 0x250001 -> 0x00000000
+   279      1.925 wddm: display QueryDeviceDescriptor call 3 detail 0x250001 -> 0x00000000
+   280      1.925 wddm: display QueryDeviceDescriptor call 4 detail 0x250001 -> 0xC01D0008
+   281      1.925 wddm: QueryAdapterInfo type 20 in 4 out 16 -> 0xC00000BB
+   282      1.926 wddm: display RecommendMonitorModes call 1 detail 0x0 -> 0x00000000
+   283      1.926 dpaudio: container id call 1: port 0x6F6D6F9BC8036CDC mfg 0x6D1E product 0x5C6A, switch 1
+   284      1.926 dpaudio: container id kept for the next start: no endpoint of this driver is configured
+   285      1.926 wddm: display GetChildContainerId call 1 detail 0x250001 -> 0xC01D0001
+   286      1.929 wddm: display IsSupportedVidPn call 1 detail 0x0 -> 0x00000000
+   287      1.930 wddm: display IsSupportedVidPn call 2 detail 0x0 -> 0x00000000
+   288      1.930 wddm: display IsSupportedVidPn call 3 detail 0x0 -> 0x00000000
+   289      1.930 wddm: display EnumVidPnCofuncModality call 1 detail 0x0 -> 0x00000000
+   290      1.930 wddm: display IsSupportedVidPn call 4 detail 0x0 -> 0x00000000
+   291      1.930 wddm: display EnumVidPnCofuncModality call 2 detail 0x0 -> 0x00000000
+   292      1.930 wddm: display IsSupportedVidPn call 5 detail 0x0 -> 0x00000000
+   293      1.930 wddm: display EnumVidPnCofuncModality call 3 detail 0x0 -> 0x00000000
+   294      1.930 wddm: display IsSupportedVidPn call 6 detail 0x0 -> 0x00000000
+   295      1.930 wddm: display EnumVidPnCofuncModality call 4 detail 0x0 -> 0x00000000
+   296      1.930 wddm: display EnumVidPnCofuncModality call 5 detail 0x0 -> 0x00000000
+   297      1.932 wddm: CreateProcess flags 0x00000002 pasids 1
+   298      1.932 wddm: CreateDevice flags 0x00000002 pasid 0 pid 924
+   299      1.932 wddm: context FFFFB903CE4EB030 pid 924 node 0 umd 0 system 0 ip 0
+   300      1.932 wddm: CreateContext node 0 engine 0x1 flags 0x00000006 private 0
+   301      1.932 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 256/0, caps 0x00000001
+   302      1.932 wddm: paging DMA mapping op11 VA0x410000 root0x45E140000 translated1 system1 PA0x21C420000 CPU_PA0x21C420000 match1 offset0
+   303      1.932 wddm: paging DMA mapping op11 VA0x4100B8 root0x45E140000 translated1 system1 PA0x21C4200B8 CPU_PA0x21C4200B8 match1 offset184
+   304      1.933 wddm: paging DMA mapping op11 VA0x400000 root0x45E140000 translated1 system1 PA0x38310000 CPU_PA0x38310000 match1 offset0
+   305      1.933 wddm: SubmitCommandVirtual fence 1 node 1 flags 0x00000001 va 0x410000 size 4024
+   306      1.933 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x410000, seq 1
+   307      1.933 wddm: paging DMA mapping op11 VA0x4000E8 root0x45E140000 translated1 system1 PA0x383100E8 CPU_PA0x383100E8 match1 offset232
+   308      1.933 wddm: paging DMA mapping op11 VA0x400128 root0x45E140000 translated1 system1 PA0x38310128 CPU_PA0x38310128 match1 offset296
+   309      1.933 wddm: SubmitCommandVirtual fence 2 node 1 flags 0x00000001 va 0x400000 size 4072
+   310      1.933 wddm: paging DMA mapping op11 VA0x410000 root0x45E140000 translated1 system1 PA0x21C420000 CPU_PA0x21C420000 match1 offset0
+   311      1.933 gfx: paging submit, 1018 ring dwords reserved for buffer at 0x400000, seq 2
+   312      1.933 wddm: paging DMA mapping op11 VA0x4101B0 root0x45E140000 translated1 system1 PA0x21C4201B0 CPU_PA0x21C4201B0 match1 offset432
+   313      1.933 wddm: paging DMA mapping op11 VA0x400000 root0x45E140000 translated1 system1 PA0x38310000 CPU_PA0x38310000 match1 offset0
+   314      1.933 wddm: SubmitCommandVirtual fence 3 node 1 flags 0x00000001 va 0x410000 size 4016
+   315      1.933 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 3
+   316      1.933 wddm: SubmitCommandVirtual fence 4 node 1 flags 0x00000001 va 0x400000 size 4016
+   317      1.933 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 4
+   318      1.933 wddm: BuildPagingBuffer operation 12 segment 0, 64720 bytes free, pass offset 0
+   319      1.933 gfx: FLUSH_TLB root 0x46DFFF000 -> VMIDs 0x0002 (1, 15 dwords)
+   320      1.933 wddm: SubmitCommandVirtual fence 5 node 1 flags 0x00000001 va 0x410000 size 876
+   321      1.933 gfx: paging submit, 219 ring dwords reserved for buffer at 0x410000, seq 5
+   322      1.933 wddm: BuildPagingBuffer operation 12 segment 0, 64596 bytes free, pass offset 0
+   323      1.933 gfx: FLUSH_TLB root 0x46DFFF000 -> VMIDs 0x0002 (1, 15 dwords)
+   324      1.933 wddm: SubmitCommandVirtual fence 6 node 1 flags 0x00000001 va 0x41036C size 124
+   325      1.933 gfx: paging submit, 31 ring dwords reserved for buffer at 0x41036C, seq 6
+   326      1.933 wddm: display EnumVidPnCofuncModality call 6 detail 0x0 -> 0x00000000
+   327      1.933 wddm: GetStandardAllocationDriverData type 1 1920x1080 format 21 -> 8294400 bytes
+   328      1.933 wddm: GetStandardAllocationDriverData type 1 1920x1080 format 21 -> 8294400 bytes
+   329      1.933 wddm: type0 create req0 v0 acc0x0 res1 1920x1080 pitch7680 fmt21 place0x19
+   330      1.934 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   331      1.934 wddm: identity bind kind 0 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+   332      1.934 wddm: OpenAllocation [0] handle 0x40000D40 private 32 bytes -> FFFFB903CE4EA530
+   333      1.934 wddm: OpenAllocation 1 allocations flags 0x00000001
+   334      1.934 wddm: SubmitCommandVirtual fence 7 node 1 flags 0x00000001 va 0x4103E8 size 3072
+   335      1.934 gfx: paging submit, 768 ring dwords reserved for buffer at 0x4103E8, seq 7
+   336      1.934 wddm: SubmitCommandVirtual fence 8 node 1 flags 0x00000001 va 0x400000 size 4016
+   337      1.934 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 8
+   338      1.935 wddm: BuildPagingBuffer operation 12 segment 0, 63952 bytes free, pass offset 0
+   339      1.935 gfx: FLUSH_TLB root 0x45E140000 -> VMIDs 0x0002 (1, 15 dwords)
+   340      1.935 wddm: BuildPagingBuffer operation 9 segment 0, 63892 bytes free, pass offset 0
+   341      1.939 wddm: BuildPagingBuffer operation 12 segment 0, 64784 bytes free, pass offset 0
+   342      1.939 gfx: FLUSH_TLB root 0x45E140000 -> VMIDs 0x0002 (1, 15 dwords)
+   343      1.940 wddm: DescribeAllocation 1920x1080 format 21 refresh 174500000/2327520
+   344      1.940 wddm: GetStandardAllocationDriverData type 2 1920x1080 format 21 -> 8294400 bytes
+   345      1.940 wddm: GetStandardAllocationDriverData type 2 1920x1080 format 21 -> 8294400 bytes
+   346      1.940 wddm: type0 create req0 v0 acc0x0 res1 1920x1080 pitch7680 fmt21 place0x19
+   347      1.940 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   348      1.940 wddm: identity bind kind 0 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+   349      1.940 wddm: OpenAllocation [0] handle 0x40000DC0 private 32 bytes -> FFFFB903CE4E9E50
+   350      1.940 wddm: OpenAllocation 1 allocations flags 0x00000001
+   351      1.942 wddm: BuildPagingBuffer operation 9 segment 0, 62292 bytes free, pass offset 0
+   352      1.947 stage 50
+   353      1.947 display: CommitVidPn source 1920x1080 format 21 stride 7680
+   354      1.947 wddm: display CommitVidPn call 1 detail 0x0 -> 0x00000000
+   355      1.947 wddm: DescribeAllocation 1920x1080 format 21 refresh 174500000/2327520
+   356      1.947 dcnflip: SetVidPnSourceAddress flip: card 0xF4007F0000 -> physical 0x2707F0000
+   357      1.947 wddm: SetVidPnSourceAddress segment 1 address 0xF4007F0000 flags 0x00000001 (firmware framebuffer 0xC0000000)
+   358      1.947 wddm: hardware vsync on (OTG0 VUPDATE_NO_LOCK, EnableVidPnFlip)
+   359      1.947 display visibility: call 1 source 0x00000000 visible 1 previous 0 hardware 1 blanked 0
+   360      1.947 display visibility: call 1 status 0x00000000 current 1 blanked 0
+   361      1.947 wddm: display SetVidPnSourceVisibility call 1 detail 0x0 -> 0x00000000
+   362      1.947 wddm: DescribeAllocation 1920x1080 format 21 refresh 174500000/2327520
+   363      2.195 wddm: ControlInterrupt type 3 on -> 0x00000000
+   364      2.197 wddm: CreateProcess flags 0x00000000 pasids 1
+   365      2.197 wddm: CreateDevice flags 0x00000000 pasid 0 pid 5796
+   366      2.199 wddm: CreateProcess flags 0x00000000 pasids 1
+   367      2.199 wddm: CreateDevice flags 0x00000000 pasid 0 pid 9528
+   368      2.213 wddm: CreateProcess flags 0x00000000 pasids 1
+   369      2.213 wddm: CreateDevice flags 0x00000000 pasid 0 pid 1948
+   370      2.214 wddm: context FFFFB903CE4EB5B0 pid 1948 node 0 umd 0 system 0 ip 0
+   371      2.214 wddm: CreateContext node 0 engine 0x1 flags 0x00000004 private 0
+   372      2.214 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 256/0, caps 0x00000001
+   373      2.255 wddm: CreateProcess flags 0x00000000 pasids 1
+   374      2.255 wddm: CreateDevice flags 0x00000000 pasid 0 pid 6280
+   375      2.255 wddm: context FFFFB903CE4EA950 pid 6280 node 0 umd 0 system 0 ip 0
+   376      2.255 wddm: CreateContext node 0 engine 0x1 flags 0x00000004 private 0
+   377      2.255 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 256/0, caps 0x00000001
+   378      2.297 wddm: context FFFFB903CE4EB710 pid 5796 node 0 umd 0 system 0 ip 0
+   379      2.297 wddm: CreateContext node 0 engine 0x1 flags 0x00000004 private 0
+   380      2.297 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 256/0, caps 0x00000001
+   381      2.299 wddm: umd context node 0 ip 0, private slot 576
+   382      2.299 wddm: context FFFFB903CE4EAAB0 pid 1948 node 0 umd 1 system 0 ip 0
+   383      2.299 wddm: CreateContext node 0 engine 0x1 flags 0x00000004 private 80
+   384      2.299 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 0/0, caps 0x00000001
+   385      2.300 wddm: umd alloc 65536 bytes heap 0x4 align 65536 va 0x0 gem 0x1 cached 0
+   386      2.300 wddm: CreateAllocation 1 allocations, flags 0 resource no
+   387      2.300 wddm: identity bind kind 1 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+   388      2.300 wddm: OpenAllocation [0] handle 0x80006040 private 192 bytes -> FFFFB903C69D61B0
+   389      2.300 wddm: OpenAllocation 1 allocations flags 0x00000001
+   390      2.300 wddm: BuildPagingBuffer operation 9 segment 0, 63076 bytes free, pass offset 0
+   391      2.301 wddm: umd alloc 262144 bytes heap 0x4 align 262144 va 0x0 gem 0x0 cached 0
+   392      2.301 wddm: CreateAllocation 1 allocations, flags 0 resource no
+   393      2.301 wddm: identity bind kind 1 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+   394      2.301 wddm: OpenAllocation [0] handle 0xC0004280 private 192 bytes -> FFFFB903C69D69F0
+   395      2.301 wddm: OpenAllocation 1 allocations flags 0x00000001
+   396      2.301 wddm: BuildPagingBuffer operation 9 segment 0, 61476 bytes free, pass offset 0
+   397      2.310 wddm: umd context node 0 ip 0, private slot 576
+   398      2.310 wddm: context FFFFB903C69D6CB0 pid 5796 node 0 umd 1 system 0 ip 0
+   399      2.310 wddm: CreateContext node 0 engine 0x1 flags 0x00000004 private 80
+   400      2.311 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 0/0, caps 0x00000001
+   401      2.311 wddm: umd alloc 65536 bytes heap 0x4 align 65536 va 0x0 gem 0x1 cached 0
+   402      2.311 wddm: CreateAllocation 1 allocations, flags 0 resource no
+   403      2.311 wddm: identity bind kind 1 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+   404      2.311 wddm: OpenAllocation [0] handle 0x80002D80 private 192 bytes -> FFFFB903C69D7910
+   405      2.311 wddm: OpenAllocation 1 allocations flags 0x00000001
+   406      2.312 wddm: umd alloc 262144 bytes heap 0x4 align 262144 va 0x0 gem 0x0 cached 0
+   407      2.312 wddm: CreateAllocation 1 allocations, flags 0 resource no
+   408      2.312 wddm: identity bind kind 1 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+   409      2.312 wddm: OpenAllocation [0] handle 0x80002BC0 private 192 bytes -> FFFFB903C69D7A70
+   410      2.312 wddm: OpenAllocation 1 allocations flags 0x00000001
+   411      2.328 wddm: umd alloc 524288 bytes heap 0x4 align 262144 va 0x0 gem 0x0 cached 0
+   412      2.328 wddm: CreateAllocation 1 allocations, flags 0 resource no
+   413      2.328 wddm: identity bind kind 1 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+   414      2.328 wddm: OpenAllocation [0] handle 0x80002B80 private 192 bytes -> FFFFB903C69D6E10
+   415      2.328 wddm: OpenAllocation 1 allocations flags 0x00000001
+   416      2.333 wddm: umd alloc 4096 bytes heap 0x4 align 4096 va 0x0 gem 0x2 cached 0
+   417      2.333 wddm: CreateAllocation 1 allocations, flags 0 resource no
+   418      2.333 wddm: identity bind kind 1 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+   419      2.333 wddm: OpenAllocation [0] handle 0x400025C0 private 192 bytes -> FFFFB903CE643750
+   420      2.333 wddm: OpenAllocation 1 allocations flags 0x00000001
+   421      2.334 wddm: umd alloc 2097152 bytes heap 0x4 align 262144 va 0x0 gem 0x2 cached 0
+   422      2.334 wddm: identity bind kind 1 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+   423      2.337 wddm: umd alloc 81920 bytes heap 0x2 align 4096 va 0x0 gem 0x5 cached 0
+   424      2.337 wddm: identity bind kind 1 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+   425      2.337 wddm: identity bind kind 1 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+   426      2.337 wddm: identity bind kind 1 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+   427      2.337 wddm: identity bind kind 1 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+   428      2.340 wddm: identity bind kind 1 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+   429      2.340 wddm: identity bind kind 1 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+   430      2.340 wddm: identity bind kind 1 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+   431      2.340 wddm: identity bind kind 1 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+   432      2.341 wddm: identity bind kind 1 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+   433      2.357 vidmm: first Zero level 0 Valid 1 flags 0x3 encoded 0x88000000000006
+   434      2.379 wddm: BuildPagingBuffer operation 8 segment 0, 61916 bytes free, pass offset 0
+   435      2.387 wddm: CloseAllocation 1 allocations
+   436      2.387 wddm: DestroyAllocation 1 allocations
+   437      2.387 wddm: CloseAllocation 1 allocations
+   438      2.387 wddm: DestroyAllocation 1 allocations
+   439      2.388 wddm: CloseAllocation 1 allocations
+   440      2.388 wddm: DestroyAllocation 1 allocations
+   441      2.388 wddm: BuildPagingBuffer operation 8 segment 0, 63896 bytes free, pass offset 0
+   442      2.388 wddm: CloseAllocation 1 allocations
+   443      2.388 wddm: DestroyAllocation 1 allocations
+   444      2.388 wddm: BuildPagingBuffer operation 8 segment 0, 62516 bytes free, pass offset 0
+   445      2.389 wddm: CloseAllocation 1 allocations
+   446      2.389 wddm: DestroyAllocation 1 allocations
+   447      2.389 wddm: BuildPagingBuffer operation 8 segment 0, 63976 bytes free, pass offset 0
+   448      2.389 wddm: CloseAllocation 1 allocations
+   449      2.389 wddm: DestroyAllocation 1 allocations
+   450      2.391 wddm: CloseAllocation 1 allocations
+   451      2.391 wddm: DestroyAllocation 1 allocations
+   452      2.391 wddm: CloseAllocation 1 allocations
+   453      2.391 wddm: DestroyAllocation 1 allocations
+   454      2.392 wddm: DestroyContext
+   455      2.393 wddm: DestroyContext
+   456      2.393 wddm: DestroyDevice
+   457      2.447 wddm: DestroyProcess
+   458      2.453 wddm: CreateProcess flags 0x00000000 pasids 1
+   459      2.453 wddm: CreateDevice flags 0x00000000 pasid 0 pid 5796
+   460      2.524 wddm: CreateProcess flags 0x00000000 pasids 1
+   461      2.537 wddm: context FFFFB903CE647270 pid 5796 node 0 umd 0 system 0 ip 0
+   462      2.537 wddm: CreateContext node 0 engine 0x1 flags 0x00000004 private 0
+   463      2.537 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 256/0, caps 0x00000001
+   464      2.543 wddm: DestroyContext
+   465      2.543 wddm: DestroyDevice
+   466      2.787 wddm: umd context node 0 ip 0, private slot 576
+   467      2.867 wddm: type0 create req0 v2 acc0x2 res1 608x608 pitch2560 fmt21 place0x7
+   468      2.867 wddm: identity bind kind 0 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+   469      2.974 wddm: type0 create req0 v3 acc0x0 res1 1424x718 pitch5888 fmt21 place0x3
+   470      2.974 wddm: identity bind kind 0 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+   471      2.977 wddm: type0 create req0 v3 acc0x0 res1 1424x718 pitch5888 fmt21 place0x3
+   472      2.977 wddm: identity bind kind 0 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+   473      3.016 wddm: SetRootPageTable segment 3 offset 0xFEAC000, 512 entries
+   474      3.016 vidmm: root page table 3:0xFEAC000 = physical 0x46DFEC000, 512 entries (the VMID is pointed at it by the first packet)
+   475      3.016 wddm: root binding handleFFFFB903CE646CF0 ctxFFFFB903CE646CF0 ownerFFFFB903CE648450 resolved1 physical46DFEC000 irql0
+   476      3.016 wddm: SubmitCommandVirtual fence 1 node 0 flags 0x00000000 va 0x200038000 size 96
+   477      3.016 gfx: VMID bring-up read: non-zero 0x3FFF unread 0x0000, pool 0xC002 (3 VMIDs), excluded 0x3FF8
+   478      3.016 gfx: VMID 0 base 0x46FE00001 at bring-up: GART aperture, reserved
+   479      3.016 gfx: VMID 1 base 0x46DFF4001 at bring-up: VMID 1, kept
+   480      3.016 gfx: VMID 2 base 0x45E140001 at bring-up: SDMA paging, reserved
+   481      3.016 gfx: VMID 3 base 0x46DFF4001 at bring-up: excluded from the pool
+   482      3.016 gfx: VMID 4 base 0x46DFBB001 at bring-up: excluded from the pool
+   483      3.016 gfx: VMID 5 base 0x46DF6C001 at bring-up: excluded from the pool
+   484      3.016 gfx: VMID 6 base 0x46DF59001 at bring-up: excluded from the pool
+   485      3.016 gfx: VMID 7 base 0x46DE8C001 at bring-up: excluded from the pool
+   486      3.016 gfx: VMID 8 base 0x46DF5F001 at bring-up: excluded from the pool
+   487      3.016 gfx: VMID 9 base 0x46DF63001 at bring-up: excluded from the pool
+   488      3.016 gfx: VMID 10 base 0x46DFC1001 at bring-up: excluded from the pool
+   489      3.016 gfx: VMID 11 base 0x46DFB1001 at bring-up: excluded from the pool
+   490      3.016 gfx: VMID 12 base 0x46DFBE001 at bring-up: excluded from the pool
+   491      3.016 gfx: VMID 13 base 0x46DEF7001 at bring-up: excluded from the pool
+   492      3.016 gfx: pipeline queued seq371 prior0 observed_after_doorbell0 overlap0 vmid1
+   493      3.016 wddm: fence 1 on the gfx ring: sequence 371, vmid 1, root 0x46DFEC000, va 0x200038000, 96 bytes
+   494      3.016 wddm: umd submit fence 1 ib 0x200038000 96 bytes
+   495      3.016 wddm: hardware fence arrived, reporting fence 1
+   496      3.033 wddm: SubmitCommandVirtual fence 2 node 0 flags 0x00000000 va 0x200039000 size 96
+   497      3.033 gfx: pipeline queued seq382 prior371 observed_after_doorbell371 overlap0 vmid1
+   498      3.033 wddm: fence 2 on the gfx ring: sequence 382, vmid 1, root 0x46DFEC000, va 0x200039000, 96 bytes
+   499      3.033 wddm: hardware fence arrived, reporting fence 2
+   500      3.033 wddm: umd submit fence 2 ib 0x200039000 96 bytes
+   501      3.303 wddm: type0 create req0 v2 acc0x0 res1 1920x1080 pitch7680 fmt21 place0x19
+   502      3.303 wddm: identity bind kind 0 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+   503      3.316 wddm: type0 create req0 v2 acc0x0 res1 1920x1080 pitch7680 fmt21 place0x19
+   504      3.316 wddm: identity bind kind 0 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+   505      3.331 wddm: type0 create req0 v2 acc0x0 res1 1920x1080 pitch7680 fmt21 place0x19
+   506      3.331 wddm: identity bind kind 0 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+   507      3.346 wddm: identity bind kind 0 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+   508      3.362 display visibility: call 2 source 0x00000000 visible 0 previous 1 hardware 1 blanked 0
+   509      3.362 display visibility: call 2 status 0x00000000 current 0 blanked 1
+   510      3.362 wddm: display SetVidPnSourceVisibility call 2 detail 0x0 -> 0x00000000
+   511      3.372 display visibility: call 3 source 0x00000000 visible 0 previous 0 hardware 1 blanked 1
+   512      3.372 display visibility: call 3 status 0x00000000 current 0 blanked 1
+   513      3.372 wddm: display SetVidPnSourceVisibility call 3 detail 0x0 -> 0x00000000
+   514      3.372 wddm: BuildPagingBuffer operation 2 segment 0, 62188 bytes free, pass offset 0
+   515      3.373 wddm: BuildPagingBuffer operation 2 segment 0, 61640 bytes free, pass offset 0
+   516      3.397 wddm: DescribeAllocation 1920x1080 format 21 refresh 174500000/2327520
+   517      3.397 wddm: SetVidPnSourceAddress segment 1 address 0xF4007F0000 flags 0x00000001 (firmware framebuffer 0xC0000000)
+   518      3.397 display visibility: call 4 source 0x00000000 visible 1 previous 0 hardware 1 blanked 1
+   519      3.397 display visibility: call 4 status 0x00000000 current 1 blanked 0
+   520      3.397 wddm: display SetVidPnSourceVisibility call 4 detail 0x0 -> 0x00000000
+   521      3.399 wddm: SetRootPageTable segment 3 offset 0xFEB4000, 512 entries
+   522      3.399 vidmm: root page table 3:0xFEB4000 = physical 0x46DFF4000, 512 entries (the VMID is pointed at it by the first packet)
+   523      3.399 wddm: root binding handleFFFFB903CE4EAAB0 ctxFFFFB903CE4EAAB0 ownerFFFFB903CE4EA7F0 resolved1 physical46DFF4000 irql0
+   524      3.399 wddm: SubmitCommandVirtual fence 3 node 0 flags 0x00000000 va 0x200038000 size 1728
+   525      3.399 gfx: pipeline queued seq746 prior382 observed_after_doorbell382 overlap0 vmid14
+   526      3.399 wddm: fence 3 on the gfx ring: sequence 746, vmid 14, root 0x46DFF4000, va 0x200038000, 1728 bytes
+   527      3.399 wddm: hardware fence arrived, reporting fence 3
+   528      3.399 wddm: umd submit fence 3 ib 0x200038000 1728 bytes
+   529      3.400 wddm: BuildPagingBuffer operation 2 segment 0, 64820 bytes free, pass offset 0
+   530      3.400 wddm: identity bind kind 0 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+   531      3.403 wddm: BuildPagingBuffer operation 2 segment 0, 63296 bytes free, pass offset 0
+   532      3.408 wddm: identity bind kind 0 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+   533      3.423 wddm: DescribeAllocation 1920x1080 format 21 refresh 174500000/2327520
+   534      3.423 wddm: SetVidPnSourceAddress segment 1 address 0xF4007F0000 flags 0x00000001 (firmware framebuffer 0xC0000000)
+   535      3.423 display visibility: call 5 source 0x00000000 visible 1 previous 1 hardware 1 blanked 0
+   536      3.423 display visibility: call 5 status 0x00000000 current 1 blanked 0
+   537      3.423 wddm: display SetVidPnSourceVisibility call 5 detail 0x0 -> 0x00000000
+   538      3.431 wddm: SubmitCommandVirtual fence 4 node 0 flags 0x00000000 va 0x200039000 size 3040
+   539      3.431 gfx: pipeline queued seq807 prior746 observed_after_doorbell746 overlap0 vmid14
+   540      3.431 wddm: fence 4 on the gfx ring: sequence 807, vmid 14, root 0x46DFF4000, va 0x200039000, 3040 bytes
+   541      3.431 wddm: umd submit fence 4 ib 0x200039000 3040 bytes
+   542      3.431 wddm: hardware fence arrived, reporting fence 4
+   543      3.432 wddm: DescribeAllocation 1920x1080 format 21 refresh 174500000/2327520
+   544      3.432 wddm: Present flags 0x0000000C source 0 dest 0, 1 sub-rectangles, 0 DMA bytes free
+   545      3.432 wddm: Present list FFFFC90DD15EFE40 (context list 256), private 0000000000000000/0, driver data 0
+   546      3.432 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   547      3.432 wddm: Present list q4-7  FFFFB903CE4F0AF0 00000001012D2000 FFFFFFFFFFFFFFFF 000000000000FFFF
+   548      3.432 wddm: Present list q8-11 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   549      3.432 wddm: Present dst (0,0)-(0,0) src (0,0)-(0,0) va 0x0
+   550      3.441 wddm: identity bind kind 0 flags 0 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+   551      3.454 wddm: identity bind kind 0 flags 2 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+   552      3.470 wddm: identity bind kind 0 flags 2 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+   553      3.493 wddm: SubmitCommandVirtual fence 5 node 0 flags 0x00000000 va 0x20003A000 size 192
+   554      3.493 gfx: pipeline queued seq865 prior807 observed_after_doorbell807 overlap0 vmid1
+   555      3.493 wddm: fence 5 on the gfx ring: sequence 865, vmid 1, root 0x46DFEC000, va 0x20003A000, 192 bytes
+   556      3.493 wddm: umd submit fence 5 ib 0x20003A000 192 bytes
+   557      3.493 wddm: hardware fence arrived, reporting fence 5
+   558      3.495 wddm: SubmitCommandVirtual fence 6 node 0 flags 0x00000000 va 0x20003A000 size 3104
+   559      3.495 gfx: pipeline queued seq868 prior865 observed_after_doorbell865 overlap0 vmid14
+   560      3.495 wddm: fence 6 on the gfx ring: sequence 868, vmid 14, root 0x46DFF4000, va 0x20003A000, 3104 bytes
+   561      3.495 wddm: umd submit fence 6 ib 0x20003A000 3104 bytes
+   562      3.495 wddm: hardware fence arrived, reporting fence 6
+   563      3.496 wddm: DescribeAllocation 1920x1080 format 21 refresh 174500000/2327520
+   564      3.496 wddm: Present flags 0x0000000C source 0 dest 0, 1 sub-rectangles, 0 DMA bytes free
+   565      3.496 wddm: Present list FFFFC90DD15EFE40 (context list 256), private 0000000000000000/0, driver data 0
+   566      3.496 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   567      3.496 wddm: Present list q4-7  FFFFB903CE4EF230 0000000000FE3000 FFFFFFFFFFFFFFFF 000000000000FFFF
+   568      3.496 wddm: Present list q8-11 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   569      3.496 wddm: Present dst (0,0)-(0,0) src (0,0)-(0,0) va 0x0
+   570      3.562 wddm: SubmitCommandVirtual fence 7 node 0 flags 0x00000000 va 0x20003B000 size 3104
+   571      3.562 gfx: pipeline queued seq878 prior868 observed_after_doorbell868 overlap0 vmid14
+   572      3.562 wddm: fence 7 on the gfx ring: sequence 878, vmid 14, root 0x46DFF4000, va 0x20003B000, 3104 bytes
+   573      3.562 wddm: umd submit fence 7 ib 0x20003B000 3104 bytes
+   574      3.562 wddm: DescribeAllocation 1920x1080 format 21 refresh 174500000/2327520
+   575      3.562 wddm: Present flags 0x0000000C source 0 dest 0, 1 sub-rectangles, 0 DMA bytes free
+   576      3.562 wddm: Present list FFFFC90DD15EFE40 (context list 256), private 0000000000000000/0, driver data 0
+   577      3.562 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   578      3.562 wddm: Present list q4-7  FFFFB903CE4EFBD0 00000000007FA000 FFFFFFFFFFFFFFFF 000000000000FFFF
+   579      3.562 wddm: Present list q8-11 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   580      3.562 wddm: Present dst (0,0)-(0,0) src (0,0)-(0,0) va 0x0
+   581      3.562 wddm: hardware fence arrived, reporting fence 7
+   582      3.575 wddm: SubmitCommandVirtual fence 8 node 0 flags 0x00000000 va 0x20003C000 size 3104
+   583      3.575 gfx: pipeline queued seq881 prior878 observed_after_doorbell878 overlap0 vmid14
+   584      3.575 wddm: fence 8 on the gfx ring: sequence 881, vmid 14, root 0x46DFF4000, va 0x20003C000, 3104 bytes
+   585      3.575 wddm: umd submit fence 8 ib 0x20003C000 3104 bytes
+   586      3.576 wddm: hardware fence arrived, reporting fence 8
+   587      3.577 wddm: Present flags 0x0000000C source 0 dest 0, 1 sub-rectangles, 0 DMA bytes free
+   588      3.577 wddm: Present list FFFFC90DD15EFE40 (context list 256), private 0000000000000000/0, driver data 0
+   589      3.577 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   590      3.577 wddm: Present list q4-7  FFFFB903CE4F0AF0 00000001012D2000 FFFFFFFFFFFFFFFF 000000000000FFFF
+   591      3.577 wddm: Present list q8-11 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   592      3.577 wddm: Present dst (0,0)-(0,0) src (0,0)-(0,0) va 0x0
+   593      4.876 cpu: the baseline of this start is clock 3500 MHz, undervolt 0 steps, cap 100 C
+   594      4.876 cpu: the baseline's answers: P-state table top 3200 MHz, per-core (boost) top 3500 MHz
+   595      4.876 cpu: the read stage answered (0x00000000): 1193 mV, GPU 824 mV, cap 100 C
+   596      5.817 dpm: telemetry dpm 1000 MHz/820 mV (SMU 1000 MHz VID 116) 63.7 C busy 0.0% avg 0.2% want 1000 cap 2000 max 2000 throttle none, raises 0 lowers 0 thermal 0 warm
+   597      5.817 dpm: telemetry idle 500 MHz, hold 3000 ms under 2 permille, entries 0 exits 0 refusals 0, 0 ms at the point
+   598      5.817 dpm: telemetry idle leave at 150 permille, exits 0 by a busy tick, 0 by the window
+   599      5.817 hwmon: telemetry fan2 1348 rpm (1/5 turn) duty 761 permille, mode 0xE0 eng 0x60
+   600      5.817 hwmon: telemetry apu 63.0 C, duty read-back unproven
+   601      5.817 hwmon: telemetry 5 samples 0 errors 0 retries 0 refusals
+   602      5.817 smu metrics: telemetry 43.7 W avg 44.9 W, gfx 17.2 W soc 0.8 W
+   603      5.817 smu metrics: telemetry gfx 818 mV 1000 MHz 60.2 C soc 806 mV 61.7 C thr 0
+   604      5.817 fan: telemetry curve curve/standard
+   605      5.817 fan: telemetry target 76% applied 76% raw 194 rb 194, 1348 rpm
+   606      5.817 fan: telemetry 1 takeovers 0 handbacks 1 writes
+   607      5.817 fan: telemetry 0 failures 0 emergencies 0 doubts
+   608      5.936 gfx: pipeline queued seq1118 prior881 observed_after_doorbell881 overlap0 vmid14
+   609      5.936 wddm: umd submit fence 9 ib 0x202700000 147904 bytes
+   610      5.937 wddm: Present flags 0x0000000C source 0 dest 0, 1 sub-rectangles, 0 DMA bytes free
+   611      5.937 wddm: Present list FFFFC90DD15EFE40 (context list 256), private 0000000000000000/0, driver data 0
+   612      5.937 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   613      5.937 wddm: Present list q4-7  FFFFB903CE4EF230 0000000000FE3000 FFFFFFFFFFFFFFFF 000000000000FFFF
+   614      5.937 wddm: Present list q8-11 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   615      5.937 wddm: Present dst (0,0)-(0,0) src (0,0)-(0,0) va 0x0
+   616      5.997 gfx: pipeline queued seq1141 prior1118 observed_after_doorbell1118 overlap0 vmid14
+   617      5.997 wddm: umd submit fence 10 ib 0x200308000 19392 bytes
+   618      5.999 wddm: Present flags 0x0000000C source 0 dest 0, 1 sub-rectangles, 0 DMA bytes free
+   619      5.999 wddm: Present list FFFFC90DD15EFE40 (context list 256), private 0000000000000000/0, driver data 0
+   620      5.999 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   621      5.999 wddm: Present list q4-7  FFFFB903CE4EFBD0 00000000007FA000 FFFFFFFFFFFFFFFF 000000000000FFFF
+   622      5.999 wddm: Present list q8-11 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   623      5.999 wddm: Present dst (0,0)-(0,0) src (0,0)-(0,0) va 0x0
+   624      6.053 gfx: pipeline queued seq1167 prior1141 observed_after_doorbell1141 overlap0 vmid14
+   625      6.053 wddm: umd submit fence 11 ib 0x20003D000 7616 bytes
+   626      6.053 wddm: Present flags 0x0000000C source 0 dest 0, 1 sub-rectangles, 0 DMA bytes free
+   627      6.053 wddm: Present list FFFFC90DD15EFE40 (context list 256), private 0000000000000000/0, driver data 0
+   628      6.053 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   629      6.053 wddm: Present list q4-7  FFFFB903CE4F0AF0 00000001012D2000 FFFFFFFFFFFFFFFF 000000000000FFFF
+   630      6.053 wddm: Present list q8-11 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   631      6.053 wddm: Present dst (0,0)-(0,0) src (0,0)-(0,0) va 0x0
+   632      6.076 gfx: pipeline queued seq1191 prior1167 observed_after_doorbell1167 overlap0 vmid14
+   633      6.076 wddm: umd submit fence 12 ib 0x20030D000 7904 bytes
+   634      6.076 wddm: Present flags 0x0000000C source 0 dest 0, 1 sub-rectangles, 0 DMA bytes free
+   635      6.076 wddm: Present list FFFFC90DD15EFE40 (context list 256), private 0000000000000000/0, driver data 0
+   636      6.076 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   637      6.076 wddm: Present list q4-7  FFFFB903CE4EF230 0000000000FE3000 FFFFFFFFFFFFFFFF 000000000000FFFF
+   638      6.076 wddm: Present list q8-11 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   639      6.076 wddm: Present dst (0,0)-(0,0) src (0,0)-(0,0) va 0x0
+   640      6.084 gfx: pipeline queued seq1201 prior1191 observed_after_doorbell1191 overlap0 vmid14
+   641      6.084 wddm: umd submit fence 13 ib 0x200038000 5440 bytes
+   642      6.555 gfx: pipeline queued seq1214 prior1201 observed_after_doorbell1201 overlap0 vmid14
+   643      6.555 wddm: umd submit fence 14 ib 0x2020FC000 5440 bytes
+   644      6.930 dpm: 1000 -> 500 MHz/820 mV VID 116, 0 settle reads (load, busy 0 permille, 63.7 C, throttle idle)
+   645      7.057 gfx: pipeline queued seq1224 prior1214 observed_after_doorbell1214 overlap0 vmid14
+   646      7.057 wddm: umd submit fence 15 ib 0x2020FE000 4640 bytes
+   647      7.552 gfx: pipeline queued seq1233 prior1224 observed_after_doorbell1224 overlap0 vmid14
+   648      7.552 wddm: umd submit fence 16 ib 0x202700000 4640 bytes
+   649      8.549 wddm: umd submit fence 17 ib 0x200308000 7616 bytes
+   650      9.051 wddm: umd submit fence 18 ib 0x20003D000 4640 bytes
+   651      9.548 wddm: umd submit fence 19 ib 0x20030D000 4640 bytes
+   652     10.057 wddm: umd submit fence 20 ib 0x200038000 4640 bytes
+   653     10.546 wddm: umd submit fence 21 ib 0x2020FC000 4640 bytes
+   654     10.560 wddm: umd submit fence 22 ib 0x2020FE000 4928 bytes
+   655     10.576 wddm: umd submit fence 23 ib 0x202700000 5440 bytes
+   656     11.052 wddm: umd submit fence 24 ib 0x200308000 5440 bytes
+   657     11.556 wddm: umd submit fence 25 ib 0x20003D000 4640 bytes
+   658     12.045 wddm: umd submit fence 26 ib 0x20030D000 4640 bytes
+   659     12.525 wddm: umd submit fence 27 ib 0x200038000 7616 bytes
+   660     13.046 wddm: umd submit fence 28 ib 0x2020FC000 4640 bytes
+   661     13.543 wddm: umd submit fence 29 ib 0x2020FE000 4640 bytes
+   662     14.049 wddm: umd submit fence 30 ib 0x202700000 4640 bytes
+   663     14.522 wddm: umd submit fence 31 ib 0x200308000 7616 bytes
+   664     15.050 wddm: umd submit fence 32 ib 0x20003D000 4640 bytes
+   665     15.551 wddm: umd submit fence 33 ib 0x20030D000 4640 bytes
+   666     16.044 wddm: umd submit fence 34 ib 0x200038000 4640 bytes
+   667     16.552 wddm: umd submit fence 35 ib 0x2020FC000 4640 bytes
+   668     17.042 wddm: umd submit fence 36 ib 0x2020FE000 4640 bytes
+   669     17.549 wddm: umd submit fence 37 ib 0x202700000 4640 bytes
+   670     18.531 wddm: umd submit fence 38 ib 0x200308000 7616 bytes
+   671     19.039 wddm: umd submit fence 39 ib 0x20003D000 4640 bytes
+   672     19.548 wddm: umd submit fence 40 ib 0x20030D000 4640 bytes
+   673     20.548 wddm: umd submit fence 41 ib 0x200038000 4640 bytes
+   674     21.040 wddm: umd submit fence 42 ib 0x2020FC000 4640 bytes
+   675     21.549 wddm: umd submit fence 43 ib 0x2020FE000 4640 bytes
+   676     22.041 wddm: umd submit fence 44 ib 0x202700000 4640 bytes
+   677     22.547 wddm: umd submit fence 45 ib 0x200308000 4640 bytes
+   678     23.038 wddm: umd submit fence 46 ib 0x20003D000 4640 bytes
+   679     23.546 wddm: umd submit fence 47 ib 0x20030D000 4640 bytes
+   680     24.053 wddm: umd submit fence 48 ib 0x200038000 4640 bytes
+   681     24.532 wddm: umd submit fence 49 ib 0x2020FC000 7616 bytes
+   682     25.047 wddm: umd submit fence 50 ib 0x2020FE000 4640 bytes
+   683     25.554 wddm: umd submit fence 51 ib 0x202700000 4640 bytes
+   684     26.050 wddm: umd submit fence 52 ib 0x200308000 4640 bytes
+   685     26.547 wddm: umd submit fence 53 ib 0x20003D000 4640 bytes
+   686     27.059 wddm: umd submit fence 54 ib 0x20030D000 4640 bytes
+   687     27.553 wddm: umd submit fence 55 ib 0x200038000 4640 bytes
+   688     28.051 wddm: umd submit fence 56 ib 0x2020FC000 4640 bytes
+   689     28.523 wddm: umd submit fence 57 ib 0x2020FE000 7616 bytes
+   690     29.050 wddm: umd submit fence 58 ib 0x202700000 4640 bytes
+   691     29.553 wddm: umd submit fence 59 ib 0x200308000 4640 bytes
+   692     30.547 wddm: umd submit fence 60 ib 0x20003D000 4640 bytes
+   693     31.057 wddm: umd submit fence 61 ib 0x20030D000 4640 bytes
+   694     31.553 wddm: umd submit fence 62 ib 0x200038000 4640 bytes
+   695     32.531 wddm: umd submit fence 63 ib 0x2020FC000 7616 bytes
+   696     32.776 wddm: umd context node 0 ip 0, private slot 576
+   697     32.883 wddm: identity bind kind 0 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+   698     32.884 wddm: identity bind kind 0 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+   699     32.942 wddm: SetRootPageTable segment 3 offset 0xFE41000, 512 entries
+   700     32.943 vidmm: root page table 3:0xFE41000 = physical 0x46DF81000, 512 entries (the VMID is pointed at it by the first packet)
+   701     32.943 wddm: root binding handleFFFFB903CA7727B0 ctxFFFFB903CA7727B0 ownerFFFFB903CE4EB2F0 resolved1 physical46DF81000 irql0
+   702     32.943 wddm: umd submit fence 64 ib 0x20487D000 192 bytes
+   703     33.051 wddm: umd submit fence 65 ib 0x2020FE000 4640 bytes
+   704     33.266 wddm: umd submit fence 66 ib 0x20003B000 64 bytes
+   705     33.284 wddm: umd submit fence 67 ib 0x20003C000 64 bytes
+   706     33.340 wddm: umd submit fence 68 ib 0x20003D000 128 bytes
+   707     33.369 wddm: umd submit fence 69 ib 0x20003E000 128 bytes
+   708     33.558 wddm: umd submit fence 70 ib 0x202700000 4640 bytes
+   709     34.064 wddm: umd submit fence 71 ib 0x200308000 4640 bytes
+   710     34.224 wddm: umd submit fence 72 ib 0x20003F000 64 bytes
+   711     34.246 wddm: umd submit fence 73 ib 0x2004B8000 64 bytes
+   712     34.375 wddm: umd submit fence 74 ib 0x20003A000 12128 bytes
+   713     34.546 wddm: umd submit fence 75 ib 0x20030D000 5440 bytes
+   714     34.571 wddm: umd submit fence 76 ib 0x2058FC000 128 bytes
+   715     34.974 wddm: umd submit fence 77 ib 0x2058FD000 128 bytes
+   716     35.092 wddm: umd submit fence 78 ib 0x2058FE000 192 bytes
+   717     35.154 wddm: umd submit fence 79 ib 0x2058FF000 128 bytes
+   718     35.173 wddm: umd submit fence 80 ib 0x2004B9000 64 bytes
+   719     35.193 wddm: umd submit fence 81 ib 0x2004BA000 192 bytes
+   720     35.230 wddm: umd submit fence 82 ib 0x2004BB000 128 bytes
+   721     35.249 wddm: umd submit fence 83 ib 0x200038000 64 bytes
+   722     35.252 wddm: umd submit fence 84 ib 0x200039000 64 bytes
+   723     35.267 wddm: umd submit fence 85 ib 0x20003A000 64 bytes
+   724     35.280 wddm: umd submit fence 86 ib 0x20003B000 64 bytes
+   725     35.293 wddm: umd submit fence 87 ib 0x20003C000 64 bytes
+   726     35.307 wddm: umd submit fence 88 ib 0x20003D000 64 bytes
+   727     35.319 wddm: umd submit fence 89 ib 0x20003E000 64 bytes
+   728     35.333 wddm: umd submit fence 90 ib 0x20003F000 64 bytes
+   729     35.346 wddm: umd submit fence 91 ib 0x2004B8000 64 bytes
+   730     35.359 wddm: umd submit fence 92 ib 0x2058FC000 64 bytes
+   731     35.373 wddm: umd submit fence 93 ib 0x2058FD000 64 bytes
+   732     35.387 wddm: umd submit fence 94 ib 0x2058FE000 64 bytes
+   733     35.400 wddm: umd submit fence 95 ib 0x2058FF000 64 bytes
+   734     35.413 wddm: umd submit fence 96 ib 0x2004B9000 64 bytes
+   735     35.427 wddm: umd submit fence 97 ib 0x2004BA000 64 bytes
+   736     35.440 wddm: umd submit fence 98 ib 0x2004BB000 64 bytes
+   737     35.453 wddm: umd submit fence 99 ib 0x200038000 64 bytes
+   738     35.466 wddm: umd submit fence 100 ib 0x200039000 64 bytes
+   739     35.480 wddm: umd submit fence 101 ib 0x20003A000 64 bytes
+   740     35.493 wddm: umd submit fence 102 ib 0x20003B000 64 bytes
+   741     35.507 wddm: umd submit fence 103 ib 0x20003C000 64 bytes
+   742     35.519 wddm: umd submit fence 104 ib 0x20003D000 64 bytes
+   743     35.533 wddm: umd submit fence 105 ib 0x20003E000 64 bytes
+   744     35.546 wddm: umd submit fence 106 ib 0x20003F000 64 bytes
+   745     35.559 wddm: umd submit fence 107 ib 0x200038000 5440 bytes
+   746     35.559 wddm: umd submit fence 108 ib 0x2004B8000 64 bytes
+   747     36.053 wddm: umd submit fence 109 ib 0x2020FC000 4640 bytes
+   748     36.543 wddm: umd submit fence 110 ib 0x2020FE000 4640 bytes
+   749     37.041 wddm: umd submit fence 111 ib 0x202700000 4640 bytes
+   750     37.543 wddm: umd submit fence 112 ib 0x200308000 4640 bytes
+   751     38.042 wddm: umd submit fence 113 ib 0x20003A000 4640 bytes
+   752     38.165 wddm: umd submit fence 114 ib 0x2058FC000 64 bytes
+   753     38.546 wddm: umd submit fence 115 ib 0x20030D000 7616 bytes
+   754     39.554 wddm: umd submit fence 116 ib 0x200038000 4640 bytes
+   755     40.053 wddm: umd submit fence 117 ib 0x2020FC000 4640 bytes
+   756     40.552 wddm: umd submit fence 118 ib 0x2020FE000 4640 bytes
+   757     40.867 wddm: umd submit fence 119 ib 0x202700000 4800 bytes
+   758     40.881 wddm: DestroyContext
+   759     40.881 wddm: DestroyContext
+   760     40.881 wddm: DestroyDevice
+   761     40.882 wddm: DestroyProcess
+   762     40.889 wddm: umd submit fence 120 ib 0x200308000 19904 bytes
+   763     40.896 wddm: umd submit fence 121 ib 0x2058FD000 64 bytes
+   764     40.900 wddm: umd submit fence 122 ib 0x2027BC000 12832 bytes
+   765     41.021 wddm: DestroyContext
+   766     41.021 wddm: DestroyContext
+   767     41.021 wddm: DestroyDevice
+   768     41.021 wddm: DestroyProcess
+   769     41.054 wddm: umd submit fence 123 ib 0x20030D000 5440 bytes
+   770     41.390 wddm: umd submit fence 124 ib 0x20003A000 18464 bytes
+   771     41.549 wddm: umd submit fence 125 ib 0x2020FC000 5440 bytes
+   772     41.653 wddm: umd context node 0 ip 0, private slot 576
+   773     41.698 wddm: umd submit fence 126 ib 0x200538000 12512 bytes
+   774     42.105 wddm: umd context node 0 ip 0, private slot 576
+   775     42.205 wddm: SetRootPageTable segment 3 offset 0xFEAC000, 512 entries
+   776     42.205 wddm: root binding handleFFFFB903CAFF6480 ctxFFFFB903CAFF6480 ownerFFFFB903CAEFD920 resolved1 physical46DFEC000 irql0
+   777     42.205 wddm: umd submit fence 127 ib 0x20487C000 192 bytes
+   778     42.284 wddm: umd submit fence 128 ib 0x20487D000 160 bytes
+   779     43.240 wddm: umd context node 0 ip 0, private slot 576
+   780     43.488 wddm: SetRootPageTable segment 3 offset 0xFE16000, 512 entries
+   781     43.488 wddm: root binding handleFFFFB903CA772D30 ctxFFFFB903CA772D30 ownerFFFFB903CA7F39F0 resolved1 physical46DF56000 irql0
+             782 lines printed
+             escapes: 14 without adapter synchronization, 0 with HardwareAccess

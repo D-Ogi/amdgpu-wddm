@@ -1,0 +1,22 @@
+Maximum selectable profile sources: 16.
+
+Id  Name                             Interval  Min      Max
+--------------------------------------------------------------
+  0 Timer                               10000  1221    1000000
+  2 TotalIssues                         65536  4096 2147483647
+  6 BranchInstructions                  65536  4096 2147483647
+  8 DcacheMisses                        65536  4096 2147483647
+  9 IcacheMisses                        65536  4096 2147483647
+ 11 BranchMispredictions                65536  4096 2147483647
+ 20 IcacheIssues                        65536  4096 2147483647
+ 21 DcacheAccesses                      65536  4096 2147483647
+ 19 TotalCycles                         65536  4096 2147483647
+ 10 CacheMisses                         65536  4096 2147483647
+ 25 InstructionRetired                  65536  4096 2147483647
+ 26 ICFetch                             65536  4096 2147483647
+ 27 ICMiss                              65536  4096 2147483647
+ 28 FRRetiredx86Instructions            65536  4096 2147483647
+ 29 FRRetiredBranches                   65536  4096 2147483647
+ 30 FRRetiredBranchesMispredicted       65536  4096 2147483647
+ 31 DCAccess                            65536  4096 2147483647
+ 32 InstructionsRetiredFixed            65536  4096 2147483647
