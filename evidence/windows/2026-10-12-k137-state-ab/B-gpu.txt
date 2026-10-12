@@ -1,0 +1,54 @@
+08:31:07.864 B/gpu BEGIN tag= host=BC250-A phase=gpu state=B
+08:31:08.209 B/gpu boot lastboot=2026-10-12T07:49:14 uptime_s=2514
+08:31:09.288 B/gpu topology name=AMD BC-250 cores=6 logical=12 max_clock_mhz=3194 current_clock_mhz=3194
+08:31:09.799 B/gpu gpu device status=OK instance=PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\4&19CAF403&0&0041
+08:31:09.884 B/gpu rd info # bc250rd pci=01:00.0 id=1002:13fe rev=00 command=0406 status=0010 bar5=0xfe800000 size=0x80000 allow=5355
+08:31:09.887 B/gpu rd info # bars c000000c 00000000 d000000c 00000000 0000ef01 fe800000
+08:31:09.944 B/gpu dpm idle driver 0x000700D8, requested dpm, reason none, generation 24819177356, ticks 1055, uptime 33495 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release below 83.0 C for 4000 ms (default), soft zone from 86.0 C per 1500 ms, lead 15000 ms (default)
+08:31:09.947 B/gpu dpm idle idle: 500 MHz (now) after 3000 ms under 2 permille busy; entries 1 exits 0 refusals 0, 24008 ms at the point
+08:31:09.961 B/gpu dpm idle smu metrics: ok, 32 tables, 0 failures, last 898 ms ago: gfx 818 mV 500 MHz 57.25 C, soc 1199 mV 58.50 C, throttler 0x0000
+08:31:09.977 B/gpu dpm idle 10:31:09.938 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  61.1 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle idle confirmed  up 0 down 1 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  53.0 W avg  45.4 W (gfx 16.6 W soc 10.6 W)
+08:31:10.031 B/gpu cpu idle cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+08:31:10.033 B/gpu cpu idle cpu: applied clock 0 MHz, undervolt 0 steps, cap 0 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+08:31:10.047 B/gpu cpu idle cpu: 1187 mV (GPU 824 mV), firmware cap 100 C, features 0xDD602C7D, 59.8 C
+08:31:10.064 B/gpu cpu idle cpu: cores 3500 3500 3500 1555 1555 3500 3500 1555 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+08:31:10.078 B/gpu cpu idle cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+08:31:10.096 B/gpu cpu idle cpu: reads 20 writes 0 refusals 0 reverts 0 (retries 0, refused 0); last queue 0 message 0x3D argument 0x00000000 status 0x00000001
+08:31:10.437 B/gpu rlc raw-idle # bc250rd pci=01:00.0 id=1002:13fe rev=00 command=0406 status=0010 bar5=0xfe800000 size=0x80000 allow=5355 | # bars c000000c 00000000 d000000c 00000000 0000ef01 fe800000 | GC.RLC_GPU_CLOCK_32_RES_SEL 0x3b104 00000000 | GC.RLC_REFCLOCK_TIMESTAMP_LSB 0x3b030 C4AF50D5 | GC.RLC_REFCLOCK_TIMESTAMP_MSB 0x3b034 0000003A | GC.RLC_GPU_CLOCK_32 0x3b108 D7D277BA | GC.RLC_REFCLOCK_TIMESTAMP_LSB_RECHECK 0x3b030 C4F5C5C5 | GC.RLC_GPU_CLOCK_COUNT_LSB_LATCH_WITNESS 0x3b090 00000000 | GC.RLC_GPU_CLOCK_COUNT_MSB_LATCH_WITNESS 0x3b094 00000000 | # complete
+08:31:11.717 B/gpu rlc idle-0 d_clock32=120475260 qpc_s=1.211 mhz_by_qpc=99.5 mhz_by_refclk=100.0 d_refclk=120436182 res_sel=0 latch_a=0 latch_b=0 latch_moved=0
+08:31:12.950 B/gpu rlc idle-1 d_clock32=104718344 qpc_s=1.071 mhz_by_qpc=97.7 mhz_by_refclk=100.0 d_refclk=104722962 res_sel=0 latch_a=0 latch_b=0 latch_moved=0
+08:31:14.146 B/gpu rlc idle-2 d_clock32=104120268 qpc_s=1.047 mhz_by_qpc=99.4 mhz_by_refclk=100.0 d_refclk=104071764 res_sel=0 latch_a=0 latch_b=0 latch_moved=0
+08:31:20.509 B/gpu vkmembw exit=0 rlc_samples=6
+08:31:20.518 B/gpu rlc under-vkmembw pair-1 d_clock32=104484848 qpc_s=1.053 mhz_by_qpc=99.3 mhz_by_refclk=100.1 d_refclk=104418294 res_sel=0 latch_a=0 latch_b=0 latch_moved=0
+08:31:20.533 B/gpu rlc under-vkmembw pair-2 d_clock32=104571788 qpc_s=1.049 mhz_by_qpc=99.7 mhz_by_refclk=100.0 d_refclk=104557008 res_sel=0 latch_a=0 latch_b=0 latch_moved=0
+08:31:20.549 B/gpu rlc under-vkmembw pair-3 d_clock32=105491900 qpc_s=1.053 mhz_by_qpc=100.2 mhz_by_refclk=99.9 d_refclk=105649320 res_sel=0 latch_a=0 latch_b=0 latch_moved=0
+08:31:20.564 B/gpu rlc under-vkmembw pair-4 d_clock32=103725032 qpc_s=1.040 mhz_by_qpc=99.7 mhz_by_refclk=100.1 d_refclk=103645890 res_sel=0 latch_a=0 latch_b=0 latch_moved=0
+08:31:20.580 B/gpu rlc under-vkmembw pair-5 d_clock32=105260436 qpc_s=1.056 mhz_by_qpc=99.6 mhz_by_refclk=100.0 d_refclk=105240672 res_sel=0 latch_a=0 latch_b=0 latch_moved=0
+08:31:20.618 B/gpu vkmembw placement local: src/dst type 0 (heap 1, flags 0x001), readback type 5 (flags 0x00E)
+08:31:20.620 B/gpu vkmembw write  n=20 gpu_ms min 0.715 median 0.726 max 0.738 sum 14.5 | GB/s median 369.6 best 375.2 | cpu_ms 18.6 (0.928 per dispatch)
+08:31:20.638 B/gpu vkmembw copy   n=20 gpu_ms min 1.376 median 1.381 max 1.391 sum 27.6 | GB/s median 388.7 best 390.1 | cpu_ms 29.4 (1.472 per dispatch)
+08:31:20.654 B/gpu vkmembw read   n=20 gpu_ms min 0.738 median 0.741 max 0.744 sum 14.8 | GB/s median 384.7 best 386.5 | cpu_ms 16.7 (0.833 per dispatch)
+08:31:20.672 B/gpu vkmembw check copy ok (0 mismatches in the first and last MiB), read sum ok (FF000000 FE000000 01000000 00000000)
+08:31:20.687 B/gpu vkmembw placement host: src/dst type 2 (heap 0, flags 0x006), readback type 5 (flags 0x00E)
+08:31:20.703 B/gpu vkmembw write  n=20 gpu_ms min 0.711 median 0.729 max 0.737 sum 14.6 | GB/s median 368.2 best 377.7 | cpu_ms 18.5 (0.923 per dispatch)
+08:31:20.720 B/gpu vkmembw copy   n=20 gpu_ms min 1.377 median 1.382 max 1.385 sum 27.7 | GB/s median 388.4 best 389.9 | cpu_ms 29.5 (1.476 per dispatch)
+08:31:20.735 B/gpu vkmembw read   n=20 gpu_ms min 0.737 median 0.744 max 0.748 sum 14.9 | GB/s median 383.6 best 386.9 | cpu_ms 15.3 (0.764 per dispatch)
+08:31:20.753 B/gpu vkmembw check copy ok (0 mismatches in the first and last MiB), read sum ok (FF000000 FE000000 01000000 00000000)
+08:31:20.798 B/gpu dpm after-vkmembw driver 0x000700D8, requested dpm, reason none, generation 24819177356, ticks 1397, uptime 44353 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release below 83.0 C for 4000 ms (default), soft zone from 86.0 C per 1500 ms, lead 15000 ms (default)
+08:31:20.800 B/gpu dpm after-vkmembw idle: 500 MHz after 3000 ms under 2 permille busy; entries 1 exits 1 refusals 0, 28668 ms at the point
+08:31:20.820 B/gpu dpm after-vkmembw smu metrics: ok, 43 tables, 0 failures, last 567 ms ago: gfx 993 mV 1900 MHz 61.00 C, soc 1187 mV 61.50 C, throttler 0x0000
+08:31:20.835 B/gpu dpm after-vkmembw 10:31:20.793 dpm 1700 MHz  952 mV (SMU 1700 MHz VID  95)  63.8 C busy   0.0% avg   0.2% want 1700 cap 2000 max 2000 throttle none confirmed session  up 6 down 9 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  59.1 W avg  72.4 W (gfx 27.4 W soc  5.9 W)
+08:31:20.880 B/gpu cpu after-vkmembw cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+08:31:20.882 B/gpu cpu after-vkmembw cpu: applied clock 0 MHz, undervolt 0 steps, cap 0 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+08:31:20.898 B/gpu cpu after-vkmembw cpu: 1187 mV (GPU 824 mV), firmware cap 100 C, features 0xDD602C7D, 59.8 C
+08:31:20.913 B/gpu cpu after-vkmembw cpu: cores 3500 3500 3500 1555 1555 3500 3500 1555 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+08:31:20.932 B/gpu cpu after-vkmembw cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+08:31:20.948 B/gpu cpu after-vkmembw cpu: reads 20 writes 0 refusals 0 reverts 0 (retries 0, refused 0); last queue 0 message 0x3D argument 0x00000000 status 0x00000001
+08:31:21.050 B/gpu kmdlog lines=862 file=C:\BC250\tmp\bd093\B-kmdlog.txt
+08:31:21.091 B/gpu kmdlog 49      0.500 startup: clock status 0x00000000 ready 1 request 1000MHz/820mV initial 1000MHz/VID116 observed 1000MHz/VID116 temp 59500mc staged 0
+08:31:21.093 B/gpu kmdlog 116      0.626 cumode: CuMode 40 disable 0x00000 -> mode 40 reason 0, confirmed earlier, stock from this boot's record
+08:31:21.109 B/gpu kmdlog 117      0.626 gfx: RLC startup policy pp_gfxoff 0
+08:31:21.129 B/gpu kmdlog 121      0.641 cumode: stage run: mode 40 applied 40 reason 0 wrote 1
+08:31:21.148 B/gpu kmdlog 181      0.641 cumode: applied 40 CUs (40 counted), reason 0, consistent 1, wrote 1, RLC_PG_CNTL 0x00800000 (PG enables 0x0), after the RLC stage 0x00800000 (PG enables 0x0)
+08:31:21.165 B/gpu kmdlog 182      0.641 cumode: SA0-3 CC 0xFFE00000 0xFFE00000 0xFFE00000 0xFFE00000 SPI 0x1F 0x1F 0x1F 0x1F
+08:31:21.185 B/gpu END phase=gpu state=B log=C:\BC250\tmp\bd093\B-gpu.txt

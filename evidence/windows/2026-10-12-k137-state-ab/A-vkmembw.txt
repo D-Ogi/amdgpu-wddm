@@ -1,0 +1,31 @@
+device        AMD BC-250 (RADV GFX1013) (vendor 0x1002 device 0x13FE) driver 0x06802063 api 1.4.363
+queue family  0 flags 0xF, timestamps 64 valid bits, period 10.000 ns
+memory        11 types, 2 heaps
+  type  0 heap 1 flags 0x001
+  type  1 heap 1 flags 0x001
+  type  2 heap 0 flags 0x006
+  type  3 heap 1 flags 0x007
+  type  4 heap 1 flags 0x007
+  type  5 heap 0 flags 0x00E
+  type  6 heap 0 flags 0x00E
+  type  7 heap 1 flags 0x0C1
+  type  8 heap 0 flags 0x0C6
+  type  9 heap 1 flags 0x0C7
+  type 10 heap 0 flags 0x0CE
+  heap 0 size 3951 MiB flags 0x0
+  heap 1 size 7902 MiB flags 0x1
+placement local: src/dst type 0 (heap 1, flags 0x001), readback type 5 (flags 0x00E)
+  buffers 256 MiB x2, 16777216 elements of 16 bytes, 4096 groups x 256 = 1048576 invocations, 20 iterations
+  warmup 175 batches of 8 copies, 1996 ms
+  write  n=20 gpu_ms min 0.708 median 0.724 max 0.730 sum 14.4 | GB/s median 371.0 best 379.0 | cpu_ms 17.8 (0.889 per dispatch)
+  copy   n=20 gpu_ms min 1.386 median 1.399 max 1.413 sum 28.0 | GB/s median 383.9 best 387.4 | cpu_ms 29.3 (1.464 per dispatch)
+  read   n=20 gpu_ms min 0.758 median 0.762 max 0.766 sum 15.2 | GB/s median 374.3 best 376.3 | cpu_ms 16.6 (0.829 per dispatch)
+  check copy ok (0 mismatches in the first and last MiB), read sum ok (FF000000 FE000000 01000000 00000000)
+placement host: src/dst type 2 (heap 0, flags 0x006), readback type 5 (flags 0x00E)
+  buffers 256 MiB x2, 16777216 elements of 16 bytes, 4096 groups x 256 = 1048576 invocations, 20 iterations
+  warmup 175 batches of 8 copies, 1999 ms
+  write  n=20 gpu_ms min 0.718 median 0.724 max 0.732 sum 14.5 | GB/s median 370.6 best 373.8 | cpu_ms 17.9 (0.896 per dispatch)
+  copy   n=20 gpu_ms min 1.388 median 1.392 max 1.400 sum 27.8 | GB/s median 385.6 best 386.8 | cpu_ms 29.1 (1.456 per dispatch)
+  read   n=20 gpu_ms min 0.755 median 0.763 max 0.766 sum 15.3 | GB/s median 373.8 best 377.6 | cpu_ms 15.5 (0.777 per dispatch)
+  check copy ok (0 mismatches in the first and last MiB), read sum ok (FF000000 FE000000 01000000 00000000)
+result ok

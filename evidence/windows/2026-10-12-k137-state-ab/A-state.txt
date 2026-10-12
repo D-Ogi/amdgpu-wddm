@@ -1,0 +1,33 @@
+08:27:10.272 A/state BEGIN tag= host=BC250-A phase=state state=A
+08:27:10.455 A/state boot lastboot=2026-10-12T07:49:14 uptime_s=2276
+08:27:11.609 A/state topology name=AMD BC-250 cores=6 logical=12 max_clock_mhz=3194 current_clock_mhz=3194
+08:27:11.796 A/state gpu device status=OK instance=PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\4&19CAF403&0&0041
+08:27:11.834 A/state info # adapter    BC-250 GPU (amdgpu-wddm)
+08:27:11.835 A/state info # hardware   PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00
+08:27:11.842 A/state info # interface  \\?\pci#ven_1002&dev_13fe&subsys_00001022&rev_00#4&19caf403&0&0041#{1ca05180-a699-450a-9a0c-de4fbe3ddd89}
+08:27:11.850 A/state info D3DKMTOpenAdapterFromDeviceName -> 0x00000000 STATUS_SUCCESS
+08:27:11.856 A/state info # adapter    handle 0x40000000 luid 00000000-000088AC
+08:27:11.864 A/state info D3DKMTEscape(D3DKMT_ESCAPE_DRIVERPRIVATE, BC250_ESCAPE_GET_INFO) -> 0x00000000 STATUS_SUCCESS
+08:27:11.889 A/state dpm idle driver 0x000700D8, requested dpm, reason none, generation 50068071, ticks 72152, uptime 2272280 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release below 83.0 C for 4000 ms (default), soft zone from 86.0 C per 1500 ms, lead 15000 ms (default)
+08:27:11.890 A/state dpm idle idle: 500 MHz (now) after 3000 ms under 2 permille busy; entries 10 exits 9 refusals 0, 1895979 ms at the point
+08:27:11.897 A/state dpm idle smu metrics: ok, 2244 tables, 1 failures, last 368 ms ago: gfx 824 mV 500 MHz 56.50 C, soc 806 mV 57.50 C, throttler 0x0000
+08:27:11.904 A/state dpm idle 10:27:11.886 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  60.6 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle idle confirmed  up 36 down 66 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  35.9 W avg  37.2 W (gfx  9.6 W soc  0.7 W)
+08:27:11.928 A/state cpu idle cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+08:27:11.929 A/state cpu idle cpu: applied clock 0 MHz, undervolt 0 steps, cap 0 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+08:27:11.938 A/state cpu idle cpu: 806 mV (GPU 824 mV), firmware cap 100 C, features 0xDD602C7D, 67.7 C
+08:27:11.944 A/state cpu idle cpu: cores 3500 1400 1400 900 1400 1400 1400 900 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+08:27:11.953 A/state cpu idle cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+08:27:11.961 A/state cpu idle cpu: reads 20 writes 0 refusals 0 reverts 0 (retries 0, refused 0); last queue 0 message 0x3D argument 0x00000000 status 0x00000001
+08:27:14.043 A/state timebase timebase qpc_frequency=10000000 is_high_resolution=1 processors=12
+08:27:14.045 A/state timebase timebase slept_ms=1000 qpc_ms=1010.362 systemtime_ms=1011.005 qpc_over_systemtime=0.99936 utc_start=2026-10-12T08:27:13.024Z utc_end=2026-10-12T08:27:14.035Z
+08:27:19.506 A/state counter idle at=08:27:14.058 window=provider-refresh-not-our-load instance=0,2 pct_processor_performance=42 pct_processor_time=0 processor_frequency_mhz=3194 pct_of_maximum_frequency=43
+08:27:22.041 A/state meter kernel cpu=2 on=2 rep=0 name=loop_add ops=1205241384 us=345435.7 ops_per_us=3489.05
+08:27:22.042 A/state meter kernel cpu=2 on=2 rep=0 name=mix_xoradd ops=1205241384 us=345387.1 ops_per_us=3489.54
+08:27:22.052 A/state meter kernel cpu=2 on=2 rep=0 name=dep_imul ops=401116552 us=344802.4 ops_per_us=1163.32
+08:27:22.061 A/state meter kernel cpu=2 on=2 rep=0 name=dep_mix ops=200756675 us=345144.3 ops_per_us=581.66
+08:27:22.069 A/state meter kernel cpu=2 on=2 rep=0 name=tput_add ops=3850489872 us=345192.1 ops_per_us=11154.63
+08:27:22.078 A/state meter kernel cpu=2 on=2 rep=0 name=tput_imul ops=1203664528 us=345135.3 ops_per_us=3487.51
+08:27:22.085 A/state meter kernel cpu=2 on=2 rep=0 name=dep_fpadd ops=401443272 us=345140.1 ops_per_us=1163.13
+08:27:22.393 A/state counter just-after-load at=08:27:22.103 window=provider-refresh-not-our-load instance=0,2 pct_processor_performance=43 pct_processor_time=0 processor_frequency_mhz=3194 pct_of_maximum_frequency=43
+08:27:22.406 A/state STATE-GUESS dep_mix_ops_per_us=581.7 verdict=healthy-like (reference: fresh 575, K137 258, K223)
+08:27:22.408 A/state END phase=state state=A log=C:\BC250\tmp\bd093\A-state.txt

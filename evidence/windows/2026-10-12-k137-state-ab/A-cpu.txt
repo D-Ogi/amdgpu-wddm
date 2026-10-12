@@ -1,0 +1,79 @@
+08:27:33.583 A/cpu BEGIN tag= host=BC250-A phase=cpu state=A
+08:27:33.751 A/cpu boot lastboot=2026-10-12T07:49:14 uptime_s=2299
+08:27:34.802 A/cpu topology name=AMD BC-250 cores=6 logical=12 max_clock_mhz=3194 current_clock_mhz=3194
+08:27:34.990 A/cpu gpu device status=OK instance=PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\4&19CAF403&0&0041
+08:27:45.153 A/cpu timebase timebase qpc_frequency=10000000 is_high_resolution=1 processors=12
+08:27:45.155 A/cpu timebase timebase slept_ms=10000 qpc_ms=10015.399 systemtime_ms=10016.109 qpc_over_systemtime=0.99993 utc_start=2026-10-12T08:27:35.126Z utc_end=2026-10-12T08:27:45.142Z
+08:27:45.251 A/cpu timebase golden_tsc_delta=1013886599 qpc_s=10.159 golden_mhz=99.801 read_span_a_s=0.017 read_span_b_s=0.015 (expect 100.000; the read spans bound the error)
+08:27:47.098 A/cpu cpu readback under-load 0 cpu readback: done, serial 0
+08:27:47.099 A/cpu cpu readback under-load 0 cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+08:27:47.107 A/cpu cpu readback under-load 0 cpu: applied clock 0 MHz, undervolt 0 steps, cap 0 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+08:27:47.113 A/cpu cpu readback under-load 0 cpu: 1199 mV (GPU 824 mV), firmware cap 100 C, features 0xDD602C7D, 60.7 C
+08:27:47.120 A/cpu cpu readback under-load 0 cpu: cores 1555 3500 1555 1555 1400 1400 1400 933 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+08:27:47.128 A/cpu cpu readback under-load 0 cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+08:27:47.135 A/cpu cpu readback under-load 0 cpu: reads 40 writes 0 refusals 0 reverts 0 (retries 0, refused 0); last queue 0 message 0x3D argument 0x00000000 status 0x00000001
+08:27:47.438 A/cpu counter under-load 0 at=08:27:47.147 window=provider-refresh-not-our-load instance=0,2 pct_processor_performance=108 pct_processor_time=100 processor_frequency_mhz=3194 pct_of_maximum_frequency=100
+08:27:48.462 A/cpu cpu readback under-load 1 cpu readback: done, serial 0
+08:27:48.464 A/cpu cpu readback under-load 1 cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+08:27:48.473 A/cpu cpu readback under-load 1 cpu: applied clock 0 MHz, undervolt 0 steps, cap 0 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+08:27:48.479 A/cpu cpu readback under-load 1 cpu: 1199 mV (GPU 824 mV), firmware cap 100 C, features 0xDD602C7D, 60.7 C
+08:27:48.487 A/cpu cpu readback under-load 1 cpu: cores 1555 3500 1555 1555 1400 1400 1400 933 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+08:27:48.494 A/cpu cpu readback under-load 1 cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+08:27:48.502 A/cpu cpu readback under-load 1 cpu: reads 60 writes 0 refusals 0 reverts 0 (retries 0, refused 0); last queue 0 message 0x3D argument 0x00000000 status 0x00000001
+08:27:48.792 A/cpu counter under-load 1 at=08:27:48.510 window=provider-refresh-not-our-load instance=0,2 pct_processor_performance=108 pct_processor_time=100 processor_frequency_mhz=3194 pct_of_maximum_frequency=100
+08:27:49.819 A/cpu cpu readback under-load 2 cpu readback: done, serial 0
+08:27:49.820 A/cpu cpu readback under-load 2 cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+08:27:49.829 A/cpu cpu readback under-load 2 cpu: applied clock 0 MHz, undervolt 0 steps, cap 0 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+08:27:49.836 A/cpu cpu readback under-load 2 cpu: 1199 mV (GPU 824 mV), firmware cap 100 C, features 0xDD602C7D, 60.7 C
+08:27:49.844 A/cpu cpu readback under-load 2 cpu: cores 1555 3500 1555 1555 1400 1400 1400 933 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+08:27:49.850 A/cpu cpu readback under-load 2 cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+08:27:49.858 A/cpu cpu readback under-load 2 cpu: reads 80 writes 0 refusals 0 reverts 0 (retries 0, refused 0); last queue 0 message 0x3D argument 0x00000000 status 0x00000001
+08:27:50.138 A/cpu counter under-load 2 at=08:27:49.866 window=provider-refresh-not-our-load instance=0,2 pct_processor_performance=108 pct_processor_time=100 processor_frequency_mhz=3194 pct_of_maximum_frequency=100
+08:27:59.164 A/cpu kernels exit=0
+08:27:59.168 A/cpu kernel kernel cpu=2 on=2 rep=0 name=loop_add ops=6026206904 us=1727290.6 ops_per_us=3488.82
+08:27:59.173 A/cpu kernel kernel cpu=2 on=2 rep=0 name=mix_xoradd ops=5971705312 us=1711233.9 ops_per_us=3489.71
+08:27:59.180 A/cpu kernel kernel cpu=2 on=2 rep=0 name=dep_imul ops=2008560216 us=1727188.4 ops_per_us=1162.91
+08:27:59.188 A/cpu kernel kernel cpu=2 on=2 rep=0 name=dep_mix ops=1000001001 us=1719543.0 ops_per_us=581.55
+08:27:59.196 A/cpu kernel kernel cpu=2 on=2 rep=0 name=tput_add ops=19264249232 us=1725686.7 ops_per_us=11163.24
+08:27:59.203 A/cpu kernel kernel cpu=2 on=2 rep=0 name=tput_imul ops=8000008012 us=2293100.6 ops_per_us=3488.73
+08:27:59.210 A/cpu kernel kernel cpu=2 on=2 rep=0 name=dep_fpadd ops=2001278184 us=1720395.1 ops_per_us=1163.27
+08:28:01.782 A/cpu hist hist cpu=2 contend=0 steal=0 chunks=705366 dropped=0 qpc_ticks_per_chunk=35.0 chunk_ops=2000 total_us=2500003 ops_per_us_mean=564.29 median=571.43 p01=571.43 p99=588.24 max=588.24 slow_chunk_pct=0.03 mean_over_median=0.988 noise_ops=0
+08:28:02.853 A/cpu hist hist cpu=2 contend=0 steal=0 chunks=1036672 dropped=0 qpc_ticks_per_chunk=9.0 chunk_ops=500 total_us=1000001 ops_per_us_mean=518.34 median=555.56 p01=555.56 p99=625.00 max=625.00 slow_chunk_pct=0.02 mean_over_median=0.933 noise_ops=0
+08:28:05.403 A/cpu hist hist cpu=2 contend=0 steal=1 chunks=359042 dropped=0 qpc_ticks_per_chunk=35.0 chunk_ops=2000 total_us=2500003 ops_per_us_mean=287.23 median=571.43 p01=571.43 p99=588.24 max=588.24 slow_chunk_pct=0.03 mean_over_median=0.503 noise_ops=0
+08:28:06.956 A/cpu hist hist cpu=2 contend=1 steal=0 chunks=423232 dropped=0 qpc_ticks_per_chunk=35.0 chunk_ops=2000 total_us=1500001 ops_per_us_mean=564.31 median=571.43 p01=571.43 p99=588.24 max=588.24 slow_chunk_pct=0.03 mean_over_median=0.988 noise_ops=0
+08:28:10.463 A/cpu sweep topo mode=sweep processors=12 process_affinity=0xFFF
+08:28:10.464 A/cpu sweep sweep cpu=0 on=0 name=dep_mix ops=165306054 us=286146.3 ops_per_us=577.70
+08:28:10.475 A/cpu sweep sweep cpu=1 on=1 name=dep_mix ops=167190212 us=287792.5 ops_per_us=580.94
+08:28:10.484 A/cpu sweep sweep cpu=2 on=2 name=dep_mix ops=167083331 us=287328.6 ops_per_us=581.51
+08:28:10.490 A/cpu sweep sweep cpu=3 on=3 name=dep_mix ops=167394637 us=287815.5 ops_per_us=581.60
+08:28:10.497 A/cpu sweep sweep cpu=4 on=4 name=dep_mix ops=166233182 us=285938.8 ops_per_us=581.36
+08:28:10.505 A/cpu sweep sweep cpu=5 on=5 name=dep_mix ops=167219385 us=287626.2 ops_per_us=581.38
+08:28:10.512 A/cpu sweep sweep cpu=6 on=6 name=dep_mix ops=153833960 us=264635.0 ops_per_us=581.31
+08:28:10.520 A/cpu sweep sweep cpu=7 on=7 name=dep_mix ops=166435272 us=286318.5 ops_per_us=581.29
+08:28:10.528 A/cpu sweep sweep cpu=8 on=8 name=dep_mix ops=167209659 us=287629.9 ops_per_us=581.34
+08:28:10.535 A/cpu sweep sweep cpu=9 on=9 name=dep_mix ops=167384891 us=287983.1 ops_per_us=581.23
+08:28:10.543 A/cpu sweep sweep cpu=10 on=10 name=dep_mix ops=167336179 us=287895.9 ops_per_us=581.24
+08:28:10.550 A/cpu sweep sweep cpu=11 on=11 name=dep_mix ops=166444907 us=286331.7 ops_per_us=581.30
+08:28:12.906 A/cpu threads topo mode=threads processors=12 process_affinity=0xFFF
+08:28:12.907 A/cpu threads threads n=1 name=dep_mix sum_ops_per_us=577.75 per_thread_mean=577.75 min=577.75 max=577.75
+08:28:12.916 A/cpu threads threads n=2 name=dep_mix sum_ops_per_us=1091.13 per_thread_mean=545.57 min=543.46 max=547.68
+08:28:12.923 A/cpu threads threads n=4 name=dep_mix sum_ops_per_us=2188.24 per_thread_mean=547.06 min=543.32 max=548.67
+08:28:12.930 A/cpu threads threads n=6 name=dep_mix sum_ops_per_us=3280.46 per_thread_mean=546.74 min=543.08 max=548.21
+08:28:12.938 A/cpu threads threads n=8 name=dep_mix sum_ops_per_us=4375.44 per_thread_mean=546.93 min=543.48 max=548.17
+08:28:14.215 A/cpu latency latency cpu=2 name=l1_16k bytes=16384 steps=119900000 us=250126.1 ns_per_access=2.086
+08:28:14.216 A/cpu latency latency cpu=2 name=l2_256k bytes=262144 steps=57700000 us=250378.7 ns_per_access=4.339
+08:28:14.224 A/cpu latency latency cpu=2 name=l3_or_dram_4m bytes=4194304 steps=11600000 us=251488.7 ns_per_access=21.680
+08:28:14.233 A/cpu latency latency cpu=2 name=dram_64m bytes=67108864 steps=1700000 us=259168.4 ns_per_access=152.452
+08:28:14.527 A/cpu counter after-load at=08:28:14.240 window=provider-refresh-not-our-load instance=0,2 pct_processor_performance=61 pct_processor_time=0 processor_frequency_mhz=3194 pct_of_maximum_frequency=42
+08:28:14.546 A/cpu dpm after-load driver 0x000700D8, requested dpm, reason none, generation 50068071, ticks 74149, uptime 2334953 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release below 83.0 C for 4000 ms (default), soft zone from 86.0 C per 1500 ms, lead 15000 ms (default)
+08:28:14.547 A/cpu dpm after-load idle: 500 MHz (now) after 3000 ms under 2 permille busy; entries 10 exits 9 refusals 0, 1957701 ms at the point
+08:28:14.555 A/cpu dpm after-load smu metrics: ok, 2306 tables, 1 failures, last 544 ms ago: gfx 824 mV 500 MHz 56.75 C, soc 1187 mV 58.50 C, throttler 0x0000
+08:28:14.564 A/cpu dpm after-load 10:28:14.543 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  65.6 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle idle confirmed  up 36 down 66 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  38.7 W avg  39.3 W (gfx 10.2 W soc  2.9 W)
+08:28:14.587 A/cpu cpu after-load cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+08:28:14.589 A/cpu cpu after-load cpu: applied clock 0 MHz, undervolt 0 steps, cap 0 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+08:28:14.596 A/cpu cpu after-load cpu: 1199 mV (GPU 824 mV), firmware cap 100 C, features 0xDD602C7D, 60.7 C
+08:28:14.605 A/cpu cpu after-load cpu: cores 1555 3500 1555 1555 1400 1400 1400 933 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+08:28:14.612 A/cpu cpu after-load cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+08:28:14.620 A/cpu cpu after-load cpu: reads 80 writes 0 refusals 0 reverts 0 (retries 0, refused 0); last queue 0 message 0x3D argument 0x00000000 status 0x00000001
+08:28:14.644 A/cpu health health abi=1 version=0x000700D8 flags=15 generation=50068071 epoch=5 completed=12522 age_ms=14399 ready_ms=2322840
+08:28:14.646 A/cpu END phase=cpu state=A log=C:\BC250\tmp\bd093\A-cpu.txt
