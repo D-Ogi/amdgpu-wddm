@@ -28,6 +28,7 @@ Usage: game-drive.py --profile rottr --attempt native-caps548 --control <game-co
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import re
 import subprocess
@@ -45,6 +46,10 @@ DRIVES = {
         # is the whole column, because one OCR read can drop items (551 read OPTIONS and "GAME" only).
         "menu_items": ("START BENCHMARK", "OPTIONS", "QUIT GAME", "CONTINUE", "NEW GAME", "EXPEDITIONS",
                        "LEADERBOARDS", "MARKETPLACE"),
+        # The whole column in its order, for naming the garbled reads of a column (canon); CREDITS and LOAD GAME
+        # are not menu evidence on their own (a credits screen), so they stay out of menu_items.
+        "column": ("CONTINUE", "LOAD GAME", "NEW GAME", "EXPEDITIONS", "LEADERBOARDS", "OPTIONS", "MARKETPLACE",
+                   "QUIT GAME", "CREDITS", "START BENCHMARK"),
         "result": "Overall score",
         # The profile's apis.d3d12.world_after_confirm_s: the scenes start 46-56 s after the confirm.
         "world_note": "note:world+60",
@@ -65,6 +70,8 @@ HIGHLIGHT_RATIO = 1.18
 KEY_SETTLE_MS = 1000
 MENU_READS = 3
 MENU_STILL_SPREAD = 0.02
+# canon(): the letter similarity at which a garbled OCR line still names a menu item (b31 565: 0.815 to 0.875).
+MENU_MATCH = 0.8
 
 
 class Channel:
@@ -103,8 +110,39 @@ def find(lines: list[dict], text: str) -> dict | None:
     return next((line for line in lines if want in str(line.get("t", "")).upper()), None)
 
 
+def letters(text: str) -> str:
+    return re.sub(r"[^A-Z]", "", str(text).upper())
+
+
+def canon(text: str, items) -> str | None:
+    """
+    The menu item an OCR line names, or None. The read of the highlighted item is often garbled: b31
+    native-caps565 read START BENCHMARK as "s r ARTBENCHM?RR" and QUIT GAME as "QUIF GAME" while the shot showed
+    the highlight on START BENCHMARK, and the exact match ended a good session. So the letters of a line are
+    compared with each item's letters: a containment, or a similarity of at least MENU_MATCH (565: 0.815 for the
+    benchmark item; a stray "GAME" against NEW GAME is 0.727 and stays unmatched).
+    """
+    got = letters(text)
+    if len(got) < 3:
+        return None
+    best, score = None, 0.0
+    for item in items:
+        want = letters(item)
+        if want in got:
+            return item
+        ratio = difflib.SequenceMatcher(None, got, want).ratio()
+        if ratio > score:
+            best, score = item, ratio
+    return best if score >= MENU_MATCH else None
+
+
+def find_item(lines: list[dict], item: str, items) -> dict | None:
+    """The line that names this menu item: an exact read first, else a garbled read that canon() maps to it."""
+    return find(lines, item) or next((line for line in lines if canon(line.get("t", ""), items) == item), None)
+
+
 def in_menu(lines: list[dict], drive: dict) -> bool:
-    return sum(1 for item in drive["menu_items"] if find(lines, item)) >= 2
+    return sum(1 for item in drive["menu_items"] if find_item(lines, item, drive["menu_items"])) >= 2
 
 
 def still(lines: list[dict], drive: dict) -> bool:
@@ -114,15 +152,27 @@ def still(lines: list[dict], drive: dict) -> bool:
     taken from it say nothing about the highlight. Still reads spread up to 0.010 (550 ocr-009/025, 552 ocr-011, the
     read that confirmed the highlight on START BENCHMARK), because the highlighted item moves its box.
     """
-    lefts = [line["b"][0] for line in (find(lines, item) for item in drive["menu_items"]) if line is not None]
+    items = drive["menu_items"]
+    lefts = [line["b"][0] for line in (find_item(lines, item, items) for item in items) if line is not None]
     return len(lefts) >= 2 and max(lefts) - min(lefts) <= MENU_STILL_SPREAD
 
 
-def menu_column(lines: list[dict], target: dict) -> list[dict]:
-    """The menu's items, top to bottom: capital-letter lines whose left edge is the target item's."""
+def menu_column(lines: list[dict], target: dict, items=()) -> list[dict]:
+    """
+    The menu's items, top to bottom: lines whose left edge is the target item's and that are either capital-letter
+    text or a garbled read of a known item (canon). Each line carries its item name in "item".
+    """
     left = target["b"][0]
-    column = [line for line in lines if re.fullmatch(r"[A-Z][A-Z ]{2,}", str(line.get("t", "")).strip())
-              and abs(line["b"][0] - left) <= 0.03]
+    column = []
+    for line in lines:
+        text = str(line.get("t", "")).strip()
+        if abs(line["b"][0] - left) > 0.03:
+            continue
+        name = canon(text, items) if items else None
+        if name is None and re.fullmatch(r"[A-Z][A-Z ]{2,}", text):
+            name = text.upper()
+        if name is not None:
+            column.append(dict(line, item=name))
     return sorted(column, key=lambda line: line["b"][1])
 
 
@@ -170,25 +220,28 @@ class Driver:
 
     def select(self, lines: list[dict]) -> bool:
         """Moves the highlight onto the menu item with the arrow keys. True once a read shows it there."""
-        want = self.drive["menu"]
+        want, items = self.drive["menu"], self.drive["menu_items"]
         for _ in range(4):
-            target = find(lines, want)
-            column = menu_column(lines, target) if target else []
-            names = [line["t"].strip().upper() for line in column]
+            target = find_item(lines, want, items)
+            column = menu_column(lines, target, self.drive.get("column", items)) if target else []
+            names = [line["item"] for line in column]
             if want not in names:
                 self.say(f"[drive] {want} is not in the menu column of the read: {names}")
                 return False
             lit = highlighted(column)
-            if lit is not None and lit["t"].strip().upper() == want:
-                self.say(f"[drive] the highlight is on {want}")
+            if lit is not None and lit["item"] == want:
+                self.say(f"[drive] the highlight is on {want}" +
+                         ("" if lit["t"].strip().upper() == want else f" (read as {lit['t'].strip()!r})"))
                 return True
             if lit is None:
                 keys = [self.drive["down"]]         # the first arrow key makes the highlight show
                 where = "no highlight in the read"
             else:
-                steps = names.index(want) - names.index(lit["t"].strip().upper())
+                # A read can miss items between the two (565 read three of ten), so this count can fall short;
+                # the next read starts again from wherever the highlight is then.
+                steps = names.index(want) - names.index(lit["item"])
                 keys = [self.drive["down"] if steps > 0 else self.drive["up"]] * abs(steps)
-                where = f"the highlight is on {lit['t'].strip()}"
+                where = f"the highlight is on {lit['item']}"
             self.say(f"[drive] {where}: {len(keys)} x {keys[0]}")
             self.channel.call(";".join(f"{key};wait:{KEY_SETTLE_MS}" for key in keys))
             lines = self.read_menu()
@@ -208,7 +261,7 @@ class Driver:
             if n:
                 self.sleep(1.0)
             lines, shot = self.channel.look()
-            if in_menu(lines, self.drive) and find(lines, self.drive["menu"]) is not None and still(lines, self.drive):
+            if in_menu(lines, self.drive) and find_item(lines, self.drive["menu"], self.drive["menu_items"]) is not None and still(lines, self.drive):
                 return lines
             self.say(f"[drive] {shot or 'no shot'}: read {n + 1} of {MENU_READS} does not show a still "
                      f"{self.drive['menu']}")
@@ -243,7 +296,7 @@ class Driver:
 
         def menu():
             lines, shot = self.channel.look()
-            found = (in_menu(lines, self.drive) and find(lines, self.drive["menu"]) is not None
+            found = (in_menu(lines, self.drive) and find_item(lines, self.drive["menu"], self.drive["menu_items"]) is not None
                      and still(lines, self.drive))
             self.say(f"[drive] {shot or 'no shot'}: {'menu' if found else 'not the menu yet'}")
             return lines if found else None

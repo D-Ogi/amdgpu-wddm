@@ -10,7 +10,7 @@
     "gamecontrol": "{ws}/scratch/m15/game-recon/game-control.py",
     "pathtrace": "{ws}/scratch/pathtrace",
     "plug": "{ws}/scratch/smartplug/plug.py",
-    "adapter_dir": "adapter137",
+    "adapter_dir": "adapter138",
     "lab_root": "C:\\BC250\\tmp\\train-{release}",
     "lab_pkg": "C:\\BC250\\tmp\\train-{release}\\{pkg_name}",
     "lab_zip": "C:\\BC250\\tmp\\train-{release}\\{pkg_name}.zip"
@@ -39,6 +39,8 @@
       "restart-2",
       "slots",
       "kmdver",
+      "stop-record",
+      "restart-3",
       "preflight",
       "pin-baseline",
       "stage-clients",
@@ -80,6 +82,8 @@
       "restart-2",
       "slots",
       "kmdver",
+      "stop-record",
+      "restart-3",
       "preflight",
       "pin-baseline"
     ],
@@ -325,10 +329,56 @@
           "{kit}/kmdver.ps1"
         ]
       ],
+      "expect_all": [
+        "gfx: VMID pool on (EnableVmidPool)",
+        "gfx: VM flush on the ring (EnableRingVmFlush), engine 1"
+      ],
+      "note": "From train b31 the VM flush on the gfx ring is the release default (EnableRingVmFlush absent = on, 0 = the rollback; docs/design/gfx-submit-root-serialization.md section 3). A registry value only says what was asked; the GfxStart lines say what the running driver did, so the arm fails when the driver came up on the MMIO flush (engine 17) or without the VMID pool.",
       "depends_on": [
         "restart-2"
       ],
       "gate_after": false
+    },
+    {
+      "id": "stop-record",
+      "title": "BD-124: the stop record of a start that nothing confirmed, on hardware",
+      "kind": "lab-read",
+      "bound_s": 170,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/stop-record.ps1"
+        ]
+      ],
+      "expect": "stop record arm: ok",
+      "note": "From train b31 the driver writes Parameters\\StopRecord when Windows stops a device whose start this generation never confirmed, and writes nothing for a stop of a confirmed start or for the stop that unwinds a start which failed (guard.c GuardRecordStopBegin). The host suites prove the layout and the readers; this arm is the only place the driver's own write is read on hardware. It stops and starts the display adapter twice with pnputil and enables it again on every exit path.",
+      "depends_on": [
+        "kmdver"
+      ],
+      "gate_after": false
+    },
+    {
+      "id": "restart-3",
+      "title": "Restart after the stop record arm",
+      "kind": "restart",
+      "bound_s": 600,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/restart-now.ps1",
+          "-Reason",
+          "stop record arm"
+        ]
+      ],
+      "depends_on": [
+        "kmdver"
+      ],
+      "gate_after": true,
+      "note": "The stop record arm stops and starts the adapter, and only a logon confirms a start, so the start health stays at 7 until a restart (validation-r1 of b31: preflight refused). It depends on kmdver, not on stop-record, so it also runs when stop-record fails."
     },
     {
       "id": "preflight",
@@ -345,7 +395,8 @@
       ],
       "expect": "preflight: ok",
       "depends_on": [
-        "restart-2"
+        "restart-2",
+        "restart-3"
       ],
       "gate_after": false
     },
@@ -1384,6 +1435,8 @@
         ]
       ],
       "env": {
+        "M157_ENGINE": "{pkg}/payload/d3d12/amdgpu_wddm_vkd3d.dll",
+        "M157_ICD": "{pkg}/payload/d3d12/amdgpu_wddm_radv.dll",
         "SESSION_ADAPTER": "{adapter_dir}",
         "SESSION_ACCEPTED": "1",
         "SESSION_SAMPLER": "1",
@@ -1407,7 +1460,7 @@
       "depends_on": [
         "d3d12-promote"
       ],
-      "note": "The runner never starts this one. The owner's rule is that the operator drives a Witcher 3 session itself, a shot every 10-15 s, and ends it when its goals are done. The suite writes its plan file and its command line, so the operator runs one line."
+      "note": "The runner never starts this one. The owner's rule is that the operator drives a Witcher 3 session itself, a shot every 10-15 s, and ends it when its goals are done. The suite writes its plan file and its command line, so the operator runs one line. M157_ENGINE and M157_ICD name the package's own files, as the rottr arm does: without them run-m157.sh stages its old defaults, and on a package with a new triplet the session swaps those in (2026-10-11, tester.28)."
     },
     {
       "id": "bm-restore",

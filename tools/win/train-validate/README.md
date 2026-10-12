@@ -135,7 +135,9 @@ Two files change between trains, and no script has to be copied.
    number below a baseline needs a reader, and the suite does not decide for them. An arm that read **no**
    number is a different matter: it is `UNREAD`, the arms that depend on it do not run, and an owner gate
    over it is not met. A baseline is pinned to a run that passed, never to one that hit its bound.
-2. The package directory on the command line.
+2. The package directory on the command line. `--package` takes the unpacked release's top folder or its
+   `files\` folder: the package root is the one that holds `manifest.json` (owner, 2026-10-11: the top folder
+   holds `setup.exe` and the one folder `files\`), and the zip is looked for beside the folder it unpacks to.
 
 A new arm is an entry in `arms.json`. It names a command that already exists, its bound, its kind, the
 regular expression that reads its result line and its baseline. The tests then hold it to the owner's bounds,

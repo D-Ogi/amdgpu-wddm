@@ -109,23 +109,40 @@ class Package:
     zip_path: Path | None
     zip_sha256: str
     zip_bytes: int
+    # The folder the zip is looked for in: the one the zip unpacks to lies in it. Reported when there is no zip, so
+    # the message names the folder that was searched and not the package root's parent, which is the unpacked
+    # release's own top folder under the current layout.
+    zip_dir: Path | None = None
+
+    # The folder that holds the package's own files inside the unpacked release (owner, 2026-10-11: the top folder
+    # holds setup.exe and this one folder).
+    FILES_DIR = "files"
 
     @classmethod
     def read(cls, directory: Path, hash_zip: bool = True) -> "Package":
         directory = Path(directory).resolve()
+        # Either the unpacked release's top folder or its files\ folder may be named: the package root is the one
+        # that holds the manifest.
+        if not (directory / "manifest.json").is_file() and (directory / cls.FILES_DIR / "manifest.json").is_file():
+            directory = directory / cls.FILES_DIR
         manifest = directory / "manifest.json"
         if not manifest.is_file():
             raise ManifestError(f"no manifest.json in {directory}: that is not a release package")
         data = json.loads(manifest.read_text(encoding="utf-8"))
         name = data.get("name") or directory.name
-        candidate = directory.parent / (name + ".zip")
+        # The zip lies beside the folder it unpacks to, which is the parent of files\ in the current layout and the
+        # package root itself in a release built before it.
+        top = directory.parent if directory.name == cls.FILES_DIR else directory
+        zip_dir = top.parent
+        candidate = zip_dir / (name + ".zip")
         zip_path = candidate if candidate.is_file() else None
         digest, size = "", 0
         if zip_path and hash_zip:
             digest, size = sha256(zip_path), zip_path.stat().st_size
         return cls(directory=directory, release=data.get("release") or data.get("version") or name, name=name,
                    kmd_build=data.get("kmd_build", ""), kmd_abi=data.get("kmd_abi", ""),
-                   built_utc=data.get("built_utc", ""), zip_path=zip_path, zip_sha256=digest, zip_bytes=size)
+                   built_utc=data.get("built_utc", ""), zip_path=zip_path, zip_sha256=digest, zip_bytes=size,
+                   zip_dir=zip_dir)
 
 
 @dataclass
@@ -399,7 +416,8 @@ def build(package: Package, data: dict | None = None, arm_ids: list[str] | None 
     needs_zip = [arm_id for arm_id in order if "{zip}" in json.dumps(index[arm_id])] if for_run else []
     needs_hash = [arm_id for arm_id in order if "{zip_sha256}" in json.dumps(index[arm_id])] if for_run else []
     if needs_zip and not package.zip_path:
-        raise ManifestError(f"no {package.name}.zip beside {package.directory.parent.as_posix()}, and "
+        searched = (package.zip_dir or package.directory.parent).as_posix()
+        raise ManifestError(f"no {package.name}.zip in {searched}, and "
                             f"{', '.join(needs_zip)} needs it: build the package zip, or ask for arms that "
                             f"do not install it")
     if needs_hash and not package.zip_sha256:
