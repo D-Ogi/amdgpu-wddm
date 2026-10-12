@@ -315,6 +315,78 @@ void test_linear_primary(Env& env) {
             checkf(refused == E_INVALIDARG && !none,
                    "linear primary: present_allocation refuses the texture that is not a primary (hr %08lx)",
                    static_cast<unsigned long>(refused));
+            // BD-133: that same texture is still a Present source, by copying it. This is the D3D9On12 back
+            // buffer's shape, and refusing it removed the device at the first windowed present. The copy goes on
+            // the command list the runtime hands to pfnPresent, and the answer is the allocation of the linear
+            // surface it wrote - a surface of the source's own kind, not the source.
+            const D3DKMT_HANDLE plain_allocation = m.last_allocation;
+            Recording copy_rec;
+            const HRESULT hr_copy_rec = open_recording(env, device, D3D12DDI_COMMAND_QUEUE_FLAG_3D, copy_rec);
+            if (hr_copy_rec == S_OK) {
+                const uint64_t copies_before = engine_ddi::present_copies();
+                const uint64_t surfaces_before = engine_ddi::present_copy_surfaces();
+                const uint32_t requests_before = m.allocations;
+                D3DKMT_HANDLE copied = 0;
+                HRESULT hr_copy =
+                    engine_ddi::present_copy_allocation(device.context, copy_rec.hlist(), plain.hres(), &copied);
+                const uint32_t want_copy = engine_ddi::kMemoryDedicated | engine_ddi::kMemoryShareable |
+                                           engine_ddi::kMemoryLinearSurface;
+                checkf(hr_copy == S_OK && copied && copied != plain_allocation &&
+                           m.allocations == requests_before + 1 && m.last_flags == want_copy && m.last_row_pitch &&
+                           m.last_layout_size && engine_ddi::present_copies() == copies_before + 1 &&
+                           engine_ddi::present_copy_surfaces() == surfaces_before + 1,
+                       "BD-133: present_copy_allocation copies the ordinary texture into one new linear surface "
+                       "(hr %08lx, allocation %08x, flags %x, row pitch %u)",
+                       static_cast<unsigned long>(hr_copy), copied, m.last_flags, m.last_row_pitch);
+                // The next present of the same source reuses that surface: no second memory request, and the
+                // allocation the kernel present reads stays the one it read before.
+                D3DKMT_HANDLE again = 0;
+                hr_copy =
+                    engine_ddi::present_copy_allocation(device.context, copy_rec.hlist(), plain.hres(), &again);
+                checkf(hr_copy == S_OK && again == copied && m.allocations == requests_before + 1 &&
+                           engine_ddi::present_copy_surfaces() == surfaces_before + 1,
+                       "BD-133: the next present of the same source reuses its surface (hr %08lx, allocation %08x)",
+                       static_cast<unsigned long>(hr_copy), again);
+                // What was recorded is a legal list: it closes, executes and leaves no list or device error. The
+                // barrier pairs are balanced, so both resources end in the state the runtime left them in.
+                const D3D12DDI_COMMAND_LIST_FUNCS_3D_0092& t = env.lists[copy_rec.table];
+                t.pfnCloseCommandList(copy_rec.hlist());
+                const D3D12DDI_HCOMMANDLIST lists[] = {copy_rec.hlist()};
+                const HRESULT hr_exec = engine_ddi::execute_command_lists(queue, 1, lists);
+                checkf(hr_exec == S_OK && !device.shell.list_errors && !device.shell.device_errors,
+                       "BD-133: the recorded copies execute (hr %08lx)", static_cast<unsigned long>(hr_exec));
+                wait_queue_idle(env, queue, "BD-133 present copy");
+                destroy_recording(env, device, copy_rec);
+            } else {
+                checkf(false, "BD-133: a command list for the present copy (hr %08lx)",
+                       static_cast<unsigned long>(hr_copy_rec));
+            }
+            // The negative control: a source no linear surface exists for is refused, answers 0 and removes no
+            // device. Two mip levels is such a source, and it is the one the engine makes no linear image of
+            // either (the PRIMARY case above).
+            Buffer two_mips;
+            const HRESULT hr_mips =
+                create_target(env, device, Shape{256, 256, DXGI_FORMAT_B8G8R8A8_UNORM, 2, false}, two_mips);
+            if (hr_mips == S_OK) {
+                Recording mip_rec;
+                if (open_recording(env, device, D3D12DDI_COMMAND_QUEUE_FLAG_3D, mip_rec) == S_OK) {
+                    const uint32_t errors_before = device.shell.device_errors;
+                    const uint64_t copies_before = engine_ddi::present_copies();
+                    const uint32_t requests_before = m.allocations;
+                    D3DKMT_HANDLE refused_copy = 1;
+                    const HRESULT hr_refused = engine_ddi::present_copy_allocation(
+                        device.context, mip_rec.hlist(), two_mips.hres(), &refused_copy);
+                    checkf(hr_refused == E_INVALIDARG && !refused_copy &&
+                               device.shell.device_errors == errors_before &&
+                               engine_ddi::present_copies() == copies_before &&
+                               m.allocations == requests_before,
+                           "BD-133: a source of 2 mip levels is refused, allocates nothing and removes no device "
+                           "(hr %08lx)",
+                           static_cast<unsigned long>(hr_refused));
+                    destroy_recording(env, device, mip_rec);
+                }
+                destroy_buffer(env, device, two_mips);
+            }
             destroy_buffer(env, device, plain);
         }
 

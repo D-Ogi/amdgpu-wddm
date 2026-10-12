@@ -93,8 +93,11 @@ static HRESULT reserve_result=S_OK;
 static UINT64 map_answer=0;                          // the address the map mock answers, 0: the ordinary one
 // What the allocation holds: the request's 4096 bytes rounded up to the alignment asked for.
 static UINT64 held_bytes(){return msaa_alignment?msaa_alignment:UINT64_C(65536);}
+// BD-133: the Present copy's surface is allocated on the driver's own request, with no runtime resource.
+static bool driver_surface_request=false;
 static HRESULT APIENTRY allocate_cb(D3D12DDI_HRTDEVICE d,D3D12DDICB_ALLOCATE_0022* a){
- assert(d.handle==handle<void*>(1) && a->hResource==handle<void*>(2) && !a->hKMResource);
+ assert(d.handle==handle<void*>(1) && !a->hKMResource);
+ assert(a->hResource==(driver_surface_request?nullptr:handle<void*>(2)));
  assert(a->NumAllocations==1);
  if(a->pAllocationInfo->PrivateDriverDataSize==32 && a->PrivateDriverDataSize==64 &&
     a->pAllocationInfo->Flags==D3D12DDI_ALLOCATION_INFO_FLAGS_0022_PRIMARY){
@@ -591,6 +594,39 @@ int main(){
    const auto before=next_allocation;s.surface_row_pitch=1020;events.clear();
    assert(owner.allocate(&s,&memory)==E_INVALIDARG && events.empty() && next_allocation==before);
    s.surface_row_pitch=1024;
+  }
+  // BD-133: the Present copy's own surface. engine-ddi asks for this same shared linear surface with no
+  // runtime resource of its own (resources.cpp, make_present_copy leaves rt_owner empty), because no resource
+  // of the runtime's owns it: the shell created it inside pfnPresent to copy a back buffer into. So the
+  // allocation is this driver's alone, the runtime destroys nothing of it, and the release goes by handle list
+  // (D) and not by the resource (R) - outside any owner scope, which is where a Present's release happens.
+  {
+   engine_ddi::MemoryRequest own=s;own.rt_owner={};
+   driver_surface_request=true;
+   const auto before=shared_created;events.clear();
+   assert(owner.allocate(&own,&memory)==S_OK && events=="AMZI" && shared_created==before+1);
+   assert(owner.owns_allocation(memory.allocation));
+   assert(owner.free(&memory)==S_OK && events=="AMZIVEUD");
+   {
+    const auto& report=owner.last_free_report();
+    assert(report.driver_surface && report.surface && !report.adopted && !report.owner_expired &&
+           report.stage==FreeStage::Done);
+   }
+   // The owner rule of a linear primary is the runtime resource's; a surface with no resource takes no
+   // authority from a create scope it happens to run inside, and its release is the same by-handle release
+   // there as anywhere else. Before BD-133 the authority was given by the scope alone, so such a surface
+   // could only ever be released on that one thread inside that one DDI, and never by a Present.
+   events.clear();
+   {OwnerScope create(&owner,0);assert(owner.allocate(&own,&memory)==S_OK && events=="AMZI");}
+   assert(owner.free(&memory)==S_OK && events=="AMZIVEUD" && owner.last_free_report().driver_surface);
+   // The negative control: the same surface request with a runtime resource is unchanged - released by that
+   // resource, inside its own destroy, and never marked a driver surface.
+   driver_surface_request=false;events.clear();
+   {OwnerScope create(&owner,0);assert(owner.allocate(&s,&memory)==S_OK && events=="AMZI");}
+   {OwnerScope destroy(&owner,memory.allocation);
+    assert(owner.free(&memory)==S_OK && events=="AMZIVEUR");
+    const auto& report=owner.last_free_report();
+    assert(report.surface && !report.driver_surface && !report.adopted && !report.owner_expired);}
   }
   // 4. The open path. The allocation exists, the runtime opened it for this device and destroys it itself:
   // no allocate callback runs, and the record that holds the mapping and the import is borrowed.

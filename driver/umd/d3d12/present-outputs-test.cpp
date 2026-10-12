@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include "present-outputs.h"
+#include "present-copy.h"
 #include <cassert>
 #include <cstdio>
 #include <cstring>
@@ -67,5 +68,121 @@ int main() {
     assert(fill_present({0x40000100,0,0,0,context},nullptr,&contexts,&queues)==E_INVALIDARG);
     assert(fill_present({0x40000100,0,0,0,context},&result,nullptr,&queues)==E_INVALIDARG);
     std::puts("PASSED: present outputs for one surface on a software-scheduled queue, refusals leave zeroes");
+
+    // BD-133: AddedGpuWork is the one output the copy changes, and only when a copy was recorded.
+    std::memset(&result,0xa5,sizeof(result));
+    assert(fill_present({0x40000100,0,0,0,context,false,DXGI_DDI_FLIP_INTERVAL_IMMEDIATE,true},
+                        &result,&contexts,&queues)==S_OK);
+    assert(result.AddedGpuWork==TRUE && result.BroadcastSrcAllocation[0]==0x40000100);
+    std::memset(&result,0xa5,sizeof(result));
+    assert(fill_present({0x40000100,0,0,0,context,false,DXGI_DDI_FLIP_INTERVAL_IMMEDIATE,false},
+                        &result,&contexts,&queues)==S_OK);
+    assert(result.AddedGpuWork==FALSE);
+    // A refused present reports no added work whatever the request said.
+    std::memset(&result,0xa5,sizeof(result));
+    assert(fill_present({0,0,0,0,context,false,DXGI_DDI_FLIP_INTERVAL_IMMEDIATE,true},
+                        &result,&contexts,&queues)==E_INVALIDARG);
+    assert(result.AddedGpuWork==FALSE);
+    std::puts("PASSED: AddedGpuWork is set only for a present that recorded a copy");
+
+    // BD-133: the admission rule of a Present source that is not a linear primary (present-copy.h). The
+    // description is a swap-chain back buffer's: one 2D texture, one mip, one slice, one sample.
+    auto back_buffer=[](DXGI_FORMAT format,UINT64 width=1280,UINT height=720){
+        D3D12_RESOURCE_DESC1 d{};
+        d.Dimension=D3D12_RESOURCE_DIMENSION_TEXTURE2D;d.Width=width;d.Height=height;
+        d.DepthOrArraySize=1;d.MipLevels=1;d.Format=format;d.SampleDesc={1,0};
+        d.Layout=D3D12_TEXTURE_LAYOUT_UNKNOWN;d.Flags=D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+        return d;
+    };
+    struct Admitted {DXGI_FORMAT format;unsigned bytes;unsigned d3dddi;bool blt;};
+    const Admitted admitted[]={
+        {DXGI_FORMAT_B8G8R8A8_UNORM,4,D3DDDIFMT_A8R8G8B8,true},
+        {DXGI_FORMAT_B8G8R8A8_UNORM_SRGB,4,D3DDDIFMT_A8R8G8B8,true},   // the sRGB view of the same storage
+        {DXGI_FORMAT_R8G8B8A8_UNORM,4,D3DDDIFMT_A8B8G8R8,true},
+        {DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,4,D3DDDIFMT_A8B8G8R8,true},
+        // 10-bit and FP16: admitted and copied, and the kernel driver's GPU present cannot blit either
+        // (WddmLinearColorFormat). The architecture is not 8-bit only; that one component is.
+        {DXGI_FORMAT_R10G10B10A2_UNORM,4,D3DDDIFMT_A2B10G10R10,false},
+        {DXGI_FORMAT_R16G16B16A16_FLOAT,8,D3DDDIFMT_A16B16G16R16F,false},
+        {DXGI_FORMAT_A8_UNORM,1,D3DDDIFMT_A8,false},
+    };
+    for(const auto& a:admitted){
+        PresentCopyShape shape{};
+        const D3D12_RESOURCE_DESC1 d=back_buffer(a.format);
+        assert(present_copy_admit(d,&shape)==PresentCopy::Admitted);
+        assert(shape.width==1280 && shape.height==720 && shape.format==a.format);
+        assert(shape.bytes_per_pixel==a.bytes && shape.d3dddi==a.d3dddi);
+        assert(shape.kernel_blt_format==a.blt);
+        assert(present_copy_kernel_blt_format(a.d3dddi)==a.blt);
+        // The destination's description is the source's geometry and format, on a GPU-only L1 heap that is
+        // neither a primary nor system-wide coherent, with no size of its own.
+        PresentCopyRequest request{};
+        present_copy_description(shape,&request);
+        assert(!request.heap.ByteSize && !request.heap.Alignment);
+        assert(request.heap.CPUPageProperty==D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE);
+        assert(request.heap.MemoryPool==D3D12DDI_MEMORY_POOL_L1);
+        assert(request.heap.Flags==D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES);
+        assert(request.heap.CreationNodeMask==1 && request.heap.VisibleNodeMask==1);
+        assert(request.resource.ResourceType==D3D12DDI_RT_TEXTURE2D);
+        assert(request.resource.Width==shape.width && request.resource.Height==shape.height);
+        assert(request.resource.DepthOrArraySize==1 && request.resource.MipLevels==1);
+        assert(request.resource.Format==a.format && request.resource.SampleDesc.Count==1);
+        assert(request.resource.Layout==D3D12DDI_TL_UNDEFINED);
+        assert(request.resource.Flags==D3D12DDI_RESOURCE_FLAG_0003_RENDER_TARGET);
+        assert(request.resource.InitialBarrierLayout==D3D12DDI_BARRIER_LAYOUT_COMMON);
+        // The primary form differs in the heap's PRIMARY flag and in nothing else.
+        PresentCopyRequest as_primary=request;
+        present_copy_as_primary(&as_primary);
+        assert(as_primary.heap.Flags==(D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES|D3D12DDI_HEAP_FLAG_PRIMARY));
+        as_primary.heap.Flags=request.heap.Flags;
+        assert(!std::memcmp(&as_primary,&request,sizeof(request)));
+    }
+    // The negative controls, one per reason, each with the back buffer's description changed in one way.
+    {
+        PresentCopyShape shape{};
+        D3D12_RESOURCE_DESC1 d=back_buffer(DXGI_FORMAT_B8G8R8A8_UNORM);
+        d.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;
+        assert(present_copy_admit(d,&shape)==PresentCopy::NotTexture2D);
+        assert(!shape.width && !shape.bytes_per_pixel && !shape.kernel_blt_format);
+        d=back_buffer(DXGI_FORMAT_B8G8R8A8_UNORM);d.Dimension=D3D12_RESOURCE_DIMENSION_TEXTURE3D;
+        assert(present_copy_admit(d,&shape)==PresentCopy::NotTexture2D);
+        d=back_buffer(DXGI_FORMAT_B8G8R8A8_UNORM);d.MipLevels=2;
+        assert(present_copy_admit(d,&shape)==PresentCopy::Subresources);
+        d=back_buffer(DXGI_FORMAT_B8G8R8A8_UNORM);d.DepthOrArraySize=2;
+        assert(present_copy_admit(d,&shape)==PresentCopy::Subresources);
+        d=back_buffer(DXGI_FORMAT_B8G8R8A8_UNORM);d.SampleDesc={4,0};
+        assert(present_copy_admit(d,&shape)==PresentCopy::Multisampled);
+        d=back_buffer(DXGI_FORMAT_B8G8R8A8_UNORM);d.SampleDesc={1,1};
+        assert(present_copy_admit(d,&shape)==PresentCopy::Multisampled);
+        assert(present_copy_admit(back_buffer(DXGI_FORMAT_B8G8R8A8_UNORM,0,720),&shape)==PresentCopy::Edge);
+        assert(present_copy_admit(back_buffer(DXGI_FORMAT_B8G8R8A8_UNORM,1280,0),&shape)==PresentCopy::Edge);
+        assert(present_copy_admit(back_buffer(DXGI_FORMAT_B8G8R8A8_UNORM,8193,720),&shape)==PresentCopy::Edge);
+        assert(present_copy_admit(back_buffer(DXGI_FORMAT_B8G8R8A8_UNORM,1280,8193),&shape)==PresentCopy::Edge);
+        assert(present_copy_admit(back_buffer(DXGI_FORMAT_B8G8R8A8_UNORM,8192,8192),&shape)==PresentCopy::Admitted);
+        // A format the wire does not compose has no linear surface to copy into.
+        assert(present_copy_admit(back_buffer(DXGI_FORMAT_R32G32B32A32_FLOAT),&shape)==PresentCopy::Format);
+        assert(present_copy_admit(back_buffer(DXGI_FORMAT_R8G8B8A8_TYPELESS),&shape)==PresentCopy::Format);
+        assert(present_copy_admit(back_buffer(DXGI_FORMAT_UNKNOWN),&shape)==PresentCopy::Format);
+        d=back_buffer(DXGI_FORMAT_B8G8R8A8_UNORM);d.Flags|=D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+        assert(present_copy_admit(d,&shape)==PresentCopy::DepthStencil);
+        d=back_buffer(DXGI_FORMAT_B8G8R8A8_UNORM);d.Flags|=D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
+        assert(present_copy_admit(d,&shape)==PresentCopy::DepthStencil);
+        d=back_buffer(DXGI_FORMAT_B8G8R8A8_UNORM);d.Flags|=D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER;
+        assert(present_copy_admit(d,&shape)==PresentCopy::CrossAdapter);
+        // A source that also carries the other view flags is still a source: they change nothing.
+        d=back_buffer(DXGI_FORMAT_B8G8R8A8_UNORM);
+        d.Flags|=D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS|D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS;
+        assert(present_copy_admit(d,&shape)==PresentCopy::Admitted);
+        // Every reason has a name of its own, and the rule writes nothing without an answer.
+        const char* names[static_cast<unsigned>(PresentCopy::Count)]={};
+        for(unsigned i=0;i<static_cast<unsigned>(PresentCopy::Count);++i){
+            names[i]=present_copy_text(static_cast<PresentCopy>(i));
+            assert(names[i] && names[i][0]);
+            for(unsigned j=0;j<i;++j)assert(std::strcmp(names[i],names[j]));
+        }
+        assert(present_copy_admit(back_buffer(DXGI_FORMAT_B8G8R8A8_UNORM),nullptr)==PresentCopy::Admitted);
+        present_copy_description(shape,nullptr);present_copy_as_primary(nullptr);
+    }
+    std::puts("PASSED: the Present copy admits every composed back-buffer format and refuses every other source");
     return 0;
 }
