@@ -5,6 +5,7 @@
 #include <atomic>
 #include "adapter-contract.h"
 #include "ddi-trace.h"
+#include "present-context.h"
 #include "../app-settings/app-settings.h"
 namespace native12 {
 struct AdapterCapsOwner;
@@ -45,6 +46,9 @@ struct Device {
     // The per-application FrameRateLimit of this device's presents (docs/design/per-app-graphics-settings.md),
     // taken before the queue domain.
     amdgpu_wddm::app_settings::FrameLimiter frame_limiter;
+    // BD-133: the context the kernel present of a copied source is made on, created at the first such present and
+    // closed by DestroyDevice (present-context.h). A linear primary is presented on its queue's context instead.
+    PresentContext present;
     // The per-application MaxFrameLatency of this device's presents lives with the engine, not here
     // (device-engine.h, engine_frame_gate): its ring of progress snapshots is half a kilobyte, and the runtime
     // allocates this structure for every device it creates.

@@ -34,6 +34,12 @@ struct QueueEngineOps {
     // refused before admission.
     decltype(&engine_ddi::update_tile_mappings) update_tiles{};
     decltype(&engine_ddi::copy_tile_mappings) copy_tiles{};
+    // BD-133: the progress the queue's ICD context last published (HostedQueue::progress), by the cookie the engine
+    // queue was created with; health_cookie is the owner. S_OK with the fence and its value, S_FALSE when the queue
+    // published none yet. Read around the execute of a list that carries a Present copy, so that the present context
+    // can wait for that submission (present-context.h). Absent in a substitute that has none: such a list is then
+    // executed with a self-check line instead of the wait.
+    HRESULT (*progress)(void* owner, void* queue_cookie, D3DKMT_HANDLE* sync, UINT64* value) noexcept{};
     // Native create/execute/tile mappings only. Caller must supply close and check_health/cookie.
     static QueueEngineOps native() noexcept;
 };
@@ -59,6 +65,9 @@ class QueueEngineRegistry final {
     // this thread. leave: the engine's health after the call, Live again, a failure removes the device.
     HRESULT admit(const QueueEngineSlot& slot, QueueEngineOwner*& queue) noexcept;
     HRESULT leave(QueueEngineOwner* queue, HRESULT result) noexcept;
+    // BD-133: the execute of lists one of which carries a Present copy, with the two waits around it that order the
+    // copy and the kernel present on the device's present context (present-context.h).
+    HRESULT execute_present_copy(QueueEngineOwner* queue, UINT count, const D3D12DDI_HCOMMANDLIST* lists) noexcept;
 public:
     QueueEngineRegistry(Device& device, engine_ddi::DeviceContext* engine,
         QueueEngineOps ops = QueueEngineOps::native()) noexcept;

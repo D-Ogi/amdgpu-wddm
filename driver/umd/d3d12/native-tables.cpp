@@ -253,6 +253,16 @@ void APIENTRY destroy_heap_and_resource(D3D12DDI_HDEVICE handle,D3D12DDI_HHEAP h
     D3DKMT_HANDLE primary=0;
     // Not a linear primary, or no resource at all: the scope names no record.
     if(resource.pDrvPrivate && engine_ddi::present_allocation(engine_context(*device),resource,&primary)!=S_OK)primary=0;
+    // BD-133: a source presented by copying it has a copy surface, which kernel presents on the device's present
+    // context read and which goes with this resource. The engine holds its release for this device's queues only,
+    // so the present context's presents are waited for first, bounded (present-context.h, drain). A failed wait is
+    // reported; the destroy still runs, because a destroy that refuses leaves the objects to nobody.
+    uint32_t copy_format=0;
+    if(resource.pDrvPrivate &&
+       engine_ddi::present_copy_surface_format(engine_context(*device),resource,&copy_format)==S_OK){
+        const HRESULT drained=device->present.drain(10000);
+        if(drained!=S_OK)report_device_error(*device,drained);
+    }
     // Refused: nothing is destroyed, the objects stay with the device, and the device error says so.
     const HRESULT hr=destroy_in_owner_scope(engine_imports(*device),primary,[&]() noexcept {engine(handle,heap,resource);});
     if(hr!=S_OK)report_device_error(*device,hr);
@@ -273,19 +283,40 @@ HRESULT present_source_copy(void* state,D3DKMT_HANDLE* allocation) noexcept {
     const auto& call=*static_cast<const PresentSourceCall*>(state);
     return engine_ddi::present_copy_allocation(call.engine,call.list,call.surface,allocation);
 }
-// The surface's allocation and the queue's context go back to the runtime, which makes the kernel call.
+// BD-133: the kernel present compares the LB7A format of the source with the destination's and refuses a pair that
+// differs (driver\kmd\wddm_allocation_identity.inc, Bc250SnapshotFormat; counted as "snapshot refused ... format").
+// A copied source has the copy surface's format, which need not be the destination's: one line per pair that
+// differs, so that the lab tells a refusal of the format from a refusal of the context. Nothing is changed by it.
+void present_copy_destination_check(engine_ddi::DeviceContext* engine,D3D12DDI_HRESOURCE source,
+    D3D12DDI_HRESOURCE destination) noexcept {
+    uint32_t copy=0,dxgi=0,lb7a=0;
+    if(engine_ddi::present_copy_surface_format(engine,source,&copy)!=S_OK)return;
+    if(engine_ddi::present_destination_format(engine,destination,&dxgi,&lb7a)!=S_OK || lb7a==copy)return;
+    // The last pair named; a pair that alternates with another is named again, which is still once per change.
+    static std::atomic<uint64_t> named{0};
+    const uint64_t pair=(uint64_t{copy}<<32)|lb7a;
+    if(named.exchange(pair,std::memory_order_relaxed)==pair)return;
+    ddi_refusal("present copy: the destination's LB7A format %u (by its DXGI format %u; 0: no row) is not the copy "
+                "surface's LB7A format %u, and the kernel present refuses a source and a destination of two formats "
+                "(Bc250SnapshotFormat): a refusal of this present is the format's, not the present context's",
+                lb7a,dxgi,copy);
+}
+// The surface's allocation and a context go back to the runtime, which makes the kernel call: the queue's context
+// for a linear primary, the present context for a copied source (BD-133, present-context.h).
 // stage: 1 arguments, 2 queue, 3 surface, 4 destination, 5 outputs, 6 the copy of a source that is no linear
-// primary (BD-133), 0 done. The numbers of the stages that existed before BD-133 are unchanged: a trace line of
-// an earlier package means what it meant.
+// primary (BD-133), 7 the present context of that copy (BD-133), 0 done. The numbers of the stages that existed
+// before BD-133 are unchanged: a trace line of an earlier package means what it meant.
 HRESULT present_outputs(Device& device,D3D12DDI_HCOMMANDLIST list,D3D12DDI_HCOMMANDQUEUE queue,
     const D3D12DDIARG_PRESENT_0001* args,
     D3D12DDI_PRESENT_0051* result,D3D12DDI_PRESENT_CONTEXTS_0051* contexts,
-    D3D12DDI_PRESENT_HWQUEUES_0051* queues,unsigned& stage) noexcept {
+    D3D12DDI_PRESENT_HWQUEUES_0051* queues,unsigned& stage,HANDLE& queue_context) noexcept {
+    queue_context=nullptr;
     stage=1;
     HRESULT hr=check_present(args,result,contexts);if(hr!=S_OK)return hr;
     PresentSources from;
     stage=2;
     hr=queue_present_context(queue,device,&from.context);if(hr!=S_OK)return hr;
+    queue_context=from.context;
     // Stage 3 is a linear primary of this device: the one kind of surface a reader outside the engine can open,
     // and the one present that costs nothing. Its path is unchanged, byte for byte: the allocation of the surface
     // itself goes to the runtime, nothing is recorded on the list and AddedGpuWork stays FALSE.
@@ -299,9 +330,20 @@ HRESULT present_outputs(Device& device,D3D12DDI_HCOMMANDLIST list,D3D12DDI_HCOMM
     hr=present_source({&call,present_source_direct,present_source_copy},from,stage);
     if(hr!=S_OK)return hr;
     if(from.added_gpu_work){
-        // Review finding 3: the copy is ordered before the kernel present only while the runtime executes this
-        // list on this queue. The mark is taken again in ExecuteCommandLists (present-copy-watch.h).
-        present_copy_watch().mark(list.pDrvPrivate,from.context);
+        // The kernel present of a copy is made on the present context, a context without private driver data: the
+        // queue's context is a UMD context, and the kernel driver refuses a present on one (present-context.h, lab
+        // arm B of 2026-10-12 17:26Z). A failure is the device error of this present, as every other stage's.
+        stage=7;
+        hr=device.present.open_for_present(device.runtime.handle,device.kernel_callbacks,&from.context);
+        if(hr!=S_OK)return hr;
+        // The list is marked with the queue's context: its ExecuteCommandLists orders the copy and the kernel
+        // present (queue-engine.cpp, execute_present_copy). Marked only once the answer exists, so that a marked list
+        // always has a present context to wait. A mark that pushed out or replaced an unexecuted one says so.
+        auto& watch=present_copy_watch();
+        const PresentCopyMark marked=watch.mark(list.pDrvPrivate,queue_context);
+        if(marked!=PresentCopyMark::Fresh)
+            present_copy_mark_lost(marked,marked==PresentCopyMark::Remarked?watch.remarks():watch.dropped(),
+                watch.marks());
     }
     if(args->hDstResource.pDrvPrivate){
         stage=4;
@@ -309,6 +351,7 @@ HRESULT present_outputs(Device& device,D3D12DDI_HCOMMANDLIST list,D3D12DDI_HCOMM
         // the call. The source form stays the strict one.
         hr=engine_ddi::present_destination_allocation(call.engine,args->hDstResource,&from.destination);
         if(hr!=S_OK)return hr;
+        if(from.added_gpu_work)present_copy_destination_check(call.engine,call.surface,args->hDstResource);
     }
     stage=5;
     // The per-application VSync setting as the sync interval override of this present.
@@ -330,13 +373,14 @@ void APIENTRY present(D3D12DDI_HCOMMANDLIST list,D3D12DDI_HCOMMANDQUEUE queue,
     // queue domain, so that no other queue operation of the device waits with this present.
     if(device)device->frame_limiter.frame(amdgpu_wddm::app_settings::frame_rate_limit(settings));
     unsigned stage=1;
+    HANDLE queue_context=nullptr;
     HRESULT hr;
     {
         // A queue operation: its context must not be executing on another thread (QueueDomainScope).
         QueueDomainScope serial(device);
         // Every output given is zero before anything is validated, and again after a refusal.
         if(result)*result={};if(contexts)*contexts={};if(queues)*queues={};
-        hr=device?present_outputs(*device,list,queue,args,result,contexts,queues,stage):E_INVALIDARG;
+        hr=device?present_outputs(*device,list,queue,args,result,contexts,queues,stage,queue_context):E_INVALIDARG;
         if(hr!=S_OK){if(result)*result={};if(contexts)*contexts={};if(queues)*queues={};}
     }
     // The per-application MaxFrameLatency (frame-latency.h): the application may have at most N presents ahead
@@ -345,17 +389,19 @@ void APIENTRY present(D3D12DDI_HCOMMANDLIST list,D3D12DDI_HCOMMANDQUEUE queue,
     if(device && hr==S_OK)
         engine_frame_gate(*device,amdgpu_wddm::app_settings::max_frame_latency(settings));
     if(ddi_trace_enabled()){
-        // present_context is the identity of the context the kernel present is made on, which is what makes the
-        // ordering of a stage-6 copy readable in the lab log (review finding 3): the copy was recorded on the
-        // list of this same call, and a mismatch line from ExecuteCommandLists would be the only other case.
+        // present_context is the identity of the context the kernel present is made on, and queue_context that of
+        // the queue the call named; they are equal for a linear primary and differ for a stage-6 copy, whose kernel
+        // present is made on the device's present context (BD-133, present-context.h). The two make the ordering of a
+        // copy readable in the lab log (review finding 3), with the self-check lines of present-copy-watch.h.
         amdgpu_wddm_log::print("{\"event\":\"present-outputs\",\"stage\":%u,\"status\":\"%08lx\","
             "\"source\":%u,\"destination\":%u,\"context\":%u,\"added_gpu_work\":%u,"
-            "\"present_context\":%llu,\"list\":%llu,\"thread\":%lu}\n",stage,
+            "\"present_context\":%llu,\"queue_context\":%llu,\"list\":%llu,\"thread\":%lu}\n",stage,
             static_cast<unsigned long>(hr),unsigned(hr==S_OK && result->BroadcastSrcAllocation[0]!=0),
             unsigned(hr==S_OK && result->BroadcastDstAllocation[0]!=0),
             unsigned(hr==S_OK && contexts->hContext!=nullptr),
             unsigned(hr==S_OK && result->AddedGpuWork!=FALSE),
             static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(hr==S_OK ? contexts->hContext : nullptr)),
+            static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(queue_context)),
             static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(list.pDrvPrivate)),GetCurrentThreadId());
         amdgpu_wddm_log::flush();
     }

@@ -580,6 +580,17 @@ HRESULT present_destination_allocation(DeviceContext* context, D3D12DDI_HRESOURC
 // memory at all; the engine-private test mode answers E_INVALIDARG.
 HRESULT present_copy_allocation(DeviceContext* context, D3D12DDI_HCOMMANDLIST list, D3D12DDI_HRESOURCE resource,
                                 D3DKMT_HANDLE* allocation) noexcept;
+// BD-133: the LB7A format of the copy surface of a source resource (PresentCopySurface::d3dddi). S_OK and *lb7a set
+// when present_copy_allocation made one for it, S_FALSE and 0 when it has none, E_INVALIDARG for a handle that is no
+// resource of this device. The shell reads it for the format line of a copied present and to know, at the source's
+// destroy, that kernel presents read a surface of it.
+HRESULT present_copy_surface_format(DeviceContext* context, D3D12DDI_HRESOURCE resource, uint32_t* lb7a) noexcept;
+// BD-133: the formats of a Present destination as far as this device knows them: its DXGI format and the LB7A format
+// of the row of that format (present-copy.h, present_copy_format), 0 when no row has it. An opened destination's
+// allocation was described by its creator, so the LB7A value is the row's, not a read of the allocation. S_OK, or
+// E_INVALIDARG for a handle that is no resource of this device.
+HRESULT present_destination_format(DeviceContext* context, D3D12DDI_HRESOURCE resource, uint32_t* dxgi,
+                                   uint32_t* lb7a) noexcept;
 // BD-133: how many presents this process has served by copying the source, and how many copy surfaces it has
 // created. Read for a report, never for a decision.
 uint64_t present_copies() noexcept;

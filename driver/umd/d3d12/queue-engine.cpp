@@ -15,6 +15,9 @@ struct QueueEngineOwner {
     UINT64 serial{};
     HANDLE binding_context{};
     DWORD operation_thread{};
+    // BD-133: the last signal of the device's present context this queue has waited for (present-context.h,
+    // queue_wait). Written by this queue's execute only, under its admission.
+    UINT64 present_waited{};
     QueueEngineOwner(D3D12DDI_HRTCOMMANDQUEUE q,
         const D3D12DDI_CORELAYER_DEVICECALLBACKS_0062& cb) : context(q, cb), runtime(q) {}
 };
@@ -155,17 +158,43 @@ HRESULT QueueEngineRegistry::execute(const QueueEngineSlot& slot, UINT count,
     if (count && !lists) return E_INVALIDARG;
     QueueEngineOwner* q; const HRESULT hr = admit(slot, q);
     if (hr != S_OK) return hr;
-    // BD-133, review finding 3: a list that a present recorded a copy on must be executed on the queue whose
-    // present context pfnPresent answered with, or the copy and the kernel present are on two WDDM contexts and
-    // nothing orders them. Nothing is marked in the ordinary case, and then this costs one atomic load per
-    // execute (present-copy-watch.h, idle()).
+    // BD-133: a list that a present recorded a copy on is executed with the waits that order the copy and the kernel
+    // present, which is made on the device's present context and not on this queue's (present-context.h). Nothing is
+    // marked in the ordinary case, and then this costs one atomic load per execute (present-copy-watch.h, idle()):
+    // every other execute, the zero-copy present of a linear primary included, is the engine call alone, as before.
+    bool copies = false;
     if (count && !present_copy_watch().idle()) {
         auto& watch = present_copy_watch();
-        for (UINT i = 0; i < count; ++i)
-            if (watch.check(lists[i].pDrvPrivate, q->context.handle()) == PresentCopyExecute::Mismatch)
+        for (UINT i = 0; i < count; ++i) {
+            const PresentCopyExecute found = watch.check(lists[i].pDrvPrivate, q->context.handle());
+            if (found == PresentCopyExecute::NotMarked) continue;
+            copies = true;
+            if (found == PresentCopyExecute::Mismatch)
                 present_copy_execute_mismatch(watch.mismatches(), watch.marks());
+        }
     }
-    return leave(q, ops_.execute(q->engine, count, lists));
+    return leave(q, copies ? execute_present_copy(q, count, lists) : ops_.execute(q->engine, count, lists));
+}
+HRESULT QueueEngineRegistry::execute_present_copy(QueueEngineOwner* q, UINT count,
+    const D3D12DDI_HCOMMANDLIST* lists) noexcept {
+    // 1. This queue waits for the present context's last signal, which is behind every kernel present made before it:
+    //    the copy must not overwrite a copy surface that one of them still reads. Nothing to wait for: no call.
+    HRESULT hr = device_.present.queue_wait(q->context.handle(), q->present_waited);
+    if (hr != S_OK) return hr;
+    D3DKMT_HANDLE before_sync = 0, sync = 0; UINT64 before = 0, after = 0;
+    const HRESULT had = ops_.progress ? ops_.progress(ops_.health_cookie, q, &before_sync, &before) : E_NOTIMPL;
+    // 2. The engine submits the lists before it returns (engine-ddi.h, execute_command_lists).
+    hr = ops_.execute(q->engine, count, lists);
+    if (hr != S_OK) return hr;
+    // 3. The present context waits for the progress this queue published for that submission, before the runtime
+    //    makes the kernel present on it. No progress, or none newer than before the execute, leaves nothing to wait
+    //    for: a self-check line, never a failed execute, because the copy itself was submitted.
+    const HRESULT now = ops_.progress ? ops_.progress(ops_.health_cookie, q, &sync, &after) : E_NOTIMPL;
+    if (now != S_OK || !sync || !after || (had == S_OK && sync == before_sync && after <= before)) {
+        present_copy_no_progress(now, before, after);
+        return S_OK;
+    }
+    return device_.present.copy_wait(sync, after);
 }
 HRESULT QueueEngineRegistry::update_tiles(const QueueEngineSlot& slot, D3D12DDI_HRESOURCE resource, UINT region_count,
     const D3D12DDI_TILED_RESOURCE_COORDINATE* region_starts, const D3D12DDI_TILE_REGION_SIZE* region_sizes,

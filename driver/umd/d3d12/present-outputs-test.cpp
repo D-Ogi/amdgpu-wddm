@@ -2,10 +2,88 @@
 #include "present-outputs.h"
 #include "present-copy.h"
 #include "present-copy-watch.h"
+#include "present-context.h"
 #include <cassert>
 #include <cstdio>
 #include <cstring>
 #include <initializer_list>
+
+namespace {
+const HANDLE kPresentContext=reinterpret_cast<HANDLE>(UINT_PTR{0x30000033});
+const HANDLE kQueueContext=reinterpret_cast<HANDLE>(UINT_PTR{0x10000011});
+const HANDLE kOtherQueueContext=reinterpret_cast<HANDLE>(UINT_PTR{0x20000022});
+constexpr D3DKMT_HANDLE kPresentFence=0x900,kQueueFence=0x700;
+// The kernel callbacks of a device, as far as the present context uses them: each call is recorded in order, as an
+// operation letter (C/c create/destroy context, F/f create/destroy fence, S GPU signal, W GPU wait, P CPU wait), the
+// context it names, its object and its value. The device handle is this object.
+struct FakeKernel {
+    struct Event {char op;HANDLE context;D3DKMT_HANDLE object;UINT64 value;};
+    Event events[32]{};
+    unsigned count{},contexts_live{},fences_live{};
+    HRESULT create_hr{S_OK},fence_hr{S_OK},signal_hr{S_OK},wait_hr{S_OK};
+    bool cpu_wait_signals{true};
+    UINT64 fence_value{};                       // what the fence's CPU address reads
+    D3DDDI_DEVICECALLBACKS cb{};
+    void push(char op,HANDLE context,D3DKMT_HANDLE object,UINT64 value) {
+        assert(count<32);events[count++]={op,context,object,value};
+    }
+    bool is(unsigned i,char op,HANDLE context,D3DKMT_HANDLE object,UINT64 value) const {
+        return i<count && events[i].op==op && events[i].context==context && events[i].object==object &&
+            events[i].value==value;
+    }
+    bool ops(unsigned first,const char* expected) const {
+        for(unsigned i=0;expected[i];++i)if(first+i>=count || events[first+i].op!=expected[i])return false;
+        return true;
+    }
+    FakeKernel() {
+        cb.pfnCreateContextVirtualCb=[](HANDLE h,D3DDDICB_CREATECONTEXTVIRTUAL* a)->HRESULT {
+            auto& k=*static_cast<FakeKernel*>(h);
+            assert(!a->hContext && a->NodeOrdinal==0 && a->EngineAffinity==1 && !a->Flags.Value);
+            assert(!a->pPrivateDriverData && !a->PrivateDriverDataSize);    // what makes it no UMD context
+            k.push('C',nullptr,0,0);
+            if(FAILED(k.create_hr))return k.create_hr;
+            ++k.contexts_live;a->hContext=kPresentContext;return S_OK;
+        };
+        cb.pfnDestroyContextCb=[](HANDLE h,const D3DDDICB_DESTROYCONTEXT* a)->HRESULT {
+            auto& k=*static_cast<FakeKernel*>(h);
+            assert(a->hContext==kPresentContext && k.contexts_live);
+            k.push('c',a->hContext,0,0);--k.contexts_live;return S_OK;
+        };
+        cb.pfnCreateSynchronizationObject2Cb=[](HANDLE h,D3DDDICB_CREATESYNCHRONIZATIONOBJECT2* a)->HRESULT {
+            auto& k=*static_cast<FakeKernel*>(h);
+            assert(a->Info.Type==D3DDDI_MONITORED_FENCE && a->Info.MonitoredFence.EngineAffinity==1 && !a->hSyncObject);
+            k.push('F',nullptr,0,0);
+            if(FAILED(k.fence_hr))return k.fence_hr;
+            ++k.fences_live;a->hSyncObject=kPresentFence;
+            a->Info.MonitoredFence.FenceValueCPUVirtualAddress=&k.fence_value;return S_OK;
+        };
+        cb.pfnDestroySynchronizationObjectCb=[](HANDLE h,const D3DDDICB_DESTROYSYNCHRONIZATIONOBJECT* a)->HRESULT {
+            auto& k=*static_cast<FakeKernel*>(h);
+            assert(a->hSyncObject==kPresentFence && k.fences_live);
+            k.push('f',nullptr,a->hSyncObject,0);--k.fences_live;return S_OK;
+        };
+        cb.pfnSignalSynchronizationObjectFromGpu2Cb=[](HANDLE h,const D3DDDICB_SIGNALSYNCHRONIZATIONOBJECTFROMGPU2* a)->HRESULT {
+            auto& k=*static_cast<FakeKernel*>(h);
+            assert(a->ObjectCount==1 && a->BroadcastContextCount==1 && !a->Flags.Value);
+            k.push('S',a->BroadcastContextArray[0],a->ObjectHandleArray[0],a->MonitoredFenceValueArray[0]);
+            return k.signal_hr;
+        };
+        cb.pfnWaitForSynchronizationObjectFromGpuCb=[](HANDLE h,const D3DDDICB_WAITFORSYNCHRONIZATIONOBJECTFROMGPU* a)->HRESULT {
+            auto& k=*static_cast<FakeKernel*>(h);
+            assert(a->ObjectCount==1);
+            k.push('W',a->hContext,a->ObjectHandleArray[0],a->MonitoredFenceValueArray[0]);
+            return k.wait_hr;
+        };
+        cb.pfnWaitForSynchronizationObjectFromCpuCb=[](HANDLE h,const D3DDDICB_WAITFORSYNCHRONIZATIONOBJECTFROMCPU* a)->HRESULT {
+            auto& k=*static_cast<FakeKernel*>(h);
+            assert(a->ObjectCount==1 && a->hAsyncEvent);
+            k.push('P',nullptr,a->ObjectHandleArray[0],a->FenceValueArray[0]);
+            if(k.cpu_wait_signals){k.fence_value=a->FenceValueArray[0];SetEvent(a->hAsyncEvent);}
+            return S_OK;
+        };
+    }
+};
+} // namespace
 
 int main() {
     using namespace native12;
@@ -297,47 +375,138 @@ int main() {
     }
     std::puts("PASSED: Present asks the copy only when the zero-copy source is refused");
 
-    // BD-133, review finding 3: the list a present recorded a copy on must be executed on the queue whose
-    // present context that present answered with (present-copy-watch.h).
+    // BD-133: the mark by which ExecuteCommandLists finds the list a present recorded a copy on, and the self-check
+    // of every way that list could go to the GPU without the waits around it (present-copy-watch.h).
     {
         PresentCopyWatchOf<2> watch;
         int list_a=0,list_b=0,list_c=0;
         void* const queue_a=reinterpret_cast<void*>(UINT_PTR{0x2001});
         void* const queue_b=reinterpret_cast<void*>(UINT_PTR{0x2002});
-        assert(watch.idle() && !watch.marks() && !watch.mismatches() && !watch.dropped());
+        assert(watch.idle() && !watch.marks() && !watch.mismatches() && !watch.dropped() && !watch.remarks());
         // An unmarked list is the ordinary case of every other ExecuteCommandLists, and never a mismatch.
         assert(watch.check(&list_a,queue_a)==PresentCopyExecute::NotMarked);
         assert(watch.check(nullptr,queue_a)==PresentCopyExecute::NotMarked);
-        watch.mark(nullptr,queue_a);
+        assert(watch.mark(nullptr,queue_a)==PresentCopyMark::Fresh);
         assert(watch.idle() && !watch.marks());
-        // The pairing the whole ordering rests on, and its one failure.
-        watch.mark(&list_a,queue_a);
+        // The ordinary pairing: the list is executed on the queue its present named.
+        assert(watch.mark(&list_a,queue_a)==PresentCopyMark::Fresh);
         assert(!watch.idle() && watch.marks()==1);
         assert(watch.check(&list_a,queue_a)==PresentCopyExecute::Matched);
         assert(watch.idle() && !watch.mismatches());
         // The mark is taken by the execute, so the same list executed again is unmarked.
         assert(watch.check(&list_a,queue_a)==PresentCopyExecute::NotMarked);
-        watch.mark(&list_b,queue_a);
+        // Another queue: still found (the waits are for the executing queue), and counted for its line.
+        assert(watch.mark(&list_b,queue_a)==PresentCopyMark::Fresh);
         assert(watch.check(&list_b,queue_b)==PresentCopyExecute::Mismatch);
         assert(watch.mismatches()==1 && watch.idle());
-        // Two presents on one list leave one mark, with the context of the last.
-        watch.mark(&list_a,queue_a);
-        watch.mark(&list_a,queue_b);
+        // Two presents on one list leave one mark, with the context of the last, and the second says the first was
+        // never executed.
+        assert(watch.mark(&list_a,queue_a)==PresentCopyMark::Fresh);
+        assert(watch.mark(&list_a,queue_b)==PresentCopyMark::Remarked && watch.remarks()==1);
         assert(watch.check(&list_a,queue_b)==PresentCopyExecute::Matched);
         assert(watch.idle() && watch.mismatches()==1 && watch.marks()==4);
         // A full table never fails a present: the oldest mark goes and says so, and the newest is still right.
-        watch.mark(&list_a,queue_a);
-        watch.mark(&list_b,queue_a);
+        assert(watch.mark(&list_a,queue_a)==PresentCopyMark::Fresh);
+        assert(watch.mark(&list_b,queue_a)==PresentCopyMark::Fresh);
         assert(!watch.dropped());
-        watch.mark(&list_c,queue_b);
+        assert(watch.mark(&list_c,queue_b)==PresentCopyMark::Dropped);
         assert(watch.dropped()==1);
         assert(watch.check(&list_c,queue_b)==PresentCopyExecute::Matched);
         assert(watch.check(&list_b,queue_a)==PresentCopyExecute::Matched);
         assert(watch.check(&list_a,queue_a)==PresentCopyExecute::NotMarked);   // the dropped one
-        assert(watch.idle() && watch.mismatches()==1);
+        assert(watch.idle() && watch.mismatches()==1 && watch.remarks()==1);
+        // The lines themselves are counts only; written here so that a format error fails this build.
+        present_copy_execute_mismatch(watch.mismatches(),watch.marks());
+        present_copy_mark_lost(PresentCopyMark::Remarked,watch.remarks(),watch.marks());
+        present_copy_mark_lost(PresentCopyMark::Dropped,watch.dropped(),watch.marks());
+        present_copy_no_progress(S_FALSE,0,0);
         // The shell's own instance is the same class and starts empty.
         assert(present_copy_watch().idle() && !present_copy_watch().mismatches());
     }
-    std::puts("PASSED: a recorded Present copy is checked against the queue its list is executed on");
+    std::puts("PASSED: a recorded Present copy is found by its execute, and every unordered case is named");
+
+    // BD-133: the present context (present-context.h), against fake kernel callbacks that record what they are asked.
+    {
+        FakeKernel k;
+        PresentContext pc;
+        HANDLE answered=reinterpret_cast<HANDLE>(UINT_PTR{1});
+        assert(pc.open_for_present(&k,k.cb,nullptr)==E_INVALIDARG && !k.count);
+        // Before the first copied present nothing exists: nothing to wait for, to drain or to close.
+        UINT64 waited=0;
+        assert(pc.queue_wait(kQueueContext,waited)==S_OK && !waited && !k.count);
+        assert(pc.copy_wait(kQueueFence,5)==E_UNEXPECTED && !k.count);
+        assert(pc.drain(0)==S_OK && pc.close(0)==S_OK && !k.count && !pc.context());
+        // The first copied present creates the context (node 0, engine affinity 1, no private data: the fake asserts
+        // it) and its monitored fence, and answers with the context. Nothing is signaled yet.
+        assert(pc.open_for_present(&k,k.cb,&answered)==S_OK && answered==kPresentContext);
+        assert(k.count==2 && k.ops(0,"CF") && k.contexts_live==1 && k.fences_live==1 && !pc.signaled());
+        // Its execute: no signal yet, so the queue does not wait; after the engine submitted the list, the present
+        // context waits for the queue's progress that covers the copy.
+        assert(pc.queue_wait(kQueueContext,waited)==S_OK && !waited && k.count==2);
+        assert(pc.copy_wait(kQueueFence,5)==S_OK && k.count==3 && k.is(2,'W',kPresentContext,kQueueFence,5));
+        // The second copied present reuses the context, and first signals 1 on it, behind the first kernel present.
+        answered=nullptr;
+        assert(pc.open_for_present(&k,k.cb,&answered)==S_OK && answered==kPresentContext);
+        assert(k.count==4 && k.is(3,'S',kPresentContext,kPresentFence,1) && pc.signaled()==1 && k.contexts_live==1);
+        // Its execute: the queue waits for 1 before the copy, once; the present context then waits for the new copy.
+        assert(pc.queue_wait(kQueueContext,waited)==S_OK && waited==1 && k.count==5);
+        assert(k.is(4,'W',kQueueContext,kPresentFence,1));
+        assert(pc.queue_wait(kQueueContext,waited)==S_OK && k.count==5);
+        assert(pc.copy_wait(kQueueFence,6)==S_OK && k.is(5,'W',kPresentContext,kQueueFence,6));
+        // A queue that never waited waits for the same value; its record is its own.
+        UINT64 other_waited=0;
+        assert(pc.queue_wait(kOtherQueueContext,other_waited)==S_OK && other_waited==1);
+        assert(k.count==7 && k.is(6,'W',kOtherQueueContext,kPresentFence,1));
+        // The third present signals 2.
+        assert(pc.open_for_present(&k,k.cb,&answered)==S_OK && k.count==8 && k.is(7,'S',kPresentContext,kPresentFence,2));
+        const PresentContext::Counts n=pc.counts();
+        assert(n.presents==3 && n.signals==2 && n.queue_waits==2 && n.copy_waits==2);
+        // Drain (a copied source's destroy): the open present is signaled (3), then the CPU waits for 3.
+        assert(pc.drain(1000)==S_OK && k.count==10 && k.is(8,'S',kPresentContext,kPresentFence,3));
+        assert(k.is(9,'P',nullptr,kPresentFence,3) && k.fence_value==3);
+        // Again: nothing open and the fence passed 3, so no call at all.
+        assert(pc.drain(1000)==S_OK && k.count==10);
+        // A wait that never ends is the D3D11 shell's hung device.
+        assert(pc.open_for_present(&k,k.cb,&answered)==S_OK && k.count==10);     // nothing open: no signal
+        k.cpu_wait_signals=false;
+        assert(pc.drain(10)==DXGI_ERROR_DEVICE_HUNG && k.count==12 && k.is(10,'S',kPresentContext,kPresentFence,4));
+        assert(k.is(11,'P',nullptr,kPresentFence,4) && k.fence_value==3);
+        k.cpu_wait_signals=true;
+        // DestroyDevice: the drain, then the fence, then the context.
+        assert(pc.close(1000)==S_OK && k.count==15 && k.ops(12,"Pfc") && k.fence_value==4);
+        assert(!pc.context() && !k.contexts_live && !k.fences_live);
+    }
+    {   // A creation that fails leaves nothing behind, reports, and the next copied present tries again.
+        FakeKernel k;
+        PresentContext pc;
+        HANDLE answered=reinterpret_cast<HANDLE>(UINT_PTR{1});
+        k.create_hr=E_OUTOFMEMORY;
+        assert(pc.open_for_present(&k,k.cb,&answered)==E_OUTOFMEMORY && !answered && !pc.context());
+        assert(k.count==1 && k.ops(0,"C") && !k.contexts_live);
+        k.create_hr=S_OK;k.fence_hr=E_FAIL;k.count=0;
+        answered=reinterpret_cast<HANDLE>(UINT_PTR{1});
+        assert(pc.open_for_present(&k,k.cb,&answered)==E_FAIL && !answered && !pc.context());
+        assert(k.count==3 && k.ops(0,"CFc") && !k.contexts_live && !k.fences_live);
+        k.fence_hr=S_OK;k.count=0;
+        assert(pc.open_for_present(&k,k.cb,&answered)==S_OK && answered==kPresentContext && k.ops(0,"CF"));
+        // A device whose callbacks lack one, or no device at all, is refused before any call.
+        PresentContext bare;D3DDDI_DEVICECALLBACKS missing{};const unsigned before=k.count;
+        assert(bare.open_for_present(&k,missing,&answered)==E_NOTIMPL && !answered && k.count==before);
+        assert(bare.open_for_present(nullptr,k.cb,&answered)==E_INVALIDARG && !answered && k.count==before);
+        // A signal that fails fails the present and signals nothing; the next one signals the same value.
+        assert(pc.open_for_present(&k,k.cb,&answered)==S_OK && pc.signaled()==1);
+        k.signal_hr=E_FAIL;
+        assert(pc.open_for_present(&k,k.cb,&answered)==E_FAIL && !answered && pc.signaled()==1);
+        k.signal_hr=S_OK;
+        assert(pc.open_for_present(&k,k.cb,&answered)==S_OK && pc.signaled()==2);
+        // A GPU wait that fails is returned and recorded nowhere.
+        k.wait_hr=E_FAIL;UINT64 waited=0;
+        assert(pc.queue_wait(kQueueContext,waited)==E_FAIL && !waited);
+        assert(pc.copy_wait(kQueueFence,9)==E_FAIL && !pc.counts().copy_waits);
+        k.wait_hr=S_OK;
+        assert(pc.close(1000)==S_OK && !k.contexts_live && !k.fences_live);
+    }
+    std::puts("PASSED: the copied present's own context: created once without private data, reused, signaled behind "
+              "the kernel presents, waited for in order, drained and closed");
     return 0;
 }

@@ -21,6 +21,23 @@ unsigned HostedQueue::discard_metadata() noexcept {
     for(auto& alias:aliases_){if(alias.cookie)++count;alias={};}
     ReleaseSRWLockExclusive(&lock_);return count;
 }
+HRESULT HostedQueue::progress(void* cookie,D3DKMT_HANDLE* sync,UINT64* value) noexcept {
+    if(!sync || !value)return E_INVALIDARG;
+    *sync=0;*value=0;
+    if(!cookie)return E_INVALIDARG;
+    // pinned() writes the two fields while the alias is busy; busy turns false under the exclusive lock after it,
+    // so a reader under the shared lock that finds the alias idle sees both of them written.
+    HRESULT hr=S_FALSE;
+    AcquireSRWLockShared(&lock_);
+    for(const auto& alias:aliases_){
+        if(alias.cookie!=cookie)continue;
+        if(alias.busy)hr=E_PENDING;
+        else if(alias.progress_sync){*sync=alias.progress_sync;*value=alias.progress_value;hr=S_OK;}
+        break;
+    }
+    ReleaseSRWLockShared(&lock_);
+    return hr;
+}
 HRESULT HostedQueue::dispatch(void* user,uint32_t op,void* argument) noexcept {
     auto self=static_cast<HostedQueue*>(user);
     if(!self || !self->domain_.entered() || !argument || !self->runtime_device_)return E_INVALIDARG;

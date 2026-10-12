@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: MIT
 #include "queue-engine.h"
+#include "present-copy-watch.h"
 #include <cassert>
 #include <cstdio>
 #include <cstring>
+#include <memory>
 #include <thread>
 #include <atomic>
 
@@ -29,6 +31,14 @@ HRESULT update_engine(engine_ddi::EngineQueue*, D3D12DDI_HRESOURCE, UINT, const 
 HRESULT copy_engine(engine_ddi::EngineQueue*, D3D12DDI_HRESOURCE, const D3D12DDI_TILED_RESOURCE_COORDINATE*,
     D3D12DDI_HRESOURCE, const D3D12DDI_TILED_RESOURCE_COORDINATE*, const D3D12DDI_TILE_REGION_SIZE*,
     D3D12DDI_TILE_MAPPING_FLAGS) noexcept;
+HRESULT engine_progress(void*, void*, D3DKMT_HANDLE*, UINT64*) noexcept;
+// BD-133: the device's present context and the queue's progress fence, as the fake kernel callbacks name them.
+const HANDLE kPresentContext = reinterpret_cast<HANDLE>(UINT_PTR{0x30000033});
+constexpr D3DKMT_HANDLE kPresentFence = 0x900, kQueueFence = 0x700;
+constexpr UINT64 kProgressBase = 100;
+// One recorded call, in order: E the engine's execute, and the present context's kernel calls (C create context,
+// F create fence, S GPU signal, W GPU wait).
+struct Event { char op; HANDLE context; D3DKMT_HANDLE object; UINT64 value; };
 // What a tile call must carry to the engine: the slot's own arguments, null arrays included.
 struct TileArguments {
     D3D12DDI_HRESOURCE resource{}, source{};
@@ -49,8 +59,45 @@ struct Fixture {
     unsigned tile_updates{}, tile_copies{};
     void (*inside_tiles)(Fixture&, void* cookie){};
     native12::QueueEngineSlot* tile_slot{};
+    // BD-133: what the present context and the queue's published progress do. The record is the BD-133 case's own
+    // (present_copy_case), so that the other fixtures of main() keep their stack size.
+    Event* events{}; unsigned event_count{};
+    D3DKMT_HANDLE progress_sync{};              // 0: the queue published no progress
+    HRESULT wait_hr{S_OK};
+    void push(char op, HANDLE context, D3DKMT_HANDLE object, UINT64 value) {
+        if (!events) return;
+        assert(event_count < 32); events[event_count++] = {op, context, object, value};
+    }
+    bool is(unsigned i, char op, HANDLE context, D3DKMT_HANDLE object, UINT64 value) const {
+        return i < event_count && events[i].op == op && events[i].context == context && events[i].object == object &&
+            events[i].value == value;
+    }
+    // The kernel callbacks of the device, as far as the present context uses them on this path.
+    void present_kernel() {
+        device.kernel_callbacks.pfnCreateContextVirtualCb = [](HANDLE h, D3DDDICB_CREATECONTEXTVIRTUAL* a) -> HRESULT {
+            auto f = static_cast<Fixture*>(h);
+            assert(!a->pPrivateDriverData && !a->PrivateDriverDataSize && a->NodeOrdinal == 0 && a->EngineAffinity == 1);
+            f->push('C', nullptr, 0, 0); a->hContext = kPresentContext; return S_OK;
+        };
+        device.kernel_callbacks.pfnDestroyContextCb = [](HANDLE, const D3DDDICB_DESTROYCONTEXT*) -> HRESULT { return S_OK; };
+        device.kernel_callbacks.pfnCreateSynchronizationObject2Cb = [](HANDLE h, D3DDDICB_CREATESYNCHRONIZATIONOBJECT2* a) -> HRESULT {
+            static UINT64 cpu = 0;
+            auto f = static_cast<Fixture*>(h); f->push('F', nullptr, 0, 0);
+            a->hSyncObject = kPresentFence; a->Info.MonitoredFence.FenceValueCPUVirtualAddress = &cpu; return S_OK;
+        };
+        device.kernel_callbacks.pfnDestroySynchronizationObjectCb = [](HANDLE, const D3DDDICB_DESTROYSYNCHRONIZATIONOBJECT*) -> HRESULT { return S_OK; };
+        device.kernel_callbacks.pfnSignalSynchronizationObjectFromGpu2Cb = [](HANDLE h, const D3DDDICB_SIGNALSYNCHRONIZATIONOBJECTFROMGPU2* a) -> HRESULT {
+            auto f = static_cast<Fixture*>(h); assert(a->ObjectCount == 1 && a->BroadcastContextCount == 1);
+            f->push('S', a->BroadcastContextArray[0], a->ObjectHandleArray[0], a->MonitoredFenceValueArray[0]); return S_OK;
+        };
+        device.kernel_callbacks.pfnWaitForSynchronizationObjectFromGpuCb = [](HANDLE h, const D3DDDICB_WAITFORSYNCHRONIZATIONOBJECTFROMGPU* a) -> HRESULT {
+            auto f = static_cast<Fixture*>(h); assert(a->ObjectCount == 1);
+            f->push('W', a->hContext, a->ObjectHandleArray[0], a->MonitoredFenceValueArray[0]); return f->wait_hr;
+        };
+        device.kernel_callbacks.pfnWaitForSynchronizationObjectFromCpuCb = [](HANDLE, const D3DDDICB_WAITFORSYNCHRONIZATIONOBJECTFROMCPU*) -> HRESULT { return E_NOTIMPL; };
+    }
     Fixture() : registry(device, reinterpret_cast<engine_ddi::DeviceContext*>(this),
-        {make_engine, execute_engine, close_engine, engine_health, this, update_engine, copy_engine}) {
+        {make_engine, execute_engine, close_engine, engine_health, this, update_engine, copy_engine, engine_progress}) {
         runtime[0] = {this, reinterpret_cast<HANDLE>(UINT_PTR{0x10000011}), false};
         runtime[1] = {this, reinterpret_cast<HANDLE>(UINT_PTR{0x20000022}), false};
         device.runtime.handle = this;
@@ -103,9 +150,18 @@ HRESULT make_engine(engine_ddi::DeviceContext* context, const BC250_VKD3D_COMMAN
     *output = reinterpret_cast<engine_ddi::EngineQueue*>(new FakeQueue{f, cookie, probe.runtime});
     return S_OK;
 }
+// The progress a queue's ICD context published: one value per submission, as the RADV winsys publishes it.
+HRESULT engine_progress(void* owner, void* cookie, D3DKMT_HANDLE* sync, UINT64* value) noexcept {
+    auto f = static_cast<Fixture*>(owner);
+    assert(cookie && sync && value);
+    *sync = 0; *value = 0;
+    if (!f->progress_sync) return S_FALSE;
+    *sync = f->progress_sync; *value = kProgressBase + f->executes; return S_OK;
+}
 HRESULT execute_engine(engine_ddi::EngineQueue* engine, UINT count, const D3D12DDI_HCOMMANDLIST* lists) noexcept {
     auto q = reinterpret_cast<FakeQueue*>(engine); auto f = q->fixture;
     assert(!count || lists); ++f->executes;
+    f->push('E', q->runtime->context, 0, f->executes);
     BindingProbe probe{f, native12::QueueEngineState::Executing};
     assert(f->registry.with_binding(q->cookie, f->device, check_binding, &probe) == S_OK);
     if (f->reentrant_destroy) assert(f->registry.destroy(*f->reentrant_destroy) == E_PENDING);
@@ -149,6 +205,7 @@ D3D12DDIARG_CREATECOMMANDQUEUE_0050 descriptor() {
     d.QueueFlags = D3D12DDI_COMMAND_QUEUE_FLAG_3D | D3D12DDI_COMMAND_QUEUE_FLAG_COMPUTE | D3D12DDI_COMMAND_QUEUE_FLAG_COPY;
     return d;
 }
+void present_copy_case(const D3D12DDIARG_CREATECOMMANDQUEUE_0050& args);
 } // namespace
 
 int main() {
@@ -332,5 +389,75 @@ int main() {
         leave.store(true); binder.join();
         assert(f.registry.destroy(slot) == S_OK && f.engine_destroys == 1 && f.closes == 1);
     }
+    present_copy_case(args);
     std::puts("PASSED: two bound engine queues, execution, retirement before context close, retained loss, validated cookie pins; native fence transport unimplemented");
+    std::puts("PASSED: a list that carries a Present copy executes between the queue's wait for the present context and "
+              "the present context's wait for that submission; every other list is the engine call alone");
 }
+namespace {
+// BD-133: a list a present recorded a copy on executes between the two waits that order the copy and the kernel
+// present on the device's present context (present-context.h); every other list is the engine call alone.
+void present_copy_case(const D3D12DDIARG_CREATECOMMANDQUEUE_0050& args) {
+    {
+        auto owned = std::make_unique<Fixture>(); Fixture& f = *owned;
+        auto record = std::make_unique<Event[]>(32); f.events = record.get();
+        f.present_kernel();
+        native12::QueueEngineSlot a{}, b{};
+        assert(f.registry.create(args, f.rt(0), a) == S_OK && f.registry.create(args, f.rt(1), b) == S_OK);
+        const HANDLE queue_a = f.runtime[0].context, queue_b = f.runtime[1].context;
+        auto& watch = native12::present_copy_watch();
+        int copy_storage{}, other_storage{};
+        const D3D12DDI_HCOMMANDLIST copy{&copy_storage}, other{&other_storage};
+        const D3D12DDI_HCOMMANDLIST both[] = {other, copy};
+        f.progress_sync = kQueueFence;
+        // The primary path is unchanged: an unmarked list is the engine call alone, no wait and no signal.
+        assert(f.registry.execute(a, 1, &other) == S_OK && f.event_count == 1 && f.is(0, 'E', queue_a, 0, 1));
+        // pfnPresent of a copied source: the present context answers (created now) and the list is marked with the
+        // queue's own context (native-tables.cpp).
+        auto present = [&]() {
+            HANDLE context{};
+            assert(f.device.present.open_for_present(f.device.runtime.handle, f.device.kernel_callbacks, &context) == S_OK);
+            assert(context == kPresentContext);
+            assert(watch.mark(copy.pDrvPrivate, queue_a) == native12::PresentCopyMark::Fresh);
+        };
+        present();
+        assert(f.event_count == 3 && f.events[1].op == 'C' && f.events[2].op == 'F');
+        // Its execute, with an unmarked list before it: nothing is signaled yet, so the queue does not wait; the
+        // engine submits both; then the present context waits for the progress of that submission, 100 + 2.
+        assert(f.registry.execute(a, 2, both) == S_OK && watch.idle() && !f.device.lost);
+        assert(f.event_count == 5 && f.is(3, 'E', queue_a, 0, 2) && f.is(4, 'W', kPresentContext, kQueueFence, 102));
+        // The next copied present reuses the context and first signals 1 behind the first kernel present. Its
+        // execute: the queue waits for 1, the engine submits, the present context waits for 103.
+        present();
+        assert(f.event_count == 6 && f.is(5, 'S', kPresentContext, kPresentFence, 1));
+        assert(f.registry.execute(a, 1, &copy) == S_OK);
+        assert(f.event_count == 9 && f.is(6, 'W', queue_a, kPresentFence, 1) && f.is(7, 'E', queue_a, 0, 3) &&
+            f.is(8, 'W', kPresentContext, kQueueFence, 103));
+        // The list executed on another queue than its present named: a mismatch line, and still ordered, because both
+        // waits are with the queue that executed it.
+        const uint64_t mismatches = watch.mismatches();
+        present();
+        assert(f.event_count == 10 && f.is(9, 'S', kPresentContext, kPresentFence, 2));
+        assert(f.registry.execute(b, 1, &copy) == S_OK && watch.mismatches() == mismatches + 1);
+        assert(f.event_count == 13 && f.is(10, 'W', queue_b, kPresentFence, 2) && f.is(11, 'E', queue_b, 0, 4) &&
+            f.is(12, 'W', kPresentContext, kQueueFence, 104));
+        // A queue that publishes no progress: the copy executes, a self-check line, and no wait is invented.
+        present();
+        f.progress_sync = 0;
+        assert(f.registry.execute(a, 1, &copy) == S_OK && !f.device.lost);
+        assert(f.event_count == 16 && f.is(13, 'S', kPresentContext, kPresentFence, 3) &&
+            f.is(14, 'W', queue_a, kPresentFence, 3) && f.is(15, 'E', queue_a, 0, 5));
+        // The unmarked list stays the engine call alone after all of this.
+        assert(f.registry.execute(a, 1, &other) == S_OK && f.event_count == 17 && f.is(16, 'E', queue_a, 0, 6));
+        // A queue wait that fails executes nothing and removes the device.
+        f.progress_sync = kQueueFence;
+        present();
+        f.wait_hr = E_FAIL;
+        assert(f.registry.execute(a, 1, &copy) == E_FAIL && f.device.lost && f.errors == 1 && watch.idle());
+        assert(f.event_count == 19 && f.is(17, 'S', kPresentContext, kPresentFence, 4) &&
+            f.is(18, 'W', queue_a, kPresentFence, 4) && f.executes == 6);
+        const auto n = f.device.present.counts();
+        assert(n.presents == 5 && n.signals == 4 && n.queue_waits == 3 && n.copy_waits == 3);
+    }
+}
+} // namespace

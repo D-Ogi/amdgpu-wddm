@@ -93,10 +93,18 @@ int main(){
   update.Flags.Value=0;update.NumOperations=0;
   assert(native12::HostedQueue::dispatch(f.bridge.get(),BC250_HOST_UpdateGpuVirtualAddress,&update)==E_INVALIDARG && f.updates==i+1);
   assert(completed==0); // Accepted callback requests are not fabricated GPU completion.
+  // BD-133: the progress the present context waits for is read by the queue's engine cookie: none before the
+  // first publication, then exactly the fence and value published, and a refused publication changes neither.
+  D3DKMT_HANDLE sync=1;UINT64 published=1;
+  assert(f.bridge->progress(f.slots[i].cookie,&sync,&published)==S_FALSE && !sync && !published);
   bc250_host_progress progress{f.tokens[i],object,value,&completed};
   assert(native12::HostedQueue::dispatch(f.bridge.get(),BC250_HOST_PUBLISH_PROGRESS,&progress)==S_OK);
   assert(native12::HostedQueue::dispatch(f.bridge.get(),BC250_HOST_PUBLISH_PROGRESS,&progress)==E_INVALIDARG);
+  assert(f.bridge->progress(f.slots[i].cookie,&sync,&published)==S_OK && sync==object && published==value);
  }
+ {D3DKMT_HANDLE sync=1;UINT64 published=1;int unknown=0;
+  assert(f.bridge->progress(&unknown,&sync,&published)==S_FALSE && !sync && !published);
+  assert(f.bridge->progress(nullptr,&sync,&published)==E_INVALIDARG && f.bridge->progress(f.slots[0].cookie,nullptr,&published)==E_INVALIDARG);}
  assert(f.submits==2 && f.waits==2 && f.signals==2 && !f.destroys);
  std::thread worker([&]{assert(native12::HostedQueue::dispatch(f.bridge.get(),BC250_HOST_CHECK_STATUS,&dummy)==E_INVALIDARG);});worker.join();
  native12::Device foreign;foreign.runtime.handle=&foreign;native12::HostedQueue wrong(f.domain,f.registry,foreign);
@@ -104,7 +112,10 @@ int main(){
  bc250_host_queue_context wrapper{f.slots[0].cookie,&create};assert(native12::HostedQueue::dispatch(&wrong,BC250_HOST_CREATE_QUEUE_CONTEXT,&wrapper)==E_INVALIDARG && !create.hContext);
  D3DKMT_SUBMITCOMMAND submit{};submit.BroadcastContextCount=1;submit.BroadcastContext[0]=f.tokens[0];submit.Commands=0x12340000;submit.CommandLength=16;
  f.fail_submit=true;assert(native12::HostedQueue::dispatch(f.bridge.get(),BC250_HOST_SubmitCommand,&submit)==E_FAIL);f.fail_submit=false;
- assert(f.registry.destroy(f.slots[0])==S_OK && f.destroys==1);
+ {void* gone=f.slots[0].cookie;
+  assert(f.registry.destroy(f.slots[0])==S_OK && f.destroys==1);
+  D3DKMT_HANDLE sync=1;UINT64 published=1; // A destroyed queue's alias, its progress with it, is gone.
+  assert(f.bridge->progress(gone,&sync,&published)==S_FALSE && !sync && !published);}
  unsigned prior=f.submits;assert(native12::HostedQueue::dispatch(f.bridge.get(),BC250_HOST_SubmitCommand,&submit)==E_INVALIDARG && f.submits==prior);
  {D3DDDI_UPDATEGPUVIRTUALADDRESS_OPERATION op{};D3DKMT_UPDATEGPUVIRTUALADDRESS stale{};stale.hContext=f.tokens[0];stale.hFenceObject=object;
   stale.NumOperations=1;stale.Operations=&op;stale.FenceValue=value;
@@ -113,5 +124,5 @@ int main(){
  assert(f.registry.destroy(f.slots[1])==S_OK && f.destroys==2);
  unsigned unresolved=99;assert(f.registry.discard_retired_metadata(unresolved)==S_OK && !unresolved);
  assert(f.bridge->discard_metadata()==0 && wrong.discard_metadata()==0);
- std::puts("PASS hosted application queues: two real registry owners, full-width KT context transport, alias-only close, reentrant pin safety, failed callback, wrong device/thread, stale token, no fabricated fence completion, address update by token");
+ std::puts("PASS hosted application queues: two real registry owners, full-width KT context transport, alias-only close, reentrant pin safety, failed callback, wrong device/thread, stale token, no fabricated fence completion, address update by token, published progress read by engine cookie");
 }

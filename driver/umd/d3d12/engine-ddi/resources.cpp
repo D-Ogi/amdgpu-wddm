@@ -2611,6 +2611,29 @@ HRESULT present_copy_allocation(DeviceContext* c, D3D12DDI_HCOMMANDLIST hlist, D
     return S_OK;
 }
 
+HRESULT present_copy_surface_format(DeviceContext* c, D3D12DDI_HRESOURCE hres, uint32_t* lb7a) noexcept {
+    if (!lb7a) return E_INVALIDARG;
+    *lb7a = 0;
+    if (!c) return E_INVALIDARG;
+    auto* r = record_of<ResourceRecord>(hres.pDrvPrivate, Tag::Resource, c);
+    if (!r) return E_INVALIDARG;
+    if (!r->present_copy) return S_FALSE;
+    *lb7a = r->present_copy->d3dddi;
+    return S_OK;
+}
+
+HRESULT present_destination_format(DeviceContext* c, D3D12DDI_HRESOURCE hres, uint32_t* dxgi, uint32_t* lb7a) noexcept {
+    if (!dxgi || !lb7a) return E_INVALIDARG;
+    *dxgi = 0;
+    *lb7a = 0;
+    if (!c) return E_INVALIDARG;
+    auto* r = record_of<ResourceRecord>(hres.pDrvPrivate, Tag::Resource, c);
+    if (!r) return E_INVALIDARG;
+    *dxgi = static_cast<uint32_t>(r->desc.Format);
+    if (const AMDGPU_WDDM_SURFACE_FORMAT* row = native12::present_copy_format(*dxgi)) *lb7a = row->d3dddi;
+    return S_OK;
+}
+
 uint64_t present_copies() noexcept { return present_copy_count.load(std::memory_order_relaxed); }
 uint64_t present_copy_surfaces() noexcept { return present_copy_surface_count.load(std::memory_order_relaxed); }
 

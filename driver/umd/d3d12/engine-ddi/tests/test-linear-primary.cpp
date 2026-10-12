@@ -320,6 +320,19 @@ void test_linear_primary(Env& env) {
             // the command list the runtime hands to pfnPresent, and the answer is the allocation of the linear
             // surface it wrote - a surface of the source's own kind, not the source.
             const D3DKMT_HANDLE plain_allocation = m.last_allocation;
+            // BD-133: before its first copied present the source has no copy surface, and as a destination its
+            // formats are its DXGI format and the composed row's LB7A format (A8R8G8B8, 21).
+            {
+                uint32_t lb7a = 1, dxgi = 0, row = 0;
+                const HRESULT none_yet = engine_ddi::present_copy_surface_format(device.context, plain.hres(), &lb7a);
+                const HRESULT as_destination =
+                    engine_ddi::present_destination_format(device.context, plain.hres(), &dxgi, &row);
+                checkf(none_yet == S_FALSE && !lb7a && as_destination == S_OK &&
+                           dxgi == static_cast<uint32_t>(DXGI_FORMAT_B8G8R8A8_UNORM) && row == 21,
+                       "BD-133: no copy surface before the first copied present (hr %08lx), destination formats %u "
+                       "and LB7A %u (hr %08lx)",
+                       static_cast<unsigned long>(none_yet), dxgi, row, static_cast<unsigned long>(as_destination));
+            }
             Recording copy_rec;
             const HRESULT hr_copy_rec = open_recording(env, device, D3D12DDI_COMMAND_QUEUE_FLAG_3D, copy_rec);
             if (hr_copy_rec == S_OK) {
@@ -329,6 +342,14 @@ void test_linear_primary(Env& env) {
                 D3DKMT_HANDLE copied = 0;
                 HRESULT hr_copy =
                     engine_ddi::present_copy_allocation(device.context, copy_rec.hlist(), plain.hres(), &copied);
+                {
+                    uint32_t lb7a = 0;
+                    const HRESULT made = engine_ddi::present_copy_surface_format(device.context, plain.hres(), &lb7a);
+                    checkf(made == S_OK && lb7a == 21,
+                           "BD-133: the copy surface of a B8G8R8A8 source has the composed row's LB7A format 21 "
+                           "(hr %08lx, LB7A %u)",
+                           static_cast<unsigned long>(made), lb7a);
+                }
                 const uint32_t want_copy = engine_ddi::kMemoryDedicated | engine_ddi::kMemoryShareable |
                                            engine_ddi::kMemoryLinearSurface;
                 checkf(hr_copy == S_OK && copied && copied != plain_allocation &&
@@ -418,6 +439,15 @@ void test_linear_primary(Env& env) {
                            "BD-133: present_copy_allocation copies a B8G8R8X8 texture into one new linear surface "
                            "(hr %08lx, allocation %08x, flags %x, row pitch %u)",
                            static_cast<unsigned long>(hr_x8), copied, m.last_flags, m.last_row_pitch);
+                    // The X8 row: the LB7A format the shell compares with the destination's (native-tables.cpp,
+                    // present_copy_destination_check).
+                    uint32_t lb7a = 0;
+                    const HRESULT x8_format =
+                        engine_ddi::present_copy_surface_format(device.context, bgrx.hres(), &lb7a);
+                    checkf(x8_format == S_OK && lb7a == 22,
+                           "BD-133: the copy surface of a B8G8R8X8 source has LB7A format 22, X8R8G8B8 (hr %08lx, "
+                           "LB7A %u)",
+                           static_cast<unsigned long>(x8_format), lb7a);
                     const D3D12DDI_COMMAND_LIST_FUNCS_3D_0092& t = env.lists[x8_rec.table];
                     t.pfnCloseCommandList(x8_rec.hlist());
                     const D3D12DDI_HCOMMANDLIST lists[] = {x8_rec.hlist()};
