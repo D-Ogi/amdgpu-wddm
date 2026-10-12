@@ -93,6 +93,9 @@ try {
  Check 'inf-gates' { & python "$repo\tools\quality\inf_gates.py" --inf "$repo\driver\kmd\bc250kmd.inf" --defaults "$repo\tools\release\installer\registry-defaults.json" --out "$Out\inf-gates" }
  # Upgrade defaults and explicit clock choices must survive the same registry writes as an installation.
  Check 'registry-defaults' { & powershell -NoProfile -File "$repo\tools\release\test-registry-defaults.ps1" }
+ # BD-077: the installer half of the CU mode setting. The -CuMode switch must reach the registry plan, and
+ # docs\testing\INSTALL.md must state the number of compute units of an install that does not use the switch.
+ Check 'cu-mode-installer' { & powershell -NoProfile -File "$repo\tools\release\test-cu-mode-installer.ps1" -Repo $repo }
  # BD-122: the consumers of the KMD's start record (start-confirm and the installer's verify), with fixtures in a
  # scratch key of HKCU that it removes again. Windows PowerShell 5.1, the shell a tester's installer runs in.
  Check 'start-record-consumers' { & powershell -NoProfile -File "$repo\tools\release\test-start-record.ps1" }
