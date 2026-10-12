@@ -206,9 +206,18 @@ function Invoke-Preflight {
     if ($hvci -eq 'on') { Add-Check 'Memory integrity' 'warn' 'on: if the driver does not start, turn off Core isolation > Memory integrity (see INSTALL.md)' 'hvci.on' }
     else { Add-Check 'Memory integrity' 'ok' $hvci 'hvci.off' }
 
-    $vc = @(Get-VcRuntimeMissing)
-    if ($vc.Count) { Add-Check 'Visual C++ runtime' 'fail' ("missing in System32: $($vc -join ', '). Install the Microsoft Visual C++ Redistributable for Visual Studio 2015-2022 (x64) from https://aka.ms/vs/17/release/vc_redist.x64.exe (on any computer with a network, then copy it here), then run the installer again.") 'vcruntime.missing' }
-    else { Add-Check 'Visual C++ runtime' 'ok' 'present' 'vcruntime.ok' }
+    # The Microsoft Visual C++ runtime our programs need. A PC without it is no longer refused (owner, 2026-10-12:
+    # "powinien byc auto-installer!!!"): the package carries Microsoft's own installer and phase 2 runs it. The only
+    # refusal left is a package that does not carry that installer, or carries a changed copy of it.
+    $vc = Get-VcRuntimeState
+    $script:VcRuntimeNeeded = [bool]$vc.install
+    $vcExe = Join-Path $package $script:VcRuntimePackagePath
+    if (-not $vc.install) { Add-Check 'Visual C++ runtime' 'ok' $vc.detail 'vcruntime.ok' }
+    else {
+        $vcFile = Test-VcRuntimeInstaller -Path $vcExe
+        if ($vcFile.ok) { Add-Check 'Visual C++ runtime' 'warn' "$($vc.detail); the installer installs $($script:VcRuntimeVersion) from $($script:VcRuntimePackagePath) (SHA256 $($vcFile.sha256.Substring(0, 16)), signature $($vcFile.status), $($vcFile.signer))" 'vcruntime.missing' }
+        else { Add-Check 'Visual C++ runtime' 'fail' "$($vc.detail); $($vcFile.problem)" 'vcruntime.no-installer' }
+    }
 
     $drive = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='$($env:SystemDrive)'"
     $freeGb = [math]::Round($drive.FreeSpace / 1GB, 1)
@@ -1118,6 +1127,30 @@ Enter-Stage 'install' 'Phase 2: install'
 if (-not $script:DryRunMode -and -not $script:TestSigningActive) {
     Write-Fail 'test signing is not active'
     Exit-Engine -Code 5 -Outcome 'failed' -MessageId 'result.testsigning-not-active' -Detail 'phase 2 needs test signing in the running boot'
+}
+# The Microsoft Visual C++ runtime, before our own files go on the PC: our control application, the CLI and the
+# user-mode drivers need it (owner, 2026-10-12: "powinien byc auto-installer!!!"). Microsoft's own installer travels
+# in the package; it runs only when the runtime is missing or older than 14.44, and only after its SHA-256 and its
+# Microsoft signature are checked here again, so a changed copy never runs. A code that asks for a restart is folded
+# into the restart this installation makes at the end of phase 2.
+$vcNow = Get-VcRuntimeState
+if (-not $vcNow.install) { Write-Info "Microsoft Visual C++ runtime: $($vcNow.detail)" }
+else {
+    $vcExe = Join-Path $package $script:VcRuntimePackagePath
+    $vcFile = Test-VcRuntimeInstaller -Path $vcExe
+    if (-not $vcFile.ok) { throw "the Microsoft Visual C++ runtime has to be installed, and $($vcFile.problem). Nothing of the driver was installed. Download the release again." }
+    Write-Info "Microsoft Visual C++ runtime: $($vcNow.detail)"
+    $vcRun = Invoke-Change "install the Microsoft Visual C++ 2015-2022 Redistributable (x64) $($script:VcRuntimeVersion) from $($script:VcRuntimePackagePath) ($($script:VcRuntimeArguments -join ' '); SHA256 $($vcFile.sha256.Substring(0, 16)) and the Microsoft signature checked)" {
+        Invoke-VcRuntimeInstall -Path $vcExe
+    }
+    if ($null -ne $vcRun) {
+        Write-Log ($vcRun.text)
+        if (-not $vcRun.ok) { throw $vcRun.message }
+        Write-Info $vcRun.message
+        $vcAfter = Get-VcRuntimeState
+        if ($vcAfter.install -and -not $vcRun.restart) { throw "Microsoft's installer reported success (code $($vcRun.code)), but the runtime is still not in place: $($vcAfter.detail). Install the Microsoft Visual C++ 2015-2022 Redistributable (x64) yourself, then run this installer again." }
+        Write-Info "Microsoft Visual C++ runtime after the step: $($vcAfter.detail)"
+    }
 }
 Enter-Stage 'firmware' 'GPU firmware'
 # Every step below can run again over its own result: files are compared by SHA256 and a file in use is replaced

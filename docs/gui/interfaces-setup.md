@@ -35,6 +35,19 @@ render gate G-CONSENT refuses a screen that grows a permission control or a disa
 happens by itself after a visible 15-second countdown, in the window and on the console. "Restart now" and "Later"
 are offered, and neither is required. Every preflight refusal that protects the machine is unchanged.
 
+**The Microsoft Visual C++ runtime comes with the package** (owner, 2026-10-12: "powinien byc auto-installer!!!").
+The driver's programs are built against the Microsoft Visual C++ 2015-2022 runtime (x64). The package carries
+Microsoft's own installer as `payload\redist\vc_redist.x64.exe`. The preflight check `vcruntime` reads the file
+versions of `vcruntime140.dll`, `vcruntime140_1.dll` and `msvcp140.dll` in `System32` and asks for the install when
+one is missing or older than 14.44 (`Get-VcRuntimeDecision` / `Get-VcRuntimeState` in `installer\common.ps1`). That
+check is `warn`, not `fail`: the plan screen states the step as information (`plan.change.vcruntime`), and the first
+step of phase 2 runs the file after checking its SHA-256 and a Valid Authenticode signature by Microsoft Corporation
+(`Test-VcRuntimeInstaller`). Exit 0 and 1638 are a success, 3010 and 1641 are a success whose restart this install
+makes anyway, and any other code stops the install with the code in the message (`Get-VcRuntimeOutcome`). A dry run
+prints the step and runs nothing. The one refusal left is `vcruntime.no-installer`: the runtime has to be installed
+and the package does not carry Microsoft's installer, or carries a changed copy of it. The window treats that id
+like a damaged package - a new try in the same session cannot fix it.
+
 **The window may carry the package inside itself.** A release ships `amdgpu-wddm-setup-<version>.exe`: the same
 window with the package appended after the end of its program image (`src\Payload.cs`,
 `tools\release\make-setup-exe.ps1`). Started with no `files\` folder beside it, it unpacks the release to

@@ -85,7 +85,8 @@ check.bitlocker.unknown|src|-|Setup could not read the BitLocker state. If BitLo
 check.hvci.off|src|-|Memory integrity is off.
 check.hvci.on|src|-|Memory integrity is on. If the driver does not start, turn it off in Windows Security (Core isolation).
 check.vcruntime.ok|src|-|The Microsoft Visual C++ runtime is installed.
-check.vcruntime.missing|src|-|The Microsoft Visual C++ 2015-2022 runtime (x64) is missing. Install it from Microsoft, then start setup again.
+check.vcruntime.missing|src|-|The Microsoft Visual C++ 2015-2022 runtime (x64) is missing or too old. Setup installs it from the file it brings with it.
+check.vcruntime.no-installer|src|-|The Microsoft Visual C++ 2015-2022 runtime (x64) has to be installed, and this set of files does not hold the Microsoft program that does it. Download the release again.
 check.space.ok|src|-|There is enough free disk space.
 check.space.low|src|-|There is not enough free space on drive C:. Setup needs 2 GB.
 check.firmware.download-ok|src|-|The GPU firmware can be downloaded.
@@ -124,6 +125,7 @@ plan.change.test-mode.note|src|-|"Test Mode" then shows in a corner of the deskt
 plan.change.test-mode.on|src|-|Windows already runs in test mode, so nothing changes there.
 plan.change.bitlocker|src|-|BitLocker protection is paused for the restarts of this installation and turns itself on again, so Windows does not ask for the recovery key.
 plan.change.bitlocker.unknown|src|-|Setup could not read the BitLocker state of this PC. It goes on anyway: keep your recovery key at hand in case Windows asks for it after a restart.
+plan.change.vcruntime|src|-|The Microsoft Visual C++ 2015-2022 runtime (x64) is installed first, because the driver's programs need it.
 plan.firmware.download|src|-|The GPU firmware is downloaded from the official Linux firmware archive and checked.
 plan.firmware.folder|src|-|The GPU firmware comes from the folder you chose and is checked.
 plan.firmware.package-folder|src|-|The GPU firmware comes from the prepared folder. No internet is needed.

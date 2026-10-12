@@ -48,6 +48,7 @@ and NOTICE in the package root).
 | `wow64\d3d12\amdgpu_wddm_radv.dll` | Mesa RADV, D-Ogi/mesa-amdgpu-wddm @ `aca2c81b3c8a52c4f9fd00a2765a8ea7b76e57b3`, the same x86 build as `wow64\d3d11\amdgpu_wddm_radv.dll` | Mesa texts as above |
 | `wow64\desktop\bc250d3d.dll` | Mesa gallium llvmpipe and D3D10 UMD, D-Ogi/mesa-amdgpu-wddm @ `76ab2c270a40fe65def27dd86fe897c55b266ee9`, x86 build, with LLVM 23.1.2 (llvm/llvm-project @ `llvmorg-23.1.2`, x86) | Mesa texts as above; Apache-2.0 WITH LLVM-exception: `LLVM-Apache-2.0-WITH-LLVM-exception.txt` |
 | `tools\vulkaninfo.exe` | vulkaninfo 1.4.335, KhronosGroup/Vulkan-Tools @ `vulkan-sdk-1.4.335.0` (`8542e6dcfc6daef20d561220f1d91a02c25d95b2`), the unmodified LunarG Vulkan SDK binary. Upstream has no NOTICE file | Apache-2.0: `Vulkan-Tools-LICENSE.txt` |
+| `redist\vc_redist.x64.exe` | Microsoft Visual C++ 2015-2022 Redistributable (x64) 14.44.35211, Microsoft Corporation, downloaded unchanged from https://aka.ms/vs/17/release/vc_redist.x64.exe and signed by Microsoft. The installer runs it when the runtime is missing or older than 14.44, and it installs Microsoft's own files in System32 | Microsoft redistributable, under the Visual Studio licence terms that the installer itself shows. No text in `licenses\` |
 
 The Mesa licence texts are the same files at all five Mesa commits above.
 

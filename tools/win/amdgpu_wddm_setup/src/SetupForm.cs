@@ -853,13 +853,17 @@ namespace AmdgpuWddmSetup
             // by itself: test mode is turned on, and BitLocker protection is paused for the restarts of the install.
             // The window states them here so that nothing happens to the PC that this screen did not say.
             bool testModeOff = _plan != null && _plan.Checks.Any(c => c.Id == "testsigning.inactive");
-            foreach (var id in InstallFlow.PlanChangeIds(testModeOff, PlanBitLocker()))
+            // The Microsoft Visual C++ runtime the driver's programs need: when the plan found it missing or too
+            // old, the install brings it (owner, 2026-10-12), and this screen says so before it happens.
+            bool vcMissing = _plan != null && _plan.Checks.Any(c => c.Id == "vcruntime.missing");
+            foreach (var id in InstallFlow.PlanChangeIds(testModeOff, PlanBitLocker(), vcMissing))
             {
                 switch (id)
                 {
                     case "plan.change.test-mode": steps.Row(Icons.Lock, Theme.Teal, Strings.T(id), Strings.T("plan.change.test-mode.note")); break;
                     case "plan.change.test-mode.on": steps.Row(Icons.Check, Theme.Good, Strings.T(id)); break;
                     case "plan.change.bitlocker": steps.Row(Icons.Shield, Theme.Teal, Strings.T(id)); break;
+                    case "plan.change.vcruntime": steps.Row(Icons.Download, Theme.Teal, Strings.T(id)); break;
                     default: steps.Row(Icons.Shield, Theme.Warn, Strings.T(id)); break;
                 }
             }

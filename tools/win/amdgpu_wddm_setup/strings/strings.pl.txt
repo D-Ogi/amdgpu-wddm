@@ -83,7 +83,8 @@ check.bitlocker.unknown|mt|74c5d56a|Instalator nie mógł odczytać stanu BitLoc
 check.hvci.off|mt|c5375084|Integralność pamięci jest wyłączona.
 check.hvci.on|mt|038dce93|Integralność pamięci jest włączona. Jeśli sterownik się nie uruchomi, wyłącz ją w Zabezpieczeniach Windows (Izolacja rdzenia).
 check.vcruntime.ok|mt|da7b7ffe|Środowisko Microsoft Visual C++ jest zainstalowane.
-check.vcruntime.missing|mt|f9d91507|Brakuje środowiska Microsoft Visual C++ 2015-2022 (x64). Zainstaluj je ze strony Microsoft, potem uruchom instalator ponownie.
+check.vcruntime.missing|rev|e96604a7|Brakuje środowiska uruchomieniowego Microsoft Visual C++ 2015-2022 (x64) albo jest ono za stare. Instalator zainstaluje je z pliku, który ma przy sobie.
+check.vcruntime.no-installer|rev|a1670c32|Trzeba zainstalować środowisko uruchomieniowe Microsoft Visual C++ 2015-2022 (x64), a ten zestaw plików nie ma programu firmy Microsoft, który to robi. Pobierz wydanie ponownie.
 check.space.ok|mt|fc218428|Jest wystarczająco dużo wolnego miejsca na dysku.
 check.space.low|mt|e473eee3|Na dysku C: jest za mało wolnego miejsca. Instalator potrzebuje 2 GB.
 check.firmware.download-ok|mt|11f01474|Firmware GPU można pobrać.
@@ -122,6 +123,7 @@ plan.change.test-mode.note|mt|9a9c5086|W rogu pulpitu pojawi się wtedy napis �
 plan.change.test-mode.on|mt|cf315297|Windows już działa w trybie testowym, więc nic się tu nie zmienia.
 plan.change.bitlocker|mt|f43553fa|Ochrona BitLocker zostaje wstrzymana na czas ponownych uruchomień tej instalacji i potem sama się włącza, więc Windows nie poprosi o klucz odzyskiwania.
 plan.change.bitlocker.unknown|mt|67f2277e|Instalator nie mógł odczytać stanu BitLockera na tym komputerze. Mimo to kontynuuje: miej klucz odzyskiwania pod ręką, jeśli Windows o niego poprosi po ponownym uruchomieniu.
+plan.change.vcruntime|rev|65d68876|Najpierw instalowane jest środowisko uruchomieniowe Microsoft Visual C++ 2015-2022 (x64), bo programy sterownika go potrzebują.
 plan.firmware.download|mt|7051aa7f|Firmware GPU zostanie pobrane z oficjalnego archiwum firmware Linuksa i sprawdzone.
 plan.firmware.folder|mt|3afc555b|Firmware GPU pochodzi z wybranego folderu i zostanie sprawdzone.
 plan.firmware.package-folder|mt|576cf803|Firmware GPU pochodzi z przygotowanego folderu. Internet nie jest potrzebny.

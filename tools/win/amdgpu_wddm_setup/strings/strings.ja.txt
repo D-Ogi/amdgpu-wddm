@@ -83,7 +83,8 @@ check.bitlocker.unknown|mt|74c5d56a|BitLocker の状態を読み取れません�
 check.hvci.off|mt|c5375084|メモリ整合性はオフです。
 check.hvci.on|mt|038dce93|メモリ整合性がオンです。ドライバーが起動しない場合は、Windows セキュリティ (コア分離) でオフにしてください。
 check.vcruntime.ok|mt|da7b7ffe|Microsoft Visual C++ ランタイムはインストールされています。
-check.vcruntime.missing|mt|f9d91507|Microsoft Visual C++ 2015-2022 ランタイム (x64) がありません。Microsoft からインストールしてから、セットアップをもう一度起動してください。
+check.vcruntime.missing|mt|e96604a7|Microsoft Visual C++ 2015-2022 ランタイム (x64) がないか、古すぎます。セットアップが同梱のファイルからインストールします。
+check.vcruntime.no-installer|mt|a1670c32|Microsoft Visual C++ 2015-2022 ランタイム (x64) をインストールする必要がありますが、この一式には Microsoft の該当プログラムが含まれていません。リリースをもう一度ダウンロードしてください。
 check.space.ok|mt|fc218428|ディスクの空き容量は十分です。
 check.space.low|mt|e473eee3|ドライブ C: の空き容量が不足しています。2 GB 必要です。
 check.firmware.download-ok|mt|11f01474|GPU ファームウェアをダウンロードできます。
@@ -122,6 +123,7 @@ plan.change.test-mode.note|mt|9a9c5086|デスクトップの隅に「テスト �
 plan.change.test-mode.on|mt|cf315297|Windows はすでにテスト モードで動作しているため、ここでは何も変わりません。
 plan.change.bitlocker|mt|f43553fa|BitLocker の保護はこのインストールの再起動の間だけ一時停止し、その後は自動的に再開するので、Windows が回復キーを求めることはありません。
 plan.change.bitlocker.unknown|mt|67f2277e|この PC の BitLocker の状態を読み取れませんでした。処理は続行します。再起動後に Windows が求めた場合に備えて、回復キーを用意しておいてください。
+plan.change.vcruntime|mt|65d68876|ドライバーのプログラムが必要とするため、最初に Microsoft Visual C++ 2015-2022 ランタイム (x64) をインストールします。
 plan.firmware.download|mt|7051aa7f|GPU ファームウェアは Linux の公式ファームウェア アーカイブからダウンロードされ、確認されます。
 plan.firmware.folder|mt|3afc555b|GPU ファームウェアは選んだフォルダーから取得され、確認されます。
 plan.firmware.package-folder|mt|576cf803|GPU ファームウェアは準備済みのフォルダーから取得されます。インターネットは不要です。

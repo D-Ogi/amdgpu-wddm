@@ -1083,6 +1083,20 @@
       "unverified": "Built offline by compute/hip/build-rebuilt-controls.ps1 from the same working tree as tools\\hip\\amdhip64.dll, linked against the import library of the enabled runtime build in scratch/hip-dispatch-journal/runtime-enabled (amdhip64.lib F549FF9F, the same 55 exports). The hashes of every input are in scratch/hip-dispatch-journal/rebuilt-controls/final-r2/build.json (48BB900A). The release rebuild check has not rebuilt it from the commit.",
       "size": 156672,
       "role": "Experimental: our hipBLAS subset for gfx1013 (compute/hipblas, the GEMM entry points that llama.cpp's HIP backend calls), rebuilt at 3737b075 with the corrected device headers, next to tools\\hip\\amdhip64.dll. No program of this package loads it. Lab 2026-10-11: gemm_check passes 532 checks and detects a deliberate corruption."
+    },
+    {
+      "component": "vc-runtime",
+      "path": "payload/redist/vc_redist.x64.exe",
+      "source": "toolchain/vc-runtime/14.44.35211/vc_redist.x64.exe",
+      "sha256": "CC0FF0EB1DC3F5188AE6300FAEF32BF5BEEBA4BDD6E8E445A9184072096B713B",
+      "authenticode_sha256": "636210491417519E9C73FBFDEA342932275DB988200EC92B38F90E0AF5286540",
+      "third_party": {
+        "url": "https://aka.ms/vs/17/release/vc_redist.x64.exe",
+        "version": "14.44.35211.0",
+        "sha256": "CC0FF0EB1DC3F5188AE6300FAEF32BF5BEEBA4BDD6E8E445A9184072096B713B"
+      },
+      "size": 25635768,
+      "role": "Microsoft Visual C++ 2015-2022 Redistributable (x64) 14.44.35211, as Microsoft publishes it, signed by Microsoft Corporation. Our programs need this runtime, so the installer installs it when System32 has no vcruntime140.dll, vcruntime140_1.dll or msvcp140.dll, or when one of them is older than 14.44 (owner, 2026-10-12: the installer brings it). It stays in the package: no file of payload\\redist is copied to the install root."
     }
   ],
   "firmware": {

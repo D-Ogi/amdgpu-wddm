@@ -709,6 +709,97 @@ Check (@([regex]::Matches($verify, 'if \(-not \$startState\.started\)')).Count -
 Check ($verify -match '\(Test-Path -LiteralPath \$cli\) -and \$startState\.started') 'the driver is not asked for its interop state when it did not start'
 Check ($verify -match 'Write-VerifyReport \$results') 'the report is still written on every path'
 
+'the Microsoft Visual C++ runtime: the installer brings it (owner, 2026-10-12)'
+# The decision, over readings of the three System32 files. A reading of $null means the file is not there.
+function New-VcReading([string]$Version) {
+    if (-not $Version) { return $null }
+    $p = $Version.Split('.')
+    return [pscustomobject]@{ major = [int]$p[0]; minor = [int]$p[1]; build = [int]$p[2]; revision = [int]$p[3] }
+}
+function New-VcReadings([string]$A, [string]$B, [string]$C) {
+    return @{ 'vcruntime140.dll' = (New-VcReading $A); 'vcruntime140_1.dll' = (New-VcReading $B); 'msvcp140.dll' = (New-VcReading $C) }
+}
+$vcAll = Get-VcRuntimeDecision -Readings (New-VcReadings '14.44.35211.0' '14.44.35211.0' '14.44.35211.0')
+Check (-not $vcAll.install -and $vcAll.missing.Count -eq 0 -and $vcAll.old.Count -eq 0 -and $vcAll.present.Count -eq 3) 'the runtime of the package itself needs no install'
+$vcNewer = Get-VcRuntimeDecision -Readings (New-VcReadings '14.50.1.0' '14.50.1.0' '14.50.1.0')
+Check (-not $vcNewer.install) 'a newer runtime needs no install'
+$vcNone = Get-VcRuntimeDecision -Readings (New-VcReadings $null $null $null)
+Check ($vcNone.install -and $vcNone.missing.Count -eq 3 -and $vcNone.detail -match 'missing in System32: vcruntime140\.dll, vcruntime140_1\.dll, msvcp140\.dll') 'no runtime at all: install, and the detail names all three files'
+$vcOne = Get-VcRuntimeDecision -Readings (New-VcReadings '14.44.35211.0' $null '14.44.35211.0')
+Check ($vcOne.install -and $vcOne.missing -contains 'vcruntime140_1.dll' -and $vcOne.present.Count -eq 2) 'one file missing is enough'
+$vcOld = Get-VcRuntimeDecision -Readings (New-VcReadings '14.40.33810.0' '14.44.35211.0' '14.44.35211.0')
+Check ($vcOld.install -and $vcOld.old.Count -eq 1 -and $vcOld.detail -match 'older than 14\.44: vcruntime140\.dll 14\.40\.33810\.0') 'a 14.40 file is too old, and the detail says so'
+$vcOldMajor = Get-VcRuntimeDecision -Readings (New-VcReadings '12.0.0.0' '14.44.35211.0' '14.44.35211.0')
+Check ($vcOldMajor.install -and $vcOldMajor.old.Count -eq 1) 'an older major version is too old'
+$vcExact = Get-VcRuntimeDecision -Readings (New-VcReadings '14.44.0.0' '14.44.0.0' '14.44.0.0')
+Check (-not $vcExact.install) '14.44 itself is enough: the minimum is the major and the minor'
+# This host's own reading, through the same decision: it says what it says, and the detail names every file.
+$vcHere = Get-VcRuntimeState
+Check ($vcHere.detail -and ($vcHere.missing.Count + $vcHere.old.Count + $vcHere.present.Count) -eq 3) "this host's runtime reads as three files ($($vcHere.detail))"
+
+# The file the package carries: SHA-256 first, then a Valid Microsoft signature. The signature reader is handed in,
+# so every case is exercised without a signed file of our own.
+$vcWork = Join-Path $work 'vcredist'
+[void][IO.Directory]::CreateDirectory($vcWork)
+$vcFake = Join-Path $vcWork 'vc_redist.x64.exe'
+Write-Text $vcFake 'not the real installer'
+$vcFakeSha = Get-Sha256 $vcFake
+$msCert = [pscustomobject]@{ Subject = 'CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US' }
+$valid = { param($p) [pscustomobject]@{ Status = 'Valid'; SignerCertificate = $msCert } }
+$ok = Test-VcRuntimeInstaller -Path $vcFake -ExpectedSha256 $vcFakeSha -SignatureReader $valid
+Check ($ok.ok -and $ok.status -eq 'Valid' -and $ok.signer -match 'Microsoft Corporation') 'the right bytes with a valid Microsoft signature are accepted'
+$badHash = Test-VcRuntimeInstaller -Path $vcFake -ExpectedSha256 ('0' * 64) -SignatureReader $valid
+Check (-not $badHash.ok -and $badHash.problem -match 'SHA256 of .* is ') 'negative control: another SHA-256 is refused, and the signature is not even read'
+$badSig = Test-VcRuntimeInstaller -Path $vcFake -ExpectedSha256 $vcFakeSha -SignatureReader { param($p) [pscustomobject]@{ Status = 'HashMismatch'; SignerCertificate = $msCert } }
+Check (-not $badSig.ok -and $badSig.problem -match 'signature of .* is not valid \(status HashMismatch\)') 'negative control: a signature that is not Valid is refused'
+$unsigned = Test-VcRuntimeInstaller -Path $vcFake -ExpectedSha256 $vcFakeSha -SignatureReader { param($p) [pscustomobject]@{ Status = 'NotSigned'; SignerCertificate = $null } }
+Check (-not $unsigned.ok -and $unsigned.problem -match 'status NotSigned') 'negative control: an unsigned file is refused'
+$otherSigner = Test-VcRuntimeInstaller -Path $vcFake -ExpectedSha256 $vcFakeSha -SignatureReader { param($p) [pscustomobject]@{ Status = 'Valid'; SignerCertificate = [pscustomobject]@{ Subject = 'CN=Somebody Else, O=Somebody Else' } } }
+Check (-not $otherSigner.ok -and $otherSigner.problem -match 'not signed by Microsoft Corporation') 'negative control: a valid signature of another signer is refused'
+$nearSigner = Test-VcRuntimeInstaller -Path $vcFake -ExpectedSha256 $vcFakeSha -SignatureReader { param($p) [pscustomobject]@{ Status = 'Valid'; SignerCertificate = [pscustomobject]@{ Subject = 'CN=Microsoft Corporation Of Nowhere, O=Nowhere' } } }
+Check (-not $nearSigner.ok) 'negative control: a signer name that only starts with the expected one is refused'
+$absent = Test-VcRuntimeInstaller -Path (Join-Path $vcWork 'nothing-here.exe')
+Check (-not $absent.ok -and $absent.problem -match 'does not carry') 'a package without the Microsoft installer is refused'
+# The real file of this workspace, when it is there: the pinned SHA-256 and Windows' own signature reading.
+$vcReal = @((Join-Path (Split-Path (Split-Path $Installer)) $script:VcRuntimePackagePath), 'P:\BC-250\toolchain\vc-runtime\14.44.35211\vc_redist.x64.exe') | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+if ($vcReal) {
+    $real = Test-VcRuntimeInstaller -Path $vcReal
+    Check ($real.ok) "the Microsoft installer in hand passes the pinned SHA-256 and Windows' signature reading ($vcReal, $($real.status), $($real.signer))"
+    Check ((Get-Item -LiteralPath $vcReal).Length -eq $script:VcRuntimeSize) "its size is the pinned $($script:VcRuntimeSize) bytes"
+} else { Check $true 'the Microsoft installer is not in this checkout: the pinned-hash case is covered by the package test' }
+
+# What each exit code of Microsoft's installer means.
+Check ((Get-VcRuntimeOutcome 0).ok -and -not (Get-VcRuntimeOutcome 0).restart) 'exit 0: installed'
+Check ((Get-VcRuntimeOutcome 1638).ok -and -not (Get-VcRuntimeOutcome 1638).restart -and (Get-VcRuntimeOutcome 1638).message -match 'newer') 'exit 1638: a newer runtime is there'
+Check ((Get-VcRuntimeOutcome 3010).ok -and (Get-VcRuntimeOutcome 3010).restart) 'exit 3010: installed, restart wanted'
+Check ((Get-VcRuntimeOutcome 1641).ok -and (Get-VcRuntimeOutcome 1641).restart) 'exit 1641: installed, restart wanted'
+foreach ($code in 1603, 1618, 5, -1073741819) {
+    $out = Get-VcRuntimeOutcome $code
+    Check (-not $out.ok -and -not $out.restart -and $out.message -match "code $code") "negative control: exit $code is a failure, and the message names the code"
+}
+# The runner, with the codes handed in: the arguments Microsoft documents, and the outcome of each code.
+$seen = $null
+$run0 = Invoke-VcRuntimeInstall -Path $vcFake -Runner { param($p, $a) $script:seen = @($a); 0 }
+Check ($run0.ok -and $run0.code -eq 0 -and (($seen -join ' ') -eq '/install /quiet /norestart')) "the install runs Microsoft's installer with /install /quiet /norestart"
+Check ((Invoke-VcRuntimeInstall -Path $vcFake -Runner { param($p, $a) 1638 }).ok) 'the install accepts 1638'
+Check ((Invoke-VcRuntimeInstall -Path $vcFake -Runner { param($p, $a) 3010 }).restart) 'the install folds 3010 into the restart it makes anyway'
+$run1603 = Invoke-VcRuntimeInstall -Path $vcFake -Runner { param($p, $a) 1603 }
+Check (-not $run1603.ok -and $run1603.message -match 'code 1603') 'negative control: exit 1603 fails the step with a plain message'
+# One real run through the bounded runner, so the plumbing from exit code to outcome is exercised for real.
+$realRun = Invoke-NativeBounded -File $env:ComSpec -Arguments @('/c', 'exit', '1603') -TimeoutSeconds 60
+Check (-not $realRun.timed_out -and (Get-VcRuntimeOutcome $realRun.code).message -match 'code 1603') 'a program that ends with 1603 reaches the same outcome through Invoke-NativeBounded'
+
+# The engine's own side: the preflight no longer refuses a PC without the runtime, and phase 2 installs it before
+# any file of ours is copied.
+$installText = [IO.File]::ReadAllText((Join-Path $Installer 'install.ps1'))
+Check ($installText -notmatch "Add-Check 'Visual C\+\+ runtime' 'fail'[^\r\n]*'vcruntime\.missing'") 'the preflight does not refuse a PC whose runtime is missing'
+Check ($installText -match "Add-Check 'Visual C\+\+ runtime' 'warn'[^\r\n]*'vcruntime\.missing'") 'a missing runtime is a line that needs attention, not a refusal'
+Check ($installText -match "'vcruntime\.no-installer'") 'the one refusal left is a package that does not carry the Microsoft installer'
+Check ($installText -match 'Invoke-VcRuntimeInstall -Path \$vcExe') 'phase 2 runs the Microsoft installer'
+$vcStep = [regex]::Match($installText, "(?s)Enter-Stage 'install' 'Phase 2: install'.{0,2400}")
+Check ($vcStep.Success -and $vcStep.Value -match 'Invoke-VcRuntimeInstall' -and $vcStep.Value -match 'Test-VcRuntimeInstaller') 'the runtime step is the first of phase 2 and checks the file again before it runs it'
+Check ($installText.IndexOf('Invoke-VcRuntimeInstall') -lt $installText.IndexOf("Enter-Stage 'files' 'Files'")) 'the runtime is installed before our own files are copied'
+
 'the installer and the uninstaller ask nothing (owner, 2026-10-12)'
 # The function that asked is gone from the engine, so a new question cannot be added by calling it, and no script of
 # the installer calls one.

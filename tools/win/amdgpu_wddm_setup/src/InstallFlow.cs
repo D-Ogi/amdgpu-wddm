@@ -41,13 +41,20 @@ namespace AmdgpuWddmSetup
         // never a question.
         //   testModeOff: the plan found Windows test mode off, so the install turns it on (check testsigning.inactive)
         //   bitLockerState: the state the engine's decision reports
-        public static string[] PlanChangeIds(bool testModeOff, string bitLockerState)
+        //   vcRuntimeMissing: the plan found the Microsoft Visual C++ runtime missing or too old, so the install
+        //                     installs it from the file the package carries (check vcruntime.missing, owner
+        //                     2026-10-12: "powinien byc auto-installer!!!")
+        public static string[] PlanChangeIds(bool testModeOff, string bitLockerState, bool vcRuntimeMissing = false)
         {
             var ids = new List<string>();
-            if (!testModeOff) { ids.Add("plan.change.test-mode.on"); return ids.ToArray(); }
-            ids.Add("plan.change.test-mode");
-            if (bitLockerState == BitLockerOn) ids.Add("plan.change.bitlocker");
-            else if (bitLockerState == BitLockerUnknown) ids.Add("plan.change.bitlocker.unknown");
+            if (!testModeOff) ids.Add("plan.change.test-mode.on");
+            else
+            {
+                ids.Add("plan.change.test-mode");
+                if (bitLockerState == BitLockerOn) ids.Add("plan.change.bitlocker");
+                else if (bitLockerState == BitLockerUnknown) ids.Add("plan.change.bitlocker.unknown");
+            }
+            if (vcRuntimeMissing) ids.Add("plan.change.vcruntime");
             return ids.ToArray();
         }
 

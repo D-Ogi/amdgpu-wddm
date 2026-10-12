@@ -83,7 +83,8 @@ check.bitlocker.unknown|mt|74c5d56a|BitLocker 상태를 읽을 수 없었습니�
 check.hvci.off|mt|c5375084|메모리 무결성이 꺼져 있습니다.
 check.hvci.on|mt|038dce93|메모리 무결성이 켜져 있습니다. 드라이버가 시작되지 않으면 Windows 보안(코어 격리)에서 끄세요.
 check.vcruntime.ok|mt|da7b7ffe|Microsoft Visual C++ 런타임이 설치되어 있습니다.
-check.vcruntime.missing|mt|f9d91507|Microsoft Visual C++ 2015-2022 런타임(x64)이 없습니다. Microsoft에서 설치한 다음 설치 프로그램을 다시 시작하세요.
+check.vcruntime.missing|mt|e96604a7|Microsoft Visual C++ 2015-2022 런타임(x64)이 없거나 너무 오래되었습니다. 설치 프로그램이 함께 가져온 파일로 설치합니다.
+check.vcruntime.no-installer|mt|a1670c32|Microsoft Visual C++ 2015-2022 런타임(x64)을 설치해야 하지만 이 파일 모음에는 해당 Microsoft 프로그램이 없습니다. 릴리스를 다시 다운로드하세요.
 check.space.ok|mt|fc218428|디스크 여유 공간이 충분합니다.
 check.space.low|mt|e473eee3|드라이브 C:의 여유 공간이 부족합니다. 2GB가 필요합니다.
 check.firmware.download-ok|mt|11f01474|GPU 펌웨어를 다운로드할 수 있습니다.
@@ -122,6 +123,7 @@ plan.change.test-mode.note|mt|9a9c5086|바탕 화면 구석에 "테스트 모드
 plan.change.test-mode.on|mt|cf315297|Windows가 이미 테스트 모드로 실행 중이므로 여기서는 바뀌는 것이 없습니다.
 plan.change.bitlocker|mt|f43553fa|BitLocker 보호는 이 설치의 다시 시작 동안만 일시 중지되고 이후 자동으로 다시 켜지므로 Windows가 복구 키를 묻지 않습니다.
 plan.change.bitlocker.unknown|mt|67f2277e|이 PC의 BitLocker 상태를 읽을 수 없었습니다. 설치는 계속합니다. 다시 시작한 후 Windows가 요청할 경우를 대비해 복구 키를 준비해 두세요.
+plan.change.vcruntime|mt|65d68876|드라이버 프로그램에 필요하므로 Microsoft Visual C++ 2015-2022 런타임(x64)을 먼저 설치합니다.
 plan.firmware.download|mt|7051aa7f|GPU 펌웨어는 Linux 공식 펌웨어 보관소에서 다운로드되고 확인됩니다.
 plan.firmware.folder|mt|3afc555b|GPU 펌웨어는 선택한 폴더에서 가져와 확인됩니다.
 plan.firmware.package-folder|mt|576cf803|GPU 펌웨어는 준비된 폴더에서 가져옵니다. 인터넷이 필요 없습니다.

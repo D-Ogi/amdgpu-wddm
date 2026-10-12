@@ -1250,10 +1250,128 @@ function Get-MemoryIntegrityState {
 }
 function Get-VcRuntimeMissing {
     $missing = @()
-    foreach ($f in 'vcruntime140.dll', 'vcruntime140_1.dll', 'msvcp140.dll') {
+    foreach ($f in $script:VcRuntimeFiles) {
         if (-not (Test-Path -LiteralPath (Join-Path $env:windir "System32\$f"))) { $missing += $f }
     }
     return $missing
+}
+
+# ---- the Microsoft Visual C++ runtime our programs need ---------------------------------------------------------
+# Our control application, the CLI and the user-mode drivers are built against the Microsoft Visual C++ 2015-2022
+# runtime. Until now a PC without it was refused at the preflight and the tester had to fetch the runtime from
+# Microsoft. The owner's instruction of 2026-10-12 is "powinien byc auto-installer!!!": the package carries
+# Microsoft's own installer (payload\redist\vc_redist.x64.exe, release-sources.json) and the install runs it.
+# Running the installer is the consent for it, like every other change this engine makes.
+$script:VcRuntimeFiles = @('vcruntime140.dll', 'vcruntime140_1.dll', 'msvcp140.dll')
+$script:VcRuntimePackagePath = 'payload\redist\vc_redist.x64.exe'
+# The version the package carries, and the lowest version we accept in System32. A runtime older than this is
+# replaced: the 14.x runtime is binary compatible upwards, so Microsoft's installer simply moves it forward.
+$script:VcRuntimeVersion = '14.44.35211.0'
+$script:VcRuntimeMinMajor = 14
+$script:VcRuntimeMinMinor = 44
+$script:VcRuntimeSha256 = 'CC0FF0EB1DC3F5188AE6300FAEF32BF5BEEBA4BDD6E8E445A9184072096B713B'
+$script:VcRuntimeSize = 25635768
+$script:VcRuntimeSigner = 'Microsoft Corporation'
+# Microsoft's command line and its exit codes (vc_redist.x64.exe /install /quiet /norestart):
+#   0     installed, or this version is already there
+#   1638  a newer version of the runtime is installed: nothing to do
+#   3010, 1641  installed, and Windows wants a restart; this install restarts anyway
+#   anything else is a failure, and the install stops with the code in the message
+$script:VcRuntimeArguments = @('/install', '/quiet', '/norestart')
+$script:VcRuntimeTimeoutSeconds = 600
+
+# The file version of one System32 DLL as four numbers, or $null when the file is not there or has no version.
+function Get-FileVersionNumbers([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+    $v = (Get-Item -LiteralPath $Path).VersionInfo
+    if (-not $v) { return $null }
+    return [pscustomobject]@{ major = [int]$v.FileMajorPart; minor = [int]$v.FileMinorPart; build = [int]$v.FileBuildPart; revision = [int]$v.FilePrivatePart }
+}
+
+# Pure: does a reading of the three runtime files mean the installer has to install the runtime?
+# -Readings is a hashtable file name -> the object of Get-FileVersionNumbers ($null = the file is not there).
+# Returns { install, missing, old, present, detail }: 'missing' is a file System32 does not have, 'old' a file
+# older than the minimum. One of either makes 'install' true, because Microsoft's installer replaces the set.
+function Get-VcRuntimeDecision {
+    param([Parameter(Mandatory)][hashtable]$Readings, [int]$MinMajor = $script:VcRuntimeMinMajor, [int]$MinMinor = $script:VcRuntimeMinMinor)
+    $missing = @(); $old = @(); $present = @()
+    foreach ($f in $script:VcRuntimeFiles) {
+        $v = $null
+        if ($Readings.ContainsKey($f)) { $v = $Readings[$f] }
+        if ($null -eq $v) { $missing += $f; continue }
+        $text = "$f $($v.major).$($v.minor).$($v.build).$($v.revision)"
+        if (($v.major -lt $MinMajor) -or ($v.major -eq $MinMajor -and $v.minor -lt $MinMinor)) { $old += $text } else { $present += $text }
+    }
+    $detail = @()
+    if ($missing.Count) { $detail += "missing in System32: $($missing -join ', ')" }
+    if ($old.Count) { $detail += "older than $MinMajor.$MinMinor`: $($old -join ', ')" }
+    if ($present.Count) { $detail += "present: $($present -join ', ')" }
+    return [pscustomobject]@{ install = [bool]($missing.Count -or $old.Count); missing = $missing; old = $old; present = $present; detail = ($detail -join '; ') }
+}
+
+# The same decision for the running PC.
+function Get-VcRuntimeState {
+    $readings = @{}
+    foreach ($f in $script:VcRuntimeFiles) { $readings[$f] = Get-FileVersionNumbers (Join-Path $env:windir "System32\$f") }
+    return Get-VcRuntimeDecision -Readings $readings
+}
+
+# Is the file the package carries Microsoft's installer, unchanged? The SHA-256 first, then the Authenticode
+# signature: Valid, and signed by Microsoft Corporation. -SignatureReader is for the tests, which hand in readings
+# instead of asking Windows; the default asks Windows.
+# Returns { ok, problem, sha256, status, signer }.
+function Test-VcRuntimeInstaller {
+    param([Parameter(Mandatory)][string]$Path, [string]$ExpectedSha256 = $script:VcRuntimeSha256,
+          [string]$ExpectedSigner = $script:VcRuntimeSigner, [scriptblock]$SignatureReader)
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        return [pscustomobject]@{ ok = $false; problem = "the package does not carry $Path"; sha256 = $null; status = $null; signer = $null }
+    }
+    $sha = Get-Sha256 $Path
+    if ($sha -ne $ExpectedSha256) {
+        return [pscustomobject]@{ ok = $false; problem = "SHA256 of $Path is $($sha.Substring(0, 16)), the installer expects $($ExpectedSha256.Substring(0, 16))"; sha256 = $sha; status = $null; signer = $null }
+    }
+    $reader = $(if ($SignatureReader) { $SignatureReader } else { { param($p) Get-AuthenticodeSignature -LiteralPath $p } })
+    $sig = & $reader $Path
+    $status = [string]$(if ($sig) { $sig.Status } else { 'unknown' })
+    $signer = [string]$(if ($sig -and $sig.SignerCertificate) { $sig.SignerCertificate.Subject } else { '' })
+    if ($status -ne 'Valid') {
+        return [pscustomobject]@{ ok = $false; problem = "the signature of $Path is not valid (status $status)"; sha256 = $sha; status = $status; signer = $signer }
+    }
+    if ($signer -notmatch ("CN=" + [regex]::Escape($ExpectedSigner) + "(,|$)")) {
+        return [pscustomobject]@{ ok = $false; problem = "$Path is not signed by $ExpectedSigner (signer '$signer')"; sha256 = $sha; status = $status; signer = $signer }
+    }
+    return [pscustomobject]@{ ok = $true; problem = $null; sha256 = $sha; status = $status; signer = $signer }
+}
+
+# Pure: what one exit code of Microsoft's installer means. { ok, restart, message }.
+function Get-VcRuntimeOutcome([int]$Code) {
+    switch ($Code) {
+        0 { return [pscustomobject]@{ ok = $true; restart = $false; message = 'the Microsoft Visual C++ runtime is installed' } }
+        1638 { return [pscustomobject]@{ ok = $true; restart = $false; message = 'a newer Microsoft Visual C++ runtime is already installed: nothing to do' } }
+        3010 { return [pscustomobject]@{ ok = $true; restart = $true; message = 'the Microsoft Visual C++ runtime is installed and Windows wants a restart, which this installation makes anyway' } }
+        1641 { return [pscustomobject]@{ ok = $true; restart = $true; message = 'the Microsoft Visual C++ runtime is installed and Windows wants a restart, which this installation makes anyway' } }
+        default { return [pscustomobject]@{ ok = $false; restart = $false; message = "Microsoft's installer for the Visual C++ runtime ended with code $Code. Install the Microsoft Visual C++ 2015-2022 Redistributable (x64) yourself, then run this installer again." } }
+    }
+}
+
+# Runs Microsoft's installer and reads its exit code. -Runner is for the tests (it gets the path and the arguments
+# and returns the exit code); the default runs the program under a deadline, so a hung installer cannot hold the
+# installation for ever. Returns the object of Get-VcRuntimeOutcome with the code and the output in it.
+function Invoke-VcRuntimeInstall {
+    param([Parameter(Mandatory)][string]$Path, [scriptblock]$Runner, [double]$TimeoutSeconds = $script:VcRuntimeTimeoutSeconds)
+    $code = $null; $text = ''
+    if ($Runner) { $code = [int](& $Runner $Path $script:VcRuntimeArguments) }
+    else {
+        $n = Invoke-NativeBounded -File $Path -Arguments $script:VcRuntimeArguments -TimeoutSeconds $TimeoutSeconds
+        $text = [string]$n.text
+        if ($n.timed_out) {
+            return [pscustomobject]@{ ok = $false; restart = $false; code = $null; text = $text
+                message = "Microsoft's installer for the Visual C++ runtime did not finish within $TimeoutSeconds s. Install the Microsoft Visual C++ 2015-2022 Redistributable (x64) yourself, then run this installer again." }
+        }
+        $code = [int]$n.code
+    }
+    $out = Get-VcRuntimeOutcome $code
+    return [pscustomobject]@{ ok = $out.ok; restart = $out.restart; message = $out.message; code = $code; text = $text }
 }
 # The UserModeDriverName slots of the GPU's software key: D3D9, D3D10, D3D11, D3D12. The D3D9 slot is empty: a D3D9
 # application then gets Microsoft's D3D9On12 layer (d3d9on12.dll), which runs on our D3D12 driver. Windows does not

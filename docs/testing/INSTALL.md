@@ -14,8 +14,11 @@ Use this package only on a BC-250. The installer stops on every other computer a
 - Secure Boot off. The stock BC-250 BIOS has no Secure Boot option, so it is already off (see "Secure Boot" below).
 - If BitLocker is on: your BitLocker recovery key, in case something goes wrong. The installer pauses BitLocker
   by itself for the restarts it needs and tells you that it did.
-- The Microsoft Visual C++ 2015-2022 Redistributable (x64). If it is missing, the installer stops and tells you.
-  Get it from Microsoft: https://aka.ms/vs/17/release/vc_redist.x64.exe (download it on any computer and copy it to the BC-250).
+- Nothing to install first. The driver's programs need the Microsoft Visual C++ 2015-2022 Redistributable (x64),
+  and the package carries Microsoft's own installer for it. The installer runs it when this PC has no
+  `vcruntime140.dll`, `vcruntime140_1.dll` or `msvcp140.dll` in `System32`, or when one of them is older than
+  14.44. It checks the SHA-256 and the Microsoft signature of that file first, and it needs no internet for this
+  step. Nothing happens when the runtime is already there.
 - 2 GB of free space on the system drive.
 - A keyboard and a monitor on the BC-250.
 - An internet connection during the installation: the installer downloads the AMD GPU firmware (see "GPU firmware"
@@ -198,6 +201,7 @@ results to `C:\ProgramData\amdgpu-wddm\start-confirm.log`.
 |---|---|
 | Test signing | `bcdedit /set '{current}' testsigning on` |
 | Test certificate | LocalMachine Root and TrustedPublisher stores |
+| Microsoft Visual C++ 2015-2022 Redistributable (x64) | installed by Microsoft's own installer from `payload\redist\vc_redist.x64.exe`, only when `System32` has no `vcruntime140.dll`, `vcruntime140_1.dll` or `msvcp140.dll`, or one of them is older than 14.44. Microsoft's files go where Microsoft puts them. `uninstall.cmd` leaves this runtime in place, because other programs use it |
 | Kernel-mode driver | driver package `bc250kmd.inf` (driver store, service `bc250kmd`) |
 | Driver settings | `HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters` |
 | User-mode drivers | `C:\Program Files\amdgpu-wddm\` (`d3d12`, `desktop`, `d3d11`, `vulkan`, `wow64`, `tools`, `control`, `mft`). Nothing goes into `C:\Windows\System32` or `C:\Windows\SysWOW64`. An install over an earlier release removes the `bc250umd.dll` that it put there |

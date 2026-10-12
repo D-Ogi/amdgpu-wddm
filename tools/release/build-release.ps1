@@ -444,6 +444,10 @@ function Get-InstallLocation([string]$PackagePath) {
         '^payload/wow64/(\w+)/' { return "<InstallDir>\wow64\$($Matches[1])\$leaf" }
         '^payload/firmware/' { return "C:\BC250\firmware\$leaf" }
         '^payload/cert/' { return 'LocalMachine Root and TrustedPublisher' }
+        # The Microsoft Visual C++ runtime installer runs from the package and is never copied anywhere: the files it
+        # installs are Microsoft's own, in System32, under Microsoft's version rules. install.ps1 copies the payload
+        # directories it names in $dirs, and redist is not one of them.
+        '^payload/redist/' { return 'run from the package (Microsoft installs its own files in System32)' }
         '^payload/(.+)$' { return ('<InstallDir>\' + $Matches[1].Replace('/', '\')) }
     }
     return $null

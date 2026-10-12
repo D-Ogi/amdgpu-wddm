@@ -461,8 +461,19 @@ static class UnitTests
             "no confirmations: test mode already on says so and nothing about the start options");
         foreach (var on in new[] { true, false })
             foreach (var state in new[] { "off", "on", "unknown", "suspended", null })
-                foreach (var id in InstallFlow.PlanChangeIds(on, state))
-                    Check(Strings.Has(id), "no confirmations: " + id + " has words");
+                foreach (var vc in new[] { true, false })
+                    foreach (var id in InstallFlow.PlanChangeIds(on, state, vc))
+                        Check(Strings.Has(id), "no confirmations: " + id + " has words");
+        // The Microsoft Visual C++ runtime (owner, 2026-10-12): the plan states that the install brings it, and
+        // says nothing when the PC already has it. It is the last line either way, after the start options.
+        Check(InstallFlow.PlanChangeIds(true, "off", true).SequenceEqual(new[] { "plan.change.test-mode", "plan.change.vcruntime" }),
+            "runtime: the plan states that setup installs the Microsoft runtime");
+        Check(InstallFlow.PlanChangeIds(false, "off", true).SequenceEqual(new[] { "plan.change.test-mode.on", "plan.change.vcruntime" }),
+            "runtime: the line also shows when test mode is already on");
+        Check(InstallFlow.PlanChangeIds(true, "on", true).SequenceEqual(new[] { "plan.change.test-mode", "plan.change.bitlocker", "plan.change.vcruntime" }),
+            "runtime: the runtime line comes after the start options");
+        Check(!InstallFlow.PlanChangeIds(true, "off", false).Contains("plan.change.vcruntime") && !InstallFlow.PlanChangeIds(false, "off").Contains("plan.change.vcruntime"),
+            "runtime: a PC that has the runtime reads no line about it");
         // The words of the removed controls are gone from every table, so neither can come back by itself.
         foreach (var id in InstallFlow.RemovedConsentIds)
             Check(!Strings.Has(id), "no confirmations: " + id + " is gone from the string tables");
