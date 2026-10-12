@@ -35,6 +35,10 @@ $script:StatePath        = Join-Path $script:StateDir 'state.json'
 $script:ProfileListKey   = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList'
 $script:ProfilePathsOverride = $null                           # host tests: fixture profile folders
 $script:DryRunMode       = $false
+# The visible countdown before a restart the installer makes (owner, 2026-10-12). The same 15 s as the setup
+# window's restart screen (tools\win\amdgpu_wddm_setup\src\InstallFlow.cs, RestartCountdownSeconds).
+$script:RestartCountdownSeconds = 15
+$script:PlannedRestarts  = 0                                   # install.ps1: the restarts the decision counted
 $script:LogPath          = $null
 $script:CurrentStep      = '(before the first change)'
 $script:ScheduleOldCopies = $true                              # host tests set $false: no MoveFileEx on the test PC
@@ -194,18 +198,12 @@ function Test-IsAdmin {
     return (New-Object Security.Principal.WindowsPrincipal $id).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
-# Asks the tester. -Answer (unattended) wins; a dry run never asks and answers as the expected answer; a run that the
-# setup window drives never asks either (it has no console): what was not given on its command line is not consented.
-function Read-Confirmation {
-    param([Parameter(Mandatory)][string]$Question, [string]$Expect = 'YES', [string]$Answer)
-    if ($Answer) { Write-Info "$Question -> $Answer (from the command line)"; return ($Answer -ceq $Expect) }
-    if ($script:GuiMode) { Write-Info "$Question -> not given by the setup window: no"; return $false }
-    # A dry run shows the path a YES takes, so it answers YES without asking.
-    if ($script:DryRunMode) { Write-Host "   [dry run] would ask: $Question (type $Expect); continuing as if answered $Expect" -ForegroundColor DarkYellow; return $true }
-    $reply = Read-Host "   $Question Type $Expect to continue"
-    Write-Log "   asked: $Question -> '$reply'"
-    return ($reply -ceq $Expect)
-}
+# Nothing here asks the person a question (owner, 2026-10-12: "Przestan wymagac potwierdzen od uzytkownika").
+# Starting install.cmd, or pressing Install in the window, IS the answer for everything an installation of this
+# driver needs; uninstall.cmd is the answer for the removal. The function that asked - Read-Confirmation - is gone,
+# so a new question cannot be added by calling it, and the tests of tools\release (test-boot-locale.ps1) refuse a
+# call to it on the way to the boot change. A choice with two good outcomes is a switch on the command line with a
+# stated default, never a prompt; a refusal that protects the machine is not a question and stays.
 
 # ---------------------------------------------------------------------------------------------------------------
 # State kept between the phases (and for uninstall): %ProgramData%\amdgpu-wddm\installer\state.json.
@@ -290,11 +288,17 @@ function Get-PendingRestart($State, $Boot) {
 $script:ResumePhases = @('testsigning-pending', 'driver-pending-restart')
 # -Repair is one of them (BD-069): the run after the restart has to know that this install is a repair, or it keeps a
 # closure that the tester asked to reopen.
-$script:InstallSwitches = @('NoControlApp', 'NoReboot', 'Force', 'Repair', 'ApplySystemTuning')
+$script:InstallSwitches = @('NoControlApp', 'NoReboot', 'Force', 'Repair', 'ApplySystemTuning', 'NoStartMenuShortcut', 'NoDesktopShortcut')
+# A switch of the list above, and the switch that clears it explicitly. A choice the setup window or a script makes
+# must be able to turn a saved choice off again, not only on: without the second switch an install that once left
+# the desktop icon out would leave it out for ever, because the state keeps the first answer over every later run.
+# The Windows tuning has had this pair from the start (-ApplySystemTuning / -SkipSystemTuning).
+$script:InstallSwitchClears = @{ ApplySystemTuning = 'SkipSystemTuning'; NoStartMenuShortcut = 'StartMenuShortcut'; NoDesktopShortcut = 'DesktopShortcut' }
 function Get-InstallInputs($Bound, $State, [string]$PackageVersion) {
-    if ($Bound.ContainsKey('ApplySystemTuning') -and [bool]$Bound['ApplySystemTuning'] -and
-        $Bound.ContainsKey('SkipSystemTuning') -and [bool]$Bound['SkipSystemTuning']) {
-        throw '-ApplySystemTuning and -SkipSystemTuning cannot be used together'
+    foreach ($pair in $script:InstallSwitchClears.GetEnumerator()) {
+        if ($Bound.ContainsKey($pair.Key) -and [bool]$Bound[$pair.Key] -and $Bound.ContainsKey($pair.Value) -and [bool]$Bound[$pair.Value]) {
+            throw "-$($pair.Key) and -$($pair.Value) cannot be used together"
+        }
     }
     $resume = $State -and ([string]$State.phase -in $script:ResumePhases) -and ([string]$State.package_version -eq $PackageVersion)
     $resumeTuning = $State -and ([string]$State.package_version -eq $PackageVersion) -and
@@ -321,7 +325,8 @@ function Get-InstallInputs($Bound, $State, [string]$PackageVersion) {
         foreach ($p in $State.command_line_parameters.PSObject.Properties) { $in.parameters[$p.Name] = [int]$p.Value; $in.restored += "-$($p.Name) $([int]$p.Value)" }
     }
     foreach ($s in $script:InstallSwitches) {
-        if ($s -eq 'ApplySystemTuning' -and $Bound.ContainsKey('SkipSystemTuning') -and [bool]$Bound['SkipSystemTuning']) { continue }
+        $clear = [string]$script:InstallSwitchClears[$s]
+        if ($clear -and $Bound.ContainsKey($clear) -and [bool]$Bound[$clear]) { continue }
         if ($Bound.ContainsKey($s)) { if ([bool]$Bound[$s]) { $in.switches += $s } }
         elseif (($resume -or ($s -eq 'ApplySystemTuning' -and $resumeTuning)) -and (@($State.install_switches) -contains $s)) { $in.switches += $s; $in.restored += "-$s" }
     }
@@ -850,6 +855,27 @@ function Get-FirmwareStaged {
 
 # ---------------------------------------------------------------------------------------------------------------
 # System facts. Each returns data; the preflight decides.
+# Whether the driver of a device verify found actually started, and why not (GitHub #38).
+#
+# A device that carries a problem code (Code 43 and the rest) has no running driver. Verify then skips the work that
+# cannot succeed on it: the wait for the start-confirm task, which confirms a start that did not happen and would
+# only spend its whole 120 s bound, and every probe that needs a started adapter (D3D12 through DXGI, Vulkan through
+# the loader, the driver's own interop state). On the tester's PC of #38 a failed start took 2 min 43 s to report,
+# 110 s of it in that wait. The verdict does not change: 'driver bound' and 'driver start' carry it, as they always
+# did, and each skipped probe is still recorded under its own name with the reason.
+#
+# ProblemCode: ConfigManagerErrorCode of the device. Status: the Windows device status, for the reason text only.
+function Get-VerifyStartState {
+    param([int]$ProblemCode = 0, [string]$Status = '')
+    $started = ($ProblemCode -eq 0)
+    $reason = $null
+    if (-not $started) {
+        $reason = "the device reports problem code $ProblemCode"
+        if ($Status -and $Status -ne 'OK') { $reason = "$reason and Windows reports it as $Status" }
+    }
+    return [pscustomobject]@{ started = $started; reason = $reason }
+}
+
 function Get-Bc250Device {
     # Present devices only, matched on the hardware ID the INF matches.
     $all = @(Get-CimInstance Win32_PnPEntity -ErrorAction SilentlyContinue | Where-Object { $_.DeviceID -like ($script:HardwareIdPrefix + '*') })
@@ -1167,17 +1193,334 @@ function Test-BitLockerConsentRequired {
     # Only verified unencrypted or suspended protection can skip this boot-change decision.
     return ($State -notin @('off', 'suspended'))
 }
+# What the installer does about BitLocker protection before it changes the start options, without asking anybody
+# (owner, 2026-10-12: "Przestan wymagac potwierdzen od uzytkownika"). The install needs test signing, test signing
+# needs a boot-option change, and a boot-option change on a protected volume makes Windows ask for the recovery key
+# at the next start. So the installer suspends protection itself for the restarts it makes, and BitLocker turns
+# itself on again afterwards (Suspend-BitLocker -RebootCount; Microsoft BitLocker PowerShell documentation).
+#
+# A decision only; the caller acts on it, so the rule is testable without a protected volume:
+#   action  'none'      nothing to do: protection off, or already suspended
+#           'suspend'   protection is on: suspend it for $Restarts restarts before the boot options change
+#           'have-key'  the command line said the person has the recovery key (-BitLocker HaveKey): change nothing
+#           'unknown'   the state could not be read: go on, and say so in one information line. A person who cannot
+#                       read the state cannot answer a question about it either, and refusing the install here left
+#                       every PC whose state is unreadable without a driver.
+#   reboots the -RebootCount of a 'suspend': the restarts this install makes, at least 1 and at most 15 (the limit
+#           of the cmdlet), so protection is back as soon as the install is through.
+#   message one plain sentence for the console and the log.
+# State: 'off', 'on', 'suspended' or 'unknown' (Get-BitLockerState). Requested: the -BitLocker switch, '' when absent.
+function Get-BitLockerPlan {
+    param([AllowNull()][string]$State, [AllowNull()][string]$Requested, [int]$Restarts = 2)
+    $reboots = [Math]::Max(1, [Math]::Min(15, $Restarts))
+    if (-not (Test-BitLockerConsentRequired $State)) {
+        return [pscustomobject]@{ action = 'none'; reboots = 0; message = "BitLocker: nothing to do (protection $State)" }
+    }
+    if ($Requested -eq 'HaveKey') {
+        return [pscustomobject]@{ action = 'have-key'; reboots = 0
+            message = 'BitLocker: the command line states that the recovery key is at hand, so protection stays as it is' }
+    }
+    if ($State -eq 'on') {
+        return [pscustomobject]@{ action = 'suspend'; reboots = $reboots
+            message = "BitLocker: protection is on, so it is paused for the $reboots restart(s) of this installation and turns itself on again afterwards" }
+    }
+    return [pscustomobject]@{ action = 'unknown'; reboots = 0
+        message = 'BitLocker: the protection state of this drive could not be read. The installation goes on; keep your recovery key at hand in case Windows asks for it after a restart' }
+}
+# A visible countdown that ends in a restart by itself (owner, 2026-10-12: automatic restarts, never a required
+# click). Enter restarts at once, any other key puts the restart off, and a console that has no key reader (a
+# scheduled run, redirected input) simply waits the countdown out and restarts. Returns 'now' or 'later'.
+function Wait-RestartCountdown {
+    param([int]$Seconds = 15)
+    $left = $Seconds
+    while ($left -gt 0) {
+        Write-Host ("`r   Windows restarts by itself in {0,2} s. Enter = restart now, any other key = later.   " -f $left) -NoNewline
+        $until = [DateTime]::UtcNow.AddSeconds(1)
+        while ([DateTime]::UtcNow -lt $until) {
+            $key = $null
+            try { if ([Console]::KeyAvailable) { $key = [Console]::ReadKey($true) } } catch { $key = $null }
+            if ($null -ne $key) {
+                Write-Host ''
+                if ($key.Key -eq 'Enter') { return 'now' }
+                return 'later'
+            }
+            Start-Sleep -Milliseconds 100
+        }
+        $left--
+    }
+    Write-Host ''
+    return 'now'
+}
 function Get-MemoryIntegrityState {
     $v = (Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity' -Name Enabled -ErrorAction SilentlyContinue).Enabled
     if ($v -eq 1) { return 'on' }
     return 'off'
 }
-function Get-VcRuntimeMissing {
-    $missing = @()
-    foreach ($f in 'vcruntime140.dll', 'vcruntime140_1.dll', 'msvcp140.dll') {
-        if (-not (Test-Path -LiteralPath (Join-Path $env:windir "System32\$f"))) { $missing += $f }
+# ---- the shortcuts of the control application -------------------------------------------------------------------
+# The owner's instruction of 2026-10-12: "pytajmy tez czy zrobic skrot na pulpicie (domyslnie i menu start i
+# pulpit)". The setup window offers both, both on by default, and neither of them gates the Install button. On the
+# command line -NoStartMenuShortcut and -NoDesktopShortcut leave one or the other out.
+#
+# One list, used by the install, by the uninstall and by the footprint probe, so a shortcut the install writes
+# cannot be one the uninstall does not know. The recovery entry stays in the Start menu only: it is a repair tool,
+# not a second icon on the desktop.
+#   kind      'control', 'recovery' or 'desktop icon'
+#   where     'Start menu' or 'desktop', as the log and the dry run name the place
+#   label      the whole name of this shortcut as a person reads it; the one field a line prints, because
+#             "$where $kind" reads "desktop desktop icon" for the third row
+#   switch     the install switch that leaves it out
+#   arguments  the arguments of the shortcut's target
+function Get-ControlShortcutPaths {
+    $startMenu = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs'
+    $desktop = [Environment]::GetFolderPath('CommonDesktopDirectory')
+    if (-not $desktop) { $desktop = Join-Path $env:Public 'Desktop' }
+    return @(
+        [pscustomobject]@{ kind = 'control'; where = 'Start menu'; label = 'Start menu entry'; switch = 'NoStartMenuShortcut'; arguments = ''; path = (Join-Path $startMenu 'amdgpu-wddm Control.lnk') }
+        [pscustomobject]@{ kind = 'recovery'; where = 'Start menu'; label = 'Start menu repair entry'; switch = 'NoStartMenuShortcut'; arguments = '--recovery'; path = (Join-Path $startMenu 'amdgpu-wddm Control (recovery).lnk') }
+        [pscustomobject]@{ kind = 'desktop icon'; where = 'desktop'; label = 'desktop icon'; switch = 'NoDesktopShortcut'; arguments = ''; path = (Join-Path $desktop 'amdgpu-wddm Control.lnk') }
+    )
+}
+
+# Pure: which shortcuts an install writes, for the two switches. Both absent = both places.
+function Get-ControlShortcutPlan {
+    param([bool]$NoStartMenu, [bool]$NoDesktop, $Shortcuts = (Get-ControlShortcutPaths))
+    $out = @()
+    foreach ($s in @($Shortcuts)) {
+        if ($s.switch -eq 'NoStartMenuShortcut' -and $NoStartMenu) { continue }
+        if ($s.switch -eq 'NoDesktopShortcut' -and $NoDesktop) { continue }
+        $out += $s
     }
-    return $missing
+    return $out
+}
+
+# Writes one shortcut to the control application, and returns the path it wrote.
+function New-ControlShortcut {
+    param([Parameter(Mandatory)][string]$Link, [Parameter(Mandatory)][string]$Target, [string]$Arguments = '')
+    [void][IO.Directory]::CreateDirectory((Split-Path $Link))
+    $sh = New-Object -ComObject WScript.Shell
+    $s = $sh.CreateShortcut($Link)
+    $s.TargetPath = $Target
+    if ($Arguments) { $s.Arguments = $Arguments }
+    $s.WorkingDirectory = (Split-Path $Target)
+    # The application's own icon, the one its window and its task-bar button show (art\icon\nagi.ico).
+    $s.IconLocation = "$Target,0"
+    $s.Save()
+    return $Link
+}
+
+# ---- the Microsoft Visual C++ runtime our programs need ---------------------------------------------------------
+# Our control application, the CLI and the user-mode drivers are built against the Microsoft Visual C++ 2015-2022
+# runtime. Until now a PC without it was refused at the preflight and the tester had to fetch the runtime from
+# Microsoft. The owner's instruction of 2026-10-12 is "powinien byc auto-installer!!!": the package carries
+# Microsoft's own installer (payload\redist\vc_redist.x64.exe, release-sources.json) and the install runs it.
+# Running the installer is the consent for it, like every other change this engine makes.
+$script:VcRuntimeFiles = @('vcruntime140.dll', 'vcruntime140_1.dll', 'msvcp140.dll')
+$script:VcRuntimePackagePath = 'payload\redist\vc_redist.x64.exe'
+# The version the package carries, and the lowest version we accept in System32. A runtime older than this is
+# replaced: the 14.x runtime is binary compatible upwards, so Microsoft's installer simply moves it forward.
+$script:VcRuntimeVersion = '14.44.35211.0'
+$script:VcRuntimeMinMajor = 14
+$script:VcRuntimeMinMinor = 44
+$script:VcRuntimeSha256 = 'CC0FF0EB1DC3F5188AE6300FAEF32BF5BEEBA4BDD6E8E445A9184072096B713B'
+$script:VcRuntimeSize = 25635768
+$script:VcRuntimeSigner = 'Microsoft Corporation'
+# Microsoft's command line and its exit codes (vc_redist.x64.exe /install /quiet /norestart):
+#   0     installed, or this version is already there
+#   1638  a newer version of the runtime is installed: nothing to do
+#   3010, 1641  installed, and Windows wants a restart; this install restarts anyway
+#   anything else is a failure, and the install stops with the code in the message
+$script:VcRuntimeArguments = @('/install', '/quiet', '/norestart')
+# 1638 means "a same or newer runtime is registered", and Microsoft's bootstrapper then installs nothing. A PC whose
+# System32 lost one of the three files keeps that answer for ever, so the install runs the same file once more with
+# /repair, which puts the files of the registered runtime back.
+$script:VcRuntimeRepairArguments = @('/repair', '/quiet', '/norestart')
+$script:VcRuntimeTimeoutSeconds = 600
+
+# The file version of one System32 DLL as four numbers, or $null when the file is not there or has no version.
+function Get-FileVersionNumbers([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+    $v = (Get-Item -LiteralPath $Path).VersionInfo
+    if (-not $v) { return $null }
+    return [pscustomobject]@{ major = [int]$v.FileMajorPart; minor = [int]$v.FileMinorPart; build = [int]$v.FileBuildPart; revision = [int]$v.FilePrivatePart }
+}
+
+# Pure: does a reading of the three runtime files mean the installer has to install the runtime?
+# -Readings is a hashtable file name -> the object of Get-FileVersionNumbers ($null = the file is not there).
+# Returns { install, missing, old, present, detail }: 'missing' is a file System32 does not have, 'old' a file
+# older than the minimum. One of either makes 'install' true, because Microsoft's installer replaces the set.
+function Get-VcRuntimeDecision {
+    param([Parameter(Mandatory)][hashtable]$Readings, [int]$MinMajor = $script:VcRuntimeMinMajor, [int]$MinMinor = $script:VcRuntimeMinMinor)
+    $missing = @(); $old = @(); $present = @()
+    foreach ($f in $script:VcRuntimeFiles) {
+        $v = $null
+        if ($Readings.ContainsKey($f)) { $v = $Readings[$f] }
+        if ($null -eq $v) { $missing += $f; continue }
+        $text = "$f $($v.major).$($v.minor).$($v.build).$($v.revision)"
+        if (($v.major -lt $MinMajor) -or ($v.major -eq $MinMajor -and $v.minor -lt $MinMinor)) { $old += $text } else { $present += $text }
+    }
+    $detail = @()
+    if ($missing.Count) { $detail += "missing in System32: $($missing -join ', ')" }
+    if ($old.Count) { $detail += "older than $MinMajor.$MinMinor`: $($old -join ', ')" }
+    if ($present.Count) { $detail += "present: $($present -join ', ')" }
+    return [pscustomobject]@{ install = [bool]($missing.Count -or $old.Count); missing = $missing; old = $old; present = $present; detail = ($detail -join '; ') }
+}
+
+# The same decision for the running PC.
+# Host tests only, and only in a dry run (AMDGPU_WDDM_TEST_VCRUNTIME): 'missing' reads as a System32 without the three
+# files, 'old' as a 14.40 runtime, 'ok' as the current one. A dry run changes nothing, so this lets the host tests walk
+# the step that installs the runtime on a PC that already has it; a real install always reads System32.
+function Get-VcRuntimeState {
+    if ($script:DryRunMode -and $env:AMDGPU_WDDM_TEST_VCRUNTIME) {
+        $fake = @{}
+        foreach ($f in $script:VcRuntimeFiles) {
+            switch ([string]$env:AMDGPU_WDDM_TEST_VCRUNTIME) {
+                'missing' { $fake[$f] = $null }
+                'old' { $fake[$f] = [pscustomobject]@{ major = 14; minor = 40; build = 33810; revision = 0 } }
+                default { $fake[$f] = [pscustomobject]@{ major = 14; minor = 44; build = 35211; revision = 0 } }
+            }
+        }
+        return Get-VcRuntimeDecision -Readings $fake
+    }
+    $readings = @{}
+    foreach ($f in $script:VcRuntimeFiles) { $readings[$f] = Get-FileVersionNumbers (Join-Path $env:windir "System32\$f") }
+    return Get-VcRuntimeDecision -Readings $readings
+}
+
+# Is the file the package carries Microsoft's installer, unchanged? The SHA-256 first, then the Authenticode
+# signature: Valid, and signed by Microsoft Corporation. -SignatureReader is for the tests, which hand in readings
+# instead of asking Windows; the default asks Windows.
+# Returns { ok, problem, sha256, status, signer }.
+function Test-VcRuntimeInstaller {
+    param([Parameter(Mandatory)][string]$Path, [string]$ExpectedSha256 = $script:VcRuntimeSha256,
+          [string]$ExpectedSigner = $script:VcRuntimeSigner, [scriptblock]$SignatureReader)
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        return [pscustomobject]@{ ok = $false; problem = "the package does not carry $Path"; sha256 = $null; status = $null; signer = $null }
+    }
+    $sha = Get-Sha256 $Path
+    if ($sha -ne $ExpectedSha256) {
+        return [pscustomobject]@{ ok = $false; problem = "SHA256 of $Path is $($sha.Substring(0, 16)), the installer expects $($ExpectedSha256.Substring(0, 16))"; sha256 = $sha; status = $null; signer = $null }
+    }
+    $reader = $(if ($SignatureReader) { $SignatureReader } else { { param($p) Get-AuthenticodeSignature -LiteralPath $p } })
+    $sig = & $reader $Path
+    $status = [string]$(if ($sig) { $sig.Status } else { 'unknown' })
+    $signer = [string]$(if ($sig -and $sig.SignerCertificate) { $sig.SignerCertificate.Subject } else { '' })
+    if ($status -ne 'Valid') {
+        return [pscustomobject]@{ ok = $false; problem = "the signature of $Path is not valid (status $status)"; sha256 = $sha; status = $status; signer = $signer }
+    }
+    if ($signer -notmatch ("CN=" + [regex]::Escape($ExpectedSigner) + "(,|$)")) {
+        return [pscustomobject]@{ ok = $false; problem = "$Path is not signed by $ExpectedSigner (signer '$signer')"; sha256 = $sha; status = $status; signer = $signer }
+    }
+    return [pscustomobject]@{ ok = $true; problem = $null; sha256 = $sha; status = $status; signer = $signer }
+}
+
+# Pure: what one exit code of Microsoft's installer means. { ok, restart, message }.
+function Get-VcRuntimeOutcome([int]$Code) {
+    switch ($Code) {
+        0 { return [pscustomobject]@{ ok = $true; restart = $false; message = 'the Microsoft Visual C++ runtime is installed' } }
+        1638 { return [pscustomobject]@{ ok = $true; restart = $false; message = 'a newer Microsoft Visual C++ runtime is already installed: nothing to do' } }
+        3010 { return [pscustomobject]@{ ok = $true; restart = $true; message = 'the Microsoft Visual C++ runtime is installed and Windows wants a restart, which this installation makes anyway' } }
+        1641 { return [pscustomobject]@{ ok = $true; restart = $true; message = 'the Microsoft Visual C++ runtime is installed and Windows wants a restart, which this installation makes anyway' } }
+        default { return [pscustomobject]@{ ok = $false; restart = $false; message = "Microsoft's installer for the Visual C++ runtime ended with code $Code. Install the Microsoft Visual C++ 2015-2022 Redistributable (x64) yourself, then run this installer again." } }
+    }
+}
+
+# Runs Microsoft's installer and reads its exit code. -Runner is for the tests (it gets the path and the arguments
+# and returns the exit code); the default runs the program under a deadline, so a hung installer cannot hold the
+# installation for ever. Returns the object of Get-VcRuntimeOutcome with the code and the output in it.
+function Invoke-VcRuntimeInstall {
+    param([Parameter(Mandatory)][string]$Path, [scriptblock]$Runner, [double]$TimeoutSeconds = $script:VcRuntimeTimeoutSeconds,
+          [string[]]$Arguments = $script:VcRuntimeArguments)
+    $code = $null; $text = ''
+    if ($Runner) { $code = [int](& $Runner $Path $Arguments) }
+    else {
+        $n = Invoke-NativeBounded -File $Path -Arguments $Arguments -TimeoutSeconds $TimeoutSeconds
+        $text = [string]$n.text
+        if ($n.timed_out) {
+            return [pscustomobject]@{ ok = $false; restart = $false; code = $null; text = $text
+                message = "Microsoft's installer for the Visual C++ runtime did not finish within $TimeoutSeconds s. Install the Microsoft Visual C++ 2015-2022 Redistributable (x64) yourself, then run this installer again." }
+        }
+        $code = [int]$n.code
+    }
+    $out = Get-VcRuntimeOutcome $code
+    return [pscustomobject]@{ ok = $out.ok; restart = $out.restart; message = $out.message; code = $code; text = $text }
+}
+
+# ---- which Windows this driver is made for ---------------------------------------------------------------------
+# The owner's policy of 2026-10-11 is n-2: "wystarczy nam wsparcie n-2 czyli maks do 23H2 jak obecnie + nowsze ale
+# canary to raczej nie". Supported are Windows 11 23H2 (22631), 24H2 (26100), 25H2 (26200) and the general builds
+# after them. A Windows 11 older than 22631 is a line that says so and advises an update (owner, 2026-10-12: "tylko
+# warning, nie blokada"), never a refusal. An Insider build and an LTSC edition are lines of the same kind. The one
+# refusal is Windows 10 and older (below build 22000), and 32-bit Windows.
+$script:WindowsSupportedBuilds = @(22631, 26100, 26200)       # 23H2, 24H2, 25H2
+$script:WindowsSupportedNames = '23H2, 24H2, 25H2'
+$script:WindowsMinimumBuild = 22000                            # below this: Windows 10 or older, refused
+$script:WindowsLowestSupportedBuild = 22631                    # 22000-22630: supported versions named, install goes on
+$script:WindowsInsiderBuild = 27000                            # at or above: a build Microsoft has not released yet
+# An Insider channel on one of the supported builds (Release Preview on 23H2, 24H2 or 25H2) is the version this
+# driver is tested on, so it gets no Insider line: only a build outside $script:WindowsSupportedBuilds does.
+$script:WindowsSelfHostKey = 'HKLM:\SOFTWARE\Microsoft\WindowsSelfHost\Applicability'
+$script:WindowsCurrentVersionKey = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
+$script:WindowsLtscEditions = @('EnterpriseS', 'IoTEnterpriseS')
+
+# Pure: what this engine says about a Windows. The readings come from Get-WindowsSupportState on a real PC and
+# from the tests on every other. Returns { x64, build, standing, findings }, where findings is the list the
+# preflight turns into its lines, in order: { id, severity, detail }. Only 'fail' refuses the install.
+#   standing: 'not-x64' | 'too-old' | 'below-supported' | 'supported'
+function Get-WindowsSupportFindings {
+    param([Parameter(Mandatory)][int]$Build, [string]$Caption = 'Windows', [bool]$Is64Bit = $true,
+          [string]$EditionId = '', [string]$SelfHostBranch = '', [string]$DisplayVersion = '')
+    $what = "$Caption build $Build"
+    if ($DisplayVersion) { $what = "$Caption $DisplayVersion (build $Build)" }
+    $findings = @()
+    $standing = 'supported'
+    if (-not $Is64Bit) {
+        $standing = 'not-x64'
+        $findings += [pscustomobject]@{ id = 'windows.not-x64'; severity = 'fail'; detail = "$what is 32-bit; x64 is required" }
+    } elseif ($Build -lt $script:WindowsMinimumBuild) {
+        $standing = 'too-old'
+        $findings += [pscustomobject]@{ id = 'windows.too-old'; severity = 'fail'
+            detail = "$what; Windows 11 (build $($script:WindowsMinimumBuild) or later) is required" }
+    } elseif ($Build -lt $script:WindowsLowestSupportedBuild) {
+        $standing = 'below-supported'
+        $findings += [pscustomobject]@{ id = 'windows.below-supported'; severity = 'warn'
+            detail = "$what is older than the versions this driver is tested on (Windows 11 $($script:WindowsSupportedNames), builds $($script:WindowsSupportedBuilds -join ', ')). Update Windows. The installation continues." }
+    } else {
+        $findings += [pscustomobject]@{ id = 'windows.ok'; severity = 'ok'; detail = $what }
+    }
+    # Beyond the version itself: the channel and the edition. Both are information, whatever the version said, and
+    # neither is asked of the user. A refused Windows gets no second line: nothing is going to be installed there.
+    if ($standing -ne 'not-x64' -and $standing -ne 'too-old') {
+        # The channel alone is not the whole signal: a PC enrolled in the Insider programme (Release Preview above
+        # all) can still run one of the supported general builds, and that build is what this driver is tested on.
+        # The line is therefore for a build that is not one of the supported ones: an enrolled PC on a build of its
+        # own, or a build Microsoft has not released at all.
+        $enrolledOnOtherBuild = $SelfHostBranch -and (@($script:WindowsSupportedBuilds) -notcontains $Build)
+        if ($enrolledOnOtherBuild -or $Build -ge $script:WindowsInsiderBuild) {
+            $which = if ($SelfHostBranch) { "Insider channel $SelfHostBranch" } else { "build $Build, which Microsoft has not released yet" }
+            $findings += [pscustomobject]@{ id = 'windows.insider'; severity = 'warn'
+                detail = "${which}: an Insider build of Windows is not supported (Windows 11 $($script:WindowsSupportedNames)). The installation continues." }
+        }
+        if (@($script:WindowsLtscEditions) -contains $EditionId) {
+            $findings += [pscustomobject]@{ id = 'windows.ltsc'; severity = 'warn'
+                detail = "edition ${EditionId}: this driver is not tested on the LTSC editions of Windows. The installation continues." }
+        }
+    }
+    return [pscustomobject]@{ x64 = $Is64Bit; build = $Build; standing = $standing; findings = $findings }
+}
+
+# The same for the running PC. The channel comes from the key Windows Update writes for an Insider PC, the edition
+# from CurrentVersion. A value that is not there reads as empty, which is the ordinary case.
+function Get-WindowsSupportState {
+    param($Os)
+    if (-not $Os) { $Os = Get-CimInstance Win32_OperatingSystem }
+    $cv = Get-ItemProperty -LiteralPath $script:WindowsCurrentVersionKey -ErrorAction SilentlyContinue
+    $sh = Get-ItemProperty -LiteralPath $script:WindowsSelfHostKey -ErrorAction SilentlyContinue
+    $branch = ''
+    if ($sh) { foreach ($n in 'BranchName', 'Ring', 'ContentType') { if (-not $branch -and $sh.$n) { $branch = [string]$sh.$n } } }
+    return Get-WindowsSupportFindings -Build ([int]$Os.BuildNumber) -Caption ([string]$Os.Caption) `
+        -Is64Bit ([bool][Environment]::Is64BitOperatingSystem) `
+        -EditionId $(if ($cv) { [string]$cv.EditionID } else { '' }) -SelfHostBranch $branch `
+        -DisplayVersion $(if ($cv -and $cv.DisplayVersion) { [string]$cv.DisplayVersion } else { '' })
 }
 # The UserModeDriverName slots of the GPU's software key: D3D9, D3D10, D3D11, D3D12. The D3D9 slot holds '<>', the
 # display kernel's "no user-mode driver" marker: the D3D9 runtime gets no driver name for the adapter and falls back to
@@ -2048,9 +2391,9 @@ function Get-ReleaseFootprint {
     & $probe 'H.264 encoder keys' { @{ present = (@($MftKeys).Count -gt 0); detail = $(if (@($MftKeys).Count) { @($MftKeys) -join ', ' } else { 'no key of ours' }) } }
     & $probe 'scheduled task' { $t = @(Get-OurScheduledTasks); @{ present = ($t.Count -gt 0); detail = $(if ($t.Count) { $t -join ', ' } else { 'no task of ours' }) } }
     & $probe 'RunOnce entry' { $p = [bool](Get-ItemProperty -LiteralPath $script:RunOnceKey -Name $script:RunOnceName -ErrorAction SilentlyContinue); @{ present = $p; detail = "$($script:RunOnceKey) $($script:RunOnceName)$(if ($p) { ' is there' } else { ' is gone' })" } }
-    & $probe 'Start menu' {
-        $lnks = @(@('amdgpu-wddm Control.lnk', 'amdgpu-wddm Control (recovery).lnk') | ForEach-Object { Join-Path $env:ProgramData "Microsoft\Windows\Start Menu\Programs\$_" } | Where-Object { Test-Path -LiteralPath $_ })
-        @{ present = ($lnks.Count -gt 0); detail = $(if ($lnks.Count) { @($lnks | ForEach-Object { Split-Path $_ -Leaf }) -join ', ' } else { 'no shortcut of ours' }) }
+    & $probe 'shortcuts' {
+        $lnks = @(@(Get-ControlShortcutPaths) | Where-Object { Test-Path -LiteralPath $_.path })
+        @{ present = ($lnks.Count -gt 0); detail = $(if ($lnks.Count) { @($lnks | ForEach-Object { "$($_.where): $(Split-Path $_.path -Leaf)" }) -join ', ' } else { 'no shortcut of ours in the Start menu or on the desktop' }) }
     }
     & $probe 'installer state' { $p = (Test-Path -LiteralPath $script:StateDir); @{ present = $p; detail = "$($script:StateDir)$(if ($p) { ' is there (state, kept repair sets, verify reports)' } else { ' is gone' })" } }
     & $probe 'per-user data' {
@@ -2185,8 +2528,8 @@ function Remove-PathOrSchedule([string]$Path) {
 
 # Pure: where one file of a package lands on the computer, or $null when the installer copies it nowhere under the
 # install root. The driver package goes into the driver store, the certificate into two certificate stores, the GPU
-# firmware into its own folder, and install.cmd, the documents and the setup window's own folder are read from the
-# package and never copied.
+# firmware into its own folder, Microsoft's runtime installer (payload\redist) is run from the package, and
+# install.cmd, the documents and the setup window's own folder are read from the package and never copied.
 function Get-InstalledPathOfPackageFile {
     param([Parameter(Mandatory)][string]$PackagePath, [Parameter(Mandatory)][string]$InstallRoot,
         [string]$SystemDir = (Join-Path $env:windir 'System32'), [string]$SysWowDir = (Join-Path $env:windir 'SysWOW64'))
@@ -2196,7 +2539,9 @@ function Get-InstalledPathOfPackageFile {
     if ($p -match '\.\.') { return $null }
     if ($p -match '^payload\\system32\\(.+)$') { return (Join-Path $SystemDir $Matches[1]) }
     if ($p -match '^payload\\syswow64\\(.+)$') { return (Join-Path $SysWowDir $Matches[1]) }
-    if ($p -match '^payload\\(kmd|cert|firmware)\\') { return $null }
+    # payload\redist carries Microsoft's installer for the Visual C++ runtime: the install runs it from the package
+    # and copies no file of it, so nothing of this folder has an installed path either (BD-089 orphan plan).
+    if ($p -match '^payload\\(kmd|cert|firmware|redist)\\') { return $null }
     if ($p -match '^payload\\(.+\\.+)$') { return (Join-Path $InstallRoot $Matches[1]) }
     if ($p -match '^(installer|licenses)\\(.+)$') { return (Join-Path $InstallRoot $p) }
     if ($p -ieq 'THIRD-PARTY.md') { return (Join-Path $InstallRoot 'licenses\THIRD-PARTY.md') }

@@ -495,6 +495,7 @@ settings.recent.busy|mt|fd22dbb3|게임이 시작되는 중이라 지금은 목�
 settings.recent.failed|mt|26db6f1a|목록을 지울 수 없습니다. 잠시 후 다시 시도하세요.
 settings.guide.title|mt-safe|8e02ab12|팁 및 가이드
 settings.guide.note|mt|529531e4|Nagi가 없으면 팁이 텍스트로 표시됩니다. 그 외에는 바뀌는 것이 없습니다.
+settings.nagi.small|mt|6fd13869|1024 x 768 이하의 작은 화면에서는 페이지를 위한 공간을 확보하기 위해 가이드가 표시되지 않습니다.
 settings.animations.windows-off|mt|0962c940|Windows 애니메이션이 꺼져 있으므로 이 앱도 애니메이션을 사용하지 않습니다.
 settings.support.title|mt-safe|be91940b|지원
 settings.support.note|mt|97dadddd|개발자가 요청할 때를 위해 도움말에 기술 세부 정보와 추가 작업을 표시합니다.

@@ -192,6 +192,16 @@ namespace AmdgpuWddmControl
             }
         }
 
+        // "<width>x<height>" in logical units, as --work-area takes it.
+        static System.Drawing.Size ParseSize(string text)
+        {
+            var parts = (text ?? "").Split('x');
+            int w, h;
+            if (parts.Length != 2 || !int.TryParse(parts[0], out w) || !int.TryParse(parts[1], out h) || w < 1 || h < 1)
+                throw new ArgumentException("a work area is <width>x<height>, not " + text);
+            return new System.Drawing.Size(w, h);
+        }
+
         static int SmokeRender(string[] args)
         {
             string dir = args[1];
@@ -212,6 +222,9 @@ namespace AmdgpuWddmControl
                     else if (args[i] == "--switch-to" && i + 1 < args.Length) o.SwitchTo = args[++i];
                     else if (args[i] == "--fixture" && i + 1 < args.Length) fixture = args[++i];
                     else if (args[i] == "--board-fixture" && i + 1 < args.Length) boardFixture = args[++i];
+                    // The screen the window is drawn for, in logical units: the small-screen rule reads it instead of
+                    // the screen of the PC the render runs on, so one render is the same picture everywhere.
+                    else if (args[i] == "--work-area" && i + 1 < args.Length) o.WorkArea = ParseSize(args[++i]);
                     else throw new ArgumentException("unknown option " + args[i]);
                 }
                 if (Array.IndexOf(Strings.Languages, lang) < 0) throw new ArgumentException("unknown language " + lang);
@@ -222,7 +235,7 @@ namespace AmdgpuWddmControl
                 Strings.Language = lang;
                 Theme.Init(scale, textScale);
                 string problems;
-                using (var form = new MainForm(true, prefs))
+                using (var form = new MainForm(true, prefs, o.WorkArea))
                 {
                     form.CreateControlTree();
                     if (fixture != null) form.UseFixture(new System.Web.Script.Serialization.JavaScriptSerializer().Deserialize<RecoverySnapshot>(File.ReadAllText(fixture)));

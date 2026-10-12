@@ -20,6 +20,7 @@ static partial class UnitTests
         RecentLaunchRecords();
         Search();
         WindowFit();
+        SmallScreens();
         PageWidthRule(root);
         RebuiltPageFocus(root);
         RebuiltPagePlace(root);
@@ -287,6 +288,37 @@ static partial class UnitTests
         Check(title.Top >= 0, "WU-036: the title bar comes back on a screen");
         var none = DisplayInfo.Fit(w, new List<Rectangle>(), min, 30);
         Equal(w, none, "WU-036: no screen information: nothing moves");
+    }
+
+    // The owner's rule of 2026-10-12: on a 1024x768 or 800x600 working area, and on every smaller one, the guide
+    // panel with the character and the whole right-hand panel it sits in do not show (GitHub #38: on the tester's
+    // 800x600 screen the panel covered the text of the page). The screen comes in through the rule's arguments, so
+    // these cases never read the screen this test runs on; the window's own side of it is a render finding
+    // (--smoke-render G-SMALL, at the same five working areas).
+    static void SmallScreens()
+    {
+        foreach (var c in new[] {
+                new { W = 800, H = 600, Small = true },
+                new { W = 1024, H = 768, Small = true },
+                new { W = 1280, H = 720, Small = true },      // 720 high: under the 768 of the rule
+                new { W = 1366, H = 768, Small = true },       // exactly 768 high
+                new { W = 1920, H = 1080, Small = false },
+                new { W = 640, H = 480, Small = true },
+                new { W = 1024, H = 1200, Small = true },      // exactly 1024 wide
+                new { W = 1025, H = 769, Small = false } })    // one pixel over the rule in both directions
+            Check(LayoutRules.SmallScreen.Is(c.W, c.H) == c.Small,
+                "small screen: " + c.W + "x" + c.H + " is " + (c.Small ? "small" : "not small"));
+        Check(!LayoutRules.SmallScreen.Is(0, 0) && !LayoutRules.SmallScreen.Is(-1, 600) && !LayoutRules.SmallScreen.Is(800, 0),
+            "small screen: a working area that is not known is not small, so the panel stays where it was");
+        // Logical units, not device pixels: the same monitor is a small screen at a large text size.
+        Check(!LayoutRules.SmallScreen.IsDevice(1920, 1032, 1f), "small screen: 1920x1032 at 100 % is not small");
+        Check(LayoutRules.SmallScreen.IsDevice(1920, 1032, 1.5f), "small screen: 1920x1032 at 150 % is 1280x688 logical, which is small");
+        Check(LayoutRules.SmallScreen.IsDevice(1600, 1200, 2f), "small screen: 1600x1200 at 200 % is 800x600 logical, which is small");
+        Check(LayoutRules.SmallScreen.IsDevice(2048, 1536, 2f), "small screen: 2048x1536 at 200 % is 1024x768 logical, which is small");
+        Check(!LayoutRules.SmallScreen.IsDevice(2100, 1600, 2f), "small screen: 2100x1600 at 200 % is 1050x800 logical, which is not small");
+        Check(!LayoutRules.SmallScreen.IsDevice(1920, 1080, 0f), "small screen: a scale that is not known decides nothing");
+        Equal(1024, LayoutRules.SmallScreen.MaxWidth, "small screen: the width of the rule the owner gave");
+        Equal(768, LayoutRules.SmallScreen.MaxHeight, "small screen: the height of the rule the owner gave");
     }
 
     // G-RENDER: the page width rule of --smoke-render. A page is measured against the column it was built at, so that

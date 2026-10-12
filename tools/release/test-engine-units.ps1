@@ -12,6 +12,9 @@
 # firmware folder and another engine contract are refused. The engine lock: one mutating engine at a time; a first
 # change whose record cannot be saved does not run. Pending restarts (Get-PendingRestart). Child closure from the
 # job's own count (this process joins a kill-on-close job in the last section).
+# GitHub #38: the start state verify reads before it waits for the start-confirm task and before it probes the
+# adapter (Get-VerifyStartState), and install.ps1's verify holding to it: a failed start skips the wait and the
+# probes that need a started adapter, records each of them, and still writes its report.
 # BD-125: Secure Boot from the UEFI variable with stand-in readers (no variable = off, not built into the firmware;
 # the fallbacks answer only when the read fails), one real read of the variable on this host, and the certificate
 # step's error (store, HRESULT, certutil commands), also through the shipped step with a stand-in Import-Certificate.
@@ -269,6 +272,7 @@ $mapCases = @(
     @{ p = 'payload/kmd/bc250kmd.sys'; want = $null }                      # the driver store
     @{ p = 'payload/cert/amdgpu-wddm-release.cer'; want = $null }          # two certificate stores
     @{ p = 'payload/firmware/cyan_skillfish2_me.bin'; want = $null }       # the firmware folder of the KMD
+    @{ p = 'payload/redist/vc_redist.x64.exe'; want = $null }              # Microsoft's installer runs from the package
     @{ p = 'install.cmd'; want = $null }                                   # read from the package, never copied
     @{ p = 'INSTALL.md'; want = $null }
     @{ p = 'setup.exe'; want = $null }                                     # the setup window runs from the package
@@ -343,7 +347,7 @@ $saveProfiles = $script:ProfilePathsOverride
 $script:ProfilePathsOverride = @((Join-Path $work 'footprint\profiles\a'), (Join-Path $work 'footprint\profiles\b'))
 $fp = @(Get-ReleaseFootprint -InstallRoot $fpRoot -State ([pscustomobject]@{ firmware_dir_existed = $true }) -MftKeys @('HKLM:\SOFTWARE\Classes\CLSID\{test}'))
 $items = @($fp | ForEach-Object { $_.item })
-$wantItems = @('install root', 'System32 stub', 'SysWOW64 stub', 'driver store', 'driver service', 'DP audio interrupt', 'policy keys', 'Vulkan registration', 'H.264 encoder keys', 'scheduled task', 'RunOnce entry', 'Start menu', 'installer state', 'per-user data', 'per-user tuning recovery', 'certificates', 'GPU firmware', 'control application data', 'system-tuning', 'system-tuning-recovery')
+$wantItems = @('install root', 'System32 stub', 'SysWOW64 stub', 'driver store', 'driver service', 'DP audio interrupt', 'policy keys', 'Vulkan registration', 'H.264 encoder keys', 'scheduled task', 'RunOnce entry', 'shortcuts', 'installer state', 'per-user data', 'per-user tuning recovery', 'certificates', 'GPU firmware', 'control application data', 'system-tuning', 'system-tuning-recovery')
 Check ((($items -join ' | ') -eq ($wantItems -join ' | '))) "every item of the release is checked: $($items -join ', ')"
 Check (-not @($fp | Where-Object { $_.detail -match '^not read' }).Count) "every probe read its item$(if (@($fp | Where-Object { $_.detail -match '^not read' }).Count) { ': ' + (@($fp | Where-Object { $_.detail -match '^not read' } | ForEach-Object { "$($_.item) $($_.detail)" }) -join '; ') })"
 $byItem = @{}; foreach ($row in $fp) { $byItem[$row.item] = $row }
@@ -669,6 +673,349 @@ $c1 = Close-EngineChildren
 Check (($c1.closure -eq 'complete') -and ($c1.remaining -eq 0) -and ($c1.left_at_exit -ge 3) -and ($c1.ended -eq $c1.left_at_exit) -and ([AmdgpuWddmEngine.Job]::ActiveProcesses() -eq 1) -and $k1.HasExited -and $k2.HasExited) "every child and grandchild ended, the job holds only this process ($($c1 | ConvertTo-Json -Compress))"
 $c2 = Close-EngineChildren
 Check (($c2.closure -eq 'complete') -and ($c2.left_at_exit -eq 0)) 'nothing left: complete with 0'
+
+'[#38] the start state verify reads before it waits and before it probes the adapter'
+$ok = Get-VerifyStartState -ProblemCode 0 -Status 'OK'
+Check ($ok.started -and ($null -eq $ok.reason)) "problem code 0: the driver started, no reason text ($($ok | ConvertTo-Json -Compress))"
+# Code 43 is what the tester's device reported in #38; the others are codes a failed start also shows.
+foreach ($code in 43, 10, 28, 31, 39) {
+    $bad = Get-VerifyStartState -ProblemCode $code -Status 'Error'
+    Check ((-not $bad.started) -and ($bad.reason -match "problem code $code") -and ($bad.reason -match 'Windows reports it as Error')) `
+        "problem code ${code}: the driver did not start, and the reason names the code and the status ($($bad.reason))"
+}
+$noStatus = Get-VerifyStartState -ProblemCode 43
+Check ((-not $noStatus.started) -and ($noStatus.reason -match 'problem code 43') -and ($noStatus.reason -notmatch 'Windows reports')) `
+    "a device status that is not known: the reason names the code alone ($($noStatus.reason))"
+$okButOdd = Get-VerifyStartState -ProblemCode 0 -Status 'Unknown'
+Check ($okButOdd.started) 'problem code 0 decides on its own: a status this check does not know is not a failed start'
+
+'[#38] install.ps1 verify: a failed start skips the wait and the probes that need a started adapter'
+$verify = [IO.File]::ReadAllText((Join-Path $Installer 'install.ps1'))
+Check ($verify -match '\$startState = Get-VerifyStartState -ProblemCode \(\[int\]\$dev\[0\]\.ConfigManagerErrorCode\)') 'the start state comes from the device verify already read'
+Check ($verify -match '\$noWaitWhy = \$\(if \(\$startState\.started\)') 'the wait reads that one state'
+Check ($verify -match 'while \(\$null -eq \$noWaitWhy\)') 'a started driver still waits for the start-confirm task of this logon'
+Check ($verify -match 'the wait was skipped because \$noWaitWhy') 'and a verify line says why nothing was waited for'
+# Each probe that needs a started adapter: guarded by the same state, recorded under its own name, never a failure.
+foreach ($probe in 'D3D12 FL 12_1', 'Vulkan', 'GPU desktop path') {
+    Check ($verify -match ("Add-Skipped '" + [regex]::Escape($probe) + "'")) "$probe is recorded as skipped when the driver did not start"
+}
+Check ($verify -match "function Add-Skipped") 'the skip has one writer'
+Check ($verify -match "Add-Info \`$Name \('skipped: the driver did not start'") 'a skipped probe is an info line, so it is not an extra failure'
+# The property the line above depends on: an info line is in the result list, so a skipped probe keeps its own name
+# in the report the control application reads, with the reason. A reviewer read this the other way round, so it is
+# now a check: Add-Info adds to $results before it writes anything to the console.
+Check ($verify -match "(?s)function Add-Info\(\[string\]\`$Name, \[string\]\`$Detail\) \{\s*\[void\]\`$results\.Add\(") `
+    'an info line, and so a skipped probe, is in the verify report under its own name'
+Check (@([regex]::Matches($verify, 'if \(-not \$startState\.started\)')).Count -ge 3) 'three probes ask the state before they run'
+Check ($verify -match '\(Test-Path -LiteralPath \$cli\) -and \$startState\.started') 'the driver is not asked for its interop state when it did not start'
+Check ($verify -match 'Write-VerifyReport \$results') 'the report is still written on every path'
+
+'the Microsoft Visual C++ runtime: the installer brings it (owner, 2026-10-12)'
+# The decision, over readings of the three System32 files. A reading of $null means the file is not there.
+function New-VcReading([string]$Version) {
+    if (-not $Version) { return $null }
+    $p = $Version.Split('.')
+    return [pscustomobject]@{ major = [int]$p[0]; minor = [int]$p[1]; build = [int]$p[2]; revision = [int]$p[3] }
+}
+function New-VcReadings([string]$A, [string]$B, [string]$C) {
+    return @{ 'vcruntime140.dll' = (New-VcReading $A); 'vcruntime140_1.dll' = (New-VcReading $B); 'msvcp140.dll' = (New-VcReading $C) }
+}
+$vcAll = Get-VcRuntimeDecision -Readings (New-VcReadings '14.44.35211.0' '14.44.35211.0' '14.44.35211.0')
+Check (-not $vcAll.install -and $vcAll.missing.Count -eq 0 -and $vcAll.old.Count -eq 0 -and $vcAll.present.Count -eq 3) 'the runtime of the package itself needs no install'
+$vcNewer = Get-VcRuntimeDecision -Readings (New-VcReadings '14.50.1.0' '14.50.1.0' '14.50.1.0')
+Check (-not $vcNewer.install) 'a newer runtime needs no install'
+$vcNone = Get-VcRuntimeDecision -Readings (New-VcReadings $null $null $null)
+Check ($vcNone.install -and $vcNone.missing.Count -eq 3 -and $vcNone.detail -match 'missing in System32: vcruntime140\.dll, vcruntime140_1\.dll, msvcp140\.dll') 'no runtime at all: install, and the detail names all three files'
+$vcOne = Get-VcRuntimeDecision -Readings (New-VcReadings '14.44.35211.0' $null '14.44.35211.0')
+Check ($vcOne.install -and $vcOne.missing -contains 'vcruntime140_1.dll' -and $vcOne.present.Count -eq 2) 'one file missing is enough'
+$vcOld = Get-VcRuntimeDecision -Readings (New-VcReadings '14.40.33810.0' '14.44.35211.0' '14.44.35211.0')
+Check ($vcOld.install -and $vcOld.old.Count -eq 1 -and $vcOld.detail -match 'older than 14\.44: vcruntime140\.dll 14\.40\.33810\.0') 'a 14.40 file is too old, and the detail says so'
+$vcOldMajor = Get-VcRuntimeDecision -Readings (New-VcReadings '12.0.0.0' '14.44.35211.0' '14.44.35211.0')
+Check ($vcOldMajor.install -and $vcOldMajor.old.Count -eq 1) 'an older major version is too old'
+$vcExact = Get-VcRuntimeDecision -Readings (New-VcReadings '14.44.0.0' '14.44.0.0' '14.44.0.0')
+Check (-not $vcExact.install) '14.44 itself is enough: the minimum is the major and the minor'
+# This host's own reading, through the same decision: it says what it says, and the detail names every file.
+$vcHere = Get-VcRuntimeState
+Check ($vcHere.detail -and ($vcHere.missing.Count + $vcHere.old.Count + $vcHere.present.Count) -eq 3) "this host's runtime reads as three files ($($vcHere.detail))"
+
+# The file the package carries: SHA-256 first, then a Valid Microsoft signature. The signature reader is handed in,
+# so every case is exercised without a signed file of our own.
+$vcWork = Join-Path $work 'vcredist'
+[void][IO.Directory]::CreateDirectory($vcWork)
+$vcFake = Join-Path $vcWork 'vc_redist.x64.exe'
+Write-Text $vcFake 'not the real installer'
+$vcFakeSha = Get-Sha256 $vcFake
+$msCert = [pscustomobject]@{ Subject = 'CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US' }
+$valid = { param($p) [pscustomobject]@{ Status = 'Valid'; SignerCertificate = $msCert } }
+$ok = Test-VcRuntimeInstaller -Path $vcFake -ExpectedSha256 $vcFakeSha -SignatureReader $valid
+Check ($ok.ok -and $ok.status -eq 'Valid' -and $ok.signer -match 'Microsoft Corporation') 'the right bytes with a valid Microsoft signature are accepted'
+$badHash = Test-VcRuntimeInstaller -Path $vcFake -ExpectedSha256 ('0' * 64) -SignatureReader $valid
+Check (-not $badHash.ok -and $badHash.problem -match 'SHA256 of .* is ') 'negative control: another SHA-256 is refused, and the signature is not even read'
+$badSig = Test-VcRuntimeInstaller -Path $vcFake -ExpectedSha256 $vcFakeSha -SignatureReader { param($p) [pscustomobject]@{ Status = 'HashMismatch'; SignerCertificate = $msCert } }
+Check (-not $badSig.ok -and $badSig.problem -match 'signature of .* is not valid \(status HashMismatch\)') 'negative control: a signature that is not Valid is refused'
+$unsigned = Test-VcRuntimeInstaller -Path $vcFake -ExpectedSha256 $vcFakeSha -SignatureReader { param($p) [pscustomobject]@{ Status = 'NotSigned'; SignerCertificate = $null } }
+Check (-not $unsigned.ok -and $unsigned.problem -match 'status NotSigned') 'negative control: an unsigned file is refused'
+$otherSigner = Test-VcRuntimeInstaller -Path $vcFake -ExpectedSha256 $vcFakeSha -SignatureReader { param($p) [pscustomobject]@{ Status = 'Valid'; SignerCertificate = [pscustomobject]@{ Subject = 'CN=Somebody Else, O=Somebody Else' } } }
+Check (-not $otherSigner.ok -and $otherSigner.problem -match 'not signed by Microsoft Corporation') 'negative control: a valid signature of another signer is refused'
+$nearSigner = Test-VcRuntimeInstaller -Path $vcFake -ExpectedSha256 $vcFakeSha -SignatureReader { param($p) [pscustomobject]@{ Status = 'Valid'; SignerCertificate = [pscustomobject]@{ Subject = 'CN=Microsoft Corporation Of Nowhere, O=Nowhere' } } }
+Check (-not $nearSigner.ok) 'negative control: a signer name that only starts with the expected one is refused'
+$absent = Test-VcRuntimeInstaller -Path (Join-Path $vcWork 'nothing-here.exe')
+Check (-not $absent.ok -and $absent.problem -match 'does not carry') 'a package without the Microsoft installer is refused'
+# The real file of this workspace, when it is there: the pinned SHA-256 and Windows' own signature reading.
+$vcReal = @((Join-Path (Split-Path (Split-Path $Installer)) $script:VcRuntimePackagePath), 'P:\BC-250\toolchain\vc-runtime\14.44.35211\vc_redist.x64.exe') | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+if ($vcReal) {
+    $real = Test-VcRuntimeInstaller -Path $vcReal
+    Check ($real.ok) "the Microsoft installer in hand passes the pinned SHA-256 and Windows' signature reading ($vcReal, $($real.status), $($real.signer))"
+    Check ((Get-Item -LiteralPath $vcReal).Length -eq $script:VcRuntimeSize) "its size is the pinned $($script:VcRuntimeSize) bytes"
+} else { Check $true 'the Microsoft installer is not in this checkout: the pinned-hash case is covered by the package test' }
+
+# What each exit code of Microsoft's installer means.
+Check ((Get-VcRuntimeOutcome 0).ok -and -not (Get-VcRuntimeOutcome 0).restart) 'exit 0: installed'
+Check ((Get-VcRuntimeOutcome 1638).ok -and -not (Get-VcRuntimeOutcome 1638).restart -and (Get-VcRuntimeOutcome 1638).message -match 'newer') 'exit 1638: a newer runtime is there'
+Check ((Get-VcRuntimeOutcome 3010).ok -and (Get-VcRuntimeOutcome 3010).restart) 'exit 3010: installed, restart wanted'
+Check ((Get-VcRuntimeOutcome 1641).ok -and (Get-VcRuntimeOutcome 1641).restart) 'exit 1641: installed, restart wanted'
+foreach ($code in 1603, 1618, 5, -1073741819) {
+    $out = Get-VcRuntimeOutcome $code
+    Check (-not $out.ok -and -not $out.restart -and $out.message -match "code $code") "negative control: exit $code is a failure, and the message names the code"
+}
+# The runner, with the codes handed in: the arguments Microsoft documents, and the outcome of each code.
+$seen = $null
+$run0 = Invoke-VcRuntimeInstall -Path $vcFake -Runner { param($p, $a) $script:seen = @($a); 0 }
+Check ($run0.ok -and $run0.code -eq 0 -and (($seen -join ' ') -eq '/install /quiet /norestart')) "the install runs Microsoft's installer with /install /quiet /norestart"
+Check ((Invoke-VcRuntimeInstall -Path $vcFake -Runner { param($p, $a) 1638 }).ok) 'the install accepts 1638'
+Check ((Invoke-VcRuntimeInstall -Path $vcFake -Runner { param($p, $a) 3010 }).restart) 'the install folds 3010 into the restart it makes anyway'
+$run1603 = Invoke-VcRuntimeInstall -Path $vcFake -Runner { param($p, $a) 1603 }
+Check (-not $run1603.ok -and $run1603.message -match 'code 1603') 'negative control: exit 1603 fails the step with a plain message'
+# 1638 with a file still missing from System32: the runtime is registered and its files are not, so the same program
+# runs once more with /repair before the installation gives up.
+$seenRepair = $null
+$runRepair = Invoke-VcRuntimeInstall -Path $vcFake -Arguments $script:VcRuntimeRepairArguments -Runner { param($p, $a) $script:seenRepair = @($a); 0 }
+Check ($runRepair.ok -and (($seenRepair -join ' ') -eq '/repair /quiet /norestart')) "the repair run uses Microsoft's /repair /quiet /norestart"
+Check ((Invoke-VcRuntimeInstall -Path $vcFake -Arguments $script:VcRuntimeRepairArguments -Runner { param($p, $a) 1603 }).ok -eq $false) 'negative control: a repair that fails is a failure too'
+Check ($installText -match "(?s)vcRun\.code -eq 1638.{0,600}VcRuntimeRepairArguments") 'phase 2 repairs the registered runtime when 1638 left System32 without it'
+Check ($installText -match 'Repair the Microsoft Visual C\+\+ 2015-2022 Redistributable \(x64\) in Windows Settings') 'the message of a runtime that is still not there asks for a repair, not for the install that just refused'
+Check ($installText -notmatch "but the runtime is still not in place[^\r\n]*Install the Microsoft Visual C\+\+ 2015-2022 Redistributable \(x64\) yourself") 'the self-contradicting remedy is gone from that message'
+# The host-test reading of System32, so a dry run can walk the step on a PC that already has the runtime. It is a
+# dry run only: a real install always reads System32.
+$script:DryRunMode = $true
+try {
+    $env:AMDGPU_WDDM_TEST_VCRUNTIME = 'missing'
+    $vcFaked = Get-VcRuntimeState
+    Check ($vcFaked.install -and $vcFaked.missing.Count -eq 3) 'a dry run can read System32 as a PC without the runtime'
+    $env:AMDGPU_WDDM_TEST_VCRUNTIME = 'old'
+    $vcFakedOld = Get-VcRuntimeState
+    Check ($vcFakedOld.install -and $vcFakedOld.old.Count -eq 3) 'and as a PC whose runtime is older than 14.44'
+    $env:AMDGPU_WDDM_TEST_VCRUNTIME = 'ok'
+    Check (-not (Get-VcRuntimeState).install) 'and as a PC that has it'
+    $script:DryRunMode = $false
+    $env:AMDGPU_WDDM_TEST_VCRUNTIME = 'missing'
+    $vcReadReal = Get-VcRuntimeState
+    Check ($vcReadReal.detail -eq (Get-VcRuntimeDecision -Readings @{
+        'vcruntime140.dll' = (Get-FileVersionNumbers (Join-Path $env:windir 'System32\vcruntime140.dll'))
+        'vcruntime140_1.dll' = (Get-FileVersionNumbers (Join-Path $env:windir 'System32\vcruntime140_1.dll'))
+        'msvcp140.dll' = (Get-FileVersionNumbers (Join-Path $env:windir 'System32\msvcp140.dll')) }).detail) 'negative control: a run that is not a dry run ignores the host-test reading'
+} finally { Remove-Item Env:\AMDGPU_WDDM_TEST_VCRUNTIME -ErrorAction SilentlyContinue; $script:DryRunMode = $false }
+# One real run through the bounded runner, so the plumbing from exit code to outcome is exercised for real.
+$realRun = Invoke-NativeBounded -File $env:ComSpec -Arguments @('/c', 'exit', '1603') -TimeoutSeconds 60
+Check (-not $realRun.timed_out -and (Get-VcRuntimeOutcome $realRun.code).message -match 'code 1603') 'a program that ends with 1603 reaches the same outcome through Invoke-NativeBounded'
+
+# The engine's own side: the preflight no longer refuses a PC without the runtime, and phase 2 installs it before
+# any file of ours is copied.
+$installText = [IO.File]::ReadAllText((Join-Path $Installer 'install.ps1'))
+Check ($installText -notmatch "Add-Check 'Visual C\+\+ runtime' 'fail'[^\r\n]*'vcruntime\.missing'") 'the preflight does not refuse a PC whose runtime is missing'
+Check ($installText -match "Add-Check 'Visual C\+\+ runtime' 'warn'[^\r\n]*'vcruntime\.missing'") 'a missing runtime is a line that needs attention, not a refusal'
+Check ($installText -match "'vcruntime\.no-installer'") 'the one refusal left is a package that does not carry the Microsoft installer'
+Check ($installText -match 'Invoke-VcRuntimeInstall -Path \$vcExe') 'phase 2 runs the Microsoft installer'
+$vcStep = [regex]::Match($installText, "(?s)Enter-Stage 'install' 'Phase 2: install'.{0,2400}")
+Check ($vcStep.Success -and $vcStep.Value -match 'Invoke-VcRuntimeInstall' -and $vcStep.Value -match 'Test-VcRuntimeInstaller') 'the runtime step is the first of phase 2 and checks the file again before it runs it'
+Check ($installText.IndexOf('Invoke-VcRuntimeInstall') -lt $installText.IndexOf("Enter-Stage 'files' 'Files'")) 'the runtime is installed before our own files are copied'
+# What the old refusal left behind is gone: one reader of the three files, and no value that nothing reads.
+Check (-not (Get-Command Get-VcRuntimeMissing -ErrorAction SilentlyContinue)) 'the reader of the old refusal is gone from common.ps1'
+Check ($installText -notmatch 'VcRuntimeNeeded') 'the preflight keeps no value about the runtime that nothing reads'
+
+'the shortcuts of the control application: Start menu and desktop, both by default (owner, 2026-10-12)'
+$scAll = @(Get-ControlShortcutPaths)
+Check ($scAll.Count -eq 3) "three shortcuts the installer knows ($($scAll.Count))"
+Check ((@($scAll | Where-Object { $_.where -eq 'Start menu' }).Count -eq 2) -and (@($scAll | Where-Object { $_.where -eq 'desktop' }).Count -eq 1)) 'two in the Start menu (the application and its recovery view), one on the desktop'
+Check (@($scAll | Where-Object { $_.kind -eq 'recovery' })[0].where -eq 'Start menu') 'the recovery entry stays in the Start menu only'
+Check (@($scAll | Where-Object { $_.kind -eq 'recovery' })[0].arguments -eq '--recovery') 'the recovery entry carries its own argument'
+Check (@($scAll | Where-Object { $_.where -eq 'desktop' })[0].path -match '[\\/]Desktop[\\/]amdgpu-wddm Control\.lnk$') "the desktop icon goes to the desktop of every user ($(@($scAll | Where-Object { $_.where -eq 'desktop' })[0].path))"
+Check (@($scAll | ForEach-Object { $_.path } | Select-Object -Unique).Count -eq 3) 'the three paths differ'
+# The name a line prints. The log and the dry run print the label alone: "$where $kind" read "desktop desktop icon"
+# for the third row, which is the one line of this step a tester sees most often.
+Check (@($scAll | Where-Object { $_.label }).Count -eq 3) 'every shortcut carries the name a person reads'
+Check (@($scAll | ForEach-Object { $_.label } | Select-Object -Unique).Count -eq 3) 'the three names differ'
+foreach ($sc in $scAll) {
+    $words = @([string]$sc.label -split '\s+')
+    Check ((@($words | Select-Object -Unique).Count -eq $words.Count)) "the name '$($sc.label)' says no word twice"
+}
+Check ((@($scAll | ForEach-Object { $_.label }) -join ', ') -eq 'Start menu entry, Start menu repair entry, desktop icon') "the summary line of the install reads '$((@($scAll | ForEach-Object { $_.label }) -join ', '))'"
+$scBoth = @(Get-ControlShortcutPlan -NoStartMenu $false -NoDesktop $false)
+Check ($scBoth.Count -eq 3) 'by default the install writes all three'
+$scNoDesk = @(Get-ControlShortcutPlan -NoStartMenu $false -NoDesktop $true)
+Check ($scNoDesk.Count -eq 2 -and -not (@($scNoDesk | Where-Object { $_.where -eq 'desktop' }).Count)) '-NoDesktopShortcut leaves the desktop icon out and keeps the Start menu'
+$scNoMenu = @(Get-ControlShortcutPlan -NoStartMenu $true -NoDesktop $false)
+Check ($scNoMenu.Count -eq 1 -and @($scNoMenu)[0].where -eq 'desktop') '-NoStartMenuShortcut leaves both Start menu entries out and keeps the desktop icon'
+Check (@(Get-ControlShortcutPlan -NoStartMenu $true -NoDesktop $true).Count -eq 0) 'both switches together write no shortcut at all'
+# A shortcut really written, read back, and removed again: the target, the arguments and the icon.
+$scWork = Join-Path $work 'shortcuts'
+[void][IO.Directory]::CreateDirectory($scWork)
+$scTarget = Join-Path $scWork 'amdgpu_wddm_control.exe'
+Write-Text $scTarget 'not a real program'
+$scLink = Join-Path $scWork 'sub\amdgpu-wddm Control (recovery).lnk'
+[void](New-ControlShortcut -Link $scLink -Target $scTarget -Arguments '--recovery')
+$scRead = (New-Object -ComObject WScript.Shell).CreateShortcut($scLink)
+Check ($scRead.TargetPath -eq $scTarget) 'a written shortcut points at the control application'
+Check ($scRead.Arguments -eq '--recovery') 'it carries the arguments it was given'
+Check ($scRead.IconLocation -like "$scTarget,0*") "it takes its icon from the application ($($scRead.IconLocation))"
+Check ($scRead.WorkingDirectory -eq $scWork) 'its working directory is the application folder'
+# The engine's own side: both switches survive a restart, the install writes by the plan, the uninstall removes all three.
+$installText = [IO.File]::ReadAllText((Join-Path $Installer 'install.ps1'))
+$uninstallText = [IO.File]::ReadAllText((Join-Path $Installer 'uninstall.ps1'))
+foreach ($switch in 'NoStartMenuShortcut', 'NoDesktopShortcut') {
+    Check ($script:InstallSwitches -contains $switch) "-$switch is an install switch the state keeps over a restart"
+    Check ($installText -match "\[switch\]\`$$switch") "install.ps1 takes -$switch"
+}
+Check ($installText -match 'Get-ControlShortcutPlan -NoStartMenu \(\[bool\]\$NoStartMenuShortcut\) -NoDesktop \(\[bool\]\$NoDesktopShortcut\)') 'the install writes the shortcuts of the plan'
+Check ($installText -match 'New-ControlShortcut -Link \$link -Target \$controlExe') 'it writes them through the one writer'
+Check ($installText -notmatch '\$\(\$_\.where\) \$\(\$_\.kind\)') 'no line joins the place and the kind into "desktop desktop icon" again'
+Check ($installText -match 'shortcuts: \$\(if \(\$shortcutPlan\.Count\) \{ @\(\$shortcutPlan \| ForEach-Object \{ \$_\.label \}\)') 'the summary line prints the name of each shortcut'
+Check ($installText -notmatch "Join-Path \`$env:ProgramData 'Microsoft\\\\Windows\\\\Start Menu") 'no second place in install.ps1 builds a shortcut path of its own'
+Check ($uninstallText -match 'foreach \(\$sc in @\(Get-ControlShortcutPaths\)\)') 'the uninstall removes every shortcut the install can write'
+Check ($uninstallText -notmatch "amdgpu-wddm Control \(recovery\)\.lnk'") 'the uninstall names no shortcut of its own any more'
+# The switches an install carries over the restart that follows it.
+$scState = [pscustomobject]@{ phase = 'testsigning-pending'; package_version = '1.0'; install_switches = @('NoDesktopShortcut') }
+$scInputs = Get-InstallInputs -Bound @{} -State $scState -PackageVersion '1.0'
+Check (@($scInputs.switches) -contains 'NoDesktopShortcut') 'the run after the restart leaves the desktop icon out again'
+# The window states both answers (InstallFlow.ShortcutArguments), so a later run of the same install can put back a
+# shortcut the first run left out: the positive switch clears the saved negative one.
+$scInputs2 = Get-InstallInputs -Bound @{ NoStartMenuShortcut = $true; DesktopShortcut = $true } -State $scState -PackageVersion '1.0'
+Check ((@($scInputs2.switches) -contains 'NoStartMenuShortcut') -and -not (@($scInputs2.switches) -contains 'NoDesktopShortcut')) 'a switch on the command line decides over the saved one'
+$scInputs3 = Get-InstallInputs -Bound @{ StartMenuShortcut = $true; DesktopShortcut = $true } -State $scState -PackageVersion '1.0'
+Check (-not (@($scInputs3.switches) -contains 'NoDesktopShortcut')) 'both places asked for again puts the desktop icon back'
+foreach ($pair in @(@('NoStartMenuShortcut', 'StartMenuShortcut'), @('NoDesktopShortcut', 'DesktopShortcut'))) {
+    $bad = $null
+    try { [void](Get-InstallInputs -Bound @{ $pair[0] = $true; $pair[1] = $true } -State $scState -PackageVersion '1.0') }
+    catch { $bad = $_.Exception.Message }
+    Check ($bad -and $bad -match "-$($pair[0]) and -$($pair[1]) cannot be used together") "-$($pair[0]) with -$($pair[1]) is a usage error ($bad)"
+}
+foreach ($switch in 'StartMenuShortcut', 'DesktopShortcut') {
+    Check ($installText -match "\[switch\]\`$$switch") "install.ps1 takes -$switch"
+    Check (-not ($script:InstallSwitches -contains $switch)) "-$switch is not saved itself: it only clears the saved No switch"
+}
+Check ($installText -match '\$NoStartMenuShortcut = \[switch\]\(@\(\$installInputs\.switches\)') 'the install reads the shortcut answers back from the state'
+
+'which Windows this driver is made for: n-2, and a line instead of a refusal (owner, 2026-10-11 and 2026-10-12)'
+# Get-WindowsSupportFindings is pure, so every version, channel and edition is tested here and none of them needs a
+# PC of its own. The severities are the whole contract: only 'fail' refuses the install.
+function Get-WinIds($Findings) { return @(@($Findings) | ForEach-Object { $_.id }) }
+function Get-WinSeverity($Findings, [string]$Id) { return [string](@(@($Findings) | Where-Object { $_.id -eq $Id })[0].severity) }
+# The supported versions: 23H2, 24H2, 25H2, and a general build after them.
+foreach ($b in 22631, 26100, 26200, 26500) {
+    $w = Get-WindowsSupportFindings -Build $b -Caption 'Microsoft Windows 11 Pro'
+    Check ((Get-WinIds $w.findings) -join ',' -eq 'windows.ok') "build $b is supported ($((Get-WinIds $w.findings) -join ','))"
+    Check ($w.standing -eq 'supported') "build $b stands as supported"
+}
+# A Windows 11 below 23H2: one line that names the supported versions and advises an update, and the install goes on.
+foreach ($b in 22000, 22621, 22630) {
+    $w = Get-WindowsSupportFindings -Build $b -Caption 'Microsoft Windows 11 Pro' -DisplayVersion '22H2'
+    Check ((Get-WinIds $w.findings) -join ',' -eq 'windows.below-supported') "build $b is a line, not a refusal ($((Get-WinIds $w.findings) -join ','))"
+    Check ((Get-WinSeverity $w.findings 'windows.below-supported') -eq 'warn') "build ${b}: the line needs attention and refuses nothing"
+    $d = [string]@($w.findings)[0].detail
+    Check ($d -match '23H2' -and $d -match '24H2' -and $d -match '25H2') "build ${b}: the line names the supported versions ($d)"
+    Check ($d -match '22631' -and $d -match '26100' -and $d -match '26200') "build ${b}: the line names their build numbers"
+    Check ($d -match 'Update Windows') "build ${b}: the line advises an update"
+    Check ($d -match '22H2') "build ${b}: the detail names the version this PC has"
+}
+# Windows 10 and older: the refusal that was there before stays as it is.
+foreach ($b in 19045, 21999) {
+    $w = Get-WindowsSupportFindings -Build $b -Caption 'Microsoft Windows 10 Pro'
+    Check ((Get-WinIds $w.findings) -join ',' -eq 'windows.too-old') "build $b is refused ($((Get-WinIds $w.findings) -join ','))"
+    Check ((Get-WinSeverity $w.findings 'windows.too-old') -eq 'fail') "build ${b}: the refusal is a failed check"
+}
+$w32 = Get-WindowsSupportFindings -Build 26100 -Caption 'Microsoft Windows 11 Pro' -Is64Bit $false
+Check ((Get-WinIds $w32.findings) -join ',' -eq 'windows.not-x64') '32-bit Windows is refused and gets no second line'
+Check ((Get-WinSeverity $w32.findings 'windows.not-x64') -eq 'fail') 'the 32-bit refusal is a failed check'
+# An Insider build: a PC in the Insider programme that runs a build of its own, or a build number Microsoft has not
+# released at all.
+$wIns = Get-WindowsSupportFindings -Build 27891 -Caption 'Microsoft Windows 11 Pro' -SelfHostBranch 'Dev'
+Check ((Get-WinIds $wIns.findings) -join ',' -eq 'windows.ok,windows.insider') "an Insider channel adds one line ($((Get-WinIds $wIns.findings) -join ','))"
+Check ((Get-WinSeverity $wIns.findings 'windows.insider') -eq 'warn') 'the Insider line refuses nothing'
+Check ([string](@($wIns.findings | Where-Object { $_.id -eq 'windows.insider' })[0].detail) -match 'Dev') 'the Insider line names the channel'
+$wCan = Get-WindowsSupportFindings -Build 27891 -Caption 'Microsoft Windows 11 Pro'
+Check ((Get-WinIds $wCan.findings) -contains 'windows.insider') 'a build at or above 27000 is an Insider build'
+# The channel alone is not the signal: a PC enrolled in the Insider programme (Release Preview above all) that runs
+# one of the three supported builds runs exactly what this driver is tested on, and reads nothing about Insider.
+foreach ($b in 22631, 26100, 26200) {
+    foreach ($branch in 'ReleasePreview', 'RP', 'Beta') {
+        $wRp = Get-WindowsSupportFindings -Build $b -Caption 'Microsoft Windows 11 Pro' -SelfHostBranch $branch
+        Check ((Get-WinIds $wRp.findings) -join ',' -eq 'windows.ok') "$branch on the supported build $b adds no line ($((Get-WinIds $wRp.findings) -join ','))"
+    }
+}
+# The same enrolment on a build that is not one of them keeps the line.
+$wRpOld = Get-WindowsSupportFindings -Build 22621 -Caption 'Microsoft Windows 11 Pro' -SelfHostBranch 'ReleasePreview'
+Check ((Get-WinIds $wRpOld.findings) -join ',' -eq 'windows.below-supported,windows.insider') "an enrolled PC on build 22621 reads both lines ($((Get-WinIds $wRpOld.findings) -join ','))"
+# Negative control: 26300 is a build a tester had (BD-125), not an Insider build, and no line is added for it.
+$w26300 = Get-WindowsSupportFindings -Build 26300 -Caption 'Microsoft Windows 11 Pro'
+Check ((Get-WinIds $w26300.findings) -join ',' -eq 'windows.ok') "build 26300 adds no line ($((Get-WinIds $w26300.findings) -join ','))"
+# The LTSC editions: not tested, and that is all.
+foreach ($ed in 'EnterpriseS', 'IoTEnterpriseS') {
+    $w = Get-WindowsSupportFindings -Build 26100 -Caption 'Microsoft Windows 11 Enterprise LTSC' -EditionId $ed
+    Check ((Get-WinIds $w.findings) -join ',' -eq 'windows.ok,windows.ltsc') "$ed adds one line ($((Get-WinIds $w.findings) -join ','))"
+    Check ((Get-WinSeverity $w.findings 'windows.ltsc') -eq 'warn') "$ed refuses nothing"
+    Check ([string](@($w.findings | Where-Object { $_.id -eq 'windows.ltsc' })[0].detail) -match $ed) "the $ed line names the edition"
+}
+# Negative controls: the ordinary editions add no line of their own.
+foreach ($ed in 'Professional', 'Enterprise', 'Core', 'IoTEnterprise') {
+    $w = Get-WindowsSupportFindings -Build 26100 -Caption 'Microsoft Windows 11' -EditionId $ed
+    Check ((Get-WinIds $w.findings) -join ',' -eq 'windows.ok') "edition $ed adds no line ($((Get-WinIds $w.findings) -join ','))"
+}
+# A refused Windows gets the refusal alone: nothing is going to be installed there.
+$wOld = Get-WindowsSupportFindings -Build 19045 -Caption 'Microsoft Windows 10 Enterprise LTSC' -EditionId 'EnterpriseS' -SelfHostBranch 'Beta'
+Check ((Get-WinIds $wOld.findings) -join ',' -eq 'windows.too-old') "an old Windows is refused once ($((Get-WinIds $wOld.findings) -join ','))"
+# Both lines at once, on one PC: the Install button is not held back by either.
+$wBoth = Get-WindowsSupportFindings -Build 22621 -Caption 'Microsoft Windows 11 Enterprise LTSC' -EditionId 'EnterpriseS' -SelfHostBranch 'Beta'
+Check ((Get-WinIds $wBoth.findings) -join ',' -eq 'windows.below-supported,windows.insider,windows.ltsc') "three lines together ($((Get-WinIds $wBoth.findings) -join ','))"
+Check (@(@($wBoth.findings) | Where-Object { $_.severity -eq 'fail' }).Count -eq 0) 'none of the three lines refuses the install'
+# The running PC reads the same way (this PC is a supported or a newer Windows).
+$wHere = Get-WindowsSupportState
+Check ($wHere -and $wHere.build -gt 0) "the running PC reads its own standing: $($wHere.standing), build $($wHere.build)"
+Check (@(@($wHere.findings) | Where-Object { $_.severity -eq 'fail' }).Count -eq 0) 'this PC is not refused by the policy'
+# install.ps1's side: the ids, and no refusal for the three information lines.
+foreach ($id in 'windows.below-supported', 'windows.insider', 'windows.ltsc') {
+    Check ($installText -match "Add-Check '[^']+' 'warn' \`$f\.detail '$([regex]::Escape($id))'") "the preflight states $id as a line that needs attention"
+    Check ($installText -notmatch "'fail'[^\r\n]*'$([regex]::Escape($id))'") "the preflight does not refuse $id"
+}
+foreach ($id in 'windows.not-x64', 'windows.too-old') {
+    Check ($installText -match "Add-Check 'Windows' 'fail' \`$f\.detail '$([regex]::Escape($id))'") "the preflight still refuses $id"
+}
+# A finding id the preflight's list does not know keeps its own severity: a line that refuses the install must not
+# read as a passed check because the list was not extended with it.
+$winDefault = [regex]::Match($installText, "(?s)default \{\s*\r?\n\s*if \(\[string\]\`$f\.severity -eq 'fail'\).{0,400}?\n\s*\}")
+Check ($winDefault.Success -and $winDefault.Value -match "Add-Check 'Windows' 'fail'" -and $winDefault.Value -match "Add-Check 'Windows' 'warn'") 'an unknown Windows finding keeps its severity in the preflight'
+Check ($installText -notmatch "default \{ Add-Check 'Windows' 'ok' \`$f\.detail 'windows\.ok' \}") 'nothing turns an unknown Windows finding into a passed check'
+Check ($installText -match '\$win = Get-WindowsSupportState -Os \$os') 'the preflight asks the one place that decides'
+Check ($installText -notmatch '\$build -lt 22000') 'no version rule is left in install.ps1 itself'
+
+'the installer and the uninstaller ask nothing (owner, 2026-10-12)'
+# The function that asked is gone from the engine, so a new question cannot be added by calling it, and no script of
+# the installer calls one.
+$common = [IO.File]::ReadAllText((Join-Path $Installer 'common.ps1'))
+Check ($common -notmatch 'function Read-Confirmation') 'the engine has no function that asks the user a question'
+foreach ($name in 'install.ps1', 'uninstall.ps1', 'common.ps1', 'components.ps1', 'prepare-offline.ps1', 'system-tuning.ps1') {
+    $text = [IO.File]::ReadAllText((Join-Path $Installer $name))
+    Check ($text -notmatch '(?m)^[^#]*Read-Confirmation') "$name asks no question"
+}
+# The two scripts a person starts: neither stops for an answer. (components.ps1 still offers the console install its
+# list of extras and models, with a default on Enter: that is a choice between good outcomes, not a permission.)
+foreach ($name in 'install.ps1', 'uninstall.ps1') {
+    $text = [IO.File]::ReadAllText((Join-Path $Installer $name))
+    Check ($text -notmatch '(?m)^[^#]*Read-Host') "$name reads no answer from the console"
+}
+$uninstall = [IO.File]::ReadAllText((Join-Path $Installer 'uninstall.ps1'))
+Check ($uninstall -match 'Wait-RestartCountdown -Seconds \$script:RestartCountdownSeconds') 'the uninstaller restarts after the same visible countdown as the installer'
+Check ($uninstall -match '-KeepTestSigning') 'test signing goes off again by itself, and a switch leaves it on'
+Check ($uninstall -match "Join-Path \`$dataRoot 'setup'") 'the uninstaller removes what a single-file setup unpacked'
 
 Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 if ($fail) { "$fail check(s) failed"; exit 1 }

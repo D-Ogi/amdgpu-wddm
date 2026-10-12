@@ -466,6 +466,10 @@ function Get-InstallLocation([string]$PackagePath) {
         '^payload/wow64/(\w+)/' { return "<InstallDir>\wow64\$($Matches[1])\$leaf" }
         '^payload/firmware/' { return "C:\BC250\firmware\$leaf" }
         '^payload/cert/' { return 'LocalMachine Root and TrustedPublisher' }
+        # The Microsoft Visual C++ runtime installer runs from the package and is never copied anywhere: the files it
+        # installs are Microsoft's own, in System32, under Microsoft's version rules. install.ps1 copies the payload
+        # directories it names in $dirs, and redist is not one of them.
+        '^payload/redist/' { return 'run from the package (Microsoft installs its own files in System32)' }
         '^payload/(.+)$' { return ('<InstallDir>\' + $Matches[1].Replace('/', '\')) }
     }
     return $null
@@ -646,3 +650,14 @@ if (-not $cv.ok) { throw "compatibility record does not verify: $($cv.detail)" }
 Compress-Archive -Path $pkgRoot -DestinationPath $zip
 '{0} files under files\ plus setup.exe, package {1}' -f $files.Count, $pkgRoot
 'zip {0} SHA256 {1}' -f $zip, (Get-FileHash -LiteralPath $zip).Hash
+
+# The single-file installer, beside the zip (owner, 2026-10-12: "dlaczego setup.exe nie zawiera zipa w sobie? to
+# lepsza metoda!"): one exe that carries this whole release inside it, for a tester who would rather download one
+# file than unpack an archive. The zip stays: it is the same release, and a tester who already has it changes
+# nothing. make-setup-exe.ps1 -Check is the gate - it reads the exe back and compares every file of the payload with
+# the file of this package, byte for byte, and -ReleaseZip compares it with the entries of the zip written above, so an exe
+# whose payload is not the files of this release's archive cannot be published.
+$setupOne = Join-Path $Out "amdgpu-wddm-setup-$Version.exe"
+& (Join-Path $PSScriptRoot 'make-setup-exe.ps1') -PackageTop $pkgRoot -Out $setupOne -Check -ReleaseZip $zip | ForEach-Object { "  $_" }
+if (-not (Test-Path -LiteralPath $setupOne -PathType Leaf)) { throw "make-setup-exe.ps1 wrote no $setupOne" }
+'single exe {0} SHA256 {1}' -f $setupOne, (Get-FileHash -LiteralPath $setupOne).Hash

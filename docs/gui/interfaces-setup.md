@@ -21,15 +21,81 @@ The window starts `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy By
 | `-EventsFile <path>` | events, appended (section 2) |
 | `-ResultFile <path>` | the terminal result, written once (section 3); a stale file is deleted at the start |
 | `-Plan` | checks and the decision only; changes nothing |
-| `-AcceptTestSigning`, `-BitLocker HaveKey\|Suspend` | the user's consents, given only after the window asked |
+| `-AcceptTestSigning`, `-BitLocker HaveKey\|Suspend` | passed by every run the window starts, and accepted from a script. The window asks nobody for them (owner, 2026-10-12) |
+| `-StartMenuShortcut\|-NoStartMenuShortcut`, `-DesktopShortcut\|-NoDesktopShortcut` | the two places of the shortcut, one pair each. The window passes the switch of an answer it has. A run with no answer of its own passes neither switch, so the answer the first run saved stands. The continuation after a restart is such a run. |
 | `-Repair`, `-FirmwareDir <dir>`, `-Verify` | as on the command line |
 | `-DeadlineUtc <ISO 8601 UTC>` | stop at the first stop point after this time (section 10) |
 | `-HoldWindow` | command line only (the RunOnce continuation, section 4): wait for Enter before the console window closes; ignored with `-Gui` |
 
+**Nothing is asked of the user** (owner, 2026-10-12: "Przestan wymagac potwierdzen od uzytkownika!"). The plan
+screen carries no permission control, and its Install button is never off. Pressing it is
+the decision. The boxes it does carry are choices between good outcomes, each with a default that needs no
+attention: the optional Windows tuning and the two places of the shortcut. `InstallFlow.PlanOptionIds`
+names them, and G-CONSENT refuses every other control. Every run the window starts therefore carries `-AcceptTestSigning`, and `-BitLocker Suspend` when
+BitLocker protects the system volume, so an engine of an older repair set asks nothing either. `src\InstallFlow.cs`
+holds those rules, the information lines of the plan screen and the ids no string table may carry again. The
+render gate G-CONSENT refuses a screen that grows a permission control or a disabled primary action. A restart
+happens by itself after a visible 15-second countdown, in the window and on the console. "Restart now" and "Later"
+are offered, and neither is required. Every preflight refusal that protects the machine is unchanged.
+
+**The Microsoft Visual C++ runtime comes with the package** (owner, 2026-10-12: "powinien byc auto-installer!!!").
+The driver's programs are built against the Microsoft Visual C++ 2015-2022 runtime (x64). The package carries
+Microsoft's own installer as `payload\redist\vc_redist.x64.exe`. The preflight check `vcruntime` reads the file
+versions of `vcruntime140.dll`, `vcruntime140_1.dll` and `msvcp140.dll` in `System32` and asks for the install when
+one is missing or older than 14.44 (`Get-VcRuntimeDecision` / `Get-VcRuntimeState` in `installer\common.ps1`). That
+check is `warn`, not `fail`: the plan screen states the step as information (`plan.change.vcruntime`), and the first
+step of phase 2 runs the file after checking its SHA-256 and a Valid Authenticode signature by Microsoft Corporation
+(`Test-VcRuntimeInstaller`). Exit 0 and 1638 are a success, 3010 and 1641 are a success whose restart this install
+makes anyway, and any other code stops the install with the code in the message (`Get-VcRuntimeOutcome`). A dry run
+prints the step and runs nothing. The one refusal left is `vcruntime.no-installer`: the runtime has to be installed
+and the package does not carry Microsoft's installer, or carries a changed copy of it. The window treats that id
+like a damaged package - a new try in the same session cannot fix it.
+
+**Which Windows the driver is made for.** The policy is the owner's n-2 of 2026-10-11: Windows 11 23H2 (22631),
+24H2 (26100), 25H2 (26200) and the general builds after them. `Get-WindowsSupportFindings` in
+`installer\common.ps1` holds it, and `Get-WindowsSupportState` reads the running PC for it. Windows 10 and older
+(below build 22000) and a 32-bit Windows are refused, as before (`windows.too-old`, `windows.not-x64`). A Windows
+11 below 22631 is one line that names the supported versions and advises an update
+(`windows.below-supported`), and the installation continues (owner, 2026-10-12: "tylko warning, nie blokada"). An
+Insider build adds `windows.insider`. The channel comes from
+`HKLM\SOFTWARE\Microsoft\WindowsSelfHost\Applicability`. A PC in the Insider programme gets that line on a build
+outside the three tested ones. Any build at or above 27000 gets it as well. A PC enrolled on one of the three
+tested builds, as Release Preview can be, runs the version this driver is tested on and reads no such line. An LTSC edition, by `EditionID` `EnterpriseS` or `IoTEnterpriseS`, adds
+`windows.ltsc`. All three are `warn`: information on the plan screen, no question and no checkbox. A refused
+Windows gets its refusal alone.
+
+**Where to find the application afterwards** (owner, 2026-10-12: "pytajmy tez czy zrobic skrot na pulpicie
+(domyslnie i menu start i pulpit)"). The plan screen has a card with two boxes, the Start menu and the desktop,
+both on. Neither holds the Install button back. A box opens on the answer the decision event reports
+(`start_menu_shortcut`, `desktop_shortcut`). Both are on where the engine reports neither. A run with no answer
+passes neither switch. The window states each answer it has on the command line
+(`InstallFlow.ShortcutArguments`), the engine writes the shortcuts of that plan and removes a shortcut an earlier
+install wrote in a place this one leaves out, and the uninstall removes every one of them. `interfaces.md` section
+4 lists the three shortcuts. The render gate G-SHORTCUT refuses an install plan screen without the two boxes, a box
+that is off when the screen opens and a box that is not a system option control.
+
+**The window may carry the package inside itself.** A release ships `amdgpu-wddm-setup-<version>.exe`: the same
+window with the package appended after the end of its program image (`src\Payload.cs`,
+`tools\release\make-setup-exe.ps1`). Started with no `files\` folder beside it, it unpacks the release to
+`%ProgramData%\amdgpu-wddm\setup\<version>\` - administrators and SYSTEM only, not inherited - checks every file
+against the embedded list before anything uses it, and runs the install from there, including the continuation
+after each restart. Its parent, the shared `%ProgramData%\amdgpu-wddm`, keeps the access rules it inherits (a
+strict list on it refused every uninstall of 0.7.216.100-tester.28, BD-129) and is checked as a location instead: a
+regular folder, no link, and an owner of SYSTEM, Administrators, TrustedInstaller or the account running setup.
+Anything else ends the run with a message, because the owner of that folder could put another folder where the
+checked files stand. One unpacking runs at a time (a `Global\` mutex): a second copy of the same file says setup is
+already running, instead of resetting the folder the first one installs from. The folder goes when the run ends,
+also after a failure, and stays only while a restart is pending. The window that ends the install removes it by
+version name, because the phase after a restart runs from the continuation closure and carries no payload of its
+own. `uninstall.ps1` removes what an interrupted run left there. With a `files\` folder beside it, or with
+`--package <dir>`, the exe uses that folder and behaves exactly as the `setup.exe` of the unpacked zip.
+
 `prepare-offline.ps1 -Destination <dir> [-FirmwareDir <dir>]` takes the same `-Gui`, `-InvocationId`, `-EventsFile`,
 `-ResultFile` and `-DeadlineUtc`. The command-line installer (`install.cmd` without `-Gui`) keeps its behaviour, except that its
-restart is now a planned one: it asks "Restart now?" and then calls `ExitWindowsEx(EWX_REBOOT)` with a planned
-reason, never `Restart-Computer -Force` (C17). `uninstall.cmd` does the same.
+restart is now a planned one that starts by itself after the same visible countdown and then calls
+`ExitWindowsEx(EWX_REBOOT)` with a planned reason, never `Restart-Computer -Force` (C17). `uninstall.cmd` does the
+same, and asks nothing either: `Read-Confirmation` is gone from the engine, so no script of the installer can ask
+for a typed answer, and `test-engine-units.ps1` holds that.
 
 Cancel: the window creates `<EventsFile>.cancel`. The engine looks for it only at a safe point (`cancel` events say
 when one is open) and then ends with outcome `cancelled`. One mutating engine runs at a time: a real run holds
@@ -50,7 +116,7 @@ One JSON object per line, UTF-8 without BOM, appended; the reader takes complete
 | `start` | `mode` (plan, dry-run, run, verify, prepare-offline), `gui`, `dry_run`, `package`, `contract`, `phase`, `deadline_utc`, `job` (`kill-on-close`, or `none: <reason>`) | first |
 | `stage` | `id`, `text` | a stage begins: `preflight`, `test-signing`, `install`, `firmware`, `files`, `driver`, `settings`, `finish`, `verify`; prepare-offline: `prepare-check`, `firmware`, `components`, `copy`, `finish`. Two more come from a package that carries `installer/components.json`. `extras` asks the questions, after the preflight and before any change. `components` installs the chosen extras, after `settings`. A run that can choose no extra opens neither, which is every run with `-Gui` and no `-Components` |
 | `check` | `id` (`<area>.<finding>`, for example `gpu.missing`, `firmware.folder-bad`), `result` (ok, warn, fail), `name`, `detail` | each preflight check |
-| `decision` | `action` (install, upgrade, resume, repair, verify, already), `installed_version`, `package_version`, `phase`, `consents` (test-signing, bitlocker), `consents_given`, `restarts` (0, 1, 2), `firmware_source` (download, folder, package-folder), `firmware_dir`, `notes` (release-notes files in the package), `secure_boot`, `bitlocker`, `compatibility` (`ok`, `reasons`) | once, before any change |
+| `decision` | `action` (install, upgrade, resume, repair, verify, already), `installed_version`, `package_version`, `phase`, `consents` (always empty: nothing is asked of the user), `consents_given`, `restarts` (0, 1, 2), `firmware_source` (download, folder, package-folder), `firmware_dir`, `notes` (release-notes files in the package), `secure_boot`, `bitlocker`, `compatibility` (`ok`, `reasons`), `system_tuning`, `start_menu_shortcut`, `desktop_shortcut` (the two shortcut answers this run would act on: its own command line, or the answer an earlier run of the same install saved) | once, before any change |
 | `settings-plan` | `summary` (`kept`, `updated`, `added`, `unchanged`, `command`, `reopened`, `driver_closed`), `rows` [`group`, `name`, `decision` (set, same, update, kept, command, reopened, driver-closed), `current`, `value`, `default`, `present`, `closure` (the driver's own act in plain words, null when there is none: BD-069)] | after the decision, before the first `step` (WU-006, WU-044) |
 | `cancel` | `available`, `where` | a safe point opens or closes |
 | `deadline` | `passed`, `where`, `deadline_utc`, `action` (`finishing`) | the deadline has passed inside a part that cannot stop; the run stops at the next stop point (section 10) |
@@ -102,7 +168,7 @@ the exit code alone is never the outcome.
 | verified | 0 | result.verified, result.verified-with-warnings |
 | refused | 2 | result.preflight-refused (`failed_checks`), result.preflight-error, result.needs-admin, result.package-damaged, result.firmware-folder-bad, result.firmware-unreachable, result.prepare-destination, result.install-unfinished |
 | refused | 9 | result.busy |
-| needs-consent | 4 | result.needs-consent (`consents_needed`) |
+| needs-consent | 4 | result.needs-consent (`consents_needed`). No run can reach it any more (2026-10-12), and `consents_needed` is always empty |
 | verify-failed | 3 | result.verify-failed |
 | failed | 5, 6 | result.testsigning-not-active, result.step-failed (`step` names it) |
 | cancelled | 8 | result.cancelled, result.cancelled-after-changes (`stop.by` cancel), result.deadline, result.deadline-after-changes (`stop.by` deadline) |
@@ -245,7 +311,9 @@ never show a window:
 
 Strings: `strings.<lang>.txt` (`en`, `pl`, `ja`, `ko`) embedded in the exe, the control app's format
 (`id|status|hash8|text`, status `mt`, `mt-safe` or `rev`, hash of the English text a line translates; English is
-the source; `stamp.ps1` refreshes the hashes). The window's language is the control app's choice
+the source; `stamp.ps1` refreshes the hashes). Every Polish line of both apps carries `rev`: a Polish speaker
+read them all against one terminology, where one English term keeps one Polish word in the installer and in the
+control app (2026-10-12). The window's language is the control app's choice
 (`HKCU\Software\amdgpu-wddm\Control`, read only), else the Windows display language, else English; the title bar
 switches it. The tip panel follows the control app's guide setting: the guide character and her tip in a speech
 bubble with her, the same tip text with a plain title without her.
@@ -334,7 +402,7 @@ Stop points, where the engine acts on 1 and 2 (the cancel file is read only ther
 
 | Run | Stop points | Parts that do not stop (finished first) |
 |---|---|---|
-| plan, dry run, verify (`install.ps1 -Plan`, `-DryRun`, `-Verify`) | every stage boundary, plus `before-changes`, `after-staging`, `before-driver-install` | none; verify's wait for the start-confirm task (up to 120 s) also ends at the deadline |
+| plan, dry run, verify (`install.ps1 -Plan`, `-DryRun`, `-Verify`) | every stage boundary, plus `before-changes`, `after-staging`, `before-driver-install` | none. Verify's wait for the start-confirm task (up to 120 s) also ends at the deadline. A device that already reports a problem code is not waited for at all |
 | install, repair, upgrade (real run) | `before-changes` (after preflight and the decision), `after-staging` (restore point and BitLocker done, closure staged, before test signing), `before-driver-install` (phase 1 done, before files, driver package and settings) | phase 1 from `after-staging` to its restart (test signing, the state, RunOnce); phase 2 from `before-driver-install` to the end (files, `pnputil`, settings, task, finish) |
 | prepare-offline | every stage boundary before `finish`, `before-copy`, `after-copy` (each removes `<destination>.partial`) | `finish` (the rename) |
 

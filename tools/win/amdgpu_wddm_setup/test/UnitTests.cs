@@ -39,6 +39,9 @@ static class UnitTests
             Prepared();
             Guide();
             Arguments();
+            SmallScreens();
+            NoConfirmations(repo);
+            SingleFile();
             LocaleContracts();
             Quoting();
             NativeLayout();
@@ -126,6 +129,11 @@ static class UnitTests
         Equal(2, r.Decision.Consents.Length, "model: consents");
         Equal("package-folder", r.Decision.FirmwareSource, "model: firmware source");
         Check(r.Decision.CompatibilityOk, "model: compatibility");
+        Check(r.Decision.StartMenuShortcut && r.Decision.DesktopShortcut, "model: an engine that says nothing about the shortcuts means both of them");
+        var shRun = new EngineRun(Id);
+        shRun.Apply(Ev(1, "start", "\"mode\":\"run\",\"gui\":true,\"dry_run\":false,\"package\":\"P\",\"contract\":\"" + EngineRun.Contract + "\",\"phase\":null"));
+        shRun.Apply(Ev(2, "decision", "\"action\":\"resume\",\"start_menu_shortcut\":true,\"desktop_shortcut\":false"));
+        Check(shRun.Decision.StartMenuShortcut && !shRun.Decision.DesktopShortcut, "model: the decision carries the two shortcut answers of this run");
         Check(!r.CancelAvailable, "model: cancel withdrawn");
         Check(r.MayHaveChanged && r.InstallActionSeen && r.RealSteps == 1, "model: the install action and the real step count");
         Equal(3, r.Ignored, "model: other run, other schema and broken line ignored");
@@ -393,6 +401,284 @@ static class UnitTests
         a = SetupArgs.Parse(new[] { "--smoke-engine", "p", "o", "--cancel", "--", "-DryRun", "-FirmwareDir", "f" });
         Check(a.Mode == "smoke-engine" && a.Cancel && a.EngineArgs.SequenceEqual(new[] { "-DryRun", "-FirmwareDir", "f" }), "args: --smoke-engine with engine arguments");
         Check(SetupArgs.Parse(new[] { "--", "-Force" }).Error != null, "args: engine arguments refused for the window");
+        a = SetupArgs.Parse(new[] { "--smoke-render", "d", "1", "en", "--work-area", "800x600" });
+        Check(a.WorkWidth == 800 && a.WorkHeight == 600 && a.Error == null, "args: --work-area 800x600");
+        foreach (var bad in new[] { "800", "800x", "x600", "0x600", "800x0", "100x100", "abcxdef", "99999x600" })
+            Check(SetupArgs.Parse(new[] { "--smoke-render", "d", "1", "en", "--work-area", bad }).Error != null, "args: --work-area refuses " + bad);
+        Check(SetupArgs.Parse(new[] { "--repair", "--work-area", "800x600" }).Error != null, "args: --work-area only with --smoke-render");
+    }
+
+    // The owner's rule of 2026-10-12: on a 1024x768 or 800x600 working area, and on every smaller one, the guide
+    // character and the whole right-hand panel she sits in do not show (GitHub #38: on the tester's 800x600 screen the
+    // panel covered the text of the screen). The screen comes in through the rule's arguments, so these cases never
+    // read the screen this test runs on; the window's own side of it is a render finding (--smoke-render G-SMALL, at
+    // the same five working areas).
+    static void SmallScreens()
+    {
+        foreach (var c in new[] {
+                new { W = 800, H = 600, Small = true },
+                new { W = 1024, H = 768, Small = true },
+                new { W = 1280, H = 720, Small = true },       // 720 high: under the 768 of the rule
+                new { W = 1366, H = 768, Small = true },       // exactly 768 high
+                new { W = 1920, H = 1080, Small = false },
+                new { W = 640, H = 480, Small = true },
+                new { W = 1024, H = 1200, Small = true },      // exactly 1024 wide
+                new { W = 1025, H = 769, Small = false } })    // one pixel over the rule in both directions
+            Check(SmallScreen.Is(c.W, c.H) == c.Small, "small screen: " + c.W + "x" + c.H + " is " + (c.Small ? "small" : "not small"));
+        Check(!SmallScreen.Is(0, 0) && !SmallScreen.Is(-1, 600) && !SmallScreen.Is(800, 0),
+            "small screen: a working area that is not known is not small, so the panel stays where it was");
+        // Logical units, not device pixels: the same monitor is a small screen at a large text size.
+        Check(!SmallScreen.IsDevice(1920, 1032, 1f), "small screen: 1920x1032 at 100 % is not small");
+        Check(SmallScreen.IsDevice(1920, 1032, 1.5f), "small screen: 1920x1032 at 150 % is 1280x688 logical, which is small");
+        Check(SmallScreen.IsDevice(1600, 1200, 2f), "small screen: 1600x1200 at 200 % is 800x600 logical, which is small");
+        Check(SmallScreen.IsDevice(2048, 1536, 2f), "small screen: 2048x1536 at 200 % is 1024x768 logical, which is small");
+        Check(!SmallScreen.IsDevice(2100, 1600, 2f), "small screen: 2100x1600 at 200 % is 1050x800 logical, which is not small");
+        Check(!SmallScreen.IsDevice(1920, 1080, 0f), "small screen: a scale that is not known decides nothing");
+        Equal(1024, SmallScreen.MaxWidth, "small screen: the width of the rule the owner gave");
+        Equal(768, SmallScreen.MaxHeight, "small screen: the height of the rule the owner gave");
+    }
+
+    // The owner's instruction of 2026-10-12: the installer asks the user for nothing. No test-mode check box, no
+    // BitLocker option buttons, no Install button that waits for an answer, and no "type YES" on the command line.
+    // Pressing Install is the consent. These cases hold the rules of InstallFlow.cs, the words of the four tables,
+    // and the absence of the words the removed controls used. The window's own side of it is a render finding
+    // (--smoke-render G-CONSENT), and the engine's side is tools/release/test-engine-units.ps1.
+    static void NoConfirmations(string repo)
+    {
+        // Every run carries the switches that used to carry the answers, so an older engine asks nothing either.
+        Check(InstallFlow.ConsentArguments(null).SequenceEqual(new[] { "-AcceptTestSigning" }),
+            "no confirmations: a PC without BitLocker protection installs with the test-signing switch alone");
+        foreach (var state in new[] { "off", "suspended", "unknown", "", null })
+            Check(!InstallFlow.ConsentArguments(state).Contains("-BitLocker"),
+                "no confirmations: BitLocker state '" + (state ?? "null") + "' is not suspended");
+        Check(InstallFlow.ConsentArguments("on").SequenceEqual(new[] { "-AcceptTestSigning", "-BitLocker", "Suspend" }),
+            "no confirmations: protection that is on is suspended for the restarts, without being asked about");
+        Check(InstallFlow.SuspendBitLocker("on") && !InstallFlow.SuspendBitLocker("unknown") && !InstallFlow.SuspendBitLocker("off"),
+            "no confirmations: only a state that was read and says on is suspendable");
+        // What the plan screen states instead of asking.
+        Check(InstallFlow.PlanChangeIds(true, "off").SequenceEqual(new[] { "plan.change.test-mode" }),
+            "no confirmations: the plan states the test mode change");
+        Check(InstallFlow.PlanChangeIds(true, "on").SequenceEqual(new[] { "plan.change.test-mode", "plan.change.bitlocker" }),
+            "no confirmations: the plan states the BitLocker pause as information");
+        Check(InstallFlow.PlanChangeIds(true, "unknown").SequenceEqual(new[] { "plan.change.test-mode", "plan.change.bitlocker.unknown" }),
+            "no confirmations: a state that could not be read is one information line, not a question");
+        Check(InstallFlow.PlanChangeIds(false, "on").SequenceEqual(new[] { "plan.change.test-mode.on" }),
+            "no confirmations: test mode already on says so and nothing about the start options");
+        foreach (var on in new[] { true, false })
+            foreach (var state in new[] { "off", "on", "unknown", "suspended", null })
+                foreach (var vc in new[] { true, false })
+                    foreach (var id in InstallFlow.PlanChangeIds(on, state, vc))
+                        Check(Strings.Has(id), "no confirmations: " + id + " has words");
+        // The Microsoft Visual C++ runtime (owner, 2026-10-12): the plan states that the install brings it, and
+        // says nothing when the PC already has it. It is the last line either way, after the start options.
+        Check(InstallFlow.PlanChangeIds(true, "off", true).SequenceEqual(new[] { "plan.change.test-mode", "plan.change.vcruntime" }),
+            "runtime: the plan states that setup installs the Microsoft runtime");
+        Check(InstallFlow.PlanChangeIds(false, "off", true).SequenceEqual(new[] { "plan.change.test-mode.on", "plan.change.vcruntime" }),
+            "runtime: the line also shows when test mode is already on");
+        Check(InstallFlow.PlanChangeIds(true, "on", true).SequenceEqual(new[] { "plan.change.test-mode", "plan.change.bitlocker", "plan.change.vcruntime" }),
+            "runtime: the runtime line comes after the start options");
+        Check(!InstallFlow.PlanChangeIds(true, "off", false).Contains("plan.change.vcruntime") && !InstallFlow.PlanChangeIds(false, "off").Contains("plan.change.vcruntime"),
+            "runtime: a PC that has the runtime reads no line about it");
+        // The shortcuts of the control application (owner, 2026-10-12): both on, and the switches only leave one out.
+        Check(InstallFlow.ShortcutArguments(true, true).SequenceEqual(new[] { "-StartMenuShortcut", "-DesktopShortcut" }), "shortcuts: both places, the default, stated on the command line");
+        Check(InstallFlow.ShortcutArguments(false, true).SequenceEqual(new[] { "-NoStartMenuShortcut", "-DesktopShortcut" }), "shortcuts: no Start menu entry");
+        Check(InstallFlow.ShortcutArguments(true, false).SequenceEqual(new[] { "-StartMenuShortcut", "-NoDesktopShortcut" }), "shortcuts: no desktop icon");
+        Check(InstallFlow.ShortcutArguments(false, false).SequenceEqual(new[] { "-NoStartMenuShortcut", "-NoDesktopShortcut" }), "shortcuts: neither place");
+        // An answer nobody stated passes no switch, so the engine keeps the answer of the first run of this install.
+        // The run that continues an install after a restart is exactly this case: it has no screen and no answer.
+        Check(InstallFlow.ShortcutArguments(null, null).Length == 0, "shortcuts: an answer nobody stated passes no switch");
+        Check(InstallFlow.ShortcutArguments(null, false).SequenceEqual(new[] { "-NoDesktopShortcut" }), "shortcuts: one answer stated passes one switch");
+        Check(InstallFlow.ShortcutArguments(true, null).SequenceEqual(new[] { "-StartMenuShortcut" }), "shortcuts: the other answer alone passes its own switch");
+        var cont = SetupArgs.Parse(new[] { "--continue" });
+        Check(cont.Mode == "continue" && InstallFlow.ShortcutArguments(cont.StartMenuShortcut, cont.DesktopShortcut).Length == 0,
+            "shortcuts: the run that continues after a restart states no answer, so a desktop icon turned off stays off");
+        var contNo = SetupArgs.Parse(new[] { "--continue", "--no-desktop-shortcut" });
+        Check(InstallFlow.ShortcutArguments(contNo.StartMenuShortcut, contNo.DesktopShortcut).SequenceEqual(new[] { "-NoDesktopShortcut" }),
+            "shortcuts: a continuation started with the switch still states it");
+        foreach (var id in InstallFlow.PlanOptionIds) Check(Strings.Has(id), "shortcuts: the plan option " + id + " has words");
+        foreach (var id in new[] { "shortcuts.title", "shortcuts.note" }) Check(Strings.Has(id), "shortcuts: " + id + " has words");
+        foreach (var id in InstallFlow.PlanOptionsOnByDefault) Check(InstallFlow.PlanOptionIds.Contains(id), "shortcuts: " + id + " is one of the plan options");
+        Check(!InstallFlow.PlanOptionsOnByDefault.Contains("tuning.opt-in"), "shortcuts: the optional Windows tuning stays off by default");
+        // The window's own switches, so a scripted run can preset the two options.
+        Check(!SetupArgs.Parse(new string[0]).StartMenuShortcut.HasValue && !SetupArgs.Parse(new string[0]).DesktopShortcut.HasValue,
+            "shortcuts: a window started with no argument states no answer and offers both");
+        Check(SetupArgs.Parse(new[] { "--no-start-menu-shortcut" }).StartMenuShortcut == false && !SetupArgs.Parse(new[] { "--no-start-menu-shortcut" }).DesktopShortcut.HasValue,
+            "shortcuts: --no-start-menu-shortcut turns one option off and leaves the other alone");
+        Check(SetupArgs.Parse(new[] { "--no-desktop-shortcut" }).DesktopShortcut == false, "shortcuts: --no-desktop-shortcut turns the desktop option off");
+        Check(SetupArgs.Parse(new[] { "--start-menu-shortcut", "--desktop-shortcut" }).StartMenuShortcut == true && SetupArgs.Parse(new[] { "--start-menu-shortcut", "--desktop-shortcut" }).DesktopShortcut == true,
+            "shortcuts: the positive switches state the answer explicitly");
+        Check(SetupArgs.Parse(new[] { "--no-desktop-shortcut" }).Error == null, "shortcuts: the switch is accepted by the welcome mode");
+        // The window keeps the two answers as "not stated yet" until a switch or the plan screen states one: a plain
+        // bool would be true again in the run that continues the install, which would put back a shortcut that was
+        // turned off.
+        var formSource = File.ReadAllText(Path.Combine(repo, "tools", "win", "amdgpu_wddm_setup", "src", "SetupForm.cs"));
+        Check(Regex.IsMatch(formSource, @"bool\?\s+_startMenuShortcut,\s*_desktopShortcut;"), "shortcuts: the window holds both answers as \"not stated yet\" until one is given");
+        Check(Regex.IsMatch(formSource, @"_startMenuShortcut\s*\?\?\s*\(d == null \|\| d\.StartMenuShortcut\)") &&
+              Regex.IsMatch(formSource, @"_desktopShortcut\s*\?\?\s*\(d == null \|\| d\.DesktopShortcut\)"),
+            "shortcuts: the boxes open on the answer the engine reports, both on where it reports none");
+        // The words of the removed controls are gone from every table, so neither can come back by itself.
+        foreach (var id in InstallFlow.RemovedConsentIds)
+            Check(!Strings.Has(id), "no confirmations: " + id + " is gone from the string tables");
+        // The countdown of the restart screen: 15 s, one sentence with the seconds in it, in all four languages.
+        Equal(15, InstallFlow.RestartCountdownSeconds, "no confirmations: the countdown the owner asked for");
+        foreach (var lang in Strings.Languages)
+        {
+            Equal("0", Strings.Placeholders(Strings.In(lang, "restart.countdown")), "no confirmations: " + lang + " restart.countdown names the seconds");
+            Check(Strings.In(lang, "restart.countdown.over").Trim().Length > 0, "no confirmations: " + lang + " says when the countdown is over");
+            // The line is drawn with every number down to 1, so the unit cannot be a plural form: "in 1 seconds"
+            // was on the last second of every English countdown. The short unit reads right at any number.
+            Check(!Strings.In(lang, "restart.countdown").Contains("seconds"),
+                "no confirmations: " + lang + " restart.countdown says the unit in a form that fits the last second");
+        }
+        // The restart screen keeps both offers, and neither is required: the countdown ends in a restart by itself.
+        foreach (var id in new[] { "restart.now", "restart.later", "restart.countdown", "restart.countdown.over" })
+            Check(Strings.Has(id), "no confirmations: the restart screen keeps " + id);
+    }
+
+    // The single-file installer (owner, 2026-10-12: "dlaczego setup.exe nie zawiera zipa w sobie?"). The reader's
+    // own end-to-end run is --smoke-payload, driven by tools/release/test-setup-exe.ps1 with a packed exe and with
+    // a damaged one; these cases hold the parts a test can hold without a package: the file list, the paths it is
+    // allowed to name, and the permission list of the folder the package is unpacked into.
+    static void SingleFile()
+    {
+        Equal(120, Payload.TrailerSize, "single file: the trailer is 120 bytes");
+        Equal(16, Payload.Magic.Length, "single file: the magic is 16 bytes");
+        Equal("files", Payload.FilesDir, "single file: the package sits in files\\ beside setup.exe");
+        // A file with no trailer, and a file too short to hold one: no payload, no exception.
+        var tmp = Path.Combine(Path.GetTempPath(), "amdgpu-wddm-setup-tests");
+        Directory.CreateDirectory(tmp);
+        var plain = Path.Combine(tmp, "plain.bin");
+        File.WriteAllBytes(plain, new byte[500]);
+        Check(Payload.ReadHead(plain) == null, "single file: a file without the trailer carries no package");
+        var tiny = Path.Combine(tmp, "tiny.bin");
+        File.WriteAllBytes(tiny, new byte[8]);
+        Check(Payload.ReadHead(tiny) == null, "single file: a file shorter than a trailer carries no package");
+        Check(Payload.ReadHead(Path.Combine(tmp, "absent.bin")) == null, "single file: a file that is not there carries no package");
+        // The file list.
+        string version;
+        var list = Payload.ParseList("version\t1.2.3\nfile\t" + new string('A', 64) + "\t7\tsetup.exe\n"
+            + "file\t" + new string('B', 64) + "\t9\tfiles/installer/install.ps1\n", out version);
+        Equal("1.2.3", version, "single file: the list names the release");
+        Equal(2, list.Count, "single file: the list holds both files");
+        Equal(@"files\installer\install.ps1", list[1].Path, "single file: a path of the list uses the separator of this system");
+        foreach (var bad in new[] {
+                "file\t" + new string('A', 64) + "\t7\tsetup.exe\n",                      // no version
+                "version\t1.2.3\n",                                                        // no file
+                "version\t1.2.3\nfile\t" + new string('A', 63) + "\t7\tsetup.exe\n",     // hash too short
+                "version\t1.2.3\nfile\t" + new string('A', 64) + "\tx\tsetup.exe\n",     // size not a number
+                "version\t1.2.3\nfile\t" + new string('A', 64) + "\t-1\tsetup.exe\n",    // negative size
+                "version\t1.2.3\nfile\t" + new string('A', 64) + "\t7\t..\\evil.exe\n",  // outside the folder
+                "version\t1.2.3\nsomething\telse\n" })                                    // a line this version does not know
+        {
+            string v;
+            bool refused = false;
+            try { Payload.ParseList(bad, out v); } catch (InvalidDataException) { refused = true; }
+            Check(refused, "single file: the list is refused: " + bad.Replace("\n", " / ").Replace("\t", " "));
+        }
+        // The paths a payload may name. A zip entry's name decides where a file is written, so this is the rule
+        // that keeps a doctored package inside its own folder.
+        foreach (var ok in new[] { "setup.exe", @"files\manifest.json", @"files\installer\install.ps1" })
+            Check(Payload.SafeRelative(ok), "single file: " + ok + " is a path inside the folder");
+        foreach (var bad in new[] { "", @"\setup.exe", @"C:\setup.exe", @"..\setup.exe", @"files\..\..\x.exe",
+                @"files\\x.exe", @"files\.\x.exe", "x:y" })
+            Check(!Payload.SafeRelative(bad), "single file: " + (bad.Length == 0 ? "(empty)" : bad) + " is refused");
+        // The permission list of the unpacked folder: administrators and SYSTEM may do anything, Users may read and
+        // run and nothing more, nobody else is on it, and it is not inherited from %ProgramData% (where a standard
+        // user may create folders). The files run elevated after the restarts of the install.
+        var rules = Payload.Access.Rules();
+        Check(rules.AreAccessRulesProtected, "single file: the folder does not inherit permissions");
+        var aces = rules.GetAccessRules(true, false, typeof(System.Security.Principal.SecurityIdentifier))
+            .Cast<System.Security.AccessControl.FileSystemAccessRule>().ToList();
+        Equal(3, aces.Count, "single file: three entries on the folder");
+        foreach (var ace in aces)
+        {
+            var sid = (System.Security.Principal.SecurityIdentifier)ace.IdentityReference;
+            Check(ace.AccessControlType == System.Security.AccessControl.AccessControlType.Allow, "single file: no deny entry is needed");
+            Check(ace.InheritanceFlags == (System.Security.AccessControl.InheritanceFlags.ObjectInherit | System.Security.AccessControl.InheritanceFlags.ContainerInherit),
+                "single file: the entry reaches the files inside");
+            bool admins = sid.IsWellKnown(System.Security.Principal.WellKnownSidType.BuiltinAdministratorsSid);
+            bool system = sid.IsWellKnown(System.Security.Principal.WellKnownSidType.LocalSystemSid);
+            bool users = sid.IsWellKnown(System.Security.Principal.WellKnownSidType.BuiltinUsersSid);
+            Check(admins || system || users, "single file: only administrators, SYSTEM and Users are on the list");
+            if (admins || system) Check(ace.FileSystemRights.HasFlag(System.Security.AccessControl.FileSystemRights.FullControl), "single file: full control for " + (admins ? "administrators" : "SYSTEM"));
+            if (users)
+            {
+                // Windows adds Synchronize to every allow entry of its own; what matters is that nothing else is in it.
+                var granted = ace.FileSystemRights & ~System.Security.AccessControl.FileSystemRights.Synchronize;
+                Check(granted == System.Security.AccessControl.FileSystemRights.ReadAndExecute, "single file: Users may read and run, no more (" + granted + ")");
+                foreach (var right in new[] { System.Security.AccessControl.FileSystemRights.WriteData,
+                        System.Security.AccessControl.FileSystemRights.AppendData,
+                        System.Security.AccessControl.FileSystemRights.CreateFiles,
+                        System.Security.AccessControl.FileSystemRights.Delete,
+                        System.Security.AccessControl.FileSystemRights.WriteAttributes })
+                    Check(!ace.FileSystemRights.HasFlag(right), "single file: Users may not " + right);
+            }
+        }
+        // Cleanup removes the version folder of the setup root and refuses anything else, whatever it is asked.
+        foreach (var outside in new[] { null, "", @"C:\Windows\System32", Path.Combine(Path.GetTempPath(), "x"), Payload.Root })
+            Payload.Cleanup(outside);
+        Check(Directory.Exists(Path.GetTempPath()), "single file: Cleanup leaves a folder outside its own root alone");
+        var fake = Path.Combine(Payload.Root, "0.0.0-unit-test");
+        var inside = Path.Combine(fake, Payload.FilesDir);
+        bool removed;
+        try
+        {
+            Directory.CreateDirectory(inside);
+            File.WriteAllText(Path.Combine(inside, "manifest.json"), "{}");
+            Payload.Cleanup(inside);
+            removed = !Directory.Exists(fake);
+        }
+        catch (UnauthorizedAccessException) { removed = true; }   // a test that may not write there proves the rest
+        catch (IOException) { removed = true; }
+        Check(removed, "single file: Cleanup removes the version folder it unpacked");
+        // The same removal by version name, which is what the window that finishes an install after the restart has
+        // in its hand (the folder was unpacked by a window that is long gone). Anything that is not a plain version
+        // name is left alone.
+        foreach (var outside in new[] { null, "", ".", "..", @"..\..\Windows", @"x\y", "C:", @"C:\Windows" })
+            Payload.CleanupVersion(outside);
+        Check(Directory.Exists(Path.GetTempPath()), "single file: CleanupVersion touches nothing outside its own root");
+        try
+        {
+            Directory.CreateDirectory(inside);
+            File.WriteAllText(Path.Combine(inside, "manifest.json"), "{}");
+            Payload.CleanupVersion("0.0.0-unit-test");
+            removed = !Directory.Exists(fake);
+        }
+        catch (UnauthorizedAccessException) { removed = true; }
+        catch (IOException) { removed = true; }
+        Check(removed, "single file: CleanupVersion removes the folder of the version it is given");
+        // Which package a run installs from. A layout the person prepared always wins over the payload.
+        Check(Payload.Carries(true, null, false), "single file: a file with a payload and nothing beside it installs from the payload");
+        Check(!Payload.Carries(false, null, false), "single file: a file without a payload installs from the folder beside it");
+        Check(!Payload.Carries(true, null, true), "single file: a release folder beside the exe wins over the payload");
+        foreach (var named in new[] { @"D:\amdgpu-wddm-offline", @"D:\empty" })
+        {
+            Check(!Payload.Carries(true, named, false), "single file: --package " + named + " wins over the payload");
+            Check(!Payload.Carries(true, named, true), "single file: --package " + named + " wins over both");
+        }
+        // One unpacking at a time, for the whole computer: a second copy of the same file would reset the folder the
+        // first one installs from.
+        Check(Payload.RunMutexName.StartsWith(@"Global\"), "single file: the run is held against every session, not only this one");
+        // The accounts a folder on the way to the unpacked package may belong to.
+        var owners = Payload.Access.TrustedOwners();
+        foreach (var sid in new[] { "S-1-5-18", "S-1-5-32-544" })
+            Check(owners.Contains(sid), "single file: " + sid + " may own the setup folder");
+        Check(owners.Any(s => s.StartsWith("S-1-5-80-")), "single file: TrustedInstaller may own the setup folder");
+        Check(owners.Contains(System.Security.Principal.WindowsIdentity.GetCurrent().User.Value),
+            "single file: the account that runs setup may own the setup folder");
+        // A folder that is not there, and one that is: the first is refused, the second is accepted because this
+        // account owns it. A folder of somebody else cannot be made in a unit test, and the refusal of one is the
+        // same code path as the refusal below.
+        var missing = Path.Combine(tmp, "not-there");
+        bool refusedMissing = false;
+        try { Payload.Access.AssertLocation(missing); } catch (Payload.FolderException) { refusedMissing = true; }
+        Check(refusedMissing, "single file: a setup folder that is not a folder is refused");
+        var ours = Path.Combine(tmp, "ours");
+        Directory.CreateDirectory(ours);
+        bool accepted = true;
+        try { Payload.Access.AssertLocation(ours); } catch (Payload.FolderException) { accepted = false; }
+        Check(accepted, "single file: a setup folder this account owns is accepted");
+        try { Directory.Delete(tmp, true); } catch (Exception) { }
     }
 
     static void LocaleContracts()

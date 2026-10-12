@@ -8,13 +8,21 @@ Use this package only on a BC-250. The installer stops on every other computer a
 
 ## What you need
 
-- An ASRock BC-250 with Windows 11 x64 (build 22000 or later) installed and working on Microsoft Basic Display
-  Adapter.
+- An ASRock BC-250 with Windows 11 x64 installed and working on Microsoft Basic Display Adapter. The driver is
+  tested on Windows 11 23H2 (build 22631), 24H2 (build 26100) and 25H2 (build 26200), and on the general builds
+  after them. An older Windows 11 (build 22000 to 22630) gets a line that advises an update, and the installation
+  continues. An Insider build (Canary, Dev or Beta) and an LTSC edition each get a line of the same kind. A PC in the
+  Insider programme that runs one of the three tested builds reads no such line. Windows 10 and older are refused.
 - A local account with administrator rights.
 - Secure Boot off. The stock BC-250 BIOS has no Secure Boot option, so it is already off (see "Secure Boot" below).
-- If BitLocker is on: your BitLocker recovery key, or permission to suspend BitLocker for two restarts.
-- The Microsoft Visual C++ 2015-2022 Redistributable (x64). If it is missing, the installer stops and tells you.
-  Get it from Microsoft: https://aka.ms/vs/17/release/vc_redist.x64.exe (download it on any computer and copy it to the BC-250).
+- If BitLocker is on: your BitLocker recovery key, in case something goes wrong. The installer pauses BitLocker
+  by itself for the restarts it needs and tells you that it did.
+- Nothing to install first. The driver's programs need the Microsoft Visual C++ 2015-2022 Redistributable (x64),
+  and the package carries Microsoft's own installer for it. The installer runs it when this PC has no
+  `vcruntime140.dll`, `vcruntime140_1.dll` or `msvcp140.dll` in `System32`, or when one of them is older than
+  14.44. It checks the SHA-256 and the Microsoft signature of that file first, and it needs no internet for this
+  step. Nothing happens when the runtime is already there. If Windows answers that the runtime is registered but a
+  file of it is missing, the installer repairs it with the same file.
 - 2 GB of free space on the system drive.
 - A keyboard and a monitor on the BC-250.
 - An internet connection during the installation: the installer downloads the AMD GPU firmware (see "GPU firmware"
@@ -25,11 +33,15 @@ Use this package only on a BC-250. The installer stops on every other computer a
 1. Make a backup of all data on the BC-250 that you want to keep.
 2. Write down your BitLocker recovery key if BitLocker is on: open a command prompt as administrator and type
    `manage-bde -protectors -get C:`.
-3. Unpack the zip file to a local folder, for example `C:\amdgpu-wddm-tester`. Do not run the installer from the
-   zip file or from a network drive. Unpack the whole zip: the folder it makes holds `setup.exe` and the folder
-   `files`, and `setup.exe` needs `files` next to it. To carry the package to another computer or to a memory
-   stick, copy that whole folder, not the folder `files` alone: the package checks `setup.exe` too, and `files`
-   on its own reports `missing setup.exe`.
+3. Take one of the two downloads of the release:
+   - **One file** - `amdgpu-wddm-setup-<version>.exe`. Copy it to a local folder and double-click it. It carries the
+     whole package inside itself, unpacks it where only administrators may write, checks every file, and installs
+     from there. It removes that folder when the installation is over. Nothing else to do.
+   - **The zip file** - unpack it to a local folder, for example `C:\amdgpu-wddm-tester`. Do not run the installer
+     from the zip file or from a network drive. Unpack the whole zip: the folder it makes holds `setup.exe` and the
+     folder `files`, and `setup.exe` needs `files` next to it. To carry the package to another computer or to a
+     memory stick, copy that whole folder, not the folder `files` alone: the package checks `setup.exe` too, and
+     `files` on its own reports `missing setup.exe`. The command line below needs this download.
 4. Optional: do a dry run first. In the folder `files`, open a command prompt and type `install.cmd -DryRun`.
    The dry run does all checks and shows all changes, but it changes nothing.
 
@@ -65,16 +77,19 @@ The installer does not change BIOS or firmware settings.
 
 The usual way is the setup window:
 
-1. In the unpacked folder, double-click `setup.exe`. It is the only file there. Everything else is in the folder
+1. Double-click `amdgpu-wddm-setup-<version>.exe`, or, in the unpacked folder, `setup.exe`. It is the only file
+   there. Everything else is in the folder
    `files` beside it. The window asks for administrator rights itself: accept the prompt. (`install.cmd` in the
    folder `files`, started with no switch, opens the same window.)
 2. The window checks the computer first. The check changes nothing. Then the window shows the checks that need
    attention, what it will change, the restarts and the release notes.
-3. Give the consents that the window asks for: Windows test mode, and, if BitLocker is on, whether you have the
-   recovery key or whether setup must pause BitLocker for two restarts.
-4. The window installs the driver and shows each stage. Before each restart of Windows it asks "Restart now" or
-   "Later", so you can save your work first. After you log on again, the window starts by itself and continues
-   (accept the administrator prompt).
+3. Press "Install". The window asks you for nothing else. It says what it will change - Windows test mode on,
+   and BitLocker paused for the restarts if BitLocker is on - because you should know it, not because it needs
+   your permission for it: you opened the installer to install the driver, and pressing "Install" is the decision.
+4. The window installs the driver and shows each stage. Before each restart of Windows it counts down 15 seconds
+   and then restarts by itself. Press "Restart now" to go at once, or "Later" to keep the computer running and
+   save your work first. After you log on again, the window starts by itself and continues (accept the
+   administrator prompt).
 5. At the end the window shows the result. On a problem it offers to try again or to repair, and it can save a
    support file for your report.
 
@@ -90,9 +105,10 @@ for example `install.cmd -Console -DryRun`:
    `install.cmd -Console` when you want the console.
 2. Read the preflight table. Every line must show `ok` or `warn`. A `fail` line stops the installer, and the
    installer tells you what to correct. When it stops at preflight, it has changed nothing.
-3. Phase 1: the installer makes a System Restore point (if System Protection is on) and asks for permission to
-   turn on test signing. Type `YES` to continue. If BitLocker is on, the installer asks if you have the recovery key
-   or if it must suspend BitLocker for two restarts.
+3. Phase 1: the installer makes a System Restore point (if System Protection is on), turns on test signing and,
+   if BitLocker is on, pauses BitLocker for the restarts it needs. It asks you nothing: it prints
+   what it changes as it changes it. The restart comes after a 15-second countdown. Press Enter to restart at
+   once, or any other key to restart later yourself.
 4. Let the computer restart. After you log on, the installer starts again by itself (accept the administrator
    prompt). If it does not start, run `install.cmd` again.
 5. Phase 2: the installer downloads the GPU firmware and checks it, then installs the certificate, the driver, the
@@ -170,7 +186,7 @@ Without internet on the BC-250:
 2. Copy them to one folder on the BC-250, for example `C:\amdgpu-wddm-firmware`.
 3. Run `install.cmd -FirmwareDir C:\amdgpu-wddm-firmware`. The installer checks the SHA256 of each file the same
    way and uses the folder also after the restarts during the installation. The same goes for `-DpmMaxMHz`,
-   `-CuMode`, `-NoControlApp` and `-NoReboot`.
+   `-CuMode`, `-NoControlApp`, `-NoStartMenuShortcut`, `-NoDesktopShortcut` and `-NoReboot`.
 
 ## The small blue window after logon
 
@@ -202,16 +218,18 @@ could not open is visible there (`last result 0` the window was shown and closed
 
 | Item | Location |
 |---|---|
-| Test signing | `bcdedit /set '{current}' testsigning on` (only after you type YES) |
+| Test signing | `bcdedit /set '{current}' testsigning on` |
 | Test certificate | LocalMachine Root and TrustedPublisher stores |
+| Microsoft Visual C++ 2015-2022 Redistributable (x64) | installed by Microsoft's own installer from `payload\redist\vc_redist.x64.exe`, only when `System32` has no `vcruntime140.dll`, `vcruntime140_1.dll` or `msvcp140.dll`, or one of them is older than 14.44. Microsoft's files go where Microsoft puts them. `uninstall.cmd` leaves this runtime in place, because other programs use it |
 | Kernel-mode driver | driver package `bc250kmd.inf` (driver store, service `bc250kmd`) |
 | Driver settings | `HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters` |
 | User-mode drivers | `C:\Program Files\amdgpu-wddm\` (`d3d12`, `desktop`, `d3d11`, `vulkan`, `opengl`, `wow64`, `tools`, `control`, `mft`). Nothing goes into `C:\Windows\System32` or `C:\Windows\SysWOW64`. An install over an earlier release removes the `bc250umd.dll` that it put there |
 | H.264 encoder (Media Foundation) | `HKLM\SOFTWARE\Classes\CLSID\{A32438F0-0D79-4CA9-A5BF-9F3C80837253}` with its `InprocServer32`, `HKLM\SOFTWARE\Classes\MediaFoundation\Transforms` (the encoder's own key and its membership in the video encoder category). These keys are for the whole computer. `uninstall.cmd` removes them, and so does a later release that does not install the encoder |
 | Licence texts | `C:\Program Files\amdgpu-wddm\licenses` (the package's `licenses\` and `THIRD-PARTY.md`) |
-| Graphics registration | the GPU's software key: `UserModeDriverName`, `VulkanDriverName`, `OpenGLDriverName`, `OpenGLVersion`, `OpenGLFlags`. For 32-bit applications: `UserModeDriverNameWow` and `VulkanDriverNameWow`. This release writes no `OpenGLDriverNameWow`, `OpenGLVersionWow` or `OpenGLFlagsWow`: it has no 32-bit OpenGL driver (see "What this release does" below). The first entry of each `UserModeDriverName` value, the Direct3D 9 entry, is empty. Also `HKLM\SOFTWARE\Khronos\Vulkan\Drivers` and `HKLM\SOFTWARE\WOW6432Node\Khronos\Vulkan\Drivers`. `uninstall.cmd` puts back an `OpenGL` value from before the install, with the registry type it had. It removes the ones it added, even when the installer state file is gone. An `OpenGL` value that belongs to another driver stays. It does all that whether or not Windows still shows the GPU, because the files the values name go with the install |
+| Graphics registration | the GPU's software key: `UserModeDriverName`, `VulkanDriverName`, `OpenGLDriverName`, `OpenGLVersion`, `OpenGLFlags`. For 32-bit applications: `UserModeDriverNameWow` and `VulkanDriverNameWow`. This release writes no `OpenGLDriverNameWow`, `OpenGLVersionWow` or `OpenGLFlagsWow`: it has no 32-bit OpenGL driver (see "What this release does" below). The first entry of each `UserModeDriverName` value, the Direct3D 9 entry, holds `<>`. Also `HKLM\SOFTWARE\Khronos\Vulkan\Drivers` and `HKLM\SOFTWARE\WOW6432Node\Khronos\Vulkan\Drivers`. `uninstall.cmd` puts back an `OpenGL` value from before the install, with the registry type it had. It removes the ones it added, even when the installer state file is gone. An `OpenGL` value that belongs to another driver stays. It does all that whether or not Windows still shows the GPU, because the files the values name go with the install |
 | Router policy and profiles | `HKLM\SOFTWARE\amdgpu-wddm` |
 | GPU firmware | `C:\BC250\firmware` (8 files and `LICENSE.amdgpu`, downloaded from linux-firmware; see "GPU firmware"). A new folder is writable by administrators only; the access rights of `C:\BC250` itself do not change. Download staging: `C:\ProgramData\amdgpu-wddm\installer\firmware-staging`, removed after the copy |
+| Shortcuts of amdgpu-wddm Control | Start menu and desktop, for all users: "amdgpu-wddm Control", "amdgpu-wddm Control (recovery)" in the Start menu and "amdgpu-wddm Control" on the desktop. Both places are written by default. The setup window has a box for each place. On the command line `-NoStartMenuShortcut` and `-NoDesktopShortcut` leave one out. `-StartMenuShortcut` and `-DesktopShortcut` ask for a place an earlier run left out. The box you clear holds over the restarts of the installation. `uninstall.cmd` removes all three |
 | Start confirmation | two scheduled tasks, both at the logon of any user. "amdgpu-wddm start confirm" runs as the Local System account. "amdgpu-wddm start window" runs as the user who logs on |
 | Installer state and logs | `C:\ProgramData\amdgpu-wddm` (the Control application keeps its setting backups and action log in its `control` folder) |
 
@@ -265,8 +283,8 @@ with all 40 cores. The page `docs/design/cu-mode.md` of the project has the whol
   behaviour of the earlier releases: the CPU route for every program, and the GPU only for the programs in
   `Allow`. Use the Direct3D 12 mode of a game if it has one.
 - Direct3D 9 applications run on the GPU through D3D9On12, the Direct3D 9 layer of Windows on top of our Direct3D 12
-  driver. The installer leaves the Direct3D 9 entry of `UserModeDriverName` empty, and Windows then loads
-  `d3d9on12.dll` by itself.
+  driver. The installer writes `<>` in the Direct3D 9 entry of `UserModeDriverName`, and Windows then loads
+  `d3d9on12.dll` by itself. Windows 11 24H2 and 25H2 do not start a GPU whose Direct3D 9 entry is empty.
 - 32-bit Direct3D 10/11/12 and Vulkan applications use 32-bit builds of the same drivers (folder `wow64`), with the
   same routing rules as 64-bit applications. A 32-bit Vulkan application also needs the 32-bit Vulkan loader of the
   computer, which no release of ours installs (see the two OpenGL entries above). 32-bit Direct3D 9 applications use
@@ -322,13 +340,15 @@ with all 40 cores. The page `docs/design/cu-mode.md` of the project has the whol
 ## Uninstall
 
 1. Run `uninstall.cmd` as administrator (in the package's `files` folder or in `C:\Program Files\amdgpu-wddm`).
-2. Type `YES`. The uninstaller removes the driver, the files, the registry values, the tasks and the certificate.
-   The GPU goes back to Microsoft Basic Display Adapter. The uninstaller keeps `C:\ProgramData\amdgpu-wddm\control`
-   (the Control application's setting backups and action log). Delete it yourself if you do not need it.
-3. If the installer turned on test signing, the uninstaller asks if it must turn it off. Use
-   `uninstall.cmd -DisableTestSigning` or `-KeepTestSigning` to answer in advance.
-4. Restart the computer. If BitLocker is on, have the recovery key ready: changing the boot options again can cause
-   a recovery key prompt.
+2. The uninstaller asks nothing: starting it is the answer. It removes the driver, the files, the registry values,
+   the tasks and the certificate. The GPU goes back to Microsoft Basic Display Adapter. The uninstaller keeps
+   `C:\ProgramData\amdgpu-wddm\control` (the Control application's setting backups and action log). Delete it
+   yourself if you do not need it.
+3. Test signing goes off again where the installer turned it on. `uninstall.cmd -KeepTestSigning` leaves it on, for
+   a tester who installs another build of ours next.
+4. The restart that finishes the removal starts by itself after a 15-second countdown: Enter restarts at once, any
+   other key leaves the restart to you, and `uninstall.cmd -NoReboot` skips it. If BitLocker is on, have the
+   recovery key ready: changing the boot options again can cause a recovery key prompt.
 
 You can also use the System Restore point "amdgpu-wddm before install" if the installer made one.
 

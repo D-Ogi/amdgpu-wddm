@@ -68,11 +68,19 @@ foreach ($f in $wowFiles) {
     $m = Get-PeMachine $f.FullName
     Check ($m -eq 0x14C) ('{0}: x86 (machine 0x{1:X})' -f $f.FullName.Substring($Package.Length + 1), $m)
 }
-foreach ($f in @(Get-ChildItem -LiteralPath (Join-Path $Package 'payload') -Recurse -File | Where-Object { ($_.Extension -in '.dll', '.exe', '.sys') -and ($_.FullName -notmatch '\\payload\\wow64\\') })) {
+# payload\redist holds Microsoft's installer for the Visual C++ runtime, not an image of ours. Microsoft builds that
+# bootstrapper as a 32-bit program, also in the x64 package, so it is exempt from the rule below and checked for what
+# it is instead.
+foreach ($f in @(Get-ChildItem -LiteralPath (Join-Path $Package 'payload') -Recurse -File | Where-Object { ($_.Extension -in '.dll', '.exe', '.sys') -and ($_.FullName -notmatch '\\payload\\(wow64|redist)\\') })) {
     $m = Get-PeMachine $f.FullName
     if ($m -ne 0x8664) { Check $false ('{0}: x64 (machine 0x{1:X})' -f $f.FullName.Substring($Package.Length + 1), $m) }
 }
-Check $true 'every other payload image is x64 (only failures are listed)'
+Check $true 'every other payload image of ours is x64 (only failures are listed)'
+$redist = Join-Path $Package 'payload\redist\vc_redist.x64.exe'
+if (Test-Path -LiteralPath $redist -PathType Leaf) {
+    Check ((Get-PeMachine $redist) -eq 0x14C) "payload\redist\vc_redist.x64.exe is Microsoft's 32-bit bootstrapper, as Microsoft ships it"
+    Check (@(Get-ChildItem -LiteralPath (Join-Path $Package 'payload\redist') -Recurse -File).Count -eq 1) 'payload\redist holds that one file and nothing else of ours'
+} else { Check $true 'this package carries no payload\redist' }
 foreach ($p in @('payload\wow64\desktop\bc250d3d_router.dll')) {
     $x = @(Get-PeExports (Join-Path $Package $p))
     Check ((@('OpenAdapter10', 'OpenAdapter10_2' | Where-Object { $x -notcontains $_ }).Count -eq 0) -and (@($x | Where-Object { $_ -match '@' }).Count -eq 0)) "$p exports OpenAdapter10 and OpenAdapter10_2 undecorated ($($x -join ', '))"

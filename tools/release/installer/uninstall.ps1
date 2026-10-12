@@ -1,7 +1,10 @@
 # amdgpu-wddm tester uninstaller, v0. Run uninstall.cmd as administrator (from the package folder or from the
 # install root). Removes everything install.ps1 added and puts the GPU back on Microsoft Basic Display Adapter.
-# -DryRun prints every change without making it. -DisableTestSigning turns test signing off (asked otherwise when
-# the installer turned it on). A restart finishes the removal of files that DWM still has loaded.
+# -DryRun prints every change without making it. Nothing is asked: running this IS the answer (owner, 2026-10-12),
+# so test signing goes off again where the installer turned it on (-KeepTestSigning leaves it on), the Windows
+# settings of the optional tuning are kept (-RestoreSystemTuning restores them), and the restart that finishes the
+# removal of files DWM still has loaded starts by itself after a visible countdown (-NoReboot leaves it to the user).
+# -Yes is accepted and changes nothing, so scripts written for the older uninstaller keep working.
 # -Force removes the release also from a development-lab machine (as install.ps1 -Force installs on one); the lab's
 # own folders (C:\BC250\m10, m14, m15) are not ours to remove and stay.
 # The extras (llama.cpp, Ollama) go with the install root, and every registration they made is removed. The models
@@ -44,10 +47,16 @@ if ($lab.Count) { Write-Warn2 "a development-lab installation ($($lab -join ', '
 # Inventory must succeed before the first change. A failed read is not an empty driver store.
 try { $pkgs = @(Get-OurDriverPackages) }
 catch { Write-Fail "Driver-store inventory could not be read. No removal was started: $($_.Exception.Message)"; exit 6 }
-if (-not $Yes -and -not (Read-Confirmation -Question 'Remove the amdgpu-wddm driver and return the GPU to Microsoft Basic Display Adapter?' -Expect 'YES')) { Write-Host 'Stopped. Nothing was changed.'; exit 4 }
-# Restore runs before removing any release files. Failure aborts removal and keeps the recovery tools.
-if (-not $RestoreSystemTuning -and -not $KeepSystemTuning -and -not $Yes -and -not $DryRun) {
-    $RestoreSystemTuning = [switch](Read-Confirmation -Question 'Restore machine-wide Windows settings managed by our optional tuning before removal? Press Enter to keep them. Per-user settings remain available for recovery in each account.' -Expect 'YES')
+# Running the uninstaller IS the answer (owner, 2026-10-12: "Przestan wymagac potwierdzen od uzytkownika"): nothing
+# here asks the user to type YES for what they started. -Yes stays accepted, so every script written for the older
+# uninstaller keeps working, and the refusals that protect a machine (a development-lab installation above, an
+# unreadable driver store) are unchanged: those are not confirmations.
+Write-Info 'removing the amdgpu-wddm driver and returning the GPU to Microsoft Basic Display Adapter'
+# Restore runs before removing any release files. Failure aborts removal and keeps the recovery tools. The default
+# is to keep the Windows settings our optional tuning applied, and -RestoreSystemTuning restores them; neither is a
+# question any more.
+if (-not $RestoreSystemTuning -and -not $KeepSystemTuning) {
+    Write-Info 'Windows tuning: the machine-wide settings it applied are kept. -RestoreSystemTuning restores them during this removal.'
 }
 if ($RestoreSystemTuning) { Invoke-SelectedSystemTuning -Selected $true -Action RestoreAll -PackageRoot $package }
 else { Write-Info 'Windows tuning is kept. Use -RestoreSystemTuning to restore managed settings.' }
@@ -77,7 +86,7 @@ try { $componentManifest = Read-ComponentsManifest $here } catch { Write-Log "  
 Invoke-ComponentUnregister $state $componentManifest
 Remove-ComponentRegistrations $state
 
-Write-Step 'Scheduled task, RunOnce entry, shortcut'
+Write-Step 'Scheduled task, RunOnce entry, shortcuts'
 # Every task of ours, not only the one this release registers: a task that an older release named differently would
 # otherwise stay and run a script that is gone.
 $tasks = @(Get-OurScheduledTasks)
@@ -91,9 +100,11 @@ Invoke-Change "unregister our scheduled task(s): $(if ($tasks.Count) { $tasks -j
     }
 } | Out-Null
 Invoke-Change "remove the RunOnce entry '$($script:RunOnceName)'" { Remove-ItemProperty -LiteralPath $script:RunOnceKey -Name $script:RunOnceName -ErrorAction SilentlyContinue } | Out-Null
-foreach ($name in 'amdgpu-wddm Control.lnk', 'amdgpu-wddm Control (recovery).lnk') {
-    $lnk = Join-Path $env:ProgramData "Microsoft\Windows\Start Menu\Programs\$name"
-    Invoke-Change "remove the Start menu shortcut $lnk" { Remove-Item -LiteralPath $lnk -Force -ErrorAction SilentlyContinue } | Out-Null
+# Every shortcut this installer can write, in the Start menu and on the desktop (common.ps1,
+# Get-ControlShortcutPaths): one list for the install and the uninstall, so an icon the install put on the desktop
+# cannot stay behind.
+foreach ($sc in @(Get-ControlShortcutPaths)) {
+    Invoke-Change "remove the $($sc.where) shortcut $($sc.path)" { Remove-Item -LiteralPath $sc.path -Force -ErrorAction SilentlyContinue } | Out-Null
 }
 
 Write-Step 'DisplayPort audio interrupt'
@@ -326,8 +337,11 @@ if ($certsLeft.Count) {
 Write-Step 'Test signing'
 $setByUs = ($state -and $state.testsigning_set_by_installer)
 $off = [bool]$DisableTestSigning
+# What the installer turned on, the uninstaller turns off again, without asking (owner, 2026-10-12). -KeepTestSigning
+# leaves it on for a tester who installs another build of ours next.
 if (-not $off -and -not $KeepTestSigning -and $setByUs) {
-    $off = Read-Confirmation -Question 'The installer turned test signing on. Turn it off again?' -Expect 'YES'
+    Write-Info 'test signing was turned on by this installer, so it is turned off again now (-KeepTestSigning leaves it on)'
+    $off = $true
 }
 if ($off) {
     Invoke-Change "bcdedit /set '{current}' testsigning off" {
@@ -343,8 +357,13 @@ $dataRoot = Split-Path $script:StateDir
 $controlData = Join-Path $dataRoot 'control'
 # The installer state includes the kept repair sets (installer\packages) and the running-release witness: without it
 # the control application names no running release until a new install verifies one.
-Invoke-Change "remove the installer state $($script:StateDir) (with the kept repair sets and the running-release witness), $dataRoot\start-confirm.log and $dataRoot\dwm-baseline.json" {
+# The folder a single-file setup unpacks itself into (%ProgramData%\amdgpu-wddm\setup\<version>, Payload.cs). The
+# window that finishes an installation removes its own; this removes what an interrupted run, or an installation made
+# by a release before that folder was cleaned up, left behind.
+$setupData = Join-Path $dataRoot 'setup'
+Invoke-Change "remove the installer state $($script:StateDir) (with the kept repair sets and the running-release witness), $setupData, $dataRoot\start-confirm.log and $dataRoot\dwm-baseline.json" {
     Remove-PathOrSchedule $script:StateDir
+    if (Test-Path -LiteralPath $setupData) { Remove-PathOrSchedule $setupData }
     Remove-Item -LiteralPath (Join-Path $dataRoot 'start-confirm.log') -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath (Join-Path $dataRoot 'dwm-baseline.json') -Force -ErrorAction SilentlyContinue
     if ((Test-Path -LiteralPath $dataRoot) -and -not @(Get-ChildItem -LiteralPath $dataRoot -Force).Count) { Remove-Item -LiteralPath $dataRoot -Force }
@@ -382,9 +401,13 @@ else { Write-Info 'nothing of this release is left, apart from the items marked 
 Write-Host ''
 Write-Host "Uninstall complete. Restart the computer to finish. Log: $($script:LogPath)" -ForegroundColor Green
 Write-Host 'Until the restart, some Windows 11 apps (the command bar of File Explorer, Task Manager) can ignore mouse clicks: the GPU changed to Microsoft Basic Display Adapter under the running desktop.' -ForegroundColor Yellow
-# A normal, planned restart (common.ps1, Request-PlannedRestart): programs are asked to close and may keep unsaved work.
-if (-not $NoReboot -and (Read-Confirmation -Question 'Restart now?' -Expect 'Y')) {
-    $why = Request-PlannedRestart
-    if ($why) { Write-Warn2 "Windows did not start the restart ($why): restart the computer yourself" }
+# A normal, planned restart (common.ps1, Request-PlannedRestart): programs are asked to close and may keep unsaved
+# work. It starts by itself after a visible countdown, as the installer's does (owner, 2026-10-12): Enter starts it
+# at once, any other key puts it off, and nothing has to be pressed. -NoReboot skips it for a script.
+if (-not $NoReboot -and -not $DryRun) {
+    if ((Wait-RestartCountdown -Seconds $script:RestartCountdownSeconds) -eq 'now') {
+        $why = Request-PlannedRestart
+        if ($why) { Write-Warn2 "Windows did not start the restart ($why): restart the computer yourself" }
+    } else { Write-Info 'restart later; the removal finishes at the next restart' }
 }
 exit 0

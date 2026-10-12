@@ -18,6 +18,8 @@
 # with her off, and a language switch at run time; every page is drawn to PNG without a window and checked for
 # overlap, overflow, internals in the text and accessible names. The guide panel must draw her picture wherever the
 # side panel is in the window, and must not draw it with "Show Nagi" off.
+# G-SMALL (owner, 2026-10-12): six runs name the screen the window is drawn for (--work-area, in logical units) and
+# hold the rule that a 1024x768, 800x600 or smaller screen draws no right-hand panel, and a larger one draws it.
 # The smoke run passes on a PC without a BC-250 when it reports the driver as not found.
 #
 # The guide character (plan v7 section 6) is embedded by default from art\nagi of this directory, as the resources
@@ -135,8 +137,17 @@ if ($NagiArt) {
         $artResourceNames += $a.Resource
     }
 }
+# The application icon (owner, 2026-10-12: "ikonke zrob z biustu Nagi"): art\icon\nagi.ico, the guide character's
+# bust as a round badge, with its own PROVENANCE.md. csc takes it as /win32icon, which is what an ApplicationIcon of
+# a project file compiles to. It is the icon of this window, of its task-bar button, and of the Start menu and
+# desktop shortcuts the installer writes, which take the icon from this exe.
+$icon = Join-Path $here 'art\icon\nagi.ico'
+if (-not (Test-Path -LiteralPath $icon -PathType Leaf)) { throw "application icon: no $icon" }
+# The same file as a resource as well (MainForm): the window's icon is then the authored image for the size Windows
+# asks for, instead of one 32x32 image rescaled on a high-resolution screen.
+$resources += "/resource:$icon,nagi.ico"
 & $csc /nologo /noconfig /nostdlib+ @refs /target:winexe /platform:x64 /optimize+ /warnaserror+ /langversion:7.3 /deterministic+ `
-    "/win32manifest:$here\app.manifest" "/out:$Out\amdgpu_wddm_control.exe" @resources @((Get-ChildItem "$here\src\*.cs").FullName | Sort-Object)
+    "/win32manifest:$here\app.manifest" "/win32icon:$icon" "/out:$Out\amdgpu_wddm_control.exe" @resources @((Get-ChildItem "$here\src\*.cs").FullName | Sort-Object)
 if ($LASTEXITCODE -ne 0) { throw "csc failed ($LASTEXITCODE)" }
 $systemTuningOutput = Join-Path $Out 'system-tuning'
 New-Item -ItemType Directory -Force -Path $systemTuningOutput | Out-Null
@@ -154,6 +165,8 @@ if ($artResourceNames.Count) {
     if ($missing.Count) { throw "guide art: the built exe has no resource $($missing -join ', ')" }
     Write-Host "  guide art: $($artResourceNames.Count) resources in the image ($(($artResourceNames | Sort-Object)[0]) .. $(($artResourceNames | Sort-Object)[-1]))"
 }
+if (-not $image.Contains('nagi.ico')) { throw 'application icon: the built exe has no resource nagi.ico' }
+Write-Host '  application icon: nagi.ico as the Win32 icon and as a resource with every authored size'
 
 # 4. Smoke run: no window, exits by itself. The DWM observations of the gates go to obj\state, not to this PC's profile.
 $env:AMDGPU_WDDM_CONTROL_STATE = Join-Path $obj 'state'
@@ -504,6 +517,13 @@ if (-not $NoSmoke) {
     $runs += , @('ko-2-tuner', '2', '--lang', 'ko', '--fixture', "`"$tuner`"")
     $runs += , @('en-1-tuner-off', '1', '--fixture', "`"$tunerOff`"")
     $runs += , @('pl-1-tuner-off', '1', '--lang', 'pl', '--fixture', "`"$tunerOff`"")
+    # G-SMALL, the owner's rule of 2026-10-12: the five working areas of a tester's screen, in logical units. The
+    # four small ones must draw no right-hand panel and the 1920x1080 one must draw it; overlap, overflow and the
+    # page width are checked in every one of them, which is what an 800x600 screen needed (GitHub #38).
+    foreach ($work in '800x600', '1024x768', '1280x720', '1366x768', '1920x1080') {
+        $runs += , @("en-1-work$work", '1', '--work-area', $work, '--fixture', "`"$fixture`"")
+    }
+    $runs += , @('pl-1.5-work1920x1080', '1.5', '--lang', 'pl', '--work-area', '1920x1080', '--fixture', "`"$fixture`"")
     $failed = @()
     foreach ($r in $runs) {
         $dir = Join-Path $obj "render\$($r[0])"
@@ -519,7 +539,7 @@ if (-not $NoSmoke) {
         if ($p.ExitCode -ne 0) { $failed += "$($r[0]): $(Get-Content (Join-Path $dir 'layout.txt') -Raw -ErrorAction SilentlyContinue)" }
     }
     if ($failed.Count) { throw "render gates:`n$($failed -join "`n")" }
-    Write-Host "  render: $($runs.Count) runs (9 pages, 96-192 DPI, 4 languages, text 150 %, Nagi on by default and two runs with her off, language switch, tuning states): no findings ($obj\render)"
+    Write-Host "  render: $($runs.Count) runs (9 pages, 96-192 DPI, 4 languages, text 150 %, Nagi on by default and two runs with her off, language switch, tuning states, 6 runs over five screen sizes from 800x600 up): no findings ($obj\render)"
 }
 Get-ChildItem $Out -File | ForEach-Object {
     '{0,9}  {1}  {2}' -f $_.Length, (Get-FileHash $_.FullName -Algorithm SHA256).Hash.Substring(0, 8), $_.Name

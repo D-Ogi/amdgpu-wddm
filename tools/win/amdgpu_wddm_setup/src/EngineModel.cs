@@ -26,6 +26,9 @@ namespace AmdgpuWddmSetup
         public string[] Consents = new string[0], Notes = new string[0], CompatibilityReasons = new string[0];
         public int Restarts;
         public bool CompatibilityOk, SystemTuning;
+        // The two shortcut answers the engine would act on: its own command line, or the answer an earlier run of
+        // the same install saved. Both are on where the engine says nothing about them.
+        public bool StartMenuShortcut = true, DesktopShortcut = true;
     }
 
     public sealed class SettingsPlan
@@ -123,6 +126,7 @@ namespace AmdgpuWddmSetup
                         FirmwareSource = Json.Str(e, "firmware_source"), FirmwareDir = Json.Str(e, "firmware_dir"), Notes = Json.Strs(e, "notes"),
                         SecureBoot = Json.Str(e, "secure_boot"), BitLocker = Json.Str(e, "bitlocker"),
                         SystemTuning = Json.Bool(e, "system_tuning"),
+                        StartMenuShortcut = Json.BoolOr(e, "start_menu_shortcut", true), DesktopShortcut = Json.BoolOr(e, "desktop_shortcut", true),
                         CompatibilityOk = c != null && Json.Bool(c, "ok"), CompatibilityReasons = Json.Strs(c, "reasons"),
                     };
                     break;
@@ -194,7 +198,10 @@ namespace AmdgpuWddmSetup
         // Failed checks that a new try cannot change while setup is open: the hardware, the Windows edition, the setup
         // files, a development installation, and Secure Boot (it changes only in the firmware settings, after a restart).
         // The engine does not mark a cause as transient, so the window decides by check id. A refusal with one failed check
-        // outside this list (free space, the Visual C++ runtime, the firmware download, ...) keeps Try again as the default.
+        // outside this list (free space, the firmware download, ...) keeps Try again as the default. A missing
+        // Microsoft Visual C++ runtime is no longer a refusal at all: the install brings it (owner, 2026-10-12).
+        // A set of files that does not carry Microsoft's own installer for it is a damaged download, so a new try
+        // in this session meets the same refusal.
         // The engine outcomes that end a run without stopping it. The stage screen is drawn once more after the
         // engine wrote its result and before its process ends: the stage the run reached is done for these, and only
         // the others (refused, failed, cancelled, verify-failed, and anything newer than this window) are crossed out.
@@ -208,7 +215,7 @@ namespace AmdgpuWddmSetup
         public static readonly HashSet<string> RetryCannotFix = new HashSet<string>(StringComparer.Ordinal)
         {
             "gpu.missing", "gpu.several", "windows.not-x64", "windows.too-old", "package.damaged", "firmware.no-list",
-            "lab-install.present", "secureboot.on",
+            "lab-install.present", "secureboot.on", "vcruntime.no-installer",
         };
 
         static readonly HashSet<string> Known = new HashSet<string>(StringComparer.Ordinal)

@@ -112,6 +112,28 @@ Check (@('EnableGpuPresentBlit', 'EnableCddDwmInterop', 'DpmMode', 'DpmMaxMHz' |
 
 Check ($r.text -match 'Dry run complete') 'walk-through completes'
 Check ($r.text -notmatch 'doing:|Administrator rights are needed') 'walk-through: no change, no elevation'
+Check ($r.text -match 'shortcuts: Start menu entry, Start menu repair entry, desktop icon') 'the summary names the three shortcuts as a person reads them'
+Check ($r.text -notmatch 'desktop desktop') 'no line says "desktop desktop"'
+Check ($r.text -match 'Microsoft Visual C\+\+ runtime: present: vcruntime140\.dll') 'this PC has the runtime, and phase 2 says so'
+
+# The two paths of the new steps that this PC would otherwise never walk: a PC without the Microsoft Visual C++
+# runtime (AMDGPU_WDDM_TEST_VCRUNTIME, a dry run only), and an install that was asked for no desktop icon. Both
+# print what they would do and change nothing.
+'install -DryRun with the runtime missing and no desktop icon'
+$env:AMDGPU_WDDM_TEST_VCRUNTIME = 'missing'
+try { $r2 = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard', '-NoDesktopShortcut') }
+finally { Remove-Item Env:\AMDGPU_WDDM_TEST_VCRUNTIME }
+$r2.text
+Check ($r2.code -eq 0) "walk-through without the runtime exit $($r2.code)"
+Check ($r2.text -match '\[warn\]\s+Visual C\+\+ runtime\s+missing in System32: vcruntime140\.dll, vcruntime140_1\.dll, msvcp140\.dll') 'the preflight states the missing runtime as a line, not a refusal'
+Check ($r2.text -match 'the installer installs 14\.44\.35211\.0 from payload\\redist\\vc_redist\.x64\.exe \(SHA256 CC0FF0EB1DC3F518, signature Valid, CN=Microsoft Corporation') 'the line names the file, its hash and its signature'
+Check ($r2.text -match 'would: install the Microsoft Visual C\+\+ 2015-2022 Redistributable \(x64\) 14\.44\.35211\.0 from payload\\redist\\vc_redist\.x64\.exe \(/install /quiet /norestart; SHA256 CC0FF0EB1DC3F518 and the Microsoft signature checked\)') 'phase 2 shows the runtime step before anything of ours is copied'
+$iVc = $r2.text.IndexOf('would: install the Microsoft Visual C++')
+$iCopy = $r2.text.IndexOf('would: copy payload\')
+Check ($iVc -ge 0 -and $iCopy -gt $iVc) "the runtime step comes before the first file of ours (runtime at $iVc, first copy at $iCopy)"
+Check ($r2.text -match 'shortcuts: Start menu entry, Start menu repair entry; left out: desktop icon') 'the run asked for no desktop icon leaves it out and says so'
+Check ($r2.text -notmatch 'would: desktop shortcut') 'no desktop icon is written in that run'
+Check ($r2.text -match 'Dry run complete' -and $r2.text -notmatch 'doing:') 'that walk-through changed nothing either'
 
 'registry defaults on upgrade (test-registry-defaults.ps1 under 5.1, HKCU scratch key)'
 $rr = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-registry-defaults.ps1'), '-Installer', (Join-Path $Package 'installer'))
@@ -282,7 +304,7 @@ Check ($r.text -match 'DWM of session \d+ before the driver package: ') 'the wal
 # BD-069: the installer tells the driver's own safety closure from a setting of the tester, and only a repair reopens
 # one. The records belong to the KMD (driver/kmd/interop.c, driver/kmd/dpm.c); the installer reads them.
 Check (($common -match '\$script:DriverClosures = @\{') -and ($common -match "record = 'InteropClosedReason'") -and ($common -match "record = 'DpmClosedReason'") -and ($common -match "legacy_record = 'DpmLastReason'") -and ($common -match "'reopened'") -and ($common -match "'driver-closed'")) 'common.ps1 holds the driver closure table (InteropClosedReason, DpmClosedReason with DpmLastReason as the legacy record) and both decisions'
-Check (($src -match "(?m)^\`$script:ReopenClosures = \[bool\]\`$Repair\s*$") -and ([regex]::Matches($src, '\$script:ReopenClosures =').Count -eq 1) -and ([regex]::Matches($src, '-Reopen:\$script:ReopenClosures').Count -eq 2) -and ($common -match "InstallSwitches = @\('NoControlApp', 'NoReboot', 'Force', 'Repair', 'ApplySystemTuning'\)")) 'only the -Repair switch reopens a closure (the plan and the write both), and -Repair survives the restart'
+Check (($src -match "(?m)^\`$script:ReopenClosures = \[bool\]\`$Repair\s*$") -and ([regex]::Matches($src, '\$script:ReopenClosures =').Count -eq 1) -and ([regex]::Matches($src, '-Reopen:\$script:ReopenClosures').Count -eq 2) -and ($common -match "InstallSwitches = @\('NoControlApp', 'NoReboot', 'Force', 'Repair', 'ApplySystemTuning', 'NoStartMenuShortcut', 'NoDesktopShortcut'\)")) 'only the -Repair switch reopens a closure (the plan and the write both), and -Repair survives the restart'
 Check (($common -match "8 = 'smu-error'") -and ($src -match "\`$ioRemedy = '; remedy: run install\.cmd -Repair") -and ($src -notmatch "if \(\`$ioClosed\) \{ \`$ioClosed \+= '; remedy")) 'every reason the DPM guard persists is a closure (3, 4, 8), and verify names the repair only where the driver left a record'
 Check (($common -match "legacy_record = 'DpmLastReason'; any_reason = \`$true") -and ($common -match "\(\`$record -eq \`$c\.record\) -and \`$c\.any_reason")) 'a durable record takes any reason the driver writes; only the legacy record is held to the three names'
 $marker = @(foreach ($s in $scripts) { if ((@($s.text -split "`n" | Where-Object { $_ -notmatch '^\s*#' }) -join "`n") -match 'InteropSession|InteropBoot') { $s.name } })
@@ -678,7 +700,7 @@ Check ($r.text -match "would: unregister our scheduled task\(s\): (none on this 
 Check ($r.text -match 'would: remove HKLM:\\SOFTWARE\\amdgpu-wddm \(router policy, application profile, release record\), HKLM:\\SOFTWARE\\WOW6432Node\\amdgpu-wddm and HKCU:\\Software\\amdgpu-wddm') 'the policy keys of both registry views and the app preferences of this account go'
 Check ($r.text -match 'would: remove the bc250kmd service entry and its settings in HKLM:\\SYSTEM\\CurrentControlSet\\Services\\bc250kmd') 'the service key goes with its Parameters, which a next install would otherwise keep as the tester''s own settings'
 Check (($r.text -match 'would: remove certificate [0-9A-F]{40} from LocalMachine Root and TrustedPublisher') -and ($r.text -match 'no other test certificate of ours in Root or TrustedPublisher|would: remove \d+ more test certificate\(s\) of ours')) 'the certificate of this release goes, and so does one of an older release of ours'
-$fpItems = @('install root', 'System32 stub', 'SysWOW64 stub', 'driver store', 'driver service', 'policy keys', 'Vulkan registration', 'H.264 encoder keys', 'scheduled task', 'RunOnce entry', 'Start menu', 'installer state', 'per-user data', 'certificates', 'GPU firmware', 'control application data')
+$fpItems = @('install root', 'System32 stub', 'SysWOW64 stub', 'driver store', 'driver service', 'policy keys', 'Vulkan registration', 'H.264 encoder keys', 'scheduled task', 'RunOnce entry', 'shortcuts', 'installer state', 'per-user data', 'certificates', 'GPU firmware', 'control application data')
 $fpMissing = @($fpItems | Where-Object { $r.text -notmatch ('(?m)^\s*\[(gone|kept|LEFT)\] ' + [regex]::Escape($_) + '\s') })
 Check (($r.text -match '== What is left of this release') -and -not $fpMissing.Count) "the uninstaller ends with the list of what is left, all $($fpItems.Count) items$(if ($fpMissing.Count) { '; missing: ' + ($fpMissing -join ', ') })"
 Check ($r.text -match 'Dry run complete: nothing was changed, so the list above is this computer as it is now \(\d+ item\(s\) of this release\)') 'the dry run says that the list is the computer as it is now'

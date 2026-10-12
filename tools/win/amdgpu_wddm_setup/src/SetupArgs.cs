@@ -4,18 +4,29 @@
 //   amdgpu_wddm_setup.exe --continue          after a restart (RunOnce): the engine continues at once
 //   amdgpu_wddm_setup.exe --repair            from the control app's Help (Release\RepairSetup): repair
 //   amdgpu_wddm_setup.exe --prepare-offline   prepare a folder for a PC without internet (no administrator needed)
+//   [--no-start-menu-shortcut]                the Start menu option of the plan screen starts off (default: on)
+//   [--no-desktop-shortcut]                   the desktop option of the plan screen starts off (default: on)
 //   [--package <dir>]                         another package folder than the one the exe is in
 //   [--run-root <dir>]                        where the engine runs keep their files (default %TEMP%\amdgpu-wddm-setup)
 //   [--dry-run]                               the install run is an engine dry run: every screen, no change (L4)
 //   amdgpu_wddm_setup.exe --version
 //   amdgpu_wddm_setup.exe --smoke-render <dir> <scale> <lang> [--text-scale <f>] [--no-nagi] [--high-contrast]
+//                         [--work-area <w>x<h>]
 //                         [--package <dir>]    no window: every screen from fixtures drawn to <dir>, checked
 //                                             (--no-nagi: the guide panel without the guide character;
-//                                             --high-contrast: the high-contrast palette on a PC without it)
+//                                             --high-contrast: the high-contrast palette on a PC without it;
+//                                             --work-area: the working area of the screen the window is drawn for,
+//                                             in logical units, so that a render never reads this PC's screen)
 //   amdgpu_wddm_setup.exe --smoke-engine <package> <out-dir> [--script <name>] [--cancel] [--plan] -- <engine args>
 //                                             no window: one engine run, its model and screens summarised
 //   amdgpu_wddm_setup.exe --smoke-start-failure <out-dir>
 //                                             no window: plan, install and prepare with an engine that cannot start
+//   amdgpu_wddm_setup.exe --smoke-payload <out-dir>
+//                                             no window: the package this exe carries (Payload.cs) is read, checked
+//                                             and unpacked into <out-dir>, with a summary in <out-dir>\payload.txt.
+//                                             The folder is a plain one, so the reader can be tested without
+//                                             administrator rights; an install always unpacks into the protected
+//                                             %ProgramData%\amdgpu-wddm\setup instead
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -28,7 +39,15 @@ namespace AmdgpuWddmSetup
         public string[] Raw = new string[0];
         public string Mode = "welcome";
         public string Package, RunRoot, Error;
+        // Set by Program when this exe carried the package inside itself and unpacked it (Payload.cs): the folder
+        // the window removes when the run ends with no restart pending. Never a command-line option.
+        public string PayloadPackage;
         public bool DryRun, ApplySystemTuning;
+        // The two shortcut options of the plan screen, both on unless a switch states otherwise (owner, 2026-10-12).
+        // null is "nothing was stated": the screen opens the box on the answer the engine reports, and the run that
+        // continues an install after a restart passes no switch at all, so the saved answer stands (BD: a positive
+        // switch clears the saved negative one, which turned an unticked box back on at the restart).
+        public bool? StartMenuShortcut, DesktopShortcut;
         public readonly List<string> EngineArgs = new List<string>();
         // smoke entries
         public string SmokeDir, Language = "en", Script = "install.ps1";
@@ -36,8 +55,11 @@ namespace AmdgpuWddmSetup
         public bool Cancel, PlanRun;
         public bool NoNagi;             // render the guide panel without the guide character (she is on by default)
         public bool HighContrast;       // draw with the system colours of high contrast, which this PC may not have on
+        // The working area of the screen the window is drawn for, in logical units; 0x0 = ask this PC's screen. The
+        // small-screen rule and the window's own size read it, so one render is the same picture on any PC.
+        public int WorkWidth, WorkHeight;
 
-        public bool Headless { get { return Mode == "smoke-render" || Mode == "smoke-engine" || Mode == "smoke-start-failure" || Mode == "version"; } }
+        public bool Headless { get { return Mode == "smoke-render" || Mode == "smoke-engine" || Mode == "smoke-start-failure" || Mode == "smoke-payload" || Mode == "version"; } }
 
         public static SetupArgs Parse(string[] args)
         {
@@ -52,6 +74,10 @@ namespace AmdgpuWddmSetup
                 {
                     case "--version": a.SetMode("version"); break;
                     case "--apply-system-tuning": a.ApplySystemTuning = true; break;
+                    case "--no-start-menu-shortcut": a.StartMenuShortcut = false; break;
+                    case "--start-menu-shortcut": a.StartMenuShortcut = true; break;
+                    case "--no-desktop-shortcut": a.DesktopShortcut = false; break;
+                    case "--desktop-shortcut": a.DesktopShortcut = true; break;
                     case "--continue": a.SetMode("continue"); break;
                     case "--repair": a.SetMode("repair"); break;
                     case "--prepare-offline": a.SetMode("prepare-offline"); break;
@@ -85,8 +111,21 @@ namespace AmdgpuWddmSetup
                         a.SmokeDir = next();
                         if (a.SmokeDir == null) a.Error = "--smoke-start-failure <out-dir>";
                         break;
+                    case "--smoke-payload":
+                        a.SetMode("smoke-payload");
+                        a.SmokeDir = next();
+                        if (a.SmokeDir == null) a.Error = "--smoke-payload <out-dir>";
+                        break;
                     case "--script": a.Script = next(); if (a.Script != "install.ps1" && a.Script != "prepare-offline.ps1") a.Error = "--script install.ps1 or prepare-offline.ps1"; break;
                     case "--no-nagi": a.NoNagi = true; break;
+                    case "--work-area":
+                        var area = (next() ?? "").Split('x');
+                        int aw, ah;
+                        if (area.Length != 2 || !int.TryParse(area[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out aw) ||
+                            !int.TryParse(area[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out ah) || aw < 320 || ah < 240 || aw > 16384 || ah > 16384)
+                            a.Error = "--work-area <width>x<height>, at least 320x240";
+                        else { a.WorkWidth = aw; a.WorkHeight = ah; }
+                        break;
                     case "--high-contrast": a.HighContrast = true; break;
                     case "--cancel": a.Cancel = true; break;
                     case "--plan": a.PlanRun = true; break;
@@ -103,6 +142,7 @@ namespace AmdgpuWddmSetup
             if (a.Error == null && (a.Cancel || a.PlanRun) && a.Mode != "smoke-engine") a.Error = "--cancel and --plan only with --smoke-engine";
             if (a.Error == null && a.NoNagi && a.Mode != "smoke-render") a.Error = "--no-nagi only with --smoke-render";
             if (a.Error == null && a.HighContrast && a.Mode != "smoke-render") a.Error = "--high-contrast only with --smoke-render";
+            if (a.Error == null && a.WorkWidth > 0 && a.Mode != "smoke-render") a.Error = "--work-area only with --smoke-render";
             return a;
         }
 

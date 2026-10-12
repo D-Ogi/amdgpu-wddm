@@ -1112,6 +1112,19 @@
       "unverified": "Neither commit of this row is on a public branch yet: the Mesa commit 9fa76f54 (branch amdgpu-wddm/bd076-wgl-icd) and the recipe commit f883a801 (branch install/bd076-opengl-icd) are both local, so tools/release/provenance.py refuses the row until they are pushed, and the package cannot be cut before that. Reproducibility is measured, not assumed: the recipe above was run twice into the same build directory and both files came out byte for byte identical (scratch/bd076-gl/out/logs/build-x64-pass1.log and -pass2.log, 2026-10-12). The first lane build of this file, which the review found, ran an uncommitted copy of build-mesa.ps1 and is replaced by this one; the recipe_commit above is the commit that carries the zink-gl-icd configuration. This exact file, SHA256 DA3D2A6CE25D395B1FACA3C56077DDBC8F674778EE6F608D5E10AF7C350C75C1, is the one unit A ran on 2026-10-12 13:05-13:08Z, where tools/win/gltest passed 5 of 5 cases through it (core 4.6, renderer \"zink Vulkan 1.4(AMD BC-250 (RADV GFX1013) (MESA_RADV))\", draw, present, threads and compute exact, and the module serving the context was this file); the lab evidence is scratch/bd076-gl/lab/evidence/boot-test. The release rebuild check has not rebuilt it from the commit.",
       "size": 21800448,
       "role": "OpenGL ICD for 64-bit applications (BD-076, GitHub issue #8): Mesa's gallium WGL target built on zink and renamed amdgpu_wddm_gl.dll, so Windows' own opengl32.dll loads it as the adapter's installable client driver and every 64-bit OpenGL application of the computer renders on the GPU with no DLL beside its executable. It exports the 19 Drv entry points of the contract (gallium_wgl.def of the build, staged next to the file); DrvSwapMultipleBuffers is not one of them and the runtime does not need it. Static CRT and b_ndebug, because this file loads into foreign processes. opengl_icd.register of this file governs the registration and opengl_icd.architectures which architectures get it; this release registers x64 alone, so there is no x86 row, and a 32-bit OpenGL program keeps the software renderer of Windows itself."
+    },
+    {
+      "component": "vc-runtime",
+      "path": "payload/redist/vc_redist.x64.exe",
+      "source": "toolchain/vc-runtime/14.44.35211/vc_redist.x64.exe",
+      "sha256": "CC0FF0EB1DC3F5188AE6300FAEF32BF5BEEBA4BDD6E8E445A9184072096B713B",
+      "third_party": {
+        "url": "https://aka.ms/vs/17/release/vc_redist.x64.exe",
+        "version": "14.44.35211.0",
+        "sha256": "CC0FF0EB1DC3F5188AE6300FAEF32BF5BEEBA4BDD6E8E445A9184072096B713B"
+      },
+      "size": 25635768,
+      "role": "Microsoft Visual C++ 2015-2022 Redistributable (x64) 14.44.35211, as Microsoft publishes it, signed by Microsoft Corporation. Our programs need this runtime, so the installer installs it when System32 has no vcruntime140.dll, vcruntime140_1.dll or msvcp140.dll, or when one of them is older than 14.44 (owner, 2026-10-12: the installer brings it). It stays in the package: no file of payload\\redist is copied to the install root."
     }
   ],
   "firmware": {

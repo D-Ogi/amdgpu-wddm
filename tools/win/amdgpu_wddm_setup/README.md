@@ -9,9 +9,9 @@ window shows them in plain words. Contract: `docs/gui/interfaces-setup.md`.
 |---|---|
 | Welcome | What the release is, where its files come from (this package or a prepared folder, checked before use), the entry to prepare an offline folder |
 | Checking | The engine's plan run (`-Plan`): read only, nothing changes |
-| Review | Checks that need attention, what the run will do (restarts, firmware source), the settings each run keeps, changes or sets (from the engine's settings-impact plan), the release notes, the consents (test signing, BitLocker) |
+| Review | Checks that need attention, what the run will do (restarts, firmware source), what it will change (Windows test mode, BitLocker paused for those restarts) as plain information, the settings each run keeps, changes or sets (from the engine's settings-impact plan), the release notes. It asks for nothing: see "Nothing is asked of the user" below |
 | Install | Stages as the engine reports them, cancel while the engine allows it |
-| Restart | A planned restart (never forced): restart now or later; after sign-in the release's RunOnce entry starts the window with `--continue` |
+| Restart | A planned restart: a 15-second countdown and then the restart, with "Restart now" and "Later" offered and neither required. After sign-in the release's RunOnce entry starts the window with `--continue` |
 | Done | One of five outcomes (A3): success, information, problem, cancelled, restart; whether anything changed; the next step (retry, repair from amdgpu-wddm Control, support file) |
 | Prepare | `--prepare-offline`: a destination, an optional firmware folder, the copy, the result |
 
@@ -21,6 +21,40 @@ Close. Try again is not the default when every failed check is one a new try can
 (`ResultView.RetryCannotFix`: `gpu.missing`, `gpu.several`, `windows.not-x64`, `windows.too-old`, `package.damaged`,
 `firmware.no-list`, `lab-install.present`, `secureboot.on`) or the setup files are damaged. The engine does not mark
 causes as transient, so the window decides by check id.
+
+## Nothing is asked of the user
+
+The owner, 2026-10-12, seeing a greyed-out Install button under a consent check box: "nie mozna wymagac, ze
+uzytkownik zaznaczy ten checkbox! ... Oczywiste jest, ze uzytkownik chce wlaczyc test mode i wlasnie robi tym
+instalatorem! Przestan wymagac potwierdzen od uzytkownika!" A person who opened this installer wants to install, so
+no screen asks for a permission, and the primary action is never off. The Review screen does carry choices between
+good outcomes, each already answered: the optional Windows tuning and the two places of the shortcut of
+amdgpu-wddm Control (both on). `InstallFlow.PlanOptionIds` names every control a screen may grow. The Review screen
+states what will change as information. `src/InstallFlow.cs` holds the rules the window and the engine share: the
+arguments every run carries (`-AcceptTestSigning`, and `-BitLocker Suspend` when BitLocker protects the system
+volume), the information lines, and the ids no string table may carry again. The render gate G-CONSENT refuses a
+screen that grows a permission control or a disabled primary action, and the unit tests hold the rules themselves.
+Preflight refusals that protect the machine are unchanged - they are the engine's findings, not questions.
+
+## One file, or setup.exe beside files\
+
+A release ships the package as a zip and as one file, `amdgpu-wddm-setup-<version>.exe`: this window with the whole
+package appended after the end of its program image (`src/Payload.cs`, written by
+`tools/release/make-setup-exe.ps1`). With no `files\` folder beside it, the window unpacks that package to
+`%ProgramData%\amdgpu-wddm\setup\<version>\` - a folder with its own permission list (administrators and SYSTEM
+full control, Users read and run, no inheritance from `%ProgramData%`) - refuses a payload, a file list or a file
+whose SHA-256 does not match and a path that would leave the folder, and installs from there, including the
+continuation after each restart. The shared parent `%ProgramData%\amdgpu-wddm` keeps the rules it inherits, because
+a strict list on it broke every uninstall of 0.7.216.100-tester.28 (BD-129). It is checked as a location instead:
+a regular folder, no link, owned by SYSTEM, Administrators, TrustedInstaller or the account running setup. Anything
+else ends the run with a message. One unpacking at a time, held by a `Global\` mutex: a second copy of the
+file says setup is already running rather than resetting the folder the first one installs from. The folder is
+removed when the run ends, also after a failure, and kept only while a restart is pending. The window that
+finishes the install after the restart removes it by version name, because the continuation runs from the closure
+and carries no payload of its own. `uninstall.ps1` removes whatever an interrupted run left there. With a `files\` folder beside it,
+or with `--package <dir>`, the window uses that folder and behaves exactly as before. `--smoke-payload <dir>` reads
+and unpacks the payload into a plain folder with no administrator rights, for the gate
+`tools/release/test-setup-exe.ps1`.
 
 The window draws its own title bar and every widget in it (`src/Theme.cs` for the tokens, `src/Controls.cs` for the
 widgets, `src/Chrome.cs` for the frame), in the visual language of the accepted control-app mockup: a dark window
@@ -59,12 +93,21 @@ pwsh tools\win\amdgpu_wddm_setup\build.ps1 -Out P:\BC-250\scratch\build\gui-setu
 pwsh tools\release\build-release.ps1 ... -SetupApp P:\BC-250\scratch\build\gui-setup\setup-app
 ```
 
-The build is the gate (its header lists the four steps): unit tests, the compile, the engine client against a
+The build is the gate (its header lists the five steps): unit tests, the compile, the engine client against a
 scripted fake engine (`test/fake-engine.ps1`) and every screen drawn headless at 96, 120, 144 and 192 DPI in four
 languages, at a 150 % text size, without the guide character and in the high-contrast palette (`--high-contrast`,
 which a PC without high contrast on could otherwise never draw). No step shows a window. `tools/release/test-dryrun.ps1` also runs the built window
 against the real engine (plan and dry run). Every release package carries the window from 0.7.216.100-tester.28 on:
-`build-release.ps1` refuses to build without `-SetupApp`, and `test-dryrun.ps1` fails a package without it.
+`build-release.ps1` refuses to build without `-SetupApp`, and `test-dryrun.ps1` fails a package without it. The
+last step of the build is `tools/release/test-setup-exe.ps1`: the exe just built is packed around a package of its
+own, reads it back, and refuses seven damaged or empty exes.
+
+The icon of the window, and of the release's single setup file, is
+`tools/win/amdgpu_wddm_control/art/icon/nagi.ico`, the icon of the control application as well. `build.ps1` passes
+it to the compiler (`/win32icon`) and stops when the file is missing. The same file is embedded as the resource
+`nagi.ico`, which `SetupForm.SetWindowIcon` reads, so the taskbar and Alt+Tab show the size that was drawn for them
+(16 to 256 px) instead of one 32 x 32 image rescaled on a 150 % or 200 % screen. The build stops when the resource
+is not in the built image.
 
 The guide panel on the right shows the guide character, from the art of
 `tools/win/amdgpu_wddm_control/art/nagi`: the build embeds the expressions this window's causes can ask for
@@ -74,6 +117,14 @@ The smallest slot of this window is 176 device pixels at 96 DPI, larger than the
 resource could never be drawn. Her pictures are stills, and the setup window never animates her. She is on unless the control application's
 `ShowNagi` is the DWORD 0, so she is on the Welcome screen of a first install. Two render runs use `--no-nagi`, and
 every other run must draw her picture.
+
+A small screen gets no guide panel at all. The content column then takes the width the panel would have had. The
+owner asked for this on 2026-10-12, after GitHub #38 from a tester whose 800x600 screen let the picture cover the
+text. Small is a working area of at most 1024 logical pixels wide, or at most 768 high (`SmallScreen.cs`). A screen
+that small has no room for a 300 px column beside the page. The window asks the rule again when it moves to another
+monitor, and after a screen or DPI change. Six render runs name the screen the window is drawn for
+(`--work-area <w>x<h>`, in logical units: 800x600, 1024x768, 1280x720, 1366x768 and 1920x1080). G-SMALL holds both
+directions of the rule.
 
 Translations: `strings/strings.<lang>.txt`. A new or redone translation gets `?` as its hash and `strings/stamp.ps1`
 stamps it; a line whose English text changed fails G-STR until it is retranslated. Polish, Japanese and Korean are

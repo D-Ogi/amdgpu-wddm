@@ -6,7 +6,9 @@ by hand, like the vendor's control panel: a normal window, no service, no autost
 The window speaks to ordinary users (GUI-PLAN-v7, phase 1): plain words, no driver internals, error codes or internal
 versions. A unit test and the render gate check every visible text against `PlainWords.Internals`; technical detail
 goes only into the support report and the Support page (shown when "Show support options" is on). Texts come from
-`strings/strings.<lang>.txt` (English is the source; Polish, Japanese and Korean are machine translations marked `mt`).
+`strings/strings.<lang>.txt` (English is the source). A Polish speaker read every Polish line against one
+terminology, where one English term keeps one Polish word, so each line carries the status `rev` (2026-10-12). Japanese and Korean are machine translations marked
+`mt`, or `mt-safe` where the English is a name or a number.
 
 | Page | What it shows or changes |
 |---|---|
@@ -372,17 +374,30 @@ refused; one dry run of this PC; where the build is not elevated, one real run t
 write `--out`), `--smoke-recovery <file>` (the recovery view built without a window; fails when `bc250control.dll`
 is loaded), `--smoke-perf <file>` (the window built hidden: no live timer, no ticks, no animation frame, start under
 5 s, private memory under 300 MB) and `--smoke-render <dir> <scale> [--lang xx] [--text-scale f] [--no-nagi]
-[--switch-to xx] [--fixture <snapshot.json>]` in 33 runs: four languages at 1, 1.25, 1.5 and 2, with
+[--switch-to xx] [--fixture <snapshot.json>] [--work-area <w>x<h>]` in 39 runs: four languages at 1, 1.25, 1.5 and 2, with
 `test/snapshot-bd059.json` and the tuning snapshots as the fixtures, text at 150 %, two runs with the guide
-character off (she is on in every other run, as she is after an install), and two language
-switches. Every page is drawn to a PNG without a window at the default size and at the minimum size, and the whole
+character off (she is on in every other run, as she is after an install), two language
+switches, and six runs that name the screen the window is drawn for (`--work-area`, in logical units: 800x600,
+1024x768, 1280x720, 1366x768 and 1920x1080), so that a render never reads the screen of the PC it runs on. Every page is drawn to a PNG without a window at the default size and at the minimum size, and the whole
 page as `<page>-full.png`. The build fails when two sibling controls overlap, a text is cut, a page is wider than
 the page column it was built at (`LayoutRules.PageWidthFinding`: the column width of this moment is not the measure,
 because the window manager clamps a client size larger than the desktop), its last control
 lies outside the scroll range, a visible text names a driver internal, a control lacks an accessible name or tab
 stop, the art shows while "Show Nagi" is off, the guide panel draws no picture while "Show Nagi" is on and the side
-panel is in the window, or a language switch leaves old texts behind. The unit tests also check
+panel is in the window, the side panel shows on a small screen or is missing on a screen with room for it
+(G-SMALL), the window is wider or taller than the screen it is drawn for or its page does not follow the column
+left after the window was clamped (G-ORDER), or a language switch leaves old texts behind. The unit tests also check
 every string table: each id in each language, no stale translation (G-STR), no internals in the texts (G-NOINT).
+
+### The icon of the application
+
+`art/icon/nagi.ico` is the icon of `amdgpu_wddm_control.exe`, of the shortcuts the installer writes and of the
+release's single setup file. It holds the guide character's head at 16, 20, 24, 32, 40, 48, 64, 128 and 256 pixels,
+built from her `@256` art by `art/icon/make-icon.py`. `PROVENANCE.md` beside it records the source picture and the
+bytes of the file. `build.ps1` passes it to the compiler (`/win32icon`) and stops when the file is missing, so a
+build without the icon cannot ship. It is embedded as the resource `nagi.ico` as well, which `MainForm` reads for
+the window, the taskbar and Alt+Tab: those take the size that was drawn for them instead of one 32 x 32 image
+rescaled on a 150 % or 200 % screen. The build stops when the resource is not in the built image.
 
 ### The guide character
 
@@ -407,6 +422,22 @@ animation setting first.
 Her picture lives in the side panel, which the window drops below a client width of 1000 logical pixels
 (`MainForm.SideShown`), as the nav bar and the page column need that room. A narrower window therefore has no guide
 panel at all, with her picture and its text, and the pages carry that help in their own cards and dialogs instead.
+
+The panel also goes on a small screen, whatever "Show Nagi" says (owner, 2026-10-12, after GitHub #38 from a tester
+on an 800x600 screen): a working area of at most 1024 logical pixels wide or at most 768 high has no room for a
+300 px column beside the page. The rule is `LayoutRules.SmallScreen`, the measure is the working area of the screen
+the window stands on in logical units, and the window asks it again when it is moved to another monitor and after a
+display or DPI change. The setting itself is not written: on a larger screen it decides as before, and Settings
+carries one line under it that says the guide is hidden on a small screen.
+
+The window's own size comes from that screen as well (`MainForm.ApplyScreenSize`): the design size of 1240x760
+logical pixels where the screen has room for it, the screen's working area less a margin where it has not, and the
+smallest size a person may drag the window to never larger than the size it opens at. A fixed smallest width of
+900 px made the window wider than an 800x600 screen, which Windows could not clamp, so the page lost its right
+edge whatever the small-screen rule answered. The shell is built before the window has a handle, and the window
+rebuilds the page for the column that is left after Windows clamps it and `FitToScreens` places it. The render gate
+G-ORDER holds that order: the page is built first and the client clamped afterwards, as in the live window, and a
+page wider than the column it ends up in is a finding.
 
 The output folder holds `amdgpu_wddm_control.exe`, `bc250control.dll` and `bc250kmd_cli.exe` (the same translation unit
 as the DLL, without `BC250_CONTROL_DLL`, so the CLI and the DLL of a release come from one build); the release

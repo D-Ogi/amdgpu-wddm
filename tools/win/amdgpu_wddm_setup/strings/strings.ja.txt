@@ -20,6 +20,9 @@ rail.current|mt-safe|3d59ee1e|現在の手順
 rail.done|mt-safe|a4c3ed04|完了
 rail.failed|mt-safe|a1f6bdb2|ここで停止
 elevation.declined|mt|0a586e33|ドライバーのインストールまたは修復には管理者のアクセス許可が必要です。何も変更されていません。セットアップをもう一度起動し、Windows の確認で [はい] を選んでください。
+payload.damaged|mt|44795d7b|このセットアップ ファイルは壊れています。中に入っているインストール用ファイルが、作成時のものと一致しません。何も変更していません。リリースをもう一度ダウンロードしてください。
+payload.already-running|mt|45dca71f|セットアップはこの PC ですでに実行中です。開いているウィンドウでインストールを終わらせてください。ここでは何も変更していません。
+payload.folder|mt|78be926d|セットアップはインストール用ファイルを置くフォルダーを準備できません。そのフォルダーはこの PC の別のアカウントのものか、通常のフォルダーではありません。何も変更していません。サポート ファイルに書かれているそのフォルダーを削除して、このファイルをもう一度開いてください。
 
 # ---- welcome ----
 welcome.title|mt|f6dd913f|ASRock BC-250 用グラフィックス ドライバーのインストール
@@ -65,6 +68,9 @@ check.admin.missing|mt|3da431e1|セットアップには管理者のアクセス
 check.windows.ok|mt|7d1c4fbb|この Windows のバージョンはサポートされています。
 check.windows.not-x64|mt|1c9550cb|この Windows は 64 ビット版ではありません。ドライバーには 64 ビット版 Windows 11 が必要です。
 check.windows.too-old|mt|b44ce700|この Windows のバージョンは古すぎます。ドライバーには Windows 11 が必要です。
+check.windows.below-supported|mt|71688b75|この Windows のバージョンは、ドライバーのテスト対象より古いバージョンです。テスト対象は Windows 11 23H2、24H2、25H2 です。Windows を更新してください。インストールは続行します。
+check.windows.insider|mt|2b892990|これは Insider 版の Windows で、サポート対象ではありません。ドライバーのテスト対象は Windows 11 23H2、24H2、25H2 です。インストールは続行します。
+check.windows.ltsc|mt|346c19f0|この Windows のエディション (LTSC) は、このドライバーでテストされていません。インストールは続行します。
 check.gpu.ok|mt|f61b25ac|ASRock BC-250 のグラフィックス チップが見つかりました。
 check.gpu.missing|mt|7ac6bcb8|ASRock BC-250 のグラフィックス チップが見つかりません。このドライバーは BC-250 専用です。
 check.gpu.several|mt|57bff6a6|BC-250 のグラフィックス チップが複数見つかりました。サポートされるのは 1 つだけです。
@@ -73,14 +79,15 @@ check.secureboot.off|mt|a107f361|セキュア ブートはオフです。
 check.secureboot.on|mt|1a594fe8|セキュア ブートがオンです。インストールの前に PC のファームウェア設定でオフにしてください。
 check.secureboot.unknown|mt|349a2c6d|セキュア ブートがオンかどうかを読み取れませんでした。
 check.testsigning.active|mt|f6138193|Windows のテスト モードはオンです。
-check.testsigning.inactive|mt|3e61e840|Windows のテスト モードはオフです。同意をいただいた後でセットアップがオンにします。
+check.testsigning.inactive|mt|1f2ea753|Windows のテスト モードはオフです。セットアップはインストールの一部としてオンにします。
 check.bitlocker.ok|mt|f6019261|BitLocker について対応は不要です。
-check.bitlocker.on|mt|94912a08|BitLocker がオンです。何かを変更する前に、扱い方をお尋ねします。
+check.bitlocker.on|mt|833d9bbb|BitLocker がオンです。セットアップはインストールの再起動の間だけ一時停止し、その後は自動的に再開します。
 check.bitlocker.unknown|mt|74c5d56a|BitLocker の状態を読み取れませんでした。BitLocker がオンの場合は、回復キーを用意してください。
 check.hvci.off|mt|c5375084|メモリ整合性はオフです。
 check.hvci.on|mt|038dce93|メモリ整合性がオンです。ドライバーが起動しない場合は、Windows セキュリティ (コア分離) でオフにしてください。
 check.vcruntime.ok|mt|da7b7ffe|Microsoft Visual C++ ランタイムはインストールされています。
-check.vcruntime.missing|mt|f9d91507|Microsoft Visual C++ 2015-2022 ランタイム (x64) がありません。Microsoft からインストールしてから、セットアップをもう一度起動してください。
+check.vcruntime.missing|mt|e96604a7|Microsoft Visual C++ 2015-2022 ランタイム (x64) がないか、古すぎます。セットアップが同梱のファイルからインストールします。
+check.vcruntime.no-installer|mt|a1670c32|Microsoft Visual C++ 2015-2022 ランタイム (x64) をインストールする必要がありますが、この一式には Microsoft の該当プログラムが含まれていません。リリースをもう一度ダウンロードしてください。
 check.space.ok|mt|fc218428|ディスクの空き容量は十分です。
 check.space.low|mt|e473eee3|ドライブ C: の空き容量が不足しています。2 GB 必要です。
 check.firmware.download-ok|mt|11f01474|GPU ファームウェアをダウンロードできます。
@@ -109,12 +116,21 @@ plan.repair-again|mt-safe|1196b6c5|修復
 plan.checks.title|mt-safe|de07d072|確認項目
 plan.checks.ok|mt|eb2f3d98|すべての確認に合格しました。
 plan.checks.attention|mt|e6885bff|注意が必要な確認項目: {0}
-plan.consent.needed|mt|8c3cbc95|インストールの前に「{0}」の質問に答えてください。
 plan.what.title|mt-safe|70fbb54b|これから行うこと
 plan.restarts.0|mt|b0a2c82a|Windows の再起動は不要です。
 plan.restarts.1|mt|2ae11afb|Windows が 1 回再起動します。もう一度サインインすると、セットアップは自動的に続行します。
 plan.restarts.2|mt|efc32bc9|Windows が 2 回再起動します。サインインするたびに、セットアップは自動的に続行します。
-plan.restarts.choice|mt|7df5fea3|再起動の前には毎回確認するので、先に作業を保存できます。
+plan.restarts.choice|mt|e2801100|再起動は短いカウントダウンのあとに自動で始まります。すぐに再起動することも、後回しにすることもできます。
+plan.change.test-mode|mt|7c5a1301|このドライバーを読み込めるように、Windows をテスト モードに切り替えます。
+plan.change.test-mode.note|mt|9a9c5086|デスクトップの隅に「テスト モード」と表示されます。ドライバーを削除すると元に戻ります。
+plan.change.test-mode.on|mt|cf315297|Windows はすでにテスト モードで動作しているため、ここでは何も変わりません。
+plan.change.bitlocker|mt|f43553fa|BitLocker の保護はこのインストールの再起動の間だけ一時停止し、その後は自動的に再開するので、Windows が回復キーを求めることはありません。
+plan.change.bitlocker.unknown|mt|67f2277e|この PC の BitLocker の状態を読み取れませんでした。処理は続行します。再起動後に Windows が求めた場合に備えて、回復キーを用意しておいてください。
+plan.change.vcruntime|mt|65d68876|ドライバーのプログラムが必要とするため、最初に Microsoft Visual C++ 2015-2022 ランタイム (x64) をインストールします。
+shortcuts.title|mt-safe|3af62f49|amdgpu-wddm Control の場所
+shortcuts.start-menu|mt-safe|f7bdc16b|スタート メニュー
+shortcuts.desktop|mt-safe|b1e0eb2c|デスクトップ
+shortcuts.note|mt|dc373b0d|スタート メニューには復旧用の項目も追加されます。不要なオプションはオフにしてください。どちらにしてもドライバーはインストールされます。
 plan.firmware.download|mt|7051aa7f|GPU ファームウェアは Linux の公式ファームウェア アーカイブからダウンロードされ、確認されます。
 plan.firmware.folder|mt|3afc555b|GPU ファームウェアは選んだフォルダーから取得され、確認されます。
 plan.firmware.package-folder|mt|576cf803|GPU ファームウェアは準備済みのフォルダーから取得されます。インターネットは不要です。
@@ -150,12 +166,6 @@ settings.decision.reopened|mt|4342e37e|この修復で元に戻しました (ド
 settings.decision.driver-closed|mt|cff55d7f|ドライバーが無効にしました。修復すると元に戻ります
 
 # ---- consents ----
-consent.title|mt-safe|34a195af|開始する前に
-consent.test-signing|mt|71d16537|Windows のテスト モードをオンにする
-consent.test-signing.note|mt|bebc2e37|ドライバーはテスト証明書で署名されているため、Windows をテスト モードで実行する必要があります。デスクトップの隅に「テスト モード」と表示されます。
-consent.bitlocker|mt|7b5d44a4|BitLocker がオンか、セットアップでその状態を読み取れませんでした。起動オプションを変更すると、次回の起動時に回復キーを求められる場合があります。
-consent.bitlocker.have-key|mt|081b65b7|回復キーを持っています
-consent.bitlocker.suspend|mt|dcf26b02|次の 2 回の再起動の間 BitLocker を一時停止する (自動的に再開します)
 
 # ---- working ----
 working.title|mt-safe|8749b169|インストールしています
@@ -189,6 +199,8 @@ stage.copy|mt-safe|ff9e3c81|ファイルのコピー
 restart.now|mt-safe|09af1002|今すぐ再起動
 restart.later|mt-safe|73b6e48a|後で
 restart.save-work|mt|16909f23|先に作業を保存してください。Windows は開いているプログラムに終了を求めますが、強制はしません。
+restart.countdown|mt|e8ce24a7|あと {0} 秒で Windows が自動的に再起動します。
+restart.countdown.over|mt|7af75060|カウントダウンが終わりました。セットアップがこれ以上自動で Windows を再起動することはありません。
 restart.later.done|mt|a38787ae|次に Windows を再起動すると、セットアップは自動的に続行します。このウィンドウは閉じてかまいません。
 restart.failed|mt|56d3b9cd|Windows が再起動を開始しませんでした。[スタート] メニューから PC を再起動してください。
 

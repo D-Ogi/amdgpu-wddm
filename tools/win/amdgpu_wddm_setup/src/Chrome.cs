@@ -48,7 +48,10 @@ namespace AmdgpuWddmSetup
         static extern bool ReleaseCapture();
 
         [DllImport("user32.dll")]
-        static extern IntPtr SendMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam);
+        static extern bool PostMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        static extern bool GetCursorPos(out System.Drawing.Point point);
 
         readonly Form _form;
         readonly string _brand;
@@ -116,6 +119,12 @@ namespace AmdgpuWddmSetup
         }
 
         // The bar itself drags the window; its buttons keep their own clicks.
+        //
+        // The message is posted, not sent. Windows answers it with a message loop of its own that lasts until the
+        // button is released, and a sent message would run that whole loop inside this handler, with this bar's
+        // frame underneath it: the window rebuilds itself when a drag carries it onto a screen of another size
+        // (SetupForm, the owner's rule of 2026-10-12), and a rebuild disposes this bar. A posted message starts the
+        // drag after this handler has returned, so nothing of this bar is on the stack while it lasts.
         protected override void OnMouseDown(MouseEventArgs e)
         {
             base.OnMouseDown(e);
@@ -123,7 +132,11 @@ namespace AmdgpuWddmSetup
             try
             {
                 ReleaseCapture();
-                SendMessage(_form.Handle, WM_NCLBUTTONDOWN, (IntPtr)HTCAPTION, IntPtr.Zero);
+                System.Drawing.Point p;
+                if (!GetCursorPos(out p)) p = Control.MousePosition;
+                // The point of the hit, as Windows packs it: the low word is x, the high word is y, and a screen
+                // left of or above the primary one gives negative numbers, so both are masked to their own word.
+                PostMessage(_form.Handle, WM_NCLBUTTONDOWN, (IntPtr)HTCAPTION, (IntPtr)(((p.Y & 0xFFFF) << 16) | (p.X & 0xFFFF)));
             }
             catch (Exception) { }
         }
