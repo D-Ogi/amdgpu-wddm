@@ -1,0 +1,55 @@
+utc 2026-10-12T05:33:59.5815435Z session 0
+=== x64 C7A37E8E
+exit 
+d3d10probe pid 6692, x64 build
+entry trace: 6 GetProcAddress imports of the runtime DLLs replaced
+entry: the runtime asks C:\Program Files\amdgpu-wddm\desktop\bc250d3d_router.dll for OpenAdapter10_2: exported
+entry: OpenAdapter10_2 interface 000B0011 version 00060000 -> 0x00000000
+entry: CalcPrivateDeviceSize interface 000B0023 version 00050000
+entry: CreateDevice interface 000B0023 (11.35) version 00050000 pipeline level 12_1 -> 0x00000000
+D3D10CreateDeviceAndSwapChain(hardware) -> 0x887A0022
+entry: the runtime asks C:\Program Files\amdgpu-wddm\desktop\bc250d3d_router.dll for OpenAdapter10_2: exported
+entry: OpenAdapter10_2 interface 000B0011 version 00060000 -> 0x00000000
+entry: CalcPrivateDeviceSize interface 000B0023 version 00050000
+entry: CreateDevice interface 000B0023 (11.35) version 00050000 pipeline level 12_1 -> 0x00000000
+D3D10CreateDevice(hardware) -> 0x00000000
+module C:\BC250\tmp\bd081\x64\d3d10probe.exe
+module C:\Windows\SYSTEM32\d3d10.dll
+module C:\Windows\SYSTEM32\d3d11.dll
+module C:\Windows\SYSTEM32\dxgi.dll
+module C:\Windows\SYSTEM32\d3d10core.dll
+module C:\Windows\SYSTEM32\d3d10_1.dll
+module C:\Windows\SYSTEM32\d3d10_1core.dll
+module C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_d3d11.dll
+module C:\Program Files\amdgpu-wddm\desktop\bc250d3d_router.dll
+module C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_dxvk.dll
+module C:\Program Files\amdgpu-wddm\d3d11\amdgpu_wddm_radv.dll
+served by: application GPU UMD (amdgpu_wddm_d3d11.dll)
+verdict NO-DEVICE
+=== x86 0B054C9E
+exit 
+d3d10probe pid 5484, x86 build
+entry trace: 6 GetProcAddress imports of the runtime DLLs replaced
+entry: the runtime asks C:\Program Files\amdgpu-wddm\wow64\desktop\bc250d3d_router.dll for OpenAdapter10_2: exported
+entry: OpenAdapter10_2 interface 000B0011 version 00060000 -> 0x00000000
+entry: CalcPrivateDeviceSize interface 000B0023 version 00050000
+entry: CreateDevice interface 000B0023 (11.35) version 00050000 pipeline level 12_1 -> 0x00000000
+D3D10CreateDeviceAndSwapChain(hardware) -> 0x887A0022
+entry: the runtime asks C:\Program Files\amdgpu-wddm\wow64\desktop\bc250d3d_router.dll for OpenAdapter10_2: exported
+entry: OpenAdapter10_2 interface 000B0011 version 00060000 -> 0x00000000
+entry: CalcPrivateDeviceSize interface 000B0023 version 00050000
+entry: CreateDevice interface 000B0023 (11.35) version 00050000 pipeline level 12_1 -> 0x00000000
+D3D10CreateDevice(hardware) -> 0x00000000
+module C:\BC250\tmp\bd081\x86\d3d10probe.exe
+module C:\Windows\SYSTEM32\d3d10.dll
+module C:\Windows\SYSTEM32\d3d10core.dll
+module C:\Windows\SYSTEM32\d3d11.dll
+module C:\Windows\SYSTEM32\dxgi.dll
+module C:\Windows\SYSTEM32\d3d10_1.dll
+module C:\Windows\SYSTEM32\d3d10_1core.dll
+module C:\Program Files\amdgpu-wddm\wow64\d3d11\amdgpu_wddm_d3d11.dll
+module C:\Program Files\amdgpu-wddm\wow64\desktop\bc250d3d_router.dll
+module C:\Program Files\amdgpu-wddm\wow64\d3d11\amdgpu_wddm_dxvk.dll
+module C:\Program Files\amdgpu-wddm\wow64\d3d11\amdgpu_wddm_radv.dll
+served by: application GPU UMD (amdgpu_wddm_d3d11.dll)
+verdict NO-DEVICE
