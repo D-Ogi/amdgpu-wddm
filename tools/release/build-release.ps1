@@ -181,8 +181,9 @@ foreach ($cfg in Get-ChildItem -LiteralPath (Join-Path $pkg 'payload') -Recurse 
 }
 
 Write-Host 'installer and documents'
-# The start-confirm task's scripts: it also writes the running-release witness (release-witness.ps1).
-$taskScripts = @('start-confirm.ps1', 'start-confirm-core.ps1', 'dwm-session.ps1', 'release-witness.ps1')
+# The logon tasks' scripts: the confirmation also writes the running-release witness (release-witness.ps1), and
+# start-window.ps1 is the window task's own script (BD-080), which the logged-on user runs with their own rights.
+$taskScripts = @('start-confirm.ps1', 'start-confirm-core.ps1', 'start-window.ps1', 'dwm-session.ps1', 'release-witness.ps1')
 $inst = Join-Path $pkg 'installer'
 [void][IO.Directory]::CreateDirectory($inst)
 foreach ($f in Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'installer') -File) {

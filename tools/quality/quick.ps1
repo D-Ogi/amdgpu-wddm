@@ -99,6 +99,10 @@ try {
  # Owner 2026-10-12: the installer's own diagnostics of a start that did not pass (the decision, the readers and
  # the bounds), with the field case as a fixture. Windows PowerShell 5.1, the shell a tester runs.
  Check 'installer-diagnostics' { & powershell -NoProfile -File "$repo\tools\release\test-diagnostics.ps1" }
+ # BD-060 and BD-080: the INF restart directive, the resumed install's inputs, the DWM baseline, and the plan of the
+ # two logon tasks (who confirms a driver start, and at whose logon). It writes files under Out and registers no
+ # task. Until now it ran only inside test-dryrun.ps1, which needs a built package.
+ Check 'session-checks' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\tools\release\test-session-checks.ps1" -WorkRoot "$Out\session-checks" }
  # The ICD's own build tree is not in the repository, and the 2026-10-10 cleanup removed the one this gate had
  # (scratch\m12\REMOVED-2026-10-10.txt). It ran through Check, so every profile that holds it - the KMD package
  # profile included - failed before its package step on a missing input. It is the same case CheckIf exists for:

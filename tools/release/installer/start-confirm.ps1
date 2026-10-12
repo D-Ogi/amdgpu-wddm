@@ -1,6 +1,7 @@
-# Logon start-confirm of a tester PC: the scheduled task "amdgpu-wddm start confirm" (install.ps1 registers it: at
-# logon of an administrator, highest privileges) runs this once per logon. The release variant of the lab's
-# start-confirm.ps1; the decision rules are the lab's, unchanged, in start-confirm-core.ps1.
+# Logon start-confirm of a tester PC: the scheduled task "amdgpu-wddm start confirm" (install.ps1 registers it from
+# the plan of common.ps1: at the logon of any user, as Local System, highest run level, -NoWindow) runs this once per
+# logon. The release variant of the lab's start-confirm.ps1; the decision rules are the lab's, unchanged, in
+# start-confirm-core.ps1.
 #
 # Why it exists: every driver start counts against the KMD's boot-loop guard (guard.c GuardCheckAndCountStart,
 # BC250_MAX_UNCONFIRMED_STARTS 2): at the third start nobody confirmed, the driver refuses to start and Windows uses
@@ -12,6 +13,15 @@
 # presenting, and confirms the start once the KMD's milestone is met. Then it exits: at health flags 15, or after
 # -Seconds (120). Nothing stays resident.
 #
+# BD-080: with -NoWindow this script only reads and confirms, and shows nothing. That is the run of the task above,
+# because the Local System account that confirms at the logon of any user has no desktop in that session. The window
+# is a second task of its own, start-window.ps1, which runs in the session of the user who logged on, with that
+# user's rights and no access to the driver. Both runs take their decisions through the same poll (Invoke-Tick ->
+# Invoke-Poll): the boot-loop guard, the DPM coupling and the fallback are the same in either mode. Where no window
+# runs at all (nobody is logged on behind the confirmation, or the window task was removed), an idle desktop may
+# present too rarely for the KMD's milestone, and the fallback below resets the boot-loop guard alone: the machine
+# stays off Basic Display and the next start runs at the floor clock.
+#
 # Health reads and the confirmation go through bc250control.dll next to this script (Bc250StartHealth, the same
 # export the control application uses). If the KMD never reaches its milestone, a fallback resets only the
 # boot-loop guard (bc250kmd_cli confirm) after 60 s of a healthy-looking start: device OK, the driver answers with
@@ -22,7 +32,7 @@
 # DWM baseline of the logon (dwm-session.ps1) and, at its end, the running-release witness of this boot when the loaded
 # KMD is the installed release's (release-witness.ps1, read by the control application). -Probe prints one reading of
 # everything and exits (read-only; verify uses it).
-param([int]$Seconds = 120, [switch]$Probe, [string]$ExpectedVersion = '', [int]$FallbackHoldSeconds = 60)
+param([int]$Seconds = 120, [switch]$Probe, [switch]$NoWindow, [string]$ExpectedVersion = '', [int]$FallbackHoldSeconds = 60)
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 # The driver version the fallback expects: manifest.json kmd_abi of the installed release (the install root is the
@@ -150,7 +160,25 @@ function Get-FallbackView {
     return [ordered]@{ ok = $ok; text = "device problem $problem, driver version $version (expected $ExpectedVersion), LastStage $stage" }
 }
 
+# ---- BD-080: the other half of this logon, the window task -------------------------------------------------------
+# The window runs as the user who logged on (start-window.ps1, the task below), where this script cannot see it: a
+# different session, and under Local System no desktop at all. What it can read is the task's own record, so the log
+# of this run says whether the window half ran and what it reported. start-window.ps1's exit codes: 0 shown and
+# closed, 2 could not be shown. 267009 is "running", and the task is absent on a machine where an older release
+# registered the single task only. This never throws and never changes the run's outcome; it is a log line.
+$windowTaskName = 'amdgpu-wddm start window'   # common.ps1 $script:WindowTaskName; test-session-checks.ps1 holds the two together
+function Format-WindowTask {
+    try {
+        $t = Get-ScheduledTask -TaskName $windowTaskName -ErrorAction SilentlyContinue
+        if (-not $t) { return "window task: '$windowTaskName' is not registered on this computer" }
+        $i = Get-ScheduledTaskInfo -TaskName $windowTaskName -ErrorAction Stop
+        $last = $(if ($i.LastRunTime) { ([DateTime]$i.LastRunTime).ToUniversalTime().ToString('o') } else { 'never' })
+        return "window task: state $($t.State), last run $last, last result $($i.LastTaskResult)"
+    } catch { return "window task: not read ($($_.Exception.Message))" }
+}
+
 if ($Probe) {
+    Write-StartConfirmLog "probe: $(Format-WindowTask)"
     Write-StartConfirmLog "probe: UnconfirmedStarts $(Read-Parameter 'UnconfirmedStarts')"
     Write-StartConfirmLog "probe: $(Format-Dpm)"
     Write-StartConfirmLog ('probe: fallback view: ' + (Get-FallbackView).text)
@@ -215,30 +243,50 @@ function Invoke-Poll {
     return $null
 }
 
-Add-Type -AssemblyName System.Windows.Forms, System.Drawing
-$form = New-Object Windows.Forms.Form
-$form.FormBorderStyle = 'None'; $form.TopMost = $true; $form.ShowInTaskbar = $false; $form.ShowIcon = $false
-$form.StartPosition = 'Manual'; $form.Size = New-Object Drawing.Size(250, 22); $form.Location = New-Object Drawing.Point(8, 34)
-$form.BackColor = [Drawing.Color]::Navy
-$label = New-Object Windows.Forms.Label
-$label.Dock = 'Fill'; $label.ForeColor = [Drawing.Color]::Cyan; $label.Font = New-Object Drawing.Font('Consolas', 9)
-$form.Controls.Add($label)
-$timer = New-Object Windows.Forms.Timer
-$timer.Interval = 250
-$timer.Add_Tick({
+# One step of the run: poll when the next poll is due, and answer with the step that ends the run, or $null. The
+# headless loop and the window's timer both call this and nothing else, so the two runs decide alike (BD-080).
+function Invoke-Tick {
     $now = $clock.Elapsed.TotalSeconds
-    $label.Text = 'amdgpu-wddm start check ' + [DateTime]::Now.ToString('HH:mm:ss.f')
-    if ($now -lt $script:nextPoll) { return }
+    if ($now -lt $script:nextPoll) { return $null }
     $step = $null
     try { $step = Invoke-Poll }
     catch { Write-StartConfirmLog "poll error: $($_.Exception.Message)"; $script:nextPoll = $now + $pollEvery }
     if (!$step -and $now -ge $Seconds + 10) { $step = [ordered]@{code = 1; reason = 'hard bound: polls kept failing' } }
-    if ($step) { $script:exitCode = [int]$step.code; $script:lastReason = $step.reason; $timer.Stop(); $form.Close() }
-})
-$timer.Start()
-[void]$form.ShowDialog()
-$timer.Dispose(); $form.Dispose()
-Write-StartConfirmLog "exit $($script:exitCode): $($script:lastReason); UnconfirmedStarts $(Read-Parameter 'UnconfirmedStarts'); $(Format-Dpm); confirm calls $($state.confirms); start record: $(Format-StartRecord -Record (Read-StartRecord) -BootUtc $script:bootUtc)"
+    return $step
+}
+
+if ($NoWindow) {
+    # The run of the Local System task: no window, no form, no assembly to load. The window of this logon is
+    # start-window.ps1's, in the user's own session; this loop keeps the time bound of the task either way.
+    Write-StartConfirmLog "window: none (-NoWindow); the window of this logon is the task $windowTaskName, and the exit line below reports what that task did"
+    while ($true) {
+        $step = Invoke-Tick
+        if ($step) { $script:exitCode = [int]$step.code; $script:lastReason = $step.reason; break }
+        Start-Sleep -Milliseconds 250
+    }
+} else {
+    # The windowed run, as it has always been. Every variable here stays in the script's own scope, which an if or
+    # else block does not change: the timer's handler reads $label, $timer and $form while ShowDialog runs.
+    Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+    $form = New-Object Windows.Forms.Form
+    $form.FormBorderStyle = 'None'; $form.TopMost = $true; $form.ShowInTaskbar = $false; $form.ShowIcon = $false
+    $form.StartPosition = 'Manual'; $form.Size = New-Object Drawing.Size(250, 22); $form.Location = New-Object Drawing.Point(8, 34)
+    $form.BackColor = [Drawing.Color]::Navy
+    $label = New-Object Windows.Forms.Label
+    $label.Dock = 'Fill'; $label.ForeColor = [Drawing.Color]::Cyan; $label.Font = New-Object Drawing.Font('Consolas', 9)
+    $form.Controls.Add($label)
+    $timer = New-Object Windows.Forms.Timer
+    $timer.Interval = 250
+    $timer.Add_Tick({
+        $label.Text = 'amdgpu-wddm start check ' + [DateTime]::Now.ToString('HH:mm:ss.f')
+        $step = Invoke-Tick
+        if ($step) { $script:exitCode = [int]$step.code; $script:lastReason = $step.reason; $timer.Stop(); $form.Close() }
+    })
+    $timer.Start()
+    [void]$form.ShowDialog()
+    $timer.Dispose(); $form.Dispose()
+}
+Write-StartConfirmLog "exit $($script:exitCode): $($script:lastReason); $(Format-WindowTask); UnconfirmedStarts $(Read-Parameter 'UnconfirmedStarts'); $(Format-Dpm); confirm calls $($state.confirms); start record: $(Format-StartRecord -Record (Read-StartRecord) -BootUtc $script:bootUtc)"
 # The running-release witness of this boot: the loaded KMD image and its reply against the installed manifest. Written
 # whatever the confirmation's outcome (it names what runs, not how healthy it is); never fails the task. It takes the
 # installer's engine.lock for the whole reading and publication (up to 3 s wait): while an installer runs, no witness.

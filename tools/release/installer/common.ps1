@@ -28,6 +28,7 @@ $script:KhronosKeyWow    = 'HKLM:\SOFTWARE\WOW6432Node\Khronos\Vulkan\Drivers'
 $script:RunOnceKey       = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce'
 $script:RunOnceName      = 'amdgpu-wddm-installer'
 $script:TaskName         = 'amdgpu-wddm start confirm'
+$script:WindowTaskName   = 'amdgpu-wddm start window'          # BD-080: the part that needs a session, not rights
 $script:FirmwareInstallDir      = 'C:\BC250\firmware'                 # compiled into the KMD (psp.c BC250_PSP_FIRMWARE_DIR)
 $script:StateDir         = Join-Path $env:ProgramData 'amdgpu-wddm\installer'
 $script:StatePath        = Join-Path $script:StateDir 'state.json'
@@ -1382,10 +1383,100 @@ function Get-OurVulkanIcdValues {
     }
     return $r
 }
-# Our scheduled tasks. The installer registers one ('amdgpu-wddm start confirm'); the sweep takes any task of ours,
+# Our scheduled tasks. The installer registers the two of Get-LogonTaskPlan below; the sweep takes any task of ours,
 # so a task that an older release named differently goes with it.
 function Get-OurScheduledTasks {
     try { return @(Get-ScheduledTask -ErrorAction Stop | Where-Object { $_.TaskName -like "$($script:ReleaseName)*" } | ForEach-Object { $_.TaskName }) } catch { return @() }
+}
+# BD-080: the logon tasks of a tester PC as data. install.ps1 registers exactly what this function returns, and
+# tools\release\test-session-checks.ps1 holds the rules of Test-LogonTaskPlan against it, so the account the
+# confirmation runs under is gated without a registration on the test PC.
+#
+# Why two tasks. The confirmation needs the KMD escape BC250_ESCAPE_RUN_START_HEALTH, and the kernel refuses its
+# CONFIRM operation to a caller who is not an administrator (driver\kmd\start_health.c StartHealthRequest, with
+# CallerIsAdmin of driver\kmd\display.c), so the confirmation runs with an administrator's token. Up to and
+# including 0.7.216.100-tester.28 the one task carried the Administrators group (S-1-5-32-544) as its principal,
+# which means it runs at the logon of an administrator and at no other logon. A standard user therefore confirmed
+# nothing, the boot-loop guard counted every start (BC250_MAX_UNCONFIRMED_STARTS 2, driver\kmd\guard.c) and the
+# third start of the machine refused to start the driver, which leaves Windows on Microsoft Basic Display with no
+# way back for the user who has no administrator account. That is BD-080.
+#
+# The confirmation itself needs no interactive account: it reads the start health and writes the confirmation
+# through an escape. It runs as Local System (S-1-5-18), whose token is an administrator's, with the trigger that
+# fires at the logon of any user, and headless (-NoWindow), because the account has no desktop in that session.
+# The window is the other half, and it is the half that needs the user's own session and no rights at all: a small
+# top-most window whose text changes keeps DWM presenting, so the KMD's milestone (ready for 60 s with a
+# presentation completion within 15 s, BC250_START_HEALTH_MIN_MS and BC250_START_HEALTH_FRESH_MS in
+# driver\kmd\bc250kmd_escape.h) is reached on an idle desktop. It is registered for the Users group
+# (S-1-5-32-545), which every interactive account belongs to, at the limited run level, and it touches neither
+# the driver nor the registry. Without it the confirmation still keeps the machine out of Basic Display through
+# the fallback of start-confirm.ps1, at the price of one start at the floor clock.
+#
+# The accounts are named by their SID here, never by a name: a name of a built-in account is translated on a German,
+# Polish or Japanese Windows, a SID is not, so this plan and the installer carry no translated text (the project's
+# rule against parsing translated OS text). The SID does not survive the registration: New-ScheduledTaskPrincipal
+# translates it into the local name before the task is stored, so a Polish Windows keeps the Users group as
+# 'Uzytkownicy' in the task itself. Whoever reads a registered task back (a lab check, a support report) therefore
+# translates the SID on that computer and compares the result, and never compares the string 'S-1-5-32-545'.
+# The logon type of a group principal is Windows' own ('Group'); the installer states it in this plan and does not
+# pass it to New-ScheduledTaskPrincipal, which takes it with -UserId.
+function Get-LogonTaskPlan {
+    param([Parameter(Mandatory)][string]$ConfirmScript, [Parameter(Mandatory)][string]$WindowScript, [int]$Seconds = 120)
+    $host51 = '-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File'
+    return @(
+        [ordered]@{
+            role      = 'confirm'
+            name      = $script:TaskName
+            execute   = 'powershell.exe'
+            arguments = "$host51 `"$ConfirmScript`" -NoWindow"
+            principal = [ordered]@{ kind = 'user'; id = 'S-1-5-18'; logon_type = 'ServiceAccount'; run_level = 'Highest' }
+            trigger   = [ordered]@{ kind = 'at-logon'; user = $null }
+            minutes   = 3
+            what      = "at the logon of any user, as Local System (S-1-5-18), headless: $ConfirmScript"
+        },
+        [ordered]@{
+            role      = 'window'
+            name      = $script:WindowTaskName
+            execute   = 'powershell.exe'
+            arguments = "$host51 `"$WindowScript`" -Seconds $Seconds"
+            principal = [ordered]@{ kind = 'group'; id = 'S-1-5-32-545'; logon_type = 'Group'; run_level = 'Limited' }
+            trigger   = [ordered]@{ kind = 'at-logon'; user = $null }
+            minutes   = 3
+            what      = "at the logon of any user, with that user's own rights (Users, S-1-5-32-545): $WindowScript"
+        }
+    )
+}
+# The rules of the plan above, as the list of what is wrong with a plan; an empty list is a plan that holds them.
+# The host test runs it over the installer's plan and over a plan with the principal of the defect, which must fail.
+function Test-LogonTaskPlan {
+    param([Parameter(Mandatory)]$Plan)
+    $bad = New-Object System.Collections.ArrayList
+    $tasks = @($Plan)
+    foreach ($t in $tasks) {
+        $n = [string]$t.name
+        if ($n -notlike "$($script:ReleaseName)*") { [void]$bad.Add("task '$n' is not named after the release: the uninstaller's sweep (Get-OurScheduledTasks) would leave it on the computer") }
+        if ([string]$t.trigger.kind -ne 'at-logon') { [void]$bad.Add("task '$n' triggers on '$($t.trigger.kind)', not at logon") }
+        if ($t.trigger.user) { [void]$bad.Add("task '$n' triggers at the logon of '$($t.trigger.user)' only; every logon has to run it") }
+        if ([string]$t.principal.id -eq 'S-1-5-32-544') { [void]$bad.Add("task '$n' is registered for the Administrators group (S-1-5-32-544): it never runs at the logon of a standard user (BD-080)") }
+        if ([int]$t.minutes -le 0) { [void]$bad.Add("task '$n' has no execution time limit") }
+        if ([string]$t.execute -ne 'powershell.exe') { [void]$bad.Add("task '$n' runs '$($t.execute)', not powershell.exe") }
+    }
+    $confirm = @($tasks | Where-Object { $_.role -eq 'confirm' })
+    if ($confirm.Count -ne 1) { [void]$bad.Add("the plan has $($confirm.Count) confirmation tasks, not one"); return @($bad) }
+    $c = $confirm[0]
+    if (([string]$c.principal.kind -ne 'user') -or ([string]$c.principal.id -ne 'S-1-5-18')) { [void]$bad.Add("the confirmation runs as $($c.principal.kind) $($c.principal.id), not as Local System (S-1-5-18)") }
+    if ([string]$c.principal.logon_type -ne 'ServiceAccount') { [void]$bad.Add("the confirmation asks for logon type '$($c.principal.logon_type)', not ServiceAccount") }
+    if ([string]$c.principal.run_level -ne 'Highest') { [void]$bad.Add("the confirmation asks for run level '$($c.principal.run_level)': the KMD refuses CONFIRM to a caller who is not an administrator") }
+    if ([string]$c.arguments -notmatch '(?i)(^|\s)-NoWindow(\s|$)') { [void]$bad.Add('the confirmation does not run headless (-NoWindow): its account has no desktop in the logon session') }
+    if ([string]$c.arguments -match '(?i)(^|\s)-Probe(\s|$)') { [void]$bad.Add('the confirmation runs read-only (-Probe): it would confirm no start') }
+    if ([string]$c.arguments -match '(?i)(^|\s)-FallbackHoldSeconds(\s|$)') { [void]$bad.Add('the confirmation changes the hold of the boot-loop fallback on its command line; the bound belongs to start-confirm.ps1') }
+    $window = @($tasks | Where-Object { $_.role -eq 'window' })
+    if ($window.Count -ne 1) { [void]$bad.Add("the plan has $($window.Count) window tasks, not one"); return @($bad) }
+    $w = $window[0]
+    if (([string]$w.principal.kind -ne 'group') -or ([string]$w.principal.id -ne 'S-1-5-32-545')) { [void]$bad.Add("the window is registered for $($w.principal.kind) $($w.principal.id), not for the Users group (S-1-5-32-545) that every interactive account belongs to") }
+    if ([string]$w.principal.run_level -ne 'Limited') { [void]$bad.Add("the window asks for run level '$($w.principal.run_level)': it needs no rights, and a standard user has none to give it") }
+    if ([string]$w.name -eq [string]$c.name) { [void]$bad.Add('both tasks carry the same name') }
+    return @($bad)
 }
 # Our test certificates in the two machine stores, by subject: the certificate of this release and of any older one.
 function Get-OurCertificates {

@@ -42,6 +42,7 @@ function Get-Footprint {
         software     = Test-Path -LiteralPath 'HKLM:\SOFTWARE\amdgpu-wddm'
         runonce      = [bool](Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'amdgpu-wddm-installer' -ErrorAction SilentlyContinue)
         task         = [bool](Get-ScheduledTask -TaskName 'amdgpu-wddm start confirm' -ErrorAction SilentlyContinue)
+        windowtask   = [bool](Get-ScheduledTask -TaskName 'amdgpu-wddm start window' -ErrorAction SilentlyContinue)   # BD-080: both logon tasks are in the before/after of a dry run
         service      = [bool](Get-Service -Name bc250kmd -ErrorAction SilentlyContinue)
         bc250        = Test-Path -LiteralPath 'C:\BC250'
         programfiles = Test-Path -LiteralPath (Join-Path $env:ProgramFiles 'amdgpu-wddm')
