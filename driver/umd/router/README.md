@@ -46,9 +46,10 @@ process, which needs a machine-wide `DXVK_LOG_PATH` because `svchost.exe` starts
 stays empty on the CPU route as well, the entry buys nothing and comes out. A fix in the D3D11 shell retires it.
 The entry is one line, so it costs nothing to keep until then.
 
-The release copies the router as a prebuilt binary (`tools/release/release-sources.json`, the `router-x64` and
-`router-x86` entries), so a policy change reaches a tester only when both architectures are rebuilt from the
-merged commit with `tools/build/build-umd-router.ps1` and the two entries are repinned to that build.
+The release copies the router as a prebuilt binary (`tools/release/release-sources.json`, the rows of the
+components `desktop-umd` and `desktop-umd-wow64`), so a policy change reaches a tester only when both
+architectures are rebuilt from the merged commit with `tools/build/build-umd-router.ps1` and both rows are
+repinned to that build.
 
 In `dwm.exe`, the router also writes each desktop decision into the session's desktop-route record
 (`driver/contract/bc250_desktop_route.h`, M15.14): `gpu`, `cpu-kill-switch`, `cpu-switches-off` or `cpu-fallback`.

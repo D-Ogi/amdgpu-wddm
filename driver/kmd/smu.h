@@ -70,7 +70,8 @@ NTSTATUS SmuReadClock(BC250_SMU_OWNER* Owner, ULONG* MHz, ULONG* Vid, LONG* Temp
 // an operating point - and is the same for both callers, so no reply tells a caller its token instead of its
 // mistake. An administrator's READ is one live reading; any other caller's READ is answered from the published
 // one while it is younger than BC250_CLOCK_SNAP_US, so the open operation cannot raise the rate of mailbox
-// traffic on the part however many callers ask.
+// traffic on the part however many callers ask. Every READ still takes the owner lock for its own short critical
+// section; that section carries no mailbox message when the published reading is the one that answers.
 void SmuClockRequest(BC250_SMU_OWNER* Owner, BC250_ESCAPE_CLOCK* Data,
     BOOLEAN Administrator, BOOLEAN HardwareAccess, BOOLEAN NoAdapterSynchronization);
 

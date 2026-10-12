@@ -386,8 +386,10 @@ NTSTATUS SmuReadClock(BC250_SMU_OWNER* owner,ULONG* mhz,ULONG* vid,LONG* tempera
 // younger than BC250_CLOCK_SNAP_US; a reading older than that is taken live and published in its turn. So every
 // unprivileged caller together adds at most one clock transaction per BC250_CLOCK_SNAP_US, the rate the
 // governor's readback already keeps, and under a running governor they add none: this is the bound that lets the
-// operation be open at all, and it is why no loop of reads can delay the governor's own transactions or put
-// mailbox traffic under a compute load (the line driver/kmd/cpu.c draws for the CPU rail in its own words).
+// operation be open at all, and it is why a loop of reads puts no further mailbox traffic on the part, whatever
+// the compute load (the line driver/kmd/cpu.c draws for the CPU rail in its own words). Such a loop does enter
+// OwnerBegin for each read, so it takes the owner lock for the copy of a published reading; that critical section
+// carries no mailbox message and no settle pause.
 // An administrator still reads live, because the lab's tools measure a moment rather than watch a number.
 static NTSTATUS SmuReadClockPublished(BC250_SMU_OWNER* owner,ULONG* mhz,ULONG* vid,LONG* temperature)
 {

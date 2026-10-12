@@ -117,9 +117,11 @@ takes a live one only when it is older. Every successful reading is published in
 the owner, including the governor's readback of `BC250_DPM_VERIFY_MS`, so while
 the governor ticks an unprivileged read sends nothing at all. The bound, not the
 cheapness of a read, is what admits the open operation: however many callers ask,
-they add at most the mailbox traffic the driver already sends for itself, so no
-loop of reads can delay a governor transaction or put messages on the part under a
-compute load. An owner start clears the published reading, so no caller is served
+they add at most the mailbox traffic the driver already sends for itself. A loop
+of reads therefore puts no further messages on the part. It does enter the owner
+lock for each read, for the time it takes to copy a published reading, and that
+critical section carries no mailbox message. An owner start clears the published
+reading, so no caller is served
 a clock from before the transition that stopped the last start. The reply carries
 no age field: a caller that needs the moment itself asks elevated.
 
