@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "set": "hist171",
+  "comment": "The nine historical helper files every KMD transition reuses byte for byte: the kmd168 transition helpers, bounded-child.exe and select-driver.exe. kmdcommon.HIST points at the copy of this set under the kit's WORK directory; historical_manifest() refuses to continue unless this file is the one kmdcommon.HIST_MANIFEST_SHA256 pins and every file in HIST still has the digest recorded here.",
+  "historical_stage_manifest_sha256": "CF57DB7375B4FE787CC98EF83D6D06F078185A34D041045BA3782A914B8C0E91",
+  "provenance": {
+    "origin": "M727 stage manifest of the measured 170 -> 171 promotion; its own SHA256 is historical_stage_manifest_sha256 above, and every frozen attempt records that value as runner.historical_stage_manifest.",
+    "original_input": "scratch/m14/kmd171-deploy001, the frozen 171 attempt directory",
+    "lost": "The workspace cleanup of 2026-10-12 deleted that directory. No byte copy of the 171 stage-manifest.json survives, in the workspace, on the lab or in git history, so the kit can no longer read the set through its original manifest.",
+    "recovered": "2026-10-12. The nine files survive byte for byte inside four later frozen attempts: kmd192-deploy001, kmd193-deploy001, kmd196-deploy001, kmd197-deploy001. Each of those attempts recorded runner.historical_stage_manifest = historical_stage_manifest_sha256, lists all nine files with digests, and still matches those digests on disk. All four agree on every digest, and the seven kmd168-transition files tracked in this repository under template/kmd168-transition match them too. The bytes were copied from kmd192-deploy001 with per-file digest verification.",
+    "proof": "scratch/kmd-deploy-hist171/hist171-proof.json, written by scratch/kmd-deploy-hist171/prove.py",
+    "reason": "A tracked manifest plus a set inside the kit's own WORK directory, which the cleanup keeps, makes the historical input durable: nothing the kit needs sits in a closed milestone's scratch tree any more."
+  },
+  "files": {
+    "bounded-child.exe": "7C8B0A4D1045446BE5A279AAD626F7C6DACF48E643FC3253641643521403D940",
+    "kmd168-transition/bounded-child-fixture.ps1": "4F0B1C31D7FE7D1C835E923991BB345C393401B3638E43EF1D23CD4BB9535703",
+    "kmd168-transition/build-bounded-child.ps1": "787DC793DFBBE5DA322D4AC2ED89B461CC06F2A37C3D4262C97A8F0A9EF14A73",
+    "kmd168-transition/deadline.ps1": "81276D6821C5EB1BBF51E9D1762FFCDA01D194C69C67F5A208766B4B09847058",
+    "kmd168-transition/invoke-bounded.ps1": "92A5619E602110A7D84553A789DE2F9685B39715AD3A7141EE7FD296C75175B8",
+    "kmd168-transition/test-bounded-child.ps1": "0DB65D96EAAA98B096A0A523773C5543426BA2C903220CC7FE74A7B0D53C0A21",
+    "kmd168-transition/test-deadline.ps1": "8C0DA67ADA209FC7DBF7F333F553B1FE9F3D841D43E3EAE62784E9A95303CD05",
+    "kmd168-transition/test-receipt-pipe.ps1": "FF4B427F10644269D10306CF615D4E6EFBD88D2410B86BFAC66BD2F11151D73C",
+    "select-driver.exe": "9D3DE5A89F707B9262D757965A2F254D8671A27B5E2F4233C005F0B7EC992272"
+  }
+}

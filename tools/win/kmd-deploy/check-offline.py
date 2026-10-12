@@ -94,6 +94,11 @@ def main():
     record('legacy lab paths', not hits, '\n'.join(hits[:10]) if hits else 'no kit file names C:\\BC250\\m8..m14 '
            'or a KMD client by path')
 
+    # The tracked manifest of the nine historical helpers is the pinned one, and a changed helper or manifest is
+    # refused (tools/test_hist171.py). This runs before the gate below reads the set.
+    r = subprocess.run([sys.executable, str(BASE / 'tools/test_hist171.py')], capture_output=True, text=True, timeout=120)
+    record('historical helper set', r.returncode == 0 and 'PASS' in r.stdout, r.stdout + r.stderr)
+
     transition = TEMPLATE / 'kmd-transition'
     kmd168 = TEMPLATE / 'kmd168-transition'
     # The kmd168 helpers in the template are the 171 stage's own files, byte for byte.

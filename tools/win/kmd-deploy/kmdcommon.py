@@ -23,10 +23,20 @@ HOST_TESTS = WORK / 'host-tests'
 REPO = ROOT / 'bc250-win'
 # The deployed lab baseline every native trial requires; freeze pins the rollback against it, accept moves it.
 LAB_BASELINE = ROOT / 'scratch/m15/native-caps001/lab-baseline.json'
-HIST = ROOT / 'scratch/m14/kmd171-deploy001'
-# M727 stage manifest of the measured 170 -> 171 promotion; it pins the kmd168 helpers, bounded-child.exe and
-# select-driver.exe that every transition reuses byte for byte.
-HIST_MANIFEST_SHA256 = 'CF57DB7375B4FE787CC98EF83D6D06F078185A34D041045BA3782A914B8C0E91'
+# The nine historical helpers every transition reuses byte for byte: the kmd168 helpers, bounded-child.exe and
+# select-driver.exe. They were pinned by the M727 stage manifest of the measured 170 -> 171 promotion, and every
+# attempt still records that manifest's own SHA256 as runner.historical_stage_manifest.
+HIST171_STAGE_MANIFEST_SHA256 = 'CF57DB7375B4FE787CC98EF83D6D06F078185A34D041045BA3782A914B8C0E91'
+# Where those bytes live now. The 171 attempt directory the kit used to read was deleted by the workspace cleanup
+# of 2026-10-12, and no copy of its stage-manifest.json survives, so the set is re-pinned here: the files in
+# scratch/kmd-deploy/hist171, which the cleanup keeps, and their digests in a tracked manifest. The bytes were
+# recovered from the frozen attempts kmd192/193/196/197-deploy001, which all four record the manifest SHA above
+# and all four agree on every digest; hist171-manifest.json carries that provenance in full. The set is
+# immutable input, not attempt output: it does not follow BC250_KMD_DEPLOY_WORK (the package gate moves WORK
+# into its own output directory), only its own BC250_KMD_DEPLOY_HIST override.
+HIST = Path(os.environ.get('BC250_KMD_DEPLOY_HIST', str(ROOT / 'scratch/kmd-deploy/hist171')))
+HIST_MANIFEST = BASE / 'hist171-manifest.json'
+HIST_MANIFEST_SHA256 = '57EF8FBAA5F9E034F35A9C3E0474A26FE4CA4B5E881BA5D222910A589A1D7C63'
 REMOTE_BASE = 'C:\\BC250\\m15'
 REMOTE_TMP = 'C:\\BC250\\tmp'
 POWERSHELL = 'C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe'
@@ -366,10 +376,27 @@ def verify_attempt(attempt, ops):
 
 
 def historical_manifest():
-    path = HIST / 'stage-manifest.json'
-    if digest(path) != HIST_MANIFEST_SHA256:
-        raise SystemExit('Historical 171 stage manifest changed; refusing to reuse its files')
-    return json.loads(path.read_text(encoding='utf-8'))['files']
+    """The nine historical helper files as {rel: sha256}, verified before anything reuses them.
+
+    Three refusals, each of which used to be the one hash comparison against the 171 stage manifest: the tracked
+    manifest is the pinned one, it still names the 171 stage manifest the attempts record, and every file under
+    HIST has the digest it records, with nothing else beside them.
+    """
+    if digest(HIST_MANIFEST) != HIST_MANIFEST_SHA256:
+        raise SystemExit('Historical helper manifest changed; refusing to reuse its files: ' + str(HIST_MANIFEST))
+    manifest = json.loads(HIST_MANIFEST.read_text(encoding='utf-8'))
+    if manifest.get('historical_stage_manifest_sha256') != HIST171_STAGE_MANIFEST_SHA256:
+        raise SystemExit('Historical helper manifest does not name the 171 stage manifest')
+    files = manifest['files']
+    if not HIST.is_dir():
+        raise SystemExit(f'Historical helper set missing: {HIST} (its provenance is {HIST_MANIFEST})')
+    present = {p.relative_to(HIST).as_posix() for p in HIST.rglob('*') if p.is_file()}
+    if present != set(files):
+        raise SystemExit('Historical helper set differs from its manifest: ' + ', '.join(sorted(present ^ set(files))))
+    for rel, value in sorted(files.items()):
+        if digest(HIST / rel) != value:
+            raise SystemExit('Historical helper file changed: ' + rel)
+    return files
 
 
 def next_receipt(ops, stem, suffix):

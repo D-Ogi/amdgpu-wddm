@@ -35,6 +35,10 @@ tools/win/wsi-dxgi/*.cpp -text
 # recorded 171 stage manifest and refuse a difference. Line-ending normalization would break every hash.
 tools/win/kmd-deploy/template/kmd168-transition/** -text
 
+# The manifest that records those hashes is hash pinned in turn: kmdcommon.HIST_MANIFEST_SHA256 holds its
+# SHA-256 and historical_manifest() refuses a difference, so no checkout may rewrite a byte of it.
+tools/win/kmd-deploy/hist171-manifest.json -text
+
 # The present-mode test fixture is one second of a real xperf dumper text, kept byte for byte with
 # its CRLF endings: it is evidence of the shapes this driver produces.
 tools/win/etw/testdata/*.txt -text
