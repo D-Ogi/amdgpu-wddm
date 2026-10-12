@@ -44,17 +44,29 @@ struct PresentSources {
 // outputs are the whole rule: stage 3 first and, on S_OK, nothing else happens and added_gpu_work stays false;
 // its refusal is not an answer, so stage 6 is asked, and only its S_OK sets added_gpu_work. A refusal of stage 6
 // leaves the source 0, which fill_present refuses as well, and the caller reports the status of stage 6.
+//   The copy is made for the windowed Blt form only (R6 of the review of 2026-10-12): the kernel driver builds its
+// GPU present for a Blt (driver\kmd\wddm.c:7200, WddmBuildGpuPresent refuses a present whose flags are not the Blt
+// alone), and a Flip names a surface that is scanned out, not one that is copied from. A present whose flags are not
+// Blt, or carry Flip, is refused at stage 8 before the copy is asked, so nothing is recorded or waited for. The flags
+// are the runtime's DXGI_DDI_PRESENT_FLAGS (D3D12DDIARG_PRESENT_0001::Flags; dxgiddi.h: Blt 0x1, Flip 0x2). The
+// zero-copy path of stage 3 does not look at them, as before.
+inline bool present_copy_flags_admitted(const DXGI_DDI_PRESENT_FLAGS& flags) noexcept {
+    return flags.Blt && !flags.Flip;
+}
 struct PresentSourceHooks {
     void* state{};
     HRESULT (*direct)(void* state,D3DKMT_HANDLE* allocation){};
     HRESULT (*copy)(void* state,D3DKMT_HANDLE* allocation){};
 };
-inline HRESULT present_source(const PresentSourceHooks& hooks,PresentSources& from,unsigned& stage) noexcept {
+inline HRESULT present_source(const PresentSourceHooks& hooks,PresentSources& from,unsigned& stage,
+                              const DXGI_DDI_PRESENT_FLAGS& flags) noexcept {
     if(!hooks.direct || !hooks.copy)return E_INVALIDARG;
     from.source=0;from.added_gpu_work=false;
     stage=3;
     HRESULT hr=hooks.direct(hooks.state,&from.source);
     if(hr==S_OK)return S_OK;
+    from.source=0;
+    if(!present_copy_flags_admitted(flags)){stage=8;return E_INVALIDARG;}
     stage=6;
     from.source=0;
     hr=hooks.copy(hooks.state,&from.source);

@@ -95,8 +95,8 @@ static UINT64 map_answer=0;                          // the address the map mock
 static UINT64 held_bytes(){return msaa_alignment?msaa_alignment:UINT64_C(65536);}
 // BD-133: the Present copy's surface is allocated on the driver's own request, with no runtime resource.
 static bool driver_surface_request=false;
-// BD-133, the D3D9 back buffer: the shared form of the driver's own X8R8G8B8 surface, counted apart from the
-// shared surfaces of the wire's v3 record.
+// BD-133, the D3D9 back buffer: the shared form of the driver's own copy surface of a B8G8R8X8 source (tagged
+// A8R8G8B8), counted apart from the shared surfaces of the wire's v3 record.
 static unsigned own_shared_surfaces=0;
 static HRESULT APIENTRY allocate_cb(D3D12DDI_HRTDEVICE d,D3D12DDICB_ALLOCATE_0022* a){
  assert(d.handle==handle<void*>(1) && !a->hKMResource);
@@ -133,7 +133,7 @@ static HRESULT APIENTRY allocate_cb(D3D12DDI_HRTDEVICE d,D3D12DDICB_ALLOCATE_002
  }
  if(a->pAllocationInfo->PrivateDriverDataSize==32 && a->PrivateDriverDataSize==12 &&
     a->pAllocationInfo->Flags==D3D12DDI_ALLOCATION_INFO_FLAGS_0022_NONE){
-  // BD-133, the shared form of the driver's own X8R8G8B8 surface: the LB7A v1 description under the 12-byte
+  // BD-133, the shared form of the driver's own copy surface: the LB7A v1 description under the 12-byte
   // E26R v1 record with shared 1, without PRIMARY, on video present source 0 - what the runtime sees of the shared
   // surface, under the record the format has - and only ever with no runtime resource.
   assert(driver_surface_request && a->pPrivateDriverData && !a->pAllocationInfo->VidPnSourceId);
@@ -474,14 +474,15 @@ int main(){
   target.Format=DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;refused(E_NOTIMPL);
   target.Format=DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;refused(E_NOTIMPL);target.Format=DXGI_FORMAT_B8G8R8A8_UNORM;
   // BD-133, the D3D9 back buffer (lab arms B and C, 2026-10-12: format 88 refused). The primary form of the
-  // Present copy's own surface for a B8G8R8X8 source and for its sRGB view: LB7A X8R8G8B8, the composed primary's
-  // v1 record and flags, no runtime resource, released by handle. The same request with a runtime resource is
-  // refused by "primary format" as before: the X8 row has no DXGI number, so no primary of an application ever
-  // finds it.
+  // Present copy's own surface for a B8G8R8X8 source and for its sRGB view: LB7A A8R8G8B8 (the A tag of the X8
+  // bytes, lab arm B of 2026-10-12 18:35Z: the kernel present refused X8R8G8B8 against the A8R8G8B8 redirection
+  // surface), the composed primary's v1 record and flags, no runtime resource, released by handle. The same request
+  // with a runtime resource is refused by "primary format" as before: 88 and 93 have no row of their own, so no
+  // primary of an application ever finds one.
   {
    engine_ddi::MemoryRequest own=s;own.rt_owner={};
    for(const DXGI_FORMAT f:{DXGI_FORMAT_B8G8R8X8_UNORM,DXGI_FORMAT_B8G8R8X8_UNORM_SRGB}){
-    target.Format=f;surface_format=D3DDDIFMT_X8R8G8B8;driver_surface_request=true;
+    target.Format=f;surface_format=D3DDDIFMT_A8R8G8B8;driver_surface_request=true;
     const auto before=surfaces;events.clear();
     assert(owner.allocate(&own,&memory)==S_OK && events=="AMZI" && surfaces==before+1);
     assert(owner.free(&memory)==S_OK && events=="AMZIVEUD");
@@ -673,14 +674,15 @@ int main(){
   }
   // BD-133, the D3D9 back buffer (lab arms B and C, 2026-10-12: "format has no linear surface", format 88). The
   // shared form of the Present copy's own surface for a B8G8R8X8 source and for its sRGB view. The wire has no
-  // record for X8R8G8B8 (no COMPOSED row, no DXGI number), so the surface goes out as LB7A X8R8G8B8 under the
-  // 12-byte v1 record, without PRIMARY and on video present source 0, and never as a v3 record nobody could decode.
-  // With a runtime resource the same request is refused by "shared surface format", exactly as before: a shared
-  // surface of an application never has this format.
+  // record for a B8G8R8X8 source (no row has its DXGI number), so the surface goes out as LB7A A8R8G8B8, the A tag
+  // of its bytes, under the 12-byte v1 record, without PRIMARY and on video present source 0, and never as a v3
+  // record that would name a DXGI format the record's LB7A format does not have. With a runtime resource the same
+  // request is refused by "shared surface format", exactly as before: a shared surface of an application never
+  // has this format.
   {
    engine_ddi::MemoryRequest own=s;own.rt_owner={};
    for(const DXGI_FORMAT f:{DXGI_FORMAT_B8G8R8X8_UNORM,DXGI_FORMAT_B8G8R8X8_UNORM_SRGB}){
-    target.Format=f;surface_format=D3DDDIFMT_X8R8G8B8;driver_surface_request=true;
+    target.Format=f;surface_format=D3DDDIFMT_A8R8G8B8;driver_surface_request=true;
     const auto before_own=own_shared_surfaces,before_wire=shared_created;events.clear();
     assert(owner.allocate(&own,&memory)==S_OK && events=="AMZI");
     assert(own_shared_surfaces==before_own+1 && shared_created==before_wire);

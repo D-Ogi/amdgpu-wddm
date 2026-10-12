@@ -169,8 +169,10 @@ struct AllocationRequest final {
     // driverSurface (BD-133): the surface is the driver's own - the Present copy's destination, which names no
     // runtime resource, is opened by no other component and is never scanned out. Such a surface may also have
     // the one format the kernel driver admits as a type-0 surface without a COMPOSED row: a SCANOUT_PRIMARY row
-    // (driver\kmd\surface_format.h, WddmSurfaceFormatBpp at BC250_SURFACE_COMPOSED), which is X8R8G8B8, the
-    // bytes of a D3D9 X8R8G8B8 back buffer (present-copy.h, present_copy_own_format). The record of every format
+    // (driver\kmd\surface_format.h, WddmSurfaceFormatBpp at BC250_SURFACE_COMPOSED), which is X8R8G8B8. The
+    // Present copy of a D3D9 X8R8G8B8 back buffer does not ask for it: since lab arm B of 2026-10-12 18:35Z it
+    // carries the A8R8G8B8 tag of the same bytes, a COMPOSED row, because the kernel present refused X8R8G8B8
+    // against the A8R8G8B8 redirection surface (present-copy.h, present_copy_alpha_tag). The record of every format
     // is unchanged by it, and every other caller passes false and gets exactly the rule it had.
     HRESULT prepare_surface(uint32_t width,uint32_t height,uint32_t pitch,D3DDDIFORMAT format,
                             uint64_t size,HANDLE runtimeOwner=nullptr,bool cpuRead=false,

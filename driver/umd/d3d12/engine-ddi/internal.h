@@ -2,6 +2,7 @@
 // engine-ddi internals shared by its translation units. Not part of the boundary (engine-ddi.h is).
 #pragma once
 #include "engine-ddi.h"
+#include "../present-copy-sync.h"
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -315,6 +316,9 @@ public:
     // GetTickCount64 at the last resource DDI's pass; stored only when it changes, so that resource DDIs on many
     // threads do not write one cache line on every call.
     std::atomic<uint64_t> retire_resource_tick{0};
+    // BD-133: the bytes of every Present copy surface of this device, live or kept, against
+    // native12::kPresentCopyDeviceBytes (resources.cpp, make_present_copy).
+    std::atomic<uint64_t> present_copy_bytes{0};
 #ifdef AMDGPU_WDDM_ENGINE_DDI_HARNESS
     std::atomic<uint64_t> retire_deferred{0};   // submission passes left to the resource DDIs
 #endif
@@ -424,22 +428,24 @@ struct HeapRecord {
     Backing* backing;
 };
 
-// BD-133: the destination of a Present copy, owned by the source resource it belongs to. The surface is a linear
+// BD-133: a destination of a Present copy, owned by the source resource it belongs to. The surface is a linear
 // image over an LB7A surface allocation this driver made for itself, which is the one kind of allocation the
-// kernel present reads (present-copy.h names the kernel's checks with their file and line). It exists for one
-// source resource, is created at that resource's first copied present and released in its
-// pfnDestroyHeapAndResource, so a swap chain of three back buffers has three of them and a resize - which
-// destroys the chain's resources and creates new ones - releases them all.
-//   Why one per source resource and not one per device or per queue: a staging surface shared by two sources
-// could be overwritten between the copy and the kernel present that reads it, and two sources are two different
-// back buffers of the chain. Keyed to the source, the surface is written only by a present of that source.
-//   What orders two presents of the SAME back buffer, which a blt-model swap chain may make one after the other
-// with no wait in between (review of BD-133, finding 3): one context, in order. The copy is recorded on the list
-// the runtime hands to pfnPresent, that list is executed on the queue of the same call, and the kernel present is
-// made on that queue's context - so copy N, present N, copy N+1 and present N+1 all go down one WDDM context,
-// which consumes them in order. Nothing here rests on the runtime leaving a back buffer alone until its earlier
-// present retired; it rests on that single-context ordering alone, and the shell checks the one assumption under
-// it - that the list really is executed on that queue - at every ExecuteCommandLists (present-copy-watch.h).
+// kernel present reads (present-copy.h names the kernel's checks with their file and line). A source has a pool of
+// them, made at its copied presents and released in its pfnDestroyHeapAndResource, so a resize - which destroys the
+// chain's resources and creates new ones - releases them all.
+//   Why per source resource and not per device or per queue: a staging surface shared by two sources could be
+// overwritten between the copy and the kernel present that reads it, and two sources are two different back buffers
+// of the chain. Keyed to the source, a surface is written only by a present of that source.
+//   Why a pool and not one: a blt-model swap chain may present the SAME back buffer again before the kernel present
+// of its last copy finished. A present takes a surface of its source only when the surface's last copy completed and
+// its last reader retired, both read on the CPU (present-copy-sync.h, present_copy_reuse); otherwise it makes another
+// one, up to kPresentCopySurfacesPerSource a source and kPresentCopyDeviceBytes a device, and beyond that it is
+// refused before anything is recorded. No copy ever waits for a present on the GPU, and nothing here rests on the
+// runtime leaving a back buffer alone until its earlier present retired.
+//   What orders the copy into a surface and the kernel present that reads it is slot: the surface's completion
+// fence, which the present context waits for before that present and the executing queue signals after the copy
+// (present-copy-sync.h, present-context.h, queue-engine.cpp). The shell writes slot; the surface is released only
+// when the shell proved it idle and destroyed its fence (PresentContext::retire), and kept otherwise.
 struct PresentCopySurface {
     Backing* backing;                           // one reference; the surface's memory, released with it
     ID3D12Resource* engine;                     // one reference; the linear image at offset 0 of that memory
@@ -449,6 +455,9 @@ struct PresentCopySurface {
     uint32_t d3dddi;                            // LB7A.Format the allocation carries
     bool kernel_blt_format;                     // the kernel's GPU present can blit that format
     uint64_t presents;                          // presents copied through it, for the log line
+    uint64_t bytes;                             // its memory, counted in DeviceContext::present_copy_bytes
+    PresentCopySurface* next;                   // the next surface of the same source
+    native12::PresentCopySlot slot;             // its completion fence and tickets (present-copy-sync.h)
 };
 
 // Reserved: a tiled resource with no heap memory of its own (tiles.cpp maps heaps into it); backing is null.
@@ -469,16 +478,19 @@ struct ResourceRecord {
     uint32_t linear_row_pitch;                  // bytes; 0 unless the image is the linear primary
     uint64_t linear_size;                       // the size of its backing as asked of the shell
     DXGI_FORMAT stored_from;                    // the video format desc stores (stored_format), else UNKNOWN
-    // BD-133: null until this resource is presented by copying it; see PresentCopySurface above. Written and
-    // read inside pfnPresent under the device's queue domain (native-tables.cpp, QueueDomainScope) and in this
-    // resource's own destroy, which the runtime does not run concurrently with a present of the same resource.
+    // BD-133: the first surface of this resource's copy pool, null until it is presented by copying it; see
+    // PresentCopySurface above. Written and read inside pfnPresent under the device's queue domain
+    // (native-tables.cpp, QueueDomainScope) and in this resource's own destroy, which the runtime does not run
+    // concurrently with a present of the same resource.
     PresentCopySurface* present_copy;
 };
 
-// BD-133: releases a resource's Present copy surface, if it has one, and clears the pointer. The engine image's
-// reference goes first, then the memory's backing reference, which hands the memory to the release sequence
-// (the deferred form: the copies that named it must retire first).
-void release_present_copy(ResourceRecord* resource) noexcept;
+// BD-133: releases a resource's Present copy surfaces and clears the pointer. A surface goes only when the shell
+// proved it idle (its slot has no fence and is not retained, PresentContext::retire); every other one is kept for
+// the OS teardown of the device, with its memory, its image and its fence, because a kernel present may still read
+// it. For a surface that goes, the engine image's reference goes first, then the memory's backing reference, which
+// hands the memory to the release sequence (the deferred form: the copies that named it must retire first).
+void release_present_copy(DeviceContext* context, ResourceRecord* resource) noexcept;
 
 // A packed video format the engine has no image of, stored as the typeless format of its element (INTEGRATION.md,
 // "Packed video formats"). The DXGI_FORMAT reference names the view formats of each: the storage's family, which a
@@ -640,6 +652,11 @@ struct CommandListRecord {
     void* root_signatures[2]{};
     // A failure of an engine Close the worker made, until a drain of the list reports it (close_list).
     std::atomic<HRESULT> close_hr{S_OK};
+    // BD-133: the ticket of the Present copy recorded on this list (present-copy-sync.h). Set by pfnPresent, taken by
+    // the ExecuteCommandLists that submits the list (queue-engine.cpp, through present_copy_list_mark), released by
+    // the list's next successful Reset and by its destroy, which remove the device when it was never executed (rule
+    // D). The list's own record, so no other list or device can push it out.
+    native12::PresentCopyListMark present_copy;
     ID3D12GraphicsCommandList* list() const noexcept { return static_cast<ID3D12GraphicsCommandList*>(h.engine); }
 };
 

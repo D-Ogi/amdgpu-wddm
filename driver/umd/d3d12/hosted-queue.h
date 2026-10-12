@@ -41,11 +41,6 @@ public:
     HostedQueue(const HostedQueue&)=delete;
     HostedQueue& operator=(const HostedQueue&)=delete;
     static HRESULT dispatch(void* user,uint32_t op,void* argument) noexcept;
-    // BD-133: the progress the ICD last published for the queue whose engine cookie is cookie
-    // (BC250_HOST_PUBLISH_PROGRESS): S_OK with its fence and value, S_FALSE when that queue published none or has no
-    // alias, E_PENDING while an operation of the alias runs. The fence is a device-level monitored fence that the
-    // ICD signals after each submission; the D3D11 shell's present context waits for the same kind of value.
-    HRESULT progress(void* cookie,D3DKMT_HANDLE* sync,UINT64* value) noexcept;
     // Terminal metadata release only after all engine calls/workers stopped.
     // No physical context destruction or GPU-retirement assertion is performed.
     unsigned discard_metadata() noexcept;

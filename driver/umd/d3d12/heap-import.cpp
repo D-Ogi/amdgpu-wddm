@@ -466,7 +466,7 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     if(!surface && (request->surface_row_pitch || request->surface_layout_size))
         return refuse("surface fields without a surface",E_INVALIDARG,*request);
     D3DDDIFORMAT surface_format=D3DDDIFMT_UNKNOWN;
-    // BD-133: the X8 row of the driver's own Present copy surface, when that is the row (see below).
+    // BD-133: the row of the driver's own Present copy surface of a B8G8R8X8 source, when that is the row (below).
     const AMDGPU_WDDM_SURFACE_FORMAT* own=nullptr;
     bool surface_scanout=false;
     uint32_t shared_bind=0;
@@ -507,12 +507,13 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
             :amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_dxgi(unsigned(r->Format)),
                                        AMDGPU_WDDM_SURFACE_COMPOSED);
         // BD-133, the D3D9 back buffer: the Present copy of a B8G8R8X8 source (88, or its sRGB view 93) takes the
-        // X8 row, LB7A format X8R8G8B8, which no lookup above returns because the row has no DXGI number. Only a
-        // surface of the driver's own may have it - nobody opens it and it is never scanned out (present-copy.h,
-        // present_copy_own_format, says why the table itself is not changed) - so a request with a runtime
-        // resource is refused exactly as before. The wire has no record for this format, so neither form of it
-        // gets the 64-byte E26R v3 record: both are the 12-byte v1 record below (prepare_surface), the shared
-        // form without the PRIMARY flag and the primary form with it.
+        // A8R8G8B8 row, the A tag of the X8 row's bytes (present-copy.h, present_copy_own_format and
+        // present_copy_alpha_tag), which no lookup above returns because 88 and 93 are not that row's DXGI numbers.
+        // Only a surface of the driver's own may have it - nobody opens it and it is never scanned out
+        // (present-copy.h says why the table itself is not changed) - so a request with a runtime resource is
+        // refused exactly as before. The wire has no record for a B8G8R8X8 source, so neither form of it gets the
+        // 64-byte E26R v3 record, which would name the source's DXGI format: both are the 12-byte v1 record below
+        // (prepare_surface), the shared form without the PRIMARY flag and the primary form with it.
         own=!composed && driver_surface?present_copy_own_format(unsigned(r->Format)):nullptr;
         const auto* row=composed?composed:own;
         // Every reason not to ask for scan-out stands the request down to this composed primary instead
@@ -619,8 +620,8 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
                 request->resource->Height,request->surface_row_pitch,unsigned(request->resource->Format),
                 request->byte_size,shared_bind,request->rt_owner.handle);
         else if(shared_surface)
-            // BD-133: the shared form of the X8 copy surface - what the runtime sees of the shared form (no
-            // PRIMARY flag, video present source 0, no runtime resource) under the record the format has. The
+            // BD-133: the shared form of the copy surface of a B8G8R8X8 source - what the runtime sees of the shared
+            // form (no PRIMARY flag, video present source 0, no runtime resource) under the record the source has. The
             // kernel driver places a v1 record with Shared 1 exactly as a v3 record with Shared 1 and Access 0
             // (driver\kmd\surface_resource_private.h, Bc250SurfaceResourcePolicy), and no opener ever reads it.
             hr=allocation.prepare_surface(static_cast<uint32_t>(request->resource->Width),request->resource->Height,

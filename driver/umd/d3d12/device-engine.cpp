@@ -134,12 +134,6 @@ class DeviceEngine final {
         return self.active_.load(std::memory_order_acquire) && self.queue_bridge_?
             HostedQueue::dispatch(self.queue_bridge_.get(),op,arg):E_NOTIMPL;
     }
-    // BD-133: QueueEngineOps::progress, the queue's published progress for the present context's wait.
-    static HRESULT queue_progress(void* owner,void* cookie,D3DKMT_HANDLE* sync,UINT64* value) noexcept {
-        auto& self=*static_cast<DeviceEngine*>(owner);
-        return self.active_.load(std::memory_order_acquire) && self.queue_bridge_?
-            self.queue_bridge_->progress(cookie,sync,value):E_NOTIMPL;
-    }
     static HRESULT checked_close(engine_ddi::EngineQueue** queue) noexcept {
         if(!queue || !*queue)return E_INVALIDARG;
         auto owned=*queue;*queue=nullptr;
@@ -377,7 +371,6 @@ public:
             ddi_mode2_note("amdgpu_wddm_d3d12 deferred-replay on\n");
         }
         auto ops=QueueEngineOps::native();ops.close=checked_close;ops.check_health=health;ops.health_cookie=this;
-        ops.progress=queue_progress;
         queues_.reset(new(std::nothrow) QueueEngineRegistry(device_,context_,ops));
         if(!queues_)return E_OUTOFMEMORY;
         queue_bridge_.reset(new(std::nothrow) HostedQueue(domain_,*queues_,device_));

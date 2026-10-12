@@ -293,7 +293,8 @@ int main() {
     // 2026-10-12). X8R8G8B8 has no COMPOSED row, so the composed rule still refuses it for every caller that does
     // not say "driver surface"; a surface of the driver's own may have it, because the kernel driver's own type-0
     // admission takes it through the SCANOUT_PRIMARY row - in both forms, the 12-byte v1 record with and without
-    // PRIMARY.
+    // PRIMARY. Since lab arm B of 2026-10-12 18:35Z the Present copy itself asks for the A8R8G8B8 tag of those
+    // bytes instead (present-copy.h, present_copy_alpha_tag); this rule of prepare_surface is kept as it is.
     {
         const unsigned width=1280,height=720,pitch=5120;const uint64_t size=uint64_t(pitch)*height;
         // The rule the shell widens to is the kernel driver's: a type-0 LB7A blob of X8R8G8B8 is 4 bytes a pixel
