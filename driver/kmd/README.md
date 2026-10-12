@@ -85,6 +85,11 @@ no code from Microsoft's MS-PL sample.
   Recovery epochs serialize watchdog failure gates with reopen. An active submission alone gets a bounded
   500 ms admission recheck. Other unstable states refuse with verdict 8 and a persisted reason mask.
   Temporary admission closure does not fault StartHealth. Existing genuine faults remain sticky.
+  From 0.7.216.62 (BD-120) a recovered engine reset also re-arms the presentation start witness: the node-0
+  timeout latch marks its own close, the recovered commit undoes that one close on a new epoch, and a witness
+  the latch never closed gets the new epoch too, so no measured interval spans a hang. Every other fault, and a
+  refusal on node 0, still keep the witness closed for the rest of the device start, and the CU-mode and DPM
+  request of a start that needed a reset stay pending.
   See `docs/design/hang-recovery.md`.
 - **Board memory size** (0.7.216.28). A positively identified BC-250 can report its memory reservation, and
   change it between 8192 and 12288 MiB, through the `RUN_BOARD_MEMORY` escape. A change needs an

@@ -32,6 +32,11 @@ static void CheckContract(void)
     CHECK(UMD_BLOB_A_EXACT_VA == BC250_UMD_A_EXACT_VA);
     CHECK(UMD_BLOB_A_SPARSE == BC250_UMD_A_SPARSE);
     CHECK(UMD_BLOB_A_USERPTR == BC250_UMD_A_USERPTR);
+    // BD-127: the compute statement of a context blob, and the version from which it is read.
+    CHECK(UMD_BLOB_C_COMPUTE == BC250_UMD_C_COMPUTE);
+    CHECK(UMD_BLOB_CONTEXT_VERSION_COMPUTE == BC250_UMD_CONTEXT_VERSION_COMPUTE);
+    CHECK(UMD_BLOB_CONTEXT_BYTES == BC250_UMD_CONTEXT_SIZE_V3);
+    CHECK(UMD_BLOB_CONTEXT_VERSION_COMPUTE > BC250_UMD_CONTEXT_VERSION);
 
     CHECK(offsetof(struct bc250_umd_alloc_private, alloc_size) == 16);
     CHECK(offsetof(struct bc250_umd_alloc_private, phys_alignment) == 24);
@@ -289,6 +294,32 @@ int main(void)
     FillContext(&ctx, AMDGPU_HW_IP_GFX, 0);
     ctx.magic = BC250_UMD_ALLOC_MAGIC;
     CHECK(UmdBlobParseContext(&ctx, sizeof(ctx), 0, &cv) == UMD_BLOB_BAD_MAGIC);
+
+    // 11a. BD-127, the compute statement. A version 3 blob with the flag says compute; the same blob at
+    // version 2 does not, so an older producer's flags word cannot turn the governor's compute set on. The
+    // flag is never a refusal, the flags word is recorded as written, and a refused blob reports no compute.
+    FillContext(&ctx, AMDGPU_HW_IP_GFX, 0);
+    ctx.version = BC250_UMD_CONTEXT_VERSION_COMPUTE;
+    ctx.flags = BC250_UMD_C_COMPUTE;
+    CHECK(UmdBlobParseContext(&ctx, sizeof(ctx), 0, &cv) == UMD_BLOB_OK);
+    CHECK(cv.compute == 1 && cv.flags == BC250_UMD_C_COMPUTE);
+    ctx.version = BC250_UMD_CONTEXT_VERSION;
+    CHECK(UmdBlobParseContext(&ctx, sizeof(ctx), 0, &cv) == UMD_BLOB_OK);
+    CHECK(cv.compute == 0 && cv.flags == BC250_UMD_C_COMPUTE);
+    // A version 3 blob without the flag, and one with a flag nothing defines: accepted, no compute.
+    ctx.version = BC250_UMD_CONTEXT_VERSION_COMPUTE;
+    ctx.flags = BC250_UMD_C_STABLE_PSTATE;
+    CHECK(UmdBlobParseContext(&ctx, sizeof(ctx), 0, &cv) == UMD_BLOB_OK && cv.compute == 0);
+    ctx.flags = 0x80000000u;
+    CHECK(UmdBlobParseContext(&ctx, sizeof(ctx), 0, &cv) == UMD_BLOB_OK && cv.compute == 0);
+    // A version above 3 keeps the meaning: everything this reader knows is where it expects it.
+    ctx.version = BC250_UMD_CONTEXT_VERSION_COMPUTE + 7u;
+    ctx.flags = BC250_UMD_C_COMPUTE | BC250_UMD_C_RESERVE_VMID;
+    CHECK(UmdBlobParseContext(&ctx, sizeof(ctx), 0, &cv) == UMD_BLOB_OK && cv.compute == 1);
+    // And a refusal clears it, whatever the flag said.
+    ctx.node_ordinal = 1;
+    CHECK(UmdBlobParseContext(&ctx, sizeof(ctx), 0, &cv) == UMD_BLOB_BAD_NODE);
+    CHECK(cv.compute == 0 && cv.flags == 0);
 
     // 12-16. One IB is runnable. Two IBs are a valid blob and not a single submission. The size word
     // is the used prefix, so sizeof(the whole struct) with one IB is a refusal.

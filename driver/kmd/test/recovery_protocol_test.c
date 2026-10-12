@@ -229,6 +229,53 @@ static void admission_paths(void)
     CHECK(w.Recovery[0].ResetActive && w.WatchdogFaulted[0] && g.SubmitFailed);
 }
 
+/* BD-120. Which close the engine reset owns. The timeout latch and the refusal tail below are the production
+ * code; the witness policy itself is checked over the production start_health.c in start_health_test.c. On the
+ * lab the latch closed the witness, the reset recovered node 0, and nothing reopened the witness: it read
+ * flags=1, completed 0, ready_ms 0 for the rest of the boot while the desktop kept flipping in hardware. */
+static void witness_ownership(void)
+{
+    BC250_DEVICE d;
+    BC250_WDDM w;
+    BC250_GFX g;
+    ULONGLONG epoch = 1;
+    /* A recovered reset reopens the close the timeout latch marked as its own. */
+    admission_setup(&d, &w, &g);
+    CHECK(WddmLatchSubmitTimeoutLocked(&d, &w, w.Recovery[0].Epoch));
+    CHECK(d.HealthFault && d.HealthPendingReset && d.Calls == 1 && g.SubmitFailed);
+    CHECK(StartHealthRecovered(&d, &epoch) == 1 && !d.HealthFault && d.HealthReopens == 1);
+    /* A refused reset of this node stays sticky and asks for no reopen at all. */
+    admission_setup(&d, &w, &g);
+    CHECK(WddmLatchSubmitTimeoutLocked(&d, &w, w.Recovery[0].Epoch));
+    CHECK(run_refusal_tail(&d) == STATUS_NOT_SUPPORTED);
+    CHECK(d.HealthFault && !d.HealthPendingReset && d.HealthReopens == 0);
+    CHECK(StartHealthRecovered(&d, &epoch) == 0 && d.HealthFault);
+    /* A refusal on node 1 closes the witness too, but node 1 is never soft-recovered, so its refusal says
+     * nothing about node 0 and leaves the answer node 0's own reset is owed. */
+    admission_setup(&d, &w, &g);
+    CHECK(WddmLatchSubmitTimeoutLocked(&d, &w, w.Recovery[0].Epoch));
+    CHECK(run_refusal_tail_node(&d, 1) == STATUS_NOT_SUPPORTED);
+    CHECK(d.HealthFault && d.HealthPendingReset && d.HealthReopens == 0);
+    CHECK(StartHealthRecovered(&d, &epoch) == 1 && !d.HealthFault);
+    /* A packet that was never dispatched is sticky through the reset, in either order around the timeout. */
+    admission_setup(&d, &w, &g);
+    GfxSubmitFail(&d);
+    CHECK(WddmLatchSubmitTimeoutLocked(&d, &w, w.Recovery[0].Epoch));
+    CHECK(!d.HealthPendingReset && StartHealthRecovered(&d, &epoch) == 0 && d.HealthFault);
+    admission_setup(&d, &w, &g);
+    CHECK(WddmLatchSubmitTimeoutLocked(&d, &w, w.Recovery[0].Epoch));
+    GfxSubmitFail(&d);
+    CHECK(!d.HealthPendingReset && StartHealthRecovered(&d, &epoch) == 0 && d.HealthFault);
+    /* The other ordering: the OS TDR reached ResetEngine before our latch, so nothing closed the witness. The
+     * admission closure itself must not have faulted it (GfxSubmitClose, not GfxSubmitFail), and the recovery
+     * then re-arms an open witness instead of reopening a close that does not exist. */
+    admission_setup(&d, &w, &g);
+    CHECK(TestResetAdmit(&d, &w, 0) == 0);
+    CHECK(w.WatchdogFaulted[0] && g.SubmitFailed && !d.HealthFault && !d.HealthPendingReset);
+    CHECK(StartHealthRecovered(&d, &epoch) == 2 && !d.HealthFault && !d.HealthPendingReset);
+    CHECK(PRODUCTION_WITNESS_PROTOCOL);
+}
+
 static void submission_freeze(void)
 {
     BC250_DEVICE d;
@@ -253,6 +300,7 @@ int main(void)
     test_timeout_latch();
     admission_reasons();
     admission_paths();
+    witness_ownership();
     submission_freeze();
     printf("recovery protocol: %u checks, %u failures\n", checks, failures);
     return failures ? 1 : 0;

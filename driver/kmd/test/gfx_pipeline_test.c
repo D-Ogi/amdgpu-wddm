@@ -122,6 +122,11 @@ static void GuardLog(const char* fmt,...) { (void)fmt; }
 #define ProgressExit(site,value) ((void)(site),(void)(value))
 static int GfxFenceArrived(BC250_DEVICE* d,ULONG v) { (void)d; return bc250_fence_reached(completed,v); }
 static void GfxSubmitFail(BC250_DEVICE* d) { (void)d; ++failures; }
+/* BD-120: the node-0 timeout latch now marks the witness close as the pending reset's own and closes the ring
+ * gate in a second call. A latched timeout is still what this harness asserts never happens, so the mark is the
+ * counted one of the two and the gate closure is a plain stub. */
+static void StartHealthFaultPendingReset(BC250_DEVICE* d) { (void)d; ++failures; }
+static void GfxSubmitClose(BC250_DEVICE* d) { (void)d; }
 #ifndef NO_RECOVERY_LEDGER
 static void WddmRecordFenceLedgerLocked(BC250_WDDM* w,UINT n,ULONGLONG e,UINT f,BOOLEAN hw)
 { (void)w; (void)n; (void)e; (void)hw; ledger=f; }

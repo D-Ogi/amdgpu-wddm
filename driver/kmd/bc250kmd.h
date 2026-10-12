@@ -401,6 +401,14 @@ void StartHealthResumeReady(BC250_DEVICE* Device, BOOLEAN Mode);
 void StartHealthClose(BC250_DEVICE* Device);
 void StartHealthStop(BC250_DEVICE* Device, BC250_ESCAPE_START_HEALTH* Snapshot);
 void StartHealthFault(BC250_DEVICE* Device);
+// BD-120. The two halves of a node-0 hardware fence timeout that the OS TDR is about to answer with an engine
+// reset: the close the reset owns, and the re-arm a recovered reset performs. Both take only the StartHealth
+// spin lock, so wddm->Lock may be held over them, as it is for StartHealthFault; never the reverse.
+void StartHealthFaultPendingReset(BC250_DEVICE* Device);
+BC250_START_HEALTH_RECOVERY StartHealthRecovered(BC250_DEVICE* Device, _Out_ ULONGLONG* Epoch);
+// BD-120. The close of a ResetEngine refusal on a node that is not node 0: it leaves the answer node 0's own
+// reset is owed. Takes the Lifecycle mutex, like StartHealthClose, so PASSIVE_LEVEL and no wddm->Lock.
+void StartHealthCloseKeepPendingReset(BC250_DEVICE* Device);
 void StartHealthRemove(BC250_DEVICE* Device);
 void StartHealthEnter(BC250_DEVICE* Device);
 void StartHealthLeave(BC250_DEVICE* Device);
@@ -430,6 +438,11 @@ void DpmStop(BC250_DEVICE* Device);
 void DpmPause(BC250_DEVICE* Device);
 void DpmResume(BC250_DEVICE* Device);
 void DpmSetStable(BC250_DEVICE* Device, BOOLEAN Enabled);
+// BD-127: one more, or one fewer, live compute context of this adapter (a BC2C blob with
+// BC250_UMD_C_COMPUTE; wddm.c CreateContext and DestroyContext). Interlocked, any IRQL, no lock: the
+// governor thread reads the count at its next tick and selects the compute threshold set while it is above
+// zero. Delta is +1 or -1 and the count never goes under zero.
+void DpmComputeContextAdd(BC250_DEVICE* Device, LONG Delta);
 NTSTATUS DpmConfirm(BC250_DEVICE* Device, _In_z_ const char* Why);
 void DpmLogSummary(BC250_DEVICE* Device);
 void DpmRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_DPM* Data, ULONG Size, BOOLEAN Admin, ULONG EscapeFlags);

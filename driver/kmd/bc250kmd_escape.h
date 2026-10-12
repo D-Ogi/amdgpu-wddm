@@ -651,6 +651,10 @@ typedef struct _BC250_ESCAPE_CU_MODE {
 // 16384 and 32768 (0.7.216.7), in every ABI: no field moves, so BC250_KMD_VERSION stays. 8192 is ABI 3's, below.
 #define BC250_DPM_FLAG_JOINT 16384u          // the joint power arm runs in this start (DpmJointGovernor 1)
 #define BC250_DPM_FLAG_JOINT_CAP 32768u      // the arm's CPU clock limit is in the chip now (the driver log says which)
+// 65536 (BD-127), in every ABI: no field moves, so BC250_KMD_VERSION stays and no tool has to change its size.
+// The count of open compute contexts and the set's three thresholds are in the driver log's telemetry block, not in
+// the escape: BC250_ESCAPE_DPM has no reserved field and RUN_DPM's three sizes may not change.
+#define BC250_DPM_FLAG_COMPUTE 65536u        // the compute threshold set governs this tick (a compute context is open)
 typedef struct _BC250_ESCAPE_DPM {
     unsigned long Magic, Command, Status, Version;
     unsigned long NtStatus, AbiVersion, Op, Flags;

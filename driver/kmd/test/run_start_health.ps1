@@ -1,9 +1,38 @@
-param([string]$Root='P:\bc-250',[string]$Out='P:\bc-250\scratch\build\health145',[switch]$IgnoreFlush)
+param([string]$Root='P:\bc-250',[string]$Out='P:\bc-250\scratch\build\health145',[switch]$IgnoreFlush,
+      [switch]$NoWitnessReopen,[switch]$ReopenAnyClose,[switch]$StickyFaultKeepsMark,[switch]$ConfirmCertifiesNewEpoch,
+      [switch]$MarkOverFailedEngines,[switch]$RefusalDropsOtherNodeMark,[switch]$RearmSkipsOpenWitness,
+      [switch]$ConfirmHungRequest)
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $env:TEMP=Join-Path $Root 'scratch\tmp';$env:TMP=$env:TEMP
 New-Item -ItemType Directory -Force $Out | Out-Null
 $source=Get-Content (Join-Path $repo 'driver\kmd\start_health.c') -Raw
+# BD-120 negative controls. Each one alters only copied production code, must compile, and must then fail a
+# CHECK; a changed anchor stops the run instead of passing a mutation that no longer applies.
+function Mutate([string]$Text,[string]$From,[string]$To) {
+    if(!$Text.Contains($From)){throw "start-health mutation anchor changed: $From"}
+    return $Text.Replace($From,$To)
+}
+# The behaviour before the fix: the witness neither reopens nor re-arms, so flags stay at FULL for the rest of
+# the start once the latch has closed it.
+if($NoWitnessReopen){$source=Mutate $source 'if (!h->Closed) {' 'if (0) {'
+                     $source=Mutate $source '} else if (h->PendingReset) {' '} else if (0) {'}
+# A reset that reopens any close, including one a real fault owns.
+if($ReopenAnyClose){$source=Mutate $source '} else if (h->PendingReset) {' '} else if (1) {'}
+# A sticky fault that leaves the pending-reset mark standing, so the reset undoes a fault of another kind.
+if($StickyFaultKeepsMark){$source=Mutate $source 'if (Mark==0) H->PendingReset=FALSE;' 'if (Mark==99) H->PendingReset=FALSE;'}
+# A mark taken over a witness whose engines never came up, so the reset clears a startup engine failure.
+if($MarkOverFailedEngines){$source=Mutate $source 'if (Mark>0 && H->Engines) H->PendingReset=TRUE;' 'if (Mark>0) H->PendingReset=TRUE;'}
+# A refusal on another node that clears node 0's mark anyway, which is the defect in one ordering.
+if($RefusalDropsOtherNodeMark){$source=Mutate $source 'if (Mark==0) H->PendingReset=FALSE;' 'if (Mark<=0) H->PendingReset=FALSE;'}
+# A recovery that leaves an open witness alone, so a measured interval can span the hang.
+if($RearmSkipsOpenWitness){$source=Mutate $source 'if (!h->Closed) {' 'if (0) {'}
+# A start that hung node 0 confirming its own clock/voltage and CU request as the next boot's default.
+if($ConfirmHungRequest){$source=Mutate $source 'h->Completed && !h->Recovered &&' 'h->Completed &&'
+                        $source=Mutate $source 'if (NT_SUCCESS(status) && !recovered) (void)CuModeConfirm(Device,"start-health");' 'if (NT_SUCCESS(status)) (void)CuModeConfirm(Device,"start-health");'
+                        $source=Mutate $source 'if (NT_SUCCESS(status) && !recovered) (void)DpmConfirm(Device,"start-health");' 'if (NT_SUCCESS(status)) (void)DpmConfirm(Device,"start-health");'}
+# A confirmation that certifies whatever epoch it finds after its registry flush, the new one included.
+if($ConfirmCertifiesNewEpoch){$source=Mutate $source 'if (h->Generation!=generation || h->Epoch!=epoch) status=STATUS_RETRY;' 'if (h->Generation!=generation) status=STATUS_RETRY;'}
 [IO.File]::WriteAllText((Join-Path $Out 'start_health_actual.inc'),$source.Replace('#include "bc250kmd.h"',''))
 $state=Get-Content (Join-Path $repo 'driver\kmd\start_health.h') -Raw
 [IO.File]::WriteAllText((Join-Path $Out 'start_health_state.inc'),$state.Replace('#include "bc250kmd_escape.h"',''))

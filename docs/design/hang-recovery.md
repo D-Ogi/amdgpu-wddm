@@ -579,7 +579,9 @@ before reset is part of the state that reset evaluates. No DPC join waits while 
 Admission uses `GfxSubmitClose`, which closes the physical submission gate without calling `StartHealthFault`.
 A successful recovery therefore does not create a health failure solely by taking this temporary gate.
 It also does not clear any existing health fault. Genuine `GfxSubmitFail` paths retain their sticky fault.
-An admitted recovery that later refuses leaves both gates closed. `refuseReset` still calls `StartHealthClose`.
+An admitted recovery that later refuses leaves both gates closed. `refuseReset` still closes the witness: with
+`StartHealthClose` for a refusal on node 0, and with `StartHealthCloseKeepPendingReset` on node 1 (BD-120).
+
 `GfxSoftRecover` only establishes drain. It
 does not reopen or wake early. The final commit rechecks the epoch, `Stopping` and GFX idle state, then calls
 `GfxReopenAfterAbort` and opens both gates in the same WDDM critical section. Clearing GFX `SubmitFailed`
@@ -589,6 +591,50 @@ boundary, leaving the actual-completion and notification watermarks unchanged. T
 and lock release. Waking earlier could cause a held submission to encounter the still-closed gate. A successful
 reset loses the affected application's device. An uncertain case still refuses and can end in 0x116. This is
 not general GPU-reset support or a guarantee that every formerly crashing workload now completes.
+
+### The start witness after a recovered reset (BD-120, 0.7.216.62)
+
+The node-0 timeout latch closes the presentation start witness, because the node that the witness measures has
+stopped. Until 0.7.216.28 nothing reopened it: the lab recovered a hang on 2026-10-11, node 0 took work again,
+the desktop kept flipping in hardware with no refused present, and the witness still read `flags=1`, `epoch 14`,
+`completed 0`, `ready_ms 0` for the rest of the boot. Every gate that reads the witness then asked for a restart
+the display did not need.
+
+The latch therefore marks its own close (`StartHealthFaultPendingReset`), and the recovered commit reopens
+exactly that close (`StartHealthRecovered`), inside the same WDDM critical section that checks the epoch and
+calls `GfxReopenAfterAbort`. A new epoch starts, `READY` returns with the engines, `VISIBLE` returns with it
+because visibility and mode belong to the display and the hang never touched them, and completions count again,
+so the flags reach a healthy boot's value once the usual ready age and freshness hold.
+
+The two orderings of the hang both end in a new epoch. `Bc250SubmitBudgetMs` is never shorter than `TdrDelay`
+(`driver/kmd/submit_watchdog.h`), so dxgkrnl usually reaches `ResetEngine` before our own latch fires. The
+witness is then still open and there is no close to undo, but the interval it reports contains a GPU hang that
+no epoch recorded, so the recovered commit ends that interval as well: a new epoch, no completions, the ready
+age re-clocked, `Closed` untouched. The KMD log says which of the three happened, in one line with the new
+epoch: reopened, still open, or closed by a fault of its own.
+
+Five properties hold by construction:
+
+- every other fault stays sticky. `StartHealthFault` clears the mark, so a packet that was never dispatched, a
+  paging failure, a stop, a power transition, a remove or a refused reset of node 0 keeps the witness closed for
+  the rest of the device start, whether it was recorded before or after the latch.
+- the mark is taken over an open witness with its engines up, and nowhere else. A startup engine failure, which
+  `StartHealthReady` keeps sticky for the whole start, is therefore not something an engine reset can clear.
+- a `ResetEngine` refusal on node 1 closes the witness, as every refusal always did, but leaves the mark
+  standing (`StartHealthCloseKeepPendingReset`). Node 1 is never soft-recovered by policy, so its refusal is no
+  evidence about node 0, and node 0's own reset still owes the witness an answer.
+- `CONFIRMED` survives the reopen. It reports the start, not the current interval (BD-098), and the boot guard
+  counts starts that never reached a healthy desktop. This start did reach one, and the registry says so
+  durably. A hang hours later cannot make that false. A `CONFIRM` in flight across the reopen still cannot
+  certify the new epoch: it carries `ExpectedGeneration`/`ExpectedEpoch`, and the re-check after the registry
+  flush compares both again, so such a call returns `STATUS_RETRY` and leaves `ConfirmedEpoch` on the interval
+  it measured.
+- the CU-mode and the DPM request of a start that needed an engine reset stay pending (`Recovered`, read by
+  `StartHealthIsReady` and by the confirmation tail of `StartHealthRequest`). The desktop's own `CONFIRM` still
+  succeeds and still clears the boot guard, because the display is healthy, but a request that hung node 0 does
+  not become the next boot's default on the strength of the start it hung. Until 0.7.216.62 that followed from
+  the witness staying closed for the rest of the boot. It is now a rule of its own, and only a new device start
+  clears it.
 
 ## Why there is no stage 2
 

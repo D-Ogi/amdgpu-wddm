@@ -326,6 +326,7 @@ static struct bc250_dpm_input tick(unsigned int busy, int temp_c, unsigned int d
 	in.dt_ms = dt;
 	in.ring_busy = 0;		/* the ring is empty: only the idle state of 0.7.207 reads this */
 	in.sdma_permille = 0;		/* the paging node is idle: the idle state alone reads this too */
+	in.compute_contexts = 0;	/* no compute client: the graphics thresholds, as every case before BD-127 */
 	return in;
 }
 
@@ -631,14 +632,18 @@ static int ref_raise(const struct bc250_dpm_tune *t)
 	for (l = BC250_DPM_FLOOR_LEVEL; l < BC250_DPM_TOP_LEVEL; l++)
 		for (busy = t->up_permille; busy <= 1000u; busy++) {
 			struct bc250_dpm_governor g;
-			struct bc250_dpm_input in;
+			/* Through tick(), which sets EVERY field, and never field by field: an input this reference
+			 * leaves unset is read by bc250_dpm_step all the same, and the reference then measures
+			 * something else than the tune it is validating. BD-127 left compute_contexts unset here,
+			 * and because the compute set is on by default a non-zero stack slot made this reference
+			 * govern with 400/300/200 instead of *t: gcc 12.2 -O1 reported 807 failures of invariant 2
+			 * where MSVC /Od reported none (BD-127 review). */
+			struct bc250_dpm_input in = tick(busy, 60, 25);
 			unsigned int next;
 			bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
 			g.tune = *t;
 			g.tune.floor_level = L(0);
 			g.level = l;
-			in.busy_permille = busy; in.temperature_mc = 60000; in.temperature_valid = 1; in.dt_ms = 25;
-			in.ring_busy = 0; in.sdma_permille = 0;
 			next = bc250_dpm_step(&g, &in);
 			if (next <= l) return -1;      /* not a raise: the reference itself is wrong */
 			if (t->down_permille * bc250_clock_points[next].mhz > busy * bc250_clock_points[l].mhz) return 0;
@@ -3249,6 +3254,213 @@ static void test_joint_traces(void)
 	CHECK(engages == 0u);
 }
 
+/* ---- the compute threshold set (BD-127) ------------------------------------------------------ */
+
+/* The measured case. On unit A a 1.7B model generating through HIP held 57.9 % GPU busy at 1000 MHz and
+ * 47.2 % at 2000 MHz, and ran 31 % faster at the higher clock: the share says nothing about the headroom,
+ * because each token waits on the CPU. The graphics thresholds raise at 900 permille and never fired.
+ * The compute set's three numbers, as constants, so a change to them has to come past this line. */
+typedef char dpm_compute_set_ordered[(BC250_DPM_COMPUTE_DOWN_PERMILLE < BC250_DPM_COMPUTE_TARGET_PERMILLE &&
+				      BC250_DPM_COMPUTE_TARGET_PERMILLE < BC250_DPM_COMPUTE_UP_PERMILLE &&
+				      BC250_DPM_COMPUTE_UP_PERMILLE < BC250_DPM_UP_PERMILLE &&
+				      BC250_DPM_COMPUTE_UP_PERMILLE >= BC250_DPM_TUNE_MIN_PERMILLE &&
+				      BC250_DPM_COMPUTE_DOWN_PERMILLE >= BC250_DPM_TUNE_MIN_PERMILLE) ? 1 : -1];
+
+/* One tick with a number of open compute contexts, everything else as run_mc. */
+static unsigned int run_compute(struct bc250_dpm_governor *g, unsigned int busy, int temp_mc, unsigned int dt,
+				unsigned int contexts)
+{
+	struct bc250_dpm_input in = tick(busy, 0, dt);
+	unsigned int level;
+	in.temperature_mc = temp_mc;
+	in.compute_contexts = contexts;
+	level = bc250_dpm_step(g, &in);
+	CHECK(level <= g->max_level && level <= g->thermal_cap);
+	CHECK(g->thermal_cap >= cap_bottom(g));
+	bc250_dpm_commit(g, level);
+	return level;
+}
+
+static void test_compute(void)
+{
+	struct bc250_dpm_governor g;
+	struct bc250_dpm_compute c;
+	unsigned int i, level;
+
+	/* The defaults: on, the three numbers of the envelope, and legal under the governor's own rules for
+	 * every ceiling a start can have. */
+	bc250_dpm_compute_default(&c);
+	CHECK(c.on == 1 && c.up_permille == BC250_DPM_COMPUTE_UP_PERMILLE &&
+	      c.target_permille == BC250_DPM_COMPUTE_TARGET_PERMILLE &&
+	      c.down_permille == BC250_DPM_COMPUTE_DOWN_PERMILLE);
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	CHECK(g.compute.on == 1 && g.compute_set == 0 && g.compute_contexts == 0u);
+	for (i = BC250_DPM_FLOOR_LEVEL; i <= BC250_DPM_TOP_LEVEL; i++) {
+		struct bc250_dpm_tune t;
+		bc250_dpm_tune_default(&t);
+		if (t.floor_level > i) t.floor_level = i;
+		CHECK(bc250_dpm_compute_check(&c, &t, i) == BC250_DPM_TUNE_OK);
+	}
+
+	/* Selection. 58 % at the lab floor is under the graphics raise threshold, so with no compute context
+	 * the clock stays where it is - which is what the lab measured (BD-127). */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	for (i = 0; i < 200; i++) CHECK(run_compute(&g, 579, 60000, 25, 0) == L(0));
+	CHECK(g.raises == 0 && g.compute_set == 0 && g.compute_entries == 0u && g.compute_ticks == 0u);
+	CHECK(g.throttle == BC250_DPM_THROTTLE_NONE);
+
+	/* The same share with one compute context open: the compute set raises to the ceiling in one tick
+	 * (1000 MHz x 579 / 300 = 1930 MHz, which the grid and the 2000 MHz ceiling make the top level). */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	CHECK(run_compute(&g, 579, 60000, 25, 1) == L(10));
+	CHECK(g.compute_set == 1 && g.compute_entries == 1u && g.compute_ticks == 1u && g.compute_contexts == 1u);
+	/* And it holds there at the share the lab measured at 2000 MHz: 47 % is above the compute set's own
+	 * lowering threshold, so nothing steps back down. */
+	for (i = 0; i < 400; i++) CHECK(run_compute(&g, 472, 60000, 25, 1) == L(10));
+	CHECK(g.lowers == 0 && g.raises == 1 && g.compute_ticks == 401u);
+	/* Several contexts are one state, not a stronger one; and closing the last one gives the graphics
+	 * thresholds back without any step of its own. */
+	CHECK(run_compute(&g, 472, 60000, 25, 4) == L(10));
+	CHECK(g.compute_entries == 1u && g.compute_set == 1);
+	CHECK(run_compute(&g, 472, 60000, 25, 0) == L(10));
+	CHECK(g.compute_set == 0 && g.compute_contexts == 0u);
+	/* With the clock already at the top, the graphics thresholds take it back down: 47 % is under their
+	 * 650 permille, so the average falls and the level steps. */
+	for (i = 0; i < 40; i++) level = run_compute(&g, 472, 60000, 25, 0);
+	CHECK(level < L(10) && g.lowers > 0u);
+
+	/* DpmComputeProfile 0: the set exists and is never selected, which is 0.7.216.7 behaviour exactly. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	bc250_dpm_compute_default(&c);
+	c.on = 0;
+	CHECK(bc250_dpm_set_compute(&g, &c) == BC250_DPM_TUNE_OK && g.compute.on == 0);
+	for (i = 0; i < 200; i++) CHECK(run_compute(&g, 579, 60000, 25, 2) == L(0));
+	CHECK(g.compute_set == 0 && g.compute_ticks == 0u && g.raises == 0);
+	CHECK(bc250_dpm_compute_on(&g) == 0);
+
+	/* A quiet GPU with a compute context open still goes to the idle point: a model server that answers
+	 * nothing costs no power. The set lowers the raise threshold and nothing else. */
+	idle_init(&g, BC250_DPM_TOP_LEVEL);
+	for (i = 1, level = L(0); i <= 400 && level != g.idle_level; i++)
+		level = run_compute(&g, 0, 60000, 25, 1);
+	CHECK(level == g.idle_level && g.idle == 1 && g.idle_entries == 1u);
+	CHECK(bc250_dpm_compute_on(&g) == 1);		/* the context is still open while the clock is at 500 MHz */
+	/* And the first real work leaves the point as it always did. */
+	CHECK(run_compute(&g, 900, 60000, 25, 1) > g.idle_level && g.idle == 0 && g.idle_fast_exits == 1u);
+
+	/* Thermal first, every rule. A hot part is held by the cap whatever the compute set asks for. */
+	init_old(&g, BC250_DPM_TOP_LEVEL);
+	g.level = L(10);
+	level = run_compute(&g, 579, 87000, 25, 1);	/* the hot cap's entry: one step below the running clock */
+	CHECK(level <= L(9) && g.hot == 1 && g.thermal_cap <= L(9));
+	CHECK(g.throttle == BC250_DPM_THROTTLE_THERMAL_SOFT || g.throttle == BC250_DPM_THROTTLE_THERMAL_WARM);
+	for (i = 0; i < 400; i++) level = run_compute(&g, 1000, 87500, 25, 1);
+	CHECK(level == L(-2) && g.thermal_cap == L(-2));	/* down to 800 MHz, the thermal floor */
+	/* The critical rule, and a tick with no reading at all. */
+	init_old(&g, BC250_DPM_TOP_LEVEL);
+	g.level = L(10);
+	CHECK(run_compute(&g, 579, 90000, 25, 1) == L(-2));
+	init_old(&g, BC250_DPM_TOP_LEVEL);
+	g.level = L(6);
+	{
+		struct bc250_dpm_input in = tick(579, 60, 25);
+		in.temperature_valid = 0;
+		in.compute_contexts = 1;
+		CHECK(bc250_dpm_step(&g, &in) == L(0));
+	}
+	/* The warm zone: at and above the warm threshold no raise happens, whichever set asked for it. */
+	init_old(&g, BC250_DPM_TOP_LEVEL);
+	g.level = L(2);
+	CHECK(run_compute(&g, 579, BC250_DPM_WARM_MC, 25, 1) <= L(2));
+	CHECK(g.warm_holds > 0u || g.hot == 1);
+	/* The soft zone of the default rules holds the clock as well, from its own threshold up. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	g.level = L(2);
+	CHECK(run_compute(&g, 579, bc250_dpm_zone_mc(&g.tune), 25, 1) <= L(2));
+	/* The ceiling of the start. */
+	bc250_dpm_init(&g, L(2));
+	CHECK(run_compute(&g, 579, 60000, 25, 1) == L(2));
+	CHECK(g.throttle == BC250_DPM_THROTTLE_MAX_SETTING);
+	/* SetStablePowerState pins the lab floor against the compute set too. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	g.stable = 1;
+	CHECK(run_compute(&g, 579, 60000, 25, 1) == L(0));
+	CHECK(g.throttle == BC250_DPM_THROTTLE_STABLE);
+
+	/* A runtime floor still lifts the request, and the compute set still raises above it. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	{
+		struct bc250_dpm_tune t = g.tune;
+		t.floor_level = L(4);
+		CHECK(bc250_dpm_set_tune(&g, &t) == BC250_DPM_TUNE_OK);
+	}
+	CHECK(run_compute(&g, 0, 60000, 25, 1) == L(4) && g.floor_ticks > 0u);
+	CHECK(run_compute(&g, 579, 60000, 25, 1) == L(10));
+	/* The floor also keeps the idle state off while it is set, with or without a compute context. */
+	CHECK(g.idle == 0);
+
+	/* Refusals. Every one leaves the set that was in force, so a bad registry value costs the governor
+	 * nothing. The error numbers are bc250_dpm_tune_check's own: one enum for both sets. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	bc250_dpm_compute_default(&c);
+	c.up_permille = BC250_DPM_TUNE_MIN_PERMILLE - 1u;
+	CHECK(bc250_dpm_set_compute(&g, &c) == BC250_DPM_TUNE_RANGE);
+	bc250_dpm_compute_default(&c);
+	c.up_permille = BC250_DPM_TUNE_MAX_PERMILLE + 1u;
+	CHECK(bc250_dpm_set_compute(&g, &c) == BC250_DPM_TUNE_RANGE);
+	bc250_dpm_compute_default(&c);
+	c.down_permille = c.target_permille;
+	CHECK(bc250_dpm_set_compute(&g, &c) == BC250_DPM_TUNE_ORDER);
+	bc250_dpm_compute_default(&c);
+	c.target_permille = c.up_permille;
+	CHECK(bc250_dpm_set_compute(&g, &c) == BC250_DPM_TUNE_ORDER);
+	/* Invariant 1: a one-step lowering that could land at or above the raise threshold. */
+	c.on = 1; c.up_permille = 400u; c.target_permille = 390u; c.down_permille = 380u;
+	CHECK(bc250_dpm_set_compute(&g, &c) == BC250_DPM_TUNE_LOWERING);
+	/* The governor kept its defaults through all of that, and still behaves as the measured case asks. */
+	CHECK(g.compute.on == 1 && g.compute.up_permille == BC250_DPM_COMPUTE_UP_PERMILLE &&
+	      g.compute.target_permille == BC250_DPM_COMPUTE_TARGET_PERMILLE &&
+	      g.compute.down_permille == BC250_DPM_COMPUTE_DOWN_PERMILLE);
+	CHECK(run_compute(&g, 579, 60000, 25, 1) == L(10));
+
+	/* The switch is not refused with the thresholds (BD-127 review). One registry key carries both, so an
+	 * operator who writes DpmComputeProfile 0 to bisect a regression, and a bad threshold beside it, must
+	 * get the graphics thresholds: the opposite would hold a default-on power policy on against an explicit
+	 * off. The three numbers still keep the values that passed, which is what the KMD logs. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	bc250_dpm_compute_default(&c);
+	c.on = 0;
+	c.up_permille = BC250_DPM_TUNE_MAX_PERMILLE + 1u;
+	CHECK(bc250_dpm_set_compute(&g, &c) == BC250_DPM_TUNE_RANGE);
+	CHECK(g.compute.on == 0 && g.compute.up_permille == BC250_DPM_COMPUTE_UP_PERMILLE);
+	CHECK(bc250_dpm_compute_on(&g) == 0);
+	for (i = 0; i < 200; i++) CHECK(run_compute(&g, 579, 60000, 25, 2) == L(0));
+	CHECK(g.compute_set == 0 && g.compute_ticks == 0u && g.raises == 0);
+	/* And the same way round: a refused triple beside an explicit 1 turns the set on with the defaults. */
+	bc250_dpm_compute_default(&c);
+	c.on = 1;
+	c.down_permille = c.target_permille;
+	CHECK(bc250_dpm_set_compute(&g, &c) == BC250_DPM_TUNE_ORDER);
+	CHECK(g.compute.on == 1 && g.compute.down_permille == BC250_DPM_COMPUTE_DOWN_PERMILLE);
+	CHECK(run_compute(&g, 579, 60000, 25, 1) == L(10) && g.compute_set == 1);
+
+	/* A compute load that needs a fixed amount of work per second settles, as the graphics one does: the
+	 * set went through the same invariants, so no demand may oscillate between two levels. */
+	for (i = 300; i <= 2400; i += 10) {
+		struct bc250_dpm_governor h;
+		unsigned int k, changes = 0, last = 0, lvl = 0;
+		bc250_dpm_init(&h, BC250_DPM_TOP_LEVEL);
+		for (k = 0; k < 2000; k++) {
+			unsigned int mhz = bc250_dpm_level_mhz(h.level);
+			unsigned int busy = i >= mhz ? 1000u : i * 1000u / mhz;
+			lvl = run_compute(&h, busy, 60000, 25, 1);
+			if (k >= 1000 && lvl != last) changes++;
+			last = lvl;
+		}
+		CHECK(changes == 0);
+	}
+}
+
 int main(void)
 {
 	test_table();
@@ -3287,6 +3499,7 @@ int main(void)
 	test_ramp();
 	test_plant367();
 	test_subfloor();
+	test_compute();
 	printf("dpm policy: %d checks, %d failures\n", checks, failures);
 	return failures ? 1 : 0;
 }

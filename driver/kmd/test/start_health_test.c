@@ -31,6 +31,10 @@ static ULONGLONG clock100ns=10000;
 static LONGLONG qpc=100;
 static NTSTATUS openStatus,writeStatus,flushStatus;
 static int faultDuringFlush;
+// BD-120: a node-0 hardware fence timeout and the recovered engine reset that answers it, both while a CONFIRM
+// holds Lifecycle and is doing registry I/O - the one interleaving in which a confirmation could certify an
+// interval it never measured.
+static int recoverDuringFlush;
 static BC250_DEVICE* live;
 #define CHECK(x) do {++checks;if(!(x)){++failures;printf("FAIL %d: %s\n",__LINE__,#x);}}while(0)
 static void KeInitializeMutex(KMUTEX*p,int n){(void)n;*p=0;}
@@ -47,9 +51,17 @@ static ULONGLONG KeQueryInterruptTime(void){return clock100ns;}
 static LARGE_INTEGER KeQueryPerformanceCounter(void*p){LARGE_INTEGER r={0};(void)p;r.QuadPart=qpc;return r;}
 static LONGLONG InterlockedCompareExchange64(volatile LONGLONG*p,LONGLONG v,LONGLONG c){LONGLONG old=*p;if(old==c)*p=v;return old;}
 void StartHealthFault(BC250_DEVICE*);
+void StartHealthFaultPendingReset(BC250_DEVICE*);
+void StartHealthCloseKeepPendingReset(BC250_DEVICE*);
+BC250_START_HEALTH_RECOVERY StartHealthRecovered(BC250_DEVICE*,ULONGLONG*);
 static NTSTATUS OpenParameters(HANDLE*k){*k=(void*)1;return openStatus;}
 static NTSTATUS WriteDword(HANDLE k,const unsigned short*n,ULONG v){(void)k;(void)n;CHECK(v==0 && spins==0 && mutexes==1);writes++;return writeStatus;}
-static NTSTATUS ZwFlushKey(HANDLE k){(void)k;CHECK(spins==0 && mutexes==1);flushes++;if(faultDuringFlush)StartHealthFault(live);return flushStatus;}
+static NTSTATUS ZwFlushKey(HANDLE k){(void)k;CHECK(spins==0 && mutexes==1);flushes++;if(faultDuringFlush)StartHealthFault(live);
+    // 1 = our latch closed the witness first, 2 = the OS TDR reached ResetEngine first and it was never closed.
+    if(recoverDuringFlush==1){ULONGLONG e=0;StartHealthFaultPendingReset(live);
+        CHECK(StartHealthRecovered(live,&e)==BC250_START_HEALTH_RECOVERY_REOPENED);}
+    if(recoverDuringFlush==2){ULONGLONG e=0;CHECK(StartHealthRecovered(live,&e)==BC250_START_HEALTH_RECOVERY_REARMED);}
+    return flushStatus;}
 static void ZwClose(HANDLE k){(void)k;closes++;}
 #define RtlZeroMemory(p,n) memset((p),0,(n))
 // cumode.c: a durable start-health confirmation also confirms a pending 40 CU request, under Lifecycle,
@@ -100,7 +112,7 @@ int main(void)
     // Every flag word this gate is asked about: the two it admits, their union, the bits of the other escapes
     // and nothing at all.
     static const ULONG words[]={0,1,2,3,4,8,9,10,12,16,24};
-    BC250_DEVICE d={0};BC250_ESCAPE_START_HEALTH r;ULONGLONG generation,epoch,count;unsigned old,i,cu0,dpm0;
+    BC250_DEVICE d={0};BC250_ESCAPE_START_HEALTH r;ULONGLONG generation,epoch,count,witness;unsigned old,i,cu0,dpm0;
     live=&d;StartHealthInitialize(&d);CHECK(sizeof(r)==96);
     r=query(&d,0);CHECK(!(r.Flags&BC250_START_HEALTH_READY));
     healthy(&d);r=query(&d,0);CHECK(r.Flags==7 && r.Completed==12 && r.ReadyAgeMs==60000 && r.LastCompletionAgeMs==0);
@@ -182,6 +194,108 @@ int main(void)
     healthy(&d);r=query(&d,1);CHECK(r.Flags==15);
     StartHealthStop(&d,&r);CHECK(r.Flags==15 && d.StartHealth.Closed);
     StartHealthBegin(&d,TRUE);StartHealthStop(&d,&r);CHECK(!(r.Flags&8));
+    // BD-120 requirement 1: the witness re-arms after a RECOVERED engine reset. On the lab (tester.27, KMD
+    // 0.7.216.28) the node-0 hardware fence timeout closed it, "ResetEngine node 0: SOFT RECOVERED" reopened the
+    // node, and the witness stayed at flags=1, epoch 14, completed 0, ready_ms 0 for the rest of the boot while
+    // the desktop kept flipping in hardware. The two acts below are what wddm.c calls at those two moments.
+    healthy(&d);r=query(&d,1);CHECK(r.Flags==15 && r.Status==0);
+    generation=d.StartHealth.Generation;epoch=d.StartHealth.Epoch;old=writes;cu0=cuConfirms;dpm0=dpmConfirms;
+    StartHealthFaultPendingReset(&d);           // WddmLatchSubmitTimeoutLocked: the hardware fence timed out
+    r=query(&d,0);
+    CHECK(r.Flags==BC250_START_HEALTH_FULL && r.Epoch>epoch && !r.Completed && !r.ReadyAgeMs); // the lab's flags=1
+    epoch=d.StartHealth.Epoch;
+    // The recovered ResetEngine, under wddm->Lock
+    CHECK(StartHealthRecovered(&d,&witness)==BC250_START_HEALTH_RECOVERY_REOPENED && witness>epoch);
+    r=query(&d,0);
+    CHECK(r.Flags==15 && r.Epoch==witness && r.Generation==generation && !r.Completed && !r.ReadyAgeMs);
+    CHECK(!StartHealthIsReady(&d,&generation)); // re-armed is not confirmed-ready: the age and a completion first
+    advance((unsigned)BC250_START_HEALTH_MIN_MS-1);StartHealthCompleted(&d,2);r=query(&d,1);
+    CHECK(r.Completed==1 && r.NtStatus==(ULONG)STATUS_DEVICE_NOT_READY && writes==old); // completions count again
+    advance(1);r=query(&d,1);CHECK(r.Status==0 && r.Flags==15 && r.ReadyAgeMs==BC250_START_HEALTH_MIN_MS && writes==old+1);
+    // The desktop confirms again without a restart, and the boot guard is cleared, but the CU-mode and DPM
+    // request of a start that needed a GPU reset stay pending: the clock, the voltage or the CU count that hung
+    // node 0 must not become the next boot's default. StartHealthIsReady, which is the milestone those two
+    // escapes of their own read, says the same. Before the re-arm existed the closed witness did this by itself.
+    CHECK(cuConfirms==cu0 && dpmConfirms==dpm0 && !StartHealthIsReady(&d,&generation));
+    healthy(&d);r=query(&d,1);                  // the next device start confirms both again
+    CHECK(r.Status==0 && cuConfirms==cu0+1 && dpmConfirms==dpm0+1 && StartHealthIsReady(&d,&generation));
+    // A resume invalidates the pre-sleep witness but does not make that request safe; only a new start does.
+    generation=d.StartHealth.Generation;cu0=cuConfirms;dpm0=dpmConfirms;old=writes;
+    StartHealthFaultPendingReset(&d);
+    CHECK(StartHealthRecovered(&d,&witness)==BC250_START_HEALTH_RECOVERY_REOPENED);
+    StartHealthResumeReady(&d,TRUE);StartHealthEnter(&d);StartHealthVisibilityLocked(&d,TRUE);StartHealthLeave(&d);
+    advance(60000);StartHealthCompleted(&d,2);r=query(&d,1);
+    CHECK(r.Status==0 && r.Flags==15 && r.Generation==generation && writes==old+1);
+    CHECK(cuConfirms==cu0 && dpmConfirms==dpm0);
+    // The mark is taken over an open witness with its engines up, and nowhere else. A startup engine failure
+    // (pnp.c: StartHealthReady with GfxStartupResources FALSE) is sticky for the whole start, so a reset that
+    // recovers node 0 afterwards must leave the witness at FULL alone, exactly as it was before this change.
+    StartHealthBegin(&d,TRUE);StartHealthReady(&d,FALSE);
+    StartHealthEnter(&d);StartHealthDisplayLocked(&d,TRUE,TRUE);StartHealthLeave(&d);
+    StartHealthFaultPendingReset(&d);
+    CHECK(StartHealthRecovered(&d,&witness)==BC250_START_HEALTH_RECOVERY_STICKY);
+    r=query(&d,0);CHECK(r.Flags==BC250_START_HEALTH_FULL);
+    // BD-120 requirement 3: every fault that is not this reset's own close stays sticky, in either order, and
+    // the reset reopens nothing. A dispatch failure (WddmFailSubmission), a paging failure, a stop, a power
+    // transition, a remove and a refused reset of node 0 all arrive as StartHealthFault or StartHealthClose.
+    healthy(&d);StartHealthFault(&d);
+    CHECK(StartHealthRecovered(&d,&witness)==BC250_START_HEALTH_RECOVERY_STICKY);
+    r=query(&d,0);CHECK(r.Flags==BC250_START_HEALTH_FULL);
+    healthy(&d);StartHealthFaultPendingReset(&d);StartHealthFault(&d);
+    CHECK(StartHealthRecovered(&d,&witness)==BC250_START_HEALTH_RECOVERY_STICKY);
+    r=query(&d,0);CHECK(!(r.Flags&BC250_START_HEALTH_READY));
+    healthy(&d);StartHealthFault(&d);StartHealthFaultPendingReset(&d);
+    CHECK(StartHealthRecovered(&d,&witness)==BC250_START_HEALTH_RECOVERY_STICKY);
+    r=query(&d,0);CHECK(!(r.Flags&BC250_START_HEALTH_READY));
+    healthy(&d);StartHealthClose(&d);epoch=d.StartHealth.Epoch;        // a node-0 refusal moves nothing
+    CHECK(StartHealthRecovered(&d,&witness)==BC250_START_HEALTH_RECOVERY_STICKY &&
+          witness==epoch && d.StartHealth.Epoch==epoch);
+    // BD-120 requirement 2 in its one awkward ordering: a ResetEngine refusal on node 1 closes the witness, as
+    // every refusal always did, but node 1 is never soft-recovered by policy, so its refusal says nothing about
+    // node 0 and must leave the answer node 0's own reset still owes. Such a close never creates a mark either.
+    healthy(&d);StartHealthFaultPendingReset(&d);StartHealthCloseKeepPendingReset(&d);
+    CHECK(StartHealthRecovered(&d,&witness)==BC250_START_HEALTH_RECOVERY_REOPENED);
+    r=query(&d,0);CHECK(r.Flags&BC250_START_HEALTH_READY);
+    healthy(&d);StartHealthCloseKeepPendingReset(&d);
+    CHECK(StartHealthRecovered(&d,&witness)==BC250_START_HEALTH_RECOVERY_STICKY);
+    r=query(&d,0);CHECK(r.Flags==BC250_START_HEALTH_FULL);
+    // The other ordering of the hang itself: the OS TDR reaches ResetEngine before our fence timeout latches
+    // (Bc250SubmitBudgetMs is never shorter than TdrDelay), so nothing closed the witness. There is no close to
+    // undo, but the interval it reports contained a GPU hang, so that interval ends too: a new epoch, no
+    // completions, the ready age re-clocked. No measured interval ever spans a hang, in either ordering.
+    healthy(&d);epoch=d.StartHealth.Epoch;count=d.StartHealth.Completed;
+    CHECK(count==12 && StartHealthRecovered(&d,&witness)==BC250_START_HEALTH_RECOVERY_REARMED && witness>epoch);
+    r=query(&d,0);
+    CHECK(r.Flags==BC250_START_HEALTH_REQUIRED && r.Epoch==witness && !r.Completed && !r.ReadyAgeMs);
+    healthy(&d);StartHealthFaultPendingReset(&d);StartHealthBegin(&d,TRUE);  // a new start clears the mark
+    CHECK(StartHealthRecovered(&d,&witness)!=BC250_START_HEALTH_RECOVERY_REOPENED);
+    healthy(&d);StartHealthFaultPendingReset(&d);StartHealthResumeReady(&d,TRUE); // and so does a resume
+    CHECK(StartHealthRecovered(&d,&witness)!=BC250_START_HEALTH_RECOVERY_REOPENED);
+    // BD-120 requirement 4: a timeout, a recovery and a CONFIRM interleave. The confirmation measured the
+    // interval before the hang, so it stays on that epoch and returns STATUS_RETRY; the new epoch is left for a
+    // later CONFIRM to certify. CONFIRMED itself survives the recovery (BD-098: it reports the start).
+    healthy(&d);epoch=d.StartHealth.Epoch;old=writes;cu0=cuConfirms;dpm0=dpmConfirms;recoverDuringFlush=1;
+    r=query(&d,1);recoverDuringFlush=0;
+    CHECK(r.NtStatus==(ULONG)STATUS_RETRY && r.Epoch>epoch && writes==old+1);
+    CHECK(d.StartHealth.ConfirmedEpoch==epoch && d.StartHealth.ConfirmedGeneration==d.StartHealth.Generation);
+    CHECK((r.Flags&BC250_START_HEALTH_CONFIRMED) && (r.Flags&BC250_START_HEALTH_READY) && r.Flags==15);
+    CHECK(cuConfirms==cu0 && dpmConfirms==dpm0);     // a retried confirmation confirms no CU mode and no DPM
+    // The same race in the other ordering: the recovery alone, over a witness no latch had closed. The epoch
+    // still moves, so the confirmation still certifies only the interval it measured.
+    healthy(&d);epoch=d.StartHealth.Epoch;old=writes;cu0=cuConfirms;dpm0=dpmConfirms;recoverDuringFlush=2;
+    r=query(&d,1);recoverDuringFlush=0;
+    CHECK(r.NtStatus==(ULONG)STATUS_RETRY && r.Epoch>epoch && writes==old+1 && r.Flags==15);
+    CHECK(d.StartHealth.ConfirmedEpoch==epoch && cuConfirms==cu0 && dpmConfirms==dpm0);
+    // And the start after it all confirms everything again, so none of the marks outlives its start.
+    healthy(&d);cu0=cuConfirms;dpm0=dpmConfirms;old=writes;r=query(&d,1);
+    CHECK(r.Status==0 && r.Flags==15 && writes==old+1 && cuConfirms==cu0+1 && dpmConfirms==dpm0+1);
+    // Port onto BD-124 stage 4 (0.7.216.62): StartHealthStop is a real close of the start. A latch close
+    // before the stop leaves no mark for a later reset to undo; the stop still returns the pre-stop snapshot.
+    healthy(&d);StartHealthFaultPendingReset(&d);CHECK(d.StartHealth.PendingReset);
+    StartHealthStop(&d,&r);
+    CHECK(r.Flags==BC250_START_HEALTH_FULL && d.StartHealth.Closed && !d.StartHealth.PendingReset);
+    CHECK(StartHealthRecovered(&d,&witness)==BC250_START_HEALTH_RECOVERY_STICKY);
+    r=query(&d,0);CHECK(!(r.Flags&BC250_START_HEALTH_READY));
     StartHealthRemove(&d);r=query(&d,0);CHECK(r.NtStatus==(ULONG)STATUS_DELETE_PENDING);
     CHECK(spins==0 && mutexes==0 && closes>0);
     CHECK(bootMarks>=cuConfirms && bootMarks>0); /* every durable confirmation, and only those (stub above) */

@@ -40,6 +40,13 @@ typedef struct _BC250_DPM_SNAP {
     // 0.7.216.6, the idle point's hysteresis: the slow exit's share in force and how the exits split between the one
     // busy tick (fast) and the trailing window (slow). Driver log only, not in the escape.
     ULONG IdleLeavePermille, IdleFastExits, IdleSlowExits;
+    // BD-127, the compute threshold set: the three thresholds of this start's set, the live context count the
+    // last tick read, and what the set did. ComputeOn is the setting (DpmComputeProfile), ComputeSet says
+    // whether the last tick governed with it. BC250_DPM_FLAG_COMPUTE carries ComputeSet to the escape; the
+    // rest is driver log only, like the zone's and the arm's counters.
+    ULONG ComputeUpPermille, ComputeTargetPermille, ComputeDownPermille;
+    ULONG ComputeContexts, ComputeEntries, ComputeTicks;
+    BOOLEAN ComputeOn, ComputeSet;
     // 0.7.210, the operator's V/F curve. CurrentMv above already comes from the active curve; these three are
     // what the telemetry line and the escape's flags need. Serial counts changes of the active curve, Applied is
     // the serial the governor has put into the hardware.
@@ -63,6 +70,11 @@ typedef struct _BC250_DPM_STATE {
     volatile LONG Paused;                   // a power transition: no SMU traffic
     volatile LONG Resync;                   // read the hardware's clock back before the next decision
     volatile LONG Stable;                   // SetStablePowerState(TRUE)
+    // BD-127: live contexts of this adapter whose BC2C blob carried BC250_UMD_C_COMPUTE. wddm.c raises it in
+    // DxgkDdiCreateContext after the blob is accepted and lowers it in DxgkDdiDestroyContext, interlocked and
+    // at any IRQL; dxgkrnl destroys the contexts of a dying process, so no process tracking is needed. The
+    // governor thread reads it once per tick and selects the compute threshold set while it is above zero.
+    volatile LONG ComputeContexts;
     // Fed by gfx.c at submit and at fence arrival, interlocked only (DpmBusyBegin/DpmBusyEnd). Both in
     // KeQueryInterruptTime units. BusySince is 0 while the ring is idle.
     volatile LONG64 BusySince;

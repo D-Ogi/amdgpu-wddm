@@ -119,6 +119,10 @@ Assert-Same $contract '#define\s+BC250_UMD_CONTEXT_SIZE_V2\s+(\d+)' $blobs '#def
 Assert-Same $contract '#define\s+BC250_UMD_SUBMIT_SIZE_V1\s+(\d+)' $blobs '#define\s+BC250HSA_SUBMIT_BLOB_BYTES\s+(\d+)u?' 'BC2S size'
 Assert-Same $contract '#define\s+BC250_UMD_SUBMIT_MAX_IBS\s+(\d+)u?' $blobs '#define\s+BC250HSA_SUBMIT_MAX_IBS\s+(\d+)u?' 'BC2S max IBs'
 Assert-Same $caps '#define\s+BC250_UMD_PRIVATE_SIZE_V3\s+(\d+)' $blobs '#define\s+BC250HSA_CAPS_BYTES\s+(\d+)u?' 'caps blob size'
+# BD-127: the compute statement and the BC2C version that admits it. The runtime sets the flag on every context it
+# creates, so a drift here would turn the kernel driver's compute clock policy off without a word.
+Assert-Same $contract '#define\s+BC250_UMD_C_COMPUTE\s+(0x[0-9A-Fa-f]+u?)' $blobs '#define\s+BC250HSA_CTX_COMPUTE\s+(0x[0-9A-Fa-f]+u?)' 'BC2C compute flag'
+Assert-Same $contract '#define\s+BC250_UMD_CONTEXT_VERSION_COMPUTE\s+(\d+)u?' $blobs '#define\s+BC250HSA_CONTEXT_VERSION\s+(\d+)u?' 'BC2C version'
 
 # tools\run-lab.ps1 runs under Windows PowerShell 5.1 on the lab: it must at least parse.
 $runner = Join-Path $toolDir 'run-lab.ps1'

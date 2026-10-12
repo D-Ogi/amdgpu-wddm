@@ -311,6 +311,15 @@ try {
   @{n='guard-start-not-durable';s='driver\kmd\test\run_guard_start.ps1';a=@('-Root',$Workspace,'-IgnoreDurability');Fails=$true}
   @{n='start-health';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace)}
   @{n='start-health-no-flush';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-IgnoreFlush');Fails=$true}
+  # BD-120: the witness re-arms after a recovered engine reset, and after nothing else.
+  @{n='start-health-no-witness-reopen';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-NoWitnessReopen');Fails=$true}
+  @{n='start-health-reopen-any-close';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-ReopenAnyClose');Fails=$true}
+  @{n='start-health-sticky-fault-keeps-mark';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-StickyFaultKeepsMark');Fails=$true}
+  @{n='start-health-confirm-new-epoch';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-ConfirmCertifiesNewEpoch');Fails=$true}
+  @{n='start-health-mark-over-failed-engines';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-MarkOverFailedEngines');Fails=$true}
+  @{n='start-health-refusal-drops-other-node-mark';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-RefusalDropsOtherNodeMark');Fails=$true}
+  @{n='start-health-rearm-skips-open-witness';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-RearmSkipsOpenWitness');Fails=$true}
+  @{n='start-health-confirm-hung-request';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-ConfirmHungRequest');Fails=$true}
   @{n='gfx-pipeline';s='driver\kmd\test\run_gfx_pipeline.ps1';a=@('-Root',$Workspace,'-KmdOnly')}
   @{n='vmid-pool';s='driver\kmd\test\run_vmid_pool.ps1';a=@('-Root',$Workspace)}
   @{n='keep-prune';s='driver\kmd\test\run_keep_prune.ps1';a=@('-Root',$Workspace)}
@@ -348,6 +357,11 @@ try {
   @{n='recovery-protocol-ResetWritesCompleted';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-ResetWritesCompleted');Fails=$true}
   @{n='recovery-protocol-IgnoreEpoch';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-IgnoreEpoch');Fails=$true}
   @{n='recovery-protocol-TimeoutAfterUnlock';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-TimeoutAfterUnlock');Fails=$true}
+  # BD-120: the timeout latch marks the close the reset owns, and only the recovered path reopens it.
+  @{n='recovery-protocol-LatchFaultsStickily';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-LatchFaultsStickily');Fails=$true}
+  @{n='recovery-protocol-DropWitnessReopen';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-DropWitnessReopen');Fails=$true}
+  @{n='recovery-protocol-ReopenWitnessOnRefusal';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-ReopenWitnessOnRefusal');Fails=$true}
+  @{n='recovery-protocol-RefusalClosesEveryNode';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-RefusalClosesEveryNode');Fails=$true}
   @{n='submit-watchdog-flat-500';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-FlatFiveHundred');Fails=$true}
   @{n='submit-watchdog-no-tdr-floor';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-NoTdrFloor');Fails=$true}
   @{n='submit-watchdog-clamp-tdr';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-ClampTdrToBudgetMax');Fails=$true}

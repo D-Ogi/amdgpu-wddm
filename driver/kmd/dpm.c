@@ -44,6 +44,16 @@
 //                   release, the warm zone back at 87 C). It is one switch for a whole start, for bisecting a
 //                   regression against the rules the lab measured before it; the zone's own numbers are tunable at
 //                   run time through RUN_DPM_TUNE ABI 3, and a RESET there turns the zone back on.
+//   DpmComputeProfile  the compute threshold set (BD-127): absent or 1 runs it, which is the default, and 0 leaves the
+//                   graphics thresholds in force at every tick. While the GPU has at least one open compute context
+//                   (a BC2C blob with BC250_UMD_C_COMPUTE, counted in wddm.c) the governor's three load thresholds
+//                   are the compute set's. A compute client waits on the CPU between dispatches, so its busy share
+//                   measures that split and not the headroom: the measured LLM run held 57.9 % at 1000 MHz, never
+//                   reached the 900 permille raise threshold, and ran 31 % faster at 2000 MHz.
+//   DpmComputeUpPermille, DpmComputeTargetPermille, DpmComputeDownPermille  the set's three thresholds. Absent =
+//                   400 / 300 / 200 (BC250_DPM_COMPUTE_*_PERMILLE). They go through the same checks as the graphics
+//                   thresholds (bc250_dpm_compute_check: ranges, the order, both invariants over the clock table);
+//                   a refused set is logged and this start keeps the defaults.
 //   DpmJointGovernor  the joint power arm (0.7.216.7, C62): 1 runs it in a governing start, absent or any other value
 //                   leaves it off, which is the default. While the GPU is bound and its clock held by heat, the arm
 //                   lowers the CPU's maximum boost clock (cpu.c) one step at a time and gives it back when either
@@ -72,6 +82,7 @@
 // fallback for a tick without samples. SDMA0 (the paging node) is sampled as well, for the telemetry only.
 #include "bc250kmd.h"
 #include "bc250kmd_escape.h"
+#include "log_rate.h"               // BD-127: the compute set's transition line, which a client could make hot
 #include "regs.generated.h"
 #include "gc_10_1_0_sh_mask.h"      // GRBM_STATUS and SDMA0_STATUS_REG field masks; the offsets come from regcalc
 
@@ -87,6 +98,11 @@
 #define DPM_SETTING_IDLE_LEAVE L"DpmIdleLeavePermille"
 #define DPM_SETTING_ZONE L"DpmThermalZone"
 #define DPM_SETTING_JOINT L"DpmJointGovernor"
+// The compute threshold set (BD-127): one switch and the three thresholds.
+#define DPM_SETTING_COMPUTE L"DpmComputeProfile"
+#define DPM_SETTING_COMPUTE_UP L"DpmComputeUpPermille"
+#define DPM_SETTING_COMPUTE_TARGET L"DpmComputeTargetPermille"
+#define DPM_SETTING_COMPUTE_DOWN L"DpmComputeDownPermille"
 #define DPM_SETTING_LAST_MODE L"DpmLastMode"
 #define DPM_SETTING_LAST_REASON L"DpmLastReason"
 #define DPM_SETTING_CLOSED L"DpmClosedReason"
@@ -457,6 +473,16 @@ typedef struct _DPM_TICK {
     LONG TemperatureMc;
     BOOLEAN TemperatureValid, SessionRefused;
     ULONG Errors, Resyncs;
+    // BD-127: what the last tick's compute state was, so that the log carries one line per change of the set
+    // and not one per tick. ComputeLogged is FALSE until the first governing tick has said which set runs.
+    // A change of the set is an event, but a client that opens and closes a context per operation (a loop over
+    // hipDeviceReset, a harness with a device per prompt) makes it a cadence of up to 40 a second, which would
+    // crowd the ring that the same session needs for its evidence. So the line goes through the rate limit the
+    // driver already has (log_rate.h): the first eight changes of a start in full, then at most two a minute,
+    // each carrying the count of the changes it stands for. The counters themselves travel in the 5 s
+    // telemetry block, which loses nothing.
+    BOOLEAN ComputeSet, ComputeLogged;
+    BC250_LOG_RATE ComputeRate;
 } DPM_TICK;
 
 static void DpmPublish(BC250_DEVICE* Device, BC250_DPM_STATE* S, const DPM_TICK* T, BOOLEAN Running)
@@ -529,6 +555,18 @@ static void DpmPublish(BC250_DEVICE* Device, BC250_DPM_STATE* S, const DPM_TICK*
     snap.JointReleases = S->Joint.releases;
     if (S->JointOn) snap.Flags |= BC250_DPM_FLAG_JOINT;
     if (snap.JointAppliedMHz) snap.Flags |= BC250_DPM_FLAG_JOINT_CAP;
+    // The compute threshold set (BD-127). The count comes from the interlocked value, so it is current even in a
+    // publish that no tick fed; the rest is the policy's own. COMPUTE follows the set that really governs, which is
+    // why it needs a governing start, like the idle flag above.
+    snap.ComputeOn = g->compute.on ? TRUE : FALSE;
+    snap.ComputeUpPermille = g->compute.up_permille;
+    snap.ComputeTargetPermille = g->compute.target_permille;
+    snap.ComputeDownPermille = g->compute.down_permille;
+    snap.ComputeContexts = (ULONG)InterlockedCompareExchange(&S->ComputeContexts, 0, 0);
+    snap.ComputeEntries = g->compute_entries;
+    snap.ComputeTicks = g->compute_ticks;
+    snap.ComputeSet = (Running && governing && g->compute_set) ? TRUE : FALSE;
+    if (snap.ComputeSet) snap.Flags |= BC250_DPM_FLAG_COMPUTE;
     if (T != NULL) {
         snap.TargetMHz = bc250_dpm_level_mhz(T->Target);
         snap.BusyPermille = T->Permille;
@@ -609,6 +647,20 @@ static void DpmLogIdleLine(const char* What, const BC250_DPM_SNAP* P)
     // rule, a runtime floor, SetStablePowerState, a stop or a power transition).
     GuardLog("dpm: %s idle leave at %lu permille, exits %lu by a busy tick, %lu by the window", What,
              P->IdleLeavePermille, P->IdleFastExits, P->IdleSlowExits);
+}
+
+// The compute threshold set (BD-127) on two lines of its own, and only once it has something to say: a start whose GPU
+// never gets a compute context, or one with DpmComputeProfile 0 and no context, logs exactly what 0.7.216.7 logged.
+// Two lines, by the rule of the guardlog-width gate: one would be some 190 characters at its widest. The first line
+// is the state and the counters, the second the three thresholds the set holds.
+static void DpmLogComputeLine(const char* What, const BC250_DPM_SNAP* P)
+{
+    if (P->ComputeContexts == 0 && P->ComputeEntries == 0) return;
+    GuardLog("dpm: %s compute %s, contexts %lu, entries %lu ticks %lu", What,
+             P->ComputeSet ? "on (now)" : (P->ComputeOn ? "on" : "off"), P->ComputeContexts,
+             P->ComputeEntries, P->ComputeTicks);
+    GuardLog("dpm: %s compute thresholds up %lu target %lu down %lu permille", What, P->ComputeUpPermille,
+             P->ComputeTargetPermille, P->ComputeDownPermille);
 }
 
 // The joint power arm (0.7.216.7) on two lines of its own, only in a start that runs it: a start with
@@ -915,9 +967,34 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
         // share, so an eviction or an upload with the GFX ring empty neither enters the state nor runs at the
         // idle point; the load governor keeps the GFX-only share in in.busy_permille.
         in.sdma_permille = T->SdmaPermille;
+        // BD-127: the live compute contexts of this adapter. Above zero the policy governs with the compute
+        // threshold set, because a compute client's busy share measures its wait on the CPU and not the
+        // headroom. One interlocked read; wddm.c keeps the count.
+        in.compute_contexts = (unsigned int)InterlockedCompareExchange(&S->ComputeContexts, 0, 0);
         S->Gov.stable = InterlockedCompareExchange(&S->Stable, 0, 0) != 0;
         DpmTakeTune(S);
         target = bc250_dpm_step(&S->Gov, &in);
+        // One line per change of the set, and one at the first governing tick: a line per tick would be 40 a
+        // second. A client that opens and closes a context per operation makes the CHANGE itself that fast, so
+        // the line goes through log_rate.h like the paging submit's: the first eight of a start in full, then at
+        // most two a minute, each standing for the changes it accounts for. The counters themselves travel in
+        // the telemetry block, which keeps its own cadence whatever this decides.
+        if (!T->ComputeLogged || (S->Gov.compute_set ? TRUE : FALSE) != T->ComputeSet) {
+            BC250_LOG_RATE_NOTE note;
+            ULONG outcome = Bc250LogRateDecide(&T->ComputeRate, GuardLogMilliseconds(), &note);
+            T->ComputeLogged = TRUE;
+            T->ComputeSet = S->Gov.compute_set ? TRUE : FALSE;
+            if (outcome == BC250_LOG_RATE_LINE)
+                GuardLog("dpm: compute set %s, contexts %lu, up %lu target %lu down %lu permille",
+                         T->ComputeSet ? "on" : "off", (ULONG)in.compute_contexts,
+                         (ULONG)(T->ComputeSet ? S->Gov.compute.up_permille : S->Gov.tune.up_permille),
+                         (ULONG)(T->ComputeSet ? S->Gov.compute.target_permille : S->Gov.tune.target_permille),
+                         (ULONG)(T->ComputeSet ? S->Gov.compute.down_permille : S->Gov.tune.down_permille));
+            else if (outcome == BC250_LOG_RATE_SUMMARY)
+                GuardLog("dpm: compute set %s, contexts %lu: %lu changes in %llu ms, %lu of %lu silent",
+                         T->ComputeSet ? "on" : "off", (ULONG)in.compute_contexts,
+                         note.Pending, note.ElapsedMs, note.Skipped, note.Calls);
+        }
         // The joint power arm reads this tick's governor and decides the CPU limit; it never changes target.
         if (S->JointOn) DpmJointTick(Device, S, &in);
         action = bc250_dpm_session_step(&S->Session, target, dtMs);
@@ -1029,6 +1106,7 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
         T->LastLog = now;
         DpmLogLine("telemetry", &snap);
         DpmLogIdleLine("telemetry", &snap);
+        DpmLogComputeLine("telemetry", &snap);
         DpmLogJointLine("telemetry", &snap);
         HwmonLogLine(Device, "telemetry");
         SmuMetricsLogLine(Device, "telemetry");
@@ -1129,6 +1207,47 @@ static void DpmConfigureJoint(BC250_DPM_STATE* S, BOOLEAN Dpm)
     GuardLog("dpm: joint power arm DpmJointGovernor %lu%s -> %s", (ULONG)value, present ? "" : " (absent)",
              S->JointOn ? "on: the CPU limit comes down while the GPU is bound and held by heat"
                         : (Dpm ? "off" : "off: this start does not govern the clock"));
+}
+
+// The compute threshold set (BD-127): one switch and three thresholds, read once per start and handed to the policy.
+// A refused threshold leaves this start with the three defaults of bc250_dpm.h and says so; the set then still runs
+// with them, because the defaults are what the lab measured. The switch is NOT refused with them
+// (bc250_dpm_set_compute applies it either way): one key carries both, so a typo in a threshold must not hold a
+// default-on power policy on against a DpmComputeProfile 0 written to bisect a regression (BD-127 review).
+// The set selects nothing by itself: a start whose GPU never gets a compute context governs exactly as 0.7.216.7 did.
+// A start that does not govern never reaches bc250_dpm_step, so the set could not act there either.
+// PASSIVE_LEVEL, under Lock, before the governor thread exists.
+static void DpmConfigureCompute(BC250_DPM_STATE* S, BOOLEAN Dpm)
+{
+    struct bc250_dpm_compute compute;
+    unsigned int on = 0, up = 0, target = 0, down = 0;
+    BOOLEAN onPresent, upPresent, targetPresent, downPresent;
+    enum bc250_dpm_tune_error error;
+
+    bc250_dpm_compute_default(&compute);
+    InterlockedExchange(&S->ComputeContexts, 0);     // a new start counts the contexts of this start alone
+    onPresent = QueryPresent(DPM_SETTING_COMPUTE, &on);
+    upPresent = QueryPresent(DPM_SETTING_COMPUTE_UP, &up);
+    targetPresent = QueryPresent(DPM_SETTING_COMPUTE_TARGET, &target);
+    downPresent = QueryPresent(DPM_SETTING_COMPUTE_DOWN, &down);
+    if (!onPresent) on = BC250_DPM_COMPUTE_PROFILE;
+    if (upPresent) compute.up_permille = up;
+    if (targetPresent) compute.target_permille = target;
+    if (downPresent) compute.down_permille = down;
+    // Only 0 turns it off, as DpmThermalZone does: anything else, an absent value included, is the default, so a
+    // typo in THIS value never switches a measured default off silently. A typo in one of the three thresholds
+    // cannot switch it on either: bc250_dpm_set_compute applies the switch whether it takes the thresholds or not.
+    compute.on = (on != 0u) ? 1 : 0;
+    error = bc250_dpm_set_compute(&S->Gov, &compute);   // the thread does not exist yet: no lock needed for Gov
+    // Two lines, by the rule of the guardlog-width gate: one would be some 220 characters at its widest.
+    GuardLog("dpm: compute set DpmComputeProfile %lu%s -> %s, error %d", (ULONG)on,
+             onPresent ? "" : " (absent)", S->Gov.compute.on ? "on" : "off", (int)error);
+    GuardLog("dpm: compute set up %lu target %lu down %lu permille%s",
+             (ULONG)S->Gov.compute.up_permille, (ULONG)S->Gov.compute.target_permille,
+             (ULONG)S->Gov.compute.down_permille,
+             error == BC250_DPM_TUNE_OK ? "" : " (the refused values were not taken)");
+    GuardLog("dpm: compute set: in force while a compute context is open%s",
+             Dpm ? "" : " (this start does not govern the clock)");
 }
 
 // The soft thermal zone's one switch (0.7.213, BD-087). DpmThermalZone 0 runs the 0.7.212 thermal rules for this whole
@@ -1342,6 +1461,7 @@ void DpmStart(BC250_DEVICE* Device)
     }
     bc250_dpm_init(&s->Gov, d->max_level);
     DpmConfigureZone(s, d->mode == BC250_DPM_MODE_DPM);
+    DpmConfigureCompute(s, d->mode == BC250_DPM_MODE_DPM);
     DpmConfigureIdle(s, d->mode == BC250_DPM_MODE_DPM);
     DpmConfigureCurve(s, d->mode == BC250_DPM_MODE_DPM);
     DpmConfigureJoint(s, d->mode == BC250_DPM_MODE_DPM && r.smu_online);
@@ -1451,6 +1571,7 @@ void DpmStop(BC250_DEVICE* Device)
         KeReleaseSpinLock(&s->SnapLock, irql);
         DpmLogLine("stopped", &snap);
         DpmLogIdleLine("stopped", &snap);
+        DpmLogComputeLine("stopped", &snap);
         DpmLogJointLine("stopped", &snap);
         DpmLogCurveLine("stopped", &snap);
     }
@@ -1512,6 +1633,25 @@ void DpmSetStable(BC250_DEVICE* Device, BOOLEAN Enabled)
         GuardLog("dpm: stable power state %s", Enabled ? "on: pinned to the floor" : "off");
 }
 
+// BD-127: one more, or one fewer, live compute context (wddm.c, after the BC2C blob was accepted and in
+// DxgkDdiDestroyContext). Interlocked and nothing else: any IRQL, no lock, no registry, no SMU message. The
+// governor thread reads the count at its next tick and the policy selects the compute threshold set while it
+// is above zero. A count that would go under zero is clamped and logged: it means a context was counted out
+// twice, which is a driver bug and not a reason to turn a clock policy on for the rest of the boot.
+void DpmComputeContextAdd(BC250_DEVICE* Device, LONG Delta)
+{
+    BC250_DPM_STATE* s;
+    LONG now;
+
+    if (Device == NULL || Delta == 0) return;
+    s = &Device->Dpm;
+    now = InterlockedAdd(&s->ComputeContexts, Delta);
+    if (now < 0) {
+        InterlockedExchange(&s->ComputeContexts, 0);
+        GuardLog("dpm: compute context count went under zero (delta %ld): clamped to 0", Delta);
+    }
+}
+
 // Clears this start's pending mark. PASSIVE_LEVEL. Pending goes first, Confirmed second: a crash in
 // between costs a reconfirmation, never a false DPM. Nothing to do is success.
 NTSTATUS DpmConfirm(BC250_DEVICE* Device, _In_z_ const char* Why)
@@ -1566,6 +1706,7 @@ void DpmLogSummary(BC250_DEVICE* Device)
     KeReleaseSpinLock(&s->SnapLock, irql);
     DpmLogLine("summary", &snap);
     DpmLogIdleLine("summary", &snap);
+    DpmLogComputeLine("summary", &snap);
     DpmLogJointLine("summary", &snap);
     HwmonLogLine(Device, "summary");
     SmuMetricsLogLine(Device, "summary");

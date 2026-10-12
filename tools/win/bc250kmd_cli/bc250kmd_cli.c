@@ -3220,6 +3220,21 @@ static void DpmPrintJoint(const BC250_ESCAPE_DPM *d)
            (d->Flags & BC250_DPM_FLAG_JOINT_CAP) ? "lowered by the arm now" : "not touched now");
 }
 
+// The compute threshold set (BD-127): one flag bit, no field of its own, so this line says only which set
+// governs now. The driver log's "dpm: telemetry compute" line carries the rest (the open context count, the
+// three thresholds in force and the counters). A driver before this change never sets the bit, so the line
+// reads "graphics" there, which is what such a driver does.
+#ifndef BC250_DPM_FLAG_COMPUTE
+#define BC250_DPM_FLAG_COMPUTE 65536u
+#endif
+static void DpmPrintCompute(const BC250_ESCAPE_DPM *d)
+{
+    if (!(d->Flags & BC250_DPM_FLAG_GOVERNING)) return;
+    printf("compute: %s\n", (d->Flags & BC250_DPM_FLAG_COMPUTE)
+           ? "the compute threshold set governs now (a compute context is open)"
+           : "the graphics thresholds govern now (no open compute context, or DpmComputeProfile 0)");
+}
+
 // ---- dpm tune / dpm floor: the governor's thresholds and a runtime floor (BC250_ESCAPE_RUN_DPM_TUNE, 0.7.185.1) ----
 //
 // "dpm tune <up> <target> <down> [hold ms]" sets the thresholds in permille (the hold stays as it is when omitted),
@@ -3985,6 +4000,7 @@ static int Dpm(int argc, WCHAR **argv)
             } else printf("; tune n/a (driver before 0x000700B9)");
             printf("\n");
             DpmPrintIdle(d);
+            DpmPrintCompute(d);
             DpmPrintJoint(d);
             DpmPrintMetrics(&x);
         }

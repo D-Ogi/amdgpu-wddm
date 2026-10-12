@@ -47,6 +47,10 @@ bc250hsa_status bc250hsa_context_create(struct bc250hsa_device* dev, D3DKMT_HAND
     context_blob.magic = BC250HSA_CONTEXT_MAGIC;
     context_blob.version = BC250HSA_CONTEXT_VERSION;
     context_blob.size = (uint32_t)sizeof(context_blob);
+    /* Every context of this library is compute (BD-127): the kernel driver counts
+     * them and its clock governor raises from a lower busy share while one is
+     * open. An older kernel driver ignores both the version and the flag. */
+    context_blob.flags = BC250HSA_CTX_COMPUTE;
     context_blob.ip_type = BC250HSA_IP_GFX;
     context_blob.node_ordinal = 0u;
 

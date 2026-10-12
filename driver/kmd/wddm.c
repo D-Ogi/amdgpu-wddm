@@ -209,6 +209,10 @@ typedef struct _BC250_WDDM_OBJECT {
     BOOLEAN UmdAlloc;
     BOOLEAN UmdContext;
     BOOLEAN SystemContext;
+    // BD-127: this context's BC2C blob carried BC250_UMD_C_COMPUTE and it was counted into the adapter's live
+    // compute-context count. The flag is what DestroyContext counts out again, so a context that was never
+    // counted (a GDI context, a refused blob, a version 2 blob) cannot lower the count.
+    BOOLEAN ComputeContext;
     unsigned long UmdIpType;
     unsigned long UmdHeap;
     ULONGLONG UmdBytes;
@@ -1364,16 +1368,25 @@ void WddmGpuFence(_Inout_ BC250_DEVICE* Device)
 }
 
 // Caller holds Lock. The epoch check and BOTH gate latches are one transaction.
-// GfxSubmitFail takes only a short lifetime reference, sets an interlocked flag
-// and signals an event; it does not acquire GartLock or join a DPC. After unlock,
-// the timeout tail may log, but must never change either submission gate.
+// The two acts below take only a short lifetime reference, a spin lock of their
+// own, an interlocked flag and an event; neither acquires GartLock or joins a
+// DPC. After unlock, the timeout tail may log, but must never change either gate.
 static BOOLEAN WddmLatchSubmitTimeoutLocked(BC250_DEVICE* Device, BC250_WDDM* Wddm, ULONGLONG Epoch)
 {
     if (Wddm->Stopping ||
         !Bc250HangTimeoutCurrent(&Wddm->Recovery[BC250_WDDM_NODE_3D], Epoch)) return FALSE;
     Wddm->WatchdogFaulted[BC250_WDDM_NODE_3D] = TRUE;
     Wddm->DeferredValid = FALSE;
-    GfxSubmitFail(Device);
+    // BD-120: the same two acts as GfxSubmitFail, with the witness close marked as the one the pending OS reset
+    // owns. A recovered ResetEngine reopens exactly this close (StartHealthRecovered); a refused reset and every
+    // other fault stay sticky, as before. The order matters only in that the mark is set while the witness is
+    // still open with its engines up, which StartHealthFaultPendingReset checks for itself.
+    // This whole latch is node 0's, whichever node's job the submit watchdog found at the head of GfxPending:
+    // it reads and writes Recovery[NODE_3D] and WatchdogFaulted[NODE_3D], and the mark it leaves is node 0's
+    // reset to answer for the same reason. A node-1 failure reaches the witness through the paging watchdog's
+    // GfxPagingSubmitFail, which is a sticky StartHealthFault and clears the mark.
+    StartHealthFaultPendingReset(Device);
+    GfxSubmitClose(Device);
     return TRUE;
 }
 
@@ -4159,6 +4172,15 @@ static NTSTATUS Bc250WddmCreateContext(_In_ const HANDLE hDevice, _Inout_ DXGKAR
             if (!NT_SUCCESS(journalStatus)) { WddmFreeObject(object); return journalStatus; }
         }
     }
+    // BD-127: the compute statement of an accepted blob, counted after the last path that can still fail, so the
+    // count never carries a context that was never created. DestroyContext counts it out again; dxgkrnl destroys the
+    // contexts of a dying process, so a killed compute client needs no process tracking of ours. The count selects
+    // the DPM governor's compute threshold set and nothing else: it changes no submission and no allocation.
+    if (umd && umdView.compute)
+    {
+        object->ComputeContext = TRUE;
+        DpmComputeContextAdd(parent->Device, 1);
+    }
     pCreateContext->hContext = object;
 
     RtlZeroMemory(&pCreateContext->ContextInfo, sizeof(pCreateContext->ContextInfo));
@@ -4202,8 +4224,8 @@ static NTSTATUS Bc250WddmCreateContext(_In_ const HANDLE hDevice, _Inout_ DXGKAR
     pCreateContext->ContextInfo.PagingCompanionNodeId = (nodeCount > BC250_WDDM_NODE_COPY) ? BC250_WDDM_NODE_COPY : BC250_WDDM_NODE_3D;
 
     if (umd && parentWddm != NULL && InterlockedIncrement(&parentWddm->UmdContexts) <= BC250_WDDM_LOG_CALLS)
-        GuardLog("wddm: umd context node %u ip %u, private slot %u", pCreateContext->NodeOrdinal,
-                 umdView.ip_type, (ULONG)UMD_BLOB_SUBMIT_BYTES);
+        GuardLog("wddm: umd context node %u ip %u %s, private slot %u", pCreateContext->NodeOrdinal,
+                 umdView.ip_type, umdView.compute ? "compute" : "graphics", (ULONG)UMD_BLOB_SUBMIT_BYTES);
     // KMD193: one line per context, capped like every other first-calls log, so that the context value in a
     // GFX_SUBMIT journal record or a Blt observation can be traced back to a process and a kind.
     if (parentWddm != NULL && InterlockedIncrement(&parentWddm->ContextsLogged) <= BC250_WDDM_LOG_CALLS)
@@ -4231,6 +4253,14 @@ static NTSTATUS Bc250WddmDestroyContext(_In_ const HANDLE hContext)
 
     if (object == NULL) return STATUS_INVALID_PARAMETER;
     if (WddmFirstCalls((BC250_WDDM*)object->Device->Wddm, WddmDdiDestroyContext)) GuardLog("wddm: DestroyContext");
+    // BD-127: out of the adapter's live compute-context count, before the object is freed. Exactly the contexts
+    // CreateContext counted in, so the count returns to zero when the last compute client's contexts are gone and
+    // the governor's graphics thresholds come back.
+    if (object->ComputeContext)
+    {
+        object->ComputeContext = FALSE;
+        DpmComputeContextAdd(object->Device, -1);
+    }
     wddm=(BC250_WDDM*)object->Device->Wddm;
     // Captures are CPU-only but builders may still be reading their arrays.
     // Join that owner before detaching/freeing the context; the lock outlives it.
@@ -6541,9 +6571,10 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
         ULONG verdict, seq, kills = 0, micros = 0, vmid = 0, reasons;
         UINT hungFence = 0, lastCompleted = 0, lastSubmitted = 0, abortFence = 0, notifiedFence;
         BOOLEAN onRing;
+        BC250_START_HEALTH_RECOVERY witness = BC250_START_HEALTH_RECOVERY_STICKY;
         int lastKnown, lastSubmittedKnown, completionPending, reportedKnown, abortReported = 0;
         unsigned node = pResetEngine->NodeOrdinal;
-        ULONGLONG epoch, admittedAt;
+        ULONGLONG epoch, admittedAt, witnessEpoch = 0;
         BC250_HANG_NODE_STATE snapshot;
         KIRQL irql;
 
@@ -6658,6 +6689,14 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
             // moved it backwards below fences node 1 had already reported.
             wddm->SubmittedFence[BC250_WDDM_NODE_3D] = (LONG)hungFence;
             Bc250HangResetEnd(&wddm->Recovery[node], TRUE, hungFence);
+            // BD-120: the presentation start witness re-arms with the node, inside this same transaction, so that
+            // no reader can see node 0 admitting work while the witness still reports the hang. It undoes only the
+            // close this reset owns (the timeout latch's), which is why a fault of any other kind, before or after
+            // the latch, keeps the witness closed for the rest of this device start. A witness our latch never
+            // closed - the ordering in which the OS TDR arrives first - gets the new epoch all the same, so no
+            // interval ever spans a hang. The three answers are logged after the lock, with the rest of the
+            // recovery.
+            witness = StartHealthRecovered(device, &witnessEpoch);
             // Last, with the queue already empty: it clears HwPending, cancels the submit watchdog and closes the
             // ring-gap edge, which a hand-written HwPending = FALSE would have left open (0.7.210's histogram).
             WddmGfxHeadLocked(wddm);
@@ -6685,6 +6724,18 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
                          pResetEngine->NodeOrdinal, hungFence);
             GuardLog("wddm: soft recovery: verdict %lu seq %lu vmid %lu, %lu kill(s) in %lu us", verdict, seq, vmid,
                      kills, micros);
+            // BD-120. Which of the three the witness did, and the epoch a health reader now sees. The middle one
+            // is not a fault report: it is the ordering in which the OS TDR arrived before our own latch, so
+            // there was no close to undo and only the interval ended.
+            if (witness == BC250_START_HEALTH_RECOVERY_REOPENED)
+                GuardLog("wddm: start witness reopened after recovery: epoch %llu, ready age and completions"
+                         " restart now", witnessEpoch);
+            else if (witness == BC250_START_HEALTH_RECOVERY_REARMED)
+                GuardLog("wddm: start witness was still open at the recovery: epoch %llu, the hung interval"
+                         " ends here", witnessEpoch);
+            else
+                GuardLog("wddm: start witness stays closed after recovery at epoch %llu: a fault of its own,"
+                         " outside this reset, is recorded", witnessEpoch);
             if (abortReported)
                 GuardLog("wddm: aborted-fence report: node %u lower boundary %u, last submitted %u (BD-114 7.4)",
                          pResetEngine->NodeOrdinal, lastCompleted, lastSubmitted);
@@ -6713,7 +6764,12 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
     // with a LastAbortedFenceId outside [last completed, last submitted] is bugcheck 0x119, and a failure names
     // no fence at all. Logged on every call, like the two timeout DDIs and for the same reason.
 refuseReset:
-    StartHealthClose(device);
+    // BD-120: a refusal on THIS node is a fault of its own and stays sticky, exactly as before - the close
+    // takes the pending-reset mark with it, so no later reset reopens the witness. A refusal on node 1 says
+    // nothing about node 0: node 1 is never soft-recovered by policy, and clearing node 0's mark here would
+    // leave the node-0 reset that follows with nothing to reopen.
+    if (pResetEngine->NodeOrdinal == BC250_WDDM_NODE_3D) StartHealthClose(device);
+    else StartHealthCloseKeepPendingReset(device);
     // A refusal before recovery admission may leave a held submission waiting
     // while the scheduler moves on to ResetFromTimeout (which closes the path). Wake
     // the waiters anyway: one extra retest on a TDR path is cheaper than reasoning about which recovery DDI the
