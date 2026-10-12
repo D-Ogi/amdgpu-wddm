@@ -594,8 +594,9 @@ Compress-Archive -Path $pkgRoot -DestinationPath $zip
 # lepsza metoda!"): one exe that carries this whole release inside it, for a tester who would rather download one
 # file than unpack an archive. The zip stays: it is the same release, and a tester who already has it changes
 # nothing. make-setup-exe.ps1 -Check is the gate - it reads the exe back and compares every file of the payload with
-# the file of this package, byte for byte, so an exe whose payload is not this release cannot be published.
+# the file of this package, byte for byte, and -ReleaseZip compares it with the entries of the zip written above, so an exe
+# whose payload is not the files of this release's archive cannot be published.
 $setupOne = Join-Path $Out "amdgpu-wddm-setup-$Version.exe"
-& (Join-Path $PSScriptRoot 'make-setup-exe.ps1') -PackageTop $pkgRoot -Out $setupOne -Check | ForEach-Object { "  $_" }
+& (Join-Path $PSScriptRoot 'make-setup-exe.ps1') -PackageTop $pkgRoot -Out $setupOne -Check -ReleaseZip $zip | ForEach-Object { "  $_" }
 if (-not (Test-Path -LiteralPath $setupOne -PathType Leaf)) { throw "make-setup-exe.ps1 wrote no $setupOne" }
 'single exe {0} SHA256 {1}' -f $setupOne, (Get-FileHash -LiteralPath $setupOne).Hash

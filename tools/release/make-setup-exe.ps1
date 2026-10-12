@@ -15,7 +15,8 @@
 # the list before anything uses it, and removes the folder when the run is over.
 #
 # -Check reads the exe back: the trailer, both hashes, and then every file of the payload against the file on the
-# disk, byte for byte. The release recipe (build-release.ps1) always runs it, so a package whose single exe does not
+# disk, byte for byte. -ReleaseZip <release zip> adds the same comparison against the entries of the published archive, so
+# that the one file and the zip of a release are proven to hold the same files. The release recipe (build-release.ps1) always runs it, so a package whose single exe does not
 # hold the files of its zip cannot be published.
 #
 # Nothing here signs anything: the appended sections would break an Authenticode signature of the exe, and the
@@ -24,7 +25,8 @@
 param(
     [Parameter(Mandatory)][string]$PackageTop,
     [Parameter(Mandatory)][string]$Out,
-    [switch]$Check
+    [switch]$Check,
+    [string]$ReleaseZip
 )
 $ErrorActionPreference = 'Stop'
 
@@ -174,6 +176,35 @@ if ($Check) {
             } finally { $archive.Dispose() }
         } finally { $payloadStream.Dispose() }
         '  gate: the payload holds the {0} files of {1}, each byte for byte the file of the release' -f $entries.Count, $version
+        # -ReleaseZip: the release zip of the same package, entry by entry against the file list of the payload. The loop
+        # above compares the payload with the folder the zip was written from, which is the same content; this
+        # compares it with the published archive itself, which is what the owner asked to be proven (2026-10-12,
+        # requirement C of the single file: the payload holds the files of the zip). Compress-Archive writes the
+        # release folder itself, so every entry starts with that folder's name and the first segment comes off.
+        if ($ReleaseZip) {
+            $relZipPath = (Resolve-Path -LiteralPath $ReleaseZip).Path
+            $zf = [IO.Compression.ZipFile]::OpenRead($relZipPath)
+            try {
+                $seen = @{}
+                foreach ($entry in @($zf.Entries | Where-Object { -not $_.FullName.EndsWith('/') })) {
+                    $rel = ($entry.FullName -replace '/', '\')
+                    $cut = $rel.IndexOf('\')
+                    if ($cut -lt 0) { throw "the zip holds $rel outside the release folder" }
+                    $rel = $rel.Substring($cut + 1)
+                    if (-not $listed.ContainsKey($rel)) { throw "the zip holds $rel, which the payload does not" }
+                    $ms = New-Object IO.MemoryStream
+                    $es = $entry.Open()
+                    try { $es.CopyTo($ms) } finally { $es.Dispose() }
+                    $bytes = $ms.ToArray(); $ms.Dispose()
+                    $want = $listed[$rel]
+                    if ($bytes.Length -ne $want.size) { throw "$rel is $($bytes.Length) bytes in the zip and $($want.size) in the payload" }
+                    if ((Get-BytesSha256Hex $bytes) -ne $want.sha.ToUpperInvariant()) { throw "$rel in the zip is not the file in the payload" }
+                    $seen[$rel] = $true
+                }
+                foreach ($rel in $listed.Keys) { if (-not $seen.ContainsKey($rel)) { throw "the payload holds $rel, which the zip does not" } }
+                '  gate: the {0} files of the payload are the files of {1}, each byte for byte' -f $seen.Count, (Split-Path $relZipPath -Leaf)
+            } finally { $zf.Dispose() }
+        }
     } finally { $stream.Dispose() }
 }
 $outHash

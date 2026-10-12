@@ -23,6 +23,9 @@
 #   8. a zip entry named out of the folder         - the path leaves the folder, and nothing is written outside it
 #   9. the plain setup window, with nothing appended - no package, which is the ordinary setup.exe beside files\
 #
+# The gate the release recipe runs is here as well: -Check -ReleaseZip <zip> compares the payload with the entries
+# of the published archive of the same package, and a zip one file short of the payload is refused.
+#
 # Exit 0 = every case behaved. A failure prints FAIL and what was expected.
 [CmdletBinding()]
 param(
@@ -223,6 +226,29 @@ foreach ($where in (Join-Path $r.dir 'evil.exe'), (Join-Path $r.dir 'unpacked\ev
     Check (-not (Test-Path -LiteralPath $where)) "nothing was written outside the unpacked folder ($where)"
 }
 
+# The gate the release recipe runs with the zip in hand: the payload's files against the entries of the published
+# archive, which is what requirement C of the single file asks to be proven. Compress-Archive writes the release
+# folder itself, so the entries carry its name, exactly as in a release.
+$zipOk = Join-Path $root 'release.zip'
+Remove-Item -LiteralPath $zipOk -Force -ErrorAction SilentlyContinue
+Compress-Archive -Path $top -DestinationPath $zipOk
+$log = & (Join-Path $PSScriptRoot 'make-setup-exe.ps1') -PackageTop $top -Out (Join-Path $root 'with-zip.exe') -Check -ReleaseZip $zipOk 2>&1 |
+    ForEach-Object { [string]$_ }
+Check (@($log | Where-Object { $_ -match 'are the files of release\.zip, each byte for byte' }).Count -eq 1) `
+    "the payload is proven against the zip of the same package ($($log -join ' / '))"
+# Negative control: a zip that is one file short of the payload must be refused.
+$zipShort = Join-Path $root 'release-short.zip'
+$shortStage = Join-Path $root 'zip-short'
+Remove-Item -LiteralPath $shortStage, $zipShort -Recurse -Force -ErrorAction SilentlyContinue
+Copy-Item -LiteralPath $top -Destination $shortStage -Recurse
+Remove-Item -LiteralPath (Join-Path $shortStage 'files\driver\amdgpu_wddm.cat') -Force
+Compress-Archive -Path $shortStage -DestinationPath $zipShort
+$refused = $false
+try {
+    & (Join-Path $PSScriptRoot 'make-setup-exe.ps1') -PackageTop $top -Out (Join-Path $root 'with-short-zip.exe') -Check -ReleaseZip $zipShort 2>&1 | Out-Null
+} catch { $refused = $true }
+Check $refused 'a zip that does not hold every file of the payload is refused'
+
 # 7. The plain window, with nothing appended: no package, which is what the setup.exe of an unpacked release is.
 $r = Invoke-Smoke $setupExe 'plain'
 Check ($r.code -eq 3) "the window without a payload says so (exit $($r.code): $($r.text))"
@@ -232,4 +258,4 @@ if ($failed) { Write-Host "$passed checks passed, $failed FAILED" -ForegroundCol
 # The summary goes to the output stream, not to the host: tools\win\amdgpu_wddm_setup\build.ps1 runs this test as
 # its last gate and reads this exact line.
 "single-file installer: $passed checks passed, 0 failed"
-"  the payload was read, checked and unpacked, and 9 damaged, doctored or empty exes were refused"
+"  the payload was read, checked and unpacked, 9 damaged, doctored or empty exes were refused, and the payload was compared with the zip of the same package"
