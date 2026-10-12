@@ -1250,14 +1250,22 @@ Enter-Stage 'files' 'Files'
 $cer = Join-Path $package 'payload\cert\amdgpu-wddm-release.cer'
 $cert = New-Object Security.Cryptography.X509Certificates.X509Certificate2 -ArgumentList $cer
 Set-StateValue $state 'cert_thumbprint' $cert.Thumbprint
+# Root is required: without it the test signature is not trusted at all. TrustedPublisher only spares the user the
+# Windows prompt that asks whether to trust the publisher when the driver package is installed, so a refusal there,
+# after Root holds the certificate, is a warning and the install goes on (BD-125).
 Invoke-Change "add the release test certificate $($cert.Thumbprint) to LocalMachine Root and TrustedPublisher" {
     $stores = @('Root', 'TrustedPublisher')
     for ($i = 0; $i -lt $stores.Count; $i++) {
-        try { Import-Certificate -FilePath $cer -CertStoreLocation "Cert:\LocalMachine\$($stores[$i])" -ErrorAction Stop | Out-Null }
-        catch {
-            throw (New-CertificateStoreError -Store $stores[$i] -Certificate $cer -Exception $_.Exception `
-                -Done @($stores | Select-Object -First $i) -Remaining @($stores | Select-Object -Skip ($i + 1)))
+        $added = Add-CertificateToStore -Store $stores[$i] -Certificate $cer -Thumbprint $cert.Thumbprint
+        if ($added.ok) { if ($added.via -ne 'Import-Certificate') { Write-Info $added.detail }; continue }
+        $err = New-CertificateStoreError -Store $stores[$i] -Certificate $cer -Exception $added.exception `
+            -Done @($stores | Select-Object -First $i) -Remaining @($stores | Select-Object -Skip ($i + 1)) -Tried $added.detail
+        if ($stores[$i] -eq 'TrustedPublisher') {
+            Write-Warn2 "$($added.detail). The install goes on: LocalMachine\Root holds the certificate. Windows may ask once whether to trust the publisher of this driver when it is installed; answer Install."
+            Write-Log "   $($err.Message)"
+            continue
         }
+        throw $err
     }
 } | Out-Null
 
