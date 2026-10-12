@@ -120,6 +120,22 @@ def synthetic():
         check('image digest: a re-signed image keeps it', k.image_digest(tmp / 'a') == k.image_digest(tmp / 'b'))
         check('image digest: a changed image changes it', k.image_digest(tmp / 'a') != k.image_digest(tmp / 'c'))
         check('refused: data after the certificate table', refused(k.image_digest, tmp / 'd'))
+    # release_root: the unpacked release names the top folder (setup.exe + files\) or files\ itself; a release built
+    # before that layout is flat; a build package is not a release.
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        for shape, root in (('flat', tmp / 'flat'), ('files', tmp / 'top/files')):
+            (root / 'payload/kmd').mkdir(parents=True)
+            (root / 'manifest.json').write_text('{}', encoding='utf-8')
+            check(f'release_root: the {shape} package root is the folder with manifest.json',
+                  k.release_root(root) == root and k.is_release(root))
+        (tmp / 'top/setup.exe').write_bytes(b'MZ')
+        check('release_root: the folder the zip unpacks to answers files\\',
+              k.release_root(tmp / 'top') == tmp / 'top/files' and k.is_release(tmp / 'top'))
+        check('release_root: a build package directory is not a release',
+              k.release_root(tmp) is None and not k.is_release(tmp))
+        check('refused: the folder the zip unpacks to, without the build it packages',
+              refused(k.read_package, tmp / 'top', k.REPO, 'rollback', contains='release package'))
     # compare_packages: full version and SYS; the same package is never frozen.
     cand = {'kind': 'build', 'version': '0.7.216.16', 'revision': 216, 'build': 16, 'files': {'bc250kmd.sys': 'A' * 64}}
     roll = {'kind': 'release', 'version': '0.7.216.100', 'revision': 216, 'build': 100, 'files': {'bc250kmd.sys': 'B' * 64}}
