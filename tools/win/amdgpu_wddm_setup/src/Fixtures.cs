@@ -67,7 +67,10 @@ namespace AmdgpuWddmSetup
             {
                 Check("gpu.ok", "ok"), Check("secureboot.off", "ok"),
                 Check("testsigning.inactive", "ok"), Check(upgradeRows ? "bitlocker.on" : "bitlocker.unknown", "warn"), Check("hvci.off", "ok"),
-                Check("vcruntime.ok", "ok"), Check("space.ok", "ok"), Check(firmware == "package-folder" ? "firmware.folder-ok" : "firmware.download-ok", "ok"),
+                // The Visual C++ runtime: "ok" is a PC that has it. The screen that draws the Windows lines also
+                // carries the missing runtime, so one render shows the step the install adds for it.
+                Check("vcruntime" + (windowsChecks == "ok" ? ".ok" : ".missing"), windowsChecks == "ok" ? "ok" : "warn"),
+                Check("space.ok", "ok"), Check(firmware == "package-folder" ? "firmware.folder-ok" : "firmware.download-ok", "ok"),
                 Ev("decision", "\"action\":\"" + action + "\",\"installed_version\":" + (installed == null ? "null" : "\"" + installed + "\"") + ",\"package_version\":\"" + Version +
                     "\",\"phase\":\"new\",\"consents\":[" + consents + "],\"consents_given\":{},\"restarts\":2,\"firmware_source\":\"" + firmware +
                     "\",\"firmware_dir\":\"\",\"notes\":[\"RELEASE-NOTES.md\"],\"secure_boot\":\"off\",\"bitlocker\":\"" + (upgradeRows ? "on" : "unknown") + "\",\"compatibility\":{\"ok\":true,\"reasons\":[]}"),
