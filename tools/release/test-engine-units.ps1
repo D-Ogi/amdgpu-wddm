@@ -803,8 +803,8 @@ Check ($installText.IndexOf('Invoke-VcRuntimeInstall') -lt $installText.IndexOf(
 'the shortcuts of the control application: Start menu and desktop, both by default (owner, 2026-10-12)'
 $scAll = @(Get-ControlShortcutPaths)
 Check ($scAll.Count -eq 3) "three shortcuts the installer knows ($($scAll.Count))"
-Check ((@($scAll | Where-Object { $_.where -eq 'start-menu' }).Count -eq 2) -and (@($scAll | Where-Object { $_.where -eq 'desktop' }).Count -eq 1)) 'two in the Start menu (the application and its recovery view), one on the desktop'
-Check (@($scAll | Where-Object { $_.kind -eq 'recovery' })[0].where -eq 'start-menu') 'the recovery entry stays in the Start menu only'
+Check ((@($scAll | Where-Object { $_.where -eq 'Start menu' }).Count -eq 2) -and (@($scAll | Where-Object { $_.where -eq 'desktop' }).Count -eq 1)) 'two in the Start menu (the application and its recovery view), one on the desktop'
+Check (@($scAll | Where-Object { $_.kind -eq 'recovery' })[0].where -eq 'Start menu') 'the recovery entry stays in the Start menu only'
 Check (@($scAll | Where-Object { $_.kind -eq 'recovery' })[0].arguments -eq '--recovery') 'the recovery entry carries its own argument'
 Check (@($scAll | Where-Object { $_.where -eq 'desktop' })[0].path -match '[\\/]Desktop[\\/]amdgpu-wddm Control\.lnk$') "the desktop icon goes to the desktop of every user ($(@($scAll | Where-Object { $_.where -eq 'desktop' })[0].path))"
 Check (@($scAll | ForEach-Object { $_.path } | Select-Object -Unique).Count -eq 3) 'the three paths differ'

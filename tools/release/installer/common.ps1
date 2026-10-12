@@ -1271,8 +1271,8 @@ function Get-VcRuntimeMissing {
 # One list, used by the install, by the uninstall and by the footprint probe, so a shortcut the install writes
 # cannot be one the uninstall does not know. The recovery entry stays in the Start menu only: it is a repair tool,
 # not a second icon on the desktop.
-#   kind      'control', 'recovery' or 'desktop'
-#   where     'start-menu' or 'desktop'
+#   kind      'control', 'recovery' or 'desktop icon'
+#   where     'Start menu' or 'desktop', as the log and the dry run name the place
 #   switch     the install switch that leaves it out
 #   arguments  the arguments of the shortcut's target
 function Get-ControlShortcutPaths {
@@ -1280,9 +1280,9 @@ function Get-ControlShortcutPaths {
     $desktop = [Environment]::GetFolderPath('CommonDesktopDirectory')
     if (-not $desktop) { $desktop = Join-Path $env:Public 'Desktop' }
     return @(
-        [pscustomobject]@{ kind = 'control'; where = 'start-menu'; switch = 'NoStartMenuShortcut'; arguments = ''; path = (Join-Path $startMenu 'amdgpu-wddm Control.lnk') }
-        [pscustomobject]@{ kind = 'recovery'; where = 'start-menu'; switch = 'NoStartMenuShortcut'; arguments = '--recovery'; path = (Join-Path $startMenu 'amdgpu-wddm Control (recovery).lnk') }
-        [pscustomobject]@{ kind = 'desktop'; where = 'desktop'; switch = 'NoDesktopShortcut'; arguments = ''; path = (Join-Path $desktop 'amdgpu-wddm Control.lnk') }
+        [pscustomobject]@{ kind = 'control'; where = 'Start menu'; switch = 'NoStartMenuShortcut'; arguments = ''; path = (Join-Path $startMenu 'amdgpu-wddm Control.lnk') }
+        [pscustomobject]@{ kind = 'recovery'; where = 'Start menu'; switch = 'NoStartMenuShortcut'; arguments = '--recovery'; path = (Join-Path $startMenu 'amdgpu-wddm Control (recovery).lnk') }
+        [pscustomobject]@{ kind = 'desktop icon'; where = 'desktop'; switch = 'NoDesktopShortcut'; arguments = ''; path = (Join-Path $desktop 'amdgpu-wddm Control.lnk') }
     )
 }
 
