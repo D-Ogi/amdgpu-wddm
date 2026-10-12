@@ -6,8 +6,8 @@
 # the <InstallDir>\wow64 install paths; the x86 router and shells export their entry points undecorated (the x86
 # D3D12 shell exactly OpenAdapter12); one x86 RADV build serves the D3D11 and D3D12 shells and the system ICD; the x86
 # Vulkan manifest names its library relative to itself; verify's Test-WowRegistration and Test-UmdRegistration (common.ps1) pass a
-# complete registration, with the D3D9 slot empty in both views after a registry round trip, and name each missing or
-# wrong part, the stub layout of the earlier releases included. The registration cases run against a scratch key,
+# complete registration, with the D3D9 slot '<>' in both views after a registry round trip, and name each
+# missing or wrong part, the stub layout and the empty-slot layout of the earlier releases included. The registration cases run against a scratch key,
 # HKCU:\Software\amdgpu-wddm-installer-test-wow, removed at the end, and files under -WorkRoot. Nothing under HKLM and
 # nothing outside -WorkRoot is written.
 param([Parameter(Mandatory)][string]$Package, [Parameter(Mandatory)][string]$WorkRoot)
@@ -114,9 +114,13 @@ try {
     $p = @(Test-WowRegistration @args0)
     Check ($p.Count -eq 0) "complete registration: no finding ($($p -join '; '))"
     $wowUmd = @(Get-WowUmdNames $root)
-    Check (($wowUmd.Count -eq 4) -and ($wowUmd[0] -eq '') -and ($wowUmd[1] -eq (Join-Path $root 'wow64\desktop\bc250d3d_router.dll')) -and ($wowUmd[2] -eq $wowUmd[1]) -and ($wowUmd[3] -eq (Join-Path $root 'wow64\d3d12\amdgpu_wddm_d3d12.dll'))) "UserModeDriverNameWow: D3D9 empty, the x86 router twice, the x86 D3D12 shell ($(Format-UmdNames $wowUmd))"
+    Check (($wowUmd.Count -eq 4) -and ($wowUmd[0] -eq '<>') -and ($wowUmd[1] -eq (Join-Path $root 'wow64\desktop\bc250d3d_router.dll')) -and ($wowUmd[2] -eq $wowUmd[1]) -and ($wowUmd[3] -eq (Join-Path $root 'wow64\d3d12\amdgpu_wddm_d3d12.dll'))) "UserModeDriverNameWow: D3D9 <>, the x86 router twice, the x86 D3D12 shell ($(Format-UmdNames $wowUmd))"
     $back = @((Get-ItemProperty -LiteralPath "$key\class").UserModeDriverNameWow)
-    Check (($back.Count -eq 4) -and ($back[0] -eq '') -and ($back[1] -eq $wowUmd[1]) -and ($back[3] -eq $wowUmd[3])) "the empty D3D9 slot survives the registry round trip (UserModeDriverNameWow read back: $(Format-UmdNames $back))"
+    Check (($back.Count -eq 4) -and ($back[0] -eq '<>') -and ($back[1] -eq $wowUmd[1]) -and ($back[3] -eq $wowUmd[3])) "the <> D3D9 slot survives the registry round trip (UserModeDriverNameWow read back: $(Format-UmdNames $back))"
+    # The layout of tester.18 to tester.29, with the D3D9 slot empty, is a finding: newer display kernels refuse it.
+    New-ItemProperty -LiteralPath "$key\class" -Name UserModeDriverNameWow -Value ([string[]](@('') + $wowUmd[1..3])) -PropertyType MultiString -Force | Out-Null
+    $p = @(Test-WowRegistration @args0)
+    Check (($p.Count -eq 1) -and ($p[0] -match "^UserModeDriverNameWow is '' \|")) "the empty D3D9 slot of tester.18 to tester.29 is a finding ($($p -join '; '))"
     # The layout of the releases up to tester.17, with the stub in the D3D9 slot, is a finding.
     New-ItemProperty -LiteralPath "$key\class" -Name UserModeDriverNameWow -Value ([string[]](@('bc250umd.dll') + $wowUmd[1..3])) -PropertyType MultiString -Force | Out-Null
     $p = @(Test-WowRegistration @args0)
@@ -142,11 +146,11 @@ try {
     $p = @(Test-UmdRegistration -InstallRoot $root -ClassKey "$key\class")
     Check (($p.Count -eq 2) -and ($p -match '^UserModeDriverName is missing') -and ($p -match '^VulkanDriverName is')) "64-bit: nothing registered: 2 findings ($($p -join '; '))"
     $umd = @(Get-UmdNames $root)
-    Check (($umd.Count -eq 4) -and ($umd[0] -eq '') -and ($umd[1] -eq (Join-Path $root 'desktop\bc250d3d_router.dll')) -and ($umd[2] -eq $umd[1]) -and ($umd[3] -eq (Join-Path $root 'd3d12\amdgpu_wddm_d3d12.dll'))) "UserModeDriverName: D3D9 empty, the router twice, the D3D12 shell ($(Format-UmdNames $umd))"
+    Check (($umd.Count -eq 4) -and ($umd[0] -eq '<>') -and ($umd[1] -eq (Join-Path $root 'desktop\bc250d3d_router.dll')) -and ($umd[2] -eq $umd[1]) -and ($umd[3] -eq (Join-Path $root 'd3d12\amdgpu_wddm_d3d12.dll'))) "UserModeDriverName: D3D9 <>, the router twice, the D3D12 shell ($(Format-UmdNames $umd))"
     New-ItemProperty -LiteralPath "$key\class" -Name UserModeDriverName -Value ([string[]]$umd) -PropertyType MultiString -Force | Out-Null
     New-ItemProperty -LiteralPath "$key\class" -Name VulkanDriverName -Value ([string[]]@((Join-Path $root 'vulkan\radeon_icd.json'))) -PropertyType MultiString -Force | Out-Null
     $back = @((Get-ItemProperty -LiteralPath "$key\class").UserModeDriverName)
-    Check (($back.Count -eq 4) -and ($back[0] -eq '') -and ($back[3] -eq $umd[3])) "the empty D3D9 slot survives the registry round trip (UserModeDriverName read back: $(Format-UmdNames $back))"
+    Check (($back.Count -eq 4) -and ($back[0] -eq '<>') -and ($back[3] -eq $umd[3])) "the <> D3D9 slot survives the registry round trip (UserModeDriverName read back: $(Format-UmdNames $back))"
     $p = @(Test-UmdRegistration -InstallRoot $root -ClassKey "$key\class")
     Check ($p.Count -eq 0) "64-bit: complete registration: no finding ($($p -join '; '))"
     New-ItemProperty -LiteralPath "$key\class" -Name UserModeDriverName -Value ([string[]](@('bc250umd.dll') + $umd[1..3])) -PropertyType MultiString -Force | Out-Null

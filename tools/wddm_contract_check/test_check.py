@@ -136,6 +136,13 @@ static NTSTATUS Bc250WddmQueryAdapterInfo(_In_ const HANDLE hAdapter, _In_ const
     case DXGKQAITYPE_PAGETABLELEVELDESC:
         status = WddmPageTableLevelDesc(device, QueryAdapterInfo);
         break;
+    case DXGKQAITYPE_PHYSICALADAPTERCAPS:
+        status = WddmPhysicalAdapterCaps(device, QueryAdapterInfo);
+        break;
+    case DXGKQAITYPE_64BITONLYCAPS:
+        RtlZeroMemory(QueryAdapterInfo->pOutputData, QueryAdapterInfo->OutputDataSize);
+        status = STATUS_SUCCESS;
+        break;
     case DXGKQAITYPE_NUMPOWERCOMPONENTS:
         *(UINT*)QueryAdapterInfo->pOutputData = 0;
         status = STATUS_SUCCESS;
@@ -239,7 +246,7 @@ class GoodFixture(unittest.TestCase):
     def test_extraction(self):
         _, facts = statuses()
         self.assertEqual(0x5023, facts.interface_version)
-        self.assertEqual({1, 6, 10, 11, 13, 14}, set(facts.qai_handled))
+        self.assertEqual({1, 6, 10, 11, 13, 14, 15, 47}, set(facts.qai_handled))
         self.assertEqual("STATUS_NOT_SUPPORTED", facts.qai_default)
         self.assertEqual(1, facts.caps["GpuEngineTopology.NbAsymetricProcessingNodes"]["value"])
         self.assertEqual(48, facts.gpummu["VirtualAddressBitCount"]["value"])
@@ -333,7 +340,15 @@ class NegativeFixtures(unittest.TestCase):
                                  "        status = STATUS_NOT_IMPLEMENTED;\n        break;\n    }")
         result, _ = statuses(wddm=wddm)
         self.assertEqual(check.VIOLATION, result["R15-QAI-OLD-SEGMENTS-REFUSED"])
-        self.assertEqual(check.VIOLATION, result["R16-QAI-15-47-REFUSED"])
+
+    def test_physical_adapter_caps_refused(self):
+        """BD-134: type 15 back in the default arm. dxgkrnl would then build the physical-adapter caps from
+        DRIVERCAPS members the driver leaves zero."""
+        wddm = GOOD_WDDM.replace("    case DXGKQAITYPE_PHYSICALADAPTERCAPS:\n"
+                                 "        status = WddmPhysicalAdapterCaps(device, QueryAdapterInfo);\n"
+                                 "        break;\n", "")
+        result, _ = statuses(wddm=wddm)
+        self.assertOnlyViolation(result, "R16-QAI-15-47-ANSWERED")
 
     def test_reserved_member_assigned(self):
         wddm = GOOD_WDDM.replace("    Data->DxgkDdiPresent = Bc250WddmPresent;",

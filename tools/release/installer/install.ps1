@@ -678,20 +678,20 @@ function Invoke-Verify {
     if ($vkOut -match '^SKIP') { Write-Host "   [skip] Vulkan               $vkOut" -ForegroundColor Yellow; Write-Log "   verify Vulkan: $vkOut" }
     else { Add-Result 'Vulkan' ($vkOut -match '(?m)^device 0x1002:0x13FE') $vkOut }
 
-    # The 64-bit registration: the four UserModeDriverName slots (the D3D9 slot empty, so that D3D9 goes through
-    # D3D9On12) and VulkanDriverName. Registration only: the D3D12 and Vulkan checks above create the devices.
+    # The 64-bit registration: the four UserModeDriverName slots (the D3D9 slot holds '<>', so that D3D9 goes
+    # through D3D9On12) and VulkanDriverName. Registration only: the D3D12 and Vulkan checks above create the devices.
     $gpuSwKey = Get-DeviceDriverKey -InstanceId $id
     if (-not $gpuSwKey) { Add-Result 'D3D registration' $false 'no software key for the GPU' }
     else {
         $reg = @(Test-UmdRegistration -InstallRoot $InstallRoot -ClassKey $gpuSwKey)
-        Add-Result 'D3D registration' ($reg.Count -eq 0) $(if ($reg.Count) { $reg -join '; ' } else { 'UserModeDriverName (D3D9 empty: D3D9On12; D3D10/11 router; D3D12), VulkanDriverName' })
+        Add-Result 'D3D registration' ($reg.Count -eq 0) $(if ($reg.Count) { $reg -join '; ' } else { 'UserModeDriverName (D3D9: <> for D3D9On12; D3D10/11 router; D3D12), VulkanDriverName' })
     }
     # 32-bit processes (BD-064): the Wow registration, the router's Wow paths and x86 images in place. Registration
     # only: no 32-bit device is created here.
     if (-not $gpuSwKey) { Add-Result '32-bit D3D/Vulkan' $false 'no software key for the GPU' }
     else {
         $wow = @(Test-WowRegistration -InstallRoot $InstallRoot -ClassKey $gpuSwKey)
-        Add-Result '32-bit D3D/Vulkan' ($wow.Count -eq 0) $(if ($wow.Count) { $wow -join '; ' } else { 'UserModeDriverNameWow (D3D9 empty: D3D9On12; D3D10/11 router; D3D12), VulkanDriverNameWow, WOW6432Node Khronos entry, router Wow paths; x86 images in place' })
+        Add-Result '32-bit D3D/Vulkan' ($wow.Count -eq 0) $(if ($wow.Count) { $wow -join '; ' } else { 'UserModeDriverNameWow (D3D9: <> for D3D9On12; D3D10/11 router; D3D12), VulkanDriverNameWow, WOW6432Node Khronos entry, router Wow paths; x86 images in place' })
     }
 
     # The H.264 encoder MFT (M15.11). The result of this check is the only place a support report can read whether the
@@ -1196,7 +1196,7 @@ $bc250Dir = Split-Path -Parent $script:FirmwareInstallDir
 [void](Set-StateValueOnce $state 'bc250_dir_existed' (Test-Path -LiteralPath $bc250Dir))
 $fwExisted = Set-StateValueOnce $state 'firmware_dir_existed' (Test-Path -LiteralPath $script:FirmwareInstallDir)
 if (-not $script:DryRunMode) { Save-InstallState $state }
-# D3D9 goes through D3D9On12 (the empty D3D9 slot, below): no stub is installed. The releases up to
+# D3D9 goes through D3D9On12 (the D3D9 slot holds '<>', below): no stub is installed. The releases up to
 # 0.7.213.102-tester.17 installed bc250umd.dll in System32 and SysWOW64; it goes here, as uninstall.ps1 takes it.
 foreach ($s in @(Get-LegacyStubPaths)) {
     if ($state.($s.flag)) { Write-Info "$($s.path) was there before the first install of ours: kept (no slot names it)"; continue }
@@ -1389,7 +1389,7 @@ foreach ($audio in @($audioPlan | Where-Object { $_.write })) {
     }
 }
 
-# Graphics registration in the GPU's software key: the D3D9 slot empty (D3D9On12 on our D3D12 driver), the D3D10/11
+# Graphics registration in the GPU's software key: the D3D9 slot '<>' (D3D9On12 on our D3D12 driver), the D3D10/11
 # slots, the D3D12 slot, Vulkan.
 $umd = Get-UmdNames $InstallRoot
 $icdJson = Join-Path $InstallRoot 'vulkan\radeon_icd.json'
@@ -1402,7 +1402,7 @@ Invoke-Change "$($script:KhronosKey) '$icdJson' = 0 (system Vulkan ICD)" {
     New-ItemProperty -LiteralPath $script:KhronosKey -Name $icdJson -Value 0 -PropertyType DWord -Force | Out-Null
 } | Out-Null
 Set-StateValue $state 'khronos_value' $icdJson
-# The same for 32-bit processes (BD-064): the empty D3D9 slot (D3D9On12 on the x86 D3D12 shell), the D3D10/11 slots,
+# The same for 32-bit processes (BD-064): the D3D9On12 slot (on the x86 D3D12 shell), the D3D10/11 slots,
 # the x86 D3D12 slot, the x86 Vulkan ICD.
 $umdWow = Get-WowUmdNames $InstallRoot
 $icdJsonWow = Join-Path $InstallRoot 'wow64\vulkan\radeon_icd.json'

@@ -3907,6 +3907,31 @@ static NTSTATUS WddmGpuMmuCaps(_In_ const DXGKARG_QUERYADAPTERINFO* Query)
     return STATUS_SUCCESS;
 }
 
+// DXGKQAITYPE_PHYSICALADAPTERCAPS. dxgkrnl tolerates a refusal, but then builds the physical-adapter caps itself
+// from DRIVERCAPS members this driver leaves zero, and takes the FDO instead of our handle (static reading of
+// 26100.9549, BD-134). The answer repeats DRIVERCAPS: the same node count and paging node, GpuMmu, and the handle
+// dxgkrnl gave StartDevice. One physical adapter, no LDA.
+static NTSTATUS WddmPhysicalAdapterCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKARG_QUERYADAPTERINFO* Query)
+{
+    const DXGK_QUERYPHYSICALADAPTERCAPSIN* in = (const DXGK_QUERYPHYSICALADAPTERCAPSIN*)Query->pInputData;
+    DXGK_PHYSICALADAPTERCAPS* caps = (DXGK_PHYSICALADAPTERCAPS*)Query->pOutputData;
+    const BC250_WDDM* wddm = (const BC250_WDDM*)Device->Wddm;
+    UINT nodeCount = (wddm != NULL) ? wddm->NodeCount : BC250_WDDM_NODE_COUNT;
+
+    if (Query->InputDataSize < sizeof(*in) || in == NULL) return STATUS_INVALID_PARAMETER;
+    if (Query->OutputDataSize < sizeof(*caps) || caps == NULL) return STATUS_BUFFER_TOO_SMALL;
+    if (in->PhysicalAdapterIndex != 0) return STATUS_INVALID_PARAMETER;
+    // The handle exists only after StartDevice; a zero handle would be a wrong answer, not a cautious one.
+    if (Device->Dxgk.DeviceHandle == NULL) return STATUS_DEVICE_NOT_READY;
+    // The caller's buffer, not our sizeof: the WDDM 2.7 VirtualCopyNodeIndex tail stays zero, no virtual copy node.
+    RtlZeroMemory(caps, Query->OutputDataSize);
+    caps->NumExecutionNodes = (WORD)nodeCount;
+    caps->PagingNodeIndex = (WORD)((nodeCount > BC250_WDDM_NODE_COPY) ? BC250_WDDM_NODE_COPY : BC250_WDDM_NODE_3D);
+    caps->DxgkPhysicalAdapterHandle = Device->Dxgk.DeviceHandle;
+    caps->Flags.GpuMmuSupported = 1;
+    return STATUS_SUCCESS;
+}
+
 // Every level of the page table has the same shape here, so the answer does not depend on which end LevelIndex
 // counts from - a point the documentation leaves open and stage B has to settle before the shape can differ.
 static NTSTATUS WddmPageTableLevelDesc(_In_ const BC250_DEVICE* Device, _In_ const DXGKARG_QUERYADAPTERINFO* Query)
@@ -3951,6 +3976,17 @@ static NTSTATUS Bc250WddmQueryAdapterInfo(_In_ const HANDLE hAdapter, _In_ const
         break;
     case DXGKQAITYPE_PAGETABLELEVELDESC:
         status = WddmPageTableLevelDesc(device, QueryAdapterInfo);
+        break;
+    case DXGKQAITYPE_PHYSICALADAPTERCAPS:
+        status = WddmPhysicalAdapterCaps(device, QueryAdapterInfo);
+        break;
+    case DXGKQAITYPE_64BITONLYCAPS:
+        // Four bytes and no WDK structure. dxgkrnl ignores a refusal; the answer sets only SupportsOnly64Bit (static
+        // reading of 26100.9549, BD-134). Zero: this driver has 32-bit user-mode drivers too. VirtualBox's WDDM
+        // miniport also answers this type with a zeroed buffer.
+        if (QueryAdapterInfo->pOutputData == NULL || QueryAdapterInfo->OutputDataSize < sizeof(UINT)) { status = STATUS_BUFFER_TOO_SMALL; break; }
+        RtlZeroMemory(QueryAdapterInfo->pOutputData, QueryAdapterInfo->OutputDataSize);
+        status = STATUS_SUCCESS;
         break;
     case DXGKQAITYPE_NUMPOWERCOMPONENTS:
         // No runtime power management of our own: zero components, and the power DDIs stay as the display-only
@@ -4029,10 +4065,9 @@ static NTSTATUS Bc250WddmQueryAdapterInfo(_In_ const HANDLE hAdapter, _In_ const
         break;
     }
     default:
-        // The pre-WDDM2 segment queries, which a WDDM 2 driver must not answer. Seen on the lab and tolerated
-        // by its dxgkrnl (E16 run 003): type 15 PHYSICALADAPTERCAPS and type 47 64BITONLYCAPS, for which the
-        // WDK has no structure at all. Two refusals in a kept log are expected. STATUS_NOT_SUPPORTED is safe
-        // for an unhandled type, and which types are asked for is stage A evidence.
+        // The pre-WDDM2 segment queries, which a WDDM 2 driver must not answer. Types 15 and 47 were refused here
+        // until 0.7.216.62 (above). Which types are asked for is stage A evidence, and a refusal here is logged
+        // below.
         status = STATUS_NOT_SUPPORTED;
         break;
     }

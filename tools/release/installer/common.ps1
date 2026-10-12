@@ -1179,14 +1179,18 @@ function Get-VcRuntimeMissing {
     }
     return $missing
 }
-# The UserModeDriverName slots of the GPU's software key: D3D9, D3D10, D3D11, D3D12. The D3D9 slot is empty: a D3D9
-# application then gets Microsoft's D3D9On12 layer (d3d9on12.dll), which runs on our D3D12 driver. Windows does not
-# fall back to D3D9On12 when the slot names a UMD that cannot open the adapter: with the stub of the earlier releases
-# (bc250umd.dll, OpenAdapter returns E_NOTIMPL) CreateDeviceEx failed with D3DERR_NOTAVAILABLE, with the empty slot it
-# renders through d3d9on12.dll -> d3d12.dll -> amdgpu_wddm_d3d12.dll (tools/win/d3d9probe, unit A, 2026-10-06).
+# The UserModeDriverName slots of the GPU's software key: D3D9, D3D10, D3D11, D3D12. The D3D9 slot holds '<>', the
+# display kernel's "no user-mode driver" marker: the D3D9 runtime gets no driver name for the adapter and falls back to
+# Microsoft's D3D9On12 layer on our D3D12 driver. An empty slot did the same from tester.18 to tester.29, but newer
+# display kernels refuse an empty first entry for a full adapter: 26100.9549 stops the adapter with "Invalid user mode
+# driver name" (0xC0000182, Code 43), and a field report shows the same on 22631.7584; the lab's 22631.6199 accepted
+# it. '<>' passes that length test, and the kernel answers the D3D9 name query for it as for an empty slot. A slot
+# that names a UMD does not reach D3D9On12: the stub of the releases up to tester.17 (bc250umd.dll) and d3d9on12.dll
+# itself both end CreateDeviceEx with D3DERR_NOTAVAILABLE (tools/win/d3d9probe, unit A, 2026-10-06 and 2026-10-12).
+$script:D3d9SlotName = '<>'
 function Get-UmdNames([string]$InstallRoot) {
     $router = Join-Path $InstallRoot 'desktop\bc250d3d_router.dll'
-    return @('', $router, $router, (Join-Path $InstallRoot 'd3d12\amdgpu_wddm_d3d12.dll'))
+    return @($script:D3d9SlotName, $router, $router, (Join-Path $InstallRoot 'd3d12\amdgpu_wddm_d3d12.dll'))
 }
 # One UserModeDriverName value as the log and the dry run print it: an empty slot is ''.
 function Format-UmdNames([string[]]$Names) {
@@ -1208,14 +1212,14 @@ function Test-UmdRegistration {
     return $problems
 }
 # BD-064: 32-bit processes. UserModeDriverNameWow mirrors the four slots of UserModeDriverName with the x86 builds:
-# the empty D3D9 slot, the D3D10 and D3D11 routers, and the x86 D3D12 shell. As on x64 the D3D12 slot names the shell
+# the D3D9 slot, the D3D10 and D3D11 routers, and the x86 D3D12 shell. As on x64 the D3D12 slot names the shell
 # itself, not a router, and the shell loads its engine and ICD from its own directory (wow64\d3d12), so the D3D12 pair
 # needs no Vulkan ICD registration. With the D3D12 slot a 32-bit D3D9 application gets D3D9On12 on our GPU, the same
 # route as a 64-bit one. The x86 router and the x86 D3D12 shell read the 64-bit policy keys; the router also reads its
 # own *Wow path values. The x86 builds link the C runtime statically: no x86 Visual C++ runtime is needed.
 function Get-WowUmdNames([string]$InstallRoot) {
     $router = Join-Path $InstallRoot 'wow64\desktop\bc250d3d_router.dll'
-    return @('', $router, $router, (Join-Path $InstallRoot 'wow64\d3d12\amdgpu_wddm_d3d12.dll'))
+    return @($script:D3d9SlotName, $router, $router, (Join-Path $InstallRoot 'wow64\d3d12\amdgpu_wddm_d3d12.dll'))
 }
 function Get-WowFiles([string]$InstallRoot) {
     return @('desktop\bc250d3d_router.dll', 'desktop\bc250d3d.dll', 'd3d11\amdgpu_wddm_d3d11.dll', 'd3d11\amdgpu_wddm_dxvk.dll', 'd3d11\amdgpu_wddm_radv.dll',

@@ -64,6 +64,9 @@ int bc250h_start_geometry(int vram_enabled, const struct bc250h_geometry* geomet
     g_Device.Post.PhysicAddress.QuadPart = (LONGLONG)geometry->vram_physical;
     g_Device.Post.TargetId = BC250_CHILD_UID;
     g_Device.Post.AcpiId = 0;
+    /* dxgkrnl's handle of the adapter, as DxgkDdiStartDevice hands it over. Only that it is set matters
+     * here: PHYSICALADAPTERCAPS (15) returns it, and refuses before a start has set it. */
+    g_Device.Dxgk.DeviceHandle = (HANDLE)(ULONG_PTR)0xB250D000u;
 
     if (vram_enabled)
     {
@@ -174,8 +177,8 @@ static const struct bc250h_region g_SegmentFillIgnore[] = {
       "in: the stride dxgkrnl chose" },
 };
 
-/* out_size for the refused types: dxgkrnl's real buffer sizes for 15 and 47 are not public, and the
- * driver must not look at the buffer at all, so any size proves the same thing. */
+/* out_size for the refused types: the driver must not look at the buffer at all, so any size proves the
+ * same thing. */
 #define BC250H_REFUSED_SIZE 64u
 
 static const struct bc250h_case g_Cases[] = {
@@ -240,7 +243,21 @@ static const struct bc250h_case g_Cases[] = {
       BC250H_STATUS_INVALID_PARAMETER, BC250H_STATUS_BUFFER_TOO_SMALL, BC250H_STATUS_BUFFER_TOO_SMALL, 0,
       BC250H_PREP_NONE, 0, 0, NULL },
 
-    /* Refused on purpose. 15 and 47 are the two the lab's dxgkrnl really asked for (E16 run 003). */
+    /* Answered since 0.7.216.62 (BD-134). Both were refused before; the lab's dxgkrnl asks for them (E16 run
+     * 003), and 26100.9549 asks for them right before the render adapter is created. The input of 15 is
+     * DXGK_QUERYPHYSICALADAPTERCAPSIN, whose first WORD (PhysicalAdapterIndex) the harness sets to 0. */
+    { "PHYSICALADAPTERCAPS (15)", 15, (unsigned)sizeof(DXGK_PHYSICALADAPTERCAPS),
+      (unsigned)sizeof(DXGK_QUERYPHYSICALADAPTERCAPSIN),
+      BC250H_STATUS_SUCCESS, BC250H_STATUS_BUFFER_TOO_SMALL, BC250H_STATUS_BUFFER_TOO_SMALL, 0,
+      BC250H_PREP_NONE, 1, 0, NULL },
+
+    /* 64BITONLYCAPS: the WDK has no structure for it; the answer is four zero bytes, as VirtualBox's WDDM
+     * miniport gives it, which dxgkrnl reads as "not 64-bit only". */
+    { "64BITONLYCAPS (47)", 47, (unsigned)sizeof(UINT), 0,
+      BC250H_STATUS_SUCCESS, BC250H_STATUS_BUFFER_TOO_SMALL, BC250H_STATUS_BUFFER_TOO_SMALL, 0,
+      BC250H_PREP_NONE, 1, 0, NULL },
+
+    /* Refused on purpose. */
     { "UMDRIVERPRIVATE (0), refused", 0, BC250H_REFUSED_SIZE, 0,
       BC250H_STATUS_NOT_SUPPORTED, BC250H_STATUS_NOT_SUPPORTED, BC250H_STATUS_NOT_SUPPORTED, 0,
       BC250H_PREP_NONE, 0, 0, NULL },
@@ -256,13 +273,7 @@ static const struct bc250h_case g_Cases[] = {
     { "POWERCOMPONENTINFO (7), refused", 7, BC250H_REFUSED_SIZE, 0,
       BC250H_STATUS_NOT_SUPPORTED, BC250H_STATUS_NOT_SUPPORTED, BC250H_STATUS_NOT_SUPPORTED, 0,
       BC250H_PREP_NONE, 0, 0, NULL },
-    { "PHYSICALADAPTERCAPS (15), refused", 15, BC250H_REFUSED_SIZE, 0,
-      BC250H_STATUS_NOT_SUPPORTED, BC250H_STATUS_NOT_SUPPORTED, BC250H_STATUS_NOT_SUPPORTED, 0,
-      BC250H_PREP_NONE, 0, 0, NULL },
     { "DISPLAY_DRIVERCAPS_EXTENSION (16), refused", 16, BC250H_REFUSED_SIZE, 0,
-      BC250H_STATUS_NOT_SUPPORTED, BC250H_STATUS_NOT_SUPPORTED, BC250H_STATUS_NOT_SUPPORTED, 0,
-      BC250H_PREP_NONE, 0, 0, NULL },
-    { "64BITONLYCAPS (47), refused", 47, BC250H_REFUSED_SIZE, 0,
       BC250H_STATUS_NOT_SUPPORTED, BC250H_STATUS_NOT_SUPPORTED, BC250H_STATUS_NOT_SUPPORTED, 0,
       BC250H_PREP_NONE, 0, 0, NULL },
 };

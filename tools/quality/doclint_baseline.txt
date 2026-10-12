@@ -16,7 +16,6 @@
 # document has to be rewritten; a document that is touched anyway should come out lower.
 #
 # To look at one document: python tools/quality/doclint.py --files <path>
-34	README.md
 62	docs/00-goal-and-roadmap.md
 8	docs/01-evidence-rules.md
 4	docs/02-register-addressing.md
@@ -115,7 +114,7 @@
 2	docs/testing/release-notes/0.7.204.100-tester.11.md
 3	docs/testing/release-notes/0.7.204.101-tester.11.md
 3	docs/testing/release-notes/0.7.205.100-tester.11.md
-62	docs/wddm_contract_matrix.md
+60	docs/wddm_contract_matrix.md
 9	driver/README.md
 45	driver/amdgpu-import/PROVENANCE.md
 8	driver/amdgpu-import/README.md

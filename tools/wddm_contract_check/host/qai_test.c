@@ -175,7 +175,8 @@ static int call_case(const struct bc250h_case* c, struct guarded* out, struct gu
     memset(in, 0, sizeof(in));
     if (c->in_size != 0)
     {
-        /* DXGK_QUERYPAGETABLELEVELDESCIN: WORD LevelIndex, WORD PhysicalAdapterIndex. */
+        /* DXGK_QUERYPAGETABLELEVELDESCIN: WORD LevelIndex, WORD PhysicalAdapterIndex.
+         * DXGK_QUERYPHYSICALADAPTERCAPSIN: WORD PhysicalAdapterIndex, so 0 (its level_index is 0). */
         in[0] = (unsigned char)(level_index & 0xFF);
         in[1] = (unsigned char)((level_index >> 8) & 0xFF);
     }

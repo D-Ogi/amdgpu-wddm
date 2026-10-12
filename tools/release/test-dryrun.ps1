@@ -131,13 +131,14 @@ $dg = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-diagnostics.ps1'), '-Installe
 $dg.text
 Check ($dg.code -eq 0) "diagnostics: the field case / a started driver / every hard signal / the readers / the bounds: exit $($dg.code)"
 
-# D3D9 goes through D3D9On12: the D3D9 slot is empty in both views, and no stub is copied.
+# D3D9 goes through D3D9On12: the D3D9 slot holds '<>' in both views (an empty first entry stops the adapter
+# on newer display kernels), and no stub is copied.
 Check ($r.text -notmatch 'would: copy payload\\(system32|syswow64)|bc250umd\.dll -> ') 'no D3D9 stub is copied (System32 or SysWOW64)'
-Check ($r.text -match "would: .+ UserModeDriverName = '' \| [^|]+\\desktop\\bc250d3d_router\.dll \| [^|]+\\desktop\\bc250d3d_router\.dll \| [^|]+\\d3d12\\amdgpu_wddm_d3d12\.dll; VulkanDriverName = ") "UserModeDriverName: D3D9 slot empty (D3D9On12), the router in the D3D10 and D3D11 slots, the D3D12 shell"
+Check ($r.text -match "would: .+ UserModeDriverName = <> \| [^|]+\\desktop\\bc250d3d_router\.dll \| [^|]+\\desktop\\bc250d3d_router\.dll \| [^|]+\\d3d12\\amdgpu_wddm_d3d12\.dll; VulkanDriverName = ") "UserModeDriverName: D3D9 slot <> (D3D9On12), the router in the D3D10 and D3D11 slots, the D3D12 shell"
 Check ($r.text -notmatch 'UserModeDriverName(Wow)? = bc250umd') 'no slot names the D3D9 stub'
-# BD-064: 32-bit processes get the x86 builds: D3D9 (empty)/10/11/12 slots, the x86 Vulkan ICD, the router's Wow paths.
+# BD-064: 32-bit processes get the x86 builds: D3D9 (<>)/10/11/12 slots, the x86 Vulkan ICD, the router's Wow paths.
 Check ($r.text -match 'would: copy payload\\wow64 -> .+\\wow64 ') 'phase 2 installs the x86 builds (wow64)'
-Check ($r.text -match "would: .+ UserModeDriverNameWow = '' \| [^|]+\\wow64\\desktop\\bc250d3d_router\.dll \| [^|]+\\wow64\\desktop\\bc250d3d_router\.dll \| [^|]+\\wow64\\d3d12\\amdgpu_wddm_d3d12\.dll; VulkanDriverNameWow = [^;\r\n]+\\wow64\\vulkan\\radeon_icd\.json") 'UserModeDriverNameWow: D3D9 slot empty (D3D9On12), two x86 routers, the x86 D3D12 shell; VulkanDriverNameWow'
+Check ($r.text -match "would: .+ UserModeDriverNameWow = <> \| [^|]+\\wow64\\desktop\\bc250d3d_router\.dll \| [^|]+\\wow64\\desktop\\bc250d3d_router\.dll \| [^|]+\\wow64\\d3d12\\amdgpu_wddm_d3d12\.dll; VulkanDriverNameWow = [^;\r\n]+\\wow64\\vulkan\\radeon_icd\.json") 'UserModeDriverNameWow: D3D9 slot <> (D3D9On12), two x86 routers, the x86 D3D12 shell; VulkanDriverNameWow'
 Check ($r.text -match "would: HKLM:\\SOFTWARE\\WOW6432Node\\Khronos\\Vulkan\\Drivers '[^']+\\wow64\\vulkan\\radeon_icd\.json' = 0") 'the x86 ICD in the WOW6432Node Khronos list'
 Check (($r.text -match 'DesktopRouter: .*CpuUmdPathWow=[^;\r\n]+\\wow64\\desktop\\bc250d3d\.dll') -and ($r.text -match 'AppRouter: .*GpuUmdPathWow=[^;\r\n]+\\wow64\\d3d11\\amdgpu_wddm_d3d11\.dll')) 'the x86 router paths are installer-owned'
 # The H.264 encoder MFT (M15.11, driver/umd/mft-h264/INSTALL.md): manifest.json "mft_h264" says whether this release
