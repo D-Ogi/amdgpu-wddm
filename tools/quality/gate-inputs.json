@@ -32,6 +32,7 @@
     "start-record-consumers",
     "installer-diagnostics",
     "session-checks",
+    "opengl-icd",
     "radv-contract",
     "umd-contract",
     "umd-app-settings",
