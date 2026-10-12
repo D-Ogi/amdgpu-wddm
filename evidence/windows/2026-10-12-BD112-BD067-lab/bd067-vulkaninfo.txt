@@ -1,0 +1,6 @@
+utc 2026-10-12T05:40:47.3427522Z
+vulkaninfo C:\Program Files\amdgpu-wddm\tools\vulkaninfo.exe 02A70101
+session 1: ended True after 0.8 s; exit 0 
+session 1 output lines 1839; deviceName: deviceName        = AMD BC-250 (RADV GFX1013)
+session 0: ended exit 0 after 0.1 s
+session 0 output lines 1829; last: 

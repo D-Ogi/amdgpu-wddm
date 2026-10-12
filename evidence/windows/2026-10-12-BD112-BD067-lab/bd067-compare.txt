@@ -1,0 +1,27 @@
+s1 deviceName: deviceName        = AMD BC-250 (RADV GFX1013)
+s0 deviceName: deviceName        = AMD BC-250 (RADV GFX1013)
+s0 'Device Properties and Extensions' sections: 1
+s0 VK_KHR_swapchain lines: 3, s1: 3
+=== lines only in session 1 (first 12)
+WARNING: [Loader Message] Code 0 : windows_read_data_files_in_registry: Registry lookup failed to get layer manifest files.
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x8349
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+radv_wddm2_winsys_create
+allocation handle=0x40000e00
+bc250: gfx preamble inlined (no gfx_init IB)
+=== lines only in session 0 (first 12)
+=== s0.err
+WARNING: [Loader Message] Code 0 : windows_read_data_files_in_registry: Registry lookup failed to get layer manifest files.
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x8349
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+radv_wddm2_winsys_create
+allocation handle=0x40000e00
+bc250: gfx preamble inlined (no gfx_init IB)

@@ -1,0 +1,47 @@
+utc 2026-10-12T05:40:03.0480652Z session 0
+vadd C:\Program Files\amdgpu-wddm\tools\hip\vadd.exe 185F7E1D4F054855BBA8D601ADED70445750D693473BEFF0DA5D6CAE71885B9C
+amdhip64 13DDF13071EAE99917BF9AACC69FE7CEE501DA3C42115A8B0E918926CCF6D885
+health before health abi=1 version=0x000700D8 flags=15 generation=27148434 epoch=5 completed=1970 age_ms=160 ready_ms=698727
+=== positive: vadd --expect-compute
+exit  wall_s 1.66
+vadd: sums are checked
+vadd: the scale of 2.0 runs after the addition, so each sum must be 2.0 times a + b
+vadd: devices 1
+vadd: props name 'AMD BC-250' arch 'gfx1013' warp 32 shared 65536 cu 40
+vadd: memory free 8280932352 total 8280932352
+vadd: the first launch returned at 3.0 ms after start
+vadd: pass 1 mismatches 0 of 65536
+vadd: pass 1 memory free 8280924160 of 8280932352 after the teardown
+vadd: pass 2 mismatches 0 of 65536
+vadd: pass 2 memory free 8280924160 of 8280932352 after the teardown
+vadd: api failures 0
+vadd: ok
+=== before: vadd --expect-compute --scale-order before
+exit  wall_s 0.04
+vadd: pass 1 index 1 is 3.000000, expected 6.000000
+vadd: pass 1 index 2 is 6.000000, expected 12.000000
+vadd: pass 1 index 3 is 9.000000, expected 18.000000
+vadd: pass 1 mismatches 65535 of 65536
+vadd: pass 1 memory free 8280924160 of 8280932352 after the teardown
+vadd: pass 2 index 1 is 3.000000, expected 6.000000
+vadd: pass 2 index 2 is 6.000000, expected 12.000000
+vadd: pass 2 index 3 is 9.000000, expected 18.000000
+vadd: pass 2 mismatches 65535 of 65536
+vadd: pass 2 memory free 8280924160 of 8280932352 after the teardown
+vadd: api failures 2
+vadd: failed
+=== omit: vadd --expect-compute --scale-order omit
+exit  wall_s 0.04
+vadd: pass 1 index 1 is 3.000000, expected 6.000000
+vadd: pass 1 index 2 is 6.000000, expected 12.000000
+vadd: pass 1 index 3 is 9.000000, expected 18.000000
+vadd: pass 1 mismatches 65535 of 65536
+vadd: pass 1 memory free 8280928256 of 8280932352 after the teardown
+vadd: pass 2 index 1 is 3.000000, expected 6.000000
+vadd: pass 2 index 2 is 6.000000, expected 12.000000
+vadd: pass 2 index 3 is 9.000000, expected 18.000000
+vadd: pass 2 mismatches 65535 of 65536
+vadd: pass 2 memory free 8280928256 of 8280932352 after the teardown
+vadd: api failures 2
+vadd: failed
+health after health abi=1 version=0x000700D8 flags=15 generation=27148434 epoch=5 completed=1973 age_ms=431 ready_ms=700505
