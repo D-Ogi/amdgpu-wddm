@@ -438,6 +438,10 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     const bool primary=request->flags==primary_flags;
     const bool shared_surface=request->flags==shared_flags;
     const bool surface=primary||shared_surface;
+    // BD-133: a surface request that names no runtime resource is one the driver asked for itself (engine-ddi
+    // resources.cpp, make_present_copy). Two things follow: its release names no owner (release_owned), and it
+    // is never scanned out, whichever form it took - see the scan-out clause below.
+    const bool driver_surface=surface && !request->rt_owner.handle;
     // The first attempt of a shared create: an ordinary dedicated request that says the resource may have to be
     // shared. Nothing about the allocation changes; the flag exists so that this call can tell the runtime's
     // refusal of a shared resource from any other E_INVALIDARG and answer kShareRequired.
@@ -507,7 +511,13 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
         // geometry and the pitch, because a request the kernel driver would refuse at flip time, or one
         // the compositor could not read, is worse than no request: the buffer would be in VRAM with no
         // CPU mapping, and the refusal would come after SharedPrimaryTransition.
-        if(primary){
+        // BD-133, review finding 5: a surface of the driver's own is only ever the source of a CP DMA copy, and
+        // no video present source ever flips it. The primary form of such a request exists because the runtime
+        // may refuse the shared form for an allocation with no runtime resource, not because the buffer is a
+        // primary; so it keeps the composed primary's format and stands scan-out down here, before the decision
+        // is asked, as the other clauses of scanout-mode.h stand it down. Admitting it would put it in the local
+        // segment as a scan-out primary of video present source 0, against the real primary of that source.
+        if(primary && !driver_surface){
             // The trailer and the compositor's record of this moment: the geometry clause compares the
             // chain with the source mode the kernel driver has committed now, which a game may have changed
             // since the device was made, and dwm.exe may have restarted on another route since then. The
@@ -632,10 +642,9 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     }
     auto record=new(std::nothrow) Record(runtime_,callbacks_);if(!record)return E_OUTOFMEMORY;
     record->busy=true;record->surface=surface;
-    // BD-133: a surface request that names no runtime resource is the driver's own (engine-ddi resources.cpp,
-    // make_present_copy). It takes no authority from an owner scope it happens to run inside, because its
-    // release never asks for one.
-    record->driver_surface=surface && !request->rt_owner.handle;
+    // BD-133: the driver's own surface (above) takes no authority from an owner scope it happens to run inside,
+    // because its release never asks for one.
+    record->driver_surface=driver_surface;
     record->authority=surface && !record->driver_surface && scope_owner_==this?GetCurrentThreadId():0;
     {Exclusive held(lock_);record->next=records_;records_=record;}
     report_.stage=ImportStage::AllocateCallback;

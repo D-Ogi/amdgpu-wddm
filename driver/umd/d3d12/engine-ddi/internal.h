@@ -431,10 +431,15 @@ struct HeapRecord {
 // pfnDestroyHeapAndResource, so a swap chain of three back buffers has three of them and a resize - which
 // destroys the chain's resources and creates new ones - releases them all.
 //   Why one per source resource and not one per device or per queue: a staging surface shared by two sources
-// could be overwritten between the copy and the kernel present that reads it. Keyed to the source, the surface
-// is written only by a present of that source, and a swap chain cannot present the same back buffer again before
-// the previous present of it has been consumed - the same ordering the zero-copy path of a linear primary has
-// always relied on.
+// could be overwritten between the copy and the kernel present that reads it, and two sources are two different
+// back buffers of the chain. Keyed to the source, the surface is written only by a present of that source.
+//   What orders two presents of the SAME back buffer, which a blt-model swap chain may make one after the other
+// with no wait in between (review of BD-133, finding 3): one context, in order. The copy is recorded on the list
+// the runtime hands to pfnPresent, that list is executed on the queue of the same call, and the kernel present is
+// made on that queue's context - so copy N, present N, copy N+1 and present N+1 all go down one WDDM context,
+// which consumes them in order. Nothing here rests on the runtime leaving a back buffer alone until its earlier
+// present retired; it rests on that single-context ordering alone, and the shell checks the one assumption under
+// it - that the list really is executed on that queue - at every ExecuteCommandLists (present-copy-watch.h).
 struct PresentCopySurface {
     Backing* backing;                           // one reference; the surface's memory, released with it
     ID3D12Resource* engine;                     // one reference; the linear image at offset 0 of that memory

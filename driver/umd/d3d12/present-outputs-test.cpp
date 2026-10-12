@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #include "present-outputs.h"
 #include "present-copy.h"
+#include "present-copy-watch.h"
 #include <cassert>
 #include <cstdio>
 #include <cstring>
@@ -165,7 +166,12 @@ int main() {
         assert(present_copy_admit(back_buffer(DXGI_FORMAT_UNKNOWN),&shape)==PresentCopy::Format);
         d=back_buffer(DXGI_FORMAT_B8G8R8A8_UNORM);d.Flags|=D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
         assert(present_copy_admit(d,&shape)==PresentCopy::DepthStencil);
+        // Its own reason, and not the depth-stencil one: a refusal line that named the wrong flag would send the
+        // next reader after the wrong resource (review finding 7).
         d=back_buffer(DXGI_FORMAT_B8G8R8A8_UNORM);d.Flags|=D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
+        assert(present_copy_admit(d,&shape)==PresentCopy::DenyShaderResource);
+        d=back_buffer(DXGI_FORMAT_B8G8R8A8_UNORM);
+        d.Flags|=D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL|D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
         assert(present_copy_admit(d,&shape)==PresentCopy::DepthStencil);
         d=back_buffer(DXGI_FORMAT_B8G8R8A8_UNORM);d.Flags|=D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER;
         assert(present_copy_admit(d,&shape)==PresentCopy::CrossAdapter);
@@ -184,5 +190,100 @@ int main() {
         present_copy_description(shape,nullptr);present_copy_as_primary(nullptr);
     }
     std::puts("PASSED: the Present copy admits every composed back-buffer format and refuses every other source");
+
+    // BD-133, review finding 8: the stage 3 -> stage 6 decision of pfnPresent, with both answers substituted.
+    {
+        struct Calls {
+            HRESULT direct_hr,copy_hr;
+            D3DKMT_HANDLE direct_allocation,copy_allocation;
+            unsigned direct_calls,copy_calls;
+        };
+        Calls calls{};
+        auto direct=[](void* state,D3DKMT_HANDLE* allocation) noexcept {
+            auto& c=*static_cast<Calls*>(state);++c.direct_calls;
+            if(c.direct_hr==S_OK)*allocation=c.direct_allocation;
+            return c.direct_hr;
+        };
+        auto copy=[](void* state,D3DKMT_HANDLE* allocation) noexcept {
+            auto& c=*static_cast<Calls*>(state);++c.copy_calls;
+            if(c.copy_hr==S_OK)*allocation=c.copy_allocation;
+            return c.copy_hr;
+        };
+        const PresentSourceHooks hooks{&calls,direct,copy};
+        PresentSources from{};
+        unsigned stage=0;
+        // A linear primary: stage 3 answers, stage 6 is never asked, no added work.
+        calls={S_OK,E_FAIL,0x40000100,0x40000200,0,0};
+        from=PresentSources{};
+        assert(present_source(hooks,from,stage)==S_OK);
+        assert(stage==3 && from.source==0x40000100 && !from.added_gpu_work);
+        assert(calls.direct_calls==1 && calls.copy_calls==0);
+        // A source stage 3 refuses: stage 6 answers, its allocation goes to the runtime, added work is reported.
+        calls={E_INVALIDARG,S_OK,0,0x40000200,0,0};
+        from=PresentSources{};
+        assert(present_source(hooks,from,stage)==S_OK);
+        assert(stage==6 && from.source==0x40000200 && from.added_gpu_work);
+        assert(calls.direct_calls==1 && calls.copy_calls==1);
+        // Both refuse: the status is stage 6's, the source stays 0 and no added work is claimed. fill_present
+        // then refuses as well, which is what leaves every output of the DDI zero.
+        calls={E_INVALIDARG,E_OUTOFMEMORY,0,0,0,0};
+        from=PresentSources{};
+        assert(present_source(hooks,from,stage)==E_OUTOFMEMORY);
+        assert(stage==6 && !from.source && !from.added_gpu_work);
+        assert(fill_present(from,&result,&contexts,&queues)==E_INVALIDARG);
+        // A copy that answers S_OK and names no allocation is the one case neither side could be trusted on.
+        calls={E_INVALIDARG,S_OK,0,0,0,0};
+        from=PresentSources{};
+        assert(present_source(hooks,from,stage)==E_UNEXPECTED);
+        assert(stage==6 && !from.source && !from.added_gpu_work);
+        // A present is never attempted without both answers.
+        from=PresentSources{};
+        assert(present_source({&calls,nullptr,copy},from,stage)==E_INVALIDARG);
+        assert(present_source({&calls,direct,nullptr},from,stage)==E_INVALIDARG);
+    }
+    std::puts("PASSED: Present asks the copy only when the zero-copy source is refused");
+
+    // BD-133, review finding 3: the list a present recorded a copy on must be executed on the queue whose
+    // present context that present answered with (present-copy-watch.h).
+    {
+        PresentCopyWatchOf<2> watch;
+        int list_a=0,list_b=0,list_c=0;
+        void* const queue_a=reinterpret_cast<void*>(UINT_PTR{0x2001});
+        void* const queue_b=reinterpret_cast<void*>(UINT_PTR{0x2002});
+        assert(watch.idle() && !watch.marks() && !watch.mismatches() && !watch.dropped());
+        // An unmarked list is the ordinary case of every other ExecuteCommandLists, and never a mismatch.
+        assert(watch.check(&list_a,queue_a)==PresentCopyExecute::NotMarked);
+        assert(watch.check(nullptr,queue_a)==PresentCopyExecute::NotMarked);
+        watch.mark(nullptr,queue_a);
+        assert(watch.idle() && !watch.marks());
+        // The pairing the whole ordering rests on, and its one failure.
+        watch.mark(&list_a,queue_a);
+        assert(!watch.idle() && watch.marks()==1);
+        assert(watch.check(&list_a,queue_a)==PresentCopyExecute::Matched);
+        assert(watch.idle() && !watch.mismatches());
+        // The mark is taken by the execute, so the same list executed again is unmarked.
+        assert(watch.check(&list_a,queue_a)==PresentCopyExecute::NotMarked);
+        watch.mark(&list_b,queue_a);
+        assert(watch.check(&list_b,queue_b)==PresentCopyExecute::Mismatch);
+        assert(watch.mismatches()==1 && watch.idle());
+        // Two presents on one list leave one mark, with the context of the last.
+        watch.mark(&list_a,queue_a);
+        watch.mark(&list_a,queue_b);
+        assert(watch.check(&list_a,queue_b)==PresentCopyExecute::Matched);
+        assert(watch.idle() && watch.mismatches()==1 && watch.marks()==4);
+        // A full table never fails a present: the oldest mark goes and says so, and the newest is still right.
+        watch.mark(&list_a,queue_a);
+        watch.mark(&list_b,queue_a);
+        assert(!watch.dropped());
+        watch.mark(&list_c,queue_b);
+        assert(watch.dropped()==1);
+        assert(watch.check(&list_c,queue_b)==PresentCopyExecute::Matched);
+        assert(watch.check(&list_b,queue_a)==PresentCopyExecute::Matched);
+        assert(watch.check(&list_a,queue_a)==PresentCopyExecute::NotMarked);   // the dropped one
+        assert(watch.idle() && watch.mismatches()==1);
+        // The shell's own instance is the same class and starts empty.
+        assert(present_copy_watch().idle() && !present_copy_watch().mismatches());
+    }
+    std::puts("PASSED: a recorded Present copy is checked against the queue its list is executed on");
     return 0;
 }

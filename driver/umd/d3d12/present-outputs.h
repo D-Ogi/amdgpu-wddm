@@ -38,6 +38,33 @@ struct PresentSources {
     // recorded copy is. A zero-copy present of a linear primary leaves it FALSE, exactly as before.
     bool added_gpu_work{};
 };
+// BD-133, review finding 8: the one new decision of pfnPresent, so that it is host-tested and not only compiled.
+// direct is the zero-copy answer for a linear primary (engine-ddi present_allocation, stage 3); copy is the
+// recorded copy for every other source of this device (present_copy_allocation, stage 6). The order and the
+// outputs are the whole rule: stage 3 first and, on S_OK, nothing else happens and added_gpu_work stays false;
+// its refusal is not an answer, so stage 6 is asked, and only its S_OK sets added_gpu_work. A refusal of stage 6
+// leaves the source 0, which fill_present refuses as well, and the caller reports the status of stage 6.
+struct PresentSourceHooks {
+    void* state{};
+    HRESULT (*direct)(void* state,D3DKMT_HANDLE* allocation){};
+    HRESULT (*copy)(void* state,D3DKMT_HANDLE* allocation){};
+};
+inline HRESULT present_source(const PresentSourceHooks& hooks,PresentSources& from,unsigned& stage) noexcept {
+    if(!hooks.direct || !hooks.copy)return E_INVALIDARG;
+    from.source=0;from.added_gpu_work=false;
+    stage=3;
+    HRESULT hr=hooks.direct(hooks.state,&from.source);
+    if(hr==S_OK)return S_OK;
+    stage=6;
+    from.source=0;
+    hr=hooks.copy(hooks.state,&from.source);
+    if(hr!=S_OK){from.source=0;return hr;}
+    // A copy answered S_OK and named no allocation: the present would claim added GPU work for a source the
+    // runtime cannot read. Never seen; said once here rather than trusted.
+    if(!from.source)return E_UNEXPECTED;
+    from.added_gpu_work=true;
+    return S_OK;
+}
 // The surface is the whole allocation from its first byte: an offset is a surface this driver did not make.
 inline HRESULT fill_present(const PresentSources& from,D3D12DDI_PRESENT_0051* result,
                             D3D12DDI_PRESENT_CONTEXTS_0051* contexts,

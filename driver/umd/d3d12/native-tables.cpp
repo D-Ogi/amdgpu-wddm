@@ -12,6 +12,7 @@
 #include "native-queue-ddi.h"
 #include "native-residency-ddi.h"
 #include "present-outputs.h"
+#include "present-copy-watch.h"
 #include "heap-import.h"
 #include "engine-ddi/entry.h"
 #include <atomic>
@@ -256,6 +257,22 @@ void APIENTRY destroy_heap_and_resource(D3D12DDI_HDEVICE handle,D3D12DDI_HHEAP h
     const HRESULT hr=destroy_in_owner_scope(engine_imports(*device),primary,[&]() noexcept {engine(handle,heap,resource);});
     if(hr!=S_OK)report_device_error(*device,hr);
 }
+// BD-133: what present_source (present-outputs.h) calls for stage 3 and stage 6. The two hooks exist so that the
+// order between them is a pure function the host suite runs, and so that this file holds nothing but the two
+// engine-ddi calls themselves.
+struct PresentSourceCall {
+    engine_ddi::DeviceContext* engine;
+    D3D12DDI_HCOMMANDLIST list;
+    D3D12DDI_HRESOURCE surface;
+};
+HRESULT present_source_direct(void* state,D3DKMT_HANDLE* allocation) noexcept {
+    const auto& call=*static_cast<const PresentSourceCall*>(state);
+    return engine_ddi::present_allocation(call.engine,call.surface,allocation);
+}
+HRESULT present_source_copy(void* state,D3DKMT_HANDLE* allocation) noexcept {
+    const auto& call=*static_cast<const PresentSourceCall*>(state);
+    return engine_ddi::present_copy_allocation(call.engine,call.list,call.surface,allocation);
+}
 // The surface's allocation and the queue's context go back to the runtime, which makes the kernel call.
 // stage: 1 arguments, 2 queue, 3 surface, 4 destination, 5 outputs, 6 the copy of a source that is no linear
 // primary (BD-133), 0 done. The numbers of the stages that existed before BD-133 are unchanged: a trace line of
@@ -269,28 +286,28 @@ HRESULT present_outputs(Device& device,D3D12DDI_HCOMMANDLIST list,D3D12DDI_HCOMM
     PresentSources from;
     stage=2;
     hr=queue_present_context(queue,device,&from.context);if(hr!=S_OK)return hr;
-    stage=3;
-    const auto engine=engine_context(device);
-    // A linear primary of this device: the one kind of surface a reader outside the engine can open, and the one
-    // present that costs nothing. Its path is unchanged, byte for byte: the allocation of the surface itself goes
-    // to the runtime, nothing is recorded on the list and AddedGpuWork stays FALSE.
-    hr=engine_ddi::present_allocation(engine,args->phSurfacesToPresent[0].hSurface,&from.source);
-    if(hr!=S_OK){
-        // BD-133: every other source of this device - an ordinary texture, which is what a D3D9On12 back buffer
-        // is - is presented by copying it into a surface of that kind on the command list the runtime handed to
-        // this DDI and closes and executes right afterwards (engine-ddi.h, present_copy_allocation). Before
-        // BD-133 this refusal left the DDI with an error, which costs the application its device at the first
-        // windowed present: the measured failure of BD-133.
-        stage=6;
-        hr=engine_ddi::present_copy_allocation(engine,list,args->phSurfacesToPresent[0].hSurface,&from.source);
-        if(hr!=S_OK)return hr;
-        from.added_gpu_work=true;
+    // Stage 3 is a linear primary of this device: the one kind of surface a reader outside the engine can open,
+    // and the one present that costs nothing. Its path is unchanged, byte for byte: the allocation of the surface
+    // itself goes to the runtime, nothing is recorded on the list and AddedGpuWork stays FALSE.
+    //   Stage 6 (BD-133) is every other source of this device - an ordinary texture, which is what a D3D9On12
+    // back buffer is: it is presented by copying it into a surface of that kind on the command list the runtime
+    // handed to this DDI and closes and executes right afterwards (engine-ddi.h, present_copy_allocation). Before
+    // BD-133 the refusal of stage 3 left the DDI with an error, which costs the application its device at the
+    // first windowed present: the measured failure of BD-133.
+    //   The order and the outputs of the two are present_source (present-outputs.h), which is host-tested.
+    PresentSourceCall call{engine_context(device),list,args->phSurfacesToPresent[0].hSurface};
+    hr=present_source({&call,present_source_direct,present_source_copy},from,stage);
+    if(hr!=S_OK)return hr;
+    if(from.added_gpu_work){
+        // Review finding 3: the copy is ordered before the kernel present only while the runtime executes this
+        // list on this queue. The mark is taken again in ExecuteCommandLists (present-copy-watch.h).
+        present_copy_watch().mark(list.pDrvPrivate,from.context);
     }
     if(args->hDstResource.pDrvPrivate){
         stage=4;
         // The destination may also be a surface this device opened (BD-075): the runtime named it and owns it for
         // the call. The source form stays the strict one.
-        hr=engine_ddi::present_destination_allocation(engine,args->hDstResource,&from.destination);
+        hr=engine_ddi::present_destination_allocation(call.engine,args->hDstResource,&from.destination);
         if(hr!=S_OK)return hr;
     }
     stage=5;
@@ -328,12 +345,18 @@ void APIENTRY present(D3D12DDI_HCOMMANDLIST list,D3D12DDI_HCOMMANDQUEUE queue,
     if(device && hr==S_OK)
         engine_frame_gate(*device,amdgpu_wddm::app_settings::max_frame_latency(settings));
     if(ddi_trace_enabled()){
+        // present_context is the identity of the context the kernel present is made on, which is what makes the
+        // ordering of a stage-6 copy readable in the lab log (review finding 3): the copy was recorded on the
+        // list of this same call, and a mismatch line from ExecuteCommandLists would be the only other case.
         amdgpu_wddm_log::print("{\"event\":\"present-outputs\",\"stage\":%u,\"status\":\"%08lx\","
-            "\"source\":%u,\"destination\":%u,\"context\":%u,\"added_gpu_work\":%u,\"thread\":%lu}\n",stage,
+            "\"source\":%u,\"destination\":%u,\"context\":%u,\"added_gpu_work\":%u,"
+            "\"present_context\":%llu,\"list\":%llu,\"thread\":%lu}\n",stage,
             static_cast<unsigned long>(hr),unsigned(hr==S_OK && result->BroadcastSrcAllocation[0]!=0),
             unsigned(hr==S_OK && result->BroadcastDstAllocation[0]!=0),
             unsigned(hr==S_OK && contexts->hContext!=nullptr),
-            unsigned(hr==S_OK && result->AddedGpuWork!=FALSE),GetCurrentThreadId());
+            unsigned(hr==S_OK && result->AddedGpuWork!=FALSE),
+            static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(hr==S_OK ? contexts->hContext : nullptr)),
+            static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(list.pDrvPrivate)),GetCurrentThreadId());
         amdgpu_wddm_log::flush();
     }
     if(hr!=S_OK && device)report_device_error(*device,hr);

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include "queue-engine.h"
+#include "present-copy-watch.h"
 #include <limits>
 #include <new>
 
@@ -153,7 +154,18 @@ HRESULT QueueEngineRegistry::execute(const QueueEngineSlot& slot, UINT count,
     const D3D12DDI_HCOMMANDLIST* lists) noexcept {
     if (count && !lists) return E_INVALIDARG;
     QueueEngineOwner* q; const HRESULT hr = admit(slot, q);
-    return hr != S_OK ? hr : leave(q, ops_.execute(q->engine, count, lists));
+    if (hr != S_OK) return hr;
+    // BD-133, review finding 3: a list that a present recorded a copy on must be executed on the queue whose
+    // present context pfnPresent answered with, or the copy and the kernel present are on two WDDM contexts and
+    // nothing orders them. Nothing is marked in the ordinary case, and then this costs one atomic load per
+    // execute (present-copy-watch.h, idle()).
+    if (count && !present_copy_watch().idle()) {
+        auto& watch = present_copy_watch();
+        for (UINT i = 0; i < count; ++i)
+            if (watch.check(lists[i].pDrvPrivate, q->context.handle()) == PresentCopyExecute::Mismatch)
+                present_copy_execute_mismatch(watch.mismatches(), watch.marks());
+    }
+    return leave(q, ops_.execute(q->engine, count, lists));
 }
 HRESULT QueueEngineRegistry::update_tiles(const QueueEngineSlot& slot, D3D12DDI_HRESOURCE resource, UINT region_count,
     const D3D12DDI_TILED_RESOURCE_COORDINATE* region_starts, const D3D12DDI_TILE_REGION_SIZE* region_sizes,

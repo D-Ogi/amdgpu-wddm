@@ -38,6 +38,11 @@
 // copied (the architecture is not 8-bit only) while the one line the refusal costs names the component that
 // cannot read it. Nothing here converts: the copy's destination has the source's own format, which is what
 // keeps the copy a byte copy.
+//   What the kernel side needs for a 10-bit or FP16 present to reach the screen (review of BD-133, finding 6;
+// not this change): WddmLinearColorFormat (driver\kmd\wddm.c:6835) admits four 8-bit D3DDDI formats and the blit
+// emitter is handed Bc250BltRgba8 or Bc250BltBgra8 only, so the rows of BC250_BLIT_SURFACE's format enum are
+// what have to grow by the 4-byte RGB10A2 and the 8-byte FP16 cases. The present is a byte copy of two equal
+// formats, so nothing about the copy itself changes with it.
 
 namespace native12 {
 
@@ -51,6 +56,7 @@ enum class PresentCopy : uint32_t {
     Edge,               // zero, or wider or taller than one linear surface may be
     Format,             // no composed row of the surface format table: no linear surface of this format exists
     DepthStencil,       // a depth-stencil surface is not a colour surface a present can read
+    DenyShaderResource, // DENY_SHADER_RESOURCE, which D3D12 allows only with ALLOW_DEPTH_STENCIL
     CrossAdapter,       // another adapter's memory layout
     Count
 };
@@ -66,6 +72,7 @@ inline const char* present_copy_text(PresentCopy why) noexcept {
     case PresentCopy::Edge: return "width or height outside one linear surface";
     case PresentCopy::Format: return "format has no linear surface";
     case PresentCopy::DepthStencil: return "depth-stencil";
+    case PresentCopy::DenyShaderResource: return "shader resources denied";
     case PresentCopy::CrossAdapter: return "cross-adapter";
     case PresentCopy::Count: break;
     }
@@ -101,8 +108,12 @@ inline bool present_copy_kernel_blt_format(uint32_t d3dddi) noexcept {
 inline PresentCopy present_copy_admit(const D3D12_RESOURCE_DESC1& desc, PresentCopyShape* out) noexcept {
     if (out) *out = PresentCopyShape{};
     if (desc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D) return PresentCopy::NotTexture2D;
-    if (desc.Flags & (D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL | D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE))
-        return PresentCopy::DepthStencil;
+    if (desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) return PresentCopy::DepthStencil;
+    // Its own reason, not the depth-stencil one, because a refusal line that names the wrong flag sends the next
+    // reader after the wrong resource (review of BD-133, finding 7). D3D12 allows DENY_SHADER_RESOURCE only
+    // together with ALLOW_DEPTH_STENCIL (D3D12_RESOURCE_FLAGS), so a colour source should never carry it; a
+    // source that does is refused by name instead of silently.
+    if (desc.Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE) return PresentCopy::DenyShaderResource;
     if (desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER) return PresentCopy::CrossAdapter;
     if (desc.DepthOrArraySize != 1 || desc.MipLevels != 1) return PresentCopy::Subresources;
     if (desc.SampleDesc.Count != 1 || desc.SampleDesc.Quality) return PresentCopy::Multisampled;

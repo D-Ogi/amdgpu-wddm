@@ -2351,9 +2351,14 @@ std::atomic<uint64_t> present_copy_count{0}, present_copy_surface_count{0};
 bool present_copy_doubling(uint64_t n) noexcept { return n && !(n & (n - 1)); }
 // One line per refusal reason per process: a refused present repeats every frame, and the reason does not change.
 LogOnce present_copy_refused[static_cast<size_t>(native12::PresentCopy::Count)];
+// Its own slot, not one of the reasons above: a source with no memory of its own is refused by this function and
+// not by the rule, and sharing a slot would let whichever fired first silence the other (review finding 7).
+LogOnce present_copy_no_memory;
 // One line per format whose copy the kernel driver's GPU present could not blit.
 FormatSet present_copy_unblittable;
 LogOnce present_copy_first;
+// The shape-changed backstop below, which no path reaches today.
+LogOnce present_copy_reshaped;
 
 // The copy's destination for one source resource, created at its first copied present. Everything here is the
 // create path's own machinery (query_linear_surface, import_memory, engine_heap_from_memory, new_backing,
@@ -2434,7 +2439,9 @@ HRESULT make_present_copy(DeviceContext* c, ResourceRecord* r, const native12::P
     // Not counted in DeviceContext::live: this surface is reachable only from its source resource's record, the
     // runtime destroys every resource before the device, and the release this destroy starts counts itself.
     const uint64_t made = present_copy_surface_count.fetch_add(1, std::memory_order_relaxed) + 1;
-    log_refusal("present copy: surface %llu created for a source the kernel present cannot read directly: "
+    // log_line, not log_refusal: this is a surface that was created, and log_refusal's own contract puts its text
+    // on the debugger channel as a refusal (internal.h), where a successful create does not belong.
+    log_line("present copy: surface %llu created for a source the kernel present cannot read directly: "
                 "%s form, format %d, %ux%u, pitch %u, %llu bytes, LB7A format %u%s",
                 static_cast<unsigned long long>(made), primary ? "primary" : "shared",
                 static_cast<int>(shape.format), shape.width, shape.height,
@@ -2492,8 +2499,10 @@ HRESULT present_copy_allocation(DeviceContext* c, D3D12DDI_HCOMMANDLIST hlist, D
     auto* r = record_of<ResourceRecord>(hres.pDrvPrivate, Tag::Resource, c);
     if (!r || !r->h.engine) return E_INVALIDARG;
     if (r->kind == ResourceKind::Reserved || !r->backing) {
-        if (present_copy_refused[static_cast<size_t>(native12::PresentCopy::NoDescription)].first())
-            log_refusal("present copy: the source has no memory of its own (kind %u): not presented",
+        if (present_copy_no_memory.first())
+            log_refusal("present copy: the source has no memory of its own (kind %u): the present is not made, "
+                        "and because pfnPresent names no status the runtime loses the device "
+                        "(handling-errors.md: an error the DDI does not allow is critical)",
                         static_cast<unsigned>(r->kind));
         return E_INVALIDARG;
     }
@@ -2501,9 +2510,14 @@ HRESULT present_copy_allocation(DeviceContext* c, D3D12DDI_HCOMMANDLIST hlist, D
     const native12::PresentCopy why = native12::present_copy_admit(r->desc, &shape);
     if (why != native12::PresentCopy::Admitted) {
         if (present_copy_refused[static_cast<size_t>(why)].first())
+            // What the refusal costs, named as it is: pfnPresent returns void and may report no status of its
+            // own, so the caller's report_device_error reaches pfnSetErrorCb with a code this DDI does not
+            // allow, and "the runtime ... will then lose the device on purpose"
+            // (ref\windows-driver-docs\windows-driver-docs-pr\display\handling-errors.md:15 and :17). There is
+            // no softer answer at this DDI: fill_present has none for a present with no source.
             log_refusal("present copy: the source cannot be copied into a linear surface (%s): format %d, "
-                        "%llux%u, %u slices, %u mips, %u samples, flags 0x%x; the present is not made and the "
-                        "device stays",
+                        "%llux%u, %u slices, %u mips, %u samples, flags 0x%x; the present is not made, and "
+                        "because pfnPresent names no status the runtime loses the device",
                         native12::present_copy_text(why), static_cast<int>(r->desc.Format),
                         static_cast<unsigned long long>(r->desc.Width), r->desc.Height,
                         static_cast<unsigned>(r->desc.DepthOrArraySize), static_cast<unsigned>(r->desc.MipLevels),
@@ -2515,17 +2529,23 @@ HRESULT present_copy_allocation(DeviceContext* c, D3D12DDI_HCOMMANDLIST hlist, D
         have && (have->width != shape.width || have->height != shape.height || have->format != shape.format)) {
         // A resource's description cannot change; this is the backstop for one that did, and never a resize path.
         // A resize destroys the chain's resources and creates new ones, each with a surface of its own.
-        log_refusal("present copy: the source's shape changed under its copy surface (%ux%u format %d became "
-                    "%ux%u format %d): the surface is made again",
-                    have->width, have->height, static_cast<int>(have->format), shape.width, shape.height,
-                    static_cast<int>(shape.format));
+        if (present_copy_reshaped.first())
+            log_refusal("present copy: the source's shape changed under its copy surface (%ux%u format %d became "
+                        "%ux%u format %d): the surface is made again",
+                        have->width, have->height, static_cast<int>(have->format), shape.width, shape.height,
+                        static_cast<int>(shape.format));
+        // Drained first, for the reason destroy_heap_and_resource drains (review finding 4): an entry still
+        // pending in a replay ring names this image and this allocation in its captured values, and the release
+        // below frees the image. Unreachable today, so the drain costs nothing; a use-after-free the day the
+        // invariant above actually breaks is what it costs not to.
+        drain_all(c, Drain::Destroy);
         release_present_copy(r);
     }
     if (!r->present_copy) {
         const HRESULT made = make_present_copy_either(c, r, shape);
         if (FAILED(made)) {
-            log_refusal("present copy: no copy surface for format %d, %ux%u: %08lx; the present is not made and "
-                        "the device stays",
+            log_refusal("present copy: no copy surface for format %d, %ux%u: %08lx; the present is not made, and "
+                        "because pfnPresent names no status the runtime loses the device",
                         static_cast<int>(shape.format), shape.width, shape.height,
                         static_cast<unsigned long>(made));
             return made;
