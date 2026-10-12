@@ -1,0 +1,66 @@
+--- a/src/amd/compiler/aco_spill.cpp
++++ b/src/amd/compiler/aco_spill.cpp
+@@ -1352,6 +1352,26 @@
+    return offset;
+ }
+ 
++/* LDS spill slots need the same ordering as scratch spill slots. Without memory_sync_info,
++ * a DS instruction has storage_none, so the scheduler treats it as non-aliasing and can move
++ * a reload above the spill that writes the same slot.
++ */
++void
++emit_lds_spill(spill_ctx& ctx, Builder& bld, Temp temp, unsigned lds_offset)
++{
++   Instruction* instr =
++      bld.ds(aco_opcode::ds_write_addtid_b32, bld.m0(ctx.lds_m0_zero), temp, lds_offset);
++   instr->ds().sync = memory_sync_info(storage_vgpr_spill, semantic_private);
++}
++
++void
++emit_lds_reload(spill_ctx& ctx, Builder& bld, Definition def, unsigned lds_offset)
++{
++   Instruction* instr =
++      bld.ds(aco_opcode::ds_read_addtid_b32, def, bld.m0(ctx.lds_m0_zero), lds_offset);
++   instr->ds().sync = memory_sync_info(storage_vgpr_spill, semantic_private);
++}
++
+ void
+ spill_vgpr(spill_ctx& ctx, Block& block, std::vector<aco_ptr<Instruction>>& instructions,
+            aco_ptr<Instruction>& spill, std::vector<uint32_t>& slots)
+@@ -1394,7 +1414,7 @@
+       for (unsigned i = 0; i < temp.size(); i++) {
+          Temp elem = split->definitions[i].getTemp();
+          if (i < lds_slots) {
+-            bld.ds(aco_opcode::ds_write_addtid_b32, bld.m0(ctx.lds_m0_zero), elem, lds_offset);
++            emit_lds_spill(ctx, bld, elem, lds_offset);
+             lds_offset += workgroup_size * 4;
+          } else if (ctx.program->gfx_level >= GFX9) {
+             bld.scratch(aco_opcode::scratch_store_dword, Operand(v1), ctx.scratch_rsrc, elem,
+@@ -1409,7 +1429,7 @@
+          }
+       }
+    } else if (lds_slots) {
+-      bld.ds(aco_opcode::ds_write_addtid_b32, bld.m0(ctx.lds_m0_zero), temp, lds_offset);
++      emit_lds_spill(ctx, bld, temp, lds_offset);
+    } else if (ctx.program->gfx_level >= GFX9) {
+       bld.scratch(aco_opcode::scratch_store_dword, Operand(v1), ctx.scratch_rsrc, temp, offset,
+                   memory_sync_info(storage_vgpr_spill, semantic_private));
+@@ -1457,8 +1477,7 @@
+          Temp tmp = bld.tmp(v1.resize(MIN2(def.bytes() - i * 4, 4)));
+          vec->operands[i] = Operand(tmp);
+          if (i < lds_slots) {
+-            bld.ds(aco_opcode::ds_read_addtid_b32, Definition(tmp), bld.m0(ctx.lds_m0_zero),
+-                   lds_offset);
++            emit_lds_reload(ctx, bld, Definition(tmp), lds_offset);
+             lds_offset += workgroup_size * 4;
+          } else if (ctx.program->gfx_level >= GFX9) {
+             bld.scratch(aco_opcode::scratch_load_dword, Definition(tmp), Operand(v1),
+@@ -1476,7 +1495,7 @@
+       }
+       bld.insert(vec);
+    } else if (lds_slots) {
+-      bld.ds(aco_opcode::ds_read_addtid_b32, def, bld.m0(ctx.lds_m0_zero), lds_offset);
++      emit_lds_reload(ctx, bld, def, lds_offset);
+    } else if (ctx.program->gfx_level >= GFX9) {
+       bld.scratch(aco_opcode::scratch_load_dword, def, Operand(v1), ctx.scratch_rsrc, offset,
+                   memory_sync_info(storage_vgpr_spill, semantic_private));

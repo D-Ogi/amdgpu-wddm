@@ -1,0 +1,1 @@
+scratch: pairs 509; read used only after the write 3; strict 0 in 0 blocks

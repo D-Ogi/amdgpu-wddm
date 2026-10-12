@@ -1,0 +1,422 @@
+BB583: read %48487 slot@0 at 8, write %7857 slot@0 at 17, stored value defined at 16, first use of read at 16
+BB583: read %48490 slot@192 at 9, write %7859 slot@192 at 21, stored value defined at 20, first use of read at 25  <-- STRICT
+BB583: read %48493 slot@0 at 10, write %7857 slot@0 at 17, stored value defined at 16, first use of read at 29  <-- STRICT
+BB583: read %48492 slot@192 at 11, write %7859 slot@192 at 21, stored value defined at 20, first use of read at 29  <-- STRICT
+BB583: read %48502 slot@576 at 13, write %52700 slot@576 at 22, stored value defined at 12, first use of read at None
+BB586: read %48495 slot@0 at 8, write %7873 slot@0 at 17, stored value defined at 16, first use of read at 16
+BB586: read %48498 slot@192 at 9, write %7875 slot@192 at 21, stored value defined at 20, first use of read at 25  <-- STRICT
+BB586: read %48501 slot@0 at 10, write %7873 slot@0 at 17, stored value defined at 16, first use of read at 29  <-- STRICT
+BB586: read %48500 slot@192 at 11, write %7875 slot@192 at 21, stored value defined at 20, first use of read at 29  <-- STRICT
+BB586: read %48504 slot@576 at 13, write %52701 slot@576 at 22, stored value defined at 12, first use of read at None
+BB592: read %48507 slot@0 at 8, write %7894 slot@0 at 17, stored value defined at 16, first use of read at 16
+BB592: read %48510 slot@192 at 9, write %7896 slot@192 at 21, stored value defined at 20, first use of read at 25  <-- STRICT
+BB592: read %48513 slot@0 at 10, write %7894 slot@0 at 17, stored value defined at 16, first use of read at 29  <-- STRICT
+BB592: read %48512 slot@192 at 11, write %7896 slot@192 at 21, stored value defined at 20, first use of read at 29  <-- STRICT
+BB592: read %48522 slot@576 at 13, write %52702 slot@576 at 22, stored value defined at 12, first use of read at None
+BB595: read %48515 slot@0 at 8, write %7910 slot@0 at 17, stored value defined at 16, first use of read at 16
+BB595: read %48518 slot@192 at 9, write %7912 slot@192 at 21, stored value defined at 20, first use of read at 25  <-- STRICT
+BB595: read %48521 slot@0 at 10, write %7910 slot@0 at 17, stored value defined at 16, first use of read at 29  <-- STRICT
+BB595: read %48520 slot@192 at 11, write %7912 slot@192 at 21, stored value defined at 20, first use of read at 29  <-- STRICT
+BB595: read %48524 slot@576 at 13, write %52703 slot@576 at 22, stored value defined at 12, first use of read at None
+BB604: read %48532 slot@0 at 8, write %7936 slot@0 at 17, stored value defined at 16, first use of read at 16
+BB604: read %48535 slot@384 at 9, write %7938 slot@384 at 21, stored value defined at 20, first use of read at 25  <-- STRICT
+BB604: read %48538 slot@0 at 10, write %7936 slot@0 at 17, stored value defined at 16, first use of read at 29  <-- STRICT
+BB604: read %48537 slot@384 at 11, write %7938 slot@384 at 21, stored value defined at 20, first use of read at 29  <-- STRICT
+BB604: read %48547 slot@576 at 13, write %52704 slot@576 at 22, stored value defined at 12, first use of read at None
+BB607: read %48540 slot@0 at 8, write %7952 slot@0 at 17, stored value defined at 16, first use of read at 16
+BB607: read %48543 slot@384 at 9, write %7954 slot@384 at 21, stored value defined at 20, first use of read at 25  <-- STRICT
+BB607: read %48546 slot@0 at 10, write %7952 slot@0 at 17, stored value defined at 16, first use of read at 29  <-- STRICT
+BB607: read %48545 slot@384 at 11, write %7954 slot@384 at 21, stored value defined at 20, first use of read at 29  <-- STRICT
+BB607: read %48549 slot@576 at 13, write %52705 slot@576 at 22, stored value defined at 12, first use of read at None
+BB613: read %48552 slot@0 at 8, write %7973 slot@0 at 17, stored value defined at 16, first use of read at 16
+BB613: read %48555 slot@384 at 9, write %7975 slot@384 at 21, stored value defined at 20, first use of read at 25  <-- STRICT
+BB613: read %48558 slot@0 at 10, write %7973 slot@0 at 17, stored value defined at 16, first use of read at 29  <-- STRICT
+BB613: read %48557 slot@384 at 11, write %7975 slot@384 at 21, stored value defined at 20, first use of read at 29  <-- STRICT
+BB613: read %48567 slot@576 at 13, write %52706 slot@576 at 22, stored value defined at 12, first use of read at None
+BB616: read %48560 slot@0 at 8, write %7989 slot@0 at 17, stored value defined at 16, first use of read at 16
+BB616: read %48563 slot@384 at 9, write %7991 slot@384 at 21, stored value defined at 20, first use of read at 25  <-- STRICT
+BB616: read %48566 slot@0 at 10, write %7989 slot@0 at 17, stored value defined at 16, first use of read at 29  <-- STRICT
+BB616: read %48565 slot@384 at 11, write %7991 slot@384 at 21, stored value defined at 20, first use of read at 29  <-- STRICT
+BB616: read %48569 slot@576 at 13, write %52707 slot@576 at 22, stored value defined at 12, first use of read at None
+BB626: read %48589 slot@1344 at 6, write %48589 slot@1344 at 26, stored value defined at 6, first use of read at 24
+BB626: read %48588 slot@768 at 7, write %8018 slot@768 at 17, stored value defined at 16, first use of read at 24  <-- STRICT
+BB626: read %48592 slot@1536 at 8, write %48592 slot@1536 at 31, stored value defined at 8, first use of read at 28
+BB626: read %48591 slot@1152 at 9, write %48591 slot@1152 at 30, stored value defined at 9, first use of read at 28
+BB626: read %48594 slot@960 at 11, write %8022 slot@960 at 29, stored value defined at 28, first use of read at 33  <-- STRICT
+BB626: read %48598 slot@768 at 12, write %8018 slot@768 at 17, stored value defined at 16, first use of read at 36  <-- STRICT
+BB626: read %48597 slot@960 at 13, write %8022 slot@960 at 29, stored value defined at 28, first use of read at 36  <-- STRICT
+BB629: read %48603 slot@1728 at 6, write %48603 slot@1728 at 26, stored value defined at 6, first use of read at 24
+BB629: read %48602 slot@768 at 7, write %8029 slot@768 at 17, stored value defined at 16, first use of read at 24  <-- STRICT
+BB629: read %48606 slot@1920 at 8, write %48606 slot@1920 at 31, stored value defined at 8, first use of read at 28
+BB629: read %48605 slot@2112 at 9, write %48605 slot@2112 at 30, stored value defined at 9, first use of read at 28
+BB629: read %48608 slot@960 at 11, write %8033 slot@960 at 29, stored value defined at 28, first use of read at 33  <-- STRICT
+BB629: read %48612 slot@768 at 12, write %8029 slot@768 at 17, stored value defined at 16, first use of read at 36  <-- STRICT
+BB629: read %48611 slot@960 at 13, write %8033 slot@960 at 29, stored value defined at 28, first use of read at 36  <-- STRICT
+BB635: read %48621 slot@2688 at 6, write %48621 slot@2688 at 26, stored value defined at 6, first use of read at 24
+BB635: read %48620 slot@768 at 7, write %8044 slot@768 at 17, stored value defined at 16, first use of read at 24  <-- STRICT
+BB635: read %48624 slot@2880 at 8, write %48624 slot@2880 at 31, stored value defined at 8, first use of read at 28
+BB635: read %48623 slot@3072 at 9, write %48623 slot@3072 at 30, stored value defined at 9, first use of read at 28
+BB635: read %48626 slot@960 at 11, write %8048 slot@960 at 29, stored value defined at 28, first use of read at 33  <-- STRICT
+BB635: read %48630 slot@768 at 12, write %8044 slot@768 at 17, stored value defined at 16, first use of read at 36  <-- STRICT
+BB635: read %48629 slot@960 at 13, write %8048 slot@960 at 29, stored value defined at 28, first use of read at 36  <-- STRICT
+BB638: read %48635 slot@2304 at 6, write %48635 slot@2304 at 26, stored value defined at 6, first use of read at 24
+BB638: read %48634 slot@768 at 7, write %8055 slot@768 at 17, stored value defined at 16, first use of read at 24  <-- STRICT
+BB638: read %48638 slot@3264 at 8, write %48638 slot@3264 at 31, stored value defined at 8, first use of read at 28
+BB638: read %48637 slot@2496 at 9, write %48637 slot@2496 at 30, stored value defined at 9, first use of read at 28
+BB638: read %48640 slot@960 at 11, write %8059 slot@960 at 29, stored value defined at 28, first use of read at 33  <-- STRICT
+BB638: read %48644 slot@768 at 12, write %8055 slot@768 at 17, stored value defined at 16, first use of read at 36  <-- STRICT
+BB638: read %48643 slot@960 at 13, write %8059 slot@960 at 29, stored value defined at 28, first use of read at 36  <-- STRICT
+BB647: read %48658 slot@3840 at 6, write %48658 slot@3840 at 25, stored value defined at 6, first use of read at 23
+BB647: read %48657 slot@768 at 7, write %8074 slot@768 at 15, stored value defined at 14, first use of read at 23  <-- STRICT
+BB647: read %48663 slot@960 at 9, write %8078 slot@960 at 28, stored value defined at 27, first use of read at 33  <-- STRICT
+BB647: read %48667 slot@768 at 10, write %8074 slot@768 at 15, stored value defined at 14, first use of read at 36  <-- STRICT
+BB647: read %48666 slot@960 at 11, write %8078 slot@960 at 28, stored value defined at 27, first use of read at 36  <-- STRICT
+BB650: read %48671 slot@768 at 6, write %8085 slot@768 at 16, stored value defined at 15, first use of read at 22  <-- STRICT
+BB650: read %48675 slot@4224 at 7, write %48675 slot@4224 at 31, stored value defined at 7, first use of read at 28
+BB650: read %48674 slot@4032 at 8, write %48674 slot@4032 at 30, stored value defined at 8, first use of read at 28
+BB650: read %48677 slot@960 at 10, write %8089 slot@960 at 29, stored value defined at 28, first use of read at 33  <-- STRICT
+BB650: read %48681 slot@768 at 11, write %8085 slot@768 at 16, stored value defined at 15, first use of read at 36  <-- STRICT
+BB650: read %48680 slot@960 at 12, write %8089 slot@960 at 29, stored value defined at 28, first use of read at 36  <-- STRICT
+BB656: read %48690 slot@4416 at 6, write %48690 slot@4416 at 26, stored value defined at 6, first use of read at 24
+BB656: read %48689 slot@768 at 7, write %8100 slot@768 at 17, stored value defined at 16, first use of read at 24  <-- STRICT
+BB656: read %48693 slot@4608 at 8, write %48693 slot@4608 at 31, stored value defined at 8, first use of read at 28
+BB656: read %48692 slot@4992 at 9, write %48692 slot@4992 at 30, stored value defined at 9, first use of read at 28
+BB656: read %48695 slot@960 at 11, write %8104 slot@960 at 29, stored value defined at 28, first use of read at 33  <-- STRICT
+BB656: read %48699 slot@768 at 12, write %8100 slot@768 at 17, stored value defined at 16, first use of read at 36  <-- STRICT
+BB656: read %48698 slot@960 at 13, write %8104 slot@960 at 29, stored value defined at 28, first use of read at 36  <-- STRICT
+BB659: read %48704 slot@5184 at 6, write %48704 slot@5184 at 26, stored value defined at 6, first use of read at 24
+BB659: read %48703 slot@768 at 7, write %8111 slot@768 at 17, stored value defined at 16, first use of read at 24  <-- STRICT
+BB659: read %48707 slot@4800 at 8, write %48707 slot@4800 at 31, stored value defined at 8, first use of read at 28
+BB659: read %48706 slot@5376 at 9, write %48706 slot@5376 at 30, stored value defined at 9, first use of read at 28
+BB659: read %48709 slot@960 at 11, write %8115 slot@960 at 29, stored value defined at 28, first use of read at 33  <-- STRICT
+BB659: read %48713 slot@768 at 12, write %8111 slot@768 at 17, stored value defined at 16, first use of read at 36  <-- STRICT
+BB659: read %48712 slot@960 at 13, write %8115 slot@960 at 29, stored value defined at 28, first use of read at 36  <-- STRICT
+BB674: read %48730 slot@960 at 6, write %8139 slot@960 at 13, stored value defined at 12, first use of read at 19  <-- STRICT
+BB674: read %48734 slot@6528 at 7, write %8143 slot@6528 at 26, stored value defined at 25, first use of read at 25
+BB674: read %48733 slot@6720 at 8, write %48733 slot@6720 at 27, stored value defined at 8, first use of read at 25
+BB674: read %48736 slot@6528 at 9, write %8143 slot@6528 at 26, stored value defined at 25, first use of read at 30  <-- STRICT
+BB674: read %48740 slot@960 at 10, write %8139 slot@960 at 13, stored value defined at 12, first use of read at 36  <-- STRICT
+BB677: read %48742 slot@7104 at 5, write %48742 slot@7104 at 19, stored value defined at 5, first use of read at 13
+BB677: read %48745 slot@6912 at 6, write %48745 slot@6912 at 23, stored value defined at 6, first use of read at 21
+BB677: read %48744 slot@960 at 7, write %8150 slot@960 at 14, stored value defined at 13, first use of read at 21  <-- STRICT
+BB677: read %48748 slot@6336 at 8, write %8154 slot@6336 at 26, stored value defined at 25, first use of read at 25
+BB677: read %48747 slot@7296 at 9, write %48747 slot@7296 at 27, stored value defined at 9, first use of read at 25
+BB677: read %48750 slot@6336 at 10, write %8154 slot@6336 at 26, stored value defined at 25, first use of read at 30  <-- STRICT
+BB677: read %48754 slot@960 at 11, write %8150 slot@960 at 14, stored value defined at 13, first use of read at 36  <-- STRICT
+BB683: read %48762 slot@960 at 6, write %8165 slot@960 at 16, stored value defined at 15, first use of read at 22  <-- STRICT
+BB683: read %48766 slot@8064 at 7, write %8169 slot@8064 at 29, stored value defined at 28, first use of read at 28
+BB683: read %48765 slot@8256 at 8, write %48765 slot@8256 at 30, stored value defined at 8, first use of read at 28
+BB683: read %48769 slot@8832 at 9, write %8171 slot@8832 at 34, stored value defined at 33, first use of read at 33
+BB683: read %48768 slot@8064 at 10, write %8169 slot@8064 at 29, stored value defined at 28, first use of read at 33  <-- STRICT
+BB683: read %48772 slot@960 at 11, write %8165 slot@960 at 16, stored value defined at 15, first use of read at 36  <-- STRICT
+BB683: read %48771 slot@8832 at 12, write %8171 slot@8832 at 34, stored value defined at 33, first use of read at 36  <-- STRICT
+BB686: read %48774 slot@8448 at 5, write %48774 slot@8448 at 22, stored value defined at 5, first use of read at 16
+BB686: read %48777 slot@7680 at 6, write %48777 slot@7680 at 26, stored value defined at 6, first use of read at 24
+BB686: read %48776 slot@960 at 7, write %8176 slot@960 at 17, stored value defined at 16, first use of read at 24  <-- STRICT
+BB686: read %48780 slot@7872 at 8, write %8180 slot@7872 at 29, stored value defined at 28, first use of read at 28
+BB686: read %48779 slot@7488 at 9, write %48779 slot@7488 at 30, stored value defined at 9, first use of read at 28
+BB686: read %48783 slot@8640 at 10, write %8182 slot@8640 at 34, stored value defined at 33, first use of read at 33
+BB686: read %48782 slot@7872 at 11, write %8180 slot@7872 at 29, stored value defined at 28, first use of read at 33  <-- STRICT
+BB686: read %48786 slot@960 at 12, write %8176 slot@960 at 17, stored value defined at 16, first use of read at 36  <-- STRICT
+BB686: read %48785 slot@8640 at 13, write %8182 slot@8640 at 34, stored value defined at 33, first use of read at 36  <-- STRICT
+BB695: read %48799 slot@960 at 6, write %8195 slot@960 at 16, stored value defined at 15, first use of read at 22  <-- STRICT
+BB695: read %48803 slot@9216 at 7, write %8199 slot@9216 at 29, stored value defined at 28, first use of read at 28
+BB695: read %48802 slot@9024 at 8, write %48802 slot@9024 at 30, stored value defined at 8, first use of read at 28
+BB695: read %48806 slot@12288 at 9, write %8201 slot@12288 at 34, stored value defined at 33, first use of read at 33
+BB695: read %48805 slot@9216 at 10, write %8199 slot@9216 at 29, stored value defined at 28, first use of read at 33  <-- STRICT
+BB695: read %48809 slot@960 at 11, write %8195 slot@960 at 16, stored value defined at 15, first use of read at 36  <-- STRICT
+BB695: read %48808 slot@12288 at 12, write %8201 slot@12288 at 34, stored value defined at 33, first use of read at 36  <-- STRICT
+BB698: read %48811 slot@9600 at 5, write %48811 slot@9600 at 22, stored value defined at 5, first use of read at 16
+BB698: read %48814 slot@9408 at 6, write %48814 slot@9408 at 26, stored value defined at 6, first use of read at 24
+BB698: read %48813 slot@960 at 7, write %8206 slot@960 at 17, stored value defined at 16, first use of read at 24  <-- STRICT
+BB698: read %48817 slot@9792 at 8, write %8210 slot@9792 at 29, stored value defined at 28, first use of read at 28
+BB698: read %48816 slot@9984 at 9, write %48816 slot@9984 at 30, stored value defined at 9, first use of read at 28
+BB698: read %48820 slot@12096 at 10, write %8212 slot@12096 at 34, stored value defined at 33, first use of read at 33
+BB698: read %48819 slot@9792 at 11, write %8210 slot@9792 at 29, stored value defined at 28, first use of read at 33  <-- STRICT
+BB698: read %48823 slot@960 at 12, write %8206 slot@960 at 17, stored value defined at 16, first use of read at 36  <-- STRICT
+BB698: read %48822 slot@12096 at 13, write %8212 slot@12096 at 34, stored value defined at 33, first use of read at 36  <-- STRICT
+BB704: read %48831 slot@960 at 6, write %8221 slot@960 at 16, stored value defined at 15, first use of read at 22  <-- STRICT
+BB704: read %48835 slot@10560 at 7, write %8225 slot@10560 at 29, stored value defined at 28, first use of read at 28
+BB704: read %48834 slot@11136 at 8, write %48834 slot@11136 at 30, stored value defined at 8, first use of read at 28
+BB704: read %48838 slot@11904 at 9, write %8227 slot@11904 at 34, stored value defined at 33, first use of read at 33
+BB704: read %48837 slot@10560 at 10, write %8225 slot@10560 at 29, stored value defined at 28, first use of read at 33  <-- STRICT
+BB704: read %48841 slot@960 at 11, write %8221 slot@960 at 16, stored value defined at 15, first use of read at 36  <-- STRICT
+BB704: read %48840 slot@11904 at 12, write %8227 slot@11904 at 34, stored value defined at 33, first use of read at 36  <-- STRICT
+BB707: read %48843 slot@11328 at 5, write %48843 slot@11328 at 22, stored value defined at 5, first use of read at 16
+BB707: read %48846 slot@10176 at 6, write %48846 slot@10176 at 26, stored value defined at 6, first use of read at 24
+BB707: read %48845 slot@960 at 7, write %8232 slot@960 at 17, stored value defined at 16, first use of read at 24  <-- STRICT
+BB707: read %48849 slot@11520 at 8, write %8236 slot@11520 at 29, stored value defined at 28, first use of read at 28
+BB707: read %48848 slot@10368 at 9, write %48848 slot@10368 at 30, stored value defined at 9, first use of read at 28
+BB707: read %48852 slot@11712 at 10, write %8238 slot@11712 at 34, stored value defined at 33, first use of read at 33
+BB707: read %48851 slot@11520 at 11, write %8236 slot@11520 at 29, stored value defined at 28, first use of read at 33  <-- STRICT
+BB707: read %48855 slot@960 at 12, write %8232 slot@960 at 17, stored value defined at 16, first use of read at 36  <-- STRICT
+BB707: read %48854 slot@11712 at 13, write %8238 slot@11712 at 34, stored value defined at 33, first use of read at 36  <-- STRICT
+BB716: read %48869 slot@12672 at 5, write %48869 slot@12672 at 16, stored value defined at 5, first use of read at 14
+BB716: read %48872 slot@960 at 10, write %8252 slot@960 at 15, stored value defined at 14, first use of read at 19  <-- STRICT
+BB716: read %48875 slot@13056 at 11, write %48875 slot@13056 at 27, stored value defined at 11, first use of read at 23
+BB716: read %48879 slot@12864 at 12, write %48879 slot@12864 at 35, stored value defined at 12, first use of read at 30
+BB716: read %48882 slot@960 at 13, write %8252 slot@960 at 15, stored value defined at 14, first use of read at 38  <-- STRICT
+BB719: read %48883 slot@13248 at 5, write %48883 slot@13248 at 16, stored value defined at 5, first use of read at 14
+BB719: read %48886 slot@960 at 10, write %8268 slot@960 at 15, stored value defined at 14, first use of read at 19  <-- STRICT
+BB719: read %48889 slot@12480 at 11, write %48889 slot@12480 at 27, stored value defined at 11, first use of read at 23
+BB719: read %48893 slot@13440 at 12, write %48893 slot@13440 at 35, stored value defined at 12, first use of read at 30
+BB719: read %48896 slot@960 at 13, write %8268 slot@960 at 15, stored value defined at 14, first use of read at 38  <-- STRICT
+BB725: read %48901 slot@14016 at 5, write %48901 slot@14016 at 21, stored value defined at 5, first use of read at 19
+BB725: read %48905 slot@14976 at 11, write %8293 slot@14976 at 29, stored value defined at 28, first use of read at 24
+BB725: read %48904 slot@960 at 12, write %8289 slot@960 at 20, stored value defined at 19, first use of read at 24  <-- STRICT
+BB725: read %48907 slot@14592 at 13, write %48907 slot@14592 at 30, stored value defined at 13, first use of read at 28
+BB725: read %48911 slot@14400 at 14, write %48911 slot@14400 at 35, stored value defined at 14, first use of read at 33
+BB725: read %48910 slot@14976 at 15, write %8293 slot@14976 at 29, stored value defined at 28, first use of read at 33  <-- STRICT
+BB725: read %48914 slot@960 at 16, write %8289 slot@960 at 20, stored value defined at 19, first use of read at 38  <-- STRICT
+BB725: read %48913 slot@14976 at 17, write %8293 slot@14976 at 29, stored value defined at 28, first use of read at 38  <-- STRICT
+BB728: read %48915 slot@13824 at 5, write %48915 slot@13824 at 21, stored value defined at 5, first use of read at 19
+BB728: read %48919 slot@14784 at 11, write %8309 slot@14784 at 29, stored value defined at 28, first use of read at 24
+BB728: read %48918 slot@960 at 12, write %8305 slot@960 at 20, stored value defined at 19, first use of read at 24  <-- STRICT
+BB728: read %48921 slot@14208 at 13, write %48921 slot@14208 at 30, stored value defined at 13, first use of read at 28
+BB728: read %48925 slot@13632 at 14, write %48925 slot@13632 at 35, stored value defined at 14, first use of read at 33
+BB728: read %48924 slot@14784 at 15, write %8309 slot@14784 at 29, stored value defined at 28, first use of read at 33  <-- STRICT
+BB728: read %48928 slot@960 at 16, write %8305 slot@960 at 20, stored value defined at 19, first use of read at 38  <-- STRICT
+BB728: read %48927 slot@14784 at 17, write %8309 slot@14784 at 29, stored value defined at 28, first use of read at 38  <-- STRICT
+BB737: read %48938 slot@15360 at 5, write %48938 slot@15360 at 16, stored value defined at 5, first use of read at 14
+BB737: read %48941 slot@960 at 10, write %8331 slot@960 at 15, stored value defined at 14, first use of read at 19  <-- STRICT
+BB737: read %48944 slot@15744 at 11, write %48944 slot@15744 at 27, stored value defined at 11, first use of read at 23
+BB737: read %48948 slot@15552 at 12, write %48948 slot@15552 at 35, stored value defined at 12, first use of read at 30
+BB737: read %48951 slot@960 at 13, write %8331 slot@960 at 15, stored value defined at 14, first use of read at 38  <-- STRICT
+BB740: read %48952 slot@15936 at 5, write %48952 slot@15936 at 16, stored value defined at 5, first use of read at 14
+BB740: read %48955 slot@960 at 10, write %8347 slot@960 at 15, stored value defined at 14, first use of read at 19  <-- STRICT
+BB740: read %48958 slot@16128 at 11, write %48958 slot@16128 at 27, stored value defined at 11, first use of read at 23
+BB740: read %48962 slot@15168 at 12, write %48962 slot@15168 at 35, stored value defined at 12, first use of read at 30
+BB740: read %48965 slot@960 at 13, write %8347 slot@960 at 15, stored value defined at 14, first use of read at 38  <-- STRICT
+BB746: read %48973 slot@960 at 9, write %8368 slot@960 at 12, stored value defined at 11, first use of read at 18  <-- STRICT
+BB746: read %48983 slot@960 at 10, write %8368 slot@960 at 12, stored value defined at 11, first use of read at 38  <-- STRICT
+BB749: read %48987 slot@960 at 9, write %8384 slot@960 at 12, stored value defined at 11, first use of read at 18  <-- STRICT
+BB749: read %48997 slot@960 at 10, write %8384 slot@960 at 12, stored value defined at 11, first use of read at 38  <-- STRICT
+BB763: read %49018 slot@6720 at 2, write %8434 slot@6720 at 9, stored value defined at 8, first use of read at 8
+BB763: read %49019 slot@6528 at 3, write %8437 slot@6528 at 11, stored value defined at 10, first use of read at 10
+BB765: read %49026 slot@768 at 9, write %8450 slot@768 at 16, stored value defined at 15, first use of read at 18  <-- STRICT
+BB769: read %49029 slot@13056 at 2, write %8472 slot@13056 at 11, stored value defined at 10, first use of read at 10
+BB778: read %49038 slot@7296 at 2, write %8505 slot@7296 at 9, stored value defined at 8, first use of read at 8
+BB778: read %49039 slot@6336 at 3, write %8508 slot@6336 at 11, stored value defined at 10, first use of read at 10
+BB780: read %49046 slot@768 at 9, write %8521 slot@768 at 16, stored value defined at 15, first use of read at 18  <-- STRICT
+BB784: read %49050 slot@12480 at 2, write %8543 slot@12480 at 11, stored value defined at 8, first use of read at 8
+BB796: read %49065 slot@8256 at 3, write %8615 slot@8256 at 11, stored value defined at 10, first use of read at 10
+BB796: read %49066 slot@8064 at 4, write %8618 slot@8064 at 13, stored value defined at 12, first use of read at 12
+BB796: read %49067 slot@8832 at 5, write %8619 slot@8832 at 15, stored value defined at 14, first use of read at 14
+BB798: read %49073 slot@768 at 9, write %8631 slot@768 at 16, stored value defined at 15, first use of read at 18  <-- STRICT
+BB802: read %49077 slot@14592 at 2, write %8653 slot@14592 at 11, stored value defined at 8, first use of read at 8
+BB811: read %49087 slot@7488 at 1, write %8686 slot@7488 at 11, stored value defined at 10, first use of read at 10
+BB811: read %49088 slot@7872 at 2, write %8689 slot@7872 at 13, stored value defined at 12, first use of read at 12
+BB811: read %49089 slot@8640 at 3, write %8690 slot@8640 at 15, stored value defined at 14, first use of read at 14
+BB813: read %49095 slot@768 at 9, write %8702 slot@768 at 16, stored value defined at 15, first use of read at 18  <-- STRICT
+BB817: read %49099 slot@14208 at 2, write %8724 slot@14208 at 11, stored value defined at 8, first use of read at 8
+BB832: read %49125 slot@9024 at 3, write %8871 slot@9024 at 11, stored value defined at 10, first use of read at 10
+BB832: read %49126 slot@9216 at 4, write %8874 slot@9216 at 13, stored value defined at 12, first use of read at 12
+BB832: read %49127 slot@12288 at 5, write %8875 slot@12288 at 15, stored value defined at 14, first use of read at 14
+BB834: read %49133 slot@768 at 9, write %8887 slot@768 at 16, stored value defined at 15, first use of read at 18  <-- STRICT
+BB838: read %49137 slot@15744 at 2, write %8909 slot@15744 at 11, stored value defined at 10, first use of read at 10
+BB847: read %49147 slot@9984 at 1, write %8942 slot@9984 at 11, stored value defined at 10, first use of read at 10
+BB847: read %49148 slot@9792 at 2, write %8945 slot@9792 at 13, stored value defined at 12, first use of read at 12
+BB847: read %49149 slot@12096 at 3, write %8946 slot@12096 at 15, stored value defined at 14, first use of read at 14
+BB849: read %49155 slot@768 at 9, write %8954 slot@768 at 19, stored value defined at 18, first use of read at 21  <-- STRICT
+BB849: read %49160 slot@960 at 16, write %8958 slot@960 at 25, stored value defined at 24, first use of read at 27  <-- STRICT
+BB853: read %49165 slot@16128 at 1, write %8980 slot@16128 at 12, stored value defined at 7, first use of read at 7
+BB865: read %49191 slot@11136 at 3, write %9052 slot@11136 at 11, stored value defined at 10, first use of read at 10
+BB865: read %49192 slot@10560 at 4, write %9055 slot@10560 at 13, stored value defined at 12, first use of read at 12
+BB865: read %49193 slot@11904 at 5, write %9056 slot@11904 at 15, stored value defined at 14, first use of read at 14
+BB867: read %49200 slot@768 at 12, write %9064 slot@768 at 21, stored value defined at 20, first use of read at 23  <-- STRICT
+BB867: read %49205 slot@960 at 18, write %9068 slot@960 at 27, stored value defined at 26, first use of read at 29  <-- STRICT
+BB880: read %49221 slot@10368 at 1, write %9123 slot@10368 at 11, stored value defined at 10, first use of read at 10
+BB880: read %49222 slot@11520 at 2, write %9126 slot@11520 at 13, stored value defined at 12, first use of read at 12
+BB880: read %49223 slot@11712 at 3, write %9127 slot@11712 at 15, stored value defined at 14, first use of read at 14
+BB882: read %49230 slot@768 at 12, write %9135 slot@768 at 22, stored value defined at 21, first use of read at 24  <-- STRICT
+BB882: read %49235 slot@960 at 19, write %9139 slot@960 at 28, stored value defined at 27, first use of read at 30  <-- STRICT
+BB978: read %49468 slot@768 at 5, write %49468 slot@768 at 20, stored value defined at 5, first use of read at 14
+BB978: read %49474 slot@960 at 6, write %9804 slot@960 at 33, stored value defined at 32, first use of read at 32
+BB978: read %49476 slot@960 at 7, write %9804 slot@960 at 33, stored value defined at 32, first use of read at 35  <-- STRICT
+BB1092: read %49501 slot@1152 at 1, write %10259 slot@1152 at 10, stored value defined at 9, first use of read at 9
+BB1092: read %49502 slot@1536 at 2, write %10262 slot@1536 at 12, stored value defined at 11, first use of read at 11
+BB1092: read %49503 slot@10752 at 3, write %10263 slot@10752 at 14, stored value defined at 13, first use of read at 13
+BB1101: read %49508 slot@2112 at 1, write %10288 slot@2112 at 10, stored value defined at 9, first use of read at 9
+BB1101: read %49509 slot@1920 at 2, write %10291 slot@1920 at 12, stored value defined at 11, first use of read at 11
+BB1101: read %49510 slot@10944 at 3, write %10292 slot@10944 at 14, stored value defined at 13, first use of read at 13
+BB1113: read %49516 slot@3072 at 1, write %10332 slot@3072 at 10, stored value defined at 9, first use of read at 9
+BB1113: read %49517 slot@2880 at 2, write %10335 slot@2880 at 12, stored value defined at 11, first use of read at 11
+BB1113: read %49518 slot@3456 at 3, write %10336 slot@3456 at 14, stored value defined at 13, first use of read at 13
+BB1122: read %49523 slot@2496 at 1, write %10361 slot@2496 at 10, stored value defined at 9, first use of read at 9
+BB1122: read %49524 slot@3264 at 2, write %10364 slot@3264 at 12, stored value defined at 11, first use of read at 11
+BB1122: read %49525 slot@3648 at 3, write %10365 slot@3648 at 14, stored value defined at 13, first use of read at 13
+BB1137: read %49535 slot@6144 at 2, write %10436 slot@6144 at 10, stored value defined at 9, first use of read at 9
+BB1146: read %49540 slot@4032 at 2, write %10461 slot@4032 at 10, stored value defined at 9, first use of read at 9
+BB1146: read %49541 slot@4224 at 3, write %10464 slot@4224 at 12, stored value defined at 11, first use of read at 11
+BB1146: read %49542 slot@5952 at 4, write %10465 slot@5952 at 14, stored value defined at 13, first use of read at 13
+BB1158: read %49548 slot@4992 at 1, write %10505 slot@4992 at 10, stored value defined at 9, first use of read at 9
+BB1158: read %49549 slot@4608 at 2, write %10508 slot@4608 at 12, stored value defined at 11, first use of read at 11
+BB1158: read %49550 slot@5568 at 3, write %10509 slot@5568 at 14, stored value defined at 13, first use of read at 13
+BB1167: read %49555 slot@5376 at 1, write %10534 slot@5376 at 10, stored value defined at 9, first use of read at 9
+BB1167: read %49556 slot@4800 at 2, write %10537 slot@4800 at 12, stored value defined at 11, first use of read at 11
+BB1167: read %49557 slot@5760 at 3, write %10538 slot@5760 at 14, stored value defined at 13, first use of read at 13
+BB1367: read %49627 slot@384 at 5, write %12071 slot@384 at 17, stored value defined at 16, first use of read at 9
+BB1367: read %49630 slot@384 at 6, write %12071 slot@384 at 17, stored value defined at 16, first use of read at 20  <-- STRICT
+BB1367: read %49632 slot@384 at 7, write %12071 slot@384 at 17, stored value defined at 16, first use of read at 23  <-- STRICT
+BB1371: read %49634 slot@576 at 3, write %12088 slot@576 at 10, stored value defined at 9, first use of read at 9
+BB1382: read %49638 slot@384 at 8, write %11871 slot@384 at 11, stored value defined at None, first use of read at 13  <-- used after write
+BB1382: read %49641 slot@384 at 10, write %11871 slot@384 at 11, stored value defined at None, first use of read at 18  <-- used after write
+BB1400: read %49650 slot@384 at 5, write %12222 slot@384 at 16, stored value defined at 15, first use of read at 13
+BB1400: read %49653 slot@384 at 10, write %12222 slot@384 at 16, stored value defined at 15, first use of read at 18  <-- STRICT
+BB1415: read %49657 slot@384 at 5, write %12283 slot@384 at 16, stored value defined at 15, first use of read at 13
+BB1415: read %49660 slot@384 at 10, write %12283 slot@384 at 16, stored value defined at 15, first use of read at 18  <-- STRICT
+BB1490: read %49686 slot@768 at 15, write %11880 slot@768 at 17, stored value defined at None, first use of read at 25  <-- used after write
+BB1502: read %49730 slot@384 at 96, write %12876 slot@384 at 114, stored value defined at 113, first use of read at 138  <-- STRICT
+BB1502: read %49731 slot@576 at 97, write %12877 slot@576 at 115, stored value defined at 113, first use of read at 139  <-- STRICT
+BB1608: read %49859 slot@6720 at 2, write %13359 slot@6720 at 9, stored value defined at 6, first use of read at 6
+BB1608: read %49860 slot@6528 at 3, write %13362 slot@6528 at 8, stored value defined at 7, first use of read at 7
+BB1617: read %49876 slot@7296 at 2, write %13392 slot@7296 at 9, stored value defined at 6, first use of read at 6
+BB1617: read %49877 slot@6336 at 3, write %13395 slot@6336 at 8, stored value defined at 7, first use of read at 7
+BB1629: read %49911 slot@8256 at 4, write %13440 slot@8256 at 10, stored value defined at 9, first use of read at 9
+BB1629: read %49912 slot@8064 at 5, write %13443 slot@8064 at 12, stored value defined at 11, first use of read at 11
+BB1629: read %49913 slot@8832 at 6, write %13444 slot@8832 at 14, stored value defined at 13, first use of read at 13
+BB1638: read %49928 slot@7488 at 2, write %13473 slot@7488 at 10, stored value defined at 9, first use of read at 9
+BB1638: read %49929 slot@7872 at 3, write %13476 slot@7872 at 12, stored value defined at 11, first use of read at 11
+BB1638: read %49930 slot@8640 at 4, write %13477 slot@8640 at 14, stored value defined at 13, first use of read at 13
+BB1653: read %49982 slot@9024 at 4, write %13548 slot@9024 at 10, stored value defined at 9, first use of read at 9
+BB1653: read %49983 slot@9216 at 5, write %13551 slot@9216 at 12, stored value defined at 11, first use of read at 11
+BB1653: read %49984 slot@12288 at 6, write %13552 slot@12288 at 14, stored value defined at 13, first use of read at 13
+BB1662: read %49999 slot@9984 at 2, write %13581 slot@9984 at 10, stored value defined at 9, first use of read at 9
+BB1662: read %50000 slot@9792 at 3, write %13584 slot@9792 at 12, stored value defined at 11, first use of read at 11
+BB1662: read %50001 slot@12096 at 4, write %13585 slot@12096 at 14, stored value defined at 13, first use of read at 13
+BB1674: read %50034 slot@11136 at 4, write %13629 slot@11136 at 10, stored value defined at 9, first use of read at 9
+BB1674: read %50035 slot@10560 at 5, write %13632 slot@10560 at 12, stored value defined at 11, first use of read at 11
+BB1674: read %50036 slot@11904 at 6, write %13633 slot@11904 at 14, stored value defined at 13, first use of read at 13
+BB1683: read %50051 slot@10368 at 2, write %13662 slot@10368 at 10, stored value defined at 9, first use of read at 9
+BB1683: read %50052 slot@11520 at 3, write %13665 slot@11520 at 12, stored value defined at 11, first use of read at 11
+BB1683: read %50053 slot@11712 at 4, write %13666 slot@11712 at 14, stored value defined at 13, first use of read at 13
+BB1691: read %50112 slot@384 at 19, write %13759 slot@384 at 26, stored value defined at 25, first use of read at 25
+BB1691: read %50113 slot@1344 at 20, write %12926 slot@1344 at 24, stored value defined at None, first use of read at 25  <-- used after write
+BB1691: read %50116 slot@384 at 23, write %13759 slot@384 at 26, stored value defined at 25, first use of read at 28  <-- STRICT
+BB1698: read %50122 slot@13056 at 2, write %13797 slot@13056 at 12, stored value defined at 11, first use of read at 11
+BB1707: read %50132 slot@12480 at 2, write %13850 slot@12480 at 12, stored value defined at 11, first use of read at 11
+BB1719: read %50146 slot@14592 at 2, write %13942 slot@14592 at 12, stored value defined at 11, first use of read at 11
+BB1728: read %50157 slot@14208 at 3, write %13995 slot@14208 at 12, stored value defined at 11, first use of read at 11
+BB1743: read %50176 slot@15744 at 2, write %14162 slot@15744 at 12, stored value defined at 11, first use of read at 11
+BB1752: read %50186 slot@16128 at 2, write %14215 slot@16128 at 12, stored value defined at 11, first use of read at 11
+BB1781: read %50251 slot@576 at 121, write %14535 slot@576 at 122, stored value defined at 43, first use of read at 138  <-- used after write
+BB1781: read %50253 slot@1152 at 123, write %14534 slot@1152 at 124, stored value defined at 42, first use of read at 140  <-- used after write
+BB1801: read %50300 slot@1920 at 6, write %50300 slot@1920 at 16, stored value defined at 6, first use of read at 14
+BB1801: read %50299 slot@2112 at 7, write %50299 slot@2112 at 17, stored value defined at 7, first use of read at 14
+BB1801: read %50301 slot@10944 at 8, write %50301 slot@10944 at 19, stored value defined at 8, first use of read at 18
+BB1810: read %50330 slot@3264 at 6, write %50330 slot@3264 at 16, stored value defined at 6, first use of read at 14
+BB1810: read %50329 slot@2496 at 7, write %50329 slot@2496 at 17, stored value defined at 7, first use of read at 14
+BB1810: read %50331 slot@3648 at 8, write %50331 slot@3648 at 19, stored value defined at 8, first use of read at 18
+BB1822: read %50379 slot@4224 at 8, write %50379 slot@4224 at 18, stored value defined at 8, first use of read at 16
+BB1822: read %50378 slot@4032 at 9, write %50378 slot@4032 at 19, stored value defined at 9, first use of read at 16
+BB1822: read %50380 slot@5952 at 10, write %50380 slot@5952 at 21, stored value defined at 10, first use of read at 20
+BB1831: read %50409 slot@4800 at 6, write %50409 slot@4800 at 17, stored value defined at 6, first use of read at 14
+BB1831: read %50408 slot@5376 at 7, write %50408 slot@5376 at 16, stored value defined at 7, first use of read at 14
+BB1831: read %50410 slot@5760 at 8, write %50410 slot@5760 at 19, stored value defined at 8, first use of read at 18
+BB1853: read %50469 slot@2112 at 1, write %15047 slot@2112 at 9, stored value defined at 8, first use of read at 8
+BB1865: read %50479 slot@3072 at 2, write %15091 slot@3072 at 11, stored value defined at 10, first use of read at 10
+BB1865: read %50480 slot@2880 at 3, write %15094 slot@2880 at 13, stored value defined at 12, first use of read at 12
+BB1874: read %50488 slot@2496 at 2, write %15120 slot@2496 at 11, stored value defined at 10, first use of read at 10
+BB1874: read %50489 slot@3264 at 3, write %15123 slot@3264 at 13, stored value defined at 12, first use of read at 12
+BB1898: read %50513 slot@4032 at 3, write %15220 slot@4032 at 11, stored value defined at 10, first use of read at 10
+BB1898: read %50514 slot@4224 at 4, write %15223 slot@4224 at 13, stored value defined at 12, first use of read at 12
+BB1910: read %50525 slot@4992 at 2, write %15264 slot@4992 at 11, stored value defined at 10, first use of read at 10
+BB1910: read %50526 slot@4608 at 3, write %15267 slot@4608 at 13, stored value defined at 12, first use of read at 12
+BB1919: read %50534 slot@5376 at 2, write %15293 slot@5376 at 11, stored value defined at 10, first use of read at 10
+BB1919: read %50535 slot@4800 at 3, write %15296 slot@4800 at 13, stored value defined at 12, first use of read at 12
+BB1935: read %50564 slot@0 at 8, write %15447 slot@0 at 16, stored value defined at 15, first use of read at 15
+BB1935: read %50567 slot@384 at 9, write %52756 slot@384 at 10, stored value defined at None, first use of read at 21  <-- used after write
+BB1935: read %50570 slot@0 at 11, write %15447 slot@0 at 16, stored value defined at 15, first use of read at 24  <-- STRICT
+BB1935: read %50569 slot@576 at 12, write %15451 slot@576 at 22, stored value defined at 21, first use of read at 24  <-- STRICT
+BB1938: read %50572 slot@0 at 8, write %15458 slot@0 at 18, stored value defined at 17, first use of read at 17
+BB1938: read %50576 slot@576 at 11, write %15460 slot@576 at 21, stored value defined at 20, first use of read at 23  <-- STRICT
+BB1938: read %50579 slot@0 at 13, write %15458 slot@0 at 18, stored value defined at 17, first use of read at 26  <-- STRICT
+BB1938: read %50578 slot@576 at 14, write %15460 slot@576 at 21, stored value defined at 20, first use of read at 26  <-- STRICT
+BB1944: read %50587 slot@0 at 8, write %12789 slot@0 at 18, stored value defined at None, first use of read at 27  <-- used after write
+BB1944: read %50592 slot@0 at 17, write %12789 slot@0 at 18, stored value defined at None, first use of read at 33  <-- used after write
+BB1944: read %50596 slot@1152 at 19, write %15473 slot@1152 at 28, stored value defined at 27, first use of read at 36  <-- STRICT
+BB1944: read %50595 slot@1344 at 20, write %15477 slot@1344 at 34, stored value defined at 33, first use of read at 36  <-- STRICT
+BB1947: read %50600 slot@0 at 10, write %12789 slot@0 at 17, stored value defined at None, first use of read at 32  <-- used after write
+BB1947: read %50604 slot@3264 at 15, write %50604 slot@3264 at 37, stored value defined at 15, first use of read at 35
+BB1947: read %50603 slot@2496 at 16, write %50603 slot@2496 at 38, stored value defined at 16, first use of read at 35
+BB1947: read %50607 slot@3648 at 18, write %50607 slot@3648 at 42, stored value defined at 18, first use of read at 40
+BB1947: read %50606 slot@1344 at 19, write %15486 slot@1344 at 36, stored value defined at 35, first use of read at 40  <-- STRICT
+BB1947: read %50610 slot@1152 at 21, write %15484 slot@1152 at 33, stored value defined at 32, first use of read at 44  <-- STRICT
+BB1947: read %50609 slot@1344 at 22, write %15486 slot@1344 at 36, stored value defined at 35, first use of read at 44  <-- STRICT
+BB1956: read %50643 slot@0 at 10, write %12789 slot@0 at 17, stored value defined at None, first use of read at 27  <-- used after write
+BB1956: read %50649 slot@1344 at 19, write %15505 slot@1344 at 31, stored value defined at 30, first use of read at 33  <-- STRICT
+BB1956: read %50653 slot@1152 at 22, write %15503 slot@1152 at 28, stored value defined at 27, first use of read at 36  <-- STRICT
+BB1956: read %50652 slot@1344 at 23, write %15505 slot@1344 at 31, stored value defined at 30, first use of read at 36  <-- STRICT
+BB1959: read %50657 slot@0 at 10, write %12789 slot@0 at 17, stored value defined at None, first use of read at 35  <-- used after write
+BB1959: read %50661 slot@4224 at 15, write %52778 slot@4224 at 40, stored value defined at 32, first use of read at 32
+BB1959: read %50660 slot@4032 at 16, write %50660 slot@4032 at 41, stored value defined at 16, first use of read at 38
+BB1959: read %50664 slot@5952 at 18, write %50664 slot@5952 at 45, stored value defined at 18, first use of read at 43
+BB1959: read %50663 slot@1344 at 19, write %15516 slot@1344 at 39, stored value defined at 38, first use of read at 43  <-- STRICT
+BB1959: read %50667 slot@1152 at 21, write %15514 slot@1152 at 36, stored value defined at 35, first use of read at 47  <-- STRICT
+BB1959: read %50666 slot@1344 at 22, write %15516 slot@1344 at 39, stored value defined at 38, first use of read at 47  <-- STRICT
+BB1965: read %50685 slot@0 at 10, write %12789 slot@0 at 17, stored value defined at None, first use of read at 27  <-- used after write
+BB1965: read %50691 slot@1344 at 19, write %15531 slot@1344 at 31, stored value defined at 30, first use of read at 33  <-- STRICT
+BB1965: read %50695 slot@1152 at 21, write %15529 slot@1152 at 28, stored value defined at 27, first use of read at 36  <-- STRICT
+BB1965: read %50694 slot@1344 at 22, write %15531 slot@1344 at 31, stored value defined at 30, first use of read at 36  <-- STRICT
+BB1968: read %50699 slot@0 at 10, write %12789 slot@0 at 17, stored value defined at None, first use of read at 34  <-- used after write
+BB1968: read %50703 slot@4800 at 15, write %50703 slot@4800 at 40, stored value defined at 15, first use of read at 37
+BB1968: read %50702 slot@5376 at 16, write %50702 slot@5376 at 39, stored value defined at 16, first use of read at 37
+BB1968: read %50706 slot@5760 at 18, write %50706 slot@5760 at 44, stored value defined at 18, first use of read at 42
+BB1968: read %50705 slot@1344 at 19, write %15542 slot@1344 at 38, stored value defined at 37, first use of read at 42  <-- STRICT
+BB1968: read %50709 slot@1152 at 21, write %15540 slot@1152 at 35, stored value defined at 34, first use of read at 46  <-- STRICT
+BB1968: read %50708 slot@1344 at 22, write %15542 slot@1344 at 38, stored value defined at 37, first use of read at 46  <-- STRICT
+BB1974: read %50752 slot@1152 at 17, write %50752 slot@1152 at 19, stored value defined at 17, first use of read at 18
+BB2011: read %50758 slot@2496 at 3, write %15685 slot@2496 at 11, stored value defined at 10, first use of read at 10
+BB2011: read %50759 slot@3264 at 4, write %15688 slot@3264 at 13, stored value defined at 12, first use of read at 12
+BB2035: read %50784 slot@4032 at 4, write %15785 slot@4032 at 13, stored value defined at 12, first use of read at 12
+BB2035: read %50785 slot@4224 at 5, write %15788 slot@4224 at 15, stored value defined at 14, first use of read at 14
+BB2047: read %50798 slot@4992 at 3, write %15829 slot@4992 at 13, stored value defined at 12, first use of read at 12
+BB2047: read %50799 slot@4608 at 4, write %15832 slot@4608 at 15, stored value defined at 14, first use of read at 14
+BB2056: read %50808 slot@5376 at 3, write %15858 slot@5376 at 13, stored value defined at 12, first use of read at 12
+BB2056: read %50809 slot@4800 at 4, write %15861 slot@4800 at 15, stored value defined at 14, first use of read at 14
+BB2072: read %50852 slot@1152 at 8, write %16012 slot@1152 at 15, stored value defined at 14, first use of read at 14
+BB2072: read %50855 slot@1344 at 9, write %16014 slot@1344 at 18, stored value defined at 17, first use of read at 20  <-- STRICT
+BB2072: read %50858 slot@1152 at 11, write %16012 slot@1152 at 15, stored value defined at 14, first use of read at 23  <-- STRICT
+BB2072: read %50857 slot@1344 at 12, write %16014 slot@1344 at 18, stored value defined at 17, first use of read at 23  <-- STRICT
+BB2075: read %50860 slot@1152 at 8, write %16023 slot@1152 at 15, stored value defined at 14, first use of read at 14
+BB2075: read %50863 slot@1344 at 9, write %16025 slot@1344 at 18, stored value defined at 17, first use of read at 20  <-- STRICT
+BB2075: read %50866 slot@1152 at 11, write %16023 slot@1152 at 15, stored value defined at 14, first use of read at 23  <-- STRICT
+BB2075: read %50865 slot@1344 at 12, write %16025 slot@1344 at 18, stored value defined at 17, first use of read at 23  <-- STRICT
+BB2081: read %50868 slot@1152 at 8, write %16038 slot@1152 at 18, stored value defined at 17, first use of read at 17
+BB2081: read %50871 slot@1344 at 9, write %16040 slot@1344 at 21, stored value defined at 20, first use of read at 23  <-- STRICT
+BB2081: read %50874 slot@1152 at 11, write %16038 slot@1152 at 18, stored value defined at 17, first use of read at 26  <-- STRICT
+BB2081: read %50873 slot@1344 at 12, write %16040 slot@1344 at 21, stored value defined at 20, first use of read at 26  <-- STRICT
+BB2084: read %50876 slot@1152 at 8, write %16049 slot@1152 at 20, stored value defined at 19, first use of read at 19
+BB2084: read %50881 slot@1344 at 13, write %16051 slot@1344 at 23, stored value defined at 22, first use of read at 25  <-- STRICT
+BB2084: read %50884 slot@1152 at 15, write %16049 slot@1152 at 20, stored value defined at 19, first use of read at 28  <-- STRICT
+BB2084: read %50883 slot@1344 at 16, write %16051 slot@1344 at 23, stored value defined at 22, first use of read at 28  <-- STRICT
+BB2093: read %50900 slot@1152 at 15, write %12782 slot@1152 at 16, stored value defined at None, first use of read at 28  <-- used after write
+BB2093: read %50906 slot@1344 at 20, write %12779 slot@1344 at 21, stored value defined at None, first use of read at 34  <-- used after write
+BB2093: read %50910 slot@2304 at 22, write %16068 slot@2304 at 29, stored value defined at 28, first use of read at 37  <-- STRICT
+BB2093: read %50909 slot@2880 at 23, write %16072 slot@2880 at 35, stored value defined at 34, first use of read at 37  <-- STRICT
+BB2096: read %50914 slot@1152 at 11, write %12782 slot@1152 at 12, stored value defined at None, first use of read at 34  <-- used after write
+BB2096: read %50918 slot@4224 at 14, write %50918 slot@4224 at 40, stored value defined at 14, first use of read at 37
+BB2096: read %50917 slot@4032 at 15, write %50917 slot@4032 at 39, stored value defined at 15, first use of read at 37
+BB2096: read %50921 slot@5952 at 17, write %50921 slot@5952 at 44, stored value defined at 17, first use of read at 42
+BB2096: read %50920 slot@1344 at 18, write %12779 slot@1344 at 19, stored value defined at None, first use of read at 42  <-- used after write
+BB2096: read %50924 slot@2304 at 20, write %16079 slot@2304 at 35, stored value defined at 34, first use of read at 46  <-- STRICT
+BB2096: read %50923 slot@2880 at 21, write %16083 slot@2880 at 43, stored value defined at 42, first use of read at 46  <-- STRICT
+BB2102: read %50942 slot@1152 at 11, write %12782 slot@1152 at 12, stored value defined at None, first use of read at 27  <-- used after write
+BB2102: read %50948 slot@1344 at 18, write %12779 slot@1344 at 19, stored value defined at None, first use of read at 33  <-- used after write
+BB2102: read %50952 slot@2304 at 20, write %16094 slot@2304 at 28, stored value defined at 27, first use of read at 36  <-- STRICT
+BB2102: read %50951 slot@2880 at 21, write %16098 slot@2880 at 34, stored value defined at 33, first use of read at 36  <-- STRICT
+BB2105: read %50956 slot@1152 at 12, write %12782 slot@1152 at 13, stored value defined at None, first use of read at 35  <-- used after write
+BB2105: read %50960 slot@4800 at 15, write %50960 slot@4800 at 40, stored value defined at 15, first use of read at 38
+BB2105: read %50959 slot@5376 at 16, write %50959 slot@5376 at 41, stored value defined at 16, first use of read at 38
+BB2105: read %50963 slot@5760 at 18, write %50963 slot@5760 at 45, stored value defined at 18, first use of read at 43
+BB2105: read %50962 slot@1344 at 19, write %52780 slot@1344 at 20, stored value defined at 10, first use of read at 43  <-- used after write
+BB2105: read %50966 slot@2304 at 21, write %16105 slot@2304 at 36, stored value defined at 35, first use of read at 47  <-- STRICT
+BB2105: read %50965 slot@2880 at 22, write %16109 slot@2880 at 44, stored value defined at 43, first use of read at 47  <-- STRICT
+BB2172: read %51019 slot@4032 at 4, write %16350 slot@4032 at 14, stored value defined at 13, first use of read at 13
+BB2172: read %51020 slot@4224 at 6, write %16353 slot@4224 at 16, stored value defined at 15, first use of read at 15
+BB2184: read %51033 slot@4992 at 3, write %16394 slot@4992 at 14, stored value defined at 13, first use of read at 13
+BB2184: read %51034 slot@4608 at 5, write %16397 slot@4608 at 16, stored value defined at 15, first use of read at 15
+BB2193: read %51043 slot@5376 at 3, write %16423 slot@5376 at 14, stored value defined at 13, first use of read at 13
+BB2193: read %51044 slot@4800 at 5, write %16426 slot@4800 at 16, stored value defined at 15, first use of read at 15
+BB2867: read %52376 slot@0 at 8, write %23354 slot@0 at 14, stored value defined at 13, first use of read at 10
+lds: pairs 421; read used only after the write 189; strict 167 in 62 blocks

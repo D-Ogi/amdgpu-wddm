@@ -1,0 +1,10 @@
+{
+    "route":  "direct",
+    "icd_source":  "C:\\Program Files\\amdgpu-wddm\\vulkan\\vulkan_radeon.dll",
+    "icd_sha256":  "FE3455FB903B758800FC6F121669235F02C276C106F61C3FF669E31CE2151B28",
+    "experimental":  "sparse",
+    "perftest":  "",
+    "deqp_sha256":  "E3DABB44EB8D252083C33B80C3E18897301EB4F7E788F95F6070BCF0AC473183",
+    "list_sha256":  "6167C4CDB3DF3D6E7600441014A9E78008EF03DC48DA27F8F44B3D1C7393F2C8",
+    "list_count":  1
+}
