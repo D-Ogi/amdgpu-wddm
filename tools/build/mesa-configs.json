@@ -145,6 +145,33 @@
         "src/gallium/targets/libgl-gdi/opengl32.dll"
       ],
       "recorded_script": null
+    },
+    "zink-gl-icd": {
+      "description": "System OpenGL ICD on Zink (WGL): the gallium wgl target DLL renamed amdgpu_wddm_gl.dll, which the display adapter's driver key names in OpenGLDriverName and OpenGLDriverNameWow, no LLVM. The zink-gl set plus -Db_ndebug=true (no live assert in a DLL that loads into every OpenGL application), -Db_vscrt=mt (the same reason the radv-mt set takes it: an application that ships its own msvcp140.dll hands it to every DLL that imports that name) and -Dgallium-wgl-dll-name=amdgpu_wddm_gl. buildtype stays debugoptimized, as in every shipped Mesa component of this project: /O2 with NDEBUG and a PDB",
+      "needs_llvm": false,
+      "glslang": "on-path",
+      "options": [
+        "-Dbuildtype=debugoptimized",
+        "-Db_ndebug=true",
+        "-Dforce_fallback_for=zlib",
+        "-Dllvm=disabled",
+        "-Damd-use-llvm=false",
+        "-Dvulkan-drivers=[]",
+        "-Dgallium-drivers=zink",
+        "-Db_vscrt=mt",
+        "-Ddefault_library=static",
+        "-Dplatforms=windows",
+        "-Dvideo-codecs=[]",
+        "-Degl=disabled",
+        "-Dglx=disabled",
+        "-Dzstd=disabled",
+        "-Dgallium-wgl-dll-name=amdgpu_wddm_gl"
+      ],
+      "targets": [
+        "src/gallium/targets/wgl/amdgpu_wddm_gl.dll",
+        "src/gallium/targets/libgl-gdi/opengl32.dll"
+      ],
+      "recorded_script": "none yet: first built 2026-10-12 for BD-076, x64 and x86 (scratch/bd076-gl/out/BUILD.md)"
     }
   }
 }

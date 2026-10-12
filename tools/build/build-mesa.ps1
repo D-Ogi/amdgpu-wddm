@@ -12,6 +12,7 @@ Configures and builds one of the lab's Mesa components with its recorded meson o
   llvmpipe-umd  desktop D3D10 UMD on llvmpipe (bc250d3d.dll), needs -Llvm
   zink-umd      native D3D10 UMD on Zink (bc250d3d_zink.dll)
   zink-gl       OpenGL on Zink (libgallium_wgl.dll, opengl32.dll)
+  zink-gl-icd   system OpenGL ICD on Zink (amdgpu_wddm_gl.dll), x64 and x86
 
 The environment is the one the recorded cmd scripts set up: vcvars64.bat, the WDK NuGet um/shared headers in
 front of INCLUDE, win_flex/win_bison and glslangValidator on PATH, meson and mako from PYTHONPATH, and for
@@ -31,7 +32,7 @@ pwsh tools\build\build-mesa.ps1 -Config llvmpipe-umd -Source <tree> -Build <dir>
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][ValidateSet('radv', 'radv-mt', 'radv-system', 'llvmpipe-umd', 'zink-umd', 'zink-gl')][string]$Config,
+    [Parameter(Mandatory)][ValidateSet('radv', 'radv-mt', 'radv-system', 'llvmpipe-umd', 'zink-umd', 'zink-gl', 'zink-gl-icd')][string]$Config,
     [Parameter(Mandatory)][string]$Source,
     [Parameter(Mandatory)][string]$Build,
     # Directory whose bin\llvm-config.exe describes the LLVM to link: the -Build directory of build-llvm.ps1.

@@ -221,6 +221,31 @@ Targets `src/gallium/targets/wgl/libgallium_wgl.dll` and `src/gallium/targets/li
 the DLL C runtime. The recorded build used the RADV ICD's tree; its Zink/WGL patches are the `zink-*.patch`
 files in `experiments/E33-m12-applications/`.
 
+### System OpenGL ICD on Zink (`-Config zink-gl-icd`)
+
+```
+-Dbuildtype=debugoptimized -Db_ndebug=true -Dforce_fallback_for=zlib -Dllvm=disabled -Damd-use-llvm=false
+-Dvulkan-drivers=[] -Dgallium-drivers=zink -Db_vscrt=mt -Ddefault_library=static -Dplatforms=windows
+-Dvideo-codecs=[] -Degl=disabled -Dglx=disabled -Dzstd=disabled -Dgallium-wgl-dll-name=amdgpu_wddm_gl
+```
+
+Targets `src/gallium/targets/wgl/amdgpu_wddm_gl.dll` and `src/gallium/targets/libgl-gdi/opengl32.dll`.
+The first file is the OpenGL installable client driver: the display adapter's driver key names it in
+`OpenGLDriverName` (x64) and `OpenGLDriverNameWow` (x86), and the system `opengl32.dll` reads those values
+through `D3DKMTQueryAdapterInfo` with `KMTQAITYPE_UMOPENGLINFO` and then resolves the `Drv*` exports of the
+named file. The second file is Mesa's application-local `opengl32.dll` replacement, which the ICD route does
+not use; it stays a target because it is the comparison path.
+
+The set is `zink-gl` plus three options. `-Db_ndebug=true` keeps NDEBUG defined, so no assert is live in a DLL
+that loads into every OpenGL application. `-Db_vscrt=mt` links the static C runtime for the same reason: an
+application that ships its own `msvcp140.dll` beside its exe hands it to every DLL that imports that name.
+`-Dgallium-wgl-dll-name` renames the WGL target, because the registered ICD must carry this project's name.
+`buildtype` stays `debugoptimized`, as in every shipped Mesa component here: `/O2` with NDEBUG and a PDB.
+
+`-Arch x86` builds the 32-bit ICD for `OpenGLDriverNameWow`. The generated module definition file carries
+undecorated names on MSVC for both architectures (`bin/gen_vs_module_defs.py`), which is what the OpenGL
+runtime resolves.
+
 ## DXVK
 
 PROVENANCE: DXVK, zlib.
