@@ -197,18 +197,12 @@ function Test-IsAdmin {
     return (New-Object Security.Principal.WindowsPrincipal $id).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
-# Asks the tester. -Answer (unattended) wins; a dry run never asks and answers as the expected answer; a run that the
-# setup window drives never asks either (it has no console): what was not given on its command line is not consented.
-function Read-Confirmation {
-    param([Parameter(Mandatory)][string]$Question, [string]$Expect = 'YES', [string]$Answer)
-    if ($Answer) { Write-Info "$Question -> $Answer (from the command line)"; return ($Answer -ceq $Expect) }
-    if ($script:GuiMode) { Write-Info "$Question -> not given by the setup window: no"; return $false }
-    # A dry run shows the path a YES takes, so it answers YES without asking.
-    if ($script:DryRunMode) { Write-Host "   [dry run] would ask: $Question (type $Expect); continuing as if answered $Expect" -ForegroundColor DarkYellow; return $true }
-    $reply = Read-Host "   $Question Type $Expect to continue"
-    Write-Log "   asked: $Question -> '$reply'"
-    return ($reply -ceq $Expect)
-}
+# Nothing here asks the person a question (owner, 2026-10-12: "Przestan wymagac potwierdzen od uzytkownika").
+# Starting install.cmd, or pressing Install in the window, IS the answer for everything an installation of this
+# driver needs; uninstall.cmd is the answer for the removal. The function that asked - Read-Confirmation - is gone,
+# so a new question cannot be added by calling it, and the tests of tools\release (test-boot-locale.ps1) refuse a
+# call to it on the way to the boot change. A choice with two good outcomes is a switch on the command line with a
+# stated default, never a prompt; a refusal that protects the machine is not a question and stays.
 
 # ---------------------------------------------------------------------------------------------------------------
 # State kept between the phases (and for uninstall): %ProgramData%\amdgpu-wddm\installer\state.json.

@@ -700,9 +700,34 @@ foreach ($probe in 'D3D12 FL 12_1', 'Vulkan', 'GPU desktop path') {
 }
 Check ($verify -match "function Add-Skipped") 'the skip has one writer'
 Check ($verify -match "Add-Info \`$Name \('skipped: the driver did not start'") 'a skipped probe is an info line, so it is not an extra failure'
+# The property the line above depends on: an info line is in the result list, so a skipped probe keeps its own name
+# in the report the control application reads, with the reason. A reviewer read this the other way round, so it is
+# now a check: Add-Info adds to $results before it writes anything to the console.
+Check ($verify -match "(?s)function Add-Info\(\[string\]\`$Name, \[string\]\`$Detail\) \{\s*\[void\]\`$results\.Add\(") `
+    'an info line, and so a skipped probe, is in the verify report under its own name'
 Check (@([regex]::Matches($verify, 'if \(-not \$startState\.started\)')).Count -ge 3) 'three probes ask the state before they run'
 Check ($verify -match '\(Test-Path -LiteralPath \$cli\) -and \$startState\.started') 'the driver is not asked for its interop state when it did not start'
 Check ($verify -match 'Write-VerifyReport \$results') 'the report is still written on every path'
+
+'the installer and the uninstaller ask nothing (owner, 2026-10-12)'
+# The function that asked is gone from the engine, so a new question cannot be added by calling it, and no script of
+# the installer calls one.
+$common = [IO.File]::ReadAllText((Join-Path $Installer 'common.ps1'))
+Check ($common -notmatch 'function Read-Confirmation') 'the engine has no function that asks the user a question'
+foreach ($name in 'install.ps1', 'uninstall.ps1', 'common.ps1', 'components.ps1', 'prepare-offline.ps1', 'system-tuning.ps1') {
+    $text = [IO.File]::ReadAllText((Join-Path $Installer $name))
+    Check ($text -notmatch '(?m)^[^#]*Read-Confirmation') "$name asks no question"
+}
+# The two scripts a person starts: neither stops for an answer. (components.ps1 still offers the console install its
+# list of extras and models, with a default on Enter: that is a choice between good outcomes, not a permission.)
+foreach ($name in 'install.ps1', 'uninstall.ps1') {
+    $text = [IO.File]::ReadAllText((Join-Path $Installer $name))
+    Check ($text -notmatch '(?m)^[^#]*Read-Host') "$name reads no answer from the console"
+}
+$uninstall = [IO.File]::ReadAllText((Join-Path $Installer 'uninstall.ps1'))
+Check ($uninstall -match 'Wait-RestartCountdown -Seconds \$script:RestartCountdownSeconds') 'the uninstaller restarts after the same visible countdown as the installer'
+Check ($uninstall -match '-KeepTestSigning') 'test signing goes off again by itself, and a switch leaves it on'
+Check ($uninstall -match "Join-Path \`$dataRoot 'setup'") 'the uninstaller removes what a single-file setup unpacked'
 
 Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 if ($fail) { "$fail check(s) failed"; exit 1 }
