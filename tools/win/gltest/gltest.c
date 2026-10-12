@@ -439,15 +439,38 @@ static int target_create(struct target *t, int width, int height, int show, cons
 static const int g_version_ladder[][2] = {
     { 4, 6 }, { 4, 5 }, { 4, 4 }, { 4, 3 }, { 4, 2 }, { 4, 1 }, { 4, 0 }, { 3, 3 }
 };
+/* --max-version MAJOR.MINOR starts the ladder lower, so that the cases which need a feature of a later version can
+ * be measured against a context that does not have it on a driver that would have given one: on a 4.6 driver it is
+ * the only way to see the refusals of compute and of the threads hand-over, which both need 4.3. */
+static int g_max_major;
+static int g_max_minor;
+
+/* The first rung the ladder asks for: its top, or the highest rung at or below --max-version. */
+static size_t ladder_first(void)
+{
+    size_t i;
+
+    for (i = 0; i < sizeof(g_version_ladder) / sizeof(g_version_ladder[0]); i++) {
+        if (!g_max_major) {
+            return i;
+        }
+        if (g_version_ladder[i][0] < g_max_major ||
+            (g_version_ladder[i][0] == g_max_major && g_version_ladder[i][1] <= g_max_minor)) {
+            return i;
+        }
+    }
+    return sizeof(g_version_ladder) / sizeof(g_version_ladder[0]) - 1;
+}
 
 static HGLRC rc_create(HDC dc, HGLRC share, int *out_major, int *out_minor, int quiet)
 {
     size_t i;
+    size_t first = ladder_first();
 
     if (!pwglCreateContextAttribsARB) {
         return NULL;
     }
-    for (i = 0; i < sizeof(g_version_ladder) / sizeof(g_version_ladder[0]); i++) {
+    for (i = first; i < sizeof(g_version_ladder) / sizeof(g_version_ladder[0]); i++) {
         const int attribs[] = {
             WGL_CONTEXT_MAJOR_VERSION_ARB, g_version_ladder[i][0],
             WGL_CONTEXT_MINOR_VERSION_ARB, g_version_ladder[i][1],
@@ -463,9 +486,9 @@ static HGLRC rc_create(HDC dc, HGLRC share, int *out_major, int *out_minor, int 
             if (out_minor) {
                 *out_minor = g_version_ladder[i][1];
             }
-            if (!quiet && i > 0) {
+            if (!quiet && i > first) {
                 say("  context: core %d.%d refused, %d.%d accepted",
-                    g_version_ladder[0][0], g_version_ladder[0][1],
+                    g_version_ladder[first][0], g_version_ladder[first][1],
                     g_version_ladder[i][0], g_version_ladder[i][1]);
             }
             return rc;
@@ -521,6 +544,28 @@ static int load_gl_functions(void)
 
 /* ------------------------------------------------------------------ which DLL served the context */
 
+/* --expect-icd <text>: the module that serves the context must carry this text in its path, or info FAILs.
+ * Without it the case only prints the module name, and a run against another vendor's ICD still says PASS, which
+ * is what a lab arm must not accept: the arm registers our ICD and then has to prove ours is the one that answered. */
+static char g_expect_icd[MAX_PATH];
+
+/* Case-insensitive substring, which is what a file path comparison needs on Windows. */
+static int path_has(const char *path, const char *text)
+{
+    size_t n = strlen(text);
+    size_t i;
+
+    if (!n) {
+        return 0;
+    }
+    for (i = 0; path[i]; i++) {
+        if (_strnicmp(path + i, text, n) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 static void module_path_of(FARPROC addr, char *out, size_t n)
 {
     union { FARPROC fn; LPCSTR p; } u;
@@ -542,7 +587,9 @@ static void module_path_of(FARPROC addr, char *out, size_t n)
 /* Every Windows OpenGL ICD exports the Drv* entry points opengl32 calls (Mesa's own export list is
  * src\gallium\targets\wgl\gallium_wgl.def.in). Naming each loaded module that exports DrvSetContext is
  * the second, independent way to say which DLL is the ICD of this process. */
-static void report_icd_modules(void)
+/* Every loaded module that exports DrvSetContext, which is the second, independent way of naming the driver that
+ * serves this process. Returns how many of them carry g_expect_icd in their path (0 when no text was asked for). */
+static int report_icd_modules(void)
 {
     HMODULE mods[512];
     DWORD needed = 0;
@@ -550,10 +597,11 @@ static void report_icd_modules(void)
     size_t count;
     char path[MAX_PATH];
     int found = 0;
+    int matched = 0;
 
     if (!EnumProcessModules(GetCurrentProcess(), mods, (DWORD)sizeof(mods), &needed)) {
         say("  info: icd-scan unavailable, EnumProcessModules failed (%lu)", GetLastError());
-        return;
+        return 0;
     }
     if (needed > (DWORD)sizeof(mods)) {
         needed = (DWORD)sizeof(mods);
@@ -565,6 +613,9 @@ static void report_icd_modules(void)
             if (GetModuleFileNameA(mods[i], path, (DWORD)sizeof(path))) {
                 say("  info: icd-export DrvSetContext in %s", path);
                 found++;
+                if (g_expect_icd[0] && path_has(path, g_expect_icd)) {
+                    matched++;
+                }
             }
         }
     }
@@ -572,6 +623,7 @@ static void report_icd_modules(void)
         say("  info: icd-export no loaded module exports DrvSetContext"
             " (opengl32 may be serving this process itself)");
     }
+    return matched;
 }
 
 /* ------------------------------------------------------------------ shader plumbing */
@@ -828,22 +880,24 @@ static int case_info(void)
     const char *version = (const char *)glGetString(GL_VERSION);
     const char *glsl = (const char *)glGetString(GL_SHADING_LANGUAGE_VERSION);
     char path[MAX_PATH];
+    char icd[MAX_PATH];
     GLint profile = 0;
+    int exporters_matched = 0;
 
     say("  info: GL_VENDOR = %s", vendor ? vendor : "(null)");
     say("  info: GL_RENDERER = %s", renderer ? renderer : "(null)");
     say("  info: GL_VERSION = %s", version ? version : "(null)");
     say("  info: GL_SHADING_LANGUAGE_VERSION = %s", glsl ? glsl : "(null)");
     say("  info: context = core %d.%d (asked for %d.%d first)", g_gl_major, g_gl_minor,
-        g_version_ladder[0][0], g_version_ladder[0][1]);
+        g_version_ladder[ladder_first()][0], g_version_ladder[ladder_first()][1]);
     glGetIntegerv(GL_CONTEXT_PROFILE_MASK, &profile);
     gl_quiet_errors();
     say("  info: GL_CONTEXT_PROFILE_MASK = 0x%X (core bit %s)", (unsigned)profile,
         (profile & GL_CONTEXT_CORE_PROFILE_BIT) ? "set" : "clear");
 
-    module_path_of((FARPROC)pglCreateShader, path, sizeof(path));
-    if (path[0]) {
-        say("  info: icd module = %s (owns the address wglGetProcAddress returned for glCreateShader)", path);
+    module_path_of((FARPROC)pglCreateShader, icd, sizeof(icd));
+    if (icd[0]) {
+        say("  info: icd module = %s (owns the address wglGetProcAddress returned for glCreateShader)", icd);
     } else {
         say("  info: icd module = unknown (no module owns the glCreateShader address)");
     }
@@ -851,7 +905,11 @@ static int case_info(void)
     if (GetModuleFileNameA(GetModuleHandleA("opengl32.dll"), path, (DWORD)sizeof(path))) {
         say("  info: opengl32 = %s", path);
     }
-    report_icd_modules();
+    exporters_matched = report_icd_modules();
+    if (g_expect_icd[0]) {
+        say("  info: expect-icd = %s (module match %s, DrvSetContext exporters matching %d)", g_expect_icd,
+            (icd[0] && path_has(icd, g_expect_icd)) ? "yes" : "no", exporters_matched);
+    }
 
     if (!vendor || !renderer || !version || !glsl) {
         say("FAIL info one of the GL strings is missing");
@@ -861,7 +919,21 @@ static int case_info(void)
         say("FAIL info no core context above GL 3.0 (%d.%d)", g_gl_major, g_gl_minor);
         return 1;
     }
-    say("PASS info core %d.%d, renderer %s", g_gl_major, g_gl_minor, renderer);
+    /* Both ways of naming the driver have to name the asked-for one: the module that owns the function pointer, and
+     * a loaded module that exports DrvSetContext. One of them alone can be satisfied by a stale DLL in the process. */
+    if (g_expect_icd[0]) {
+        if (!icd[0] || !path_has(icd, g_expect_icd)) {
+            say("FAIL info the context is served by %s, which is not %s", icd[0] ? icd : "an unknown module",
+                g_expect_icd);
+            return 1;
+        }
+        if (!exporters_matched) {
+            say("FAIL info no loaded module that exports DrvSetContext carries %s", g_expect_icd);
+            return 1;
+        }
+    }
+    say("PASS info core %d.%d, renderer %s%s%s", g_gl_major, g_gl_minor, renderer,
+        g_expect_icd[0] ? ", icd " : "", g_expect_icd[0] ? icd : "");
     return 0;
 }
 
@@ -1394,11 +1466,21 @@ static int case_threads(void)
             THREAD_FRAMES);
     } else if (la.mismatches || lb.mismatches) {
         say("FAIL threads pixel mismatches A=%ld B=%ld", la.mismatches, lb.mismatches);
-    } else if (compute && !g_shared_ok) {
+    } else if (!compute) {
+        /* The shared buffer across the fence hand-over is the one piece of cross-context synchronisation this case
+         * measures, so a run that could not set it up is a failure, not a pass with a note. case_compute refuses
+         * below GL 4.3 in the same way: a driver that cannot do it has to say so in the tally. */
+        if (g_gl_major < 4 || (g_gl_major == 4 && g_gl_minor < 3)) {
+            say("FAIL threads the context is core %d.%d, the shared-buffer fence check needs 4.3", g_gl_major,
+                g_gl_minor);
+        } else {
+            say("FAIL threads the shared buffer or its fence entry points could not be set up");
+        }
+    } else if (!g_shared_ok) {
         say("FAIL threads the shared buffer did not survive the fence hand-over");
     } else {
-        say("PASS threads 2 contexts, %d frames each, shared buffer %s", THREAD_FRAMES,
-            compute ? "exact across glFenceSync/glClientWaitSync" : "skipped (context below GL 4.3)");
+        say("PASS threads 2 contexts, %d frames each, shared buffer exact across glFenceSync/glClientWaitSync",
+            THREAD_FRAMES);
         verdict = 0;
     }
 
@@ -1581,6 +1663,12 @@ static void usage(FILE *out)
           "  --show                                         show the present window (hidden by default)\n"
           "  --seconds N                                    watchdog bound, 1..3600 (default 60)\n"
           "  --log PATH                                     also write every line to PATH\n"
+          "  --max-version MAJOR.MINOR                      start the context ladder at this rung, so that\n"
+          "                                                 the cases needing a later version can be seen\n"
+          "                                                 refusing (compute and threads need 4.3)\n"
+          "  --expect-icd TEXT                              info FAILs unless the module that serves the\n"
+          "                                                 context, and a loaded module exporting\n"
+          "                                                 DrvSetContext, both carry TEXT in their path\n"
           "  --negative-control                             displace every expected value by one, so\n"
           "                                                 draw, threads and compute must all fail\n"
           "  --help                                         this text\n"
@@ -1659,6 +1747,29 @@ int main(int argc, char **argv)
                 return 2;
             }
             log_path = argv[i];
+        } else if (strcmp(argv[i], "--max-version") == 0) {
+            int maj = 0;
+            int min = 0;
+            if (++i >= argc) {
+                fputs("gltest: --max-version needs MAJOR.MINOR\n", stderr);
+                return 2;
+            }
+            if (sscanf(argv[i], "%d.%d", &maj, &min) != 2 || maj < 3 || maj > 4 || min < 0 || min > 9) {
+                fprintf(stderr, "gltest: --max-version out of range: %s\n", argv[i]);
+                return 2;
+            }
+            g_max_major = maj;
+            g_max_minor = min;
+        } else if (strcmp(argv[i], "--expect-icd") == 0) {
+            if (++i >= argc) {
+                fputs("gltest: --expect-icd needs a text to look for in the module path\n", stderr);
+                return 2;
+            }
+            if (!argv[i][0] || strlen(argv[i]) >= sizeof(g_expect_icd)) {
+                fprintf(stderr, "gltest: --expect-icd value out of range: %s\n", argv[i]);
+                return 2;
+            }
+            strcpy(g_expect_icd, argv[i]);
         } else {
             fprintf(stderr, "gltest: unknown option \"%s\"\n", argv[i]);
             usage(stderr);
@@ -1697,6 +1808,9 @@ int main(int argc, char **argv)
         g_show);
     if (g_negative) {
         say("  note: --negative-control, draw, threads and compute must all FAIL");
+    }
+    if (g_expect_icd[0]) {
+        say("  note: --expect-icd %s, so info passes only on that module", g_expect_icd);
     }
 
     if (bootstrap_wgl()) {

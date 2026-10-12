@@ -95,6 +95,8 @@ foreach ($exe in $built) {
     if ($LASTEXITCODE -ne 2) { throw "case check failed for $exe ($LASTEXITCODE)" }
     & $exe --seconds 0 2>$null | Out-Null
     if ($LASTEXITCODE -ne 2) { throw "range check failed for $exe ($LASTEXITCODE)" }
+    & $exe --expect-icd 2>$null | Out-Null
+    if ($LASTEXITCODE -ne 2) { throw "expect-icd value check failed for $exe ($LASTEXITCODE)" }
 }
 Write-Host '  help, option, case and range checks pass'
 
@@ -116,6 +118,30 @@ if ($SkipSelfTest) {
             }
         }
         Write-Host "  negative control $name : draw, threads and compute all failed as required"
+        # --expect-icd, both ways round, against whatever ICD serves this computer: the module the client itself
+        # named has to pass, and a name no module carries has to fail. This is the check a lab arm leans on, because
+        # the arm has to prove that OUR registered ICD answered and not the one that was there before.
+        $infoText = @(& $exe --case info --seconds $SelfTestSeconds)
+        if ($LASTEXITCODE -ne 0) { throw "info run failed for $name ($LASTEXITCODE)" }
+        $icdLine = @($infoText | Where-Object { $_ -match 'info: icd module = ' })
+        if (-not $icdLine.Count) { throw "no 'icd module' line in the info output of $name" }
+        $icdPath = ($icdLine[0] -replace '^.*info: icd module = ', '') -replace ' \(owns.*$', ''
+        $icdLeaf = Split-Path -Leaf $icdPath
+        & $exe --case info --expect-icd $icdLeaf --seconds $SelfTestSeconds | Select-Object -Last 2 | ForEach-Object { Write-Host "    $_" }
+        if ($LASTEXITCODE -ne 0) { throw "--expect-icd $icdLeaf did not pass for $name ($LASTEXITCODE)" }
+        & $exe --case info --expect-icd 'no_such_icd_module' --seconds $SelfTestSeconds | Select-Object -Last 2 | ForEach-Object { Write-Host "    $_" }
+        if ($LASTEXITCODE -ne 1) { throw "--expect-icd no_such_icd_module did not fail for $name ($LASTEXITCODE)" }
+        Write-Host "  expect-icd $name : passes on $icdLeaf, fails on a name no module carries"
+        # Below GL 4.3 the two cases that need compute shaders have to FAIL, not pass with a note: the shared buffer
+        # across the fence hand-over is the only cross-context synchronisation the threads case measures, so a run
+        # that skipped it says nothing about the driver. --max-version makes that visible on a 4.6 driver.
+        foreach ($c in @('compute', 'threads')) {
+            & $exe --case $c --max-version 4.2 --seconds $SelfTestSeconds | Select-Object -Last 2 | ForEach-Object { Write-Host "    $_" }
+            if ($LASTEXITCODE -ne 1) { throw "--case $c --max-version 4.2 did not fail for $name ($LASTEXITCODE)" }
+        }
+        & $exe --case draw --max-version 3.3 --seconds $SelfTestSeconds | Select-Object -Last 2 | ForEach-Object { Write-Host "    $_" }
+        if ($LASTEXITCODE -ne 0) { throw "--case draw --max-version 3.3 did not pass for $name ($LASTEXITCODE)" }
+        Write-Host "  version ladder $name : compute and threads fail below 4.3, draw passes on a core 3.3 context"
     }
 }
 

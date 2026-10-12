@@ -67,7 +67,7 @@ or the watchdog fired, 2 on a usage error.
 | `info` | `ChoosePixelFormat` and a legacy context, then `wglCreateContextAttribsARB` for core 4.6 and down the ladder to 3.3 until one is accepted. Prints `GL_VENDOR`, `GL_RENDERER`, `GL_VERSION`, `GL_SHADING_LANGUAGE_VERSION`, the profile mask and the ICD module paths. |
 | `draw` | A GLSL 4.x program draws a pattern into a 256x256 RGBA8 framebuffer object, `glReadPixels` reads it back, and all 65536 pixels are compared byte for byte. Four named points are printed whatever the verdict. |
 | `present` | A 640x360 window, 120 frames with `SwapBuffers` and alternating colours, a `glReadPixels` from the back buffer before each swap. Reports frames, milliseconds and frames per second. |
-| `threads` | Two threads, two contexts in one share group. Each thread renders 200 frames into its own framebuffer object, with a full byte comparison per frame. Thread A then writes one shared buffer object with a compute shader. Thread B reads that buffer after `glFenceSync` and `glClientWaitSync`. |
+| `threads` | Two threads, two contexts in one share group. Each thread renders 200 frames into its own framebuffer object, with a full byte comparison per frame. Thread A then writes one shared buffer object with a compute shader. Thread B reads that buffer after `glFenceSync` and `glClientWaitSync`. The shared buffer is the only cross-context synchronisation this case measures. A context that cannot run it fails the case. It is not a pass with a note. Below GL 4.3 the case says so. |
 | `compute` | One compute dispatch of 16 work groups writes 1024 words into a shader storage buffer. The words are read back and compared exactly. Needs GL 4.3. |
 
 Every channel of every expected colour is `k/255.0` for an integer `k`, so the UNORM8 encoding is exact and
@@ -80,6 +80,9 @@ the comparison needs no tolerance.
 --show                                         show the present window (hidden by default)
 --seconds N                                    watchdog bound, 1..3600 (default 60)
 --log PATH                                     also write every line to PATH
+--max-version MAJOR.MINOR                      start the context ladder at this rung
+--expect-icd TEXT                              info FAILs unless the driver that serves the
+                                               context carries TEXT in its path
 --negative-control                             displace every expected value by one
 ```
 
@@ -93,6 +96,17 @@ counted and printed but does not decide the `present` verdict. With `--show` it 
 
 `--negative-control` displaces every expected value by one, so `draw`, `threads` and `compute` must all come
 back FAIL. A comparison that cannot fail proves nothing, which is why the build runs this as well.
+
+`--expect-icd TEXT` turns the module report of the `info` case into a verdict. Both of its independent reports
+have to carry the text: the module that owns the address `wglGetProcAddress` returned, and a loaded module that
+exports `DrvSetContext`. Without it a run against any other vendor's OpenGL 4.x driver reports `PASS 5/5`, which
+is no use to a lab arm whose whole question is which DLL answered after a registration. The build runs it both
+ways round, with the name of the driver this computer has and with a name no module carries.
+
+`--max-version MAJOR.MINOR` starts the context ladder lower than 4.6, which is how the cases that need a later
+version can be seen refusing on a driver that would have given one: `compute` and the shared-buffer hand-over of
+`threads` both need 4.3, and on a 4.6 driver there is no other way to reach those paths. The build uses it for
+exactly that, and to run `draw` once on a core 3.3 context, which takes the GLSL 330 source of each shader.
 
 ## Two things it does not do
 
