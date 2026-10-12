@@ -68,6 +68,9 @@ check.admin.missing|mt|3da431e1|설치 프로그램에 관리자 권한이 필�
 check.windows.ok|mt|7d1c4fbb|이 Windows 버전은 지원됩니다.
 check.windows.not-x64|mt|1c9550cb|이 Windows는 64비트가 아닙니다. 드라이버에는 64비트 Windows 11이 필요합니다.
 check.windows.too-old|mt|b44ce700|이 Windows 버전은 너무 오래되었습니다. 드라이버에는 Windows 11이 필요합니다.
+check.windows.below-supported|mt|71688b75|이 Windows 버전은 드라이버를 테스트한 버전보다 오래되었습니다. 테스트 대상은 Windows 11 23H2, 24H2, 25H2입니다. Windows를 업데이트하세요. 설치는 계속됩니다.
+check.windows.insider|mt|2b892990|이것은 지원되지 않는 Insider 버전의 Windows입니다. 드라이버는 Windows 11 23H2, 24H2, 25H2에서 테스트됩니다. 설치는 계속됩니다.
+check.windows.ltsc|mt|346c19f0|이 Windows 에디션(LTSC)은 이 드라이버에서 테스트되지 않았습니다. 설치는 계속됩니다.
 check.gpu.ok|mt|f61b25ac|ASRock BC-250 그래픽 칩을 찾았습니다.
 check.gpu.missing|mt|7ac6bcb8|ASRock BC-250 그래픽 칩을 찾을 수 없습니다. 이 드라이버는 BC-250 전용입니다.
 check.gpu.several|mt|57bff6a6|BC-250 그래픽 칩이 여러 개 있습니다. 하나만 지원됩니다.

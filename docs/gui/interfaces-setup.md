@@ -51,6 +51,17 @@ prints the step and runs nothing. The one refusal left is `vcruntime.no-installe
 and the package does not carry Microsoft's installer, or carries a changed copy of it. The window treats that id
 like a damaged package - a new try in the same session cannot fix it.
 
+**Which Windows the driver is made for.** The policy is the owner's n-2 of 2026-10-11: Windows 11 23H2 (22631),
+24H2 (26100), 25H2 (26200) and the general builds after them. `Get-WindowsSupportFindings` in
+`installer\common.ps1` holds it, and `Get-WindowsSupportState` reads the running PC for it. Windows 10 and older
+(below build 22000) and a 32-bit Windows are refused, as before (`windows.too-old`, `windows.not-x64`). A Windows
+11 below 22631 is one line that names the supported versions and advises an update
+(`windows.below-supported`), and the installation continues (owner, 2026-10-12: "tylko warning, nie blokada"). An
+Insider build, by the channel in `HKLM\SOFTWARE\Microsoft\WindowsSelfHost\Applicability` or a build at or above
+27000, adds `windows.insider`. An LTSC edition, by `EditionID` `EnterpriseS` or `IoTEnterpriseS`, adds
+`windows.ltsc`. All three are `warn`: information on the plan screen, no question and no checkbox. A refused
+Windows gets its refusal alone.
+
 **Where to find the application afterwards** (owner, 2026-10-12: "pytajmy tez czy zrobic skrot na pulpicie
 (domyslnie i menu start i pulpit)"). The plan screen has a card with two boxes, the Start menu and the desktop,
 both on. Neither holds the Install button back. The window states both answers on the command line

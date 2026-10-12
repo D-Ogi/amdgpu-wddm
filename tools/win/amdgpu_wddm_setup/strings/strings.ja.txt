@@ -68,6 +68,9 @@ check.admin.missing|mt|3da431e1|セットアップには管理者のアクセス
 check.windows.ok|mt|7d1c4fbb|この Windows のバージョンはサポートされています。
 check.windows.not-x64|mt|1c9550cb|この Windows は 64 ビット版ではありません。ドライバーには 64 ビット版 Windows 11 が必要です。
 check.windows.too-old|mt|b44ce700|この Windows のバージョンは古すぎます。ドライバーには Windows 11 が必要です。
+check.windows.below-supported|mt|71688b75|この Windows のバージョンは、ドライバーのテスト対象より古いバージョンです。テスト対象は Windows 11 23H2、24H2、25H2 です。Windows を更新してください。インストールは続行します。
+check.windows.insider|mt|2b892990|これは Insider 版の Windows で、サポート対象ではありません。ドライバーのテスト対象は Windows 11 23H2、24H2、25H2 です。インストールは続行します。
+check.windows.ltsc|mt|346c19f0|この Windows のエディション (LTSC) は、このドライバーでテストされていません。インストールは続行します。
 check.gpu.ok|mt|f61b25ac|ASRock BC-250 のグラフィックス チップが見つかりました。
 check.gpu.missing|mt|7ac6bcb8|ASRock BC-250 のグラフィックス チップが見つかりません。このドライバーは BC-250 専用です。
 check.gpu.several|mt|57bff6a6|BC-250 のグラフィックス チップが複数見つかりました。サポートされるのは 1 つだけです。

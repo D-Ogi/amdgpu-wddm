@@ -861,6 +861,81 @@ foreach ($switch in 'StartMenuShortcut', 'DesktopShortcut') {
 }
 Check ($installText -match '\$NoStartMenuShortcut = \[switch\]\(@\(\$installInputs\.switches\)') 'the install reads the shortcut answers back from the state'
 
+'which Windows this driver is made for: n-2, and a line instead of a refusal (owner, 2026-10-11 and 2026-10-12)'
+# Get-WindowsSupportFindings is pure, so every version, channel and edition is tested here and none of them needs a
+# PC of its own. The severities are the whole contract: only 'fail' refuses the install.
+function Get-WinIds($Findings) { return @(@($Findings) | ForEach-Object { $_.id }) }
+function Get-WinSeverity($Findings, [string]$Id) { return [string](@(@($Findings) | Where-Object { $_.id -eq $Id })[0].severity) }
+# The supported versions: 23H2, 24H2, 25H2, and a general build after them.
+foreach ($b in 22631, 26100, 26200, 26500) {
+    $w = Get-WindowsSupportFindings -Build $b -Caption 'Microsoft Windows 11 Pro'
+    Check ((Get-WinIds $w.findings) -join ',' -eq 'windows.ok') "build $b is supported ($((Get-WinIds $w.findings) -join ','))"
+    Check ($w.standing -eq 'supported') "build $b stands as supported"
+}
+# A Windows 11 below 23H2: one line that names the supported versions and advises an update, and the install goes on.
+foreach ($b in 22000, 22621, 22630) {
+    $w = Get-WindowsSupportFindings -Build $b -Caption 'Microsoft Windows 11 Pro' -DisplayVersion '22H2'
+    Check ((Get-WinIds $w.findings) -join ',' -eq 'windows.below-supported') "build $b is a line, not a refusal ($((Get-WinIds $w.findings) -join ','))"
+    Check ((Get-WinSeverity $w.findings 'windows.below-supported') -eq 'warn') "build ${b}: the line needs attention and refuses nothing"
+    $d = [string]@($w.findings)[0].detail
+    Check ($d -match '23H2' -and $d -match '24H2' -and $d -match '25H2') "build ${b}: the line names the supported versions ($d)"
+    Check ($d -match '22631' -and $d -match '26100' -and $d -match '26200') "build ${b}: the line names their build numbers"
+    Check ($d -match 'Update Windows') "build ${b}: the line advises an update"
+    Check ($d -match '22H2') "build ${b}: the detail names the version this PC has"
+}
+# Windows 10 and older: the refusal that was there before stays as it is.
+foreach ($b in 19045, 21999) {
+    $w = Get-WindowsSupportFindings -Build $b -Caption 'Microsoft Windows 10 Pro'
+    Check ((Get-WinIds $w.findings) -join ',' -eq 'windows.too-old') "build $b is refused ($((Get-WinIds $w.findings) -join ','))"
+    Check ((Get-WinSeverity $w.findings 'windows.too-old') -eq 'fail') "build ${b}: the refusal is a failed check"
+}
+$w32 = Get-WindowsSupportFindings -Build 26100 -Caption 'Microsoft Windows 11 Pro' -Is64Bit $false
+Check ((Get-WinIds $w32.findings) -join ',' -eq 'windows.not-x64') '32-bit Windows is refused and gets no second line'
+Check ((Get-WinSeverity $w32.findings 'windows.not-x64') -eq 'fail') 'the 32-bit refusal is a failed check'
+# An Insider build: by the channel Windows Update writes, or by a build number Microsoft has not released.
+$wIns = Get-WindowsSupportFindings -Build 26100 -Caption 'Microsoft Windows 11 Pro' -SelfHostBranch 'Dev'
+Check ((Get-WinIds $wIns.findings) -join ',' -eq 'windows.ok,windows.insider') "an Insider channel adds one line ($((Get-WinIds $wIns.findings) -join ','))"
+Check ((Get-WinSeverity $wIns.findings 'windows.insider') -eq 'warn') 'the Insider line refuses nothing'
+Check ([string](@($wIns.findings | Where-Object { $_.id -eq 'windows.insider' })[0].detail) -match 'Dev') 'the Insider line names the channel'
+$wCan = Get-WindowsSupportFindings -Build 27891 -Caption 'Microsoft Windows 11 Pro'
+Check ((Get-WinIds $wCan.findings) -contains 'windows.insider') 'a build at or above 27000 is an Insider build'
+# Negative control: 26300 is a build a tester had (BD-125), not an Insider build, and no line is added for it.
+$w26300 = Get-WindowsSupportFindings -Build 26300 -Caption 'Microsoft Windows 11 Pro'
+Check ((Get-WinIds $w26300.findings) -join ',' -eq 'windows.ok') "build 26300 adds no line ($((Get-WinIds $w26300.findings) -join ','))"
+# The LTSC editions: not tested, and that is all.
+foreach ($ed in 'EnterpriseS', 'IoTEnterpriseS') {
+    $w = Get-WindowsSupportFindings -Build 26100 -Caption 'Microsoft Windows 11 Enterprise LTSC' -EditionId $ed
+    Check ((Get-WinIds $w.findings) -join ',' -eq 'windows.ok,windows.ltsc') "$ed adds one line ($((Get-WinIds $w.findings) -join ','))"
+    Check ((Get-WinSeverity $w.findings 'windows.ltsc') -eq 'warn') "$ed refuses nothing"
+    Check ([string](@($w.findings | Where-Object { $_.id -eq 'windows.ltsc' })[0].detail) -match $ed) "the $ed line names the edition"
+}
+# Negative controls: the ordinary editions add no line of their own.
+foreach ($ed in 'Professional', 'Enterprise', 'Core', 'IoTEnterprise') {
+    $w = Get-WindowsSupportFindings -Build 26100 -Caption 'Microsoft Windows 11' -EditionId $ed
+    Check ((Get-WinIds $w.findings) -join ',' -eq 'windows.ok') "edition $ed adds no line ($((Get-WinIds $w.findings) -join ','))"
+}
+# A refused Windows gets the refusal alone: nothing is going to be installed there.
+$wOld = Get-WindowsSupportFindings -Build 19045 -Caption 'Microsoft Windows 10 Enterprise LTSC' -EditionId 'EnterpriseS' -SelfHostBranch 'Beta'
+Check ((Get-WinIds $wOld.findings) -join ',' -eq 'windows.too-old') "an old Windows is refused once ($((Get-WinIds $wOld.findings) -join ','))"
+# Both lines at once, on one PC: the Install button is not held back by either.
+$wBoth = Get-WindowsSupportFindings -Build 22621 -Caption 'Microsoft Windows 11 Enterprise LTSC' -EditionId 'EnterpriseS' -SelfHostBranch 'Beta'
+Check ((Get-WinIds $wBoth.findings) -join ',' -eq 'windows.below-supported,windows.insider,windows.ltsc') "three lines together ($((Get-WinIds $wBoth.findings) -join ','))"
+Check (@(@($wBoth.findings) | Where-Object { $_.severity -eq 'fail' }).Count -eq 0) 'none of the three lines refuses the install'
+# The running PC reads the same way (this PC is a supported or a newer Windows).
+$wHere = Get-WindowsSupportState
+Check ($wHere -and $wHere.build -gt 0) "the running PC reads its own standing: $($wHere.standing), build $($wHere.build)"
+Check (@(@($wHere.findings) | Where-Object { $_.severity -eq 'fail' }).Count -eq 0) 'this PC is not refused by the policy'
+# install.ps1's side: the ids, and no refusal for the three information lines.
+foreach ($id in 'windows.below-supported', 'windows.insider', 'windows.ltsc') {
+    Check ($installText -match "Add-Check '[^']+' 'warn' \`$f\.detail '$([regex]::Escape($id))'") "the preflight states $id as a line that needs attention"
+    Check ($installText -notmatch "'fail'[^\r\n]*'$([regex]::Escape($id))'") "the preflight does not refuse $id"
+}
+foreach ($id in 'windows.not-x64', 'windows.too-old') {
+    Check ($installText -match "Add-Check 'Windows' 'fail' \`$f\.detail '$([regex]::Escape($id))'") "the preflight still refuses $id"
+}
+Check ($installText -match '\$win = Get-WindowsSupportState -Os \$os') 'the preflight asks the one place that decides'
+Check ($installText -notmatch '\$build -lt 22000') 'no version rule is left in install.ps1 itself'
+
 'the installer and the uninstaller ask nothing (owner, 2026-10-12)'
 # The function that asked is gone from the engine, so a new question cannot be added by calling it, and no script of
 # the installer calls one.

@@ -8,8 +8,11 @@ Use this package only on a BC-250. The installer stops on every other computer a
 
 ## What you need
 
-- An ASRock BC-250 with Windows 11 x64 (build 22000 or later) installed and working on Microsoft Basic Display
-  Adapter.
+- An ASRock BC-250 with Windows 11 x64 installed and working on Microsoft Basic Display Adapter. The driver is
+  tested on Windows 11 23H2 (build 22631), 24H2 (build 26100) and 25H2 (build 26200), and on the general builds
+  after them. An older Windows 11 (build 22000 to 22630) gets a line that advises an update, and the installation
+  continues. An Insider build (Canary, Dev or Beta) and an LTSC edition each get a line of the same kind. Windows 10
+  and older are refused.
 - A local account with administrator rights.
 - Secure Boot off. The stock BC-250 BIOS has no Secure Boot option, so it is already off (see "Secure Boot" below).
 - If BitLocker is on: your BitLocker recovery key, in case something goes wrong. The installer pauses BitLocker

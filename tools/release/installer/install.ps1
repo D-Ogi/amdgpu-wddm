@@ -172,9 +172,19 @@ function Invoke-Preflight {
 
     $os = Get-CimInstance Win32_OperatingSystem
     $build = [int]$os.BuildNumber
-    if (-not [Environment]::Is64BitOperatingSystem) { Add-Check 'Windows' 'fail' "$($os.Caption) is 32-bit; x64 is required" 'windows.not-x64' }
-    elseif ($build -lt 22000) { Add-Check 'Windows' 'fail' "$($os.Caption) build $build; Windows 11 (build 22000 or later) is required" 'windows.too-old' }
-    else { Add-Check 'Windows' 'ok' "$($os.Caption) build $build" 'windows.ok' }
+    # The support policy of the owner, 2026-10-11 (n-2) and 2026-10-12 (older Windows 11: a line, not a refusal).
+    # Get-WindowsSupportFindings in common.ps1 decides; the ids below are the whole set it can return.
+    $win = Get-WindowsSupportState -Os $os
+    foreach ($f in @($win.findings)) {
+        switch ($f.id) {
+            'windows.not-x64' { Add-Check 'Windows' 'fail' $f.detail 'windows.not-x64' }
+            'windows.too-old' { Add-Check 'Windows' 'fail' $f.detail 'windows.too-old' }
+            'windows.below-supported' { Add-Check 'Windows' 'warn' $f.detail 'windows.below-supported' }
+            'windows.insider' { Add-Check 'Windows channel' 'warn' $f.detail 'windows.insider' }
+            'windows.ltsc' { Add-Check 'Windows edition' 'warn' $f.detail 'windows.ltsc' }
+            default { Add-Check 'Windows' 'ok' $f.detail 'windows.ok' }
+        }
+    }
 
     $dev = @(Get-Bc250Device)
     $board = (Get-CimInstance Win32_BaseBoard -ErrorAction SilentlyContinue)

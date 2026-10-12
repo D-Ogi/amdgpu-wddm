@@ -43,20 +43,35 @@ namespace AmdgpuWddmSetup
                 ",\"mutated\":" + (mutated ? "true" : "false") + ",\"nothing_changed\":" + (mutated ? "false" : "true") + ",\"message_id\":\"" + message + "\"" + extra + "}";
         }
 
-        static string[] PlanEvents(string action, string installed, string consents, string firmware, bool upgradeRows)
+        // windowsChecks: the lines the Windows support policy can add (owner, 2026-10-11 n-2, and 2026-10-12 "tylko
+        // warning, nie blokada"). "ok" is the ordinary PC. "not-tested" is a Windows 11 older than 22631, an Insider
+        // build and an LTSC edition at once, so one screen covers all three information lines.
+        static string[] PlanEvents(string action, string installed, string consents, string firmware, bool upgradeRows,
+                                   string windowsChecks = "ok")
         {
             _seq = 0;
             var list = new List<string>
             {
                 Ev("start", "\"mode\":\"plan\",\"gui\":true,\"dry_run\":true,\"package\":\"P\",\"contract\":\"" + EngineRun.Contract + "\",\"phase\":null"),
                 Ev("stage", "\"id\":\"preflight\",\"text\":\"Preflight\""),
-                Check("package.ok", "ok"), Check("admin.ok", "ok"), Check("windows.ok", "ok"), Check("gpu.ok", "ok"), Check("secureboot.off", "ok"),
+                Check("package.ok", "ok"), Check("admin.ok", "ok"),
+            };
+            if (windowsChecks == "ok") list.Add(Check("windows.ok", "ok"));
+            else
+            {
+                list.Add(Check("windows.below-supported", "warn"));
+                list.Add(Check("windows.insider", "warn"));
+                list.Add(Check("windows.ltsc", "warn"));
+            }
+            list.AddRange(new[]
+            {
+                Check("gpu.ok", "ok"), Check("secureboot.off", "ok"),
                 Check("testsigning.inactive", "ok"), Check(upgradeRows ? "bitlocker.on" : "bitlocker.unknown", "warn"), Check("hvci.off", "ok"),
                 Check("vcruntime.ok", "ok"), Check("space.ok", "ok"), Check(firmware == "package-folder" ? "firmware.folder-ok" : "firmware.download-ok", "ok"),
                 Ev("decision", "\"action\":\"" + action + "\",\"installed_version\":" + (installed == null ? "null" : "\"" + installed + "\"") + ",\"package_version\":\"" + Version +
                     "\",\"phase\":\"new\",\"consents\":[" + consents + "],\"consents_given\":{},\"restarts\":2,\"firmware_source\":\"" + firmware +
                     "\",\"firmware_dir\":\"\",\"notes\":[\"RELEASE-NOTES.md\"],\"secure_boot\":\"off\",\"bitlocker\":\"" + (upgradeRows ? "on" : "unknown") + "\",\"compatibility\":{\"ok\":true,\"reasons\":[]}"),
-            };
+            });
             var rows = upgradeRows
                 ? "{\"group\":\"parameters\",\"name\":\"DpmMaxMHz\",\"decision\":\"kept\",\"current\":1700,\"value\":1500,\"default\":1500,\"present\":true}," +
                   "{\"group\":\"parameters\",\"name\":\"DpmMode\",\"decision\":\"same\",\"current\":1,\"value\":1,\"default\":1,\"present\":true}," +
@@ -142,6 +157,10 @@ namespace AmdgpuWddmSetup
                 new Fixture { Name = "plan-install", RunKind = "plan", Screen = Screen.Plan, PlanEvents = planInstall, PlanResult = planned },
                 new Fixture { Name = "plan-upgrade", RunKind = "plan", Screen = Screen.Plan, PlanEvents = planUpgrade, PlanResult = planned },
                 new Fixture { Name = "plan-already", RunKind = "plan", Screen = Screen.Plan, PlanEvents = PlanEvents("already", Version, "", "download", false), PlanResult = planned },
+                // A Windows the driver is not tested on: older than 23H2, an Insider build and an LTSC edition. The
+                // three lines are information and the Install button stays on (owner, 2026-10-12).
+                new Fixture { Name = "plan-windows-not-tested", RunKind = "plan", Screen = Screen.Plan,
+                    PlanEvents = PlanEvents("install", null, "", "download", false, "not-tested"), PlanResult = planned },
                 new Fixture { Name = "working", Screen = Screen.Working, Events = RunEvents("files", false, true) },
                 new Fixture { Name = "working-cancel", Screen = Screen.Working, Events = RunEvents("preflight", true, false) },
                 new Fixture { Name = "continue", Flow = "continue", Screen = Screen.Working, Events = RunEvents("driver", false, true) },

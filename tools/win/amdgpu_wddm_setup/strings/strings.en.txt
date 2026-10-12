@@ -70,6 +70,9 @@ check.admin.missing|src|-|Setup needs administrator permission.
 check.windows.ok|src|-|This Windows version is supported.
 check.windows.not-x64|src|-|This Windows is not 64-bit. The driver needs 64-bit Windows 11.
 check.windows.too-old|src|-|This Windows version is too old. The driver needs Windows 11.
+check.windows.below-supported|src|-|This Windows version is older than the versions the driver is tested on: Windows 11 23H2, 24H2 and 25H2. Update Windows. The installation continues.
+check.windows.insider|src|-|This is an Insider version of Windows, which is not supported. The driver is tested on Windows 11 23H2, 24H2 and 25H2. The installation continues.
+check.windows.ltsc|src|-|This Windows edition (LTSC) is not tested with this driver. The installation continues.
 check.gpu.ok|src|-|The graphics chip of the ASRock BC-250 was found.
 check.gpu.missing|src|-|No ASRock BC-250 graphics chip was found. This driver works only on the BC-250.
 check.gpu.several|src|-|More than one BC-250 graphics chip was found. Only one is supported.

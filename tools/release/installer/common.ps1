@@ -1430,6 +1430,77 @@ function Invoke-VcRuntimeInstall {
     $out = Get-VcRuntimeOutcome $code
     return [pscustomobject]@{ ok = $out.ok; restart = $out.restart; message = $out.message; code = $code; text = $text }
 }
+
+# ---- which Windows this driver is made for ---------------------------------------------------------------------
+# The owner's policy of 2026-10-11 is n-2: "wystarczy nam wsparcie n-2 czyli maks do 23H2 jak obecnie + nowsze ale
+# canary to raczej nie". Supported are Windows 11 23H2 (22631), 24H2 (26100), 25H2 (26200) and the general builds
+# after them. A Windows 11 older than 22631 is a line that says so and advises an update (owner, 2026-10-12: "tylko
+# warning, nie blokada"), never a refusal. An Insider build and an LTSC edition are lines of the same kind. The one
+# refusal is Windows 10 and older (below build 22000), and 32-bit Windows.
+$script:WindowsSupportedBuilds = @(22631, 26100, 26200)       # 23H2, 24H2, 25H2
+$script:WindowsSupportedNames = '23H2, 24H2, 25H2'
+$script:WindowsMinimumBuild = 22000                            # below this: Windows 10 or older, refused
+$script:WindowsLowestSupportedBuild = 22631                    # 22000-22630: supported versions named, install goes on
+$script:WindowsInsiderBuild = 27000                            # at or above: a build Microsoft has not released yet
+$script:WindowsSelfHostKey = 'HKLM:\SOFTWARE\Microsoft\WindowsSelfHost\Applicability'
+$script:WindowsCurrentVersionKey = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
+$script:WindowsLtscEditions = @('EnterpriseS', 'IoTEnterpriseS')
+
+# Pure: what this engine says about a Windows. The readings come from Get-WindowsSupportState on a real PC and
+# from the tests on every other. Returns { x64, build, standing, findings }, where findings is the list the
+# preflight turns into its lines, in order: { id, severity, detail }. Only 'fail' refuses the install.
+#   standing: 'not-x64' | 'too-old' | 'below-supported' | 'supported'
+function Get-WindowsSupportFindings {
+    param([Parameter(Mandatory)][int]$Build, [string]$Caption = 'Windows', [bool]$Is64Bit = $true,
+          [string]$EditionId = '', [string]$SelfHostBranch = '', [string]$DisplayVersion = '')
+    $what = "$Caption build $Build"
+    if ($DisplayVersion) { $what = "$Caption $DisplayVersion (build $Build)" }
+    $findings = @()
+    $standing = 'supported'
+    if (-not $Is64Bit) {
+        $standing = 'not-x64'
+        $findings += [pscustomobject]@{ id = 'windows.not-x64'; severity = 'fail'; detail = "$what is 32-bit; x64 is required" }
+    } elseif ($Build -lt $script:WindowsMinimumBuild) {
+        $standing = 'too-old'
+        $findings += [pscustomobject]@{ id = 'windows.too-old'; severity = 'fail'
+            detail = "$what; Windows 11 (build $($script:WindowsMinimumBuild) or later) is required" }
+    } elseif ($Build -lt $script:WindowsLowestSupportedBuild) {
+        $standing = 'below-supported'
+        $findings += [pscustomobject]@{ id = 'windows.below-supported'; severity = 'warn'
+            detail = "$what is older than the versions this driver is tested on (Windows 11 $($script:WindowsSupportedNames), builds $($script:WindowsSupportedBuilds -join ', ')). Update Windows. The installation continues." }
+    } else {
+        $findings += [pscustomobject]@{ id = 'windows.ok'; severity = 'ok'; detail = $what }
+    }
+    # Beyond the version itself: the channel and the edition. Both are information, whatever the version said, and
+    # neither is asked of the user. A refused Windows gets no second line: nothing is going to be installed there.
+    if ($standing -ne 'not-x64' -and $standing -ne 'too-old') {
+        if ($SelfHostBranch -or $Build -ge $script:WindowsInsiderBuild) {
+            $which = if ($SelfHostBranch) { "Insider channel $SelfHostBranch" } else { "build $Build, which Microsoft has not released yet" }
+            $findings += [pscustomobject]@{ id = 'windows.insider'; severity = 'warn'
+                detail = "${which}: an Insider build of Windows is not supported (Windows 11 $($script:WindowsSupportedNames)). The installation continues." }
+        }
+        if (@($script:WindowsLtscEditions) -contains $EditionId) {
+            $findings += [pscustomobject]@{ id = 'windows.ltsc'; severity = 'warn'
+                detail = "edition ${EditionId}: this driver is not tested on the LTSC editions of Windows. The installation continues." }
+        }
+    }
+    return [pscustomobject]@{ x64 = $Is64Bit; build = $Build; standing = $standing; findings = $findings }
+}
+
+# The same for the running PC. The channel comes from the key Windows Update writes for an Insider PC, the edition
+# from CurrentVersion. A value that is not there reads as empty, which is the ordinary case.
+function Get-WindowsSupportState {
+    param($Os)
+    if (-not $Os) { $Os = Get-CimInstance Win32_OperatingSystem }
+    $cv = Get-ItemProperty -LiteralPath $script:WindowsCurrentVersionKey -ErrorAction SilentlyContinue
+    $sh = Get-ItemProperty -LiteralPath $script:WindowsSelfHostKey -ErrorAction SilentlyContinue
+    $branch = ''
+    if ($sh) { foreach ($n in 'BranchName', 'Ring', 'ContentType') { if (-not $branch -and $sh.$n) { $branch = [string]$sh.$n } } }
+    return Get-WindowsSupportFindings -Build ([int]$Os.BuildNumber) -Caption ([string]$Os.Caption) `
+        -Is64Bit ([bool][Environment]::Is64BitOperatingSystem) `
+        -EditionId $(if ($cv) { [string]$cv.EditionID } else { '' }) -SelfHostBranch $branch `
+        -DisplayVersion $(if ($cv -and $cv.DisplayVersion) { [string]$cv.DisplayVersion } else { '' })
+}
 # The UserModeDriverName slots of the GPU's software key: D3D9, D3D10, D3D11, D3D12. The D3D9 slot is empty: a D3D9
 # application then gets Microsoft's D3D9On12 layer (d3d9on12.dll), which runs on our D3D12 driver. Windows does not
 # fall back to D3D9On12 when the slot names a UMD that cannot open the adapter: with the stub of the earlier releases

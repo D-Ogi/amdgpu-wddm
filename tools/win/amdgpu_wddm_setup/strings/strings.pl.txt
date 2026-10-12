@@ -68,6 +68,9 @@ check.admin.missing|mt|3da431e1|Instalator potrzebuje uprawnień administratora.
 check.windows.ok|mt|7d1c4fbb|Ta wersja Windows jest obsługiwana.
 check.windows.not-x64|mt|1c9550cb|Ten Windows nie jest 64-bitowy. Sterownik wymaga 64-bitowego Windows 11.
 check.windows.too-old|mt|b44ce700|Ta wersja Windows jest za stara. Sterownik wymaga Windows 11.
+check.windows.below-supported|rev|71688b75|Ta wersja Windows jest starsza niż wersje, na których sterownik jest testowany: Windows 11 23H2, 24H2 i 25H2. Zaktualizuj Windows. Instalacja jest kontynuowana.
+check.windows.insider|rev|2b892990|To jest wersja Insider systemu Windows, która nie jest obsługiwana. Sterownik jest testowany na Windows 11 23H2, 24H2 i 25H2. Instalacja jest kontynuowana.
+check.windows.ltsc|rev|346c19f0|Ta edycja Windows (LTSC) nie jest testowana z tym sterownikiem. Instalacja jest kontynuowana.
 check.gpu.ok|mt|f61b25ac|Znaleziono układ graficzny ASRock BC-250.
 check.gpu.missing|mt|7ac6bcb8|Nie znaleziono układu graficznego ASRock BC-250. Ten sterownik działa tylko na BC-250.
 check.gpu.several|mt|57bff6a6|Znaleziono więcej niż jeden układ graficzny BC-250. Obsługiwany jest tylko jeden.
