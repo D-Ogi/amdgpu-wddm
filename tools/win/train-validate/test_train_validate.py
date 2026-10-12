@@ -1644,6 +1644,16 @@ class ShippedSetEndToEnd(unittest.TestCase):
                                              "  final device status OK\n"
                                              "stop record arm: ok, 3 readings")),
             ("preflight.ps1", Completed(0, "preflight: ok")),
+            ("clock-read-user.ps1",
+             Completed(0, "console user BC250-A\\bc250\n"
+                          "--- 1. the clock read of the non-elevated task\n"
+                          "  mhz 1000 vid 820 temperature_mc 58000\n"
+                          "--- 2. the same read from the elevated session\n"
+                          "  mhz 1000 vid 820 temperature_mc 58125\n"
+                          "--- 3. the clock set of the non-elevated task must be refused\n"
+                          "  refused: access denied\n"
+                          "GPU FAULT lines 0\nfan state=curve controlling=1\n"
+                          "clock read user arm: ok")),
             ("pin-baseline.py", Completed(0, "release 0.7.0-tester.1: 85 files verified")),
             ("release-baseline.py", Completed(0, "release 0.7.0-tester.1: 85 files verified")),
             ("vk-smoke.ps1", Completed(0, "driverInfo = Mesa 26.3.0-devel (git-18e0f56be7)")),
@@ -1675,6 +1685,12 @@ class ShippedSetEndToEnd(unittest.TestCase):
                           "spp=0/1024 tracing=1 estMrays/s=127.3 size=1536x864")),
             ("mesacache.ps1", Completed(0, "cache C:\\Users\\bc250\\AppData\\Local\\mesa_shader_cache: 541 "
                                            "files, 2775706 bytes, newest 2026-10-10T07:30:37Z")),
+            # The one-case list of cts-rt-wave64 has no NotRun case to end the runner at rc 1, so both of its
+            # steps, the rtwave64 one and the default one, must come back rc 0. This needle is before the
+            # general run-batch.ps1 one, which answers the 140-case list of cts-rt.
+            ("rt-k97-di1.txt", Completed(0, "list-rt-k97-di1 run=trainr route=direct icd=1D4DAD41 exit=0 "
+                                            "complete=True done=1/1 attempts=1 elapsed=6.2s\n"
+                                            "counts: Pass=1")),
             ("run-batch.ps1", Completed(1, "list-rt-k97 run=trainr route=direct icd=1D4DAD41 exit=1 "
                                            "complete=True done=140/140 attempts=1 elapsed=8.7s\n"
                                            "counts: Pass=137 NotRun=3")),
@@ -1731,7 +1747,9 @@ class ShippedSetEndToEnd(unittest.TestCase):
         # Rise of the Tomb Raider ran, and its score is read by a person: the gate waits for that number.
         self.assertIn("**Rise of the Tomb Raider**: NOT MET", results)
         self.assertIn("`w3-high-rt`", results)
-        self.assertEqual(len(records), 41)  # restart-3 after stop-record (b31 validation-r1)
+        # b32 adds clock-read-user (BD-062), standard-user-logon (BD-080), router-dialog (BD-126) and
+        # cts-rt-wave64 (BD-074) to the 41 arms of b31 (restart-3 after stop-record, b31 validation-r1).
+        self.assertEqual(len(records), 45)
         values = {row["id"]: row["value"] for row in records}
         self.assertEqual((values["bm-before"], values["bm-at-8192"], values["bm-after"]), (12288, 8192, 12288),
                          "the operation moves the board to 8192 MiB and Restore brings it back")
