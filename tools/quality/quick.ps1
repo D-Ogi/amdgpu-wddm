@@ -109,6 +109,13 @@ try {
  # two logon tasks (who confirms a driver start, and at whose logon). It writes files under Out and registers no
  # task. Until now it ran only inside test-dryrun.ps1, which needs a built package.
  Check 'session-checks' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\tools\release\test-session-checks.ps1" -WorkRoot "$Out\session-checks" }
+ # BD-076: the OpenGL ICD registration of the installer. The architecture list of the release, the values of each
+ # architecture in it, the ICD file check, the restore plan of the uninstaller and the step of an install that
+ # registers fewer architectures than the computer holds. It writes a scratch key under HKCU and a folder under
+ # %TEMP% and removes both. Like session-checks above it ran only inside test-dryrun.ps1, which needs a built
+ # package, so a change of the registration could reach a release before any gate read it. Windows PowerShell 5.1,
+ # the shell a tester's installer runs in. Without -Package it reads no package and checks the sources instead.
+ Check 'opengl-icd' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\tools\release\test-opengl-icd.ps1" -Installer "$repo\tools\release\installer" }
  # The ICD's own build tree is not in the repository, and the 2026-10-10 cleanup removed the one this gate had
  # (scratch\m12\REMOVED-2026-10-10.txt). It ran through Check, so every profile that holds it - the KMD package
  # profile included - failed before its package step on a missing input. It is the same case CheckIf exists for:

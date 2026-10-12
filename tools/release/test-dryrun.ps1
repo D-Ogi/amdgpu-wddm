@@ -163,16 +163,33 @@ $rm = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-mft-h264.ps1'), '-Installer',
 $rm.text
 Check ($rm.code -eq 0) "install, repair, uninstall and rollback of the encoder keys: exit $($rm.code)"
 # The OpenGL ICD (BD-076, GitHub issue #8): manifest.json "opengl_icd" says whether this release registers an OpenGL
-# driver for every application of the computer, and the dry run shows the files and the six values it would write.
+# driver and for which architectures ("architectures"), and the dry run shows the files and the values it would write.
+# This release lists x64 alone, so the plan has to name the three x64 values and none of the three Wow ones: a 32-bit
+# OpenGL program keeps the renderer of Windows itself (common.ps1 holds the lab measurement behind that).
 $glOn = [bool]($m.opengl_icd -and $m.opengl_icd.register)
+$glArch = @()
+if ($m.opengl_icd -and $m.opengl_icd.architectures) { $glArch = @($m.opengl_icd.architectures | ForEach-Object { [string]$_ }) }
+$glX86 = [bool]($glArch -contains 'x86')
 Check ((-not $m.opengl_icd) -or (($m.opengl_icd.package_path -eq 'payload/opengl/amdgpu_wddm_gl.dll') -and ($m.opengl_icd.package_path_wow -eq 'payload/wow64/opengl/amdgpu_wddm_gl.dll') -and (@('REG_MULTI_SZ', 'REG_SZ') -contains [string]$m.opengl_icd.value_type) -and ([int]$m.opengl_icd.version -ge 1))) "manifest opengl_icd: register $glOn, both package paths, $([string]$m.opengl_icd.value_type), version $([string]$m.opengl_icd.version), flags $([string]$m.opengl_icd.flags)"
+Check ((-not $glOn) -or (@($glArch).Count -and (@($glArch | Where-Object { @('x64', 'x86') -notcontains $_ }).Count -eq 0))) "manifest opengl_icd: the architecture list is named and known ($($glArch -join ', '))"
 if ($glOn) {
-    foreach ($p in @([string]$m.opengl_icd.package_path, [string]$m.opengl_icd.package_path_wow)) {
+    foreach ($p in @(@(if ($glArch -contains 'x64') { [string]$m.opengl_icd.package_path }) + @(if ($glX86) { [string]$m.opengl_icd.package_path_wow }))) {
         Check (@($m.files | Where-Object { $_.path -eq $p }).Count -eq 1) "the package carries $p"
     }
-    Check (@($m.components | Where-Object { $_.package_path -eq [string]$m.opengl_icd.package_path -and $_.install_path -eq '<InstallDir>\opengl\amdgpu_wddm_gl.dll' }).Count -eq 1) 'manifest components: the x64 ICD goes to <InstallDir>\opengl'
-    Check ($r.text -match 'would: copy payload\\opengl -> [^\r\n]+\\opengl ') 'phase 2 installs the x64 OpenGL ICD'
-    Check ($r.text -match "would: .+ OpenGLDriverName = \[[^\r\n]+\\opengl\\amdgpu_wddm_gl\.dll\]; OpenGLVersion = 1; OpenGLFlags = 1; OpenGLDriverNameWow = \[[^\r\n]+\\wow64\\opengl\\amdgpu_wddm_gl\.dll\]; OpenGLVersionWow = 1; OpenGLFlagsWow = 1 \(REG_MULTI_SZ\)") 'the plan names the six values of the OpenGL registration, x64 and Wow'
+    if ($glArch -contains 'x64') {
+        Check (@($m.components | Where-Object { $_.package_path -eq [string]$m.opengl_icd.package_path -and $_.install_path -eq '<InstallDir>\opengl\amdgpu_wddm_gl.dll' }).Count -eq 1) 'manifest components: the x64 ICD goes to <InstallDir>\opengl'
+        Check ($r.text -match 'would: copy payload\\opengl -> [^\r\n]+\\opengl ') 'phase 2 installs the x64 OpenGL ICD'
+    }
+    if ($glX86) {
+        Check ($r.text -match "would: .+ OpenGLDriverName = \[[^\r\n]+\\opengl\\amdgpu_wddm_gl\.dll\]; OpenGLVersion = 1; OpenGLFlags = 1; OpenGLDriverNameWow = \[[^\r\n]+\\wow64\\opengl\\amdgpu_wddm_gl\.dll\]; OpenGLVersionWow = 1; OpenGLFlagsWow = 1 \(REG_MULTI_SZ, x64 and x86\)") 'the plan names the six values of the OpenGL registration, x64 and Wow'
+    } else {
+        # The positive control and the negative one in one line each: the three x64 values are named with the
+        # architecture list, and no Wow value is named anywhere in the plan.
+        Check ($r.text -match "would: .+ OpenGLDriverName = \[[^\r\n]+\\opengl\\amdgpu_wddm_gl\.dll\]; OpenGLVersion = 1; OpenGLFlags = 1 \(REG_MULTI_SZ, x64\)") 'the plan names the three x64 values of the OpenGL registration and the architecture list'
+        Check ($r.text -notmatch 'OpenGLDriverNameWow = |OpenGLVersionWow = |OpenGLFlagsWow = ') 'no 32-bit OpenGL value is written by a release that registers x64 alone'
+        Check (@($m.files | Where-Object { $_.path -eq [string]$m.opengl_icd.package_path_wow }).Count -eq 0) 'the package carries no 32-bit OpenGL ICD'
+        Check (@($m.components | Where-Object { [string]$_.install_path -like '*wow64\opengl\*' }).Count -eq 0) 'no component installs a 32-bit OpenGL ICD'
+    }
     Check ($r.text -notmatch 'would: remove [^\r\n]+\\opengl \(the OpenGL ICD of an earlier install') 'nothing of the ICD is rolled back by a release that registers it'
 } else {
     Check ($r.text -match 'OpenGL ICD: not registered by this release') 'the dry run says this release registers no OpenGL ICD'

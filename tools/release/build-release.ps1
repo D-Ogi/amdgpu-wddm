@@ -572,31 +572,36 @@ if ($sources.PSObject.Properties['mft_h264']) {
 # after the Ollama asset, and the validation suite then found no zip beside the folder.
 if ($name -ne (Split-Path -Leaf $pkgRoot)) { throw "build-release: the package name is '$name', its folder is '$(Split-Path -Leaf $pkgRoot)'" }
 # The OpenGL ICD (BD-076, GitHub issue #8): manifest.json carries the switch, so the package itself says whether the
-# installer registers an OpenGL driver, and this gate holds the payload to the contract. A release that registers the
-# ICD must carry both architectures, each an image of the right machine that exports every Drv entry point the OpenGL
-# runtime calls (installer\common.ps1 holds the list and the sources of the contract): a file that does not is no ICD,
-# and a registration naming it would leave every OpenGL application of the tester's computer without a driver. A
-# missing file is never a silent skip: the build stops here and names what is missing.
+# installer registers an OpenGL driver and for which architectures ("architectures"), and this gate holds the payload
+# to the contract. Every architecture of that list must be in the package, as an image of the right machine that
+# exports every Drv entry point the OpenGL runtime calls (installer\common.ps1 holds the list and the sources of the
+# contract): a file that does not is no ICD, and a registration naming it would leave every OpenGL application of that
+# architecture on the tester's computer without a driver, instead of the software renderer Windows gives it without a
+# registration. A missing file is never a silent skip: the build stops here and names what is missing.
+# The other way round is no finding at all: a package may carry an architecture it does not register (a built file
+# that stays unregistered while its half is unfinished), because provenance and THIRD-PARTY.md cover every payload
+# file whether a value names it or not.
 $glRelease = $null
 if ($sources.PSObject.Properties['opengl_icd']) {
     $gl = Get-OpenGlReleaseSwitch -Manifest $sources -PackageRoot $pkg
-    $glRelease = [ordered]@{ register = [bool]$gl.register; package_path = [string]$gl.package_path; package_path_wow = [string]$gl.package_path_wow
+    $glRelease = [ordered]@{ register = [bool]$gl.register; architectures = @($gl.architectures)
+        package_path = [string]$gl.package_path; package_path_wow = [string]$gl.package_path_wow
         value_type = [string]$gl.value_type; version = [int]$gl.version; flags = [int]$gl.flags }
     if ($gl.register) {
-        $glMissing = @()
-        if (-not $gl.present) { $glMissing += $gl.package_path }
-        if (-not $gl.present_wow) { $glMissing += $gl.package_path_wow }
+        $glFiles = @(Get-OpenGlArchFiles -Switch $gl)
+        $glMissing = @($glFiles | Where-Object { -not $_.present } | ForEach-Object { $_.package_path })
         if ($glMissing.Count) {
-            throw ("release-sources.json registers the OpenGL ICD, but the package has no " + ($glMissing -join ' and ') +
-                   ": add the files row(s) of the built ICD, or set opengl_icd.register false")
+            throw ("release-sources.json registers the OpenGL ICD for " + (@($gl.architectures) -join ' and ') +
+                   ", but the package has no " + ($glMissing -join ' and ') +
+                   ": add the files row(s) of the built ICD, drop that architecture from opengl_icd.architectures, or set opengl_icd.register false")
         }
         $glProblems = @()
-        $glProblems += @(Test-OpenGlIcdFile -Path $gl.source -Machine 0x8664)
-        $glProblems += @(Test-OpenGlIcdFile -Path $gl.source_wow -Machine 0x14C)
+        foreach ($f in $glFiles) { $glProblems += @(Test-OpenGlIcdFile -Path $f.source -Machine $f.machine) }
         if ($glProblems.Count) { throw ('OpenGL ICD payload: ' + ($glProblems -join '; ')) }
         # The counted exports of each file, not the length of the contract list: the line says what the package holds.
-        $glDrv = @($gl.source, $gl.source_wow | ForEach-Object { @(Get-PeExportNames $_ | Where-Object { $_ -like 'Drv*' }).Count })
-        '  OpenGL ICD: {0} (x64, {1} Drv entry points) and {2} (x86, {3}), all {4} of the contract, {5}, version {6}, flags {7}' -f $gl.package_path, $glDrv[0], $gl.package_path_wow, $glDrv[1], @($script:OpenGlDrvExports).Count, $gl.value_type, $gl.version, $gl.flags
+        $glShown = (@($glFiles | ForEach-Object { '{0} ({1}, {2} Drv entry points)' -f $_.package_path, $_.arch, @(Get-PeExportNames $_.source | Where-Object { $_ -like 'Drv*' }).Count }) -join ' and ')
+        '  OpenGL ICD: {0}, all {1} of the contract, {2}, version {3}, flags {4}' -f $glShown, @($script:OpenGlDrvExports).Count, $gl.value_type, $gl.version, $gl.flags
+        if (-not $gl.register_x86) { '  OpenGL ICD: no 32-bit registration in this release; 32-bit OpenGL programs keep the renderer of Windows itself' }
     } else {
         '  OpenGL ICD: not registered by this release'
     }

@@ -1,13 +1,18 @@
 # Host test of the OpenGL ICD registration (BD-076, GitHub issue #8) on a computer WITHOUT a BC-250. Windows
 # PowerShell 5.1, like the installer:
 #   powershell -NoProfile -File tools\release\test-opengl-icd.ps1 -Installer <package>\installer [-Package <package>]
-# Asserts: the release switch of manifest.json (register on and off, the package paths, the value type, the version
-# and the flags, and the refusals of a malformed switch); the six values the installer writes, with their types and
-# the paths under the install root; verify's Test-OpenGlRegistration against a complete and an incomplete
-# registration; the ICD file check (machine, the Drv entry points, a file that is no image); the restore plan of the
-# uninstaller (a value from before the install comes back, a value that was not there is removed, a value somebody
-# else changed is kept, and without a record only a value that names the install root is ours); and that install.ps1
-# and uninstall.ps1 carry the steps. With -Package the real ICD files of that package are checked too.
+# Asserts: the release switch of manifest.json (register on and off, the architecture list, the package paths, the
+# value type, the version and the flags, and the refusals of a malformed switch); the values the installer writes,
+# three per architecture of the list, with their types and the paths under the install root; verify's
+# Test-OpenGlRegistration against a complete and an incomplete registration, for a release that registers both
+# architectures and for this release, which registers x64 alone; the ICD file check (machine, the Drv entry points, a
+# file that is no image); the restore plan of the uninstaller (a value from before the install comes back, a value
+# that was not there is removed, a value somebody else changed is kept, and without a record only a value that names
+# the install root is ours); the narrowing step of an install whose architecture list is shorter than the one on the
+# computer; and that install.ps1 and uninstall.ps1 carry the steps. With -Package the real ICD files of that package
+# are checked too.
+# The x86 half is tested either way: this release registers x64 alone (common.ps1 holds the lab measurement behind
+# that), and a release that adds "x86" to the list changes nothing else, so the cases of both lists run here.
 # The registration cases run against a scratch key, HKCU:\Software\amdgpu-wddm-installer-test-gl, removed at the end,
 # and files under the user's temporary folder, removed at the end. Nothing under HKLM and no other file is written.
 param([Parameter(Mandatory)][string]$Installer, [string]$Package)
@@ -37,28 +42,57 @@ $on = Get-OpenGlReleaseSwitch -Manifest (New-Switch (New-Table @{ register = $tr
 Check ($on.register -and ($on.package_path -eq 'payload/opengl/amdgpu_wddm_gl.dll') -and ($on.package_path_wow -eq 'payload/wow64/opengl/amdgpu_wddm_gl.dll')) "register true: the default package paths ($($on.package_path), $($on.package_path_wow))"
 Check (($on.payload_dir -eq 'opengl') -and ($on.install_path -eq 'opengl\amdgpu_wddm_gl.dll') -and ($on.install_path_wow -eq 'wow64\opengl\amdgpu_wddm_gl.dll')) "the install paths under the install root ($($on.install_path), $($on.install_path_wow))"
 Check (($on.value_type -eq 'REG_MULTI_SZ') -and ($on.version -eq 1) -and ($on.flags -eq 1)) "the defaults: $($on.value_type), version $($on.version), flags $($on.flags)"
-$sz = Get-OpenGlReleaseSwitch -Manifest (New-Switch (New-Table @{ register = $true; value_type = 'REG_SZ'; version = 2; flags = 3 })) -PackageRoot $null
+# The architecture list. A switch that names none gets this release's own answer, x64 alone, and with it the
+# installer writes the three x64 values and no Wow value at all. The x86 half of every function stays in use and
+# stays tested: a later release that ships a 32-bit Vulkan loader adds "x86" to the list and changes nothing else.
+Check ((@($on.architectures) -join ',') -eq 'x64') "a switch without an architecture list registers this release's own list ($(@($on.architectures) -join ', '))"
+Check ($on.register_x64 -and (-not $on.register_x86)) 'x64 is registered, x86 is not'
+$both = Get-OpenGlReleaseSwitch -Manifest (New-Switch (New-Table @{ register = $true; architectures = @('x64', 'x86') })) -PackageRoot $null
+Check ((@($both.architectures) -join ',') -eq 'x64,x86') "the list can ask for both architectures ($(@($both.architectures) -join ', '))"
+Check ($both.register_x64 -and $both.register_x86) 'with both in the list both are registered'
+$x86only = Get-OpenGlReleaseSwitch -Manifest (New-Switch (New-Table @{ register = $true; architectures = @('x86') })) -PackageRoot $null
+Check (((@($x86only.architectures) -join ',') -eq 'x86') -and (-not $x86only.register_x64) -and $x86only.register_x86) 'the list can ask for x86 alone'
+$rev = Get-OpenGlReleaseSwitch -Manifest (New-Switch (New-Table @{ register = $true; architectures = @('x86', 'x64') })) -PackageRoot $null
+Check ((@($rev.architectures) -join ',') -eq 'x64,x86') "the list comes back in the installer's own order, whatever order the package wrote it in ($(@($rev.architectures) -join ', '))"
+$sz = Get-OpenGlReleaseSwitch -Manifest (New-Switch (New-Table @{ register = $true; architectures = @('x64', 'x86'); value_type = 'REG_SZ'; version = 2; flags = 3 })) -PackageRoot $null
 Check (($sz.value_type -eq 'REG_SZ') -and ($sz.version -eq 2) -and ($sz.flags -eq 3)) 'the switch can ask for REG_SZ, another version and other flags'
 foreach ($bad in @(
     @{ what = 'a package path outside payload'; t = @{ register = $true; package_path = 'opengl/amdgpu_wddm_gl.dll' } }
     @{ what = 'a 64-bit path in the Wow slot'; t = @{ register = $true; package_path_wow = 'payload/opengl/amdgpu_wddm_gl.dll' } }
     @{ what = 'an unknown value type'; t = @{ register = $true; value_type = 'REG_DWORD' } }
-    @{ what = 'version 0'; t = @{ register = $true; version = 0 } })) {
+    @{ what = 'version 0'; t = @{ register = $true; version = 0 } }
+    @{ what = 'an empty architecture list'; t = @{ register = $true; architectures = @() } }
+    @{ what = 'an architecture it does not know'; t = @{ register = $true; architectures = @('x64', 'arm64') } }
+    @{ what = 'an architecture named twice'; t = @{ register = $true; architectures = @('x64', 'x64') } })) {
     $threw = $false
     try { [void](Get-OpenGlReleaseSwitch -Manifest (New-Switch (New-Table $bad.t)) -PackageRoot $null) } catch { $threw = $true }
     Check $threw "the switch refuses $($bad.what)"
 }
 
-'the six values the installer writes'
+'the values the installer writes: three per architecture of the list'
 $root = 'C:\Program Files\amdgpu-wddm'
 $plan = @(Get-OpenGlRegistrationPlan -Switch $on -InstallRoot $root)
-Check ((@($plan | ForEach-Object { $_.name }) -join ',') -eq 'OpenGLDriverName,OpenGLVersion,OpenGLFlags,OpenGLDriverNameWow,OpenGLVersionWow,OpenGLFlagsWow') "six values in order ($(@($plan | ForEach-Object { $_.name }) -join ', '))"
+Check ((@($plan | ForEach-Object { $_.name }) -join ',') -eq 'OpenGLDriverName,OpenGLVersion,OpenGLFlags') "x64 alone: three values in order ($(@($plan | ForEach-Object { $_.name }) -join ', '))"
+Check (@($plan | Where-Object { $_.name -like '*Wow' }).Count -eq 0) 'x64 alone: no Wow value is written, so a 32-bit program keeps the renderer of Windows itself'
 Check ((@($plan | Where-Object { $_.name -eq 'OpenGLDriverName' })[0].value -join '|') -eq "$root\opengl\amdgpu_wddm_gl.dll") 'OpenGLDriverName names the x64 ICD under the install root'
-Check ((@($plan | Where-Object { $_.name -eq 'OpenGLDriverNameWow' })[0].value -join '|') -eq "$root\wow64\opengl\amdgpu_wddm_gl.dll") 'OpenGLDriverNameWow names the x86 ICD under the install root'
-Check ((@($plan | Where-Object { $_.type -eq 'MultiString' }).Count -eq 2) -and (@($plan | Where-Object { $_.type -eq 'DWord' }).Count -eq 4)) 'two REG_MULTI_SZ name values and four REG_DWORD numbers'
+Check ((Format-OpenGlRegistrationPlan $plan) -eq "OpenGLDriverName = [$root\opengl\amdgpu_wddm_gl.dll]; OpenGLVersion = 1; OpenGLFlags = 1") "the dry run line of this release names its three values ($(Format-OpenGlRegistrationPlan $plan))"
+$planX86 = @(Get-OpenGlRegistrationPlan -Switch $x86only -InstallRoot $root)
+Check ((@($planX86 | ForEach-Object { $_.name }) -join ',') -eq 'OpenGLDriverNameWow,OpenGLVersionWow,OpenGLFlagsWow') "x86 alone: the three Wow values and nothing else ($(@($planX86 | ForEach-Object { $_.name }) -join ', '))"
+Check ((@($planX86 | Where-Object { $_.name -eq 'OpenGLDriverNameWow' })[0].value -join '|') -eq "$root\wow64\opengl\amdgpu_wddm_gl.dll") 'OpenGLDriverNameWow names the x86 ICD under the install root'
+$planBoth = @(Get-OpenGlRegistrationPlan -Switch $both -InstallRoot $root)
+Check ((@($planBoth | ForEach-Object { $_.name }) -join ',') -eq 'OpenGLDriverName,OpenGLVersion,OpenGLFlags,OpenGLDriverNameWow,OpenGLVersionWow,OpenGLFlagsWow') "both: six values in order ($(@($planBoth | ForEach-Object { $_.name }) -join ', '))"
+Check ((@($planBoth | Where-Object { $_.type -eq 'MultiString' }).Count -eq 2) -and (@($planBoth | Where-Object { $_.type -eq 'DWord' }).Count -eq 4)) 'both: two REG_MULTI_SZ name values and four REG_DWORD numbers'
 $planSz = @(Get-OpenGlRegistrationPlan -Switch $sz -InstallRoot $root)
 Check (@($planSz | Where-Object { $_.type -eq 'String' }).Count -eq 2) 'with REG_SZ the two name values are single strings'
-Check ((Format-OpenGlRegistrationPlan $plan) -match 'OpenGLDriverName = \[C:\\Program Files\\amdgpu-wddm\\opengl\\amdgpu_wddm_gl\.dll\]; OpenGLVersion = 1; OpenGLFlags = 1; OpenGLDriverNameWow = ') "the dry run line names every value ($(Format-OpenGlRegistrationPlan $plan))"
+Check ((Format-OpenGlRegistrationPlan $planBoth) -match 'OpenGLDriverName = \[C:\\Program Files\\amdgpu-wddm\\opengl\\amdgpu_wddm_gl\.dll\]; OpenGLVersion = 1; OpenGLFlags = 1; OpenGLDriverNameWow = ') "the dry run line names every value of a both-architecture release ($(Format-OpenGlRegistrationPlan $planBoth))"
+# The files a release has to carry, and the values it has to take away again: one row per architecture of the list.
+$fOn = @(Get-OpenGlArchFiles -Switch $on)
+Check ((@($fOn).Count -eq 1) -and ($fOn[0].arch -eq 'x64') -and ($fOn[0].machine -eq 0x8664) -and ($fOn[0].package_path -eq $on.package_path)) "x64 alone: one file row, the x64 image ($($fOn[0].package_path), machine 0x$('{0:X}' -f $fOn[0].machine))"
+$fBoth = @(Get-OpenGlArchFiles -Switch $both)
+Check ((@($fBoth).Count -eq 2) -and ((@($fBoth | ForEach-Object { $_.arch }) -join ',') -eq 'x64,x86') -and ($fBoth[1].machine -eq 0x14C)) 'both: two file rows, x64 then x86'
+Check ((@(Get-OpenGlUnregisteredValueNames -Switch $on) -join ',') -eq 'OpenGLDriverNameWow,OpenGLVersionWow,OpenGLFlagsWow') "x64 alone: the three Wow values are the ones an install takes away again ($(@(Get-OpenGlUnregisteredValueNames -Switch $on) -join ', '))"
+Check ((@(Get-OpenGlUnregisteredValueNames -Switch $x86only) -join ',') -eq 'OpenGLDriverName,OpenGLVersion,OpenGLFlags') 'x86 alone: the three x64 values are the ones an install takes away again'
+Check (@(Get-OpenGlUnregisteredValueNames -Switch $both).Count -eq 0) 'both: nothing to take away'
 
 'the ICD file check (machine, the Drv entry points)'
 Check (@($script:OpenGlDrvExports).Count -eq 19) "19 Drv entry points in the contract ($(@($script:OpenGlDrvExports) -join ', '))"
@@ -86,11 +120,13 @@ try {
     Check (@($p | Where-Object { $_ -match 'is machine 0x8664, expected 0x14C' }).Count -eq 1) "the wrong machine is a finding ($($p -join '; '))"
 
     'verify: Test-OpenGlRegistration against a scratch key'
+    # The six-value scenario first, against a switch that lists both architectures, so that the x86 half of verify
+    # stays measured while this release registers x64 alone. The x64-only scenario of this release follows it.
     [void](New-Item -Path "$key\class" -Force)
-    $args0 = @{ InstallRoot = $work; ClassKey = "$key\class"; Switch = $on }
+    $args0 = @{ InstallRoot = $work; ClassKey = "$key\class"; Switch = $both }
     $p = @(Test-OpenGlRegistration @args0)
     Check ((@($p | Where-Object { $_ -match ' is missing$' }).Count -eq 6) -and (@($p | Where-Object { $_ -match 'missing or not an image' }).Count -eq 2)) "nothing registered: six values missing and both files missing ($($p.Count) findings)"
-    $workPlan = @(Get-OpenGlRegistrationPlan -Switch $on -InstallRoot $work)
+    $workPlan = @(Get-OpenGlRegistrationPlan -Switch $both -InstallRoot $work)
     Write-OpenGlRegistration -ClassKey "$key\class" -Plan $workPlan
     # The two ICD files: a copy of a real x64 and x86 image each. They are no ICD, so the file findings stay two; the
     # value findings have to be gone.
@@ -109,6 +145,27 @@ try {
     Remove-ItemProperty -LiteralPath "$key\class" -Name OpenGLDriverNameWow
     $p = @(Test-OpenGlRegistration @args0)
     Check (@($p | Where-Object { $_ -eq 'OpenGLDriverNameWow is missing' }).Count -eq 1) 'a missing Wow name is a finding: a 32-bit OpenGL application would get no driver'
+
+    'verify: this release registers x64 alone'
+    # What verify reports on a tester's computer for this release: the three x64 values and the x64 file, and nothing
+    # about the 32-bit half. The negative controls are in the same block: a 32-bit value that belongs to somebody
+    # else is not a finding, and a missing 32-bit file is not one either, because no value of ours names it.
+    [void](New-Item -Path "$key\x64" -Force)
+    $args64 = @{ InstallRoot = $work; ClassKey = "$key\x64"; Switch = $on }
+    $p = @(Test-OpenGlRegistration @args64)
+    Check ((@($p | Where-Object { $_ -match ' is missing$' }).Count -eq 3) -and (@($p | Where-Object { $_ -match 'missing or not an image' }).Count -eq 0)) "nothing registered: the three x64 values are missing and no Wow value is asked for ($($p -join '; '))"
+    Check (@($p | Where-Object { $_ -match 'Wow' }).Count -eq 0) 'no finding names a Wow value'
+    $plan64 = @(Get-OpenGlRegistrationPlan -Switch $on -InstallRoot $work)
+    Write-OpenGlRegistration -ClassKey "$key\x64" -Plan $plan64
+    $p = @(Test-OpenGlRegistration @args64)
+    Check ((@($p | Where-Object { $_ -match '^OpenGL' }).Count -eq 0) -and (@($p | Where-Object { $_ -match 'does not export' }).Count -eq 1)) "a complete x64 registration leaves no registry finding, and only the x64 file is read ($($p -join '; '))"
+    New-ItemProperty -LiteralPath "$key\x64" -Name OpenGLDriverNameWow -Value ([string[]]@('C:\Windows\System32\foreign.dll')) -PropertyType MultiString -Force | Out-Null
+    $p = @(Test-OpenGlRegistration @args64)
+    Check (@($p | Where-Object { $_ -match 'Wow' }).Count -eq 0) "another vendor's 32-bit registration on the same key is no finding of ours ($($p -join '; '))"
+    Remove-Item -LiteralPath (Join-Path $work 'wow64\opengl\amdgpu_wddm_gl.dll') -Force
+    $p = @(Test-OpenGlRegistration @args64)
+    Check (@($p | Where-Object { $_ -match 'wow64' }).Count -eq 0) 'a missing 32-bit ICD file is no finding: this release names none'
+    Copy-Item -LiteralPath (Join-Path $env:windir 'SysWOW64\WindowsPowerShell\v1.0\powershell.exe') -Destination (Join-Path $work 'wow64\opengl\amdgpu_wddm_gl.dll')
 
     'the restore plan of the uninstaller'
     $prev = @(
@@ -161,6 +218,38 @@ try {
     Check ($fmt -eq 'OpenGLDriverName back to [C:\Windows\System32\otherdriver.dll] (MultiString); OpenGLVersion back to 7 (DWord); remove OpenGLFlags; OpenGLDriverNameWow kept (no record of this release writing it)') "the restore line names every value, its new value and its type ($fmt)"
     Check ((@('OpenGLDriverName', 'OpenGLVersion', 'OpenGLFlags', 'OpenGLDriverNameWow' | Where-Object { $fmt -match [regex]::Escape($_) }).Count -eq 4) -and ($fmt -notmatch 'OpenGLVersionWow')) 'the restore line leaves out the values it does not touch'
 
+    'an install that narrows the architecture list takes the other half away again'
+    # The case a release like this one has to survive: a computer where a release of ours registered both
+    # architectures, and this release registers x64 alone. The three x64 values are written again, and the three Wow
+    # values of the earlier install go, with the value from before that install coming back where there was one.
+    # Without this the Wow registration would name a file this package does not carry, and a 32-bit OpenGL program
+    # would get no driver at all instead of the renderer of Windows itself.
+    [void](New-Item -Path "$key\narrow" -Force)
+    New-ItemProperty -LiteralPath "$key\narrow" -Name OpenGLDriverNameWow -Value ([string[]]@('C:\Windows\System32\otherdriver.dll')) -PropertyType MultiString -Force | Out-Null
+    $prevNarrow = @(Get-OpenGlValueRecord -ClassKey "$key\narrow")
+    Write-OpenGlRegistration -ClassKey "$key\narrow" -Plan $workPlan          # the earlier release: both architectures
+    $wroteNarrow = @($workPlan | ForEach-Object { [pscustomobject]@{ name = $_.name; value = $_.value } })
+    $offNames = @(Get-OpenGlUnregisteredValueNames -Switch $on)
+    $rpN = @(Get-OpenGlRestorePlan -Previous $prevNarrow -Wrote $wroteNarrow -Current (Read-RegistryValues "$key\narrow") -InstallRoot $work -Names $offNames)
+    Check ((@($rpN).Count -eq 3) -and (@($rpN | Where-Object { $_.name -like '*Wow' }).Count -eq 3)) "the plan covers the three Wow values and nothing else ($(@($rpN | ForEach-Object { $_.name }) -join ', '))"
+    Check (((@($rpN | Where-Object { $_.name -eq 'OpenGLDriverNameWow' })[0].action) -eq 'restore') -and ((@($rpN | Where-Object { $_.name -eq 'OpenGLVersionWow' })[0].action) -eq 'remove')) "the 32-bit name value from before the install comes back, the numbers go ($(@($rpN | ForEach-Object { "$($_.name)=$($_.action)" }) -join ' '))"
+    Write-OpenGlRestore -ClassKey "$key\narrow" -Plan $rpN
+    $afterN = Read-RegistryValues "$key\narrow"
+    Check ((@($afterN['OpenGLDriverNameWow']) -join '|') -eq 'C:\Windows\System32\otherdriver.dll') 'the 32-bit registration from before the install is back on the key'
+    Check ((-not $afterN.ContainsKey('OpenGLVersionWow')) -and (-not $afterN.ContainsKey('OpenGLFlagsWow'))) 'the 32-bit numbers of the earlier install are gone'
+    Check (((@($afterN['OpenGLDriverName']) -join '|') -eq (Join-Path $work 'opengl\amdgpu_wddm_gl.dll')) -and ($afterN['OpenGLVersion'] -eq 1) -and ($afterN['OpenGLFlags'] -eq 1)) 'the three x64 values of this release are untouched by that step'
+    # The negative control: the same narrowing on a key where the 32-bit registration is somebody else's leaves it.
+    [void](New-Item -Path "$key\narrow-foreign" -Force)
+    New-ItemProperty -LiteralPath "$key\narrow-foreign" -Name OpenGLDriverNameWow -Value ([string[]]@('C:\Windows\System32\foreign.dll')) -PropertyType MultiString -Force | Out-Null
+    New-ItemProperty -LiteralPath "$key\narrow-foreign" -Name OpenGLVersionWow -Value 1 -PropertyType DWord -Force | Out-Null
+    $rpF = @(Get-OpenGlRestorePlan -Previous @() -Wrote @() -Current (Read-RegistryValues "$key\narrow-foreign") -InstallRoot $work -Names $offNames)
+    Check (@($rpF | Where-Object { $_.action -eq 'keep' }).Count -eq 2) "a 32-bit registration that is not ours is kept by the narrowing step ($(Format-OpenGlRestorePlan $rpF))"
+    # And on a computer that never had a 32-bit registration of ours the step has nothing to do.
+    [void](New-Item -Path "$key\narrow-clean" -Force)
+    Write-OpenGlRegistration -ClassKey "$key\narrow-clean" -Plan $plan64
+    $rpC = @(Get-OpenGlRestorePlan -Previous @() -Wrote @($plan64 | ForEach-Object { [pscustomobject]@{ name = $_.name; value = $_.value } }) -Current (Read-RegistryValues "$key\narrow-clean") -InstallRoot $work -Names $offNames)
+    Check (@($rpC | Where-Object { $_.action -ne 'none' }).Count -eq 0) "a fresh install of this release has nothing to take away ($(Format-OpenGlRestorePlan $rpC))"
+
     'the restore keeps the registry type of each value'
     # Another vendor's registration, or a repair tool's, may use any registry type. A restore that guesses the type
     # from the .NET type of the recorded value turns a REG_EXPAND_SZ path into a literal REG_SZ one, four bytes into
@@ -208,13 +297,21 @@ Check ((-not (Test-Path -LiteralPath $key)) -and (-not (Test-Path -LiteralPath $
 $src = [IO.File]::ReadAllText((Join-Path $Installer 'install.ps1'))
 $un = [IO.File]::ReadAllText((Join-Path $Installer 'uninstall.ps1'))
 Check ($src -match 'Get-OpenGlReleaseSwitch -Manifest \$script:Manifest -PackageRoot \$package') 'install.ps1 takes the switch from the manifest of the package'
-Check ($src -match 'throw "manifest\.json registers the OpenGL ICD, but this package has no') 'install.ps1 refuses a package that registers the ICD without carrying it'
+Check ($src -match 'throw "manifest\.json registers the OpenGL ICD for \$\(@\(\$gl\.architectures\) -join '' and ''\), but this package has no') 'install.ps1 refuses a package that registers an architecture without carrying its file'
+Check ($src -match 'Get-OpenGlArchFiles -Switch \$gl\) \| Where-Object \{ -not \$_\.present \}') 'the refusal walks the architecture list, so a package that lists x86 without the x86 file is refused'
+Check ($src -match 'if \(\$gl\.register_x64\) \{ \$dirs \+= \$gl\.payload_dir \}') 'the 64-bit payload directory is installed only by a release that registers x64'
+Check (($src -match 'Get-OpenGlUnregisteredValueNames -Switch \$gl') -and ($src -match '-Names \$glOff')) 'install.ps1 takes away the values of an architecture it does not register'
+Check ($src -match 'Remove-PathOrSchedule \$glDirWow') 'install.ps1 removes the 32-bit ICD of an earlier install when it does not register x86'
+Check ($src -match "Add-Info 'OpenGL ICD \(32-bit\)'") 'verify says in one line that 32-bit OpenGL programs keep the renderer of Windows itself'
 Check (($src -match 'Set-StateValueOnce \$state ''opengl_icd_previous''') -and ($src -match 'Set-StateValue \$state ''opengl_icd''')) 'install.ps1 records the values from before the install and the values it writes'
 Check ($src -match 'Write-OpenGlRegistration -ClassKey \$classKey -Plan \$glPlan') 'install.ps1 writes the registration into the GPU software key'
 Check (($src -match 'Write-OpenGlRestore -ClassKey \$classKey -Plan \$glRestore') -and ($src -match 'Remove-PathOrSchedule \$glDir')) 'install.ps1 rolls the registration and the files back when this release does not register the ICD'
-$posKeys = $src.IndexOf('Write-OpenGlRestore -ClassKey $classKey')
-$posFiles = $src.IndexOf('Remove-PathOrSchedule $glDir')
+$posKeys = $src.IndexOf('Write-OpenGlRestore -ClassKey $classKey -Plan $glRestore')
+$posFiles = $src.IndexOf('Remove-PathOrSchedule $d')
 Check (($posKeys -gt 0) -and ($posKeys -lt $posFiles)) 'the rollback removes the values before the files they name'
+$posOffKeys = $src.IndexOf('Write-OpenGlRestore -ClassKey $classKey -Plan $glOffPlan')
+$posOffFiles = $src.IndexOf('Remove-PathOrSchedule $glDirWow')
+Check (($posOffKeys -gt 0) -and ($posOffKeys -lt $posOffFiles)) 'the narrowing step too removes the values before the file they name'
 Check ($src -match "Add-Result 'OpenGL ICD'") 'verify reports the OpenGL ICD'
 Check ($un -match 'Write-OpenGlRestore -ClassKey \$glKey -Plan \$glPlan') 'uninstall.ps1 restores or removes the six values'
 # The registration must go even when Get-Bc250Device does not return exactly one device (the GPU disabled or hidden
@@ -245,9 +342,13 @@ if ($Package) {
     $s = Get-OpenGlReleaseSwitch -Manifest $mf -PackageRoot $Package
     if (-not $s.register) { '  SKIP this release registers no OpenGL ICD' }
     else {
-        foreach ($f in @(@{ p = $s.source; m = 0x8664; n = $s.package_path }, @{ p = $s.source_wow; m = 0x14C; n = $s.package_path_wow })) {
-            $p = @(Test-OpenGlIcdFile -Path $f.p -Machine $f.m)
-            Check ($p.Count -eq 0) "$($f.n): machine and every Drv entry point ($($p -join '; '))"
+        "  the architectures of this package: $(@($s.architectures) -join ', ')"
+        foreach ($f in @(Get-OpenGlArchFiles -Switch $s)) {
+            $p = @(Test-OpenGlIcdFile -Path $f.source -Machine $f.machine)
+            Check ($p.Count -eq 0) "$($f.package_path): $($f.arch), machine and every Drv entry point ($($p -join '; '))"
+        }
+        if (-not $s.register_x86) {
+            Check (-not (Test-Path -LiteralPath $s.source_wow)) "this release registers x64 alone, so the package carries no $($s.package_path_wow)"
         }
     }
     if ($fail) { "$fail check(s) failed"; exit 1 }

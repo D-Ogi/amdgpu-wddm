@@ -46,12 +46,14 @@ function Get-PeExports([string]$Path) {
     return $out
 }
 
-# The OpenGL ICD (BD-076) adds one x86 file to the wow64 tree when this release registers it (manifest.json
-# "opengl_icd"), so the counts below follow the switch instead of a frozen number.
+# The OpenGL ICD (BD-076) adds one x86 file to the wow64 tree when this release registers the ICD for x86
+# (manifest.json "opengl_icd": "architectures" holds x86), so the counts below follow the switch instead of a frozen
+# number. This release registers x64 alone, so the wow64 tree holds its eleven files and no OpenGL ICD.
 $mf = Get-Content -LiteralPath (Join-Path $Package 'manifest.json') -Raw | ConvertFrom-Json
 $glSwitch = Get-OpenGlReleaseSwitch -Manifest $mf -PackageRoot $Package
+$glWow = [bool]($glSwitch.register -and $glSwitch.register_x86)
 $wowExpected = 11
-if ($glSwitch.register) { $wowExpected = 12 }
+if ($glWow) { $wowExpected = 12 }
 
 'payload images: x86 under wow64, x64 elsewhere, no D3D9 stub'
 Check (-not (Test-Path -LiteralPath (Join-Path $Package 'payload\system32')) -and -not (Test-Path -LiteralPath (Join-Path $Package 'payload\syswow64'))) 'no payload\system32 and no payload\syswow64: the package ships no D3D9 stub'
@@ -81,12 +83,16 @@ $x = @(Get-PeExports (Join-Path $Package 'payload\wow64\d3d12\amdgpu_wddm_d3d12.
 Check (($x -join ',') -eq 'OpenAdapter12') "wow64\d3d12\amdgpu_wddm_d3d12.dll exports exactly OpenAdapter12, undecorated ($($x -join ', '))"
 $x = @(Get-PeExports (Join-Path $Package 'payload\wow64\d3d12\amdgpu_wddm_vkd3d.dll'))
 Check (($x -join ',') -eq 'Bc250Vkd3dEngineGetFuncs') "wow64\d3d12\amdgpu_wddm_vkd3d.dll exports exactly Bc250Vkd3dEngineGetFuncs ($($x -join ', '))"
-if ($glSwitch.register) {
+if ($glWow) {
     # The x86 OpenGL ICD (BD-076): a 32-bit OpenGL application gets this file, so it has to be an x86 image with
     # every Drv entry point of the contract, undecorated (installer\common.ps1).
     $p = @(Test-OpenGlIcdFile -Path $glSwitch.source_wow -Machine 0x14C)
     Check ($p.Count -eq 0) "$($glSwitch.package_path_wow): x86 and every Drv entry point ($($p -join '; '))"
-} else { Check (-not (Test-Path -LiteralPath (Join-Path $Package 'payload\wow64\opengl'))) 'this release registers no OpenGL ICD and the package has no payload\wow64\opengl' }
+} else {
+    # This release registers no 32-bit OpenGL driver, so no value names a file there and none is installed. A package
+    # that carried one would put an x86 DLL in the wow64 tree that nothing loads, and the count above would catch it.
+    Check (-not (Test-Path -LiteralPath (Join-Path $Package 'payload\wow64\opengl'))) 'this release registers no 32-bit OpenGL ICD and the package has no payload\wow64\opengl'
+}
 $radv = @('vulkan\vulkan_radeon.dll', 'd3d11\amdgpu_wddm_radv.dll', 'd3d12\amdgpu_wddm_radv.dll' | ForEach-Object { (Get-FileHash -LiteralPath (Join-Path $Package "payload\wow64\$_")).Hash })
 Check (@($radv | Select-Object -Unique).Count -eq 1) 'one x86 RADV build for the D3D11 and D3D12 shells and the system ICD'
 
@@ -98,8 +104,10 @@ $sys = @($m.components | Where-Object { ([string]$_.install_path -like '%SystemR
 Check ($sys.Count -eq 0) "no component installs into System32 or SysWOW64, no D3D9 stub ($(@($sys | ForEach-Object { $_.package_path }) -join ', '))"
 Check ((@($c | Where-Object { $_.package_path -eq 'payload/wow64/d3d11/amdgpu_wddm_d3d11.dll' })[0].install_path) -eq '<InstallDir>\wow64\d3d11\amdgpu_wddm_d3d11.dll') 'the x86 D3D11 shell goes to <InstallDir>\wow64\d3d11'
 Check ((@($c | Where-Object { $_.package_path -eq 'payload/wow64/d3d12/amdgpu_wddm_d3d12.dll' })[0].install_path) -eq '<InstallDir>\wow64\d3d12\amdgpu_wddm_d3d12.dll') 'the x86 D3D12 shell goes to <InstallDir>\wow64\d3d12'
-if ($glSwitch.register) {
+if ($glWow) {
     Check ((@($c | Where-Object { $_.package_path -eq $glSwitch.package_path_wow })[0].install_path) -eq ('<InstallDir>\' + $glSwitch.install_path_wow)) "the x86 OpenGL ICD goes to <InstallDir>\$($glSwitch.install_path_wow)"
+} else {
+    Check (@($c | Where-Object { $_.package_path -eq $glSwitch.package_path_wow }).Count -eq 0) "no component installs a 32-bit OpenGL ICD ($($glSwitch.package_path_wow))"
 }
 
 'verify: Test-WowRegistration against a scratch key and folder'

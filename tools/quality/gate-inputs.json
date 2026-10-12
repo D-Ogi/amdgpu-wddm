@@ -130,6 +130,11 @@
         "documents"
       ]
     },
+    "opengl-icd": {
+      "inputs": [
+        "host"
+      ]
+    },
     "register-generators": {
       "inputs": [
         "host"
