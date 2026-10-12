@@ -1,0 +1,98 @@
+12:18:12.184 A/lawmap BEGIN tag= host=BC250-A phase=lawmap state=A ms=50 cpu=2
+12:18:12.340 A/lawmap boot lastboot=2026-10-12T12:11:55 uptime_s=377
+12:18:12.524 A/lawmap gpu device status=OK instance=PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\4&19CAF403&0&0041
+12:18:12.620 A/lawmap thermal tctl_c=60.9 gate_c=85.0 source=telemetry live=yes
+12:18:12.664 A/lawmap dpm before driver 0x000700D8, requested dpm, reason none, generation 28093727, ticks 11917, uptime 374217 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release below 83.0 C for 4000 ms (default), soft zone from 86.0 C per 1500 ms, lead 15000 ms (default)
+12:18:12.665 A/lawmap dpm before idle: 500 MHz (now) after 3000 ms under 2 permille busy; entries 1 exits 0 refusals 0, 361284 ms at the point
+12:18:12.673 A/lawmap dpm before smu metrics: ok, 368 tables, 1 failures, last 476 ms ago: gfx 824 mV 500 MHz 56.75 C, soc 1168 mV 58.50 C, throttler 0x0000
+12:18:12.681 A/lawmap dpm before 14:18:12.646 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  60.9 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle idle confirmed  up 0 down 1 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  40.3 W avg  41.2 W (gfx 10.2 W soc  4.3 W)
+12:18:12.711 A/lawmap cpu before cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+12:18:12.712 A/lawmap cpu before cpu: applied clock 0 MHz, undervolt 0 steps, cap 0 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+12:18:12.720 A/lawmap cpu before cpu: 806 mV (GPU 824 mV), firmware cap 100 C, features 0xDD602C7D, 65.2 C
+12:18:12.727 A/lawmap cpu before cpu: cores 1400 1400 1400 933 3500 1555 1555 1555 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+12:18:12.736 A/lawmap cpu before cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+12:18:12.743 A/lawmap cpu before cpu: reads 36 writes 0 refusals 0 reverts 0 (retries 0, refused 0); last queue 3 message 0x43 argument 0x00000007 status 0x00000001
+12:18:14.088 A/lawmap pairs pairs_begin processors=12 ms=25
+12:18:14.089 A/lawmap pairs pairs solo cpu=0 work_per_us=11953.32 ns_per_iter=2.0078
+12:18:14.098 A/lawmap pairs pairs cpu_a=0 cpu_b=1 a_work_per_us=6397.74 b_work_per_us=6463.96 sum=12861.70 sum_over_solo=1.076 verdict=shares_a_core
+12:18:14.104 A/lawmap pairs pairs cpu_a=0 cpu_b=2 a_work_per_us=11962.34 b_work_per_us=12030.32 sum=23992.66 sum_over_solo=2.007 verdict=separate_cores
+12:18:14.112 A/lawmap pairs pairs cpu_a=0 cpu_b=3 a_work_per_us=11966.58 b_work_per_us=12040.06 sum=24006.64 sum_over_solo=2.008 verdict=separate_cores
+12:18:14.120 A/lawmap pairs pairs cpu_a=0 cpu_b=4 a_work_per_us=11959.97 b_work_per_us=12028.28 sum=23988.25 sum_over_solo=2.007 verdict=separate_cores
+12:18:14.127 A/lawmap pairs pairs cpu_a=0 cpu_b=5 a_work_per_us=11954.17 b_work_per_us=12040.27 sum=23994.45 sum_over_solo=2.007 verdict=separate_cores
+12:18:14.134 A/lawmap pairs pairs cpu_a=0 cpu_b=6 a_work_per_us=11948.56 b_work_per_us=12024.48 sum=23973.04 sum_over_solo=2.006 verdict=separate_cores
+12:18:14.142 A/lawmap pairs pairs cpu_a=0 cpu_b=7 a_work_per_us=11957.66 b_work_per_us=12033.29 sum=23990.95 sum_over_solo=2.007 verdict=separate_cores
+12:18:14.149 A/lawmap pairs pairs cpu_a=0 cpu_b=8 a_work_per_us=11958.59 b_work_per_us=12035.85 sum=23994.44 sum_over_solo=2.007 verdict=separate_cores
+12:18:14.157 A/lawmap pairs pairs cpu_a=0 cpu_b=9 a_work_per_us=11954.92 b_work_per_us=12033.68 sum=23988.60 sum_over_solo=2.007 verdict=separate_cores
+12:18:14.164 A/lawmap pairs pairs cpu_a=0 cpu_b=10 a_work_per_us=11956.42 b_work_per_us=12022.80 sum=23979.22 sum_over_solo=2.006 verdict=separate_cores
+12:18:14.172 A/lawmap pairs pairs cpu_a=0 cpu_b=11 a_work_per_us=11952.59 b_work_per_us=12029.30 sum=23981.89 sum_over_solo=2.006 verdict=separate_cores
+12:18:14.183 A/lawmap pairs exit=0 seconds=1.3
+12:18:14.800 A/lawmap cache cache cpu=2 kib=16 steps=12300000 us=25018.3 ns_per_access=2.034
+12:18:14.801 A/lawmap cache cache cpu=2 kib=32 steps=12400000 us=25171.5 ns_per_access=2.030
+12:18:14.810 A/lawmap cache cache cpu=2 kib=512 steps=3500000 us=25634.7 ns_per_access=7.324
+12:18:14.818 A/lawmap cache cache cpu=2 kib=2048 steps=1500000 us=26340.3 ns_per_access=17.560
+12:18:14.825 A/lawmap cache cache cpu=2 kib=3072 steps=1100000 us=26819.8 ns_per_access=24.382
+12:18:14.833 A/lawmap cache cache cpu=2 kib=4096 steps=900000 us=25226.0 ns_per_access=28.029
+12:18:14.842 A/lawmap cache cache cpu=2 kib=6144 steps=300000 us=28020.6 ns_per_access=93.402
+12:18:14.849 A/lawmap cache cache cpu=2 kib=8192 steps=300000 us=33431.3 ns_per_access=111.438
+12:18:14.856 A/lawmap cache cache cpu=2 kib=65536 steps=200000 us=30436.1 ns_per_access=152.181
+12:18:14.864 A/lawmap cache exit=0 seconds=0.6
+12:18:14.898 A/lawmap dpm after driver 0x000700D8, requested dpm, reason none, generation 28093727, ticks 11990, uptime 376459 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release below 83.0 C for 4000 ms (default), soft zone from 86.0 C per 1500 ms, lead 15000 ms (default)
+12:18:14.899 A/lawmap dpm after idle: 500 MHz (now) after 3000 ms under 2 permille busy; entries 1 exits 0 refusals 0, 363498 ms at the point
+12:18:14.906 A/lawmap dpm after smu metrics: ok, 370 tables, 1 failures, last 691 ms ago: gfx 824 mV 500 MHz 56.25 C, soc 1193 mV 58.25 C, throttler 0x0000
+12:18:14.915 A/lawmap dpm after 14:18:14.887 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  62.2 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle idle confirmed  up 0 down 1 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  42.3 W avg  41.6 W (gfx 10.2 W soc  6.5 W)
+12:18:14.944 A/lawmap cpu after cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+12:18:14.945 A/lawmap cpu after cpu: applied clock 0 MHz, undervolt 0 steps, cap 0 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+12:18:14.953 A/lawmap cpu after cpu: 806 mV (GPU 824 mV), firmware cap 100 C, features 0xDD602C7D, 65.2 C
+12:18:14.960 A/lawmap cpu after cpu: cores 1400 1400 1400 933 3500 1555 1555 1555 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+12:18:14.968 A/lawmap cpu after cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+12:18:14.975 A/lawmap cpu after cpu: reads 36 writes 0 refusals 0 reverts 0 (retries 0, refused 0); last queue 3 message 0x43 argument 0x00000007 status 0x00000001
+12:18:14.987 A/lawmap END phase=lawmap state=A exit=0
+12:18:25.154 A/lawmap BEGIN tag= host=BC250-A phase=lawmap state=A ms=50 cpu=2
+12:18:25.308 A/lawmap boot lastboot=2026-10-12T12:11:55 uptime_s=390
+12:18:25.493 A/lawmap gpu device status=OK instance=PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\4&19CAF403&0&0041
+12:18:25.588 A/lawmap thermal tctl_c=61.6 gate_c=85.0 source=telemetry live=yes
+12:18:25.631 A/lawmap dpm before driver 0x000700D8, requested dpm, reason none, generation 28093727, ticks 12331, uptime 387184 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release below 83.0 C for 4000 ms (default), soft zone from 86.0 C per 1500 ms, lead 15000 ms (default)
+12:18:25.632 A/lawmap dpm before idle: 500 MHz (now) after 3000 ms under 2 permille busy; entries 1 exits 0 refusals 0, 374018 ms at the point
+12:18:25.641 A/lawmap dpm before smu metrics: ok, 381 tables, 1 failures, last 258 ms ago: gfx 824 mV 500 MHz 56.25 C, soc 1175 mV 58.00 C, throttler 0x0000
+12:18:25.648 A/lawmap dpm before 14:18:25.614 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  61.6 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle idle confirmed  up 0 down 1 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  41.6 W avg  40.8 W (gfx 10.2 W soc  5.8 W)
+12:18:25.681 A/lawmap cpu before cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+12:18:25.683 A/lawmap cpu before cpu: applied clock 0 MHz, undervolt 0 steps, cap 0 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+12:18:25.691 A/lawmap cpu before cpu: 806 mV (GPU 824 mV), firmware cap 100 C, features 0xDD602C7D, 65.2 C
+12:18:25.698 A/lawmap cpu before cpu: cores 1400 1400 1400 933 3500 1555 1555 1555 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+12:18:25.707 A/lawmap cpu before cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+12:18:25.715 A/lawmap cpu before cpu: reads 36 writes 0 refusals 0 reverts 0 (retries 0, refused 0); last queue 3 message 0x43 argument 0x00000007 status 0x00000001
+12:18:27.195 A/lawmap pairs pairs_begin processors=12 ms=25
+12:18:27.197 A/lawmap pairs pairs solo cpu=0 work_per_us=11952.48 ns_per_iter=2.0080
+12:18:27.205 A/lawmap pairs pairs cpu_a=0 cpu_b=1 a_work_per_us=6405.71 b_work_per_us=6463.23 sum=12868.94 sum_over_solo=1.077 verdict=shares_a_core
+12:18:27.212 A/lawmap pairs pairs cpu_a=0 cpu_b=2 a_work_per_us=11967.50 b_work_per_us=12035.35 sum=24002.85 sum_over_solo=2.008 verdict=separate_cores
+12:18:27.221 A/lawmap pairs pairs cpu_a=0 cpu_b=3 a_work_per_us=11964.63 b_work_per_us=12036.26 sum=24000.89 sum_over_solo=2.008 verdict=separate_cores
+12:18:27.241 A/lawmap pairs pairs cpu_a=0 cpu_b=4 a_work_per_us=11965.27 b_work_per_us=12035.83 sum=24001.09 sum_over_solo=2.008 verdict=separate_cores
+12:18:27.249 A/lawmap pairs pairs cpu_a=0 cpu_b=5 a_work_per_us=11964.94 b_work_per_us=12029.91 sum=23994.85 sum_over_solo=2.008 verdict=separate_cores
+12:18:27.257 A/lawmap pairs pairs cpu_a=0 cpu_b=6 a_work_per_us=11956.04 b_work_per_us=12031.24 sum=23987.28 sum_over_solo=2.007 verdict=separate_cores
+12:18:27.264 A/lawmap pairs pairs cpu_a=0 cpu_b=7 a_work_per_us=11951.62 b_work_per_us=12030.94 sum=23982.57 sum_over_solo=2.006 verdict=separate_cores
+12:18:27.272 A/lawmap pairs pairs cpu_a=0 cpu_b=8 a_work_per_us=11949.88 b_work_per_us=12031.65 sum=23981.53 sum_over_solo=2.006 verdict=separate_cores
+12:18:27.280 A/lawmap pairs pairs cpu_a=0 cpu_b=9 a_work_per_us=11959.08 b_work_per_us=12027.52 sum=23986.60 sum_over_solo=2.007 verdict=separate_cores
+12:18:27.289 A/lawmap pairs pairs cpu_a=0 cpu_b=10 a_work_per_us=11962.54 b_work_per_us=12026.76 sum=23989.31 sum_over_solo=2.007 verdict=separate_cores
+12:18:27.296 A/lawmap pairs pairs cpu_a=0 cpu_b=11 a_work_per_us=11962.04 b_work_per_us=12030.65 sum=23992.70 sum_over_solo=2.007 verdict=separate_cores
+12:18:27.308 A/lawmap pairs exit=0 seconds=1.4
+12:18:27.874 A/lawmap cache cache cpu=2 kib=16 steps=12200000 us=25104.4 ns_per_access=2.058
+12:18:27.875 A/lawmap cache cache cpu=2 kib=32 steps=12400000 us=25183.7 ns_per_access=2.031
+12:18:27.884 A/lawmap cache cache cpu=2 kib=512 steps=4700000 us=25537.7 ns_per_access=5.434
+12:18:27.891 A/lawmap cache cache cpu=2 kib=2048 steps=2000000 us=25717.2 ns_per_access=12.859
+12:18:27.900 A/lawmap cache cache cpu=2 kib=3072 steps=1900000 us=25450.1 ns_per_access=13.395
+12:18:27.907 A/lawmap cache cache cpu=2 kib=4096 steps=800000 us=25836.0 ns_per_access=32.295
+12:18:27.916 A/lawmap cache cache cpu=2 kib=6144 steps=300000 us=27817.4 ns_per_access=92.725
+12:18:27.923 A/lawmap cache cache cpu=2 kib=8192 steps=300000 us=33115.6 ns_per_access=110.385
+12:18:27.931 A/lawmap cache cache cpu=2 kib=65536 steps=200000 us=30391.1 ns_per_access=151.956
+12:18:27.939 A/lawmap cache exit=0 seconds=0.6
+12:18:27.975 A/lawmap dpm after driver 0x000700D8, requested dpm, reason none, generation 28093727, ticks 12407, uptime 389524 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release below 83.0 C for 4000 ms (default), soft zone from 86.0 C per 1500 ms, lead 15000 ms (default)
+12:18:27.976 A/lawmap dpm after idle: 500 MHz (now) after 3000 ms under 2 permille busy; entries 1 exits 0 refusals 0, 376328 ms at the point
+12:18:27.985 A/lawmap dpm after smu metrics: ok, 383 tables, 1 failures, last 580 ms ago: gfx 824 mV 500 MHz 56.25 C, soc 1193 mV 58.00 C, throttler 0x0000
+12:18:27.993 A/lawmap dpm after 14:18:27.963 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  62.6 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle idle confirmed  up 0 down 1 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  39.5 W avg  41.8 W (gfx 10.2 W soc  3.8 W)
+12:18:28.022 A/lawmap cpu after cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+12:18:28.024 A/lawmap cpu after cpu: applied clock 0 MHz, undervolt 0 steps, cap 0 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+12:18:28.031 A/lawmap cpu after cpu: 806 mV (GPU 824 mV), firmware cap 100 C, features 0xDD602C7D, 65.2 C
+12:18:28.040 A/lawmap cpu after cpu: cores 1400 1400 1400 933 3500 1555 1555 1555 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+12:18:28.048 A/lawmap cpu after cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+12:18:28.055 A/lawmap cpu after cpu: reads 36 writes 0 refusals 0 reverts 0 (retries 0, refused 0); last queue 3 message 0x43 argument 0x00000007 status 0x00000001
+12:18:28.066 A/lawmap END phase=lawmap state=A exit=0

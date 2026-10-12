@@ -1,0 +1,4 @@
+boot-wait 0s: windows up, old boot 2026-10-12T12:11:55Z, linux down (other host key; refused; no answer; no answer; no answer; no answer)
+boot-wait 71s: windows up, boot 2026-10-12T12:28:05Z, linux down (other host key; refused; no answer; no answer; no answer; no answer)
+BOOT UP windows boot 2026-10-12T12:28:05Z after 71s
+exit 0

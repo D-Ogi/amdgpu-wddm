@@ -57,7 +57,7 @@
       ]
     }
   },
-  "kmd_version": "0.7.216.61",
+  "kmd_version": "0.7.216.62",
   "kmd_abi": "0x000700D8",
   "control_app_exe": "amdgpu_wddm_control.exe",
   "mft_h264": {

@@ -105,6 +105,8 @@ NTSTATUS ModesetPrepareInherited(BC250_DEVICE* Device, const D3DKMDT_VIDEO_SIGNA
         m->InheritedPipe.TilingConfig, m->InheritedPipe.Pitch, m->InheritedPipe.Otg1);
     GuardLog("display inherited: surface %08lX bottom %08lX mpcc %08lX out %08lX",
         m->InheritedPipe.SurfaceControl,m->InheritedPipe.MpccBottom,m->InheritedPipe.MpccControl,m->InheritedPipe.MpcOut);
+    GuardLog("display inherited: autocal %08lX dscl control %08lX",
+        m->InheritedPipe.Autocal,m->InheritedPipe.DsclControl);
     if (m->InheritedFixed) {
         GuardStartDetail(L"inherited source %ux%u pitch %u target %ux%u total %ux%u pixel %Iu support %08X pipe %08X valid %08X",
             Device->Post.Width,Device->Post.Height,Device->Post.Pitch,Signal->ActiveSize.cx,Signal->ActiveSize.cy,

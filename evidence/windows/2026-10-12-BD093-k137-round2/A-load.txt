@@ -1,0 +1,117 @@
+12:19:59.840 A/load BEGIN tag= host=BC250-A phase=load state=A ms=50 cpu=2
+12:19:59.988 A/load boot lastboot=2026-10-12T12:11:55 uptime_s=484
+12:20:00.176 A/load gpu device status=OK instance=PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\4&19CAF403&0&0041
+12:20:00.272 A/load thermal tctl_c=61.1 gate_c=80.0 source=telemetry live=yes
+12:20:00.315 A/load dpm before-load driver 0x000700D8, requested dpm, reason none, generation 28093727, ticks 15349, uptime 481864 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release below 83.0 C for 4000 ms (default), soft zone from 86.0 C per 1500 ms, lead 15000 ms (default)
+12:20:00.316 A/load dpm before-load idle: 500 MHz (now) after 3000 ms under 2 permille busy; entries 1 exits 0 refusals 0, 467204 ms at the point
+12:20:00.324 A/load dpm before-load smu metrics: ok, 474 tables, 1 failures, last 941 ms ago: gfx 824 mV 500 MHz 56.25 C, soc 806 mV 58.25 C, throttler 0x0000
+12:20:00.330 A/load dpm before-load 14:20:00.295 dpm  500 MHz  820 mV (SMU  500 MHz VID 116)  61.1 C busy   3.3% avg   1.0% want 1000 cap 2000 max 2000 throttle idle confirmed  up 0 down 1 thermal 0 err 0  src grbm submit   3.2% sdma   0.0%  power  36.8 W avg  40.4 W (gfx 10.2 W soc  1.0 W)
+12:20:00.362 A/load cpu before-load cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+12:20:00.363 A/load cpu before-load cpu: applied clock 3500 MHz, undervolt 0 steps, cap 0 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+12:20:00.371 A/load cpu before-load cpu: 806 mV (GPU 824 mV), firmware cap 100 C, features 0xDD602C7D, 61.1 C
+12:20:00.379 A/load cpu before-load cpu: cores 1400 1400 1400 900 1400 1400 1400 900 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+12:20:00.386 A/load cpu before-load cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+12:20:00.393 A/load cpu before-load cpu: reads 118 writes 2 refusals 0 reverts 0 (retries 0, refused 0); last queue 3 message 0x36 argument 0x00000000 status 0x00000001
+12:20:06.746 A/load law gpu-idle law_begin cpu=2 on=2 ms=50 full=0 processors=12
+12:20:06.747 A/load law gpu-idle law_isa osxsave=1 avx=1 avx2=1 xcr0_ymm=1 vec256=run
+12:20:06.756 A/load law gpu-idle clock imul16_ns=13.7505 imul16_mhz=3490.8 fp8_ns=6.8755 fp8_mhz_at_3cyc=3490.7 fp_over_imul=1.0000 tsc_mhz=3194.04 qpc_hz=10000000
+12:20:06.763 A/load law gpu-idle sweep8 name=add_x6 instr=8 bytes=30 iters=128002003 us=73383.8 ns_per_iter=0.5733 cyc_per_iter=2.001 cyc_per_instr=0.2502 cyc_per_byte=0.0667 latency_cyc=1.0 work_per_us=10465.69 tsc_per_iter=1.8312
+12:20:06.772 A/load law gpu-idle sweep32 name=add32_x6 instr=8 bytes=48 iters=128002003 us=73370.0 ns_per_iter=0.5732 cyc_per_iter=2.001 cyc_per_instr=0.2501 cyc_per_byte=0.0417 latency_cyc=1.0 work_per_us=10467.66 tsc_per_iter=1.8308
+12:20:06.779 A/load law gpu-idle sweep8 name=add_x12 instr=14 bytes=54 iters=53970394 us=57295.3 ns_per_iter=1.0616 cyc_per_iter=3.706 cyc_per_instr=0.2647 cyc_per_byte=0.0686 latency_cyc=1.0 work_per_us=11303.63 tsc_per_iter=3.3908
+12:20:06.786 A/load law gpu-idle sweep32 name=add32_x12 instr=14 bytes=90 iters=54235105 us=57553.0 ns_per_iter=1.0612 cyc_per_iter=3.704 cyc_per_instr=0.2646 cyc_per_byte=0.0412 latency_cyc=1.0 work_per_us=11308.21 tsc_per_iter=3.3894
+12:20:06.795 A/load law gpu-idle sweep8 name=add_x18 instr=20 bytes=78 iters=37951329 us=57388.4 ns_per_iter=1.5122 cyc_per_iter=5.279 cyc_per_instr=0.2639 cyc_per_byte=0.0677 latency_cyc=1.0 work_per_us=11903.52 tsc_per_iter=4.8299
+12:20:06.802 A/load law gpu-idle sweep32 name=add32_x18 instr=20 bytes=136 iters=40173310 us=57942.4 ns_per_iter=1.4423 cyc_per_iter=5.035 cyc_per_instr=0.2517 cyc_per_byte=0.0370 latency_cyc=1.0 work_per_us=12479.97 tsc_per_iter=4.6068
+12:20:06.811 A/load law gpu-idle sweep8 name=add_x24 instr=26 bytes=102 iters=28866940 us=57551.0 ns_per_iter=1.9937 cyc_per_iter=6.959 cyc_per_instr=0.2677 cyc_per_byte=0.0682 latency_cyc=1.0 work_per_us=12038.13 tsc_per_iter=6.3679
+12:20:06.819 A/load law gpu-idle sweep32 name=add32_x24 instr=26 bytes=178 iters=28702670 us=57220.5 ns_per_iter=1.9936 cyc_per_iter=6.959 cyc_per_instr=0.2677 cyc_per_byte=0.0391 latency_cyc=1.0 work_per_us=12038.76 tsc_per_iter=6.3675
+12:20:06.826 A/load law gpu-idle sweep8 name=add_x36 instr=38 bytes=154 iters=19838552 us=57560.9 ns_per_iter=2.9015 cyc_per_iter=10.128 cyc_per_instr=0.2665 cyc_per_byte=0.0658 latency_cyc=1.0 work_per_us=12407.52 tsc_per_iter=9.2674
+12:20:06.834 A/load law gpu-idle sweep32 name=add32_x36 instr=38 bytes=262 iters=19838552 us=57648.9 ns_per_iter=2.9059 cyc_per_iter=10.144 cyc_per_instr=0.2669 cyc_per_byte=0.0387 latency_cyc=1.0 work_per_us=12388.58 tsc_per_iter=9.2816
+12:20:06.841 A/load law gpu-idle sweep8 name=add_x48 instr=50 bytes=202 iters=15159920 us=56856.4 ns_per_iter=3.7504 cyc_per_iter=13.092 cyc_per_instr=0.2618 cyc_per_byte=0.0648 latency_cyc=1.0 work_per_us=12798.49 tsc_per_iter=11.9791
+12:20:06.849 A/load law gpu-idle sweep32 name=add32_x48 instr=50 bytes=346 iters=15313340 us=57313.0 ns_per_iter=3.7427 cyc_per_iter=13.065 cyc_per_instr=0.2613 cyc_per_byte=0.0378 latency_cyc=1.0 work_per_us=12825.02 tsc_per_iter=11.9543
+12:20:06.857 A/load law gpu-idle slope_imm8 points=6 slope_cyc_per_instr=0.2644 intercept_cyc=-0.013 r2=0.99951 instr_per_cyc=3.783
+12:20:06.864 A/load law gpu-idle slope_imm32 points=6 slope_cyc_per_instr=0.2652 intercept_cyc=-0.077 r2=0.99886 instr_per_cyc=3.771
+12:20:06.872 A/load law gpu-idle knee name=knee_m0 instr=10 bytes=38 iters=8336604 us=57312.7 ns_per_iter=6.8748 cyc_per_iter=23.999 cyc_per_instr=2.3999 cyc_per_byte=0.6315 latency_cyc=24.0 work_per_us=1163.67 tsc_per_iter=21.9585
+12:20:06.880 A/load law gpu-idle knee name=knee_m4 instr=14 bytes=54 iters=8355988 us=57465.0 ns_per_iter=6.8771 cyc_per_iter=24.006 cyc_per_instr=1.7147 cyc_per_byte=0.4446 latency_cyc=24.0 work_per_us=1163.28 tsc_per_iter=21.9657
+12:20:06.887 A/load law gpu-idle knee name=knee_m8 instr=18 bytes=70 iters=8350527 us=57411.3 ns_per_iter=6.8752 cyc_per_iter=24.000 cyc_per_instr=1.3333 cyc_per_byte=0.3429 latency_cyc=24.0 work_per_us=1163.61 tsc_per_iter=21.9596
+12:20:06.896 A/load law gpu-idle knee name=knee_m12 instr=22 bytes=86 iters=8356838 us=57454.7 ns_per_iter=6.8752 cyc_per_iter=24.000 cyc_per_instr=1.0909 cyc_per_byte=0.2791 latency_cyc=24.0 work_per_us=1163.61 tsc_per_iter=21.9596
+12:20:06.902 A/load law gpu-idle knee name=knee_m16 instr=26 bytes=102 iters=8354895 us=57461.3 ns_per_iter=6.8776 cyc_per_iter=24.008 cyc_per_instr=0.9234 cyc_per_byte=0.2354 latency_cyc=24.0 work_per_us=1163.20 tsc_per_iter=21.9673
+12:20:06.910 A/load law gpu-idle knee name=knee_m20 instr=30 bytes=118 iters=8352589 us=57458.8 ns_per_iter=6.8792 cyc_per_iter=24.014 cyc_per_instr=0.8005 cyc_per_byte=0.2035 latency_cyc=24.0 work_per_us=1162.93 tsc_per_iter=21.9723
+12:20:06.917 A/load law gpu-idle knee name=knee_m24 instr=34 bytes=138 iters=8349921 us=57398.3 ns_per_iter=6.8741 cyc_per_iter=23.996 cyc_per_instr=0.7058 cyc_per_byte=0.1739 latency_cyc=24.0 work_per_us=1163.79 tsc_per_iter=21.9562
+12:20:06.925 A/load law gpu-idle knee name=knee_m32 instr=42 bytes=170 iters=8347618 us=57379.9 ns_per_iter=6.8738 cyc_per_iter=23.995 cyc_per_instr=0.5713 cyc_per_byte=0.1411 latency_cyc=24.0 work_per_us=1163.84 tsc_per_iter=21.9553
+12:20:06.932 A/load law gpu-idle knee name=knee_m40 instr=50 bytes=202 iters=8367783 us=57548.5 ns_per_iter=6.8774 cyc_per_iter=24.007 cyc_per_instr=0.4801 cyc_per_byte=0.1188 latency_cyc=24.0 work_per_us=1163.23 tsc_per_iter=21.9666
+12:20:06.941 A/load law gpu-idle port name=port_alu_x24 instr=26 bytes=102 iters=28840878 us=57496.2 ns_per_iter=1.9936 cyc_per_iter=6.959 cyc_per_instr=0.2677 cyc_per_byte=0.0682 latency_cyc=1.0 work_per_us=12038.73 tsc_per_iter=6.3675
+12:20:06.948 A/load law gpu-idle port name=port_mul_x24 instr=26 bytes=102 iters=8360970 us=57497.1 ns_per_iter=6.8768 cyc_per_iter=24.006 cyc_per_instr=0.9233 cyc_per_byte=0.2353 latency_cyc=3.0 work_per_us=3489.97 tsc_per_iter=21.9650
+12:20:06.956 A/load law gpu-idle port name=port_fp_x24 instr=26 bytes=102 iters=8368636 us=57568.3 ns_per_iter=6.8791 cyc_per_iter=24.013 cyc_per_instr=0.9236 cyc_per_byte=0.2354 latency_cyc=3.0 work_per_us=3488.85 tsc_per_iter=21.9720
+12:20:06.963 A/load law gpu-idle port name=port_vec128_x24 instr=26 bytes=102 iters=16704450 us=57435.5 ns_per_iter=3.4383 cyc_per_iter=12.002 cyc_per_instr=0.4616 cyc_per_byte=0.1177 latency_cyc=1.0 work_per_us=13960.24 tsc_per_iter=10.9822
+12:20:06.971 A/load law gpu-idle port name=port_vec256_x24 instr=26 bytes=102 iters=16739464 us=57570.8 ns_per_iter=3.4392 cyc_per_iter=12.006 cyc_per_instr=0.4618 cyc_per_byte=0.1177 latency_cyc=1.0 work_per_us=27913.26 tsc_per_iter=10.9850
+12:20:06.978 A/load law gpu-idle port name=port_load_x24 instr=26 bytes=126 iters=16641601 us=57217.8 ns_per_iter=3.4382 cyc_per_iter=12.002 cyc_per_instr=0.4616 cyc_per_byte=0.0953 latency_cyc=1.0 work_per_us=6980.32 tsc_per_iter=10.9819
+12:20:06.986 A/load law gpu-idle port name=port_store_x24 instr=26 bytes=126 iters=8344347 us=57397.7 ns_per_iter=6.8786 cyc_per_iter=24.012 cyc_per_instr=0.9235 cyc_per_byte=0.1906 latency_cyc=1.0 work_per_us=3489.07 tsc_per_iter=21.9707
+12:20:06.993 A/load law gpu-idle pair name=dep_imul_x4 instr=6 bytes=22 iters=16713676 us=57453.5 ns_per_iter=3.4375 cyc_per_iter=12.000 cyc_per_instr=1.9999 cyc_per_byte=0.5454 latency_cyc=12.0 work_per_us=1163.63 tsc_per_iter=10.9796
+12:20:07.001 A/load law gpu-idle pair name=ind_imul_x4 instr=6 bytes=22 iters=50192090 us=57507.1 ns_per_iter=1.1457 cyc_per_iter=4.000 cyc_per_instr=0.6666 cyc_per_byte=0.1818 latency_cyc=3.0 work_per_us=3491.19 tsc_per_iter=3.6595
+12:20:07.008 A/load law gpu-idle clock imul16_ns=13.7561 imul16_mhz=3489.4 fp8_ns=6.8747 fp8_mhz_at_3cyc=3491.0 fp_over_imul=1.0005 tsc_mhz=3194.06 qpc_hz=10000000
+12:20:07.017 A/load law gpu-idle law_end cpu=2 clock_start_mhz=3490.8 clock_end_mhz=3489.4 drift_pct=-0.041
+12:20:07.026 A/load law gpu-idle exit=0 seconds=6.3
+12:20:07.034 A/load law gpu-idle SUMMARY clock_mhz=3490.8 k_cyc_per_instr=0.2644 (state A reference: clock about 3489, k about 0.23; state B 2026-10-12: clock about 2790, k about 1.1)
+12:20:07.095 A/load load loader=vkmembw-warmup90s idle_gfx_w=10.2
+12:20:12.186 A/load dpm under-load-1 driver 0x000700D8, requested dpm, reason none, generation 28093727, ticks 15724, uptime 493697 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release below 83.0 C for 4000 ms (default), soft zone from 86.0 C per 1500 ms, lead 15000 ms (default)
+12:20:12.187 A/load dpm under-load-1 idle: 500 MHz after 3000 ms under 2 permille busy; entries 1 exits 1 refusals 0, 474062 ms at the point
+12:20:12.200 A/load dpm under-load-1 smu metrics: ok, 486 tables, 1 failures, last 674 ms ago: gfx 987 mV 2000 MHz 69.25 C, soc 806 mV 64.00 C, throttler 0x0000
+12:20:12.210 A/load dpm under-load-1 14:20:12.130 dpm 2000 MHz 1000 mV (SMU 2000 MHz VID  88)  68.1 C busy  96.7% avg  98.0% want 2000 cap 2000 max 2000 throttle none confirmed session  up 5 down 1 thermal 0 err 0  src grbm submit  96.7% sdma   0.0%  power 100.8 W avg  99.9 W (gfx 58.0 W soc  1.6 W)
+12:20:18.518 A/load law gpu-loaded law_begin cpu=2 on=2 ms=50 full=0 processors=12
+12:20:18.519 A/load law gpu-loaded law_isa osxsave=1 avx=1 avx2=1 xcr0_ymm=1 vec256=run
+12:20:18.532 A/load law gpu-loaded clock imul16_ns=13.7530 imul16_mhz=3490.2 fp8_ns=6.8773 fp8_mhz_at_3cyc=3489.7 fp_over_imul=0.9999 tsc_mhz=3194.04 qpc_hz=10000000
+12:20:18.541 A/load law gpu-loaded sweep8 name=add_x6 instr=8 bytes=30 iters=128002003 us=73359.7 ns_per_iter=0.5731 cyc_per_iter=2.000 cyc_per_instr=0.2500 cyc_per_byte=0.0667 latency_cyc=1.0 work_per_us=10469.13 tsc_per_iter=1.8306
+12:20:18.551 A/load law gpu-loaded sweep32 name=add32_x6 instr=8 bytes=48 iters=128002003 us=73398.9 ns_per_iter=0.5734 cyc_per_iter=2.001 cyc_per_instr=0.2502 cyc_per_byte=0.0417 latency_cyc=1.0 work_per_us=10463.54 tsc_per_iter=1.8315
+12:20:18.562 A/load law gpu-loaded sweep8 name=add_x12 instr=14 bytes=54 iters=54235105 us=57576.1 ns_per_iter=1.0616 cyc_per_iter=3.705 cyc_per_instr=0.2647 cyc_per_byte=0.0686 latency_cyc=1.0 work_per_us=11303.67 tsc_per_iter=3.3908
+12:20:18.573 A/load law gpu-loaded sweep32 name=add32_x12 instr=14 bytes=90 iters=53970394 us=57286.8 ns_per_iter=1.0614 cyc_per_iter=3.705 cyc_per_instr=0.2646 cyc_per_byte=0.0412 latency_cyc=1.0 work_per_us=11305.30 tsc_per_iter=3.3903
+12:20:18.583 A/load law gpu-loaded sweep8 name=add_x18 instr=20 bytes=78 iters=37557190 us=56956.0 ns_per_iter=1.5165 cyc_per_iter=5.293 cyc_per_instr=0.2646 cyc_per_byte=0.0679 latency_cyc=1.0 work_per_us=11869.33 tsc_per_iter=4.8438
+12:20:18.595 A/load law gpu-loaded sweep32 name=add32_x18 instr=20 bytes=136 iters=37082457 us=53120.7 ns_per_iter=1.4325 cyc_per_iter=5.000 cyc_per_instr=0.2500 cyc_per_byte=0.0368 latency_cyc=1.0 work_per_us=12565.43 tsc_per_iter=4.5755
+12:20:18.604 A/load law gpu-loaded sweep8 name=add_x24 instr=26 bytes=102 iters=28868390 us=57608.2 ns_per_iter=1.9955 cyc_per_iter=6.965 cyc_per_instr=0.2679 cyc_per_byte=0.0683 latency_cyc=1.0 work_per_us=12026.78 tsc_per_iter=6.3739
+12:20:18.615 A/load law gpu-loaded sweep32 name=add32_x24 instr=26 bytes=178 iters=28695508 us=57222.9 ns_per_iter=1.9941 cyc_per_iter=6.960 cyc_per_instr=0.2677 cyc_per_byte=0.0391 latency_cyc=1.0 work_per_us=12035.25 tsc_per_iter=6.3694
+12:20:18.626 A/load law gpu-loaded sweep8 name=add_x36 instr=38 bytes=154 iters=19838552 us=57648.6 ns_per_iter=2.9059 cyc_per_iter=10.142 cyc_per_instr=0.2669 cyc_per_byte=0.0659 latency_cyc=1.0 work_per_us=12388.64 tsc_per_iter=9.2815
+12:20:18.636 A/load law gpu-loaded sweep32 name=add32_x36 instr=38 bytes=262 iters=19831026 us=57648.6 ns_per_iter=2.9070 cyc_per_iter=10.146 cyc_per_instr=0.2670 cyc_per_byte=0.0387 latency_cyc=1.0 work_per_us=12383.94 tsc_per_iter=9.2850
+12:20:18.646 A/load law gpu-loaded sweep8 name=add_x48 instr=50 bytes=202 iters=15160319 us=57134.9 ns_per_iter=3.7687 cyc_per_iter=13.153 cyc_per_instr=0.2631 cyc_per_byte=0.0651 latency_cyc=1.0 work_per_us=12736.44 tsc_per_iter=12.0375
+12:20:18.657 A/load law gpu-loaded sweep32 name=add32_x48 instr=50 bytes=346 iters=15113300 us=56292.1 ns_per_iter=3.7247 cyc_per_iter=13.000 cyc_per_instr=0.2600 cyc_per_byte=0.0376 latency_cyc=1.0 work_per_us=12887.04 tsc_per_iter=11.8968
+12:20:18.668 A/load law gpu-loaded slope_imm8 points=6 slope_cyc_per_instr=0.2657 intercept_cyc=-0.031 r2=0.99962 instr_per_cyc=3.764
+12:20:18.677 A/load law gpu-loaded slope_imm32 points=6 slope_cyc_per_instr=0.2641 intercept_cyc=-0.065 r2=0.99848 instr_per_cyc=3.786
+12:20:18.690 A/load law gpu-loaded knee name=knee_m0 instr=10 bytes=38 iters=8327428 us=57274.6 ns_per_iter=6.8778 cyc_per_iter=24.005 cyc_per_instr=2.4005 cyc_per_byte=0.6317 latency_cyc=24.0 work_per_us=1163.16 tsc_per_iter=21.9681
+12:20:18.699 A/load law gpu-loaded knee name=knee_m4 instr=14 bytes=54 iters=8353075 us=57423.2 ns_per_iter=6.8745 cyc_per_iter=23.993 cyc_per_instr=1.7138 cyc_per_byte=0.4443 latency_cyc=24.0 work_per_us=1163.72 tsc_per_iter=21.9575
+12:20:18.711 A/load law gpu-loaded knee name=knee_m8 instr=18 bytes=70 iters=8355017 us=57443.3 ns_per_iter=6.8753 cyc_per_iter=23.996 cyc_per_instr=1.3331 cyc_per_byte=0.3428 latency_cyc=24.0 work_per_us=1163.58 tsc_per_iter=21.9600
+12:20:18.720 A/load law gpu-loaded knee name=knee_m12 instr=22 bytes=86 iters=8355502 us=57464.7 ns_per_iter=6.8775 cyc_per_iter=24.003 cyc_per_instr=1.0911 cyc_per_byte=0.2791 latency_cyc=24.0 work_per_us=1163.22 tsc_per_iter=21.9669
+12:20:18.731 A/load law gpu-loaded knee name=knee_m16 instr=26 bytes=102 iters=8355381 us=57470.3 ns_per_iter=6.8782 cyc_per_iter=24.006 cyc_per_instr=0.9233 cyc_per_byte=0.2354 latency_cyc=24.0 work_per_us=1163.09 tsc_per_iter=21.9694
+12:20:18.742 A/load law gpu-loaded knee name=knee_m20 instr=30 bytes=118 iters=8361334 us=57516.2 ns_per_iter=6.8788 cyc_per_iter=24.008 cyc_per_instr=0.8003 cyc_per_byte=0.2035 latency_cyc=24.0 work_per_us=1162.99 tsc_per_iter=21.9713
+12:20:18.753 A/load law gpu-loaded knee name=knee_m24 instr=34 bytes=138 iters=8369001 us=57593.0 ns_per_iter=6.8817 cyc_per_iter=24.018 cyc_per_instr=0.7064 cyc_per_byte=0.1740 latency_cyc=24.0 work_per_us=1162.50 tsc_per_iter=21.9804
+12:20:18.763 A/load law gpu-loaded knee name=knee_m32 instr=42 bytes=170 iters=8360727 us=57505.3 ns_per_iter=6.8780 cyc_per_iter=24.005 cyc_per_instr=0.5716 cyc_per_byte=0.1412 latency_cyc=24.0 work_per_us=1163.12 tsc_per_iter=21.9688
+12:20:18.773 A/load law gpu-loaded knee name=knee_m40 instr=50 bytes=202 iters=8368149 us=57546.4 ns_per_iter=6.8768 cyc_per_iter=24.001 cyc_per_instr=0.4800 cyc_per_byte=0.1188 latency_cyc=24.0 work_per_us=1163.33 tsc_per_iter=21.9649
+12:20:18.785 A/load law gpu-loaded port name=port_alu_x24 instr=26 bytes=102 iters=28866940 us=57578.1 ns_per_iter=1.9946 cyc_per_iter=6.961 cyc_per_instr=0.2677 cyc_per_byte=0.0682 latency_cyc=1.0 work_per_us=12032.47 tsc_per_iter=6.3708
+12:20:18.798 A/load law gpu-loaded port name=port_mul_x24 instr=26 bytes=102 iters=8362672 us=57504.7 ns_per_iter=6.8764 cyc_per_iter=24.000 cyc_per_instr=0.9231 cyc_per_byte=0.2353 latency_cyc=3.0 work_per_us=3490.22 tsc_per_iter=21.9633
+12:20:18.809 A/load law gpu-loaded port name=port_fp_x24 instr=26 bytes=102 iters=8360970 us=57506.0 ns_per_iter=6.8779 cyc_per_iter=24.005 cyc_per_instr=0.9233 cyc_per_byte=0.2353 latency_cyc=3.0 work_per_us=3489.43 tsc_per_iter=21.9683
+12:20:18.819 A/load law gpu-loaded port name=port_vec128_x24 instr=26 bytes=102 iters=16733618 us=57538.2 ns_per_iter=3.4385 cyc_per_iter=12.001 cyc_per_instr=0.4616 cyc_per_byte=0.1177 latency_cyc=1.0 work_per_us=13959.66 tsc_per_iter=10.9826
+12:20:18.830 A/load law gpu-loaded port name=port_vec256_x24 instr=26 bytes=102 iters=16739464 us=57565.0 ns_per_iter=3.4389 cyc_per_iter=12.002 cyc_per_instr=0.4616 cyc_per_byte=0.1177 latency_cyc=1.0 work_per_us=27916.07 tsc_per_iter=10.9839
+12:20:18.841 A/load law gpu-loaded port name=port_load_x24 instr=26 bytes=126 iters=16713676 us=57460.8 ns_per_iter=3.4380 cyc_per_iter=11.999 cyc_per_instr=0.4615 cyc_per_byte=0.0952 latency_cyc=1.0 work_per_us=6980.90 tsc_per_iter=10.9811
+12:20:18.851 A/load law gpu-loaded port name=port_store_x24 instr=26 bytes=126 iters=8342773 us=57389.4 ns_per_iter=6.8789 cyc_per_iter=24.009 cyc_per_instr=0.9234 cyc_per_byte=0.1905 latency_cyc=1.0 work_per_us=3488.91 tsc_per_iter=21.9716
+12:20:18.863 A/load law gpu-loaded pair name=dep_imul_x4 instr=6 bytes=22 iters=16646901 us=57239.6 ns_per_iter=3.4385 cyc_per_iter=12.001 cyc_per_instr=2.0001 cyc_per_byte=0.5455 latency_cyc=12.0 work_per_us=1163.31 tsc_per_iter=10.9825
+12:20:18.874 A/load law gpu-loaded pair name=ind_imul_x4 instr=6 bytes=22 iters=50214006 us=57556.4 ns_per_iter=1.1462 cyc_per_iter=4.000 cyc_per_instr=0.6667 cyc_per_byte=0.1818 latency_cyc=3.0 work_per_us=3489.73 tsc_per_iter=3.6611
+12:20:18.884 A/load law gpu-loaded clock imul16_ns=13.7500 imul16_mhz=3490.9 fp8_ns=6.8758 fp8_mhz_at_3cyc=3490.5 fp_over_imul=0.9999 tsc_mhz=3194.05 qpc_hz=10000000
+12:20:18.894 A/load law gpu-loaded law_end cpu=2 clock_start_mhz=3490.2 clock_end_mhz=3490.9 drift_pct=0.022
+12:20:18.906 A/load law gpu-loaded exit=0 seconds=6.3
+12:20:18.916 A/load law gpu-loaded SUMMARY clock_mhz=3490.2 k_cyc_per_instr=0.2657 (state A reference: clock about 3489, k about 0.23; state B 2026-10-12: clock about 2790, k about 1.1)
+12:20:18.968 A/load dpm under-load-2 driver 0x000700D8, requested dpm, reason none, generation 28093727, ticks 15943, uptime 500529 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release below 83.0 C for 4000 ms (default), soft zone from 86.0 C per 1500 ms, lead 15000 ms (default)
+12:20:18.970 A/load dpm under-load-2 idle: 500 MHz after 3000 ms under 2 permille busy; entries 1 exits 1 refusals 0, 474062 ms at the point
+12:20:18.981 A/load dpm under-load-2 smu metrics: ok, 493 tables, 1 failures, last 403 ms ago: gfx 987 mV 2000 MHz 71.75 C, soc 1193 mV 66.00 C, throttler 0x0000
+12:20:18.991 A/load dpm under-load-2 14:20:18.952 dpm 2000 MHz 1000 mV (SMU 2000 MHz VID  88)  71.1 C busy  96.8% avg  97.5% want 2000 cap 2000 max 2000 throttle none confirmed session  up 5 down 1 thermal 0 err 0  src grbm submit 100.0% sdma   0.0%  power 104.5 W avg 103.5 W (gfx 58.7 W soc  4.6 W)
+12:20:19.041 A/load load tctl_c=71.1 source=telemetry
+12:20:19.079 A/load load loader_exited_on_its_own=no, it was still running and was killed
+12:20:19.082 A/load loader (no output)
+12:20:22.137 A/load dpm after-load driver 0x000700D8, requested dpm, reason none, generation 28093727, ticks 16043, uptime 503682 ms; up 900 target 800 down 650 permille, hold 200 ms (default), floor off (default), hot step 500 ms, soft release below 83.0 C for 4000 ms (default), soft zone from 86.0 C per 1500 ms, lead 15000 ms (default)
+12:20:22.139 A/load dpm after-load idle: 500 MHz after 3000 ms under 2 permille busy; entries 1 exits 1 refusals 0, 474062 ms at the point
+12:20:22.147 A/load dpm after-load smu metrics: ok, 496 tables, 1 failures, last 528 ms ago: gfx 818 mV 1000 MHz 61.25 C, soc 806 mV 62.50 C, throttler 0x0000
+12:20:22.155 A/load dpm after-load 14:20:22.123 dpm 1000 MHz  820 mV (SMU 1000 MHz VID 116)  70.6 C busy   0.0% avg   0.2% want 1000 cap 2000 max 2000 throttle none confirmed session  up 5 down 11 thermal 0 err 0  src grbm submit   0.0% sdma   0.0%  power  44.1 W avg  47.2 W (gfx 17.2 W soc  1.1 W)
+12:20:22.185 A/load cpu after-load cpu: driver 0x000700D8, on (CpuTune 1), queue 3 answered
+12:20:22.186 A/load cpu after-load cpu: applied clock 3500 MHz, undervolt 0 steps, cap 0 C (stored 0 / 0 / 0, baseline 3500 / 0 / 100)
+12:20:22.195 A/load cpu after-load cpu: 806 mV (GPU 824 mV), firmware cap 100 C, features 0xDD602C7D, 61.1 C
+12:20:22.202 A/load cpu after-load cpu: cores 1400 1400 1400 900 1400 1400 1400 900 MHz; P-states 3200 2550 2325 1960 1820 1600 1271 800 MHz
+12:20:22.210 A/load cpu after-load cpu: mask 0x77 in force, 0x00 stored, 12 processors to Windows
+12:20:22.219 A/load cpu after-load cpu: reads 118 writes 2 refusals 0 reverts 0 (retries 0, refused 0); last queue 3 message 0x36 argument 0x00000000 status 0x00000001
+12:20:22.230 A/load load RESULT idle_k=0.2644 loaded_k=0.2657 idle_mhz=3490.8 loaded_mhz=3490.2 idle_gfx_w=10.2 loaded_gfx_w_1=58.0 loaded_gfx_w_2=58.7 after_gfx_w=17.2
+12:20:22.236 A/load load GATE PASSED the island held above 20.0 W through the measurement, so the k pair above is the M1a reading: k unchanged means real GFX current does not cap the cores
+12:20:22.247 A/load END phase=load state=A exit=0
