@@ -209,7 +209,7 @@ could not open is visible there (`last result 0` the window was shown and closed
 | User-mode drivers | `C:\Program Files\amdgpu-wddm\` (`d3d12`, `desktop`, `d3d11`, `vulkan`, `opengl`, `wow64`, `tools`, `control`, `mft`). Nothing goes into `C:\Windows\System32` or `C:\Windows\SysWOW64`. An install over an earlier release removes the `bc250umd.dll` that it put there |
 | H.264 encoder (Media Foundation) | `HKLM\SOFTWARE\Classes\CLSID\{A32438F0-0D79-4CA9-A5BF-9F3C80837253}` with its `InprocServer32`, `HKLM\SOFTWARE\Classes\MediaFoundation\Transforms` (the encoder's own key and its membership in the video encoder category). These keys are for the whole computer. `uninstall.cmd` removes them, and so does a later release that does not install the encoder |
 | Licence texts | `C:\Program Files\amdgpu-wddm\licenses` (the package's `licenses\` and `THIRD-PARTY.md`) |
-| Graphics registration | the GPU's software key: `UserModeDriverName`, `VulkanDriverName`, `OpenGLDriverName`, `OpenGLVersion`, `OpenGLFlags`. For 32-bit applications: `UserModeDriverNameWow`, `VulkanDriverNameWow`, `OpenGLDriverNameWow`, `OpenGLVersionWow`, `OpenGLFlagsWow`. The first entry of each `UserModeDriverName` value, the Direct3D 9 entry, is empty. Also `HKLM\SOFTWARE\Khronos\Vulkan\Drivers` and `HKLM\SOFTWARE\WOW6432Node\Khronos\Vulkan\Drivers`. `uninstall.cmd` puts back an `OpenGL` value from before the install, with the registry type it had. It removes the ones it added, all six of them, even when the installer state file is gone. It does that whether or not Windows still shows the GPU, because the files the values name go with the install |
+| Graphics registration | the GPU's software key: `UserModeDriverName`, `VulkanDriverName`, `OpenGLDriverName`, `OpenGLVersion`, `OpenGLFlags`. For 32-bit applications: `UserModeDriverNameWow` and `VulkanDriverNameWow`. This release writes no `OpenGLDriverNameWow`, `OpenGLVersionWow` or `OpenGLFlagsWow`: it has no 32-bit OpenGL driver (see "What this release does" below). The first entry of each `UserModeDriverName` value, the Direct3D 9 entry, is empty. Also `HKLM\SOFTWARE\Khronos\Vulkan\Drivers` and `HKLM\SOFTWARE\WOW6432Node\Khronos\Vulkan\Drivers`. `uninstall.cmd` puts back an `OpenGL` value from before the install, with the registry type it had. It removes the ones it added, even when the installer state file is gone. An `OpenGL` value that belongs to another driver stays. It does all that whether or not Windows still shows the GPU, because the files the values name go with the install |
 | Router policy and profiles | `HKLM\SOFTWARE\amdgpu-wddm` |
 | GPU firmware | `C:\BC250\firmware` (8 files and `LICENSE.amdgpu`, downloaded from linux-firmware; see "GPU firmware"). A new folder is writable by administrators only; the access rights of `C:\BC250` itself do not change. Download staging: `C:\ProgramData\amdgpu-wddm\installer\firmware-staging`, removed after the copy |
 | Start confirmation | two scheduled tasks, both at the logon of any user. "amdgpu-wddm start confirm" runs as the Local System account. "amdgpu-wddm start window" runs as the user who logs on |
@@ -241,10 +241,14 @@ with all 40 cores. The page `docs/design/cu-mode.md` of the project has the whol
   desktop on the CPU route. An upgrade keeps the value you set.
 - Direct3D 12 applications run on the GPU through the Windows Direct3D 12 runtime, at feature level 12_1.
 - Vulkan applications run on the GPU through the Vulkan ICD.
-- OpenGL applications run on the GPU through the OpenGL driver (ICD) of this release. Windows loads it for
-  every OpenGL program of the computer, 64-bit and 32-bit, with no file beside the program. `verify.cmd`
-  shows the line `OpenGL ICD` with the registration and both driver files. Without this driver Windows gives
-  an OpenGL program its own software renderer, which is OpenGL 1.1.
+- 64-bit OpenGL applications run on the GPU through the OpenGL driver (ICD) of this release. Windows loads it
+  for every 64-bit OpenGL program of the computer, with no file beside the program. `verify.cmd` shows the
+  line `OpenGL ICD` with the registration and the driver file. Without this driver Windows gives an OpenGL
+  program its own software renderer, which is OpenGL 1.1.
+- 32-bit OpenGL applications keep that software renderer of Windows, which is OpenGL 1.1. This release has no
+  32-bit OpenGL driver: the 32-bit driver needs a 32-bit Vulkan loader on the computer, and there is none, so
+  it would load and then give the program no OpenGL at all. `verify.cmd` says so in one line. 32-bit Direct3D
+  and Vulkan programs are not affected and run on the GPU.
 - Direct3D 11 applications and games run on the GPU, and so do the components of Windows and the packaged
   Microsoft applications. The value `Mode` in `HKLM\SOFTWARE\amdgpu-wddm\AppRouter` holds `gpu-default`, and the
   `Allow` and `Deny` lists beside it are empty in a new install. These programs stay on the CPU route (software
