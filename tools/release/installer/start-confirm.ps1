@@ -32,6 +32,17 @@ if (-not $ExpectedVersion) {
     if (-not $ExpectedVersion) { $ExpectedVersion = '0x000700D8' }   # this release's kmd_abi; test-dryrun.ps1 gates it
 }
 . (Join-Path $here 'start-confirm-core.ps1')
+# The boot identity (Get-BootIdentity), loaded here and not only before the witness at the end: the start record's
+# reading needs this boot's start time from the one place that defines it (start-confirm-core.ps1
+# Get-StartRecordBootUtc), and -Probe exits before the witness block.
+# Guarded, because this script runs under $ErrorActionPreference = 'Stop' and release-witness.ps1 runs Add-Type at
+# its top level, which needs a writable TEMP and the CodeDom compiler. Unguarded, a failure there stopped this
+# script before it read anything: the task that keeps the PC out of Basic Display never ran its confirmation loop,
+# and -Probe printed no line at all, which is the text verify parses for the device, the driver version, LastStage
+# and the start health. A failure is a line in the log instead; the boot time then reads as unknown and the witness
+# block at the end says why.
+$script:witnessLoadError = $null
+try { . (Join-Path $here 'release-witness.ps1') } catch { $script:witnessLoadError = [string]$_.Exception.Message }
 $clock = [Diagnostics.Stopwatch]::StartNew()
 $cli = Join-Path $here 'bc250kmd_cli.exe'
 $dll = [IO.Path]::GetFullPath((Join-Path $here 'bc250control.dll'))
@@ -51,6 +62,9 @@ function Write-StartConfirmLog([string]$Text) {
     $line = [string]::Format($inv, '{0} +{1,6:F1}s {2}', [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.fffZ', $inv), $clock.Elapsed.TotalSeconds, $Text)
     if ($Probe) { $line; return }
     try { [IO.File]::AppendAllText($log, $line + "`r`n") } catch { }
+}
+if ($script:witnessLoadError) {
+    Write-StartConfirmLog "release-witness.ps1 did not load: $($script:witnessLoadError); this boot's start time reads as unknown and no witness is written"
 }
 # BD-060: the DWM instance of this logon's session, recorded once per logon as the baseline that verify and the control
 # application compare against (dwm-session.ps1). Never fails the task; -Probe writes nothing.
@@ -229,7 +243,6 @@ Write-StartConfirmLog "exit $($script:exitCode): $($script:lastReason); Unconfir
 # whatever the confirmation's outcome (it names what runs, not how healthy it is); never fails the task. It takes the
 # installer's engine.lock for the whole reading and publication (up to 3 s wait): while an installer runs, no witness.
 try {
-    . (Join-Path $here 'release-witness.ps1')
     $why = Write-RunningReleaseWitness -InstallRoot (Split-Path $here) -RecordedBy 'start-confirm'
     Write-StartConfirmLog $(if ($why) { "running-release witness: not written, $why" } else { "running-release witness: written, $($script:WitnessPath)" })
 } catch { Write-StartConfirmLog "running-release witness: $($_.Exception.Message)" }

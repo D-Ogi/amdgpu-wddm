@@ -517,6 +517,7 @@ namespace AmdgpuWddmControl
             ReadDriverCard(!_smoke && !ReadOnlyProbe);
             ComputeStatus();
             ShowPage(_page, null, false);
+            MaybeAutomaticDiagnostics();
         }
 
         int _drvRead;       // the newest Driver card read; an older one that ends later is dropped

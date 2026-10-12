@@ -14,7 +14,9 @@ Only the steps marked LAB touch unit A. Every lab trial stays within three minut
   `driver/kmd/build.ps1` on a clean checkout, in the plain `package` flavor.
 - `--rollback DIR`: the KMD deployed now, in the same form. Either the candidate directory of the attempt that
   promoted it, or its build package directory. When the lab runs a tester release, give the release package
-  directory (`manifest.json`, `payload/kmd`, `payload/cert`). See "A release package as the rollback".
+  directory (`manifest.json`, `payload/kmd`, `payload/cert`): either the folder the release zip unpacks to or the
+  `files` folder under it, which is where those entries are in a package with the `setup.exe` top folder. See
+  "A release package as the rollback".
 - `--rollback-build DIR`: only with a release package as `--rollback`. The build package directory that the
   release packages: the `source` of `payload/kmd` in the release's `release-sources.json`.
 - `--repo DIR`: the git repository that holds both commits. The default is `<BC250_ROOT>/bc250-win`.

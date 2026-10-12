@@ -671,6 +671,11 @@ namespace AmdgpuWddmControl
         [DllImport("psapi.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         static extern int GetDeviceDriverFileNameW(IntPtr imageBase, StringBuilder name, int size);
 
+        // The registry copy of the boot counter. It stays the reading for the records this application and the
+        // installer write themselves (the running-release witness, the install actions, the loaded-image evidence,
+        // the DWM observations, the CU durability record): all of those hold a number taken from this same value,
+        // so both sides of every such comparison move together. A record of the KERNEL DRIVER is a different
+        // matter and must not use this value: see SharedBootId below (BD-130).
         public static long? BootId()
         {
             try
@@ -679,6 +684,31 @@ namespace AmdgpuWddmControl
                     return k != null && k.GetValue("BootId") is int ? (long?)(uint)(int)k.GetValue("BootId") : null;
             }
             catch (Exception) { return null; }
+        }
+
+        // This boot's BootId from the same place the kernel driver takes it: KUSER_SHARED_DATA.BootId, in the page
+        // every process maps read-only at 0x7FFE0000, at offset 0x2C4. The offset is the WDK header's own:
+        // km\ntddk.h of 10.0.26100 declares the structure at line 8965 with BootId at line 9117, and its C_ASSERTs
+        // at lines 9568 and 9569 put AlternativeArchitecture at 0x2C0 and SystemExpirationDate at 0x2C8, so the
+        // ULONG between them is at 0x2C4. The registry copy above LAGS: on 22631, 13 minutes after a boot, the page
+        // said 388 and the registry 387, so a fresh stop record of this boot was reported as an earlier boot's
+        // (BD-130). Any number compared with a value the driver wrote comes from here. Source carries the name of
+        // the place the number came from, for a report that must say it.
+        const long SharedBootIdAddress = 0x7FFE02C4;
+
+        public static long? SharedBootId(out string source)
+        {
+            source = "KUSER_SHARED_DATA";
+            try
+            {
+                uint value = (uint)Marshal.ReadInt32(new IntPtr(SharedBootIdAddress));
+                if (value != 0) return value;
+            }
+            catch (Exception) { }
+            source = "the PrefetchParameters registry value, which can lag this boot by one";
+            long? fallback = BootId();
+            if (fallback == null) source = "nothing: neither the shared page nor the registry could be read";
+            return fallback;
         }
     }
 }

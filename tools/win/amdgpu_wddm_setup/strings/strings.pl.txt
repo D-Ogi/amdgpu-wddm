@@ -6,6 +6,9 @@ ui.back|mt-safe|76900f1b|Wstecz
 ui.cancel|mt-safe|19766ed6|Anuluj
 ui.choose-folder|mt-safe|826c7dcd|Wybierz folder...
 ui.language|mt-safe|a6567634|Język: {0}
+ui.minimise|mt-safe|20f082e9|Minimalizuj
+ui.close-window|mt-safe|8b9de9c0|Zamknij okno
+ui.unexpected|mt|88790f84|Instalator zatrzymał się, bo coś poszło nie tak w jego oknie. Nic więcej nie zmienił. Uruchom go ponownie.
 rail.welcome|mt-safe|0e2226b5|Start
 rail.check|mt-safe|9d60841e|Sprawdzenie
 rail.plan|mt-safe|aff0766a|Przegląd
@@ -25,6 +28,7 @@ welcome.repair.title|mt|a29b2205|Naprawa sterownika grafiki
 welcome.repair.body|mt|25153ac9|Instalator instaluje tę samą wersję ponownie, z kopii zachowanej na tym komputerze. Twoje ustawienia zostają zachowane.
 welcome.dry-run|mt|42af2b21|Przebieg próbny: instalator przechodzi przez wszystkie kroki, ale niczego nie zmienia.
 welcome.version|mt-safe|9699394c|Wersja {0}
+welcome.files-missing|mt|938e9bd4|Brakuje plików tej wersji. Rozpakuj cały plik zip do folderu, a potem uruchom setup.exe z tego folderu: obok niego musi leżeć folder files.
 welcome.source.title|mt|1623a97a|Skąd pochodzą pliki
 welcome.source.package|mt|61e09644|Pliki tego instalatora
 welcome.source.kept|mt|9ea897ba|Kopia zachowana na tym komputerze
@@ -34,6 +38,9 @@ welcome.prepared.choose|mt|40e8823f|Wybierz przygotowany folder.
 welcome.prepared.ok|mt|6203a8e5|Przygotowany folder z wersją {0}. Internet nie jest potrzebny.
 welcome.prepare-link|mt|5868e4fc|Przygotuj folder dla komputera bez internetu...
 welcome.check|mt-safe|7c97d062|Sprawdź ten komputer
+welcome.promise.driver|mt|82ad81d1|Sterownik graficzny i amdgpu-wddm Control instalowane razem.
+welcome.promise.shown|mt|0f886d7e|Każda zmiana jest pokazana, zanim cokolwiek zmieni się na tym komputerze.
+welcome.promise.offline|mt|bb2a3e49|Przygotowany folder instaluje to samo wydanie bez internetu.
 folder.missing|mt|219fdbbd|Ten folder nie istnieje.
 folder.not-prepared|mt|c9f12282|To nie jest przygotowany folder. Wybierz folder przygotowany przez instalator albo najpierw go przygotuj.
 folder.unknown|mt|6c91a6f6|Ten folder przygotowała inna wersja instalatora i nie można go użyć. Przygotuj go ponownie.
@@ -101,6 +108,8 @@ plan.verify.body|mt|1deb5208|Po ponownym uruchomieniu Windows instalator sprawdz
 plan.repair-again|mt-safe|1196b6c5|Napraw
 plan.checks.title|mt-safe|de07d072|Sprawdzenia
 plan.checks.ok|mt|eb2f3d98|Wszystkie sprawdzenia zakończone pomyślnie.
+plan.checks.attention|mt|e6885bff|Sprawdzenia wymagające uwagi: {0}
+plan.consent.needed|mt|8c3cbc95|Przed instalacją odpowiedz na pytania w sekcji "{0}".
 plan.what.title|mt-safe|70fbb54b|Co się stanie
 plan.restarts.0|mt|b0a2c82a|Ponowne uruchomienie Windows nie jest potrzebne.
 plan.restarts.1|mt|2ae11afb|Windows uruchomi się ponownie raz. Po ponownym zalogowaniu instalator będzie kontynuował sam.
@@ -156,6 +165,7 @@ working.prepare.title|mt|28edcf49|Przygotowywanie folderu
 working.body|mt|dccb0ab7|Proszę czekać. Nie wyłączaj komputera.
 working.prepare.body|mt|aa356215|Instalator kopiuje swoje pliki i firmware GPU i sprawdza każdy z nich.
 working.stages|mt-safe|1de3df70|Kroki
+working.elapsed|mt-safe|409cb488|Czas od startu: {0}
 working.cancel.available|mt|0031d59c|Nadal możesz anulować. Nic jeszcze nie zostało zmienione.
 working.cancel.unavailable|mt|42461b9b|Teraz nie można anulować: instalator musi najpierw dokończyć ten etap.
 working.cancel.requested|mt|3caf86ac|Zatrzymywanie w najbliższym bezpiecznym miejscu...
@@ -206,7 +216,7 @@ result.installed-restart.body|mt|42a56d9a|Wszystko jest zainstalowane. Po ponown
 result.testsigning-not-active.title|mt|7fcee967|Tryb testowy Windows nie jest jeszcze włączony
 result.testsigning-not-active.body|mt|3213b661|Windows nie włączył trybu testowego przy ostatnim starcie. Uruchom Windows ponownie jeszcze raz. Jeśli ten komunikat wróci, sprawdź, czy Secure Boot jest wyłączony.
 result.testsigning-secureboot.title|mt|e160b4ae|Secure Boot blokuje tryb testowy Windows
-result.testsigning-secureboot.body|mt|79f331ae|Wyłącz Secure Boot w ustawieniach firmware komputera, potem uruchom instalator ponownie. Instrukcja instalacji pokazuje, jak to zrobić.
+result.testsigning-secureboot.body|mt|5ab0b106|Windows zgłasza, że Secure Boot jest włączony. Dopóki jest włączony, Windows nie pozwala na tryb testowy, którego wymaga ten sterownik. Standardowy firmware BC-250 nie ma ustawienia Secure Boot, więc ten komputer ma zmieniony firmware: wyłącz Secure Boot w jego ustawieniach, zwykle w Security > Secure Boot, a potem uruchom instalator ponownie. Niektóre zmienione wersje nie mają takiego przełącznika: ustaw OS Type na "Other OS" albo usuń klucze Secure Boot. Aby samodzielnie sprawdzić stan, otwórz Informacje o systemie z menu Start i znajdź wiersz o Secure Boot.
 result.restart-still-pending.title|mt|9676613e|Windows nie został jeszcze uruchomiony ponownie
 result.restart-still-pending.body|mt|e79d291f|Instalator będzie kontynuował po następnym ponownym uruchomieniu Windows.
 result.verify-before-restart.title|mt|93aab4b5|Uruchom ponownie Windows, aby zakończyć
@@ -253,6 +263,7 @@ result.already-installed|mt|c90b9352|Ten komputer ma już wersję {0} sterownika
 result.changes-made|mt|8e3dd6e8|Przed zatrzymaniem instalator wprowadził część zmian i pozostają one bez zmian. Uruchom instalator ponownie, aby dokończyć, albo użyj Napraw w amdgpu-wddm Control.
 result.changes-unknown|mt|88bf7384|Instalator nie wie, czy cokolwiek zostało zmienione. Uruchom go ponownie; będzie kontynuował tam, gdzie to możliwe.
 result.support|mt|3e9e40b3|Plik dla pomocy technicznej zawiera szczegóły do zgłoszenia problemu. Nic nie jest wysyłane automatycznie.
+result.support.diagnostics|mt|a739d1a9|Szczegóły układu graficznego, który się nie uruchomił, zostały już zebrane. Są w tym pliku.
 result.support.saved|mt-safe|73cd7e8c|Zapisano: {0}
 result.support.failed|mt|d2f9f531|Nie udało się zapisać pliku dla pomocy technicznej. Wybierz inne miejsce.
 result.save-support|mt|884d47cb|Zapisz plik dla pomocy technicznej...

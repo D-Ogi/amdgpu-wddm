@@ -6,7 +6,7 @@ param(
     [string]$InvocationId,
     [string]$EventsFile,
     [string]$ResultFile,
-    [ValidateSet('plan', 'cancel', 'stale', 'crash', 'restart', 'refused', 'noise')][string]$Scenario = 'plan',
+    [ValidateSet('plan', 'cancel', 'stale', 'crash', 'restart', 'refused', 'noise', 'verify-failed')][string]$Scenario = 'plan',
     [Parameter(ValueFromRemainingArguments = $true)]$Rest
 )
 $ErrorActionPreference = 'Stop'
@@ -74,5 +74,34 @@ switch ($Scenario) {
     'refused' {
         Ev 'check' @{ id = 'gpu.missing'; result = 'fail'; name = 'n'; detail = "no device on $env:COMPUTERNAME" }
         Result 'refused' 2 'result.preflight-refused' $false @{ failed_checks = @('gpu.missing') }
+    }
+    # A verify that found a driver which did not start: the engine collected its own diagnostics file and names it
+    # in the result (install.ps1 Invoke-VerifyDiagnostics, diagnostics.ps1). The file holds this PC's user and
+    # computer name on purpose, so that the build gate shows the support file redacting the new entry as well.
+    # It also carries a serial number and a machine id in the shapes a collected file has them in (a setupapi
+    # line, an event line with its timestamp): every one of those lines starts with a prefix that holds a colon
+    # of its own, which the redaction rule has to see past, and the hardware id, which has to stay. Three more
+    # lines name ANOTHER account of the computer, in the shapes a setupapi line and an event entry carry them:
+    # a profile path, a security identifier and the computer element of an event. The rules of train b31
+    # take those out as well, and this window has the same copy of the rules as the control application.
+    'verify-failed' {
+        Ev 'stage' @{ id = 'verify'; text = 'Verify' }
+        $diag = Join-Path (Split-Path $EventsFile) 'diagnostics-fake.txt'
+        [IO.File]::WriteAllText($diag, (@(
+            'schema amdgpu-wddm.diagnostics/1',
+            'the decision: start failure: the device reports problem code 43 (CM_PROB_FAILED_POST_START)',
+            "collected on $env:COMPUTERNAME for $env:USERNAME",
+            'StartRecord : the last start reached a started device; stage 39',
+            'StopRecord : result stopped, stage 79',
+            '     dvi: Device serial: SN-ABC123456789',
+            '  2026-10-12T01:59:48.123Z level 2 id 411 MachineGuid: 11111111-2222-3333-4444-555555555555',
+            '>>>  Section start 2026/10/12 01:59:40.001 [Device Install - PCI\VEN_1002&DEV_13FE]',
+            '      cmd: C:\Users\otherperson\Downloads\amdgpu-wddm\files\install.cmd',
+            '      sid: S-1-5-21-3623811015-3361044348-30300820-1013',
+            '      <Computer>SOMEBODY-ELSE-PC</Computer>',
+            'device instance: PCI\VEN_1002&DEV_13FE&SUBSYS_13FE1002&REV_C1'
+        ) -join "`r`n"), $utf8)
+        Ev 'diagnostics' @{ collected = $true; path = $diag; bytes = 256; seconds = 0.2; cut = $false }
+        Result 'verify-failed' 3 'result.verify-failed' $false @{ diagnostics = $diag; detail = 'driver start: device problem 43' }
     }
 }

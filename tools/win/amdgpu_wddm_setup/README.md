@@ -22,10 +22,23 @@ Close. Try again is not the default when every failed check is one a new try can
 `firmware.no-list`, `lab-install.present`, `secureboot.on`) or the setup files are damaged. The engine does not mark
 causes as transient, so the window decides by check id.
 
+The window draws its own title bar and every widget in it (`src/Theme.cs` for the tokens, `src/Controls.cs` for the
+widgets, `src/Chrome.cs` for the frame), in the visual language of the accepted control-app mockup: a dark window
+with rounded corners, a step rail with an icon per step, cards with a border and a soft shadow, Fluent glyphs, a red
+gradient on the primary action and the guide's tip in a speech bubble over her picture.
+
+A tester clicks `setup.exe` in the unpacked folder, which is this window. The package root's `install.cmd` opens it
+as well when it is started with no argument, so an advanced user in the folder `files` also reaches the window.
+`install.cmd` with a switch, and `install.cmd -Console`, keep the console engine. The window is
+never larger than the work area of its screen (it has no frame of Windows and cannot be resized), the primary action
+is the rightmost button of the bar, and the first Tab lands on the screen and not on a glyph of the title bar.
+
 Ordinary words only: no driver internals, codes or file names in the window (G-NOINT, checked in every language and
 every screen by the build). The details are in the support file, a zip that the user saves on request: the window's
 summary and, per engine run, the command line, events, result, engine output and log, with the user name, computer
-name and profile path redacted.
+name and profile path redacted. A run that found a driver which did not start also brings the engine's
+own diagnostics of that start, as `run-<n>-diagnostics.txt` and through the same redaction. The engine collects
+it by itself (owner, 2026-10-12), so nobody has to ask the tester for the readings one at a time.
 
 ## How it runs the engine
 
@@ -48,15 +61,17 @@ pwsh tools\release\build-release.ps1 ... -SetupApp P:\BC-250\scratch\build\gui-s
 
 The build is the gate (its header lists the four steps): unit tests, the compile, the engine client against a
 scripted fake engine (`test/fake-engine.ps1`) and every screen drawn headless at 96, 120, 144 and 192 DPI in four
-languages and at a 150 % text size. No step shows a window. `tools/release/test-dryrun.ps1` also runs the built window
+languages, at a 150 % text size, without the guide character and in the high-contrast palette (`--high-contrast`,
+which a PC without high contrast on could otherwise never draw). No step shows a window. `tools/release/test-dryrun.ps1` also runs the built window
 against the real engine (plan and dry run). Every release package carries the window from 0.7.216.100-tester.28 on:
 `build-release.ps1` refuses to build without `-SetupApp`, and `test-dryrun.ps1` fails a package without it.
 
 The guide panel on the right shows the guide character, from the art of
 `tools/win/amdgpu_wddm_control/art/nagi`: the build embeds the expressions this window's causes can ask for
 (`SetupGuide.ArtExpressions`, which its unit tests check against every `SetupCause` and print for the build) at
-`@128` and `@256`, under the names that application's `Guide.ArtFile` map gives them, and refuses an exe that lacks
-one. Her pictures are stills, and the setup window never animates her. She is on unless the control application's
+`@256` alone, under the names that application's `Guide.ArtFile` map gives them, and refuses an exe that lacks one.
+The smallest slot of this window is 176 device pixels at 96 DPI, larger than the `@128` picture, so a `@128`
+resource could never be drawn. Her pictures are stills, and the setup window never animates her. She is on unless the control application's
 `ShowNagi` is the DWORD 0, so she is on the Welcome screen of a first install. Two render runs use `--no-nagi`, and
 every other run must draw her picture.
 

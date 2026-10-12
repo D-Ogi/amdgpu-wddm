@@ -21,6 +21,9 @@ $ErrorActionPreference = 'Continue'
 if ($Step -eq 'install' -and -not $Name) { 'clean-slate: -Name is needed for the install step'; exit 2 }
 $root = $Root
 $pkg = "$root\$Name"
+# The zip unpacks to <pkg>\setup.exe and <pkg>\files\ (owner, 2026-10-11): the installer scripts live under files\.
+# A package built before that layout has them in <pkg> itself. Asked after the expansion, never before.
+function Get-PackageFilesDir { if (Test-Path -LiteralPath "$pkg\files\manifest.json") { return "$pkg\files" } return $pkg }
 # Query package fields, never pnputil's translated display labels.
 # https://learn.microsoft.com/powershell/module/dism/get-windowsdriver
 function Get-KmdDriverStorePackages {
@@ -105,8 +108,10 @@ switch ($Step) {
         if ($Sha) { $h = (Get-FileHash "$pkg.zip" -Algorithm SHA256).Hash; if ($h -ne $Sha) { "zip hash $h, expected $Sha"; exit 2 }; "zip ok $($h.Substring(0, 8))" }
         if (Test-Path $pkg) { Remove-Item $pkg -Recurse -Force }
         Expand-Archive "$pkg.zip" -DestinationPath $root -Force
+        $pkgFiles = Get-PackageFilesDir
+        "package files: $pkgFiles"
         $extra = @(); if ($Repair) { $extra += '-Repair' }
-        & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$pkg\installer\install.ps1" -Force -AcceptTestSigning -NoReboot -NoComponents -NoModels -CuMode $CuMode @extra *>&1 | Tee-Object "$root\install-console.txt" | Select-Object -Last 30
+        & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$pkgFiles\installer\install.ps1" -Force -AcceptTestSigning -NoReboot -NoComponents -NoModels -CuMode $CuMode @extra *>&1 | Tee-Object "$root\install-console.txt" | Select-Object -Last 30
         "install exit $LASTEXITCODE"
         '--- after install'
         Inventory

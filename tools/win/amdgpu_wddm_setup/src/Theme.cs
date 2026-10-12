@@ -1,27 +1,103 @@
-// Colours, fonts, one scale factor and the few widgets every screen uses: a copy of the control app's Ui.cs
-// (tools/win/amdgpu_wddm_control/src/Ui.cs) so that setup and the app look and scale alike. The process is per-monitor
-// DPI aware (app.manifest) and the form does no automatic scaling, so every pixel size goes through S() and the fonts
-// are sized in pixels with the same factor; the text scale (Windows "Make text bigger") multiplies the fonts only.
-// Fonts follow the language: Yu Gothic UI for Japanese, Malgun Gothic for Korean.
+// The design tokens of the amdgpu-wddm windows: colours, radii, spacing, fonts, icon glyphs, and the GDI+ helpers that
+// draw them. One file, so that the control application can adopt the same language later (its Ui.cs holds the older
+// copy). The process is per-monitor DPI aware (app.manifest) and the forms do no automatic scaling, so every pixel
+// size goes through S() and the fonts are sized in pixels with the same factor; the text scale (Windows "Make text
+// bigger") multiplies the fonts only. Fonts follow the language: Yu Gothic UI for Japanese, Malgun Gothic for Korean.
+// High contrast replaces the palette with the system colours.
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Drawing.Text;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 namespace AmdgpuWddmSetup
 {
+    // The icon glyphs of the window, in the Segoe Fluent Icons code points (Segoe MDL2 Assets carries the same ones).
+    // Every glyph a screen uses is listed here, so one place says what the window can draw; Gfx.Glyph draws a plain
+    // shape instead when neither icon font is on the PC.
+    static class Icons
+    {
+        public const string Check = "";        // CheckMark
+        public const string Warning = "";      // Warning
+        public const string Error = "";        // ErrorBadge
+        public const string Info = "";         // Info
+        public const string Cancel = "";       // Cancel
+        public const string Restart = "";      // UpdateRestore (restart of Windows)
+        public const string Download = "";     // Download
+        public const string Shield = "";       // Shield
+        public const string Gear = "";         // Settings
+        public const string Folder = "";       // FolderHorizontal
+        public const string Play = "";         // Play (the step that runs)
+        public const string Dot = "";          // CircleRing
+        // Two marks the window draws itself, because no icon font says them as quietly as a page needs: the ring of a
+        // step that waits and the dot of a list item (Gfx.Glyph draws every mark that starts with \u0001).
+        public const string Ring = "\u0001ring";
+        public const string Bullet = "\u0001bullet";
+        public const string Chevron = "";      // ChevronRight
+        public const string Minimise = "";     // ChromeMinimize
+        public const string Close = "";        // ChromeClose
+        public const string Chip = "";         // Processor (the driver itself)
+        public const string Lock = "";         // Lock (nothing changes without consent)
+        public const string Sparkle = "";      // FavoriteStar (what is new)
+        public const string Clock = "";        // DateTime (elapsed time)
+        public const string Welcome = "";      // Home
+        // The last step of the rail. It is not a check mark: a check is the mark of a step that is done, and
+        // the same mark on a step that still waits reads as "already finished".
+        public const string Flag = "";         // Flag (the end of the run)
+    }
+
     static class Theme
     {
-        public static readonly Color Back = Color.FromArgb(18, 20, 26), Nav = Color.FromArgb(13, 15, 20), Card = Color.FromArgb(28, 31, 39),
-            CardHi = Color.FromArgb(38, 42, 52), Text = Color.FromArgb(234, 236, 240), Dim = Color.FromArgb(160, 166, 178),
-            Accent = Color.FromArgb(226, 38, 62), Teal = Color.FromArgb(64, 204, 214), Good = Color.FromArgb(90, 200, 120),
-            Warn = Color.FromArgb(240, 180, 60), Line = Color.FromArgb(58, 62, 74), Focus = Color.FromArgb(120, 200, 255),
-            GuideBack = Color.FromArgb(20, 44, 52);
+        // ---- palette ---------------------------------------------------------------------------------------------
+        // Dark by design (the accepted mockup). HighContrast swaps every colour for a system one.
+        public static Color Back { get { return _hc ? SystemColors.Window : Rgb(0x10, 0x12, 0x17); } }
+        public static Color Nav { get { return _hc ? SystemColors.Control : Rgb(0x0A, 0x0C, 0x10); } }
+        public static Color Card { get { return _hc ? SystemColors.Control : Rgb(0x1A, 0x1D, 0x25); } }
+        public static Color CardHi { get { return _hc ? SystemColors.ControlLight : Rgb(0x24, 0x28, 0x33); } }
+        public static Color Text { get { return _hc ? SystemColors.WindowText : Rgb(0xEC, 0xEE, 0xF2); } }
+        public static Color Dim { get { return _hc ? SystemColors.GrayText : Rgb(0xA2, 0xA8, 0xB4); } }
+        public static Color Accent { get { return _hc ? SystemColors.Highlight : Rgb(0xE2, 0x26, 0x3E); } }
+        public static Color AccentHi { get { return _hc ? SystemColors.HotTrack : Rgb(0xF2, 0x44, 0x5E); } }
+        public static Color AccentLow { get { return _hc ? SystemColors.Highlight : Rgb(0xB4, 0x16, 0x2C); } }
+        public static Color Teal { get { return _hc ? SystemColors.HotTrack : Rgb(0x40, 0xCC, 0xD6); } }
+        public static Color Good { get { return _hc ? SystemColors.WindowText : Rgb(0x4F, 0xC7, 0x7B); } }
+        public static Color Warn { get { return _hc ? SystemColors.WindowText : Rgb(0xF0, 0xB4, 0x3C); } }
+        public static Color Line { get { return _hc ? SystemColors.WindowFrame : Rgb(0x30, 0x35, 0x41); } }
+        public static Color Focus { get { return _hc ? SystemColors.WindowText : Rgb(0x78, 0xC8, 0xFF); } }
+        public static Color GuideBack { get { return _hc ? SystemColors.Control : Rgb(0x10, 0x26, 0x2D); } }
+        // The tint of the step the window is on, and the hover tint of a row or a quiet button.
+        public static Color Tint { get { return _hc ? SystemColors.Highlight : Rgb(0x2A, 0x14, 0x1C); } }
+        // The tint of the step a run stopped in: deeper, so the stopped step is not only a colour of a glyph.
+        public static Color TintBad { get { return _hc ? SystemColors.Highlight : Rgb(0x45, 0x12, 0x1E); } }
+        // What is drawn on a tinted field. In high contrast a tint is Highlight, and Highlight carries HighlightText
+        // alone: WindowText on Highlight is the classic high-contrast failure.
+        public static Color OnTint { get { return _hc ? SystemColors.HighlightText : Rgb(0xEC, 0xEE, 0xF2); } }
+
+        static Color Rgb(int r, int g, int b) { return Color.FromArgb(r, g, b); }
+
+        static bool _hc;
+        public static bool HighContrast { get { return _hc; } }
+
+        // ---- shape and spacing -----------------------------------------------------------------------------------
+        public const int RadiusCard = 8, RadiusControl = 6, RadiusSmall = 4;
+        public const int GapTight = 6, Gap = 12, GapWide = 20, GapSection = 16;
+
         public static float Scale { get; private set; }
         public static float TextScale { get; private set; }
-        public static Font Body, Bold, Small, Title, CardTitle, Brand, Big, Mono, MonoSmall;
+
+        // Body and Bold are the running text, Small the notes under a row, CardTitle the title of a card, Title a page
+        // headline (28-32 px at 96 DPI), Brand the name in the title bar, Big a number or a result word.
+        public static Font Body, Bold, Small, SmallBold, Title, CardTitle, Brand, Big;
+
+        // Windows animation effects: the short screen transitions and the entrance of the result icon run only with
+        // them on. A headless render never animates (the window is never shown).
+        public static bool Animations
+        {
+            get { try { return SystemInformation.UIEffectsEnabled && !_hc; } catch (Exception) { return false; } }
+        }
 
         static Theme()
         {
@@ -44,28 +120,98 @@ namespace AmdgpuWddmSetup
             catch (Exception) { return 1f; }
         }
 
-        // scale: 1.0 at 96 DPI; --smoke-render passes 1.25, 1.5 or 2 to draw the pages as a 120, 144 or 192 DPI screen shows them.
-        public static void Init(float scale, float textScale)
+        // scale: 1.0 at 96 DPI; --smoke-render passes 1.25, 1.5 or 2 to draw the pages as a 120, 144 or 192 DPI screen
+        // shows them. highContrast: this PC's setting when it is null, and the value itself when the caller forces it
+        // (--high-contrast, so the render gate draws the high-contrast palette on a PC that does not have it on).
+        public static void Init(float scale, float textScale, bool? highContrast = null)
         {
             Scale = scale <= 0 ? 1 : scale;
             TextScale = textScale < 1 ? 1 : textScale;
+            if (highContrast.HasValue) _hc = highContrast.Value;
+            else try { _hc = SystemInformation.HighContrast; } catch (Exception) { _hc = false; }
             Fonts();
+        }
+
+        // ---- fonts -----------------------------------------------------------------------------------------------
+
+        static HashSet<string> _installed;
+
+        // The first of these families that this PC has, else the last one (which Windows then replaces itself).
+        public static string Face(params string[] names)
+        {
+            if (_installed == null)
+            {
+                try
+                {
+                    using (var c = new InstalledFontCollection()) _installed = new HashSet<string>(c.Families.Select(f => f.Name), StringComparer.OrdinalIgnoreCase);
+                }
+                catch (Exception) { _installed = new HashSet<string>(StringComparer.OrdinalIgnoreCase); }
+            }
+            foreach (var n in names) if (_installed.Contains(n)) return n;
+            return names[names.Length - 1];
+        }
+
+        public static string IconFace { get; private set; }
+
+        // The fonts of the generation before the last switch. They are not disposed while they are replaced: the
+        // controls on the screen still hold them and would throw while painting. The window disposes them after it
+        // has rebuilt its frame (DropRetired), one generation behind.
+        static readonly List<Font> _retired = new List<Font>();
+
+        public static void DropRetired()
+        {
+            foreach (var f in _retired) { try { f.Dispose(); } catch (Exception) { } }
+            _retired.Clear();
+        }
+
+        static void Retire(params Font[] fonts)
+        {
+            foreach (var f in fonts) if (f != null) _retired.Add(f);
         }
 
         public static void Fonts()
         {
             string lang = Strings.Language;
-            string face = lang == "ja" ? "Yu Gothic UI" : lang == "ko" ? "Malgun Gothic" : "Segoe UI";
-            string semi = lang == "ja" ? "Yu Gothic UI Semibold" : lang == "ko" ? "Malgun Gothic" : "Segoe UI Semibold";
-            Body = Px(face, 9.5f); Bold = Px(semi, 9.5f, lang == "ko"); Small = Px(face, 8.5f); Title = Px(semi, 17f, lang == "ko");
-            CardTitle = Px(semi, 11.5f, lang == "ko"); Brand = Px("Segoe UI Semibold", 13f); Big = Px(semi, 14f, lang == "ko");
-            Mono = Px("Consolas", 9f); MonoSmall = Px("Consolas", 8.5f);
+            // Every font this call replaces goes to the retired list, including the cached icon fonts.
+            Retire(Body, Bold, Small, SmallBold, Title, CardTitle, Brand, Big);
+            Retire(_icons.Values.ToArray());
+            // Japanese and Korean have no Segoe: their own interface faces carry every Latin character too.
+            string face = lang == "ja" ? Face("Yu Gothic UI", "Meiryo UI", "Segoe UI") : lang == "ko" ? Face("Malgun Gothic", "Segoe UI") : Face("Segoe UI");
+            string semi = lang == "ja" ? Face("Yu Gothic UI Semibold", "Yu Gothic UI") : lang == "ko" ? Face("Malgun Gothic") : Face("Segoe UI Semibold", "Segoe UI");
+            // The headline face of Windows 11. Korean has no semibold family, so its headline is drawn bold.
+            string display = lang == "ja" ? Face("Yu Gothic UI Semibold", "Yu Gothic UI") : lang == "ko" ? Face("Malgun Gothic")
+                : Face("Segoe UI Variable Display Semib", "Segoe UI Semibold", "Segoe UI");
+            bool heavy = lang == "ko";
+            Body = Px(face, 9.5f); Bold = Px(semi, 9.5f, heavy); Small = Px(face, 8.5f); SmallBold = Px(semi, 8.5f, heavy);
+            Title = Px(display, 22f, heavy); CardTitle = Px(semi, 11.5f, heavy); Big = Px(display, 15f, heavy);
+            Brand = Px(lang == "ja" || lang == "ko" ? semi : Face("Segoe UI Variable Display Semib", "Segoe UI Semibold"), 13.5f, heavy);
+            IconFace = Face("Segoe Fluent Icons", "Segoe MDL2 Assets", NoFont);
+            HasIconFont = IconFace != NoFont;
+            if (!HasIconFont) IconFace = "Segoe UI";
+            _icons.Clear();
         }
 
         static Font Px(string name, float points, bool bold = false)
         {
             return new Font(name, points * 96f / 72f * Scale * TextScale, bold ? FontStyle.Bold : FontStyle.Regular, GraphicsUnit.Pixel);
         }
+
+        static readonly Dictionary<int, Font> _icons = new Dictionary<int, Font>();
+
+        // An icon font of a height in device pixels (the caller has scaled it already).
+        public static Font Icon(int px)
+        {
+            Font f;
+            if (_icons.TryGetValue(px, out f)) return f;
+            f = new Font(IconFace, Math.Max(6, px), FontStyle.Regular, GraphicsUnit.Pixel);
+            _icons[px] = f;
+            return f;
+        }
+
+        // Windows 11 has Segoe Fluent Icons, Windows 10 has Segoe MDL2 Assets. Without either one the window draws
+        // plain shapes (Gfx.Glyph), so a PC that lost its icon font still reads.
+        const string NoFont = "\u0001no-icon-font";
+        public static bool HasIconFont { get; private set; }
 
         public static int S(int px) { return (int)Math.Round(px * Scale); }
         public static Size Sz(int w, int h) { return new Size(S(w), S(h)); }
@@ -75,172 +221,149 @@ namespace AmdgpuWddmSetup
         [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)]
         static extern int SetWindowTheme(IntPtr hwnd, string appName, string idList);
 
-        [DllImport("user32.dll")]
-        static extern IntPtr SendMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam);
-
-        const int LVM_GETHEADER = 0x101F;
-
         // Dark scroll bars on a scrolling control (the Explorer dark theme of Windows 10 1809 and later).
         public static T DarkScroll<T>(T c) where T : Control
         {
             c.HandleCreated += (s, e) => { try { SetWindowTheme(c.Handle, "DarkMode_Explorer", null); } catch (Exception) { } };
             return c;
         }
-
-        // A list view in the theme colours, headers and rows drawn here.
-        public static ListView DarkList(ListView lv)
-        {
-            DarkScroll(lv);
-            lv.OwnerDraw = true;
-            lv.HandleCreated += (s, e) =>
-            {
-                try { SetWindowTheme(SendMessage(lv.Handle, LVM_GETHEADER, IntPtr.Zero, IntPtr.Zero), "DarkMode_ItemsView", null); } catch (Exception) { }
-            };
-            const TextFormatFlags flags = TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine;
-            lv.DrawColumnHeader += (s, e) =>
-            {
-                using (var b = new SolidBrush(Nav)) e.Graphics.FillRectangle(b, e.Bounds);
-                using (var pen = new Pen(Line)) e.Graphics.DrawLine(pen, e.Bounds.Left, e.Bounds.Bottom - 1, e.Bounds.Right, e.Bounds.Bottom - 1);
-                TextRenderer.DrawText(e.Graphics, e.Header.Text, lv.Font, Rectangle.Inflate(e.Bounds, -S(6), 0), Dim, flags);
-            };
-            lv.DrawItem += (s, e) => { };
-            lv.DrawSubItem += (s, e) =>
-            {
-                using (var b = new SolidBrush(e.Item.Selected ? Line : lv.BackColor)) e.Graphics.FillRectangle(b, e.Bounds);
-                var fore = e.Item.UseItemStyleForSubItems ? e.Item.ForeColor : e.SubItem.ForeColor;
-                TextRenderer.DrawText(e.Graphics, e.SubItem.Text, lv.Font, Rectangle.Inflate(e.Bounds, -S(6), 0), fore, flags);
-                if (e.ColumnIndex == 0 && e.Item.Focused && lv.Focused)
-                    using (var pen = new Pen(Focus)) e.Graphics.DrawRectangle(pen, e.Item.Bounds.X, e.Item.Bounds.Y, e.Item.Bounds.Width - 1, e.Item.Bounds.Height - 1);
-            };
-            lv.MouseMove += (s, e) => { var item = lv.GetItemAt(e.X, e.Y); if (item != null) lv.Invalidate(item.Bounds); };
-            return lv;
-        }
     }
 
-    // The widgets. Every interactive control gets an accessible name (G-A11Y) and a visible focus border.
-    static class Ui
+    // The drawing helpers: rounded shapes, a soft elevation and the icon glyphs.
+    static class Gfx
     {
-        public static Label Label(string text, Font font = null, Color? color = null, int width = 0)
+        public static GraphicsPath Round(Rectangle r, int radius)
         {
-            var l = new Label { Text = text, AutoSize = true, Font = font ?? Theme.Body, ForeColor = color ?? Theme.Text, Margin = Theme.Pad(0, 3, 0, 3), UseMnemonic = false, BackColor = Color.Transparent };
-            if (width > 0) l.MaximumSize = new Size(width, 0);
-            return l;
-        }
-
-        public static Label Dim(string text, int width) { return Label(text, null, Theme.Dim, width); }
-
-        static void FocusCue(ButtonBase b, Color border)
-        {
-            b.GotFocus += (s, e) => { if (b is Button) ((Button)b).FlatAppearance.BorderColor = Theme.Focus; ((ButtonBase)s).FlatAppearance.BorderSize = 2; };
-            b.LostFocus += (s, e) => { if (b is Button) ((Button)b).FlatAppearance.BorderColor = border; ((ButtonBase)s).FlatAppearance.BorderSize = 1; };
-        }
-
-        public static Button Button(string text, EventHandler click, bool primary = false)
-        {
-            var b = new Button
-            {
-                Text = text, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, FlatStyle = FlatStyle.Flat, ForeColor = Theme.Text, Font = Theme.Bold,
-                BackColor = primary ? Theme.Accent : Theme.CardHi, Padding = Theme.Pad(10, 4, 10, 4), Margin = Theme.Pad(0, 6, 10, 6), Cursor = Cursors.Hand,
-                AccessibleName = text.TrimEnd('.', '…'), UseMnemonic = false,
-            };
-            var border = primary ? Theme.Accent : Theme.Line;
-            b.FlatAppearance.BorderColor = border;
-            if (primary) b.EnabledChanged += (s, e) => { b.BackColor = b.Enabled ? Theme.Accent : Theme.CardHi; };
-            FocusCue(b, border);
-            if (click != null) b.Click += click;
-            return b;
-        }
-
-        // A check box that stays readable: never disabled (a disabled box draws etched text on the dark theme).
-        public static CheckBox Check(string text, int width = 0)
-        {
-            var c = new CheckBox { Text = text, AutoSize = true, ForeColor = Theme.Text, BackColor = Color.Transparent, Font = Theme.Bold, Margin = Theme.Pad(0, 6, 0, 0), UseVisualStyleBackColor = false, AccessibleName = text, UseMnemonic = false };
-            if (width > 0) c.MaximumSize = new Size(width, 0);
-            return c;
-        }
-
-        public static RadioButton Radio(string text, int width = 0)
-        {
-            var r = new RadioButton { Text = text, AutoSize = true, ForeColor = Theme.Text, BackColor = Color.Transparent, Font = Theme.Bold, Margin = Theme.Pad(0, 4, 18, 0), UseVisualStyleBackColor = false, AccessibleName = text, UseMnemonic = false };
-            if (width > 0) r.MaximumSize = new Size(width, 0);
-            return r;
-        }
-
-        public static FlowLayoutPanel Row(params Control[] controls)
-        {
-            var r = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Theme.Pad(0), BackColor = Color.Transparent };
-            foreach (var c in controls) if (c != null) r.Controls.Add(c);
-            return r;
-        }
-
-        public static FlowLayoutPanel WrapRow(int width, params Control[] controls)
-        {
-            var r = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = true, Margin = Theme.Pad(0), BackColor = Color.Transparent, MaximumSize = new Size(width, 0) };
-            foreach (var c in controls) if (c != null) r.Controls.Add(c);
-            return r;
-        }
-
-        public static FlowLayoutPanel Stack(int width = 0)
-        {
-            var p = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Margin = Theme.Pad(0), BackColor = Color.Transparent };
-            if (width > 0) p.MaximumSize = new Size(width, 0);
+            var p = new GraphicsPath();
+            int d = Math.Max(1, radius * 2);
+            if (r.Width <= d || r.Height <= d) { p.AddRectangle(r); return p; }
+            p.AddArc(r.X, r.Y, d, d, 180, 90);
+            p.AddArc(r.Right - d - 1, r.Y, d, d, 270, 90);
+            p.AddArc(r.Right - d - 1, r.Bottom - d - 1, d, d, 0, 90);
+            p.AddArc(r.X, r.Bottom - d - 1, d, d, 90, 90);
+            p.CloseFigure();
             return p;
         }
-    }
 
-    // A titled block of a page; Inner is the width its content may use. The title is drawn by the card and is the
-    // card's accessible name (a group), not a label: Windows names an unnamed window after the nearest label before it
-    // in its parent, so a title label made every bare row of the card a second copy of the title for a screen reader.
-    sealed class CardPanel : Panel
-    {
-        public readonly FlowLayoutPanel Body;
-        public readonly int Inner;
-        readonly string _title;
-        readonly Rectangle _titleBox;
-        const TextFormatFlags TitleFlags = TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix | TextFormatFlags.Left | TextFormatFlags.Top;
-
-        public CardPanel(string title, int width, Color? back = null)
+        public static void Fill(Graphics g, Rectangle r, int radius, Color fill)
         {
-            BackColor = back ?? Theme.Card; AutoSize = true; AutoSizeMode = AutoSizeMode.GrowAndShrink; Padding = Theme.Pad(16, 12, 16, 14);
-            Margin = Theme.Pad(0, 0, 0, 14);
-            MinimumSize = new Size(width, 0); MaximumSize = new Size(width, 0);
-            Inner = width - Padding.Horizontal;
-            _title = title;
-            if (title != null)
+            var old = g.SmoothingMode;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            using (var p = Round(r, radius))
+            using (var b = new SolidBrush(fill)) g.FillPath(b, p);
+            g.SmoothingMode = old;
+        }
+
+        public static void FillGradient(Graphics g, Rectangle r, int radius, Color top, Color bottom)
+        {
+            if (r.Width <= 0 || r.Height <= 0) return;
+            var old = g.SmoothingMode;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            using (var p = Round(r, radius))
+            using (var b = new LinearGradientBrush(new Rectangle(r.X, r.Y, r.Width, r.Height + 1), top, bottom, LinearGradientMode.Vertical))
+                g.FillPath(b, p);
+            g.SmoothingMode = old;
+        }
+
+        public static void Border(Graphics g, Rectangle r, int radius, Color line, int width = 1)
+        {
+            var old = g.SmoothingMode;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            using (var p = Round(new Rectangle(r.X, r.Y, r.Width - 1, r.Height - 1), radius))
+            using (var pen = new Pen(line, width)) g.DrawPath(pen, p);
+            g.SmoothingMode = old;
+        }
+
+        // A card: the fill, a 1 px border and a soft shadow in the space below it (reserve "depth" pixels there).
+        public static void Card(Graphics g, Rectangle r, int radius, Color fill, Color line, int depth)
+        {
+            for (int i = depth; i > 0; i--)
             {
-                // The space a title label had: its 3 px margins above and below and its wrapped height.
-                var h = TextRenderer.MeasureText(title, Theme.CardTitle, new Size(Inner, int.MaxValue), TitleFlags).Height;
-                _titleBox = new Rectangle(Padding.Left, Padding.Top + Theme.S(3), Inner, h);
-                Padding = new Padding(Padding.Left, _titleBox.Bottom + Theme.S(3), Padding.Right, Padding.Bottom);
-                AccessibleName = title;
-                AccessibleRole = AccessibleRole.Grouping;
-                SetStyle(ControlStyles.ResizeRedraw | ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint, true);
+                var s = new Rectangle(r.X + i / 2, r.Y + i, r.Width - i, r.Height);
+                using (var p = Round(s, radius))
+                using (var b = new SolidBrush(Color.FromArgb(Math.Max(6, 26 - i * 6), 0, 0, 0)))
+                {
+                    var old = g.SmoothingMode;
+                    g.SmoothingMode = SmoothingMode.AntiAlias;
+                    g.FillPath(b, p);
+                    g.SmoothingMode = old;
+                }
             }
-            Body = Ui.Stack(Inner);
-            Body.Dock = DockStyle.Fill;
-            Controls.Add(Body);
+            Fill(g, r, radius, fill);
+            Border(g, r, radius, line);
         }
 
-        public string Title { get { return _title; } }
-
-        protected override void OnPaint(PaintEventArgs e)
+        // One glyph centred in a square. Without an icon font on the PC, a plain shape says the same.
+        public static void Glyph(Graphics g, string glyph, Rectangle box, Color color, int size = 0)
         {
-            base.OnPaint(e);
-            if (_title != null) TextRenderer.DrawText(e.Graphics, _title, Theme.CardTitle, _titleBox, Theme.Text, TitleFlags);
+            if (box.Width <= 0 || box.Height <= 0) return;
+            int px = size > 0 ? size : (int)(Math.Min(box.Width, box.Height) * 0.82f);
+            if (Theme.HasIconFont && !string.IsNullOrEmpty(glyph) && glyph[0] != '\u0001')
+            {
+                var old = g.TextRenderingHint;
+                g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+                TextRenderer.DrawText(g, glyph, Theme.Icon(px), box, color,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding);
+                g.TextRenderingHint = old;
+                return;
+            }
+            Shape(g, glyph, box, color);
         }
 
-        public T Add<T>(T c) where T : Control { Body.Controls.Add(c); return c; }
-
-        // A label and a value in two columns, the value wrapping inside the card.
-        public Label Pair(string key, string value, Color? color = null)
+        // The shapes that stand in for the glyphs that carry a state.
+        static void Shape(Graphics g, string glyph, Rectangle box, Color color)
         {
-            int keyWidth = Math.Min(Theme.S(210), Inner / 3);
-            var k = Ui.Label(key, null, Theme.Dim, keyWidth);
-            k.MinimumSize = new Size(keyWidth, 0);
-            var v = Ui.Label(value, null, color, Inner - keyWidth - Theme.S(8));
-            Body.Controls.Add(Ui.Row(k, v));
-            return v;
+            var old = g.SmoothingMode;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            float share = glyph == Icons.Ring ? 0.5f : glyph == Icons.Bullet ? 0.3f : 0.7f;
+            int d = Math.Max(2, (int)(Math.Min(box.Width, box.Height) * share));
+            var r = new Rectangle(box.X + (box.Width - d) / 2, box.Y + (box.Height - d) / 2, d, d);
+            using (var pen = new Pen(color, Math.Max(1.5f, d / 8f)))
+            {
+                if (glyph == Icons.Ring) { g.DrawEllipse(pen, r); g.SmoothingMode = old; return; }
+                if (glyph == Icons.Bullet) { using (var b = new SolidBrush(color)) g.FillEllipse(b, r); g.SmoothingMode = old; return; }
+                if (glyph == Icons.Check)
+                    g.DrawLines(pen, new[] { new Point(r.Left, r.Top + r.Height / 2), new Point(r.Left + r.Width / 3, r.Bottom - r.Height / 6), new Point(r.Right, r.Top + r.Height / 6) });
+                else if (glyph == Icons.Cancel || glyph == Icons.Error)
+                {
+                    g.DrawLine(pen, r.Left, r.Top, r.Right, r.Bottom);
+                    g.DrawLine(pen, r.Right, r.Top, r.Left, r.Bottom);
+                }
+                else if (glyph == Icons.Chevron)
+                    g.DrawLines(pen, new[] { new Point(r.Left + r.Width / 4, r.Top), new Point(r.Right - r.Width / 4, r.Top + r.Height / 2), new Point(r.Left + r.Width / 4, r.Bottom) });
+                else if (glyph == Icons.Dot)
+                    g.DrawEllipse(pen, r);
+                else
+                    using (var b = new SolidBrush(color)) g.FillEllipse(b, r);
+            }
+            g.SmoothingMode = old;
+        }
+
+        // A round status badge: a filled circle of the state colour with its glyph in the window's background colour.
+        public static void Badge(Graphics g, Rectangle box, Color color, string glyph)
+        {
+            var old = g.SmoothingMode;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            using (var b = new SolidBrush(color)) g.FillEllipse(b, box);
+            g.SmoothingMode = old;
+            var inner = Rectangle.Inflate(box, -(int)(box.Width * 0.22f), -(int)(box.Height * 0.22f));
+            Glyph(g, glyph, inner, Theme.HighContrast ? SystemColors.Window : Color.FromArgb(0x10, 0x12, 0x17));
+        }
+
+        public static void FocusRing(Graphics g, Rectangle r, int radius)
+        {
+            var old = g.SmoothingMode;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            using (var p = Round(new Rectangle(r.X + 1, r.Y + 1, r.Width - 3, r.Height - 3), radius))
+            using (var pen = new Pen(Theme.Focus, Math.Max(1, Theme.S(2))) { DashStyle = DashStyle.Solid }) g.DrawPath(pen, p);
+            g.SmoothingMode = old;
+        }
+
+        public const TextFormatFlags Wrap = TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix | TextFormatFlags.Left | TextFormatFlags.Top;
+
+        public static Size Measure(string text, Font font, int width)
+        {
+            return TextRenderer.MeasureText(text ?? "", font, new Size(width, int.MaxValue), Wrap);
         }
     }
-
 }

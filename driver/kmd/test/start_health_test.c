@@ -175,6 +175,13 @@ int main(void)
     CHECK(r.Status==BC250_ESCAPE_STATUS_NOT_ADMIN && r.NtStatus==(ULONG)STATUS_ACCESS_DENIED &&
           !(r.Flags&BC250_START_HEALTH_CONFIRMED) &&
           writes==old && cuConfirms==cu0 && dpmConfirms==dpm0);
+    healthy(&d);generation=d.StartHealth.Generation;epoch=d.StartHealth.Epoch;
+    StartHealthStop(&d,&r);CHECK(r.Flags==7 && r.Generation==generation && r.Epoch==epoch);
+    CHECK(d.StartHealth.Closed && !d.StartHealth.Engines && d.StartHealth.Epoch>epoch);
+    r=query(&d,1);CHECK(r.Status==BC250_ESCAPE_STATUS_REFUSED);
+    healthy(&d);r=query(&d,1);CHECK(r.Flags==15);
+    StartHealthStop(&d,&r);CHECK(r.Flags==15 && d.StartHealth.Closed);
+    StartHealthBegin(&d,TRUE);StartHealthStop(&d,&r);CHECK(!(r.Flags&8));
     StartHealthRemove(&d);r=query(&d,0);CHECK(r.NtStatus==(ULONG)STATUS_DELETE_PENDING);
     CHECK(spins==0 && mutexes==0 && closes>0);
     CHECK(bootMarks>=cuConfirms && bootMarks>0); /* every durable confirmation, and only those (stub above) */

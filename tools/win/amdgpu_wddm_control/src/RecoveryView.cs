@@ -61,6 +61,9 @@ namespace AmdgpuWddmControl
             _page.Controls.Add(actions);
             scroll.Controls.Add(_page);
             Controls.Add(scroll);
+            // Shown is not raised by the no-window smoke builder. Recovery also
+            // collects automatically without loading the native control DLL.
+            Shown += (s, e) => AutomaticReport();
         }
 
         public string Describe()
@@ -88,6 +91,7 @@ namespace AmdgpuWddmControl
 
         void Report()
         {
+            if (_collecting) return;
             Say("help.report.collecting");
             var report = new BugReport(Redactor.ForThisPc());
             Task.Run(() => report.Collect(false, false, true, _ => { })).ContinueWith(t =>
@@ -98,6 +102,18 @@ namespace AmdgpuWddmControl
                     if (preview.ShowDialog(this) != DialogResult.OK) { Say("help.report.cancelled"); return; }
                 try { report.Write(path); _result.Text = Strings.T("help.report.saved", path); }
                 catch (Exception) { Say("help.report.not-saved"); }
+            }, TaskScheduler.FromCurrentSynchronizationContext());
+        }
+
+        bool _collecting;
+        void AutomaticReport()
+        {
+            _collecting = true;
+            Say("help.auto.collecting");
+            Task.Run(() => StartupDiagnostics.SaveAutomatic()).ContinueWith(t => {
+                _collecting = false;
+                if (IsDisposed || Disposing) return;
+                _result.Text = t.IsFaulted ? Strings.T("help.auto.failed") : Strings.T("help.auto.saved", t.Result);
             }, TaskScheduler.FromCurrentSynchronizationContext());
         }
     }

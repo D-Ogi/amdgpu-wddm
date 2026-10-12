@@ -1153,3 +1153,9 @@ bench.note.notemp|mt|a2b8397f|Gra otwiera się we własnym okienku i sama się z
 search.perf.benchmark|mt-safe|0cc4b592|Test ray tracingu
 search.perf.benchmark.terms|mt|8e2c7bdd|benchmark|fps|klatki na sekundę|obrazy na sekundę|szybkość|wynik|pomiar|ray tracing|path tracing|quake|quake 2|q2rtx|jak szybko
 help.setting.benchmark|mt|6a6a4b69|Test Twojej własnej karty. Dwa razy uruchamia krótką scenę z ray tracingiem z darmowej gry Quake II RTX, raz dla każdego sposobu śledzenia światła, i pokazuje, ile obrazów na sekundę narysowała Twoja karta. Potrzebujesz gry na tym komputerze; pakiet sterownika jej nie zawiera. Test potrzebuje około dwudziestu sekund na każdy sposób na naszej własnej płycie, otwiera grę w małym okienku i znów ją zamyka, a zatrzymuje się sam, gdy układ zrobi się za gorący. Dziesięć ostatnich przebiegów zostaje na tym komputerze, żeby zobaczyć, czy nowe wydanie sterownika zmieniło wynik.
+
+help.auto.collecting|mt|1267cd3d|Start sterownika nie został potwierdzony. Automatycznie zbieramy raport diagnostyczny (do 20 sekund).
+
+help.auto.saved|mt|ad41ef59|Zapisano raport diagnostyczny: {0}. Odfiltrowano typowe dane osobowe. Przejrzyj plik przed udostępnieniem. Niczego nie wysłano.
+
+help.auto.failed|mt|e242261b|Nie udało się zapisać automatycznego raportu diagnostycznego. Otwórz Pomoc, aby spróbować ponownie.

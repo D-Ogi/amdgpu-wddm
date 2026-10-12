@@ -10,10 +10,10 @@
 //     EnableVmidPool   REG_DWORD  0 = every WDDM job at VMID 1, a job of another root waits for the ring to drain
 //                                 (0.7.213.1). Absent or 1 = a VMID per page-table root from a pool (vmid_pool.h,
 //                                 docs/design/gfx-submit-root-serialization.md). Default 1 from 0.7.214.1.
-//     EnableRingVmFlush  REG_DWORD  1 = a job's root write and invalidation are packets in front of its frame
-//                                 (option (b) of docs/design/gfx-submit-root-serialization.md), on the gfx ring's
-//                                 own invalidation engine. Absent or 0 = the MMIO flush ahead of the frame, byte
-//                                 for byte as 0.7.216.24. Default 0.
+//     EnableRingVmFlush  REG_DWORD  Absent or 1 = a job's root write and invalidation are packets in front of its
+//                                 frame (option (b) of docs/design/gfx-submit-root-serialization.md), on the gfx
+//                                 ring's own invalidation engine. 0 = the MMIO flush ahead of the frame, byte for
+//                                 byte as 0.7.216.24: the rollback. Default 1 from train b31.
 //
 // One escape (BC250_ESCAPE_RUN_GFX), four operations:
 //   PLAN    set up (allocates memory and zeroes it, the GART table untouched; reads registers), run stages 1..LastStage against the real registers
@@ -171,9 +171,9 @@ typedef struct _BC250_GFX {
     BOOLEAN VmidPoolGate;           // EnableVmidPool, read once at GfxStart; absent = on
     // Option (b) of docs/design/gfx-submit-root-serialization.md: the root change and the invalidation of a job
     // whose root differs from the VMID's current root go into the command stream instead of MMIO ahead of it.
-    // Read once at GfxStart; absent or 0 = the MMIO flush of 0.7.216.24, byte for byte. The admission decision
+    // Read once at GfxStart; 0 = the MMIO flush of 0.7.216.24, byte for byte (the rollback). The admission decision
     // (Bc250VmidAdmit) does not change with the gate: only how the root reaches the register.
-    BOOLEAN RingVmFlushGate;        // EnableRingVmFlush, read once at GfxStart; absent = off
+    BOOLEAN RingVmFlushGate;        // EnableRingVmFlush, read once at GfxStart; absent = on, 0 = off
     volatile LONG RingVmFlushes;    // jobs whose flush was emitted on the ring
     volatile LONG RingVmFlushSame;  // of those, the ones whose VMID already held the root
     BOOLEAN VmidProbed;             // the bring-up read ran; once per device start, a teardown does not clear it
@@ -4335,11 +4335,12 @@ NTSTATUS GfxStart(_Inout_ BC250_DEVICE* Device)
     //                              page-table root from a pool (vmid_pool.h). Until the bring-up read at the first
     //                              pool submit, the pool is VMID 1 alone.
     gfx->VmidPoolGate = (GuardReadSetting(L"EnableVmidPool", 1) != 0);
-    //   EnableRingVmFlush  REG_DWORD  1 = the root write and the invalidation of a job are packets in front of
-    //                                 its frame (option (b) of docs/design/gfx-submit-root-serialization.md).
-    //                                 Absent or 0 = the MMIO flush of 0.7.216.24 ahead of the frame, byte for
-    //                                 byte. Independent of EnableVmidPool; both on is the recommended pair.
-    gfx->RingVmFlushGate = (GuardReadSetting(L"EnableRingVmFlush", 0) != 0);
+    //   EnableRingVmFlush  REG_DWORD  Absent or any value but 0 = the root write and the invalidation of a job are
+    //                                 packets in front of its frame (option (b) of
+    //                                 docs/design/gfx-submit-root-serialization.md). 0 = the MMIO flush of
+    //                                 0.7.216.24 ahead of the frame, byte for byte: the rollback. Independent of
+    //                                 EnableVmidPool; both on is the recommended pair and the default.
+    gfx->RingVmFlushGate = (GuardReadSetting(L"EnableRingVmFlush", 1) != 0);
     gfx->VmidMembers = (USHORT)(1u << BC250_VMID_LEGACY);
     KeInitializeSpinLock(&gfx->VmidLock);
     KeInitializeSpinLock(&gfx->Sdma0RingLock);

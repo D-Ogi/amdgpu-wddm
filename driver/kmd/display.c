@@ -741,7 +741,7 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
 // ---- VidPN ------------------------------------------------------------------------------------------------
 
 // The VidPN scaling of a present path as modeset.c names it; BC250_SCALING_COUNT for "no preference" (unpinned,
-// uninitialized, not specified) and for a scaling this driver never offers (custom).
+// uninitialized, not specified) or an unrecognized value. Custom is retained firmware only.
 static ULONG ScalingFromPath(D3DKMDT_VIDPN_PRESENT_PATH_SCALING Scaling)
 {
     switch (Scaling)
@@ -750,6 +750,7 @@ static ULONG ScalingFromPath(D3DKMDT_VIDPN_PRESENT_PATH_SCALING Scaling)
     case D3DKMDT_VPPS_CENTERED: return BC250_SCALING_CENTERED;
     case D3DKMDT_VPPS_STRETCHED: return BC250_SCALING_STRETCHED;
     case D3DKMDT_VPPS_ASPECTRATIOCENTEREDMAX: return BC250_SCALING_ASPECT;
+    case D3DKMDT_VPPS_CUSTOM: return BC250_SCALING_CUSTOM;
     default: return BC250_SCALING_COUNT;
     }
 }
@@ -767,6 +768,8 @@ NTSTATUS DisplayPrepareInheritedTiming(_Inout_ BC250_DEVICE* Device)
     NTSTATUS status=STATUS_SUCCESS;
     Device->InheritedSignalValid=FALSE;
     Device->InheritedTmds=FALSE;
+    Device->Modeset.InheritedFixed=FALSE;
+    Device->Modeset.InheritedSupport=0;
     RtlZeroMemory(Signal, sizeof(*Signal));
     Signal->VideoStandard = D3DKMDT_VSS_OTHER;
     Signal->TotalSize.cx = Device->Post.Width;
@@ -783,8 +786,34 @@ NTSTATUS DisplayPrepareInheritedTiming(_Inout_ BC250_DEVICE* Device)
     // nominal60Hz and zero blanking are not hardware measurements.
     if (Device->FullWddm) status=DisplayReadInheritedTiming(Device,Signal);
     if (!NT_SUCCESS(status)) { DisplayLogRefusedTiming(Device,status); return status; }
+    if (Device->FullWddm) status=ModesetPrepareInherited(Device,Signal);
+    if (!NT_SUCCESS(status)) return status; // the pipe diagnostic retains the actual failure and read mask
     Device->InheritedSignal=*Signal;
     Device->InheritedSignalValid=TRUE;
+    return STATUS_SUCCESS;
+}
+
+NTSTATUS DisplayValidateInheritedSignal(BC250_DEVICE* Device)
+{
+    D3DKMDT_VIDEO_SIGNAL_INFO signal = Device->InheritedSignal;
+    const D3DKMDT_VIDEO_SIGNAL_INFO* saved = &Device->InheritedSignal;
+    BOOLEAN tmds = Device->InheritedTmds, measuredTmds;
+    NTSTATUS status;
+    ULONGLONG delta;
+    if (!Device->InheritedSignalValid) return STATUS_DEVICE_NOT_READY;
+    Device->InheritedTmds = FALSE;
+    status = DisplayReadInheritedTiming(Device,&signal);
+    measuredTmds = Device->InheritedTmds;
+    Device->InheritedTmds = tmds;
+    if (!NT_SUCCESS(status)) return status;
+    if (tmds != measuredTmds || signal.ActiveSize.cx != saved->ActiveSize.cx ||
+        signal.ActiveSize.cy != saved->ActiveSize.cy || signal.TotalSize.cx != saved->TotalSize.cx ||
+        signal.TotalSize.cy != saved->TotalSize.cy) return STATUS_DEVICE_BUSY;
+    delta = signal.PixelRate > saved->PixelRate ? signal.PixelRate - saved->PixelRate : saved->PixelRate - signal.PixelRate;
+    // DTO is exact. The counter-measured TMDS path has the half-window 0.5%
+    // stability bound plus its 10 kHz rounding interval. Never publish a new
+    // tuple under retained allocations, even when a repeat is within that bound.
+    if (delta > (tmds ? saved->PixelRate / 200u + 10000u : 0u)) return STATUS_DEVICE_BUSY;
     return STATUS_SUCCESS;
 }
 
@@ -826,7 +855,8 @@ static NTSTATUS OfferSourceMode(_In_ const BC250_DEVICE* Device, _In_ const DXGK
         const ULONG height = list->Count ? list->Modes[size].Height : Device->Post.Height;
         const BOOLEAN native = (width == Device->Post.Width && height == Device->Post.Height);
         const ULONG support = ModesetScalingSupport(Device, width, height);
-        if (!native && (support == 0 || (filter != BC250_SCALING_COUNT && !(support & BC250_SCALING_BIT(filter)))))
+        if ((!native || Device->Modeset.InheritedFixed) && (support == 0 ||
+            (ScalingPinned(PathScaling) && (filter == BC250_SCALING_COUNT || !(support & BC250_SCALING_BIT(filter))))))
             continue;
         for (i = 0; i < count && NT_SUCCESS(status); ++i)
         {
@@ -908,7 +938,8 @@ static NTSTATUS SourceModeIsPinned(_In_ const DXGK_VIDPN_INTERFACE* VidPn, D3DKM
 }
 
 static NTSTATUS TargetModeIsPinned(_In_ const DXGK_VIDPN_INTERFACE* VidPn, D3DKMDT_HVIDPN hVidPn,
-                                   D3DDDI_VIDEO_PRESENT_TARGET_ID TargetId, _Out_ BOOLEAN* Pinned)
+                                   D3DDDI_VIDEO_PRESENT_TARGET_ID TargetId, _Out_ BOOLEAN* Pinned,
+                                   _Out_opt_ D3DKMDT_VIDEO_SIGNAL_INFO* Signal)
 {
     D3DKMDT_HVIDPNTARGETMODESET hSet = NULL;
     const DXGK_VIDPNTARGETMODESET_INTERFACE* set = NULL;
@@ -922,10 +953,44 @@ static NTSTATUS TargetModeIsPinned(_In_ const DXGK_VIDPN_INTERFACE* VidPn, D3DKM
     if (NT_SUCCESS(status) && pinned != NULL)
     {
         *Pinned = TRUE;
+        if (Signal != NULL) *Signal = pinned->VideoSignalInfo;
         set->pfnReleaseModeInfo(hSet, pinned);
     }
     VidPn->pfnReleaseTargetModeSet(hVidPn, hSet);
     return (status == STATUS_GRAPHICS_MODE_NOT_PINNED) ? STATUS_SUCCESS : status;
+}
+
+// Exact inherited tuple only. The same check serves IsSupportedVidPn and the
+// final commit, so a saved OS mode cannot silently reprogram this pipeline.
+static BOOLEAN DisplayInheritedModeMatches(const BC250_DEVICE* Device,
+    const D3DKMDT_VIDPN_SOURCE_MODE* Mode, const D3DKMDT_VIDPN_PRESENT_PATH* Path,
+    const D3DKMDT_VIDEO_SIGNAL_INFO* Target)
+{
+    const D3DKMDT_VIDEO_SIGNAL_INFO* actual = &Device->InheritedSignal;
+    ULONG scaling = ScalingFromPath(Path->ContentTransformation.Scaling);
+    return Device->InheritedSignalValid && Mode->Type == D3DKMDT_RMT_GRAPHICS &&
+        Path->VidPnSourceId == 0 && Path->VidPnTargetId == 0 &&
+        (Path->ContentTransformation.Rotation == D3DKMDT_VPPR_IDENTITY ||
+         Path->ContentTransformation.Rotation == D3DKMDT_VPPR_UNPINNED ||
+         Path->ContentTransformation.Rotation == D3DKMDT_VPPR_UNINITIALIZED) &&
+        (!ScalingPinned(Path->ContentTransformation.Scaling) ||
+         (scaling < BC250_SCALING_COUNT && (Device->Modeset.InheritedSupport & BC250_SCALING_BIT(scaling)))) &&
+        Path->VisibleFromActiveTLOffset.cx == 0 && Path->VisibleFromActiveTLOffset.cy == 0 &&
+        Path->VisibleFromActiveBROffset.cx == 0 && Path->VisibleFromActiveBROffset.cy == 0 &&
+        Mode->Format.Graphics.PrimSurfSize.cx == Device->Post.Width &&
+        Mode->Format.Graphics.PrimSurfSize.cy == Device->Post.Height &&
+        Mode->Format.Graphics.VisibleRegionSize.cx == Device->Post.Width &&
+        Mode->Format.Graphics.VisibleRegionSize.cy == Device->Post.Height &&
+        Bc250SourceModeAdmitted(Device->ComposedSourceModes,(ULONG)Mode->Format.Graphics.PixelFormat) &&
+        Mode->Format.Graphics.Stride == Bc250SourceModeStride((ULONG)Mode->Format.Graphics.PixelFormat,Device->Post.Pitch) &&
+        Target->ActiveSize.cx == actual->ActiveSize.cx && Target->ActiveSize.cy == actual->ActiveSize.cy &&
+        Target->TotalSize.cx == actual->TotalSize.cx && Target->TotalSize.cy == actual->TotalSize.cy &&
+        Target->PixelRate == actual->PixelRate && Target->ScanLineOrdering == actual->ScanLineOrdering &&
+        Target->HSyncFreq.Denominator && Target->VSyncFreq.Denominator &&
+        (ULONGLONG)Target->HSyncFreq.Numerator * actual->HSyncFreq.Denominator ==
+            (ULONGLONG)actual->HSyncFreq.Numerator * Target->HSyncFreq.Denominator &&
+        (ULONGLONG)Target->VSyncFreq.Numerator * actual->VSyncFreq.Denominator ==
+            (ULONGLONG)actual->VSyncFreq.Numerator * Target->VSyncFreq.Denominator;
 }
 
 NTSTATUS Bc250IsSupportedVidPn(_In_ const HANDLE hAdapter, _Inout_ DXGKARG_ISSUPPORTEDVIDPN* IsSupportedVidPn)
@@ -974,9 +1039,18 @@ NTSTATUS Bc250IsSupportedVidPn(_In_ const HANDLE hAdapter, _Inout_ DXGKARG_ISSUP
                 const D3DKMDT_VIDPN_PRESENT_PATH_SCALING scaling = path->ContentTransformation.Scaling;
                 const BOOLEAN native = (width == device->Post.Width && height == device->Post.Height);
                 // At the native size every scaling dxgkrnl can pin is the 1:1 shape; custom is never offered.
-                if (ScalingPinned(scaling) && !native &&
+                if (ScalingPinned(scaling) && (!native || device->Modeset.InheritedFixed) &&
                     (ScalingFromPath(scaling) == BC250_SCALING_COUNT || !(support & BC250_SCALING_BIT(ScalingFromPath(scaling)))))
                     IsSupportedVidPn->IsVidPnSupported = FALSE;
+                if (device->Modeset.InheritedFixed) {
+                    BOOLEAN targetPinned;
+                    D3DKMDT_VIDEO_SIGNAL_INFO target;
+                    NTSTATUS targetStatus = TargetModeIsPinned(vidpn,IsSupportedVidPn->hDesiredVidPn,
+                        path->VidPnTargetId,&targetPinned,&target);
+                    if (!NT_SUCCESS(targetStatus) || (targetPinned &&
+                        !DisplayInheritedModeMatches(device,&mode,path,&target)))
+                        IsSupportedVidPn->IsVidPnSupported = FALSE;
+                }
                 topology->pfnReleasePathInfo(hTopology, path);
             }
         }
@@ -1022,7 +1096,7 @@ NTSTATUS Bc250EnumVidPnCofuncModality(_In_ const HANDLE hAdapter, _In_ const DXG
                                    path->ContentTransformation.Scaling);
 
         // Target mode set: the same.
-        if (NT_SUCCESS(step)) step = TargetModeIsPinned(vidpn, Enum->hConstrainingVidPn, path->VidPnTargetId, &pinned);
+        if (NT_SUCCESS(step)) step = TargetModeIsPinned(vidpn, Enum->hConstrainingVidPn, path->VidPnTargetId, &pinned, NULL);
         if (NT_SUCCESS(step) && !pinned &&
             !(Enum->EnumPivotType == D3DKMDT_EPT_VIDPNTARGET && Enum->EnumPivot.VidPnTargetId == path->VidPnTargetId))
             step = OfferTargetMode(device, vidpn, Enum->hConstrainingVidPn, path->VidPnTargetId);
@@ -1043,12 +1117,14 @@ NTSTATUS Bc250EnumVidPnCofuncModality(_In_ const HANDLE hAdapter, _In_ const DXG
                                                     (ULONG)source.Format.Graphics.PrimSurfSize.cy);
                 else
                     support = ModesetScalingSupport(device, device->Post.Width, device->Post.Height);
-                if (support == 0) support = BC250_SCALING_BIT(BC250_SCALING_IDENTITY);
+                if (support == 0 && !device->Modeset.InheritedFixed) support = BC250_SCALING_BIT(BC250_SCALING_IDENTITY);
                 update.ContentTransformation.ScalingSupport.Identity = (support & BC250_SCALING_BIT(BC250_SCALING_IDENTITY)) ? 1 : 0;
                 update.ContentTransformation.ScalingSupport.Centered = (support & BC250_SCALING_BIT(BC250_SCALING_CENTERED)) ? 1 : 0;
                 update.ContentTransformation.ScalingSupport.Stretched = (support & BC250_SCALING_BIT(BC250_SCALING_STRETCHED)) ? 1 : 0;
                 update.ContentTransformation.ScalingSupport.AspectRatioCenteredMax =
                     (support & BC250_SCALING_BIT(BC250_SCALING_ASPECT)) ? 1 : 0;
+                update.ContentTransformation.ScalingSupport.Custom =
+                    (support & BC250_SCALING_BIT(BC250_SCALING_CUSTOM)) ? 1 : 0;
                 changed = TRUE;
             }
             if (path->ContentTransformation.Rotation == D3DKMDT_VPPR_UNPINNED && Enum->EnumPivotType != D3DKMDT_EPT_ROTATION)
@@ -1183,6 +1259,7 @@ static NTSTATUS CommitVidPnCore(_In_ const HANDLE hAdapter, _In_ const DXGKARG_C
     // dropped while ModeActive is clear, so a surface of another size can never be copied from.
     device->ModeActive = FALSE;
     if (paths == 0) return STATUS_SUCCESS;                               // source detached: nothing to program
+    if (device->Modeset.InheritedFixed && paths != 1) return STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED;
 
     status = SourceModeIsPinned(vidpn, Commit->hFunctionalVidPn, 0, &pinned, &mode);
     if (!NT_SUCCESS(status)) return status;
@@ -1201,10 +1278,21 @@ static NTSTATUS CommitVidPnCore(_In_ const HANDLE hAdapter, _In_ const DXGKARG_C
     {
         const D3DKMDT_VIDPN_PRESENT_PATH* path = NULL;
         ULONG scaling = BC250_SCALING_COUNT;            // no preference: modeset.c takes the default
-        if (NT_SUCCESS(topology->pfnAcquireFirstPathInfo(hTopology, &path)) && path != NULL)
+        status = topology->pfnAcquireFirstPathInfo(hTopology, &path);
+        if (device->Modeset.InheritedFixed && (!NT_SUCCESS(status) || path == NULL))
+            return NT_SUCCESS(status) ? STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED : status;
+        if (NT_SUCCESS(status) && path != NULL)
         {
             scaling = ScalingFromPath(path->ContentTransformation.Scaling);
+            if (device->Modeset.InheritedFixed) {
+                D3DKMDT_VIDEO_SIGNAL_INFO target;
+                BOOLEAN targetPinned = FALSE;
+                status = TargetModeIsPinned(vidpn,Commit->hFunctionalVidPn,path->VidPnTargetId,&targetPinned,&target);
+                if (NT_SUCCESS(status) && (!targetPinned || !DisplayInheritedModeMatches(device,&mode,path,&target)))
+                    status = STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED;
+            }
             topology->pfnReleasePathInfo(hTopology, path);
+            if (!NT_SUCCESS(status)) return status;
         }
         status = ModesetCommit(device, (ULONG)mode.Format.Graphics.PrimSurfSize.cx,
                                (ULONG)mode.Format.Graphics.PrimSurfSize.cy, scaling);
@@ -1249,6 +1337,16 @@ NTSTATUS Bc250UpdateActiveVidPnPresentPath(_In_ const HANDLE hAdapter, _In_ cons
     const D3DKMDT_VIDPN_PRESENT_PATH_SCALING scaling = Update->VidPnPresentPathInfo.ContentTransformation.Scaling;
     ULONG width, height, support;
 
+    // The retained transform has no programmable crop or alternate route.
+    // Check this even when scaling is unpinned and the call would be a no-op.
+    if (device->Modeset.InheritedFixed &&
+        (!device->InheritedSignalValid || Update->VidPnPresentPathInfo.VidPnSourceId != 0 ||
+         Update->VidPnPresentPathInfo.VidPnTargetId != 0 ||
+         Update->VidPnPresentPathInfo.VisibleFromActiveTLOffset.cx != 0 ||
+         Update->VidPnPresentPathInfo.VisibleFromActiveTLOffset.cy != 0 ||
+         Update->VidPnPresentPathInfo.VisibleFromActiveBROffset.cx != 0 ||
+         Update->VidPnPresentPathInfo.VisibleFromActiveBROffset.cy != 0))
+        return STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED;
     if (Update->VidPnPresentPathInfo.ContentTransformation.Rotation != D3DKMDT_VPPR_IDENTITY &&
         Update->VidPnPresentPathInfo.ContentTransformation.Rotation != D3DKMDT_VPPR_UNINITIALIZED)
         return STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED;
@@ -1299,7 +1397,10 @@ NTSTATUS Bc250RecommendMonitorModes(_In_ const HANDLE hAdapter, _In_ const DXGKA
 NTSTATUS Bc250QueryVidPnHWCapability(_In_ const HANDLE hAdapter, _Inout_ DXGKARG_QUERYVIDPNHWCAPABILITY* Capability)
 {
     UNREFERENCED_PARAMETER(hAdapter);
-    RtlZeroMemory(&Capability->VidPnHWCaps, sizeof(Capability->VidPnHWCaps));     // no hardware rotation, scaling or cloning
+    // DriverScaling=0 means scaling in the display pipeline (including a
+    // retained firmware scaler), not an absence of scaling support. A value
+    // of 1 promises a software/graphics-engine scaling implementation.
+    RtlZeroMemory(&Capability->VidPnHWCaps, sizeof(Capability->VidPnHWCaps));
     return STATUS_SUCCESS;
 }
 

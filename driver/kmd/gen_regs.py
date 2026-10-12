@@ -318,6 +318,18 @@ AUDIO_DIRECT_WRITES += [f"mm{r.format(n=n)}" for n in range(2) for r in (
     "DIG{n}_AFMT_AUDIO_SRC_CONTROL", "DIG{n}_AFMT_AUDIO_PACKET_CONTROL", "DIG{n}_AFMT_AUDIO_PACKET_CONTROL2",
     "DIG{n}_AFMT_INFOFRAME_CONTROL0", "DIG{n}_AFMT_60958_0")]
 AUDIO_DIRECT_WRITES += ["mmDIO_MEM_PWR_CTRL"]
+# HDMI audio only. HDMI_CONTROL is observed, never changed by audio: the
+# inherited link must already be 8bpc, with no scrambling or pixel repetition.
+HDMI_AUDIO_WRITES = ["mmDCCG_AUDIO_DTO0_MODULE", "mmDCCG_AUDIO_DTO0_PHASE"] + [
+    f"mmDIG{n}_{r}" for n in range(2) for r in (
+        "HDMI_AUDIO_PACKET_CONTROL", "HDMI_ACR_PACKET_CONTROL", "HDMI_INFOFRAME_CONTROL0", "HDMI_INFOFRAME_CONTROL1",
+        "HDMI_ACR_32_0", "HDMI_ACR_32_1", "HDMI_ACR_44_0", "HDMI_ACR_44_1", "HDMI_ACR_48_0", "HDMI_ACR_48_1",
+        "AFMT_60958_1", "AFMT_60958_2")]
+AUDIO_DIRECT_WRITES += HDMI_AUDIO_WRITES
+AUDIO_READ_REGISTERS += [n for n in HDMI_AUDIO_WRITES if n not in AUDIO_READ_REGISTERS]
+AUDIO_READ_REGISTERS += [f"mmDIG{n}_{r}" for n in range(2) for r in ("HDMI_CONTROL", "DIG_FE_CNTL", "DIG_BE_EN_CNTL")
+                         if f"mmDIG{n}_{r}" not in AUDIO_READ_REGISTERS]
+EXTRA_READS += [("DMU", n) for n in AUDIO_READ_REGISTERS if ("DMU", n) not in EXTRA_READS]
 # Indirect indices, by their ENDPOINT0 name in dcn_2_0_1_offset.h (regcalc: `lookup ix...`); the ENDPOINT1 name must
 # carry the same number, which main() checks. Read: the configuration and status registers dpaudio.c observes. The
 # interrupt-status indices (AUDIO_ENABLED_INT_STATUS and its neighbours) are left out: whether a read clears them is
@@ -345,6 +357,11 @@ DISPLAY_AUX_WRITES = ["mmDP_AUX0_AUX_CONTROL", "mmDP_AUX0_AUX_SW_CONTROL", "mmDP
                       "mmDP_AUX0_AUX_INTERRUPT_CONTROL", "mmDP_AUX0_AUX_SW_DATA", "mmDC_GPIO_DDC1_MASK",
                       "mmDC_GPIO_AUX_CTRL_5"]
 DISPLAY_AUX_READS = ["mmDP_AUX0_AUX_SW_STATUS"]
+# Native DDC uses the same connector pads, but never emits AUX packets. DATA
+# advances the FIFO index on read and is private to the transaction engine.
+DISPLAY_DDC_WRITES = ["mmDC_I2C_CONTROL", "mmDC_I2C_ARBITRATION", "mmDC_I2C_DDC1_SETUP",
+                      "mmDC_I2C_DDC1_SPEED", "mmDC_I2C_DATA"] + [f"mmDC_I2C_TRANSACTION{i}" for i in range(4)]
+DISPLAY_DDC_READS = ["mmDC_I2C_SW_STATUS", "mmDC_I2C_DDC1_HW_STATUS", "mmMICROSECOND_TIME_BASE_DIV"]
 _DSCL_WRITES = ["SCL_COEF_RAM_TAP_SELECT", "SCL_COEF_RAM_TAP_DATA", "SCL_MODE", "SCL_TAP_CONTROL", "DSCL_CONTROL",
                 "DSCL_2TAP_CONTROL", "SCL_HORZ_FILTER_SCALE_RATIO", "SCL_HORZ_FILTER_INIT",
                 "SCL_HORZ_FILTER_SCALE_RATIO_C", "SCL_HORZ_FILTER_INIT_C", "SCL_VERT_FILTER_SCALE_RATIO",
@@ -360,9 +377,15 @@ DISPLAY_PIPE_WRITES = ([f"mmDSCL0_{r}" for r in _DSCL_WRITES] + [f"mmHUBP0_{r}" 
 # Read only: the update and memory power state of the scaler, the underflow status, and which DPP and OPP feed
 # MPCC 0 and OTG 0 (the precondition that pipe 0 alone drives the output).
 DISPLAY_PIPE_READS = ["mmDSCL0_DSCL_UPDATE", "mmDSCL0_DSCL_MEM_PWR_CTRL", "mmDSCL0_DSCL_MEM_PWR_STATUS",
-                      "mmHUBP0_DCHUBP_CNTL", "mmMPCC0_MPCC_TOP_SEL", "mmODM0_OPTC_DATA_SOURCE_SELECT"]
-DISPLAY_DATA_PORTS = ["mmDP_AUX0_AUX_SW_DATA", "mmDSCL0_SCL_COEF_RAM_TAP_DATA", "mmDSCL0_SCL_COEF_RAM_TAP_SELECT"]
-DISPLAY_NAMED = DISPLAY_AUX_WRITES + DISPLAY_AUX_READS + DISPLAY_PIPE_WRITES + DISPLAY_PIPE_READS
+                      "mmHUBP0_DCHUBP_CNTL", "mmMPCC0_MPCC_TOP_SEL", "mmODM0_OPTC_DATA_SOURCE_SELECT",
+                      "mmHUBP0_DCSURF_SURFACE_CONFIG", "mmHUBP0_DCSURF_TILING_CONFIG",
+                      "mmHUBPREQ0_DCSURF_SURFACE_PITCH", "mmOTG1_OTG_CONTROL",
+                      "mmHUBPREQ0_DCSURF_SURFACE_CONTROL", "mmMPCC0_MPCC_BOT_SEL",
+                      "mmMPCC0_MPCC_CONTROL", "mmMPC_OUT0_MUX"]
+DISPLAY_DATA_PORTS = ["mmDP_AUX0_AUX_SW_DATA", "mmDSCL0_SCL_COEF_RAM_TAP_DATA", "mmDSCL0_SCL_COEF_RAM_TAP_SELECT",
+                      "mmDC_I2C_DATA"]
+DISPLAY_NAMED = (DISPLAY_AUX_WRITES + DISPLAY_AUX_READS + DISPLAY_PIPE_WRITES + DISPLAY_PIPE_READS +
+                 DISPLAY_DDC_WRITES + DISPLAY_DDC_READS)
 EXTRA_READS += [("DMU", n) for n in DISPLAY_NAMED
                 if n not in DISPLAY_DATA_PORTS and ("DMU", n) not in EXTRA_READS and
                 n not in ("mmOTG0_OTG_MASTER_UPDATE_LOCK", "mmOTG0_OTG_TRIGA_MANUAL_TRIG")]
@@ -556,9 +579,9 @@ def main():
 
     # Display modes (dpaux.c, dcn_scale.c, modeset.c): their own read and write tables, in a block of their own like
     # the audio tables, so that nothing outside those files can reach these registers through them.
-    disp_write = sorted({offset(maps, "DMU", n) for n in DISPLAY_AUX_WRITES + DISPLAY_PIPE_WRITES})
+    disp_write = sorted({offset(maps, "DMU", n) for n in DISPLAY_AUX_WRITES + DISPLAY_PIPE_WRITES + DISPLAY_DDC_WRITES})
     disp_read = sorted({offset(maps, "DMU", n) for n in DISPLAY_NAMED})
-    if len(disp_write) != len(DISPLAY_AUX_WRITES) + len(DISPLAY_PIPE_WRITES):
+    if len(disp_write) != len(DISPLAY_AUX_WRITES) + len(DISPLAY_PIPE_WRITES) + len(DISPLAY_DDC_WRITES):
         sys.exit("the display write lists have two names for one offset")
     if len(disp_read) != len(DISPLAY_NAMED):
         sys.exit("the display lists have two names for one offset")

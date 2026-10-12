@@ -2588,6 +2588,103 @@ static void StartRecord(void)
     }
 }
 
+// BD-124: the record the KMD writes when Windows stops a device whose start nothing had confirmed, from
+// Parameters\\StopRecord (guard.c GuardRecordStopBegin and GuardRecordStopDone). It is a registry read, like the
+// start record above, so it answers on a device with Code 43. Three rules of this record differ from the start
+// record's and this reader states each of them in words:
+//   a confirmed start that Windows stops later writes nothing, and a start that failed writes nothing either
+//   (its reason is the start record), so an absent record is the normal case;
+//   Status is always 0, because StopDevice carries no reason code from dxgkrnl, and it is never a verdict;
+//   the record outlives the boot that wrote it, so BootId decides which boot it belongs to.
+//
+// This boot's BootId, from the same place the driver takes it: KUSER_SHARED_DATA.BootId. That structure is mapped
+// read-only into every process at 0x7FFE0000, and BootId sits at offset 0x2C4. The offset is the WDK header's own:
+// km\ntddk.h of 10.0.26100 declares the structure at line 8965 with BootId at line 9117, and its C_ASSERTs at
+// lines 9568 and 9569 put AlternativeArchitecture at 0x2C0 and SystemExpirationDate at 0x2C8, so the ULONG between
+// them is at 0x2C4.
+// Windows keeps a SECOND copy of the counter in PrefetchParameters\\BootId, and that copy LAGS: on 22631, 13
+// minutes after a boot, the shared page said 388 and the registry still said 387, so this reader called a fresh
+// record of this boot "AN EARLIER BOOT" (BD-130). The registry value stays as the fallback for a host where the
+// page cannot be read, and the line below says which of the two answered.
+#define BC250_SHARED_BOOT_ID ((const volatile DWORD *)(ULONG_PTR)0x7FFE02C4)
+
+static int BootIdOfThisBoot(DWORD *value, const char **source)
+{
+    static const WCHAR *key = L"SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management\\PrefetchParameters";
+    DWORD shared = 0;
+
+    *source = "KUSER_SHARED_DATA";
+    shared = *BC250_SHARED_BOOT_ID;
+    if (shared != 0) {
+        *value = shared;
+        return 1;
+    }
+    *source = "the PrefetchParameters registry value, which can lag this boot by one";
+    return ReadDword(key, L"BootId", value);
+}
+
+static void StopRecord(void)
+{
+    static const WCHAR *record = BC250_PARAMETERS L"\\StopRecord";
+    WCHAR result[32], step[96], sub[96], when[40], done[40], detail[400];
+    DWORD status = 0, stage = 0, startStage = 0, health = 0, boot = 0, lines = 0, version = 0, now = 0;
+    const char *nowSource = "";
+    int haveBoot, haveNow;
+
+    if (!ReadString(record, L"Result", result, sizeof(result))) {
+        printf("StopRecord   -  (none: a KMD before 0.7.216.39, no unconfirmed start of this boot was stopped,\n");
+        printf("                or the last start failed and its reason is the start record above)\n");
+        return;
+    }
+    if (!ReadString(record, L"Step", step, sizeof(step))) wcscpy_s(step, 96, L"-");
+    if (!ReadString(record, L"SubStep", sub, sizeof(sub))) wcscpy_s(sub, 96, L"-");
+    if (!ReadString(record, L"TimeUtc", when, sizeof(when))) wcscpy_s(when, 40, L"-");
+    if (!ReadString(record, L"StopTimeUtc", done, sizeof(done))) wcscpy_s(done, 40, L"-");
+    (void)ReadDword(record, L"Status", &status);
+    (void)ReadDword(record, L"Stage", &stage);
+    (void)ReadDword(record, L"StartStage", &startStage);
+    (void)ReadDword(record, L"HealthFlags", &health);
+    (void)ReadDword(record, L"LogLines", &lines);
+    (void)ReadDword(record, L"Version", &version);
+    haveBoot = ReadDword(record, L"BootId", &boot);
+    haveNow = BootIdOfThisBoot(&now, &nowSource);
+    printf("StopRecord   %ls, step %ls / %ls, status 0x%08lX (no reason: StopDevice carries none)\n",
+           result, step, sub, (unsigned long)status);
+    printf("             stage %lu %s, start stage %lu %s, health flags %lu\n", stage, StageName(stage),
+           startStage, StageName(startStage), health);
+    // Generation and Epoch are decimal strings in the registry, because a 64-bit number loses digits in a DWORD.
+    {
+        WCHAR generation[32], epoch[32];
+
+        if (!ReadString(record, L"Generation", generation, sizeof(generation))) wcscpy_s(generation, 32, L"-");
+        if (!ReadString(record, L"Epoch", epoch, sizeof(epoch))) wcscpy_s(epoch, 32, L"-");
+        printf("             generation %ls, epoch %ls, at %ls, finished %ls, %lu log line(s), ABI 0x%08lX\n",
+               generation, epoch, when, done, lines, (unsigned long)version);
+    }
+    // A higher number in the record is no record of the future: the counter only grows, so it means the two
+    // numbers come from two different counters, which is what BD-130 was.
+    if (haveBoot && haveNow)
+        printf("             BootId %lu against this boot %lu (from %s): %s\n", boot, now, nowSource,
+               boot == now ? "this boot"
+               : boot < now ? "AN EARLIER BOOT, so this record is not about this boot's start"
+               : "A LATER BOOT than the number read here, which no record of the past can be: the two numbers are from different counters, so the BootId cannot place this record");
+    else if (haveBoot)
+        printf("             BootId %lu, and this boot's number cannot be read, so the record cannot be placed\n", boot);
+    else
+        printf("             no BootId in the record, so only its time can place it\n");
+    if (ReadString(record, L"Detail", detail, sizeof(detail)) && detail[0])
+        printf("             detail %ls\n", detail);
+    {
+        WCHAR kept[64 * 160 + 2];
+        DWORD size = sizeof(kept), type = 0;
+        const WCHAR *p;
+
+        if (RegGetValueW(HKEY_LOCAL_MACHINE, record, L"Log", RRF_RT_REG_MULTI_SZ, &type, kept, &size) != ERROR_SUCCESS)
+            return;
+        for (p = kept; *p; p += wcslen(p) + 1) printf("  stop log   %ls\n", p);
+    }
+}
+
 static int Stages(void)
 {
     HKEY key;
@@ -2620,6 +2717,8 @@ static int Stages(void)
     // BD-122: why the last start did not reach a started device, which the two lines above cannot say. Printed
     // before the counter below, because that one decides this command's exit code and returns.
     StartRecord();
+    // BD-124: and why Windows stopped a start that did reach a started device, which the start record cannot say.
+    StopRecord();
 
     if (ReadDword(BC250_PARAMETERS, L"UnconfirmedStarts", &starts)) {
         printf("starts       %lu unconfirmed%s\n", starts,

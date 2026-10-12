@@ -11,7 +11,19 @@
 # GPU firmware: not in the package; the dry run prints both URLs and the SHA256 of each file and downloads nothing;
 # test-firmware.ps1 downloads the files for real into the scratch folder and checks the refusals; -FirmwareDir dry runs
 # with a good and a changed folder. Needs network access to git.kernel.org and gitlab.com.
-param([Parameter(Mandatory)][string]$Package, [string]$WorkBase = (Join-Path (Split-Path $Package) 'test-tmp'))  # scratch for test-filesafe.ps1
+param([Parameter(Mandatory)][string]$Package, [string]$WorkBase)  # WorkBase: scratch for test-filesafe.ps1
+# -Package takes the folder the zip unpacks to or the files\ folder under it: the package root is the one that holds
+# manifest.json (owner, 2026-10-11). The release recipe and an operator may name either.
+if ((Test-Path -LiteralPath (Join-Path $Package 'files\manifest.json') -PathType Leaf) -and
+    -not (Test-Path -LiteralPath (Join-Path $Package 'manifest.json') -PathType Leaf)) {
+    $Package = (Join-Path $Package 'files')
+}
+# Default scratch: beside the folder the zip unpacks to, never inside it. The package root is files\ of that folder
+# (owner, 2026-10-11), so one more level up than it used to be; an older flat package keeps the old place.
+if (-not $PSBoundParameters.ContainsKey('WorkBase')) {
+    $packageTop = $(if ((Split-Path $Package -Leaf) -eq 'files') { Split-Path $Package } else { $Package })
+    $WorkBase = Join-Path (Split-Path $packageTop) 'test-tmp'
+}
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'headless.ps1')
 $ps51 = Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
@@ -72,7 +84,7 @@ Check ($r.text -notmatch 'doing:|Administrator rights are needed') 'no change, n
 $r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard')
 $r.text
 Check ($r.code -eq 0) "walk-through exit $($r.code)"
-Check ($r.text -match 'would: bcdedit /set \{current\} testsigning on') 'phase 1 shows the test-signing change'
+Check ($r.text -match 'would: bcdedit /set ''\{current\}'' testsigning on') 'phase 1 shows the test-signing change'
 Check ($r.text -match 'would: pnputil /add-driver') 'phase 2 shows the driver install'
 Check ($r.text -match 'would: HKLM:\\SYSTEM\\CurrentControlSet\\Services\\bc250kmd\\Parameters: .*DpmMode=1 \(new\); DpmMaxMHz=2000 \(new\)') 'phase 2 shows DPM on, 2000 MHz'
 Check ($r.text -match 'Parameters: .*UnconfirmedStarts=0') 'UnconfirmedStarts reset (installer-owned)'
@@ -110,6 +122,13 @@ Check ($rr.code -eq 0) "set / same / update / kept / command line / installer-ow
 $sr = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-start-record.ps1'), '-Installer', (Join-Path $Package 'installer'))
 $sr.text
 Check ($sr.code -eq 0) "start record: step failure / guard refusal / started after a failure / absent: exit $($sr.code)"
+
+# Owner, 2026-10-12: the installer collects the logs itself when the install does not pass. The decision and the
+# readers of that diagnostics file (test-diagnostics.ps1 under 5.1, an HKCU scratch key and a folder of this run),
+# with the field report 20261011T222253Z replayed as its first fixture.
+$dg = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-diagnostics.ps1'), '-Installer', (Join-Path $Package 'installer'), '-WorkRoot', (Join-Path $WorkBase 'diagnostics'))
+$dg.text
+Check ($dg.code -eq 0) "diagnostics: the field case / a started driver / every hard signal / the readers / the bounds: exit $($dg.code)"
 
 # D3D9 goes through D3D9On12: the D3D9 slot is empty in both views, and no stub is copied.
 Check ($r.text -notmatch 'would: copy payload\\(system32|syswow64)|bc250umd\.dll -> ') 'no D3D9 stub is copied (System32 or SysWOW64)'
@@ -541,9 +560,11 @@ Check ($r.code -eq 0) "G-OFF: exit $($r.code)"
 # The setup window against this package's real engine: a plan run and a dry run through the window's own engine client,
 # each screen in four languages without internals (--smoke-engine shows no window). Every package carries the window
 # from 0.7.216.100-tester.28 on (build-release.ps1 -SetupApp), so a package without it fails here.
-$setupExe = Join-Path $Package 'setup\amdgpu_wddm_setup.exe'
-Check (Test-Path -LiteralPath $setupExe) 'the package carries the setup window (setup\amdgpu_wddm_setup.exe)'
-if (Test-Path -LiteralPath $setupExe) {
+# The unpacked release holds setup.exe in its top folder, one level above the package root (owner, 2026-10-11);
+# a kept repair set or a prepared folder holds its copy in the package root itself (common.ps1, Get-PackageSetupExe).
+$setupExe = @((Join-Path $Package 'setup.exe'), (Join-Path $Package '..\setup.exe') | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | ForEach-Object { [IO.Path]::GetFullPath($_) })[0]
+Check ([bool]$setupExe) 'the package carries the setup window (setup.exe in the unpacked release''s top folder)'
+if ($setupExe) {
     'setup window against the real engine (--smoke-engine: plan and dry run, no window)'
     foreach ($c in @(
             @{ name = 'plan'; flags = @('--plan'); engine = @('-Plan', '-DryRunIgnoreBoard', '-FirmwareDir', $goodDir); expect = @('result: bound', 'outcome: planned', 'view: Plan result.planned.title nothing-changed', 'decision: install') }
@@ -564,7 +585,11 @@ if (Test-Path -LiteralPath $setupExe) {
         Remove-Item -LiteralPath $stateDir -Recurse -Force
     }
     $cr0 = Get-Content -LiteralPath (Join-Path $Package 'compatibility.json') -Raw | ConvertFrom-Json
-    Check (($cr0.continuation.setup_exe -eq 'setup/amdgpu_wddm_setup.exe') -and (@($m.files | Where-Object { $_.path -eq 'setup/amdgpu_wddm_setup.exe' }).Count -eq 1)) 'the compatibility record names the setup window as the continuation, manifest.json lists it'
+    # The setup window is the one file of the zip outside the package root, so the manifest carries it under "setup"
+    # instead of in files[] (build-release.ps1, owner 2026-10-11). Both hashes are the exe that was packaged.
+    Check (($cr0.continuation.setup_exe -eq 'setup.exe') -and ($m.setup) -and ([string]$m.setup.file -eq 'setup.exe') -and
+           (([string]$m.setup.sha256) -eq (Get-FileHash -LiteralPath $setupExe -Algorithm SHA256).Hash)) 'the compatibility record names the setup window as the continuation, manifest.json hashes it under "setup"'
+    Check (@($m.files | Where-Object { $_.path -like '*amdgpu_wddm_setup.exe' -or $_.path -eq 'setup.exe' }).Count -eq 0) 'the package root holds no second copy of the setup window'
 }
 if (Test-Path -LiteralPath $fwWork) { Remove-Item -LiteralPath $fwWork -Recurse -Force }
 

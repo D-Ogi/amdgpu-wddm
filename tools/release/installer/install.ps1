@@ -57,6 +57,9 @@ $package = Split-Path -Parent $here
 . (Join-Path $here 'dwm-session.ps1')
 . (Join-Path $here 'engine.ps1')
 . (Join-Path $here 'release-witness.ps1')
+# The readers of the KMD's start and stop records, and the automatic diagnostics of a start that did not pass.
+. (Join-Path $here 'start-confirm-core.ps1')
+. (Join-Path $here 'diagnostics.ps1')
 . (Join-Path $here 'compatibility.ps1')
 . (Join-Path $here 'mft-h264.ps1')
 . (Join-Path $here 'system-tuning.ps1')
@@ -171,11 +174,13 @@ function Invoke-Preflight {
         Add-Check 'BC-250 GPU' 'ok' "found ($boardText), current driver service: $(if ($svc) { $svc } else { 'none' })" 'gpu.ok'
     }
 
-    $sb = Get-SecureBootState
+    # The detail names the source that decided; a firmware without Secure Boot reads "off (not built into the firmware)".
+    $sbRead = Read-SecureBootState
+    $sb = $sbRead.state
     $script:SecureBoot = $sb
-    if ($sb -eq 'on') { Add-Check 'Secure Boot' 'fail' 'on: test signing cannot be enabled. Turn Secure Boot off in the BIOS setup first (see INSTALL.md, section Secure Boot).' 'secureboot.on' }
-    elseif ($sb -eq 'unknown') { Add-Check 'Secure Boot' 'warn' 'state unknown' 'secureboot.unknown' }
-    else { Add-Check 'Secure Boot' 'ok' $sb 'secureboot.off' }
+    if ($sb -eq 'on') { Add-Check 'Secure Boot' 'fail' "$($sbRead.detail): test signing cannot be enabled. Turn Secure Boot off in the BIOS setup first (see INSTALL.md, section Secure Boot)." 'secureboot.on' }
+    elseif ($sb -eq 'unknown') { Add-Check 'Secure Boot' 'warn' "state unknown: $($sbRead.detail)" 'secureboot.unknown' }
+    else { Add-Check 'Secure Boot' 'ok' $sbRead.detail 'secureboot.off' }
 
     $tsActive = Get-TestSigningActive
     $tsNext = Get-TestSigningConfigured
@@ -424,6 +429,52 @@ function Request-Restart([string]$Why, [string]$ReasonId) {
     } else { Write-Info 'restart later; the installer continues after you log on again' }
 }
 
+# ---- automatic diagnostics of a start that did not pass (owner, 2026-10-12) -------------------------------------
+# "The installer must collect the logs itself when the install does not pass": the readings verify has already taken
+# decide it (diagnostics.ps1 Get-StartFailureDecision), and when they show a driver that did not start, ONE
+# diagnostics file is written for this run, next to the installer's log. The engine names it in result.json, the
+# setup window puts it into the support file, and the last console lines print its path.
+# It never changes a verify result, a message id or an exit code. A collection that fails, in part or altogether,
+# is a line inside the file and an [info] line here, and verify ends exactly as it did before.
+# The KMD's StartRecord through the one reader of start-confirm-core.ps1: the registry, with no gate and without
+# the driver, which is the point - a device at problem code 43 answers no escape.
+function Read-VerifyStartRecord {
+    try {
+        $k = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey("SYSTEM\CurrentControlSet\Services\$($script:ServiceName)\Parameters\$($script:StartRecordKey)")
+        if (-not $k) { return $null }
+        try { return Read-StartRecordFromKey $k } finally { $k.Dispose() }
+    } catch { return $null }
+}
+function Invoke-VerifyDiagnostics {
+    # $BootIdSource names where $BootId came from, so the file says whether this boot's number is the one the
+    # driver writes (KUSER_SHARED_DATA) or the registry copy that can lag it (BD-130).
+    param($DeviceState, $StartRecord, [AllowNull()]$BootUtc, [AllowNull()]$BootId, [string]$Context = 'verify', [scriptblock]$Info,
+          [AllowNull()][string]$BootIdSource = (Get-StartRecordBootIdSource))
+    $decision = $null
+    try {
+        $decision = Get-StartFailureDecision -ProblemCode $DeviceState.problem_code -DevicePresent $DeviceState.present `
+            -DeviceStatus ([string]$DeviceState.status) -Record $StartRecord -BootUtc $BootUtc `
+            -HealthFlags $DeviceState.health_flags -LastStage $DeviceState.last_stage
+        Write-Log "   diagnostics: $($decision.summary)"
+        if (-not $decision.collect) { return }
+        if ($script:DryRunMode) { Write-Log '   diagnostics: a dry run collects nothing'; return }
+        $path = Join-Path $script:StateDir ('diagnostics-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ') + '.txt')
+        $r = Write-StartFailureDiagnostics -Path $path -Decision $decision -DeviceState $DeviceState -BootUtc $BootUtc -BootId $BootId `
+            -BootIdSource $BootIdSource `
+            -ParametersSubKey "SYSTEM\CurrentControlSet\Services\$($script:ServiceName)\Parameters" `
+            -HardwareId $script:HardwareIdPrefix -Context $Context
+        Write-Log "   diagnostics: written $($r.written), $($r.bytes) bytes in $($r.seconds) s, sections: $(@($r.sections) -join ' | ')"
+        foreach ($p in @($r.problems)) { Write-Log "   diagnostics problem: $p" }
+        if (-not $r.written) { if ($Info) { & $Info 'diagnostics' "the driver did not start, and the details could not be written: $(@($r.problems) -join '; ')" }; return }
+        $script:EngineDiagnostics = $r.path
+        Write-EngineEvent 'diagnostics' ([ordered]@{ collected = $true; path = $r.path; bytes = $r.bytes; seconds = $r.seconds; cut = [bool]$r.cut; reasons = @($decision.reasons) })
+        if ($Info) { & $Info 'diagnostics' "the driver did not start; the details of this run are in $($r.path) (and in the support file of the setup window)" }
+    } catch {
+        Write-Log "   diagnostics: not collected, $($_.Exception.Message)"
+        if ($Info) { & $Info 'diagnostics' "the details of the failed start could not be collected: $($_.Exception.Message)" }
+    }
+}
+
 # ---- phase 3: verify -------------------------------------------------------------------------------------------
 $script:VerifyComplete = $false
 function Invoke-Verify {
@@ -456,7 +507,14 @@ function Invoke-Verify {
         if ($n) { Write-Info "removed $n old copies of replaced files" }
     }
     $dev = @(Get-Bc250Device)
-    if ($dev.Count -ne 1) { Add-Result 'device' $false 'BC-250 GPU not found'; return $results }
+    if ($dev.Count -ne 1) {
+        Add-Result 'device' $false 'BC-250 GPU not found'
+        # A GPU that is not there after an installation is a start failure too: the driver's own record of the start
+        # and the logs of this boot are collected here as well, because nothing below this line runs.
+        Invoke-VerifyDiagnostics -DeviceState ([ordered]@{ present = $false; devices = $dev.Count }) `
+            -StartRecord (Read-VerifyStartRecord) -BootUtc (Get-StartRecordBootUtc) -BootId (Get-StartRecordBootId) -Context 'verify: no device with our hardware id' -Info ${function:Add-Info}
+        return $results
+    }
     $id = $dev[0].DeviceID
     $svc = Get-DeviceServiceName -InstanceId $id
     $pnp = Get-PnpDevice -InstanceId $id
@@ -520,6 +578,16 @@ function Invoke-Verify {
     $health = $null; if ($probe -match '(?m)^(?!.*start record log: ).*probe: start health (.+)$') { $health = $Matches[1].Trim() }
     $hflags = $null; if ($health -match 'flags (\d+)') { $hflags = [int]$Matches[1] }
     Add-Result 'start health' (($null -ne $hflags) -and (($hflags -band 7) -eq 7)) $(if ($health) { "$health (15 = confirmed; 7 = full, ready, visible)" } else { 'no reading' })
+    # Everything the decision of diagnostics.ps1 needs is now read, and nothing of it is read twice: the device and
+    # the driver from the checks above, LastStage and the driver's reply from the probe's own view line.
+    $lastStage = $null; if ($view -match 'LastStage (\d+)') { $lastStage = [int]$Matches[1] }
+    $replyVersion = $null; if ($view -match 'driver version (0x[0-9A-Fa-f]{8})') { $replyVersion = $Matches[1] }
+    Invoke-VerifyDiagnostics -DeviceState ([ordered]@{
+            present = $true; instance_id = $id; problem_code = $dev[0].ConfigManagerErrorCode; status = [string]$pnp.Status
+            service = $svc; driver_version = $(if ($drv) { [string]$drv.DriverVersion } else { $null }); inf = $inf
+            provider = [string]$provider; package_version = [string]$script:Manifest.kmd_version
+            reply_version = $replyVersion; last_stage = $lastStage; health_flags = $hflags
+        }) -StartRecord (Read-VerifyStartRecord) -BootUtc (Get-StartRecordBootUtc) -BootId (Get-StartRecordBootId) -Context 'verify' -Info ${function:Add-Info}
     $uc = (Get-ItemProperty -LiteralPath $script:ParametersKey -Name UnconfirmedStarts -ErrorAction SilentlyContinue).UnconfirmedStarts
     Add-Result 'boot-loop guard' (($null -eq $uc) -or ([int]$uc -lt 2)) "UnconfirmedStarts $uc (the start-confirm task resets it after each logon)"
     $p = Get-ItemProperty -LiteralPath $script:ParametersKey -ErrorAction SilentlyContinue
@@ -709,6 +777,13 @@ if ($script:VerifyOnly) {
     }
     if ($bad.Count) {
         Write-Host "Verification: $($bad.Count) check(s) failed. See INSTALL.md, section 'If something fails'." -ForegroundColor Red
+        # The automatic diagnostics of this run, when the driver did not start: the console route has no support
+        # file, so the last thing a tester reads is the path of the file to send.
+        if ($script:EngineDiagnostics) {
+            Write-Host "The driver did not start. Send these two files with the report:" -ForegroundColor Yellow
+            Write-Host "   $($script:EngineDiagnostics)" -ForegroundColor Yellow
+            Write-Host "   $($script:LogPath)" -ForegroundColor Yellow
+        }
         Exit-Engine -Code 3 -Outcome 'verify-failed' -MessageId 'result.verify-failed' -Detail (($bad | ForEach-Object { "$($_.check): $($_.detail)" }) -join ' | ')
     }
     Write-Host 'Verification passed. The BC-250 runs on the amdgpu-wddm driver.' -ForegroundColor Green
@@ -967,7 +1042,7 @@ if ($state.phase -eq 'new') {
         # is the last one of phase 1: test signing, the state and RunOnce follow without a stop.
         Initialize-Closure
         Set-CancelAvailable $false 'test-signing'
-        Invoke-Change 'bcdedit /set {current} testsigning on' {
+        Invoke-Change "bcdedit /set '{current}' testsigning on" {
             $n = Invoke-Native bcdedit.exe @('/set', '{current}', 'testsigning', 'on')
             if ($n.code -ne 0) { throw "bcdedit failed: $($n.text)" }
         } | Out-Null
@@ -1035,7 +1110,14 @@ $cer = Join-Path $package 'payload\cert\amdgpu-wddm-release.cer'
 $cert = New-Object Security.Cryptography.X509Certificates.X509Certificate2 -ArgumentList $cer
 Set-StateValue $state 'cert_thumbprint' $cert.Thumbprint
 Invoke-Change "add the release test certificate $($cert.Thumbprint) to LocalMachine Root and TrustedPublisher" {
-    foreach ($store in 'Root', 'TrustedPublisher') { Import-Certificate -FilePath $cer -CertStoreLocation "Cert:\LocalMachine\$store" | Out-Null }
+    $stores = @('Root', 'TrustedPublisher')
+    for ($i = 0; $i -lt $stores.Count; $i++) {
+        try { Import-Certificate -FilePath $cer -CertStoreLocation "Cert:\LocalMachine\$($stores[$i])" -ErrorAction Stop | Out-Null }
+        catch {
+            throw (New-CertificateStoreError -Store $stores[$i] -Certificate $cer -Exception $_.Exception `
+                -Done @($stores | Select-Object -First $i) -Remaining @($stores | Select-Object -Skip ($i + 1)))
+        }
+    }
 } | Out-Null
 
 # Files. Each payload directory goes to the same name under the install root; wow64 holds the x86 builds (BD-064).
@@ -1434,7 +1516,7 @@ Invoke-Change "$($script:SoftwareKey)\Release: Version, InstallDir, InstallRoot,
 } | Out-Null
 # The repair entry (docs/gui/interfaces.md section 4): the setup window of the kept repair set, which the control
 # application's Help -> Repair starts with --repair. A package without a setup window leaves no entry.
-$repairSetup = Join-Path $script:Closure $script:SetupExeRelative
+$repairSetup = Join-Path $script:Closure $script:SetupExeName
 Invoke-Change "$($script:SoftwareKey)\Release: RepairSetup = $repairSetup (when the repair set has a setup window)" {
     $k = "$($script:SoftwareKey)\Release"
     if (Test-Path -LiteralPath $repairSetup) { New-ItemProperty -LiteralPath $k -Name RepairSetup -Value $repairSetup -PropertyType String -Force | Out-Null }

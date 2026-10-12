@@ -25,6 +25,8 @@ namespace AmdgpuWddmSetup
 
         readonly object _gate = new object();
         Process _process;
+        volatile bool _outDone, _errDone;
+        DateTime? _exitedAt;
         long _offset;
         readonly List<byte> _partial = new List<byte>();
         readonly StringBuilder _output = new StringBuilder();
@@ -74,8 +76,12 @@ namespace AmdgpuWddmSetup
                 StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8,
             };
             _process = new Process { StartInfo = psi, EnableRaisingEvents = true };
-            _process.OutputDataReceived += (s, e) => { if (e.Data != null) lock (_gate) _output.AppendLine(e.Data); };
-            _process.ErrorDataReceived += (s, e) => { if (e.Data != null) lock (_gate) _output.AppendLine("stderr: " + e.Data); };
+            // A null line is the end of that pipe. The window waits for both ends, with a bound, instead of calling
+            // the parameterless WaitForExit(): that one returns only when every handle of the child's output pipes is
+            // closed, and a tool the engine starts (pnputil, dism, a setup child) that outlives its parent inherits
+            // those handles and holds it for ever. The window would then stop painting in the middle of an install.
+            _process.OutputDataReceived += (s, e) => { if (e.Data == null) _outDone = true; else lock (_gate) _output.AppendLine(e.Data); };
+            _process.ErrorDataReceived += (s, e) => { if (e.Data == null) _errDone = true; else lock (_gate) _output.AppendLine("stderr: " + e.Data); };
             _process.Start();
             _process.StandardInput.Close();
             _process.BeginOutputReadLine();
@@ -93,7 +99,10 @@ namespace AmdgpuWddmSetup
             bool exited = _process.HasExited;
             bool changed = ReadEvents();
             if (!exited) return changed;
-            _process.WaitForExit();
+            // The process is gone; its output may still be on its way. The run is bound as soon as both pipes end,
+            // and after two seconds in any case, so an inherited handle cannot hold the window.
+            if (!_exitedAt.HasValue) _exitedAt = DateTime.UtcNow;
+            if (!(_outDone && _errDone) && DateTime.UtcNow - _exitedAt.Value < TimeSpan.FromSeconds(2)) return changed;
             ReadEvents();
             ExitCode = _process.ExitCode;
             string problem;

@@ -52,6 +52,8 @@ FIELD_RE = re.compile(r'0|[1-9][0-9]*')
 # puts this line after each install section header. It re-signs the SYS and makes a new catalog; the code is the
 # build's.
 RELEASE_KMD = 'payload/kmd'
+# The folder that holds the package's own files inside the unpacked release (owner, 2026-10-11).
+RELEASE_FILES_DIR = 'files'
 RELEASE_CER = 'amdgpu-wddm-release.cer'
 RELEASE_REBOOT_LINE = 'Reboot                                          ; release package: the GPU changes driver at the next restart'
 IDENTITY_KEYS = ['KmdCandidateLabel', 'KmdCandidateVersion', 'KmdCandidateAbi', 'KmdRollbackLabel',
@@ -216,8 +218,21 @@ def check_detector(inf, repo, commit, role):
             fail(f'{role}: hang.c at {commit} does not read {name}')
 
 
+def release_root(directory):
+    """The package root of a release package: the named directory, or `files` under it, else None.
+
+    The unpacked release holds setup.exe in its top folder and everything else in `files` (owner, 2026-10-11), so an
+    operator who names the folder the zip made is one level above manifest.json. A release built before that layout
+    is flat and the named directory is the root. Without this, --rollback over a tester release read the top folder
+    as a build directory and failed with "no source-manifest.json", which names the wrong problem."""
+    for candidate in (Path(directory), Path(directory) / RELEASE_FILES_DIR):
+        if (candidate / 'manifest.json').is_file() and (candidate / RELEASE_KMD).is_dir():
+            return candidate
+    return None
+
+
 def is_release(directory):
-    return (Path(directory) / 'manifest.json').is_file() and (Path(directory) / RELEASE_KMD).is_dir()
+    return release_root(directory) is not None
 
 
 def read_package(directory, repo, role, build=None):
@@ -226,11 +241,13 @@ def read_package(directory, repo, role, build=None):
     A build directory holds bc250kmd.sys/.inf/.cat, bc250-lab-test.cer and source-manifest.json: a package directory
     of driver/kmd/build.ps1, or a candidate directory of an accepted attempt. A release package is the directory of
     tools/release/build-release.ps1 (manifest.json, payload/kmd, payload/cert); `build` must then name the build
-    package directory it was made from (release-sources.json `source` of payload/kmd)."""
-    if is_release(directory):
+    package directory it was made from (release-sources.json `source` of payload/kmd). Either the folder the release
+    zip unpacks to or the `files` folder under it may be named: release_root() answers the one with manifest.json."""
+    root = release_root(directory)
+    if root is not None:
         if build is None:
-            fail(f'{role}: {directory} is a release package; name the build it packages with --rollback-build')
-        return read_release(directory, build, repo, role)
+            fail(f'{role}: {root} is a release package; name the build it packages with --rollback-build')
+        return read_release(root, build, repo, role)
     if build is not None:
         fail(f'{role}: --rollback-build goes only with a release package')
     return read_build(directory, repo, role)
@@ -389,7 +406,10 @@ def historical_manifest():
         raise SystemExit('Historical helper manifest does not name the 171 stage manifest')
     files = manifest['files']
     if not HIST.is_dir():
-        raise SystemExit(f'Historical helper set missing: {HIST} (its provenance is {HIST_MANIFEST})')
+        raise SystemExit(f'Historical helper set missing: {HIST} (its provenance is {HIST_MANIFEST}). '
+                         'The default sits next to this repository, under the workspace root, so a copy of this '
+                         'kit that runs from somewhere else needs BC250_ROOT set to that workspace root, or '
+                         'BC250_KMD_DEPLOY_HIST set to the helper set itself.')
     present = {p.relative_to(HIST).as_posix() for p in HIST.rglob('*') if p.is_file()}
     if present != set(files):
         raise SystemExit('Historical helper set differs from its manifest: ' + ', '.join(sorted(present ^ set(files))))

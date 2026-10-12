@@ -84,6 +84,8 @@ static void gfx_stop(BC250_DEVICE* device) {
 #define VramStop(...) touch()
 #define MmioStop(...) touch()
 #define GuardReleaseStart(...) touch()
+#define GuardRecordStopBegin(...) touch()
+#define GuardRecordStopDone(...) touch()
 #define GuardLogKeep(...) touch()
 NTSTATUS Bc250StopDevice(const PVOID context);
 /* ACTUAL_OWNER */

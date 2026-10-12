@@ -523,7 +523,10 @@ def check_unreviewed(data: dict, report: Report) -> None:
 
 
 def release_components(root: str, data: dict) -> set[str]:
-    rel = data.get("release_sources", "scratch/gui/wt-setup/tools/release/release-sources.json")
+    # The published main's file. The old default named a scratch worktree (scratch/gui/wt-setup), which froze the
+    # component set at b20 and which the workspace cleanup of 2026-10-12 deleted: the gate then found no file,
+    # returned an empty set and passed every entry whose components it could not check.
+    rel = data.get("release_sources", "bc250-win/tools/release/release-sources.json")
     path = os.path.join(root, rel.replace("/", os.sep))
     if not os.path.exists(path):
         return set()

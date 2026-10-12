@@ -43,7 +43,7 @@
  *   0     the SDMA0 paging stream, in SDMA packets (bc250_sdma_paging.c,
  *         bc250_sdma_emit_vm_flush())
  *   1     the gfx ring, in PM4 packets (bc250_gfx_emit_vm_flush(), the EnableRingVmFlush gate of
- *         the miniport)
+ *         the miniport: on unless the value is 0)
  *   2, 3  firmware, as upstream
  *   17    every CPU MMIO flush (bc250_gmc_flush_gpu_tlb()), which the miniport serializes under
  *         one lock at PASSIVE_LEVEL

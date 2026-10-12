@@ -1,5 +1,11 @@
 # Builds the tester release package: one folder and its zip that a tester unpacks and runs (the setup window
-# setup\amdgpu_wddm_setup.exe, or install.cmd on the command line).
+# setup.exe, or files\install.cmd on the command line).
+#
+# Layout of the unpacked release (owner, 2026-10-11): the top folder holds setup.exe and nothing else but one folder,
+# files\, which holds the whole package (manifest.json, install.cmd and the other command-line entries, installer\,
+# payload\, licenses\, the documents). files\ is therefore the package root that manifest.json describes and that
+# every installer script works from, and setup.exe is the only file outside that list: manifest.json records it under
+# "setup", so verify covers it too.
 #
 #   pwsh -File tools\release\build-release.ps1 -SetupApp <dir> [-Root <BC250_ROOT>] [-Out <dir>] [-Version <v>]
 #
@@ -18,7 +24,8 @@
 # override with -AllowLedgerDebt -LedgerDebtReason, or -NoLedger -NoLedgerReason in a workspace without the
 # ledger; manifest.json records which of the three happened), every source hash, the provenance of every payload file
 # (provenance.py: a published commit and a recipe, or a download record; -RebuildCheck also rebuilds the files with
-# rebuild-check.ps1 and compares the bytes), signer of .sys and .cat = the release certificate, no private-key material in the
+# rebuild-check.ps1 and compares the bytes; -NoProvenance -NoProvenanceReason builds a lab candidate from a work tree
+# whose commits are not published yet, and manifest.json records that), signer of .sys and .cat = the release certificate, no private-key material in the
 # package, every installer script parses under Windows PowerShell 5.1, every form of cli-commands.json answered by the
 # packaged CLI, the guide character's art in the packaged control application (nine expressions at both sizes) and in
 # the setup window (the expressions its own screens reach), under the names of the repository's own
@@ -32,11 +39,13 @@ param(
     [string]$DriverVer = '0.7.216.100',          # the release's own 4th field: ranks above the lab's x.y.z.1, names the package
     [string]$Version = '0.7.216.100-tester.21',
     [string]$KitVersion = '10.0.26100.0',
-    [string]$SetupApp,                           # required: the built setup window (tools\win\amdgpu_wddm_setup\build.ps1 output), copied to setup\
+    [string]$SetupApp,                           # required: the built setup window (build.ps1 output), copied to the top folder as setup.exe
     [switch]$AllowLedgerDebt,                    # build although finished work for a release component is unlanded
     [string]$LedgerDebtReason,                   # required with -AllowLedgerDebt: recorded in the build log and manifest
     [switch]$NoLedger,                           # build in a workspace that has no work ledger at all
     [string]$NoLedgerReason,                     # required with -NoLedger: recorded in the build log and manifest
+    [switch]$NoProvenance,                       # lab candidate: build although the payload commits are not published yet
+    [string]$NoProvenanceReason,                 # required with -NoProvenance: recorded in the build log and manifest
     [switch]$RebuildCheck                        # also rebuild every payload file that claims a bit-identical rebuild (slow)
 )
 $ErrorActionPreference = 'Stop'
@@ -47,8 +56,9 @@ if (-not (Test-Path -LiteralPath (Join-Path $SetupApp 'amdgpu_wddm_setup.exe')))
 if (-not $Out) { $Out = Join-Path $Root 'scratch\release\out' }
 $repo = Split-Path (Split-Path $PSScriptRoot)
 $name = "amdgpu-wddm-tester-$Version"
-$pkg = Join-Path $Out $name
-$zip = "$pkg.zip"
+$pkgRoot = Join-Path $Out $name      # what the zip unpacks to: setup.exe and files\
+$pkg = Join-Path $pkgRoot 'files'    # the package root: manifest.json and everything the installer reads
+$zip = "$pkgRoot.zip"
 $sources = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'release-sources.json') -Raw | ConvertFrom-Json
 $secrets = Join-Path $Root 'secrets\release'
 $pfx = Join-Path $secrets 'amdgpu-wddm-release.pfx'
@@ -110,7 +120,7 @@ if (-not (Test-Path -LiteralPath $ledgerTool)) {
     }
 }
 
-if (Test-Path -LiteralPath $pkg) { Remove-Item -LiteralPath $pkg -Recurse -Force }
+if (Test-Path -LiteralPath $pkgRoot) { Remove-Item -LiteralPath $pkgRoot -Recurse -Force }
 if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
 [void][IO.Directory]::CreateDirectory($pkg)
 
@@ -132,9 +142,24 @@ Write-Host 'provenance'
 $pythonExe = (Get-Command python -ErrorAction SilentlyContinue).Source
 if (-not $pythonExe) { throw 'python is not on PATH: the provenance gate cannot run' }
 $provenanceArgs = @((Join-Path $PSScriptRoot 'provenance.py'), 'check', '--sources', (Join-Path $PSScriptRoot 'release-sources.json'), '--root', $Root, '--repo', $repo)
-$r = Invoke-Headless -File $pythonExe -Arguments $provenanceArgs -TimeoutSeconds 300
-$r.text
-if ($r.code -ne 0) { throw 'provenance: a payload file has no published commit, recipe or download record (see above)' }
+# A lab candidate is built from a work tree on purpose: the lab test comes before the commit (owner rule), so the
+# commit that the payload rows would name does not exist yet and no remote-tracking branch can contain it. The gate
+# is then off for this build, the reason is required, and manifest.json carries both, so a package that nobody could
+# tie to published commits cannot look like a gated release. A shipping package is built again after the commit,
+# with the gate on.
+$script:provenanceGate = 'enforced'
+$script:provenanceGateReason = ''
+if ($NoProvenance) {
+    if (-not $NoProvenanceReason) { throw '-NoProvenance needs -NoProvenanceReason "<why this build cannot name published commits>"' }
+    $script:provenanceGate = 'skipped'
+    $script:provenanceGateReason = $NoProvenanceReason
+    Write-Host 'provenance: GATE OFF for this build by -NoProvenance. This package is a candidate, not a release.'
+    Write-Host "provenance: reason: $NoProvenanceReason"
+} else {
+    $r = Invoke-Headless -File $pythonExe -Arguments $provenanceArgs -TimeoutSeconds 300
+    $r.text
+    if ($r.code -ne 0) { throw 'provenance: a payload file has no published commit, recipe or download record (see above)' }
+}
 if ($RebuildCheck) {
     $pwshExe = (Get-Process -Id $PID).Path
     $r = Invoke-Headless -File $pwshExe -Arguments @('-NoProfile', '-File', (Join-Path $PSScriptRoot 'rebuild-check.ps1'), '-Root', $Root, '-Report', (Join-Path $Out 'rebuild-check.json')) -TimeoutSeconds 21600
@@ -193,6 +218,12 @@ $notesText = Get-Content -LiteralPath $notes -Raw
 foreach ($h in 'New', 'Fixed', 'Known issues', 'Settings affected') {
     if ($notesText -notmatch ('(?m)^## ' + [regex]::Escape($h) + '\s*$')) { throw "release notes $notes lack the section '## $h'" }
 }
+# The notes ship as RELEASE-NOTES.md and the setup window shows them, so they may not send a tester to a path this
+# package does not have. The unpacked release holds setup.exe in its top folder and everything else in files\
+# (owner, 2026-10-11), so the setup path of the notes up to 0.7.216.100-tester.28 is gone.
+if ($notesText -match 'setup\\amdgpu_wddm_setup\.exe') {
+    throw "release notes $notes still name setup\amdgpu_wddm_setup.exe: a tester double-clicks setup.exe in the unpacked folder, and the command line is files\install.cmd"
+}
 Copy-Item -LiteralPath $notes -Destination (Join-Path $pkg 'RELEASE-NOTES.md')
 foreach ($t in Get-ChildItem -LiteralPath $notesDir -File -Filter "$Version.*.md") {
     $lang = $t.Name.Substring($Version.Length + 1) -replace '\.md$', ''
@@ -200,13 +231,16 @@ foreach ($t in Get-ChildItem -LiteralPath $notesDir -File -Filter "$Version.*.md
     Copy-Item -LiteralPath $t.FullName -Destination (Join-Path $pkg "RELEASE-NOTES.$lang.md")
 }
 '  release notes: RELEASE-NOTES.md{0}' -f $(if (@(Get-ChildItem -LiteralPath $pkg -Filter 'RELEASE-NOTES.*.md').Count) { ' + ' + ((Get-ChildItem -LiteralPath $pkg -Filter 'RELEASE-NOTES.*.md' | ForEach-Object { $_.Name }) -join ', ') } else { '' })
-# The setup window (required, checked at the start): setup\amdgpu_wddm_setup.exe (its string tables are embedded). The
-# installer's continuation runs it from the staged closure after each restart that a setup-window run asked for.
-$setupExe = Join-Path $SetupApp 'amdgpu_wddm_setup.exe'
-$setupDst = Join-Path $pkg 'setup'
-[void][IO.Directory]::CreateDirectory($setupDst)
-foreach ($f in Get-ChildItem -LiteralPath $SetupApp -File | Where-Object { $_.Extension -in '.exe', '.config' }) { Copy-Item -LiteralPath $f.FullName -Destination $setupDst }
-'  setup window: {0} ({1})' -f $setupExe, (Get-FileHash -LiteralPath $setupExe -Algorithm SHA256).Hash.Substring(0, 8)
+# The setup window (required, checked at the start): the one file in the unpacked release's top folder, named
+# setup.exe because that is what a tester double-clicks. The installer's continuation runs it from the staged closure
+# after each restart that a setup-window run asked for; its copy there is next to the manifest (common.ps1).
+$setupSrc = Join-Path $SetupApp 'amdgpu_wddm_setup.exe'
+$setupPkg = Join-Path $pkgRoot 'setup.exe'
+Copy-Item -LiteralPath $setupSrc -Destination $setupPkg
+# A .NET application configuration file, when the build makes one, belongs to the exe under its new name.
+foreach ($f in Get-ChildItem -LiteralPath $SetupApp -File -Filter 'amdgpu_wddm_setup.exe.config') { Copy-Item -LiteralPath $f.FullName -Destination "$setupPkg.config" }
+$setupHash = (Get-FileHash -LiteralPath $setupPkg -Algorithm SHA256).Hash
+'  setup window: {0} -> {1} ({2})' -f $setupSrc, $setupPkg, $setupHash.Substring(0, 8)
 foreach ($f in 'LICENSE.md', 'NOTICE') { Copy-Item -LiteralPath (Join-Path $repo $f) -Destination $pkg }
 # The release's own third-party list (each bundled file and its licence file) and the licence texts, each from the
 # source that release-sources.json records (repository, path, commit) and refused unless its SHA256 matches.
@@ -274,7 +308,11 @@ $setupExpressions = @([regex]::Matches((Get-Content -LiteralPath (Join-Path $rep
 if (-not $setupExpressions.Count) { throw 'SetupGuide: no guide expression found in EngineModel.cs' }
 $unknown = @($setupExpressions | Where-Object { $e = $_; -not ($guideMap | Where-Object { $_.Groups['expr'].Value -eq $e }) })
 if ($unknown.Count) { throw "SetupGuide names the expression $($unknown -join ', '), which Guide.ArtFile does not have" }
-$setupResources = @(foreach ($e in $setupExpressions) { foreach ($size in 128, 256) { "nagi.$e@$size.png" } })
+# The setup window embeds the @256 picture alone, by its own contract: its smallest slot is 176 device pixels at 96
+# DPI, larger than the @128 picture, so a @128 resource could never be drawn (EngineModel.cs, SetupGuide.ArtPixels,
+# and the -Sizes 256 of tools\win\amdgpu_wddm_setup\build.ps1). Asking for both sizes here refused every setup
+# window ever built, this release's included. The control application above keeps both sizes: it draws the small one.
+$setupResources = @(foreach ($e in $setupExpressions) { "nagi.$e@256.png" })
 # The control application is a component of every package: its path comes from release-sources.json, so a renamed
 # payload path cannot make this gate match nothing. The setup window is required too (-SetupApp, checked at the start).
 $controlFiles = @($sources.files | Where-Object { $_.component -eq 'control' -and $_.path -like '*amdgpu_wddm_control.exe' })
@@ -282,7 +320,7 @@ if ($controlFiles.Count -ne 1) { throw "release-sources.json: $($controlFiles.Co
 $checkedPrograms = 0
 foreach ($program in @(
         @{ name = 'control application'; path = (Join-Path $pkg ($controlFiles[0].path -replace '/', '\')); want = $guideResources; required = $true },
-        @{ name = 'setup window'; path = (Join-Path $pkg 'setup\amdgpu_wddm_setup.exe'); want = $setupResources; required = $true })) {
+        @{ name = 'setup window'; path = $setupPkg; want = $setupResources; required = $true })) {
     if (-not (Test-Path -LiteralPath $program.path)) {
         if ($program.required) { throw "guide art: the package has no $($program.name) at $($program.path)" }
         continue
@@ -344,16 +382,27 @@ foreach ($f in 'bc250kmd.sys', 'bc250kmd.cat') {
 }
 
 Write-Host 'gates'
-$forbidden = @(Get-ChildItem -LiteralPath $pkg -Recurse -File | Where-Object { $_.Extension -in '.pfx', '.pass', '.pem', '.key', '.p12', '.pvk' })
+$forbidden = @(Get-ChildItem -LiteralPath $pkgRoot -Recurse -File | Where-Object { $_.Extension -in '.pfx', '.pass', '.pem', '.key', '.p12', '.pvk' })
 if ($forbidden.Count) { throw "private-key material in the package: $($forbidden.FullName -join ', ')" }
-$blobs = @(Get-ChildItem -LiteralPath $pkg -Recurse -File | Where-Object { $_.Extension -eq '.bin' -or $_.FullName -like '*\payload\firmware\*' })
+$blobs = @(Get-ChildItem -LiteralPath $pkgRoot -Recurse -File | Where-Object { $_.Extension -eq '.bin' -or $_.FullName -like '*\payload\firmware\*' })
 if ($blobs.Count) { throw "AMD firmware in the package (the installer downloads it): $($blobs.FullName -join ', ')" }
 '  no private-key material, no firmware file'
+# The unpacked release's top folder: setup.exe (with its configuration file, when there is one) and the one folder
+# files\, nothing else (owner, 2026-10-11). A document or a script that creeps back into the top folder is a finding
+# here, not something a tester has to sort out.
+$topFiles = @(Get-ChildItem -LiteralPath $pkgRoot -File | ForEach-Object { $_.Name } | Where-Object { $_ -notin 'setup.exe', 'setup.exe.config' })
+$topDirs = @(Get-ChildItem -LiteralPath $pkgRoot -Directory | ForEach-Object { $_.Name } | Where-Object { $_ -ne 'files' })
+if ($topFiles.Count -or $topDirs.Count) { throw "the unpacked package's top folder may hold only setup.exe and files\: it also holds $(@($topFiles + $topDirs) -join ', ')" }
+'  top folder: setup.exe and files\ only'
 # The packaged copies against release-sources.json: each is its source byte for byte, the re-signed kernel driver keeps
 # its recorded Authenticode digest, and only an entry that names its "release_edits" (the INF) differs otherwise.
-$r = Invoke-Headless -File $pythonExe -Arguments ($provenanceArgs + @('--package', $pkg)) -TimeoutSeconds 300
-$r.text -split "`r?`n" | Where-Object { $_ -match '^(FAIL|provenance: (FAIL|PASS))' } | ForEach-Object { "  package $_" }
-if ($r.code -ne 0) { throw 'provenance: a packaged file is not the recorded one (see above)' }
+if ($NoProvenance) {
+    '  package provenance: GATE OFF by -NoProvenance (the commits of this candidate are not published yet)'
+} else {
+    $r = Invoke-Headless -File $pythonExe -Arguments ($provenanceArgs + @('--package', $pkg)) -TimeoutSeconds 300
+    $r.text -split "`r?`n" | Where-Object { $_ -match '^(FAIL|provenance: (FAIL|PASS))' } | ForEach-Object { "  package $_" }
+    if ($r.code -ne 0) { throw 'provenance: a packaged file is not the recorded one (see above)' }
+}
 $ps51 = Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
 $r = Invoke-Headless -File $ps51 -Arguments @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $PSScriptRoot 'test-parse51.ps1'), '-Directory', $inst) -TimeoutSeconds 120
 $r.text
@@ -499,7 +548,7 @@ if ($sources.PSObject.Properties['mft_h264']) {
 }
 # The package names itself after its folder. A loop that took $name for its own variable once named tester.28 r1
 # after the Ollama asset, and the validation suite then found no zip beside the folder.
-if ($name -ne (Split-Path -Leaf $pkg)) { throw "build-release: the package name is '$name', its folder is '$(Split-Path -Leaf $pkg)'" }
+if ($name -ne (Split-Path -Leaf $pkgRoot)) { throw "build-release: the package name is '$name', its folder is '$(Split-Path -Leaf $pkgRoot)'" }
 $manifest = [ordered]@{
     schema = 1
     name = $name
@@ -513,7 +562,15 @@ $manifest = [ordered]@{
     # The package states it itself, so a build that waved the gate cannot look like a gated one.
     work_ledger_gate = $script:ledgerGate
     work_ledger_gate_reason = $script:ledgerGateReason
+    # enforced, or skipped by -NoProvenance in a lab candidate whose commits are not published yet.
+    provenance_gate = $script:provenanceGate
+    provenance_gate_reason = $script:provenanceGateReason
     release_certificate = $release.Thumbprint
+    # The setup window: the one file of the zip that is not under the package root, because the unpacked release puts
+    # it in the top folder (owner, 2026-10-11). "file" is a name, not a path: the unpacked release keeps it beside
+    # files\, a kept repair set and a prepared folder keep their copy in the package root (common.ps1,
+    # Get-PackageSetupExe). Test-PackageManifest hashes it wherever it is, so verify covers it like every other file.
+    setup = [ordered]@{ file = 'setup.exe'; sha256 = $setupHash; size = (Get-Item -LiteralPath $setupPkg).Length }
     control_app_exe = $sources.control_app_exe
     system_tuning = $tuningManifest
     mft_h264 = $mftRelease        # the H.264 encoder MFT switch; absent in a release that has no encoder at all
@@ -529,6 +586,6 @@ $manifest = [ordered]@{
 $cv = Test-CompatibilityRecord -PackageRoot $pkg
 if (-not $cv.ok) { throw "compatibility record does not verify: $($cv.detail)" }
 '  compatibility record verifies against the package'
-Compress-Archive -Path $pkg -DestinationPath $zip
-'{0} files, package {1}' -f $files.Count, $pkg
+Compress-Archive -Path $pkgRoot -DestinationPath $zip
+'{0} files under files\ plus setup.exe, package {1}' -f $files.Count, $pkgRoot
 'zip {0} SHA256 {1}' -f $zip, (Get-FileHash -LiteralPath $zip).Hash

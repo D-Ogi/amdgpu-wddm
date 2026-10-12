@@ -1,6 +1,7 @@
-// The guide character's art in this exe: build.ps1 embeds nagi.<expression>@128.png and @256.png from
+// The guide character's art in this exe: build.ps1 embeds nagi.<expression>@256.png from
 // tools\win\amdgpu_wddm_control\art\nagi, under the same resource names the control app uses, so one map of
-// expression to file serves both programs. The setup window draws one still picture for the screen it shows; it
+// expression to file serves both programs. This window embeds that one size, because its smallest slot is larger
+// than the @128 picture (EngineModel.cs, SetupGuide.ArtPixels). The setup window draws one still picture for the screen it shows; it
 // never animates. A resource that is absent or does not decode leaves the text-only guide panel, which carries the
 // same words.
 using System;

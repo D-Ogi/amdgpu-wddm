@@ -573,6 +573,12 @@ namespace Bc250Mon
 
         // The REG_DWORD Windows increments at every boot, read as an unsigned 32-bit number, exactly as
         // Get-BootIdentity and the control application read it. 0 means it could not be read.
+        // The registry copy is right for this provider and stays (BD-130): the only number it is compared with is
+        // the boot_id inside the running-release witness, which release-witness.ps1 wrote from this same registry
+        // value, so both sides of the comparison move together. The kernel driver's own records carry
+        // KUSER_SHARED_DATA.BootId instead, whose registry copy can lag a boot by one; this provider reads no such
+        // record (the escape's BootId field is not compared here), and the readers that do take this boot's number
+        // from the shared page.
         static long ReadBootId()
         {
             try

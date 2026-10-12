@@ -125,6 +125,26 @@ function Get-StartConfirmStep {
 # Therefore every reading also compares TimeUtc with this boot's own start time and says when the record is older
 # than this boot. An absent record means a KMD older than 0.7.216.30.
 $script:StartRecordKey = 'StartRecord'      # the subkey of the service's Parameters key
+# The stop record (KMD 0.7.216.39 and later, guard.c GuardRecordStopBegin and GuardRecordStopDone). The KMD writes
+# it when dxgkrnl stops a device whose start THIS generation never confirmed, and writes nothing at all for a normal
+# stop of a confirmed generation. It also writes nothing when the driver itself calls its own stop to unwind a start
+# that failed, because StartRecord names the step and the status of such a failure and Windows stopped nothing there.
+# Only the diagnostics collector (diagnostics.ps1) reads it, and nothing decides anything from it.
+#
+# THE STOP READER'S RULE, which differs from the start record's in three ways:
+#   Result     'attempt' the write was torn, so the record is incomplete; 'stopping' the entry snapshot is
+#              complete and the teardown had not finished; 'stopped' the teardown reached StageStopDone.
+#   Status     always 0. StopDevice carries no reason code from dxgkrnl, so 0 here is NOT "no problem" and not
+#              the device's CM problem code. The record's Detail value says that in words.
+#   age        a confirmed stop writes nothing, so a record of an earlier boot survives a healthy install. Match
+#              BootId and TimeUtc against this boot before you present a record as this boot's.
+# The stop record carries seven values of its own: StartStage, HealthFlags, BootId and LogLines as REG_DWORD, and
+# Generation, Epoch and StopTimeUtc as REG_SZ. Generation and Epoch are decimal strings of unsigned 64-bit numbers,
+# which a REG_DWORD would truncate.
+$script:StopRecordKey = 'StopRecord'
+# The health flags of a start that reached a healthy desktop (BC250_START_HEALTH_* of bc250kmd_escape.h: the start
+# completed, the display is up and the first frame was presented). Anything less is an incomplete start.
+$script:StartHealthFlagsFull = 7
 $script:StartRecordMaxLogLines = 64         # BC250_START_RECORD_LINES
 
 # The statuses this start path can answer with, from the WDK's ntstatus.h, keyed by the eight hex digits the
@@ -168,15 +188,104 @@ function Format-StartRecordStatus {
 }
 
 # This boot's own start time in UTC, for the one question the record cannot answer about itself: is it this boot's?
-# The tick count, not Win32_OperatingSystem: this runs at every logon and inside the installer, and a CIM query
-# costs seconds there. Its drift over sleep does not matter at the margin below.
+# It is the boot_utc of Get-BootIdentity (release-witness.ps1), the one place that defines this boot:
+# Win32_OperatingSystem LastBootUpTime. The callers that matter have that function loaded already (the installer's
+# verify step through install.ps1, the start-confirm task); a caller that loads this file alone gets the same
+# definition from release-witness.ps1 in this file's own folder, which is where every package and every installation
+# puts the two scripts side by side.
+# It was a tick count before: [datetime]::UtcNow minus [Environment]::TickCount64. .NET Framework, the runtime of
+# Windows PowerShell 5.1 and so of every installer and task run on a tester's PC, has no TickCount64: the property
+# read as $null, the subtraction returned the present moment, and every record older than the two-minute margin
+# below was marked "written before this boot started". Two field reports show the false note (20261011T220244Z and
+# 20261011T222253Z: the record at 22:19:52Z, the boot at 22:19:45Z).
+# $null when no definition can answer, never the present moment: a boot time of "now" marks every record of this
+# boot as a foreign one, which is the failure this function had.
+# The fallback reading is kept here, once per process. A dot-source inside a function leaves its functions in that
+# call's scope only, so Get-BootIdentity is gone again on return, and running release-witness.ps1 again also resets
+# the cache that script keeps ("read once per process"): without the two variables below every call would pay
+# another Win32_OperatingSystem query, which costs seconds on a tester's PC. A caller that has Get-BootIdentity
+# loaded at its own top level (install.ps1, start-confirm.ps1) never reaches the fallback and keeps that script's
+# own cache, so nothing here caches a reading that is not this function's.
+$script:StartRecordBootIdentity = $null
+$script:StartRecordBootIdentityRead = $false
+# The whole identity of this boot, from the one definition: boot_utc and boot_id. The stop record carries the
+# BootId of the boot it was written in, so both halves are read here and both come from the same reading.
+function Get-StartRecordBootIdentity {
+    $ownReading = $false
+    try {
+        if (-not (Get-Command -Name Get-BootIdentity -CommandType Function -ErrorAction SilentlyContinue)) {
+            if ($script:StartRecordBootIdentityRead) { return $script:StartRecordBootIdentity }
+            $ownReading = $true
+            $witness = Join-Path $PSScriptRoot 'release-witness.ps1'
+            if (Test-Path -LiteralPath $witness) { . $witness }
+        }
+        $id = $null
+        if (Get-Command -Name Get-BootIdentity -CommandType Function -ErrorAction SilentlyContinue) { $id = Get-BootIdentity }
+    } catch { $id = $null }
+    if ($ownReading) { $script:StartRecordBootIdentityRead = $true; $script:StartRecordBootIdentity = $id }
+    return $id
+}
 function Get-StartRecordBootUtc {
-    try { return [datetime]::UtcNow.AddMilliseconds(-[Environment]::TickCount64) } catch { return $null }
+    $utc = $null
+    try { $utc = [string](Get-StartRecordBootIdentity).boot_utc } catch { $utc = $null }
+    $when = $null
+    if ($utc) {
+        try {
+            $styles = [System.Globalization.DateTimeStyles]::AdjustToUniversal -bor [System.Globalization.DateTimeStyles]::AssumeUniversal
+            $when = [datetime]::Parse($utc, [cultureinfo]::InvariantCulture, $styles)
+        } catch { $when = $null }
+    }
+    return $when
+}
+# THIS BOOT'S BootId, THE VALUE A KMD RECORD IS MATCHED AGAINST
+# The driver writes SharedUserData->BootId into the stop record (guard.c), which is KUSER_SHARED_DATA.BootId: the
+# page that every process maps read-only at 0x7FFE0000, field offset 0x2C4. The offset is the header's own, not a
+# guess: WDK 10.0.26100 km\ntddk.h declares the structure at line 8965 with BootId at line 9117, and its two
+# C_ASSERTs at lines 9568 and 9569 put AlternativeArchitecture at 0x2C0 and SystemExpirationDate at 0x2C8, so the
+# ULONG between them is at 0x2C4.
+# Windows keeps a SECOND copy of that counter in PrefetchParameters\BootId, which Get-BootIdentity reads, and that
+# copy LAGS: on 22631, 13 minutes after a boot, the shared page said 388 while the registry still said 387, so a
+# fresh record of this boot was shown as an earlier boot's (BD-130). On a machine that has been up for weeks both
+# say the same number, which is why the fault hid. The shared page is the reading; the registry value is the
+# fallback for a host where the read fails, and every reader names which of the two it used.
+$script:SharedBootIdAddress = [IntPtr]0x7FFE02C4
+# KUSER_SHARED_DATA.BootId, or $null when the read fails. Host tests set AMDGPU_WDDM_TEST_SHARED_BOOT_ID to a
+# number for the value or to 'unreadable' for a host that cannot read the page.
+function Get-SharedBootId {
+    $forced = $env:AMDGPU_WDDM_TEST_SHARED_BOOT_ID
+    if ($forced) {
+        if ($forced -eq 'unreadable') { return $null }
+        try { return [int64]([int64]$forced -band [int64]4294967295) } catch { return $null }
+    }
+    try {
+        $raw = [Runtime.InteropServices.Marshal]::ReadInt32($script:SharedBootIdAddress)
+        return [int64]([int64]$raw -band [int64]4294967295)
+    } catch { return $null }
+}
+# This boot's BootId with the source of the reading, for a reader that prints where its number came from:
+#   @{ boot_id = <number or $null>; source = 'KUSER_SHARED_DATA' | 'PrefetchParameters registry' | 'nothing' }
+function Get-StartRecordBootIdReading {
+    $shared = Get-SharedBootId
+    if ($null -ne $shared) { return [ordered]@{ boot_id = $shared; source = 'KUSER_SHARED_DATA' } }
+    $id = $null
+    try { $id = (Get-StartRecordBootIdentity).boot_id } catch { $id = $null }
+    if ($null -eq $id) { return [ordered]@{ boot_id = $null; source = 'nothing' } }
+    try { return [ordered]@{ boot_id = [int64]([int64]$id -band [int64]4294967295); source = 'PrefetchParameters registry' } }
+    catch { return [ordered]@{ boot_id = $null; source = 'nothing' } }
+}
+# This boot's BootId as an unsigned 32-bit number, or $null when neither source can be read.
+function Get-StartRecordBootId {
+    return (Get-StartRecordBootIdReading).boot_id
+}
+# Where Get-StartRecordBootId took its number from. 'PrefetchParameters registry' is the weaker answer: that value
+# can lag this boot by one, so a record of this boot can read as an earlier boot's.
+function Get-StartRecordBootIdSource {
+    return [string](Get-StartRecordBootIdReading).source
 }
 
 # True when the record was written before this boot, so it is not about any start of this boot. The two-minute
-# margin covers a record written in the first seconds of a boot against a tick count that sleep skewed; a record
-# left by an earlier boot is minutes or days old, never seconds.
+# margin covers a record written in the first seconds of a boot against a boot time that the clock moved (a time
+# synchronisation right after the boot); a record left by an earlier boot is minutes or days old, never seconds.
 function Test-StartRecordFromEarlierBoot {
     param([AllowNull()]$Record, [AllowNull()]$BootUtc)
     if ($null -eq $Record -or $null -eq $BootUtc -or -not $Record.TimeUtc) { return $false }
@@ -204,10 +313,13 @@ function Format-StartRecord {
     $lines = @($Record.Log).Count
     if ($null -eq $Record.Log) { $lines = 0 }
     # Every reading carries the same four facts, whatever the result is: the stage, the time, the boot-loop count
-    # (which decides whether the next start is refused at all) and the driver that wrote the record (which tells a
-    # record left by the version before an upgrade from one this driver wrote).
+    # (which decides whether the next start is refused at all) and the escape ABI word of the driver that wrote the
+    # record (BC250_KMD_VERSION of bc250kmd_escape.h). That word is NOT the build: two releases share it whenever
+    # the escape layout did not move, as 0.7.216.100-tester.28 and tester.29 both do at 0x000700D8, so it can only
+    # tell a record apart from one written by a driver of a DIFFERENT ABI. What separates a record of an earlier
+    # install or boot from this one's is the boot identity below (BootId first, TimeUtc when there is no BootId).
     $driver = if ($null -ne $Record.Version) { '0x{0:X8}' -f ([uint32]$Record.Version) } else { 'unknown' }
-    $tail = "stage $($Record.Stage), at $when, UnconfirmedStarts $($Record.UnconfirmedStarts), driver $driver"
+    $tail = "stage $($Record.Stage), at $when, UnconfirmedStarts $($Record.UnconfirmedStarts), driver ABI $driver"
     $reason = "$tail, $lines log lines kept"
     # The measured values of the refusing step (GitHub #38: the inherited timing's registers), when it kept any.
     if ($Record.Detail) { $reason = "$reason; detail: $([string]$Record.Detail)" }
@@ -239,8 +351,10 @@ function Get-StartRecordLogLines {
 # so the real key of a tester PC and the scratch key of the host test go through the same reader. A REG_DWORD with
 # the high bit set (every NTSTATUS failure has it) comes back as a negative Int32, which is why the mask is here
 # and not a plain cast. No Result value means no record: a KMD before 0.7.216.30, or a key we cannot read.
+# -AllowNoResult keeps a record whose Result value is missing, for the stop record of a driver that writes the
+# other values first: the caller then prints what the key holds instead of calling the whole record absent.
 function Read-StartRecordFromKey {
-    param([AllowNull()]$Key)
+    param([AllowNull()]$Key, [switch]$AllowNoResult)
     if ($null -eq $Key) { return $null }
     try {
         $r = [ordered]@{}
@@ -250,7 +364,7 @@ function Read-StartRecordFromKey {
             $r[$n] = $(if ($null -eq $v) { $null } else { [int64]([int64]$v -band [int64]4294967295) })
         }
         $r['Log'] = @($Key.GetValue('Log', @()))
-        if (-not $r.Result) { return $null }
+        if (-not $r.Result -and -not $AllowNoResult) { return $null }
         return $r
     } catch { return $null }
 }
@@ -263,4 +377,88 @@ function Test-StartRecordIsReason {
     if ($null -eq $Record) { return $false }
     if (Test-StartRecordFromEarlierBoot -Record $Record -BootUtc $BootUtc) { return $false }
     return (@('failed', 'guard') -contains [string]$Record.Result)
+}
+
+# ---- the stop record: the same key layout plus seven values of its own -------------------------------------------
+# Read the stop record from an OPEN registry key (the service's Parameters\StopRecord). The shared values come from
+# the start-record reader, with -AllowNoResult, because the KMD writes the other values first and a torn write
+# leaves a key with no Result. The seven values of this record are read here:
+#   StartStage, HealthFlags, BootId, LogLines   REG_DWORD, as unsigned 32-bit numbers
+#   Generation, Epoch                           REG_SZ, decimal strings of unsigned 64-bit numbers. Kept as
+#                                               strings: a 64-bit generation does not fit a DWORD, and parsing it
+#                                               into a number only risks losing digits that a report needs.
+#   StopTimeUtc                                 REG_SZ, the time the teardown finished. Absent until it does.
+function Read-StopRecordFromKey {
+    param([AllowNull()]$Key)
+    if ($null -eq $Key) { return $null }
+    $r = Read-StartRecordFromKey $Key -AllowNoResult
+    if ($null -eq $r) { return $null }
+    try {
+        foreach ($n in @('StartStage', 'HealthFlags', 'BootId', 'LogLines')) {
+            $v = $Key.GetValue($n, $null)
+            $r[$n] = $(if ($null -eq $v) { $null } else { [int64]([int64]$v -band [int64]4294967295) })
+        }
+        foreach ($n in @('Generation', 'Epoch', 'StopTimeUtc')) { $r[$n] = [string]$Key.GetValue($n, '') }
+        return $r
+    } catch { return $null }
+}
+
+# Is this stop record about the boot that is running now? A confirmed stop writes nothing, so a record of an older
+# boot survives a healthy install, and a reader that shows it as this boot's blames the wrong boot. The answer:
+#   'this boot'      the record's BootId is this boot's, or no BootId can be compared and the time is in this boot
+#   'earlier boot'   the record's BootId is lower, or the time is before this boot started
+#   'later boot'     the record's BootId is higher than this boot's, which no record of the past can be
+#   'unknown'        nothing can place it: no BootId to compare and no boot time on this computer
+# The BootId decides when both sides have one, because a clock that moved cannot change it. 'later boot' is not a
+# record of the future: the counter only grows, so a higher number means the two numbers come from two different
+# counters, which is what BD-130 was (this boot read from the lagging registry copy against a record written from
+# KUSER_SHARED_DATA, 387 against 388, reported as "AN EARLIER BOOT").
+function Test-StopRecordBoot {
+    param([AllowNull()]$Record, [AllowNull()]$BootUtc, [AllowNull()]$BootId)
+    if ($null -eq $Record) { return 'unknown' }
+    if ($null -ne $BootId -and $null -ne $Record.BootId) {
+        if ([int64]$Record.BootId -eq [int64]$BootId) { return 'this boot' }
+        if ([int64]$Record.BootId -gt [int64]$BootId) { return 'later boot' }
+        return 'earlier boot'
+    }
+    if ($null -eq $BootUtc -or -not $Record.TimeUtc) { return 'unknown' }
+    if (Test-StartRecordFromEarlierBoot -Record $Record -BootUtc $BootUtc) { return 'earlier boot' }
+    return 'this boot'
+}
+
+# One line a tester can paste. It never calls Status a verdict: StopDevice carries no reason code from dxgkrnl, so
+# the 0 in that value says nothing about why Windows stopped the device, and this line says that in words.
+function Format-StopRecord {
+    param([AllowNull()]$Record, [AllowNull()]$BootUtc, [AllowNull()]$BootId)
+    if ($null -eq $Record) {
+        return 'no stop record: a driver before 0.7.216.39 keeps none, Windows stopped no unconfirmed start of this boot, the last start failed and is in StartRecord instead, or the key cannot be read'
+    }
+    $result = [string]$Record.Result
+    $what = switch ($result) {
+        'stopped'  { 'Windows stopped the device after a start that nothing confirmed, and the teardown finished' }
+        'stopping' { 'Windows stopped the device after a start that nothing confirmed; the record was written at the entry of the stop and the teardown had not finished' }
+        'attempt'  { 'the stop record is incomplete: the driver began to write it and the write was torn' }
+        ''         { 'the key holds no result value: the driver began to write the record and the write was torn' }
+        default    { "unreadable stop record: Result '$result'" }
+    }
+    $when = $(if ($Record.TimeUtc) { [string]$Record.TimeUtc } else { 'no time' })
+    $done = $(if ($Record.StopTimeUtc) { [string]$Record.StopTimeUtc } else { 'the teardown wrote no finish time' })
+    $full = $script:StartHealthFlagsFull
+    $flags = $(if ($null -eq $Record.HealthFlags) { 'no health flags' } else { "start-health flags $($Record.HealthFlags)$(if (([int64]$Record.HealthFlags -band $full) -ne $full) { ', so the start was not full, ready and visible' } else { '' })" })
+    $where = $(if ($null -eq $Record.StartStage) { 'no stage before the stop' } else { "stage $($Record.StartStage) before the stop" })
+    $now = $(if ($null -eq $Record.Stage) { 'no stop stage' } else { "stop stage $($Record.Stage)" })
+    $who = "generation $(if ($Record.Generation) { [string]$Record.Generation } else { 'unknown' }), epoch $(if ($Record.Epoch) { [string]$Record.Epoch } else { 'unknown' })"
+    $boot = $(if ($null -eq $Record.BootId) { 'no BootId' } else { "BootId $($Record.BootId)" })
+    $lines = $(if ($null -eq $Record.LogLines) { 'no line count' } else { "$($Record.LogLines) log line(s) kept" })
+    $driver = $(if ($null -ne $Record.Version) { '0x{0:X8}' -f ([uint32]$Record.Version) } else { 'unknown' })
+    $text = "$what; $where, $now, $flags, $who, $boot, at $when, finished $done, $lines, driver ABI $driver"
+    if ($Record.Detail) { $text = "$text; detail: $([string]$Record.Detail)" }
+    # Status is in the line for completeness and with its meaning beside it, never as a verdict.
+    $text = "$text; Status $(Format-StartRecordStatus $Record.Status), which is no reason: StopDevice gives the driver no code for why Windows stopped the device"
+    switch (Test-StopRecordBoot -Record $Record -BootUtc $BootUtc -BootId $BootId) {
+        'earlier boot' { $text = "$text; NOTE this record is from an EARLIER boot, so it is not about this boot's start: a stop that a confirmed start preceded writes nothing and leaves the older record standing" }
+        'later boot'   { $text = "$text; NOTE the record's BootId is HIGHER than the number read for this boot, which no record of an earlier boot can be: the two numbers come from two different counters, so this record cannot be placed in a boot by its BootId" }
+        'unknown'      { $text = "$text; NOTE neither the BootId nor the boot time of this computer can place this record in a boot, so it may be older than this one" }
+    }
+    return $text
 }

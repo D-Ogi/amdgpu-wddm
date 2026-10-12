@@ -169,6 +169,22 @@ static void HealthSnapshot(const BC250_START_HEALTH_STATE* H, BC250_ESCAPE_START
     Data->LastCompletionAgeMs=H->LastCompletion ? (now-H->LastCompletion)/10000ull : ~0ull;
     Data->ReadyAgeMs=H->ReadySince ? (now-H->ReadySince)/10000ull : 0;
 }
+// Serialize with CONFIRM, retain the pre-stop witness, then close admission in
+// the same critical section. No registry access occurs under the spin lock.
+void StartHealthStop(BC250_DEVICE* Device, BC250_ESCAPE_START_HEALTH* Snapshot)
+{
+    BC250_START_HEALTH_STATE* h=&Device->StartHealth;
+    KIRQL irql;
+    RtlZeroMemory(Snapshot,sizeof(*Snapshot));
+    StartHealthEnter(Device);
+    KeAcquireSpinLock(&h->Lock,&irql);
+    HealthSnapshot(h,Snapshot);
+    if (!h->Closed) HealthInvalidate(h);
+    h->Closed=TRUE;
+    h->Engines=FALSE;
+    KeReleaseSpinLock(&h->Lock,irql);
+    StartHealthLeave(Device);
+}
 // The healthy milestone of a CONFIRM, for the CU mode's own confirmation (cumode.c): the same flags,
 // completions, age and freshness, without the durable start-counter write.
 BOOLEAN StartHealthIsReady(BC250_DEVICE* Device, _Out_ ULONGLONG* Generation)

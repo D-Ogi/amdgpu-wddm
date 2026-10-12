@@ -106,6 +106,18 @@ def cache_path(config_path=None):
     return os.path.splitext(config_path or CONFIG)[0] + "-last-address.json"
 
 
+# The remote command line goes through the shell of the lab's sshd, PowerShell, before powershell.exe -File sees
+# it. Unquoted, a ';' ends the statement there, a ',' makes an array and '|', '&', '(', '{' and '#' are syntax:
+# on 2026-10-11 `d3d12-putback.ps1 -Expect a=<sha>;b=<sha>;c=<sha>` reached the script as its first pair alone.
+SHELL_SPECIAL = set(" \t;,|&(){}<>@#'")
+
+
+def script_arg(arg):
+    """One argument of `run_script`, double-quoted when it holds a space or a PowerShell metacharacter."""
+    text = str(arg)
+    return f'"{text}"' if SHELL_SPECIAL & set(text) else text
+
+
 class Target:
     def __init__(self, config=None):
         self.cfg = config if isinstance(config, dict) else load(config)
@@ -235,7 +247,7 @@ class Target:
         remote_dir = remote_dir or self.cfg["tmp_dir"]
         self.push([local_path], remote_dir)
         remote = remote_dir.rstrip("\\") + "\\" + os.path.basename(local_path)
-        quoted = " ".join(f'"{a}"' if " " in str(a) else str(a) for a in args)
+        quoted = " ".join(script_arg(a) for a in args)
         return self.ssh(f'powershell -NoProfile -ExecutionPolicy Bypass -File "{remote}" {quoted}'.rstrip(),
                         timeout=timeout)
 

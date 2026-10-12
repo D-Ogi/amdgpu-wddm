@@ -4,6 +4,7 @@
 // through the DCN scaler (dcn_scale.c). docs/design/display-modes.md has the design. Included by bc250kmd.h after
 // the WDK headers.
 #pragma once
+#include "../shim/bc250_ddc.h"
 #include "edid.h"
 #include "dcn_scale.h"
 
@@ -16,6 +17,10 @@ typedef struct _BC250_MODESET {
     ULONG Requested;                        // EnableDisplayModes as this start read it
     ULONG Level;                            // what this start offers: BC250_DISPLAY_MODES_*
     ULONG PipeVerdict;                      // enum bc250_pipe_verdict of the pipe the firmware lit
+    BC250_INHERITED_PIPE InheritedPipe;     // read before any TMDS exit, even with display modes off
+    LONG InheritedPipeStatus;
+    ULONG InheritedSupport;                // transformations equivalent to the saved source/target tuple
+    BOOLEAN InheritedFixed;                // scaler/timing retained; only the GOP source is offered
     LONG AuxStatus;                         // the AUX session's result (0 = the EDID was read)
     ULONG EdidReason;                       // enum bc250_edid_reason
     BOOLEAN EdidValid;                      // the base block passed its checks
@@ -24,6 +29,7 @@ typedef struct _BC250_MODESET {
     BOOLEAN PipeChanged;                    // pipe 0 is not in the firmware's shape: stop, reset and D3 owe the restore
     BOOLEAN Suspended;                      // D3: the shape went back to native; D0 programs the committed one again
     ULONG EdidLength;
+    BC250_DUAL_MODE_ADAPTER Adapter;
     UCHAR Edid[BC250_EDID_MAX_BYTES];
     UCHAR Dpcd[BC250_MODESET_DPCD_BYTES];
     BC250_EDID_INFO Info;
@@ -41,6 +47,8 @@ typedef struct _BC250_MODESET {
 
 struct _BC250_DEVICE;
 void ModesetInitialize(struct _BC250_DEVICE* Device);                   // AddDevice
+NTSTATUS ModesetPrepareInherited(struct _BC250_DEVICE* Device, const D3DKMDT_VIDEO_SIGNAL_INFO* Signal);
+NTSTATUS ModesetValidateInherited(struct _BC250_DEVICE* Device);        // before D0 display access or VSync re-arm
 void ModesetStart(struct _BC250_DEVICE* Device);                        // StartDevice, after the inherited timing
 // CommitVidPn of a source mode Width x Height with a VidPN scaling (enum bc250_scaling; IDENTITY for the native
 // size). Returns STATUS_GRAPHICS_INVALID_VIDEO_PRESENT_SOURCE_MODE for a size or scaling this start does not offer.

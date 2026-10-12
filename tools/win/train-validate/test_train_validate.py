@@ -272,6 +272,32 @@ class ShippedManifest(unittest.TestCase):
         arm = next(a for a in self.data["arms"] if a["id"] == "w3-high-rt")
         self.assertEqual(arm["kind"], "operator")
 
+    def test_both_game_sessions_name_the_package_engine_and_icd(self):
+        # 2026-10-11, tester.28: without them run-m157.sh stages its old defaults as swap candidates.
+        for arm_id in ("w3-high-rt", "rottr"):
+            env = next(a for a in self.data["arms"] if a["id"] == arm_id)["env"]
+            self.assertEqual(env["M157_ENGINE"], "{pkg}/payload/d3d12/amdgpu_wddm_vkd3d.dll", arm_id)
+            self.assertEqual(env["M157_ICD"], "{pkg}/payload/d3d12/amdgpu_wddm_radv.dll", arm_id)
+
+    def test_the_identity_read_expects_the_ring_vm_flush_of_the_release_default(self):
+        # From train b31 EnableRingVmFlush absent = on; the GfxStart line is what the driver did.
+        arm = next(a for a in self.data["arms"] if a["id"] == "kmdver")
+        self.assertIn("gfx: VM flush on the ring (EnableRingVmFlush), engine 1", arm["expect_all"])
+        self.assertIn("gfx: VM flush ", (LAB / "kmdver.ps1").read_text(encoding="utf-8"))
+
+    def test_the_stop_record_arm_reads_the_record_on_hardware_and_restores_the_adapter(self):
+        # BD-124. The host suites prove the layout and the readers; only this arm reads the driver's own write.
+        arm = next(a for a in self.data["arms"] if a["id"] == "stop-record")
+        self.assertEqual(arm["expect"], "stop record arm: ok")
+        self.assertLessEqual(arm["bound_s"], self.data["limits"]["trial_bound_s"])
+        script = (LAB / "stop-record.ps1").read_text(encoding="utf-8")
+        # The three readings of the arm, and the one promise the arm makes to the board: the adapter comes back.
+        self.assertIn("/disable-device", script)
+        self.assertIn("/enable-device", script)
+        self.assertIn("finally", script)
+        self.assertIn("stop record arm: ok", script)
+        self.assertIn("the adapter did not come back", script)
+
     def test_every_lab_script_the_manifest_calls_exists(self):
         for arm in self.data["arms"]:
             for argv in step_argvs(arm):
@@ -602,6 +628,50 @@ class GameDrive(unittest.TestCase):
         self.assertEqual(driver.failed, "")
         self.assertTrue(channel.skewed)
         self.assertTrue(any("read 1 of 3 does not show a still START BENCHMARK" in line for line in said), said)
+        self.assertIn("[drive] result: Overall score: 51.24 FPS", said)
+
+    # b31 native-caps565 ocr-005: the read after the Down arrows, while the shot showed the highlight on START
+    # BENCHMARK. The OCR garbled the highlighted item and two others and dropped the rest of the column.
+    OCR_565_LIT = [
+        {"t": "14", "b": [0.099, 0.157, 0.112, 0.182]},
+        {"t": "QUIF GAME", "b": [0.132, 0.222, 0.203, 0.277]},
+        {"t": "CREDIrs", "b": [0.126, 0.266, 0.181, 0.311]},
+        {"t": "s r ARTBENCHM?RR", "b": [0.118, 0.306, 0.284, 0.408]},
+        {"t": "Dogi1PL1", "b": [0.31, 0.484, 0.348, 0.514]},
+        {"t": "services are disabled and no longer functionat in", "b": [0.094, 0.487, 0.316, 0.583]}]
+
+    def test_the_garbled_565_read_still_shows_the_highlight_on_the_benchmark(self):
+        import importlib
+        module = importlib.import_module("game-drive")
+        drive = module.DRIVES["rottr"]
+        lines = self.OCR_565_LIT
+        self.assertTrue(module.in_menu(lines, drive))
+        self.assertTrue(module.still(lines, drive))
+        target = module.find_item(lines, "START BENCHMARK", drive["menu_items"])
+        self.assertEqual(target["t"], "s r ARTBENCHM?RR")
+        column = module.menu_column(lines, target, drive["column"])
+        self.assertEqual([line["item"] for line in column], ["QUIT GAME", "CREDITS", "START BENCHMARK"])
+        self.assertEqual(module.highlighted(column)["item"], "START BENCHMARK")
+        self.assertIsNone(module.canon("GAME", drive["menu_items"]), "a stray GAME names no item")
+        self.assertIsNone(module.canon("services are disabled and no longer functionat in", drive["menu_items"]))
+
+    def test_a_garbled_read_of_the_highlighted_benchmark_gets_the_enter(self):
+        # 565: the drive pressed Down five times, the highlight reached START BENCHMARK, and three reads in a row
+        # came back garbled like OCR_565_LIT. The drive must read them as the highlight on the item and press Enter.
+        lit_read = self.OCR_565_LIT
+
+        class Garbling(FakeChannel):
+            def look(self):
+                lines, shot = super().look()
+                if self.state == "menu" and self.items[self.lit or 0] == "START BENCHMARK":
+                    return list(lit_read), shot
+                return lines, shot
+
+        channel = Garbling(lit=4)
+        driver, said = self.drive(channel)
+        self.assertEqual(driver.failed, "")
+        self.assertIn("[drive] the highlight is on START BENCHMARK (read as 's r ARTBENCHM?RR')", said)
+        self.assertIn("hold:1C:300", channel.calls)
         self.assertIn("[drive] result: Overall score: 51.24 FPS", said)
 
     def test_a_submenu_is_left_with_esc_and_the_drive_tries_again(self):
@@ -1562,7 +1632,17 @@ class ShippedSetEndToEnd(unittest.TestCase):
                           "--- after\ndriver store bc250kmd packages: 0 \n")),
             ("clean-slate.ps1 -Step install", Completed(0, "install exit 0")),
             ("slots.ps1", Completed(0, "slot check: 36 match, 0 differ, 1 absent (of 37 payload files)")),
-            ("kmdver.ps1", Completed(0, "install root C:\\Program Files\\amdgpu-wddm")),
+            ("kmdver.ps1", Completed(0, "install root C:\\Program Files\\amdgpu-wddm\n"
+                                        "--- KMD start lines of the GfxStart gates\n"
+                                        "  gfx: VMID pool on (EnableVmidPool)\n"
+                                        "  gfx: VM flush on the ring (EnableRingVmFlush), engine 1")),
+            ("stop-record.ps1", Completed(0, "device PCI\\VEN_1002&DEV_13FE\n"
+                                             "--- 1. a stop of a CONFIRMED start must write no record\n"
+                                             "  ok: no new record, the older one (if any) stands\n"
+                                             "--- 2. a stop of an UNCONFIRMED start must write a fresh record\n"
+                                             "  unconfirmed-stop Result = stopped\n"
+                                             "  final device status OK\n"
+                                             "stop record arm: ok, 3 readings")),
             ("preflight.ps1", Completed(0, "preflight: ok")),
             ("pin-baseline.py", Completed(0, "release 0.7.0-tester.1: 85 files verified")),
             ("release-baseline.py", Completed(0, "release 0.7.0-tester.1: 85 files verified")),
@@ -1651,7 +1731,7 @@ class ShippedSetEndToEnd(unittest.TestCase):
         # Rise of the Tomb Raider ran, and its score is read by a person: the gate waits for that number.
         self.assertIn("**Rise of the Tomb Raider**: NOT MET", results)
         self.assertIn("`w3-high-rt`", results)
-        self.assertEqual(len(records), 39)
+        self.assertEqual(len(records), 41)  # restart-3 after stop-record (b31 validation-r1)
         values = {row["id"]: row["value"] for row in records}
         self.assertEqual((values["bm-before"], values["bm-at-8192"], values["bm-after"]), (12288, 8192, 12288),
                          "the operation moves the board to 8192 MiB and Restore brings it back")
@@ -1805,6 +1885,55 @@ class PackageAndPush(unittest.TestCase):
         package = fake_package(self.tmp, with_zip=False)
         plan = manifest.build(package, self.data, arm_ids=["vk-smoke", "x86-smoke"], python="python")
         self.assertEqual([arm.id for arm in plan.arms], ["vk-smoke", "x86-smoke"])
+
+
+class PackageLayout(unittest.TestCase):
+    """What --package accepts: the folder the zip unpacks to (setup.exe + files\\) or the package root itself."""
+
+    def setUp(self):
+        self.tmp = Path(self.enterContext(__import__("tempfile").TemporaryDirectory()))
+        self.name = "amdgpu-wddm-tester-0.7.0-tester.2"
+
+    def unpacked(self, with_zip: bool = True) -> Path:
+        """A release of the current layout: <top>\\setup.exe and <top>\\files\\manifest.json, the zip beside <top>."""
+        top = self.tmp / self.name
+        (top / "files").mkdir(parents=True)
+        (top / "setup.exe").write_bytes(b"MZ a fake setup window")
+        (top / "files" / "manifest.json").write_text(json.dumps({
+            "name": self.name, "release": "0.7.0-tester.2", "version": "0.7.0-tester.2",
+            "kmd_build": "0.7.0.1", "kmd_abi": "0x000700D8", "built_utc": "2026-10-10T07:45:30Z"}),
+            encoding="utf-8")
+        if with_zip:
+            (self.tmp / (self.name + ".zip")).write_bytes(b"PK\x03\x04 a fake package zip")
+        return top
+
+    def test_the_folder_the_zip_unpacks_to_answers_the_package_root_under_files(self):
+        top = self.unpacked()
+        for named in (top, top / "files"):
+            package = Package.read(named)
+            self.assertEqual(package.directory, (top / "files").resolve(),
+                             "the package root is the folder that holds manifest.json")
+            self.assertEqual(package.name, self.name)
+            self.assertEqual(package.zip_path, (self.tmp / (self.name + ".zip")).resolve(),
+                             "the zip lies beside the folder the zip unpacks to, not beside files\\")
+
+    def test_a_package_built_before_the_layout_is_read_from_its_own_folder(self):
+        package = fake_package(self.tmp)
+        self.assertEqual(package.directory, (self.tmp / package.name).resolve())
+        self.assertEqual(package.zip_path, (self.tmp / (package.name + ".zip")).resolve())
+
+    def test_a_missing_zip_names_the_folder_that_was_searched(self):
+        top = self.unpacked(with_zip=False)
+        package = Package.read(top)
+        with self.assertRaises(ManifestError) as refused:
+            manifest.build(package, manifest.load_manifest(), attempt_base=700, python="python")
+        self.assertIn(self.tmp.resolve().as_posix(), str(refused.exception),
+                      "the message must name the folder the zip is looked for in, not the unpacked release")
+
+    def test_the_lab_package_path_names_the_folder_the_zip_unpacks_to(self):
+        config = manifest.load_manifest()["config"]
+        self.assertEqual(config["lab_pkg"], config["lab_root"] + "\\{pkg_name}",
+                         "the lab path stays the folder the zip unpacks to; the lab scripts find files\\ themselves")
 
 
 class DestructiveArm(unittest.TestCase):

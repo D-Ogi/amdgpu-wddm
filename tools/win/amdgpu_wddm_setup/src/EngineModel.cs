@@ -37,6 +37,8 @@ namespace AmdgpuWddmSetup
     public sealed class EngineResult
     {
         public string Invocation, Mode, Action, Outcome, MessageId, Step, Detail, Log, PhaseBefore, PhaseAfter, PackageVersion;
+        // The engine's automatic diagnostics file of a driver start that did not pass (null for every other run).
+        public string Diagnostics;
         public string RestartReason, ContinuationCommand;
         public int ExitCode;
         public bool DryRun, Mutated, NothingChanged, RestartRequired;
@@ -58,6 +60,7 @@ namespace AmdgpuWddmSetup
             {
                 Invocation = invocation, Mode = Json.Str(o, "mode"), Action = Json.Str(o, "action"), Outcome = outcome,
                 MessageId = Json.Str(o, "message_id"), Step = Json.Str(o, "step"), Detail = Json.Str(o, "detail"), Log = Json.Str(o, "log"),
+                Diagnostics = Json.Str(o, "diagnostics"),
                 PhaseBefore = Json.Str(o, "phase_before"), PhaseAfter = Json.Str(o, "phase_after"),
                 PackageVersion = Json.Str(Json.Obj(o, "engine"), "package_version"),
                 ExitCode = Json.Int(o, "exit_code", -1), DryRun = Json.Bool(o, "dry_run"), Mutated = Json.Bool(o, "mutated"),
@@ -192,6 +195,16 @@ namespace AmdgpuWddmSetup
         // files, a development installation, and Secure Boot (it changes only in the firmware settings, after a restart).
         // The engine does not mark a cause as transient, so the window decides by check id. A refusal with one failed check
         // outside this list (free space, the Visual C++ runtime, the firmware download, ...) keeps Try again as the default.
+        // The engine outcomes that end a run without stopping it. The stage screen is drawn once more after the
+        // engine wrote its result and before its process ends: the stage the run reached is done for these, and only
+        // the others (refused, failed, cancelled, verify-failed, and anything newer than this window) are crossed out.
+        public static readonly HashSet<string> OutcomesThatFinish = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "verified", "completed", "prepared", "restart-required", "already", "planned", "needs-consent",
+        };
+
+        public static bool StoppedIn(string outcome) { return outcome != null && !OutcomesThatFinish.Contains(outcome); }
+
         public static readonly HashSet<string> RetryCannotFix = new HashSet<string>(StringComparer.Ordinal)
         {
             "gpu.missing", "gpu.several", "windows.not-x64", "windows.too-old", "package.damaged", "firmware.no-list",
@@ -320,10 +333,24 @@ namespace AmdgpuWddmSetup
         }
 
         // The art of an expression in the exe, embedded by build.ps1 from the control application's art directory
-        // under the same names it uses (Guide.Resource): one map of expression to file, one set of resources.
-        // @128 up to a 125 % screen, @256 from 150 % up, drawn scaled into the slot.
+        // under the same names it uses (Guide.Resource): one map of expression to file, one set of resources. The
+        // window embeds the @256 pictures only: its smallest slot is 176 device pixels at 96 DPI, larger than the
+        // @128 picture, so a @128 resource could never be drawn and the exe would carry it for nothing.
         public static string Resource(string expression, int size) { return "nagi." + expression + "@" + size + ".png"; }
-        public static int ArtSize(float scale) { return scale >= 1.5f ? 256 : 128; }
+
+        // The art is drawn at most 1.25 times the @256 picture, so it never blurs: 320 device pixels. The welcome and
+        // prepare screens give her the whole width of the panel, every other screen a smaller slot beside its tip.
+        public const int MaxArtPixels = 320, HeroArtDesign = 244, ArtDesign = 176;
+
+        public static int ArtBox(float scale, bool hero)
+        {
+            return Math.Min(MaxArtPixels, (int)Math.Round((hero ? HeroArtDesign : ArtDesign) * (scale <= 0 ? 1 : scale)));
+        }
+
+        // The picture to load for that slot. The smallest slot is larger than the @128 picture at every scale
+        // (ArtBox(scale, false) >= 176), so the window asks for the @256 art and no other size is embedded.
+        public const int ArtPixels = 256;
+        public static int ArtSize(float scale) { return ArtPixels; }
 
         // Every expression a screen of this window can ask for: Expression() of every cause there is. The build
         // embeds these and no more, so the exe carries no picture it could never draw (the control application

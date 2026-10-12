@@ -32,6 +32,11 @@ foreach ($n in $Names) {
     if ($names -contains $n) { '  {0} = {1}' -f $n, $p.$n } else { '  {0} ABSENT' -f $n }
 }
 '  Parameters values in all: {0}' -f @($names | Where-Object { $_ -notlike 'PS*' }).Count
+# What the running driver made of the gates it reads once at GfxStart: a registry value says what was asked, these
+# lines say what the driver did. The kmdver arm of arms.json expects the VM flush line of the release default.
+'--- KMD start lines of the GfxStart gates'
+(& $cli log 2>&1 | Select-String 'gfx: VMID pool (on|off)|gfx: VM flush ') | Select-Object -First 2 |
+  ForEach-Object { '  ' + ($_.Line -replace '^\s*\d+\s+[0-9.]+\s+', '') }
 '--- the Vulkan ICD the loader takes (registered entry)'
 $vi = & (Join-Path $inst 'tools\vulkaninfo.exe') --summary 2>&1
 ($vi | Select-String 'driverName|driverInfo|apiVersion|deviceName|driverVersion|GPU id|conformanceVersion') | ForEach-Object { '  ' + $_.Line.Trim() }

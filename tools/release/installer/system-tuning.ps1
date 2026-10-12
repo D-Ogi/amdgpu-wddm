@@ -1,6 +1,10 @@
 # Optional Windows tuning. Only the manifest-bound package closure is executable.
 # The durable journal belongs to the backend, outside the installation directory.
 $script:SystemTuningFiles = @('system-tuning.ps1', 'SystemTuning.Core.psm1', 'SystemTuning.Native.psm1')
+# The accounts that may own a directory of the recovery tools, and the only accounts that may write in the
+# recovery directory itself. The host tests replace this list, because a test that does not run elevated cannot
+# give a temporary directory to Administrators.
+$script:SystemTuningTrustedSids = @('S-1-5-18', 'S-1-5-32-544')
 
 function Write-SystemTuningPlan([bool]$Selected, $Manifest) {
     if (-not $Selected) { Write-Info 'Windows tuning: not selected. Existing Windows settings stay unchanged.'; return }
@@ -54,21 +58,35 @@ function Invoke-TuningProcess([string]$ScriptPath, [ValidateSet('ApplyRecommende
     } finally { $p.Dispose() }
 }
 
+# One existing directory of the recovery path. Both forms refuse a file, a reparse point and an owner outside
+# the trusted list. $Protected adds the rule that no other account may write there, which is the property the
+# recovery tools need of their own directory.
+#
+# The parent %ProgramData%\amdgpu-wddm is a shared location, not a protected store: the installer creates it
+# implicitly with its state directory, so it keeps the rules it inherits from ProgramData (Users may add a
+# folder, CREATOR OWNER), and the start-confirm record, the DWM baseline and the control application write
+# beside us in it. The strict rule on that parent refused every uninstall of 0.7.216.100-tester.28 (BD-129), so
+# the parent is checked as a location and its access rules are left alone.
+function Assert-SystemTuningRecoveryDirectory([string]$Path, [bool]$Protected) {
+    $item = Get-Item -LiteralPath $Path -Force
+    if (-not $item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw "Windows tuning recovery: $Path is not a regular directory." }
+    $acl = Get-Acl -LiteralPath $Path
+    $owner = $acl.GetOwner([Security.Principal.SecurityIdentifier]).Value
+    if ($owner -notin $script:SystemTuningTrustedSids) { throw "Windows tuning recovery: $Path has an unexpected owner ($owner)." }
+    if (-not $Protected) { return }
+    $write = [Security.AccessControl.FileSystemRights]::Write -bor [Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles -bor [Security.AccessControl.FileSystemRights]::ChangePermissions -bor [Security.AccessControl.FileSystemRights]::TakeOwnership -bor [Security.AccessControl.FileSystemRights]::Delete
+    foreach ($rule in $acl.GetAccessRules($true,$true,[Security.Principal.SecurityIdentifier])) {
+        if ($rule.AccessControlType -eq 'Allow' -and $rule.IdentityReference.Value -notin $script:SystemTuningTrustedSids -and ($rule.FileSystemRights -band $write)) { throw "Windows tuning recovery: $Path grants write access to another account ($($rule.IdentityReference.Value))." }
+    }
+}
+
 function Save-SystemTuningRecovery([string]$PackageRoot) {
     # Keep code separately from the protected machine and per-user journals.
     $source = Split-Path (Get-SystemTuningScript $PackageRoot)
     $destination = Join-Path $env:ProgramData 'amdgpu-wddm\system-tuning-recovery'
     foreach ($path in @((Split-Path $destination), $destination)) {
         if (Test-Path -LiteralPath $path) {
-            $item = Get-Item -LiteralPath $path -Force
-            if (-not $item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Windows tuning recovery directory is not a regular directory.' }
-            $acl = Get-Acl -LiteralPath $path
-            $owner = $acl.GetOwner([Security.Principal.SecurityIdentifier]).Value
-            if ($owner -notin @('S-1-5-18','S-1-5-32-544')) { throw 'Windows tuning recovery directory has an unexpected owner.' }
-            foreach ($rule in $acl.GetAccessRules($true,$true,[Security.Principal.SecurityIdentifier])) {
-                $write = [Security.AccessControl.FileSystemRights]::Write -bor [Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles -bor [Security.AccessControl.FileSystemRights]::ChangePermissions -bor [Security.AccessControl.FileSystemRights]::TakeOwnership -bor [Security.AccessControl.FileSystemRights]::Delete
-                if ($rule.AccessControlType -eq 'Allow' -and $rule.IdentityReference.Value -notin @('S-1-5-18','S-1-5-32-544') -and ($rule.FileSystemRights -band $write)) { throw 'Windows tuning recovery directory grants write access to another account.' }
-            }
+            Assert-SystemTuningRecoveryDirectory $path ($path -ceq $destination)
         } else {
             $acl = New-Object Security.AccessControl.DirectorySecurity
             $acl.SetOwner((New-Object Security.Principal.SecurityIdentifier 'S-1-5-32-544'))

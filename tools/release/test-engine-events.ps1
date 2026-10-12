@@ -6,7 +6,19 @@
 #   pwsh -File tools\release\test-engine-events.ps1 -Package <unpacked package folder> [-WorkRoot <dir>] [-FirmwareDir <dir>]
 # -FirmwareDir: a folder with the release's firmware files (test-dryrun.ps1 passes the one it downloaded); without it
 # the -FirmwareDir case is skipped.
-param([Parameter(Mandatory)][string]$Package, [string]$WorkRoot = (Join-Path (Split-Path $Package) 'test-tmp'), [string]$FirmwareDir)
+param([Parameter(Mandatory)][string]$Package, [string]$WorkRoot, [string]$FirmwareDir)
+# -Package takes the folder the zip unpacks to or the files\ folder under it: the package root is the one that holds
+# manifest.json (owner, 2026-10-11). The release recipe and an operator may name either.
+if ((Test-Path -LiteralPath (Join-Path $Package 'files\manifest.json') -PathType Leaf) -and
+    -not (Test-Path -LiteralPath (Join-Path $Package 'manifest.json') -PathType Leaf)) {
+    $Package = (Join-Path $Package 'files')
+}
+# Default scratch: beside the folder the zip unpacks to, never inside it. The package root is files\ of that folder
+# (owner, 2026-10-11), so one more level up than it used to be; an older flat package keeps the old place.
+if (-not $PSBoundParameters.ContainsKey('WorkRoot')) {
+    $packageTop = $(if ((Split-Path $Package -Leaf) -eq 'files') { Split-Path $Package } else { $Package })
+    $WorkRoot = Join-Path (Split-Path $packageTop) 'test-tmp'
+}
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'headless.ps1')
 $ps51 = Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
@@ -205,13 +217,19 @@ if ($FirmwareDir) {
 } else { '  (skipped: no -FirmwareDir given)' }
 
 '[G-EVT] a failing step still ends with a terminal result'
-$broken = Join-Path $work 'pkg-broken'
+# The copy has the unpacked release's shape: setup.exe in the top folder, the package root in files\ under it
+# (owner, 2026-10-11), so the package integrity check finds the setup window where the manifest's "setup" block
+# says it is and the run reaches the step that this case breaks.
+$brokenTop = Join-Path $work 'pkg-broken'
+$broken = Join-Path $brokenTop 'files'
 [void][IO.Directory]::CreateDirectory($broken)
 foreach ($f in @($m.files)) {
     $dst = Join-Path $broken ($f.path -replace '/', '\')
     [void][IO.Directory]::CreateDirectory((Split-Path $dst))
     [void](New-Item -ItemType HardLink -Path $dst -Target (Join-Path $Package ($f.path -replace '/', '\')))
 }
+$setupSrc = @((Join-Path $Package 'setup.exe'), (Join-Path $Package '..\setup.exe') | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | ForEach-Object { [IO.Path]::GetFullPath($_) })[0]
+if ($setupSrc) { [void](New-Item -ItemType HardLink -Path (Join-Path $brokenTop 'setup.exe') -Target $setupSrc) }
 $tbl = Join-Path $broken 'installer\registry-defaults.json'
 Remove-Item -LiteralPath $tbl
 [IO.File]::WriteAllText($tbl, '{ "schema": 1, "defaults": ')

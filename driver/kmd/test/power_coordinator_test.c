@@ -42,6 +42,7 @@ static NTSTATUS GartSetPowerRetained(BC250_DEVICE*d,int resume){if(resume)d->Gfx
 static NTSTATUS SmuOwnerStart(int*s,void*m){(void)s;(void)m;return note('s');}
 static NTSTATUS SmuPrepareClock(int*s,struct bc250_clock_report*r){(void)s;r->ready=1;return note('c');}
 static NTSTATUS DcnSetVisibility(BC250_DEVICE*d,int on){CHECK(!on);d->SourceVisible=0;return note('b');}
+static NTSTATUS ModesetValidateInherited(BC250_DEVICE*d){(void)d;return note('v');}
 static int GfxStartupResources(BC250_DEVICE*d,int on){CHECK(on&&!d->GfxTlbBootstrap);return 1;}
 static NTSTATUS WddmResumeRetained(BC250_DEVICE*d){CHECK(!d->SourceVisible);return note('w');}
 static void StartHealthResumeReady(BC250_DEVICE*d,int mode){CHECK(!d->SourceVisible&&mode);(void)note('h');}
@@ -55,9 +56,12 @@ int main(void){BC250_DEVICE d;
  CHECK(!strcmp(trace,"HSWIGPT"));resetTrace();
  CHECK(GpuSetPowerRetained(&d,PowerDeviceD3,8)==0&&!pos&&d.RetainedDownAction==7);
  CHECK(GpuSetPowerRetained(&d,PowerDeviceD0,99)==0&&d.RetainedPowerPhase==0&&d.RetainedDownAction==7);
- CHECK(!strcmp(trace,"scdbtpigwh"));CHECK(!d.SourceVisible);
+ CHECK(!strcmp(trace,"scdvbtpigwh"));CHECK(!d.SourceVisible);
  setup(&d);CHECK(GpuSetPowerRetained(&d,PowerDeviceD3,7)==0);resetTrace();failAt='g';
  CHECK(GpuSetPowerRetained(&d,PowerDeviceD0,99)==-9&&d.RetainedPowerPhase==4);CHECK(!strchr(trace,'w')&&!strchr(trace,'h'));resetTrace();CHECK(GpuSetPowerRetained(&d,PowerDeviceD0,99)==STATUS_INVALID_DEVICE_STATE&&!pos);
  setup(&d);CHECK(GpuSetPowerRetained(&d,PowerDeviceD3,7)==0);resetTrace();postMismatch=1;CHECK(GpuSetPowerRetained(&d,PowerDeviceD0,99)==STATUS_GRAPHICS_INVALID_VIDPN&&!strchr(trace,'t'));
+ setup(&d);CHECK(GpuSetPowerRetained(&d,PowerDeviceD3,7)==0);resetTrace();failAt='v';
+ CHECK(GpuSetPowerRetained(&d,PowerDeviceD0,99)==-9&&d.RetainedPowerPhase==4);
+ CHECK(!strchr(trace,'b')&&!strchr(trace,'t')&&!strchr(trace,'w')&&!strchr(trace,'h'));
  printf("Power coordinator: %u checks, %u failures\n",checks,failures);return failures?1:0;
 }

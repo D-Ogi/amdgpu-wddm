@@ -44,9 +44,12 @@ $env:INCLUDE = ''; $env:LIB = ''
 $tests = [ordered]@{
     'edid_test'      = @('edid.c')
     'dpaux_test'     = @('dpaux.c', 'display_io.c', 'edid.c')
+    'ddc_test'       = @('../shim/bc250_ddc.c', '../shim/bc250_dual_mode.c', 'display_io.c', 'edid.c')
     'dcn_scale_test' = @('dcn_scale.c', 'display_io.c', 'edid.c')
 }
 $failed = @()
+& python (Join-Path $repo 'tools\import\extract_display.py') --check
+if ($LASTEXITCODE -ne 0) { throw 'AMD display imports are stale' }
 foreach ($t in $tests.Keys) {
     $tobj = Join-Path $obj $t
     New-Item -ItemType Directory -Force $tobj | Out-Null

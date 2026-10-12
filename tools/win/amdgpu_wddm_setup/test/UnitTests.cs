@@ -42,6 +42,7 @@ static class UnitTests
             LocaleContracts();
             Quoting();
             NativeLayout();
+            Redaction();
         }
         catch (Exception e) { _failed++; Console.WriteLine("FAIL exception: " + e); }
         Console.WriteLine(_passed + " passed, " + _failed + " failed");
@@ -151,6 +152,11 @@ static class UnitTests
         Check(EngineResult.Read("{\"schema\":\"" + EngineRun.ResultSchema + "\",\"invocation\":\"" + Id + "\"}", Id, out problem) == null, "A2: a result without an outcome is not");
         var r = EngineResult.Read(Result(Id, "restart-required", 0, "result.restart-test-signing", true, ",\"restart\":{\"required\":true,\"reason_id\":\"restart.test-signing\",\"continuation\":{\"command\":\"x\"}},\"consents_needed\":[],\"failed_checks\":[\"gpu.missing\"]"), Id, out problem);
         Check(r.RestartRequired && r.RestartReason == "restart.test-signing" && r.ContinuationCommand == "x" && r.FailedChecks.Length == 1, "A2: restart and continuation read");
+        // The engine's automatic diagnostics of a driver start that did not pass: the window only carries the
+        // path, and the support file adds that file as run-<n>-diagnostics.txt.
+        var d = EngineResult.Read(Result(Id, "verify-failed", 3, "result.verify-failed", false, ",\"diagnostics\":\"C:\\\\ProgramData\\\\amdgpu-wddm\\\\installer\\\\diagnostics-x.txt\""), Id, out problem);
+        Check(d.Diagnostics == @"C:\ProgramData\amdgpu-wddm\installer\diagnostics-x.txt", "A2: the diagnostics path of a failed start is read");
+        Check(EngineResult.Read(Result(Id, "verified", 0, "result.verified", false), Id, out problem).Diagnostics == null, "A2: a run that collected nothing names no diagnostics file");
     }
 
     static ResultView V(string outcome, int exit, string message, bool mutated, string extra = "")
@@ -218,6 +224,12 @@ static class UnitTests
         Equal("Done,Done,Current,Pending,Pending", Rails(Rail.States(5, 2, null, "plan")), "rail: the Review screen");
         Equal("Done,Failed,Pending,Pending,Pending", Rails(Rail.States(5, 4, ResultView.For(null, new EngineRun(Id)), "plan")), "rail: a plan without a result");
         foreach (var id in new[] { "rail.done", "rail.failed", "rail.current", "check.mark.ok", "check.mark.warn", "check.mark.fail", "guide.checking" }) Check(Strings.Has(id), id + " has words");
+        // The words of the window frame and of the screens the new layout added: the title bar glyphs, the three
+        // promises of the welcome screen, the count of checks that need attention and the elapsed time of a run.
+        foreach (var id in new[] { "ui.minimise", "ui.close-window", "welcome.promise.driver", "welcome.promise.shown", "welcome.promise.offline", "plan.checks.attention", "working.elapsed" })
+            Check(Strings.Has(id), id + " has words");
+        Check(Strings.In("en", "plan.checks.attention", 2).Contains("2"), "the count of checks that need attention reaches the sentence");
+        Check(Strings.In("en", "working.elapsed", "1:05").Contains("1:05"), "the elapsed time reaches the sentence");
     }
 
     static void Settings()
@@ -284,6 +296,19 @@ static class UnitTests
         var real = Directory.GetFiles(Path.Combine(repo, "docs", "testing", "release-notes"), "*.md");
         Check(real.Length > 0, "notes: release notes in the repository");
         foreach (var f in real) Equal(0, ReleaseNotes.MissingSections(File.ReadAllText(f)).Count, "notes: " + Path.GetFileName(f) + " has the four sections");
+        // The window draws the notes as blocks, so the page shows headings, bullets and paragraphs, not a raw file.
+        var blocks = NotesDoc.Parse(md);
+        Equal(NoteKind.Title, blocks[0].Kind, "notes: the first heading is the title of the notes");
+        Equal("amdgpu-wddm 1", blocks[0].Text, "notes: the title text");
+        Equal(NoteKind.Paragraph, blocks[1].Kind, "notes: the text under the title is a paragraph");
+        Equal(NoteKind.Heading, blocks[2].Kind, "notes: a section heading");
+        var bullets = blocks.Where(b => b.Kind == NoteKind.Bullet).ToList();
+        Equal(2, bullets.Count, "notes: the bullets of the section");
+        Equal("One thing continued here.", bullets[0].Text, "notes: a bullet joins its wrapped line");
+        Check(bullets.All(b => !b.Text.Contains("`") && !b.Text.Contains("*")), "notes: code marks and emphasis are gone");
+        Check(blocks.All(b => !b.Text.StartsWith("#", StringComparison.Ordinal)), "notes: no heading marks in the text");
+        Equal(0, NotesDoc.Parse(null).Count, "notes: no notes, no blocks");
+
         var dir = Path.Combine(Path.GetTempPath(), "amdgpu-wddm-setup-test-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
         try
@@ -291,6 +316,7 @@ static class UnitTests
             File.WriteAllText(Path.Combine(dir, "RELEASE-NOTES.md"), md);
             var n = ReleaseNotes.Load(dir, "ja");
             Check(n.EnglishFallback && n.Language == "en", "C16: no Japanese notes: English, labelled");
+            Check(n.Source == md && NotesDoc.Parse(n.Source).Count == blocks.Count, "notes: the window gets the notes as they are written, for its own blocks");
             File.WriteAllText(Path.Combine(dir, "RELEASE-NOTES.ja.md"), "## New\n- x\n");
             n = ReleaseNotes.Load(dir, "ja");
             Check(!n.EnglishFallback && n.Language == "ja", "C16: a localized notes file is used");
@@ -335,6 +361,16 @@ static class UnitTests
         foreach (var e in SetupGuide.ArtExpressions)
             Check(Enum.GetValues(typeof(SetupCause)).Cast<SetupCause>().Any(c => SetupGuide.Expression(c) == e), "guide: no expression is embedded that no cause asks for (" + e + ")");
         Console.WriteLine("guide art expressions: " + string.Join(" ", SetupGuide.ArtExpressions));
+        // The picture never grows past 1.25 times the @256 art, at any screen scale, and the welcome panel gives her
+        // more room than the other screens.
+        foreach (var scale in new[] { 1f, 1.25f, 1.5f, 2f })
+        {
+            Check(SetupGuide.ArtBox(scale, true) <= SetupGuide.MaxArtPixels && SetupGuide.ArtBox(scale, false) <= SetupGuide.MaxArtPixels, "guide: the art stays within 1.25 x @256 at scale " + scale);
+            Check(SetupGuide.ArtBox(scale, true) >= SetupGuide.ArtBox(scale, false), "guide: the welcome panel is not smaller at scale " + scale);
+            Equal(256, SetupGuide.ArtSize(scale), "guide: the @256 art fills the slot at scale " + scale);
+            Check(SetupGuide.ArtBox(scale, false) > 128, "guide: the smallest slot is larger than the @128 picture at scale " + scale + ", so only the @256 art is embedded");
+        }
+        Equal(SetupGuide.MaxArtPixels, SetupGuide.ArtBox(4f, true), "guide: a very large screen still draws the art at 1.25 x @256");
     }
 
     static void Arguments()
@@ -408,5 +444,57 @@ static class UnitTests
         Equal(0, (int)Marshal.OffsetOf(t, "Count"), "TOKEN_PRIVILEGES PrivilegeCount offset");
         Equal(4, (int)Marshal.OffsetOf(t, "Luid"), "TOKEN_PRIVILEGES Privileges[0].Luid offset");
         Equal(12, (int)Marshal.OffsetOf(t, "Attributes"), "TOKEN_PRIVILEGES Privileges[0].Attributes offset");
+    }
+
+    // The support file goes through Redactor (SupportFile.Write), and run-<n>-diagnostics.txt of the installer is
+    // one of its files: every line of it carries a prefix with a colon of its own (a setupapi line, an event line
+    // with its timestamp, a record line), which the serial and machine-id rule has to see past. The same test is in
+    // the control application, whose Redactor.cs this file is a copy of.
+    static void Redaction()
+    {
+        var r = new Redactor("tester", "BENCH-PC", @"C:\Users\tester");
+        Check(r.Apply("System Serial Number: ABC123XYZ") == "System Serial Number: <redacted>", "a serial at the start of the line");
+        Check(r.Apply("     dvi: Device serial: SN-ABC123456789") == "     dvi: Device serial: <redacted>", "a serial behind a setupapi prefix");
+        Check(r.Apply("  2026-10-12T01:59:48.123Z level 2 id 411 Device serial number: SN-ABC123456789")
+            == "  2026-10-12T01:59:48.123Z level 2 id 411 Device serial number: <redacted>", "a serial in an event line of the diagnostics file");
+        Check(r.Apply("StartRecord log: MachineGuid: 11111111-2222-3333-4444-555555555555")
+            == "StartRecord log: MachineGuid: <redacted>", "a machine id in a record line");
+        // One record of an event is ONE line of XML, so a keyword anywhere in it used to let the rule run
+        // to the end of the line and take the message with it. The value of the element that names the
+        // keyword goes; every other element of the same line stays.
+        const string xml = "<Event><EventData><Data Name=\"AdapterUuid\">1234abcd</Data>"
+            + "<Data Name=\"Reason\">the GPU was reset</Data></EventData></Event>";
+        var oneLine = r.Apply(xml);
+        Check(!oneLine.Contains("1234abcd"), "the UUID of a one-line event record goes");
+        Check(oneLine.Contains("<Data Name=\"Reason\">the GPU was reset</Data></EventData></Event>"),
+            "and the rest of that line, the reading the report was collected for, stays");
+        Check(r.Apply("<Data Name=\"SerialNumber\">SN-ABC123456789</Data><Data Name=\"Code\">43</Data>")
+            == "<Data Name=\"SerialNumber\"><redacted></Data><Data Name=\"Code\">43</Data>",
+            "a serial in markup goes by itself, and the code beside it stays");
+        Check(r.Apply("driver INF: oem42.inf") == "driver INF: oem42.inf", "a line that names no personal value is left alone");
+        // The whole file at once, with the line ending it is written with: a rule anchored with $ matches
+        // nothing before a carriage return, so the same lines in one CRLF text are the case that matters.
+        var text = string.Join("\r\n", new[] {
+            "schema amdgpu-wddm.diagnostics/1",
+            "     dvi: Device serial: SN-ABC123456789",
+            "  2026-10-12T01:59:48.123Z level 4 id 100 MachineGuid: 11111111-2222-3333-4444-555555555555",
+            @"device instance: PCI\VEN_1002&DEV_13FE&SUBSYS_13FE1002&REV_C1",
+        });
+        var done = r.Apply(text);
+        Check(!done.Contains("SN-ABC123456789") && !done.Contains("11111111-2222-3333-4444-555555555555"),
+            "a CRLF text has its serial and its machine id removed");
+        Check(done.Contains("Device serial: <redacted>\r\n") && done.Contains("MachineGuid: <redacted>\r\n"),
+            "and keeps the label and the line ending");
+        Check(done.Contains("PCI\\VEN_1002&DEV_13FE"), "while the hardware id of that text stays");
+        Check(r.Apply(@"device instance: PCI\VEN_1002&DEV_13FE&SUBSYS_13FE1002&REV_C1")
+            == @"device instance: PCI\VEN_1002&DEV_13FE&SUBSYS_13FE1002&REV_C1", "the hardware id of the report stays");
+        // Train b31: a collected log can name ANOTHER account of the same computer. The control application's
+        // rules take those out, and this file is a copy of that one, so the three cases are here as well.
+        Check(r.Apply(@"      cmd: C:\Users\otherperson\Downloads\install.cmd")
+            == @"      cmd: C:\Users\<user>\Downloads\install.cmd", "another account's profile name goes, and the rest of the path stays");
+        Check(r.Apply("      sid: S-1-5-21-3623811015-3361044348-30300820-1013")
+            == "      sid: <sid>", "a security identifier goes");
+        Check(r.Apply("      <Computer>SOMEBODY-ELSE-PC</Computer>")
+            == "      <Computer><computer></Computer>", "the computer of an event entry goes");
     }
 }

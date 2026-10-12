@@ -56,7 +56,7 @@ $refs = 'mscorlib.dll', 'System.dll', 'System.Core.dll', 'System.Drawing.dll', '
 $pure = 'KmdReply.cs', 'Profiles.cs', 'Redactor.cs', 'ManifestCheck.cs', 'Recovery.cs', 'Strings.cs', 'CuMode.cs', 'DriverCard.cs', 'UpdateCheck.cs',
     'AppSettings.cs', 'Guide.cs', 'RecentLaunches.cs', 'Sensors.cs', 'CacheInventory.cs', 'DisplayInfo.cs', 'Hints.cs', 'GameGroups.cs',
     'SettingsSearch.cs', 'HomeStatus.cs', 'PlainPlan.cs', 'HelpGuides.cs', 'CuRegistry.cs', 'Tuner.cs', 'TunerPlan.cs', 'TunerView.cs', 'FanPlan.cs', 'GraphicsSettings.cs', 'TdrSetting.cs',
-    'LayoutRules.cs', 'UmaSetting.cs', 'BoardCapabilities.cs', 'SystemTuning.cs', 'Benchmark.cs' |
+    'LayoutRules.cs', 'UmaSetting.cs', 'BoardCapabilities.cs', 'SystemTuning.cs', 'Benchmark.cs', 'StartupDiagnosticData.cs', 'DiagnosticWorker.cs' |
     ForEach-Object { Join-Path $here "src\$_" }
 
 # Build the capability fixture from the actual provider and shipping shim tables, without adapter access.
@@ -474,7 +474,7 @@ if (-not $NoSmoke) {
     # fixture, scrolled, then rebuilt as a progress report rebuilds it, and every state of a benchmark run with the
     # buttons measured against the view.
     $file = Join-Path $obj 'smoke-scroll.txt'
-    $p = Start-Process -FilePath "$Out\amdgpu_wddm_control.exe" -ArgumentList '--smoke-scroll', "`"$file`"", '--fixture', "`"$(Join-Path $here 'test\snapshot-bd059.json')`"" -PassThru -WindowStyle Hidden
+    $p = Start-Process -FilePath "$Out\amdgpu_wddm_control.exe" -ArgumentList '--smoke-scroll', "`"$file`"", '--fixture', "`"$(Join-Path $here 'test\snapshot-bd059.json')`"", '--board-fixture', "`"$env:AMDGPU_WDDM_BOARD_FIXTURE`"" -PassThru -WindowStyle Hidden
     if (-not $p.WaitForExit(60000)) { $p.Kill(); throw 'scroll smoke did not exit within 60 s' }
     if ($p.ExitCode -ne 0) { throw "scroll smoke (exit $($p.ExitCode)): $(Get-Content $file -Raw -ErrorAction SilentlyContinue)" }
     Write-Host '  rebuilt page: the place is kept, and the buttons of a run stay where they are'
