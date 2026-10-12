@@ -2,6 +2,7 @@
 #include "heap-import.h"
 #include "device-state.h"
 #include "allocation-request.h"
+#include "present-copy.h"
 #include "ddi-trace.h"
 #include "scanout-mode.h"
 #include <bc250_host_bootstrap.h>
@@ -465,6 +466,8 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     if(!surface && (request->surface_row_pitch || request->surface_layout_size))
         return refuse("surface fields without a surface",E_INVALIDARG,*request);
     D3DDDIFORMAT surface_format=D3DDDIFMT_UNKNOWN;
+    // BD-133: the X8 row of the driver's own Present copy surface, when that is the row (see below).
+    const AMDGPU_WDDM_SURFACE_FORMAT* own=nullptr;
     bool surface_scanout=false;
     uint32_t shared_bind=0;
     if(surface){
@@ -503,7 +506,15 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
             ?Bc250SharedSurfaceFormat(static_cast<unsigned long>(r->Format))
             :amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_dxgi(unsigned(r->Format)),
                                        AMDGPU_WDDM_SURFACE_COMPOSED);
-        const auto* row=composed;
+        // BD-133, the D3D9 back buffer: the Present copy of a B8G8R8X8 source (88, or its sRGB view 93) takes the
+        // X8 row, LB7A format X8R8G8B8, which no lookup above returns because the row has no DXGI number. Only a
+        // surface of the driver's own may have it - nobody opens it and it is never scanned out (present-copy.h,
+        // present_copy_own_format, says why the table itself is not changed) - so a request with a runtime
+        // resource is refused exactly as before. The wire has no record for this format, so neither form of it
+        // gets the 64-byte E26R v3 record: both are the 12-byte v1 record below (prepare_surface), the shared
+        // form without the PRIMARY flag and the primary form with it.
+        own=!composed && driver_surface?present_copy_own_format(unsigned(r->Format)):nullptr;
+        const auto* row=composed?composed:own;
         // Every reason not to ask for scan-out stands the request down to this composed primary instead
         // of failing the allocation; the clauses and why each one exists are in scanout-mode.h. They
         // include the operator's switches on both sides (scanout-flip-off, the kernel driver's published
@@ -603,14 +614,22 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
         // The image's own requirements, from engine-ddi: no buffer is ever bound to this memory, and
         // the address has to suit the image alone. The description is refused here, before any callback.
         bits=request->memory_type_bits;alignment=std::max<uint64_t>(4096,request->alignment);
-        if(shared_surface)
+        if(shared_surface && !own)
             hr=allocation.prepare_shared_surface(static_cast<uint32_t>(request->resource->Width),
                 request->resource->Height,request->surface_row_pitch,unsigned(request->resource->Format),
                 request->byte_size,shared_bind,request->rt_owner.handle);
+        else if(shared_surface)
+            // BD-133: the shared form of the X8 copy surface - what the runtime sees of the shared form (no
+            // PRIMARY flag, video present source 0, no runtime resource) under the record the format has. The
+            // kernel driver places a v1 record with Shared 1 exactly as a v3 record with Shared 1 and Access 0
+            // (driver\kmd\surface_resource_private.h, Bc250SurfaceResourcePolicy), and no opener ever reads it.
+            hr=allocation.prepare_surface(static_cast<uint32_t>(request->resource->Width),request->resource->Height,
+                request->surface_row_pitch,surface_format,request->byte_size,nullptr,false,false,false,true);
         else
             hr=allocation.prepare_surface(static_cast<uint32_t>(request->resource->Width),request->resource->Height,
                 request->surface_row_pitch,surface_format,request->byte_size,request->rt_owner.handle,
-                ddi_experiment("present-cached"),!ddi_experiment("present-noprimary"),surface_scanout);
+                ddi_experiment("present-cached"),!ddi_experiment("present-noprimary"),surface_scanout,
+                driver_surface);
         if(FAILED(hr))return hr;
     } else {
     report_.stage=ImportStage::Probe;

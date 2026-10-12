@@ -289,6 +289,71 @@ int main() {
         CHECK(c.prepare_surface(0,height,pitch,D3DDDIFMT_A8R8G8B8,size,owner,false,true,true)==E_INVALIDARG);
         CHECK(c.prepare_surface(width,0,pitch,D3DDDIFMT_A8R8G8B8,size,owner,false,true,true)==E_INVALIDARG);
     }
+    // (c2) BD-133: the Present copy's destination for a D3D9 X8R8G8B8 back buffer (DXGI 88, lab arms B and C of
+    // 2026-10-12). X8R8G8B8 has no COMPOSED row, so the composed rule still refuses it for every caller that does
+    // not say "driver surface"; a surface of the driver's own may have it, because the kernel driver's own type-0
+    // admission takes it through the SCANOUT_PRIMARY row - in both forms, the 12-byte v1 record with and without
+    // PRIMARY.
+    {
+        const unsigned width=1280,height=720,pitch=5120;const uint64_t size=uint64_t(pitch)*height;
+        // The rule the shell widens to is the kernel driver's: a type-0 LB7A blob of X8R8G8B8 is 4 bytes a pixel
+        // there, through the SCANOUT_PRIMARY clause of the composed stage.
+        CHECK(WddmSurfaceFormatBpp(AMDGPU_WDDM_D3DDDI_X8R8G8B8,BC250_SURFACE_COMPOSED)==4);
+        CHECK(!amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_d3dddi(AMDGPU_WDDM_D3DDDI_X8R8G8B8),
+                                         AMDGPU_WDDM_SURFACE_COMPOSED));
+        AllocationRequest own;
+        // Unchanged for every other caller, with or without a runtime resource and in either form.
+        CHECK(own.prepare_surface(width,height,pitch,D3DDDIFMT_X8R8G8B8,size,owner)==E_NOTIMPL);
+        CHECK(own.prepare_surface(width,height,pitch,D3DDDIFMT_X8R8G8B8,size)==E_NOTIMPL);
+        CHECK(own.prepare_surface(width,height,pitch,D3DDDIFMT_X8R8G8B8,size,nullptr,false,false)==E_NOTIMPL);
+        // The primary form: LB7A X8R8G8B8 at the engine's pitch, v1 in 12 bytes with Shared 1, PRIMARY, no video
+        // present source, no runtime resource.
+        CHECK(own.prepare_surface(width,height,pitch,D3DDDIFMT_X8R8G8B8,size,nullptr,false,true,false,true)==S_OK);
+        CHECK(own.surface.magic==kLb7aMagic && own.surface.version==1 && own.surface.width==width &&
+              own.surface.height==height && own.surface.pitch==pitch &&
+              own.surface.format==AMDGPU_WDDM_D3DDDI_X8R8G8B8 && own.surface.size==size);
+        CHECK(own.args.pPrivateDriverData==&own.resource && own.args.PrivateDriverDataSize==12 &&
+              own.resource.version==1 && own.resource.shared==1 && !own.resource.access && !own.texture.Magic);
+        CHECK(own.info.Flags==D3D12DDI_ALLOCATION_INFO_FLAGS_0022_PRIMARY &&
+              own.info.VidPnSourceId==D3DDDI_ID_UNINITIALIZED);
+        CHECK(!own.args.hResource && own.held==size);
+        int shared=0,cached=0;
+        CHECK(Bc250SurfaceResourcePolicy(own.args.pPrivateDriverData,own.args.PrivateDriverDataSize,&shared,&cached));
+        CHECK(shared==1 && !cached);
+        // The shared form: what the runtime sees of the BGRA8 shared form (no PRIMARY, video present source 0),
+        // under the v1 record, which the kernel driver places exactly as the shared surface's v3 record.
+        CHECK(own.prepare_surface(width,height,pitch,D3DDDIFMT_X8R8G8B8,size,nullptr,false,false,false,true)==S_OK);
+        CHECK(own.info.Flags==D3D12DDI_ALLOCATION_INFO_FLAGS_0022_NONE && !own.info.VidPnSourceId);
+        CHECK(own.args.PrivateDriverDataSize==12 && own.resource.version==1 && own.resource.shared==1 &&
+              own.surface.format==AMDGPU_WDDM_D3DDDI_X8R8G8B8 && !own.args.hResource);
+        shared=0;cached=1;
+        CHECK(Bc250SurfaceResourcePolicy(own.args.pPrivateDriverData,own.args.PrivateDriverDataSize,&shared,&cached));
+        AllocationRequest wire;
+        CHECK(wire.prepare_shared_surface(width,height,pitch,DXGI_FORMAT_B8G8R8A8_UNORM,size,0)==S_OK);
+        CHECK(wire.info.Flags==own.info.Flags && wire.info.VidPnSourceId==own.info.VidPnSourceId);
+        int wire_shared=0,wire_cached=1;
+        CHECK(Bc250SurfaceResourcePolicy(wire.args.pPrivateDriverData,wire.args.PrivateDriverDataSize,&wire_shared,
+                                         &wire_cached));
+        CHECK(wire_shared==shared && wire_cached==cached && shared==1 && !cached);
+        // A surface of the driver's own is never scanned out and names no runtime resource.
+        CHECK(own.prepare_surface(width,height,pitch,D3DDDIFMT_X8R8G8B8,size,nullptr,false,true,true,true)==E_INVALIDARG);
+        CHECK(own.prepare_surface(width,height,pitch,D3DDDIFMT_X8R8G8B8,size,owner,false,true,false,true)==E_INVALIDARG);
+        CHECK(own.prepare_surface(width,height,pitch,D3DDDIFMT_A8R8G8B8,size,owner,false,false,false,true)==E_INVALIDARG);
+        // The geometry rules hold for it as for every row: a pitch that is not 16-byte aligned, or short of the row.
+        CHECK(own.prepare_surface(width,height,5116,D3DDDIFMT_X8R8G8B8,size,nullptr,false,true,false,true)==E_INVALIDARG);
+        CHECK(own.prepare_surface(width,height,5104,D3DDDIFMT_X8R8G8B8,size,nullptr,false,true,false,true)==E_INVALIDARG);
+        // The widening is the X8 row and nothing else: a format with no row of the table stays refused.
+        CHECK(own.prepare_surface(width,height,pitch,D3DDDIFMT_R5G6B5,size,nullptr,false,true,false,true)==E_NOTIMPL);
+        CHECK(own.prepare_surface(width,height,pitch,D3DDDIFMT_X8B8G8R8,size,nullptr,false,true,false,true)==E_NOTIMPL);
+        // A composed row's request is the same request whether or not it says driver surface.
+        AllocationRequest said,unsaid;
+        CHECK(said.prepare_surface(width,height,pitch,D3DDDIFMT_A8R8G8B8,size,nullptr,false,true,false,true)==S_OK);
+        CHECK(unsaid.prepare_surface(width,height,pitch,D3DDDIFMT_A8R8G8B8,size,nullptr,false,true,false,false)==S_OK);
+        CHECK(!std::memcmp(&said.surface,&unsaid.surface,sizeof(said.surface)) &&
+              !std::memcmp(&said.resource,&unsaid.resource,sizeof(said.resource)) &&
+              said.info.Flags==unsaid.info.Flags && said.info.VidPnSourceId==unsaid.info.VidPnSourceId &&
+              said.args.PrivateDriverDataSize==unsaid.args.PrivateDriverDataSize && said.held==unsaid.held);
+    }
     // (d) The stand-down decision, one case per clause. Every refusal leaves the composed primary, so the
     // test asserts the reason and not a failure. Increment 3: no list is the default, which is on, and the
     // geometry is the trailer's source mode at the moment of the decision, whatever a list names.

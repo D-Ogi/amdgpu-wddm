@@ -54,7 +54,7 @@ enum class PresentCopy : uint32_t {
     Subresources,       // more than one mip level, array slice or plane
     Multisampled,       // a multisampled source needs a resolve, which is not a copy
     Edge,               // zero, or wider or taller than one linear surface may be
-    Format,             // no composed row of the surface format table: no linear surface of this format exists
+    Format,             // no row a copy destination may take (present_copy_format): no linear surface of it exists
     DepthStencil,       // a depth-stencil surface is not a colour surface a present can read
     DenyShaderResource, // DENY_SHADER_RESOURCE, which D3D12 allows only with ALLOW_DEPTH_STENCIL
     CrossAdapter,       // another adapter's memory layout
@@ -103,6 +103,64 @@ inline bool present_copy_kernel_blt_format(uint32_t d3dddi) noexcept {
            d3dddi == AMDGPU_WDDM_D3DDDI_A8B8G8R8 || d3dddi == static_cast<uint32_t>(D3DDDIFMT_X8B8G8R8);
 }
 
+// BD-133, the D3D9 back buffer (lab arms B and C, 2026-10-12 16:54Z). D3D9On12 gives a D3DFMT_X8R8G8B8 back
+// buffer - the most common D3D9 back-buffer format - to this driver as DXGI_FORMAT_B8G8R8X8_UNORM (88), and the
+// first version of this rule refused it ("format has no linear surface"), which removed the device at the first
+// windowed present of every such game. The surface format table has a row for these bytes: the X8 row, LB7A
+// format X8R8G8B8 (22). It has no DXGI number and no COMPOSED bit on purpose (amdgpu_wddm_surface_format.h), and
+// that is what keeps it out of every lookup by DXGI number - the wire (Bc250SharedSurfaceFormat), the scan-out
+// rule (bc250_scanout_primary_rule, runtime_scanout_format) and both shells' composed surfaces. Giving the row a
+// DXGI number would admit a B8G8R8X8 scan-out primary and a B8G8R8X8 shared surface in every component built
+// from the table, which none of them is tested for. So the table stays as it is, and the copy's destination - a
+// surface of this driver's own, which no other component opens and which is never scanned out - takes the X8 row
+// here, by its LB7A format, for exactly the two DXGI formats that store those bytes:
+//   - DXGI_FORMAT_B8G8R8X8_UNORM (88) and its sRGB view DXGI_FORMAT_B8G8R8X8_UNORM_SRGB (93). Both are
+//     D3DDDIFMT_X8R8G8B8 bytes; the sRGB view changes how a shader reads them, not what a byte copy moves.
+//   - The kernel driver creates a type-0 LB7A surface of X8R8G8B8: its admission takes a COMPOSED row or a
+//     SCANOUT_PRIMARY row (driver\kmd\surface_format.h, WddmSurfaceFormatBpp, BC250_SURFACE_COMPOSED), and the
+//     X8 row is the second. Its GPU present blits X8R8G8B8 (driver\kmd\wddm.c:6835, WddmLinearColorFormat).
+//   - The engine maps 88 to VK_FORMAT_B8G8R8A8_UNORM and 93 to VK_FORMAT_B8G8R8A8_SRGB, the Vulkan formats of
+//     the composed BGRA8 row (vkd3d-proton libs\vkd3d\utils.c, the format table), so the linear image of either
+//     is the BGRA8 linear image the linear primary already proves; CopyResource from an 88 source into an 88
+//     destination is a copy within one format, as for every other row.
+// The X8 row admitted for the copy, or null if the table ever loses it.
+inline const AMDGPU_WDDM_SURFACE_FORMAT* present_copy_x8_row() noexcept {
+    return amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_d3dddi(AMDGPU_WDDM_D3DDDI_X8R8G8B8),
+                                     AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY);
+}
+
+// The row of a copy destination that only this driver's own surface may have: the X8 row for the two DXGI
+// formats that store X8R8G8B8, null for every other format. The shell's memory request reads this for a surface
+// that names no runtime resource (heap-import.cpp, driver_surface) and for nothing else.
+inline const AMDGPU_WDDM_SURFACE_FORMAT* present_copy_own_format(uint32_t dxgi) noexcept {
+    if (dxgi != static_cast<uint32_t>(DXGI_FORMAT_B8G8R8X8_UNORM) &&
+        dxgi != static_cast<uint32_t>(DXGI_FORMAT_B8G8R8X8_UNORM_SRGB))
+        return nullptr;
+    return present_copy_x8_row();
+}
+
+// The row a copy destination of this source format takes: the composed row the wire describes - by its storage
+// format or by the sRGB view that shares that storage, the lookup the whole stack uses for a linear surface
+// (engine-ddi resources.cpp, composed_format; driver\contract\bc250_shared_surface.h, Bc250SharedSurfaceFormat) -
+// or the X8 row of present_copy_own_format. Null: there is no linear surface of this format to copy into.
+inline const AMDGPU_WDDM_SURFACE_FORMAT* present_copy_format(uint32_t dxgi) noexcept {
+    if (const AMDGPU_WDDM_SURFACE_FORMAT* row = Bc250SharedSurfaceFormat(static_cast<unsigned long>(dxgi)))
+        return row;
+    return present_copy_own_format(dxgi);
+}
+
+// Whether the destination of this source format has the primary form (present_copy_as_primary below) to fall
+// back to when the shared form is refused. A composed row's primary is looked up by its storage format alone
+// (heap-import.cpp, "primary format"), so the sRGB view of a composed row has none - unchanged from the first
+// version of this rule. The X8 pair has one for both formats: its records name no DXGI format in either form
+// (the 12-byte E26R v1 record and the LB7A description alone, allocation-request.h prepare_surface), so the
+// sRGB view is not a different surface there.
+inline bool present_copy_primary_form(uint32_t dxgi) noexcept {
+    if (amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_dxgi(dxgi), AMDGPU_WDDM_SURFACE_COMPOSED))
+        return true;
+    return present_copy_own_format(dxgi) != nullptr;
+}
+
 // The one admission rule. desc is the source resource's description as the driver holds it; out is written only
 // when the answer is Admitted.
 inline PresentCopy present_copy_admit(const D3D12_RESOURCE_DESC1& desc, PresentCopyShape* out) noexcept {
@@ -119,11 +177,10 @@ inline PresentCopy present_copy_admit(const D3D12_RESOURCE_DESC1& desc, PresentC
     if (desc.SampleDesc.Count != 1 || desc.SampleDesc.Quality) return PresentCopy::Multisampled;
     if (!desc.Width || desc.Width > kPresentCopyMaxEdge || !desc.Height || desc.Height > kPresentCopyMaxEdge)
         return PresentCopy::Edge;
-    // The same lookup the whole stack uses for a linear surface's format: a composed row by its storage format
-    // or by the sRGB view that shares that storage and that LB7A row (engine-ddi resources.cpp,
-    // composed_format; driver\contract\bc250_shared_surface.h, Bc250SharedSurfaceFormat). A format the wire
-    // does not admit has no linear surface, so there is nothing to copy into.
-    const AMDGPU_WDDM_SURFACE_FORMAT* row = Bc250SharedSurfaceFormat(static_cast<unsigned long>(desc.Format));
+    // The lookup the whole stack uses for a linear surface's format, widened by the X8 row for the D3D9 back
+    // buffer and for nothing else (present_copy_format above). Any other format has no linear surface, so there
+    // is nothing to copy into.
+    const AMDGPU_WDDM_SURFACE_FORMAT* row = present_copy_format(static_cast<uint32_t>(desc.Format));
     if (!row || !row->bytes_per_pixel) return PresentCopy::Format;
     if (out) {
         out->width = static_cast<uint32_t>(desc.Width);

@@ -387,6 +387,52 @@ void test_linear_primary(Env& env) {
                 }
                 destroy_buffer(env, device, two_mips);
             }
+            // BD-133, the D3D9 back buffer (lab arms B and C, 2026-10-12: "format has no linear surface", format
+            // 88). D3D9On12 gives a D3DFMT_X8R8G8B8 back buffer as B8G8R8X8_UNORM. Its copy surface is the same
+            // shared linear surface, sized from the X8 row of the surface format table (present-copy.h,
+            // present_copy_format), and the engine's linear image of it is the BGRA8 one: vkd3d-proton maps 88 to
+            // VK_FORMAT_B8G8R8A8_UNORM. The copy is 88 into 88, so it executes like every other.
+            Buffer bgrx;
+            const HRESULT hr_bgrx =
+                create_target(env, device, Shape{256, 256, DXGI_FORMAT_B8G8R8X8_UNORM, 1, false}, bgrx);
+            checkf(hr_bgrx == S_OK, "BD-133: an ordinary B8G8R8X8 render target (hr %08lx)",
+                   static_cast<unsigned long>(hr_bgrx));
+            if (hr_bgrx == S_OK) {
+                Recording x8_rec;
+                const HRESULT hr_x8_rec = open_recording(env, device, D3D12DDI_COMMAND_QUEUE_FLAG_3D, x8_rec);
+                if (hr_x8_rec == S_OK) {
+                    const uint64_t copies_before = engine_ddi::present_copies();
+                    const uint64_t surfaces_before = engine_ddi::present_copy_surfaces();
+                    const uint32_t requests_before = m.allocations;
+                    const D3DKMT_HANDLE bgrx_allocation = m.last_allocation;
+                    D3DKMT_HANDLE copied = 0;
+                    const HRESULT hr_x8 =
+                        engine_ddi::present_copy_allocation(device.context, x8_rec.hlist(), bgrx.hres(), &copied);
+                    const uint32_t want_copy = engine_ddi::kMemoryDedicated | engine_ddi::kMemoryShareable |
+                                               engine_ddi::kMemoryLinearSurface;
+                    checkf(hr_x8 == S_OK && copied && copied != bgrx_allocation &&
+                               m.allocations == requests_before + 1 && m.last_flags == want_copy &&
+                               m.last_row_pitch >= 256 * 4 && m.last_layout_size &&
+                               engine_ddi::present_copies() == copies_before + 1 &&
+                               engine_ddi::present_copy_surfaces() == surfaces_before + 1,
+                           "BD-133: present_copy_allocation copies a B8G8R8X8 texture into one new linear surface "
+                           "(hr %08lx, allocation %08x, flags %x, row pitch %u)",
+                           static_cast<unsigned long>(hr_x8), copied, m.last_flags, m.last_row_pitch);
+                    const D3D12DDI_COMMAND_LIST_FUNCS_3D_0092& t = env.lists[x8_rec.table];
+                    t.pfnCloseCommandList(x8_rec.hlist());
+                    const D3D12DDI_HCOMMANDLIST lists[] = {x8_rec.hlist()};
+                    const HRESULT hr_exec = engine_ddi::execute_command_lists(queue, 1, lists);
+                    checkf(hr_exec == S_OK && !device.shell.list_errors && !device.shell.device_errors,
+                           "BD-133: the recorded B8G8R8X8 copy executes (hr %08lx)",
+                           static_cast<unsigned long>(hr_exec));
+                    wait_queue_idle(env, queue, "BD-133 B8G8R8X8 present copy");
+                    destroy_recording(env, device, x8_rec);
+                } else {
+                    checkf(false, "BD-133: a command list for the B8G8R8X8 present copy (hr %08lx)",
+                           static_cast<unsigned long>(hr_x8_rec));
+                }
+                destroy_buffer(env, device, bgrx);
+            }
             destroy_buffer(env, device, plain);
         }
 

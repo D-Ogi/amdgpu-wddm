@@ -5,6 +5,7 @@
 #include <cassert>
 #include <cstdio>
 #include <cstring>
+#include <initializer_list>
 
 int main() {
     using namespace native12;
@@ -95,17 +96,24 @@ int main() {
         d.Layout=D3D12_TEXTURE_LAYOUT_UNKNOWN;d.Flags=D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
         return d;
     };
-    struct Admitted {DXGI_FORMAT format;unsigned bytes;unsigned d3dddi;bool blt;};
+    // primary: whether the destination has the primary form to fall back to (present_copy_primary_form).
+    struct Admitted {DXGI_FORMAT format;unsigned bytes;unsigned d3dddi;bool blt;bool primary;};
     const Admitted admitted[]={
-        {DXGI_FORMAT_B8G8R8A8_UNORM,4,D3DDDIFMT_A8R8G8B8,true},
-        {DXGI_FORMAT_B8G8R8A8_UNORM_SRGB,4,D3DDDIFMT_A8R8G8B8,true},   // the sRGB view of the same storage
-        {DXGI_FORMAT_R8G8B8A8_UNORM,4,D3DDDIFMT_A8B8G8R8,true},
-        {DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,4,D3DDDIFMT_A8B8G8R8,true},
+        {DXGI_FORMAT_B8G8R8A8_UNORM,4,D3DDDIFMT_A8R8G8B8,true,true},
+        {DXGI_FORMAT_B8G8R8A8_UNORM_SRGB,4,D3DDDIFMT_A8R8G8B8,true,false},   // the sRGB view of the same storage
+        {DXGI_FORMAT_R8G8B8A8_UNORM,4,D3DDDIFMT_A8B8G8R8,true,true},
+        {DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,4,D3DDDIFMT_A8B8G8R8,true,false},
         // 10-bit and FP16: admitted and copied, and the kernel driver's GPU present cannot blit either
         // (WddmLinearColorFormat). The architecture is not 8-bit only; that one component is.
-        {DXGI_FORMAT_R10G10B10A2_UNORM,4,D3DDDIFMT_A2B10G10R10,false},
-        {DXGI_FORMAT_R16G16B16A16_FLOAT,8,D3DDDIFMT_A16B16G16R16F,false},
-        {DXGI_FORMAT_A8_UNORM,1,D3DDDIFMT_A8,false},
+        {DXGI_FORMAT_R10G10B10A2_UNORM,4,D3DDDIFMT_A2B10G10R10,false,true},
+        {DXGI_FORMAT_R16G16B16A16_FLOAT,8,D3DDDIFMT_A16B16G16R16F,false,true},
+        {DXGI_FORMAT_A8_UNORM,1,D3DDDIFMT_A8,false,true},
+        // The D3D9 back buffer: D3D9On12 gives D3DFMT_X8R8G8B8 as B8G8R8X8_UNORM, which lab arms B and C
+        // (2026-10-12 16:54Z) saw refused with "format has no linear surface", format 88. Its destination
+        // carries LB7A X8R8G8B8, which the kernel driver's GPU present blits, and both formats have the primary
+        // form, because neither form's record names a DXGI format (present-copy.h, present_copy_primary_form).
+        {DXGI_FORMAT_B8G8R8X8_UNORM,4,D3DDDIFMT_X8R8G8B8,true,true},
+        {DXGI_FORMAT_B8G8R8X8_UNORM_SRGB,4,D3DDDIFMT_X8R8G8B8,true,true},
     };
     for(const auto& a:admitted){
         PresentCopyShape shape{};
@@ -115,6 +123,11 @@ int main() {
         assert(shape.bytes_per_pixel==a.bytes && shape.d3dddi==a.d3dddi);
         assert(shape.kernel_blt_format==a.blt);
         assert(present_copy_kernel_blt_format(a.d3dddi)==a.blt);
+        // The row the destination's memory request and the engine's linear image are sized from is the row the
+        // rule admitted, and the fallback form exists exactly where the table above says.
+        const AMDGPU_WDDM_SURFACE_FORMAT* row=present_copy_format(static_cast<uint32_t>(a.format));
+        assert(row && row->d3dddi==a.d3dddi && row->bytes_per_pixel==a.bytes);
+        assert(present_copy_primary_form(static_cast<uint32_t>(a.format))==a.primary);
         // The destination's description is the source's geometry and format, on a GPU-only L1 heap that is
         // neither a primary nor system-wide coherent, with no size of its own.
         PresentCopyRequest request{};
@@ -164,6 +177,16 @@ int main() {
         assert(present_copy_admit(back_buffer(DXGI_FORMAT_R32G32B32A32_FLOAT),&shape)==PresentCopy::Format);
         assert(present_copy_admit(back_buffer(DXGI_FORMAT_R8G8B8A8_TYPELESS),&shape)==PresentCopy::Format);
         assert(present_copy_admit(back_buffer(DXGI_FORMAT_UNKNOWN),&shape)==PresentCopy::Format);
+        // The X8 row is admitted for the two DXGI formats that store its bytes and for no other: not the typeless
+        // family of B8G8R8X8, and not the other D3D9 back-buffer formats (D3DFMT_R5G6B5, X1R5G5B5, A1R5G5B5),
+        // which have no row at all.
+        assert(present_copy_admit(back_buffer(DXGI_FORMAT_B8G8R8X8_TYPELESS),&shape)==PresentCopy::Format);
+        assert(present_copy_admit(back_buffer(DXGI_FORMAT_B5G6R5_UNORM),&shape)==PresentCopy::Format);
+        assert(present_copy_admit(back_buffer(DXGI_FORMAT_B5G5R5A1_UNORM),&shape)==PresentCopy::Format);
+        assert(!shape.width && !shape.bytes_per_pixel && !shape.d3dddi);
+        assert(!present_copy_format(DXGI_FORMAT_B8G8R8X8_TYPELESS) && !present_copy_format(DXGI_FORMAT_B5G6R5_UNORM));
+        assert(!present_copy_primary_form(DXGI_FORMAT_B8G8R8X8_TYPELESS));
+        assert(!present_copy_primary_form(DXGI_FORMAT_R32G32B32A32_FLOAT));
         d=back_buffer(DXGI_FORMAT_B8G8R8A8_UNORM);d.Flags|=D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
         assert(present_copy_admit(d,&shape)==PresentCopy::DepthStencil);
         // Its own reason, and not the depth-stencil one: a refusal line that named the wrong flag would send the
@@ -190,6 +213,37 @@ int main() {
         present_copy_description(shape,nullptr);present_copy_as_primary(nullptr);
     }
     std::puts("PASSED: the Present copy admits every composed back-buffer format and refuses every other source");
+
+    // BD-133, the D3D9 back buffer: the X8 row reaches the copy and nothing else. The table is not changed, so every
+    // lookup by DXGI number that another component makes - the wire, the scan-out rule, both shells' composed
+    // surfaces - still finds no row for 88 or 93; the copy's own lookup is the one that finds it.
+    {
+        const AMDGPU_WDDM_SURFACE_FORMAT* x8=present_copy_x8_row();
+        assert(x8 && x8->d3dddi==AMDGPU_WDDM_D3DDDI_X8R8G8B8 && x8->bytes_per_pixel==4 && !x8->dxgi &&
+               !x8->dxgi_srgb && !(x8->policy&AMDGPU_WDDM_SURFACE_COMPOSED) &&
+               (x8->policy&AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY));
+        for(const DXGI_FORMAT f:{DXGI_FORMAT_B8G8R8X8_UNORM,DXGI_FORMAT_B8G8R8X8_UNORM_SRGB}){
+            assert(!Bc250SharedSurfaceFormat(static_cast<unsigned long>(f)));
+            assert(!amdgpu_wddm_surface_format_by_dxgi(static_cast<unsigned>(f)));
+            assert(present_copy_own_format(static_cast<uint32_t>(f))==x8);
+            assert(present_copy_format(static_cast<uint32_t>(f))==x8);
+        }
+        // A composed format is never the driver's own: its row stays the wire's, so its records do not change.
+        for(const DXGI_FORMAT f:{DXGI_FORMAT_B8G8R8A8_UNORM,DXGI_FORMAT_B8G8R8A8_UNORM_SRGB,DXGI_FORMAT_R8G8B8A8_UNORM,
+                                 DXGI_FORMAT_R10G10B10A2_UNORM,DXGI_FORMAT_R16G16B16A16_FLOAT,DXGI_FORMAT_A8_UNORM}){
+            assert(!present_copy_own_format(static_cast<uint32_t>(f)));
+            assert(present_copy_format(static_cast<uint32_t>(f))==Bc250SharedSurfaceFormat(static_cast<unsigned long>(f)));
+        }
+        assert(!present_copy_own_format(DXGI_FORMAT_UNKNOWN) && !present_copy_own_format(DXGI_FORMAT_B8G8R8X8_TYPELESS));
+        // The copy stays a byte copy: the destination's description has the source's own format, 88 for 88.
+        PresentCopyShape shape{};
+        assert(present_copy_admit(back_buffer(DXGI_FORMAT_B8G8R8X8_UNORM,256,256),&shape)==PresentCopy::Admitted);
+        PresentCopyRequest request{};
+        present_copy_description(shape,&request);
+        assert(request.resource.Format==DXGI_FORMAT_B8G8R8X8_UNORM && request.resource.Width==256 &&
+               request.resource.Height==256);
+    }
+    std::puts("PASSED: the D3D9 X8R8G8B8 back buffer (B8G8R8X8 and its sRGB view) is copied through the X8 row alone");
 
     // BD-133, review finding 8: the stage 3 -> stage 6 decision of pfnPresent, with both answers substituted.
     {

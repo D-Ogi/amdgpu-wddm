@@ -288,10 +288,11 @@ D3D12_RESOURCE_DESC1 linear_desc(D3D12_RESOURCE_DESC1 desc) noexcept {
 }
 
 // What the engine's linear image of desc needs, before any memory exists, and the size of the backing: enough for
-// the image's memory requirement and for a reader that takes pitch * (height rounded up to 4) bytes.
-HRESULT query_linear_surface(DeviceContext* c, const D3D12_RESOURCE_DESC1& desc, LinearSurface* out) noexcept {
+// the image's memory requirement and for a reader that takes pitch * (height rounded up to 4) bytes. row is the
+// surface format table's row the surface will carry; its bytes a pixel bound the pitch.
+HRESULT query_linear_surface(DeviceContext* c, const D3D12_RESOURCE_DESC1& desc,
+                             const AMDGPU_WDDM_SURFACE_FORMAT* row, LinearSurface* out) noexcept {
     *out = LinearSurface{};
-    const AMDGPU_WDDM_SURFACE_FORMAT* row = composed_format(desc.Format);
     if (!c->funcs.QueryLinearImage || !row) return E_NOTIMPL;
     const D3D12_RESOURCE_DESC1 d = linear_desc(desc);
     BC250_VKD3D_LINEAR_IMAGE_INFO info{};
@@ -323,6 +324,11 @@ HRESULT query_linear_surface(DeviceContext* c, const D3D12_RESOURCE_DESC1& desc,
     out->info = info;
     out->backing_size = (need + kLinearPage - 1) & ~(kLinearPage - 1);
     return S_OK;
+}
+
+// Every linear surface but the Present copy's: the composed row of the description's format.
+HRESULT query_linear_surface(DeviceContext* c, const D3D12_RESOURCE_DESC1& desc, LinearSurface* out) noexcept {
+    return query_linear_surface(c, desc, composed_format(desc.Format), out);
 }
 
 // The linear image at offset 0 of the backing. The bound image must be the one the query described: the memory was
@@ -2372,7 +2378,9 @@ HRESULT make_present_copy(DeviceContext* c, ResourceRecord* r, const native12::P
     HRESULT hr = to_api_desc(request.resource, desc);
     if (FAILED(hr)) return hr;
     LinearSurface surface{};
-    hr = query_linear_surface(c, desc, &surface);
+    // The copy's own row (present-copy.h, present_copy_format): the composed row of every other linear surface,
+    // and the X8 row for a D3D9 X8R8G8B8 back buffer, which no other linear surface may have.
+    hr = query_linear_surface(c, desc, native12::present_copy_format(static_cast<uint32_t>(shape.format)), &surface);
     if (FAILED(hr)) return hr;
     request.heap.ByteSize = surface.backing_size;
     MemoryRequest ask{};
@@ -2456,14 +2464,13 @@ HRESULT make_present_copy(DeviceContext* c, ResourceRecord* r, const native12::P
 // wire defines for a surface another component opens. The primary form is the fallback: the same LB7A
 // description under a 12-byte E26R v1 record, with the PRIMARY allocation flag, which is the shape the runtime
 // takes for every swap-chain buffer this driver has ever allocated - with a runtime resource, which is the one
-// difference left. A primary's format comes from the storage column alone (heap-import.cpp, "primary format"),
-// so an sRGB source has no primary form and the fallback is skipped for it with a line.
+// difference left. A composed primary's format comes from the storage column alone (heap-import.cpp, "primary
+// format"), so the sRGB view of a composed row has no primary form and the fallback is skipped for it with a line;
+// the X8 pair of the D3D9 back buffer has both forms (present-copy.h, present_copy_primary_form).
 HRESULT make_present_copy_either(DeviceContext* c, ResourceRecord* r, const native12::PresentCopyShape& shape) noexcept {
     const HRESULT shared = make_present_copy(c, r, shape, false);
     if (SUCCEEDED(shared)) return shared;
-    const AMDGPU_WDDM_SURFACE_FORMAT* storage = amdgpu_wddm_surface_admit(
-        amdgpu_wddm_surface_format_by_dxgi(static_cast<unsigned>(shape.format)), AMDGPU_WDDM_SURFACE_COMPOSED);
-    if (!storage) {
+    if (!native12::present_copy_primary_form(static_cast<uint32_t>(shape.format))) {
         log_refusal("present copy: the shared surface form was refused (%08lx) and format %d is a view of a "
                     "storage format, which has no primary form",
                     static_cast<unsigned long>(shared), static_cast<int>(shape.format));
