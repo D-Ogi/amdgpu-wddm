@@ -563,6 +563,27 @@ HRESULT present_allocation(DeviceContext* context, D3D12DDI_HRESOURCE resource,
 // device at stage 4 (BD-075 review, 2026-10-06).
 HRESULT present_destination_allocation(DeviceContext* context, D3D12DDI_HRESOURCE resource,
                                        D3DKMT_HANDLE* allocation) noexcept;
+// BD-133: the Present source that present_allocation refuses - an ordinary texture of this device, which is what
+// a D3D9On12 back buffer is. The DDI "copies content from source allocations to a primary surface"
+// (ref\ddi-display\d3d12umddi.md:14693) and the runtime hands pfnPresent a command list that it closes and
+// executes immediately afterwards, so this records that copy on that list and answers with the allocation of its
+// destination: a linear surface of the admitted kind that belongs to this source resource (internal.h,
+// PresentCopySurface), created here at the first such present and released with the resource.
+//   What it records on the list, in this order: a barrier pair that moves the source from COMMON to COPY_SOURCE
+// and the destination from COMMON to COPY_DEST, one CopyResource of the whole surface, and the opposite barrier
+// pair, so the state of both resources is what it was when the list ends. A presented back buffer is in
+// D3D12_RESOURCE_STATE_PRESENT, which is COMMON (value 0), by the runtime's own rule.
+//   S_OK and *allocation set: the copy is recorded and the caller must report AddedGpuWork. E_INVALIDARG with
+// *allocation 0: the source is a shape no linear surface exists for (present-copy.h, PresentCopy), and one line
+// names which. Any other failure is the memory request's or the engine's, named on the same channel.
+//   list must be a command list of this device, open for recording. Only RuntimeBacked mode has LB7A surface
+// memory at all; the engine-private test mode answers E_INVALIDARG.
+HRESULT present_copy_allocation(DeviceContext* context, D3D12DDI_HCOMMANDLIST list, D3D12DDI_HRESOURCE resource,
+                                D3DKMT_HANDLE* allocation) noexcept;
+// BD-133: how many presents this process has served by copying the source, and how many copy surfaces it has
+// created. Read for a report, never for a decision.
+uint64_t present_copies() noexcept;
+uint64_t present_copy_surfaces() noexcept;
 // BD-075: how many creates this process has turned into a shared linear surface after the runtime refused the
 // ordinary allocation shape. The named risk of that retry is that it fires on an ordinary committed texture, so
 // the count is kept whatever the trace switches say and every retry also names itself through log_refusal.

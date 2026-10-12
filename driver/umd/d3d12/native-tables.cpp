@@ -257,8 +257,11 @@ void APIENTRY destroy_heap_and_resource(D3D12DDI_HDEVICE handle,D3D12DDI_HHEAP h
     if(hr!=S_OK)report_device_error(*device,hr);
 }
 // The surface's allocation and the queue's context go back to the runtime, which makes the kernel call.
-// stage: 1 arguments, 2 queue, 3 surface, 4 destination, 5 outputs, 0 done.
-HRESULT present_outputs(Device& device,D3D12DDI_HCOMMANDQUEUE queue,const D3D12DDIARG_PRESENT_0001* args,
+// stage: 1 arguments, 2 queue, 3 surface, 4 destination, 5 outputs, 6 the copy of a source that is no linear
+// primary (BD-133), 0 done. The numbers of the stages that existed before BD-133 are unchanged: a trace line of
+// an earlier package means what it meant.
+HRESULT present_outputs(Device& device,D3D12DDI_HCOMMANDLIST list,D3D12DDI_HCOMMANDQUEUE queue,
+    const D3D12DDIARG_PRESENT_0001* args,
     D3D12DDI_PRESENT_0051* result,D3D12DDI_PRESENT_CONTEXTS_0051* contexts,
     D3D12DDI_PRESENT_HWQUEUES_0051* queues,unsigned& stage) noexcept {
     stage=1;
@@ -268,9 +271,21 @@ HRESULT present_outputs(Device& device,D3D12DDI_HCOMMANDQUEUE queue,const D3D12D
     hr=queue_present_context(queue,device,&from.context);if(hr!=S_OK)return hr;
     stage=3;
     const auto engine=engine_context(device);
-    // A linear primary of this device only: the one kind of surface a reader outside the engine can open.
+    // A linear primary of this device: the one kind of surface a reader outside the engine can open, and the one
+    // present that costs nothing. Its path is unchanged, byte for byte: the allocation of the surface itself goes
+    // to the runtime, nothing is recorded on the list and AddedGpuWork stays FALSE.
     hr=engine_ddi::present_allocation(engine,args->phSurfacesToPresent[0].hSurface,&from.source);
-    if(hr!=S_OK)return hr;
+    if(hr!=S_OK){
+        // BD-133: every other source of this device - an ordinary texture, which is what a D3D9On12 back buffer
+        // is - is presented by copying it into a surface of that kind on the command list the runtime handed to
+        // this DDI and closes and executes right afterwards (engine-ddi.h, present_copy_allocation). Before
+        // BD-133 this refusal left the DDI with an error, which costs the application its device at the first
+        // windowed present: the measured failure of BD-133.
+        stage=6;
+        hr=engine_ddi::present_copy_allocation(engine,list,args->phSurfacesToPresent[0].hSurface,&from.source);
+        if(hr!=S_OK)return hr;
+        from.added_gpu_work=true;
+    }
     if(args->hDstResource.pDrvPrivate){
         stage=4;
         // The destination may also be a surface this device opened (BD-075): the runtime named it and owns it for
@@ -304,7 +319,7 @@ void APIENTRY present(D3D12DDI_HCOMMANDLIST list,D3D12DDI_HCOMMANDQUEUE queue,
         QueueDomainScope serial(device);
         // Every output given is zero before anything is validated, and again after a refusal.
         if(result)*result={};if(contexts)*contexts={};if(queues)*queues={};
-        hr=device?present_outputs(*device,queue,args,result,contexts,queues,stage):E_INVALIDARG;
+        hr=device?present_outputs(*device,list,queue,args,result,contexts,queues,stage):E_INVALIDARG;
         if(hr!=S_OK){if(result)*result={};if(contexts)*contexts={};if(queues)*queues={};}
     }
     // The per-application MaxFrameLatency (frame-latency.h): the application may have at most N presents ahead
@@ -314,10 +329,11 @@ void APIENTRY present(D3D12DDI_HCOMMANDLIST list,D3D12DDI_HCOMMANDQUEUE queue,
         engine_frame_gate(*device,amdgpu_wddm::app_settings::max_frame_latency(settings));
     if(ddi_trace_enabled()){
         amdgpu_wddm_log::print("{\"event\":\"present-outputs\",\"stage\":%u,\"status\":\"%08lx\","
-            "\"source\":%u,\"destination\":%u,\"context\":%u,\"thread\":%lu}\n",stage,
+            "\"source\":%u,\"destination\":%u,\"context\":%u,\"added_gpu_work\":%u,\"thread\":%lu}\n",stage,
             static_cast<unsigned long>(hr),unsigned(hr==S_OK && result->BroadcastSrcAllocation[0]!=0),
             unsigned(hr==S_OK && result->BroadcastDstAllocation[0]!=0),
-            unsigned(hr==S_OK && contexts->hContext!=nullptr),GetCurrentThreadId());
+            unsigned(hr==S_OK && contexts->hContext!=nullptr),
+            unsigned(hr==S_OK && result->AddedGpuWork!=FALSE),GetCurrentThreadId());
         amdgpu_wddm_log::flush();
     }
     if(hr!=S_OK && device)report_device_error(*device,hr);

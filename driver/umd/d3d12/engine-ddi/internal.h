@@ -424,6 +424,28 @@ struct HeapRecord {
     Backing* backing;
 };
 
+// BD-133: the destination of a Present copy, owned by the source resource it belongs to. The surface is a linear
+// image over an LB7A surface allocation this driver made for itself, which is the one kind of allocation the
+// kernel present reads (present-copy.h names the kernel's checks with their file and line). It exists for one
+// source resource, is created at that resource's first copied present and released in its
+// pfnDestroyHeapAndResource, so a swap chain of three back buffers has three of them and a resize - which
+// destroys the chain's resources and creates new ones - releases them all.
+//   Why one per source resource and not one per device or per queue: a staging surface shared by two sources
+// could be overwritten between the copy and the kernel present that reads it. Keyed to the source, the surface
+// is written only by a present of that source, and a swap chain cannot present the same back buffer again before
+// the previous present of it has been consumed - the same ordering the zero-copy path of a linear primary has
+// always relied on.
+struct PresentCopySurface {
+    Backing* backing;                           // one reference; the surface's memory, released with it
+    ID3D12Resource* engine;                     // one reference; the linear image at offset 0 of that memory
+    D3DKMT_HANDLE allocation;                   // what pfnPresent returns as BroadcastSrcAllocation
+    uint32_t width, height, row_pitch;
+    DXGI_FORMAT format;
+    uint32_t d3dddi;                            // LB7A.Format the allocation carries
+    bool kernel_blt_format;                     // the kernel's GPU present can blit that format
+    uint64_t presents;                          // presents copied through it, for the log line
+};
+
 // Reserved: a tiled resource with no heap memory of its own (tiles.cpp maps heaps into it); backing is null.
 // Opened (BD-075): a shared surface another process or another API created, over an allocation the runtime opened.
 // It behaves as Committed everywhere except that it is never queued for render-target initialisation - the surface
@@ -442,7 +464,16 @@ struct ResourceRecord {
     uint32_t linear_row_pitch;                  // bytes; 0 unless the image is the linear primary
     uint64_t linear_size;                       // the size of its backing as asked of the shell
     DXGI_FORMAT stored_from;                    // the video format desc stores (stored_format), else UNKNOWN
+    // BD-133: null until this resource is presented by copying it; see PresentCopySurface above. Written and
+    // read inside pfnPresent under the device's queue domain (native-tables.cpp, QueueDomainScope) and in this
+    // resource's own destroy, which the runtime does not run concurrently with a present of the same resource.
+    PresentCopySurface* present_copy;
 };
+
+// BD-133: releases a resource's Present copy surface, if it has one, and clears the pointer. The engine image's
+// reference goes first, then the memory's backing reference, which hands the memory to the release sequence
+// (the deferred form: the copies that named it must retire first).
+void release_present_copy(ResourceRecord* resource) noexcept;
 
 // A packed video format the engine has no image of, stored as the typeless format of its element (INTEGRATION.md,
 // "Packed video formats"). The DXGI_FORMAT reference names the view formats of each: the storage's family, which a

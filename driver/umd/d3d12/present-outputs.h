@@ -32,6 +32,11 @@ struct PresentSources {
     // runtime presents with sync_override in place of the application's sync interval.
     bool sync_override_valid{};
     DXGI_DDI_FLIP_INTERVAL_TYPE sync_override{DXGI_DDI_FLIP_INTERVAL_IMMEDIATE};
+    // BD-133: this present recorded a copy into the command list the runtime handed to pfnPresent, because the
+    // source is not a surface the kernel present can read (present-copy.h). D3D12DDI_PRESENT_0051::AddedGpuWork
+    // "specifies whether there is added GPU work" (ref\ddi-display\d3d12umddi.md:42409), which is what the
+    // recorded copy is. A zero-copy present of a linear primary leaves it FALSE, exactly as before.
+    bool added_gpu_work{};
 };
 // The surface is the whole allocation from its first byte: an offset is a surface this driver did not make.
 inline HRESULT fill_present(const PresentSources& from,D3D12DDI_PRESENT_0051* result,
@@ -42,7 +47,7 @@ inline HRESULT fill_present(const PresentSources& from,D3D12DDI_PRESENT_0051* re
     if(!from.source || from.source_offset || from.destination_offset || !from.context)return E_INVALIDARG;
     result->BroadcastSrcAllocation[0]=from.source;
     result->BroadcastDstAllocation[0]=from.destination;
-    result->AddedGpuWork=FALSE;
+    result->AddedGpuWork=from.added_gpu_work ? TRUE : FALSE;
     result->BackBufferMultiplicity=1;
     result->SyncIntervalOverrideValid=from.sync_override_valid ? TRUE : FALSE;
     result->SyncIntervalOverride=from.sync_override_valid ? from.sync_override : DXGI_DDI_FLIP_INTERVAL_IMMEDIATE;

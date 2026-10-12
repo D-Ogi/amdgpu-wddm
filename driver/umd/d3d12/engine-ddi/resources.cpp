@@ -7,6 +7,7 @@
 #include "format-list.h"
 #include "../../../contract/amdgpu_wddm_surface_format.h"
 #include "../../../contract/bc250_shared_surface.h"
+#include "../present-copy.h"
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -990,6 +991,9 @@ void APIENTRY destroy_heap_and_resource(D3D12DDI_HDEVICE device, D3D12DDI_HHEAP 
     if (hres.pDrvPrivate) {
         if (auto* r = record_of<ResourceRecord>(hres.pDrvPrivate, Tag::Resource, c)) {
             Backing* b = r->backing;
+            // BD-133: the copy surface of a presented source goes with the source. drain_all above has already
+            // made every pending entry of every ring replay, so no recorded copy still names the image.
+            release_present_copy(r);
             if (r->kind == ResourceKind::Committed && cancel_initialization(c, r) && b && !b->retained) {
                 b->retained = r->h.engine;              // an initialization batch names it: see Backing::retained
                 r->h.engine = nullptr;
@@ -2335,6 +2339,253 @@ HRESULT present_allocation(DeviceContext* c, D3D12DDI_HRESOURCE hres, D3DKMT_HAN
 HRESULT present_destination_allocation(DeviceContext* c, D3D12DDI_HRESOURCE hres, D3DKMT_HANDLE* allocation) noexcept {
     return linear_surface_allocation(c, hres, true, allocation);
 }
+
+// ---- BD-133: the Present copy ------------------------------------------------------------------------------------
+// present_allocation above answers for the one source the kernel present can read without help. This is the other
+// source: an ordinary texture of this device, which is what a D3D9On12 back buffer is. engine-ddi.h states the
+// contract; present-copy.h states the rule and why the kernel needs a surface of this kind, with the kernel's own
+// checks by file and line.
+namespace {
+std::atomic<uint64_t> present_copy_count{0}, present_copy_surface_count{0};
+// context.cpp has the same one-liner for its own release lines; it is file-local there.
+bool present_copy_doubling(uint64_t n) noexcept { return n && !(n & (n - 1)); }
+// One line per refusal reason per process: a refused present repeats every frame, and the reason does not change.
+LogOnce present_copy_refused[static_cast<size_t>(native12::PresentCopy::Count)];
+// One line per format whose copy the kernel driver's GPU present could not blit.
+FormatSet present_copy_unblittable;
+LogOnce present_copy_first;
+
+// The copy's destination for one source resource, created at its first copied present. Everything here is the
+// create path's own machinery (query_linear_surface, import_memory, engine_heap_from_memory, new_backing,
+// place_linear_at), asked for the one shape the shell admits for a linear surface that is nobody's primary.
+HRESULT make_present_copy(DeviceContext* c, ResourceRecord* r, const native12::PresentCopyShape& shape,
+                          bool primary) noexcept {
+    native12::PresentCopyRequest request{};
+    native12::present_copy_description(shape, &request);
+    if (primary) native12::present_copy_as_primary(&request);
+    D3D12_RESOURCE_DESC1 desc{};
+    HRESULT hr = to_api_desc(request.resource, desc);
+    if (FAILED(hr)) return hr;
+    LinearSurface surface{};
+    hr = query_linear_surface(c, desc, &surface);
+    if (FAILED(hr)) return hr;
+    request.heap.ByteSize = surface.backing_size;
+    MemoryRequest ask{};
+    ask.size = sizeof(ask);
+    // The shared linear surface of BD-075, with one difference: rt_owner stays empty, because this surface is the
+    // driver's own and no runtime resource owns its allocation. The shell releases such a surface by handle
+    // instead of by its runtime resource inside that resource's DDI (heap-import.h, driver_surface).
+    ask.flags = kMemoryDedicated | kMemoryLinearSurface | (primary ? kMemoryPrimary : kMemoryShareable);
+    ask.heap = &request.heap;
+    ask.resource = &request.resource;
+    ask.byte_size = surface.backing_size;
+    ask.alignment = surface.info.MemoryAlignment;
+    ask.memory_type_bits = surface.info.MemoryTypeBits;
+    ask.surface_row_pitch = static_cast<uint32_t>(surface.info.RowPitch);
+    ask.surface_layout_size = surface.info.LayoutSize;
+    ImportedMemory memory{};
+    hr = import_memory(c, ask, &memory);
+    if (FAILED(hr)) return hr;                  // on a failure the shell owns nothing (engine-ddi.h)
+    D3D12_HEAP_DESC hd{};
+    hr = heap_desc_of(request.heap, hd);
+    ID3D12Heap* heap = nullptr;
+    if (SUCCEEDED(hr)) hr = engine_heap_from_memory(c, hd, memory, &heap);
+    if (FAILED(hr)) {
+        ReleasePayload payload{{nullptr, nullptr}, true, memory, 0};
+        run_release(c->hooks, payload);         // exactly once; nothing used the memory yet
+        return hr;
+    }
+    Backing* b = new_backing(c, request.heap, heap);
+    if (!b) {
+        ReleasePayload payload{{heap, nullptr}, true, memory, 0};
+        run_release(c->hooks, payload);
+        return E_OUTOFMEMORY;
+    }
+    b->imported = true;
+    b->memory = memory;
+    b->dedicated = true;
+    // Deliberately not linear. Backing::linear is what makes a release run inside the DDI that ends it, because a
+    // linear primary's allocation is destroyed by the runtime as soon as pfnDestroyHeapAndResource returns
+    // (heap-import.h, in_ddi). This allocation has no runtime resource, so nothing destroys it behind us and its
+    // release waits for retirement like every other heap's - which is what the copies that named it need.
+    b->linear = false;
+    ID3D12Resource* engine = nullptr;
+    hr = place_linear_at(c, b, desc, D3D12_RESOURCE_STATE_COMMON, nullptr, surface, &engine);
+    if (FAILED(hr)) {
+        backing_release(b);                     // takes the heap and the memory with it
+        return hr;
+    }
+    auto* s = make_new<PresentCopySurface>();
+    if (!s) {
+        engine->Release();
+        backing_release(b);
+        return E_OUTOFMEMORY;
+    }
+    s->backing = b;                             // the reference new_backing made; released in release_present_copy
+    s->engine = engine;
+    s->allocation = memory.allocation;
+    s->width = shape.width;
+    s->height = shape.height;
+    s->row_pitch = static_cast<uint32_t>(surface.info.RowPitch);
+    s->format = shape.format;
+    s->d3dddi = shape.d3dddi;
+    s->kernel_blt_format = shape.kernel_blt_format;
+    r->present_copy = s;
+    // Not counted in DeviceContext::live: this surface is reachable only from its source resource's record, the
+    // runtime destroys every resource before the device, and the release this destroy starts counts itself.
+    const uint64_t made = present_copy_surface_count.fetch_add(1, std::memory_order_relaxed) + 1;
+    log_refusal("present copy: surface %llu created for a source the kernel present cannot read directly: "
+                "%s form, format %d, %ux%u, pitch %u, %llu bytes, LB7A format %u%s",
+                static_cast<unsigned long long>(made), primary ? "primary" : "shared",
+                static_cast<int>(shape.format), shape.width, shape.height,
+                s->row_pitch, static_cast<unsigned long long>(surface.backing_size), shape.d3dddi,
+                shape.kernel_blt_format ? "" : " (the kernel driver's GPU present cannot blit this format)");
+    return S_OK;
+}
+
+// Both forms of the surface, in order, because neither is proven for an allocation with no runtime resource and
+// the two differ in exactly the fields a runtime refusal could be about. The shared form goes first: it is what
+// the surface is (nobody's primary, of no video present source) and it carries the 64-byte E26R v3 record the
+// wire defines for a surface another component opens. The primary form is the fallback: the same LB7A
+// description under a 12-byte E26R v1 record, with the PRIMARY allocation flag, which is the shape the runtime
+// takes for every swap-chain buffer this driver has ever allocated - with a runtime resource, which is the one
+// difference left. A primary's format comes from the storage column alone (heap-import.cpp, "primary format"),
+// so an sRGB source has no primary form and the fallback is skipped for it with a line.
+HRESULT make_present_copy_either(DeviceContext* c, ResourceRecord* r, const native12::PresentCopyShape& shape) noexcept {
+    const HRESULT shared = make_present_copy(c, r, shape, false);
+    if (SUCCEEDED(shared)) return shared;
+    const AMDGPU_WDDM_SURFACE_FORMAT* storage = amdgpu_wddm_surface_admit(
+        amdgpu_wddm_surface_format_by_dxgi(static_cast<unsigned>(shape.format)), AMDGPU_WDDM_SURFACE_COMPOSED);
+    if (!storage) {
+        log_refusal("present copy: the shared surface form was refused (%08lx) and format %d is a view of a "
+                    "storage format, which has no primary form",
+                    static_cast<unsigned long>(shared), static_cast<int>(shape.format));
+        return shared;
+    }
+    log_refusal("present copy: the shared surface form was refused (%08lx); asking for the primary form of the "
+                "same linear surface",
+                static_cast<unsigned long>(shared));
+    const HRESULT as_primary = make_present_copy(c, r, shape, true);
+    return SUCCEEDED(as_primary) ? as_primary : shared;
+}
+} // namespace
+
+void release_present_copy(ResourceRecord* r) noexcept {
+    PresentCopySurface* s = r ? r->present_copy : nullptr;
+    if (!s) return;
+    r->present_copy = nullptr;
+    if (s->engine) s->engine->Release();
+    if (s->backing) backing_release(s->backing);
+    delete s;
+}
+
+HRESULT present_copy_allocation(DeviceContext* c, D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_HRESOURCE hres,
+                                D3DKMT_HANDLE* allocation) noexcept {
+    if (!allocation) return E_INVALIDARG;
+    *allocation = 0;
+    if (!c) return E_INVALIDARG;
+    // Only the runtime-backed shell has LB7A surface memory; the engine-private test mode allocates nothing the
+    // kernel knows about.
+    if (c->mode != MemoryMode::RuntimeBacked) return E_INVALIDARG;
+    CommandListRecord* l = list_of(hlist, "Present");
+    if (!l || l->h.device != c || !l->h.engine) return E_INVALIDARG;
+    auto* r = record_of<ResourceRecord>(hres.pDrvPrivate, Tag::Resource, c);
+    if (!r || !r->h.engine) return E_INVALIDARG;
+    if (r->kind == ResourceKind::Reserved || !r->backing) {
+        if (present_copy_refused[static_cast<size_t>(native12::PresentCopy::NoDescription)].first())
+            log_refusal("present copy: the source has no memory of its own (kind %u): not presented",
+                        static_cast<unsigned>(r->kind));
+        return E_INVALIDARG;
+    }
+    native12::PresentCopyShape shape{};
+    const native12::PresentCopy why = native12::present_copy_admit(r->desc, &shape);
+    if (why != native12::PresentCopy::Admitted) {
+        if (present_copy_refused[static_cast<size_t>(why)].first())
+            log_refusal("present copy: the source cannot be copied into a linear surface (%s): format %d, "
+                        "%llux%u, %u slices, %u mips, %u samples, flags 0x%x; the present is not made and the "
+                        "device stays",
+                        native12::present_copy_text(why), static_cast<int>(r->desc.Format),
+                        static_cast<unsigned long long>(r->desc.Width), r->desc.Height,
+                        static_cast<unsigned>(r->desc.DepthOrArraySize), static_cast<unsigned>(r->desc.MipLevels),
+                        r->desc.SampleDesc.Count, static_cast<unsigned>(r->desc.Flags));
+        return E_INVALIDARG;
+    }
+    if (c->lost()) return DXGI_ERROR_DEVICE_REMOVED;
+    if (PresentCopySurface* have = r->present_copy;
+        have && (have->width != shape.width || have->height != shape.height || have->format != shape.format)) {
+        // A resource's description cannot change; this is the backstop for one that did, and never a resize path.
+        // A resize destroys the chain's resources and creates new ones, each with a surface of its own.
+        log_refusal("present copy: the source's shape changed under its copy surface (%ux%u format %d became "
+                    "%ux%u format %d): the surface is made again",
+                    have->width, have->height, static_cast<int>(have->format), shape.width, shape.height,
+                    static_cast<int>(shape.format));
+        release_present_copy(r);
+    }
+    if (!r->present_copy) {
+        const HRESULT made = make_present_copy_either(c, r, shape);
+        if (FAILED(made)) {
+            log_refusal("present copy: no copy surface for format %d, %ux%u: %08lx; the present is not made and "
+                        "the device stays",
+                        static_cast<int>(shape.format), shape.width, shape.height,
+                        static_cast<unsigned long>(made));
+            return made;
+        }
+    }
+    PresentCopySurface* s = r->present_copy;
+    // A made surface is recorded on its resource; this says so to the reader and to /analyze, and is the one
+    // place that would catch a maker that answered S_OK and left nothing behind.
+    if (!s || !s->engine) return E_UNEXPECTED;
+    auto* source = static_cast<ID3D12Resource*>(r->h.engine);
+    ID3D12Resource* destination = s->engine;
+    // The source is the presented back buffer, which the runtime's own rule leaves in
+    // D3D12_RESOURCE_STATE_PRESENT - the same value as COMMON (d3d12.h: both are 0) - and the destination was
+    // created in COMMON and is touched by nothing but this copy. Both pairs are balanced, so the list leaves the
+    // state of both resources exactly as it found it and no later call of the application sees a state this
+    // driver invented.
+    struct Barriers {
+        D3D12_RESOURCE_BARRIER b[2];
+    } before{}, after{};
+    for (unsigned i = 0; i < 2; ++i) {
+        ID3D12Resource* resource = i ? destination : source;
+        const D3D12_RESOURCE_STATES state = i ? D3D12_RESOURCE_STATE_COPY_DEST : D3D12_RESOURCE_STATE_COPY_SOURCE;
+        before.b[i].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        before.b[i].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        before.b[i].Transition.pResource = resource;
+        before.b[i].Transition.Subresource = 0;
+        before.b[i].Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON;
+        before.b[i].Transition.StateAfter = state;
+        after.b[i] = before.b[i];
+        after.b[i].Transition.StateBefore = state;
+        after.b[i].Transition.StateAfter = D3D12_RESOURCE_STATE_COMMON;
+    }
+    // One entry each, in this order, on the list the runtime handed to pfnPresent and closes and executes right
+    // afterwards. record() makes the engine call here, or writes the entry for the list's replay worker; either
+    // way the order within the list is this order (replay.h, R1 and R2).
+    record(l, [=](ID3D12GraphicsCommandList* e) { e->ResourceBarrier(2, before.b); });
+    record(l, [=](ID3D12GraphicsCommandList* e) { e->CopyResource(destination, source); });
+    record(l, [=](ID3D12GraphicsCommandList* e) { e->ResourceBarrier(2, after.b); });
+    *allocation = s->allocation;
+    ++s->presents;
+    const uint64_t calls = present_copy_count.fetch_add(1, std::memory_order_relaxed) + 1;
+    if (present_copy_first.first())
+        log_refusal("present copy: the first present of a source that is not a linear primary is served by a copy "
+                    "(format %d, %ux%u, pitch %u, allocation %#x)",
+                    static_cast<int>(shape.format), shape.width, shape.height, s->row_pitch,
+                    static_cast<unsigned>(s->allocation));
+    if (!s->kernel_blt_format && present_copy_unblittable.insert(static_cast<uint32_t>(shape.format)))
+        log_refusal("present copy: format %d is copied into LB7A format %u, which the kernel driver's GPU present "
+                    "cannot blit (driver\\kmd\\wddm.c WddmLinearColorFormat): the present is legal and the frame "
+                    "may stay unpainted",
+                    static_cast<int>(shape.format), shape.d3dddi);
+    if (present_copy_doubling(calls))
+        log_line("present copy: %llu presents copied (%llu through this surface, %ux%u, pitch %u)",
+                 static_cast<unsigned long long>(calls), static_cast<unsigned long long>(s->presents), s->width,
+                 s->height, s->row_pitch);
+    return S_OK;
+}
+
+uint64_t present_copies() noexcept { return present_copy_count.load(std::memory_order_relaxed); }
+uint64_t present_copy_surfaces() noexcept { return present_copy_surface_count.load(std::memory_order_relaxed); }
 
 uint64_t shared_surface_retries() noexcept { return shared_retries.load(std::memory_order_relaxed); }
 

@@ -66,6 +66,10 @@ struct RuntimeHeapImports::Record {
     bool retired{true},locked{},busy{};
     unsigned borrowed{};                        // runtime callbacks in flight that name it as backing
     bool surface{};                             // the allocation of a linear primary
+    // BD-133: a linear surface this driver asked for itself, with no runtime resource of its own (the request
+    // carried no rt_owner). Its release names no owner, so it goes by handle like any other allocation of ours;
+    // see release_owned.
+    bool driver_surface{};
     bool adopted{};                             // BD-075: opened by the runtime, borrowed, never deallocated here
     DWORD authority{};                          // the thread whose runtime resource DDI runs (0: none)
     bool destroyed{};                           // that DDI destroys the resource
@@ -331,6 +335,15 @@ HRESULT RuntimeHeapImports::release_owned(Record& record) noexcept {
         // never was, so there is no deallocate callback to make and no owner to prove. close() forgets the
         // handle and calls nothing, and the runtime destroys the allocation when the opened resource goes.
         free_report_.adopted=true;
+        hr=record.allocation.close(ReleaseForm::Handle,Retirement::Retired);
+    } else if(record.surface && record.driver_surface){
+        // BD-133: a surface this driver allocated for itself. There is no runtime resource to release it by and
+        // no DDI of such a resource to be inside: the runtime made the allocation on our request alone and
+        // destroys nothing of it behind us, so the handle form is the only right one, with the caller's proof of
+        // retirement as for every other allocation of ours. The owner form below exists because the runtime
+        // destroys a linear primary's allocation with its resource; that reason does not apply here, and using
+        // the owner form would name a resource that does not exist.
+        free_report_.driver_surface=true;
         hr=record.allocation.close(ReleaseForm::Handle,Retirement::Retired);
     } else if(record.surface){
         // By the runtime resource, inside that resource's own DDI and on its thread, or not at all:
@@ -619,7 +632,11 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     }
     auto record=new(std::nothrow) Record(runtime_,callbacks_);if(!record)return E_OUTOFMEMORY;
     record->busy=true;record->surface=surface;
-    record->authority=surface && scope_owner_==this?GetCurrentThreadId():0;
+    // BD-133: a surface request that names no runtime resource is the driver's own (engine-ddi resources.cpp,
+    // make_present_copy). It takes no authority from an owner scope it happens to run inside, because its
+    // release never asks for one.
+    record->driver_surface=surface && !request->rt_owner.handle;
+    record->authority=surface && !record->driver_surface && scope_owner_==this?GetCurrentThreadId():0;
     {Exclusive held(lock_);record->next=records_;records_=record;}
     report_.stage=ImportStage::AllocateCallback;
     hr=record->allocation.open(allocation.args);
@@ -801,6 +818,7 @@ HRESULT RuntimeHeapImports::free(const engine_ddi::ImportedMemory* memory) noexc
         // Retired and taken for the release in one hold: no other thread's call starts on it in between.
         record->retired=true;record->releasing=GetCurrentThreadId();
         free_report_.surface=record->surface;free_report_.adopted=record->adopted;
+        free_report_.driver_surface=record->driver_surface;
         // A linear primary is never quarantined: only its own runtime resource may release it, inside the
         // destroy that ends it (release_owned), which a later drain is no longer inside. Nor is an opened
         // shared surface (BD-075): the runtime destroys its allocation as soon as the destroy returns, so a
