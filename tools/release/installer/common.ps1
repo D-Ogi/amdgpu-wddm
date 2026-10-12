@@ -83,11 +83,12 @@ function Write-StepFailure($ErrorRecord) {
     if ($script:LogPath) { Write-Host "Log: $($script:LogPath)" -ForegroundColor Yellow }
 }
 # The certificate step when a store refuses (BD-125: E_ACCESSDENIED in an elevated run on a tester's PC). The error
-# names the store, keeps the HRESULT, and gives the commands that add the certificate by hand. Nothing else is tried:
-# the step stops as before, and a run after the cause is fixed continues from here.
+# names the store, keeps the HRESULT, and gives the commands that add the certificate by hand. Add-CertificateToStore
+# below has already tried certutil when this error is made, and a run after the cause is fixed continues from here.
 function New-CertificateStoreError {
     param([Parameter(Mandatory)][string]$Store, [Parameter(Mandatory)][string]$Certificate,
-          [Parameter(Mandatory)][Exception]$Exception, [string[]]$Done = @(), [string[]]$Remaining = @())
+          [Parameter(Mandatory)][Exception]$Exception, [string[]]$Done = @(), [string[]]$Remaining = @(),
+          [string]$Tried = '')
     $hr = $Exception.HResult
     $code = '0x{0:X8}' -f $hr
     $names = @{ '0x80070005' = 'E_ACCESSDENIED' }
@@ -96,11 +97,37 @@ function New-CertificateStoreError {
     if ($Done.Count) { $text += " LocalMachine\$($Done -join ' and LocalMachine\') already has it." }
     $text += ' Setup runs elevated, so Windows itself refused the change. The usual causes are antivirus protection' +
         ' of the certificate store or a policy that locks the store.'
+    if ($Tried) { $text += " Setup also tried: $Tried." }
     $commands = @(@($Store) + @($Remaining) | ForEach-Object { "certutil -addstore -f $_ `"$Certificate`"" })
     $text += " To add it by hand, run in an administrator command prompt: $($commands -join ' and then ')."
     $text += ' Then run setup again: it continues from here.'
     $text += " Windows said: $($Exception.Message)"
     return (New-Object Runtime.InteropServices.COMException -ArgumentList $text, $hr)
+}
+# The release certificate into one LocalMachine store (BD-125). Import-Certificate first. When Windows refuses it,
+# certutil -addstore -f: on a tester's PC (tester.29, 2026-10-13) Import-Certificate got E_ACCESSDENIED for
+# TrustedPublisher and certutil added the same certificate to the same store in the same elevated session. Only the
+# store decides the result: the thumbprint must be in it afterwards. certutil's exit code and text are logged, never
+# parsed (the text is translated). Result: ok, via ('Import-Certificate', 'certutil' or 'none'), detail, and the
+# exception of Import-Certificate. The three actions are parameters for the host test (test-engine-units.ps1).
+function Add-CertificateToStore {
+    param([Parameter(Mandatory)][string]$Store, [Parameter(Mandatory)][string]$Certificate,
+          [Parameter(Mandatory)][string]$Thumbprint,
+          [scriptblock]$Import = { param($File, $Name) Import-Certificate -FilePath $File -CertStoreLocation "Cert:\LocalMachine\$Name" -ErrorAction Stop | Out-Null },
+          [scriptblock]$CertUtil = { param($File, $Name) Invoke-NativeBounded -File (Join-Path $env:SystemRoot 'System32\certutil.exe') -Arguments @('-addstore', '-f', $Name, $File) -TimeoutSeconds 60 },
+          [scriptblock]$Present = { param($Name, $Thumb) @(Get-ChildItem "Cert:\LocalMachine\$Name" -ErrorAction Stop | Where-Object { $_.Thumbprint -eq $Thumb }).Count -gt 0 })
+    function Result([bool]$Ok, [string]$Via, [string]$Detail, $Exception) { [pscustomobject]@{ ok = $Ok; via = $Via; detail = $Detail; exception = $Exception } }
+    try { & $Import $Certificate $Store; return (Result $true 'Import-Certificate' "LocalMachine\$Store`: added" $null) }
+    catch { $refused = $_.Exception }
+    $why = "Import-Certificate was refused (HRESULT $('0x{0:X8}' -f $refused.HResult))"
+    try {
+        $r = & $CertUtil $Certificate $Store
+        $ran = if ($r.timed_out) { 'certutil did not finish in 60 s' } else { "certutil exit code $($r.code)" }
+    } catch { $ran = "certutil did not run: $($_.Exception.Message)" }
+    $held = $false
+    try { $held = [bool](& $Present $Store $Thumbprint) } catch { $ran += "; the store could not be read: $($_.Exception.Message)" }
+    if ($held) { return (Result $true 'certutil' "LocalMachine\$Store`: $why, added with certutil ($ran)" $refused) }
+    return (Result $false 'none' "LocalMachine\$Store`: $why, and certutil did not add it ($ran)" $refused)
 }
 
 # A native program, its stdout and stderr as one text, and its exit code. Windows PowerShell 5.1 turns a stderr line

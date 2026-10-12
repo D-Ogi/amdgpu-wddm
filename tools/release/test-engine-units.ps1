@@ -640,22 +640,57 @@ $e2 = New-CertificateStoreError -Store 'TrustedPublisher' -Certificate $cerPath 
 Check (($e2.Message -match [regex]::Escape('LocalMachine\TrustedPublisher, HRESULT 0x80070005')) -and ($e2.Message -match [regex]::Escape('LocalMachine\Root already has it')) -and ($e2.Message.Contains("certutil -addstore -f TrustedPublisher `"$cerPath`".")) -and ($e2.Message -notmatch 'addstore -f Root')) "TrustedPublisher refused after Root: $($e2.Message)"
 $e3 = New-CertificateStoreError -Store 'Root' -Certificate $cerPath -Exception (New-Object IO.IOException 'busy', -2147024864)
 Check (($e3.Message -match 'HRESULT 0x80070020\.') -and ($e3.HResult -eq -2147024864)) "another HRESULT keeps its number without a name: $('0x{0:X8}' -f $e3.HResult)"
-# The step itself, as install.ps1 ships it, with a stand-in Import-Certificate that TrustedPublisher refuses.
+# Add-CertificateToStore (BD-125 part two): Import-Certificate, then certutil, and the store decides.
+$thumb = 'F' * 40
+$cuCalls = New-Object Collections.ArrayList
+$refuse = { param($File, $Name) throw (New-Object UnauthorizedAccessException 'Access is denied.') }
+$cuOk = { param($File, $Name) [void]$cuCalls.Add("$Name|$File"); @{ text = 'translated text'; code = 0; timed_out = $false } }
+$a = Add-CertificateToStore -Store 'Root' -Certificate $cerPath -Thumbprint $thumb -Import { param($File, $Name) } -CertUtil $cuOk -Present { $false }
+Check (($a.ok) -and ($a.via -eq 'Import-Certificate') -and ($cuCalls.Count -eq 0) -and ($null -eq $a.exception)) "Import-Certificate adds it: certutil is not run ($($a.detail))"
+$a = Add-CertificateToStore -Store 'TrustedPublisher' -Certificate $cerPath -Thumbprint $thumb -Import $refuse -CertUtil $cuOk -Present { param($Name, $T) ($Name -eq 'TrustedPublisher') -and ($T -eq $thumb) }
+Check (($a.ok) -and ($a.via -eq 'certutil') -and ($cuCalls.Count -eq 1) -and ($cuCalls[0] -eq "TrustedPublisher|$cerPath") -and ($a.detail -match 'HRESULT 0x80070005') -and ($a.detail -match 'exit code 0') -and ($a.exception -is [UnauthorizedAccessException])) "refused, certutil adds it to the same store: $($a.detail)"
+$a = Add-CertificateToStore -Store 'TrustedPublisher' -Certificate $cerPath -Thumbprint $thumb -Import $refuse -CertUtil $cuOk -Present { $false }
+Check ((-not $a.ok) -and ($a.via -eq 'none') -and ($a.detail -match 'certutil did not add it \(certutil exit code 0\)')) "certutil exit code 0 but the store lacks the thumbprint: not added ($($a.detail))"
+$a = Add-CertificateToStore -Store 'Root' -Certificate $cerPath -Thumbprint $thumb -Import $refuse -CertUtil { throw 'no certutil' } -Present { $false }
+Check ((-not $a.ok) -and ($a.detail -match 'certutil did not run: no certutil')) "certutil cannot run: not added ($($a.detail))"
+$a = Add-CertificateToStore -Store 'Root' -Certificate $cerPath -Thumbprint $thumb -Import $refuse -CertUtil { @{ text = ''; code = $null; timed_out = $true } } -Present { throw 'store locked' }
+Check ((-not $a.ok) -and ($a.detail -match 'did not finish in 60 s') -and ($a.detail -match 'could not be read: store locked')) "certutil times out and the store cannot be read: not added ($($a.detail))"
+
+# The step itself, as install.ps1 ships it, with stand-ins for the three actions of Add-CertificateToStore.
 $installText = [IO.File]::ReadAllText((Join-Path $Installer 'install.ps1'))
 $step = [regex]::Match($installText, '(?s)Invoke-Change "add the release test certificate .*?\n\} \| Out-Null')
 Check $step.Success 'install.ps1 has the certificate step'
-$imported = New-Object Collections.ArrayList
-function Import-Certificate { [CmdletBinding()] param([string]$FilePath, [string]$CertStoreLocation)
-    if ($CertStoreLocation -like '*TrustedPublisher') { throw (New-Object UnauthorizedAccessException 'Access is denied.') }
-    [void]$imported.Add($CertStoreLocation) }
-$cer = $cerPath
-$cert = [pscustomobject]@{ Thumbprint = 'F' * 40 }
-$script:DryRunMode = $false; $script:OnFirstChange = $null; $script:OnMutation = $null; $script:OnChange = $null
-$stepError = $null
-try { & ([scriptblock]::Create($step.Value)) } catch { $stepError = $_.Exception }
-Remove-Item Function:\Import-Certificate
-Check (($imported.Count -eq 1) -and ($imported[0] -eq 'Cert:\LocalMachine\Root') -and ($stepError -is [Runtime.InteropServices.COMException]) -and ($stepError.Message -match [regex]::Escape('LocalMachine\TrustedPublisher, HRESULT 0x80070005')) -and ($stepError.Message -match 'Root already has it')) "the shipped step stops at the refusing store: $(if ($stepError) { $stepError.Message } else { 'no error' })"
-$script:Mutated = $false
+$realAdd = ${function:Add-CertificateToStore}
+$script:held = New-Object Collections.ArrayList
+function Run-CertStep([string[]]$ImportRefuses, [string[]]$CertUtilAdds) {
+    $held = $script:held   # one list for the closures below: $script: inside a closure is the closure's own module
+    $held.Clear()
+    $script:stubImport = { param($File, $Name) if ($ImportRefuses -contains $Name) { throw (New-Object UnauthorizedAccessException 'Access is denied.') }; [void]$held.Add($Name) }.GetNewClosure()
+    $script:stubCertUtil = { param($File, $Name) if ($CertUtilAdds -contains $Name) { [void]$held.Add($Name) }; @{ text = ''; code = 0; timed_out = $false } }.GetNewClosure()
+    $script:stubPresent = { param($Name, $T) $held -contains $Name }.GetNewClosure()
+    $warnings = New-Object Collections.ArrayList
+    Set-Item Function:\Write-Warn2 { param([string]$Text) [void]$warnings.Add($Text) }.GetNewClosure()
+    $cer = $cerPath
+    $cert = [pscustomobject]@{ Thumbprint = $thumb }
+    $script:DryRunMode = $false; $script:OnFirstChange = $null; $script:OnMutation = $null; $script:OnChange = $null
+    $stepError = $null
+    try { & ([scriptblock]::Create($step.Value)) 6>$null } catch { $stepError = $_.Exception }
+    $script:Mutated = $false
+    return [pscustomobject]@{ held = @($held); error = $stepError; warnings = @($warnings) }
+}
+$realWarn = ${function:Write-Warn2}
+Set-Item Function:\Add-CertificateToStore { param($Store, $Certificate, $Thumbprint)
+    & $realAdd -Store $Store -Certificate $Certificate -Thumbprint $Thumbprint -Import $script:stubImport -CertUtil $script:stubCertUtil -Present $script:stubPresent }
+$r = Run-CertStep -ImportRefuses @('TrustedPublisher') -CertUtilAdds @('TrustedPublisher')
+Check (($null -eq $r.error) -and (($r.held -join ',') -eq 'Root,TrustedPublisher') -and ($r.warnings.Count -eq 0)) "TrustedPublisher refuses Import-Certificate, certutil adds it: both stores, no warning ($(($r.held) -join ','))"
+$r = Run-CertStep -ImportRefuses @('TrustedPublisher') -CertUtilAdds @()
+Check (($null -eq $r.error) -and (($r.held -join ',') -eq 'Root') -and ($r.warnings.Count -eq 1) -and ($r.warnings[0] -match 'LocalMachine\\TrustedPublisher: Import-Certificate was refused \(HRESULT 0x80070005\)') -and ($r.warnings[0] -match 'The install goes on')) "TrustedPublisher refuses both ways after Root: a warning, the install goes on: $($r.warnings -join ' | ')"
+$r = Run-CertStep -ImportRefuses @('Root', 'TrustedPublisher') -CertUtilAdds @()
+Check (($r.error -is [Runtime.InteropServices.COMException]) -and ($r.held.Count -eq 0) -and ($r.error.Message -match [regex]::Escape('LocalMachine\Root, HRESULT 0x80070005')) -and ($r.error.Message.Contains("certutil -addstore -f Root `"$cerPath`" and then certutil -addstore -f TrustedPublisher `"$cerPath`""))) "Root refuses both ways: the step stops with the hand commands: $(if ($r.error) { $r.error.Message } else { 'no error' })"
+$r = Run-CertStep -ImportRefuses @('Root') -CertUtilAdds @('Root')
+Check (($null -eq $r.error) -and (($r.held -join ',') -eq 'Root,TrustedPublisher')) "Root refuses Import-Certificate, certutil adds it, TrustedPublisher imports: both stores ($(($r.held) -join ','))"
+Set-Item Function:\Add-CertificateToStore $realAdd
+Set-Item Function:\Write-Warn2 $realWarn
 
 '[G-STAGE] child closure: the job''s own count decides, an unreadable job is unknown (R9; last: this process joins a job)'
 Check (($null -eq [AmdgpuWddmEngine.Job]::Processes()) -and ([AmdgpuWddmEngine.Job]::ActiveProcesses() -eq -1)) 'no job: the listing is unknown (null), never an empty job'
