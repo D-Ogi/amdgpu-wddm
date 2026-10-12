@@ -73,6 +73,7 @@ namespace AmdgpuWddmControl
             }
             var result = ResultLine(status.Inner);
             if (result != null) status.Add(result);
+            if (_autoReportStatus != null) status.Add(Ui.Label(_autoReportStatus, null, Theme.Dim, status.Inner));
             p.Controls.Add(status);
 
             if (!_prefs.GettingStartedDismissed)

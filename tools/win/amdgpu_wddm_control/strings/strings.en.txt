@@ -1172,3 +1172,9 @@ bench.note.notemp|src|-|The game opens in a window of its own and closes by itse
 search.perf.benchmark|src|-|Ray tracing benchmark
 search.perf.benchmark.terms|src|-|benchmark|fps|frames per second|speed|score|measure|ray tracing|path tracing|quake|quake 2|q2rtx|how fast
 help.setting.benchmark|src|-|A test of your own card. It runs a short ray traced scene of the free game Quake II RTX twice, once for each way a card can trace light, and shows how many pictures a second your card drew. You need the game on this computer; the driver package does not hold it. The test needs about twenty seconds for each way on our own board, opens the game in a small window and closes it again, and stops by itself when the chip gets too hot. The last ten runs stay on this computer so you can see whether a new driver release changed the number.
+
+help.auto.collecting|src|-|The driver has not completed a confirmed start. Collecting a support report automatically (up to 20 seconds).
+
+help.auto.saved|src|-|Support report saved: {0}. Common personal details were filtered. Review the file before sharing it. Nothing was sent.
+
+help.auto.failed|src|-|The automatic support report could not be saved. Open Help to try again.

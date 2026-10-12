@@ -698,7 +698,7 @@ static partial class UnitTests
         Check(Regex.IsMatch(files["DisplayModes.cs"], @"CdsTest") && Regex.IsMatch(files["MainForm.Display.cs"], @"KeepDisplayDialog\.Ask"), "G-SRC: a mode is tested first and kept only on the person's word");
         // BenchmarkRun.cs ends one process: the game it started itself, and only when that game could not be put
         // into the job object that would otherwise have ended it (test/BenchmarkTests.cs decides that exact shape).
-        Equal("", string.Join(",", where(@"\b(TerminateProcess|taskkill)\b|\.Kill\(", new[] { "RecoveryActions.cs", "BugReport.cs", "SystemTuningProcess.cs", "BenchmarkRun.cs" })), "G-SRC: no process kill outside the helper's accepted BD-060 escape, each helper's own timed-out child and the benchmark's own game");
+        Equal("", string.Join(",", where(@"\b(TerminateProcess|taskkill)\b|\.Kill\(", new[] { "RecoveryActions.cs", "BugReport.cs", "SystemTuningProcess.cs", "BenchmarkRun.cs", "DiagnosticWorker.cs" })), "G-SRC: no process kill outside the helper's accepted BD-060 escape, each helper's own timed-out child and the benchmark's own game");
         Equal("", string.Join(",", where(@"\b(SetupDiCallClassInstaller|DICS_DISABLE|DIF_PROPERTYCHANGE|CM_Disable_DevNode|pnputil|devcon)\b", null)), "G-SRC: no PnP disable or enable");
         Equal("", string.Join(",", where(@"\b(EWX_FORCE\w*|Restart-Computer|shutdown(\.exe)?\s+/r)\b", null)), "G-SRC: no forced restart");
         Equal("", string.Join(",", where(@"(?i)\b(oauth|access_token|Authorization)\b", null)), "G-SRC: no sign-in or token code");

@@ -147,7 +147,7 @@ namespace AmdgpuWddmControl
 
         void CreateReport()
         {
-            if (_smoke || _work != null) return;
+            if (_smoke || _work != null || _autoReportRunning) return;
             _work = GuideCause.CreatingReport; ComputeStatus();
             _reportStatus = Strings.T("help.report.collecting"); _reportOk = false;
             ShowPage(_page, null, false);
@@ -165,6 +165,25 @@ namespace AmdgpuWddmControl
                 try { report.Write(path); _reportStatus = Strings.T("help.report.saved", path); _reportOk = true; }
                 catch (Exception) { _reportStatus = Strings.T("help.report.not-saved"); }
                 ShowPage(_page, null, false);
+            }, TaskScheduler.FromCurrentSynchronizationContext());
+        }
+
+        bool _autoReportStarted, _autoReportRunning;
+        string _autoReportStatus;
+
+        void MaybeAutomaticDiagnostics()
+        {
+            if (_smoke || ReadOnlyProbe || _autoReportStarted || _inv == null || _snap == null) return;
+            if (!StartupDiagnosticData.Needed(_inv.DevicePresent, _inv.ReleaseVersion.Length != 0,
+                _inv.DeviceProblem, Recovery.StartConfirmed(_snap))) return;
+            _autoReportStarted = _autoReportRunning = true;
+            _autoReportStatus = Strings.T("help.auto.collecting");
+            ShowPage(_page, null, false);
+            Task.Run(() => StartupDiagnostics.SaveAutomatic()).ContinueWith(t => {
+                _autoReportRunning = false;
+                _autoReportStatus = t.IsFaulted ? Strings.T("help.auto.failed") : Strings.T("help.auto.saved", t.Result);
+                _reportStatus = _autoReportStatus; _reportOk = !t.IsFaulted;
+                if (!IsDisposed && !Disposing) ShowPage(_page, null, false);
             }, TaskScheduler.FromCurrentSynchronizationContext());
         }
 

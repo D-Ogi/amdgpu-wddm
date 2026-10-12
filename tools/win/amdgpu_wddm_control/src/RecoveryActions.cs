@@ -278,7 +278,7 @@ namespace AmdgpuWddmControl
 
         // The boot time as Win32_OperatingSystem.LastBootUpTime gives it: SystemTimeOfDayInformation's BootTime (at 0)
         // less BootTimeBias (at 32), the clock corrections since the boot (52 s on the PC that builds this).
-        static DateTime? BootTime()
+        internal static DateTime? BootTime()
         {
             var buffer = Marshal.AllocHGlobal(64);
             try

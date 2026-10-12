@@ -333,7 +333,8 @@ static partial class UnitTests
     static void Redaction()
     {
         var r = new Redactor("tester", "BENCH-PC", @"C:\Users\tester");
-        var input = string.Join("\n", new[]
+        // CRLF, the line ending of every file this redacts: a rule anchored with $ matched nothing in such text.
+        var input = string.Join("\r\n", new[]
         {
             @"Log: C:\Users\tester\AppData\Local\Temp\x.txt",
             "Machine name: BENCH-PC",
@@ -359,6 +360,25 @@ static partial class UnitTests
         Check(o.Contains("0.7.197.1") && o.Contains("982DB3CF0011"), "versions and hashes kept");
         Check(o.Contains(@"PCI\VEN_1002&DEV_13FE"), "hardware id kept");
         Check(o.Contains("testerx and xtester stay"), "user name only as a whole word");
+        // Every line of a collected log has a prefix with a colon of its own: a setupapi line starts "     dvi: ",
+        // an event line with its timestamp, a record line with "StartRecord log:". The rule has to see past it.
+        Check(r.Apply("     dvi: Device serial: SN-ABC123456789") == "     dvi: Device serial: <redacted>", "serial behind a setupapi prefix");
+        Check(r.Apply("  2026-10-12T01:59:48.123Z level 2 id 411 Device serial number: SN-ABC123456789")
+            == "  2026-10-12T01:59:48.123Z level 2 id 411 Device serial number: <redacted>", "serial in an event line");
+        Check(r.Apply("StartRecord log: MachineGuid: 11111111-2222-3333-4444-555555555555")
+            == "StartRecord log: MachineGuid: <redacted>", "machine id in a record line");
+        // One record of an event is ONE line of XML, so a keyword anywhere in it used to let the rule run
+        // to the end of the line and take the message with it. The value of the element that names the
+        // keyword goes; every other element of the same line stays.
+        const string xml = "<Event><EventData><Data Name=\"AdapterUuid\">1234abcd</Data>"
+            + "<Data Name=\"Reason\">the GPU was reset</Data></EventData></Event>";
+        var oneLine = r.Apply(xml);
+        Check(!oneLine.Contains("1234abcd"), "the UUID of a one-line event record goes");
+        Check(oneLine.Contains("<Data Name=\"Reason\">the GPU was reset</Data></EventData></Event>"),
+            "and the rest of that line, the reading the report was collected for, stays");
+        Check(r.Apply("<Data Name=\"SerialNumber\">SN-ABC123456789</Data><Data Name=\"Code\">43</Data>")
+            == "<Data Name=\"SerialNumber\"><redacted></Data><Data Name=\"Code\">43</Data>",
+            "a serial in markup goes by itself, and the code beside it stays");
         Equal("", r.Apply(null), "null text");
     }
 
@@ -1117,6 +1137,12 @@ static partial class UnitTests
             var matches = System.Text.RegularExpressions.Regex.Matches(text, @"\.Kill\s*\(");
             int k = matches.Count;
             if (name == "BugReport.cs") Equal(1, k, "static check: BugReport.cs kills only its own timed-out child tool");
+            else if (name == "DiagnosticWorker.cs")
+            {
+                Equal(1, k, "automatic diagnostics ends only its own bounded worker");
+                Check(text.Contains("new Process { StartInfo = start }") && text.Contains("if (!ended)") &&
+                    !text.Contains("GetProcessById") && !text.Contains("GetProcesses"), "diagnostic worker identity comes from this process handle");
+            }
             else if (name == "SystemTuningProcess.cs")
             {
                 Equal(1, k, "static check: Windows tuning kills only its bounded child");
@@ -1158,7 +1184,7 @@ static partial class UnitTests
             foreach (var l in text.Split('\n').Where(x => x.Contains("\"dwm\"")))
                 Check(l.Contains("GetProcessesByName(\"dwm\")"), "static check: " + name + " only reads the dwm process: " + l.Trim());
         }
-        Equal(3, kills, "static check: three Kill() calls: the bug report's and the Windows tuning's own bounded children, and the benchmark's own game");
+        Equal(4, kills, "static check: own bounded diagnostic and tuning children, and the benchmark's own game");
         var rules = File.ReadAllText(Path.Combine(dir, "Recovery.cs"));
         Check(rules.Contains("if (!operatorAccepted)") && System.Text.RegularExpressions.Regex.Matches(rules, @"RestartCompositor = true").Count == 1,
             "static check: only the accepted escape plans a DWM stop");
@@ -1172,6 +1198,14 @@ static partial class UnitTests
 
     static int Main(string[] args)
     {
+        if (args.Length == 1 && args[0] == "--diagnostic-worker-fixture")
+        {
+            Console.OutputEncoding = new UTF8Encoding(false);
+            Console.WriteLine("fixture-ready " + System.Diagnostics.Process.GetCurrentProcess().Id);
+            Console.Out.Flush();
+            System.Threading.Thread.Sleep(60000);
+            return 0;
+        }
         if (args.Length != 1 && args.Length != 2) { Console.WriteLine("usage: unit-tests <repository root> [<start-confirm-core.ps1>]"); return 2; }
         var header = File.ReadAllText(Path.Combine(args[0], @"driver\kmd\bc250kmd_escape.h"));
         Strings.Directory = Path.Combine(args[0], @"tools\win\amdgpu_wddm_control\strings");
@@ -1188,6 +1222,7 @@ static partial class UnitTests
         Dpm();
         DpmDesignDoc(args[0]);
         Redaction();
+        StartupDiagnosticTests();
         Manifest();
         SettingsRule();
         NoDwmRestart(args[0]);

@@ -53,6 +53,7 @@ namespace AmdgpuWddmControl
         [STAThread]
         static int Main(string[] args)
         {
+            if (args.Length == 1 && args[0] == "--startup-diagnostics-worker") return StartupDiagnostics.Worker();
             if (args.Length == 1 && args[0] == "--version") { Console.WriteLine(ProductName + " " + VersionText); return 0; }
             if (args.Length > 0 && args[0] == "--bc250-board-memory-action") return UmaActions.Run(args);
             if (args.Length > 0 && args[0] == "--status") return Status(args);
@@ -65,7 +66,8 @@ namespace AmdgpuWddmControl
             if (args.Length >= 3 && args[0] == "--smoke-render") return SmokeRender(args);
             if (args.Length == 2 && args[0] == "--smoke-recovery") return SmokeRecovery(args[1]);
             if (args.Length == 2 && args[0] == "--smoke-perf") return SmokePerf(args[1]);
-            if (args.Length == 4 && args[0] == "--smoke-scroll" && args[2] == "--fixture") return SmokeScroll(args[1], args[3]);
+            if ((args.Length == 4 || args.Length == 6 && args[4] == "--board-fixture") && args[0] == "--smoke-scroll" && args[2] == "--fixture")
+                return SmokeScroll(args[1], args[3], args.Length == 6 ? args[5] : null);
             if (args.Length == 1 && args[0] == "--recovery")
             {
                 Kmd.Blocked = true;
@@ -147,10 +149,11 @@ namespace AmdgpuWddmControl
 
         // The place a rebuild of the same page keeps (F1 of the b23 lab round), without a window. Findings go to
         // <file>; an empty file is a pass.
-        static int SmokeScroll(string path, string fixture)
+        static int SmokeScroll(string path, string fixture, string boardFixture = null)
         {
             try
             {
+                if (boardFixture != null) BoardCapabilities.Replace(BoardCapabilities.Parse(File.ReadAllBytes(boardFixture)));
                 string findings;
                 using (var form = new MainForm(true, new AppPrefs(new MemoryPrefStore())))
                 {
@@ -241,7 +244,7 @@ namespace AmdgpuWddmControl
             try
             {
                 var report = new BugReport(Redactor.ForThisPc());
-                report.Collect(false, false, false, _ => { });
+                report.Collect(false, false, false, _ => { }, false);
                 report.Write(path);
                 return 0;
             }

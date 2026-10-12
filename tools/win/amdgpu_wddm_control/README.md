@@ -328,6 +328,17 @@ gates use it, so a build records nothing in the profile of the PC that builds).
 
 ## Bug report
 
+An unconfirmed or failed start automatically saves a local report when the control window opens.
+The Recovery window also collects this report without a driver connection.
+Collection stops after 20 seconds and keeps at most 4 MiB of text.
+The window shows the saved path. Nothing is sent.
+
+`startup-diagnostics.txt` includes StartRecord, StopRecord, device status and current-boot events for the display driver.
+It includes matching SetupAPI sections from the last 1 MiB and at most three kept KMD logs.
+Each kept log contributes at most 512 KiB. Redirected file paths are omitted.
+The automatic archive stays under `%LOCALAPPDATA%\amdgpu-wddm\diagnostics`.
+The manual report includes the same diagnostics. Its optional capability tests and dxdiag have their own time limits.
+
 `driver-state.txt` (the snapshots above), `driver-log.txt` (the whole log ring), `installed-files.txt` (Device
 Manager status and problem code, the display driver key, every component with version and SHA-256), `settings.txt`
 (the driver's `Parameters` values, the D3D12 profiles, and the stored and effective graphics settings for all games
