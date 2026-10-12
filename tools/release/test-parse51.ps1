@@ -1,6 +1,12 @@
 # Gate: every .ps1 in -Directory parses under the running PowerShell. build-release.ps1 and test-dryrun.ps1 run it
 # with Windows PowerShell 5.1 (System32\WindowsPowerShell\v1.0\powershell.exe), the version a tester has.
 param([Parameter(Mandatory)][string]$Directory)
+# A folder that is not there is a failure, not an empty pass: the gate would otherwise report PASS for a wrong path
+# and let the run go on to a misleading error (reviewer, 2026-10-12).
+if (-not (Test-Path -LiteralPath $Directory -PathType Container)) {
+    "  no such directory: $Directory"
+    exit 1
+}
 $bad = 0
 foreach ($f in Get-ChildItem -LiteralPath $Directory -Filter *.ps1 -File) {
     $tokens = $null; $errors = $null

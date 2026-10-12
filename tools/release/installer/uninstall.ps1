@@ -307,7 +307,7 @@ if (-not $off -and -not $KeepTestSigning -and $setByUs) {
     $off = Read-Confirmation -Question 'The installer turned test signing on. Turn it off again?' -Expect 'YES'
 }
 if ($off) {
-    Invoke-Change 'bcdedit /set {current} testsigning off' {
+    Invoke-Change "bcdedit /set '{current}' testsigning off" {
         $n = Invoke-Native bcdedit.exe @('/set', '{current}', 'testsigning', 'off')
         if ($n.code -ne 0) { Write-Warn2 "bcdedit failed: $($n.text)" }
     } | Out-Null

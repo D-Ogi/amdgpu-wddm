@@ -12,8 +12,18 @@
 # firmware folder and another engine contract are refused. The engine lock: one mutating engine at a time; a first
 # change whose record cannot be saved does not run. Pending restarts (Get-PendingRestart). Child closure from the
 # job's own count (this process joins a kill-on-close job in the last section).
+# BD-125: Secure Boot from the UEFI variable with stand-in readers (no variable = off, not built into the firmware;
+# the fallbacks answer only when the read fails), one real read of the variable on this host, and the certificate
+# step's error (store, HRESULT, certutil commands), also through the shipped step with a stand-in Import-Certificate.
 # Everything is written under -WorkRoot; nothing in the registry, no driver, no restart.
-param([string]$Installer = (Join-Path $PSScriptRoot 'installer'), [string]$WorkRoot = (Join-Path (Split-Path (Split-Path $Installer)) 'test-tmp'))
+param([string]$Installer = (Join-Path $PSScriptRoot 'installer'), [string]$WorkRoot)
+# Default scratch: beside the folder the zip unpacks to, never inside it. The package root is files\ of that folder
+# (owner, 2026-10-11), so one more level up than it used to be; an older flat package keeps the old place.
+if (-not $PSBoundParameters.ContainsKey('WorkRoot')) {
+    $packageRoot = Split-Path $Installer   # <package>\installer -> <package>
+    $packageTop = $(if ((Split-Path $packageRoot -Leaf) -eq 'files') { Split-Path $packageRoot } else { $packageRoot })
+    $WorkRoot = Join-Path (Split-Path $packageTop) 'test-tmp'
+}
 $ErrorActionPreference = 'Stop'
 . (Join-Path $Installer 'common.ps1')
 . (Join-Path $Installer 'engine.ps1')
@@ -38,11 +48,13 @@ $fwPin = [pscustomobject]@{ commit = ('0' * 40); install_dir = 'C:\BC250\firmwar
 $infGood = "[Version]`r`nSignature = `"`$Windows NT`$`"`r`n`r`n[Manufacturer]`r`n%P% = Models,NTamd64`r`n`r`n[Models.NTamd64]`r`n%D% = Bc250_Install, PCI\VEN_1002&DEV_13FE`r`n`r`n[Bc250_Install]`r`nReboot`r`nCopyFiles = F`r`n"
 $infTester10 = $infGood -replace "Reboot`r`n", ''
 function New-FakePackage {
-    param([string]$Dir, [string]$Version = '0.7.199.100-test.1', [string]$Inf = $infGood, [switch]$NoRecord, [scriptblock]$EditRecord, $Firmware = $fwPin, [AllowNull()][AllowEmptyString()][string]$RecordText = $null, [switch]$RawRecord)
+    param([string]$Dir, [string]$Version = '0.7.199.100-test.1', [string]$Inf = $infGood, [switch]$NoRecord, [scriptblock]$EditRecord, $Firmware = $fwPin, [AllowNull()][AllowEmptyString()][string]$RecordText = $null, [switch]$RawRecord, [switch]$Setup)
     Write-Text (Join-Path $Dir 'payload\kmd\bc250kmd.inf') $Inf
     Write-Text (Join-Path $Dir 'payload\kmd\bc250kmd.sys') "kmd image $Version"
     Write-Text (Join-Path $Dir 'installer\registry-defaults.json') '{ "schema": 1, "defaults": { "parameters": { "DpmMode": 1 }, "desktop_router": { "DwmForceCpu": 0 } } }'
     Write-Text (Join-Path $Dir 'install.cmd') '@echo off'
+    # -Setup: the unpacked release's shape, setup.exe in the top folder beside the package root files\.
+    if ($Setup) { Write-Text (Join-Path (Split-Path -Parent $Dir.TrimEnd('\')) 'setup.exe') "setup window $Version" }
     if ($RawRecord) { Write-Text (Join-Path $Dir 'compatibility.json') $RecordText }
     elseif (-not $NoRecord) {
         $rec = New-CompatibilityRecord -PackageRoot $Dir -Version $Version -Firmware $Firmware -KmdBuild '0.7.199.1' -KmdAbi '0x000700C7' -DriverVer '0.7.199.100'
@@ -53,6 +65,10 @@ function New-FakePackage {
             [ordered]@{ path = ($_.FullName.Substring($Dir.TrimEnd('\').Length + 1) -replace '\\', '/'); sha256 = (Get-Sha256 $_.FullName); size = $_.Length } })
     $m = [ordered]@{ schema = 1; name = "pkg-$Version"; release = $Version; version = $Version; kmd_version = '0.7.199.100'; kmd_build = '0.7.199.1'; kmd_abi = '0x000700C7'
         firmware = $fwPin; components = @([ordered]@{ role = 'kmd'; package_path = 'payload/kmd/bc250kmd.sys'; sha256 = (Get-Sha256 (Join-Path $Dir 'payload\kmd\bc250kmd.sys')) }); files = $files }
+    if ($Setup) {
+        $se = Join-Path (Split-Path -Parent $Dir.TrimEnd('\')) 'setup.exe'
+        $m.setup = [ordered]@{ file = 'setup.exe'; sha256 = (Get-Sha256 $se); size = (Get-Item -LiteralPath $se).Length }
+    }
     Write-Text (Join-Path $Dir 'manifest.json') ($m | ConvertTo-Json -Depth 6)
     return (Get-Content -LiteralPath (Join-Path $Dir 'manifest.json') -Raw | ConvertFrom-Json)
 }
@@ -113,20 +129,52 @@ Write-Text (Join-Path $badFw 'fw_a.bin') 'other'
 $threw = $null; try { [void](Save-ContinuationClosure -PackageRoot $pkg -Manifest $m -FirmwareDir $badFw -Destination (Join-Path $work 'closure-badfw')) } catch { $threw = $_.Exception.Message }
 Check ($threw -match 'firmware') "a firmware folder with a changed or missing file is refused: $threw"
 
+'[G-STAGE] package layout: setup.exe beside files\ in the unpacked release, in the folder itself in a closure, hashed by the manifest'
+$top = Join-Path $work 'unpacked\amdgpu-wddm-tester-test.3'
+$lay = Join-Path $top 'files'
+$mL = New-FakePackage -Dir $lay -Version '0.7.199.100-test.3' -Setup
+Check ((Get-PackageSetupExe $lay) -eq (Join-Path $top 'setup.exe')) 'the setup window of an unpacked release is found one level above the package root'
+Check (Test-PackageManifest -PackageRoot $lay).ok 'the package verifies with setup.exe beside files\'
+$lc = Save-ContinuationClosure -PackageRoot $lay -Manifest $mL -FirmwareDir $fwDir
+Check (Test-Path -LiteralPath (Join-Path $lc 'setup.exe') -PathType Leaf) 'the closure gets its own copy of setup.exe'
+Check ((Get-PackageSetupExe $lc) -eq (Join-Path $lc 'setup.exe')) 'the setup window of a closure is found in the package root itself'
+Check (Test-PackageManifest -PackageRoot $lc).ok 'the closure verifies with its own copy'
+[IO.File]::AppendAllText((Join-Path $lc 'setup.exe'), 'tampered')
+$chk = Test-PackageManifest -PackageRoot $lc
+Check ((-not $chk.ok) -and ($chk.detail -match 'changed setup\.exe')) "a changed setup.exe is a finding: $($chk.detail)"
+Remove-Item -LiteralPath (Join-Path $lc 'setup.exe') -Force
+$chk = Test-PackageManifest -PackageRoot $lc
+Check ((-not $chk.ok) -and ($chk.detail -match 'missing setup\.exe')) "a missing setup.exe is a finding: $($chk.detail)"
+[void](Save-ContinuationClosure -PackageRoot $lay -Manifest $mL -FirmwareDir $fwDir)
+Check (Test-PackageManifest -PackageRoot $lc).ok 'a closure whose setup.exe was removed is staged again and verifies'
+# A folder that holds its own copy never reads the folder above it: a setup.exe of another build beside a closure or
+# a prepared folder must not hide the package's own copy, and must not stand in for a tampered one.
+$foreign = Join-Path (Split-Path $lc) 'setup.exe'
+Write-Text $foreign 'OTHER BUILD'
+Check ((Get-PackageSetupExe $lc) -eq (Join-Path $lc 'setup.exe')) 'a closure reads its own setup.exe, not another build''s copy beside it'
+Check (Test-PackageManifest -PackageRoot $lc).ok 'a closure with its own copy verifies although the folder above holds another setup.exe'
+[IO.File]::AppendAllText((Join-Path $lc 'setup.exe'), 'tampered')
+$chk = Test-PackageManifest -PackageRoot $lc
+Check ((-not $chk.ok) -and ($chk.detail -match 'changed setup\.exe')) "a tampered copy is not masked by the folder above: $($chk.detail)"
+Remove-Item -LiteralPath $foreign -Force
+[void](Save-ContinuationClosure -PackageRoot $lay -Manifest $mL -FirmwareDir $fwDir)
+$recL = New-CompatibilityRecord -PackageRoot $lay -Version '0.7.199.100-test.3' -Firmware $fwPin -KmdBuild '0.7.199.1' -KmdAbi '0x000700C7' -DriverVer '0.7.199.100'
+Check ($recL.continuation.setup_exe -eq 'setup.exe') "the compatibility record names the setup window by its file name: $($recL.continuation.setup_exe)"
+
 '[G-STAGE] continuation command: the setup window of the closure, else Windows PowerShell with the closure''s install.ps1; verify from the install root'
 $psExe = Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
 $c = Get-ContinuationCommand -Kind continue -Closure $closure -InstallRoot 'C:\Program Files\amdgpu-wddm' -Gui $true
 Check (($c.exe -eq $psExe) -and ((@($c.arguments) -join ' ') -eq "-NoProfile -ExecutionPolicy Bypass -File $closure\installer\install.ps1 -HoldWindow")) 'GUI run, closure without a setup window: Windows PowerShell runs the closure''s install.ps1 directly (no cmd.exe)'
-Write-Text (Join-Path $closure $script:SetupExeRelative) 'exe'
+Write-Text (Join-Path $closure $script:SetupExeName) 'exe'
 $c = Get-ContinuationCommand -Kind continue -Closure $closure -InstallRoot 'C:\Program Files\amdgpu-wddm' -Gui $true
-Check (($c.exe -eq (Join-Path $closure $script:SetupExeRelative)) -and ((@($c.arguments) -join ' ') -eq '--continue')) 'GUI run: the closure''s setup window with --continue'
+Check (($c.exe -eq (Join-Path $closure $script:SetupExeName)) -and ((@($c.arguments) -join ' ') -eq '--continue')) 'GUI run: the closure''s setup window with --continue'
 $c = Get-ContinuationCommand -Kind continue -Closure $closure -InstallRoot 'C:\Program Files\amdgpu-wddm' -Gui $false
 Check ((@($c.arguments) -join ' ') -eq "-NoProfile -ExecutionPolicy Bypass -File $closure\installer\install.ps1 -HoldWindow") 'command-line run: the closure''s install.ps1, never the original folder'
 $c = Get-ContinuationCommand -Kind verify -Closure $closure -InstallRoot 'C:\Program Files\amdgpu-wddm' -Gui $false
 $line = Format-CommandLine $c.exe $c.arguments
 $argv = [EngineUnits.Argv]::Split($line)
 Check (($argv[0] -eq $psExe) -and ($argv[5] -eq 'C:\Program Files\amdgpu-wddm\installer\install.ps1') -and (($argv[6..7] -join ' ') -eq '-HoldWindow -Verify')) "verify: $line"
-Remove-Item -LiteralPath (Join-Path $closure 'setup') -Recurse -Force
+Remove-Item -LiteralPath (Join-Path $closure $script:SetupExeName) -Force
 
 '[G-STAGE] RunOnce continuation run for real from folders with spaces and command metacharacters (R7)'
 # The RunOnce line is started as Windows starts it (program, then the tail as one string); a stub install.ps1 records
@@ -223,7 +271,7 @@ $mapCases = @(
     @{ p = 'payload/firmware/cyan_skillfish2_me.bin'; want = $null }       # the firmware folder of the KMD
     @{ p = 'install.cmd'; want = $null }                                   # read from the package, never copied
     @{ p = 'INSTALL.md'; want = $null }
-    @{ p = 'setup/amdgpu_wddm_setup.exe'; want = $null }                   # the setup window runs from the package
+    @{ p = 'setup.exe'; want = $null }                                     # the setup window runs from the package
     @{ p = 'payload/loose.dll'; want = $null }                             # no payload directory: nothing copies it
     @{ p = 'payload/d3d12/../../../evil.dll'; want = $null })
 $bad = @()
@@ -547,6 +595,63 @@ $clockOld = [Diagnostics.Stopwatch]::StartNew()
 $null = Invoke-Native $fakeSix @('/restart-device', 'PCI\x')
 $oldSeconds = $clockOld.Elapsed.TotalSeconds
 Check ($oldSeconds -ge 5) "negative control: Invoke-Native (no deadline) took $([Math]::Round($oldSeconds, 1)) s for a 6 s program and observes no budget"
+
+'[BD-125] Secure Boot from the UEFI variable (fallbacks only when the read fails); the certificate step names the store'
+$sbCalls = @{ confirm = 0; registry = 0 }
+function Read-Sb($Variable, $Confirm = { $true }, $Registry = { $null }) {
+    $sbCalls.confirm = 0; $sbCalls.registry = 0
+    return Read-SecureBootState -ReadVariable $Variable -ConfirmUefi { $sbCalls.confirm++; & $Confirm }.GetNewClosure() -ReadRegistry { $sbCalls.registry++; & $Registry }.GetNewClosure()
+}
+$s = Read-Sb { [pscustomobject]@{ bytes = [byte[]]@(1); error = 0; privilege_error = 0 } }
+Check (($s.state -eq 'on') -and ($s.source -eq 'uefi-variable') -and ($sbCalls.confirm -eq 0)) "variable 1: $($s.state), $($s.detail)"
+$s = Read-Sb { [pscustomobject]@{ bytes = [byte[]]@(0); error = 0; privilege_error = 0 } }
+Check (($s.state -eq 'off') -and ($s.source -eq 'uefi-variable') -and ($sbCalls.confirm -eq 0)) "variable 0: $($s.state), $($s.detail)"
+# The stock BC-250 firmware (BD-125): no variable. Confirm-SecureBootUEFI would throw and the registry key is absent.
+$s = Read-Sb { [pscustomobject]@{ bytes = $null; error = 203; privilege_error = 0 } } { throw 'Variable is currently undefined: 0xC0000100' }
+Check (($s.state -eq 'off') -and ($s.detail -like 'off (not built into the firmware*') -and ($s.detail -match 'Win32 error 203') -and ($sbCalls.confirm -eq 0) -and ($sbCalls.registry -eq 0)) "no variable (ERROR_ENVVAR_NOT_FOUND): $($s.state), $($s.detail)"
+$s = Read-Sb { [pscustomobject]@{ bytes = $null; error = 1; privilege_error = 0 } }
+Check (($s.state -eq 'legacy-bios') -and ($s.source -eq 'uefi-variable') -and ($sbCalls.confirm -eq 0)) "ERROR_INVALID_FUNCTION: $($s.state), $($s.detail)"
+$s = Read-Sb { [pscustomobject]@{ bytes = $null; error = 1314; privilege_error = 1300 } } { $false }
+Check (($s.state -eq 'off') -and ($s.source -eq 'confirm-securebootuefi') -and ($s.detail -match 'Win32 error 1314') -and ($s.detail -match 'Win32 error 1300')) "read refused, Confirm-SecureBootUEFI decides: $($s.detail)"
+$s = Read-Sb { [pscustomobject]@{ bytes = [byte[]]@(2); error = 0; privilege_error = 0 } } { $true }
+Check (($s.state -eq 'on') -and ($s.source -eq 'confirm-securebootuefi') -and ($s.detail -match 'unexpected value: 02')) "an unexpected byte goes to the fallback: $($s.detail)"
+$s = Read-Sb { [pscustomobject]@{ bytes = $null; error = 5; privilege_error = 0 } } { throw (New-Object PlatformNotSupportedException) }
+Check (($s.state -eq 'legacy-bios') -and ($s.source -eq 'confirm-securebootuefi')) "Confirm-SecureBootUEFI on a legacy BIOS: $($s.detail)"
+$s = Read-Sb { throw 'no Add-Type' } { throw 'denied' } { 1 }
+Check (($s.state -eq 'on') -and ($s.source -eq 'registry') -and ($s.detail -match 'did not run') -and ($sbCalls.registry -eq 1)) "the read could not run, Confirm-SecureBootUEFI failed, the registry decides: $($s.detail)"
+# Negative control: the shape the old reader saw on the BC-250 (no variable answer, Confirm throws, no registry value)
+# stays unknown and names every source; only the variable read turns it into "off".
+$s = Read-Sb { [pscustomobject]@{ bytes = $null; error = 87; privilege_error = 0 } } { throw 'Variable is currently undefined: 0xC0000100' } { $null }
+Check (($s.state -eq 'unknown') -and ($s.source -eq 'none') -and ($s.detail -match 'Win32 error 87') -and ($s.detail -match 'Confirm-SecureBootUEFI: ') -and ($s.detail -match 'no SecureBoot\\State')) "no source answers: $($s.state), $($s.detail)"
+$live = Read-SecureBootVariable
+Check (($null -ne $live.bytes) -or ($live.error -gt 0)) "the real read compiles and runs on this host: bytes $(if ($null -ne $live.bytes) { [BitConverter]::ToString([byte[]]$live.bytes) } else { 'none' }), Win32 error $($live.error), privilege error $($live.privilege_error)"
+Check ((Get-SecureBootState) -in 'on', 'off', 'legacy-bios', 'unknown') "Get-SecureBootState keeps its four values on this host: $(Get-SecureBootState)"
+
+$cerPath = 'C:\pkg dir\payload\cert\amdgpu-wddm-release.cer'
+$denied = New-Object UnauthorizedAccessException 'Access is denied.'
+$e1 = New-CertificateStoreError -Store 'Root' -Certificate $cerPath -Exception $denied -Remaining @('TrustedPublisher')
+Check (($e1 -is [Runtime.InteropServices.COMException]) -and ($e1.HResult -eq $denied.HResult) -and ('0x{0:X8}' -f $e1.HResult) -eq '0x80070005') "the error keeps the HRESULT: $('0x{0:X8}' -f $e1.HResult)"
+Check (($e1.Message -match [regex]::Escape('LocalMachine\Root, HRESULT 0x80070005 (E_ACCESSDENIED)')) -and ($e1.Message -notmatch 'already has it') -and ($e1.Message -match 'antivirus') -and ($e1.Message -match 'continues from here') -and ($e1.Message.Contains("certutil -addstore -f Root `"$cerPath`" and then certutil -addstore -f TrustedPublisher `"$cerPath`"")) -and ($e1.Message -match 'Windows said: Access is denied\.')) "Root refused: $($e1.Message)"
+$e2 = New-CertificateStoreError -Store 'TrustedPublisher' -Certificate $cerPath -Exception $denied -Done @('Root')
+Check (($e2.Message -match [regex]::Escape('LocalMachine\TrustedPublisher, HRESULT 0x80070005')) -and ($e2.Message -match [regex]::Escape('LocalMachine\Root already has it')) -and ($e2.Message.Contains("certutil -addstore -f TrustedPublisher `"$cerPath`".")) -and ($e2.Message -notmatch 'addstore -f Root')) "TrustedPublisher refused after Root: $($e2.Message)"
+$e3 = New-CertificateStoreError -Store 'Root' -Certificate $cerPath -Exception (New-Object IO.IOException 'busy', -2147024864)
+Check (($e3.Message -match 'HRESULT 0x80070020\.') -and ($e3.HResult -eq -2147024864)) "another HRESULT keeps its number without a name: $('0x{0:X8}' -f $e3.HResult)"
+# The step itself, as install.ps1 ships it, with a stand-in Import-Certificate that TrustedPublisher refuses.
+$installText = [IO.File]::ReadAllText((Join-Path $Installer 'install.ps1'))
+$step = [regex]::Match($installText, '(?s)Invoke-Change "add the release test certificate .*?\n\} \| Out-Null')
+Check $step.Success 'install.ps1 has the certificate step'
+$imported = New-Object Collections.ArrayList
+function Import-Certificate { [CmdletBinding()] param([string]$FilePath, [string]$CertStoreLocation)
+    if ($CertStoreLocation -like '*TrustedPublisher') { throw (New-Object UnauthorizedAccessException 'Access is denied.') }
+    [void]$imported.Add($CertStoreLocation) }
+$cer = $cerPath
+$cert = [pscustomobject]@{ Thumbprint = 'F' * 40 }
+$script:DryRunMode = $false; $script:OnFirstChange = $null; $script:OnMutation = $null; $script:OnChange = $null
+$stepError = $null
+try { & ([scriptblock]::Create($step.Value)) } catch { $stepError = $_.Exception }
+Remove-Item Function:\Import-Certificate
+Check (($imported.Count -eq 1) -and ($imported[0] -eq 'Cert:\LocalMachine\Root') -and ($stepError -is [Runtime.InteropServices.COMException]) -and ($stepError.Message -match [regex]::Escape('LocalMachine\TrustedPublisher, HRESULT 0x80070005')) -and ($stepError.Message -match 'Root already has it')) "the shipped step stops at the refusing store: $(if ($stepError) { $stepError.Message } else { 'no error' })"
+$script:Mutated = $false
 
 '[G-STAGE] child closure: the job''s own count decides, an unreadable job is unknown (R9; last: this process joins a job)'
 Check (($null -eq [AmdgpuWddmEngine.Job]::Processes()) -and ([AmdgpuWddmEngine.Job]::ActiveProcesses() -eq -1)) 'no job: the listing is unknown (null), never an empty job'

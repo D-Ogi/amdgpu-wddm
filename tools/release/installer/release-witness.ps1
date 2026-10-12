@@ -24,6 +24,12 @@ $script:BootIdentity = $null
 # REG_DWORD that Windows increments at every boot, read as an unsigned 32-bit number (the control application reads the
 # same value the same way); boot_utc is Win32_OperatingSystem.LastBootUpTime in UTC. Read once per process; a part
 # that cannot be read is $null.
+# This value stays the registry one on purpose (BD-130). Every number it is ever compared with was written from
+# this same value by this release: the witness's own boot_id, state.json restart_boot_id, the install actions, and
+# the control application's and the overlay's readings of the witness, which read the same registry value. A record
+# of the KERNEL DRIVER is a different matter: the driver writes KUSER_SHARED_DATA.BootId, the registry copy can lag
+# it by one inside a boot, and a reader that compares the two numbers must take this boot's from the shared page.
+# Get-StartRecordBootId in start-confirm-core.ps1 is that reader and explains the offset and the measurement.
 function Get-BootIdentity {
     if ($script:BootIdentity) { return $script:BootIdentity }
     $id = $null

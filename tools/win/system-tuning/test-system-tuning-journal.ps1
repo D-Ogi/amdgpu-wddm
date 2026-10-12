@@ -77,6 +77,34 @@ try{
     if($_.Exception.Message -like 'Journal test failed:*'){throw}
     $junctionTest='unavailable: '+$_.Exception.GetType().Name
 }
+# BD-129: the parent of the state directory is a shared location. The installer creates it with its own state
+# directory, so it keeps the rules it inherits from ProgramData (Users may add a folder). The state directory keeps
+# the strict rule; its parent is checked as a location only, and its rules are left alone.
+$sharedParent=Join-Path (Join-Path $testRoot 'shared') 'amdgpu-wddm'
+[void][IO.Directory]::CreateDirectory($sharedParent)
+$users=New-Object Security.Principal.SecurityIdentifier('S-1-5-32-545')
+$acl=[IO.Directory]::GetAccessControl($sharedParent,[Security.AccessControl.AccessControlSections]::Access)
+$acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($users,[Security.AccessControl.FileSystemRights]::AppendData,'ContainerInherit','None','Allow'))
+[IO.Directory]::SetAccessControl($sharedParent,$acl)
+$sharedSddl=(Get-Acl -LiteralPath $sharedParent).Sddl
+& $module {param($Root)$script:Root=$Root} (Join-Path $sharedParent 'system-tuning')
+& $module {Assert-StateChain $true}
+Check ([IO.Directory]::Exists((Join-Path $sharedParent 'system-tuning'))) 'state directory created under a shared parent'
+Check ((Get-Acl -LiteralPath $sharedParent).Sddl -ceq $sharedSddl) 'shared parent keeps its access rules'
+& $module {Assert-StateChain $false}
+Check $true 'shared parent read without refusal'
+$refused=$false
+try{& $module {param($Path)Assert-ProtectedPath $Path} $sharedParent}catch{$refused=$true}
+Check $refused 'the strict rule itself still refuses that parent shape'
+if($junctionTest -eq 'passed'){
+    $reparseRoot=Join-Path $testRoot 'reparse'
+    [void][IO.Directory]::CreateDirectory((Join-Path $reparseRoot 'real'))
+    $null=New-Item -ItemType Junction -Path (Join-Path $reparseRoot 'amdgpu-wddm') -Target (Join-Path $reparseRoot 'real')
+    & $module {param($Root)$script:Root=$Root} (Join-Path $reparseRoot 'amdgpu-wddm\system-tuning')
+    $refused=$false
+    try{& $module {Assert-StateChain $true}}catch{$refused=$true}
+    Check $refused 'reparse-point parent refused'
+}
 $report=@{schema=1;ok=$true;checks=$checks;nativeOperationsExecuted=0;journalIo=$true;junction=$junctionTest}
 [IO.File]::WriteAllText((Join-Path $Out 'system-tuning-journal-tests.json'),($report | ConvertTo-Json),[Text.UTF8Encoding]::new($false))
 Write-Output ('System tuning journal tests passed: '+$checks+' ('+$junctionTest+')')

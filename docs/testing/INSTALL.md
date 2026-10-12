@@ -11,7 +11,7 @@ Use this package only on a BC-250. The installer stops on every other computer a
 - An ASRock BC-250 with Windows 11 x64 (build 22000 or later) installed and working on Microsoft Basic Display
   Adapter.
 - A local account with administrator rights.
-- Secure Boot set to off in the BIOS setup (see "Secure Boot" below).
+- Secure Boot off. The stock BC-250 BIOS has no Secure Boot option, so it is already off (see "Secure Boot" below).
 - If BitLocker is on: your BitLocker recovery key, or permission to suspend BitLocker for two restarts.
 - The Microsoft Visual C++ 2015-2022 Redistributable (x64). If it is missing, the installer stops and tells you.
   Get it from Microsoft: https://aka.ms/vs/17/release/vc_redist.x64.exe (download it on any computer and copy it to the BC-250).
@@ -26,18 +26,38 @@ Use this package only on a BC-250. The installer stops on every other computer a
 2. Write down your BitLocker recovery key if BitLocker is on: open a command prompt as administrator and type
    `manage-bde -protectors -get C:`.
 3. Unpack the zip file to a local folder, for example `C:\amdgpu-wddm-tester`. Do not run the installer from the
-   zip file or from a network drive.
-4. Optional: do a dry run first. In the unpacked folder, open a command prompt and type `install.cmd -DryRun`.
+   zip file or from a network drive. Unpack the whole zip: the folder it makes holds `setup.exe` and the folder
+   `files`, and `setup.exe` needs `files` next to it. To carry the package to another computer or to a memory
+   stick, copy that whole folder, not the folder `files` alone: the package checks `setup.exe` too, and `files`
+   on its own reports `missing setup.exe`.
+4. Optional: do a dry run first. In the folder `files`, open a command prompt and type `install.cmd -DryRun`.
    The dry run does all checks and shows all changes, but it changes nothing.
 
 ## Secure Boot
 
-Windows does not load test-signed drivers while Secure Boot is on. To turn it off:
+Windows does not load a test-signed driver while Secure Boot is on.
+
+The stock BC-250 BIOS versions P2.00, P3.00 and P5.00 have no Secure Boot option. Secure Boot is not built into
+that firmware, so it is always off and you do nothing here. The preflight shows Secure Boot
+`off (not built into the firmware)` and names where it read that answer.
+
+A modified BIOS can have the option. If the preflight shows Secure Boot `on`, turn it off:
 
 1. Restart the BC-250 and push `Del` (or `F2`) to open the BIOS setup.
-2. Find the Secure Boot setting (on most firmware versions: Security > Secure Boot).
-3. Set Secure Boot to Disabled.
-4. Save and exit (usually `F10`).
+2. Find the Secure Boot setting. It is usually under Security > Secure Boot. Set it to Disabled. Some modified
+   BIOS versions have no switch for it: set OS Type to "Other OS", or delete the Secure Boot keys.
+3. Save and exit (usually `F10`).
+
+To read the setting yourself, open PowerShell as administrator and type `Confirm-SecureBootUEFI`:
+
+- `True`: Secure Boot is on.
+- `False`: Secure Boot is off.
+- The red error "Variable is currently undefined": Secure Boot is off. The firmware does not hold the setting
+  at all. The stock BC-250 BIOS gives this error. The installer reads the firmware itself and shows
+  `off (not built into the firmware)` for the same board.
+- "not supported": Secure Boot is off. The computer started from a legacy BIOS.
+
+`msinfo32` shows the same value as "Secure Boot State".
 
 The installer does not change BIOS or firmware settings.
 
@@ -45,8 +65,9 @@ The installer does not change BIOS or firmware settings.
 
 The usual way is the setup window:
 
-1. In the unpacked folder, open the folder `setup` and double-click `amdgpu_wddm_setup.exe`. The window asks for
-   administrator rights itself: accept the prompt.
+1. In the unpacked folder, double-click `setup.exe`. It is the only file there. Everything else is in the folder
+   `files` beside it. The window asks for administrator rights itself: accept the prompt. (`install.cmd` in the
+   folder `files`, started with no switch, opens the same window.)
 2. The window checks the computer first. The check changes nothing. Then the window shows the checks that need
    attention, what it will change, the restarts and the release notes.
 3. Give the consents that the window asks for: Windows test mode, and, if BitLocker is on, whether you have the
@@ -58,11 +79,15 @@ The usual way is the setup window:
    support file for your report.
 
 The setup window installs the driver only. It does not install llama.cpp, Ollama or a model. For these, install
-with `install.cmd` (see "The extras" below).
+with `install.cmd` on the command line (see "The extras" below).
 
-On the command line, `install.cmd` installs the same release, with all its switches:
+On the command line, `install.cmd` with any switch installs the same release in the console window, as before.
+`install.cmd -Console` does the same with no other switch, and you can put `-Console` beside the other switches,
+for example `install.cmd -Console -DryRun`:
 
-1. In the unpacked folder, right-click `install.cmd` and select "Run as administrator".
+1. In the folder `files` of the unpacked folder, open a command prompt as administrator and type `install.cmd`
+   with the switches you want. With no switch `install.cmd` opens the setup window instead, so type
+   `install.cmd -Console` when you want the console.
 2. Read the preflight table. Every line must show `ok` or `warn`. A `fail` line stops the installer, and the
    installer tells you what to correct. When it stops at preflight, it has changed nothing.
 3. Phase 1: the installer makes a System Restore point (if System Protection is on) and asks for permission to
@@ -162,7 +187,7 @@ results to `C:\ProgramData\amdgpu-wddm\start-confirm.log`.
 
 | Item | Location |
 |---|---|
-| Test signing | `bcdedit /set {current} testsigning on` (only after you type YES) |
+| Test signing | `bcdedit /set '{current}' testsigning on` (only after you type YES) |
 | Test certificate | LocalMachine Root and TrustedPublisher stores |
 | Kernel-mode driver | driver package `bc250kmd.inf` (driver store, service `bc250kmd`) |
 | Driver settings | `HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters` |
@@ -175,7 +200,11 @@ results to `C:\ProgramData\amdgpu-wddm\start-confirm.log`.
 | Start confirmation | scheduled task "amdgpu-wddm start confirm" |
 | Installer state and logs | `C:\ProgramData\amdgpu-wddm` (the Control application keeps its setting backups and action log in its `control` folder) |
 
-Default driver settings: automatic clock control (DPM) on, maximum 1500 MHz. The thermal limits of the driver do not
+If you type the `bcdedit` command yourself, keep the quotation marks around `'{current}'` in PowerShell.
+PowerShell reads `{current}` without them as a command of its own. In a command prompt (`cmd`) the quotation
+marks are not necessary.
+
+Default driver settings: automatic clock control (DPM) on, maximum 2000 MHz. The thermal limits of the driver do not
 change. The driver writes no debug log files. To change the maximum clock at install time, use
 `install.cmd -DpmMaxMHz <1000-2000>`. An upgrade keeps a maximum clock that you set (see "Install").
 
@@ -213,8 +242,13 @@ change. The driver writes no debug log files. To change the maximum clock at ins
   download addresses, or a file has a different SHA256. Connect the computer to the internet, or use
   `-FirmwareDir` (see "GPU firmware").
 - The installer stops with `stopped at step: ...`: the message names the step and the cause. Correct the cause if
-  you can, then run `install.cmd` again from the same package folder. The installer skips the steps that are
+  you can, then run `install.cmd` again from the same `files` folder of the package. The installer skips the steps that are
   complete and continues at the step that failed.
+- The installer stops at the step that adds the release test certificate, with `Windows refused to add the
+  certificate to LocalMachine\Root` (or `TrustedPublisher`): setup runs as administrator, so Windows itself refused
+  the change. Usually an antivirus program protects the certificate store, or a policy locks the store. Allow the
+  change in the antivirus program, or run the `certutil -addstore` commands that the message shows in an
+  administrator command prompt. Then run setup again.
 - A file that Windows uses (for example a user-mode driver that the desktop has loaded) cannot be overwritten. The
   installer renames it to `<name>.old-<time>`, copies the new file and deletes the old copy at the next restart.
 - The screen stays black after a restart: wait two minutes. If it stays black, restart the computer with the power
@@ -225,6 +259,12 @@ change. The driver writes no debug log files. To change the maximum clock at ins
 - To start Windows without the driver: hold `Shift` and select Restart, then Troubleshoot > Advanced options >
   Startup Settings > Restart > `3` (Enable low-resolution video), or `4` (Safe Mode). Then run `uninstall.cmd`.
 - Verification fails: run `verify.cmd`, then make a diagnostics bundle (see "How to report a bug").
+- Verification says that the driver did not start: the installer collects the readings itself. It writes one
+  file, `diagnostics-<time>.txt`, next to its log in `C:\ProgramData\amdgpu-wddm\installer`, and the setup
+  window puts the same file into the support file it saves. The console route prints the path of both files in
+  its last lines. Send them with the report: they hold the problem code of the device, the driver's own record
+  of the start and of the stop, the event-log entries of that start, and the setup log sections of the
+  graphics device. Nothing is sent by itself.
 - After an installation, `verify.cmd` fails `GPU desktop path` with `closed by the driver` or `last boot died in a
   session`, and the desktop runs on the CPU route: run `install.cmd -Repair`. It sets the switches of the release back
   and restarts Windows. You can also open amdgpu-wddm Control, select "Reopen the GPU desktop path" on its Recovery
@@ -240,7 +280,7 @@ change. The driver writes no debug log files. To change the maximum clock at ins
 
 ## Uninstall
 
-1. Run `uninstall.cmd` as administrator (in the package folder or in `C:\Program Files\amdgpu-wddm`).
+1. Run `uninstall.cmd` as administrator (in the package's `files` folder or in `C:\Program Files\amdgpu-wddm`).
 2. Type `YES`. The uninstaller removes the driver, the files, the registry values, the task and the certificate.
    The GPU goes back to Microsoft Basic Display Adapter. The uninstaller keeps `C:\ProgramData\amdgpu-wddm\control`
    (the Control application's setting backups and action log). Delete it yourself if you do not need it.
@@ -277,7 +317,9 @@ The zip file contains these files:
 
 Before the preview, the application removes from every file: your user name, your profile path (shown as
 `%USERPROFILE%`), the computer name, MAC addresses, e-mail addresses, and every value on a line that names a serial
-number, machine ID, product ID or UUID. Versions, hashes and hardware IDs stay, because we need them.
+number, machine ID, product ID or UUID. It also removes the account name of every other `C:\Users\<name>` path,
+the security identifiers, and the computer name of an event entry. Versions, hashes and hardware IDs stay, because
+we need them.
 If you find personal data in the preview, do not send the file, and tell us in the bug report so that we can
 correct the application.
 

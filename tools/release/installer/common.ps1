@@ -77,6 +77,26 @@ function Write-StepFailure($ErrorRecord) {
     Write-Host 'it skips what is already in place and continues from here.' -ForegroundColor Yellow
     if ($script:LogPath) { Write-Host "Log: $($script:LogPath)" -ForegroundColor Yellow }
 }
+# The certificate step when a store refuses (BD-125: E_ACCESSDENIED in an elevated run on a tester's PC). The error
+# names the store, keeps the HRESULT, and gives the commands that add the certificate by hand. Nothing else is tried:
+# the step stops as before, and a run after the cause is fixed continues from here.
+function New-CertificateStoreError {
+    param([Parameter(Mandatory)][string]$Store, [Parameter(Mandatory)][string]$Certificate,
+          [Parameter(Mandatory)][Exception]$Exception, [string[]]$Done = @(), [string[]]$Remaining = @())
+    $hr = $Exception.HResult
+    $code = '0x{0:X8}' -f $hr
+    $names = @{ '0x80070005' = 'E_ACCESSDENIED' }
+    if ($names.ContainsKey($code)) { $code += " ($($names[$code]))" }
+    $text = "Windows refused to add the certificate to LocalMachine\$Store, HRESULT $code."
+    if ($Done.Count) { $text += " LocalMachine\$($Done -join ' and LocalMachine\') already has it." }
+    $text += ' Setup runs elevated, so Windows itself refused the change. The usual causes are antivirus protection' +
+        ' of the certificate store or a policy that locks the store.'
+    $commands = @(@($Store) + @($Remaining) | ForEach-Object { "certutil -addstore -f $_ `"$Certificate`"" })
+    $text += " To add it by hand, run in an administrator command prompt: $($commands -join ' and then ')."
+    $text += ' Then run setup again: it continues from here.'
+    $text += " Windows said: $($Exception.Message)"
+    return (New-Object Runtime.InteropServices.COMException -ArgumentList $text, $hr)
+}
 
 # A native program, its stdout and stderr as one text, and its exit code. Windows PowerShell 5.1 turns a stderr line
 # of a native program into a terminating error under ErrorActionPreference Stop; here it stays text.
@@ -718,6 +738,9 @@ function Get-Sha256([string]$Path) {
     try { return ([BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($s)) -replace '-', '') } finally { $s.Dispose() }
 }
 # Package integrity: manifest.json lists every file of the package with its SHA256 (build-release.ps1 writes it).
+# The setup window is the one file outside that list, because it is the one file the unpacked release puts in the top
+# folder (manifest "setup", Get-PackageSetupExe); it is hashed here like every other file. A manifest from a release
+# before that layout has no "setup" block and is checked as before.
 function Test-PackageManifest {
     param([Parameter(Mandatory)][string]$PackageRoot)
     $path = Join-Path $PackageRoot 'manifest.json'
@@ -730,6 +753,12 @@ function Test-PackageManifest {
         $p = Join-Path $PackageRoot ($f.path -replace '/', '\')
         if (-not (Test-Path -LiteralPath $p -PathType Leaf)) { $bad += "missing $($f.path)"; continue }
         if ((Get-Sha256 $p) -ne $f.sha256) { $bad += "changed $($f.path)" }
+    }
+    if ($m.PSObject.Properties['setup'] -and $m.setup) {
+        $count++
+        $exe = Get-PackageSetupExe $PackageRoot
+        if (-not $exe) { $bad += "missing $([string]$m.setup.file)" }
+        elseif ((Get-Sha256 $exe) -ne ([string]$m.setup.sha256)) { $bad += "changed $([string]$m.setup.file)" }
     }
     if ($bad.Count) { return @{ ok = $false; detail = ($bad -join '; '); manifest = $m } }
     return @{ ok = $true; detail = "$count files match manifest.json (version $($m.version))"; manifest = $m }
@@ -1004,14 +1033,107 @@ function Get-TestSigningConfigured {
 }
 function Get-SecureBootState {
     # 'on', 'off', 'legacy-bios' or 'unknown'
-    try { if (Confirm-SecureBootUEFI -ErrorAction Stop) { return 'on' } else { return 'off' } }
-    catch [System.PlatformNotSupportedException] { return 'legacy-bios' }
-    catch {
-        $v = (Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control\SecureBoot\State' -Name UEFISecureBootEnabled -ErrorAction SilentlyContinue).UEFISecureBootEnabled
-        if ($v -eq 1) { return 'on' }
-        if ($v -eq 0) { return 'off' }
-        return 'unknown'
+    return (Read-SecureBootState).state
+}
+# Secure Boot from the firmware variable that holds it: SecureBoot in the EFI global variable namespace, one byte,
+# 1 on and 0 off. A firmware without Secure Boot does not define the variable: the stock BC-250 firmware is one
+# (BD-125), where Confirm-SecureBootUEFI throws "Variable is currently undefined" and the SecureBoot\State key is
+# absent. Only the Win32 error number of the read decides, never the (translated) message text.
+# https://learn.microsoft.com/windows/win32/api/winbase/nf-winbase-getfirmwareenvironmentvariableexw
+# Confirm-SecureBootUEFI and the registry answer only when the variable read itself fails. The result names the
+# source that decided. The three readers are parameters for the host test (test-engine-units.ps1).
+function Read-SecureBootState {
+    param([scriptblock]$ReadVariable = { Read-SecureBootVariable },
+          [scriptblock]$ConfirmUefi = { Confirm-SecureBootUEFI -ErrorAction Stop },
+          [scriptblock]$ReadRegistry = { (Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control\SecureBoot\State' -Name UEFISecureBootEnabled -ErrorAction SilentlyContinue).UEFISecureBootEnabled })
+    function Result([string]$State, [string]$Detail, [string]$Source) { [pscustomobject]@{ state = $State; detail = $Detail; source = $Source } }
+    $variable = 'UEFI variable SecureBoot'
+    try {
+        $v = & $ReadVariable
+        if ($null -ne $v.bytes) {
+            $bytes = [byte[]]$v.bytes
+            if ($bytes.Length -eq 1 -and $bytes[0] -eq 1) { return (Result 'on' "on (source: $variable = 1)" 'uefi-variable') }
+            if ($bytes.Length -eq 1 -and $bytes[0] -eq 0) { return (Result 'off' "off (source: $variable = 0)" 'uefi-variable') }
+            $why = "$variable holds an unexpected value: $(([BitConverter]::ToString($bytes)) -replace '-', ' ')"
+        } elseif ($v.error -eq 203) {
+            # ERROR_ENVVAR_NOT_FOUND: the firmware does not define the variable.
+            return (Result 'off' "off (not built into the firmware; source: $variable not present, Win32 error 203)" 'uefi-variable')
+        } elseif ($v.error -eq 1) {
+            # ERROR_INVALID_FUNCTION: Windows started from a legacy BIOS, which has no UEFI variables.
+            return (Result 'legacy-bios' "legacy-bios (source: $variable, Win32 error 1: no UEFI variables)" 'uefi-variable')
+        } else {
+            $why = "$variable read failed with Win32 error $($v.error)"
+            if ($v.privilege_error) { $why += " (SeSystemEnvironmentPrivilege: Win32 error $($v.privilege_error))" }
+        }
+    } catch { $why = "$variable read did not run: $($_.Exception.GetType().FullName)" }
+    try {
+        $on = & $ConfirmUefi
+        if ($on -is [bool]) { return (Result $(if ($on) { 'on' } else { 'off' }) "$(if ($on) { 'on' } else { 'off' }) (source: Confirm-SecureBootUEFI, because the $why)" 'confirm-securebootuefi') }
+        $confirm = "Confirm-SecureBootUEFI returned no Boolean"
     }
+    catch [System.PlatformNotSupportedException] { return (Result 'legacy-bios' "legacy-bios (source: Confirm-SecureBootUEFI, because the $why)" 'confirm-securebootuefi') }
+    catch { $confirm = 'Confirm-SecureBootUEFI: {0} 0x{1:X8}' -f $_.Exception.GetType().FullName, $_.Exception.HResult }
+    $reg = & $ReadRegistry
+    if ($reg -eq 1) { return (Result 'on' "on (source: registry SecureBoot\State UEFISecureBootEnabled = 1, because the $why)" 'registry') }
+    if ($reg -eq 0) { return (Result 'off' "off (source: registry SecureBoot\State UEFISecureBootEnabled = 0, because the $why)" 'registry') }
+    return (Result 'unknown' "the $why; $confirm; no SecureBoot\State UEFISecureBootEnabled value" 'none')
+}
+# The raw read: bytes, or the Win32 error (and the error of enabling SeSystemEnvironmentPrivilege, which the read needs).
+function Read-SecureBootVariable {
+    if (-not ('AmdgpuWddmInstaller.FirmwareVariable' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+namespace AmdgpuWddmInstaller {
+public static class FirmwareVariable {
+    [StructLayout(LayoutKind.Sequential, Pack = 4)] struct TokenPrivilege { public uint Count; public long Luid; public uint Attributes; }
+    [DllImport("advapi32.dll", SetLastError = true)] static extern bool OpenProcessToken(IntPtr process, uint access, out IntPtr token);
+    [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)] static extern bool LookupPrivilegeValue(string system, string name, out long luid);
+    [DllImport("advapi32.dll", SetLastError = true)] static extern bool AdjustTokenPrivileges(IntPtr token, bool disableAll, ref TokenPrivilege state, uint length, out TokenPrivilege previous, out uint returned);
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)] static extern uint GetFirmwareEnvironmentVariableExW(string name, string guid, byte[] buffer, uint size, out uint attributes);
+    [DllImport("kernel32.dll")] static extern IntPtr GetCurrentProcess();
+    [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
+    // The variable's bytes, or null and the Win32 error. SeSystemEnvironmentPrivilege is enabled for the read and put
+    // back as it was; privilegeError is 0, or the error of enabling it (1300: the account does not hold it).
+    public static byte[] Read(string name, string guid, out int error, out int privilegeError) {
+        IntPtr token = IntPtr.Zero;
+        var previous = new TokenPrivilege();
+        bool adjusted = false;
+        privilegeError = 0;
+        // TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY; SE_PRIVILEGE_ENABLED.
+        if (!OpenProcessToken(GetCurrentProcess(), 0x28, out token)) { privilegeError = Marshal.GetLastWin32Error(); token = IntPtr.Zero; }
+        try {
+            if (token != IntPtr.Zero) {
+                var p = new TokenPrivilege { Count = 1, Attributes = 2 };
+                uint returned;
+                if (!LookupPrivilegeValue(null, "SeSystemEnvironmentPrivilege", out p.Luid)) privilegeError = Marshal.GetLastWin32Error();
+                else if (!AdjustTokenPrivileges(token, false, ref p, (uint)Marshal.SizeOf(typeof(TokenPrivilege)), out previous, out returned)) privilegeError = Marshal.GetLastWin32Error();
+                else { privilegeError = Marshal.GetLastWin32Error(); adjusted = privilegeError == 0; }
+            }
+            var buffer = new byte[64];
+            uint attributes;
+            uint size = GetFirmwareEnvironmentVariableExW(name, guid, buffer, (uint)buffer.Length, out attributes);
+            if (size == 0) { error = Marshal.GetLastWin32Error(); return null; }
+            error = 0;
+            Array.Resize(ref buffer, (int)size);
+            return buffer;
+        } finally {
+            if (adjusted && previous.Count != 0) {
+                TokenPrivilege ignored; uint returned;
+                AdjustTokenPrivileges(token, false, ref previous, (uint)Marshal.SizeOf(typeof(TokenPrivilege)), out ignored, out returned);
+            }
+            if (token != IntPtr.Zero) CloseHandle(token);
+        }
+    }
+}
+}
+'@
+    }
+    $err = 0
+    $privilegeErr = 0
+    # EFI_GLOBAL_VARIABLE (UEFI specification, section 3.3 Globally Defined Variables).
+    $bytes = [AmdgpuWddmInstaller.FirmwareVariable]::Read('SecureBoot', '{8BE4DF61-93CA-11D2-AA0D-00E098032B8C}', [ref]$err, [ref]$privilegeErr)
+    return [pscustomobject]@{ bytes = $bytes; error = $err; privilege_error = $privilegeErr }
 }
 function Get-BitLockerState {
     # 'off', 'on', 'suspended' or 'unknown'
@@ -1596,8 +1718,32 @@ function Format-CommandLine([Parameter(Mandatory)][string]$Exe, [string[]]$Argum
 # downloaded folder, a USB stick or a temporary extraction may be gone by then. The state folder is writable by
 # administrators only (Set-StateDirAccess). When phase 2 completes, the closure of the installed package becomes the
 # active repair set (firmware included, also after a download) and the one before it is kept as the previous set;
-# older sets are removed. A prepared offline folder (prepare-offline.ps1) has the same layout.
-$script:SetupExeRelative = 'setup\amdgpu_wddm_setup.exe'
+# older sets are removed. A prepared offline folder (prepare-offline.ps1) has the same layout. Neither is the
+# unpacked release: both keep the package root as their own folder, with setup.exe in it (Get-PackageSetupExe).
+#
+# Where the setup window is (owner, 2026-10-11): the unpacked release holds setup.exe in its top folder and
+# everything else in files\, so the package root (the folder with manifest.json) is files\ and the exe is one level
+# above it. A kept repair set and a prepared folder are not unpacked by a tester: they keep the package root as
+# their own folder, with the setup copy in it. Get-PackageSetupExe answers both shapes, so nothing else has to know
+# which one it holds.
+#
+# The package root's own copy is answered first, and the folder above it is read only when the root is the files\
+# folder of an unpacked release. A closure, a repair set and a prepared folder hold their own copy, and their parent
+# folder is chosen by whoever made them (prepare-offline.ps1 takes any -Destination): a setup.exe of another build
+# lying there must neither hide the package's own copy (Test-PackageManifest would report a good folder as changed)
+# nor stand in for a tampered one (the integrity check would pass the file that RunOnce and Release\RepairSetup run).
+$script:SetupExeName = 'setup.exe'
+$script:PackageFilesDir = 'files'
+function Get-PackageSetupExe([string]$PackageRoot) {
+    if (-not $PackageRoot) { return $null }
+    $own = Join-Path $PackageRoot $script:SetupExeName
+    if (Test-Path -LiteralPath $own -PathType Leaf) { return ([IO.Path]::GetFullPath($own)) }
+    if ((Split-Path $PackageRoot -Leaf) -ieq $script:PackageFilesDir) {
+        $up = Join-Path $PackageRoot (Join-Path '..' $script:SetupExeName)
+        if (Test-Path -LiteralPath $up -PathType Leaf) { return ([IO.Path]::GetFullPath($up)) }
+    }
+    return $null
+}
 $script:RepairIndexSchema = 'amdgpu-wddm.repair-sets/1'
 function Get-PackagesDir { return (Join-Path $script:StateDir 'packages') }
 function Get-ClosureDir([string]$Version) { return (Join-Path (Get-PackagesDir) $Version) }
@@ -1652,6 +1798,10 @@ function Save-ContinuationClosure {
             [void](Copy-FileSafe -Source (Join-Path $src $rel) -Destination (Join-Path $dst $rel))
         }
         [void](Copy-FileSafe -Source (Join-Path $src 'manifest.json') -Destination (Join-Path $dst 'manifest.json'))
+        # The setup window travels with the package: in the unpacked release it is one level above the package root,
+        # in the closure it goes next to the manifest, where Get-ContinuationCommand and the repair entry look for it.
+        $setupSrc = Get-PackageSetupExe $src
+        if ($setupSrc) { [void](Copy-FileSafe -Source $setupSrc -Destination (Join-Path $dst $script:SetupExeName)) }
     }
     if ((Get-Sha256 (Join-Path $dst 'manifest.json')) -ne (Get-Sha256 (Join-Path $src 'manifest.json'))) { throw "continuation closure ${dst}: manifest.json is not this package's" }
     $check = Test-PackageManifest -PackageRoot $dst
@@ -1669,8 +1819,8 @@ function Save-ContinuationClosure {
 # the console open at the end, as the pause of install.cmd and verify.cmd does.
 function Get-ContinuationCommand {
     param([ValidateSet('continue', 'verify')][string]$Kind, [string]$Closure, [string]$InstallRoot, [bool]$Gui)
-    if ($Gui -and $Closure -and (Test-Path -LiteralPath (Join-Path $Closure $script:SetupExeRelative))) {
-        return [pscustomobject]@{ exe = (Join-Path $Closure $script:SetupExeRelative); arguments = @('--continue') }
+    if ($Gui -and $Closure -and (Test-Path -LiteralPath (Join-Path $Closure $script:SetupExeName))) {
+        return [pscustomobject]@{ exe = (Join-Path $Closure $script:SetupExeName); arguments = @('--continue') }
     }
     $ps = Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
     $common = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File')
@@ -1715,7 +1865,7 @@ function Complete-RepairSet {
         if (Test-Path -LiteralPath $m) { try { $own = Get-Content -LiteralPath $m -Raw | ConvertFrom-Json } catch { $own = $null } }
         $valid = ($own -is [pscustomobject]) -and ([string]$own.version -eq $Version) -and $own.firmware -and @($own.firmware.files).Count
         return [ordered]@{ version = $Version; dir = $d; manifest_sha256 = $(if (Test-Path -LiteralPath $m) { Get-Sha256 $m } else { $null }); manifest_valid = [bool]$valid
-            firmware_complete = [bool]($valid -and (Test-FirmwareFolder $own.firmware (Join-Path $d 'firmware')).Count -eq 0); setup = (Test-Path -LiteralPath (Join-Path $d $script:SetupExeRelative)) }
+            firmware_complete = [bool]($valid -and (Test-FirmwareFolder $own.firmware (Join-Path $d 'firmware')).Count -eq 0); setup = (Test-Path -LiteralPath (Join-Path $d $script:SetupExeName)) }
     }
     $index = [ordered]@{ schema = $script:RepairIndexSchema; updated_utc = [DateTime]::UtcNow.ToString('o'); active = (& $entry $plan.active); previous = (& $entry $plan.previous) }
     [IO.File]::WriteAllText((Join-Path $dir 'index.json'), ($index | ConvertTo-Json -Depth 4))

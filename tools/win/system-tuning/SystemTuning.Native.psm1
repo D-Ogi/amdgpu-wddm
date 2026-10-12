@@ -29,6 +29,16 @@ function Assert-ProtectedPath([string]$Path) {
     }
 }
 
+function Assert-StateParentPath([string]$Path) {
+    $item=Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+    if (-not $item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'The parent of the state path is not a regular directory.' }
+    $acl=Get-Acl -LiteralPath $Path
+    $trusted=@('S-1-5-18','S-1-5-32-544')
+    if($script:Scope -eq 'User'){$trusted+=,$script:UserSid}
+    $owner=$acl.GetOwner([Security.Principal.SecurityIdentifier]).Value
+    if ($trusted -notcontains $owner) { throw 'The parent of the state path has an untrusted owner.' }
+}
+
 function New-ProtectedDirectory([string]$Path) {
     if ([IO.Directory]::Exists($Path)) { Assert-ProtectedPath $Path; return }
     if ([IO.File]::Exists($Path)) { throw 'A file occupies the state directory.' }
@@ -45,12 +55,18 @@ function New-ProtectedDirectory([string]$Path) {
     Assert-ProtectedPath $Path
 }
 
+# The state directory keeps the full protection check. Its parent (%ProgramData%\amdgpu-wddm, or the per-user
+# equivalent) is a shared location: the installer creates it implicitly with its own state directory, so it keeps
+# the rules it inherits from ProgramData (Users may add a folder, CREATOR OWNER), and other parts of the release
+# write beside us in it. The strict rule on that parent refused the recovery save of every uninstall of
+# 0.7.216.100-tester.28 (BD-129). An existing parent is therefore checked as a location only: a regular directory
+# of a trusted owner, with its access rules left alone. A missing parent is still created protected.
 function Assert-StateChain([bool]$Create) {
     $parent=Split-Path -Parent $script:Root
-    foreach($path in @($parent,$script:Root)) {
-        if ($Create) { New-ProtectedDirectory $path }
-        elseif ([IO.Directory]::Exists($path) -or [IO.File]::Exists($path)) { Assert-ProtectedPath $path }
-    }
+    if ([IO.Directory]::Exists($parent) -or [IO.File]::Exists($parent)) { Assert-StateParentPath $parent }
+    elseif ($Create) { New-ProtectedDirectory $parent }
+    if ($Create) { New-ProtectedDirectory $script:Root }
+    elseif ([IO.Directory]::Exists($script:Root) -or [IO.File]::Exists($script:Root)) { Assert-ProtectedPath $script:Root }
 }
 
 function New-ProtectedFile([string]$Path,[IO.FileOptions]$Options=[IO.FileOptions]::None) {

@@ -100,7 +100,7 @@ $planGate = [scriptblock]::Create($gates[0].Extent.Text)
 $bootGate = [scriptblock]::Create($gates[1].Extent.Text)
 $bcdWrites = @($installAst.FindAll({ param($n)
     $n -is [Management.Automation.Language.CommandAst] -and $n.GetCommandName() -eq 'Invoke-Change' -and
-    $n.Extent.Text -match "Invoke-Change 'bcdedit /set \{current\} testsigning on'"
+    $n.Extent.Text -match 'Invoke-Change "bcdedit /set ''\{current\}'' testsigning on"'
 }, $true))
 Check ($bcdWrites.Count -eq 1 -and $gates[1].Extent.EndOffset -lt $bcdWrites[0].Extent.StartOffset) 'consent precedes boot mutation'
 $refreshes = @($installAst.FindAll({ param($n)

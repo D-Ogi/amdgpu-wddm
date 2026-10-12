@@ -6,7 +6,14 @@
 #   powershell -NoProfile -File tools\release\test-session-checks.ps1 [-Installer <package>\installer] [-Inf <packaged INF>] [-WorkRoot <dir>]
 # -Inf: the INF of a built package, which must carry the directive. The baseline cases write only files under
 # -WorkRoot. Nothing in the registry is written; this computer's own session and DWM are read only.
-param([string]$Installer = (Join-Path $PSScriptRoot 'installer'), [string]$Inf, [string]$WorkRoot = (Join-Path (Split-Path (Split-Path $Installer)) 'test-tmp'))
+param([string]$Installer = (Join-Path $PSScriptRoot 'installer'), [string]$Inf, [string]$WorkRoot)
+# Default scratch: beside the folder the zip unpacks to, never inside it. The package root is files\ of that folder
+# (owner, 2026-10-11), so one more level up than it used to be; an older flat package keeps the old place.
+if (-not $PSBoundParameters.ContainsKey('WorkRoot')) {
+    $packageRoot = Split-Path $Installer   # <package>\installer -> <package>
+    $packageTop = $(if ((Split-Path $packageRoot -Leaf) -eq 'files') { Split-Path $packageRoot } else { $packageRoot })
+    $WorkRoot = Join-Path (Split-Path $packageTop) 'test-tmp'
+}
 $ErrorActionPreference = 'Stop'
 . (Join-Path $Installer 'common.ps1')
 . (Join-Path $Installer 'dwm-session.ps1')
