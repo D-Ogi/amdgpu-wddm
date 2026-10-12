@@ -246,9 +246,13 @@ with all 40 cores. The page `docs/design/cu-mode.md` of the project has the whol
   line `OpenGL ICD` with the registration and the driver file. Without this driver Windows gives an OpenGL
   program its own software renderer, which is OpenGL 1.1.
 - 32-bit OpenGL applications keep that software renderer of Windows, which is OpenGL 1.1. This release has no
-  32-bit OpenGL driver: the 32-bit driver needs a 32-bit Vulkan loader on the computer, and there is none, so
-  it would load and then give the program no OpenGL at all. `verify.cmd` says so in one line. 32-bit Direct3D
-  and Vulkan programs are not affected and run on the GPU.
+  32-bit OpenGL driver: that driver draws through Vulkan, and a 32-bit program reaches Vulkan through the
+  32-bit Vulkan loader of the computer, `C:\Windows\SysWOW64\vulkan-1.dll`. No release of ours installs that
+  loader, and the test computer has none, so the 32-bit OpenGL driver would load and then give the program no
+  OpenGL at all. `verify.cmd` says so in one line. 32-bit Direct3D programs are not affected and run on the
+  GPU: the 32-bit Direct3D 10, 11 and 12 drivers of this release use our Vulkan driver directly, without that
+  loader. A 32-bit Vulkan application does need it. This release registers its 32-bit Vulkan driver for a
+  computer that has one.
 - Direct3D 11 applications and games run on the GPU, and so do the components of Windows and the packaged
   Microsoft applications. The value `Mode` in `HKLM\SOFTWARE\amdgpu-wddm\AppRouter` holds `gpu-default`, and the
   `Allow` and `Deny` lists beside it are empty in a new install. These programs stay on the CPU route (software
@@ -264,8 +268,9 @@ with all 40 cores. The page `docs/design/cu-mode.md` of the project has the whol
   driver. The installer leaves the Direct3D 9 entry of `UserModeDriverName` empty, and Windows then loads
   `d3d9on12.dll` by itself.
 - 32-bit Direct3D 10/11/12 and Vulkan applications use 32-bit builds of the same drivers (folder `wow64`), with the
-  same routing rules as 64-bit applications. 32-bit Direct3D 9 applications use D3D9On12 on the 32-bit Direct3D 12
-  driver, as 64-bit ones do.
+  same routing rules as 64-bit applications. A 32-bit Vulkan application also needs the 32-bit Vulkan loader of the
+  computer, which no release of ours installs (see the two OpenGL entries above). 32-bit Direct3D 9 applications use
+  D3D9On12 on the 32-bit Direct3D 12 driver, as 64-bit ones do.
 - The Witcher 3 (Direct3D 12 version) has an application profile.
 - A program that records video can use the H.264 encoder of the GPU through Media Foundation. The encoder works only
   while Windows runs the BC-250 on this driver: if the driver did not start, the encoder refuses, and the program
