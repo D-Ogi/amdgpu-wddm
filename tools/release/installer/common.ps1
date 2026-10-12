@@ -1388,6 +1388,12 @@ $script:OpenGlValueNames = @('OpenGLDriverName', 'OpenGLVersion', 'OpenGLFlags',
 # The three values of each architecture, in the order they are written.
 $script:OpenGlValueNamesByArch = @{ x64 = @('OpenGLDriverName', 'OpenGLVersion', 'OpenGLFlags')
     x86 = @('OpenGLDriverNameWow', 'OpenGLVersionWow', 'OpenGLFlagsWow') }
+# The name value of each half: the value that names the ICD file, for itself and for the two numbers beside it. A
+# number alone says nothing about who wrote it (every registration of this family writes 1 and 1), so a number is
+# always judged with the name value of its own half. Used by the record and by the restore plan, which is why it is
+# one table here and not a copy in each of them.
+$script:OpenGlValueHalf = @{ OpenGLDriverName = 'OpenGLDriverName'; OpenGLVersion = 'OpenGLDriverName'; OpenGLFlags = 'OpenGLDriverName'
+    OpenGLDriverNameWow = 'OpenGLDriverNameWow'; OpenGLVersionWow = 'OpenGLDriverNameWow'; OpenGLFlagsWow = 'OpenGLDriverNameWow' }
 # The entry points the OpenGL runtime calls in an ICD, as Mesa's WGL front end exports them
 # (src\gallium\targets\wgl\gallium_wgl.def.in; the @N suffixes of that file are stripped for a Visual C++ build, so
 # the names are undecorated in both architectures). A file that lacks one of these is no ICD, whatever its name says,
@@ -1489,6 +1495,35 @@ function Get-OpenGlUnregisteredValueNames {
     return @($script:OpenGlArchitecturesKnown | Where-Object { @($Switch.architectures) -notcontains $_ } |
         ForEach-Object { $script:OpenGlValueNamesByArch[$_] })
 }
+# What the payload of a release that registers the ICD has to look like: the file of every architecture of the list,
+# and no file of an architecture outside it. Returns the problems found (none: the payload matches the list). Pure;
+# the file probes are the ones Get-OpenGlReleaseSwitch already did, so this needs a switch read with a package root.
+# The second rule is not symmetry for its own sake. The x86 ICD rides in payload\wow64, and the installer copies that
+# tree whole, so a file of an architecture the release does not register is copied into the install root and deleted
+# again by the narrowing step of the same run, while manifest.json carries a component row that says it is installed:
+# the orphan plan of the next release then works from an install map that never matched the computer. One of the two
+# has to change, and the package itself says which: add the architecture to the list, or drop that files row.
+# A release that registers nothing (opengl_icd.register false, the bisect lever) is not held to either rule: it takes
+# the registration and the files of an earlier install away, and its files rows stay as they are.
+function Get-OpenGlPayloadProblems {
+    param([Parameter(Mandatory)]$Switch)
+    if (-not $Switch.register) { return @() }
+    $problems = @()
+    $missing = @(@(Get-OpenGlArchFiles -Switch $Switch) | Where-Object { -not $_.present } | ForEach-Object { $_.package_path })
+    if ($missing.Count) {
+        $problems += ('the OpenGL ICD is registered for ' + (@($Switch.architectures) -join ' and ') + ', but the package has no ' + ($missing -join ' and ') +
+            ': add the files row(s) of the built ICD, drop that architecture from opengl_icd.architectures, or set opengl_icd.register false')
+    }
+    foreach ($a in @($script:OpenGlArchitecturesKnown | Where-Object { @($Switch.architectures) -notcontains $_ })) {
+        $path = $(if ($a -eq 'x64') { [string]$Switch.package_path } else { [string]$Switch.package_path_wow })
+        $there = $(if ($a -eq 'x64') { [bool]$Switch.present } else { [bool]$Switch.present_wow })
+        if ($there) {
+            $problems += ("the package carries $path, and opengl_icd.architectures registers " + (@($Switch.architectures) -join ' and ') +
+                " only: add '$a' to that list, or drop the files row of that file")
+        }
+    }
+    return $problems
+}
 
 # What a run has to do about the ICD. Pure: the switch and what is on the computer in, the action out.
 #   register   this release registers it: the files and the three values of every architecture of its list go on
@@ -1569,6 +1604,20 @@ function Test-OpenGlRegistration {
     }
     return $problems
 }
+# Whether each half of the registration on a key is ours: the name value of the half names the install root, so a
+# release of this family wrote it. The only test available without the installer's own record, and the one both the
+# record and the restore plan use. Pure.
+function Get-OpenGlHalfIsOurs {
+    param([hashtable]$Current = @{}, [string]$InstallRoot)
+    $o = @{}
+    foreach ($nm in @('OpenGLDriverName', 'OpenGLDriverNameWow')) {
+        $o[$nm] = $false
+        if ($InstallRoot -and $Current.ContainsKey($nm)) {
+            $o[$nm] = [bool](@($Current[$nm] | ForEach-Object { [string]$_ }) -match [regex]::Escape($InstallRoot))
+        }
+    }
+    return $o
+}
 # Which of the six values a key carries now, with the value itself and its registry type: the record install.ps1
 # keeps once (the values from before the first install of ours) and the list uninstall.ps1 works from.
 # The type is recorded because a value cannot be put back without it. The .NET type of the value does not carry it:
@@ -1576,15 +1625,26 @@ function Test-OpenGlRegistration {
 # array, and a REG_QWORD and a REG_DWORD are both a number. Another vendor's registration, or a repair tool's, may
 # use any of them, and a restore that changes the type corrupts the value it claims to have put back: an expandable
 # path stops being expanded, and four bytes come back as four strings.
+#
+# -InstallRoot names this install's own root, and with it the record tells a value of ours from a value of somebody
+# else's: a name value that names the install root was written by a release of this family, so it is NOT "the value
+# from before the install", and neither are the two numbers of its own half. Without that test a record taken on a
+# computer that already carries our own registration - a lost or reset state file, a repair after one - would make the
+# uninstaller and the narrowing step of an install "restore" our own value, and that value then names a file the same
+# run deletes: a program of that architecture would get no OpenGL driver at all, not even the software renderer of
+# Windows, which is exactly the harm the two steps exist to prevent (BD-076 review). Without -InstallRoot every value
+# of the key is recorded as it stands, which is what a caller that only wants to read the key gets.
 function Get-OpenGlValueRecord {
-    param([Parameter(Mandatory)][string]$ClassKey)
+    param([Parameter(Mandatory)][string]$ClassKey, [string]$InstallRoot)
     $c = Read-RegistryValues $ClassKey
     $k = Get-Item -LiteralPath $ClassKey -ErrorAction SilentlyContinue
+    $ours = Get-OpenGlHalfIsOurs -Current $c -InstallRoot $InstallRoot
     return @($script:OpenGlValueNames | ForEach-Object {
-        $has = $c.ContainsKey($_)
+        $mine = [bool]$ours[$script:OpenGlValueHalf[$_]]
+        $has = $c.ContainsKey($_) -and (-not $mine)
         $kind = $null
         if ($has -and $k) { try { $kind = [string]$k.GetValueKind($_) } catch { $kind = $null } }
-        [pscustomobject]@{ name = $_; present = $has; previous = $(if ($has) { $c[$_] } else { $null }); kind = $kind }
+        [pscustomobject]@{ name = $_; present = $has; previous = $(if ($has) { $c[$_] } else { $null }); kind = $kind; ours = $mine }
     })
 }
 # The registry type a restore writes: the recorded one when the record carries it, otherwise the type the value's own
@@ -1621,15 +1681,8 @@ function Get-OpenGlRestorePlan {
     $wroteMap = @{}
     foreach ($w in @($Wrote)) { if ($w -and $w.name) { $wroteMap[[string]$w.name] = $w.value } }
     # The name value of each half, and whether it names the install root. Used only where there is no record.
-    $halfName = @{ OpenGLDriverName = 'OpenGLDriverName'; OpenGLVersion = 'OpenGLDriverName'; OpenGLFlags = 'OpenGLDriverName'
-        OpenGLDriverNameWow = 'OpenGLDriverNameWow'; OpenGLVersionWow = 'OpenGLDriverNameWow'; OpenGLFlagsWow = 'OpenGLDriverNameWow' }
-    $halfIsOurs = @{}
-    foreach ($nm in @('OpenGLDriverName', 'OpenGLDriverNameWow')) {
-        $halfIsOurs[$nm] = $false
-        if ($InstallRoot -and $Current.ContainsKey($nm)) {
-            $halfIsOurs[$nm] = [bool](@($Current[$nm] | ForEach-Object { [string]$_ }) -match [regex]::Escape($InstallRoot))
-        }
-    }
+    $halfName = $script:OpenGlValueHalf
+    $halfIsOurs = Get-OpenGlHalfIsOurs -Current $Current -InstallRoot $InstallRoot
     $rows = @()
     foreach ($n in @($script:OpenGlValueNames | Where-Object { @($Names) -contains $_ })) {
         $has = $Current.ContainsKey($n)

@@ -49,6 +49,10 @@ function Get-PeExports([string]$Path) {
 # The OpenGL ICD (BD-076) adds one x86 file to the wow64 tree when this release registers the ICD for x86
 # (manifest.json "opengl_icd": "architectures" holds x86), so the counts below follow the switch instead of a frozen
 # number. This release registers x64 alone, so the wow64 tree holds its eleven files and no OpenGL ICD.
+# The switch is the right thing to count from because a package may not carry an ICD it does not register: the
+# installer copies the wow64 tree whole, so that file would be installed and deleted again in one run while
+# manifest.json says it is installed. build-release.ps1 refuses such a package, from the same rule this gate asserts
+# below (installer\common.ps1, Get-OpenGlPayloadProblems).
 $mf = Get-Content -LiteralPath (Join-Path $Package 'manifest.json') -Raw | ConvertFrom-Json
 $glSwitch = Get-OpenGlReleaseSwitch -Manifest $mf -PackageRoot $Package
 $glWow = [bool]($glSwitch.register -and $glSwitch.register_x86)
@@ -90,9 +94,13 @@ if ($glWow) {
     Check ($p.Count -eq 0) "$($glSwitch.package_path_wow): x86 and every Drv entry point ($($p -join '; '))"
 } else {
     # This release registers no 32-bit OpenGL driver, so no value names a file there and none is installed. A package
-    # that carried one would put an x86 DLL in the wow64 tree that nothing loads, and the count above would catch it.
-    Check (-not (Test-Path -LiteralPath (Join-Path $Package 'payload\wow64\opengl'))) 'this release registers no 32-bit OpenGL ICD and the package has no payload\wow64\opengl'
+    # that carried one would put an x86 DLL into the install root that the same run deletes again, with a component
+    # row of manifest.json still naming it, which is why build-release.ps1 refuses it.
+    Check (-not (Test-Path -LiteralPath (Join-Path $Package 'payload\wow64\opengl'))) 'this release registers no 32-bit OpenGL ICD, so the package carries no payload\wow64\opengl (to ship one, add "x86" to opengl_icd.architectures; to keep it unregistered, drop its files row)'
 }
+# The one rule the build and the gates share: the file of every architecture of the list, and no file outside it.
+$glPayload = @(Get-OpenGlPayloadProblems -Switch $glSwitch)
+Check ($glPayload.Count -eq 0) "the OpenGL payload matches opengl_icd.architectures ($(if ($glPayload.Count) { $glPayload -join '; ' } else { @($glSwitch.architectures) -join ', ' }))"
 $radv = @('vulkan\vulkan_radeon.dll', 'd3d11\amdgpu_wddm_radv.dll', 'd3d12\amdgpu_wddm_radv.dll' | ForEach-Object { (Get-FileHash -LiteralPath (Join-Path $Package "payload\wow64\$_")).Hash })
 Check (@($radv | Select-Object -Unique).Count -eq 1) 'one x86 RADV build for the D3D11 and D3D12 shells and the system ICD'
 

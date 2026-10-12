@@ -119,6 +119,35 @@ try {
     $p = @(Test-OpenGlIcdFile -Path $host64 -Machine 0x14C)
     Check (@($p | Where-Object { $_ -match 'is machine 0x8664, expected 0x14C' }).Count -eq 1) "the wrong machine is a finding ($($p -join '; '))"
 
+    'the payload a release may carry (Get-OpenGlPayloadProblems)'
+    # One rule for build-release.ps1 and for the package gates: the file of every architecture of the list, and no
+    # file of an architecture outside it. The second half is not symmetry: the installer copies the wow64 tree whole,
+    # so a carried file of an unregistered architecture is installed and deleted again in one run while manifest.json
+    # carries a component row naming it. Two fake package roots, files only (the switch probes paths, not images).
+    $pkgBoth = Join-Path $work 'pkg-both'
+    $pkgX64 = Join-Path $work 'pkg-x64'
+    foreach ($r in @($pkgBoth, $pkgX64)) { [void][IO.Directory]::CreateDirectory((Join-Path $r 'payload\opengl')); [IO.File]::WriteAllText((Join-Path $r 'payload\opengl\amdgpu_wddm_gl.dll'), 'x') }
+    [void][IO.Directory]::CreateDirectory((Join-Path $pkgBoth 'payload\wow64\opengl'))
+    [IO.File]::WriteAllText((Join-Path $pkgBoth 'payload\wow64\opengl\amdgpu_wddm_gl.dll'), 'x')
+    $swX64inX64 = Get-OpenGlReleaseSwitch -Manifest (New-Switch (New-Table @{ register = $true; architectures = @('x64') })) -PackageRoot $pkgX64
+    Check ((@(Get-OpenGlPayloadProblems -Switch $swX64inX64)).Count -eq 0) 'x64 registered and the x64 file carried: the payload matches the list'
+    $swBothinBoth = Get-OpenGlReleaseSwitch -Manifest (New-Switch (New-Table @{ register = $true; architectures = @('x64', 'x86') })) -PackageRoot $pkgBoth
+    Check ((@(Get-OpenGlPayloadProblems -Switch $swBothinBoth)).Count -eq 0) 'both registered and both files carried: the payload matches the list'
+    # The negative controls, one for each half of the rule.
+    $swBothinX64 = Get-OpenGlReleaseSwitch -Manifest (New-Switch (New-Table @{ register = $true; architectures = @('x64', 'x86') })) -PackageRoot $pkgX64
+    $pb = @(Get-OpenGlPayloadProblems -Switch $swBothinX64)
+    Check (($pb.Count -eq 1) -and ($pb[0] -match 'the package has no payload/wow64/opengl/amdgpu_wddm_gl\.dll') -and ($pb[0] -match 'drop that architecture from opengl_icd\.architectures')) "a list that names x86 without the x86 file is a finding ($($pb -join '; '))"
+    $swX64inBoth = Get-OpenGlReleaseSwitch -Manifest (New-Switch (New-Table @{ register = $true; architectures = @('x64') })) -PackageRoot $pkgBoth
+    $pb = @(Get-OpenGlPayloadProblems -Switch $swX64inBoth)
+    Check (($pb.Count -eq 1) -and ($pb[0] -match 'carries payload/wow64/opengl/amdgpu_wddm_gl\.dll') -and ($pb[0] -match "add 'x86' to that list, or drop the files row")) "a package that carries an x86 ICD it does not register is a finding, and the finding names both ways out ($($pb -join '; '))"
+    $swX86inX64 = Get-OpenGlReleaseSwitch -Manifest (New-Switch (New-Table @{ register = $true; architectures = @('x86') })) -PackageRoot $pkgX64
+    $pb = @(Get-OpenGlPayloadProblems -Switch $swX86inX64)
+    Check (($pb.Count -eq 2) -and (@($pb | Where-Object { $_ -match 'has no payload/wow64/opengl' }).Count -eq 1) -and (@($pb | Where-Object { $_ -match "carries payload/opengl/amdgpu_wddm_gl\.dll" }).Count -eq 1)) "both halves of the rule are reported together ($($pb -join '; '))"
+    # The bisect lever (register false) is held to neither rule: it registers nothing, takes an earlier install away,
+    # and its files rows stay as they are.
+    $swOffBoth = Get-OpenGlReleaseSwitch -Manifest (New-Switch (New-Table @{ register = $false; architectures = @('x64') })) -PackageRoot $pkgBoth
+    Check ((@(Get-OpenGlPayloadProblems -Switch $swOffBoth)).Count -eq 0) 'register false: a package that carries both files is no finding'
+
     'verify: Test-OpenGlRegistration against a scratch key'
     # The six-value scenario first, against a switch that lists both architectures, so that the x86 half of verify
     # stays measured while this release registers x64 alone. The x64-only scenario of this release follows it.
@@ -226,7 +255,10 @@ try {
     # would get no driver at all instead of the renderer of Windows itself.
     [void](New-Item -Path "$key\narrow" -Force)
     New-ItemProperty -LiteralPath "$key\narrow" -Name OpenGLDriverNameWow -Value ([string[]]@('C:\Windows\System32\otherdriver.dll')) -PropertyType MultiString -Force | Out-Null
-    $prevNarrow = @(Get-OpenGlValueRecord -ClassKey "$key\narrow")
+    # The record is taken with the install root, as install.ps1 takes it: the 32-bit value on this key is another
+    # driver's, so it does not name our install root and stays in the record, and the step below puts it back.
+    $prevNarrow = @(Get-OpenGlValueRecord -ClassKey "$key\narrow" -InstallRoot $work)
+    Check ((@($prevNarrow | Where-Object { $_.present }).Count -eq 1) -and ((@($prevNarrow | Where-Object { $_.present })[0].name) -eq 'OpenGLDriverNameWow')) 'the record of this key holds the one value that was there, which is not ours'
     Write-OpenGlRegistration -ClassKey "$key\narrow" -Plan $workPlan          # the earlier release: both architectures
     $wroteNarrow = @($workPlan | ForEach-Object { [pscustomobject]@{ name = $_.name; value = $_.value } })
     $offNames = @(Get-OpenGlUnregisteredValueNames -Switch $on)
@@ -275,6 +307,42 @@ try {
     Check (([long](Get-ItemProperty -LiteralPath "$key\types" -Name OpenGLFlags).OpenGLFlags) -eq 4294967299) 'a REG_QWORD above 2^31 comes back whole, instead of throwing in the uninstall step'
     Check (((Get-ItemProperty -LiteralPath "$key\types" -Name OpenGLVersion).OpenGLVersion -join ',') -eq '1,0,0,0') 'the four bytes are four bytes, not four strings'
 
+    'the record of the values from before the install leaves out a registration of ours'
+    # A record is "the values from before the first install of ours", so a value of ours can never be in it. The test
+    # is the install root the name value carries, the same one the restore plan uses without a record. Without this a
+    # computer whose installer state is gone - a deleted C:\ProgramData\amdgpu-wddm\installer, a repair after a state
+    # reset - would hand the narrowing step and the uninstaller our own earlier registration as "the value from
+    # before the install", they would put it back, and the file it names goes in the same run: a program of that
+    # architecture would then get no OpenGL driver and not even the software renderer of Windows (BD-076 review).
+    [void](New-Item -Path "$key\record" -Force)
+    Write-OpenGlRegistration -ClassKey "$key\record" -Plan $workPlan      # a release of ours that registered both
+    $recOurs = @(Get-OpenGlValueRecord -ClassKey "$key\record" -InstallRoot $work)
+    Check ((@($recOurs | Where-Object { $_.present }).Count -eq 0) -and (@($recOurs | Where-Object { $_.ours }).Count -eq 6)) "a registration of ours is no value from before the install ($(@($recOurs | ForEach-Object { "$($_.name)=$(if ($_.present) { 'present' } else { 'ours' })" }) -join ' '))"
+    # Without the install root the same key is recorded as it stands: a caller that only reads the key gets every
+    # value, which is what the record did before this test existed.
+    Check ((@(Get-OpenGlValueRecord -ClassKey "$key\record" | Where-Object { $_.present }).Count -eq 6)) 'without an install root every value of the key is recorded as it stands'
+    # One half ours, the other half somebody else's: the foreign half stays in the record, with its registry type, so
+    # the uninstaller still puts it back.
+    [void](New-Item -Path "$key\record-mixed" -Force)
+    Write-OpenGlRegistration -ClassKey "$key\record-mixed" -Plan $plan64
+    New-ItemProperty -LiteralPath "$key\record-mixed" -Name OpenGLDriverNameWow -Value '%SystemRoot%\System32\foreign.dll' -PropertyType ExpandString -Force | Out-Null
+    New-ItemProperty -LiteralPath "$key\record-mixed" -Name OpenGLVersionWow -Value 7 -PropertyType DWord -Force | Out-Null
+    $recMixed = @(Get-OpenGlValueRecord -ClassKey "$key\record-mixed" -InstallRoot $work)
+    Check ((@($recMixed | Where-Object { $_.present }).Count -eq 2) -and ((@($recMixed | Where-Object { $_.name -eq 'OpenGLDriverNameWow' })[0].kind) -eq 'ExpandString') -and (@($recMixed | Where-Object { ($_.name -like 'OpenGL*Wow') -and $_.ours }).Count -eq 0)) "a foreign half stays in the record with its type, our own half does not ($(@($recMixed | Where-Object { $_.present } | ForEach-Object { "$($_.name)=$($_.kind)" }) -join ' '))"
+    Check ((@($recMixed | Where-Object { ($_.name -notlike '*Wow') -and $_.ours }).Count -eq 3)) 'the two numbers of our own half go with their name value'
+    # The scenario end to end: our own x64 and x86 registration on the key, no record of what wrote it, this
+    # x64-only release installed over it. The three Wow values have to go, not come back.
+    $recLost = @(Get-OpenGlValueRecord -ClassKey "$key\record" -InstallRoot $work)
+    $rpLost = @(Get-OpenGlRestorePlan -Previous $recLost -Wrote @() -Current (Read-RegistryValues "$key\record") -InstallRoot $work -Names $offNames)
+    Check ((@($rpLost | Where-Object { $_.action -eq 'remove' }).Count -eq 3) -and (@($rpLost | Where-Object { $_.action -eq 'restore' }).Count -eq 0)) "with the state file gone the 32-bit registration of ours is removed, never restored ($(Format-OpenGlRestorePlan $rpLost))"
+    Write-OpenGlRestore -ClassKey "$key\record" -Plan $rpLost
+    $afterLost = Read-RegistryValues "$key\record"
+    Check ((@($script:OpenGlValueNames | Where-Object { ($_ -like '*Wow') -and $afterLost.ContainsKey($_) }).Count -eq 0)) 'no 32-bit value is left naming the file that run deletes'
+    Check ((@($afterLost['OpenGLDriverName']) -join '|') -eq (Join-Path $work 'opengl\amdgpu_wddm_gl.dll')) 'the x64 registration is untouched by that step'
+    # And the uninstaller of that install takes its own three x64 values away instead of restoring them.
+    $rpLostUn = @(Get-OpenGlRestorePlan -Previous $recLost -Wrote @($plan64 | ForEach-Object { [pscustomobject]@{ name = $_.name; value = $_.value } }) -Current $afterLost -InstallRoot $work)
+    Check ((@($rpLostUn | Where-Object { $_.action -eq 'remove' }).Count -eq 3) -and (@($rpLostUn | Where-Object { $_.action -eq 'none' }).Count -eq 3) -and (@($rpLostUn | Where-Object { $_.action -eq 'restore' }).Count -eq 0)) "the uninstaller of that install removes its own three values ($(Format-OpenGlRestorePlan $rpLostUn))"
+
     'the display class keys the uninstaller works from'
     # The uninstaller finds the registration by what a key holds, not by the device: the GPU can be missing, disabled
     # or doubled, and the files go whatever the device looks like.
@@ -309,6 +377,7 @@ Check (($posWroteRead -gt 0) -and ($posWroteRead -lt $posWroteSet) -and ($src -m
 Check ($src -match 'Remove-PathOrSchedule \$glDirWow') 'install.ps1 removes the 32-bit ICD of an earlier install when it does not register x86'
 Check ($src -match "Add-Info 'OpenGL ICD \(32-bit\)'") 'verify says in one line that 32-bit OpenGL programs keep the renderer of Windows itself'
 Check (($src -match 'Set-StateValueOnce \$state ''opengl_icd_previous''') -and ($src -match 'Set-StateValue \$state ''opengl_icd''')) 'install.ps1 records the values from before the install and the values it writes'
+Check ($src -match 'Get-OpenGlValueRecord -ClassKey \$classKey -InstallRoot \$InstallRoot') 'that record is taken with the install root, so a registration of ours is never "the value from before the install"'
 Check ($src -match 'Write-OpenGlRegistration -ClassKey \$classKey -Plan \$glPlan') 'install.ps1 writes the registration into the GPU software key'
 Check (($src -match 'Write-OpenGlRestore -ClassKey \$classKey -Plan \$glRestore') -and ($src -match 'Remove-PathOrSchedule \$glDir')) 'install.ps1 rolls the registration and the files back when this release does not register the ICD'
 $posKeys = $src.IndexOf('Write-OpenGlRestore -ClassKey $classKey -Plan $glRestore')

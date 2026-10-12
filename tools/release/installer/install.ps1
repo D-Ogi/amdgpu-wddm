@@ -1476,7 +1476,11 @@ if ($gl.register) {
     # would have to be judged by the install root they name, which is a weaker test.
     $glWroteBefore = @()
     if ($state.PSObject.Properties['opengl_icd'] -and $state.opengl_icd) { $glWroteBefore = @($state.opengl_icd) }
-    [void](Set-StateValueOnce $state 'opengl_icd_previous' (Get-OpenGlValueRecord -ClassKey $classKey))
+    # -InstallRoot keeps a registration of ours out of that record: a value naming the install root was written by a
+    # release of this family, so it is not a value from before the install, and the uninstaller and the step below
+    # have to remove it instead of putting it back. Without this a computer whose state file is gone would get its
+    # own earlier Wow registration "restored" and the file it names deleted in the same run (BD-076 review).
+    [void](Set-StateValueOnce $state 'opengl_icd_previous' (Get-OpenGlValueRecord -ClassKey $classKey -InstallRoot $InstallRoot))
     Save-InstallState $state
     Invoke-Change ("$classKey " + (Format-OpenGlRegistrationPlan $glPlan) + " ($($gl.value_type), $(@($gl.architectures) -join ' and '))") {
         Write-OpenGlRegistration -ClassKey $classKey -Plan $glPlan

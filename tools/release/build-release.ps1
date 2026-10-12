@@ -578,9 +578,12 @@ if ($name -ne (Split-Path -Leaf $pkgRoot)) { throw "build-release: the package n
 # contract): a file that does not is no ICD, and a registration naming it would leave every OpenGL application of that
 # architecture on the tester's computer without a driver, instead of the software renderer Windows gives it without a
 # registration. A missing file is never a silent skip: the build stops here and names what is missing.
-# The other way round is no finding at all: a package may carry an architecture it does not register (a built file
-# that stays unregistered while its half is unfinished), because provenance and THIRD-PARTY.md cover every payload
-# file whether a value names it or not.
+# The other way round stops the build as well, and the reason is the wow64 tree: the installer copies that tree whole,
+# so a file of an architecture this release does not register would be copied into the install root and deleted again
+# by the narrowing step of the same run, while manifest.json carries a component row that says it is installed. The
+# package has to say which of the two it means - register that architecture, or drop its files row - and
+# test-wow64.ps1 and test-opengl-icd.ps1 hold a cut package to the same rule. Both rules are
+# installer\common.ps1 Get-OpenGlPayloadProblems, so the build and the gates read one rule.
 $glRelease = $null
 if ($sources.PSObject.Properties['opengl_icd']) {
     $gl = Get-OpenGlReleaseSwitch -Manifest $sources -PackageRoot $pkg
@@ -588,13 +591,9 @@ if ($sources.PSObject.Properties['opengl_icd']) {
         package_path = [string]$gl.package_path; package_path_wow = [string]$gl.package_path_wow
         value_type = [string]$gl.value_type; version = [int]$gl.version; flags = [int]$gl.flags }
     if ($gl.register) {
+        $glPayload = @(Get-OpenGlPayloadProblems -Switch $gl)
+        if ($glPayload.Count) { throw ('release-sources.json: ' + ($glPayload -join '; ')) }
         $glFiles = @(Get-OpenGlArchFiles -Switch $gl)
-        $glMissing = @($glFiles | Where-Object { -not $_.present } | ForEach-Object { $_.package_path })
-        if ($glMissing.Count) {
-            throw ("release-sources.json registers the OpenGL ICD for " + (@($gl.architectures) -join ' and ') +
-                   ", but the package has no " + ($glMissing -join ' and ') +
-                   ": add the files row(s) of the built ICD, drop that architecture from opengl_icd.architectures, or set opengl_icd.register false")
-        }
         $glProblems = @()
         foreach ($f in $glFiles) { $glProblems += @(Test-OpenGlIcdFile -Path $f.source -Machine $f.machine) }
         if ($glProblems.Count) { throw ('OpenGL ICD payload: ' + ($glProblems -join '; ')) }
