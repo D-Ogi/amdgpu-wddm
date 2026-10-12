@@ -21,10 +21,27 @@ The window starts `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy By
 | `-EventsFile <path>` | events, appended (section 2) |
 | `-ResultFile <path>` | the terminal result, written once (section 3); a stale file is deleted at the start |
 | `-Plan` | checks and the decision only; changes nothing |
-| `-AcceptTestSigning`, `-BitLocker HaveKey\|Suspend` | the user's consents, given only after the window asked |
+| `-AcceptTestSigning`, `-BitLocker HaveKey\|Suspend` | passed by every run the window starts, and accepted from a script. The window asks nobody for them (owner, 2026-10-12) |
 | `-Repair`, `-FirmwareDir <dir>`, `-Verify` | as on the command line |
 | `-DeadlineUtc <ISO 8601 UTC>` | stop at the first stop point after this time (section 10) |
 | `-HoldWindow` | command line only (the RunOnce continuation, section 4): wait for Enter before the console window closes; ignored with `-Gui` |
+
+**Nothing is asked of the user** (owner, 2026-10-12: "Przestan wymagac potwierdzen od uzytkownika!"). The plan
+screen carries no check box and no option button of its own, and its Install button is never off. Pressing it is
+the decision. Every run the window starts therefore carries `-AcceptTestSigning`, and `-BitLocker Suspend` when
+BitLocker protects the system volume, so an engine of an older repair set asks nothing either. `src\InstallFlow.cs`
+holds those rules, the information lines of the plan screen and the ids no string table may carry again. The
+render gate G-CONSENT refuses a screen that grows a permission control or a disabled primary action. A restart
+happens by itself after a visible 15-second countdown, in the window and on the console. "Restart now" and "Later"
+are offered, and neither is required. Every preflight refusal that protects the machine is unchanged.
+
+**The window may carry the package inside itself.** A release ships `amdgpu-wddm-setup-<version>.exe`: the same
+window with the package appended after the end of its program image (`src\Payload.cs`,
+`tools\release\make-setup-exe.ps1`). Started with no `files\` folder beside it, it unpacks the release to
+`%ProgramData%\amdgpu-wddm\setup\<version>\` - administrators and SYSTEM only, not inherited - checks every file
+against the embedded list before anything uses it, and runs the install from there, including the continuation
+after each restart. The folder goes when the run ends and stays only while a restart is pending. With a `files\`
+folder beside it, the exe behaves exactly as the `setup.exe` of the unpacked zip.
 
 `prepare-offline.ps1 -Destination <dir> [-FirmwareDir <dir>]` takes the same `-Gui`, `-InvocationId`, `-EventsFile`,
 `-ResultFile` and `-DeadlineUtc`. The command-line installer (`install.cmd` without `-Gui`) keeps its behaviour, except that its
@@ -50,7 +67,7 @@ One JSON object per line, UTF-8 without BOM, appended; the reader takes complete
 | `start` | `mode` (plan, dry-run, run, verify, prepare-offline), `gui`, `dry_run`, `package`, `contract`, `phase`, `deadline_utc`, `job` (`kill-on-close`, or `none: <reason>`) | first |
 | `stage` | `id`, `text` | a stage begins: `preflight`, `test-signing`, `install`, `firmware`, `files`, `driver`, `settings`, `finish`, `verify`; prepare-offline: `prepare-check`, `firmware`, `components`, `copy`, `finish`. Two more come from a package that carries `installer/components.json`. `extras` asks the questions, after the preflight and before any change. `components` installs the chosen extras, after `settings`. A run that can choose no extra opens neither, which is every run with `-Gui` and no `-Components` |
 | `check` | `id` (`<area>.<finding>`, for example `gpu.missing`, `firmware.folder-bad`), `result` (ok, warn, fail), `name`, `detail` | each preflight check |
-| `decision` | `action` (install, upgrade, resume, repair, verify, already), `installed_version`, `package_version`, `phase`, `consents` (test-signing, bitlocker), `consents_given`, `restarts` (0, 1, 2), `firmware_source` (download, folder, package-folder), `firmware_dir`, `notes` (release-notes files in the package), `secure_boot`, `bitlocker`, `compatibility` (`ok`, `reasons`) | once, before any change |
+| `decision` | `action` (install, upgrade, resume, repair, verify, already), `installed_version`, `package_version`, `phase`, `consents` (always empty: nothing is asked of the user), `consents_given`, `restarts` (0, 1, 2), `firmware_source` (download, folder, package-folder), `firmware_dir`, `notes` (release-notes files in the package), `secure_boot`, `bitlocker`, `compatibility` (`ok`, `reasons`) | once, before any change |
 | `settings-plan` | `summary` (`kept`, `updated`, `added`, `unchanged`, `command`, `reopened`, `driver_closed`), `rows` [`group`, `name`, `decision` (set, same, update, kept, command, reopened, driver-closed), `current`, `value`, `default`, `present`, `closure` (the driver's own act in plain words, null when there is none: BD-069)] | after the decision, before the first `step` (WU-006, WU-044) |
 | `cancel` | `available`, `where` | a safe point opens or closes |
 | `deadline` | `passed`, `where`, `deadline_utc`, `action` (`finishing`) | the deadline has passed inside a part that cannot stop; the run stops at the next stop point (section 10) |
@@ -102,7 +119,7 @@ the exit code alone is never the outcome.
 | verified | 0 | result.verified, result.verified-with-warnings |
 | refused | 2 | result.preflight-refused (`failed_checks`), result.preflight-error, result.needs-admin, result.package-damaged, result.firmware-folder-bad, result.firmware-unreachable, result.prepare-destination, result.install-unfinished |
 | refused | 9 | result.busy |
-| needs-consent | 4 | result.needs-consent (`consents_needed`) |
+| needs-consent | 4 | result.needs-consent (`consents_needed`). No run can reach it any more (2026-10-12), and `consents_needed` is always empty |
 | verify-failed | 3 | result.verify-failed |
 | failed | 5, 6 | result.testsigning-not-active, result.step-failed (`step` names it) |
 | cancelled | 8 | result.cancelled, result.cancelled-after-changes (`stop.by` cancel), result.deadline, result.deadline-after-changes (`stop.by` deadline) |

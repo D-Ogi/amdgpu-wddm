@@ -12,7 +12,8 @@ Use this package only on a BC-250. The installer stops on every other computer a
   Adapter.
 - A local account with administrator rights.
 - Secure Boot off. The stock BC-250 BIOS has no Secure Boot option, so it is already off (see "Secure Boot" below).
-- If BitLocker is on: your BitLocker recovery key, or permission to suspend BitLocker for two restarts.
+- If BitLocker is on: your BitLocker recovery key, in case something goes wrong. The installer pauses BitLocker
+  by itself for the restarts it needs and tells you that it did.
 - The Microsoft Visual C++ 2015-2022 Redistributable (x64). If it is missing, the installer stops and tells you.
   Get it from Microsoft: https://aka.ms/vs/17/release/vc_redist.x64.exe (download it on any computer and copy it to the BC-250).
 - 2 GB of free space on the system drive.
@@ -25,11 +26,15 @@ Use this package only on a BC-250. The installer stops on every other computer a
 1. Make a backup of all data on the BC-250 that you want to keep.
 2. Write down your BitLocker recovery key if BitLocker is on: open a command prompt as administrator and type
    `manage-bde -protectors -get C:`.
-3. Unpack the zip file to a local folder, for example `C:\amdgpu-wddm-tester`. Do not run the installer from the
-   zip file or from a network drive. Unpack the whole zip: the folder it makes holds `setup.exe` and the folder
-   `files`, and `setup.exe` needs `files` next to it. To carry the package to another computer or to a memory
-   stick, copy that whole folder, not the folder `files` alone: the package checks `setup.exe` too, and `files`
-   on its own reports `missing setup.exe`.
+3. Take one of the two downloads of the release:
+   - **One file** - `amdgpu-wddm-setup-<version>.exe`. Copy it to a local folder and double-click it. It carries the
+     whole package inside itself, unpacks it where only administrators may write, checks every file, and installs
+     from there. It removes that folder when the installation is over. Nothing else to do.
+   - **The zip file** - unpack it to a local folder, for example `C:\amdgpu-wddm-tester`. Do not run the installer
+     from the zip file or from a network drive. Unpack the whole zip: the folder it makes holds `setup.exe` and the
+     folder `files`, and `setup.exe` needs `files` next to it. To carry the package to another computer or to a
+     memory stick, copy that whole folder, not the folder `files` alone: the package checks `setup.exe` too, and
+     `files` on its own reports `missing setup.exe`. The command line below needs this download.
 4. Optional: do a dry run first. In the folder `files`, open a command prompt and type `install.cmd -DryRun`.
    The dry run does all checks and shows all changes, but it changes nothing.
 
@@ -65,16 +70,19 @@ The installer does not change BIOS or firmware settings.
 
 The usual way is the setup window:
 
-1. In the unpacked folder, double-click `setup.exe`. It is the only file there. Everything else is in the folder
+1. Double-click `amdgpu-wddm-setup-<version>.exe`, or, in the unpacked folder, `setup.exe`. It is the only file
+   there. Everything else is in the folder
    `files` beside it. The window asks for administrator rights itself: accept the prompt. (`install.cmd` in the
    folder `files`, started with no switch, opens the same window.)
 2. The window checks the computer first. The check changes nothing. Then the window shows the checks that need
    attention, what it will change, the restarts and the release notes.
-3. Give the consents that the window asks for: Windows test mode, and, if BitLocker is on, whether you have the
-   recovery key or whether setup must pause BitLocker for two restarts.
-4. The window installs the driver and shows each stage. Before each restart of Windows it asks "Restart now" or
-   "Later", so you can save your work first. After you log on again, the window starts by itself and continues
-   (accept the administrator prompt).
+3. Press "Install". The window asks you for nothing else. It says what it will change - Windows test mode on,
+   and BitLocker paused for the restarts if BitLocker is on - because you should know it, not because it needs
+   your permission for it: you opened the installer to install the driver, and pressing "Install" is the decision.
+4. The window installs the driver and shows each stage. Before each restart of Windows it counts down 15 seconds
+   and then restarts by itself. Press "Restart now" to go at once, or "Later" to keep the computer running and
+   save your work first. After you log on again, the window starts by itself and continues (accept the
+   administrator prompt).
 5. At the end the window shows the result. On a problem it offers to try again or to repair, and it can save a
    support file for your report.
 
@@ -90,9 +98,10 @@ for example `install.cmd -Console -DryRun`:
    `install.cmd -Console` when you want the console.
 2. Read the preflight table. Every line must show `ok` or `warn`. A `fail` line stops the installer, and the
    installer tells you what to correct. When it stops at preflight, it has changed nothing.
-3. Phase 1: the installer makes a System Restore point (if System Protection is on) and asks for permission to
-   turn on test signing. Type `YES` to continue. If BitLocker is on, the installer asks if you have the recovery key
-   or if it must suspend BitLocker for two restarts.
+3. Phase 1: the installer makes a System Restore point (if System Protection is on), turns on test signing and,
+   if BitLocker is on, pauses BitLocker for the restarts it needs. It asks you nothing: it prints
+   what it changes as it changes it. The restart comes after a 15-second countdown. Press Enter to restart at
+   once, or any other key to restart later yourself.
 4. Let the computer restart. After you log on, the installer starts again by itself (accept the administrator
    prompt). If it does not start, run `install.cmd` again.
 5. Phase 2: the installer downloads the GPU firmware and checks it, then installs the certificate, the driver, the
@@ -187,7 +196,7 @@ results to `C:\ProgramData\amdgpu-wddm\start-confirm.log`.
 
 | Item | Location |
 |---|---|
-| Test signing | `bcdedit /set '{current}' testsigning on` (only after you type YES) |
+| Test signing | `bcdedit /set '{current}' testsigning on` |
 | Test certificate | LocalMachine Root and TrustedPublisher stores |
 | Kernel-mode driver | driver package `bc250kmd.inf` (driver store, service `bc250kmd`) |
 | Driver settings | `HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters` |
