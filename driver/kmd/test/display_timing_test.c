@@ -164,6 +164,7 @@ static void Adapter(BC250_DEVICE* d)
 }
 #include "inherited_pipe_cases.h"
 #include "inherited_vidpn_cases.h"
+#include "inherited_field38_cases.h"
 int main(int argc,char** argv)
 {
     BC250_DEVICE d={0};D3DKMDT_VIDEO_SIGNAL_INFO s;unsigned before;
@@ -186,7 +187,8 @@ int main(int argc,char** argv)
         return result==STATUS_SUCCESS?0:1;
     }
     InheritedPipeCases();
-    InheritedVidpnCases();refusedLogs=0;
+    InheritedVidpnCases();
+    InheritedField38Cases();refusedLogs=0;
     Mode(&d,1920,1200,2080,1235,154000000);
     CHECK(TestFillSignalInfo(&d,&s)==STATUS_SUCCESS && reads==2*TimingCount && refusedLogs==0);
     CHECK(s.TotalSize.cx==2080 && s.TotalSize.cy==1235 && s.ActiveSize.cx==1920 && s.ActiveSize.cy==1200);

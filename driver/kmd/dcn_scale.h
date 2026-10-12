@@ -102,13 +102,17 @@ typedef struct _BC250_INHERITED_PIPE {
     BC250_PIPE_SHAPE Shape;
     unsigned long RatioH, RatioV, Taps, SurfaceConfig, TilingConfig, Pitch, Otg1;
     unsigned long SurfaceControl, MpccBottom, MpccControl, MpcOut;
+    unsigned long Autocal, DsclControl;
     unsigned long Valid;
 } BC250_INHERITED_PIPE;
-#define BC250_INHERITED_PIPE_READS 21ul
+#define BC250_INHERITED_PIPE_READS 23ul
 #define BC250_INHERITED_PIPE_ALL ((1ul << BC250_INHERITED_PIPE_READS) - 1ul)
 long Bc250InheritedPipeRead(BC250_DISP_IO* Io, BC250_INHERITED_PIPE* Pipe);
 int Bc250InheritedPipeSame(const BC250_INHERITED_PIPE* A, const BC250_INHERITED_PIPE* B);
-// A set of equivalent VidPN transformations for exactly the saved tuple; 0 if
+// A set of equivalent VidPN transformations for exactly the saved tuple.
+// Custom preserves the firmware image without claiming a standard scaling
+// transform (automatic ratio calculation or a unity-ratio enlarged recout).
+// It never grants permission to program a different pipe. Return 0 if
 // the readback does not prove a linear, unrotated RGB source feeding OTG0.
 unsigned long Bc250InheritedPipeSupport(const BC250_INHERITED_PIPE* Pipe,
     unsigned long SourceWidth, unsigned long SourceHeight, unsigned long Pitch,
