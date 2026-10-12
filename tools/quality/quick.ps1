@@ -96,7 +96,12 @@ try {
  # BD-122: the consumers of the KMD's start record (start-confirm and the installer's verify), with fixtures in a
  # scratch key of HKCU that it removes again. Windows PowerShell 5.1, the shell a tester's installer runs in.
  Check 'start-record-consumers' { & powershell -NoProfile -File "$repo\tools\release\test-start-record.ps1" }
- Check 'radv-contract' { & python "$repo\tools\quality\prototype_gate.py" --compile-commands "$radvBuild\compile_commands.json" --out "$Out\radv-contract" }
+ # The ICD's own build tree is not in the repository, and the 2026-10-10 cleanup removed the one this gate had
+ # (scratch\m12\REMOVED-2026-10-10.txt). It ran through Check, so every profile that holds it - the KMD package
+ # profile included - failed before its package step on a missing input. It is the same case CheckIf exists for:
+ # it runs wherever the tree is (BC250_RADV_BUILD names another one) and records why it did not when it is gone.
+ CheckIf 'radv-contract' "$radvBuild\compile_commands.json" `
+   { & python "$repo\tools\quality\prototype_gate.py" --compile-commands "$radvBuild\compile_commands.json" --out "$Out\radv-contract" }
  Check 'umd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compile-commands "$umdBuild\compile_commands.json" --match '/src/gallium/(frontends/d3d10umd|targets/d3d10umd|drivers/zink)/' --out "$Out\umd-contract" }
  Check 'vsync-vector' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_vsync_vector.ps1" -Root $Workspace -Out "$Out\vsync-vector" }
  Check 'ih-consume' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_ih_consume.ps1" -Root $Workspace -Out "$Out\ih-consume" }
@@ -198,7 +203,14 @@ try {
  Check 'flip-rule-names' { & python "$repo\tools\quality\flip_rule_names.py" --router "$repo\driver\umd\router\front-direct-flip.h" --log "$repo\driver\umd\router\front-flip-log.h" --document "$repo\docs\design\direct-flip-handshake.md" }
  Check 'gfx-copy' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_gfx_copy.ps1" -Root $Workspace -Out "$Out\gfx-copy" -Kits "$Kits" }
  Check 'gfx-blt' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_gfx_blt.ps1" -Root $Workspace -Out "$Out\gfx-blt" -Kits "$Kits" }
- Check 'blob-abi' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_umd_blob.ps1" -Out "$Out\blob-abi" -Kits "$Kits" -ProducerRoot $icd }
+ # The blob reader has two halves. The contract half needs nothing outside the repository. The producer half
+ # extracts the ICD's own field writes from the ICD source tree, whose input went with the ICD trees on
+ # 2026-10-10 (scratch\m12\REMOVED-2026-10-10.txt) and took the whole gate down with it, the same way
+ # radv-contract above went down. So they are separate now: the contract half always runs, and the producer half
+ # runs wherever the tree is (BC250_RADV_SOURCE names another one) and records why it did not when it is absent.
+ Check 'blob-abi' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_umd_blob.ps1" -Out "$Out\blob-abi" -Kits "$Kits" }
+ CheckIf 'blob-abi-producer' "$icd\src\amd\vulkan\winsys\wddm2\radv_wddm2_bc250.h" `
+   { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_umd_blob.ps1" -Out "$Out\blob-abi-producer" -Kits "$Kits" -ProducerRoot $icd }
  Check 'surface-control' { & python "$PSScriptRoot\check_surface.py" --mesa "$umdSource" --out "$Out\surface-control" }
  Check 'kmd-analysis' { & python "$PSScriptRoot\msvc_analysis.py" --database "$Out\kmd\compile_commands.json" --match '/umd_blob.c$' --out "$Out\analysis-kmd" }
  Check 'umd-analysis' { & python "$PSScriptRoot\msvc_analysis.py" --database "$umdBuild\compile_commands.json" --match '/Device.cpp$' --out "$Out\analysis-umd" }
@@ -317,6 +329,11 @@ try {
   @{n='board-sequence';s='driver\shim\test\run_board_sequence.ps1';a=@('-Root',$Workspace)}
   @{n='board-sequence-changed-point';s='driver\shim\test\run_board_sequence.ps1';a=@('-Root',$Workspace,'-Mutation','gpu-point');Fails=$true}
   @{n='smu-native-board-admission';s='driver\shim\test\run_smu_native.ps1';a=@('-Root',$Workspace,'-Mutation','board-admission');Fails=$true}
+  # The clock escape's two gates (BD-062): the token in front of the write, and the published reading the open
+  # READ rests on. Each mutation removes one of them, and the suite must fail by a check; a mutation that nobody
+  # runs is not a control, so both are listed here and not only in the runner.
+  @{n='smu-native-clock-write-privilege';s='driver\shim\test\run_smu_native.ps1';a=@('-Root',$Workspace,'-Mutation','clock-write-privilege');Fails=$true}
+  @{n='smu-native-clock-read-snapshot';s='driver\shim\test\run_smu_native.ps1';a=@('-Root',$Workspace,'-Mutation','clock-read-snapshot');Fails=$true}
   @{n='hwmon';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$kits)}
   @{n='hwmon-board-port';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$kits,'-Mutation','board-port');Fails=$true}
   # The case fan's load feed-forward (rule 10 of driver\shim\include\bc250_fan.h): the first negative controls of

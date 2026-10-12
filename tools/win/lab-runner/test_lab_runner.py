@@ -93,6 +93,20 @@ class OwnerRules(unittest.TestCase):
         # A failed read is -1, never a temperature: only a readable sample below 87 C ends the hot stretch.
         self.assertRegex(RUNTIME, r'elseif\(\$temp\s+-ge\s+0\)\{\$hotSince=\$null\}')
 
+    def test_every_temperature_note_says_which_source_answered(self):
+        # BD-062: the runner reads the temperature through the KMD client and falls back to the overlay. The
+        # driver reports the same version with and without the fix, so only the session's own evidence can say
+        # which path produced a number. Both branches set the source, and no note credits the client blindly.
+        self.assertIn("$script:TempSource='clock-read'", RUNTIME, 'the client branch names no source')
+        self.assertIn("$script:TempSource='overlay'", RUNTIME, 'the overlay branch names no source')
+        self.assertIn('$result.temperature_source=$script:TempSource', RUNTIME,
+                      'the result record carries no temperature source')
+        self.assertIn(" tsrc='+$script:TempSource", RUNTIME, 'a sample note without its temperature source')
+        self.assertNotRegex(RUNTIME, r"temperature_before '\+\$result\.temperature_before\+' through '\+\$script:ClockCli",
+                            'a note that credits the client whichever source answered')
+        for note in re.findall(r"'(?:tctl|temperature_before|temperature_after) .*?through '\+([^+\n]+)", RUNTIME):
+            self.assertIn('Temp-Where', note, 'a temperature note must name the source that answered')
+
     def test_the_walk_marker_says_whether_anything_verified_the_world(self):
         # BD-107, and H1 of the 2026-10-10 audit: the marker that opens ETW measurement window B must say what
         # verified the world. This copy of the runner has no telemetry rule, so only the operator's explicit mark

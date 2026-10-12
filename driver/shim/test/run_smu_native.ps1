@@ -1,4 +1,4 @@
-param([string]$Root='P:\bc-250',[string]$Out='P:\bc-250\scratch\m9\smu-native',[string]$Source='', [ValidateSet('', 'board-admission')][string]$Mutation='', [string]$Fixture='')
+param([string]$Root='P:\bc-250',[string]$Out='P:\bc-250\scratch\m9\smu-native',[string]$Source='', [ValidateSet('', 'board-admission', 'clock-write-privilege', 'clock-read-snapshot')][string]$Mutation='', [string]$Fixture='')
 $ErrorActionPreference='Stop'
 if (-not $Fixture) { $Fixture="$PSScriptRoot\smu_native_test.c" }
 $repo=(Resolve-Path "$PSScriptRoot\..\..\..").Path # the tree this script lives in; -Root only locates the toolchain
@@ -21,6 +21,23 @@ if ($Mutation -eq 'board-admission') {
     $needle = 'if(!owner->BoardAllowed)return STATUS_NOT_SUPPORTED;'
     if ($native.Split(@($needle), [StringSplitOptions]::None).Count -ne 2) { throw 'Board mutation anchor changed' }
     $native = $native.Replace($needle, '/* Deliberate missing board startup admission. */')
+}
+# BD-062's negative control: the clock escape serves READ to every caller, so the suite must still fail when the
+# token check in front of the write disappears with it. Run it after any change to that gate; the suite is
+# expected to report failures here, and a clean run means the write is open to an ordinary user.
+if ($Mutation -eq 'clock-write-privilege') {
+    $needle = 'if(write && !administrator) { data->Status=BC250_ESCAPE_STATUS_NOT_ADMIN;status=STATUS_ACCESS_DENIED;goto Done; }'
+    if ($native.Split(@($needle), [StringSplitOptions]::None).Count -ne 2) { throw 'Clock write privilege anchor changed' }
+    # The two casts keep the mutated build warning-free, so the suite's own answer is what the run reports.
+    $native = $native.Replace($needle, '(void)write;(void)administrator; /* Deliberate missing administrator check. */')
+}
+# BD-062's second negative control: the open READ rests on the published reading, so the suite must fail when
+# nothing is ever published and every unprivileged read goes to the mailbox instead. Run it after any change to
+# that path; a clean run means the counted messages no longer hold the rate down.
+if ($Mutation -eq 'clock-read-snapshot') {
+    $needle = 'owner->SnapAt=MailboxNow(owner);owner->SnapValid=TRUE;'
+    if ($native.Split(@($needle), [StringSplitOptions]::None).Count -ne 2) { throw 'Clock read snapshot anchor changed' }
+    $native = $native.Replace($needle, 'owner->SnapAt=MailboxNow(owner);owner->SnapValid=FALSE; /* Deliberate unpublished reading. */')
 }
 [IO.File]::WriteAllText("$Out\smu-native.inc",$native,[Text.UTF8Encoding]::new($false))
 & $cl /nologo /TC /W4 /WX /wd4505 /O2 /MT @inc "/I$($msvc.FullName)\include" "/I$sdk\Include\10.0.26100.0\ucrt" "/I$sdk\Include\10.0.26100.0\um" "/I$sdk\Include\10.0.26100.0\shared" "/Fo$Out\" "/Fe$Out\smu_test.exe" "$repo\driver\shim\bc250_smu.c" "$repo\driver\shim\bc250_clock.c" "$repo\driver\shim\bc250_cpu.c" "$repo\driver\shim\bc250_smu_metrics.c" $Fixture /link "/LIBPATH:$($msvc.FullName)\lib\x64" "/LIBPATH:$libs\ucrt\x64" "/LIBPATH:$libs\um\x64"
