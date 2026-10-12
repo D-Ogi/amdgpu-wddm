@@ -82,9 +82,9 @@ have to uninstall first. The installer shows `upgrading <old> -> <new>`, keeps t
 replaces the others and restarts the computer. Running `install.cmd` of the version that is already installed and verified does nothing;
 use `install.cmd -Repair` to install it again.
 
-An upgrade keeps the settings you changed: the driver settings (for example `DpmMaxMHz`), `DwmForceCpu`, the D3D11
-allowlist and the application profiles. The installer writes a new default only over a value that the previous
-installer wrote and that you did not change. The upgrade output shows each value as `new`, `unchanged`, `KEPT`
+An upgrade keeps the settings you changed: the driver settings (for example `DpmMaxMHz` and `CuMode`), `DwmForceCpu`,
+the D3D11 allowlist and the application profiles. The installer writes a new default only over a value that the
+previous installer wrote and that you did not change. The upgrade output shows each value as `new`, `unchanged`, `KEPT`
 (your value) or `->` (new default). A value given on the command line (`-DpmMaxMHz`) is always written. The
 installer always writes its own values: the file paths, the graphics registration and the start counter
 `UnconfirmedStarts`. The Control application can set the defaults again.
@@ -178,6 +178,15 @@ results to `C:\ProgramData\amdgpu-wddm\start-confirm.log`.
 Default driver settings: automatic clock control (DPM) on, maximum 1500 MHz. The thermal limits of the driver do not
 change. The driver writes no debug log files. To change the maximum clock at install time, use
 `install.cmd -DpmMaxMHz <1000-2000>`. An upgrade keeps a maximum clock that you set (see "Install").
+
+Graphics cores: the driver uses 24 of the 40 compute units of the GPU after a normal install. That is the number
+the board's firmware switches on. To get all 40 at install time, use `install.cmd -CuMode 40`. After the install,
+the Graphics page of amdgpu-wddm Control holds the same choice: "Standard (24)" or "All (40)". A new number applies
+at the next restart of Windows. The first start with 40 cores needs the confirmation of the small blue window after
+logon. Without that confirmation the next start goes back to 24, records the reason and puts the choice back to
+"Standard (24)", so you choose 40 again. The change writes one registry value and no firmware. All 40 cores give
+more performance in many games, and also more power and more heat. The game results that we publish are measured
+with all 40 cores. The page `docs/design/cu-mode.md` of the project has the whole description.
 
 ## What works and what does not
 
