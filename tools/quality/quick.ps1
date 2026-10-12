@@ -1,4 +1,5 @@
-param([Parameter(Mandatory)][string]$Workspace,[Parameter(Mandatory)][string]$Out,[string]$RepoRoot="",[ValidateSet('Full','KmdPackage')][string]$Profile='Full',[string]$Kits='')
+param([Parameter(Mandatory)][string]$Workspace,[Parameter(Mandatory)][string]$Out,[string]$RepoRoot="",[ValidateSet('Full','KmdPackage')][string]$Profile='Full',[string]$Kits='',
+      [switch]$NoCache,[int]$Jobs=[Environment]::ProcessorCount,[switch]$PlanOnly)
 $ErrorActionPreference='Stop'
 $repo=if($RepoRoot){$RepoRoot}else{Join-Path $Workspace 'bc250-win'}
 if (!$Kits) { $Kits = Join-Path $Workspace 'toolchain\nuget' }
@@ -15,13 +16,15 @@ $umdSource=if($env:BC250_UMD_SOURCE){$env:BC250_UMD_SOURCE}else{Join-Path $Works
 $umdBuild=if($env:BC250_UMD_BUILD){$env:BC250_UMD_BUILD}else{Join-Path $Workspace 'scratch\m13-native-zink-build'}
 $clock=[Diagnostics.Stopwatch]::StartNew()
 New-Item -ItemType Directory -Force $Out | Out-Null
+$Out=(Resolve-Path -LiteralPath $Out).Path
 $results=@()
+$gateJobs=@()
 function Check([string]$name,[scriptblock]$action) {
-    $watch=[Diagnostics.Stopwatch]::StartNew()
-    & $action *> (Join-Path $Out "$name.log")
-    if($LASTEXITCODE -ne 0){throw "$name failed; see $Out\$name.log"}
-    $script:results+=@{name=$name;status='PASS';seconds=$watch.Elapsed.TotalSeconds}
-    Write-Host "$name PASS $([Math]::Round($watch.Elapsed.TotalSeconds,2))s"
+    # Dynamic scriptblocks have no original automatic script-path variables.
+    # Keep child pwsh calls: -File exit semantics differ from & script.ps1 when
+    # a negative control consumes a failing native command and returns normally.
+    $text=$action.ToString().Replace('$PSScriptRoot','$qualityRoot').Replace('$PSCommandPath','$quickPath')
+    $script:gateJobs+=@{name=$name;action=$text}
 }
 # A gate whose inputs are not in the repository. It runs whenever they are present, so that nobody has to
 # remember it, and records why it did not when they are absent - never silently.
@@ -44,8 +47,7 @@ try {
  # The documentation style ratchet of docs/style.md: a document in tools\quality\doclint_baseline.txt
  # must not get worse, and a document outside it must be clean. It never asks for a rewrite.
  Check 'doclint' { & python "$repo\tools\quality\doclint.py" --root $repo --out "$Out\doclint" }
- # Full requires fresh tracked Status maps. KmdPackage regenerates them under Out from current source and
- # headers; only tracked presentation freshness is excluded, with a receipt. Parser tests remain required.
+ # Status maps and release tool controls run in Full (required by build-release.ps1), not KmdPackage.
  Check 'status-map' { & python "$repo\tools\quality\kmd_status_profile.py" --repo $repo --profile $Profile --kits $Kits --out "$Out\status-map"; if($LASTEXITCODE -eq 0){ & python -m unittest discover -s "$repo\tools\docs" -p 'test_*.py' } }
  Check 'ledger' { & python -m unittest discover -s "$repo\tools\win\ledger" }
  # Windows PowerShell 5.1 for the app-route test, because that is the shell its ops scripts run in on the lab.
@@ -64,6 +66,7 @@ try {
  Check 'frameloop-host' { & pwsh -NoProfile -File "$repo\tools\win\frameloop\lab\host-checks.ps1" }
  Check 'register-generators' { & python -m unittest discover -s "$repo\tools\regcalc"; if($LASTEXITCODE -eq 0){ & python -m unittest discover -s "$repo\tools\diagusb" }; if($LASTEXITCODE -eq 0){ & python -m unittest discover -s "$repo\tools\win\bc250rd" } }
  Check 'quality-controls' { $env:BC250_TEST_OUT=(New-Item -ItemType Directory -Force "$Out\quality-controls").FullName; & python -m unittest discover -s "$repo\tools\quality" }
+ Check 'gate-cache-controls' { & python -B -m unittest discover -s "$repo\tools\quality" -p 'test_gate_cache.py' }
  Check 'wininstall-locale' { & powershell -NoProfile -ExecutionPolicy Bypass -File "$repo\tools\wininstall\test-locale.ps1" -Out "$Out\wininstall-locale" }
  Check 'kd-dump-triage' { & pwsh -NoProfile -File "$repo\tools\win\kd\analyze-kernel-dump.ps1" -SelfTest }
  Check 'smartplug' { & python "$repo\tools\win\smartplug\selftest.py" }
@@ -376,7 +379,6 @@ try {
   @{n='gfx-pipeline-no-capacity';s='driver\kmd\test\run_gfx_pipeline.ps1';a=@('-Root',$Workspace,'-KmdOnly','-WithoutCapacity');Fails=$true}
   @{n='gfx-pipeline-equal-fence';s='driver\kmd\test\run_gfx_pipeline.ps1';a=@('-Root',$Workspace,'-KmdOnly','-EqualityFence');Fails=$true}
   # -Root as well: this runner puts the compiler's TEMP under it, and a worktree's parent has no scratch\tmp.
-  @{n='firmware-metadata';s='driver\kmd\test\run_firmware_metadata.ps1';a=@('-Root',$Workspace,'-Kits',$kits,'-Firmware',$firmware)}
   @{n='firmware-metadata-no-runtime';s='driver\kmd\test\run_firmware_metadata.ps1';a=@('-Root',$Workspace,'-Kits',$kits,'-Firmware',$firmware,'-OmitRuntimeFirmware');Fails=$true}
   @{n='paging-mc';s='driver\kmd\test\run_paging_mc.ps1';a=@('-Kits',$kits)}
   @{n='paging-private';s='driver\kmd\test\run_paging_private.ps1';a=@('-Kits',$kits)}
@@ -384,7 +386,6 @@ try {
   @{n='paging-pt-shadow';s='driver\kmd\test\run_paging_pt_shadow.ps1';a=@('-Kits',$kits)}
   @{n='paging-stream';s='driver\kmd\test\run_paging_stream.ps1';a=@('-Kits',$kits)}
   @{n='paging-window';s='driver\kmd\test\run_paging_window.ps1';a=@('-Kits',$kits)}
-  @{n='umd-caps';s='driver\kmd\test\run_umd_caps.ps1';a=@('-Kits',$kits)}
   @{n='shim-replay';s='driver\shim\test\run.ps1';a=@('-Kits',$kits)}
   @{n='shim-gfx';s='driver\shim\test\run_gfx.ps1';a=@('-Kits',$kits)}
   # The frozen gfx job frame and the VM flush on the ring (docs/design/gfx-submit-root-serialization.md).
@@ -433,20 +434,25 @@ try {
   if($foreign){throw "take their sources from -Root\bc250-win instead of their own tree: $($foreign -join ', ')"}
   "$($runners.Count) runners, all gated, all self-located"
  }
- $runs=$suites | ForEach-Object -ThrottleLimit ([Math]::Max(2,[Environment]::ProcessorCount/2)) -Parallel {
-  $suite=$_; $log=Join-Path $using:Out "$($suite.n).log"; $watch=[Diagnostics.Stopwatch]::StartNew()
-  & pwsh -NoProfile -File (Join-Path $using:repo $suite.s) @($suite.a) -Out (Join-Path $using:Out $suite.n) *> $log
-  [pscustomobject]@{n=$suite.n;code=$LASTEXITCODE;fails=[bool]$suite.Fails;log=$log;seconds=$watch.Elapsed.TotalSeconds}
+ foreach($suite in $suites) {
+  $gateJobs+=@{name=$suite.n;runner=$suite.s;arguments=@($suite.a);fails=[bool]$suite.Fails}
  }
- foreach($run in @($runs | Sort-Object n)){
-  if($run.fails){
-   if($run.code -eq 0){throw "$($run.n) passed, but it is a negative control and must fail; see $($run.log)"}
-   if(!(Select-String -LiteralPath $run.log -Pattern 'FAIL' -CaseSensitive -Quiet)){throw "$($run.n) failed without a FAIL line (build or setup?); see $($run.log)"}
-  } elseif($run.code -ne 0){throw "$($run.n) failed; see $($run.log)"}
-  $results+=@{name=$run.n;status='PASS';seconds=$run.seconds}
-  Write-Host "$($run.n) PASS $([Math]::Round($run.seconds,2))s$(if($run.fails){' (negative control failed as it must)'})"
+ $variables=@{}
+ foreach($name in @('repo','Workspace','Out','Kits','Profile','icd','radvBuild','umdSource','umdBuild','routerHosted','firmware')) {
+  $variables[$name]=(Get-Variable -Name $name).Value
  }
- @{status='PASS';profile=$Profile;kits=$Kits;context=$context;seconds=$clock.Elapsed.TotalSeconds;checks=$results} | ConvertTo-Json -Depth 5 | Set-Content "$Out\result.json"
+ $vs=& "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe" -latest -products * -property installationPath
+ if(!$vs){throw 'Visual Studio not found'}
+ # Host scripts select the newest MSVC directory; the cache hashes that exact tree too.
+ $compiler=(Get-ChildItem "$vs/VC/Tools/MSVC" -Directory | Sort-Object Name | Select-Object -Last 1).FullName
+ $planPath=Join-Path $Out 'plan.json'
+ @{variables=$variables;context=$context;compiler=$compiler;jobs=$gateJobs;skips=$results} |
+   ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $planPath -Encoding utf8
+ if($PlanOnly){return}
+ $argsGate=@('-B',"$repo/tools/quality/gate_cache.py",'--plan',$planPath,'--jobs',$Jobs)
+ if($NoCache){$argsGate+='--no-cache'}
+ & python @argsGate
+ exit $LASTEXITCODE
 } catch {
  @{status='FAIL';profile=$Profile;kits=$Kits;context=$context;seconds=$clock.Elapsed.TotalSeconds;checks=$results;error=$_.Exception.Message} | ConvertTo-Json -Depth 5 | Set-Content "$Out\result.json"
  Write-Error $_

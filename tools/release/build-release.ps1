@@ -48,6 +48,8 @@ param(
     [string]$NoProvenanceReason,                 # required with -NoProvenance: recorded in the build log and manifest
     [switch]$RebuildCheck                        # also rebuild every payload file that claims a bit-identical rebuild (slow)
 )
+# Release and provenance rebuilds always execute the gates, including nested analysis.
+$env:BC250_GATE_NOCACHE = '1'
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'headless.ps1')
 # The setup window is the default entry of an ordinary user, so a package without it is not a release.
@@ -443,6 +445,13 @@ if ($r.code -ne 0) { throw 'the packaged bc250kmd.inf and installer\registry-def
 $r = Invoke-Headless -File $pwshExe -Arguments @('-NoProfile', '-File', (Join-Path $PSScriptRoot 'test-kmd-compile.ps1'), '-Root', $Root, '-Out', (Join-Path $Out 'kmd-compile'), '-KitVersion', $KitVersion) -TimeoutSeconds 900
 $r.text
 if ($r.code -ne 0) { throw 'the kernel driver of this repository does not compile and link (see above)' }
+
+# Full owns the controls removed from the incremental KMD profile. No cache can
+# supply a PASS here; the receipt identifies every executed check and its deadline.
+$qualityCmd = Join-Path $repo 'tools\quality\quick.cmd'
+$qualityOut = Join-Path $Out 'quality-full'
+& $qualityCmd $Root $qualityOut $repo 'Full' (Join-Path $Root 'toolchain\nuget')
+if ($LASTEXITCODE -ne 0) { throw 'Full uncached release quality gates failed' }
 
 Write-Host 'manifest'
 # Where each payload directory lands on the tester PC (install.ps1 does the copying).

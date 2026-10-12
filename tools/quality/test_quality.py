@@ -8,6 +8,7 @@ from pathlib import Path
 import shutil
 import tempfile
 import unittest
+from unittest.mock import patch
 from artifact_gate import sha, verify
 from msvc_analysis import run
 
@@ -27,6 +28,7 @@ class QualityControls(unittest.TestCase):
             receipt['status']='FAIL'
             with self.assertRaises(ValueError):verify(receipt,{'driver.dll':path})
 
+    @patch.dict(os.environ, {'BC250_GATE_NOCACHE': '0'})
     def test_analysis_cache_and_warning(self):
         with tempfile.TemporaryDirectory(dir=OUT) as d:
             root=Path(d);header=root/'value.h';source=root/'control.c'
@@ -39,6 +41,10 @@ class QualityControls(unittest.TestCase):
                 return json.loads((args.out/'summary.json').read_text())[0]['status']
             self.assertEqual(check(),'PASS')
             self.assertEqual(check(),'CACHED')
+            # This is a fixture cache, even inside a forced release run. Check
+            # the forced path too; no production gate inherits this override.
+            with patch.dict(os.environ, {'BC250_GATE_NOCACHE': '1'}):
+                self.assertEqual(check(),'PASS')
             header.write_text('#define VALUE 2\n')
             self.assertEqual(check(),'PASS')
             header.write_text('#define VALUE value\n')
