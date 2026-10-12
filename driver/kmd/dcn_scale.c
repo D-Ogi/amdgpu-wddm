@@ -551,22 +551,73 @@ static long WritePipe(BC250_DISP_IO* Io, const BC250_SCALER_PLAN* P, BC250_SCALE
     return BC250_DISP_STATUS_SUCCESS;
 }
 
+static long ScalerBegin(BC250_DISP_IO* Io, const BC250_SCALER_PLAN* Plan, BC250_SCALER_RESULT* Result,
+                       int Stopped)
+{
+    BC250_SCALER_RESULT empty = {0};
+    unsigned long control, clock;
+    long status;
+    if (!Result) return BC250_DISP_STATUS_INVALID;
+    *Result = empty;
+    if (!Io || !Io->Read || !Io->Write || !Plan ||
+        Plan->Viewport.Width == 0 || Plan->Recout.Width == 0) return BC250_DISP_STATUS_INVALID;
+    TRY(Bc250DispRead(Io, BC250_REG_DMU_DSCL0_SCL_MODE, &Result->SclModeBefore));
+    TRY(Bc250DispRead(Io, BC250_REG_DMU_OTG0_OTG_CONTROL, &control));
+    if (Stopped) {
+        // optc1_disable_crtc clears MASTER_EN and waits for OTG_BUSY=0.
+        // dcn10_hwseq skips the TG lock for an already disabled controller.
+        if (control & OTG0_OTG_CONTROL__OTG_MASTER_EN_MASK) return BC250_DISP_STATUS_MISMATCH;
+        TRY(Bc250DispRead(Io, BC250_REG_DMU_OTG0_OTG_CLOCK_CONTROL, &clock));
+        if (clock & OTG0_OTG_CLOCK_CONTROL__OTG_BUSY_MASK) return BC250_DISP_STATUS_MISMATCH;
+        status = Bc250DispRead(Io, BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK, &Result->LockStatus);
+        Result->LockStatusValid = status >= 0;
+        if (status < 0) { Result->LockStatus = 0; return status; }
+        if (Result->LockStatus & (OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK |
+                                 OTG0_OTG_MASTER_UPDATE_LOCK__UPDATE_LOCK_STATUS_MASK))
+            return BC250_DISP_STATUS_MISMATCH;
+    } else if (!(control & OTG0_OTG_CONTROL__OTG_MASTER_EN_MASK)) {
+        return BC250_DISP_STATUS_MISMATCH;
+    }
+    return BC250_DISP_STATUS_SUCCESS;
+}
+
+static void ScalerAfter(BC250_DISP_IO* Io, BC250_SCALER_RESULT* Result)
+{
+    (void)Bc250DispRead(Io, BC250_REG_DMU_DSCL0_SCL_MODE, &Result->SclModeAfter);
+    (void)Bc250DispRead(Io, BC250_REG_DMU_HUBP0_DCHUBP_CNTL, &Result->HubpCntlAfter);
+}
+
+long Bc250ScalerProgramStopped(BC250_DISP_IO* Io, const BC250_SCALER_PLAN* Plan, BC250_SCALER_RESULT* Result)
+{
+    long status = ScalerBegin(Io, Plan, Result, 1);
+    if (status < 0) return status;
+    status = WritePipe(Io, Plan, Result);
+    ScalerAfter(Io, Result);
+    return status;
+}
+
 long Bc250ScalerProgram(BC250_DISP_IO* Io, const BC250_SCALER_PLAN* Plan, BC250_SCALER_RESULT* Result)
 {
     unsigned long value = 0, waited = 0;
-    long status;
+    long status = ScalerBegin(Io, Plan, Result, 0);
 
-    Result->LockWaitUs = Result->CoefWrites = Result->SclModeBefore = Result->SclModeAfter = 0;
-    Result->HubpCntlAfter = 0;
-    if (Plan->Viewport.Width == 0 || Plan->Recout.Width == 0) return BC250_DISP_STATUS_INVALID;
-    status = Bc250DispRead(Io, BC250_REG_DMU_DSCL0_SCL_MODE, &Result->SclModeBefore);
     if (status < 0) return status;
-    // optc1_lock: take the lock and wait for its acknowledgement before the first double-buffered write.
+    // optc1_lock selects this OTG before requesting the update lock. REG_SET
+    // uses an initial value of zero in AMD's implementation, including keepout.
+    status = Bc250DispWrite(Io, BC250_REG_DMU_OTG0_OTG_GLOBAL_CONTROL0,
+                           Bc250DispField(OTG0_OTG_GLOBAL_CONTROL0__OTG_MASTER_UPDATE_LOCK_SEL_MASK, 0));
+    if (status < 0) return status;
     status = Bc250DispWrite(Io, BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK,
                             OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK);
-    if (status < 0) return status;
+    if (status < 0) {
+        // A failed posted write may still have reached the device.
+        (void)Bc250DispWrite(Io, BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK, 0);
+        return status;
+    }
     for (;;) {
         status = Bc250DispRead(Io, BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK, &value);
+        Result->LockStatus = status >= 0 ? value : 0;
+        Result->LockStatusValid = status >= 0;
         if (status < 0 || (value & OTG0_OTG_MASTER_UPDATE_LOCK__UPDATE_LOCK_STATUS_MASK) != 0) break;
         if (waited == LOCK_WAIT_STEPS) { status = BC250_DISP_STATUS_TIMEOUT; break; }
         status = Bc250DispStall(Io, 1);
@@ -583,8 +634,7 @@ long Bc250ScalerProgram(BC250_DISP_IO* Io, const BC250_SCALER_PLAN* Plan, BC250_
     if (status >= 0)
         status = Bc250DispWrite(Io, BC250_REG_DMU_OTG0_OTG_TRIGA_MANUAL_TRIG,
                                 OTG0_OTG_TRIGA_MANUAL_TRIG__OTG_TRIGA_MANUAL_TRIG_MASK);
-    (void)Bc250DispRead(Io, BC250_REG_DMU_DSCL0_SCL_MODE, &Result->SclModeAfter);
-    (void)Bc250DispRead(Io, BC250_REG_DMU_HUBP0_DCHUBP_CNTL, &Result->HubpCntlAfter);
+    ScalerAfter(Io, Result);
     return status;
 }
 

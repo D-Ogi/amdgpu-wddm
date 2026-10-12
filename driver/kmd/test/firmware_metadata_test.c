@@ -43,8 +43,10 @@ typedef struct {void* Psp;int GartLock,GpuStopUnconfirmed,Smu;
     // M15.14 (0.7.216.20): whether this start captured the firmware's plane format (dcn.c), which the
     // trailer publishes as BC250_SCANOUT_CAPS_PLANE_FORMATS.
     BOOLEAN DcnPlaneFormats;
+    BOOLEAN ConnectorEnabled;
     struct {BOOLEAN InheritedFixed;} Modeset;
 } BC250_DEVICE;
+static BOOLEAN ConnectorIsEnabled(BC250_DEVICE* d){return d->ConnectorEnabled;}
 /* bc250kmd.h: the committed source size, else the POST size. */
 static ULONG DisplaySourceWidth(const BC250_DEVICE* d){return d->SourceWidth?d->SourceWidth:d->Post.Width;}
 static ULONG DisplaySourceHeight(const BC250_DEVICE* d){return d->SourceHeight?d->SourceHeight:d->Post.Height;}
@@ -216,6 +218,20 @@ int main(int argc,char**argv)
         CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
         memcpy(&scanout,extended+BC250_SCANOUT_CAPS_OFFSET,sizeof(scanout));
         CHECK(scanout.flags==(BC250_SCANOUT_CAPS_DIRECT_FLIP|BC250_SCANOUT_CAPS_PLANE_FORMATS));
+        // The runtime connector currently admits RGB8 ARGB only. It must not
+        // advertise the extended formats merely because GOP captured them.
+        d.ConnectorEnabled=1;
+        memset(extended,0xA5,sizeof(extended));
+        CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
+        memcpy(&scanout,extended+BC250_SCANOUT_CAPS_OFFSET,sizeof(scanout));
+        CHECK(scanout.flags==BC250_SCANOUT_CAPS_DIRECT_FLIP);
+        d.ConnectorEnabled=0;
+        d.Modeset.InheritedFixed=1;
+        memset(extended,0xA5,sizeof(extended));
+        CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
+        memcpy(&scanout,extended+BC250_SCANOUT_CAPS_OFFSET,sizeof(scanout));
+        CHECK(scanout.flags==BC250_SCANOUT_CAPS_DIRECT_FLIP);
+        d.Modeset.InheritedFixed=0;
         wddm->DirectFlipHandshake=0;
         memset(extended,0xA5,sizeof(extended));
         CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);

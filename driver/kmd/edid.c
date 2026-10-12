@@ -76,6 +76,61 @@ static void DecodeDtd(const unsigned char* d, BC250_EDID_TIMING* t)
     t->Flags = d[17];
 }
 
+int Bc250TargetTimingValid(const BC250_TARGET_TIMING* t)
+{
+    // DCN201 progressive RGB8 scope. Restrict totals before every addition;
+    // EDID is external input, including when a host client supplies a fixture.
+    return t && t->PixelClockKhz >= 25000 && t->PixelClockKhz <= 600000 &&
+        t->HActive >= 640 && t->HActive <= 4096 && t->VActive >= 480 && t->VActive <= 2160 &&
+        t->HBlank && t->HBlank <= 4096 && t->VBlank && t->VBlank <= 4096 &&
+        t->HSyncOffset && t->HSyncOffset < t->HBlank &&
+        t->HSyncWidth && t->HSyncWidth <= t->HBlank-t->HSyncOffset &&
+        t->VSyncOffset && t->VSyncOffset < t->VBlank &&
+        t->VSyncWidth && t->VSyncWidth <= t->VBlank-t->VSyncOffset &&
+        !(t->Flags & 0x80u) && (t->Flags & 0x18u)==0x18u;
+}
+
+int Bc250TargetTimingEqual(const BC250_TARGET_TIMING* a, const BC250_TARGET_TIMING* b)
+{
+    return a->PixelClockKhz==b->PixelClockKhz && a->HActive==b->HActive && a->HBlank==b->HBlank &&
+        a->HSyncOffset==b->HSyncOffset && a->HSyncWidth==b->HSyncWidth &&
+        a->VActive==b->VActive && a->VBlank==b->VBlank && a->VSyncOffset==b->VSyncOffset &&
+        a->VSyncWidth==b->VSyncWidth && (a->Flags & 0x9eu)==(b->Flags & 0x9eu);
+}
+
+unsigned long Bc250TargetRefreshMilliHz(const BC250_TARGET_TIMING* t)
+{
+    unsigned long long total;
+    if (!Bc250TargetTimingValid(t)) return 0;
+    total=(unsigned long long)(t->HActive+t->HBlank)*(t->VActive+t->VBlank);
+    return (unsigned long)(((unsigned long long)t->PixelClockKhz*1000000ull+total/2)/total);
+}
+
+static void AddTarget(BC250_EDID_INFO* info, const BC250_TARGET_TIMING* t)
+{
+    unsigned long i;
+    if (!Bc250TargetTimingValid(t)) return;
+    for (i=0;i<info->TargetCount;++i)
+        if (Bc250TargetTimingEqual(t,&info->Targets[i])) return;
+    if (info->TargetCount<BC250_EDID_MAX_MODES) info->Targets[info->TargetCount++]=*t;
+}
+
+unsigned long Bc250EdidTargetList(const BC250_EDID_INFO* info, unsigned long clockLimit,
+    unsigned long maxWidth, unsigned long maxHeight, BC250_TARGET_TIMING* out, unsigned long capacity)
+{
+    unsigned long i,n=0;
+    if (!info || !out || !clockLimit ||
+        (info->Reason!=BC250_EDID_OK && info->Reason!=BC250_EDID_EXTENSION_DROPPED)) return 0;
+    if (info->Hdmi && info->MaxTmdsClockKhz && info->MaxTmdsClockKhz<clockLimit)
+        clockLimit=info->MaxTmdsClockKhz;
+    for (i=0;i<info->TargetCount && i<BC250_EDID_MAX_MODES && n<capacity;++i) {
+        const BC250_TARGET_TIMING* t=&info->Targets[i];
+        if (Bc250TargetTimingValid(t) && t->PixelClockKhz<=clockLimit &&
+            t->HActive<=maxWidth && t->VActive<=maxHeight) out[n++]=*t;
+    }
+    return n;
+}
+
 static unsigned long RefreshMilliHz(const BC250_EDID_TIMING* t)
 {
     unsigned long long total = (unsigned long long)(t->HActive + t->HBlank) * (t->VActive + t->VBlank);
@@ -86,9 +141,15 @@ static unsigned long RefreshMilliHz(const BC250_EDID_TIMING* t)
 static void AddDtd(BC250_EDID_INFO* Info, const unsigned char* d, int First)
 {
     BC250_EDID_TIMING t;
+    BC250_TARGET_TIMING target;
     unsigned long milli;
     DecodeDtd(d, &t);
     if (t.Flags & 0x80u) return;                // interlaced: not a desktop size this driver offers
+    target.PixelClockKhz=t.PixelClock10Khz*10;
+    target.HActive=t.HActive;target.HBlank=t.HBlank;target.HSyncOffset=t.HSyncOffset;target.HSyncWidth=t.HSyncWidth;
+    target.VActive=t.VActive;target.VBlank=t.VBlank;target.VSyncOffset=t.VSyncOffset;target.VSyncWidth=t.VSyncWidth;
+    target.Flags=t.Flags;
+    AddTarget(Info,&target);
     milli = RefreshMilliHz(&t);
     AddMode(Info, t.HActive, t.VActive, (milli + 500) / 1000, BC250_MODE_SRC_DTD);
     if (First && !Info->HasPreferred) {
@@ -159,7 +220,12 @@ static const unsigned short g_Vic[][4] = {
 
 static void AddVic(BC250_EDID_INFO* Info, unsigned long Vic)
 {
+    static const struct { unsigned long Vic; BC250_TARGET_TIMING Timing; } targets[] = {
+#include "../shim/cta_target_modes.inc"
+    };
     unsigned long i;
+    for (i=0;i<sizeof(targets)/sizeof(targets[0]);++i)
+        if (targets[i].Vic==Vic) { AddTarget(Info,&targets[i].Timing);break; }
     for (i = 0; i < sizeof(g_Vic) / sizeof(g_Vic[0]); i++)
         if (g_Vic[i][0] == Vic) { AddMode(Info, g_Vic[i][1], g_Vic[i][2], g_Vic[i][3], BC250_MODE_SRC_VIC); return; }
 }

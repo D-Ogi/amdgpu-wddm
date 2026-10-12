@@ -45,11 +45,25 @@ $tests = [ordered]@{
     'edid_test'      = @('edid.c')
     'dpaux_test'     = @('dpaux.c', 'display_io.c', 'edid.c')
     'ddc_test'       = @('../shim/bc250_ddc.c', '../shim/bc250_dual_mode.c', 'display_io.c', 'edid.c')
+    'hpd_test'       = @('../shim/bc250_hpd.c', 'display_io.c')
+    'dp_train_test'  = @('../shim/bc250_dp_train.c')
+    'dp_phy_test'    = @('../shim/bc250_dp_phy.c', 'display_io.c')
+    'sink_test'      = @('../shim/bc250_sink.c', '../shim/bc250_dp_train.c', 'edid.c')
+    'optc_test'      = @('../shim/bc250_optc.c', 'display_io.c')
+    'dp_stream_test' = @('../shim/bc250_dp_stream.c', '../shim/bc250_optc.c', 'display_io.c')
     'dcn_scale_test' = @('dcn_scale.c', 'display_io.c', 'edid.c')
 }
 $failed = @()
 & python (Join-Path $repo 'tools\import\extract_display.py') --check
 if ($LASTEXITCODE -ne 0) { throw 'AMD display imports are stale' }
+& python (Join-Path $repo 'tools\import\extract_target_modes.py') --check
+if ($LASTEXITCODE -ne 0) { throw 'CTA target modes are stale' }
+& python (Join-Path $repo 'tools\import\extract_connector.py') --check
+if ($LASTEXITCODE -ne 0) { throw 'connector extracts are stale' }
+& python (Join-Path $repo 'tools\import\extract_optc.py') --check
+if ($LASTEXITCODE -ne 0) { throw 'OPTC extracts are stale' }
+& python (Join-Path $repo 'tools\import\extract_dp_stream.py') --check
+if ($LASTEXITCODE -ne 0) { throw 'DP stream extracts are stale' }
 foreach ($t in $tests.Keys) {
     $tobj = Join-Path $obj $t
     New-Item -ItemType Directory -Force $tobj | Out-Null

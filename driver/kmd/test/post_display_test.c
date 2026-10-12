@@ -6,6 +6,8 @@
 #include "regs.generated.h"
 #include "dcn_2_0_1_sh_mask.h"
 #include "plane_format.h"
+#include "display_io.h"
+#include "dcn_translate.h"
 typedef int32_t NTSTATUS;
 typedef unsigned long ULONG;
 typedef unsigned UINT;
@@ -17,10 +19,17 @@ typedef void* PVOID;
 typedef unsigned D3DDDIFORMAT;
 typedef unsigned D3DDDI_VIDEO_PRESENT_TARGET_ID;
 typedef const void* PDXGKARG_SYSTEM_DISPLAY_ENABLE_FLAGS;
-typedef struct {
+typedef struct { long long QuadPart; } PHYSICAL_ADDRESS;
+typedef struct { UINT Width,Height,Pitch; D3DDDIFORMAT ColorFormat; PHYSICAL_ADDRESS PhysicAddress; } DXGK_DISPLAY_INFORMATION;
+typedef struct _BC250_DEVICE {
+    BOOLEAN VramEnabled;PHYSICAL_ADDRESS VramPhysical;ULONGLONG VramLength;
     void *Mmio,*Framebuffer;
     SIZE_T FramebufferLength;
-    struct { UINT Width,Height,Pitch; D3DDDIFORMAT ColorFormat; } Post;
+    DXGK_DISPLAY_INFORMATION Post,RuntimePost;
+    UCHAR* RuntimeFramebuffer;
+    SIZE_T RuntimeFramebufferLength;
+    PHYSICAL_ADDRESS RuntimeFramebufferPhysical;
+    volatile long RuntimeDisplayChanged,RuntimePostValid,RuntimePlaneBlank;
     BOOLEAN DcnWriteEnabled,DcnFirmwareKnown,DcnDiverged,SystemDisplayReady,DcnBlanked;
     ULONG DcnFirmwarePitch,DcnCurrentPitch;
     ULONGLONG DcnFirmwareAddress,DcnCurrentAddress;
@@ -30,6 +39,7 @@ typedef struct {
     BOOLEAN DcnPlaneFormats;
     ULONG DcnPlaneFormat;
 } BC250_DEVICE;
+#include "connector_surface.h"
 #define TRUE 1
 #define FALSE 0
 #define STATUS_SUCCESS ((NTSTATUS)0)
@@ -48,22 +58,30 @@ typedef struct {
 #define BC250_DCNFLIP_POLL_STEP_US 100
 #define UNREFERENCED_PARAMETER(x) ((void)(x))
 #define min(a,b) ((a)<(b)?(a):(b))
+#define RtlZeroMemory(p,n) memset(p,0,n)
 #define RtlCopyMemory(d,s,n) memcpy(d,s,n)
 static unsigned checks,failures;
 #define CHECK(x) do {++checks;if(!(x)){++failures;printf("FAIL %d: %s\n",__LINE__,#x);}}while(0)
 static struct {
-    ULONG pitch,flip,surface,high,blank,dbuf;
+    ULONG pitch,flip,surface,high,blank,dbuf,hubp;
+    unsigned blank_reads,unstable_blank;
     ULONG config,crossbar,cnvc;unsigned format_reads,format_writes;   /* M15.14: the plane format registers */
     ULONGLONG requested,scanned;
     unsigned elapsed,latch_delay,writes;
     int locked,triggered,never_latch;
 } model;
 static long InterlockedIncrement(volatile long *v){return ++*v;}
+static long InterlockedCompareExchange(volatile long* v,long n,long old){long r=*v;if(r==old)*v=n;return r;}
+static long InterlockedExchange(volatile long* v,long n){long r=*v;*v=n;return r;}
 static NTSTATUS MmioDcnRead(const BC250_DEVICE*d,ULONG reg,ULONG*out)
 {
     if(!d->Mmio)return STATUS_DEVICE_NOT_READY;
     switch(reg){
-    case BC250_REG_DMU_OTG0_OTG_BLANK_CONTROL:*out=model.blank;break;
+    case BC250_REG_DMU_OTG0_OTG_BLANK_CONTROL:
+        *out=model.blank;
+        if(model.unstable_blank && ++model.blank_reads==2)*out^=OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK;
+        break;
+    case BC250_REG_DMU_HUBP0_DCHUBP_CNTL:*out=model.hubp;break;
     case BC250_REG_DMU_OTG0_OTG_DOUBLE_BUFFER_CONTROL:*out=model.dbuf;break;
     case BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK:*out=model.locked?OTG0_OTG_MASTER_UPDATE_LOCK__UPDATE_LOCK_STATUS_MASK:0;break;
     case BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL:*out=model.flip;break;
@@ -108,14 +126,27 @@ static NTSTATUS MmioDcnWriteEx(const BC250_DEVICE*d,ULONG reg,ULONG value,BOOLEA
  * Counted here; the modeset host suite tests what it writes. It must run only after a successful restore. */
 static unsigned modeset_restores;
 static void ModesetRestoreQuiet(BC250_DEVICE*d){CHECK(!d->DcnDiverged);++modeset_restores;}
+static int plane_is_blank;
 static void KeStallExecutionProcessor(ULONG us)
 {
     CHECK(us==1 || us==100);model.elapsed+=us;
-    if(model.triggered){
+    if(model.triggered && !plane_is_blank){
         // The pending bit can clear before the in-use address catches up.
         if(model.elapsed>=100)model.flip&=~HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK;
         if(!model.never_latch && model.elapsed>=model.latch_delay)model.scanned=model.requested;
     }
+}
+static long RuntimeRead(void* c,unsigned long o,unsigned long* v){return MmioDcnRead(c,o,v);}
+static long RuntimeWrite(void* c,unsigned long o,unsigned long v){return MmioDcnWriteEx(c,o,v,TRUE);}
+static void RuntimeStall(void* c,unsigned long us){(void)c;KeStallExecutionProcessor(us);}
+static unsigned plane_blanks,plane_unblanks;
+static long Bc250Dcn201PlaneBlank(BC250_DISP_IO* io,int blank)
+{
+    (void)io;
+    plane_is_blank=blank;
+    if(blank) ++plane_blanks;
+    else { ++plane_unblanks; CHECK(model.blank&OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK); }
+    return STATUS_SUCCESS;
 }
 /* ACTUAL_SOURCE */
 static void init(BC250_DEVICE*d,ULONG*fb)
@@ -200,6 +231,74 @@ int main(void)
         // Already the firmware's surface in the firmware's format: verified by reads, nothing written.
         writes=model.writes;
         CHECK(DcnRestorePostDisplay(&d)==STATUS_SUCCESS);CHECK(model.writes==writes && model.format_reads>=6);
+    }
+    // Changed geometry must never silently fall back to the old GOP mapping.
+    init(&d,fb);d.RuntimeDisplayChanged=1;
+    CHECK(Bc250SystemDisplayEnable(&d,BC250_CHILD_UID,NULL,&width,&height,&fmt)==STATUS_DEVICE_NOT_READY);
+    CHECK(model.writes==0 && !d.SystemDisplayReady);
+    d.SystemDisplayReady=TRUE;Bc250SystemDisplayWrite(&d,src,4,1,16,0,0);CHECK(fb[0]==0);
+    // Runtime geometry remains distinct from immutable boot geometry.
+    d.RuntimePost=d.Post;d.RuntimePost.Width=2;d.RuntimePost.Height=2;
+    d.RuntimeFramebuffer=(UCHAR*)fb;d.RuntimeFramebufferLength=96;
+    d.RuntimeFramebufferPhysical.QuadPart=0x490000000ll;
+    d.RuntimePost.PhysicAddress=d.RuntimeFramebufferPhysical;d.RuntimePostValid=1;
+    d.DcnPlaneFormats=TRUE;d.DcnFirmwareSurfaceConfig=8;
+    d.DcnFirmwareHubpretControl=0x00E40000ul;d.DcnFirmwareCnvcFormat=8;
+    writes=modeset_restores;
+    CHECK(Bc250SystemDisplayEnable(&d,BC250_CHILD_UID,NULL,&width,&height,&fmt)==STATUS_SUCCESS);
+    CHECK(width==2 && height==2 && model.scanned==0x490000000ull && d.Post.Width==4);
+    CHECK(modeset_restores==writes && plane_blanks==1 && plane_unblanks==1 && !d.RuntimePlaneBlank);
+    Bc250SystemDisplayWrite(&d,src,4,1,16,0,0);CHECK(fb[0]==1 && fb[1]==2 && fb[2]==0);
+    // Ordinary allocation handoff preserves OTG visibility, but must release
+    // HUBP so a later application flip can scan out without a cold unblank.
+    model.blank=OTG0_OTG_BLANK_CONTROL__OTG_BLANK_DATA_EN_MASK|OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK;
+    CHECK(DcnRuntimeSurface(&d,FALSE)==STATUS_SUCCESS);
+    CHECK(!d.RuntimePlaneBlank && plane_unblanks==2 && (model.blank&OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK));
+    // Hardware visibility wins over a deliberately stale software cache.
+    model.blank=0;d.DcnBlanked=TRUE;model.elapsed=0;model.scanned=0;
+    CHECK(DcnRuntimeSurface(&d,FALSE)==STATUS_SUCCESS);
+    CHECK(!d.DcnBlanked && !model.blank && !plane_is_blank);
+    model.never_latch=1;model.elapsed=0;model.scanned=0;
+    CHECK(DcnRuntimeSurface(&d,TRUE)==STATUS_IO_TIMEOUT);
+    CHECK(d.RuntimePlaneBlank && plane_is_blank && plane_unblanks==4 && model.elapsed==50000);
+    CHECK(d.DcnBlanked && (model.blank&OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK));
+    {
+        BC250_LINK_SURFACE saved,refused;
+        init(&d,fb);d.VramEnabled=TRUE;d.VramPhysical.QuadPart=0x400000000ll;d.VramLength=0x100000000ull;
+        d.DcnPlaneFormats=TRUE;d.DcnFirmwareSurfaceConfig=8;
+        d.DcnFirmwareHubpretControl=0x00E40000;d.DcnFirmwareCnvcFormat=8;
+        model.config=8;model.crossbar=0x00E40000;model.cnvc=8;model.pitch=7;
+        model.scanned=0x480000000ull;
+        CHECK(DcnLinkSurfaceCapture(&d,4,3,&saved)==STATUS_SUCCESS);
+        CHECK(saved.Physical==model.scanned && saved.Physical!=d.DcnFirmwareAddress && saved.Pitch==32);
+        CHECK(saved.Visible==1);
+        CHECK(model.writes==0);
+        model.blank=OTG0_OTG_BLANK_CONTROL__OTG_BLANK_DATA_EN_MASK;
+        CHECK(DcnLinkSurfaceCapture(&d,4,3,&refused)==STATUS_DEVICE_BUSY && !refused.Physical);
+        model.blank=0;model.unstable_blank=1;model.blank_reads=0;
+        CHECK(DcnLinkSurfaceCapture(&d,4,3,&refused)==STATUS_DEVICE_BUSY && !refused.Physical);
+        model.unstable_blank=0;model.hubp=HUBP0_DCHUBP_CNTL__HUBP_BLANK_EN_MASK;
+        CHECK(DcnLinkSurfaceCapture(&d,4,3,&refused)==STATUS_SUCCESS && !refused.Visible);
+        model.hubp=0;
+        model.blank=OTG0_OTG_BLANK_CONTROL__OTG_BLANK_DATA_EN_MASK|OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK;
+        CHECK(DcnLinkSurfaceCapture(&d,4,3,&refused)==STATUS_SUCCESS && !refused.Visible);
+        model.blank=0;
+        model.flip=HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK;
+        CHECK(DcnLinkSurfaceCapture(&d,4,3,&refused)==STATUS_DEVICE_BUSY && refused.Physical==0);
+        model.flip=0;model.scanned=0x500000000ull;
+        CHECK(DcnLinkSurfaceCapture(&d,4,3,&refused)==STATUS_INVALID_PARAMETER && refused.Physical==0);
+        model.scanned=0x480000000ull;model.config=0xff;
+        CHECK(DcnLinkSurfaceCapture(&d,4,3,&refused)==STATUS_INVALID_PARAMETER);
+        model.config=8;model.scanned=0x490000000ull;fb[0]=0x12345678;
+        CHECK(DcnLinkSurfaceRestore(&d,&saved)==STATUS_SUCCESS);
+        CHECK(model.scanned==saved.Physical && !model.blank && !plane_is_blank && fb[0]==0x12345678);
+        saved.Visible=0;
+        CHECK(DcnLinkSurfaceRestore(&d,&saved)==STATUS_SUCCESS);
+        CHECK(d.DcnBlanked && plane_is_blank==0);
+        model.never_latch=1;model.elapsed=0;model.scanned=0;
+        saved.Visible=1;
+        CHECK(DcnLinkSurfaceRestore(&d,&saved)==STATUS_IO_TIMEOUT);
+        CHECK(d.DcnBlanked && plane_is_blank && fb[0]==0x12345678);
     }
     printf("post display restore: %u checks, %u failures\n",checks,failures);return failures?1:0;
 }

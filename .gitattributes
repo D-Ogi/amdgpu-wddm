@@ -68,3 +68,9 @@ compute/hip/tests/data/** -text
 # The Ollama patches are applied with git apply to an upstream tree whose CMakeLists.txt has CRLF lines, and
 # compute/ollama/build-ollama.ps1 records the SHA-256 of each patch: they are stored byte for byte.
 compute/ollama/patches/** -text
+
+# The imported AMD display reference sources are hash pinned: driver/shim/dml201/reference/manifest.json,
+# driver/shim/dml201/reference/pipe/manifest.json and the extractors under tools/import compare their SHA-256
+# with the files. They are stored byte for byte, so a checkout gives the bytes the hashes name.
+driver/shim/dml201/reference/** -text
+driver/amdgpu-import/reference/** -text

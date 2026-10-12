@@ -109,6 +109,12 @@ $shimInc = @("/I$repo\driver\shim\include", "/I$repo\driver\amdgpu-import", "/I$
 $shimSources = @("$repo\driver\shim\shim.c", "$repo\driver\shim\bc250_gmc.c", "$repo\driver\shim\bc250_gart.c", "$repo\driver\shim\bc250_pte.c", "$repo\driver\shim\bc250_psp.c", "$repo\driver\shim\bc250_uma.c")
 $shimSources += @("$repo\driver\shim\bc250_ddc.c", "$repo\driver\shim\bc250_dual_mode.c")
 $shimSources += @("$repo\driver\shim\bc250_hdmi_audio.c")
+$shimSources += @('bc250_atom_image.c', 'bc250_atom_preflight.c', 'bc250_atom.c', 'bc250_atom_firmware.c') | ForEach-Object { "$repo\driver\shim\$_" }
+$shimSources += @("$repo\driver\shim\bc250_hdmi_link.c")
+$shimSources += @('bc250_hpd.c','bc250_dp_train.c','bc250_dp_phy.c','bc250_sink.c','bc250_optc.c','bc250_link_atom.c') | ForEach-Object { "$repo\driver\shim\$_" }
+$shimSources += @("$repo\driver\shim\bc250_dp_stream.c")
+$shimSources += @("$repo\driver\shim\bc250_link_regs.c", "$repo\driver\shim\bc250_dml201.c",
+    "$repo\driver\shim\bc250_dcn201_pipe.c")
 # M5 second part: amdgpu's gfx/SDMA bring-up transcribed against AMD's imported tables. C4245: AMD's PACKET3() in the
 # imported nvd.h is a signed int with bit 31 set (driver\shim\README.md).
 # M6: bc250_ih.c, the interrupt ring (navi10_ih.c), is in this group for its include path.

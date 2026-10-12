@@ -303,6 +303,8 @@ typedef struct {
     FAKE_POST Post;
     void* Mmio;
     LONG RetainedPowerPhase;
+    unsigned long long DisplayReservationEnd,RuntimeFramebufferLength;
+    LONG RuntimePostValid,RuntimeDisplayChanged,RuntimePlaneBlank;
 } BC250_DEVICE;
 #define PDXGK_START_INFO ULONG*
 #define PDXGKRNL_INTERFACE FAKE_IF*
@@ -331,6 +333,14 @@ static void BoardMemoryStart(BC250_DEVICE* d) { (void)d; }
 static void BoardMemoryStop(BC250_DEVICE* d) { (void)d; Trace("bmstop"); }
 static void BoardProviderBind(BC250_DEVICE* d) { (void)d; }
 static NTSTATUS fbStatus, wddmStatus, timingStatus, smuStatus;
+static unsigned connectorPrepares,connectorStarts,connectorDirty;
+static NTSTATUS ConnectorBufferPrepare(BC250_DEVICE* d) {
+    connectorPrepares++;
+    if(d->DisplayReservationEnd || d->RuntimeFramebufferLength || d->RuntimePostValid ||
+       d->RuntimeDisplayChanged || d->RuntimePlaneBlank) connectorDirty++;
+    return STATUS_SUCCESS;
+}
+static NTSTATUS ConnectorStart(BC250_DEVICE* d) { (void)d;connectorStarts++;return STATUS_SUCCESS; }
 // What the record says at this point of the start, for the case where the machine never reaches the end of it, and
 // for the case where the write of the record was torn: nothing of the last start may still stand here.
 static WCHAR resultInsideStart[16], stepInsideStart[64];
@@ -374,7 +384,7 @@ static void IhStart(BC250_DEVICE* d) { (void)d; }
 static PCWSTR wddmSubStep;
 static NTSTATUS WddmStart(BC250_DEVICE* d) { (void)d; if (wddmSubStep) GuardStartSubStep(wddmSubStep); return wddmStatus; }
 static void ModesetStart(BC250_DEVICE* d) { (void)d; }
-static void DpAudioStart(BC250_DEVICE* d) { (void)d; }
+static void HdmiLinkStartAudio(BC250_DEVICE* d, BOOLEAN resume) { (void)d; (void)resume; }
 static BOOLEAN GfxStartupResources(BC250_DEVICE* d, BOOLEAN live) { (void)d; (void)live; return TRUE; }
 static void HangDetectorStart(BC250_DEVICE* d) { (void)d; }
 static void FanStart(BC250_DEVICE* d) { (void)d; }
@@ -414,6 +424,8 @@ static void Reset(void)
 {
     memset(vals, 0, sizeof(vals));
     memset(&dev, 0, sizeof(dev));
+    dev.DisplayReservationEnd=1;dev.RuntimeFramebufferLength=1;
+    dev.RuntimePostValid=dev.RuntimeDisplayChanged=dev.RuntimePlaneBlank=1;
     memset(&iface, 0, sizeof(iface));
     trace[0] = 0; logCount = 0; lastStage = 0; durable = 0;
     opens = creates = closes = flushes = writeOps = stops = 0;
@@ -676,6 +688,7 @@ int main(void)
         CHECK(found == 1);
     }
 
+    CHECK(connectorPrepares>0 && connectorStarts>0 && connectorDirty==0);
     printf("BD-122 start record: %u checks, %u failures\n", checks, failures);
     return failures ? 1 : 0;
 }

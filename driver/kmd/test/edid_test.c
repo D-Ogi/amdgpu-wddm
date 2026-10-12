@@ -257,12 +257,50 @@ static void TestListOverflow(void)
     CHECK(Bc250ModeListBuild(3840, 2160, &info, BC250_DISPLAY_MODES_SCALED, &list) == 14);
 }
 
+static void TestTargetTimings(void)
+{
+    static BC250_EDID_INFO info;
+    static BC250_TARGET_TIMING targets[BC250_EDID_MAX_MODES];
+    BC250_TARGET_TIMING malformed;
+    unsigned long i,n,seenVga=0,seen1080=0;
+    CHECK(Bc250EdidParse(g_LabEdid,sizeof(g_LabEdid),&info)==BC250_EDID_OK);
+    CHECK(info.TargetCount>=6);
+    CHECK(info.Targets[0].PixelClockKhz==154000);
+    CHECK(Bc250TargetRefreshMilliHz(&info.Targets[0])==59950);
+    CHECK(Bc250EdidTargetList(&info,0,1920,1200,targets,48)==0);
+    n=Bc250EdidTargetList(&info,150000,1920,1200,targets,48);
+    CHECK(n>0 && n<info.TargetCount);
+    for (i=0;i<n;++i) {
+        CHECK(targets[i].PixelClockKhz<=150000);
+        if (targets[i].HActive==640 && targets[i].PixelClockKhz==25175) ++seenVga;
+        if (targets[i].HActive==1920 && targets[i].HBlank==280 && targets[i].VActive==1080 &&
+            targets[i].PixelClockKhz==148500) ++seen1080;
+    }
+    CHECK(seenVga==1 && seen1080==1); // exact clock; DTD/CTA duplicate removed
+    CHECK(Bc250EdidTargetList(&info,150000,1280,720,targets,1)==1);
+    CHECK(targets[0].HActive<=1280 && targets[0].VActive<=720);
+    info.Hdmi=1;info.MaxTmdsClockKhz=75000;
+    n=Bc250EdidTargetList(&info,300000,1920,1200,targets,48);
+    CHECK(n>0);
+    for (i=0;i<n;++i) CHECK(targets[i].PixelClockKhz<=75000);
+    malformed=info.Targets[0];malformed.HBlank=0xfffffffful;
+    CHECK(!Bc250TargetTimingValid(&malformed));
+    CHECK(Bc250TargetRefreshMilliHz(&malformed)==0);
+    malformed=info.Targets[0];malformed.VSyncWidth=malformed.VBlank;
+    CHECK(!Bc250TargetTimingValid(&malformed));
+    malformed=info.Targets[0];malformed.Flags|=0x80;
+    CHECK(!Bc250TargetTimingValid(&malformed));
+    info.Reason=BC250_EDID_CHECKSUM;
+    CHECK(Bc250EdidTargetList(&info,300000,1920,1200,targets,48)==0);
+}
+
 int main(void)
 {
     TestLabMonitor();
     TestTv();
     TestNegative();
     TestListOverflow();
+    TestTargetTimings();
     printf("edid_test: %d checks, %d failures\n", g_checks, g_failures);
     return g_failures ? 1 : 0;
 }

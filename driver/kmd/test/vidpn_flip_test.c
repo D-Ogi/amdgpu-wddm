@@ -76,7 +76,8 @@ typedef struct {
     unsigned VSyncTargetId;
 } BC250_WDDM;
 typedef struct {
-    struct {ULONG Width,Height,Pitch;} Post;
+    struct {ULONG Width,Height,Pitch;} Post,RuntimePost;
+    BOOLEAN RuntimePostValid;
     BC250_WDDM *Wddm;
     // M15.14: the two bases the card address is translated through. The scan-out clause refuses a
     // candidate when either is not page aligned, because the predicate's 4 KiB test is on the card
@@ -360,6 +361,11 @@ static void PlaneFormatFlips(void)
     request.hAllocation=NULL;request.PrimaryAddress.QuadPart=0x50000;w.PrimaryPitch=0;
     CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_SUCCESS);
     CHECK(programmed_format==BC250_PLANE_FORMAT_ARGB8888 && programmed_pitch==5632);
+    /* A detached allocation has no private pitch; use the current runtime
+     * handoff pitch rather than the immutable boot surface. */
+    d.RuntimePostValid=TRUE;d.RuntimePost.Pitch=5888;w.PrimaryPitch=0;
+    CHECK(Bc250WddmSetVidPnSourceAddress(&d,&request)==STATUS_SUCCESS);
+    CHECK(programmed_pitch==5888 && w.PrimaryPitch==5888 && d.Post.Pitch==5632);
 }
 int main(void)
 {

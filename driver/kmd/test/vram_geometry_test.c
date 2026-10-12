@@ -33,7 +33,7 @@ typedef struct {LONGLONG QuadPart;} PHYSICAL_ADDRESS;
 typedef struct {
  struct {ULONGLONG bytes;} WddmAperture;
  void* Mmio;BOOLEAN VramEnabled,VramWriteEnabled;
- PHYSICAL_ADDRESS VramPhysical,Bar0Physical;ULONGLONG VramLength,VramMcBase,Bar0Length;
+ PHYSICAL_ADDRESS VramPhysical,Bar0Physical;ULONGLONG VramLength,VramMcBase,Bar0Length,DisplayReservationEnd;
  struct {ULONG Pitch,Height;PHYSICAL_ADDRESS PhysicAddress;} Post;
  volatile LONG64 UmaActiveBytes;
 } BC250_DEVICE;
@@ -121,6 +121,14 @@ int main(void){
   CHECK(os_checks==1);CHECK(WddmMemoryLayout(&d,&off,&len,&table,&tablelen));
   CHECK(off>=((ULONGLONG)d.Post.Pitch*d.Post.Height) && len>0 && table==off+len);
   CHECK(table+tablelen<=d.VramLength-BC250_VRAM_TOP_RESERVED);
+  d.DisplayReservationEnd=64ull*1024*1024;
+  CHECK(WddmMemoryLayout(&d,&off,&len,&table,&tablelen));
+  CHECK(off==64ull*1024*1024 && table==off+len);
+  check_caps(&d,len);
+  d.DisplayReservationEnd=d.VramLength-BC250_VRAM_TOP_RESERVED;
+  CHECK(!WddmMemoryLayout(&d,&off,&len,&table,&tablelen));
+  CHECK(!off && !len && !table && !tablelen);
+  d.DisplayReservationEnd=0;
   memset(&g,0,sizeof(g));g.Device=&d;CHECK(RunSetup(&g)==0 && g.SetUp);
   for(mismatch=1;mismatch<=3;mismatch++) {shim_mismatch=mismatch;CHECK(RunSetup(&g)!=0 && !g.SetUp);}
   init(&d,gib);nbio_mib=(gib==8?12:8)*1024;

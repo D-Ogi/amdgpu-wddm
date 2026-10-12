@@ -2978,6 +2978,7 @@ void WddmSummary(_In_ BC250_DEVICE* Device)
         GuardLog("wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)");
         return;
     }
+    ConnectorLinkLogOpen(Device);
     DcnLogVsyncSnapshot(Device);
     DpmLogSummary(Device);
     InteropLogSummary(Device);
@@ -3536,6 +3537,10 @@ static BOOLEAN WddmMemoryLayout(_In_ const BC250_DEVICE* Device, _Out_ ULONGLONG
     }
     if (framebufferEnd>MAXULONGLONG-65535ull) return FALSE;
     framebufferEnd=(framebufferEnd+65535ull)&~65535ull;
+    // Stage 4 handoff storage is owned from start to stop, outside all VidMm
+    // allocations. Both the private caps and QUERYSEGMENT use this same layout.
+    if (Device->DisplayReservationEnd>framebufferEnd)
+        framebufferEnd=Device->DisplayReservationEnd;
     if (framebufferEnd>=limit) return FALSE;
     available=(limit-framebufferEnd)&~65535ull;
     // Capacity policy: reserve 1/32 of usable VRAM, rounded down to64KiB,
@@ -4001,7 +4006,8 @@ static NTSTATUS Bc250WddmQueryAdapterInfo(_In_ const HANDLE hAdapter, _In_ const
             scanout.flags = BC250_SCANOUT_CAPS_DIRECT_FLIP;
             // M15.14 (0.7.216.20): the plane takes the table's non-firmware SCANOUT_PRIMARY rows (R8G8B8A8,
             // R10G10B10A2) only after the firmware's format was captured at WddmStart, which ran before this.
-            if (device->DcnPlaneFormats && !device->Modeset.InheritedFixed) scanout.flags |= BC250_SCANOUT_CAPS_PLANE_FORMATS;
+            if (device->DcnPlaneFormats && !device->Modeset.InheritedFixed && !ConnectorIsEnabled(device))
+                scanout.flags |= BC250_SCANOUT_CAPS_PLANE_FORMATS;
             scanout.post_width = (unsigned int)DisplaySourceWidth(device);
             scanout.post_height = (unsigned int)DisplaySourceHeight(device);
             RtlCopyMemory((PUCHAR)QueryAdapterInfo->pOutputData+BC250_SCANOUT_CAPS_OFFSET,
@@ -4805,20 +4811,28 @@ static DXGKDDI_DESCRIBEALLOCATION Bc250WddmDescribeAllocation;
 static NTSTATUS Bc250WddmDescribeAllocation(_In_ const HANDLE hAdapter,
                                             _Inout_ DXGKARG_DESCRIBEALLOCATION* pDescribeAllocation)
 {
-    const BC250_DEVICE* device=(const BC250_DEVICE*)hAdapter;
+    BC250_DEVICE* device=(BC250_DEVICE*)hAdapter;
     BC250_WDDM_OBJECT* object = WddmObject(pDescribeAllocation->hAllocation, BC250_WDDM_MAGIC_ALLOCATION);
+    D3DKMDT_VIDEO_SIGNAL_INFO signal;
+    NTSTATUS status;
 
     if (object == NULL) return STATUS_INVALID_PARAMETER;
-    if (!device->InheritedSignalValid) return STATUS_DEVICE_NOT_READY;
+    if (ConnectorIsEnabled(device)) {
+        status=ConnectorLinkCurrentSignal(device,&signal);
+        if (!NT_SUCCESS(status)) return status;
+    } else {
+        if (!device->InheritedSignalValid) return STATUS_DEVICE_NOT_READY;
+        signal=device->InheritedSignal;
+    }
     pDescribeAllocation->Width = object->Allocation.Width;
     pDescribeAllocation->Height = object->Allocation.Height;
     pDescribeAllocation->Format = (D3DDDIFORMAT)object->Allocation.Format;
     pDescribeAllocation->MultisampleMethod.NumSamples = 0;
     pDescribeAllocation->MultisampleMethod.NumQualityLevels = 0;
-    // The primary uses the same inherited mode advertised by FillSignalInfo.
+    // The primary uses the committed target mode advertised by FillSignalInfo.
     // E26/M147: a different allocation refresh yields PRESENT_MODE_CHANGED.
-    // The start-time tuple is immutable until StopDevice; no MMIO query here.
-    pDescribeAllocation->RefreshRate = device->InheritedSignal.VSyncFreq;
+    // PASSIVE_LEVEL DDI: copy the tuple under the connector operation owner.
+    pDescribeAllocation->RefreshRate = signal.VSyncFreq;
     pDescribeAllocation->PrivateDriverFormatAttribute = 0;
     pDescribeAllocation->Rotation = D3DDDI_ROTATION_IDENTITY;
     if (WddmFirstCalls(WddmOf(hAdapter), WddmDdiDescribeAllocation))
@@ -6878,10 +6892,13 @@ static int WddmPresentTranslate(void* Context, unsigned long long Va,
     return result;
 }
 
-static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_PRESENT* Present)
+static void WddmPresentBlitOwned(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_PRESENT* Present)
 {
     BC250_DEVICE* device = Context->Device;
     BC250_WDDM* wddm = (BC250_WDDM*)device->Wddm;
+    const DXGK_DISPLAY_INFORMATION* post=device->RuntimePostValid?&device->RuntimePost:&device->Post;
+    PUCHAR framebuffer=device->RuntimePostValid?device->RuntimeFramebuffer:device->Framebuffer;
+    SIZE_T framebufferLength=device->RuntimePostValid?device->RuntimeFramebufferLength:device->FramebufferLength;
     const ULONGLONG* raw;               // the list, read as qwords: both arms of the union are tried below
     HANDLE handle = NULL;
     BC250_WDDM_OBJECT* object = NULL;
@@ -6901,14 +6918,15 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
     BOOLEAN toFlip = FALSE, mapFailed = FALSE;    // for the counters and the log line at the end
     PVOID destinationMap = NULL;
     BOOLEAN destinationPrimary = FALSE, destinationRedFirst = FALSE;
-    UINT dstPitch = device->Post.Pitch, dstWidth = DisplaySourceWidth(device), dstHeight = DisplaySourceHeight(device);
+    UINT dstPitch = post->Pitch, dstWidth = DisplaySourceWidth(device), dstHeight = DisplaySourceHeight(device);
 
 
     verbose = (wddm->Calls[WddmDdiPresent] <= BC250_WDDM_LOG_CALLS);
-    if (Present->pAllocationList == NULL || Context->AllocationListSize <= DXGK_PRESENT_MAX_INDEX) why = "no list";
+    if (device->RuntimeDisplayChanged && !device->RuntimePostValid) why = "no active runtime target";
+    else if (Present->pAllocationList == NULL || Context->AllocationListSize <= DXGK_PRESENT_MAX_INDEX) why = "no list";
     else if (KeGetCurrentIrql() != PASSIVE_LEVEL) why = "IRQL";
     else if (Context->RootPhysical == 0) why = "context has no root";
-    else if (device->Framebuffer == NULL || device->FramebufferLength == 0) why = "no framebuffer";
+    else if (framebuffer == NULL || framebufferLength == 0) why = "no framebuffer";
     else if (Present->DstRect.right - Present->DstRect.left != Present->SrcRect.right - Present->SrcRect.left ||
              Present->DstRect.bottom - Present->DstRect.top != Present->SrcRect.bottom - Present->SrcRect.top) why = "scaled";
     if (why != NULL)
@@ -6992,8 +7010,8 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
     // check above). A mapping failure falls back to the POST framebuffer rather than dropping the present -
     // the picture is still produced somewhere the log can point at, never skipped silently - and is counted
     // apart from the ordinary gate-closed/pre-flip case so the two reasons stay distinguishable.
-    dst = (UCHAR*)device->Framebuffer;
-    dstLength = device->FramebufferLength;
+    dst = (UCHAR*)framebuffer;
+    dstLength = framebufferLength;
     if (device->VidPnFlipEnabled && device->DcnDiverged)
     {
         PVOID flipMap = NULL;
@@ -7061,18 +7079,18 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
     // captured from the register; M92 measured that as the carve-out base, which is VramPhysical (M31).
     // Seed from that physical address, once per flip target, then the dirty rectangles on top.
     if (toFlip && device->VramEnabled && device->DcnScanoutSeedAddress != device->DcnScanoutMapAddress &&
-        device->FramebufferLength != 0 && device->VramLength != 0)
+        framebufferLength != 0 && device->VramLength != 0)
     {
         ULONGLONG vramBase = (ULONGLONG)device->VramPhysical.QuadPart;
-        ULONGLONG seedAt = vramBase;
-        SIZE_T seedBytes = device->FramebufferLength;
+        ULONGLONG seedAt = device->RuntimePostValid?(ULONGLONG)post->PhysicAddress.QuadPart:vramBase;
+        SIZE_T seedBytes = framebufferLength;
         PHYSICAL_ADDRESS seedPhys;
         PVOID seedMap;
 
-        if (device->DcnFirmwareKnown && device->DcnFirmwareAddress >= vramBase &&
+        if (!device->RuntimePostValid && device->DcnFirmwareKnown && device->DcnFirmwareAddress >= vramBase &&
             device->DcnFirmwareAddress - vramBase < device->VramLength)
             seedAt = device->DcnFirmwareAddress;
-        if (seedAt != device->DcnScanoutMapAddress &&
+        if (seedAt >= vramBase && seedAt-vramBase < device->VramLength && seedAt != device->DcnScanoutMapAddress &&
             (ULONGLONG)seedBytes <= device->VramLength - (seedAt - vramBase))
         {
             seedPhys.QuadPart = (LONGLONG)seedAt;
@@ -7082,7 +7100,7 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
                 ULONG firstPixel = *(volatile ULONG*)seedMap;
 
                 BOOLEAN copied=WddmCopyScanoutRows(dst,dstLength,dstPitch,seedMap,seedBytes,
-                    device->Post.Pitch,device->Post.Width,device->Post.Height);
+                    post->Pitch,post->Width,post->Height);
                 MmUnmapIoSpace(seedMap, seedBytes);
                 if (copied)
                 {
@@ -7135,10 +7153,8 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
         if (right <= left || bottom <= top) continue;
         for (y = top; y < bottom; y++)
         {
-            // The geometry (pitch, and so this offset) is always the firmware's mode, Device->Post - the one
-            // the VidPn primary is pinned to (display.c's Bc250CommitVidPn) - whichever buffer dst points at;
-            // only the bound changes between the two destinations. dstLength is one of the two driver-owned
-            // lengths set above, never a number that came from user mode.
+            // Use the selected target's actual pitch and bounded allocation.
+            // The operation owner excludes a concurrent target-mode change.
             SIZE_T dstOff = (SIZE_T)y * dstPitch + (SIZE_T)left * 4;
             SIZE_T src = (SIZE_T)(y + dy) * alloc->Pitch + (SIZE_T)(left + dx) * 4;
             SIZE_T bytes = (SIZE_T)(right - left) * 4;
@@ -7147,11 +7163,11 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
             WddmCopyColorRow(dst + dstOff, map + src, bytes,
                 WddmRedFirst(alloc->Format) != destinationRedFirst);
             if (destinationPrimary && !device->VidPnFlipEnabled &&
-                right <= (LONG)device->Post.Width && y < (LONG)device->Post.Height)
+                right <= (LONG)post->Width && y < (LONG)post->Height)
             {
-                SIZE_T postOffset = (SIZE_T)y * device->Post.Pitch + (SIZE_T)left * 4;
-                if (postOffset + bytes <= device->FramebufferLength)
-                    WddmCopyColorRow((UCHAR*)device->Framebuffer + postOffset, map + src, bytes,
+                SIZE_T postOffset = (SIZE_T)y * post->Pitch + (SIZE_T)left * 4;
+                if (postOffset + bytes <= framebufferLength)
+                    WddmCopyColorRow((UCHAR*)framebuffer + postOffset, map + src, bytes,
                         WddmRedFirst(alloc->Format));
             }
             rows++;
@@ -7178,6 +7194,17 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
         GuardLog("wddm: blit %u rectangles, %u rows copied, destination %s%s", count, rows,
                  destinationMap ? (destinationPrimary ? "primary allocation" : "offscreen allocation") :
                  (toFlip ? "flipped surface" : "POST framebuffer"), mapFailed ? " (mapping failed, fell back)" : "");
+}
+
+// The compatibility CPU path can run while a new sink is being detected.
+// Serialize its geometry and surface access with passive connector transactions;
+// high-IRQL Present calls retain the original no-copy result.
+static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_PRESENT* Present)
+{
+    BOOLEAN owned=ConnectorIsEnabled(Context->Device) && KeGetCurrentIrql()==PASSIVE_LEVEL;
+    if (owned) ConnectorOperationAcquire(Context->Device);
+    WddmPresentBlitOwned(Context,Present);
+    if (owned) ConnectorOperationRelease(Context->Device);
 }
 
 // Build a complete OS-owned IB. The gate remains diagnostic until CDD/UMD
@@ -7563,7 +7590,8 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddress(_In_ const HANDLE hAdapter,
         // firmware's ARGB8888. The surface has the committed source mode's size (modeset.c), which this
         // transaction excludes from changing under it. The bytes follow the format's own size, never a
         // literal 4 (M15.14).
-        pitch=wddm->PrimaryPitch?wddm->PrimaryPitch:device->Post.Pitch;
+        pitch=wddm->PrimaryPitch?wddm->PrimaryPitch:
+            (device->RuntimePostValid?device->RuntimePost.Pitch:device->Post.Pitch);
         planeFormat=wddm->PrimaryPlaneFormat?wddm->PrimaryPlaneFormat:BC250_PLANE_FORMAT_ARGB8888;
         plane=Bc250PlaneEncoding(planeFormat);
         if (!plane || !DcnLinearSurfaceBytes(DisplaySourceWidth(device),DisplaySourceHeight(device),pitch,
@@ -7754,7 +7782,7 @@ static NTSTATUS Bc250WddmGetScanLine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
     BC250_WDDM* wddm = WddmOf(hAdapter);
     LARGE_INTEGER now, frequency;
     ULONGLONG since, period;
-    UINT height = device->Post.Height;
+    UINT height = device->RuntimePostValid?device->RuntimePost.Height:device->Post.Height;
 
     if (wddm == NULL || height == 0) return STATUS_NOT_SUPPORTED;
     if (pGetScanLine->VidPnTargetId != wddm->VSyncTargetId) return STATUS_INVALID_PARAMETER;

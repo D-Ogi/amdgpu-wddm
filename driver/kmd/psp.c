@@ -379,6 +379,19 @@ static void RetainPrepared(BC250_PSP* Psp, const BC250_PSP_FIRMWARE* Prepared)
     PspReleaseFirmware(previous);
 }
 
+NTSTATUS PspSessionAcquire(BC250_DEVICE* Device,ULONG TimeoutUs)
+{
+    LARGE_INTEGER timeout;
+    if(KeGetCurrentIrql()!=PASSIVE_LEVEL)return STATUS_INVALID_DEVICE_STATE;
+    timeout.QuadPart=-(LONGLONG)TimeoutUs*10;
+    return KeWaitForSingleObject(&Device->PspSessionLock,Executive,KernelMode,FALSE,
+        TimeoutUs?&timeout:NULL);
+}
+void PspSessionRelease(BC250_DEVICE* Device)
+{
+    KeReleaseMutex(&Device->PspSessionLock,FALSE);
+}
+
 static void PspExecutePrepared(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_PSP* Data,
                                const BC250_PSP_FIRMWARE* Prepared)
 {
@@ -425,6 +438,11 @@ static void PspExecutePrepared(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAP
         return;
     }
 
+    status=PspSessionAcquire(Device,0);
+    if(status!=STATUS_SUCCESS) {
+        if(!Prepared)FreeFiles(&files);
+        Data->NtStatus=(ULONG)status;Data->Status=BC250_ESCAPE_STATUS_REFUSED;return;
+    }
     ExAcquireFastMutex(&Device->GartLock);
     psp = (BC250_PSP*)Device->Psp;
     if (psp == NULL) status = STATUS_DEVICE_NOT_READY;
@@ -533,6 +551,7 @@ static void PspExecutePrepared(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAP
     Data->Result = result;
     Data->NtStatus = (unsigned long)status;
     Data->Status = (NT_SUCCESS(status) && result == 0) ? BC250_ESCAPE_STATUS_DONE : BC250_ESCAPE_STATUS_REFUSED;
+    PspSessionRelease(Device);
 }
 
 static void PspExecute(BC250_DEVICE* Device, BC250_ESCAPE_PSP* Data)
@@ -611,6 +630,8 @@ NTSTATUS PspSetPowerRetained(BC250_DEVICE* Device, BOOLEAN Resume, BC250_ESCAPE_
     Report->Version=BC250_KMD_VERSION;
     Report->Op=Resume ? BC250_PSP_OP_LOAD : BC250_PSP_OP_UNLOAD;
     if (KeGetCurrentIrql()!=PASSIVE_LEVEL) {status=STATUS_INVALID_DEVICE_STATE;goto Done;}
+    status=PspSessionAcquire(Device,0);if(status!=STATUS_SUCCESS)goto Done;
+    status=STATUS_DEVICE_NOT_READY;
     ExAcquireFastMutex(&Device->GartLock);
     psp=(BC250_PSP*)Device->Psp;
     if (!psp || !psp->Retained || Device->GpuStopUnconfirmed || !Device->MmioPspEnabled) goto Unlock;
@@ -640,6 +661,9 @@ NTSTATUS PspSetPowerRetained(BC250_DEVICE* Device, BOOLEAN Resume, BC250_ESCAPE_
     }
 Unlock:
     ExReleaseFastMutex(&Device->GartLock);
+    // Resume's load takes the same session in PspExecutePrepared. Do not recurse;
+    // the power coordinator keeps display admission closed between these phases.
+    PspSessionRelease(Device);
     if (NT_SUCCESS(status) && prepared) {
         status=PspInitializePrepared(Device,prepared,Report);
         PspReleaseFirmware(prepared);
@@ -693,6 +717,9 @@ void PspStop(_Inout_ BC250_DEVICE* Device)
     BOOLEAN gartEnabled;
     long result = 0;
 
+    if(PspSessionAcquire(Device,0)!=STATUS_SUCCESS) {
+        Device->GpuStopUnconfirmed=TRUE;Device->PspStopQuiet=FALSE;return;
+    }
     ExAcquireFastMutex(&Device->GartLock);
     psp = (BC250_PSP*)Device->Psp;
     Device->Psp = NULL;
@@ -706,7 +733,7 @@ void PspStop(_Inout_ BC250_DEVICE* Device)
         adev->backend = previousBackend;
     }
     ExReleaseFastMutex(&Device->GartLock);
-    if (psp == NULL) return;
+    if (psp == NULL) {PspSessionRelease(Device);return;}
     Device->PspStopQuiet=!(psp->RingUp || psp->TmrUp);
     if (!Device->PspStopQuiet)
     {
@@ -715,9 +742,11 @@ void PspStop(_Inout_ BC250_DEVICE* Device)
         Device->GpuStopUnconfirmed=TRUE;
         GuardLog("psp: stop unconfirmed (gfx quiet %u, ring %u, TMR %u), retaining state",
                  Device->GfxStopQuiet,psp->RingUp,psp->TmrUp);
+        PspSessionRelease(Device);
         return;
     }
     if (psp->Pages != NULL) MmUnmapIoSpace(psp->Pages, BC250_PSP_PAGES_LENGTH);
     PspReleaseFirmware(psp->Retained);
     ExFreePoolWithTag(psp, BC250_PSP_TAG);
+    PspSessionRelease(Device);
 }

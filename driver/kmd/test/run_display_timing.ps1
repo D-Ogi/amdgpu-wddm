@@ -36,7 +36,11 @@ $end=[regex]::Match($wddm.Substring($first),'\r?\n}\r?\n')
 if($first -lt 0 -or !$end.Success){throw 'Bc250WddmDescribeAllocation not found in wddm.c'}
 $last=$first+$end.Index+$end.Length
 $describe=$wddm.Substring($first,$last-$first)
-if($OldDescribe60){$describe=$describe.Replace('pDescribeAllocation->RefreshRate = device->InheritedSignal.VSyncFreq;', 'pDescribeAllocation->RefreshRate.Numerator=60000; pDescribeAllocation->RefreshRate.Denominator=1000;')}
+if($OldDescribe60){
+    $anchor='pDescribeAllocation->RefreshRate = signal.VSyncFreq;'
+    if (!$describe.Contains($anchor)) { throw 'Describe refresh mutation anchor missing' }
+    $describe=$describe.Replace($anchor, 'pDescribeAllocation->RefreshRate.Numerator=60000; pDescribeAllocation->RefreshRate.Denominator=1000;')
+}
 [IO.File]::WriteAllText((Join-Path $Out 'describe_timing_actual.inc'),$describe)
 $test=Get-Content (Join-Path $PSScriptRoot 'display_timing_test.c') -Raw
 $helper=Get-Content (Join-Path $repo 'driver\kmd\display_timing.h') -Raw

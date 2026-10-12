@@ -168,6 +168,13 @@ try {
  Check 'scanout-admit' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_scanout_admit.ps1" -Root $Workspace -Out "$Out\scanout-admit" -Kits "$Kits" }
  Check 'dpaudio' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_dpaudio.ps1" -Root $Workspace -Out "$Out\dpaudio" -Kits "$Kits" }
  Check 'modeset' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_modeset.ps1" -Root $Workspace -Out "$Out\modeset" -Kits "$Kits" }
+ Check 'atom-display' {
+  $atomArgs=@('-Root',$Workspace,'-Out',"$Out\atom-display",'-Kits',$Kits)
+  if($env:BC250_LINK_TEST_ROM){$atomArgs+=@('-PrivateRom',$env:BC250_LINK_TEST_ROM)}
+  & pwsh -NoProfile -File "$repo\driver\kmd\test\run_atom.ps1" @atomArgs
+ }
+ Check 'link-command-import' { & python -B "$repo\tools\import\extract_link_commands.py" --check }
+ Check 'link-register-import' { & python -B "$repo\tools\import\extract_link_regs.py" --check }
  Check 'blit-plan' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_blit_plan.ps1" -Root $Workspace -Out "$Out\blit-plan" -Kits "$Kits" }
  Check 'gpu-clock' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_gpu_clock.ps1" -Root $Workspace -Out "$Out\gpu-clock" -Kits "$Kits" }
  # The per-application graphics settings (docs/design/per-app-graphics-settings.md): the kernel-mode driver's
@@ -237,7 +244,36 @@ try {
  # -Out. They do not share outputs, so they run side by side. A suite marked Fails is the runner's own negative
  # control: it must fail by a check (a FAIL line in its log), not by a build error, or the control proves nothing.
  $firmware="$Workspace\ref\linux-firmware__WARN-AMD-blobs-never-commit\amdgpu"
+ if($env:BC250_LINK_TEST_ROM) {
+  Check 'link-active-off' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_link_active_off.ps1" -Root $Workspace -Out "$Out\link-active-off" -Kits $Kits -Rom $env:BC250_LINK_TEST_ROM }
+  Check 'link-old-clock-policy' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_link_active_off.ps1" -Root $Workspace -Out "$Out\link-old-clock-policy" -Kits $Kits -Rom $env:BC250_LINK_TEST_ROM -OldClockPolicy -ExpectFailure }
+  Check 'link-strict-clock-values' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_link_active_off.ps1" -Root $Workspace -Out "$Out\link-strict-clock-values" -Kits $Kits -Rom $env:BC250_LINK_TEST_ROM -StrictValues -ExpectFailure }
+  Check 'link-clock-reinit' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_link_atom.ps1" -Root $Workspace -Out "$Out\link-clock-reinit" -Kits $Kits -Rom $env:BC250_LINK_TEST_ROM }
+  Check 'link-clock-old-scope' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_link_atom.ps1" -Root $Workspace -Out "$Out\link-clock-old-scope" -Kits $Kits -Rom $env:BC250_LINK_TEST_ROM -OldScope -ExpectFailure }
+ } else {
+  $results+=@{name='link-active-off';status='SKIP';reason='Requires an external target ATOM ROM supplied through BC250_LINK_TEST_ROM'}
+  Write-Host 'link-active-off SKIP (BC250_LINK_TEST_ROM not supplied)'
+  foreach($name in @('link-clock-reinit','link-clock-old-scope')) {
+   $results+=@{name=$name;status='SKIP';reason='Requires an external target ATOM ROM supplied through BC250_LINK_TEST_ROM'}
+   Write-Host "$name SKIP (BC250_LINK_TEST_ROM not supplied)"
+  }
+ }
  $suites=@(
+  @{n='link-atom';s='driver\kmd\test\run_link_atom.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
+  @{n='connector-buffer';s='driver\kmd\test\run_connector_buffer.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
+  @{n='connector-modes';s='driver\kmd\test\run_connector_modes.ps1';a=@('-Root',$Workspace)}
+  @{n='connector-link';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits)}
+  @{n='connector-link-stale-generation';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitGeneration','-ExpectFailure')}
+  @{n='connector-link-open-cleanup';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitOpenCleanup','-ExpectFailure')}
+  @{n='connector-link-cold-recovery';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitColdRecovery','-ExpectFailure')}
+  @{n='connector-link-first-failure';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitFirstFailure','-ExpectFailure')}
+  @{n='connector-link-nested-hdmi';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-NestedHdmiStop','-ExpectFailure')}
+  @{n='connector-link-diagnostic-replay';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitDiagnosticReplay','-ExpectFailure')}
+  @{n='connector-link-write-requested';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-WriteRequestedValue','-ExpectFailure')}
+  @{n='connector-link-recovery-target';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-WrongRecoveryTarget','-ExpectFailure')}
+  @{n='dml201';s='driver\shim\test\run_dml201.ps1';a=@('-Kits',$Kits)}
+  @{n='dcn201-pipe';s='driver\shim\test\run_dcn201_pipe.ps1';a=@('-Kits',$Kits)}
+  @{n='dpaudio-start-debt';s='driver\kmd\test\run_dpaudio_debt.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
   @{n='wave-recovery-pending-control';s='driver\kmd\test\run_wave_recovery.ps1';a=@('-Kits',$Kits,'-NoPendingMarker');Fails=$true}
   @{n='wave-recovery-order-control';s='driver\kmd\test\run_wave_recovery.ps1';a=@('-Kits',$Kits,'-ClearBeforeData');Fails=$true}
   @{n='wave-recovery-delete-control';s='driver\kmd\test\run_wave_recovery.ps1';a=@('-Kits',$Kits,'-AdminReadOnly');Fails=$true}
@@ -245,6 +281,8 @@ try {
   @{n='post-display-stop';s='driver\kmd\test\run_post_display_stop.ps1';a=@('-Root',$Workspace)}
   @{n='scanout-geometry';s='driver\kmd\test\run_scanout_geometry.ps1';a=@('-Root',$Workspace)}
   @{n='post-display';s='driver\kmd\test\run_post_display.ps1';a=@('-Root',$Workspace)}
+  @{n='post-display-old-runtime-order';s='driver\kmd\test\run_post_display.ps1';a=@('-Root',$Workspace,'-OldRuntimeOrder');Fails=$true}
+  @{n='post-display-wrong-saved-surface';s='driver\kmd\test\run_post_display.ps1';a=@('-Root',$Workspace,'-WrongSavedSurface');Fails=$true}
   @{n='dcn-flip';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace)}
   @{n='dcn-observation';s='driver\kmd\test\run_dcn_observation.ps1';a=@('-Root',$Workspace)}
   @{n='dcn-observe';s='driver\kmd\test\run_dcn_observe.ps1';a=@('-Root',$Workspace)}
@@ -256,6 +294,7 @@ try {
   @{n='ih-retained';s='driver\kmd\test\run_ih_retained.ps1';a=@('-Root',$Workspace)}
   @{n='psp-retained';s='driver\kmd\test\run_psp_retained.ps1';a=@('-Root',$Workspace)}
   @{n='psp-retained-dropped';s='driver\kmd\test\run_psp_retained.ps1';a=@('-Root',$Workspace,'-DropRetain');Fails=$true}
+  @{n='psp-retained-false-success';s='driver\kmd\test\run_psp_retained.ps1';a=@('-Root',$Workspace,'-PowerSuccessRefusal');Fails=$true}
   @{n='retained-gtt';s='driver\kmd\test\run_retained_gtt.ps1';a=@('-Root',$Workspace)}
   @{n='retained-power';s='driver\kmd\test\run_retained_power.ps1';a=@('-Root',$Workspace)}
   @{n='power-coordinator';s='driver\kmd\test\run_power_coordinator.ps1';a=@('-Root',$Workspace)}

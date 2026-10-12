@@ -443,3 +443,39 @@ PROVENANCE: Linux AMD DC (MIT), v6.18 commit `7d0a66e4bb9081d75c82ec4957c50034cb
 The last two use the upstream names `dio/dcn10/dcn10_stream_encoder.c` and `dce/dce_audio.c`.
 `tools/import/extract_display.py --check` checks the extracted functions and ACR tables in `driver/shim/`.
 The wrappers add checked register access, finite waits and cleanup on failure.
+
+## ATOM executor
+
+PROVENANCE: Linux AMDGPU (MIT), v6.18 commit `7d0a66e4bb9081d75c82ec4957c50034cb0ea449`.
+`reference/atom/` holds unchanged `amdgpu/atom.c`, `amdgpu/atom.h`, `include/atomfirmware.h` and
+`display/dc/bios/command_table2.c` from [drivers/gpu/drm/amd](https://github.com/torvalds/linux/tree/7d0a66e4bb9081d75c82ec4957c50034cb0ea449/drivers/gpu/drm/amd).
+`tools/import/extract_atom.py --check` checks the layouts, constants, opcode map and interpreter extract.
+The generator states each change to the interpreter. The wrapper checks byte ranges, the call tree,
+register access, owner state and limits before and during execution. The KMD reads VFCT through AuxKlib
+and matches the image to its PCI device. Firmware images are not part of this repository.
+
+## HDMI stream takeover
+
+PROVENANCE: Linux AMD DC (MIT), v6.18 commit `7d0a66e4bb9081d75c82ec4957c50034cb0ea449`.
+`reference/hdmi-link/` holds the original DCN10 and DCN20 stream code, resource code and type headers.
+`tools/import/extract_hdmi_link.py --check` checks the stream functions, AVI packer and argument layouts.
+The wrapper admits a powered DIG0 link at the inherited clock. It does not write the PHY or PLL.
+The register journal restores the inherited settings when the conversion fails or the device stops.
+`link10.c`, `link20.c`, `stream32.c` and `hwseq201.c` retain the same revision's
+field-programming and status-wait evidence. `extract_hdmi_policy.py --check`
+checks the exhaustive field inventory and configuration-only readback masks.
+Unknown access semantics remain explicit and fail closed when nonzero.
+
+## Target timings
+
+PROVENANCE: Linux DRM (MIT), v6.18 commit `7d0a66e4bb9081d75c82ec4957c50034cb0ea449`.
+`reference/target-modes/drm_edid.c` is unchanged. `tools/import/extract_target_modes.py --check`
+checks the progressive CTA timing table used for actual target modes, including exact 1 kHz clocks.
+
+## DP connector lifecycle
+
+PROVENANCE: Linux AMD DC (MIT) and DRM DP headers (MIT/X11), v6.18 commit `7d0a66e4bb9081d75c82ec4957c50034cb0ea449`.
+`reference/connector/` holds unchanged AUX, IRQ, link encoder, DP training and type sources. The source paths
+are in `tools/import/extract_connector.py`. `drm_dp.h` is from `include/drm/display/drm_dp.h` at the same commit.
+`--check` verifies the extracted HPD acknowledgment, AUX enable, DP training and symbol-generator sequences.
+The port limits training to 8b/10b SST RBR/HBR, adds a time budget and cancels on a connector generation change.

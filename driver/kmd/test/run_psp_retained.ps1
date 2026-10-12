@@ -1,10 +1,11 @@
-param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\build\psp-retained",[switch]$DropRetain)
+param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\build\psp-retained",[switch]$DropRetain,[switch]$PowerSuccessRefusal)
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $env:TEMP=Join-Path $Root 'scratch\tmp';$env:TMP=$env:TEMP
 New-Item -ItemType Directory -Force $Out | Out-Null
 $generatorArgs=@((Join-Path $repo 'driver/kmd/psp.c'),(Join-Path $Out 'test.c'))
 if($DropRetain){$generatorArgs+='--drop-retain'}
+if($PowerSuccessRefusal){$generatorArgs+='--power-success-refusal'}
 & python (Join-Path $PSScriptRoot 'generate_psp_retained_test.py') @generatorArgs
 if($LASTEXITCODE -ne 0){throw 'extraction failed'}
 $vs=& "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath

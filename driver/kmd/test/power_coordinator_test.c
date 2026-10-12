@@ -22,7 +22,7 @@ typedef unsigned long ULONG;
 typedef struct {int dummy;} BC250_ESCAPE_PSP;
 struct bc250_clock_report {int ready;};
 typedef struct {unsigned Width,Height,Pitch,ColorFormat;struct {long long QuadPart;}PhysicAddress;} DXGK_DISPLAY_INFORMATION;
-typedef struct {int Started,FullWddm;volatile LONG RetainedPowerPhase;DEVICE_POWER_STATE RetainedDownState;POWER_ACTION RetainedDownAction;int Smu;void*Mmio;int GfxTlbBootstrap,ModeActive,SourceVisible;DXGK_DISPLAY_INFORMATION Post;struct {void*DeviceHandle;NTSTATUS(*DxgkCbAcquirePostDisplayOwnership)(void*,DXGK_DISPLAY_INFORMATION*);}Dxgk;} BC250_DEVICE;
+typedef struct {int Started,FullWddm;volatile LONG RetainedPowerPhase,RuntimeDisplayChanged;struct {int Enabled;volatile LONG Pending;} Connector;DEVICE_POWER_STATE RetainedDownState;POWER_ACTION RetainedDownAction;int Smu;void*Mmio;int GfxTlbBootstrap,ModeActive,SourceVisible;DXGK_DISPLAY_INFORMATION Post;struct {void*DeviceHandle;NTSTATUS(*DxgkCbAcquirePostDisplayOwnership)(void*,DXGK_DISPLAY_INFORMATION*);}Dxgk;} BC250_DEVICE;
 static unsigned checks,failures;static char trace[128];static unsigned pos;static char failAt;static int postMismatch;
 #define CHECK(x) do{checks++;if(!(x)){failures++;printf("FAIL %u: %s\n",__LINE__,#x);}}while(0)
 static NTSTATUS note(char c){trace[pos++]=c;trace[pos]=0;return c==failAt?-9:0;}
@@ -47,6 +47,11 @@ static int GfxStartupResources(BC250_DEVICE*d,int on){CHECK(on&&!d->GfxTlbBootst
 static NTSTATUS WddmResumeRetained(BC250_DEVICE*d){CHECK(!d->SourceVisible);return note('w');}
 static void StartHealthResumeReady(BC250_DEVICE*d,int mode){CHECK(!d->SourceVisible&&mode);(void)note('h');}
 static NTSTATUS acquire(void*handle,DXGK_DISPLAY_INFORMATION*p){BC250_DEVICE*d=handle;*p=d->Post;p->Width+=(unsigned)postMismatch;return note('d');}
+static BOOLEAN ConnectorIsEnabled(BC250_DEVICE*d){return d->Connector.Enabled;}
+static NTSTATUS ConnectorResumeDisplay(BC250_DEVICE*d)
+{CHECK(d->RetainedPowerPhase==3 && strchr(trace,'d')!=NULL);return note('r');}
+static NTSTATUS ConnectorResumeNotifications(BC250_DEVICE*d)
+{CHECK(d->RetainedPowerPhase==0);CHECK(strchr(trace,'w')!=NULL);return note('n');}
 /* ACTUAL_SOURCE */
 static void resetTrace(void){pos=0;trace[0]=0;failAt=0;}
 static void setup(BC250_DEVICE*d){memset(d,0,sizeof(*d));d->Started=d->FullWddm=d->ModeActive=d->SourceVisible=1;d->Post.Width=1920;d->Post.Height=1200;d->Post.Pitch=7680;d->Post.PhysicAddress.QuadPart=1234;d->Dxgk.DeviceHandle=d;d->Dxgk.DxgkCbAcquirePostDisplayOwnership=acquire;postMismatch=0;resetTrace();}
@@ -63,5 +68,29 @@ int main(void){BC250_DEVICE d;
  setup(&d);CHECK(GpuSetPowerRetained(&d,PowerDeviceD3,7)==0);resetTrace();failAt='v';
  CHECK(GpuSetPowerRetained(&d,PowerDeviceD0,99)==-9&&d.RetainedPowerPhase==4);
  CHECK(!strchr(trace,'b')&&!strchr(trace,'t')&&!strchr(trace,'w')&&!strchr(trace,'h'));
+ // Runtime geometry bypasses all inherited POST acquisition/scaler paths.
+ setup(&d);d.Connector.Enabled=1;d.RuntimeDisplayChanged=1;
+ CHECK(GpuSetPowerRetained(&d,PowerDeviceD3,7)==0);resetTrace();postMismatch=1;
+ CHECK(GpuSetPowerRetained(&d,PowerDeviceD0,99)==0);
+ CHECK(!strcmp(trace,"scdrbtpigwhn"));
+ // Sink change before first runtime commit also forbids stale POST replay.
+ setup(&d);d.Connector.Enabled=1;d.Connector.Pending=1;
+ CHECK(GpuSetPowerRetained(&d,PowerDeviceD3,7)==0);resetTrace();
+ CHECK(GpuSetPowerRetained(&d,PowerDeviceD0,99)==0 && !strchr(trace,'v') && strchr(trace,'b'));
+ setup(&d);d.Connector.Enabled=1;d.Connector.Pending=1;
+ CHECK(GpuSetPowerRetained(&d,PowerDeviceD3,7)==0);resetTrace();failAt='b';
+ CHECK(GpuSetPowerRetained(&d,PowerDeviceD0,99)==-9 && d.RetainedPowerPhase==4);
+ CHECK(!strchr(trace,'t') && !strchr(trace,'w') && !strchr(trace,'n'));
+ setup(&d);d.Connector.Enabled=1;d.RuntimeDisplayChanged=1;
+ CHECK(GpuSetPowerRetained(&d,PowerDeviceD3,7)==0);resetTrace();failAt='d';
+ CHECK(GpuSetPowerRetained(&d,PowerDeviceD0,99)==-9 && !strchr(trace,'r'));
+ setup(&d);d.Connector.Enabled=1;d.RuntimeDisplayChanged=1;
+ CHECK(GpuSetPowerRetained(&d,PowerDeviceD3,7)==0);resetTrace();failAt='r';
+ CHECK(GpuSetPowerRetained(&d,PowerDeviceD0,99)==-9 && d.RetainedPowerPhase==4);
+ CHECK(!strchr(trace,'t') && !strchr(trace,'n'));
+ setup(&d);d.Connector.Enabled=1;d.RuntimeDisplayChanged=1;
+ CHECK(GpuSetPowerRetained(&d,PowerDeviceD3,7)==0);resetTrace();failAt='n';
+ CHECK(GpuSetPowerRetained(&d,PowerDeviceD0,99)==-9 && d.RetainedPowerPhase==4);
+ CHECK(strstr(trace,"nHS")!=NULL);
  printf("Power coordinator: %u checks, %u failures\n",checks,failures);return failures?1:0;
 }

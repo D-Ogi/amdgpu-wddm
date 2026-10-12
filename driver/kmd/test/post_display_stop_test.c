@@ -35,6 +35,10 @@ typedef struct {
     void *Framebuffer;
     size_t FramebufferLength;
     DXGK_DISPLAY_INFORMATION Post;
+    DXGK_DISPLAY_INFORMATION RuntimePost;
+    BOOLEAN RuntimePostValid;
+    void* RuntimeFramebuffer;
+    size_t RuntimeFramebufferLength;
 } BC250_DEVICE;
 #define UNREFERENCED_PARAMETER(x) ((void)(x))
 #define TRUE 1
@@ -42,6 +46,7 @@ typedef struct {
 #define STATUS_SUCCESS ((NTSTATUS)0)
 #define STATUS_DEVICE_NOT_READY ((NTSTATUS)0xC00000A3u)
 #define STATUS_IO_TIMEOUT ((NTSTATUS)0xC00000B5u)
+#define STATUS_DEVICE_DATA_ERROR ((NTSTATUS)0xC000009Cu)
 #define NT_SUCCESS(s) ((s)>=0)
 #define BC250_CHILD_UID 0x250001u
 #define D3DDDI_ID_UNINITIALIZED 0xffffffffu
@@ -59,7 +64,7 @@ static int ownedPdo,foreignPdo;
 static void* ownerIdentity;
 static int AdapterOwnerIs(void* identity){return identity && identity==ownerIdentity;}
 /* Reset by init(), so these are "in this run", unlike the totals the stubs below count. */
-static struct {unsigned joined,smu,restores,vidmm,objects,unmaps,dpm;NTSTATUS result;} model;
+static struct {unsigned joined,smu,restores,vidmm,objects,unmaps,dpm,hdmiStops;NTSTATUS result,hdmiResult;} model;
 static void WddmGpuFence(BC250_DEVICE*d){(void)d;}
 static void WddmGpuFencePaging(BC250_DEVICE*d){(void)d;}
 static void KeDelayExecutionThread(int k,int a,LARGE_INTEGER*t){(void)k;(void)a;(void)t;}
@@ -87,6 +92,8 @@ static void GuardRecordStopDone(void){CHECK(model.unmaps==1);}
 /* board_memory_service.c, board_memory_identity.c: the stop path ends the board memory operation and
    drops the captured identity. Neither one is what this test is about. */
 static void BoardMemoryStop(BC250_DEVICE*d){(void)d;}
+static NTSTATUS ConnectorStop(BC250_DEVICE*d){(void)d;CHECK(model.smu==0 && model.unmaps==0);return STATUS_SUCCESS;}
+static void ConnectorBufferRelease(BC250_DEVICE*d){CHECK(model.restores==1);d->RuntimeFramebuffer=NULL;}
 static void BoardMemoryIdentityClear(BC250_DEVICE*d){CHECK(!d->Smu.BoardAllowed && !d->Hwmon.BoardAllowed);}
 static void GuardStage(int s){(void)s;}
 static void GuardLogKeep(void){}
@@ -122,6 +129,10 @@ static unsigned dpaudioStops;
 /* DP audio: AUDIO_ENABLED goes to 0 while BAR5 and the display block are still ours, before the SMU owner goes
    offline and before WddmStop/DcnStop restore the surface. */
 static void DpAudioStop(BC250_DEVICE*d){(void)d;CHECK(model.dpm==1 && model.smu==0 && model.restores==0);dpaudioStops++;}
+static BOOLEAN HdmiLinkStop(BC250_DEVICE*d)
+{(void)d;CHECK(model.dpm==1 && model.smu==0 && model.restores==0 && dpaudioStops);model.hdmiStops++;return TRUE;}
+static NTSTATUS HdmiLinkRelease(BC250_DEVICE*d)
+{(void)d;CHECK(model.hdmiStops==1 && model.restores==1 && model.unmaps==0);return model.hdmiResult;}
 static void SmuOwnerStop(BOARD_BLOCK*s){CHECK(s->BoardAllowed && model.dpm==1 && cpuStopped);model.smu++;}
 static unsigned interopStops;
 /* KMD181: the interop session marker goes after WddmStop (DDI devices are gone), registry only. */
@@ -204,9 +215,27 @@ int main(void)
         CHECK(Bc250StopDevice(i==3?NULL:&d)==STATUS_SUCCESS);
         memset(&info,0xcc,sizeof(info));
         CHECK(Bc250StopDeviceAndReleasePostDisplayOwnership(i==3?NULL:&d,BC250_CHILD_UID,&info)==STATUS_DEVICE_NOT_READY);
-        CHECK(model.smu==0 && model.joined==0 && model.restores==0 && model.unmaps==0 && model.objects==0);
+        CHECK(model.smu==0 && model.joined==0 && model.restores==0 && model.unmaps==0 && model.objects==0 && model.hdmiStops==0);
         CHECK(d.Started && !d.StopDone && d.Smu.BoardAllowed && d.Hwmon.BoardAllowed && postIs(0xab));
         CHECK(info.Width==0 && info.Height==0 && info.Pitch==0 && info.PhysicAddress==0 && stopEpisodes==5);
     }}
+    // A final failed encoder restore cannot be reported as a successful handoff.
+    init(&d,&w,&o);model.hdmiResult=STATUS_DEVICE_DATA_ERROR;memset(&info,0xcc,sizeof(info));
+    CHECK(Bc250StopDeviceAndReleasePostDisplayOwnership(&d,BC250_CHILD_UID,&info)==STATUS_DEVICE_DATA_ERROR);
+    CHECK(info.Width==0 && info.Height==0 && info.Pitch==0 && info.PhysicAddress==0);
+    CHECK(model.unmaps==1 && d.PostDisplayStopStatus==STATUS_DEVICE_DATA_ERROR);
+    // The active handoff surface is distinct from GOP and must be black before
+    // release, while its returned geometry survives the CPU mapping teardown.
+    {
+        unsigned char runtime[48];unsigned i;
+        init(&d,&w,&o);memset(runtime,0xcd,sizeof(runtime));
+        d.RuntimePost=d.Post;d.RuntimePost.Width=1280;d.RuntimePost.Height=720;
+        d.RuntimePost.Pitch=5120;d.RuntimePost.PhysicAddress=0x480000000ull;
+        d.RuntimePostValid=TRUE;d.RuntimeFramebuffer=runtime;d.RuntimeFramebufferLength=sizeof(runtime);
+        CHECK(Bc250StopDeviceAndReleasePostDisplayOwnership(&d,BC250_CHILD_UID,&info)==STATUS_SUCCESS);
+        CHECK(info.Width==1280 && info.Height==720 && info.Pitch==5120 && info.PhysicAddress==0x480000000ull);
+        CHECK(d.RuntimeFramebuffer==NULL && d.RuntimePostValid && postIs(0));
+        for(i=0;i<sizeof(runtime);++i)CHECK(runtime[i]==0);
+    }
     printf("post display stop: %u checks, %u failures\n",checks,failures);return failures?1:0;
 }
