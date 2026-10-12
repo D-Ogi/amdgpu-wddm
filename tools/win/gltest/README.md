@@ -47,7 +47,11 @@ pwsh tools\win\gltest\build.ps1 -Kits <BC250_ROOT>\toolchain\nuget -Arch x64
 pwsh tools\win\gltest\build.ps1 -SkipSelfTest
 ```
 
-Output: `<BC250_ROOT>\scratch\build\gltest\gltest-x64.exe` and `gltest-x86.exe`. Headers and import
+`-Tool gltest|glprobe|both` selects the program (default `both`). The section `glprobe` below describes the
+second program.
+
+Output: `<BC250_ROOT>\scratch\build\gltest\gltest-x64.exe`, `gltest-x86.exe`, `glprobe-x64.exe` and
+`glprobe-x86.exe`. Headers and import
 libraries come from the SDK NuGet packages under `-Kits`, the compiler from the installed Visual Studio, as
 in `tools\win\vkfillcheck\build.ps1`. Release settings: `/O2 /GL` with `/LTCG`, `NDEBUG`, static CRT and
 `/Brepro`, so two builds of the same source are the same bytes.
@@ -108,9 +112,47 @@ version can be seen refusing on a driver that would have given one: `compute` an
 `threads` both need 4.3, and on a 4.6 driver there is no other way to reach those paths. The build uses it for
 exactly that, and to run `draw` once on a core 3.3 context, which takes the GLSL 330 source of each shader.
 
+## glprobe
+
+`glprobe.c` is the second program of this directory. gltest says which DLL served the context. glprobe says
+why a DLL did or did not serve it. It runs in four steps and prints one line per reading:
+
+1. **The kernel's answer.** `D3DKMTQueryAdapterInfo` with `KMTQAITYPE_UMOPENGLINFO` (name, `Version`,
+   `Flags`, NTSTATUS) for each adapter of `D3DKMTEnumAdapters2` with its LUID, for the primary display
+   adapter (`D3DKMTOpenAdapterFromGdiDisplayName`) and for the adapter of a window DC
+   (`D3DKMTOpenAdapterFromHdc`, then the DC of the window's monitor if that fails, then the primary). Each
+   adapter also gets `KMTQAITYPE_CHECKDRIVERUPDATESTATUS`, which `opengl32` checks before it accepts an ICD.
+2. **The registry as the kernel reads it.** `KMTQAITYPE_QUERYREGISTRY` with
+   `D3DDDI_QUERYREGISTRY_ADAPTERKEY` reads the six `OpenGL*` values of the adapter's key through the kernel.
+   The D3D user-mode driver names of the same adapter (`KMTQAITYPE_UMDRIVERNAME`) are the control.
+3. **What opengl32 does.** `LdrRegisterDllNotification` records each DLL that the process maps and unmaps
+   while `ChoosePixelFormat`, `SetPixelFormat` and `wglCreateContext` run. A vectored exception handler
+   records `OutputDebugString` text (Mesa logs there on Windows). The probe counts the pixel formats as ICD,
+   generic and generic-accelerated, prints the GL strings of the context, and lists the loaded modules that
+   export `DrvSetContext`.
+4. **The direct load.** The ICD file that the kernel named (or `--load-file PATH`) is opened for read and
+   loaded with `LoadLibrary`. The probe checks the 19 `Drv*` exports and calls `DrvValidateVersion`.
+
+The `summary` lines at the end compare these readings: the window's adapter against the adapter that names
+the ICD, the kernel's answer against the registry, the load by `opengl32` against the module that serves the
+context.
+
+```
+--expect-icd TEXT        the summary says if each reading carries TEXT
+--load-file PATH         the direct load takes PATH (default: the file the kernel named)
+--validate-version N     DrvValidateVersion of a --load-file gets N (default 1)
+--no-load-icd            leave out the direct load
+--show / --seconds N / --log PATH   as in gltest (default watchdog 30 s)
+```
+
+Exit code 0 when the probe ran to its end, 1 when the watchdog fired, 2 on a usage error. A finding is
+in the lines, never in the exit code. The build's self-test uses this computer's own OpenGL driver as the
+positive control (named, loaded, found as a module that exports `DrvSetContext`) and a name that no module
+carries as the negative control.
+
 ## Two things it does not do
 
-- It does not register the ICD, and it does not read the registry or the adapter. It reports what the
-  process got. Which value in the driver key produced that is the business of the registration step.
+- gltest does not register the ICD, and it does not read the registry or the adapter. It reports what the
+  process got. glprobe reads the adapter and the registry, but it does not write either.
 - `present` says nothing about independent flip or about who composes the frame. It counts frames and reads
   back the colour it drew.
