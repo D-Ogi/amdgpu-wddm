@@ -40,12 +40,19 @@ A release ships the package as a zip and as one file, `amdgpu-wddm-setup-<versio
 package appended after the end of its program image (`src/Payload.cs`, written by
 `tools/release/make-setup-exe.ps1`). With no `files\` folder beside it, the window unpacks that package to
 `%ProgramData%\amdgpu-wddm\setup\<version>\` - a folder with its own permission list (administrators and SYSTEM
-full control, Users read and run, no inheritance from `%ProgramData%`, the parent hardened first) - refuses a
-payload, a file list or a file whose SHA-256 does not match and a path that would leave the folder, and installs
-from there, including the continuation after each restart. The folder is removed when the run ends, also after a
-failure, and kept only while a restart is pending. With a `files\` folder beside it the window behaves exactly as
-before. `--smoke-payload <dir>` reads and unpacks the payload into a plain folder with no administrator rights, for
-the gate `tools/release/test-setup-exe.ps1`.
+full control, Users read and run, no inheritance from `%ProgramData%`) - refuses a payload, a file list or a file
+whose SHA-256 does not match and a path that would leave the folder, and installs from there, including the
+continuation after each restart. The shared parent `%ProgramData%\amdgpu-wddm` keeps the rules it inherits, because
+a strict list on it broke every uninstall of 0.7.216.100-tester.28 (BD-129). It is checked as a location instead:
+a regular folder, no link, owned by SYSTEM, Administrators, TrustedInstaller or the account running setup. Anything
+else ends the run with a message. One unpacking at a time, held by a `Global\` mutex: a second copy of the
+file says setup is already running rather than resetting the folder the first one installs from. The folder is
+removed when the run ends, also after a failure, and kept only while a restart is pending. The window that
+finishes the install after the restart removes it by version name, because the continuation runs from the closure
+and carries no payload of its own. `uninstall.ps1` removes whatever an interrupted run left there. With a `files\` folder beside it,
+or with `--package <dir>`, the window uses that folder and behaves exactly as before. `--smoke-payload <dir>` reads
+and unpacks the payload into a plain folder with no administrator rights, for the gate
+`tools/release/test-setup-exe.ps1`.
 
 The window draws its own title bar and every widget in it (`src/Theme.cs` for the tokens, `src/Controls.cs` for the
 widgets, `src/Chrome.cs` for the frame), in the visual language of the accepted control-app mockup: a dark window

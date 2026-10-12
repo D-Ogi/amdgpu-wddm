@@ -290,13 +290,15 @@ change. The driver writes no debug log files. To change the maximum clock at ins
 ## Uninstall
 
 1. Run `uninstall.cmd` as administrator (in the package's `files` folder or in `C:\Program Files\amdgpu-wddm`).
-2. Type `YES`. The uninstaller removes the driver, the files, the registry values, the task and the certificate.
-   The GPU goes back to Microsoft Basic Display Adapter. The uninstaller keeps `C:\ProgramData\amdgpu-wddm\control`
-   (the Control application's setting backups and action log). Delete it yourself if you do not need it.
-3. If the installer turned on test signing, the uninstaller asks if it must turn it off. Use
-   `uninstall.cmd -DisableTestSigning` or `-KeepTestSigning` to answer in advance.
-4. Restart the computer. If BitLocker is on, have the recovery key ready: changing the boot options again can cause
-   a recovery key prompt.
+2. The uninstaller asks nothing: starting it is the answer. It removes the driver, the files, the registry values,
+   the task and the certificate. The GPU goes back to Microsoft Basic Display Adapter. The uninstaller keeps
+   `C:\ProgramData\amdgpu-wddm\control` (the Control application's setting backups and action log). Delete it
+   yourself if you do not need it.
+3. Test signing goes off again where the installer turned it on. `uninstall.cmd -KeepTestSigning` leaves it on, for
+   a tester who installs another build of ours next.
+4. The restart that finishes the removal starts by itself after a 15-second countdown: Enter restarts at once, any
+   other key leaves the restart to you, and `uninstall.cmd -NoReboot` skips it. If BitLocker is on, have the
+   recovery key ready: changing the boot options again can cause a recovery key prompt.
 
 You can also use the System Restore point "amdgpu-wddm before install" if the installer made one.
 

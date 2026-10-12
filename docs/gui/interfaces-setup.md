@@ -40,13 +40,23 @@ window with the package appended after the end of its program image (`src\Payloa
 `tools\release\make-setup-exe.ps1`). Started with no `files\` folder beside it, it unpacks the release to
 `%ProgramData%\amdgpu-wddm\setup\<version>\` - administrators and SYSTEM only, not inherited - checks every file
 against the embedded list before anything uses it, and runs the install from there, including the continuation
-after each restart. The folder goes when the run ends and stays only while a restart is pending. With a `files\`
-folder beside it, the exe behaves exactly as the `setup.exe` of the unpacked zip.
+after each restart. Its parent, the shared `%ProgramData%\amdgpu-wddm`, keeps the access rules it inherits (a
+strict list on it refused every uninstall of 0.7.216.100-tester.28, BD-129) and is checked as a location instead: a
+regular folder, no link, and an owner of SYSTEM, Administrators, TrustedInstaller or the account running setup.
+Anything else ends the run with a message, because the owner of that folder could put another folder where the
+checked files stand. One unpacking runs at a time (a `Global\` mutex): a second copy of the same file says setup is
+already running, instead of resetting the folder the first one installs from. The folder goes when the run ends,
+also after a failure, and stays only while a restart is pending. The window that ends the install removes it by
+version name, because the phase after a restart runs from the continuation closure and carries no payload of its
+own. `uninstall.ps1` removes what an interrupted run left there. With a `files\` folder beside it, or with
+`--package <dir>`, the exe uses that folder and behaves exactly as the `setup.exe` of the unpacked zip.
 
 `prepare-offline.ps1 -Destination <dir> [-FirmwareDir <dir>]` takes the same `-Gui`, `-InvocationId`, `-EventsFile`,
 `-ResultFile` and `-DeadlineUtc`. The command-line installer (`install.cmd` without `-Gui`) keeps its behaviour, except that its
-restart is now a planned one: it asks "Restart now?" and then calls `ExitWindowsEx(EWX_REBOOT)` with a planned
-reason, never `Restart-Computer -Force` (C17). `uninstall.cmd` does the same.
+restart is now a planned one that starts by itself after the same visible countdown and then calls
+`ExitWindowsEx(EWX_REBOOT)` with a planned reason, never `Restart-Computer -Force` (C17). `uninstall.cmd` does the
+same, and asks nothing either: `Read-Confirmation` is gone from the engine, so no script of the installer can ask
+for a typed answer, and `test-engine-units.ps1` holds that.
 
 Cancel: the window creates `<EventsFile>.cancel`. The engine looks for it only at a safe point (`cancel` events say
 when one is open) and then ends with outcome `cancelled`. One mutating engine runs at a time: a real run holds
