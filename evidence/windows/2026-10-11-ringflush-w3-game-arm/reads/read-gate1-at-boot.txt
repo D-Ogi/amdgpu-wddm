@@ -1,0 +1,26 @@
+utc 2026-10-11T20:45:44.5613449Z boot 2026-10-11T20:44:04.5000000Z uptime 100.1 s
+  EnableRingVmFlush = 1
+  EnableVmidPool = 1
+  HangRecoveryMode = 1
+  TdrDelay = 10
+health: health abi=1 version=0x000700D8 flags=15 generation=27167994 epoch=5 completed=760 age_ms=463 ready_ms=85112
+--- the start line the gate writes
+  25      1.158 gfx: VMID pool on (EnableVmidPool)
+  26      1.158 gfx: VM flush on the ring (EnableRingVmFlush), engine 1
+--- the summary counters the plan reads
+  25      1.158 gfx: VMID pool on (EnableVmidPool)
+  885     27.856 wddm: preemption queued fence 2 node 0 hardware pending 1 active submits 0
+  970     98.955 wddm summary: node 0 hardware: 1037 submitted, 1037 completed, 0 timeouts, 0 refused, 0 soft-recovered
+  979     98.955 wddm profile: hold wakes 0 event, 0 timeout
+  997     98.955 wddm summary: VMID pool on, members 0xFFFA, excluded 0x0000
+  998     98.955 wddm summary: VMID pool: 7 claims, 1030 reuses, 0 busy, 0 rule refusals
+  999     98.955 wddm summary: VMID pool FLUSH_TLB: 2114 built, 29492 VMID invalidations
+  1000     98.955 wddm summary: ring VM flush on: 1037 frames, 1030 of them on a root the VMID held
+  1001     98.955 wddm summary: node 1 (paging, open): 5469 hardware submitted, 5469 completed, 0 timeouts, 0 refused
+  1178     98.956 wddm summary: dcn lock acknowledgement timeouts 0
+  1187     98.956 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+--- an MMIO flush must not have run (this line must be absent)
+  gfx: VMID ... root ... flush -> lines: 0
+--- faults and timeouts
+  GPU faults 0, fence timeouts 0, ResetEngine 0, wddm timeout 0
+  Display provider events since the boot: 0 (4101: 0)

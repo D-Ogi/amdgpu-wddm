@@ -1,0 +1,11 @@
+2026-10-11T20:31:43.9562170Z t=- left=1143.9 etw-capture begin tag=N559 perfview=E6B89A6D not_after_qpc=86887239357
+2026-10-11T20:31:46.5290464Z t=0.0 left=1141.4 witcher3 seen
+2026-10-11T20:31:46.5310785Z t=0.0 left=1141.4 window A skipped (-SkipA)
+2026-10-11T20:33:41.7834563Z t=115.3 left=1026.1 window B trigger world: walk 114s: start, 120 s
+2026-10-11T20:33:42.6228031Z t=116.1 left=1025.3 window B gpu session BC250-N559-B-gpu start exited exit 0 providers dxgkrnl max 2464MB
+2026-10-11T20:33:42.6259062Z t=116.1 left=1025.3 window B start session=BC250-N559-B seconds=120 gpu_only=True scheduler_stacks=False
+2026-10-11T20:35:43.1431789Z t=236.6 left=904.8 window B gpu-only held 120.5 s
+2026-10-11T20:35:43.7982779Z t=237.3 left=904.1 window B stop BC250-N559-B-gpu exited exit 0
+2026-10-11T20:35:44.3301494Z t=237.8 left=903.6 window B sessions gone (query ok)
+2026-10-11T20:35:44.3713076Z t=237.8 left=903.5 file gpu-B.etl 260046848
+2026-10-11T20:35:44.3733542Z t=237.8 left=903.5 etw-capture end cleanup_failed=False

@@ -1,11 +1,11 @@
 # The root serialization of the gfx submit path, and the VMID pool
 
 Status: option (a) is **implemented in KMD 0.7.214.1 behind `EnableVmidPool` (default on)**. Option (b) is
-**implemented behind `EnableRingVmFlush` (default off)** and **ran on the lab on 2026-10-09**: 81 minutes of
-uptime, 680 786 frames flushed on the ring, 0 rule refusals, 0 faults, 0 timeouts, no measurable cost (section 3,
-"What the lab measured"). The default stays off until the open measurement of a game's frame time is made.
-`EnableVmidPool` 0 gives the behaviour of 0.7.213.1. `EnableRingVmFlush` absent or 0 gives the packet sequence of
-0.7.216.24, dword for dword.
+**implemented behind `EnableRingVmFlush` (default on from train b31)**. It ran on the lab on 2026-10-09: 81 minutes
+of uptime, 680 786 frames flushed on the ring, 0 rule refusals, 0 faults, 0 timeouts, no measurable cost. The game
+arm on 2026-10-11 found the same frame time at the same GPU clock at both gates (section 3, "What the lab
+measured"). `EnableVmidPool` 0 gives the behaviour of 0.7.213.1. `EnableRingVmFlush` 0 gives the packet sequence of
+0.7.216.24, dword for dword: that is the rollback.
 
 This document was first written as "F2" against KMD 0.7.196.1. Section 1 keeps that analysis. Sections 2, 4 and 5
 describe what 0.7.214.1 does. Section 3 describes option (b), its lab plan and what the lab measured. Code names refer to the tree of
@@ -170,7 +170,7 @@ with nothing published, and the next buffer starts the whole set again.
 | `driver/kmd/test/gfx_pipeline_test.c`, `gfx_retained_test.c` | follow the new types; the pipeline test checks the VMID in the queue and in the timeout report |
 | `experiments/E27-m9-inference/paging-route-test-suffix.c` (`shim-paging`) | the real `GfxPagingBuildFlush`, gate 0 and the fan-out |
 
-## 3. Option (b): the flush on the ring, implemented behind `EnableRingVmFlush`, default off
+## 3. Option (b): the flush on the ring, implemented behind `EnableRingVmFlush`, default on from train b31
 
 Upstream does the root change and the invalidation in the command stream: `gmc_v10_0_emit_flush_gpu_tlb`
 (`driver/amdgpu-import/reference/gmc_v10_0.c`) emits two `WREG` packets for the page-table-base pair of the context
@@ -315,11 +315,47 @@ on one boot each: gate 1 read 18.81 and 18.74 fps (124.8 and 124.4 Mrays/s), gat
 (125.1 and 124.3 Mrays/s). The two gates are inside each other's run-to-run spread, 0.6 % end to end, so this
 workload sees neither a cost nor a saving.
 
-**Open: the game frame time.** The plan's step 3 asks for a game session against an existing baseline. The gate-0
-arm was measured (trial 519: 12.5 presents/s at a mean 1337 MHz, 9.3 presents per GHz, which matches trial 516 on
-the b25 package within the usual spread). The gate-1 half was not: the harness opened its measurement window on
-the game's main menu in all three attempts, which is `DEFECTS.md` BD-107, not driver behaviour. Until a game arm
-is measured at gate 1, the default stays off.
+**The game frame time.** The plan's step 3 asks for a game session against an existing baseline. On 2026-10-09
+only the gate-0 half ran (trial 519: 12.5 presents/s at a mean 1337 MHz).
+In the model where the rate follows the clock, that is an estimated 9.3 presents per GHz. In the three gate-1
+attempts the harness opened its measurement window on the game's main menu, which is `DEFECTS.md` BD-107, not
+driver behaviour.
+
+The pair ran on 2026-10-11 on `0.7.216.100-tester.28` (KMD 0.7.216.32), one session at each gate
+(`evidence/windows/2026-10-11-ringflush-w3-game-arm/`). The Witcher 3 Remaster ran in D3D12 at 1920x1080 HIGH with
+ray tracing, VSync off, with no upscaler and no dynamic resolution. Both sessions loaded the same save, and the camera
+did not move after the load. One 120 s DxgKrnl window per session was opened in the world, and no input was sent
+during the window. Trial 559 is gate 0 (value absent on that KMD) and trial 561 is gate 1.
+
+| | Gate 0, trial 559 | Gate 1, trial 561 |
+|---|---|---|
+| Presents/s in the window | 14.60 | 13.60 |
+| Mean GPU clock (1 s KMD DPM samples) | 1344 MHz (1200-1500) | 1225 MHz (1100-1300) |
+| Frame time p50 / p99 | 68.05 / 78.23 ms | 72.47 / 86.88 ms |
+| Mean frame time at 1300 MHz | 70.33 ms (273 frames, 19 s, SE 0.21 ms) | 70.23 ms (952 frames, 67 s, SE 0.14 ms) |
+| Mean frame time at 1200 MHz | 75.12 ms (390 frames, 30 s, SE 0.24 ms) | 74.92 ms (54 frames, 4 s, SE 0.86 ms) |
+| `ring VM flush on/off` at the end | off: 0 frames | on: 64 417 frames, 64 405 on a root the VMID held |
+| Node 0 hardware submissions | 79 229 | 64 417 |
+| VMID pool busy / rule refusals | 0 / 0 | 0 / 0 |
+| GPU faults, fence timeouts, `ResetEngine`, `wddm: timeout`, TDR, `Display` 4101 | none | none |
+| Tctl max, plug max | 84.8 C, 224 W | 85.0 C, 218 W |
+
+The raw rates differ because the clocks differ, not because of the gate. Both windows ran at the thermal limit
+(Tctl 83-85 C, GPU busy 99 %), where the KMD thermal policy sets the clock. The gate-1 window opened an estimated
+2.5 to 3 minutes after the world loaded, not 40 s after it, because an sshd accept stall (BD-051) delayed the
+command that opens the window. The board was hotter by then, so the clock was lower.
+The model of presents per GHz does not remove this difference in this scene, because the estimated rate per GHz
+rises as the clock falls (from 10.71 at 1457 MHz to 11.02 at 1243 MHz inside trial 559). The comparison that holds the clock constant assigns each frame interval to the 1 s DPM sample in force
+and counts only stretches where the samples before and after show the same clock. At 1300 MHz the gates differ by
+-0.10 ms per frame, and at 1200 MHz by -0.20 ms.
+
+The step-4 checks hold at gate 1: the ring-flush frame count equals the node-0 hardware submissions, rule
+refusals stay 0, and `busy` stays 0 as at gate 0. The stop rule of step 5 never fired.
+
+The limit of this result: it is one pair. It cannot resolve a difference smaller than about 0.5 ms per frame, which
+is 0.7 % of the frame time and two standard errors of the 1300 MHz difference. The game arm therefore shows no cost
+and no saving, as the DXRPathTracer pair does. It does not show that the cost is zero. On this result the default
+goes on in train b31.
 
 **One check in the arm script is not discriminating.** `ringflush.ps1 -Step read` asserts that the per-frame line
 `gfx: VMID <n> root 0x... flush -> ...` is absent. It counted 0 at gate 1 and 0 at gate 0, where the MMIO flush is
@@ -380,10 +416,11 @@ wddm summary: VMID pool FLUSH_TLB: %lu built, %lu VMID invalidations
 
 `rule refusals` must be 0. Any other value is a defect. To roll back, set `EnableVmidPool` to 0 and restart.
 
-`EnableRingVmFlush` is a second REG_DWORD under the same key, read once in `GfxStart`. Absent or 0 is the MMIO
-flush ahead of the frame, dword for dword as 0.7.216.24. 1 puts the root write and the invalidation in the
-command stream (section 3). Neither the INF nor the release installer writes it, so a computer that has never
-been told otherwise has it off. The start log says:
+`EnableRingVmFlush` is a second REG_DWORD under the same key, read once in `GfxStart`. From train b31, absent or
+any value other than 0 puts the root write and the invalidation in the command stream (section 3), and 0 is the MMIO
+flush ahead of the frame, dword for dword as 0.7.216.24. In every driver before train b31 the default was off: absent
+meant the MMIO flush. Neither the INF nor the release installer writes the value, so a computer that has never been told
+otherwise has the ring flush on. An install keeps a value that is already there. The start log says:
 
 ```
 gfx: VM flush on the ring (EnableRingVmFlush), engine 1
@@ -396,4 +433,6 @@ and the summary adds one line:
 wddm summary: ring VM flush on: %lu frames, %lu of them on a root the VMID held
 ```
 
-With the gate off both numbers are 0. To roll back, set `EnableRingVmFlush` to 0 and restart.
+With the gate off the line says `off` and both numbers are 0. To roll back, set `EnableRingVmFlush` to 0 and
+restart. The kmdver arm of the train validation suite (`tools/win/train-validate/arms.json`) expects the start
+line of the default, `gfx: VM flush on the ring (EnableRingVmFlush), engine 1`.

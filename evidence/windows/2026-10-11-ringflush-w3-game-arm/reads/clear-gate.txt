@@ -1,0 +1,6 @@
+utc 2026-10-11T21:07:18.0051238Z boot 2026-10-11T20:44:04.5000000Z uptime 1393.5 s
+EnableRingVmFlush removed
+  EnableRingVmFlush ABSENT
+  EnableVmidPool = 1
+  HangRecoveryMode = 1
+  TdrDelay = 10
