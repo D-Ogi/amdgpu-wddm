@@ -21,6 +21,7 @@ typedef struct _BC250_MODESET {
     LONG InheritedPipeStatus;
     ULONG InheritedSupport;                // transformations equivalent to the saved source/target tuple
     BOOLEAN InheritedFixed;                // scaler/timing retained; only the GOP source is offered
+    volatile LONG InheritedSupportCalls, InheritedCofuncCalls, InheritedCommitCalls; // first 16 calls per start
     LONG AuxStatus;                         // the AUX session's result (0 = the EDID was read)
     ULONG EdidReason;                       // enum bc250_edid_reason
     BOOLEAN EdidValid;                      // the base block passed its checks

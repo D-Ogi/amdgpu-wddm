@@ -337,14 +337,35 @@ void ConnectorInitialize(BC250_DEVICE* Device)
 
 // Static VidPN has its own source/target contract and preserves the GOP scaler.
 // Do not feed that tuple to Plan(), which describes a newly programmed 1:1 pipe.
-// This is an admitted start route, not a fallback after a connector transaction
-// failed. A refusal propagates to StartDevice before the adapter is published.
+// This route also covers unavailable discovery/programming prerequisites. It is
+// selected before any connector transaction; a failed transaction is not hidden.
+static BOOLEAN ConnectorNeedsInherited(const BC250_DEVICE* Device)
+{
+    return Device->Modeset.InheritedFixed || Device->Modeset.Requested==BC250_DISPLAY_MODES_OFF ||
+        !Device->Mmio || !Device->DcnWriteEnabled || !Device->Modeset.EdidValid ||
+        (!Device->Modeset.DpcdValid && Device->Modeset.Adapter.type==BC250_ADAPTER_UNKNOWN) ||
+        !Device->Dxgk.DxgkCbSynchronizeExecution || !Device->Dxgk.DxgkCbQueueDpc ||
+        !Device->Dxgk.DxgkCbIndicateChildStatus;
+}
+
 static NTSTATUS ConnectorStartInherited(BC250_DEVICE* Device)
 {
     BC250_MODESET* m=&Device->Modeset;
-    if (!Device->InheritedSignalValid || !NT_SUCCESS(m->InheritedPipeStatus) || !m->InheritedSupport ||
-        m->Modes.Count!=1 || m->Modes.Modes[0].Width!=Device->Post.Width ||
+    ULONG scaling;
+    if (!Device->InheritedSignalValid || !NT_SUCCESS(m->InheritedPipeStatus) || !m->InheritedSupport)
+        return STATUS_NOT_SUPPORTED;
+    for(scaling=0;scaling<BC250_SCALING_COUNT;scaling++)
+        if(m->InheritedSupport & BC250_SCALING_BIT(scaling)) break;
+    if(scaling==BC250_SCALING_COUNT) return STATUS_NOT_SUPPORTED;
+    // A native pipe may have advertised extra modes before discovery failed or
+    // a programming callback proved unavailable. Publish only the saved tuple.
+    Bc250ModeListBuild(Device->Post.Width,Device->Post.Height,NULL,BC250_DISPLAY_MODES_OFF,&m->Modes);
+    if (m->Modes.Count!=1 || m->Modes.Modes[0].Width!=Device->Post.Width ||
         m->Modes.Modes[0].Height!=Device->Post.Height) return STATUS_NOT_SUPPORTED;
+    m->InheritedFixed=TRUE;
+    m->InheritedSupportCalls=m->InheritedCofuncCalls=m->InheritedCommitCalls=0;
+    m->Level=BC250_DISPLAY_MODES_OFF;
+    m->Scaling=scaling;
     Device->Connector.StartAccepted=1;
     GuardLog("connector: inherited-only child %lu source %ux%u pitch %u target %ux%u pixel %Iu support %lX",
         (ULONG)BC250_CHILD_UID,Device->Post.Width,Device->Post.Height,Device->Post.Pitch,
@@ -372,20 +393,11 @@ NTSTATUS ConnectorStart(BC250_DEVICE* Device)
         // Display-only does not own a hardware connector.
         return c->LastStatus=c->StartStatus=STATUS_SUCCESS;
     }
-    if (Device->Modeset.InheritedFixed || Device->Modeset.Requested==BC250_DISPLAY_MODES_OFF) {
+    if (ConnectorNeedsInherited(Device)) {
         status=ConnectorStartInherited(Device);
         c->LastStatus=c->StartStatus=status;
         if (!NT_SUCCESS(status)) InterlockedIncrement(&c->Refusals);
         return status;
-    }
-    if (!Device->Mmio || !Device->DcnWriteEnabled || !Device->Modeset.EdidValid ||
-        (!Device->Modeset.DpcdValid && Device->Modeset.Adapter.type == BC250_ADAPTER_UNKNOWN) ||
-        !Device->Dxgk.DxgkCbSynchronizeExecution || !Device->Dxgk.DxgkCbQueueDpc ||
-        !Device->Dxgk.DxgkCbIndicateChildStatus) {
-        InterlockedIncrement(&c->Refusals);
-        c->LastStatus=c->StartStatus;
-        GuardLog("connector: initial admission refused; adapter start must fail");
-        return STATUS_NOT_SUPPORTED;
     }
     if (!c->WorkItem) c->WorkItem = IoAllocateWorkItem(Device->PhysicalDeviceObject);
     if (!c->WorkItem) {
