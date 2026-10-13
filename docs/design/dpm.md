@@ -81,8 +81,9 @@ messages, `driver/kmd/smu_metrics.c` for the page, the gate and the snapshot):
   uncached for the start. The list admits only a page-aligned address in that window.
 - The governor thread reads the table at most once a second, after the tick's own SMU traffic. The first read waits
   one second after the start. The escape never sends a message: it copies the published snapshot.
-- Each read fills the page with `0xFF` first. A table that still holds `0xFF` in a field the firmware always writes,
-  or holds a value over 400 W, 2 V or 150 C, is refused. Three refused tables in a row stop the reads for this start.
+- Each read fills the page with `0xFF` first. The parser rejects unwritten fields and checks the values before it publishes them.
+  [Metrics validation](smu-metrics.md) lists the field offsets, bounds and checks for overwritten core data.
+  Three bad tables stop the reads for this start.
 - A table whose current or average socket power reads 0 mW is skipped: it is counted, it keeps the previous reading,
   and it does not count toward the three. A Linux stress run on unit A (2026-10-07, four parallel readers, 316 000
   tables in 90 s, no error and no kernel message) read 0 W for the average in about one sample of three, and one

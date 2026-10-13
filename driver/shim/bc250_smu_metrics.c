@@ -49,6 +49,19 @@ static unsigned int u32_at(const unsigned char *raw, unsigned int offset)
 	return u16_at(raw, offset) | u16_at(raw, offset + 2) << 16;
 }
 
+unsigned int bc250_smu_metrics_marker(const unsigned char *raw, unsigned int length)
+{
+	unsigned int i, mask = 0;
+	if (raw == NULL || length < BC250_SMU_METRICS_BYTES)
+		return 0;
+	for (i = 0; i < 4u; i++) {
+		unsigned int offset = BC250_SMU_METRICS_OFF_SPARE + (i / 2u) * BC250_SMU_METRICS_HALF + i % 2u;
+		if (raw[offset] == 0x67u)
+			mask |= 1u << i;
+	}
+	return mask;
+}
+
 enum bc250_smu_metrics_parse bc250_smu_metrics_parse(const unsigned char *raw, unsigned int length,
 						     struct bc250_smu_metrics *out)
 {
@@ -66,14 +79,23 @@ enum bc250_smu_metrics_parse bc250_smu_metrics_parse(const unsigned char *raw, u
 	m.gfx_cc = u16_at(raw, BC250_SMU_METRICS_OFF_GFX_TEMP);
 	m.soc_cc = u16_at(raw, BC250_SMU_METRICS_OFF_SOC_TEMP);
 	m.throttler = u16_at(raw, BC250_SMU_METRICS_OFF_THROTTLER);
-	/* The fields every table carries. A whole field of poison is a page the firmware did not write; one poison
-	 * byte inside a real value is impossible for these widths and bounds, so whole fields are enough. */
+	/* A complete poison field is not a measurement. Include every published field, including the opaque
+	 * throttler word. A single 0xFF byte can occur in a valid value, so do not reject individual bytes. */
 	if (m.socket_mw == 0xFFFFFFFFu || m.socket_avg_mw == 0xFFFFFFFFu || m.gfx_mv == 0xFFFFFFFFu ||
-	    m.soc_mv == 0xFFFFFFFFu || m.gfx_mhz == 0xFFFFu || m.gfx_cc == 0xFFFFu || m.soc_cc == 0xFFFFu)
+	    m.soc_mv == 0xFFFFFFFFu || m.gfx_mw == 0xFFFFFFFFu || m.soc_mw == 0xFFFFFFFFu ||
+	    m.gfx_mhz == 0xFFFFu || m.gfx_cc == 0xFFFFu || m.soc_cc == 0xFFFFu || m.throttler == 0xFFFFu)
 		return BC250_SMU_METRICS_PARSE_UNWRITTEN;
+	/* BD-148: C0Residency starts at byte 56. Two writes past its six uint16 entries land at 68/70, exactly
+	 * GfxclkFrequency/GfxTemperature. Two percentages there imply <=100 MHz AND <=1 C. This is a refusal
+	 * signature, not proof of which firmware wrote it. Neither a marker nor CPU core count bypasses it. */
+	if (m.gfx_mhz <= BC250_SMU_METRICS_MAX_RESIDENCY && m.gfx_cc <= BC250_SMU_METRICS_MAX_RESIDENCY)
+		return BC250_SMU_METRICS_PARSE_CORE_OVERFLOW;
+	if (m.gfx_mhz != 0u && (m.gfx_mhz < BC250_SMU_METRICS_MIN_GFX_MHZ ||
+	    m.gfx_mhz > BC250_SMU_METRICS_MAX_GFX_MHZ))
+		return BC250_SMU_METRICS_PARSE_CLOCK;
 	if (m.socket_mw > BC250_SMU_METRICS_MAX_MW || m.socket_avg_mw > BC250_SMU_METRICS_MAX_MW ||
 	    m.gfx_mw > BC250_SMU_METRICS_MAX_MW || m.soc_mw > BC250_SMU_METRICS_MAX_MW ||
-	    m.gfx_mv > BC250_SMU_METRICS_MAX_MV || m.soc_mv > BC250_SMU_METRICS_MAX_MV ||
+	    m.gfx_mv > BC250_SMU_METRICS_MAX_GFX_MV || m.soc_mv > BC250_SMU_METRICS_MAX_SOC_MV ||
 	    m.gfx_cc > BC250_SMU_METRICS_MAX_CC || m.soc_cc > BC250_SMU_METRICS_MAX_CC)
 		return BC250_SMU_METRICS_PARSE_RANGE;
 	/* The package never draws 0 W while the SMU answers (58 W idle on unit A's Linux). A Linux stress run of
@@ -127,6 +149,15 @@ int bc250_smu_metrics_record(struct bc250_smu_metrics_reader *r, unsigned long l
 	}
 	parse = bc250_smu_metrics_parse(raw, length, &m);
 	r->last_parse = (unsigned int)parse;
+	r->marker_mask = bc250_smu_metrics_marker(raw, length);
+	r->spare_bytes = raw != NULL && length >= BC250_SMU_METRICS_BYTES ?
+		u16_at(raw, BC250_SMU_METRICS_OFF_SPARE) |
+		(u16_at(raw, BC250_SMU_METRICS_HALF + BC250_SMU_METRICS_OFF_SPARE) << 16) : 0u;
+	if (parse != BC250_SMU_METRICS_PARSE_OK) {
+		if (r->rejected_tables != 0xFFFFFFFFu)
+			r->rejected_tables++;
+		r->last_reject = (unsigned int)parse;
+	}
 	if (parse == BC250_SMU_METRICS_PARSE_ZERO_POWER) {
 		r->failures++;  /* counted, but not toward the bad-table limit: the next table is usually whole */
 		return 0;

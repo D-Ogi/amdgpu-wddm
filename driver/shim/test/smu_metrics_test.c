@@ -60,6 +60,8 @@ struct layout_checks {
 	SAME(socket, offsetof(struct half, socket_mw) == BC250_SMU_METRICS_OFF_SOCKET);
 	SAME(soc_temp, offsetof(struct half, soc_cc) == BC250_SMU_METRICS_OFF_SOC_TEMP);
 	SAME(throttler, offsetof(struct half, throttler) == BC250_SMU_METRICS_OFF_THROTTLER);
+	SAME(spare, offsetof(struct half, spare) == BC250_SMU_METRICS_OFF_SPARE);
+	SAME(core_overflow, offsetof(struct half, c0_residency) + 6 * sizeof(unsigned short) == BC250_SMU_METRICS_OFF_GFXCLK);
 	SAME(average, offsetof(struct table, average) == BC250_SMU_METRICS_HALF);
 	SAME(accnt, offsetof(struct table, accnt) == BC250_SMU_METRICS_OFF_ACCNT);
 	SAME(fits, BC250_SMU_METRICS_BYTES % 4u == 0 && BC250_SMU_METRICS_BYTES <= BC250_SMU_METRICS_PAGE);
@@ -182,13 +184,13 @@ static void decode(void)
 	memcpy(raw, &t, sizeof(raw));
 	CHECK(bc250_smu_metrics_parse(raw, sizeof(raw), &m) == BC250_SMU_METRICS_PARSE_UNWRITTEN);
 
-	/* Out of range: 401 W, 2.1 V, 151 C. The bounds themselves pass. */
+	/* Out of range: 300 W + 1 mW, 1.2 V GPU, 151 C. The bounds themselves pass. */
 	good_table(&t);
 	t.current.socket_mw = BC250_SMU_METRICS_MAX_MW + 1u;
 	memcpy(raw, &t, sizeof(raw));
 	CHECK(bc250_smu_metrics_parse(raw, sizeof(raw), &m) == BC250_SMU_METRICS_PARSE_RANGE);
 	good_table(&t);
-	t.current.mv[1] = BC250_SMU_METRICS_MAX_MV + 100u;
+	t.current.mv[1] = BC250_SMU_METRICS_MAX_GFX_MV + 100u;
 	memcpy(raw, &t, sizeof(raw));
 	CHECK(bc250_smu_metrics_parse(raw, sizeof(raw), &m) == BC250_SMU_METRICS_PARSE_RANGE);
 	good_table(&t);
@@ -197,7 +199,7 @@ static void decode(void)
 	CHECK(bc250_smu_metrics_parse(raw, sizeof(raw), &m) == BC250_SMU_METRICS_PARSE_RANGE);
 	good_table(&t);
 	t.current.socket_mw = BC250_SMU_METRICS_MAX_MW;
-	t.current.mv[1] = BC250_SMU_METRICS_MAX_MV;
+	t.current.mv[1] = BC250_SMU_METRICS_MAX_GFX_MV;
 	t.current.gfx_cc = (unsigned short)BC250_SMU_METRICS_MAX_CC;
 	memcpy(raw, &t, sizeof(raw));
 	CHECK(bc250_smu_metrics_parse(raw, sizeof(raw), &m) == BC250_SMU_METRICS_PARSE_OK);
@@ -214,6 +216,75 @@ static void decode(void)
 	t.current.socket_mw = 1u;
 	memcpy(raw, &t, sizeof(raw));
 	CHECK(bc250_smu_metrics_parse(raw, sizeof(raw), &m) == BC250_SMU_METRICS_PARSE_OK && m.socket_mw == 1u);
+}
+
+/* Every published numeric field, the overflow signature, and diagnostic-only spare bytes. */
+static void plausibility(void)
+{
+	struct table t;
+	struct bc250_smu_metrics m;
+	unsigned char raw[sizeof(t)];
+	unsigned int i, half, core;
+	const unsigned int offsets[] = {104, 220, 96, 100, 80, 84, 68, 70, 108, 112};
+	const unsigned int widths[] = {4, 4, 4, 4, 4, 4, 2, 2, 2, 2};
+	const unsigned int maxima[] = {300000, 300000, 300000, 300000, 1600, 1100, 2100, 15000, 15000, 65534};
+	for (i = 0; i < sizeof(offsets) / sizeof(offsets[0]); i++) {
+		unsigned int j, v;
+		good_table(&t);
+		memcpy(raw, &t, sizeof(raw));
+		v = maxima[i];
+		for (j = 0; j < widths[i]; j++) raw[offsets[i] + j] = (unsigned char)(v >> (8 * j));
+		CHECK(bc250_smu_metrics_parse(raw, sizeof(raw), &m) == BC250_SMU_METRICS_PARSE_OK);
+		v++;
+		for (j = 0; j < widths[i]; j++) raw[offsets[i] + j] = (unsigned char)(v >> (8 * j));
+		CHECK(bc250_smu_metrics_parse(raw, sizeof(raw), &m) != BC250_SMU_METRICS_PARSE_OK);
+		CHECK(m.socket_mw == 0 && m.gfx_mhz == 0 && m.throttler == 0);
+		memset(raw + offsets[i], 0xFF, widths[i]);
+		CHECK(bc250_smu_metrics_parse(raw, sizeof(raw), &m) == BC250_SMU_METRICS_PARSE_UNWRITTEN);
+	}
+	good_table(&t);
+	t.current.gfx_mhz = 500;
+	CHECK(bc250_smu_metrics_parse((const unsigned char *)&t, sizeof(t), &m) == BC250_SMU_METRICS_PARSE_OK);
+	t.current.gfx_mhz = 499;
+	CHECK(bc250_smu_metrics_parse((const unsigned char *)&t, sizeof(t), &m) == BC250_SMU_METRICS_PARSE_CLOCK);
+	t.current.gfx_mhz = 0; /* gated clock alone is not a corrupted table */
+	CHECK(bc250_smu_metrics_parse((const unsigned char *)&t, sizeof(t), &m) == BC250_SMU_METRICS_PARSE_OK);
+	t.current.gfx_cc = 8900; /* hot telemetry must not disappear at the thermal stop threshold */
+	CHECK(bc250_smu_metrics_parse((const unsigned char *)&t, sizeof(t), &m) == BC250_SMU_METRICS_PARSE_OK);
+
+	good_table(&t);
+	memcpy(raw, &t, sizeof(raw));
+	/* Synthetic stock-6 layout with stores for cores 6 and 7 at EACH per-core array base. Byte writes avoid
+	 * undefined C array overruns in the test. This models the report, not a captured field-board table. */
+	for (half = 0; half < 2; half++) {
+		unsigned int base = half * (unsigned int)sizeof(struct half);
+		for (core = 6; core < 8; core++) {
+			const unsigned int bases[] = {0, 12, 36, 56};
+			const unsigned int strides[] = {2, 4, 2, 2};
+			const unsigned int values[] = {3500, 5000, 6500, 100};
+			for (i = 0; i < 4; i++) {
+				unsigned int j, off = base + bases[i] + core * strides[i];
+				for (j = 0; j < strides[i]; j++) raw[off + j] = (unsigned char)(values[i] >> (8 * j));
+			}
+		}
+	}
+	CHECK(bc250_smu_metrics_parse(raw, sizeof(raw), &m) == BC250_SMU_METRICS_PARSE_CORE_OVERFLOW);
+	CHECK(m.socket_mw == 0 && m.gfx_mhz == 0);
+	for (i = 0; i < 4; i++) {
+		unsigned int off = 114 + (i / 2) * 116 + i % 2;
+		raw[off] = 0x67;
+		CHECK(bc250_smu_metrics_marker(raw, sizeof(raw)) == (1u << (i + 1)) - 1u);
+		CHECK(bc250_smu_metrics_parse(raw, sizeof(raw), &m) == BC250_SMU_METRICS_PARSE_CORE_OVERFLOW);
+	}
+	/* A marker does not require refusing an otherwise valid stock table or trusting another table. */
+	good_table(&t);
+	t.current.spare = 0x67;
+	CHECK(bc250_smu_metrics_marker((const unsigned char *)&t, sizeof(t)) == 1);
+	CHECK(bc250_smu_metrics_parse((const unsigned char *)&t, sizeof(t), &m) == BC250_SMU_METRICS_PARSE_OK);
+	CHECK(bc250_smu_metrics_marker(NULL, sizeof(t)) == 0);
+	CHECK(bc250_smu_metrics_marker((const unsigned char *)&t, 231) == 0);
+	t.current.spare = 0x42; /* unknown patch: no magic-based allow/deny decision */
+	CHECK(bc250_smu_metrics_parse((const unsigned char *)&t, sizeof(t), &m) == BC250_SMU_METRICS_PARSE_OK);
 }
 
 /* ---- the reader ---------------------------------------------------------------------------------------- */
@@ -332,6 +403,7 @@ int main(void)
 	messages();
 	page();
 	decode();
+	plausibility();
 	reader();
 	printf("SMU metrics policy: %d checks, %d failures\n", checks, failures);
 	return failures ? 1 : 0;
