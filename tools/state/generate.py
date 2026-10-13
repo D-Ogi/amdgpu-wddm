@@ -80,7 +80,7 @@ def main():
     release_path='tools/release/installer/registry-defaults.json'
     release=json.loads((ROOT/release_path).read_text(encoding='utf-8'))
     release['defaults']['parameters']={s['name']:s['factory'] for s in catalog['values'] if s['factory'] is not None}
-    files[release_path]=(json.dumps(release,indent=2,ensure_ascii=True)+'\n').replace('\n','\r\n').encode('ascii')
+    files[release_path]=(json.dumps(release,indent=2,ensure_ascii=True)+'\n').encode('ascii')
     inf=ROOT/'driver/kmd/bc250kmd.inf'
     text=inf.read_text(encoding='ascii')
     begin='; BEGIN GENERATED STATE DEFAULTS\n'
