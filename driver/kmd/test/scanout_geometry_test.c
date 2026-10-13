@@ -78,7 +78,7 @@ typedef struct {
  STANDARD_DATA *pCreateSharedPrimarySurfaceData,*pCreateShadowSurfaceData,*pCreateStagingSurfaceData,*pCreateGdiSurfaceData;
  PVOID pAllocationPrivateDriverData,pResourcePrivateDriverData;
 } DXGKARG_GETSTANDARDALLOCATIONDRIVERDATA;
-typedef struct {volatile LONG GdiSurfaceTypesLogged;BC250_STDALLOC_COUNTERS StdAlloc;ULONG OsBuildNumber;} BC250_WDDM;
+typedef struct {volatile LONG GdiSurfaceTypesLogged;BC250_STDALLOC_COUNTERS StdAlloc;ULONG OsBuildNumber;BOOLEAN GpuPresentGate;} BC250_WDDM;
 #define D3DKMDT_STANDARDALLOCATION_SHAREDPRIMARYSURFACE 1
 #define D3DKMDT_STANDARDALLOCATION_SHADOWSURFACE 2
 #define D3DKMDT_STANDARDALLOCATION_STAGINGSURFACE 3
@@ -86,6 +86,7 @@ typedef struct {volatile LONG GdiSurfaceTypesLogged;BC250_STDALLOC_COUNTERS StdA
 #define D3DDDIFMT_A8R8G8B8 21
 #define WddmDdiGetStandardAllocationDriverData 0
 static BC250_WDDM adapter;
+static BOOLEAN g_ApertureOffered;
 static BC250_WDDM *WddmOf(HANDLE h){return h ? &adapter : NULL;}
 static BOOLEAN WddmFirstCalls(BC250_WDDM *w,int call){(void)w;(void)call;return FALSE;}
 /* ACTUAL_SOURCE */
@@ -167,6 +168,32 @@ static void ShadowDdiChecks(void){
  }
  adapter.OsBuildNumber=0;
 }
+/* BD-156: the staging surface of a redirected Blt through GDI gets the cached aperture record only when the GPU
+   Present route is on and segment 2 is offered, on every build; otherwise the answer is the one before BD-156. */
+static void StagingDdiChecks(void){
+ unsigned gate,aperture;
+ for(gate=0;gate<2;gate++)for(aperture=0;aperture<2;aperture++){
+  STANDARD_DATA data={0};DXGKARG_GETSTANDARDALLOCATIONDRIVERDATA request={0};
+  BC250_WDDM_ALLOCATION_PRIVATE allocation;ULONG resource[6];
+  ULONG expected=gate&&aperture?16u:0u;
+  adapter.OsBuildNumber=22631;adapter.GpuPresentGate=(BOOLEAN)gate;g_ApertureOffered=(BOOLEAN)aperture;
+  data.Width=1546;data.Height=831;data.Pitch=123;
+  request.StandardAllocationType=D3DKMDT_STANDARDALLOCATION_STAGINGSURFACE;request.pCreateStagingSurfaceData=&data;
+  CHECK(Bc250WddmGetStandardAllocationDriverData(&adapter,&request)==STATUS_SUCCESS);
+  CHECK(data.Pitch==123 && request.AllocationPrivateDriverDataSize==32);
+  CHECK(request.ResourcePrivateDriverDataSize==expected);
+  memset(resource,0xcd,sizeof(resource));request.pAllocationPrivateDriverData=&allocation;
+  request.pResourcePrivateDriverData=expected?&resource[1]:NULL;
+  CHECK(Bc250WddmGetStandardAllocationDriverData(&adapter,&request)==STATUS_SUCCESS);
+  CHECK(data.Pitch==6184 && allocation.Pitch==6184 && allocation.Size==5138904ull);
+  CHECK(allocation.Format==D3DDDIFMT_A8R8G8B8 && request.ResourcePrivateDriverDataSize==expected);
+  CHECK(resource[0]==0xcdcdcdcdul && resource[5]==0xcdcdcdcdul);
+  if(expected)CHECK(resource[1]==BC250_SURFACE_RESOURCE_MAGIC && resource[2]==2 && resource[3]==1 &&
+                    resource[4]==BC250_SURFACE_RESOURCE_CPU_READ);
+  else CHECK(request.pResourcePrivateDriverData==NULL && resource[1]==0xcdcdcdcdul);
+ }
+ adapter.OsBuildNumber=0;adapter.GpuPresentGate=0;g_ApertureOffered=0;
+}
 int main(void){
  const ULONG widths[]={1366,1440,1680,1920,2560};
  const ULONG pitches[]={5632,5888,6912,7680,10240};
@@ -240,7 +267,7 @@ int main(void){
    free(src);free(dst);
   }
  }
- GdiChecks();ShadowDdiChecks();
+ GdiChecks();ShadowDdiChecks();StagingDdiChecks();
  free(buffer);CHECK(maps==unmaps);
  printf("scanout geometry: %u checks, %u failures\n",checks,failures);return failures?1:0;
 }
