@@ -212,6 +212,7 @@ left out (`-StartMenuShortcut`, `-DesktopShortcut`). The uninstall removes all t
 | `ShowSupportOptions` | off (D5) | 1 when checked; removed when unchecked |
 | `GettingStartedDismissed` | the card shows | 1 on "Dismiss"; removed by Help -> "Getting started" |
 | `HiddenGames` (REG_MULTI_SZ) | nothing hidden | the file names (`witcher3.exe`) of the hidden entries; the Games list has one entry per file name, as the profiles do (B3) |
+| `ShownGames` (REG_MULTI_SZ) | every recorded launch that is not a game stays hidden. | The file names of the entries that the person chose to see among the games with "Show". These entries are not games. They are web browsers and web views, parts of Windows, game store clients and tools of this driver (`LaunchKinds` in `RecentLaunches.cs`, BD-140) |
 | `LastSeenRelease` (REG_SZ) | - | the release the app last showed as "upgrade done", for the one-time verdict |
 | `NameTipRelease` (REG_SZ) | the name tip is due | the installed release that the guide panel showed the name tip for. The tip says what the name Nagi stands for. It shows for 15 s at the first start of each installed release |
 | `WallpaperApplied` (REG_SZ) | the Nagi wallpaper is due when the installer chose it | the `Release\WallpaperStamp` this account had the Nagi wallpaper set for, so it is set once per install (section 4) |

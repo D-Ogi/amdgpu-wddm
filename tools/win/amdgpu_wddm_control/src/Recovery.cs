@@ -39,9 +39,18 @@ namespace AmdgpuWddmControl
         public string DwmRouteDetail { get; set; }
         public bool GpuDesktopModules { get; set; }                 // the GPU route's UMDs are installed
         public bool TaskFound { get; set; }
+        // BD-141: why the start-confirm task could not be read, when no source found it and at least one source was
+        // refused or failed (an app without administrator rights is refused a task that runs as Local System).
+        // Null: every source answered, so TaskFound false means the task is absent. An older snapshot has no
+        // member, which reads as answered.
+        public string TaskReadError { get; set; }
         public long? TaskResult { get; set; }
         public string TaskLastRun { get; set; }
         public string ConfirmLogLast { get; set; }
+        // The newest "exit N:" line of start-confirm.log, which every user can read: its time (UTC, as the log
+        // writes it) and its exit code. The task's own evidence when the task itself cannot be read (BD-141).
+        public string ConfirmLogRunUtc { get; set; }
+        public long? ConfirmLogExit { get; set; }
         public Dictionary<string, long> DefaultParameters { get; set; }     // manifest.json "defaults"; null: none
         public Dictionary<string, long> DefaultRouter { get; set; }
         public Dictionary<string, long> DefaultGraphicsDrivers { get; set; }
@@ -345,6 +354,22 @@ namespace AmdgpuWddmControl
         public string Source;
     }
 
+    // One source's answer to "is the start-confirm task there" (BD-141): the task, "no such task" (HRESULT
+    // 0x80070002 or 0x80070003, the answer of a reader who may see the folder), "access denied" (0x80070005: a task
+    // whose security descriptor gives this reader nothing, which is every task the installer registers for Local
+    // System, seen from an app without administrator rights) or any other failure.
+    public enum TaskAnswer { Found, Absent, Refused, Failed }
+
+    public sealed class TaskQuery
+    {
+        public string Source;               // com, wmi
+        public TaskAnswer Answer;
+        public string Detail;               // the HRESULT and the exception type of a refusal or a failure
+    }
+
+    // What the window and the report say about the task, from all sources together.
+    public enum TaskPresence { Found, Absent, Unknown }
+
     public static class Recovery
     {
         public const string ParametersPath = DpmSettings.RegistryPath;
@@ -563,6 +588,101 @@ namespace AmdgpuWddmControl
             return list.Where(r => r.LastRun != null && r.LastRun.Value.Year >= 2000).OrderBy(r => r.LastRun.Value).LastOrDefault() ?? list.FirstOrDefault();
         }
 
+        // BD-141: an HRESULT of the Task Scheduler (ITaskFolder.GetTask through the COM object, error_Code of the WMI
+        // provider's MSFT_WmiError) as one source's answer. Measured on Windows 11 26200 from a session without
+        // administrator rights: a task name that does not exist gives 0x80070002 and a task the reader may not see
+        // (the root folder's inheritable entries grant tasks to Administrators, SYSTEM and the creator owner only)
+        // gives 0x80070005, from both sources alike.
+        public static TaskAnswer TaskAnswerOf(int hresult)
+        {
+            switch (unchecked((uint)hresult))
+            {
+                case 0: return TaskAnswer.Found;
+                case 0x80070002: case 0x80070003: return TaskAnswer.Absent;
+                case 0x80070005: return TaskAnswer.Refused;
+                default: return TaskAnswer.Failed;
+            }
+        }
+
+        // Found when any source has the task. Absent only when a source answered "no such task" and none was
+        // refused: a refusal means the task may be there unseen. Everything else is unknown, never "not installed".
+        public static TaskPresence Presence(IEnumerable<TaskQuery> queries)
+        {
+            var list = (queries ?? Enumerable.Empty<TaskQuery>()).Where(q => q != null).ToList();
+            if (list.Any(q => q.Answer == TaskAnswer.Found)) return TaskPresence.Found;
+            if (list.Any(q => q.Answer == TaskAnswer.Absent) && !list.Any(q => q.Answer == TaskAnswer.Refused)) return TaskPresence.Absent;
+            return TaskPresence.Unknown;
+        }
+
+        // The snapshot's reading of the task: found, absent (TaskReadError null) or unknown (TaskReadError names why).
+        public static TaskPresence Presence(RecoverySnapshot s)
+        {
+            return s.TaskFound ? TaskPresence.Found : s.TaskReadError == null ? TaskPresence.Absent : TaskPresence.Unknown;
+        }
+
+        // Why the sources could not say, for TaskReadError: each refusal or failure with its detail.
+        public static string TaskReadErrorText(IEnumerable<TaskQuery> queries)
+        {
+            var bad = (queries ?? Enumerable.Empty<TaskQuery>()).Where(q => q != null && (q.Answer == TaskAnswer.Refused || q.Answer == TaskAnswer.Failed)).ToList();
+            if (bad.Count == 0) return "no source answered";
+            return string.Join("; ", bad.Select(q => q.Source + " " + (q.Answer == TaskAnswer.Refused ? "access denied" : "failed") + (string.IsNullOrEmpty(q.Detail) ? "" : " (" + q.Detail + ")")));
+        }
+
+        static readonly System.Text.RegularExpressions.Regex ConfirmExitLine = new System.Text.RegularExpressions.Regex(
+            @"^(?<utc>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z) \+\s*[0-9.]+s exit (?<code>-?\d+): ", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+        // The newest run of the task in start-confirm.log (start-confirm.ps1 writes one "exit N: reason" line at the
+        // end of each run, '{utc} +{seconds}s {text}'): its time as "yyyy-MM-dd HH:mm UTC" and its exit code. Null
+        // when the log has no such line.
+        public static TaskRun ConfirmLogRun(IEnumerable<string> lines)
+        {
+            TaskRun last = null;
+            foreach (var l in lines ?? Enumerable.Empty<string>())
+            {
+                var m = ConfirmExitLine.Match((l ?? "").Trim());
+                long code;
+                DateTime utc;
+                if (!m.Success || !long.TryParse(m.Groups["code"].Value, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out code)) continue;
+                if (!DateTime.TryParse(m.Groups["utc"].Value, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out utc)) continue;
+                last = new TaskRun { LastRun = DateTime.SpecifyKind(utc, DateTimeKind.Utc), Result = code, Source = "log" };
+            }
+            return last;
+        }
+
+        public static string ConfirmLogRunText(TaskRun r)
+        {
+            return r == null || r.LastRun == null ? null : r.LastRun.Value.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) + " UTC";
+        }
+
+        // The lines of a log another process may be writing (start-confirm.log: the task appends with
+        // File.AppendAllText, which opens the file for writing and shares Read only). File.ReadAllLines asks for
+        // FileShare.Read, which does not admit that writer, so it fails with a sharing violation while the task runs;
+        // FileShare.ReadWrite | Delete does not conflict with it. At most the last limit bytes; null when the file is
+        // absent or cannot be read.
+        public static List<string> SharedLogLines(string path, int limit = 256 * 1024)
+        {
+            try
+            {
+                using (var f = new System.IO.FileStream(path, System.IO.FileMode.Open, System.IO.FileAccess.Read, System.IO.FileShare.ReadWrite | System.IO.FileShare.Delete))
+                {
+                    long skip = Math.Max(0, f.Length - limit);
+                    f.Seek(skip, System.IO.SeekOrigin.Begin);
+                    var lines = new List<string>();
+                    using (var r = new System.IO.StreamReader(f, Encoding.UTF8, true))
+                        for (string l; (l = r.ReadLine()) != null; ) lines.Add(l);
+                    if (skip > 0 && lines.Count > 0) lines.RemoveAt(0);         // the first line was cut by the seek
+                    return lines;
+                }
+            }
+            catch (Exception) { return null; }
+        }
+
+        public static string LastLine(IEnumerable<string> lines)
+        {
+            var kept = (lines ?? Enumerable.Empty<string>()).Where(l => l != null && l.Trim().Length > 0).ToArray();
+            return kept.Length == 0 ? null : kept[kept.Length - 1].Trim();
+        }
+
         public static string TaskLastRunText(TaskRun r)
         {
             return r == null || r.LastRun == null ? null : r.LastRun.Value.Year < 2000 ? "never" : r.LastRun.Value.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
@@ -579,6 +699,7 @@ namespace AmdgpuWddmControl
                 case 3: return "the driver restarted while it waited";
                 case 4: return "stopped by the operator";
                 case 5: return "found no full driver start";
+                case 6: return "reset the boot-loop guard only (fallback); the automatic clock stays unconfirmed";
                 case 0x41300: return "ready, has not run yet";
                 case 0x41301: return "running now";
                 case 0x41303: return "has not run yet";
@@ -1035,9 +1156,22 @@ namespace AmdgpuWddmControl
                 add("Graphics waiting time", TdrSetting.ValueName + " " + s.Tdr().Value + " s." + tdrRelease,
                     tdrKnown && s.Tdr().Value < tdrWanted ? "warn" : "ok", null, null);
 
-            // The installer's start-confirm task.
-            if (!s.TaskFound)
+            // The installer's start-confirm task: found, absent, or unknown when the Task Scheduler refused this reader
+            // (BD-141: the task runs as Local System, and an app without administrator rights may not read it). For
+            // unknown, the task's own log, which every user can read, is its evidence.
+            var presence = Presence(s);
+            if (presence == TaskPresence.Absent)
                 add("Start confirmation task", "The release's logon task is not installed. Run the release installer again.", "warn", null, null);
+            else if (presence == TaskPresence.Unknown)
+            {
+                string why = "The release's logon task cannot be read from here (" + s.TaskReadError + "): it runs as Local System, which an app without administrator rights may not read.";
+                if (s.ConfirmLogRunUtc == null)
+                    add("Start confirmation task", why + " Its log (start-confirm.log) records no run of it either: if the driver's start stays unconfirmed, run the release installer again.",
+                        "warn", null, null);
+                else
+                    add("Start confirmation task", why + " Its log records the last run: " + s.ConfirmLogRunUtc + ": " + TaskResultText(s.ConfirmLogExit) + ".",
+                        s.ConfirmLogExit == 0 ? "ok" : "warn", null, null);
+            }
             else
                 add("Start confirmation task", "Last run " + (s.TaskLastRun ?? "unknown") + ": " + TaskResultText(s.TaskResult) + "." +
                     (string.IsNullOrEmpty(s.ConfirmLogLast) ? "" : " Log: " + s.ConfirmLogLast), s.TaskResult == 0 || s.TaskResult >= 0x41300 ? "ok" : "warn", null, null);

@@ -418,6 +418,11 @@ games.no-settings|mt-safe|62ce296b|独自の設定なし
 games.hide|mt-safe|ac20a57b|非表示
 games.unhide|mt-safe|0df6f1ca|表示
 games.hide.note|mt|91405f21|ゲームを非表示にしても、この一覧から削除されるだけです。ファイル、セーブ データ、設定はそのまま残ります。
+games.kind.browser|mt|705a76e7|Web ブラウザー (ゲームではありません)
+games.kind.windows|mt|eda843a4|Windows の一部 (ゲームではありません)
+games.kind.launcher|mt|dc3b2e61|ゲーム ストアのアプリ (ゲームではありません)
+games.kind.own|mt|14dee775|グラフィックス ドライバーの一部 (ゲームではありません)
+games.not-games.note|mt|b7c08956|Web ブラウザーや Windows の一部など、ゲームではないプログラム {0} 個はゲームとして表示されません。「非表示のゲームを表示」で一覧に表示され、「表示」を選ぶとゲームの一覧に加わります。
 games.empty|mt|0818ed91|まだゲームはありません。ゲームを一度起動するか、手動で追加してください。
 games.empty.off|mt|5cfe9fad|一覧にゲームがありません。起動したゲームの記憶はオフになっています (設定)。ゲームは手動で追加できます。
 games.select|mt|3c23c839|設定を表示するゲームを選択してください。

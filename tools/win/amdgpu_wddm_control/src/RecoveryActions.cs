@@ -106,7 +106,11 @@ namespace AmdgpuWddmControl
             var route = LoadRouteRecord();
             if (route != null) { s.RouteWrittenUtc = Stamp(Recovery.Utc(route.Utc)); s.RouteWrittenValue = route.Value; }
             s.CuNotDurable = CuUnflushedThisBoot();
-            s.ConfirmLogLast = LastLine(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "amdgpu-wddm", "start-confirm.log"));
+            var confirmLog = Recovery.SharedLogLines(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "amdgpu-wddm", "start-confirm.log"));
+            s.ConfirmLogLast = Recovery.LastLine(confirmLog);
+            var logRun = Recovery.ConfirmLogRun(confirmLog);
+            s.ConfirmLogRunUtc = Recovery.ConfirmLogRunText(logRun);
+            s.ConfirmLogExit = logRun == null ? null : logRun.Result;
             return s;
         }
 
@@ -447,20 +451,56 @@ namespace AmdgpuWddmControl
         // The scheduled task through the Task Scheduler's scripting objects, late bound (no interop assembly).
         // Two sources, the newest run wins (Recovery.NewestTaskRun): the COM object and the WMI provider that
         // Get-ScheduledTaskInfo uses.
+        // BD-141: each source says whether it found the task, was told "no such task", was refused or failed. The
+        // task runs as Local System and its security descriptor comes from the root folder's inheritable entries
+        // (Administrators, SYSTEM, the creator owner), so an app without administrator rights gets E_ACCESSDENIED
+        // from both sources for a task that exists. That used to read as "not installed". Now only a "no such task"
+        // answer without a refusal is absent; a refusal is unknown, and the window then takes the task's evidence
+        // from start-confirm.log, which every user can read.
         static void ReadTask(RecoverySnapshot s)
         {
-            var com = ReadTaskCom();
-            var wmi = ReadTaskWmi();
-            s.TaskFound = com != null || wmi != null;
+            TaskQuery comQuery, wmiQuery;
+            var com = ReadTaskCom(out comQuery);
+            var wmi = ReadTaskWmi(out wmiQuery);
+            var queries = new[] { comQuery, wmiQuery };
+            var presence = Recovery.Presence(queries);
+            s.TaskFound = presence == TaskPresence.Found;
+            s.TaskReadError = presence == TaskPresence.Unknown ? Recovery.TaskReadErrorText(queries) : null;
             var best = Recovery.NewestTaskRun(new[] { com, wmi });
             if (best == null) return;
             s.TaskResult = best.Result;
             s.TaskLastRun = Recovery.TaskLastRunText(best);
         }
 
-        static TaskRun ReadTaskCom()
+        // The answer of one source from the exception it threw: COM errors arrive as a COMException or as the
+        // exception the runtime maps the HRESULT to (UnauthorizedAccessException, FileNotFoundException), wrapped in
+        // a TargetInvocationException by the late-bound call; the WMI provider's error carries the HRESULT as the
+        // error_Code of its MSFT_WmiError, whatever the language of its message.
+        static TaskQuery QueryOf(string source, Exception e)
+        {
+            while (e is TargetInvocationException && e.InnerException != null) e = e.InnerException;
+            int hresult = e.HResult;
+            var wmi = e as System.Management.ManagementException;
+            if (wmi != null)
+            {
+                hresult = 0;
+                try
+                {
+                    var code = wmi.ErrorInformation == null ? null : wmi.ErrorInformation["error_Code"];
+                    if (code != null) hresult = unchecked((int)Convert.ToUInt32(code, CultureInfo.InvariantCulture));
+                }
+                catch (Exception) { }
+                if (hresult == 0) return new TaskQuery { Source = source, Answer = TaskAnswer.Failed, Detail = "WMI " + wmi.ErrorCode };
+            }
+            var answer = Recovery.TaskAnswerOf(hresult);
+            if (answer == TaskAnswer.Found) answer = TaskAnswer.Failed;     // an exception is never a found task
+            return new TaskQuery { Source = source, Answer = answer, Detail = "HRESULT 0x" + hresult.ToString("X8", CultureInfo.InvariantCulture) + ", " + e.GetType().Name };
+        }
+
+        static TaskRun ReadTaskCom(out TaskQuery query)
         {
             object service = null;
+            TaskQuery found = null;             // the task was there even if reading its run fails after
             try
             {
                 var type = Type.GetTypeFromProgID("Schedule.Service");
@@ -468,15 +508,17 @@ namespace AmdgpuWddmControl
                 Call(service, "Connect");
                 var folder = Call(service, "GetFolder", @"\");
                 var task = Call(folder, "GetTask", TaskName);
+                query = found = new TaskQuery { Source = "com", Answer = TaskAnswer.Found };
                 return new TaskRun { Result = Convert.ToInt64(Get(task, "LastTaskResult")), LastRun = (DateTime)Get(task, "LastRunTime"), Source = "com" };
             }
-            catch (Exception) { return null; }
+            catch (Exception e) { query = found ?? QueryOf("com", e); return null; }
             finally { if (service != null) System.Runtime.InteropServices.Marshal.FinalReleaseComObject(service); }
         }
 
         // PS_ScheduledTask.GetInfoByName (root\Microsoft\Windows\TaskScheduler), as Get-ScheduledTaskInfo calls it.
-        static TaskRun ReadTaskWmi()
+        static TaskRun ReadTaskWmi(out TaskQuery query)
         {
+            TaskQuery found = null;
             try
             {
                 using (var c = new System.Management.ManagementClass(@"root\Microsoft\Windows\TaskScheduler", "PS_ScheduledTask", null))
@@ -487,7 +529,12 @@ namespace AmdgpuWddmControl
                     using (var output = c.InvokeMethod("GetInfoByName", input, null))
                     {
                         var info = output == null ? null : output["CmdletOutput"] as System.Management.ManagementBaseObject;
-                        if (info == null) return null;
+                        if (info == null)
+                        {
+                            query = new TaskQuery { Source = "wmi", Answer = TaskAnswer.Failed, Detail = "no task information returned" };
+                            return null;
+                        }
+                        query = found = new TaskQuery { Source = "wmi", Answer = TaskAnswer.Found };
                         var last = info["LastRunTime"] as string;
                         var result = info["LastTaskResult"];
                         return new TaskRun
@@ -499,7 +546,7 @@ namespace AmdgpuWddmControl
                     }
                 }
             }
-            catch (Exception) { return null; }
+            catch (Exception e) { query = found ?? QueryOf("wmi", e); return null; }
         }
 
         static object Call(object o, string method, params object[] args)
@@ -510,16 +557,6 @@ namespace AmdgpuWddmControl
         static object Get(object o, string property)
         {
             return o.GetType().InvokeMember(property, BindingFlags.GetProperty, null, o, null);
-        }
-
-        static string LastLine(string path)
-        {
-            try
-            {
-                var lines = File.ReadAllLines(path).Where(l => l.Trim().Length > 0).ToArray();
-                return lines.Length == 0 ? null : lines[lines.Length - 1].Trim();
-            }
-            catch (Exception) { return null; }
         }
 
         public static List<BackupRecord> Backups()

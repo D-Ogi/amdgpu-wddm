@@ -33,6 +33,7 @@ namespace AmdgpuWddmControl
             public bool D3D12;
             public bool Hidden;
             public bool OwnGfx;                         // has graphics or Vulkan settings of its own
+            public LaunchKind Kind;                     // BD-140: what its last recorded launch is; Game when none
         }
 
         // The changes of one game that Apply sends as one game-profile action: its switches, its graphics settings or both.
@@ -69,8 +70,16 @@ namespace AmdgpuWddmControl
                 foreach (var image in GraphicsSettings.Games(_snap.GfxKeys)) if (GraphicsSettings.HasOwn(_snap.GfxKeys, image)) get(image).OwnGfx = true;
             foreach (var a in _addedGames) get(a);
             foreach (var g in _gameEdits.Keys.Concat(_smEdits.Keys).Concat(_gfxGameEdits.Keys)) get(g);
+            // BD-140: a web browser, a part of Windows or a game store's client is not offered as a game, unless the
+            // person asked to see it (ShownGames) or added it by hand. Only the recorded path decides (LaunchKinds).
             var hidden = _prefs.HiddenGames;
-            foreach (var e in map.Values) e.Hidden = hidden.Contains(e.Image);
+            var shownAnyway = _prefs.ShownGames;
+            string windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+            foreach (var e in map.Values)
+            {
+                e.Kind = e.Path == null || _addedGames.Contains(e.Image) ? LaunchKind.Game : LaunchKinds.Of(e.Path, windows);
+                e.Hidden = LaunchKinds.Hidden(e.Image, e.Kind, hidden, shownAnyway);
+            }
             var list = map.Values.ToList();
             if (_gameSortName) list.Sort((a, b) => string.Compare(a.Image, b.Image, StringComparison.OrdinalIgnoreCase));
             else list = list.OrderByDescending(e => e.LastLaunch ?? DateTime.MinValue).ThenBy(e => e.Image, StringComparer.OrdinalIgnoreCase).ToList();
@@ -165,8 +174,10 @@ namespace AmdgpuWddmControl
             Mark("games.add", add);
             list.Add(Ui.WrapRow(list.Inner, filter, sort, hidden, add));
             var rows = new List<KeyValuePair<string, Control>>();
+            int notGames = 0;
             foreach (var g in games)
             {
+                if (g.Hidden && g.Kind != LaunchKind.Game) notGames++;
                 if (g.Hidden && !_showHidden) continue;
                 var entry = g;
                 var name = Ui.Button(entry.Image + (GameEdited(entry.Image) ? "  *" : ""), (s, e) => { _game = entry.Image; ShowPage(_page, null, false); }, entry.Image.Equals(_game, StringComparison.OrdinalIgnoreCase));
@@ -174,6 +185,8 @@ namespace AmdgpuWddmControl
                 name.TextAlign = ContentAlignment.MiddleLeft;
                 name.AccessibleName = entry.Image + (GameEdited(entry.Image) ? ", " + Strings.T("games.unsaved") : "");
                 string about = entry.LastLaunch != null ? Strings.T("games.launched", When(entry.LastLaunch.Value), Strings.T(entry.D3D12 ? "games.api.d3d12" : "games.api.d3d11")) : entry.Stored != null || entry.OwnGfx ? Strings.T("games.has-settings") : Strings.T("games.no-settings");
+                var kind = LaunchKinds.TextId(entry.Kind);
+                if (kind != null) about = Strings.T(kind) + "\n" + about;
                 int infoWidth = Math.Max(Theme.S(120), list.Inner - Math.Min(Theme.S(200), list.Inner / 3) - Theme.S(130));
                 var info = Ui.Dim(about, infoWidth);
                 info.MinimumSize = new Size(Math.Min(infoWidth, Theme.S(220)), 0);
@@ -181,8 +194,10 @@ namespace AmdgpuWddmControl
                 var hide = Ui.Button(Strings.T(entry.Hidden ? "games.unhide" : "games.hide"), (s, e) =>
                 {
                     var set = _prefs.HiddenGames;
-                    if (entry.Hidden) set.Remove(entry.Image); else set.Add(entry.Image);
+                    var shownSet = _prefs.ShownGames;
+                    LaunchKinds.Toggle(entry.Image, entry.Kind, entry.Hidden, set, shownSet);
                     _prefs.HiddenGames = set;
+                    _prefs.ShownGames = shownSet;
                     ShowPage(_page, null, false);
                 });
                 hide.AccessibleName = Strings.T(entry.Hidden ? "games.unhide" : "games.hide") + ": " + entry.Image;
@@ -197,6 +212,7 @@ namespace AmdgpuWddmControl
                 foreach (var r in rows) r.Value.Visible = q.Length == 0 || SettingsSearch.Normalize(r.Key).Contains(q);
             };
             list.Add(Ui.Dim(Strings.T("games.hide.note"), list.Inner));
+            if (notGames > 0 && !_showHidden) list.Add(Ui.Dim(Strings.T("games.not-games.note", notGames), list.Inner));
             p.Controls.Add(list);
 
             var shown = games.FirstOrDefault(g => g.Image.Equals(_game, StringComparison.OrdinalIgnoreCase));

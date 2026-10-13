@@ -207,4 +207,134 @@ namespace AmdgpuWddmControl
 
         public static bool SamePath(string a, string b) { return string.Equals(a, b, StringComparison.OrdinalIgnoreCase); }
     }
+
+    // What a recorded launch is, as far as its path tells (BD-140). The list records every program that created a
+    // Direct3D device on this driver (docs/design/recent-launches.md: "launched", not "a game"), so a web browser's
+    // GPU process, a web view inside another program and a Windows tool such as the Snipping Tool are in it too. The
+    // window offers only Game as a game; the others stay in the list, hidden unless the person asks for them.
+    public enum LaunchKind { Game, Browser, Windows, Launcher, OwnTool }
+
+    // The rule is a list of what is known not to be a game, never a list of where games live: a game in any folder
+    // of any drive stays a game. Only the recorded path is read, nothing is opened (the window builds its pages from
+    // this), so a name the lists below do not know is a game.
+    public static class LaunchKinds
+    {
+        // Web browsers, and the programs that draw web pages inside other programs: Edge's WebView2 (Widgets, Teams,
+        // the new Outlook, the Xbox app), the Chromium Embedded Framework helpers of game stores and other programs,
+        // Qt WebEngine. Their GPU processes create Direct3D 11 and 12 devices like a game does.
+        static readonly HashSet<string> BrowserFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "msedge.exe", "msedgewebview2.exe", "iexplore.exe", "chrome.exe", "chromium.exe", "firefox.exe", "brave.exe",
+            "opera.exe", "vivaldi.exe", "librewolf.exe", "waterfox.exe", "floorp.exe", "thorium.exe",
+            "steamwebhelper.exe", "EpicWebHelper.exe", "UplayWebCore.exe", "CefSharp.BrowserSubprocess.exe", "QtWebEngineProcess.exe",
+        };
+
+        // The game stores' own clients: they start games, they are not games.
+        static readonly HashSet<string> LauncherFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "steam.exe", "EpicGamesLauncher.exe", "EADesktop.exe", "Origin.exe", "UbisoftConnect.exe", "upc.exe", "GalaxyClient.exe",
+            "Battle.net.exe", "XboxPcApp.exe",
+        };
+
+        // Packaged programs that come with Windows or from Microsoft and are not games, by the package name (the part
+        // of the package folder before the first "_"; WindowsApps\Microsoft.ScreenSketch_11.2409.25.0_x64__8wekyb3d8bbwe
+        // is the Snipping Tool). A name, not the publisher: Microsoft's own games come as packages of the same
+        // publisher (Microsoft Solitaire Collection, Forza), and a package this list does not name stays a game.
+        static readonly HashSet<string> WindowsPackages = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "Microsoft.ScreenSketch", "Microsoft.Windows.Photos", "Microsoft.Paint", "Microsoft.MSPaint", "Microsoft.WindowsNotepad",
+            "Microsoft.WindowsTerminal", "Microsoft.WindowsTerminalPreview", "Microsoft.WindowsCalculator", "Microsoft.WindowsCamera",
+            "Microsoft.WindowsAlarms", "Microsoft.WindowsSoundRecorder", "Microsoft.WindowsMaps", "Microsoft.ZuneMusic", "Microsoft.ZuneVideo",
+            "Microsoft.MicrosoftStickyNotes", "Microsoft.Todos", "Microsoft.OutlookForWindows", "microsoft.windowscommunicationsapps",
+            "Microsoft.People", "Microsoft.GamingApp", "Microsoft.XboxApp", "Microsoft.XboxGamingOverlay", "Microsoft.XboxGameOverlay",
+            "Microsoft.XboxIdentityProvider", "Microsoft.XboxSpeechToTextOverlay", "Microsoft.Xbox.TCUI", "Microsoft.YourPhone",
+            "MicrosoftWindows.CrossDevice", "MicrosoftWindows.Client.WebExperience", "Microsoft.WidgetsPlatformRuntime",
+            "Microsoft.Windows.DevHome", "Microsoft.Copilot", "Microsoft.Windows.Ai.Copilot.Provider", "Microsoft.MicrosoftOfficeHub",
+            "Microsoft.Office.OneNote", "MSTeams", "MicrosoftTeams", "Microsoft.WindowsStore", "Microsoft.StorePurchaseApp",
+            "Microsoft.DesktopAppInstaller", "Microsoft.BingNews", "Microsoft.BingWeather", "Microsoft.BingSearch", "Microsoft.GetHelp",
+            "Microsoft.Getstarted", "Microsoft.WindowsFeedbackHub", "Microsoft.PowerAutomateDesktop", "Clipchamp.Clipchamp",
+            "MicrosoftCorporationII.QuickAssist", "Microsoft.MicrosoftEdge", "Microsoft.MicrosoftEdge.Stable", "Microsoft.MicrosoftEdge.Beta",
+            "Microsoft.MicrosoftEdge.Dev", "Microsoft.MicrosoftEdge.Canary", "Microsoft.Win32WebViewHost", "Microsoft.Whiteboard",
+            "Microsoft.Microsoft3DViewer", "Microsoft.MixedReality.Portal", "Microsoft.SkypeApp", "Microsoft.549981C3F5F10",
+        };
+
+        // windowsDir: the Windows directory of this PC (the writers skip it already; an older list may still hold
+        // such a path). Compared as a directory: C:\Windows2\x.exe is not below C:\Windows.
+        public static LaunchKind Of(string path, string windowsDir)
+        {
+            if (string.IsNullOrEmpty(path)) return LaunchKind.Game;
+            string file;
+            try { file = System.IO.Path.GetFileName(path); } catch (ArgumentException) { return LaunchKind.Game; }
+            if (Below(path, windowsDir)) return LaunchKind.Windows;
+            // This project's own programs, as the writers name them (amdgpu_wddm_*, bc250*, vulkaninfo*).
+            if (file.StartsWith("amdgpu_wddm_", StringComparison.OrdinalIgnoreCase) || file.StartsWith("bc250", StringComparison.OrdinalIgnoreCase) ||
+                file.StartsWith("vulkaninfo", StringComparison.OrdinalIgnoreCase)) return LaunchKind.OwnTool;
+            if (BrowserFiles.Contains(file)) return LaunchKind.Browser;
+            if (LauncherFiles.Contains(file)) return LaunchKind.Launcher;
+            var package = PackageName(path);
+            if (package != null && WindowsPackages.Contains(package)) return LaunchKind.Windows;
+            return LaunchKind.Game;
+        }
+
+        public static LaunchKind Of(RecentLaunch launch, string windowsDir) { return launch == null ? LaunchKind.Game : Of(launch.Path, windowsDir); }
+
+        // The package name of a path inside a WindowsApps folder (C:\Program Files\WindowsApps, or X:\WindowsApps
+        // of a drive the person moved apps to): the folder after it is "<name>_<version>_<arch>_<resource>_<publisher id>".
+        public static string PackageName(string path)
+        {
+            var parts = (path ?? "").Split('\\', '/');
+            for (int i = 0; i + 2 < parts.Length; i++)
+                if (parts[i].Equals("WindowsApps", StringComparison.OrdinalIgnoreCase))
+                {
+                    var folder = parts[i + 1];
+                    int cut = folder.IndexOf('_');
+                    return cut > 0 && folder.Split('_').Length >= 5 ? folder.Substring(0, cut) : null;
+                }
+            return null;
+        }
+
+        static bool Below(string path, string dir)
+        {
+            if (string.IsNullOrEmpty(dir)) return false;
+            var d = dir.TrimEnd('\\', '/');
+            return d.Length > 0 && path.Length > d.Length + 1 && path.StartsWith(d, StringComparison.OrdinalIgnoreCase) && (path[d.Length] == '\\' || path[d.Length] == '/');
+        }
+
+        // Whether an entry of the Games list is hidden: the person hid it, or it is not a game and the person has not
+        // asked to see it. "Show hidden games" lists both; "Show" on an entry that is not a game puts it among the
+        // games (shown), "Hide" takes it out again.
+        public static bool Hidden(string image, LaunchKind kind, ISet<string> hidden, ISet<string> shown)
+        {
+            if (hidden != null && hidden.Contains(image)) return true;
+            return kind != LaunchKind.Game && (shown == null || !shown.Contains(image));
+        }
+
+        // The person's choice on one entry: the new hidden and shown sets.
+        public static void Toggle(string image, LaunchKind kind, bool show, ISet<string> hidden, ISet<string> shown)
+        {
+            if (show)
+            {
+                hidden.Remove(image);
+                if (kind != LaunchKind.Game) shown.Add(image);
+            }
+            else
+            {
+                shown.Remove(image);
+                if (kind == LaunchKind.Game) hidden.Add(image);
+            }
+        }
+
+        // The entry's line under its name in the Games list: what it is, for an entry that is not a game.
+        public static string TextId(LaunchKind kind)
+        {
+            switch (kind)
+            {
+                case LaunchKind.Browser: return "games.kind.browser";
+                case LaunchKind.Windows: return "games.kind.windows";
+                case LaunchKind.Launcher: return "games.kind.launcher";
+                case LaunchKind.OwnTool: return "games.kind.own";
+                default: return null;
+            }
+        }
+    }
 }

@@ -42,6 +42,9 @@ namespace AmdgpuWddmControl
                 new RecentLaunch { Image = "witcher3.exe", Path = @"D:\Games\The Witcher 3\bin\x64_dx12\witcher3.exe", LastLaunchUtc = now.AddHours(-2), Apis = 1, Launches = 12 },
                 new RecentLaunch { Image = "ROTTR.exe", Path = @"D:\Games\Rise of the Tomb Raider\ROTTR.exe", LastLaunchUtc = now.AddDays(-1), Apis = 1, Launches = 3 },
                 new RecentLaunch { Image = "factorio.exe", Path = @"D:\Games\Factorio\bin\x64\factorio.exe", LastLaunchUtc = now.AddDays(-3), Apis = 2, Launches = 40 },
+                // BD-140: a browser's GPU process is in the list too; Home and Games do not offer it, and the Games
+                // list draws the note that counts such entries.
+                new RecentLaunch { Image = "msedge.exe", Path = @"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe", LastLaunchUtc = now.AddMinutes(-5), Apis = 3, Launches = 90 },
             };
             _upd = new UpdateCache { LastSuccessUtc = Recovery.Stamp(now.AddMinutes(-30)), LastAttemptUtc = Recovery.Stamp(now.AddMinutes(-30)), LastAttemptOutcome = "Available", CandidateTag = "v0.7.216.101-tester.29", CandidateVersion = "0.7.216.101-tester.29" };
             _drv = DriverCard.Decide(new DriverFacts { InstalledVersion = "0.7.216.100-tester.28", DriverDate = "10-3-2026" });

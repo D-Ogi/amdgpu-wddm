@@ -9,7 +9,8 @@
 # Gates, in order, each stops the build: the unit tests (test/UnitTests.cs against driver/kmd/bc250kmd_escape.h, the
 # KMD's interop, guard and DPM sources, the D3D12 shell's switch names, and with -StartConfirmCore the installer's
 # confirmation rule), the DLL and app compiles with warnings as errors, a smoke run of the exe with --smoke (no
-# window: the pages are built and refreshed once, their text written to smoke.txt), the bug report smoke, and the
+# window: the pages are built and refreshed once, their text written to smoke.txt), the bug report smoke, the start
+# diagnostics worker as the window starts it (no console, output redirected: BD-142), and the
 # Recovery dry runs (--action X --dry-run: nothing is written, no UAC) against test/snapshot-bd059.json and this PC,
 # the recovery view without bc250control.dll (--smoke-recovery), the hidden-window cost (--smoke-perf, G-PERF),
 # the sign-in notice in both its cases, four languages and four scales on a small and a large screen
@@ -210,6 +211,28 @@ if (-not $NoSmoke) {
         }
         Write-Host "  report smoke: $($names.Count) files, no user or computer name"
     } finally { $archive.Dispose() }
+
+    # The start diagnostics worker (BD-142): the built exe started as the window starts it (DiagnosticWorker.Run: no
+    # shell, no window, standard output redirected), which is a Windows-subsystem process without a console. tester.29
+    # ended every such worker with 0xE0434352 before its first line, and the smoke runs above never start it. The
+    # text is checked here and not kept: it must run to its end with exit 0 and name neither this PC's user nor its
+    # computer.
+    $start = New-Object Diagnostics.ProcessStartInfo("$Out\amdgpu_wddm_control.exe", '--startup-diagnostics-worker')
+    $start.UseShellExecute = $false; $start.CreateNoWindow = $true
+    $start.RedirectStandardOutput = $true; $start.StandardOutputEncoding = New-Object Text.UTF8Encoding($false)
+    $worker = [Diagnostics.Process]::Start($start)
+    $read = $worker.StandardOutput.ReadToEndAsync()
+    if (-not $worker.WaitForExit(40000)) { $worker.Kill(); throw 'startup diagnostics worker did not exit within 40 s' }
+    $text = $read.Result
+    if ($worker.ExitCode -ne 0) { throw "startup diagnostics worker: exit $($worker.ExitCode), $($text.Length) characters of output" }
+    foreach ($want in 'Automatic start/stop diagnostics', '=== StartRecord ===', 'Collection finished.') {
+        if (-not $text.Contains($want)) { throw "startup diagnostics worker: no '$want' in its output ($($text.Length) characters)" }
+    }
+    foreach ($secret in $env:USERNAME, $env:COMPUTERNAME) {
+        if ($secret.Length -ge 2 -and $text -match "(?<![A-Za-z0-9])$([regex]::Escape($secret))(?![A-Za-z0-9])") { throw "startup diagnostics worker: its output names this PC's user or computer" }
+    }
+    Write-Host "  startup diagnostics worker: exit 0, $([Text.Encoding]::UTF8.GetByteCount($text)) bytes, every source reached, no user or computer name"
+    $text = $null
 
     # The Recovery dry runs: the plans of the exe itself, from the recorded BD-059 state and from this PC.
     function Invoke-DryRun([string[]]$ArgList, [string]$Name) {

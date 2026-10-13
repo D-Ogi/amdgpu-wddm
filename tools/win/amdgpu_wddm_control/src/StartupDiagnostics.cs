@@ -20,15 +20,26 @@ namespace AmdgpuWddmControl
         static readonly string[] Fields = { "Result", "Step", "SubStep", "Status", "Stage", "StartStage", "HealthFlags",
             "BootId", "Generation", "Epoch", "UnconfirmedStarts", "Version", "TimeUtc", "StopTimeUtc", "Detail", "LogLines", "Log" };
 
+        // The worker's entry (--startup-diagnostics-worker). BD-142: this process is the GUI-subsystem exe started
+        // with its output redirected, so it has no console. It never touches Console.OutputEncoding (whose setter
+        // calls SetConsoleOutputCP and throws IOException "The handle is invalid" without a console: every worker of
+        // tester.29 ended there with 0xE0434352 and an empty report). The text goes to the redirected standard
+        // output as UTF-8 through RunWorker, which also turns any exception into report text and an exit code.
         public static int Worker()
         {
             var clock = Stopwatch.StartNew();
-            Console.OutputEncoding = new UTF8Encoding(false);
-            var data = new StartupDiagnosticData(Console.Out, Redactor.ForThisPc(), () => clock.ElapsedMilliseconds);
+            using (var output = Console.OpenStandardOutput())
+                return StartupDiagnosticData.RunWorker(output, Redactor.ForThisPc(), () => clock.ElapsedMilliseconds, Collect);
+        }
+
+        static void Collect(StartupDiagnosticData data)
+        {
             data.Add("Automatic start/stop diagnostics; read-only; no GPU requests.\nUTC: " + DateTime.UtcNow.ToString("o") + "\n");
             data.Source("StartRecord", () => RegistryRecord(data, "StartRecord"));
             data.Source("StopRecord", () => RegistryRecord(data, "StopRecord"));
-            var boot = RecoveryProbe.BootTime();
+            DateTime? boot = null;
+            try { boot = RecoveryProbe.BootTime(); }
+            catch (Exception e) { data.Add("\nBoot time unavailable: " + StartupDiagnosticData.Describe(e)); }
             // The reader of this file is told to compare this number with the BootId of the records above, which
             // the driver writes from KUSER_SHARED_DATA. It therefore comes from that same page, not from the
             // registry copy that can lag a boot by one (BD-130), and the line names the source it used.
@@ -44,7 +55,6 @@ namespace AmdgpuWddmControl
                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "INF", "setupapi.dev.log"), 1024 * 1024))));
             data.Source("Kept KMD logs (up to three files, last 512 KiB each)", () => KeptLogs(data));
             data.Add("\nCollection finished. Missing or truncated sources above are not proof of absence of a fault.\n");
-            return 0;
         }
 
         static void RegistryRecord(StartupDiagnosticData data, string record)

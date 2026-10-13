@@ -12,14 +12,68 @@ namespace AmdgpuWddmControl
         public const int Limit = 4 * 1024 * 1024;
         public const int TimeoutMs = 20000;
         public const string DeviceId = @"PCI\VEN_1002&DEV_13FE";
+        // The worker's own exit codes (RunWorker). 0: the collection ran to its end; a source that failed is a line
+        // of the text, not an exit code. WorkerFaulted: an exception outside every source stopped the collection, and
+        // its type, message and stack are the last lines of the text. WorkerOutputLost: the parent's end of the
+        // output pipe went away, so nothing after that point reached the report.
+        public const int WorkerFaulted = 3, WorkerOutputLost = 4;
         readonly TextWriter _writer;
         readonly Redactor _redactor;
         readonly Func<long> _elapsed;
         public int Bytes { get; private set; }
-        public bool Active { get { return Bytes < Limit - 4096 && _elapsed() < TimeoutMs - 1500; } }
+        // The output could not be written (the parent closed its end of the pipe): nothing more is collected.
+        public bool OutputLost { get; private set; }
+        public bool Active { get { return !OutputLost && Bytes < Limit - 4096 && _elapsed() < TimeoutMs - 1500; } }
 
         public StartupDiagnosticData(TextWriter writer, Redactor redactor, Func<long> elapsed)
         { _writer = writer; _redactor = redactor; _elapsed = elapsed; }
+
+        // The worker process's whole run (BD-142). The text goes to output as UTF-8 through a writer of its own:
+        // the worker is a GUI-subsystem process without a console, so Console.OutputEncoding, which calls
+        // SetConsoleOutputCP, throws IOException 0x80070006 there (tester.29: every report's worker ended with
+        // 0xE0434352 before it wrote one line). Every exception of collect ends here as text and an exit code, never
+        // as an unhandled exception: a source that throws is already a line of its own (Source), and anything
+        // outside the sources is written with its type, message and stack before the worker exits.
+        public static int RunWorker(Stream output, Redactor redactor, Func<long> elapsed, Action<StartupDiagnosticData> collect)
+        {
+            StreamWriter writer;
+            try { writer = new StreamWriter(output, new UTF8Encoding(false), 4096, true); }
+            catch (Exception) { return WorkerOutputLost; }      // no output to write to (null, or not writable)
+            var data = new StartupDiagnosticData(writer, redactor, elapsed);
+            try
+            {
+                collect(data);
+                return data.OutputLost ? WorkerOutputLost : 0;
+            }
+            catch (Exception e)
+            {
+                // Past the deadline and the 4 KiB reserve too: these lines say why the text ends here. The parent
+                // keeps the text up to 1 KiB under the limit (DiagnosticWorker.Run).
+                try { data.Write(Fit("\n=== The collection stopped ===\nAn error outside every source above ended the collection here.\n" + Describe(e), 2048), 1024); }
+                catch (Exception) { }
+                return data.OutputLost ? WorkerOutputLost : WorkerFaulted;
+            }
+            finally
+            {
+                try { writer.Dispose(); } catch (Exception) { }
+            }
+        }
+
+        // An exception as the report shows it: the short type name first (as every "Unavailable:" line has always
+        // started), then the full type, the HRESULT and the stack, and the same for each inner exception.
+        public static string Describe(Exception e)
+        {
+            var w = new StringBuilder();
+            for (int depth = 0; e != null && depth < 4; e = e.InnerException, depth++)
+            {
+                w.Append(depth == 0 ? "" : "Inner exception: ").Append(e.GetType().Name).Append(": ").Append(e.Message).Append('\n');
+                w.Append("  type ").Append(e.GetType().FullName).Append(", HRESULT 0x")
+                    .Append(e.HResult.ToString("X8", System.Globalization.CultureInfo.InvariantCulture)).Append('\n');
+                if (!string.IsNullOrEmpty(e.StackTrace))
+                    foreach (var line in e.StackTrace.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries)) w.Append("  ").Append(line.Trim()).Append('\n');
+            }
+            return w.ToString();
+        }
 
         public static bool Needed(bool present, bool installed, uint problem, bool confirmed)
         { return (present || installed) && (problem != 0 || !confirmed); }
@@ -65,20 +119,37 @@ namespace AmdgpuWddmControl
         public void Add(string text)
         {
             if (!Active) return;
+            Write(text, 4096);
+        }
+
+        // Writes past the collection deadline too (the last lines of a stopped collection), within the byte limit
+        // less reserve. A failed write of the pipe (IOException, a closed writer) marks the output lost instead of
+        // throwing: a source's failure line must not become a second exception in its own catch.
+        void Write(string text, int reserve)
+        {
+            if (OutputLost) return;
             // Limit both the regex input and the encoded output. Replacements can grow text.
             string clean = _redactor.Apply(Fit(text, 512 * 1024));
-            clean = Fit(clean, Limit - 4096 - Bytes);
-            _writer.Write(clean);
-            _writer.Flush();
+            clean = Fit(clean, Limit - reserve - Bytes);
+            if (clean.Length == 0) return;
+            try
+            {
+                _writer.Write(clean);
+                _writer.Flush();
+            }
+            catch (IOException) { OutputLost = true; return; }
+            catch (ObjectDisposedException) { OutputLost = true; return; }
             Bytes += Encoding.UTF8.GetByteCount(clean);
         }
 
+        // One source: its header, then what it adds. An exception of the source ends that source only: the report
+        // names it with its type, message and stack, and the next source runs.
         public void Source(string name, Action action)
         {
             if (!Active) return;
             Add("\n=== " + name + " ===\n");
             try { action(); }
-            catch (Exception e) { Add("Unavailable: " + e.GetType().Name + ": " + e.Message + "\n"); }
+            catch (Exception e) { Add("Unavailable: " + Describe(e)); }
         }
 
         public static string Tail(string path, int limit)

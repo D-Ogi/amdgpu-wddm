@@ -818,6 +818,7 @@ static partial class UnitTests
             "task: no source with a run: never");
         Equal(null, Recovery.NewestTaskRun(new TaskRun[] { null, null }), "task: no source: nothing");
         Equal(null, Recovery.NewestTaskRun(null), "task: no readings");
+        TaskPresenceRules();
 
         // JSON: the snapshot (--snapshot) and the backup round-trip.
         var json = new JavaScriptSerializer();
@@ -835,6 +836,93 @@ static partial class UnitTests
         Throws<FormatException>(() => ManifestCheck.Parse(@"{""defaults"": {""parameters"": {""DpmMode"": ""1""}}}"), "manifest default as text refused");
         Throws<FormatException>(() => ManifestCheck.Parse(@"{""defaults"": {""parameters"": {""DpmMode"": -1}}}"), "negative manifest default refused");
         Throws<FormatException>(() => ManifestCheck.Parse(@"{""defaults"": [1]}"), "manifest defaults as a list refused");
+    }
+
+    // BD-141: the start-confirm task is found, absent (a source said "no such task" and none was refused) or unknown
+    // (the Task Scheduler refused this reader: an app without administrator rights may not read a Local System task).
+    // For unknown, the task's own log is the evidence; "not installed" is said only for absent.
+    static void TaskPresenceRules()
+    {
+        Func<List<StateLine>, StateLine> taskLine = ls => ls.First(l => l.Topic == "Start confirmation task");
+        Equal(TaskAnswer.Found, Recovery.TaskAnswerOf(0), "BD-141: S_OK is the task");
+        Equal(TaskAnswer.Absent, Recovery.TaskAnswerOf(unchecked((int)0x80070002)), "BD-141: 0x80070002 is no such task");
+        Equal(TaskAnswer.Absent, Recovery.TaskAnswerOf(unchecked((int)0x80070003)), "BD-141: 0x80070003 (no such folder) is absent too");
+        Equal(TaskAnswer.Refused, Recovery.TaskAnswerOf(unchecked((int)0x80070005)), "BD-141: E_ACCESSDENIED is a refusal, not an absence");
+        Equal(TaskAnswer.Failed, Recovery.TaskAnswerOf(unchecked((int)0x80041003)), "BD-141: any other HRESULT is a failure");
+        Func<TaskAnswer, string, TaskQuery> q = (a, src) => new TaskQuery { Source = src, Answer = a, Detail = a == TaskAnswer.Refused ? "HRESULT 0x80070005, UnauthorizedAccessException" : null };
+        Equal(TaskPresence.Found, Recovery.Presence(new[] { q(TaskAnswer.Refused, "com"), q(TaskAnswer.Found, "wmi") }), "BD-141: one source with the task is enough");
+        Equal(TaskPresence.Absent, Recovery.Presence(new[] { q(TaskAnswer.Absent, "com"), q(TaskAnswer.Absent, "wmi") }), "BD-141: both say no such task: absent");
+        Equal(TaskPresence.Absent, Recovery.Presence(new[] { q(TaskAnswer.Absent, "com"), q(TaskAnswer.Failed, "wmi") }), "BD-141: no such task and a failure without a refusal: absent");
+        Equal(TaskPresence.Unknown, Recovery.Presence(new[] { q(TaskAnswer.Refused, "com"), q(TaskAnswer.Refused, "wmi") }), "BD-141: both refused (the tester.29 case): unknown");
+        Equal(TaskPresence.Unknown, Recovery.Presence(new[] { q(TaskAnswer.Absent, "com"), q(TaskAnswer.Refused, "wmi") }), "BD-141: a refusal makes an absence unsure: unknown");
+        Equal(TaskPresence.Unknown, Recovery.Presence(new[] { q(TaskAnswer.Failed, "com"), null }), "BD-141: only failures: unknown");
+        Equal(TaskPresence.Unknown, Recovery.Presence((TaskQuery[])null), "BD-141: no answers: unknown");
+        var refusedText = Recovery.TaskReadErrorText(new[] { q(TaskAnswer.Refused, "com"), q(TaskAnswer.Refused, "wmi") });
+        Equal("com access denied (HRESULT 0x80070005, UnauthorizedAccessException); wmi access denied (HRESULT 0x80070005, UnauthorizedAccessException)", refusedText,
+            "BD-141: the reason names each source and its HRESULT");
+
+        // start-confirm.ps1 ends each run with one line '{utc} +{seconds,6:F1}s exit N: reason' (Write-StartConfirmLog).
+        var log = new List<string>
+        {
+            "2026-10-12T18:01:02.345Z +   0.1s start: boot 2026-10-12T18:00:10.000Z, session 1",
+            "2026-10-12T18:01:40.000Z +  37.7s exit 1: bound reached unconfirmed (flags 7 completed 0 age_ms 0 ready_ms 0)",
+            "2026-10-13T07:15:00.120Z +   0.1s start: boot 2026-10-13T07:14:20.000Z, session 1",
+            "2026-10-13T07:16:02.500Z +  62.4s exit 0: confirmed by this task: flags 15 generation 3 epoch 2; window task: ok",
+            "",
+        };
+        var run = Recovery.ConfirmLogRun(log);
+        Check(run != null && run.Source == "log" && run.Result == 0 && run.LastRun == new DateTime(2026, 10, 13, 7, 16, 2, 500, DateTimeKind.Utc), "BD-141: the newest exit line of the log is the last run");
+        Equal("2026-10-13 07:16 UTC", Recovery.ConfirmLogRunText(run), "BD-141: its time as the report prints it");
+        Equal("2026-10-13T07:16:02.500Z +  62.4s exit 0: confirmed by this task: flags 15 generation 3 epoch 2; window task: ok", Recovery.LastLine(log), "BD-141: the last line skips empty lines");
+        Equal(null, Recovery.ConfirmLogRun(new[] { "2026-10-13T07:15:00.120Z +   0.1s start: boot", "exit 0: no time", "garbage" }), "BD-141: no exit line, no run");
+        Equal(null, Recovery.ConfirmLogRun(null), "BD-141: no log, no run");
+        Equal(6L, Recovery.ConfirmLogRun(new[] { "2026-10-13T07:16:02.500Z +12345.6s exit 6: fallback" }).Result, "BD-141: a long run and the fallback code read too");
+
+        // The three states in the report.
+        var found = Closed(); found.TaskFound = true; found.TaskResult = 0; found.TaskLastRun = "2026-10-13 07:16";
+        var fl = taskLine(Recovery.Describe(found));
+        Check(Recovery.Presence(found) == TaskPresence.Found && fl.Text.StartsWith("Last run 2026-10-13 07:16: confirmed the start.") && fl.Severity == "ok", "BD-141: found: its last run");
+        var absent = Closed(); absent.TaskFound = false; absent.TaskResult = null; absent.TaskLastRun = null; absent.TaskReadError = null;
+        var al = taskLine(Recovery.Describe(absent));
+        Check(Recovery.Presence(absent) == TaskPresence.Absent && al.Text.Contains("is not installed") && al.Severity == "warn", "BD-141: absent (a source said no such task): not installed");
+        var unknown = Closed(); unknown.TaskFound = false; unknown.TaskResult = null; unknown.TaskLastRun = null; unknown.TaskReadError = refusedText;
+        unknown.ConfirmLogRunUtc = Recovery.ConfirmLogRunText(run); unknown.ConfirmLogExit = run.Result;
+        var ul = taskLine(Recovery.Describe(unknown));
+        Check(Recovery.Presence(unknown) == TaskPresence.Unknown && !ul.Text.Contains("not installed") && ul.Text.Contains("cannot be read from here (com access denied") &&
+            ul.Text.Contains("Its log records the last run: 2026-10-13 07:16 UTC: confirmed the start.") && ul.Severity == "ok",
+            "BD-141: refused, the log has a confirming run: never 'not installed', the run from the log, ok");
+        unknown.ConfirmLogExit = 1;
+        ul = taskLine(Recovery.Describe(unknown));
+        Check(ul.Text.Contains("gave up after 2 minutes") && ul.Severity == "warn", "BD-141: refused, the log's last run failed: warn with its reason");
+        unknown.ConfirmLogRunUtc = null; unknown.ConfirmLogExit = null;
+        ul = taskLine(Recovery.Describe(unknown));
+        Check(!ul.Text.Contains("not installed") && ul.Text.Contains("records no run of it either") && ul.Severity == "warn", "BD-141: refused and no run in the log: unknown, never 'not installed'");
+        var js = new JavaScriptSerializer();
+        unknown.ConfirmLogRunUtc = "2026-10-13 07:16 UTC"; unknown.ConfirmLogExit = 0;
+        var back = js.Deserialize<RecoverySnapshot>(js.Serialize(unknown));
+        Check(back.TaskReadError == refusedText && back.ConfirmLogRunUtc == "2026-10-13 07:16 UTC" && back.ConfirmLogExit == 0 && Recovery.Presence(back) == TaskPresence.Unknown,
+            "BD-141: the snapshot JSON keeps the three-state reading");
+
+        // The log while the task writes it: File.AppendAllText holds it for writing and shares Read only. The reader
+        // shares ReadWrite | Delete, so it reads; File.ReadAllLines (the old reader) is refused by that writer.
+        var dir = Path.Combine(Path.GetTempPath(), "amdgpu-wddm-bd141-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var path = Path.Combine(dir, "start-confirm.log");
+            File.WriteAllText(path, string.Join("\r\n", log.Take(4)) + "\r\n");
+            using (new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.Read))
+            {
+                Throws<IOException>(() => File.ReadAllLines(path), "BD-141: the old reader fails while the task appends (the contract of FileShare)");
+                var shared = Recovery.SharedLogLines(path);
+                Check(shared != null && shared.Count == 4 && Recovery.ConfirmLogRun(shared).Result == 0, "BD-141: the shared reader reads the log while the task appends");
+            }
+            var tail = Recovery.SharedLogLines(path, 200);
+            Check(tail != null && tail.Count >= 1 && tail[tail.Count - 1].EndsWith("window task: ok") && tail.All(l => l.Length == 0 || l.StartsWith("2026-")),
+                "BD-141: a bounded tail drops the line its seek cut");
+            Equal(null, Recovery.SharedLogLines(Path.Combine(dir, "absent.log")), "BD-141: an absent log is no lines, not an error");
+        }
+        finally { try { Directory.Delete(dir, true); } catch (Exception) { } }
     }
 
     // The settings rule (owner, 2026-10-03): unchecked = not written, unchecking removes, the exact set is written.
@@ -1227,7 +1315,7 @@ static partial class UnitTests
         Dpm();
         DpmDesignDoc(args[0]);
         Redaction();
-        StartupDiagnosticTests();
+        StartupDiagnosticTests(args[0]);
         Manifest();
         SettingsRule();
         NoDwmRestart(args[0]);
