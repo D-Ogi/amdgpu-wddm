@@ -5,7 +5,7 @@ HLK test areas for such a driver and the order in which we plan to run them. The
 2026-10-12. Each policy claim was then compared with the cited Microsoft page on the same day. A claim that we
 could not find on a Microsoft page carries the mark **Not verified**.
 
-This page describes Microsoft policy and our plan. It does not describe the state of the driver.
+This page describes Microsoft policy and our plan. The dated blocker review below compares those requirements with the driver.
 
 ## Path
 
@@ -143,6 +143,80 @@ We read each version from the file version of the signed installer, or from the 
 
 The most useful next result is the export of the HLK test list for our adapter. That list turns the requirements
 into a checklist. Each line gets one of three marks: implement, test, or not applicable.
+
+## Blockers from the documentation
+
+Review date: 2026-10-13. The profile is Full Graphics, WDDM 2.0, Windows 11 25H2 x64, with WoW64 user-mode components.
+The source review uses driver revision `878f296291ad3671c25532a56a251d9fff0918ba` and the named candidates below.
+It does not replace the device-specific test list that HLK will generate. No row is a measured HLK failure.
+
+The review uses the 25H2/26H1 component specification and the official 25H2 compatibility playlist downloaded on 2026-10-12.
+Requirement names below identify sections in that specification. Job names identify entries in that playlist.
+The local Microsoft driver guides are at revision `110f60eaf2ac5836e644d320c1e92c1011f2af5e`.
+The DDI reference is at revision `7515063cea4c9e98db6a92986c5b4ddb0463fd16`, with WDK headers `10.0.26100.0`.
+The playlist stays outside the repository. Its presence does not establish that every listed job applies to this adapter.
+
+**Setup** means that we cannot yet run the required measurement.
+**Contract gap** means that a documented requirement has no matching implementation in the reviewed path.
+**Pending** means that a candidate or existing implementation still needs the relevant validation.
+S means configuration, packaging or a focused check. M means a bounded implementation or validation series.
+L means a subsystem change or a broad compatibility campaign. These sizes are estimates, not delivery dates.
+
+BD numbers identify tracked defects. Environment statements come from the local environment record.
+The latest dated results take precedence over older summaries. The table does not reopen defects whose later evidence records a fix.
+
+| ID | Requirement and source | Current state and evidence pointer | Work needed |
+| --- | --- | --- | --- |
+| E1 | Running controller and client. [HLK prerequisites](https://learn.microsoft.com/en-us/windows-hardware/test/hlk/getstarted/windows-hlk-prerequisites), controller and test-system requirements. | **Setup.** Hyper-V activation needs the owner's host restart. The VHLK image is downloaded. The local environment record lists no running controller or registered client. | **S.** After the host restart, create the switch and VHLK VM. Install the matching client on 26200 and put it in a Ready pool. |
+| E2 | Client prerequisites and reliable return after test restarts. HLK prerequisites, test-system and network requirements. | **Setup.** The client scripts have not run. Default boot returns to 22631. The local environment record describes prepared prerequisite checks and boot selection. | **S.** Check language, networking, shares, account policy and storage. Keep 26200 selected through the campaign's restarts, then restore the previous boot policy. |
+| E3 | A working adapter and desktop on the full-run OS. Prerequisite for `WGF11 D3DWDDM` and the presentation jobs. | **Pending final package.** BD-135 r4 with BD-136 r1 now passes desktop controls on 22631, 26200 and 26300. R2 fixes r1's OOM contract and awaits lab validation. See the BD-136 results. | **M.** Check the replacement package on 26200, through login, rendering and device teardown. Keep CPU and GPU route results distinct. |
+| E4 | Device-selected tests, matching official playlist and current filters. [Select and run tests](https://learn.microsoft.com/en-us/windows-hardware/test/hlk/getstarted/step-6-select-and-run-tests). | **Setup.** The local environment record lists downloaded playlist and filter files. No adapter test-list export or HLK result package exists in the reviewed inputs. | **S.** Import the matching files, select the installed adapter and export its test list. Record the package, kit and filters with each run. |
+| H1 | Certification hardware coverage. [Graphics prerequisites](https://learn.microsoft.com/en-us/windows-hardware/test/hlk/testref/graphic-adapter-or-chipset-testing-prerequisites), hardware requirements. | **Setup.** The local environment record lists one board and one attached monitor. The prerequisites ask for two computers and two adapters per INF family, with multi-display coverage. | **M.** Supply the required hardware coverage or get an applicable program exception. A single-monitor job's Continue option does not waive the submission prerequisites. |
+| H2 | Test-system storage and sleep coverage. HLK prerequisites, 300 GB disk requirement. `DF - Sleep with IO During (Reliability)`. | **Setup.** The local environment record lists an 80 GB maximum for the client VHDX. Native VHDX boot does not support hibernation. Explicit HLK acceptance of this boot layout is unverified. | **M.** Resolve storage for certification. Use a supported hibernation-capable installation for selected S4 tests, or document why those tests do not apply. |
+| G1 | GDI hardware acceleration. [WDDM feature caps](https://learn.microsoft.com/en-us/windows-hardware/drivers/display/wddm-driver-and-feature-caps), mandatory Full Graphics row. `GDIHW_Functional test for GDI HW ACC (v1.1)`. | **Contract gap.** [wddm.c](../../driver/kmd/wddm.c) leaves `SupportKernelModeCommandBuffer` clear and `RenderKm`/`RenderGdi` absent. CDD shared surfaces and a GPU-rendered desktop do not implement this interface. | **L.** Implement the required kernel GDI path and check the native and WoW64 jobs. Clearing its cap does not satisfy the mandatory profile row. |
+| G2 | Virtual resolution and DWMClone. Component specification, `Device.Graphics.WDDM20.Display.VirtualModeSupport.CoreRequirement`, page 251. | **Contract gap.** The specification says WDDM 2.0 drivers report `VirtualModeSupport=1`. [wddm.c](../../driver/kmd/wddm.c) has no `DXGKQAITYPE_DISPLAY_DRIVERCAPS_EXTENSION` case. An unhandled query returns `STATUS_NOT_SUPPORTED`. | **M.** Implement the query and its mode semantics together. Check applicability of the section's If-Implemented label against the selected WDDM 2.0 profile. Do not merely set the bit. |
+| V1 | D3D11 decoder DDI. Component specification, `Device.Graphics.WDDM12.Render.D3D11VideoDecoding`, pages 229-230. | **Contract gap.** The rendering UMD does not expose the video path. See [ddi-format.cpp](../../driver/umd/dxvk/ddi-format.cpp) and [ddi-clear-view.cpp](../../driver/umd/dxvk/ddi-clear-view.cpp). The M15.11 encoder is a separate interface. | **L.** Implement the required H.264 decoder profile, NV12 and 420_OPAQUE output, and the specified x64/x86 protection support. Run the selected DXVA jobs. |
+| V2 | D3D11 video processor DDI. Component specification, `Device.Graphics.WDDM12.Render.D3D11VideoProcessing`, pages 230-231. | **Contract gap.** The same UMD has no video processor table. Ordinary texture sampling and format admission do not implement video processing. See [ddi-format.cpp](../../driver/umd/dxvk/ddi-format.cpp). | **L.** Add the required formats, deinterlacing, scaling, rotation and colour conversion. Check the video processor caps and selected jobs. |
+| V3 | WDDM 2.0 hardware content protection. Component specification, `Device.Graphics.WDDM20.DisplayRender.HardwareContentProtection`, page 250. | **Contract gap.** [ddi-wddm2.cpp](../../driver/umd/dxvk/ddi-wddm2.cpp) routes hardware-protection entries to `Unexpected`. There is no demonstrated protected playback path. | **L.** Establish the hardware and driver protection contract, implement it and run the applicable content-protection tests. The specification also requires access to PlayReady test servers. |
+| V4 | Media files for selected video tests. HLK graphics prerequisites, supplemental content. | **Setup.** The local environment record lists the two supplemental media images as not downloaded. | **S.** Get the media required by the jobs selected for this adapter. This does not block unrelated rendering tests. |
+| D1 | DDI error rules under allocation failure. [Handling errors](https://learn.microsoft.com/en-us/windows-hardware/drivers/display/handling-errors) and the `DestroyDevice`, `SetShader`, `ResourceMap`, `QueryGetData` DDI pages. | **Pending.** BD-136 r1 could report a forbidden OOM and skip teardown. R2 allocates a device worker at creation. Its host tests exercise the production wrappers under forced allocation failure. | **M.** Check r2 on the real runtime. Cover both production architectures and all compiler frontends. An OOM result is legal only where the specific DDI permits it. |
+| D2 | Runtime concurrency. `D3D12 - MultiThreaded Create Record and ExecuteTest`, plus `WGF11 D3DWDDM`. | **Pending.** Own clients and BD-136 host controls cover selected calls, callback reentry and independent devices. They are not the HLK workload. See [M15 reconciliation](../m15-reconciliation.md) and the BD-136 r2 host results. | **M.** Run the selected multithreading jobs against the final package. Check deferred contexts, concurrent creation, submission and teardown. |
+| D3 | 32-bit user-mode coverage on x64 Windows. `DXGI Presentation testing - FSPresentMS (WoW64)`. | **Pending.** BD-133 and BD-134 have later D3D9 controls. The BD-136 r2 package manifest lists x86 host tests but only x64 production DLLs. | **M.** Build and check the x86 production components. Run the selected WoW64 jobs. Do not treat a passing x64 desktop as WoW64 coverage. |
+| M1 | Heap residency and eviction. `WDDM2 - Make Resident - Verify Standard Test` and `WDDM2 - Memory Budget Test - Trim To Budget 11 Test`. | **Pending.** BD-052 has an offline candidate for imported heaps that retained residency. Its lab plan requires joint validation of the kernel and user-mode changes. | **M.** Check the combined candidate, then run pressure, eviction and make-resident jobs. Include heaps created not resident and mixed allocation ownership. |
+| M2 | Offer, reclaim and working-set behaviour. `WDDM2 - OfferReclaim11 - Working Set Test`. | **Pending.** [ddi-dxgi-resources.cpp](../../driver/umd/dxvk/ddi-dxgi-resources.cpp) forwards runtime surfaces. It keeps engine-private resources resident without forwarding their offers. No working-set HLK result establishes adequacy under pressure. | **M.** Measure the selected job, including private suballocations. Add allocator-level offer accounting if the pressure tests expose retained memory. Keeping reclaim contents alone is not working-set evidence. |
+| R1 | Hang recovery. `SimulateVSync TDR` and `TDR2 - Multiple TDR Compute Lockout and Recovery Test (Enumerated Adapter)`. | **Pending.** [Hang recovery](../design/hang-recovery.md) records working soft recovery for a bounded class. Paging-node reset and parked memory-fault waves remain outside that recovery. BD-114's watchdog fix does not establish full TDR coverage. | **L.** Run the documented fault classes and repeated recovery jobs. Extend recovery for failing classes. Preserve unrelated contexts and check desktop recovery. |
+| R2 | PnP restart and mode changes. `WDDM PnPStop Test` and `WDDM PnPStopModeSwitch Test`. | **Pending.** BD-124 has a later device-restart picture fix. BD-093's second measurement round still records a stop/start performance regression. | **M.** Run repeated stop/start with rendering and mode changes. Check performance, contents, interrupts and thermal controls after restart, not only device status. |
+| P1 | Presentation correctness across the supported mode and format set. `DXGI Presentation testing - FSPresentMS` and `Display Mode Filter Check`. | **Pending.** [M15 reconciliation](../m15-reconciliation.md) describes partial coverage. Later BD-105 and BD-124 records add Vulkan flip and HDMI mode results. Neither is a complete HLK matrix. | **M.** Run composed and direct presentation, scaling, intervals, formats and mode changes on the final package. Include the direct-DP control and adapter hotplug. |
+| S1 | Kernel code integrity. `HyperVisor Code Integrity Readiness Test`. | **Pending.** No HLK HVCI result accompanies the reviewed package. Test signing and ordinary loading do not establish HVCI compatibility. The requirement is described under Test environment above. | **M.** Run readiness checks and the applicable HVCI workload. Fix executable-memory or mapping violations if found. Do not infer failure solely from test signing. |
+| S2 | INF and submission validation. `DF - InfVerif INF Verification` and `Static Tools Logo Test`. | **Pending.** Our build gates do not supply these HLK results. The May 2026 kit also has the documented DVL version issue described above. See Kits on 2026-10-12 for the selected version. | **S.** Run the package jobs and produce the required DVL with the documented tool version and filter. Keep CodeQL's graphics-driver recommendation distinct from a mandatory result. |
+
+Interpretation limits matter when using this table:
+
+- G2 quotes the WDDM 2.0 rule within a section labelled If-Implemented. The missing query is a source finding, not an observed OS refusal.
+- V1 does not make every codec mandatory. The specification lists VC-1, MPEG-2, HEVC and VPx under conditional support.
+- V3 is the WDDM 2.0 protection requirement. OPM and COPP also depend on connector and monitor capabilities, as the graphics prerequisites explain.
+- The specification permits DMA-buffer-boundary preemption. Our declared granularity is not itself a missing feature. Scheduler correctness still needs the selected preemption jobs.
+- Runtime F-state power management is conditional in `Device.Graphics.WDDM12.DisplayRender.RuntimePowerMgmt.RuntimePowerMgmt`, page 227. Missing optional callbacks alone do not prove a certification failure.
+- The D3D9 DDI requirement does not, by itself, prove that a new vendor D3D9 frontend is necessary. Qualify the actual D3D9On12 route.
+- No reviewed DDI or HLK page specifies a universal 64 KiB caller stack. That size belongs to our BD-136 regression control.
+- The BD-136 checks do not cover every D3D12 or WGL frontend before the backend compiler. Those paths need separate stack review.
+
+### What blocks the first campaign
+
+E1, E2 and E4 block scheduling tests on the intended controller/client pair. E3 has passing r1 controls but needs acceptance of the replacement r2 package.
+The owner has approved the additional HLK disk budget, long campaigns and the client's required account setup.
+The host restart remains the owner's action. Those approved decisions are not open permission requests.
+
+The first campaign can record failures while implementation gaps remain. It need not wait for G1, V1, V2 or V3 to be complete.
+H1 and H2 limit certification coverage, but do not prevent an internal rendering run on the current single-board setup.
+V4 is needed when the selected media jobs run. A thermal guard must remain active throughout an HLK campaign.
+
+### What blocks full certification
+
+G1 and V1-V3 identify substantial missing interfaces for the selected profile. G2 needs its requirement interpretation and implementation resolved.
+H1, H2 and V4 need the required environment coverage. D1-S2 need final-artifact results for the selected jobs, with fixes where those results expose defects.
+The selected test list can add further requirements. This review cannot certify an adapter without that list and its results.
+Reduced results for older supported Windows versions and the final submission package remain required by the policy above.
 
 ## Sources
 
