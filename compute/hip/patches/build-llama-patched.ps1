@@ -11,12 +11,67 @@ param(
     [switch]$Bc250AllocationCap,
     [switch]$ValidationTools,
     [switch]$AssetTools,
-    [switch]$NoLto
+    [switch]$NoLto,
+    # Apply any patch of the complete set that the source copy does not carry yet, with git apply, and
+    # then check the markers as usual. Without it the script changes no file and only checks, which is
+    # how a frozen reviewed snapshot is built.
+    [switch]$ApplyPatches,
+    # Where the patch files are. Empty means this script's own directory, resolved below rather than in
+    # the default, because $PSScriptRoot is not yet set in a param default under powershell.exe -File.
+    [string]$PatchDir = '',
+    [string]$Git = 'git'
 )
 $ErrorActionPreference = 'Stop'
-$sourceText = Get-Content (Join-Path $Source 'ggml/src/ggml-cuda/common.cuh') -Raw
-if ($sourceText -notmatch '#ifndef BC250_HIP_NO_DEVICE_PRINTF') {
-    throw 'Apply llama-no-device-printf.patch to the reviewed source copy first.'
+if (-not $PatchDir) {
+    $PatchDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
+}
+
+# The complete set of source changes this HIP route needs, each with the marker that says it is in.
+# A source copy that is missing one of them builds and loads, and is wrong: without the RDNA1 entry
+# the device compiles mul_mat_vec_q_moe with a smaller __launch_bounds__ than the block the host
+# launches (256 threads into a kernel built for 128), which is the expert path of every MoE model.
+# This set used to hold two of the four, and the other two lived only in a reviewed source snapshot
+# and in the shipped asset's provenance, so a rebuild driven from this directory produced that wrong
+# binary and nothing said so. The marker, not the patch file, is the evidence that a change is in.
+$patchSet = @(
+    @{ Patch = 'llama-no-device-printf.patch'; File = 'ggml/src/ggml-cuda/common.cuh';
+       Marker = '#ifndef BC250_HIP_NO_DEVICE_PRINTF'; What = 'no device printf in the HIP kernels' }
+    @{ Patch = 'llama-gfx1013-rdna1.patch'; File = 'ggml/src/ggml-cuda/vendors/hip.h';
+       Marker = 'defined(__gfx1013__)'; What = 'gfx1013 in the device-side RDNA1 list' }
+    @{ Patch = 'llama-no-asm-dp4a.patch'; File = 'ggml/src/ggml-cuda/common.cuh';
+       Marker = '!defined(BC250_HIP_NO_ASM_DP4A)'; What = 'the RDNA1 dp4a assembly behind a macro' }
+    # The allocation cap is the one opt-in change: -Bc250AllocationCap turns it on in the compiler
+    # flags, so the source carries it in every build and the define decides.
+    @{ Patch = 'llama-bc250-allocation-cap.patch'; File = 'ggml/src/ggml-cuda/ggml-cuda.cu';
+       Marker = 'BC250_HIP_MAX_ALLOC_BYTES'; What = 'the measured per-allocation limit' }
+)
+function Test-PatchMarker($item) {
+    $path = Join-Path $Source $item.File
+    if (-not (Test-Path -LiteralPath $path)) { throw "the source copy has no $($item.File)" }
+    # -Raw gives nothing at all for an empty file, and a [string] cast of that is still not a string,
+    # so the null is handled before any method call. An empty file carries no marker.
+    $text = Get-Content -LiteralPath $path -Raw
+    if ($null -eq $text) { return $false }
+    return ([string]$text).Contains($item.Marker)
+}
+if ($ApplyPatches) {
+    foreach ($item in $patchSet) {
+        if (Test-PatchMarker $item) { "already in: $($item.Patch)"; continue }
+        $patch = Join-Path $PatchDir $item.Patch
+        if (-not (Test-Path -LiteralPath $patch)) { throw "missing patch file $patch" }
+        & $Git -C $Source apply -p1 --verbose -- $patch
+        if ($LASTEXITCODE) { throw "git apply failed for $($item.Patch): $LASTEXITCODE" }
+        if (-not (Test-PatchMarker $item)) {
+            throw "$($item.Patch) applied but its marker $($item.Marker) is not in $($item.File)"
+        }
+        "applied: $($item.Patch)"
+    }
+}
+$missing = @($patchSet | Where-Object { -not (Test-PatchMarker $_) })
+if ($missing.Count) {
+    throw ("the source copy is missing " + $missing.Count + " of the " + $patchSet.Count +
+        " HIP source changes: " + (($missing | ForEach-Object { "$($_.Patch) ($($_.What))" }) -join '; ') +
+        ". Apply them to the reviewed source copy first, or pass -ApplyPatches.")
 }
 $options = @()
 $originalCxxFlags = ''
