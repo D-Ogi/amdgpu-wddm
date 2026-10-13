@@ -46,6 +46,10 @@ namespace AmdgpuWddmControl
             E("system.background", "system"), E("system.updates", "system"), E("system.drivers", "system"), E("system.drive", "system"),
             E("settings.language", "settings"), E("settings.update-start", "settings"), E("settings.recent", "settings"), E("settings.nagi", "settings"),
             E("settings.tips", "settings"), E("settings.animations", "settings"), E("settings.support", "settings"), E("settings.data", "settings"),
+            // The small window after sign-in (BD-080): a person who wants it gone types "window", "start" or "blue".
+            E("settings.start-window", "settings"),
+            // The Nagi wallpaper (Wallpaper.cs): set it again, or put back the background this account had.
+            E("settings.wallpaper", "settings"),
             E("help.repair", "help"), E("help.report", "help"), E("help.restart", "help"), E("help.guides", "help"),
             // How long Windows waits for the graphics (TdrSetting.cs): on the Help page, with the other things a
             // person reaches for when the picture broke.

@@ -45,6 +45,10 @@ namespace AmdgpuWddmControl
             };
             _upd = new UpdateCache { LastSuccessUtc = Recovery.Stamp(now.AddMinutes(-30)), LastAttemptUtc = Recovery.Stamp(now.AddMinutes(-30)), LastAttemptOutcome = "Available", CandidateTag = "v0.7.216.101-tester.29", CandidateVersion = "0.7.216.101-tester.29" };
             _drv = DriverCard.Decide(new DriverFacts { InstalledVersion = "0.7.216.100-tester.28", DriverDate = "10-3-2026" });
+            // Exercise the long BD-138 attention text in every language, DPI and small-screen render gate.
+            // Selection of this view from an exact witness is covered by StaleVerifyTests.
+            _drv.Verification = VerifyKind.EarlierBootFailed;
+            _drv.VerificationText = Strings.T("drv.verify.earlier-boot");
             _vram = new VideoMemoryState { Segments = 1, LocalResident = 3L << 30, Dedicated = 8L << 30, LocalLimit = 8L << 30 };
             // The board memory card as a BC-250 answers it: 8 GiB reserved and in use, 12 GiB the other choice,
             // nothing pending and no backup to restore. Without this a render on a PC without the board falls back
@@ -265,6 +269,7 @@ namespace AmdgpuWddmControl
                     foreach (var p in Overflows(this)) w.AppendLine(where + ": " + p);
                     foreach (var p in NoInternals(Texts(this, true))) w.AppendLine(where + ": G-NOINT " + p);
                     foreach (var p in Accessibility(this)) w.AppendLine(where + ": G-A11Y " + p);
+                    foreach (var p in Backdrops(this)) w.AppendLine(where + ": G-BACKDROP " + p);
                     if (_fixture && page == "graphics")
                     {
                         bool admitted = BoardCapabilities.Current.Allows(BoardCapabilities.Gpu | BoardCapabilities.Cpu);
@@ -340,6 +345,80 @@ namespace AmdgpuWddmControl
             }
             return w.ToString();
         }
+
+        // G-BACKDROP (BD-137): a control that paints itself leaves no pixel of its client rectangle unpainted.
+        //
+        // Control.WmPaint runs two layers for a control with ControlStyles.UserPaint: the background layer, and that
+        // one only when ControlStyles.Opaque is not set, then OnPaint (.NET Framework reference source, Control.cs,
+        // WmPaint and PaintWithErrorHandling). ButtonBase sets Opaque, so a button, option button or check box paints
+        // its whole background itself. On the screen every control paints into a buffer that BufferedGraphicsManager
+        // hands to the next control with the pixels of the last one still in it, so a control that does not clear
+        // itself shows the control painted before it - which is what the setup window did in BD-137. A render into
+        // one bitmap cannot show it: there the parent has already drawn the right pixels underneath. This gate paints
+        // every control alone, over a colour no page uses, and reports whatever is left of it.
+        //
+        // The setup window's gate has a second half, which asks whether the colour a control clears itself in is the
+        // colour the window paints under it. It has no counterpart here, and there is nothing to compare against: no
+        // control of this application takes a background colour from an ancestor. Every container carries an opaque
+        // BackColor of its own (CardPanel Theme.Card, GuidePanel Theme.GuideBack, the two charts Theme.Nav), and the
+        // controls with Color.Transparent are stock ones, whose painting routes the transparent colour through
+        // Control.PaintBackground and so through PaintTransparentBackground, which paints the parent chain itself
+        // (probe of 2026-10-13: a stock RadioButton with a transparent BackColor inside a transparent layout panel
+        // leaves no pixel of a sentinel background behind, although ButtonBase sets ControlStyles.Opaque). The half
+        // above is what keeps the BD-137 shape - an owner-drawn control that fills a colour of its parent's instead -
+        // out of this application.
+        public List<string> Backdrops(Control root)
+        {
+            var problems = new List<string>();
+            foreach (var c in ShownIn(root, false))
+            {
+                if (c.Width <= 0 || c.Height <= 0) continue;
+                if (!Style(c, ControlStyles.UserPaint)) continue;
+                if (c.GetType().Assembly != typeof(MainForm).Assembly && c.BackColor.A == 255) continue;
+                int left;
+                using (var bmp = new Bitmap(c.Width, c.Height, System.Drawing.Imaging.PixelFormat.Format32bppRgb))
+                {
+                    using (var g = Graphics.FromImage(bmp))
+                    {
+                        g.Clear(Sentinel);
+                        var e = new PaintEventArgs(g, new Rectangle(0, 0, c.Width, c.Height));
+                        if (!Style(c, ControlStyles.Opaque)) InvokePaintBackground(c, e);
+                        InvokePaint(c, e);
+                    }
+                    left = Unpainted(bmp);
+                }
+                if (left > 0)
+                    problems.Add(Label(c) + " " + c.Width + "x" + c.Height + " leaves " + left + " pixels of its background unpainted (parent " +
+                        (c.Parent == null ? "none" : c.Parent.GetType().Name + " BackColor " + c.Parent.BackColor) + ")");
+            }
+            return problems;
+        }
+
+        // A colour no palette of this application carries.
+        static readonly Color Sentinel = Color.FromArgb(0xFF, 0x00, 0xFF);
+
+        static int Unpainted(Bitmap bmp)
+        {
+            // The alpha byte of a 32bppRgb bitmap is not part of the picture, so only the colour is compared.
+            int sentinel = Sentinel.ToArgb() & 0xFFFFFF, left = 0;
+            var data = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height), System.Drawing.Imaging.ImageLockMode.ReadOnly,
+                System.Drawing.Imaging.PixelFormat.Format32bppRgb);
+            try
+            {
+                var row = new int[bmp.Width];
+                for (int y = 0; y < bmp.Height; y++)
+                {
+                    System.Runtime.InteropServices.Marshal.Copy(data.Scan0 + y * data.Stride, row, 0, row.Length);
+                    for (int x = 0; x < row.Length; x++) if ((row[x] & 0xFFFFFF) == sentinel) left++;
+                }
+            }
+            finally { bmp.UnlockBits(data); }
+            return left;
+        }
+
+        static readonly System.Reflection.MethodInfo GetStyleMethod =
+            typeof(Control).GetMethod("GetStyle", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        static bool Style(Control c, ControlStyles s) { return (bool)GetStyleMethod.Invoke(c, new object[] { s }); }
 
         void Snap(string path)
         {

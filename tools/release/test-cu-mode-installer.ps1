@@ -1,9 +1,17 @@
-# Host test of the installer half of the CU mode setting (BD-077). Three contracts:
+# Host test of the installer half of the CU mode setting (BD-077). Four contracts:
 #   1. The installer's -CuMode switch reaches the registry plan as a 'command' write of the value the tester gave.
 #   2. An install that does not name -CuMode writes exactly what registry-defaults.json holds for CuMode, and
 #      nothing when the table holds no CuMode. An absent value means 24 compute units (driver/kmd/cumode.c).
 #   3. docs\testing\INSTALL.md states that same default in a line a reader can act on, so the guide cannot drift
 #      away from the table. The expected number comes from the table, not from this file.
+#   4. The driver's own fallback to 24 is a driver closure, the way DpmMode 0 is: CuMode 24 next to
+#      CuModeClosedReason stays as the driver left it and is reported with its remedy, install.cmd -Repair writes
+#      the default again and deletes the record, a 24 the tester chose (no record) stays the tester's, and a value
+#      named on the command line takes the record with it. These checks run only while the table's default is 40,
+#      because a default equal to the closed value is no closure.
+#   5. The control application's Graphics page writes the stock choice out as CuMode = 24 and never deletes the
+#      value, so that an install reads it as a choice and not as a key nobody configured; and the release recipe
+#      itself refuses a table without a CuMode of 24 or 40.
 # Windows PowerShell 5.1, like the installer:
 #   powershell -NoProfile -File tools\release\test-cu-mode-installer.ps1 [-Installer <package>\installer]
 # Pure: nothing under HKLM or HKCU is read or written, and no file is changed.
@@ -33,10 +41,10 @@ if ($null -ne $tableCuMode) { $expectedCus = $tableCuMode }
 # $After are the two arguments of the preservation path of install.ps1 (around line 1170): $Current is the key as
 # it was before the driver package, $After is the key as the package left it, and $Restore names the values
 # outside the table that have to go back.
-function New-ParameterPlan([hashtable]$Bound, [hashtable]$Current = @{}, [string[]]$Restore = @(), [hashtable]$After = $null) {
+function New-ParameterPlan([hashtable]$Bound, [hashtable]$Current = @{}, [string[]]$Restore = @(), [hashtable]$After = $null, [switch]$Reopen) {
     $inputs = Get-InstallInputs $Bound $null $version
     return , (Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $table.legacy_applied.parameters `
-        -Current $Current -Explicit $inputs.parameters -Restore $Restore -After $After)
+        -Current $Current -Explicit $inputs.parameters -Restore $Restore -After $After -Reopen:$Reopen)
 }
 
 'an install that does not name -CuMode'
@@ -82,6 +90,122 @@ Check (($null -ne $e) -and ($e.decision -eq 'restored') -and ([int]$e.value -eq 
 $plan = New-ParameterPlan @{ CuMode = 0 }
 $e = Get-Entry $plan 'CuMode'
 Check (($null -eq $e) -or ([int]$e.value -ne 0)) '-CuMode 0 never writes a 0 into the key'
+
+# The driver closure of the graphics cores (contract 4). The driver's fallback writes CuModeClosedReason and then
+# CuMode 24 (driver/kmd/cumode.c PersistFallback); the installer must not read that 24 as a choice of the tester.
+if ($tableCuMode -eq 40) {
+    'the driver went back to 24 by itself'
+    $closed = @{ CuMode = 24; CuModeClosedReason = 3; CuModeLastReason = 3 }
+    $d = Get-Entry (New-ParameterPlan @{} $closed) 'CuMode'
+    Check (($d.decision -eq 'driver-closed') -and ([int]$d.value -eq 24) -and -not $d.write -and `
+           ($d.closure_record -eq 'CuModeClosedReason') -and ([int]$d.closure_code -eq 3) -and ($d.closure_reason -eq 'unconfirmed')) `
+        "CuMode 24 with CuModeClosedReason 3: $($d.decision) ($($d.closure_reason))"
+    $text = Format-RegistryPlan (New-ParameterPlan @{} $closed)
+    Check (($text -match 'CuMode=24 KEPT \(the driver went back to 24 graphics cores after a start with all 40 that nobody confirmed, CuModeClosedReason 3 unconfirmed; not a setting of the tester; default 40; remedy: install\.cmd -Repair\)')) `
+        'the plan text names the closure, its reason code and the remedy, not the tester'
+
+    'a repair reopens it'
+    $plan = New-ParameterPlan @{} $closed @('CuModeClosedReason') @{} -Reopen
+    $d = Get-Entry $plan 'CuMode'
+    Check (($d.decision -eq 'reopened') -and ([int]$d.value -eq 40) -and $d.write -and (@($d.clear) -contains 'CuModeClosedReason')) `
+        "a repair writes 40 again and clears the record: $($d.decision) -> $($d.value), clears $(@($d.clear) -join ',')"
+    Check ($null -eq (Get-Entry $plan 'CuModeClosedReason')) 'the reopened record is not written back by the preservation path'
+
+    'one start after the fallback'
+    # Every later start rewrites CuModeLastReason (here: NONE), and the durable record still names the closure.
+    $d = Get-Entry (New-ParameterPlan @{} @{ CuMode = 24; CuModeClosedReason = 3; CuModeLastReason = 0 }) 'CuMode'
+    Check (($d.decision -eq 'driver-closed') -and ($d.closure_record -eq 'CuModeClosedReason')) `
+        "the record outlives the boot that wrote it: $($d.decision)"
+
+    'a 24 the tester chose'
+    $d = Get-Entry (New-ParameterPlan @{} @{ CuMode = 24 }) 'CuMode'
+    Check (($d.decision -eq 'kept') -and ([int]$d.value -eq 24) -and ($null -eq $d.PSObject.Properties['closure'])) `
+        "a 24 with no record stays the tester's: $($d.decision)"
+    # No legacy record for CuMode: CuModeLastReason 9 (RESTORE_FAILED) is written by a tester's own 24 start whose
+    # stock restore did not read back, as well as by a fallback, so it never turns a 24 into a closure.
+    $d = Get-Entry (New-ParameterPlan @{} @{ CuMode = 24; CuModeLastReason = 9 }) 'CuMode'
+    Check ($d.decision -eq 'kept') "CuModeLastReason 9 alone is no closure: $($d.decision)"
+    $d = Get-Entry (New-ParameterPlan @{} @{ CuMode = 24; CuModeClosedReason = 0; CuModeLastReason = 3 }) 'CuMode'
+    Check ($d.decision -eq 'kept') "an empty durable record is no closure either: $($d.decision)"
+
+    'a reason the table does not name'
+    $d = Get-Entry (New-ParameterPlan @{} @{ CuMode = 24; CuModeClosedReason = 11 }) 'CuMode'
+    Check (($d.decision -eq 'driver-closed') -and ($d.closure_reason -eq 'reason 11') -and ($d.closure -eq 'the driver went back to 24 graphics cores itself')) `
+        "a later driver's new reason is still a closure: $($d.decision) ($($d.closure_reason))"
+
+    'a record next to a CuMode that still asks for 40'
+    # The fallback writes the record first, so a start that died between the two writes leaves this state. The
+    # value is not the closed one, so the installer leaves it alone; the next start deletes the record itself.
+    $d = Get-Entry (New-ParameterPlan @{} @{ CuMode = 40; CuModeClosedReason = 3 }) 'CuMode'
+    Check (($d.decision -eq 'same') -and ([int]$d.value -eq 40)) "a record beside a 40 is no closure: $($d.decision)"
+
+    'an upgrade over the fallback keeps the record for the driver'
+    $plan = New-ParameterPlan @{} $closed @('CuModeClosedReason', 'CuModeLastReason') @{}
+    $d = Get-Entry $plan 'CuModeClosedReason'
+    Check (($null -ne $d) -and ($d.decision -eq 'restored') -and ([int]$d.value -eq 3) -and $d.write) `
+        'the record comes back after the driver package has cleared the key, so the next start still sees it'
+
+    'the command line wins over the closure'
+    $d = Get-Entry (New-ParameterPlan @{ CuMode = 24 } $closed) 'CuMode'
+    Check (($d.decision -eq 'command') -and ([int]$d.value -eq 24)) "-CuMode 24 over a closure: $($d.decision)"
+    # The switch is the tester's word about that very value, so the driver's record is stale and goes with the
+    # write. Without this, -CuMode 24 over a closure left the record, and the next install reported the tester's
+    # own 24 as a step back of the driver with a repair as its remedy (review 2 finding 2).
+    Check ((@($d.clear) -contains 'CuModeClosedReason')) "-CuMode 24 over a closure clears the record: clears $(@($d.clear) -join ',')"
+    $d40 = Get-Entry (New-ParameterPlan @{ CuMode = 40 } $closed) 'CuMode'
+    Check ((@($d40.clear) -contains 'CuModeClosedReason')) '-CuMode 40 over a closure clears the record as well'
+    $plan = New-ParameterPlan @{ CuMode = 24 } $closed @('CuModeClosedReason', 'CuModeLastReason') @{}
+    $d = Get-Entry $plan 'CuMode'
+    Check (($d.decision -eq 'command') -and (@($d.clear) -contains 'CuModeClosedReason')) 'the same through the preservation path'
+    Check ($null -eq (Get-Entry $plan 'CuModeClosedReason')) 'the cleared record is not written back by the preservation path'
+    $d = Get-Entry (New-ParameterPlan @{} @{ CuMode = 24; CuModeLastReason = 3 }) 'CuMode'
+    Check ($d.decision -eq 'kept') "after the switch, the install that follows reads the 24 as the tester's: $($d.decision)"
+    $d = Get-Entry (New-ParameterPlan @{ CuMode = 24 } @{ CuMode = 40 }) 'CuMode'
+    Check ($null -eq $d.PSObject.Properties['clear']) 'a command line without a closure clears nothing'
+
+    'a 24 the control application wrote'
+    # The application writes the stock choice out as CuMode = 24 and takes the record with it, so the plan of the
+    # next install reads a choice of the tester and never the key of a machine it never configured (finding 1).
+    $d = Get-Entry (New-ParameterPlan @{} @{ CuMode = 24; CuModeLastApplied = 24; CuModeLastReason = 0 }) 'CuMode'
+    Check (($d.decision -eq 'kept') -and ([int]$d.value -eq 24) -and -not $d.write) `
+        "the 24 of the Graphics page is kept by an install: $($d.decision)"
+    $d = Get-Entry (New-ParameterPlan @{} @{ CuModeLastApplied = 24; CuModeLastReason = 0 }) 'CuMode'
+    Check (($d.decision -eq 'set') -and ([int]$d.value -eq 40)) `
+        "a key with no CuMode is a machine this installer never configured: $($d.decision) $($d.value)"
+} else {
+    "the table's default is not 40, so the CuMode closure is not in force and its checks are skipped"
+}
+
+'the control application writes the stock choice out as 24'
+# Contract 5 (review 2 finding 1): with CuMode in the defaults table, an absent value is no longer "the default"
+# but "write the release default". The Graphics page therefore writes 24 and never deletes the value, or every
+# later install would take the cores of a tester who chose the firmware's number back to 40.
+$cuApp = Join-Path $Repo 'tools\win\amdgpu_wddm_control\src\CuMode.cs'
+$cuReg = Join-Path $Repo 'tools\win\amdgpu_wddm_control\src\CuRegistry.cs'
+if ((Test-Path -LiteralPath $cuApp) -and (Test-Path -LiteralPath $cuReg)) {
+    $appText = Get-Content -LiteralPath $cuApp -Raw
+    $regText = Get-Content -LiteralPath $cuReg -Raw
+    Check ($appText.Contains('step("write-24", "CuMode", Stock)')) 'the setter writes CuMode = 24 for the stock choice'
+    Check (-not $appText.Contains('"remove-mode"')) 'the setter has no step that deletes CuMode'
+    Check ($appText.Contains('step("remove-closed", "CuModeClosedReason", 0)')) "the setter takes the driver's record away with the chosen 24"
+    Check ($regText.Contains('if (name != "CuDisableWgp" && name != "CuModeConfirmed" && name != "CuModeClosedReason")')) `
+        'the checked registry removes three values and CuMode is not one of them'
+    Check ($regText.Contains('value != CuMode.Full && value != CuMode.Stock')) 'the checked registry allows CuMode 24 and 40 only'
+} else {
+    '  the control application is not in this tree, its source checks are skipped'
+}
+
+'the release recipe requires the number in the table'
+# BD-077 (review 2 finding 4): the number of graphics cores of an install belongs to a gate the package build runs
+# itself, not only to the host tests.
+$recipe = Join-Path $Repo 'tools\release\build-release.ps1'
+if (Test-Path -LiteralPath $recipe) {
+    $recipeText = Get-Content -LiteralPath $recipe -Raw
+    Check ($recipeText -match "'DpmMaxMHz',\s*'CuMode'") 'build-release.ps1 requires parameters.CuMode in the table'
+    Check ($recipeText.Contains("not 24 or 40")) 'build-release.ps1 refuses a CuMode default that is neither 24 nor 40'
+} else {
+    '  the release recipe is not in this tree, its checks are skipped'
+}
 
 'install.ps1 accepts 0, 24 and 40 only'
 $installText = Get-Content -LiteralPath (Join-Path $Installer 'install.ps1') -Raw

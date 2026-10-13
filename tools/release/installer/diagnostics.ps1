@@ -97,6 +97,9 @@ function ConvertTo-DiagnosticsProblemCode {
     $n = 0
     if ([int]::TryParse([string]$Code, [ref]$n)) { return $n }
     $name = ([string]$Code).Trim()
+    # Win32_PnPEntity can expose the successful value as the enum name too (BD-147). Entry 0 in the display
+    # table is prose, so looking up that table alone classified CM_PROB_NONE as an unreadable problem code.
+    if ($name -eq 'CM_PROB_NONE') { return 0 }
     foreach ($k in @($script:DiagnosticsProblemNames.Keys)) { if ($script:DiagnosticsProblemNames[$k] -eq $name) { return [int]$k } }
     return $null
 }

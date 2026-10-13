@@ -270,15 +270,27 @@ if ($NoWindow) {
     Add-Type -AssemblyName System.Windows.Forms, System.Drawing
     $form = New-Object Windows.Forms.Form
     $form.FormBorderStyle = 'None'; $form.TopMost = $true; $form.ShowInTaskbar = $false; $form.ShowIcon = $false
-    $form.StartPosition = 'Manual'; $form.Size = New-Object Drawing.Size(250, 22); $form.Location = New-Object Drawing.Point(8, 34)
+    $form.StartPosition = 'Manual'; $form.Location = New-Object Drawing.Point(8, 34)
     $form.BackColor = [Drawing.Color]::Navy
     $label = New-Object Windows.Forms.Label
     $label.Dock = 'Fill'; $label.ForeColor = [Drawing.Color]::Cyan; $label.Font = New-Object Drawing.Font('Consolas', 9)
+    $label.Padding = New-Object Windows.Forms.Padding(4, 3, 4, 3)
+    # The text of start-window.ps1 (what the window is for, a countdown that is also the changing text DWM presents);
+    # this run ends with the confirmation, so the countdown is its upper bound.
+    $windowText = {
+        param([double]$Left)
+        $s = [int][Math]::Max(0, [Math]::Ceiling($Left))
+        ("Nagi start check: confirming that the GPU driver started correctly.`r`n" +
+            'Nothing to do. This window closes by itself within {0}:{1:00}.') -f [int][Math]::Floor($s / 60), ($s % 60)
+    }
+    $label.Text = & $windowText $Seconds
+    $need = [Windows.Forms.TextRenderer]::MeasureText($label.Text, $label.Font)
+    $form.ClientSize = New-Object Drawing.Size(($need.Width + 12), ($need.Height + 8))
     $form.Controls.Add($label)
     $timer = New-Object Windows.Forms.Timer
     $timer.Interval = 250
     $timer.Add_Tick({
-        $label.Text = 'amdgpu-wddm start check ' + [DateTime]::Now.ToString('HH:mm:ss.f')
+        $label.Text = & $windowText ($Seconds - $clock.Elapsed.TotalSeconds)
         $step = Invoke-Tick
         if ($step) { $script:exitCode = [int]$step.code; $script:lastReason = $step.reason; $timer.Stop(); $form.Close() }
     })

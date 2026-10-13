@@ -1,4 +1,4 @@
-# English source strings of amdgpu-wddm Control. Format and rules: src/Strings.cs. Translations carry the first 8 hex
+# English source strings of Nagi Control App. Format and rules: src/Strings.cs. Translations carry the first 8 hex
 # digits of SHA-256 over the English text they were made from; changing a text here makes them stale (the build fails
 # until each language gets a new translation).
 
@@ -7,6 +7,8 @@ cu.choice.all|src|-|Your choice: All (40).
 cu.choice.standard|src|-|Your choice: Standard (24).
 cu.choice.invalid|src|-|Your choice is not valid; choose Standard (24) or All (40).
 cu.choice.unreadable|src|-|Your choice cannot be read.
+cu.choice.driver-24|src|-|Standard (24) is set, but the driver chose that number, not you.
+cu.note.driver-24|src|-|Select All (40) and restart Windows to use all 40 cores again.
 cu.choice.after-restart|src|-|It applies after the next Windows restart.
 cu.run.standard|src|-|Running now: {0} cores.
 cu.run.waiting|src|-|Running now: {0} cores, not confirmed yet. If the new 40-core setting is not confirmed, the next start returns to 24 cores.
@@ -32,7 +34,8 @@ cu.refuse.unreadable|src|-|The stored setting cannot be read.
 cu.refuse.already40|src|-|All (40) is selected already.
 cu.refuse.already24|src|-|Standard (24) is selected already.
 cu.preview.write40|src|-|Selects all 40 graphics cores.
-cu.preview.remove-mode|src|-|Selects the standard 24 graphics cores.
+cu.preview.write24|src|-|Selects the standard 24 graphics cores.
+cu.preview.remove-closed|src|-|Records that the standard 24 graphics cores are your choice, not a step back the driver took by itself.
 cu.preview.remove-confirmed|src|-|Removes the earlier confirmation of 40 cores, so the new setting is confirmed on its own start.
 cu.preview.remove-disable|src|-|An earlier diagnostic core limit is removed.
 cu.result.nothing|src|-|Nothing was changed.
@@ -94,6 +97,7 @@ guide.all-good|src|-|Everything looks good. Ready to play.
 guide.tip.settings|src|-|Your choices here stay when the driver is updated.
 guide.tip.display|src|-|If the window gets lost after a monitor change, it comes back to a visible screen by itself.
 guide.tip.graphics|src|-|Clock and core changes apply after the next restart of Windows. The settings for all games apply the next time a game starts.
+guide.name|src|-|Nagi stands for {0}. Yes, the N is Nagi again.
 
 # ---- status card on Home (WU-007, WU-052, WU-061) ----
 status.title.problem|src|-|Something needs your attention
@@ -103,8 +107,8 @@ status.title.ok|src|-|Ready to play
 status.title.unknown|src|-|Status not known
 status.unreadable|src|-|The app could not read the driver's status right now.
 status.ok-detail|src|-|The driver is running and nothing is waiting for you.
-status.not-installed|src|-|The amdgpu-wddm driver is not installed on this PC.
-status.not-installed.next|src|-|Install it with the amdgpu-wddm setup from the release page.
+status.not-installed|src|-|The Nagi graphics driver is not installed on this PC.
+status.not-installed.next|src|-|Install it with Nagi Setup from the release page.
 status.driver-not-running|src|-|The graphics driver is not running. Windows uses its basic display.
 status.driver-not-running.next|src|-|Restart Windows. If this stays, open Help and follow "The screen stays dark or the driver does not start".
 status.install-stopped|src|-|The last installation stopped before it finished.
@@ -545,7 +549,7 @@ help.guide.display.4|src|-|If the picture is wrong after an update, use "Restore
 help.guide.safe|src|-|Repair from Safe Mode
 help.guide.safe.1|src|-|Hold Shift and select Restart in the Start menu.
 help.guide.safe.2|src|-|Select Troubleshoot, Advanced options, Startup Settings, Restart, then press 4 for Safe Mode.
-help.guide.safe.3|src|-|Open "amdgpu-wddm Control (recovery)" from the Start menu and select Repair.
+help.guide.safe.3|src|-|Open "Nagi Control App (recovery)" from the Start menu and select Repair.
 help.guide.safe.4|src|-|These steps are also on the release page, so you can read them on another device.
 help.start.text|src|-|Show the "Getting started" card on Home again.
 help.start.show|src|-|Show it again
@@ -579,7 +583,9 @@ help.report.contents|src|-|Contents
 help.report.save|src|-|Save the report
 help.about.title|src|-|About
 help.about.release|src|-|Driver release {0}
-help.about.text|src|-|An open-source driver for the ASRock BC-250. No account, no telemetry.
+help.about.text|src|-|Nagi (amdgpu-wddm) is an open-source driver for the ASRock BC-250. No account, no telemetry.
+help.about.name|src|-|Nagi stands for {0}.
+brand.expansion|src|-|Nagi's AMD Graphics Infrastructure
 
 # ---- recovery view (WU-068) ----
 recovery.title|src|-|Recovery
@@ -1179,3 +1185,48 @@ help.auto.collecting|src|-|The driver has not completed a confirmed start. Colle
 help.auto.saved|src|-|Support report saved: {0}. Common personal details were filtered. Review the file before sharing it. Nothing was sent.
 
 help.auto.failed|src|-|The automatic support report could not be saved. Open Help to try again.
+drv.verify.earlier-boot|src|-|The last full check failed before a restart. The installed driver is running now.
+status.verification-earlier-boot|src|-|The last full check was before a restart. The installed driver is running now.
+
+# ---- the sign-in notice, the one-click repair and the switch for the window after sign-in (owner, 2026-10-13) ----
+notice.guard.title|src|-|The graphics driver was switched off
+notice.guard.text|src|-|The graphics driver was switched off to keep this computer usable: its last starts did not finish their check.\nWindows is drawing the screen with its basic display now, so games do not run and everything is slower.\nYou can turn the graphics driver back on. Nothing else on this computer changes.
+notice.failed.title|src|-|The graphics driver did not start
+notice.failed.text|src|-|The graphics driver did not start, so Windows is drawing the screen with its basic display: games do not run and everything is slower.\nNagi Control App shows what happened and what to try next.
+notice.open-app|src|-|Open Nagi Control App
+notice.close|src|-|Close
+notice.working|src|-|Turning the graphics driver back on. This can take up to four minutes, and the screen can go dark for a moment.
+notice.working.seconds|src|-|{0} s
+notice.done|src|-|The graphics driver is running again.
+notice.action-failed|src|-|The graphics driver could not be started now. Restarting Windows is the next thing to try.
+notice.restart-needed|src|-|This computer is set to start the graphics driver again. Restart Windows to finish it.
+notice.not-needed|src|-|This repair is not needed any more. Open Nagi Control App to see how the graphics driver is now.
+notice.open-failed|src|-|Nagi Control App could not be opened from here. Open it from the Start menu.
+status.action.enable-driver|src|-|Turn the graphics driver back on...
+status.driver-refused|src|-|The graphics driver was switched off for safety, because its last starts did not finish their check. Windows uses its basic display, so games do not run.
+status.driver-refused.next|src|-|Turn the graphics driver back on. If it does not start, restart Windows.
+plan.title.enable-driver|src|-|Turn the graphics driver back on
+plan.line.enable-driver|src|-|The count of starts that were not checked goes back to zero, so the driver may start again.
+plan.line.enable-driver-confirm|src|-|The graphics device starts again and the new start is marked as working.
+plan.enable-driver.dark|src|-|The screen can go dark for a few seconds, and it can change its size once.
+plan.enable-driver.restart|src|-|If the graphics driver does not start, this app says so and offers to restart Windows.
+plan.refuse.driver-on|src|-|The graphics driver is running already, so there is nothing to turn back on.
+plan.refuse.not-guard|src|-|The graphics driver was not switched off for safety, so this does not help here. Open Help to find the next step.
+settings.start.title|src|-|After you sign in
+search.settings.start-window|src|-|Show the start check window after sign-in
+search.settings.start-window.terms|src|-|start|check|window|sign in|logon|blue|clock
+settings.start-window.cost|src|-|The window keeps the screen drawing for two minutes, which is what lets the driver finish the check of its start. Without it the check can stay unfinished, and the next start of Windows runs the graphics chip at its lower fixed speed. If the check keeps staying unfinished, the driver switches itself off after a few starts of Windows, and Windows then uses its basic display until you turn the driver back on.
+settings.start-window.notice|src|-|The warning about a graphics driver that was switched off always appears, whatever this box says.
+help.setting.start-window|src|-|After you sign in, a small window with a clock shows for two minutes in the top left corner. The changing clock keeps the screen drawing, and the driver needs that to finish the check of its start. Turn it off only if it is in your way: the check can then stay unfinished, the next start of Windows runs the graphics chip at its lower fixed speed, and if the check keeps staying unfinished the driver switches itself off after a few starts and Windows uses its basic display until you turn the driver back on. This box is yours alone and needs no administrator rights.
+search.settings.wallpaper|src|-|Nagi wallpaper
+search.settings.wallpaper.terms|src|-|wallpaper|background|desktop|picture|Nagi
+settings.wallpaper.note|src|-|After a checked installation, the installer sets the Nagi wallpaper as your desktop background once, unless you cleared its box. Your previous background is saved first. Here you can set the Nagi wallpaper again or bring back your previous background.
+settings.wallpaper.set|src|-|Set the Nagi wallpaper
+settings.wallpaper.restore|src|-|Restore my previous wallpaper
+settings.wallpaper.done|src|-|The Nagi wallpaper is your desktop background now.
+settings.wallpaper.failed|src|-|The wallpaper could not be set. Nothing else was changed. If this keeps happening, repair the installation.
+settings.wallpaper.restored|src|-|Your previous background is back.
+settings.wallpaper.restored-partial|src|-|Your previous background was a slideshow or Windows Spotlight. A picture comes back only where Windows still had it. To turn the slideshow or Spotlight on again, use Windows Settings, Personalization, Background.
+settings.wallpaper.restore-failed|src|-|Your previous background could not be brought back: its picture is no longer on this PC. Choose a background in Windows Settings, Personalization, Background.
+settings.wallpaper.nothing-saved|src|-|No previous background is saved for your account, so there is nothing to restore.
+help.setting.wallpaper|src|-|The installer sets the Nagi wallpaper once for each person after a checked installation, unless its box was cleared, and saves the background that person had first. "Set the Nagi wallpaper" sets the picture again. "Restore my previous wallpaper" brings back the saved background. A slideshow or Windows Spotlight comes back as its last picture only: turn it on again in Windows Settings, Personalization, Background. Both buttons change only your own background and need no administrator rights.

@@ -96,11 +96,12 @@ function Write-FileAtomic([string]$Path, [string]$Text) {
 # The boot (boot_id, boot_utc) comes from Get-BootIdentity in release-witness.ps1, the one place that defines it.
 
 # ---- the record of the newest install action ----------------------------------------------------------------------
-# state.json mutation_boot_id and mutation_utc (docs/gui/interfaces.md section 2): the boot and the start time of the
+# state.json mutation_boot_id, mutation_boot_elapsed_ms and mutation_utc (docs/gui/interfaces.md section 2): the boot and the start time of the
 # newest step of a real run that changes Windows, the driver, files or settings. A dry run, a plan, verify and
 # prepare-offline are not install actions. The first change of a run saves the state at once, before the change; later
 # changes move the time on in memory and reach state.json with the next save of the state (every phase saves it). A
-# running-release witness of the same boot that is older than mutation_utc no longer names what runs.
+# running-release witness of the same boot must have a strictly later monotonic stamp. UTC is display metadata;
+# a clock correction must not retain a witness from before the mutation.
 function Set-MutationRecord {
     param([switch]$Save)
     if ($script:DryRunMode -or -not $script:state) { return }
@@ -108,6 +109,7 @@ function Set-MutationRecord {
     $first = -not $script:EngineMutationSeen
     Set-StateValue $script:state 'mutation_boot_id' $boot.boot_id
     Set-StateValue $script:state 'mutation_utc' ([DateTime]::UtcNow.ToString('o'))
+    Set-StateValue $script:state 'mutation_boot_elapsed_ms' (Get-BootElapsedMilliseconds)
     if ($Save) {
         # The record is the boundary that voids an older witness: no record, no change. The throw reaches the step's
         # trap before Invoke-Change runs the action, so the run ends as failed with nothing changed.

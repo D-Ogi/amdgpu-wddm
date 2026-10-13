@@ -64,7 +64,18 @@ static class UnitTests
                 Check(hits.Count == 0, "G-NOINT: " + lang + " " + e.Id + " has no internals (" + string.Join(",", hits) + ")");
             }
         Check(NoInternals.Find("the KMD fence 0x1F failed, see install.ps1").Count == 4, "G-NOINT catches KMD, fence, a hex code and a script name");
-        Check(NoInternals.Find("amdgpu-wddm Control").Count == 0, "G-NOINT allows the product name");
+        Check(NoInternals.Find("amdgpu-wddm Control").Count == 0 && NoInternals.Find("Nagi Control App").Count == 0, "G-NOINT allows the product names");
+        // The Nagi naming (owner, 2026-10-13).
+        foreach (var lang in Strings.Languages)
+        {
+            Check(Strings.In(lang, "ui.window-title").StartsWith("Nagi Setup", StringComparison.Ordinal), "Nagi: the window title of " + lang + " starts with Nagi Setup");
+            Check(Strings.In(lang, "shortcuts.title").Contains("Nagi Control App") && Strings.In(lang, "result.verified.body").Contains("Nagi Control App"),
+                "Nagi: " + lang + " names the control app as its shortcuts are named");
+            Equal("Nagi's AMD Graphics Infrastructure", Strings.In(lang, "brand.expansion"), "Nagi: the meaning of the name is the same English phrase in " + lang);
+            Check(Strings.In(lang, SetupGuide.NameTipId).Contains("{0}"), "Nagi: the name tip of " + lang + " takes the phrase as its argument");
+            foreach (var t in Strings.Tables[lang].Entries.Values)
+                if (t.Text.Contains("amdgpu-wddm")) Check(false, "Nagi: " + lang + " " + t.Id + " still names amdgpu-wddm");
+        }
         var queue = Strings.ReviewQueue(Strings.Tables);
         Console.WriteLine("G-STR review queue: " + queue.Count + " translations not reviewed");
     }
@@ -135,6 +146,10 @@ static class UnitTests
         shRun.Apply(Ev(2, "decision", "\"action\":\"resume\",\"start_menu_shortcut\":true,\"desktop_shortcut\":false"));
         Check(shRun.Decision.StartMenuShortcut && !shRun.Decision.DesktopShortcut, "model: the decision carries the two shortcut answers of this run");
         Check(!r.CancelAvailable, "model: cancel withdrawn");
+        shRun.Apply(Ev(3, "pending-removals-cancelled", "\"count\":4"));
+        Equal(4, shRun.PendingRemovalsCancelled, "BD-146: the window records the cancelled removals");
+        shRun.Apply(Ev(4, "pending-removals-cancelled", "\"count\":-1"));
+        Equal(4, shRun.PendingRemovalsCancelled, "BD-146: an invalid count cannot erase the notice");
         Check(r.MayHaveChanged && r.InstallActionSeen && r.RealSteps == 1, "model: the install action and the real step count");
         Equal(3, r.Ignored, "model: other run, other schema and broken line ignored");
         Check(r.Problems.Count == 1, "model: a repeated sequence number is recorded");
@@ -155,6 +170,12 @@ static class UnitTests
         string problem;
         Check(EngineResult.Read(Result(Id, "verified", 0, "result.verified", false), Id, out problem) != null, "A2: a result of this run is believed");
         Check(EngineResult.Read(Result("stale", "verified", 0, "result.verified", false), Id, out problem) == null && problem.Contains("another run"), "A2: a stale result of another run is not");
+        Check(EngineResult.Read(Result(Id, "verified", 0, "result.verified", false,
+            ",\"started_utc\":\"2026-10-13T08:00:00Z\",\"ended_utc\":\"2026-10-13T01:00:00Z\""), Id, out problem) != null,
+            "BD-138 setup accepts its invocation after the clock moves back");
+        Check(EngineResult.Read(Result("stale", "verified", 0, "result.verified", false,
+            ",\"ended_utc\":\"2099-10-13T08:00:00Z\""), Id, out problem) == null,
+            "BD-138 future UTC cannot make another invocation current");
         Check(EngineResult.Read(Result(Id, "verified", 0, "result.verified", false, "", "amdgpu-wddm.engine-result/9"), Id, out problem) == null, "A2: an unknown result schema is not");
         Check(EngineResult.Read(null, Id, out problem) == null, "A2: no result file, no result");
         Check(EngineResult.Read("{\"schema\":\"" + EngineRun.ResultSchema + "\",\"invocation\":\"" + Id + "\"}", Id, out problem) == null, "A2: a result without an outcome is not");
@@ -259,6 +280,18 @@ static class UnitTests
         Check(text.Contains("Automatic graphics clock: off") && text.Contains("Graphics cores: 40") && text.Contains("processor (safe mode)") && text.Contains("witcher3.exe"), "settings: the named settings in plain words");
         Check(text.Contains("3 other driver settings, 1 of them new or changed"), "settings: the rest counted");
         Check(text.Contains("Direct3D 11 and 10.1 games and apps drawn by the graphics chip") && !text.Contains("gpu-default"), "settings: the D3D11 route of tester.11 in plain words (GPU, Windows' own apps on the processor)");
+        // BD-077: the graphics cores carry a driver closure of their own, and the window says what happened to
+        // them, not "switched off".
+        var cores = new SettingsPlan();
+        cores.Rows.Add(new SettingRow { Group = "parameters", Name = "CuMode", Decision = "driver-closed", Current = 24, Value = 40 });
+        var coresLine = SettingsView.Lines(cores)[0];
+        Equal("settings.decision.cores-driver-closed", coresLine.DecisionId, "settings: the cores have their own closure words");
+        Check(Strings.In("en", coresLine.TextId, coresLine.Args) == "Graphics cores: 24" &&
+            Strings.In("en", coresLine.DecisionId).Contains("the driver went back to this number itself"), "settings: the closed cores show the number the driver left");
+        cores.Rows[0].Decision = "reopened";
+        coresLine = SettingsView.Lines(cores)[0];
+        Equal("settings.decision.cores-reopened", coresLine.DecisionId, "settings: a repair of the cores says so");
+        Equal("Graphics cores: 40", Strings.In("en", coresLine.TextId, coresLine.Args), "settings: a repair shows the number of the release");
         var old = new SettingsPlan();
         old.Rows.Add(new SettingRow { Group = "app_router", Name = "Mode", Decision = "kept", Current = "allowlist", Value = "gpu-default" });
         Check(SettingsView.Lines(old)[0].TextId == "settings.d3d11.listed", "settings: a kept allowlist route says so");
@@ -361,6 +394,13 @@ static class UnitTests
         Equal(SetupCause.InstallStopped, SetupGuide.Pick(new[] { SetupCause.VerificationFailed, SetupCause.InstallStopped }), "guide: inside rank 1 the plan's order");
         Equal("07-hopeful", SetupGuide.Expression(SetupCause.PendingRestart), "guide: expression of a pending restart");
         foreach (SetupCause c in Enum.GetValues(typeof(SetupCause))) Check(Strings.Has(SetupGuide.TextId(c)), "guide: " + c + " has words");
+        // The Working screen's two tips take turns; every other cause keeps its one tip whatever the turn.
+        Equal("guide.work-in-progress", SetupGuide.TipId(SetupCause.WorkInProgress, 0), "guide: the first turn of the Working screen is the working tip");
+        Equal(SetupGuide.NameTipId, SetupGuide.TipId(SetupCause.WorkInProgress, 1), "guide: the second turn is the name of Nagi");
+        Equal("guide.work-in-progress", SetupGuide.TipId(SetupCause.WorkInProgress, 2), "guide: and then the working tip again");
+        foreach (SetupCause c in Enum.GetValues(typeof(SetupCause)))
+            if (c != SetupCause.WorkInProgress) Equal(SetupGuide.TextId(c), SetupGuide.TipId(c, 1), "guide: " + c + " has one tip");
+        Check(Strings.Has(SetupGuide.NameTipId) && SetupGuide.TipSeconds == 15, "guide: the name tip has words and turns every 15 s");
         Check(Strings.In("en", "checking.body").Contains("up to a minute") && Strings.In("en", "guide.checking").Contains("up to a minute"), "guide: the Checking page and its tip give the same time");
         // The art the build embeds: every expression a cause can ask for, and nothing else. build.ps1 reads the line
         // below and embeds exactly these, so an expression that a new cause introduces is embedded by that alone.
@@ -508,6 +548,27 @@ static class UnitTests
         Check(SetupArgs.Parse(new[] { "--start-menu-shortcut", "--desktop-shortcut" }).StartMenuShortcut == true && SetupArgs.Parse(new[] { "--start-menu-shortcut", "--desktop-shortcut" }).DesktopShortcut == true,
             "shortcuts: the positive switches state the answer explicitly");
         Check(SetupArgs.Parse(new[] { "--no-desktop-shortcut" }).Error == null, "shortcuts: the switch is accepted by the welcome mode");
+        // The Nagi wallpaper (owner, 2026-10-13): a third box of the same card, on by default, with the same
+        // "not stated yet" rule as the two shortcuts. The engine only records the answer for the control application.
+        Check(InstallFlow.PlanOptionIds.Contains("shortcuts.wallpaper") && InstallFlow.PlanOptionsOnByDefault.Contains("shortcuts.wallpaper"),
+            "wallpaper: the box is a plan option, on by default");
+        Check(InstallFlow.WallpaperArguments(null).Length == 0, "wallpaper: an answer nobody stated passes no switch");
+        Check(InstallFlow.WallpaperArguments(true).SequenceEqual(new[] { "-Wallpaper" }), "wallpaper: the box on states -Wallpaper");
+        Check(InstallFlow.WallpaperArguments(false).SequenceEqual(new[] { "-NoWallpaper" }), "wallpaper: the box off states -NoWallpaper");
+        Check(!SetupArgs.Parse(new string[0]).Wallpaper.HasValue, "wallpaper: a window started with no argument states no answer");
+        Check(SetupArgs.Parse(new[] { "--no-wallpaper" }).Wallpaper == false && SetupArgs.Parse(new[] { "--no-wallpaper" }).Error == null, "wallpaper: --no-wallpaper clears the box");
+        Check(SetupArgs.Parse(new[] { "--wallpaper" }).Wallpaper == true, "wallpaper: --wallpaper states the default");
+        Check(InstallFlow.WallpaperArguments(SetupArgs.Parse(new[] { "--continue" }).Wallpaper).Length == 0,
+            "wallpaper: the run that continues after a restart states no answer, so a cleared box stays cleared");
+        var wpOn = new EngineRun(Id);
+        wpOn.Apply(Ev(1, "decision", "\"action\":\"install\""));
+        var wpOff = new EngineRun(Id);
+        wpOff.Apply(Ev(1, "decision", "\"action\":\"install\",\"wallpaper\":false"));
+        Check(wpOn.Decision != null && wpOn.Decision.Wallpaper && wpOff.Decision != null && !wpOff.Decision.Wallpaper,
+            "wallpaper: the decision event reports the answer, on where it reports none");
+        foreach (var lang in Strings.Languages)
+            foreach (var id in new[] { "shortcuts.wallpaper", "shortcuts.wallpaper.note" })
+                Check(Strings.In(lang, id).Trim().Length > 0 && Strings.In(lang, id).Contains("Nagi"), "wallpaper: " + lang + " " + id + " names Nagi");
         // The window keeps the two answers as "not stated yet" until a switch or the plan screen states one: a plain
         // bool would be true again in the run that continues the install, which would put back a shortcut that was
         // turned off.
@@ -516,6 +577,9 @@ static class UnitTests
         Check(Regex.IsMatch(formSource, @"_startMenuShortcut\s*\?\?\s*\(d == null \|\| d\.StartMenuShortcut\)") &&
               Regex.IsMatch(formSource, @"_desktopShortcut\s*\?\?\s*\(d == null \|\| d\.DesktopShortcut\)"),
             "shortcuts: the boxes open on the answer the engine reports, both on where it reports none");
+        Check(Regex.IsMatch(formSource, @"bool\?\s+_wallpaper;") && Regex.IsMatch(formSource, @"_wallpaper\s*\?\?\s*\(d == null \|\| d\.Wallpaper\)") &&
+              formSource.Contains("InstallFlow.WallpaperArguments(_wallpaper)"),
+            "wallpaper: the box holds \"not stated yet\", opens on the engine's answer and reaches the engine");
         // The words of the removed controls are gone from every table, so neither can come back by itself.
         foreach (var id in InstallFlow.RemovedConsentIds)
             Check(!Strings.Has(id), "no confirmations: " + id + " is gone from the string tables");

@@ -1,5 +1,7 @@
-# Polish strings of amdgpu-wddm Setup. Every line was read by a Polish speaker (status rev, 2026-10-12)
-# against one terminology: one English term keeps one Polish word in both apps. Format: src/Strings.cs.
+# Polish strings of amdgpu-wddm Setup. Every line with status rev was read by a Polish speaker (2026-10-12)
+install.pending-removals-cancelled|mt|4a977944|Instalator anulował usunięcia zaplanowane podczas poprzedniej deinstalacji. Pliki tej instalacji pozostaną po ponownym uruchomieniu Windows.
+# against one terminology: one English term keeps one Polish word in both apps. A line added after that
+# reading starts at status mt, so the build's review queue asks for it. Format: src/Strings.cs.
 
 # ---- frame ----
 ui.close|rev|7d9eb7ac|Zamknij
@@ -9,6 +11,7 @@ ui.choose-folder|rev|826c7dcd|Wybierz folder...
 ui.language|rev|a6567634|Język: {0}
 ui.minimise|rev|20f082e9|Minimalizuj
 ui.close-window|rev|8b9de9c0|Zamknij okno
+ui.window-title|mt|229174f8|Nagi Setup - sterownik grafiki dla BC-250
 ui.unexpected|rev|88790f84|Instalator zatrzymał się, bo coś poszło nie tak w jego oknie. Nic więcej nie zmienił. Uruchom go ponownie.
 rail.welcome|rev|0e2226b5|Start
 rail.check|rev|9d60841e|Sprawdzenie
@@ -26,9 +29,9 @@ payload.already-running|rev|45dca71f|Instalator już działa na tym komputerze. 
 payload.folder|rev|78be926d|Instalator nie może przygotować folderu, w którym trzyma pliki instalacyjne: folder należy do innego konta na tym komputerze albo nie jest zwykłym folderem. Nic nie zostało zmienione. Usuń go, a potem uruchom ten plik ponownie. Jego ścieżkę znajdziesz w pliku diagnostycznym.
 
 # ---- welcome ----
-welcome.title|rev|f6dd913f|Instalacja sterownika grafiki dla ASRock BC-250
-welcome.body|rev|e4fa6ee2|Instalator instaluje sterownik grafiki i amdgpu-wddm Control. Najpierw sprawdza ten komputer i pokazuje wszystkie zmiany, zanim cokolwiek na nim zmieni.
-welcome.repair.title|rev|a29b2205|Naprawa sterownika grafiki
+welcome.title|mt|1d5a1bfb|Instalacja Nagi, sterownika grafiki dla ASRock BC-250
+welcome.body|mt|37fc056a|Instalator instaluje sterownik grafiki i Nagi Control App. Najpierw sprawdza ten komputer i pokazuje wszystkie zmiany, zanim cokolwiek na nim zmieni.
+welcome.repair.title|mt|ccc0cf87|Naprawa sterownika grafiki Nagi
 welcome.repair.body|rev|25153ac9|Instalator instaluje tę samą wersję ponownie, z kopii przechowywanej na tym komputerze. Twoje ustawienia zostają zachowane.
 welcome.dry-run|rev|42af2b21|Przebieg próbny: instalator przechodzi przez wszystkie kroki, ale niczego nie zmienia.
 welcome.version|rev|9699394c|Wersja {0}
@@ -42,7 +45,7 @@ welcome.prepared.choose|rev|40e8823f|Wybierz przygotowany folder.
 welcome.prepared.ok|rev|6203a8e5|Przygotowany folder z wersją {0}. Internet nie jest potrzebny.
 welcome.prepare-link|rev|5868e4fc|Przygotuj folder dla komputera bez internetu...
 welcome.check|rev|7c97d062|Sprawdź ten komputer
-welcome.promise.driver|rev|82ad81d1|Sterownik grafiki i amdgpu-wddm Control instalowane razem.
+welcome.promise.driver|mt|d8eb7961|Sterownik grafiki i Nagi Control App instalowane razem.
 welcome.promise.shown|rev|0f886d7e|Instalator pokazuje wszystkie zmiany, zanim wprowadzi je na tym komputerze.
 welcome.promise.offline|rev|bb2a3e49|Z przygotowanego folderu zainstalujesz to samo wydanie bez internetu.
 folder.missing|rev|219fdbbd|Ten folder nie istnieje.
@@ -98,7 +101,7 @@ check.firmware.folder-bad|rev|e11eec4f|W folderze brakuje części plików firmw
 check.firmware.no-list|rev|de36633a|Pliki instalatora nie mówią, jaki firmware GPU jest potrzebny. Pobierz wydanie ponownie.
 check.lab-install.present|rev|c4ebe135|Na tym komputerze jest deweloperska instalacja sterownika. Instalator jej nie zmienia.
 check.lab-install.forced|rev|711bb1d9|Na tym komputerze jest deweloperska instalacja sterownika; instalator kontynuuje na Twoje żądanie.
-check.state.ok|rev|63bdb478|Znaleziono wcześniejszą instalację amdgpu-wddm.
+check.state.ok|mt|52525a38|Znaleziono wcześniejszą instalację Nagi.
 check.existing.no-state|rev|a46215ab|Sterownik jest zainstalowany, ale instalator nie ma o tym żadnych zapisów. Najpierw go odinstaluj, potem uruchom instalator ponownie.
 check.prepare.destination-inside|rev|08b96974|Folder jest wewnątrz plików instalatora. Wybierz folder w innym miejscu.
 check.prepare.destination-file|rev|3d875a78|Taką nazwę ma już plik. Wybierz folder.
@@ -128,10 +131,12 @@ plan.change.test-mode.on|rev|cf315297|Windows już działa w trybie testowym, wi
 plan.change.bitlocker|rev|f43553fa|Ochrona BitLocker zostaje wstrzymana na czas ponownych uruchomień tej instalacji i potem włącza się sama, więc Windows nie poprosi o klucz odzyskiwania.
 plan.change.bitlocker.unknown|rev|67f2277e|Instalator nie mógł odczytać stanu funkcji BitLocker na tym komputerze. Mimo to kontynuuje pracę: miej klucz odzyskiwania pod ręką, jeśli Windows poprosi o niego po ponownym uruchomieniu.
 plan.change.vcruntime|rev|65d68876|Najpierw instalowane jest środowisko uruchomieniowe Microsoft Visual C++ 2015-2022 (x64), którego potrzebują programy sterownika.
-shortcuts.title|rev|3af62f49|Gdzie znaleźć amdgpu-wddm Control
+shortcuts.title|mt|02f4d7de|Gdzie znaleźć Nagi Control App
 shortcuts.start-menu|rev|f7bdc16b|W menu Start
 shortcuts.desktop|rev|b1e0eb2c|Na pulpicie
 shortcuts.note|rev|dc373b0d|Menu Start dostaje też wpis do odzyskiwania. Wyłącz opcję, jeśli jej nie chcesz. Na instalację sterownika to nie wpływa.
+shortcuts.wallpaper|mt|ce6e26e6|Ustaw tapetę Nagi
+shortcuts.wallpaper.note|mt|14a12464|Tapeta jest ustawiana raz dla każdej osoby, która się zaloguje, po sprawdzeniu sterownika. Nagi Control App może przywrócić poprzednie tło.
 plan.firmware.download|rev|7051aa7f|Firmware GPU zostanie pobrany z oficjalnego archiwum firmware Linuksa i sprawdzony.
 plan.firmware.folder|rev|3afc555b|Firmware GPU pochodzi z wybranego folderu i zostanie sprawdzony.
 plan.firmware.package-folder|rev|576cf803|Firmware GPU pochodzi z przygotowanego folderu. Internet nie jest potrzebny.
@@ -165,6 +170,8 @@ settings.decision.kept|rev|b4865f1f|Twoja wartość zostaje zachowana
 settings.decision.command|rev|898239d8|zgodnie z Twoim wyborem dla tej instalacji
 settings.decision.reopened|rev|4342e37e|przywrócone przez tę naprawę (sterownik je wyłączył)
 settings.decision.driver-closed|rev|cff55d7f|wyłączone przez sterownik. Naprawa przywróci to ustawienie
+settings.decision.cores-driver-closed|mt|6f8a9a7c|sterownik sam wrócił do tej liczby. Naprawa przywróci liczbę z wydania
+settings.decision.cores-reopened|mt|282a0682|przywrócone przez tę naprawę (sterownik wcześniej zmniejszył liczbę rdzeni)
 
 # ---- consents ----
 
@@ -236,9 +243,9 @@ result.verify-before-restart.title|rev|93aab4b5|Uruchom ponownie system Windows,
 result.verify-before-restart.body|rev|ff335b2d|Sterownik zostanie sprawdzony po ponownym uruchomieniu systemu Windows.
 result.install-unfinished.title|rev|905e1ac5|Instalacja nie jest jeszcze zakończona
 result.install-unfinished.body|rev|0e894d61|Uruchom instalator ponownie, aby dokończyć instalację. Potem sterownik zostanie sprawdzony.
-result.verified.title|rev|9756a569|Sterownik jest zainstalowany i działa
-result.verified.body|rev|5542d882|Wszystko gotowe. amdgpu-wddm Control jest w menu Start.
-result.verified-with-warnings.title|rev|c50059a2|Sterownik jest zainstalowany i działa, z uwagami
+result.verified.title|mt|243117f3|Sterownik Nagi jest zainstalowany i działa
+result.verified.body|mt|10c96356|Wszystko gotowe. Nagi Control App jest w menu Start.
+result.verified-with-warnings.title|mt|b0c2d18c|Sterownik Nagi jest zainstalowany i działa, z uwagami
 result.verified-with-warnings.body|rev|687cef5d|Wszystko gotowe. Niektóre sprawdzenia miały uwagi; szczegóły są w pliku diagnostycznym.
 result.preflight-refused.title|rev|6a7ab8d2|Instalator nie może teraz instalować na tym komputerze
 result.preflight-refused.body|rev|435efe20|Te sprawdzenia nie zostały zaliczone. Napraw wskazane problemy, a potem uruchom instalator ponownie.
@@ -273,7 +280,7 @@ result.offline-prepared.body|rev|2a59d535|Skopiuj folder na komputer bez interne
 result.failed-checks|rev|ecefee18|Sprawdzenia, które nie zostały zaliczone
 result.nothing-changed|rev|54ca5460|Nic nie zostało zmienione.
 result.already-installed|rev|c90b9352|Ten komputer ma już wersję {0} sterownika.
-result.changes-made|rev|8e3dd6e8|Instalator wprowadził część zmian, zanim się zatrzymał, i nie wycofuje ich. Uruchom go ponownie, aby dokończyć, albo użyj funkcji Napraw w aplikacji amdgpu-wddm Control.
+result.changes-made|mt|b7ee935f|Instalator wprowadził część zmian, zanim się zatrzymał, i nie wycofuje ich. Uruchom go ponownie, aby dokończyć, albo użyj funkcji Napraw w aplikacji Nagi Control App.
 result.changes-unknown|rev|88bf7384|Instalator nie potrafi ustalić, czy cokolwiek zostało zmienione. Uruchom go ponownie; podejmie pracę tam, gdzie to możliwe.
 result.support|rev|3e9e40b3|Plik diagnostyczny zawiera szczegóły potrzebne do zgłoszenia problemu. Nic nie jest wysyłane automatycznie.
 result.support.diagnostics|rev|a739d1a9|Szczegóły układu graficznego, który się nie uruchomił, zostały już zebrane. Są w tym pliku.
@@ -300,15 +307,17 @@ guide.title|rev|5506739a|Wskazówka Nagi
 guide.title.plain|rev|a4245a3c|Wskazówka
 guide.welcome|rev|65339917|Nic się nie zmieni, dopóki nie naciśniesz Zainstaluj. Instalator najpierw pokazuje każdą zmianę.
 guide.prepare|rev|9ee5d83f|Przygotowany folder działa na każdym BC-250 bez internetu, także przy późniejszej naprawie.
-guide.page-tip|rev|70da7524|Ustawienia zmienione w amdgpu-wddm Control zostają zachowane przy aktualizacji.
+guide.page-tip|mt|267a0cc9|Ustawienia zmienione w Nagi Control App zostają zachowane przy aktualizacji.
 guide.work-in-progress|rev|f3e8ef82|Pracuję nad tym. To może potrwać kilka minut.
 guide.checking|rev|687b400d|Sprawdzam ten komputer. To może potrwać do minuty.
 guide.pending-restart|rev|d31250df|Twoje zmiany są zapisane. Instalator wznowi pracę po następnym ponownym uruchomieniu systemu Windows.
 guide.install-stopped|rev|47319a31|Instalator nie dokończył pracy. Na tej stronie jest napisane, co zrobić dalej.
 guide.verification-failed|rev|1abe91c5|Sterownik nie przeszedł sprawdzeń. Naprawa zwykle pomaga.
 guide.upgrade-done|rev|7ed192a1|Gotowe! Sterownik jest zainstalowany i sprawdzony. Miłej zabawy!
+guide.name|mt|58a9149a|Nagi to skrót od {0}. Tak, N to znowu Nagi.
+brand.expansion|mt-safe|8b8af7be|Nagi's AMD Graphics Infrastructure
 # Optional Windows tuning
 tuning.title|rev|a1f6198e|Optymalizacja systemu Windows
 tuning.opt-in|rev|d229d14d|Zastosuj opcjonalną optymalizację systemu Windows
 tuning.details|rev|36ae26fb|Zastosuj zalecane ustawienia, które ograniczą aktywność systemu Windows w tle.
-tuning.restore|rev|387d1d61|Poszczególne ustawienia przejrzysz, a zapisane wartości przywrócisz w aplikacji amdgpu-wddm Control. Odinstalowanie proponuje też przywrócenie ustawień obejmujących cały komputer.
+tuning.restore|mt|3fb261c1|Poszczególne ustawienia przejrzysz, a zapisane wartości przywrócisz w aplikacji Nagi Control App. Odinstalowanie proponuje też przywrócenie ustawień obejmujących cały komputer.

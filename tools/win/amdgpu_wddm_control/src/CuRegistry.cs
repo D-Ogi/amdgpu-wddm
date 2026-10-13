@@ -49,17 +49,19 @@ namespace AmdgpuWddmControl
             return BitConverter.ToUInt32(data, 0);
         }
 
-        // An absent value counts as removed; every other status is an error.
+        // An absent value counts as removed; every other status is an error. CuMode itself is never removed: the
+        // stock choice is written as 24, so that the release installer reads it as a choice and not as a key it
+        // never configured (BD-077).
         public void Delete(string name)
         {
-            if (name != "CuMode" && name != "CuDisableWgp" && name != "CuModeConfirmed") throw new InvalidOperationException(name + " is not a value the setter removes");
+            if (name != "CuDisableWgp" && name != "CuModeConfirmed" && name != "CuModeClosedReason") throw new InvalidOperationException(name + " is not a value the setter removes");
             int s = _api.Delete(name);
             if (s != Success && s != FileNotFound) throw new CuRegistryException("delete", name, s);
         }
 
         public void SetDword(string name, uint value)
         {
-            if (name != "CuMode" || value != CuMode.Full) throw new InvalidOperationException("the setter writes only CuMode = 40");
+            if (name != "CuMode" || (value != CuMode.Full && value != CuMode.Stock)) throw new InvalidOperationException("the setter writes only CuMode = 40 or CuMode = 24");
             int s = _api.SetDword(name, value);
             if (s != Success) throw new CuRegistryException("set", name, s);
         }

@@ -85,7 +85,8 @@ namespace AmdgpuWddmControl
         public CuStored StoredCu()
         {
             if (CuBadValues != null && CuBadValues.Count > 0) return new CuStored { Unreadable = true };
-            return new CuStored { Mode = P("CuMode"), Disable = P("CuDisableWgp"), Confirmed = P("CuModeConfirmed"), Pending = P("CuModePending"), NotDurable = CuNotDurable };
+            return new CuStored { Mode = P("CuMode"), Disable = P("CuDisableWgp"), Confirmed = P("CuModeConfirmed"), Pending = P("CuModePending"),
+                Closed = P("CuModeClosedReason"), NotDurable = CuNotDurable };
         }
 
         public uint? P(string name)
@@ -139,6 +140,10 @@ namespace AmdgpuWddmControl
         public readonly List<RegWrite> Writes = new List<RegWrite>();
         public readonly List<string> Notes = new List<string>();
         public bool ConfirmStart, OfferRestart, RestartCompositor, Undoable = true;
+        // enable-driver: clear the driver's count of unconfirmed starts and start the graphics device again
+        // (RecoveryActions.EnableDriver). It writes no value of Writes, because the count is outside the allow-list
+        // of the actions and of the undo on purpose (StartNotice.cs, GuardReset).
+        public bool EnableDriver;
         public string UndoOf;                  // undo: the backup file it restores
         // The CU setter's steps (section 7 S1-S6), run after Writes, never restored; CuConfirm: the CU CONFIRM escape.
         public CuSetterPlan Cu;
@@ -198,6 +203,12 @@ namespace AmdgpuWddmControl
             }
             if (CuConfirm) w.AppendLine("  confirm the 40-core start (CU CONFIRM with the Generation of a fresh READ), then READ again");
             if (ConfirmStart) w.AppendLine("  confirm this driver start (start-health CONFIRM with this start's generation and epoch)");
+            if (EnableDriver)
+            {
+                w.AppendLine(@"  set HKLM\" + Recovery.ParametersPath + " " + GuardReset.ValueName + " = 0 (DWord), flushed and read back");
+                w.AppendLine("  then a kernel restart of the graphics device, a bounded wait for the device and the driver,");
+                w.AppendLine("  then the start-health CONFIRM of the new start, and the count to 0 again if it stays unconfirmed");
+            }
             if (RestartCompositor) w.AppendLine("  stop DWM in the active session; Windows starts a new one (operator escape)");
             foreach (var n in Notes) w.AppendLine("note: " + n);
             w.AppendLine("undo: " + (Undoable ? "yes (Undo last action)" : "no"));
@@ -339,6 +350,10 @@ namespace AmdgpuWddmControl
         public const string ParametersPath = DpmSettings.RegistryPath;
         public const string RouterPath = KmdReply.DesktopRouterPath;
         public const uint MaxUnconfirmedStarts = 2;         // BC250_MAX_UNCONFIRMED_STARTS, driver/kmd/bc250kmd.h
+        // StageGuardRefused, enum _BC250_STAGE of driver/kmd/bc250kmd.h: the start the driver's own guard refused
+        // (guard.c GuardCheckAndCountStart, STATUS_DEVICE_CONFIGURATION_ERROR). Windows uses Microsoft Basic Display
+        // from there, so this is the one stage the sign-in notice and the Home banner act on.
+        public const uint StageGuardRefused = 90;
         // start-confirm-core.ps1: $StartConfirmMinReadyMs, $StartConfirmFreshMs, Test-StartConfirmEligible. The unit
         // tests compare these with that file when the build is given it.
         public const ulong ConfirmMinReadyMs = 60000, ConfirmFreshMs = 5000;
@@ -352,11 +367,21 @@ namespace AmdgpuWddmControl
         public static readonly string[] RouterNames = { "DwmForceCpu" };
         // Defaults the reset takes from manifest.json (the rest of the release's table is not the app's to touch).
         public static readonly string[] DefaultParameterNames = { "EnableGpuPresentBlit", "EnableCddDwmInterop", "DpmMode", "DpmMaxMHz" };
+        // Defaults of the same table that the reset applies through a setter of its own instead of a plain write
+        // (BD-077): the graphics cores go through the CU setter, which also clears an old confirmation and mask.
+        // CpuTune goes with the tuning page's standard steps (TunerPlan.StandardSteps), which write it only when
+        // the stored value differs. They are release defaults all the same, so the note about the settings
+        // left to the installer leaves them out, and a release that names none of them keeps the old behaviour of
+        // the action.
+        public static readonly string[] SetterParameterNames = { "CuMode", "CpuTune" };
 
         // Not offered in the window, refused without --accept-bd060: for a desktop that does not respond.
         public const string OperatorEscape = "restart-compositor";
 
         public static readonly string[] Actions = { "reopen-gpu-path", "desktop-gpu", "desktop-cpu", "confirm-start", "enable-dpm", "set-clocks", "reset-defaults", "undo",
+            // The one click back from Microsoft Basic Display after the driver's guard refused a start: the count of
+            // unconfirmed starts to zero, then the graphics device started again (RecoveryActions.EnableDriver).
+            "enable-driver",
             "cu-mode", "cu-confirm", "game-profile", "game-undo", "game-redo",
             // The tuning page. Only cpu-enable and cpu-disable write a value; the other ten send one escape each.
             "tune-trial", "tune-keep", "tune-stop", "tune-reset", "cpu-enable", "cpu-disable", "cpu-readback",
@@ -377,12 +402,13 @@ namespace AmdgpuWddmControl
             return GraphicsSettings.Allowed(path, name);
         }
 
-        // The CU setter's set only (G-PLAN): CuMode written as 40 or removed, CuDisableWgp and CuModeConfirmed removed.
+        // The CU setter's set only (G-PLAN): CuMode written as 40 or as 24, and CuDisableWgp, CuModeConfirmed and
+        // CuModeClosedReason removed. CuMode is never removed: the stock choice is written out (BD-077).
         public static bool CuAllowed(RegWrite w)
         {
             if (!string.Equals(w.Path, ParametersPath, StringComparison.OrdinalIgnoreCase)) return false;
-            if (w.Name == "CuMode") return w.Delete || (w.Kind == "DWord" && w.Number == CuMode.Full);
-            return (w.Name == "CuDisableWgp" || w.Name == "CuModeConfirmed") && w.Delete;
+            if (w.Name == "CuMode") return !w.Delete && w.Kind == "DWord" && (w.Number == CuMode.Full || w.Number == CuMode.Stock);
+            return (w.Name == "CuDisableWgp" || w.Name == "CuModeConfirmed" || w.Name == "CuModeClosedReason") && w.Delete;
         }
 
         // A game's Experiment value (WU-015, WU-020a): HKLM\SOFTWARE\amdgpu-wddm\D3D12\Applications\<image> only.
@@ -431,6 +457,20 @@ namespace AmdgpuWddmControl
             if (s == null) return false;
             if (Confirmed(s.Health)) return true;
             return s.DriverRunning && s.P("UnconfirmedStarts") == 0u && s.P("DpmPending") == null;
+        }
+
+        // The driver's own guard refused this start, so Windows draws the screen with Microsoft Basic Display: the
+        // driver gives no answer and either the count of unconfirmed starts has reached the limit or the last stage
+        // the driver recorded is the refusal itself. One rule for the sign-in notice (StartNotice.Decide), the Home
+        // banner and the support view, so the three never disagree about the same machine.
+        public static bool GuardRefused(RecoverySnapshot s)
+        {
+            if (s == null || s.ReadFailed || !s.DriverInstalled) return false;
+            return StartNotice.Decide(new StartReading
+            {
+                Read = true, Installed = true, Running = s.DriverRunning,
+                UnconfirmedStarts = s.P("UnconfirmedStarts"), LastStage = s.P("LastStage"), DriverError = s.DriverError,
+            }) == StartNoticeCase.Guard;
         }
 
         // Why a reading is not eligible; null when it is. requireFresh false: the window's check, where the last
@@ -849,9 +889,13 @@ namespace AmdgpuWddmControl
             string guard = "Unconfirmed starts: " + starts + " of " + MaxUnconfirmedStarts + ". Last driver step: " + StageText(stage) + ".";
             if (!s.DriverRunning)
             {
-                if (starts >= MaxUnconfirmedStarts || stage == 90)
+                if (GuardRefused(s))
+                    // The way back is this app's own action now (enable-driver): the count to 0 and the device
+                    // started again, without a restart of Windows and without the installer. Up to this release
+                    // the only advice here was to run the release installer again, which a person on Microsoft
+                    // Basic Display has to find and download first.
                     add("Driver start", "The driver refused to start: " + starts + " starts in a row were not confirmed, so Windows uses Microsoft Basic Display. " + guard +
-                        " Create a bug report, then run the release installer again: it resets the counter.", "warn", null, null);
+                        " Create a bug report first if the developers should see why, then \"Turn the graphics driver back on\" in Support: actions below.", "warn", "enable-driver", "Turn the graphics driver back on");
                 else
                     add("Driver start", "The driver is not running (" + (s.DriverError ?? "no answer") + "). " + guard, "warn", null, null);
             }
@@ -1093,6 +1137,37 @@ namespace AmdgpuWddmControl
                     p.Notes.Add("A confirmation cannot be undone: it only clears the driver's own counter.");
                     break;
 
+                case "enable-driver":
+                    // The way back from Microsoft Basic Display without a restart of Windows: the count of starts
+                    // that nothing confirmed goes to zero (so the guard lets the next start through), then the
+                    // helper starts the graphics device again and confirms the start it gets. Offered only for the
+                    // state it repairs: with the driver running there is nothing to turn on, and a start that
+                    // failed for another reason is not a refusal of the guard, so clearing the count would hide
+                    // the real reason instead of fixing it.
+                    p.Title = "Turn the graphics driver back on";
+                    p.Change = "Sets the count of unconfirmed starts to 0 and starts the graphics device again, without a restart of Windows.";
+                    p.Effect = "at once";
+                    p.Undoable = false;
+                    if (s.DriverRunning)
+                    {
+                        p.PlainRefusal = Strings.T("plan.refuse.driver-on");
+                        return Refuse(p, "The graphics driver is running already.");
+                    }
+                    if (!GuardRefused(s))
+                    {
+                        p.PlainRefusal = Strings.T("plan.refuse.not-guard");
+                        return Refuse(p, "No start was refused by the driver's own guard (unconfirmed starts " + (s.P("UnconfirmedStarts") ?? 0) +
+                            " of " + MaxUnconfirmedStarts + ", last step " + StageText(s.P("LastStage") ?? 0) + "), so this action would change nothing that is wrong.");
+                    }
+                    p.EnableDriver = true;
+                    p.Preview.Add(Strings.T("plan.line.enable-driver"));
+                    p.Preview.Add(Strings.T("plan.line.enable-driver-confirm"));
+                    p.Notes.Add("The screen can go dark for a few seconds while the graphics device starts, and it can change its size once.");
+                    p.PlainNotes.Add(Strings.T("plan.enable-driver.dark"));
+                    p.Notes.Add("If the device does not start, the helper says so and the window offers a restart of Windows; the count stays at 0 either way.");
+                    p.PlainNotes.Add(Strings.T("plan.enable-driver.restart"));
+                    break;
+
                 case "enable-dpm":
                 case "set-clocks":
                     // set-clocks: the Performance page's two boxes, mode 1 or null (unchecked: removed), ceiling a
@@ -1139,19 +1214,40 @@ namespace AmdgpuWddmControl
                     if (s.DefaultGraphicsDrivers != null && s.DefaultGraphicsDrivers.TryGetValue(TdrSetting.ValueName, out tdrDefault) &&
                         tdrDefault >= 0 && tdrDefault <= uint.MaxValue && TdrSetting.IsValid((uint)tdrDefault) && s.TdrError == null)
                         p.Writes.AddRange(TdrSetting.PlanWrites(s.Tdr(), (uint)tdrDefault));
-                    int others = s.DefaultParameters.Keys.Count(k => !DefaultParameterNames.Contains(k));
+                    int others = s.DefaultParameters.Keys.Count(k => !DefaultParameterNames.Contains(k) && !SetterParameterNames.Contains(k));
                     if (others > 0) p.Notes.Add("The other " + others + " driver settings of the release are left to the installer: run it again to reset them.");
                     // The tuning page's settings are not in manifest.json, because the driver stores them itself
                     // (DpmCurve*, CpuMaxMHz, CpuUvSteps, CpuTempC, CoreMask). WU-042 asks for one control that puts
-                    // the standard settings back, so this action carries those steps as well.
-                    var left = TunerPlan.StandardSteps(s, p);
+                    // the standard settings back, so this action carries those steps as well. CpuTune, the switch of
+                    // the processor surface, is in manifest.json (1 from 0.7.216): the steps put it back to that
+                    // number, not off, and a number other than 0 or 1 refuses the action, as the other
+                    // defaults out of range do. A release that names none keeps the old step, which removes it.
+                    long cpuTuneDefault;
+                    bool cpuTuneNamed = s.DefaultParameters.TryGetValue("CpuTune", out cpuTuneDefault);
+                    if (cpuTuneNamed && cpuTuneDefault != 0 && cpuTuneDefault != 1)
+                        return Refuse(p, "The release default CpuTune = " + cpuTuneDefault + " is out of range.");
+                    var left = TunerPlan.StandardSteps(s, p, cpuTuneNamed ? (uint?)cpuTuneDefault : null);
                     if (left != null) p.Notes.Add(left);
                     left = FanPlan.StandardSteps(s, p);
                     if (left != null) p.Notes.Add(left);
-                    // The CU part goes through the same setter as "Standard (24)" (WU-042, WU-055).
-                    var cu = CuMode.Plan(s.StoredCu(), CuMode.Stock);
-                    if (!cu.Refused) { p.Cu = cu; p.Preview.AddRange(cu.Preview); }
-                    else if (s.StoredCu().Unreadable) p.Notes.Add("The graphics-core setting cannot be read and is left as it is.");
+                    // The CU part goes through the same setter as the Graphics page (WU-042, WU-055), and it sets
+                    // the release default of the manifest, not the firmware's 24 (BD-077): with 40 as the default,
+                    // a reset to "Standard (24)" would take the cores away that an install gives. A release that
+                    // names no CuMode gets 24, which is what the driver runs when the value is absent.
+                    long cuDefault;
+                    bool cuNamed = s.DefaultParameters.TryGetValue("CuMode", out cuDefault);
+                    if (!cuNamed) cuDefault = CuMode.Stock;
+                    else if (cuDefault != CuMode.Stock && cuDefault != CuMode.Full)
+                        return Refuse(p, "The release default CuMode = " + cuDefault + " is out of range.");
+                    var storedCu = s.StoredCu();
+                    var cu = CuMode.Plan(storedCu, (uint)cuDefault);
+                    // The setter writes the stock choice out as CuMode = 24 (BD-077). Under a release that names no
+                    // number, an explicit 24 is not a default of that release: a key with no number is then left
+                    // without one, and the setter runs only for the work that remains (a stored number to change, a
+                    // leftover confirmation or mask, the driver's own record).
+                    bool writesStockOnly = !cuNamed && storedCu.Mode == null && cu.Steps.Where(x => x.Changes).All(x => x.Kind == "write-24");
+                    if (!cu.Refused && !writesStockOnly) { p.Cu = cu; p.Preview.AddRange(cu.Preview); }
+                    else if (storedCu.Unreadable) p.Notes.Add("The graphics-core setting cannot be read and is left as it is.");
                     // The graphics settings for all games go back to "Application decides"; a game's own ones go with
                     // the per-game switches.
                     int gfxFrom = p.Writes.Count;
@@ -1177,7 +1273,8 @@ namespace AmdgpuWddmControl
                         return Refuse(p, "All these settings have their release defaults already.");
                     p.Change = "Sets " + string.Join(", ", p.Writes.Take(gfxFrom).Select(w => w.Delete ? "removes " + w.Name : w.Name + " " + w.Number)) +
                         (gfxCount > 0 ? "; graphics settings for games: " + gfxCount + " changes back to \"Application decides\"" : "") +
-                        (p.Cu != null ? "; graphics cores: Standard (24)" : "") + (p.GameWrites.Count > 0 ? "; game settings: " + p.GameWrites.Count + " games" : "") +
+                        (p.Cu != null ? "; graphics cores: " + (p.Cu.Target == CuMode.Full ? "All (40)" : "Standard (24)") : "") +
+                        (p.GameWrites.Count > 0 ? "; game settings: " + p.GameWrites.Count + " games" : "") +
                         (p.TuneSteps.Count > 0 ? "; tuning: " + string.Join(", ", p.TuneSteps.Select(t => t.Kind)) : "") + ".";
                     if (p.Cu != null) p.Notes.Add("The graphics-core part cannot be undone: its old values are kept for diagnosis only.");
                     p.OfferRestart = true;

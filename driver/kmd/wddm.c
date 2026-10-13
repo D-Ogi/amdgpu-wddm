@@ -4074,9 +4074,9 @@ static NTSTATUS Bc250WddmQueryAdapterInfo(_In_ const HANDLE hAdapter, _In_ const
         break;
     }
     default:
-        // The pre-WDDM2 segment queries, which a WDDM 2 driver must not answer. Types 15 and 47 were refused here
-        // until 0.7.216.62 (above). Which types are asked for is stage A evidence, and a refusal here is logged
-        // below.
+        // The pre-WDDM2 segment queries, which a WDDM 2 driver must not answer. Types 15 and 47, which the lab's
+        // dxgkrnl asked for in E16 run 003, were refused here until 0.7.216.62 (above). Which types are asked for
+        // is stage A evidence, and a refusal here is logged below.
         status = STATUS_NOT_SUPPORTED;
         break;
     }

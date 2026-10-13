@@ -61,6 +61,7 @@ typedef struct _BC250_STDALLOC_ANSWER {
     int PublishPitch;
 } BC250_STDALLOC_ANSWER;
 
+// The one decision. It keeps the checks and their order of the code before BD-060, and BD-060 added PublishPitch.
 // BD-135: a 24H2 CDD shadow keeps CPU backing in the coherent aperture. It is not a primary: CDD locks it,
 // then blits to the primary. Protected local-memory locks can reach Rotate without a process heap on 26100.
 // E26R v2 already expresses this placement, so the LB7A allocation and all UMD parsers stay unchanged.

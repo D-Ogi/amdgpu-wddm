@@ -69,7 +69,14 @@ namespace AmdgpuWddmSetup
                 }
                 else if (group == "parameters" && name == "DpmMaxMHz") line = new SettingLine { TextId = "settings.clock-limit", Args = new[] { Json.Show(shown) } };
                 else if (group == "parameters" && name == "DpmMode") line = new SettingLine { TextId = Number(shown) == 0 ? "settings.auto-clock.off" : "settings.auto-clock.on" };
-                else if (group == "parameters" && name == "CuMode") line = new SettingLine { TextId = "settings.cores", Args = new[] { Json.Show(shown) } };
+                else if (group == "parameters" && name == "CuMode")
+                {
+                    line = new SettingLine { TextId = "settings.cores", Args = new[] { Json.Show(shown) } };
+                    // BD-077: the graphics cores are a driver closure of their own, and "switched off by the
+                    // driver" is not what happened to them. The driver went back to the firmware's 24, and a
+                    // repair writes the number of the release again.
+                    if (r.Decision == "driver-closed" || r.Decision == "reopened") decision = "settings.decision.cores-" + r.Decision;
+                }
                 else if (group == "desktop_router" && name == "DwmForceCpu") line = new SettingLine { TextId = Number(shown) == 1 ? "settings.desktop.cpu" : (path == "driver-closed" ? "settings.desktop.cpu-until-repair" : "settings.desktop.gpu") };
                 // The D3D11 route (tester.11 on): gpu-default sends Direct3D 11 and 10.1 applications to the graphics chip,
                 // while Windows' own applications and Direct3D 10.0 stay on the processor; allowlist sends only the listed ones.

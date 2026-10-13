@@ -95,6 +95,13 @@ namespace AmdgpuWddmControl
         // installs, so a fresh install shows her; the art ships with the exe). Unchecking writes 0.
         public bool ShowNagi { get { return OnUnlessZero("ShowNagi"); } set { SetOnUnlessZero("ShowNagi", value); } }
         public bool ShowTipsAutomatically { get { return Flag("ShowTipsAutomatically"); } set { SetFlag("ShowTipsAutomatically", value); } }
+        // The small window after sign-in that keeps the screen drawing while the driver finishes its start check
+        // (the release's start-window.ps1 reads this value under HKCU, so no administrator rights are needed to
+        // change it). On while the value is absent, like D2 and D3: unchecking writes 0, checking removes the
+        // value. Turning it off never hides the warning about a driver the guard switched off: that notice is a
+        // different window with a different rule (StartNotice.cs).
+        public bool ShowStartWindow { get { return OnUnlessZero(StartWindowPref); } set { SetOnUnlessZero(StartWindowPref, value); } }
+        public const string StartWindowPref = "ShowStartWindow";
         public bool ReduceAnimations { get { return Flag("ReduceAnimations"); } set { SetFlag("ReduceAnimations", value); } }
         public bool ShowSupportOptions { get { return Flag("ShowSupportOptions"); } set { SetFlag("ShowSupportOptions", value); } }
         public bool GettingStartedDismissed { get { return Flag("GettingStartedDismissed"); } set { SetFlag("GettingStartedDismissed", value); } }
@@ -120,6 +127,29 @@ namespace AmdgpuWddmControl
         {
             get { return _store.Get("LastSeenRelease") as string; }
             set { if (value == null) _store.Delete("LastSeenRelease"); else if (LastSeenRelease != value) _store.SetString("LastSeenRelease", value); }
+        }
+
+        // The installed release the name tip was shown for (Guide.NameTipDue): the tip shows once after each install
+        // or update, for 15 seconds, and not again until another release is installed.
+        public string NameTipRelease
+        {
+            get { return _store.Get("NameTipRelease") as string; }
+            set { if (value == null) _store.Delete("NameTipRelease"); else if (NameTipRelease != value) _store.SetString("NameTipRelease", value); }
+        }
+
+        // The Nagi wallpaper (Wallpaper.cs): the installer's WallpaperStamp this account already had the picture set
+        // for (REG_SZ), so the automatic step runs once per install, and the background this account had before
+        // (REG_SZ, SavedBackground), which Settings can restore.
+        public string WallpaperApplied
+        {
+            get { return _store.Get("WallpaperApplied") as string; }
+            set { if (value == null) { if (_store.Get("WallpaperApplied") != null) _store.Delete("WallpaperApplied"); } else if (WallpaperApplied != value) _store.SetString("WallpaperApplied", value); }
+        }
+
+        public SavedBackground WallpaperPrevious
+        {
+            get { return SavedBackground.FromValue(_store.Get("WallpaperPrevious") as string); }
+            set { if (value == null) { if (_store.Get("WallpaperPrevious") != null) _store.Delete("WallpaperPrevious"); } else _store.SetString("WallpaperPrevious", value.ToValue()); }
         }
 
         // The game folder the person chose for the ray tracing benchmark (REG_SZ). Absent: the card looks for the

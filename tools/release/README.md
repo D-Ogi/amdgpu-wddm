@@ -107,7 +107,8 @@ session marker. The control application (INSTALL.md) or a repair install opens a
 
 The driver's own safety closures (BD-069): the KMD writes a release default away itself after a start it must not
 repeat, and records that act next to the value (`InteropClosedReason` for `EnableGpuPresentBlit` and
-`EnableCddDwmInterop`, `DpmClosedReason` 3, 4 or 8 for `DpmMode`). `common.ps1` `$script:DriverClosures` holds the
+`EnableCddDwmInterop`, `DpmClosedReason` 3, 4 or 8 for `DpmMode`, `CuModeClosedReason` for a `CuMode` back at 24).
+`common.ps1` `$script:DriverClosures` holds the
 value each closure writes, its record and its reason words. A value at the closure value with its record is the
 driver's act: `install.cmd -Repair` writes the release default again and clears the record (decision `reopened`),
 every other install keeps it and reports it with its remedy (decision `driver-closed`), and a value the tester set
@@ -129,6 +130,22 @@ over it, so it names the fallback only inside the boot that wrote it. There only
 a durable record with nothing in it is read through the legacy one. One start later the installer keeps such a
 driver's 0 and reports it as the tester's value. A repair clears no legacy record, because the next start writes it
 again anyway (`docs/design/dpm.md`).
+
+`CuMode` has no legacy record (KMD 0.7.216.62, BD-077). Its release default is 40 graphics cores, and the driver
+writes 24 with `CuModeClosedReason` when a start with 40 is never confirmed or does not hold in the hardware, so an
+unconfirmed start cannot hold a tester at 24 cores through every later upgrade. `CuModeLastReason` could not carry
+that record: every start rewrites it, and the reasons of a fallback are not the driver's alone, because a tester's
+own 24 start whose stock restore does not read back writes 9 (restore-failed) there as well. A driver that writes no
+`CuModeClosedReason` therefore keeps its 24 as the tester's own value, which is the safe side here: reading it as a
+closure would take a chosen 24 away, and a tester whose 24 came from an older driver's fallback gets 40 back with
+`install.cmd -Repair` or on the Graphics page of the control application (`docs/design/cu-mode.md`).
+
+A value named on the command line takes the record with it (`clear`), whichever number the tester chose. The
+switch is their word about that very value, so the driver's record of its own fallback is stale. `CuMode` is the
+only closure with a switch that can write the closed value: without this rule `install.cmd -CuMode 24` over a
+closure left the record behind, and every install after it reported the tester's own 24 as a step back of the
+driver and offered a repair that takes it away. The Graphics page of the control application does the same for
+its own choice of "Standard (24)": it writes `CuMode = 24` and deletes the record.
 
 The KMD's own INF stays without `Reboot`, because the lab's deployment kits
 restart the device in place. Uninstall still moves the GPU to Microsoft Basic Display Adapter at once and asks for a

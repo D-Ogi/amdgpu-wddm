@@ -94,7 +94,14 @@ Check ($r.text -match 'would: .*\\Release: .*AppliedDefaults') 'Release\AppliedD
 Check ($r.text -match "would: scheduled task 'amdgpu-wddm start confirm'") 'phase 2 shows the start-confirm task'
 Check ($r.text -match 'would: copy payload\\control') 'phase 2 installs the control application'
 Check ($r.text -match 'would: copy licenses\\ and THIRD-PARTY\.md -> .+\\licenses') 'phase 2 installs the licence texts'
-Check ($r.text -match 'would: Start menu shortcut .*amdgpu-wddm Control\.lnk') 'phase 2 shows the Start menu shortcut'
+Check ($r.text -match 'would: Start menu shortcut .*\\Nagi Control App\.lnk') 'phase 2 shows the Start menu shortcut, with the name Nagi Control App'
+Check ($r.text -match 'would: desktop shortcut .*\\Nagi Control App\.lnk') 'phase 2 shows the desktop icon, with the name Nagi Control App'
+Check ($r.text -notmatch 'would: (Start menu|desktop) shortcut .*amdgpu-wddm Control') 'no shortcut is written under the old name'
+# The Nagi wallpaper (owner, 2026-10-13): on by default, recorded for Nagi Control App with a stamp of this run.
+Check ($r.text -match 'wallpaper: the Nagi wallpaper, set by Nagi Control App once for each person after the install is verified') 'phase 2 says the Nagi wallpaper is chosen'
+Check ($r.text -match 'would: HKLM:\\SOFTWARE\\amdgpu-wddm\\Release: Wallpaper = 1, WallpaperStamp = \S+ \d{8}T\d{6}Z') 'phase 2 records the wallpaper choice and its install stamp'
+# The old names of an older release: this PC has none, and the run says it looked (common.ps1, Remove-LegacyControlShortcuts).
+Check ($r.text -match 'shortcuts of an older release \(amdgpu-wddm Control\): none') 'phase 2 looks for the shortcuts of an older release'
 $dwm = [int]$m.defaults.desktop_router.DwmForceCpu
 # DirectFlipFront is between them from 0.7.213.100-tester.15: the D3D11_1 front of route C is a finished
 # feature, so the installer writes it on, and the value is read from the same defaults table as DwmForceCpu.
@@ -121,7 +128,7 @@ Check ($r.text -match 'Microsoft Visual C\+\+ runtime: present: vcruntime140\.dl
 # print what they would do and change nothing.
 'install -DryRun with the runtime missing and no desktop icon'
 $env:AMDGPU_WDDM_TEST_VCRUNTIME = 'missing'
-try { $r2 = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard', '-NoDesktopShortcut') }
+try { $r2 = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard', '-NoDesktopShortcut', '-NoWallpaper') }
 finally { Remove-Item Env:\AMDGPU_WDDM_TEST_VCRUNTIME }
 $r2.text
 Check ($r2.code -eq 0) "walk-through without the runtime exit $($r2.code)"
@@ -133,6 +140,7 @@ $iCopy = $r2.text.IndexOf('would: copy payload\')
 Check ($iVc -ge 0 -and $iCopy -gt $iVc) "the runtime step comes before the first file of ours (runtime at $iVc, first copy at $iCopy)"
 Check ($r2.text -match 'shortcuts: Start menu entry, Start menu repair entry; left out: desktop icon') 'the run asked for no desktop icon leaves it out and says so'
 Check ($r2.text -notmatch 'would: desktop shortcut') 'no desktop icon is written in that run'
+Check (($r2.text -match 'wallpaper: not set \(-NoWallpaper\)') -and ($r2.text -match 'Release: Wallpaper = 0, WallpaperStamp = ')) 'the run asked for no wallpaper records 0 and says so'
 Check ($r2.text -match 'Dry run complete' -and $r2.text -notmatch 'doing:') 'that walk-through changed nothing either'
 
 'registry defaults on upgrade (test-registry-defaults.ps1 under 5.1, HKCU scratch key)'
@@ -303,8 +311,11 @@ Check ((Test-Path -LiteralPath (Join-Path $Package 'payload\tools\dwm-session.ps
 Check ($r.text -match 'DWM of session \d+ before the driver package: ') 'the walk-through records the DWM before the driver package'
 # BD-069: the installer tells the driver's own safety closure from a setting of the tester, and only a repair reopens
 # one. The records belong to the KMD (driver/kmd/interop.c, driver/kmd/dpm.c); the installer reads them.
-Check (($common -match '\$script:DriverClosures = @\{') -and ($common -match "record = 'InteropClosedReason'") -and ($common -match "record = 'DpmClosedReason'") -and ($common -match "legacy_record = 'DpmLastReason'") -and ($common -match "'reopened'") -and ($common -match "'driver-closed'")) 'common.ps1 holds the driver closure table (InteropClosedReason, DpmClosedReason with DpmLastReason as the legacy record) and both decisions'
-Check (($src -match "(?m)^\`$script:ReopenClosures = \[bool\]\`$Repair\s*$") -and ([regex]::Matches($src, '\$script:ReopenClosures =').Count -eq 1) -and ([regex]::Matches($src, '-Reopen:\$script:ReopenClosures').Count -eq 2) -and ($common -match "InstallSwitches = @\('NoControlApp', 'NoReboot', 'Force', 'Repair', 'ApplySystemTuning', 'NoStartMenuShortcut', 'NoDesktopShortcut'\)")) 'only the -Repair switch reopens a closure (the plan and the write both), and -Repair survives the restart'
+Check (($common -match '\$script:DriverClosures = @\{') -and ($common -match "record = 'InteropClosedReason'") -and ($common -match "record = 'DpmClosedReason'") -and ($common -match "legacy_record = 'DpmLastReason'") -and ($common -match "record = 'CuModeClosedReason'") -and ($common -match "'reopened'") -and ($common -match "'driver-closed'")) 'common.ps1 holds the driver closure table (InteropClosedReason, DpmClosedReason with DpmLastReason as the legacy record, CuModeClosedReason) and both decisions'
+# BD-077: the graphics cores are a closure of the same kind, and they carry no legacy record. CuModeLastReason is
+# written by every start, a tester's own 24 start among them, so it would turn a chosen 24 into a closure.
+Check (($common -match "CuMode = @\{ closed = 24; record = 'CuModeClosedReason'; any_reason = \`$true") -and ($common -notmatch "legacy_record = 'CuModeLastReason'")) 'the graphics-core closure is CuMode 24 with CuModeClosedReason, and no legacy record'
+Check (($src -match "(?m)^\`$script:ReopenClosures = \[bool\]\`$Repair\s*$") -and ([regex]::Matches($src, '\$script:ReopenClosures =').Count -eq 1) -and ([regex]::Matches($src, '-Reopen:\$script:ReopenClosures').Count -eq 2) -and ($common -match "InstallSwitches = @\('NoControlApp', 'NoReboot', 'Force', 'Repair', 'ApplySystemTuning', 'NoStartMenuShortcut', 'NoDesktopShortcut', 'NoWallpaper'\)")) 'only the -Repair switch reopens a closure (the plan and the write both), and -Repair survives the restart'
 Check (($common -match "8 = 'smu-error'") -and ($src -match "\`$ioRemedy = '; remedy: run install\.cmd -Repair") -and ($src -notmatch "if \(\`$ioClosed\) \{ \`$ioClosed \+= '; remedy")) 'every reason the DPM guard persists is a closure (3, 4, 8), and verify names the repair only where the driver left a record'
 Check (($common -match "legacy_record = 'DpmLastReason'; any_reason = \`$true") -and ($common -match "\(\`$record -eq \`$c\.record\) -and \`$c\.any_reason")) 'a durable record takes any reason the driver writes; only the legacy record is held to the three names'
 $marker = @(foreach ($s in $scripts) { if ((@($s.text -split "`n" | Where-Object { $_ -notmatch '^\s*#' }) -join "`n") -match 'InteropSession|InteropBoot') { $s.name } })
@@ -695,6 +706,8 @@ $mftAt = $r.text.IndexOf('would: remove the H.264 encoder MFT registration')
 $rootAt = $r.text.IndexOf('would: remove ' + (Join-Path $env:ProgramFiles 'amdgpu-wddm'))
 Check (($mftAt -gt 0) -and ($rootAt -gt $mftAt)) 'the encoder keys go before the install root, so no COM registration points at a DLL that is gone'
 Check ($r.text -notmatch 'doing:|Administrator rights are needed') 'uninstall dry run with a state: no change, no elevation'
+Check (($r.text -match 'would: remove the Start menu shortcut .*\\Nagi Control App\.lnk') -and ($r.text -match 'would: remove the desktop shortcut .*\\Nagi Control App\.lnk')) 'the uninstall removes the new names'
+Check ($r.text -match 'shortcuts of an older release \(amdgpu-wddm Control\): none') 'the uninstall looks for the old names too'
 # BD-089, the clean slate: every item of ours goes, and the uninstaller ends with the list of what is on the computer.
 Check ($r.text -match "would: unregister our scheduled task\(s\): (none on this computer \(this release registers 'amdgpu-wddm start confirm'\)|[^\r\n]*amdgpu-wddm)") 'every scheduled task of ours is unregistered, not only the one of this release'
 Check ($r.text -match 'would: remove HKLM:\\SOFTWARE\\amdgpu-wddm \(router policy, application profile, release record\), HKLM:\\SOFTWARE\\WOW6432Node\\amdgpu-wddm and HKCU:\\Software\\amdgpu-wddm') 'the policy keys of both registry views and the app preferences of this account go'

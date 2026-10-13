@@ -19,6 +19,8 @@ namespace AmdgpuWddmSetup
         // The welcome screen of a setup.exe whose files\ folder is not there (somebody copied the exe out of the zip).
         public bool FilesMissing;
         public string PreparedDir, PreparedProblem, PreparedVersion, PrepareDestination, PrepareFirmware, SupportSaved;
+        // The turn of the Working screen's tips (SetupGuide.TipId): 1 draws the second tip, the name of Nagi.
+        public int TipTurn;
     }
 
     public static class Fixtures
@@ -106,7 +108,7 @@ namespace AmdgpuWddmSetup
 
         // outcome: the engine's result event, written before its process ends. The stage screen is drawn once more
         // with it, so the fixtures cover both sides of that branch: an ending that finished and one that stopped.
-        static string[] RunEvents(string lastStage, bool cancel, bool mutated, string mode = "run", string outcome = null)
+        static string[] RunEvents(string lastStage, bool cancel, bool mutated, string mode = "run", string outcome = null, bool repaired = false)
         {
             _seq = 0;
             var list = new List<string> { Ev("start", "\"mode\":\"" + mode + "\",\"gui\":true,\"dry_run\":false,\"package\":\"P\",\"contract\":\"" + EngineRun.Contract + "\",\"phase\":\"new\"") };
@@ -118,6 +120,7 @@ namespace AmdgpuWddmSetup
                 if (s == lastStage) break;
             }
             if (mutated) { list.Add(Ev("install-action", "\"action\":\"install\",\"boot_id\":41")); list.Add(Ev("step", "\"description\":\"x\",\"dry_run\":false")); }
+            if (repaired) list.Add(Ev("pending-removals-cancelled", "\"count\":4"));
             if (outcome != null)
                 list.Add(Ev("result", "\"outcome\":\"" + outcome + "\",\"exit_code\":0,\"message_id\":\"result.other\",\"mutated\":" + (mutated ? "true" : "false")));
             return list.ToArray();
@@ -165,6 +168,9 @@ namespace AmdgpuWddmSetup
                 new Fixture { Name = "plan-windows-not-tested", RunKind = "plan", Screen = Screen.Plan,
                     PlanEvents = PlanEvents("install", null, "", "download", false, "not-tested"), PlanResult = planned },
                 new Fixture { Name = "working", Screen = Screen.Working, Events = RunEvents("files", false, true) },
+                new Fixture { Name = "working-reinstalled", Screen = Screen.Working, Events = RunEvents("files", false, true, repaired: true) },
+                new Fixture { Name = "restart-reinstalled", Screen = Screen.Restart, Events = RunEvents("finish", false, true, repaired: true),
+                    Result = ResultJson("run", "restart-required", 0, "result.installed-restart", true) },
                 new Fixture { Name = "working-cancel", Screen = Screen.Working, Events = RunEvents("preflight", true, false) },
                 new Fixture { Name = "continue", Flow = "continue", Screen = Screen.Working, Events = RunEvents("driver", false, true) },
                 // The stage screen after the engine wrote its result and before its process ended: a restart is a
@@ -173,6 +179,7 @@ namespace AmdgpuWddmSetup
                     Result = ResultJson("run", "restart-required", 0, "result.restart-test-signing", true, ",\"restart\":{\"required\":true,\"reason_id\":\"restart.test-signing\"}") },
                 new Fixture { Name = "working-stopped", Screen = Screen.Working, Events = RunEvents("driver", false, true, "run", "failed"),
                     Result = ResultJson("run", "failed", 6, "result.step-failed", true, ",\"step\":\"x\",\"detail\":\"x\"") },
+                new Fixture { Name = "working-name-tip", Screen = Screen.Working, Events = RunEvents("files", false, true), TipTurn = 1 },
                 new Fixture { Name = "restart", Screen = Screen.Restart, Events = RunEvents("test-signing", false, true), Result = ResultJson("run", "restart-required", 0, "result.restart-test-signing", true, ",\"restart\":{\"required\":true,\"reason_id\":\"restart.test-signing\"}") },
                 // The countdown of the restart screen a few seconds in, so that a render shows the running number
                 // and not only its first value.

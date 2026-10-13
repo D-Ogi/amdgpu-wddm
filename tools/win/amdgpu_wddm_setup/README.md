@@ -1,6 +1,7 @@
-# amdgpu-wddm Setup
+# Nagi Setup
 
-The setup window of a tester release: install, update and repair the amdgpu-wddm driver on the ASRock BC-250, and
+The setup window of a tester release: install, update and repair the Nagi graphics driver (aka amdgpu-wddm) on the
+ASRock BC-250, and
 prepare a folder for a PC without internet. It is a face for the release's PowerShell engine
 (`tools/release/installer/install.ps1`, `prepare-offline.ps1`): every decision, check and change is the engine's, the
 window shows them in plain words. Contract: `docs/gui/interfaces-setup.md`.
@@ -12,7 +13,7 @@ window shows them in plain words. Contract: `docs/gui/interfaces-setup.md`.
 | Review | Checks that need attention, what the run will do (restarts, firmware source), what it will change (Windows test mode, BitLocker paused for those restarts) as plain information, the settings each run keeps, changes or sets (from the engine's settings-impact plan), the release notes. It asks for nothing: see "Nothing is asked of the user" below |
 | Install | Stages as the engine reports them, cancel while the engine allows it |
 | Restart | A planned restart: a 15-second countdown and then the restart, with "Restart now" and "Later" offered and neither required. After sign-in the release's RunOnce entry starts the window with `--continue` |
-| Done | One of five outcomes (A3): success, information, problem, cancelled, restart; whether anything changed; the next step (retry, repair from amdgpu-wddm Control, support file) |
+| Done | One of five outcomes (A3): success, information, problem, cancelled, restart; whether anything changed; the next step (retry, repair from Nagi Control App, support file) |
 | Prepare | `--prepare-offline`: a destination, an optional firmware folder, the copy, the result |
 
 The step rail marks the step in which a run stopped: a refusal at Check shows Check as current and stopped, and
@@ -28,8 +29,8 @@ The owner, 2026-10-12, seeing a greyed-out Install button under a consent check 
 uzytkownik zaznaczy ten checkbox! ... Oczywiste jest, ze uzytkownik chce wlaczyc test mode i wlasnie robi tym
 instalatorem! Przestan wymagac potwierdzen od uzytkownika!" A person who opened this installer wants to install, so
 no screen asks for a permission, and the primary action is never off. The Review screen does carry choices between
-good outcomes, each already answered: the optional Windows tuning and the two places of the shortcut of
-amdgpu-wddm Control (both on). `InstallFlow.PlanOptionIds` names every control a screen may grow. The Review screen
+good outcomes, each already answered: the optional Windows tuning, the two places of the shortcut of
+Nagi Control App (both on) and the Nagi wallpaper (on). `InstallFlow.PlanOptionIds` names every control a screen may grow. The Review screen
 states what will change as information. `src/InstallFlow.cs` holds the rules the window and the engine share: the
 arguments every run carries (`-AcceptTestSigning`, and `-BitLocker Suspend` when BitLocker protects the system
 volume), the information lines, and the ids no string table may carry again. The render gate G-CONSENT refuses a

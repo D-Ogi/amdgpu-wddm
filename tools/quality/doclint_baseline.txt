@@ -43,7 +43,7 @@
 15	docs/d3d12-shared-resources.md
 8	docs/design/adaptive-cpu-gpu.md
 22	docs/design/bc250-open-test-pack.md
-34	docs/design/cu-mode.md
+33	docs/design/cu-mode.md
 66	docs/design/d3d11-ddi-engine.md
 26	docs/design/d3d12-ddi-engine.md
 2	docs/design/dp-audio.md
@@ -147,7 +147,7 @@
 48	tools/release/README.md
 18	tools/runcompare/README.md
 25	tools/win/README.md
-62	tools/win/amdgpu_wddm_control/README.md
+60	tools/win/amdgpu_wddm_control/README.md
 6	tools/win/amdgpu_wddm_setup/README.md
 14	tools/win/bc250kmd_cli/README.md
 39	tools/win/bc250mon/README.md

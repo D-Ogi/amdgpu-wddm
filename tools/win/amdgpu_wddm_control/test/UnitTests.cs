@@ -728,7 +728,12 @@ static partial class UnitTests
         Check(line(Recovery.Describe(gpuClosed), "Desktop composition").Text.Contains("stays on the CPU route"), "GPU route selected with closed switches explained");
         var refused = Closed(); refused.Interop = null; refused.Health = null; refused.Dpm = null; refused.DriverError = "not loaded";
         refused.Parameters["UnconfirmedStarts"] = 2; refused.Parameters["LastStage"] = 90;
-        Check(line(Recovery.Describe(refused), "Driver start").Text.Contains("refused to start") && line(Recovery.Describe(refused), "Driver start").Text.Contains("installer"), "guard refusal explained, installer named");
+        // The refusal is explained and the way back is this app's own action now (enable-driver), not the release
+        // installer: a person on Microsoft Basic Display would have to find and download that installer first
+        // (owner, 2026-10-13). The notice at sign-in and the Home banner carry the same action.
+        var refusedLine = line(Recovery.Describe(refused), "Driver start");
+        Check(refusedLine.Text.Contains("refused to start") && refusedLine.Action == "enable-driver" && !refusedLine.Text.Contains("installer"),
+            "guard refusal explained, with the one-click repair and no installer");
         var early = Closed(); early.Health.ReadyAgeMs = 1000;
         Check(line(Recovery.Describe(early), "Driver start").Action == null, "an early start recommends waiting");
         var trial = Open(); trial.Parameters["DpmMode"] = 1; trial.Parameters["DpmPending"] = 0x10005DC; trial.Dpm = new DpmState { Mode = 1, MaxMHz = 1500 };
@@ -1228,6 +1233,8 @@ static partial class UnitTests
         NoDwmRestart(args[0]);
         RecoveryRules(args[0], header, args.Length == 2 ? args[1] : null);
         PlanAdditions(args[0]);
+        StartNoticeTests(args[0]);
+        WallpaperTests(args[0]);
         GraphicsSettingsTests();
         TdrTests(args[0]);
         UmaTests(args[0]);

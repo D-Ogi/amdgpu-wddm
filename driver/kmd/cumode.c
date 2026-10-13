@@ -12,6 +12,19 @@
 //   CuModePending     the encoded 40 request of a start nobody confirmed yet
 //   CuModeConfirmed   the encoded 40 request a healthy start confirmed; a later start is not pending
 //   CuModeLastApplied, CuModeLastReason   what the last start did, for the tool when the adapter is gone
+//   CuModeClosedReason the reason the driver itself wrote CuMode = 24 (0.7.216.62, BD-077). PersistFallback
+//                     writes it, a start that reads a CuMode other than 24 deletes it, and a start that reads
+//                     24 (or no value, which means 24) leaves it alone. The release default is 40, so without
+//                     this record one unconfirmed start would hold a tester at 24 compute units through every
+//                     later upgrade: the installer reads the record and offers install.cmd -Repair instead of
+//                     taking the 24 for the tester's own choice. DpmClosedReason (dpm.c) and
+//                     InteropClosedReason (interop.c) work the same way.
+//                     CuModeLastReason is no legacy record of this kind, and the installer reads none for
+//                     CuMode. Every start rewrites that value with its own reason, and the reasons of a
+//                     fallback are not the driver's alone: a 24 start whose stock restore does not read back
+//                     writes RESTORE_FAILED (9) as well, so the code would read a 24 the tester chose as a
+//                     closure and the next upgrade would write 40 over it. DpmLastReason can carry it because
+//                     no start but a fallback writes reasons 3, 4 or 8 there.
 // And a volatile subkey CuModeBoot: this boot's firmware stock of both registers, per shader array.
 // It dies with the boot, which is the point: a warm device restart finds our own writes in the
 // registers and must not take them for stock.
@@ -32,6 +45,7 @@
 #define CU_SETTING_CONFIRMED L"CuModeConfirmed"
 #define CU_SETTING_LAST_APPLIED L"CuModeLastApplied"
 #define CU_SETTING_LAST_REASON L"CuModeLastReason"
+#define CU_SETTING_CLOSED L"CuModeClosedReason"
 #define CU_BOOT_KEY L"CuModeBoot"
 
 C_ASSERT(sizeof(BC250_ESCAPE_CU_MODE) == 184);
@@ -131,10 +145,11 @@ static BOOLEAN QueryPresent(PCWSTR Name, unsigned int* Value)
     return FALSE;
 }
 
-static void StoreLogged(PCWSTR Name, ULONG Value)
+static NTSTATUS StoreLogged(PCWSTR Name, ULONG Value)
 {
     NTSTATUS status = GuardStoreSetting(Name, Value);
     if (!NT_SUCCESS(status)) GuardLog("cumode: writing %ws = %lu failed 0x%08X", Name, Value, status);
+    return status;
 }
 
 static void DeleteLogged(PCWSTR Name)
@@ -144,12 +159,26 @@ static void DeleteLogged(PCWSTR Name)
 }
 
 // The automatic fallback: CuMode back to 24, durably, so that the next start does not try again.
+// CuModeClosedReason records who wrote that 24. It outlives the boot, because no later start overwrites it; only
+// a start that reads a CuMode other than 24 deletes it (CuModePrepare below). CuModeLastReason keeps its old
+// meaning: the reason of the last start, overwritten at every start.
+// The record goes first, before the 24 it describes. A start that dies between the two writes leaves a record
+// beside a CuMode that still asks for 40, and the next start deletes that record by itself (clear_closed). The
+// other order leaves the 24 without its record, which is the state BD-069 is about. The 24 is written whatever
+// the record's status, because a start that tries 40 again unasked is the worse failure.
 static void PersistFallback(ULONG Reason)
 {
-    StoreLogged(CU_SETTING_MODE, BC250_CU_MODE_STOCK);
+    NTSTATUS record = StoreLogged(CU_SETTING_CLOSED, Reason);
+    (void)StoreLogged(CU_SETTING_MODE, BC250_CU_MODE_STOCK);
     DeleteLogged(CU_SETTING_CONFIRMED);
     DeleteLogged(CU_SETTING_PENDING);
-    StoreLogged(CU_SETTING_LAST_REASON, Reason);
+    (void)StoreLogged(CU_SETTING_LAST_REASON, Reason);
+    if (NT_SUCCESS(record))
+        GuardLog("cumode: CuModeClosedReason %lu written next to CuMode 24: this fallback is the driver's own, "
+                 "not a setting", Reason);
+    else
+        GuardLog("cumode: the record of this fallback is not durable; CuMode 24 stays, and an installer reads it "
+                 "as a setting");
 }
 
 static BOOLEAN ReadStockRecord(struct bc250_cu_mode_hw* Hw)
@@ -214,6 +243,7 @@ void CuModePrepare(BC250_DEVICE* Device)
     r->disable_present = QueryPresent(CU_SETTING_DISABLE, &r->disable);
     (void)QueryPresent(CU_SETTING_PENDING, &r->pending);
     (void)QueryPresent(CU_SETTING_CONFIRMED, &r->confirmed);
+    r->closed_present = QueryPresent(CU_SETTING_CLOSED, &r->closed);
     r->sa_count = BC250_SHADER_ENGINES * BC250_SH_PER_SE;
     r->wgps_per_sa = BC250_MAX_CU_PER_SH / 2;
     bc250_cu_decide(r, d);
@@ -221,8 +251,19 @@ void CuModePrepare(BC250_DEVICE* Device)
     if (d->force_stock) {
         GuardLog("cumode: 40 CU request 0x%08X was pending from an earlier start that was never confirmed: "
                  "falling back to 24 and writing CuMode = 24", r->pending);
-        PersistFallback(d->reason);
-    } else if (d->clear_pending) DeleteLogged(CU_SETTING_PENDING);
+        // The record is the shim's answer, not this reason read again: what the host test asserts is what the
+        // key gets (the hardware fallback in CuModeFinish has no shim decision and names its own reason).
+        PersistFallback(d->closed_reason);
+    } else {
+        if (d->clear_pending) DeleteLogged(CU_SETTING_PENDING);
+        if (d->clear_closed) {
+            // CuMode is not 24 any more: the tester, the control application or a repair wrote over the
+            // fallback, so its record goes.
+            DeleteLogged(CU_SETTING_CLOSED);
+            GuardLog("cumode: CuModeClosedReason %lu deleted: CuMode %lu asks for the cores again", r->closed,
+                     r->mode);
+        }
+    }
     if (d->mark_pending) {
         // Durable before the first register write, or no 40 at all.
         status = GuardStoreSetting(CU_SETTING_PENDING, d->encoded);
@@ -314,8 +355,8 @@ void CuModeFinish(BC250_DEVICE* Device)
         // The pending mark stays: a start that never reached the stage is no healthy start.
         GuardLog("cumode: the constants stage did not run the hook, reason %lu; the caps stay stock", reason);
     }
-    StoreLogged(CU_SETTING_LAST_APPLIED, applied);
-    StoreLogged(CU_SETTING_LAST_REASON, reason);
+    (void)StoreLogged(CU_SETTING_LAST_APPLIED, applied);
+    (void)StoreLogged(CU_SETTING_LAST_REASON, reason);
 
     KeAcquireSpinLock(&s->SnapLock, &irql);
     s->Valid = valid && info.active != 0;

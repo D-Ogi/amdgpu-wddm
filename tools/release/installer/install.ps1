@@ -44,7 +44,7 @@ param(
     # 'HaveKey' still means "do not touch protection, the recovery key is at hand" (Get-BitLockerPlan).
     [ValidateSet('', 'HaveKey', 'Suspend')][string]$BitLocker = '',
     [ValidateRange(1000, 2000)][int]$DpmMaxMHz,  # absent = the default (registry-defaults.json) or the tester's own value
-    [ValidateSet(0, 24, 40)][int]$CuMode = 0,  # 0 = leave unset (driver default, 24 CUs)
+    [ValidateSet(0, 24, 40)][int]$CuMode = 0,  # 0 = not given: the release default of registry-defaults.json
     [string]$InstallRoot = (Join-Path $env:ProgramFiles 'amdgpu-wddm'),
     [switch]$NoControlApp,
     # The shortcuts of the control application (owner, 2026-10-12). Both places are written by default. The two No
@@ -54,6 +54,11 @@ param(
     [switch]$StartMenuShortcut,
     [switch]$NoDesktopShortcut,
     [switch]$DesktopShortcut,
+    # The Nagi wallpaper (owner, 2026-10-13), recorded for Nagi Control App, which sets it once for each person after
+    # the install is verified. On by default; -NoWallpaper leaves it out and -Wallpaper states the default, as the
+    # shortcut pairs do.
+    [switch]$NoWallpaper,
+    [switch]$Wallpaper,
     [switch]$ApplySystemTuning,              # optional reversible Windows tuning; absent = keep Windows settings
     [switch]$SkipSystemTuning,               # explicitly clear an earlier opt-in when resuming
     [switch]$Repair,                        # install the same, already verified version again
@@ -393,6 +398,7 @@ $ApplySystemTuning = [switch](@($installInputs.switches) -contains 'ApplySystemT
 # (-StartMenuShortcut, -DesktopShortcut) clears the saved negative one (Get-InstallInputs).
 $NoStartMenuShortcut = [switch](@($installInputs.switches) -contains 'NoStartMenuShortcut')
 $NoDesktopShortcut = [switch](@($installInputs.switches) -contains 'NoDesktopShortcut')
+$NoWallpaper = [switch](@($installInputs.switches) -contains 'NoWallpaper')
 # BD-069: a repair that the tester asked for writes the release default again over a switch that the driver closed
 # itself (the tester asked for the release as it ships). Only the -Repair switch asks for that. Every other install
 # keeps the closure and reports it with its remedy, and so does the automatic 'repair' action of an unfinished or
@@ -692,7 +698,7 @@ function Invoke-Verify {
     }
     if ($io -match 'died in a session') {
         $ioClosed += '; last boot died in a session'
-        if (-not $ioRemedy) { $ioRemedy = '; a repair changes nothing here, because the driver left no record of a closure: open the GPU desktop path in amdgpu-wddm Control' }
+        if (-not $ioRemedy) { $ioRemedy = '; a repair changes nothing here, because the driver left no record of a closure: open the GPU desktop path in Nagi Control App' }
     }
     $ioClosed += $ioRemedy
     if (-not $startState.started) {
@@ -845,6 +851,7 @@ function Write-VerifyReport($Results) {
             utc = [DateTime]::UtcNow.ToString('o')
             invocation = $script:EngineInvocationId
             boot_id = (Get-BootIdentity).boot_id
+            boot_elapsed_ms = Get-BootElapsedMilliseconds
             dry_run = [bool]$script:DryRunMode
             release = $(if ($mf) { [string]$mf.name } else { $null })
             package_version = $(if ($mf) { [string]$mf.version } else { $null })
@@ -859,7 +866,8 @@ function Write-VerifyReport($Results) {
             results = $list
         }
         $vdir = Join-Path $script:StateDir 'verify'
-        Write-FileAtomic (Join-Path $vdir ('verify-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ') + '.json')) ($report | ConvertTo-Json -Depth 5)
+        # UTC may repeat after time sync. Keep each report instead of overwriting a previous run's evidence.
+        Write-FileAtomic (Join-Path $vdir ('verify-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ') + '-' + [guid]::NewGuid().ToString('N') + '.json')) ($report | ConvertTo-Json -Depth 5)
     } catch { Write-Log "   verify report not written: $($_.Exception.Message)" }
 }
 
@@ -946,7 +954,8 @@ Write-EngineEvent 'decision' ([ordered]@{ action = $action.action; message = $ac
     # The two shortcut answers this run would act on (the command line, or the answer an earlier run of the same
     # install saved). The setup window opens its two boxes on them, so the run after a restart and a repair run
     # state the answer the tester gave, not the default (interfaces-setup.md A2).
-    start_menu_shortcut = (-not [bool]$NoStartMenuShortcut); desktop_shortcut = (-not [bool]$NoDesktopShortcut) })
+    start_menu_shortcut = (-not [bool]$NoStartMenuShortcut); desktop_shortcut = (-not [bool]$NoDesktopShortcut)
+    wallpaper = (-not [bool]$NoWallpaper) })
 Write-SystemTuningPlan -Selected ([bool]$ApplySystemTuning) -Manifest $script:Manifest
 if ($action.action -in @('install', 'upgrade', 'repair', 'resume')) {
     $impact = Get-InstallSettingsImpact
@@ -1313,6 +1322,13 @@ foreach ($row in @($script:OrphanRows | Where-Object { $_.state -eq 'remove' }))
         Remove-PathOrSchedule $row.path
     } | Out-Null
 }
+# BD-146: the old uninstall can still have deletes queued for files about to become current again. Cancel only
+# those exact destinations before Copy-FileSafe can keep a same-hash file. No unrelated rename/delete is changed.
+Invoke-Change 'keep the files of this installation from being removed at the next restart' {
+    $destinations = @(Get-InstallCopyDestinations -Package $package -InstallRoot $InstallRoot -PayloadDirs $dirs -FirmwareFiles @($fwStaged))
+    $repaired = Repair-PendingFileRemovals -Destinations $destinations
+    if ($repaired) { Write-EngineEvent 'pending-removals-cancelled' ([ordered]@{ count = $repaired }) }
+} | Out-Null
 foreach ($d in $dirs) {
     $src = Join-Path $package "payload\$d"
     Invoke-Change "copy payload\$d -> $InstallRoot\$d (same SHA256: kept; in use: replaced by rename)" {
@@ -1819,7 +1835,7 @@ $controlExe = $null
 if ($script:Manifest -and $script:Manifest.control_app_exe) { $controlExe = Join-Path $InstallRoot ('control\' + $script:Manifest.control_app_exe) }
 if ($controlExe -and $dirs -contains 'control') {
     $shortcutPlan = @(Get-ControlShortcutPlan -NoStartMenu ([bool]$NoStartMenuShortcut) -NoDesktop ([bool]$NoDesktopShortcut))
-    $shortcutLeft = @(@(Get-ControlShortcutPaths) | Where-Object { $p = $_.path; -not (@($shortcutPlan | ForEach-Object { $_.path }) -contains $p) })
+    $shortcutLeft = @(@(Get-ControlShortcutPaths) | Where-Object { $p = $_.path; -not [bool]$_.legacy -and -not (@($shortcutPlan | ForEach-Object { $_.path }) -contains $p) })
     Write-Info ("shortcuts: $(if ($shortcutPlan.Count) { @($shortcutPlan | ForEach-Object { $_.label }) -join ', ' } else { 'none' })" +
         $(if ($shortcutLeft.Count) { "; left out: $(@($shortcutLeft | ForEach-Object { $_.label }) -join ', ')" } else { '' }))
     foreach ($sc in $shortcutPlan) {
@@ -1836,8 +1852,13 @@ if ($controlExe -and $dirs -contains 'control') {
             Remove-Item -LiteralPath $sc.path -Force -ErrorAction SilentlyContinue
         } | Out-Null
     }
+    # The names an older release wrote ("amdgpu-wddm Control", common.ps1 Get-ControlShortcutPaths): removed when they
+    # point at our control application, whatever the two switches say, because this install replaces them.
+    Remove-LegacyControlShortcuts -OwnTargets @(Get-OwnControlTargets -InstallRoots @($InstallRoot) -ExeName ([string]$script:Manifest.control_app_exe))
     Set-StateValue $state 'shortcut' $(if ($shortcutPlan.Count) { @($shortcutPlan | ForEach-Object { $_.path })[0] } else { $null })
     Set-StateValue $state 'shortcuts' @($shortcutPlan | ForEach-Object { $_.path })
+    # The Nagi wallpaper: the choice and its stamp for the application, which sets the picture (common.ps1).
+    Set-WallpaperRecord -Selected (-not [bool]$NoWallpaper) -Version ([string]$script:Manifest.version)
 } else { Write-Info 'control application: not in this package (or -NoControlApp); skipped' }
 
 # ---- the extras ------------------------------------------------------------------------------------------------

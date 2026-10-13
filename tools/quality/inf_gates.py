@@ -64,6 +64,7 @@ NOT_IN_INF = {
     "DpmMode": "a driver safety closure (BD-069): only the installer and the driver write it",
     "DpmMaxMHz": "a clock limit the installer and the control application own",
     "DpmIdleMHz": "a clock limit the installer and the control application own",
+    "CuMode": "the boot guard owns this value: only the installer, the control application and the driver write it",
 }
 
 # The device properties of a device's software key that a driver must not modify, from

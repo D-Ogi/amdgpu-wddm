@@ -206,7 +206,7 @@ $plan = Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $
 $d = Get-Decision $plan 'DpmMaxMHz'
 Check (($d.decision -eq 'command') -and ($d.value -eq 1800) -and $d.write) '-DpmMaxMHz 1800 over the tester''s 1200'
 $d = Get-Decision $plan 'CuMode'
-Check (($d.decision -eq 'command') -and ($d.value -eq 40) -and $d.write) '-CuMode 40 (not in the table) written'
+Check (($d.decision -eq 'command') -and ($d.value -eq 40) -and $d.write) '-CuMode 40 from the command line over the table written'
 $d = Get-Decision $plan 'UnconfirmedStarts'
 Check (($d.decision -eq 'installer') -and ($d.value -eq 0) -and $d.write) 'UnconfirmedStarts reset to 0 (installer-owned)'
 $text = Format-RegistryPlan $plan
@@ -316,7 +316,7 @@ try {
     $plan = Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current $whole -Owned ([ordered]@{ UnconfirmedStarts = 0 }) -After (Read-RegistryValues $k) -Restore $restore
     Write-RegistryPlan $k $plan
     $v = Read-RegistryValues $k
-    Check (((Get-Decision $plan 'CuMode').decision -eq 'restored') -and ($v.CuMode -eq 40) -and ($v.CuModeConfirmed -eq 1)) "CuMode $($v.CuMode) and CuModeConfirmed $($v.CuModeConfirmed) back as before the driver package"
+    Check (((Get-Decision $plan 'CuMode').decision -eq 'same') -and ($v.CuMode -eq 40) -and ($v.CuModeConfirmed -eq 1)) "CuMode $($v.CuMode) and CuModeConfirmed $($v.CuModeConfirmed) back as before the driver package"
     Check ($v.LabNote -eq 'unit A') "a REG_SZ value outside the table back as before: LabNote '$($v.LabNote)'"
     Check (-not $v.ContainsKey('SomeBlob')) 'a REG_BINARY value is not written back (the installer names it in its log)'
     Check ($v.DpmMaxMHz -eq 1200) "a value of the table that the tester changed is still kept: DpmMaxMHz $($v.DpmMaxMHz)"

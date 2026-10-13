@@ -315,12 +315,12 @@ function Get-PendingRestart($State, $Boot) {
 $script:ResumePhases = @('testsigning-pending', 'driver-pending-restart')
 # -Repair is one of them (BD-069): the run after the restart has to know that this install is a repair, or it keeps a
 # closure that the tester asked to reopen.
-$script:InstallSwitches = @('NoControlApp', 'NoReboot', 'Force', 'Repair', 'ApplySystemTuning', 'NoStartMenuShortcut', 'NoDesktopShortcut')
+$script:InstallSwitches = @('NoControlApp', 'NoReboot', 'Force', 'Repair', 'ApplySystemTuning', 'NoStartMenuShortcut', 'NoDesktopShortcut', 'NoWallpaper')
 # A switch of the list above, and the switch that clears it explicitly. A choice the setup window or a script makes
 # must be able to turn a saved choice off again, not only on: without the second switch an install that once left
 # the desktop icon out would leave it out for ever, because the state keeps the first answer over every later run.
 # The Windows tuning has had this pair from the start (-ApplySystemTuning / -SkipSystemTuning).
-$script:InstallSwitchClears = @{ ApplySystemTuning = 'SkipSystemTuning'; NoStartMenuShortcut = 'StartMenuShortcut'; NoDesktopShortcut = 'DesktopShortcut' }
+$script:InstallSwitchClears = @{ ApplySystemTuning = 'SkipSystemTuning'; NoStartMenuShortcut = 'StartMenuShortcut'; NoDesktopShortcut = 'DesktopShortcut'; NoWallpaper = 'Wallpaper' }
 function Get-InstallInputs($Bound, $State, [string]$PackageVersion) {
     foreach ($pair in $script:InstallSwitchClears.GetEnumerator()) {
         if ($Bound.ContainsKey($pair.Key) -and [bool]$Bound[$pair.Key] -and $Bound.ContainsKey($pair.Value) -and [bool]$Bound[$pair.Value]) {
@@ -483,6 +483,22 @@ function Format-RegistryValue($V) { if ($V -is [array]) { return '[' + (@($V | F
 #       DPM_SETTING_LAST_REASON at every start with the SMU online). After one more start the installer cannot tell
 #       such a driver's guard 0 from a 0 the tester wrote, and the value stays 'kept'. A reopen deletes nothing
 #       there, because the record is the reason of the last start and that start owns it.
+#   CuMode   written 24 with CuModeClosedReason, the reason of the fallback: 3 (a start with all 40 graphics cores
+#       was never confirmed), or 2, 6, 7, 8 and 9 for a 40 that did not hold in the hardware (driver/kmd/cumode.c
+#       PersistFallback, from bc250_cu_decide force_stock and from bc250_cu_hardware_fallback). From KMD
+#       0.7.216.62 that record outlives its boot, because no later start overwrites it and only a start that reads
+#       a CuMode other than 24 deletes it (bc250_cu_decide clear_closed). The release default is 40, so without
+#       the record one unconfirmed start would hold a tester at 24 compute units through every later upgrade
+#       (BD-077, BD-069 for the graphics cores). A reopen writes CuMode 40 and deletes the record; the fallback
+#       itself already deleted CuModePending and CuModeConfirmed, so the reopened 40 is a fresh request that its
+#       own start confirms.
+#       CuMode has no legacy_record, and a driver that writes no CuModeClosedReason therefore keeps its 24 as the
+#       tester's own value. CuModeLastReason is not a sound legacy record: every start rewrites it with its own
+#       reason, and the reasons of a fallback are not the driver's alone - a tester's own 24 start whose stock
+#       restore does not read back writes 9 (RESTORE_FAILED) there as well. Reading such a value as a closure
+#       would take the tester's 24 away and start 40 against their choice, which is the worse error of the two:
+#       a tester whose 24 is a closure of an older driver gets it back with install.cmd -Repair or the Graphics
+#       page of the control application. DpmLastReason is sound because no start but a fallback writes 3, 4 or 8.
 # Which codes count depends on who writes the record. Only PersistFallback writes a durable record, so any reason in
 # it is the driver's act (any_reason), and a code the table does not name is reported by its number: a later caller
 # of PersistFallback with a new reason must not become a 0 that reads as the tester's own setting. A legacy record is
@@ -508,6 +524,15 @@ $script:DriverClosures = @{
                   4 = 'the driver went back to the base clock after a start that ended above it'
                   8 = 'the driver went back to the base clock after repeated clock changes that the firmware refused' }
         fallback = 'the driver went back to the base clock itself' }
+    CuMode = @{ closed = 24; record = 'CuModeClosedReason'; any_reason = $true
+        clear = @('CuModeClosedReason')
+        names = @{ 2 = 'invalid-mask'; 3 = 'unconfirmed'; 6 = 'power-gating'; 7 = 'stock-unexpected'; 8 = 'readback'; 9 = 'restore-failed' }
+        text = @{ 3 = 'the driver went back to 24 graphics cores after a start with all 40 that nobody confirmed'
+                  6 = 'the driver went back to 24 graphics cores because the firmware kept power gating on, where 40 cannot run'
+                  7 = 'the driver went back to 24 graphics cores because the firmware left them in a state it does not know'
+                  8 = 'the driver went back to 24 graphics cores because the core registers did not read back'
+                  9 = 'the driver went back to 24 graphics cores and could not put the values of the firmware back either' }
+        fallback = 'the driver went back to 24 graphics cores itself' }
 }
 # Pure: the driver closure behind one value, or $null. $Current is the whole key (Read-RegistryValues), because the
 # record sits next to the value. $Default is this release's default, so that a default equal to the closed value
@@ -581,6 +606,14 @@ function Get-RegistryDefaultPlan {
             $e | Add-Member -NotePropertyName closure_reason -NotePropertyValue $closure.reason
             # The record of the closure goes with it, so that the next start does not find a stale one.
             if ($decision -eq 'reopened' -and @($closure.clear).Count) { $e | Add-Member -NotePropertyName clear -NotePropertyValue @($closure.clear) }
+        }
+        # A value the tester named on the command line is their word about that very value, whatever number they
+        # chose, so the driver's record of its own fallback is stale and goes with the write. Without this,
+        # install.cmd -CuMode 24 over a closure left the record behind, and every install after it called the
+        # tester's own 24 a step back of the driver and offered a repair that takes it away. CuMode is the only
+        # closure with a switch that can write the closed value, so this case is new with BD-077.
+        elseif ($decision -eq 'command' -and $null -ne $closure -and @($closure.clear).Count) {
+            $e | Add-Member -NotePropertyName clear -NotePropertyValue @($closure.clear)
         }
         [void]$plan.Add($e)
     }
@@ -1297,22 +1330,106 @@ function Get-MemoryIntegrityState {
 #             "$where $kind" reads "desktop desktop icon" for the third row
 #   switch     the install switch that leaves it out
 #   arguments  the arguments of the shortcut's target
+#   legacy     $true for a name an older release wrote (below); the install never writes such a row
+#
+# The names (owner, 2026-10-13: "Ikonka na pulpicie i w menu powinna miec nazwe zaczynajaca sie od Nagi"): the
+# shortcuts carry the product name Nagi. Earlier releases wrote the same three shortcuts as
+# "amdgpu-wddm Control". Those three old names stay in this list as legacy rows, so an install over an older release
+# and the uninstall remove them, and the footprint sees them. A legacy row is removed only when its target is our own
+# control application (Get-LegacyShortcutCleanup): a file of that name that points anywhere else is not ours and stays.
+$script:ShortcutBrand = 'Nagi'
+$script:ControlShortcutName = 'Nagi Control App'
+$script:LegacyShortcutBrand = 'amdgpu-wddm'
+$script:LegacyControlShortcutName = 'amdgpu-wddm Control'
 function Get-ControlShortcutPaths {
     $startMenu = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs'
     $desktop = [Environment]::GetFolderPath('CommonDesktopDirectory')
     if (-not $desktop) { $desktop = Join-Path $env:Public 'Desktop' }
-    return @(
-        [pscustomobject]@{ kind = 'control'; where = 'Start menu'; label = 'Start menu entry'; switch = 'NoStartMenuShortcut'; arguments = ''; path = (Join-Path $startMenu 'amdgpu-wddm Control.lnk') }
-        [pscustomobject]@{ kind = 'recovery'; where = 'Start menu'; label = 'Start menu repair entry'; switch = 'NoStartMenuShortcut'; arguments = '--recovery'; path = (Join-Path $startMenu 'amdgpu-wddm Control (recovery).lnk') }
-        [pscustomobject]@{ kind = 'desktop icon'; where = 'desktop'; label = 'desktop icon'; switch = 'NoDesktopShortcut'; arguments = ''; path = (Join-Path $desktop 'amdgpu-wddm Control.lnk') }
-    )
+    $out = @()
+    foreach ($n in @(@($script:ControlShortcutName, $false), @($script:LegacyControlShortcutName, $true))) {
+        $name = [string]$n[0]; $legacy = [bool]$n[1]
+        $old = $(if ($legacy) { 'old ' } else { '' })
+        $out += [pscustomobject]@{ kind = 'control'; where = 'Start menu'; label = "${old}Start menu entry"; switch = 'NoStartMenuShortcut'; arguments = ''; legacy = $legacy; path = (Join-Path $startMenu "$name.lnk") }
+        $out += [pscustomobject]@{ kind = 'recovery'; where = 'Start menu'; label = "${old}Start menu repair entry"; switch = 'NoStartMenuShortcut'; arguments = '--recovery'; legacy = $legacy; path = (Join-Path $startMenu "$name (recovery).lnk") }
+        $out += [pscustomobject]@{ kind = 'desktop icon'; where = 'desktop'; label = "${old}desktop icon"; switch = 'NoDesktopShortcut'; arguments = ''; legacy = $legacy; path = (Join-Path $desktop "$name.lnk") }
+    }
+    return $out
 }
 
-# Pure: which shortcuts an install writes, for the two switches. Both absent = both places.
+# The target of a shortcut file, as Windows reads it (IShellLink through WScript.Shell): the full path, or $null when
+# the file is not there or cannot be read. Reading creates nothing: CreateShortcut opens an existing .lnk and writes
+# only on Save, which this never calls.
+function Read-ShortcutTarget([string]$Link) {
+    if (-not (Test-Path -LiteralPath $Link -PathType Leaf)) { return $null }
+    try { $t = [string](New-Object -ComObject WScript.Shell).CreateShortcut($Link).TargetPath } catch { return $null }
+    if (-not $t) { return $null }
+    return $t
+}
+
+# Pure: whether a shortcut target is one of our own executables. The same file compares equal whatever its letter
+# case, its separators or a trailing dot segment; a relative or empty target is never ours.
+function Test-OwnShortcutTarget([string]$Target, [string[]]$OwnTargets) {
+    if (-not $Target) { return $false }
+    if (-not [IO.Path]::IsPathRooted($Target)) { return $false }
+    try { $t = [IO.Path]::GetFullPath($Target) } catch { return $false }
+    foreach ($o in @($OwnTargets)) {
+        if (-not $o) { continue }
+        try { $f = [IO.Path]::GetFullPath([string]$o) } catch { continue }
+        if ([string]::Equals($t, $f, [StringComparison]::OrdinalIgnoreCase)) { return $true }
+    }
+    return $false
+}
+
+# The control application's executable in every install root that this computer may know: the root of this run, the
+# root the state or the release key recorded, and the default one. An older release wrote its shortcuts to the
+# executable of its own root, which is one of these.
+function Get-OwnControlTargets {
+    param([string[]]$InstallRoots, [string]$ExeName = 'amdgpu_wddm_control.exe')
+    $roots = @($InstallRoots) + @((Join-Path $env:ProgramFiles $script:ReleaseName))
+    $out = @()
+    foreach ($r in $roots) { if ($r) { $p = Join-Path ([string]$r) "control\$ExeName"; if ($out -notcontains $p) { $out += $p } } }
+    return $out
+}
+
+# Pure: what to do with each legacy shortcut row that exists. ReadTarget is a script block that returns the target of
+# one .lnk path ($null when unreadable); the install and the uninstall pass Read-ShortcutTarget, the unit tests their
+# own. A row whose target is ours is removed; any other row is kept, with the reason, because a file of that name
+# that points elsewhere was not written by us.
+function Get-LegacyShortcutCleanup {
+    param($Shortcuts, [scriptblock]$ReadTarget, [string[]]$OwnTargets)
+    $out = @()
+    foreach ($s in @($Shortcuts)) {
+        if (-not $s -or -not [bool]$s.legacy) { continue }
+        if (-not (Test-Path -LiteralPath $s.path -PathType Leaf)) { continue }
+        $target = & $ReadTarget $s.path
+        if (Test-OwnShortcutTarget $target $OwnTargets) { $out += [pscustomobject]@{ row = $s; action = 'remove'; target = $target; reason = 'it points at our control application' } }
+        elseif ($target) { $out += [pscustomobject]@{ row = $s; action = 'keep'; target = $target; reason = "it points at $target, which is not ours" } }
+        else { $out += [pscustomobject]@{ row = $s; action = 'keep'; target = $null; reason = 'its target cannot be read' } }
+    }
+    return $out
+}
+
+# Removes the legacy shortcuts of the control application that are ours (Get-LegacyShortcutCleanup) and says which
+# ones stay. The install calls it after it wrote the new names, the uninstall with the rest of the shortcuts.
+function Remove-LegacyControlShortcuts([string[]]$OwnTargets) {
+    $rows = @(Get-LegacyShortcutCleanup -Shortcuts (Get-ControlShortcutPaths) -ReadTarget { param($p) Read-ShortcutTarget $p } -OwnTargets $OwnTargets)
+    if (-not $rows.Count) { Write-Info "shortcuts of an older release ($($script:LegacyControlShortcutName)): none"; return }
+    foreach ($c in $rows) {
+        if ($c.action -eq 'remove') {
+            Invoke-Change "remove the $($c.row.label) $($c.row.path): the name of an older release; $($c.reason)" {
+                Remove-Item -LiteralPath $c.row.path -Force -ErrorAction SilentlyContinue
+            } | Out-Null
+        } else { Write-Info "kept: $($c.row.path), $($c.reason)" }
+    }
+}
+
+# Pure: which shortcuts an install writes, for the two switches. Both absent = both places. A legacy row is never
+# written.
 function Get-ControlShortcutPlan {
     param([bool]$NoStartMenu, [bool]$NoDesktop, $Shortcuts = (Get-ControlShortcutPaths))
     $out = @()
     foreach ($s in @($Shortcuts)) {
+        if ([bool]$s.legacy) { continue }
         if ($s.switch -eq 'NoStartMenuShortcut' -and $NoStartMenu) { continue }
         if ($s.switch -eq 'NoDesktopShortcut' -and $NoDesktop) { continue }
         $out += $s
@@ -1333,6 +1450,29 @@ function New-ControlShortcut {
     $s.IconLocation = "$Target,0"
     $s.Save()
     return $Link
+}
+
+# The Nagi wallpaper (owner, 2026-10-13: after a successful install the wallpaper is set, unless the person cleared
+# the box of the installer). The engine runs elevated, for whoever started it, and a picture is a setting of each
+# person's own session, so the engine sets nothing itself: it records the choice for Nagi Control App in
+# <SoftwareKey>\Release, Wallpaper (DWORD 1 or 0) and WallpaperStamp (REG_SZ, one value per install run). The
+# application sets the picture once per stamp for each person who signs in, after the installer's state says
+# 'verified' (tools/win/amdgpu_wddm_control/src/Wallpaper.cs). Pure: the two values.
+function Get-WallpaperRecord([bool]$Selected, [string]$Version, [DateTime]$Utc) {
+    return [ordered]@{ Wallpaper = $(if ($Selected) { 1 } else { 0 }); WallpaperStamp = ('{0} {1}' -f $Version, $Utc.ToUniversalTime().ToString('yyyyMMddTHHmmssZ')) }
+}
+# Writes the record. A failure is one line and never fails the install: the wallpaper is an extra.
+function Set-WallpaperRecord([bool]$Selected, [string]$Version) {
+    $rec = Get-WallpaperRecord -Selected $Selected -Version $Version -Utc ([DateTime]::UtcNow)
+    $k = "$($script:SoftwareKey)\Release"
+    Write-Info ("wallpaper: $(if ($Selected) { 'the Nagi wallpaper, set by Nagi Control App once for each person after the install is verified' } else { 'not set (-NoWallpaper)' })")
+    Invoke-Change "$k`: Wallpaper = $($rec.Wallpaper), WallpaperStamp = $($rec.WallpaperStamp)" {
+        try {
+            Initialize-RegistryKey $k
+            New-ItemProperty -LiteralPath $k -Name Wallpaper -Value $rec.Wallpaper -PropertyType DWord -Force | Out-Null
+            New-ItemProperty -LiteralPath $k -Name WallpaperStamp -Value $rec.WallpaperStamp -PropertyType String -Force | Out-Null
+        } catch { Write-Log "   wallpaper record not written: $($_.Exception.Message)" }
+    } | Out-Null
 }
 
 # ---- the Microsoft Visual C++ runtime our programs need ---------------------------------------------------------
@@ -2418,18 +2558,27 @@ function Get-ReleaseFootprint {
     & $probe 'H.264 encoder keys' { @{ present = (@($MftKeys).Count -gt 0); detail = $(if (@($MftKeys).Count) { @($MftKeys) -join ', ' } else { 'no key of ours' }) } }
     & $probe 'scheduled task' { $t = @(Get-OurScheduledTasks); @{ present = ($t.Count -gt 0); detail = $(if ($t.Count) { $t -join ', ' } else { 'no task of ours' }) } }
     & $probe 'RunOnce entry' { $p = [bool](Get-ItemProperty -LiteralPath $script:RunOnceKey -Name $script:RunOnceName -ErrorAction SilentlyContinue); @{ present = $p; detail = "$($script:RunOnceKey) $($script:RunOnceName)$(if ($p) { ' is there' } else { ' is gone' })" } }
+    # Both lists of names: the ones this release writes, and the ones of an older release (legacy rows), which count
+    # only when they point at our control application, as the uninstall removes them only then.
     & $probe 'shortcuts' {
-        $lnks = @(@(Get-ControlShortcutPaths) | Where-Object { Test-Path -LiteralPath $_.path })
+        $own = @(Get-OwnControlTargets -InstallRoots @($InstallRoot))
+        $lnks = @(@(Get-ControlShortcutPaths) | Where-Object { (Test-Path -LiteralPath $_.path -PathType Leaf) -and (-not [bool]$_.legacy -or (Test-OwnShortcutTarget (Read-ShortcutTarget $_.path) $own)) })
         @{ present = ($lnks.Count -gt 0); detail = $(if ($lnks.Count) { @($lnks | ForEach-Object { "$($_.where): $(Split-Path $_.path -Leaf)" }) -join ', ' } else { 'no shortcut of ours in the Start menu or on the desktop' }) }
     }
     & $probe 'installer state' { $p = (Test-Path -LiteralPath $script:StateDir); @{ present = $p; detail = "$($script:StateDir)$(if ($p) { ' is there (state, kept repair sets, verify reports)' } else { ' is gone' })" } }
     & $probe 'per-user data' {
-        $u = @(Get-OurUserDataDirs | Where-Object { @(Get-ChildItem -LiteralPath $_ -Force | Where-Object { $_.Name -ine 'system-tuning' }).Count -gt 0 })
+        $u = @(Get-OurUserDataDirs | Where-Object { @(Get-ChildItem -LiteralPath $_ -Force | Where-Object { $_.Name -notin $script:UserDataKept }).Count -gt 0 })
         @{ present = ($u.Count -gt 0); detail = $(if ($u.Count) { $u -join ', ' } else { 'no per-user release data other than retained tuning recovery journals' }) }
     }
     & $probe 'per-user tuning recovery' {
         $u = @(Get-OurUserDataDirs | ForEach-Object { Join-Path $_ 'system-tuning' } | Where-Object { Test-Path -LiteralPath $_ })
         @{ present = ($u.Count -gt 0); detail = $(if ($u.Count) { 'per-user tuning journals retained for their owners' } else { 'no per-user tuning journal' }) }
+    } $true
+    # The Nagi wallpaper picture stays: it can be the desktop background of its account, which the uninstall leaves
+    # alone (owner, 2026-10-13).
+    & $probe 'per-user wallpaper' {
+        $u = @(Get-OurUserDataDirs | ForEach-Object { Join-Path $_ 'wallpaper' } | Where-Object { Test-Path -LiteralPath $_ })
+        @{ present = ($u.Count -gt 0); detail = $(if ($u.Count) { 'the Nagi wallpaper picture stays for the accounts that may show it as their background' } else { 'no per-user wallpaper picture' }) }
     } $true
     & $probe 'certificates' { $c = @(Get-OurCertificates); @{ present = ($c.Count -gt 0); detail = $(if ($c.Count) { @($c | ForEach-Object { "$($_.store) $($_.thumbprint)" }) -join ', ' } else { 'no certificate of ours in Root or TrustedPublisher' }) } }
     # Kept on purpose: the firmware folder and C:\BC250 when they were there before the install, and the control
@@ -2441,6 +2590,138 @@ function Get-ReleaseFootprint {
         & $probe $name { $d = Join-Path (Split-Path $script:StateDir) $name; @{ present = (Test-Path -LiteralPath $d); detail = "$d is retained when present for optional Windows settings recovery" } } $true
     }
     return $rows.ToArray()
+}
+
+# BD-146: cancel only deletions of exact files this install will copy. Keep pairs intact, in order, including
+# duplicate and foreign entries. MoveFileEx defines an empty target as deletion; a nonempty target is a rename.
+# https://learn.microsoft.com/windows/win32/api/winbase/nf-winbase-movefileexw
+# An uninstaller also schedules directories: Windows removes those only when empty, so they stay in the list.
+function Get-PendingRemovalPath([string]$Path) {
+    if ($Path.StartsWith('\??\') -or $Path.StartsWith('\\?\')) { $Path = $Path.Substring(4) }
+    # Our destinations are full local paths. Do not resolve links, short names, variables or device paths.
+    if ($Path -notmatch '^[A-Za-z]:\\' -or $Path -match '(^|\\)\.{1,2}(\\|$)') { return $null }
+    return $Path
+}
+function Get-PendingRemovalPlan {
+    param([AllowEmptyCollection()][string[]]$Operations = @(), [AllowEmptyCollection()][string[]]$Destinations = @())
+    if ($Operations.Count % 2) { throw 'The pending file operations list has an incomplete pair. No entries were changed.' }
+    $ours = New-Object 'Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+    foreach ($d in $Destinations) {
+        $p = Get-PendingRemovalPath $d
+        if (-not $p) { throw "The install destination is not a full local file path: $d" }
+        [void]$ours.Add($p)
+    }
+    $keep = New-Object 'Collections.Generic.List[string]'
+    $cancel = New-Object 'Collections.Generic.List[string]'
+    for ($i = 0; $i -lt $Operations.Count; $i += 2) {
+        $source = $Operations[$i]; $target = $Operations[$i + 1]
+        if ([string]::IsNullOrEmpty($source)) { throw 'The pending file operations list has an empty source. No entries were changed.' }
+        $p = Get-PendingRemovalPath $source
+        if ($target -eq '' -and $p -and $ours.Contains($p)) { $cancel.Add($source) }
+        else { $keep.Add($source); $keep.Add($target) }
+    }
+    return [pscustomobject]@{ kept = $keep.ToArray(); cancelled = $cancel.ToArray() }
+}
+function Test-PendingFileOperationsEqual([string[]]$Left, [string[]]$Right) {
+    if ($Left.Count -ne $Right.Count) { return $false }
+    for ($i = 0; $i -lt $Left.Count; $i++) { if ($Left[$i] -cne $Right[$i]) { return $false } }
+    return $true
+}
+# Registry transactions serialize this read/modify/write with other installers. A conflict aborts our write
+# instead of discarding someone else's newly queued operation. No file I/O occurs inside the transaction.
+# https://learn.microsoft.com/windows/win32/api/winreg/nf-winreg-regopenkeytransactedw
+function Open-PendingFileTransaction {
+    param([Microsoft.Win32.RegistryKey]$Root, [string]$SubKey)
+    if (-not ('AmdgpuWddmInstaller.PendingFileTransaction' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using Microsoft.Win32;
+using Microsoft.Win32.SafeHandles;
+namespace AmdgpuWddmInstaller {
+    public sealed class PendingFileTransaction : IDisposable {
+        [DllImport("KtmW32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        static extern IntPtr CreateTransaction(IntPtr attributes, IntPtr id, uint options, uint isolation,
+            uint flags, uint timeout, string description);
+        [DllImport("KtmW32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)] static extern bool CommitTransaction(IntPtr transaction);
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)] static extern bool CloseHandle(IntPtr handle);
+        [DllImport("advapi32.dll", CharSet = CharSet.Unicode)]
+        static extern int RegOpenKeyTransacted(SafeRegistryHandle root, string subkey, uint options, int access,
+            out IntPtr key, IntPtr transaction, IntPtr reserved);
+        IntPtr transaction;
+        public RegistryKey Key { get; private set; }
+        public PendingFileTransaction(RegistryKey root, string subkey) {
+            transaction = CreateTransaction(IntPtr.Zero, IntPtr.Zero, 0, 0, 0, 5000, "amdgpu-wddm pending file removals");
+            if (transaction == new IntPtr(-1)) { transaction = IntPtr.Zero; throw new Win32Exception(Marshal.GetLastWin32Error()); }
+            try {
+                IntPtr key;
+                int error = RegOpenKeyTransacted(root.Handle, subkey, 0, 3, out key, transaction, IntPtr.Zero); // KEY_QUERY_VALUE | KEY_SET_VALUE
+                if (error != 0) throw new Win32Exception(error);
+                Key = RegistryKey.FromHandle(new SafeRegistryHandle(key, true));
+            } catch { Dispose(); throw; }
+        }
+        public void Commit() {
+            if (!CommitTransaction(transaction)) throw new Win32Exception(Marshal.GetLastWin32Error());
+        }
+        public void Dispose() {
+            if (Key != null) { Key.Dispose(); Key = null; }
+            if (transaction != IntPtr.Zero) { CloseHandle(transaction); transaction = IntPtr.Zero; }
+        }
+    }
+}
+'@
+    }
+    return (New-Object AmdgpuWddmInstaller.PendingFileTransaction -ArgumentList $Root, $SubKey)
+}
+# Production opens only Session Manager, inside Invoke-Change before any payload copy. Host tests name their
+# own HKCU scratch key. Remove-PathOrSchedule keeps no separate pending-removal journal.
+function Repair-PendingFileRemovals {
+    param([Parameter(Mandatory)][AllowEmptyCollection()][string[]]$Destinations,
+          [Microsoft.Win32.RegistryKey]$Root = [Microsoft.Win32.Registry]::LocalMachine,
+          [string]$SubKey = 'SYSTEM\CurrentControlSet\Control\Session Manager')
+    $transaction = Open-PendingFileTransaction -Root $Root -SubKey $SubKey
+    try {
+        $Key = $transaction.Key
+        $name = 'PendingFileRenameOperations'
+        $raw = $Key.GetValue($name, $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+        if ($null -eq $raw) { return 0 }
+        if ($Key.GetValueKind($name) -ne [Microsoft.Win32.RegistryValueKind]::MultiString -or $raw -isnot [string[]]) {
+            throw 'The pending file operations value is not REG_MULTI_SZ. No entries were changed.'
+        }
+        $plan = Get-PendingRemovalPlan -Operations $raw -Destinations $Destinations
+        if (-not $plan.cancelled.Count) { return 0 }
+        # Keep an empty MULTI_SZ rather than delete the value: the same write path serves every plan.
+        $Key.SetValue($name, [string[]]$plan.kept, [Microsoft.Win32.RegistryValueKind]::MultiString)
+        $written = $Key.GetValue($name, $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+        if ($null -eq $written -or $written -isnot [string[]] -or
+            -not (Test-PendingFileOperationsEqual $plan.kept $written)) {
+            throw 'The pending file operations could not be verified. No entries were changed.'
+        }
+        $transaction.Commit()
+        foreach ($p in $plan.cancelled) { Write-Log "   cancelled pending removal: $p" }
+        Write-Info "Kept $($plan.cancelled.Count) install file(s) from being deleted at the next restart."
+        return $plan.cancelled.Count
+    } finally { $transaction.Dispose() }
+}
+# Only real file sources in this run's selected trees are destinations. A disabled optional component, a stale
+# file in the install root and a file in another product's folder are never admitted by a directory prefix.
+function Get-InstallCopyDestinations {
+    param([Parameter(Mandatory)][string]$Package, [Parameter(Mandatory)][string]$InstallRoot,
+          [string[]]$PayloadDirs, [string[]]$FirmwareFiles = @(), [string]$FirmwareRoot = $script:FirmwareInstallDir)
+    $trees = @(@{ source = (Join-Path $Package 'installer'); target = (Join-Path $InstallRoot 'installer') },
+        @{ source = (Join-Path $Package 'licenses'); target = (Join-Path $InstallRoot 'licenses') })
+    foreach ($d in $PayloadDirs) { $trees += @{ source = (Join-Path $Package "payload\$d"); target = (Join-Path $InstallRoot $d) } }
+    foreach ($tree in $trees) {
+        foreach ($f in Get-ChildItem -LiteralPath $tree.source -Recurse -File -ErrorAction Stop) {
+            Join-Path $tree.target $f.FullName.Substring($tree.source.TrimEnd('\').Length + 1)
+        }
+    }
+    foreach ($f in 'manifest.json', 'uninstall.cmd', 'verify.cmd') { Join-Path $InstallRoot $f }
+    Join-Path $InstallRoot 'licenses\THIRD-PARTY.md'
+    foreach ($f in $FirmwareFiles) { Join-Path $FirmwareRoot (Split-Path $f -Leaf) }
 }
 
 # MoveFileEx(MOVEFILE_DELAY_UNTIL_REBOOT): delete a file that a running process (DWM) still has mapped.
@@ -2460,6 +2741,10 @@ public static extern bool MoveFileEx(string existing, string replacement, int fl
 # Per-user data of the release: the D3D12 engine's disk shader cache, the recent-launch list and the DWM
 # observations live in %LOCALAPPDATA%\amdgpu-wddm of every user who ran a program on the GPU. One folder per
 # profile in the ProfileList. A host test sets $script:ProfilePathsOverride to fixture profile folders.
+# Two folders in it stay at an uninstall (Remove-UserDataExceptTuning): the user's Windows tuning journal, and the
+# Nagi wallpaper picture, which can be that account's desktop background (owner, 2026-10-13: the uninstall leaves
+# the person's current wallpaper alone).
+$script:UserDataKept = @('system-tuning', 'wallpaper')
 function Get-OurUserDataDirs {
     $profiles = @()
     if ($null -ne $script:ProfilePathsOverride) { $profiles = @($script:ProfilePathsOverride) }

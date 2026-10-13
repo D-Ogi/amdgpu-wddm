@@ -1,9 +1,9 @@
 using System.Reflection;
 using System.Runtime.Versioning;
 
-[assembly: AssemblyTitle("amdgpu-wddm Control")]
-[assembly: AssemblyProduct("amdgpu-wddm")]
-[assembly: AssemblyDescription("Control application for the amdgpu-wddm driver on the ASRock BC-250")]
+[assembly: AssemblyTitle("Nagi Control App")]
+[assembly: AssemblyProduct("Nagi")]
+[assembly: AssemblyDescription("Control application of Nagi (amdgpu-wddm), the graphics driver for the ASRock BC-250")]
 [assembly: AssemblyVersion("0.7.0.0")]
 [assembly: AssemblyFileVersion("0.7.0.0")]
 // csc does not add this attribute by itself; without it the runtime treats the exe as an old-framework image and

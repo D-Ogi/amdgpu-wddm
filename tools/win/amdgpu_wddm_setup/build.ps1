@@ -21,7 +21,11 @@
 #      prepare with an engine that cannot start end on the result screen;
 #   4. --smoke-render: every setup screen from fixtures at 96, 120, 144 and 192 DPI in EN, PL, JA, KO, at a 150 %
 #      text size, without the guide character, with the high-contrast palette, and for six screen sizes from
-#      800x600 up (--work-area, in logical units): no overlap, nothing outside the window, G-A11Y (names, Tab reach,
+#      800x600 up (--work-area, in logical units): no overlap, nothing outside the window, G-BACKDROP (BD-137: every
+#      control that paints itself fills its whole client rectangle, which the picture cannot show because the parent
+#      drew the pixels under it first, and clears itself in the colour the window really paints under it, which the
+#      picture cannot show either because one flat colour over another leaves no overlap and no overflow),
+#      G-A11Y (names, Tab reach,
 #      tab order, Enter and Escape), G-CHROME, G-NOINT, G-SMALL, the owner's rule of 2026-10-12 that a 1024x768,
 #      800x600 or smaller screen draws no right-hand panel and a larger one draws it, and G-CONSENT, the owner's
 #      instruction of the same day that no screen asks the user for a permission: the plan screen carries no check

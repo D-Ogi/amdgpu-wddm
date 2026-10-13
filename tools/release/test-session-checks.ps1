@@ -320,7 +320,29 @@ Check ($confirmText -match 'Confirm-Health' -and $confirmText -match 'Complete-W
 if (Test-Path -LiteralPath $windowFile) {
     $windowText = [IO.File]::ReadAllText($windowFile)
     $kmd = @('bc250control', 'bc250kmd_cli', 'Bc250StartHealth', 'CurrentControlSet', 'New-ItemProperty', 'Set-ItemProperty', 'Microsoft.Win32.Registry', 'HKLM', 'Add-Type -TypeDefinition') | Where-Object { $windowText -cmatch [regex]::Escape($_) }
-    Check ($kmd.Count -eq 0) "the window script touches neither the driver nor the registry$(if ($kmd.Count) { ": $($kmd -join ', ')" } else { '' })"
+    Check ($kmd.Count -eq 0) "the window script opens no handle to the driver and writes nothing, in the registry or anywhere else$(if ($kmd.Count) { ": $($kmd -join ', ')" } else { '' })"
+    # The one thing it reads is this user's own preference for the clock window, under HKCU, which needs no rights
+    # and is the user's own to change. It reads it and nothing else: the write cmdlets are in the list above.
+    Check ($windowText -cmatch 'HKCU:\\Software\\amdgpu-wddm\\Control' -and $windowText -cmatch 'ShowStartWindow') 'the window script reads this user''s own switch for the clock window (HKCU ShowStartWindow)'
+    Check ($windowText -cmatch '(?m)^if \(-not \$showWindow\) \{ exit 3 \}') 'a person who turned the clock window off gets no window and the task reports 3'
+    # The sign-in notice (owner, 2026-10-13): the window task starts it, because it is the task that already runs
+    # in the session of the person who just signed in. Three rules of that start, all of them in this script:
+    #   it is started before the switch is read, so turning the clock window off never hides a driver that was
+    #   switched off; the script never waits for it, so the task completes inside its own time limit and does not
+    #   stop the notice; and a control application that is not installed changes nothing about the clock window.
+    Check ($windowText -cmatch '--start-notice') 'the window script starts the sign-in notice of the control application'
+    $noticeAt = $windowText.IndexOf('--start-notice')
+    $switchAt = $windowText.IndexOf('ShowStartWindow')
+    Check (($noticeAt -ge 0) -and ($switchAt -gt $noticeAt)) 'the notice is started before the clock-window switch is read, so the switch cannot hide it'
+    Check ($windowText -cmatch 'Start-Process[^\r\n]*--start-notice' -and $windowText -notmatch 'Start-Process[^\r\n]*-Wait') 'the window script does not wait for the notice'
+    # No startup information on that start, above all no -WindowStyle. Windows ignores the first ShowWindow call of
+    # a process whose launcher passed STARTUPINFO, and that first call is the only show a WinForms window makes, so
+    # a start with -WindowStyle Hidden (the style every headless smoke of this exe in the tree uses) would create
+    # the notice and never put it on the screen.
+    Check ($windowText -notmatch 'Start-Process[^\r\n]*--start-notice[^\r\n]*-WindowStyle' -and
+        $windowText -notmatch '-WindowStyle[^\r\n]*--start-notice') 'the notice is not started with a window style, so its window is actually shown'
+    Check ($windowText -cmatch '(?s)try \{.{0,2000}--start-notice.{0,200}\r?\n\} catch \{ \}') 'the notice start is guarded, so a control application that is missing or refused does not fail the logon'
+    Check ($windowText -cmatch 'Test-Path -LiteralPath \$exe -PathType Leaf') 'the window script starts the notice only when the control application is there'
     Check ($windowText -match '(?m)^param\([^\r\n]*\[int\]\$Seconds') 'the window script takes its own bound (-Seconds)'
     Check ($windowText -match 'System.Windows.Forms' -and $windowText -match 'TopMost') 'the window script shows the top-most window that keeps DWM presenting'
     # The window runs in a session this project never watches, and it writes no file (a standard user may write

@@ -347,13 +347,13 @@ $saveProfiles = $script:ProfilePathsOverride
 $script:ProfilePathsOverride = @((Join-Path $work 'footprint\profiles\a'), (Join-Path $work 'footprint\profiles\b'))
 $fp = @(Get-ReleaseFootprint -InstallRoot $fpRoot -State ([pscustomobject]@{ firmware_dir_existed = $true }) -MftKeys @('HKLM:\SOFTWARE\Classes\CLSID\{test}'))
 $items = @($fp | ForEach-Object { $_.item })
-$wantItems = @('install root', 'System32 stub', 'SysWOW64 stub', 'driver store', 'driver service', 'DP audio interrupt', 'policy keys', 'Vulkan registration', 'H.264 encoder keys', 'scheduled task', 'RunOnce entry', 'shortcuts', 'installer state', 'per-user data', 'per-user tuning recovery', 'certificates', 'GPU firmware', 'control application data', 'system-tuning', 'system-tuning-recovery')
+$wantItems = @('install root', 'System32 stub', 'SysWOW64 stub', 'driver store', 'driver service', 'DP audio interrupt', 'policy keys', 'Vulkan registration', 'H.264 encoder keys', 'scheduled task', 'RunOnce entry', 'shortcuts', 'installer state', 'per-user data', 'per-user tuning recovery', 'per-user wallpaper', 'certificates', 'GPU firmware', 'control application data', 'system-tuning', 'system-tuning-recovery')
 Check ((($items -join ' | ') -eq ($wantItems -join ' | '))) "every item of the release is checked: $($items -join ', ')"
 Check (-not @($fp | Where-Object { $_.detail -match '^not read' }).Count) "every probe read its item$(if (@($fp | Where-Object { $_.detail -match '^not read' }).Count) { ': ' + (@($fp | Where-Object { $_.detail -match '^not read' } | ForEach-Object { "$($_.item) $($_.detail)" }) -join '; ') })"
 $byItem = @{}; foreach ($row in $fp) { $byItem[$row.item] = $row }
 Check ((-not $byItem['install root'].present) -and ($byItem['install root'].detail -match 'is gone')) 'an install root that is not there is gone'
 Check ((@($byItem['H.264 encoder keys']).present) -and ($byItem['H.264 encoder keys'].detail -match '\{test\}')) 'the encoder keys come from the caller (uninstall.ps1 reads them with the classes key it uses)'
-Check (($byItem['GPU firmware'].kept) -and ($byItem['control application data'].kept) -and ($byItem['per-user tuning recovery'].kept) -and ($byItem['system-tuning'].kept) -and ($byItem['system-tuning-recovery'].kept) -and -not @($fp | Where-Object { $_.kept -and $_.item -notin @('GPU firmware', 'control application data','per-user tuning recovery','system-tuning','system-tuning-recovery') }).Count) 'only pre-existing firmware, control backups and tuning recovery are kept on purpose'
+Check (($byItem['GPU firmware'].kept) -and ($byItem['control application data'].kept) -and ($byItem['per-user tuning recovery'].kept) -and ($byItem['per-user wallpaper'].kept) -and ($byItem['system-tuning'].kept) -and ($byItem['system-tuning-recovery'].kept) -and -not @($fp | Where-Object { $_.kept -and $_.item -notin @('GPU firmware', 'control application data','per-user tuning recovery','per-user wallpaper','system-tuning','system-tuning-recovery') }).Count) 'only pre-existing firmware, control backups, tuning recovery and the Nagi wallpaper picture are kept on purpose'
 Write-Text (Join-Path $fpRoot 'manifest.json') '{}'
 Write-Text (Join-Path $script:StateDir 'state.json') '{}'
 $fp2 = @(Get-ReleaseFootprint -InstallRoot $fpRoot -State $null)
@@ -438,7 +438,7 @@ Check ((Test-RunningReleaseWitness -Witness $wit -Boot $boot -Reply '0x000700C7'
 Check (-not (Test-RunningReleaseWitness -Witness $wit -Boot ([ordered]@{ boot_id = 42 }) -Reply '0x000700C7').valid) 'reader: witness of an earlier boot: ignored'
 Check (-not (Test-RunningReleaseWitness -Witness $wit -Boot $boot -Reply '0x000700C8').valid) 'reader: another driver reply: not this release'
 Check (-not (Test-RunningReleaseWitness -Witness $wit -Boot $boot -Reply '0x000700C7' -State ([pscustomobject]@{ mutation_boot_id = 41; mutation_utc = '2026-10-04T08:05:00.0000000Z' })).valid) 'reader: an install action after the witness in this boot voids it'
-Check ((Test-RunningReleaseWitness -Witness $wit -Boot $boot -Reply '0x000700C7' -State ([pscustomobject]@{ mutation_boot_id = 41; mutation_utc = '2026-10-04T07:59:00.0000000Z' })).valid) 'reader: an install action before the witness leaves it valid'
+Check (-not (Test-RunningReleaseWitness -Witness $wit -Boot $boot -Reply '0x000700C7' -State ([pscustomobject]@{ mutation_boot_id = 41; mutation_utc = '2026-10-04T07:59:00.0000000Z' })).valid) 'BD-138 reader: legacy action UTC cannot prove it preceded the witness'
 Check ((Test-RunningReleaseWitness -Witness $wit -Boot $boot -Reply '0x000700C7' -State ([pscustomobject]@{ mutation_boot_id = 40; mutation_utc = '2026-10-04T09:00:00.0000000Z' })).valid) 'reader: an install action of another boot leaves it valid'
 $wpath = Join-Path $work 'running-release.json'
 $testStatePath = Join-Path $work 'absent-state\state.json'
@@ -869,12 +869,19 @@ Check (-not (Get-Command Get-VcRuntimeMissing -ErrorAction SilentlyContinue)) 't
 Check ($installText -notmatch 'VcRuntimeNeeded') 'the preflight keeps no value about the runtime that nothing reads'
 
 'the shortcuts of the control application: Start menu and desktop, both by default (owner, 2026-10-12)'
-$scAll = @(Get-ControlShortcutPaths)
-Check ($scAll.Count -eq 3) "three shortcuts the installer knows ($($scAll.Count))"
+$scKnown = @(Get-ControlShortcutPaths)
+$scAll = @($scKnown | Where-Object { -not $_.legacy })
+$scOld = @($scKnown | Where-Object { $_.legacy })
+Check ($scAll.Count -eq 3) "three shortcuts the installer writes ($($scAll.Count))"
+# The Nagi names (owner, 2026-10-13), and the three names of the older releases in the same list.
+Check ((@($scAll | ForEach-Object { Split-Path $_.path -Leaf }) -join '|') -eq 'Nagi Control App.lnk|Nagi Control App (recovery).lnk|Nagi Control App.lnk') "the shortcuts carry the name Nagi Control App ($(@($scAll | ForEach-Object { Split-Path $_.path -Leaf }) -join ', '))"
+Check ($scOld.Count -eq 3 -and (@($scOld | ForEach-Object { Split-Path $_.path -Leaf }) -join '|') -eq 'amdgpu-wddm Control.lnk|amdgpu-wddm Control (recovery).lnk|amdgpu-wddm Control.lnk') 'the list knows the three names an older release wrote'
+Check ((@($scOld | ForEach-Object { "$($_.kind)/$($_.where)/$(Split-Path $_.path)" }) -join '|') -eq (@($scAll | ForEach-Object { "$($_.kind)/$($_.where)/$(Split-Path $_.path)" }) -join '|')) 'each old name is the same shortcut in the same folder as a new one'
+Check (@(Get-ControlShortcutPlan -NoStartMenu $false -NoDesktop $false | Where-Object { $_.legacy }).Count -eq 0) 'the install never writes an old name'
 Check ((@($scAll | Where-Object { $_.where -eq 'Start menu' }).Count -eq 2) -and (@($scAll | Where-Object { $_.where -eq 'desktop' }).Count -eq 1)) 'two in the Start menu (the application and its recovery view), one on the desktop'
 Check (@($scAll | Where-Object { $_.kind -eq 'recovery' })[0].where -eq 'Start menu') 'the recovery entry stays in the Start menu only'
 Check (@($scAll | Where-Object { $_.kind -eq 'recovery' })[0].arguments -eq '--recovery') 'the recovery entry carries its own argument'
-Check (@($scAll | Where-Object { $_.where -eq 'desktop' })[0].path -match '[\\/]Desktop[\\/]amdgpu-wddm Control\.lnk$') "the desktop icon goes to the desktop of every user ($(@($scAll | Where-Object { $_.where -eq 'desktop' })[0].path))"
+Check (@($scAll | Where-Object { $_.where -eq 'desktop' })[0].path -match '[\\/]Desktop[\\/]Nagi Control App\.lnk$') "the desktop icon goes to the desktop of every user ($(@($scAll | Where-Object { $_.where -eq 'desktop' })[0].path))"
 Check (@($scAll | ForEach-Object { $_.path } | Select-Object -Unique).Count -eq 3) 'the three paths differ'
 # The name a line prints. The log and the dry run print the label alone: "$where $kind" read "desktop desktop icon"
 # for the third row, which is the one line of this step a tester sees most often.
@@ -897,7 +904,7 @@ $scWork = Join-Path $work 'shortcuts'
 [void][IO.Directory]::CreateDirectory($scWork)
 $scTarget = Join-Path $scWork 'amdgpu_wddm_control.exe'
 Write-Text $scTarget 'not a real program'
-$scLink = Join-Path $scWork 'sub\amdgpu-wddm Control (recovery).lnk'
+$scLink = Join-Path $scWork 'sub\Nagi Control App (recovery).lnk'
 [void](New-ControlShortcut -Link $scLink -Target $scTarget -Arguments '--recovery')
 $scRead = (New-Object -ComObject WScript.Shell).CreateShortcut($scLink)
 Check ($scRead.TargetPath -eq $scTarget) 'a written shortcut points at the control application'
@@ -916,8 +923,76 @@ Check ($installText -match 'New-ControlShortcut -Link \$link -Target \$controlEx
 Check ($installText -notmatch '\$\(\$_\.where\) \$\(\$_\.kind\)') 'no line joins the place and the kind into "desktop desktop icon" again'
 Check ($installText -match 'shortcuts: \$\(if \(\$shortcutPlan\.Count\) \{ @\(\$shortcutPlan \| ForEach-Object \{ \$_\.label \}\)') 'the summary line prints the name of each shortcut'
 Check ($installText -notmatch "Join-Path \`$env:ProgramData 'Microsoft\\\\Windows\\\\Start Menu") 'no second place in install.ps1 builds a shortcut path of its own'
-Check ($uninstallText -match 'foreach \(\$sc in @\(Get-ControlShortcutPaths\)\)') 'the uninstall removes every shortcut the install can write'
-Check ($uninstallText -notmatch "amdgpu-wddm Control \(recovery\)\.lnk'") 'the uninstall names no shortcut of its own any more'
+Check ($uninstallText -match 'foreach \(\$sc in @\(Get-ControlShortcutPaths \| Where-Object \{ -not \[bool\]\$_\.legacy \}\)\)') 'the uninstall removes every shortcut the install can write'
+Check ($uninstallText -notmatch "amdgpu-wddm Control \(recovery\)\.lnk'" -and $uninstallText -notmatch "Nagi Control App \(recovery\)\.lnk'") 'the uninstall names no shortcut of its own any more'
+Check ($uninstallText -match 'Remove-LegacyControlShortcuts -OwnTargets @\(Get-OwnControlTargets -InstallRoots @\(\$root\)\)') 'the uninstall removes the old names too, by the same rule as the install'
+Check ($installText -match 'Remove-LegacyControlShortcuts -OwnTargets @\(Get-OwnControlTargets -InstallRoots @\(\$InstallRoot\)') 'an install over an older release removes the old names'
+Check ($installText -match '\$shortcutLeft = .*-not \[bool\]\$_\.legacy') 'a shortcut left out by a switch is a new name only: an old name goes by its own rule'
+
+'the shortcuts of an older release (amdgpu-wddm Control): removed only when they point at our control application'
+$lgWork = Join-Path $work 'legacy-shortcuts'
+$lgRoot = Join-Path $lgWork 'Program Files\amdgpu-wddm'
+$lgOurs = Join-Path $lgRoot 'control\amdgpu_wddm_control.exe'
+$lgForeign = Join-Path $lgWork 'Other\amdgpu_wddm_control.exe'
+Write-Text $lgOurs 'not a real program'
+Write-Text $lgForeign 'not ours either'
+$lgOwn = @(Get-OwnControlTargets -InstallRoots @($lgRoot))
+Check ($lgOwn -contains $lgOurs) "the executable of the install root is ours ($($lgOwn -join ', '))"
+Check ($lgOwn -contains (Join-Path $env:ProgramFiles 'amdgpu-wddm\control\amdgpu_wddm_control.exe')) 'so is the one of the default install root'
+Check (Test-OwnShortcutTarget $lgOurs.ToUpperInvariant() $lgOwn) 'the same path in other letter case is ours'
+Check (-not (Test-OwnShortcutTarget $lgForeign $lgOwn)) 'a program of the same name in another folder is not ours'
+Check (-not (Test-OwnShortcutTarget 'amdgpu_wddm_control.exe' $lgOwn) -and -not (Test-OwnShortcutTarget '' $lgOwn) -and -not (Test-OwnShortcutTarget $null $lgOwn)) 'a relative or empty target is never ours'
+# Three old shortcuts of the three kinds, written for real: one points at our program, one at a foreign program of
+# the same name, one is a file of that name that is no shortcut. A fourth old name is not there at all.
+$lgMenu = Join-Path $lgWork 'Start Menu'
+$lgDesk = Join-Path $lgWork 'Desktop'
+$lgRows = @(
+    [pscustomobject]@{ kind = 'control'; where = 'Start menu'; label = 'old Start menu entry'; legacy = $true; path = (Join-Path $lgMenu 'amdgpu-wddm Control.lnk') }
+    [pscustomobject]@{ kind = 'recovery'; where = 'Start menu'; label = 'old Start menu repair entry'; legacy = $true; path = (Join-Path $lgMenu 'amdgpu-wddm Control (recovery).lnk') }
+    [pscustomobject]@{ kind = 'desktop icon'; where = 'desktop'; label = 'old desktop icon'; legacy = $true; path = (Join-Path $lgDesk 'amdgpu-wddm Control.lnk') }
+    [pscustomobject]@{ kind = 'control'; where = 'Start menu'; label = 'Start menu entry'; legacy = $false; path = (Join-Path $lgMenu 'Nagi Control App.lnk') }
+    [pscustomobject]@{ kind = 'desktop icon'; where = 'desktop'; label = 'old desktop icon'; legacy = $true; path = (Join-Path $lgWork 'Gone\amdgpu-wddm Control.lnk') }
+)
+[void](New-ControlShortcut -Link $lgRows[0].path -Target $lgOurs)
+[void](New-ControlShortcut -Link $lgRows[1].path -Target $lgForeign -Arguments '--recovery')
+Write-Text $lgRows[2].path 'a file with the name of a shortcut'
+[void](New-ControlShortcut -Link $lgRows[3].path -Target $lgOurs)
+$lgRead = { param($p) Read-ShortcutTarget $p }
+Check ((& $lgRead $lgRows[0].path) -eq $lgOurs) 'the target of an old shortcut is read back'
+$lgPlan = @(Get-LegacyShortcutCleanup -Shortcuts $lgRows -ReadTarget $lgRead -OwnTargets $lgOwn)
+Check ($lgPlan.Count -eq 3) "the three old names that exist are judged, the missing one and the new name are not ($($lgPlan.Count))"
+Check (@($lgPlan | Where-Object { $_.row.path -eq $lgRows[0].path })[0].action -eq 'remove') 'an old shortcut that points at our control application is removed'
+Check (@($lgPlan | Where-Object { $_.row.path -eq $lgRows[1].path })[0].action -eq 'keep') 'an old shortcut that points at a foreign program is kept'
+Check (@($lgPlan | Where-Object { $_.row.path -eq $lgRows[1].path })[0].reason -like "*$lgForeign*") 'and the line says where it points'
+Check (@($lgPlan | Where-Object { $_.row.path -eq $lgRows[2].path })[0].action -eq 'keep') 'a file of that name that is no shortcut is kept'
+# The writer of the install and of the uninstall, over these rows (the list function is replaced for this test only).
+$lgList = ${function:Get-ControlShortcutPaths}
+try {
+    $lgMutated = $script:Mutated
+    Set-Item function:Get-ControlShortcutPaths ([scriptblock]::Create('return $global:lgTestRows'))
+    $global:lgTestRows = $lgRows
+    $lgOut = @(Remove-LegacyControlShortcuts -OwnTargets $lgOwn 6>&1 | ForEach-Object { [string]$_ })
+    Check (-not (Test-Path -LiteralPath $lgRows[0].path)) 'Remove-LegacyControlShortcuts removed the old shortcut that is ours'
+    Check ((Test-Path -LiteralPath $lgRows[1].path) -and (Test-Path -LiteralPath $lgRows[2].path)) 'it kept the foreign shortcut and the file that is no shortcut'
+    Check (Test-Path -LiteralPath $lgRows[3].path) 'it left the new name alone'
+    Check (Test-Path -LiteralPath $lgOurs) 'it removed a shortcut, never the program'
+    Check (@($lgOut | Where-Object { $_ -like '*kept:*' }).Count -eq 2) "it names the two files it kept ($(@($lgOut | Where-Object { $_ -like '*kept:*' }).Count))"
+    # The footprint knows both lists: the new name, and an old name of ours, are left; a foreign old name is not ours.
+    [void](New-ControlShortcut -Link $lgRows[0].path -Target $lgOurs)
+    $lgFp = @(Get-ReleaseFootprint -InstallRoot $lgRoot -State $null | Where-Object { $_.item -eq 'shortcuts' })
+    Check ($lgFp.Count -eq 1 -and $lgFp[0].present) 'the footprint lists the shortcuts that are left'
+    Check (($lgFp[0].detail -like '*Nagi Control App.lnk*') -and ($lgFp[0].detail -like '*amdgpu-wddm Control.lnk*')) "it names the new and the old name of ours ($($lgFp[0].detail))"
+    Check ($lgFp[0].detail -notlike '*amdgpu-wddm Control (recovery).lnk*') 'it does not count the old name that points at a foreign program'
+    Remove-LegacyControlShortcuts -OwnTargets $lgOwn 6>&1 | Out-Null
+    Remove-Item -LiteralPath $lgRows[3].path -Force
+    $lgFp2 = @(Get-ReleaseFootprint -InstallRoot $lgRoot -State $null | Where-Object { $_.item -eq 'shortcuts' })
+    Check (-not $lgFp2[0].present) "after the removal of the new and the old names of ours nothing of ours is left ($($lgFp2[0].detail))"
+} finally {
+    Set-Item function:Get-ControlShortcutPaths $lgList
+    Remove-Variable -Name lgTestRows -Scope Global -ErrorAction SilentlyContinue
+    $script:Mutated = $lgMutated
+}
+Check (@(Get-ControlShortcutPaths).Count -eq 6) 'the list of the installer is back after the test'
 # The switches an install carries over the restart that follows it.
 $scState = [pscustomobject]@{ phase = 'testsigning-pending'; package_version = '1.0'; install_switches = @('NoDesktopShortcut') }
 $scInputs = Get-InstallInputs -Bound @{} -State $scState -PackageVersion '1.0'
@@ -939,6 +1014,21 @@ foreach ($switch in 'StartMenuShortcut', 'DesktopShortcut') {
     Check (-not ($script:InstallSwitches -contains $switch)) "-$switch is not saved itself: it only clears the saved No switch"
 }
 Check ($installText -match '\$NoStartMenuShortcut = \[switch\]\(@\(\$installInputs\.switches\)') 'the install reads the shortcut answers back from the state'
+# The Nagi wallpaper (owner, 2026-10-13): an answer of the same kind as the shortcuts, carried over the restart and
+# recorded for the control application, which sets the picture itself (common.ps1, Get-WallpaperRecord).
+$wpState = [pscustomobject]@{ phase = 'testsigning-pending'; package_version = '1.0'; install_switches = @('NoWallpaper') }
+Check (@((Get-InstallInputs -Bound @{} -State $wpState -PackageVersion '1.0').switches) -contains 'NoWallpaper') 'the run after the restart leaves the wallpaper out again'
+Check (-not (@((Get-InstallInputs -Bound @{ Wallpaper = $true } -State $wpState -PackageVersion '1.0').switches) -contains 'NoWallpaper')) '-Wallpaper on a later run of the same install puts the wallpaper back'
+$bad = $null
+try { [void](Get-InstallInputs -Bound @{ NoWallpaper = $true; Wallpaper = $true } -State $wpState -PackageVersion '1.0') } catch { $bad = $_.Exception.Message }
+Check ($bad -and $bad -match '-NoWallpaper and -Wallpaper cannot be used together') "-NoWallpaper with -Wallpaper is a usage error ($bad)"
+Check (($installText -match '\[switch\]\$Wallpaper\b') -and ($installText -match '\[switch\]\$NoWallpaper\b')) 'install.ps1 takes -Wallpaper and -NoWallpaper'
+Check (-not ($script:InstallSwitches -contains 'Wallpaper')) '-Wallpaper is not saved itself: it only clears the saved -NoWallpaper'
+$wpRec = Get-WallpaperRecord -Selected $true -Version '1.2.3' -Utc (New-Object DateTime 2026, 10, 13, 12, 34, 56, ([DateTimeKind]::Utc))
+Check (($wpRec.Wallpaper -eq 1) -and ($wpRec.WallpaperStamp -eq '1.2.3 20261013T123456Z')) "the wallpaper record: chosen, with the version and the UTC time of the run ($($wpRec.WallpaperStamp))"
+Check ((Get-WallpaperRecord -Selected $false -Version '1.2.3' -Utc ([DateTime]::UtcNow)).Wallpaper -eq 0) 'the wallpaper record: a cleared box is 0'
+Check ($installText -match 'Set-WallpaperRecord -Selected \(-not \[bool\]\$NoWallpaper\)') 'the install records the wallpaper answer for the control application'
+Check ($installText -match 'wallpaper = \(-not \[bool\]\$NoWallpaper\)') 'the decision event reports the wallpaper answer to the setup window'
 
 'which Windows this driver is made for: n-2, and a line instead of a refusal (owner, 2026-10-11 and 2026-10-12)'
 # Get-WindowsSupportFindings is pure, so every version, channel and edition is tested here and none of them needs a
@@ -1051,6 +1141,50 @@ $uninstall = [IO.File]::ReadAllText((Join-Path $Installer 'uninstall.ps1'))
 Check ($uninstall -match 'Wait-RestartCountdown -Seconds \$script:RestartCountdownSeconds') 'the uninstaller restarts after the same visible countdown as the installer'
 Check ($uninstall -match '-KeepTestSigning') 'test signing goes off again by itself, and a switch leaves it on'
 Check ($uninstall -match "Join-Path \`$dataRoot 'setup'") 'the uninstaller removes what a single-file setup unpacked'
+
+'[BD-138] elapsed boot stamps and the actual verify report writer, without running install.ps1'
+$firstTick = Get-BootElapsedMilliseconds
+$timedWitness = Get-RunningReleaseWitness -Manifest $m -ManifestSha256 $msha -Reading $reading -Boot $boot -RecordedBy 'verify'
+$lastTick = Get-BootElapsedMilliseconds
+Check ($timedWitness.record.boot_elapsed_ms -is [long] -and $timedWitness.record.boot_elapsed_ms -ge $firstTick -and $timedWitness.record.boot_elapsed_ms -le $lastTick) 'BD-138 writer records monotonic milliseconds since boot'
+$stamped = Get-RunningReleaseWitness -Manifest $m -ManifestSha256 $msha -Reading $reading -Boot $boot -RecordedBy 'verify' -BootElapsedMs 2000
+foreach ($elapsed in 1000, 2000, 3000, $null, -1, '1000') {
+    $action = [pscustomobject]@{ mutation_boot_id = $boot.boot_id; mutation_utc = '2020-01-01T00:00:00Z'; mutation_boot_elapsed_ms = $elapsed }
+    $answer = Test-RunningReleaseWitness -Witness $stamped.record -Boot $boot -Reply '0x000700C7' -State $action
+    Check ($answer.valid -eq ($elapsed -is [int] -and $elapsed -eq 1000)) "BD-138 mutation order uses uptime, not the earlier UTC: $elapsed"
+}
+$legacyWitness = $stamped.record | ConvertTo-Json | ConvertFrom-Json
+$legacyWitness.PSObject.Properties.Remove('boot_elapsed_ms')
+Check (-not (Test-RunningReleaseWitness -Witness $legacyWitness -Boot $boot -Reply '0x000700C7' -State ([pscustomobject]@{ mutation_boot_id = $boot.boot_id; mutation_boot_elapsed_ms = 1000 })).valid) 'BD-138 legacy witness cannot survive a same-boot mutation by wall time'
+
+# Load only the production function's AST. Dot-sourcing the installer itself would be a host installation.
+$tokens = $null; $errors = $null
+$ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $Installer 'install.ps1'), [ref]$tokens, [ref]$errors)
+if ($errors.Count) { throw 'install.ps1 did not parse' }
+$writer = $ast.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Write-VerifyReport' }, $false)
+if (-not $writer) { throw 'Write-VerifyReport not found' }
+. ([scriptblock]::Create($writer.Extent.Text))
+$script:StateDir = Join-Path $work 'bd138'
+$InstallRoot = Join-Path $work 'bd138-install'
+$script:Manifest = [pscustomobject]@{ name = 'test'; version = 'test'; kmd_abi = '0x000700C7' }
+$script:VerifyManifestSha256 = 'A' * 64
+$script:VerifyManifestSource = 'install-root'
+$script:VerifyComplete = $true; $script:DryRunMode = $false
+$script:BootIdentity = [ordered]@{ boot_id = 9; boot_utc = '2026-10-13T01:00:00Z' }
+$before = Get-BootElapsedMilliseconds
+Write-VerifyReport @([pscustomobject]@{ check = 'test'; pass = $true; detail = 'synthetic' })
+Write-VerifyReport @([pscustomobject]@{ check = 'test'; pass = $false; detail = 'synthetic' })
+$after = Get-BootElapsedMilliseconds
+$reports = @(Get-ChildItem -LiteralPath (Join-Path $script:StateDir 'verify') -Filter 'verify-*.json')
+Check ($reports.Count -eq 2) 'BD-138 separate report files survive successive writes'
+foreach ($file in $reports) {
+    $savedReport = Get-Content -LiteralPath $file.FullName -Raw | ConvertFrom-Json
+    Check ($savedReport.boot_id -eq 9 -and $null -ne $savedReport.boot_elapsed_ms -and $savedReport.boot_elapsed_ms -ge $before -and $savedReport.boot_elapsed_ms -le $after) 'BD-138 serialized report carries boot and uptime within the writing interval'
+    Check ($file.Name -match '^verify-\d{8}T\d{9}Z-[a-f0-9]{32}\.json$') 'BD-138 report filename includes a collision-resistant suffix'
+}
+$script:state = [pscustomobject]@{ schema = 1 }
+Set-MutationRecord
+Check ($script:state.mutation_boot_elapsed_ms -is [long] -and $script:state.mutation_boot_elapsed_ms -ge $after) 'BD-138 mutation writer records uptime too'
 
 Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 if ($fail) { "$fail check(s) failed"; exit 1 }

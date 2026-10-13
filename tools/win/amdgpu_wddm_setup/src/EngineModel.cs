@@ -29,6 +29,8 @@ namespace AmdgpuWddmSetup
         // The two shortcut answers the engine would act on: its own command line, or the answer an earlier run of
         // the same install saved. Both are on where the engine says nothing about them.
         public bool StartMenuShortcut = true, DesktopShortcut = true;
+        // The wallpaper answer the engine would act on, on where the engine says nothing (an older engine).
+        public bool Wallpaper = true;
     }
 
     public sealed class SettingsPlan
@@ -85,6 +87,7 @@ namespace AmdgpuWddmSetup
         public string Mode, Package, StartPhase, EngineContract, CurrentStage, CancelWhere, RestartReason, Continuation;
         public bool Started, Gui, DryRun, CancelAvailable, InstallActionSeen, WitnessWritten;
         public int Steps, RealSteps, LastSeq, Ignored;
+        public int PendingRemovalsCancelled;
         public readonly List<string> Stages = new List<string>();
         public readonly List<CheckRow> Checks = new List<CheckRow>();
         public EngineDecision Decision;
@@ -127,6 +130,7 @@ namespace AmdgpuWddmSetup
                         SecureBoot = Json.Str(e, "secure_boot"), BitLocker = Json.Str(e, "bitlocker"),
                         SystemTuning = Json.Bool(e, "system_tuning"),
                         StartMenuShortcut = Json.BoolOr(e, "start_menu_shortcut", true), DesktopShortcut = Json.BoolOr(e, "desktop_shortcut", true),
+                        Wallpaper = Json.BoolOr(e, "wallpaper", true),
                         CompatibilityOk = c != null && Json.Bool(c, "ok"), CompatibilityReasons = Json.Strs(c, "reasons"),
                     };
                     break;
@@ -155,6 +159,9 @@ namespace AmdgpuWddmSetup
                     break;
                 case "witness":
                     WitnessWritten = Json.Bool(e, "written");
+                    break;
+                case "pending-removals-cancelled":
+                    PendingRemovalsCancelled = Math.Max(PendingRemovalsCancelled, Json.Int(e, "count"));
                     break;
                 case "result":
                     ResultOutcome = Json.Str(e, "outcome"); ResultMessageId = Json.Str(e, "message_id"); CancelAvailable = false;
@@ -384,6 +391,17 @@ namespace AmdgpuWddmSetup
                 case SetupCause.Welcome: return "guide.welcome";
                 default: return "guide.page-tip";
             }
+        }
+
+        // While an installation runs (the Working screen), its tip takes turns with one more: what the name Nagi
+        // stands for (owner, 2026-10-13). The turn changes every TipSeconds; an even turn is the working tip, an odd
+        // one the name. Every other screen and cause keeps its one tip, whatever the turn.
+        public const int TipSeconds = 15;
+        public const string NameTipId = "guide.name";
+
+        public static string TipId(SetupCause c, int turn)
+        {
+            return c == SetupCause.WorkInProgress && (turn & 1) == 1 ? NameTipId : TextId(c);
         }
     }
 }

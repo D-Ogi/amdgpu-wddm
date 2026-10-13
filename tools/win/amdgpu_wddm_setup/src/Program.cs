@@ -1,4 +1,4 @@
-// amdgpu-wddm Setup: the setup window for the amdgpu-wddm driver (GUI plan v7 phase 1, WU-001, WU-044, WU-047,
+// Nagi Setup: the setup window for the Nagi graphics driver, amdgpu-wddm (GUI plan v7 phase 1, WU-001, WU-044, WU-047,
 // WU-048, WU-051, WU-058). Arguments: SetupArgs.cs. The window runs as the invoking user and starts itself again as
 // administrator for an install, an update, a repair or a continuation (one UAC prompt); preparing an offline folder
 // needs no administrator. The headless entries (--smoke-render, --smoke-engine) never show a window.
@@ -17,12 +17,17 @@ namespace AmdgpuWddmSetup
     {
         public static string VersionText { get { return Assembly.GetExecutingAssembly().GetName().Version.ToString(); } }
 
+        // The name a person reads (owner, 2026-10-13: Nagi is the main brand of everything the package shows). The
+        // title bar draws it; the window's own title (task bar, Alt+Tab) is the string ui.window-title. Files,
+        // folders, registry keys and the support file's schema keep the technical name amdgpu-wddm.
+        public const string ProductName = "Nagi Setup";
+
         [STAThread]
         static int Main(string[] argv)
         {
             var a = SetupArgs.Parse(argv);
             if (a.Error != null) { Console.Error.WriteLine("amdgpu_wddm_setup: " + a.Error); return 2; }
-            if (a.Mode == "version") { Console.WriteLine("amdgpu-wddm Setup " + VersionText); return 0; }
+            if (a.Mode == "version") { Console.WriteLine(ProductName + " " + VersionText); return 0; }
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             if (a.Mode == "smoke-render") return SmokeRender(a);
@@ -48,7 +53,7 @@ namespace AmdgpuWddmSetup
             if ((a.Mode != "prepare-offline" || carries) && !Native.IsElevated())
             {
                 if (Native.RelaunchElevated(argv)) return 0;
-                MessageBox.Show(Strings.T("elevation.declined"), "amdgpu-wddm Setup", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(Strings.T("elevation.declined"), ProductName, MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return 5;
             }
             if (carries)
@@ -62,7 +67,7 @@ namespace AmdgpuWddmSetup
                     try { mine = _run.WaitOne(0); } catch (AbandonedMutexException) { mine = true; }
                     if (!mine)
                     {
-                        MessageBox.Show(Strings.T("payload.already-running"), "amdgpu-wddm Setup", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        MessageBox.Show(Strings.T("payload.already-running"), ProductName, MessageBoxButtons.OK, MessageBoxIcon.Information);
                         return 8;
                     }
                 }
@@ -81,7 +86,7 @@ namespace AmdgpuWddmSetup
                     }
                     catch (Exception) { }
                     MessageBox.Show(Strings.T(e is Payload.FolderException ? "payload.folder" : "payload.damaged"),
-                        "amdgpu-wddm Setup", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        ProductName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return 7;
                 }
                 a.PayloadPackage = a.Package;
@@ -142,7 +147,7 @@ namespace AmdgpuWddmSetup
                     DateTime.UtcNow.ToString("o") + " " + VersionText + Environment.NewLine + e + Environment.NewLine, new UTF8Encoding(false));
             }
             catch (Exception) { }
-            try { MessageBox.Show(Strings.T("ui.unexpected"), "amdgpu-wddm Setup", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+            try { MessageBox.Show(Strings.T("ui.unexpected"), ProductName, MessageBoxButtons.OK, MessageBoxIcon.Warning); }
             catch (Exception) { }
             Environment.Exit(9);
         }
@@ -166,6 +171,9 @@ namespace AmdgpuWddmSetup
                         form.ShowFixture(f);
                         foreach (var line in form.Render(Path.Combine(a.SmokeDir, f.Name + ".png")).Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries)) w.AppendLine(f.Name + ": " + line);
                         foreach (var p in form.Accessibility()) w.AppendLine(f.Name + ": G-A11Y " + p);
+                        // G-BACKDROP (BD-137): every control clears its own background, which the picture above
+                        // cannot show because there the parent painted the pixels under it first.
+                        foreach (var p in form.Backdrops()) w.AppendLine(f.Name + ": G-BACKDROP " + p);
                         // The guide character: her picture shows on every screen unless --no-nagi, and never with it.
                         if (form.GuideArtWanted != form.GuideArtShown)
                             w.AppendLine(f.Name + ": G-ART the guide art " + (form.GuideArtShown ? "shows but was not wanted" : "is wanted but does not show") +

@@ -55,8 +55,15 @@ namespace AmdgpuWddmControl
                 _work = null;
                 int code = t.Status == TaskStatus.RanToCompletion ? t.Result : RecoveryRunner.Failed;
                 bool ok = code == RecoveryRunner.Done;
+                // The change was made and only a restart of Windows finishes it (enable-driver, when the graphics
+                // device did not come back by itself). That is not a failure: the helper has already cleared what
+                // kept the driver off, so the person is told what happened and offered the restart that finishes
+                // it, here as in the window at sign-in. Saying "the change was not made" here would send a person
+                // whose driver is one restart away from working back to the beginning.
+                bool restartNeeded = code == RecoveryRunner.RestartNeeded;
                 if (action == "cu-confirm") _cuConfirmFailed = !ok;
-                string text = code == Program.NotElevated ? Strings.T("action.not-elevated") : ok ? Strings.T("action.done") : Strings.T("action.failed");
+                string text = code == Program.NotElevated ? Strings.T("action.not-elevated")
+                    : restartNeeded ? Strings.T("notice.restart-needed") : ok ? Strings.T("action.done") : Strings.T("action.failed");
                 RefreshAll();
                 if (action == "cu-confirm" && ok)
                 {
@@ -65,9 +72,9 @@ namespace AmdgpuWddmControl
                     if (view.Class == CuClass.Waiting) { _cuConfirmFailed = true; text = Strings.T("cu.run.confirm-failed"); ok = false; ComputeStatus(); }
                 }
                 if (ok && plan.OfferRestart) text += " " + Strings.T("plan.when.restart");
-                Result(text, ok);
+                Result(text, ok || restartNeeded);
                 if (done != null) done(ok);
-                if (ok && plan.OfferRestart) OfferRestart();
+                if (restartNeeded || ok && plan.OfferRestart) OfferRestart();
             }, TaskScheduler.FromCurrentSynchronizationContext());
         }
 

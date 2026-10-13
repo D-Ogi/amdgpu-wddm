@@ -48,6 +48,9 @@ namespace AmdgpuWddmSetup
         // continues an install after a restart passes no switch at all, so the saved answer stands (BD: a positive
         // switch clears the saved negative one, which turned an unticked box back on at the restart).
         public bool? StartMenuShortcut, DesktopShortcut;
+        // The Nagi wallpaper box of the same card (owner, 2026-10-13), on unless a switch or the person says no;
+        // null in the same way as the two shortcut answers.
+        public bool? Wallpaper;
         public readonly List<string> EngineArgs = new List<string>();
         // smoke entries
         public string SmokeDir, Language = "en", Script = "install.ps1";
@@ -78,6 +81,8 @@ namespace AmdgpuWddmSetup
                     case "--start-menu-shortcut": a.StartMenuShortcut = true; break;
                     case "--no-desktop-shortcut": a.DesktopShortcut = false; break;
                     case "--desktop-shortcut": a.DesktopShortcut = true; break;
+                    case "--no-wallpaper": a.Wallpaper = false; break;
+                    case "--wallpaper": a.Wallpaper = true; break;
                     case "--continue": a.SetMode("continue"); break;
                     case "--repair": a.SetMode("repair"); break;
                     case "--prepare-offline": a.SetMode("prepare-offline"); break;

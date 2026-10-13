@@ -132,6 +132,34 @@ namespace AmdgpuWddmSetup
             Fonts();
         }
 
+        // ---- the colour under a control (BD-137) -------------------------------------------------------------------
+
+        // The colour the window really paints under a control, for a control that paints its own background.
+        //
+        // It may not be read from Parent.BackColor. Every layout panel of these windows is Color.Transparent, and a
+        // SolidBrush of a colour whose alpha is 0 paints nothing at all, so the fill that was meant to clear the
+        // control left the pixels of whatever had used the shared double buffer before it: the language pills each
+        // carried the pill painted before them and a word from the step rail, and the two option buttons of "Where
+        // the files come from" carried each other's text (BD-137). WinForms paints no background of its own for
+        // these controls either: ButtonBase sets ControlStyles.Opaque, and Control.WmPaint runs the background layer
+        // only for a control that is not opaque (.NET Framework reference source, Control.PaintWithErrorHandling;
+        // ControlStyles.Opaque in the Windows Forms documentation), so the whole client rectangle is the control's
+        // own to fill. Probe of 2026-10-13: Button, CheckBox and RadioButton report Opaque true, Label and
+        // FlowLayoutPanel false.
+        //
+        // A card paints a colour of its own over its BackColor, so a container like that answers with IBackdrop
+        // instead of its BackColor; everything else is the first ancestor whose BackColor is really a colour.
+        public static Color Backdrop(Control c)
+        {
+            for (var p = c == null ? null : c.Parent; p != null; p = p.Parent)
+            {
+                var painted = p as IBackdrop;
+                if (painted != null) return painted.Backdrop;
+                if (p.BackColor.A == 255) return p.BackColor;
+            }
+            return Back;
+        }
+
         // ---- fonts -----------------------------------------------------------------------------------------------
 
         static HashSet<string> _installed;

@@ -1,6 +1,16 @@
-# amdgpu-wddm
+<p align="center"><img src="docs/media/nagi-banner.webp" width="860" alt="Nagi (amdgpu-wddm): an AMD GPU driver for Windows 11 on the ASRock BC-250"></p>
 
-An open Windows driver for AMD GPUs, made first for the ASRock BC-250 (AMD Cyan Skillfish APU, gfx1013). The Windows
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/media/nagi-lockup-dark.svg">
+    <img src="docs/media/nagi-lockup-light.svg" height="84" alt="Nagi">
+  </picture>
+</h1>
+
+<p align="center"><b>Nagi's AMD Graphics Infrastructure</b>, the driver project also known as amdgpu-wddm.<br>
+<sub>Yes, the N is Nagi again. A recursive acronym, the way Unix people like them.</sub></p>
+
+Nagi is an open Windows driver for AMD GPUs, made first for the ASRock BC-250 (AMD Cyan Skillfish APU, gfx1013). The Windows
 desktop, Direct3D 12, Direct3D 11 and Vulkan games run on the GPU of the board. Inside, the kernel driver uses AMD's
 own amdgpu code, and Mesa RADV, DXVK and vkd3d-proton work behind the standard Windows runtimes. The driver is
 experimental and has a test signature. Not affiliated with or endorsed by AMD, ASRock or Microsoft.
@@ -14,7 +24,7 @@ You need an ASRock BC-250 with Windows 11 x64, version 23H2 or newer, and an int
 1. Download the setup program from the [latest release](https://github.com/D-Ogi/amdgpu-wddm/releases/latest).
 2. Run it and click Install. It checks the board, downloads the AMD GPU firmware, turns on the test mode of
    Windows and restarts the computer.
-3. After the restart, amdgpu-wddm Control shows the driver, the clocks, the temperature and the fan.
+3. After the restart, Nagi Control App shows the driver, the clocks, the temperature and the fan.
 
 The installer stops on a computer that is not a BC-250 and changes nothing there. Secure Boot must be off. The stock
 BC-250 BIOS has no Secure Boot, so it is off already. Removal, settings and what to do when something fails:

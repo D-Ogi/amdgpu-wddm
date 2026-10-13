@@ -1,11 +1,14 @@
-# Polish strings of amdgpu-wddm Control. Every line was read by a Polish speaker (status rev, 2026-10-12)
-# against one terminology: one English term keeps one Polish word in both apps. Format: src/Strings.cs.
+# Polish strings of Nagi Control App. Every line with status rev was read by a Polish speaker (2026-10-12)
+# against one terminology: one English term keeps one Polish word in both apps. A line added after that
+# reading starts at status mt, so the build's review queue asks for it. Format: src/Strings.cs.
 
 # ---- graphics cores ----
 cu.choice.all|rev|c8029dd4|Twój wybór: Wszystkie (40).
 cu.choice.standard|rev|fa436287|Twój wybór: Standardowe (24).
 cu.choice.invalid|rev|9ed29361|Twój wybór jest nieprawidłowy; wybierz Standardowe (24) albo Wszystkie (40).
 cu.choice.unreadable|rev|ee127a9b|Nie można odczytać Twojego wyboru.
+cu.choice.driver-24|mt|a8fa591b|Ustawione jest Standardowe (24), ale tę liczbę wybrał sterownik, nie Ty.
+cu.note.driver-24|mt|0199b2dd|Wybierz Wszystkie (40) i uruchom ponownie system Windows, aby znów używać wszystkich 40 rdzeni.
 cu.choice.after-restart|rev|07660ab1|Zacznie działać po następnym ponownym uruchomieniu systemu Windows.
 cu.run.standard|rev|a1be65f1|Liczba działających rdzeni: {0}.
 cu.run.waiting|rev|c00ce647|Liczba działających rdzeni: {0}, jeszcze niepotwierdzona. Bez potwierdzenia nowego ustawienia 40 rdzeni następne uruchomienie wróci do 24 rdzeni.
@@ -31,7 +34,8 @@ cu.refuse.unreadable|rev|d945441d|Nie można odczytać zapisanego ustawienia.
 cu.refuse.already40|rev|4f5796de|Wszystkie (40) są już wybrane.
 cu.refuse.already24|rev|91c3ed3d|Standardowe (24) są już wybrane.
 cu.preview.write40|rev|46267060|Wybiera wszystkie 40 rdzeni graficznych.
-cu.preview.remove-mode|rev|3920ecbe|Wybiera standardowe 24 rdzenie graficzne.
+cu.preview.write24|rev|3920ecbe|Wybiera standardowe 24 rdzenie graficzne.
+cu.preview.remove-closed|mt|93f4029d|Zapisuje, że standardowe 24 rdzenie graficzne to Twój wybór, a nie krok wstecz wykonany przez sterownik.
 cu.preview.remove-confirmed|rev|d10b327e|Usuwa wcześniejsze potwierdzenie 40 rdzeni, aby nowe ustawienie zostało potwierdzone przy własnym uruchomieniu.
 cu.preview.remove-disable|rev|51075647|Wcześniejsze diagnostyczne ograniczenie liczby rdzeni zostanie usunięte.
 cu.result.nothing|rev|54ca5460|Nic nie zostało zmienione.
@@ -96,6 +100,7 @@ guide.all-good|rev|f523ac28|Wszystko wygląda dobrze. Można grać.
 guide.tip.settings|rev|d4c81f93|Twoje wybory na tej stronie pozostają po aktualizacji sterownika.
 guide.tip.display|rev|fff5e425|Jeśli po zmianie monitora okno się zgubi, samo wróci na widoczny ekran.
 guide.tip.graphics|rev|bce30225|Zmiany taktowania i rdzeni zaczną działać po następnym ponownym uruchomieniu systemu Windows. Ustawienia dla wszystkich gier działają od następnego uruchomienia gry.
+guide.name|mt|58a9149a|Nagi to skrót od {0}. Tak, N to znowu Nagi.
 # ---- status card on Home (WU-007, WU-052, WU-061) ----
 status.title.problem|rev|4241fd03|Coś wymaga Twojej uwagi
 status.title.attention|rev|2908a908|Sprawdź to
@@ -104,8 +109,8 @@ status.title.ok|rev|6dbc080d|Gotowe do gry
 status.title.unknown|rev|3e28dda8|Stan nieznany
 status.unreadable|rev|8c31205d|Aplikacja nie mogła teraz odczytać stanu sterownika.
 status.ok-detail|rev|a5875517|Sterownik działa i nic nie czeka na Twoją reakcję.
-status.not-installed|rev|20e303d1|Sterownik amdgpu-wddm nie jest zainstalowany na tym komputerze.
-status.not-installed.next|rev|663c2562|Zainstaluj go instalatorem amdgpu-wddm ze strony wydania.
+status.not-installed|mt|fc070032|Sterownik grafiki Nagi nie jest zainstalowany na tym komputerze.
+status.not-installed.next|mt|187b98b1|Zainstaluj go programem Nagi Setup ze strony wydania.
 status.driver-not-running|rev|5818d3e1|Sterownik grafiki nie działa. Windows używa podstawowego trybu wyświetlania.
 status.driver-not-running.next|rev|3588314e|Uruchom ponownie system Windows. Jeśli to się nie zmieni, otwórz Pomoc i wykonaj kroki z „Ekran pozostaje czarny lub sterownik się nie uruchamia”.
 status.install-stopped|rev|58f52a20|Ostatnia instalacja zatrzymała się przed ukończeniem.
@@ -530,7 +535,7 @@ help.guide.display.4|rev|7a5f2a9b|Jeśli po aktualizacji obraz jest nieprawidło
 help.guide.safe|rev|d2304dae|Naprawa w trybie awaryjnym
 help.guide.safe.1|rev|7f161492|Przytrzymaj klawisz Shift i wybierz Uruchom ponownie w menu Start.
 help.guide.safe.2|rev|b12561b0|Wybierz Rozwiązywanie problemów, Opcje zaawansowane, Ustawienia uruchamiania, Uruchom ponownie, a następnie naciśnij 4, aby włączyć tryb awaryjny.
-help.guide.safe.3|rev|0fce9cbb|Otwórz „amdgpu-wddm Control (recovery)” z menu Start i wybierz Napraw.
+help.guide.safe.3|mt|2c9b1fcf|Otwórz „Nagi Control App (recovery)” z menu Start i wybierz Napraw.
 help.guide.safe.4|rev|bb202726|Te kroki są też na stronie wydania, więc możesz je przeczytać na innym urządzeniu.
 help.start.text|rev|75b035b9|Ponownie pokaż kartę „Pierwsze kroki” na Stronie głównej.
 help.start.show|rev|42892e31|Pokaż ponownie
@@ -564,7 +569,9 @@ help.report.contents|rev|437aea62|Zawartość
 help.report.save|rev|c7ca9b29|Zapisz raport
 help.about.title|rev|4efca0d1|Informacje
 help.about.release|rev|1751ebfd|Wydanie sterownika {0}
-help.about.text|rev|5e62f6df|Sterownik open source dla płyty ASRock BC-250. Bez konta, bez telemetrii.
+help.about.text|mt|c9714463|Nagi (amdgpu-wddm) to sterownik open source dla płyty ASRock BC-250. Bez konta, bez telemetrii.
+help.about.name|mt|a9f92e00|Nagi to skrót od {0}.
+brand.expansion|mt-safe|8b8af7be|Nagi's AMD Graphics Infrastructure
 # ---- recovery view (WU-068) ----
 recovery.title|rev|48f6a8d5|Odzyskiwanie
 recovery.intro|rev|cf19b743|Ten widok działa nawet wtedy, gdy sterownik lub reszta aplikacji nie działa. Tylko odczytuje, co jest zainstalowane.
@@ -1161,3 +1168,48 @@ help.auto.collecting|rev|1267cd3d|Sterownik nie ma jeszcze potwierdzonego urucho
 help.auto.saved|rev|ad41ef59|Zapisano raport diagnostyczny: {0}. Odfiltrowano typowe dane osobowe. Przejrzyj plik przed udostępnieniem. Niczego nie wysłano.
 
 help.auto.failed|rev|e242261b|Nie udało się zapisać automatycznego raportu diagnostycznego. Otwórz Pomoc, aby spróbować ponownie.
+drv.verify.earlier-boot|mt|d7afb829|Ostatnia pełna kontrola nie powiodła się przed ponownym uruchomieniem. Zainstalowany sterownik teraz działa.
+status.verification-earlier-boot|mt|6b5b86e8|Ostatnia pełna kontrola była przed ponownym uruchomieniem. Zainstalowany sterownik teraz działa.
+
+# ---- the sign-in notice, the one-click repair and the switch for the window after sign-in (owner, 2026-10-13) ----
+notice.guard.title|mt|660b2a51|Sterownik karty graficznej został wyłączony
+notice.guard.text|mt|1f5d6130|Sterownik karty graficznej został wyłączony, aby komputer dał się dalej używać: jego ostatnie uruchomienia nie dokończyły sprawdzenia.\nWindows rysuje teraz obraz swoim podstawowym sterownikiem ekranu, więc gry nie działają, a wszystko jest wolniejsze.\nMożesz włączyć sterownik karty graficznej z powrotem. Nic innego w tym komputerze się nie zmieni.
+notice.failed.title|mt|fb8e175f|Sterownik karty graficznej nie uruchomił się
+notice.failed.text|mt|1e13a43f|Sterownik karty graficznej nie uruchomił się, więc Windows rysuje obraz swoim podstawowym sterownikiem ekranu: gry nie działają, a wszystko jest wolniejsze.\nProgram Nagi Control App pokazuje, co się stało i co zrobić dalej.
+notice.open-app|mt|f8a181ac|Otwórz Nagi Control App
+notice.close|mt|7d9eb7ac|Zamknij
+notice.working|mt|2a07b127|Włączam sterownik karty graficznej z powrotem. Może to potrwać do czterech minut, a obraz może na chwilę zgasnąć.
+notice.working.seconds|mt|dae58fb2|{0} s
+notice.done|mt|3d647c8d|Sterownik karty graficznej znowu działa.
+notice.action-failed|mt|26a5f377|Nie udało się teraz uruchomić sterownika karty graficznej. Następny krok to ponowne uruchomienie systemu Windows.
+notice.restart-needed|mt|55461c06|Ten komputer jest ustawiony tak, aby znowu uruchomić sterownik karty graficznej. Uruchom ponownie system Windows, aby to dokończyć.
+notice.not-needed|mt|2890eefa|Ta naprawa nie jest już potrzebna. Otwórz Nagi Control App, aby zobaczyć stan sterownika karty graficznej.
+notice.open-failed|mt|44569b54|Nie udało się otworzyć programu Nagi Control App z tego miejsca. Otwórz go z menu Start.
+status.action.enable-driver|mt|1aa40cb7|Włącz sterownik karty graficznej z powrotem...
+status.driver-refused|mt|0f7cc434|Sterownik karty graficznej został wyłączony na wszelki wypadek, bo jego ostatnie uruchomienia nie dokończyły sprawdzenia. Windows używa swojego podstawowego ekranu, więc gry nie działają.
+status.driver-refused.next|mt|449a51bf|Włącz sterownik karty graficznej z powrotem. Jeśli się nie uruchomi, uruchom ponownie system Windows.
+plan.title.enable-driver|mt|3ebf7632|Włączenie sterownika karty graficznej z powrotem
+plan.line.enable-driver|mt|eb9dd536|Licznik uruchomień bez sprawdzenia wraca do zera, więc sterownik może znowu się uruchomić.
+plan.line.enable-driver-confirm|mt|8eda43a1|Urządzenie graficzne uruchamia się ponownie, a nowe uruchomienie zostaje oznaczone jako działające.
+plan.enable-driver.dark|mt|02d9a741|Obraz może zgasnąć na kilka sekund i raz zmienić rozmiar.
+plan.enable-driver.restart|mt|73638369|Jeśli sterownik karty graficznej się nie uruchomi, program to napisze i zaproponuje ponowne uruchomienie systemu Windows.
+plan.refuse.driver-on|mt|7532d61c|Sterownik karty graficznej już działa, więc nie ma czego włączać.
+plan.refuse.not-guard|mt|040c6a83|Sterownik karty graficznej nie został wyłączony na wszelki wypadek, więc to tutaj nie pomoże. Otwórz Pomoc, aby znaleźć następny krok.
+settings.start.title|mt|9a62389e|Po zalogowaniu
+search.settings.start-window|mt|d956c490|Pokazuj okno sprawdzenia po zalogowaniu
+search.settings.start-window.terms|mt|3cedb013|uruchomienie|sprawdzenie|okno|logowanie|zalogowanie|niebieskie|zegar
+settings.start-window.cost|mt|87e0a47c|To okno przez dwie minuty podtrzymuje rysowanie obrazu, a właśnie to pozwala sterownikowi dokończyć sprawdzenie swojego uruchomienia. Bez niego sprawdzenie może zostać niedokończone, a przy następnym uruchomieniu systemu Windows układ graficzny pracuje ze swoją niższą, stałą częstotliwością. Jeśli sprawdzenie dalej pozostaje niedokończone, sterownik po kilku uruchomieniach systemu Windows sam się wyłącza, a Windows używa wtedy swojego podstawowego ekranu, dopóki nie włączysz sterownika z powrotem.
+settings.start-window.notice|mt|c48dfcba|Ostrzeżenie o wyłączonym sterowniku karty graficznej pojawia się zawsze, niezależnie od tego pola.
+help.setting.start-window|mt|0e802003|Po zalogowaniu na dwie minuty pojawia się w lewym górnym rogu małe okno z zegarem. Zmieniający się zegar podtrzymuje rysowanie obrazu, a sterownik tego potrzebuje, aby dokończyć sprawdzenie swojego uruchomienia. Wyłącz je tylko wtedy, gdy przeszkadza: sprawdzenie może wtedy zostać niedokończone, przy następnym uruchomieniu systemu Windows układ graficzny pracuje ze swoją niższą, stałą częstotliwością, a jeśli sprawdzenie dalej pozostaje niedokończone, sterownik po kilku uruchomieniach sam się wyłącza i Windows używa swojego podstawowego ekranu, dopóki nie włączysz sterownika z powrotem. To pole dotyczy tylko Ciebie i nie wymaga praw administratora.
+search.settings.wallpaper|mt|42350221|Tapeta Nagi
+search.settings.wallpaper.terms|mt|e2a1f213|tapeta|tło|pulpit|obraz|Nagi
+settings.wallpaper.note|mt|af8edf22|Po sprawdzonej instalacji instalator raz ustawia tapetę Nagi jako tło pulpitu, chyba że wyczyszczono jej pole. Poprzednie tło jest najpierw zapisywane. Tutaj możesz ponownie ustawić tapetę Nagi albo przywrócić poprzednie tło.
+settings.wallpaper.set|mt|ce6e26e6|Ustaw tapetę Nagi
+settings.wallpaper.restore|mt|90ce1c66|Przywróć moją poprzednią tapetę
+settings.wallpaper.done|mt|64e92ae9|Tapeta Nagi jest teraz tłem pulpitu.
+settings.wallpaper.failed|mt|fd1e10bd|Nie udało się ustawić tapety. Nic innego się nie zmieniło. Jeśli to się powtarza, napraw instalację.
+settings.wallpaper.restored|mt|a7c47858|Poprzednie tło wróciło.
+settings.wallpaper.restored-partial|mt|c85e565d|Poprzednim tłem był pokaz slajdów lub Windows Spotlight. Obraz wraca tylko tam, gdzie Windows go jeszcze miał. Aby ponownie włączyć pokaz slajdów lub Spotlight, użyj Ustawień systemu Windows: Personalizacja, Tło.
+settings.wallpaper.restore-failed|mt|7af0bb53|Nie udało się przywrócić poprzedniego tła: jego obrazu nie ma już na tym komputerze. Wybierz tło w Ustawieniach systemu Windows: Personalizacja, Tło.
+settings.wallpaper.nothing-saved|mt|d8f54a55|Dla Twojego konta nie zapisano poprzedniego tła, więc nie ma czego przywracać.
+help.setting.wallpaper|mt|18d99de4|Instalator ustawia tapetę Nagi raz dla każdej osoby po sprawdzonej instalacji, chyba że wyczyszczono jej pole, i najpierw zapisuje tło, które ta osoba miała. „Ustaw tapetę Nagi” ustawia obraz ponownie. „Przywróć moją poprzednią tapetę” przywraca zapisane tło. Pokaz slajdów lub Windows Spotlight wraca tylko jako ostatni obraz: włącz go ponownie w Ustawieniach systemu Windows: Personalizacja, Tło. Oba przyciski zmieniają tylko Twoje własne tło i nie wymagają uprawnień administratora.

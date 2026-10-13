@@ -34,9 +34,13 @@ static partial class UnitTests
 
         // The allow-lists: Allowed is unchanged, the CU setter has its own narrow set.
         foreach (var n in CuMode.ValueNames) Check(!Recovery.Allowed(Recovery.ParametersPath, n), "Recovery.Allowed keeps " + n + " out");
-        Check(Recovery.CuAllowed(RegWrite.Dword(Recovery.ParametersPath, "CuMode", 40)) && Recovery.CuAllowed(RegWrite.Remove(Recovery.ParametersPath, "CuMode")) &&
-            Recovery.CuAllowed(RegWrite.Remove(Recovery.ParametersPath, "CuDisableWgp")) && Recovery.CuAllowed(RegWrite.Remove(Recovery.ParametersPath, "CuModeConfirmed")), "CuAllowed: the setter's set");
-        foreach (var w in new[] { RegWrite.Dword(Recovery.ParametersPath, "CuMode", 24), RegWrite.Dword(Recovery.ParametersPath, "CuModeConfirmed", 40),
+        Check(Recovery.CuAllowed(RegWrite.Dword(Recovery.ParametersPath, "CuMode", 40)) && Recovery.CuAllowed(RegWrite.Dword(Recovery.ParametersPath, "CuMode", 24)) &&
+            Recovery.CuAllowed(RegWrite.Remove(Recovery.ParametersPath, "CuDisableWgp")) && Recovery.CuAllowed(RegWrite.Remove(Recovery.ParametersPath, "CuModeConfirmed")) &&
+            Recovery.CuAllowed(RegWrite.Remove(Recovery.ParametersPath, "CuModeClosedReason")), "CuAllowed: the setter's set");
+        // BD-077: the stock choice is written out as 24, so a removal of CuMode is no longer one of the setter's own
+        // operations (an absent value reads to the release installer as a key it never configured).
+        Check(!Recovery.CuAllowed(RegWrite.Remove(Recovery.ParametersPath, "CuMode")), "CuAllowed refuses a removal of CuMode");
+        foreach (var w in new[] { RegWrite.Dword(Recovery.ParametersPath, "CuMode", 32), RegWrite.Dword(Recovery.ParametersPath, "CuModeConfirmed", 40),
             RegWrite.Dword(Recovery.ParametersPath, "CuDisableWgp", 0), RegWrite.Remove(Recovery.ParametersPath, "CuModePending"), RegWrite.Dword(Recovery.ParametersPath, "CuModePending", 0),
             RegWrite.Remove(Recovery.ParametersPath, "CuModeLastReason"), RegWrite.Dword(Recovery.RouterPath, "CuMode", 40) })
             Check(!Recovery.CuAllowed(w), "CuAllowed refuses " + w);
@@ -46,15 +50,25 @@ static partial class UnitTests
         var p = Recovery.Plan("cu-mode", s, more: new Recovery.PlanArgs { Cu = 24 });
         Check(!p.Refused && p.Cu != null && !p.Undoable && p.OfferRestart, "cu-mode 24: planned, not undoable, restart offered");
         var text = p.Text();
-        Check(text.Contains("S1 delete HKLM\\" + Recovery.ParametersPath + " CuMode") && text.Contains("S2 delete") && text.Contains("S3 delete") && text.Contains("never restored"), "cu-mode plan text names every step");
-        Check(text.IndexOf("S1 delete", StringComparison.Ordinal) < text.IndexOf("S1 flush", StringComparison.Ordinal) &&
+        Check(text.Contains("S1 set HKLM\\" + Recovery.ParametersPath + " CuMode = 24 (DWord)") && text.Contains("S2 delete") && text.Contains("S3 delete") && text.Contains("never restored"), "cu-mode plan text names every step");
+        Check(text.IndexOf("S1 set", StringComparison.Ordinal) < text.IndexOf("S1 flush", StringComparison.Ordinal) &&
             text.IndexOf("S1 flush", StringComparison.Ordinal) < text.IndexOf("S2 delete", StringComparison.Ordinal), "cu-mode 24 plan order: S1, verify, then S2");
         Equal(p.Cu.Preview.Count, p.Preview.Count, "cu-mode 24: the dialog's preview is the plan's change list");
         Check(p.Notes.Any(n => n.Contains("0x21")), "cu-mode: the exact old mask goes to the plan");
         p = Recovery.Plan("cu-mode", s, more: new Recovery.PlanArgs { Cu = 40 });
         Check(!p.Refused && p.Cu.Steps.Select(x => x.Kind).SequenceEqual(new[] { "remove-confirmed", "remove-disable", "flush-readback" }), "cu-mode 40 with a mask: S2, S3, S4");
         Check(p.Preview.Contains(CuMode.EffectText()), "cu-mode 40: the effect text before the switch");
-        Check(Recovery.Plan("cu-mode", WithDefaults(), more: new Recovery.PlanArgs { Cu = 24 }).Refusal == "Standard (24) is selected already.", "cu-mode 24 when stock: refused");
+        // BD-077: with no CuMode in the key the number is not stored at all, so Standard (24) is a change to write;
+        // only a stored 24 with nothing else left over is "selected already".
+        var pStock = Recovery.Plan("cu-mode", WithDefaults(), more: new Recovery.PlanArgs { Cu = 24 });
+        Check(!pStock.Refused && pStock.Cu.Steps.Any(x => x.Kind == "write-24"), "cu-mode 24 with no stored number: the 24 is written");
+        var stored24 = WithDefaults(); stored24.Parameters["CuMode"] = 24;
+        Check(Recovery.Plan("cu-mode", stored24, more: new Recovery.PlanArgs { Cu = 24 }).Refusal == "Standard (24) is selected already.", "cu-mode 24 when 24 is stored: refused");
+        // A 24 the driver wrote itself can be adopted: the run takes its record away, so that every later install
+        // reads the 24 as a choice of the tester (review 2 finding 1).
+        var driver24 = WithDefaults(); driver24.Parameters["CuMode"] = 24; driver24.Parameters["CuModeClosedReason"] = 3;
+        p = Recovery.Plan("cu-mode", driver24, more: new Recovery.PlanArgs { Cu = 24 });
+        Check(!p.Refused && p.Cu.Steps.Any(x => x.Kind == "remove-closed"), "cu-mode 24 over the driver's own 24: the record goes");
         Check(Recovery.Plan("cu-mode", WithDefaults()).Refused, "cu-mode without a choice: refused");
         var bad = WithDefaults(); bad.CuBadValues.Add("CuMode");
         Check(Recovery.Plan("cu-mode", bad, more: new Recovery.PlanArgs { Cu = 40 }).Refusal == "The stored setting cannot be read.", "cu-mode with a non-DWORD value: refused");
@@ -82,6 +96,24 @@ static partial class UnitTests
         Check(Recovery.Plan("reset-defaults", clean).Refused, "reset when everything is default (CU stock, games kept): refused");
         clean.Parameters["CuModeConfirmed"] = 40;
         Check(!Recovery.Plan("reset-defaults", clean).Refused, "reset with a leftover CU confirmation: the cleanup runs");
+
+        // reset-defaults with the release default of 40 graphics cores (BD-077): the setter takes the manifest's
+        // CuMode, not the firmware's 24, and the cores are not counted among the settings left to the installer.
+        var cu40 = WithDefaults(); cu40.DefaultParameters["CuMode"] = 40;
+        p = Recovery.Plan("reset-defaults", cu40);
+        Check(!p.Refused && p.Cu != null && p.Cu.Target == 40 && p.Cu.Steps.Any(x => x.Kind == "write-40"), "reset with CuMode 40 in the manifest: the setter writes 40");
+        Check(p.Change.Contains("graphics cores: All (40)"), "reset names All (40) in the change: " + p.Change);
+        Check(p.Notes.Any(n => n.StartsWith("The other 1 driver settings of the release", StringComparison.Ordinal)),
+            "the cores are a release default of the setter, not one of the settings left to the installer");
+        // A machine already at the release default: the CU setter has nothing to do, the rest of the reset runs.
+        var at40 = WithDefaults(); at40.DefaultParameters["CuMode"] = 40; at40.Parameters["CuMode"] = 40;
+        p = Recovery.Plan("reset-defaults", at40);
+        Check(!p.Refused && p.Cu == null && !p.Change.Contains("graphics cores"), "reset with the cores at the release default: no CU part");
+        // A manifest CuMode that is neither 24 nor 40 refuses the action, as the other defaults out of range do.
+        var cuBad = WithDefaults(); cuBad.DefaultParameters["CuMode"] = 32;
+        Check(Recovery.Plan("reset-defaults", cuBad).Refusal == "The release default CuMode = 32 is out of range.", "reset refuses a CuMode default out of range");
+        // A release that names no CuMode keeps the old target: the driver runs 24 when the value is absent.
+        Check(Recovery.Plan("reset-defaults", s).Cu.Target == 24, "reset with no CuMode in the manifest: the setter targets 24");
 
         // game-profile: the scope note, effect at the next game start, undoable.
         s = WithDefaults();

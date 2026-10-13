@@ -78,9 +78,13 @@ namespace AmdgpuWddmControl
             c.StatusRead = s != null && !s.ReadFailed;
             if (!c.StatusRead) Item(c, null, "unreadable", "unknown");
             else if (!s.DriverInstalled) Item(c, GuideCause.DriverNotRunning, "not-installed", "problem");
+            // A start the driver's own guard refused is the one state with a repair in this app: the banner carries
+            // the same button as the sign-in notice (StartNotice.cs), so a person who closed that window finds it here.
+            else if (Recovery.GuardRefused(s)) Item(c, GuideCause.DriverNotRunning, "driver-refused", "problem", "enable-driver");
             else if (!s.DriverRunning) Item(c, GuideCause.DriverNotRunning, "driver-not-running", "problem", "restart");
             if (d != null && d.InstallStopped) Item(c, GuideCause.InstallStopped, "install-stopped", "problem", "repair");
             if (d != null && d.Verification == VerifyKind.Failed) Item(c, GuideCause.VerificationFailed, "verification-failed", "problem", "repair");
+            if (d != null && d.Verification == VerifyKind.EarlierBootFailed) Item(c, null, "verification-earlier-boot", "attention");
 
             if (!c.StatusRead) s = null;      // the rest reads the snapshot only when it was read
             CuView cu = null;

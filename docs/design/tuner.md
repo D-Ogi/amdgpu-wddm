@@ -341,10 +341,11 @@ each scenario against a fake driver that keeps the trial rules above (set, the g
 of the window, reset, the readback, `CpuTune` and a restart).
 
 "Reset driver settings to the release defaults" takes these settings back as well: the stored curve, the stored
-processor values, the core mask and `CpuTune` itself. They are not in the release's `manifest.json`, because the
-driver stores them, so the action sends the same escapes this page sends (WU-042: one control puts the standard
-settings back). A start that cannot send them says which ones stay stored instead of claiming a reset it did not
-do.
+processor values and the core mask. They are not in the release's `manifest.json`, because the driver stores them,
+so the action sends the same escapes this page sends (WU-042: one control puts the standard settings back). A start
+that cannot send them says which ones stay stored instead of claiming a reset it did not do. `CpuTune` itself is in
+the release's table (1 from 0.7.216), so the action writes that number when the stored value is another one or
+absent, and leaves the surface open.
 
 ## What the lab must answer first
 

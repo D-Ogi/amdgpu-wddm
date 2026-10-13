@@ -3,6 +3,7 @@
 # makes them stale (the build fails until each language gets a new translation; strings/stamp.ps1 stamps new ones).
 
 # ---- frame ----
+install.pending-removals-cancelled|src|-|Setup cancelled removals left by the previous uninstall. These installation files will remain after Windows restarts.
 ui.close|src|-|Close
 ui.back|src|-|Back
 ui.cancel|src|-|Cancel
@@ -10,6 +11,7 @@ ui.choose-folder|src|-|Choose folder...
 ui.language|src|-|Language: {0}
 ui.minimise|src|-|Minimise
 ui.close-window|src|-|Close window
+ui.window-title|src|-|Nagi Setup - graphics driver for the BC-250
 ui.unexpected|src|-|Setup stopped because something went wrong inside its window. It has changed nothing more. Please start it again.
 rail.welcome|src|-|Welcome
 rail.check|src|-|Check
@@ -27,9 +29,9 @@ payload.already-running|src|-|Setup is already running on this PC. Finish the in
 payload.folder|src|-|Setup cannot prepare the folder it keeps the installation files in: it belongs to another account on this PC, or it is not a normal folder. Nothing was changed. Remove that folder, which the support file names, and start this file again.
 
 # ---- welcome ----
-welcome.title|src|-|Install the graphics driver for the ASRock BC-250
-welcome.body|src|-|Setup installs the graphics driver and amdgpu-wddm Control. It checks this PC first and shows everything it will change before it changes anything.
-welcome.repair.title|src|-|Repair the graphics driver
+welcome.title|src|-|Install Nagi, the graphics driver for the ASRock BC-250
+welcome.body|src|-|Setup installs the graphics driver and Nagi Control App. It checks this PC first and shows everything it will change before it changes anything.
+welcome.repair.title|src|-|Repair the Nagi graphics driver
 welcome.repair.body|src|-|Setup installs the same version again, from the copy kept on this PC. Your settings are kept.
 welcome.dry-run|src|-|Test run: setup goes through every step but changes nothing.
 welcome.version|src|-|Version {0}
@@ -43,7 +45,7 @@ welcome.prepared.choose|src|-|Choose the prepared folder.
 welcome.prepared.ok|src|-|Prepared folder with version {0}. No internet is needed.
 welcome.prepare-link|src|-|Prepare a folder for a PC without internet...
 welcome.check|src|-|Check this PC
-welcome.promise.driver|src|-|The graphics driver and amdgpu-wddm Control, installed together.
+welcome.promise.driver|src|-|The graphics driver and Nagi Control App, installed together.
 welcome.promise.shown|src|-|Every change is shown before anything on this PC changes.
 welcome.promise.offline|src|-|A prepared folder installs the same release without internet.
 folder.missing|src|-|This folder does not exist.
@@ -99,7 +101,7 @@ check.firmware.folder-bad|src|-|Some GPU firmware files in the folder are missin
 check.firmware.no-list|src|-|The setup files do not say which GPU firmware is needed. Download the release again.
 check.lab-install.present|src|-|This PC has a development installation of the driver. Setup does not change it.
 check.lab-install.forced|src|-|This PC has a development installation of the driver; setup continues because you asked it to.
-check.state.ok|src|-|An earlier installation of amdgpu-wddm was found.
+check.state.ok|src|-|An earlier installation of Nagi was found.
 check.existing.no-state|src|-|The driver is installed without setup's records. Uninstall it first, then start setup again.
 check.prepare.destination-inside|src|-|The folder is inside the setup files. Choose a folder elsewhere.
 check.prepare.destination-file|src|-|A file has this name. Choose a folder.
@@ -129,10 +131,12 @@ plan.change.test-mode.on|src|-|Windows already runs in test mode, so nothing cha
 plan.change.bitlocker|src|-|BitLocker protection is paused for the restarts of this installation and turns itself on again, so Windows does not ask for the recovery key.
 plan.change.bitlocker.unknown|src|-|Setup could not read the BitLocker state of this PC. It goes on anyway: keep your recovery key at hand in case Windows asks for it after a restart.
 plan.change.vcruntime|src|-|The Microsoft Visual C++ 2015-2022 runtime (x64) is installed first, because the driver's programs need it.
-shortcuts.title|src|-|Where to find amdgpu-wddm Control
+shortcuts.title|src|-|Where to find Nagi Control App
 shortcuts.start-menu|src|-|In the Start menu
 shortcuts.desktop|src|-|On the desktop
 shortcuts.note|src|-|The Start menu also gets an entry for recovery. Turn an option off if you do not want it. The driver is installed either way.
+shortcuts.wallpaper|src|-|Set the Nagi wallpaper
+shortcuts.wallpaper.note|src|-|The wallpaper is set once for each person who signs in, after the driver is checked. Nagi Control App can bring back the previous background.
 plan.firmware.download|src|-|The GPU firmware is downloaded from the official Linux firmware archive and checked.
 plan.firmware.folder|src|-|The GPU firmware comes from the folder you chose and is checked.
 plan.firmware.package-folder|src|-|The GPU firmware comes from the prepared folder. No internet is needed.
@@ -166,6 +170,8 @@ settings.decision.kept|src|-|your value is kept
 settings.decision.command|src|-|as you chose for this installation
 settings.decision.reopened|src|-|set back by this repair (the driver had switched it off)
 settings.decision.driver-closed|src|-|switched off by the driver. A repair sets it back
+settings.decision.cores-driver-closed|src|-|the driver went back to this number itself. A repair sets the number of the release back
+settings.decision.cores-reopened|src|-|set back by this repair (the driver had gone back to fewer cores)
 
 # ---- consents ----
 
@@ -237,9 +243,9 @@ result.verify-before-restart.title|src|-|Restart Windows to finish
 result.verify-before-restart.body|src|-|The driver is checked after the restart of Windows.
 result.install-unfinished.title|src|-|The installation is not finished yet
 result.install-unfinished.body|src|-|Run Setup again to finish the installation. The driver is checked after that.
-result.verified.title|src|-|The driver is installed and works
-result.verified.body|src|-|Everything is ready. amdgpu-wddm Control is in the Start menu.
-result.verified-with-warnings.title|src|-|The driver is installed and works, with notes
+result.verified.title|src|-|The Nagi driver is installed and works
+result.verified.body|src|-|Everything is ready. Nagi Control App is in the Start menu.
+result.verified-with-warnings.title|src|-|The Nagi driver is installed and works, with notes
 result.verified-with-warnings.body|src|-|Everything is ready. Some checks had notes; the support file has the details.
 result.preflight-refused.title|src|-|Setup cannot install on this PC now
 result.preflight-refused.body|src|-|These checks did not pass. Fix them, then start setup again.
@@ -274,7 +280,7 @@ result.offline-prepared.body|src|-|Copy the folder to the PC without internet an
 result.failed-checks|src|-|Checks that did not pass
 result.nothing-changed|src|-|Nothing was changed.
 result.already-installed|src|-|This PC already has version {0} of the driver.
-result.changes-made|src|-|Some changes were made before setup stopped, and they stay as they are. Start setup again to finish, or use Repair in amdgpu-wddm Control.
+result.changes-made|src|-|Some changes were made before setup stopped, and they stay as they are. Start setup again to finish, or use Repair in Nagi Control App.
 result.changes-unknown|src|-|Setup cannot tell whether anything was changed. Start setup again; it continues where it can.
 result.support|src|-|The support file has the details for a problem report. Nothing is sent automatically.
 result.support.diagnostics|src|-|The details of the graphics chip that did not start were collected for you. They are in that file.
@@ -301,15 +307,17 @@ guide.title|src|-|Nagi's tip
 guide.title.plain|src|-|Tip
 guide.welcome|src|-|Nothing changes until you press Install. Setup shows every change first.
 guide.prepare|src|-|A prepared folder works on any BC-250 without internet, also for a later repair.
-guide.page-tip|src|-|Settings you changed in amdgpu-wddm Control are kept when you update.
+guide.page-tip|src|-|Settings you changed in Nagi Control App are kept when you update.
 guide.work-in-progress|src|-|I am working on it. This can take a few minutes.
 guide.checking|src|-|I am checking this PC. This can take up to a minute.
 guide.pending-restart|src|-|Your changes are saved. Setup continues after the next restart of Windows.
 guide.install-stopped|src|-|Setup did not finish. The page says what to do next.
 guide.verification-failed|src|-|The driver did not pass its checks. A repair usually helps.
 guide.upgrade-done|src|-|Done! The driver is installed and checked. Have fun!
+guide.name|src|-|Nagi stands for {0}. Yes, the N is Nagi again.
+brand.expansion|src|-|Nagi's AMD Graphics Infrastructure
 # Optional Windows tuning
 tuning.title|src|-|Windows tuning
 tuning.opt-in|src|-|Apply optional Windows tuning
 tuning.details|src|-|Apply recommended settings to reduce Windows background activity.
-tuning.restore|src|-|Review individual settings and restore saved values in the control app. Removal also offers restoration of machine-wide settings.
+tuning.restore|src|-|Review individual settings and restore saved values in Nagi Control App. Removal also offers restoration of machine-wide settings.

@@ -1,4 +1,5 @@
 # Japanese strings of amdgpu-wddm Setup. Machine translation (mt / mt-safe) until the Ph 2 native review. Format: src/Strings.cs.
+install.pending-removals-cancelled|mt|4a977944|セットアップは前回のアンインストールで予約された削除を取り消しました。今回インストールするファイルは Windows の再起動後も保持されます。
 
 # ---- frame ----
 ui.close|mt-safe|7d9eb7ac|閉じる
@@ -8,6 +9,7 @@ ui.choose-folder|mt-safe|826c7dcd|フォルダーを選択...
 ui.language|mt-safe|a6567634|言語: {0}
 ui.minimise|mt-safe|20f082e9|最小化
 ui.close-window|mt-safe|8b9de9c0|ウィンドウを閉じる
+ui.window-title|mt|229174f8|Nagi Setup - BC-250 用グラフィックス ドライバー
 ui.unexpected|mt|88790f84|セットアップのウィンドウで問題が起きたため、停止しました。これ以上は何も変更していません。もう一度起動してください。
 rail.welcome|mt-safe|0e2226b5|ようこそ
 rail.check|mt-safe|9d60841e|確認
@@ -25,9 +27,9 @@ payload.already-running|mt|45dca71f|セットアップはこの PC ですでに�
 payload.folder|mt|78be926d|セットアップはインストール用ファイルを置くフォルダーを準備できません。そのフォルダーはこの PC の別のアカウントのものか、通常のフォルダーではありません。何も変更していません。サポート ファイルに書かれているそのフォルダーを削除して、このファイルをもう一度開いてください。
 
 # ---- welcome ----
-welcome.title|mt|f6dd913f|ASRock BC-250 用グラフィックス ドライバーのインストール
-welcome.body|mt|e4fa6ee2|セットアップはグラフィックス ドライバーと amdgpu-wddm Control をインストールします。最初にこの PC を確認し、何かを変更する前に変更内容をすべて表示します。
-welcome.repair.title|mt|a29b2205|グラフィックス ドライバーの修復
+welcome.title|mt|1d5a1bfb|ASRock BC-250 用グラフィックス ドライバー Nagi のインストール
+welcome.body|mt|37fc056a|セットアップはグラフィックス ドライバーと Nagi Control App をインストールします。最初にこの PC を確認し、何かを変更する前に変更内容をすべて表示します。
+welcome.repair.title|mt|ccc0cf87|Nagi グラフィックス ドライバーの修復
 welcome.repair.body|mt|25153ac9|この PC に保存されているコピーから、同じバージョンをもう一度インストールします。設定はそのまま残ります。
 welcome.dry-run|mt|42af2b21|テスト実行: すべての手順を通りますが、何も変更しません。
 welcome.version|mt-safe|9699394c|バージョン {0}
@@ -41,7 +43,7 @@ welcome.prepared.choose|mt|40e8823f|準備したフォルダーを選んでく�
 welcome.prepared.ok|mt|6203a8e5|バージョン {0} を含む準備済みフォルダーです。インターネットは不要です。
 welcome.prepare-link|mt|5868e4fc|インターネットのない PC 用のフォルダーを準備...
 welcome.check|mt-safe|7c97d062|この PC を確認
-welcome.promise.driver|mt|82ad81d1|グラフィックドライバーと amdgpu-wddm Control を一緒にインストールします。
+welcome.promise.driver|mt|d8eb7961|グラフィックドライバーと Nagi Control App を一緒にインストールします。
 welcome.promise.shown|mt|0f886d7e|この PC を変更する前に、すべての変更内容を表示します。
 welcome.promise.offline|mt|bb2a3e49|準備済みフォルダーがあれば、インターネットなしで同じリリースをインストールできます。
 folder.missing|mt|219fdbbd|このフォルダーは存在しません。
@@ -97,7 +99,7 @@ check.firmware.folder-bad|mt|e11eec4f|フォルダー内の GPU ファームウ�
 check.firmware.no-list|mt|de36633a|必要な GPU ファームウェアがセットアップ ファイルに記載されていません。リリースをもう一度ダウンロードしてください。
 check.lab-install.present|mt|c4ebe135|この PC には開発用のドライバーがインストールされています。セットアップはそれを変更しません。
 check.lab-install.forced|mt|711bb1d9|この PC には開発用のドライバーがインストールされていますが、指示により続行します。
-check.state.ok|mt|63bdb478|以前の amdgpu-wddm のインストールが見つかりました。
+check.state.ok|mt|52525a38|以前の Nagi のインストールが見つかりました。
 check.existing.no-state|mt|a46215ab|ドライバーがセットアップの記録なしでインストールされています。先にアンインストールしてから、セットアップをもう一度起動してください。
 check.prepare.destination-inside|mt|08b96974|フォルダーがセットアップ ファイルの中にあります。別の場所のフォルダーを選んでください。
 check.prepare.destination-file|mt|3d875a78|この名前のファイルがあります。フォルダーを選んでください。
@@ -127,10 +129,12 @@ plan.change.test-mode.on|mt|cf315297|Windows はすでにテスト モードで�
 plan.change.bitlocker|mt|f43553fa|BitLocker の保護はこのインストールの再起動の間だけ一時停止し、その後は自動的に再開するので、Windows が回復キーを求めることはありません。
 plan.change.bitlocker.unknown|mt|67f2277e|この PC の BitLocker の状態を読み取れませんでした。処理は続行します。再起動後に Windows が求めた場合に備えて、回復キーを用意しておいてください。
 plan.change.vcruntime|mt|65d68876|ドライバーのプログラムが必要とするため、最初に Microsoft Visual C++ 2015-2022 ランタイム (x64) をインストールします。
-shortcuts.title|mt-safe|3af62f49|amdgpu-wddm Control の場所
+shortcuts.title|mt-safe|02f4d7de|Nagi Control App の場所
 shortcuts.start-menu|mt-safe|f7bdc16b|スタート メニュー
 shortcuts.desktop|mt-safe|b1e0eb2c|デスクトップ
 shortcuts.note|mt|dc373b0d|スタート メニューには復旧用の項目も追加されます。不要なオプションはオフにしてください。どちらにしてもドライバーはインストールされます。
+shortcuts.wallpaper|mt|ce6e26e6|Nagi の壁紙を設定
+shortcuts.wallpaper.note|mt|14a12464|壁紙は、ドライバーの確認後にサインインした各ユーザーに一度だけ設定されます。以前の背景は Nagi Control App で戻せます。
 plan.firmware.download|mt|7051aa7f|GPU ファームウェアは Linux の公式ファームウェア アーカイブからダウンロードされ、確認されます。
 plan.firmware.folder|mt|3afc555b|GPU ファームウェアは選んだフォルダーから取得され、確認されます。
 plan.firmware.package-folder|mt|576cf803|GPU ファームウェアは準備済みのフォルダーから取得されます。インターネットは不要です。
@@ -164,6 +168,8 @@ settings.decision.kept|mt|b4865f1f|現在の値を保持
 settings.decision.command|mt|898239d8|このインストールで選んだとおり
 settings.decision.reopened|mt|4342e37e|この修復で元に戻しました (ドライバーが無効にしていました)
 settings.decision.driver-closed|mt|cff55d7f|ドライバーが無効にしました。修復すると元に戻ります
+settings.decision.cores-driver-closed|mt|6f8a9a7c|ドライバーがこの数に戻しました。修復するとリリースの数に戻ります
+settings.decision.cores-reopened|mt|282a0682|この修復で元に戻しました (ドライバーがコア数を減らしていました)
 
 # ---- consents ----
 
@@ -235,9 +241,9 @@ result.verify-before-restart.title|mt|93aab4b5|完了するには Windows を再
 result.verify-before-restart.body|mt|ff335b2d|ドライバーは Windows の再起動後に確認されます。
 result.install-unfinished.title|mt|905e1ac5|インストールはまだ完了していません
 result.install-unfinished.body|mt|0e894d61|セットアップをもう一度実行してインストールを完了してください。ドライバーはその後に確認されます。
-result.verified.title|mt|9756a569|ドライバーはインストールされ、正常に動作しています
-result.verified.body|mt|5542d882|準備ができました。amdgpu-wddm Control は [スタート] メニューにあります。
-result.verified-with-warnings.title|mt|c50059a2|ドライバーはインストールされ動作していますが、注意事項があります
+result.verified.title|mt|243117f3|Nagi ドライバーはインストールされ、正常に動作しています
+result.verified.body|mt|10c96356|準備ができました。Nagi Control App は [スタート] メニューにあります。
+result.verified-with-warnings.title|mt|b0c2d18c|Nagi ドライバーはインストールされ動作していますが、注意事項があります
 result.verified-with-warnings.body|mt|687cef5d|準備ができました。一部の確認に注意事項があります。詳細はサポート ファイルにあります。
 result.preflight-refused.title|mt|6a7ab8d2|現在この PC にはインストールできません
 result.preflight-refused.body|mt|435efe20|次の確認に合格しませんでした。問題を解決してから、セットアップをもう一度起動してください。
@@ -272,7 +278,7 @@ result.offline-prepared.body|mt|2a59d535|このフォルダーをインターネ
 result.failed-checks|mt|ecefee18|合格しなかった確認
 result.nothing-changed|mt|54ca5460|何も変更されていません。
 result.already-installed|mt|c90b9352|この PC には、ドライバーのバージョン {0} がすでにあります。
-result.changes-made|mt|8e3dd6e8|セットアップが停止する前に一部の変更が行われ、その変更はそのまま残っています。完了するにはセットアップをもう一度起動するか、amdgpu-wddm Control の [修復] を使ってください。
+result.changes-made|mt|b7ee935f|セットアップが停止する前に一部の変更が行われ、その変更はそのまま残っています。完了するにはセットアップをもう一度起動するか、Nagi Control App の [修復] を使ってください。
 result.changes-unknown|mt|88bf7384|何かが変更されたかどうかを判断できません。セットアップをもう一度起動してください。可能なところから続行します。
 result.support|mt|3e9e40b3|サポート ファイルには問題の報告に必要な詳細が含まれます。自動的に送信されることはありません。
 result.support.diagnostics|mt|a739d1a9|起動しなかったグラフィック チップの詳細はすでに収集されています。そのファイルに含まれています。
@@ -299,15 +305,17 @@ guide.title|mt-safe|5506739a|ナギのヒント
 guide.title.plain|mt-safe|a4245a3c|ヒント
 guide.welcome|mt|65339917|[インストール] を押すまで何も変わりません。変更はすべて先に表示されます。
 guide.prepare|mt|9ee5d83f|準備したフォルダーは、インターネットのないどの BC-250 でも使えます。後の修復にも使えます。
-guide.page-tip|mt|70da7524|amdgpu-wddm Control で変更した設定は、更新後もそのまま残ります。
+guide.page-tip|mt|267a0cc9|Nagi Control App で変更した設定は、更新後もそのまま残ります。
 guide.work-in-progress|mt|f3e8ef82|作業中です。数分かかることがあります。
 guide.checking|mt|687b400d|この PC を確認しています。最大 1 分ほどかかります。
 guide.pending-restart|mt|d31250df|変更は保存されました。次に Windows を再起動すると、セットアップは続行します。
 guide.install-stopped|mt|47319a31|セットアップは完了しませんでした。次に行うことは画面に表示されています。
 guide.verification-failed|mt|1abe91c5|ドライバーが確認に合格しませんでした。たいていは修復で直ります。
 guide.upgrade-done|mt|7ed192a1|完了です! ドライバーはインストールされ、確認も済みました。楽しんでください!
+guide.name|mt|58a9149a|Nagi は {0} の略です。そう、N もまた Nagi です。
+brand.expansion|mt-safe|8b8af7be|Nagi's AMD Graphics Infrastructure
 # Optional Windows tuning
 tuning.title|mt|a1f6198e|Windows の設定調整
 tuning.opt-in|mt|d229d14d|任意の Windows 設定調整を適用する
 tuning.details|mt|36ae26fb|Windows のバックグラウンド動作を減らす推奨設定を適用します。
-tuning.restore|mt|387d1d61|制御アプリで個別の設定を確認し、保存した値を復元できます。アンインストール時にもコンピューター全体の設定を復元できます。
+tuning.restore|mt|3fb261c1|Nagi Control App で個別の設定を確認し、保存した値を復元できます。アンインストール時にもコンピューター全体の設定を復元できます。

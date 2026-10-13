@@ -186,11 +186,12 @@ Without internet on the BC-250:
 2. Copy them to one folder on the BC-250, for example `C:\amdgpu-wddm-firmware`.
 3. Run `install.cmd -FirmwareDir C:\amdgpu-wddm-firmware`. The installer checks the SHA256 of each file the same
    way and uses the folder also after the restarts during the installation. The same goes for `-DpmMaxMHz`,
-   `-CuMode`, `-NoControlApp`, `-NoStartMenuShortcut`, `-NoDesktopShortcut` and `-NoReboot`.
+   `-CuMode`, `-NoControlApp`, `-NoStartMenuShortcut`, `-NoDesktopShortcut`, `-NoWallpaper` and `-NoReboot`.
 
 ## The small blue window after logon
 
-After each logon, a small blue window with a clock is shown in the top-left corner for two minutes. The driver
+After each logon, a small blue window is shown in the top-left corner for two minutes. It says "Nagi start
+check: confirming that the GPU driver started correctly" and counts down to the moment it closes by itself. The driver
 counts each start that is not confirmed. After two unconfirmed starts, Windows uses Microsoft Basic Display Adapter
 again, to prevent a start loop. The window keeps the desktop drawing for at least one minute, and the confirmation
 then confirms the start. The same confirmation keeps the automatic clock control (DPM) on: if a start is not
@@ -212,7 +213,41 @@ confirms a start as well:
 
 The confirmation writes its results to `C:\ProgramData\amdgpu-wddm\start-confirm.log`. Its last line of each logon
 also reports the state, the last run time and the last result of the window task, so a window that did not run or
-could not open is visible there (`last result 0` the window was shown and closed, `2` it could not be shown).
+could not open is visible there (`last result 0` the window was shown and closed, `2` it could not be shown,
+`3` the person turned the clock window off).
+
+You can turn the clock window off: open Nagi Control App, go to Settings and clear "Show the start check window
+after sign-in". The setting belongs to the account that sets it, needs no administrator rights, and the window task
+then ends at once and reports `3`. Read what it costs before you clear it: without the window the desktop may stop
+drawing before the driver has confirmed the start, so the next start can run at the fixed clock instead of the
+automatic one, and if the confirmation keeps staying unfinished the driver's own guard switches the driver off
+after two such starts, which puts Windows on Microsoft Basic Display Adapter until you turn the driver back on.
+
+## If the graphics driver did not start, you see it at the sign-in
+
+The same window task also starts the control application's own notice (`amdgpu_wddm_control.exe --start-notice`),
+which looks for the driver for up to half a minute and stays silent when the driver answers. A driver that was
+switched off for safety is already recorded as such, so that notice appears at once. The other case waits out the
+half minute, because a driver still inside its own start looks the same from outside. It is a separate window from
+the blue clock, and the setting above never switches it off.
+
+- The driver was switched off for safety (two starts did not finish their check, so Windows now uses its basic
+  display driver: no games, low performance). The notice says that in plain words and offers three buttons:
+  "Turn the graphics driver back on...", "Open Nagi Control App" and "Close".
+- The driver did not start for another reason. The notice says so and offers "Open Nagi Control App" and
+  "Close".
+
+"Turn the graphics driver back on..." sets the count of unconfirmed starts back to 0 and restarts the graphics
+device in place, without a restart of Windows. The notice counts the seconds while it works: it can take up to
+four minutes, and the screen can go dark for a moment. The notice then waits for the driver and confirms this
+start itself, so the next start of Windows does not count it against you. If the device does not come back, the
+notice says that Windows has to be restarted and offers a button for it. "Close" stays usable the whole time, and
+the repair finishes whether the notice is open or not.
+
+The home page of Nagi Control App carries the same button while the driver stays switched off, for a person who
+closed the notice, and the Recovery page (Help, with "Show support options" on) explains the state in "Support:
+driver states" and offers the same repair as "Turn the graphics driver back on" in "Support: actions". You no
+longer have to run the release installer again for this.
 
 ## What the installer changes
 
@@ -229,8 +264,11 @@ could not open is visible there (`last result 0` the window was shown and closed
 | Graphics registration | the GPU's software key: `UserModeDriverName`, `VulkanDriverName`, `OpenGLDriverName`, `OpenGLVersion`, `OpenGLFlags`. For 32-bit applications: `UserModeDriverNameWow` and `VulkanDriverNameWow`. This release writes no `OpenGLDriverNameWow`, `OpenGLVersionWow` or `OpenGLFlagsWow`: it has no 32-bit OpenGL driver (see "What this release does" below). The first entry of each `UserModeDriverName` value, the Direct3D 9 entry, holds `<>`. Also `HKLM\SOFTWARE\Khronos\Vulkan\Drivers` and `HKLM\SOFTWARE\WOW6432Node\Khronos\Vulkan\Drivers`. `uninstall.cmd` puts back an `OpenGL` value from before the install, with the registry type it had. It removes the ones it added, even when the installer state file is gone. An `OpenGL` value that belongs to another driver stays. It does all that whether or not Windows still shows the GPU, because the files the values name go with the install |
 | Router policy and profiles | `HKLM\SOFTWARE\amdgpu-wddm` |
 | GPU firmware | `C:\BC250\firmware` (8 files and `LICENSE.amdgpu`, downloaded from linux-firmware; see "GPU firmware"). A new folder is writable by administrators only; the access rights of `C:\BC250` itself do not change. Download staging: `C:\ProgramData\amdgpu-wddm\installer\firmware-staging`, removed after the copy |
-| Shortcuts of amdgpu-wddm Control | Start menu and desktop, for all users: "amdgpu-wddm Control", "amdgpu-wddm Control (recovery)" in the Start menu and "amdgpu-wddm Control" on the desktop. Both places are written by default. The setup window has a box for each place. On the command line `-NoStartMenuShortcut` and `-NoDesktopShortcut` leave one out. `-StartMenuShortcut` and `-DesktopShortcut` ask for a place an earlier run left out. The box you clear holds over the restarts of the installation. `uninstall.cmd` removes all three |
-| Start confirmation | two scheduled tasks, both at the logon of any user. "amdgpu-wddm start confirm" runs as the Local System account. "amdgpu-wddm start window" runs as the user who logs on |
+| Shortcuts of Nagi Control App | Start menu and desktop, for all users: "Nagi Control App", "Nagi Control App (recovery)" in the Start menu and "Nagi Control App" on the desktop. Both places are written by default. The setup window has a box for each place. On the command line `-NoStartMenuShortcut` and `-NoDesktopShortcut` leave one out. `-StartMenuShortcut` and `-DesktopShortcut` ask for a place an earlier run left out. The box you clear holds over the restarts of the installation. `uninstall.cmd` removes all three |
+| Start confirmation | two scheduled tasks, both at the logon of any user. "amdgpu-wddm start confirm" runs as the Local System account. "amdgpu-wddm start window" runs as the user who logs on, shows the clock window and starts the control application's sign-in notice |
+| Settings of the person who signs in | `HKCU\Software\amdgpu-wddm\Control` of that account (language, the switches of the control application, "Show the start check window after sign-in"). The application itself writes this key when you change a setting. The installer does not. No administrator rights, nothing for other accounts. `uninstall.cmd` removes the key of the account that runs it, and leaves the keys of other accounts |
+| Shortcuts of an earlier release | earlier releases named the shortcuts "amdgpu-wddm Control". An install over such a release and `uninstall.cmd` remove those old shortcuts when they point at the control application. A file of that name that points elsewhere stays |
+| Nagi wallpaper | for each person who signs in after the installation is checked, Nagi Control App sets the Nagi wallpaper once (position Fill). It saves the previous background of that person first. The setup window has a box for it, on by default. `install.cmd -NoWallpaper` leaves it out. In Nagi Control App, Settings, "Nagi wallpaper" sets it again or restores the previous background. A slideshow or Windows Spotlight comes back as its last picture only. `uninstall.cmd` changes nobody's background and keeps the picture in `%LOCALAPPDATA%\amdgpu-wddm\wallpaper` |
 | Installer state and logs | `C:\ProgramData\amdgpu-wddm` (the Control application keeps its setting backups and action log in its `control` folder) |
 
 If you type the `bcdedit` command yourself, keep the quotation marks around `'{current}'` in PowerShell.
@@ -241,20 +279,23 @@ Default driver settings: automatic clock control (DPM) on, maximum 2000 MHz. The
 change. The driver writes no debug log files. To change the maximum clock at install time, use
 `install.cmd -DpmMaxMHz <1000-2000>`. An upgrade keeps a maximum clock that you set (see "Install").
 
-Graphics cores: the driver uses 24 of the 40 compute units of the GPU after a normal install. That is the number
-the board's firmware switches on. To get all 40 at install time, use `install.cmd -CuMode 40`. After the install,
-the Graphics page of amdgpu-wddm Control holds the same choice: "Standard (24)" or "All (40)". A new number applies
-at the next restart of Windows. The first start with 40 cores needs the confirmation of the small blue window after
-logon. Without that confirmation the next start goes back to 24, records the reason and puts the choice back to
-"Standard (24)", so you choose 40 again. The change writes one registry value and no firmware. All 40 cores give
-more performance in many games, and also more power and more heat. The game results that we publish are measured
+Graphics cores: the driver uses all 40 compute units of the GPU after a normal install. The firmware of the board
+switches on 24 of them. To keep that number, use `install.cmd -CuMode 24`. After the install, the Graphics page of
+Nagi Control App holds the same choice: "Standard (24)" or "All (40)". A new number applies at the next restart
+of Windows. The first start with 40 cores needs the confirmation of the small blue window after logon. Without that
+confirmation the next start goes back to 24 and records the reason. An installation and an upgrade keep that 24 and
+name it in the report, because the driver went back for a reason. `install.cmd -Repair` sets all 40 cores back. A 24
+that you chose yourself is kept by every install: the switch and the Graphics page both write the number 24 into the
+driver's settings, so a later install reads it as your choice. Where the driver went back to 24 by itself, the
+Graphics page says so and offers "All (40)" as the way back. The change writes one registry value and no firmware. All 40 cores
+give more performance in many games, and also more power and more heat. The game results that we publish are measured
 with all 40 cores. The page `docs/design/cu-mode.md` of the project has the whole description.
 
 ## What works and what does not
 
 - Desktop composition (DWM) runs on the GPU (`DwmForceCpu` 0 in `HKLM\SOFTWARE\amdgpu-wddm\DesktopRouter`). When the
   driver has closed the GPU desktop path (for example after a start that ended in a crash or a power loss), DWM uses
-  the CPU route by itself. "Reopen the GPU desktop path" on the Recovery page of amdgpu-wddm Control opens it again,
+  the CPU route by itself. "Reopen the GPU desktop path" on the Recovery page of Nagi Control App opens it again,
   and so does `install.cmd -Repair`. `DwmForceCpu` 1 keeps the
   desktop on the CPU route. An upgrade keeps the value you set.
 - Direct3D 12 applications run on the GPU through the Windows Direct3D 12 runtime, at feature level 12_1.
@@ -275,7 +316,7 @@ with all 40 cores. The page `docs/design/cu-mode.md` of the project has the whol
   Microsoft applications. The value `Mode` in `HKLM\SOFTWARE\amdgpu-wddm\AppRouter` holds `gpu-default`, and the
   `Allow` and `Deny` lists beside it are empty in a new install. These programs stay on the CPU route (software
   rendering): the processes of the logon and lock screens, a program whose image the router cannot resolve, a
-  program you put in the `Deny` list, a program you set to processor rendering in amdgpu-wddm Control, and
+  program you put in the `Deny` list, a program you set to processor rendering in Nagi Control App, and
   `PickerHost.exe`, which the driver keeps there by itself. `PickerHost.exe` is the program behind the Windows
   firewall notification window ("Windows Security") and behind the file open and save windows. That firewall
   window stayed white and empty on the GPU route, so the driver sends that program to the processor. An entry in
@@ -312,7 +353,15 @@ with all 40 cores. The page `docs/design/cu-mode.md` of the project has the whol
   installer renames it to `<name>.old-<time>`, copies the new file and deletes the old copy at the next restart.
 - The screen stays black after a restart: wait two minutes. If it stays black, restart the computer with the power
   button. After two failed starts, Windows uses Microsoft Basic Display Adapter again.
-- The desktop is black after an update, but programs still start: open amdgpu-wddm Control (`Win`, then type its
+- Windows uses Microsoft Basic Display Adapter again (no games, low performance, the picture is slow): at the next
+  sign-in a notice says so and offers "Turn the graphics driver back on..." (see "If the graphics driver did not start,
+  you see it at the sign-in"). The same button is on the home page of Nagi Control App and in "Support: actions"
+  on its Recovery page.
+  It needs no restart of Windows and no second run of the installer. Make a bug report first if the developers
+  should see why the driver was switched off: the repair clears the count the driver kept. If the notice ends by
+  asking for a restart of Windows, use the button it offers. If the driver is switched off again after that
+  restart, make a bug report instead of repairing a second time.
+- The desktop is black after an update, but programs still start: open Nagi Control App (`Win`, then type its
   name) and select "Desktop on the CPU route" on its Recovery page. Otherwise use Safe Mode and `uninstall.cmd`
   (next item).
 - To start Windows without the driver: hold `Shift` and select Restart, then Troubleshoot > Advanced options >
@@ -326,10 +375,14 @@ with all 40 cores. The page `docs/design/cu-mode.md` of the project has the whol
   graphics device. Nothing is sent by itself.
 - After an installation, `verify.cmd` fails `GPU desktop path` with `closed by the driver` or `last boot died in a
   session`, and the desktop runs on the CPU route: run `install.cmd -Repair`. It sets the switches of the release back
-  and restarts Windows. You can also open amdgpu-wddm Control, select "Reopen the GPU desktop path" on its Recovery
+  and restarts Windows. You can also open Nagi Control App, select "Reopen the GPU desktop path" on its Recovery
   page and restart Windows. A normal installation, an upgrade and a plain re-run of `install.cmd` keep the closed path
   and name it in the report, because the driver closed it for a reason. If the driver closes the path again, make a
   bug report instead of repairing a second time.
+- The Graphics page shows 24 graphics cores and you never chose them: the driver went back to 24 after a start with
+  all 40 that nobody confirmed. Run `install.cmd -Repair` to get all 40 back, or select "All (40)" on the Graphics
+  page and restart Windows. An installation and an upgrade keep the 24 and name it in their report, the way they keep
+  a closed desktop path. If the driver goes back a second time, make a bug report.
 - Windows 11 apps (the command bar of File Explorer, Task Manager) ignore mouse clicks, often after the screen went
   black for a moment, or `verify.cmd` shows `[warn] DWM restarted in this session`: WinUI pointer-input loss after the
   desktop compositor (DWM) is terminated and restarted reproduces on this Windows build also with Microsoft Basic
@@ -354,7 +407,7 @@ You can also use the System Restore point "amdgpu-wddm before install" if the in
 
 ## How to report a bug
 
-1. Open "amdgpu-wddm Control" from the Start menu and select the bug report function.
+1. Open "Nagi Control App" from the Start menu and select the bug report function.
 2. The application shows the list of files and the text of each file before it writes anything. Read them.
 3. The application writes one zip file to your desktop: `amdgpu-wddm-report-YYYYMMDD-HHMMSS.zip`. It sends
    nothing.

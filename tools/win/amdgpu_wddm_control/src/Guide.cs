@@ -160,6 +160,20 @@ namespace AmdgpuWddmControl
         // text, asked-for help, results and warnings always show.
         public static bool ShowUnaskedTip(bool showTipsAutomatically) { return showTipsAutomatically; }
 
+        // The name tip (owner, 2026-10-13): what the name Nagi stands for, said once after each install or update for
+        // NameTipSeconds and then never again for that release (AppPrefs.NameTipRelease). It takes the panel's text
+        // only over a verdict of rank 4 or lower in importance (rank > 3): a problem, an attention item or a pending
+        // restart keeps the panel. The phrase itself is one string, brand.expansion, passed as the argument.
+        public const int NameTipSeconds = 15;
+        public const string NameTipId = "guide.name";
+
+        public static bool NameTipDue(string installedRelease, string shownFor)
+        {
+            return !string.IsNullOrEmpty(installedRelease) && !string.Equals(installedRelease, shownFor, StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static bool ShowNameTip(bool showing, GuideVerdict v) { return showing && v != null && v.Rank > 3; }
+
         // The art's resource name in the exe for an expression and a slot size: build.ps1 embeds
         // nagi.<expression>@<size>.png (and nagi.<expression>-fNN@<size>.png frames when the art has them).
         public static string Resource(string expression, int size) { return "nagi." + expression + "@" + size + ".png"; }

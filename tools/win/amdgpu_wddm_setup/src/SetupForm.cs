@@ -50,6 +50,8 @@ namespace AmdgpuWddmSetup
         // The two shortcut answers: null until a switch or the person on the plan screen states one. A run with no
         // answer of its own passes no switch, so the answer an earlier run of the same install saved stands.
         bool? _startMenuShortcut, _desktopShortcut;
+        // The wallpaper box of the same card, with the same rule (null: nothing stated).
+        bool? _wallpaper;
         // True while the plan screen shown is the one that offers an install, with its options (G-SHORTCUT).
         bool _planOffersInstall;
         bool _restartLater;
@@ -84,13 +86,14 @@ namespace AmdgpuWddmSetup
             _systemTuningChoice = args.ApplySystemTuning ? (bool?)true : null;
             _startMenuShortcut = args.StartMenuShortcut;
             _desktopShortcut = args.DesktopShortcut;
+            _wallpaper = args.Wallpaper;
             _smoke = smoke;
             _ownPackage = args.Package ?? DefaultPackage();
             _package = _ownPackage;
             // On unless the control app's setting says 0 (Native.ShowNagi). A headless render asks nothing of this
             // PC's registry, so it takes the same default and --no-nagi draws the panel without her.
             _showNagi = smoke ? !args.NoNagi : Native.ShowNagi();
-            Text = "amdgpu-wddm Setup";
+            Text = Strings.T("ui.window-title");
             SetWindowIcon();
             AutoScaleMode = AutoScaleMode.None;
             // The window draws its own title bar (ChromeBar): no caption of Windows, and the corners and the frame
@@ -110,7 +113,7 @@ namespace AmdgpuWddmSetup
             if (!smoke)
             {
                 _timer = new Timer { Interval = 250 };
-                _timer.Tick += (s, e) => PollEngine();
+                _timer.Tick += (s, e) => { PollEngine(); TurnTip(); };
                 _timer.Start();
                 _anim = new Timer { Interval = 33 };
                 _anim.Tick += (s, e) => Animate();
@@ -372,8 +375,9 @@ namespace AmdgpuWddmSetup
             {
             SuspendLayout();
             ClearAndDispose(this);
+            Text = Strings.T("ui.window-title");
             var languages = new[] { new[] { "en", "EN", "English" }, new[] { "pl", "PL", "Polski" }, new[] { "ja", "日本語", "日本語" }, new[] { "ko", "한국어", "한국어" } };
-            _chrome = new ChromeBar(this, "amdgpu-wddm Setup", Theme.S(ChromeHeight), code => Strings.Language = code, languages,
+            _chrome = new ChromeBar(this, Program.ProductName, Theme.S(ChromeHeight), code => Strings.Language = code, languages,
                 Strings.T("ui.minimise"), Strings.T("ui.close-window"));
             _rail = new Panel { Dock = DockStyle.Left, Width = Theme.S(RailWidth), BackColor = Theme.Nav, Padding = Theme.Pad(0, 22, 0, 0) };
             // The owner's rule of 2026-10-12: on a small screen the guide panel is not in the window at all, and the
@@ -748,6 +752,7 @@ namespace AmdgpuWddmSetup
             string titleId = checking ? "checking.title" : _flow == "prepare" ? "working.prepare.title" : _flow == "repair" ? "working.repair.title" : _flow == "continue" ? "working.continue.title" : "working.title";
             Title(Strings.T(titleId));
             Status(Strings.T(checking ? "checking.body" : _flow == "prepare" ? "working.prepare.body" : "working.body"), StatusLine.State.Busy);
+            PendingRemovalNotice();
             _progress = new ProgressStrip(_contentWidth);
             _progress.AccessibleName = Strings.T(titleId);
             _content.Controls.Add(_progress);
@@ -942,6 +947,12 @@ namespace AmdgpuWddmSetup
             desktop.CheckedChanged += (s, e) => { _desktopShortcut = desktop.Checked; };
             shortcuts.Add(desktop);
             shortcuts.Add(Ui.Label(Strings.T("shortcuts.note"), Theme.Small, Theme.Dim, shortcuts.Inner));
+            // The Nagi wallpaper (owner, 2026-10-13): on, in the same group, an option and not a question.
+            var wallpaper = Ui.Check(Strings.T("shortcuts.wallpaper"), shortcuts.Inner);
+            wallpaper.Checked = _wallpaper ?? (d == null || d.Wallpaper);
+            wallpaper.CheckedChanged += (s, e) => { _wallpaper = wallpaper.Checked; };
+            shortcuts.Add(wallpaper);
+            shortcuts.Add(Ui.Label(Strings.T("shortcuts.wallpaper.note"), Theme.Small, Theme.Dim, shortcuts.Inner));
 
             var tuning = Card(Strings.T("tuning.title"), Icons.Gear);
             var tune = Ui.Check(Strings.T("tuning.opt-in"), tuning.Inner);
@@ -988,7 +999,7 @@ namespace AmdgpuWddmSetup
             // checked, or that waits for a restart, carry no options at all.
             if (Current != Screen.Plan || !_planOffersInstall) yield break;
             var boxes = Descendants(_content).OfType<CheckBox>().ToList();
-            foreach (var id in new[] { "shortcuts.start-menu", "shortcuts.desktop" })
+            foreach (var id in new[] { "shortcuts.start-menu", "shortcuts.desktop", "shortcuts.wallpaper" })
             {
                 var box = boxes.FirstOrDefault(b => b.Text == Strings.T(id));
                 if (box == null) { yield return "the plan screen has no option for " + id; continue; }
@@ -1014,6 +1025,7 @@ namespace AmdgpuWddmSetup
             _content.Controls.Add(_resultMark);
             Title(Strings.T(_view.TitleId));
             Para(Strings.T(_view.BodyId), Theme.Dim);
+            PendingRemovalNotice();
             if (_restartError != null) Line(Icons.Warning, Theme.Warn, Strings.T("restart.failed"), Theme.Warn);
             if (_restartLater)
             {
@@ -1098,6 +1110,7 @@ namespace AmdgpuWddmSetup
             Title(Strings.T(v.TitleId));
             if (v.AlreadyInstalled) Para(Strings.T("result.already-installed", v.PackageVersion ?? "-"));
             Para(Strings.T(v.BodyId), Theme.Dim);
+            PendingRemovalNotice();
             if (v.FailedChecks.Length > 0)
             {
                 var card = Card(Strings.T("result.failed-checks"), Icons.Shield);
@@ -1126,6 +1139,13 @@ namespace AmdgpuWddmSetup
             if (v.OfferRetry) AddButton("result.retry", (s, e) => { if (_flow == "prepare") Show(Screen.Prepare); else RunPlan(); }, retryFirst, true);
             CancelButton = AddButton("ui.close", (s, e) => Close(), !repairFirst && !retryFirst);
             if (v.Kind != ViewKind.Success || _flow == "prepare") AddButton("result.save-support", (s, e) => SaveSupport());
+        }
+
+        void PendingRemovalNotice()
+        {
+            if ((_active != null && _active.PendingRemovalsCancelled > 0) ||
+                _runs.Any(r => r.Run != null && r.Run.PendingRemovalsCancelled > 0))
+                Line(Icons.Info, Theme.Dim, Strings.T("install.pending-removals-cancelled"), Theme.Dim);
         }
 
         void BuildPrepare()
@@ -1192,6 +1212,7 @@ namespace AmdgpuWddmSetup
             var args = new List<string>();
             args.AddRange(SetupArgs.TuningArguments(_systemTuningChoice));
             args.AddRange(InstallFlow.ShortcutArguments(_startMenuShortcut, _desktopShortcut));
+            args.AddRange(InstallFlow.WallpaperArguments(_wallpaper));
             if (_flow == "repair") args.Add("-Repair");
             // Pressing Install is the consent (owner, 2026-10-12), so the switches that used to carry a user's answer
             // are given on every run. The engine of this package no longer needs them; an engine of an older release,
@@ -1352,12 +1373,36 @@ namespace AmdgpuWddmSetup
             // The words first, then the picture: the tip's height decides how much room is left for her.
             // The checks take less than a minute; an installation can take minutes. The guide says the same as the page.
             if (_guideBubble != null)
-                _guideBubble.Say(Strings.T(cause == SetupCause.Welcome && _flow == "prepare" ? "guide.prepare" : cause == SetupCause.WorkInProgress && Current == Screen.Checking ? "guide.checking" : SetupGuide.TextId(cause)));
+                _guideBubble.Say(GuideText(cause == SetupCause.Welcome && _flow == "prepare" ? "guide.prepare" : cause == SetupCause.WorkInProgress && Current == Screen.Checking ? "guide.checking" : SetupGuide.TipId(cause, Current == Screen.Working ? _tipTurn : 0)));
             ShowGuideArt(cause);
             GuideCause = cause;
         }
 
         public SetupCause GuideCause { get; private set; }
+
+        // The text of one tip. The name tip carries the meaning of the name as an argument: that phrase is one string
+        // (brand.expansion), so a new wording is one line in each table.
+        static string GuideText(string id)
+        {
+            return id == SetupGuide.NameTipId ? Strings.T(id, Strings.T("brand.expansion")) : Strings.T(id);
+        }
+
+        // The turn of the Working screen's tips: the next one after SetupGuide.TipSeconds on that screen, back to the
+        // first on any other screen. The window's poll timer drives it (never a headless render, whose fixture sets
+        // the turn it draws).
+        int _tipTurn;
+        DateTime _tipSince;
+
+        void TurnTip()
+        {
+            if (IsDisposed || Current != Screen.Working || GuideCause != SetupCause.WorkInProgress) { _tipTurn = 0; _tipSince = DateTime.MinValue; return; }
+            var now = DateTime.UtcNow;
+            if (_tipSince == DateTime.MinValue) { _tipSince = now; return; }
+            if ((now - _tipSince).TotalSeconds < SetupGuide.TipSeconds) return;
+            _tipTurn++;
+            _tipSince = now;
+            UpdateGuide();
+        }
 
         // The still picture of this screen's cause, with "Show Nagi" on and its resource in the exe. Without either
         // one the slot is empty and the panel is the text-only panel. The picture is drawn at most 1.25 times the
@@ -1446,7 +1491,7 @@ namespace AmdgpuWddmSetup
         public string Summary()
         {
             var w = new StringBuilder();
-            w.AppendLine("amdgpu-wddm Setup " + Program.VersionText + ", " + DateTime.UtcNow.ToString("o"));
+            w.AppendLine(Program.ProductName + " " + Program.VersionText + ", " + DateTime.UtcNow.ToString("o"));
             w.AppendLine("arguments: " + string.Join(" ", _args.Raw));
             w.AppendLine("flow: " + _flow + "; screen: " + Current + "; language: " + Strings.Language + "; elevated: " + (!_smoke && Native.IsElevated()));
             w.AppendLine("package: " + _package + (_usePrepared ? " (prepared folder)" : ""));
@@ -1549,6 +1594,7 @@ namespace AmdgpuWddmSetup
             _prepFirmware = f.PrepareFirmware ?? "";
             _prepFromWelcome = f.Flow == "prepare";
             _supportSaved = f.SupportSaved;
+            _tipTurn = f.TipTurn;
             // The elapsed time of a run in a drawn screen: a fixed 42 seconds, so every render of the same screen is
             // the same picture.
             _runStarted = DateTime.UtcNow - TimeSpan.FromSeconds(42);
@@ -1623,6 +1669,160 @@ namespace AmdgpuWddmSetup
                     if (row.Right > _rail.Width) w.AppendLine("chrome: a step of the rail is wider than the rail");
             return w.ToString();
         }
+
+        // G-BACKDROP (BD-137), in two halves: a control that paints itself leaves no pixel of its client rectangle
+        // unpainted, and the colour it clears itself in is the colour the window really paints under it
+        // (WrongBackdrop, below).
+        //
+        // Control.WmPaint runs two layers for a control with ControlStyles.UserPaint: the background layer, and that
+        // one only when ControlStyles.Opaque is not set, then OnPaint (.NET Framework reference source, Control.cs,
+        // WmPaint and PaintWithErrorHandling). ButtonBase sets Opaque, so for every button, option button and check
+        // box of this window the whole background is OnPaint's own work. On the screen each control paints into a
+        // buffer that BufferedGraphicsManager hands to the next control with the pixels of the last one still in it,
+        // so a control that does not clear itself shows what was painted there before: the language pills each
+        // carried the pill before them and a word from the step rail, and the two option buttons of "Where the files
+        // come from" carried each other's text. A render into one bitmap cannot show this, because there the parent
+        // has already drawn the right pixels underneath, which is why 27 screens x 22 renders passed over it; this
+        // gate paints every control alone, over a colour no screen uses, and fails on whatever is left of it.
+        public List<string> Backdrops()
+        {
+            var problems = new List<string>();
+            var under = new Dictionary<Control, Bitmap>();
+            try
+            {
+                foreach (var c in Painters(this))
+                {
+                    int w = c.Width, h = c.Height;
+                    if (w <= 0 || h <= 0) continue;
+                    int left;
+                    using (var bmp = new Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppRgb))
+                    {
+                        using (var g = Graphics.FromImage(bmp))
+                        {
+                            g.Clear(Sentinel);
+                            var e = new PaintEventArgs(g, new Rectangle(0, 0, w, h));
+                            if (!Style(c, ControlStyles.Opaque)) InvokePaintBackground(c, e);
+                            InvokePaint(c, e);
+                        }
+                        left = Unpainted(bmp);
+                    }
+                    if (left > 0)
+                        problems.Add(Current + ": " + Describe(c) + " " + w + "x" + h + " leaves " + left + " pixels of its background unpainted" +
+                            " (parent " + (c.Parent == null ? "none" : c.Parent.GetType().Name + " BackColor " + Hex(c.Parent.BackColor)) +
+                            ", backdrop " + Hex(Theme.Backdrop(c)) + ")");
+                    var wrong = WrongBackdrop(c, under);
+                    if (wrong != null) problems.Add(Current + ": " + Describe(c) + " " + wrong);
+                }
+            }
+            finally { foreach (var b in under.Values) if (b != null) b.Dispose(); }
+            return problems;
+        }
+
+        // The colour half of G-BACKDROP: the colour a control clears itself in is the colour the window really
+        // paints under it.
+        //
+        // The pixel half above holds only that the control painted something. A control that fills its whole
+        // rectangle in the wrong colour passes it and still shows, on the screen, a rectangle that does not match
+        // what it sits on, which is the other half of the BD-137 picture ("a dark rectangle behind the text that
+        // does not match the card"): a new container that paints a colour of its own over its BackColor and does not
+        // carry IBackdrop, or an IBackdrop whose property has drifted from what its own OnPaint fills, hands its
+        // children a colour that is not there. So the parent is painted alone (with its own background layer, which
+        // is the rest of the chain above it: Control.PaintTransparentBackground paints the parent for a child with a
+        // transparent back colour, .NET Framework reference source, Control.cs), and the colour it leaves where the
+        // control sits must be the colour Theme.Backdrop answers for that control. The check is of the declaration
+        // against the paint, so it reads every control the gate walks, whoever drew it.
+        //
+        // The parent is painted in its own coordinates, into a bitmap of its client rectangle, and the point is read
+        // inside that: TextRenderer draws through GDI and does not follow the Graphics transform, so a parent painted
+        // through a translation puts its title text where the child is and the check would read a letter of it.
+        //
+        // One point is read, in the middle of the control: a wrong backdrop is one flat colour against another over
+        // the whole rectangle, while an edge of a control may legitimately run over a line, a rounded corner or the
+        // shadow of an ancestor (the guide picture stands on the card's teal border). The point is taken in the
+        // middle of the part of the control the parent's client rectangle really covers, because the page scrolls:
+        // a card below the fold sits outside the viewport its parent paints. Where even that point is left the
+        // sentinel colour, nothing paints there at all and there is nothing to compare.
+        string WrongBackdrop(Control c, Dictionary<Control, Bitmap> cache)
+        {
+            var parent = c.Parent;
+            if (parent == null) return null;
+            var bmp = Under(parent, cache);
+            if (bmp == null) return null;
+            var covered = Rectangle.Intersect(new Rectangle(c.Left, c.Top, c.Width, c.Height), new Rectangle(0, 0, bmp.Width, bmp.Height));
+            if (covered.Width <= 0 || covered.Height <= 0) return null;
+            var at = new Point(covered.Left + covered.Width / 2, covered.Top + covered.Height / 2);
+            var want = Theme.Backdrop(c);
+            var got = bmp.GetPixel(at.X, at.Y);
+            if ((got.ToArgb() & 0xFFFFFF) == (Sentinel.ToArgb() & 0xFFFFFF)) return null;
+            if ((got.ToArgb() & 0xFFFFFF) == (want.ToArgb() & 0xFFFFFF)) return null;
+            return c.Width + "x" + c.Height + " clears itself in " + Hex(want) + ", but the window paints " + Hex(got) +
+                " under it at " + (at.X - c.Left) + "," + (at.Y - c.Top) + " of it (parent " + Describe(parent) + ")";
+        }
+
+        // What one container paints when nothing of its content is drawn over it, kept for the whole walk: a page
+        // has many rows in one card and the card is painted once for all of them.
+        Bitmap Under(Control parent, Dictionary<Control, Bitmap> cache)
+        {
+            Bitmap bmp;
+            if (cache.TryGetValue(parent, out bmp)) return bmp;
+            var size = parent.ClientSize;
+            if (size.Width > 0 && size.Height > 0)
+            {
+                bmp = new Bitmap(size.Width, size.Height, System.Drawing.Imaging.PixelFormat.Format32bppRgb);
+                using (var g = Graphics.FromImage(bmp))
+                {
+                    g.Clear(Sentinel);
+                    var e = new PaintEventArgs(g, new Rectangle(0, 0, size.Width, size.Height));
+                    InvokePaintBackground(parent, e);
+                    InvokePaint(parent, e);
+                }
+            }
+            cache[parent] = bmp;
+            return bmp;
+        }
+
+        // A colour no palette of this window carries, in either theme.
+        static readonly Color Sentinel = Color.FromArgb(0xFF, 0x00, 0xFF);
+
+        static string Hex(Color c) { return c.A == 255 ? "#" + c.R.ToString("X2") + c.G.ToString("X2") + c.B.ToString("X2") : c.Name; }
+
+        // The controls whose own painting the gate reads: the ones this program draws, and any control that was left
+        // a transparent back colour. A stock control on a colour of its own is Windows' to paint. A control that is
+        // not shown is skipped with everything inside it: a child keeps its own visible flag while its parent is
+        // hidden, so a walk that recursed past a hidden container would report controls the user never sees (Walk,
+        // for G-A11Y, and the control application's ShownIn skip the subtree the same way).
+        static IEnumerable<Control> Painters(Control root)
+        {
+            foreach (Control k in root.Controls)
+            {
+                if (!HasVisibleFlag(k)) continue;
+                if (Style(k, ControlStyles.UserPaint) &&
+                    (k.GetType().Assembly == typeof(SetupForm).Assembly || k.BackColor.A != 255)) yield return k;
+                foreach (var p in Painters(k)) yield return p;
+            }
+        }
+
+        static int Unpainted(Bitmap bmp)
+        {
+            // The alpha byte of a 32bppRgb bitmap is not part of the picture, so only the colour is compared.
+            int sentinel = Sentinel.ToArgb() & 0xFFFFFF, left = 0;
+            var data = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height), System.Drawing.Imaging.ImageLockMode.ReadOnly,
+                System.Drawing.Imaging.PixelFormat.Format32bppRgb);
+            try
+            {
+                var row = new int[bmp.Width];
+                for (int y = 0; y < bmp.Height; y++)
+                {
+                    System.Runtime.InteropServices.Marshal.Copy(data.Scan0 + y * data.Stride, row, 0, row.Length);
+                    for (int x = 0; x < row.Length; x++) if ((row[x] & 0xFFFFFF) == sentinel) left++;
+                }
+            }
+            finally { bmp.UnlockBits(data); }
+            return left;
+        }
+
+        static readonly MethodInfo GetStyleMethod = typeof(Control).GetMethod("GetStyle", BindingFlags.NonPublic | BindingFlags.Instance);
+        static bool Style(Control c, ControlStyles s) { return (bool)GetStyleMethod.Invoke(c, new object[] { s }); }
 
         // G-A11Y: every control a user can reach has a name, the keyboard reaches every one of them, Enter and Escape
         // have their buttons, and nothing reachable is disabled-looking text.

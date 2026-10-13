@@ -209,6 +209,25 @@ foreach ($destination in $tuningDestinations) {
         $tuningRows += [pscustomobject]@{ component = 'system-tuning'; path = "$destination/$tuningFile" }
     }
 }
+# The Nagi wallpaper (owner, 2026-10-13): the obfuscated container next to the control application, which decodes
+# it for each person (tools\win\amdgpu_wddm_control\art\wallpaper\PROVENANCE.md). No plain picture enters the
+# package; the header and the SHA-256 of the picture inside are checked here, so a damaged file stops the build.
+$wallpaperRows = @()
+if (Test-Path -LiteralPath (Join-Path $pkg 'payload\control')) {
+    $wpFile = Join-Path $repo 'tools\win\amdgpu_wddm_control\art\wallpaper\nagi-wallpaper.nwp'
+    $wpBytes = [IO.File]::ReadAllBytes($wpFile)
+    if ($wpBytes.Length -lt 44 -or [Text.Encoding]::ASCII.GetString($wpBytes, 0, 8) -ne 'NAGIWP01' -or [BitConverter]::ToUInt32($wpBytes, 40) -ne ($wpBytes.Length - 44)) { throw "$wpFile is not a whole Nagi wallpaper file" }
+    $wpSha = [Security.Cryptography.SHA256]::Create()
+    try {
+        $wpKey = $wpSha.ComputeHash([Text.Encoding]::ASCII.GetBytes("Nagi's AMD Graphics Infrastructure"))
+        $wpPlain = New-Object byte[] ($wpBytes.Length - 44)
+        for ($wpAt = 0; $wpAt -lt $wpPlain.Length; $wpAt++) { $wpPlain[$wpAt] = $wpBytes[44 + $wpAt] -bxor $wpKey[$wpAt % 32] }
+        if ([BitConverter]::ToString($wpSha.ComputeHash($wpPlain)) -ne [BitConverter]::ToString($wpBytes, 8, 32)) { throw "$wpFile`: the picture inside does not match its SHA-256" }
+    } finally { $wpSha.Dispose() }
+    Copy-Item -LiteralPath $wpFile -Destination (Join-Path $pkg 'payload\control\nagi-wallpaper.nwp')
+    $wallpaperRows += [pscustomobject]@{ component = 'control'; path = 'payload/control/nagi-wallpaper.nwp' }
+    '  wallpaper: payload\control\nagi-wallpaper.nwp, {0} bytes, the picture inside checked' -f $wpBytes.Length
+}
 Copy-Item -LiteralPath (Join-Path $repo 'docs\testing\INSTALL.md') -Destination (Join-Path $pkg 'INSTALL.md')
 # TESTERS.md is not shipped any more. It named one package version of its own ("0.7.199.100-tester.11") in every
 # package up to tester.12, it read as the tester-facing note, and no gate held it to the release that carried it. The
@@ -282,10 +301,12 @@ foreach ($f in $sources.files) {
 # No shipped document may name a package version other than this one: TESTERS.md named 0.7.199.100-tester.11 in every
 # package up to tester.12, and it read as the tester-facing note. This runs after the last document is copied, so it
 # covers every one of them. The release notes are the one exception: they are chosen by version above, and they name
-# an earlier release where a tester has to know about it.
+# an earlier release where a tester has to know about it. A version token is read whole, with the "vR" of a second
+# issue (0.7.216.100-tester.29v2, owner 2026-10-13): read without it, every mention of this package's own version
+# would count as the other release 0.7.216.100-tester.29.
 foreach ($d in Get-ChildItem -LiteralPath $pkg -File -Filter '*.md') {
     if ($d.Name -like 'RELEASE-NOTES*') { continue }
-    $versionNames = @([regex]::Matches((Get-Content -LiteralPath $d.FullName -Raw), '\d+\.\d+\.\d+\.\d+-tester\.\d+') | ForEach-Object { $_.Value } | Sort-Object -Unique | Where-Object { $_ -ne $Version })
+    $versionNames = @([regex]::Matches((Get-Content -LiteralPath $d.FullName -Raw), '\d+\.\d+\.\d+\.\d+-tester\.\d+(?:v\d+)?') | ForEach-Object { $_.Value } | Sort-Object -Unique | Where-Object { $_ -ne $Version })
     if ($versionNames.Count) { throw "$($d.Name) names the package version $($versionNames -join ', '): a shipped document may name only this package's version ($Version), or no version at all" }
 }
 '  documents: {0} name no package version but this one ({1})' -f @(Get-ChildItem -LiteralPath $pkg -File -Filter '*.md' | Where-Object { $_.Name -notlike 'RELEASE-NOTES*' }).Count, ((Get-ChildItem -LiteralPath $pkg -File -Filter '*.md' | Where-Object { $_.Name -notlike 'RELEASE-NOTES*' } | ForEach-Object { $_.Name }) -join ', ')
@@ -475,7 +496,7 @@ function Get-InstallLocation([string]$PackagePath) {
     return $null
 }
 $components = @()
-$extra = @($taskScripts | ForEach-Object { [pscustomobject]@{ component = 'tool'; path = "payload/tools/$_" } }) + @([pscustomobject]@{ component = 'certificate'; path = 'payload/cert/amdgpu-wddm-release.cer' }) + $tuningRows
+$extra = @($taskScripts | ForEach-Object { [pscustomobject]@{ component = 'tool'; path = "payload/tools/$_" } }) + @([pscustomobject]@{ component = 'certificate'; path = 'payload/cert/amdgpu-wddm-release.cer' }) + $tuningRows + $wallpaperRows
 foreach ($f in $sources.files + $extra) {
     $p = Join-Path $pkg ($f.path -replace '/', '\')
     $ver = (Get-Item -LiteralPath $p).VersionInfo.FileVersion
@@ -506,11 +527,13 @@ if (Test-Path -LiteralPath $componentSource -PathType Leaf) {
     # An asset name that carries no {release} is the literal name of one release's asset. When it names another
     # release's train than this build, its address is a 404 at install time, and only a tester would find out. The
     # asset is downloaded by its SHA-256, so the name is the one thing nothing else checks.
-    if ($Version -match 'tester\.(\d+)') {
+    # The token is read whole, with the "vR" of a second issue (0.7.216.100-tester.29v2): read without it, the
+    # warning would name this release tester.29.
+    if ($Version -match 'tester\.(\d+(?:v\d+)?)') {
         $thisTrain = $Matches[1]
         foreach ($c in @($cmJson.components)) {
             $assetName = [string]$c.asset.name
-            if ($assetName -match 'tester\.(\d+)' -and $Matches[1] -ne $thisTrain) {
+            if ($assetName -match 'tester\.(\d+(?:v\d+)?)' -and $Matches[1] -ne $thisTrain) {
                 "  WARNING: component '$([string]$c.id)' names the asset $assetName, which carries tester.$($Matches[1]) while this release is tester.$thisTrain. Upload the asset under that name, or write the new name, size and sha256 into tools\release\components.json."
             }
         }
@@ -548,14 +571,19 @@ foreach ($f in Get-ChildItem -LiteralPath $pkg -Recurse -File | Sort-Object Full
 # application's reset reads from here.
 $regDefaults = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'installer\registry-defaults.json') -Raw | ConvertFrom-Json
 foreach ($g in 'parameters', 'desktop_router', 'app_router', 'd3d12_applications', 'graphics_drivers') { if (-not $regDefaults.defaults.$g) { throw "registry-defaults.json: defaults.$g missing" } }
-foreach ($n in 'EnableGpuPresentBlit', 'EnableCddDwmInterop', 'DpmMode', 'DpmMaxMHz') { if ($null -eq $regDefaults.defaults.parameters.$n) { throw "registry-defaults.json: parameters.$n missing" } }
+foreach ($n in 'EnableGpuPresentBlit', 'EnableCddDwmInterop', 'DpmMode', 'DpmMaxMHz', 'CuMode') { if ($null -eq $regDefaults.defaults.parameters.$n) { throw "registry-defaults.json: parameters.$n missing" } }
+# The graphics cores of an install (BD-077): the table names the number the driver starts with, and the only numbers
+# the driver and the control application accept are the firmware's 24 and all 40. A package that names another number
+# would install a value the driver refuses (reason INVALID_SETTING) and a number the application cannot show.
+$cuDefault = [int]$regDefaults.defaults.parameters.CuMode
+if ($cuDefault -ne 24 -and $cuDefault -ne 40) { throw "registry-defaults.json: parameters.CuMode is '$cuDefault', not 24 or 40" }
 if ($null -eq $regDefaults.defaults.desktop_router.DwmForceCpu) { throw 'registry-defaults.json: desktop_router.DwmForceCpu missing' }
 # How long Windows waits for the graphics (BD-079): inside the range the control application offers, or the app would
 # show a release default it cannot choose (tools/win/amdgpu_wddm_control/src/TdrSetting.cs, Min and Max).
 $tdrDefault = $regDefaults.defaults.graphics_drivers.TdrDelay
 if ($null -eq $tdrDefault -or $tdrDefault -lt 2 -or $tdrDefault -gt 60) { throw "registry-defaults.json: graphics_drivers.TdrDelay is '$tdrDefault', not a number of seconds between 2 and 60" }
 if (-not $regDefaults.legacy_applied) { throw 'registry-defaults.json: legacy_applied missing' }
-'  registry defaults: {0} parameters, DwmForceCpu {1}, TdrDelay {2} s' -f @($regDefaults.defaults.parameters.PSObject.Properties).Count, $regDefaults.defaults.desktop_router.DwmForceCpu, $tdrDefault
+'  registry defaults: {0} parameters, DwmForceCpu {1}, TdrDelay {2} s, CuMode {3}' -f @($regDefaults.defaults.parameters.PSObject.Properties).Count, $regDefaults.defaults.desktop_router.DwmForceCpu, $tdrDefault, $cuDefault
 # The H.264 encoder MFT switch (M15.11): manifest.json carries it, so the package itself says whether the installer
 # registers the transform (installer\mft-h264.ps1, driver/umd/mft-h264/INSTALL.md). The identifiers must be the ones
 # the installer and the DLL use; a release that registers the encoder has to carry its DLL.

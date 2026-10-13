@@ -218,6 +218,9 @@ namespace AmdgpuWddmControl
 
             _header = new Panel { Dock = DockStyle.Top, Height = Theme.S(60), BackColor = Theme.Nav, Padding = Theme.Pad(16, 12, 16, 8) };
             var left = new FlowLayoutPanel { Dock = DockStyle.Left, AutoSize = true, WrapContents = false, BackColor = Color.Transparent };
+            // The Nagi mark beside the product name (NagiMark.cs); decorative, the name says the same.
+            var mark = new NagiMarkBox(Theme.S(30)) { Margin = Theme.Pad(0, 2, 8, 0) };
+            left.Controls.Add(mark);
             var brand = Ui.Label(Program.ProductName, Theme.Brand);
             brand.Margin = Theme.Pad(0, 4, 18, 0);
             left.Controls.Add(brand);
@@ -580,6 +583,7 @@ namespace AmdgpuWddmControl
             _verdict = Guide.Choose(causes);
             string text = _verdict == null ? Strings.T("status.unreadable")
                 : _verdict.Cause == GuideCause.PageTip && Strings.Has("guide.tip." + _page) ? Strings.T("guide.tip." + _page) : Strings.T(_verdict.TextId);
+            if (Guide.ShowNameTip(_nameTipShowing, _verdict)) text = Strings.T(Guide.NameTipId, Strings.T("brand.expansion"));
             _guide.Show(_verdict, text, Visible && WindowState != FormWindowState.Minimized);
         }
 
@@ -612,6 +616,19 @@ namespace AmdgpuWddmControl
             ComputeStatus();
             ShowPage(_page, null, false);
             MaybeAutomaticDiagnostics();
+            MaybeNagiWallpaper();
+        }
+
+        // The Nagi wallpaper of a verified install, once per install for this account (Wallpaper.cs), when the
+        // sign-in run has not set it yet. Off the UI thread, once per window, and never in a render or a probe.
+        bool _wallpaperChecked;
+
+        void MaybeNagiWallpaper()
+        {
+            if (_wallpaperChecked || _smoke || ReadOnlyProbe || _fixture) return;
+            _wallpaperChecked = true;
+            var prefs = _prefs;
+            System.Threading.ThreadPool.QueueUserWorkItem(_ => NagiWallpaper.RunIfDue(prefs));
         }
 
         int _drvRead;       // the newest Driver card read; an older one that ends later is dropped
@@ -654,6 +671,28 @@ namespace AmdgpuWddmControl
             _upgradeDone = DriverCard.UpgradeLatch(_upgradeDone, _drv, _prefs.LastSeenRelease);
             if (!_smoke && !ReadOnlyProbe && _drv != null && DriverCard.UpgradeVerified(_drv))
                 _prefs.LastSeenRelease = _drv.InstalledVersion;
+            if (!_smoke && !ReadOnlyProbe && _drv != null && !_nameTipShowing && Guide.NameTipDue(_drv.InstalledVersion, _prefs.NameTipRelease))
+                StartNameTip(_drv.InstalledVersion);
+        }
+
+        // The name tip of the guide panel (Guide.ShowNameTip): on for NameTipSeconds after the first read of a release
+        // this account has not seen the tip for, then the panel goes back to its verdict. The release is recorded at
+        // once, so a window closed within the 15 seconds does not show the tip again. Nothing waits for it.
+        bool _nameTipShowing;
+
+        void StartNameTip(string release)
+        {
+            _prefs.NameTipRelease = release;
+            _nameTipShowing = true;
+            var t = new Timer { Interval = Guide.NameTipSeconds * 1000 };
+            t.Tick += (s, e) =>
+            {
+                t.Stop();
+                t.Dispose();
+                _nameTipShowing = false;
+                if (!IsDisposed) UpdateGuide();
+            };
+            t.Start();
         }
 
         void ComputeStatus()

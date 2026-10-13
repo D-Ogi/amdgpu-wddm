@@ -53,6 +53,8 @@ using System.Runtime.InteropServices;
 using System.Text;
 namespace AmdgpuWddmWitness {
 public static class Drivers {
+    [DllImport("kernel32.dll")]
+    public static extern ulong GetTickCount64();
     [DllImport("psapi.dll", SetLastError = true)]
     static extern bool EnumDeviceDrivers([Out] IntPtr[] bases, int cb, out int needed);
     [DllImport("psapi.dll", CharSet = CharSet.Unicode, SetLastError = true)]
@@ -75,6 +77,18 @@ public static class Drivers {
 }
 }
 '@
+}
+
+# Milliseconds since Windows started, including sleep. Independent of wall-clock and time-zone changes.
+function Get-BootElapsedMilliseconds { return [int64][AmdgpuWddmWitness.Drivers]::GetTickCount64() }
+
+function Get-RecordElapsedMilliseconds($Record, [string]$Field) {
+    if (-not $Record) { return $null }
+    if ($Record -is [Collections.IDictionary]) { if (-not $Record.Contains($Field)) { return $null } }
+    elseif (-not $Record.PSObject.Properties[$Field]) { return $null }
+    $v = $Record.$Field
+    if (($v -is [int] -or $v -is [long] -or $v -is [uint32]) -and $v -ge 0) { return [int64]$v }
+    return $null
 }
 
 # A kernel module name as a Win32 path.
@@ -122,7 +136,8 @@ function Get-RunningKmdReading([string]$Cli, [string]$ImageName = 'bc250kmd.sys'
 # is the image of this boot only while nothing replaced it after the boot started, so there is no witness when the
 # file was created or written after boot_utc, or when $State records an install action in this boot.
 function Get-RunningReleaseWitness {
-    param($Manifest, [string]$ManifestSha256, $Reading, $Boot, [ValidateSet('verify', 'start-confirm')][string]$RecordedBy, [string]$Utc = ([DateTime]::UtcNow.ToString('o')), $State)
+    param($Manifest, [string]$ManifestSha256, $Reading, $Boot, [ValidateSet('verify', 'start-confirm')][string]$RecordedBy, [string]$Utc = ([DateTime]::UtcNow.ToString('o')), $State,
+        [Nullable[long]]$BootElapsedMs = (Get-BootElapsedMilliseconds))
     function No([string]$Why) { return [pscustomobject]@{ record = $null; reason = $Why } }
     function Get-Utc([string]$T) {
         $d = [DateTime]::MinValue
@@ -153,6 +168,7 @@ function Get-RunningReleaseWitness {
     $rec = [ordered]@{
         schema = $script:WitnessSchema
         boot_id = [int64]$Boot.boot_id
+        boot_elapsed_ms = $BootElapsedMs
         recorded_utc = $Utc
         recorded_by = $RecordedBy
         release = [string]$Manifest.name
@@ -184,8 +200,11 @@ function Test-RunningReleaseWitness {
     $w = Get-Utc ([string]$Witness.recorded_utc)
     if ($null -eq $w) { return [pscustomobject]@{ valid = $false; reason = 'the witness has no valid time' } }
     if ($State -and $State.PSObject.Properties['mutation_boot_id'] -and $null -ne $State.mutation_boot_id -and [int64]$State.mutation_boot_id -eq [int64]$Boot.boot_id) {
-        $t = Get-Utc ([string]$State.mutation_utc)
-        if ($null -eq $t -or $t -gt $w) { return [pscustomobject]@{ valid = $false; reason = "an install action at $($State.mutation_utc) came after the witness in this boot" } }
+        $t = Get-RecordElapsedMilliseconds $State 'mutation_boot_elapsed_ms'
+        $stamp = Get-RecordElapsedMilliseconds $Witness 'boot_elapsed_ms'
+        if ($null -eq $t -or $null -eq $stamp -or $t -ge $stamp) {
+            return [pscustomobject]@{ valid = $false; reason = 'an install action in this boot is not known to precede the witness' }
+        }
     }
     return [pscustomobject]@{ valid = $true; reason = $null }
 }

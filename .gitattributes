@@ -50,6 +50,10 @@ tools/win/etw/testdata/*.txt -text
 # PROVENANCE.md beside it and the build compares the files against that list, so no checkout may rewrite a byte.
 tools/win/amdgpu_wddm_control/art/nagi/*.png binary
 
+# The Nagi wallpaper is an obfuscated container (art/wallpaper/PROVENANCE.md). Its SHA-256 is pinned there and in the
+# unit tests, so no checkout may rewrite a byte.
+tools/win/amdgpu_wddm_control/art/wallpaper/*.nwp binary
+
 # The pictures of the README are stored byte for byte. The animation is an animated WebP, which no checkout
 # may normalize.
 docs/media/** binary

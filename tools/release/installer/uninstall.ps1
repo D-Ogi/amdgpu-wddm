@@ -102,10 +102,12 @@ Invoke-Change "unregister our scheduled task(s): $(if ($tasks.Count) { $tasks -j
 Invoke-Change "remove the RunOnce entry '$($script:RunOnceName)'" { Remove-ItemProperty -LiteralPath $script:RunOnceKey -Name $script:RunOnceName -ErrorAction SilentlyContinue } | Out-Null
 # Every shortcut this installer can write, in the Start menu and on the desktop (common.ps1,
 # Get-ControlShortcutPaths): one list for the install and the uninstall, so an icon the install put on the desktop
-# cannot stay behind.
-foreach ($sc in @(Get-ControlShortcutPaths)) {
+# cannot stay behind. The list carries the names of an older release as well ("amdgpu-wddm Control"): those go only
+# when they point at our control application, and a file of that name that points elsewhere stays.
+foreach ($sc in @(Get-ControlShortcutPaths | Where-Object { -not [bool]$_.legacy })) {
     Invoke-Change "remove the $($sc.where) shortcut $($sc.path)" { Remove-Item -LiteralPath $sc.path -Force -ErrorAction SilentlyContinue } | Out-Null
 }
+Remove-LegacyControlShortcuts -OwnTargets @(Get-OwnControlTargets -InstallRoots @($root))
 
 Write-Step 'DisplayPort audio interrupt'
 # The one value the install changed on the GPU's HD Audio function (BD-092, common.ps1): back as it was, or removed
@@ -371,7 +373,7 @@ Invoke-Change "remove the installer state $($script:StateDir) (with the kept rep
 Write-Step 'Per-user data'
 $userData = @(Get-OurUserDataDirs)
 if ($userData.Count) {
-    Invoke-Change "remove the per-user data of this release (shader caches, the recent-launch list, DWM observations): $($userData -join ', ')" {
+    Invoke-Change "remove the per-user data of this release (shader caches, the recent-launch list, DWM observations; the Nagi wallpaper picture and the tuning journal stay): $($userData -join ', ')" {
         foreach ($d in $userData) { Remove-UserDataExceptTuning $d }
     } | Out-Null
 } else { Write-Info 'no per-user data of ours' }

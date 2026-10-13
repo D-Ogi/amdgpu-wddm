@@ -23,6 +23,7 @@ The window starts `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy By
 | `-Plan` | checks and the decision only; changes nothing |
 | `-AcceptTestSigning`, `-BitLocker HaveKey\|Suspend` | passed by every run the window starts, and accepted from a script. The window asks nobody for them (owner, 2026-10-12) |
 | `-StartMenuShortcut\|-NoStartMenuShortcut`, `-DesktopShortcut\|-NoDesktopShortcut` | the two places of the shortcut, one pair each. The window passes the switch of an answer it has. A run with no answer of its own passes neither switch, so the answer the first run saved stands. The continuation after a restart is such a run. |
+| `-Wallpaper\|-NoWallpaper` | the Nagi wallpaper box, with the same rule as the shortcut pairs (`InstallFlow.WallpaperArguments`) |
 | `-Repair`, `-FirmwareDir <dir>`, `-Verify` | as on the command line |
 | `-DeadlineUtc <ISO 8601 UTC>` | stop at the first stop point after this time (section 10) |
 | `-HoldWindow` | command line only (the RunOnce continuation, section 4): wait for Enter before the console window closes; ignored with `-Gui` |
@@ -74,6 +75,10 @@ install wrote in a place this one leaves out, and the uninstall removes every on
 4 lists the three shortcuts. The render gate G-SHORTCUT refuses an install plan screen without the two boxes, a box
 that is off when the screen opens and a box that is not a system option control.
 
+The same card has a third box, "Set the Nagi wallpaper" (owner, 2026-10-13), on when the screen opens and opened on
+the `wallpaper` answer of the decision event. It is an option, not a question. The engine only records the answer
+(`interfaces.md` section 4), and G-SHORTCUT checks this box the same way as the two others.
+
 **The window may carry the package inside itself.** A release ships `amdgpu-wddm-setup-<version>.exe`: the same
 window with the package appended after the end of its program image (`src\Payload.cs`,
 `tools\release\make-setup-exe.ps1`). Started with no `files\` folder beside it, it unpacks the release to
@@ -116,7 +121,7 @@ One JSON object per line, UTF-8 without BOM, appended; the reader takes complete
 | `start` | `mode` (plan, dry-run, run, verify, prepare-offline), `gui`, `dry_run`, `package`, `contract`, `phase`, `deadline_utc`, `job` (`kill-on-close`, or `none: <reason>`) | first |
 | `stage` | `id`, `text` | a stage begins: `preflight`, `test-signing`, `install`, `firmware`, `files`, `driver`, `settings`, `finish`, `verify`; prepare-offline: `prepare-check`, `firmware`, `components`, `copy`, `finish`. Two more come from a package that carries `installer/components.json`. `extras` asks the questions, after the preflight and before any change. `components` installs the chosen extras, after `settings`. A run that can choose no extra opens neither, which is every run with `-Gui` and no `-Components` |
 | `check` | `id` (`<area>.<finding>`, for example `gpu.missing`, `firmware.folder-bad`), `result` (ok, warn, fail), `name`, `detail` | each preflight check |
-| `decision` | `action` (install, upgrade, resume, repair, verify, already), `installed_version`, `package_version`, `phase`, `consents` (always empty: nothing is asked of the user), `consents_given`, `restarts` (0, 1, 2), `firmware_source` (download, folder, package-folder), `firmware_dir`, `notes` (release-notes files in the package), `secure_boot`, `bitlocker`, `compatibility` (`ok`, `reasons`), `system_tuning`, `start_menu_shortcut`, `desktop_shortcut` (the two shortcut answers this run would act on: its own command line, or the answer an earlier run of the same install saved) | once, before any change |
+| `decision` | `action` (install, upgrade, resume, repair, verify, already), `installed_version`, `package_version`, `phase`, `consents` (always empty: nothing is asked of the user), `consents_given`, `restarts` (0, 1, 2), `firmware_source` (download, folder, package-folder), `firmware_dir`, `notes` (release-notes files in the package), `secure_boot`, `bitlocker`, `compatibility` (`ok`, `reasons`), `system_tuning`, `start_menu_shortcut`, `desktop_shortcut` (the two shortcut answers this run would act on: its own command line, or the answer an earlier run of the same install saved), `wallpaper` (the Nagi wallpaper answer, the same way) | once, before any change |
 | `settings-plan` | `summary` (`kept`, `updated`, `added`, `unchanged`, `command`, `reopened`, `driver_closed`), `rows` [`group`, `name`, `decision` (set, same, update, kept, command, reopened, driver-closed), `current`, `value`, `default`, `present`, `closure` (the driver's own act in plain words, null when there is none: BD-069)] | after the decision, before the first `step` (WU-006, WU-044) |
 | `cancel` | `available`, `where` | a safe point opens or closes |
 | `deadline` | `passed`, `where`, `deadline_utc`, `action` (`finishing`) | the deadline has passed inside a part that cannot stop; the run stops at the next stop point (section 10) |
@@ -126,6 +131,7 @@ One JSON object per line, UTF-8 without BOM, appended; the reader takes complete
 | `restart-required` | `reason_id` (restart.test-signing, restart.driver-package, restart.complete), `continuation` | a restart is needed |
 | `witness` | `written`, `reason` | verify tried to write the running-release witness |
 | `diagnostics` | `collected`, `path`, `bytes`, `seconds`, `cut`, `reasons` | verify found a driver that did not start and collected one diagnostics file for this run |
+| `pending-removals-cancelled` | `count` | setup cancelled queued deletions of files that this run installs, before copying them |
 | `result` | `outcome`, `exit_code`, `message_id`, `mutated`, `stop` (`cancel`, `deadline` or null) | last |
 
 ## 3. Terminal result
@@ -340,6 +346,7 @@ one; when a value cannot be obtained, it writes no witness and logs why.
 |---|---|
 | `boot_id` | `Get-BootIdentity` (release-witness.ps1), the one definition for the engine, verify, the task and the witness: `HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters\BootId` read as an unsigned 32-bit number |
 | `recorded_utc` | the writer's clock at the reading, ISO 8601 UTC |
+| `boot_elapsed_ms` | `GetTickCount64`, milliseconds since Windows started, stored as a nonnegative integer |
 | `recorded_by` | `verify` or `start-confirm` |
 | `release`, `version` | `name` and `version` of `<install root>\manifest.json` |
 | `manifest_sha256` | SHA256 of exactly that file, `<install root>\manifest.json` |
@@ -362,13 +369,13 @@ second time inside verify. Before it publishes, the writer reads `state.json` ag
 recorded during the reading gives no witness.
 
 Verify report: every verify run that reaches its checks writes
-`%ProgramData%\amdgpu-wddm\installer\verify\verify-<yyyyMMddTHHmmssfffZ>.json` through a temporary file, also when the
+`%ProgramData%\amdgpu-wddm\installer\verify\verify-<yyyyMMddTHHmmssfffZ>-<unique-id>.json` through a temporary file, also when the
 GPU is missing or a check throws (then with a failing `verify` result):
 
 ```json
 {
   "schema": "amdgpu-wddm.verify-report/1",
-  "utc": "2026-10-04T12:00:00.000Z", "invocation": "...", "boot_id": 1234, "dry_run": false,
+  "utc": "2026-10-04T12:00:00.000Z", "invocation": "...", "boot_id": 1234, "boot_elapsed_ms": 120000, "dry_run": false,
   "release": "amdgpu-wddm-tester-0.7.199.100-tester.11", "package_version": "0.7.199.100-tester.11",
   "manifest_sha256": "64 hex digits of <install root>\\manifest.json", "manifest_source": "install-root",
   "kmd_abi": "0x000700C7", "install_root": "C:\\Program Files\\amdgpu-wddm",
@@ -381,6 +388,13 @@ GPU is missing or a check throws (then with a failing `verify` result):
 (`complete` false). `results[]` keeps the existing fields (`check`, `pass`, `detail`, and `warning` or `info` on
 results that do not fail). `manifest_source` is `package` only when the install root has no manifest (a verify of an
 uninstalled package); such a report does not bind an installed release.
+
+BD-138: `boot_elapsed_ms` comes from `GetTickCount64`, not from UTC minus the boot time.
+The same clock supplies `mutation_boot_elapsed_ms` in installer state and `boot_elapsed_ms` in the running-release witness.
+These optional fields keep the existing schemas. The reader's ordering and legacy fallback are in `interfaces.md`, section 2.
+The unique filename suffix prevents a clock change from overwriting an earlier report. Readers also accept the old filenames.
+The setup reads its exact result path and checks the invocation ID. It does not select a result by UTC.
+Its two-second wait for output pipes after process exit uses a stopwatch, so clock changes cannot extend that wait.
 
 One manifest identity: verify reads `<install root>\manifest.json` once, hashes exactly those bytes and parses them.
 The checks (expected files, hashes, KMD ABI), the report's `release`, `package_version`, `manifest_sha256`,

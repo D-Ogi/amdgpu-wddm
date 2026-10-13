@@ -94,7 +94,11 @@ namespace AmdgpuWddmControl
             if (result != null) p.Controls.Add(result);
 
             var about = new CardPanel(Strings.T("help.about.title"), width);
-            about.Add(Ui.Label(Program.ProductName, Theme.Bold, null, about.Inner));
+            var aboutMark = new NagiMarkBox(Theme.S(40)) { Margin = Theme.Pad(0, 0, 10, 0) };
+            var aboutName = Ui.Label(Program.ProductName, Theme.Bold, null, about.Inner - aboutMark.Width - Theme.S(10));
+            aboutName.Margin = Theme.Pad(0, 10, 0, 0);
+            about.Add(Ui.Row(aboutMark, aboutName));
+            about.Add(Ui.Dim(Strings.T("help.about.name", Strings.T("brand.expansion")), about.Inner));
             about.Add(Ui.Dim(InstalledVersion != null ? Strings.T("help.about.release", InstalledVersion) : Strings.T("drv.installed.none"), about.Inner));
             about.Add(Ui.Dim(Strings.T("help.about.text"), about.Inner));
             about.Add(Ui.Button(Strings.T("driver.updates.releases"), (s, e) => UpdateCheck.OpenReleasePage(null)));
@@ -210,6 +214,10 @@ namespace AmdgpuWddmControl
             Func<string, string, Button> act = (label, action) => Ui.Button(label, (s, e) => RunAction(action));
             actions.Add(Ui.WrapRow(actions.Inner, act("Desktop on the CPU route", "desktop-cpu"), act("Desktop on the GPU route", "desktop-gpu"), act("Reopen the GPU desktop path", "reopen-gpu-path")));
             actions.Add(Ui.WrapRow(actions.Inner, act("Confirm this start", "confirm-start"), act("Re-enable automatic clocks", "enable-dpm"), act("Undo last action", "undo")));
+            // The way back from Microsoft Basic Display after the driver's own guard refused a start. The state
+            // line above recommends it and INSTALL.md sends the person to this card for it, so the button has to be
+            // here; it refuses itself through Recovery.Plan on a machine the refusal does not fit, like the rest.
+            actions.Add(Ui.WrapRow(actions.Inner, act("Turn the graphics driver back on", "enable-driver")));
             p.Controls.Add(actions);
 
             var comps = new CardPanel("Support: installed components", width) { Tag = "support" };

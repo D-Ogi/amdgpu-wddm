@@ -146,14 +146,9 @@ namespace AmdgpuWddmSetup
             var g = e.Graphics;
             using (var b = new SolidBrush(Theme.Nav)) g.FillRectangle(b, ClientRectangle);
             using (var pen = new Pen(Theme.Line)) g.DrawLine(pen, 0, Height - 1, Width, Height - 1);
-            // The mark of the release: two overlapping squares, the accent over the teal.
-            int d = Theme.S(22), x = Theme.S(22), y = (Height - d) / 2;
-            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            using (var teal = new Pen(Theme.Teal, Math.Max(1.4f, Theme.S(3) * 0.9f)))
-                g.DrawRectangle(teal, x + Theme.S(6), y + Theme.S(6), d - Theme.S(7), d - Theme.S(7));
-            using (var red = new Pen(Theme.Accent, Math.Max(1.4f, Theme.S(3) * 0.9f)))
-                g.DrawRectangle(red, x, y, d - Theme.S(7), d - Theme.S(7));
-            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.Default;
+            // The Nagi mark beside the product name (NagiMark.cs, the project's logo).
+            int d = Theme.S(26), x = Theme.S(20), y = (Height - d) / 2;
+            NagiMark.Draw(g, new Rectangle(x, y, d, d), Theme.Nav);
             var size = Gfx.Measure(_brand, Theme.Brand, Width);
             TextRenderer.DrawText(g, _brand, Theme.Brand, new Rectangle(x + d + Theme.S(14), (Height - size.Height) / 2, Width, size.Height), Theme.Text,
                 TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine | TextFormatFlags.Left | TextFormatFlags.NoPadding);
