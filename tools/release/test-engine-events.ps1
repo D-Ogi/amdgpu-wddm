@@ -117,7 +117,7 @@ Check (($r.code -eq 0) -and ($r.result.outcome -eq 'planned') -and ($d.Count -eq
 # whether test signing is on or off, and whatever BitLocker protection says. What the install changes is stated
 # instead: the plan prints it, and the setup window's plan screen says it in words.
 Check (@($d[0].consents).Count -eq 0) "no consent is asked for: consents $(@($d[0].consents) -join ', ') (test signing active on this PC: $tsActive)"
-Check ([int]$d[0].restarts -eq $(if ($tsActive) { 1 } else { 2 })) "restarts: $($d[0].restarts)"
+Check ([int]$d[0].restarts -eq $(if ($tsActive) { 2 } else { 3 })) "restarts: $($d[0].restarts)"
 Check (($d[0].firmware_source -eq 'download') -and (@($d[0].notes) -contains 'RELEASE-NOTES.md') -and $d[0].compatibility.ok) 'firmware from the download, the release notes named, the package''s compatibility record verifies'
 $sp = @(Get-Events $r 'settings-plan')
 Check (($sp.Count -eq 1) -and (@($sp[0].rows).Count -ge 20) -and -not @($sp[0].rows | Where-Object { $_.decision -in 'installer', 'restored' -or -not $_.group -or -not $_.name }).Count -and ($null -ne $sp[0].summary.added)) "settings-plan: $(@($sp[0].rows).Count) rows (group, name, decision), summary $($sp[0].summary | ConvertTo-Json -Compress)"
@@ -203,10 +203,26 @@ Check (-not (Get-Events $r 'step').Count) 'no step after the cancel'
 $st = [ordered]@{ schema = 1; phase = 'verified'; package_version = $pkgVersion; install_root = (Join-Path $env:ProgramFiles 'amdgpu-wddm'); updated_utc = '2026-10-03T00:00:00Z' }
 $r = Invoke-Engine 'repair plan' @('-Plan', '-DryRunIgnoreBoard', '-Repair') -State $st
 $d = @(Get-Events $r 'decision')
-Check (($r.result.outcome -eq 'planned') -and ($d[0].action -eq 'repair') -and -not @($d[0].consents).Count -and ([int]$d[0].restarts -eq 1) -and (Get-Events $r 'settings-plan').Count) 'repair: no consent, one restart, a settings plan'
+Check (($r.result.outcome -eq 'planned') -and ($d[0].action -eq 'repair') -and -not @($d[0].consents).Count -and ([int]$d[0].restarts -eq 2) -and (Get-Events $r 'settings-plan').Count) 'repair: no consent, driver-set and configuration restarts, a settings plan'
 $r = Invoke-Engine 'already plan' @('-Plan', '-DryRunIgnoreBoard') -State $st
 $d = @(Get-Events $r 'decision')
 Check (($d[0].action -eq 'already') -and ([int]$d[0].restarts -eq 0) -and -not (Get-Events $r 'settings-plan').Count) 'the same verified version: already, nothing to plan'
+# A saved successful stage reduces the remaining plan only after a known new boot. These are synthetic states;
+# the native driver API is never called by -Plan, and the actual receipt logic decides each result.
+$bootValue = (Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters' -Name BootId).BootId
+$bootValue = [int64][BitConverter]::ToUInt32([BitConverter]::GetBytes([int32]$bootValue), 0)
+$stageState = [ordered]@{ schema = 1; phase = 'driver-pending-restart'; package_version = $pkgVersion; restart_boot_id = $bootValue
+    install_root = (Join-Path $env:ProgramFiles 'amdgpu-wddm'); driver_set = [ordered]@{
+        method = 'di-install-as-set'; inf_sha256 = (Get-FileHash -LiteralPath (Join-Path $Package 'payload\kmd\bc250kmd.inf')).Hash
+        staged = $true; boot_id = [string]$bootValue } }
+$r = Invoke-Engine 'driver set same boot plan' @('-Plan', '-DryRunIgnoreBoard') -State $stageState
+Check (($r.code -eq 7) -and $r.result.outcome -eq 'restart-required' -and -not $r.result.mutated) 'same boot stops at the existing restart boundary before staging again'
+$stageState.driver_set.boot_id = [string]($bootValue - 1)
+$stageState.restart_boot_id = $bootValue - 1
+$r = Invoke-Engine 'driver set next boot plan' @('-Plan', '-DryRunIgnoreBoard') -State $stageState
+Check ((@(Get-Events $r 'decision')[0].restarts -eq 1) -and $r.result.outcome -eq 'planned') 'after driver activation only the configuration restart remains'
+$r = Invoke-Engine 'driver set unknown boot plan' @('-Plan', '-DryRunIgnoreBoard') -State $stageState -Env @{ AMDGPU_WDDM_TEST_BOOT_ID = 'unreadable' }
+Check (($r.code -eq 7) -and $r.result.outcome -eq 'restart-required' -and -not $r.result.mutated) 'unknown boot stops at the existing restart boundary'
 $st2 = [ordered]@{ schema = 1; phase = 'verified'; package_version = '0.7.198.100-tester.10'; install_root = (Join-Path $env:ProgramFiles 'amdgpu-wddm'); updated_utc = '2026-10-03T00:00:00Z' }
 $r = Invoke-Engine 'upgrade dry run' @('-DryRun', '-DryRunIgnoreBoard') -State $st2
 Test-Stream $r 'upgrade dry run'

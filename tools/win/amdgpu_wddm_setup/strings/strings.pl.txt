@@ -124,6 +124,7 @@ plan.what.title|rev|70fbb54b|Co się stanie
 plan.restarts.0|rev|b0a2c82a|Ponowne uruchomienie systemu Windows nie jest potrzebne.
 plan.restarts.1|rev|2ae11afb|Windows uruchomi się ponownie raz. Po ponownym zalogowaniu instalator sam wznowi pracę.
 plan.restarts.2|rev|efc32bc9|Windows uruchomi się ponownie dwa razy. Po każdym zalogowaniu instalator sam wznowi pracę.
+plan.restarts.many|mt|40c9ca93|Windows uruchomi się ponownie {0} razy. Po każdym zalogowaniu instalator sam wznowi pracę.
 plan.restarts.choice|rev|e2801100|Każde ponowne uruchomienie zaczyna się samo po krótkim odliczaniu. Możesz uruchomić ponownie od razu albo odłożyć to na później.
 plan.change.test-mode|rev|7c5a1301|Windows przełącza się w tryb testowy, aby móc wczytać ten sterownik.
 plan.change.test-mode.note|rev|9a9c5086|W rogu pulpitu pojawi się wtedy napis „Tryb testowy”. Usunięcie sterownika wyłącza ten tryb.

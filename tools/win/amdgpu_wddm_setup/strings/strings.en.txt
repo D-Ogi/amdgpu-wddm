@@ -124,6 +124,7 @@ plan.what.title|src|-|What happens
 plan.restarts.0|src|-|No restart of Windows is needed.
 plan.restarts.1|src|-|Windows restarts once. After you log on again, setup continues by itself.
 plan.restarts.2|src|-|Windows restarts twice. After each logon, setup continues by itself.
+plan.restarts.many|src|-|Windows will restart {0} times. Setup resumes after each sign-in.
 plan.restarts.choice|src|-|Each restart starts by itself after a short countdown. You can restart at once or put it off.
 plan.change.test-mode|src|-|Windows switches to test mode, so it can load this driver.
 plan.change.test-mode.note|src|-|"Test Mode" then shows in a corner of the desktop. Removing the driver turns it off again.

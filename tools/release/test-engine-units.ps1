@@ -48,13 +48,14 @@ $fwFiles = @(
     [pscustomobject]@{ name = 'LICENSE.amdgpu'; path = 'LICENSE.amdgpu'; text = 'licence' })
 $fwPin = [pscustomobject]@{ commit = ('0' * 40); install_dir = 'C:\BC250\firmware'; url_templates = @('https://example.invalid/{path}?id={commit}')
     files = @($fwFiles | ForEach-Object { [pscustomobject]@{ name = $_.name; path = $_.path; sha256 = (Get-TextSha $_.text); size = $_.text.Length } }) }
-$infGood = "[Version]`r`nSignature = `"`$Windows NT`$`"`r`n`r`n[Manufacturer]`r`n%P% = Models,NTamd64`r`n`r`n[Models.NTamd64]`r`n%D% = Bc250_Install, PCI\VEN_1002&DEV_13FE`r`n`r`n[Bc250_Install]`r`nReboot`r`nCopyFiles = F`r`n"
-$infTester10 = $infGood -replace "Reboot`r`n", ''
+$infGood = "[Version]`r`nSignature = `"`$Windows NT`$`"`r`n`r`n[Manufacturer]`r`n%P% = Models,NTamd64`r`n`r`n[Models.NTamd64]`r`n%D% = Bc250_Install, PCI\VEN_1002&DEV_13FE`r`n`r`n[Bc250_Install]`r`nCopyFiles = F`r`n"
+$infLegacy = $infGood -replace 'CopyFiles', "Reboot`r`nCopyFiles"
 function New-FakePackage {
     param([string]$Dir, [string]$Version = '0.7.199.100-test.1', [string]$Inf = $infGood, [switch]$NoRecord, [scriptblock]$EditRecord, $Firmware = $fwPin, [AllowNull()][AllowEmptyString()][string]$RecordText = $null, [switch]$RawRecord, [switch]$Setup)
     Write-Text (Join-Path $Dir 'payload\kmd\bc250kmd.inf') $Inf
     Write-Text (Join-Path $Dir 'payload\kmd\bc250kmd.sys') "kmd image $Version"
     Write-Text (Join-Path $Dir 'installer\registry-defaults.json') '{ "schema": 1, "defaults": { "parameters": { "DpmMode": 1 }, "desktop_router": { "DwmForceCpu": 0 } } }'
+    Write-Text (Join-Path $Dir 'installer\deferred-driver.ps1') ([IO.File]::ReadAllText((Join-Path $Installer 'deferred-driver.ps1')))
     Write-Text (Join-Path $Dir 'install.cmd') '@echo off'
     # -Setup: the unpacked release's shape, setup.exe in the top folder beside the package root files\.
     if ($Setup) { Write-Text (Join-Path (Split-Path -Parent $Dir.TrimEnd('\')) 'setup.exe') "setup window $Version" }
@@ -545,20 +546,27 @@ $script:DryRunMode = $false
 
 '[C7] compatibility record'
 $cv = Test-CompatibilityRecord -PackageRoot $pkg
-Check ($cv.ok -and ($cv.record.no_live_rebind.reboot_directive) -and ((@($cv.record.no_live_rebind.install_sections) -join ',') -eq 'Bc250_Install')) 'a compliant package verifies'
+Check ($cv.ok -and (-not $cv.record.no_live_rebind.reboot_directive) -and $cv.record.no_live_rebind.method -eq 'di-install-as-set' -and ((@($cv.record.no_live_rebind.install_sections) -join ',') -eq 'Bc250_Install')) 'a compliant package verifies'
 foreach ($c in @(
-        @{ name = 'tester.10 shape (INF without the Reboot directive)'; args = @{ Inf = $infTester10 }; want = 'compat.live-rebind' }
+        @{ name = 'legacy record without its INF Reboot directive'; args = @{ EditRecord = { param($r) $r.no_live_rebind.Remove('method'); $r.no_live_rebind.reboot_directive = $true } }; want = 'compat.live-rebind' }
+        @{ name = 'unsupported method'; args = @{ EditRecord = { param($r) $r.no_live_rebind.method = 'force-rebind' } }; want = 'compat.live-rebind' }
+        @{ name = 'wrong native flags'; args = @{ EditRecord = { param($r) $r.no_live_rebind.flags = 2 } }; want = 'compat.live-rebind' }
+        @{ name = 'wrong helper hash'; args = @{ EditRecord = { param($r) $r.no_live_rebind.helper_sha256 = ('0' * 64) } }; want = 'compat.live-rebind' }
+        @{ name = 'new method with forbidden display directive'; args = @{ Inf = $infLegacy }; want = 'compat.live-rebind' }
         @{ name = 'no record'; args = @{ NoRecord = $true }; want = 'compat.missing' }
         @{ name = 'unknown record schema'; args = @{ EditRecord = { param($r) $r.schema = 'amdgpu-wddm.compatibility/0' } }; want = 'compat.unknown-schema' }
         @{ name = 'another firmware set'; args = @{ EditRecord = { param($r) $r.firmware.files[0].sha256 = ('0' * 64) } }; want = 'compat.firmware' }
         @{ name = 'another engine contract'; args = @{ EditRecord = { param($r) $r.engine.contract = 'amdgpu-wddm.engine/0' } }; want = 'compat.engine' }
-        @{ name = 'record claims the directive, INF lacks it'; args = @{ Inf = $infTester10; EditRecord = { param($r) $r.no_live_rebind.reboot_directive = $true } }; want = 'compat.live-rebind' })) {
+        @{ name = 'record claims the directive with new method'; args = @{ EditRecord = { param($r) $r.no_live_rebind.reboot_directive = $true } }; want = 'compat.live-rebind' })) {
     $d = Join-Path $work ('compat-' + ($c.name -replace '[^a-z0-9]+', '-'))
     $a = $c.args
     [void](New-FakePackage -Dir $d @a)
     $cv = Test-CompatibilityRecord -PackageRoot $d
     Check ((-not $cv.ok) -and (@($cv.reasons) -contains $c.want)) "$($c.name): refused ($(@($cv.reasons) -join ', '))"
 }
+$legacy = Join-Path $work 'compat-legacy-deferred'
+[void](New-FakePackage -Dir $legacy -Inf $infLegacy -EditRecord { param($r) $r.no_live_rebind.Remove('method'); $r.no_live_rebind.reboot_directive = $true })
+Check (Test-CompatibilityRecord -PackageRoot $legacy).ok 'old deferred packages remain readable for rollback'
 $cv = Test-CompatibilityRecord -PackageRoot $pkg -FirmwareDir $badFw
 Check ((-not $cv.ok) -and (@($cv.reasons) -contains 'compat.firmware-incomplete')) 'a set whose firmware folder is incomplete is refused'
 $cv = Test-CompatibilityRecord -PackageRoot $pkg -FirmwareDir $fwDir

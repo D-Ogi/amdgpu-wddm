@@ -89,7 +89,7 @@ $r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-Dr
 $r.text
 Check ($r.code -eq 0) "walk-through exit $($r.code)"
 Check ($r.text -match 'would: bcdedit /set ''\{current\}'' testsigning on') 'phase 1 shows the test-signing change'
-Check ($r.text -match 'would: pnputil /add-driver') 'phase 2 shows the driver install'
+Check ($r.text -match 'would: DiInstallDriverW INSTALL_AS_SET') 'phase 2 shows deferred driver staging'
 Check ($r.text -match 'would: HKLM:\\SYSTEM\\CurrentControlSet\\Services\\bc250kmd\\Parameters: .*DpmMode=1 \(new\); DpmMaxMHz=2000 \(new\)') 'phase 2 shows DPM on, 2000 MHz'
 Check ($r.text -match 'Parameters: .*UnconfirmedStarts=0') 'UnconfirmedStarts reset (installer-owned)'
 Check ($r.text -match 'previous installer defaults: the defaults of tester\.1 to tester\.7 \(no record\)') 'no AppliedDefaults record on this computer: legacy table'
@@ -252,9 +252,9 @@ $src = [IO.File]::ReadAllText((Join-Path $Package 'installer\install.ps1'))
 Check ($src -notmatch "icacls\.exe @\('C:\\BC250'") 'no icacls on C:\BC250 itself'
 Check ($src -notmatch 'Copy-Item') 'install.ps1 copies only through Copy-FileSafe / Copy-TreeSafe'
 Check (($src -match "Add-Result 'GPU desktop path'") -and ($src -match "Invoke-Native \`$cli @\('interop'\)") -and ($src -match 'effective blit\\\+cdd') -and ($src -match 'died in a session') -and ($src -match 'bc250d3d_zink')) 'verify checks the GPU desktop path (interop effective blit+cdd, no unclean session, zink in DWM)'
-$pos = @("Read-RegistryValues `$script:ParametersKey", "Invoke-Change 'pnputil /add-driver", "Invoke-RegistryDefaults `$script:ParametersKey") | ForEach-Object { $src.IndexOf($_) }
-Check (($pos[0] -gt 0) -and ($pos[0] -lt $pos[1]) -and ($pos[1] -lt $pos[2]) -and ($src -match "parameters_before_install") -and ($src -match '\$parametersBefore \$restoreNames')) 'driver settings are read before pnputil (the INF resets the gates) and judged from that snapshot'
-Check ($r.text -match 'driver settings before the driver package: \d+ values under Parameters, \d+ of \d+ judged by this release') 'the walk-through takes the snapshot before pnputil'
+$pos = @("Read-RegistryValues `$script:ParametersKey", "Invoke-Change 'DiInstallDriverW INSTALL_AS_SET", "Invoke-RegistryDefaults `$script:ParametersKey") | ForEach-Object { $src.IndexOf($_) }
+Check (($pos[0] -gt 0) -and ($pos[0] -lt $pos[1]) -and ($pos[1] -lt $pos[2]) -and ($src -match "parameters_before_install") -and ($src -match '\$parametersBefore \$restoreNames')) 'driver settings are read before staging (the INF resets the gates) and judged from that snapshot'
+Check ($r.text -match 'driver settings before the driver package: \d+ values under Parameters, \d+ of \d+ judged by this release') 'the walk-through takes the snapshot before staging'
 # The snapshot keeps the whole key, and every value that this release does not judge goes back as it was. A snapshot
 # of the judged names alone dropped CuMode at every release install, and the GPU then ran on 24 of its 40 compute
 # units (test-registry-defaults.ps1 has the case).
@@ -267,7 +267,7 @@ Check (($src -match '(?m)^\s+Set-StateDirAccess\s*$') -and ($common -match "\*S-
 Check (([string]$m.kmd_abi -eq '0x000700D8' -and [version]($m.kmd_build) -ge [version]'0.7.216.0') -or ([string]$m.kmd_abi -eq '0x000700D7' -and [version]($m.kmd_build) -ge [version]'0.7.215.0' -and [version]($m.kmd_build) -lt [version]'0.7.216.0') -or ([string]$m.kmd_abi -eq '0x000700D6' -and [version]($m.kmd_build) -ge [version]'0.7.214.0' -and [version]($m.kmd_build) -lt [version]'0.7.215.0') -or ([string]$m.kmd_abi -eq '0x000700D5' -and [version]($m.kmd_build) -ge [version]'0.7.213.0' -and [version]($m.kmd_build) -lt [version]'0.7.214.0') -or ([string]$m.kmd_abi -eq '0x000700D4' -and [version]($m.kmd_build) -ge [version]'0.7.212.0' -and [version]($m.kmd_build) -lt [version]'0.7.213.0') -or ([string]$m.kmd_abi -eq '0x000700D0' -and [version]($m.kmd_build) -ge [version]'0.7.208.0' -and [version]($m.kmd_build) -lt [version]'0.7.209.0') -or ([string]$m.kmd_abi -eq '0x000700CF' -and [version]($m.kmd_build) -ge [version]'0.7.207.0' -and [version]($m.kmd_build) -lt [version]'0.7.208.0') -or ([string]$m.kmd_abi -eq '0x000700CE' -and [version]($m.kmd_build) -ge [version]'0.7.206.0' -and [version]($m.kmd_build) -lt [version]'0.7.207.0') -or ([string]$m.kmd_abi -eq '0x000700CD' -and [version]($m.kmd_build) -ge [version]'0.7.205.0' -and [version]($m.kmd_build) -lt [version]'0.7.206.0') -or ([string]$m.kmd_abi -eq '0x000700CC' -and [version]($m.kmd_build) -ge [version]'0.7.204.0' -and [version]($m.kmd_build) -lt [version]'0.7.205.0') -or ([string]$m.kmd_abi -eq '0x000700CB' -and [version]($m.kmd_build) -ge [version]'0.7.203.0' -and [version]($m.kmd_build) -lt [version]'0.7.204.0') -or ([string]$m.kmd_abi -eq '0x000700CA' -and [version]($m.kmd_build) -ge [version]'0.7.202.0' -and [version]($m.kmd_build) -lt [version]'0.7.203.0') -or ([string]$m.kmd_abi -eq '0x000700C9' -and [version]($m.kmd_build) -ge [version]'0.7.201.0' -and [version]($m.kmd_build) -lt [version]'0.7.202.0') -or ([string]$m.kmd_abi -eq '0x000700C8' -and [version]($m.kmd_build) -ge [version]'0.7.200.0' -and [version]($m.kmd_build) -lt [version]'0.7.201.0') -or ([string]$m.kmd_abi -eq '0x000700C7' -and [version]($m.kmd_build) -lt [version]'0.7.200.0')) "kmd_abi $($m.kmd_abi) for KMD build $($m.kmd_build)"
 
 # BD-060: nothing in the installer stops or restarts DWM or the display device under the running desktop; the driver
-# package changes the GPU at the restart (INF Reboot directive), and only uninstall moves it in place (documented
+# package changes the GPU at shutdown (INSTALL_AS_SET), and only uninstall moves it in place (documented
 # there). The GPU's HD Audio function is a different device on the same part, and the installer restarts that one
 # function on purpose (BD-092: DisplayPort audio plays at the right rate only with a message-signalled interrupt,
 # which the function reads when it starts). The four checks below hold that restart to that one function, so a
@@ -298,15 +298,15 @@ Check (($audioRestarts -join '; ') -eq 'install.ps1: Restart-GpuAudioDevice -Ins
 $bad = @(foreach ($s in $scripts) { if ($s.text -match 'regsvr32') { $s.name } })
 Check ($bad.Count -eq 0) "no installer script calls regsvr32$(if ($bad.Count) { ': ' + ($bad -join ', ') })"
 $pnpCalls = @(foreach ($s in $scripts) { foreach ($mm in [regex]::Matches($s.text, 'Invoke-Native pnputil\.exe @\(\s*[''"]?(/[a-z-]+)[''"]?')) { "$($s.name) $($mm.Groups[1].Value)" } })
-Check ((($pnpCalls | Sort-Object) -join ', ') -eq 'install.ps1 /add-driver, install.ps1 /delete-driver, uninstall.ps1 /delete-driver, uninstall.ps1 /scan-devices') "pnputil calls: $($pnpCalls -join ', ')"
+Check ((($pnpCalls | Sort-Object) -join ', ') -eq 'install.ps1 /delete-driver, uninstall.ps1 /delete-driver, uninstall.ps1 /scan-devices') "pnputil calls: $($pnpCalls -join ', ')"
 # BD-089: the install deletes an older package of ours from the driver store, and it must not touch the device while
 # it does it. The uninstall takes the GPU off our driver on purpose, so there both switches belong.
 Check (($src -match "Invoke-Native pnputil\.exe @\('/delete-driver', \`$oldPackage\)") -and ($src -notmatch "'/delete-driver'[^\r\n]*/uninstall")) 'install.ps1 deletes an older driver package without /uninstall and without /force'
 $unsrc = [IO.File]::ReadAllText((Join-Path $Package 'installer\uninstall.ps1'))
 Check ($unsrc -match "@\('/delete-driver', \`$p, '/uninstall', '/force'\)") 'uninstall.ps1 removes the package of the GPU with /uninstall /force (the GPU goes back to Microsoft Basic Display Adapter)'
-$pos = @('Test-InfDefersDeviceRestart ([IO.File]::ReadAllLines($infFile))', "Invoke-Change 'pnputil /add-driver") | ForEach-Object { $src.IndexOf($_) }
-Check (($pos[0] -gt 0) -and ($pos[0] -lt $pos[1])) 'install.ps1 refuses a package INF without the Reboot directive before pnputil'
-Check ($r.text -match 'would: pnputil /add-driver payload\\kmd\\bc250kmd\.inf /install \(the GPU changes to it at the next restart\)') 'the walk-through shows the driver package for the next restart'
+$pos = @('Test-InfHasReboot ([IO.File]::ReadAllLines($infFile))', "Invoke-Change 'DiInstallDriverW INSTALL_AS_SET") | ForEach-Object { $src.IndexOf($_) }
+Check (($pos[0] -gt 0) -and ($pos[0] -lt $pos[1])) 'install.ps1 rejects Reboot before staging the display package'
+Check ($r.text -match 'would: DiInstallDriverW INSTALL_AS_SET payload\\kmd \(the GPU changes to it at the next restart\)') 'the walk-through shows the driver set for the next restart'
 Check (($src -match "'observed' \{ Add-Warning 'DWM restarted in this session'") -and ($src -match 'Get-DwmReplacementFinding \(Find-DwmBaseline \(Read-DwmBaseline\) \$epoch\)') -and ($src -notmatch 'LogonUtc -DwmStartUtc|StartTime|CreationDate -gt')) 'verify reports a DWM replacement only when observed against the logon baseline, unknown history otherwise'
 $sc0 = [IO.File]::ReadAllText((Join-Path $Package 'installer\start-confirm.ps1'))
 Check (($sc0 -match 'if \(-not \$Probe\) \{\s+try \{\s+\. \(Join-Path \$here ''dwm-session\.ps1''\)') -and ($sc0 -match 'Save-DwmBaseline \$epoch')) 'the start-confirm task records the DWM baseline at each logon (not in -Probe)'
@@ -323,14 +323,14 @@ Check (($common -match "8 = 'smu-error'") -and ($src -match "\`$ioRemedy = '; re
 Check (($common -match "legacy_record = 'DpmLastReason'; any_reason = \`$true") -and ($common -match "\(\`$record -eq \`$c\.record\) -and \`$c\.any_reason")) 'a durable record takes any reason the driver writes; only the legacy record is held to the three names'
 $marker = @(foreach ($s in $scripts) { if ((@($s.text -split "`n" | Where-Object { $_ -notmatch '^\s*#' }) -join "`n") -match 'InteropSession|InteropBoot') { $s.name } })
 Check ($marker.Count -eq 0) "the BD-059 session marker stays under KMD ownership: no installer code names it$(if ($marker.Count) { ': ' + ($marker -join ', ') })"
-$pos = @("Invoke-Change 'pnputil /add-driver", "Add-DwmObservation 'after the driver package'", "Save-Phase 'driver-pending-restart'", "Add-DwmObservation 'end of phase 2'", "Save-Phase 'installed'") | ForEach-Object { $src.IndexOf($_) }
+$pos = @("Invoke-Change 'DiInstallDriverW INSTALL_AS_SET", "Add-DwmObservation 'after the driver package'", "if (`$driverSetAction -ne 'verify-binding')", "Add-DwmObservation 'end of phase 2'", "Save-Phase 'installed'") | ForEach-Object { $src.IndexOf($_) }
 Check (($pos[0] -gt 0) -and ($pos[0] -lt $pos[1]) -and ($pos[1] -lt $pos[2]) -and ($pos[2] -lt $pos[3]) -and ($pos[3] -lt $pos[4]) -and ($src -match "Set-StateValue \`$state 'dwm_observations'")) 'DWM observations before and right after the driver package (ahead of the restart-pending branch) and at the end of phase 2 go into the state'
 $pos = @('$installInputs = Get-InstallInputs $PSBoundParameters $early', '$was = Set-InstallPackage $state $packageVersion', 'Save-InstallInputs $state $installInputs', "if (`$state.phase -eq 'new')", "Save-Phase 'driver-pending-restart'", 'Clear-InstallInputs $state', "Save-Phase 'installed'") | ForEach-Object { $src.IndexOf($_) }
 Check ((@($pos | Where-Object { $_ -lt 0 }).Count -eq 0) -and ($pos[0] -lt $pos[1]) -and ($pos[1] -lt $pos[2]) -and ($pos[2] -lt $pos[3]) -and ($pos[3] -lt $pos[4]) -and ($pos[4] -lt $pos[5]) -and ($pos[5] -lt $pos[6]) -and ([regex]::Matches($src, 'Clear-InstallInputs').Count -eq 1)) 'install inputs: restored first, bound to the package that takes an unfinished install over, saved before any restart for every install action, cleared only when phase 2 completes'
 'BD-060 session rules (test-session-checks.ps1 under 5.1, HKCU scratch key)'
 $rs = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-session-checks.ps1'), '-Installer', (Join-Path $Package 'installer'), '-Inf', (Join-Path $Package 'payload\kmd\bc250kmd.inf'), '-WorkRoot', $WorkBase)
 $rs.text
-Check ($rs.code -eq 0) "INF Reboot directive, pnputil outcomes, install inputs across a restart, DWM baseline: exit $($rs.code)"
+Check ($rs.code -eq 0) "driver-set staging, legacy outcomes, install inputs across a restart, DWM baseline: exit $($rs.code)"
 
 'file replacement and re-run (test-filesafe.ps1 under 5.1, inside a scratch folder)'
 $work = Join-Path $WorkBase ('filesafe-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ'))
@@ -366,7 +366,7 @@ foreach ($c in $cases) {
     Check ($r.code -eq 0) "$($c.name): exit $($r.code)"
     Check ($r.text -match $c.expect) "$($c.name): '$($c.expect)'"
     if ($c.phase2) {
-        Check (($r.text -match 'would: copy payload\\tools') -and ($r.text -match 'would: pnputil /add-driver') -and ($r.text -match 'Dry run complete')) "$($c.name): phase 2 runs again"
+        Check (($r.text -match 'would: copy payload\\tools') -and ($r.text -match 'would: DiInstallDriverW INSTALL_AS_SET') -and ($r.text -match 'Dry run complete')) "$($c.name): phase 2 runs again"
         Check ($r.text -notmatch 'would: bcdedit /set') "$($c.name): phase 1 (test signing) is not repeated"
         Check ($r.text -match "would: RunOnce entry 'amdgpu-wddm-installer' -> .*powershell\.exe`" -NoProfile -ExecutionPolicy Bypass -File `"[^`"]*\\installer\\install\.ps1`" -HoldWindow -Verify") "$($c.name): RunOnce verify armed again (Windows PowerShell, no cmd.exe)"
         Check ($r.text -match 'would: .*\\Release: Version') "$($c.name): Release\Version rewritten"
@@ -604,7 +604,7 @@ foreach ($c in @(
         $closureCmd = [regex]::Escape('powershell.exe" -NoProfile -ExecutionPolicy Bypass -File ' + (Format-RunOnceArg (Join-Path $dir "packages\$pkgVersion\installer\install.ps1")) + ' -HoldWindow')
         Check (($r.text -match 'Test signing is set but not active yet') -and ($r.text -match "would: RunOnce entry 'amdgpu-wddm-installer' -> .*$closureCmd") -and ($r.text -match "would: stage the continuation closure: every file of this package and the firmware folder $([regex]::Escape($goodDir))") -and ($r.text -notmatch 'would: pnputil')) 'takeover at testsigning-pending: stops for the test-signing restart, and the run after it is this package''s, from its closure'
     } else {
-        Check (($r.text -match 'would: pnputil /add-driver') -and ($r.text -notmatch 'would: bcdedit /set')) 'takeover at testsigning-active: phase 2 runs, test signing is not set again'
+        Check (($r.text -match 'would: DiInstallDriverW INSTALL_AS_SET') -and ($r.text -notmatch 'would: bcdedit /set')) 'takeover at testsigning-active: phase 2 runs, test signing is not set again'
     }
     if ($r.code -ne $c.code) { $r.text }
     Remove-Item -LiteralPath $dir -Recurse -Force
@@ -670,7 +670,7 @@ if (Test-Path -LiteralPath $fwWork) { Remove-Item -LiteralPath $fwWork -Recurse 
 
 'package records: compatibility, release notes, witness writer, planned restarts only'
 $cr = Get-Content -LiteralPath (Join-Path $Package 'compatibility.json') -Raw | ConvertFrom-Json
-Check (($cr.schema -eq 'amdgpu-wddm.compatibility/1') -and $cr.no_live_rebind.reboot_directive -and (@($m.files | Where-Object { $_.path -eq 'compatibility.json' }).Count -eq 1)) 'compatibility.json: the Reboot directive recorded, listed in manifest.json'
+Check (($cr.schema -eq 'amdgpu-wddm.compatibility/1') -and $cr.no_live_rebind.method -eq 'di-install-as-set' -and -not $cr.no_live_rebind.reboot_directive -and (@($m.files | Where-Object { $_.path -eq 'compatibility.json' }).Count -eq 1)) 'compatibility.json: INSTALL_AS_SET recorded, listed in manifest.json'
 $notesText = Get-Content -LiteralPath (Join-Path $Package 'RELEASE-NOTES.md') -Raw
 Check (@('New', 'Fixed', 'Known issues', 'Settings affected' | Where-Object { $notesText -notmatch "(?m)^## $_\s*$" }).Count -eq 0) 'RELEASE-NOTES.md has New / Fixed / Known issues / Settings affected'
 Check ((Get-FileHash -LiteralPath (Join-Path $Package 'payload\tools\release-witness.ps1')).Hash -eq (Get-FileHash -LiteralPath (Join-Path $Package 'installer\release-witness.ps1')).Hash) 'release-witness.ps1 ships next to the installed start-confirm task'

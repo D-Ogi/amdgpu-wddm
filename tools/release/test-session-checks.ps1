@@ -1,10 +1,10 @@
-# Host test of the BD-060 rules in common.ps1 and dwm-session.ps1: the INF Reboot directive (the GPU changes driver at
-# the next restart, not under the running desktop), the pnputil outcomes (only what the exit code establishes; the
+# Host test of BD-060 and BD-152: deferred driver-set staging (the GPU changes driver at shutdown), the legacy
+# pnputil outcomes used by rollback readers (only what the exit code establishes; the
 # BD-059 session marker stays the KMD's), the install inputs that the argument-free run after a restart takes from the
 # state, and the DWM baseline: a replacement is reported only when observed against a whole record of the same boot,
 # session and logon, otherwise the history is unknown. Windows PowerShell 5.1, like the installer:
 #   powershell -NoProfile -File tools\release\test-session-checks.ps1 [-Installer <package>\installer] [-Inf <packaged INF>] [-WorkRoot <dir>]
-# -Inf: the INF of a built package, which must carry the directive. The baseline cases write only files under
+# -Inf: the INF of a built package, which must not carry Reboot. The baseline cases write only files under
 # -WorkRoot. Nothing in the registry is written; this computer's own session and DWM are read only.
 param([string]$Installer = (Join-Path $PSScriptRoot 'installer'), [string]$Inf, [string]$WorkRoot)
 # Default scratch: beside the folder the zip unpacks to, never inside it. The package root is files\ of that folder
@@ -16,6 +16,7 @@ if (-not $PSBoundParameters.ContainsKey('WorkRoot')) {
 }
 $ErrorActionPreference = 'Stop'
 . (Join-Path $Installer 'common.ps1')
+. (Join-Path $Installer 'deferred-driver.ps1')
 . (Join-Path $Installer 'dwm-session.ps1')
 $fail = 0
 function Check([bool]$Ok, [string]$Text) { if ($Ok) { "  PASS $Text" } else { "  FAIL $Text"; $script:fail++ } }
@@ -52,32 +53,54 @@ DeviceName = "BC-250 GPU (amdgpu-wddm)"
 '@
 $lab = $lab -replace "`r?`n", "`r`n"
 
-'INF install sections and the Reboot directive'
+'INF install sections and legacy record reading'
 $sections = Get-InfInstallSections (Split-Lines $lab)
 Check (($sections.Count -eq 1) -and ($sections[0] -eq 'Bc250_Install')) "install sections through [Manufacturer]: $($sections -join ', ')"
-Check (-not (Test-InfDefersDeviceRestart (Split-Lines $lab))) 'the lab INF restarts a started device in place (no Reboot)'
-$rel = Add-InfRebootDirective $lab
-Check (Test-InfDefersDeviceRestart (Split-Lines $rel)) 'the release rewrite adds Reboot to [Bc250_Install]'
-$a = Split-Lines $lab; $b = Split-Lines $rel
-$i = [array]::IndexOf($a, '[Bc250_Install]')
-$rest = @($b | Select-Object -First $i -Skip 0) + @($b | Select-Object -Skip ($i + 2))
-Check (($b.Count -eq $a.Count + 1) -and ($b[$i + 1] -match '^Reboot\s+;') -and (($rest -join "`n") -eq ((@($a | Select-Object -First $i) + @($a | Select-Object -Skip ($i + 1))) -join "`n"))) 'exactly one line added, right after the section header; every other line unchanged'
-Check (($rel -split "`r`n").Count -eq ($rel -split "`n").Count) 'CRLF kept on every line'
-Check ((Add-InfRebootDirective $rel) -ceq $rel) 'the rewrite is idempotent'
-$lf = $lab -replace "`r`n", "`n"
-$relLf = Add-InfRebootDirective $lf
-Check (($relLf -notmatch "`r") -and (Test-InfDefersDeviceRestart (Split-Lines $relLf))) 'an LF INF stays LF'
+Check (-not (Test-InfHasReboot (Split-Lines $lab))) 'the display INF has no Reboot directive'
+$rel = $lab -replace '\[Bc250_Install\]\r\n', "[Bc250_Install]`r`nReboot`r`n"
+Check (Test-InfDefersDeviceRestart (Split-Lines $rel)) 'the legacy reader recognizes an old rollback package'
+Check (Test-InfHasReboot (Split-Lines $rel)) 'the new reader rejects the legacy directive for new packages'
 Check (-not (Test-InfDefersDeviceRestart (Split-Lines ($lab -replace 'FeatureScore = F8', "FeatureScore = F8`r`n; Reboot")))) 'a commented-out Reboot does not count'
 Check (-not (Test-InfDefersDeviceRestart (Split-Lines ($lab -replace '\[Bc250_Files\]\r\n', "[Bc250_Files]`r`nReboot`r`n")))) 'Reboot in another section does not count'
 $two = $lab -replace '(%DeviceName% = Bc250_Install, [^\r]+)', ("`$1`r`n%Other% = Other_Install, PCI\VEN_1002&DEV_FFFF") -replace '\[Bc250_Files\]', "[Other_Install]`r`nCopyFiles = Bc250_Files`r`n`r`n[Bc250_Files]"
 Check ((Get-InfInstallSections (Split-Lines $two)).Count -eq 2) 'two models lines: two install sections'
 Check (-not (Test-InfDefersDeviceRestart (Split-Lines ($two -replace '\[Bc250_Install\]\r\n', "[Bc250_Install]`r`nReboot`r`n")))) 'Reboot in only one of two install sections does not count'
-Check (Test-InfDefersDeviceRestart (Split-Lines (Add-InfRebootDirective $two))) 'the rewrite covers every install section'
-$threw = $false; try { [void](Add-InfRebootDirective "[Version]`r`nSignature = x`r`n") } catch { $threw = $true }
-Check $threw 'an INF without install sections is refused'
 if ($Inf) {
-    Check (Test-InfDefersDeviceRestart ([IO.File]::ReadAllLines($Inf))) "the packaged INF carries Reboot in every install section ($Inf)"
+    Check (-not (Test-InfHasReboot ([IO.File]::ReadAllLines($Inf)))) "the packaged display INF has no Reboot ($Inf)"
 }
+
+'INSTALL_AS_SET transport and restart receipt (no native driver operation)'
+$stageDir = Join-Path $WorkRoot ('driver-set-' + [Guid]::NewGuid().ToString('N'))
+[void][IO.Directory]::CreateDirectory($stageDir)
+$stageInf = Join-Path $stageDir 'bc250kmd.inf'
+[IO.File]::WriteAllText($stageInf, $lab)
+$script:StageCalls = 0
+foreach ($answer in @($true, $false)) {
+    $script:StageAnswer = $answer
+    $staged = Invoke-DriverSetStage $stageInf { param($Directory, $Flags)
+        Check ($Directory -eq $stageDir -and $Flags -eq 0x40) 'native call gets the directory and INSTALL_AS_SET only' | Out-Host
+        $script:StageCalls++; return $script:StageAnswer
+    }
+    Check ($staged.deferred -and $staged.api_need_reboot -eq $answer) 'both API restart answers retain the shutdown boundary'
+}
+[IO.File]::WriteAllText((Join-Path $stageDir 'extra.inf'), $lab)
+$threw = $false; try { Invoke-DriverSetStage $stageInf { $script:StageCalls++; return $true } } catch { $threw = $true }
+Check ($threw -and $script:StageCalls -eq 2) 'extra INF is refused before native staging'
+Remove-Item -LiteralPath (Join-Path $stageDir 'extra.inf')
+[IO.File]::WriteAllText($stageInf, $rel)
+$threw = $false; try { Invoke-DriverSetStage $stageInf { $script:StageCalls++; return $true } } catch { $threw = $true }
+Check ($threw -and $script:StageCalls -eq 2) 'forbidden display directive is refused before native staging'
+[IO.File]::WriteAllText($stageInf, $lab)
+$threw = $false; try { Invoke-DriverSetStage $stageInf { throw 'injected native staging failure' } } catch { $threw = $true }
+Check $threw 'native failure produces no successful receipt'
+$receipt = [pscustomobject]@{ method = 'di-install-as-set'; inf_sha256 = 'A'; boot_id = 'boot1'; staged = $true }
+Check ((Get-DriverSetAction $null 'A' 'boot1') -eq 'stage') 'first install stages'
+Check ((Get-DriverSetAction $receipt 'A' 'boot1') -eq 'restart') 'same boot cannot verify or stage twice'
+Check ((Get-DriverSetAction $receipt 'A' 'boot2') -eq 'verify-binding') 'new boot checks exact binding without another staging loop'
+Check ((Get-DriverSetAction $receipt 'B' 'boot2') -eq 'stage') 'another INF requires its own staging receipt'
+Check ((Get-DriverSetAction $receipt 'A' '') -eq 'unknown-boot') 'unknown boot cannot cross the boundary'
+$receipt.staged = $false
+Check ((Get-DriverSetAction $receipt 'A' 'boot2') -eq 'invalid-receipt') 'an incomplete receipt cannot permit verification'
 
 'pnputil outcomes: only what the exit code establishes'
 $o = Get-DriverPackageOutcome 3010

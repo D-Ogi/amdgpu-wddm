@@ -373,17 +373,13 @@ foreach ($program in @(
 if ($checkedPrograms -eq 0) { throw 'guide art: no packaged program was checked' }
 
 Write-Host 'driver version'
-# Two changes to the packaged INF, nothing else; the catalog below is made from this INF.
-#  - DriverVer = <date>,$DriverVer.
-#  - The Reboot directive in each install section (BD-060): Windows then installs the package without restarting a
-#    GPU that is already started, and the GPU changes driver at the restart that ends the install, so DWM keeps its
-#    devices for the rest of the session. The lab's deployment kits restart the device in place on purpose, so the
-#    KMD's own INF stays without it.
+# DriverVer is the only release rewrite. The display class forbids the Reboot directive (BD-152).
+# The installer defers binding through DiInstallDriverW(INSTALL_AS_SET), preserving BD-060 outside the INF.
 . (Join-Path $PSScriptRoot 'installer\common.ps1')
+. (Join-Path $PSScriptRoot 'installer\deferred-driver.ps1')
 $infPath = Join-Path $pkg 'payload\kmd\bc250kmd.inf'
 $infText = [IO.File]::ReadAllText($infPath)
-$infText = Add-InfRebootDirective $infText
-'  Reboot directive in [{0}]' -f ((Get-InfInstallSections ($infText -split "`r?`n")) -join '], [')
+if (Test-InfHasReboot ($infText -split "`r?`n")) { throw 'display INF must not contain Reboot (BD-152)' }
 # Only the 4th field is the release's: the first three name the KMD build (kmd_version).
 $kmdBase = (([string]$sources.kmd_version) -split '\.')[0..2] -join '.'
 if ($DriverVer -notmatch ('^' + [regex]::Escape($kmdBase) + '\.\d+$')) { throw "DriverVer $DriverVer does not belong to KMD $($sources.kmd_version)" }
@@ -597,9 +593,9 @@ if (Test-Path -LiteralPath $componentSource -PathType Leaf) {
 . (Join-Path $PSScriptRoot 'installer\release-witness.ps1')
 . (Join-Path $PSScriptRoot 'installer\compatibility.ps1')
 $compat = New-CompatibilityRecord -PackageRoot $pkg -Version $Version -Firmware $firmware -KmdBuild ([string]$sources.kmd_version) -KmdAbi ([string]$sources.kmd_abi) -DriverVer $DriverVer
-if (-not $compat.no_live_rebind.reboot_directive) { throw 'compatibility record: the packaged INF lacks the Reboot directive' }
+if ($compat.no_live_rebind.method -ne 'di-install-as-set' -or $compat.no_live_rebind.reboot_directive) { throw 'compatibility record: deferred driver-set contract missing' }
 [IO.File]::WriteAllText((Join-Path $pkg $script:CompatibilityFile), ($compat | ConvertTo-Json -Depth 6))
-'  compatibility record: engine {0}, Reboot directive in [{1}], {2} firmware files, settings table schema {3}' -f $compat.engine.contract, ($compat.no_live_rebind.install_sections -join '], ['), @($compat.firmware.files).Count, $compat.settings.table_schema
+'  compatibility record: engine {0}, {1}, {2} firmware files, settings table schema {3}' -f $compat.engine.contract, $compat.no_live_rebind.method, @($compat.firmware.files).Count, $compat.settings.table_schema
 $files = @()
 foreach ($f in Get-ChildItem -LiteralPath $pkg -Recurse -File | Sort-Object FullName) {
     $rel = $f.FullName.Substring($pkg.Length + 1) -replace '\\', '/'

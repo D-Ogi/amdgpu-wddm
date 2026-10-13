@@ -688,9 +688,8 @@ function Get-InfParameterNames([string]$InfPath) {
 # path, "Reopen the GPU desktop path" in the control application opens it again (INSTALL.md), and so does a repair
 # install (the driver closures above).
 
-# The INF's Reboot directive in each install section that its models name: Windows 8 and later then install the
-# package but do not restart a device that is already started, pnputil answers 3010, and the device changes driver
-# at the next restart (INF Reboot directive, Remarks). build-release.ps1 adds it to the packaged INF.
+# Legacy compatibility-record readers. Display INFs must not contain Reboot (BD-152); current packages use
+# deferred-driver.ps1 / INSTALL_AS_SET. Keep this reader for the records of older rollback packages only.
 function Get-InfInstallSections([string[]]$Lines) {
     # [Manufacturer] names the models sections (name, plus name.decoration for each decoration); each model line
     # names its install section.
@@ -723,21 +722,6 @@ function Test-InfDefersDeviceRestart([string[]]$Lines) {
         if (-not $found) { return $false }
     }
     return $true
-}
-# The INF text with a Reboot line as the first line of each install section that lacks one; nothing else changes.
-function Add-InfRebootDirective([string]$Text) {
-    $lines = $Text -split "`r?`n"
-    $sections = Get-InfInstallSections $lines
-    if (-not $sections.Count) { throw 'INF: no install section found through [Manufacturer] and its models' }
-    if (Test-InfDefersDeviceRestart $lines) { return $Text }
-    $nl = $(if ($Text -match "`r`n") { "`r`n" } else { "`n" })
-    foreach ($s in $sections) {
-        $hx = [regex]('(?m)^\[' + [regex]::Escape($s) + '\][ \t]*\r?\n')
-        if ($hx.Matches($Text).Count -ne 1) { throw "INF: expected exactly one [$s] section" }
-        $Text = $hx.Replace($Text, { param($m) $m.Value + 'Reboot                                          ; release package: the GPU changes driver at the next restart' + $nl })
-    }
-    if (-not (Test-InfDefersDeviceRestart ($Text -split "`r?`n"))) { throw 'INF: Reboot directive missing after the rewrite' }
-    return $Text
 }
 # What the exit code of pnputil /add-driver /install establishes (PnPUtil Return Values), and no more: it does not say
 # whether a device instance stopped or started. The binding check after it decides what the GPU runs.
