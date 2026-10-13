@@ -17,7 +17,7 @@ static NTSTATUS DisplayInheritedVidPn(BC250_DEVICE* Device, D3DKMDT_HVIDPN Handl
     LONG call = InterlockedIncrement(Commit ? &Device->Modeset.InheritedCommitCalls : Enum ? &Device->Modeset.InheritedCofuncCalls :
         &Device->Modeset.InheritedSupportCalls);
     const BOOLEAN log = call > 0 && call <= 16;
-    const char* op = Commit ? "commit" : Enum ? "cofunc" : "supported";
+    const char op = Commit ? 'C' : Enum ? 'E' : 'S'; // commit / enum / supported
     ULONG scaling = D3DKMDT_VPPS_UNINITIALIZED;
     ULONG rotation = D3DKMDT_VPPR_UNINITIALIZED;
     const ULONG support = Device->Modeset.InheritedSupport;
@@ -122,23 +122,28 @@ static NTSTATUS DisplayInheritedVidPn(BC250_DEVICE* Device, D3DKMDT_HVIDPN Handl
     reason = "ok";
 done:
     if (log) {
-        GuardLog("ivpn %s %ld pivot %lu:%lu/%lu paths %lu status %08lX supported %u why %s",
+        GuardLog("ivpn %c%ld pivot %lu:%lu/%lu paths %lu",
             op, call, Enum ? (ULONG)Enum->EnumPivotType : MAXULONG,
             Enum ? Enum->EnumPivot.VidPnSourceId : MAXULONG,
-            Enum ? Enum->EnumPivot.VidPnTargetId : MAXULONG, (ULONG)paths, (ULONG)status, *Supported, reason);
+            Enum ? Enum->EnumPivot.VidPnTargetId : MAXULONG, (ULONG)paths);
+        GuardLog("ivpn %c%ld status %08lX supported %u why %s", op, call, (ULONG)status, *Supported, reason);
         if (path) {
-            GuardLog("ivpn %s %ld path %lu/%lu scale %lu->%lu rot %lu support I%u C%u S%u A%u X%u update %u",
+            GuardLog("ivpn %c%ld path %lu/%lu scale %lu->%lu rot %lu update %u",
                 op, call, path->VidPnSourceId, path->VidPnTargetId, scaling,
-                (ULONG)update.ContentTransformation.Scaling, rotation,
+                (ULONG)update.ContentTransformation.Scaling, rotation, changed);
+            GuardLog("ivpn %c%ld support I%u C%u S%u A%u X%u rot I%u O%u", op, call,
                 update.ContentTransformation.ScalingSupport.Identity, update.ContentTransformation.ScalingSupport.Centered,
                 update.ContentTransformation.ScalingSupport.Stretched, update.ContentTransformation.ScalingSupport.AspectRatioCenteredMax,
-                update.ContentTransformation.ScalingSupport.Custom, changed);
-            GuardLog("ivpn %s %ld source pinned %u type %u size %lux%lu visible %lux%lu fmt %u pitch %lu",
+                update.ContentTransformation.ScalingSupport.Custom,
+                update.ContentTransformation.RotationSupport.Identity, update.ContentTransformation.RotationSupport.Offset0);
+            GuardLog("ivpn %c%ld source pinned %u type %u size %lux%lu",
                 op, call, sourcePinned, source.Type, source.Format.Graphics.PrimSurfSize.cx,
-                source.Format.Graphics.PrimSurfSize.cy, source.Format.Graphics.VisibleRegionSize.cx,
+                source.Format.Graphics.PrimSurfSize.cy);
+            GuardLog("ivpn %c%ld source visible %lux%lu fmt %u pitch %lu", op, call, source.Format.Graphics.VisibleRegionSize.cx,
                 source.Format.Graphics.VisibleRegionSize.cy, source.Format.Graphics.PixelFormat, source.Format.Graphics.Stride);
-            GuardLog("ivpn %s %ld target pinned %u active %lux%lu total %lux%lu pixel %Iu scan %u v %u/%u h %u/%u",
-                op, call, targetPinned, target.ActiveSize.cx, target.ActiveSize.cy, target.TotalSize.cx, target.TotalSize.cy,
+            GuardLog("ivpn %c%ld target pinned %u active %lux%lu total %lux%lu",
+                op, call, targetPinned, target.ActiveSize.cx, target.ActiveSize.cy, target.TotalSize.cx, target.TotalSize.cy);
+            GuardLog("ivpn %c%ld target pixel %Iu scan %u v %u/%u h %u/%u", op, call,
                 target.PixelRate, target.ScanLineOrdering, target.VSyncFreq.Numerator, target.VSyncFreq.Denominator,
                 target.HSyncFreq.Numerator, target.HSyncFreq.Denominator);
         }
