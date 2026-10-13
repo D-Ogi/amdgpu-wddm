@@ -206,6 +206,8 @@ def image_digest(path):
 
 
 def check_detector(inf, repo, commit, role):
+    if re.search(r'DefaultsV2|AmdgpuStateCatalog|amdgpu-state\.bin', inf, re.I):
+        fail(f'{role}: shared state schema is unsupported by this legacy transition kit; use the package installer')
     # The detector handling assumes exactly this contract: the install closes EnableHangBugcheck and never writes
     # HangBugcheckSeconds; hang.c reads both from the service Parameters key.
     if not re.search(r'^HKR,\s*Parameters,\s*EnableHangBugcheck,\s*0x00010001,\s*0\s*$', inf, re.M):

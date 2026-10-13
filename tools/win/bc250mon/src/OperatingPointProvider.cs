@@ -24,15 +24,16 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text;
-using Microsoft.Win32;
+
 
 namespace Bc250Mon
 {
     /// <summary>The CU mode registry record and, when it answered, the escape snapshot.</summary>
     public sealed class CuModeView
     {
-        public bool ParametersPresent;              // the miniport's Parameters key exists
+        public bool ParametersPresent;              // the shared state store opened
         public int? CuMode, CuDisableWgp, Pending, Confirmed, LastApplied, LastReason;
+        public string SettingSource;
         public bool HaveEscape;
         public CuModeSnapshot Escape;
         public string EscapeError;                  // why the escape has no answer (an old control DLL says so)
@@ -67,13 +68,13 @@ namespace Bc250Mon
                 return LastApplied.HasValue ? (uint?)(uint)LastApplied.Value : null;
             }
         }
-        /// <summary>What the next start will apply: `CuMode`, and an absent value means the firmware's 24.</summary>
+        /// <summary>What the next start will apply, resolved by the common state client.</summary>
         public uint? Setting
         {
             get
             {
                 if (CuMode.HasValue) return (uint)CuMode.Value;
-                return ParametersPresent ? (uint?)CuModeSnapshot.Stock : null;
+                return null; // Defaults were resolved by the common state client.
             }
         }
         /// <summary>What this start was asked for. The escape reports 0 for an absent setting, which means 24.</summary>
@@ -95,8 +96,8 @@ namespace Bc250Mon
         {
             get
             {
-                if (!CuMode.HasValue || CuMode.Value != (int)CuModeSnapshot.Full) return null;
-                return (CuMode.Value & 0xFF) | ((CuDisableWgp.HasValue ? CuDisableWgp.Value : 0) << 8);
+                if (!CuMode.HasValue || CuMode.Value != (int)CuModeSnapshot.Full || !CuDisableWgp.HasValue) return null;
+                return (CuMode.Value & 0xFF) | (CuDisableWgp.Value << 8);
             }
         }
         /// <summary>
@@ -310,12 +311,11 @@ namespace Bc250Mon
 
             uint? setting = v.Setting;
             if (!setting.HasValue)
-                panel.Rows.Add(new Row("CU setting", "no Parameters key", Level.Info));
+                panel.Rows.Add(new Row("CU setting", "driver state unavailable", Level.Info));
             else
             {
-                string value = v.CuMode.HasValue
-                    ? "CuMode " + v.CuMode.Value.ToString(CultureInfo.InvariantCulture)
-                    : "CuMode absent: the next start harvests to 24";
+                string value = "CuMode " + setting.Value.ToString(CultureInfo.InvariantCulture);
+                if (!string.IsNullOrEmpty(v.SettingSource)) value += " (" + v.SettingSource + ")";
                 if (v.CuDisableWgp.HasValue && v.CuDisableWgp.Value != 0)
                     value += " less WGP mask 0x" + v.CuDisableWgp.Value.ToString("X", CultureInfo.InvariantCulture);
                 // The marks hold bc250_cu_encode(mode, disable), so "confirmed" is only true of this exact
@@ -329,8 +329,10 @@ namespace Bc250Mon
                 // A mask holds the counted units below the mode, so a mode that equals the expectation still
                 // cannot reach it: the next start applies fewer units than the measurement assumes.
                 bool maskedBelow = v.CuDisableWgp.HasValue && v.CuDisableWgp.Value != 0;
+                bool maskUnknown = setting.Value == CuModeSnapshot.Full && !v.CuDisableWgp.HasValue;
+                if (maskUnknown) value += ", WGP mask unavailable";
                 panel.Rows.Add(new Row("CU setting", value,
-                    setting.Value == expected && !otherMark && !maskedBelow ? Level.Good : Level.Warn));
+                    maskUnknown ? Level.Error : setting.Value == expected && !otherMark && !maskedBelow ? Level.Good : Level.Warn));
             }
 
             if (v.Reason != 0)
@@ -458,7 +460,7 @@ namespace Bc250Mon
             if (!v.Effective.HasValue)
             {
                 panel.Rows.Add(new Row("Interop", v.EscapeError ?? (v.ParametersPresent
-                    ? "no InteropLastState record" : "no Parameters key"), Level.Info));
+                    ? "no InteropLastState record" : "driver state unavailable"), Level.Info));
                 return;
             }
             int effective = v.Effective.Value, requested = v.Requested.Value;
@@ -587,7 +589,6 @@ namespace Bc250Mon
 
     public sealed class OperatingPointProvider : IProvider
     {
-        public const string ParametersKey = @"SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters";
 
         readonly ILabStateSource _source;
         readonly DpmFeed _dpm;
@@ -628,8 +629,11 @@ namespace Bc250Mon
             if (!paused) ReadEscapes();
 
             var view = new OperatingPointView { Paused = paused, NowUtc = DateTime.UtcNow };
-            RegistryDwords parameters = RegistryDwords.Read(Registry.LocalMachine, ParametersKey);
+            RegistryDwords parameters = RegistryDwords.Read();
             view.Cu = BuildCu(parameters);
+            if (parameters.Error != null) panel.Rows.Add(new Row("State", parameters.Error, Level.Error));
+            foreach (var error in parameters.Errors)
+                panel.Rows.Add(new Row("State " + error.Key, error.Value, Level.Error));
             view.Dpm = _dpm != null ? _dpm.Read() : new DpmView { Error = "no telemetry feed" };
             view.Health = new StartHealthView
             {
@@ -722,10 +726,12 @@ namespace Bc250Mon
 
         CuModeView BuildCu(RegistryDwords parameters)
         {
+            string source; parameters.Sources.TryGetValue("CuMode", out source);
             return new CuModeView
             {
                 ParametersPresent = parameters.Present,
                 CuMode = parameters.Get("CuMode"),
+                SettingSource = source,
                 CuDisableWgp = parameters.Get("CuDisableWgp"),
                 Pending = parameters.Get("CuModePending"),
                 Confirmed = parameters.Get("CuModeConfirmed"),

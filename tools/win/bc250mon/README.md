@@ -41,20 +41,19 @@ because `bc250rd.sys` is admin-only.
 
 ## The bc250kmd panel
 
-`KmdProvider.cs` polls the miniport's registry key every 5 seconds and shows what the driver managed to write
+`KmdProvider.cs` polls the shared service state every 5 seconds and shows what the driver managed to write
 before it stopped talking (ADR 0006 points 3 and 4, `driver/kmd/README.md`):
 
 | Row | From |
 |---|---|
-| `Driver` | does `HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd` exist |
-| `Key` | only when `--kmd-key` points somewhere else, so the overlay cannot lie about what it is watching |
-| `Stage` | `Parameters\LastStage`, number plus name |
-| `History` | the tail of `Parameters\StageHistory` |
-| `Unconfirmed` | `Parameters\UnconfirmedStarts`, green at 0, amber at 1, red at 2 (the guard then refuses to start) |
+| `Driver` | the common state client reports whether the service exists |
+| `Stage` | `LastStage`, number plus name |
+| `History` | the tail of `StageHistory` |
+| `Unconfirmed` | `UnconfirmedStarts`, green at 0, amber at 1, red at 2 (the guard then refuses to start) |
 | `Confirm` | where the automatic confirmation stands |
 
-When the service key does not exist the panel says `not installed` and writes nothing to the log; the state
-of the lab today is not an error.
+Only SCM error 1060 produces `not installed`. A missing or damaged store produces an error.
+An initialized store does not prove that a driver start occurred. Startup records remain readable with Code 43.
 
 **Confirming a start** (ADR 0006 point 3). Full WDDM uses a typed KMD
 snapshot through `bc250control.dll`. The monitor requires 60 seconds of fresh,
@@ -79,9 +78,10 @@ fails the build if they drift apart:
 python -m unittest discover -s tools/win/bc250mon      # build.ps1 runs this too
 ```
 
-`--kmd-key HKCU\...` (or the environment variable `BC250MON_KMD_KEY`) points the provider and the actions at
-another registry key. It is a debug switch: it lets the "installed" rows be exercised on a machine where no
-such service exists, without administrator rights.
+The old `--kmd-key` and `BC250MON_KMD_KEY` overrides are rejected. Tests inject a fake state client.
+The operating-point and measurement panels retain raw overrides, effective values, their sources and errors.
+Defaults come from the common native client. An unreadable value never selects a local default.
+`test-state.ps1` exercises this boundary without an overlay window or a GPU call.
 
 ## The "bc250kmd live" panel
 
@@ -329,14 +329,14 @@ manifest and every known package. The row says which of the two answers it has.
 ### The expectations file
 
 `expectations.json` in the monitor data directory (`C:\BC250\mon\expectations.json`) holds what this lab
-expects of itself. The file is optional. Without it the expectation is 40 compute units and the installer's own
+expects of itself. The file is optional. Without it the expectation is 24 compute units and the installer's own
 record of the applied defaults.
 
 ```json
 { "schema": 1, "cuMode": 40, "parameters": { "DpmMaxMHz": 2000, "KeepLog": null } }
 ```
 
-- `cuMode` drives the `CU` row and the `CuMode` expectation of the `Parameters` row together. The default is 40.
+- `cuMode` drives the `CU` row and the `CuMode` expectation of the `Parameters` row together. The default is 24.
 - `parameters` adds expectations, and replaces an installed default where the lab deviates on purpose.
 - A `null` value switches that one comparison off.
 - A file that does not parse never hides the defaults. The panel keeps the default expectations and shows the
@@ -518,7 +518,7 @@ Copy-Item C:\BC250\mon\new\bc250mon.exe C:\BC250\mon\bc250mon.exe -Force
 schtasks /run /tn "BC250 monitor overlay"
 ```
 
-`expectations.json` in `C:\BC250\mon\` is optional. The lab needs it only where it deviates from 40 compute
+`expectations.json` in `C:\BC250\mon\` is optional. The lab needs it only where it deviates from 24 compute
 units or from the defaults the installer applied. See "The expectations file" above.
 
 ## mon.py

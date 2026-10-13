@@ -21,6 +21,7 @@ and NOTICE in the package root).
 | `tools\bc250kmd_cli.exe`, `control\bc250control.dll`, `tools\bc250control.dll` | amdgpu-wddm `0d6b3299dc7b4ed3d8b057755577493a85903853` (branch `train/b23`: the CLI and the control DLL from one build of `tools/win/bc250kmd_cli`) |
 | `mft\amdgpu_wddm_mft_h264.dll` | amdgpu-wddm `70b6f8388309888690a854ddf4cdf5ab35ea594f` (branch `m15/video-encode-mft`, `driver/umd/mft-h264`) |
 | `tools\amdgpu_wddm_d3d12caps.exe` | amdgpu-wddm `tools/win/d3d12caps` |
+| `kmd\amdgpu-state.bin`, `tools\amdgpu-state-installer.exe`, `tools\state-reader.ps1` | amdgpu-wddm `driver/state` and `tools/release/installer`, at the source revision recorded in this package's `manifest.json` |
 | `tools\d3d11bench.exe` | amdgpu-wddm `0d6b3299dc7b4ed3d8b057755577493a85903853` (branch `train/b23`, `tools/win/d3d11bench`) |
 | `tools\hip\amdhip64.dll`, `tools\hip\vadd.exe`, `tools\hip\bc250hipblas.dll` | amdgpu-wddm `3737b075a607147c9937d0504ed6b8ec1cbd5865` (branch `train/b29`, `compute/hip` and `compute/hipblas`), experimental |
 | `control\amdgpu_wddm_control.exe` | amdgpu-wddm `0d6b3299dc7b4ed3d8b057755577493a85903853` (branch `train/b23`, `tools/win/amdgpu_wddm_control`) |

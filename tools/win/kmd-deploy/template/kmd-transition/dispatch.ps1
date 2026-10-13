@@ -1,6 +1,8 @@
 param([ValidateSet('Prepare','Start','Inspect','Cleanup','RestoreDetector')][string]$Mode='Inspect',
  [Parameter(Mandatory)][string]$Directory,[Parameter(Mandatory)][string]$ManifestSha256)
 $ErrorActionPreference='Stop'
+. "$PSScriptRoot\legacy-state.ps1"
+Assert-KmdLegacyState $Directory
 . "$PSScriptRoot\identity.ps1"
 . "$PSScriptRoot\verify-stage.ps1"
 . "$PSScriptRoot\run-arm.ps1"

@@ -2,6 +2,8 @@
 # Registry only; the values are read at the next device start, so a running candidate is not affected.
 param([Parameter(Mandatory)][string]$Directory,[Parameter(Mandatory)][ValidatePattern('^detector-final-[0-9]+$')][string]$Receipt)
 $ErrorActionPreference='Stop'
+. "$PSScriptRoot\legacy-state.ps1"
+Assert-KmdLegacyState $Directory
 . "$PSScriptRoot\identity.ps1"
 . "$PSScriptRoot\durable.ps1"
 . "$PSScriptRoot\hang-detector.ps1"

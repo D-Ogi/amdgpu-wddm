@@ -15,9 +15,22 @@ $svc = Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\bc250kmd' -Erro
 "ImagePath $($svc.ImagePath)"
 if ($svc.ImagePath) { $p = $svc.ImagePath -replace '^\\SystemRoot', $env:windir -replace '^System32', "$env:windir\System32"
   if (Test-Path $p) { "sys $(( Get-FileHash $p).Hash.Substring(0,8)) $p" } }
-"== Parameters"
-$par = Get-Item 'HKLM:\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters' -ErrorAction SilentlyContinue
-if ($par) { foreach ($n in $par.GetValueNames()) { $val = $par.GetValue($n); if ($val -is [array]) { $val = ($val -join ',') }; "  $n = $val" } }
+"== driver shared state"
+try {
+    $inst = [string](Get-ItemProperty 'HKLM:\SOFTWARE\amdgpu-wddm\Release' -Name InstallRoot -ErrorAction Stop).InstallRoot
+    $reader = Join-Path $inst 'tools\state-reader.ps1'
+    if (-not (Test-Path -LiteralPath $reader)) { throw 'schema-2 state reader is not installed' }
+    . $reader
+    $cli = Join-Path $inst 'tools\bc250kmd_cli.exe'
+    $snapshot = Read-DriverStateSnapshot -Cli $cli
+    foreach ($path in @('', 'StartRecord', 'StopRecord', 'HangRecovery')) {
+        "  path: $path"
+        $values = ConvertFrom-DriverStateSnapshot -Snapshot $snapshot -Path $path
+        foreach ($n in ($values.Keys | Sort-Object)) {
+            $val=$values[$n]; if($val -is [array]){$val=$val -join ','}; "  $n = $val"
+        }
+    }
+} catch { "driver state: UNREADABLE: $($_.Exception.Message)" }
 "== class key registration"
 try { $drv = (Get-PnpDeviceProperty -InstanceId $gpu.InstanceId -KeyName DEVPKEY_Device_Driver).Data
   $ck = Get-Item "HKLM:\SYSTEM\CurrentControlSet\Control\Class\$drv"

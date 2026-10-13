@@ -34,6 +34,7 @@ $tableCuMode = $null
 if ($table.defaults.parameters.PSObject.Properties['CuMode']) { $tableCuMode = [int]$table.defaults.parameters.CuMode }
 $expectedCus = 24
 if ($null -ne $tableCuMode) { $expectedCus = $tableCuMode }
+Check ($tableCuMode -eq 24) 'the current release starts with the owner-approved 24 CU default'
 
 "the table holds $(if ($null -eq $tableCuMode) { 'no CuMode default, so the driver runs 24 compute units' } else { "CuMode $tableCuMode" })"
 
@@ -68,6 +69,8 @@ $plan = New-ParameterPlan @{ CuMode = 24 } @{ CuMode = 40 }
 $e = Get-Entry $plan 'CuMode'
 Check (($null -ne $e) -and ($e.decision -eq 'command') -and ([int]$e.value -eq 24) -and $e.write) `
     "-CuMode 24 reaches the plan as a 'command' write of 24"
+$kept24=Get-Entry (New-ParameterPlan @{} @{CuMode=24}) 'CuMode'
+Check ($kept24.value -eq 24 -and -not $kept24.write) 'an existing stock choice is preserved without a rewrite'
 
 # The path unit A lost CuMode 40 to (the lab-cu40 regression inside BD-077): the driver package's AddReg clears
 # the service key, so the value only survives because the installer snapshots the key first and writes the names
@@ -218,14 +221,15 @@ $guideText = Get-Content -LiteralPath $guide -Raw
 # The one line the gate reads. It must name the number of compute units of an install that does not use -CuMode.
 # Two forms are accepted, so that the sentence stays plain English for either number: "24 of the 40 compute units
 # of the GPU" and "all 40 compute units of the GPU".
-$m = [regex]::Match($guideText, 'Graphics cores: the driver uses (all 40|\d+ of the 40) compute units of the GPU')
+$m = [regex]::Match($guideText, 'Graphics cores: the driver uses (all 40|\d+ of the 40|\d+) compute units(?: of the GPU| after a normal install)')
 Check $m.Success 'the guide holds the line "Graphics cores: the driver uses <n> of the 40 compute units of the GPU"'
 if ($m.Success) {
     $said = $(if ($m.Groups[1].Value -eq 'all 40') { 40 } else { [int]($m.Groups[1].Value -split ' ')[0] })
     Check ($said -eq $expectedCus) "the guide names $said compute units and the table gives $expectedCus"
 }
 Check ($guideText -match 'install\.cmd -CuMode (24|40)') 'the guide names install.cmd -CuMode as the way to change the number'
-Check (($guideText -match 'Standard \(24\)') -and ($guideText -match 'All \(40\)')) 'the guide names both choices of the control application'
+Check (($guideText -match 'Standard \(24\)' -and $guideText -match 'All \(40\)') -or
+    ($guideText -match 'Nagi Control App offers the same choice on its Graphics page')) 'the guide identifies the equivalent control application choice'
 Check ($guideText -match 'docs/design/cu-mode\.md|cu-mode\.md') 'the guide points at the CU mode design document'
 
 if ($fail) { "FAILED: $fail check(s)"; exit 1 }

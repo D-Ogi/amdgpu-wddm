@@ -65,6 +65,11 @@ $pkgRoot = Join-Path $Out $name      # what the zip unpacks to: setup.exe and fi
 $pkg = Join-Path $pkgRoot 'files'    # the package root: manifest.json and everything the installer reads
 $zip = "$pkgRoot.zip"
 $sources = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'release-sources.json') -Raw | ConvertFrom-Json
+foreach ($requiredStateFile in @('payload/kmd/amdgpu-state.bin','payload/tools/amdgpu-state-installer.exe')) {
+    if (@($sources.files | Where-Object {$_.path -ceq $requiredStateFile}).Count -ne 1) {
+        throw "release-sources.json must pin exactly one $requiredStateFile from the state migration build"
+    }
+}
 $secrets = Join-Path $Root 'secrets\release'
 $pfx = Join-Path $secrets 'amdgpu-wddm-release.pfx'
 $cer = Join-Path $secrets 'amdgpu-wddm-release.cer'
@@ -188,7 +193,7 @@ foreach ($cfg in Get-ChildItem -LiteralPath (Join-Path $pkg 'payload') -Recurse 
 Write-Host 'installer and documents'
 # The logon tasks' scripts: the confirmation also writes the running-release witness (release-witness.ps1), and
 # start-window.ps1 is the window task's own script (BD-080), which the logged-on user runs with their own rights.
-$taskScripts = @('start-confirm.ps1', 'start-confirm-core.ps1', 'start-window.ps1', 'dwm-session.ps1', 'release-witness.ps1', 'version-identity.ps1')
+$taskScripts = @('start-confirm.ps1', 'start-confirm-core.ps1', 'start-window.ps1', 'dwm-session.ps1', 'release-witness.ps1', 'version-identity.ps1', 'state-reader.ps1')
 $inst = Join-Path $pkg 'installer'
 [void][IO.Directory]::CreateDirectory($inst)
 foreach ($f in Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'installer') -File) {
@@ -419,8 +424,8 @@ if (-not (($driverDate -gt $oldDate) -or (($driverDate -eq $oldDate) -and ([vers
 }
 $driverDateText = $driverDate.ToString('MM/dd/yyyy', [Globalization.CultureInfo]::InvariantCulture)
 $infText = $rx.Replace($infText, { param($m) $m.Groups[1].Value + $driverDateText + ',' + $DriverVer + $m.Groups[4].Value })
-$productRx = [regex]'(?m)^(HKR,, ProductPackageVersion, 0x00000000, ")[0-9.]+("\r?)$'
-if ($productRx.Matches($infText).Count -ne 1) { throw 'INF must name ProductPackageVersion once' }
+$productRx = [regex]'(?m)^(PackageProductVersion\s*=\s*")[0-9.]+("\r?)$'
+if ($productRx.Matches($infText).Count -ne 1) { throw 'INF must define PackageProductVersion once' }
 $infText = $productRx.Replace($infText, { param($m) $m.Groups[1].Value + $productQuad + $m.Groups[2].Value })
 [IO.File]::WriteAllText($infPath, $infText)
 if ($infText -notmatch ('(?m)^DriverVer\s*=\s*' + [regex]::Escape("$driverDateText,$DriverVer") + '\s*$')) { throw 'DriverVer rewrite failed' }
@@ -496,6 +501,8 @@ if ($r.code -ne 0) { throw 'a script does not parse under Windows PowerShell 5.1
 $r = Invoke-Headless -File $ps51 -Arguments @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $PSScriptRoot 'test-cli-commands.ps1'), '-Cli', (Join-Path $pkg 'payload\tools\bc250kmd_cli.exe'), '-Sources', (Join-Path $PSScriptRoot 'release-sources.json')) -TimeoutSeconds 60
 $r.text
 if ($r.code -ne 0) { throw 'bc250kmd_cli.exe lacks a form of cli-commands.json, or the CLI and the control DLL come from different builds' }
+. (Join-Path $PSScriptRoot 'state-package.ps1')
+Test-DriverStatePackage -Package $pkg -CatalogSource (Join-Path $repo 'driver\state\amdgpu-state.bin')
 # No fix lost its comment on the way into this release (test-marker-guard.ps1). A train merge or a rebase can drop
 # a fix together with the host tests that covered it, and then nothing else here notices.
 $pwshExe = (Get-Process -Id $PID).Path
@@ -503,8 +510,8 @@ $r = Invoke-Headless -File $pwshExe -Arguments @('-NoProfile', '-File', (Join-Pa
 $r.text
 if ($r.code -ne 0) { throw 'marker guard: a fix named in a source revision has no comment in this release (see above)' }
 # The packaged INF's own settings against the defaults table this package carries (BD-091, tools\quality\inf_gates.py):
-# every setting the INF writes is the released value and carries NOCLOBBER, so an install this installer does not drive
-# cannot close one gate while another stays open. The packaged INF, not the repository's: the release re-stamps
+# every immutable default the INF writes is the generated released value; runtime overrides belong to the shared
+# state generation and survive through the installer transaction. The packaged INF, not the repository's: it re-stamps
 # DriverVer, our product identity and the image comment above; the packaged file runs on a tester's computer.
 $pythonExe = (Get-Command python -ErrorAction SilentlyContinue).Source
 if (-not $pythonExe) { throw 'python is not on PATH: the inf-gates gate (BD-091) cannot run' }

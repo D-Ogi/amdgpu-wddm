@@ -954,6 +954,8 @@ static partial class UnitTests
         Equal("DpmMode=1", Show(DpmSettings.PlanWrites(null, null, true, null)), "clocks: automatic checked writes DpmMode 1 only");
         Equal("", Show(DpmSettings.PlanWrites(null, null, false, null)), "clocks: checked, then unchecked before Apply: nothing written");
         Equal("DpmMode- DpmMaxMHz-", Show(DpmSettings.PlanWrites(1, 1500, false, null)), "clocks: unchecking after a save removes both values");
+        Equal("DpmMode=0 DpmMaxMHz-", Show(DpmSettings.PlanWrites(1, 1500, false, null, true)),
+            "state v2: fixed clocks write zero; absence would restore automatic clocks");
         Equal("", Show(DpmSettings.PlanWrites(0, null, false, null)), "clocks: the driver's fallback 0 stays when unchecked");
         Equal("DpmMaxMHz=1800", Show(DpmSettings.PlanWrites(1, null, true, 1800)), "clocks: the exact ceiling is written");
         Equal("", Show(DpmSettings.PlanWrites(null, 1700, false, 1700)), "clocks: a stored ceiling shown checked is not rewritten");

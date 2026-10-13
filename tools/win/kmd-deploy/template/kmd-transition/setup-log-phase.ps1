@@ -1,6 +1,8 @@
 param([Parameter(Mandatory)][ValidateSet('Enable','Restore')][string]$Mode,
  [Parameter(Mandatory)][string]$Directory)
 $ErrorActionPreference='Stop'
+. "$PSScriptRoot\legacy-state.ps1"
+Assert-KmdLegacyState $Directory
 . "$PSScriptRoot\identity.ps1"
 . "$PSScriptRoot\durable.ps1"
 . "$PSScriptRoot\setup-log.ps1"

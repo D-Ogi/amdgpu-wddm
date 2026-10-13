@@ -14,10 +14,12 @@
 # disable and the enable of the adapter, which the operator asks for by running this arm.
 param([int]$Gap = 10, [int]$ConfirmWaitS = 60, [string]$Hardware = 'PCI\VEN_1002&DEV_13FE')
 $ErrorActionPreference = 'Continue'
-$par = 'HKLM:\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters\StopRecord'
 $prefetch = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters'
 $inst = [string](Get-ItemProperty 'HKLM:\SOFTWARE\amdgpu-wddm\Release' -Name InstallRoot -ErrorAction SilentlyContinue).InstallRoot
 $cli = if ($inst) { Join-Path $inst 'tools\bc250kmd_cli.exe' } else { $null }
+$stateReader = Join-Path $inst 'tools\state-reader.ps1'
+if (-not (Test-Path -LiteralPath $stateReader)) { throw 'This train validator requires the schema-2 state reader' }
+. $stateReader
 $problems = New-Object System.Collections.Generic.List[string]
 
 # This boot's BootId, from the place the driver takes it: KUSER_SHARED_DATA.BootId at 0x7FFE0000 + 0x2C4 (WDK
@@ -35,12 +37,12 @@ function BootIdNow {
     return [int](Get-ItemProperty -LiteralPath $prefetch -Name BootId -ErrorAction SilentlyContinue).BootId
 }
 function Record {
-    $p = Get-ItemProperty -LiteralPath $par -ErrorAction SilentlyContinue
-    if ($null -eq $p) { return $null }
+    $p = Read-DriverStateValues -Cli $cli -Path 'StopRecord'
+    if (-not $p.Count) { return $null }
     $o = [ordered]@{}
     foreach ($n in @('Result', 'Step', 'SubStep', 'Status', 'Stage', 'StartStage', 'HealthFlags', 'BootId',
                      'Generation', 'Epoch', 'Version', 'TimeUtc', 'StopTimeUtc', 'LogLines', 'Detail')) {
-        if ($p.PSObject.Properties.Name -contains $n) { $o[$n] = $p.$n }
+        if ($p.ContainsKey($n)) { $o[$n] = $p.$n }
     }
     return [pscustomobject]$o
 }

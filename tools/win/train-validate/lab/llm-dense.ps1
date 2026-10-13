@@ -38,7 +38,13 @@ if (-not $BenchArgs) { $BenchArgs = "-ub 512 -p 512 -n 128 -r $Repeats" }
 "utc $([DateTime]::UtcNow.ToString('o'))"
 $kit = Join-Path $Root 'kit'
 $supervisor = Join-Path $kit 'seg0-arm3.ps1'
-$cli = 'C:\Program Files\amdgpu-wddm\tools\bc250kmd_cli.exe'
+try {
+    $inst = [string](Get-ItemProperty 'HKLM:\SOFTWARE\amdgpu-wddm\Release' -Name InstallRoot -ErrorAction Stop).InstallRoot
+    $cli = Join-Path $inst 'tools\bc250kmd_cli.exe'
+    . (Join-Path $inst 'tools\state-reader.ps1')
+    # Refuse before launching a workload when its safety state cannot be read.
+    [void](Read-DriverStateValues -Cli $cli)
+} catch { "STATE UNREADABLE $($_.Exception.Message)"; exit 2 }
 foreach ($needed in @($supervisor, (Join-Path $kit 'seg0-operations.ps1'), $Exe, $Model,
         (Join-Path $Root $Pins), $(if ($ModelSha) { $Model } else { Join-Path $Root $ModelPins }))) {
     if (-not (Test-Path -LiteralPath $needed)) { "MISSING $needed"; exit 2 }
@@ -151,17 +157,19 @@ if (Test-Path -LiteralPath $cli) {
         ForEach-Object { '  ' + $_.Line }
     & $cli dpm 2>&1 | Select-Object -First 2 | ForEach-Object { '  ' + $_ }
 }
-$hangKey = 'HKLM:\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters\HangRecovery'
-if (Test-Path $hangKey) {
-    $hr = Get-ItemProperty $hangKey
-    foreach ($name in 'LastVerdict', 'LastSeq', 'LastNode', 'Count') {
-        if ($hr.PSObject.Properties[$name]) { "  HangRecovery $name = $($hr.$name)" }
+try {
+    $snapshot = Read-DriverStateSnapshot -Cli $cli
+    $hr = ConvertFrom-DriverStateSnapshot -Snapshot $snapshot -Path 'HangRecovery'
+    foreach ($name in 'LastVerdict', 'LastSeq', 'Attempts', 'Recovered', 'Refused') {
+        if ($hr.ContainsKey($name)) { "  HangRecovery $name = $($hr[$name])" }
+        else { "  HangRecovery $name absent" }
     }
-} else { '  HangRecovery key absent' }
-$par = Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters' -ErrorAction SilentlyContinue
-foreach ($name in 'DpmMode', 'DpmLastMode', 'DpmLastReason') {
-    if ($par -and $par.PSObject.Properties[$name]) { "  $name = $($par.$name)" }
-}
+    $par = ConvertFrom-DriverStateSnapshot -Snapshot $snapshot
+    foreach ($name in 'DpmMode', 'DpmLastMode', 'DpmLastReason') {
+        if ($par.ContainsKey($name)) { "  $name = $($par[$name])" }
+        else { "  $name absent" }
+    }
+} catch { "STATE UNREADABLE $($_.Exception.Message)"; $verdict = 'FAILED' }
 $started = Get-Date
 $after = (Get-FileHash -LiteralPath $Model -Algorithm SHA256).Hash
 "model_after $after in $([Math]::Round(((Get-Date) - $started).TotalSeconds, 2)) s match $($after -eq $modelPin)"

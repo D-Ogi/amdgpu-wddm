@@ -50,6 +50,16 @@ if (-not $SelfTest) {
     foreach ($path in $Client, $Cli) { if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "not found: $path" } }
 }
 # The arm the list names: 'control', 'scanout' or '' (none). The off switch wins, as it does in the shell.
+function Convert-ScanoutState { param([string]$Text)
+    $stateValue = $Text | ConvertFrom-Json -ErrorAction Stop
+    if ($stateValue.abi -ne 1 -or $stateValue.error -ne 0 -or $stateValue.result.status -ne 'ok' -or
+        $stateValue.result.type -ne 4 -or $stateValue.result.error -ne 0 -or
+        ($stateValue.result.value -isnot [int] -and $stateValue.result.value -isnot [long]) -or
+        $stateValue.result.value -notin @(0,1) -or $stateValue.result.source -notin @('override','factory','code')) {
+        throw 'Invalid shared state reply for EnableDirectFlipHandshake'
+    }
+    return $stateValue.result
+}
 function Get-Arm { param([string]$List)
     $items = @($List -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
     if ($items -contains 'scanout-flip-off') { return 'control' }
@@ -360,16 +370,13 @@ Write-Host "before: $($before.values | ConvertTo-Json -Compress)"
 # adapter start, so this script must not write it: a write here would read as armed while the running driver
 # still answers "off", and the scan-out arm would be judged against a compositor nobody had offered the flip
 # to. It is read, compared with what the driver publishes, and said out loud before the client starts.
-$setting = $null
-try { $setting = (Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters' `
-                    -Name 'EnableDirectFlipHandshake' -ErrorAction Stop).EnableDirectFlipHandshake }
-catch { $setting = $null }
+$stateText = & $Cli state get EnableDirectFlipHandshake 2>&1 | Out-String
+if ($LASTEXITCODE -ne 0) { throw "Shared state read failed: $stateText" }
+$stateValue = Convert-ScanoutState $stateText
+$setting = [uint32]$stateValue.value
 $published = if ($before.values.Contains('directflip_handshake')) { $before.values['directflip_handshake'] } else { 'unknown' }
-# Absent means on from 0.7.213 (the train rule for a finished feature), the same reading the overlay's
-# absent-value table uses. So an absent or 1 value next to a published "off" is not a closed switch: one of
-# the start-latched facts the flip path needs refused, and the driver's own "DirectFlip handshake inputs"
-# line in the kernel log names which one. Only a value of 0 is the operator having closed it.
-$handshakeNote = "EnableDirectFlipHandshake $(if ($null -eq $setting) { 'absent (default 1 from 0.7.213)' } else { $setting }), driver publishes $published"
+# The common client resolves the effective setting. Errors cannot authorize a default.
+$handshakeNote = "EnableDirectFlipHandshake $setting ($($stateValue.source)), driver publishes $published"
 if ($Arm -and $published -eq 'off') {
     $handshakeNote += $(if ($null -ne $setting -and $setting -eq 0) {
                             ' - CLOSED BY THE OPERATOR: this arm can only end "not reached"; remove the value or set it to 1 and restart the adapter' }

@@ -82,6 +82,7 @@
 // fallback for a tick without samples. SDMA0 (the paging node) is sampled as well, for the telemetry only.
 #include "bc250kmd.h"
 #include "bc250kmd_escape.h"
+#include "state_kernel.h"
 #include "log_rate.h"               // BD-127: the compute set's transition line, which a client could make hot
 #include "regs.generated.h"
 #include "gc_10_1_0_sh_mask.h"      // GRBM_STATUS and SDMA0_STATUS_REG field masks; the offsets come from regcalc
@@ -299,7 +300,7 @@ static BOOLEAN QueryPresent(PCWSTR Name, unsigned int* Value)
     if (NT_SUCCESS(status)) return TRUE;
     *Value = 0;
     if (status != STATUS_OBJECT_NAME_NOT_FOUND)
-        GuardLog("dpm: reading %ws failed 0x%08X, treated as absent", Name, status);
+        GuardLog("dpm: reading %ws failed 0x%08X, the DPM state group is refused", Name, status);
     return FALSE;
 }
 
@@ -1327,6 +1328,7 @@ static void DpmConfigureCurve(BC250_DPM_STATE* S, BOOLEAN Dpm)
     pendingPresent = QueryPresent(DPM_SETTING_CURVE_PENDING, &pending);
     (void)QueryPresent(DPM_SETTING_CURVE_CONFIRMED, &confirmed);
     DpmReadCurve(S, &curve, &any, &refused);
+    if (!DriverStateGroupEnabled(AMDGPU_STATE_GROUP_DPM)) return;
     if (any && pendingPresent) {
         GuardLog("dpm: the stored curve (mark 0x%04X) ran a start that never became healthy: the curve is "
                  "deleted and the table's own line runs", pending);
@@ -1424,6 +1426,7 @@ void DpmStart(BC250_DEVICE* Device)
     r.confirmed_present = QueryPresent(DPM_SETTING_CONFIRMED, &r.confirmed);
     r.session_present = QueryPresent(DPM_SETTING_SESSION, &r.session);
     r.closed_present = QueryPresent(DPM_SETTING_CLOSED, &r.closed);
+    if (!DriverStateGroupEnabled(AMDGPU_STATE_GROUP_DPM)) goto StateRefused;
     bc250_dpm_decide(&r, d);
 
     if (d->force_fixed) {
@@ -1465,6 +1468,7 @@ void DpmStart(BC250_DEVICE* Device)
     DpmConfigureIdle(s, d->mode == BC250_DPM_MODE_DPM);
     DpmConfigureCurve(s, d->mode == BC250_DPM_MODE_DPM);
     DpmConfigureJoint(s, d->mode == BC250_DPM_MODE_DPM && r.smu_online);
+    if (!DriverStateGroupEnabled(AMDGPU_STATE_GROUP_DPM)) goto StateRefused;
     GuardLog("dpm: DpmMode %lu%s DpmMaxMHz %lu%s -> %s, ceiling %lu MHz, reason %lu%s%s", r.mode,
              r.mode_present ? "" : " (absent)", r.max_mhz, r.max_present ? "" : " (absent)",
              d->mode == BC250_DPM_MODE_DPM ? "DPM" : "fixed-lab", d->max_mhz, d->reason,
@@ -1500,6 +1504,20 @@ void DpmStart(BC250_DEVICE* Device)
         GuardLog("dpm: hardware busy sampler %s, every %lu us", s->HwTimer != NULL ? "running" : "NOT allocated (submit accounting only)",
                  (ULONG)BC250_DPM_HW_SAMPLE_US);
     }
+    DpmUnlock(s);
+    return;
+StateRefused:
+    d->mode = BC250_DPM_MODE_FIXED;
+    d->max_mhz = BC250_CLOCK_FLOOR_MHZ;
+    d->max_level = BC250_DPM_FLOOR_LEVEL;
+    d->reason = BC250_DPM_REASON_REGISTRY;
+    d->mark_pending = d->confirmed = 0;
+    s->Confirmed = FALSE;
+    s->JointOn = FALSE;
+    bc250_dpm_init(&s->Gov, BC250_DPM_FLOOR_LEVEL);
+    DpmInstallCurve(s, NULL);
+    DpmPublish(Device, s, NULL, FALSE);
+    GuardLog("dpm: state read refused, fixed floor and no governor worker");
     DpmUnlock(s);
 }
 

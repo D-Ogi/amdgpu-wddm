@@ -8,6 +8,10 @@
 function Get-KmdHangDetectorNames {return @('EnableHangBugcheck','HangBugcheckSeconds')}
 function Read-KmdHangDetector {
  param([Parameter(Mandatory)]$Key)
+ if($Key -is [Microsoft.Win32.RegistryKey]){
+  . "$PSScriptRoot\legacy-state.ps1"
+  Assert-KmdLegacyState
+ }
  $present=@($Key.GetValueNames())
  $state=[ordered]@{}
  foreach($name in Get-KmdHangDetectorNames){

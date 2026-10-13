@@ -64,7 +64,7 @@ $refs = 'mscorlib.dll', 'System.dll', 'System.Core.dll', 'System.Drawing.dll', '
 $pure = 'KmdReply.cs', 'Profiles.cs', 'Redactor.cs', 'ManifestCheck.cs', 'Recovery.cs', 'Strings.cs', 'CuMode.cs', 'DriverCard.cs', 'UpdateCheck.cs',
     'AppSettings.cs', 'Guide.cs', 'RecentLaunches.cs', 'Sensors.cs', 'CacheInventory.cs', 'DisplayInfo.cs', 'Hints.cs', 'GameGroups.cs',
     'SettingsSearch.cs', 'HomeStatus.cs', 'PlainPlan.cs', 'HelpGuides.cs', 'CuRegistry.cs', 'Tuner.cs', 'TunerPlan.cs', 'TunerView.cs', 'FanPlan.cs', 'GraphicsSettings.cs', 'TdrSetting.cs',
-    'LayoutRules.cs', 'UmaSetting.cs', 'BoardCapabilities.cs', 'SystemTuning.cs', 'Benchmark.cs', 'StartupDiagnosticData.cs', 'DiagnosticWorker.cs',
+    'LayoutRules.cs', 'UmaSetting.cs', 'BoardCapabilities.cs', 'SystemTuning.cs', 'Benchmark.cs', 'StartupDiagnosticData.cs', 'DiagnosticWorker.cs', 'DriverState.cs',
     'StartNotice.cs', 'Wallpaper.cs' |
     ForEach-Object { Join-Path $here "src\$_" }
 
@@ -102,12 +102,15 @@ if ($LASTEXITCODE -ne 0) { throw 'unit tests failed' }
 
 # 2. bc250control.dll, the same translation unit and flags as tools\win\bc250kmd_cli\build.ps1.
 $env:INCLUDE = ''; $env:LIB = ''
+$stateFlags = @('/O2','/MT','/Brepro',"/I$($msvc.FullName)\include","/I$sdk\Include\$KitVersion\ucrt",
+    "/I$sdk\Include\$KitVersion\um","/I$sdk\Include\$KitVersion\shared")
+$stateObjects = & (Join-Path $repo 'tools\state\build-objects.ps1') -Compiler $cl -Out "$obj\state" -Flags $stateFlags -Exports
 & $cl @('/nologo', '/W4', '/WX', '/O2', '/MT', '/LD', '/Brepro', '/DBC250_CONTROL_DLL', '/D_CRT_SECURE_NO_WARNINGS',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/Fo$obj\bc250control.obj", "/Fe$Out\bc250control.dll",
-    (Join-Path $repo 'tools\win\bc250kmd_cli\bc250kmd_cli.c'), '/link', '/Brepro', "/IMPLIB:$obj\bc250control.lib",
+    (Join-Path $repo 'tools\win\bc250kmd_cli\bc250kmd_cli.c')) @stateObjects @('/link', '/Brepro', "/IMPLIB:$obj\bc250control.lib",
     "/LIBPATH:$(Join-Path $msvc.FullName 'lib\x64')", "/LIBPATH:$sdkLib\ucrt\x64", "/LIBPATH:$sdkLib\um\x64",
-    'gdi32.lib', 'setupapi.lib', 'advapi32.lib') |
+    'gdi32.lib', 'setupapi.lib', 'advapi32.lib','onecore.lib','uuid.lib') |
     ForEach-Object { if ($_ -notmatch '^\s*$|^Microsoft|^Copyright|^\S+\.c$|Creating library|bc250control.lib') { Write-Host "  $_" } }
 if ($LASTEXITCODE -ne 0) { throw "bc250control.dll build failed ($LASTEXITCODE)" }
 Remove-Item "$Out\bc250control.exp", "$Out\bc250control.lib" -ErrorAction SilentlyContinue
@@ -118,9 +121,9 @@ Remove-Item "$Out\bc250control.exp", "$Out\bc250control.lib" -ErrorAction Silent
 & $cl @('/nologo', '/W4', '/WX', '/O2', '/MT', '/Brepro', '/D_CRT_SECURE_NO_WARNINGS',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/Fo$obj\bc250kmd_cli.obj", "/Fe$Out\bc250kmd_cli.exe",
-    (Join-Path $repo 'tools\win\bc250kmd_cli\bc250kmd_cli.c'), '/link', '/Brepro',
+    (Join-Path $repo 'tools\win\bc250kmd_cli\bc250kmd_cli.c')) @stateObjects @('/link', '/Brepro',
     "/LIBPATH:$(Join-Path $msvc.FullName 'lib\x64')", "/LIBPATH:$sdkLib\ucrt\x64", "/LIBPATH:$sdkLib\um\x64",
-    'gdi32.lib', 'setupapi.lib', 'advapi32.lib') |
+    'gdi32.lib', 'setupapi.lib', 'advapi32.lib','onecore.lib','uuid.lib') |
     ForEach-Object { if ($_ -notmatch '^\s*$|^Microsoft|^Copyright|^\S+\.c$') { Write-Host "  $_" } }
 if ($LASTEXITCODE -ne 0) { throw "bc250kmd_cli.exe build failed ($LASTEXITCODE)" }
 $usage = & "$Out\bc250kmd_cli.exe" 2>&1 | ForEach-Object { [string]$_ }

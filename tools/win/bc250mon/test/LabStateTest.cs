@@ -1,7 +1,6 @@
 // Host test of the operating-point and measurement-guard panels: the real rules, the real expectations reader,
 // the real DpmFeed and the real providers against built views and a scripted source. No control DLL, adapter,
-// escape, window or UI thread is involved; the registry is only read where a provider reads it anyway, and a
-// key that does not exist on this computer is one of the cases under test.
+// escape, window or UI thread is involved. Shared state calls use a fake unavailable service.
 //
 // Every amber and every red rule of the two panels has a check here, because these rules are what stops a
 // measurement being taken on a machine that is not in the state the measurement assumes.
@@ -104,7 +103,7 @@ static class LabStateTest
     {
         return new CuModeView
         {
-            ParametersPresent = true, CuMode = 40, Confirmed = 40, LastApplied = 40, LastReason = 0,
+            ParametersPresent = true, CuMode = 40, CuDisableWgp = 0, Confirmed = 40, LastApplied = 40, LastReason = 0,
             HaveEscape = true, Escape = Escape(40, 40, 40, GoodCuFlags, 0), EscapeUtc = Now,
         };
     }
@@ -179,7 +178,7 @@ static class LabStateTest
             Cu = Cu40(), Dpm = DpmGood(), Health = HealthGood(), Interop = InteropLive(), NowUtc = Now,
         };
     }
-    static LabExpectations Expect40() { return new LabExpectations(); }
+    static LabExpectations Expect40() { return new LabExpectations { CuMode = 40 }; }
 
     static List<Row> CuRows(CuModeView v, LabExpectations x)
     {
@@ -249,6 +248,7 @@ static class LabStateTest
 
     static int Main(string[] args)
     {
+        DriverState.OpenSession = write => { throw new System.ComponentModel.Win32Exception(1060); };
         // The lab runs a Polish Windows: every number on this panel must still be written the invariant way.
         Thread.CurrentThread.CurrentCulture = new CultureInfo("pl-PL");
         string root = args.Length > 0 ? args[0] : Path.GetTempPath();
@@ -277,18 +277,18 @@ static class LabStateTest
     static void ExpectationChecks(string dir)
     {
         LabExpectations none = ExpectationsFile.Parse("{}");
-        Check(none.CuMode == 40 && none.Parameters.Count == 0 && none.Error == null, "empty file: 40 CU expected");
+        Check(none.CuMode == 24 && none.Parameters.Count == 0 && none.Error == null, "empty file: stock 24 CU expected");
         LabExpectations x = ExpectationsFile.Parse(
             "{\"schema\":1,\"cuMode\":24,\"parameters\":{\"DpmMaxMHz\":2000,\"KeepLog\":null}}");
         Check(x.CuMode == 24 && x.Parameters["DpmMaxMHz"] == 2000 && x.Parameters["KeepLog"] == null && x.Error == null,
               "file values, a null switches a check off");
         Check(x.Parameters.ContainsKey("dpmmaxmhz"), "parameter names are compared without case");
         LabExpectations broken = ExpectationsFile.Parse("{not json");
-        Check(broken.CuMode == 40 && broken.Error != null, "a broken file keeps the defaults and says why");
+        Check(broken.CuMode == 24 && broken.Error != null, "a broken file keeps the defaults and says why");
 
         var file = new ExpectationsFile(dir);
         string path = Path.Combine(dir, ExpectationsFile.FileName);
-        Check(file.Read().CuMode == 40 && !file.Read().FromFile, "no file: the default expectation, not an error");
+        Check(file.Read().CuMode == 24 && !file.Read().FromFile, "no file: the default expectation, not an error");
         File.WriteAllText(path, "{\"cuMode\":24}");
         Check(file.Read().CuMode == 24 && file.Read().FromFile, "the file is picked up");
         // Two writes of the same length inside one filesystem timestamp tick would look unchanged, so the
@@ -309,7 +309,7 @@ static class LabStateTest
               "and the next poll reads it again instead of latching the failure");
 
         File.Delete(path);
-        Check(file.Read().CuMode == 40 && !file.Read().FromFile, "a deleted file falls back to the default");
+        Check(file.Read().CuMode == 24 && !file.Read().FromFile, "a deleted file falls back to the default");
     }
 
     // ---- compute units: the row the owner asked for ---------------------------------------------------------
@@ -324,19 +324,27 @@ static class LabStateTest
               "the setting row names what the next start applies");
         Check(Find(rows, "CU reason") == null && Find(rows, "CU snapshot") == null, "a healthy state has two CU rows");
 
+        var unreadableMask = Cu40();
+        unreadableMask.CuDisableWgp = null;
+        rows = CuRows(unreadableMask, x);
+        Check(!unreadableMask.SettingConfirmed && !unreadableMask.Encoded.HasValue,
+              "an unavailable mask never means confirmed mask zero");
+        Check(Value(rows, "CU setting").Contains("WGP mask unavailable") && LevelOf(rows, "CU setting") == Level.Error,
+              "an unavailable mask makes the next CU setting an error");
+
         // The regression of 2026-10-05: the tester install left CuMode out, the driver harvested to 24, and
         // every Witcher 3 and Rise of the Tomb Raider number of three days was a 24 CU number.
         var lost = new CuModeView
         {
-            ParametersPresent = true, CuMode = null, LastApplied = 24, LastReason = 0,
+            ParametersPresent = true, CuMode = 24, LastApplied = 24, LastReason = 0,
             HaveEscape = true, Escape = Escape(0, 24, 24, CuModeSnapshot.FlagValid | CuModeSnapshot.FlagConsistent, 0),
         };
         rows = CuRows(lost, x);
         Check(LevelOf(rows, "CU") == Level.Warn && Value(rows, "CU").Contains("24 CU") && Value(rows, "CU").Contains("expected 40"),
               "24 CU against an expectation of 40 is amber: " + Value(rows, "CU"));
         Check(LevelOf(rows, "CU setting") == Level.Warn &&
-              Value(rows, "CU setting") == "CuMode absent: the next start harvests to 24",
-              "an absent CuMode is amber and says what the next start does");
+              Value(rows, "CU setting") == "CuMode 24",
+              "the resolved CuMode is amber and says what the next start does");
 
         // The automatic fallback: 40 was asked for, 24 came out. Red, with the driver's own reason.
         var fallback = new CuModeView
@@ -393,7 +401,7 @@ static class LabStateTest
         var blind = new CuModeView { ParametersPresent = false, HaveEscape = false, EscapeError = "KMD CU mode snapshot unavailable (0xC00000BB)" };
         rows = CuRows(blind, x);
         Check(LevelOf(rows, "CU") == Level.Warn && Value(rows, "CU").Contains("unknown"), "no source at all is amber, never green");
-        Check(Value(rows, "CU setting") == "no Parameters key", "no Parameters key is stated");
+        Check(Value(rows, "CU setting") == "driver state unavailable", "no Parameters key is stated");
 
         // A lab that deliberately runs the harvest: the expectation file decides, not the code.
         var expect24 = new LabExpectations { CuMode = 24 };
@@ -662,7 +670,7 @@ static class LabStateTest
         var lost = Guard();
         lost.Parameters.Values.Remove("CuMode");
         rows = GuardRows(lost, x);
-        Check(LevelOf(rows, "Parameters") == Level.Warn && Value(rows, "Parameters") == "CuMode absent, so 24 (expected 40)",
+        Check(LevelOf(rows, "Parameters") == Level.Warn && Value(rows, "Parameters") == "CuMode absent (expected 40)",
               "a missing expected value is amber, named, and says what is in force: " + Value(rows, "Parameters"));
 
         var raised = Guard();
@@ -670,11 +678,11 @@ static class LabStateTest
         rows = GuardRows(raised, x);
         Check(LevelOf(rows, "Parameters") == Level.Warn && Value(rows, "Parameters").Contains("DpmMaxMHz 2000 (expected 1500)"),
               "a value above the installed default is amber: " + Value(rows, "Parameters"));
-        var admitted = new LabExpectations();
+        var admitted = Expect40();
         admitted.Parameters["DpmMaxMHz"] = 2000;
         Check(LevelOf(GuardRows(raised, admitted), "Parameters") == Level.Good,
               "expectations.json admits a deliberate deviation");
-        var off = new LabExpectations();
+        var off = Expect40();
         off.Parameters["DpmMaxMHz"] = null;
         Check(LevelOf(GuardRows(raised, off), "Parameters") == Level.Good, "a null expectation switches the check off");
 
@@ -687,28 +695,28 @@ static class LabStateTest
         }
         Check(!MeasurementGuardRules.IsLatchedGate("KeepLog"), "KeepLog is not a latched gate");
 
-        // Absent is not always a deviation. The two interop switches are on when absent (since 0.7.181), so a
-        // key written by the driver package rather than the installer used to show amber for settings that are
-        // in force at the expectation.
+        // The common client already resolved absent overrides through package/code
+        // defaults. The overlay consumes those effective values without its own table.
         foreach (string name in new[] { "EnableGpuPresentBlit", "EnableCddDwmInterop" })
         {
             var gone = Guard();
-            gone.Parameters.Values.Remove(name);
+            gone.Parameters.Overrides.Remove(name);
+            gone.Parameters.Values[name] = 1;
+            gone.Parameters.Sources[name] = "factory";
             Check(LevelOf(GuardRows(gone, x), "Parameters") == Level.Good,
-                  name + " absent means on, so it is green: " + Value(GuardRows(gone, x), "Parameters"));
-            Check(MeasurementGuardRules.AbsentDefault(name) == 1, name + " absent default is 1");
+                  name + " effective factory value matches expectation");
         }
-        // And where absent means something else it stays a deviation, with what is in force spelled out.
         var noDpm = Guard();
-        noDpm.Parameters.Values.Remove("DpmMode");
+        noDpm.Parameters.Values["DpmMode"] = 0;
+        noDpm.Parameters.Sources["DpmMode"] = "code";
         rows = GuardRows(noDpm, x);
-        Check(LevelOf(rows, "Parameters") == Level.Error && Value(rows, "Parameters").Contains("DpmMode absent, so 0"),
-              "an absent DpmMode is fixed-lab, which is red for a latched gate: " + Value(rows, "Parameters"));
-        Check(MeasurementGuardRules.AbsentDefault("CuMode") == 24 && MeasurementGuardRules.AbsentDefault("DpmMaxMHz") == 2000 &&
-              MeasurementGuardRules.AbsentDefault("EnableGpuSubmit") == 0,
-              "the absent defaults come from the driver's own readers");
-        Check(MeasurementGuardRules.AbsentDefault("SomethingNobodyKnows") == null,
-              "an unknown name has no default, so absent stays a difference");
+        Check(LevelOf(rows, "Parameters") == Level.Error && Value(rows, "Parameters").Contains("DpmMode 0"),
+              "a resolved zero is red for a latched gate: " + Value(rows, "Parameters"));
+        var badState = Guard();
+        badState.Parameters.Errors["DpmMode"] = "state status 8, Windows error 2";
+        rows = GuardRows(badState, x);
+        Check(LevelOf(rows, "Parameters") == Level.Error && Value(rows, "Parameters").Contains("status 8"),
+              "an incomplete record cannot turn into a default or a matching cached value");
         var unknownName = Guard();
         unknownName.Installed = InstalledDefaults.Parse("{\"parameters\":{\"SomethingNobodyKnows\":1}}");
         unknownName.Parameters.Values.Remove("CuMode");
@@ -716,9 +724,9 @@ static class LabStateTest
         Check(Value(rows, "Parameters").Contains("SomethingNobodyKnows absent (expected 1)"),
               "and it is reported as plain absent: " + Value(rows, "Parameters"));
         Check(MeasurementGuardRules.InForce(Guard().Parameters, "DpmMaxMHz") == 1500 &&
-              MeasurementGuardRules.InForce(new RegistryDwords(), "EnableCddDwmInterop") == 1 &&
+              MeasurementGuardRules.InForce(new RegistryDwords(), "EnableCddDwmInterop") == null &&
               MeasurementGuardRules.InForce(new RegistryDwords(), "NoSuchValue") == null,
-              "InForce is the value in the key, else the driver's default");
+              "InForce uses only a successful effective result");
 
         var many = Guard();
         many.Parameters.Values["DpmMaxMHz"] = 2000;

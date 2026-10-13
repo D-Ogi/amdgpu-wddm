@@ -47,12 +47,12 @@ void GuardRecordStartStarted(void){}
 } else {
     $code=$source.Substring($first,$last-$first)
     if ($GateOnKeepLog) {
-        $code=$code.Replace('    if (KeGetCurrentIrql() != PASSIVE_LEVEL || g_ParametersPath.Buffer == NULL) {',
-            "    if (GuardReadSetting(L`"KeepLog`", 0) == 0) return;`n    if (KeGetCurrentIrql() != PASSIVE_LEVEL || g_ParametersPath.Buffer == NULL) {")
+        $code=$code.Replace('    if (KeGetCurrentIrql() != PASSIVE_LEVEL || !DriverStateReady()) {',
+            "    if (GuardReadSetting(L`"KeepLog`", 0) == 0) return;`n    if (KeGetCurrentIrql() != PASSIVE_LEVEL || !DriverStateReady()) {")
     }
     if ($RecordAtAnyIrql) {
-        $code=$code.Replace('if (KeGetCurrentIrql() != PASSIVE_LEVEL || g_ParametersPath.Buffer == NULL) {',
-                            'if (g_ParametersPath.Buffer == NULL) {')
+        $code=$code.Replace('if (KeGetCurrentIrql() != PASSIVE_LEVEL || !DriverStateReady()) {',
+                            'if (!DriverStateReady()) {')
     }
     if ($LogAfterCleanup) {
         $mark='ULONG mark = g_StartLogMark;'

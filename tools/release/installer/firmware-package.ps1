@@ -75,12 +75,8 @@ function New-HydratedDriverPackage {
     if ($bad.Count) { throw "firmware not ready: $($bad -join '; ')" }
     $inputs = @($Manifest.files | Where-Object { $_.path -clike 'payload/kmd/*' })
     $names = @($inputs | ForEach-Object { ([string]$_.path).Substring(12) })
-    if (@($names | Where-Object { $_ -ceq 'bc250kmd.inf' }).Count -ne 1 -or
-        @($names | Where-Object { $_ -ceq 'bc250kmd.sys' }).Count -ne 1 -or
-        @($names | Where-Object { $_ -ceq 'bc250kmd.cat' }).Count -ne 1 -or
-        @($names | Where-Object { $_ -cnotmatch '\Abc250kmd\.(inf|sys|cat)\z' }).Count -or $names.Count -ne 3) {
-        throw 'invalid manifest KMD payload set'
-    }
+    $infText=[IO.File]::ReadAllText((Join-Path $PackageRoot 'payload\kmd\bc250kmd.inf'))
+    Assert-DriverStatePackageMembers -Names $names -InfText $infText
     Initialize-FirmwarePackageNative
     $scope = New-Object AmdgpuWddm.PackageStage $Parent
     try {
@@ -108,6 +104,16 @@ function New-HydratedDriverPackage {
         Test-DriverCatalogMembers $scope.DirectoryPath $members
         return $scope
     } catch { $scope.Dispose(); throw }
+}
+
+function Assert-DriverStatePackageMembers {
+    param([string[]]$Names,[string]$InfText)
+    $required=@('bc250kmd.inf','bc250kmd.sys','bc250kmd.cat')
+    if($InfText -match '(?im)^\s*HKR\s*,\s*,\s*AmdgpuStateCatalog\s*,'){$required+='amdgpu-state.bin'}
+    if($Names.Count -ne $required.Count){throw 'invalid manifest KMD payload set'}
+    foreach($name in $required) {
+        if(@($Names | Where-Object {$_ -ceq $name}).Count -ne 1){throw "missing or duplicate KMD payload: $name"}
+    }
 }
 
 function Assert-DriverCatalogSigner {

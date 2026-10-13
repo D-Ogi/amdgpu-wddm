@@ -94,6 +94,32 @@ try {
  # The driver package's own AddReg against the release defaults table (BD-091): every setting the INF writes is the
  # released value and carries NOCLOBBER, so no install outside our installer closes a gate while another stays open.
  Check 'inf-gates' { & python "$repo\tools\quality\inf_gates.py" --inf "$repo\driver\kmd\bc250kmd.inf" --defaults "$repo\tools\release\installer\registry-defaults.json" --out "$Out\inf-gates" }
+ Check 'driver-state-x64' { & pwsh -NoProfile -File "$repo\tools\state\test.ps1" -Kits "$Kits" -Out "$Out\driver-state-x64" -Arch x64 }
+ Check 'driver-state-x86' { & pwsh -NoProfile -File "$repo\tools\state\test.ps1" -Kits "$Kits" -Out "$Out\driver-state-x86" -Arch x86 }
+ Check 'stored-fan-choice' { & pwsh -NoProfile -File "$repo\tools\state\test-fan-choice.ps1" -Kits "$Kits" -Out "$Out\stored-fan-choice" }
+ Check 'driver-state-kernel' { & pwsh -NoProfile -File "$repo\tools\state\test-kernel.ps1" -Kits "$Kits" -Out "$Out\driver-state-kernel" }
+ Check 'driver-state-package' { & powershell -NoProfile -NonInteractive -File "$repo\tools\release\test-state-package.ps1" -Out "$Out\driver-state-package" }
+ Check 'driver-state-installer' { & pwsh -NoProfile -File "$repo\driver\state\installer-build.ps1" -Kits "$Kits" -Out "$Out\driver-state-installer" -Test }
+ Check 'driver-state-lifecycle' { & powershell -NoProfile -NonInteractive -File "$repo\tools\release\test-state-lifecycle.ps1" }
+ Check 'driver-state-rollback' { & powershell -NoProfile -NonInteractive -File "$repo\tools\release\test-legacy-rollback.ps1" }
+ Check 'driver-state-consumer-syntax' { & powershell -NoProfile -NonInteractive -File "$repo\tools\state\test-consumer-syntax.ps1" }
+ # Native consumers link the same state ABI. These gates never open a device or a window.
+ Check 'driver-state-cli-x64' { & pwsh -NoProfile -File "$repo\tools\win\bc250kmd_cli\build.ps1" -Kits "$Kits" -Out "$Out\driver-state-cli-x64" -Arch x64 }
+ Check 'driver-state-cli-x86' { & pwsh -NoProfile -File "$repo\tools\win\bc250kmd_cli\build.ps1" -Kits "$Kits" -Out "$Out\driver-state-cli-x86" -Arch x86 }
+ Check 'driver-state-cumode-x64' { & pwsh -NoProfile -File "$repo\tools\win\cumode\build.ps1" -Kits "$Kits" -Out "$Out\driver-state-cumode-x64" -Arch x64 }
+ Check 'driver-state-cumode-x86' { & pwsh -NoProfile -File "$repo\tools\win\cumode\build.ps1" -Kits "$Kits" -Out "$Out\driver-state-cumode-x86" -Arch x86 }
+ Check 'driver-state-client-x64' { & pwsh -NoProfile -File "$repo\tools\state\test-client.ps1" -Kits "$Kits" -Out "$Out\driver-state-client-x64" -Arch x64 }
+ Check 'driver-state-client-x86' { & pwsh -NoProfile -File "$repo\tools\state\test-client.ps1" -Kits "$Kits" -Out "$Out\driver-state-client-x86" -Arch x86 }
+ Check 'driver-state-gui-batch' { & pwsh -NoProfile -File "$repo\tools\state\test-gui-batch.ps1" -Kits "$Kits" -Out "$Out\driver-state-gui-batch" }
+ Check 'driver-state-overlay' {
+  & pwsh -NoProfile -File "$repo\tools\win\bc250mon\test-state.ps1" -Out "$Out\driver-state-overlay"
+  if($LASTEXITCODE -eq 0){ & pwsh -NoProfile -File "$repo\tools\win\bc250mon\test-lab-state.ps1" -Out "$Out\driver-state-overlay-lab" }
+ }
+ Check 'driver-state-infverif' {
+  $infverif=Join-Path $Kits 'microsoft.windows.wdk.x64\c\tools\10.0.26100.0\x64\infverif.exe'
+  if(-not (Test-Path -LiteralPath $infverif)){throw "InfVerif is required: $infverif"}
+  & $infverif /h /v "$repo\driver\kmd\bc250kmd.inf"
+ }
  # Upgrade defaults and explicit clock choices must survive the same registry writes as an installation.
  Check 'registry-defaults' { & powershell -NoProfile -File "$repo\tools\release\test-registry-defaults.ps1" }
  # BD-077: the installer half of the CU mode setting. The -CuMode switch must reach the registry plan, and

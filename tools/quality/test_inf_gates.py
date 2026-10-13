@@ -199,6 +199,33 @@ class InfGates(unittest.TestCase):
         self.assertEqual([], g.check_installation_state(inf, defaults))
 
     # ---- the repository itself -----------------------------------------------------------------
+    def test_schema2_report_counts_defaults_and_does_not_claim_runtime_overwrite(self):
+        inf = REPO / 'driver/kmd/bc250kmd.inf'
+        defaults_path = REPO / 'tools/release/installer/registry-defaults.json'
+        rows, duplicates = g.read_inf(inf)
+        defaults = g.read_defaults(defaults_path)
+        self.assertEqual([], duplicates)
+        self.assertEqual(set(defaults), set(rows))
+        report = g.report(inf, defaults_path, rows, defaults)
+        self.assertIn('Schema 2: immutable', report)
+        self.assertNotIn('the INF does not write it', report)
+        self.assertNotIn('every install writes it', report)
+
+    def test_schema2_rejects_extra_writes_and_changed_defaults(self):
+        source = (REPO / 'driver/kmd/bc250kmd.inf').read_text(encoding='ascii')
+        defaults = REPO / 'tools/release/installer/registry-defaults.json'
+        with tempfile.TemporaryDirectory(dir=OUT) as directory:
+            inf = Path(directory) / 'bad.inf'
+            for change in (
+                source + '\nHKR,Parameters,CuMode,0x00010001,40\n',
+                source + '\nHKR,Parameters\\DefaultsV2,CuMode,0x00010001,40\n',
+                source.replace('HKR,Parameters\\DefaultsV2,CuMode,0x00010001,24',
+                               'HKR,Parameters\\DefaultsV2,CuMode,0x00010001,40'),
+            ):
+                self.assertNotEqual(source, change)
+                inf.write_text(change, encoding='ascii')
+                self.assertTrue(g.check(inf, defaults))
+
     def test_the_repository_agrees(self):
         inf = REPO / "driver" / "kmd" / "bc250kmd.inf"
         defaults = REPO / "tools" / "release" / "installer" / "registry-defaults.json"

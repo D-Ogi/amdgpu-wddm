@@ -100,7 +100,7 @@ namespace AmdgpuWddmControl
             var r = new StartReading();
             try
             {
-                using (var key = SettingsStore.Machine.OpenSubKey(Recovery.ParametersPath))
+                using (var key = DriverStateKey.Open())
                 {
                     r.Read = true;
                     r.Installed = key != null;

@@ -17,6 +17,8 @@ if(Test-Path $Out){
 $cases=0
 function Reject([string]$Name,[scriptblock]$Action){$failed=$false;try{& $Action}catch{$failed=$true};if(!$failed){throw "False acceptance: $Name"};$script:cases++}
 function Check([string]$Name,[bool]$Ok){if(!$Ok){throw "Check failed: $Name"};$script:cases++}
+Reject 'retired global present enable refuses' {Set-DurablePresentGates 1}
+Reject 'retired global present disable refuses' {Set-DurablePresentGates 0}
 
 # ---- router swap
 $dir="$Out\swap";$null=New-Item -ItemType Directory $dir

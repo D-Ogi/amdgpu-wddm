@@ -45,7 +45,7 @@
 //   exports OpenAdapter10_2 only. The Direct3D 10.0 runtime of Windows 11 does not call OpenAdapter10 when
 //   OpenAdapter10_2 is exported: it opens this router through OpenAdapter10_2 and creates a D3D11-family device,
 //   so a D3D10.0 application takes the AppRouter decision like a D3D11 one (BD-081, measured 2026-10-07).
-//   HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters
+//   Shared service state through driver/state/client.h
 //     InteropLastState    REG_DWORD, KMD 0.7.181 and later (driver/kmd/interop.c InteropStart): effective bits |
 //                         requested bits << 8, written at every full adapter start. Both switches count as on
 //                         when the effective bits 1 (EnableGpuPresentBlit) and 2 (EnableCddDwmInterop) are both
@@ -80,6 +80,7 @@
 #include <cstdio>
 #include <cwchar>
 #include "router-policy.h"
+#include "router-state.h"
 #include "router-identity.h"
 #include "front-adapter.h"
 #include "../app-settings/app-settings-core.h"
@@ -110,7 +111,6 @@ static const REGSAM RegistryView = KEY_WOW64_64KEY;
 #endif
 static const wchar_t RouterKey[] = L"SOFTWARE\\amdgpu-wddm\\DesktopRouter";
 static const wchar_t AppRouterKey[] = L"SOFTWARE\\amdgpu-wddm\\AppRouter";
-static const wchar_t KmdParametersKey[] = L"SYSTEM\\CurrentControlSet\\Services\\bc250kmd\\Parameters";
 static const wchar_t HostedUmdFile[] = L"bc250d3d_zink.dll";
 static const size_t PathChars = 1024;
 static const DWORD ClientsBytes = 4096;
@@ -261,26 +261,10 @@ static void ReadConfig(Config *c)
             c->hosted_source = "unavailable";
         }
     }
-    c->switch_source = "unreadable";
-    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, KmdParametersKey, 0, KEY_QUERY_VALUE | RegistryView, &key) == ERROR_SUCCESS) {
-        DWORD v = 0;
-        switch (ReadDword(key, L"InteropLastState", &v)) {
-        case Dword::Value:
-            c->switch_source = "latched";
-            c->blit_on = (v & 1) != 0;
-            c->interop_on = (v & 2) != 0;
-            break;
-        case Dword::Other:
-            c->switch_source = "latched-invalid";
-            break;
-        case Dword::Absent:
-            c->switch_source = "settings";
-            c->blit_on = ReadDword(key, L"EnableGpuPresentBlit", &v) == Dword::Value && v == 1;
-            c->interop_on = ReadDword(key, L"EnableCddDwmInterop", &v) == Dword::Value && v == 1;
-            break;
-        }
-        RegCloseKey(key);
-    }
+    const RouterKmdState kmd = ReadRouterKmdState();
+    c->switch_source = kmd.source;
+    c->blit_on = kmd.blit_on;
+    c->interop_on = kmd.interop_on;
 }
 
 // The AppRouter key. Fail safe throughout: anything unreadable keeps applications on the CPU UMD.

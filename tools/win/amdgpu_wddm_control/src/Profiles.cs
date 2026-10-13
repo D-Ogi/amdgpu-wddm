@@ -170,11 +170,11 @@ namespace AmdgpuWddmControl
         // The writes of the Performance page under the settings rule: DpmMode 1 only while "automatic" is checked
         // (unchecking removes it; a 0 the driver stored after a fallback means the same as no value and stays),
         // DpmMaxMHz only while a ceiling is checked (unchecking removes it).
-        public static List<RegWrite> PlanWrites(uint? storedMode, uint? storedMax, bool automatic, uint? ceiling)
+        public static List<RegWrite> PlanWrites(uint? storedMode, uint? storedMax, bool automatic, uint? ceiling, bool factoryFallback = false)
         {
             var writes = new List<RegWrite>();
             if (automatic) { if (storedMode != 1) writes.Add(RegWrite.Dword(RegistryPath, "DpmMode", 1)); }
-            else if (storedMode == 1) writes.Add(RegWrite.Remove(RegistryPath, "DpmMode"));
+            else if (storedMode == 1) writes.Add(factoryFallback ? RegWrite.Dword(RegistryPath, "DpmMode", 0) : RegWrite.Remove(RegistryPath, "DpmMode"));
             if (ceiling != null) { if (storedMax != ceiling) writes.Add(RegWrite.Dword(RegistryPath, "DpmMaxMHz", ceiling.Value)); }
             else if (storedMax != null) writes.Add(RegWrite.Remove(RegistryPath, "DpmMaxMHz"));
             return writes;

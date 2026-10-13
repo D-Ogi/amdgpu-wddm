@@ -239,7 +239,7 @@ It can cause a visible hitch in a game. Never poll it from an overlay or GUI.
 The KMD owns the register lock. Run the known-spin control below to measure live delivery.
 There is no fallback to other escape flags.
 
-`waves saved` reads the last `Snapshot` binary value under the service's `Parameters/HangRecovery/Waves` key.
+`waves saved` reads the last `Snapshot` binary value at `HangRecovery\Waves` through the common state client.
 This child key grants access only to administrators and SYSTEM.
 It does not access the GPU. The snapshot contains a header and exactly `WaveCount` records.
 The tool checks the ABI, length, count, flags and selectors before it prints any record.
@@ -267,5 +267,44 @@ Both checks return 1 on failure. Invalid arguments return 2, and an unelevated c
 A plain read also returns 1 for an incomplete capture, after it prints the available records.
 
 `waves_test.c` checks fixed register values, damaged saved blobs, capture failures and the control checks.
-It replaces all adapter, registry and token calls. The build runs this host test before it builds the tool.
+It replaces all adapter, state and token calls. The build runs this host test before it builds the tool.
 These tests do not establish a working hardware read. Run the idle and known-spin controls on the target first.
+
+## State JSON interface
+
+Scripts use the common state client through these commands:
+
+```text
+bc250kmd_cli state catalog
+bc250kmd_cli state paths
+bc250kmd_cli state snapshot
+bc250kmd_cli state get NAME [PATH] [--override]
+bc250kmd_cli state set NAME DWORD [PATH]
+bc250kmd_cli state clear NAME [PATH]
+```
+
+`PATH` is a relative catalog path, such as `StartRecord`. Omit it for a root value.
+Unknown names and paths fail before the tool opens the store. `DWORD` accepts decimal or `0x` hexadecimal.
+The common store checks access, type and range. A write succeeds only after the checked persistence flush.
+`clear` removes an override or clears a record whose catalog access permits that operation.
+`paths` returns the OS service log directory as `logs`. It does not create a directory or open a GPU.
+On failure, `logs` is empty and `error` reports the Windows error.
+
+Each command prints one JSON object with `abi: 1`, `command` and a Win32 `error` number.
+`catalog` returns `items` with each value's path, name, kind, type, size limit and access fields.
+It also returns the compiled `schema` and `catalog_id` for comparison with the package catalog.
+It does not open the store. `snapshot` adds `override` and `effective` objects for each setting.
+For records, it adds a `record` object. Each read has `status`, `os_error`, `error`, `source`,
+`type`, `bytes` and `value`. `get` returns the read object as `result`.
+It reads the effective setting unless `--override` is present.
+
+Sources are `none`, `override`, `factory` and `code`. Defaults apply only to an absent override.
+Errors such as access denial, invalid data or an incomplete store remain errors.
+DWORD values are JSON numbers. QWORD values are decimal strings to preserve all bits.
+Strings use JSON escapes, string lists use arrays, and binary values use hexadecimal strings.
+Failed reads have a null value. A snapshot can contain failed or absent reads while the command succeeds.
+Scripts must check the status of every value they use.
+
+Exit codes are 0 for success, 1 for a failed operation, 2 for invalid arguments, and 3 for an absent `get` value.
+Only Win32 error 1060 identifies an uninstalled service. A missing store is an error, not an uninstalled service.
+The state commands, `stages`, `confirm` and `waves saved` do not open a GPU adapter.

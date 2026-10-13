@@ -1,9 +1,14 @@
 # cumode - 24 or 40 compute units
 
 Switches the BC-250 GPU between the 24 compute units it ships with and all 40. The driver (KMD 0.7.174 or
-later) applies the mode when the device starts; the tool writes the setting, asks for the reboot that applies
+later) applies the mode when the device starts. The tool writes the setting, asks for the reboot that applies
 it, confirms a healthy 40 CU start and shows what the driver did. Design, safeguards and the lab plan:
 `docs/design/cu-mode.md`.
+
+This build requires the shared state schema. Reads use the common client and preserve errors.
+Only the common client supplies defaults. Setting changes hold one writer lock through backup,
+write, persistence, readback and rollback. A failure reports both the original and rollback errors.
+Older drivers need the matching historical tool.
 
 ```
 cumode                          the window (setting, status, reboot, confirm)

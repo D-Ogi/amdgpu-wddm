@@ -23,7 +23,7 @@
 //   a bugcheck               the classic bugcheck callback and Bc250ResetDevice: port writes only, no lock, a bounded
 //                            poll, no verification (bc250_fan_handback_blind)
 //
-// Settings, REG_DWORD under Services\bc250kmd\Parameters:
+// Settings, REG_DWORD through the shared state resolver:
 //   EnableFanControl   1 (the default, and what the INF and the release write) lets the driver take the fan. 0, and
 //                      any other value, means this file never writes the chip: that is the bisect switch.
 //   FanMode            the stored choice: 0 the board's curve, 1 the driver's curve. Absent is the driver's curve.
@@ -32,9 +32,10 @@
 //   FanLoadBoost       1 (the default) lets the load feed-forward take the fan to full speed under a sustained
 //                      heavy load, before the temperature curve gets there (rule 10 of bc250_fan.h, owner
 //                      2026-10-10). 0, and any other value, leaves the duty to the curve alone.
-// A stored choice the policy refuses runs the standard curve, and the log says so.
+// An invalid stored choice leaves the fan with the board and closes driver control.
 #include "bc250kmd.h"
 #include "bc250kmd_escape.h"
+#include "state_kernel.h"
 
 #define FAN_SETTING_ENABLE L"EnableFanControl"
 #define FAN_SETTING_MODE L"FanMode"
@@ -476,29 +477,7 @@ void FanInitialize(BC250_DEVICE* Device)
     owner->Gate = BC250_FAN_GATE_READER;
 }
 
-// The stored choice, as a request. FALSE when there is none (the standard curve runs).
-static BOOLEAN FanReadChoice(struct bc250_fan_request* Start, ULONG* Points)
-{
-    ULONG mode = 0, profile = BC250_FAN_PROFILE_STANDARD, points = 0, value = 0, i;
-
-    RtlZeroMemory(Start, sizeof(*Start));
-    *Points = 0;
-    if (!NT_SUCCESS(GuardQuerySetting(FAN_SETTING_MODE, &mode))) return FALSE;
-    (void)GuardQuerySetting(FAN_SETTING_PROFILE, &profile);
-    Start->mode = mode;
-    Start->profile = profile;
-    if (mode == BC250_FAN_MODE_CURVE && profile == BC250_FAN_PROFILE_CUSTOM &&
-        NT_SUCCESS(GuardQuerySetting(FAN_SETTING_POINTS, &points)) && points <= BC250_FAN_POINTS_MAX) {
-        Start->curve.points = points;
-        for (i = 0; i < points; i++) {
-            if (!NT_SUCCESS(GuardQuerySetting(g_FanCurveSetting[i], &value))) value = 0;
-            Start->curve.p[i].c = (value >> 8) & 0xFFu;
-            Start->curve.p[i].pct = value & 0xFFu;
-        }
-        *Points = points;
-    }
-    return TRUE;
-}
+#include "fan_choice.h"
 
 // StartDevice, PASSIVE_LEVEL, after the start can no longer fail and before the governor thread exists. Never fails
 // the start: a closed gate is one log line and a control that writes nothing.
@@ -507,7 +486,8 @@ void FanStart(BC250_DEVICE* Device)
     BC250_FAN_OWNER* owner = &Device->Fan;
     struct bc250_fan_request start;
     BOOLEAN stored, setting;
-    ULONG points = 0, gate;
+    ULONG points = 0, gate, boost = 0;
+    NTSTATUS choiceStatus;
     KIRQL irql;
 
     owner->Hwmon = &Device->Hwmon;
@@ -517,14 +497,15 @@ void FanStart(BC250_DEVICE* Device)
     else if (!Device->Hwmon.IdPinned && Device->Hwmon.Identity.customer_id != BC250_FAN_CUSTOMER_UNIT_A)
         gate = BC250_FAN_GATE_CHIP;
     else gate = BC250_FAN_GATE_OK;
-    stored = FanReadChoice(&start, &points);
+    choiceStatus = FanReadConfiguredChoice(&start, &points, &boost);
+    stored = NT_SUCCESS(choiceStatus);
+    if (!stored && choiceStatus != STATUS_OBJECT_NAME_NOT_FOUND) {
+        gate = BC250_FAN_GATE_SETTING;
+        GuardLog("fan: stored choice unreadable or invalid (0x%08X): control closed", (ULONG)choiceStatus);
+    }
     bc250_fan_init(&owner->Ctl, gate == BC250_FAN_GATE_OK, stored ? &start : NULL);
     // The load feed-forward (rule 10), on unless this start's registry says otherwise.
-    bc250_fan_load_boost(&owner->Ctl, GuardReadSetting(FAN_SETTING_BOOST, 1) == 1);
-    if (stored && (owner->Ctl.mode != start.mode ||
-                   (start.mode == BC250_FAN_MODE_CURVE && owner->Ctl.profile != start.profile)))
-        GuardLog("fan: the stored choice FanMode %lu FanProfile %lu (%lu points) is refused: the standard curve runs",
-                 (ULONG)start.mode, (ULONG)start.profile, points);
+    bc250_fan_load_boost(&owner->Ctl, boost == 1);
     KeAcquireSpinLock(&owner->SnapLock, &irql);
     owner->Stored = stored;
     owner->StoredMode = stored ? start.mode : 0u;

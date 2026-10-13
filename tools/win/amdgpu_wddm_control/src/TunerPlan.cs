@@ -113,7 +113,7 @@ namespace AmdgpuWddmControl
                 return No(p, on ? "Processor tuning is on already." : "Processor tuning is off already.",
                     on ? "tuner.refuse.cpu-enable-already" : "tuner.refuse.cpu-disable-already");
             if (on) p.Writes.Add(RegWrite.Dword(Recovery.ParametersPath, "CpuTune", 1));
-            else p.Writes.Add(RegWrite.Remove(Recovery.ParametersPath, "CpuTune"));
+            else p.Writes.Add(RegWrite.Dword(Recovery.ParametersPath, "CpuTune", 0));
             p.Preview.Add(Strings.T(on ? "plan.line.cpu-tune-on" : "plan.line.cpu-tune-off"));
             if (on) p.Notes.Add("The processor numbers come from community reports and are measured by nobody on this part. "
                 + "Every change is then a trial that the driver reverts by itself.");
@@ -327,7 +327,17 @@ namespace AmdgpuWddmControl
             // surface off: the reset then removes a stored value, as it did before.
             long now = 0;
             bool has = s.Parameters != null && s.Parameters.TryGetValue("CpuTune", out now);
-            if (cpuTuneDefault != null)
+            if (s.StateSchema == 2)
+            {
+                // Reset clears the user's override. Disable is the separate,
+                // explicit zero above; deleting it must restore the package's default.
+                if (s.ParameterOverrides != null && s.ParameterOverrides.ContainsKey("CpuTune"))
+                {
+                    p.Writes.Add(RegWrite.Remove(Recovery.ParametersPath, "CpuTune"));
+                    p.Preview.Add(Strings.T(cpuTuneDefault == 1 ? "plan.line.cpu-tune-on" : "plan.line.cpu-tune-off"));
+                }
+            }
+            else if (cpuTuneDefault != null)
             {
                 if (!has || now != cpuTuneDefault.Value)
                 {

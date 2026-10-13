@@ -21,6 +21,8 @@ __pycache__/
 # Never commit: AMD firmware blobs, crash dumps, secrets, local scratch
 *.dmp
 *.bin
+# Generated setting catalog, not firmware. tools/state/generate.py owns it.
+!/driver/state/amdgpu-state.bin
 *.bin.zst
 /secrets/
 wpa_supplicant.conf

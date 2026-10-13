@@ -1,5 +1,7 @@
 param([Parameter(Mandatory)][string]$Directory,[Parameter(Mandatory)][string]$Tool)
 $ErrorActionPreference='Stop'
+. "$PSScriptRoot\legacy-state.ps1"
+Assert-KmdLegacyState $Directory
 . "$PSScriptRoot\run-arm.ps1"
 $boundary=Get-Content "$Directory\boundary.json" -Raw|ConvertFrom-Json
 $result=Invoke-KmdTransitionArm candidate $Directory $Tool $boundary.qpc $boundary.frequency

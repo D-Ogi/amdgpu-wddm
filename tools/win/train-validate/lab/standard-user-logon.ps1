@@ -32,7 +32,6 @@ $work = 'C:\BC250\tmp\standard-user-logon'
 $saved = Join-Path $work 'winlogon-before.json'
 $winlogon = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
 $confirmLog = Join-Path $env:ProgramData 'amdgpu-wddm\start-confirm.log'
-$par = 'HKLM:\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters'
 
 function Get-WinlogonValue([string]$Name) {
     $v = Get-ItemProperty -Path $winlogon -Name $Name -ErrorAction SilentlyContinue
@@ -42,6 +41,13 @@ function Get-WinlogonValue([string]$Name) {
 
 try {
     "utc $([DateTime]::UtcNow.ToString('o')) phase $Phase account $Account"
+    if ($Phase -ne 'cleanup') {
+        $inst = [string](Get-ItemProperty 'HKLM:\SOFTWARE\amdgpu-wddm\Release' -Name InstallRoot -ErrorAction Stop).InstallRoot
+        $cli = Join-Path $inst 'tools\bc250kmd_cli.exe'
+        . (Join-Path $inst 'tools\state-reader.ps1')
+        $state = Read-DriverStateValues -Cli $cli
+        if (-not $state.ContainsKey('UnconfirmedStarts')) { throw 'UnconfirmedStarts is absent' }
+    }
     [void][IO.Directory]::CreateDirectory($work)
     $boot = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime
     "boot $($boot.ToUniversalTime().ToString('o'))"
@@ -91,7 +97,7 @@ try {
         $mark = Join-Path $work 'mark.json'
         $logLines = 0
         if (Test-Path -LiteralPath $confirmLog) { $logLines = @(Get-Content -LiteralPath $confirmLog).Count }
-        $unconfirmed = [int](Get-ItemProperty $par -Name UnconfirmedStarts -ErrorAction SilentlyContinue).UnconfirmedStarts
+        $unconfirmed = [uint32]$state['UnconfirmedStarts']
         @{ utc = [DateTime]::UtcNow.ToString('o'); log_lines = $logLines; unconfirmed = $unconfirmed } |
             ConvertTo-Json | Set-Content -LiteralPath $mark -Encoding UTF8
         "mark written to $mark"
@@ -128,8 +134,9 @@ try {
         } else { $bad += "no $confirmLog" }
 
         # 3. the driver's own counters
-        $p = Get-ItemProperty $par -ErrorAction SilentlyContinue
-        "params: UnconfirmedStarts=$($p.UnconfirmedStarts) DpmMode=$($p.DpmMode) DpmMaxMHz=$($p.DpmMaxMHz) DpmClosedReason=$($p.DpmClosedReason)"
+        $p = Read-DriverStateValues -Cli $cli
+        if (-not $p.ContainsKey('UnconfirmedStarts')) { throw 'UnconfirmedStarts is absent' }
+        "state: UnconfirmedStarts=$($p.UnconfirmedStarts) DpmMode=$($p.DpmMode) DpmMaxMHz=$($p.DpmMaxMHz) DpmClosedReason=$($p.DpmClosedReason)"
         if ([int]$p.UnconfirmedStarts -ne 0) { $bad += "UnconfirmedStarts is $($p.UnconfirmedStarts), not 0: the logon of the standard account confirmed nothing" }
         if ($null -ne $p.DpmMode -and [int]$p.DpmMode -eq 0) { $bad += 'DpmMode is 0: the automatic clock control was set aside' }
 

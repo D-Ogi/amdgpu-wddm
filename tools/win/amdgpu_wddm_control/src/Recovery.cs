@@ -28,6 +28,8 @@ namespace AmdgpuWddmControl
         public bool DriverInstalled { get; set; }                   // Services\bc250kmd\Parameters exists
         public bool RouterInstalled { get; set; }                   // SOFTWARE\amdgpu-wddm\DesktopRouter exists
         public Dictionary<string, long> Parameters { get; set; }    // REG_DWORD values of Parameters (absent: not listed)
+        public int StateSchema { get; set; }                        // 2: common service state; 0: old saved snapshot
+        public Dictionary<string, long> ParameterOverrides { get; set; } // raw values, distinct from effective defaults
         public long? DwmForceCpu { get; set; }
         public long? RequireKmdSwitches { get; set; }
         public string DriverError { get; set; }                     // null when the escapes answered
@@ -1187,6 +1189,8 @@ namespace AmdgpuWddmControl
             if (!string.Equals(w.Path, ParametersPath, StringComparison.OrdinalIgnoreCase))
                 return w.Name == "DwmForceCpu" && !w.Delete && s.DwmForceCpu == w.Number;
             var now = s.P(w.Name);
+            if (s.StateSchema == 2 && w.Delete)
+                return s.ParameterOverrides != null && !s.ParameterOverrides.ContainsKey(w.Name);
             return w.Delete ? now == null : now != null && now.Value == w.Number;
         }
 
@@ -1312,11 +1316,11 @@ namespace AmdgpuWddmControl
                         return Refuse(p, "Only DpmMode 1 is written; leave automatic clocks unchecked for the fixed clock (driver default).");
                     if (ceiling != null && !DpmSettings.IsValidCeiling(ceiling.Value)) return Refuse(p, "The ceiling " + ceiling + " MHz is not one of 1000, 1100 ... 2000 MHz.");
                     var stored = s.P("DpmMaxMHz");
-                    var clock = DpmSettings.PlanWrites(s.P("DpmMode"), stored, automatic, action == "enable-dpm" ? ceiling ?? stored : ceiling);
+                    var clock = DpmSettings.PlanWrites(s.P("DpmMode"), stored, automatic, action == "enable-dpm" ? ceiling ?? stored : ceiling, s.StateSchema == 2);
                     if (action == "enable-dpm" && ceiling == null) clock.RemoveAll(w => w.Name == "DpmMaxMHz");
                     p.Writes.AddRange(clock);
                     if (p.Writes.Count == 0) return Refuse(p, "These clock settings are stored already.");
-                    p.Change = string.Join(" ", p.Writes.Select(w => w.Name == "DpmMode" ? (w.Delete ? "Removes DpmMode: the fixed clock of 1000 MHz (driver default)." : "Automatic clocks (DpmMode 1).")
+                    p.Change = string.Join(" ", p.Writes.Select(w => w.Name == "DpmMode" ? (w.Delete ? "Removes DpmMode: the fixed clock of 1000 MHz (driver default)." : w.Number == 0 ? "Fixed clock of 1000 MHz (DpmMode 0)." : "Automatic clocks (DpmMode 1).")
                         : w.Delete ? "Removes the clock ceiling: " + DpmSettings.DefaultMaxMHz + " MHz (driver default)." : "Clock ceiling " + w.Number + " MHz (DpmMaxMHz)."));
                     p.Effect = "at the next restart of Windows";
                     if (ceiling > DpmSettings.DefaultMaxMHz && automatic) p.Notes.Add("A ceiling above " + DpmSettings.DefaultMaxMHz + " MHz makes the GPU hotter and uses more power. Make sure the case has good air flow.");
@@ -1326,6 +1330,8 @@ namespace AmdgpuWddmControl
                 case "reset-defaults":
                     p.Title = "Reset driver settings to the release defaults";
                     p.Effect = "at the next restart of Windows";
+                    if (s.StateSchema == 2 && s.ParameterOverrides == null)
+                        return Refuse(p, "The stored driver settings could not be read. No settings were changed.");
                     if (s.DefaultParameters == null || s.DefaultRouter == null)
                         return Refuse(p, "The installed release has no list of default settings" + (s.DefaultsError != null ? " (" + s.DefaultsError + ")" : "") + ". Run the release installer again to reset.");
                     foreach (var name in DefaultParameterNames)
@@ -1334,7 +1340,7 @@ namespace AmdgpuWddmControl
                         if (!s.DefaultParameters.TryGetValue(name, out v)) return Refuse(p, "The release defaults do not name " + name + ".");
                         bool ok = name == "DpmMaxMHz" ? DpmSettings.IsValidCeiling((uint)v) : v == 0 || v == 1;
                         if (v < 0 || v > uint.MaxValue || !ok) return Refuse(p, "The release default " + name + " = " + v + " is out of range.");
-                        p.Writes.Add(RegWrite.Dword(ParametersPath, name, (uint)v));
+                        p.Writes.Add(s.StateSchema == 2 ? RegWrite.Remove(ParametersPath, name) : RegWrite.Dword(ParametersPath, name, (uint)v));
                     }
                     long cpu;
                     if (!s.DefaultRouter.TryGetValue("DwmForceCpu", out cpu) || (cpu != 0 && cpu != 1)) return Refuse(p, "The release defaults have no valid DwmForceCpu.");

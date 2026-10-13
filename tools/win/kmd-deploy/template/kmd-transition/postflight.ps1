@@ -2,6 +2,8 @@
 # inside a bounded child. Compares the live lab with this attempt's own capture and pins; changes nothing.
 param([Parameter(Mandatory)][string]$Directory)
 $ErrorActionPreference = 'Stop'
+. "$PSScriptRoot\legacy-state.ps1"
+Assert-KmdLegacyState $Directory
 . "$PSScriptRoot\identity.ps1"
 . "$PSScriptRoot\registration.ps1"
 . "$PSScriptRoot\hang-detector.ps1"

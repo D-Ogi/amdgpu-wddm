@@ -258,7 +258,7 @@ longer have to run the release installer again for this.
 | Test certificate | LocalMachine Root and TrustedPublisher stores |
 | Microsoft Visual C++ 2015-2022 Redistributable (x64) | installed by Microsoft's own installer from `payload\redist\vc_redist.x64.exe`, only when `System32` has no `vcruntime140.dll`, `vcruntime140_1.dll` or `msvcp140.dll`, or one of them is older than 14.44. Microsoft's files go where Microsoft puts them. `uninstall.cmd` leaves this runtime in place, because other programs use it |
 | Kernel-mode driver | driver package `bc250kmd.inf` (driver store, service `bc250kmd`) |
-| Driver settings | `HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters` |
+| Driver settings | The shared service state returned by Windows. Nagi Control App and `bc250kmd_cli state` use the same reader. Installation defaults remain separate from user choices and driver records. See `docs/design/driver-state.md` |
 | User-mode drivers | `C:\Program Files\amdgpu-wddm\` (`d3d12`, `desktop`, `d3d11`, `vulkan`, `opengl`, `wow64`, `tools`, `control`, `mft`). Nothing goes into `C:\Windows\System32` or `C:\Windows\SysWOW64`. An install over an earlier release removes the `bc250umd.dll` that it put there |
 | H.264 encoder (Media Foundation) | `HKLM\SOFTWARE\Classes\CLSID\{A32438F0-0D79-4CA9-A5BF-9F3C80837253}` with its `InprocServer32`, `HKLM\SOFTWARE\Classes\MediaFoundation\Transforms` (the encoder's own key and its membership in the video encoder category). These keys are for the whole computer. `uninstall.cmd` removes them, and so does a later release that does not install the encoder |
 | Licence texts | `C:\Program Files\amdgpu-wddm\licenses` (the package's `licenses\` and `THIRD-PARTY.md`) |
@@ -280,24 +280,21 @@ Default driver settings: automatic clock control (DPM) on, maximum 2000 MHz. The
 change. The driver writes no debug log files. To change the maximum clock at install time, use
 `install.cmd -DpmMaxMHz <1000-2000>`. An upgrade keeps a maximum clock that you set (see "Install").
 
-Graphics cores: the driver uses all 40 compute units of the GPU after a normal install. The firmware of the board
-switches on 24 of them. To keep that number, use `install.cmd -CuMode 24`. After the install, the Graphics page of
-Nagi Control App holds the same choice: "Standard (24)" or "All (40)". A new number applies at the next restart
-of Windows. The first start with 40 cores needs the confirmation of the small blue window after logon. Without that
-confirmation the next start goes back to 24 and records the reason. An installation and an upgrade keep that 24 and
-name it in the report, because the driver went back for a reason. `install.cmd -Repair` sets all 40 cores back. A 24
-that you chose yourself is kept by every install: the switch and the Graphics page both write the number 24 into the
-driver's settings, so a later install reads it as your choice. Where the driver went back to 24 by itself, the
-Graphics page says so and offers "All (40)" as the way back. The change writes one registry value and no firmware. All 40 cores
-give more performance in many games, and also more power and more heat. The game results that we publish are measured
-with all 40 cores. The page `docs/design/cu-mode.md` of the project has the whole description.
+Graphics cores: the driver uses 24 compute units after a normal install. To request all 40, use
+`install.cmd -CuMode 40`. Nagi Control App offers the same choice on its Graphics page.
+The change applies at the next Windows restart. It changes a driver setting, not firmware.
+
+The first start with 40 cores needs confirmation in the small blue window after logon.
+Without confirmation, the next start returns to 24 and records the reason. Installation, upgrade and repair keep
+that safety record. They also keep a 24-core choice that you made. Use the Graphics page to review and change
+the choice. See `docs/design/cu-mode.md` for the start confirmation rules.
 
 ## What works and what does not
 
 - Desktop composition (DWM) runs on the GPU (`DwmForceCpu` 0 in `HKLM\SOFTWARE\amdgpu-wddm\DesktopRouter`). When the
   driver has closed the GPU desktop path (for example after a start that ended in a crash or a power loss), DWM uses
-  the CPU route by itself. "Reopen the GPU desktop path" on the Recovery page of Nagi Control App opens it again,
-  and so does `install.cmd -Repair`. `DwmForceCpu` 1 keeps the
+  the CPU route by itself. "Reopen the GPU desktop path" on the Recovery page of Nagi Control App opens it again.
+  `DwmForceCpu` 1 keeps the
   desktop on the CPU route. An upgrade keeps the value you set.
 - Direct3D 12 applications run on the GPU through the Windows Direct3D 12 runtime, at feature level 12_1.
 - Vulkan applications run on the GPU through the Vulkan ICD.
@@ -374,16 +371,12 @@ with all 40 cores. The page `docs/design/cu-mode.md` of the project has the whol
   its last lines. Send them with the report: they hold the problem code of the device, the driver's own record
   of the start and of the stop, the event-log entries of that start, and the setup log sections of the
   graphics device. Nothing is sent by itself.
-- After an installation, `verify.cmd` fails `GPU desktop path` with `closed by the driver` or `last boot died in a
-  session`, and the desktop runs on the CPU route: run `install.cmd -Repair`. It sets the switches of the release back
-  and restarts Windows. You can also open Nagi Control App, select "Reopen the GPU desktop path" on its Recovery
-  page and restart Windows. A normal installation, an upgrade and a plain re-run of `install.cmd` keep the closed path
-  and name it in the report, because the driver closed it for a reason. If the driver closes the path again, make a
-  bug report instead of repairing a second time.
-- The Graphics page shows 24 graphics cores and you never chose them: the driver went back to 24 after a start with
-  all 40 that nobody confirmed. Run `install.cmd -Repair` to get all 40 back, or select "All (40)" on the Graphics
-  page and restart Windows. An installation and an upgrade keep the 24 and name it in their report, the way they keep
-  a closed desktop path. If the driver goes back a second time, make a bug report.
+- After installation, `verify.cmd` reports `GPU desktop path` as `closed by the driver`: open Nagi Control App.
+  Select "Reopen the GPU desktop path" on its Recovery page, then restart Windows.
+  Installation, upgrade and repair preserve the driver's safety record. If the driver closes the path again, make a bug report.
+- The Graphics page shows 24 graphics cores: this is the install default.
+  If the page reports a return from 40 to 24, review the recorded reason before selecting "All (40)" again.
+  Installation, upgrade and repair preserve this record. If the driver returns to 24 again, make a bug report.
 - Windows 11 apps (the command bar of File Explorer, Task Manager) ignore mouse clicks, often after the screen went
   black for a moment, or `verify.cmd` shows `[warn] DWM restarted in this session`: WinUI pointer-input loss after the
   desktop compositor (DWM) is terminated and restarted reproduces on this Windows build also with Microsoft Basic
@@ -424,7 +417,7 @@ The zip file contains these files:
 | `driver-state.txt` | driver version; clock control (mode, maximum, clocks, voltage, temperature, load, throttle reason); start health; desktop composition (CPU or GPU); video memory statistics |
 | `driver-log.txt` | the driver's internal log ring |
 | `installed-files.txt` | release version and folder; Device Manager status and problem code; the GPU's driver key (INF version and date, driver name values); driver, Vulkan manifest and library files with file version and SHA-256 |
-| `settings.txt` | the driver settings (`Services\bc250kmd\Parameters`) and the Direct3D 12 application profiles |
+| `settings.txt` | the shared driver settings, their read status, and the Direct3D 12 application profiles |
 | `system.txt` | Windows build, test signing state, application version, UTC time |
 | `events.txt` | System log entries of the last 24 hours from the display driver, DirectX kernel, DWM, crash reporting, power and Plug and Play, and application errors that name the driver, DWM, Direct3D or Vulkan |
 | `dxdiag.txt` | `dxdiag /t` output (only if you select it; it takes about one minute) |

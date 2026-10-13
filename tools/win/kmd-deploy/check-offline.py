@@ -21,7 +21,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from kmdcommon import BASE, HIST, OPS, POWERSHELL, TEMPLATE, HOST_TESTS, digest, historical_manifest, ps_env  # noqa: E402
 
-PURE = ['test-identity', 'test-hang-detector', 'test-child-closure', 'test-cpu-snapshot', 'test-deployment-acceptance',
+PURE = ['test-identity', 'test-legacy-state', 'test-hang-detector', 'test-child-closure', 'test-cpu-snapshot', 'test-deployment-acceptance',
         'test-health-order', 'test-health-wait', 'test-install-observation', 'test-logged-transition',
         'test-package-cleanup', 'test-pnp-idle', 'test-readiness-health', 'test-readiness', 'test-registered-package',
         'test-setup-log', 'test-verify-cpu', 'test-parameters']

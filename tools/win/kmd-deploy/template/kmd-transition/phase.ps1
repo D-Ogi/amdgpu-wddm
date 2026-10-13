@@ -4,6 +4,8 @@ param([Parameter(Mandatory)][ValidateSet('Capture','Quiesce','Rebind','Disable',
  [Parameter(Mandatory)][string]$Directory,[Parameter(Mandatory)][ValidatePattern('^[a-z0-9-]+$')][string]$Receipt,
  [Parameter(Mandatory)][long]$ChildDeadline)
 $ErrorActionPreference='Stop'
+. "$PSScriptRoot\legacy-state.ps1"
+Assert-KmdLegacyState $Directory
 . "$PSScriptRoot\identity.ps1"
 . "$PSScriptRoot\durable.ps1"
 . "$PSScriptRoot\transition-policy.ps1"

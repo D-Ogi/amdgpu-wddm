@@ -241,6 +241,12 @@ namespace AmdgpuWddmControl
 
         public static uint? ReadDword(string path, string name)
         {
+            if (DriverStateKey.IsPath(path))
+                using (var key = DriverStateKey.OpenPath(path))
+                {
+                    object value = key == null ? null : key.GetValue(name);
+                    return value is int ? (uint?)(uint)(int)value : null;
+                }
             using (var key = Machine.OpenSubKey(path))
             {
                 var v = key == null ? null : key.GetValue(name);
@@ -251,6 +257,21 @@ namespace AmdgpuWddmControl
         public static Dictionary<string, string> ReadAll(string path)
         {
             var d = new Dictionary<string, string>();
+            if (DriverStateKey.IsPath(path))
+            {
+                using (var key = DriverStateKey.OpenPath(path))
+                    if (key != null)
+                        foreach (string name in key.GetValueNames())
+                        {
+                            try
+                            {
+                                object value = key.GetValue(name);
+                                if (value != null) d[name] = Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture);
+                            }
+                            catch (Exception e) { d[name] = "unreadable: " + e.Message; }
+                        }
+                return d;
+            }
             using (var key = Registry.LocalMachine.OpenSubKey(path))
                 if (key != null)
                     foreach (var n in key.GetValueNames())

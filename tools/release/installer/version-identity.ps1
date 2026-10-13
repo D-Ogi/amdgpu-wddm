@@ -96,3 +96,19 @@ function Test-PackageVersionIdentity($Manifest, [string]$InfText, [string]$KmdSh
     }
     return $inf
 }
+
+# BD-161: a legacy KMD may still be loaded at the first post-upgrade check, or
+# leave its alias until the next start after the option was disabled. The pair
+# of private records must prove both sides. Arithmetic on the major is no proof.
+function Test-InstalledDriverVersion {
+    param([Alias('Reading')][string]$Installed,[Alias('Want')][string]$Expected,[Alias('Backup')][string]$Original,
+        [string]$Reported,[bool]$InstallationOwned=$false)
+    $result=[pscustomobject]@{ok=$false;note=''}
+    if(-not $Installed -or -not $Expected){return $result}
+    try { [void](ConvertTo-DriverQuad $Installed);[void](ConvertTo-DriverQuad $Expected) } catch { return $result }
+    if($Installed -ceq $Expected){$result.ok=$true;return $result}
+    if(-not $InstallationOwned -and $Original -ceq $Expected -and $Reported -ceq $Installed) {
+        $result.ok=$true;$result.note="; legacy AMD numbering is proved by private records, installed $Original"
+    }
+    return $result
+}

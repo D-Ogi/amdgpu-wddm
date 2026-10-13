@@ -1,22 +1,11 @@
-// bc250kmd's trail in the registry, on the overlay. The lab has no kernel debugger (ADR 0006), so the
-// miniport leaves everything it can say about itself under
-//
-//   HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters
-//     UnconfirmedStarts  REG_DWORD  raised by the driver at every start, cleared from here once the desktop is up
-//     LastStage          REG_DWORD  BC250_STAGE
-//     StageHistory       REG_SZ     the stages of this boot, oldest first
-//
-// This file holds the reader (KmdRegistry), the stage names (KmdStages) and the panel (KmdProvider). The
-// confirmation policy lives here too: full WDDM requires typed completed-presentation progress;
-// display-only retains the stage61 interval. The interactive process alone proves neither.
+// Startup records and guard confirmation through the shared state client.
+// This reader performs no GPU call and remains usable when the adapter has Code 43.
+// Full WDDM confirmation still requires the typed presentation witness below.
 using System;
 using System.Globalization;
 using System.Diagnostics;
 using System.ComponentModel;
-using System.Runtime.InteropServices;
-using Microsoft.Win32.SafeHandles;
 using System.IO;
-using Microsoft.Win32;
 
 namespace Bc250Mon
 {
@@ -80,108 +69,61 @@ namespace Bc250Mon
 
     public sealed class KmdSnapshot
     {
-        public bool Installed;                  // the service key exists
-        public bool Started;                    // the Parameters key exists, so the driver has run at least once
-        public int? LastStage, UnconfirmedStarts;
-        public string History;
-        public string Error;                    // the key is there but could not be read
+        public bool Installed;
+        public bool Started; // A startup breadcrumb exists, not merely an initialized store.
+        public int? LastStage, UnconfirmedStarts, StartStatus;
+        public string History, StartResult, StartStep, StartDetail;
+        public string Error;
     }
 
-    /// <summary>
-    /// Reader and writer of the miniport's registry key. One instance is shared by the provider and the
-    /// actions, so both look at the same place, including when a test key is used instead of the service.
-    /// </summary>
     public sealed class KmdRegistry
     {
-        public const string DefaultPath = @"HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd";
-        readonly RegistryKey _hive;
-        readonly string _subPath;
-        public readonly string Path;            // what the panel and the log show
-
-        /// <param name="overridePath">
-        /// Debug switch (env BC250MON_KMD_KEY): another key to read and write, e.g.
-        /// <c>HKCU\Software\BC250\kmdtest</c>. It exists so that the "installed" paths of this code can be
-        /// exercised on a machine where no such service is installed and without administrator rights.
-        /// </param>
+        public const string DefaultPath = "bc250kmd shared service state";
+        public readonly string Path = DefaultPath;
         public KmdRegistry(string overridePath)
         {
-            Path = string.IsNullOrEmpty(overridePath) ? DefaultPath : overridePath.Trim();
-            string rest;
-            _hive = SplitHive(Path, out rest);
-            _subPath = rest;
+            if (!string.IsNullOrEmpty(overridePath))
+                throw new ArgumentException("KMD registry overrides are unsupported. Tests use an injected state client.");
         }
-
-        static RegistryKey SplitHive(string path, out string rest)
-        {
-            int slash = path.IndexOf('\\');
-            string hive = slash < 0 ? path : path.Substring(0, slash);
-            rest = slash < 0 ? "" : path.Substring(slash + 1);
-            switch (hive.ToUpperInvariant())
-            {
-                case "HKCU":
-                case "HKEY_CURRENT_USER": return Registry.CurrentUser;
-                case "HKLM":
-                case "HKEY_LOCAL_MACHINE": return Registry.LocalMachine;
-                default: throw new ArgumentException("key must start with HKLM or HKCU: " + path);
-            }
-        }
-
-        static int? AsInt(object value)
-        {
-            return value is int ? (int?)(int)value : null;
-        }
-
         public KmdSnapshot Read()
         {
             var s = new KmdSnapshot();
             try
             {
-                using (var service = _hive.OpenSubKey(_subPath, false))
+                using (var state = DriverState.Open())
                 {
-                    if (service == null) return s;           // not installed: the normal case today, not an error
                     s.Installed = true;
-                    using (var parameters = service.OpenSubKey("Parameters", false))
-                    {
-                        if (parameters == null) return s;    // installed but never started
-                        s.Started = true;
-                        s.LastStage = AsInt(parameters.GetValue("LastStage"));
-                        s.UnconfirmedStarts = AsInt(parameters.GetValue("UnconfirmedStarts"));
-                        s.History = parameters.GetValue("StageHistory") as string;
-                    }
+                    s.LastStage = (int?)state.Read("", "LastStage", false).Require();
+                    s.UnconfirmedStarts = (int?)state.Read("", "UnconfirmedStarts", false).Require();
+                    s.History = (string)state.Read("", "StageHistory", false).Require();
+                    s.StartResult = (string)state.Read("StartRecord", "Result", false).Require();
+                    s.StartStep = (string)state.Read("StartRecord", "Step", false).Require();
+                    s.StartStatus = (int?)state.Read("StartRecord", "Status", false).Require();
+                    s.StartDetail = (string)state.Read("StartRecord", "Detail", false).Require();
+                    s.Started = s.LastStage.HasValue || s.History != null || s.StartResult != null;
                 }
+            }
+            catch (Win32Exception e)
+            {
+                if (e.NativeErrorCode == 1060) s.Installed = false;
+                else s.Error = e.Message;
             }
             catch (Exception e) { s.Error = e.Message; }
             return s;
         }
-
-        // .NET Framework RegistryKey.Flush ignores RegFlushKey's return value
-        // (Microsoft referencesource registrykey.cs). Check native persistence.
-        [DllImport("advapi32.dll", ExactSpelling = true)]
-        static extern int RegFlushKey(SafeRegistryHandle key);
-
-        /// <summary>Tell the driver that a human saw the desktop: UnconfirmedStarts = 0. Throws if it cannot.</summary>
+        /// <summary>Persist explicit confirmation. The native store checks its flush.</summary>
         public void Confirm()
         {
-            using (var service = _hive.OpenSubKey(_subPath, true))
-            {
-                if (service == null) throw new InvalidOperationException("bc250kmd is not installed (" + Path + ")");
-                // Writable CreateSubKey obtains read/write access, including
-                // KEY_QUERY_VALUE required by RegFlushKey.
-                using (var parameters = service.CreateSubKey("Parameters"))
-                {
-                    parameters.SetValue("UnconfirmedStarts", 0, RegistryValueKind.DWord);
-                    int error = RegFlushKey(parameters.Handle);
-                    if (error != 0) throw new Win32Exception(error, "Cannot persist UnconfirmedStarts = 0");
-                }
-            }
+            using (var state = DriverState.Open(true))
+                state.WriteDword("", "UnconfirmedStarts", 0);
         }
 
         public string Summary()
         {
             var s = Read();
-            if (!s.Installed) return "bc250kmd not installed (" + Path + ")";
-            if (s.Error != null) return "bc250kmd key unreadable: " + s.Error;
-            if (!s.Started) return "bc250kmd installed, never started (no Parameters key)";
+            if (s.Error != null) return "bc250kmd state unreadable: " + s.Error;
+            if (!s.Installed) return "bc250kmd not installed";
+            if (!s.Started) return "bc250kmd installed, no startup record";
             return string.Format(CultureInfo.InvariantCulture, "bc250kmd UnconfirmedStarts={0} of {1}, LastStage={2}, history {3}",
                 s.UnconfirmedStarts.HasValue ? s.UnconfirmedStarts.Value.ToString(CultureInfo.InvariantCulture) : "-",
                 KmdStages.MaxUnconfirmedStarts,
@@ -226,7 +168,7 @@ namespace Bc250Mon
             var p = new Panel { Name = Name, Title = "bc250kmd", Order = 30 };
             var s = _kmd.Read();
 
-            if (!s.Installed)
+            if (!s.Installed && s.Error == null)
             {
                 ResetAutoConfirmation();
                 // The normal state of the lab today. Say it once in the log, then stay quiet.
@@ -241,7 +183,7 @@ namespace Bc250Mon
             if (_wasInstalled == false) state.Log(Name, Level.Good, "the bc250kmd service key appeared");
             _wasInstalled = true;
 
-            p.Rows.Add(new Row("Driver", "installed", Level.Good));
+            p.Rows.Add(new Row("Driver", s.Installed ? "installed" : "state unavailable", s.Installed ? Level.Good : Level.Error));
             AddKeyRow(p);
             if (s.Error != null)
             {
@@ -257,7 +199,7 @@ namespace Bc250Mon
             if (!s.Started)
             {
                 ResetAutoConfirmation();
-                p.Rows.Add(new Row("Stage", "never started (no Parameters key)"));
+                p.Rows.Add(new Row("Stage", "no startup record"));
                 state.SetPanel(p);
                 return;
             }
@@ -265,6 +207,12 @@ namespace Bc250Mon
             p.Rows.Add(new Row("Stage", s.LastStage.HasValue ? KmdStages.Describe(s.LastStage.Value) : "-",
                                s.LastStage.HasValue && (s.LastStage.Value == 90 || s.LastStage.Value == 91) ? Level.Error : Level.Info));
             p.Rows.Add(new Row("History", KmdStages.Tail(s.History, 12)));
+            if (s.StartResult != null) {
+                bool failed = s.StartResult == "failed" || s.StartResult == "guard";
+                p.Rows.Add(new Row("Last start", s.StartResult + " / " + (s.StartStep ?? "-") +
+                    (s.StartStatus.HasValue ? " / 0x" + s.StartStatus.Value.ToString("X8") : ""), failed ? Level.Error : Level.Info));
+                if (failed && !string.IsNullOrEmpty(s.StartDetail)) p.Rows.Add(new Row("Reason", s.StartDetail, Level.Error));
+            }
 
             int starts = s.UnconfirmedStarts ?? 0;
             Level level = starts >= KmdStages.MaxUnconfirmedStarts ? Level.Error : starts >= 1 ? Level.Warn : Level.Good;

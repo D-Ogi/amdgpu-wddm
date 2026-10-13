@@ -110,7 +110,7 @@ static void RtlInitUnicodeString(UNICODE_STRING* s, PCWSTR t)
 
 static int g_Irql = PASSIVE_LEVEL;
 static int KeGetCurrentIrql(void) { return g_Irql; }
-static struct { PWSTR Buffer; } g_ParametersPath;
+static int stateReady; static int DriverStateReady(void){return stateReady;}
 
 // ---- the GuardLog ring, recorded so the self-check line can be asserted ---------------------------------------
 #define MAXLOGS 64
@@ -434,7 +434,7 @@ static void Reset(void)
     unconfirmed = 1; keepLog = 0; enableNativeSmu = 0; poolRefused = 0;
     ringTotal = 12; ringLongLines = 0; ringEmptyAt = -1; ringGrowOnStop = 0;
     wddmSubStep = NULL; g_Irql = PASSIVE_LEVEL;
-    g_ParametersPath.Buffer = (PWSTR)L"\\Registry\\Machine\\...\\Parameters";
+    stateReady = 1;
     ownerIdentity = &ownedPdo;
     dev.PhysicalDeviceObject = &ownedPdo;
     iface.Size = (ULONG)sizeof(iface);
@@ -673,7 +673,7 @@ int main(void)
     Reset(); g_Irql = DISPATCH_LEVEL;
     GuardRecordStartFailed(STATUS_ACCESS_DENIED);
     CHECK(opens == 0 && creates == 0 && writeOps == 0 && LoggedTimes("IRQL or no Parameters path") == 1);
-    Reset(); g_ParametersPath.Buffer = NULL;
+    Reset(); stateReady = 0;
     GuardRecordStartFailed(STATUS_ACCESS_DENIED);
     CHECK(opens == 0 && creates == 0 && writeOps == 0 && LoggedTimes("IRQL or no Parameters path") == 1);
     // A start that works answers exactly as before: no stop, two records, two flushes, nothing else.

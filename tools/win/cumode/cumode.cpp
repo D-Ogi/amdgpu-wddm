@@ -1,7 +1,7 @@
 // cumode - switch the BC-250 GPU between 24 compute units (the firmware's harvest, stock) and 40.
 //
 // The driver does the work at device start (driver/kmd/cumode.c, docs/design/cu-mode.md). This tool only
-//   - writes the setting (HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters: CuMode, CuDisableWgp),
+//   - writes CuMode and CuDisableWgp through the shared state client,
 //   - asks for the reboot that applies it, or, opt-in and for lab validation, restarts the display device,
 //   - confirms a 40 CU start once it has been healthy (BC250_ESCAPE_RUN_CU_MODE, OP_CONFIRM),
 //   - reports what the driver applied, the register values it read back, and the GPU temperature.
@@ -32,7 +32,7 @@ extern "C" {
 #include "../../../driver/shim/include/bc250_cu_mode.h"
 }
 
-static const wchar_t kParameters[] = L"SYSTEM\\CurrentControlSet\\Services\\bc250kmd\\Parameters";
+#include "cumode-state.h"
 static const wchar_t kHardwareId[] = L"PCI\\VEN_1002&DEV_13FE";
 static const wchar_t kWarning[] =
     L"40 CUs draw more power and heat than 24: the unlock's reference measured about +30 W at 1500 MHz. "
@@ -74,18 +74,15 @@ static const wchar_t* ReasonName(unsigned long reason)
     return reason < BC250_CU_REASON_COUNT ? kReason[reason] : L"(unknown reason)";
 }
 
-// ---- registry ---------------------------------------------------------------------------------------------------
+// ---- shared state ------------------------------------------------------------------------------------------------
 
-static bool ReadDword(const wchar_t* name, DWORD* value)
+static DWORD g_stateError;
+static bool ReadDword(const char* name, DWORD* value, bool effective = false)
 {
-    DWORD size = sizeof(*value);
-    *value = 0;
-    return RegGetValueW(HKEY_LOCAL_MACHINE, kParameters, name, RRF_RT_REG_DWORD, nullptr, value, &size) == ERROR_SUCCESS;
-}
-
-static LSTATUS WriteDword(HKEY key, const wchar_t* name, DWORD value)
-{
-    return RegSetValueExW(key, name, 0, REG_DWORD, reinterpret_cast<const BYTE*>(&value), sizeof(value));
+    bool present = false;
+    DWORD error = ReadCuStateDword(name, effective, value, &present);
+    if (error) { g_stateError = error; Say(L"state %S: Windows error %lu", name, error); }
+    return present;
 }
 
 static bool IsAdmin()
@@ -207,19 +204,21 @@ static void Flags(unsigned long flags, wchar_t* text, size_t size)
 static int Status()
 {
     DWORD mode = 0, disable = 0, pending = 0, confirmed = 0, lastApplied = 0, lastReason = 0, error = 0;
-    bool modeSet = ReadDword(L"CuMode", &mode);
-    bool disableSet = ReadDword(L"CuDisableWgp", &disable);
-    bool pendingSet = ReadDword(L"CuModePending", &pending);
-    bool confirmedSet = ReadDword(L"CuModeConfirmed", &confirmed);
-    bool lastSet = ReadDword(L"CuModeLastApplied", &lastApplied);
+    g_stateError = 0;
+    bool modeSet = ReadDword("CuMode", &mode, true);
+    bool disableSet = ReadDword("CuDisableWgp", &disable, true);
+    bool pendingSet = ReadDword("CuModePending", &pending);
+    bool confirmedSet = ReadDword("CuModeConfirmed", &confirmed);
+    bool lastSet = ReadDword("CuModeLastApplied", &lastApplied);
     std::wstring path;
     BC250_ESCAPE_CU_MODE data;
     wchar_t flags[160];
     long milliC = 0;
 
-    ReadDword(L"CuModeLastReason", &lastReason);
+    ReadDword("CuModeLastReason", &lastReason);
+    if (g_stateError) return 1;
     Say(L"setting      CuMode %s%lu, CuDisableWgp %s0x%05lX, pending %s0x%lX, confirmed %s0x%lX",
-        modeSet ? L"" : L"(absent) ", modeSet ? mode : 24ul, disableSet ? L"" : L"(absent) ", disable,
+        modeSet ? L"" : L"(absent) ", mode, disableSet ? L"" : L"(absent) ", disable,
         pendingSet ? L"" : L"(absent) ", pending, confirmedSet ? L"" : L"(absent) ", confirmed);
     if (lastSet) Say(L"last start   applied %lu, reason %lu (%s)", lastApplied, lastReason, ReasonName(lastReason));
     if (!FindAdapter(&path, false, &error)) {
@@ -244,35 +243,26 @@ static int Status()
     else Say(L"temperature  unavailable%s", IsAdmin() ? L"" : L" (needs an administrator)");
     if (data.Flags & BC250_CU_MODE_FLAG_PENDING)
         Say(L"note         40 CUs are pending: run `cumode confirm` once the desktop has run healthy for a minute.");
-    if ((modeSet ? mode : 24ul) != data.Applied)
+    if (mode != data.Applied)
         Say(L"note         the setting differs from this start: it applies at the next start (reboot).");
     return 0;
 }
 
 static int Set(unsigned long mode, bool haveDisable, unsigned long disable)
 {
-    HKEY key;
-    LSTATUS result;
+    DWORD result, rollbackError;
     if (mode != BC250_CU_MODE_STOCK && mode != BC250_CU_MODE_FULL) { Say(L"only 24 or 40"); return 2; }
     if (haveDisable && (mode != BC250_CU_MODE_FULL || disable >= (1ul << (BC250_CU_SA_MAX * BC250_CU_WGP_MAX)))) {
         Say(L"--disable is a 20-bit mask (bit sa * 5 + wgp) and only goes with 40");
         return 2;
     }
     if (!IsAdmin()) { Say(L"writing the setting needs an administrator"); return 1; }
-    result = RegOpenKeyExW(HKEY_LOCAL_MACHINE, kParameters, 0, KEY_SET_VALUE, &key);
-    if (result != ERROR_SUCCESS) { Say(L"cannot open the driver's Parameters key (error %ld): is bc250kmd installed?", result); return 2; }
-    result = WriteDword(key, L"CuMode", mode);
-    if (result == ERROR_SUCCESS)
-        result = haveDisable ? WriteDword(key, L"CuDisableWgp", disable) : RegDeleteValueW(key, L"CuDisableWgp");
-    if (result == ERROR_FILE_NOT_FOUND) result = ERROR_SUCCESS;
-    // A new request is confirmed on its own start, never by an older one's confirmation.
-    if (result == ERROR_SUCCESS) {
-        result = RegDeleteValueW(key, L"CuModeConfirmed");
-        if (result == ERROR_FILE_NOT_FOUND) result = ERROR_SUCCESS;
+    result = WriteCuState(mode, haveDisable, disable, &rollbackError);
+    if (result != ERROR_SUCCESS) {
+        Say(L"writing the setting failed (error %lu)", result);
+        if (rollbackError) Say(L"restoring the previous settings failed (error %lu)", rollbackError);
+        return 1;
     }
-    if (result == ERROR_SUCCESS) result = RegFlushKey(key);
-    RegCloseKey(key);
-    if (result != ERROR_SUCCESS) { Say(L"writing the setting failed (error %ld)", result); return 1; }
     Say(L"CuMode = %lu%s. It applies at the next start of the driver: reboot (`cumode reboot`).", mode,
         haveDisable ? L" with CuDisableWgp" : L"");
     if (mode == BC250_CU_MODE_FULL) Say(L"%s", kWarning);
@@ -281,11 +271,11 @@ static int Set(unsigned long mode, bool haveDisable, unsigned long disable)
 
 static int Apply()
 {
-    DWORD mode = 24;
+    DWORD mode = 0;
     std::wstring path;
     DWORD error;
     BC250_ESCAPE_CU_MODE data;
-    ReadDword(L"CuMode", &mode);
+    if (!ReadDword("CuMode", &mode, true)) return 1;
     if (FindAdapter(&path, false, &error) && NT_SUCCESS(CuModeEscape(path, &data, BC250_CU_MODE_OP_READ, 0)) &&
         data.Status == BC250_ESCAPE_STATUS_DONE && data.Applied == mode) {
         Say(L"this start already runs %lu CUs; nothing to apply.", mode);
@@ -377,9 +367,9 @@ static void Show(HWND window)
 
 static void Refresh(HWND window)
 {
-    DWORD mode = 24;
-    ReadDword(L"CuMode", &mode);
-    SendMessageW(g_mode24, BM_SETCHECK, mode == 40 ? BST_UNCHECKED : BST_CHECKED, 0);
+    DWORD mode = 0;
+    ReadDword("CuMode", &mode, true);
+    SendMessageW(g_mode24, BM_SETCHECK, mode == 24 ? BST_CHECKED : BST_UNCHECKED, 0);
     SendMessageW(g_mode40, BM_SETCHECK, mode == 40 ? BST_CHECKED : BST_UNCHECKED, 0);
     Status();
     Show(window);

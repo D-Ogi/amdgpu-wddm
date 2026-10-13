@@ -94,22 +94,27 @@ INSTALLATION_OWNED = (
 RUNTIME_VERSION_SETTING = "ReportAmdDriverVersion"
 SOFTWARE_KEY_PAGE = "install/opening-a-device-s-software-key.md:33-46"
 
-LINE = re.compile(r"^\s*HKR\s*,\s*Parameters\s*,\s*([A-Za-z0-9_]+)\s*,\s*(0x[0-9A-Fa-f]+)\s*,\s*(.*?)\s*$")
+LINE = re.compile(r"^\s*HKR\s*,\s*Parameters\s*,\s*([A-Za-z0-9_]+)\s*,\s*(0x[0-9A-Fa-f]+)\s*,\s*(.*?)\s*$", re.I)
+DEFAULT_LINE = re.compile(r"^\s*HKR\s*,\s*Parameters\\DefaultsV2\s*,\s*([A-Za-z0-9_]+)\s*,\s*(0x[0-9A-Fa-f]+)\s*,\s*(.*?)\s*$", re.I)
 # Any AddReg line, whatever root and subkey it writes: HKR, HKLM, HKCU, HKCR, HKU.
 ADDREG = re.compile(r"^\s*HK(?:R|LM|CU|CR|U)\s*,[^,]*,\s*([A-Za-z0-9_]+)\s*,")
 
 
 def read_inf(path):
-    """Every HKR,Parameters line of the INF: name -> (flags, value text, line number)."""
+    """Legacy settings or schema-2 immutable defaults, excluding metadata."""
     rows = {}
     duplicate = []
-    for number, text in enumerate(path.read_text(encoding="ascii").splitlines(), 1):
+    contents = path.read_text(encoding="ascii")
+    pattern = DEFAULT_LINE if '[AmdgpuStateDefaults]' in contents else LINE
+    for number, text in enumerate(contents.splitlines(), 1):
         if text.lstrip().startswith(";"):
             continue
-        m = LINE.match(text)
+        m = pattern.match(text)
         if not m:
             continue
         name = m.group(1)
+        if pattern is DEFAULT_LINE and name.lower() in ('schema', 'catalogid', 'packageproductversion'):
+            continue
         if name in rows:
             duplicate.append("%s: written twice, lines %d and %d" % (name, rows[name][2], number))
         rows[name] = (int(m.group(2), 16), m.group(3), number)
@@ -191,6 +196,8 @@ def check_installation_state(inf_path, defaults_path):
 
 def check(inf_path, defaults_path):
     """Every failure as one line, oldest decision first. An empty list is a pass."""
+    if '[AmdgpuStateDefaults]' in inf_path.read_text(encoding='ascii'):
+        return check_state_v2(inf_path, defaults_path)
     rows, failures = read_inf(inf_path)
     if not rows:
         return ["%s: no HKR,Parameters line found" % inf_path]
@@ -256,15 +263,60 @@ def check(inf_path, defaults_path):
     return failures
 
 
+def check_state_v2(inf_path, defaults_path):
+    """Only immutable catalog defaults in P; no installation writes of runtime S."""
+    import importlib.util
+    recipe = pathlib.Path(__file__).resolve().parents[1] / 'state' / 'generate.py'
+    module_spec = importlib.util.spec_from_file_location('state_generator', recipe)
+    generator = importlib.util.module_from_spec(module_spec)
+    module_spec.loader.exec_module(generator)
+    catalog = generator.load(generator.ROOT / 'driver/state/catalog.json')
+    expected = generator.render(catalog)['driver/state/defaults.generated.inf'].decode('ascii')
+    text = inf_path.read_text(encoding='ascii')
+    begin, end = '; BEGIN GENERATED STATE DEFAULTS\n', '; END GENERATED STATE DEFAULTS'
+    failures = check_installation_state(inf_path, defaults_path)
+    generated = ''
+    if text.count(begin) != 1 or text.count(end) != 1:
+        failures.append('Missing or repeated generated immutable-defaults section')
+    else:
+        start = text.index(begin) + len(begin)
+        stop = text.index(end, start)
+        generated = text[start:stop]
+        if text[start:stop] != expected:
+            failures.append('Immutable state defaults differ from the generated catalog')
+    for line in text.splitlines():
+        if line.lstrip().startswith(';'): continue
+        if LINE.match(line): failures.append('INF writes mutable legacy Parameters state: ' + line)
+    # Repeating a generated row outside the block can override the catalog.
+    outside = text.replace(generated, '', 1) if generated else text
+    for line in outside.splitlines():
+        if DEFAULT_LINE.match(line): failures.append('Immutable defaults written outside generated section: ' + line)
+    release = read_defaults(defaults_path)
+    defaults = {s['name']:s['factory'] for s in catalog['values'] if s['factory'] is not None}
+    if release != defaults: failures.append('Release defaults differ from the state catalog')
+    for pattern, why in (
+        (r'(?m)^amdgpu-state\.bin\s*=\s*1\s*$', 'state catalog source file'),
+        (r'(?m)^amdgpu-state\.bin\s*$', 'state catalog CopyFiles entry'),
+        (r'(?m)^HKR,, AmdgpuStateCatalog, 0x00000000, "%13%\\amdgpu-state\.bin"\s*$', 'Driver Store catalog pointer'),
+        (r'(?m)^PackageProductVersion\s*=\s*"(?:\d+\.){3}\d+"\s*$', 'product version string')):
+        if len(re.findall(pattern,text)) != 1: failures.append('Expected one ' + why)
+    return failures
+
+
 def report(inf_path, defaults_path, rows, defaults):
     """One line per setting, for the gate's log."""
     out = ["%-28s %-10s %-8s %s" % ("setting", "INF flags", "INF", "release default")]
+    immutable = '[AmdgpuStateDefaults]' in inf_path.read_text(encoding='ascii')
+    if immutable:
+        out.insert(0, 'Schema 2: immutable DefaultsV2; runtime overrides are held in shared driver state.')
     for name in sorted(set(rows) | set(defaults)):
         flags = "0x%08X" % rows[name][0] if name in rows else "-"
         written = rows[name][1] if name in rows else "-"
         default = defaults[name] if name in defaults else "-"
         note = ""
-        if name in UNCONDITIONAL:
+        if immutable:
+            note = '  immutable factory default'
+        elif name in UNCONDITIONAL:
             note = "  every install writes it: " + UNCONDITIONAL[name]
         elif name in NOT_IN_TABLE:
             note = "  not a release default: " + NOT_IN_TABLE[name]

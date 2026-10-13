@@ -2,12 +2,16 @@
 #include "bc250kmd.h"
 #include "adapter_owner.h"
 #include "hdmi_link.h"
+#include "state_kernel.h"
 
 NTSTATUS Bc250AddDevice(_In_ const PDEVICE_OBJECT PhysicalDeviceObject, _Outptr_ PVOID* MiniportDeviceContext)
 {
     BC250_DEVICE* device;
+    NTSTATUS stateStatus;
 
     *MiniportDeviceContext = NULL;
+    stateStatus=DriverStateValidateDevice(PhysicalDeviceObject);
+    if(!NT_SUCCESS(stateStatus))return stateStatus;
     if (!AdapterOwnerClaim(PhysicalDeviceObject)) return STATUS_DEVICE_BUSY;
     device = (BC250_DEVICE*)ExAllocatePool2(POOL_FLAG_NON_PAGED, sizeof(*device), BC250_TAG);
     if (device == NULL) {

@@ -60,16 +60,23 @@ Check ($staged.Count -eq 9 -and (Test-FirmwareFolder $fw $download).Count -eq 0)
 
 [IO.File]::Copy((Join-Path $repo 'driver\kmd\bc250kmd.inf'), (Join-Path $kmd 'bc250kmd.inf'))
 [IO.File]::Copy($SysFile, (Join-Path $kmd 'bc250kmd.sys'))
+[IO.File]::Copy((Join-Path $repo 'driver\state\amdgpu-state.bin'), (Join-Path $kmd 'amdgpu-state.bin'))
 $inf2cat = Join-Path $Kits "microsoft.windows.wdk.x64\c\bin\$KitVersion\x86\Inf2Cat.exe"
 # A public package lacks the eight binaries; the OS package must not be signed
 # or staged in that state. Check the actual catalog generator, then hydrate it.
 & $inf2cat "/driver:$kmd" '/os:10_X64' *> (Join-Path $case 'incomplete.log')
 Check ($LASTEXITCODE -ne 0) 'catalog generation refuses missing firmware'
 Copy-DriverStoreFirmware $fw $source $kmd
+$stateBin=Join-Path $kmd 'amdgpu-state.bin'
+[IO.File]::Move($stateBin,($stateBin+'.held'))
+try {
+    & $inf2cat "/driver:$kmd" '/os:10_X64' *> (Join-Path $case 'missing-state.log')
+    Check ($LASTEXITCODE -ne 0) 'catalog generation refuses missing state catalog'
+} finally { [IO.File]::Move(($stateBin+'.held'),$stateBin) }
 & $inf2cat "/driver:$kmd" '/os:10_X64' *> (Join-Path $case 'complete.log')
 Check ($LASTEXITCODE -eq 0) "complete Driver Store package catalog: $(Join-Path $case 'complete.log')"
-Test-DriverCatalogMembers $kmd (@('bc250kmd.inf', 'bc250kmd.sys') + @(Get-DriverStoreFirmwareNames))
-Check $true 'catalog contains actual INF, SYS and all eight pinned files'
+Test-DriverCatalogMembers $kmd (@('bc250kmd.inf', 'bc250kmd.sys','amdgpu-state.bin') + @(Get-DriverStoreFirmwareNames))
+Check $true 'catalog contains actual INF, SYS, state catalog and all eight pinned files'
 $cat = Join-Path $kmd 'bc250kmd.cat'
 $changed = Join-Path $case 'changed.bin'
 [IO.File]::Copy((Join-Path $source 'cyan_skillfish2_ce.bin'), $changed)
@@ -77,19 +84,19 @@ $changed = Join-Path $case 'changed.bin'
 Check (-not [AmdgpuWddm.CatalogMembership]::Contains($cat, $changed)) 'catalog refuses changed firmware bytes'
 Check (-not [AmdgpuWddm.CatalogMembership]::Contains($cat, (Join-Path $source 'LICENSE.amdgpu'))) 'catalog refuses nonmember'
 
-$manifest = [pscustomobject]@{ firmware = $fw; files = @('bc250kmd.inf', 'bc250kmd.sys', 'bc250kmd.cat' | ForEach-Object {
+$manifest = [pscustomobject]@{ firmware = $fw; files = @('bc250kmd.inf', 'bc250kmd.sys', 'bc250kmd.cat','amdgpu-state.bin' | ForEach-Object {
     $p = Join-Path $kmd $_
     [pscustomobject]@{ path = "payload/kmd/$_"; size = (Get-Item -LiteralPath $p).Length; sha256 = Get-Sha256 $p }
 }) }
 # Model the public ZIP: exact INF/CAT, no firmware. Delete fixed known leaves only.
 foreach ($name in Get-DriverStoreFirmwareNames) { Remove-Item -LiteralPath (Join-Path $kmd $name) }
-Check (@(Get-ChildItem -LiteralPath $kmd -File).Count -eq 3) 'public payload has only INF, SYS and CAT'
+Check (@(Get-ChildItem -LiteralPath $kmd -File).Count -eq 4) 'public payload has INF, SYS, CAT and state catalog'
 $package = Join-Path $case 'package'
 $scope = New-HydratedDriverPackage $manifest $package $source $parent
 $stagePath = $scope.DirectoryPath
 try {
-    Check (@(Get-ChildItem -LiteralPath $stagePath -File).Count -eq 11) 'held hydration has exactly eleven files'
-    foreach ($name in @('bc250kmd.inf', 'bc250kmd.sys', 'bc250kmd.cat') + @(Get-DriverStoreFirmwareNames)) {
+    Check (@(Get-ChildItem -LiteralPath $stagePath -File).Count -eq 12) 'held hydration has exactly twelve files'
+    foreach ($name in @('bc250kmd.inf', 'bc250kmd.sys', 'bc250kmd.cat','amdgpu-state.bin') + @(Get-DriverStoreFirmwareNames)) {
         $p = Join-Path $stagePath $name
         Refuses { [IO.File]::Open($p, 'Open', 'Write', 'ReadWrite').Dispose() } "sealed file rejects write: $name"
         Refuses { [IO.File]::Delete($p) } "sealed file rejects delete: $name"
@@ -98,6 +105,8 @@ try {
     Refuses { $scope.Copy($changed, 'another.bin', (Get-Item -LiteralPath $changed).Length) } 'sealed stage rejects new members'
 } finally { $scope.Dispose() }
 Check (-not (Test-Path -LiteralPath $stagePath)) 'disposing scope removes only its private files'
+$bad=Clone $manifest;$bad.files=@($bad.files | Where-Object {$_.path -cne 'payload/kmd/amdgpu-state.bin'})
+Refuses {New-HydratedDriverPackage $bad $package $source $parent} 'state catalog cannot be omitted from manifest'
 $bad = Clone $manifest; $bad.files[0].sha256 = '0' * 64
 Refuses { New-HydratedDriverPackage $bad $package $source $parent } 'tampered INF hash refuses hydration'
 Check (@(Get-ChildItem -LiteralPath $parent -Force).Count -eq 0) 'failed hydration cleans its own directory'

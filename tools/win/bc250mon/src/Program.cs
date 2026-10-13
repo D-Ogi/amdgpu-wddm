@@ -15,7 +15,7 @@ namespace Bc250Mon
             using (new Mutex(true, @"Global\bc250mon", out first))
             {
                 if (!first) return;
-                // bc250mon [data directory] [--kmd-key HKLM\...|HKCU\...]
+                // bc250mon [data directory]. Reject retired registry overrides below.
                 string dataDir = @"C:\BC250\mon", kmdKey = Environment.GetEnvironmentVariable("BC250MON_KMD_KEY");
                 for (int i = 0; i < argv.Length; i++)
                 {
@@ -27,8 +27,7 @@ namespace Bc250Mon
                 AppDomain.CurrentDomain.UnhandledException += (s, e) => state.Log("fatal", Level.Error, Convert.ToString(e.ExceptionObject));
 
                 var driver = new Driver();
-                // --kmd-key (or BC250MON_KMD_KEY) points the KMD provider at another registry key: a debug switch
-                // that lets the "installed" paths be exercised where no such service exists (see KmdProvider).
+                // Nonempty legacy registry overrides fail explicitly. State tests inject a fake client.
                 var kmd = new KmdRegistry(kmdKey);
                 // The pipeline provider is built before the action table, because "graphics.summary" asks it for
                 // one KMD log summary (nothing asks for one on a schedule any more, C55).

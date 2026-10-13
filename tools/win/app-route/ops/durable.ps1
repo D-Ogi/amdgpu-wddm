@@ -23,24 +23,9 @@ function Flush-ExistingFile {
 }
 function Set-DurablePresentGates {
  param([ValidateSet(0,1)][int]$Value)
- if(-not ('BC250TrialRegistryFlush' -as [type])) {
-  Add-Type -TypeDefinition 'using System;
-using System.Runtime.InteropServices;
-using Microsoft.Win32.SafeHandles;
-public static class BC250TrialRegistryFlush {
- [DllImport("advapi32.dll", ExactSpelling=true)]
- public static extern int RegFlushKey(SafeRegistryHandle key);
-}'
- }
- $key=[Microsoft.Win32.Registry]::LocalMachine.OpenSubKey('SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters',$true)
- if(!$key){throw 'Driver registry key absent'}
- try {
-  $key.SetValue('EnableGpuPresentBlit',$Value,[Microsoft.Win32.RegistryValueKind]::DWord)
-  $key.SetValue('EnableCddDwmInterop',$Value,[Microsoft.Win32.RegistryValueKind]::DWord)
-  $errorCode=[BC250TrialRegistryFlush]::RegFlushKey($key.Handle)
-  if($errorCode -ne 0){throw "RegFlushKey failed: $errorCode"}
-  if($key.GetValue('EnableGpuPresentBlit') -ne $Value -or $key.GetValue('EnableCddDwmInterop') -ne $Value){throw 'Gate readback mismatch'}
- } finally {$key.Dispose()}
+ # No current app-route caller needs this old global gate mutation. Keeping the
+ # name as a refusal also stops previously staged callers from writing stale P.
+ throw 'Set-DurablePresentGates is retired. Use the installed control app to change the desktop route.'
 }
 
 function Restore-DurableBaseline {

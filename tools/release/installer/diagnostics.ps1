@@ -26,7 +26,7 @@
 #      System log and from Microsoft-Windows-DxgKrnl in its own two channels: errors and warnings, and DxgKrnl's
 #      information entries as well, bounded in count;
 #   5. the setupapi.dev.log sections whose header names the GPU's hardware id, the newest ones, bounded;
-#   6. the files of C:\BC250\kmdlog when that folder exists, newest first, bounded.
+#   6. the files of the service shared Logs directory, newest first, bounded.
 #
 # Bounds and the rule that keeps this harmless: the whole collection has 20 s and 4 MiB. A section that passes the
 # budget, is cut by the size bound or fails altogether writes that fact into the file as a line of its own. Nothing
@@ -47,8 +47,7 @@ $script:DiagnosticsBudgetSeconds = 20
 # ("the bc250kmd service failed to start", "boot-start driver did not load"): the KMD writes no event-log entry of
 # its own today (no IoAllocateErrorLogEntry, IoWriteErrorLogEntry or EventWrite anywhere in driver/kmd), so a
 # bc250kmd provider row could only ever answer "there is no such provider on this computer".
-# test-diagnostics.ps1 holds every row of this list against Get-WinEvent -ListProvider of this computer, so a log a
-# provider does not write to cannot come back unnoticed.
+# Host fixtures inject provider metadata and events; they never read host logs.
 $script:DiagnosticsEventSources = @(
     [ordered]@{ log = 'System';                                levels = @(1, 2, 3);    provider = 'Display' }
     [ordered]@{ log = 'Microsoft-Windows-DxgKrnl-Admin';        levels = @(1, 2, 3, 4); provider = 'Microsoft-Windows-DxgKrnl' }
@@ -228,9 +227,13 @@ function Add-DiagnosticsLines {
 # BootId: a stop that a confirmed start preceded writes nothing, so a record of an older boot survives a healthy
 # install and must be named as that boot's and not as this one's.
 function Get-DiagnosticsRecordLines {
-    param([Parameter(Mandatory)]$Root, [Parameter(Mandatory)][string]$ParametersSubKey, [Parameter(Mandatory)][string]$SubKey,
-          [AllowNull()]$BootUtc, [AllowNull()]$BootId, [AllowNull()][string]$BootIdSource, [switch]$StartRecord)
-    $k = $Root.OpenSubKey("$ParametersSubKey\$SubKey")
+    param([Parameter(Mandatory)]$Root, [Parameter(Mandatory)][AllowEmptyString()][string]$ParametersSubKey, [Parameter(Mandatory)][string]$SubKey,
+          [AllowNull()]$BootUtc, [AllowNull()]$BootId, [AllowNull()][string]$BootIdSource, [switch]$StartRecord,
+          [scriptblock]$StateRunner)
+    # Explicit fixture roots remain supported by CPU-only diagnostic tests.
+    # Production obtains its records only through the common state resolver.
+    $k = if($ParametersSubKey) {$Root.OpenSubKey("$ParametersSubKey\$SubKey")}
+         else {Open-DriverStateRecordView -Path $SubKey -Runner $StateRunner}
     if (-not $k) { return @("$SubKey : absent") }
     try {
         $lines = New-Object Collections.ArrayList
@@ -321,12 +324,13 @@ function Get-DiagnosticsWindowsLines {
 # computer does not know (a driver that writes no event-log entry has no provider here, which is not a failure).
 function Get-DiagnosticsEventLines {
     param([Parameter(Mandatory)][string]$Provider, [string]$Log = 'System', [int[]]$Levels = @(1, 2, 3), [AllowNull()]$BootUtc,
-          [int]$Max = $script:DiagnosticsMaxEventsPerProvider)
+          [int]$Max = $script:DiagnosticsMaxEventsPerProvider,[scriptblock]$EventReader)
     $label = "$Provider in $Log"
     $filter = @{ LogName = $Log; ProviderName = $Provider; Level = $Levels }
     if ($null -ne $BootUtc) { $filter['StartTime'] = ([datetime]$BootUtc).ToLocalTime() }
     $events = $null
-    try { $events = @(Get-WinEvent -FilterHashtable $filter -MaxEvents $Max -ErrorAction Stop) }
+    if(-not $EventReader){$EventReader={param($query,$limit) Get-WinEvent -FilterHashtable $query -MaxEvents $limit -ErrorAction Stop}}
+    try { $events = @(& $EventReader $filter $Max) }
     catch {
         $why = [string]$_.Exception.Message
         if ($why -match 'No events were found') { return @("$label : no entry of levels $($Levels -join ',') in this boot") }
@@ -424,14 +428,14 @@ function Write-StartFailureDiagnostics {
         # Where $BootId was read: 'KUSER_SHARED_DATA' or 'PrefetchParameters registry' (Get-StartRecordBootIdSource).
         [AllowNull()][string]$BootIdSource,
         $Root = [Microsoft.Win32.Registry]::LocalMachine,
-        [string]$ParametersSubKey = 'SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters',
+        [string]$ParametersSubKey = '',
         [string]$HardwareId = 'PCI\VEN_1002&DEV_13FE',
         [string]$SetupApiLog = (Join-Path $env:windir 'INF\setupapi.dev.log'),
-        [string]$KmdLogDir = 'C:\BC250\kmdlog',
+        [string]$KmdLogDir = '',
         [AllowNull()]$EventSources = $null,
         [int]$BudgetSeconds = $script:DiagnosticsBudgetSeconds,
         [int]$MaxBytes = $script:DiagnosticsMaxBytes,
-        [string]$Context = ''
+        [string]$Context = '',[scriptblock]$EventReader,[scriptblock]$WindowsReader
     )
     $clock = [Diagnostics.Stopwatch]::StartNew()
     $sink = New-DiagnosticsSink -MaxBytes $MaxBytes
@@ -474,7 +478,7 @@ function Write-StartFailureDiagnostics {
     foreach ($r in @($Decision.notes)) { [void](Add-DiagnosticsLine -Sink $sink -Text "note: $r") }
 
     Add-Section 'the driver device' { Get-DiagnosticsDeviceLines -State $DeviceState }
-    Add-Section 'this Windows' { Get-DiagnosticsWindowsLines -Root $Root -InstanceId $(if ($null -ne $DeviceState) { [string]$DeviceState.instance_id } else { $null }) }
+    Add-Section 'this Windows' { if($WindowsReader){& $WindowsReader}else{Get-DiagnosticsWindowsLines -Root $Root -InstanceId $(if ($null -ne $DeviceState) { [string]$DeviceState.instance_id } else { $null })} }
     Add-Section 'the start record' { Get-DiagnosticsRecordLines -Root $Root -ParametersSubKey $ParametersSubKey -SubKey $script:StartRecordKey -BootUtc $BootUtc -StartRecord }
     Add-Section 'the stop record' { Get-DiagnosticsRecordLines -Root $Root -ParametersSubKey $ParametersSubKey -SubKey $script:StopRecordKey -BootUtc $BootUtc -BootId $BootId -BootIdSource $BootIdSource }
     Add-Section 'the event logs of this boot' {
@@ -483,7 +487,7 @@ function Write-StartFailureDiagnostics {
         foreach ($s in @($EventSources)) {
             if ($clock.Elapsed.TotalSeconds -ge $BudgetSeconds) { [void]$out.Add("[the $BudgetSeconds s budget ran out: the sources after $($s.provider) were not read]"); break }
             $log = $(if ($s.log) { [string]$s.log } else { 'System' })
-            foreach ($l in (Get-DiagnosticsEventLines -Provider ([string]$s.provider) -Log $log -Levels @($s.levels) -BootUtc $BootUtc)) { [void]$out.Add($l) }
+            foreach ($l in (Get-DiagnosticsEventLines -Provider ([string]$s.provider) -Log $log -Levels @($s.levels) -BootUtc $BootUtc -EventReader $EventReader)) { [void]$out.Add($l) }
         }
         return @($out)
     }
@@ -496,7 +500,10 @@ function Write-StartFailureDiagnostics {
         foreach ($s in @($r.sections)) { foreach ($l in @($s)) { [void]$out.Add([string]$l) } }
         return @($out)
     }
-    Add-Section "the driver's own log folder" { Get-DiagnosticsKmdLogLines -Directory $KmdLogDir }
+    Add-Section "the driver's own log folder" {
+        $directory=if($KmdLogDir){$KmdLogDir}else{(Read-DriverStatePaths).logs}
+        Get-DiagnosticsKmdLogLines -Directory $directory
+    }
 
     [void](Add-DiagnosticsLine -Sink $sink -Text '')
     [void](Add-DiagnosticsLine -Sink $sink -Text "== the collection ==")

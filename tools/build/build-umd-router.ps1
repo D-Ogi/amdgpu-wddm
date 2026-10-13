@@ -55,9 +55,21 @@ try {
     $opt = @('/O2', '/GL', '/arch:AVX2')
     Push-Location $OutputDir
     try {
+        $stateObjects = @(& "$repo\tools\state\build-objects.ps1" -Compiler 'cl.exe' -Out "$obj\state" -Flags ($opt + @($crt) + $repro))
         $front = @("$src\front-adapter.cpp", "$src\front-device.cpp", "$src\front-dxgi.cpp")
-        & cl.exe /nologo @opt $crt /W4 /WX /Zi /LD @repro "/Fo$obj\" "/Fd$obj\router-vc.pdb" "$src\router.cpp" @front "/Fe:$OutputDir\bc250d3d_router.dll" /link /Brepro /LTCG /DEBUG /OPT:REF /OPT:ICF "/PDB:$OutputDir\bc250d3d_router.pdb" '/PDBALTPATH:%_PDB%'
+        & cl.exe /nologo @opt $crt /W4 /WX /Zi /LD @repro "/Fo$obj\" "/Fd$obj\router-vc.pdb" "$src\router.cpp" @front @stateObjects "/Fe:$OutputDir\bc250d3d_router.dll" /link /Brepro /LTCG /DEBUG /OPT:REF /OPT:ICF "/PDB:$OutputDir\bc250d3d_router.pdb" '/PDBALTPATH:%_PDB%' onecore.lib uuid.lib setupapi.lib advapi32.lib
         if ($LASTEXITCODE -ne 0) { throw 'router build failed' }
+        # The existing private-hive gate needs a state boundary double: SCM state
+        # is not redirected by RegOverridePredefKey. Never ship this test DLL.
+        $fixtureObj = Join-Path $obj 'fixture'
+        New-Item -ItemType Directory -Force $fixtureObj | Out-Null
+        & cl.exe /nologo @opt $crt /W4 /WX /LD @repro /DBC250_ROUTER_STATE_FIXTURE "/Fo$fixtureObj\" "$src\router.cpp" @front "$src\tests\state-fixture.cpp" "/Fe:$OutputDir\bc250d3d_router-test.dll" /link /Brepro /LTCG advapi32.lib
+        if ($LASTEXITCODE -ne 0) { throw 'router test fixture build failed' }
+
+        & cl.exe /nologo /O2 $crt /W4 /WX @repro "/Fo$obj\host\state-test.obj" "$src\tests\test-state.cpp" "/Fe:$OutputDir\test-state.exe" /link /Brepro
+        if ($LASTEXITCODE -ne 0) { throw 'router state test build failed' }
+        & "$OutputDir\test-state.exe"
+        if ($LASTEXITCODE -ne 0) { throw 'router state test failed' }
         # The doubles: one source, a tag per role (cpu, hosted, app), one without OpenAdapter10_2, one that fails.
         $doubles = @(
             @('fake-cpu', @('/DFAKE_TAG=0xC0')),
@@ -72,6 +84,21 @@ try {
         }
         & cl.exe /nologo @opt $crt /W4 /WX /EHsc /std:c++17 @repro "/I$contract" "/Fo$obj\host\" "$src\tests\test-router.cpp" @front "/Fe:$OutputDir\test-router.exe" /link /Brepro /LTCG
         if ($LASTEXITCODE -ne 0) { throw 'test-router build failed' }
+        # These cases use only UMD doubles and a private hive. None runs as dwm.exe,
+        # publishes a desktop-route record, opens an adapter or starts a window.
+        $fixture = Join-Path $OutputDir ('quality\state-fixture-' + [Guid]::NewGuid().ToString('N'))
+        foreach ($dir in 'router','cpu','hives','routelogs') {
+            New-Item -ItemType Directory -Force (Join-Path $fixture $dir) | Out-Null
+        }
+        Copy-Item -LiteralPath "$OutputDir\bc250d3d_router-test.dll" -Destination "$fixture\router\bc250d3d_router.dll"
+        Copy-Item -LiteralPath "$OutputDir\fake-hosted.dll" -Destination "$fixture\router\bc250d3d_zink.dll"
+        Copy-Item -LiteralPath "$OutputDir\fake-cpu.dll" -Destination "$fixture\cpu\bc250d3d.dll"
+        foreach ($case in 'route-kill-switch','route-switches-off','route-switches-absent',
+            'route-latched-on','route-latched-closed','route-latched-partial','route-latched-wrong-type',
+            'route-switches-not-required','route-require-wrong-type') {
+            & "$OutputDir\test-router.exe" child $case $fixture
+            if ($LASTEXITCODE -ne 0) { throw "router state fixture failed: $case" }
+        }
         $machine = (& dumpbin.exe /nologo /headers bc250d3d_router.dll | Select-String 'machine \(') -join ' '
         $want = if ($Arch -eq 'x86') { '14C machine (x86)' } else { '8664 machine (x64)' }
         Write-Host "header: $machine"

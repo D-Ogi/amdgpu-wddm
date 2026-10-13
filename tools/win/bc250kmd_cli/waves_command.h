@@ -1,9 +1,10 @@
-/* Included by the CLI and the host test with adapter/registry calls replaced. */
+/* Included by the CLI and the host test with adapter/state calls replaced. */
 #ifndef BC250_CLI_WAVES_COMMAND_H
 #define BC250_CLI_WAVES_COMMAND_H
 #include <errno.h>
 #include <stdlib.h>
 #include "wave_decode.h"
+#include "../../../driver/state/client.h"
 
 static int WavesIsAdministrator(void)
 {
@@ -59,13 +60,18 @@ static int WavesCommand(int argc, WCHAR **argv)
     snapshot = &request->Snapshot;
     bytes = sizeof(*snapshot);
     if (saved) {
-        DWORD type = 0;
-        LSTATUS status = RegGetValueW(HKEY_LOCAL_MACHINE, BC250_PARAMETERS L"\\HangRecovery\\Waves", L"Snapshot",
-                                      RRF_RT_REG_BINARY, &type, snapshot, &bytes);
-        if (status != ERROR_SUCCESS || type != REG_BINARY) {
-            fprintf(stderr, "waves saved: RegGetValue Waves/Snapshot error=%ld type=%lu bytes=%lu\n", status, type, bytes);
+        AMDGPU_WINDOWS_STATE *state = NULL;
+        AMDGPU_STATE_VALUE value = { 0 };
+        DWORD status = AmdgpuClientOpen(&state, 0);
+        if (status == ERROR_SUCCESS)
+            status = AmdgpuClientRead(state, "HangRecovery\\Waves", "Snapshot", 0, &value, snapshot, bytes);
+        AmdgpuClientClose(state);
+        if (status != ERROR_SUCCESS || value.status != AMDGPU_STATE_OK || value.type != AMDGPU_STATE_BINARY) {
+            fprintf(stderr, "waves saved: state read error=%lu status=%u type=%u bytes=%u\n",
+                    status, value.status, value.type, value.bytes);
             goto out;
         }
+        bytes = value.bytes;
     } else {
         D3DKMT_HANDLE adapter = 0;
         D3DKMT_ESCAPE escape = { 0 };

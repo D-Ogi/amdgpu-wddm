@@ -76,7 +76,7 @@ NTSTATUS DriverEntry(_In_ PDRIVER_OBJECT DriverObject, _In_ PUNICODE_STRING Regi
 {
     NTSTATUS status;
 
-    status = GuardInit(RegistryPath);
+    status = GuardInit(DriverObject);
     if (!NT_SUCCESS(status)) return status;
     status = PspDriverInit(DriverObject);
     if (!NT_SUCCESS(status)) {

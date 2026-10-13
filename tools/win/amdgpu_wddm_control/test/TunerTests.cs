@@ -387,7 +387,7 @@ static partial class UnitTests
         Check(enable.Undoable, "that one is undoable");
         Check(PlainPlan.LineId(enable.Writes[0]) != null, "G-PLAN: the switch has a plain sentence");
         var disable = TunePlan("cpu-disable", s);
-        Check(!disable.Refused && Writes(disable, "CpuTune-"), "turning it off removes the value");
+        Check(!disable.Refused && Writes(disable, "CpuTune=0"), "turning it off overrides the factory-on default with zero");
         Refused(TunePlan("cpu-enable", s), "on already", "turning it on twice");
         Refused(TunePlan("cpu-disable", noTune), "off already", "turning it off twice");
 
@@ -471,6 +471,22 @@ static partial class UnitTests
     // away before, which the lab saw on 2026-10-13. c and u: the tuned curve and processor of TunerStandardSteps.
     static void TunerResetCpuTune(CurveState c, CpuState u)
     {
+        foreach (long raw in new long[] { 0, 1 })
+        {
+            var current = Tuned();
+            current.StateSchema = 2;
+            current.Parameters["CpuTune"] = raw;
+            current.DefaultParameters["CpuTune"] = 1;
+            current.ParameterOverrides = new Dictionary<string, long> { { "CpuTune", raw } };
+            var reset = TunePlan("reset-defaults", current, new Recovery.PlanArgs { Games = "keep" });
+            Check(!reset.Refused && reset.Writes.Any(w => w.Name == "CpuTune" && w.Delete),
+                "state v2 reset removes even an override equal to the factory default");
+            Check(reset.Writes.Where(w => Recovery.DefaultParameterNames.Contains(w.Name)).All(w => w.Delete),
+                "state v2 reset clears overrides instead of pinning a copy of package defaults");
+            current.ParameterOverrides = null;
+            Check(TunePlan("reset-defaults", current, new Recovery.PlanArgs { Games = "keep" }).Refused,
+                "state v2 reset refuses an unreadable override snapshot");
+        }
         var on = Strings.T("plan.line.cpu-tune-on");
         var off = Strings.T("plan.line.cpu-tune-off");
         var setOne = @"set HKLM\" + Recovery.ParametersPath + " CpuTune = 1 (DWord)";

@@ -9,7 +9,9 @@ param([string[]]$Names = @('FanLoadBoost', 'ReportAmdDriverVersion', 'EnableRing
 $ErrorActionPreference = 'Continue'
 $inst = [string](Get-ItemProperty 'HKLM:\SOFTWARE\amdgpu-wddm\Release' -Name InstallRoot).InstallRoot
 $cli = Join-Path $inst 'tools\bc250kmd_cli.exe'
-$par = 'HKLM:\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters'
+$stateReader = Join-Path $inst 'tools\state-reader.ps1'
+if (-not (Test-Path -LiteralPath $stateReader)) { throw 'This train validator requires the schema-2 state reader' }
+. $stateReader
 "install root $inst"
 '--- driver version the running KMD reports'
 (& $cli version 2>&1) | ForEach-Object { '  ' + $_ }
@@ -26,12 +28,12 @@ foreach ($d in $store) {
     if (Test-Path -LiteralPath $inf) { (Get-Content -LiteralPath $inf | Select-String '^DriverVer') | ForEach-Object { '  ' + $_.Line.Trim() } }
 }
 '--- release defaults this train is asked about'
-$p = Get-ItemProperty $par -ErrorAction SilentlyContinue
-$names = @($p.PSObject.Properties.Name)
+$p = Read-DriverStateValues -Cli $cli
+$availableNames = @($p.Keys)
 foreach ($n in $Names) {
-    if ($names -contains $n) { '  {0} = {1}' -f $n, $p.$n } else { '  {0} ABSENT' -f $n }
+    if ($availableNames -contains $n) { '  {0} = {1}' -f $n, $p.$n } else { '  {0} ABSENT' -f $n }
 }
-'  Parameters values in all: {0}' -f @($names | Where-Object { $_ -notlike 'PS*' }).Count
+'  Effective driver state values in all: {0}' -f $availableNames.Count
 # What the running driver made of the gates it reads once at GfxStart: a registry value says what was asked, these
 # lines say what the driver did. The kmdver arm of arms.json expects the VM flush line of the release default.
 '--- KMD start lines of the GfxStart gates'

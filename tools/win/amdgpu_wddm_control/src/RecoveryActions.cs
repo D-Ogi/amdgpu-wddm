@@ -52,21 +52,32 @@ namespace AmdgpuWddmControl
 
         // observer names who reads (window, status, report, helper, escape) and records the DWM it sees; null reads
         // without recording (the dry run).
-        public static RecoverySnapshot Read(string observer = null)
+        public static RecoverySnapshot Read(string observer = null, DriverStateBatch batch = null)
         {
             var s = new RecoverySnapshot { CuBadValues = new List<string>() };
             try
             {
-                using (var k = Registry.LocalMachine.OpenSubKey(Recovery.ParametersPath))
+                using (var k = batch == null ? DriverStateKey.Open() : batch.Open())
                 {
                     s.DriverInstalled = k != null;
                     if (k != null)
+                    {
+                        s.StateSchema = 2;
+                        s.ParameterOverrides = new Dictionary<string, long>();
                         foreach (var name in k.GetValueNames())
-                            if (k.GetValueKind(name) == RegistryValueKind.DWord) s.Parameters[name] = (uint)(int)k.GetValue(name);
-                            else if (CuMode.ValueNames.Contains(name)) s.CuBadValues.Add(name);
+                            try
+                            {
+                                object value = k.GetValue(name);
+                                if (value is int) s.Parameters[name] = (uint)(int)value;
+                                else if (value != null && CuMode.ValueNames.Contains(name)) s.CuBadValues.Add(name);
+                                object raw = k.GetOverride(name);
+                                if (raw is int) s.ParameterOverrides[name] = (uint)(int)raw;
+                            }
+                            catch (Exception) { s.CuBadValues.Add(name); s.ReadFailed = true; }
+                    }
                 }
             }
-            catch (Exception) { s.CuBadValues.Add("(the driver's settings key cannot be read)"); }
+            catch (Exception) { s.CuBadValues.Add("(the driver's settings key cannot be read)"); s.ReadFailed = true; }
             try { s.GameProfiles = new Dictionary<string, string>(SettingsStore.ReadProfiles(), StringComparer.OrdinalIgnoreCase); }
             catch (Exception) { s.GameProfiles = null; }
             try { s.GfxKeys = SettingsStore.ReadGfxKeys(); }
@@ -860,17 +871,28 @@ namespace AmdgpuWddmControl
                 if (plan.EnableDriver) return EnableDriver();
                 if (plan.CuConfirm) return ConfirmCu();
                 if (plan.Tune != null) return RunTune(plan);
-                var backup = Backup(o, plan, s);
-                Log("backup " + backup.File);
-
-                if (plan.ConfirmStart)
+                // Begin before the backup. Re-plan while holding the installer
+                // writer lock, then retain the same generation through rollback.
+                using (var batch = plan.Cu != null || plan.Writes.Any(w => DriverStateKey.IsPath(w.Path))
+                    ? DriverStateBatch.Begin() : null)
                 {
-                    var why = Confirm();
-                    if (why != null) { Log("result: failed: " + why); return Failed; }
+                    if (batch != null)
+                    {
+                        s = RecoveryProbe.Read("helper", batch);
+                        plan = Recovery.Plan(o.Action, s, o.Mode, o.Ceiling, RecoveryProbe.Backups(), o.AcceptBd060, o.More);
+                        if (plan.Refused) { Log("result: refused: " + plan.Refusal); return Refused; }
+                    }
+                    var backup = Backup(o, plan, s, batch);
+                    Log("backup " + backup.File);
+                    if (plan.ConfirmStart)
+                    {
+                        var why = Confirm();
+                        if (why != null) { Log("result: failed: " + why); return Failed; }
+                    }
+                    if (!Apply(plan.Writes, backup, batch)) { Log("result: failed: a write did not read back; rollback was attempted, see each result above"); return Failed; }
+                    if (!ApplyGames(plan.GameWrites, backup)) { Log("result: failed: a game setting did not read back; the old game settings were restored"); return Failed; }
+                    if (plan.Cu != null && !RunCu(plan.Cu, batch)) return Failed;
                 }
-                if (!Apply(plan.Writes, backup)) { Log("result: failed: a write did not read back; the old values were restored"); return Failed; }
-                if (!ApplyGames(plan.GameWrites, backup)) { Log("result: failed: a game setting did not read back; the old game settings were restored"); return Failed; }
-                if (plan.Cu != null && !RunCu(plan.Cu)) return Failed;
                 if (plan.TuneSteps.Count > 0 && !RunTuneSteps(plan)) return Failed;
                 // A change that applies at the next restart is written, not done: the active route stays until then.
                 Log(plan.OfferRestart ? "result: written, pending until the next restart of Windows: " + plan.Change
@@ -949,7 +971,7 @@ namespace AmdgpuWddmControl
 
         static bool IsRoute(RegWrite w) { return w.Path == Recovery.RouterPath && w.Name == "DwmForceCpu"; }
 
-        static BackupRecord Backup(Options o, ActionPlan plan, RecoverySnapshot s)
+        static BackupRecord Backup(Options o, ActionPlan plan, RecoverySnapshot s, DriverStateBatch batch)
         {
             var b = new BackupRecord
             {
@@ -964,10 +986,10 @@ namespace AmdgpuWddmControl
             if (plan.ConfirmStart)
                 foreach (var n in new[] { "UnconfirmedStarts", "DpmPending" }) names.Add(new[] { Recovery.ParametersPath, n });   // a record only
             names.AddRange(plan.GameWrites.Keys.Select(image => new[] { Recovery.GamePath(image), Profiles.ValueName }));
-            foreach (var pn in names) b.Values.Add(Saved(pn[0], pn[1], false));
+            foreach (var pn in names) b.Values.Add(Saved(pn[0], pn[1], false, batch));
             // The CU setter's values: for diagnosis only (S6), never restored.
             if (plan.Cu != null)
-                foreach (var n in CuMode.ValueNames) b.Diagnosis.Add(Saved(Recovery.ParametersPath, n, true));
+                foreach (var n in CuMode.ValueNames) b.Diagnosis.Add(Saved(Recovery.ParametersPath, n, true, batch));
             var file = Recovery.BackupFileName(DateTime.UtcNow);
             var path = Path.Combine(RecoveryProbe.ControlDirectory, file);
             File.WriteAllText(path + ".partial", new JavaScriptSerializer().Serialize(b));
@@ -980,8 +1002,20 @@ namespace AmdgpuWddmControl
         }
 
         // One value as found before an action. diagnosis: an unexpected type is recorded, not refused.
-        static BackupValue Saved(string path, string name, bool diagnosis)
+        static BackupValue Saved(string path, string name, bool diagnosis, DriverStateBatch batch)
         {
+            if (DriverStateKey.IsPath(path))
+                using (var state = batch == null ? DriverStateKey.OpenPath(path, false, false) : batch.OpenPath(path, false))
+                {
+                    var saved = new BackupValue { Path = path, Name = name };
+                    object value = state == null ? null : state.GetValue(name);
+                    if (value == null) return saved;
+                    saved.Existed = true;
+                    if (value is int) { saved.Kind = "DWord"; saved.Number = (uint)(int)value; }
+                    else if (diagnosis) saved.Kind = state.GetValueKind(name).ToString();
+                    else throw new InvalidOperationException("Unsupported raw state backup type: " + name);
+                    return saved;
+                }
             using (var k = SettingsStore.Machine.OpenSubKey(path))
             {
                 var v = new BackupValue { Path = path, Name = name };
@@ -1036,13 +1070,13 @@ namespace AmdgpuWddmControl
 
         // The CU setter (plan v7 section 7, S1-S6) on the live key: stops at the first failed step, never restores,
         // reports the read-back state.
-        static bool RunCu(CuSetterPlan plan)
+        static bool RunCu(CuSetterPlan plan, DriverStateBatch batch)
         {
             Log("CU setter: target " + plan.Target + ", before: " + plan.Before);
             CuSetterResult r;
             try
             {
-                using (var api = new Win32RegApi(CuMode.ParametersPath)) r = CuMode.Execute(plan, new CheckedCuRegistry(api));
+                using (var api = new Win32RegApi(CuMode.ParametersPath, batch)) r = CuMode.Execute(plan, new CheckedCuRegistry(api));
             }
             catch (Exception e)
             {
@@ -1357,10 +1391,21 @@ namespace AmdgpuWddmControl
             }
         }
 
-        static void Write(RegWrite w)
+        static void Write(RegWrite w, DriverStateBatch batch)
         {
             if (w.DeleteKey) { RemoveEmptyKey(w.Path); return; }
             if (!Recovery.Allowed(w.Path, w.Name)) throw new InvalidOperationException(w.Name + " is not a value this app may write");
+            if (DriverStateKey.IsPath(w.Path))
+            {
+                using (var state = batch.OpenPath(w.Path, false))
+                {
+                    if (state == null) throw new InvalidOperationException("Driver state is not installed");
+                    if (w.Delete) state.DeleteValue(w.Name);
+                    else if (w.Kind == "DWord") state.SetValue(w.Name, unchecked((int)(uint)w.Number), RegistryValueKind.DWord);
+                    else throw new InvalidOperationException("Unsupported driver state write: " + w.Kind);
+                }
+                return;
+            }
             // The graphics settings keys are the app's own: a write creates its key, a removal from a key that does
             // not exist has nothing to do. The driver's keys must exist.
             bool gfx = GraphicsSettings.Allowed(w.Path, w.Name);
@@ -1397,8 +1442,15 @@ namespace AmdgpuWddmControl
             }
         }
 
-        static bool ReadsBack(RegWrite w)
+        static bool ReadsBack(RegWrite w, DriverStateBatch batch)
         {
+            if (DriverStateKey.IsPath(w.Path))
+                using (var state = batch.OpenPath(w.Path, false))
+                {
+                    if (state == null) return false;
+                    object value = state.GetValue(w.Name);
+                    return w.Delete ? value == null : w.Kind == "DWord" && value is int && (uint)(int)value == (uint)w.Number;
+                }
             if (w.DeleteKey) using (var gone = SettingsStore.Machine.OpenSubKey(w.Path)) return gone == null;
             using (var k = SettingsStore.Machine.OpenSubKey(w.Path))
             {
@@ -1410,16 +1462,16 @@ namespace AmdgpuWddmControl
             }
         }
 
-        static bool Apply(List<RegWrite> writes, BackupRecord backup)
+        static bool Apply(List<RegWrite> writes, BackupRecord backup, DriverStateBatch batch)
         {
             try
             {
                 RouteRecordBefore(writes);
-                foreach (var w in writes) { Write(w); Log("wrote: " + w); }
+                foreach (var w in writes) { Write(w, batch); Log("wrote: " + w); }
                 bool ok = true;
                 foreach (var w in writes)
                 {
-                    bool back = ReadsBack(w);
+                    bool back = ReadsBack(w, batch);
                     Log((back ? "read back OK: " : "read back MISMATCH: ") + w);
                     ok &= back;
                 }
@@ -1430,7 +1482,9 @@ namespace AmdgpuWddmControl
                 try
                 {
                     var r = v.Existed ? new RegWrite { Path = v.Path, Name = v.Name, Kind = v.Kind, Number = v.Number, Text = v.Text } : RegWrite.Remove(v.Path, v.Name);
-                    Write(r); Log("restored: " + r);
+                    Write(r, batch);
+                    if (!ReadsBack(r, batch)) throw new InvalidOperationException("rollback did not read back");
+                    Log("restored and read back: " + r);
                 }
                 catch (Exception e) { Log("restore failed: " + v.Name + ": " + e.Message); }
             return false;

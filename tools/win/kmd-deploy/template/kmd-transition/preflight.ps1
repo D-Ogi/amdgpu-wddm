@@ -1,4 +1,6 @@
 $ErrorActionPreference = 'Stop'
+. "$PSScriptRoot\legacy-state.ps1"
+Assert-KmdLegacyState
 . "$PSScriptRoot\identity.ps1"
 . "$PSScriptRoot\registration.ps1"
 . "$PSScriptRoot\hang-detector.ps1"

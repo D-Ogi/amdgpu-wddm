@@ -307,7 +307,7 @@ namespace AmdgpuWddmControl
         List<RegWrite> ClockWrites()
         {
             if (!_snap.DriverInstalled) return new List<RegWrite>();
-            return DpmSettings.PlanWrites(StoredMode, StoredMax, AutoChosen, CeilingChosen);
+            return DpmSettings.PlanWrites(StoredMode, StoredMax, AutoChosen, CeilingChosen, true);
         }
 
         CuView CuNow() { return CuMode.View(_snap.Cu, _snap.Health != null ? (ulong?)_snap.Health.Generation : null, _snap.StoredCu(), _cuConfirmFailed); }

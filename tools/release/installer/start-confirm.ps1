@@ -42,6 +42,7 @@ if (-not $ExpectedVersion) {
     if (-not $ExpectedVersion) { $ExpectedVersion = '0x000700D8' }   # this release's kmd_abi; test-dryrun.ps1 gates it
 }
 . (Join-Path $here 'start-confirm-core.ps1')
+. (Join-Path $here 'state-reader.ps1')
 # The boot identity (Get-BootIdentity), loaded here and not only before the witness at the end: the start record's
 # reading needs this boot's start time from the one place that defines it (start-confirm-core.ps1
 # Get-StartRecordBootUtc), and -Probe exits before the witness block.
@@ -56,7 +57,6 @@ try { . (Join-Path $here 'release-witness.ps1') } catch { $script:witnessLoadErr
 $clock = [Diagnostics.Stopwatch]::StartNew()
 $cli = Join-Path $here 'bc250kmd_cli.exe'
 $dll = [IO.Path]::GetFullPath((Join-Path $here 'bc250control.dll'))
-$parametersKey = 'SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters'
 $log = Join-Path $env:ProgramData 'amdgpu-wddm\start-confirm.log'
 $script:exitCode = 1
 $script:lastReason = $null
@@ -89,15 +89,17 @@ if (-not $Probe) {
     } catch { Write-StartConfirmLog "DWM baseline: $($_.Exception.Message)" }
 }
 function Read-Parameter([string]$Name) {
-    $k = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey($parametersKey)
-    if (!$k) { return 'no key' }
-    try { $v = $k.GetValue($Name, $null); if ($null -eq $v) { return 'absent' }; return [string]$v } finally { $k.Dispose() }
+    try {
+        $values=Read-DriverStateValues -Cli $cli -MaxAgeMilliseconds 1000
+        if(-not $values.ContainsKey($Name)){return 'absent'}
+        return [string]$values[$Name]
+    } catch { return "unreadable: $($_.Exception.Message)" }
 }
 # BD-122: the KMD's record of the last start that did not reach a started device (Parameters\StartRecord,
 # guard.c). Read with no gate and without the driver, which is the point: a device with Code 43 answers no escape.
 # The record's own values only; the rule that makes them current is in start-confirm-core.ps1.
 function Read-StartRecord {
-    $k = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey("$parametersKey\$script:StartRecordKey")
+    $k = Open-DriverStateRecordView -Cli $cli -Path $script:StartRecordKey
     if (!$k) { return $null }
     try { return Read-StartRecordFromKey $k } finally { $k.Dispose() }
 }

@@ -105,22 +105,22 @@ namespace AmdgpuWddmControl
     {
         public const string ValueName = "UnconfirmedStarts";
 
-        // Reads the count, writes 0, flushes the key and reads the value again. A value that is absent counts as
-        // written: the driver reads an absent value as zero, which is what this action wants. Nothing throws.
+        // Reads the count, writes 0, flushes and requires an exact zero readback.
+        // Only an absent value is a fresh count; access/type failures refuse the reset. Nothing throws.
         public static GuardResetResult Run(IRegApi api)
         {
             var r = new GuardResetResult();
             if (api == null) { r.Error = "no registry access"; return r; }
             try
             {
-                r.Before = ReadCount(api);
+                r.Before = ReadCountChecked(api);
                 int s = api.SetDword(ValueName, 0);
                 if (s != CheckedCuRegistry.Success) { r.Error = new CuRegistryException("set", ValueName, s).Message; return r; }
                 s = api.Flush();
                 if (s != CheckedCuRegistry.Success) { r.Error = new CuRegistryException("flush", null, s).Message; return r; }
-                r.After = ReadCount(api);
-                r.Written = r.After == null || r.After.Value == 0;
-                if (!r.Written) r.Error = "the count reads back as " + r.After.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                r.After = ReadCountChecked(api);
+                r.Written = r.After == 0;
+                if (!r.Written) r.Error = "the count did not read back as zero";
                 return r;
             }
             catch (Exception e) { r.Error = e.Message; return r; }
@@ -133,6 +133,16 @@ namespace AmdgpuWddmControl
             uint type; byte[] data;
             if (api.Query(ValueName, out type, out data) != CheckedCuRegistry.Success) return null;
             return type == 4 && data != null && data.Length == 4 ? (uint?)BitConverter.ToUInt32(data, 0) : null;
+        }
+        static uint? ReadCountChecked(IRegApi api)
+        {
+            uint type; byte[] data;
+            int status = api.Query(ValueName, out type, out data);
+            if (status == 2) return null;
+            if (status != 0) throw new CuRegistryException("query", ValueName, status);
+            if (type != 4 || data == null || data.Length != 4)
+                throw new CuRegistryException("query type", ValueName, 13);
+            return BitConverter.ToUInt32(data, 0);
         }
     }
 }

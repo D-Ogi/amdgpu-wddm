@@ -269,7 +269,7 @@ static HKEY Sub(const wchar_t *path)
 }
 static const wchar_t RouterKey[] = L"SOFTWARE\\amdgpu-wddm\\DesktopRouter";
 static const wchar_t HostedKey[] = L"SOFTWARE\\amdgpu-wddm\\HostedUmd";
-static const wchar_t KmdKey[] = L"SYSTEM\\CurrentControlSet\\Services\\bc250kmd\\Parameters";
+static const wchar_t KmdKey[] = L"SOFTWARE\\amdgpu-wddm\\RouterTestState";
 static const wchar_t AppKey[] = L"SOFTWARE\\amdgpu-wddm\\AppRouter";
 static const wchar_t GraphicsKey[] = L"SOFTWARE\\amdgpu-wddm\\Graphics"; // app-settings-core.h
 // The UMD path values of the router under test and of the other bitness (router.cpp, BD-064): a 32-bit router reads
@@ -402,6 +402,11 @@ static HMODULE LoadAt(const std::wstring &relative)
     std::wstring p = Layout + L"\\" + relative;
     HMODULE m = LoadLibraryExW(p.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
     if (!m) { printf("  LoadLibrary %ls failed %lu\n", p.c_str(), GetLastError()); ExitProcess(3); }
+    if (relative.find(L"bc250d3d_router.dll") != std::wstring::npos &&
+        !GetProcAddress(m,"Bc250RouterStateFixture") && !GetProcAddress(m,"_Bc250RouterStateFixture@0")) {
+        printf("  private-hive gate requires bc250d3d_router-test.dll\n");
+        ExitProcess(3);
+    }
     return m;
 }
 static bool Loaded(const std::wstring &relative) { return GetModuleHandleW((Layout + L"\\" + relative).c_str()) != nullptr; }

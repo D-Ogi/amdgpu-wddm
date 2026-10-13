@@ -1,4 +1,6 @@
 #Requires -Version 7.0
+# This gate uses the test router, whose state client reads only the private hive.
+# The production DLL links the real common client and is validated separately.
 # Host gate of the application router (driver/umd/router), without a device and without touching machine state.
 # Builds a scratch layout from the output of build-umd-router.ps1 (router, UMD doubles, harness) and three real
 # binaries named by parameter: the hosted UMD bc250d3d_zink.dll, the CPU UMD bc250d3d.dll and a package holding the
@@ -68,11 +70,11 @@ function Put([string]$From, [string]$To) { Copy-Item -LiteralPath $From -Destina
 function Placeholder([string]$To) { Set-Content -LiteralPath (Join-Path $layout $To) -Value 'placeholder, never loaded by OpenAdapter' -NoNewline }
 $shell = Join-Path $AppPackage 'amdgpu_wddm_d3d11.dll'
 $shellConfig = Join-Path $AppPackage 'amdgpu_wddm_d3d11.config'
-Put "$Build\bc250d3d_router.dll" 'router\bc250d3d_router.dll'
+Put "$Build\bc250d3d_router-test.dll" 'router\bc250d3d_router.dll'
 Put "$Build\fake-hosted.dll" 'router\bc250d3d_zink.dll'
 Put "$Build\fake-cpu.dll" 'cpu\bc250d3d.dll'
 # The 32-bit router's default CPU UMD is bc250d3d.dll next to it (route-wow-default-cpu-beside-router).
-Put "$Build\bc250d3d_router.dll" 'router-wow\bc250d3d_router.dll'
+Put "$Build\bc250d3d_router-test.dll" 'router-wow\bc250d3d_router.dll'
 Put "$Build\fake-cpu.dll" 'router-wow\bc250d3d.dll'
 Put "$Build\fake-fail.dll" 'fail\fake-fail.dll'
 Put "$Build\fake-app.dll" 'app\amdgpu_wddm_d3d11.dll'
@@ -81,7 +83,7 @@ Put $CpuUmd 'cpu-real\bc250d3d.dll'
 foreach ($d in @('umd','umd-noicd','umd-diag','umd-router')) { Put $HostedUmd "$d\bc250d3d_zink.dll" }
 foreach ($d in @('umd','umd-diag','umd-router')) { Placeholder "$d\amdgpu_wddm_radv.dll" }
 Placeholder 'icd-alt\alt-icd.dll'
-Put "$Build\bc250d3d_router.dll" 'umd-router\bc250d3d_router.dll'
+Put "$Build\bc250d3d_router-test.dll" 'umd-router\bc250d3d_router.dll'
 Put "$Build\test-router.exe" 'dwm\dwm.exe'
 Put "$Build\test-router.exe" 'logonui\logonui.exe'
 # BD-126: the harness under the name of the dialog host on the router's built-in default Deny list.
@@ -92,7 +94,7 @@ Put $shell 'app-real\amdgpu_wddm_d3d11.dll'
 Put $shellConfig 'app-real\amdgpu_wddm_d3d11.config'
 Put $shell 'app-real-noconfig\amdgpu_wddm_d3d11.dll'
 
-$inputs = foreach ($f in @("$Build\bc250d3d_router.dll", "$Build\test-router.exe", $HostedUmd, $CpuUmd, $shell, $shellConfig)) {
+$inputs = foreach ($f in @("$Build\bc250d3d_router.dll", "$Build\bc250d3d_router-test.dll", "$Build\test-router.exe", $HostedUmd, $CpuUmd, $shell, $shellConfig)) {
     '{0}  {1}' -f (Get-FileHash -LiteralPath $f).Hash, $f
 }
 $inputs | Set-Content -LiteralPath (Join-Path $gate 'inputs.sha256')

@@ -2,6 +2,8 @@
 param([Parameter(Mandatory)][string]$Directory,[Parameter(Mandatory)][string]$Tool,
  [Parameter(Mandatory)][long]$Origin,[Parameter(Mandatory)][long]$Frequency)
 $ErrorActionPreference='Stop'
+. "$PSScriptRoot\legacy-state.ps1"
+Assert-KmdLegacyState $Directory
 . "$PSScriptRoot\identity.ps1"
 . "$PSScriptRoot\supervise.ps1"
 . "$PSScriptRoot\logged-transition.ps1"

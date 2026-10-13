@@ -562,7 +562,7 @@ typedef struct _BC250_SEQUENCE {
 } BC250_SEQUENCE;
 
 // guard.c
-NTSTATUS GuardInit(_In_ PUNICODE_STRING RegistryPath);
+NTSTATUS GuardInit(_In_ PDRIVER_OBJECT DriverObject);
 void GuardCleanup(void);
 void GuardStage(BC250_STAGE Stage);
 BC250_STAGE GuardLastStage(void);

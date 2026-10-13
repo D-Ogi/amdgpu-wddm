@@ -19,16 +19,17 @@
 #include "wave_snapshot.h"
 #include "guard_keep_prune.h"
 #include "hang_recovery.h"
+#include "state_kernel.h"
 #include <ntstrsafe.h>
 #include <stdarg.h>
 
-static UNICODE_STRING g_ParametersPath;
 static WCHAR g_History[256];
 static BC250_STAGE g_LastStage;
 // BD-090: this image's start wrote and flushed one count, and no confirmation has cleared it since. Per image on
 // purpose: a stop runs in the image of the start it ends (a restart or an update unloads the image in between).
 // Start, confirmation (under StartHealth.Lifecycle, closed by StartHealthClose) and stop never overlap.
 static BOOLEAN g_StartCounted;
+static HANDLE g_KeepRoot;
 
 // ---- the log ring --------------------------------------------------------------------------------------------
 //
@@ -111,9 +112,9 @@ ULONGLONG GuardLogMilliseconds(void)
 
 static NTSTATUS OpenParameters(_Out_ HANDLE* Key)
 {
-    OBJECT_ATTRIBUTES attributes;
-    InitializeObjectAttributes(&attributes, &g_ParametersPath, OBJ_KERNEL_HANDLE | OBJ_CASE_INSENSITIVE, NULL, NULL);
-    return ZwCreateKey(Key, KEY_READ | KEY_WRITE, &attributes, 0, NULL, REG_OPTION_NON_VOLATILE, NULL);
+    // Retained helper name for the record writers. This opens mutable service
+    // state through its OS-returned handle, never the installation parameters.
+    return DriverStateOpenData(Key);
 }
 
 static NTSTATUS ReadDword(HANDLE Key, PCWSTR Name, _Out_ ULONG* Value)
@@ -140,28 +141,28 @@ static NTSTATUS WriteDword(HANDLE Key, PCWSTR Name, ULONG Value)
     return ZwSetValueKey(Key, &name, 0, REG_DWORD, &Value, sizeof(Value));
 }
 
-NTSTATUS GuardInit(_In_ PUNICODE_STRING RegistryPath)
+NTSTATUS GuardInit(_In_ PDRIVER_OBJECT DriverObject)
 {
-    static const WCHAR suffix[] = L"\\Parameters";
-    USHORT bytes = RegistryPath->Length + sizeof(suffix);
-
+    NTSTATUS status;
     // The ring first, so that everything DriverEntry does from here on is in it, including a failure below.
     KeInitializeSpinLock(&g_LogLock);
     g_LogStart = KeQueryInterruptTime();
     g_LogReady = TRUE;
 
-    g_ParametersPath.Buffer = (PWCH)ExAllocatePool2(POOL_FLAG_PAGED, bytes, BC250_TAG);
-    if (g_ParametersPath.Buffer == NULL) return STATUS_INSUFFICIENT_RESOURCES;
-    g_ParametersPath.MaximumLength = bytes;
-    g_ParametersPath.Length = 0;
-    RtlCopyUnicodeString(&g_ParametersPath, RegistryPath);
-    return RtlAppendUnicodeToString(&g_ParametersPath, suffix);
+    status = IoGetDriverDirectory(DriverObject, DriverDirectorySharedData, 0, &g_KeepRoot);
+    if (!NT_SUCCESS(status)) {
+        g_KeepRoot = NULL;
+        GuardLog("keeplog: shared directory unavailable 0x%08X", (ULONG)status);
+    }
+    status = DriverStateInit(DriverObject);
+    if (!NT_SUCCESS(status)) GuardCleanup();
+    return status;
 }
 
 void GuardCleanup(void)
 {
-    if (g_ParametersPath.Buffer != NULL) ExFreePoolWithTag(g_ParametersPath.Buffer, BC250_TAG);
-    RtlZeroMemory(&g_ParametersPath, sizeof(g_ParametersPath));
+    if (g_KeepRoot != NULL) { ZwClose(g_KeepRoot); g_KeepRoot = NULL; }
+    DriverStateClose();
 }
 
 void GuardStage(BC250_STAGE Stage)
@@ -170,7 +171,7 @@ void GuardStage(BC250_STAGE Stage)
     WCHAR item[16];
     UNICODE_STRING name;
 
-    if (KeGetCurrentIrql() != PASSIVE_LEVEL || g_ParametersPath.Buffer == NULL) return;
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL || !DriverStateReady()) return;
     if (Stage == g_LastStage) return;
     g_LastStage = Stage;
 
@@ -198,45 +199,29 @@ BC250_STAGE GuardLastStage(void)
 
 ULONG GuardReadSetting(_In_z_ PCWSTR Name, ULONG Default)
 {
-    HANDLE key;
-    ULONG value;
-    NTSTATUS status;
-
-    if (KeGetCurrentIrql() != PASSIVE_LEVEL || !NT_SUCCESS(OpenParameters(&key))) return Default;
-    status = ReadDword(key, Name, &value);
-    ZwClose(key);
-    return NT_SUCCESS(status) ? value : Default;
+    ULONG value=0;NTSTATUS status=DriverStateNumber(L"",Name,TRUE,&value);
+    if(NT_SUCCESS(status))return value;
+    return status==STATUS_OBJECT_NAME_NOT_FOUND?Default:0;
 }
 
 // A one-shot gate: the value 1 is read and put back to 0 on disk before anything it opens has run, so a bugcheck
 // behind the gate cannot repeat itself at the next boot (E16 run 007 did, once). Any other value is left alone.
 ULONG GuardConsumeSetting(_In_z_ PCWSTR Name, ULONG Default)
 {
-    HANDLE key;
-    ULONG value;
-    NTSTATUS status;
-
-    if (KeGetCurrentIrql() != PASSIVE_LEVEL || !NT_SUCCESS(OpenParameters(&key))) return Default;
-    status = ReadDword(key, Name, &value);
-    if (NT_SUCCESS(status) && value == 1)
-    {
-        status=WriteDword(key,Name,0);
-        if (!NT_SUCCESS(status)) {
-            GuardLog("gate: one-shot closure write failed, refused (0x%08X)",status);
-            ZwClose(key);
-            return 0;
-        }
-        status=ZwFlushKey(key);
-        if (!NT_SUCCESS(status)) {
-            // Never run a one-shot experiment unless its reset is durable.
-            // Default is for an absent setting, not permission after this failure.
-            GuardLog("gate: one-shot closure flush failed, refused (0x%08X)",status);
-            ZwClose(key);
+    ULONG value=0,closed=0;
+    NTSTATUS status=DriverStateNumber(L"",Name,TRUE,&value);
+    if(status==STATUS_OBJECT_NAME_NOT_FOUND)return Default;
+    if(!NT_SUCCESS(status))return 0;
+    if(value==1) {
+        // DriverStateSet includes the durable flush. Failure never grants the
+        // experiment permission, including when the caller's default is 1.
+        status=DriverStateSet(L"",Name,REG_DWORD,&closed,sizeof(closed));
+        if(!NT_SUCCESS(status)) {
+            GuardLog("gate: one-shot durable closure failed, refused (0x%08X)",status);
             return 0;
         }
     }
-    ZwClose(key);
-    return NT_SUCCESS(status) ? value : Default;
+    return value;
 }
 
 NTSTATUS GuardCheckAndCountStart(BOOLEAN RequireDurable)
@@ -479,7 +464,7 @@ ULONG GuardLogRead(ULONG From, _Out_writes_to_(Max, return) BC250_LOG_LINE* Line
 // stop): a synchronous file write has no timeout, and a stop during a shutdown or over a wedged volume is no
 // place for one on a board without a BMC. An experiment that expects dxgkrnl to end the start opens it.
 //
-// ONE text file per episode under C:\BC250\kmdlog, where an episode is one device start or one device stop
+// ONE text file per episode under the OS shared driver directory's Logs child. An episode is a device start or stop
 // (GuardLogKeepEpisode, called by pnp.c). The file is named by the UTC time of the first keep of that episode, to
 // the millisecond, and by the episode's label, in the format bc250kmd_cli log prints. The directory is created if
 // it is missing. What became of the attempt is written to Parameters\KeepStatus (the NTSTATUS of the create, or of
@@ -494,7 +479,7 @@ ULONG GuardLogRead(ULONG From, _Out_writes_to_(Max, return) BC250_LOG_LINE* Line
 // was written before it. Each append writes its own "-- keep" line first, so a reader still sees where the
 // checkpoints were. The number of files is bounded as well: see KeepPrune below.
 #define BC250_LOG_KEEP_LINE (BC250_LOG_TEXT + 32)   // "%6lu %6lu.%03lu " is 18 characters, CR LF, and room to spare
-#define BC250_KEEP_DIRECTORY L"\\??\\C:\\BC250\\kmdlog"
+#define BC250_KEEP_DIRECTORY L"Logs"
 #define BC250_KEEP_SCAN_BYTES 8192u                 // one directory page; about 90 names of ours
 #define BC250_KEEP_DELETE_MAX 512u                  // deletes in one prune: a bound on the work a PnP start does
 
@@ -503,6 +488,18 @@ static LONGLONG g_KeepBytes;            // bytes that file already holds; the of
 static ULONG g_KeepFrom;                // the first ring sequence that is not in it yet
 static ULONG g_KeepAppends;             // keeps of this episode, the first one included
 static PCWSTR g_KeepLabel = L"load";    // what the episode is; before the first GuardLogKeepEpisode, the load
+
+static NTSTATUS KeepCheckFile(HANDLE File, BOOLEAN Directory)
+{
+    FILE_ATTRIBUTE_TAG_INFORMATION tag;
+    IO_STATUS_BLOCK io;
+    NTSTATUS status = ZwQueryInformationFile(File, &io, &tag, sizeof(tag), FileAttributeTagInformation);
+    if (!NT_SUCCESS(status)) return status;
+    if ((tag.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) ||
+        !!(tag.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != !!Directory)
+        return STATUS_OBJECT_TYPE_MISMATCH;
+    return STATUS_SUCCESS;
+}
 
 static void KeepStatus(NTSTATUS Status)
 {
@@ -540,7 +537,6 @@ static void KeepPrune(HANDLE Directory)
     UCHAR* buffer;
     FILE_NAMES_INFORMATION* entry;
     WCHAR leaf[BC250_KEEP_NAME];
-    WCHAR name[BC250_KEEP_NAME + RTL_NUMBER_OF(BC250_KEEP_DIRECTORY) + 2];
     ULONG offset, length, deleted = 0, failed = 0, pass, i;
     NTSTATUS status;
 
@@ -578,15 +574,10 @@ static void KeepPrune(HANDLE Directory)
                     // because a directory entry is not: the printing below takes a string, not a counted name.
                     for (i = 0; i < length; i++) leaf[i] = entry->FileName[i];
                     leaf[length] = 0;
-                    if (NT_SUCCESS(RtlStringCchPrintfW(name, RTL_NUMBER_OF(name), L"%ws\\%ws",
-                                                       BC250_KEEP_DIRECTORY, leaf)))
-                    {
-                        RtlInitUnicodeString(&path, name);
-                        InitializeObjectAttributes(&attributes, &path, OBJ_KERNEL_HANDLE | OBJ_CASE_INSENSITIVE,
-                                                   NULL, NULL);
-                        if (NT_SUCCESS(ZwDeleteFile(&attributes))) deleted++; else failed++;
-                    }
-                    else failed++;
+                    RtlInitUnicodeString(&path, leaf);
+                    InitializeObjectAttributes(&attributes, &path,
+                        OBJ_KERNEL_HANDLE | OBJ_CASE_INSENSITIVE | OBJ_DONT_REPARSE, Directory, NULL);
+                    if (NT_SUCCESS(ZwDeleteFile(&attributes))) deleted++; else failed++;
                 }
                 if (entry->NextEntryOffset == 0) break;
                 offset += entry->NextEntryOffset;
@@ -621,22 +612,26 @@ void GuardLogKeep(void)
 
     if (KeGetCurrentIrql() != PASSIVE_LEVEL) return;
     if (GuardReadSetting(L"KeepLog", 0) == 0) return;
+    if (g_KeepRoot == NULL) { KeepStatus(STATUS_INVALID_DEVICE_STATE); return; }
 
     // The directory first; FILE_OPEN_IF makes this a no-op when it is there, and a failure shows in the create
     // below. The handle stays open while a new file is made, because the prune enumerates through it.
     RtlInitUnicodeString(&path, BC250_KEEP_DIRECTORY);
-    InitializeObjectAttributes(&attributes, &path, OBJ_KERNEL_HANDLE | OBJ_CASE_INSENSITIVE, NULL, NULL);
-    status = ZwCreateFile(&directory, FILE_LIST_DIRECTORY | SYNCHRONIZE, &attributes, &io, NULL,
+    InitializeObjectAttributes(&attributes, &path,
+        OBJ_KERNEL_HANDLE | OBJ_CASE_INSENSITIVE | OBJ_DONT_REPARSE, g_KeepRoot, NULL);
+    status = ZwCreateFile(&directory, FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES | SYNCHRONIZE, &attributes, &io, NULL,
                           FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ | FILE_SHARE_WRITE, FILE_OPEN_IF,
-                          FILE_SYNCHRONOUS_IO_NONALERT | FILE_DIRECTORY_FILE, NULL, 0);
-    if (!NT_SUCCESS(status)) directory = NULL;
+                          FILE_SYNCHRONOUS_IO_NONALERT | FILE_DIRECTORY_FILE | FILE_OPEN_REPARSE_POINT, NULL, 0);
+    if (!NT_SUCCESS(status)) { KeepStatus(status); return; }
+    status = KeepCheckFile(directory, TRUE);
+    if (!NT_SUCCESS(status)) { ZwClose(directory); KeepStatus(status); return; }
 
     if (g_KeepPath[0] == 0)
     {
         KeQuerySystemTime(&now);
         RtlTimeToTimeFields(&now, &t);
         status = RtlStringCchPrintfW(g_KeepPath, RTL_NUMBER_OF(g_KeepPath),
-                                     L"%ws\\ring-%04d%02d%02d-%02d%02d%02d-%03d-%ws.log", BC250_KEEP_DIRECTORY,
+                                     L"ring-%04d%02d%02d-%02d%02d%02d-%03d-%ws.log",
                                      t.Year, t.Month, t.Day, t.Hour, t.Minute, t.Second, t.Milliseconds,
                                      g_KeepLabel);
         if (!NT_SUCCESS(status))
@@ -650,13 +645,17 @@ void GuardLogKeep(void)
         if (directory != NULL) KeepPrune(directory);
         created = TRUE;
     }
-    if (directory != NULL) ZwClose(directory);
-
     RtlInitUnicodeString(&path, g_KeepPath);
-    InitializeObjectAttributes(&attributes, &path, OBJ_KERNEL_HANDLE | OBJ_CASE_INSENSITIVE, NULL, NULL);
-    status = ZwCreateFile(&file, FILE_GENERIC_WRITE, &attributes, &io, NULL, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ,
+    InitializeObjectAttributes(&attributes, &path,
+        OBJ_KERNEL_HANDLE | OBJ_CASE_INSENSITIVE | OBJ_DONT_REPARSE, directory, NULL);
+    status = ZwCreateFile(&file, FILE_GENERIC_WRITE | FILE_READ_ATTRIBUTES, &attributes, &io, NULL, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ,
                           created ? FILE_OVERWRITE_IF : FILE_OPEN,
-                          FILE_SYNCHRONOUS_IO_NONALERT | FILE_NON_DIRECTORY_FILE, NULL, 0);
+                          FILE_SYNCHRONOUS_IO_NONALERT | FILE_NON_DIRECTORY_FILE | FILE_OPEN_REPARSE_POINT, NULL, 0);
+    ZwClose(directory);
+    if (NT_SUCCESS(status)) {
+        status = KeepCheckFile(file, FALSE);
+        if (!NT_SUCCESS(status)) { ZwClose(file); file = NULL; }
+    }
     if (!NT_SUCCESS(status))
     {
         // The file of this episode is gone (deleted by hand, another volume): the next keep starts a new one rather
@@ -749,69 +748,28 @@ NTSTATUS GuardConfirmStartDurable(void)
 
 NTSTATUS GuardQuerySetting(_In_z_ PCWSTR Name, _Out_ ULONG* Value)
 {
-    HANDLE key;
-    NTSTATUS status;
-
-    *Value = 0;
-    if (KeGetCurrentIrql() != PASSIVE_LEVEL || g_ParametersPath.Buffer == NULL) return STATUS_INVALID_DEVICE_STATE;
-    status = OpenParameters(&key);
-    if (!NT_SUCCESS(status)) return status;
-    status = ReadDword(key, Name, Value);
-    ZwClose(key);
-    return status;          // STATUS_OBJECT_NAME_NOT_FOUND when absent
+    // Settings resolve their package default; records still distinguish absent
+    // from zero. No malformed value or API failure becomes an absent override.
+    return DriverStateNumber(L"",Name,TRUE,Value);
 }
 
 // Written and flushed: success means it is on the disk.
 NTSTATUS GuardStoreSetting(_In_z_ PCWSTR Name, ULONG Value)
 {
-    HANDLE key;
-    NTSTATUS status;
-
-    if (KeGetCurrentIrql() != PASSIVE_LEVEL || g_ParametersPath.Buffer == NULL) return STATUS_INVALID_DEVICE_STATE;
-    status = OpenParameters(&key);
-    if (!NT_SUCCESS(status)) return status;
-    status = WriteDword(key, Name, Value);
-    if (NT_SUCCESS(status)) status = ZwFlushKey(key);
-    ZwClose(key);
-    return status;
+    return DriverStateSet(L"",Name,REG_DWORD,&Value,sizeof(Value));
 }
 
 // Deleted and flushed; a value that was not there is success.
 NTSTATUS GuardDeleteSetting(_In_z_ PCWSTR Name)
 {
-    HANDLE key;
-    UNICODE_STRING name;
-    NTSTATUS status;
-
-    if (KeGetCurrentIrql() != PASSIVE_LEVEL || g_ParametersPath.Buffer == NULL) return STATUS_INVALID_DEVICE_STATE;
-    status = OpenParameters(&key);
-    if (!NT_SUCCESS(status)) return status;
-    RtlInitUnicodeString(&name, Name);
-    status = ZwDeleteValueKey(key, &name);
-    if (status == STATUS_OBJECT_NAME_NOT_FOUND) status = STATUS_SUCCESS;
-    if (NT_SUCCESS(status)) status = ZwFlushKey(key);
-    ZwClose(key);
-    return status;
+    return DriverStateClear(L"",Name);
 }
 
-// A volatile subkey of Parameters: the configuration manager drops it at every reboot, which is exactly the life
+// A volatile child of service state: the configuration manager drops it at every reboot, which is exactly the life
 // of what it holds (this boot's firmware values, cumode.c). Never flushed; there is no disk copy to flush.
 static NTSTATUS OpenVolatile(_In_z_ PCWSTR Subkey, BOOLEAN Create, _Out_ HANDLE* Key)
 {
-    HANDLE parent;
-    UNICODE_STRING name;
-    OBJECT_ATTRIBUTES attributes;
-    NTSTATUS status;
-
-    *Key = NULL;
-    status = OpenParameters(&parent);
-    if (!NT_SUCCESS(status)) return status;
-    RtlInitUnicodeString(&name, Subkey);
-    InitializeObjectAttributes(&attributes, &name, OBJ_KERNEL_HANDLE | OBJ_CASE_INSENSITIVE, parent, NULL);
-    status = Create ? ZwCreateKey(Key, KEY_READ | KEY_WRITE, &attributes, 0, NULL, REG_OPTION_VOLATILE, NULL)
-                    : ZwOpenKey(Key, KEY_READ, &attributes);
-    ZwClose(parent);
-    return status;
+    return DriverStateOpenVolatile(Subkey,Create,Key);
 }
 
 NTSTATUS GuardVolatileQuery(_In_z_ PCWSTR Subkey, _In_z_ PCWSTR Name, _Out_ ULONG* Value)
@@ -820,7 +778,7 @@ NTSTATUS GuardVolatileQuery(_In_z_ PCWSTR Subkey, _In_z_ PCWSTR Name, _Out_ ULON
     NTSTATUS status;
 
     *Value = 0;
-    if (KeGetCurrentIrql() != PASSIVE_LEVEL || g_ParametersPath.Buffer == NULL) return STATUS_INVALID_DEVICE_STATE;
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL || !DriverStateReady()) return STATUS_INVALID_DEVICE_STATE;
     status = OpenVolatile(Subkey, FALSE, &key);
     if (!NT_SUCCESS(status)) return status;
     status = ReadDword(key, Name, Value);
@@ -833,7 +791,7 @@ NTSTATUS GuardVolatileStore(_In_z_ PCWSTR Subkey, _In_z_ PCWSTR Name, ULONG Valu
     HANDLE key;
     NTSTATUS status;
 
-    if (KeGetCurrentIrql() != PASSIVE_LEVEL || g_ParametersPath.Buffer == NULL) return STATUS_INVALID_DEVICE_STATE;
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL || !DriverStateReady()) return STATUS_INVALID_DEVICE_STATE;
     status = OpenVolatile(Subkey, TRUE, &key);
     if (!NT_SUCCESS(status)) return status;
     status = WriteDword(key, Name, Value);
@@ -877,7 +835,7 @@ void GuardRecordHangRecovery(ULONG Verdict, ULONG Seq, ULONG Fence, ULONG Kills,
     ULONG counts = Bc250HangVerdictCounts(Verdict);
     NTSTATUS status;
 
-    if (KeGetCurrentIrql() != PASSIVE_LEVEL || g_ParametersPath.Buffer == NULL) return;
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL || !DriverStateReady()) return;
     status = OpenParameters(&parameters);
     if (!NT_SUCCESS(status)) {
         GuardLog("hang record: verdict %lu NOT persisted, Parameters open 0x%08X", Verdict, status);
@@ -931,7 +889,7 @@ NTSTATUS GuardRecordWaveSnapshot(const BC250_WAVE_HEADER* Header)
     static const ULONG systemSid[] = {0x00000101u, 0x05000000u, 18u};
     static const ULONG adminSid[] = {0x00000201u, 0x05000000u, 32u, 544u};
     NTSTATUS status;
-    if (KeGetCurrentIrql() != PASSIVE_LEVEL || g_ParametersPath.Buffer == NULL)
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL || !DriverStateReady())
         return STATUS_INVALID_DEVICE_STATE;
     if (Header->AbiVersion != BC250_WAVE_ABI_VERSION ||
         Header->WaveCount > BC250_WAVE_MAX_RECORDS || Header->Kind != BC250_WAVE_KIND_PRE_KILL ||
@@ -1201,7 +1159,7 @@ static void StartRecordWrite(_In_z_ PCWSTR Result, BOOLEAN Failed, NTSTATUS Reas
     ULONG starts = 0, lines = 0;
     NTSTATUS status, first = STATUS_SUCCESS, logStatus = STATUS_SUCCESS;
 
-    if (KeGetCurrentIrql() != PASSIVE_LEVEL || g_ParametersPath.Buffer == NULL) {
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL || !DriverStateReady()) {
         GuardLog("start record %ws: not written, IRQL or no Parameters path", Result);
         return;
     }
@@ -1388,7 +1346,7 @@ void GuardRecordStopBegin(BC250_DEVICE* Device)
     // overwrite the one case this record exists for when a retry of a stopped start then fails. Device->Started
     // is set at the last point of a start that can fail, so a stop before it is always such an unwind.
     if (!Device->Started) { GuardLog("stop record: none, this stop unwinds a start that did not reach a started device"); return; }
-    if (g_ParametersPath.Buffer==NULL) return;
+    if (!DriverStateReady()) return;
     status=StopRecordOpen(&key);
     if (!NT_SUCCESS(status)) {
         GuardLog("stop record: open failed 0x%08X",status);
@@ -1429,7 +1387,7 @@ void GuardRecordStopDone(void)
     NTSTATUS status, first=STATUS_SUCCESS;
     if (!g_StopRecordPending) return;
     g_StopRecordPending=FALSE;
-    if (KeGetCurrentIrql()!=PASSIVE_LEVEL || g_ParametersPath.Buffer==NULL) return;
+    if (KeGetCurrentIrql()!=PASSIVE_LEVEL || !DriverStateReady()) return;
     status=StopRecordOpen(&key);
     if (!NT_SUCCESS(status)) { GuardLog("stop record: finish open failed 0x%08X",status); return; }
     StartRecordTime(time,RTL_NUMBER_OF(time));
