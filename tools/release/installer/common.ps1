@@ -6,7 +6,7 @@
 
 $script:ReleaseName      = 'amdgpu-wddm'
 $script:ServiceName      = 'bc250kmd'
-$script:HardwareIdPrefix = 'PCI\VEN_1002&DEV_13FE'          # bc250kmd.inf [Models.NTamd64]
+$script:HardwareIdPrefix = 'PCI\VEN_1002&DEV_13FE'          # bc250kmd.inf [Models.NTamd64.10.0...22631]
 # The GPU's HD Audio function, the second function of the same silicon. It keeps the inbox HDAudBus driver; the
 # installer changes one value of it (BD-092, Set-GpuAudioMsi below).
 $script:AudioIdPrefix    = 'PCI\VEN_1002&DEV_13FF'

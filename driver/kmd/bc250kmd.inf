@@ -7,7 +7,7 @@ Class       = Display
 ClassGuid   = {4d36e968-e325-11ce-bfc1-08002be10318}
 Provider    = %Provider%
 CatalogFile = bc250kmd.cat
-DriverVer   = 10/12/2026,0.7.216.62
+DriverVer   = 10/13/2026,0.7.216.63
 PnpLockdown = 1
 
 [DestinationDirs]
@@ -21,10 +21,12 @@ DefaultDestDir = 13
 bc250kmd.sys = 1
 ;@UMD bc250umd.dll = 1
 
+; The install section copies to DIRID 13 (driver store), which Windows has since 10.0.16299; InfVerif (HLK, code 1199)
+; asks for a TargetOSVersion that says so. The floor is the oldest build the project supports (n-2, 23H2 = 22631).
 [Manufacturer]
-%Provider% = Models,NTamd64
+%Provider% = Models,NTamd64.10.0...22631
 
-[Models.NTamd64]
+[Models.NTamd64.10.0...22631]
 %DeviceName% = Bc250_Install, PCI\VEN_1002&DEV_13FE
 
 [Bc250_Install]
