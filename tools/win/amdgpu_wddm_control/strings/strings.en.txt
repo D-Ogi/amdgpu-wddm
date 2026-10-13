@@ -570,7 +570,7 @@ help.report.item.1|src|-|the driver's log and its current state (clock speed, te
 help.report.item.2|src|-|the state of the desktop and of the last starts
 help.report.item.3|src|-|the installed driver files with their versions
 help.report.item.4|src|-|DirectX diagnostics and graphics checks
-help.report.item.5|src|-|Windows events of the last 24 hours about the graphics driver
+help.report.item.5|src|-|Windows events of the last 24 hours about the graphics driver, and the records of every program crash and hang of the same 24 hours
 help.report.privacy|src|-|Your user name, computer name and serial numbers are removed. You see every file before the report is saved, and nothing is sent anywhere.
 help.report.dxdiag|src|-|Include DirectX diagnostics (takes up to 2 minutes)
 help.report.caps|src|-|Include the graphics checks

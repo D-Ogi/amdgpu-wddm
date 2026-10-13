@@ -554,7 +554,7 @@ help.report.item.1|mt|4792c5d9|드라이버 로그와 현재 상태(클럭 속�
 help.report.item.2|mt|cd14373b|데스크톱 상태와 최근 시작 상태
 help.report.item.3|mt|b2dda27d|설치된 드라이버 파일과 버전
 help.report.item.4|mt|8014d767|DirectX 진단 및 그래픽 검사
-help.report.item.5|mt|79e75614|그래픽 드라이버와 관련된 최근 24시간의 Windows 이벤트
+help.report.item.5|mt|3e350ded|그래픽 드라이버와 관련된 최근 24시간의 Windows 이벤트 및 같은 24시간 동안 발생한 모든 프로그램 충돌 및 응답 없음 기록
 help.report.privacy|mt|bb8e792c|사용자 이름, 컴퓨터 이름 및 일련 번호는 제거됩니다. 보고서를 저장하기 전에 모든 파일을 확인할 수 있으며, 어디로도 전송되지 않습니다.
 help.report.dxdiag|mt|9661696b|DirectX 진단 포함(최대 2분 소요)
 help.report.caps|mt|2425bb47|그래픽 검사 포함

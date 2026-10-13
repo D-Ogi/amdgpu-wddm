@@ -554,7 +554,7 @@ help.report.item.1|mt|4792c5d9|ドライバーのログと現在の状態 (ク�
 help.report.item.2|mt|cd14373b|デスクトップと最近の起動の状態
 help.report.item.3|mt|b2dda27d|インストールされているドライバー ファイルとそのバージョン
 help.report.item.4|mt|8014d767|DirectX 診断とグラフィックスのチェック
-help.report.item.5|mt|79e75614|グラフィックス ドライバーに関する過去 24 時間の Windows イベント
+help.report.item.5|mt|3e350ded|グラフィックス ドライバーに関する過去 24 時間の Windows イベントと、同じ 24 時間に起きたすべてのプログラムのクラッシュと応答停止の記録
 help.report.privacy|mt|bb8e792c|ユーザー名、コンピューター名、シリアル番号は削除されます。レポートが保存される前にすべてのファイルを確認でき、どこにも送信されません。
 help.report.dxdiag|mt|9661696b|DirectX 診断を含める (最大 2 分かかります)
 help.report.caps|mt|2425bb47|グラフィックスのチェックを含める

@@ -556,7 +556,7 @@ help.report.item.1|rev|4792c5d9|dziennik sterownika i jego bieżący stan (takto
 help.report.item.2|rev|cd14373b|stan pulpitu i ostatnich uruchomień
 help.report.item.3|rev|b2dda27d|zainstalowane pliki sterownika wraz z ich wersjami
 help.report.item.4|rev|8014d767|diagnostykę DirectX i testy grafiki
-help.report.item.5|rev|79e75614|zdarzenia systemu Windows z ostatnich 24 godzin dotyczące sterownika grafiki
+help.report.item.5|mt|3e350ded|zdarzenia systemu Windows z ostatnich 24 godzin dotyczące sterownika grafiki oraz zapisy wszystkich awarii i zawieszeń programów z tych samych 24 godzin
 help.report.privacy|rev|bb8e792c|Nazwa użytkownika, nazwa komputera i numery seryjne są usuwane. Przed zapisaniem raportu zobaczysz każdy plik i nic nie jest nigdzie wysyłane.
 help.report.dxdiag|rev|9661696b|Dołącz diagnostykę DirectX (trwa do 2 minut)
 help.report.caps|rev|2425bb47|Dołącz testy grafiki
