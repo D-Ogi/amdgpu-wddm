@@ -20,8 +20,8 @@ static void InheritedStartCases(void)
         PipeFixture(d.Post.Width,d.Post.Height,cases[i].tw,cases[i].th);
         pipeRegisters[BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_PITCH/4]=d.Post.Pitch/4-1;
         if(autocal) {
-            // The firmware automatic scaler advertises CUSTOM, not a ratio
-            // re-derived from the dimensions. These are not a programming plan.
+            // Manual mode (low bits zero) with unity ratios and an enlarged
+            // recout stays CUSTOM; inactive NUM_PIPE=1 does not mean autoscale.
             pipeRegisters[BC250_REG_DMU_DSCL0_SCL_HORZ_FILTER_SCALE_RATIO/4]=0x01000000;
             pipeRegisters[BC250_REG_DMU_DSCL0_SCL_VERT_FILTER_SCALE_RATIO/4]=0x01000000;
             pipeRegisters[BC250_REG_DMU_DSCL0_DSCL_AUTOCAL/4]=0x100;

@@ -111,7 +111,7 @@ long Bc250InheritedPipeRead(BC250_DISP_IO* Io, BC250_INHERITED_PIPE* Pipe);
 int Bc250InheritedPipeSame(const BC250_INHERITED_PIPE* A, const BC250_INHERITED_PIPE* B);
 // A set of equivalent VidPN transformations for exactly the saved tuple.
 // Custom preserves the firmware image without claiming a standard scaling
-// transform (automatic ratio calculation or a unity-ratio enlarged recout).
+// transform (a non-standard rectangle or a manual unity-ratio enlarged recout).
 // It never grants permission to program a different pipe. Return 0 if
 // the readback does not prove a linear, unrotated RGB source feeding OTG0.
 unsigned long Bc250InheritedPipeSupport(const BC250_INHERITED_PIPE* Pipe,

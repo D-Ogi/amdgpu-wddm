@@ -364,11 +364,10 @@ unsigned long Bc250InheritedPipeSupport(const BC250_INHERITED_PIPE* P,
                           DSCL0_DSCL_AUTOCAL__AUTOCAL_PIPE_ID_MASK)) ||
             mode != DSCL_MODE_444_RGB_ENABLE || W > recout.Width || H > recout.Height ||
             Bc250DispGet(s->MemPwrCtrl, DSCL0_DSCL_MEM_PWR_CTRL__LUT_MEM_PWR_FORCE_MASK)) return 0;
-        // Equal source/recout/target computes unity. Classify that native
-        // geometry below, without consulting inactive manual ratios. Other
-        // automatic shapes remain fixed Custom; no new scaler programming.
-        if (W != TW || H != TH || recout.X || recout.Y ||
-            recout.Width != W || recout.Height != H) return BC250_SCALING_BIT(BC250_SCALING_CUSTOM);
+        // Classify the automatic transform from viewport and recout below.
+        // Full-target recout is STRETCHED; centering and aspect preservation
+        // use the same rectangle matcher as manual ratios. This names the
+        // existing transform only: commit still keeps every pipe register.
     } else if (mode == DSCL_MODE_444_BYPASS) {
         if (recout.Width != W || recout.Height != H) return 0;
     } else if (mode == DSCL_MODE_444_RGB_ENABLE) {

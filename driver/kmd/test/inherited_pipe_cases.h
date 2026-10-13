@@ -89,6 +89,31 @@ static void InheritedPipeCases(void)
     PipeFixture(1024,768,1920,1080);
     CHECK(Bc250InheritedPipeRead(&io,&p)==0 && p.Valid==BC250_INHERITED_PIPE_ALL);
     CHECK(Bc250InheritedPipeSupport(&p,1024,768,4096,1920,1080)==BC250_SCALING_BIT(BC250_SCALING_STRETCHED));
+    // AUTOCAL_MODE=1 derives ratio/phase from viewport and recout. Its manual
+    // ratio words are inactive, so the geometry, not those words, names it.
+    {
+        static const struct {ULONG x,y,w,h,expected;} shapes[]={
+            {0,0,1920,1080,BC250_SCALING_STRETCHED},
+            {448,156,1024,768,BC250_SCALING_CENTERED},
+            {240,0,1440,1080,BC250_SCALING_ASPECT},
+            {0,0,1918,1080,BC250_SCALING_CUSTOM}
+        };
+        unsigned shape,ratios;
+        for(shape=0;shape<RTL_NUMBER_OF(shapes);shape++)for(ratios=0;ratios<3;ratios++) {
+            BC250_INHERITED_PIPE before;
+            q=p;q.Autocal=1;
+            q.Shape.RecoutStart=shapes[shape].x|(shapes[shape].y<<16);
+            q.Shape.RecoutSize=shapes[shape].w|(shapes[shape].h<<16);
+            q.RatioH=q.RatioV=ratios==0?0:ratios==1?0x01000000:0x01000040;
+            before=q;
+            CHECK(Bc250InheritedPipeSupport(&q,1024,768,4096,1920,1080)==BC250_SCALING_BIT(shapes[shape].expected));
+            CHECK(!memcmp(&before,&q,sizeof(q)) && !pipeWrites && !io.StalledUs);
+        }
+        q=p;q.Autocal=1;q.Shape.RecoutStart=1; // full width no longer fits
+        CHECK(!Bc250InheritedPipeSupport(&q,1024,768,4096,1920,1080));
+        q=p;q.Autocal=1;q.Shape.RecoutSize=1023|(768ul<<16); // no automatic downscale admission
+        CHECK(!Bc250InheritedPipeSupport(&q,1024,768,4096,1920,1080));
+    }
     q=p;q.Valid=0;CHECK(!Bc250InheritedPipeSupport(&q,1024,768,4096,1920,1080));
     CHECK(!Bc250InheritedPipeSupport(&p,1024,768,4095,1920,1080));
     CHECK(!Bc250InheritedPipeSupport(&p,0,768,4096,1920,1080));

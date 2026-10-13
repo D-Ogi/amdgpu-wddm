@@ -1,16 +1,23 @@
-static void NegotiationReset(BC250_DEVICE* d,ULONG width,ULONG height,ULONG pitch)
+static void NegotiationResetShape(BC250_DEVICE* d,ULONG width,ULONG height,ULONG pitch,
+    ULONG targetWidth,ULONG targetHeight,BOOLEAN custom)
 {
     D3DKMDT_VIDEO_SIGNAL_INFO signal;
-    memset(d,0,sizeof(*d));Mode(d,1920,1080,2080,1119,174490000);
+    memset(d,0,sizeof(*d));
+    if(targetWidth==2560)Mode(d,2560,1440,2720,1481,241500000);
+    else Mode(d,1920,1080,2080,1119,174490000);
     d->Post.Width=width;d->Post.Height=height;d->Post.Pitch=pitch;
-    PipeFixture(width,height,1920,1080);
+    PipeFixture(width,height,targetWidth,targetHeight);
+    // #38 did not record AUTOCAL. Here it is an explicit synthetic extension.
+    if(targetWidth==2560)Field38Fixture(1,0);
     pipeRegisters[BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_PITCH/4]=pitch/4-1;
     // AUTOCAL_MODE=1, as in both .64 lab arms; ratio words are inactive.
     pipeRegisters[BC250_REG_DMU_DSCL0_DSCL_AUTOCAL/4]=1;
     pipeRegisters[BC250_REG_DMU_DSCL0_SCL_HORZ_FILTER_SCALE_RATIO/4]=0x01000000;
     pipeRegisters[BC250_REG_DMU_DSCL0_SCL_VERT_FILTER_SCALE_RATIO/4]=0x01000000;
+    // A left-aligned recout two pixels short is none of the standard shapes.
+    if(custom)pipeRegisters[BC250_REG_DMU_DSCL0_RECOUT_SIZE/4]=(targetWidth-2)|(targetHeight<<16);
     CHECK(TestFillSignalInfo(d,&signal)==0);
-    CHECK(d->Modeset.InheritedSupport==BC250_SCALING_BIT(BC250_SCALING_CUSTOM));
+    CHECK(d->Modeset.InheritedSupport==BC250_SCALING_BIT(custom?BC250_SCALING_CUSTOM:BC250_SCALING_STRETCHED));
     CHECK(ConnectorStartInherited(d)==0);
     d->ComposedSourceModes=TRUE;d->Dxgk.DxgkCbQueryVidPnInterface=CommitQueryInterface;
     memset(&commitPath,0,sizeof(commitPath));memset(&commitSource,0,sizeof(commitSource));
@@ -22,26 +29,36 @@ static void NegotiationReset(BC250_DEVICE* d,ULONG width,ULONG height,ULONG pitc
     sourceCount=targetCount=sourceAssigned=targetAssigned=updateCalls=failBoundary=0;
     CHECK(!pathRefs && !sourceRefs && !targetRefs && !sourceInfoRefs && !targetInfoRefs);
 }
+static void NegotiationReset(BC250_DEVICE* d,ULONG width,ULONG height,ULONG pitch)
+{
+    NegotiationResetShape(d,width,height,pitch,1920,1080,TRUE);
+}
 static void NegotiationCases(void)
 {
-    BC250_DEVICE d;unsigned size,initial,pinOrder,pivot,n;
+    BC250_DEVICE d;unsigned size,initial,pinOrder,pivot,n,custom;
     const unsigned unpinned[]={D3DKMDT_VPPS_UNPINNED,D3DKMDT_VPPS_UNINITIALIZED,D3DKMDT_VPPS_NOTSPECIFIED};
-    for(size=0;size<2;size++)for(initial=0;initial<RTL_NUMBER_OF(unpinned);initial++)for(pinOrder=0;pinOrder<2;pinOrder++) {
+    for(custom=0;custom<=1;custom++)for(size=0;size<3;size++)
+    for(initial=0;initial<RTL_NUMBER_OF(unpinned);initial++)for(pinOrder=0;pinOrder<2;pinOrder++) {
         DXGKARG_ISSUPPORTEDVIDPN supported={&d,FALSE};
         DXGKARG_ENUMVIDPNCOFUNCMODALITY cofunc={&d,D3DKMDT_EPT_NOPIVOT,{0,BC250_CHILD_UID}};
         DXGKARG_COMMITVIDPN commit={0};unsigned srcBefore,targetBefore;
         BC250_INHERITED_PIPE saved;
-        NegotiationReset(&d,size?1024:800,size?768:600,size?4096:3328);saved=d.Modeset.InheritedPipe;
+        NegotiationResetShape(&d,size==1?1024:800,size==1?768:600,size==1?4096:3328,
+            size==2?2560:1920,size==2?1440:1080,(BOOLEAN)custom);saved=d.Modeset.InheritedPipe;
         commitPath.ContentTransformation.Scaling=unpinned[initial];
         commitPath.ContentTransformation.Rotation=unpinned[initial];
         CHECK(Bc250IsSupportedVidPn(&d,&supported)==0 && supported.IsVidPnSupported);
         CHECK(Bc250EnumVidPnCofuncModality(&d,&cofunc)==0);
         CHECK(sourceCount>0 && sourceCount<=BC250_SOURCE_MODE_MAX && targetCount==1 && sourceAssigned==1 && targetAssigned==1);
-        CHECK(commitPath.ContentTransformation.Scaling==D3DKMDT_VPPS_CUSTOM);
-        CHECK(commitPath.ContentTransformation.ScalingSupport.Custom==1 &&
-            !commitPath.ContentTransformation.ScalingSupport.Identity && !commitPath.ContentTransformation.ScalingSupport.Stretched);
+        CHECK(commitPath.ContentTransformation.Scaling==(custom?D3DKMDT_VPPS_CUSTOM:unpinned[initial]));
+        CHECK((ULONG)commitPath.ContentTransformation.ScalingSupport.Custom==custom &&
+            (ULONG)commitPath.ContentTransformation.ScalingSupport.Stretched==(ULONG)!custom &&
+            !commitPath.ContentTransformation.ScalingSupport.Identity &&
+            !commitPath.ContentTransformation.ScalingSupport.Centered &&
+            !commitPath.ContentTransformation.ScalingSupport.AspectRatioCenteredMax);
         CHECK(commitPath.ContentTransformation.RotationSupport.Identity && commitPath.ContentTransformation.RotationSupport.Offset0);
-        CHECK(offeredTarget.VideoSignalInfo.PixelRate==174490000 && offeredTarget.VideoSignalInfo.ActiveSize.cx==1920);
+        CHECK(offeredTarget.VideoSignalInfo.PixelRate==(size==2?241500000ull:174490000ull) &&
+            offeredTarget.VideoSignalInfo.ActiveSize.cx==(size==2?2560ul:1920ul));
         CHECK(offeredTarget.WireFormatAndPreference.Rgb==D3DKMDT_BITS_PER_COMPONENT_08);
         for(n=0;n<sourceCount;n++) {
             CHECK(offeredSources[n].Format.Graphics.PrimSurfSize.cx==d.Post.Width &&
@@ -56,11 +73,15 @@ static void NegotiationCases(void)
         CHECK(Bc250IsSupportedVidPn(&d,&supported)==0 && supported.IsVidPnSupported);
         CHECK(Bc250EnumVidPnCofuncModality(&d,&cofunc)==0);
         CHECK(sourceAssigned==srcBefore+(pinOrder?1:0) && targetAssigned==targetBefore+(pinOrder?0:1));
+        // DMM owns the standard scaling pin. A support update must not pretend
+        // to pin it; our lab arms check that Windows actually selects it.
+        commitPath.ContentTransformation.Scaling=custom?D3DKMDT_VPPS_CUSTOM:D3DKMDT_VPPS_STRETCHED;
         sourceIsPinned=targetIsPinned=TRUE;commitPath.ContentTransformation.Rotation=D3DKMDT_VPPR_IDENTITY;
         CHECK(Bc250IsSupportedVidPn(&d,&supported)==0 && supported.IsVidPnSupported);
         commit.hFunctionalVidPn=&d;
         CHECK(CommitVidPnCore(&d,&commit)==0 && d.ModeActive && d.CommitSeen);
         CHECK(d.CommittedSourceWidth==d.Post.Width && d.CommittedSourceHeight==d.Post.Height);
+        CHECK(d.Modeset.Scaling==(ULONG)(custom?BC250_SCALING_CUSTOM:BC250_SCALING_STRETCHED));
         CHECK(!memcmp(&saved,&d.Modeset.InheritedPipe,sizeof(saved)) && !pipeWrites && !commitPrograms && !commitTransactions);
     }
     for(pivot=D3DKMDT_EPT_VIDPNSOURCE;pivot<=D3DKMDT_EPT_ROTATION;pivot++) {
@@ -114,5 +135,5 @@ static void NegotiationCases(void)
         CHECK(!pathRefs && !sourceRefs && !targetRefs && !sourceInfoRefs && !targetInfoRefs);
     }
     failBoundary=0;sourceIsPinned=targetIsPinned=TRUE;commitPaths=1;
-    puts("inherited VidPN: enumeration, both pin orders, pivots, commit, refusal and ownership controls passed");
+    puts("inherited VidPN: three tuples, standard/custom pins, pivots, commit, refusal and ownership controls passed");
 }
