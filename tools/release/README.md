@@ -80,6 +80,19 @@ v1 items: the KMD reads its firmware from the driver store (INF `DestinationDirs
 0.7.200.1). Done for tester.11 (KMD 5116c058 = 0aec4c58 + the DPM warm zone, with the INF strings of 1fccb978): the adapter string is "BC-250 GPU (amdgpu-wddm)" (it was
 "BC-250 GPU (bc250kmd, display-only, lab build)") and the INF Provider is "amdgpu-wddm" (it was "BC-250 lab (D-Ogi)").
 
+Release identity of the driver package (BD-150). Windows names a driver package by its INF. If a new INF is byte for
+byte the INF of an installed package, pnputil keeps the installed package and its bc250kmd.sys. If two packages have
+the same DriverVer date and version, PnP keeps the installed one. 29v2 hit both cases and ran the old KMD, and its
+verify passed on the version alone. The build now prevents this:
+
+- `release-sources.json` gives the DriverVer date (`driver_date`) and the release it replaces (`supersedes`). The
+  build stops when the new DriverVer does not rank above it: a later date, or a higher version on the same date.
+- The packaged INF has one comment line under DriverVer with the release and the SHA256 of the signed bc250kmd.sys.
+  So two different KMDs never have the same INF.
+- After pnputil, the installer reads the disk. The driver store must have the bc250kmd.sys of the package, and the
+  service image of the next start must be that file. If not, the install stops and gives the reason.
+- Verify has the check `driver image`: the loaded bc250kmd.sys against the SHA256 in the manifest.
+
 Driver-store queries use `Get-WindowsDriver -Online` objects, including staged packages.
 No removal decision uses translated `pnputil` labels (issue #35).
 An unreadable inventory prevents removal. Failed deletion or an unverified empty store

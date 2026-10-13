@@ -128,6 +128,63 @@ function Get-RunningKmdReading([string]$Cli, [string]$ImageName = 'bc250kmd.sys'
     return [ordered]@{ image = $image; reply_version = $reply }
 }
 
+# BD-150: Windows names a driver package by its INF. pnputil /add-driver of an INF that is byte for byte the INF of a
+# package in the driver store answers "Already exists in the system" and keeps that package with its own bc250kmd.sys,
+# and an INF with the DriverVer date and version of the installed package does not rank above it. Both times pnputil
+# completed, the version matched, and the GPU ran another KMD (tester.29v2 on unit A, 2026-10-13: 22631 kept the
+# BD-077 lab KMD, 26200 the tester.29 KMD). So the installer checks the files after pnputil, and verify checks the
+# loaded image: the version names the release family, only the SHA256 names the KMD.
+function Get-KmdFileSha256([string]$Path) {
+    if (-not $Path -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+    $s = [IO.File]::OpenRead($Path)
+    try { return ([BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($s)) -replace '-', '') } finally { $s.Dispose() }
+}
+
+# Our packages in the driver store, one row per FileRepository folder (bc250kmd.inf_amd64_<hash>): the folder name and
+# the SHA256 of its bc250kmd.sys. A folder name is not translated text, so no DISM or pnputil output is parsed.
+function Read-KmdStoreImages([string]$Repository = (Join-Path $env:windir 'System32\DriverStore\FileRepository')) {
+    return @(Get-ChildItem -LiteralPath $Repository -Directory -Filter 'bc250kmd.inf_*' -ErrorAction SilentlyContinue | ForEach-Object {
+        [pscustomobject]@{ folder = $_.Name; sha256 = (Get-KmdFileSha256 (Join-Path $_.FullName 'bc250kmd.sys')) }
+    })
+}
+
+# The image that the next start of the service loads: its ImagePath as Windows writes it, as a Win32 path, and the
+# SHA256 of that file. $null when the service has no ImagePath.
+function Read-ServiceImage([string]$ServiceName) {
+    $v = (Get-ItemProperty -LiteralPath "HKLM:\SYSTEM\CurrentControlSet\Services\$ServiceName" -Name ImagePath -ErrorAction SilentlyContinue).ImagePath
+    if (-not $v) { return $null }
+    $path = ConvertTo-Win32DriverPath ([string]$v)
+    return [pscustomobject]@{ image_path = [string]$v; path = $path; sha256 = (Get-KmdFileSha256 $path) }
+}
+
+# Pure: does the next start load this package's KMD? $WantSha is the SHA256 of the package's payload\kmd\bc250kmd.sys,
+# $Store the rows of Read-KmdStoreImages, $Service the reading of Read-ServiceImage. Fails when no package of ours in
+# the store has this KMD (the INF matched a stored package), and when the service image is another file (Windows ranks
+# another package above this one). A service without an ImagePath passes on the store alone; verify then reads the
+# loaded image after the restart.
+function Get-KmdImageDecision {
+    param([string]$WantSha, $Store, $Service)
+    function Short([string]$H) { if ($H) { return $H.Substring(0, [Math]::Min(8, $H.Length)) } return 'unreadable' }
+    $want = ([string]$WantSha).ToUpperInvariant()
+    if ($want -notmatch '^[0-9A-F]{64}$') { return [pscustomobject]@{ ok = $false; detail = "the package's bc250kmd.sys has no SHA256 ('$WantSha')" } }
+    $rows = @(@($Store) | Where-Object { $_ })
+    $shown = $(if ($rows.Count) { (@($rows | ForEach-Object { "$($_.folder) $(Short $_.sha256)" }) -join ', ') } else { 'no package of ours' })
+    $mine = @($rows | Where-Object { $_.sha256 -and ([string]$_.sha256).ToUpperInvariant() -eq $want })
+    if (-not $mine.Count) {
+        return [pscustomobject]@{ ok = $false; detail = ("Windows did not take this package's bc250kmd.sys ($(Short $want)): no driver package in the store has it " +
+            "(store: $shown). Windows kept an installed package with the same INF. Uninstall the driver (uninstall.cmd), restart, and install this package again.") }
+    }
+    $where = (@($mine | ForEach-Object { $_.folder }) -join ', ')
+    if (-not $Service -or -not $Service.path) {
+        return [pscustomobject]@{ ok = $true; detail = "the driver store has this package's bc250kmd.sys ($(Short $want)) in $where; the service has no image path yet" }
+    }
+    if (([string]$Service.sha256).ToUpperInvariant() -ne $want) {
+        return [pscustomobject]@{ ok = $false; detail = ("the next start loads $($Service.path) ($(Short $Service.sha256)), not this package's bc250kmd.sys ($(Short $want)) in $where. " +
+            'Windows ranks the installed driver package above this one. Uninstall the driver (uninstall.cmd), restart, and install this package again.') }
+    }
+    return [pscustomobject]@{ ok = $true; detail = "the next start loads this package's bc250kmd.sys ($(Short $want)) from $($Service.path)" }
+}
+
 # Pure: the witness record for one reading, or the reason why there is none. $Manifest is the installed release's
 # manifest.json, $ManifestSha256 the SHA256 of that file. The fields of section 1 first; boot_utc, kmd_image_path,
 # reply_version and driver_ver are for the support report only.
