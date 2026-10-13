@@ -8,7 +8,7 @@
 </h1>
 
 <p align="center"><b>Nagi's AMD Graphics Infrastructure</b>, the driver project also known as amdgpu-wddm.<br>
-<sub>Yes, the N is Nagi again. A recursive acronym, the way Unix people like them.</sub></p>
+<sub>Yes, the N is Nagi again. We borrowed the recursive acronym from GNU and took it to Windows. Linux fans, please send complaints to /dev/null (here it is called NUL).</sub></p>
 
 Nagi is an open Windows driver for AMD GPUs, made first for the ASRock BC-250 (AMD Cyan Skillfish APU, gfx1013). The Windows
 desktop, Direct3D 12, Direct3D 11 and Vulkan games run on the GPU of the board. Inside, the kernel driver uses AMD's
