@@ -87,6 +87,7 @@ static void InheritedField38Cases(void)
             mode.Format.Graphics.VisibleRegionSize=mode.Format.Graphics.PrimSurfSize;
             mode.Format.Graphics.Stride=3328;mode.Format.Graphics.PixelFormat=21;
             path.ContentTransformation.Scaling=D3DKMDT_VPPS_CUSTOM;
+            path.VidPnTargetId=BC250_CHILD_UID;
             path.ContentTransformation.Rotation=D3DKMDT_VPPR_IDENTITY;
             CHECK(DisplayInheritedModeMatches(&d,&mode,&path,&signal));
             update.VidPnPresentPathInfo=path;

@@ -77,7 +77,12 @@ NTSTATUS ModesetPrepareInherited(BC250_DEVICE* Device, const D3DKMDT_VIDEO_SIGNA
     BC250_INHERITED_PIPE second;
     BC250_DISP_IO io;
     NTSTATUS status;
-    m->InheritedFixed = Device->Post.Width != Signal->ActiveSize.cx || Device->Post.Height != Signal->ActiveSize.cy;
+    // A preserved firmware pipe is not a mode we will program with DML/ATOM.
+    // Keep its source stride and clocks, including a running timing above the
+    // 300 MHz bound of connector_link.c:Plan. That bound still applies to every
+    // requested output mode. A fixed start exposes this inherited tuple only.
+    m->InheritedFixed = Device->Post.Width != Signal->ActiveSize.cx || Device->Post.Height != Signal->ActiveSize.cy ||
+        Signal->PixelRate > 300000000ull;
     m->InheritedSupport = 0;
     RtlZeroMemory(&m->InheritedPipe, sizeof(m->InheritedPipe));
     RtlZeroMemory(&second, sizeof(second));

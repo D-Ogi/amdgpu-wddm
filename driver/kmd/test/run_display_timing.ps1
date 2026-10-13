@@ -16,6 +16,10 @@ foreach($signature in @('static ULONG ScalingFromPath(','static BOOLEAN ScalingP
     $vidpn+=$source.Substring($first,$last-$first)+"`n"
 }
 [IO.File]::WriteAllText((Join-Path $Out 'inherited_vidpn_actual.inc'),$vidpn)
+$first=$source.IndexOf('static NTSTATUS CommitVidPnCore(')
+$last=$source.IndexOf("`n}",$first)+3
+if($first -lt 0 -or $last -lt $first){throw 'CommitVidPnCore not found'}
+[IO.File]::WriteAllText((Join-Path $Out 'inherited_vidpn_commit_actual.inc'),$source.Substring($first,$last-$first))
 $modeset=Get-Content (Join-Path $repo 'driver\kmd\modeset.c') -Raw
 $first=$modeset.IndexOf('NTSTATUS ModesetPrepareInherited(')
 $last=$modeset.IndexOf('static ULONG InheritedScalingDefault(',$first)
@@ -27,6 +31,11 @@ foreach($signature in @('static ULONG InheritedScalingDefault(','NTSTATUS Modese
     if($first -lt 0 -or $last -lt $first){throw "Missing body: $signature"}
     $inherited+=$modeset.Substring($first,$last-$first)+"`n"
 }
+$connector=Get-Content (Join-Path $repo 'driver\kmd\connector.c') -Raw
+$first=$connector.IndexOf('static NTSTATUS ConnectorStartInherited(')
+$last=$connector.IndexOf("`n}",$first)+3
+if($first -lt 0 -or $last -lt $first){throw 'ConnectorStartInherited not found'}
+$inherited+=$connector.Substring($first,$last-$first)+"`n"
 [IO.File]::WriteAllText((Join-Path $Out 'inherited_actual.inc'),$inherited)
 $wddm=Get-Content (Join-Path $repo 'driver\kmd\wddm.c') -Raw
 $first=$wddm.IndexOf('static NTSTATUS Bc250WddmDescribeAllocation(')

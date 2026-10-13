@@ -980,7 +980,7 @@ static BOOLEAN DisplayInheritedModeMatches(const BC250_DEVICE* Device,
     const D3DKMDT_VIDEO_SIGNAL_INFO* actual = &Device->InheritedSignal;
     ULONG scaling = ScalingFromPath(Path->ContentTransformation.Scaling);
     return Device->InheritedSignalValid && Mode->Type == D3DKMDT_RMT_GRAPHICS &&
-        Path->VidPnSourceId == 0 && Path->VidPnTargetId == 0 &&
+        Path->VidPnSourceId == 0 && Path->VidPnTargetId == BC250_CHILD_UID &&
         (Path->ContentTransformation.Rotation == D3DKMDT_VPPR_IDENTITY ||
          Path->ContentTransformation.Rotation == D3DKMDT_VPPR_UNPINNED ||
          Path->ContentTransformation.Rotation == D3DKMDT_VPPR_UNINITIALIZED) &&
@@ -1631,6 +1631,7 @@ NTSTATUS Bc250CommitVidPn(_In_ const HANDLE hAdapter, _In_ const DXGKARG_COMMITV
 {
     BC250_DEVICE* device=(BC250_DEVICE*)hAdapter;
     NTSTATUS status;
+    BOOLEAN first=!device->CommitSeen;
     StartHealthEnter(device);
     status=CommitVidPnCore(hAdapter,Commit);
     // Only one inherited mode is accepted. Redundant commits of it preserve
@@ -1638,6 +1639,11 @@ NTSTATUS Bc250CommitVidPn(_In_ const HANDLE hAdapter, _In_ const DXGKARG_COMMITV
     StartHealthDisplayLocked(device,device->SourceVisible,
         (NT_SUCCESS(status) || ConnectorIsEnabled(device)) && device->ModeActive && !Commit->Flags.PathPoweredOff);
     StartHealthLeave(device);
+    if (first && device->Modeset.InheritedFixed)
+        GuardLog("display: first inherited commit status %08lX source %lux%lu pitch %u support %lX active %u power %u/%u",
+            (ULONG)status,device->CommittedSourceWidth,device->CommittedSourceHeight,device->Post.Pitch,
+            device->Modeset.InheritedSupport,(UINT)device->ModeActive,
+            Commit->Flags.PathPowerTransition,Commit->Flags.PathPoweredOff);
     // Outside the start-health mutex: the audio endpoint follows the monitor's power (DPMS off is an unplug for
     // audio, as Linux's az_disable), and takes only its own leaf lock (dpaudio.c).
     if (NT_SUCCESS(status) && Commit->Flags.PathPowerTransition)
@@ -1674,7 +1680,7 @@ NTSTATUS Bc250UpdateActiveVidPnPresentPath(_In_ const HANDLE hAdapter, _In_ cons
     // Check this even when scaling is unpinned and the call would be a no-op.
     if (device->Modeset.InheritedFixed &&
         (!device->InheritedSignalValid || Update->VidPnPresentPathInfo.VidPnSourceId != 0 ||
-         Update->VidPnPresentPathInfo.VidPnTargetId != 0 ||
+         Update->VidPnPresentPathInfo.VidPnTargetId != BC250_CHILD_UID ||
          Update->VidPnPresentPathInfo.VisibleFromActiveTLOffset.cx != 0 ||
          Update->VidPnPresentPathInfo.VisibleFromActiveTLOffset.cy != 0 ||
          Update->VidPnPresentPathInfo.VisibleFromActiveBROffset.cx != 0 ||

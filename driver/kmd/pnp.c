@@ -218,13 +218,15 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     GuardStage(StageStartMmioDone);
 
     device->Started = TRUE;
-    StartHealthReady(device,device->FullWddm && GfxStartupResources(device,TRUE));
     *NumberOfVideoPresentSources = 1;
     *NumberOfChildren = 1;
     InterlockedExchange(&device->RetainedPowerPhase,0);
     // The initial admission keeps the inherited image. Subsequent HPD events
     // go through the passive owner and an OS-selected VidPN transaction.
-    (void)ConnectorStart(device);
+    GuardStartStep(L"ConnectorStart");
+    status=ConnectorStart(device);
+    if (!NT_SUCCESS(status)) goto failed;
+    StartHealthReady(device,device->FullWddm && GfxStartupResources(device,TRUE));
     // Last: it watches a started device, and it never fails the start (EnableHangBugcheck, hang.c).
     HangDetectorStart(device);
     // Before the governor, whose thread runs its step, and after the last point where the start can fail: it arms a
@@ -472,6 +474,10 @@ NTSTATUS Bc250QueryChildRelations(_In_ const PVOID MiniportDeviceContext,
     ChildRelations[0].ChildCapabilities.Type.VideoOutput.SupportsSdtvModes = FALSE;
     ChildRelations[0].AcpiUid = 0;
     ChildRelations[0].ChildUid = BC250_CHILD_UID;
+    if (((BC250_DEVICE*)MiniportDeviceContext)->Modeset.InheritedFixed)
+        GuardLog("display: inherited child reported uid %lu hpd %u interface %u",
+            ChildRelations[0].ChildUid,(UINT)ChildRelations[0].ChildCapabilities.HpdAwareness,
+            (UINT)ChildRelations[0].ChildCapabilities.Type.VideoOutput.InterfaceTechnology);
     return STATUS_SUCCESS;
 }
 

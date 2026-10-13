@@ -1007,8 +1007,24 @@ static void psp_session_controls(void)
     CHECK(!AtomAllowed(&link,0x5e02,1) && link.IoAccess==2);
     ClockSessionLeave(&link);End(&link);balanced();
 }
+static void programmed_clock_bound(void)
+{
+    LINK_MODE mode;BC250_TARGET_TIMING timing;
+    reset(BC250_SINK_HDMI);snapshot.Sink.MaxPixelClockKhz=600000;
+    Begin(&link,snapshot.Generation,FALSE);
+    timing=snapshot.Sink.Targets[0];timing.PixelClockKhz=304250;
+    CHECK(Plan(&link,&snapshot.Sink,&timing,&mode)==STATUS_NOT_SUPPORTED);
+    CHECK(!mode.Valid && !plan_calls && !clock_reads);
+    timing.PixelClockKhz=300001;
+    CHECK(Plan(&link,&snapshot.Sink,&timing,&mode)==STATUS_NOT_SUPPORTED);
+    CHECK(!mode.Valid && !plan_calls && !clock_reads);
+    timing.PixelClockKhz=300000;
+    CHECK(Plan(&link,&snapshot.Sink,&timing,&mode)==STATUS_SUCCESS && mode.Valid);
+    End(&link);balanced();
+}
 int main(void)
 {
+    programmed_clock_bound();
     psp_session_controls();
     distinct_recovery_target();
     atom_write_decisions();
