@@ -10,7 +10,7 @@
     "gamecontrol": "{ws}/scratch/m15/game-recon/game-control.py",
     "pathtrace": "{ws}/scratch/pathtrace",
     "plug": "{ws}/scratch/smartplug/plug.py",
-    "adapter_dir": "adapter138",
+    "adapter_dir": "adapter139",
     "lab_root": "C:\\BC250\\tmp\\train-{release}",
     "lab_pkg": "C:\\BC250\\tmp\\train-{release}\\{pkg_name}",
     "lab_zip": "C:\\BC250\\tmp\\train-{release}\\{pkg_name}.zip"
@@ -1599,8 +1599,8 @@
         ]
       ],
       "env": {
-        "M157_ENGINE": "{pkg}/payload/d3d12/amdgpu_wddm_vkd3d.dll",
-        "M157_ICD": "{pkg}/payload/d3d12/amdgpu_wddm_radv.dll",
+        "SESSION_ENGINE": "{pkg}/payload/d3d12/amdgpu_wddm_vkd3d.dll",
+        "SESSION_ICD": "{pkg}/payload/d3d12/amdgpu_wddm_radv.dll",
         "SESSION_ADAPTER": "{adapter_dir}",
         "SESSION_ACCEPTED": "1",
         "SESSION_SAMPLER": "1",
@@ -1697,7 +1697,7 @@
       "depends_on": [
         "d3d12-promote"
       ],
-      "note": "The runner never starts this one. The owner's rule is that the operator drives a Witcher 3 session itself, a shot every 10-15 s, and ends it when its goals are done. The suite writes its plan file and its command line, so the operator runs one line. M157_ENGINE and M157_ICD name the package's own files, as the rottr arm does: without them run-m157.sh stages its old defaults, and on a package with a new triplet the session swaps those in (2026-10-11, tester.28)."
+      "note": "The runner never starts this one. The owner's rule is that the operator drives a Witcher 3 session itself, a shot every 10-15 s, and ends it when its goals are done. The suite writes its plan file and its command line, so the operator runs one line. M157_ENGINE and M157_ICD name the package's own files, as SESSION_ENGINE and SESSION_ICD do for the rottr arm's run-game.sh: without them run-m157.sh stages its old defaults, and on a package with a new triplet the session swaps those in (2026-10-11, tester.28)."
     },
     {
       "id": "bm-restore",

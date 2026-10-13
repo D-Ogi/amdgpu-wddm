@@ -428,6 +428,11 @@ games.no-settings|src|-|No own settings
 games.hide|src|-|Hide
 games.unhide|src|-|Show
 games.hide.note|src|-|Hiding a game only removes it from this list. Its files, saves and settings stay.
+games.kind.browser|src|-|Web browser, not a game
+games.kind.windows|src|-|Part of Windows, not a game
+games.kind.launcher|src|-|Game store app, not a game
+games.kind.own|src|-|Part of the graphics driver, not a game
+games.not-games.note|src|-|Not listed as games: {0} program(s) such as web browsers and parts of Windows. "Show hidden games" lists them, and "Show" puts one among your games.
 games.empty|src|-|No games yet. Start a game once, or add it by hand.
 games.empty.off|src|-|No games in the list. Remembering launched games is off (Settings); you can add a game by hand.
 games.select|src|-|Choose a game to see its settings.

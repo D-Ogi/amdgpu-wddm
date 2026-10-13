@@ -54,6 +54,10 @@ static void Publish(BC250_SMU_METRICS* M)
     snap.Failures = M->Reader.failures;
     snap.LastStatus = M->Reader.last_status;
     snap.LastParse = M->Reader.last_parse;
+    snap.RejectedTables = M->Reader.rejected_tables;
+    snap.LastReject = M->Reader.last_reject;
+    snap.MarkerMask = M->Reader.marker_mask;
+    snap.SpareBytes = M->Reader.spare_bytes;
     snap.HasTable = M->Reader.has_last ? TRUE : FALSE;
     // The reader's clock is NowMs; the snapshot keeps interrupt time so the escape can age it without the reader.
     snap.TableAt = M->Reader.has_last ? M->Reader.last_ok_ms * 10000ull : 0;
@@ -143,16 +147,20 @@ void SmuMetricsSample(BC250_DEVICE* Device)
     }
 }
 
-BOOLEAN SmuMetricsFill(BC250_DEVICE* Device, BC250_DPM_METRICS* Out)
+static BC250_SMU_METRICS_SNAP Snapshot(BC250_DEVICE* Device)
 {
     BC250_SMU_METRICS* m = &Device->SmuMetrics;
     BC250_SMU_METRICS_SNAP snap;
-    ULONGLONG now = KeQueryInterruptTime(), age;
     KIRQL irql;
-
     KeAcquireSpinLock(&m->SnapLock, &irql);
     snap = m->Snap;
     KeReleaseSpinLock(&m->SnapLock, irql);
+    return snap;
+}
+
+static BOOLEAN FillSnapshot(BC250_SMU_METRICS_SNAP snap, BC250_DPM_METRICS* Out)
+{
+    ULONGLONG now = KeQueryInterruptTime(), age;
     RtlZeroMemory(Out, sizeof(*Out));
     Out->MetricsState = snap.State;
     Out->MetricsReads = snap.Reads;
@@ -170,24 +178,31 @@ BOOLEAN SmuMetricsFill(BC250_DEVICE* Device, BC250_DPM_METRICS* Out)
     Out->GfxTemperatureCc = snap.Table.gfx_cc;
     Out->SocTemperatureCc = snap.Table.soc_cc;
     Out->ThrottlerStatus = snap.Table.throttler;
-    return snap.State == BC250_SMU_METRICS_STATE_OK && age <= BC250_SMU_METRICS_FRESH_MS;
+    return snap.State == BC250_SMU_METRICS_STATE_OK && now >= snap.TableAt && age <= BC250_SMU_METRICS_FRESH_MS;
+}
+
+BOOLEAN SmuMetricsFill(BC250_DEVICE* Device, BC250_DPM_METRICS* Out)
+{
+    return FillSnapshot(Snapshot(Device), Out);
 }
 
 void SmuMetricsLogLine(BC250_DEVICE* Device, _In_z_ const char* What)
 {
     BC250_DPM_METRICS x;
-    BOOLEAN fresh = SmuMetricsFill(Device, &x);
+    BC250_SMU_METRICS_SNAP snap = Snapshot(Device);
+    BOOLEAN fresh = FillSnapshot(snap, &x);
     if (x.MetricsState == BC250_SMU_METRICS_STATE_OFF) return;
     if (!fresh) {
-        GuardLog("smu metrics: %s %s, no fresh table (%lu tables, %lu failures)", What, StateText(x.MetricsState),
-                 x.MetricsReads, x.MetricsFailures);
+        GuardLog("smu metrics: %s no fresh table s%lu fail%lu reject %lu why %lu sp%08X m67 %X", What,
+                 x.MetricsState, x.MetricsFailures, snap.RejectedTables,
+                 snap.LastReject, snap.SpareBytes, snap.MarkerMask);
         return;
     }
     // Two lines: one would pass the log ring's 160 bytes at its worst case (tools/quality/guardlog_width.py).
-    GuardLog("smu metrics: %s %lu.%01lu W avg %lu.%01lu W, gfx %lu.%01lu W soc %lu.%01lu W", What,
-             x.SocketPowerMw / 1000, x.SocketPowerMw % 1000 / 100, x.SocketPowerAvgMw / 1000,
-             x.SocketPowerAvgMw % 1000 / 100, x.GfxPowerMw / 1000, x.GfxPowerMw % 1000 / 100, x.SocPowerMw / 1000,
-             x.SocPowerMw % 1000 / 100);
+    // Raw mW leaves room for quality diagnostics without adding a periodic line (BD-097).
+    GuardLog("smu metrics: %s mW p%lu a%lu g%lu s%lu reject %lu why %lu sp%08X m67 %X", What,
+             x.SocketPowerMw, x.SocketPowerAvgMw, x.GfxPowerMw, x.SocPowerMw,
+             snap.RejectedTables, snap.LastReject, snap.SpareBytes, snap.MarkerMask);
     GuardLog("smu metrics: %s gfx %lu mV %lu MHz %lu.%lu C soc %lu mV %lu.%lu C thr %lX", What, x.GfxMv, x.GfxMHz,
              x.GfxTemperatureCc / 100, x.GfxTemperatureCc % 100 / 10, x.SocMv, x.SocTemperatureCc / 100,
              x.SocTemperatureCc % 100 / 10, x.ThrottlerStatus);

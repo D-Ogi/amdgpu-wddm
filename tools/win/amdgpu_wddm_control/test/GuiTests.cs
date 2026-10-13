@@ -18,6 +18,7 @@ static partial class UnitTests
         Preferences();
         GuideVerdicts();
         RecentLaunchRecords();
+        LaunchKindRules();
         Search();
         WindowFit();
         SmallScreens();
@@ -70,6 +71,9 @@ static partial class UnitTests
         store.Values.Remove(RecentLaunches.SwitchName);
         p.HiddenGames = new HashSet<string> { "a.exe" }; Check(p.HiddenGames.Contains("A.EXE"), "hidden games compare without case");
         p.HiddenGames = new HashSet<string>();
+        p.ShownGames = new HashSet<string> { "msedge.exe" };
+        Check(p.ShownGames.Contains("MSEDGE.EXE") && store.Values["ShownGames"] is string[], "BD-140: entries shown anyway are a list of names (REG_MULTI_SZ) and compare without case");
+        p.ShownGames = new HashSet<string>();
         p.LastSeenRelease = "1.0"; p.LastSeenRelease = null;
         p.NameTipRelease = "1.0"; Equal("1.0", p.NameTipRelease, "the name tip records the release it was shown for"); p.NameTipRelease = null;
         Equal(0, store.Values.Count, "R4: on then off leaves no value");
@@ -246,6 +250,58 @@ static partial class UnitTests
             Check(File.Exists(Path.Combine(dir, RecentLaunches.LockName)), "A4: the lock file is never deleted");
         }
         finally { try { Directory.Delete(dir, true); } catch (Exception) { } }
+    }
+
+    // BD-140: what a recorded launch is, from its path alone. Browsers, web views, parts of Windows and game stores are
+    // not offered as games; a game in any folder stays a game; Hide and Show keep working on both kinds.
+    static void LaunchKindRules()
+    {
+        const string win = @"C:\Windows";
+        Equal(LaunchKind.Browser, LaunchKinds.Of(@"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe", win), "BD-140: Edge is a browser");
+        Equal(LaunchKind.Browser, LaunchKinds.Of(@"C:\Program Files (x86)\Microsoft\EdgeWebView\Application\129.0.2792.89\msedgewebview2.exe", win),
+            "BD-140: the WebView2 host (Widgets, Teams, the new Outlook) is a browser");
+        Equal(LaunchKind.Browser, LaunchKinds.Of(@"D:\Tools\Portable\MSEDGE.EXE", win), "BD-140: the file name decides, in any folder and any case");
+        Equal(LaunchKind.Windows, LaunchKinds.Of(@"C:\Program Files\WindowsApps\Microsoft.ScreenSketch_11.2409.25.0_x64__8wekyb3d8bbwe\SnippingTool\SnippingTool.exe", win),
+            "BD-140: the Snipping Tool is part of Windows (by its package name)");
+        Equal(LaunchKind.Windows, LaunchKinds.Of(@"E:\WindowsApps\Microsoft.Paint_11.2410.28.0_x64__8wekyb3d8bbwe\PaintApp\mspaint.exe", win),
+            "BD-140: a Windows package moved to another drive is still part of Windows");
+        Equal(LaunchKind.Windows, LaunchKinds.Of(@"C:\Windows\SystemApps\MicrosoftWindows.Client.CBS_cw5n1h2txyewy\SearchHost.exe", win), "BD-140: anything below the Windows folder");
+        Equal(LaunchKind.Windows, LaunchKinds.Of(@"c:\windows\system32\dwm.exe", win + @"\"), "BD-140: the Windows folder compares without case and trailing separator");
+        Equal(LaunchKind.Game, LaunchKinds.Of(@"C:\Windows2\game.exe", win), "BD-140: a folder whose name only starts like the Windows folder is not below it");
+        Equal(LaunchKind.Game, LaunchKinds.Of(@"D:\SteamLibrary\steamapps\common\The Witcher 3\bin\x64_dx12\witcher3.exe", win), "BD-140: a game in a Steam library is a game");
+        Equal(LaunchKind.Game, LaunchKinds.Of(@"C:\Games\Factorio\bin\x64\factorio.exe", win), @"BD-140: a game in C:\Games is a game");
+        Equal(LaunchKind.Game, LaunchKinds.Of(@"\\nas\games\Quake II RTX\q2rtx.exe", win), "BD-140: a game on a network share is a game");
+        Equal(LaunchKind.Game, LaunchKinds.Of(@"C:\Program Files\WindowsApps\Microsoft.MicrosoftSolitaireCollection_4.21.0.0_x64__8wekyb3d8bbwe\Solitaire.exe", win),
+            "BD-140: a Microsoft game package this list does not name stays a game (the publisher does not decide)");
+        Equal(LaunchKind.Game, LaunchKinds.Of(@"C:\XboxGames\Forza Horizon 5\Content\ForzaHorizon5.exe", win), "BD-140: an Xbox app game is a game");
+        Equal(LaunchKind.Launcher, LaunchKinds.Of(@"C:\Program Files (x86)\Steam\steam.exe", win), "BD-140: the Steam client starts games, it is not one");
+        Equal(LaunchKind.Browser, LaunchKinds.Of(@"C:\Program Files (x86)\Steam\bin\cef\cef.win7x64\steamwebhelper.exe", win), "BD-140: Steam's web pages are a browser");
+        Equal(LaunchKind.OwnTool, LaunchKinds.Of(@"C:\Program Files\amdgpu-wddm\amdgpu_wddm_control.exe", win), "BD-140: this project's own programs are not games");
+        Equal(LaunchKind.Game, LaunchKinds.Of("", win), "BD-140: no path, no verdict: a game");
+        Equal(LaunchKind.Game, LaunchKinds.Of(@"C:\Games\x.exe", null), "BD-140: no Windows folder known, the other rules still apply");
+        Equal(LaunchKind.Browser, LaunchKinds.Of(new RecentLaunch { Image = "msedge.exe", Path = @"C:\Program Files\Microsoft\Edge\Application\msedge.exe" }, win), "BD-140: a recorded launch by its path");
+        Equal("Microsoft.ScreenSketch", LaunchKinds.PackageName(@"C:\Program Files\WindowsApps\Microsoft.ScreenSketch_11.2409.25.0_x64__8wekyb3d8bbwe\SnippingTool\SnippingTool.exe"), "BD-140: package name");
+        Equal(null, LaunchKinds.PackageName(@"D:\Games\WindowsApps\MyGame\game.exe"), "BD-140: a folder that is not a package folder has no package name");
+
+        var hidden = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var shown = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        Check(LaunchKinds.Hidden("msedge.exe", LaunchKind.Browser, hidden, shown) && !LaunchKinds.Hidden("witcher3.exe", LaunchKind.Game, hidden, shown),
+            "BD-140: a browser is hidden by itself, a game is not");
+        LaunchKinds.Toggle("msedge.exe", LaunchKind.Browser, true, hidden, shown);
+        Check(!LaunchKinds.Hidden("MSEDGE.EXE", LaunchKind.Browser, hidden, shown) && shown.Contains("msedge.exe") && hidden.Count == 0, "BD-140: Show puts a browser among the games");
+        LaunchKinds.Toggle("msedge.exe", LaunchKind.Browser, false, hidden, shown);
+        Check(LaunchKinds.Hidden("msedge.exe", LaunchKind.Browser, hidden, shown) && shown.Count == 0 && hidden.Count == 0, "BD-140: Hide takes it out again and leaves no name behind");
+        LaunchKinds.Toggle("witcher3.exe", LaunchKind.Game, false, hidden, shown);
+        Check(LaunchKinds.Hidden("witcher3.exe", LaunchKind.Game, hidden, shown) && hidden.Contains("witcher3.exe") && shown.Count == 0, "BD-140: Hide on a game still hides it (WU-013)");
+        LaunchKinds.Toggle("witcher3.exe", LaunchKind.Game, true, hidden, shown);
+        Check(!LaunchKinds.Hidden("witcher3.exe", LaunchKind.Game, hidden, shown) && hidden.Count == 0 && shown.Count == 0, "BD-140: Show on a hidden game brings it back");
+        hidden.Add("msedge.exe"); shown.Add("msedge.exe");
+        Check(LaunchKinds.Hidden("msedge.exe", LaunchKind.Browser, hidden, shown), "BD-140: the person's Hide wins over an older Show");
+        foreach (LaunchKind k in Enum.GetValues(typeof(LaunchKind)))
+        {
+            var id = LaunchKinds.TextId(k);
+            Check(k == LaunchKind.Game ? id == null : Strings.Has(id), "BD-140: the line of " + k + " is in the string table");
+        }
     }
 
     // WU-009, WU-071: names and common terms in every language, width and kana folding, Coming-later rows.

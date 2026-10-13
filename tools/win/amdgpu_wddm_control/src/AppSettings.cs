@@ -164,13 +164,25 @@ namespace AmdgpuWddmControl
         // Hidden entries of the Games list (WU-013): their keys; hiding never touches a game's files or saves.
         public HashSet<string> HiddenGames
         {
-            get { return new HashSet<string>(_store.Get("HiddenGames") as string[] ?? new string[0], StringComparer.OrdinalIgnoreCase); }
-            set
-            {
-                var list = (value ?? new HashSet<string>()).OrderBy(k => k, StringComparer.OrdinalIgnoreCase).ToArray();
-                if (list.Length == 0) { if (_store.Get("HiddenGames") != null) _store.Delete("HiddenGames"); }
-                else if (!HiddenGames.SetEquals(list)) _store.SetMulti("HiddenGames", list);
-            }
+            get { return Names("HiddenGames"); }
+            set { SetNames("HiddenGames", value); }
+        }
+
+        // BD-140: entries that are not games (a web browser, a part of Windows, a game store's client; LaunchKinds)
+        // and that the person chose to see among the games anyway. Absent: every such entry stays hidden.
+        public HashSet<string> ShownGames
+        {
+            get { return Names("ShownGames"); }
+            set { SetNames("ShownGames", value); }
+        }
+
+        HashSet<string> Names(string name) { return new HashSet<string>(_store.Get(name) as string[] ?? new string[0], StringComparer.OrdinalIgnoreCase); }
+
+        void SetNames(string name, HashSet<string> value)
+        {
+            var list = (value ?? new HashSet<string>()).OrderBy(k => k, StringComparer.OrdinalIgnoreCase).ToArray();
+            if (list.Length == 0) { if (_store.Get(name) != null) _store.Delete(name); }
+            else if (!Names(name).SetEquals(list)) _store.SetMulti(name, list);
         }
 
         // Windows "Animation effects" (SPI_GETCLIENTAREAANIMATION); null when it cannot be read.

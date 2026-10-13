@@ -48,17 +48,24 @@
 #define BC250_SMU_METRICS_OFF_SOCKET 104u       /* uint32 CurrentSocketPower, mW: the whole package */
 #define BC250_SMU_METRICS_OFF_SOC_TEMP 108u     /* uint16 SocTemperature, centi-Celsius (amdgpu: hotspot) */
 #define BC250_SMU_METRICS_OFF_THROTTLER 112u    /* uint16 ThrottlerStatus */
+#define BC250_SMU_METRICS_OFF_SPARE 114u        /* uint16 Spare, diagnostic only */
 #define BC250_SMU_METRICS_OFF_ACCNT 240u        /* uint32 Accnt, after SampleStartTime and SampleStopTime */
 
 /* The byte the owner fills the page with before every transfer. A field that still holds it afterwards was not
  * written by the firmware, so the table is refused instead of read as 4294967 W. */
 #define BC250_SMU_METRICS_POISON 0xFFu
 
-/* Plausibility bounds of one accepted table. The lab PSU is 300 W (owner, 2026-10-01); a package figure above 400 W
- * or a rail voltage above 2 V is not a reading of this part, and neither is a temperature above 150 C. */
-#define BC250_SMU_METRICS_MAX_MW 400000u
-#define BC250_SMU_METRICS_MAX_MV 2000u
+/* Acceptance bounds, not control limits. The board has a 300 W PSU. The GPU uses 500..2000 MHz and at most
+ * 1000 mV (docs/hardware.md). Allow 5% clock and 100 mV readback margin, not higher setpoints. The CPU rail's
+ * readback envelope is at most 1600 mV there. Zero voltage/clock is allowed for a gated rail. Temperature must
+ * remain visible ABOVE the thermal trip: 150 C is a decode ceiling, never permission to operate that hot. */
+#define BC250_SMU_METRICS_MAX_MW 300000u
+#define BC250_SMU_METRICS_MAX_GFX_MV 1100u
+#define BC250_SMU_METRICS_MAX_SOC_MV 1600u
+#define BC250_SMU_METRICS_MIN_GFX_MHZ 500u
+#define BC250_SMU_METRICS_MAX_GFX_MHZ 2100u
 #define BC250_SMU_METRICS_MAX_CC 15000u
+#define BC250_SMU_METRICS_MAX_RESIDENCY 100u /* C0Residency is percentage, upstream interface 0x8 */
 
 /* Cadence and freshness. One table per second at most, read by the DPM governor thread, the same cadence as its
  * clock readback (BC250_DPM_VERIFY_MS). A reading older than three periods is "no reading". */
@@ -90,7 +97,9 @@ enum bc250_smu_metrics_parse {
 	BC250_SMU_METRICS_PARSE_SHORT = 1,      /* fewer than BC250_SMU_METRICS_BYTES bytes */
 	BC250_SMU_METRICS_PARSE_UNWRITTEN = 2,  /* the poison is still in a field the firmware always writes */
 	BC250_SMU_METRICS_PARSE_RANGE = 3,      /* a value outside the bounds above */
-	BC250_SMU_METRICS_PARSE_ZERO_POWER = 4  /* the current or average socket power reads 0 mW: a skipped sample */
+	BC250_SMU_METRICS_PARSE_ZERO_POWER = 4, /* the current or average socket power reads 0 mW: a skipped sample */
+	BC250_SMU_METRICS_PARSE_CORE_OVERFLOW = 5, /* clock AND temperature look like C0Residency[6..7] */
+	BC250_SMU_METRICS_PARSE_CLOCK = 6      /* nonzero GPU clock outside the readback envelope */
 };
 
 /* One accepted table, in the units of the header. */
@@ -112,6 +121,10 @@ struct bc250_smu_metrics_reader {
 	unsigned int bad_in_row;
 	int last_status;                /* the transport's last result, 0 for success */
 	unsigned int last_parse;        /* enum bc250_smu_metrics_parse of the last table the firmware wrote */
+	unsigned int rejected_tables;   /* saturating count of parse refusals, no transport failures */
+	unsigned int last_reject;       /* last non-OK parse, retained across successful reads */
+	unsigned int marker_mask;       /* 0x67 seen in Spare bytes 114,115,230,231: bits 0..3; diagnostic only */
+	unsigned int spare_bytes;       /* raw bytes at 114,115,230,231, packed from least to most significant */
 	unsigned long long next_ms;     /* no read before this time */
 	unsigned long long last_ok_ms;  /* the time of the last accepted table */
 	int has_last;
@@ -131,6 +144,9 @@ int bc250_smu_metrics_table_allowed(unsigned long long table_mc, unsigned long l
 /* Decodes one table. On BC250_SMU_METRICS_PARSE_OK *out holds it; on anything else *out is zeroed. */
 enum bc250_smu_metrics_parse bc250_smu_metrics_parse(const unsigned char *raw, unsigned int length,
 						     struct bc250_smu_metrics *out);
+/* Only inspect the four named Spare bytes. The community marker's exact byte is not specified. No marker
+ * admits a layout or overrides validation; this function never follows an address or reads another table. */
+unsigned int bc250_smu_metrics_marker(const unsigned char *raw, unsigned int length);
 /* A reader for one start. enabled: EnableSmuMetrics. table_ok: the page exists and the SMU owner is online.
  * refused_this_boot: an earlier start of this driver image saw a refusal, so this one sends nothing. */
 void bc250_smu_metrics_reader_init(struct bc250_smu_metrics_reader *r, int enabled, int table_ok,

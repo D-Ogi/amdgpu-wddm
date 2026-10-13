@@ -5,7 +5,7 @@ using AmdgpuWddmControl;
 
 static partial class UnitTests
 {
-    static void StartupDiagnosticTests()
+    static void StartupDiagnosticTests(string root)
     {
         Check(!StartupDiagnosticData.Needed(false, false, 0, false), "no report on a PC with no installed driver");
         // How the report prints one value of a record. The numbers a reader compares by eye - the stage the
@@ -91,5 +91,105 @@ static partial class UnitTests
             catch (ArgumentException) { }
         }
         Check(pid.Success && !alive, "deadline terminates the actual worker, not only its waiter");
+        WorkerRunTests(root, dir);
+    }
+
+    // BD-142: tester.29's reports held one line, "Worker exit -532462766." (0xE0434352, an unhandled .NET exception):
+    // the worker set Console.OutputEncoding, whose setter calls SetConsoleOutputCP and throws IOException in a process
+    // without a console, before it wrote anything. Now the worker writes to its output stream itself, every probe's
+    // exception is a line of the report, and an exception outside the probes is the report's last lines.
+    static void WorkerRunTests(string root, string dir)
+    {
+        var redactor = new Redactor("Alice", "LABPC", @"C:\Users\Alice");
+        string held = Path.Combine(dir, "held-open.log");
+        File.WriteAllText(held, "a log another program holds open\n");
+        string report;
+        int code;
+        using (new FileStream(held, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+        using (var pipe = new MemoryStream())
+        {
+            code = StartupDiagnosticData.RunWorker(pipe, redactor, () => 0, data =>
+            {
+                data.Add("Automatic start/stop diagnostics\n");
+                data.Source("first source", () => data.Add("first source ran for Alice\n"));
+                data.Source("held file", () => data.Add(StartupDiagnosticData.Tail(held, 1024)));
+                data.Source("third source", () => data.Add("third source ran\n"));
+                data.Add("\nCollection finished.\n");
+            });
+            report = new UTF8Encoding(false, true).GetString(pipe.ToArray());
+        }
+        Equal(0, code, "BD-142: a probe that throws is a line of the report, not the worker's exit");
+        Check(report.Contains("=== first source ===\nfirst source ran") && report.Contains("=== third source ===\nthird source ran") && report.Contains("Collection finished."),
+            "BD-142: the probes before and after the failing one are in the report, and the collection finished");
+        // The message and the word before each stack frame ("at", "w", ...) are in the language of Windows; the type,
+        // the HRESULT and the method names are not.
+        Check(report.Contains("=== held file ===\nUnavailable: IOException: "), "BD-142: the failing probe's line names the exception's type and message");
+        Check(report.Contains("type System.IO.IOException, HRESULT 0x80070020"), "BD-142: and its full type and HRESULT (0x80070020, a sharing violation)");
+        Check(report.Contains(" AmdgpuWddmControl.StartupDiagnosticData.Tail(") && report.Contains(" System.IO.FileStream..ctor("), "BD-142: and its stack, down to the probe that threw");
+        Check(!report.Contains("Alice") && !report.Contains("\uFEFF"), "BD-142: the worker's text is redacted UTF-8 without a byte order mark");
+
+        using (var pipe = new MemoryStream())
+        {
+            code = StartupDiagnosticData.RunWorker(pipe, redactor, () => 0, data =>
+            {
+                data.Source("first source", () => data.Add("first source ran\n"));
+                throw new InvalidOperationException("outside every source");
+            });
+            report = Encoding.UTF8.GetString(pipe.ToArray());
+        }
+        Equal(StartupDiagnosticData.WorkerFaulted, code, "BD-142: an exception outside the probes is the worker's exit 3, not an unhandled exception");
+        Check(report.Contains("first source ran") && report.Contains("=== The collection stopped ===") && report.Contains("InvalidOperationException: outside every source"),
+            "BD-142: and its type and message are the report's last lines");
+        Check(report.Contains("type System.InvalidOperationException, HRESULT 0x80131509") && report.Contains("WorkerRunTests") && report.Contains(" AmdgpuWddmControl.StartupDiagnosticData.RunWorker("),
+            "BD-142: with its HRESULT and its stack");
+
+        long late = StartupDiagnosticData.TimeoutMs;
+        using (var pipe = new MemoryStream())
+        {
+            code = StartupDiagnosticData.RunWorker(pipe, redactor, () => late, data => { data.Add("skipped after the deadline\n"); throw new TimeoutException("late"); });
+            report = Encoding.UTF8.GetString(pipe.ToArray());
+        }
+        Check(code == StartupDiagnosticData.WorkerFaulted && !report.Contains("skipped") && report.Contains("TimeoutException: late"), "BD-142: the stop lines are written after the deadline too");
+
+        code = StartupDiagnosticData.RunWorker(new BrokenPipe(), redactor, () => 0, data =>
+        {
+            data.Source("first source", () => data.Add("lost\n"));
+            Check(data.OutputLost && !data.Active, "BD-142: a write to a closed pipe marks the output lost and stops the collection");
+            data.Source("second source", () => { throw new Exception("must not run"); });
+        });
+        Equal(StartupDiagnosticData.WorkerOutputLost, code, "BD-142: a closed pipe is exit 4, not an exception");
+        Equal(StartupDiagnosticData.WorkerOutputLost, StartupDiagnosticData.RunWorker(new MemoryStream(new byte[0], false), redactor, () => 0, data => data.Add("x")),
+            "BD-142: an output that cannot be written at all is exit 4");
+
+        Equal("Worker exit 0", DiagnosticWorker.ExitText(0), "BD-142: a finished worker reads as before");
+        Check(DiagnosticWorker.ExitText(-532462766).StartsWith("Worker exit -532462766 (0xE0434352: ") && DiagnosticWorker.ExitText(-532462766).Contains("Application event log"),
+            "BD-142: the tester.29 exit says what it is and where its record is");
+        Check(DiagnosticWorker.ExitText(3).Contains("lines above") && DiagnosticWorker.ExitText(4).Contains("could not write") && DiagnosticWorker.ExitText(7) == "Worker exit 7 (0x00000007)",
+            "BD-142: the worker's own exit codes are explained");
+        var missing = DiagnosticWorker.Run(new System.Diagnostics.ProcessStartInfo(Path.Combine(dir, "no-such-worker.exe")), 2000);
+        Check(missing.StartsWith("The diagnostics worker could not start: Win32Exception: "), "BD-142: a worker that cannot start is a line of the report, not an exception of the window");
+
+        // No source of the application sets the console's code pages: the exe is a Windows-subsystem program, and the
+        // worker and the other entries run without a console.
+        var src = Path.Combine(root, @"tools\win\amdgpu_wddm_control\src");
+        foreach (var file in Directory.GetFiles(src, "*.cs"))
+        {
+            var text = File.ReadAllText(file);
+            Check(!System.Text.RegularExpressions.Regex.IsMatch(text, @"Console\.(OutputEncoding|InputEncoding)\s*="), "BD-142: " + Path.GetFileName(file) + " does not set the console's encoding");
+        }
+    }
+
+    sealed class BrokenPipe : Stream
+    {
+        public override bool CanRead { get { return false; } }
+        public override bool CanSeek { get { return false; } }
+        public override bool CanWrite { get { return true; } }
+        public override long Length { get { throw new NotSupportedException(); } }
+        public override long Position { get { throw new NotSupportedException(); } set { throw new NotSupportedException(); } }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) { throw new NotSupportedException(); }
+        public override long Seek(long offset, SeekOrigin origin) { throw new NotSupportedException(); }
+        public override void SetLength(long value) { throw new NotSupportedException(); }
+        public override void Write(byte[] buffer, int offset, int count) { throw new IOException("The pipe is being closed.", unchecked((int)0x800700E8)); }
     }
 }

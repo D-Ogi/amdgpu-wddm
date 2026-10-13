@@ -19,6 +19,8 @@ typedef struct _BC250_SMU_METRICS_SNAP {
     ULONG Reads, Failures;
     LONG LastStatus;                        // the transport's last result
     ULONG LastParse;                        // enum bc250_smu_metrics_parse of the last table the firmware wrote
+    ULONG RejectedTables, LastReject, MarkerMask; // log-only quality data; RUN_DPM ABI 3 stays 248 bytes
+    ULONG SpareBytes;                       // raw Spare bytes, see bc250_smu_metrics_reader
     BOOLEAN HasTable;
     ULONGLONG TableAt;                      // KeQueryInterruptTime of the last accepted table, 0 for none
     struct bc250_smu_metrics Table;         // the last accepted table

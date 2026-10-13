@@ -1024,8 +1024,46 @@ static void disabled(void)
 	CHECK(ec.logged == 0u && ec.writes_latch == 0u && ctl.state == BC250_FAN_STATE_OFF);
 }
 
+/* BD-148: an absent/stale SMU sample removes only the power contribution. The native metrics test drives
+ * that freshness result; here the real fan policy must still use temperature, temperature rise and GPU load. */
+static void missing_power(void)
+{
+	struct ec_mock ec;
+	struct bc250_hwmon_io io;
+	struct bc250_fan_ctl ctl;
+	struct bc250_fan_input in;
+	unsigned int i;
+
+	start(&ec, &io, &ctl);
+	for (i = 0; i < 10; i++) {
+		in = load_input(&ec, 60000, 0, 500, 300000);
+		in.power_valid = 0;
+		CHECK(bc250_fan_tick(&io, &ctl, &in) == 0);
+		CHECK((ctl.boost_why & BC250_FAN_BOOST_WHY_POWER) == 0 && !ctl.boost);
+	}
+	CHECK(ctl.controlling && ctl.applied_pct == bc250_fan_curve_eval(&ctl.curve, 60000));
+	for (i = 0; i < 3; i++) {
+		in = load_input(&ec, 60000, 990, 1500, 0);
+		in.power_valid = 0;
+		CHECK(bc250_fan_tick(&io, &ctl, &in) == 0);
+	}
+	CHECK(ctl.boost && (ctl.boost_why & BC250_FAN_BOOST_WHY_BUSY) != 0 && ctl.applied_pct == 100);
+	start(&ec, &io, &ctl);
+	for (i = 0; i < 8; i++) {
+		in = load_input(&ec, 50000 + (int)i * 1500, 0, 500, 0);
+		in.power_valid = 0;
+		CHECK(bc250_fan_tick(&io, &ctl, &in) == 0);
+	}
+	CHECK(ctl.boost && (ctl.boost_why & BC250_FAN_BOOST_WHY_RISE) != 0 && ctl.applied_pct == 100);
+	in = load_input(&ec, 87000, 0, 500, 0);
+	in.power_valid = 0;
+	CHECK(bc250_fan_tick(&io, &ctl, &in) == 0 && ctl.emergency && ctl.applied_pct == 100);
+	CHECK(clean_writes(&ec));
+}
+
 int main(void)
 {
+	missing_power();
 	curves();
 	requests();
 	handshake();

@@ -146,7 +146,7 @@ static void reading(void)
     /* The log line fits the ring and says what the escape says. */
     native_lines = 0;
     SmuMetricsLogLine(&device, "telemetry");
-    CHECK(native_lines == 2 && native_log_has("78.0 W avg 77.4 W, gfx 48.0 W soc 21.0 W") && native_log_has("gfx 919 mV 1500 MHz 62.0 C soc 900 mV 60.5 C thr 4"));
+    CHECK(native_lines == 2 && native_log_has("mW p78000 a77400 g48000 s21000") && native_log_has("gfx 919 mV 1500 MHz 62.0 C soc 900 mV 60.5 C thr 4"));
     /* A governor that stops calling (paused for a power transition): the copy ages out after three seconds. */
     native_advance_ms(2360);
     CHECK(SmuMetricsFill(&device, &x));
@@ -191,6 +191,50 @@ static void bad_tables(void)
     SmuMetricsStop(&device);
 }
 
+static void overflow_and_age(void)
+{
+    BC250_DPM_METRICS x;
+    ULONG i;
+    unit_a();
+    good_table();
+    SmuMetricsStart(&device);
+    ticks(1000);
+    CHECK(SmuMetricsFill(&device, &x));
+    put16(68, 100); put16(70, 99); /* C0Residency[6] and [7] overwrote the GPU pair */
+    native_table[114] = 0x67;      /* marker does not admit corrupt fields */
+    for (i = 1; i <= 3; i++) {
+        ticks(1000);
+        CHECK(SmuMetricsFill(&device, &x) == (i < 3));
+        CHECK(x.MetricsFailures == i && x.MetricsReads == 1 && x.MetricsAgeMs == i * 1000);
+        CHECK(x.GfxMHz == 1500 && x.GfxTemperatureCc == 6200 && x.SocketPowerMw == 78000);
+    }
+    CHECK(x.MetricsState == BC250_DPM_METRICS_BAD_TABLE);
+    native_lines = 0;
+    SmuMetricsLogLine(&device, "telemetry");
+    CHECK(native_log_has("reject 3 why 5 sp00000067 m67 1") && native_log_has("no fresh table"));
+    ticks(5000);
+    CHECK(native_reads == 4 && !SmuMetricsFill(&device, &x));
+    SmuMetricsStop(&device);
+
+    /* A transient refusal followed by a valid table recovers, preserving the last refusal reason. */
+    good_table();
+    SmuMetricsStart(&device);
+    ticks(1000);
+    put16(68, 100); put16(70, 99);
+    ticks(1000);
+    good_table();
+    ticks(1000);
+    CHECK(SmuMetricsFill(&device, &x) && x.MetricsFailures == 1 && x.MetricsAgeMs == 0);
+    native_lines = 0;
+    SmuMetricsLogLine(&device, "telemetry");
+    CHECK(native_log_has("reject 1 why 5 sp00000000 m67 0") && native_lines == 2);
+    /* Zero-power skips do not renew the last good sample: consumers lose POWER after three periods. */
+    put32(220, 0);
+    ticks(4000);
+    CHECK(!SmuMetricsFill(&device, &x) && x.MetricsState == BC250_DPM_METRICS_OK);
+    SmuMetricsStop(&device);
+}
+
 /* Last: the latch is the image's (a static in smu_metrics.c), as on the lab. */
 static void refusal(void)
 {
@@ -231,6 +275,7 @@ int main(void)
     no_page();
     reading();
     bad_tables();
+    overflow_and_age();
     refusal();
     printf("SMU metrics binding: %ld checks, %ld failures\n", native_checks, native_failures);
     return native_failures ? 1 : 0;

@@ -21,7 +21,9 @@ about 1.3 times wider, which the OCR boxes show, so the driver reads where the h
 where a click put it.
 
 The score stays the operator's reading in the summary; the line this prints is where to read it from. Exit code:
-the session command's own, or 5 when the drive failed (the session is then ended through the channel first).
+the session command's own when it is not 0; else 0 only when the drive read the result line; else 5: the drive
+failed (the session is then ended through the channel first), the drive raised or did not end, the game never
+ran, or the session ended before the result showed.
 
 Usage: game-drive.py --profile rottr --attempt native-caps548 --control <game-control.py> -- <session command>
 """
@@ -198,6 +200,8 @@ class Driver:
         self.wait_game, self.wait_menu, self.wait_result = wait_game, wait_menu, wait_result
         self.sleep, self.clock, self.say = sleep, clock, say
         self.failed = ""
+        self.game_seen = False
+        self.completed = False      # set only after the result line was read
 
     def fail(self, why: str) -> None:
         self.failed = why
@@ -292,6 +296,7 @@ class Driver:
             if self.alive():
                 self.fail("the game did not start")
             return
+        self.game_seen = True
         self.say("[drive] the game runs; reading the screen until the menu shows")
 
         def menu():
@@ -331,6 +336,7 @@ class Driver:
             return
         for line in lines:
             self.say(f"[drive] result: {line.get('t', '')}")
+        self.completed = True
         self.channel.call(self.drive["confirm"])
         self.channel.call("quit")
         self.say("[drive] result confirmed, the session ended through the control channel")
@@ -366,13 +372,33 @@ def main(argv: list[str] | None = None) -> int:
     driver = Driver(DRIVES[args.profile], Channel(control, args.attempt, say), lambda: child.poll() is None,
                     args.every, args.peek_every, args.check_after, args.wait_game, args.wait_menu,
                     args.wait_result, say=say)
-    thread = threading.Thread(target=driver.run, daemon=True)
+    def drive() -> None:
+        try:
+            driver.run()
+        except Exception as error:      # a drive that raised read nothing; end the session it was driving
+            driver.fail(f"the drive raised {type(error).__name__}: {error}")
+
+    thread = threading.Thread(target=drive, daemon=True)
     thread.start()
     rc = child.wait()
     thread.join(timeout=120)
     if driver.failed:
         return FAILED
-    return rc
+    if thread.is_alive():
+        say("[drive] FAILED the drive did not end within 120 s of the session")
+        return FAILED
+    if rc != 0:
+        return rc
+    # run-game.sh ends with 0 whatever its inner session did, so 0 is a PASS only with the result read.
+    if not driver.game_seen:
+        # Train b33 rc4, native-caps569: the trial's admission refused (Capture failed), the session script ended
+        # with exit 0 and the arm read PASS. A session in which the game never ran measured nothing.
+        say("[drive] FAILED the session ended and the game never ran (admission or launch: see the session output)")
+        return FAILED
+    if not driver.completed:
+        say(f"[drive] FAILED the session ended before the {DRIVES[args.profile]['result']} line showed")
+        return FAILED
+    return 0
 
 
 if __name__ == "__main__":

@@ -403,7 +403,9 @@ $kmdDate = ConvertFrom-InfDate $rx.Match($infText).Groups[2].Value 'the KMD INF 
 if (-not $sources.driver_date) { throw 'release-sources.json: no driver_date (the DriverVer date of this release, MM/dd/yyyy)' }
 $driverDate = ConvertFrom-InfDate ([string]$sources.driver_date) 'release-sources.json driver_date'
 if ($driverDate -lt $kmdDate) { throw "driver_date $($sources.driver_date) is older than the KMD INF date $($kmdDate.ToString('MM/dd/yyyy'))" }
-if ($driverDate -gt [DateTime]::UtcNow.Date.AddDays(1)) { throw "driver_date $($sources.driver_date) is in the future" }
+# Inf2Cat refuses a DriverVer date after the build computer's local date (22.9.7, postdated DriverVer), so a date
+# that is tomorrow in local time fails at the catalog step after every other gate has run. Refuse it here.
+if ($driverDate -gt [DateTime]::Now.Date) { throw "driver_date $($sources.driver_date) is after today ($([DateTime]::Now.ToString('MM/dd/yyyy'))): Inf2Cat refuses a postdated DriverVer" }
 if (-not $sources.supersedes -or -not $sources.supersedes.release -or -not $sources.supersedes.driver_ver) {
     throw 'release-sources.json: no supersedes {release, driver_ver}: the release this one replaces and its DriverVer line value'
 }

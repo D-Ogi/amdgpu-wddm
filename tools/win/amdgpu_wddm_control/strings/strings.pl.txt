@@ -420,6 +420,11 @@ games.no-settings|rev|62ce296b|Brak własnych ustawień
 games.hide|rev|ac20a57b|Ukryj
 games.unhide|rev|0df6f1ca|Pokaż
 games.hide.note|rev|91405f21|Ukrycie gry usuwa ją tylko z tej listy. Jej pliki, zapisy i ustawienia pozostają.
+games.kind.browser|mt|705a76e7|Przeglądarka internetowa, nie gra
+games.kind.windows|mt|eda843a4|Część systemu Windows, nie gra
+games.kind.launcher|mt|dc3b2e61|Aplikacja sklepu z grami, nie gra
+games.kind.own|mt|14dee775|Część sterownika grafiki, nie gra
+games.not-games.note|mt|b7c08956|Programy, które nie są grami (np. przeglądarki internetowe i części systemu Windows), nie są pokazywane jako gry: {0}. „Pokaż ukryte gry” je wyświetla, a „Pokaż” dodaje wybrany program do Twoich gier.
 games.empty|rev|0818ed91|Nie ma jeszcze gier. Uruchom grę raz albo dodaj ją ręcznie.
 games.empty.off|rev|5cfe9fad|Lista gier jest pusta. Zapamiętywanie uruchomionych gier jest wyłączone (Ustawienia); grę możesz dodać ręcznie.
 games.select|rev|3c23c839|Wybierz grę, aby zobaczyć jej ustawienia.

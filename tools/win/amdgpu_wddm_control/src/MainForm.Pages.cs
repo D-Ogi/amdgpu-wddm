@@ -85,8 +85,11 @@ namespace AmdgpuWddmControl
             }
 
             var recent = new CardPanel(Strings.T("home.recent.title"), width);
+            // BD-140: the same rule as the Games list (LaunchKinds): a web browser or a part of Windows is not a game.
             var hidden = _prefs.HiddenGames;
-            var shown = _recent.Where(r => !hidden.Contains(r.Image)).Take(4).ToList();
+            var shownAnyway = _prefs.ShownGames;
+            string windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+            var shown = _recent.Where(r => !LaunchKinds.Hidden(r.Image, LaunchKinds.Of(r, windows), hidden, shownAnyway)).Take(4).ToList();
             if (shown.Count == 0) recent.Add(Ui.Dim(Strings.T(_prefs.RecordRecentLaunches ? "home.recent.none" : "home.recent.off"), recent.Inner));
             foreach (var r in shown)
             {

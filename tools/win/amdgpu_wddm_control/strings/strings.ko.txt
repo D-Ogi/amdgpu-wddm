@@ -418,6 +418,11 @@ games.no-settings|mt-safe|62ce296b|개별 설정 없음
 games.hide|mt-safe|ac20a57b|숨기기
 games.unhide|mt-safe|0df6f1ca|표시
 games.hide.note|mt|91405f21|게임을 숨기면 이 목록에서만 제거됩니다. 게임 파일, 저장 데이터, 설정은 그대로 유지됩니다.
+games.kind.browser|mt|705a76e7|웹 브라우저(게임 아님)
+games.kind.windows|mt|eda843a4|Windows 구성 요소(게임 아님)
+games.kind.launcher|mt|dc3b2e61|게임 스토어 앱(게임 아님)
+games.kind.own|mt|14dee775|그래픽 드라이버 구성 요소(게임 아님)
+games.not-games.note|mt|b7c08956|웹 브라우저, Windows 구성 요소 등 게임이 아닌 프로그램 {0}개는 게임으로 표시되지 않습니다. "숨긴 게임 표시"를 선택하면 목록에 나타나고, "표시"를 누르면 내 게임에 추가됩니다.
 games.empty|mt|0818ed91|아직 게임이 없습니다. 게임을 한 번 시작하거나 직접 추가하세요.
 games.empty.off|mt|5cfe9fad|목록에 게임이 없습니다. 실행한 게임 기억이 꺼져 있습니다(설정). 게임을 직접 추가할 수 있습니다.
 games.select|mt|3c23c839|설정을 보려면 게임을 선택하세요.

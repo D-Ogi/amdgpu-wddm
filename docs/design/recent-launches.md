@@ -153,6 +153,14 @@ profile; the application must say so and must not suggest separate settings.
 - Do not take the lock to read and never write the list.
 - Icons, titles and the file name come from the path, read off the UI thread with a time bound; never start the
   recorded program to get them.
+- The list holds every program that created a device, not only games. The reader offers an entry as a game unless
+  its path says otherwise (`LaunchKinds` in `tools/win/amdgpu_wddm_control/src/RecentLaunches.cs`, BD-140): a web
+  browser or a web view host by file name (`msedge.exe`, `msedgewebview2.exe`, CEF and Qt WebEngine helpers), a game
+  store's own client, a path below the Windows directory, a packaged Windows program by package name
+  (`WindowsApps\Microsoft.ScreenSketch_...` is the Snipping Tool) and this project's own tools. It is a list of what
+  is not a game, never of where games live, so a game in any folder stays a game. Home does not show the others. The
+  Games list keeps them hidden until the person turns on "Show hidden games", and "Show" on one of them puts it
+  among the games (`ShownGames`, docs/gui/interfaces.md section 5). The writers record them as before.
 
 ## Clear and Off (control application)
 
