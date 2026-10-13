@@ -1,0 +1,1253 @@
+{
+  "schema": 1,
+  "timeout": 180,
+  "release_only": [
+    "x86-callconv",
+    "status-map",
+    "ledger",
+    "release-provenance",
+    "app-route-lib",
+    "system-tuning",
+    "system-tuning-installer",
+    "system-tuning-journal",
+    "lab-runner-etw",
+    "lab-runner-intro",
+    "present-mode",
+    "frameloop-host",
+    "quality-controls",
+    "wininstall-locale",
+    "kd-dump-triage",
+    "smartplug",
+    "hostwatch",
+    "lab-emerg",
+    "lab-runner",
+    "target-boot",
+    "train-validate",
+    "gpu-timeline",
+    "isa-xml",
+    "gui-trials",
+    "conformance-shaders",
+    "registry-defaults",
+    "cu-mode-installer",
+    "start-record-consumers",
+    "installer-diagnostics",
+    "session-checks",
+    "opengl-icd",
+    "radv-contract",
+    "umd-contract",
+    "umd-app-settings",
+    "mft-h264-host",
+    "router-front",
+    "router-stack",
+    "ddi-error-policy",
+    "ddi-error-policy-mutants",
+    "ddi-table-versions",
+    "flip-rule-names",
+    "surface-control",
+    "umd-analysis",
+    "kmd-deploy"
+  ],
+  "groups": {
+    "host": [
+      {
+        "root": "repo",
+        "globs": [
+          "driver/**/*",
+          "tools/**/*",
+          "third_party/**/*"
+        ],
+        "exclude": [
+          "driver/kmd/umd_blob.c"
+        ]
+      }
+    ],
+    "documents": [
+      {
+        "root": "repo",
+        "globs": [
+          "docs/**/*",
+          "README.md",
+          "tools/**/*",
+          "driver/**/*.md",
+          "third_party/**/*"
+        ]
+      }
+    ],
+    "firmware": [
+      {
+        "root": "workspace",
+        "globs": [
+          "ref/linux-firmware__WARN-AMD-blobs-never-commit/amdgpu/cyan_skillfish2*.bin"
+        ]
+      }
+    ],
+    "blob-reader": [
+      {
+        "root": "repo",
+        "globs": [
+          "driver/kmd/umd_blob.c"
+        ]
+      }
+    ]
+  },
+  "toolchain": [
+    {
+      "root": "compiler",
+      "globs": [
+        "bin/Hostx64/x64/**/*",
+        "include/**/*",
+        "lib/x64/**/*"
+      ]
+    },
+    {
+      "root": "kits",
+      "globs": [
+        "microsoft.windows.wdk.x64/c/Include/**/*",
+        "microsoft.windows.wdk.x64/c/Lib/10.0.26100.0/km/x64/*",
+        "microsoft.windows.sdk.cpp/c/Include/**/*",
+        "microsoft.windows.sdk.cpp.x64/c/um/x64/*",
+        "microsoft.windows.sdk.cpp.x64/c/ucrt/x64/*"
+      ]
+    }
+  ],
+  "checks": {
+    "kmd-order": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "escape-commands": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "claim-shares": {
+      "inputs": [
+        "documents"
+      ]
+    },
+    "doclint": {
+      "inputs": [
+        "documents"
+      ]
+    },
+    "opengl-icd": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "register-generators": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "kmd-compile": {
+      "inputs": [
+        "host",
+        "blob-reader"
+      ],
+      "artifacts": [
+        "kmd/compile_commands.json"
+      ]
+    },
+    "kmd-contract": {
+      "inputs": [
+        "host",
+        "blob-reader"
+      ],
+      "depends": [
+        "kmd-compile"
+      ]
+    },
+    "guardlog-width": {
+      "inputs": [
+        "host",
+        "blob-reader"
+      ]
+    },
+    "inf-gates": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "vsync-vector": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "ih-consume": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "dpm": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "cpu": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "clock-policy": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "smu-native": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "cu-mode": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "uma-policy": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "uma-request": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "uma-probe": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "board-memory-identity": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "board-memory-identity-qualification": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "board-memory-detect": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "board-memory-transport": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "board-memory-service": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "board-memory-store": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "board-memory-write": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "board-provider": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "board-provider-admission-control": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "adapter-owner": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "adapter-owner-admission-control": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "adapter-owner-cleanup-control": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "adapter-owner-quarantine-control": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "hang-progress": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "wave-reader": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "wave-access": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "wave-recovery": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "hip-journal": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "hip-journal-owner-control": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "recovery-protocol": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "submit-watchdog": {
+      "inputs": [
+        "host",
+        "blob-reader"
+      ]
+    },
+    "ring-gap": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "paging-queue": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "paging-queue-no-quota": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "paging-queue-flat-budget": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "paging-preemption": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "paging-preemption-old-drain": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "paging-preemption-any-root": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "paging-preemption-any-align": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "surface-layout": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "gdi-admission": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "display-modes": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "vidpn-flip": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "scanout-admit": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "dpaudio": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "modeset": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "atom-display": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "blit-plan": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "gpu-clock": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "driver-version": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "umd-caps": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "firmware-metadata": {
+      "inputs": [
+        "host",
+        "firmware"
+      ]
+    },
+    "interop-policy": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "escape-abi": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "allocation-identity": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "object-index": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "hang-witness": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "gfx-copy": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "gfx-blt": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "blob-abi": {
+      "inputs": [
+        "host",
+        "blob-reader"
+      ]
+    },
+    "kmd-analysis": {
+      "inputs": [
+        "host",
+        "blob-reader"
+      ],
+      "depends": [
+        "kmd-compile"
+      ]
+    },
+    "host-suite-coverage": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "link-atom": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "connector-buffer": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "connector-modes": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "connector-link": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "connector-link-stale-generation": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "connector-link-open-cleanup": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "connector-link-cold-recovery": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "connector-link-first-failure": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "connector-link-nested-hdmi": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "connector-link-diagnostic-replay": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "connector-link-write-requested": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "connector-link-recovery-target": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "dml201": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "dcn201-pipe": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "dpaudio-start-debt": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "wave-recovery-pending-control": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "wave-recovery-order-control": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "wave-recovery-delete-control": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "display-visibility": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "post-display-stop": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "scanout-geometry": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "post-display": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "post-display-old-runtime-order": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "post-display-wrong-saved-surface": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "dcn-flip": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "dcn-observation": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "dcn-observe": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "display-timing": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "display-timing-old-describe": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "display-timing-phase-hz": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "gart-retained": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "gfx-retained": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "ih-retained": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "psp-retained": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "psp-retained-dropped": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "psp-retained-false-success": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "retained-gtt": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "retained-power": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "power-coordinator": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "vram-geometry": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "guard-start": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "start-record": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "stop-record": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "start-record-keeplog-gate": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "start-record-no-attempt": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "start-record-before-cleanup": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "start-record-any-irql": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "start-record-log-after-cleanup": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "guard-start-not-durable": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "start-health": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "start-health-no-flush": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "start-health-no-witness-reopen": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "start-health-reopen-any-close": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "start-health-sticky-fault-keeps-mark": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "start-health-confirm-new-epoch": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "start-health-mark-over-failed-engines": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "start-health-refusal-drops-other-node-mark": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "start-health-rearm-skips-open-witness": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "start-health-confirm-hung-request": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "gfx-pipeline": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "vmid-pool": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "keep-prune": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "keep-prune-ignore-order": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "log-rate": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "log-rate-no-gap": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "log-rate-fan-block": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "dpm-log-cadence": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "dpm-log-cadence-no-idle": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "dpm-log-cadence-60s": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "hang-recovery": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "hang-recovery-no-fence-guard": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "hang-recovery-any-vmid": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "hang-recovery-shared-fence": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "hang-recovery-gart-backend": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "hang-recovery-count-refused": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "hang-recovery-no-backend-switch": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "submit-watchdog-CountUnchangedAsActivity": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "submit-watchdog-CountPrimeAsActivity": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "submit-watchdog-CountGapAsActivity": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "submit-watchdog-IgnoreAlternatingActivity": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "submit-watchdog-AssumeOsClockAtHead": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "submit-watchdog-HeadAgeAtRetirement": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "recovery-protocol-DropAdmissionReason": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "recovery-protocol-RejectActiveImmediately": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "recovery-protocol-IgnoreDrainDeadline": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "recovery-protocol-FaultHealthOnAdmission": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "recovery-protocol-AdmitDuringReset": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "recovery-protocol-ReadAfterRelease": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "recovery-protocol-KeepCoveredBoundary": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "recovery-protocol-IgnoreReportInFlight": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "recovery-protocol-IgnoreLostReport": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "recovery-protocol-UseNotifiedAsCompleted": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "recovery-protocol-ShareNodeWatermark": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "recovery-protocol-ResetWritesCompleted": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "recovery-protocol-IgnoreEpoch": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "recovery-protocol-TimeoutAfterUnlock": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "recovery-protocol-LatchFaultsStickily": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "recovery-protocol-DropWitnessReopen": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "recovery-protocol-ReopenWitnessOnRefusal": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "recovery-protocol-RefusalClosesEveryNode": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "submit-watchdog-flat-500": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "submit-watchdog-no-tdr-floor": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "submit-watchdog-clamp-tdr": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "submit-watchdog-ignore-progress": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "submit-watchdog-stamp-at-ring-write": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "submit-watchdog-report-with-pending": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "submit-watchdog-no-fence-range": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "submit-watchdog-log-the-constant": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "submit-watchdog-rearm-outside-lock": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "vmid-pool-ignore-retirement": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "gfx-pipeline-idle-only": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "gfx-pipeline-no-capacity": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "gfx-pipeline-equal-fence": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "firmware-metadata-no-runtime": {
+      "inputs": [
+        "host",
+        "firmware"
+      ]
+    },
+    "paging-mc": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "paging-private": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "paging-private-slot-reuse": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "paging-pt-shadow": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "paging-stream": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "paging-window": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "shim-replay": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "shim-gfx": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "gfx-vm-flush": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "gfx-vm-flush-wrong-ack": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "shim-ih": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "shim-psp": {
+      "inputs": [
+        "host",
+        "firmware"
+      ]
+    },
+    "shim-pte": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "shim-paging": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "sdma-copy": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "sdma-copy-vmid-zero": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "sdma-copy-no-vm-flush": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "sdma-faults": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "smu-mailbox": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "board-sequence": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "board-sequence-changed-point": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "smu-native-board-admission": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "smu-native-clock-write-privilege": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "smu-native-clock-read-snapshot": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "hwmon": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "hwmon-board-port": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "hwmon-no-boost-raise": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "hwmon-boost-held-back": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "hwmon-step-pays-all": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "hwmon-telemetry-always": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "hwmon-boost-claims-fixed": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "hwmon-rise-outlives-doubt": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "smu-metrics": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "router-stack": {
+      "depends": [
+        "router-front"
+      ]
+    },
+    "quality-controls": {
+      "timeout": 300
+    },
+    "ledger": {
+      "timeout": 300
+    },
+    "link-command-import": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "link-register-import": {
+      "inputs": [
+        "host"
+      ]
+    }
+  },
+  "toolchain_environment": [
+    "INCLUDE",
+    "LIB"
+  ]
+}

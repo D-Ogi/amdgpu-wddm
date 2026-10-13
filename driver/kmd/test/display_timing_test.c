@@ -50,7 +50,19 @@ typedef struct {BC250_INHERITED_PIPE InheritedPipe;NTSTATUS InheritedPipeStatus;
     long SourceWidth,SourceHeight;BC250_MODE_LIST Modes;
     BC250_SCALER_PLAN Plan;BC250_SCALER_RESULT LastResult;} BC250_MODESET;
 typedef struct {void* Mmio;int FullWddm,ComposedSourceModes;struct {ULONG Width,Height,Pitch;} Post;
-    D3DKMDT_VIDEO_SIGNAL_INFO InheritedSignal;BOOLEAN InheritedSignalValid,InheritedTmds;BC250_MODESET Modeset;} BC250_DEVICE;
+    D3DKMDT_VIDEO_SIGNAL_INFO InheritedSignal;BOOLEAN InheritedSignalValid,InheritedTmds;BC250_MODESET Modeset;
+    BOOLEAN ModeActive; ULONG CommittedSourceWidth,CommittedSourceHeight;} BC250_DEVICE;
+
+// This gate retains the inherited route. Dynamic selection has its own actual
+// helper gate; these transport seams must never be reached here.
+static volatile int unexpectedConnector = 1;
+static void UnexpectedConnector(void){if(unexpectedConnector) abort();}
+static BOOLEAN testConnectorEnabled;
+static D3DKMDT_VIDEO_SIGNAL_INFO testConnectorSignal;
+static NTSTATUS testConnectorStatus;
+static BOOLEAN ConnectorIsEnabled(const BC250_DEVICE* d){(void)d;return testConnectorEnabled;}
+static NTSTATUS ConnectorLinkCurrentSignal(BC250_DEVICE* d,D3DKMDT_VIDEO_SIGNAL_INFO* s)
+{(void)d;if(!testConnectorEnabled)UnexpectedConnector();*s=testConnectorSignal;return testConnectorStatus;}
 typedef UINT D3DDDIFORMAT;
 typedef struct {struct {UINT Width,Height,Format;} Allocation;} BC250_WDDM_OBJECT;
 typedef struct {HANDLE hAllocation;UINT Width,Height;D3DDDIFORMAT Format;
@@ -164,6 +176,7 @@ static void Adapter(BC250_DEVICE* d)
 }
 #include "inherited_pipe_cases.h"
 #include "inherited_vidpn_cases.h"
+#include "inherited_field38_cases.h"
 int main(int argc,char** argv)
 {
     BC250_DEVICE d={0};D3DKMDT_VIDEO_SIGNAL_INFO s;unsigned before;
@@ -186,7 +199,8 @@ int main(int argc,char** argv)
         return result==STATUS_SUCCESS?0:1;
     }
     InheritedPipeCases();
-    InheritedVidpnCases();refusedLogs=0;
+    InheritedVidpnCases();
+    InheritedField38Cases();refusedLogs=0;
     Mode(&d,1920,1200,2080,1235,154000000);
     CHECK(TestFillSignalInfo(&d,&s)==STATUS_SUCCESS && reads==2*TimingCount && refusedLogs==0);
     CHECK(s.TotalSize.cx==2080 && s.TotalSize.cy==1235 && s.ActiveSize.cx==1920 && s.ActiveSize.cy==1200);
@@ -339,5 +353,21 @@ int main(int argc,char** argv)
     CHECK(TestFillSignalInfo(&d,&s)==STATUS_NOT_SUPPORTED && polls==0);
     Mode(&d,1920,1200,2080,1235,154000000);
     CHECK(TestFillSignalInfo(&d,&s)==STATUS_SUCCESS && !d.InheritedTmds && s.PixelRate==154000000 && polls==0);
+    {
+        BC250_WDDM_OBJECT allocation={{1280,720,21}};
+        DXGKARG_DESCRIBEALLOCATION description={0};
+        description.hAllocation=&allocation;
+        testConnectorEnabled=TRUE;testConnectorStatus=STATUS_SUCCESS;
+        d.InheritedSignal.VSyncFreq.Numerator=60;d.InheritedSignal.VSyncFreq.Denominator=1;
+        testConnectorSignal.VSyncFreq.Numerator=75;testConnectorSignal.VSyncFreq.Denominator=1;
+        CHECK(Bc250WddmDescribeAllocation(&d,&description)==STATUS_SUCCESS);
+        CHECK(description.RefreshRate.Numerator==75 && description.RefreshRate.Denominator==1);
+        testConnectorSignal.VSyncFreq.Numerator=60000;testConnectorSignal.VSyncFreq.Denominator=1001;
+        CHECK(Bc250WddmDescribeAllocation(&d,&description)==STATUS_SUCCESS);
+        CHECK(description.RefreshRate.Numerator==60000 && description.RefreshRate.Denominator==1001);
+        testConnectorStatus=STATUS_DEVICE_NOT_READY;
+        CHECK(Bc250WddmDescribeAllocation(&d,&description)==STATUS_DEVICE_NOT_READY);
+        testConnectorEnabled=FALSE;
+    }
     printf("inherited timing: %u checks, %u failures\n",checks,failures);return failures?1:0;
 }

@@ -3,6 +3,7 @@
 # makes them stale (the build fails until each language gets a new translation; strings/stamp.ps1 stamps new ones).
 
 # ---- frame ----
+install.pending-removals-cancelled|src|-|Setup cancelled removals left by the previous uninstall. These installation files will remain after Windows restarts.
 ui.close|src|-|Close
 ui.back|src|-|Back
 ui.cancel|src|-|Cancel
@@ -10,6 +11,7 @@ ui.choose-folder|src|-|Choose folder...
 ui.language|src|-|Language: {0}
 ui.minimise|src|-|Minimise
 ui.close-window|src|-|Close window
+ui.window-title|src|-|Nagi Setup - graphics driver for the BC-250
 ui.unexpected|src|-|Setup stopped because something went wrong inside its window. It has changed nothing more. Please start it again.
 rail.welcome|src|-|Welcome
 rail.check|src|-|Check
@@ -22,11 +24,14 @@ rail.current|src|-|current step
 rail.done|src|-|done
 rail.failed|src|-|stopped here
 elevation.declined|src|-|Setup needs administrator permission to install or repair the driver. Nothing was changed. Start setup again and choose Yes when Windows asks.
+payload.damaged|src|-|This setup file is damaged: the installation files it carries are not the ones it was built with. Nothing was changed. Download the release again.
+payload.already-running|src|-|Setup is already running on this PC. Finish the installation in the window that is open; nothing was changed here.
+payload.folder|src|-|Setup cannot prepare the folder it keeps the installation files in: it belongs to another account on this PC, or it is not a normal folder. Nothing was changed. Remove that folder, which the support file names, and start this file again.
 
 # ---- welcome ----
-welcome.title|src|-|Install the graphics driver for the ASRock BC-250
-welcome.body|src|-|Setup installs the graphics driver and amdgpu-wddm Control. It checks this PC first and shows everything it will change before it changes anything.
-welcome.repair.title|src|-|Repair the graphics driver
+welcome.title|src|-|Install Nagi, the graphics driver for the ASRock BC-250
+welcome.body|src|-|Setup installs the graphics driver and Nagi Control App. It checks this PC first and shows everything it will change before it changes anything.
+welcome.repair.title|src|-|Repair the Nagi graphics driver
 welcome.repair.body|src|-|Setup installs the same version again, from the copy kept on this PC. Your settings are kept.
 welcome.dry-run|src|-|Test run: setup goes through every step but changes nothing.
 welcome.version|src|-|Version {0}
@@ -40,7 +45,7 @@ welcome.prepared.choose|src|-|Choose the prepared folder.
 welcome.prepared.ok|src|-|Prepared folder with version {0}. No internet is needed.
 welcome.prepare-link|src|-|Prepare a folder for a PC without internet...
 welcome.check|src|-|Check this PC
-welcome.promise.driver|src|-|The graphics driver and amdgpu-wddm Control, installed together.
+welcome.promise.driver|src|-|The graphics driver and Nagi Control App, installed together.
 welcome.promise.shown|src|-|Every change is shown before anything on this PC changes.
 welcome.promise.offline|src|-|A prepared folder installs the same release without internet.
 folder.missing|src|-|This folder does not exist.
@@ -67,6 +72,9 @@ check.admin.missing|src|-|Setup needs administrator permission.
 check.windows.ok|src|-|This Windows version is supported.
 check.windows.not-x64|src|-|This Windows is not 64-bit. The driver needs 64-bit Windows 11.
 check.windows.too-old|src|-|This Windows version is too old. The driver needs Windows 11.
+check.windows.below-supported|src|-|This Windows version is older than the versions the driver is tested on: Windows 11 23H2, 24H2 and 25H2. Update Windows. The installation continues.
+check.windows.insider|src|-|This is an Insider version of Windows, which is not supported. The driver is tested on Windows 11 23H2, 24H2 and 25H2. The installation continues.
+check.windows.ltsc|src|-|This Windows edition (LTSC) is not tested with this driver. The installation continues.
 check.gpu.ok|src|-|The graphics chip of the ASRock BC-250 was found.
 check.gpu.missing|src|-|No ASRock BC-250 graphics chip was found. This driver works only on the BC-250.
 check.gpu.several|src|-|More than one BC-250 graphics chip was found. Only one is supported.
@@ -75,14 +83,15 @@ check.secureboot.off|src|-|Secure Boot is off.
 check.secureboot.on|src|-|Secure Boot is on. Turn it off in the PC's firmware settings before you install.
 check.secureboot.unknown|src|-|Setup could not read whether Secure Boot is on.
 check.testsigning.active|src|-|Windows test mode is on.
-check.testsigning.inactive|src|-|Windows test mode is off. Setup turns it on after you agree.
+check.testsigning.inactive|src|-|Windows test mode is off. Setup turns it on as part of the installation.
 check.bitlocker.ok|src|-|BitLocker needs no attention.
-check.bitlocker.on|src|-|BitLocker is on. Setup asks how to handle it before any change.
+check.bitlocker.on|src|-|BitLocker is on. Setup pauses it for the restarts of the installation and it turns itself on again.
 check.bitlocker.unknown|src|-|Setup could not read the BitLocker state. If BitLocker is on, have your recovery key ready.
 check.hvci.off|src|-|Memory integrity is off.
 check.hvci.on|src|-|Memory integrity is on. If the driver does not start, turn it off in Windows Security (Core isolation).
 check.vcruntime.ok|src|-|The Microsoft Visual C++ runtime is installed.
-check.vcruntime.missing|src|-|The Microsoft Visual C++ 2015-2022 runtime (x64) is missing. Install it from Microsoft, then start setup again.
+check.vcruntime.missing|src|-|The Microsoft Visual C++ 2015-2022 runtime (x64) is missing or too old. Setup installs it from the file it brings with it.
+check.vcruntime.no-installer|src|-|The Microsoft Visual C++ 2015-2022 runtime (x64) has to be installed, and this set of files does not hold the Microsoft program that does it. Download the release again.
 check.space.ok|src|-|There is enough free disk space.
 check.space.low|src|-|There is not enough free space on drive C:. Setup needs 2 GB.
 check.firmware.download-ok|src|-|The GPU firmware can be downloaded.
@@ -92,7 +101,7 @@ check.firmware.folder-bad|src|-|Some GPU firmware files in the folder are missin
 check.firmware.no-list|src|-|The setup files do not say which GPU firmware is needed. Download the release again.
 check.lab-install.present|src|-|This PC has a development installation of the driver. Setup does not change it.
 check.lab-install.forced|src|-|This PC has a development installation of the driver; setup continues because you asked it to.
-check.state.ok|src|-|An earlier installation of amdgpu-wddm was found.
+check.state.ok|src|-|An earlier installation of Nagi was found.
 check.existing.no-state|src|-|The driver is installed without setup's records. Uninstall it first, then start setup again.
 check.prepare.destination-inside|src|-|The folder is inside the setup files. Choose a folder elsewhere.
 check.prepare.destination-file|src|-|A file has this name. Choose a folder.
@@ -111,12 +120,23 @@ plan.repair-again|src|-|Repair
 plan.checks.title|src|-|Checks
 plan.checks.ok|src|-|All checks passed.
 plan.checks.attention|src|-|Checks that need your attention: {0}
-plan.consent.needed|src|-|Answer the questions under "{0}" before you install.
 plan.what.title|src|-|What happens
 plan.restarts.0|src|-|No restart of Windows is needed.
 plan.restarts.1|src|-|Windows restarts once. After you log on again, setup continues by itself.
 plan.restarts.2|src|-|Windows restarts twice. After each logon, setup continues by itself.
-plan.restarts.choice|src|-|Setup asks before each restart, so you can save your work first.
+plan.restarts.choice|src|-|Each restart starts by itself after a short countdown. You can restart at once or put it off.
+plan.change.test-mode|src|-|Windows switches to test mode, so it can load this driver.
+plan.change.test-mode.note|src|-|"Test Mode" then shows in a corner of the desktop. Removing the driver turns it off again.
+plan.change.test-mode.on|src|-|Windows already runs in test mode, so nothing changes there.
+plan.change.bitlocker|src|-|BitLocker protection is paused for the restarts of this installation and turns itself on again, so Windows does not ask for the recovery key.
+plan.change.bitlocker.unknown|src|-|Setup could not read the BitLocker state of this PC. It goes on anyway: keep your recovery key at hand in case Windows asks for it after a restart.
+plan.change.vcruntime|src|-|The Microsoft Visual C++ 2015-2022 runtime (x64) is installed first, because the driver's programs need it.
+shortcuts.title|src|-|Where to find Nagi Control App
+shortcuts.start-menu|src|-|In the Start menu
+shortcuts.desktop|src|-|On the desktop
+shortcuts.note|src|-|The Start menu also gets an entry for recovery. Turn an option off if you do not want it. The driver is installed either way.
+shortcuts.wallpaper|src|-|Set the Nagi wallpaper
+shortcuts.wallpaper.note|src|-|The wallpaper is set once for each person who signs in, after the driver is checked. Nagi Control App can bring back the previous background.
 plan.firmware.download|src|-|The GPU firmware is downloaded from the official Linux firmware archive and checked.
 plan.firmware.folder|src|-|The GPU firmware comes from the folder you chose and is checked.
 plan.firmware.package-folder|src|-|The GPU firmware comes from the prepared folder. No internet is needed.
@@ -150,14 +170,10 @@ settings.decision.kept|src|-|your value is kept
 settings.decision.command|src|-|as you chose for this installation
 settings.decision.reopened|src|-|set back by this repair (the driver had switched it off)
 settings.decision.driver-closed|src|-|switched off by the driver. A repair sets it back
+settings.decision.cores-driver-closed|src|-|the driver went back to this number itself. A repair sets the number of the release back
+settings.decision.cores-reopened|src|-|set back by this repair (the driver had gone back to fewer cores)
 
 # ---- consents ----
-consent.title|src|-|Before setup starts
-consent.test-signing|src|-|Turn on Windows test mode
-consent.test-signing.note|src|-|The driver is signed with a test certificate, so Windows must run in test mode. "Test Mode" then shows in a corner of the desktop.
-consent.bitlocker|src|-|BitLocker is on, or Setup could not read its state. Changing the start options may make Windows ask for the recovery key at the next start.
-consent.bitlocker.have-key|src|-|I have the recovery key
-consent.bitlocker.suspend|src|-|Pause BitLocker for the next two restarts (it turns on again by itself)
 
 # ---- working ----
 working.title|src|-|Installing
@@ -191,6 +207,8 @@ stage.copy|src|-|Copying the files
 restart.now|src|-|Restart now
 restart.later|src|-|Later
 restart.save-work|src|-|Save your work first. Windows asks open programs to close; it does not force them.
+restart.countdown|src|-|Windows restarts by itself in {0} s.
+restart.countdown.over|src|-|The countdown has ended. Setup does not restart Windows by itself any more.
 restart.later.done|src|-|Setup continues by itself after the next restart of Windows. You can close this window.
 restart.failed|src|-|Windows did not start the restart. Restart the PC from the Start menu.
 
@@ -225,9 +243,9 @@ result.verify-before-restart.title|src|-|Restart Windows to finish
 result.verify-before-restart.body|src|-|The driver is checked after the restart of Windows.
 result.install-unfinished.title|src|-|The installation is not finished yet
 result.install-unfinished.body|src|-|Run Setup again to finish the installation. The driver is checked after that.
-result.verified.title|src|-|The driver is installed and works
-result.verified.body|src|-|Everything is ready. amdgpu-wddm Control is in the Start menu.
-result.verified-with-warnings.title|src|-|The driver is installed and works, with notes
+result.verified.title|src|-|The Nagi driver is installed and works
+result.verified.body|src|-|Everything is ready. Nagi Control App is in the Start menu.
+result.verified-with-warnings.title|src|-|The Nagi driver is installed and works, with notes
 result.verified-with-warnings.body|src|-|Everything is ready. Some checks had notes; the support file has the details.
 result.preflight-refused.title|src|-|Setup cannot install on this PC now
 result.preflight-refused.body|src|-|These checks did not pass. Fix them, then start setup again.
@@ -262,7 +280,7 @@ result.offline-prepared.body|src|-|Copy the folder to the PC without internet an
 result.failed-checks|src|-|Checks that did not pass
 result.nothing-changed|src|-|Nothing was changed.
 result.already-installed|src|-|This PC already has version {0} of the driver.
-result.changes-made|src|-|Some changes were made before setup stopped, and they stay as they are. Start setup again to finish, or use Repair in amdgpu-wddm Control.
+result.changes-made|src|-|Some changes were made before setup stopped, and they stay as they are. Start setup again to finish, or use Repair in Nagi Control App.
 result.changes-unknown|src|-|Setup cannot tell whether anything was changed. Start setup again; it continues where it can.
 result.support|src|-|The support file has the details for a problem report. Nothing is sent automatically.
 result.support.diagnostics|src|-|The details of the graphics chip that did not start were collected for you. They are in that file.
@@ -289,15 +307,17 @@ guide.title|src|-|Nagi's tip
 guide.title.plain|src|-|Tip
 guide.welcome|src|-|Nothing changes until you press Install. Setup shows every change first.
 guide.prepare|src|-|A prepared folder works on any BC-250 without internet, also for a later repair.
-guide.page-tip|src|-|Settings you changed in amdgpu-wddm Control are kept when you update.
+guide.page-tip|src|-|Settings you changed in Nagi Control App are kept when you update.
 guide.work-in-progress|src|-|I am working on it. This can take a few minutes.
 guide.checking|src|-|I am checking this PC. This can take up to a minute.
 guide.pending-restart|src|-|Your changes are saved. Setup continues after the next restart of Windows.
 guide.install-stopped|src|-|Setup did not finish. The page says what to do next.
 guide.verification-failed|src|-|The driver did not pass its checks. A repair usually helps.
 guide.upgrade-done|src|-|Done! The driver is installed and checked. Have fun!
+guide.name|src|-|Nagi stands for {0}. Yes, the N is Nagi again.
+brand.expansion|src|-|Nagi's AMD Graphics Infrastructure
 # Optional Windows tuning
 tuning.title|src|-|Windows tuning
 tuning.opt-in|src|-|Apply optional Windows tuning
 tuning.details|src|-|Apply recommended settings to reduce Windows background activity.
-tuning.restore|src|-|Review individual settings and restore saved values in the control app. Removal also offers restoration of machine-wide settings.
+tuning.restore|src|-|Review individual settings and restore saved values in Nagi Control App. Removal also offers restoration of machine-wide settings.

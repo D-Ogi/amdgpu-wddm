@@ -36,13 +36,43 @@ const char* Bc250AuxResultText(unsigned long Result)
     }
 }
 
-long Bc250AuxOpen(BC250_AUX_SESSION* Session, BC250_DISP_IO* Io)
+static long WaitControl(BC250_DISP_IO* io, unsigned long mask, unsigned long want,
+    unsigned long step, unsigned long count)
+{
+    unsigned long i,v;
+    for (i=0;i<=count;++i) {
+        TRY(Bc250DispRead(io,R_CONTROL,&v));
+        if (Bc250DispGet(v,mask)==want) return 0;
+        if (i<count) { TRY(Bc250DispStall(io,step)); }
+    }
+    return BC250_DISP_STATUS_TIMEOUT;
+}
+
+static long EnableAux(BC250_DISP_IO* io, unsigned long value)
+{
+    unsigned long field=Bc250DispGet(value,DP_AUX0_AUX_CONTROL__AUX_EN_MASK);
+#define REG(r) 1 // DCN201 implements AUX_RESET; the extract only asks this question.
+#define set_reg_field_value(v,w,r,f) ((v)=((v)&~DP_AUX0_##r##__##f##_MASK)|Bc250DispField(DP_AUX0_##r##__##f##_MASK,(w)))
+#define REG_WRITE(r,v) TRY(Bc250DispWrite(io,BC250_REG_DMU_DP_AUX0_##r,(v)))
+#define REG_WAIT(r,f,w,s,n) TRY(WaitControl(io,DP_AUX0_##r##__##f##_MASK,(w),(s),(n)))
+#include "../shim/aux_enable.inc"
+#undef REG_WAIT
+#undef REG_WRITE
+#undef set_reg_field_value
+#undef REG
+    return 0;
+}
+
+static long OpenAux(BC250_AUX_SESSION* Session, BC250_DISP_IO* Io, int Enable)
 {
     unsigned long v;
+    long status;
 
     Session->Io = Io;
     Session->Open = 0;
     Session->PadModeSet = 0;
+    Session->ControlChanged = 0;
+    Session->CleanupStatus = 0;
     Session->Transactions = Session->Attempts = Session->Defers = Session->Timeouts = 0;
     Session->Invalid = Session->Nacks = Session->Busy = 0;
     Session->LastStatus = Session->LastReply = Session->LastResult = 0;
@@ -51,17 +81,39 @@ long Bc250AuxOpen(BC250_AUX_SESSION* Session, BC250_DISP_IO* Io)
     TRY(Bc250DispRead(Io, R_AUX_CTRL5, &Session->AuxCtrl5Before));
     // Deviation from acquire_engine: an engine the firmware left disabled is not enabled and reset here. The GOP
     // reads the EDID itself, so an enabled engine is the expected state; anything else is a refusal to log.
-    if ((Session->AuxControl & DP_AUX0_AUX_CONTROL__AUX_EN_MASK) == 0) return BC250_DISP_STATUS_MISMATCH;
+    if (!(Session->AuxControl & DP_AUX0_AUX_CONTROL__AUX_EN_MASK) && !Enable) return BC250_DISP_STATUS_MISMATCH;
+    TRY(Bc250DispRead(Io,R_ARB,&v));
+    if (Bc250DispGet(v,DP_AUX0_AUX_ARB_CONTROL__AUX_REG_RW_CNTL_STATUS_MASK)==DMCU_CAN_ACCESS_AUX)
+        return BC250_DISP_STATUS_BUSY;
+    // Record the cleanup obligation before the first attempted write. A failed
+    // callback can mean a posted write followed by a failed readback.
+    Session->Open=1;
+    if (!(Session->AuxControl & DP_AUX0_AUX_CONTROL__AUX_EN_MASK)) {
+        Session->ControlChanged=1;
+        status=EnableAux(Io,Session->AuxControl);
+        if (status<0) goto fail;
+    }
     // hw_ddc.c set_config, GPIO_DDC_CONFIG_TYPE_MODE_AUX: AUX_PAD1_MODE 1 if it is 0, then DDC_PAD_I2CMODE 0.
     if ((Session->DdcMaskBefore & DC_GPIO_DDC1_MASK__AUX_PAD1_MODE_MASK) == 0) {
-        TRY(Bc250DispWrite(Io, R_DDC_MASK, Session->DdcMaskBefore | DC_GPIO_DDC1_MASK__AUX_PAD1_MODE_MASK));
         Session->PadModeSet = 1;
+        status=Bc250DispWrite(Io,R_DDC_MASK,Session->DdcMaskBefore | DC_GPIO_DDC1_MASK__AUX_PAD1_MODE_MASK);
+        if (status<0) goto fail;
     }
-    TRY(Bc250DispRead(Io, R_AUX_CTRL5, &v));
-    TRY(Bc250DispWrite(Io, R_AUX_CTRL5, v & ~DC_GPIO_AUX_CTRL_5__DDC_PAD1_I2CMODE_MASK));
-    Session->Open = 1;
+    status=Bc250DispRead(Io,R_AUX_CTRL5,&v);
+    if (status<0) goto fail;
+    status=Bc250DispWrite(Io,R_AUX_CTRL5,v & ~DC_GPIO_AUX_CTRL_5__DDC_PAD1_I2CMODE_MASK);
+    if (status<0) goto fail;
     return BC250_DISP_STATUS_SUCCESS;
+fail:
+    (void)Bc250AuxClose(Session);
+    return status;
 }
+
+long Bc250AuxOpen(BC250_AUX_SESSION* Session, BC250_DISP_IO* Io)
+{ return OpenAux(Session,Io,0); }
+
+long Bc250AuxOpenForDetection(BC250_AUX_SESSION* Session, BC250_DISP_IO* Io)
+{ return OpenAux(Session,Io,1); }
 
 // Not in Linux, which leaves the pad in AUX mode: the next owner (Basic Display, the firmware after a restart) finds
 // the two named bits as the firmware left them. Every other bit of both registers is written back as read.
@@ -71,13 +123,19 @@ long Bc250AuxClose(BC250_AUX_SESSION* Session)
     long first = BC250_DISP_STATUS_SUCCESS, s;
 
     if (!Session->Open) return BC250_DISP_STATUS_SUCCESS;
-    Session->Open = 0;
     s = Bc250DispUpdate(io, R_AUX_CTRL5, DC_GPIO_AUX_CTRL_5__DDC_PAD1_I2CMODE_MASK, Session->AuxCtrl5Before);
     if (s < 0) first = s;
     if (Session->PadModeSet) {
         s = Bc250DispUpdate(io, R_DDC_MASK, DC_GPIO_DDC1_MASK__AUX_PAD1_MODE_MASK, 0);
         if (s < 0 && first >= 0) first = s;
     }
+    if (Session->ControlChanged) {
+        s=Bc250DispUpdate(io,R_CONTROL,DP_AUX0_AUX_CONTROL__AUX_EN_MASK | DP_AUX0_AUX_CONTROL__AUX_RESET_MASK,
+            Session->AuxControl);
+        if (s<0 && first>=0) first=s;
+    }
+    Session->CleanupStatus=first;
+    if (first>=0) Session->Open=0; // failed cleanup can be retried while the owner holds the session
     return first;
 }
 

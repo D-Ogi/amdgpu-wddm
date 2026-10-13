@@ -32,7 +32,51 @@ struct PresentSources {
     // runtime presents with sync_override in place of the application's sync interval.
     bool sync_override_valid{};
     DXGI_DDI_FLIP_INTERVAL_TYPE sync_override{DXGI_DDI_FLIP_INTERVAL_IMMEDIATE};
+    // BD-133: this present recorded a copy into the command list the runtime handed to pfnPresent, because the
+    // source is not a surface the kernel present can read (present-copy.h). D3D12DDI_PRESENT_0051::AddedGpuWork
+    // "specifies whether there is added GPU work" (ref\ddi-display\d3d12umddi.md:42409), which is what the
+    // recorded copy is. A zero-copy present of a linear primary leaves it FALSE, exactly as before.
+    bool added_gpu_work{};
 };
+// BD-133, review finding 8: the one new decision of pfnPresent, so that it is host-tested and not only compiled.
+// direct is the zero-copy answer for a linear primary (engine-ddi present_allocation, stage 3); copy is the
+// recorded copy for every other source of this device (present_copy_allocation, stage 6). The order and the
+// outputs are the whole rule: stage 3 first and, on S_OK, nothing else happens and added_gpu_work stays false;
+// its refusal is not an answer, so stage 6 is asked, and only its S_OK sets added_gpu_work. A refusal of stage 6
+// leaves the source 0, which fill_present refuses as well, and the caller reports the status of stage 6.
+//   The copy is made for the windowed Blt form only (R6 of the review of 2026-10-12): the kernel driver builds its
+// GPU present for a Blt (driver\kmd\wddm.c:7200, WddmBuildGpuPresent refuses a present whose flags are not the Blt
+// alone), and a Flip names a surface that is scanned out, not one that is copied from. A present whose flags are not
+// Blt, or carry Flip, is refused at stage 8 before the copy is asked, so nothing is recorded or waited for. The flags
+// are the runtime's DXGI_DDI_PRESENT_FLAGS (D3D12DDIARG_PRESENT_0001::Flags; dxgiddi.h: Blt 0x1, Flip 0x2). The
+// zero-copy path of stage 3 does not look at them, as before.
+inline bool present_copy_flags_admitted(const DXGI_DDI_PRESENT_FLAGS& flags) noexcept {
+    return flags.Blt && !flags.Flip;
+}
+struct PresentSourceHooks {
+    void* state{};
+    HRESULT (*direct)(void* state,D3DKMT_HANDLE* allocation){};
+    HRESULT (*copy)(void* state,D3DKMT_HANDLE* allocation){};
+};
+inline HRESULT present_source(const PresentSourceHooks& hooks,PresentSources& from,unsigned& stage,
+                              const DXGI_DDI_PRESENT_FLAGS& flags) noexcept {
+    if(!hooks.direct || !hooks.copy)return E_INVALIDARG;
+    from.source=0;from.added_gpu_work=false;
+    stage=3;
+    HRESULT hr=hooks.direct(hooks.state,&from.source);
+    if(hr==S_OK)return S_OK;
+    from.source=0;
+    if(!present_copy_flags_admitted(flags)){stage=8;return E_INVALIDARG;}
+    stage=6;
+    from.source=0;
+    hr=hooks.copy(hooks.state,&from.source);
+    if(hr!=S_OK){from.source=0;return hr;}
+    // A copy answered S_OK and named no allocation: the present would claim added GPU work for a source the
+    // runtime cannot read. Never seen; said once here rather than trusted.
+    if(!from.source)return E_UNEXPECTED;
+    from.added_gpu_work=true;
+    return S_OK;
+}
 // The surface is the whole allocation from its first byte: an offset is a surface this driver did not make.
 inline HRESULT fill_present(const PresentSources& from,D3D12DDI_PRESENT_0051* result,
                             D3D12DDI_PRESENT_CONTEXTS_0051* contexts,
@@ -42,7 +86,7 @@ inline HRESULT fill_present(const PresentSources& from,D3D12DDI_PRESENT_0051* re
     if(!from.source || from.source_offset || from.destination_offset || !from.context)return E_INVALIDARG;
     result->BroadcastSrcAllocation[0]=from.source;
     result->BroadcastDstAllocation[0]=from.destination;
-    result->AddedGpuWork=FALSE;
+    result->AddedGpuWork=from.added_gpu_work ? TRUE : FALSE;
     result->BackBufferMultiplicity=1;
     result->SyncIntervalOverrideValid=from.sync_override_valid ? TRUE : FALSE;
     result->SyncIntervalOverride=from.sync_override_valid ? from.sync_override : DXGI_DDI_FLIP_INTERVAL_IMMEDIATE;

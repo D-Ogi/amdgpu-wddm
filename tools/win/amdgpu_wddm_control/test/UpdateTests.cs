@@ -32,6 +32,21 @@ static partial class UnitTests
         Equal(0, cmp("v0.7.199.100-tester.11", "0.7.199.100-tester.11"), "the v prefix does not change the version");
         Equal("amdgpu-wddm-tester-0.7.199.100-tester.11.zip", ReleaseVersion.Parse("v0.7.199.100-tester.11").AssetName, "tester asset name");
         Equal("amdgpu-wddm-0.8.0.0.zip", ReleaseVersion.Parse("0.8.0.0").AssetName, "stable asset name");
+        // A second issue of a tester build (owner 2026-10-13: 0.7.216.100-tester.29v2 carries the tester.30 work).
+        Check(ReleaseVersion.Parse("v0.7.216.100-tester.29v2") != null && ReleaseVersion.Parse("0.7.216.100-tester.29v12") != null, "a second issue of a tester build parses");
+        foreach (var bad in new[] { "0.7.216.100-tester.29v1", "0.7.216.100-tester.29v0", "0.7.216.100-tester.29v", "0.7.216.100-tester.29V2", "0.7.216.100-tester.29v2a", "0.7.216.100v2" })
+            Check(ReleaseVersion.Parse(bad) == null, "tag refused: " + bad);
+        Equal(1, cmp("0.7.216.100-tester.29v2", "0.7.216.100-tester.29"), "tester.29v2 > tester.29");
+        Equal(-1, cmp("0.7.216.100-tester.29v2", "0.7.216.100-tester.30"), "tester.29v2 < tester.30");
+        Equal(1, cmp("0.7.216.100-tester.29v10", "0.7.216.100-tester.29v9"), "tester.29v10 > tester.29v9 (numeric)");
+        Equal(1, cmp("0.7.216.100", "0.7.216.100-tester.29v2"), "stable > a later issue of a tester build of the same base");
+        Equal(0, cmp("v0.7.216.100-tester.29v2", "0.7.216.100-tester.29v2"), "the v prefix does not change a later issue");
+        Equal("amdgpu-wddm-tester-0.7.216.100-tester.29v2.zip", ReleaseVersion.Parse("v0.7.216.100-tester.29v2").AssetName, "asset name of a later issue");
+        var issues = UpdateCheck.ParsePage("[" + Release("v0.7.216.100-tester.29") + "," + Release("v0.7.216.100-tester.29v2", published: "2026-10-13T12:00:00Z") + "]");
+        Check(issues.Count == 2, "a later issue of a tester build is an eligible release");
+        var ri = UpdateCheck.Decide(issues, "0.7.216.100-tester.29", true);
+        Check(ri.Outcome == UpdateOutcome.Available && ri.Candidate.Tag == "v0.7.216.100-tester.29v2", "tester.29 installed: tester.29v2 is offered");
+        Equal(UpdateOutcome.UpToDate, UpdateCheck.Decide(issues, "0.7.216.100-tester.29v2", true).Outcome, "tester.29v2 installed: up to date, tester.29 is never offered");
 
         // Eligible entries only.
         var page = "[" + string.Join(",", Release("v0.7.199.100-tester.11"), Release("v0.7.199.101-tester.12", draft: true), Release("v0.7.199.102-tester.13", asset: "other.zip"),

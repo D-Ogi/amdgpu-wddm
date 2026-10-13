@@ -42,6 +42,7 @@ function Get-Footprint {
         software     = Test-Path -LiteralPath 'HKLM:\SOFTWARE\amdgpu-wddm'
         runonce      = [bool](Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'amdgpu-wddm-installer' -ErrorAction SilentlyContinue)
         task         = [bool](Get-ScheduledTask -TaskName 'amdgpu-wddm start confirm' -ErrorAction SilentlyContinue)
+        windowtask   = [bool](Get-ScheduledTask -TaskName 'amdgpu-wddm start window' -ErrorAction SilentlyContinue)   # BD-080: both logon tasks are in the before/after of a dry run
         service      = [bool](Get-Service -Name bc250kmd -ErrorAction SilentlyContinue)
         bc250        = Test-Path -LiteralPath 'C:\BC250'
         programfiles = Test-Path -LiteralPath (Join-Path $env:ProgramFiles 'amdgpu-wddm')
@@ -93,7 +94,14 @@ Check ($r.text -match 'would: .*\\Release: .*AppliedDefaults') 'Release\AppliedD
 Check ($r.text -match "would: scheduled task 'amdgpu-wddm start confirm'") 'phase 2 shows the start-confirm task'
 Check ($r.text -match 'would: copy payload\\control') 'phase 2 installs the control application'
 Check ($r.text -match 'would: copy licenses\\ and THIRD-PARTY\.md -> .+\\licenses') 'phase 2 installs the licence texts'
-Check ($r.text -match 'would: Start menu shortcut .*amdgpu-wddm Control\.lnk') 'phase 2 shows the Start menu shortcut'
+Check ($r.text -match 'would: Start menu shortcut .*\\Nagi Control App\.lnk') 'phase 2 shows the Start menu shortcut, with the name Nagi Control App'
+Check ($r.text -match 'would: desktop shortcut .*\\Nagi Control App\.lnk') 'phase 2 shows the desktop icon, with the name Nagi Control App'
+Check ($r.text -notmatch 'would: (Start menu|desktop) shortcut .*amdgpu-wddm Control') 'no shortcut is written under the old name'
+# The Nagi wallpaper (owner, 2026-10-13): on by default, recorded for Nagi Control App with a stamp of this run.
+Check ($r.text -match 'wallpaper: the Nagi wallpaper, set by Nagi Control App once for each person after the install is verified') 'phase 2 says the Nagi wallpaper is chosen'
+Check ($r.text -match 'would: HKLM:\\SOFTWARE\\amdgpu-wddm\\Release: Wallpaper = 1, WallpaperStamp = \S+ \d{8}T\d{6}Z') 'phase 2 records the wallpaper choice and its install stamp'
+# The old names of an older release: this PC has none, and the run says it looked (common.ps1, Remove-LegacyControlShortcuts).
+Check ($r.text -match 'shortcuts of an older release \(amdgpu-wddm Control\): none') 'phase 2 looks for the shortcuts of an older release'
 $dwm = [int]$m.defaults.desktop_router.DwmForceCpu
 # DirectFlipFront is between them from 0.7.213.100-tester.15: the D3D11_1 front of route C is a finished
 # feature, so the installer writes it on, and the value is read from the same defaults table as DwmForceCpu.
@@ -111,6 +119,29 @@ Check (@('EnableGpuPresentBlit', 'EnableCddDwmInterop', 'DpmMode', 'DpmMaxMHz' |
 
 Check ($r.text -match 'Dry run complete') 'walk-through completes'
 Check ($r.text -notmatch 'doing:|Administrator rights are needed') 'walk-through: no change, no elevation'
+Check ($r.text -match 'shortcuts: Start menu entry, Start menu repair entry, desktop icon') 'the summary names the three shortcuts as a person reads them'
+Check ($r.text -notmatch 'desktop desktop') 'no line says "desktop desktop"'
+Check ($r.text -match 'Microsoft Visual C\+\+ runtime: present: vcruntime140\.dll') 'this PC has the runtime, and phase 2 says so'
+
+# The two paths of the new steps that this PC would otherwise never walk: a PC without the Microsoft Visual C++
+# runtime (AMDGPU_WDDM_TEST_VCRUNTIME, a dry run only), and an install that was asked for no desktop icon. Both
+# print what they would do and change nothing.
+'install -DryRun with the runtime missing and no desktop icon'
+$env:AMDGPU_WDDM_TEST_VCRUNTIME = 'missing'
+try { $r2 = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard', '-NoDesktopShortcut', '-NoWallpaper') }
+finally { Remove-Item Env:\AMDGPU_WDDM_TEST_VCRUNTIME }
+$r2.text
+Check ($r2.code -eq 0) "walk-through without the runtime exit $($r2.code)"
+Check ($r2.text -match '\[warn\]\s+Visual C\+\+ runtime\s+missing in System32: vcruntime140\.dll, vcruntime140_1\.dll, msvcp140\.dll') 'the preflight states the missing runtime as a line, not a refusal'
+Check ($r2.text -match 'the installer installs 14\.44\.35211\.0 from payload\\redist\\vc_redist\.x64\.exe \(SHA256 CC0FF0EB1DC3F518, signature Valid, CN=Microsoft Corporation') 'the line names the file, its hash and its signature'
+Check ($r2.text -match 'would: install the Microsoft Visual C\+\+ 2015-2022 Redistributable \(x64\) 14\.44\.35211\.0 from payload\\redist\\vc_redist\.x64\.exe \(/install /quiet /norestart; SHA256 CC0FF0EB1DC3F518 and the Microsoft signature checked\)') 'phase 2 shows the runtime step before anything of ours is copied'
+$iVc = $r2.text.IndexOf('would: install the Microsoft Visual C++')
+$iCopy = $r2.text.IndexOf('would: copy payload\')
+Check ($iVc -ge 0 -and $iCopy -gt $iVc) "the runtime step comes before the first file of ours (runtime at $iVc, first copy at $iCopy)"
+Check ($r2.text -match 'shortcuts: Start menu entry, Start menu repair entry; left out: desktop icon') 'the run asked for no desktop icon leaves it out and says so'
+Check ($r2.text -notmatch 'would: desktop shortcut') 'no desktop icon is written in that run'
+Check (($r2.text -match 'wallpaper: not set \(-NoWallpaper\)') -and ($r2.text -match 'Release: Wallpaper = 0, WallpaperStamp = ')) 'the run asked for no wallpaper records 0 and says so'
+Check ($r2.text -match 'Dry run complete' -and $r2.text -notmatch 'doing:') 'that walk-through changed nothing either'
 
 'registry defaults on upgrade (test-registry-defaults.ps1 under 5.1, HKCU scratch key)'
 $rr = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-registry-defaults.ps1'), '-Installer', (Join-Path $Package 'installer'))
@@ -130,13 +161,14 @@ $dg = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-diagnostics.ps1'), '-Installe
 $dg.text
 Check ($dg.code -eq 0) "diagnostics: the field case / a started driver / every hard signal / the readers / the bounds: exit $($dg.code)"
 
-# D3D9 goes through D3D9On12: the D3D9 slot is empty in both views, and no stub is copied.
+# D3D9 goes through D3D9On12: the D3D9 slot holds '<>' in both views (an empty first entry stops the adapter
+# on newer display kernels), and no stub is copied.
 Check ($r.text -notmatch 'would: copy payload\\(system32|syswow64)|bc250umd\.dll -> ') 'no D3D9 stub is copied (System32 or SysWOW64)'
-Check ($r.text -match "would: .+ UserModeDriverName = '' \| [^|]+\\desktop\\bc250d3d_router\.dll \| [^|]+\\desktop\\bc250d3d_router\.dll \| [^|]+\\d3d12\\amdgpu_wddm_d3d12\.dll; VulkanDriverName = ") "UserModeDriverName: D3D9 slot empty (D3D9On12), the router in the D3D10 and D3D11 slots, the D3D12 shell"
+Check ($r.text -match "would: .+ UserModeDriverName = <> \| [^|]+\\desktop\\bc250d3d_router\.dll \| [^|]+\\desktop\\bc250d3d_router\.dll \| [^|]+\\d3d12\\amdgpu_wddm_d3d12\.dll; VulkanDriverName = ") "UserModeDriverName: D3D9 slot <> (D3D9On12), the router in the D3D10 and D3D11 slots, the D3D12 shell"
 Check ($r.text -notmatch 'UserModeDriverName(Wow)? = bc250umd') 'no slot names the D3D9 stub'
-# BD-064: 32-bit processes get the x86 builds: D3D9 (empty)/10/11/12 slots, the x86 Vulkan ICD, the router's Wow paths.
+# BD-064: 32-bit processes get the x86 builds: D3D9 (<>)/10/11/12 slots, the x86 Vulkan ICD, the router's Wow paths.
 Check ($r.text -match 'would: copy payload\\wow64 -> .+\\wow64 ') 'phase 2 installs the x86 builds (wow64)'
-Check ($r.text -match "would: .+ UserModeDriverNameWow = '' \| [^|]+\\wow64\\desktop\\bc250d3d_router\.dll \| [^|]+\\wow64\\desktop\\bc250d3d_router\.dll \| [^|]+\\wow64\\d3d12\\amdgpu_wddm_d3d12\.dll; VulkanDriverNameWow = [^;\r\n]+\\wow64\\vulkan\\radeon_icd\.json") 'UserModeDriverNameWow: D3D9 slot empty (D3D9On12), two x86 routers, the x86 D3D12 shell; VulkanDriverNameWow'
+Check ($r.text -match "would: .+ UserModeDriverNameWow = <> \| [^|]+\\wow64\\desktop\\bc250d3d_router\.dll \| [^|]+\\wow64\\desktop\\bc250d3d_router\.dll \| [^|]+\\wow64\\d3d12\\amdgpu_wddm_d3d12\.dll; VulkanDriverNameWow = [^;\r\n]+\\wow64\\vulkan\\radeon_icd\.json") 'UserModeDriverNameWow: D3D9 slot <> (D3D9On12), two x86 routers, the x86 D3D12 shell; VulkanDriverNameWow'
 Check ($r.text -match "would: HKLM:\\SOFTWARE\\WOW6432Node\\Khronos\\Vulkan\\Drivers '[^']+\\wow64\\vulkan\\radeon_icd\.json' = 0") 'the x86 ICD in the WOW6432Node Khronos list'
 Check (($r.text -match 'DesktopRouter: .*CpuUmdPathWow=[^;\r\n]+\\wow64\\desktop\\bc250d3d\.dll') -and ($r.text -match 'AppRouter: .*GpuUmdPathWow=[^;\r\n]+\\wow64\\d3d11\\amdgpu_wddm_d3d11\.dll')) 'the x86 router paths are installer-owned'
 # The H.264 encoder MFT (M15.11, driver/umd/mft-h264/INSTALL.md): manifest.json "mft_h264" says whether this release
@@ -161,6 +193,43 @@ if ($mftOn) {
 $rm = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-mft-h264.ps1'), '-Installer', (Join-Path $Package 'installer'), '-Dll', (Join-Path $Package ($mftPath -replace '/', '\')))
 $rm.text
 Check ($rm.code -eq 0) "install, repair, uninstall and rollback of the encoder keys: exit $($rm.code)"
+# The OpenGL ICD (BD-076, GitHub issue #8): manifest.json "opengl_icd" says whether this release registers an OpenGL
+# driver and for which architectures ("architectures"), and the dry run shows the files and the values it would write.
+# This release lists x64 alone, so the plan has to name the three x64 values and none of the three Wow ones: a 32-bit
+# OpenGL program keeps the renderer of Windows itself (common.ps1 holds the lab measurement behind that).
+$glOn = [bool]($m.opengl_icd -and $m.opengl_icd.register)
+$glArch = @()
+if ($m.opengl_icd -and $m.opengl_icd.architectures) { $glArch = @($m.opengl_icd.architectures | ForEach-Object { [string]$_ }) }
+$glX86 = [bool]($glArch -contains 'x86')
+Check ((-not $m.opengl_icd) -or (($m.opengl_icd.package_path -eq 'payload/opengl/amdgpu_wddm_gl.dll') -and ($m.opengl_icd.package_path_wow -eq 'payload/wow64/opengl/amdgpu_wddm_gl.dll') -and (@('REG_MULTI_SZ', 'REG_SZ') -contains [string]$m.opengl_icd.value_type) -and ([int]$m.opengl_icd.version -ge 1))) "manifest opengl_icd: register $glOn, both package paths, $([string]$m.opengl_icd.value_type), version $([string]$m.opengl_icd.version), flags $([string]$m.opengl_icd.flags)"
+Check ((-not $glOn) -or (@($glArch).Count -and (@($glArch | Where-Object { @('x64', 'x86') -notcontains $_ }).Count -eq 0))) "manifest opengl_icd: the architecture list is named and known ($($glArch -join ', '))"
+if ($glOn) {
+    foreach ($p in @(@(if ($glArch -contains 'x64') { [string]$m.opengl_icd.package_path }) + @(if ($glX86) { [string]$m.opengl_icd.package_path_wow }))) {
+        Check (@($m.files | Where-Object { $_.path -eq $p }).Count -eq 1) "the package carries $p"
+    }
+    if ($glArch -contains 'x64') {
+        Check (@($m.components | Where-Object { $_.package_path -eq [string]$m.opengl_icd.package_path -and $_.install_path -eq '<InstallDir>\opengl\amdgpu_wddm_gl.dll' }).Count -eq 1) 'manifest components: the x64 ICD goes to <InstallDir>\opengl'
+        Check ($r.text -match 'would: copy payload\\opengl -> [^\r\n]+\\opengl ') 'phase 2 installs the x64 OpenGL ICD'
+    }
+    if ($glX86) {
+        Check ($r.text -match "would: .+ OpenGLDriverName = \[[^\r\n]+\\opengl\\amdgpu_wddm_gl\.dll\]; OpenGLVersion = 1; OpenGLFlags = 1; OpenGLDriverNameWow = \[[^\r\n]+\\wow64\\opengl\\amdgpu_wddm_gl\.dll\]; OpenGLVersionWow = 1; OpenGLFlagsWow = 1 \(REG_MULTI_SZ, x64 and x86\)") 'the plan names the six values of the OpenGL registration, x64 and Wow'
+    } else {
+        # The positive control and the negative one in one line each: the three x64 values are named with the
+        # architecture list, and no Wow value is named anywhere in the plan.
+        Check ($r.text -match "would: .+ OpenGLDriverName = \[[^\r\n]+\\opengl\\amdgpu_wddm_gl\.dll\]; OpenGLVersion = 1; OpenGLFlags = 1 \(REG_MULTI_SZ, x64\)") 'the plan names the three x64 values of the OpenGL registration and the architecture list'
+        Check ($r.text -notmatch 'OpenGLDriverNameWow = |OpenGLVersionWow = |OpenGLFlagsWow = ') 'no 32-bit OpenGL value is written by a release that registers x64 alone'
+        Check (@($m.files | Where-Object { $_.path -eq [string]$m.opengl_icd.package_path_wow }).Count -eq 0) 'the package carries no 32-bit OpenGL ICD'
+        Check (@($m.components | Where-Object { [string]$_.install_path -like '*wow64\opengl\*' }).Count -eq 0) 'no component installs a 32-bit OpenGL ICD'
+    }
+    Check ($r.text -notmatch 'would: remove [^\r\n]+\\opengl \(the OpenGL ICD of an earlier install') 'nothing of the ICD is rolled back by a release that registers it'
+} else {
+    Check ($r.text -match 'OpenGL ICD: not registered by this release') 'the dry run says this release registers no OpenGL ICD'
+    Check ($r.text -notmatch 'would: copy payload\\opengl|OpenGLDriverName = ') 'nothing of the OpenGL ICD is installed'
+}
+'OpenGL ICD registration (test-opengl-icd.ps1 under 5.1, HKCU scratch key)'
+$rg = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-opengl-icd.ps1'), '-Installer', (Join-Path $Package 'installer'), '-Package', $Package)
+$rg.text
+Check ($rg.code -eq 0) "the release switch, the six values, the ICD file check, the restore plan: exit $($rg.code)"
 '32-bit registration (test-wow64.ps1 under 5.1, HKCU scratch key)'
 $rw = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-wow64.ps1'), '-Package', $Package, '-WorkRoot', $WorkBase)
 $rw.text
@@ -242,8 +311,11 @@ Check ((Test-Path -LiteralPath (Join-Path $Package 'payload\tools\dwm-session.ps
 Check ($r.text -match 'DWM of session \d+ before the driver package: ') 'the walk-through records the DWM before the driver package'
 # BD-069: the installer tells the driver's own safety closure from a setting of the tester, and only a repair reopens
 # one. The records belong to the KMD (driver/kmd/interop.c, driver/kmd/dpm.c); the installer reads them.
-Check (($common -match '\$script:DriverClosures = @\{') -and ($common -match "record = 'InteropClosedReason'") -and ($common -match "record = 'DpmClosedReason'") -and ($common -match "legacy_record = 'DpmLastReason'") -and ($common -match "'reopened'") -and ($common -match "'driver-closed'")) 'common.ps1 holds the driver closure table (InteropClosedReason, DpmClosedReason with DpmLastReason as the legacy record) and both decisions'
-Check (($src -match "(?m)^\`$script:ReopenClosures = \[bool\]\`$Repair\s*$") -and ([regex]::Matches($src, '\$script:ReopenClosures =').Count -eq 1) -and ([regex]::Matches($src, '-Reopen:\$script:ReopenClosures').Count -eq 2) -and ($common -match "InstallSwitches = @\('NoControlApp', 'NoReboot', 'Force', 'Repair', 'ApplySystemTuning'\)")) 'only the -Repair switch reopens a closure (the plan and the write both), and -Repair survives the restart'
+Check (($common -match '\$script:DriverClosures = @\{') -and ($common -match "record = 'InteropClosedReason'") -and ($common -match "record = 'DpmClosedReason'") -and ($common -match "legacy_record = 'DpmLastReason'") -and ($common -match "record = 'CuModeClosedReason'") -and ($common -match "'reopened'") -and ($common -match "'driver-closed'")) 'common.ps1 holds the driver closure table (InteropClosedReason, DpmClosedReason with DpmLastReason as the legacy record, CuModeClosedReason) and both decisions'
+# BD-077: the graphics cores are a closure of the same kind, and they carry no legacy record. CuModeLastReason is
+# written by every start, a tester's own 24 start among them, so it would turn a chosen 24 into a closure.
+Check (($common -match "CuMode = @\{ closed = 24; record = 'CuModeClosedReason'; any_reason = \`$true") -and ($common -notmatch "legacy_record = 'CuModeLastReason'")) 'the graphics-core closure is CuMode 24 with CuModeClosedReason, and no legacy record'
+Check (($src -match "(?m)^\`$script:ReopenClosures = \[bool\]\`$Repair\s*$") -and ([regex]::Matches($src, '\$script:ReopenClosures =').Count -eq 1) -and ([regex]::Matches($src, '-Reopen:\$script:ReopenClosures').Count -eq 2) -and ($common -match "InstallSwitches = @\('NoControlApp', 'NoReboot', 'Force', 'Repair', 'ApplySystemTuning', 'NoStartMenuShortcut', 'NoDesktopShortcut', 'NoWallpaper'\)")) 'only the -Repair switch reopens a closure (the plan and the write both), and -Repair survives the restart'
 Check (($common -match "8 = 'smu-error'") -and ($src -match "\`$ioRemedy = '; remedy: run install\.cmd -Repair") -and ($src -notmatch "if \(\`$ioClosed\) \{ \`$ioClosed \+= '; remedy")) 'every reason the DPM guard persists is a closure (3, 4, 8), and verify names the repair only where the driver left a record'
 Check (($common -match "legacy_record = 'DpmLastReason'; any_reason = \`$true") -and ($common -match "\(\`$record -eq \`$c\.record\) -and \`$c\.any_reason")) 'a durable record takes any reason the driver writes; only the legacy record is held to the three names'
 $marker = @(foreach ($s in $scripts) { if ((@($s.text -split "`n" | Where-Object { $_ -notmatch '^\s*#' }) -join "`n") -match 'InteropSession|InteropBoot') { $s.name } })
@@ -634,12 +706,14 @@ $mftAt = $r.text.IndexOf('would: remove the H.264 encoder MFT registration')
 $rootAt = $r.text.IndexOf('would: remove ' + (Join-Path $env:ProgramFiles 'amdgpu-wddm'))
 Check (($mftAt -gt 0) -and ($rootAt -gt $mftAt)) 'the encoder keys go before the install root, so no COM registration points at a DLL that is gone'
 Check ($r.text -notmatch 'doing:|Administrator rights are needed') 'uninstall dry run with a state: no change, no elevation'
+Check (($r.text -match 'would: remove the Start menu shortcut .*\\Nagi Control App\.lnk') -and ($r.text -match 'would: remove the desktop shortcut .*\\Nagi Control App\.lnk')) 'the uninstall removes the new names'
+Check ($r.text -match 'shortcuts of an older release \(amdgpu-wddm Control\): none') 'the uninstall looks for the old names too'
 # BD-089, the clean slate: every item of ours goes, and the uninstaller ends with the list of what is on the computer.
 Check ($r.text -match "would: unregister our scheduled task\(s\): (none on this computer \(this release registers 'amdgpu-wddm start confirm'\)|[^\r\n]*amdgpu-wddm)") 'every scheduled task of ours is unregistered, not only the one of this release'
 Check ($r.text -match 'would: remove HKLM:\\SOFTWARE\\amdgpu-wddm \(router policy, application profile, release record\), HKLM:\\SOFTWARE\\WOW6432Node\\amdgpu-wddm and HKCU:\\Software\\amdgpu-wddm') 'the policy keys of both registry views and the app preferences of this account go'
 Check ($r.text -match 'would: remove the bc250kmd service entry and its settings in HKLM:\\SYSTEM\\CurrentControlSet\\Services\\bc250kmd') 'the service key goes with its Parameters, which a next install would otherwise keep as the tester''s own settings'
 Check (($r.text -match 'would: remove certificate [0-9A-F]{40} from LocalMachine Root and TrustedPublisher') -and ($r.text -match 'no other test certificate of ours in Root or TrustedPublisher|would: remove \d+ more test certificate\(s\) of ours')) 'the certificate of this release goes, and so does one of an older release of ours'
-$fpItems = @('install root', 'System32 stub', 'SysWOW64 stub', 'driver store', 'driver service', 'policy keys', 'Vulkan registration', 'H.264 encoder keys', 'scheduled task', 'RunOnce entry', 'Start menu', 'installer state', 'per-user data', 'certificates', 'GPU firmware', 'control application data')
+$fpItems = @('install root', 'System32 stub', 'SysWOW64 stub', 'driver store', 'driver service', 'policy keys', 'Vulkan registration', 'H.264 encoder keys', 'scheduled task', 'RunOnce entry', 'shortcuts', 'installer state', 'per-user data', 'certificates', 'GPU firmware', 'control application data')
 $fpMissing = @($fpItems | Where-Object { $r.text -notmatch ('(?m)^\s*\[(gone|kept|LEFT)\] ' + [regex]::Escape($_) + '\s') })
 Check (($r.text -match '== What is left of this release') -and -not $fpMissing.Count) "the uninstaller ends with the list of what is left, all $($fpItems.Count) items$(if ($fpMissing.Count) { '; missing: ' + ($fpMissing -join ', ') })"
 Check ($r.text -match 'Dry run complete: nothing was changed, so the list above is this computer as it is now \(\d+ item\(s\) of this release\)') 'the dry run says that the list is the computer as it is now'

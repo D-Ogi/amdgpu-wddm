@@ -38,6 +38,8 @@ before it writes anything. Every one of these was called on the host with the bu
 | 11 | `QUERYSEGMENT4` | `WddmQuerySegment4()` `wddm.c:1171` | `OutputDataSize < sizeof(*out)`, `out == NULL`; pass 2 also `NbSegment < count`, `pSegmentDescriptor == NULL`, `SegmentDescriptorStride < sizeof(descriptor)` | 40 (+96/descriptor) | section (c) |
 | 13 | `GPUMMUCAPS` | `WddmGpuMmuCaps()` `wddm.c:1174` | `OutputDataSize < sizeof(*caps)`, `caps == NULL` | 24 | section (d) |
 | 14 | `PAGETABLELEVELDESC` | `WddmPageTableLevelDesc()` `wddm.c:1177` | `OutputDataSize < sizeof(*desc)`, `desc == NULL` | 20 | per level; `STATUS_INVALID_PARAMETER` above level 3 |
+| 15 | `PHYSICALADAPTERCAPS` | `WddmPhysicalAdapterCaps()` | `InputDataSize < sizeof(*in)`, `in == NULL`, `OutputDataSize < sizeof(*caps)`, `caps == NULL`, index not 0, no `DeviceHandle` yet | 32 | the DRIVERCAPS node count and paging node, `GpuMmuSupported`, the StartDevice handle. Zeroes `OutputDataSize` first (since 0.7.216.62) |
+| 47 | `64BITONLYCAPS` | inline | `pOutputData == NULL`, `OutputDataSize < sizeof(UINT)` | 4 | four zero bytes: not 64-bit only (since 0.7.216.62) |
 
 The two inline arms check the size and not the pointer. That is defect D1; see section (g).
 
@@ -48,13 +50,13 @@ Refused, all through one `default:` arm at `wddm.c:1195` with `STATUS_NOT_SUPPOR
 | 0 | `UMDRIVERPRIVATE` | no UMD of ours yet; the stub package carries a name, not a driver |
 | 2, 4, 5 | `QUERYSEGMENT`, `QUERYSEGMENT2`, `QUERYSEGMENT3` | a WDDM 2 driver must not answer the pre-WDDM2 segment queries (R15) |
 | 7 | `POWERCOMPONENTINFO` | never asked once type 6 answers zero components |
-| 15 | `PHYSICALADAPTERCAPS` | asked on the lab and tolerated (R16, E16 run 003) |
 | 16 | `DISPLAY_DRIVERCAPS_EXTENSION` | asked on the lab and tolerated (M65) |
-| 47 | `64BITONLYCAPS` | asked on the lab and tolerated; the WDK has no structure for it at all |
 
-Types 15 and 47 are the ones the task singles out, and they are not refused on the strength of the
-`default:` arm reading correctly. Both are called by `host/qai_test.c` with every buffer shape, including a
-NULL pointer and a zero-size buffer, and asserted to return `STATUS_NOT_SUPPORTED` and touch nothing.
+Types 15 and 47 were refused until 0.7.216.62. dxgkrnl tolerates a refusal of either, but after a refusal of
+15 it builds the physical-adapter caps itself from DRIVERCAPS members we leave zero and takes the FDO as the
+handle (static reading of 26100.9549, BD-134), so both are answered now (R16). `host/qai_test.c` expects the
+answers with every buffer shape, but that harness no longer builds against the current `wddm.c`. The static
+rule is the gate that runs.
 
 The lab-observed set is 1, 10, 11, 13, 14, 15, 16, 47 (M65). Type 6 is in our switch but has not been seen
 asked for; it is answered because Learn lists it among the four a WDDM 2.x miniport must answer (R14).
@@ -231,7 +233,7 @@ making the declaration later is not free.
 | R13 | either MMU cap set | `VirtualAddressingSupported = 1` | LEARN `_DXGK_VIDMMCAPS` | OK |
 | R14 | a full WDDM 2.x miniport | answers types 1, 6, 10, 11 | LEARN mcdm-implementation-guidelines; DXGKRNL asked 1, 11, 13, 14 in that order | OK |
 | R15 | a WDDM 2.x driver | types 2, 4, 5 not answered; `default:` refuses with `STATUS_NOT_SUPPORTED` | LEARN mcdm table "must not be supported" | OK |
-| R16 | dxgkrnl asks a started adapter for 15 and 47 | both refused, and the refusal tested not assumed | DXGKRNL `+0x967` "a refusal is tolerated"; facts M64, E16 run 003 | OK |
+| R16 | dxgkrnl asks a started adapter for 15 and 47 | both answered: 15 repeats DRIVERCAPS, 47 four zero bytes | DXGKRNL `+0x967` "a refusal is tolerated"; static reading of 26100.9549 (BD-134), facts M64, E16 run 003 | OK |
 | R17 | answers `HISTORYBUFFERPRECISION` (10) | `FormatHistoryBuffer` | LEARN mcdm table; SAMPLE CosKmdGlobal.cpp:332 | OK |
 | R18 | `NumberOfSwizzlingRanges = 0` | `AcquireSwizzlingRange`, `ReleaseSwizzlingRange` stay NULL | LEARN what-s-new-for-prior-wddm-2-x-versions "Support for swizzling ranges has been removed."; SAMPLE RosKmdGlobal.cpp:265-266 | OK |
 | R19 | any table | the ten reserved members stay NULL | LEARN; the WDDM 1.x page-table trap | OK |
@@ -440,6 +442,6 @@ refusal, and the stride and NULL-descriptor variants of `QUERYSEGMENT4` behaved 
 - **The INF as installed.** R05 reads `bc250kmd.inf` and `build.ps1` and concludes that the `-UmdStub`
   package writes `UserModeDriverName`. It does not run the installer or read the software key on a target.
 - **Concurrency and IRQL.** One thread, PASSIVE_LEVEL. The spin locks are stubs.
-- **Rules nobody wrote down.** The table is as complete as its three sources; a cap whose obligation is
+- **Rules nobody wrote down.** The table is as complete as its three sources. A cap whose obligation is
   neither in the dxgkrnl reading, nor on Learn, nor visible in a sample driver is not in it. That is the
   honest limit, and it is the reason each row carries its source rather than a claim.

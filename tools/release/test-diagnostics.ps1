@@ -108,6 +108,40 @@ try {
     Check (-not $noRecord.collect) 'and a driver before 0.7.216.30, which keeps no start record at all, is not one'
     Check ((@($noRecord.notes) -join ' | ') -match 'kept no start record') 'the absent record is a note, not a reason'
 
+    'BD-147: the successful named problem code follows the same path as numeric zero'
+    if (-not ('DiagnosticsTest.Problem' -as [type])) { Add-Type 'namespace DiagnosticsTest { public enum Problem { CM_PROB_NONE = 0, CM_PROB_FAILED_POST_START = 43 } }' }
+    foreach ($code in @(0, '0', 'CM_PROB_NONE', ' cm_prob_none ', [DiagnosticsTest.Problem]::CM_PROB_NONE)) {
+        Check ((ConvertTo-DiagnosticsProblemCode $code) -eq 0) "successful problem code decoded: $code"
+        $named = Get-StartFailureDecision -ProblemCode $code -DevicePresent $true -DeviceStatus 'OK' -Record $okRecord `
+            -BootUtc ([datetime]::UtcNow.AddMinutes(-5)) -HealthFlags 15 -LastStage 50
+        Check (-not $named.collect -and $named.summary.StartsWith('no start failure:')) "healthy $code does not collect failure diagnostics"
+    }
+    # Run the real callback wrapper with only its side effects replaced. A successful enum value must never
+    # invoke the collector, publish a failure event or print the misleading BD-147 information line.
+    $tokens = $null; $parseErrors = $null
+    $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $Installer 'install.ps1'), [ref]$tokens, [ref]$parseErrors)
+    $wrapper = $ast.Find({ param($a) $a -is [Management.Automation.Language.FunctionDefinitionAst] -and $a.Name -eq 'Invoke-VerifyDiagnostics' }, $true)
+    . ([scriptblock]::Create($wrapper.Extent.Text))
+    & {
+        $script:bd147Collected = 0; $script:bd147Events = 0; $script:bd147Info = @()
+        $script:DryRunMode = $false; $script:StateDir = $WorkRoot; $script:ServiceName = 'bc250kmd'
+        $script:HardwareIdPrefix = 'fixture'; $script:EngineDiagnostics = $null
+        function Write-Log { param($Text) }
+        function Write-EngineEvent { param($Type, $Data) $script:bd147Events++ }
+        function Write-StartFailureDiagnostics {
+            $script:bd147Collected++
+            return @{ written = $true; bytes = 1; seconds = 0; sections = @(); problems = @(); path = 'fixture.txt'; cut = $false }
+        }
+        $info = { param($Name, $Text) $script:bd147Info += ($Name + ': ' + $Text) }
+        foreach ($problem in @('CM_PROB_NONE', [DiagnosticsTest.Problem]::CM_PROB_NONE)) {
+            Invoke-VerifyDiagnostics -DeviceState @{ present = $true; problem_code = $problem; status = 'OK'; health_flags = 15; last_stage = 50 } `
+                -StartRecord $okRecord -BootUtc ([datetime]::UtcNow.AddMinutes(-5)) -BootId 11 -BootIdSource 'fixture' -Info $info
+        }
+        Check ($script:bd147Collected -eq 0 -and $script:bd147Events -eq 0 -and $script:bd147Info.Count -eq 0) 'the real wrapper emits no failure diagnostics for CM_PROB_NONE'
+        Invoke-VerifyDiagnostics -DeviceState @{ present = $true; problem_code = 'CM_PROB_FAILED_POST_START'; status = 'Error'; health_flags = $null; last_stage = 79 } `
+            -StartRecord $fieldRecord -BootUtc $fieldBoot -BootId 11 -BootIdSource 'fixture' -Info $info
+        Check ($script:bd147Collected -eq 1 -and $script:bd147Events -eq 1 -and ($script:bd147Info -join ' ') -match 'the driver did not start') 'a genuine failed start still collects and announces the details'
+    }
     '3. every hard signal on its own'
     $cases = @(
         @{ name = 'no device with our hardware id'; args = @{ DevicePresent = $false; ProblemCode = $null; DeviceStatus = $null; HealthFlags = 15; LastStage = 50 }; want = 'no graphics device' }

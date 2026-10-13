@@ -20,6 +20,7 @@ static partial class UnitTests
         RecentLaunchRecords();
         Search();
         WindowFit();
+        SmallScreens();
         PageWidthRule(root);
         RebuiltPageFocus(root);
         RebuiltPagePlace(root);
@@ -70,6 +71,7 @@ static partial class UnitTests
         p.HiddenGames = new HashSet<string> { "a.exe" }; Check(p.HiddenGames.Contains("A.EXE"), "hidden games compare without case");
         p.HiddenGames = new HashSet<string>();
         p.LastSeenRelease = "1.0"; p.LastSeenRelease = null;
+        p.NameTipRelease = "1.0"; Equal("1.0", p.NameTipRelease, "the name tip records the release it was shown for"); p.NameTipRelease = null;
         Equal(0, store.Values.Count, "R4: on then off leaves no value");
         Check(store.Writes > 0, "R4: the changes were written");
         Equal(@"Software\amdgpu-wddm\Control", RegistryPrefStore.Path, "preferences live under HKCU Software\\amdgpu-wddm\\Control");
@@ -104,6 +106,18 @@ static partial class UnitTests
         Check(Guide.Rank(GuideCause.Installing) == 4 && Guide.Order(GuideCause.Installing) == 1 && Guide.Order(GuideCause.Repairing) == 2 && Guide.Order(GuideCause.CreatingReport) == 3,
             "G-ART: rank 4 is installing, repair, support report, in that order");
         Check(Guide.Order(GuideCause.DesktopReplaced) == 6 && Guide.Order(GuideCause.PageTip) == 3 && Guide.Order(GuideCause.AllGood) == 1, "G-ART: places inside a rank");
+        // The name tip: once per installed release, never over a problem, an attention item or a pending restart.
+        Check(Guide.NameTipDue("0.7.216.100-tester.30", null) && Guide.NameTipDue("0.7.216.100-tester.30", "0.7.216.100-tester.29v2"),
+            "name tip: due on the first start after an install and after an update");
+        Check(!Guide.NameTipDue("0.7.216.100-tester.30", "0.7.216.100-TESTER.30") && !Guide.NameTipDue(null, null) && !Guide.NameTipDue("", "x"),
+            "name tip: not again for the same release, and never without an installed release");
+        foreach (var c in all)
+        {
+            var v = Guide.Choose(new[] { c });
+            Check(Guide.ShowNameTip(true, v) == (Guide.Rank(c) > 3) && !Guide.ShowNameTip(false, v), "name tip: over " + c + " only when its rank is above 3, and only while it shows");
+        }
+        Check(!Guide.ShowNameTip(true, null), "name tip: no verdict, no tip (the panel says the status is unreadable)");
+        Equal(15, Guide.NameTipSeconds, "name tip: about 15 seconds");
 
         // Guide.Evaluate: the whole decision as a pure function.
         var on = new GuideContext { ShowNagi = true, ArtAvailable = true, FramesFound = 12, FramesComplete = true, WindowsAnimations = true };
@@ -287,6 +301,37 @@ static partial class UnitTests
         Check(title.Top >= 0, "WU-036: the title bar comes back on a screen");
         var none = DisplayInfo.Fit(w, new List<Rectangle>(), min, 30);
         Equal(w, none, "WU-036: no screen information: nothing moves");
+    }
+
+    // The owner's rule of 2026-10-12: on a 1024x768 or 800x600 working area, and on every smaller one, the guide
+    // panel with the character and the whole right-hand panel it sits in do not show (GitHub #38: on the tester's
+    // 800x600 screen the panel covered the text of the page). The screen comes in through the rule's arguments, so
+    // these cases never read the screen this test runs on; the window's own side of it is a render finding
+    // (--smoke-render G-SMALL, at the same five working areas).
+    static void SmallScreens()
+    {
+        foreach (var c in new[] {
+                new { W = 800, H = 600, Small = true },
+                new { W = 1024, H = 768, Small = true },
+                new { W = 1280, H = 720, Small = true },      // 720 high: under the 768 of the rule
+                new { W = 1366, H = 768, Small = true },       // exactly 768 high
+                new { W = 1920, H = 1080, Small = false },
+                new { W = 640, H = 480, Small = true },
+                new { W = 1024, H = 1200, Small = true },      // exactly 1024 wide
+                new { W = 1025, H = 769, Small = false } })    // one pixel over the rule in both directions
+            Check(LayoutRules.SmallScreen.Is(c.W, c.H) == c.Small,
+                "small screen: " + c.W + "x" + c.H + " is " + (c.Small ? "small" : "not small"));
+        Check(!LayoutRules.SmallScreen.Is(0, 0) && !LayoutRules.SmallScreen.Is(-1, 600) && !LayoutRules.SmallScreen.Is(800, 0),
+            "small screen: a working area that is not known is not small, so the panel stays where it was");
+        // Logical units, not device pixels: the same monitor is a small screen at a large text size.
+        Check(!LayoutRules.SmallScreen.IsDevice(1920, 1032, 1f), "small screen: 1920x1032 at 100 % is not small");
+        Check(LayoutRules.SmallScreen.IsDevice(1920, 1032, 1.5f), "small screen: 1920x1032 at 150 % is 1280x688 logical, which is small");
+        Check(LayoutRules.SmallScreen.IsDevice(1600, 1200, 2f), "small screen: 1600x1200 at 200 % is 800x600 logical, which is small");
+        Check(LayoutRules.SmallScreen.IsDevice(2048, 1536, 2f), "small screen: 2048x1536 at 200 % is 1024x768 logical, which is small");
+        Check(!LayoutRules.SmallScreen.IsDevice(2100, 1600, 2f), "small screen: 2100x1600 at 200 % is 1050x800 logical, which is not small");
+        Check(!LayoutRules.SmallScreen.IsDevice(1920, 1080, 0f), "small screen: a scale that is not known decides nothing");
+        Equal(1024, LayoutRules.SmallScreen.MaxWidth, "small screen: the width of the rule the owner gave");
+        Equal(768, LayoutRules.SmallScreen.MaxHeight, "small screen: the height of the rule the owner gave");
     }
 
     // G-RENDER: the page width rule of --smoke-render. A page is measured against the column it was built at, so that
@@ -643,7 +688,19 @@ static partial class UnitTests
             }
         Check(n > 1000, "G-NOINT: strings checked: " + n);
         Check(PlainWords.Findings(new[] { "The KMD fence 0x1F timed out" }).Any(), "G-NOINT: the check finds internals");
-        Check(!PlainWords.Findings(new[] { "amdgpu-wddm Control 1.0.0.0-tester.11" }).Any(), "G-NOINT: the product name and a release version are fine");
+        Check(!PlainWords.Findings(new[] { "Nagi Control App 1.0.0.0-tester.11" }).Any(), "G-NOINT: the product name and a release version are fine");
+        Check(!PlainWords.Findings(new[] { Strings.In("en", "help.about.text") }).Any(), "G-NOINT: the technical name Nagi (amdgpu-wddm) on About is fine");
+        // The Nagi naming (owner, 2026-10-13): the window, the About card and the sign-in notice name the app Nagi
+        // Control App, and the meaning of the name is one string that the name tip and the About line both read.
+        foreach (var lang in Strings.Languages)
+        {
+            Check(Strings.In(lang, "notice.open-app").Contains("Nagi Control App") && Strings.In(lang, "help.guide.safe.3").Contains("Nagi Control App (recovery)"),
+                "Nagi: " + lang + " names the app and its recovery shortcut as the Start menu shows them");
+            Equal("Nagi's AMD Graphics Infrastructure", Strings.In(lang, "brand.expansion"), "Nagi: the meaning of the name is the same English phrase in " + lang);
+            Check(Strings.In(lang, "guide.name").Contains("{0}") && Strings.In(lang, "help.about.name").Contains("{0}"), "Nagi: " + lang + " takes the phrase as the argument, not a copy of it");
+            foreach (var t in Strings.Tables[lang].Entries.Values)
+                if (t.Text.Contains("amdgpu-wddm Control")) Check(false, "Nagi: " + lang + " " + t.Id + " still names amdgpu-wddm Control");
+        }
     }
 
     // WU-063, WU-064: four symptom guides with steps, an explanation for every searchable setting and every page.
@@ -699,7 +756,14 @@ static partial class UnitTests
         // BenchmarkRun.cs ends one process: the game it started itself, and only when that game could not be put
         // into the job object that would otherwise have ended it (test/BenchmarkTests.cs decides that exact shape).
         Equal("", string.Join(",", where(@"\b(TerminateProcess|taskkill)\b|\.Kill\(", new[] { "RecoveryActions.cs", "BugReport.cs", "SystemTuningProcess.cs", "BenchmarkRun.cs", "DiagnosticWorker.cs" })), "G-SRC: no process kill outside the helper's accepted BD-060 escape, each helper's own timed-out child and the benchmark's own game");
-        Equal("", string.Join(",", where(@"\b(SetupDiCallClassInstaller|DICS_DISABLE|DIF_PROPERTYCHANGE|CM_Disable_DevNode|pnputil|devcon)\b", null)), "G-SRC: no PnP disable or enable");
+        // A restart of our own graphics device is neither a disable nor an enable. The one click back from
+        // Microsoft Basic Display after the driver's guard refused a start (RecoveryActions.EnableDriver) runs
+        // pnputil /restart-device for that one device, the way the release installer already restarts the GPU's
+        // audio function. Nothing else in this application may name a PnP tool, and that helper may not disable,
+        // remove or enable any device.
+        Equal("", string.Join(",", where(@"\b(SetupDiCallClassInstaller|DICS_DISABLE|DIF_PROPERTYCHANGE|CM_Disable_DevNode|pnputil|devcon)\b", new[] { "RecoveryActions.cs" })), "G-SRC: no PnP disable or enable");
+        Check(Regex.IsMatch(files["RecoveryActions.cs"], @"/restart-device") && !Regex.IsMatch(files["RecoveryActions.cs"], @"/(remove|disable|enable|delete)-device"),
+            "G-SRC: the helper restarts one device and never disables, removes or enables one");
         Equal("", string.Join(",", where(@"\b(EWX_FORCE\w*|Restart-Computer|shutdown(\.exe)?\s+/r)\b", null)), "G-SRC: no forced restart");
         Equal("", string.Join(",", where(@"(?i)\b(oauth|access_token|Authorization)\b", null)), "G-SRC: no sign-in or token code");
         foreach (var f in window)

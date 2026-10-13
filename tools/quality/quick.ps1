@@ -1,4 +1,5 @@
-param([Parameter(Mandatory)][string]$Workspace,[Parameter(Mandatory)][string]$Out,[string]$RepoRoot="",[ValidateSet('Full','KmdPackage')][string]$Profile='Full',[string]$Kits='')
+param([Parameter(Mandatory)][string]$Workspace,[Parameter(Mandatory)][string]$Out,[string]$RepoRoot="",[ValidateSet('Full','KmdPackage')][string]$Profile='Full',[string]$Kits='',
+      [switch]$NoCache,[int]$Jobs=[Environment]::ProcessorCount,[switch]$PlanOnly)
 $ErrorActionPreference='Stop'
 $repo=if($RepoRoot){$RepoRoot}else{Join-Path $Workspace 'bc250-win'}
 if (!$Kits) { $Kits = Join-Path $Workspace 'toolchain\nuget' }
@@ -15,13 +16,15 @@ $umdSource=if($env:BC250_UMD_SOURCE){$env:BC250_UMD_SOURCE}else{Join-Path $Works
 $umdBuild=if($env:BC250_UMD_BUILD){$env:BC250_UMD_BUILD}else{Join-Path $Workspace 'scratch\m13-native-zink-build'}
 $clock=[Diagnostics.Stopwatch]::StartNew()
 New-Item -ItemType Directory -Force $Out | Out-Null
+$Out=(Resolve-Path -LiteralPath $Out).Path
 $results=@()
+$gateJobs=@()
 function Check([string]$name,[scriptblock]$action) {
-    $watch=[Diagnostics.Stopwatch]::StartNew()
-    & $action *> (Join-Path $Out "$name.log")
-    if($LASTEXITCODE -ne 0){throw "$name failed; see $Out\$name.log"}
-    $script:results+=@{name=$name;status='PASS';seconds=$watch.Elapsed.TotalSeconds}
-    Write-Host "$name PASS $([Math]::Round($watch.Elapsed.TotalSeconds,2))s"
+    # Dynamic scriptblocks have no original automatic script-path variables.
+    # Keep child pwsh calls: -File exit semantics differ from & script.ps1 when
+    # a negative control consumes a failing native command and returns normally.
+    $text=$action.ToString().Replace('$PSScriptRoot','$qualityRoot').Replace('$PSCommandPath','$quickPath')
+    $script:gateJobs+=@{name=$name;action=$text}
 }
 # A gate whose inputs are not in the repository. It runs whenever they are present, so that nobody has to
 # remember it, and records why it did not when they are absent - never silently.
@@ -44,8 +47,7 @@ try {
  # The documentation style ratchet of docs/style.md: a document in tools\quality\doclint_baseline.txt
  # must not get worse, and a document outside it must be clean. It never asks for a rewrite.
  Check 'doclint' { & python "$repo\tools\quality\doclint.py" --root $repo --out "$Out\doclint" }
- # Full requires fresh tracked Status maps. KmdPackage regenerates them under Out from current source and
- # headers; only tracked presentation freshness is excluded, with a receipt. Parser tests remain required.
+ # Status maps and release tool controls run in Full (required by build-release.ps1), not KmdPackage.
  Check 'status-map' { & python "$repo\tools\quality\kmd_status_profile.py" --repo $repo --profile $Profile --kits $Kits --out "$Out\status-map"; if($LASTEXITCODE -eq 0){ & python -m unittest discover -s "$repo\tools\docs" -p 'test_*.py' } }
  Check 'ledger' { & python -m unittest discover -s "$repo\tools\win\ledger" }
  # Windows PowerShell 5.1 for the app-route test, because that is the shell its ops scripts run in on the lab.
@@ -64,6 +66,7 @@ try {
  Check 'frameloop-host' { & pwsh -NoProfile -File "$repo\tools\win\frameloop\lab\host-checks.ps1" }
  Check 'register-generators' { & python -m unittest discover -s "$repo\tools\regcalc"; if($LASTEXITCODE -eq 0){ & python -m unittest discover -s "$repo\tools\diagusb" }; if($LASTEXITCODE -eq 0){ & python -m unittest discover -s "$repo\tools\win\bc250rd" } }
  Check 'quality-controls' { $env:BC250_TEST_OUT=(New-Item -ItemType Directory -Force "$Out\quality-controls").FullName; & python -m unittest discover -s "$repo\tools\quality" }
+ Check 'gate-cache-controls' { & python -B -m unittest discover -s "$repo\tools\quality" -p 'test_gate_cache.py' }
  Check 'wininstall-locale' { & powershell -NoProfile -ExecutionPolicy Bypass -File "$repo\tools\wininstall\test-locale.ps1" -Out "$Out\wininstall-locale" }
  Check 'kd-dump-triage' { & pwsh -NoProfile -File "$repo\tools\win\kd\analyze-kernel-dump.ps1" -SelfTest }
  Check 'smartplug' { & python "$repo\tools\win\smartplug\selftest.py" }
@@ -93,13 +96,32 @@ try {
  Check 'inf-gates' { & python "$repo\tools\quality\inf_gates.py" --inf "$repo\driver\kmd\bc250kmd.inf" --defaults "$repo\tools\release\installer\registry-defaults.json" --out "$Out\inf-gates" }
  # Upgrade defaults and explicit clock choices must survive the same registry writes as an installation.
  Check 'registry-defaults' { & powershell -NoProfile -File "$repo\tools\release\test-registry-defaults.ps1" }
+ # BD-077: the installer half of the CU mode setting. The -CuMode switch must reach the registry plan, and
+ # docs\testing\INSTALL.md must state the number of compute units of an install that does not use the switch.
+ Check 'cu-mode-installer' { & powershell -NoProfile -File "$repo\tools\release\test-cu-mode-installer.ps1" -Repo $repo }
  # BD-122: the consumers of the KMD's start record (start-confirm and the installer's verify), with fixtures in a
  # scratch key of HKCU that it removes again. Windows PowerShell 5.1, the shell a tester's installer runs in.
  Check 'start-record-consumers' { & powershell -NoProfile -File "$repo\tools\release\test-start-record.ps1" }
  # Owner 2026-10-12: the installer's own diagnostics of a start that did not pass (the decision, the readers and
  # the bounds), with the field case as a fixture. Windows PowerShell 5.1, the shell a tester runs.
  Check 'installer-diagnostics' { & powershell -NoProfile -File "$repo\tools\release\test-diagnostics.ps1" }
- Check 'radv-contract' { & python "$repo\tools\quality\prototype_gate.py" --compile-commands "$radvBuild\compile_commands.json" --out "$Out\radv-contract" }
+ # BD-060 and BD-080: the INF restart directive, the resumed install's inputs, the DWM baseline, and the plan of the
+ # two logon tasks (who confirms a driver start, and at whose logon). It writes files under Out and registers no
+ # task. Until now it ran only inside test-dryrun.ps1, which needs a built package.
+ Check 'session-checks' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\tools\release\test-session-checks.ps1" -WorkRoot "$Out\session-checks" }
+ # BD-076: the OpenGL ICD registration of the installer. The architecture list of the release, the values of each
+ # architecture in it, the ICD file check, the restore plan of the uninstaller and the step of an install that
+ # registers fewer architectures than the computer holds. It writes a scratch key under HKCU and a folder under
+ # %TEMP% and removes both. Like session-checks above it ran only inside test-dryrun.ps1, which needs a built
+ # package, so a change of the registration could reach a release before any gate read it. Windows PowerShell 5.1,
+ # the shell a tester's installer runs in. Without -Package it reads no package and checks the sources instead.
+ Check 'opengl-icd' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\tools\release\test-opengl-icd.ps1" -Installer "$repo\tools\release\installer" }
+ # The ICD's own build tree is not in the repository, and the 2026-10-10 cleanup removed the one this gate had
+ # (scratch\m12\REMOVED-2026-10-10.txt). It ran through Check, so every profile that holds it - the KMD package
+ # profile included - failed before its package step on a missing input. It is the same case CheckIf exists for:
+ # it runs wherever the tree is (BC250_RADV_BUILD names another one) and records why it did not when it is gone.
+ CheckIf 'radv-contract' "$radvBuild\compile_commands.json" `
+   { & python "$repo\tools\quality\prototype_gate.py" --compile-commands "$radvBuild\compile_commands.json" --out "$Out\radv-contract" }
  Check 'umd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compile-commands "$umdBuild\compile_commands.json" --match '/src/gallium/(frontends/d3d10umd|targets/d3d10umd|drivers/zink)/' --out "$Out\umd-contract" }
  Check 'vsync-vector' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_vsync_vector.ps1" -Root $Workspace -Out "$Out\vsync-vector" }
  Check 'ih-consume' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_ih_consume.ps1" -Root $Workspace -Out "$Out\ih-consume" }
@@ -140,6 +162,15 @@ try {
  Check 'paging-queue-no-quota' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_queue.ps1" -Root $Workspace -Out "$Out\paging-queue-no-quota" -Mutation '--drop-quota' -ExpectFailure }
  # BD-114 7.1: node 1's deadline and timer priced from the old flat 500 ms again must fail by a CHECK.
  Check 'paging-queue-flat-budget' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_queue.ps1" -Root $Workspace -Out "$Out\paging-queue-flat-budget" -Mutation '--flat-paging-budget' -ExpectFailure }
+ # BD-085: the same queue harness plus the actual preempt/report pass - the DMA boundary, the completion-before-
+ # preemption order, same-fence scheduler replay and the native root gate. It was in no gate and rotted twice
+ # (KMD172 renamed the report pass, KMD231 gave it the hang-recovery node state), so it is here now.
+ Check 'paging-preemption' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_preemption.ps1" -Root $Workspace -Out "$Out\paging-preemption" }
+ Check 'paging-preemption-old-drain' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_preemption.ps1" -Root $Workspace -Out "$Out\paging-preemption-old-drain" -Mutation '--old-drain' -ExpectFailure }
+ Check 'paging-preemption-any-root' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_preemption.ps1" -Root $Workspace -Out "$Out\paging-preemption-any-root" -AnyRootNative -ExpectFailure }
+ # One control per half of the native root gate: dropping only the 4 KiB alignment check left the whole suite
+ # green until the misaligned-root check was added (BD-085 review finding 2).
+ Check 'paging-preemption-any-align' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_preemption.ps1" -Root $Workspace -Out "$Out\paging-preemption-any-align" -AnyAlignNative -ExpectFailure }
  Check 'surface-layout' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_dcn_translate.ps1" -Root $Workspace -Out "$Out\surface-layout" -Kits "$Kits" }
  Check 'gdi-admission' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_gdi_admission.ps1" -Root $Workspace -Out "$Out\gdi-admission" -Kits "$Kits" }
  Check 'display-modes' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_display_modes.ps1" -Root $Workspace -Out "$Out\display-modes" -Kits "$Kits" }
@@ -147,6 +178,13 @@ try {
  Check 'scanout-admit' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_scanout_admit.ps1" -Root $Workspace -Out "$Out\scanout-admit" -Kits "$Kits" }
  Check 'dpaudio' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_dpaudio.ps1" -Root $Workspace -Out "$Out\dpaudio" -Kits "$Kits" }
  Check 'modeset' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_modeset.ps1" -Root $Workspace -Out "$Out\modeset" -Kits "$Kits" }
+ Check 'atom-display' {
+  $atomArgs=@('-Root',$Workspace,'-Out',"$Out\atom-display",'-Kits',$Kits)
+  if($env:BC250_LINK_TEST_ROM){$atomArgs+=@('-PrivateRom',$env:BC250_LINK_TEST_ROM)}
+  & pwsh -NoProfile -File "$repo\driver\kmd\test\run_atom.ps1" @atomArgs
+ }
+ Check 'link-command-import' { & python -B "$repo\tools\import\extract_link_commands.py" --check }
+ Check 'link-register-import' { & python -B "$repo\tools\import\extract_link_regs.py" --check }
  Check 'blit-plan' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_blit_plan.ps1" -Root $Workspace -Out "$Out\blit-plan" -Kits "$Kits" }
  Check 'gpu-clock' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_gpu_clock.ps1" -Root $Workspace -Out "$Out\gpu-clock" -Kits "$Kits" }
  # The per-application graphics settings (docs/design/per-app-graphics-settings.md): the kernel-mode driver's
@@ -201,7 +239,14 @@ try {
  Check 'flip-rule-names' { & python "$repo\tools\quality\flip_rule_names.py" --router "$repo\driver\umd\router\front-direct-flip.h" --log "$repo\driver\umd\router\front-flip-log.h" --document "$repo\docs\design\direct-flip-handshake.md" }
  Check 'gfx-copy' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_gfx_copy.ps1" -Root $Workspace -Out "$Out\gfx-copy" -Kits "$Kits" }
  Check 'gfx-blt' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_gfx_blt.ps1" -Root $Workspace -Out "$Out\gfx-blt" -Kits "$Kits" }
- Check 'blob-abi' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_umd_blob.ps1" -Out "$Out\blob-abi" -Kits "$Kits" -ProducerRoot $icd }
+ # The blob reader has two halves. The contract half needs nothing outside the repository. The producer half
+ # extracts the ICD's own field writes from the ICD source tree, whose input went with the ICD trees on
+ # 2026-10-10 (scratch\m12\REMOVED-2026-10-10.txt) and took the whole gate down with it, the same way
+ # radv-contract above went down. So they are separate now: the contract half always runs, and the producer half
+ # runs wherever the tree is (BC250_RADV_SOURCE names another one) and records why it did not when it is absent.
+ Check 'blob-abi' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_umd_blob.ps1" -Out "$Out\blob-abi" -Kits "$Kits" }
+ CheckIf 'blob-abi-producer' "$icd\src\amd\vulkan\winsys\wddm2\radv_wddm2_bc250.h" `
+   { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_umd_blob.ps1" -Out "$Out\blob-abi-producer" -Kits "$Kits" -ProducerRoot $icd }
  Check 'surface-control' { & python "$PSScriptRoot\check_surface.py" --mesa "$umdSource" --out "$Out\surface-control" }
  Check 'kmd-analysis' { & python "$PSScriptRoot\msvc_analysis.py" --database "$Out\kmd\compile_commands.json" --match '/umd_blob.c$' --out "$Out\analysis-kmd" }
  Check 'umd-analysis' { & python "$PSScriptRoot\msvc_analysis.py" --database "$umdBuild\compile_commands.json" --match '/Device.cpp$' --out "$Out\analysis-umd" }
@@ -209,7 +254,36 @@ try {
  # -Out. They do not share outputs, so they run side by side. A suite marked Fails is the runner's own negative
  # control: it must fail by a check (a FAIL line in its log), not by a build error, or the control proves nothing.
  $firmware="$Workspace\ref\linux-firmware__WARN-AMD-blobs-never-commit\amdgpu"
+ if($env:BC250_LINK_TEST_ROM) {
+  Check 'link-active-off' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_link_active_off.ps1" -Root $Workspace -Out "$Out\link-active-off" -Kits $Kits -Rom $env:BC250_LINK_TEST_ROM }
+  Check 'link-old-clock-policy' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_link_active_off.ps1" -Root $Workspace -Out "$Out\link-old-clock-policy" -Kits $Kits -Rom $env:BC250_LINK_TEST_ROM -OldClockPolicy -ExpectFailure }
+  Check 'link-strict-clock-values' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_link_active_off.ps1" -Root $Workspace -Out "$Out\link-strict-clock-values" -Kits $Kits -Rom $env:BC250_LINK_TEST_ROM -StrictValues -ExpectFailure }
+  Check 'link-clock-reinit' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_link_atom.ps1" -Root $Workspace -Out "$Out\link-clock-reinit" -Kits $Kits -Rom $env:BC250_LINK_TEST_ROM }
+  Check 'link-clock-old-scope' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_link_atom.ps1" -Root $Workspace -Out "$Out\link-clock-old-scope" -Kits $Kits -Rom $env:BC250_LINK_TEST_ROM -OldScope -ExpectFailure }
+ } else {
+  $results+=@{name='link-active-off';status='SKIP';reason='Requires an external target ATOM ROM supplied through BC250_LINK_TEST_ROM'}
+  Write-Host 'link-active-off SKIP (BC250_LINK_TEST_ROM not supplied)'
+  foreach($name in @('link-clock-reinit','link-clock-old-scope')) {
+   $results+=@{name=$name;status='SKIP';reason='Requires an external target ATOM ROM supplied through BC250_LINK_TEST_ROM'}
+   Write-Host "$name SKIP (BC250_LINK_TEST_ROM not supplied)"
+  }
+ }
  $suites=@(
+  @{n='link-atom';s='driver\kmd\test\run_link_atom.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
+  @{n='connector-buffer';s='driver\kmd\test\run_connector_buffer.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
+  @{n='connector-modes';s='driver\kmd\test\run_connector_modes.ps1';a=@('-Root',$Workspace)}
+  @{n='connector-link';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits)}
+  @{n='connector-link-stale-generation';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitGeneration','-ExpectFailure')}
+  @{n='connector-link-open-cleanup';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitOpenCleanup','-ExpectFailure')}
+  @{n='connector-link-cold-recovery';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitColdRecovery','-ExpectFailure')}
+  @{n='connector-link-first-failure';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitFirstFailure','-ExpectFailure')}
+  @{n='connector-link-nested-hdmi';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-NestedHdmiStop','-ExpectFailure')}
+  @{n='connector-link-diagnostic-replay';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitDiagnosticReplay','-ExpectFailure')}
+  @{n='connector-link-write-requested';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-WriteRequestedValue','-ExpectFailure')}
+  @{n='connector-link-recovery-target';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-WrongRecoveryTarget','-ExpectFailure')}
+  @{n='dml201';s='driver\shim\test\run_dml201.ps1';a=@('-Kits',$Kits)}
+  @{n='dcn201-pipe';s='driver\shim\test\run_dcn201_pipe.ps1';a=@('-Kits',$Kits)}
+  @{n='dpaudio-start-debt';s='driver\kmd\test\run_dpaudio_debt.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
   @{n='wave-recovery-pending-control';s='driver\kmd\test\run_wave_recovery.ps1';a=@('-Kits',$Kits,'-NoPendingMarker');Fails=$true}
   @{n='wave-recovery-order-control';s='driver\kmd\test\run_wave_recovery.ps1';a=@('-Kits',$Kits,'-ClearBeforeData');Fails=$true}
   @{n='wave-recovery-delete-control';s='driver\kmd\test\run_wave_recovery.ps1';a=@('-Kits',$Kits,'-AdminReadOnly');Fails=$true}
@@ -217,6 +291,8 @@ try {
   @{n='post-display-stop';s='driver\kmd\test\run_post_display_stop.ps1';a=@('-Root',$Workspace)}
   @{n='scanout-geometry';s='driver\kmd\test\run_scanout_geometry.ps1';a=@('-Root',$Workspace)}
   @{n='post-display';s='driver\kmd\test\run_post_display.ps1';a=@('-Root',$Workspace)}
+  @{n='post-display-old-runtime-order';s='driver\kmd\test\run_post_display.ps1';a=@('-Root',$Workspace,'-OldRuntimeOrder');Fails=$true}
+  @{n='post-display-wrong-saved-surface';s='driver\kmd\test\run_post_display.ps1';a=@('-Root',$Workspace,'-WrongSavedSurface');Fails=$true}
   @{n='dcn-flip';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace)}
   @{n='dcn-observation';s='driver\kmd\test\run_dcn_observation.ps1';a=@('-Root',$Workspace)}
   @{n='dcn-observe';s='driver\kmd\test\run_dcn_observe.ps1';a=@('-Root',$Workspace)}
@@ -228,6 +304,7 @@ try {
   @{n='ih-retained';s='driver\kmd\test\run_ih_retained.ps1';a=@('-Root',$Workspace)}
   @{n='psp-retained';s='driver\kmd\test\run_psp_retained.ps1';a=@('-Root',$Workspace)}
   @{n='psp-retained-dropped';s='driver\kmd\test\run_psp_retained.ps1';a=@('-Root',$Workspace,'-DropRetain');Fails=$true}
+  @{n='psp-retained-false-success';s='driver\kmd\test\run_psp_retained.ps1';a=@('-Root',$Workspace,'-PowerSuccessRefusal');Fails=$true}
   @{n='retained-gtt';s='driver\kmd\test\run_retained_gtt.ps1';a=@('-Root',$Workspace)}
   @{n='retained-power';s='driver\kmd\test\run_retained_power.ps1';a=@('-Root',$Workspace)}
   @{n='power-coordinator';s='driver\kmd\test\run_power_coordinator.ps1';a=@('-Root',$Workspace)}
@@ -244,6 +321,15 @@ try {
   @{n='guard-start-not-durable';s='driver\kmd\test\run_guard_start.ps1';a=@('-Root',$Workspace,'-IgnoreDurability');Fails=$true}
   @{n='start-health';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace)}
   @{n='start-health-no-flush';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-IgnoreFlush');Fails=$true}
+  # BD-120: the witness re-arms after a recovered engine reset, and after nothing else.
+  @{n='start-health-no-witness-reopen';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-NoWitnessReopen');Fails=$true}
+  @{n='start-health-reopen-any-close';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-ReopenAnyClose');Fails=$true}
+  @{n='start-health-sticky-fault-keeps-mark';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-StickyFaultKeepsMark');Fails=$true}
+  @{n='start-health-confirm-new-epoch';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-ConfirmCertifiesNewEpoch');Fails=$true}
+  @{n='start-health-mark-over-failed-engines';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-MarkOverFailedEngines');Fails=$true}
+  @{n='start-health-refusal-drops-other-node-mark';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-RefusalDropsOtherNodeMark');Fails=$true}
+  @{n='start-health-rearm-skips-open-witness';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-RearmSkipsOpenWitness');Fails=$true}
+  @{n='start-health-confirm-hung-request';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-ConfirmHungRequest');Fails=$true}
   @{n='gfx-pipeline';s='driver\kmd\test\run_gfx_pipeline.ps1';a=@('-Root',$Workspace,'-KmdOnly')}
   @{n='vmid-pool';s='driver\kmd\test\run_vmid_pool.ps1';a=@('-Root',$Workspace)}
   @{n='keep-prune';s='driver\kmd\test\run_keep_prune.ps1';a=@('-Root',$Workspace)}
@@ -281,6 +367,11 @@ try {
   @{n='recovery-protocol-ResetWritesCompleted';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-ResetWritesCompleted');Fails=$true}
   @{n='recovery-protocol-IgnoreEpoch';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-IgnoreEpoch');Fails=$true}
   @{n='recovery-protocol-TimeoutAfterUnlock';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-TimeoutAfterUnlock');Fails=$true}
+  # BD-120: the timeout latch marks the close the reset owns, and only the recovered path reopens it.
+  @{n='recovery-protocol-LatchFaultsStickily';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-LatchFaultsStickily');Fails=$true}
+  @{n='recovery-protocol-DropWitnessReopen';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-DropWitnessReopen');Fails=$true}
+  @{n='recovery-protocol-ReopenWitnessOnRefusal';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-ReopenWitnessOnRefusal');Fails=$true}
+  @{n='recovery-protocol-RefusalClosesEveryNode';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-RefusalClosesEveryNode');Fails=$true}
   @{n='submit-watchdog-flat-500';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-FlatFiveHundred');Fails=$true}
   @{n='submit-watchdog-no-tdr-floor';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-NoTdrFloor');Fails=$true}
   @{n='submit-watchdog-clamp-tdr';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-ClampTdrToBudgetMax');Fails=$true}
@@ -295,7 +386,6 @@ try {
   @{n='gfx-pipeline-no-capacity';s='driver\kmd\test\run_gfx_pipeline.ps1';a=@('-Root',$Workspace,'-KmdOnly','-WithoutCapacity');Fails=$true}
   @{n='gfx-pipeline-equal-fence';s='driver\kmd\test\run_gfx_pipeline.ps1';a=@('-Root',$Workspace,'-KmdOnly','-EqualityFence');Fails=$true}
   # -Root as well: this runner puts the compiler's TEMP under it, and a worktree's parent has no scratch\tmp.
-  @{n='firmware-metadata';s='driver\kmd\test\run_firmware_metadata.ps1';a=@('-Root',$Workspace,'-Kits',$kits,'-Firmware',$firmware)}
   @{n='firmware-metadata-no-runtime';s='driver\kmd\test\run_firmware_metadata.ps1';a=@('-Root',$Workspace,'-Kits',$kits,'-Firmware',$firmware,'-OmitRuntimeFirmware');Fails=$true}
   @{n='paging-mc';s='driver\kmd\test\run_paging_mc.ps1';a=@('-Kits',$kits)}
   @{n='paging-private';s='driver\kmd\test\run_paging_private.ps1';a=@('-Kits',$kits)}
@@ -303,7 +393,6 @@ try {
   @{n='paging-pt-shadow';s='driver\kmd\test\run_paging_pt_shadow.ps1';a=@('-Kits',$kits)}
   @{n='paging-stream';s='driver\kmd\test\run_paging_stream.ps1';a=@('-Kits',$kits)}
   @{n='paging-window';s='driver\kmd\test\run_paging_window.ps1';a=@('-Kits',$kits)}
-  @{n='umd-caps';s='driver\kmd\test\run_umd_caps.ps1';a=@('-Kits',$kits)}
   @{n='shim-replay';s='driver\shim\test\run.ps1';a=@('-Kits',$kits)}
   @{n='shim-gfx';s='driver\shim\test\run_gfx.ps1';a=@('-Kits',$kits)}
   # The frozen gfx job frame and the VM flush on the ring (docs/design/gfx-submit-root-serialization.md).
@@ -321,6 +410,11 @@ try {
   @{n='board-sequence';s='driver\shim\test\run_board_sequence.ps1';a=@('-Root',$Workspace)}
   @{n='board-sequence-changed-point';s='driver\shim\test\run_board_sequence.ps1';a=@('-Root',$Workspace,'-Mutation','gpu-point');Fails=$true}
   @{n='smu-native-board-admission';s='driver\shim\test\run_smu_native.ps1';a=@('-Root',$Workspace,'-Mutation','board-admission');Fails=$true}
+  # The clock escape's two gates (BD-062): the token in front of the write, and the published reading the open
+  # READ rests on. Each mutation removes one of them, and the suite must fail by a check; a mutation that nobody
+  # runs is not a control, so both are listed here and not only in the runner.
+  @{n='smu-native-clock-write-privilege';s='driver\shim\test\run_smu_native.ps1';a=@('-Root',$Workspace,'-Mutation','clock-write-privilege');Fails=$true}
+  @{n='smu-native-clock-read-snapshot';s='driver\shim\test\run_smu_native.ps1';a=@('-Root',$Workspace,'-Mutation','clock-read-snapshot');Fails=$true}
   @{n='hwmon';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$kits)}
   @{n='hwmon-board-port';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$kits,'-Mutation','board-port');Fails=$true}
   # The case fan's load feed-forward (rule 10 of driver\shim\include\bc250_fan.h): the first negative controls of
@@ -347,20 +441,25 @@ try {
   if($foreign){throw "take their sources from -Root\bc250-win instead of their own tree: $($foreign -join ', ')"}
   "$($runners.Count) runners, all gated, all self-located"
  }
- $runs=$suites | ForEach-Object -ThrottleLimit ([Math]::Max(2,[Environment]::ProcessorCount/2)) -Parallel {
-  $suite=$_; $log=Join-Path $using:Out "$($suite.n).log"; $watch=[Diagnostics.Stopwatch]::StartNew()
-  & pwsh -NoProfile -File (Join-Path $using:repo $suite.s) @($suite.a) -Out (Join-Path $using:Out $suite.n) *> $log
-  [pscustomobject]@{n=$suite.n;code=$LASTEXITCODE;fails=[bool]$suite.Fails;log=$log;seconds=$watch.Elapsed.TotalSeconds}
+ foreach($suite in $suites) {
+  $gateJobs+=@{name=$suite.n;runner=$suite.s;arguments=@($suite.a);fails=[bool]$suite.Fails}
  }
- foreach($run in @($runs | Sort-Object n)){
-  if($run.fails){
-   if($run.code -eq 0){throw "$($run.n) passed, but it is a negative control and must fail; see $($run.log)"}
-   if(!(Select-String -LiteralPath $run.log -Pattern 'FAIL' -CaseSensitive -Quiet)){throw "$($run.n) failed without a FAIL line (build or setup?); see $($run.log)"}
-  } elseif($run.code -ne 0){throw "$($run.n) failed; see $($run.log)"}
-  $results+=@{name=$run.n;status='PASS';seconds=$run.seconds}
-  Write-Host "$($run.n) PASS $([Math]::Round($run.seconds,2))s$(if($run.fails){' (negative control failed as it must)'})"
+ $variables=@{}
+ foreach($name in @('repo','Workspace','Out','Kits','Profile','icd','radvBuild','umdSource','umdBuild','routerHosted','firmware')) {
+  $variables[$name]=(Get-Variable -Name $name).Value
  }
- @{status='PASS';profile=$Profile;kits=$Kits;context=$context;seconds=$clock.Elapsed.TotalSeconds;checks=$results} | ConvertTo-Json -Depth 5 | Set-Content "$Out\result.json"
+ $vs=& "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe" -latest -products * -property installationPath
+ if(!$vs){throw 'Visual Studio not found'}
+ # Host scripts select the newest MSVC directory; the cache hashes that exact tree too.
+ $compiler=(Get-ChildItem "$vs/VC/Tools/MSVC" -Directory | Sort-Object Name | Select-Object -Last 1).FullName
+ $planPath=Join-Path $Out 'plan.json'
+ @{variables=$variables;context=$context;compiler=$compiler;jobs=$gateJobs;skips=$results} |
+   ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $planPath -Encoding utf8
+ if($PlanOnly){return}
+ $argsGate=@('-B',"$repo/tools/quality/gate_cache.py",'--plan',$planPath,'--jobs',$Jobs)
+ if($NoCache){$argsGate+='--no-cache'}
+ & python @argsGate
+ exit $LASTEXITCODE
 } catch {
  @{status='FAIL';profile=$Profile;kits=$Kits;context=$context;seconds=$clock.Elapsed.TotalSeconds;checks=$results;error=$_.Exception.Message} | ConvertTo-Json -Depth 5 | Set-Content "$Out\result.json"
  Write-Error $_

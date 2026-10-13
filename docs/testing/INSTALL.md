@@ -8,13 +8,21 @@ Use this package only on a BC-250. The installer stops on every other computer a
 
 ## What you need
 
-- An ASRock BC-250 with Windows 11 x64 (build 22000 or later) installed and working on Microsoft Basic Display
-  Adapter.
+- An ASRock BC-250 with Windows 11 x64 installed and working on Microsoft Basic Display Adapter. The driver is
+  tested on Windows 11 23H2 (build 22631), 24H2 (build 26100) and 25H2 (build 26200), and on the general builds
+  after them. An older Windows 11 (build 22000 to 22630) gets a line that advises an update, and the installation
+  continues. An Insider build (Canary, Dev or Beta) and an LTSC edition each get a line of the same kind. A PC in the
+  Insider programme that runs one of the three tested builds reads no such line. Windows 10 and older are refused.
 - A local account with administrator rights.
 - Secure Boot off. The stock BC-250 BIOS has no Secure Boot option, so it is already off (see "Secure Boot" below).
-- If BitLocker is on: your BitLocker recovery key, or permission to suspend BitLocker for two restarts.
-- The Microsoft Visual C++ 2015-2022 Redistributable (x64). If it is missing, the installer stops and tells you.
-  Get it from Microsoft: https://aka.ms/vs/17/release/vc_redist.x64.exe (download it on any computer and copy it to the BC-250).
+- If BitLocker is on: your BitLocker recovery key, in case something goes wrong. The installer pauses BitLocker
+  by itself for the restarts it needs and tells you that it did.
+- Nothing to install first. The driver's programs need the Microsoft Visual C++ 2015-2022 Redistributable (x64),
+  and the package carries Microsoft's own installer for it. The installer runs it when this PC has no
+  `vcruntime140.dll`, `vcruntime140_1.dll` or `msvcp140.dll` in `System32`, or when one of them is older than
+  14.44. It checks the SHA-256 and the Microsoft signature of that file first, and it needs no internet for this
+  step. Nothing happens when the runtime is already there. If Windows answers that the runtime is registered but a
+  file of it is missing, the installer repairs it with the same file.
 - 2 GB of free space on the system drive.
 - A keyboard and a monitor on the BC-250.
 - An internet connection during the installation: the installer downloads the AMD GPU firmware (see "GPU firmware"
@@ -25,11 +33,15 @@ Use this package only on a BC-250. The installer stops on every other computer a
 1. Make a backup of all data on the BC-250 that you want to keep.
 2. Write down your BitLocker recovery key if BitLocker is on: open a command prompt as administrator and type
    `manage-bde -protectors -get C:`.
-3. Unpack the zip file to a local folder, for example `C:\amdgpu-wddm-tester`. Do not run the installer from the
-   zip file or from a network drive. Unpack the whole zip: the folder it makes holds `setup.exe` and the folder
-   `files`, and `setup.exe` needs `files` next to it. To carry the package to another computer or to a memory
-   stick, copy that whole folder, not the folder `files` alone: the package checks `setup.exe` too, and `files`
-   on its own reports `missing setup.exe`.
+3. Take one of the two downloads of the release:
+   - **One file** - `amdgpu-wddm-setup-<version>.exe`. Copy it to a local folder and double-click it. It carries the
+     whole package inside itself, unpacks it where only administrators may write, checks every file, and installs
+     from there. It removes that folder when the installation is over. Nothing else to do.
+   - **The zip file** - unpack it to a local folder, for example `C:\amdgpu-wddm-tester`. Do not run the installer
+     from the zip file or from a network drive. Unpack the whole zip: the folder it makes holds `setup.exe` and the
+     folder `files`, and `setup.exe` needs `files` next to it. To carry the package to another computer or to a
+     memory stick, copy that whole folder, not the folder `files` alone: the package checks `setup.exe` too, and
+     `files` on its own reports `missing setup.exe`. The command line below needs this download.
 4. Optional: do a dry run first. In the folder `files`, open a command prompt and type `install.cmd -DryRun`.
    The dry run does all checks and shows all changes, but it changes nothing.
 
@@ -65,16 +77,19 @@ The installer does not change BIOS or firmware settings.
 
 The usual way is the setup window:
 
-1. In the unpacked folder, double-click `setup.exe`. It is the only file there. Everything else is in the folder
+1. Double-click `amdgpu-wddm-setup-<version>.exe`, or, in the unpacked folder, `setup.exe`. It is the only file
+   there. Everything else is in the folder
    `files` beside it. The window asks for administrator rights itself: accept the prompt. (`install.cmd` in the
    folder `files`, started with no switch, opens the same window.)
 2. The window checks the computer first. The check changes nothing. Then the window shows the checks that need
    attention, what it will change, the restarts and the release notes.
-3. Give the consents that the window asks for: Windows test mode, and, if BitLocker is on, whether you have the
-   recovery key or whether setup must pause BitLocker for two restarts.
-4. The window installs the driver and shows each stage. Before each restart of Windows it asks "Restart now" or
-   "Later", so you can save your work first. After you log on again, the window starts by itself and continues
-   (accept the administrator prompt).
+3. Press "Install". The window asks you for nothing else. It says what it will change - Windows test mode on,
+   and BitLocker paused for the restarts if BitLocker is on - because you should know it, not because it needs
+   your permission for it: you opened the installer to install the driver, and pressing "Install" is the decision.
+4. The window installs the driver and shows each stage. Before each restart of Windows it counts down 15 seconds
+   and then restarts by itself. Press "Restart now" to go at once, or "Later" to keep the computer running and
+   save your work first. After you log on again, the window starts by itself and continues (accept the
+   administrator prompt).
 5. At the end the window shows the result. On a problem it offers to try again or to repair, and it can save a
    support file for your report.
 
@@ -90,9 +105,10 @@ for example `install.cmd -Console -DryRun`:
    `install.cmd -Console` when you want the console.
 2. Read the preflight table. Every line must show `ok` or `warn`. A `fail` line stops the installer, and the
    installer tells you what to correct. When it stops at preflight, it has changed nothing.
-3. Phase 1: the installer makes a System Restore point (if System Protection is on) and asks for permission to
-   turn on test signing. Type `YES` to continue. If BitLocker is on, the installer asks if you have the recovery key
-   or if it must suspend BitLocker for two restarts.
+3. Phase 1: the installer makes a System Restore point (if System Protection is on), turns on test signing and,
+   if BitLocker is on, pauses BitLocker for the restarts it needs. It asks you nothing: it prints
+   what it changes as it changes it. The restart comes after a 15-second countdown. Press Enter to restart at
+   once, or any other key to restart later yourself.
 4. Let the computer restart. After you log on, the installer starts again by itself (accept the administrator
    prompt). If it does not start, run `install.cmd` again.
 5. Phase 2: the installer downloads the GPU firmware and checks it, then installs the certificate, the driver, the
@@ -107,9 +123,9 @@ have to uninstall first. The installer shows `upgrading <old> -> <new>`, keeps t
 replaces the others and restarts the computer. Running `install.cmd` of the version that is already installed and verified does nothing;
 use `install.cmd -Repair` to install it again.
 
-An upgrade keeps the settings you changed: the driver settings (for example `DpmMaxMHz`), `DwmForceCpu`, the D3D11
-allowlist and the application profiles. The installer writes a new default only over a value that the previous
-installer wrote and that you did not change. The upgrade output shows each value as `new`, `unchanged`, `KEPT`
+An upgrade keeps the settings you changed: the driver settings (for example `DpmMaxMHz` and `CuMode`), `DwmForceCpu`,
+the D3D11 allowlist and the application profiles. The installer writes a new default only over a value that the
+previous installer wrote and that you did not change. The upgrade output shows each value as `new`, `unchanged`, `KEPT`
 (your value) or `->` (new default). A value given on the command line (`-DpmMaxMHz`) is always written. The
 installer always writes its own values: the file paths, the graphics registration and the start counter
 `UnconfirmedStarts`. The Control application can set the defaults again.
@@ -170,34 +186,89 @@ Without internet on the BC-250:
 2. Copy them to one folder on the BC-250, for example `C:\amdgpu-wddm-firmware`.
 3. Run `install.cmd -FirmwareDir C:\amdgpu-wddm-firmware`. The installer checks the SHA256 of each file the same
    way and uses the folder also after the restarts during the installation. The same goes for `-DpmMaxMHz`,
-   `-CuMode`, `-NoControlApp` and `-NoReboot`.
+   `-CuMode`, `-NoControlApp`, `-NoStartMenuShortcut`, `-NoDesktopShortcut`, `-NoWallpaper` and `-NoReboot`.
 
 ## The small blue window after logon
 
-After each logon, a small blue window with a clock is shown in the top-left corner for up to two minutes. It is
-the "amdgpu-wddm start confirm" scheduled task. The driver counts each start that is not confirmed. After two
-unconfirmed starts, Windows uses Microsoft Basic Display Adapter again, to prevent a start loop. The task keeps the
-desktop drawing for at least one minute and then confirms the start. The same confirmation keeps the automatic
-clock control (DPM) on: if a start is not confirmed, the next start runs at the fixed 1000 MHz clock, and DPM stays
-off until you set it again in the control application. Do not close the window. If you log on with an account that
-is not an administrator, the task does not run, and the driver falls back after two restarts. The task writes its
-results to `C:\ProgramData\amdgpu-wddm\start-confirm.log`.
+After each logon, a small blue window is shown in the top-left corner for two minutes. It says "Nagi start
+check: confirming that the GPU driver started correctly" and counts down to the moment it closes by itself. The driver
+counts each start that is not confirmed. After two unconfirmed starts, Windows uses Microsoft Basic Display Adapter
+again, to prevent a start loop. The window keeps the desktop drawing for at least one minute, and the confirmation
+then confirms the start. The same confirmation keeps the automatic clock control (DPM) on: if a start is not
+confirmed, the next start runs at the fixed 1000 MHz clock, and DPM stays off until you set it again in the control
+application. Do not close the window.
+
+Two scheduled tasks do this work, and both run at the logon of any user, so an account without administrator rights
+confirms a start as well:
+
+- "amdgpu-wddm start confirm" runs as the Local System account (`S-1-5-18`), with the highest run level and no
+  window of its own. It reads the driver's start health and confirms the start. The driver accepts a confirmation
+  only from an administrator, which is why this task does not run as the user who logs on.
+- "amdgpu-wddm start window" runs as the user who logs on, with that user's own rights (the Users group,
+  `S-1-5-32-545`, limited run level). It shows the small blue window and nothing else: it never opens the driver
+  and changes no setting. The window stays for the full two minutes, because this task does not read the
+  confirmation's progress. Earlier releases closed it as soon as the start was confirmed, usually after about one
+  minute. If it does not run, the confirmation still keeps the computer off Microsoft Basic Display, and the next
+  start runs at the fixed clock.
+
+The confirmation writes its results to `C:\ProgramData\amdgpu-wddm\start-confirm.log`. Its last line of each logon
+also reports the state, the last run time and the last result of the window task, so a window that did not run or
+could not open is visible there (`last result 0` the window was shown and closed, `2` it could not be shown,
+`3` the person turned the clock window off).
+
+You can turn the clock window off: open Nagi Control App, go to Settings and clear "Show the start check window
+after sign-in". The setting belongs to the account that sets it, needs no administrator rights, and the window task
+then ends at once and reports `3`. Read what it costs before you clear it: without the window the desktop may stop
+drawing before the driver has confirmed the start, so the next start can run at the fixed clock instead of the
+automatic one, and if the confirmation keeps staying unfinished the driver's own guard switches the driver off
+after two such starts, which puts Windows on Microsoft Basic Display Adapter until you turn the driver back on.
+
+## If the graphics driver did not start, you see it at the sign-in
+
+The same window task also starts the control application's own notice (`amdgpu_wddm_control.exe --start-notice`),
+which looks for the driver for up to half a minute and stays silent when the driver answers. A driver that was
+switched off for safety is already recorded as such, so that notice appears at once. The other case waits out the
+half minute, because a driver still inside its own start looks the same from outside. It is a separate window from
+the blue clock, and the setting above never switches it off.
+
+- The driver was switched off for safety (two starts did not finish their check, so Windows now uses its basic
+  display driver: no games, low performance). The notice says that in plain words and offers three buttons:
+  "Turn the graphics driver back on...", "Open Nagi Control App" and "Close".
+- The driver did not start for another reason. The notice says so and offers "Open Nagi Control App" and
+  "Close".
+
+"Turn the graphics driver back on..." sets the count of unconfirmed starts back to 0 and restarts the graphics
+device in place, without a restart of Windows. The notice counts the seconds while it works: it can take up to
+four minutes, and the screen can go dark for a moment. The notice then waits for the driver and confirms this
+start itself, so the next start of Windows does not count it against you. If the device does not come back, the
+notice says that Windows has to be restarted and offers a button for it. "Close" stays usable the whole time, and
+the repair finishes whether the notice is open or not.
+
+The home page of Nagi Control App carries the same button while the driver stays switched off, for a person who
+closed the notice, and the Recovery page (Help, with "Show support options" on) explains the state in "Support:
+driver states" and offers the same repair as "Turn the graphics driver back on" in "Support: actions". You no
+longer have to run the release installer again for this.
 
 ## What the installer changes
 
 | Item | Location |
 |---|---|
-| Test signing | `bcdedit /set '{current}' testsigning on` (only after you type YES) |
+| Test signing | `bcdedit /set '{current}' testsigning on` |
 | Test certificate | LocalMachine Root and TrustedPublisher stores |
+| Microsoft Visual C++ 2015-2022 Redistributable (x64) | installed by Microsoft's own installer from `payload\redist\vc_redist.x64.exe`, only when `System32` has no `vcruntime140.dll`, `vcruntime140_1.dll` or `msvcp140.dll`, or one of them is older than 14.44. Microsoft's files go where Microsoft puts them. `uninstall.cmd` leaves this runtime in place, because other programs use it |
 | Kernel-mode driver | driver package `bc250kmd.inf` (driver store, service `bc250kmd`) |
 | Driver settings | `HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters` |
-| User-mode drivers | `C:\Program Files\amdgpu-wddm\` (`d3d12`, `desktop`, `d3d11`, `vulkan`, `wow64`, `tools`, `control`, `mft`). Nothing goes into `C:\Windows\System32` or `C:\Windows\SysWOW64`. An install over an earlier release removes the `bc250umd.dll` that it put there |
+| User-mode drivers | `C:\Program Files\amdgpu-wddm\` (`d3d12`, `desktop`, `d3d11`, `vulkan`, `opengl`, `wow64`, `tools`, `control`, `mft`). Nothing goes into `C:\Windows\System32` or `C:\Windows\SysWOW64`. An install over an earlier release removes the `bc250umd.dll` that it put there |
 | H.264 encoder (Media Foundation) | `HKLM\SOFTWARE\Classes\CLSID\{A32438F0-0D79-4CA9-A5BF-9F3C80837253}` with its `InprocServer32`, `HKLM\SOFTWARE\Classes\MediaFoundation\Transforms` (the encoder's own key and its membership in the video encoder category). These keys are for the whole computer. `uninstall.cmd` removes them, and so does a later release that does not install the encoder |
 | Licence texts | `C:\Program Files\amdgpu-wddm\licenses` (the package's `licenses\` and `THIRD-PARTY.md`) |
-| Graphics registration | the GPU's software key (`UserModeDriverName`, `VulkanDriverName`, and for 32-bit applications `UserModeDriverNameWow`, `VulkanDriverNameWow`; the first entry of each `UserModeDriverName` value, the Direct3D 9 entry, is empty), `HKLM\SOFTWARE\Khronos\Vulkan\Drivers`, `HKLM\SOFTWARE\WOW6432Node\Khronos\Vulkan\Drivers` |
+| Graphics registration | the GPU's software key: `UserModeDriverName`, `VulkanDriverName`, `OpenGLDriverName`, `OpenGLVersion`, `OpenGLFlags`. For 32-bit applications: `UserModeDriverNameWow` and `VulkanDriverNameWow`. This release writes no `OpenGLDriverNameWow`, `OpenGLVersionWow` or `OpenGLFlagsWow`: it has no 32-bit OpenGL driver (see "What this release does" below). The first entry of each `UserModeDriverName` value, the Direct3D 9 entry, holds `<>`. Also `HKLM\SOFTWARE\Khronos\Vulkan\Drivers` and `HKLM\SOFTWARE\WOW6432Node\Khronos\Vulkan\Drivers`. `uninstall.cmd` puts back an `OpenGL` value from before the install, with the registry type it had. It removes the ones it added, even when the installer state file is gone. An `OpenGL` value that belongs to another driver stays. It does all that whether or not Windows still shows the GPU, because the files the values name go with the install |
 | Router policy and profiles | `HKLM\SOFTWARE\amdgpu-wddm` |
 | GPU firmware | `C:\BC250\firmware` (8 files and `LICENSE.amdgpu`, downloaded from linux-firmware; see "GPU firmware"). A new folder is writable by administrators only; the access rights of `C:\BC250` itself do not change. Download staging: `C:\ProgramData\amdgpu-wddm\installer\firmware-staging`, removed after the copy |
-| Start confirmation | scheduled task "amdgpu-wddm start confirm" |
+| Shortcuts of Nagi Control App | Start menu and desktop, for all users: "Nagi Control App", "Nagi Control App (recovery)" in the Start menu and "Nagi Control App" on the desktop. Both places are written by default. The setup window has a box for each place. On the command line `-NoStartMenuShortcut` and `-NoDesktopShortcut` leave one out. `-StartMenuShortcut` and `-DesktopShortcut` ask for a place an earlier run left out. The box you clear holds over the restarts of the installation. `uninstall.cmd` removes all three |
+| Start confirmation | two scheduled tasks, both at the logon of any user. "amdgpu-wddm start confirm" runs as the Local System account. "amdgpu-wddm start window" runs as the user who logs on, shows the clock window and starts the control application's sign-in notice |
+| Settings of the person who signs in | `HKCU\Software\amdgpu-wddm\Control` of that account (language, the switches of the control application, "Show the start check window after sign-in"). The application itself writes this key when you change a setting. The installer does not. No administrator rights, nothing for other accounts. `uninstall.cmd` removes the key of the account that runs it, and leaves the keys of other accounts |
+| Shortcuts of an earlier release | earlier releases named the shortcuts "amdgpu-wddm Control". An install over such a release and `uninstall.cmd` remove those old shortcuts when they point at the control application. A file of that name that points elsewhere stays |
+| Nagi wallpaper | for each person who signs in after the installation is checked, Nagi Control App sets the Nagi wallpaper once (position Fill). It saves the previous background of that person first. The setup window has a box for it, on by default. `install.cmd -NoWallpaper` leaves it out. In Nagi Control App, Settings, "Nagi wallpaper" sets it again or restores the previous background. A slideshow or Windows Spotlight comes back as its last picture only. `uninstall.cmd` changes nobody's background and keeps the picture in `%LOCALAPPDATA%\amdgpu-wddm\wallpaper` |
 | Installer state and logs | `C:\ProgramData\amdgpu-wddm` (the Control application keeps its setting backups and action log in its `control` folder) |
 
 If you type the `bcdedit` command yourself, keep the quotation marks around `'{current}'` in PowerShell.
@@ -208,28 +279,57 @@ Default driver settings: automatic clock control (DPM) on, maximum 2000 MHz. The
 change. The driver writes no debug log files. To change the maximum clock at install time, use
 `install.cmd -DpmMaxMHz <1000-2000>`. An upgrade keeps a maximum clock that you set (see "Install").
 
+Graphics cores: the driver uses all 40 compute units of the GPU after a normal install. The firmware of the board
+switches on 24 of them. To keep that number, use `install.cmd -CuMode 24`. After the install, the Graphics page of
+Nagi Control App holds the same choice: "Standard (24)" or "All (40)". A new number applies at the next restart
+of Windows. The first start with 40 cores needs the confirmation of the small blue window after logon. Without that
+confirmation the next start goes back to 24 and records the reason. An installation and an upgrade keep that 24 and
+name it in the report, because the driver went back for a reason. `install.cmd -Repair` sets all 40 cores back. A 24
+that you chose yourself is kept by every install: the switch and the Graphics page both write the number 24 into the
+driver's settings, so a later install reads it as your choice. Where the driver went back to 24 by itself, the
+Graphics page says so and offers "All (40)" as the way back. The change writes one registry value and no firmware. All 40 cores
+give more performance in many games, and also more power and more heat. The game results that we publish are measured
+with all 40 cores. The page `docs/design/cu-mode.md` of the project has the whole description.
+
 ## What works and what does not
 
 - Desktop composition (DWM) runs on the GPU (`DwmForceCpu` 0 in `HKLM\SOFTWARE\amdgpu-wddm\DesktopRouter`). When the
   driver has closed the GPU desktop path (for example after a start that ended in a crash or a power loss), DWM uses
-  the CPU route by itself. "Reopen the GPU desktop path" on the Recovery page of amdgpu-wddm Control opens it again,
+  the CPU route by itself. "Reopen the GPU desktop path" on the Recovery page of Nagi Control App opens it again,
   and so does `install.cmd -Repair`. `DwmForceCpu` 1 keeps the
   desktop on the CPU route. An upgrade keeps the value you set.
 - Direct3D 12 applications run on the GPU through the Windows Direct3D 12 runtime, at feature level 12_1.
 - Vulkan applications run on the GPU through the Vulkan ICD.
-- Direct3D 11 applications and games run on the GPU. The value `Mode` in
-  `HKLM\SOFTWARE\amdgpu-wddm\AppRouter` holds `gpu-default`. These programs stay on the CPU route (software
-  rendering): the components of Windows and the packaged Microsoft applications, the processes of the logon and lock
-  screens, a program whose image the router cannot resolve, and a program in the `Deny` list (by default
-  `witcher3.exe`, which has a Direct3D 12 mode). An entry in the `Allow` list puts a Windows component on the GPU
-  (by default `dxdiag.exe`). `Mode` `allowlist` gives the behaviour of the earlier releases: the CPU route for every
-  program, and the GPU only for the programs in `Allow`. Use the Direct3D 12 mode of a game if it has one.
+- 64-bit OpenGL applications run on the GPU through the OpenGL driver (ICD) of this release. Windows loads it
+  for every 64-bit OpenGL program of the computer, with no file beside the program. `verify.cmd` shows the
+  line `OpenGL ICD` with the registration and the driver file. Without this driver Windows gives an OpenGL
+  program its own software renderer, which is OpenGL 1.1.
+- 32-bit OpenGL applications keep that software renderer of Windows, which is OpenGL 1.1. This release has no
+  32-bit OpenGL driver: that driver draws through Vulkan, and a 32-bit program reaches Vulkan through the
+  32-bit Vulkan loader of the computer, `C:\Windows\SysWOW64\vulkan-1.dll`. No release of ours installs that
+  loader, and the test computer has none, so the 32-bit OpenGL driver would load and then give the program no
+  OpenGL at all. `verify.cmd` says so in one line. 32-bit Direct3D programs are not affected and run on the
+  GPU: the 32-bit Direct3D 10, 11 and 12 drivers of this release use our Vulkan driver directly, without that
+  loader. A 32-bit Vulkan application does need it. This release registers its 32-bit Vulkan driver for a
+  computer that has one.
+- Direct3D 11 applications and games run on the GPU, and so do the components of Windows and the packaged
+  Microsoft applications. The value `Mode` in `HKLM\SOFTWARE\amdgpu-wddm\AppRouter` holds `gpu-default`, and the
+  `Allow` and `Deny` lists beside it are empty in a new install. These programs stay on the CPU route (software
+  rendering): the processes of the logon and lock screens, a program whose image the router cannot resolve, a
+  program you put in the `Deny` list, a program you set to processor rendering in Nagi Control App, and
+  `PickerHost.exe`, which the driver keeps there by itself. `PickerHost.exe` is the program behind the Windows
+  firewall notification window ("Windows Security") and behind the file open and save windows. That firewall
+  window stayed white and empty on the GPU route, so the driver sends that program to the processor. An entry in
+  the `Allow` list puts a program back on the GPU, `PickerHost.exe` included. `Mode` `allowlist` gives the
+  behaviour of the earlier releases: the CPU route for every program, and the GPU only for the programs in
+  `Allow`. Use the Direct3D 12 mode of a game if it has one.
 - Direct3D 9 applications run on the GPU through D3D9On12, the Direct3D 9 layer of Windows on top of our Direct3D 12
-  driver. The installer leaves the Direct3D 9 entry of `UserModeDriverName` empty, and Windows then loads
-  `d3d9on12.dll` by itself.
+  driver. The installer writes `<>` in the Direct3D 9 entry of `UserModeDriverName`, and Windows then loads
+  `d3d9on12.dll` by itself. Windows 11 24H2 and 25H2 do not start a GPU whose Direct3D 9 entry is empty.
 - 32-bit Direct3D 10/11/12 and Vulkan applications use 32-bit builds of the same drivers (folder `wow64`), with the
-  same routing rules as 64-bit applications. 32-bit Direct3D 9 applications use D3D9On12 on the 32-bit Direct3D 12
-  driver, as 64-bit ones do.
+  same routing rules as 64-bit applications. A 32-bit Vulkan application also needs the 32-bit Vulkan loader of the
+  computer, which no release of ours installs (see the two OpenGL entries above). 32-bit Direct3D 9 applications use
+  D3D9On12 on the 32-bit Direct3D 12 driver, as 64-bit ones do.
 - The Witcher 3 (Direct3D 12 version) has an application profile.
 - A program that records video can use the H.264 encoder of the GPU through Media Foundation. The encoder works only
   while Windows runs the BC-250 on this driver: if the driver did not start, the encoder refuses, and the program
@@ -253,7 +353,15 @@ change. The driver writes no debug log files. To change the maximum clock at ins
   installer renames it to `<name>.old-<time>`, copies the new file and deletes the old copy at the next restart.
 - The screen stays black after a restart: wait two minutes. If it stays black, restart the computer with the power
   button. After two failed starts, Windows uses Microsoft Basic Display Adapter again.
-- The desktop is black after an update, but programs still start: open amdgpu-wddm Control (`Win`, then type its
+- Windows uses Microsoft Basic Display Adapter again (no games, low performance, the picture is slow): at the next
+  sign-in a notice says so and offers "Turn the graphics driver back on..." (see "If the graphics driver did not start,
+  you see it at the sign-in"). The same button is on the home page of Nagi Control App and in "Support: actions"
+  on its Recovery page.
+  It needs no restart of Windows and no second run of the installer. Make a bug report first if the developers
+  should see why the driver was switched off: the repair clears the count the driver kept. If the notice ends by
+  asking for a restart of Windows, use the button it offers. If the driver is switched off again after that
+  restart, make a bug report instead of repairing a second time.
+- The desktop is black after an update, but programs still start: open Nagi Control App (`Win`, then type its
   name) and select "Desktop on the CPU route" on its Recovery page. Otherwise use Safe Mode and `uninstall.cmd`
   (next item).
 - To start Windows without the driver: hold `Shift` and select Restart, then Troubleshoot > Advanced options >
@@ -267,10 +375,14 @@ change. The driver writes no debug log files. To change the maximum clock at ins
   graphics device. Nothing is sent by itself.
 - After an installation, `verify.cmd` fails `GPU desktop path` with `closed by the driver` or `last boot died in a
   session`, and the desktop runs on the CPU route: run `install.cmd -Repair`. It sets the switches of the release back
-  and restarts Windows. You can also open amdgpu-wddm Control, select "Reopen the GPU desktop path" on its Recovery
+  and restarts Windows. You can also open Nagi Control App, select "Reopen the GPU desktop path" on its Recovery
   page and restart Windows. A normal installation, an upgrade and a plain re-run of `install.cmd` keep the closed path
   and name it in the report, because the driver closed it for a reason. If the driver closes the path again, make a
   bug report instead of repairing a second time.
+- The Graphics page shows 24 graphics cores and you never chose them: the driver went back to 24 after a start with
+  all 40 that nobody confirmed. Run `install.cmd -Repair` to get all 40 back, or select "All (40)" on the Graphics
+  page and restart Windows. An installation and an upgrade keep the 24 and name it in their report, the way they keep
+  a closed desktop path. If the driver goes back a second time, make a bug report.
 - Windows 11 apps (the command bar of File Explorer, Task Manager) ignore mouse clicks, often after the screen went
   black for a moment, or `verify.cmd` shows `[warn] DWM restarted in this session`: WinUI pointer-input loss after the
   desktop compositor (DWM) is terminated and restarted reproduces on this Windows build also with Microsoft Basic
@@ -281,19 +393,21 @@ change. The driver writes no debug log files. To change the maximum clock at ins
 ## Uninstall
 
 1. Run `uninstall.cmd` as administrator (in the package's `files` folder or in `C:\Program Files\amdgpu-wddm`).
-2. Type `YES`. The uninstaller removes the driver, the files, the registry values, the task and the certificate.
-   The GPU goes back to Microsoft Basic Display Adapter. The uninstaller keeps `C:\ProgramData\amdgpu-wddm\control`
-   (the Control application's setting backups and action log). Delete it yourself if you do not need it.
-3. If the installer turned on test signing, the uninstaller asks if it must turn it off. Use
-   `uninstall.cmd -DisableTestSigning` or `-KeepTestSigning` to answer in advance.
-4. Restart the computer. If BitLocker is on, have the recovery key ready: changing the boot options again can cause
-   a recovery key prompt.
+2. The uninstaller asks nothing: starting it is the answer. It removes the driver, the files, the registry values,
+   the tasks and the certificate. The GPU goes back to Microsoft Basic Display Adapter. The uninstaller keeps
+   `C:\ProgramData\amdgpu-wddm\control` (the Control application's setting backups and action log). Delete it
+   yourself if you do not need it.
+3. Test signing goes off again where the installer turned it on. `uninstall.cmd -KeepTestSigning` leaves it on, for
+   a tester who installs another build of ours next.
+4. The restart that finishes the removal starts by itself after a 15-second countdown: Enter restarts at once, any
+   other key leaves the restart to you, and `uninstall.cmd -NoReboot` skips it. If BitLocker is on, have the
+   recovery key ready: changing the boot options again can cause a recovery key prompt.
 
 You can also use the System Restore point "amdgpu-wddm before install" if the installer made one.
 
 ## How to report a bug
 
-1. Open "amdgpu-wddm Control" from the Start menu and select the bug report function.
+1. Open "Nagi Control App" from the Start menu and select the bug report function.
 2. The application shows the list of files and the text of each file before it writes anything. Read them.
 3. The application writes one zip file to your desktop: `amdgpu-wddm-report-YYYYMMDD-HHMMSS.zip`. It sends
    nothing.

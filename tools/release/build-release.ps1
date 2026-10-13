@@ -26,7 +26,9 @@
 # (provenance.py: a published commit and a recipe, or a download record; -RebuildCheck also rebuilds the files with
 # rebuild-check.ps1 and compares the bytes; -NoProvenance -NoProvenanceReason builds a lab candidate from a work tree
 # whose commits are not published yet, and manifest.json records that), signer of .sys and .cat = the release certificate, no private-key material in the
-# package, every installer script parses under Windows PowerShell 5.1, every form of cli-commands.json answered by the
+# package, the OpenGL ICD payload (BD-076: every architecture of opengl_icd.architectures is carried, and each of its
+# files is an image of the right machine that exports every Drv entry point), every installer script parses under
+# Windows PowerShell 5.1, every form of cli-commands.json answered by the
 # packaged CLI, the guide character's art in the packaged control application (nine expressions at both sizes) and in
 # the setup window (the expressions its own screens reach), under the names of the repository's own
 # map, the marker guard (no fix lost its comment on the way into this release: test-marker-guard.ps1) and the
@@ -48,6 +50,8 @@ param(
     [string]$NoProvenanceReason,                 # required with -NoProvenance: recorded in the build log and manifest
     [switch]$RebuildCheck                        # also rebuild every payload file that claims a bit-identical rebuild (slow)
 )
+# Release and provenance rebuilds always execute the gates, including nested analysis.
+$env:BC250_GATE_NOCACHE = '1'
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'headless.ps1')
 # The setup window is the default entry of an ordinary user, so a package without it is not a release.
@@ -181,8 +185,9 @@ foreach ($cfg in Get-ChildItem -LiteralPath (Join-Path $pkg 'payload') -Recurse 
 }
 
 Write-Host 'installer and documents'
-# The start-confirm task's scripts: it also writes the running-release witness (release-witness.ps1).
-$taskScripts = @('start-confirm.ps1', 'start-confirm-core.ps1', 'dwm-session.ps1', 'release-witness.ps1')
+# The logon tasks' scripts: the confirmation also writes the running-release witness (release-witness.ps1), and
+# start-window.ps1 is the window task's own script (BD-080), which the logged-on user runs with their own rights.
+$taskScripts = @('start-confirm.ps1', 'start-confirm-core.ps1', 'start-window.ps1', 'dwm-session.ps1', 'release-witness.ps1')
 $inst = Join-Path $pkg 'installer'
 [void][IO.Directory]::CreateDirectory($inst)
 foreach ($f in Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'installer') -File) {
@@ -203,6 +208,25 @@ foreach ($destination in $tuningDestinations) {
         Copy-Item -LiteralPath (Join-Path $repo "tools\win\system-tuning\$tuningFile") -Destination (Join-Path $pkg "$destination/$tuningFile")
         $tuningRows += [pscustomobject]@{ component = 'system-tuning'; path = "$destination/$tuningFile" }
     }
+}
+# The Nagi wallpaper (owner, 2026-10-13): the obfuscated container next to the control application, which decodes
+# it for each person (tools\win\amdgpu_wddm_control\art\wallpaper\PROVENANCE.md). No plain picture enters the
+# package; the header and the SHA-256 of the picture inside are checked here, so a damaged file stops the build.
+$wallpaperRows = @()
+if (Test-Path -LiteralPath (Join-Path $pkg 'payload\control')) {
+    $wpFile = Join-Path $repo 'tools\win\amdgpu_wddm_control\art\wallpaper\nagi-wallpaper.nwp'
+    $wpBytes = [IO.File]::ReadAllBytes($wpFile)
+    if ($wpBytes.Length -lt 44 -or [Text.Encoding]::ASCII.GetString($wpBytes, 0, 8) -ne 'NAGIWP01' -or [BitConverter]::ToUInt32($wpBytes, 40) -ne ($wpBytes.Length - 44)) { throw "$wpFile is not a whole Nagi wallpaper file" }
+    $wpSha = [Security.Cryptography.SHA256]::Create()
+    try {
+        $wpKey = $wpSha.ComputeHash([Text.Encoding]::ASCII.GetBytes("Nagi's AMD Graphics Infrastructure"))
+        $wpPlain = New-Object byte[] ($wpBytes.Length - 44)
+        for ($wpAt = 0; $wpAt -lt $wpPlain.Length; $wpAt++) { $wpPlain[$wpAt] = $wpBytes[44 + $wpAt] -bxor $wpKey[$wpAt % 32] }
+        if ([BitConverter]::ToString($wpSha.ComputeHash($wpPlain)) -ne [BitConverter]::ToString($wpBytes, 8, 32)) { throw "$wpFile`: the picture inside does not match its SHA-256" }
+    } finally { $wpSha.Dispose() }
+    Copy-Item -LiteralPath $wpFile -Destination (Join-Path $pkg 'payload\control\nagi-wallpaper.nwp')
+    $wallpaperRows += [pscustomobject]@{ component = 'control'; path = 'payload/control/nagi-wallpaper.nwp' }
+    '  wallpaper: payload\control\nagi-wallpaper.nwp, {0} bytes, the picture inside checked' -f $wpBytes.Length
 }
 Copy-Item -LiteralPath (Join-Path $repo 'docs\testing\INSTALL.md') -Destination (Join-Path $pkg 'INSTALL.md')
 # TESTERS.md is not shipped any more. It named one package version of its own ("0.7.199.100-tester.11") in every
@@ -231,6 +255,16 @@ foreach ($t in Get-ChildItem -LiteralPath $notesDir -File -Filter "$Version.*.md
     Copy-Item -LiteralPath $t.FullName -Destination (Join-Path $pkg "RELEASE-NOTES.$lang.md")
 }
 '  release notes: RELEASE-NOTES.md{0}' -f $(if (@(Get-ChildItem -LiteralPath $pkg -Filter 'RELEASE-NOTES.*.md').Count) { ' + ' + ((Get-ChildItem -LiteralPath $pkg -Filter 'RELEASE-NOTES.*.md' | ForEach-Object { $_.Name }) -join ', ') } else { '' })
+# docs\testing\release-notes\pending holds tester-facing lines written before the release that carries them. Nothing
+# reads that folder, so a note left there ships nowhere: the file 0.7.208-log-lines.md sat through tester.24 to
+# tester.28 unread. Name every pending file in the build log, so the release step either folds the lines into
+# <version>.md and deletes the file, or decides out loud to leave it for the next release.
+$pendingDir = Join-Path $notesDir 'pending'
+if (Test-Path -LiteralPath $pendingDir) {
+    foreach ($p in Get-ChildItem -LiteralPath $pendingDir -File -Filter '*.md') {
+        Write-Warning ("pending release-notes lines not folded into ${Version}.md: docs\testing\release-notes\pending\{0}" -f $p.Name)
+    }
+}
 # The setup window (required, checked at the start): the one file in the unpacked release's top folder, named
 # setup.exe because that is what a tester double-clicks. The installer's continuation runs it from the staged closure
 # after each restart that a setup-window run asked for; its copy there is next to the manifest (common.ps1).
@@ -267,10 +301,12 @@ foreach ($f in $sources.files) {
 # No shipped document may name a package version other than this one: TESTERS.md named 0.7.199.100-tester.11 in every
 # package up to tester.12, and it read as the tester-facing note. This runs after the last document is copied, so it
 # covers every one of them. The release notes are the one exception: they are chosen by version above, and they name
-# an earlier release where a tester has to know about it.
+# an earlier release where a tester has to know about it. A version token is read whole, with the "vR" of a second
+# issue (0.7.216.100-tester.29v2, owner 2026-10-13): read without it, every mention of this package's own version
+# would count as the other release 0.7.216.100-tester.29.
 foreach ($d in Get-ChildItem -LiteralPath $pkg -File -Filter '*.md') {
     if ($d.Name -like 'RELEASE-NOTES*') { continue }
-    $versionNames = @([regex]::Matches((Get-Content -LiteralPath $d.FullName -Raw), '\d+\.\d+\.\d+\.\d+-tester\.\d+') | ForEach-Object { $_.Value } | Sort-Object -Unique | Where-Object { $_ -ne $Version })
+    $versionNames = @([regex]::Matches((Get-Content -LiteralPath $d.FullName -Raw), '\d+\.\d+\.\d+\.\d+-tester\.\d+(?:v\d+)?') | ForEach-Object { $_.Value } | Sort-Object -Unique | Where-Object { $_ -ne $Version })
     if ($versionNames.Count) { throw "$($d.Name) names the package version $($versionNames -join ', '): a shipped document may name only this package's version ($Version), or no version at all" }
 }
 '  documents: {0} name no package version but this one ({1})' -f @(Get-ChildItem -LiteralPath $pkg -File -Filter '*.md' | Where-Object { $_.Name -notlike 'RELEASE-NOTES*' }).Count, ((Get-ChildItem -LiteralPath $pkg -File -Filter '*.md' | Where-Object { $_.Name -notlike 'RELEASE-NOTES*' } | ForEach-Object { $_.Name }) -join ', ')
@@ -433,6 +469,13 @@ $r = Invoke-Headless -File $pwshExe -Arguments @('-NoProfile', '-File', (Join-Pa
 $r.text
 if ($r.code -ne 0) { throw 'the kernel driver of this repository does not compile and link (see above)' }
 
+# Full owns the controls removed from the incremental KMD profile. No cache can
+# supply a PASS here; the receipt identifies every executed check and its deadline.
+$qualityCmd = Join-Path $repo 'tools\quality\quick.cmd'
+$qualityOut = Join-Path $Out 'quality-full'
+& $qualityCmd $Root $qualityOut $repo 'Full' (Join-Path $Root 'toolchain\nuget')
+if ($LASTEXITCODE -ne 0) { throw 'Full uncached release quality gates failed' }
+
 Write-Host 'manifest'
 # Where each payload directory lands on the tester PC (install.ps1 does the copying).
 function Get-InstallLocation([string]$PackagePath) {
@@ -444,12 +487,16 @@ function Get-InstallLocation([string]$PackagePath) {
         '^payload/wow64/(\w+)/' { return "<InstallDir>\wow64\$($Matches[1])\$leaf" }
         '^payload/firmware/' { return "C:\BC250\firmware\$leaf" }
         '^payload/cert/' { return 'LocalMachine Root and TrustedPublisher' }
+        # The Microsoft Visual C++ runtime installer runs from the package and is never copied anywhere: the files it
+        # installs are Microsoft's own, in System32, under Microsoft's version rules. install.ps1 copies the payload
+        # directories it names in $dirs, and redist is not one of them.
+        '^payload/redist/' { return 'run from the package (Microsoft installs its own files in System32)' }
         '^payload/(.+)$' { return ('<InstallDir>\' + $Matches[1].Replace('/', '\')) }
     }
     return $null
 }
 $components = @()
-$extra = @($taskScripts | ForEach-Object { [pscustomobject]@{ component = 'tool'; path = "payload/tools/$_" } }) + @([pscustomobject]@{ component = 'certificate'; path = 'payload/cert/amdgpu-wddm-release.cer' }) + $tuningRows
+$extra = @($taskScripts | ForEach-Object { [pscustomobject]@{ component = 'tool'; path = "payload/tools/$_" } }) + @([pscustomobject]@{ component = 'certificate'; path = 'payload/cert/amdgpu-wddm-release.cer' }) + $tuningRows + $wallpaperRows
 foreach ($f in $sources.files + $extra) {
     $p = Join-Path $pkg ($f.path -replace '/', '\')
     $ver = (Get-Item -LiteralPath $p).VersionInfo.FileVersion
@@ -480,11 +527,13 @@ if (Test-Path -LiteralPath $componentSource -PathType Leaf) {
     # An asset name that carries no {release} is the literal name of one release's asset. When it names another
     # release's train than this build, its address is a 404 at install time, and only a tester would find out. The
     # asset is downloaded by its SHA-256, so the name is the one thing nothing else checks.
-    if ($Version -match 'tester\.(\d+)') {
+    # The token is read whole, with the "vR" of a second issue (0.7.216.100-tester.29v2): read without it, the
+    # warning would name this release tester.29.
+    if ($Version -match 'tester\.(\d+(?:v\d+)?)') {
         $thisTrain = $Matches[1]
         foreach ($c in @($cmJson.components)) {
             $assetName = [string]$c.asset.name
-            if ($assetName -match 'tester\.(\d+)' -and $Matches[1] -ne $thisTrain) {
+            if ($assetName -match 'tester\.(\d+(?:v\d+)?)' -and $Matches[1] -ne $thisTrain) {
                 "  WARNING: component '$([string]$c.id)' names the asset $assetName, which carries tester.$($Matches[1]) while this release is tester.$thisTrain. Upload the asset under that name, or write the new name, size and sha256 into tools\release\components.json."
             }
         }
@@ -522,14 +571,19 @@ foreach ($f in Get-ChildItem -LiteralPath $pkg -Recurse -File | Sort-Object Full
 # application's reset reads from here.
 $regDefaults = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'installer\registry-defaults.json') -Raw | ConvertFrom-Json
 foreach ($g in 'parameters', 'desktop_router', 'app_router', 'd3d12_applications', 'graphics_drivers') { if (-not $regDefaults.defaults.$g) { throw "registry-defaults.json: defaults.$g missing" } }
-foreach ($n in 'EnableGpuPresentBlit', 'EnableCddDwmInterop', 'DpmMode', 'DpmMaxMHz') { if ($null -eq $regDefaults.defaults.parameters.$n) { throw "registry-defaults.json: parameters.$n missing" } }
+foreach ($n in 'EnableGpuPresentBlit', 'EnableCddDwmInterop', 'DpmMode', 'DpmMaxMHz', 'CuMode') { if ($null -eq $regDefaults.defaults.parameters.$n) { throw "registry-defaults.json: parameters.$n missing" } }
+# The graphics cores of an install (BD-077): the table names the number the driver starts with, and the only numbers
+# the driver and the control application accept are the firmware's 24 and all 40. A package that names another number
+# would install a value the driver refuses (reason INVALID_SETTING) and a number the application cannot show.
+$cuDefault = [int]$regDefaults.defaults.parameters.CuMode
+if ($cuDefault -ne 24 -and $cuDefault -ne 40) { throw "registry-defaults.json: parameters.CuMode is '$cuDefault', not 24 or 40" }
 if ($null -eq $regDefaults.defaults.desktop_router.DwmForceCpu) { throw 'registry-defaults.json: desktop_router.DwmForceCpu missing' }
 # How long Windows waits for the graphics (BD-079): inside the range the control application offers, or the app would
 # show a release default it cannot choose (tools/win/amdgpu_wddm_control/src/TdrSetting.cs, Min and Max).
 $tdrDefault = $regDefaults.defaults.graphics_drivers.TdrDelay
 if ($null -eq $tdrDefault -or $tdrDefault -lt 2 -or $tdrDefault -gt 60) { throw "registry-defaults.json: graphics_drivers.TdrDelay is '$tdrDefault', not a number of seconds between 2 and 60" }
 if (-not $regDefaults.legacy_applied) { throw 'registry-defaults.json: legacy_applied missing' }
-'  registry defaults: {0} parameters, DwmForceCpu {1}, TdrDelay {2} s' -f @($regDefaults.defaults.parameters.PSObject.Properties).Count, $regDefaults.defaults.desktop_router.DwmForceCpu, $tdrDefault
+'  registry defaults: {0} parameters, DwmForceCpu {1}, TdrDelay {2} s, CuMode {3}' -f @($regDefaults.defaults.parameters.PSObject.Properties).Count, $regDefaults.defaults.desktop_router.DwmForceCpu, $tdrDefault, $cuDefault
 # The H.264 encoder MFT switch (M15.11): manifest.json carries it, so the package itself says whether the installer
 # registers the transform (installer\mft-h264.ps1, driver/umd/mft-h264/INSTALL.md). The identifiers must be the ones
 # the installer and the DLL use; a release that registers the encoder has to carry its DLL.
@@ -549,6 +603,40 @@ if ($sources.PSObject.Properties['mft_h264']) {
 # The package names itself after its folder. A loop that took $name for its own variable once named tester.28 r1
 # after the Ollama asset, and the validation suite then found no zip beside the folder.
 if ($name -ne (Split-Path -Leaf $pkgRoot)) { throw "build-release: the package name is '$name', its folder is '$(Split-Path -Leaf $pkgRoot)'" }
+# The OpenGL ICD (BD-076, GitHub issue #8): manifest.json carries the switch, so the package itself says whether the
+# installer registers an OpenGL driver and for which architectures ("architectures"), and this gate holds the payload
+# to the contract. Every architecture of that list must be in the package, as an image of the right machine that
+# exports every Drv entry point the OpenGL runtime calls (installer\common.ps1 holds the list and the sources of the
+# contract): a file that does not is no ICD, and a registration naming it would leave every OpenGL application of that
+# architecture on the tester's computer without a driver, instead of the software renderer Windows gives it without a
+# registration. A missing file is never a silent skip: the build stops here and names what is missing.
+# The other way round stops the build as well, and the reason is the wow64 tree: the installer copies that tree whole,
+# so a file of an architecture this release does not register would be copied into the install root and deleted again
+# by the narrowing step of the same run, while manifest.json carries a component row that says it is installed. The
+# package has to say which of the two it means - register that architecture, or drop its files row - and
+# test-wow64.ps1 and test-opengl-icd.ps1 hold a cut package to the same rule. Both rules are
+# installer\common.ps1 Get-OpenGlPayloadProblems, so the build and the gates read one rule.
+$glRelease = $null
+if ($sources.PSObject.Properties['opengl_icd']) {
+    $gl = Get-OpenGlReleaseSwitch -Manifest $sources -PackageRoot $pkg
+    $glRelease = [ordered]@{ register = [bool]$gl.register; architectures = @($gl.architectures)
+        package_path = [string]$gl.package_path; package_path_wow = [string]$gl.package_path_wow
+        value_type = [string]$gl.value_type; version = [int]$gl.version; flags = [int]$gl.flags }
+    if ($gl.register) {
+        $glPayload = @(Get-OpenGlPayloadProblems -Switch $gl)
+        if ($glPayload.Count) { throw ('release-sources.json: ' + ($glPayload -join '; ')) }
+        $glFiles = @(Get-OpenGlArchFiles -Switch $gl)
+        $glProblems = @()
+        foreach ($f in $glFiles) { $glProblems += @(Test-OpenGlIcdFile -Path $f.source -Machine $f.machine) }
+        if ($glProblems.Count) { throw ('OpenGL ICD payload: ' + ($glProblems -join '; ')) }
+        # The counted exports of each file, not the length of the contract list: the line says what the package holds.
+        $glShown = (@($glFiles | ForEach-Object { '{0} ({1}, {2} Drv entry points)' -f $_.package_path, $_.arch, @(Get-PeExportNames $_.source | Where-Object { $_ -like 'Drv*' }).Count }) -join ' and ')
+        '  OpenGL ICD: {0}, all {1} of the contract, {2}, version {3}, flags {4}' -f $glShown, @($script:OpenGlDrvExports).Count, $gl.value_type, $gl.version, $gl.flags
+        if (-not $gl.register_x86) { '  OpenGL ICD: no 32-bit registration in this release; 32-bit OpenGL programs keep the renderer of Windows itself' }
+    } else {
+        '  OpenGL ICD: not registered by this release'
+    }
+}
 $manifest = [ordered]@{
     schema = 1
     name = $name
@@ -574,6 +662,7 @@ $manifest = [ordered]@{
     control_app_exe = $sources.control_app_exe
     system_tuning = $tuningManifest
     mft_h264 = $mftRelease        # the H.264 encoder MFT switch; absent in a release that has no encoder at all
+    opengl_icd = $glRelease       # the OpenGL ICD switch (BD-076); absent in a release that has no GL ICD at all
     optional_components = $optionalComponents   # the extras (installer/components.json); $null in a release without any
     sources = $sources.sources
     firmware = $firmware
@@ -589,3 +678,14 @@ if (-not $cv.ok) { throw "compatibility record does not verify: $($cv.detail)" }
 Compress-Archive -Path $pkgRoot -DestinationPath $zip
 '{0} files under files\ plus setup.exe, package {1}' -f $files.Count, $pkgRoot
 'zip {0} SHA256 {1}' -f $zip, (Get-FileHash -LiteralPath $zip).Hash
+
+# The single-file installer, beside the zip (owner, 2026-10-12: "dlaczego setup.exe nie zawiera zipa w sobie? to
+# lepsza metoda!"): one exe that carries this whole release inside it, for a tester who would rather download one
+# file than unpack an archive. The zip stays: it is the same release, and a tester who already has it changes
+# nothing. make-setup-exe.ps1 -Check is the gate - it reads the exe back and compares every file of the payload with
+# the file of this package, byte for byte, and -ReleaseZip compares it with the entries of the zip written above, so an exe
+# whose payload is not the files of this release's archive cannot be published.
+$setupOne = Join-Path $Out "amdgpu-wddm-setup-$Version.exe"
+& (Join-Path $PSScriptRoot 'make-setup-exe.ps1') -PackageTop $pkgRoot -Out $setupOne -Check -ReleaseZip $zip | ForEach-Object { "  $_" }
+if (-not (Test-Path -LiteralPath $setupOne -PathType Leaf)) { throw "make-setup-exe.ps1 wrote no $setupOne" }
+'single exe {0} SHA256 {1}' -f $setupOne, (Get-FileHash -LiteralPath $setupOne).Hash

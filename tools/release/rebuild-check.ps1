@@ -46,6 +46,8 @@ param(
     [string]$PackageCache,
     [string]$Report
 )
+# Release and provenance rebuilds always execute the gates, including nested analysis.
+$env:BC250_GATE_NOCACHE = '1'
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path (Split-Path $PSScriptRoot)
 if (-not $Work) { $Work = Join-Path $Root 'scratch\repro-builds\rb' }

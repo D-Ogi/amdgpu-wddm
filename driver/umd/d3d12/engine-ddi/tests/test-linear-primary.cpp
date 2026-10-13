@@ -6,6 +6,7 @@
 #include "harness.h"
 
 #include "../../../../contract/amdgpu_wddm_surface_format.h"
+#include "../../present-copy-sync.h"
 
 #include <algorithm>
 #include <cstring>
@@ -13,6 +14,17 @@
 #include <vector>
 
 namespace harness {
+namespace {
+// BD-133: the shell's half of a copied present, as far as the engine half asks for it: the present fence as the CPU
+// read it and the hook that gives a chosen surface its completion fence (present-copy-sync.h, PresentCopyPick). The
+// harness has no kernel fence and takes no ticket, so a surface stays fresh and is released with its source
+// (release_present_copy); prepared counts the calls.
+HRESULT harness_prepare(void* state, native12::PresentCopySlot&) noexcept {
+    ++*static_cast<unsigned*>(state);
+    return S_OK;
+}
+} // namespace
+
 namespace {
 
 struct Shape {
@@ -315,6 +327,193 @@ void test_linear_primary(Env& env) {
             checkf(refused == E_INVALIDARG && !none,
                    "linear primary: present_allocation refuses the texture that is not a primary (hr %08lx)",
                    static_cast<unsigned long>(refused));
+            // BD-133: that same texture is still a Present source, by copying it. This is the D3D9On12 back
+            // buffer's shape, and refusing it removed the device at the first windowed present. The copy goes on
+            // the command list the runtime hands to pfnPresent, and the answer is the allocation of the linear
+            // surface it wrote - a surface of the source's own kind, not the source.
+            const D3DKMT_HANDLE plain_allocation = m.last_allocation;
+            // BD-133: before its first copied present the source has no copy surface, and as a destination its
+            // formats are its DXGI format and the composed row's LB7A format (A8R8G8B8, 21).
+            {
+                uint32_t lb7a = 1, dxgi = 0, row = 0;
+                const HRESULT none_yet = engine_ddi::present_copy_surface_format(device.context, plain.hres(), &lb7a);
+                const HRESULT as_destination =
+                    engine_ddi::present_destination_format(device.context, plain.hres(), &dxgi, &row);
+                checkf(none_yet == S_FALSE && !lb7a && as_destination == S_OK &&
+                           dxgi == static_cast<uint32_t>(DXGI_FORMAT_B8G8R8A8_UNORM) && row == 21,
+                       "BD-133: no copy surface before the first copied present (hr %08lx), destination formats %u "
+                       "and LB7A %u (hr %08lx)",
+                       static_cast<unsigned long>(none_yet), dxgi, row, static_cast<unsigned long>(as_destination));
+            }
+            Recording copy_rec;
+            const HRESULT hr_copy_rec = open_recording(env, device, D3D12DDI_COMMAND_QUEUE_FLAG_3D, copy_rec);
+            if (hr_copy_rec == S_OK) {
+                const uint64_t copies_before = engine_ddi::present_copies();
+                const uint64_t surfaces_before = engine_ddi::present_copy_surfaces();
+                const uint32_t requests_before = m.allocations;
+                unsigned prepared = 0;
+                const native12::PresentCopyPick pick{0, &prepared, harness_prepare};
+                native12::PresentCopySlot* slot = nullptr;
+                D3DKMT_HANDLE copied = 0;
+                HRESULT hr_copy = engine_ddi::present_copy_allocation(device.context, copy_rec.hlist(), plain.hres(),
+                                                                      pick, &slot, &copied);
+                {
+                    uint32_t lb7a = 0;
+                    const HRESULT made = engine_ddi::present_copy_surface_format(device.context, plain.hres(), &lb7a);
+                    checkf(made == S_OK && lb7a == 21,
+                           "BD-133: the copy surface of a B8G8R8A8 source has the composed row's LB7A format 21 "
+                           "(hr %08lx, LB7A %u)",
+                           static_cast<unsigned long>(made), lb7a);
+                }
+                const uint32_t want_copy = engine_ddi::kMemoryDedicated | engine_ddi::kMemoryShareable |
+                                           engine_ddi::kMemoryLinearSurface;
+                checkf(hr_copy == S_OK && copied && copied != plain_allocation && slot && prepared == 1 &&
+                           m.allocations == requests_before + 1 && m.last_flags == want_copy && m.last_row_pitch &&
+                           m.last_layout_size && engine_ddi::present_copies() == copies_before + 1 &&
+                           engine_ddi::present_copy_surfaces() == surfaces_before + 1,
+                       "BD-133: present_copy_allocation copies the ordinary texture into one new linear surface "
+                       "(hr %08lx, allocation %08x, flags %x, row pitch %u)",
+                       static_cast<unsigned long>(hr_copy), copied, m.last_flags, m.last_row_pitch);
+                // The next present of the same source reuses that surface while it is idle (no ticket taken here):
+                // no second memory request, and the allocation the kernel present reads stays the one it read before.
+                D3DKMT_HANDLE again = 0;
+                native12::PresentCopySlot* same = nullptr;
+                hr_copy = engine_ddi::present_copy_allocation(device.context, copy_rec.hlist(), plain.hres(), pick,
+                                                              &same, &again);
+                checkf(hr_copy == S_OK && again == copied && same == slot && m.allocations == requests_before + 1 &&
+                           engine_ddi::present_copy_surfaces() == surfaces_before + 1 &&
+                           engine_ddi::present_copy_reuses() >= 1,
+                       "BD-133: the next present of the same source reuses its idle surface (hr %08lx, allocation %08x)",
+                       static_cast<unsigned long>(hr_copy), again);
+                // A surface whose last copy has not completed is not taken: the present makes a second surface of
+                // the pool, with a memory request of its own. The busy state is the shell's slot (a ticket k = 1
+                // whose fence still reads 0); it is made idle again before the source's destroy releases both.
+                if (slot) {
+                    static volatile UINT64 copy_fence = 0;
+                    slot->issued = 1;
+                    slot->fence_cpu = &copy_fence;
+                    D3DKMT_HANDLE grown = 0;
+                    native12::PresentCopySlot* other = nullptr;
+                    hr_copy = engine_ddi::present_copy_allocation(device.context, copy_rec.hlist(), plain.hres(),
+                                                                  pick, &other, &grown);
+                    checkf(hr_copy == S_OK && grown && grown != copied && other && other != slot &&
+                               m.allocations == requests_before + 2 &&
+                               engine_ddi::present_copy_surfaces() == surfaces_before + 2,
+                           "BD-133: a busy copy surface is not reused; the present makes the pool's second surface "
+                           "(hr %08lx, allocation %08x)",
+                           static_cast<unsigned long>(hr_copy), grown);
+                    slot->issued = 0;
+                    slot->fence_cpu = nullptr;
+                }
+                // What was recorded is a legal list: it closes, executes and leaves no list or device error. The
+                // barrier pairs are balanced, so both resources end in the state the runtime left them in.
+                const D3D12DDI_COMMAND_LIST_FUNCS_3D_0092& t = env.lists[copy_rec.table];
+                t.pfnCloseCommandList(copy_rec.hlist());
+                const D3D12DDI_HCOMMANDLIST lists[] = {copy_rec.hlist()};
+                const HRESULT hr_exec = engine_ddi::execute_command_lists(queue, 1, lists);
+                checkf(hr_exec == S_OK && !device.shell.list_errors && !device.shell.device_errors,
+                       "BD-133: the recorded copies execute (hr %08lx)", static_cast<unsigned long>(hr_exec));
+                wait_queue_idle(env, queue, "BD-133 present copy");
+                destroy_recording(env, device, copy_rec);
+            } else {
+                checkf(false, "BD-133: a command list for the present copy (hr %08lx)",
+                       static_cast<unsigned long>(hr_copy_rec));
+            }
+            // The negative control: a source no linear surface exists for is refused, answers 0 and removes no
+            // device. Two mip levels is such a source, and it is the one the engine makes no linear image of
+            // either (the PRIMARY case above).
+            Buffer two_mips;
+            const HRESULT hr_mips =
+                create_target(env, device, Shape{256, 256, DXGI_FORMAT_B8G8R8A8_UNORM, 2, false}, two_mips);
+            if (hr_mips == S_OK) {
+                Recording mip_rec;
+                if (open_recording(env, device, D3D12DDI_COMMAND_QUEUE_FLAG_3D, mip_rec) == S_OK) {
+                    const uint32_t errors_before = device.shell.device_errors;
+                    const uint64_t copies_before = engine_ddi::present_copies();
+                    const uint32_t requests_before = m.allocations;
+                    D3DKMT_HANDLE refused_copy = 1;
+                    unsigned prepared = 0;
+                    native12::PresentCopySlot* no_slot = nullptr;
+                    const HRESULT hr_refused = engine_ddi::present_copy_allocation(
+                        device.context, mip_rec.hlist(), two_mips.hres(),
+                        native12::PresentCopyPick{0, &prepared, harness_prepare}, &no_slot, &refused_copy);
+                    checkf(hr_refused == E_INVALIDARG && !refused_copy && !no_slot && !prepared &&
+                               device.shell.device_errors == errors_before &&
+                               engine_ddi::present_copies() == copies_before &&
+                               m.allocations == requests_before,
+                           "BD-133: a source of 2 mip levels is refused, allocates nothing and removes no device "
+                           "(hr %08lx)",
+                           static_cast<unsigned long>(hr_refused));
+                    destroy_recording(env, device, mip_rec);
+                }
+                destroy_buffer(env, device, two_mips);
+            }
+            // BD-133, the D3D9 back buffer (lab arms B and C, 2026-10-12: "format has no linear surface", format
+            // 88). D3D9On12 gives a D3DFMT_X8R8G8B8 back buffer as B8G8R8X8_UNORM. Its copy surface is the same
+            // shared linear surface, tagged with the A format of its bytes, A8R8G8B8 (present-copy.h,
+            // present_copy_format and present_copy_alpha_tag), and the engine's linear image of it is the BGRA8 one:
+            // vkd3d-proton maps 88 to VK_FORMAT_B8G8R8A8_UNORM. The copy is 88 into 88, so it executes like every
+            // other.
+            Buffer bgrx;
+            const HRESULT hr_bgrx =
+                create_target(env, device, Shape{256, 256, DXGI_FORMAT_B8G8R8X8_UNORM, 1, false}, bgrx);
+            checkf(hr_bgrx == S_OK, "BD-133: an ordinary B8G8R8X8 render target (hr %08lx)",
+                   static_cast<unsigned long>(hr_bgrx));
+            if (hr_bgrx == S_OK) {
+                Recording x8_rec;
+                const HRESULT hr_x8_rec = open_recording(env, device, D3D12DDI_COMMAND_QUEUE_FLAG_3D, x8_rec);
+                if (hr_x8_rec == S_OK) {
+                    const uint64_t copies_before = engine_ddi::present_copies();
+                    const uint64_t surfaces_before = engine_ddi::present_copy_surfaces();
+                    const uint32_t requests_before = m.allocations;
+                    const D3DKMT_HANDLE bgrx_allocation = m.last_allocation;
+                    D3DKMT_HANDLE copied = 0;
+                    unsigned prepared = 0;
+                    native12::PresentCopySlot* x8_slot = nullptr;
+                    const HRESULT hr_x8 = engine_ddi::present_copy_allocation(
+                        device.context, x8_rec.hlist(), bgrx.hres(),
+                        native12::PresentCopyPick{0, &prepared, harness_prepare}, &x8_slot, &copied);
+                    const uint32_t want_copy = engine_ddi::kMemoryDedicated | engine_ddi::kMemoryShareable |
+                                               engine_ddi::kMemoryLinearSurface;
+                    checkf(hr_x8 == S_OK && copied && copied != bgrx_allocation && x8_slot && prepared == 1 &&
+                               m.allocations == requests_before + 1 && m.last_flags == want_copy &&
+                               m.last_row_pitch >= 256 * 4 && m.last_layout_size &&
+                               engine_ddi::present_copies() == copies_before + 1 &&
+                               engine_ddi::present_copy_surfaces() == surfaces_before + 1,
+                           "BD-133: present_copy_allocation copies a B8G8R8X8 texture into one new linear surface "
+                           "(hr %08lx, allocation %08x, flags %x, row pitch %u)",
+                           static_cast<unsigned long>(hr_x8), copied, m.last_flags, m.last_row_pitch);
+                    // The LB7A format the shell compares with the destination's (native-tables.cpp,
+                    // present_copy_destination_check) and the kernel present compares with the redirection
+                    // surface's: A8R8G8B8 (21), the A tag of the X8 bytes, not X8R8G8B8 (22), which lab arm B of
+                    // 2026-10-12 18:35Z saw refused 240 times out of 240 ("snapshot refused ... format"). The copy
+                    // of the B8G8R8A8 source above still carries 21, so both meet an A8R8G8B8 destination with one
+                    // format.
+                    uint32_t lb7a = 0, a8_lb7a = 0;
+                    const HRESULT x8_format =
+                        engine_ddi::present_copy_surface_format(device.context, bgrx.hres(), &lb7a);
+                    const HRESULT a8_format =
+                        engine_ddi::present_copy_surface_format(device.context, plain.hres(), &a8_lb7a);
+                    checkf(x8_format == S_OK && lb7a == 21 && a8_format == S_OK && a8_lb7a == 21,
+                           "BD-133: the copy surface of a B8G8R8X8 source has LB7A format 21, A8R8G8B8, as the copy "
+                           "surface of a B8G8R8A8 source has (hr %08lx, LB7A %u; hr %08lx, LB7A %u)",
+                           static_cast<unsigned long>(x8_format), lb7a, static_cast<unsigned long>(a8_format),
+                           a8_lb7a);
+                    const D3D12DDI_COMMAND_LIST_FUNCS_3D_0092& t = env.lists[x8_rec.table];
+                    t.pfnCloseCommandList(x8_rec.hlist());
+                    const D3D12DDI_HCOMMANDLIST lists[] = {x8_rec.hlist()};
+                    const HRESULT hr_exec = engine_ddi::execute_command_lists(queue, 1, lists);
+                    checkf(hr_exec == S_OK && !device.shell.list_errors && !device.shell.device_errors,
+                           "BD-133: the recorded B8G8R8X8 copy executes (hr %08lx)",
+                           static_cast<unsigned long>(hr_exec));
+                    wait_queue_idle(env, queue, "BD-133 B8G8R8X8 present copy");
+                    destroy_recording(env, device, x8_rec);
+                } else {
+                    checkf(false, "BD-133: a command list for the B8G8R8X8 present copy (hr %08lx)",
+                           static_cast<unsigned long>(hr_x8_rec));
+                }
+                destroy_buffer(env, device, bgrx);
+            }
             destroy_buffer(env, device, plain);
         }
 

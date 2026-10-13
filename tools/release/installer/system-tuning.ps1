@@ -113,14 +113,17 @@ function Save-SystemTuningRecovery([string]$PackageRoot) {
     Write-Info ('Recovery tools kept at ' + $destination + '. In the account whose settings need restoring, run powershell -NoProfile -File "' + (Join-Path $destination 'system-tuning.ps1') + '" -Action RestoreAll -Scope User')
 }
 
+# The folders of %LOCALAPPDATA%\amdgpu-wddm that an uninstall keeps ($script:UserDataKept, common.ps1): the user's
+# tuning journal and the Nagi wallpaper picture. This file also runs without common.ps1, so it names them as well.
 function Remove-UserDataExceptTuning([string]$Directory) {
+    $kept = @(if ($script:UserDataKept) { $script:UserDataKept } else { 'system-tuning', 'wallpaper' })
     $root = [IO.Path]::GetFullPath($Directory)
     $item = Get-Item -LiteralPath $root -Force
     if (-not $item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Per-user data is not a regular directory. It was retained.' }
-    if (-not (Test-Path -LiteralPath (Join-Path $root 'system-tuning'))) { Remove-PathOrSchedule $root; return }
-    # Preserve the whole user journal. Do not open it from an elevated account.
+    if (-not @($kept | Where-Object { Test-Path -LiteralPath (Join-Path $root $_) }).Count) { Remove-PathOrSchedule $root; return }
+    # Preserve the whole user journal and the wallpaper picture. Do not open them from an elevated account.
     foreach ($item in @(Get-ChildItem -LiteralPath $root -Force)) {
-        if ($item.Name -ieq 'system-tuning') { continue }
+        if ($kept -contains $item.Name) { continue }
         Remove-PathOrSchedule $item.FullName
     }
 }

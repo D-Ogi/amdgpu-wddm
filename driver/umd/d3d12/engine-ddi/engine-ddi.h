@@ -39,6 +39,13 @@
 #include "bc250_vkd3d_engine.h"
 #include <cstdint>
 
+// BD-133: the shell's synchronization records of a Present copy (present-copy-sync.h), named here by reference only.
+namespace native12 {
+class PresentCopyListMark;
+struct PresentCopySlot;
+struct PresentCopyPick;
+}
+
 namespace engine_ddi {
 
 inline constexpr uint32_t kBoundaryRevision = 5;
@@ -563,6 +570,59 @@ HRESULT present_allocation(DeviceContext* context, D3D12DDI_HRESOURCE resource,
 // device at stage 4 (BD-075 review, 2026-10-06).
 HRESULT present_destination_allocation(DeviceContext* context, D3D12DDI_HRESOURCE resource,
                                        D3DKMT_HANDLE* allocation) noexcept;
+// BD-133: the Present source that present_allocation refuses - an ordinary texture of this device, which is what
+// a D3D9On12 back buffer is. The DDI "copies content from source allocations to a primary surface"
+// (ref\ddi-display\d3d12umddi.md:14693) and the runtime hands pfnPresent a command list that it closes and
+// executes immediately afterwards, so this records that copy on that list and answers with the allocation of its
+// destination: a linear surface of the admitted kind from this source resource's pool (internal.h,
+// PresentCopySurface), released with the resource.
+//   The surface: the first of the pool that present_copy_choose finds reusable with pick.present_cpu (its last copy
+// completed and its last reader retired, present-copy-sync.h); else a new one, while the source has fewer than
+// kPresentCopySurfacesPerSource and the device's copy surfaces stay within kPresentCopyDeviceBytes. pick.prepare then
+// gives it its completion fence, and only after that is anything recorded.
+//   What it records on the list, in this order: a barrier pair that moves the source from COMMON to COPY_SOURCE
+// and the destination from COMMON to COPY_DEST, one CopyResource of the whole surface, and the opposite barrier
+// pair, so the state of both resources is what it was when the list ends. A presented back buffer is in
+// D3D12_RESOURCE_STATE_PRESENT, which is COMMON (value 0), by the runtime's own rule.
+//   S_OK, *slot and *allocation set: the copy is recorded and the caller must take the ticket on *slot and report
+// AddedGpuWork. E_INVALIDARG with *allocation 0: the source is a shape no linear surface exists for (present-copy.h,
+// PresentCopy), and one line names which. E_OUTOFMEMORY: no surface is reusable and the pool or the device budget
+// is full, or the memory request failed; DXGI_ERROR_DEVICE_REMOVED: a fence read UINT64_MAX. In every failure
+// nothing is recorded and no surface is named, and one line says which.
+//   list must be a command list of this device, open for recording. Only RuntimeBacked mode has LB7A surface
+// memory at all; the engine-private test mode answers E_INVALIDARG.
+HRESULT present_copy_allocation(DeviceContext* context, D3D12DDI_HCOMMANDLIST list, D3D12DDI_HRESOURCE resource,
+                                const native12::PresentCopyPick& pick, native12::PresentCopySlot** slot,
+                                D3DKMT_HANDLE* allocation) noexcept;
+// BD-133: the ticket record of list (CommandListRecord::present_copy, present-copy-sync.h), for pfnPresent, which
+// sets it, and ExecuteCommandLists, which takes it. S_OK, or E_INVALIDARG for a handle that is no command list of
+// this device (the execute itself refuses such a handle as well).
+HRESULT present_copy_list_mark(DeviceContext* context, D3D12DDI_HCOMMANDLIST list,
+                               native12::PresentCopyListMark** mark) noexcept;
+// BD-133: the synchronization records of the copy surfaces of a source resource, for its destroy (the shell proves
+// them idle before the engine releases them). S_OK with *count of them, at most capacity; S_FALSE and 0 when it has
+// none; E_INVALIDARG for a handle that is no resource of this device.
+HRESULT present_copy_slots(DeviceContext* context, D3D12DDI_HRESOURCE resource, native12::PresentCopySlot** slots,
+                           unsigned capacity, unsigned* count) noexcept;
+// BD-133: the LB7A format of the copy surfaces of a source resource (PresentCopySurface::d3dddi). S_OK and *lb7a set
+// when present_copy_allocation made one for it, S_FALSE and 0 when it has none, E_INVALIDARG for a handle that is no
+// resource of this device. The shell reads it for the format line of a copied present.
+HRESULT present_copy_surface_format(DeviceContext* context, D3D12DDI_HRESOURCE resource, uint32_t* lb7a) noexcept;
+// BD-133: the formats of a Present destination as far as this device knows them: its DXGI format and the LB7A format
+// of the row of that format (present-copy.h, present_copy_format), 0 when no row has it. An opened destination's
+// allocation was described by its creator, so the LB7A value is the row's, not a read of the allocation. S_OK, or
+// E_INVALIDARG for a handle that is no resource of this device.
+HRESULT present_destination_format(DeviceContext* context, D3D12DDI_HRESOURCE resource, uint32_t* dxgi,
+                                   uint32_t* lb7a) noexcept;
+// BD-133: how many presents this process has served by copying the source, how many copy surfaces it has created,
+// how many presents reused a surface, how many it refused because no surface was reusable and the pool, the budget
+// or the memory was exhausted, and how many surfaces it kept at a destroy because their retirement was not proven.
+// Read for a report, never for a decision.
+uint64_t present_copies() noexcept;
+uint64_t present_copy_surfaces() noexcept;
+uint64_t present_copy_reuses() noexcept;
+uint64_t present_copy_refusals() noexcept;
+uint64_t present_copy_kept() noexcept;
 // BD-075: how many creates this process has turned into a shared linear surface after the runtime refused the
 // ordinary allocation shape. The named risk of that retry is that it fires on an ordinary committed texture, so
 // the count is kept whatever the trace switches say and every retry also names itself through log_refusal.

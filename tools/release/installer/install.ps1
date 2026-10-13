@@ -13,13 +13,19 @@
 # own firmware\ folder, which is used when -FirmwareDir is not given. Nothing else uses the network.
 #
 # The setup window (tools\win\amdgpu_wddm_setup) drives this script with -Gui (docs/gui/interfaces-setup.md): the
-# engine writes events (-EventsFile) and one terminal result bound to -InvocationId (-ResultFile), decides the action
-# and the consents it needs, never asks, never elevates itself and never restarts Windows. -Plan runs the checks and
-# reports the decision, the consents, the restarts and the settings-impact plan, and changes nothing. Before the
+# engine writes events (-EventsFile) and one terminal result bound to -InvocationId (-ResultFile), decides the action,
+# asks the user nothing, never elevates itself and never restarts Windows. -Plan runs the checks and
+# reports the decision, the restarts and the settings-impact plan, and changes nothing. Before the
 # first restart it asks for, the whole package (and an offline firmware folder) is staged and checked in
 # %ProgramData%\amdgpu-wddm\installer\packages\<version>, and RunOnce runs the continuation from there; when phase 2
-# completes, that copy stays as the repair set. On the command line the installer asks "Restart now?" as before and
-# then asks Windows for a normal, planned restart (never a forced one).
+# completes, that copy stays as the repair set. On the command line a restart starts by itself after a visible 15 s
+# countdown (any key puts it off) and is a normal, planned restart (never a forced one).
+#
+# Nothing in this engine asks the user for a permission (owner, 2026-10-12): running it IS the consent for the test
+# mode the driver needs and for the BitLocker pause that the boot-option change needs (Get-BitLockerPlan). The
+# switches that used to carry those answers, -AcceptTestSigning and -BitLocker, are still accepted so that every
+# script that passes them keeps running. A preflight check that fails still refuses the install: a machine this
+# driver must not change is not a question.
 [CmdletBinding()]
 param(
     [switch]$DryRun,
@@ -33,12 +39,26 @@ param(
     [switch]$Verify,
     [switch]$Force,                         # install even over a development-lab installation (not supported)
     [switch]$NoReboot,                      # never restart; tell the tester to do it
-    [switch]$AcceptTestSigning,             # unattended: answer YES to the test-signing question
+    [switch]$AcceptTestSigning,             # accepted and not needed any more: no test-signing question is asked
+    # Accepted and not needed any more: BitLocker protection is suspended by itself for the restarts of the install.
+    # 'HaveKey' still means "do not touch protection, the recovery key is at hand" (Get-BitLockerPlan).
     [ValidateSet('', 'HaveKey', 'Suspend')][string]$BitLocker = '',
     [ValidateRange(1000, 2000)][int]$DpmMaxMHz,  # absent = the default (registry-defaults.json) or the tester's own value
-    [ValidateSet(0, 24, 40)][int]$CuMode = 0,  # 0 = leave unset (driver default, 24 CUs)
+    [ValidateSet(0, 24, 40)][int]$CuMode = 0,  # 0 = not given: the release default of registry-defaults.json
     [string]$InstallRoot = (Join-Path $env:ProgramFiles 'amdgpu-wddm'),
     [switch]$NoControlApp,
+    # The shortcuts of the control application (owner, 2026-10-12). Both places are written by default. The two No
+    # switches leave one out, and the two positive ones state the default explicitly, so a later run can put back a
+    # shortcut that an earlier one left out (the state keeps the first answer, as it does for the Windows tuning).
+    [switch]$NoStartMenuShortcut,
+    [switch]$StartMenuShortcut,
+    [switch]$NoDesktopShortcut,
+    [switch]$DesktopShortcut,
+    # The Nagi wallpaper (owner, 2026-10-13), recorded for Nagi Control App, which sets it once for each person after
+    # the install is verified. On by default; -NoWallpaper leaves it out and -Wallpaper states the default, as the
+    # shortcut pairs do.
+    [switch]$NoWallpaper,
+    [switch]$Wallpaper,
     [switch]$ApplySystemTuning,              # optional reversible Windows tuning; absent = keep Windows settings
     [switch]$SkipSystemTuning,               # explicitly clear an earlier opt-in when resuming
     [switch]$Repair,                        # install the same, already verified version again
@@ -156,10 +176,25 @@ function Invoke-Preflight {
     else { Add-Check 'administrator' 'fail' 'not elevated' 'admin.missing' }
 
     $os = Get-CimInstance Win32_OperatingSystem
-    $build = [int]$os.BuildNumber
-    if (-not [Environment]::Is64BitOperatingSystem) { Add-Check 'Windows' 'fail' "$($os.Caption) is 32-bit; x64 is required" 'windows.not-x64' }
-    elseif ($build -lt 22000) { Add-Check 'Windows' 'fail' "$($os.Caption) build $build; Windows 11 (build 22000 or later) is required" 'windows.too-old' }
-    else { Add-Check 'Windows' 'ok' "$($os.Caption) build $build" 'windows.ok' }
+    # The support policy of the owner, 2026-10-11 (n-2) and 2026-10-12 (older Windows 11: a line, not a refusal).
+    # Get-WindowsSupportFindings in common.ps1 decides; the ids below are the whole set it can return.
+    $win = Get-WindowsSupportState -Os $os
+    foreach ($f in @($win.findings)) {
+        switch ($f.id) {
+            'windows.not-x64' { Add-Check 'Windows' 'fail' $f.detail 'windows.not-x64' }
+            'windows.too-old' { Add-Check 'Windows' 'fail' $f.detail 'windows.too-old' }
+            'windows.below-supported' { Add-Check 'Windows' 'warn' $f.detail 'windows.below-supported' }
+            'windows.insider' { Add-Check 'Windows channel' 'warn' $f.detail 'windows.insider' }
+            'windows.ltsc' { Add-Check 'Windows edition' 'warn' $f.detail 'windows.ltsc' }
+            # An id this list does not know keeps its own severity: a finding that refuses the install must never
+            # read as a passed check because the list above was not extended with it.
+            default {
+                if ([string]$f.severity -eq 'fail') { Add-Check 'Windows' 'fail' "$($f.detail) ($($f.id))" $f.id }
+                elseif ([string]$f.severity -eq 'warn') { Add-Check 'Windows' 'warn' "$($f.detail) ($($f.id))" $f.id }
+                else { Add-Check 'Windows' 'ok' $f.detail 'windows.ok' }
+            }
+        }
+    }
 
     $dev = @(Get-Bc250Device)
     $board = (Get-CimInstance Win32_BaseBoard -ErrorAction SilentlyContinue)
@@ -190,17 +225,25 @@ function Invoke-Preflight {
 
     $bl = Get-BitLockerState
     $script:BitLockerState = $bl
-    if ($bl -eq 'on') { Add-Check 'BitLocker' 'warn' "protection on for $($env:SystemDrive): changing the boot options makes Windows ask for the recovery key at the next start. You must have the key, or let the installer suspend BitLocker for two restarts." 'bitlocker.on' }
-    elseif ($bl -eq 'unknown') { Add-Check 'BitLocker' 'warn' 'state unknown: changing boot options requires the recovery-key or suspension choice' 'bitlocker.unknown' }
+    if ($bl -eq 'on') { Add-Check 'BitLocker' 'warn' "protection on for $($env:SystemDrive): the installer suspends it for the restarts of this installation before it changes the boot options, so Windows does not ask for the recovery key (Get-BitLockerPlan)" 'bitlocker.on' }
+    elseif ($bl -eq 'unknown') { Add-Check 'BitLocker' 'warn' 'state unknown: the installation goes on; keep the recovery key at hand in case Windows asks for it after a restart' 'bitlocker.unknown' }
     else { Add-Check 'BitLocker' 'ok' $bl 'bitlocker.ok' }
 
     $hvci = Get-MemoryIntegrityState
     if ($hvci -eq 'on') { Add-Check 'Memory integrity' 'warn' 'on: if the driver does not start, turn off Core isolation > Memory integrity (see INSTALL.md)' 'hvci.on' }
     else { Add-Check 'Memory integrity' 'ok' $hvci 'hvci.off' }
 
-    $vc = @(Get-VcRuntimeMissing)
-    if ($vc.Count) { Add-Check 'Visual C++ runtime' 'fail' ("missing in System32: $($vc -join ', '). Install the Microsoft Visual C++ Redistributable for Visual Studio 2015-2022 (x64) from https://aka.ms/vs/17/release/vc_redist.x64.exe (on any computer with a network, then copy it here), then run the installer again.") 'vcruntime.missing' }
-    else { Add-Check 'Visual C++ runtime' 'ok' 'present' 'vcruntime.ok' }
+    # The Microsoft Visual C++ runtime our programs need. A PC without it is no longer refused (owner, 2026-10-12:
+    # "powinien byc auto-installer!!!"): the package carries Microsoft's own installer and phase 2 runs it. The only
+    # refusal left is a package that does not carry that installer, or carries a changed copy of it.
+    $vc = Get-VcRuntimeState
+    $vcExe = Join-Path $package $script:VcRuntimePackagePath
+    if (-not $vc.install) { Add-Check 'Visual C++ runtime' 'ok' $vc.detail 'vcruntime.ok' }
+    else {
+        $vcFile = Test-VcRuntimeInstaller -Path $vcExe
+        if ($vcFile.ok) { Add-Check 'Visual C++ runtime' 'warn' "$($vc.detail); the installer installs $($script:VcRuntimeVersion) from $($script:VcRuntimePackagePath) (SHA256 $($vcFile.sha256.Substring(0, 16)), signature $($vcFile.status), $($vcFile.signer))" 'vcruntime.missing' }
+        else { Add-Check 'Visual C++ runtime' 'fail' "$($vc.detail); $($vcFile.problem)" 'vcruntime.no-installer' }
+    }
 
     $drive = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='$($env:SystemDrive)'"
     $freeGb = [math]::Round($drive.FreeSpace / 1GB, 1)
@@ -351,6 +394,11 @@ $NoReboot = [switch](@($installInputs.switches) -contains 'NoReboot')
 $Force = [switch](@($installInputs.switches) -contains 'Force')
 $Repair = [switch](@($installInputs.switches) -contains 'Repair')
 $ApplySystemTuning = [switch](@($installInputs.switches) -contains 'ApplySystemTuning')
+# The run after a restart keeps the shortcut answers of the first run, and a positive switch on this command line
+# (-StartMenuShortcut, -DesktopShortcut) clears the saved negative one (Get-InstallInputs).
+$NoStartMenuShortcut = [switch](@($installInputs.switches) -contains 'NoStartMenuShortcut')
+$NoDesktopShortcut = [switch](@($installInputs.switches) -contains 'NoDesktopShortcut')
+$NoWallpaper = [switch](@($installInputs.switches) -contains 'NoWallpaper')
 # BD-069: a repair that the tester asked for writes the release default again over a switch that the driver closed
 # itself (the tester asked for the release as it ships). Only the -Repair switch asks for that. Every other install
 # keeps the closure and reports it with its remedy, and so does the automatic 'repair' action of an unfinished or
@@ -422,7 +470,9 @@ function Request-Restart([string]$Why, [string]$ReasonId) {
     Write-Host "A restart is needed: $Why" -ForegroundColor White
     if ($script:GuiMode) { Write-Info 'the setup window offers the restart'; return }
     if ($script:DryRunMode -or $NoReboot) { Write-Info 'restart the computer yourself; the installer continues after you log on again'; return }
-    $go = Read-Confirmation -Question 'Restart now?' -Expect 'Y'
+    # The restart starts by itself after a visible countdown (owner, 2026-10-12): nothing waits for an answer here
+    # either. A key press during the countdown puts the restart off, Enter starts it at once.
+    $go = (Wait-RestartCountdown -Seconds $script:RestartCountdownSeconds) -eq 'now'
     if ($go) {
         $why = Request-PlannedRestart
         if ($why) { Write-Warn2 "Windows did not start the restart ($why): restart the computer yourself; the installer continues after you log on again" }
@@ -497,6 +547,13 @@ function Invoke-Verify {
         Write-Host ('   [info] {0,-20} {1}' -f $Name, $Detail)
         Write-Log ('   verify {0}: info {1}' -f $Name, $Detail)
     }
+    # A probe that cannot answer on a device whose driver did not start (Get-VerifyStartState). It keeps its own name
+    # in the report, with the reason, and it is not a failure of its own: the failed start is already the verdict of
+    # the 'driver bound' and 'driver start' results. Without this a failed start reported several checks that only
+    # restated it, and spent minutes doing so (GitHub #38).
+    function Add-Skipped([string]$Name, [string]$Detail) {
+        Add-Info $Name ('skipped: the driver did not start' + $(if ($Detail) { "; $Detail" } else { '' }))
+    }
     # Every verify run ends with its report (Write-VerifyReport), also when a check throws or the GPU is missing: the
     # control application counts a verification only from a report with a non-empty result list for the installed
     # package, never from the phase label.
@@ -519,6 +576,8 @@ function Invoke-Verify {
     $svc = Get-DeviceServiceName -InstanceId $id
     $pnp = Get-PnpDevice -InstanceId $id
     Add-Result 'driver bound' (($svc -eq $script:ServiceName) -and ($pnp.Status -eq 'OK')) "service $svc, status $($pnp.Status), problem code $($dev[0].ConfigManagerErrorCode)"
+    # Everything below that needs a running driver asks this first.
+    $startState = Get-VerifyStartState -ProblemCode ([int]$dev[0].ConfigManagerErrorCode) -Status ([string]$pnp.Status)
     $drv = Get-CimInstance Win32_PnPSignedDriver -Filter "DeviceID='$($id -replace '\\', '\\')'" -ErrorAction SilentlyContinue
     $want = $null
     if ($script:Manifest) { $want = $script:Manifest.kmd_version }
@@ -535,13 +594,18 @@ function Invoke-Verify {
     # registry state. The task itself runs at the same logon and may still be waiting for its 60 s.
     # Verify starts at the same logon as the start-confirm task, which needs about a minute: wait for this boot's run
     # of the task to end (at most 120 s), so that the confirmation and DPM lines below are final.
+    #
+    # Not on a device that did not start: the task confirms a start, it has nothing to confirm here, and the wait
+    # would spend its whole bound before saying so (GitHub #38: 110 s of a 2 min 43 s verification). Its last result
+    # is read at once instead, and the line below says why nothing was waited for.
     $taskNote = 'start-confirm task: not registered'
     $task = Get-ScheduledTask -TaskName $script:TaskName -ErrorAction SilentlyContinue
     if ($task) {
         $boot = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime
         $waited = [Diagnostics.Stopwatch]::StartNew()
         $announced = $false
-        while ($true) {
+        $noWaitWhy = $(if ($startState.started) { $null } else { $startState.reason })
+        while ($null -eq $noWaitWhy) {
             $ti = Get-ScheduledTaskInfo -TaskName $script:TaskName -ErrorAction SilentlyContinue
             $running = (Get-ScheduledTask -TaskName $script:TaskName -ErrorAction SilentlyContinue).State -eq 'Running'
             $ranThisBoot = $ti -and $ti.LastRunTime -and ($ti.LastRunTime -ge $boot)
@@ -551,9 +615,13 @@ function Invoke-Verify {
             if (-not $announced) { Write-Info 'waiting for the start-confirm task of this logon to finish (at most 120 s)...'; $announced = $true }
             Start-Sleep -Seconds 2
         }
+        if ($null -ne $noWaitWhy) { $ti = Get-ScheduledTaskInfo -TaskName $script:TaskName -ErrorAction SilentlyContinue }
         $code = $ti.LastTaskResult
         $meaning = switch ($code) { 0 { 'confirmed through the KMD start health' } 6 { 'fallback: boot-loop guard reset only, DPM not confirmed' } 1 { 'bound reached unconfirmed' } 5 { 'no start-health reading' } 267009 { 'still running' } default { 'see C:\ProgramData\amdgpu-wddm\start-confirm.log' } }
         $taskNote = "start-confirm task: last run $($ti.LastRunTime), result $code ($meaning), waited $([int]$waited.Elapsed.TotalSeconds) s"
+        if ($null -ne $noWaitWhy) {
+            $taskNote = "$taskNote; the wait was skipped because $noWaitWhy, so this logon's task cannot confirm a start that did not happen"
+        }
     }
     Write-Info $taskNote
     $sc = Join-Path $InstallRoot 'tools\start-confirm.ps1'
@@ -602,7 +670,8 @@ function Invoke-Verify {
     # DWM to the CPU route by itself when the switches are off, so a closed path shows here, not as a black desktop.
     $cli = Join-Path $InstallRoot 'tools\bc250kmd_cli.exe'
     $io = ''
-    if (Test-Path -LiteralPath $cli) { $io = [string](Invoke-Native $cli @('interop')).text }
+    # The driver answers for its own interop state. A device that did not start cannot, so it is not asked.
+    if ((Test-Path -LiteralPath $cli) -and $startState.started) { $io = [string](Invoke-Native $cli @('interop')).text }
     Write-Log $io
     $ioFirst = (($io -split "`n") | Select-Object -First 1)
     $ioOk = ($io -match 'effective blit\+cdd') -and ($io -notmatch 'died in a session')
@@ -629,10 +698,14 @@ function Invoke-Verify {
     }
     if ($io -match 'died in a session') {
         $ioClosed += '; last boot died in a session'
-        if (-not $ioRemedy) { $ioRemedy = '; a repair changes nothing here, because the driver left no record of a closure: open the GPU desktop path in amdgpu-wddm Control' }
+        if (-not $ioRemedy) { $ioRemedy = '; a repair changes nothing here, because the driver left no record of a closure: open the GPU desktop path in Nagi Control App' }
     }
     $ioClosed += $ioRemedy
-    Add-Result 'GPU desktop path' ($ioOk -and $dwmOk) $(if ($io) { "$($ioFirst.Trim())$ioClosed; $dwmNote" } else { "no reading from $cli; $dwmNote" })
+    if (-not $startState.started) {
+        Add-Skipped 'GPU desktop path' "$($startState.reason); the driver cannot be asked for its interop state. $dwmNote"
+    } else {
+        Add-Result 'GPU desktop path' ($ioOk -and $dwmOk) $(if ($io) { "$($ioFirst.Trim())$ioClosed; $dwmNote" } else { "no reading from $cli; $dwmNote" })
+    }
 
     # BD-060: a replacement of the session's DWM that was observed against the start-confirm task's record of this
     # logon (dwm-session.ps1). A warning with its remedy that helps to attribute a failure; unknown history is reported
@@ -647,52 +720,87 @@ function Invoke-Verify {
         default { Add-Info 'DWM restarted in this session' $dwmFinding.detail }
     }
 
-    # D3D12 through the system runtime, as an application sees it.
+    # D3D12 through the system runtime, as an application sees it. Not on a device that did not start: no D3D12
+    # device can be created on an adapter whose driver is not running, so the probe would only restate the start.
     $caps = Join-Path $InstallRoot 'tools\amdgpu_wddm_d3d12caps.exe'
     $vdir = Join-Path $script:StateDir 'verify'
     [void][IO.Directory]::CreateDirectory($vdir)
     $index = $null
-    try {
-        $first = Join-Path $vdir 'd3d12caps-0.json'
-        [void](Invoke-Native $caps @('0', $first))
-        $j = Get-Content -LiteralPath $first -Raw | ConvertFrom-Json
-        foreach ($p in $j.dxgi.adapters.PSObject.Properties) {
-            $d = $p.Value.GetDesc1
-            if ($d.VendorId -eq '0x1002' -and $d.DeviceId -eq '0x13FE') { $index = [int]$p.Name; break }
-        }
-        if ($null -eq $index) { Add-Result 'D3D12 FL 12_1' $false 'no DXGI adapter 1002:13FE' }
-        else {
-            $out = Join-Path $vdir "d3d12caps-$index.json"
-            if ($index -ne 0) { [void](Invoke-Native $caps @([string]$index, $out)) } else { $out = $first }
-            $j = Get-Content -LiteralPath $out -Raw | ConvertFrom-Json
-            $fl = $j.device.features.FEATURE_LEVELS.list_all.MaxSupportedFeatureLevel
-            $created = $j.device.created_at
-            $ok = ($created -and ($fl -eq '12_1' -or $fl -eq '12_2'))
-            Add-Result 'D3D12 FL 12_1' $ok "adapter $index, device created at $created, max feature level $fl"
-        }
-    } catch { Add-Result 'D3D12 FL 12_1' $false $_.Exception.Message }
+    if (-not $startState.started) {
+        Add-Skipped 'D3D12 FL 12_1' "$($startState.reason); no D3D12 device can be created on an adapter without a running driver"
+    } else {
+        try {
+            $first = Join-Path $vdir 'd3d12caps-0.json'
+            [void](Invoke-Native $caps @('0', $first))
+            $j = Get-Content -LiteralPath $first -Raw | ConvertFrom-Json
+            foreach ($p in $j.dxgi.adapters.PSObject.Properties) {
+                $d = $p.Value.GetDesc1
+                if ($d.VendorId -eq '0x1002' -and $d.DeviceId -eq '0x13FE') { $index = [int]$p.Name; break }
+            }
+            if ($null -eq $index) { Add-Result 'D3D12 FL 12_1' $false 'no DXGI adapter 1002:13FE' }
+            else {
+                $out = Join-Path $vdir "d3d12caps-$index.json"
+                if ($index -ne 0) { [void](Invoke-Native $caps @([string]$index, $out)) } else { $out = $first }
+                $j = Get-Content -LiteralPath $out -Raw | ConvertFrom-Json
+                $fl = $j.device.features.FEATURE_LEVELS.list_all.MaxSupportedFeatureLevel
+                $created = $j.device.created_at
+                $ok = ($created -and ($fl -eq '12_1' -or $fl -eq '12_2'))
+                Add-Result 'D3D12 FL 12_1' $ok "adapter $index, device created at $created, max feature level $fl"
+            }
+        } catch { Add-Result 'D3D12 FL 12_1' $false $_.Exception.Message }
+    }
 
     # Vulkan through the system loader, in a child process so that a failing ICD cannot take the installer down.
+    # Not on a device that did not start: the loader can enumerate no physical device of an adapter without a driver.
     $vk = Join-Path $here 'vk-check.ps1'
-    $vkOut = (Invoke-Native powershell.exe @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $vk)).text.Trim()
-    if ($vkOut -match '^SKIP') { Write-Host "   [skip] Vulkan               $vkOut" -ForegroundColor Yellow; Write-Log "   verify Vulkan: $vkOut" }
-    else { Add-Result 'Vulkan' ($vkOut -match '(?m)^device 0x1002:0x13FE') $vkOut }
+    if (-not $startState.started) {
+        Add-Skipped 'Vulkan' "$($startState.reason); the loader enumerates no device of an adapter without a running driver"
+    } else {
+        $vkOut = (Invoke-Native powershell.exe @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $vk)).text.Trim()
+        if ($vkOut -match '^SKIP') { Write-Host "   [skip] Vulkan               $vkOut" -ForegroundColor Yellow; Write-Log "   verify Vulkan: $vkOut" }
+        else { Add-Result 'Vulkan' ($vkOut -match '(?m)^device 0x1002:0x13FE') $vkOut }
+    }
 
-    # The 64-bit registration: the four UserModeDriverName slots (the D3D9 slot empty, so that D3D9 goes through
-    # D3D9On12) and VulkanDriverName. Registration only: the D3D12 and Vulkan checks above create the devices.
+    # The 64-bit registration: the four UserModeDriverName slots (the D3D9 slot holds '<>', so that D3D9 goes
+    # through D3D9On12) and VulkanDriverName. Registration only: the D3D12 and Vulkan checks above create the devices.
     $gpuSwKey = Get-DeviceDriverKey -InstanceId $id
     if (-not $gpuSwKey) { Add-Result 'D3D registration' $false 'no software key for the GPU' }
     else {
         $reg = @(Test-UmdRegistration -InstallRoot $InstallRoot -ClassKey $gpuSwKey)
-        Add-Result 'D3D registration' ($reg.Count -eq 0) $(if ($reg.Count) { $reg -join '; ' } else { 'UserModeDriverName (D3D9 empty: D3D9On12; D3D10/11 router; D3D12), VulkanDriverName' })
+        Add-Result 'D3D registration' ($reg.Count -eq 0) $(if ($reg.Count) { $reg -join '; ' } else { 'UserModeDriverName (D3D9: <> for D3D9On12; D3D10/11 router; D3D12), VulkanDriverName' })
     }
     # 32-bit processes (BD-064): the Wow registration, the router's Wow paths and x86 images in place. Registration
     # only: no 32-bit device is created here.
     if (-not $gpuSwKey) { Add-Result '32-bit D3D/Vulkan' $false 'no software key for the GPU' }
     else {
         $wow = @(Test-WowRegistration -InstallRoot $InstallRoot -ClassKey $gpuSwKey)
-        Add-Result '32-bit D3D/Vulkan' ($wow.Count -eq 0) $(if ($wow.Count) { $wow -join '; ' } else { 'UserModeDriverNameWow (D3D9 empty: D3D9On12; D3D10/11 router; D3D12), VulkanDriverNameWow, WOW6432Node Khronos entry, router Wow paths; x86 images in place' })
+        Add-Result '32-bit D3D/Vulkan' ($wow.Count -eq 0) $(if ($wow.Count) { $wow -join '; ' } else { 'UserModeDriverNameWow (D3D9: <> for D3D9On12; D3D10/11 router; D3D12), VulkanDriverNameWow, WOW6432Node Khronos entry, router Wow paths; x86 images in place' })
     }
+
+    # The OpenGL ICD (BD-076): the values of the GPU's software key and the ICD file of every architecture this
+    # release registers (manifest.json "opengl_icd": "architectures"). Registration and files only. No OpenGL context
+    # is created here: the installer runs in session 0, where there is no desktop to give a window a pixel format, so
+    # a context test belongs to a client of ours on a logged-on desktop (tools/win/gltest). A release that does not
+    # register the ICD says so and checks nothing.
+    # An architecture outside the list gets one information line and no check: a program of that architecture keeps
+    # the renderer Windows gives it, which is the software OpenGL 1.1 of opengl32.dll. That is a statement about this
+    # release, not a fault of the computer, so it is an information line and never a failing check.
+    try {
+        $glSwitch = Get-OpenGlReleaseSwitch -Manifest $script:Manifest -PackageRoot $null
+        if (-not $glSwitch.register) {
+            Add-Info 'OpenGL ICD' 'not registered by this release'
+        } elseif (-not $gpuSwKey) {
+            Add-Result 'OpenGL ICD' $false 'no software key for the GPU'
+        } else {
+            $glProblems = @(Test-OpenGlRegistration -InstallRoot $InstallRoot -ClassKey $gpuSwKey -Switch $glSwitch)
+            $glPlanNames = @((Get-OpenGlRegistrationPlan -Switch $glSwitch -InstallRoot $InstallRoot) | ForEach-Object { $_.name })
+            Add-Result 'OpenGL ICD' ($glProblems.Count -eq 0) $(if ($glProblems.Count) { $glProblems -join '; ' } else {
+                "$($glPlanNames -join ', ') ($($glSwitch.value_type), version $($glSwitch.version), flags $($glSwitch.flags)); the $(@($glSwitch.architectures) -join ' and ') ICD in place with the Drv entry points" })
+            if (-not $glSwitch.register_x86) {
+                Add-Info 'OpenGL ICD (32-bit)' 'this release registers no 32-bit OpenGL driver: 32-bit OpenGL programs keep the OpenGL renderer of Windows itself'
+            }
+        }
+    } catch { Add-Result 'OpenGL ICD' $false $_.Exception.Message }
 
     # The H.264 encoder MFT (M15.11). The result of this check is the only place a support report can read whether the
     # encoder is registered, which DLL the registration names and which bytes that DLL has (BugReport.cs collects
@@ -743,6 +851,7 @@ function Write-VerifyReport($Results) {
             utc = [DateTime]::UtcNow.ToString('o')
             invocation = $script:EngineInvocationId
             boot_id = (Get-BootIdentity).boot_id
+            boot_elapsed_ms = Get-BootElapsedMilliseconds
             dry_run = [bool]$script:DryRunMode
             release = $(if ($mf) { [string]$mf.name } else { $null })
             package_version = $(if ($mf) { [string]$mf.version } else { $null })
@@ -757,7 +866,8 @@ function Write-VerifyReport($Results) {
             results = $list
         }
         $vdir = Join-Path $script:StateDir 'verify'
-        Write-FileAtomic (Join-Path $vdir ('verify-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ') + '.json')) ($report | ConvertTo-Json -Depth 5)
+        # UTC may repeat after time sync. Keep each report instead of overwriting a previous run's evidence.
+        Write-FileAtomic (Join-Path $vdir ('verify-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ') + '-' + [guid]::NewGuid().ToString('N') + '.json')) ($report | ConvertTo-Json -Depth 5)
     } catch { Write-Log "   verify report not written: $($_.Exception.Message)" }
 }
 
@@ -793,9 +903,9 @@ if ($script:VerifyOnly) {
 }
 
 # ---- the decision (GUI plan A2) ------------------------------------------------------------------------------------
-# Everything the user decides on comes from here, before any change: the action, the consents it needs, the restarts,
-# where the firmware comes from, and what happens to each setting (WU-006, WU-044). -Plan stops after it. A run of the
-# setup window that lacks a consent stops here too, with nothing changed.
+# Everything this run will do comes from here, before any change: the action, the restarts, where the firmware comes
+# from, and what happens to each setting (WU-006, WU-044). -Plan stops after it. Nothing here asks the user for a
+# permission (owner, 2026-10-12); the consent list of the decision event stays, empty, for the engine contract.
 function Get-InstallSettingsImpact {
     $tbl = Get-Content -LiteralPath (Join-Path $here 'registry-defaults.json') -Raw | ConvertFrom-Json
     $prev = Get-PreviousAppliedDefaults $tbl ((Get-ItemProperty -LiteralPath "$($script:SoftwareKey)\Release" -Name AppliedDefaults -ErrorAction SilentlyContinue).AppliedDefaults)
@@ -817,16 +927,18 @@ function Get-InstallSettingsImpact {
     }
     return (Get-SettingsImpact $groups)
 }
+# No consent is asked for any more (owner, 2026-10-12): starting this installer IS the consent for the test mode the
+# driver needs and for the BitLocker pause the boot-option change needs. The list stays in the decision event, empty,
+# because it is part of the engine contract (interfaces-setup.md A2) and because a future change that really needs an
+# answer belongs in it; the gate below still stops a window run that did not give one. What this install changes is
+# stated instead: the plan screen says it in words, and the console prints it.
 $consents = @()
 $restarts = 0
 if ($action.action -in @('install', 'upgrade', 'repair', 'resume')) {
     $restarts = 1
     if ($state.phase -in @('new', 'testsigning-pending') -and -not $script:TestSigningActive) { $restarts = 2 }
-    if ($state.phase -eq 'new' -and -not $script:TestSigningActive) {
-        $consents += 'test-signing'
-        if (Test-BitLockerConsentRequired $script:BitLockerState) { $consents += 'bitlocker' }
-    }
 }
+$script:PlannedRestarts = $restarts
 $firmwareSource = $(if (-not $FirmwareDir) { 'download' } elseif (Test-SamePath $FirmwareDir (Join-Path $package 'firmware')) { 'package-folder' } else { 'folder' })
 $notes = @(Get-ChildItem -LiteralPath $package -File -Filter 'RELEASE-NOTES*.md' -ErrorAction SilentlyContinue | ForEach-Object { $_.Name })
 # This package's own compatibility record (compatibility.ps1). Phase 1 only reports it; a rollback admits a package
@@ -838,7 +950,12 @@ if ($action.action -ne 'verify' -and $script:Manifest) {
 Write-EngineEvent 'decision' ([ordered]@{ action = $action.action; message = $action.message; installed_version = $installedVersion; package_version = $packageVersion; phase = [string]$state.phase
     consents = @($consents); consents_given = [ordered]@{ test_signing = [bool]$AcceptTestSigning; bitlocker = $BitLocker }; restarts = $restarts
     firmware_source = $firmwareSource; firmware_dir = $FirmwareDir; notes = @($notes); secure_boot = $script:SecureBoot; bitlocker = $script:BitLockerState
-    compatibility = $compat; system_tuning = [bool]$ApplySystemTuning })
+    compatibility = $compat; system_tuning = [bool]$ApplySystemTuning
+    # The two shortcut answers this run would act on (the command line, or the answer an earlier run of the same
+    # install saved). The setup window opens its two boxes on them, so the run after a restart and a repair run
+    # state the answer the tester gave, not the default (interfaces-setup.md A2).
+    start_menu_shortcut = (-not [bool]$NoStartMenuShortcut); desktop_shortcut = (-not [bool]$NoDesktopShortcut)
+    wallpaper = (-not [bool]$NoWallpaper) })
 Write-SystemTuningPlan -Selected ([bool]$ApplySystemTuning) -Manifest $script:Manifest
 if ($action.action -in @('install', 'upgrade', 'repair', 'resume')) {
     $impact = Get-InstallSettingsImpact
@@ -879,15 +996,22 @@ if ($action.action -in @('install', 'upgrade', 'repair', 'resume')) {
 $script:EngineConsents = @($consents)
 if ($Plan) {
     Write-Host ''
-    Write-Host "Plan: $($action.action)$(if ($consents.Count) { "; consents needed: $($consents -join ', ')" }); restarts: $restarts; firmware: $firmwareSource. Nothing was changed." -ForegroundColor Green
+    Write-Host "Plan: $($action.action); restarts: $restarts; firmware: $firmwareSource. Nothing was changed." -ForegroundColor Green
+    if ($action.action -in @('install', 'upgrade', 'repair', 'resume') -and $state.phase -eq 'new' -and -not $script:TestSigningActive) {
+        # What the install changes about the way Windows starts, as information: the console says the same as the
+        # setup window's plan screen, and neither asks for an answer.
+        Write-Host '      Windows test mode is turned on, and "Test Mode" then shows on the desktop. Uninstall turns it off again.' -ForegroundColor White
+        Write-Host ('      ' + (Get-BitLockerPlan -State $script:BitLockerState -Requested $BitLocker -Restarts $restarts).message) -ForegroundColor White
+    }
     Exit-Engine -Code 0 -Outcome 'planned' -MessageId 'result.planned'
 }
-if ($script:GuiMode) {
-    $missing = @()
-    if ($consents -contains 'test-signing' -and -not $AcceptTestSigning) { $missing += 'test-signing' }
-    if ($consents -contains 'bitlocker' -and -not $BitLocker) { $missing += 'bitlocker' }
+# A consent the window did not give still stops a window run before any change. The list is empty today (nothing is
+# asked for any more), so this gate passes every install; it stays because the engine contract carries the field and
+# because a future change that really needs an answer must not be able to slip past the window.
+if ($script:GuiMode -and $consents.Count) {
+    $missing = @($consents)
     $script:EngineConsents = $missing
-    if ($missing.Count) { Exit-Engine -Code 4 -Outcome 'needs-consent' -MessageId 'result.needs-consent' -Detail "missing: $($missing -join ', ')" }
+    Exit-Engine -Code 4 -Outcome 'needs-consent' -MessageId 'result.needs-consent' -Detail "missing: $($missing -join ', ')"
 }
 # ---- the extras: llama.cpp, Ollama, and the models -------------------------------------------------------------
 # The questions are asked here, before any change, and the answers are saved with the install inputs: the run after a
@@ -1006,38 +1130,26 @@ if ($state.phase -eq 'new') {
         Set-StateValue $state 'testsigning_set_by_installer' $false
         Save-Phase 'testsigning-active'
     } else {
+        # No question here (owner, 2026-10-12): a person who started this installer wants the driver, and the driver
+        # needs the test mode. The two lines say what happens, and it happens. -AcceptTestSigning stays accepted so
+        # that every script that passes it still runs; it changes nothing now.
         Write-Host ''
-        Write-Host '   Windows must run in TEST MODE to load this driver. Test mode lets Windows load drivers that are' -ForegroundColor White
-        Write-Host '   signed with a test certificate, and shows "Test Mode" on the desktop. Uninstall can turn it off.' -ForegroundColor White
-        $ok = Read-Confirmation -Question 'Turn on test signing (bcdedit /set testsigning on)?' -Answer $(if ($AcceptTestSigning) { 'YES' } else { $null })
-        if (-not $ok) {
-            Write-Host 'Stopped: test signing not confirmed. Nothing else was changed.' -ForegroundColor Yellow
-            if (-not $script:DryRunMode) { Save-Phase 'new' }
-            $script:EngineConsents = @('test-signing')
-            Exit-Engine -Code 4 -Outcome 'needs-consent' -MessageId 'result.needs-consent' -Detail 'test signing not confirmed'
-        }
+        Write-Host '   Windows is switched to TEST MODE, so that it can load this driver. Test mode lets Windows load' -ForegroundColor White
+        Write-Host '   drivers signed with a test certificate, and shows "Test Mode" on the desktop. Uninstall turns it off.' -ForegroundColor White
+        Write-Info ('test signing: turning it on' + $(if ($AcceptTestSigning) { ' (-AcceptTestSigning was given; it is not needed any more)' } else { '' }))
         # Recheck before the boot change; preparation may have taken long enough for protection to change.
         $script:BitLockerState = Get-BitLockerState
-        if (Test-BitLockerConsentRequired $script:BitLockerState) {
-            $choice = $BitLocker
-            if (-not $choice) {
-                $question = if ($script:BitLockerState -eq 'on') { 'BitLocker is on. Do you have the recovery key for this drive (Windows may ask for it after the restart)?' } else { 'BitLocker protection could not be confirmed. Do you have the recovery key for this drive if Windows asks for it after the restart?' }
-                if (Read-Confirmation -Question $question -Answer $null) { $choice = 'HaveKey' }
-                elseif (Read-Confirmation -Question 'Suspend BitLocker for the next two restarts instead?' -Answer $null) { $choice = 'Suspend' }
-            }
-            if (-not $choice) {
-                Write-Host 'Stopped: BitLocker not handled. Nothing else was changed.' -ForegroundColor Yellow
-                $script:EngineConsents = @('bitlocker')
-                Exit-Engine -Code 4 -Outcome 'needs-consent' -MessageId 'result.needs-consent' -Detail 'BitLocker not handled'
-            }
-            if ($choice -eq 'Suspend') {
-                Invoke-Change "suspend BitLocker on $($env:SystemDrive) for two restarts" {
-                    Suspend-BitLocker -MountPoint $env:SystemDrive -RebootCount 2 -ErrorAction Stop | Out-Null
-                    if (Test-BitLockerConsentRequired (Get-BitLockerState)) { throw 'BitLocker suspension could not be verified; boot options were not changed.' }
-                } | Out-Null
-            }
-            Set-StateValue $state 'bitlocker' $choice
+        $blPlan = Get-BitLockerPlan -State $script:BitLockerState -Requested $BitLocker -Restarts $(if ($script:PlannedRestarts) { $script:PlannedRestarts } else { 2 })
+        Write-Info $blPlan.message
+        if ($blPlan.action -eq 'suspend') {
+            Invoke-Change "suspend BitLocker on $($env:SystemDrive) for $($blPlan.reboots) restart(s)" {
+                Suspend-BitLocker -MountPoint $env:SystemDrive -RebootCount $blPlan.reboots -ErrorAction Stop | Out-Null
+                # A suspension that did not take hold is the one case that still stops the install: the boot options
+                # are not touched, so Windows cannot ask for a recovery key the person may not have.
+                if (Test-BitLockerConsentRequired (Get-BitLockerState)) { throw 'BitLocker suspension could not be verified; boot options were not changed.' }
+            } | Out-Null
         }
+        if ($blPlan.action -ne 'none') { Set-StateValue $state 'bitlocker' $(if ($blPlan.action -eq 'suspend') { 'Suspend' } elseif ($blPlan.action -eq 'have-key') { 'HaveKey' } else { 'unknown' }) }
         # The continuation of this install runs after the restart from the staged closure. Its after-staging stop point
         # is the last one of phase 1: test signing, the state and RunOnce follow without a stop.
         Initialize-Closure
@@ -1079,6 +1191,44 @@ if (-not $script:DryRunMode -and -not $script:TestSigningActive) {
     Write-Fail 'test signing is not active'
     Exit-Engine -Code 5 -Outcome 'failed' -MessageId 'result.testsigning-not-active' -Detail 'phase 2 needs test signing in the running boot'
 }
+# The Microsoft Visual C++ runtime, before our own files go on the PC: our control application, the CLI and the
+# user-mode drivers need it (owner, 2026-10-12: "powinien byc auto-installer!!!"). Microsoft's own installer travels
+# in the package; it runs only when the runtime is missing or older than 14.44, and only after its SHA-256 and its
+# Microsoft signature are checked here again, so a changed copy never runs. A code that asks for a restart is folded
+# into the restart this installation makes at the end of phase 2.
+$vcNow = Get-VcRuntimeState
+if (-not $vcNow.install) { Write-Info "Microsoft Visual C++ runtime: $($vcNow.detail)" }
+else {
+    $vcExe = Join-Path $package $script:VcRuntimePackagePath
+    $vcFile = Test-VcRuntimeInstaller -Path $vcExe
+    if (-not $vcFile.ok) { throw "the Microsoft Visual C++ runtime has to be installed, and $($vcFile.problem). Nothing of the driver was installed. Download the release again." }
+    Write-Info "Microsoft Visual C++ runtime: $($vcNow.detail)"
+    $vcRun = Invoke-Change "install the Microsoft Visual C++ 2015-2022 Redistributable (x64) $($script:VcRuntimeVersion) from $($script:VcRuntimePackagePath) ($($script:VcRuntimeArguments -join ' '); SHA256 $($vcFile.sha256.Substring(0, 16)) and the Microsoft signature checked)" {
+        Invoke-VcRuntimeInstall -Path $vcExe
+    }
+    if ($null -ne $vcRun) {
+        Write-Log ($vcRun.text)
+        if (-not $vcRun.ok) { throw $vcRun.message }
+        Write-Info $vcRun.message
+        $vcAfter = Get-VcRuntimeState
+        # Code 1638 says a same or newer runtime is registered, so Microsoft's installer installed nothing. When a
+        # file of it is missing from System32 all the same, the registration is there and its files are not: the same
+        # program repairs that, and only a repair that does not help ends the installation.
+        if ($vcAfter.install -and $vcRun.code -eq 1638) {
+            Write-Info "the Microsoft Visual C++ runtime is registered on this PC and $($vcAfter.detail): the installer repairs it"
+            $vcRepair = Invoke-Change "repair the Microsoft Visual C++ 2015-2022 Redistributable (x64) from $($script:VcRuntimePackagePath) ($($script:VcRuntimeRepairArguments -join ' '))" {
+                Invoke-VcRuntimeInstall -Path $vcExe -Arguments $script:VcRuntimeRepairArguments
+            }
+            if ($null -ne $vcRepair) {
+                Write-Log ($vcRepair.text)
+                if (-not $vcRepair.ok) { throw $vcRepair.message }
+                $vcAfter = Get-VcRuntimeState
+            }
+        }
+        if ($vcAfter.install -and -not $vcRun.restart) { throw "Microsoft's installer reported success (code $($vcRun.code)), but the runtime is still not in place: $($vcAfter.detail). Repair the Microsoft Visual C++ 2015-2022 Redistributable (x64) in Windows Settings, Apps, Installed apps (or install it again from Microsoft), then run this installer again." }
+        Write-Info "Microsoft Visual C++ runtime after the step: $($vcAfter.detail)"
+    }
+}
 Enter-Stage 'firmware' 'GPU firmware'
 # Every step below can run again over its own result: files are compared by SHA256 and a file in use is replaced
 # by rename, registry values and the task are overwritten, pnputil accepts a package that is already there.
@@ -1109,14 +1259,22 @@ Enter-Stage 'files' 'Files'
 $cer = Join-Path $package 'payload\cert\amdgpu-wddm-release.cer'
 $cert = New-Object Security.Cryptography.X509Certificates.X509Certificate2 -ArgumentList $cer
 Set-StateValue $state 'cert_thumbprint' $cert.Thumbprint
+# Root is required: without it the test signature is not trusted at all. TrustedPublisher only spares the user the
+# Windows prompt that asks whether to trust the publisher when the driver package is installed, so a refusal there,
+# after Root holds the certificate, is a warning and the install goes on (BD-125).
 Invoke-Change "add the release test certificate $($cert.Thumbprint) to LocalMachine Root and TrustedPublisher" {
     $stores = @('Root', 'TrustedPublisher')
     for ($i = 0; $i -lt $stores.Count; $i++) {
-        try { Import-Certificate -FilePath $cer -CertStoreLocation "Cert:\LocalMachine\$($stores[$i])" -ErrorAction Stop | Out-Null }
-        catch {
-            throw (New-CertificateStoreError -Store $stores[$i] -Certificate $cer -Exception $_.Exception `
-                -Done @($stores | Select-Object -First $i) -Remaining @($stores | Select-Object -Skip ($i + 1)))
+        $added = Add-CertificateToStore -Store $stores[$i] -Certificate $cer -Thumbprint $cert.Thumbprint
+        if ($added.ok) { if ($added.via -ne 'Import-Certificate') { Write-Info $added.detail }; continue }
+        $err = New-CertificateStoreError -Store $stores[$i] -Certificate $cer -Exception $added.exception `
+            -Done @($stores | Select-Object -First $i) -Remaining @($stores | Select-Object -Skip ($i + 1)) -Tried $added.detail
+        if ($stores[$i] -eq 'TrustedPublisher') {
+            Write-Warn2 "$($added.detail). The install goes on: LocalMachine\Root holds the certificate. Windows may ask once whether to trust the publisher of this driver when it is installed; answer Install."
+            Write-Log "   $($err.Message)"
+            continue
         }
+        throw $err
     }
 } | Out-Null
 
@@ -1135,6 +1293,23 @@ if ($mft.register) {
     if (-not $mft.present) { throw "manifest.json registers the H.264 encoder MFT, but this package has no $($mft.package_path)" }
     $dirs += $mft.payload_dir
 }
+# The OpenGL ICD (BD-076, GitHub issue #8): the release decides whether it is registered at all and for which
+# architectures (manifest.json "opengl_icd" with its "architectures" list), and the decision is taken here, before
+# the first change of this stage, so that the files of this stage and the registry values of the settings stage below
+# follow one answer. A release that registers an architecture has to carry that architecture's file: a registration
+# naming a file that is not there leaves an OpenGL program of that architecture with no driver at all, instead of the
+# software renderer Windows gives it without a registration. The x86 ICD rides in the wow64 tree, which goes in
+# anyway, so only the 64-bit directory ever joins the list of payload directories.
+# This release lists x64 alone (common.ps1 holds the lab measurement behind that): the 32-bit ICD loads but has no
+# 32-bit Vulkan loader to run zink on, so a 32-bit program is better off with the renderer of Windows itself.
+$gl = Get-OpenGlReleaseSwitch -Manifest $script:Manifest -PackageRoot $package
+$glDir = Split-Path (Join-Path $InstallRoot $gl.install_path)         # <install root>\opengl, the x64 ICD
+$glDirWow = Split-Path (Join-Path $InstallRoot $gl.install_path_wow)  # <install root>\wow64\opengl, the x86 ICD
+if ($gl.register) {
+    $glMissing = @(@(Get-OpenGlArchFiles -Switch $gl) | Where-Object { -not $_.present } | ForEach-Object { $_.package_path })
+    if ($glMissing.Count) { throw "manifest.json registers the OpenGL ICD for $(@($gl.architectures) -join ' and '), but this package has no $($glMissing -join ' and ')" }
+    if ($gl.register_x64) { $dirs += $gl.payload_dir }
+}
 # BD-089: what the release installed here installed and this one does not, before the new payload goes in. The rows
 # come from the plan that this run printed before any change (above); each removal names the file and the release that
 # installed it. The SHA256 is read again here, so a file that somebody changed between the plan and this step stays.
@@ -1147,6 +1322,13 @@ foreach ($row in @($script:OrphanRows | Where-Object { $_.state -eq 'remove' }))
         Remove-PathOrSchedule $row.path
     } | Out-Null
 }
+# BD-146: the old uninstall can still have deletes queued for files about to become current again. Cancel only
+# those exact destinations before Copy-FileSafe can keep a same-hash file. No unrelated rename/delete is changed.
+Invoke-Change 'keep the files of this installation from being removed at the next restart' {
+    $destinations = @(Get-InstallCopyDestinations -Package $package -InstallRoot $InstallRoot -PayloadDirs $dirs -FirmwareFiles @($fwStaged))
+    $repaired = Repair-PendingFileRemovals -Destinations $destinations
+    if ($repaired) { Write-EngineEvent 'pending-removals-cancelled' ([ordered]@{ count = $repaired }) }
+} | Out-Null
 foreach ($d in $dirs) {
     $src = Join-Path $package "payload\$d"
     Invoke-Change "copy payload\$d -> $InstallRoot\$d (same SHA256: kept; in use: replaced by rename)" {
@@ -1196,7 +1378,7 @@ $bc250Dir = Split-Path -Parent $script:FirmwareInstallDir
 [void](Set-StateValueOnce $state 'bc250_dir_existed' (Test-Path -LiteralPath $bc250Dir))
 $fwExisted = Set-StateValueOnce $state 'firmware_dir_existed' (Test-Path -LiteralPath $script:FirmwareInstallDir)
 if (-not $script:DryRunMode) { Save-InstallState $state }
-# D3D9 goes through D3D9On12 (the empty D3D9 slot, below): no stub is installed. The releases up to
+# D3D9 goes through D3D9On12 (the D3D9 slot holds '<>', below): no stub is installed. The releases up to
 # 0.7.213.102-tester.17 installed bc250umd.dll in System32 and SysWOW64; it goes here, as uninstall.ps1 takes it.
 foreach ($s in @(Get-LegacyStubPaths)) {
     if ($state.($s.flag)) { Write-Info "$($s.path) was there before the first install of ours: kept (no slot names it)"; continue }
@@ -1389,7 +1571,7 @@ foreach ($audio in @($audioPlan | Where-Object { $_.write })) {
     }
 }
 
-# Graphics registration in the GPU's software key: the D3D9 slot empty (D3D9On12 on our D3D12 driver), the D3D10/11
+# Graphics registration in the GPU's software key: the D3D9 slot '<>' (D3D9On12 on our D3D12 driver), the D3D10/11
 # slots, the D3D12 slot, Vulkan.
 $umd = Get-UmdNames $InstallRoot
 $icdJson = Join-Path $InstallRoot 'vulkan\radeon_icd.json'
@@ -1402,7 +1584,7 @@ Invoke-Change "$($script:KhronosKey) '$icdJson' = 0 (system Vulkan ICD)" {
     New-ItemProperty -LiteralPath $script:KhronosKey -Name $icdJson -Value 0 -PropertyType DWord -Force | Out-Null
 } | Out-Null
 Set-StateValue $state 'khronos_value' $icdJson
-# The same for 32-bit processes (BD-064): the empty D3D9 slot (D3D9On12 on the x86 D3D12 shell), the D3D10/11 slots,
+# The same for 32-bit processes (BD-064): the D3D9On12 slot (on the x86 D3D12 shell), the D3D10/11 slots,
 # the x86 D3D12 slot, the x86 Vulkan ICD.
 $umdWow = Get-WowUmdNames $InstallRoot
 $icdJsonWow = Join-Path $InstallRoot 'wow64\vulkan\radeon_icd.json'
@@ -1415,6 +1597,97 @@ Invoke-Change "$($script:KhronosKeyWow) '$icdJsonWow' = 0 (32-bit system Vulkan 
     New-ItemProperty -LiteralPath $script:KhronosKeyWow -Name $icdJsonWow -Value 0 -PropertyType DWord -Force | Out-Null
 } | Out-Null
 Set-StateValue $state 'khronos_wow_value' $icdJsonWow
+
+# The OpenGL ICD (BD-076, GitHub issue #8): three values of the same key per registered architecture, so that every
+# OpenGL application of that architecture runs on the GPU without a DLL beside its executable. Windows' opengl32.dll
+# reads them through D3DKMTQueryAdapterInfo(KMTQAITYPE_UMOPENGLINFO); common.ps1 holds the contract and the sources of
+# it. The registration is written here, with the Direct3D and Vulkan ones, because the ICD files live under the
+# install root and an INF can only name the driver store.
+# The values from before the first install of ours go into the state first, so the uninstaller can put them back; a
+# re-run must not record the values this installer itself wrote, hence Set-StateValueOnce. The record covers all six
+# value names whatever this release registers, so an architecture that leaves the list can be put back as it was. The
+# values this release writes go into the state too: the uninstaller only takes away a value that is still the one from
+# here, the rule TdrDelay and the HD Audio interrupt follow.
+if ($gl.register) {
+    $glPlan = Get-OpenGlRegistrationPlan -Switch $gl -InstallRoot $InstallRoot
+    # What the release installed here wrote, read before this run's record replaces it: the step below works on the
+    # values of the architectures this release does not register, and that record is the only exact answer to
+    # whether they are ours. Read after the replacement it would hold this run's values alone, and those values
+    # would have to be judged by the install root they name, which is a weaker test.
+    $glWroteBefore = @()
+    if ($state.PSObject.Properties['opengl_icd'] -and $state.opengl_icd) { $glWroteBefore = @($state.opengl_icd) }
+    # -InstallRoot keeps a registration of ours out of that record: a value naming the install root was written by a
+    # release of this family, so it is not a value from before the install, and the uninstaller and the step below
+    # have to remove it instead of putting it back. Without this a computer whose state file is gone would get its
+    # own earlier Wow registration "restored" and the file it names deleted in the same run (BD-076 review).
+    [void](Set-StateValueOnce $state 'opengl_icd_previous' (Get-OpenGlValueRecord -ClassKey $classKey -InstallRoot $InstallRoot))
+    Save-InstallState $state
+    Invoke-Change ("$classKey " + (Format-OpenGlRegistrationPlan $glPlan) + " ($($gl.value_type), $(@($gl.architectures) -join ' and '))") {
+        Write-OpenGlRegistration -ClassKey $classKey -Plan $glPlan
+    } | Out-Null
+    Set-StateValue $state 'opengl_icd' @($glPlan | ForEach-Object { [pscustomobject]@{ name = $_.name; value = $_.value } })
+    # The architectures this release does not register. An install over a release of ours that did register one of
+    # them has to take those values and that file away again, in that order, or an OpenGL program of that
+    # architecture would be sent to a DLL this package does not carry and get no driver at all, instead of the
+    # software renderer Windows gives it without a registration. A value that is not ours stays (Get-OpenGlRestorePlan
+    # decides that, from the installer's own record and the install root the name value carries), and on a computer
+    # that never had such a release this step prints one line and changes nothing.
+    $glOff = @(Get-OpenGlUnregisteredValueNames -Switch $gl)
+    if ($glOff.Count) {
+        $glNowOff = Read-RegistryValues $classKey
+        $glOffPlan = @(Get-OpenGlRestorePlan -Previous $(if ($state.PSObject.Properties['opengl_icd_previous']) { $state.opengl_icd_previous } else { @() }) `
+            -Wrote $glWroteBefore -Current $glNowOff -InstallRoot $InstallRoot -Names $glOff)
+        $glOffAct = @($glOffPlan | Where-Object { $_.action -eq 'restore' -or $_.action -eq 'remove' })
+        if ($glOffAct.Count) {
+            Invoke-Change ("$classKey OpenGL ICD values of an architecture this release does not register ($(@($script:OpenGlArchitecturesKnown | Where-Object { @($gl.architectures) -notcontains $_ }) -join ', ')): " + (Format-OpenGlRestorePlan $glOffPlan)) {
+                Write-OpenGlRestore -ClassKey $classKey -Plan $glOffPlan
+            } | Out-Null
+        } else {
+            Write-Info ("OpenGL ICD: this release registers $(@($gl.architectures) -join ' and ') only; nothing of ours for " +
+                "$(@($script:OpenGlArchitecturesKnown | Where-Object { @($gl.architectures) -notcontains $_ }) -join ', ') in the GPU key")
+        }
+        if ((-not $gl.register_x86) -and (Test-Path -LiteralPath $glDirWow)) {
+            Invoke-Change "remove $glDirWow (the 32-bit OpenGL ICD of an earlier install; this release registers $(@($gl.architectures) -join ' and ') only)" {
+                Remove-PathOrSchedule $glDirWow
+            } | Out-Null
+        }
+        if ((-not $gl.register_x64) -and (Test-Path -LiteralPath $glDir)) {
+            Invoke-Change "remove $glDir (the 64-bit OpenGL ICD of an earlier install; this release registers $(@($gl.architectures) -join ' and ') only)" {
+                Remove-PathOrSchedule $glDir
+            } | Out-Null
+        }
+    }
+} else {
+    # A release that does not register the ICD takes the registration and the files of an earlier install away again,
+    # and in that order: a value that names a DLL which is gone would leave every OpenGL application without an ICD
+    # and without the software renderer that no registration at all gives it. The rollback is in this stage and not
+    # in the files stage above, because the key it writes is the GPU's own software key, which exists only after the
+    # driver package of this run.
+    $glNow = Read-RegistryValues $classKey
+    $glPresent = @($script:OpenGlValueNames | Where-Object { $glNow.ContainsKey($_) })
+    $glRollback = Get-OpenGlAction -Switch $gl -PresentValues $glPresent -DirPresent ((Test-Path -LiteralPath $glDir) -or (Test-Path -LiteralPath $glDirWow))
+    if ($glRollback -eq 'rollback') {
+        # The same opening as the 'none' case below, so that one line of a run always says what this release does
+        # about the ICD, whatever it finds on the computer.
+        Write-Info ("OpenGL ICD: not registered by this release; the registration and the files of an earlier " +
+            "install go ($(if ($glPresent.Count) { $glPresent -join ', ' } else { 'no value of ours in the GPU key' }))")
+        if ($glPresent.Count) {
+            $glRestore = @(Get-OpenGlRestorePlan -Previous $(if ($state.PSObject.Properties['opengl_icd_previous']) { $state.opengl_icd_previous } else { @() }) `
+                -Wrote $(if ($state.PSObject.Properties['opengl_icd']) { $state.opengl_icd } else { @() }) -Current $glNow -InstallRoot $InstallRoot)
+            Invoke-Change ("$classKey OpenGL ICD registration of an earlier install (this release does not register it): " + (Format-OpenGlRestorePlan $glRestore)) {
+                Write-OpenGlRestore -ClassKey $classKey -Plan $glRestore
+            } | Out-Null
+        }
+        foreach ($d in @($glDir, $glDirWow)) {
+            if (Test-Path -LiteralPath $d) {
+                Invoke-Change "remove $d (the OpenGL ICD of an earlier install; this release does not register it)" {
+                    Remove-PathOrSchedule $d
+                } | Out-Null
+            }
+        }
+    } else { Write-Info 'OpenGL ICD: not registered by this release, and nothing of an earlier install on this computer' }
+    Set-StateValue $state 'opengl_icd' $null
+}
 
 # The H.264 encoder MFT (M15.11): route A of driver/umd/mft-h264/INSTALL.md, machine wide under
 # HKLM\SOFTWARE\Classes, which is what HKCR gives every process. A client that wants the encoder of one adapter asks
@@ -1523,35 +1796,69 @@ Invoke-Change "$($script:SoftwareKey)\Release: RepairSetup = $repairSetup (when 
     else { Remove-ItemProperty -LiteralPath $k -Name RepairSetup -ErrorAction SilentlyContinue }
 } | Out-Null
 
-# The start-confirm task: after every logon it confirms the boot's driver start, so the boot-loop guard does not
-# fall back to Basic Display at the third start (see INSTALL.md, "The small blue window after logon").
+# The logon tasks: after every logon the confirmation confirms the boot's driver start, so the boot-loop guard does
+# not fall back to Basic Display at the third start (see INSTALL.md, "The small blue window after logon"). BD-080:
+# two tasks, because the confirmation needs an administrator's token and the window needs the user's session. The
+# plan and the reasons are in common.ps1 (Get-LogonTaskPlan). The installer decides nothing here: it holds the plan
+# against the plan's own rules (Test-LogonTaskPlan) and then registers exactly what the plan says.
 $sc = Join-Path $InstallRoot 'tools\start-confirm.ps1'
-Invoke-Change "scheduled task '$($script:TaskName)': at logon of an administrator, runs $sc (at most 2 minutes)" {
-    $old = Get-ScheduledTask -TaskName $script:TaskName -ErrorAction SilentlyContinue
-    if ($old) { Unregister-ScheduledTask -TaskName $script:TaskName -Confirm:$false }
-    $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$sc`""
-    $trigger = New-ScheduledTaskTrigger -AtLogOn
-    $principal = New-ScheduledTaskPrincipal -GroupId 'S-1-5-32-544' -RunLevel Highest
-    $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 3) -MultipleInstances IgnoreNew -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
-    Register-ScheduledTask -TaskName $script:TaskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings | Out-Null
-} | Out-Null
+$sw = Join-Path $InstallRoot 'tools\start-window.ps1'
+$logonPlan = @(Get-LogonTaskPlan -ConfirmScript $sc -WindowScript $sw)
+# The rules of the plan run here, over the plan this install registers, and not only in the host test: a plan that
+# breaks them (the Administrators principal of the defect, a trigger bound to one account, a confirmation without
+# an administrator token) stops the install instead of leaving behind a task that never runs at a standard user's
+# logon. A dry run reaches this line as well, because nothing of it changes the computer.
+$logonPlanProblems = @(Test-LogonTaskPlan $logonPlan)
+if ($logonPlanProblems.Count) { throw "the logon task plan of common.ps1 (Get-LogonTaskPlan) breaks its own rules: $($logonPlanProblems -join '; ')" }
+foreach ($logonTask in $logonPlan) {
+    # The trigger comes from the plan too, so "at the logon of any user" - the half of BD-080 that the principal
+    # does not cover - cannot differ between the plan and what is registered. New-ScheduledTaskTrigger -AtLogOn
+    # without -User is that trigger; any other plan is refused here rather than silently registered as this one.
+    if ([string]$logonTask.trigger.kind -ne 'at-logon') { throw "scheduled task '$($logonTask.name)': the plan asks for the trigger kind '$($logonTask.trigger.kind)', and the installer registers only 'at-logon'" }
+    if ($logonTask.trigger.user) { throw "scheduled task '$($logonTask.name)': the plan binds the trigger to the logon of '$($logonTask.trigger.user)'; every logon has to run it (BD-080)" }
+    Invoke-Change "scheduled task '$($logonTask.name)': $($logonTask.what) (at most $($logonTask.minutes) minutes)" {
+        $old = Get-ScheduledTask -TaskName $logonTask.name -ErrorAction SilentlyContinue
+        if ($old) { Unregister-ScheduledTask -TaskName $logonTask.name -Confirm:$false }
+        $action = New-ScheduledTaskAction -Execute $logonTask.execute -Argument $logonTask.arguments
+        $trigger = New-ScheduledTaskTrigger -AtLogOn
+        if ($logonTask.principal.kind -eq 'user') { $principal = New-ScheduledTaskPrincipal -UserId $logonTask.principal.id -LogonType $logonTask.principal.logon_type -RunLevel $logonTask.principal.run_level }
+        else { $principal = New-ScheduledTaskPrincipal -GroupId $logonTask.principal.id -RunLevel $logonTask.principal.run_level }
+        $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes $logonTask.minutes) -MultipleInstances IgnoreNew -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+        Register-ScheduledTask -TaskName $logonTask.name -Action $action -Trigger $trigger -Principal $principal -Settings $settings | Out-Null
+    } | Out-Null
+}
 
-# The control application: a Start menu entry, nothing resident.
+# The control application: a Start menu entry and a desktop icon, both on unless a switch leaves one out (owner,
+# 2026-10-12: "domyslnie i menu start i pulpit"). The recovery entry (docs/gui/interfaces.md section 4; it never
+# loads bc250control.dll) belongs to the Start menu alone. Nothing resident is installed either way.
 $controlExe = $null
 if ($script:Manifest -and $script:Manifest.control_app_exe) { $controlExe = Join-Path $InstallRoot ('control\' + $script:Manifest.control_app_exe) }
 if ($controlExe -and $dirs -contains 'control') {
-    $lnk = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\amdgpu-wddm Control.lnk'
-    Invoke-Change "Start menu shortcut $lnk -> $controlExe" {
-        $sh = New-Object -ComObject WScript.Shell
-        $s = $sh.CreateShortcut($lnk); $s.TargetPath = $controlExe; $s.WorkingDirectory = (Split-Path $controlExe); $s.Save()
-    } | Out-Null
-    Set-StateValue $state 'shortcut' $lnk
-    # The recovery view (docs/gui/interfaces.md section 4): it never loads bc250control.dll.
-    $rlnk = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\amdgpu-wddm Control (recovery).lnk'
-    Invoke-Change "Start menu shortcut $rlnk -> $controlExe --recovery" {
-        $sh = New-Object -ComObject WScript.Shell
-        $s = $sh.CreateShortcut($rlnk); $s.TargetPath = $controlExe; $s.Arguments = '--recovery'; $s.WorkingDirectory = (Split-Path $controlExe); $s.Save()
-    } | Out-Null
+    $shortcutPlan = @(Get-ControlShortcutPlan -NoStartMenu ([bool]$NoStartMenuShortcut) -NoDesktop ([bool]$NoDesktopShortcut))
+    $shortcutLeft = @(@(Get-ControlShortcutPaths) | Where-Object { $p = $_.path; -not [bool]$_.legacy -and -not (@($shortcutPlan | ForEach-Object { $_.path }) -contains $p) })
+    Write-Info ("shortcuts: $(if ($shortcutPlan.Count) { @($shortcutPlan | ForEach-Object { $_.label }) -join ', ' } else { 'none' })" +
+        $(if ($shortcutLeft.Count) { "; left out: $(@($shortcutLeft | ForEach-Object { $_.label }) -join ', ')" } else { '' }))
+    foreach ($sc in $shortcutPlan) {
+        $link = $sc.path
+        $arguments = [string]$sc.arguments
+        Invoke-Change "$($sc.where) shortcut $link -> $controlExe$(if ($arguments) { " $arguments" } else { '' })" {
+            [void](New-ControlShortcut -Link $link -Target $controlExe -Arguments $arguments)
+        } | Out-Null
+    }
+    # A shortcut the tester asked to leave out goes when an earlier install wrote it.
+    foreach ($sc in $shortcutLeft) {
+        if (-not (Test-Path -LiteralPath $sc.path -PathType Leaf)) { continue }
+        Invoke-Change "remove the $($sc.label) $($sc.path): this install was asked for no $($sc.where) shortcut" {
+            Remove-Item -LiteralPath $sc.path -Force -ErrorAction SilentlyContinue
+        } | Out-Null
+    }
+    # The names an older release wrote ("amdgpu-wddm Control", common.ps1 Get-ControlShortcutPaths): removed when they
+    # point at our control application, whatever the two switches say, because this install replaces them.
+    Remove-LegacyControlShortcuts -OwnTargets @(Get-OwnControlTargets -InstallRoots @($InstallRoot) -ExeName ([string]$script:Manifest.control_app_exe))
+    Set-StateValue $state 'shortcut' $(if ($shortcutPlan.Count) { @($shortcutPlan | ForEach-Object { $_.path })[0] } else { $null })
+    Set-StateValue $state 'shortcuts' @($shortcutPlan | ForEach-Object { $_.path })
+    # The Nagi wallpaper: the choice and its stamp for the application, which sets the picture (common.ps1).
+    Set-WallpaperRecord -Selected (-not [bool]$NoWallpaper) -Version ([string]$script:Manifest.version)
 } else { Write-Info 'control application: not in this package (or -NoControlApp); skipped' }
 
 # ---- the extras ------------------------------------------------------------------------------------------------

@@ -1,9 +1,9 @@
 using System.Reflection;
 using System.Runtime.Versioning;
 
-[assembly: AssemblyTitle("amdgpu-wddm Setup")]
-[assembly: AssemblyProduct("amdgpu-wddm")]
-[assembly: AssemblyDescription("Setup window for the amdgpu-wddm driver on the ASRock BC-250")]
+[assembly: AssemblyTitle("Nagi Setup")]
+[assembly: AssemblyProduct("Nagi")]
+[assembly: AssemblyDescription("Setup window of Nagi (amdgpu-wddm), the graphics driver for the ASRock BC-250")]
 [assembly: AssemblyVersion("0.1.0.0")]
 [assembly: AssemblyFileVersion("0.1.0.0")]
 // csc does not add this attribute by itself (see the control app's AssemblyInfo.cs); build.ps1 checks the image for it.

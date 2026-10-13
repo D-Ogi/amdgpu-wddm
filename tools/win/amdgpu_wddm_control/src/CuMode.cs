@@ -33,21 +33,25 @@ namespace AmdgpuWddmControl
         public bool Pending, Confirmed;
     }
 
-    // The four values the setter and the prediction look at. Null: absent. Unreadable: a value that exists but could
+    // The values the setter and the prediction look at. Null: absent. Unreadable: a value that exists but could
     // not be read as a REG_DWORD (or the key could not be read): nothing is predicted from it. NotDurable: a setter run
     // of this boot could not flush or verify its writes (cu-unflushed.json, plan 497 decision 1): the values read now
     // may not be what the next start reads, so the next start is not predicted until a restart or a completed run.
+    // Closed is CuModeClosedReason, the record the driver writes next to a CuMode = 24 of its own fallback
+    // (driver/kmd/cumode.c PersistFallback, BD-077): with it, a stored 24 is the driver's act, not a choice of the
+    // user, and the page says so instead of calling it "Your choice".
     public sealed class CuStored
     {
-        public uint? Mode, Disable, Confirmed, Pending;
+        public uint? Mode, Disable, Confirmed, Pending, Closed;
         public bool Unreadable, NotDurable;
 
-        public CuStored Copy() { return new CuStored { Mode = Mode, Disable = Disable, Confirmed = Confirmed, Pending = Pending, Unreadable = Unreadable, NotDurable = NotDurable }; }
+        public CuStored Copy() { return new CuStored { Mode = Mode, Disable = Disable, Confirmed = Confirmed, Pending = Pending, Closed = Closed, Unreadable = Unreadable, NotDurable = NotDurable }; }
 
         public override string ToString()
         {
             Func<uint?, string> v = x => x == null ? "absent" : x.Value.ToString(CultureInfo.InvariantCulture) + " (0x" + x.Value.ToString("X", CultureInfo.InvariantCulture) + ")";
-            return Unreadable ? "unreadable" : "CuMode " + v(Mode) + ", CuDisableWgp " + v(Disable) + ", CuModeConfirmed " + v(Confirmed) + ", CuModePending " + v(Pending);
+            return Unreadable ? "unreadable" : "CuMode " + v(Mode) + ", CuDisableWgp " + v(Disable) + ", CuModeConfirmed " + v(Confirmed) + ", CuModePending " + v(Pending)
+                + ", CuModeClosedReason " + v(Closed);
         }
     }
 
@@ -59,6 +63,7 @@ namespace AmdgpuWddmControl
         public CuChoice Stored;
         public string Choice, Running, NextStart, Note;
         public bool OfferConfirm, OfferTry40, OfferChoose24, OfferReport;
+        public bool DriverChose24;          // a stored 24 with the driver's own record next to it (CuModeClosedReason)
         public uint ChoiceMode;             // 24, 40, or 0 when the stored value is not valid or unreadable
     }
 
@@ -76,7 +81,7 @@ namespace AmdgpuWddmControl
 
     public sealed class CuStep
     {
-        public string Kind;      // remove-confirmed, remove-disable, write-40, remove-mode, verify-stock, flush-readback
+        public string Kind;      // remove-confirmed, remove-disable, write-40, write-24, remove-closed, verify-stock, flush-readback
         public string Name;      // the registry value, null for verify/flush
         public uint Value;
         public bool Changes { get { return Kind != "verify-stock" && Kind != "flush-readback"; } }
@@ -87,10 +92,11 @@ namespace AmdgpuWddmControl
             switch (Kind)
             {
                 case "write-40": return "S1 set " + where + "CuMode = 40 (DWord)";
-                case "remove-mode": return "S1 delete " + where + "CuMode";
+                case "write-24": return "S1 set " + where + "CuMode = 24 (DWord)";
+                case "remove-closed": return "S1b delete " + where + "CuModeClosedReason";
                 case "remove-confirmed": return "S2 delete " + where + "CuModeConfirmed";
                 case "remove-disable": return "S3 delete " + where + "CuDisableWgp";
-                case "verify-stock": return "S1 flush the key, read back CuMode and verify the stock selection (absent or 24)";
+                case "verify-stock": return "S1 flush the key, read back CuMode and verify the stock selection (24)";
                 default: return "S4 flush the key, read back CuMode, CuModeConfirmed and CuDisableWgp";
             }
         }
@@ -128,7 +134,7 @@ namespace AmdgpuWddmControl
             ReasonNotThisDevice = 5, ReasonPowerGating = 6, ReasonStockUnexpected = 7, ReasonReadback = 8, ReasonRestoreFailed = 9, ReasonNotRun = 10,
             ReasonTopology = 11;
 
-        public static readonly string[] ValueNames = { "CuMode", "CuDisableWgp", "CuModeConfirmed", "CuModePending" };
+        public static readonly string[] ValueNames = { "CuMode", "CuDisableWgp", "CuModeConfirmed", "CuModePending", "CuModeClosedReason" };
 
         // The reason, for the support report only.
         public static string ReasonName(uint reason)
@@ -222,6 +228,14 @@ namespace AmdgpuWddmControl
             return v.Mode == Full ? CuChoice.All40 : CuChoice.Invalid;
         }
 
+        // A stored 24 that the driver wrote itself, with its record still next to it (BD-077). The record is the
+        // driver's alone, so the page must not call that 24 a choice of the user. Reason 0 is no closure, the same
+        // rule the release installer's Get-DriverClosure uses.
+        public static bool DriverChose24(CuStored v)
+        {
+            return v != null && !v.Unreadable && v.Mode == Stock && (v.Closed ?? 0) != 0;
+        }
+
         public static uint ChoiceOf(CuStored v)
         {
             var c = Choice(v);
@@ -243,13 +257,23 @@ namespace AmdgpuWddmControl
         // failed): the Waiting sentence stays and the failure is said next to it.
         public static CuView View(CuModeState snapshot, ulong? startGeneration, CuStored stored, bool confirmFailed = false)
         {
-            var v = new CuView { Class = Classify(snapshot, startGeneration), Next = Predict(stored), Stored = Choice(stored), ChoiceMode = ChoiceOf(stored) };
+            var v = new CuView { Class = Classify(snapshot, startGeneration), Next = Predict(stored), Stored = Choice(stored), ChoiceMode = ChoiceOf(stored),
+                DriverChose24 = DriverChose24(stored) };
             int cores = snapshot != null ? (int)snapshot.ActiveCus : 0;
             uint applied = v.Class == CuClass.Unknown ? 0 : snapshot.Applied;
 
-            // Your choice.
-            v.Choice = ChoiceText(v.Stored);
-            if (v.ChoiceMode != 0 && applied != 0 && applied != v.ChoiceMode) v.Choice += " " + Strings.T("cu.choice.after-restart");
+            // Your choice, or the driver's own 24: a stored 24 with the driver's record next to it is not a choice of
+            // the user (BD-077). The note names the two ways back, the same two the release installer names.
+            if (v.DriverChose24)
+            {
+                v.Choice = Strings.T("cu.choice.driver-24");
+                v.Note = Strings.T("cu.note.driver-24");
+            }
+            else
+            {
+                v.Choice = ChoiceText(v.Stored);
+                if (v.ChoiceMode != 0 && applied != 0 && applied != v.ChoiceMode) v.Choice += " " + Strings.T("cu.choice.after-restart");
+            }
 
             // This start.
             switch (v.Class)
@@ -317,11 +341,17 @@ namespace AmdgpuWddmControl
             }
             else
             {
-                bool stockNow = before.Mode == null || before.Mode == Stock;
-                if (stockNow && before.Confirmed == null && before.Disable == null) { p.Refusal = Strings.T("cu.refuse.already24"); return p; }
-                // S1 (a KMD-stored 24 is left as it is), flush, verify the stock selection; only then S2, S3, S4.
-                if (!stockNow) p.Steps.Add(step("remove-mode", "CuMode", 0));
+                // A stored 24 is the only state that needs no write: an absent CuMode is "never configured" to the
+                // release installer, which then writes the release default 40 over it, so the stock choice has to be
+                // written out (BD-077, review 2 finding 1). The driver reads 24 and an absent value alike.
+                bool stored24 = before.Mode == Stock;
+                if (stored24 && before.Confirmed == null && before.Disable == null && before.Closed == null) { p.Refusal = Strings.T("cu.refuse.already24"); return p; }
+                // S1, flush, verify the stock selection; only then S1b, S2, S3, S4. S1b takes the driver's own
+                // fallback record away, so the 24 that stays is the user's choice and no later install reads it as
+                // a closure of the driver.
+                if (!stored24) p.Steps.Add(step("write-24", "CuMode", Stock));
                 p.Steps.Add(step("verify-stock", null, 0));
+                if (before.Closed != null) p.Steps.Add(step("remove-closed", "CuModeClosedReason", 0));
                 if (before.Confirmed != null) p.Steps.Add(step("remove-confirmed", "CuModeConfirmed", 0));
                 if (before.Disable != null) p.Steps.Add(step("remove-disable", "CuDisableWgp", 0));
                 p.Steps.Add(step("flush-readback", null, 0));
@@ -330,21 +360,24 @@ namespace AmdgpuWddmControl
                 switch (s.Kind)
                 {
                     case "write-40": p.Preview.Add(Strings.T("cu.preview.write40")); break;
-                    case "remove-mode": p.Preview.Add(Strings.T("cu.preview.remove-mode")); break;
+                    case "write-24": p.Preview.Add(Strings.T("cu.preview.write24")); break;
+                    case "remove-closed": p.Preview.Add(Strings.T("cu.preview.remove-closed")); break;
                     case "remove-confirmed": p.Preview.Add(Strings.T("cu.preview.remove-confirmed")); break;
                     case "remove-disable": p.Preview.Add(Strings.T("cu.preview.remove-disable")); break;
                 }
             return p;
         }
 
-        // The only registry operations the CU setter may make (G-PLAN, G-SRC): CuMode set to 40 or deleted, and the
-        // deletion of CuDisableWgp and CuModeConfirmed. Never CuModePending, never the KMD's last-reason values.
+        // The only registry operations the CU setter may make (G-PLAN, G-SRC): CuMode set to 40 or to 24, and the
+        // deletion of CuDisableWgp, CuModeConfirmed and CuModeClosedReason. Never CuModePending, never the KMD's
+        // last-reason values, and CuMode is never deleted: the stock choice is written out (BD-077).
         public static bool Allowed(CuStep s)
         {
             switch (s.Kind)
             {
                 case "write-40": return s.Name == "CuMode" && s.Value == Full;
-                case "remove-mode": return s.Name == "CuMode";
+                case "write-24": return s.Name == "CuMode" && s.Value == Stock;
+                case "remove-closed": return s.Name == "CuModeClosedReason";
                 case "remove-confirmed": return s.Name == "CuModeConfirmed";
                 case "remove-disable": return s.Name == "CuDisableWgp";
                 case "verify-stock":
@@ -355,7 +388,8 @@ namespace AmdgpuWddmControl
 
         public static CuStored ReadAll(ICuRegistry r)
         {
-            return new CuStored { Mode = r.Read("CuMode"), Disable = r.Read("CuDisableWgp"), Confirmed = r.Read("CuModeConfirmed"), Pending = r.Read("CuModePending") };
+            return new CuStored { Mode = r.Read("CuMode"), Disable = r.Read("CuDisableWgp"), Confirmed = r.Read("CuModeConfirmed"), Pending = r.Read("CuModePending"),
+                Closed = r.Read("CuModeClosedReason") };
         }
 
         // Runs the plan. Any failed step stops the sequence (S6); nothing is ever restored from the backup; the state is
@@ -375,7 +409,8 @@ namespace AmdgpuWddmControl
                     switch (s.Kind)
                     {
                         case "write-40": r.SetDword("CuMode", Full); break;
-                        case "remove-mode":
+                        case "write-24": r.SetDword("CuMode", Stock); break;
+                        case "remove-closed":
                         case "remove-confirmed":
                         case "remove-disable": r.Delete(s.Name); break;
                         case "verify-stock":
@@ -386,8 +421,8 @@ namespace AmdgpuWddmControl
                             var back = ReadAll(r);
                             res.ReadBack = back;
                             stage = "compare";
-                            if (s.Kind == "verify-stock" && !(back.Mode == null || back.Mode == Stock))
-                                throw new InvalidOperationException("CuMode reads back as " + back.Mode + ", not the stock selection");
+                            if (s.Kind == "verify-stock" && back.Mode != Stock)
+                                throw new InvalidOperationException("CuMode reads back as " + (back.Mode == null ? "absent" : back.Mode.ToString()) + ", not the stock selection 24");
                             if (s.Kind == "flush-readback" && !Matches(plan, back))
                                 throw new InvalidOperationException("the read-back does not match the plan: " + back);
                             break;
@@ -417,7 +452,9 @@ namespace AmdgpuWddmControl
         {
             if (back.Confirmed != null && plan.Before.Confirmed != null) return false;
             if (back.Disable != null && plan.Before.Disable != null) return false;
-            return plan.Target == Full ? back.Mode == Full : back.Mode == null || back.Mode == Stock;
+            if (plan.Target == Full) return back.Mode == Full;
+            // The stock run writes the 24 out and takes the driver's record with it, so neither may be left over.
+            return back.Mode == Stock && back.Closed == null;
         }
 
         // The prediction after a setter run: a failed flush or a failed verifying read establishes no durable state
@@ -473,7 +510,8 @@ namespace AmdgpuWddmControl
             var choice = ChoiceText(ChoiceAfter(r));
             if (r.Completed) return Strings.T("cu.result.saved") + " " + choice + " " + Strings.T("cu.choice.after-restart") + " " + NextText(r.ReadBack, next);
             // F14d: stock verified, the cleanup stopped: the next start uses 24 cores, a remaining mask does not reduce them.
-            bool cleanup = plan.Target == Stock && next == CuNext.Standard && r.ReadBack != null && (r.ReadBack.Confirmed != null || r.ReadBack.Disable != null);
+            bool cleanup = plan.Target == Stock && next == CuNext.Standard && r.ReadBack != null
+                && (r.ReadBack.Confirmed != null || r.ReadBack.Disable != null || r.ReadBack.Closed != null);
             return Strings.T("cu.result.failed") + " " + choice + " " + (cleanup ? Strings.T("cu.result.cleanup-incomplete") : NextText(r.ReadBack, next));
         }
 

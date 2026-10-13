@@ -16,6 +16,7 @@
  *                             and what the caller must persist before and after
  *   bc250_dpm_step()          one governor tick: GPU busy share and temperature in, a level out
  *   bc250_dpm_tune_check()    the thresholds and floor an administrator may set at run time (0.7.185)
+ *   bc250_dpm_compute_check() the compute threshold set, in force while a compute context is open (BD-127)
  *   bc250_dpm_session_step()  the "running above the floor" marker that turns a crash at a high
  *                             clock into a fixed-lab next start
  * The idle state (0.7.207) is part of bc250_dpm_step(); bc250_dpm_idle_config() turns it on. So is the soft thermal
@@ -381,6 +382,43 @@ int bc250_dpm_warm_mc(const struct bc250_dpm_tune *t);
  * release off. */
 enum bc250_dpm_tune_error bc250_dpm_tune_check(const struct bc250_dpm_tune *t, unsigned int max_level);
 
+/* ---- the compute threshold set (BD-127) ------------------------------------------------------ */
+
+/* A second set of the three load thresholds, in force while the GPU has at least one open compute context.
+ * The KMD counts those contexts (a BC2C blob with BC250_UMD_C_COMPUTE, driver/kmd/wddm.c) and reports the
+ * count in every tick; nothing else selects the set.
+ *
+ * Why a second set at all. The graphics thresholds raise at 900 permille, which a frame-bound renderer
+ * reaches whenever the clock is its limit. A compute client does not: it hands the GPU one dispatch, waits
+ * for it on the CPU and hands over the next, so the busy share measures the split between the two and not
+ * the headroom. Measured on unit A (BD-127, 2026-10-12): a 1.7B model generating through HIP held a mean
+ * busy share of 57.9 % at 1000 MHz, 54.9 % at 1500 and 47.2 % at 2000, while the tokens a second went
+ * 47.4 -> 59.6 -> 62.0. The share hardly moves with the clock, so it says nothing about the headroom, and
+ * the 900 permille threshold never fired: the governor sat at the lab floor through the whole run and left
+ * 31 % of the throughput on the table. The compute set raises from 400 permille instead and aims a raise at
+ * 300, which takes 58 % at 1000 MHz to the ceiling in one step and holds it there at 47 %.
+ *
+ * What it does NOT change. Every thermal rule, the runtime floor, SetStablePowerState, the ceiling
+ * (DpmMaxMHz) and the idle state read the same values they always did: the set replaces the three load
+ * thresholds of the tick and nothing else, so a hot part is still held by the cap and a quiet GPU still goes
+ * to the idle point - an open but idle compute process (a model server with nothing to answer) costs no
+ * power. The set is checked by bc250_dpm_tune_check, through bc250_dpm_compute_check, so both invariants
+ * over the clock table hold for it exactly as for the graphics set. */
+struct bc250_dpm_compute {
+	int		on;			/* the set may be selected in this start (DpmComputeProfile) */
+	unsigned int	up_permille;
+	unsigned int	target_permille;
+	unsigned int	down_permille;
+};
+void bc250_dpm_compute_default(struct bc250_dpm_compute *c);
+/* The compute set under the same rules as the graphics one: the three thresholds are put into a copy of *t
+ * and bc250_dpm_tune_check judges the whole thing, so a compute set can never break an invariant a tune
+ * could not break either. An off set (on 0) is checked all the same, so that turning it on later is one
+ * field and not a new refusal. */
+enum bc250_dpm_tune_error bc250_dpm_compute_check(const struct bc250_dpm_compute *c,
+						  const struct bc250_dpm_tune *t, unsigned int max_level);
+/* bc250_dpm_set_compute and bc250_dpm_compute_on are below, with the governor they read. */
+
 struct bc250_dpm_input {
 	unsigned int	busy_permille;		/* 0..1000 over this tick */
 	int		temperature_mc;
@@ -398,6 +436,11 @@ struct bc250_dpm_input {
 	 * paging queue, and without this field an eviction or an upload with the GFX ring empty would run at the
 	 * idle point and nothing would end the state. The load governor keeps its GFX-only accounting. */
 	unsigned int	sdma_permille;
+	/* Open compute contexts at this tick (BD-127), as the KMD's interlocked per-adapter count reads. Above
+	 * zero, and with the compute set on for this start, the three load thresholds of this tick are the
+	 * compute set's. Zero is "no compute client has a context open now", which is also what a caller that
+	 * knows nothing of this field leaves behind, so the graphics thresholds are the unchanged default. */
+	unsigned int	compute_contexts;
 };
 
 struct bc250_dpm_governor {
@@ -415,6 +458,13 @@ struct bc250_dpm_governor {
 	unsigned int	want;			/* what the load asked for in the last step */
 	unsigned int	raises, lowers, thermal_events;
 	struct bc250_dpm_tune tune;		/* the thresholds and floor in force; bc250_dpm_set_tune changes them */
+	/* The compute threshold set (BD-127). compute is the setting of this start, compute_set says whether the
+	 * last tick governed with it, and compute_contexts is the count that tick reported. */
+	struct bc250_dpm_compute compute;
+	unsigned int	compute_contexts;
+	int		compute_set;
+	unsigned int	compute_entries;	/* ticks at which the set took over from the graphics one */
+	unsigned int	compute_ticks;		/* ticks governed with the compute set */
 	unsigned int	floor_ticks;		/* steps in which the runtime floor lifted the request above want */
 	unsigned int	warm_holds;		/* steps in which the warm zone refused a raise (0.7.200) */
 	unsigned int	raise_ms;		/* since the last step that returned a raise, saturating (0.7.203) */
@@ -467,6 +517,17 @@ struct bc250_dpm_governor {
 void bc250_dpm_init(struct bc250_dpm_governor *g, unsigned int max_level);
 /* A checked tune replaces g->tune (the next step uses it); a refused one leaves it as it was. */
 enum bc250_dpm_tune_error bc250_dpm_set_tune(struct bc250_dpm_governor *g, const struct bc250_dpm_tune *t);
+/* A checked compute set replaces g->compute (the next tick may use it); a refused one leaves the three
+ * thresholds as they were, which is the default of bc250_dpm_init. c->on is applied in EITHER case, because
+ * one registry key carries the switch and the thresholds and a typo in a threshold must not hold a
+ * default-on policy on against an explicit off (BD-127 review). The KMD calls it once per start, from the
+ * registry values. */
+enum bc250_dpm_tune_error bc250_dpm_set_compute(struct bc250_dpm_governor *g,
+						const struct bc250_dpm_compute *c);
+/* 1 while the compute set governs: it is on for this start and the last tick reported an open compute
+ * context. It is the condition bc250_dpm_step itself applies, for a caller that has no tick of its own;
+ * the KMD reads g->compute_set, which that step wrote, for its log line and the escape's flag. */
+int bc250_dpm_compute_on(const struct bc250_dpm_governor *g);
 /* One tick. Returns the level to apply; the caller applies it and reports with bc250_dpm_commit()
  * (success) or leaves g->level as it was (failure). Never returns above min(max_level, thermal_cap). */
 unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm_input *in);

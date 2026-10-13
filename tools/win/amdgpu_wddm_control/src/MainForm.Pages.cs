@@ -343,11 +343,55 @@ namespace AmdgpuWddmControl
 
             var guide = new CardPanel(Strings.T("settings.guide.title"), width);
             guide.Add(PrefCheck("settings.nagi", "nagi", _prefs.ShowNagi, v => { _prefs.ShowNagi = v; UpdateGuide(); }, guide.Inner));
+            // The owner's rule of 2026-10-12: a small screen has no room for the guide beside the page, so it stays
+            // hidden there whatever this choice says. The line is always here, so a person on a large screen knows
+            // what will happen on a small one, and a person on a small one knows why the guide is not there.
+            guide.Add(Ui.Dim(Strings.T("settings.nagi.small"), guide.Inner));
             guide.Add(PrefCheck("settings.tips", "tips", _prefs.ShowTipsAutomatically, v => { _prefs.ShowTipsAutomatically = v; UpdateGuide(); }, guide.Inner));
             guide.Add(PrefCheck("settings.animations", "animations", _prefs.ReduceAnimations, v => _prefs.ReduceAnimations = v, guide.Inner));
             if (AppPrefs.WindowsAnimations() == false) guide.Add(Ui.Dim(Strings.T("settings.animations.windows-off"), guide.Inner));
             guide.Add(Ui.Dim(Strings.T("settings.guide.note"), guide.Inner));
             p.Controls.Add(guide);
+
+            // The small window after sign-in (BD-080, the release's start-window.ps1). The value is this user's own
+            // (HKCU), so the box needs no administrator rights, and the two lines under it say what turning it off
+            // really costs and what it does not touch.
+            var start = new CardPanel(Strings.T("settings.start.title"), width);
+            start.Add(PrefCheck("settings.start-window", "start-window", _prefs.ShowStartWindow, v => _prefs.ShowStartWindow = v, start.Inner));
+            start.Add(Ui.Dim(Strings.T("settings.start-window.cost"), start.Inner));
+            start.Add(Ui.Dim(Strings.T("settings.start-window.notice"), start.Inner));
+            p.Controls.Add(start);
+
+            // The Nagi wallpaper (Wallpaper.cs): the installer sets it once after a verified install, unless its box
+            // was cleared. Here the person sets it again or puts back the background this account had before.
+            // Both write only this account's own background, so neither needs administrator rights.
+            var wall = new CardPanel(Strings.T("search.settings.wallpaper"), width);
+            Mark("settings.wallpaper", wall);
+            wall.Add(Ui.Dim(Strings.T("settings.wallpaper.note"), wall.Inner));
+            var wallResult = Ui.Dim("", wall.Inner);
+            Button wallSet = null, wallRestore = null;
+            Action<Func<string>> wallRun = work =>
+            {
+                wallSet.Enabled = wallRestore.Enabled = false;
+                wallResult.Text = "";
+                System.Threading.ThreadPool.QueueUserWorkItem(_ =>
+                {
+                    var id = work();
+                    try { BeginInvoke((Action)(() => { wallResult.Text = Strings.T(id); wallSet.Enabled = wallRestore.Enabled = true; })); }
+                    catch (InvalidOperationException) { }
+                });
+            };
+            var wallPrefs = _prefs;
+            wallSet = Ui.Button(Strings.T("settings.wallpaper.set"), (s, e) => wallRun(() =>
+            {
+                var error = NagiWallpaper.Set(wallPrefs);
+                NagiWallpaper.Log(error == null ? "set (Settings)" : "not set (Settings): " + error);
+                return error == null ? "settings.wallpaper.done" : "settings.wallpaper.failed";
+            }));
+            wallRestore = Ui.Button(Strings.T("settings.wallpaper.restore"), (s, e) => wallRun(() => NagiWallpaper.Restore(wallPrefs)));
+            wall.Add(Ui.Row(wallSet, wallRestore));
+            wall.Add(wallResult);
+            p.Controls.Add(wall);
 
             var support = new CardPanel(Strings.T("settings.support.title"), width);
             support.Add(PrefCheck("settings.support", "support", _prefs.ShowSupportOptions, v => _prefs.ShowSupportOptions = v, support.Inner));

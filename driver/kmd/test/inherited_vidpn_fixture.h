@@ -11,3 +11,12 @@ typedef struct {unsigned Type;struct {struct {REGION PrimSurfSize,VisibleRegionS
 typedef struct {unsigned VidPnSourceId,VidPnTargetId;struct {unsigned Scaling,Rotation;} ContentTransformation;
     REGION VisibleFromActiveTLOffset,VisibleFromActiveBROffset;} D3DKMDT_VIDPN_PRESENT_PATH;
 typedef struct {D3DKMDT_VIDPN_PRESENT_PATH VidPnPresentPathInfo;} DXGKARG_UPDATEACTIVEVIDPNPRESENTPATH;
+typedef struct {ULONG Generation;} BC250_CONNECTOR_SNAPSHOT;
+static BC250_CONNECTOR_SNAPSHOT* ConnectorSnapshotAcquire(BC250_DEVICE* d)
+{(void)d;UnexpectedConnector();return NULL;}
+static void ConnectorSnapshotRelease(BC250_CONNECTOR_SNAPSHOT* s){(void)s;UnexpectedConnector();}
+static BOOLEAN ConnectorPathValid(const D3DKMDT_VIDPN_PRESENT_PATH* p){(void)p;UnexpectedConnector();return FALSE;}
+static const BC250_TARGET_TIMING* ConnectorFindTiming(const BC250_DEVICE* d,
+    const BC250_CONNECTOR_SNAPSHOT* s,const D3DKMDT_VIDPN_SOURCE_MODE* m,const D3DKMDT_VIDEO_SIGNAL_INFO* v)
+{(void)d;(void)s;(void)m;(void)v;UnexpectedConnector();return NULL;}
+static BOOLEAN ConnectorGenerationCurrent(BC250_DEVICE* d,ULONG g){(void)d;(void)g;UnexpectedConnector();return FALSE;}

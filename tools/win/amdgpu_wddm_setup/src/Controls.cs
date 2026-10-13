@@ -23,6 +23,17 @@ namespace AmdgpuWddmSetup
     {
     }
 
+    // A container that paints a colour of its own over its BackColor (the card, the field, the notes panel, the
+    // guide's balloon). Its children paint their background in that colour, not in the BackColor of the window
+    // behind it; Theme.Backdrop asks for it on the way up the parent chain (BD-137). A container that paints a
+    // colour of its own and does not carry this hands its children the colour of the container behind it, which is
+    // the BD-137 picture again with the colours swapped, so the colour half of G-BACKDROP reads this interface and
+    // fails a child whose backdrop is not what the window really paints under it.
+    public interface IBackdrop
+    {
+        Color Backdrop { get; }
+    }
+
     public enum ButtonKind { Primary, Secondary, Quiet, Pill, Chrome }
 
     // One button in every state the mockup shows: a red gradient with a chevron for the primary action, a dark
@@ -75,7 +86,7 @@ namespace AmdgpuWddmSetup
         {
             var g = e.Graphics;
             var r = new Rectangle(0, 0, Width, Height);
-            using (var back = new SolidBrush(Parent != null ? Parent.BackColor : Theme.Back)) g.FillRectangle(back, r);
+            using (var back = new SolidBrush(Theme.Backdrop(this))) g.FillRectangle(back, r);
             Color face = Theme.Text, line = Color.Empty;
             bool on = Enabled;
             switch (Kind)
@@ -177,7 +188,7 @@ namespace AmdgpuWddmSetup
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics;
-            using (var back = new SolidBrush(Parent != null ? Parent.BackColor : Theme.Card)) g.FillRectangle(back, ClientRectangle);
+            using (var back = new SolidBrush(Theme.Backdrop(this))) g.FillRectangle(back, ClientRectangle);
             var box = new Rectangle(0, Theme.S(2), Box, Box);
             Gfx.Fill(g, box, Theme.S(Theme.RadiusSmall), Checked ? Theme.Accent : _hot ? Theme.CardHi : Theme.Card);
             Gfx.Border(g, box, Theme.S(Theme.RadiusSmall), Checked ? Theme.Accent : _hot ? Theme.Dim : Theme.Line);
@@ -220,7 +231,7 @@ namespace AmdgpuWddmSetup
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics;
-            using (var back = new SolidBrush(Parent != null ? Parent.BackColor : Theme.Card)) g.FillRectangle(back, ClientRectangle);
+            using (var back = new SolidBrush(Theme.Backdrop(this))) g.FillRectangle(back, ClientRectangle);
             var box = new Rectangle(0, Theme.S(2), Box, Box);
             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
             using (var b = new SolidBrush(_hot ? Theme.CardHi : Theme.Card)) g.FillEllipse(b, box);
@@ -237,9 +248,11 @@ namespace AmdgpuWddmSetup
     }
 
     // A text box in the palette, with a border that follows focus.
-    public sealed class ThemeBox : Panel
+    public sealed class ThemeBox : Panel, IBackdrop
     {
         public readonly TextBox Box = new TextBox();
+
+        public Color Backdrop { get { return Theme.Nav; } }
 
         public ThemeBox(int width, string name, bool readOnly)
         {
@@ -385,7 +398,7 @@ namespace AmdgpuWddmSetup
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics;
-            using (var b = new SolidBrush(Parent != null ? Parent.BackColor : Theme.Card)) g.FillRectangle(b, ClientRectangle);
+            using (var b = new SolidBrush(Theme.Backdrop(this))) g.FillRectangle(b, ClientRectangle);
             Gfx.Glyph(g, Glyph, new Rectangle(0, Theme.S(1), Icon, Icon), GlyphColor, Theme.S(15));
             int room = Math.Max(1, Width - Room);
             var size = Gfx.Measure(Head, Face, room);
@@ -449,7 +462,7 @@ namespace AmdgpuWddmSetup
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics;
-            using (var b = new SolidBrush(Parent != null ? Parent.BackColor : Theme.Back)) g.FillRectangle(b, ClientRectangle);
+            using (var b = new SolidBrush(Theme.Backdrop(this))) g.FillRectangle(b, ClientRectangle);
             int d = Theme.S(22);
             Gfx.Badge(g, new Rectangle(0, 0, d, d), Colour, Mark);
             int room = Math.Max(1, Width - Theme.S(34));
@@ -498,7 +511,7 @@ namespace AmdgpuWddmSetup
         {
             var g = e.Graphics;
             var r = new Rectangle(0, 0, Width, Height);
-            using (var b = new SolidBrush(Parent != null ? Parent.BackColor : Theme.Back)) g.FillRectangle(b, r);
+            using (var b = new SolidBrush(Theme.Backdrop(this))) g.FillRectangle(b, r);
             int radius = Height / 2;
             Gfx.Fill(g, r, radius, Theme.CardHi);
             if (Indeterminate)
@@ -537,7 +550,7 @@ namespace AmdgpuWddmSetup
         {
             var g = e.Graphics;
             var r = new Rectangle(0, 0, Width, Height);
-            using (var b = new SolidBrush(Theme.Nav)) g.FillRectangle(b, r);
+            using (var b = new SolidBrush(Theme.Backdrop(this))) g.FillRectangle(b, r);
             bool on = _kind == RailState.Current || _kind == RailState.Failed;
             if (on)
             {
@@ -590,7 +603,7 @@ namespace AmdgpuWddmSetup
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics;
-            using (var b = new SolidBrush(Parent != null ? Parent.BackColor : Theme.Back)) g.FillRectangle(b, ClientRectangle);
+            using (var b = new SolidBrush(Theme.Backdrop(this))) g.FillRectangle(b, ClientRectangle);
             float k = Math.Max(0.2f, Math.Min(1f, Grow));
             int d = (int)(Width * k);
             var box = new Rectangle((Width - d) / 2, (Height - d) / 2, d, d);
@@ -605,7 +618,7 @@ namespace AmdgpuWddmSetup
     // A titled block of a page; Inner is the width its content may use. The title is drawn by the card and is the
     // card's accessible name (a group), not a label: Windows names an unnamed window after the nearest label before it
     // in its parent, so a title label made every bare row of the card a second copy of the title for a screen reader.
-    sealed class CardPanel : Panel
+    sealed class CardPanel : Panel, IBackdrop
     {
         public readonly FlowLayoutPanel Body;
         public readonly int Inner;
@@ -651,13 +664,16 @@ namespace AmdgpuWddmSetup
 
         public string Title { get { return _title; } }
 
+        // What the card paints over its own BackColor: the colour its rows draw their background in (BD-137).
+        public Color Backdrop { get { return _back; } }
+
         // The pixels the shadow takes under the card: the card itself is drawn down to Height - Depth.
         public int Depth { get { return _depth; } }
 
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics;
-            using (var b = new SolidBrush(Theme.Back)) g.FillRectangle(b, ClientRectangle);
+            using (var b = new SolidBrush(Theme.Backdrop(this))) g.FillRectangle(b, ClientRectangle);
             Gfx.Card(g, new Rectangle(0, 0, Width, Height - _depth), Theme.S(Theme.RadiusCard), _back, _line, _depth);
             if (_title == null) return;
             if (_glyph != null) Gfx.Glyph(g, _glyph, new Rectangle(Theme.S(18), _titleBox.Y, Theme.S(18), _titleBox.Height), Theme.Teal, Theme.S(16));
@@ -687,8 +703,12 @@ namespace AmdgpuWddmSetup
 
     // The guide's speech bubble: the tip in a teal-outlined balloon with a tail that points at the character under it
     // (the accepted mockup). The bubble carries the words, so a screen reader reads the tip and never the picture.
-    public sealed class Bubble : Panel
+    public sealed class Bubble : Panel, IBackdrop
     {
+        // The colour the balloon paints over its own BackColor, and so the colour anything placed inside it clears
+        // itself in: the balloon is darker than the guide card it sits on (BD-137).
+        public Color Backdrop { get { return Theme.HighContrast ? SystemColors.Control : Color.FromArgb(0x0C, 0x1E, 0x24); } }
+
         // Where the tail leaves the balloon, as a part of its width: the window points it at the guide's head.
         // WithTail false is the panel without her, where a tail would point at nobody.
         public float TailAt = 0.62f;
@@ -724,9 +744,9 @@ namespace AmdgpuWddmSetup
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics;
-            using (var b = new SolidBrush(Parent != null ? Parent.BackColor : Theme.GuideBack)) g.FillRectangle(b, ClientRectangle);
+            using (var b = new SolidBrush(Theme.Backdrop(this))) g.FillRectangle(b, ClientRectangle);
             var body = new Rectangle(0, 0, Width, Height - Tail);
-            Gfx.Fill(g, body, Theme.S(Theme.RadiusCard), Theme.HighContrast ? SystemColors.Control : Color.FromArgb(0x0C, 0x1E, 0x24));
+            Gfx.Fill(g, body, Theme.S(Theme.RadiusCard), Backdrop);
             Gfx.Border(g, body, Theme.S(Theme.RadiusCard), Theme.Teal);
             if (_withTail)
             {
@@ -735,7 +755,7 @@ namespace AmdgpuWddmSetup
                 at = Math.Max(Inset * 2, Math.Min(Width - Inset * 2 - Tail * 2, at));
                 var p = new Point[] { new Point(at, body.Bottom - 2), new Point(at + Tail * 2, body.Bottom - 2), new Point(at + Tail + Tail / 2, Height - 1) };
                 g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-                using (var fill = new SolidBrush(Theme.HighContrast ? SystemColors.Control : Color.FromArgb(0x0C, 0x1E, 0x24))) g.FillPolygon(fill, p);
+                using (var fill = new SolidBrush(Backdrop)) g.FillPolygon(fill, p);
                 using (var pen = new Pen(Theme.Teal))
                 {
                     g.DrawLine(pen, p[0], p[2]);
@@ -751,9 +771,12 @@ namespace AmdgpuWddmSetup
     // out at their full height inside the page, so the page has one scroll axis: a box of its own put a second scroll
     // thumb 50 px from the page's and showed the longest text on the screen through the smallest window on it.
     // The notes are release content, so G-NOINT does not read them (Tag "noint-exempt").
-    public sealed class NotesPanel : Panel
+    public sealed class NotesPanel : Panel, IBackdrop
     {
         readonly FlowLayoutPanel _flow;
+
+        // The notes sit on the field colour, not on the card: a row inside them clears itself in that colour.
+        public Color Backdrop { get { return Theme.Nav; } }
 
         public NotesPanel(string markdown, int width, string name)
         {

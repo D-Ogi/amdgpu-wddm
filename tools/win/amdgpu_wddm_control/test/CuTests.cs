@@ -52,7 +52,7 @@ static partial class UnitTests
         public CuStored Stored()
         {
             Func<string, uint?> g = k => { uint v; return Values.TryGetValue(k, out v) ? (uint?)v : null; };
-            return new CuStored { Mode = g("CuMode"), Disable = g("CuDisableWgp"), Confirmed = g("CuModeConfirmed"), Pending = g("CuModePending") };
+            return new CuStored { Mode = g("CuMode"), Disable = g("CuDisableWgp"), Confirmed = g("CuModeConfirmed"), Pending = g("CuModePending"), Closed = g("CuModeClosedReason") };
         }
     }
 
@@ -103,6 +103,13 @@ static partial class UnitTests
         Throws<CuRegistryException>(() => reg.Flush(), "R1 a failed RegFlushKey is an error");
         Throws<InvalidOperationException>(() => reg.Delete("CuModePending"), "R1 CuModePending is never removed");
         Throws<InvalidOperationException>(() => reg.SetDword("CuModeConfirmed", 40), "R1 CuModeConfirmed is never written");
+        // BD-077: the stock choice is written out as 24, and CuMode is never deleted (an absent value reads to the
+        // release installer as a key it never configured, which it then sets to the release default 40).
+        Throws<InvalidOperationException>(() => reg.Delete("CuMode"), "R1 CuMode is never removed");
+        Throws<InvalidOperationException>(() => reg.SetDword("CuMode", 32), "R1 only 24 and 40 are written");
+        api.SetStatus = 0; api.DeleteStatus = 0; api.FlushStatus = 0;
+        reg.SetDword("CuMode", CuMode.Stock); reg.Delete("CuModeClosedReason");
+        Check(api.Values.ContainsKey("CuMode") && api.Values["CuMode"] == 24, "R1 CuMode = 24 and the driver's record go through the checked registry");
 
         // Through the setter: the native codes decide the result.
         api = new FakeRegApi(); api.Values["CuMode"] = 24; api.Values["CuModeConfirmed"] = CuMode.Encode(40, 8); api.Values["CuDisableWgp"] = 8;
@@ -114,8 +121,13 @@ static partial class UnitTests
         api = new FakeRegApi(); api.Values["CuMode"] = 40; api.Values["CuDisableWgp"] = 8; api.DeleteStatus = 5;
         plan = CuMode.Plan(CuMode.ReadAll(new CheckedCuRegistry(api)), 24);
         res = CuMode.Execute(plan, new CheckedCuRegistry(api));
-        Check(!res.Completed && res.FailedStep == 0 && res.Error.Contains("LSTATUS 5"), "R1 a native delete failure stops at S1 with its LSTATUS: " + res.Error);
-        Equal((uint?)40, CuMode.ChoiceOf(res.ReadBack) == 40 ? (uint?)40 : null, "R1 the read-back after the failure shows the old mode");
+        Check(!res.Completed && res.FailedStep == 2 && res.Error.Contains("LSTATUS 5"), "R1 a native delete failure stops at S3 with its LSTATUS: " + res.Error);
+        Equal(CuMode.Stock, CuMode.ChoiceOf(res.ReadBack), "R1 the read-back after the failed cleanup shows the written 24");
+        api = new FakeRegApi(); api.Values["CuMode"] = 40; api.SetStatus = 1021;
+        plan = CuMode.Plan(CuMode.ReadAll(new CheckedCuRegistry(api)), 24);
+        res = CuMode.Execute(plan, new CheckedCuRegistry(api));
+        Check(!res.Completed && res.FailedStep == 0 && res.Error.Contains("LSTATUS 1021"), "R1 a native failure of the 24 write stops at S1: " + res.Error);
+        Equal(CuMode.Full, CuMode.ChoiceOf(res.ReadBack), "R1 a failed 24 write leaves the old 40");
         api = new FakeRegApi(); api.Values["CuMode"] = 40; api.QueryStatus = 5;
         Throws<CuRegistryException>(() => CuMode.ReadAll(new CheckedCuRegistry(api)), "R1 an unreadable value never reads as absent");
     }
@@ -127,9 +139,9 @@ static partial class UnitTests
 
     const uint V = CuModeState.FlagValid, P = CuModeState.FlagPending, C = CuModeState.FlagConfirmed;
 
-    static CuStored St(uint? mode = null, uint? disable = null, uint? confirmed = null, uint? pending = null)
+    static CuStored St(uint? mode = null, uint? disable = null, uint? confirmed = null, uint? pending = null, uint? closed = null)
     {
-        return new CuStored { Mode = mode, Disable = disable, Confirmed = confirmed, Pending = pending };
+        return new CuStored { Mode = mode, Disable = disable, Confirmed = confirmed, Pending = pending, Closed = closed };
     }
 
     static void CuLayout(string header)
@@ -290,11 +302,11 @@ static partial class UnitTests
         foreach (var sub in new[] { "a", "b", "c" })
         {
             reg = new FakeCu(); reg.Values["CuMode"] = 40; reg.Values["CuDisableWgp"] = 3; reg.Values["CuModeConfirmed"] = CuMode.Encode(40, 3);
-            if (sub == "a") reg.FailDelete.Add("CuMode");
+            if (sub == "a") reg.FailSet = true;
             if (sub == "b") reg.FailFlush = 0;
             if (sub == "c") reg.FailReadAfterFlush = 0;
             plan = CuMode.Plan(reg.Stored(), 24);
-            Check(plan.Steps.Select(s => s.Kind).SequenceEqual(new[] { "remove-mode", "verify-stock", "remove-confirmed", "remove-disable", "flush-readback" }), "F14c steps S1, verify, S2, S3, S4");
+            Check(plan.Steps.Select(s => s.Kind).SequenceEqual(new[] { "write-24", "verify-stock", "remove-confirmed", "remove-disable", "flush-readback" }), "F14c steps S1, verify, S2, S3, S4");
             res = CuMode.Execute(plan, reg);
             Check(!reg.Ops.Contains("delete CuModeConfirmed") && !reg.Ops.Contains("delete CuDisableWgp"), "F14c(" + sub + ") stops before S2 and S3");
             Check(reg.Values["CuDisableWgp"] == 3 && reg.Values["CuModeConfirmed"] == CuMode.Encode(40, 3), "F14c(" + sub + ") mask and confirmation untouched");
@@ -343,7 +355,7 @@ static partial class UnitTests
             plan = CuMode.Plan(reg.Stored(), 24);
             res = CuMode.Execute(plan, reg);
             text = CuMode.ResultText(plan, res);
-            Check(!reg.Values.ContainsKey("CuMode") && reg.Values.ContainsKey(name), "F14d " + name + ": stock with the remaining value");
+            Check(reg.Values["CuMode"] == 24 && reg.Values.ContainsKey(name), "F14d " + name + ": the written 24 with the remaining value");
             Equal(CuNext.Standard, CuMode.PredictAfter(res), "F14d " + name + " next start Standard");
             Check(text.StartsWith("The change could not be completed. Your choice: Standard (24). The cleanup is incomplete. The next start uses the standard 24 cores"), "F14d text: " + text);
             Check(!text.Contains("fewer cores"), "F14d never fewer cores for Standard");
@@ -371,7 +383,7 @@ static partial class UnitTests
         // F16 the current start read an invalid CuMode: Refused; the choice is not valid; either choice repairs it.
         v = CuMode.View(Snap(V, 24, CuMode.ReasonInvalidSetting, 24), 5, St(7));
         Equal(CuClass.Refused, v.Class, "F16 class"); Equal("Your choice is not valid; choose Standard (24) or All (40).", v.Choice, "F16 choice");
-        Check(CuMode.Plan(St(7), 24).Steps[0].Kind == "remove-mode" && CuMode.Plan(St(7), 40).Steps.Any(s => s.Kind == "write-40"), "F16 either choice repairs it");
+        Check(CuMode.Plan(St(7), 24).Steps[0].Kind == "write-24" && CuMode.Plan(St(7), 40).Steps.Any(s => s.Kind == "write-40"), "F16 either choice repairs it");
 
         // F16b a valid start, then an invalid CuMode written afterwards: the running class stays.
         v = CuMode.View(Snap(V, 24, 0, 24), 5, St(7));
@@ -382,20 +394,67 @@ static partial class UnitTests
         Equal("Next start: 24 cores.", v.NextStart, "F16b a refused next start reads as 24 cores");
 
         // S5: the setter never writes CuModeConfirmed, never touches CuModePending, never the last-reason value.
-        foreach (var start in new[] { St(), St(40), St(40, 3, 40, 1), St(7, 0x100000, 9, 2), St(24, 1, 40) })
+        foreach (var start in new[] { St(), St(40), St(40, 3, 40, 1), St(7, 0x100000, 9, 2), St(24, 1, 40), St(24, null, null, null, 3) })
             foreach (uint target in new uint[] { 24, 40 })
             {
                 var p = CuMode.Plan(start, target);
                 Check(p.Steps.All(CuMode.Allowed), "S5 every step allowed");
-                Check(!p.Steps.Any(s => s.Name == "CuModePending" || s.Name == "CuModeLastReason" || (s.Kind == "write-40" && s.Name != "CuMode")), "S5 no Pending, no last-reason, writes only CuMode");
+                Check(!p.Steps.Any(s => s.Name == "CuModePending" || s.Name == "CuModeLastReason" || (s.Kind.StartsWith("write-") && s.Name != "CuMode")), "S5 no Pending, no last-reason, writes only CuMode");
             }
-        Check(!CuMode.Allowed(new CuStep { Kind = "remove-mode", Name = "CuModePending" }) && !CuMode.Allowed(new CuStep { Kind = "write-40", Name = "CuModeConfirmed", Value = 40 }),
-            "S5 Allowed refuses the KMD's marks");
-        Check(CuMode.Plan(St(40), 40).Refused && CuMode.Plan(St(), 24).Refused && CuMode.Plan(St(24), 24).Refused, "S6 nothing to change -> refused before any step");
+        Check(!CuMode.Allowed(new CuStep { Kind = "write-24", Name = "CuModePending", Value = 24 }) && !CuMode.Allowed(new CuStep { Kind = "write-40", Name = "CuModeConfirmed", Value = 40 })
+            && !CuMode.Allowed(new CuStep { Kind = "remove-closed", Name = "CuModeLastReason" }), "S5 Allowed refuses the KMD's marks");
+        Check(!CuMode.Allowed(new CuStep { Kind = "remove-mode", Name = "CuMode" }), "S5 CuMode is never deleted (BD-077)");
+        Check(CuMode.Plan(St(40), 40).Refused && CuMode.Plan(St(24), 24).Refused, "S6 nothing to change -> refused before any step");
         Equal("Nothing was changed. All (40) is selected already.", CuMode.ResultText(CuMode.Plan(St(40), 40), new CuSetterResult()), "A3 nothing changed only on refusal");
         Check(!CuMode.Plan(St(24, null, 40), 24).Refused, "a KMD-stored 24 with a leftover confirmation: the cleanup can run");
-        Check(CuMode.Plan(St(24, null, 40), 24).Steps.All(s => s.Kind != "remove-mode"), "S1 leaves a KMD-stored 24");
+        Check(CuMode.Plan(St(24, null, 40), 24).Steps.All(s => s.Kind != "write-24"), "S1 leaves a stored 24 as it is");
         Check(CuMode.Plan(new CuStored { Unreadable = true }, 24).Refused, "unreadable values: refused");
+
+        // BD-077 review 2 finding 1: Standard (24) has to be a durable choice. An absent CuMode is "never
+        // configured" to the release installer, which writes the release default 40 over it, so the stock choice is
+        // written out as 24 and the 24 survives every later install.
+        var stock = CuMode.Plan(St(), 24);
+        Check(!stock.Refused && stock.Steps.Select(s => s.Kind).SequenceEqual(new[] { "write-24", "verify-stock", "flush-readback" }), "BD-077 an absent CuMode: the 24 is written");
+        Check(stock.Preview.SequenceEqual(new[] { "Selects the standard 24 graphics cores." }), "BD-077 one preview line for the written 24");
+        reg = new FakeCu();
+        res = CuMode.Execute(CuMode.Plan(reg.Stored(), 24), reg);
+        Check(res.Completed && reg.Values["CuMode"] == 24, "BD-077 the run writes CuMode = 24 on a key that had none");
+        Equal("Saved. Your choice: Standard (24). It applies after the next Windows restart. Next start: 24 cores.", CuMode.ResultText(CuMode.Plan(St(), 24), res), "BD-077 result text");
+
+        // The same for a 24 the driver wrote itself: the record is what makes that 24 the driver's, so taking the
+        // record away is what makes the 24 the user's. Every later install then reads it as a choice ('kept').
+        var adopt = CuMode.Plan(St(24, null, null, null, 3), 24);
+        Check(!adopt.Refused && adopt.Steps.Select(s => s.Kind).SequenceEqual(new[] { "verify-stock", "remove-closed", "flush-readback" }), "BD-077 a driver-written 24 can be adopted");
+        Check(adopt.Preview.SequenceEqual(new[] { "Records that the standard 24 graphics cores are your choice, not a step back the driver took by itself." }), "BD-077 the adoption says what it records");
+        reg = new FakeCu(); reg.Values["CuMode"] = 24; reg.Values["CuModeClosedReason"] = 3;
+        res = CuMode.Execute(CuMode.Plan(reg.Stored(), 24), reg);
+        Check(res.Completed && reg.Values["CuMode"] == 24 && !reg.Values.ContainsKey("CuModeClosedReason"), "BD-077 the adopted 24 stays, the driver's record goes");
+        Check(!CuMode.DriverChose24(res.ReadBack), "BD-077 the read-back is no longer the driver's 24");
+        // A failed removal of the record is a partial failure, never a completed run.
+        reg = new FakeCu(); reg.Values["CuMode"] = 24; reg.Values["CuModeClosedReason"] = 3; reg.FailDelete.Add("CuModeClosedReason");
+        plan = CuMode.Plan(reg.Stored(), 24);
+        res = CuMode.Execute(plan, reg);
+        Check(!res.Completed && reg.Values["CuModeClosedReason"] == 3, "BD-077 a failed record removal stops the run");
+        Check(CuMode.ResultText(plan, res).Contains("The cleanup is incomplete."), "BD-077 the incomplete cleanup is said: " + CuMode.ResultText(plan, res));
+        // All (40) over the record leaves it to the driver: the next start that reads a CuMode other than 24
+        // deletes it itself (bc250_cu_decide clear_closed).
+        var reopen = CuMode.Plan(St(24, null, null, null, 3), 40);
+        Check(reopen.Steps.Select(s => s.Kind).SequenceEqual(new[] { "write-40", "flush-readback" }), "BD-077 All (40) over the record is the plain 40 request");
+
+        // The page must not call the driver's own 24 a choice of the user (review 2 finding 3).
+        v = CuMode.View(Snap(V, 24, 0, 24), 5, St(24, null, null, null, 3));
+        Check(v.DriverChose24, "BD-077 view: the driver's 24 is marked");
+        Equal("Standard (24) is set, but the driver chose that number, not you.", v.Choice, "BD-077 view: the choice line names the driver");
+        Equal("Select All (40) and restart Windows to use all 40 cores again.", v.Note, "BD-077 view: the way back");
+        v = CuMode.View(Snap(V, 24, CuMode.ReasonPendingUnconfirmed, 24), 5, St(24, null, null, null, 3));
+        Check(v.Class == CuClass.Fallback && v.DriverChose24 && v.OfferTry40, "BD-077 view: the fallback boot itself reads the record too");
+        v = CuMode.View(Snap(V, 24, 0, 24), 5, St(24, null, null, null, 0));
+        Check(!v.DriverChose24 && v.Choice == "Your choice: Standard (24).", "BD-077 view: a record of 0 is no closure");
+        v = CuMode.View(Snap(V, 24, 0, 24), 5, St(null, null, null, null, 3));
+        Check(!v.DriverChose24, "BD-077 view: a record without a stored 24 is not the driver's choice");
+        v = CuMode.View(Snap(V | C, 40, 0, 40), 5, St(40, null, 40, null, 3));
+        Check(!v.DriverChose24 && v.Choice == "Your choice: All (40).", "BD-077 view: a stale record next to a 40 changes nothing");
+        Check(CuMode.ValueNames.Contains("CuModeClosedReason"), "BD-077 the record is read with the other CU values");
         Equal(CuNext.Ask40, CuMode.Predict(St(40, 3, CuMode.Encode(40, 1))), "a confirmation of another mask does not match");
         Equal(CuNext.Refused, CuMode.Predict(St(40, 0x100000)), "an invalid mask: INVALID_DISABLE -> 24");
         Equal(CuMode.ReasonInvalidDisable, CuMode.Prediction(St(40, 0x100000)).Reason, "INVALID_DISABLE reason");

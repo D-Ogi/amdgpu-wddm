@@ -7,14 +7,14 @@ body:
     attributes:
       value: |
         Thank you for testing. One problem per report, please.
-        Before you start: open "amdgpu-wddm Control" from the Start menu and make a bug report. It shows every file
+        Before you start: open "Nagi Control App" from the Start menu and make a bug report. It shows every file
         before it writes the zip to your desktop and sends nothing by itself. Read the files, then attach the zip
         below. If you find personal data in it, do not attach it; say so in the report instead.
   - type: input
     id: version
     attributes:
       label: Tester version
-      description: The package version, for example 0.7.207.100-tester.12 (amdgpu-wddm Control shows it, and so does RELEASE-NOTES.md in the package).
+      description: The package version, for example 0.7.207.100-tester.12 (Nagi Control App shows it, and so does RELEASE-NOTES.md in the package).
       placeholder: 0.7.207.100-tester.12
     validations:
       required: true

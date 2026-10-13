@@ -155,6 +155,17 @@ part of the same decision, not a new one.
 | 9, least privilege | The readback was open to anybody, because reading a voltage is not a privilege | It holds the surface for 19 messages on a shared mailbox, so it asks for an administrator like every other operation |
 | 11, one "Restore standard settings" | "Reset driver settings to the release defaults" left the curve, the processor values, the core mask and `CpuTune` as they were | The reset carries those steps as well, and names what a start cannot take back instead of claiming a reset it did not do |
 
+Row 9, least privilege, held for the CPU rail and not for the GPU clock rail, and the release 0.7.216.100-tester.29v2
+separates the two (BD-062, GitHub issue 7). The escape ABI word does not move with it: `BC250_KMD_VERSION` stays
+`0x000700D8`, revision 216, because the change is an admission rule and the meaning of a per-operation flag word,
+with no field added and none moved. The reason the readback asks for an administrator is the hold, not the reading:
+19 messages and about 1.9 s of a shared mailbox. The clock READ has no such hold - one BAR read and two getters -
+and a caller who is not an administrator is answered from the last published reading while it is younger than
+`BC250_CLOCK_SNAP_US`, so every unprivileged caller together adds at most the one transaction per second the
+governor's own readback already sends. That operation is therefore open, while the CPU readback and every write
+on either rail keep the token check. What row 9 settles stands as written: privilege follows the hold on the
+shared mailbox, and never the question of whether a number looks harmless.
+
 Two numbers were wrong in the documentation rather than in the code: 3600 MHz was never this part's stock clock
 and had no source (the community's two tools report 3500 MHz, which is what the release build now takes as its
 highest limit), and the two soft CCLK messages `0x35`/`0x36` of queue 0 were in the allowlist tables although no

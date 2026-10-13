@@ -94,6 +94,20 @@ function Remove-PathOrSchedule([string]$Path) { $script:deleted.Add($Path) }
 Remove-UserDataExceptTuning $user
 Assert ($script:deleted.Count -eq 1 -and $script:deleted[0] -eq (Join-Path $user 'shader-cache')) 'Uninstall removed a user recovery journal'
 Assert ([IO.File]::ReadAllText((Join-Path $user 'system-tuning\state.json')) -ceq 'private recovery fixture') 'Uninstall changed user recovery contents'
+# The Nagi wallpaper picture stays too (owner, 2026-10-13): it can be the background of that account. A folder that
+# holds only the picture keeps its root, and a folder with neither kept folder goes as a whole.
+$userWp = Join-Path $outRoot ('user-data-' + [Guid]::NewGuid().ToString('N'))
+[void][IO.Directory]::CreateDirectory((Join-Path $userWp 'wallpaper'))
+[void][IO.Directory]::CreateDirectory((Join-Path $userWp 'vkd3d'))
+[IO.File]::WriteAllText((Join-Path $userWp 'wallpaper\nagi-wallpaper.jpg'), 'picture fixture')
+$script:deleted.Clear()
+Remove-UserDataExceptTuning $userWp
+Assert ($script:deleted.Count -eq 1 -and $script:deleted[0] -eq (Join-Path $userWp 'vkd3d')) 'Uninstall removed the Nagi wallpaper picture'
+$userNone = Join-Path $outRoot ('user-data-' + [Guid]::NewGuid().ToString('N'))
+[void][IO.Directory]::CreateDirectory((Join-Path $userNone 'vkd3d'))
+$script:deleted.Clear()
+Remove-UserDataExceptTuning $userNone
+Assert ($script:deleted.Count -eq 1 -and $script:deleted[0] -eq [IO.Path]::GetFullPath($userNone)) 'Uninstall kept a folder with nothing to keep'
 # Exercise the actual child-process transport with a harmless fixture, including spaces in its path.
 $child = Join-Path $outRoot 'fake tuning child.ps1'
 [IO.File]::WriteAllText($child, 'param($Action,$Scope) @{schema=1;ok=$true;action=$Action;scope=$Scope;dryRun=$false}|ConvertTo-Json -Compress')
@@ -104,7 +118,9 @@ Assert ($native.code -eq 0 -and $parsed.scope -ceq 'Machine' -and $parsed.action
 $clock = [Diagnostics.Stopwatch]::StartNew()
 Refuses { & $realTuningProcess -ScriptPath $child -Action ApplyRecommended -TimeoutSeconds 1 } 'Hung child was not refused'
 Assert ($clock.Elapsed.TotalSeconds -lt 8) 'Child timeout or drain exceeded its bound'
-# Run the actual uninstall script with a fake host. A declined removal must stop before every mutation.
+# Run the actual uninstall script with a fake host. The uninstaller asks nothing (setup-v2, c9825005: running
+# uninstall.cmd is the answer, and Read-Confirmation is gone from common.ps1), so a run without -Yes goes on to its
+# first change. The fixture's Read-Confirmation throws, so a question that comes back is a finding here.
 $decline = Join-Path $outRoot ('decline-' + [Guid]::NewGuid().ToString('N'))
 [void][IO.Directory]::CreateDirectory((Join-Path $decline 'installer'))
 foreach ($name in 'uninstall.ps1','system-tuning.ps1','components.ps1') { Copy-Item -LiteralPath (Join-Path $PSScriptRoot "installer\$name") -Destination (Join-Path $decline "installer\$name") }
@@ -117,13 +133,13 @@ function Write-Info($s) { }
 function Write-Fail($s) { Write-Output ('FAIL: ' + $s) }
 function Get-LabInstallPaths { @() }
 function Get-OurDriverPackages { @() }
-function Read-Confirmation { $false }
-function Invoke-Change { throw 'MUTATION BEFORE CONSENT' }
+function Read-Confirmation { throw 'QUESTION ASKED' }
+function Invoke-Change { throw 'MUTATION REACHED' }
 '@
 [IO.File]::WriteAllText((Join-Path $decline 'installer\common.ps1'), $fakeCommon)
 $hostExe = Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
-$declined = Invoke-Native -File $hostExe -Arguments @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',(Join-Path $decline 'installer\uninstall.ps1'),'-RestoreSystemTuning')
-Assert ($declined.code -eq 4 -and $declined.text -match 'Nothing was changed' -and $declined.text -notmatch 'MUTATION') 'Declining removal changed Windows settings or kept recovery tools'
+$unasked = Invoke-Native -File $hostExe -Arguments @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',(Join-Path $decline 'installer\uninstall.ps1'),'-RestoreSystemTuning')
+Assert ($unasked.text -match 'MUTATION REACHED' -and $unasked.text -notmatch 'QUESTION ASKED' -and $unasked.text -notmatch 'Nothing was changed') 'The uninstaller asked a question, or stopped before its first change, in a run without -Yes'
 # An unreadable driver store stops before tuning restoration or recovery copies, even with explicit consent.
 $failedInventory = $fakeCommon.Replace('function Get-OurDriverPackages { @() }', "function Get-OurDriverPackages { throw 'fixture inventory failure' }")
 [IO.File]::WriteAllText((Join-Path $decline 'installer\common.ps1'), $failedInventory)

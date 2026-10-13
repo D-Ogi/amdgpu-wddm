@@ -4,7 +4,8 @@ param(
     [switch]$IgnoreReportInFlight, [switch]$IgnoreLostReport,
     [switch]$UseNotifiedAsCompleted, [switch]$ShareNodeWatermark,
     [switch]$ResetWritesCompleted, [switch]$IgnoreEpoch, [switch]$TimeoutAfterUnlock,
-    [switch]$ReadAfterRelease, [switch]$KeepCoveredBoundary, [switch]$DropAdmissionReason, [switch]$RejectActiveImmediately, [switch]$IgnoreDrainDeadline, [switch]$FaultHealthOnAdmission, [switch]$AdmitDuringReset
+    [switch]$ReadAfterRelease, [switch]$KeepCoveredBoundary, [switch]$DropAdmissionReason, [switch]$RejectActiveImmediately, [switch]$IgnoreDrainDeadline, [switch]$FaultHealthOnAdmission, [switch]$AdmitDuringReset,
+    [switch]$LatchFaultsStickily, [switch]$ReopenWitnessOnRefusal, [switch]$DropWitnessReopen, [switch]$RefusalClosesEveryNode
 )
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
@@ -63,7 +64,32 @@ if ($DropAdmissionReason) {
     $header=$header.Replace($live,'state->ReportLost ? 0u : 0u')
 }
 [IO.File]::WriteAllText((Join-Path $Out 'hang_recovery.h'), $header)
+# BD-120 negative controls over the witness wiring. The first one is the code before the fix.
+$reopenLive = '            witness = StartHealthRecovered(device, &witnessEpoch);'
+$tailLive = '    if (pResetEngine->NodeOrdinal == BC250_WDDM_NODE_3D) StartHealthClose(device);'
+if ($DropWitnessReopen) {
+    if (!$source.Contains($reopenLive)) { throw 'witness reopen anchor changed' }
+    $source = $source.Replace($reopenLive, '            witness = BC250_START_HEALTH_RECOVERY_STICKY;')
+}
+if ($ReopenWitnessOnRefusal) {
+    if (!$source.Contains($reopenLive)) { throw 'witness reopen anchor changed' }
+    $source = $source.Replace($reopenLive, '            witness = BC250_START_HEALTH_RECOVERY_STICKY;')
+    # Written with explicit newlines: the sources are stored with LF and this script with CRLF.
+    $anchor = "refuseReset:`n"
+    if (!$source.Contains($anchor)) { throw 'refusal tail anchor changed' }
+    $source = $source.Replace($anchor, $anchor + "    { ULONGLONG tailEpoch = 0; (void)StartHealthRecovered(device, &tailEpoch); }`n")
+}
+# A refusal on any node clearing node 0's mark: the defect of 0.7.216.28 in the node-1-refusal ordering.
+if ($RefusalClosesEveryNode) {
+    if (!$source.Contains($tailLive)) { throw 'refusal node anchor changed' }
+    $source = $source.Replace($tailLive, '    if (1) StartHealthClose(device);')
+}
 $latch = 'static BOOLEAN ' + (Function-Body $source 'WddmLatchSubmitTimeoutLocked').Text
+if ($LatchFaultsStickily) {
+    $live = 'StartHealthFaultPendingReset(Device);'
+    if (!$latch.Contains($live)) { throw 'timeout latch witness anchor changed' }
+    $latch = $latch.Replace($live, 'StartHealthFault(Device);')
+}
 $mock = @'
 typedef int BOOLEAN;
 typedef unsigned long long ULONGLONG;
@@ -79,7 +105,10 @@ typedef struct { long long QuadPart; } LARGE_INTEGER;
 #define BC250_WDDM_NODE_3D 0
 #define BC250_SUBMIT_FENCE_SLOT 0
 typedef struct { void *SubmitAdev; LONG SubmitFailed; ULONG SubmitSeq; } BC250_GFX;
-typedef struct { int GfxClosed; int Calls; void *Gfx; int HealthFault; unsigned Wakes, DrainWakes; } BC250_DEVICE;
+/* BD-120: HealthPendingReset says whether the witness close is the one a recovered ResetEngine owns, and
+ * HealthReopens counts the reopen attempts, so the refusal tail can be checked for making none. */
+typedef struct { int GfxClosed; int Calls; void *Gfx; int HealthFault, HealthPendingReset; unsigned HealthReopens;
+                 unsigned Wakes, DrainWakes; } BC250_DEVICE;
 typedef struct {
     int Stopping, Lock, SubmitTimer;
     BC250_HANG_NODE_STATE Recovery[2];
@@ -97,8 +126,23 @@ static void GfxAccessRelease(BC250_DEVICE *d) {
 static ULONG bc250_gfx_fence_read(void *adev, int slot) { (void)adev; (void)slot; return 123; }
 static LONG InterlockedExchange(LONG *p, LONG value) { LONG old = *p; *p = value; return old; }
 static void GuardLog(const char *format, ...) { (void)format; }
-static void StartHealthFault(BC250_DEVICE *d) { d->HealthFault = 1; d->Calls++; }
+static void StartHealthFault(BC250_DEVICE *d) { d->HealthFault = 1; d->HealthPendingReset = 0; d->Calls++; }
 static void StartHealthClose(BC250_DEVICE *d) { StartHealthFault(d); }
+/* BD-120, start_health.c: the timeout latch's close carries the mark, and only a marked close is reopened.
+ * The policy itself is checked over the production source in driver/kmd/test/start_health_test.c. */
+static void StartHealthFaultPendingReset(BC250_DEVICE *d) {
+    if (!d->HealthFault) d->HealthPendingReset = 1;
+    d->HealthFault = 1; d->Calls++;
+}
+/* The three answers of start_health.c: STICKY 0, REOPENED 1, REARMED 2 (never closed). */
+static int StartHealthRecovered(BC250_DEVICE *d, ULONGLONG *epoch) {
+    *epoch = 0; d->HealthReopens++;
+    if (!d->HealthFault) return 2;
+    if (!d->HealthPendingReset) return 0;
+    d->HealthFault = 0; d->HealthPendingReset = 0; return 1;
+}
+/* The refusal close of a node that is not node 0: it closes and leaves the mark where it is. */
+static void StartHealthCloseKeepPendingReset(BC250_DEVICE *d) { d->HealthFault = 1; d->Calls++; }
 static void GfxRetireSignal(BC250_DEVICE *d) {
     d->Wakes++;
     d->GfxClosed = d->Gfx && ((BC250_GFX *)d->Gfx)->SubmitFailed;
@@ -254,13 +298,43 @@ $tailAt=$reset.IndexOf('refuseReset:')
 if ($tailAt -lt 0) { throw 'refusal tail missing' }
 $tail=$reset.Substring($tailAt+'refuseReset:'.Length)
 if (!$tail.Contains('StartHealthClose(device);') -or $tail.Contains('GfxSubmitClose(') -or $tail.Contains('GfxReopenAfterAbort(')) { $admissionOk=$false }
+# BD-120. Where the start witness is closed and where it is reopened, read off the production source:
+#  - the node-0 timeout latch marks its close as the pending reset's own and faults nothing stickily;
+#  - the reopen stands in the recovered block, still under the wddm->Lock that validated the epoch and
+#    reopened the gfx gate, which is why no reader can see node 0 admitting work while the witness reports
+#    the hang;
+#  - the refusal tail only closes. A reopen there would re-arm a witness after a reset that did not recover.
+#    It closes with StartHealthClose on node 0, which clears the mark, and with the keep-mark close on any
+#    other node, whose refusal says nothing about node 0.
+$witnessOk = $true
+if (!$latch.Contains('StartHealthFaultPendingReset(Device);') -or $latch.Contains('GfxSubmitFail(')) { $witnessOk = $false }
+if (!$tail.Contains('if (pResetEngine->NodeOrdinal == BC250_WDDM_NODE_3D) StartHealthClose(device);') -or
+    !$tail.Contains('else StartHealthCloseKeepPendingReset(device);')) { $witnessOk = $false }
+$reopenCall = $reset.IndexOf('StartHealthRecovered(device')
+$innerRefusal = if ($reopen -ge 0) { $reset.IndexOf('goto refuseReset;', $reopen) } else { -1 }
+if ($reopenCall -lt 0 -or $innerRefusal -lt 0 -or $reopenCall -lt $innerRefusal) { $witnessOk = $false }
+else {
+    $between = $reset.Substring($innerRefusal, $reopenCall - $innerRefusal)
+    if ($between.Contains('KeAcquireSpinLock(') -or $between.Contains('KeReleaseSpinLock(') -or
+        !$between.Contains('Bc250HangResetEnd(&wddm->Recovery[node], TRUE, hungFence);')) { $witnessOk = $false }
+    if ($reset.IndexOf('StartHealthRecovered(device', $reopenCall + 1) -ge 0) { $witnessOk = $false }
+}
+if ($tail.Contains('StartHealthRecovered(')) { $witnessOk = $false }
 $mock += @'
-static int run_refusal_tail(BC250_DEVICE *device)
+/* BD-120: the node is a parameter, because the tail answers a refusal on node 1 differently from one on node 0. */
+static int run_refusal_tail_node(BC250_DEVICE *device, UINT node)
 {
     BC250_DEVICE *hAdapter = device;
-    struct { UINT NodeOrdinal, EngineOrdinal; } args = {0, 0}, *pResetEngine = &args;
+    struct { UINT NodeOrdinal, EngineOrdinal; } args, *pResetEngine = &args;
+    args.NodeOrdinal = node;
+    args.EngineOrdinal = 0;
 '@
 $mock += $tail
+$mock += @'
+
+static int run_refusal_tail(BC250_DEVICE *device) { return run_refusal_tail_node(device, 0); }
+'@
+$mock = '#define PRODUCTION_WITNESS_PROTOCOL ' + [int]$witnessOk + "`n" + $mock
 $mock = '#define PRODUCTION_ADMISSION_PROTOCOL ' + [int]$admissionOk + "`n" + $mock
 $mock = '#define PRODUCTION_SOURCE_PROTOCOL ' + [int]$sourceOk + "`n" + $mock
 [IO.File]::WriteAllText((Join-Path $Out 'timeout_latch.inc'), $mock)

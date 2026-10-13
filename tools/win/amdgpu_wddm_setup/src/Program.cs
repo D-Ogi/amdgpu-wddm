@@ -1,4 +1,4 @@
-// amdgpu-wddm Setup: the setup window for the amdgpu-wddm driver (GUI plan v7 phase 1, WU-001, WU-044, WU-047,
+// Nagi Setup: the setup window for the Nagi graphics driver, amdgpu-wddm (GUI plan v7 phase 1, WU-001, WU-044, WU-047,
 // WU-048, WU-051, WU-058). Arguments: SetupArgs.cs. The window runs as the invoking user and starts itself again as
 // administrator for an install, an update, a repair or a continuation (one UAC prompt); preparing an offline folder
 // needs no administrator. The headless entries (--smoke-render, --smoke-engine) never show a window.
@@ -17,17 +17,23 @@ namespace AmdgpuWddmSetup
     {
         public static string VersionText { get { return Assembly.GetExecutingAssembly().GetName().Version.ToString(); } }
 
+        // The name a person reads (owner, 2026-10-13: Nagi is the main brand of everything the package shows). The
+        // title bar draws it; the window's own title (task bar, Alt+Tab) is the string ui.window-title. Files,
+        // folders, registry keys and the support file's schema keep the technical name amdgpu-wddm.
+        public const string ProductName = "Nagi Setup";
+
         [STAThread]
         static int Main(string[] argv)
         {
             var a = SetupArgs.Parse(argv);
             if (a.Error != null) { Console.Error.WriteLine("amdgpu_wddm_setup: " + a.Error); return 2; }
-            if (a.Mode == "version") { Console.WriteLine("amdgpu-wddm Setup " + VersionText); return 0; }
+            if (a.Mode == "version") { Console.WriteLine(ProductName + " " + VersionText); return 0; }
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             if (a.Mode == "smoke-render") return SmokeRender(a);
             if (a.Mode == "smoke-engine") return SmokeEngine(a);
             if (a.Mode == "smoke-start-failure") return SmokeStartFailure(a);
+            if (a.Mode == "smoke-payload") return SmokePayload(a);
 
             // Nothing in a window may end setup with the crash dialog of .NET: every widget draws itself, and a GDI+
             // failure in any of them reaches the message loop. The detail goes into a file the support file carries,
@@ -37,15 +43,94 @@ namespace AmdgpuWddmSetup
             AppDomain.CurrentDomain.UnhandledException += (s, e) => Unexpected(a, e.ExceptionObject as Exception);
             Strings.Language = Native.ChosenLanguage() ?? Strings.SystemLanguage();
             Theme.Fonts();
-            if (a.Mode != "prepare-offline" && !Native.IsElevated())
+            // A single file that carries the whole package (Payload.cs, owner 2026-10-12). It has to unpack itself
+            // into a folder only administrators may write, so it needs the administrator prompt whatever it was
+            // started for; a setup.exe that has its files\ folder beside it carries no payload and is unchanged.
+            // --package names another release than the one in the file, and a folder beside the exe is the zip
+            // layout: in both cases the payload is not used, because the layout the user prepared is the one they
+            // asked for ("behaves as today", owner 2026-10-12). a.Package is read before it is overwritten below.
+            bool carries = Payload.Carries(Payload.Present(), a.Package, SetupForm.HasPackage(SetupForm.DefaultPackage()));
+            if ((a.Mode != "prepare-offline" || carries) && !Native.IsElevated())
             {
                 if (Native.RelaunchElevated(argv)) return 0;
-                MessageBox.Show(Strings.T("elevation.declined"), "amdgpu-wddm Setup", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(Strings.T("elevation.declined"), ProductName, MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return 5;
+            }
+            if (carries)
+            {
+                // One unpacking at a time (Payload.RunMutexName): a second copy of the same file would reset the
+                // folder the first one is installing from, and the first install would die on a missing file.
+                bool mine;
+                _run = new Mutex(true, Payload.RunMutexName, out mine);
+                if (!mine)
+                {
+                    try { mine = _run.WaitOne(0); } catch (AbandonedMutexException) { mine = true; }
+                    if (!mine)
+                    {
+                        MessageBox.Show(Strings.T("payload.already-running"), ProductName, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        return 8;
+                    }
+                }
+                try { a.Package = Payload.Extract(); }
+                catch (Exception e)
+                {
+                    // The package in the file is damaged, it does not match the list it came with, or the folder it
+                    // unpacks into cannot be made safe. Nothing is installed from it: the words say so, the detail
+                    // goes where every unexpected detail goes.
+                    try
+                    {
+                        var dir = a.RunRoot ?? Path.Combine(Path.GetTempPath(), "amdgpu-wddm-setup");
+                        Directory.CreateDirectory(dir);
+                        File.AppendAllText(Path.Combine(dir, "setup-window-problem.txt"),
+                            DateTime.UtcNow.ToString("o") + " " + VersionText + " payload: " + e + Environment.NewLine, new UTF8Encoding(false));
+                    }
+                    catch (Exception) { }
+                    MessageBox.Show(Strings.T(e is Payload.FolderException ? "payload.folder" : "payload.damaged"),
+                        ProductName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return 7;
+                }
+                a.PayloadPackage = a.Package;
             }
             Application.Run(new SetupForm(a, false));
             return 0;
         }
+
+        // --smoke-payload: the package this exe carries, read and checked exactly as an install reads it, and
+        // unpacked into a plain folder so that the whole reader can be tested without administrator rights (the
+        // permission list of the real folder is checked by the unit tests, Payload.Access). The summary says what
+        // was found; a payload that does not match its own file list ends this with a non-zero exit and the reason.
+        static int SmokePayload(SetupArgs a)
+        {
+            var report = Path.Combine(a.SmokeDir, "payload.txt");
+            try
+            {
+                Directory.CreateDirectory(a.SmokeDir);
+                var head = Payload.ReadHead(Assembly.GetExecutingAssembly().Location);
+                if (head == null) { File.WriteAllText(report, "no payload" + Environment.NewLine); Console.Error.WriteLine("no payload"); return 3; }
+                var package = Payload.Extract(Path.Combine(a.SmokeDir, "unpacked"), false);
+                var files = Directory.GetFiles(Path.GetDirectoryName(package.TrimEnd('\\')), "*", SearchOption.AllDirectories);
+                var w = new StringBuilder();
+                w.AppendLine("payload ok");
+                w.AppendLine("package " + package);
+                w.AppendLine("files " + files.Length);
+                w.AppendLine("payload-sha256 " + head.PayloadSha256);
+                w.AppendLine("list-sha256 " + head.ListSha256);
+                w.AppendLine("payload-bytes " + head.PayloadLength);
+                File.WriteAllText(report, w.ToString(), new UTF8Encoding(false));
+                Console.WriteLine(w.ToString().Trim());
+                return 0;
+            }
+            catch (Exception e)
+            {
+                try { Directory.CreateDirectory(a.SmokeDir); File.WriteAllText(report, "payload refused: " + e.Message + Environment.NewLine); } catch (Exception) { }
+                Console.Error.WriteLine("payload refused: " + e.Message);
+                return 4;
+            }
+        }
+
+        // The mutex of this run, held until the process ends: a field, so that nothing collects it while the
+        // install is still going on.
+        static Mutex _run;
 
         static int _unexpected;
 
@@ -62,7 +147,7 @@ namespace AmdgpuWddmSetup
                     DateTime.UtcNow.ToString("o") + " " + VersionText + Environment.NewLine + e + Environment.NewLine, new UTF8Encoding(false));
             }
             catch (Exception) { }
-            try { MessageBox.Show(Strings.T("ui.unexpected"), "amdgpu-wddm Setup", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+            try { MessageBox.Show(Strings.T("ui.unexpected"), ProductName, MessageBoxButtons.OK, MessageBoxIcon.Warning); }
             catch (Exception) { }
             Environment.Exit(9);
         }
@@ -86,12 +171,25 @@ namespace AmdgpuWddmSetup
                         form.ShowFixture(f);
                         foreach (var line in form.Render(Path.Combine(a.SmokeDir, f.Name + ".png")).Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries)) w.AppendLine(f.Name + ": " + line);
                         foreach (var p in form.Accessibility()) w.AppendLine(f.Name + ": G-A11Y " + p);
+                        // G-BACKDROP (BD-137): every control clears its own background, which the picture above
+                        // cannot show because there the parent painted the pixels under it first.
+                        foreach (var p in form.Backdrops()) w.AppendLine(f.Name + ": G-BACKDROP " + p);
                         // The guide character: her picture shows on every screen unless --no-nagi, and never with it.
                         if (form.GuideArtWanted != form.GuideArtShown)
                             w.AppendLine(f.Name + ": G-ART the guide art " + (form.GuideArtShown ? "shows but was not wanted" : "is wanted but does not show") +
                                 " (cause " + form.GuideCause + ", expression " + SetupGuide.Expression(form.GuideCause) + ")");
-                        if (a.NoNagi == form.GuideArtShown)
+                        if (form.GuidePanelShown && a.NoNagi == form.GuideArtShown)
                             w.AppendLine(f.Name + ": G-ART the guide art " + (form.GuideArtShown ? "shows with --no-nagi" : "does not show although the guide character is on"));
+                        // G-SMALL, the owner's rule of 2026-10-12: no guide panel at all on a small screen
+                        // (--work-area), the panel with its card on a screen that has room for it, and the page
+                        // column inside the room the window really has.
+                        foreach (var p in form.SmallScreenFindings()) w.AppendLine(f.Name + ": G-SMALL " + p);
+                        // G-CONSENT, the owner's instruction of 2026-10-12: no screen asks the user for a
+                        // permission, and the primary action is never off waiting for one.
+                        foreach (var p in form.ConsentFindings()) w.AppendLine(f.Name + ": G-CONSENT " + p);
+                        // G-SHORTCUT, the owner's instruction of 2026-10-12: the plan screen offers the Start menu
+                        // and the desktop shortcut, and both are on when it opens.
+                        foreach (var p in form.ShortcutFindings()) w.AppendLine(f.Name + ": G-SHORTCUT " + p);
                         var text = form.VisibleText(false);
                         foreach (var hit in NoInternals.Find(text)) w.AppendLine(f.Name + ": G-NOINT \"" + hit + "\"");
                         if (text.Contains("[")) foreach (var m in System.Text.RegularExpressions.Regex.Matches(text, @"\[[a-z0-9.-]+\]")) w.AppendLine(f.Name + ": missing string " + m);

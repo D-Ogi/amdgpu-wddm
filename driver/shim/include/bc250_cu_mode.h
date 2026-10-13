@@ -65,6 +65,8 @@ struct bc250_cu_request {
 	unsigned int	disable;	/* CuDisableWgp: bit sa * BC250_CU_WGP_MAX + wgp, 40 only */
 	unsigned int	pending;	/* CuModePending, 0 when absent */
 	unsigned int	confirmed;	/* CuModeConfirmed, 0 when absent */
+	int		closed_present;	/* CuModeClosedReason: the driver itself wrote CuMode 24 (0.7.216.62) */
+	unsigned int	closed;
 	unsigned int	sa_count;	/* shader arrays of the part */
 	unsigned int	wgps_per_sa;
 };
@@ -78,6 +80,17 @@ struct bc250_cu_decision {
 	int		clear_pending;	/* delete Pending */
 	int		force_stock;	/* write CuMode = 24: the automatic fallback, durable */
 	int		confirmed;	/* 40 was confirmed on an earlier start: nothing pending this time */
+	/* The durable record of a fallback (0.7.216.62, BD-077), the way bc250_dpm_decide keeps
+	 * DpmClosedReason. force_stock writes closed_reason into CuModeClosedReason, so the next boot
+	 * still knows that the driver wrote CuMode 24 and the release installer does not read the 24 as
+	 * a setting of the tester: with 40 as the release default, one unconfirmed start would otherwise
+	 * hold a tester at 24 compute units through every later upgrade (BD-069 for the CU mode).
+	 * CuModeLastReason cannot carry that: every start overwrites it, and a start that reads CuMode 24
+	 * writes NONE over the fallback. */
+	unsigned int	closed_reason;	/* the record after this start: force_stock writes this value into
+					 * CuModeClosedReason (driver/kmd/cumode.c PersistFallback), every other
+					 * start reports here what the key keeps. 0 for no record */
+	int		clear_closed;	/* delete CuModeClosedReason: CuMode is not 24 any more */
 };
 
 void bc250_cu_decide(const struct bc250_cu_request *req, struct bc250_cu_decision *out);

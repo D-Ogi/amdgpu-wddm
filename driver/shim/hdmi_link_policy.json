@@ -1,0 +1,1442 @@
+[
+  {
+    "register": "DIO_MEM_PWR_CTRL",
+    "field": "I2C_LIGHT_SLEEP_FORCE",
+    "mask": 1,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16047",
+    "usage": "hwseq201.c:362 REG_WRITE(DIO_MEM_PWR_CTRL, 0) memory power control"
+  },
+  {
+    "register": "DIO_MEM_PWR_CTRL",
+    "field": "I2C_LIGHT_SLEEP_DIS",
+    "mask": 2,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16048",
+    "usage": "hwseq201.c:362 REG_WRITE(DIO_MEM_PWR_CTRL, 0) memory power control"
+  },
+  {
+    "register": "DIO_MEM_PWR_CTRL",
+    "field": "DPA_LIGHT_SLEEP_DIS",
+    "mask": 16,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16049",
+    "usage": "hwseq201.c:362 REG_WRITE(DIO_MEM_PWR_CTRL, 0) memory power control"
+  },
+  {
+    "register": "DIO_MEM_PWR_CTRL",
+    "field": "DPB_LIGHT_SLEEP_DIS",
+    "mask": 32,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16050",
+    "usage": "hwseq201.c:362 REG_WRITE(DIO_MEM_PWR_CTRL, 0) memory power control"
+  },
+  {
+    "register": "DIO_MEM_PWR_CTRL",
+    "field": "DPC_LIGHT_SLEEP_DIS",
+    "mask": 64,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16051",
+    "usage": "hwseq201.c:362 REG_WRITE(DIO_MEM_PWR_CTRL, 0) memory power control"
+  },
+  {
+    "register": "DIO_MEM_PWR_CTRL",
+    "field": "DPD_LIGHT_SLEEP_DIS",
+    "mask": 128,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16052",
+    "usage": "hwseq201.c:362 REG_WRITE(DIO_MEM_PWR_CTRL, 0) memory power control"
+  },
+  {
+    "register": "DIO_MEM_PWR_CTRL",
+    "field": "DPE_LIGHT_SLEEP_DIS",
+    "mask": 256,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16053",
+    "usage": "hwseq201.c:362 REG_WRITE(DIO_MEM_PWR_CTRL, 0) memory power control"
+  },
+  {
+    "register": "DIO_MEM_PWR_CTRL",
+    "field": "DPF_LIGHT_SLEEP_DIS",
+    "mask": 512,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16054",
+    "usage": "hwseq201.c:362 REG_WRITE(DIO_MEM_PWR_CTRL, 0) memory power control"
+  },
+  {
+    "register": "DIO_MEM_PWR_CTRL",
+    "field": "DPG_LIGHT_SLEEP_DIS",
+    "mask": 1024,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16055",
+    "usage": "hwseq201.c:362 REG_WRITE(DIO_MEM_PWR_CTRL, 0) memory power control"
+  },
+  {
+    "register": "DIO_MEM_PWR_CTRL",
+    "field": "HDMI0_MEM_PWR_FORCE",
+    "mask": 6144,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16056",
+    "usage": "hwseq201.c:362 REG_WRITE(DIO_MEM_PWR_CTRL, 0) memory power control"
+  },
+  {
+    "register": "DIO_MEM_PWR_CTRL",
+    "field": "HDMI0_MEM_PWR_DIS",
+    "mask": 8192,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16057",
+    "usage": "hwseq201.c:362 REG_WRITE(DIO_MEM_PWR_CTRL, 0) memory power control"
+  },
+  {
+    "register": "DIO_MEM_PWR_CTRL",
+    "field": "HDMI1_MEM_PWR_FORCE",
+    "mask": 49152,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16058",
+    "usage": "hwseq201.c:362 REG_WRITE(DIO_MEM_PWR_CTRL, 0) memory power control"
+  },
+  {
+    "register": "DIO_MEM_PWR_CTRL",
+    "field": "HDMI1_MEM_PWR_DIS",
+    "mask": 65536,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16059",
+    "usage": "hwseq201.c:362 REG_WRITE(DIO_MEM_PWR_CTRL, 0) memory power control"
+  },
+  {
+    "register": "DIO_MEM_PWR_CTRL",
+    "field": "HDMI2_MEM_PWR_FORCE",
+    "mask": 393216,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16060",
+    "usage": "hwseq201.c:362 REG_WRITE(DIO_MEM_PWR_CTRL, 0) memory power control"
+  },
+  {
+    "register": "DIO_MEM_PWR_CTRL",
+    "field": "HDMI2_MEM_PWR_DIS",
+    "mask": 524288,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16061",
+    "usage": "hwseq201.c:362 REG_WRITE(DIO_MEM_PWR_CTRL, 0) memory power control"
+  },
+  {
+    "register": "DIO_MEM_PWR_CTRL",
+    "field": "HDMI3_MEM_PWR_FORCE",
+    "mask": 3145728,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16062",
+    "usage": "hwseq201.c:362 REG_WRITE(DIO_MEM_PWR_CTRL, 0) memory power control"
+  },
+  {
+    "register": "DIO_MEM_PWR_CTRL",
+    "field": "HDMI3_MEM_PWR_DIS",
+    "mask": 4194304,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16063",
+    "usage": "hwseq201.c:362 REG_WRITE(DIO_MEM_PWR_CTRL, 0) memory power control"
+  },
+  {
+    "register": "DIO_MEM_PWR_CTRL",
+    "field": "HDMI4_MEM_PWR_FORCE",
+    "mask": 25165824,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16064",
+    "usage": "hwseq201.c:362 REG_WRITE(DIO_MEM_PWR_CTRL, 0) memory power control"
+  },
+  {
+    "register": "DIO_MEM_PWR_CTRL",
+    "field": "HDMI4_MEM_PWR_DIS",
+    "mask": 33554432,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16065",
+    "usage": "hwseq201.c:362 REG_WRITE(DIO_MEM_PWR_CTRL, 0) memory power control"
+  },
+  {
+    "register": "DIO_MEM_PWR_CTRL",
+    "field": "HDMI5_MEM_PWR_FORCE",
+    "mask": 201326592,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16066",
+    "usage": "hwseq201.c:362 REG_WRITE(DIO_MEM_PWR_CTRL, 0) memory power control"
+  },
+  {
+    "register": "DIO_MEM_PWR_CTRL",
+    "field": "HDMI5_MEM_PWR_DIS",
+    "mask": 268435456,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16067",
+    "usage": "hwseq201.c:362 REG_WRITE(DIO_MEM_PWR_CTRL, 0) memory power control"
+  },
+  {
+    "register": "DIO_MEM_PWR_CTRL",
+    "field": "HDMI6_MEM_PWR_FORCE",
+    "mask": 1610612736,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16068",
+    "usage": "hwseq201.c:362 REG_WRITE(DIO_MEM_PWR_CTRL, 0) memory power control"
+  },
+  {
+    "register": "DIO_MEM_PWR_CTRL",
+    "field": "HDMI6_MEM_PWR_DIS",
+    "mask": 2147483648,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16069",
+    "usage": "hwseq201.c:362 REG_WRITE(DIO_MEM_PWR_CTRL, 0) memory power control"
+  },
+  {
+    "register": "DIG0_DIG_FE_CNTL",
+    "field": "DIG_SOURCE_SELECT",
+    "mask": 7,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16824",
+    "usage": "stream.c:1495 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_DIG_FE_CNTL",
+    "field": "DIG_STEREOSYNC_SELECT",
+    "mask": 112,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16825",
+    "usage": "stream.c:1485 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_DIG_FE_CNTL",
+    "field": "DIG_STEREOSYNC_GATE_EN",
+    "mask": 256,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16826",
+    "usage": "stream.c:1486 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_DIG_FE_CNTL",
+    "field": "DIG_START",
+    "mask": 1024,
+    "kind": "command",
+    "layout": "dcn_2_0_1_sh_mask.h:16827",
+    "usage": "stream.c:1004-1006 resync FIFO command"
+  },
+  {
+    "register": "DIG0_DIG_FE_CNTL",
+    "field": "DIG_DIGITAL_BYPASS_SELECT",
+    "mask": 28672,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:16828",
+    "usage": "No positive usage evidence; refuse nonzero unknown fields"
+  },
+  {
+    "register": "DIG0_DIG_FE_CNTL",
+    "field": "DIG_INPUT_PIXEL_SELECT",
+    "mask": 196608,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:16829",
+    "usage": "No positive usage evidence; refuse nonzero unknown fields"
+  },
+  {
+    "register": "DIG0_DIG_FE_CNTL",
+    "field": "DOLBY_VISION_EN",
+    "mask": 262144,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16830",
+    "usage": "stream20.c:404 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_DIG_FE_CNTL",
+    "field": "DOLBY_VISION_METADATA_PACKET_MISSED",
+    "mask": 524288,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:16831",
+    "usage": "No positive usage evidence; refuse nonzero unknown fields"
+  },
+  {
+    "register": "DIG0_DIG_FE_CNTL",
+    "field": "DIG_SYMCLK_FE_ON",
+    "mask": 16777216,
+    "kind": "status",
+    "layout": "dcn_2_0_1_sh_mask.h:16832",
+    "usage": "stream32.c:314 REG_WAIT(DIG_FE_CNTL, DIG_SYMCLK_FE_ON, 1, 10, 5000)"
+  },
+  {
+    "register": "DIG0_DIG_FE_CNTL",
+    "field": "TMDS_PIXEL_ENCODING",
+    "mask": 268435456,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16833",
+    "usage": "stream.c:470 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_DIG_FE_CNTL",
+    "field": "TMDS_COLOR_FORMAT",
+    "mask": 3221225472,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16834",
+    "usage": "stream.c:476 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_DIG_CLOCK_PATTERN",
+    "field": "DIG_CLOCK_PATTERN",
+    "mask": 1023,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16847",
+    "usage": "link10.c:967 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_HDMI_GENERIC_PACKET_CONTROL4",
+    "field": "HDMI_GENERIC6_LINE",
+    "mask": 65535,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16901",
+    "usage": "stream20.c:126 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_HDMI_GENERIC_PACKET_CONTROL4",
+    "field": "HDMI_GENERIC7_LINE",
+    "mask": 4294901760,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16902",
+    "usage": "stream20.c:133 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_HDMI_CONTROL",
+    "field": "HDMI_KEEPOUT_MODE",
+    "mask": 1,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16913",
+    "usage": "stream.c:503 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_HDMI_CONTROL",
+    "field": "HDMI_DATA_SCRAMBLE_EN",
+    "mask": 2,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16914",
+    "usage": "stream.c:503 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_HDMI_CONTROL",
+    "field": "HDMI_CLOCK_CHANNEL_RATE",
+    "mask": 4,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16915",
+    "usage": "stream.c:503 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_HDMI_CONTROL",
+    "field": "HDMI_NO_EXTRA_NULL_PACKET_FILLED",
+    "mask": 8,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16916",
+    "usage": "stream.c:503 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_HDMI_CONTROL",
+    "field": "HDMI_PACKET_GEN_VERSION",
+    "mask": 16,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16917",
+    "usage": "stream.c:503 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_HDMI_CONTROL",
+    "field": "HDMI_ERROR_ACK",
+    "mask": 256,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:16918",
+    "usage": "No positive usage evidence; refuse nonzero unknown fields"
+  },
+  {
+    "register": "DIG0_HDMI_CONTROL",
+    "field": "HDMI_ERROR_MASK",
+    "mask": 512,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:16919",
+    "usage": "No positive usage evidence; refuse nonzero unknown fields"
+  },
+  {
+    "register": "DIG0_HDMI_CONTROL",
+    "field": "HDMI_DEEP_COLOR_ENABLE",
+    "mask": 16777216,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16920",
+    "usage": "stream.c:503 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_HDMI_CONTROL",
+    "field": "HDMI_DEEP_COLOR_DEPTH",
+    "mask": 805306368,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16921",
+    "usage": "stream.c:514 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_HDMI_VBI_PACKET_CONTROL",
+    "field": "HDMI_NULL_SEND",
+    "mask": 1,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16962",
+    "usage": "stream.c:581 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_HDMI_VBI_PACKET_CONTROL",
+    "field": "HDMI_GC_SEND",
+    "mask": 16,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16963",
+    "usage": "stream.c:581 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_HDMI_VBI_PACKET_CONTROL",
+    "field": "HDMI_GC_CONT",
+    "mask": 32,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16964",
+    "usage": "stream.c:581 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_HDMI_VBI_PACKET_CONTROL",
+    "field": "HDMI_ISRC_SEND",
+    "mask": 256,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:16965",
+    "usage": "No positive usage evidence; refuse nonzero unknown fields"
+  },
+  {
+    "register": "DIG0_HDMI_VBI_PACKET_CONTROL",
+    "field": "HDMI_ISRC_CONT",
+    "mask": 512,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:16966",
+    "usage": "No positive usage evidence; refuse nonzero unknown fields"
+  },
+  {
+    "register": "DIG0_HDMI_VBI_PACKET_CONTROL",
+    "field": "HDMI_ACP_SEND",
+    "mask": 4096,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:16967",
+    "usage": "stream.c:586 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_HDMI_VBI_PACKET_CONTROL",
+    "field": "HDMI_ISRC_LINE",
+    "mask": 4128768,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:16968",
+    "usage": "No positive usage evidence; refuse nonzero unknown fields"
+  },
+  {
+    "register": "DIG0_HDMI_GENERIC_PACKET_CONTROL0",
+    "field": "HDMI_GENERIC0_SEND",
+    "mask": 1,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:17009",
+    "usage": "stream.c:188 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_HDMI_GENERIC_PACKET_CONTROL0",
+    "field": "HDMI_GENERIC0_CONT",
+    "mask": 2,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:17010",
+    "usage": "stream.c:188 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_HDMI_GENERIC_PACKET_CONTROL0",
+    "field": "HDMI_GENERIC0_LINE_REFERENCE",
+    "mask": 4,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:17011",
+    "usage": "No positive usage evidence; refuse nonzero unknown fields"
+  },
+  {
+    "register": "DIG0_HDMI_GENERIC_PACKET_CONTROL0",
+    "field": "HDMI_GENERIC1_SEND",
+    "mask": 16,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:17012",
+    "usage": "stream.c:194 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_HDMI_GENERIC_PACKET_CONTROL0",
+    "field": "HDMI_GENERIC1_CONT",
+    "mask": 32,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:17013",
+    "usage": "stream.c:194 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_HDMI_GENERIC_PACKET_CONTROL0",
+    "field": "HDMI_GENERIC1_LINE_REFERENCE",
+    "mask": 64,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:17014",
+    "usage": "No positive usage evidence; refuse nonzero unknown fields"
+  },
+  {
+    "register": "DIG0_HDMI_GENERIC_PACKET_CONTROL0",
+    "field": "HDMI_GENERIC2_SEND",
+    "mask": 256,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:17015",
+    "usage": "stream20.c:95 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_HDMI_GENERIC_PACKET_CONTROL0",
+    "field": "HDMI_GENERIC2_CONT",
+    "mask": 512,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:17016",
+    "usage": "stream20.c:95 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_HDMI_GENERIC_PACKET_CONTROL0",
+    "field": "HDMI_GENERIC2_LINE_REFERENCE",
+    "mask": 1024,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:17017",
+    "usage": "No positive usage evidence; refuse nonzero unknown fields"
+  },
+  {
+    "register": "DIG0_HDMI_GENERIC_PACKET_CONTROL0",
+    "field": "HDMI_GENERIC3_SEND",
+    "mask": 4096,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:17018",
+    "usage": "stream20.c:102 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_HDMI_GENERIC_PACKET_CONTROL0",
+    "field": "HDMI_GENERIC3_CONT",
+    "mask": 8192,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:17019",
+    "usage": "stream20.c:102 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_HDMI_GENERIC_PACKET_CONTROL0",
+    "field": "HDMI_GENERIC3_LINE_REFERENCE",
+    "mask": 16384,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:17020",
+    "usage": "No positive usage evidence; refuse nonzero unknown fields"
+  },
+  {
+    "register": "DIG0_HDMI_GENERIC_PACKET_CONTROL0",
+    "field": "HDMI_GENERIC4_SEND",
+    "mask": 65536,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:17021",
+    "usage": "stream20.c:109 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_HDMI_GENERIC_PACKET_CONTROL0",
+    "field": "HDMI_GENERIC4_CONT",
+    "mask": 131072,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:17022",
+    "usage": "stream20.c:109 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_HDMI_GENERIC_PACKET_CONTROL0",
+    "field": "HDMI_GENERIC4_LINE_REFERENCE",
+    "mask": 262144,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:17023",
+    "usage": "No positive usage evidence; refuse nonzero unknown fields"
+  },
+  {
+    "register": "DIG0_HDMI_GENERIC_PACKET_CONTROL0",
+    "field": "HDMI_GENERIC5_SEND",
+    "mask": 1048576,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:17024",
+    "usage": "stream20.c:116 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_HDMI_GENERIC_PACKET_CONTROL0",
+    "field": "HDMI_GENERIC5_CONT",
+    "mask": 2097152,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:17025",
+    "usage": "stream20.c:116 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_HDMI_GENERIC_PACKET_CONTROL0",
+    "field": "HDMI_GENERIC5_LINE_REFERENCE",
+    "mask": 4194304,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:17026",
+    "usage": "No positive usage evidence; refuse nonzero unknown fields"
+  },
+  {
+    "register": "DIG0_HDMI_GENERIC_PACKET_CONTROL0",
+    "field": "HDMI_GENERIC6_SEND",
+    "mask": 16777216,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:17027",
+    "usage": "stream20.c:123 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_HDMI_GENERIC_PACKET_CONTROL0",
+    "field": "HDMI_GENERIC6_CONT",
+    "mask": 33554432,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:17028",
+    "usage": "stream20.c:123 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_HDMI_GENERIC_PACKET_CONTROL0",
+    "field": "HDMI_GENERIC6_LINE_REFERENCE",
+    "mask": 67108864,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:17029",
+    "usage": "No positive usage evidence; refuse nonzero unknown fields"
+  },
+  {
+    "register": "DIG0_HDMI_GENERIC_PACKET_CONTROL0",
+    "field": "HDMI_GENERIC7_SEND",
+    "mask": 268435456,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:17030",
+    "usage": "stream20.c:130 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_HDMI_GENERIC_PACKET_CONTROL0",
+    "field": "HDMI_GENERIC7_CONT",
+    "mask": 536870912,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:17031",
+    "usage": "stream20.c:130 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_HDMI_GENERIC_PACKET_CONTROL0",
+    "field": "HDMI_GENERIC7_LINE_REFERENCE",
+    "mask": 1073741824,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:17032",
+    "usage": "No positive usage evidence; refuse nonzero unknown fields"
+  },
+  {
+    "register": "DIG0_HDMI_GC",
+    "field": "HDMI_GC_AVMUTE",
+    "mask": 1,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:17039",
+    "usage": "stream.c:596 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_HDMI_GC",
+    "field": "HDMI_GC_AVMUTE_CONT",
+    "mask": 4,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:17040",
+    "usage": "No positive usage evidence; refuse nonzero unknown fields"
+  },
+  {
+    "register": "DIG0_HDMI_GC",
+    "field": "HDMI_DEFAULT_PHASE",
+    "mask": 16,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:17041",
+    "usage": "No positive usage evidence; refuse nonzero unknown fields"
+  },
+  {
+    "register": "DIG0_HDMI_GC",
+    "field": "HDMI_PACKING_PHASE",
+    "mask": 3840,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:17042",
+    "usage": "No positive usage evidence; refuse nonzero unknown fields"
+  },
+  {
+    "register": "DIG0_HDMI_GC",
+    "field": "HDMI_PACKING_PHASE_OVERRIDE",
+    "mask": 4096,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:17043",
+    "usage": "No positive usage evidence; refuse nonzero unknown fields"
+  },
+  {
+    "register": "DIG0_HDMI_GENERIC_PACKET_CONTROL2",
+    "field": "HDMI_GENERIC2_LINE",
+    "mask": 65535,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:17139",
+    "usage": "stream20.c:98 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_HDMI_GENERIC_PACKET_CONTROL2",
+    "field": "HDMI_GENERIC3_LINE",
+    "mask": 4294901760,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:17140",
+    "usage": "stream20.c:105 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_HDMI_GENERIC_PACKET_CONTROL3",
+    "field": "HDMI_GENERIC4_LINE",
+    "mask": 65535,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:17144",
+    "usage": "stream20.c:112 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_HDMI_GENERIC_PACKET_CONTROL3",
+    "field": "HDMI_GENERIC5_LINE",
+    "mask": 4294901760,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:17145",
+    "usage": "stream20.c:119 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_HDMI_DB_CONTROL",
+    "field": "HDMI_DB_PENDING",
+    "mask": 1,
+    "kind": "observed_volatile",
+    "layout": "dcn_2_0_1_sh_mask.h:17155",
+    "usage": "audio41 lab readback 0x9001 -> 0x1000; volatility observed, RO semantics unproven"
+  },
+  {
+    "register": "DIG0_HDMI_DB_CONTROL",
+    "field": "HDMI_DB_TAKEN",
+    "mask": 16,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:17156",
+    "usage": "No positive usage evidence; refuse nonzero unknown fields"
+  },
+  {
+    "register": "DIG0_HDMI_DB_CONTROL",
+    "field": "HDMI_DB_TAKEN_CLR",
+    "mask": 32,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:17157",
+    "usage": "No positive usage evidence; refuse nonzero unknown fields"
+  },
+  {
+    "register": "DIG0_HDMI_DB_CONTROL",
+    "field": "HDMI_DB_LOCK",
+    "mask": 256,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:17158",
+    "usage": "No positive usage evidence; refuse nonzero unknown fields"
+  },
+  {
+    "register": "DIG0_HDMI_DB_CONTROL",
+    "field": "HDMI_DB_DISABLE",
+    "mask": 4096,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:17159",
+    "usage": "stream.c:664 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_HDMI_DB_CONTROL",
+    "field": "VUPDATE_DB_PENDING",
+    "mask": 32768,
+    "kind": "observed_volatile",
+    "layout": "dcn_2_0_1_sh_mask.h:17160",
+    "usage": "audio41 lab readback 0x9001 -> 0x1000; volatility observed, RO semantics unproven"
+  },
+  {
+    "register": "DIG0_HDMI_DB_CONTROL",
+    "field": "VUPDATE_DB_TAKEN",
+    "mask": 65536,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:17161",
+    "usage": "No positive usage evidence; refuse nonzero unknown fields"
+  },
+  {
+    "register": "DIG0_HDMI_DB_CONTROL",
+    "field": "VUPDATE_DB_TAKEN_CLR",
+    "mask": 131072,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:17162",
+    "usage": "No positive usage evidence; refuse nonzero unknown fields"
+  },
+  {
+    "register": "DIG0_AFMT_GENERIC_HDR",
+    "field": "AFMT_GENERIC_HB0",
+    "mask": 255,
+    "kind": "packet_data",
+    "layout": "dcn_2_0_1_sh_mask.h:17199",
+    "usage": "stream.c:90-125 indexed header/payload writes then update; no immediate readback or old-data restore contract"
+  },
+  {
+    "register": "DIG0_AFMT_GENERIC_HDR",
+    "field": "AFMT_GENERIC_HB1",
+    "mask": 65280,
+    "kind": "packet_data",
+    "layout": "dcn_2_0_1_sh_mask.h:17200",
+    "usage": "stream.c:90-125 indexed header/payload writes then update; no immediate readback or old-data restore contract"
+  },
+  {
+    "register": "DIG0_AFMT_GENERIC_HDR",
+    "field": "AFMT_GENERIC_HB2",
+    "mask": 16711680,
+    "kind": "packet_data",
+    "layout": "dcn_2_0_1_sh_mask.h:17201",
+    "usage": "stream.c:90-125 indexed header/payload writes then update; no immediate readback or old-data restore contract"
+  },
+  {
+    "register": "DIG0_AFMT_GENERIC_HDR",
+    "field": "AFMT_GENERIC_HB3",
+    "mask": 4278190080,
+    "kind": "packet_data",
+    "layout": "dcn_2_0_1_sh_mask.h:17202",
+    "usage": "stream.c:90-125 indexed header/payload writes then update; no immediate readback or old-data restore contract"
+  },
+  {
+    "register": "DIG0_AFMT_GENERIC_0",
+    "field": "AFMT_GENERIC_BYTE0",
+    "mask": 255,
+    "kind": "packet_data",
+    "layout": "dcn_2_0_1_sh_mask.h:17208",
+    "usage": "stream.c:90-125 indexed header/payload writes then update; no immediate readback or old-data restore contract"
+  },
+  {
+    "register": "DIG0_AFMT_GENERIC_0",
+    "field": "AFMT_GENERIC_BYTE1",
+    "mask": 65280,
+    "kind": "packet_data",
+    "layout": "dcn_2_0_1_sh_mask.h:17209",
+    "usage": "stream.c:90-125 indexed header/payload writes then update; no immediate readback or old-data restore contract"
+  },
+  {
+    "register": "DIG0_AFMT_GENERIC_0",
+    "field": "AFMT_GENERIC_BYTE2",
+    "mask": 16711680,
+    "kind": "packet_data",
+    "layout": "dcn_2_0_1_sh_mask.h:17210",
+    "usage": "stream.c:90-125 indexed header/payload writes then update; no immediate readback or old-data restore contract"
+  },
+  {
+    "register": "DIG0_AFMT_GENERIC_0",
+    "field": "AFMT_GENERIC_BYTE3",
+    "mask": 4278190080,
+    "kind": "packet_data",
+    "layout": "dcn_2_0_1_sh_mask.h:17211",
+    "usage": "stream.c:90-125 indexed header/payload writes then update; no immediate readback or old-data restore contract"
+  },
+  {
+    "register": "DIG0_AFMT_GENERIC_1",
+    "field": "AFMT_GENERIC_BYTE4",
+    "mask": 255,
+    "kind": "packet_data",
+    "layout": "dcn_2_0_1_sh_mask.h:17217",
+    "usage": "stream.c:90-125 indexed header/payload writes then update; no immediate readback or old-data restore contract"
+  },
+  {
+    "register": "DIG0_AFMT_GENERIC_1",
+    "field": "AFMT_GENERIC_BYTE5",
+    "mask": 65280,
+    "kind": "packet_data",
+    "layout": "dcn_2_0_1_sh_mask.h:17218",
+    "usage": "stream.c:90-125 indexed header/payload writes then update; no immediate readback or old-data restore contract"
+  },
+  {
+    "register": "DIG0_AFMT_GENERIC_1",
+    "field": "AFMT_GENERIC_BYTE6",
+    "mask": 16711680,
+    "kind": "packet_data",
+    "layout": "dcn_2_0_1_sh_mask.h:17219",
+    "usage": "stream.c:90-125 indexed header/payload writes then update; no immediate readback or old-data restore contract"
+  },
+  {
+    "register": "DIG0_AFMT_GENERIC_1",
+    "field": "AFMT_GENERIC_BYTE7",
+    "mask": 4278190080,
+    "kind": "packet_data",
+    "layout": "dcn_2_0_1_sh_mask.h:17220",
+    "usage": "stream.c:90-125 indexed header/payload writes then update; no immediate readback or old-data restore contract"
+  },
+  {
+    "register": "DIG0_AFMT_GENERIC_2",
+    "field": "AFMT_GENERIC_BYTE8",
+    "mask": 255,
+    "kind": "packet_data",
+    "layout": "dcn_2_0_1_sh_mask.h:17226",
+    "usage": "stream.c:90-125 indexed header/payload writes then update; no immediate readback or old-data restore contract"
+  },
+  {
+    "register": "DIG0_AFMT_GENERIC_2",
+    "field": "AFMT_GENERIC_BYTE9",
+    "mask": 65280,
+    "kind": "packet_data",
+    "layout": "dcn_2_0_1_sh_mask.h:17227",
+    "usage": "stream.c:90-125 indexed header/payload writes then update; no immediate readback or old-data restore contract"
+  },
+  {
+    "register": "DIG0_AFMT_GENERIC_2",
+    "field": "AFMT_GENERIC_BYTE10",
+    "mask": 16711680,
+    "kind": "packet_data",
+    "layout": "dcn_2_0_1_sh_mask.h:17228",
+    "usage": "stream.c:90-125 indexed header/payload writes then update; no immediate readback or old-data restore contract"
+  },
+  {
+    "register": "DIG0_AFMT_GENERIC_2",
+    "field": "AFMT_GENERIC_BYTE11",
+    "mask": 4278190080,
+    "kind": "packet_data",
+    "layout": "dcn_2_0_1_sh_mask.h:17229",
+    "usage": "stream.c:90-125 indexed header/payload writes then update; no immediate readback or old-data restore contract"
+  },
+  {
+    "register": "DIG0_AFMT_GENERIC_3",
+    "field": "AFMT_GENERIC_BYTE12",
+    "mask": 255,
+    "kind": "packet_data",
+    "layout": "dcn_2_0_1_sh_mask.h:17235",
+    "usage": "stream.c:90-125 indexed header/payload writes then update; no immediate readback or old-data restore contract"
+  },
+  {
+    "register": "DIG0_AFMT_GENERIC_3",
+    "field": "AFMT_GENERIC_BYTE13",
+    "mask": 65280,
+    "kind": "packet_data",
+    "layout": "dcn_2_0_1_sh_mask.h:17236",
+    "usage": "stream.c:90-125 indexed header/payload writes then update; no immediate readback or old-data restore contract"
+  },
+  {
+    "register": "DIG0_AFMT_GENERIC_3",
+    "field": "AFMT_GENERIC_BYTE14",
+    "mask": 16711680,
+    "kind": "packet_data",
+    "layout": "dcn_2_0_1_sh_mask.h:17237",
+    "usage": "stream.c:90-125 indexed header/payload writes then update; no immediate readback or old-data restore contract"
+  },
+  {
+    "register": "DIG0_AFMT_GENERIC_3",
+    "field": "AFMT_GENERIC_BYTE15",
+    "mask": 4278190080,
+    "kind": "packet_data",
+    "layout": "dcn_2_0_1_sh_mask.h:17238",
+    "usage": "stream.c:90-125 indexed header/payload writes then update; no immediate readback or old-data restore contract"
+  },
+  {
+    "register": "DIG0_AFMT_GENERIC_4",
+    "field": "AFMT_GENERIC_BYTE16",
+    "mask": 255,
+    "kind": "packet_data",
+    "layout": "dcn_2_0_1_sh_mask.h:17244",
+    "usage": "stream.c:90-125 indexed header/payload writes then update; no immediate readback or old-data restore contract"
+  },
+  {
+    "register": "DIG0_AFMT_GENERIC_4",
+    "field": "AFMT_GENERIC_BYTE17",
+    "mask": 65280,
+    "kind": "packet_data",
+    "layout": "dcn_2_0_1_sh_mask.h:17245",
+    "usage": "stream.c:90-125 indexed header/payload writes then update; no immediate readback or old-data restore contract"
+  },
+  {
+    "register": "DIG0_AFMT_GENERIC_4",
+    "field": "AFMT_GENERIC_BYTE18",
+    "mask": 16711680,
+    "kind": "packet_data",
+    "layout": "dcn_2_0_1_sh_mask.h:17246",
+    "usage": "stream.c:90-125 indexed header/payload writes then update; no immediate readback or old-data restore contract"
+  },
+  {
+    "register": "DIG0_AFMT_GENERIC_4",
+    "field": "AFMT_GENERIC_BYTE19",
+    "mask": 4278190080,
+    "kind": "packet_data",
+    "layout": "dcn_2_0_1_sh_mask.h:17247",
+    "usage": "stream.c:90-125 indexed header/payload writes then update; no immediate readback or old-data restore contract"
+  },
+  {
+    "register": "DIG0_AFMT_GENERIC_5",
+    "field": "AFMT_GENERIC_BYTE20",
+    "mask": 255,
+    "kind": "packet_data",
+    "layout": "dcn_2_0_1_sh_mask.h:17253",
+    "usage": "stream.c:90-125 indexed header/payload writes then update; no immediate readback or old-data restore contract"
+  },
+  {
+    "register": "DIG0_AFMT_GENERIC_5",
+    "field": "AFMT_GENERIC_BYTE21",
+    "mask": 65280,
+    "kind": "packet_data",
+    "layout": "dcn_2_0_1_sh_mask.h:17254",
+    "usage": "stream.c:90-125 indexed header/payload writes then update; no immediate readback or old-data restore contract"
+  },
+  {
+    "register": "DIG0_AFMT_GENERIC_5",
+    "field": "AFMT_GENERIC_BYTE22",
+    "mask": 16711680,
+    "kind": "packet_data",
+    "layout": "dcn_2_0_1_sh_mask.h:17255",
+    "usage": "stream.c:90-125 indexed header/payload writes then update; no immediate readback or old-data restore contract"
+  },
+  {
+    "register": "DIG0_AFMT_GENERIC_5",
+    "field": "AFMT_GENERIC_BYTE23",
+    "mask": 4278190080,
+    "kind": "packet_data",
+    "layout": "dcn_2_0_1_sh_mask.h:17256",
+    "usage": "stream.c:90-125 indexed header/payload writes then update; no immediate readback or old-data restore contract"
+  },
+  {
+    "register": "DIG0_AFMT_GENERIC_6",
+    "field": "AFMT_GENERIC_BYTE24",
+    "mask": 255,
+    "kind": "packet_data",
+    "layout": "dcn_2_0_1_sh_mask.h:17262",
+    "usage": "stream.c:90-125 indexed header/payload writes then update; no immediate readback or old-data restore contract"
+  },
+  {
+    "register": "DIG0_AFMT_GENERIC_6",
+    "field": "AFMT_GENERIC_BYTE25",
+    "mask": 65280,
+    "kind": "packet_data",
+    "layout": "dcn_2_0_1_sh_mask.h:17263",
+    "usage": "stream.c:90-125 indexed header/payload writes then update; no immediate readback or old-data restore contract"
+  },
+  {
+    "register": "DIG0_AFMT_GENERIC_6",
+    "field": "AFMT_GENERIC_BYTE26",
+    "mask": 16711680,
+    "kind": "packet_data",
+    "layout": "dcn_2_0_1_sh_mask.h:17264",
+    "usage": "stream.c:90-125 indexed header/payload writes then update; no immediate readback or old-data restore contract"
+  },
+  {
+    "register": "DIG0_AFMT_GENERIC_6",
+    "field": "AFMT_GENERIC_BYTE27",
+    "mask": 4278190080,
+    "kind": "packet_data",
+    "layout": "dcn_2_0_1_sh_mask.h:17265",
+    "usage": "stream.c:90-125 indexed header/payload writes then update; no immediate readback or old-data restore contract"
+  },
+  {
+    "register": "DIG0_AFMT_GENERIC_7",
+    "field": "AFMT_GENERIC_BYTE28",
+    "mask": 255,
+    "kind": "packet_data",
+    "layout": "dcn_2_0_1_sh_mask.h:17271",
+    "usage": "stream.c:90-125 indexed header/payload writes then update; no immediate readback or old-data restore contract"
+  },
+  {
+    "register": "DIG0_AFMT_GENERIC_7",
+    "field": "AFMT_GENERIC_BYTE29",
+    "mask": 65280,
+    "kind": "packet_data",
+    "layout": "dcn_2_0_1_sh_mask.h:17272",
+    "usage": "stream.c:90-125 indexed header/payload writes then update; no immediate readback or old-data restore contract"
+  },
+  {
+    "register": "DIG0_AFMT_GENERIC_7",
+    "field": "AFMT_GENERIC_BYTE30",
+    "mask": 16711680,
+    "kind": "packet_data",
+    "layout": "dcn_2_0_1_sh_mask.h:17273",
+    "usage": "stream.c:90-125 indexed header/payload writes then update; no immediate readback or old-data restore contract"
+  },
+  {
+    "register": "DIG0_AFMT_GENERIC_7",
+    "field": "AFMT_GENERIC_BYTE31",
+    "mask": 4278190080,
+    "kind": "packet_data",
+    "layout": "dcn_2_0_1_sh_mask.h:17274",
+    "usage": "stream.c:90-125 indexed header/payload writes then update; no immediate readback or old-data restore contract"
+  },
+  {
+    "register": "DIG0_HDMI_GENERIC_PACKET_CONTROL1",
+    "field": "HDMI_GENERIC0_LINE",
+    "mask": 65535,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:17278",
+    "usage": "stream.c:200 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_HDMI_GENERIC_PACKET_CONTROL1",
+    "field": "HDMI_GENERIC1_LINE",
+    "mask": 4294901760,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:17279",
+    "usage": "stream.c:206 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_AFMT_VBI_PACKET_CONTROL",
+    "field": "AFMT_GENERIC_LOCK_STATUS",
+    "mask": 256,
+    "kind": "status",
+    "layout": "dcn_2_0_1_sh_mask.h:17435",
+    "usage": "stream20.c:233-240 REG_WAIT hardware lock/conflict"
+  },
+  {
+    "register": "DIG0_AFMT_VBI_PACKET_CONTROL",
+    "field": "AFMT_GENERIC_CONFLICT",
+    "mask": 65536,
+    "kind": "status",
+    "layout": "dcn_2_0_1_sh_mask.h:17437",
+    "usage": "stream20.c:233-240 REG_WAIT hardware lock/conflict"
+  },
+  {
+    "register": "DIG0_AFMT_VBI_PACKET_CONTROL",
+    "field": "AFMT_GENERIC_CONFLICT_CLR",
+    "mask": 131072,
+    "kind": "command",
+    "layout": "dcn_2_0_1_sh_mask.h:17438",
+    "usage": "stream20.c:242-243 clear HW/SW memory access conflict flag"
+  },
+  {
+    "register": "DIG0_AFMT_VBI_PACKET_CONTROL",
+    "field": "AFMT_GENERIC_INDEX",
+    "mask": 4026531840,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:17439",
+    "usage": "stream.c:90 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_DIG_BE_CNTL",
+    "field": "DIG_DUAL_LINK_ENABLE",
+    "mask": 1,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:17457",
+    "usage": "No positive usage evidence; refuse nonzero unknown fields"
+  },
+  {
+    "register": "DIG0_DIG_BE_CNTL",
+    "field": "DIG_SWAP",
+    "mask": 2,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:17458",
+    "usage": "No positive usage evidence; refuse nonzero unknown fields"
+  },
+  {
+    "register": "DIG0_DIG_BE_CNTL",
+    "field": "DIG_RB_SWITCH_EN",
+    "mask": 4,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:17459",
+    "usage": "No positive usage evidence; refuse nonzero unknown fields"
+  },
+  {
+    "register": "DIG0_DIG_BE_CNTL",
+    "field": "DIG_FE_SOURCE_SELECT",
+    "mask": 32512,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:17460",
+    "usage": "link10.c:1361 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_DIG_BE_CNTL",
+    "field": "DIG_MODE",
+    "mask": 458752,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:17461",
+    "usage": "link10.c:890 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_DIG_BE_CNTL",
+    "field": "DIG_HPD_SELECT",
+    "mask": 1879048192,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:17462",
+    "usage": "link10.c:560 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_TMDS_CTL_BITS",
+    "field": "TMDS_CTL0",
+    "mask": 1,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:17504",
+    "usage": "link20.c:353 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_TMDS_CTL_BITS",
+    "field": "TMDS_CTL1",
+    "mask": 256,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:17505",
+    "usage": "No positive usage evidence; refuse nonzero unknown fields"
+  },
+  {
+    "register": "DIG0_TMDS_CTL_BITS",
+    "field": "TMDS_CTL2",
+    "mask": 65536,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:17506",
+    "usage": "No positive usage evidence; refuse nonzero unknown fields"
+  },
+  {
+    "register": "DIG0_TMDS_CTL_BITS",
+    "field": "TMDS_CTL3",
+    "mask": 16777216,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:17507",
+    "usage": "No positive usage evidence; refuse nonzero unknown fields"
+  },
+  {
+    "register": "DIG0_AFMT_CNTL",
+    "field": "AFMT_AUDIO_CLOCK_EN",
+    "mask": 1,
+    "kind": "configuration",
+    "layout": "dcn_2_0_1_sh_mask.h:17603",
+    "usage": "stream.c:68 REG_UPDATE"
+  },
+  {
+    "register": "DIG0_AFMT_CNTL",
+    "field": "AFMT_AUDIO_CLOCK_ON",
+    "mask": 256,
+    "kind": "status",
+    "layout": "dcn_2_0_1_sh_mask.h:17604",
+    "usage": "stream.c:1379 REG_WAIT clock acknowledgement"
+  },
+  {
+    "register": "DIG0_AFMT_VBI_PACKET_CONTROL1",
+    "field": "AFMT_GENERIC0_FRAME_UPDATE",
+    "mask": 1,
+    "kind": "command",
+    "layout": "dcn_2_0_1_sh_mask.h:17638",
+    "usage": "stream.c:119-153 update request; stream20.c packet update"
+  },
+  {
+    "register": "DIG0_AFMT_VBI_PACKET_CONTROL1",
+    "field": "AFMT_GENERIC0_FRAME_UPDATE_PENDING",
+    "mask": 2,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:17639",
+    "usage": "Pending family resembles stream.c:851, but no direct usage proof; refuse nonzero"
+  },
+  {
+    "register": "DIG0_AFMT_VBI_PACKET_CONTROL1",
+    "field": "AFMT_GENERIC0_IMMEDIATE_UPDATE",
+    "mask": 4,
+    "kind": "command",
+    "layout": "dcn_2_0_1_sh_mask.h:17640",
+    "usage": "stream.c:119-153 update request; stream20.c packet update"
+  },
+  {
+    "register": "DIG0_AFMT_VBI_PACKET_CONTROL1",
+    "field": "AFMT_GENERIC0_IMMEDIATE_UPDATE_PENDING",
+    "mask": 8,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:17641",
+    "usage": "Pending family resembles stream.c:851, but no direct usage proof; refuse nonzero"
+  },
+  {
+    "register": "DIG0_AFMT_VBI_PACKET_CONTROL1",
+    "field": "AFMT_GENERIC1_FRAME_UPDATE",
+    "mask": 16,
+    "kind": "command",
+    "layout": "dcn_2_0_1_sh_mask.h:17642",
+    "usage": "stream.c:119-153 update request; stream20.c packet update"
+  },
+  {
+    "register": "DIG0_AFMT_VBI_PACKET_CONTROL1",
+    "field": "AFMT_GENERIC1_FRAME_UPDATE_PENDING",
+    "mask": 32,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:17643",
+    "usage": "Pending family resembles stream.c:851, but no direct usage proof; refuse nonzero"
+  },
+  {
+    "register": "DIG0_AFMT_VBI_PACKET_CONTROL1",
+    "field": "AFMT_GENERIC1_IMMEDIATE_UPDATE",
+    "mask": 64,
+    "kind": "command",
+    "layout": "dcn_2_0_1_sh_mask.h:17644",
+    "usage": "stream.c:119-153 update request; stream20.c packet update"
+  },
+  {
+    "register": "DIG0_AFMT_VBI_PACKET_CONTROL1",
+    "field": "AFMT_GENERIC1_IMMEDIATE_UPDATE_PENDING",
+    "mask": 128,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:17645",
+    "usage": "Pending family resembles stream.c:851, but no direct usage proof; refuse nonzero"
+  },
+  {
+    "register": "DIG0_AFMT_VBI_PACKET_CONTROL1",
+    "field": "AFMT_GENERIC2_FRAME_UPDATE",
+    "mask": 256,
+    "kind": "command",
+    "layout": "dcn_2_0_1_sh_mask.h:17646",
+    "usage": "stream.c:119-153 update request; stream20.c packet update"
+  },
+  {
+    "register": "DIG0_AFMT_VBI_PACKET_CONTROL1",
+    "field": "AFMT_GENERIC2_FRAME_UPDATE_PENDING",
+    "mask": 512,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:17647",
+    "usage": "Pending family resembles stream.c:851, but no direct usage proof; refuse nonzero"
+  },
+  {
+    "register": "DIG0_AFMT_VBI_PACKET_CONTROL1",
+    "field": "AFMT_GENERIC2_IMMEDIATE_UPDATE",
+    "mask": 1024,
+    "kind": "command",
+    "layout": "dcn_2_0_1_sh_mask.h:17648",
+    "usage": "stream.c:119-153 update request; stream20.c packet update"
+  },
+  {
+    "register": "DIG0_AFMT_VBI_PACKET_CONTROL1",
+    "field": "AFMT_GENERIC2_IMMEDIATE_UPDATE_PENDING",
+    "mask": 2048,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:17649",
+    "usage": "Pending family resembles stream.c:851, but no direct usage proof; refuse nonzero"
+  },
+  {
+    "register": "DIG0_AFMT_VBI_PACKET_CONTROL1",
+    "field": "AFMT_GENERIC3_FRAME_UPDATE",
+    "mask": 4096,
+    "kind": "command",
+    "layout": "dcn_2_0_1_sh_mask.h:17650",
+    "usage": "stream.c:119-153 update request; stream20.c packet update"
+  },
+  {
+    "register": "DIG0_AFMT_VBI_PACKET_CONTROL1",
+    "field": "AFMT_GENERIC3_FRAME_UPDATE_PENDING",
+    "mask": 8192,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:17651",
+    "usage": "Pending family resembles stream.c:851, but no direct usage proof; refuse nonzero"
+  },
+  {
+    "register": "DIG0_AFMT_VBI_PACKET_CONTROL1",
+    "field": "AFMT_GENERIC3_IMMEDIATE_UPDATE",
+    "mask": 16384,
+    "kind": "command",
+    "layout": "dcn_2_0_1_sh_mask.h:17652",
+    "usage": "stream.c:119-153 update request; stream20.c packet update"
+  },
+  {
+    "register": "DIG0_AFMT_VBI_PACKET_CONTROL1",
+    "field": "AFMT_GENERIC3_IMMEDIATE_UPDATE_PENDING",
+    "mask": 32768,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:17653",
+    "usage": "Pending family resembles stream.c:851, but no direct usage proof; refuse nonzero"
+  },
+  {
+    "register": "DIG0_AFMT_VBI_PACKET_CONTROL1",
+    "field": "AFMT_GENERIC4_FRAME_UPDATE",
+    "mask": 65536,
+    "kind": "command",
+    "layout": "dcn_2_0_1_sh_mask.h:17654",
+    "usage": "stream.c:119-153 update request; stream20.c packet update"
+  },
+  {
+    "register": "DIG0_AFMT_VBI_PACKET_CONTROL1",
+    "field": "AFMT_GENERIC4_FRAME_UPDATE_PENDING",
+    "mask": 131072,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:17655",
+    "usage": "Pending family resembles stream.c:851, but no direct usage proof; refuse nonzero"
+  },
+  {
+    "register": "DIG0_AFMT_VBI_PACKET_CONTROL1",
+    "field": "AFMT_GENERIC4_IMMEDIATE_UPDATE",
+    "mask": 262144,
+    "kind": "command",
+    "layout": "dcn_2_0_1_sh_mask.h:17656",
+    "usage": "stream.c:119-153 update request; stream20.c packet update"
+  },
+  {
+    "register": "DIG0_AFMT_VBI_PACKET_CONTROL1",
+    "field": "AFMT_GENERIC4_IMMEDIATE_UPDATE_PENDING",
+    "mask": 524288,
+    "kind": "status",
+    "layout": "dcn_2_0_1_sh_mask.h:17657",
+    "usage": "stream.c:851 REG_WAIT update completion"
+  },
+  {
+    "register": "DIG0_AFMT_VBI_PACKET_CONTROL1",
+    "field": "AFMT_GENERIC5_FRAME_UPDATE",
+    "mask": 1048576,
+    "kind": "command",
+    "layout": "dcn_2_0_1_sh_mask.h:17658",
+    "usage": "stream.c:119-153 update request; stream20.c packet update"
+  },
+  {
+    "register": "DIG0_AFMT_VBI_PACKET_CONTROL1",
+    "field": "AFMT_GENERIC5_FRAME_UPDATE_PENDING",
+    "mask": 2097152,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:17659",
+    "usage": "Pending family resembles stream.c:851, but no direct usage proof; refuse nonzero"
+  },
+  {
+    "register": "DIG0_AFMT_VBI_PACKET_CONTROL1",
+    "field": "AFMT_GENERIC5_IMMEDIATE_UPDATE",
+    "mask": 4194304,
+    "kind": "command",
+    "layout": "dcn_2_0_1_sh_mask.h:17660",
+    "usage": "stream.c:119-153 update request; stream20.c packet update"
+  },
+  {
+    "register": "DIG0_AFMT_VBI_PACKET_CONTROL1",
+    "field": "AFMT_GENERIC5_IMMEDIATE_UPDATE_PENDING",
+    "mask": 8388608,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:17661",
+    "usage": "Pending family resembles stream.c:851, but no direct usage proof; refuse nonzero"
+  },
+  {
+    "register": "DIG0_AFMT_VBI_PACKET_CONTROL1",
+    "field": "AFMT_GENERIC6_FRAME_UPDATE",
+    "mask": 16777216,
+    "kind": "command",
+    "layout": "dcn_2_0_1_sh_mask.h:17662",
+    "usage": "stream.c:119-153 update request; stream20.c packet update"
+  },
+  {
+    "register": "DIG0_AFMT_VBI_PACKET_CONTROL1",
+    "field": "AFMT_GENERIC6_FRAME_UPDATE_PENDING",
+    "mask": 33554432,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:17663",
+    "usage": "Pending family resembles stream.c:851, but no direct usage proof; refuse nonzero"
+  },
+  {
+    "register": "DIG0_AFMT_VBI_PACKET_CONTROL1",
+    "field": "AFMT_GENERIC6_IMMEDIATE_UPDATE",
+    "mask": 67108864,
+    "kind": "command",
+    "layout": "dcn_2_0_1_sh_mask.h:17664",
+    "usage": "stream.c:119-153 update request; stream20.c packet update"
+  },
+  {
+    "register": "DIG0_AFMT_VBI_PACKET_CONTROL1",
+    "field": "AFMT_GENERIC6_IMMEDIATE_UPDATE_PENDING",
+    "mask": 134217728,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:17665",
+    "usage": "Pending family resembles stream.c:851, but no direct usage proof; refuse nonzero"
+  },
+  {
+    "register": "DIG0_AFMT_VBI_PACKET_CONTROL1",
+    "field": "AFMT_GENERIC7_FRAME_UPDATE",
+    "mask": 268435456,
+    "kind": "command",
+    "layout": "dcn_2_0_1_sh_mask.h:17666",
+    "usage": "stream.c:119-153 update request; stream20.c packet update"
+  },
+  {
+    "register": "DIG0_AFMT_VBI_PACKET_CONTROL1",
+    "field": "AFMT_GENERIC7_FRAME_UPDATE_PENDING",
+    "mask": 536870912,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:17667",
+    "usage": "Pending family resembles stream.c:851, but no direct usage proof; refuse nonzero"
+  },
+  {
+    "register": "DIG0_AFMT_VBI_PACKET_CONTROL1",
+    "field": "AFMT_GENERIC7_IMMEDIATE_UPDATE",
+    "mask": 1073741824,
+    "kind": "command",
+    "layout": "dcn_2_0_1_sh_mask.h:17668",
+    "usage": "stream.c:119-153 update request; stream20.c packet update"
+  },
+  {
+    "register": "DIG0_AFMT_VBI_PACKET_CONTROL1",
+    "field": "AFMT_GENERIC7_IMMEDIATE_UPDATE_PENDING",
+    "mask": 2147483648,
+    "kind": "unknown",
+    "layout": "dcn_2_0_1_sh_mask.h:17669",
+    "usage": "Pending family resembles stream.c:851, but no direct usage proof; refuse nonzero"
+  }
+]

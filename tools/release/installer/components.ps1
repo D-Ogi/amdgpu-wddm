@@ -539,12 +539,57 @@ function New-ComponentShortcut {
 }
 
 # Pure: the shortcut names of a component (the install writes them, the uninstaller removes them by these names).
-function Get-ComponentShortcutPaths($Component) {
-    $out = [pscustomobject]@{ start_menu = $null; startup = $null }
+# The names start with the product name Nagi (common.ps1 $ShortcutBrand, owner 2026-10-13); legacy holds the names an
+# older release gave the same shortcuts ("amdgpu-wddm <title>"), which the install and the uninstall remove only when
+# they point into the component's own folder (Get-ComponentLegacyShortcutCleanup). Without -All a component gets the
+# names of the shortcuts it has (an entry, a server launcher); with -All every name its title can carry, for a record
+# of the installer state, which does not keep the entry and the launcher.
+function Get-ComponentShortcutPaths($Component, [switch]$All) {
+    $out = [pscustomobject]@{ start_menu = $null; startup = $null; legacy = @() }
     $title = [string]$Component.title
-    if ([string]$Component.entry) { $out.start_menu = Join-Path $script:StartMenuDir "amdgpu-wddm $title.lnk" }
-    if ([string]$Component.server_launcher) { $out.startup = Join-Path $script:StartupDir "amdgpu-wddm $title server.lnk" }
+    $menu = $All -or [bool][string]$Component.entry
+    $boot = $All -or [bool][string]$Component.server_launcher
+    if ($menu) { $out.start_menu = Join-Path $script:StartMenuDir "$($script:ShortcutBrand) $title.lnk"; $out.legacy += (Join-Path $script:StartMenuDir "$($script:LegacyShortcutBrand) $title.lnk") }
+    if ($boot) { $out.startup = Join-Path $script:StartupDir "$($script:ShortcutBrand) $title server.lnk"; $out.legacy += (Join-Path $script:StartupDir "$($script:LegacyShortcutBrand) $title server.lnk") }
     return $out
+}
+
+# Pure: which legacy shortcut files of one component are ours. A file is ours when its target lies inside the
+# component's own folder ($Dir); ReadTarget returns the target of a .lnk path ($null when unreadable). Returns the
+# rows with action 'remove' or 'keep' and the reason, like Get-LegacyShortcutCleanup of common.ps1.
+function Get-ComponentLegacyShortcutCleanup {
+    param([string[]]$Links, [string]$Dir, [scriptblock]$ReadTarget)
+    $out = @()
+    $root = $null
+    if ($Dir -and [IO.Path]::IsPathRooted($Dir)) { try { $root = [IO.Path]::GetFullPath($Dir).TrimEnd([char]92) + [char]92 } catch { $root = $null } }
+    foreach ($l in @($Links)) {
+        if (-not $l -or -not (Test-Path -LiteralPath $l -PathType Leaf)) { continue }
+        $t = & $ReadTarget $l
+        $full = $null
+        if ($t -and [IO.Path]::IsPathRooted($t)) { try { $full = [IO.Path]::GetFullPath($t) } catch { $full = $null } }
+        if ($root -and $full -and $full.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) { $out += [pscustomobject]@{ path = $l; action = 'remove'; target = $full; reason = 'it points into the folder of the component' } }
+        elseif ($t) { $out += [pscustomobject]@{ path = $l; action = 'keep'; target = $t; reason = "it points at $t, which is not ours" } }
+        else { $out += [pscustomobject]@{ path = $l; action = 'keep'; target = $null; reason = 'its target cannot be read' } }
+    }
+    return $out
+}
+
+# Removes the legacy shortcuts of one component that are ours, and says which ones stay.
+function Remove-ComponentLegacyShortcuts([string[]]$Links, [string]$Dir, [string]$Title) {
+    foreach ($c in @(Get-ComponentLegacyShortcutCleanup -Links $Links -Dir $Dir -ReadTarget { param($p) Read-ShortcutTarget $p })) {
+        if ($c.action -eq 'remove') {
+            Invoke-Change "remove the shortcut $($c.path) ($Title): the name of an older release; $($c.reason)" { Remove-Item -LiteralPath $c.path -Force -ErrorAction SilentlyContinue } | Out-Null
+        } else { Write-Info "kept: $($c.path), $($c.reason)" }
+    }
+}
+
+# Pure: the names of the shortcuts of one record of the installer state that are not the recorded ones: the other
+# list of names (new and legacy) that the same component can carry. A record of an older release holds the old
+# names, one of this release the new names.
+function Get-ComponentOtherShortcutNames($Record) {
+    $names = Get-ComponentShortcutPaths $Record -All
+    $recorded = @([string]$Record.start_menu, [string]$Record.startup)
+    return @(@($names.start_menu, $names.startup) + @($names.legacy) | Where-Object { $_ -and $recorded -notcontains $_ })
 }
 
 # Installs one checked component zip. Every change goes through Invoke-Change, so a dry run prints it and changes
@@ -610,6 +655,8 @@ function Install-ComponentFiles {
         } | Out-Null
         $record.startup = $links.startup
     }
+    # The names an older release gave these shortcuts go, when they point into this component's folder.
+    if (@($links.legacy).Count) { Remove-ComponentLegacyShortcuts -Links @($links.legacy) -Dir $dir -Title ([string]$Component.title) }
     return $record
 }
 
@@ -779,6 +826,9 @@ function Remove-ComponentRegistrations($State) {
             if (-not (Test-Path -LiteralPath $lnk)) { Write-Info "already gone: $lnk"; continue }
             Invoke-Change "remove the shortcut $lnk ($([string]$r.title))" { Remove-Item -LiteralPath $lnk -Force -ErrorAction SilentlyContinue } | Out-Null
         }
+        # The other names of the same shortcuts (new or legacy) go too, when they point into the component's folder.
+        $other = @(Get-ComponentOtherShortcutNames $r)
+        if ($other.Count) { Remove-ComponentLegacyShortcuts -Links $other -Dir ([string]$r.dir) -Title ([string]$r.title) }
     }
 }
 
@@ -855,7 +905,12 @@ function Get-ComponentFootprint($State, [bool]$RemoveModels) {
         @{ present = ($left.Count -gt 0); detail = $d }
     } $false
     & $add 'component shortcuts' {
+        # The recorded names, and every other name of the same shortcuts (new and legacy) that points into the
+        # component's folder: the same rule as the uninstall (Remove-ComponentRegistrations).
         $links = @(@($records | ForEach-Object { [string]$_.start_menu; [string]$_.startup }) | Where-Object { $_ -and (Test-Path -LiteralPath $_) })
+        foreach ($r in $records) {
+            $links += @(@(Get-ComponentLegacyShortcutCleanup -Links @(Get-ComponentOtherShortcutNames $r) -Dir ([string]$r.dir) -ReadTarget { param($p) Read-ShortcutTarget $p }) | Where-Object { $_.action -eq 'remove' } | ForEach-Object { $_.path })
+        }
         $d = 'no shortcut of a component of ours'
         if ($links.Count) { $d = (@($links | ForEach-Object { Split-Path $_ -Leaf }) -join ', ') }
         @{ present = ($links.Count -gt 0); detail = $d }

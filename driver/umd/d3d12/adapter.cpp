@@ -157,6 +157,10 @@ HRESULT APIENTRY fill_table(D3D12DDI_HADAPTER h,D3D12DDI_TABLE_TYPE type,void* o
 void APIENTRY destroy_device(D3D12DDI_HDEVICE h) {
     if(!h.pDrvPrivate) return;
     auto device=static_cast<Device*>(h.pDrvPrivate);auto adapter=device->adapter;
+    // BD-133: the present context first (present-context.h): it waits for the queues' progress fences, which go with
+    // the engine, and its close waits, bounded, for the kernel presents made on it. Nothing happens without one.
+    const HRESULT present=device->present.close(10000);
+    if(present!=S_OK)trace("DestroyDevice-present-context-failed",static_cast<unsigned>(present));
     native12::destroy_device_engine(*device);
     unsigned retired=0,active=0;
     device->queues.discard_device_metadata(retired,active);

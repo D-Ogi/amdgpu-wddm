@@ -65,6 +65,15 @@ static inline int bc250_board_supported(unsigned int provider_id)
 #define BC250_DPM_TARGET_PERMILLE	800u	/* a raise aims at this share at the new clock */
 #define BC250_DPM_DOWN_PERMILLE		650u	/* the average below this for DOWN_HOLD_MS: one step down */
 #define BC250_DPM_DOWN_HOLD_MS		200u
+/* The compute threshold set (BD-127): the three load thresholds in force while a compute context is open.
+ * Measured on unit A: a 1.7B model generating through HIP held 57.9 % GPU busy at 1000 MHz and gained 31 %
+ * of its tokens a second at a 2000 MHz floor, so the clock was the limit and the graphics thresholds above
+ * never asked for it. 400/300/200 answer 58 % at 1000 MHz with about 1930 MHz, which the grid and the
+ * ceiling make 2000, and 47 % at 2000 MHz stays above the lowering threshold. */
+#define BC250_DPM_COMPUTE_UP_PERMILLE		400u
+#define BC250_DPM_COMPUTE_TARGET_PERMILLE	300u
+#define BC250_DPM_COMPUTE_DOWN_PERMILLE		200u
+#define BC250_DPM_COMPUTE_PROFILE		1u	/* DpmComputeProfile absent: the set is on */
 #define BC250_DPM_RAMP_KNEE_MC		70000
 #define BC250_DPM_RAMP_MIN_MS		1000u
 #define BC250_DPM_RAMP_MAX_MS		4000u

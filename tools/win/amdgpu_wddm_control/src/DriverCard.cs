@@ -33,19 +33,21 @@ using Microsoft.Win32;
 namespace AmdgpuWddmControl
 {
     public enum RunningKind { Exact, Unknown, Ambiguous }
-    public enum VerifyKind { Verified, Failed, Unknown }
+    public enum VerifyKind { Verified, Failed, EarlierBootFailed, Unknown }
     public enum MappingStatus { Complete, Absent, Incomplete, Conflicting }
 
     public sealed class ReleaseWitness
     {
         public long BootId;
+        public long? BootElapsedMs;
         public string RecordedUtc, RecordedBy, Release, Version, ManifestSha256, KmdImageSha256, KmdBuild, KmdAbi;
     }
 
-    // One recorded install action (state.json mutation_boot_id / mutation_utc).
+    // One recorded install action (state.json mutation_boot_id / mutation_boot_elapsed_ms; UTC is metadata).
     public sealed class InstallAction
     {
         public long BootId;
+        public long? BootElapsedMs;
         public string Utc;
     }
 
@@ -71,6 +73,7 @@ namespace AmdgpuWddmControl
 
     public sealed class VerifyReport
     {
+        public long? BootId, BootElapsedMs;
         public bool Valid;                  // the format of interfaces.md section 2, a real run with results
         public bool Passed;                 // outcome 'passed'
         public string Utc, PackageVersion, ManifestSha256, ManifestSource;
@@ -166,9 +169,11 @@ namespace AmdgpuWddmControl
             if (w.BootId != f.BootId.Value) return "the witness is from another boot (" + w.BootId + ", now " + f.BootId + ")";
             if (f.ReplyAbi == null) return "no driver reply";
             if (ParseAbi(w.KmdAbi) != f.ReplyAbi.Value) return "the witness names kmd_abi " + w.KmdAbi + ", the driver replies " + KmdReply.VersionText(f.ReplyAbi.Value);
-            var recorded = Utc(w.RecordedUtc).Value;
             foreach (var a in f.InstallActions.Where(a => a != null && a.BootId == f.BootId.Value))
-                if (Utc(a.Utc) == null || Utc(a.Utc) > recorded) return "an install action at " + (a.Utc ?? "an unknown time") + " came after the witness in this boot";
+                // Equal ticks cannot establish that the reading followed the mutation. Legacy records have no
+                // reliable order after a clock correction, so they cannot preserve an exact witness either.
+                if (a.BootElapsedMs == null || w.BootElapsedMs == null || a.BootElapsedMs >= w.BootElapsedMs)
+                    return "an install action in this boot is not known to precede the witness (" + (a.Utc ?? "unknown time") + ")";
             if (f.Mapping != MappingStatus.Complete) return "the manifest mapping is " + f.Mapping.ToString().ToLowerInvariant();
             int bound = Distinct(f.Packages).Count(p => Binds(p, w));
             if (bound != 1) return bound == 0 ? "no known package binds the witness (manifest, release, version, build, ABI and image)" : bound + " known packages bind the witness";
@@ -193,7 +198,18 @@ namespace AmdgpuWddmControl
         // Verification of the installed package only (decision 8): its newest valid report.
         public static VerifyReport InstalledReport(DriverFacts f)
         {
-            return f.Reports.Where(r => OfInstalled(r, f)).OrderByDescending(r => Utc(r.Utc) ?? DateTime.MinValue).FirstOrDefault();
+            if (f.ReportSearchNote != null) return null; // An unread report can outrank every candidate seen so far.
+            var reports = f.Reports.Where(r => OfInstalled(r, f)).ToList();
+            if (reports.Count == 0) return null;
+            var boot = reports.Max(r => r.BootId ?? -1);
+            reports = reports.Where(r => (r.BootId ?? -1) == boot).ToList();
+            // Use one ordering for the whole boot. Pairwise fallback between ticks and UTC is not transitive
+            // when a legacy report sits between two stamped reports across a clock correction.
+            bool ticks = boot >= 0 && reports.All(r => r.BootElapsedMs.HasValue);
+            return reports.OrderByDescending(r => ticks ? r.BootElapsedMs.Value : 0)
+                .ThenByDescending(r => Utc(r.Utc) ?? DateTime.MinValue)
+                .ThenBy(r => r.Passed) // Indistinguishable legacy outcomes must not hide a failed check.
+                .First();
         }
 
         public static DriverCardView Decide(DriverFacts f)
@@ -217,12 +233,16 @@ namespace AmdgpuWddmControl
 
             var report = InstalledReport(f);
             v.Verification = report == null ? VerifyKind.Unknown : report.Passed ? VerifyKind.Verified : VerifyKind.Failed;
+            if (report != null && !report.Passed && report.BootId.HasValue && f.BootId.HasValue && report.BootId < f.BootId &&
+                v.Running == RunningKind.Exact && v.RunningVersion == v.InstalledVersion && SameHash(f.Witness.ManifestSha256, f.InstalledManifestSha256))
+                v.Verification = VerifyKind.EarlierBootFailed;
 
             v.RunningText = v.Running == RunningKind.Exact ? Strings.T("drv.running.exact", v.RunningVersion) : Strings.T("drv.running.unknown");
             v.InstalledText = v.InstalledVersion == null ? Strings.T("drv.installed.none")
                 : v.InstalledPending ? Strings.T("drv.installed.pending", v.InstalledVersion) : Strings.T("drv.installed", v.InstalledVersion);
             if (v.InstallStopped) v.InstalledText += " " + Strings.T("drv.installed.stopped");
-            v.VerificationText = Strings.T(v.Verification == VerifyKind.Verified ? "drv.verify.ok" : v.Verification == VerifyKind.Failed ? "drv.verify.failed" : "drv.verify.unknown");
+            v.VerificationText = Strings.T(v.Verification == VerifyKind.Verified ? "drv.verify.ok" : v.Verification == VerifyKind.Failed ? "drv.verify.failed"
+                : v.Verification == VerifyKind.EarlierBootFailed ? "drv.verify.earlier-boot" : "drv.verify.unknown");
             var date = InfDate(f.DriverDate);
             v.DriverDateText = date == null ? Strings.T("drv.date.none") : Strings.T("drv.date", date.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
 
@@ -234,7 +254,7 @@ namespace AmdgpuWddmControl
                 "; loaded image " + (f.Image != null && f.Image.BasesHidden ? "not listed by Windows for this reader (null driver bases), the witness's record of this boot is used"
                     : f.Image != null && f.Image.Available ? f.Image.Sha256 + " build " + (f.Image.KmdBuild ?? "unknown") : "unknown" + (f.Image != null && f.Image.Detail != null ? " (" + f.Image.Detail + ")" : "")) +
                 "; installed " + (v.InstalledVersion ?? "unknown") + "; installer state " + (f.Phase ?? "none") + " for " + (f.StatePackageVersion ?? "none") +
-                "; verification " + v.Verification + (report != null ? " (" + report.Utc + ": " + report.PassedCount + " passed, " + report.FailedCount + " failed)" : "") +
+                "; verification " + v.Verification + (report != null ? " (" + report.Utc + ", boot " + report.BootId + ", elapsed ms " + report.BootElapsedMs + ": " + report.PassedCount + " passed, " + report.FailedCount + " failed)" : "") +
                 (f.ReportSearchNote != null ? " (report search incomplete: " + f.ReportSearchNote + ")" : "") +
                 (f.WitnessNote != null ? "; " + f.WitnessNote : "");
             return v;
@@ -299,6 +319,12 @@ namespace AmdgpuWddmControl
             return null;
         }
 
+        static long? Nonnegative(IDictionary<string, object> d, string key, long max = long.MaxValue)
+        {
+            var n = N(d, key);
+            return n.HasValue && n.Value >= 0 && n.Value <= max ? n : null;
+        }
+
         // The witness as written; completeness is a rule of WitnessProblem. null: no witness (another schema, damaged).
         public static ReleaseWitness ParseWitness(string text)
         {
@@ -308,7 +334,7 @@ namespace AmdgpuWddmControl
             if (by != "verify" && by != "start-confirm") return null;
             return new ReleaseWitness
             {
-                BootId = N(d, "boot_id").Value, RecordedUtc = S(d, "recorded_utc"), RecordedBy = by, Release = S(d, "release"), Version = S(d, "version"),
+                BootId = N(d, "boot_id").Value, BootElapsedMs = Nonnegative(d, "boot_elapsed_ms"), RecordedUtc = S(d, "recorded_utc"), RecordedBy = by, Release = S(d, "release"), Version = S(d, "version"),
                 ManifestSha256 = S(d, "manifest_sha256"), KmdImageSha256 = S(d, "kmd_image_sha256"), KmdBuild = S(d, "kmd_build"), KmdAbi = S(d, "kmd_abi"),
             };
         }
@@ -321,7 +347,7 @@ namespace AmdgpuWddmControl
             f.Phase = S(d, "phase");
             f.StatePackageVersion = S(d, "package_version");
             var boot = N(d, "mutation_boot_id");
-            if (boot != null) f.InstallActions.Add(new InstallAction { BootId = boot.Value, Utc = S(d, "mutation_utc") });
+            if (boot != null) f.InstallActions.Add(new InstallAction { BootId = boot.Value, BootElapsedMs = Nonnegative(d, "mutation_boot_elapsed_ms"), Utc = S(d, "mutation_utc") });
             return true;
         }
 
@@ -331,7 +357,8 @@ namespace AmdgpuWddmControl
         {
             var d = Json(text);
             if (d == null) return null;
-            var r = new VerifyReport { Utc = S(d, "utc"), PackageVersion = S(d, "package_version"), ManifestSha256 = S(d, "manifest_sha256"), ManifestSource = S(d, "manifest_source") };
+            var r = new VerifyReport { BootId = Nonnegative(d, "boot_id", uint.MaxValue), BootElapsedMs = Nonnegative(d, "boot_elapsed_ms"),
+                Utc = S(d, "utc"), PackageVersion = S(d, "package_version"), ManifestSha256 = S(d, "manifest_sha256"), ManifestSource = S(d, "manifest_source") };
             object results, dry, complete;
             bool listOk = d.TryGetValue("results", out results) && results is object[] && ((object[])results).Length > 0;
             if (listOk)
@@ -553,9 +580,8 @@ namespace AmdgpuWddmControl
             return f;
         }
 
-        // The newest valid report of the installed package (936 A3): every verify-<utc>.json, newest name first, until the
-        // first one of the installed package. Invalid, oversized, untrusted and other-package reports are passed over; a
-        // report that cannot be read, a directory that cannot be listed or the budget end the search as incomplete.
+        // Names do not establish order after a clock correction. Read the whole bounded set before choosing by
+        // boot and uptime. An incomplete search gives Unknown, even when a matching report was already read.
         static void FindReport(IInstallerFiles files, string dir, DriverFacts f, ProbeBudget budget)
         {
             string[] names;
@@ -579,7 +605,6 @@ namespace AmdgpuWddmControl
                 var r = DriverCard.ParseVerify(Text(b.Bytes));
                 if (r == null || !r.Valid) continue;
                 f.Reports.Add(r);
-                if (DriverCard.OfInstalled(r, f)) return;
             }
         }
 

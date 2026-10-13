@@ -312,8 +312,19 @@ Check (@(Test-ComponentsManifest $one).Count -eq 0) 'the fixture manifest with a
 Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue
 $staged = Get-ComponentAssetStaged -Manifest $one -Component $one.components[0] -Staging $staging -FromDir $modelSrcDir
 $modelsDir = Join-Path $WorkRoot 'models'
-$record = Install-ComponentFiles -Manifest $one -Component $one.components[0] -Zip $staged -InstallRoot $installRoot -Staging $staging -ModelsDir $modelsDir
+# The shortcut an older release wrote under the old name ("amdgpu-wddm <title>"), pointing at the component's own
+# program: the install over it writes the new name and removes the old one.
 $dir = Join-Path $installRoot 'tools\demo'
+$oldMenu = Join-Path $script:StartMenuDir 'amdgpu-wddm Demo extra.lnk'
+[void](New-ComponentShortcut -Link $oldMenu -Target (Join-Path $dir 'demo.exe') -WorkDir $dir -Hidden $false)
+Check (Test-Path -LiteralPath $oldMenu) 'the old-named shortcut of an older release is there before the install'
+$record = Install-ComponentFiles -Manifest $one -Component $one.components[0] -Zip $staged -InstallRoot $installRoot -Staging $staging -ModelsDir $modelsDir
+Check ((Split-Path $record.start_menu -Leaf) -eq 'Nagi Demo extra.lnk') "the Start menu shortcut carries the name Nagi ($(Split-Path $record.start_menu -Leaf))"
+Check (-not (Test-Path -LiteralPath $oldMenu)) 'the install removed the old name, which pointed into the component folder'
+$names = Get-ComponentShortcutPaths $one.components[0]
+Check ($null -eq $names.startup -and @($names.legacy).Count -eq 1) 'a component without a server launcher has one new name and one old name'
+$allNames = Get-ComponentShortcutPaths ([pscustomobject]@{ title = 'Demo extra' }) -All
+Check (((@($allNames.start_menu, $allNames.startup) + @($allNames.legacy) | ForEach-Object { Split-Path $_ -Leaf }) -join '|') -eq 'Nagi Demo extra.lnk|Nagi Demo extra server.lnk|amdgpu-wddm Demo extra.lnk|amdgpu-wddm Demo extra server.lnk') 'a record of the state knows the four names its title can carry'
 Check (Test-Path -LiteralPath (Join-Path $dir 'demo.exe')) 'the zip_root contents are in <install root>\tools\demo'
 Check (-not (Test-Path -LiteralPath (Join-Path $dir 'demo'))) 'the zip_root folder itself is not repeated inside it'
 Check ((Get-Content -LiteralPath (Join-Path $dir 'demo-backend.cfg') -Raw).Trim() -eq 'backend=vulkan') 'the backend setting is one line in the component folder'
@@ -382,6 +393,14 @@ Check (-not (Test-Path -LiteralPath (Join-Path $modelsDir 'tiny.gguf'))) 'the fi
 
 'the uninstall'
 $state = [pscustomobject]@{ install_root = $installRoot; components_installed = @($record); models_installed = @($modelRecords); models_dir = $modelsDir }
+# Two old-named shortcuts left by an older release: one of ours (into the component folder), one with a foreign target.
+$oldServer = Join-Path $script:StartupDir 'amdgpu-wddm Demo extra server.lnk'
+$foreignExe = Join-Path $WorkRoot 'foreign\demo.exe'
+[void](New-ComponentShortcut -Link $oldMenu -Target (Join-Path $dir 'demo.exe') -WorkDir $dir -Hidden $false)
+[void](New-ComponentShortcut -Link $oldServer -Target $foreignExe -WorkDir (Split-Path $foreignExe) -Hidden $true)
+$footBefore = @(Get-ComponentFootprint $state $false | Where-Object { $_.item -eq 'component shortcuts' })[0]
+Check ($footBefore.present -and $footBefore.detail -like '*Nagi Demo extra.lnk*' -and $footBefore.detail -like '*amdgpu-wddm Demo extra.lnk*') "the footprint lists the new and the old name of ours ($($footBefore.detail))"
+Check ($footBefore.detail -notlike '*server.lnk*') 'the footprint does not count the old name with a foreign target'
 Check ((Get-StateModelsDir $state) -eq $modelsDir) 'the state says which models folder this installation used'
 Invoke-ComponentUnregister $state $one
 Check (Test-Path -LiteralPath (Join-Path $dir 'hook-unregister.txt')) 'each extra undid its own registration first, with its own script'
@@ -389,6 +408,10 @@ Remove-ComponentRegistrations $state
 Check (-not (Test-PathEntry (Get-MachinePath).value $dir)) 'the PATH entry is gone'
 Check ((Get-MachinePath).value -eq 'C:\Windows;C:\Windows\System32') 'and nothing else of the PATH changed'
 Check (-not (Test-Path -LiteralPath $record.start_menu)) 'the Start menu shortcut is gone'
+Check (-not (Test-Path -LiteralPath $oldMenu)) 'the uninstall removed the old name of ours too'
+Check (Test-Path -LiteralPath $oldServer) 'the uninstall kept the old name that points at a foreign program'
+Check (@(Get-ComponentFootprint $state $false | Where-Object { $_.item -eq 'component shortcuts' })[0].present -eq $false) 'the footprint sees no shortcut of ours after the uninstall'
+Remove-Item -LiteralPath $oldServer -Force
 # The component's own store, as its server would have written it.
 [void][IO.Directory]::CreateDirectory($ownStore)
 [IO.File]::WriteAllText((Join-Path $ownStore 'blobs.bin'), 'a model in the component''s own format')

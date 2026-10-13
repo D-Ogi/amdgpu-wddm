@@ -2,6 +2,7 @@
 #include "heap-import.h"
 #include "device-state.h"
 #include "allocation-request.h"
+#include "present-copy.h"
 #include "ddi-trace.h"
 #include "scanout-mode.h"
 #include <bc250_host_bootstrap.h>
@@ -66,6 +67,10 @@ struct RuntimeHeapImports::Record {
     bool retired{true},locked{},busy{};
     unsigned borrowed{};                        // runtime callbacks in flight that name it as backing
     bool surface{};                             // the allocation of a linear primary
+    // BD-133: a linear surface this driver asked for itself, with no runtime resource of its own (the request
+    // carried no rt_owner). Its release names no owner, so it goes by handle like any other allocation of ours;
+    // see release_owned.
+    bool driver_surface{};
     bool adopted{};                             // BD-075: opened by the runtime, borrowed, never deallocated here
     DWORD authority{};                          // the thread whose runtime resource DDI runs (0: none)
     bool destroyed{};                           // that DDI destroys the resource
@@ -332,6 +337,15 @@ HRESULT RuntimeHeapImports::release_owned(Record& record) noexcept {
         // handle and calls nothing, and the runtime destroys the allocation when the opened resource goes.
         free_report_.adopted=true;
         hr=record.allocation.close(ReleaseForm::Handle,Retirement::Retired);
+    } else if(record.surface && record.driver_surface){
+        // BD-133: a surface this driver allocated for itself. There is no runtime resource to release it by and
+        // no DDI of such a resource to be inside: the runtime made the allocation on our request alone and
+        // destroys nothing of it behind us, so the handle form is the only right one, with the caller's proof of
+        // retirement as for every other allocation of ours. The owner form below exists because the runtime
+        // destroys a linear primary's allocation with its resource; that reason does not apply here, and using
+        // the owner form would name a resource that does not exist.
+        free_report_.driver_surface=true;
+        hr=record.allocation.close(ReleaseForm::Handle,Retirement::Retired);
     } else if(record.surface){
         // By the runtime resource, inside that resource's own DDI and on its thread, or not at all:
         // neither a saved owner in a later DDI nor the other form.
@@ -425,6 +439,10 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     const bool primary=request->flags==primary_flags;
     const bool shared_surface=request->flags==shared_flags;
     const bool surface=primary||shared_surface;
+    // BD-133: a surface request that names no runtime resource is one the driver asked for itself (engine-ddi
+    // resources.cpp, make_present_copy). Two things follow: its release names no owner (release_owned), and it
+    // is never scanned out, whichever form it took - see the scan-out clause below.
+    const bool driver_surface=surface && !request->rt_owner.handle;
     // The first attempt of a shared create: an ordinary dedicated request that says the resource may have to be
     // shared. Nothing about the allocation changes; the flag exists so that this call can tell the runtime's
     // refusal of a shared resource from any other E_INVALIDARG and answer kShareRequired.
@@ -448,6 +466,8 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     if(!surface && (request->surface_row_pitch || request->surface_layout_size))
         return refuse("surface fields without a surface",E_INVALIDARG,*request);
     D3DDDIFORMAT surface_format=D3DDDIFMT_UNKNOWN;
+    // BD-133: the row of the driver's own Present copy surface of a B8G8R8X8 source, when that is the row (below).
+    const AMDGPU_WDDM_SURFACE_FORMAT* own=nullptr;
     bool surface_scanout=false;
     uint32_t shared_bind=0;
     if(surface){
@@ -486,7 +506,16 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
             ?Bc250SharedSurfaceFormat(static_cast<unsigned long>(r->Format))
             :amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_dxgi(unsigned(r->Format)),
                                        AMDGPU_WDDM_SURFACE_COMPOSED);
-        const auto* row=composed;
+        // BD-133, the D3D9 back buffer: the Present copy of a B8G8R8X8 source (88, or its sRGB view 93) takes the
+        // A8R8G8B8 row, the A tag of the X8 row's bytes (present-copy.h, present_copy_own_format and
+        // present_copy_alpha_tag), which no lookup above returns because 88 and 93 are not that row's DXGI numbers.
+        // Only a surface of the driver's own may have it - nobody opens it and it is never scanned out
+        // (present-copy.h says why the table itself is not changed) - so a request with a runtime resource is
+        // refused exactly as before. The wire has no record for a B8G8R8X8 source, so neither form of it gets the
+        // 64-byte E26R v3 record, which would name the source's DXGI format: both are the 12-byte v1 record below
+        // (prepare_surface), the shared form without the PRIMARY flag and the primary form with it.
+        own=!composed && driver_surface?present_copy_own_format(unsigned(r->Format)):nullptr;
+        const auto* row=composed?composed:own;
         // Every reason not to ask for scan-out stands the request down to this composed primary instead
         // of failing the allocation; the clauses and why each one exists are in scanout-mode.h. They
         // include the operator's switches on both sides (scanout-flip-off, the kernel driver's published
@@ -494,7 +523,13 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
         // geometry and the pitch, because a request the kernel driver would refuse at flip time, or one
         // the compositor could not read, is worse than no request: the buffer would be in VRAM with no
         // CPU mapping, and the refusal would come after SharedPrimaryTransition.
-        if(primary){
+        // BD-133, review finding 5: a surface of the driver's own is only ever the source of a CP DMA copy, and
+        // no video present source ever flips it. The primary form of such a request exists because the runtime
+        // may refuse the shared form for an allocation with no runtime resource, not because the buffer is a
+        // primary; so it keeps the composed primary's format and stands scan-out down here, before the decision
+        // is asked, as the other clauses of scanout-mode.h stand it down. Admitting it would put it in the local
+        // segment as a scan-out primary of video present source 0, against the real primary of that source.
+        if(primary && !driver_surface){
             // The trailer and the compositor's record of this moment: the geometry clause compares the
             // chain with the source mode the kernel driver has committed now, which a game may have changed
             // since the device was made, and dwm.exe may have restarted on another route since then. The
@@ -580,14 +615,22 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
         // The image's own requirements, from engine-ddi: no buffer is ever bound to this memory, and
         // the address has to suit the image alone. The description is refused here, before any callback.
         bits=request->memory_type_bits;alignment=std::max<uint64_t>(4096,request->alignment);
-        if(shared_surface)
+        if(shared_surface && !own)
             hr=allocation.prepare_shared_surface(static_cast<uint32_t>(request->resource->Width),
                 request->resource->Height,request->surface_row_pitch,unsigned(request->resource->Format),
                 request->byte_size,shared_bind,request->rt_owner.handle);
+        else if(shared_surface)
+            // BD-133: the shared form of the copy surface of a B8G8R8X8 source - what the runtime sees of the shared
+            // form (no PRIMARY flag, video present source 0, no runtime resource) under the record the source has. The
+            // kernel driver places a v1 record with Shared 1 exactly as a v3 record with Shared 1 and Access 0
+            // (driver\kmd\surface_resource_private.h, Bc250SurfaceResourcePolicy), and no opener ever reads it.
+            hr=allocation.prepare_surface(static_cast<uint32_t>(request->resource->Width),request->resource->Height,
+                request->surface_row_pitch,surface_format,request->byte_size,nullptr,false,false,false,true);
         else
             hr=allocation.prepare_surface(static_cast<uint32_t>(request->resource->Width),request->resource->Height,
                 request->surface_row_pitch,surface_format,request->byte_size,request->rt_owner.handle,
-                ddi_experiment("present-cached"),!ddi_experiment("present-noprimary"),surface_scanout);
+                ddi_experiment("present-cached"),!ddi_experiment("present-noprimary"),surface_scanout,
+                driver_surface);
         if(FAILED(hr))return hr;
     } else {
     report_.stage=ImportStage::Probe;
@@ -619,7 +662,10 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     }
     auto record=new(std::nothrow) Record(runtime_,callbacks_);if(!record)return E_OUTOFMEMORY;
     record->busy=true;record->surface=surface;
-    record->authority=surface && scope_owner_==this?GetCurrentThreadId():0;
+    // BD-133: the driver's own surface (above) takes no authority from an owner scope it happens to run inside,
+    // because its release never asks for one.
+    record->driver_surface=driver_surface;
+    record->authority=surface && !record->driver_surface && scope_owner_==this?GetCurrentThreadId():0;
     {Exclusive held(lock_);record->next=records_;records_=record;}
     report_.stage=ImportStage::AllocateCallback;
     hr=record->allocation.open(allocation.args);
@@ -801,6 +847,7 @@ HRESULT RuntimeHeapImports::free(const engine_ddi::ImportedMemory* memory) noexc
         // Retired and taken for the release in one hold: no other thread's call starts on it in between.
         record->retired=true;record->releasing=GetCurrentThreadId();
         free_report_.surface=record->surface;free_report_.adopted=record->adopted;
+        free_report_.driver_surface=record->driver_surface;
         // A linear primary is never quarantined: only its own runtime resource may release it, inside the
         // destroy that ends it (release_owned), which a later drain is no longer inside. Nor is an opened
         // shared surface (BD-075): the runtime destroys its allocation as soon as the destroy returns, so a

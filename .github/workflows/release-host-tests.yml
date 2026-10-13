@@ -1,0 +1,21 @@
+# The pure host tests of the release tooling: they read the repository only, and they need no package, no
+# registry and no hardware. Same checks as the steps of the same name in tools/quality/quick.ps1. Windows
+# PowerShell 5.1, the shell a tester's installer runs in.
+name: release host tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  release-host-tests:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: The installer half of the CU mode setting (BD-077)
+        shell: powershell
+        run: powershell -NoProfile -File tools\release\test-cu-mode-installer.ps1

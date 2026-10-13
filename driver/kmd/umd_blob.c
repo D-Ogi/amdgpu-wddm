@@ -72,6 +72,8 @@ static void ClearContext(struct umd_context_view* out)
     out->ip_type = 0;
     out->node_ordinal = 0;
     out->priority = 0;
+    out->flags = 0;
+    out->compute = 0;
 }
 
 static void ClearSubmit(struct umd_submit_view* out)
@@ -183,7 +185,7 @@ int UmdBlobPlacement(const struct umd_alloc_view* allocation, unsigned long vram
 int UmdBlobParseContext(const void* bytes, unsigned len, unsigned ddi_node, struct umd_context_view* out)
 {
     const unsigned char* p = (const unsigned char*)bytes;
-    unsigned long magic, version, size, ip, instance, ring, priority, node;
+    unsigned long magic, version, size, ip, instance, ring, priority, node, flags;
 
     ClearContext(out);
     // Twelve bytes is the envelope. Version 1 is only 64 and has no node_ordinal, so requiring the
@@ -197,6 +199,7 @@ int UmdBlobParseContext(const void* bytes, unsigned len, unsigned ddi_node, stru
     // is the bug the field was added to catch, so version 1 is refused rather than accepted blindly.
     if (version < 2) return UMD_BLOB_BAD_VERSION;
     if (size < UMD_BLOB_CONTEXT_BYTES || len < size || len < UMD_BLOB_CONTEXT_BYTES) return UMD_BLOB_BAD_SIZE;
+    flags = Rd32(p + 12);
     ip = Rd32(p + 16);
     instance = Rd32(p + 20);
     ring = Rd32(p + 24);
@@ -209,6 +212,11 @@ int UmdBlobParseContext(const void* bytes, unsigned len, unsigned ddi_node, stru
         out->ip_type = ip;
         out->node_ordinal = node;
         out->priority = priority;
+        out->flags = flags;
+        // BD-127: the compute statement, read from version 3 up. An unknown flag bit is recorded and ignored,
+        // never a refusal: the blob describes a context the KMD runs the same way whatever this bit says, and a
+        // newer runtime must keep working with this driver (the header's VERSIONING rule).
+        out->compute = version >= UMD_BLOB_CONTEXT_VERSION_COMPUTE && (flags & UMD_BLOB_C_COMPUTE) != 0;
     }
     return UMD_BLOB_OK;
 }

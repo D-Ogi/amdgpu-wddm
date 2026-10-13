@@ -20,8 +20,21 @@
 #      the support file without this PC's user or computer name; then --smoke-start-failure: plan, install and
 #      prepare with an engine that cannot start end on the result screen;
 #   4. --smoke-render: every setup screen from fixtures at 96, 120, 144 and 192 DPI in EN, PL, JA, KO, at a 150 %
-#      text size, without the guide character and with the high-contrast palette: no overlap, nothing outside the
-#      window, G-A11Y (names, Tab reach, tab order, Enter and Escape), G-CHROME and G-NOINT.
+#      text size, without the guide character, with the high-contrast palette, and for six screen sizes from
+#      800x600 up (--work-area, in logical units): no overlap, nothing outside the window, G-BACKDROP (BD-137: every
+#      control that paints itself fills its whole client rectangle, which the picture cannot show because the parent
+#      drew the pixels under it first, and clears itself in the colour the window really paints under it, which the
+#      picture cannot show either because one flat colour over another leaves no overlap and no overflow),
+#      G-A11Y (names, Tab reach,
+#      tab order, Enter and Escape), G-CHROME, G-NOINT, G-SMALL, the owner's rule of 2026-10-12 that a 1024x768,
+#      800x600 or smaller screen draws no right-hand panel and a larger one draws it, and G-CONSENT, the owner's
+#      instruction of the same day that no screen asks the user for a permission: the plan screen carries no check
+#      box or option button of its own and its Install button is never off. G-SHORTCUT holds the two shortcut
+#      options of the same instruction: the plan screen offers the Start menu and the desktop, and both are on when
+#      it opens.
+#   5. tools\release\test-setup-exe.ps1: the exe is packed around a small package of its own (the single-file
+#      installer the release ships, owner 2026-10-12) and reads it back through --smoke-payload, and nine damaged, doctored
+#      or empty exes are offered to the reader and every one of them is refused.
 # None of them shows a window; nothing is installed and nothing outside -Out is written (the runs' temporary files are
 # under -Out\obj).
 
@@ -42,7 +55,7 @@ $exe = Join-Path $Out 'amdgpu_wddm_setup.exe'
 
 $refs = 'mscorlib.dll', 'System.dll', 'System.Core.dll', 'System.Drawing.dll', 'System.Windows.Forms.dll', 'System.IO.Compression.dll',
     'System.IO.Compression.FileSystem.dll', 'System.Web.Extensions.dll' | ForEach-Object { "/reference:$fx\$_" }
-$pure = 'Strings.cs', 'Json.cs', 'EngineModel.cs', 'PlanText.cs', 'SetupArgs.cs', 'NoInternals.cs', 'Redactor.cs' | ForEach-Object { Join-Path $here "src\$_" }
+$pure = 'Strings.cs', 'Json.cs', 'EngineModel.cs', 'PlanText.cs', 'SetupArgs.cs', 'NoInternals.cs', 'Redactor.cs', 'SmallScreen.cs', 'InstallFlow.cs', 'Payload.cs' | ForEach-Object { Join-Path $here "src\$_" }
 
 # 1. Unit tests of the pure parts.
 & $csc /nologo /noconfig /nostdlib+ @refs /target:exe /platform:x64 /warnaserror+ /langversion:7.3 /deterministic+ `
@@ -75,14 +88,24 @@ foreach ($a in & (Join-Path $repo 'tools\win\amdgpu_wddm_control\art\check-art.p
     $artResourceNames += $a.Resource
 }
 Write-Host "  guide art: $($setupExpressions.Count) expressions ($($setupExpressions -join ', ')) at @256 embedded from $artDir"
+# The application icon (owner, 2026-10-12: "ikonke zrob z biustu Nagi"): the guide character's bust as a round badge,
+# art\icon\nagi.ico with its PROVENANCE.md, the same file the control application uses. It is the window's icon, the
+# icon of the single-file installer that carries this exe, and the icon the Start menu and desktop shortcuts show.
+$icon = Join-Path $repo 'tools\win\amdgpu_wddm_control\art\icon\nagi.ico'
+if (-not (Test-Path -LiteralPath $icon -PathType Leaf)) { throw "application icon: no $icon" }
+# The same file as a resource as well (SetWindowIcon): the window's icon is then the authored 16, 20, 24, ... 256
+# image for the size Windows asks for, instead of one 32x32 image rescaled on a high-resolution screen.
+$resources += "/resource:$icon,nagi.ico"
 & $csc /nologo /noconfig /nostdlib+ @refs /target:winexe /platform:x64 /optimize+ /warnaserror+ /langversion:7.3 /deterministic+ `
-    "/win32manifest:$here\app.manifest" "/out:$exe" @resources @((Get-ChildItem "$here\src\*.cs").FullName | Sort-Object)
+    "/win32manifest:$here\app.manifest" "/win32icon:$icon" "/out:$exe" @resources @((Get-ChildItem "$here\src\*.cs").FullName | Sort-Object)
 if ($LASTEXITCODE -ne 0) { throw "csc failed ($LASTEXITCODE)" }
 $image = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($exe))
 if (-not $image.Contains('.NETFramework,Version=v4.8')) { throw 'amdgpu_wddm_setup.exe does not declare TargetFramework .NETFramework,Version=v4.8' }
 Write-Host '  target framework: .NETFramework,Version=v4.8 declared'
 $missingArt = @($artResourceNames | Where-Object { -not $image.Contains($_) })
 if ($missingArt.Count) { throw "guide art: the built exe has no resource $($missingArt -join ', ')" }
+if (-not $image.Contains('nagi.ico')) { throw 'application icon: the built exe has no resource nagi.ico' }
+Write-Host '  application icon: nagi.ico as the Win32 icon and as a resource with every authored size'
 Write-Host "  guide art: $($artResourceNames.Count) resources in the image"
 
 if (-not $NoSmoke) {
@@ -104,6 +127,9 @@ if (-not $NoSmoke) {
 
     # 3. The engine client against the scripted engine.
     $expect = [ordered]@{
+        # The fake engine still reports a consent in its decision, because the model has to go on reading the
+        # field of the engine contract. The window shows no control for it any more (G-CONSENT): what the install
+        # changes is stated on the plan screen, and pressing Install is the consent (owner, 2026-10-12).
         plan    = @('--plan', '-Scenario', 'plan'), @('result: bound', 'outcome: planned', 'view: Plan', 'decision: install restarts 2 consents test-signing', 'settings: rows 3 lines 3', 'unknown checks: future.check', 'events: 9 ignored 0 problems 0')
         noise   = @('--plan', '-Scenario', 'noise'), @('result: bound', 'outcome: planned', 'ignored 2')
         cancel  = @('--cancel', '-Scenario', 'cancel'), @('result: bound', 'outcome: cancelled', 'cancel: requested', 'view: Cancelled result.cancelled.title nothing-changed')
@@ -184,15 +210,33 @@ if (-not $NoSmoke) {
     # nothing would see a tint drawn on a tint or text that the high-contrast colours make unreadable.
     $renders += , @('1', 'en', '1', '--high-contrast')
     $renders += , @('1.5', 'pl', '1', '--high-contrast')
+    # G-SMALL, the owner's rule of 2026-10-12: five working areas of a tester's screen, in logical units. The four
+    # small ones must draw no right-hand panel and the 1920x1080 one must draw it; overlap, overflow and the page
+    # column are checked in every one of them, which is what the tester's 800x600 screen needed (GitHub #38).
+    foreach ($work in '800x600', '1024x768', '1280x720', '1366x768', '1920x1080') {
+        $renders += , @('1', 'en', '1', '--work-area', $work)
+    }
+    $renders += , @('1.5', 'pl', '1', '--work-area', '1920x1080')
     foreach ($r in $renders) {
-        $dir = Join-Path $obj "render-$($r[0])-$($r[1])-text$($r[2])$(if ($r[3]) { $r[3] -replace '^--', '-' })"
+        $extra = @($r[3..($r.Count - 1)] | Where-Object { $_ })
+        $dir = Join-Path $obj "render-$($r[0])-$($r[1])-text$($r[2])$(if ($extra.Count) { '-' + (($extra -replace '^--', '') -join '-') })"
         Remove-Item -Recurse -Force $dir -ErrorAction SilentlyContinue
-        $renderArgs = @('--smoke-render', $dir, $r[0], $r[1], '--text-scale', $r[2]) + @(if ($r[3]) { $r[3] }) + @('--package', $fake)
+        $renderArgs = @('--smoke-render', $dir, $r[0], $r[1], '--text-scale', $r[2]) + $extra + @('--package', $fake)
         $code = Invoke-Exe $renderArgs 300
         $layout = Get-Content (Join-Path $dir 'layout.txt') -Raw -ErrorAction SilentlyContinue
-        if ($code -ne 0 -or $layout -notmatch '^ok: ') { throw "render at scale $($r[0]), $($r[1]), text $($r[2]) $($r[3]) (exit $code):`n$layout" }
+        if ($code -ne 0 -or $layout -notmatch '^ok: ') { throw "render at scale $($r[0]), $($r[1]), text $($r[2]) $($extra -join ' ') (exit $code):`n$layout" }
     }
-    Write-Host "  render: $(@(Get-ChildItem (Join-Path $obj 'render-1-en-text1') -Filter *.png).Count) screens x $($renders.Count) (4 DPIs x 4 languages + 150 % text + 2 without the guide character + 2 in high contrast), no overlap or overflow, the guide art where it belongs, G-A11Y, G-CHROME and G-NOINT clean ($obj\render-*)"
+    Write-Host "  render: $(@(Get-ChildItem (Join-Path $obj 'render-1-en-text1') -Filter *.png).Count) screens x $($renders.Count) (4 DPIs x 4 languages + 150 % text + 2 without the guide character + 2 in high contrast + 6 runs over five screen sizes from 800x600 up), no overlap or overflow, the guide art and the right-hand panel where they belong, G-A11Y, G-CHROME, G-SMALL, G-CONSENT, G-SHORTCUT and G-NOINT clean ($obj\render-*)"
+
+    # 5. The single-file installer (Payload.cs): the exe just built is packed around a small package of its own and
+    #    read back through its --smoke-payload mode, then nine damaged, doctored or empty exes are offered to it and every one
+    #    of them must be refused. This runs here, with the exe in hand, so a reader that would unpack a doctored
+    #    package cannot reach a release.
+    $one = @(& (Join-Path $repo 'tools\release\test-setup-exe.ps1') -Setup $exe -Out (Join-Path $obj 'setup-exe') |
+        ForEach-Object { [string]$_ })
+    $oneOk = @($one | Where-Object { $_ -match '^single-file installer: \d+ checks passed, 0 failed$' })
+    if ($oneOk.Count -ne 1) { throw "the single-file installer test did not pass:`n$($one -join "`n")" }
+    Write-Host "  $($oneOk[0]) (the payload read, checked and unpacked; 9 damaged, doctored or empty exes refused)"
 }
 
 Get-ChildItem $Out -File | ForEach-Object {

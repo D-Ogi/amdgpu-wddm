@@ -26,7 +26,7 @@ namespace AmdgpuWddmSetup
         readonly object _gate = new object();
         Process _process;
         volatile bool _outDone, _errDone;
-        DateTime? _exitedAt;
+        Stopwatch _exitWait;
         long _offset;
         readonly List<byte> _partial = new List<byte>();
         readonly StringBuilder _output = new StringBuilder();
@@ -101,8 +101,8 @@ namespace AmdgpuWddmSetup
             if (!exited) return changed;
             // The process is gone; its output may still be on its way. The run is bound as soon as both pipes end,
             // and after two seconds in any case, so an inherited handle cannot hold the window.
-            if (!_exitedAt.HasValue) _exitedAt = DateTime.UtcNow;
-            if (!(_outDone && _errDone) && DateTime.UtcNow - _exitedAt.Value < TimeSpan.FromSeconds(2)) return changed;
+            if (_exitWait == null) _exitWait = Stopwatch.StartNew();
+            if (!(_outDone && _errDone) && _exitWait.Elapsed < TimeSpan.FromSeconds(2)) return changed;
             ReadEvents();
             ExitCode = _process.ExitCode;
             string problem;

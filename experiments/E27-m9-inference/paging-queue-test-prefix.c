@@ -24,7 +24,11 @@ typedef unsigned char UCHAR;
 #define NT_SUCCESS(s) ((s)>=0)
 #define FIELD_OFFSET(t,f) offsetof(t,f)
 #define RtlCopyMemory memcpy
-typedef unsigned long ULONG,UINT;
+typedef unsigned long ULONG;
+/* BD-085: UINT is unsigned int, as the SDK declares it (wtypes.h:142), not a second name for ULONG. Both are
+ * 32 bits here, so nothing the harness computes changes; but a UINT* and an unsigned int* are different types,
+ * and a harness that includes a driver header taking unsigned* (hang_recovery.h) fails /W4 /WX on the mismatch. */
+typedef unsigned int UINT;
 typedef unsigned long long ULONGLONG;
 typedef size_t SIZE_T;
 typedef unsigned char BOOLEAN;

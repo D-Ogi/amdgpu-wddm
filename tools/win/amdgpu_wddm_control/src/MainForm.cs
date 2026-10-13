@@ -60,22 +60,45 @@ namespace AmdgpuWddmControl
 
         public MainForm() : this(false) { }
 
-        public MainForm(bool smoke, AppPrefs prefs = null)
+        // workArea: the working area of the screen this window is drawn for, in logical units, for a render or a
+        // test. It is given to the constructor, because the window takes its own size and builds its first page
+        // there - exactly as the live window does on the screen it opens on.
+        public MainForm(bool smoke, AppPrefs prefs = null, Size workArea = default(Size))
         {
             _smoke = smoke;
+            WorkAreaForLayout = workArea;
             _prefs = prefs ?? (smoke ? new AppPrefs(new MemoryPrefStore()) : AppPrefs.Live());
             Strings.Language = _prefs.EffectiveLanguage;
             Theme.Fonts();
             Text = Program.ProductName;
             BackColor = Theme.Back; ForeColor = Theme.Text; Font = Theme.Body;
-            ClientSize = Theme.Sz(1240, 760); MinimumSize = Theme.Sz(900, 560); StartPosition = FormStartPosition.CenterScreen;
+            StartPosition = FormStartPosition.CenterScreen;
+            ApplyScreenSize();
             KeyPreview = true;
-            try { Icon = Icon.ExtractAssociatedIcon(System.Reflection.Assembly.GetExecutingAssembly().Location); } catch (Exception) { }
+            // The application's own icon (art\icon\nagi.ico), embedded by build.ps1 twice: as the Win32 icon of the
+            // exe and as the resource read here. The resource carries every authored size, so the task bar and
+            // Alt+Tab take the image drawn for the size they need; ExtractAssociatedIcon hands out one 32x32 image,
+            // which a 150 % or 200 % screen rescales. An icon that cannot be read is no reason not to start.
+            try
+            {
+                var iconAsm = System.Reflection.Assembly.GetExecutingAssembly();
+                using (var iconStream = iconAsm.GetManifestResourceStream("nagi.ico"))
+                {
+                    if (iconStream != null) Icon = new Icon(iconStream);
+                    else Icon = Icon.ExtractAssociatedIcon(iconAsm.Location);
+                }
+            }
+            catch (Exception) { }
             BuildShell();
             _timer.Tick += (s, e) => Tick();
             if (!_smoke)
             {
-                Load += (s, e) => { FitToScreens(); RefreshAll(); StartUpdateCheck(false); UpdateTimer(); };
+                // The shell is built before the handle exists, from the screen the window is about to open on
+                // (ApplyScreenSize). The window manager may still clamp the window to the desktop, and FitToScreens
+                // can move it: whatever column is left after that is the column the page is built for, so the page
+                // is rebuilt here when the two differ. Without it a 1240 px page stood in a 650 px column on the
+                // owner's 800x600 screen and was cut on the right, which is the finding of GitHub #38.
+                Load += (s, e) => { FitToScreens(); RebuildIfWidthChanged(); RefreshAll(); StartUpdateCheck(false); UpdateTimer(); };
                 VisibleChanged += (s, e) => UpdateTimer();
                 Resize += (s, e) => { UpdateTimer(); if (_guide != null) _guide.Paused = WindowState == FormWindowState.Minimized; };
                 ResizeEnd += (s, e) => RebuildIfWidthChanged();
@@ -89,7 +112,56 @@ namespace AmdgpuWddmControl
 
         int NavWidth { get { return Theme.S(210); } }
         int SideWidth { get { return Theme.S(300); } }
-        bool SideShown { get { return ClientSize.Width >= Theme.S(1000); } }
+
+        // The working area of the screen that holds the window, in device pixels. A test and a render set it through
+        // WorkAreaForLayout (logical units), so that neither reads the screen of the PC it happens to run on; the
+        // live window asks Windows for the screen the window is on now.
+        public Size WorkAreaForLayout { get; set; }
+
+        Size ScreenWorkArea()
+        {
+            if (WorkAreaForLayout.Width > 0 && WorkAreaForLayout.Height > 0) return Theme.Sz(WorkAreaForLayout.Width, WorkAreaForLayout.Height);
+            if (_smoke) return Theme.Sz(LargeScreenWidth, LargeScreenHeight);
+            try
+            {
+                var screen = IsHandleCreated ? Screen.FromHandle(Handle) : Screen.FromPoint(Cursor.Position);
+                return screen.WorkingArea.Size;
+            }
+            catch (Exception) { return Theme.Sz(LargeScreenWidth, LargeScreenHeight); }
+        }
+
+        // What a render or a test that says nothing about the screen gets: a screen with room for the whole window,
+        // which is the screen every render until this rule assumed.
+        const int LargeScreenWidth = 2560, LargeScreenHeight = 1440;
+
+        // The size the window opens at, and the smallest size a person may drag it to: the design size on a screen
+        // that has room for it, and the screen itself where it has not. Both have to come from the screen. A fixed
+        // 900 px smallest width made the window wider than an 800x600 screen, Windows could not clamp it, and the
+        // page lost its right-hand edge however the small-screen rule answered (GitHub #38).
+        public static Size DesignSize { get { return Theme.Sz(1240, 760); } }
+        public static Size SmallestSize { get { return Theme.Sz(900, 560); } }
+
+        void ApplyScreenSize()
+        {
+            var want = DesignSize;
+            var least = SmallestSize;
+            var work = ScreenWorkArea();
+            if (work.Width > 0 && work.Height > 0)
+            {
+                int margin = Theme.S(24);
+                want = new Size(Math.Max(Theme.S(640), Math.Min(want.Width, work.Width - margin)),
+                                Math.Max(Theme.S(440), Math.Min(want.Height, work.Height - margin)));
+                least = new Size(Math.Min(least.Width, want.Width), Math.Min(least.Height, want.Height));
+            }
+            MinimumSize = least;
+            ClientSize = want;
+        }
+
+        // The owner's rule of 2026-10-12 (LayoutRules.SmallScreen): no side panel at all on a small screen.
+        public bool SmallScreen { get { var w = ScreenWorkArea(); return LayoutRules.SmallScreen.IsDevice(w.Width, w.Height, Theme.Scale); } }
+
+        // The side panel: never on a small screen, and on a larger one only while the window is wide enough for it.
+        public bool SideShown { get { return !SmallScreen && ClientSize.Width >= Theme.S(1000); } }
 
         // The page column: what is left between the bar and the side panel, at most 780 px at 96 DPI.
         public int ColumnWidth
@@ -102,6 +174,7 @@ namespace AmdgpuWddmControl
         }
 
         int _builtWidth;
+        bool _builtSmall;           // the answer of the small-screen rule the shell in the window was built with
 
         // The column width the page now in the content panel was built at. ColumnWidth above is the width of this
         // moment, and the two differ whenever ClientSize changed after the page was built: the window manager clamps a
@@ -117,8 +190,26 @@ namespace AmdgpuWddmControl
             if (Math.Abs(ColumnWidth - _builtWidth) > Theme.S(8)) { BuildShell(); }
         }
 
+        // The screen under the window can change while it is open: the person drags the window to another monitor, or
+        // Windows changes the desktop under it. The small-screen rule is answered again then, and the shell is rebuilt
+        // only when the answer changed, because a rebuild throws away every control of the page.
+        void RebuildIfScreenChanged()
+        {
+            if (_smoke || IsDisposed || _building || _moving || !IsHandleCreated) return;
+            if (SmallScreen == _builtSmall) return;
+            // The window may now stand on a screen of another size: its own size and the smallest size a person may
+            // drag it to are the new screen's, and the page is built for the column that leaves.
+            ApplyScreenSize();
+            BuildShell();
+        }
+
+        bool _building;
+
         void BuildShell()
         {
+            _building = true;
+            try
+            {
             SuspendLayout();
             var old = Controls.Cast<Control>().ToList();
             Controls.Clear();
@@ -127,6 +218,9 @@ namespace AmdgpuWddmControl
 
             _header = new Panel { Dock = DockStyle.Top, Height = Theme.S(60), BackColor = Theme.Nav, Padding = Theme.Pad(16, 12, 16, 8) };
             var left = new FlowLayoutPanel { Dock = DockStyle.Left, AutoSize = true, WrapContents = false, BackColor = Color.Transparent };
+            // The Nagi mark beside the product name (NagiMark.cs); decorative, the name says the same.
+            var mark = new NagiMarkBox(Theme.S(30)) { Margin = Theme.Pad(0, 2, 8, 0) };
+            left.Controls.Add(mark);
             var brand = Ui.Label(Program.ProductName, Theme.Brand);
             brand.Margin = Theme.Pad(0, 4, 18, 0);
             left.Controls.Add(brand);
@@ -209,7 +303,10 @@ namespace AmdgpuWddmControl
             Font = Theme.Body;
             ResumeLayout(true);
             _builtWidth = ColumnWidth;
+            _builtSmall = SmallScreen;
             ShowPage(_page, null, false);
+            }
+            finally { _building = false; }
         }
 
         static string LanguageName(string lang)
@@ -486,6 +583,7 @@ namespace AmdgpuWddmControl
             _verdict = Guide.Choose(causes);
             string text = _verdict == null ? Strings.T("status.unreadable")
                 : _verdict.Cause == GuideCause.PageTip && Strings.Has("guide.tip." + _page) ? Strings.T("guide.tip." + _page) : Strings.T(_verdict.TextId);
+            if (Guide.ShowNameTip(_nameTipShowing, _verdict)) text = Strings.T(Guide.NameTipId, Strings.T("brand.expansion"));
             _guide.Show(_verdict, text, Visible && WindowState != FormWindowState.Minimized);
         }
 
@@ -518,6 +616,19 @@ namespace AmdgpuWddmControl
             ComputeStatus();
             ShowPage(_page, null, false);
             MaybeAutomaticDiagnostics();
+            MaybeNagiWallpaper();
+        }
+
+        // The Nagi wallpaper of a verified install, once per install for this account (Wallpaper.cs), when the
+        // sign-in run has not set it yet. Off the UI thread, once per window, and never in a render or a probe.
+        bool _wallpaperChecked;
+
+        void MaybeNagiWallpaper()
+        {
+            if (_wallpaperChecked || _smoke || ReadOnlyProbe || _fixture) return;
+            _wallpaperChecked = true;
+            var prefs = _prefs;
+            System.Threading.ThreadPool.QueueUserWorkItem(_ => NagiWallpaper.RunIfDue(prefs));
         }
 
         int _drvRead;       // the newest Driver card read; an older one that ends later is dropped
@@ -560,6 +671,28 @@ namespace AmdgpuWddmControl
             _upgradeDone = DriverCard.UpgradeLatch(_upgradeDone, _drv, _prefs.LastSeenRelease);
             if (!_smoke && !ReadOnlyProbe && _drv != null && DriverCard.UpgradeVerified(_drv))
                 _prefs.LastSeenRelease = _drv.InstalledVersion;
+            if (!_smoke && !ReadOnlyProbe && _drv != null && !_nameTipShowing && Guide.NameTipDue(_drv.InstalledVersion, _prefs.NameTipRelease))
+                StartNameTip(_drv.InstalledVersion);
+        }
+
+        // The name tip of the guide panel (Guide.ShowNameTip): on for NameTipSeconds after the first read of a release
+        // this account has not seen the tip for, then the panel goes back to its verdict. The release is recorded at
+        // once, so a window closed within the 15 seconds does not show the tip again. Nothing waits for it.
+        bool _nameTipShowing;
+
+        void StartNameTip(string release)
+        {
+            _prefs.NameTipRelease = release;
+            _nameTipShowing = true;
+            var t = new Timer { Interval = Guide.NameTipSeconds * 1000 };
+            t.Tick += (s, e) =>
+            {
+                t.Stop();
+                t.Dispose();
+                _nameTipShowing = false;
+                if (!IsDisposed) UpdateGuide();
+            };
+            t.Start();
         }
 
         void ComputeStatus()
@@ -631,12 +764,37 @@ namespace AmdgpuWddmControl
             if (fitted != Bounds) { WindowState = FormWindowState.Normal; Bounds = fitted; }
         }
 
-        const int WM_DISPLAYCHANGE = 0x007E;
+        const int WM_DISPLAYCHANGE = 0x007E, WM_DPICHANGED = 0x02E0;
 
         protected override void WndProc(ref Message m)
         {
             base.WndProc(ref m);
-            if (m.Msg == WM_DISPLAYCHANGE && !_smoke) BeginInvoke((Action)FitToScreens);
+            // A display or DPI change can turn the screen under the window into a small one, or back: the window fits
+            // itself to the new desktop and then asks the small-screen rule again.
+            if ((m.Msg == WM_DISPLAYCHANGE || m.Msg == WM_DPICHANGED) && !_smoke)
+                BeginInvoke((Action)(() => { FitToScreens(); RebuildIfScreenChanged(); }));
+            // A drag of the window runs a message loop of its own inside Windows. Nothing is rebuilt while it
+            // lasts: a page thrown away and built again on every message of a drag costs the person the page they
+            // were reading, and a rebuild from inside that loop disposes controls it is still working with. The
+            // rule is answered once, when the drag ends.
+            if (m.Msg == WM_ENTERSIZEMOVE) _moving = true;
+            if (m.Msg == WM_EXITSIZEMOVE && !_smoke)
+            {
+                _moving = false;
+                BeginInvoke((Action)RebuildIfScreenChanged);
+            }
+        }
+
+        const int WM_ENTERSIZEMOVE = 0x0231, WM_EXITSIZEMOVE = 0x0232;
+        bool _moving;               // Windows is running the loop of a window drag
+
+        // The window was moved, possibly onto another monitor: the small-screen rule decides again. A move the
+        // person is making waits for the end of the drag; a move the program made is answered after this message.
+        protected override void OnMove(EventArgs e)
+        {
+            base.OnMove(e);
+            if (_moving || _smoke || IsDisposed || !IsHandleCreated) return;
+            BeginInvoke((Action)RebuildIfScreenChanged);
         }
 
         // ---- keyboard ----------------------------------------------------------------------------------------------

@@ -69,9 +69,20 @@ void bc250_cu_decide(const struct bc250_cu_request *req, struct bc250_cu_decisio
 	out->confirmed = 0;
 	/* Whatever else happens, a stale mark never outlives a start that does not apply 40. */
 	out->clear_pending = req->pending != 0;
+	/* The record of an earlier fallback stays as it is, unless this start falls back itself or
+	 * somebody asked for more cores again. */
+	out->closed_reason = req->closed_present ? req->closed : 0u;
+	out->clear_closed = 0;
 
 	if (!req->mode_present || req->mode == BC250_CU_MODE_STOCK)
+		/* 24, or absent, which means 24: a mark of a request no longer made goes, the record of a
+		 * fallback stays. It describes who wrote this 24, so the installer reads it one boot later
+		 * and offers the repair, instead of taking the 24 for the tester's own choice (BD-077). */
 		return;
+	/* CuMode is not 24 any more, so somebody wrote over the fallback: the record goes, the way
+	 * bc250_dpm_decide clears DpmClosedReason when the clock is asked for again. */
+	out->clear_closed = req->closed_present;
+	out->closed_reason = 0u;
 	if (req->mode != BC250_CU_MODE_FULL) {
 		out->reason = BC250_CU_REASON_INVALID_SETTING;
 		return;
@@ -91,6 +102,8 @@ void bc250_cu_decide(const struct bc250_cu_request *req, struct bc250_cu_decisio
 	if (req->pending != 0) {
 		out->reason = BC250_CU_REASON_PENDING_UNCONFIRMED;
 		out->force_stock = 1;
+		out->clear_closed = 0;
+		out->closed_reason = out->reason;	/* the driver writes this 24: CuModeClosedReason records it */
 		return;
 	}
 	out->mode = BC250_CU_MODE_FULL;

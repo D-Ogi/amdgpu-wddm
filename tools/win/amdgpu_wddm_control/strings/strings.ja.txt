@@ -1,10 +1,12 @@
-# Japanese strings of amdgpu-wddm Control. Machine translation (mt / mt-safe) until the Ph 2 native review. Format: src/Strings.cs.
+# Japanese strings of Nagi Control App. Machine translation (mt / mt-safe) until the Ph 2 native review. Format: src/Strings.cs.
 
 # ---- graphics cores ----
 cu.choice.all|mt-safe|c8029dd4|選択: すべて (40)。
 cu.choice.standard|mt-safe|fa436287|選択: 標準 (24)。
 cu.choice.invalid|mt|9ed29361|選択が無効です。標準 (24) またはすべて (40) を選んでください。
 cu.choice.unreadable|mt|ee127a9b|選択を読み取れません。
+cu.choice.driver-24|mt|a8fa591b|標準 (24) が設定されていますが、この数を選んだのはドライバーであり、あなたではありません。
+cu.note.driver-24|mt|0199b2dd|すべて (40) を選び、Windows を再起動すると、再び 40 コアすべてを使用します。
 cu.choice.after-restart|mt|07660ab1|次回の Windows 再起動後に適用されます。
 cu.run.standard|mt|a1be65f1|現在の動作: {0} コア。
 cu.run.waiting|mt|c00ce647|現在の動作: {0} コア、まだ確認されていません。新しい 40 コア設定が確認されない場合、次回の起動は 24 コアに戻ります。
@@ -30,7 +32,8 @@ cu.refuse.unreadable|mt|d945441d|保存されている設定を読み取れま�
 cu.refuse.already40|mt|4f5796de|すべて (40) はすでに選択されています。
 cu.refuse.already24|mt|91c3ed3d|標準 (24) はすでに選択されています。
 cu.preview.write40|mt|46267060|40 個すべてのグラフィックス コアを選択します。
-cu.preview.remove-mode|mt|3920ecbe|標準の 24 グラフィックス コアを選択します。
+cu.preview.write24|mt|3920ecbe|標準の 24 グラフィックス コアを選択します。
+cu.preview.remove-closed|mt|93f4029d|標準の 24 グラフィックス コアがドライバーによる後退ではなく、あなたの選択であることを記録します。
 cu.preview.remove-confirmed|mt|d10b327e|以前の 40 コアの確認を削除し、新しい設定がその起動で確認されるようにします。
 cu.preview.remove-disable|mt|51075647|以前の診断用コア制限が削除されます。
 cu.result.nothing|mt|54ca5460|何も変更されていません。
@@ -95,6 +98,7 @@ guide.all-good|mt|f523ac28|すべて問題ありません。プレイの準備�
 guide.tip.settings|mt|d4c81f93|ここでの選択は、ドライバーを更新してもそのまま残ります。
 guide.tip.display|mt|fff5e425|モニターを変更した後にウィンドウが見えなくなっても、表示されている画面に自動的に戻ります。
 guide.tip.graphics|mt|bce30225|クロックとコアの変更は、次回 Windows を再起動した後に適用されます。すべてのゲームの設定は、次にゲームを起動したときに適用されます。
+guide.name|mt|58a9149a|Nagi は {0} の略です。そう、N もまた Nagi です。
 # ---- status card on Home (WU-007, WU-052, WU-061) ----
 status.title.problem|mt|4241fd03|確認が必要な項目があります
 status.title.attention|mt|2908a908|これを確認してください
@@ -103,8 +107,8 @@ status.title.ok|mt-safe|6dbc080d|プレイの準備完了
 status.title.unknown|mt|3e28dda8|状態は不明です
 status.unreadable|mt|8c31205d|アプリは現在ドライバーの状態を読み取れませんでした。
 status.ok-detail|mt|a5875517|ドライバーは動作中で、対応が必要な項目はありません。
-status.not-installed|mt|20e303d1|この PC には amdgpu-wddm ドライバーがインストールされていません。
-status.not-installed.next|mt|663c2562|リリース ページにある amdgpu-wddm セットアップでインストールしてください。
+status.not-installed|mt|fc070032|この PC には Nagi グラフィックス ドライバーがインストールされていません。
+status.not-installed.next|mt|187b98b1|リリース ページにある Nagi Setup でインストールしてください。
 status.driver-not-running|mt|5818d3e1|グラフィックス ドライバーが動作していません。Windows は基本ディスプレイを使用しています。
 status.driver-not-running.next|mt|3588314e|Windows を再起動してください。このままの場合は、ヘルプを開いて「画面が暗いままになる、またはドライバーが起動しない」の手順に従ってください。
 status.install-stopped|mt|58f52a20|前回のインストールは完了前に停止しました。
@@ -495,6 +499,7 @@ settings.recent.busy|mt|fd22dbb3|ゲームの起動中のため、現在は一�
 settings.recent.failed|mt|26db6f1a|一覧を消去できませんでした。しばらくしてからもう一度お試しください。
 settings.guide.title|mt-safe|8e02ab12|ヒントとガイド
 settings.guide.note|mt|529531e4|Nagi を表示しない場合、ヒントはテキストで表示されます。それ以外は何も変わりません。
+settings.nagi.small|mt|6fd13869|1024 x 768 以下の小さい画面では、ページの場所を確保するためにガイドは表示されません。
 settings.animations.windows-off|mt|0962c940|Windows のアニメーションがオフのため、このアプリもアニメーションを表示しません。
 settings.support.title|mt-safe|be91940b|サポート
 settings.support.note|mt|97dadddd|開発者から依頼されたときのために、ヘルプに技術的な詳細と追加の操作を表示します。
@@ -528,7 +533,7 @@ help.guide.display.4|mt|7a5f2a9b|更新後に画面の表示がおかしい場�
 help.guide.safe|mt-safe|d2304dae|セーフ モードから修復
 help.guide.safe.1|mt|7f161492|Shift キーを押しながら、スタート メニューで「再起動」を選択します。
 help.guide.safe.2|mt|b12561b0|「トラブルシューティング」、「詳細オプション」、「スタートアップ設定」、「再起動」の順に選択し、4 キーを押してセーフ モードを選びます。
-help.guide.safe.3|mt|0fce9cbb|スタート メニューから「amdgpu-wddm Control (recovery)」を開き、「修復」を選択します。
+help.guide.safe.3|mt|2c9b1fcf|スタート メニューから「Nagi Control App (recovery)」を開き、「修復」を選択します。
 help.guide.safe.4|mt|bb202726|これらの手順はリリース ページにも記載されているため、別のデバイスで読むことができます。
 help.start.text|mt|75b035b9|ホームに「はじめに」カードを再び表示します。
 help.start.show|mt-safe|42892e31|再び表示
@@ -562,7 +567,9 @@ help.report.contents|mt-safe|437aea62|内容
 help.report.save|mt-safe|c7ca9b29|レポートを保存
 help.about.title|mt-safe|4efca0d1|バージョン情報
 help.about.release|mt|1751ebfd|ドライバー リリース {0}
-help.about.text|mt|5e62f6df|ASRock BC-250 用のオープンソース ドライバーです。アカウントもテレメトリもありません。
+help.about.text|mt|c9714463|Nagi (amdgpu-wddm) は ASRock BC-250 用のオープンソース ドライバーです。アカウントもテレメトリもありません。
+help.about.name|mt|a9f92e00|Nagi は {0} の略です。
+brand.expansion|mt-safe|8b8af7be|Nagi's AMD Graphics Infrastructure
 # ---- recovery view (WU-068) ----
 recovery.title|mt-safe|48f6a8d5|回復
 recovery.intro|mt|cf19b743|この画面は、ドライバーやアプリの他の部分が動作しない場合でも機能します。インストールされている内容を読み取るだけです。
@@ -1159,3 +1166,48 @@ help.auto.collecting|mt|1267cd3d|ドライバーの起動がまだ確認され�
 help.auto.saved|mt|ad41ef59|サポートレポートを保存しました: {0}。一般的な個人情報を除去しました。共有前に内容を確認してください。何も送信していません。
 
 help.auto.failed|mt|e242261b|自動サポートレポートを保存できませんでした。ヘルプを開いて再試行してください。
+drv.verify.earlier-boot|mt|d7afb829|前回の完全なチェックは再起動前に失敗しました。現在、インストール済みのドライバーは動作しています。
+status.verification-earlier-boot|mt|6b5b86e8|前回の完全なチェックは再起動前のものです。現在、インストール済みのドライバーは動作しています。
+
+# ---- the sign-in notice, the one-click repair and the switch for the window after sign-in (owner, 2026-10-13) ----
+notice.guard.title|mt|660b2a51|グラフィックスドライバーを停止しました
+notice.guard.text|mt|1f5d6130|このパソコンを使い続けられるように、グラフィックスドライバーを停止しました。直前の起動で確認が完了しなかったためです。\n現在はWindowsの基本ディスプレイで画面を描いているため、ゲームは動かず、全体の動作も遅くなります。\nグラフィックスドライバーを元に戻せます。このパソコンのほかの設定は変わりません。
+notice.failed.title|mt|fb8e175f|グラフィックスドライバーが起動しませんでした
+notice.failed.text|mt|1e13a43f|グラフィックスドライバーが起動しなかったため、Windowsは基本ディスプレイで画面を描いています。ゲームは動かず、全体の動作も遅くなります。\nNagi Control Appに、何が起きたかと次に試すことが表示されます。
+notice.open-app|mt|f8a181ac|Nagi Control Appを開く
+notice.close|mt|7d9eb7ac|閉じる
+notice.working|mt|2a07b127|グラフィックスドライバーを元に戻しています。最大で4分ほどかかり、画面が一瞬暗くなることがあります。
+notice.working.seconds|mt|dae58fb2|{0}秒
+notice.done|mt|3d647c8d|グラフィックスドライバーが再び動いています。
+notice.action-failed|mt|26a5f377|今はグラフィックスドライバーを起動できませんでした。次はWindowsの再起動を試してください。
+notice.restart-needed|mt|55461c06|このパソコンはグラフィックスドライバーを再び起動する設定になりました。Windowsを再起動して完了してください。
+notice.not-needed|mt|2890eefa|この修復はもう必要ありません。Nagi Control Appを開いてグラフィックスドライバーの状態を確認してください。
+notice.open-failed|mt|44569b54|ここからNagi Control Appを開けませんでした。スタートメニューから開いてください。
+status.action.enable-driver|mt|1aa40cb7|グラフィックスドライバーを元に戻す...
+status.driver-refused|mt|0f7cc434|直前の起動で確認が完了しなかったため、安全のためグラフィックスドライバーを停止しました。Windowsは基本ディスプレイを使っているので、ゲームは動きません。
+status.driver-refused.next|mt|449a51bf|グラフィックスドライバーを元に戻してください。起動しない場合はWindowsを再起動してください。
+plan.title.enable-driver|mt|3ebf7632|グラフィックスドライバーを元に戻す
+plan.line.enable-driver|mt|eb9dd536|確認されなかった起動の回数が0に戻り、ドライバーは再び起動できるようになります。
+plan.line.enable-driver-confirm|mt|8eda43a1|グラフィックスデバイスを再起動し、新しい起動を正常として記録します。
+plan.enable-driver.dark|mt|02d9a741|画面が数秒暗くなり、大きさが一度変わることがあります。
+plan.enable-driver.restart|mt|73638369|グラフィックスドライバーが起動しない場合は、その旨を表示してWindowsの再起動を提案します。
+plan.refuse.driver-on|mt|7532d61c|グラフィックスドライバーはすでに動いているため、戻すものはありません。
+plan.refuse.not-guard|mt|040c6a83|グラフィックスドライバーは安全のために停止されたのではないので、ここでは解決しません。ヘルプを開いて次の手順を確認してください。
+settings.start.title|mt|9a62389e|サインインした後
+search.settings.start-window|mt|d956c490|サインイン後に起動確認の小窓を表示する
+search.settings.start-window.terms|mt|3cedb013|起動|確認|ウィンドウ|小窓|サインイン|ログオン|青|時計
+settings.start-window.cost|mt|87e0a47c|この小窓は2分間、画面の描画を続けさせます。それによってドライバーは起動の確認を完了できます。表示しないと確認が未完了のままになり、次回のWindows起動ではグラフィックスチップが低い固定の速度で動きます。確認が未完了のまま続くと、Windowsを数回起動したあとにドライバーが自動的に停止し、元に戻すまでWindowsは基本ディスプレイを使います。
+settings.start-window.notice|mt|c48dfcba|グラフィックスドライバーが停止されたという警告は、このチェックボックスに関わらず必ず表示されます。
+help.setting.start-window|mt|0e802003|サインインすると、画面の左上に時計の付いた小さな窓が2分間表示されます。時計が動き続けることで画面の描画が続き、ドライバーは起動の確認を完了できます。邪魔なときだけ切ってください。切ると確認が未完了のままになり、次回のWindows起動ではグラフィックスチップが低い固定の速度で動きます。さらに未完了が続くと、数回の起動のあとにドライバーが自動的に停止し、元に戻すまでWindowsは基本ディスプレイを使います。この設定はあなた専用で、管理者権限は要りません。
+search.settings.wallpaper|mt|42350221|Nagi の壁紙
+search.settings.wallpaper.terms|mt|e2a1f213|壁紙|背景|デスクトップ|画像|Nagi
+settings.wallpaper.note|mt|af8edf22|確認済みのインストールの後、ボックスをオフにしていない限り、インストーラーは Nagi の壁紙をデスクトップの背景として一度だけ設定します。以前の背景は先に保存されます。ここでは Nagi の壁紙をもう一度設定したり、以前の背景に戻したりできます。
+settings.wallpaper.set|mt|ce6e26e6|Nagi の壁紙を設定
+settings.wallpaper.restore|mt|90ce1c66|以前の壁紙に戻す
+settings.wallpaper.done|mt|64e92ae9|Nagi の壁紙がデスクトップの背景になりました。
+settings.wallpaper.failed|mt|fd1e10bd|壁紙を設定できませんでした。ほかには何も変更されていません。繰り返し起こる場合は、インストールを修復してください。
+settings.wallpaper.restored|mt|a7c47858|以前の背景に戻りました。
+settings.wallpaper.restored-partial|mt|c85e565d|以前の背景はスライドショーまたは Windows スポットライトでした。画像が戻るのは、Windows にまだ残っていた場合だけです。スライドショーやスポットライトを再びオンにするには、Windows の設定の [個人用設定] > [背景] を使用してください。
+settings.wallpaper.restore-failed|mt|7af0bb53|以前の背景に戻せませんでした。その画像はこの PC にもうありません。Windows の設定の [個人用設定] > [背景] で背景を選んでください。
+settings.wallpaper.nothing-saved|mt|d8f54a55|このアカウントには以前の背景が保存されていないため、戻すものはありません。
+help.setting.wallpaper|mt|18d99de4|インストーラーは、確認済みのインストールの後、ボックスがオフにされていない限り、各ユーザーに Nagi の壁紙を一度だけ設定し、その前にそのユーザーの背景を保存します。[Nagi の壁紙を設定] は画像をもう一度設定します。[以前の壁紙に戻す] は保存した背景に戻します。スライドショーや Windows スポットライトは最後の画像としてのみ戻ります。Windows の設定の [個人用設定] > [背景] で再びオンにしてください。どちらのボタンも自分の背景だけを変更し、管理者の権限は必要ありません。

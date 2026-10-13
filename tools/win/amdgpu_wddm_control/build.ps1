@@ -12,12 +12,19 @@
 # window: the pages are built and refreshed once, their text written to smoke.txt), the bug report smoke, and the
 # Recovery dry runs (--action X --dry-run: nothing is written, no UAC) against test/snapshot-bd059.json and this PC,
 # the recovery view without bc250control.dll (--smoke-recovery), the hidden-window cost (--smoke-perf, G-PERF),
+# the sign-in notice in both its cases, four languages and four scales on a small and a large screen
+# (--smoke-notice: it fits the screen, overlaps nothing, names no internals, closes with Escape),
 # the place a rebuilt page keeps and the place of the buttons in every state of a benchmark run (--smoke-scroll), and
 # the render gates (G-RENDER, G-NOINT, G-A11Y): --smoke-render of the 9 pages at 96, 120, 144 and 192 DPI in the four
 # languages, at text scale 150 %, with the guide character on (the default of an installed application) and two runs
 # with her off, and a language switch at run time; every page is drawn to PNG without a window and checked for
-# overlap, overflow, internals in the text and accessible names. The guide panel must draw her picture wherever the
+# overlap, overflow, internals in the text and accessible names. G-BACKDROP (BD-137) paints every control of the page
+# alone over a colour no page uses and refuses a control that leaves any of it: a control that does not fill its own
+# client rectangle shows, on the screen, the control painted into the shared double buffer before it, which a render
+# into one bitmap cannot show. The guide panel must draw her picture wherever the
 # side panel is in the window, and must not draw it with "Show Nagi" off.
+# G-SMALL (owner, 2026-10-12): six runs name the screen the window is drawn for (--work-area, in logical units) and
+# hold the rule that a 1024x768, 800x600 or smaller screen draws no right-hand panel, and a larger one draws it.
 # The smoke run passes on a PC without a BC-250 when it reports the driver as not found.
 #
 # The guide character (plan v7 section 6) is embedded by default from art\nagi of this directory, as the resources
@@ -56,7 +63,8 @@ $refs = 'mscorlib.dll', 'System.dll', 'System.Core.dll', 'System.Drawing.dll', '
 $pure = 'KmdReply.cs', 'Profiles.cs', 'Redactor.cs', 'ManifestCheck.cs', 'Recovery.cs', 'Strings.cs', 'CuMode.cs', 'DriverCard.cs', 'UpdateCheck.cs',
     'AppSettings.cs', 'Guide.cs', 'RecentLaunches.cs', 'Sensors.cs', 'CacheInventory.cs', 'DisplayInfo.cs', 'Hints.cs', 'GameGroups.cs',
     'SettingsSearch.cs', 'HomeStatus.cs', 'PlainPlan.cs', 'HelpGuides.cs', 'CuRegistry.cs', 'Tuner.cs', 'TunerPlan.cs', 'TunerView.cs', 'FanPlan.cs', 'GraphicsSettings.cs', 'TdrSetting.cs',
-    'LayoutRules.cs', 'UmaSetting.cs', 'BoardCapabilities.cs', 'SystemTuning.cs', 'Benchmark.cs', 'StartupDiagnosticData.cs', 'DiagnosticWorker.cs' |
+    'LayoutRules.cs', 'UmaSetting.cs', 'BoardCapabilities.cs', 'SystemTuning.cs', 'Benchmark.cs', 'StartupDiagnosticData.cs', 'DiagnosticWorker.cs',
+    'StartNotice.cs', 'Wallpaper.cs' |
     ForEach-Object { Join-Path $here "src\$_" }
 
 # Build the capability fixture from the actual provider and shipping shim tables, without adapter access.
@@ -135,8 +143,17 @@ if ($NagiArt) {
         $artResourceNames += $a.Resource
     }
 }
+# The application icon (owner, 2026-10-12: "ikonke zrob z biustu Nagi"): art\icon\nagi.ico, the guide character's
+# bust as a round badge, with its own PROVENANCE.md. csc takes it as /win32icon, which is what an ApplicationIcon of
+# a project file compiles to. It is the icon of this window, of its task-bar button, and of the Start menu and
+# desktop shortcuts the installer writes, which take the icon from this exe.
+$icon = Join-Path $here 'art\icon\nagi.ico'
+if (-not (Test-Path -LiteralPath $icon -PathType Leaf)) { throw "application icon: no $icon" }
+# The same file as a resource as well (MainForm): the window's icon is then the authored image for the size Windows
+# asks for, instead of one 32x32 image rescaled on a high-resolution screen.
+$resources += "/resource:$icon,nagi.ico"
 & $csc /nologo /noconfig /nostdlib+ @refs /target:winexe /platform:x64 /optimize+ /warnaserror+ /langversion:7.3 /deterministic+ `
-    "/win32manifest:$here\app.manifest" "/out:$Out\amdgpu_wddm_control.exe" @resources @((Get-ChildItem "$here\src\*.cs").FullName | Sort-Object)
+    "/win32manifest:$here\app.manifest" "/win32icon:$icon" "/out:$Out\amdgpu_wddm_control.exe" @resources @((Get-ChildItem "$here\src\*.cs").FullName | Sort-Object)
 if ($LASTEXITCODE -ne 0) { throw "csc failed ($LASTEXITCODE)" }
 $systemTuningOutput = Join-Path $Out 'system-tuning'
 New-Item -ItemType Directory -Force -Path $systemTuningOutput | Out-Null
@@ -154,6 +171,8 @@ if ($artResourceNames.Count) {
     if ($missing.Count) { throw "guide art: the built exe has no resource $($missing -join ', ')" }
     Write-Host "  guide art: $($artResourceNames.Count) resources in the image ($(($artResourceNames | Sort-Object)[0]) .. $(($artResourceNames | Sort-Object)[-1]))"
 }
+if (-not $image.Contains('nagi.ico')) { throw 'application icon: the built exe has no resource nagi.ico' }
+Write-Host '  application icon: nagi.ico as the Win32 icon and as a resource with every authored size'
 
 # 4. Smoke run: no window, exits by itself. The DWM observations of the gates go to obj\state, not to this PC's profile.
 $env:AMDGPU_WDDM_CONTROL_STATE = Join-Path $obj 'state'
@@ -221,6 +240,9 @@ if (-not $NoSmoke) {
         'desktop-gpu'     = @(3, 'refused: The GPU desktop path is closed for this start')
         'desktop-cpu'     = @(3, 'refused: The desktop already runs on the CPU route')
         'confirm-start'   = @(0, 'confirm this driver start', 'undo: no')
+        # The one click back from Microsoft Basic Display. This reading has a running driver, so the plan refuses it
+        # and says why in the words the window shows; the lab arm exercises the state it repairs.
+        'enable-driver'   = @(3, 'refused: The graphics driver is running already.')
         'enable-dpm'      = @(0, "set $params DpmMode = 1 (DWord)", "set $params DpmMaxMHz = 1700 (DWord)")
         'reset-defaults'  = @(0, 'set HKLM\SOFTWARE\amdgpu-wddm\DesktopRouter DwmForceCpu = 1 (DWord)')
         'undo'            = @(3, 'refused: There is no action to undo')
@@ -228,7 +250,9 @@ if (-not $NoSmoke) {
         'restart-compositor' = @(3, 'refused: restart-compositor is an operator escape', '--accept-bd060')
         # The CU setter (G-PLAN, plan v7 section 7): the dry run lists the helper's steps, in the helper's order.
         'cu-mode:40'      = @(0, "S1 set $params CuMode = 40 (DWord)", 'S4 flush the key', 'undo: no', 'never restored')
-        'cu-mode:24'      = @(3, 'refused: Standard (24) is selected already')
+        # The snapshot has no CuMode, so Standard (24) is a number to write, not a selection that is there already
+        # (BD-077: an absent value reads to the release installer as a key it never configured).
+        'cu-mode:24'      = @(0, "S1 set $params CuMode = 24 (DWord)", 'verify the stock selection (24)', 'never restored')
         'cu-confirm'      = @(3, 'refused: No 40-core start is waiting for confirmation')
         'reset-defaults:keep' = @(0, 'note: Per-game settings are kept.')
         'game-undo'       = @(3, 'refused: There is no change of witcher3.exe to undo')
@@ -259,10 +283,12 @@ if (-not $NoSmoke) {
         'cpu-keep'    = @(3, 'refused: No processor trial is running.')
         'cpu-reset'   = @(3, 'refused: The processor has its default settings already.')
         'core-mask'   = @(0, 'tuning request core-mask, cores 8', 'at the next restart of Windows')
-        # WU-042: "Reset driver settings" is the one control that puts the standard settings back, so with the
-        # processor surface open it also turns processor tuning off. The tuning steps of a machine that has
-        # settings stored are gated by the host tests (TunerStandardSteps); this snapshot has none stored.
-        'reset-defaults' = @(0, "delete $params CpuTune", 'at the next restart of Windows')
+        # WU-042: "Reset driver settings" is the one control that puts the standard settings back. Processor tuning
+        # goes to the release's CpuTune, which is 1 here as in registry-defaults.json, so a stored 1 is left alone
+        # (a leading "!" means the text must not be there). The tuning steps of a machine that has settings
+        # stored and the writes of a CpuTune 0 or absent are gated by the host tests (TunerStandardSteps,
+        # TunerResetCpuTune); this snapshot has none stored.
+        'reset-defaults' = @(0, "!$params CpuTune", 'at the next restart of Windows')
         # The fan card (docs/design/fan.md Part B): the driver runs the standard curve with nothing stored.
         'fan-auto'    = @(0, 'tuning request fan-board', 'takes effect: at once', 'undo: no')
         'fan-curve'   = @(0, 'tuning request fan-curve, fan profile quiet', 'takes effect: at once')
@@ -280,7 +306,9 @@ if (-not $NoSmoke) {
         $r = Invoke-DryRun (@('--action', $e.Key) + $extra + @('--dry-run', '--snapshot', $tuned)) "tune-$($e.Key)"
         if ($r.Code -ne $e.Value[0]) { throw "dry run $($e.Key): exit $($r.Code), $($e.Value[0]) expected: $($r.Text)" }
         foreach ($want in $e.Value | Select-Object -Skip 1) {
-            if (-not $r.Text.Contains($want)) { throw "dry run $($e.Key): '$want' missing: $($r.Text)" }
+            if ($want.StartsWith('!')) {
+                if ($r.Text.Contains($want.Substring(1))) { throw "dry run $($e.Key): '$($want.Substring(1))' must not be there: $($r.Text)" }
+            } elseif (-not $r.Text.Contains($want)) { throw "dry run $($e.Key): '$want' missing: $($r.Text)" }
         }
     }
     # A curve under the driver's own floor, a core count this board does not take, and a trial without a curve: the
@@ -469,6 +497,16 @@ if (-not $NoSmoke) {
     if ($p.ExitCode -ne 0) { throw "perf smoke (exit $($p.ExitCode)): $perf" }
     Write-Host "  hidden window: $((($perf -split "`r?`n") | Where-Object { $_ }) -join ', ')"
 
+    # The sign-in notice (NoticeForm.cs): both cases, the four languages, 96/120/144/192 DPI, a 1024x768 screen and
+    # a large one, built without being shown. It must fit the screen, overlap nothing, overflow nothing, name no
+    # driver internals and close with Escape (BD-137 found overlapping texts on Microsoft Basic Display).
+    $file = Join-Path $obj 'smoke-notice.txt'
+    $p = Start-Process -FilePath "$Out\amdgpu_wddm_control.exe" -ArgumentList '--smoke-notice', "`"$file`"" -PassThru -WindowStyle Hidden
+    if (-not $p.WaitForExit(120000)) { $p.Kill(); throw 'notice smoke did not exit within 120 s' }
+    $notice = Get-Content $file -Raw -ErrorAction SilentlyContinue
+    if ($p.ExitCode -ne 0) { throw "notice smoke (exit $($p.ExitCode)): $notice" }
+    Write-Host "  sign-in notice: $((($notice -split "`r?`n") | Where-Object { $_ } | Select-Object -First 1))"
+
     # A rebuilt page keeps the place the person scrolled to (F1 of the b23 lab round) and the card the person reads
     # keeps its place while a card above it grows (F7 of the second round): the Performance page of the recorded
     # fixture, scrolled, then rebuilt as a progress report rebuilds it, and every state of a benchmark run with the
@@ -504,6 +542,13 @@ if (-not $NoSmoke) {
     $runs += , @('ko-2-tuner', '2', '--lang', 'ko', '--fixture', "`"$tuner`"")
     $runs += , @('en-1-tuner-off', '1', '--fixture', "`"$tunerOff`"")
     $runs += , @('pl-1-tuner-off', '1', '--lang', 'pl', '--fixture', "`"$tunerOff`"")
+    # G-SMALL, the owner's rule of 2026-10-12: the five working areas of a tester's screen, in logical units. The
+    # four small ones must draw no right-hand panel and the 1920x1080 one must draw it; overlap, overflow and the
+    # page width are checked in every one of them, which is what an 800x600 screen needed (GitHub #38).
+    foreach ($work in '800x600', '1024x768', '1280x720', '1366x768', '1920x1080') {
+        $runs += , @("en-1-work$work", '1', '--work-area', $work, '--fixture', "`"$fixture`"")
+    }
+    $runs += , @('pl-1.5-work1920x1080', '1.5', '--lang', 'pl', '--work-area', '1920x1080', '--fixture', "`"$fixture`"")
     $failed = @()
     foreach ($r in $runs) {
         $dir = Join-Path $obj "render\$($r[0])"
@@ -519,7 +564,7 @@ if (-not $NoSmoke) {
         if ($p.ExitCode -ne 0) { $failed += "$($r[0]): $(Get-Content (Join-Path $dir 'layout.txt') -Raw -ErrorAction SilentlyContinue)" }
     }
     if ($failed.Count) { throw "render gates:`n$($failed -join "`n")" }
-    Write-Host "  render: $($runs.Count) runs (9 pages, 96-192 DPI, 4 languages, text 150 %, Nagi on by default and two runs with her off, language switch, tuning states): no findings ($obj\render)"
+    Write-Host "  render: $($runs.Count) runs (9 pages, 96-192 DPI, 4 languages, text 150 %, Nagi on by default and two runs with her off, language switch, tuning states, 6 runs over five screen sizes from 800x600 up): no findings ($obj\render)"
 }
 Get-ChildItem $Out -File | ForEach-Object {
     '{0,9}  {1}  {2}' -f $_.Length, (Get-FileHash $_.FullName -Algorithm SHA256).Hash.Substring(0, 8), $_.Name

@@ -185,14 +185,14 @@
       ]
     },
     {
-      "id": "R16-QAI-15-47-REFUSED",
-      "declaration": "the lab's dxgkrnl asks a started full adapter for PHYSICALADAPTERCAPS (15) and 64BITONLYCAPS (47)",
-      "requires_text": "both fall to the default arm and are refused, and the refusal is tested rather than assumed",
-      "source": "DXGKRNL dxgk_caps_static.md 2.4, DXGADAPTER::Initialize+0x967, 'a refusal is tolerated: js +0xc06 logs, sets a marker, continues'; docs/facts.md M64 and evidence/windows/2026-09-21-E16-run-003 saw both asked and both refused; the WDK has no structure for type 47 at all",
+      "id": "R16-QAI-15-47-ANSWERED",
+      "declaration": "dxgkrnl asks a started full adapter for PHYSICALADAPTERCAPS (15) and 64BITONLYCAPS (47)",
+      "requires_text": "both are answered: 15 with the DRIVERCAPS node count, paging node, GpuMmu and the StartDevice handle, 47 with four zero bytes",
+      "source": "DXGKRNL dxgk_caps_static.md 2.4, DXGADAPTER::Initialize+0x967: a refusal of either is tolerated; static reading of 26100.9549 (BD-134): after a refusal of 15 dxgkrnl builds the physical-adapter caps itself from DRIVERCAPS members this driver leaves zero and takes the FDO as the handle, and an answer to 47 only sets SupportsOnly64Bit; docs/facts.md M64 and evidence/windows/2026-09-21-E16-run-003 saw both asked; the WDK has no structure for type 47",
       "when": [{"always": true}],
       "require": [
-        {"qai_refused": 15},
-        {"qai_refused": 47}
+        {"qai_handled": "DXGKQAITYPE_PHYSICALADAPTERCAPS"},
+        {"qai_handled": "DXGKQAITYPE_64BITONLYCAPS"}
       ]
     },
     {

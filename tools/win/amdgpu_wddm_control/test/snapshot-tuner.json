@@ -57,7 +57,7 @@
   "TaskResult": 0,
   "TaskLastRun": "2026-10-05 10:00",
   "ConfirmLogLast": null,
-  "DefaultParameters": { "EnableGpuPresentBlit": 1, "EnableCddDwmInterop": 1, "DpmMode": 1, "DpmMaxMHz": 1500 },
+  "DefaultParameters": { "EnableGpuPresentBlit": 1, "EnableCddDwmInterop": 1, "DpmMode": 1, "DpmMaxMHz": 1500, "CpuTune": 1 },
   "DefaultRouter": { "DwmForceCpu": 0 },
   "DefaultsError": null
 }

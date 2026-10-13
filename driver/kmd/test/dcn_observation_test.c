@@ -20,7 +20,8 @@ typedef struct {
     BOOLEAN VramEnabled, VidPnFlipEnabled;
     PHYSICAL_ADDRESS VramPhysical;
     ULONGLONG VramMcBase, VramLength;
-    struct { UINT Height; } Post;
+    struct { UINT Height; } Post,RuntimePost;
+    BOOLEAN RuntimePostValid;
     BC250_WDDM *Wddm;
 } BC250_DEVICE;
 typedef struct { UINT VidPnTargetId; BOOLEAN InVerticalBlank; UINT ScanLine; } DXGKARG_GETSCANLINE;
@@ -107,6 +108,13 @@ int main(void)
         CHECK(line.ScanLine==((i>=100 && i<200)?0:(i+800)%1000));
     }
     CHECK(clock_queries==0); // Hardware path never derives phase from stale VSyncLast.
+    // Runtime height controls the software fallback independently of GOP.
+    d.VidPnFlipEnabled=0;d.RuntimePostValid=TRUE;d.RuntimePost.Height=2160;
+    w.VSyncLast.QuadPart=1000000000-8000;
+    CHECK(Bc250WddmGetScanLine(&d,&line)==STATUS_SUCCESS);
+    CHECK(!line.InVerticalBlank && line.ScanLine==1080 && d.Post.Height==1200);
+    d.RuntimePostValid=FALSE;
+    CHECK(Bc250WddmGetScanLine(&d,&line)==STATUS_SUCCESS && line.ScanLine==600);
     printf("DCN observation: %u checks, %u failures\n",checks,failures);
     return failures?1:0;
 }

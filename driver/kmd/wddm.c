@@ -209,6 +209,10 @@ typedef struct _BC250_WDDM_OBJECT {
     BOOLEAN UmdAlloc;
     BOOLEAN UmdContext;
     BOOLEAN SystemContext;
+    // BD-127: this context's BC2C blob carried BC250_UMD_C_COMPUTE and it was counted into the adapter's live
+    // compute-context count. The flag is what DestroyContext counts out again, so a context that was never
+    // counted (a GDI context, a refused blob, a version 2 blob) cannot lower the count.
+    BOOLEAN ComputeContext;
     unsigned long UmdIpType;
     unsigned long UmdHeap;
     ULONGLONG UmdBytes;
@@ -539,6 +543,7 @@ typedef struct _BC250_WDDM {
     // E20 (ADR 0011): the diagnostic CPU blit of a Blt present into the firmware framebuffer, behind EnablePresentBlit.
     volatile LONG GdiSurfaceTypesLogged;       // first size/fill request per GDI type, bounded to20 lines
     BC250_STDALLOC_COUNTERS StdAlloc;          // BD-060: standard allocation requests/answers, LB7A create/open
+    ULONG OsBuildNumber;                     // BD-135: standard-shadow placement on 24H2 and later
     BOOLEAN BlitGate;
     BOOLEAN HandleIdentityProbe;
     volatile LONG HandleIdentityProbeCalls[2]; // at most16 non-BC2A and16 BC2A opens per start
@@ -1364,16 +1369,25 @@ void WddmGpuFence(_Inout_ BC250_DEVICE* Device)
 }
 
 // Caller holds Lock. The epoch check and BOTH gate latches are one transaction.
-// GfxSubmitFail takes only a short lifetime reference, sets an interlocked flag
-// and signals an event; it does not acquire GartLock or join a DPC. After unlock,
-// the timeout tail may log, but must never change either submission gate.
+// The two acts below take only a short lifetime reference, a spin lock of their
+// own, an interlocked flag and an event; neither acquires GartLock or joins a
+// DPC. After unlock, the timeout tail may log, but must never change either gate.
 static BOOLEAN WddmLatchSubmitTimeoutLocked(BC250_DEVICE* Device, BC250_WDDM* Wddm, ULONGLONG Epoch)
 {
     if (Wddm->Stopping ||
         !Bc250HangTimeoutCurrent(&Wddm->Recovery[BC250_WDDM_NODE_3D], Epoch)) return FALSE;
     Wddm->WatchdogFaulted[BC250_WDDM_NODE_3D] = TRUE;
     Wddm->DeferredValid = FALSE;
-    GfxSubmitFail(Device);
+    // BD-120: the same two acts as GfxSubmitFail, with the witness close marked as the one the pending OS reset
+    // owns. A recovered ResetEngine reopens exactly this close (StartHealthRecovered); a refused reset and every
+    // other fault stay sticky, as before. The order matters only in that the mark is set while the witness is
+    // still open with its engines up, which StartHealthFaultPendingReset checks for itself.
+    // This whole latch is node 0's, whichever node's job the submit watchdog found at the head of GfxPending:
+    // it reads and writes Recovery[NODE_3D] and WatchdogFaulted[NODE_3D], and the mark it leaves is node 0's
+    // reset to answer for the same reason. A node-1 failure reaches the witness through the paging watchdog's
+    // GfxPagingSubmitFail, which is a sticky StartHealthFault and clears the mark.
+    StartHealthFaultPendingReset(Device);
+    GfxSubmitClose(Device);
     return TRUE;
 }
 
@@ -2978,6 +2992,7 @@ void WddmSummary(_In_ BC250_DEVICE* Device)
         GuardLog("wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)");
         return;
     }
+    ConnectorLinkLogOpen(Device);
     DcnLogVsyncSnapshot(Device);
     DpmLogSummary(Device);
     InteropLogSummary(Device);
@@ -3009,6 +3024,7 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     BOOLEAN vidmmPrepared=FALSE;
     NTSTATUS status;
     ULONGLONG segmentOffset, segmentLength, tableOffset, tableLength;
+    RTL_OSVERSIONINFOW osVersion;
 
     Device->FullWddm = g_FullWddm;
     Device->Wddm = NULL;
@@ -3017,6 +3033,10 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     Device->ComposedSourceModes = FALSE;
     Device->CommittedSourceFormat = 0;
     if (!g_FullWddm) return STATUS_SUCCESS;                            // gate closed: this file does nothing at all
+    RtlZeroMemory(&osVersion, sizeof(osVersion));
+    osVersion.dwOSVersionInfoSize = sizeof(osVersion);
+    status = RtlGetVersion(&osVersion);
+    if (!NT_SUCCESS(status)) return status;
     // 0.7.201: source modes of the composed formats (display_modes.h), on unless the value is 0.
     Device->ComposedSourceModes = GuardReadSetting(L"OfferComposedSourceModes", 1) != 0;
     GuardLog("wddm: composed source modes %s", Device->ComposedSourceModes ? "offered" : "off");
@@ -3038,6 +3058,9 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     }
     Bc250ObjectIndexInit(&wddm->ObjectIndex,buckets,(unsigned long)FIELD_OFFSET(BC250_WDDM_OBJECT,HashNext));
     wddm->Device = Device;
+    wddm->OsBuildNumber = osVersion.dwBuildNumber;
+    GuardLog("wddm: OS build %lu, CDD shadow backing %s", wddm->OsBuildNumber,
+             wddm->OsBuildNumber >= 26100 ? "coherent aperture" : "local memory");
     wddm->NativePteCopies=(GuardReadSetting(L"EnableNativePteCopy",0)==1);
     wddm->TraceUmdProbes = (GuardReadSetting(L"TraceUmdProbes", 0) == 1);
     (void)KeQueryPerformanceCounter(&wddm->UmdProfileFrequency);
@@ -3536,6 +3559,10 @@ static BOOLEAN WddmMemoryLayout(_In_ const BC250_DEVICE* Device, _Out_ ULONGLONG
     }
     if (framebufferEnd>MAXULONGLONG-65535ull) return FALSE;
     framebufferEnd=(framebufferEnd+65535ull)&~65535ull;
+    // Stage 4 handoff storage is owned from start to stop, outside all VidMm
+    // allocations. Both the private caps and QUERYSEGMENT use this same layout.
+    if (Device->DisplayReservationEnd>framebufferEnd)
+        framebufferEnd=Device->DisplayReservationEnd;
     if (framebufferEnd>=limit) return FALSE;
     available=(limit-framebufferEnd)&~65535ull;
     // Capacity policy: reserve 1/32 of usable VRAM, rounded down to64KiB,
@@ -3889,6 +3916,31 @@ static NTSTATUS WddmGpuMmuCaps(_In_ const DXGKARG_QUERYADAPTERINFO* Query)
     return STATUS_SUCCESS;
 }
 
+// DXGKQAITYPE_PHYSICALADAPTERCAPS. dxgkrnl tolerates a refusal, but then builds the physical-adapter caps itself
+// from DRIVERCAPS members this driver leaves zero, and takes the FDO instead of our handle (static reading of
+// 26100.9549, BD-134). The answer repeats DRIVERCAPS: the same node count and paging node, GpuMmu, and the handle
+// dxgkrnl gave StartDevice. One physical adapter, no LDA.
+static NTSTATUS WddmPhysicalAdapterCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKARG_QUERYADAPTERINFO* Query)
+{
+    const DXGK_QUERYPHYSICALADAPTERCAPSIN* in = (const DXGK_QUERYPHYSICALADAPTERCAPSIN*)Query->pInputData;
+    DXGK_PHYSICALADAPTERCAPS* caps = (DXGK_PHYSICALADAPTERCAPS*)Query->pOutputData;
+    const BC250_WDDM* wddm = (const BC250_WDDM*)Device->Wddm;
+    UINT nodeCount = (wddm != NULL) ? wddm->NodeCount : BC250_WDDM_NODE_COUNT;
+
+    if (Query->InputDataSize < sizeof(*in) || in == NULL) return STATUS_INVALID_PARAMETER;
+    if (Query->OutputDataSize < sizeof(*caps) || caps == NULL) return STATUS_BUFFER_TOO_SMALL;
+    if (in->PhysicalAdapterIndex != 0) return STATUS_INVALID_PARAMETER;
+    // The handle exists only after StartDevice; a zero handle would be a wrong answer, not a cautious one.
+    if (Device->Dxgk.DeviceHandle == NULL) return STATUS_DEVICE_NOT_READY;
+    // The caller's buffer, not our sizeof: the WDDM 2.7 VirtualCopyNodeIndex tail stays zero, no virtual copy node.
+    RtlZeroMemory(caps, Query->OutputDataSize);
+    caps->NumExecutionNodes = (WORD)nodeCount;
+    caps->PagingNodeIndex = (WORD)((nodeCount > BC250_WDDM_NODE_COPY) ? BC250_WDDM_NODE_COPY : BC250_WDDM_NODE_3D);
+    caps->DxgkPhysicalAdapterHandle = Device->Dxgk.DeviceHandle;
+    caps->Flags.GpuMmuSupported = 1;
+    return STATUS_SUCCESS;
+}
+
 // Every level of the page table has the same shape here, so the answer does not depend on which end LevelIndex
 // counts from - a point the documentation leaves open and stage B has to settle before the shape can differ.
 static NTSTATUS WddmPageTableLevelDesc(_In_ const BC250_DEVICE* Device, _In_ const DXGKARG_QUERYADAPTERINFO* Query)
@@ -3933,6 +3985,17 @@ static NTSTATUS Bc250WddmQueryAdapterInfo(_In_ const HANDLE hAdapter, _In_ const
         break;
     case DXGKQAITYPE_PAGETABLELEVELDESC:
         status = WddmPageTableLevelDesc(device, QueryAdapterInfo);
+        break;
+    case DXGKQAITYPE_PHYSICALADAPTERCAPS:
+        status = WddmPhysicalAdapterCaps(device, QueryAdapterInfo);
+        break;
+    case DXGKQAITYPE_64BITONLYCAPS:
+        // Four bytes and no WDK structure. dxgkrnl ignores a refusal; the answer sets only SupportsOnly64Bit (static
+        // reading of 26100.9549, BD-134). Zero: this driver has 32-bit user-mode drivers too. VirtualBox's WDDM
+        // miniport also answers this type with a zeroed buffer.
+        if (QueryAdapterInfo->pOutputData == NULL || QueryAdapterInfo->OutputDataSize < sizeof(UINT)) { status = STATUS_BUFFER_TOO_SMALL; break; }
+        RtlZeroMemory(QueryAdapterInfo->pOutputData, QueryAdapterInfo->OutputDataSize);
+        status = STATUS_SUCCESS;
         break;
     case DXGKQAITYPE_NUMPOWERCOMPONENTS:
         // No runtime power management of our own: zero components, and the power DDIs stay as the display-only
@@ -4001,7 +4064,8 @@ static NTSTATUS Bc250WddmQueryAdapterInfo(_In_ const HANDLE hAdapter, _In_ const
             scanout.flags = BC250_SCANOUT_CAPS_DIRECT_FLIP;
             // M15.14 (0.7.216.20): the plane takes the table's non-firmware SCANOUT_PRIMARY rows (R8G8B8A8,
             // R10G10B10A2) only after the firmware's format was captured at WddmStart, which ran before this.
-            if (device->DcnPlaneFormats && !device->Modeset.InheritedFixed) scanout.flags |= BC250_SCANOUT_CAPS_PLANE_FORMATS;
+            if (device->DcnPlaneFormats && !device->Modeset.InheritedFixed && !ConnectorIsEnabled(device))
+                scanout.flags |= BC250_SCANOUT_CAPS_PLANE_FORMATS;
             scanout.post_width = (unsigned int)DisplaySourceWidth(device);
             scanout.post_height = (unsigned int)DisplaySourceHeight(device);
             RtlCopyMemory((PUCHAR)QueryAdapterInfo->pOutputData+BC250_SCANOUT_CAPS_OFFSET,
@@ -4010,10 +4074,9 @@ static NTSTATUS Bc250WddmQueryAdapterInfo(_In_ const HANDLE hAdapter, _In_ const
         break;
     }
     default:
-        // The pre-WDDM2 segment queries, which a WDDM 2 driver must not answer. Seen on the lab and tolerated
-        // by its dxgkrnl (E16 run 003): type 15 PHYSICALADAPTERCAPS and type 47 64BITONLYCAPS, for which the
-        // WDK has no structure at all. Two refusals in a kept log are expected. STATUS_NOT_SUPPORTED is safe
-        // for an unhandled type, and which types are asked for is stage A evidence.
+        // The pre-WDDM2 segment queries, which a WDDM 2 driver must not answer. Types 15 and 47, which the lab's
+        // dxgkrnl asked for in E16 run 003, were refused here until 0.7.216.62 (above). Which types are asked for
+        // is stage A evidence, and a refusal here is logged below.
         status = STATUS_NOT_SUPPORTED;
         break;
     }
@@ -4153,6 +4216,15 @@ static NTSTATUS Bc250WddmCreateContext(_In_ const HANDLE hDevice, _Inout_ DXGKAR
             if (!NT_SUCCESS(journalStatus)) { WddmFreeObject(object); return journalStatus; }
         }
     }
+    // BD-127: the compute statement of an accepted blob, counted after the last path that can still fail, so the
+    // count never carries a context that was never created. DestroyContext counts it out again; dxgkrnl destroys the
+    // contexts of a dying process, so a killed compute client needs no process tracking of ours. The count selects
+    // the DPM governor's compute threshold set and nothing else: it changes no submission and no allocation.
+    if (umd && umdView.compute)
+    {
+        object->ComputeContext = TRUE;
+        DpmComputeContextAdd(parent->Device, 1);
+    }
     pCreateContext->hContext = object;
 
     RtlZeroMemory(&pCreateContext->ContextInfo, sizeof(pCreateContext->ContextInfo));
@@ -4196,8 +4268,8 @@ static NTSTATUS Bc250WddmCreateContext(_In_ const HANDLE hDevice, _Inout_ DXGKAR
     pCreateContext->ContextInfo.PagingCompanionNodeId = (nodeCount > BC250_WDDM_NODE_COPY) ? BC250_WDDM_NODE_COPY : BC250_WDDM_NODE_3D;
 
     if (umd && parentWddm != NULL && InterlockedIncrement(&parentWddm->UmdContexts) <= BC250_WDDM_LOG_CALLS)
-        GuardLog("wddm: umd context node %u ip %u, private slot %u", pCreateContext->NodeOrdinal,
-                 umdView.ip_type, (ULONG)UMD_BLOB_SUBMIT_BYTES);
+        GuardLog("wddm: umd context node %u ip %u %s, private slot %u", pCreateContext->NodeOrdinal,
+                 umdView.ip_type, umdView.compute ? "compute" : "graphics", (ULONG)UMD_BLOB_SUBMIT_BYTES);
     // KMD193: one line per context, capped like every other first-calls log, so that the context value in a
     // GFX_SUBMIT journal record or a Blt observation can be traced back to a process and a kind.
     if (parentWddm != NULL && InterlockedIncrement(&parentWddm->ContextsLogged) <= BC250_WDDM_LOG_CALLS)
@@ -4225,6 +4297,14 @@ static NTSTATUS Bc250WddmDestroyContext(_In_ const HANDLE hContext)
 
     if (object == NULL) return STATUS_INVALID_PARAMETER;
     if (WddmFirstCalls((BC250_WDDM*)object->Device->Wddm, WddmDdiDestroyContext)) GuardLog("wddm: DestroyContext");
+    // BD-127: out of the adapter's live compute-context count, before the object is freed. Exactly the contexts
+    // CreateContext counted in, so the count returns to zero when the last compute client's contexts are gone and
+    // the governor's graphics thresholds come back.
+    if (object->ComputeContext)
+    {
+        object->ComputeContext = FALSE;
+        DpmComputeContextAdd(object->Device, -1);
+    }
     wddm=(BC250_WDDM*)object->Device->Wddm;
     // Captures are CPU-only but builders may still be reading their arrays.
     // Join that owner before detaching/freeing the context; the lock outlives it.
@@ -4334,6 +4414,9 @@ static NTSTATUS Bc250WddmGetStandardAllocationDriverData(_In_ const HANDLE hAdap
     request.Kind = (ULONG)pData->StandardAllocationType;
     request.Fill = pData->pAllocationPrivateDriverData != NULL;
     request.Bytes = request.Fill ? pData->AllocationPrivateDriverDataSize : 0;
+    request.OsBuild = wddm != NULL ? wddm->OsBuildNumber : 0;
+    request.ResourceFill = pData->pResourcePrivateDriverData != NULL;
+    request.ResourceBytes = request.ResourceFill ? pData->ResourcePrivateDriverDataSize : 0;
     switch (pData->StandardAllocationType)
     {
     case D3DKMDT_STANDARDALLOCATION_SHAREDPRIMARYSURFACE:
@@ -4401,7 +4484,7 @@ static NTSTATUS Bc250WddmGetStandardAllocationDriverData(_In_ const HANDLE hAdap
             pData->pCreateGdiSurfaceData->Pitch = answer.Surface.Pitch;
     }
 
-    // Two passes: a NULL buffer asks only for the size. The resource blob stays empty in stage A.
+    // Two passes: a NULL buffer asks only for the size. Only a 24H2+ shadow gets an E26R resource record.
     if (request.Fill)
     {
         if (answer.PrivateBytes == sizeof(gdi)) {
@@ -4412,10 +4495,12 @@ static NTSTATUS Bc250WddmGetStandardAllocationDriverData(_In_ const HANDLE hAdap
             gdi.Flags = request.GdiFlags;
             RtlCopyMemory(pData->pAllocationPrivateDriverData, &gdi, sizeof(gdi));
         } else RtlCopyMemory(pData->pAllocationPrivateDriverData, &answer.Surface, sizeof(answer.Surface));
+        if (answer.ResourceBytes)
+            RtlCopyMemory(pData->pResourcePrivateDriverData, answer.Resource, answer.ResourceBytes);
     }
     pData->AllocationPrivateDriverDataSize = answer.PrivateBytes;
-    pData->pResourcePrivateDriverData = NULL;
-    pData->ResourcePrivateDriverDataSize = 0;
+    if (!answer.ResourceBytes) pData->pResourcePrivateDriverData = NULL;
+    pData->ResourcePrivateDriverDataSize = answer.ResourceBytes;
 
     if (WddmFirstCalls(wddm, WddmDdiGetStandardAllocationDriverData))
         GuardLog("wddm: GetStandardAllocationDriverData type %u %ux%u format %u -> %llu bytes",
@@ -4595,6 +4680,11 @@ static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Sl
                      pCreateAllocation->NumAllocations, info->PrivateDriverDataSize);
         return BC250_CREATE_STEP_REFUSED;
     }
+
+    // Resource records can also request the aperture for type 0 (including the BD-135 CDD shadow).
+    // Refuse before publishing any object if QUERYSEGMENT4 did not offer that segment.
+    if (!gdiType && call->RecordPolicy.Aperture && !g_ApertureOffered)
+        return BC250_CREATE_STEP_REFUSED;
 
     object = WddmNewObject(device, BC250_WDDM_MAGIC_ALLOCATION);
     if (object == NULL) return BC250_CREATE_STEP_NO_MEMORY;
@@ -4805,20 +4895,28 @@ static DXGKDDI_DESCRIBEALLOCATION Bc250WddmDescribeAllocation;
 static NTSTATUS Bc250WddmDescribeAllocation(_In_ const HANDLE hAdapter,
                                             _Inout_ DXGKARG_DESCRIBEALLOCATION* pDescribeAllocation)
 {
-    const BC250_DEVICE* device=(const BC250_DEVICE*)hAdapter;
+    BC250_DEVICE* device=(BC250_DEVICE*)hAdapter;
     BC250_WDDM_OBJECT* object = WddmObject(pDescribeAllocation->hAllocation, BC250_WDDM_MAGIC_ALLOCATION);
+    D3DKMDT_VIDEO_SIGNAL_INFO signal;
+    NTSTATUS status;
 
     if (object == NULL) return STATUS_INVALID_PARAMETER;
-    if (!device->InheritedSignalValid) return STATUS_DEVICE_NOT_READY;
+    if (ConnectorIsEnabled(device)) {
+        status=ConnectorLinkCurrentSignal(device,&signal);
+        if (!NT_SUCCESS(status)) return status;
+    } else {
+        if (!device->InheritedSignalValid) return STATUS_DEVICE_NOT_READY;
+        signal=device->InheritedSignal;
+    }
     pDescribeAllocation->Width = object->Allocation.Width;
     pDescribeAllocation->Height = object->Allocation.Height;
     pDescribeAllocation->Format = (D3DDDIFORMAT)object->Allocation.Format;
     pDescribeAllocation->MultisampleMethod.NumSamples = 0;
     pDescribeAllocation->MultisampleMethod.NumQualityLevels = 0;
-    // The primary uses the same inherited mode advertised by FillSignalInfo.
+    // The primary uses the committed target mode advertised by FillSignalInfo.
     // E26/M147: a different allocation refresh yields PRESENT_MODE_CHANGED.
-    // The start-time tuple is immutable until StopDevice; no MMIO query here.
-    pDescribeAllocation->RefreshRate = device->InheritedSignal.VSyncFreq;
+    // PASSIVE_LEVEL DDI: copy the tuple under the connector operation owner.
+    pDescribeAllocation->RefreshRate = signal.VSyncFreq;
     pDescribeAllocation->PrivateDriverFormatAttribute = 0;
     pDescribeAllocation->Rotation = D3DDDI_ROTATION_IDENTITY;
     if (WddmFirstCalls(WddmOf(hAdapter), WddmDdiDescribeAllocation))
@@ -6527,9 +6625,10 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
         ULONG verdict, seq, kills = 0, micros = 0, vmid = 0, reasons;
         UINT hungFence = 0, lastCompleted = 0, lastSubmitted = 0, abortFence = 0, notifiedFence;
         BOOLEAN onRing;
+        BC250_START_HEALTH_RECOVERY witness = BC250_START_HEALTH_RECOVERY_STICKY;
         int lastKnown, lastSubmittedKnown, completionPending, reportedKnown, abortReported = 0;
         unsigned node = pResetEngine->NodeOrdinal;
-        ULONGLONG epoch, admittedAt;
+        ULONGLONG epoch, admittedAt, witnessEpoch = 0;
         BC250_HANG_NODE_STATE snapshot;
         KIRQL irql;
 
@@ -6644,6 +6743,14 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
             // moved it backwards below fences node 1 had already reported.
             wddm->SubmittedFence[BC250_WDDM_NODE_3D] = (LONG)hungFence;
             Bc250HangResetEnd(&wddm->Recovery[node], TRUE, hungFence);
+            // BD-120: the presentation start witness re-arms with the node, inside this same transaction, so that
+            // no reader can see node 0 admitting work while the witness still reports the hang. It undoes only the
+            // close this reset owns (the timeout latch's), which is why a fault of any other kind, before or after
+            // the latch, keeps the witness closed for the rest of this device start. A witness our latch never
+            // closed - the ordering in which the OS TDR arrives first - gets the new epoch all the same, so no
+            // interval ever spans a hang. The three answers are logged after the lock, with the rest of the
+            // recovery.
+            witness = StartHealthRecovered(device, &witnessEpoch);
             // Last, with the queue already empty: it clears HwPending, cancels the submit watchdog and closes the
             // ring-gap edge, which a hand-written HwPending = FALSE would have left open (0.7.210's histogram).
             WddmGfxHeadLocked(wddm);
@@ -6671,6 +6778,18 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
                          pResetEngine->NodeOrdinal, hungFence);
             GuardLog("wddm: soft recovery: verdict %lu seq %lu vmid %lu, %lu kill(s) in %lu us", verdict, seq, vmid,
                      kills, micros);
+            // BD-120. Which of the three the witness did, and the epoch a health reader now sees. The middle one
+            // is not a fault report: it is the ordering in which the OS TDR arrived before our own latch, so
+            // there was no close to undo and only the interval ended.
+            if (witness == BC250_START_HEALTH_RECOVERY_REOPENED)
+                GuardLog("wddm: start witness reopened after recovery: epoch %llu, ready age and completions"
+                         " restart now", witnessEpoch);
+            else if (witness == BC250_START_HEALTH_RECOVERY_REARMED)
+                GuardLog("wddm: start witness was still open at the recovery: epoch %llu, the hung interval"
+                         " ends here", witnessEpoch);
+            else
+                GuardLog("wddm: start witness stays closed after recovery at epoch %llu: a fault of its own,"
+                         " outside this reset, is recorded", witnessEpoch);
             if (abortReported)
                 GuardLog("wddm: aborted-fence report: node %u lower boundary %u, last submitted %u (BD-114 7.4)",
                          pResetEngine->NodeOrdinal, lastCompleted, lastSubmitted);
@@ -6699,7 +6818,12 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
     // with a LastAbortedFenceId outside [last completed, last submitted] is bugcheck 0x119, and a failure names
     // no fence at all. Logged on every call, like the two timeout DDIs and for the same reason.
 refuseReset:
-    StartHealthClose(device);
+    // BD-120: a refusal on THIS node is a fault of its own and stays sticky, exactly as before - the close
+    // takes the pending-reset mark with it, so no later reset reopens the witness. A refusal on node 1 says
+    // nothing about node 0: node 1 is never soft-recovered by policy, and clearing node 0's mark here would
+    // leave the node-0 reset that follows with nothing to reopen.
+    if (pResetEngine->NodeOrdinal == BC250_WDDM_NODE_3D) StartHealthClose(device);
+    else StartHealthCloseKeepPendingReset(device);
     // A refusal before recovery admission may leave a held submission waiting
     // while the scheduler moves on to ResetFromTimeout (which closes the path). Wake
     // the waiters anyway: one extra retest on a TDR path is cheaper than reasoning about which recovery DDI the
@@ -6878,10 +7002,13 @@ static int WddmPresentTranslate(void* Context, unsigned long long Va,
     return result;
 }
 
-static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_PRESENT* Present)
+static void WddmPresentBlitOwned(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_PRESENT* Present)
 {
     BC250_DEVICE* device = Context->Device;
     BC250_WDDM* wddm = (BC250_WDDM*)device->Wddm;
+    const DXGK_DISPLAY_INFORMATION* post=device->RuntimePostValid?&device->RuntimePost:&device->Post;
+    PUCHAR framebuffer=device->RuntimePostValid?device->RuntimeFramebuffer:device->Framebuffer;
+    SIZE_T framebufferLength=device->RuntimePostValid?device->RuntimeFramebufferLength:device->FramebufferLength;
     const ULONGLONG* raw;               // the list, read as qwords: both arms of the union are tried below
     HANDLE handle = NULL;
     BC250_WDDM_OBJECT* object = NULL;
@@ -6901,14 +7028,15 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
     BOOLEAN toFlip = FALSE, mapFailed = FALSE;    // for the counters and the log line at the end
     PVOID destinationMap = NULL;
     BOOLEAN destinationPrimary = FALSE, destinationRedFirst = FALSE;
-    UINT dstPitch = device->Post.Pitch, dstWidth = DisplaySourceWidth(device), dstHeight = DisplaySourceHeight(device);
+    UINT dstPitch = post->Pitch, dstWidth = DisplaySourceWidth(device), dstHeight = DisplaySourceHeight(device);
 
 
     verbose = (wddm->Calls[WddmDdiPresent] <= BC250_WDDM_LOG_CALLS);
-    if (Present->pAllocationList == NULL || Context->AllocationListSize <= DXGK_PRESENT_MAX_INDEX) why = "no list";
+    if (device->RuntimeDisplayChanged && !device->RuntimePostValid) why = "no active runtime target";
+    else if (Present->pAllocationList == NULL || Context->AllocationListSize <= DXGK_PRESENT_MAX_INDEX) why = "no list";
     else if (KeGetCurrentIrql() != PASSIVE_LEVEL) why = "IRQL";
     else if (Context->RootPhysical == 0) why = "context has no root";
-    else if (device->Framebuffer == NULL || device->FramebufferLength == 0) why = "no framebuffer";
+    else if (framebuffer == NULL || framebufferLength == 0) why = "no framebuffer";
     else if (Present->DstRect.right - Present->DstRect.left != Present->SrcRect.right - Present->SrcRect.left ||
              Present->DstRect.bottom - Present->DstRect.top != Present->SrcRect.bottom - Present->SrcRect.top) why = "scaled";
     if (why != NULL)
@@ -6992,8 +7120,8 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
     // check above). A mapping failure falls back to the POST framebuffer rather than dropping the present -
     // the picture is still produced somewhere the log can point at, never skipped silently - and is counted
     // apart from the ordinary gate-closed/pre-flip case so the two reasons stay distinguishable.
-    dst = (UCHAR*)device->Framebuffer;
-    dstLength = device->FramebufferLength;
+    dst = (UCHAR*)framebuffer;
+    dstLength = framebufferLength;
     if (device->VidPnFlipEnabled && device->DcnDiverged)
     {
         PVOID flipMap = NULL;
@@ -7061,18 +7189,18 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
     // captured from the register; M92 measured that as the carve-out base, which is VramPhysical (M31).
     // Seed from that physical address, once per flip target, then the dirty rectangles on top.
     if (toFlip && device->VramEnabled && device->DcnScanoutSeedAddress != device->DcnScanoutMapAddress &&
-        device->FramebufferLength != 0 && device->VramLength != 0)
+        framebufferLength != 0 && device->VramLength != 0)
     {
         ULONGLONG vramBase = (ULONGLONG)device->VramPhysical.QuadPart;
-        ULONGLONG seedAt = vramBase;
-        SIZE_T seedBytes = device->FramebufferLength;
+        ULONGLONG seedAt = device->RuntimePostValid?(ULONGLONG)post->PhysicAddress.QuadPart:vramBase;
+        SIZE_T seedBytes = framebufferLength;
         PHYSICAL_ADDRESS seedPhys;
         PVOID seedMap;
 
-        if (device->DcnFirmwareKnown && device->DcnFirmwareAddress >= vramBase &&
+        if (!device->RuntimePostValid && device->DcnFirmwareKnown && device->DcnFirmwareAddress >= vramBase &&
             device->DcnFirmwareAddress - vramBase < device->VramLength)
             seedAt = device->DcnFirmwareAddress;
-        if (seedAt != device->DcnScanoutMapAddress &&
+        if (seedAt >= vramBase && seedAt-vramBase < device->VramLength && seedAt != device->DcnScanoutMapAddress &&
             (ULONGLONG)seedBytes <= device->VramLength - (seedAt - vramBase))
         {
             seedPhys.QuadPart = (LONGLONG)seedAt;
@@ -7082,7 +7210,7 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
                 ULONG firstPixel = *(volatile ULONG*)seedMap;
 
                 BOOLEAN copied=WddmCopyScanoutRows(dst,dstLength,dstPitch,seedMap,seedBytes,
-                    device->Post.Pitch,device->Post.Width,device->Post.Height);
+                    post->Pitch,post->Width,post->Height);
                 MmUnmapIoSpace(seedMap, seedBytes);
                 if (copied)
                 {
@@ -7135,10 +7263,8 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
         if (right <= left || bottom <= top) continue;
         for (y = top; y < bottom; y++)
         {
-            // The geometry (pitch, and so this offset) is always the firmware's mode, Device->Post - the one
-            // the VidPn primary is pinned to (display.c's Bc250CommitVidPn) - whichever buffer dst points at;
-            // only the bound changes between the two destinations. dstLength is one of the two driver-owned
-            // lengths set above, never a number that came from user mode.
+            // Use the selected target's actual pitch and bounded allocation.
+            // The operation owner excludes a concurrent target-mode change.
             SIZE_T dstOff = (SIZE_T)y * dstPitch + (SIZE_T)left * 4;
             SIZE_T src = (SIZE_T)(y + dy) * alloc->Pitch + (SIZE_T)(left + dx) * 4;
             SIZE_T bytes = (SIZE_T)(right - left) * 4;
@@ -7147,11 +7273,11 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
             WddmCopyColorRow(dst + dstOff, map + src, bytes,
                 WddmRedFirst(alloc->Format) != destinationRedFirst);
             if (destinationPrimary && !device->VidPnFlipEnabled &&
-                right <= (LONG)device->Post.Width && y < (LONG)device->Post.Height)
+                right <= (LONG)post->Width && y < (LONG)post->Height)
             {
-                SIZE_T postOffset = (SIZE_T)y * device->Post.Pitch + (SIZE_T)left * 4;
-                if (postOffset + bytes <= device->FramebufferLength)
-                    WddmCopyColorRow((UCHAR*)device->Framebuffer + postOffset, map + src, bytes,
+                SIZE_T postOffset = (SIZE_T)y * post->Pitch + (SIZE_T)left * 4;
+                if (postOffset + bytes <= framebufferLength)
+                    WddmCopyColorRow((UCHAR*)framebuffer + postOffset, map + src, bytes,
                         WddmRedFirst(alloc->Format));
             }
             rows++;
@@ -7178,6 +7304,17 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
         GuardLog("wddm: blit %u rectangles, %u rows copied, destination %s%s", count, rows,
                  destinationMap ? (destinationPrimary ? "primary allocation" : "offscreen allocation") :
                  (toFlip ? "flipped surface" : "POST framebuffer"), mapFailed ? " (mapping failed, fell back)" : "");
+}
+
+// The compatibility CPU path can run while a new sink is being detected.
+// Serialize its geometry and surface access with passive connector transactions;
+// high-IRQL Present calls retain the original no-copy result.
+static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_PRESENT* Present)
+{
+    BOOLEAN owned=ConnectorIsEnabled(Context->Device) && KeGetCurrentIrql()==PASSIVE_LEVEL;
+    if (owned) ConnectorOperationAcquire(Context->Device);
+    WddmPresentBlitOwned(Context,Present);
+    if (owned) ConnectorOperationRelease(Context->Device);
 }
 
 // Build a complete OS-owned IB. The gate remains diagnostic until CDD/UMD
@@ -7563,7 +7700,8 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddress(_In_ const HANDLE hAdapter,
         // firmware's ARGB8888. The surface has the committed source mode's size (modeset.c), which this
         // transaction excludes from changing under it. The bytes follow the format's own size, never a
         // literal 4 (M15.14).
-        pitch=wddm->PrimaryPitch?wddm->PrimaryPitch:device->Post.Pitch;
+        pitch=wddm->PrimaryPitch?wddm->PrimaryPitch:
+            (device->RuntimePostValid?device->RuntimePost.Pitch:device->Post.Pitch);
         planeFormat=wddm->PrimaryPlaneFormat?wddm->PrimaryPlaneFormat:BC250_PLANE_FORMAT_ARGB8888;
         plane=Bc250PlaneEncoding(planeFormat);
         if (!plane || !DcnLinearSurfaceBytes(DisplaySourceWidth(device),DisplaySourceHeight(device),pitch,
@@ -7754,7 +7892,7 @@ static NTSTATUS Bc250WddmGetScanLine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
     BC250_WDDM* wddm = WddmOf(hAdapter);
     LARGE_INTEGER now, frequency;
     ULONGLONG since, period;
-    UINT height = device->Post.Height;
+    UINT height = device->RuntimePostValid?device->RuntimePost.Height:device->Post.Height;
 
     if (wddm == NULL || height == 0) return STATUS_NOT_SUPPORTED;
     if (pGetScanLine->VidPnTargetId != wddm->VSyncTargetId) return STATUS_INVALID_PARAMETER;

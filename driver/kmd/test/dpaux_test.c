@@ -50,6 +50,7 @@ typedef struct {
     unsigned long goes, acquires, releases, outsideTable, i2cStops, segmentWrites;
     unsigned long readsBeforeRelease;   // transactions started while the engine was not granted
     unsigned long writeFail;            // fail the write to this offset (0 = none)
+    int resetNeverDone;
 } MODEL;
 
 static MODEL g_m;
@@ -161,7 +162,11 @@ static long ModelWrite(void* Context, unsigned long Offset, unsigned long Value)
     (void)Context;
     if (g_m.writeFail && Offset == g_m.writeFail) return (long)0xC0000185L;
     switch (Offset) {
-    case BC250_REG_DMU_DP_AUX0_AUX_CONTROL: g_m.auxControl = Value; break;
+    case BC250_REG_DMU_DP_AUX0_AUX_CONTROL:
+        g_m.auxControl = Value & ~DP_AUX0_AUX_CONTROL__AUX_RESET_DONE_MASK;
+        if ((Value & DP_AUX0_AUX_CONTROL__AUX_RESET_MASK) && !g_m.resetNeverDone)
+            g_m.auxControl |= DP_AUX0_AUX_CONTROL__AUX_RESET_DONE_MASK;
+        break;
     case BC250_REG_DMU_DP_AUX0_AUX_ARB_CONTROL:
         g_m.arb = Value & ~DP_AUX0_AUX_ARB_CONTROL__AUX_REG_RW_CNTL_STATUS_MASK;
         if ((Value & DP_AUX0_AUX_ARB_CONTROL__AUX_SW_USE_AUX_REG_REQ_MASK) && !g_m.dmcuOwns && !g_m.granted) {
@@ -433,6 +438,32 @@ static void TestRefusals(void)
     CHECK(Bc250DispStall(&io, 1) == BC250_DISP_STATUS_BUDGET && io.StalledUs == 0);
 }
 
+static void TestColdEngine(void)
+{
+    BC250_DISP_IO io;
+    BC250_AUX_SESSION s;
+    unsigned char byte;
+    unsigned long got;
+    ModelReset();g_m.auxControl=0;IoInit(&io,10000);
+    CHECK(Bc250AuxOpen(&s,&io)==BC250_DISP_STATUS_MISMATCH);
+    CHECK(Bc250AuxOpenForDetection(&s,&io)==0);
+    CHECK(s.ControlChanged && (g_m.auxControl & DP_AUX0_AUX_CONTROL__AUX_EN_MASK));
+    CHECK(!(g_m.auxControl & (DP_AUX0_AUX_CONTROL__AUX_RESET_MASK|DP_AUX0_AUX_CONTROL__AUX_RESET_DONE_MASK)));
+    CHECK(Bc250AuxTransfer(&s,BC250_AUX_DP_READ,0,&byte,1,&got)==0 && got==1);
+    CHECK(Bc250AuxClose(&s)==0 && !s.Open && g_m.auxControl==0 && g_m.ddcMask==0);
+    ModelReset();g_m.auxControl=0;g_m.resetNeverDone=1;IoInit(&io,10000);
+    CHECK(Bc250AuxOpenForDetection(&s,&io)==BC250_DISP_STATUS_TIMEOUT);
+    CHECK(!s.Open && !s.CleanupStatus && g_m.auxControl==0 && io.StalledUs==11);
+    ModelReset();g_m.auxControl=0;g_m.dmcuOwns=1;IoInit(&io,10000);
+    CHECK(Bc250AuxOpenForDetection(&s,&io)==BC250_DISP_STATUS_BUSY);
+    CHECK(!s.Open && !io.Writes && !g_m.goes);
+    ModelReset();g_m.auxControl=0;g_m.writeFail=BC250_REG_DMU_DC_GPIO_AUX_CTRL_5;IoInit(&io,10000);
+    CHECK(Bc250AuxOpenForDetection(&s,&io)<0);
+    CHECK(s.Open && s.CleanupStatus<0); // obligation retained until a retry succeeds
+    g_m.writeFail=0;
+    CHECK(Bc250AuxClose(&s)==0 && !s.Open && g_m.auxControl==0 && g_m.ddcMask==0);
+}
+
 int main(void)
 {
     TestOpenClose();
@@ -442,6 +473,7 @@ int main(void)
     TestDpcd();
     TestRetries();
     TestRefusals();
+    TestColdEngine();
     printf("dpaux_test: %d checks, %d failures\n", g_checks, g_failures);
     return g_failures ? 1 : 0;
 }

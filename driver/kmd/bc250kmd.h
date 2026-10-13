@@ -79,6 +79,7 @@
 #include "interop.h"
 #include "dpaudio.h"
 #include "modeset.h"
+#include "connector.h"
 #include "board_memory_service.h"
 
 C_ASSERT(DXGKDDI_INTERFACE_VERSION == DXGKDDI_INTERFACE_VERSION_WDDM2_9);
@@ -171,6 +172,8 @@ typedef struct _BC250_DEVICE {
     BC250_SMU_METRICS SmuMetrics;      // smu_metrics.c: the SMU metrics table, its page and its reader
     BC250_DPAUDIO DpAudio;             // dpaudio.c: the DP stream's Azalia endpoint, its switches and record
     BC250_MODESET Modeset;             // modeset.c: the EDID, the source modes, pipe 0's scaler and viewport
+    BC250_CONNECTOR Connector;         // ISR/DPC/passive owner of the single physical connector
+    PVOID ConnectorLink;               // PASSIVE-only clock/PHY/timing transaction, connector_link.c
     volatile LONG RetainedPowerPhase; // 0 active, 1 suspending, 2 suspended, 3 restoring, 4 failed
     DEVICE_POWER_STATE RetainedDownState;
     POWER_ACTION RetainedDownAction;
@@ -204,8 +207,18 @@ typedef struct _BC250_DEVICE {
     D3DKMDT_VIDEO_SIGNAL_INFO InheritedSignal;
     BOOLEAN InheritedSignalValid;     // immutable from successful start until stop
     BOOLEAN InheritedTmds;            // validated OTG0 TMDS route; DP operations stay off on this start
+    PVOID HdmiLinkContext;            // PnP-owned saved inherited encoder state, hdmi_link.c
     PVOID Framebuffer;                  // mapping of Post.PhysicAddress
     SIZE_T FramebufferLength;
+    // Reserved before VidMm sees its segments. Never an application allocation.
+    ULONGLONG DisplayReservationEnd;
+    PHYSICAL_ADDRESS RuntimeFramebufferPhysical;
+    PUCHAR RuntimeFramebuffer;
+    SIZE_T RuntimeFramebufferLength;
+    DXGK_DISPLAY_INFORMATION RuntimePost;
+    volatile LONG RuntimePostValid;
+    volatile LONG RuntimeDisplayChanged;
+    volatile LONG RuntimePlaneBlank;
     BOOLEAN SystemDisplayReady;        // bugcheck CPU writes only after verified scanout restore
     BOOLEAN PostDisplayStopAttempted;  // WddmStop restores before freeing scanout objects
     NTSTATUS PostDisplayStopStatus;    // separate from the ordinary StopDevice completion result
@@ -346,6 +359,7 @@ typedef struct _BC250_DEVICE {
     volatile LONG LastMessageNumber;
     BOOLEAN InterruptIsMessage;         // what Windows assigned (pnp.c, from the translated resources)
     ULONG InterruptVector;
+    KMUTEX PspSessionLock;             // PASSIVE owner: Connector.Operation -> this -> GartLock
     FAST_MUTEX GartLock;                // serializes every bring-up sequence (gart.c, psp.c, gfx.c) and the stop;
                                         // initialized in AddDevice
     // KMD196: the wake of a held submission. gfx.c never changes the root of a VMID whose job is still running
@@ -387,6 +401,14 @@ void StartHealthResumeReady(BC250_DEVICE* Device, BOOLEAN Mode);
 void StartHealthClose(BC250_DEVICE* Device);
 void StartHealthStop(BC250_DEVICE* Device, BC250_ESCAPE_START_HEALTH* Snapshot);
 void StartHealthFault(BC250_DEVICE* Device);
+// BD-120. The two halves of a node-0 hardware fence timeout that the OS TDR is about to answer with an engine
+// reset: the close the reset owns, and the re-arm a recovered reset performs. Both take only the StartHealth
+// spin lock, so wddm->Lock may be held over them, as it is for StartHealthFault; never the reverse.
+void StartHealthFaultPendingReset(BC250_DEVICE* Device);
+BC250_START_HEALTH_RECOVERY StartHealthRecovered(BC250_DEVICE* Device, _Out_ ULONGLONG* Epoch);
+// BD-120. The close of a ResetEngine refusal on a node that is not node 0: it leaves the answer node 0's own
+// reset is owed. Takes the Lifecycle mutex, like StartHealthClose, so PASSIVE_LEVEL and no wddm->Lock.
+void StartHealthCloseKeepPendingReset(BC250_DEVICE* Device);
 void StartHealthRemove(BC250_DEVICE* Device);
 void StartHealthEnter(BC250_DEVICE* Device);
 void StartHealthLeave(BC250_DEVICE* Device);
@@ -416,6 +438,11 @@ void DpmStop(BC250_DEVICE* Device);
 void DpmPause(BC250_DEVICE* Device);
 void DpmResume(BC250_DEVICE* Device);
 void DpmSetStable(BC250_DEVICE* Device, BOOLEAN Enabled);
+// BD-127: one more, or one fewer, live compute context of this adapter (a BC2C blob with
+// BC250_UMD_C_COMPUTE; wddm.c CreateContext and DestroyContext). Interlocked, any IRQL, no lock: the
+// governor thread reads the count at its next tick and selects the compute threshold set while it is above
+// zero. Delta is +1 or -1 and the count never goes under zero.
+void DpmComputeContextAdd(BC250_DEVICE* Device, LONG Delta);
 NTSTATUS DpmConfirm(BC250_DEVICE* Device, _In_z_ const char* Why);
 void DpmLogSummary(BC250_DEVICE* Device);
 void DpmRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_DPM* Data, ULONG Size, BOOLEAN Admin, ULONG EscapeFlags);
@@ -698,6 +725,7 @@ void DcnFlipEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_DC
 NTSTATUS DcnStop(_Inout_ BC250_DEVICE* Device);
 NTSTATUS DcnSetVisibility(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible);
 NTSTATUS DcnRestorePostDisplay(_Inout_ BC250_DEVICE* Device); // any IRQL; no allocation/log/lock
+NTSTATUS DcnRuntimeSurface(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible);
 NTSTATUS DcnFlipToFirmwareSurface(_Inout_ BC250_DEVICE* Device);   // the same without the unblank (modeset.c)
 
 // dcn.c (0.7.24, ADR 0011 point 3 step 3): SetVidPnSourceAddress's own path - the same M87 write sequence
@@ -791,6 +819,10 @@ NTSTATUS GartCaptureAperture(BC250_DEVICE* Device, PAGING_APERTURE* Aperture);
 struct _BC250_ESCAPE_PSP;
 NTSTATUS PspStart(_Inout_ BC250_DEVICE* Device);
 void PspStop(_Inout_ BC250_DEVICE* Device);
+// PASSIVE session excludes display clock firmware from PSP commands and teardown.
+// TimeoutUs=0 is reserved for ordinary PSP lifecycle owners; display uses its deadline.
+NTSTATUS PspSessionAcquire(BC250_DEVICE* Device,ULONG TimeoutUs);
+void PspSessionRelease(BC250_DEVICE* Device);
 void PspEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_PSP* Data);
 // PASSIVE_LEVEL; caller supplies nonpaged report storage, retained through completion.
 NTSTATUS PspInitializeHardware(BC250_DEVICE* Device, struct _BC250_ESCAPE_PSP* Report);

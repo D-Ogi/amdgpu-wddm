@@ -10,15 +10,19 @@
 - The unlock does not flash the BIOS. It does not write the SPI flash, CMOS or NVRAM, and it does not change a
   clock or a voltage. The only lasting state is one registry value. Remove the value, restart, and the GPU
   has 24 CUs again.
-- The default is 24. You choose 40.
+- The release default is 40. The board's firmware switches on 24. You choose 24 to go back, and that choice is
+  written into the key as `CuMode = 24`, so every later install keeps it.
 - A 40 CU start must reach a healthy desktop. If it does not, the next start goes back to 24 by itself and
-  records why.
+  records why. The record is `CuModeClosedReason`, and the release installer reads it: an install keeps that 24
+  and names it, `install.cmd -Repair` writes 40 again.
 
 ## How to turn on 40 CUs
 
-With the tester package, use one of these:
+A release install writes `CuMode = 40` by itself (the table of
+`tools/release/installer/registry-defaults.json`), so a fresh install starts with all 40 CUs and its first start
+asks for the confirmation below. The two ways to choose the number by hand:
 
-- **When you install:** `install.cmd -CuMode 40`.
+- **When you install:** `install.cmd -CuMode 40`, or `install.cmd -CuMode 24` for the firmware's number.
 - **After the install:** open the amdgpu-wddm control app, go to the Graphics page, select 40 compute units,
   and restart Windows when the app offers it.
 
@@ -33,7 +37,9 @@ To check the result:
 - `CuModeLastReason` tells why a start applied 24. The reasons are in the "Settings and the boot guard" section
   below.
 
-To go back to 24, select 24 on the same page, or remove the `CuMode` value, and restart.
+To go back to 24, select 24 on the same page, or write `CuMode = 24` by hand, and restart. The page writes the
+number out as `CuMode = 24`. It does not delete the value. With 40 as the release default, a deleted value is a
+key that the release installer never configured, and the next install would write 40 over the choice.
 
 If one WGP of your board does not work, `CuDisableWgp` keeps it masked while the others run (see the settings
 table below). Only the WGPs that the firmware disables are accepted there.
@@ -176,15 +182,18 @@ anything by the active CU count; the dispatch masks are all-ones, so the SPI mas
 ## Settings and the boot guard
 
 All values are REG_DWORD under `HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters`. None is in the
-INF; an absent `CuMode` means 24.
+INF; an absent `CuMode` means 24. The release installer writes `CuMode = 40` at an install, so the value is
+absent only on a machine that this installer never configured (`tools/quality/inf_gates.py` `NOT_IN_INF` holds
+the name, because the INF must not clobber the boot guard's own writes).
 
 | Value | Written by | Meaning |
 |---|---|---|
-| `CuMode` | cumode tool; driver on fallback | 24 or 40. Anything else: stock, reason `INVALID_SETTING` |
+| `CuMode` | cumode tool, release installer, control app, driver on fallback | 24 or 40. Anything else: stock, reason `INVALID_SETTING` |
 | `CuDisableWgp` | cumode tool | with 40: WGPs kept masked, bit `sa * 5 + wgp`, stock-inactive WGPs only |
 | `CuModePending` | driver | the encoded 40 request (`mode | disable << 8`) of a start nobody confirmed |
 | `CuModeConfirmed` | driver | the encoded request a healthy start confirmed |
 | `CuModeLastApplied`, `CuModeLastReason` | driver | what the last start did, readable without the adapter |
+| `CuModeClosedReason` | driver on fallback | 0.7.216.62: the reason the driver itself wrote `CuMode` 24. `PersistFallback` writes it, a start that reads a `CuMode` other than 24 deletes it, a start that reads 24 (or no value) leaves it alone |
 
 **Guard sequence for a 40 request.**
 
@@ -193,12 +202,38 @@ INF; an absent `CuMode` means 24.
 - A start that finds a mark concludes that the previous 40 start died, hung, lost power or was rebooted before
   anyone looked. It then:
   - applies 24,
-  - writes `CuMode = 24`,
+  - writes `CuModeClosedReason` and then `CuMode = 24`,
   - deletes the mark and the confirmation,
   - keeps the reason (`PENDING_UNCONFIRMED`).
 - The same durable fallback follows a 40 that did not hold in hardware (`POWER_GATING`, `STOCK_UNEXPECTED`,
   `READBACK`, `RESTORE_FAILED`).
 - 40 is never retried unasked: `cumode set 40` is the retry.
+
+**The record of a fallback** (0.7.216.62, BD-077). The release default is 40, so a 24 in the key is either the
+fallback's or the tester's, and the release installer has to tell them apart. `CuModeClosedReason` does that:
+
+- Only `PersistFallback` writes it, and the record goes in before the 24 it describes. A start that dies between
+  the two writes leaves a record next to a `CuMode` that still asks for 40, and the next start deletes the record
+  itself.
+- No later start overwrites it. A start that reads `CuMode` 24, or no value at all, leaves it alone
+  (`bc250_cu_decide`: the 24 branch returns before `clear_closed`).
+- A start that reads any other `CuMode` deletes it (`clear_closed`): the tester, the control application or
+  `install.cmd -Repair` wrote over the fallback.
+- Two writers delete the record themselves, because their own 24 is not the driver's: the control application
+  when the Graphics page selects "Standard (24)" (step `remove-closed` of the setter), and the installer when
+  `-CuMode` names a number on the command line. Both are the tester's word about that very value, so the record
+  of the driver's fallback is stale. Without them a chosen 24 would read as a closure at every later install,
+  which would report the tester's own number as a step back of the driver and offer to take it away.
+- The control application reads the record as well: next to a stored 24 it shows "Standard (24) is set, but the
+  driver chose that number, not you" with the way back, instead of calling that 24 a choice of the user.
+- `CuModeLastReason` cannot do this work. Every start overwrites it, and the reasons of a fallback are not the
+  driver's alone: a 24 start whose stock restore does not read back writes `RESTORE_FAILED` there as well. The
+  installer therefore reads no legacy record for `CuMode`, and a 24 from a driver older than 0.7.216.62 stays the
+  tester's value (`tools/release/README.md`). `DpmLastReason` is sound for `DpmMode` because no start but a
+  fallback writes its three reasons.
+- The installer's side of the same contract is `$script:DriverClosures` in
+  `tools/release/installer/common.ps1`: an install keeps the 24 and names it, `install.cmd -Repair` writes 40
+  again and deletes the record.
 
 **Confirmation.** It needs the healthy milestone the deploy procedure already uses: start-health READY,
 visible, completions, at least 60 s of it, fresh.
@@ -231,7 +266,8 @@ snapshot with no BAR access. It is dispatched next to start health, before the W
 - **Accepted values.** Only 24 and 40; the disable mask is limited to stock-inactive WGPs of the part's
   topology.
 - **Readback.** Every write is read back; a mismatch restores stock.
-- **Boot guard.** An unconfirmed 40 falls back to 24, durably, with the reason kept.
+- **Boot guard.** An unconfirmed 40 falls back to 24, durably, with the reason kept and recorded in
+  `CuModeClosedReason`.
 - **Scope of writes.** No clock, voltage or SMU access, no BIOS, SPI flash or NVRAM write. The only lasting
   state is the registry values above.
 

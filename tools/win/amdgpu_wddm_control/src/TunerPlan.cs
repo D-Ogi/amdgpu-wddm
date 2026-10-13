@@ -278,9 +278,11 @@ namespace AmdgpuWddmControl
         // The steps that put the tuning settings of this machine back to standard, for an action that is not itself
         // a tuning action (reset-defaults). The driver stores these settings itself, so they are not in the
         // release's manifest.json and the installer's defaults say nothing about them: the only way back is the
-        // same escapes the tuning page sends. The return value is the English note about what this start cannot
-        // take back, or null when everything stored could be named.
-        public static string StandardSteps(RecoverySnapshot s, ActionPlan p)
+        // same escapes the tuning page sends. The one exception is CpuTune, the switch of the processor surface:
+        // it is in the release's table, and cpuTuneDefault is the number that table names (null when it names
+        // none; Recovery refuses a number other than 0 or 1 before it gets here). The return value is the English
+        // note about what this start cannot take back, or null when everything stored could be named.
+        public static string StandardSteps(RecoverySnapshot s, ActionPlan p, uint? cpuTuneDefault)
         {
             var left = new List<string>();
             var c = s.Curve;
@@ -317,10 +319,23 @@ namespace AmdgpuWddmControl
                 }
                 else left.Add("the processor settings");
             }
-            // Processor tuning goes back off, which is what the release ships: the driver then leaves the processor
-            // alone at its next start, whatever is still stored.
-            long now;
-            if (s.Parameters != null && s.Parameters.TryGetValue("CpuTune", out now) && now != 0)
+            // Processor tuning goes back to what the release ships. The INF and the release's defaults write
+            // CpuTune = 1 from 0.7.216, so the reset writes the table's number when the stored value is absent or
+            // another number, and leaves a value that has it alone. With the surface on, settings that this start
+            // could not take back apply again at the next start, which the note below says; the next reset then
+            // finds the surface open and can take them back. A release whose table names no CpuTune shipped the
+            // surface off: the reset then removes a stored value, as it did before.
+            long now = 0;
+            bool has = s.Parameters != null && s.Parameters.TryGetValue("CpuTune", out now);
+            if (cpuTuneDefault != null)
+            {
+                if (!has || now != cpuTuneDefault.Value)
+                {
+                    p.Writes.Add(RegWrite.Dword(Recovery.ParametersPath, "CpuTune", cpuTuneDefault.Value));
+                    p.Preview.Add(Strings.T(cpuTuneDefault.Value == 1 ? "plan.line.cpu-tune-on" : "plan.line.cpu-tune-off"));
+                }
+            }
+            else if (has && now != 0)
             {
                 p.Writes.Add(RegWrite.Remove(Recovery.ParametersPath, "CpuTune"));
                 p.Preview.Add(Strings.T("plan.line.cpu-tune-off"));

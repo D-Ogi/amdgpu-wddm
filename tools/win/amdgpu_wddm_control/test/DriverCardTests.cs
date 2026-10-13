@@ -97,7 +97,7 @@ static partial class UnitTests
         notExact("a writer other than verify or start-confirm", x => x.Witness.RecordedBy = "someone");
         notExact("a second, different manifest of the same release (conflicting mapping)", x => { x.Packages.Add(Pkg("0.7.199.100-tester.11", ShaM2, ShaI)); x.Mapping = DriverCard.Mapping(2, x.Packages); });
         f = Facts(); f.InstallActions.Add(new InstallAction { BootId = 53, Utc = "2026-10-04T07:00:00.000Z" });
-        Equal(RunningKind.Exact, DriverCard.Decide(f).Running, "G-VER an install before the witness keeps it");
+        Equal(RunningKind.Unknown, DriverCard.Decide(f).Running, "BD-138 a legacy action cannot be ordered against the witness by UTC");
         f = Facts(); f.InstallActions.Add(new InstallAction { BootId = 52, Utc = "2026-10-04T09:00:00.000Z" });
         Equal(RunningKind.Exact, DriverCard.Decide(f).Running, "G-VER an install of an earlier boot does not void");
         Equal((uint?)199, DriverCard.ParseAbi("199"), "kmd_abi decimal"); Check(DriverCard.ParseAbi("0xZZ") == null, "kmd_abi junk");
@@ -202,6 +202,7 @@ static partial class UnitTests
         UpgradeLatchTests();
         LoadedImageTests();
         ProbeTests();
+        StaleVerifyTests();
     }
 
     // 936 A6: the witness's writer recorded the loaded image in this boot; the app's own list is a cross-check only

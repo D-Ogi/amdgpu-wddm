@@ -1,0 +1,154 @@
+{
+  "revision": "7d0a66e4bb9081d75c82ec4957c50034cb0ea449",
+  "license": "MIT",
+  "files": {
+    "hubp10.c": {
+      "source": "drivers/gpu/drm/amd/display/dc/hubp/dcn10/dcn10_hubp.c",
+      "sha256": "46b120700a960eab2729b1509d5d75d4b5fefce2c95acd186f4ff033939a2268"
+    },
+    "hubp10.h": {
+      "source": "drivers/gpu/drm/amd/display/dc/hubp/dcn10/dcn10_hubp.h",
+      "sha256": "8a64f3b8e42e950c0d27ea25a3f2bda73d9d6134d9e10e1a11a445e2a2e7060f"
+    },
+    "hubp20.c": {
+      "source": "drivers/gpu/drm/amd/display/dc/hubp/dcn20/dcn20_hubp.c",
+      "sha256": "6b7871c2739d31dc2cab761e5e2fd20fb39f2f4e6b6b28d696d4f80e7abc4507"
+    },
+    "hubp20.h": {
+      "source": "drivers/gpu/drm/amd/display/dc/hubp/dcn20/dcn20_hubp.h",
+      "sha256": "ce681ecba415b3133f1163b2dfa1a4915aaf7ac0fdacaffec2fb495862e0fed7"
+    },
+    "hubp201.c": {
+      "source": "drivers/gpu/drm/amd/display/dc/hubp/dcn201/dcn201_hubp.c",
+      "sha256": "242fa64c067175488eed002f366e4069619b71b5104c5aea278e76dd8d7d9215"
+    },
+    "hubp201.h": {
+      "source": "drivers/gpu/drm/amd/display/dc/hubp/dcn201/dcn201_hubp.h",
+      "sha256": "f56e131292453be84e52dd4a1b6c93d89db149fe9a41ce7809cc7a1528c8dbb2"
+    },
+    "hubbub10.c": {
+      "source": "drivers/gpu/drm/amd/display/dc/hubbub/dcn10/dcn10_hubbub.c",
+      "sha256": "b09eb940eae3ece8a2176a197c241de11c0908d048be67da1fbb72326d8ea038"
+    },
+    "hubbub10.h": {
+      "source": "drivers/gpu/drm/amd/display/dc/hubbub/dcn10/dcn10_hubbub.h",
+      "sha256": "47e7d340b8c2a20db4fc7841096560ade06b1952ae2ff54beb1c3675f9a0ab77"
+    },
+    "hubbub20.c": {
+      "source": "drivers/gpu/drm/amd/display/dc/hubbub/dcn20/dcn20_hubbub.c",
+      "sha256": "2ee139309ef23eefc61eabd4ffa85c0bd7efc8e6d132cb14135e06a857e3f4af"
+    },
+    "hubbub20.h": {
+      "source": "drivers/gpu/drm/amd/display/dc/hubbub/dcn20/dcn20_hubbub.h",
+      "sha256": "1f4190bdbcf04fdc92f5d580c166c384f2d21069669987829118004bb53fb7c2"
+    },
+    "hubbub201.c": {
+      "source": "drivers/gpu/drm/amd/display/dc/hubbub/dcn201/dcn201_hubbub.c",
+      "sha256": "28fda97a89c7707dc5937ac857b29b1c2c9828b159aa10bc274c7ce3ad93442c"
+    },
+    "clk20.c": {
+      "source": "drivers/gpu/drm/amd/display/dc/clk_mgr/dcn20/dcn20_clk_mgr.c",
+      "sha256": "79106d4fea2640b41ad83a04499464c2f6c4e37e94b412e37d1b0d2a6d73d016"
+    },
+    "clkdce.c": {
+      "source": "drivers/gpu/drm/amd/display/dc/clk_mgr/dce100/dce_clk_mgr.c",
+      "sha256": "d4fd4e98dc721b0a5922b74a158e8a103d4faeeac8edd44ed04bc393bd4b0f5b"
+    },
+    "clk.h": {
+      "source": "drivers/gpu/drm/amd/display/dc/inc/hw/clk_mgr_internal.h",
+      "sha256": "c05dd5bb25dc01d3a3fb65de15aa7b276bba038d3a823357e0bab4f1b3ad2cc3"
+    },
+    "clk201.c": {
+      "source": "drivers/gpu/drm/amd/display/dc/clk_mgr/dcn201/dcn201_clk_mgr.c",
+      "sha256": "3ed2f118f266ce0751371f91882f216932837a0b5ee4e3a1e5198fa33ae7a04a"
+    },
+    "dccg20.c": {
+      "source": "drivers/gpu/drm/amd/display/dc/dccg/dcn20/dcn20_dccg.c",
+      "sha256": "32f37ca5fd36d0b20bbc6014983919f569485752180a53343bc9dec70a7c9723"
+    },
+    "dccg20.h": {
+      "source": "drivers/gpu/drm/amd/display/dc/dccg/dcn20/dcn20_dccg.h",
+      "sha256": "cc013cb1b387c991a984b73a7252dc399b7281936ea2ed5e871a293afebaf97e"
+    },
+    "dccg201.c": {
+      "source": "drivers/gpu/drm/amd/display/dc/dccg/dcn201/dcn201_dccg.c",
+      "sha256": "e27c3bb29a9599c9e0d96d24cf2b7c0dadf4a9f7f252071c4c6ac1d02ec66325"
+    },
+    "enc20.c": {
+      "source": "drivers/gpu/drm/amd/display/dc/dio/dcn20/dcn20_stream_encoder.c",
+      "sha256": "a8d41b3babb3f2e09a4bedaed44be8f78bb0b36d57eba6e0b30d68cc8c673b9f"
+    },
+    "enc20.h": {
+      "source": "drivers/gpu/drm/amd/display/dc/dio/dcn20/dcn20_stream_encoder.h",
+      "sha256": "efe82a6c43398144deb0db4fc1501ac416cc0b18ebae68fea3a498135903481f"
+    },
+    "enc10.h": {
+      "source": "drivers/gpu/drm/amd/display/dc/dio/dcn10/dcn10_stream_encoder.h",
+      "sha256": "2abe452347fbcbb9cb68932731bb8b061a945c176fc562b7a6291871ff129e2c"
+    },
+    "enc10.c": {
+      "source": "drivers/gpu/drm/amd/display/dc/dio/dcn10/dcn10_stream_encoder.c",
+      "sha256": "c025e0122f406b950091f43acca3e9cd8be8a346be3847b04713884f4651b7af"
+    },
+    "link10.c": {
+      "source": "drivers/gpu/drm/amd/display/dc/dio/dcn10/dcn10_link_encoder.c",
+      "sha256": "e0cdf3a805075350db864d040828b9bc46c9eaaf4f66169e013e366755ecb448"
+    },
+    "link10.h": {
+      "source": "drivers/gpu/drm/amd/display/dc/dio/dcn10/dcn10_link_encoder.h",
+      "sha256": "4e8db10038bbb1ba782f6b60f4948277196052fe33b8fc46545da4e4bd41c0fe"
+    },
+    "mpc201.c": {
+      "source": "drivers/gpu/drm/amd/display/dc/dcn201/dcn201_mpc.c",
+      "sha256": "8524cd221df368368d7b72d4c1c18f2f3a91de39bb14f5f6234c3efcdccc8285"
+    },
+    "mpc201.h": {
+      "source": "drivers/gpu/drm/amd/display/dc/dcn201/dcn201_mpc.h",
+      "sha256": "945986fd99d17643eb389050fe0c32ef2e765d7f368049b9fc203259955a94ee"
+    },
+    "opp10.c": {
+      "source": "drivers/gpu/drm/amd/display/dc/opp/dcn10/dcn10_opp.c",
+      "sha256": "8d35c063b336f87eb635f13984d518b07f7dbf0879f35b28c19748a97ec0bf73"
+    },
+    "opp10.h": {
+      "source": "drivers/gpu/drm/amd/display/dc/opp/dcn10/dcn10_opp.h",
+      "sha256": "5d8fcb34560428f18e0abaab82ec5199be0f7b8316d9fb5097dad5077d1063d3"
+    },
+    "opp20.c": {
+      "source": "drivers/gpu/drm/amd/display/dc/opp/dcn20/dcn20_opp.c",
+      "sha256": "ce2c6f3e3a099aed48e0b39881cae9cb875c49bb77c14b17e760154c1b303aef"
+    },
+    "opp20.h": {
+      "source": "drivers/gpu/drm/amd/display/dc/opp/dcn20/dcn20_opp.h",
+      "sha256": "393ca0b278312ebb26ceb771be196756874d250bf8a7c726055db49f11a25b1a"
+    },
+    "opp201.c": {
+      "source": "drivers/gpu/drm/amd/display/dc/dcn201/dcn201_opp.c",
+      "sha256": "8b2e4976d971b57aaaa9a8756a5ae39a6f121d58094e9c5e8135de0ab7222676"
+    },
+    "opp201.h": {
+      "source": "drivers/gpu/drm/amd/display/dc/dcn201/dcn201_opp.h",
+      "sha256": "7096136d2bb09d4c8e4564c11255d2621ae3d51a4f8b7bc0f925b5991c64bd11"
+    },
+    "hw_shared.h": {
+      "source": "drivers/gpu/drm/amd/display/dc/inc/hw/hw_shared.h",
+      "sha256": "b2e1646b89eb4c035914f4668df9ef50478c02185787efe90e9d1ac418fe0301"
+    },
+    "dc_hw_types.h": {
+      "source": "drivers/gpu/drm/amd/display/dc/dc_hw_types.h",
+      "sha256": "46ed09a8523aad180fac00ee87acb599fcd24c04a1ac9dcf056731478cc4e098"
+    },
+    "signal_types.h": {
+      "source": "drivers/gpu/drm/amd/display/dc/../include/signal_types.h",
+      "sha256": "e05dac915e844374ebe1c9a4b135d6cb785fbb115ca95d41708400fa39c75463"
+    },
+    "grph_object_id.h": {
+      "source": "drivers/gpu/drm/amd/display/dc/../include/grph_object_id.h",
+      "sha256": "9de285e0b34dbf1fca0ab221d727e3226fc5497bc7f977cca5e86dded213235e"
+    },
+    "clk_mask.h": {
+      "source": "drivers/gpu/drm/amd/display/dc/../../include/asic_reg/clk/clk_11_0_1_sh_mask.h",
+      "sha256": "19d34973ca12334284568d0a43dca554d2c8d991de979009acb6a6227cdf6391"
+    }
+  }
+}

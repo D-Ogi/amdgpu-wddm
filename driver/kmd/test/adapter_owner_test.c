@@ -9,6 +9,8 @@ typedef void* PDEVICE_OBJECT;
 #define STATUS_DEVICE_BUSY ((LONG)-1)
 #define STATUS_INSUFFICIENT_RESOURCES ((LONG)-2)
 #define STATUS_DEVICE_NOT_READY ((LONG)-3)
+#define STATUS_DEVICE_DATA_ERROR ((LONG)-4)
+#define NT_SUCCESS(status) ((LONG)(status)>=0)
 #define POOL_FLAG_NON_PAGED 0
 #define BC250_TAG 0
 #define D3DKMDT_VPPR_IDENTITY 0
@@ -19,15 +21,18 @@ typedef void* PDEVICE_OBJECT;
 #define StageStopDone 2
 static LONG touches, allocations, frees, failAllocation, retained, checks, failures, stopCalls;
 static HANDLE releaseGate, enteredGate;
+static LONG connectorStopResult;
 typedef struct {
  void* PhysicalDeviceObject;
- int Rotation,Smu,Hwmon,GartLock,GfxPagingLock,GfxAccessLock,GfxAccessDrained,GfxRetireEvent,GfxAccessClosed;
+ int Rotation,Smu,Hwmon,GartLock,GfxPagingLock,GfxAccessLock,GfxAccessDrained,GfxRetireEvent,GfxAccessClosed,PspSessionLock;
  BOOLEAN StopDone,GpuStopUnconfirmed,Started,InheritedSignalValid,SystemDisplayReady,PostDisplayStopAttempted;
  LONG PostDisplayStopStatus;
  int ModeActive,SourceVisible,CommitSeen,PresentSeen,FullWddm;
+ int ConnectorInitialized,ConnectorDrained,ConnectorBufferFreed,ConnectorDestroyed;
 } BC250_DEVICE;
 #define CHECK(x) do { InterlockedIncrement(&checks); if(!(x)){InterlockedIncrement(&failures);printf("FAIL CHECK %u\n",(unsigned)__LINE__);fflush(stdout);ExitProcess(1);} } while(0)
 static void touch(void) { InterlockedIncrement(&touches); }
+static void KeInitializeMutex(int* mutex,int level) { CHECK(!*mutex && !level);*mutex=1;touch(); }
 static void* allocate(size_t bytes) { InterlockedIncrement(&allocations); return failAllocation ? NULL : calloc(1,bytes); }
 static void release(void* value) { InterlockedIncrement(&frees); free(value); }
 #define ExAllocatePool2(flags,bytes,tag) allocate(bytes)
@@ -66,6 +71,8 @@ static void release(void* value) { InterlockedIncrement(&frees); free(value); }
 #define GuardLogKeepEpisode(...) touch()
 #define HwmonStop(...) touch()
 #define DpAudioStop(...) touch()
+#define HdmiLinkStop(...) touch()
+#define HdmiLinkRelease(...) (touch(),STATUS_SUCCESS)
 #define SmuOwnerStop(...) touch()
 #define WddmStop(...) touch()
 #define InteropStop(...) touch()
@@ -82,7 +89,26 @@ static void gfx_stop(BC250_DEVICE* device) {
 #define GartStop(...) touch()
 #define GfxTraceRlcState(...) touch()
 #define VramStop(...) touch()
-#define MmioStop(...) touch()
+static void MmioStop(BC250_DEVICE* device) {
+ CHECK(device->ConnectorDrained && device->ConnectorBufferFreed); touch();
+}
+static void ConnectorInitialize(BC250_DEVICE* device) {
+ CHECK(!device->ConnectorInitialized && device->PhysicalDeviceObject && device->StopDone);
+ device->ConnectorInitialized=1; touch();
+}
+static NTSTATUS ConnectorStop(BC250_DEVICE* device) {
+ CHECK(device->ConnectorInitialized && !device->ConnectorDestroyed);
+ device->ConnectorDrained=1; touch(); return connectorStopResult;
+}
+static void ConnectorBufferRelease(BC250_DEVICE* device) {
+ CHECK(device->ConnectorDrained && !device->ConnectorDestroyed);
+ device->ConnectorBufferFreed=1; touch();
+}
+static void ConnectorDestroy(BC250_DEVICE* device) {
+ CHECK(device->ConnectorInitialized && device->StopDone && !device->ConnectorDestroyed);
+ CHECK(AdapterOwnerIs(device->PhysicalDeviceObject));
+ device->ConnectorDestroyed=1; touch();
+}
 #define GuardReleaseStart(...) touch()
 #define GuardRecordStopBegin(...) touch()
 #define GuardRecordStopDone(...) touch()
@@ -114,6 +140,14 @@ int main(void) {
  CHECK(!AdapterOwnerIs(&pdoA));
  // Add followed directly by Remove must not attempt hardware teardown.
  before=stopCalls; CHECK(Bc250AddDevice(&pdoB,&b)==0);CHECK(Bc250RemoveDevice(b)==0);CHECK(stopCalls==before);
+ // Disarm failure is retained in the handoff status; ordinary Stop still drains.
+ CHECK(Bc250AddDevice(&pdoB,&b)==0);
+ ((BC250_DEVICE*)b)->StopDone=FALSE;connectorStopResult=STATUS_DEVICE_DATA_ERROR;
+ CHECK(Bc250StopDevice(b)==STATUS_SUCCESS);
+ CHECK(((BC250_DEVICE*)b)->PostDisplayStopStatus==STATUS_DEVICE_DATA_ERROR);
+ CHECK(((BC250_DEVICE*)b)->StopDone && ((BC250_DEVICE*)b)->ConnectorBufferFreed);
+ CHECK(AdapterOwnerIs(&pdoB));connectorStopResult=STATUS_SUCCESS;
+ CHECK(Bc250RemoveDevice(b)==0);
  // Concurrent AddDevice: exactly one can initialize global state.
  start=CreateEventW(NULL,TRUE,FALSE,NULL); CHECK(start!=NULL);
  memset(racers,0,sizeof(racers)); racers[0].pdo=&pdoA;racers[1].pdo=&pdoB;

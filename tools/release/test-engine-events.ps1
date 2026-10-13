@@ -108,12 +108,15 @@ Check (($checks.Count -ge 8) -and -not @($checks | Where-Object { -not $_.id -or
 Check ($r.result.mutated -eq $false -and $r.result.nothing_changed -eq $true -and $r.result.mode -eq 'plan' -and $r.result.dry_run) 'plan: mode plan, nothing changed'
 Check (-not (Get-Events $r 'step').Count -and -not (Get-Events $r 'decision').Count) 'refused before the decision: no decision, no step'
 
-'[G-EVT] plan of a fresh install: decision, consents, restarts, settings-impact plan'
+'[G-EVT] plan of a fresh install: decision, restarts, settings-impact plan, no consent asked for'
 $r = Invoke-Engine 'plan fresh' @('-Plan', '-DryRunIgnoreBoard')
 Test-Stream $r 'plan fresh'
 $d = @(Get-Events $r 'decision')
 Check (($r.code -eq 0) -and ($r.result.outcome -eq 'planned') -and ($d.Count -eq 1) -and ($d[0].action -eq 'install')) 'planned: one decision, action install'
-Check ((@($d[0].consents) -contains 'test-signing') -eq (-not $tsActive)) "consents from the engine: $(@($d[0].consents) -join ', ') (test signing active on this PC: $tsActive)"
+# The installer asks the user for nothing (owner, 2026-10-12): the decision's consent list is empty on every PC,
+# whether test signing is on or off, and whatever BitLocker protection says. What the install changes is stated
+# instead: the plan prints it, and the setup window's plan screen says it in words.
+Check (@($d[0].consents).Count -eq 0) "no consent is asked for: consents $(@($d[0].consents) -join ', ') (test signing active on this PC: $tsActive)"
 Check ([int]$d[0].restarts -eq $(if ($tsActive) { 1 } else { 2 })) "restarts: $($d[0].restarts)"
 Check (($d[0].firmware_source -eq 'download') -and (@($d[0].notes) -contains 'RELEASE-NOTES.md') -and $d[0].compatibility.ok) 'firmware from the download, the release notes named, the package''s compatibility record verifies'
 $sp = @(Get-Events $r 'settings-plan')
@@ -121,23 +124,20 @@ Check (($sp.Count -eq 1) -and (@($sp[0].rows).Count -ge 20) -and -not @($sp[0].r
 Check ((Get-Seq $r 'decision') -lt (Get-Seq $r 'settings-plan')) 'the decision comes before the settings plan'
 Check (-not (Get-Events $r 'step').Count -and -not (Get-Events $r 'install-action').Count) 'a plan has no step and records no install action'
 $fresh = $r
-$expectedConsents = @($d[0].consents)
 
-'[G-EVT] setup-window run without the consent: stops before any change'
-if ($expectedConsents.Count) {
-    $r = Invoke-Engine 'needs consent' @('-DryRun', '-DryRunIgnoreBoard')
-    Test-Stream $r 'needs consent'
-    Check (($r.code -eq 4) -and ($r.result.outcome -eq 'needs-consent') -and ((@($r.result.consents_needed) -join ',') -eq ($expectedConsents -join ','))) "needs-consent matches the plan, consents_needed: $(@($r.result.consents_needed) -join ', ')"
-    Check (-not (Get-Events $r 'step').Count -and ($r.text -notmatch 'would ask')) 'no step, no question asked'
-} else { '  (skipped: the plan requires no consent on this PC)' }
-if ($expectedConsents -contains 'bitlocker') {
-    $r = Invoke-Engine 'needs BitLocker choice' @('-DryRun', '-DryRunIgnoreBoard', '-AcceptTestSigning')
-    Test-Stream $r 'needs BitLocker choice'
-    Check (($r.code -eq 4) -and ($r.result.outcome -eq 'needs-consent') -and ((@($r.result.consents_needed) -join ',') -eq 'bitlocker')) 'test-signing consent alone does not authorize unknown or active BitLocker protection'
-    Check (-not (Get-Events $r 'step').Count -and -not $r.result.mutated) 'missing BitLocker choice stops before any change'
-}
+'[G-EVT] setup-window run with no switch at all: it installs, and asks nothing'
+# The negative control of the owner's instruction: the run below gives neither -AcceptTestSigning nor -BitLocker,
+# which used to end it with needs-consent and nothing done. It now walks the whole install.
+$r = Invoke-Engine 'no switches' @('-DryRun', '-DryRunIgnoreBoard')
+Test-Stream $r 'no switches'
+Check (($r.code -eq 0) -and ($r.result.outcome -eq 'completed') -and (@($r.result.consents_needed).Count -eq 0)) `
+    "a run without any consent switch completes: outcome $($r.result.outcome), consents_needed $(@($r.result.consents_needed) -join ', ')"
+Check (@(Get-Events $r 'step').Count -gt 0) 'it takes its steps instead of stopping at a question'
+Check ($r.text -notmatch 'would ask' -and $r.text -notmatch 'Type YES') 'nothing in its output asks for an answer'
+Check ($r.text -match 'test signing: turning it on') 'it says that it turns the test mode on'
+Check ($r.text -match 'BitLocker: ') 'it says in one line what it does about BitLocker protection'
 
-'[G-EVT] full dry run with the consent: stages in order, settings plan before the first step, cancel window, restart handed over'
+'[G-EVT] full dry run with the old switches: they are still accepted, stages in order, settings plan before the first step, cancel window, restart handed over'
 $r = Invoke-Engine 'dry run' @('-DryRun', '-DryRunIgnoreBoard', '-AcceptTestSigning', '-BitLocker', 'HaveKey')
 Test-Stream $r 'dry run'
 Check (($r.code -eq 0) -and ($r.result.outcome -eq 'completed') -and ($r.result.message_id -eq 'result.dry-run-complete') -and $r.result.dry_run -and -not $r.result.mutated) 'completed (dry run), nothing changed'

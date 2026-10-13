@@ -105,6 +105,8 @@ NTSTATUS ModesetPrepareInherited(BC250_DEVICE* Device, const D3DKMDT_VIDEO_SIGNA
         m->InheritedPipe.TilingConfig, m->InheritedPipe.Pitch, m->InheritedPipe.Otg1);
     GuardLog("display inherited: surface %08lX bottom %08lX mpcc %08lX out %08lX",
         m->InheritedPipe.SurfaceControl,m->InheritedPipe.MpccBottom,m->InheritedPipe.MpccControl,m->InheritedPipe.MpcOut);
+    GuardLog("display inherited: autocal %08lX dscl control %08lX",
+        m->InheritedPipe.Autocal,m->InheritedPipe.DsclControl);
     if (m->InheritedFixed) {
         GuardStartDetail(L"inherited source %ux%u pitch %u target %ux%u total %ux%u pixel %Iu support %08X pipe %08X valid %08X",
             Device->Post.Width,Device->Post.Height,Device->Post.Pitch,Signal->ActiveSize.cx,Signal->ActiveSize.cy,
@@ -465,6 +467,7 @@ void ModesetStop(_Inout_ BC250_DEVICE* Device)
     BC250_SCALER_RESULT result;
     long status;
 
+    if (InterlockedCompareExchange(&Device->RuntimeDisplayChanged,0,0)) return;
     ExAcquireFastMutex(&m->Lock);
     if (m->PipeChanged)
     {
@@ -489,7 +492,8 @@ void ModesetRestoreQuiet(_Inout_ BC250_DEVICE* Device)
 {
     BC250_SCALER_RESULT result;
 
-    if (!Device->Modeset.PipeChanged || Device->Mmio == NULL) return;
+    if (InterlockedCompareExchange(&Device->RuntimeDisplayChanged,0,0) ||
+        !Device->Modeset.PipeChanged || Device->Mmio == NULL) return;
     (void)RestoreNative(Device, &result);
     Device->Modeset.PipeChanged = FALSE;
     InterlockedExchange(&Device->Modeset.SourceWidth, (LONG)Device->Post.Width);
@@ -506,6 +510,7 @@ void ModesetPowerDown(_Inout_ BC250_DEVICE* Device)
     ULONG generation;
     long status = STATUS_SUCCESS, flip = STATUS_SUCCESS;
 
+    if (InterlockedCompareExchange(&Device->RuntimeDisplayChanged,0,0)) return;
     ExAcquireFastMutex(&m->Lock);
     if (m->PipeChanged && !m->Suspended)
     {
@@ -531,6 +536,7 @@ void ModesetPowerUp(_Inout_ BC250_DEVICE* Device)
     ULONG generation, maxLevel = BC250_DISPLAY_MODES_OFF, verdict = BC250_PIPE_VERDICT_COUNT;
     long status;
 
+    if (InterlockedCompareExchange(&Device->RuntimeDisplayChanged,0,0)) return;
     ExAcquireFastMutex(&m->Lock);
     m->Suspended = FALSE;
     if (m->InheritedFixed) {

@@ -16,7 +16,6 @@
 # document has to be rewritten; a document that is touched anyway should come out lower.
 #
 # To look at one document: python tools/quality/doclint.py --files <path>
-34	README.md
 62	docs/00-goal-and-roadmap.md
 8	docs/01-evidence-rules.md
 4	docs/02-register-addressing.md
@@ -44,7 +43,7 @@
 15	docs/d3d12-shared-resources.md
 8	docs/design/adaptive-cpu-gpu.md
 22	docs/design/bc250-open-test-pack.md
-34	docs/design/cu-mode.md
+33	docs/design/cu-mode.md
 66	docs/design/d3d11-ddi-engine.md
 26	docs/design/d3d12-ddi-engine.md
 2	docs/design/dp-audio.md
@@ -75,7 +74,7 @@
 36	docs/design/wsi-engine-present.md
 2	docs/dxvk-engine-commit-map.md
 21	docs/facts/README.md
-66	docs/gui/interfaces-setup.md
+65	docs/gui/interfaces-setup.md
 38	docs/gui/interfaces.md
 20	docs/hardware.md
 8	docs/init-sequence.md
@@ -107,16 +106,15 @@
 65	docs/research/m9-acceptance-status.md
 364	docs/research/m9-dma-contract-audit.md
 13	docs/research/m9-system-paging.md
-22	docs/testing/INSTALL.md
-13	docs/testing/THIRD-PARTY.md
+21	docs/testing/INSTALL.md
+12	docs/testing/THIRD-PARTY.md
 73	docs/testing/defaults-audit-2026-10-04.md
 1	docs/testing/release-notes/0.7.202.100-tester.11.md
 2	docs/testing/release-notes/0.7.203.100-tester.11.md
 2	docs/testing/release-notes/0.7.204.100-tester.11.md
 3	docs/testing/release-notes/0.7.204.101-tester.11.md
 3	docs/testing/release-notes/0.7.205.100-tester.11.md
-1	docs/testing/release-notes/pending/0.7.208-log-lines.md
-62	docs/wddm_contract_matrix.md
+60	docs/wddm_contract_matrix.md
 9	driver/README.md
 45	driver/amdgpu-import/PROVENANCE.md
 8	driver/amdgpu-import/README.md
@@ -149,8 +147,8 @@
 48	tools/release/README.md
 18	tools/runcompare/README.md
 25	tools/win/README.md
-63	tools/win/amdgpu_wddm_control/README.md
-7	tools/win/amdgpu_wddm_setup/README.md
+60	tools/win/amdgpu_wddm_control/README.md
+6	tools/win/amdgpu_wddm_setup/README.md
 14	tools/win/bc250kmd_cli/README.md
 39	tools/win/bc250mon/README.md
 9	tools/win/bc250rd/README.md

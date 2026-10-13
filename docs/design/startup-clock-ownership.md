@@ -104,8 +104,28 @@ The local Microsoft D3DDDI_ESCAPEFLAGS reference and display guide
 `threading-and-synchronization-second-level.md` say HardwareAccess requests
 Level Two synchronization and idles the GPU. READ instead requires
 HardwareAccess0/NoAdapterSynchronization1 and uses the embedded object's lock.
-SET requires HardwareAccess1/NoAdapterSynchronization0. Both require the existing
-administrator check. The object is initialized before AddDevice publication;
+SET requires HardwareAccess1/NoAdapterSynchronization0. SET also requires the
+administrator check. READ does not (BD-062, issue 7), so an ordinary user may ask
+for the clock and the temperature. Up to 0.7.216 the token check sat above the
+operation split and refused the read as well, which left the game runtime without
+a temperature and every non-elevated tool without a clock.
+
+An administrator's READ is one live reading: one BAR read and two getters under
+the owner lock, with no settle pause. Any other caller's READ is answered from
+the last reading while it is younger than `BC250_CLOCK_SNAP_US` (one second), and
+takes a live one only when it is older. Every successful reading is published in
+the owner, including the governor's readback of `BC250_DPM_VERIFY_MS`, so while
+the governor ticks an unprivileged read sends nothing at all. The bound, not the
+cheapness of a read, is what admits the open operation: however many callers ask,
+they add at most the mailbox traffic the driver already sends for itself. A loop
+of reads therefore puts no further messages on the part. It does enter the owner
+lock for each read, for the time it takes to copy a published reading, and that
+critical section carries no mailbox message. An owner start clears the published
+reading, so no caller is served
+a clock from before the transition that stopped the last start. The reply carries
+no age field: a caller that needs the moment itself asks elevated.
+
+The object is initialized before AddDevice publication;
 MmioStop closes/joins it before BAR unmap. At M440 no SmuOwnerStart callsite was active; M441 adds gated PnP activation.
 This is not yet proof of PnP/power-transition behavior on the lab.
 

@@ -97,6 +97,9 @@ function ConvertTo-DiagnosticsProblemCode {
     $n = 0
     if ([int]::TryParse([string]$Code, [ref]$n)) { return $n }
     $name = ([string]$Code).Trim()
+    # Win32_PnPEntity can expose the successful value as the enum name too (BD-147). Entry 0 in the display
+    # table is prose, so looking up that table alone classified CM_PROB_NONE as an unreadable problem code.
+    if ($name -eq 'CM_PROB_NONE') { return 0 }
     foreach ($k in @($script:DiagnosticsProblemNames.Keys)) { if ($script:DiagnosticsProblemNames[$k] -eq $name) { return [int]$k } }
     return $null
 }
@@ -275,6 +278,44 @@ function Get-DiagnosticsDeviceLines {
     return @($lines)
 }
 
+# The Windows build and the GPU's user-mode driver names, as lines. BD-134: a field Code 43 came with no build in its
+# file, and its cause was an empty first UserModeDriverName entry, which only newer display kernels refuse.
+function Get-DiagnosticsWindowsLines {
+    param([Parameter(Mandatory)]$Root, [AllowNull()][string]$InstanceId)
+    $lines = New-Object Collections.ArrayList
+    $cv = $Root.OpenSubKey('SOFTWARE\Microsoft\Windows NT\CurrentVersion')
+    if ($null -eq $cv) { [void]$lines.Add('windows: the version key cannot be read') }
+    else {
+        try {
+            [void]$lines.Add("windows: $([string]$cv.GetValue('ProductName')) $([string]$cv.GetValue('DisplayVersion')), build $([string]$cv.GetValue('CurrentBuild')).$([string]$cv.GetValue('UBR')), edition $([string]$cv.GetValue('EditionID'))")
+        } finally { $cv.Dispose() }
+    }
+    $dxgk = Join-Path $env:windir 'System32\drivers\dxgkrnl.sys'
+    try {
+        $v = (Get-Item -LiteralPath $dxgk -ErrorAction Stop).VersionInfo
+        [void]$lines.Add("display kernel: dxgkrnl.sys $($v.FileMajorPart).$($v.FileMinorPart).$($v.FileBuildPart).$($v.FilePrivatePart)")
+    } catch { [void]$lines.Add("display kernel: dxgkrnl.sys cannot be read ($($_.Exception.Message))") }
+    if (-not $InstanceId) { [void]$lines.Add('user-mode driver names: no device instance to read them from'); return @($lines) }
+    $driver = $null
+    $enum = $Root.OpenSubKey("SYSTEM\CurrentControlSet\Enum\$InstanceId")
+    if ($null -ne $enum) { try { $driver = [string]$enum.GetValue('Driver') } finally { $enum.Dispose() } }
+    if (-not $driver) { [void]$lines.Add('user-mode driver names: the device has no driver key'); return @($lines) }
+    $cls = $Root.OpenSubKey("SYSTEM\CurrentControlSet\Control\Class\$driver")
+    if ($null -eq $cls) { [void]$lines.Add("user-mode driver names: the driver key $driver cannot be read"); return @($lines) }
+    try {
+        foreach ($n in 'UserModeDriverName', 'UserModeDriverNameWow') {
+            $value = $cls.GetValue($n)
+            if ($null -eq $value) { [void]$lines.Add("$($n): absent"); continue }
+            $names = @($value)
+            [void]$lines.Add("$($n): " + (@($names | ForEach-Object { if ($_) { [string]$_ } else { "''" } }) -join ' | '))
+            if ($names.Count -gt 0 -and -not $names[0]) {
+                [void]$lines.Add("$($n): the first entry is empty; Windows 11 builds newer than 22631.6199 refuse that with Code 43 (BD-134)")
+            }
+        }
+    } finally { $cls.Dispose() }
+    return @($lines)
+}
+
 # One log of this boot from one provider, newest first, bounded. $Log is the log the provider writes to and $Levels
 # are the event levels to take. Returns lines; a provider with no entry of those levels says so, and so does one this
 # computer does not know (a driver that writes no event-log entry has no provider here, which is not a failure).
@@ -433,6 +474,7 @@ function Write-StartFailureDiagnostics {
     foreach ($r in @($Decision.notes)) { [void](Add-DiagnosticsLine -Sink $sink -Text "note: $r") }
 
     Add-Section 'the driver device' { Get-DiagnosticsDeviceLines -State $DeviceState }
+    Add-Section 'this Windows' { Get-DiagnosticsWindowsLines -Root $Root -InstanceId $(if ($null -ne $DeviceState) { [string]$DeviceState.instance_id } else { $null }) }
     Add-Section 'the start record' { Get-DiagnosticsRecordLines -Root $Root -ParametersSubKey $ParametersSubKey -SubKey $script:StartRecordKey -BootUtc $BootUtc -StartRecord }
     Add-Section 'the stop record' { Get-DiagnosticsRecordLines -Root $Root -ParametersSubKey $ParametersSubKey -SubKey $script:StopRecordKey -BootUtc $BootUtc -BootId $BootId -BootIdSource $BootIdSource }
     Add-Section 'the event logs of this boot' {

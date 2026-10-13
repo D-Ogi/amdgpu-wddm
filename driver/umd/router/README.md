@@ -15,6 +15,15 @@ driver of its own. At every `OpenAdapter10` / `OpenAdapter10_2` call it picks on
   are compared as final resolved paths (`router-identity.h`), so `\\?\` prefixes, 8.3 names and junctions read as
   one form; an image or directory that cannot be resolved stays on the CPU UMD unless `Allow` names it (reason
   `app-component-unknown`);
+- under `gpu-default` the router also carries a built-in default `Deny` list of its own (`IsCpuOnlyDialogHost` in
+  `router-policy.h`, reason `app-dialog-host`): the images whose window the application GPU UMD was measured not
+  to show. It holds `PickerHost.exe`, the File Picker UI Host, which serves the Windows firewall notification
+  dialog and the modern file open and save dialogs. That firewall notification stayed an empty white window for
+  two minutes on the GPU route (BD-126, 2026-10-12 on tester.28). It names one image per measured failure and never a
+  class of images: the 2026-10-04 rule that sent every Windows component to the CPU UMD cost those processes
+  FL 12_1 (BD-088), and BD-061, the defect that rule answered, is fixed since b20. An entry in `Allow` lifts the
+  built-in list for that image, so the GPU route can be measured again without a new router build. `Deny`, the
+  protected list, `RenderOnCpu` and the allowlist's own answer come first,
 - a Direct3D 10.0 application takes the same application decision as a D3D11 one. The 10.0, 10.1 and 11 runtimes
   of Windows 11 all open the router through `OpenAdapter10_2` and create a device at a D3D11-family interface
   (BD-081, measured on x64 and x86 on 2026-10-07: `evidence/windows/2026-10-07-BD081-d3d10-entry-devpc`). The
@@ -22,6 +31,25 @@ driver of its own. At every `OpenAdapter10` / `OpenAdapter10_2` call it picks on
   `app-d3d10-entry`), because the application GPU UMD has no `OpenAdapter10`; no measured runtime calls it.
   `tools/win/d3d10probe --trace-entry` shows the entry and the interface for one process;
 - a failed GPU load or GPU `OpenAdapter` falls back to the CPU UMD with the caller's arguments restored.
+
+What the built-in default `Deny` list still owes, and how to repay it (BD-126). The entry changes the route, and
+the host gate proves the route: no measurement yet shows the dialog painted on the CPU UMD, and the dialog's own
+failure on the GPU UMD is not diagnosed, only routed around. Two risks ride with it until the lab answers: the
+CPU UMD is `d3d10umd` on llvmpipe and gives FL 10_0 (BD-088), so content of that image that asks for FL 11_0 as
+its minimum gets no device at all, and every window of the image moves with the entry, the modern file open and
+save dialogs included. The repro needs no game: start a program that listens on a network port from a path that
+has no firewall rule yet, and Windows starts `PickerHost.exe` for the notification window. Four measurements on
+the next occurrence, all with the route log directory set: the notification window on the default route (the
+reason reads `app-dialog-host`), a file open or save dialog on the same route, then the same window with the
+image in `Allow` (the GPU route, the state this list leaves behind) and the application GPU UMD's own log of that
+process, which needs a machine-wide `DXVK_LOG_PATH` because `svchost.exe` starts the dialog host. If the window
+stays empty on the CPU route as well, the entry buys nothing and comes out. A fix in the D3D11 shell retires it.
+The entry is one line, so it costs nothing to keep until then.
+
+The release copies the router as a prebuilt binary (`tools/release/release-sources.json`, the rows of the
+components `desktop-umd` and `desktop-umd-wow64`), so a policy change reaches a tester only when both
+architectures are rebuilt from the merged commit with `tools/build/build-umd-router.ps1` and both rows are
+repinned to that build.
 
 In `dwm.exe`, the router also writes each desktop decision into the session's desktop-route record
 (`driver/contract/bc250_desktop_route.h`, M15.14): `gpu`, `cpu-kill-switch`, `cpu-switches-off` or `cpu-fallback`.

@@ -71,11 +71,20 @@ function Resolve-KmdClient([string]$Release,[string]$Form){
  throw "The release KMD client $Release does not list '$Form'"
 }
 $script:ClockCli=''
-# The release KMD (tester.11, 0.7.199.1) refuses "clock read" to a non-elevated caller (STATUS_ACCESS_DENIED), and the
-# runtime runs as the console user: then the overlay's telemetry (GET /telemetry, the KMD temperature it samples
-# elevated) answers, if it is at most 10 s old.
-function Temp-Overlay{try{$t=Invoke-RestMethod http://127.0.0.1:2250/telemetry -TimeoutSec 2;if($t.available -and $null -ne $t.temperatureC -and $null -ne $t.ageSeconds -and [double]$t.ageSeconds -le 10){return [double]$t.temperatureC}}catch{};return -1}
-function Temp-Now{try{if(!$script:ClockCli){$script:ClockCli=Resolve-KmdClient $script:ReleaseCli 'clock read'};$raw=& $script:ClockCli clock read 2>&1|Out-String;if($raw -match 'temperature_mc=(\d+)'){return [double]$Matches[1]/1000}}catch{};return Temp-Overlay}
+# Since the KMD fix of BD-062 (issue 7) "clock read" answers a non-elevated caller as well, which is what this
+# runtime is: the console user. Up to 0.7.216 it got STATUS_ACCESS_DENIED and no temperature at all. The
+# overlay's telemetry (GET /telemetry, the KMD temperature it samples elevated, at most 10 s old) stays as the
+# second source: it is what answers against an older installed KMD, and on this development PC's dry run, where
+# there is no release client at all. Because both sources stay, every reading records which one answered
+# ($script:TempSource, the result's temperature_source and the tsrc of each sample note): the driver reports the
+# same version fixed and unfixed, so a session's own evidence is what says whether the fix answered.
+# Which source answered the last reading, so a session's evidence names it instead of crediting the client for
+# an overlay number: 'clock-read', 'overlay' or 'none'. Every note that prints a temperature prints this.
+$script:TempSource='none'
+function Temp-Overlay{try{$t=Invoke-RestMethod http://127.0.0.1:2250/telemetry -TimeoutSec 2;if($t.available -and $null -ne $t.temperatureC -and $null -ne $t.ageSeconds -and [double]$t.ageSeconds -le 10){$script:TempSource='overlay';return [double]$t.temperatureC}}catch{};$script:TempSource='none';return -1}
+function Temp-Now{try{if(!$script:ClockCli){$script:ClockCli=Resolve-KmdClient $script:ReleaseCli 'clock read'};$raw=& $script:ClockCli clock read 2>&1|Out-String;if($raw -match 'temperature_mc=(\d+)'){$script:TempSource='clock-read';return [double]$Matches[1]/1000}}catch{};return Temp-Overlay}
+# What a note says about a reading: the source, and for the client the client itself.
+function Temp-Where{if($script:TempSource -eq 'clock-read'){return 'clock-read '+$script:ClockCli};return $script:TempSource}
 $result=[ordered]@{launched=$false;pid=0;session=0;exe_sha256='';exe_version='';elapsed_seconds=0;has_exited=$false;exit_code=$null;bounded_stop=$false;stop_reason='';last_title='';responding_last=$null;peak_ws_mb=0;peak_threads=0;screenshots=0;modules=@{};shadow_dlls=@();settings=@{};saves=@{};errors=@()}
 $child=$null;$debugger=$null;$settingsBefore=@{};$gamePids=@()
 $result.launch='direct';$result.launch_chain=@();$result.launch_seconds=0;$result.app_profile=''
@@ -570,6 +579,10 @@ function Get-RouterDecision([string]$image){
   $allow=if($kind.Allow){@($key.GetValue('Allow'))}else{@()}
   if($deny -contains $image){return 'cpu app-denied'}
   if($mode -eq 'allowlist' -and $allow -notcontains $image){return 'cpu app-not-allowed'}
+  # The router's built-in default Deny list (router-policy.h IsCpuOnlyDialogHost, BD-126): the images whose window
+  # the application GPU UMD was measured not to show. An entry in Allow lifts it; under allowlist the line above
+  # answers first.
+  if($image -in @('pickerhost.exe') -and $allow -notcontains $image){return 'cpu app-dialog-host'}
   $gpu=if($kind.GpuUmdPath -eq 'String'){[string]$key.GetValue('GpuUmdPath')}else{''}
   if($gpu -notmatch '^[A-Za-z]:\\'){return 'cpu app-gpu-umd-unset'}
   if($mode -eq 'allowlist'){return 'gpu app-allowed'};return 'gpu app-default'
@@ -693,7 +706,7 @@ if($DryRun){
  $mb=Get-AvailableMemoryMiB
  Gate 'available memory' ($mb -ge 3500) ([string]$mb+' MB of 3500 (the low-memory pre-step otherwise)')
  $tempNow=Temp-Now
- Gate 'temperature' ($tempNow -ge 0 -and $tempNow -lt 80) ('tctl '+$tempNow+' through '+$script:ClockCli)
+ Gate 'temperature' ($tempNow -ge 0 -and $tempNow -lt 80) ('tctl '+$tempNow+' through '+(Temp-Where))
  if($launchMode -eq 'steam'){
   $sp=@(Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($steamClient)) -ErrorAction SilentlyContinue).Count
   Gate 'steam client running' ([bool]$sp) ([string]$sp+' processes')
@@ -733,7 +746,8 @@ try{
  $result.admission_min_available_mb=3500
  if($result.available_mb_before -lt $result.admission_min_available_mb){throw 'Less than 3500 MB available; run the low-memory pre-step'}
  $result.temperature_before=Temp-Now
- Note ('temperature_before '+$result.temperature_before+' through '+$script:ClockCli)
+ $result.temperature_source=$script:TempSource
+ Note ('temperature_before '+$result.temperature_before+' through '+(Temp-Where))
  if($result.temperature_before -lt 0 -or $result.temperature_before -ge 80){throw ('Temperature before launch unreadable or at the limit: '+$result.temperature_before)}
  Router-Gate
  Registry-Gate
@@ -909,7 +923,7 @@ try{
    $result.responding_last=[bool]$child.Responding
    $ws=[int]($child.WorkingSet64/1MB);if($ws -gt $result.peak_ws_mb){$result.peak_ws_mb=$ws}
    $threads=$child.Threads.Count;if($threads -gt $result.peak_threads){$result.peak_threads=$threads}
-   Note ('t='+$t+' tctl='+$temp+' ws_mb='+$ws+' threads='+$threads+' responding='+$result.responding_last)
+   Note ('t='+$t+' tctl='+$temp+' tsrc='+$script:TempSource+' ws_mb='+$ws+' threads='+$threads+' responding='+$result.responding_last)
   }catch{Note ('sample failed: '+$_.Exception.Message)}
   # The thermal guard outside the sample's try: -1 is unreadable, never cool; two in a row end the session.
   # Owner rule 2026-10-04: stop when Tctl stays >= 87 C for 10 s, or at once at >= 89 C (scene loads spike for a
@@ -965,7 +979,9 @@ try{
     $result.application_events=$events.Count
    }catch{$result.errors+=,('events: '+$_.Exception.Message)}
   }
-  Note ('temperature_after '+(Temp-Now))
+  $result.temperature_after=Temp-Now
+  $result.temperature_source_after=$script:TempSource
+  Note ('temperature_after '+$result.temperature_after+' through '+(Temp-Where))
   if($result.saves.before){
    $result.saves.after=Save-State
    if($utcStart -and (Test-Path -LiteralPath $saves)){$result.saves.new=@(Get-ChildItem -LiteralPath $saves -File|Where-Object{$_.LastWriteTimeUtc -gt $utcStart}|ForEach-Object{$_.Name})}

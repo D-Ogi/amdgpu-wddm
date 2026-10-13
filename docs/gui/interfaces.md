@@ -54,7 +54,7 @@ Reader acceptance rules. The app names a release as running ("exact") only when 
    dotted numbers, `kmd_abi` `0x` and 8 hex digits. A partial witness is no witness.
 2. `boot_id` equals the current BootId.
 3. The driver replies, and `kmd_abi` equals the reply's version (as numbers).
-4. No install action of this boot is later than `recorded_utc` (section 2).
+4. Every install action of this boot has a smaller elapsed boot stamp than the witness (section 2).
 5. The manifest mapping is complete (every known package's manifest, section 2, is readable and has `name`,
    `version`, `kmd_build`, `kmd_abi` and the KMD component hash; no two manifests disagree about one release or one
    KMD image), and exactly one known package binds the whole witness: its manifest file's SHA256 equals
@@ -84,15 +84,16 @@ later install action); rules 1, 5 and 6 are the app's own additions.
 
 ## 2. Install actions, installed release and verification (engine, stream B)
 
-Install actions: two fields of `%ProgramData%\amdgpu-wddm\installer\state.json` (schema unchanged, extra fields):
+Install actions: fields of `%ProgramData%\amdgpu-wddm\installer\state.json` (schema unchanged, extra fields):
 
 - `mutation_boot_id` (number): the BootId of the boot of the newest mutating step (any step that changes Windows,
   the driver, files or settings; a dry run and verify are not mutations).
 - `mutation_utc` (string, ISO 8601 UTC): the time that step started.
+- `mutation_boot_elapsed_ms` (nonnegative integer): `GetTickCount64`, in milliseconds, at that step.
 
-The app voids a witness when `mutation_boot_id` equals the current BootId and `mutation_utc` is later than the
-witness's `recorded_utc` (or cannot be read). Absent fields mean "no install action recorded". An install action in
-another boot does not void anything.
+The witness also records `boot_elapsed_ms`. For an action in this boot, both stamps must exist and the action's stamp must be smaller.
+Otherwise the app voids the witness. Equal stamps cannot establish the order. Legacy records cannot use UTC to preserve a witness after a mutation.
+An action in another boot does not void the witness. No recorded mutation means no install action.
 
 Installed release: `HKLM\SOFTWARE\amdgpu-wddm\Release\Version` (REG_SZ) only. When it is absent or not a string, the
 installed release is unknown; the app never falls back to `state.json`'s `package_version` in the window (the
@@ -112,11 +113,20 @@ binds). Belongs to the installed package: `package_version` equals `Release\Vers
 SHA256 of `<InstallDir>\manifest.json` (uppercase hex, ordinal comparison). Then `passed` -> "verified", `failed` -> "not verified". No such report (none, only
 invalid ones, or only reports of another package) -> "could not be checked".
 
-The search: off the window's UI thread, every `verify-*.json` in name order, newest first (the engine names them
-`verify-<yyyyMMddTHHmmssfffZ>.json`), until the first valid report of the installed package. Invalid reports, reports
-of another package, files larger than 4 MiB and files with another owner are passed over. A report that exists but
-cannot be read, a `verify` directory that cannot be listed, or the search's bound (2000 reports, 64 MiB, 10 s) ends
-the search as incomplete: "could not be checked" unless the report was found before.
+Decision 8, BD-138: select the greatest valid `boot_id` first. A report without that field ranks below every report with it.
+Within the selected boot, compare `boot_elapsed_ms`, then `utc`. If any candidate lacks a valid elapsed stamp, order that boot's candidates by UTC.
+Use this fallback for the whole boot, so comparisons remain transitive. Without BootId, compare UTC only. Tied outcomes select the failed report.
+Elapsed stamps are nonnegative signed 64-bit integers. BootId is an unsigned 32-bit integer. Other values count as missing.
+
+The search runs off the UI thread and reads every `verify-*.json` before choosing. File names do not establish order after a clock correction.
+Invalid reports, other packages, files larger than 4 MiB and files with another owner are passed over.
+An unreadable report or directory makes the search incomplete. The bounds are 2000 reports, 64 MiB and 10 s.
+An incomplete search always means "could not be checked", even when a matching candidate was already read.
+
+A failed report from an earlier boot becomes an attention line only when this boot has an exact witness of the installed version and manifest.
+The line says that the last full check preceded a restart and the installed driver runs now. It does not claim a passed check.
+A failure from this boot, a future boot or an unknown boot stays a problem. Without the exact witness, an earlier failure stays a problem too.
+The upgrade success latch still requires a passed full check. It cannot use this attention state as verification.
 
 Known packages for the "unknown / ambiguous" decision: `<InstallDir>\manifest.json` and every
 `%ProgramData%\amdgpu-wddm\installer\packages\*\manifest.json` (the kept repair set and, from phase 3, the previous
@@ -149,8 +159,43 @@ is merged). The app follows its reader, Clear and switch rules; in short:
 - `HKLM\SOFTWARE\amdgpu-wddm\Release\RepairSetup` (REG_SZ): the full path of the setup exe in the kept repair set.
   The app's Help -> Repair starts `"<RepairSetup>" --repair` as the invoking user (setup elevates itself). Absent or
   a missing file: Help says repair is not available on this PC and names the release package instead.
-- Start-menu shortcut "amdgpu-wddm Control (recovery)" -> `amdgpu_wddm_control.exe --recovery`. The recovery view
+- Start-menu shortcut "Nagi Control App (recovery)" -> `amdgpu_wddm_control.exe --recovery`. The recovery view
   never loads `bc250control.dll`.
+
+Shortcuts of the application (one writer, `Get-ControlShortcutPaths` in `installer\common.ps1`):
+
+| Place | Name | Arguments | Left out by |
+|---|---|---|---|
+| Start menu (all users) | `Nagi Control App.lnk` | - | `-NoStartMenuShortcut` |
+| Start menu (all users) | `Nagi Control App (recovery).lnk` | `--recovery` | `-NoStartMenuShortcut` |
+| Desktop (all users) | `Nagi Control App.lnk` | - | `-NoDesktopShortcut` |
+
+The names carry the product name Nagi (owner, 2026-10-13). Earlier releases wrote the same three shortcuts as
+`amdgpu-wddm Control.lnk` and `amdgpu-wddm Control (recovery).lnk`. The same list holds those three old names as
+legacy rows. An install over an older release and the uninstall remove an old name only when its target is our
+control application (`Get-LegacyShortcutCleanup`). A file of that name that points elsewhere stays. The footprint of the uninstall counts an old name by the same rule. The shortcuts of a component
+(`components.ps1`, `Get-ComponentShortcutPaths`) follow the same rule: `Nagi <title>.lnk` and
+`Nagi <title> server.lnk`, and the old `amdgpu-wddm <title>` names go when they point into the component's folder.
+
+**The Nagi wallpaper** (owner, 2026-10-13). The installer writes `HKLM\SOFTWARE\amdgpu-wddm\Release\Wallpaper`
+(REG_DWORD: 1, or 0 after the box of the setup window was cleared or `-NoWallpaper`) and `Release\WallpaperStamp`
+(REG_SZ, `<version> <UTC>`, new at every install run). It sets no picture itself. The application sets the picture
+for the person who signs in when `Wallpaper` is 1, the stamp is not this account's `WallpaperApplied` (section 5),
+and the installer's `state.json` says `verified` for the installed `Release\Version`. Two starts that exist already
+reach this rule. The first is the sign-in notice (`--start-notice`), which the logon task "amdgpu-wddm start window"
+starts for every person, with that person's rights. It waits up to 300 s for the verification of that logon. The
+second is the first read of the window. The picture comes from `<InstallDir>\control\nagi-wallpaper.nwp`
+(`tools/win/amdgpu_wddm_control/art/wallpaper/PROVENANCE.md`). The application decodes it into
+`%LOCALAPPDATA%\amdgpu-wddm\wallpaper\nagi-wallpaper.jpg` and sets it with the position Fill. Before that it saves
+the background of the account (`WallpaperPrevious`). Settings, "Nagi wallpaper", sets the picture again or restores
+the saved background. A slideshow or Windows Spotlight comes back as its last picture only, and the card says so. A
+failure is one line in `wallpaper.log` in the same folder and changes nothing else. The uninstall changes no
+background and keeps `%LOCALAPPDATA%\amdgpu-wddm\wallpaper`.
+
+Both places are written by default. Each shortcut takes its icon from the application (`IconLocation` =
+`<exe>,0`) and its working directory is the install folder. The setup window offers the two places as checked
+boxes and states both answers on the command line, so a run after a restart can put back a shortcut the first run
+left out (`-StartMenuShortcut`, `-DesktopShortcut`). The uninstall removes all three.
 
 ## 5. Control app preferences (HKCU, app state only; the installer never writes them)
 
@@ -168,6 +213,9 @@ is merged). The app follows its reader, Clear and switch rules; in short:
 | `GettingStartedDismissed` | the card shows | 1 on "Dismiss"; removed by Help -> "Getting started" |
 | `HiddenGames` (REG_MULTI_SZ) | nothing hidden | the file names (`witcher3.exe`) of the hidden entries; the Games list has one entry per file name, as the profiles do (B3) |
 | `LastSeenRelease` (REG_SZ) | - | the release the app last showed as "upgrade done", for the one-time verdict |
+| `NameTipRelease` (REG_SZ) | the name tip is due | the installed release that the guide panel showed the name tip for. The tip says what the name Nagi stands for. It shows for 15 s at the first start of each installed release |
+| `WallpaperApplied` (REG_SZ) | the Nagi wallpaper is due when the installer chose it | the `Release\WallpaperStamp` this account had the Nagi wallpaper set for, so it is set once per install (section 4) |
+| `WallpaperPrevious` (REG_SZ) | nothing to restore | the background this account had before the Nagi wallpaper. Five fields separated by vertical bars: kind (picture, solid, slideshow, Spotlight), picture path, `WallpaperStyle`, `TileWallpaper` and colour |
 | `BenchmarkFolder` (REG_SZ) | the ray tracing benchmark looks for the Steam copy of the game itself (section 7) | the folder the person chose, written only when that folder held a usable copy. This release has no control that clears it again |
 
 Update check cache: `HKCU\Software\amdgpu-wddm\Control\Update` (REG_SZ values; times ISO 8601 UTC):

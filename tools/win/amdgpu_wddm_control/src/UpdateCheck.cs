@@ -6,8 +6,10 @@
 // Rules (A5):
 //   * TLS: the operating system's choice (SecurityProtocolType.SystemDefault, with the .NET 4.8 target declared in
 //     AssemblyInfo.cs); machine TLS settings are never changed.
-//   * Tags: v?A.B.C.D (stable) or v?A.B.C.D-tester.N; numeric order; for the same A.B.C.D a stable release is newer
-//     than every tester build; tester.10 > tester.9. A release counts only with its package asset
+//   * Tags: v?A.B.C.D (stable) or v?A.B.C.D-tester.N, and a second issue of a tester build as v?A.B.C.D-tester.NvR
+//     (R from 2, owner 2026-10-13: 0.7.216.100-tester.29v2); numeric order; for the same A.B.C.D a stable release is
+//     newer than every tester build; tester.10 > tester.9; tester.29 < tester.29v2 < tester.29v3 < tester.30. A
+//     release counts only with its package asset
 //     (amdgpu-wddm-<version>.zip or amdgpu-wddm-tester-<version>.zip) and not as a draft.
 //   * Never a downgrade: only a release newer than the INSTALLED one is offered; with an unknown installed version
 //     the card says only which release is the newest.
@@ -41,16 +43,20 @@ namespace AmdgpuWddmControl
     {
         public int A, B, C, D;
         public int? Tester;              // null: a stable release
+        public int Issue = 1;            // the R of tester.NvR: 1 for tester.N itself, 2 and up for a later issue of it
         public string Text;
 
-        static readonly Regex Grammar = new Regex(@"^v?(?<a>\d{1,6})\.(?<b>\d{1,6})\.(?<c>\d{1,6})\.(?<d>\d{1,6})(-tester\.(?<t>\d{1,6}))?$", RegexOptions.CultureInvariant);
+        static readonly Regex Grammar = new Regex(@"^v?(?<a>\d{1,6})\.(?<b>\d{1,6})\.(?<c>\d{1,6})\.(?<d>\d{1,6})(-tester\.(?<t>\d{1,6})(v(?<r>\d{1,3}))?)?$", RegexOptions.CultureInvariant);
 
         public static ReleaseVersion Parse(string tag)
         {
             var m = Grammar.Match(tag ?? "");
             if (!m.Success) return null;
             Func<string, int> n = g => int.Parse(m.Groups[g].Value, CultureInfo.InvariantCulture);
-            return new ReleaseVersion { A = n("a"), B = n("b"), C = n("c"), D = n("d"), Tester = m.Groups["t"].Success ? (int?)n("t") : null, Text = (tag ?? "").TrimStart('v') };
+            // One spelling per release: tester.N is the first issue, so "v1" (and "v0") would be a second name of it.
+            var issue = m.Groups["r"].Success ? n("r") : 1;
+            if (m.Groups["r"].Success && issue < 2) return null;
+            return new ReleaseVersion { A = n("a"), B = n("b"), C = n("c"), D = n("d"), Tester = m.Groups["t"].Success ? (int?)n("t") : null, Issue = issue, Text = (tag ?? "").TrimStart('v') };
         }
 
         public int CompareTo(ReleaseVersion o)
@@ -59,7 +65,8 @@ namespace AmdgpuWddmControl
             if (Tester == null && o.Tester == null) return 0;
             if (Tester == null) return 1;          // stable after every tester build of the same base
             if (o.Tester == null) return -1;
-            return Tester.Value.CompareTo(o.Tester.Value);
+            var t = Tester.Value.CompareTo(o.Tester.Value);
+            return t != 0 ? t : Issue.CompareTo(o.Issue);   // tester.29 < tester.29v2 < tester.30
         }
 
         public string AssetName { get { return Tester == null ? "amdgpu-wddm-" + Text + ".zip" : "amdgpu-wddm-tester-" + Text + ".zip"; } }

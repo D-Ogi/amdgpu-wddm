@@ -52,6 +52,8 @@ typedef struct _BC250_AUX_SESSION {
     BC250_DISP_IO* Io;
     int Open;
     int PadModeSet;                         // AUX_PAD1_MODE was 0 and this session set it (Linux does the same)
+    int ControlChanged;                     // detection enabled a previously disabled AUX engine
+    long CleanupStatus;                     // failure to restore is distinct from a sink's NACK
     unsigned long DdcMaskBefore, AuxCtrl5Before, AuxControl;    // the pad and engine state found at open
     unsigned long Transactions, Attempts, Defers, Timeouts, Invalid, Nacks, Busy;
     unsigned long LastStatus, LastReply, LastResult;
@@ -61,6 +63,9 @@ typedef struct _BC250_AUX_SESSION {
 // when AUX_CONTROL.AUX_EN is 0: the firmware left the engine off, and this code does not run the enable-and-reset
 // sequence of acquire_engine on an engine it did not see working (docs/design/display-modes.md, the AUX section).
 long Bc250AuxOpen(BC250_AUX_SESSION* Session, BC250_DISP_IO* Io);
+// Runtime detection/training owner only. May enable/reset AUX with AMD's
+// bounded sequence; Close restores the saved enable/reset and pad state.
+long Bc250AuxOpenForDetection(BC250_AUX_SESSION* Session, BC250_DISP_IO* Io);
 // Put DDC_PAD1_I2CMODE back to the value found at open, and AUX_PAD1_MODE when this session set it.
 long Bc250AuxClose(BC250_AUX_SESSION* Session);
 

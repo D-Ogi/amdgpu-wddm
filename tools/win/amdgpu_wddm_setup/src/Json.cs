@@ -36,6 +36,10 @@ namespace AmdgpuWddmSetup
 
         public static bool Bool(IDictionary<string, object> o, string key) { var v = Get(o, key); return v is bool && (bool)v; }
 
+        // A true/false value whose absence means something other than false (an engine of an older release does not
+        // write every field this window reads).
+        public static bool BoolOr(IDictionary<string, object> o, string key, bool fallback) { var v = Get(o, key); return v is bool ? (bool)v : fallback; }
+
         public static long? Long(IDictionary<string, object> o, string key)
         {
             var v = Get(o, key);

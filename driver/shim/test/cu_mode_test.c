@@ -234,6 +234,8 @@ static struct bc250_cu_request request(int present, unsigned int mode)
 	return r;
 }
 
+static void test_decide_closed_record(void);
+
 static void test_decide(void)
 {
 	struct bc250_cu_request r;
@@ -302,6 +304,77 @@ static void test_decide(void)
 	CHECK(!bc250_cu_hardware_fallback(40, 40));
 	CHECK(!bc250_cu_hardware_fallback(24, 24));
 	CHECK(!bc250_cu_hardware_fallback(24, 0));
+
+	test_decide_closed_record();
+}
+
+/* The durable record of a fallback (0.7.216.62, BD-077): CuModeClosedReason tells the release installer, one
+ * boot later, that the driver wrote CuMode 24 and the tester did not. force_stock writes it, a start with a
+ * CuMode other than 24 deletes it, and a start that reads 24 (or no value, which means 24) leaves it where it
+ * is. The release default is 40, so without the record an unconfirmed start would hold a tester at 24 compute
+ * units through every later upgrade. */
+static void test_decide_closed_record(void)
+{
+	struct bc250_cu_request r;
+	struct bc250_cu_decision d;
+
+	/* The boot guard's fallback records its own reason and does not clear the record it writes. */
+	r = request(1, 40);
+	r.pending = 40;
+	bc250_cu_decide(&r, &d);
+	CHECK(d.force_stock && d.closed_reason == BC250_CU_REASON_PENDING_UNCONFIRMED && d.closed_reason == 3u &&
+	      !d.clear_closed);
+	/* A fallback over an older record writes the new reason. */
+	r.closed_present = 1; r.closed = BC250_CU_REASON_READBACK;
+	bc250_cu_decide(&r, &d);
+	CHECK(d.force_stock && d.closed_reason == BC250_CU_REASON_PENDING_UNCONFIRMED && !d.clear_closed);
+
+	/* The next start of the fallback's own boot, and every start after it: CuMode 24, reason NONE over
+	 * CuModeLastReason, and the record untouched. This is the start that would make the installer blind
+	 * without the record (BD-069 for the CU mode). */
+	r = request(1, 24);
+	r.closed_present = 1; r.closed = BC250_CU_REASON_PENDING_UNCONFIRMED;
+	bc250_cu_decide(&r, &d);
+	CHECK_EQ(d.mode, 24); CHECK_EQ(d.reason, BC250_CU_REASON_NONE);
+	CHECK(d.closed_reason == BC250_CU_REASON_PENDING_UNCONFIRMED && !d.clear_closed && !d.force_stock);
+	/* An absent CuMode means 24, so it keeps the record too. */
+	r = request(0, 0);
+	r.closed_present = 1; r.closed = BC250_CU_REASON_POWER_GATING;
+	bc250_cu_decide(&r, &d);
+	CHECK_EQ(d.mode, 24);
+	CHECK(d.closed_reason == BC250_CU_REASON_POWER_GATING && !d.clear_closed);
+	/* A stale pending mark next to the record: the mark goes, the record stays. */
+	r.pending = 40;
+	bc250_cu_decide(&r, &d);
+	CHECK(d.clear_pending && !d.clear_closed && d.closed_reason == BC250_CU_REASON_POWER_GATING);
+
+	/* CuMode 40 again (the tester, the control application or install.cmd -Repair): the record goes. */
+	r = request(1, 40);
+	r.closed_present = 1; r.closed = BC250_CU_REASON_READBACK;
+	bc250_cu_decide(&r, &d);
+	CHECK_EQ(d.mode, 40);
+	CHECK(d.clear_closed && d.closed_reason == 0u && d.mark_pending);
+	/* Nothing to delete when there is no record. */
+	r.closed_present = 0; r.closed = 0;
+	bc250_cu_decide(&r, &d);
+	CHECK_EQ(d.mode, 40);
+	CHECK(!d.clear_closed && d.closed_reason == 0u);
+
+	/* A CuMode that is neither 24 nor 40 is not 24 either: the record goes with it, as DpmMode does for a
+	 * value that is neither the fixed mode nor 1. The setting itself is kept for its owner to fix. */
+	r = request(1, 32);
+	r.closed_present = 1; r.closed = BC250_CU_REASON_PENDING_UNCONFIRMED;
+	bc250_cu_decide(&r, &d);
+	CHECK_EQ(d.mode, 24); CHECK_EQ(d.reason, BC250_CU_REASON_INVALID_SETTING);
+	CHECK(d.clear_closed && d.closed_reason == 0u && !d.force_stock);
+
+	/* A 40 request the part cannot take (topology, mask) clears it as well: the stored value says 40. */
+	r = request(1, 40);
+	r.closed_present = 1; r.closed = BC250_CU_REASON_PENDING_UNCONFIRMED;
+	r.disable_present = 1; r.disable = 1u << 20;
+	bc250_cu_decide(&r, &d);
+	CHECK_EQ(d.reason, BC250_CU_REASON_INVALID_DISABLE);
+	CHECK(d.clear_closed && d.closed_reason == 0u);
 }
 
 static void test_targets(void)

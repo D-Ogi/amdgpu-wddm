@@ -418,13 +418,14 @@ static partial class UnitTests
         u.StoredMaxMHz = 3200; u.StoredUvSteps = 6; u.AppliedMaxMHz = 3200; u.AppliedUvSteps = 6;
         u.CoreMaskStored = CpuTuning.MaskFull;
         var s = Tuned(c, u);
+        s.DefaultParameters["CpuTune"] = 1;     // the release's table from 0.7.216
         var p = TunePlan("reset-defaults", s, new Recovery.PlanArgs { Games = "keep" });
         Check(!p.Refused, "a tuned machine can be reset: " + p.Refusal);
         var kinds = p.TuneSteps.Select(x => x.Kind).ToArray();
         Check(kinds.SequenceEqual(new[] { "curve-reset", "cpu-readback", "cpu-reset", "core-mask" }),
             "the reset takes the curve, the processor values and the core mask back: " + string.Join(", ", kinds));
         Equal(CpuTuning.MaskStock, p.TuneSteps.Last().CoreMask, "the core mask goes back to the stock one");
-        Check(p.Writes.Any(w => w.Name == "CpuTune" && w.Delete), "processor tuning itself goes back off");
+        Check(!p.Writes.Any(w => w.Name == "CpuTune"), "processor tuning itself stays on, the release's value");
         Check(p.OfferRestart, "a core count takes a restart, and the dialog says so");
         Check(p.Text().Contains("tuning step curve-reset") && p.Text().Contains("tuning step core-mask"),
             "the log names every step the helper will send");
@@ -445,7 +446,9 @@ static partial class UnitTests
         clean.Parameters.Remove("CpuTune");
         var r = TunePlan("reset-defaults", clean, new Recovery.PlanArgs { Games = "keep" });
         Check(r.TuneSteps.Count == 0, "an untuned machine needs no tuning step");
-        Check(!r.Writes.Any(w => w.Name == "CpuTune"), "and CpuTune is not touched when it is not there");
+        Check(!r.Writes.Any(w => w.Name == "CpuTune"), "and, under a release that names no CpuTune, CpuTune is not touched when it is not there");
+
+        TunerResetCpuTune(c, u);
 
         // WU-042 asks for the risk before the change: the dialog says it in the window's language.
         var trial = TunePlan("tune-trial", Tuned(), new Recovery.PlanArgs
@@ -461,6 +464,69 @@ static partial class UnitTests
         Check(cores.PlainNotes.Count == 1, "eight cores say what they cost");
         Check(!PlainWords.Findings(trial.PlainNotes.Concat(cpu.PlainNotes).Concat(cores.PlainNotes).ToList()).Any(),
             "G-NOINT: the risk sentences");
+    }
+
+    // CpuTune is in the release's table (1 from 0.7.216, tools/release/installer/registry-defaults.json), so
+    // "Reset driver settings to the release defaults" leaves the processor surface at that number. It took the value
+    // away before, which the lab saw on 2026-10-13. c and u: the tuned curve and processor of TunerStandardSteps.
+    static void TunerResetCpuTune(CurveState c, CpuState u)
+    {
+        var on = Strings.T("plan.line.cpu-tune-on");
+        var off = Strings.T("plan.line.cpu-tune-off");
+        var setOne = @"set HKLM\" + Recovery.ParametersPath + " CpuTune = 1 (DWord)";
+        // A stored 0 and an absent value: one write of 1, said once as "on", and the write alone is work to do on a
+        // machine that has every other setting at its release default already.
+        foreach (var stored in new long?[] { 0, null })
+        {
+            var what = "reset with CpuTune " + (stored == null ? "absent" : stored.Value.ToString()) + " and the release default 1";
+            var t = Tuned();
+            t.DefaultParameters["CpuTune"] = 1;
+            if (stored == null) t.Parameters.Remove("CpuTune"); else t.Parameters["CpuTune"] = stored.Value;
+            var p = TunePlan("reset-defaults", t, new Recovery.PlanArgs { Games = "keep" });
+            Check(!p.Refused, what + ": the plan stands: " + p.Refusal);
+            var tune = p.Writes.Where(w => w.Name == "CpuTune").ToList();
+            Check(tune.Count == 1 && !tune[0].Delete && tune[0].Kind == "DWord" && tune[0].Number == 1, what + ": one write of CpuTune = 1");
+            Check(tune.Count == 1 && Recovery.Allowed(tune[0].Path, tune[0].Name), what + ": the write is one the helper may make");
+            Check(p.Preview.Contains(on) && !p.Preview.Contains(off), what + ": the preview says processor tuning goes on");
+            var dialog = PlainPlan.Describe(p);
+            Check(dialog.Changes.Count(x => x == on) == 1 && !dialog.Changes.Contains(off), what + ": the dialog says it once, as on");
+            Check(p.Text().Contains(setOne), what + ": the dry run names the write: " + p.Text());
+            Check(p.Change != null && p.Change.Contains("CpuTune 1"), what + ": the change names it: " + p.Change);
+            Check(p.Notes.Any(n => n.StartsWith("The other 1 driver settings of the release", StringComparison.Ordinal)),
+                what + ": CpuTune is not counted among the settings left to the installer");
+            Check(!PlainWords.Findings(dialog.Changes.Concat(dialog.Notes).ToList()).Any(), what + ": G-NOINT");
+        }
+        // A stored 1 on a machine that is at its release defaults otherwise: nothing to write, so the action says so.
+        var at = Tuned();
+        at.DefaultParameters["CpuTune"] = 1;
+        var q = TunePlan("reset-defaults", at, new Recovery.PlanArgs { Games = "keep" });
+        Check(!q.Writes.Any(w => w.Name == "CpuTune") && !q.Preview.Contains(on) && !q.Preview.Contains(off),
+            "reset with CpuTune 1 and the release default 1: no CpuTune write and no processor tuning line");
+        Check(q.Refusal == "All these settings have their release defaults already.",
+            "reset with CpuTune 1 and the release default 1: CpuTune counts as at its default: " + q.Refusal);
+        // A stored 1 next to stored tuning settings: the cpu-reset and core-mask steps run, CpuTune is not written.
+        var tuned = Tuned(c, u);
+        tuned.DefaultParameters["CpuTune"] = 1;
+        var r = TunePlan("reset-defaults", tuned, new Recovery.PlanArgs { Games = "keep" });
+        Check(!r.Refused && r.TuneSteps.Any(x => x.Kind == "cpu-reset") && r.TuneSteps.Any(x => x.Kind == "core-mask") &&
+            !r.Writes.Any(w => w.Name == "CpuTune") && !r.Text().Contains("CpuTune"),
+            "reset of a tuned machine with CpuTune 1: the steps run and CpuTune is left alone");
+        // A release whose table names no CpuTune shipped the surface off: the old step stays, it removes a stored 1.
+        var old = Tuned(c, u);
+        var o = TunePlan("reset-defaults", old, new Recovery.PlanArgs { Games = "keep" });
+        Check(o.Writes.Count(w => w.Name == "CpuTune") == 1 && o.Writes.Any(w => w.Name == "CpuTune" && w.Delete) && o.Preview.Contains(off),
+            "reset under a release that names no CpuTune: the stored 1 is removed, as before");
+        // A number other than 0 or 1 in the table refuses the whole action, as the other defaults out of range do.
+        var bad = Tuned();
+        bad.DefaultParameters["CpuTune"] = 2;
+        Check(TunePlan("reset-defaults", bad, new Recovery.PlanArgs { Games = "keep" }).Refusal == "The release default CpuTune = 2 is out of range.",
+            "reset refuses a CpuTune default out of range");
+        // A release default of 0 writes 0 over a stored 1, said as "off".
+        var zero = Tuned();
+        zero.DefaultParameters["CpuTune"] = 0;
+        var z = TunePlan("reset-defaults", zero, new Recovery.PlanArgs { Games = "keep" });
+        Check(!z.Refused && z.Writes.Count(w => w.Name == "CpuTune" && !w.Delete && w.Number == 0) == 1 && z.Preview.Contains(off) && !z.Preview.Contains(on),
+            "reset with the release default 0: CpuTune = 0 is written");
     }
 
     // The chart lives on the page it rebuilds. A knot that reported every pixel of a drag would dispose the control

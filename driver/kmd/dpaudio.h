@@ -32,6 +32,7 @@ typedef struct _BC250_DPAUDIO {
     ULONG SinkFromEdid;
     BOOLEAN Written;                        // this start wrote the endpoint: the stop path must clear AUDIO_ENABLED
     BOOLEAN StreamWritten;                  // the stream is on: the stop path must turn it off first
+    BOOLEAN TmdsMode;                        // protocol of the owed stop, not the next sink's protocol
 } BC250_DPAUDIO;
 
 struct _BC250_DEVICE;
@@ -40,6 +41,9 @@ void DpAudioInitialize(struct _BC250_DEVICE* Device);                   // AddDe
 void DpAudioStart(struct _BC250_DEVICE* Device);                        // StartDevice, after the inherited timing
 void DpAudioResume(struct _BC250_DEVICE* Device);                       // back in D0
 void DpAudioStop(struct _BC250_DEVICE* Device);                         // StopDevice before WddmStop/DcnStop; D3
+// Checks outstanding register cleanup under the audio leaf lock. The outer
+// connector operation owner must exclude a new start while acting on the result.
+BOOLEAN DpAudioQuiesced(struct _BC250_DEVICE* Device);
 void DpAudioPathPower(struct _BC250_DEVICE* Device, BOOLEAN On);        // CommitVidPn path power transition
 // Step 4's container ID: DxgkDdiGetChildContainerId (pnp.c) hands over the port ID and identity the operating
 // system made for the child, after DxgkDdiStartDevice has returned. PASSIVE_LEVEL.

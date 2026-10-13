@@ -1,4 +1,5 @@
 # Korean strings of amdgpu-wddm Setup. Machine translation (mt / mt-safe) until the Ph 2 native review. Format: src/Strings.cs.
+install.pending-removals-cancelled|mt|4a977944|설치 프로그램이 이전 제거 과정에서 예약된 파일 삭제를 취소했습니다. 이번에 설치하는 파일은 Windows를 다시 시작한 후에도 유지됩니다.
 
 # ---- frame ----
 ui.close|mt-safe|7d9eb7ac|닫기
@@ -8,6 +9,7 @@ ui.choose-folder|mt-safe|826c7dcd|폴더 선택...
 ui.language|mt-safe|a6567634|언어: {0}
 ui.minimise|mt-safe|20f082e9|최소화
 ui.close-window|mt-safe|8b9de9c0|창 닫기
+ui.window-title|mt|229174f8|Nagi Setup - BC-250용 그래픽 드라이버
 ui.unexpected|mt|88790f84|설치 프로그램 창에서 문제가 발생하여 중지되었습니다. 더 이상 변경된 것은 없습니다. 다시 실행하세요.
 rail.welcome|mt-safe|0e2226b5|시작
 rail.check|mt-safe|9d60841e|확인
@@ -20,11 +22,14 @@ rail.current|mt-safe|3d59ee1e|현재 단계
 rail.done|mt-safe|a4c3ed04|완료
 rail.failed|mt-safe|a1f6bdb2|여기서 중지됨
 elevation.declined|mt|0a586e33|드라이버를 설치하거나 복구하려면 관리자 권한이 필요합니다. 아무것도 변경되지 않았습니다. 설치 프로그램을 다시 시작하고 Windows가 물으면 [예]를 선택하세요.
+payload.damaged|mt|44795d7b|이 설치 파일이 손상되었습니다. 안에 들어 있는 설치 파일이 만들 때의 파일과 일치하지 않습니다. 아무것도 변경하지 않았습니다. 릴리스를 다시 다운로드하세요.
+payload.already-running|mt|45dca71f|설치 프로그램이 이 PC에서 이미 실행 중입니다. 열려 있는 창에서 설치를 끝내세요. 여기서는 아무것도 변경하지 않았습니다.
+payload.folder|mt|78be926d|설치 프로그램이 설치 파일을 보관하는 폴더를 준비할 수 없습니다. 그 폴더는 이 PC의 다른 계정의 것이거나 보통 폴더가 아닙니다. 아무것도 변경하지 않았습니다. 지원 파일에 적힌 그 폴더를 삭제한 뒤 이 파일을 다시 실행하세요.
 
 # ---- welcome ----
-welcome.title|mt|f6dd913f|ASRock BC-250용 그래픽 드라이버 설치
-welcome.body|mt|e4fa6ee2|설치 프로그램이 그래픽 드라이버와 amdgpu-wddm Control을 설치합니다. 먼저 이 PC를 확인하고, 무엇이든 변경하기 전에 변경할 내용을 모두 보여 줍니다.
-welcome.repair.title|mt|a29b2205|그래픽 드라이버 복구
+welcome.title|mt|1d5a1bfb|ASRock BC-250용 그래픽 드라이버 Nagi 설치
+welcome.body|mt|37fc056a|설치 프로그램이 그래픽 드라이버와 Nagi Control App을 설치합니다. 먼저 이 PC를 확인하고, 무엇이든 변경하기 전에 변경할 내용을 모두 보여 줍니다.
+welcome.repair.title|mt|ccc0cf87|Nagi 그래픽 드라이버 복구
 welcome.repair.body|mt|25153ac9|이 PC에 보관된 사본에서 같은 버전을 다시 설치합니다. 설정은 그대로 유지됩니다.
 welcome.dry-run|mt|42af2b21|테스트 실행: 모든 단계를 거치지만 아무것도 변경하지 않습니다.
 welcome.version|mt-safe|9699394c|버전 {0}
@@ -38,7 +43,7 @@ welcome.prepared.choose|mt|40e8823f|준비한 폴더를 선택하세요.
 welcome.prepared.ok|mt|6203a8e5|버전 {0}이(가) 들어 있는 준비된 폴더입니다. 인터넷이 필요 없습니다.
 welcome.prepare-link|mt|5868e4fc|인터넷이 없는 PC용 폴더 준비...
 welcome.check|mt-safe|7c97d062|이 PC 확인
-welcome.promise.driver|mt|82ad81d1|그래픽 드라이버와 amdgpu-wddm Control을 함께 설치합니다.
+welcome.promise.driver|mt|d8eb7961|그래픽 드라이버와 Nagi Control App을 함께 설치합니다.
 welcome.promise.shown|mt|0f886d7e|이 PC가 바뀌기 전에 모든 변경 내용을 보여 줍니다.
 welcome.promise.offline|mt|bb2a3e49|준비된 폴더가 있으면 인터넷 없이 같은 릴리스를 설치할 수 있습니다.
 folder.missing|mt|219fdbbd|이 폴더가 없습니다.
@@ -65,6 +70,9 @@ check.admin.missing|mt|3da431e1|설치 프로그램에 관리자 권한이 필�
 check.windows.ok|mt|7d1c4fbb|이 Windows 버전은 지원됩니다.
 check.windows.not-x64|mt|1c9550cb|이 Windows는 64비트가 아닙니다. 드라이버에는 64비트 Windows 11이 필요합니다.
 check.windows.too-old|mt|b44ce700|이 Windows 버전은 너무 오래되었습니다. 드라이버에는 Windows 11이 필요합니다.
+check.windows.below-supported|mt|71688b75|이 Windows 버전은 드라이버를 테스트한 버전보다 오래되었습니다. 테스트 대상은 Windows 11 23H2, 24H2, 25H2입니다. Windows를 업데이트하세요. 설치는 계속됩니다.
+check.windows.insider|mt|2b892990|이것은 지원되지 않는 Insider 버전의 Windows입니다. 드라이버는 Windows 11 23H2, 24H2, 25H2에서 테스트됩니다. 설치는 계속됩니다.
+check.windows.ltsc|mt|346c19f0|이 Windows 에디션(LTSC)은 이 드라이버에서 테스트되지 않았습니다. 설치는 계속됩니다.
 check.gpu.ok|mt|f61b25ac|ASRock BC-250 그래픽 칩을 찾았습니다.
 check.gpu.missing|mt|7ac6bcb8|ASRock BC-250 그래픽 칩을 찾을 수 없습니다. 이 드라이버는 BC-250 전용입니다.
 check.gpu.several|mt|57bff6a6|BC-250 그래픽 칩이 여러 개 있습니다. 하나만 지원됩니다.
@@ -73,14 +81,15 @@ check.secureboot.off|mt|a107f361|보안 부팅이 꺼져 있습니다.
 check.secureboot.on|mt|1a594fe8|보안 부팅이 켜져 있습니다. 설치하기 전에 PC의 펌웨어 설정에서 끄세요.
 check.secureboot.unknown|mt|349a2c6d|보안 부팅이 켜져 있는지 읽을 수 없었습니다.
 check.testsigning.active|mt|f6138193|Windows 테스트 모드가 켜져 있습니다.
-check.testsigning.inactive|mt|3e61e840|Windows 테스트 모드가 꺼져 있습니다. 동의하시면 설치 프로그램이 켭니다.
+check.testsigning.inactive|mt|1f2ea753|Windows 테스트 모드가 꺼져 있습니다. 설치 프로그램이 설치 과정에서 켭니다.
 check.bitlocker.ok|mt|f6019261|BitLocker에 대해 할 일은 없습니다.
-check.bitlocker.on|mt|94912a08|BitLocker가 켜져 있습니다. 무엇이든 변경하기 전에 처리 방법을 묻습니다.
+check.bitlocker.on|mt|833d9bbb|BitLocker가 켜져 있습니다. 설치 프로그램이 설치에 필요한 다시 시작 동안만 일시 중지하고, 이후 자동으로 다시 켜집니다.
 check.bitlocker.unknown|mt|74c5d56a|BitLocker 상태를 읽을 수 없었습니다. BitLocker가 켜져 있다면 복구 키를 준비하세요.
 check.hvci.off|mt|c5375084|메모리 무결성이 꺼져 있습니다.
 check.hvci.on|mt|038dce93|메모리 무결성이 켜져 있습니다. 드라이버가 시작되지 않으면 Windows 보안(코어 격리)에서 끄세요.
 check.vcruntime.ok|mt|da7b7ffe|Microsoft Visual C++ 런타임이 설치되어 있습니다.
-check.vcruntime.missing|mt|f9d91507|Microsoft Visual C++ 2015-2022 런타임(x64)이 없습니다. Microsoft에서 설치한 다음 설치 프로그램을 다시 시작하세요.
+check.vcruntime.missing|mt|e96604a7|Microsoft Visual C++ 2015-2022 런타임(x64)이 없거나 너무 오래되었습니다. 설치 프로그램이 함께 가져온 파일로 설치합니다.
+check.vcruntime.no-installer|mt|a1670c32|Microsoft Visual C++ 2015-2022 런타임(x64)을 설치해야 하지만 이 파일 모음에는 해당 Microsoft 프로그램이 없습니다. 릴리스를 다시 다운로드하세요.
 check.space.ok|mt|fc218428|디스크 여유 공간이 충분합니다.
 check.space.low|mt|e473eee3|드라이브 C:의 여유 공간이 부족합니다. 2GB가 필요합니다.
 check.firmware.download-ok|mt|11f01474|GPU 펌웨어를 다운로드할 수 있습니다.
@@ -90,7 +99,7 @@ check.firmware.folder-bad|mt|e11eec4f|폴더의 GPU 펌웨어 파일 중 일부�
 check.firmware.no-list|mt|de36633a|설치 파일에 필요한 GPU 펌웨어가 나와 있지 않습니다. 릴리스를 다시 다운로드하세요.
 check.lab-install.present|mt|c4ebe135|이 PC에는 개발용 드라이버가 설치되어 있습니다. 설치 프로그램은 이를 변경하지 않습니다.
 check.lab-install.forced|mt|711bb1d9|이 PC에는 개발용 드라이버가 설치되어 있지만, 요청에 따라 계속합니다.
-check.state.ok|mt|63bdb478|이전 amdgpu-wddm 설치를 찾았습니다.
+check.state.ok|mt|52525a38|이전 Nagi 설치를 찾았습니다.
 check.existing.no-state|mt|a46215ab|드라이버가 설치 프로그램의 기록 없이 설치되어 있습니다. 먼저 제거한 다음 설치 프로그램을 다시 시작하세요.
 check.prepare.destination-inside|mt|08b96974|폴더가 설치 파일 안에 있습니다. 다른 위치의 폴더를 선택하세요.
 check.prepare.destination-file|mt|3d875a78|이 이름의 파일이 있습니다. 폴더를 선택하세요.
@@ -109,12 +118,23 @@ plan.repair-again|mt-safe|1196b6c5|복구
 plan.checks.title|mt-safe|de07d072|확인 항목
 plan.checks.ok|mt|eb2f3d98|모든 확인을 통과했습니다.
 plan.checks.attention|mt|e6885bff|주의가 필요한 확인 항목: {0}
-plan.consent.needed|mt|8c3cbc95|설치하기 전에 "{0}" 항목의 질문에 답하세요.
 plan.what.title|mt-safe|70fbb54b|진행할 내용
 plan.restarts.0|mt|b0a2c82a|Windows를 다시 시작할 필요가 없습니다.
 plan.restarts.1|mt|2ae11afb|Windows가 한 번 다시 시작됩니다. 다시 로그인하면 설치 프로그램이 자동으로 계속됩니다.
 plan.restarts.2|mt|efc32bc9|Windows가 두 번 다시 시작됩니다. 로그인할 때마다 설치 프로그램이 자동으로 계속됩니다.
-plan.restarts.choice|mt|7df5fea3|다시 시작하기 전에 매번 묻기 때문에 먼저 작업을 저장할 수 있습니다.
+plan.restarts.choice|mt|e2801100|다시 시작은 짧은 카운트다운 후에 저절로 시작됩니다. 바로 다시 시작하거나 나중으로 미룰 수 있습니다.
+plan.change.test-mode|mt|7c5a1301|이 드라이버를 불러올 수 있도록 Windows를 테스트 모드로 전환합니다.
+plan.change.test-mode.note|mt|9a9c5086|바탕 화면 구석에 "테스트 모드"가 표시됩니다. 드라이버를 제거하면 다시 꺼집니다.
+plan.change.test-mode.on|mt|cf315297|Windows가 이미 테스트 모드로 실행 중이므로 여기서는 바뀌는 것이 없습니다.
+plan.change.bitlocker|mt|f43553fa|BitLocker 보호는 이 설치의 다시 시작 동안만 일시 중지되고 이후 자동으로 다시 켜지므로 Windows가 복구 키를 묻지 않습니다.
+plan.change.bitlocker.unknown|mt|67f2277e|이 PC의 BitLocker 상태를 읽을 수 없었습니다. 설치는 계속합니다. 다시 시작한 후 Windows가 요청할 경우를 대비해 복구 키를 준비해 두세요.
+plan.change.vcruntime|mt|65d68876|드라이버 프로그램에 필요하므로 Microsoft Visual C++ 2015-2022 런타임(x64)을 먼저 설치합니다.
+shortcuts.title|mt-safe|02f4d7de|Nagi Control App 위치
+shortcuts.start-menu|mt-safe|f7bdc16b|시작 메뉴
+shortcuts.desktop|mt-safe|b1e0eb2c|바탕 화면
+shortcuts.note|mt|dc373b0d|시작 메뉴에는 복구용 항목도 추가됩니다. 원하지 않는 옵션은 끄세요. 어느 쪩이든 드라이버는 설치됩니다.
+shortcuts.wallpaper|mt|ce6e26e6|Nagi 배경 화면 설정
+shortcuts.wallpaper.note|mt|14a12464|배경 화면은 드라이버를 확인한 후 로그인하는 사람마다 한 번 설정됩니다. Nagi Control App에서 이전 배경을 되돌릴 수 있습니다.
 plan.firmware.download|mt|7051aa7f|GPU 펌웨어는 Linux 공식 펌웨어 보관소에서 다운로드되고 확인됩니다.
 plan.firmware.folder|mt|3afc555b|GPU 펌웨어는 선택한 폴더에서 가져와 확인됩니다.
 plan.firmware.package-folder|mt|576cf803|GPU 펌웨어는 준비된 폴더에서 가져옵니다. 인터넷이 필요 없습니다.
@@ -148,14 +168,10 @@ settings.decision.kept|mt|b4865f1f|현재 값 유지
 settings.decision.command|mt|898239d8|이 설치에서 선택한 대로
 settings.decision.reopened|mt|4342e37e|이 복구로 되돌렸습니다 (드라이버가 껐던 항목입니다)
 settings.decision.driver-closed|mt|cff55d7f|드라이버가 껐습니다. 복구하면 되돌아갑니다
+settings.decision.cores-driver-closed|mt|6f8a9a7c|드라이버가 스스로 이 개수로 되돌렸습니다. 복구하면 릴리스 개수로 돌아갑니다
+settings.decision.cores-reopened|mt|282a0682|이 복구로 되돌렸습니다 (드라이버가 코어 수를 줄였습니다)
 
 # ---- consents ----
-consent.title|mt-safe|34a195af|시작하기 전에
-consent.test-signing|mt|71d16537|Windows 테스트 모드 켜기
-consent.test-signing.note|mt|bebc2e37|드라이버가 테스트 인증서로 서명되어 있어 Windows를 테스트 모드로 실행해야 합니다. 바탕 화면 구석에 "테스트 모드"가 표시됩니다.
-consent.bitlocker|mt|7b5d44a4|BitLocker가 켜져 있거나 설치 프로그램이 상태를 읽지 못했습니다. 시작 옵션을 변경하면 다음 시작 때 Windows가 복구 키를 요청할 수 있습니다.
-consent.bitlocker.have-key|mt|081b65b7|복구 키가 있습니다
-consent.bitlocker.suspend|mt|dcf26b02|다음 두 번의 다시 시작 동안 BitLocker 일시 중지 (자동으로 다시 켜짐)
 
 # ---- working ----
 working.title|mt-safe|8749b169|설치하는 중
@@ -189,6 +205,8 @@ stage.copy|mt-safe|ff9e3c81|파일 복사
 restart.now|mt-safe|09af1002|지금 다시 시작
 restart.later|mt-safe|73b6e48a|나중에
 restart.save-work|mt|16909f23|먼저 작업을 저장하세요. Windows는 열려 있는 프로그램에 종료를 요청하지만 강제로 닫지는 않습니다.
+restart.countdown|mt|e8ce24a7|{0}초 후에 Windows가 자동으로 다시 시작됩니다.
+restart.countdown.over|mt|7af75060|카운트다운이 끝났습니다. 설치 프로그램이 Windows를 자동으로 다시 시작하지 않습니다.
 restart.later.done|mt|a38787ae|다음에 Windows를 다시 시작하면 설치 프로그램이 자동으로 계속됩니다. 이 창은 닫아도 됩니다.
 restart.failed|mt|56d3b9cd|Windows가 다시 시작을 시작하지 않았습니다. [시작] 메뉴에서 PC를 다시 시작하세요.
 
@@ -223,9 +241,9 @@ result.verify-before-restart.title|mt|93aab4b5|마치려면 Windows를 다시 �
 result.verify-before-restart.body|mt|ff335b2d|드라이버는 Windows를 다시 시작한 후 확인됩니다.
 result.install-unfinished.title|mt|905e1ac5|설치가 아직 끝나지 않았습니다
 result.install-unfinished.body|mt|0e894d61|설치를 마치려면 설치 프로그램을 다시 실행하세요. 드라이버는 그 후에 확인됩니다.
-result.verified.title|mt|9756a569|드라이버가 설치되어 정상적으로 작동합니다
-result.verified.body|mt|5542d882|모든 준비가 끝났습니다. amdgpu-wddm Control은 [시작] 메뉴에 있습니다.
-result.verified-with-warnings.title|mt|c50059a2|드라이버가 설치되어 작동하지만 참고 사항이 있습니다
+result.verified.title|mt|243117f3|Nagi 드라이버가 설치되어 정상적으로 작동합니다
+result.verified.body|mt|10c96356|모든 준비가 끝났습니다. Nagi Control App은 [시작] 메뉴에 있습니다.
+result.verified-with-warnings.title|mt|b0c2d18c|Nagi 드라이버가 설치되어 작동하지만 참고 사항이 있습니다
 result.verified-with-warnings.body|mt|687cef5d|모든 준비가 끝났습니다. 일부 확인에 참고 사항이 있으며 자세한 내용은 지원 파일에 있습니다.
 result.preflight-refused.title|mt|6a7ab8d2|지금은 이 PC에 설치할 수 없습니다
 result.preflight-refused.body|mt|435efe20|다음 확인을 통과하지 못했습니다. 문제를 해결한 다음 설치 프로그램을 다시 시작하세요.
@@ -260,7 +278,7 @@ result.offline-prepared.body|mt|2a59d535|이 폴더를 인터넷이 없는 PC로
 result.failed-checks|mt|ecefee18|통과하지 못한 확인
 result.nothing-changed|mt|54ca5460|아무것도 변경되지 않았습니다.
 result.already-installed|mt|c90b9352|이 PC에는 이미 드라이버 버전 {0}이(가) 있습니다.
-result.changes-made|mt|8e3dd6e8|설치 프로그램이 멈추기 전에 일부 변경이 이루어졌고, 그 변경은 그대로 남아 있습니다. 마치려면 설치 프로그램을 다시 시작하거나 amdgpu-wddm Control의 [복구]를 사용하세요.
+result.changes-made|mt|b7ee935f|설치 프로그램이 멈추기 전에 일부 변경이 이루어졌고, 그 변경은 그대로 남아 있습니다. 마치려면 설치 프로그램을 다시 시작하거나 Nagi Control App의 [복구]를 사용하세요.
 result.changes-unknown|mt|88bf7384|무엇이 변경되었는지 알 수 없습니다. 설치 프로그램을 다시 시작하세요. 가능한 곳부터 계속합니다.
 result.support|mt|3e9e40b3|지원 파일에는 문제 보고에 필요한 자세한 내용이 들어 있습니다. 자동으로 전송되지 않습니다.
 result.support.diagnostics|mt|a739d1a9|시작되지 않은 그래픽 칩의 자세한 내용이 이미 수집되었습니다. 해당 파일에 들어 있습니다.
@@ -287,15 +305,17 @@ guide.title|mt-safe|5506739a|나기의 팁
 guide.title.plain|mt-safe|a4245a3c|팁
 guide.welcome|mt|65339917|[설치]를 누르기 전에는 아무것도 바뀌지 않습니다. 모든 변경을 먼저 보여 드립니다.
 guide.prepare|mt|9ee5d83f|준비한 폴더는 인터넷이 없는 어떤 BC-250에서도 쓸 수 있고, 나중에 복구할 때도 쓸 수 있습니다.
-guide.page-tip|mt|70da7524|amdgpu-wddm Control에서 변경한 설정은 업데이트 후에도 그대로 유지됩니다.
+guide.page-tip|mt|267a0cc9|Nagi Control App에서 변경한 설정은 업데이트 후에도 그대로 유지됩니다.
 guide.work-in-progress|mt|f3e8ef82|작업 중입니다. 몇 분 걸릴 수 있습니다.
 guide.checking|mt|687b400d|이 PC를 확인하고 있습니다. 최대 1분 정도 걸릴 수 있습니다.
 guide.pending-restart|mt|d31250df|변경 내용이 저장되었습니다. 다음에 Windows를 다시 시작하면 설치 프로그램이 계속됩니다.
 guide.install-stopped|mt|47319a31|설치 프로그램이 끝나지 않았습니다. 다음에 할 일은 화면에 나와 있습니다.
 guide.verification-failed|mt|1abe91c5|드라이버가 확인을 통과하지 못했습니다. 대개 복구하면 해결됩니다.
 guide.upgrade-done|mt|7ed192a1|완료! 드라이버가 설치되고 확인되었습니다. 즐거운 시간 되세요!
+guide.name|mt|58a9149a|Nagi는 {0}의 약자입니다. 네, N은 또 Nagi입니다.
+brand.expansion|mt-safe|8b8af7be|Nagi's AMD Graphics Infrastructure
 # Optional Windows tuning
 tuning.title|mt|a1f6198e|Windows 설정 조정
 tuning.opt-in|mt|d229d14d|선택적 Windows 설정 조정 적용
 tuning.details|mt|36ae26fb|Windows의 백그라운드 활동을 줄이는 권장 설정을 적용합니다.
-tuning.restore|mt|387d1d61|제어 앱에서 개별 설정을 확인하고 저장된 값을 복원할 수 있습니다. 제거할 때도 컴퓨터 전체 설정을 복원할 수 있습니다.
+tuning.restore|mt|3fb261c1|Nagi Control App에서 개별 설정을 확인하고 저장된 값을 복원할 수 있습니다. 제거할 때도 컴퓨터 전체 설정을 복원할 수 있습니다.

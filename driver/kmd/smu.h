@@ -31,7 +31,21 @@ typedef struct _BC250_SMU_OWNER {
     // owner start has told it nothing. Under the owner lock; SmuOwnerStart clears it, so the address goes out
     // again after every power transition.
     ULONGLONG MetricsTableMc;
+    // The last clock reading, and the interrupt time it was taken at (microseconds, as MailboxNow counts them).
+    // Written by every successful live reading under the owner lock and cleared by every owner start, so a
+    // reading never outlives the start that took it. BD-062: a caller who is not an administrator is answered
+    // from it while it is younger than BC250_CLOCK_SNAP_US, which is what keeps an open READ from putting
+    // mailbox traffic on the part faster than the driver already does.
+    ULONG SnapMHz;
+    ULONG SnapVid;
+    LONG SnapTemperatureMc;
+    ULONGLONG SnapAt;
+    BOOLEAN SnapValid;
 } BC250_SMU_OWNER;
+// How old the published reading may be when it answers a caller who is not an administrator (BD-062). One
+// second, the period of the DPM governor's own readback (BC250_DPM_VERIFY_MS, driver/kmd/dpm.h): while the
+// governor ticks, the reading is that fresh anyway and the unprivileged path sends nothing at all.
+#define BC250_CLOCK_SNAP_US 1000000u
 // AddDevice before publication; object storage lives with BC250_DEVICE.
 void SmuOwnerInitialize(BC250_SMU_OWNER* Owner);
 // PASSIVE_LEVEL, unpublished start after legacy writer removal. Requires a
@@ -50,6 +64,14 @@ NTSTATUS SmuReadClock(BC250_SMU_OWNER* Owner, ULONG* MHz, ULONG* Vid, LONG* Temp
 // Typed request processor; caller validates payload length before entry. All
 // responses initialize output fields, including refusal/offline. READ does not
 // require adapter-wide idling; object storage survives until RemoveDevice.
+// Administrator governs the write alone (BD-062): READ answers every caller, SET answers an administrator with
+// BC250_ESCAPE_STATUS_NOT_ADMIN for anybody else. Every malformed-request answer comes first - the ABI's own
+// fields, an operation this ABI does not name, the flag word of the operation asked for, and a READ that carries
+// an operating point - and is the same for both callers, so no reply tells a caller its token instead of its
+// mistake. An administrator's READ is one live reading; any other caller's READ is answered from the published
+// one while it is younger than BC250_CLOCK_SNAP_US, so the open operation cannot raise the rate of mailbox
+// traffic on the part however many callers ask. Every READ still takes the owner lock for its own short critical
+// section; that section carries no mailbox message when the published reading is the one that answers.
 void SmuClockRequest(BC250_SMU_OWNER* Owner, BC250_ESCAPE_CLOCK* Data,
     BOOLEAN Administrator, BOOLEAN HardwareAccess, BOOLEAN NoAdapterSynchronization);
 

@@ -23,12 +23,16 @@ namespace AmdgpuWddmSetup
     {
         public const int DesignWidth = 1160, DesignHeight = 740, RailWidth = 220, GuideWidth = 300, ChromeHeight = 48, ButtonBarHeight = 76;
 
+        // The countdown of the restart screen, in seconds (owner, 2026-10-12: "automatic after a visible countdown").
+        public const int RestartCountdownSeconds = InstallFlow.RestartCountdownSeconds;
+
         readonly SetupArgs _args;
         readonly bool _smoke;
         readonly string _ownPackage;
         // Only a render fixture sets this: whether this setup.exe has its own package beside it. null = ask the disk.
         bool? _ownPackagePresent;
         readonly bool _showNagi;
+        bool _small;                    // the answer of the small-screen rule the frame in the window was built with
 
         public Screen Current { get; private set; }
         string _package;
@@ -41,15 +45,27 @@ namespace AmdgpuWddmSetup
         EngineRun _active, _plan;
         EngineResult _planResult, _result;
         ResultView _view;
-        bool _consentTestSigning;
         bool? _systemTuningChoice;
-        string _bitLocker = "";
+        // The two shortcut options of the plan screen (owner, 2026-10-12), both on unless the command line says no.
+        // The two shortcut answers: null until a switch or the person on the plan screen states one. A run with no
+        // answer of its own passes no switch, so the answer an earlier run of the same install saved stands.
+        bool? _startMenuShortcut, _desktopShortcut;
+        // The wallpaper box of the same card, with the same rule (null: nothing stated).
+        bool? _wallpaper;
+        // True while the plan screen shown is the one that offers an install, with its options (G-SHORTCUT).
+        bool _planOffersInstall;
         bool _restartLater;
         string _restartError, _supportSaved, _supportError;
         string _prepDestination = "", _prepFirmware = "";
         bool _prepUseFirmware, _prepFromWelcome;
         DateTime? _runStarted;
         Timer _timer, _anim;
+        // The restart this install needs starts by itself after a visible countdown (owner, 2026-10-12): nothing on
+        // the restart screen waits for a click. Restart now takes the countdown's place and Later cancels it.
+        Timer _countdown;
+        int _restartLeft = RestartCountdownSeconds;
+        bool _countdownDone;
+        IconRow _countdownRow;
 
         ChromeBar _chrome;
         Panel _rail, _guide, _column;
@@ -68,13 +84,17 @@ namespace AmdgpuWddmSetup
         {
             _args = args;
             _systemTuningChoice = args.ApplySystemTuning ? (bool?)true : null;
+            _startMenuShortcut = args.StartMenuShortcut;
+            _desktopShortcut = args.DesktopShortcut;
+            _wallpaper = args.Wallpaper;
             _smoke = smoke;
             _ownPackage = args.Package ?? DefaultPackage();
             _package = _ownPackage;
             // On unless the control app's setting says 0 (Native.ShowNagi). A headless render asks nothing of this
             // PC's registry, so it takes the same default and --no-nagi draws the panel without her.
             _showNagi = smoke ? !args.NoNagi : Native.ShowNagi();
-            Text = "amdgpu-wddm Setup";
+            Text = Strings.T("ui.window-title");
+            SetWindowIcon();
             AutoScaleMode = AutoScaleMode.None;
             // The window draws its own title bar (ChromeBar): no caption of Windows, and the corners and the frame
             // come from DWM where Windows draws them.
@@ -93,12 +113,34 @@ namespace AmdgpuWddmSetup
             if (!smoke)
             {
                 _timer = new Timer { Interval = 250 };
-                _timer.Tick += (s, e) => PollEngine();
+                _timer.Tick += (s, e) => { PollEngine(); TurnTip(); };
                 _timer.Start();
                 _anim = new Timer { Interval = 33 };
                 _anim.Tick += (s, e) => Animate();
                 _anim.Start();
             }
+        }
+
+        // The application's own icon (art\icon\nagi.ico): the icon Windows shows in the task bar and in Alt+Tab, and
+        // the icon of the file itself. The window draws its own title bar, so it shows no icon of its own.
+        // The file travels twice in this exe: as its Win32 icon (build.ps1, /win32icon, the icon Explorer draws) and
+        // as the resource read here. The resource carries all nine sizes, so Windows takes the size it needs from the
+        // ones that were drawn for it; Icon.ExtractAssociatedIcon would hand out one 32x32 image, which a 150 % or
+        // 200 % screen then rescales. A resource that cannot be read leaves the WinForms default icon in place: an
+        // icon is never a reason for a setup not to start.
+        void SetWindowIcon()
+        {
+            try
+            {
+                var asm = Assembly.GetExecutingAssembly();
+                using (var s = asm.GetManifestResourceStream("nagi.ico"))
+                {
+                    if (s != null) { Icon = new Icon(s); return; }
+                }
+                var path = Assembly.GetEntryAssembly() != null ? Assembly.GetEntryAssembly().Location : null;
+                if (!string.IsNullOrEmpty(path) && File.Exists(path)) Icon = Icon.ExtractAssociatedIcon(path);
+            }
+            catch (Exception) { }
         }
 
         // The window at this screen's scale, never larger than the screen it is on. The window has no frame of
@@ -109,23 +151,42 @@ namespace AmdgpuWddmSetup
         Size WindowSize()
         {
             var want = Theme.Sz(DesignWidth, DesignHeight);
-            if (_smoke) return want;
+            var work = WorkArea();
+            if (work.Width <= 0 || work.Height <= 0) return want;
+            int margin = Theme.S(24);
+            return new Size(Math.Max(Theme.S(640), Math.Min(want.Width, work.Width - margin)),
+                            Math.Max(Theme.S(480), Math.Min(want.Height, work.Height - margin)));
+        }
+
+        // The working area of the screen the window is on, in device pixels. --work-area gives it in logical units, so
+        // that a headless render draws the same picture on any PC; without it a render takes a screen with room for
+        // the whole window, which is the screen every render until this rule assumed.
+        Size WorkArea()
+        {
+            if (_args.WorkWidth > 0 && _args.WorkHeight > 0) return Theme.Sz(_args.WorkWidth, _args.WorkHeight);
+            if (_smoke) return Theme.Sz(LargeScreenWidth, LargeScreenHeight);
             try
             {
-                var work = System.Windows.Forms.Screen.FromPoint(Cursor.Position).WorkingArea;
-                int margin = Theme.S(24);
-                return new Size(Math.Max(Theme.S(640), Math.Min(want.Width, work.Width - margin)),
-                                Math.Max(Theme.S(480), Math.Min(want.Height, work.Height - margin)));
+                var screen = IsHandleCreated ? System.Windows.Forms.Screen.FromHandle(Handle) : System.Windows.Forms.Screen.FromPoint(Cursor.Position);
+                return screen.WorkingArea.Size;
             }
-            catch (Exception) { return want; }
+            catch (Exception) { return Theme.Sz(LargeScreenWidth, LargeScreenHeight); }
         }
+
+        const int LargeScreenWidth = 2560, LargeScreenHeight = 1440;
+
+        // The owner's rule of 2026-10-12 (SmallScreen.cs): a small screen gets no guide panel at all.
+        public bool SmallScreenNow { get { var w = WorkArea(); return SmallScreen.IsDevice(w.Width, w.Height, Theme.Scale); } }
+
+        // Whether the right-hand panel, with or without the guide character, is in the window at all.
+        public bool GuidePanelShown { get { return !_small; } }
 
         // The folder that holds the package, next to the exe. The unpacked release holds setup.exe in its top folder
         // and the whole package in files\ beside it (owner, 2026-10-11), so that is where this looks first. The kept
         // repair set keeps its copy of setup.exe in the package folder itself, so the exe's own folder is the second
         // place. Neither has a manifest when only setup.exe was copied out of the zip: files\ is then the answer, and
         // the welcome screen says to unpack the whole zip (PackageMissing).
-        public const string FilesDir = "files";
+        public const string FilesDir = Payload.FilesDir;
 
         // The package the exe belongs to: <package>\files\ beside setup.exe, or the exe's own folder.
         public static string DefaultPackage()
@@ -137,13 +198,9 @@ namespace AmdgpuWddmSetup
             return files;
         }
 
-        // A folder that holds this release's files: the manifest and the installer the window starts.
-        public static bool HasPackage(string dir)
-        {
-            if (string.IsNullOrEmpty(dir)) return false;
-            try { return File.Exists(Path.Combine(dir, "manifest.json")) && File.Exists(Path.Combine(dir, "installer", "install.ps1")); }
-            catch (Exception) { return false; }
-        }
+        // A folder that holds this release's files: the manifest and the installer the window starts (Payload.cs
+        // holds the rule, because a single-file setup checks the folder it unpacked with the same one).
+        public static bool HasPackage(string dir) { return Payload.HasPackage(dir); }
 
         protected override void OnHandleCreated(EventArgs e)
         {
@@ -177,6 +234,31 @@ namespace AmdgpuWddmSetup
             base.OnFormClosing(e);
         }
 
+        // A restart of this install is still to come, so the files this run needs must stay where they are.
+        bool RestartPending()
+        {
+            if (_view != null && _view.Kind == ViewKind.Restart) return true;
+            return _result != null && _result.RestartRequired;
+        }
+
+        // A single-file setup unpacked the package it carries into %ProgramData%\amdgpu-wddm\setup\<version>
+        // (Payload.cs). That folder goes when the run is over, and stays while a restart is pending: the engine
+        // staged its own copy for the continuation, but a person who starts the file again before the restart
+        // should still find the release it came from.
+        //
+        // Every fresh install ends its first phase with a restart, and the phase after it runs from the
+        // continuation closure, whose setup.exe is the plain window and carries no payload. So the window that ends
+        // the install - the one with no payload of its own - removes the folder of the version it just installed,
+        // by name; otherwise the whole unpacked release would stay in %ProgramData% for good, which is what every
+        // install of a single file used to do.
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            base.OnFormClosed(e);
+            if (_smoke || _args.DryRun || RestartPending()) return;
+            if (!string.IsNullOrEmpty(_args.PayloadPackage)) { Payload.Cleanup(_args.PayloadPackage); return; }
+            Payload.CleanupVersion(PackageVersion(_package));
+        }
+
         // The window lets go of everything it owns here, and not in OnFormClosing: a close that is cancelled (by
         // another handler) would otherwise leave a window whose language switch no longer rebuilds it, and a form
         // that is disposed without being closed (every form of a headless run) would never let go at all.
@@ -185,9 +267,9 @@ namespace AmdgpuWddmSetup
             if (disposing)
             {
                 Strings.LanguageChanged -= OnLanguageChanged;
-                foreach (var t in new[] { _timer, _anim })
+                foreach (var t in new[] { _timer, _anim, _countdown })
                     if (t != null) { t.Stop(); t.Dispose(); }
-                _timer = _anim = null;
+                _timer = _anim = _countdown = null;
             }
             base.Dispose(disposing);
         }
@@ -203,7 +285,7 @@ namespace AmdgpuWddmSetup
             _content.AutoScrollPosition = new Point(0, Math.Max(0, Math.Min(_content.VerticalScroll.Maximum, y)));
         }
 
-        const int WM_DPICHANGED = 0x02E0;
+        const int WM_DPICHANGED = 0x02E0, WM_DISPLAYCHANGE = 0x007E;
 
         // The window is per-monitor DPI aware (app.manifest) and every size in it is a pixel count taken at the scale
         // the process started with: a move to a screen of another scale rebuilds the window at the new one.
@@ -217,8 +299,10 @@ namespace AmdgpuWddmSetup
                     Theme.Init(dpi / 96f, Theme.SystemTextScale());
                     var suggested = (Native.Rect)System.Runtime.InteropServices.Marshal.PtrToStructure(m.LParam, typeof(Native.Rect));
                     SuspendLayout();
-                    BuildFrame();
+                    // The bounds first, then the frame: the frame measures its page column against the client size it
+                    // really has, and the small-screen rule against the screen the window now stands on.
                     Bounds = new Rectangle(suggested.Left, suggested.Top, Math.Max(1, suggested.Right - suggested.Left), Math.Max(1, suggested.Bottom - suggested.Top));
+                    BuildFrame();
                     ResumeLayout(true);
                     Show(Current);
                     Theme.DropRetired();
@@ -227,6 +311,46 @@ namespace AmdgpuWddmSetup
                 }
             }
             base.WndProc(ref m);
+            // The desktop changed under the window: another resolution can turn the screen into a small one, or back.
+            if (m.Msg == WM_DISPLAYCHANGE && !_smoke) BeginInvoke(new Action(RebuildIfScreenChanged));
+            // The person is dragging the window. Nothing is rebuilt while that lasts: Windows runs its own message
+            // loop for a drag, and a rebuild started from inside it would dispose the title bar that the drag began
+            // on. The rule is answered once, when the drag ends.
+            if (m.Msg == WM_ENTERSIZEMOVE) _moving = true;
+            if (m.Msg == WM_EXITSIZEMOVE && !_smoke)
+            {
+                _moving = false;
+                BeginInvoke(new Action(RebuildIfScreenChanged));
+            }
+        }
+
+        const int WM_ENTERSIZEMOVE = 0x0231, WM_EXITSIZEMOVE = 0x0232;
+        bool _moving;                   // Windows is running the loop of a window drag
+
+        // The window was moved, possibly onto another monitor of the same scale: the small-screen rule decides again.
+        // A move the person is making waits for the end of the drag (WM_EXITSIZEMOVE above); a move the program
+        // itself made is answered at once, after this message, never inside it.
+        protected override void OnMove(EventArgs e)
+        {
+            base.OnMove(e);
+            if (_moving || _smoke || IsDisposed || !IsHandleCreated) return;
+            BeginInvoke(new Action(RebuildIfScreenChanged));
+        }
+
+        bool _building;
+
+        // The screen under the window can change while it is open. The frame is rebuilt only when the rule's answer
+        // changed, because a rebuild throws away every control of the screen that is shown.
+        void RebuildIfScreenChanged()
+        {
+            if (_smoke || IsDisposed || _building || _moving || !IsHandleCreated) return;
+            if (SmallScreenNow == _small) return;
+            SuspendLayout();
+            var want = WindowSize();
+            if (want != ClientSize) ClientSize = want;
+            BuildFrame();
+            ResumeLayout(true);
+            Show(Current);
         }
 
         // ---- frame ------------------------------------------------------------------------------------------------
@@ -246,13 +370,22 @@ namespace AmdgpuWddmSetup
 
         void BuildFrame()
         {
+            _building = true;
+            try
+            {
             SuspendLayout();
             ClearAndDispose(this);
+            Text = Strings.T("ui.window-title");
             var languages = new[] { new[] { "en", "EN", "English" }, new[] { "pl", "PL", "Polski" }, new[] { "ja", "日本語", "日本語" }, new[] { "ko", "한국어", "한국어" } };
-            _chrome = new ChromeBar(this, "amdgpu-wddm Setup", Theme.S(ChromeHeight), code => Strings.Language = code, languages,
+            _chrome = new ChromeBar(this, Program.ProductName, Theme.S(ChromeHeight), code => Strings.Language = code, languages,
                 Strings.T("ui.minimise"), Strings.T("ui.close-window"));
             _rail = new Panel { Dock = DockStyle.Left, Width = Theme.S(RailWidth), BackColor = Theme.Nav, Padding = Theme.Pad(0, 22, 0, 0) };
-            _guide = new Panel { Dock = DockStyle.Right, Width = Theme.S(GuideWidth), BackColor = Theme.Back, Padding = Theme.Pad(0, 24, 24, 20) };
+            // The owner's rule of 2026-10-12: on a small screen the guide panel is not in the window at all, and the
+            // width it would have taken goes to the screen's own column. The panel object stays (the tab order and
+            // the frame read it), with no width and not visible, so nothing of it is drawn or reached.
+            _small = SmallScreenNow;
+            int guideWidth = _small ? 0 : Theme.S(GuideWidth);
+            _guide = new Panel { Dock = DockStyle.Right, Width = guideWidth, BackColor = Theme.Back, Padding = Theme.Pad(0, 24, 24, 20), Visible = !_small };
             _column = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Back };
             // The bar wraps: a long translation at a 150 % text size needs a second line of buttons, and a button that
             // does not fit cannot be pressed (the render gate refuses one that leaves the bar).
@@ -277,13 +410,21 @@ namespace AmdgpuWddmSetup
             _column.Controls.Add(_content);
             _column.Controls.Add(divider);
             _column.Controls.Add(_buttons);
-            _contentWidth = Theme.S(DesignWidth - RailWidth - GuideWidth) - _content.Padding.Horizontal - SystemInformation.VerticalScrollBarWidth;
+            // The column the screen is built at: what this window really has between the rail and the guide panel,
+            // never more than the design width gives. The two differ on a screen too small for the design size, where
+            // the window itself is smaller (WindowSize): a column measured from the design width drew text wider than
+            // the column it sits in, which is what the tester's 800x600 screen showed (GitHub #38).
+            int frameWidth = Math.Min(Theme.S(DesignWidth), ClientSize.Width > 0 ? ClientSize.Width : Theme.S(DesignWidth));
+            _contentWidth = Math.Max(Theme.S(260), frameWidth - Theme.S(RailWidth) - guideWidth - _content.Padding.Horizontal - SystemInformation.VerticalScrollBarWidth);
             Controls.Add(_column);
             Controls.Add(_guide);
             Controls.Add(_rail);
             Controls.Add(_chrome);
-            BuildGuide();
+            if (!_small) BuildGuide();
+            else { _guideTitle = null; _guideBubble = null; _guideArt = null; _guideCard = null; _guideInner = 0; }
             ResumeLayout(true);
+            }
+            finally { _building = false; }
         }
 
         void BuildGuide()
@@ -397,6 +538,10 @@ namespace AmdgpuWddmSetup
             _resultMark = null;
             _elapsedRow = null;
             _centreContent = false;
+            // Every control of the screen that leaves is disposed below, the countdown's line among them: its timer
+            // stops here, and BuildRestart starts a new one when the restart screen is built again.
+            _countdownRow = null;
+            StopCountdown();
             SuspendLayout();
             _content.SuspendLayout();
             ClearAndDispose(_content);
@@ -607,6 +752,7 @@ namespace AmdgpuWddmSetup
             string titleId = checking ? "checking.title" : _flow == "prepare" ? "working.prepare.title" : _flow == "repair" ? "working.repair.title" : _flow == "continue" ? "working.continue.title" : "working.title";
             Title(Strings.T(titleId));
             Status(Strings.T(checking ? "checking.body" : _flow == "prepare" ? "working.prepare.body" : "working.body"), StatusLine.State.Busy);
+            PendingRemovalNotice();
             _progress = new ProgressStrip(_contentWidth);
             _progress.AccessibleName = Strings.T(titleId);
             _content.Controls.Add(_progress);
@@ -691,6 +837,7 @@ namespace AmdgpuWddmSetup
 
         void BuildPlan()
         {
+            _planOffersInstall = false;
             var d = _plan != null ? _plan.Decision : null;
             var version = d != null ? d.PackageVersion : PackageVersion(_package);
             var action = d != null ? d.Action : "install";
@@ -720,16 +867,12 @@ namespace AmdgpuWddmSetup
                 return;
             }
 
-            // What this screen still wants from the user, before the page says anything else: the primary action is
-            // off until every consent is answered, and the headline of a first install promises readiness.
-            var consents = d != null ? d.Consents : new string[0];
-            if (_planResult != null && _planResult.ConsentsNeeded.Length > 0) consents = consents.Union(_planResult.ConsentsNeeded).ToArray();
-            bool wantsConsent = consents.Contains("test-signing") || consents.Contains("bitlocker");
-
-            // Checks: all passed, or the ones that need attention.
+            _planOffersInstall = true;
+            // Checks: all passed, or the ones that need attention. Nothing on this screen asks the user for a
+            // permission any more (owner, 2026-10-12): the Install button is enabled from the first moment, and
+            // pressing it is the consent for what the card below states.
             var warn = _plan == null ? new List<CheckRow>() : _plan.Checks.Where(c => c.Result != "ok").ToList();
-            if (wantsConsent && !ConsentsComplete(consents)) Status(Strings.T("plan.consent.needed", Strings.T("consent.title")), StatusLine.State.Warn);
-            else if (warn.Count == 0) Status(Strings.T("plan.checks.ok"), StatusLine.State.Good);
+            if (warn.Count == 0) Status(Strings.T("plan.checks.ok"), StatusLine.State.Good);
             else Status(Strings.T("plan.checks.attention", warn.Count), warn.Any(c => c.Result == "fail") ? StatusLine.State.Bad : StatusLine.State.Warn);
             if (warn.Count > 0)
             {
@@ -737,40 +880,31 @@ namespace AmdgpuWddmSetup
                 foreach (var c in warn) AddCheck(checks, c);
             }
 
-            // The consents come directly after the checks. At the end of the page, below five other cards, nothing in
-            // the first screenful said why the primary action was off.
             Button go = null;
-            if (wantsConsent)
-            {
-                var cc = Card(Strings.T("consent.title"), Icons.Shield);
-                if (consents.Contains("test-signing"))
-                {
-                    var box = Ui.Check(Strings.T("consent.test-signing"), cc.Inner);
-                    box.Checked = _consentTestSigning;
-                    box.CheckedChanged += (s, e) => { _consentTestSigning = box.Checked; ShowSoon(Screen.Plan); };
-                    cc.Add(box);
-                    cc.Add(Ui.Label(Strings.T("consent.test-signing.note"), Theme.Small, Theme.Dim, cc.Inner));
-                }
-                if (consents.Contains("bitlocker"))
-                {
-                    cc.Add(Ui.Label(Strings.T("consent.bitlocker"), null, null, cc.Inner));
-                    var key = Ui.Radio(Strings.T("consent.bitlocker.have-key"), cc.Inner);
-                    var pause = Ui.Radio(Strings.T("consent.bitlocker.suspend"), cc.Inner);
-                    key.Checked = _bitLocker == "HaveKey";
-                    pause.Checked = _bitLocker == "Suspend";
-                    key.CheckedChanged += (s, e) => { if (key.Checked && _bitLocker != "HaveKey") { _bitLocker = "HaveKey"; ShowSoon(Screen.Plan); } };
-                    pause.CheckedChanged += (s, e) => { if (pause.Checked && _bitLocker != "Suspend") { _bitLocker = "Suspend"; ShowSoon(Screen.Plan); } };
-                    // Directly in the card (the only option buttons there), not in a bare panel after the label above.
-                    cc.Add(key);
-                    cc.Add(pause);
-                }
-            }
-
             var steps = Card(Strings.T("plan.what.title"), Icons.Info);
             int restarts = d != null ? d.Restarts : 0;
             steps.Row(Icons.Restart, restarts > 0 ? Theme.Warn : Theme.Good,
                 Strings.T(restarts <= 0 ? "plan.restarts.0" : restarts == 1 ? "plan.restarts.1" : "plan.restarts.2"),
                 restarts > 0 ? Strings.T("plan.restarts.choice") : null);
+            // What the installation changes about the way Windows starts, as plain information (owner, 2026-10-12:
+            // "Przestan wymagac potwierdzen od uzytkownika"). The engine reads the same two states and acts on them
+            // by itself: test mode is turned on, and BitLocker protection is paused for the restarts of the install.
+            // The window states them here so that nothing happens to the PC that this screen did not say.
+            bool testModeOff = _plan != null && _plan.Checks.Any(c => c.Id == "testsigning.inactive");
+            // The Microsoft Visual C++ runtime the driver's programs need: when the plan found it missing or too
+            // old, the install brings it (owner, 2026-10-12), and this screen says so before it happens.
+            bool vcMissing = _plan != null && _plan.Checks.Any(c => c.Id == "vcruntime.missing");
+            foreach (var id in InstallFlow.PlanChangeIds(testModeOff, PlanBitLocker(), vcMissing))
+            {
+                switch (id)
+                {
+                    case "plan.change.test-mode": steps.Row(Icons.Lock, Theme.Teal, Strings.T(id), Strings.T("plan.change.test-mode.note")); break;
+                    case "plan.change.test-mode.on": steps.Row(Icons.Check, Theme.Good, Strings.T(id)); break;
+                    case "plan.change.bitlocker": steps.Row(Icons.Shield, Theme.Teal, Strings.T(id)); break;
+                    case "plan.change.vcruntime": steps.Row(Icons.Download, Theme.Teal, Strings.T(id)); break;
+                    default: steps.Row(Icons.Shield, Theme.Warn, Strings.T(id)); break;
+                }
+            }
             var fw = d != null ? d.FirmwareSource : null;
             if (fw == "download" || fw == "folder" || fw == "package-folder") steps.Row(Icons.Download, Theme.Teal, Strings.T("plan.firmware." + fw));
 
@@ -800,6 +934,26 @@ namespace AmdgpuWddmSetup
                 sc.Row(Icons.Lock, Theme.Dim, Strings.T("plan.settings.note"), null, false, Theme.Small);
             }
 
+            // Where the control application can be started from afterwards (owner, 2026-10-12). Both options are on
+            // when the screen opens, and neither holds the install back: a person who turns both off still installs
+            // the driver by pressing Install.
+            var shortcuts = Card(Strings.T("shortcuts.title"), Icons.Sparkle);
+            var startMenu = Ui.Check(Strings.T("shortcuts.start-menu"), shortcuts.Inner);
+            startMenu.Checked = _startMenuShortcut ?? (d == null || d.StartMenuShortcut);
+            startMenu.CheckedChanged += (s, e) => { _startMenuShortcut = startMenu.Checked; };
+            shortcuts.Add(startMenu);
+            var desktop = Ui.Check(Strings.T("shortcuts.desktop"), shortcuts.Inner);
+            desktop.Checked = _desktopShortcut ?? (d == null || d.DesktopShortcut);
+            desktop.CheckedChanged += (s, e) => { _desktopShortcut = desktop.Checked; };
+            shortcuts.Add(desktop);
+            shortcuts.Add(Ui.Label(Strings.T("shortcuts.note"), Theme.Small, Theme.Dim, shortcuts.Inner));
+            // The Nagi wallpaper (owner, 2026-10-13): on, in the same group, an option and not a question.
+            var wallpaper = Ui.Check(Strings.T("shortcuts.wallpaper"), shortcuts.Inner);
+            wallpaper.Checked = _wallpaper ?? (d == null || d.Wallpaper);
+            wallpaper.CheckedChanged += (s, e) => { _wallpaper = wallpaper.Checked; };
+            shortcuts.Add(wallpaper);
+            shortcuts.Add(Ui.Label(Strings.T("shortcuts.wallpaper.note"), Theme.Small, Theme.Dim, shortcuts.Inner));
+
             var tuning = Card(Strings.T("tuning.title"), Icons.Gear);
             var tune = Ui.Check(Strings.T("tuning.opt-in"), tuning.Inner);
             tune.Checked = _systemTuningChoice ?? (d != null && d.SystemTuning);
@@ -811,14 +965,57 @@ namespace AmdgpuWddmSetup
             // The bar flows right to left, so the first button added is the rightmost: the primary action takes the
             // place the eye and the mouse go to first, and the dismissive one stands away from it.
             go = AddButton(action == "upgrade" ? "plan.go.upgrade" : action == "repair" ? "plan.go.repair" : action == "resume" ? "plan.go.resume" : "plan.go.install", (s, e) => RunInstall(), true, true);
-            go.Enabled = ConsentsComplete(consents);
+            // The primary action is never off: a person who opened this installer wants to install (owner,
+            // 2026-10-12). A machine the installer must not change is refused by the preflight, which fails a check
+            // and ends the run; it is not a question on this screen.
+            go.Enabled = true;
             CancelButton = AddButton("ui.close", (s, e) => Close());
             if (_flow != "continue") AddButton("ui.back", (s, e) => Show(Screen.Welcome));
         }
 
-        bool ConsentsComplete(string[] consents)
+        // For the render gate: the plan screen has no control that asks the user for a permission, and its primary
+        // action is enabled (owner, 2026-10-12). Both are findings, so neither can come back.
+        public IEnumerable<string> ConsentFindings()
         {
-            return (!consents.Contains("test-signing") || _consentTestSigning) && (!consents.Contains("bitlocker") || _bitLocker.Length > 0);
+            if (Current != Screen.Plan) yield break;
+            // The check boxes the plan screen may carry are the ones of InstallFlow.PlanOptionIds: the optional
+            // Windows tuning and the two shortcuts. Each has a default, none of them holds the install back, and no
+            // other control of this kind may appear.
+            var allowed = InstallFlow.PlanOptionIds.Select(id => Strings.T(id)).ToList();
+            foreach (var c in Descendants(_content))
+            {
+                if (c is RadioButton) yield return "the plan screen has an option button: \"" + c.Text + "\"";
+                else if (c is CheckBox && !allowed.Contains(c.Text)) yield return "the plan screen has a check box: \"" + c.Text + "\"";
+            }
+            var primary = AcceptButton as Control;
+            if (primary != null && !primary.Enabled) yield return "the primary action \"" + primary.Text + "\" is off";
+        }
+
+        // G-SHORTCUT (owner, 2026-10-12): the plan screen offers both shortcut options, both of them on when the
+        // screen opens, and the Install button does not depend on either. The render gate reports what is wrong.
+        public IEnumerable<string> ShortcutFindings()
+        {
+            // Only the plan screen that offers an install: the screens for a version that is already installed and
+            // checked, or that waits for a restart, carry no options at all.
+            if (Current != Screen.Plan || !_planOffersInstall) yield break;
+            var boxes = Descendants(_content).OfType<CheckBox>().ToList();
+            foreach (var id in new[] { "shortcuts.start-menu", "shortcuts.desktop", "shortcuts.wallpaper" })
+            {
+                var box = boxes.FirstOrDefault(b => b.Text == Strings.T(id));
+                if (box == null) { yield return "the plan screen has no option for " + id; continue; }
+                if (!box.Checked) yield return id + " is off when the screen opens";
+                if (!box.Enabled) yield return id + " cannot be changed";
+            }
+        }
+
+        static IEnumerable<Control> Descendants(Control parent)
+        {
+            if (parent == null) yield break;
+            foreach (Control k in parent.Controls)
+            {
+                yield return k;
+                foreach (var deep in Descendants(k)) yield return deep;
+            }
         }
 
         void BuildRestart()
@@ -828,6 +1025,7 @@ namespace AmdgpuWddmSetup
             _content.Controls.Add(_resultMark);
             Title(Strings.T(_view.TitleId));
             Para(Strings.T(_view.BodyId), Theme.Dim);
+            PendingRemovalNotice();
             if (_restartError != null) Line(Icons.Warning, Theme.Warn, Strings.T("restart.failed"), Theme.Warn);
             if (_restartLater)
             {
@@ -837,9 +1035,53 @@ namespace AmdgpuWddmSetup
                 return;
             }
             Line(Icons.Info, Theme.Dim, Strings.T("restart.save-work"), Theme.Dim);
-            if (_view.OfferRestart) AddButton("restart.now", (s, e) => RestartNow(), true);
-            CancelButton = AddButton("restart.later", (s, e) => { _restartLater = true; Show(Screen.Restart); });
+            // The restart happens by itself (owner, 2026-10-12): a visible countdown runs down and Windows restarts
+            // at its end, whether anybody presses anything or not. The two buttons only shorten it or call it off.
+            // A screen that cannot restart Windows at all (no offer in the result view) shows no countdown.
+            if (_view.OfferRestart)
+            {
+                // Once it has run out it does not start again: a restart Windows refused would otherwise be asked
+                // for every second, and the line then says that the restart is up to the user.
+                if (_countdownDone) Line(Icons.Info, Theme.Dim, Strings.T("restart.countdown.over"), Theme.Dim);
+                else _countdownRow = Line(Icons.Restart, Theme.Teal, Strings.T("restart.countdown", _restartLeft), Theme.Teal);
+                AddButton("restart.now", (s, e) => RestartNow(), true);
+                if (!_countdownDone) StartCountdown();
+            }
+            CancelButton = AddButton("restart.later", (s, e) => { _restartLater = true; StopCountdown(); Show(Screen.Restart); });
         }
+
+        // The countdown of the restart screen. A headless render draws the first second and starts no timer, so a
+        // render is a picture and never a restart.
+        void StartCountdown()
+        {
+            StopCountdown();
+            if (_smoke || _args.DryRun) return;
+            _countdown = new Timer { Interval = 1000 };
+            _countdown.Tick += (s, e) =>
+            {
+                _restartLeft--;
+                if (_restartLeft <= 0) { _restartLeft = 0; _countdownDone = true; StopCountdown(); RestartNow(); return; }
+                if (_countdownRow != null && !_countdownRow.IsDisposed)
+                {
+                    _countdownRow.Head = Strings.T("restart.countdown", _restartLeft);
+                    _countdownRow.Done();
+                    _countdownRow.Invalidate();
+                }
+            };
+            _countdown.Start();
+        }
+
+        void StopCountdown()
+        {
+            if (_countdown == null) return;
+            _countdown.Stop();
+            _countdown.Dispose();
+            _countdown = null;
+        }
+
+        // For the render gate and the tests: the seconds the restart screen shows, and whether its countdown runs.
+        public int RestartSecondsLeft { get { return _restartLeft; } }
+        public bool CountdownRunning { get { return _countdown != null && _countdown.Enabled; } }
 
         // The result icon, with its entrance when the window is shown and may animate: it is at its full size at
         // once in a headless render and on a PC whose animation effects are off.
@@ -868,6 +1110,7 @@ namespace AmdgpuWddmSetup
             Title(Strings.T(v.TitleId));
             if (v.AlreadyInstalled) Para(Strings.T("result.already-installed", v.PackageVersion ?? "-"));
             Para(Strings.T(v.BodyId), Theme.Dim);
+            PendingRemovalNotice();
             if (v.FailedChecks.Length > 0)
             {
                 var card = Card(Strings.T("result.failed-checks"), Icons.Shield);
@@ -896,6 +1139,13 @@ namespace AmdgpuWddmSetup
             if (v.OfferRetry) AddButton("result.retry", (s, e) => { if (_flow == "prepare") Show(Screen.Prepare); else RunPlan(); }, retryFirst, true);
             CancelButton = AddButton("ui.close", (s, e) => Close(), !repairFirst && !retryFirst);
             if (v.Kind != ViewKind.Success || _flow == "prepare") AddButton("result.save-support", (s, e) => SaveSupport());
+        }
+
+        void PendingRemovalNotice()
+        {
+            if ((_active != null && _active.PendingRemovalsCancelled > 0) ||
+                _runs.Any(r => r.Run != null && r.Run.PendingRemovalsCancelled > 0))
+                Line(Icons.Info, Theme.Dim, Strings.T("install.pending-removals-cancelled"), Theme.Dim);
         }
 
         void BuildPrepare()
@@ -961,12 +1211,22 @@ namespace AmdgpuWddmSetup
         {
             var args = new List<string>();
             args.AddRange(SetupArgs.TuningArguments(_systemTuningChoice));
+            args.AddRange(InstallFlow.ShortcutArguments(_startMenuShortcut, _desktopShortcut));
+            args.AddRange(InstallFlow.WallpaperArguments(_wallpaper));
             if (_flow == "repair") args.Add("-Repair");
-            if (_consentTestSigning) args.Add("-AcceptTestSigning");
-            if (_bitLocker.Length > 0) { args.Add("-BitLocker"); args.Add(_bitLocker); }
+            // Pressing Install is the consent (owner, 2026-10-12), so the switches that used to carry a user's answer
+            // are given on every run. The engine of this package no longer needs them; an engine of an older release,
+            // which a kept repair set may still hold, reads them and asks nothing either.
+            args.AddRange(InstallFlow.ConsentArguments(PlanBitLocker()));
             if (_args.DryRun) args.Add("-DryRun");
             args.AddRange(_args.EngineArgs);
             StartRun("install", Path.Combine(_package, "installer", "install.ps1"), args, Screen.Working);
+        }
+
+        // The BitLocker state of the plan ('on', 'unknown', 'off', 'suspended' or null when no plan ran).
+        string PlanBitLocker()
+        {
+            return _plan != null && _plan.Decision != null ? _plan.Decision.BitLocker : null;
         }
 
         void RunPrepare()
@@ -1107,15 +1367,42 @@ namespace AmdgpuWddmSetup
                     break;
             }
             var cause = SetupGuide.Pick(causes);
-            _guideTitle.Text = Strings.T(_showNagi ? "guide.title" : "guide.title.plain");
+            // On a small screen there is no panel to fill: the cause is still picked and kept, so that a move to a
+            // larger screen fills the panel with this screen's tip and not with the first one of the window.
+            if (_guideTitle != null) _guideTitle.Text = Strings.T(_showNagi ? "guide.title" : "guide.title.plain");
             // The words first, then the picture: the tip's height decides how much room is left for her.
             // The checks take less than a minute; an installation can take minutes. The guide says the same as the page.
-            _guideBubble.Say(Strings.T(cause == SetupCause.Welcome && _flow == "prepare" ? "guide.prepare" : cause == SetupCause.WorkInProgress && Current == Screen.Checking ? "guide.checking" : SetupGuide.TextId(cause)));
+            if (_guideBubble != null)
+                _guideBubble.Say(GuideText(cause == SetupCause.Welcome && _flow == "prepare" ? "guide.prepare" : cause == SetupCause.WorkInProgress && Current == Screen.Checking ? "guide.checking" : SetupGuide.TipId(cause, Current == Screen.Working ? _tipTurn : 0)));
             ShowGuideArt(cause);
             GuideCause = cause;
         }
 
         public SetupCause GuideCause { get; private set; }
+
+        // The text of one tip. The name tip carries the meaning of the name as an argument: that phrase is one string
+        // (brand.expansion), so a new wording is one line in each table.
+        static string GuideText(string id)
+        {
+            return id == SetupGuide.NameTipId ? Strings.T(id, Strings.T("brand.expansion")) : Strings.T(id);
+        }
+
+        // The turn of the Working screen's tips: the next one after SetupGuide.TipSeconds on that screen, back to the
+        // first on any other screen. The window's poll timer drives it (never a headless render, whose fixture sets
+        // the turn it draws).
+        int _tipTurn;
+        DateTime _tipSince;
+
+        void TurnTip()
+        {
+            if (IsDisposed || Current != Screen.Working || GuideCause != SetupCause.WorkInProgress) { _tipTurn = 0; _tipSince = DateTime.MinValue; return; }
+            var now = DateTime.UtcNow;
+            if (_tipSince == DateTime.MinValue) { _tipSince = now; return; }
+            if ((now - _tipSince).TotalSeconds < SetupGuide.TipSeconds) return;
+            _tipTurn++;
+            _tipSince = now;
+            UpdateGuide();
+        }
 
         // The still picture of this screen's cause, with "Show Nagi" on and its resource in the exe. Without either
         // one the slot is empty and the panel is the text-only panel. The picture is drawn at most 1.25 times the
@@ -1148,7 +1435,34 @@ namespace AmdgpuWddmSetup
 
         // For the render gate: whether the guide panel drew the picture, and whether it was meant to.
         public bool GuideArtShown { get { return _guideArt != null && HasVisibleFlag(_guideArt) && _guideArt.Image != null; } }
-        public bool GuideArtWanted { get { return _showNagi && NagiArt.Has(SetupGuide.Expression(GuideCause), SetupGuide.ArtSize(Theme.Scale)); } }
+        public bool GuideArtWanted { get { return GuidePanelShown && _showNagi && NagiArt.Has(SetupGuide.Expression(GuideCause), SetupGuide.ArtSize(Theme.Scale)); } }
+
+        // The owner's rule of 2026-10-12, as the render gate reads it: on a small screen the right-hand panel takes no
+        // width, is not visible and holds nothing; on a larger screen it is there with its card. Both directions are
+        // findings, so neither can drift.
+        public IEnumerable<string> SmallScreenFindings()
+        {
+            var work = WorkArea();
+            bool small = SmallScreen.IsDevice(work.Width, work.Height, Theme.Scale);
+            if (small != _small)
+                yield return "the frame was built for a " + (_small ? "small" : "large") + " screen, the rule says " + (small ? "small" : "large");
+            if (small)
+            {
+                if (_guide != null && (_guide.Width > 0 || HasVisibleFlag(_guide) || _guide.Controls.Count > 0))
+                    yield return "the guide panel is in the window on a " + work.Width + "x" + work.Height + " screen (width " + (_guide == null ? 0 : _guide.Width) + ")";
+                if (_guideArt != null || _guideCard != null) yield return "the guide card was built on a small screen";
+                if (GuideArtShown) yield return "the guide art shows on a small screen";
+            }
+            else
+            {
+                if (_guide == null || !HasVisibleFlag(_guide) || _guide.Width <= 0) yield return "the guide panel is missing on a screen that has room for it";
+                if (_guideCard == null) yield return "the guide card is missing on a screen that has room for it";
+            }
+            // Whatever the screen, the column the page was built at must fit the room the window really has.
+            int room = _content == null ? 0 : _content.ClientSize.Width - _content.Padding.Horizontal;
+            if (_content != null && _contentWidth > room + Theme.S(2))
+                yield return "the page column is " + _contentWidth + " px, the window has room for " + room;
+        }
 
         void SetGuideNote(string text) { if (_guideBubble != null) _guideBubble.Say(text); }
 
@@ -1177,7 +1491,7 @@ namespace AmdgpuWddmSetup
         public string Summary()
         {
             var w = new StringBuilder();
-            w.AppendLine("amdgpu-wddm Setup " + Program.VersionText + ", " + DateTime.UtcNow.ToString("o"));
+            w.AppendLine(Program.ProductName + " " + Program.VersionText + ", " + DateTime.UtcNow.ToString("o"));
             w.AppendLine("arguments: " + string.Join(" ", _args.Raw));
             w.AppendLine("flow: " + _flow + "; screen: " + Current + "; language: " + Strings.Language + "; elevated: " + (!_smoke && Native.IsElevated()));
             w.AppendLine("package: " + _package + (_usePrepared ? " (prepared folder)" : ""));
@@ -1272,14 +1586,15 @@ namespace AmdgpuWddmSetup
             _preparedVersion = f.PreparedVersion;
             _package = f.Package ?? _ownPackage;
             _ownPackagePresent = f.FilesMissing ? (bool?)false : null;
-            _consentTestSigning = f.ConsentTestSigning;
-            _bitLocker = f.BitLocker ?? "";
             _restartLater = f.RestartLater;
+            // The second the countdown of the restart screen is drawn at, so a render is one fixed picture.
+            _restartLeft = f.RestartSecondsLeft > 0 ? f.RestartSecondsLeft : RestartCountdownSeconds;
             _prepDestination = f.PrepareDestination ?? "";
             _prepUseFirmware = f.PrepareFirmware != null;
             _prepFirmware = f.PrepareFirmware ?? "";
             _prepFromWelcome = f.Flow == "prepare";
             _supportSaved = f.SupportSaved;
+            _tipTurn = f.TipTurn;
             // The elapsed time of a run in a drawn screen: a fixed 42 seconds, so every render of the same screen is
             // the same picture.
             _runStarted = DateTime.UtcNow - TimeSpan.FromSeconds(42);
@@ -1354,6 +1669,160 @@ namespace AmdgpuWddmSetup
                     if (row.Right > _rail.Width) w.AppendLine("chrome: a step of the rail is wider than the rail");
             return w.ToString();
         }
+
+        // G-BACKDROP (BD-137), in two halves: a control that paints itself leaves no pixel of its client rectangle
+        // unpainted, and the colour it clears itself in is the colour the window really paints under it
+        // (WrongBackdrop, below).
+        //
+        // Control.WmPaint runs two layers for a control with ControlStyles.UserPaint: the background layer, and that
+        // one only when ControlStyles.Opaque is not set, then OnPaint (.NET Framework reference source, Control.cs,
+        // WmPaint and PaintWithErrorHandling). ButtonBase sets Opaque, so for every button, option button and check
+        // box of this window the whole background is OnPaint's own work. On the screen each control paints into a
+        // buffer that BufferedGraphicsManager hands to the next control with the pixels of the last one still in it,
+        // so a control that does not clear itself shows what was painted there before: the language pills each
+        // carried the pill before them and a word from the step rail, and the two option buttons of "Where the files
+        // come from" carried each other's text. A render into one bitmap cannot show this, because there the parent
+        // has already drawn the right pixels underneath, which is why 27 screens x 22 renders passed over it; this
+        // gate paints every control alone, over a colour no screen uses, and fails on whatever is left of it.
+        public List<string> Backdrops()
+        {
+            var problems = new List<string>();
+            var under = new Dictionary<Control, Bitmap>();
+            try
+            {
+                foreach (var c in Painters(this))
+                {
+                    int w = c.Width, h = c.Height;
+                    if (w <= 0 || h <= 0) continue;
+                    int left;
+                    using (var bmp = new Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppRgb))
+                    {
+                        using (var g = Graphics.FromImage(bmp))
+                        {
+                            g.Clear(Sentinel);
+                            var e = new PaintEventArgs(g, new Rectangle(0, 0, w, h));
+                            if (!Style(c, ControlStyles.Opaque)) InvokePaintBackground(c, e);
+                            InvokePaint(c, e);
+                        }
+                        left = Unpainted(bmp);
+                    }
+                    if (left > 0)
+                        problems.Add(Current + ": " + Describe(c) + " " + w + "x" + h + " leaves " + left + " pixels of its background unpainted" +
+                            " (parent " + (c.Parent == null ? "none" : c.Parent.GetType().Name + " BackColor " + Hex(c.Parent.BackColor)) +
+                            ", backdrop " + Hex(Theme.Backdrop(c)) + ")");
+                    var wrong = WrongBackdrop(c, under);
+                    if (wrong != null) problems.Add(Current + ": " + Describe(c) + " " + wrong);
+                }
+            }
+            finally { foreach (var b in under.Values) if (b != null) b.Dispose(); }
+            return problems;
+        }
+
+        // The colour half of G-BACKDROP: the colour a control clears itself in is the colour the window really
+        // paints under it.
+        //
+        // The pixel half above holds only that the control painted something. A control that fills its whole
+        // rectangle in the wrong colour passes it and still shows, on the screen, a rectangle that does not match
+        // what it sits on, which is the other half of the BD-137 picture ("a dark rectangle behind the text that
+        // does not match the card"): a new container that paints a colour of its own over its BackColor and does not
+        // carry IBackdrop, or an IBackdrop whose property has drifted from what its own OnPaint fills, hands its
+        // children a colour that is not there. So the parent is painted alone (with its own background layer, which
+        // is the rest of the chain above it: Control.PaintTransparentBackground paints the parent for a child with a
+        // transparent back colour, .NET Framework reference source, Control.cs), and the colour it leaves where the
+        // control sits must be the colour Theme.Backdrop answers for that control. The check is of the declaration
+        // against the paint, so it reads every control the gate walks, whoever drew it.
+        //
+        // The parent is painted in its own coordinates, into a bitmap of its client rectangle, and the point is read
+        // inside that: TextRenderer draws through GDI and does not follow the Graphics transform, so a parent painted
+        // through a translation puts its title text where the child is and the check would read a letter of it.
+        //
+        // One point is read, in the middle of the control: a wrong backdrop is one flat colour against another over
+        // the whole rectangle, while an edge of a control may legitimately run over a line, a rounded corner or the
+        // shadow of an ancestor (the guide picture stands on the card's teal border). The point is taken in the
+        // middle of the part of the control the parent's client rectangle really covers, because the page scrolls:
+        // a card below the fold sits outside the viewport its parent paints. Where even that point is left the
+        // sentinel colour, nothing paints there at all and there is nothing to compare.
+        string WrongBackdrop(Control c, Dictionary<Control, Bitmap> cache)
+        {
+            var parent = c.Parent;
+            if (parent == null) return null;
+            var bmp = Under(parent, cache);
+            if (bmp == null) return null;
+            var covered = Rectangle.Intersect(new Rectangle(c.Left, c.Top, c.Width, c.Height), new Rectangle(0, 0, bmp.Width, bmp.Height));
+            if (covered.Width <= 0 || covered.Height <= 0) return null;
+            var at = new Point(covered.Left + covered.Width / 2, covered.Top + covered.Height / 2);
+            var want = Theme.Backdrop(c);
+            var got = bmp.GetPixel(at.X, at.Y);
+            if ((got.ToArgb() & 0xFFFFFF) == (Sentinel.ToArgb() & 0xFFFFFF)) return null;
+            if ((got.ToArgb() & 0xFFFFFF) == (want.ToArgb() & 0xFFFFFF)) return null;
+            return c.Width + "x" + c.Height + " clears itself in " + Hex(want) + ", but the window paints " + Hex(got) +
+                " under it at " + (at.X - c.Left) + "," + (at.Y - c.Top) + " of it (parent " + Describe(parent) + ")";
+        }
+
+        // What one container paints when nothing of its content is drawn over it, kept for the whole walk: a page
+        // has many rows in one card and the card is painted once for all of them.
+        Bitmap Under(Control parent, Dictionary<Control, Bitmap> cache)
+        {
+            Bitmap bmp;
+            if (cache.TryGetValue(parent, out bmp)) return bmp;
+            var size = parent.ClientSize;
+            if (size.Width > 0 && size.Height > 0)
+            {
+                bmp = new Bitmap(size.Width, size.Height, System.Drawing.Imaging.PixelFormat.Format32bppRgb);
+                using (var g = Graphics.FromImage(bmp))
+                {
+                    g.Clear(Sentinel);
+                    var e = new PaintEventArgs(g, new Rectangle(0, 0, size.Width, size.Height));
+                    InvokePaintBackground(parent, e);
+                    InvokePaint(parent, e);
+                }
+            }
+            cache[parent] = bmp;
+            return bmp;
+        }
+
+        // A colour no palette of this window carries, in either theme.
+        static readonly Color Sentinel = Color.FromArgb(0xFF, 0x00, 0xFF);
+
+        static string Hex(Color c) { return c.A == 255 ? "#" + c.R.ToString("X2") + c.G.ToString("X2") + c.B.ToString("X2") : c.Name; }
+
+        // The controls whose own painting the gate reads: the ones this program draws, and any control that was left
+        // a transparent back colour. A stock control on a colour of its own is Windows' to paint. A control that is
+        // not shown is skipped with everything inside it: a child keeps its own visible flag while its parent is
+        // hidden, so a walk that recursed past a hidden container would report controls the user never sees (Walk,
+        // for G-A11Y, and the control application's ShownIn skip the subtree the same way).
+        static IEnumerable<Control> Painters(Control root)
+        {
+            foreach (Control k in root.Controls)
+            {
+                if (!HasVisibleFlag(k)) continue;
+                if (Style(k, ControlStyles.UserPaint) &&
+                    (k.GetType().Assembly == typeof(SetupForm).Assembly || k.BackColor.A != 255)) yield return k;
+                foreach (var p in Painters(k)) yield return p;
+            }
+        }
+
+        static int Unpainted(Bitmap bmp)
+        {
+            // The alpha byte of a 32bppRgb bitmap is not part of the picture, so only the colour is compared.
+            int sentinel = Sentinel.ToArgb() & 0xFFFFFF, left = 0;
+            var data = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height), System.Drawing.Imaging.ImageLockMode.ReadOnly,
+                System.Drawing.Imaging.PixelFormat.Format32bppRgb);
+            try
+            {
+                var row = new int[bmp.Width];
+                for (int y = 0; y < bmp.Height; y++)
+                {
+                    System.Runtime.InteropServices.Marshal.Copy(data.Scan0 + y * data.Stride, row, 0, row.Length);
+                    for (int x = 0; x < row.Length; x++) if ((row[x] & 0xFFFFFF) == sentinel) left++;
+                }
+            }
+            finally { bmp.UnlockBits(data); }
+            return left;
+        }
+
+        static readonly MethodInfo GetStyleMethod = typeof(Control).GetMethod("GetStyle", BindingFlags.NonPublic | BindingFlags.Instance);
+        static bool Style(Control c, ControlStyles s) { return (bool)GetStyleMethod.Invoke(c, new object[] { s }); }
 
         // G-A11Y: every control a user can reach has a name, the keyboard reaches every one of them, Enter and Escape
         // have their buttons, and nothing reachable is disabled-looking text.

@@ -43,6 +43,9 @@
       "restart-3",
       "preflight",
       "pin-baseline",
+      "clock-read-user",
+      "standard-user-logon",
+      "router-dialog",
       "stage-clients",
       "vk-smoke",
       "vkheaps",
@@ -57,6 +60,7 @@
       "cache-2",
       "dxrpt",
       "cts-rt",
+      "cts-rt-wave64",
       "llm-dense",
       "llm-text-vulkan",
       "llm-q35",
@@ -98,7 +102,8 @@
       "vkheaps",
       "x86-smoke",
       "dxrpt",
-      "cts-rt"
+      "cts-rt",
+      "cts-rt-wave64"
     ],
     "cache": [
       "cache-0",
@@ -424,6 +429,176 @@
         "slots"
       ],
       "gate_after": false
+    },
+    {
+      "id": "clock-read-user",
+      "title": "BD-062: the clock read answers a caller without administrator rights, the set still does not",
+      "kind": "lab-read",
+      "bound_s": 170,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/clock-read-user.ps1"
+        ]
+      ],
+      "expect": "clock read user arm: ok",
+      "depends_on": [
+        "preflight"
+      ],
+      "gate_after": false,
+      "note": "Every other call of this suite arrives over ssh and is elevated, so no existing arm can see this defect: it would read the clock as an administrator. The probe runs bc250kmd_cli clock read in the console session, as the user who is logged on there, at the limited run level, through a scheduled task that it removes again. mhz, vid and temperature_mc must all be in that answer. Then the same read from the elevated session must still give a live reading, and clock set 1000 820 from the non-elevated task must be refused. It ends on the health of the part: no GPU fault line and the fan still at state=curve controlling=1. It changes no setting and no clock, and the operating point it names in the refused set is the one the lab already runs at.",
+      "failure_classes": [
+        "BD-062"
+      ]
+    },
+    {
+      "id": "standard-user-logon",
+      "title": "BD-080: a logon that is not an administrator confirms the driver start",
+      "kind": "operator",
+      "bound_s": 1200,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/standard-user-logon.ps1",
+          "-Phase",
+          "prepare"
+        ],
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/restart-now.ps1",
+          "-Reason",
+          "BD-080 standard user logon"
+        ],
+        [
+          "python",
+          "{target}",
+          "boot",
+          "--os",
+          "windows",
+          "--after-now",
+          "--bound",
+          "600"
+        ],
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/standard-user-logon.ps1",
+          "-Phase",
+          "verify"
+        ]
+      ],
+      "post": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/standard-user-logon.ps1",
+          "-Phase",
+          "cleanup"
+        ],
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/restart-now.ps1",
+          "-Reason",
+          "BD-080 cleanup"
+        ],
+        [
+          "python",
+          "{target}",
+          "boot",
+          "--os",
+          "windows",
+          "--after-now",
+          "--bound",
+          "600"
+        ]
+      ],
+      "expect_all": [
+        "standard user logon arm (prepare): ok",
+        "standard user logon arm (verify): ok"
+      ],
+      "depends_on": [
+        "preflight"
+      ],
+      "gate_after": true,
+      "note": "The suite cannot reach this defect either: every installer arm logs on as the lab's administrator account, which the defect never affected. The arm makes a local account that is not in Administrators, arms the automatic logon for two starts, restarts, and then reads what the two logons left: a confirmation line and the window task's line in start-confirm.log, the window task's last result 0, UnconfirmedStarts back at 0, the clock control still on, both scheduled tasks registered, and no Microsoft Basic Display Adapter. The password is generated on the lab and never printed. Windows keeps it in plain text in the registry while the automatic logon is armed, which is why the cleanup step removes the value, the account and its profile, and why the cleanup runs as a post step on every exit path. The boot waits are target.py boot --after-now, as the owner's rule of 2026-10-11 requires. Why it is an operator arm and not a trial: it restarts the machine twice and waits for two logons, so no three-minute bound can hold it.",
+      "failure_classes": [
+        "BD-080"
+      ]
+    },
+    {
+      "id": "router-dialog",
+      "title": "BD-126: the firewall notification window on the processor route, and back on the adapter",
+      "kind": "operator",
+      "bound_s": 900,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/router-dialog.ps1",
+          "-Phase",
+          "default"
+        ],
+        {
+          "argv": [
+            "python",
+            "{mon}",
+            "screenshot",
+            "--out",
+            "{out}/router-dialog/dialog-cpu-route.png"
+          ],
+          "optional": true
+        },
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/router-dialog.ps1",
+          "-Phase",
+          "allow"
+        ],
+        {
+          "argv": [
+            "python",
+            "{mon}",
+            "screenshot",
+            "--out",
+            "{out}/router-dialog/dialog-gpu-route.png"
+          ],
+          "optional": true
+        }
+      ],
+      "post": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{kit}/router-dialog.ps1",
+          "-Phase",
+          "restore"
+        ]
+      ],
+      "expect_all": [
+        "router dialog arm: ok"
+      ],
+      "depends_on": [
+        "preflight"
+      ],
+      "gate_after": false,
+      "note": "The repro needs no game: a program that listens on a network port from a path with no firewall rule makes Windows raise the 'Windows Security' window, and svchost.exe starts PickerHost.exe to draw it. The listener is a copy of powershell.exe under a name of its own, started in the console session through a scheduled task, because no window of this kind appears in session 0. The default phase wants route=cpu with reason=app-dialog-host, the allow phase wants route=gpu with reason=app-default, and the restore phase puts the AppRouter values back from its own record. The two shots are the only evidence that the window paints its text and its two buttons, which no script can read: they are optional steps, so a missing shot fails nothing, and the operator looks at them. If the window stays empty on the processor route as well, the entry buys nothing and comes out (driver/umd/router/README.md). The application GPU UMD's own log of that process needs a machine-wide DXVK_LOG_PATH, because svchost.exe starts the dialog host.",
+      "failure_classes": [
+        "BD-126"
+      ]
     },
     {
       "id": "stage-clients",
@@ -931,6 +1106,68 @@
         "BD-102"
       ],
       "note": "The CTS runner pins the route, the driver's hash and the case list per RunId and refuses a change, so the RunId carries the release. The three NotRun cases are the known ones of the pinned CTS revision, and the batch runner ends rc 1 because of them, which is why this arm names 1 among the exit codes it reads as an answer; the case count and 'complete=True' decide. The lab needs the CTS package at C:\\BC250\\cts."
+    },
+    {
+      "id": "cts-rt-wave64",
+      "title": "BD-074: the ray query dynamic indexing case under rtwave64, and in the default mode",
+      "kind": "lab",
+      "bound_s": 170,
+      "run": [
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{repo}/tools/win/cts/run-batch.ps1",
+          "-CaseList",
+          "C:\\BC250\\cts\\batches\\rt-k97-di1.txt",
+          "-RunId",
+          "train{release}-wave64",
+          "-Route",
+          "direct",
+          "-IcdPath",
+          "C:\\Program Files\\amdgpu-wddm\\vulkan\\vulkan_radeon.dll",
+          "-Perftest",
+          "rtwave64",
+          "-BoundSeconds",
+          "60"
+        ],
+        [
+          "python",
+          "{target}",
+          "ps",
+          "{repo}/tools/win/cts/run-batch.ps1",
+          "-CaseList",
+          "C:\\BC250\\cts\\batches\\rt-k97-di1.txt",
+          "-RunId",
+          "train{release}-default",
+          "-Route",
+          "direct",
+          "-IcdPath",
+          "C:\\Program Files\\amdgpu-wddm\\vulkan\\vulkan_radeon.dll",
+          "-BoundSeconds",
+          "60"
+        ]
+      ],
+      "expect": "complete=True",
+      "result": {
+        "regex": "exit=(\\d+) complete=True",
+        "group": 1,
+        "pick": "first",
+        "name": "exit code of the rtwave64 run",
+        "unit": ""
+      },
+      "baseline": {
+        "value": 0,
+        "tolerance_abs": 0,
+        "source": "the batch runner's contract: 0 means every case of the list passed. On tester.28 the wave64 run of this one case failed twice with 'expected 1 but found 0 at position 0' (BD-074), so 0 is the fix answering and 1 is the defect."
+      },
+      "depends_on": [
+        "preflight"
+      ],
+      "note": "The same shape as cts-rt, on the one case the defect fails: dEQP-VK.ray_query.misc.dynamic_indexing, from batches/rt-k97-di1.txt. The first step sets RADV_PERFTEST=rtwave64, the second leaves it unset, and each step carries its own RunId because the runner pins the route, the driver's hash and the variable per RunId. Both steps must end rc 0: this arm names no exit code among the answers it reads, unlike cts-rt, because a list of one case has no NotRun case to end the runner at rc 1. The result line reads the exit code of the first step, the rtwave64 one. The existing cts-rt arm runs the default mode only and would not have caught this defect.",
+      "failure_classes": [
+        "BD-074"
+      ]
     },
     {
       "id": "llm-dense",

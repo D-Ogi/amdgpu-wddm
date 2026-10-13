@@ -8,12 +8,14 @@
 // (driver/kmd/gen_regs.py's DCN_REGISTERS, tools/regcalc, ip DMU) - never amdgpu's trace, because there is no
 // Windows trace of this IP yet: proving these offsets from Windows is what this command is for.
 #include "bc250kmd.h"
+#include "connector_surface.h"
 #include "bc250kmd_escape.h"
 #include "regs.generated.h"
 #include "display_timing_snapshot.h"
 #include "dcn_2_0_1_sh_mask.h"       // field masks for the decoded summary only; every offset comes from regcalc
 #include "dcn_translate.h"           // ADR 0011 point 3 step 3: the WDDM flip's host-testable address conversion
 #include "plane_format.h"            // M15.14: the plane's pixel format per flip
+#include "../shim/bc250_dcn201_pipe.h"
 #include <ntstrsafe.h>
 
 void DcnObserve(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_DCN_OBSERVE* Data,
@@ -852,6 +854,8 @@ static NTSTATUS DcnFirmwareSurfaceCore(_Inout_ BC250_DEVICE* Device, BOOLEAN Unb
 
 NTSTATUS DcnRestorePostDisplay(_Inout_ BC250_DEVICE* Device)
 {
+    if (InterlockedCompareExchange(&Device->RuntimeDisplayChanged,0,0))
+        return DcnRuntimeSurface(Device,TRUE);
     return DcnFirmwareSurfaceCore(Device,TRUE);
 }
 
@@ -860,7 +864,214 @@ NTSTATUS DcnRestorePostDisplay(_Inout_ BC250_DEVICE* Device)
 // OS's business (SetVidPnSourceVisibility) and stays as it is. PASSIVE_LEVEL in practice; same rules as above.
 NTSTATUS DcnFlipToFirmwareSurface(_Inout_ BC250_DEVICE* Device)
 {
+    if (InterlockedCompareExchange(&Device->RuntimeDisplayChanged,0,0))
+        return DcnRuntimeSurface(Device,FALSE);
     return DcnFirmwareSurfaceCore(Device,FALSE);
+}
+
+static long RuntimeRead(void* Context, unsigned long Offset, unsigned long* Value)
+{
+    BC250_DEVICE* device=Context;
+    *Value=0;
+    if (!device->Mmio) return STATUS_DEVICE_NOT_READY;
+    if (!Bc250DispReadAllowed(Offset)) return STATUS_ACCESS_DENIED;
+    *Value=READ_REGISTER_ULONG(device->Mmio+Offset/sizeof(ULONG));
+    return STATUS_SUCCESS;
+}
+
+static long RuntimeWrite(void* Context, unsigned long Offset, unsigned long Value)
+{
+    BC250_DEVICE* device=Context;
+    if (!device->Mmio || !device->DcnWriteEnabled) return STATUS_DEVICE_NOT_READY;
+    if (!Bc250DispWriteAllowed(Offset)) return STATUS_ACCESS_DENIED;
+    WRITE_REGISTER_ULONG(device->Mmio+Offset/sizeof(ULONG),Value);
+    return STATUS_SUCCESS;
+}
+
+static void RuntimeStall(void* Context, unsigned long Microseconds)
+{
+    UNREFERENCED_PARAMETER(Context);
+    KeStallExecutionProcessor(Microseconds);
+}
+
+// Caller owns the primary transaction, or OS bugcheck/stop serialization.
+// No allocation, software lock, logger or floating-point work is reachable.
+NTSTATUS DcnRuntimeSurface(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible)
+{
+    BC250_DISP_IO io={0};
+    BC250_PLANE_REGISTERS format;
+    ULONGLONG bytes,scanned=0;
+    ULONG waited=0,pending=0,pitch=0,blank=0;
+    BOOLEAN restoreVisible;
+    NTSTATUS status;
+    if (!InterlockedCompareExchange(&Device->RuntimePostValid,0,0) ||
+        !Device->RuntimeFramebuffer || !Device->DcnPlaneFormats ||
+        !DcnSurfaceBytes(Device->RuntimePost.Width,Device->RuntimePost.Height,Device->RuntimePost.Pitch,&bytes) ||
+        bytes>Device->RuntimeFramebufferLength ||
+        Device->RuntimePost.PhysicAddress.QuadPart!=Device->RuntimeFramebufferPhysical.QuadPart ||
+        !DcnPlaneFormatRegisters(Device,BC250_PLANE_FORMAT_ARGB8888,&format))
+        return STATUS_DEVICE_NOT_READY;
+    io.Context=Device; io.Read=RuntimeRead; io.Write=RuntimeWrite; io.Stall=RuntimeStall;
+    io.BudgetUs=BC250_DCNFLIP_POLL_MAX_US;
+    // Read hardware, not the cached DcnBlanked flag. A pending blank request
+    // is preserved as blank even if CURRENT_BLANK_STATE has not caught up.
+    status=MmioDcnRead(Device,BC250_REG_DMU_OTG0_OTG_BLANK_CONTROL,&blank);
+    if (!NT_SUCCESS(status)) return status;
+    restoreVisible=Visible || !(blank & (OTG0_OTG_BLANK_CONTROL__OTG_BLANK_DATA_EN_MASK |
+        OTG0_OTG_BLANK_CONTROL__OTG_BLANK_DE_MODE_MASK |
+        OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK));
+    status=DcnSetVisibility(Device,FALSE);
+    if (!NT_SUCCESS(status)) goto failed;
+    InterlockedExchange(&Device->RuntimePlaneBlank,1);
+    status=Bc250Dcn201PlaneBlank(&io,1);
+    if (!NT_SUCCESS(status)) goto failed;
+    status=DcnFlipWriteSequence(Device,(ULONGLONG)Device->RuntimeFramebufferPhysical.QuadPart,
+        Device->RuntimePost.Pitch,4,&format,TRUE);
+    if (!NT_SUCCESS(status)) goto failed;
+    // DCN201 selects dcn10_program_pipe (Linux dcn201_init.c:101), which
+    // programs the address then unblanks HUBP (dcn10_hwseq.c:3133-3136).
+    // hubp1_set_blank also disables TTU; no in-use progress while blank is
+    // guaranteed. Resume fetch from the validated reserved buffer with OTG
+    // output still blank, then prove the frame-latched address took effect.
+    status=Bc250Dcn201PlaneBlank(&io,0);
+    if (!NT_SUCCESS(status)) goto failed;
+    InterlockedExchange(&Device->RuntimePlaneBlank,0);
+    for (;;) {
+        status=MmioDcnRead(Device,BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL,&pending);
+        if (NT_SUCCESS(status)) status=DcnReadScanoutPhysical(Device,&scanned);
+        if (NT_SUCCESS(status)) status=MmioDcnRead(Device,BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_PITCH,&pitch);
+        if (!NT_SUCCESS(status)) goto failed;
+        if (!(pending&HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK) &&
+            scanned==(ULONGLONG)Device->RuntimeFramebufferPhysical.QuadPart &&
+            ((pitch&HUBPREQ0_DCSURF_SURFACE_PITCH__PITCH_MASK)+1)*4==Device->RuntimePost.Pitch) break;
+        if (waited>=BC250_DCNFLIP_POLL_MAX_US) { status=STATUS_IO_TIMEOUT; goto failed; }
+        KeStallExecutionProcessor(BC250_DCNFLIP_POLL_STEP_US);
+        waited+=BC250_DCNFLIP_POLL_STEP_US;
+    }
+    if (restoreVisible) {
+        status=DcnSetVisibility(Device,TRUE);
+        if (!NT_SUCCESS(status)) goto failed;
+    }
+    Device->DcnCurrentAddress=(ULONGLONG)Device->RuntimeFramebufferPhysical.QuadPart;
+    Device->DcnCurrentPitch=Device->RuntimePost.Pitch;
+    Device->DcnPlaneFormat=BC250_PLANE_FORMAT_ARGB8888;
+    Device->DcnDiverged=TRUE; // different from the immutable firmware surface
+    return STATUS_SUCCESS;
+failed:
+    // Best-effort bounded cleanup. Preserve the original failure; a failed
+    // MMIO cleanup cannot establish physical blanking or a drained plane.
+    (void)DcnSetVisibility(Device,FALSE);
+    InterlockedExchange(&Device->RuntimePlaneBlank,1);
+    (void)Bc250Dcn201PlaneBlank(&io,1);
+    return status;
+}
+
+// Caller holds primary exclusion. No writes or ownership changes occur here.
+NTSTATUS DcnLinkSurfaceCapture(BC250_DEVICE* Device, ULONG Width, ULONG Height, BC250_LINK_SURFACE* Surface)
+{
+    BC250_LINK_SURFACE saved={0};ULONGLONG bytes,again;
+    ULONG pending=0,pitch=0,config=0,crossbar=0,cnvc=0;
+    ULONG blank=0,hubp=0,blankAgain=0,hubpAgain=0;NTSTATUS status;
+    if (!Surface) return STATUS_INVALID_PARAMETER;
+    RtlZeroMemory(Surface,sizeof(*Surface));
+    if (!Device->VramEnabled || !Device->DcnPlaneFormats) return STATUS_DEVICE_NOT_READY;
+    status=MmioDcnRead(Device,BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL,&pending);
+    if (!NT_SUCCESS(status)) return status;
+    if (pending&HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK) return STATUS_DEVICE_BUSY;
+    status=DcnReadScanoutPhysical(Device,&saved.Physical);
+    if (NT_SUCCESS(status)) status=MmioDcnRead(Device,BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_PITCH,&pitch);
+    if (NT_SUCCESS(status)) status=MmioDcnRead(Device,BC250_REG_DMU_HUBP0_DCSURF_SURFACE_CONFIG,&config);
+    if (NT_SUCCESS(status)) status=MmioDcnRead(Device,BC250_REG_DMU_HUBPRET0_HUBPRET_CONTROL,&crossbar);
+    if (NT_SUCCESS(status)) status=MmioDcnRead(Device,BC250_REG_DMU_CNVC_CFG0_CNVC_SURFACE_PIXEL_FORMAT,&cnvc);
+    if (NT_SUCCESS(status)) status=MmioDcnRead(Device,BC250_REG_DMU_OTG0_OTG_BLANK_CONTROL,&blank);
+    if (NT_SUCCESS(status)) status=MmioDcnRead(Device,BC250_REG_DMU_HUBP0_DCHUBP_CNTL,&hubp);
+    if (!NT_SUCCESS(status)) return status;
+    // A request/current disagreement is a transition, not a saved visibility.
+    if (!!(blank&(OTG0_OTG_BLANK_CONTROL__OTG_BLANK_DATA_EN_MASK |
+                  OTG0_OTG_BLANK_CONTROL__OTG_BLANK_DE_MODE_MASK)) !=
+        !!(blank&OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK))
+        return STATUS_DEVICE_BUSY;
+    saved.Visible=!(blank&OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK) &&
+        !(hubp&HUBP0_DCHUBP_CNTL__HUBP_BLANK_EN_MASK);
+    saved.Format=DcnPlaneFormatDecodeRegisters(config,crossbar,cnvc);
+    saved.Pitch=((pitch&HUBPREQ0_DCSURF_SURFACE_PITCH__PITCH_MASK)+1)*4;
+    saved.Width=Width;saved.Height=Height;
+    if (saved.Format!=BC250_PLANE_FORMAT_ARGB8888 || !DcnSurfaceBytes(Width,Height,saved.Pitch,&bytes) ||
+        !DcnAddressFits(saved.Physical,(ULONGLONG)Device->VramPhysical.QuadPart,Device->VramLength,bytes))
+        return STATUS_INVALID_PARAMETER;
+    status=DcnReadScanoutPhysical(Device,&again);
+    if (NT_SUCCESS(status)) status=MmioDcnRead(Device,BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL,&pending);
+    if (NT_SUCCESS(status)) status=MmioDcnRead(Device,BC250_REG_DMU_OTG0_OTG_BLANK_CONTROL,&blankAgain);
+    if (NT_SUCCESS(status)) status=MmioDcnRead(Device,BC250_REG_DMU_HUBP0_DCHUBP_CNTL,&hubpAgain);
+    if (!NT_SUCCESS(status)) return status;
+    if (((blank^blankAgain)&(OTG0_OTG_BLANK_CONTROL__OTG_BLANK_DATA_EN_MASK |
+          OTG0_OTG_BLANK_CONTROL__OTG_BLANK_DE_MODE_MASK |
+          OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK)) ||
+        ((hubp^hubpAgain)&HUBP0_DCHUBP_CNTL__HUBP_BLANK_EN_MASK))
+        return STATUS_DEVICE_BUSY;
+    if (again!=saved.Physical || (pending&HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK))
+        return STATUS_DEVICE_BUSY;
+    *Surface=saved;return STATUS_SUCCESS;
+}
+
+NTSTATUS DcnLinkSurfaceRestore(BC250_DEVICE* Device, const BC250_LINK_SURFACE* Surface)
+{
+    BC250_DISP_IO io={0};
+    BC250_PLANE_REGISTERS format;
+    ULONGLONG bytes,scanned=0;
+    ULONG waited=0,pending=0,pitch=0;
+    NTSTATUS status;
+    if (!Surface || !Device->VramEnabled || !Device->DcnPlaneFormats ||
+        Surface->Format!=BC250_PLANE_FORMAT_ARGB8888 || Surface->Visible>1 ||
+        !DcnSurfaceBytes(Surface->Width,Surface->Height,Surface->Pitch,&bytes) ||
+        !DcnAddressFits(Surface->Physical,(ULONGLONG)Device->VramPhysical.QuadPart,Device->VramLength,bytes) ||
+        !DcnPlaneFormatRegisters(Device,Surface->Format,&format)) return STATUS_DEVICE_NOT_READY;
+    io.Context=Device; io.Read=RuntimeRead; io.Write=RuntimeWrite; io.Stall=RuntimeStall;
+    io.BudgetUs=BC250_DCNFLIP_POLL_MAX_US;
+    status=DcnSetVisibility(Device,FALSE);
+    if (!NT_SUCCESS(status)) goto failed;
+    InterlockedExchange(&Device->RuntimePlaneBlank,1);
+    status=Bc250Dcn201PlaneBlank(&io,1);
+    if (!NT_SUCCESS(status)) goto failed;
+    status=DcnFlipWriteSequence(Device,Surface->Physical,
+        Surface->Pitch,4,&format,TRUE);
+    if (!NT_SUCCESS(status)) goto failed;
+    // DCN201 selects dcn10_program_pipe (Linux dcn201_init.c:101), which
+    // programs the address then unblanks HUBP (dcn10_hwseq.c:3133-3136).
+    // hubp1_set_blank also disables TTU; no in-use progress while blank is
+    // guaranteed. Resume fetch from the validated saved buffer with OTG
+    // output still blank, then prove the frame-latched address took effect.
+    status=Bc250Dcn201PlaneBlank(&io,0);
+    if (!NT_SUCCESS(status)) goto failed;
+    InterlockedExchange(&Device->RuntimePlaneBlank,0);
+    for (;;) {
+        status=MmioDcnRead(Device,BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL,&pending);
+        if (NT_SUCCESS(status)) status=DcnReadScanoutPhysical(Device,&scanned);
+        if (NT_SUCCESS(status)) status=MmioDcnRead(Device,BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_PITCH,&pitch);
+        if (!NT_SUCCESS(status)) goto failed;
+        if (!(pending&HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK) &&
+            scanned==Surface->Physical &&
+            ((pitch&HUBPREQ0_DCSURF_SURFACE_PITCH__PITCH_MASK)+1)*4==Surface->Pitch) break;
+        if (waited>=BC250_DCNFLIP_POLL_MAX_US) { status=STATUS_IO_TIMEOUT; goto failed; }
+        KeStallExecutionProcessor(BC250_DCNFLIP_POLL_STEP_US);
+        waited+=BC250_DCNFLIP_POLL_STEP_US;
+    }
+    if (Surface->Visible) {
+        status=DcnSetVisibility(Device,TRUE);
+        if (!NT_SUCCESS(status)) goto failed;
+    }
+    Device->DcnCurrentAddress=Surface->Physical;
+    Device->DcnCurrentPitch=Surface->Pitch;
+    Device->DcnPlaneFormat=BC250_PLANE_FORMAT_ARGB8888;
+    Device->DcnDiverged=TRUE; // saved application surface may differ from firmware
+    return STATUS_SUCCESS;
+failed:
+    // Best-effort bounded cleanup. Preserve the original failure; a failed
+    // MMIO cleanup cannot establish physical blanking or a drained plane.
+    (void)DcnSetVisibility(Device,FALSE);
+    InterlockedExchange(&Device->RuntimePlaneBlank,1);
+    (void)Bc250Dcn201PlaneBlank(&io,1);
+    return status;
 }
 
 NTSTATUS DcnStop(_Inout_ BC250_DEVICE* Device)
@@ -908,7 +1119,12 @@ NTSTATUS DcnFlipSourceAddress(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddres
     if (Device->Mmio == NULL || !Device->VidPnFlipEnabled) return STATUS_DEVICE_NOT_READY;
     // The scaled inherited path retains the GOP viewport and surface layout.
     // A new pitch or format needs a separately admitted pipe configuration.
-    if (Device->Modeset.InheritedFixed && (!Device->Modeset.InheritedSupport ||
+    if (InterlockedCompareExchange(&Device->RuntimeDisplayChanged,0,0)) {
+        if (!InterlockedCompareExchange(&Device->RuntimePostValid,0,0) ||
+            Pitch!=Device->RuntimePost.Pitch || PlaneFormat!=BC250_PLANE_FORMAT_ARGB8888 ||
+            DisplaySourceWidth(Device)!=Device->RuntimePost.Width ||
+            DisplaySourceHeight(Device)!=Device->RuntimePost.Height) return STATUS_NOT_SUPPORTED;
+    } else if (Device->Modeset.InheritedFixed && (!Device->Modeset.InheritedSupport ||
         Pitch != Device->Post.Pitch || PlaneFormat != BC250_PLANE_FORMAT_ARGB8888)) return STATUS_NOT_SUPPORTED;
     if (plane==NULL ||
         !DcnLinearSurfaceBytes(DisplaySourceWidth(Device),DisplaySourceHeight(Device),Pitch,plane->BytesPerPixel,

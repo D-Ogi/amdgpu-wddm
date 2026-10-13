@@ -33,6 +33,7 @@ struct FreeReport {
     FreeStage stage{};
     bool surface{};
     bool adopted{};                             // an opened shared surface: borrowed, so no deallocate callback
+    bool driver_surface{};                      // BD-133: a linear surface of ours with no runtime resource
     bool owner_expired{};                       // a linear primary outside its resource's own DDI
     // The import this free() named, for the trace that has to meet the kernel's paging journal by address
     // (instrumentation item 5 of the trial 245 report), and what the quarantine held when it returned.
