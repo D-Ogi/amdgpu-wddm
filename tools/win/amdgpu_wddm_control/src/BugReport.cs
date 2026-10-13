@@ -1,7 +1,8 @@
 // "Create bug report": collect everything in memory, redact it, show the tester the file list, then write one zip to
 // the Desktop. Sources: the KMD's log ring and software snapshots (no Level Two escape), the installed files with
-// versions and SHA-256, the driver's registry settings, dxdiag /t, System and Application events of the last 24 hours
-// from the display stack, and the D3D12 and Vulkan capability tools when they are present. No network.
+// versions and SHA-256, the driver's registry settings, dxdiag /t, System events of the last 24 hours from the display
+// stack, every application crash and hang record of the same 24 hours, and the D3D12 and Vulkan capability tools when
+// they are present. No network.
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -62,7 +63,7 @@ namespace AmdgpuWddmControl
             if (events)
             {
                 progress("Reading the event logs");
-                Add("events.txt", "System and Application events of the last 24 hours from the display drivers", Events(TimeSpan.FromHours(24)));
+                Add("events.txt", "System events of the last 24 hours from the display drivers, and every application crash and hang record of the same 24 hours", Events(TimeSpan.FromHours(24)));
             }
             if (dxdiag) { progress("Running dxdiag (up to 2 minutes)"); Add("dxdiag.txt", "DirectX diagnostic report (dxdiag /t)", DxDiag()); }
             if (caps)
@@ -321,33 +322,35 @@ namespace AmdgpuWddmControl
             "Microsoft-Windows-WHEA-Logger",
         };
 
-        // System: the providers above. Application: crash records (Application Error, Windows Error Reporting) that
-        // name a module or process of the display stack.
+        // System: the providers above. Application: every crash and hang record (Application Error, Application
+        // Hang, Windows Error Reporting) of the window, whatever module it names. A game that crashes in its own code
+        // after a driver call names no module of the display stack, and the keyword filter that stood here dropped
+        // exactly those records (field report, 2026-10-13: the zip had none of the crashes it was sent for). The
+        // profile path and user name inside the records go through the report's Redactor like every other entry.
         public static string Events(TimeSpan window)
         {
             var w = new StringBuilder();
             long ms = (long)window.TotalMilliseconds;
             string providers = string.Join(" or ", SystemProviders.Select(p => "@Name='" + p + "'"));
-            Query(w, "System", "*[System[Provider[" + providers + "] and TimeCreated[timediff(@SystemTime) <= " + ms + "]]]", null);
-            Query(w, "Application", "*[System[Provider[@Name='Application Error' or @Name='Windows Error Reporting'] and TimeCreated[timediff(@SystemTime) <= " + ms + "]]]",
-                text => new[] { "amdgpu", "bc250", "dwm.exe", "d3d12", "dxgi", "vulkan", "zink" }.Any(k => text.IndexOf(k, StringComparison.OrdinalIgnoreCase) >= 0));
+            Query(w, "System", "*[System[Provider[" + providers + "] and TimeCreated[timediff(@SystemTime) <= " + ms + "]]]", 2000);
+            Query(w, "Application", "*[System[Provider[@Name='Application Error' or @Name='Application Hang' or @Name='Windows Error Reporting'] and TimeCreated[timediff(@SystemTime) <= " + ms + "]]]", 500);
             return w.ToString();
         }
 
-        static void Query(StringBuilder w, string log, string xpath, Func<string, bool> keep)
+        // Newest first and at most limit records, so a crash loop cannot make the report unbounded.
+        static void Query(StringBuilder w, string log, string xpath, int limit)
         {
             w.AppendLine("==== " + log);
             int n = 0;
             try
             {
                 using (var reader = new EventLogReader(new EventLogQuery(log, PathType.LogName, xpath) { ReverseDirection = true }))
-                    for (EventRecord r = reader.ReadEvent(); r != null && n < 2000; r = reader.ReadEvent())
+                    for (EventRecord r = reader.ReadEvent(); r != null && n < limit; r = reader.ReadEvent())
                         using (r)
                         {
                             string text;
                             try { text = r.FormatDescription(); } catch (Exception) { text = null; }
                             if (text == null) text = string.Join(" | ", r.Properties.Select(p => Convert.ToString(p.Value)));
-                            if (keep != null && !keep(text)) continue;
                             w.AppendLine(string.Format("{0:yyyy-MM-ddTHH:mm:ss.fffZ} {1} id {2} level {3}: {4}", r.TimeCreated.HasValue ? r.TimeCreated.Value.ToUniversalTime() : DateTime.MinValue,
                                 r.ProviderName, r.Id, r.Level, text.Replace("\r", "").Replace("\n", " / ")));
                             n++;
