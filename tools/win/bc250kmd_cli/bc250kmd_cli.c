@@ -1587,6 +1587,7 @@ static int Fan(int argc, WCHAR **argv)
         status = Bc250Fan(&r, &f, sizeof(f));
         if (status < 0) { if (i == 0) PrintStatus("fanctl", status); }
         else FanCtlLine(&f);
+        fflush(stdout);                 // BD-159: a sample reaches a redirected file now, not at exit
     }
     return 0;
 }
@@ -1637,6 +1638,7 @@ static int Telemetry(int argc, wchar_t **argv)
             printf("vram segments=%lu local_resident_mb=%llu local_limit_mb=%llu dedicated_mb=%llu aperture_resident_mb=%llu "
                    "aperture_limit_mb=%llu\n", m.Segments, m.LocalResident >> 20, m.LocalLimit >> 20,
                    m.DedicatedVideoMemory >> 20, m.ApertureResident >> 20, m.ApertureLimit >> 20);
+        fflush(stdout);                 // BD-159: see Dpm
     }
     return failed ? 1 : 0;
 }
@@ -4006,6 +4008,9 @@ static int Dpm(int argc, WCHAR **argv)
         }
         DpmPrint(d);
         DpmPrintPower(&x);
+        // BD-159: stdout redirected to a file is fully buffered, so without this a sampler's file stayed empty until
+        // the process ended and a thermal guard reading it saw each hot sample up to a buffer late.
+        fflush(stdout);
     }
     return 0;
 }
