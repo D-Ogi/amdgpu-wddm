@@ -89,6 +89,17 @@ preset, a resolution and an upscaler check belong to it. `session.py` refuses th
 - **The input server runs in the interactive session**, as the one-shot task "Lab game input". The name stays
   outside the competing-task gate of the trial kits (`BC250|DWM|G0|WSI`), which once refused a capture under
   another name. The server ends at its bound whatever happens, and the bound is at most 1200 s.
+- **A Steam-started game inherits the Steam client's environment, not the runner's.** `steam.exe -applaunch`
+  only signals the running client, so a per-trial variable set here (`AMDGPU_WDDM_D3D12_EXPERIMENT`,
+  `AMDGPU_WDDM_VKD3D_PSO_LOG`, `RADV_PERFTEST`, `MESA_SPIRV_FAIL_DUMP_PATH`, `VKD3D_SHADER_DUMP_PATH`) reaches
+  that game only if the client itself was started with it. Trials 586-588 recorded `pso_log` true and wrote no
+  PSO log at all (GitHub #42). The runner now resolves delivery before the launch: with no client running it
+  starts one itself, a client an earlier trial of this runner started is accepted through
+  `C:\BC250\tmp\steam-env.json`, and a foreign client either falls back to the direct launch
+  (`steam.env_fallback: "direct"` in the profile) or stops the trial with a named reason. It never stops a
+  client it did not start. `game-result.json` carries `env_requested`, `env_armed` and a state per variable in
+  `env_delivery`, so a reader can tell a delivered variable from a believed one. The experiment has a second
+  route and keeps it: the shell reads the application profile in the registry when the process has none.
 - **Keys and buttons are held 150-250 ms.** A game at a few frames per second misses a shorter press.
 - **Do not open a held ssh session before the trial runs.** In trials 220 and 221 a session opened before the
   push met an sshd accept stall (BD-051).

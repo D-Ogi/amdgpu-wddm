@@ -8,6 +8,8 @@ the workspace scratch directory, so these tests read the profiles directly and c
 import importlib.util
 import json
 import re
+import shutil
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -187,12 +189,59 @@ class LogStream(unittest.TestCase):
                          'exactly one LOG_SUMMARY escape per session, before the loop')
 
 
+class Environment(unittest.TestCase):
+    """Per-trial variables and the Steam route (GitHub #42 / BD-158).
+
+    The runner sets its variables in its own process. A Steam-started game inherits the Steam client's environment,
+    not the runner's, so trials 586-588 recorded pso_log true and produced no PSO log at all. The runner must now
+    resolve delivery before the launch and record it per variable.
+    """
+
+    def test_every_per_trial_variable_is_in_the_delivery_plan(self):
+        # A variable added later must join the plan, or its trials silently measure nothing again.
+        for name in ('AMDGPU_WDDM_D3D12_EXPERIMENT', 'AMDGPU_WDDM_VKD3D_PSO_LOG', 'RADV_PERFTEST',
+                     'MESA_SPIRV_FAIL_DUMP_PATH', 'VKD3D_SHADER_DUMP_PATH'):
+            with self.subTest(variable=name):
+                self.assertIn(f"$envPlan['{name}']", RUNTIME, f'{name} is set but never enters $envPlan')
+
+    def test_the_result_records_delivery_per_variable(self):
+        for field in ('$result.env_requested', '$result.env_armed', '$result.env_delivery'):
+            self.assertIn(field, RUNTIME, f'{field} must be in the result record')
+
+    def test_an_undeliverable_armed_variable_stops_the_trial(self):
+        self.assertIn('Steam environment not delivered', RUNTIME,
+                      'a foreign Steam client with an armed variable must throw a named reason')
+
+    def test_the_runner_never_stops_a_steam_client_it_did_not_start(self):
+        # The client may belong to the owner or another session: the runner starts one, never stops one.
+        for forbidden in ('-shutdown', 'Stop-Process -Name steam', "Stop-Process -Name 'steam'"):
+            with self.subTest(call=forbidden):
+                self.assertNotIn(forbidden, RUNTIME)
+
+
 class Sources(unittest.TestCase):
     def test_every_script_compiles(self):
         # A syntax error in a host tool must fail the gate, not the next session that calls it.
         for path in sorted(HERE.rglob('*.py')):
             with self.subTest(script=path.name):
                 compile(path.read_text(encoding='utf-8'), str(path), 'exec')
+
+    def test_every_powershell_script_parses(self):
+        # The same rule for the scripts that actually run the session: a syntax error must fail here, not on the lab.
+        # Skipped where no PowerShell is installed (the gate still runs on the lab host and on this workstation).
+        shell = shutil.which('pwsh') or shutil.which('powershell')
+        if not shell:
+            self.skipTest('no PowerShell on this host')
+        for path in sorted(HERE.rglob('*.ps1')):
+            with self.subTest(script=path.name):
+                probe = (
+                    "$e=$null;"
+                    f"$null=[System.Management.Automation.Language.Parser]::ParseFile('{path}',[ref]$null,[ref]$e);"
+                    "if($e){$e|ForEach-Object{$_.Extent.StartLineNumber.ToString()+': '+$_.Message};exit 1}"
+                )
+                done = subprocess.run([shell, '-NoProfile', '-NonInteractive', '-Command', probe],
+                                      capture_output=True, text=True, timeout=120)
+                self.assertEqual(done.returncode, 0, f'{path.name} does not parse:\n{done.stdout}{done.stderr}')
 
 
 class Screenshots(unittest.TestCase):
