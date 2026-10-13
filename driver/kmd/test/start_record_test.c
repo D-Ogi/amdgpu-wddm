@@ -325,14 +325,15 @@ static NTSTATUS guardStatus;
 static NTSTATUS GuardCheckAndCountStart(BOOLEAN durableNeeded) { (void)durableNeeded; return guardStatus; }
 static void StartHealthBegin(BC250_DEVICE* d, BOOLEAN f) { (void)d; (void)f; }
 static void StartHealthClose(BC250_DEVICE* d) { (void)d; Trace("hclose"); }
-static void StartHealthReady(BC250_DEVICE* d, BOOLEAN r) { (void)d; (void)r; }
+static unsigned readyCalls;
+static void StartHealthReady(BC250_DEVICE* d, BOOLEAN r) { (void)d; (void)r;readyCalls++; }
 static void CuModeBegin(BC250_DEVICE* d) { (void)d; }
 static void BoardMemoryIdentityClear(BC250_DEVICE* d) { (void)d; if (lastStage) Trace("bmclear"); }
 static void BoardMemoryIdentityCapture(BC250_DEVICE* d) { (void)d; }
 static void BoardMemoryStart(BC250_DEVICE* d) { (void)d; }
 static void BoardMemoryStop(BC250_DEVICE* d) { (void)d; Trace("bmstop"); }
 static void BoardProviderBind(BC250_DEVICE* d) { (void)d; }
-static NTSTATUS fbStatus, wddmStatus, timingStatus, smuStatus;
+static NTSTATUS fbStatus, wddmStatus, timingStatus, smuStatus, connectorStatus;
 static unsigned connectorPrepares,connectorStarts,connectorDirty;
 static NTSTATUS ConnectorBufferPrepare(BC250_DEVICE* d) {
     connectorPrepares++;
@@ -340,7 +341,7 @@ static NTSTATUS ConnectorBufferPrepare(BC250_DEVICE* d) {
        d->RuntimeDisplayChanged || d->RuntimePlaneBlank) connectorDirty++;
     return STATUS_SUCCESS;
 }
-static NTSTATUS ConnectorStart(BC250_DEVICE* d) { (void)d;connectorStarts++;return STATUS_SUCCESS; }
+static NTSTATUS ConnectorStart(BC250_DEVICE* d) { (void)d;connectorStarts++;return connectorStatus; }
 // What the record says at this point of the start, for the case where the machine never reaches the end of it, and
 // for the case where the write of the record was torn: nothing of the last start may still stand here.
 static WCHAR resultInsideStart[16], stepInsideStart[64];
@@ -428,9 +429,9 @@ static void Reset(void)
     dev.RuntimePostValid=dev.RuntimeDisplayChanged=dev.RuntimePlaneBlank=1;
     memset(&iface, 0, sizeof(iface));
     trace[0] = 0; logCount = 0; lastStage = 0; durable = 0;
-    opens = creates = closes = flushes = writeOps = stops = 0;
+    opens = creates = closes = flushes = writeOps = stops = readyCalls = 0;
     failAt = 0; openStatus = createStatus = writeStatus = flushStatus = STATUS_SUCCESS;
-    fbStatus = wddmStatus = timingStatus = smuStatus = guardStatus = STATUS_SUCCESS;
+    fbStatus = wddmStatus = timingStatus = smuStatus = guardStatus = connectorStatus = STATUS_SUCCESS;
     unconfirmed = 1; keepLog = 0; enableNativeSmu = 0; poolRefused = 0;
     ringTotal = 12; ringLongLines = 0; ringEmptyAt = -1; ringGrowOnStop = 0;
     wddmSubStep = NULL; g_Irql = PASSIVE_LEVEL;
@@ -497,6 +498,7 @@ int main(void)
             {"native SMU owner", L"SmuOwnerStart", (ULONG)STATUS_ACCESS_DENIED},
             {"WDDM start", L"WddmStart", (ULONG)STATUS_DEVICE_NOT_READY},
             {"inherited timing", L"DisplayPrepareInheritedTiming", (ULONG)STATUS_UNSUCCESSFUL},
+            {"connector admission", L"ConnectorStart", (ULONG)STATUS_DEVICE_NOT_READY},
         };
         unsigned i;
         for (i = 0; i < RTL_NUMBER_OF(table); i++) {
@@ -508,10 +510,12 @@ int main(void)
             if (i == 4) { enableNativeSmu = 1; dev.Mmio = &dev; smuStatus = STATUS_ACCESS_DENIED; }
             if (i == 5) wddmStatus = STATUS_DEVICE_NOT_READY;
             if (i == 6) timingStatus = STATUS_UNSUCCESSFUL;
+            if (i == 7) connectorStatus = STATUS_DEVICE_NOT_READY;
             CHECK((ULONG)Start() == table[i].status);
             // KeepLog is 0, the release value: the record is written all the same. That is the defect.
             CHECK(RecordIs(L"failed", table[i].step, L"-", table[i].status, StageStartFailed));
             CHECK(durable == 1);
+            CHECK(readyCalls == 0);
             CHECK(LogLines(NULL) == 12);
             if (failures) { printf("  (step case: %s)\n", table[i].what); break; }
         }

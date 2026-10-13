@@ -21,8 +21,12 @@ typedef struct {long long QuadPart;} LARGE_INTEGER;
 #define STATUS_INVALID_PARAMETER (-7L)
 #define D3DDDI_ROTATION_IDENTITY 1u
 #define BC250_WDDM_MAGIC_ALLOCATION 1u
+#define BC250_CHILD_UID 0x250001ul
 #define WddmDdiDescribeAllocation 1u
-#define GuardLog(...) ((void)0)
+static unsigned guardLines;
+static char lastGuard[512];
+static void GuardLog(const char* fmt,...)
+{va_list args;va_start(args,fmt);vsnprintf(lastGuard,sizeof(lastGuard),fmt,args);va_end(args);guardLines++;}
 #define STATUS_SUCCESS 0L
 #define STATUS_NOT_SUPPORTED (-1L)
 #define STATUS_DEVICE_DATA_ERROR (-2L)
@@ -41,17 +45,25 @@ typedef struct {long long QuadPart;} LARGE_INTEGER;
 typedef struct {UINT cx,cy;} REGION;
 typedef struct {UINT Numerator,Denominator;} RATIONAL;
 typedef struct {UINT VideoStandard;REGION TotalSize,ActiveSize;RATIONAL VSyncFreq,HSyncFreq;SIZE_T PixelRate;UINT ScanLineOrdering;} D3DKMDT_VIDEO_SIGNAL_INFO;
+struct TEST_VIDPN_INTERFACE;
 #include "dcn_scale.h"
 #include "edid.h"
+#include "../shim/bc250_ddc.h"
 typedef struct {BC250_INHERITED_PIPE InheritedPipe;NTSTATUS InheritedPipeStatus;
     ULONG InheritedSupport;BOOLEAN InheritedFixed;
+    volatile long InheritedSupportCalls,InheritedCofuncCalls,InheritedCommitCalls;
+    ULONG Requested;BOOLEAN EdidValid,DpcdValid;BC250_DUAL_MODE_ADAPTER Adapter;
     ULONG Level,Refusals,Commits,Changes,Busy,Scaling;
     NTSTATUS LastStatus;BOOLEAN Suspended,PipeChanged;int Lock;
     long SourceWidth,SourceHeight;BC250_MODE_LIST Modes;
     BC250_SCALER_PLAN Plan;BC250_SCALER_RESULT LastResult;} BC250_MODESET;
-typedef struct {void* Mmio;int FullWddm,ComposedSourceModes;struct {ULONG Width,Height,Pitch;} Post;
+typedef struct {void* Mmio;int FullWddm,ComposedSourceModes,DcnWriteEnabled;struct {ULONG Width,Height,Pitch;} Post;
     D3DKMDT_VIDEO_SIGNAL_INFO InheritedSignal;BOOLEAN InheritedSignalValid,InheritedTmds;BC250_MODESET Modeset;
-    BOOLEAN ModeActive; ULONG CommittedSourceWidth,CommittedSourceHeight;} BC250_DEVICE;
+    BOOLEAN ModeActive,CommitSeen; ULONG CommittedSourceWidth,CommittedSourceHeight,CommittedSourceFormat;
+    struct {ULONG StartAccepted;} Connector;
+    struct {NTSTATUS (*DxgkCbQueryVidPnInterface)(void*,unsigned,const struct TEST_VIDPN_INTERFACE**);
+        void *DxgkCbSynchronizeExecution,*DxgkCbQueueDpc,*DxgkCbIndicateChildStatus;} Dxgk;
+} BC250_DEVICE;
 
 // This gate retains the inherited route. Dynamic selection has its own actual
 // helper gate; these transport seams must never be reached here.
@@ -95,6 +107,11 @@ NTSTATUS DisplayValidateInheritedSignal(BC250_DEVICE*);
 #include "describe_timing_actual.inc"
 #include "inherited_vidpn_fixture.h"
 #include "inherited_vidpn_actual.inc"
+#include "inherited_negotiation_fixture.h"
+#include "inherited_negotiation_actual.inc"
+#include "display_inherited_vidpn.h"
+#include "inherited_ddi_actual.inc"
+#include "inherited_vidpn_commit_actual.inc"
 static NTSTATUS TestFillSignalInfo(BC250_DEVICE* d,D3DKMDT_VIDEO_SIGNAL_INFO* s)
 {
     NTSTATUS result=DisplayPrepareInheritedTiming(d);
@@ -177,6 +194,8 @@ static void Adapter(BC250_DEVICE* d)
 #include "inherited_pipe_cases.h"
 #include "inherited_vidpn_cases.h"
 #include "inherited_field38_cases.h"
+#include "inherited_start_cases.h"
+#include "inherited_negotiation_cases.h"
 int main(int argc,char** argv)
 {
     BC250_DEVICE d={0};D3DKMDT_VIDEO_SIGNAL_INFO s;unsigned before;
@@ -201,6 +220,8 @@ int main(int argc,char** argv)
     InheritedPipeCases();
     InheritedVidpnCases();
     InheritedField38Cases();refusedLogs=0;
+    InheritedStartCases();refusedLogs=0;
+    NegotiationCases();refusedLogs=0;
     Mode(&d,1920,1200,2080,1235,154000000);
     CHECK(TestFillSignalInfo(&d,&s)==STATUS_SUCCESS && reads==2*TimingCount && refusedLogs==0);
     CHECK(s.TotalSize.cx==2080 && s.TotalSize.cy==1235 && s.ActiveSize.cx==1920 && s.ActiveSize.cy==1200);

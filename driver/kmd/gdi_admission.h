@@ -46,6 +46,7 @@ typedef struct _BC250_STDALLOC_REQUEST {
     int Fill;                       // pAllocationPrivateDriverData != NULL; NULL is the size query
     unsigned long Bytes;            // AllocationPrivateDriverDataSize, read in the fill phase only
     unsigned long OsBuild;          // start-latched RtlGetVersion build
+    int StagingAperture;            // BD-156: the GPU Present route is on and segment 2 is offered (start-latched)
     int ResourceFill;               // pResourcePrivateDriverData != NULL
     unsigned long ResourceBytes;
 } BC250_STDALLOC_REQUEST;
@@ -65,6 +66,11 @@ typedef struct _BC250_STDALLOC_ANSWER {
 // BD-135: a 24H2 CDD shadow keeps CPU backing in the coherent aperture. It is not a primary: CDD locks it,
 // then blits to the primary. Protected local-memory locks can reach Rotate without a process heap on 26100.
 // E26R v2 already expresses this placement, so the LB7A allocation and all UMD parsers stay unchanged.
+// BD-156: a staging surface is the destination of a redirected Blt that DWM sends through GDI. The GPU Present
+// writes it, then dxgkrnl locks it and EngCopyBits reads it on the CPU under the USER/GDI locks, every frame. In
+// local memory that read goes through an uncached view (about 50 ms for 1546x831, the whole desktop waits on it),
+// so it gets the same coherent, cached aperture placement as the 24H2 shadow. Only on the GPU Present route: the
+// CPU Blt path copies into contiguous local memory and refuses an aperture destination.
 static __inline int Bc250StdAllocDecide(const BC250_STDALLOC_REQUEST* R, BC250_STDALLOC_ANSWER* A)
 {
     BC250_GDI_ALLOCATION_POLICY policy;
@@ -79,7 +85,8 @@ static __inline int Bc250StdAllocDecide(const BC250_STDALLOC_REQUEST* R, BC250_S
     A->ResourceBytes = 0;
     A->Resource[0] = A->Resource[1] = A->Resource[2] = A->Resource[3] = 0;
     if (R->Kind < BC250_STDALLOC_PRIMARY || R->Kind > BC250_STDALLOC_GDI || !R->Described) return BC250_STDALLOC_INPUT;
-    if (R->Kind == BC250_STDALLOC_SHADOW && R->OsBuild >= 26100) {
+    if ((R->Kind == BC250_STDALLOC_SHADOW && R->OsBuild >= 26100) ||
+        (R->Kind == BC250_STDALLOC_STAGING && R->StagingAperture)) {
         A->Resource[0] = BC250_SURFACE_RESOURCE_MAGIC;
         A->Resource[1] = 2;
         A->Resource[2] = 1;  // aperture placement, not a request to change OS sharing/protection

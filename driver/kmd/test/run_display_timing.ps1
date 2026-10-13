@@ -9,13 +9,31 @@ $last=$source.IndexOf('static NTSTATUS OfferSourceMode(',$first)
 $code=$source.Substring($first,$last-$first)
 [IO.File]::WriteAllText((Join-Path $Out 'display_timing_actual.inc'),$code)
 $vidpn=''
-foreach($signature in @('static ULONG ScalingFromPath(','static BOOLEAN ScalingPinned(','static BOOLEAN DisplayInheritedModeMatches(','NTSTATUS Bc250UpdateActiveVidPnPresentPath(')){
+foreach($signature in @('static ULONG ScalingFromPath(','static BOOLEAN ScalingPinned(','static const char* DisplayInheritedModeRefusal(','static BOOLEAN DisplayInheritedModeMatches(','NTSTATUS Bc250UpdateActiveVidPnPresentPath(')){
     $first=$source.IndexOf($signature)
     $last=$source.IndexOf("`n}",$first)+3
     if($first -lt 0 -or $last -lt $first){throw "Missing body: $signature"}
     $vidpn+=$source.Substring($first,$last-$first)+"`n"
 }
 [IO.File]::WriteAllText((Join-Path $Out 'inherited_vidpn_actual.inc'),$vidpn)
+$negotiation=''
+foreach($signature in @('static NTSTATUS OfferSourceMode(','static NTSTATUS OfferTargetMode(','static NTSTATUS SourceModeIsPinned(','static NTSTATUS TargetModeIsPinned(')){
+    $first=$source.IndexOf($signature);$last=$source.IndexOf("`n}",$first)+3
+    if($first -lt 0 -or $last -lt $first){throw "Missing body: $signature"}
+    $negotiation+=$source.Substring($first,$last-$first)+"`n"
+}
+[IO.File]::WriteAllText((Join-Path $Out 'inherited_negotiation_actual.inc'),$negotiation)
+$ddi=''
+foreach($signature in @('NTSTATUS Bc250IsSupportedVidPn(','NTSTATUS Bc250EnumVidPnCofuncModality(')){
+    $first=$source.IndexOf($signature);$last=$source.IndexOf("`n}",$first)+3
+    if($first -lt 0 -or $last -lt $first){throw "Missing body: $signature"}
+    $ddi+=$source.Substring($first,$last-$first)+"`n"
+}
+[IO.File]::WriteAllText((Join-Path $Out 'inherited_ddi_actual.inc'),$ddi)
+$first=$source.IndexOf('static NTSTATUS CommitVidPnCore(')
+$last=$source.IndexOf("`n}",$first)+3
+if($first -lt 0 -or $last -lt $first){throw 'CommitVidPnCore not found'}
+[IO.File]::WriteAllText((Join-Path $Out 'inherited_vidpn_commit_actual.inc'),$source.Substring($first,$last-$first))
 $modeset=Get-Content (Join-Path $repo 'driver\kmd\modeset.c') -Raw
 $first=$modeset.IndexOf('NTSTATUS ModesetPrepareInherited(')
 $last=$modeset.IndexOf('static ULONG InheritedScalingDefault(',$first)
@@ -26,6 +44,13 @@ foreach($signature in @('static ULONG InheritedScalingDefault(','NTSTATUS Modese
     $last=$modeset.IndexOf("`n}",$first)+3
     if($first -lt 0 -or $last -lt $first){throw "Missing body: $signature"}
     $inherited+=$modeset.Substring($first,$last-$first)+"`n"
+}
+$connector=Get-Content (Join-Path $repo 'driver\kmd\connector.c') -Raw
+foreach($signature in @('static BOOLEAN ConnectorNeedsInherited(','static NTSTATUS ConnectorStartInherited(')){
+    $first=$connector.IndexOf($signature)
+    $last=$connector.IndexOf("`n}",$first)+3
+    if($first -lt 0 -or $last -lt $first){throw "Missing body: $signature"}
+    $inherited+=$connector.Substring($first,$last-$first)+"`n"
 }
 [IO.File]::WriteAllText((Join-Path $Out 'inherited_actual.inc'),$inherited)
 $wddm=Get-Content (Join-Path $repo 'driver\kmd\wddm.c') -Raw

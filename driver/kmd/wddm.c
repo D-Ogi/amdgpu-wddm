@@ -4415,6 +4415,7 @@ static NTSTATUS Bc250WddmGetStandardAllocationDriverData(_In_ const HANDLE hAdap
     request.Fill = pData->pAllocationPrivateDriverData != NULL;
     request.Bytes = request.Fill ? pData->AllocationPrivateDriverDataSize : 0;
     request.OsBuild = wddm != NULL ? wddm->OsBuildNumber : 0;
+    request.StagingAperture = wddm != NULL && wddm->GpuPresentGate && g_ApertureOffered;
     request.ResourceFill = pData->pResourcePrivateDriverData != NULL;
     request.ResourceBytes = request.ResourceFill ? pData->ResourcePrivateDriverDataSize : 0;
     switch (pData->StandardAllocationType)
@@ -4484,7 +4485,8 @@ static NTSTATUS Bc250WddmGetStandardAllocationDriverData(_In_ const HANDLE hAdap
             pData->pCreateGdiSurfaceData->Pitch = answer.Surface.Pitch;
     }
 
-    // Two passes: a NULL buffer asks only for the size. Only a 24H2+ shadow gets an E26R resource record.
+    // Two passes: a NULL buffer asks only for the size. Only a 24H2+ shadow and, on the GPU Present route, a
+    // staging surface (BD-156) get an E26R resource record.
     if (request.Fill)
     {
         if (answer.PrivateBytes == sizeof(gdi)) {
@@ -4503,8 +4505,9 @@ static NTSTATUS Bc250WddmGetStandardAllocationDriverData(_In_ const HANDLE hAdap
     pData->ResourcePrivateDriverDataSize = answer.ResourceBytes;
 
     if (WddmFirstCalls(wddm, WddmDdiGetStandardAllocationDriverData))
-        GuardLog("wddm: GetStandardAllocationDriverData type %u %ux%u format %u -> %llu bytes",
-                 request.Kind, answer.Surface.Width, answer.Surface.Height, answer.Surface.Format, answer.Surface.Size);
+        GuardLog("wddm: GetStandardAllocationDriverData type %u %ux%u format %u -> %llu bytes, record %u",
+                 request.Kind, answer.Surface.Width, answer.Surface.Height, answer.Surface.Format, answer.Surface.Size,
+                 answer.ResourceBytes);
     return STATUS_SUCCESS;
 }
 

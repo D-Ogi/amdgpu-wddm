@@ -1179,7 +1179,13 @@ NTSTATUS DcnFlipSourceAddress(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddres
         }
         Device->DcnDiverged=(physical!=Device->DcnFirmwareAddress || Pitch!=Device->DcnFirmwarePitch ||
                              PlaneFormat!=BC250_PLANE_FORMAT_ARGB8888);
-        if (InterlockedIncrement(&Device->DcnFlipsHardware) <= BC250_DCN_LOG_CALLS)
+        current=(ULONG)InterlockedIncrement(&Device->DcnFlipsHardware);
+        if (current==1 && Device->Modeset.InheritedFixed)
+            GuardLog("dcnflip: first inherited flip source %lux%lu pitch %lu target %ux%u support %lX",
+                DisplaySourceWidth(Device),DisplaySourceHeight(Device),Pitch,
+                Device->InheritedSignal.ActiveSize.cx,Device->InheritedSignal.ActiveSize.cy,
+                Device->Modeset.InheritedSupport);
+        if (current <= BC250_DCN_LOG_CALLS)
             GuardLog("dcnflip: SetVidPnSourceAddress flip: card 0x%llX -> physical 0x%llX", CardAddress, physical);
     }
     else if (InterlockedIncrement(&Device->DcnFlipRefused) <= BC250_DCN_LOG_CALLS)

@@ -617,17 +617,24 @@ static void RecordDerivation(void)
 // Follow the standard-allocation answer through the real resource parser and allocation admission.
 // A shadow can be CPU-read and blitted, but must never become a scan-out primary. The old OS answer,
 // the primary, and all other standard kinds retain their exact private-data sizes and placement.
+// BD-156: on the GPU Present route a staging surface (GPU-written, CPU-read by EngCopyBits) takes the same
+// coherent cached aperture on every build; with the route closed it keeps local memory, as before.
+// LegacyControl 1 answers every shadow as before BD-135, 2 every staging surface as before BD-156.
 static void ShadowBacking(int LegacyControl)
 {
     static const unsigned long builds[] = { 22621, 22631, 26099, 26100, 26200, 26300 };
     unsigned long b, kind, type;
-    for (b = 0; b < sizeof(builds) / sizeof(builds[0]); b++) for (kind = 1; kind <= 4; kind++) {
+    int gate;
+    for (b = 0; b < sizeof(builds) / sizeof(builds[0]); b++) for (kind = 1; kind <= 4; kind++)
+    for (gate = 0; gate < 2; gate++) {
         BC250_STDALLOC_REQUEST r = Gdi(1, 1920, 1080, FMT_A8R8G8B8, 0);
         BC250_STDALLOC_ANSWER a, fill;
         BC250_GDI_ALLOCATION_POLICY p, admitted;
-        int changed = kind == BC250_STDALLOC_SHADOW && builds[b] >= 26100;
+        int changed = (kind == BC250_STDALLOC_SHADOW && builds[b] >= 26100) ||
+                      (kind == BC250_STDALLOC_STAGING && gate);
         r.Kind = kind;
-        r.OsBuild = LegacyControl ? 22621 : builds[b];
+        r.OsBuild = LegacyControl == 1 ? 22621 : builds[b];
+        r.StagingAperture = LegacyControl == 2 ? 0 : gate;
         CHECK(Bc250StdAllocDecide(&r, &a) == BC250_STDALLOC_OK && !a.PublishPitch);
         CHECK(a.PrivateBytes == (kind == BC250_STDALLOC_GDI ? 48u : 32u));
         CHECK(a.ResourceBytes == (changed ? 16u : 0u));
@@ -661,6 +668,10 @@ int main(int argc, char** argv)
 {
     if (argc == 2 && strcmp(argv[1], "--legacy-shadow-control") == 0) {
         ShadowBacking(1);  // must fail: the pre-BD-135 placement cannot meet the new shadow contract
+        return g_failures ? 1 : 0;
+    }
+    if (argc == 2 && strcmp(argv[1], "--legacy-staging-control") == 0) {
+        ShadowBacking(2);  // must fail: the pre-BD-156 staging placement cannot meet the new contract
         return g_failures ? 1 : 0;
     }
     ShadowBacking(0);

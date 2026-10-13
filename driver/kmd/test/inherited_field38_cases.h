@@ -65,20 +65,23 @@ static void InheritedField38Cases(void)
         BC250_SCALING_BIT(BC250_SCALING_ASPECT);
     IoOpen(&d,&io,0);
     for(autocal=0;autocal<=1;autocal++)for(boundary=0;boundary<=1;boundary++) {
+        const unsigned long expected=autocal?BC250_SCALING_BIT(BC250_SCALING_STRETCHED):custom;
         Mode(&d,2560,1440,2720,1481,241500000);
         d.Post.Width=800;d.Post.Height=600;d.Post.Pitch=3328;
         Field38Fixture(autocal?1ul:0x100ul,boundary);
         CHECK(Bc250InheritedPipeRead(&io,&p)==0);
         CHECK(p.Valid==BC250_INHERITED_PIPE_ALL);
-        CHECK(Bc250InheritedPipeSupport(&p,800,600,3328,2560,1440)==custom);
+        CHECK(Bc250InheritedPipeSupport(&p,800,600,3328,2560,1440)==expected);
         q=p;q.Valid=(1ul<<21)-1; // original record has no automatic-mode observation
         CHECK(!Bc250InheritedPipeSupport(&q,800,600,3328,2560,1440));
         CHECK(TestFillSignalInfo(&d,&signal)==0 && d.InheritedSignalValid);
         CHECK(signal.PixelRate==241500000 && signal.ActiveSize.cx==2560 && signal.ActiveSize.cy==1440);
-        CHECK(d.Modeset.InheritedFixed && d.Modeset.InheritedSupport==custom);
-        CHECK(ModesetScalingSupport(&d,800,600)==custom && !ModesetScalingSupport(&d,1024,768));
-        CHECK(ModesetCommit(&d,800,600,BC250_SCALING_COUNT)==0 && d.Modeset.Scaling==BC250_SCALING_CUSTOM);
-        CHECK(ModesetCommit(&d,800,600,BC250_SCALING_STRETCHED)==STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED);
+        CHECK(d.Modeset.InheritedFixed && d.Modeset.InheritedSupport==expected);
+        CHECK(ModesetScalingSupport(&d,800,600)==expected && !ModesetScalingSupport(&d,1024,768));
+        CHECK(ModesetCommit(&d,800,600,BC250_SCALING_COUNT)==0 &&
+            d.Modeset.Scaling==(ULONG)(autocal?BC250_SCALING_STRETCHED:BC250_SCALING_CUSTOM));
+        CHECK(ModesetCommit(&d,800,600,autocal?BC250_SCALING_CUSTOM:BC250_SCALING_STRETCHED)==
+            STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED);
         {
             D3DKMDT_VIDPN_SOURCE_MODE mode={0};D3DKMDT_VIDPN_PRESENT_PATH path={0};
             DXGKARG_UPDATEACTIVEVIDPNPRESENTPATH update={0};
@@ -86,12 +89,13 @@ static void InheritedField38Cases(void)
             mode.Format.Graphics.PrimSurfSize.cx=800;mode.Format.Graphics.PrimSurfSize.cy=600;
             mode.Format.Graphics.VisibleRegionSize=mode.Format.Graphics.PrimSurfSize;
             mode.Format.Graphics.Stride=3328;mode.Format.Graphics.PixelFormat=21;
-            path.ContentTransformation.Scaling=D3DKMDT_VPPS_CUSTOM;
+            path.ContentTransformation.Scaling=autocal?D3DKMDT_VPPS_STRETCHED:D3DKMDT_VPPS_CUSTOM;
+            path.VidPnTargetId=BC250_CHILD_UID;
             path.ContentTransformation.Rotation=D3DKMDT_VPPR_IDENTITY;
             CHECK(DisplayInheritedModeMatches(&d,&mode,&path,&signal));
             update.VidPnPresentPathInfo=path;
             CHECK(Bc250UpdateActiveVidPnPresentPath(&d,&update)==0);
-            path.ContentTransformation.Scaling=D3DKMDT_VPPS_STRETCHED;
+            path.ContentTransformation.Scaling=autocal?D3DKMDT_VPPS_CUSTOM:D3DKMDT_VPPS_STRETCHED;
             CHECK(!DisplayInheritedModeMatches(&d,&mode,&path,&signal));
         }
         CHECK(ModesetValidateInherited(&d)==0);
@@ -103,9 +107,9 @@ static void InheritedField38Cases(void)
         CHECK(pipeWrites==0 && commitPrograms==0 && commitTransactions==0);
         for(bottom=0;bottom<16;bottom++) {
             q=p;q.MpccBottom=bottom;
-            CHECK(Bc250InheritedPipeSupport(&q,800,600,3328,2560,1440)==custom);
+            CHECK(Bc250InheritedPipeSupport(&q,800,600,3328,2560,1440)==expected);
             q.MpccControl=(q.MpccControl&~MPCC0_MPCC_CONTROL__MPCC_MODE_MASK)|2;
-            CHECK(Bc250InheritedPipeSupport(&q,800,600,3328,2560,1440)==(bottom==15?custom:0));
+            CHECK(Bc250InheritedPipeSupport(&q,800,600,3328,2560,1440)==(bottom==15?expected:0));
         }
         q=p;q.MpccControl=3;CHECK(!Bc250InheritedPipeSupport(&q,800,600,3328,2560,1440));
         q=p;q.MpccControl=0;CHECK(!Bc250InheritedPipeSupport(&q,800,600,3328,2560,1440));
@@ -118,7 +122,7 @@ static void InheritedField38Cases(void)
                 (count<<DSCL0_DSCL_AUTOCAL__AUTOCAL_NUM_PIPE__SHIFT) |
                 (id<<DSCL0_DSCL_AUTOCAL__AUTOCAL_PIPE_ID__SHIFT);
             CHECK(Bc250InheritedPipeSupport(&q,800,600,3328,2560,1440)==
-                ((autocal && (count || id))?0:custom));
+                ((autocal && (count || id))?0:expected));
         }
         q=p;q.Shape.SclMode=0;CHECK(!Bc250InheritedPipeSupport(&q,800,600,3328,2560,1440));
         q=p;q.Shape.MemPwrCtrl=DSCL0_DSCL_MEM_PWR_CTRL__LUT_MEM_PWR_FORCE_MASK;
@@ -126,9 +130,9 @@ static void InheritedField38Cases(void)
         q=p;q.Shape.RecoutSize=640|(480ul<<16);
         CHECK(!Bc250InheritedPipeSupport(&q,800,600,3328,2560,1440));
         q=p;q.RatioH=0;q.RatioV=0;
-        CHECK(Bc250InheritedPipeSupport(&q,800,600,3328,2560,1440)==(autocal?custom:0));
+        CHECK(Bc250InheritedPipeSupport(&q,800,600,3328,2560,1440)==(autocal?expected:0));
         q=p;q.RatioH=0x01000040;
-        CHECK(Bc250InheritedPipeSupport(&q,800,600,3328,2560,1440)==(autocal?custom:0));
+        CHECK(Bc250InheritedPipeSupport(&q,800,600,3328,2560,1440)==(autocal?expected:0));
         CHECK(pipeWrites==0 && io.StalledUs==0);
     }
     // A real read failure in either snapshot, including each new register,

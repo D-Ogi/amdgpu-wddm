@@ -9,6 +9,7 @@ static void InheritedVidpnCases(void)
     mode.Type=D3DKMDT_RMT_GRAPHICS;mode.Format.Graphics.PrimSurfSize.cx=1024;mode.Format.Graphics.PrimSurfSize.cy=768;
     mode.Format.Graphics.VisibleRegionSize=mode.Format.Graphics.PrimSurfSize;
     mode.Format.Graphics.Stride=4096;mode.Format.Graphics.PixelFormat=21;
+    path.VidPnTargetId=BC250_CHILD_UID;
     path.ContentTransformation.Scaling=D3DKMDT_VPPS_STRETCHED;path.ContentTransformation.Rotation=D3DKMDT_VPPR_IDENTITY;
     CHECK(DisplayInheritedModeMatches(&d,&mode,&path,&s));
     update.VidPnPresentPathInfo=path;
@@ -17,7 +18,7 @@ static void InheritedVidpnCases(void)
     CHECK(Bc250UpdateActiveVidPnPresentPath(&d,&update)==STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED);
     update.VidPnPresentPathInfo=path;update.VidPnPresentPathInfo.VidPnSourceId=1;
     CHECK(Bc250UpdateActiveVidPnPresentPath(&d,&update)==STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED);
-    update.VidPnPresentPathInfo=path;update.VidPnPresentPathInfo.VidPnTargetId=1;
+    update.VidPnPresentPathInfo=path;update.VidPnPresentPathInfo.VidPnTargetId=0;
     CHECK(Bc250UpdateActiveVidPnPresentPath(&d,&update)==STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED);
     update.VidPnPresentPathInfo=path;update.VidPnPresentPathInfo.ContentTransformation.Scaling=D3DKMDT_VPPS_IDENTITY;
     CHECK(Bc250UpdateActiveVidPnPresentPath(&d,&update)==STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED);
@@ -31,7 +32,7 @@ static void InheritedVidpnCases(void)
     other=path;other.ContentTransformation.Scaling=253;
     CHECK(!DisplayInheritedModeMatches(&d,&mode,&other,&s));
     other=path;other.ContentTransformation.Rotation=2;CHECK(!DisplayInheritedModeMatches(&d,&mode,&other,&s));
-    other=path;other.VidPnTargetId=1;CHECK(!DisplayInheritedModeMatches(&d,&mode,&other,&s));
+    other=path;other.VidPnTargetId=0;CHECK(!DisplayInheritedModeMatches(&d,&mode,&other,&s));
     other=path;other.VidPnSourceId=1;CHECK(!DisplayInheritedModeMatches(&d,&mode,&other,&s));
     other=path;other.VisibleFromActiveTLOffset.cx=1;CHECK(!DisplayInheritedModeMatches(&d,&mode,&other,&s));
     other=path;other.VisibleFromActiveBROffset.cy=1;CHECK(!DisplayInheritedModeMatches(&d,&mode,&other,&s));

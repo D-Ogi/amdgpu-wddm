@@ -973,35 +973,46 @@ static NTSTATUS TargetModeIsPinned(_In_ const DXGK_VIDPN_INTERFACE* VidPn, D3DKM
 
 // Exact inherited tuple only. The same check serves IsSupportedVidPn and the
 // final commit, so a saved OS mode cannot silently reprogram this pipeline.
-static BOOLEAN DisplayInheritedModeMatches(const BC250_DEVICE* Device,
+static const char* DisplayInheritedModeRefusal(const BC250_DEVICE* Device,
     const D3DKMDT_VIDPN_SOURCE_MODE* Mode, const D3DKMDT_VIDPN_PRESENT_PATH* Path,
     const D3DKMDT_VIDEO_SIGNAL_INFO* Target)
 {
     const D3DKMDT_VIDEO_SIGNAL_INFO* actual = &Device->InheritedSignal;
     ULONG scaling = ScalingFromPath(Path->ContentTransformation.Scaling);
-    return Device->InheritedSignalValid && Mode->Type == D3DKMDT_RMT_GRAPHICS &&
-        Path->VidPnSourceId == 0 && Path->VidPnTargetId == 0 &&
-        (Path->ContentTransformation.Rotation == D3DKMDT_VPPR_IDENTITY ||
-         Path->ContentTransformation.Rotation == D3DKMDT_VPPR_UNPINNED ||
-         Path->ContentTransformation.Rotation == D3DKMDT_VPPR_UNINITIALIZED) &&
-        (!ScalingPinned(Path->ContentTransformation.Scaling) ||
-         (scaling < BC250_SCALING_COUNT && (Device->Modeset.InheritedSupport & BC250_SCALING_BIT(scaling)))) &&
-        Path->VisibleFromActiveTLOffset.cx == 0 && Path->VisibleFromActiveTLOffset.cy == 0 &&
-        Path->VisibleFromActiveBROffset.cx == 0 && Path->VisibleFromActiveBROffset.cy == 0 &&
-        Mode->Format.Graphics.PrimSurfSize.cx == Device->Post.Width &&
-        Mode->Format.Graphics.PrimSurfSize.cy == Device->Post.Height &&
-        Mode->Format.Graphics.VisibleRegionSize.cx == Device->Post.Width &&
-        Mode->Format.Graphics.VisibleRegionSize.cy == Device->Post.Height &&
-        Bc250SourceModeAdmitted(Device->ComposedSourceModes,(ULONG)Mode->Format.Graphics.PixelFormat) &&
-        Mode->Format.Graphics.Stride == Bc250SourceModeStride((ULONG)Mode->Format.Graphics.PixelFormat,Device->Post.Pitch) &&
-        Target->ActiveSize.cx == actual->ActiveSize.cx && Target->ActiveSize.cy == actual->ActiveSize.cy &&
-        Target->TotalSize.cx == actual->TotalSize.cx && Target->TotalSize.cy == actual->TotalSize.cy &&
-        Target->PixelRate == actual->PixelRate && Target->ScanLineOrdering == actual->ScanLineOrdering &&
-        Target->HSyncFreq.Denominator && Target->VSyncFreq.Denominator &&
-        (ULONGLONG)Target->HSyncFreq.Numerator * actual->HSyncFreq.Denominator ==
-            (ULONGLONG)actual->HSyncFreq.Numerator * Target->HSyncFreq.Denominator &&
-        (ULONGLONG)Target->VSyncFreq.Numerator * actual->VSyncFreq.Denominator ==
-            (ULONGLONG)actual->VSyncFreq.Numerator * Target->VSyncFreq.Denominator;
+    if (!Device->InheritedSignalValid) return "signal-invalid";
+    if (Mode->Type != D3DKMDT_RMT_GRAPHICS) return "source-type";
+    if (Path->VidPnSourceId != 0 || Path->VidPnTargetId != BC250_CHILD_UID) return "path-ids";
+    if (Path->ContentTransformation.Rotation != D3DKMDT_VPPR_IDENTITY &&
+        Path->ContentTransformation.Rotation != D3DKMDT_VPPR_UNPINNED &&
+        Path->ContentTransformation.Rotation != D3DKMDT_VPPR_UNINITIALIZED &&
+        Path->ContentTransformation.Rotation != D3DKMDT_VPPR_NOTSPECIFIED) return "rotation";
+    if (!Device->Modeset.InheritedSupport || (ScalingPinned(Path->ContentTransformation.Scaling) &&
+        (scaling >= BC250_SCALING_COUNT || !(Device->Modeset.InheritedSupport & BC250_SCALING_BIT(scaling))))) return "scaling";
+    if (Path->VisibleFromActiveTLOffset.cx || Path->VisibleFromActiveTLOffset.cy ||
+        Path->VisibleFromActiveBROffset.cx || Path->VisibleFromActiveBROffset.cy) return "visible-offset";
+    if (Mode->Format.Graphics.PrimSurfSize.cx != Device->Post.Width ||
+        Mode->Format.Graphics.PrimSurfSize.cy != Device->Post.Height) return "source-size";
+    if (Mode->Format.Graphics.VisibleRegionSize.cx != Device->Post.Width ||
+        Mode->Format.Graphics.VisibleRegionSize.cy != Device->Post.Height) return "source-visible";
+    if (!Bc250SourceModeAdmitted(Device->ComposedSourceModes,(ULONG)Mode->Format.Graphics.PixelFormat)) return "source-format";
+    if (Mode->Format.Graphics.Stride != Bc250SourceModeStride((ULONG)Mode->Format.Graphics.PixelFormat,Device->Post.Pitch)) return "source-stride";
+    if (Target->ActiveSize.cx != actual->ActiveSize.cx || Target->ActiveSize.cy != actual->ActiveSize.cy) return "target-active";
+    if (Target->TotalSize.cx != actual->TotalSize.cx || Target->TotalSize.cy != actual->TotalSize.cy) return "target-total";
+    if (Target->PixelRate != actual->PixelRate) return "target-clock";
+    if (Target->ScanLineOrdering != actual->ScanLineOrdering) return "target-scan";
+    if (!Target->HSyncFreq.Denominator || !Target->VSyncFreq.Denominator ||
+        (ULONGLONG)Target->HSyncFreq.Numerator * actual->HSyncFreq.Denominator !=
+            (ULONGLONG)actual->HSyncFreq.Numerator * Target->HSyncFreq.Denominator ||
+        (ULONGLONG)Target->VSyncFreq.Numerator * actual->VSyncFreq.Denominator !=
+            (ULONGLONG)actual->VSyncFreq.Numerator * Target->VSyncFreq.Denominator) return "target-frequency";
+    return NULL;
+}
+
+static BOOLEAN DisplayInheritedModeMatches(const BC250_DEVICE* Device,
+    const D3DKMDT_VIDPN_SOURCE_MODE* Mode, const D3DKMDT_VIDPN_PRESENT_PATH* Path,
+    const D3DKMDT_VIDEO_SIGNAL_INFO* Target)
+{
+    return DisplayInheritedModeRefusal(Device, Mode, Path, Target) == NULL;
 }
 
 // Runtime connector modes are exact, progressive, unscaled EDID targets. The
@@ -1289,6 +1300,8 @@ done:
     return status;
 }
 
+#include "display_inherited_vidpn.h"
+
 NTSTATUS Bc250IsSupportedVidPn(_In_ const HANDLE hAdapter, _Inout_ DXGKARG_ISSUPPORTEDVIDPN* IsSupportedVidPn)
 {
     BC250_DEVICE* device = (BC250_DEVICE*)hAdapter;
@@ -1299,6 +1312,11 @@ NTSTATUS Bc250IsSupportedVidPn(_In_ const HANDLE hAdapter, _Inout_ DXGKARG_ISSUP
     NTSTATUS status;
 
     IsSupportedVidPn->IsVidPnSupported = FALSE;
+    if (device->Modeset.InheritedFixed && !ConnectorIsEnabled(device)) {
+        status = DisplayInheritedVidPn(device, IsSupportedVidPn->hDesiredVidPn, NULL, FALSE,
+            &IsSupportedVidPn->IsVidPnSupported);
+        return status == STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED ? STATUS_SUCCESS : status;
+    }
     if (IsSupportedVidPn->hDesiredVidPn == NULL)        // the empty VidPN is always supported
     {
         IsSupportedVidPn->IsVidPnSupported = TRUE;
@@ -1378,6 +1396,10 @@ NTSTATUS Bc250EnumVidPnCofuncModality(_In_ const HANDLE hAdapter, _In_ const DXG
     if (ConnectorIsEnabled(device)) {
         BOOLEAN supported;
         return ConnectorVidPn(device, Enum->hConstrainingVidPn, Enum, FALSE, &supported);
+    }
+    if (device->Modeset.InheritedFixed) {
+        BOOLEAN supported;
+        return DisplayInheritedVidPn(device, Enum->hConstrainingVidPn, Enum, FALSE, &supported);
     }
     status = device->Dxgk.DxgkCbQueryVidPnInterface(Enum->hConstrainingVidPn, DXGK_VIDPN_INTERFACE_VERSION_V1, &vidpn);
     if (!NT_SUCCESS(status)) return status;
@@ -1553,6 +1575,10 @@ static NTSTATUS CommitVidPnCore(_In_ const HANDLE hAdapter, _In_ const DXGKARG_C
     DisplayRetainCommitPower(device,Commit);
     if (!device->CommitSeen) { device->CommitSeen = TRUE; GuardStage(StageFirstCommitVidPn); }
     if (Commit->Flags.PathPowerTransition) return STATUS_SUCCESS;       // no mode change, power only
+    if (device->Modeset.InheritedFixed && !ConnectorIsEnabled(device)) {
+        BOOLEAN supported;
+        return DisplayInheritedVidPn(device, Commit->hFunctionalVidPn, NULL, TRUE, &supported);
+    }
 
     if (ConnectorIsEnabled(device)) {
         BOOLEAN supported;
@@ -1631,6 +1657,7 @@ NTSTATUS Bc250CommitVidPn(_In_ const HANDLE hAdapter, _In_ const DXGKARG_COMMITV
 {
     BC250_DEVICE* device=(BC250_DEVICE*)hAdapter;
     NTSTATUS status;
+    BOOLEAN first=!device->CommitSeen;
     StartHealthEnter(device);
     status=CommitVidPnCore(hAdapter,Commit);
     // Only one inherited mode is accepted. Redundant commits of it preserve
@@ -1638,6 +1665,11 @@ NTSTATUS Bc250CommitVidPn(_In_ const HANDLE hAdapter, _In_ const DXGKARG_COMMITV
     StartHealthDisplayLocked(device,device->SourceVisible,
         (NT_SUCCESS(status) || ConnectorIsEnabled(device)) && device->ModeActive && !Commit->Flags.PathPoweredOff);
     StartHealthLeave(device);
+    if (first && device->Modeset.InheritedFixed)
+        GuardLog("display: first inherited commit status %08lX source %lux%lu pitch %u support %lX active %u power %u/%u",
+            (ULONG)status,device->CommittedSourceWidth,device->CommittedSourceHeight,device->Post.Pitch,
+            device->Modeset.InheritedSupport,(UINT)device->ModeActive,
+            Commit->Flags.PathPowerTransition,Commit->Flags.PathPoweredOff);
     // Outside the start-health mutex: the audio endpoint follows the monitor's power (DPMS off is an unplug for
     // audio, as Linux's az_disable), and takes only its own leaf lock (dpaudio.c).
     if (NT_SUCCESS(status) && Commit->Flags.PathPowerTransition)
@@ -1674,7 +1706,7 @@ NTSTATUS Bc250UpdateActiveVidPnPresentPath(_In_ const HANDLE hAdapter, _In_ cons
     // Check this even when scaling is unpinned and the call would be a no-op.
     if (device->Modeset.InheritedFixed &&
         (!device->InheritedSignalValid || Update->VidPnPresentPathInfo.VidPnSourceId != 0 ||
-         Update->VidPnPresentPathInfo.VidPnTargetId != 0 ||
+         Update->VidPnPresentPathInfo.VidPnTargetId != BC250_CHILD_UID ||
          Update->VidPnPresentPathInfo.VisibleFromActiveTLOffset.cx != 0 ||
          Update->VidPnPresentPathInfo.VisibleFromActiveTLOffset.cy != 0 ||
          Update->VidPnPresentPathInfo.VisibleFromActiveBROffset.cx != 0 ||
