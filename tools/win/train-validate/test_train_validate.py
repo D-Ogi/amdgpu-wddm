@@ -273,11 +273,14 @@ class ShippedManifest(unittest.TestCase):
         self.assertEqual(arm["kind"], "operator")
 
     def test_both_game_sessions_name_the_package_engine_and_icd(self):
-        # 2026-10-11, tester.28: without them run-m157.sh stages its old defaults as swap candidates.
-        for arm_id in ("w3-high-rt", "rottr"):
-            env = next(a for a in self.data["arms"] if a["id"] == arm_id)["env"]
-            self.assertEqual(env["M157_ENGINE"], "{pkg}/payload/d3d12/amdgpu_wddm_vkd3d.dll", arm_id)
-            self.assertEqual(env["M157_ICD"], "{pkg}/payload/d3d12/amdgpu_wddm_radv.dll", arm_id)
+        # 2026-10-11, tester.28: without them run-m157.sh stages its old defaults as swap candidates. Each runner
+        # reads its own names: run-m157.sh M157_ENGINE/M157_ICD, run-game.sh (session.py) SESSION_ENGINE/SESSION_ICD
+        # (train b33 rc4: the rottr arm named the M157 pair and its session staged the tester.28 engine and ICD).
+        for arm_id, runner, prefix in (("w3-high-rt", "run-m157.sh", "M157"), ("rottr", "run-game.sh", "SESSION")):
+            arm = next(a for a in self.data["arms"] if a["id"] == arm_id)
+            self.assertIn(runner, json.dumps(arm["run"]), arm_id)
+            self.assertEqual(arm["env"][prefix + "_ENGINE"], "{pkg}/payload/d3d12/amdgpu_wddm_vkd3d.dll", arm_id)
+            self.assertEqual(arm["env"][prefix + "_ICD"], "{pkg}/payload/d3d12/amdgpu_wddm_radv.dll", arm_id)
 
     def test_the_identity_read_expects_the_ring_vm_flush_of_the_release_default(self):
         # From train b31 EnableRingVmFlush absent = on; the GfxStart line is what the driver did.
@@ -733,6 +736,70 @@ class GameDrive(unittest.TestCase):
                           sys.executable, "-c", "import time; time.sleep(3)"])
         self.assertEqual(rc, module.FAILED)
         self.assertEqual((tmp / "control.py.log").read_text(encoding="utf-8").split(), ["peek", "quit"])
+
+    def test_a_session_that_ends_with_0_before_the_game_ran_fails_the_arm(self):
+        # Train b33 rc4, native-caps569: admission refused, run-game.sh ended with 0, and the arm read PASS.
+        import importlib
+        import sys
+        module = importlib.import_module("game-drive")
+        tmp = Path(self.enterContext(__import__("tempfile").TemporaryDirectory()))
+        control = tmp / "control.py"
+        control.write_text("import sys\nopen(sys.argv[0] + '.log', 'a').write(sys.argv[2] + '\\n')\n"
+                           "print('queue: 0 commands, 0 done, game running: False')\n", encoding="utf-8")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            rc = module.main(["--profile", "rottr", "--attempt", "native-caps001", "--control", str(control),
+                              "--wait-game", "600", "--peek-every", "0", "--", sys.executable, "-c", "pass"])
+        self.assertEqual(rc, module.FAILED)
+        self.assertIn("[drive] FAILED the session ended and the game never ran", out.getvalue())
+        log = tmp / "control.py.log"
+        self.assertNotIn("quit", log.read_text(encoding="utf-8").split() if log.exists() else [],
+                         "nothing to end: the session is over")
+
+    def main_with(self, channel, session_s: float) -> tuple[int, str]:
+        """game-drive.py's main() on a session that sleeps session_s and ends with 0, driven through channel."""
+        import importlib
+        import sys
+        module = importlib.import_module("game-drive")
+        self.enterContext(unittest.mock.patch.object(module, "Channel", lambda control, attempt, say: channel))
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            rc = module.main(["--profile", "rottr", "--attempt", "native-caps001", "--control", "control.py",
+                              "--every", "0.05", "--peek-every", "0", "--check-after", "0", "--",
+                              sys.executable, "-c", f"import time; time.sleep({session_s})"])
+        return rc, out.getvalue()
+
+    def test_a_session_that_ends_with_0_before_the_result_fails_the_arm(self):
+        # Train b33 rc5 review (R1): once the game was seen, a session that ended with 0 before the menu or before
+        # the result read PASS, because run-game.sh keeps 0 whatever its inner session did.
+        import importlib
+        module = importlib.import_module("game-drive")
+        for name, channel in (("before the menu", FakeChannel(before_menu=10 ** 9)),
+                              ("before the result", FakeChannel(lit=9, scenes=10 ** 9))):
+            with self.subTest(end=name):
+                rc, out = self.main_with(channel, 1.5)
+                self.assertEqual(rc, module.FAILED, out)
+                self.assertIn("[drive] FAILED the session ended before the Overall score line showed", out)
+                self.assertNotIn("[drive] result:", out)
+
+    def test_a_session_with_the_result_read_passes(self):
+        rc, out = self.main_with(FakeChannel(lit=6), 2.0)
+        self.assertEqual(rc, 0, out)
+        self.assertIn("[drive] result: Overall score: 51.24 FPS", out)
+
+    def test_a_drive_that_raises_fails_the_arm(self):
+        import importlib
+        module = importlib.import_module("game-drive")
+
+        class Raising(FakeChannel):
+            def look(self):
+                raise RuntimeError("bad read")
+
+        channel = Raising()
+        rc, out = self.main_with(channel, 1.0)
+        self.assertEqual(rc, module.FAILED, out)
+        self.assertIn("[drive] FAILED the drive raised RuntimeError: bad read", out)
+        self.assertEqual(channel.calls[-1], "quit", "the session it was driving is ended")
 
     def test_the_shipped_rottr_arm_runs_its_session_through_the_driver(self):
         data = manifest.load_manifest()
