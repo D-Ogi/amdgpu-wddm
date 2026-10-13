@@ -6,6 +6,7 @@ namespace bc250::umd {
 // shell). S_OK with sparse set or cleared; a failure resolves to off. A handle the query could not close
 // is returned in unresolved and stays with the adapter.
 using SparsePolicyQuery=HRESULT (*)(UINT64 luid,bool &sparse,D3DKMT_HANDLE &unresolved) noexcept;
+using WddmVersionQuery=HRESULT (*)(UINT64 luid,bool &supports_wddm22,D3DKMT_HANDLE &unresolved) noexcept;
 // The deployment layer supplies artifact-bound capabilities and absolute DLL
 // paths. This transaction does not guess caps or load Vulkan at adapter open.
 struct AdapterConfiguration {
@@ -15,6 +16,7 @@ struct AdapterConfiguration {
     unsigned char engine_sha256[32]{};
     unsigned char icd_sha256[32]{};
     SparsePolicyQuery sparse_policy=nullptr; // nullptr: the adapter key through gdi32
+    WddmVersionQuery wddm_version=nullptr; // nullptr: the OS-visible WDDM version through gdi32
 };
 HRESULT open_render_adapter(D3D10DDIARG_OPENADAPTER &,const AdapterConfiguration &) noexcept;
 // The advertised caps under a resolved policy: FL12 needs sparse binding in the hosted ICD.

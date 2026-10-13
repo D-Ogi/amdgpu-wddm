@@ -12,6 +12,7 @@
 #include "ddi-experiment.h"
 #include "ddi-resource.h"
 #include "adapter-identity.h"
+#include "adapter-wddm-version.h"
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
@@ -38,6 +39,52 @@ HRESULT APIENTRY adapter_query(HANDLE,const D3DDDICB_QUERYADAPTERINFO *args) {
 HRESULT sparse_policy(UINT64,bool &sparse,D3DKMT_HANDLE &unresolved) noexcept {
     sparse=true; unresolved=0; return S_OK;
 }
+bool osWddm22; HRESULT osVersionResult=S_OK; unsigned versionQueries;
+HRESULT version_policy(UINT64 luid,bool &supported,D3DKMT_HANDLE &unresolved) noexcept {
+    CHECK(luid==77); ++versionQueries;
+    supported=osWddm22; unresolved=0; return osVersionResult;
+}
+D3DKMT_DRIVERVERSION kmtVersion;
+NTSTATUS openStatus,queryStatus,closeStatus;
+unsigned opens,queries,closes;
+NTSTATUS APIENTRY open_version(D3DKMT_OPENADAPTERFROMLUID *args) {
+    CHECK(args->AdapterLuid.LowPart==77 && args->AdapterLuid.HighPart==0); ++opens;
+    if (!openStatus) args->hAdapter=42;
+    return openStatus;
+}
+NTSTATUS APIENTRY read_version(const D3DKMT_QUERYADAPTERINFO *args) {
+    CHECK(args->hAdapter==42 && args->Type==KMTQAITYPE_DRIVERVERSION &&
+          args->PrivateDriverDataSize==sizeof(D3DKMT_DRIVERVERSION)); ++queries;
+    *static_cast<D3DKMT_DRIVERVERSION *>(args->pPrivateDriverData)=kmtVersion;
+    return queryStatus;
+}
+NTSTATUS APIENTRY close_version(const D3DKMT_CLOSEADAPTER *args) {
+    CHECK(args->hAdapter==42); ++closes; return closeStatus;
+}
+void version_transport() {
+    const native12::MemoryPolicyKmt kmt{open_version,read_version,close_version};
+    constexpr NTSTATUS refused=static_cast<NTSTATUS>(0xC0000022u);
+    LUID luid{77,0}; bool supported=true; D3DKMT_HANDLE unresolved=99;
+    CHECK(query_wddm22_support(luid,{},supported,unresolved)==E_INVALIDARG && !supported && !unresolved);
+    for (auto version:{KMT_DRIVERVERSION_WDDM_2_0,KMT_DRIVERVERSION_WDDM_2_1,
+                      KMT_DRIVERVERSION_WDDM_2_2,KMT_DRIVERVERSION_WDDM_3_0}) {
+        openStatus=queryStatus=closeStatus=0; opens=queries=closes=0; kmtVersion=version;
+        CHECK(query_wddm22_support(luid,kmt,supported,unresolved)==S_OK &&
+              supported==(version>=KMT_DRIVERVERSION_WDDM_2_2) && !unresolved);
+        CHECK(opens==1 && queries==1 && closes==1);
+    }
+    for (NTSTATUS status:{refused,NTSTATUS(1)}) {
+        queryStatus=status; opens=queries=closes=0;
+        CHECK(FAILED(query_wddm22_support(luid,kmt,supported,unresolved)) && !supported && !unresolved);
+        CHECK(opens==1 && queries==1 && closes==1);
+    }
+    queryStatus=0; closeStatus=refused; opens=queries=closes=0;
+    CHECK(FAILED(query_wddm22_support(luid,kmt,supported,unresolved)) && !supported && unresolved==42);
+    CHECK(closes==1); // failed ownership is retained, never retried by a destructor
+    closeStatus=0; openStatus=refused; opens=queries=closes=0;
+    CHECK(FAILED(query_wddm22_support(luid,kmt,supported,unresolved)) && !supported && !unresolved);
+    CHECK(opens==1 && !queries && !closes);
+}
 AdapterCaps fl12_1_caps() {
     AdapterCaps caps{}; caps.maximum=D3D_FEATURE_LEVEL_12_1;
     caps.doubles.DoublePrecisionFloatShaderOps=TRUE;
@@ -56,7 +103,7 @@ UINT flags_for(UINT pipeline) {
 constexpr UINT build_of(UINT build) { return build<<16; }
 
 // The WDDM 2.2 interface is the newest offer, and only at the build whose present callback carries the whole
-// structure. The switch of ddi-experiment.h chooses between the two newest offers.
+// structure. The OS-visible KMD version and the process switch control the optional offer.
 void negotiation() {
     UINT32 count=0; UINT64 versions[4]={1,2,3,4};
     CHECK(supported_ddi_versions(D3D_FEATURE_LEVEL_12_1,true,&count,nullptr)==S_OK && count==3);
@@ -95,7 +142,7 @@ void negotiation() {
     // The "-off" suffix comes from the reader, not from the caller, and an empty name is no switch.
     CHECK(!d3d11_experiment_off(""));
     CHECK(d3d11_experiment_off("wddm22-ddi")==d3d11_experiment("wddm22-ddi-off"));
-    // The recommended default: with no switch named, the shell offers the WDDM 2.2 interface.
+    // No switch withholds the optional offer; the adapter must still establish the KMD version.
     if (!d3d11_experiment_name()[0]) CHECK(wddm2_2_offered());
     CHECK(wddm2_2_offered()!=d3d11_experiment_off("wddm22-ddi"));
     // The version names of the log, which must name the set the shell really offered.
@@ -235,26 +282,49 @@ void adapter_policy() {
     // No swizzle pattern is ever asked for, and none is invented.
     query.Type=D3DWDDM2_0DDICAPS_SWIZZLE_PATTERN;
     CHECK(get_adapter_caps(caps,query)==E_NOTIMPL);
-    // The adapter admits the WDDM 2.2 interface at its build, and nothing else at that interface.
+    // The OS-visible KMD version caps the optional offer without changing FL12 support.
+    for (int arm=0;arm<3;++arm) {
+    osWddm22=arm!=0; osVersionResult=arm==2 ? E_FAIL : S_OK; versionQueries=0;
     AdapterConfiguration configuration{L"P:/BC-250/scratch/m14/missing-adapter-engine.dll",
         L"P:/BC-250/scratch/m14/missing-adapter-icd.dll",caps};
     configuration.sparse_policy=sparse_policy;
+    configuration.wddm_version=version_policy;
     D3D10_2DDI_ADAPTERFUNCS table{};
     D3DDDI_ADAPTERCALLBACKS callbacks{}; callbacks.pfnQueryAdapterInfoCb=adapter_query;
     D3D10DDIARG_OPENADAPTER args{}; args.pAdapterFuncs_2=&table; args.pAdapterCallbacks=&callbacks;
     args.hRTAdapter.handle=&adapterIdentity;
     CHECK(open_render_adapter(args,configuration)==S_OK);
-    const bool offered=wddm2_2_offered();
+    const bool offered=arm==1 && wddm2_2_offered();
+    CHECK(versionQueries==1);
+    osWddm22=!osWddm22; // discovery and CreateDevice use the same snapshot, not a second query
     UINT32 count=0;
     CHECK(table.pfnGetSupportedVersions(args.hAdapter,&count,nullptr)==S_OK && count==(offered ? 3u : 2u));
     D3D10DDIARG_CALCPRIVATEDEVICESIZE size{}; size.Interface=D3DWDDM2_2_DDI_INTERFACE_VERSION;
     size.Version=build_of(D3DWDDM2_2_DDI_BUILD_VERSION); size.Flags=flags_for(D3DWDDM2_0DDI_3DPIPELINELEVEL_12_1);
     CHECK(table.pfnCalcPrivateDeviceSize(args.hAdapter,&size)==(offered ? sizeof(DdiDeviceHandle) : 0u));
+    if (!offered) {
+        DdiDeviceHandle privateDevice{};
+        D3DWDDM2_2DDI_DEVICEFUNCS funcs{};
+        DXGI1_6_1_DDI_BASE_FUNCTIONS dxgi{};
+        D3D10DDIARG_CREATEDEVICE device{};
+        device.Interface=size.Interface; device.Version=size.Version; device.Flags=size.Flags;
+        device.hDrvDevice.pDrvPrivate=&privateDevice;
+        device.pWDDM2_2DeviceFuncs=&funcs; device.DXGIBaseDDI.pDXGIDDIBaseFunctions6_1=&dxgi;
+        CHECK(table.pfnCreateDevice(args.hAdapter,&device)==E_INVALIDARG && !privateDevice.owner);
+        const D3DWDDM2_2DDI_DEVICEFUNCS empty{};
+        const DXGI1_6_1_DDI_BASE_FUNCTIONS emptyDxgi{};
+        CHECK(!std::memcmp(&funcs,&empty,sizeof(funcs)) && !std::memcmp(&dxgi,&emptyDxgi,sizeof(dxgi)));
+    }
     size.Version=build_of(D3DWDDM2_2_DDI_BUILD_VERSION-1);
     CHECK(!table.pfnCalcPrivateDeviceSize(args.hAdapter,&size));
     size.Version=build_of(D3DWDDM2_2_DDI_BUILD_VERSION); size.Flags=flags_for(D3D11_1DDI_3DPIPELINELEVEL_11_1);
     CHECK(table.pfnCalcPrivateDeviceSize(args.hAdapter,&size)==(offered ? sizeof(DdiDeviceHandle) : 0u));
+    size.Interface=D3DWDDM2_0_DDI_INTERFACE_VERSION; size.Version=build_of(D3DWDDM2_0_DDI_BUILD_VERSION);
+    size.Flags=flags_for(D3DWDDM2_0DDI_3DPIPELINELEVEL_12_1);
+    CHECK(table.pfnCalcPrivateDeviceSize(args.hAdapter,&size)==sizeof(DdiDeviceHandle));
+    CHECK(versionQueries==1);
     CHECK(table.pfnCloseAdapter(args.hAdapter)==S_OK);
+    }
     // The interface is refused for an FL11 snapshot, and refused at a build the adapter never advertised,
     // before any callback is used. Both leave the runtime's private handle empty.
     D3DWDDM2_2DDI_DEVICEFUNCS funcs{}; DXGI1_6_1_DDI_BASE_FUNCTIONS dxgi{};
@@ -275,6 +345,7 @@ void adapter_policy() {
 }
 }
 void test_wddm2_2_ddi() {
+    version_transport();
     negotiation();
     device_table();
     dxgi_table();

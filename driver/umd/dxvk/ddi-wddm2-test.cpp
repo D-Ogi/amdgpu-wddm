@@ -430,6 +430,9 @@ void adapter_policy() {
         AdapterConfiguration configuration{L"P:/BC-250/scratch/m14/missing-adapter-engine.dll",
             L"P:/BC-250/scratch/m14/missing-adapter-icd.dll",fl12_1_caps()};
         configuration.sparse_policy=policy;
+        configuration.wddm_version=+[](UINT64,bool &supported,D3DKMT_HANDLE &unresolved) noexcept {
+            supported=true; unresolved=0; return S_OK;
+        };
         D3D10_2DDI_ADAPTERFUNCS table{};
         D3DDDI_ADAPTERCALLBACKS callbacks{}; callbacks.pfnQueryAdapterInfoCb=adapter_query;
         D3D10DDIARG_OPENADAPTER args{}; args.pAdapterFuncs_2=&table; args.pAdapterCallbacks=&callbacks;

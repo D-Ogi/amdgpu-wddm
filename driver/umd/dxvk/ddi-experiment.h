@@ -76,7 +76,7 @@ inline bool d3d11_experiment_off(const char *name) noexcept {
     return d3d11_experiment(text);
 }
 // BD-099: the newest D3D11 DDI interface this process offers. The WDDM 2.2 interface is the one whose Present
-// callback carries the whole DXGIDDICB_PRESENT, so it is the default. The switch takes the shell back to the
-// WDDM 2.0 interface for a comparison or for a trial that must exclude the newer table.
+// callback carries the whole DXGIDDICB_PRESENT. This switch only permits the offer: ddi-adapter.cpp also
+// requires the OS-visible KMD version to be at least WDDM 2.2 (BD-153). It never raises that ceiling.
 inline bool wddm2_2_offered() noexcept { return !d3d11_experiment_off("wddm22-ddi"); }
 }
