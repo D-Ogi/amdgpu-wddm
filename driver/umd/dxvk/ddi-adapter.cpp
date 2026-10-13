@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #include "ddi-adapter.h"
 #include "adapter-identity.h"
+#include "adapter-wddm-version.h"
 #include "ddi-negotiation.h"
 #include "ddi-experiment.h"
 #include "diagnostics.h"
@@ -19,6 +20,8 @@ struct Adapter {
     AdapterCaps caps{};
     UINT32 policy_flags=0;
     D3DKMT_HANDLE unresolved_policy_adapter=0; // a KMT adapter handle the policy query could not close
+    D3DKMT_HANDLE unresolved_version_adapter=0;
+    bool offers_wddm22=false; // frozen at open, shared by version discovery and device creation
     unsigned char engine_sha256[32]{},icd_sha256[32]{};
     std::wstring engine_path,icd_path;
     EngineModules modules;
@@ -48,12 +51,25 @@ bool compatible_device(const Adapter &a,UINT interfaceVersion,UINT version,UINT 
     // runtime that asks for the WDDM 2.2 interface which the process switch withholds gets no device from
     // this table: it asks again for the newest interface the adapter did offer.
     const bool wddm2_0=wddm2_0_ddi(interfaceVersion,version) && fl12;
-    const bool wddm2_2=wddm2_2_ddi(interfaceVersion,version) && fl12 && wddm2_2_offered();
+    const bool wddm2_2=wddm2_2_ddi(interfaceVersion,version) && fl12 && a.offers_wddm22;
     return (d3d11_1 || wddm2_0 || wddm2_2) &&
         SUCCEEDED(requested_feature_level(flags,level,interfaceVersion)) && level<=a.caps.maximum;
 }
 template<typename T> T system_entry(HMODULE module,const char *name) noexcept {
     return reinterpret_cast<T>(reinterpret_cast<void *>(GetProcAddress(module,name)));
+}
+HRESULT system_wddm_version(UINT64 luid,bool &supported,D3DKMT_HANDLE &unresolved) noexcept {
+    supported=false; unresolved=0;
+    HMODULE gdi=LoadLibraryExW(L"gdi32.dll",nullptr,LOAD_LIBRARY_SEARCH_SYSTEM32);
+    if (!gdi) return HRESULT_FROM_WIN32(GetLastError());
+    const native12::MemoryPolicyKmt kmt{
+        system_entry<PFND3DKMT_OPENADAPTERFROMLUID>(gdi,"D3DKMTOpenAdapterFromLuid"),
+        system_entry<PFND3DKMT_QUERYADAPTERINFO>(gdi,"D3DKMTQueryAdapterInfo"),
+        system_entry<PFND3DKMT_CLOSEADAPTER>(gdi,"D3DKMTCloseAdapter")};
+    LUID id{}; std::memcpy(&id,&luid,sizeof(id));
+    const HRESULT hr=query_wddm22_support(id,kmt,supported,unresolved);
+    FreeLibrary(gdi);
+    return hr;
 }
 // The D3D12 shell's reading of the adapter's software key, on the admitted LUID.
 HRESULT system_sparse_policy(UINT64 luid,bool &sparse,D3DKMT_HANDLE &unresolved) noexcept {
@@ -86,7 +102,7 @@ SIZE_T APIENTRY device_size(D3D10DDI_HADAPTER handle,const D3D10DDIARG_CALCPRIVA
 HRESULT APIENTRY versions(D3D10DDI_HADAPTER handle,UINT32 *entries,UINT64 *values) {
     auto *a=adapter(handle);
     if (!a) return E_INVALIDARG;
-    const bool wddm2_2=wddm2_2_offered();
+    const bool wddm2_2=a->offers_wddm22;
     const HRESULT hr=supported_ddi_versions(a->caps.maximum,wddm2_2,entries,values);
     // The offered set, once per adapter, read out of the array the shell just filled: the runtime asks twice
     // (count, then array), and an FL11 adapter offers the D3D11.1 table alone.
@@ -99,8 +115,8 @@ HRESULT APIENTRY versions(D3D10DDI_HADAPTER handle,UINT32 *entries,UINT64 *value
         }
         list[used]=0;
         char text[192];
-        std::snprintf(text,sizeof(text),"M14 DDI versions: %s (BD-099 experiment wddm22-ddi-off=%u)\n",
-            list,unsigned(!wddm2_2));
+        std::snprintf(text,sizeof(text),"M14 DDI versions: %s (OS WDDM ceiling; wddm22-ddi-off=%u)\n",
+            list,unsigned(d3d11_experiment_off("wddm22-ddi")));
         OutputDebugStringA(text);
         amdgpu_wddm_log::print("%s",text);
     }
@@ -154,7 +170,7 @@ HRESULT APIENTRY close(D3D10DDI_HADAPTER handle) {
     // Failed CreateDevice handles are already invalid: never retry runtime
     // cleanup through them. Retain the adapter and pinned owners until exit,
     // and likewise an adapter whose policy query left a KMT handle open.
-    if (!a->failed.empty() || a->unresolved_policy_adapter) {
+    if (!a->failed.empty() || a->unresolved_policy_adapter || a->unresolved_version_adapter) {
         OutputDebugStringA("M14: retaining adapter with failed device cleanup\n");
         return S_OK;
     }
@@ -177,6 +193,13 @@ HRESULT open_render_adapter(D3D10DDIARG_OPENADAPTER &args,const AdapterConfigura
             a->luid,sparse,a->unresolved_policy_adapter);
         a->policy_flags=policy==S_OK && sparse ? BC250_HOST_POLICY_SPARSE : 0;
         a->caps=adapter_caps_for_policy(config.caps,a->policy_flags);
+        if (a->caps.maximum>=D3D_FEATURE_LEVEL_12_0) {
+            bool supported=false;
+            const HRESULT version=(config.wddm_version ? config.wddm_version : system_wddm_version)(
+                a->luid,supported,a->unresolved_version_adapter);
+            a->offers_wddm22=version==S_OK && supported && wddm2_2_offered();
+            if (version!=S_OK) failure_diagnostic("WDDM version query (keeping WDDM 2.0)",version);
+        }
         a->scanout=read_scanout_source(args.hRTAdapter.handle,args.pAdapterCallbacks->pfnQueryAdapterInfoCb);
         D3D10_2DDI_ADAPTERFUNCS table{};
         table.pfnCalcPrivateDeviceSize=device_size;table.pfnCreateDevice=create;

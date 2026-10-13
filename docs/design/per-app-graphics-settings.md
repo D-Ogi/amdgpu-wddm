@@ -73,18 +73,25 @@ for both values: the D3D12 shell in `D3D12DDI_PRESENT_0051`, and the D3D11 shell
 The D3D11 shell gets those two fields only at the interface it negotiates. The WDK declares them only for the
 WDDM 2.2.2 interface and later. The D3D11 runtime copies the whole structure only from interface 0xB0023
 (WDDM 2.2) build 5 (`IS_DXGI1_6_1_BASE_FUNCTIONS` in `d3d10umddi.h`). The shell therefore offers the WDDM 2.2
-interface to an FL12 adapter, with the WDDM 2.2 device table and the DXGI 1.6.1 table that go with it
+interface to an FL12 adapter whose KMD reports WDDM 2.2 or later, with the WDDM 2.2 device table and the
+DXGI 1.6.1 table that go with it
 (`driver/umd/dxvk/ddi-wddm22.h`). `DeviceOwner::full_present_callback` holds the answer for the device, and the
 Present path passes the whole override while it is true.
 
-Below that interface the shell passes `VSync` 0 only, and does `VSync` 1 with its own waits. Two cases keep it
-there: an FL11 adapter, which offers the D3D11.1 interface alone, and the process switch
+Below that interface the shell passes `VSync` 0 only, and does `VSync` 1 with its own waits. This applies to
+an FL11 adapter, which offers the D3D11.1 interface alone, an older KMD (BD-153 below), and the process switch
 `wddm22-ddi-off` of `AMDGPU_WDDM_D3D11_EXPERIMENT` (`driver/umd/dxvk/ddi-experiment.h`), which withholds the
 WDDM 2.2 offer for a comparison. Then `d3d11.dll` 10.0.22621 gives `PresentCB_PreWDDM2_2`, which copies only the
 older, shorter structure into its own `DXGIDDICB_PRESENT` (BD-099). On x64 the copy holds
 `SyncIntervalOverrideValid`, which is in the tail padding of the older structure, but not `SyncIntervalOverride`.
 Thus each override arrives as interval 0. An override for `VSync` 1 gave 873-928 frames/s for the intervals 1
 and 2. On x86 (WOW64) the copy holds neither field, and the override has no effect.
+
+BD-153 adds another constraint: `KMTQAITYPE_DRIVERVERSION` must report WDDM 2.2 or later on the adapter's
+LUID. The driver reads it once at adapter open. Version discovery and device creation use the same result.
+The current KMD reports WDDM 2.0, so its FL12 adapter offers that table as its highest version. A failed query
+also withholds the optional WDDM 2.2 table and logs the failure. FL12 support stays unchanged. The Present
+path uses the existing vertical-blank waits below the WDDM 2.2 interface.
 
 The arguments of the D3D11 Present DDI do not show the interval of the application. For a swap chain in a window,
 `FlipInterval` is 0 for the intervals 0, 1 and 2. Thus on the old callback the shell waits for one vertical blank
