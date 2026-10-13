@@ -388,12 +388,37 @@ $infText = Add-InfRebootDirective $infText
 $kmdBase = (([string]$sources.kmd_version) -split '\.')[0..2] -join '.'
 if ($DriverVer -notmatch ('^' + [regex]::Escape($kmdBase) + '\.\d+$')) { throw "DriverVer $DriverVer does not belong to KMD $($sources.kmd_version)" }
 if ($Version -notlike "$DriverVer-*") { throw "release version $Version does not start with DriverVer $DriverVer" }
-$rx = [regex]'(?m)^(DriverVer\s*=\s*[\d/]+,)(\d+\.\d+\.\d+\.\d+)(\s*)$'
+# BD-150: the date is the release's too (release-sources.json driver_date), and the release must rank above the one it
+# supersedes. PnP orders packages of one rank by DriverVer date, then by version, and keeps the installed package on a
+# tie: tester.29 and 29v2 both said 10/12/2026,0.7.216.100, and the 29v2 install left the tester.29 KMD on the GPU. The
+# date is pinned in the sources, not taken from the clock, so a rebuild gives the same INF.
+$rx = [regex]'(?m)^(DriverVer\s*=\s*)(\d\d/\d\d/\d{4}),(\d+\.\d+\.\d+\.\d+)(\s*)$'
 if ($rx.Matches($infText).Count -ne 1) { throw 'bc250kmd.inf: expected exactly one DriverVer line' }
-$infText = $rx.Replace($infText, { param($m) $m.Groups[1].Value + $DriverVer + $m.Groups[3].Value })
+function ConvertFrom-InfDate([string]$Text, [string]$What) {
+    $d = [DateTime]::MinValue
+    if (-not [DateTime]::TryParseExact($Text, 'MM/dd/yyyy', [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::None, [ref]$d)) { throw "${What}: '$Text' is not an INF date (MM/dd/yyyy)" }
+    return $d
+}
+$kmdDate = ConvertFrom-InfDate $rx.Match($infText).Groups[2].Value 'the KMD INF DriverVer date'
+if (-not $sources.driver_date) { throw 'release-sources.json: no driver_date (the DriverVer date of this release, MM/dd/yyyy)' }
+$driverDate = ConvertFrom-InfDate ([string]$sources.driver_date) 'release-sources.json driver_date'
+if ($driverDate -lt $kmdDate) { throw "driver_date $($sources.driver_date) is older than the KMD INF date $($kmdDate.ToString('MM/dd/yyyy'))" }
+if ($driverDate -gt [DateTime]::UtcNow.Date.AddDays(1)) { throw "driver_date $($sources.driver_date) is in the future" }
+if (-not $sources.supersedes -or -not $sources.supersedes.release -or -not $sources.supersedes.driver_ver) {
+    throw 'release-sources.json: no supersedes {release, driver_ver}: the release this one replaces and its DriverVer line value'
+}
+if ([string]$sources.supersedes.driver_ver -notmatch '^(\d\d/\d\d/\d{4}),(\d+\.\d+\.\d+\.\d+)$') { throw "supersedes.driver_ver '$($sources.supersedes.driver_ver)' is not <MM/dd/yyyy>,<a.b.c.d>" }
+$oldDate = ConvertFrom-InfDate $Matches[1] 'supersedes.driver_ver'
+$oldVer = [version]$Matches[2]
+if (-not (($driverDate -gt $oldDate) -or (($driverDate -eq $oldDate) -and ([version]$DriverVer -gt $oldVer)))) {
+    throw ("DriverVer $($sources.driver_date),$DriverVer does not rank above $($sources.supersedes.release) ($($sources.supersedes.driver_ver)): " +
+           'Windows would keep that package. Set a later driver_date, or a higher -DriverVer on the same date.')
+}
+$driverDateText = $driverDate.ToString('MM/dd/yyyy', [Globalization.CultureInfo]::InvariantCulture)
+$infText = $rx.Replace($infText, { param($m) $m.Groups[1].Value + $driverDateText + ',' + $DriverVer + $m.Groups[4].Value })
 [IO.File]::WriteAllText($infPath, $infText)
-if ($infText -notmatch ('(?m)^DriverVer\s*=\s*[\d/]+,' + [regex]::Escape($DriverVer) + '\s*$')) { throw 'DriverVer rewrite failed' }
-'  DriverVer {0}' -f $DriverVer
+if ($infText -notmatch ('(?m)^DriverVer\s*=\s*' + [regex]::Escape("$driverDateText,$DriverVer") + '\s*$')) { throw 'DriverVer rewrite failed' }
+'  DriverVer {0},{1} (above {2}, {3})' -f $driverDateText, $DriverVer, $sources.supersedes.release, $sources.supersedes.driver_ver
 
 Write-Host 'sign'
 $kmd = Join-Path $pkg 'payload\kmd'
@@ -407,6 +432,17 @@ function Invoke-Sign([string]$Path) {
     if ($r.code -ne 0) { throw "signtool sign $Path failed: $($r.text -replace [regex]::Escape($pass), '<redacted>')" }
 }
 Invoke-Sign (Join-Path $kmd 'bc250kmd.sys')
+# BD-150: Windows names a driver package by its INF, so two packages with different bc250kmd.sys files must never share
+# one INF: pnputil answers "Already exists in the system" for the second and keeps the first one's KMD. One comment line
+# under DriverVer names the release and the signed KMD, so the INF changes whenever the KMD does.
+$kmdSha = (Get-FileHash -LiteralPath (Join-Path $kmd 'bc250kmd.sys') -Algorithm SHA256).Hash
+$infText = [IO.File]::ReadAllText($infPath)
+$dvLine = [regex]'(?m)^DriverVer\s*=.*$'
+if ($dvLine.Matches($infText).Count -ne 1) { throw 'bc250kmd.inf: expected exactly one DriverVer line' }
+$identity = "; release $Version, bc250kmd.sys SHA256 $kmdSha"
+$infText = $dvLine.Replace($infText, { param($m) $cr = $(if ($m.Value.EndsWith("`r")) { "`r" } else { '' }); $m.Value.TrimEnd("`r") + $cr + "`n" + $identity + $cr })
+[IO.File]::WriteAllText($infPath, $infText)
+'  INF identity: {0}' -f $identity
 $r = Invoke-Headless -File $inf2cat -Arguments @("/driver:$kmd", '/os:10_X64', '/uselocaltime') -TimeoutSeconds 300
 if ($r.code -ne 0) { throw "Inf2Cat failed: $($r.text)" }
 Invoke-Sign (Join-Path $kmd 'bc250kmd.cat')

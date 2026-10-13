@@ -589,6 +589,23 @@ function Invoke-Verify {
     try { $provider = (Get-PnpDeviceProperty -InstanceId $id -KeyName DEVPKEY_Device_DriverProvider -ErrorAction Stop).Data } catch { }
     if (-not $provider -and $drv) { $provider = $drv.DriverProviderName }
     Add-Result 'driver version' (($null -ne $drv) -and ($drv.DriverVersion -eq $want)) "installed $($drv.DriverVersion) from $inf (provider $provider), package $want"
+    # BD-150: the version names the release family; the loaded image names the KMD. An equal DriverVer let 29v2 verify
+    # pass on another KMD.
+    $kmdComp = $null
+    if ($script:Manifest) { $kmdComp = @($script:Manifest.components | Where-Object { $_ -and $_.package_path -eq 'payload/kmd/bc250kmd.sys' }) | Select-Object -First 1 }
+    if (-not $startState.started) {
+        Add-Skipped 'driver image' "$($startState.reason); no bc250kmd.sys image is loaded"
+    } elseif (-not $kmdComp -or -not $kmdComp.sha256) {
+        Add-Info 'driver image' 'the manifest of this release names no KMD image hash'
+    } else {
+        $loaded = (Get-RunningKmdReading -Cli $null).image
+        $wantImage = ([string]$kmdComp.sha256).ToUpperInvariant()
+        if (-not $loaded -or -not $loaded.sha256) {
+            Add-Result 'driver image' $false "no readable bc250kmd.sys among the loaded drivers; package $($wantImage.Substring(0, 8))"
+        } else {
+            Add-Result 'driver image' ($loaded.sha256 -eq $wantImage) "loaded $($loaded.path) $($loaded.sha256.Substring(0, 8)), package $($wantImage.Substring(0, 8))"
+        }
+    }
     # One read-only reading of the start-confirm task's inputs, in a child process (start-confirm.ps1 -Probe): the
     # driver version and LastStage through bc250kmd_cli, the KMD start health through bc250control.dll, the DPM
     # registry state. The task itself runs at the same logon and may still be waiting for its 60 s.
@@ -1490,6 +1507,12 @@ if ($dwmSession) {
 }
 $classKey = $null
 if (-not $script:DryRunMode) {
+    # BD-150: the files decide, not pnputil's exit code or the version (release-witness.ps1, Get-KmdImageDecision). The
+    # check reads the disk: the image of this boot stays the old one until the restart, and verify reads that one.
+    $script:CurrentStep = "check that the next start loads this package's bc250kmd.sys"
+    $kmdImage = Get-KmdImageDecision -WantSha (Get-Sha256 (Join-Path $package 'payload\kmd\bc250kmd.sys')) -Store (Read-KmdStoreImages) -Service (Read-ServiceImage $script:ServiceName)
+    if (-not $kmdImage.ok) { throw $kmdImage.detail }
+    Write-Info "driver image: $($kmdImage.detail)"
     $svc = Get-DeviceServiceName -InstanceId $instance
     $script:CurrentStep = 'check that the GPU is bound to the new driver package'
     if ($svc -ne $script:ServiceName -and $pnp.deferred) {

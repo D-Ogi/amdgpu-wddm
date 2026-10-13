@@ -69,6 +69,9 @@ foreach ($f in Get-ChildItem -LiteralPath (Join-Path $Package 'installer') -File
 $m = Get-Content -LiteralPath (Join-Path $Package 'manifest.json') -Raw | ConvertFrom-Json
 $inf = [IO.File]::ReadAllText((Join-Path $Package 'payload\kmd\bc250kmd.inf'))
 Check ($inf -match ('(?m)^DriverVer\s*=\s*[\d/]+,' + [regex]::Escape([string]$m.kmd_version) + '\s*$')) "INF DriverVer = manifest kmd_version $($m.kmd_version)"
+# BD-150: the INF names the release and the signed KMD, so two packages with different KMDs never share an INF.
+$kmdSys = (Get-FileHash -LiteralPath (Join-Path $Package 'payload\kmd\bc250kmd.sys') -Algorithm SHA256).Hash
+Check ($inf -match ('(?m)^; release ' + [regex]::Escape([string]$m.version) + ', bc250kmd\.sys SHA256 ' + $kmdSys + '\r?$')) "INF identity line names release $($m.version) and bc250kmd.sys $($kmdSys.Substring(0, 8))"
 Check ([string]$m.version -like "$($m.kmd_version)-*") "release version $($m.version) carries the driver version"
 $before = Get-Footprint
 

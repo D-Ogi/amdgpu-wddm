@@ -59,6 +59,12 @@
   },
   "kmd_version": "0.7.216.62",
   "kmd_abi": "0x000700D8",
+  "driver_date": "10/13/2026",
+  "supersedes": {
+    "note": "BD-150: build-release.ps1 stamps DriverVer = driver_date,<-DriverVer> and refuses a package that does not rank above this release's DriverVer, because PnP keeps the installed package on an equal date and version.",
+    "release": "0.7.216.100-tester.29",
+    "driver_ver": "10/12/2026,0.7.216.100"
+  },
   "control_app_exe": "amdgpu_wddm_control.exe",
   "mft_h264": {
     "note": "The H.264 encoder Media Foundation transform (M15.11). register true: the installer copies payload/mft/amdgpu_wddm_mft_h264.dll to <install root>\\mft\\ and writes route A of driver/umd/mft-h264/INSTALL.md machine wide. register false: the installer installs and registers nothing, and takes away what an earlier install of this release family wrote. The value travels into manifest.json, so the package itself says what it does. This is the bisect lever of the encoder wagon.",

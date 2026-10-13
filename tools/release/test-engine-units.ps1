@@ -336,6 +336,35 @@ Check ((-not @($sp.remove).Count) -and ($sp.why -match 'oem20\.inf')) "a package
 $sp = Get-DriverStoreRemovePlan -Packages @($store[2]) -BoundPublished 'oem15.inf' -PreviousVersion '0.7.208.100'
 Check ((-not @($sp.remove).Count) -and ((@($sp.keep) -join ',') -eq 'oem15.inf')) 'a first install leaves one package and removes nothing'
 
+'[BD-150] the next start loads the package''s bc250kmd.sys, not only its version'
+$shaNew = ('AB' * 32); $shaLab = ('85' * 32); $shaOld = ('52' * 32)
+$storeNew = @([pscustomobject]@{ folder = 'bc250kmd.inf_amd64_aaaa'; sha256 = $shaOld }, [pscustomobject]@{ folder = 'bc250kmd.inf_amd64_bbbb'; sha256 = $shaNew })
+$kd = Get-KmdImageDecision -WantSha $shaNew -Store $storeNew -Service ([pscustomobject]@{ path = 'C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_bbbb\bc250kmd.sys'; sha256 = $shaNew })
+Check ($kd.ok -and $kd.detail -match 'bc250kmd\.inf_amd64_bbbb') "a new package in the store and the service on its file passes ($($kd.detail))"
+$kd = Get-KmdImageDecision -WantSha $shaNew.ToLowerInvariant() -Store $storeNew -Service ([pscustomobject]@{ path = 'x'; sha256 = $shaNew })
+Check $kd.ok 'the SHA256 comparison ignores case'
+# 22631, 2026-10-13: the INF matched the BD-077 lab package, pnputil kept it, the store has no copy of the package's KMD.
+$kd = Get-KmdImageDecision -WantSha $shaNew -Store @([pscustomobject]@{ folder = 'bc250kmd.inf_amd64_2385'; sha256 = $shaLab }) -Service ([pscustomobject]@{ path = 'C:\x\bc250kmd.sys'; sha256 = $shaLab })
+Check ((-not $kd.ok) -and $kd.detail -match 'no driver package in the store has it' -and $kd.detail -match 'bc250kmd\.inf_amd64_2385 85858585') "an INF that matched a stored package fails, naming the store ($($kd.detail))"
+# 26200 shape with a distinct INF: the package is in the store, but the service stays on the older package.
+$kd = Get-KmdImageDecision -WantSha $shaNew -Store $storeNew -Service ([pscustomobject]@{ path = 'C:\old\bc250kmd.sys'; sha256 = $shaOld })
+Check ((-not $kd.ok) -and $kd.detail -match 'ranks the installed driver package above') "the service on another package's file fails ($($kd.detail))"
+$kd = Get-KmdImageDecision -WantSha $shaNew -Store $storeNew -Service ([pscustomobject]@{ path = 'C:\gone\bc250kmd.sys'; sha256 = $null })
+Check ((-not $kd.ok) -and $kd.detail -match 'unreadable') "a service image that cannot be read fails ($($kd.detail))"
+$kd = Get-KmdImageDecision -WantSha $shaNew -Store $storeNew -Service $null
+Check ($kd.ok -and $kd.detail -match 'no image path yet') 'a service without an ImagePath passes on the store alone'
+$kd = Get-KmdImageDecision -WantSha $shaNew -Store @() -Service $null
+Check ((-not $kd.ok) -and $kd.detail -match 'no package of ours') 'an empty store fails'
+$kd = Get-KmdImageDecision -WantSha '' -Store $storeNew -Service $null
+Check (-not $kd.ok) 'a package without a KMD hash fails'
+$fr = Join-Path $work 'bd150-FileRepository'
+foreach ($n in 'bc250kmd.inf_amd64_1111', 'bc250kmd.inf_amd64_2222', 'other.inf_amd64_3333') { [void][IO.Directory]::CreateDirectory((Join-Path $fr $n)) }
+[IO.File]::WriteAllText((Join-Path $fr 'bc250kmd.inf_amd64_1111\bc250kmd.sys'), 'kmd one')
+[IO.File]::WriteAllText((Join-Path $fr 'other.inf_amd64_3333\bc250kmd.sys'), 'not ours')
+$rowsFr = @(Read-KmdStoreImages -Repository $fr)
+Check ((@($rowsFr | ForEach-Object { $_.folder }) -join ',') -eq 'bc250kmd.inf_amd64_1111,bc250kmd.inf_amd64_2222' -and $rowsFr[0].sha256 -eq (Get-TextSha 'kmd one') -and $null -eq $rowsFr[1].sha256) "the store reading lists our folders only, with the SHA256 of each bc250kmd.sys ($(@($rowsFr | ForEach-Object { "$($_.folder)=$($_.sha256)" }) -join ', '))"
+Check ((ConvertTo-Win32DriverPath '\SystemRoot\System32\DriverStore\FileRepository\a\bc250kmd.sys') -eq (Join-Path $env:windir 'System32\DriverStore\FileRepository\a\bc250kmd.sys') -and (ConvertTo-Win32DriverPath '\??\C:\BC250\bd135\bc250kmd.sys') -eq 'C:\BC250\bd135\bc250kmd.sys') 'service ImagePath forms resolve to Win32 paths'
+
 '[BD-089] what is left of this release (the list uninstall.ps1 prints at the end)'
 # Inventory is mocked: this test must not query DISM or depend on host elevation/language.
 $savedInventoryReader = ${function:Read-DriverStorePackages}
