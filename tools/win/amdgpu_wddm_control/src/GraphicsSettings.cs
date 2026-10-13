@@ -10,7 +10,6 @@
 //     MaxFrameLatency     1-3 frames queued ahead ("Low latency")
 //     PerformanceOverlay  1 on (works in DirectX 11 games for now), 0 off
 //     RenderOnCpu         1: the game's DirectX 11 runs on the processor (much slower, a last resort), 0 off
-//     ReportAmdDriverVersion (for all games only)  1: the driver reports an AMD-compatible version, 0 off
 //   HKLM\SOFTWARE\amdgpu-wddm\Vulkan                           REG_SZ values for all games
 //   HKLM\SOFTWARE\amdgpu-wddm\Vulkan\Applications\<image>      REG_SZ values for one game
 //     WsiRoute            dxgi (the default) or gdi; the reader also takes dxgi-composition, which this app does not
@@ -57,7 +56,7 @@ namespace AmdgpuWddmControl
     {
         public string Name, Id, Root;
         public bool Text;                   // REG_SZ, else REG_DWORD
-        public bool GlobalOnly;             // no per-game value (ReportAmdDriverVersion)
+        public bool GlobalOnly;             // no per-game value
         public bool GameFirst;              // offered per game; the card for all games shows it only when it is stored
         public string[] Presets;            // the values offered, in the order shown
         public Func<long, bool> Valid;      // REG_DWORD: the contract's range
@@ -120,7 +119,6 @@ namespace AmdgpuWddmControl
                 Valid = n => n >= 1 && n <= 3 },
             new GfxSetting { Name = "PerformanceOverlay", Id = "overlay", Root = GraphicsPath, SameAsAbsent = "0", AbsentTextId = "gfx.choice.off", Presets = new[] { "1", "0" }, Valid = Bool },
             new GfxSetting { Name = "RenderOnCpu", Id = "cpu-render", Root = GraphicsPath, GameFirst = true, SameAsAbsent = "0", AbsentTextId = "gfx.choice.off", Presets = new[] { "1", "0" }, Valid = Bool },
-            new GfxSetting { Name = "ReportAmdDriverVersion", Id = "amd-version", Root = GraphicsPath, GlobalOnly = true, SameAsAbsent = "0", AbsentTextId = "gfx.choice.off", Presets = new[] { "1", "0" }, Valid = Bool },
         };
 
         // The Vulkan settings wait for the ICD that reads them: the vk-wsi-dxgi line and the per-application keys of the
@@ -331,21 +329,6 @@ namespace AmdgpuWddmControl
             bool same = item.Kept || (item.Absent && here.State == GfxState.Absent) ||
                 (!item.Absent && here.State == GfxState.Valid && here.Value == item.Value);
             if (same) edits.Remove(s.Name); else edits[s.Name] = item.Absent ? null : item.Value;
-        }
-
-        // The check box of a setting with one "on" value (ReportAmdDriverVersion): checked = 1 stored or chosen.
-        public static bool Checked(GfxRead here, bool edited, string edit)
-        {
-            return edited ? edit == "1" : here.State == GfxState.Valid && here.Value == "1";
-        }
-
-        public static void Check(IDictionary<string, string> edits, GfxSetting s, GfxRead here, bool on)
-        {
-            bool storedOn = here.State == GfxState.Valid && here.Value == "1";
-            if (on == storedOn) { edits.Remove(s.Name); return; }
-            if (on) edits[s.Name] = "1";
-            else if (storedOn) edits[s.Name] = null;
-            else edits.Remove(s.Name);
         }
 
         // ---- planning ----------------------------------------------------------------------------------------------

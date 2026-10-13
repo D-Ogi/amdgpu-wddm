@@ -895,8 +895,6 @@ search.graphics.overlay.terms|rev|72342a7f|licznik FPS|FPS|czas klatki|frame tim
 search.graphics.latency|rev|f3bcef3c|Niskie opóźnienie
 search.graphics.latency.terms|rev|5b07cf0e|opóźnienie|input lag|opóźnienie sterowania|kolejka klatek|Anti-Lag|Reflex
 search.graphics.overlay|rev|37d49e6c|Nakładka wydajności
-search.graphics.amd-version|rev|e9b65d7d|Zgłaszaj wersję sterownika AMD
-search.graphics.amd-version.terms|rev|a3215411|wersja sterownika|stary sterownik|przestarzały sterownik|ostrzeżenie o sterowniku|AMD
 search.graphics.vk-present|rev|cdee9cc4|Wyświetlanie w grach Vulkan
 search.graphics.vk-present.terms|rev|93c9bf20|Vulkan|wyświetlanie|czarny ekran|zamrożony obraz|zgodność
 search.graphics.vk-memory|rev|542ed595|Gdy pamięć wideo jest pełna
@@ -943,7 +941,6 @@ gfx.origin.stored|rev|2b5c4aeb|Zapisane dla wszystkich gier.
 gfx.origin.global|rev|6617fcee|Z ustawień dla wszystkich gier: {0}.
 gfx.note.overlay|rev|a4263f23|Na razie działa w grach DirectX 11.
 gfx.note.cpu-render|rev|0b9bf5df|Znacznie wolniej. Ostateczność dla gry DirectX 11, która nie działa na układzie graficznym.
-gfx.note.amd-version|rev|7f26a73f|Dla gier, które ostrzegają przed starym sterownikiem graficznym.
 gfx.note.vk-present|rev|3d7eec4c|Tryb zgodności jest wolniejszy. Wypróbuj go, gdy gra Vulkan pokazuje czarny lub zamrożony obraz.
 gfx.note.sm|rev|3efcfd20|Niektóre gry nie działają z nowszym modelem shaderów. Niższy wybierz tylko dla takiej gry.
 gfx.global.title|rev|c750f458|Ustawienia dla wszystkich gier

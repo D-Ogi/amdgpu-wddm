@@ -45,7 +45,7 @@ static partial class UnitTests
     // Every value of the contract: what is valid, how it reads and what it is called.
     static void GfxContract()
     {
-        Equal(7, GraphicsSettings.All.Length, "contract: seven settings offered");
+        Equal(6, GraphicsSettings.All.Length, "contract: six settings offered");
         Equal(2, GraphicsSettings.AwaitingIcd.Length, "contract: two Vulkan settings wait for their ICD");
         Check(GraphicsSettings.AwaitingIcd.All(s => GraphicsSettings.Find(s.Name) == null && s.Root == GraphicsSettings.VulkanPath), "contract: a Vulkan setting that waits is not offered");
         var contract = GraphicsSettings.All.Concat(GraphicsSettings.AwaitingIcd).ToArray();
@@ -73,7 +73,7 @@ static partial class UnitTests
             Equal(n == 0 || n == 1, valid("VSync", n), "VSync " + n);
             Equal(n == 1 || n == 2 || n == 4 || n == 8 || n == 16, valid("Anisotropy", n), "Anisotropy " + n);
             Equal(n >= 1 && n <= 3, valid("MaxFrameLatency", n), "MaxFrameLatency " + n);
-            foreach (var b in new[] { "PerformanceOverlay", "RenderOnCpu", "ReportAmdDriverVersion" }) Equal(n == 0 || n == 1, valid(b, n), b + " " + n);
+            foreach (var b in new[] { "PerformanceOverlay", "RenderOnCpu" }) Equal(n == 0 || n == 1, valid(b, n), b + " " + n);
         }
         Check(!valid("FrameRateLimit", 0xFFFFFFFFL) && !valid("FrameRateLimit", -1), "FrameRateLimit: 0xFFFFFFFF and -1 are not valid");
         var fps = GraphicsSettings.Find("FrameRateLimit");
@@ -109,7 +109,7 @@ static partial class UnitTests
 
         // The allow-lists: a setting's own name under its own root, per game unless it is for all games only.
         Check(GraphicsSettings.Allowed(GraphicsSettings.GraphicsPath, "FrameRateLimit") && GraphicsSettings.Allowed(W3G, "FrameRateLimit"), "Allowed: FrameRateLimit for all games and one game");
-        Check(GraphicsSettings.Allowed(GraphicsSettings.GraphicsPath, "ReportAmdDriverVersion") && !GraphicsSettings.Allowed(W3G, "ReportAmdDriverVersion"), "Allowed: ReportAmdDriverVersion for all games only");
+        Check(!GraphicsSettings.Allowed(GraphicsSettings.GraphicsPath, "ReportAmdDriverVersion") && !GraphicsSettings.Allowed(W3G, "ReportAmdDriverVersion"), "removed version override is never writable");
         Check(GraphicsSettings.Allowed(W3G, "VSync") && !GraphicsSettings.Allowed(W3V, "VSync"), "Allowed: each name under its own root only");
         Check(!GraphicsSettings.Allowed(W3V, "WsiRoute") && !GraphicsSettings.Allowed(GraphicsSettings.VulkanPath, "MemoryOverflow") && !GraphicsSettings.Allowed(W3G, "WsiRoute"),
             "Allowed: no Vulkan name while it waits for its ICD");
@@ -159,8 +159,7 @@ static partial class UnitTests
         Check(v.Source == "default" && v.Effective == null, "precedence: nothing stored, the application decides");
         Equal("Not set: Application decides.", GraphicsSettings.OriginText(v, false), "origin: not set");
         Equal("Changed, not applied yet", GraphicsSettings.OriginText(v, true), "origin: an edit");
-        v = view("ReportAmdDriverVersion", "witcher3.exe");
-        Check(v.Game.State == GfxState.Absent, "precedence: a setting for all games only has no game value");
+        Check(GraphicsSettings.Find("ReportAmdDriverVersion") == null, "version belongs to the installed package");
         // A game's invalid value wins even over a valid one for all games (the readers stop at the first source).
         var k2 = new List<GfxKey> { GKey(GraphicsSettings.VulkanPath, 1, "WsiRoute", "dxgi"), GKey(W3V, 0, "WsiRoute", "bogus") };
         v = GraphicsSettings.View(AnySetting("WsiRoute"), k2, "witcher3.exe");
@@ -236,19 +235,6 @@ static partial class UnitTests
         Check(rItems.Any(i => i.Value == "dxgi") && rItems.Any(i => i.Value == "gdi"), "items: a game can pick Modern or Compatibility");
         Equal(rItems.Count - 1, GraphicsSettings.Selected(rItems, route.Here, false, null), "selected: the value set outside");
 
-        // The check box of ReportAmdDriverVersion.
-        var amd = GraphicsSettings.Find("ReportAmdDriverVersion");
-        var absent = new GfxRead { State = GfxState.Absent };
-        var on = new GfxRead { State = GfxState.Valid, Value = "1" };
-        var off = new GfxRead { State = GfxState.Valid, Value = "0" };
-        var e = new Dictionary<string, string>();
-        Check(!GraphicsSettings.Checked(absent, false, null) && GraphicsSettings.Checked(on, false, null) && !GraphicsSettings.Checked(off, false, null), "check box: stored state");
-        GraphicsSettings.Check(e, amd, absent, true); Equal("1", e["ReportAmdDriverVersion"], "check box: on writes 1");
-        GraphicsSettings.Check(e, amd, absent, false); Equal(0, e.Count, "check box: off again is no change");
-        GraphicsSettings.Check(e, amd, on, false); Check(e.ContainsKey("ReportAmdDriverVersion") && e["ReportAmdDriverVersion"] == null, "check box: off removes a stored 1");
-        GraphicsSettings.Check(e, amd, on, true); Equal(0, e.Count, "check box: on again is no change");
-        GraphicsSettings.Check(e, amd, off, false); Equal(0, e.Count, "check box: a stored 0 stays when unchecked");
-        Check(GraphicsSettings.Checked(off, true, "1") && !GraphicsSettings.Checked(on, true, null), "check box: an edit");
     }
 
     // The writes: nothing for no change, a removal for "Application decides", a game's empty key removed.
@@ -270,7 +256,7 @@ static partial class UnitTests
         Equal(@"delete HKLM\SOFTWARE\amdgpu-wddm\Graphics FrameRateLimit", plan(null, new Dictionary<string, string> { { "FrameRateLimit", null } }), "plan: Application decides removes the value");
         Equal("", plan(null, new Dictionary<string, string> { { "VSync", null } }), "plan: Application decides on an absent value writes nothing");
         Equal(@"set HKLM\SOFTWARE\amdgpu-wddm\Graphics PerformanceOverlay = 1 (DWord)", plan(null, new Dictionary<string, string> { { "PerformanceOverlay", "1" } }), "plan: the invalid 7 is rewritten only on a choice");
-        Equal(@"set HKLM\SOFTWARE\amdgpu-wddm\Graphics ReportAmdDriverVersion = 1 (DWord)", plan(null, new Dictionary<string, string> { { "ReportAmdDriverVersion", "1" } }), "plan: ReportAmdDriverVersion for all games");
+        Throws<ArgumentException>(() => plan(null, new Dictionary<string, string> { { "ReportAmdDriverVersion", "1" } }), "legacy version override refused");
         // The Vulkan names wait for their ICD (GraphicsSettings.AwaitingIcd): no write, for all games or for a game.
         Throws<ArgumentException>(() => GraphicsSettings.PlanWrites(keys, null, new Dictionary<string, string> { { "WsiRoute", "gdi" } }), "plan: a Vulkan name is refused while it waits");
         Throws<ArgumentException>(() => GraphicsSettings.PlanWrites(keys, "witcher3.exe", new Dictionary<string, string> { { "MemoryOverflow", null } }), "plan: a game's Vulkan value is refused while it waits");
@@ -313,7 +299,7 @@ static partial class UnitTests
         {
             Strings.Language = lang;
             foreach (var w in GraphicsSettings.PlanWrites(keys, "witcher3.exe", new Dictionary<string, string> { { "FrameRateLimit", null } })
-                .Concat(GraphicsSettings.PlanWrites(keys, null, new Dictionary<string, string> { { "FrameRateLimit", null }, { "VSync", "1" }, { "ReportAmdDriverVersion", "1" } })))
+                .Concat(GraphicsSettings.PlanWrites(keys, null, new Dictionary<string, string> { { "FrameRateLimit", null }, { "VSync", "1" } })))
             {
                 var line = GraphicsSettings.PlainLine(w);
                 Check(!line.StartsWith("[", StringComparison.Ordinal) && !PlainWords.Findings(new[] { line }).Any(), "plain line " + lang + ": " + line);

@@ -4,6 +4,8 @@
 # Every change to the system goes through Invoke-Change. In a dry run it prints what it would do and does nothing,
 # so the dry run executes the same code path as the real run, checks included.
 
+. (Join-Path $PSScriptRoot 'version-identity.ps1')
+
 $script:ReleaseName      = 'amdgpu-wddm'
 $script:ServiceName      = 'bc250kmd'
 $script:HardwareIdPrefix = 'PCI\VEN_1002&DEV_13FE'          # bc250kmd.inf [Models.NTamd64.10.0...22631]
@@ -809,6 +811,13 @@ function Test-PackageManifest {
         $exe = Get-PackageSetupExe $PackageRoot
         if (-not $exe) { $bad += "missing $([string]$m.setup.file)" }
         elseif ((Get-Sha256 $exe) -ne ([string]$m.setup.sha256)) { $bad += "changed $([string]$m.setup.file)" }
+    }
+    if ($m.PSObject.Properties['version_identity']) {
+        try {
+            $inf = Join-Path $PackageRoot 'payload\kmd\bc250kmd.inf'
+            $sys = Join-Path $PackageRoot 'payload\kmd\bc250kmd.sys'
+            [void](Test-PackageVersionIdentity $m ([IO.File]::ReadAllText($inf)) (Get-Sha256 $sys))
+        } catch { $bad += "version identity: $($_.Exception.Message)" }
     }
     if ($bad.Count) { return @{ ok = $false; detail = ($bad -join '; '); manifest = $m } }
     return @{ ok = $true; detail = "$count files match manifest.json (version $($m.version))"; manifest = $m }
@@ -2318,7 +2327,15 @@ function Get-OurDriverPackageRows {
         $seen[$published] = $true
         $version = [string]$p.Version
         if (-not ($version -as [version])) { throw "Driver-store inventory has no valid version for $published" }
-        $r += [pscustomobject]@{ published = $published.ToLowerInvariant(); version = $version }
+        # DISM supplies a DateTime. Unreadable/stringified dates are not inferred
+        # from a localized display string and cannot authorize fallback pruning.
+        $date = $null
+        if ($p.Date -is [DateTime]) { $date = $p.Date.Date.ToString('MM/dd/yyyy', [Globalization.CultureInfo]::InvariantCulture) }
+        elseif ([string]$p.Date -match '\A([0-9]{4})-([0-9]{2})-([0-9]{2})(?:T00:00:00(?:Z)?)?\z') {
+            $candidate = "$($Matches[2])/$($Matches[3])/$($Matches[1])"
+            try { [void](ConvertTo-DriverDate $candidate); $date = $candidate } catch { }
+        }
+        $r += [pscustomobject]@{ published = $published.ToLowerInvariant(); version = $version; date = $date }
     }
     return $r
 }
@@ -2360,8 +2377,20 @@ function Get-DriverStoreRemovePlan {
     $why = $null
     if ($PreviousVersion -and -not $rollback.Count) { $why = "the previous repair set ($PreviousVersion) has no package in the store" }
     if (-not $rollback.Count -and $others.Count) {
-        $rollback = @(@($others | Sort-Object { [version]$_.version } -Descending)[0])
-        if (-not $PreviousVersion) { $why = 'no previous repair set is recorded: the newest of the other packages is kept for a rollback' }
+        # PnP orders packages of equal rank by INF date first, then quad. A high
+        # mapped version cannot substitute for an unknown date. Keep ambiguous
+        # candidates rather than inventing a rollback order.
+        $ranked = @()
+        foreach ($p in $others) {
+            try { $ranked += [pscustomobject]@{ row = $p; date = (ConvertTo-DriverDate ([string]$p.date)); quad = (ConvertTo-DriverQuad ([string]$p.version)) } }
+            catch { return [pscustomobject]@{ keep = $names; remove = @(); previous = $null; why = "cannot rank $($p.published) by INF date and version" } }
+        }
+        $sorted = @($ranked | Sort-Object -Property date, quad -Descending)
+        $top = $sorted[0]
+        $ties = @($sorted | Where-Object { $_.date -eq $top.date -and $_.quad -eq $top.quad })
+        if ($ties.Count -ne 1) { return [pscustomobject]@{ keep = $names; remove = @(); previous = $null; why = 'ambiguous rollback packages with equal INF date and version' } }
+        $rollback = @($top.row)
+        if (-not $PreviousVersion) { $why = 'no previous repair set is recorded: the newest INF date/quad is kept for a rollback' }
     }
     $keep = @($BoundPublished) + @($rollback | ForEach-Object { $_.published })
     return [pscustomobject]@{ keep = @($keep | Select-Object -Unique); remove = @($others | Where-Object { $keep -notcontains $_.published } | ForEach-Object { $_.published }); previous = @($rollback | ForEach-Object { $_.published })[0]; why = $why }
@@ -2371,7 +2400,44 @@ function Get-RepairSetDriverVersion([string]$Version) {
     if (-not $Version) { return $null }
     $m = Join-Path (Get-ClosureDir $Version) 'manifest.json'
     if (-not (Test-Path -LiteralPath $m)) { return $null }
-    try { return [string](Get-Content -LiteralPath $m -Raw | ConvertFrom-Json).kmd_version } catch { return $null }
+    try { return Get-ManifestDriverQuad (Get-Content -LiteralPath $m -Raw | ConvertFrom-Json) } catch { return $null }
+}
+
+# BD-152: remove only our obsolete backup tags, after a real package bind has
+# restored the OS-owned DriverVersion. Never restore that OS value ourselves.
+# A stale opt-in install that does not bind correctly keeps its tags for diagnosis.
+function Remove-LegacyDriverVersionTags {
+    param([string]$InstanceId, $Manifest, [string]$LoadedSha256)
+    if (-not $Manifest.version_identity) { return 0 }
+    $want = Get-ManifestDriverQuad $Manifest
+    if ($LoadedSha256 -ine $Manifest.version_identity.kmd.sha256) { throw 'version cleanup requires the new loaded KMD' }
+    if ((Get-DeviceServiceName $InstanceId) -cne $script:ServiceName) { throw 'version cleanup requires our bound service' }
+    $infName = Get-DeviceDriverPackage $InstanceId
+    if ($infName -notmatch '\Aoem[0-9]+\.inf\z') { throw 'version cleanup requires the bound OEM INF' }
+    $infPath = Join-Path (Join-Path $env:windir 'INF') $infName
+    $expected = @($Manifest.files | Where-Object { $_.path -ceq 'payload/kmd/bc250kmd.inf' })
+    if ($expected.Count -ne 1 -or (Get-Sha256 $infPath) -ine $expected[0].sha256) { throw 'bound INF differs from this package' }
+    [void](Test-PackageVersionIdentity $Manifest ([IO.File]::ReadAllText($infPath)) $LoadedSha256)
+    $property = (Get-PnpDeviceProperty -InstanceId $InstanceId -KeyName DEVPKEY_Device_DriverVersion -ErrorAction Stop).Data
+    $key = Get-DeviceDriverKey $InstanceId
+    if ($key -notmatch '\AHKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\\{4d36e968-e325-11ce-bfc1-08002be10318\}\\[0-9]{4}\z') {
+        throw 'invalid adapter software key for version cleanup'
+    }
+    $values = Get-ItemProperty -LiteralPath $key -ErrorAction Stop
+    if ([string]$property -cne $want -or [string]$values.DriverVersion -cne $want -or
+        [string]$values.ProductPackageVersion -cne [string]$Manifest.version_identity.product_quad) {
+        throw 'Windows version properties disagree with the installed INF; rebind the package before cleanup'
+    }
+    $removed = 0
+    foreach ($name in 'Bc250DriverVersion', 'Bc250ReportedDriverVersion') {
+        if ($values.PSObject.Properties[$name]) {
+            Invoke-Change "remove obsolete private version tag $name after verified binding" {
+                Remove-ItemProperty -LiteralPath $key -Name $name -ErrorAction Stop
+            }
+            $removed++
+        }
+    }
+    return $removed
 }
 # Our Vulkan ICD registrations in both views of the registry: the value names that name a folder of ours. The
 # installer writes one name per view, the full path of radeon_icd.json under the install root; an older release of

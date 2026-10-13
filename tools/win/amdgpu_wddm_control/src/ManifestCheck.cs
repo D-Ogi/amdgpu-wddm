@@ -151,7 +151,7 @@ namespace AmdgpuWddmControl
             Func<string, bool> exists, Func<string, string> sha256, Func<string, IEnumerable<KeyValuePair<string, string>>> storeCerts)
         {
             var w = new StringBuilder();
-            w.AppendLine("release " + m.Release + " version " + m.Version + " kmd " + m.KmdVersion + ", " + m.Components.Count + " components");
+            w.AppendLine("release " + m.Release + " version " + m.Version + " INF " + m.KmdVersion + " KMD " + m.KmdBuild + ", " + m.Components.Count + " components");
             int ok = 0, bad = 0;
             string thumbprint = (m.ReleaseCertificate ?? "").Replace(" ", "").Replace(":", "");
             foreach (var c in m.Components)

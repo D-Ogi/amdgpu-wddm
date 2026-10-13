@@ -32,8 +32,13 @@ bc250kmd.sys = 1
 [Bc250_Install]
 FeatureScore = F8
 CopyFiles    = Bc250_Files                      ;@PLAIN-ONLY
+AddReg       = Bc250_PackageIdentity            ;@PLAIN-ONLY
 ;@UMD CopyFiles    = Bc250_Files, Bc250_UmdFiles
-;@UMD AddReg       = Bc250_UserModeDriver
+;@UMD AddReg       = Bc250_UserModeDriver, Bc250_PackageIdentity
+
+[Bc250_PackageIdentity]
+; The release builder stamps the product package quad, independent of embedded KMD and Windows DriverVer.
+HKR,, ProductPackageVersion, 0x00000000, "0.7.216.64"
 
 [Bc250_Files]
 bc250kmd.sys

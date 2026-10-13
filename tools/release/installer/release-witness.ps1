@@ -15,6 +15,7 @@
 # The file lives in the installer's state folder, which only administrators and SYSTEM can write (Set-StateDirAccess);
 # the reader also requires such an owner.
 
+. (Join-Path $PSScriptRoot 'version-identity.ps1')
 $script:WitnessSchema = 1
 $script:WitnessPath = Join-Path $env:ProgramData 'amdgpu-wddm\installer\running-release.json'
 $script:BootIdentity = $null
@@ -237,7 +238,7 @@ function Get-RunningReleaseWitness {
         boot_utc = $Boot.boot_utc
         kmd_image_path = $Reading.image.path
         reply_version = $Reading.reply_version
-        driver_ver = [string]$Manifest.kmd_version
+        driver_ver = (Get-ManifestDriverQuad $Manifest)
     }
     return [pscustomobject]@{ record = $rec; reason = $null }
 }

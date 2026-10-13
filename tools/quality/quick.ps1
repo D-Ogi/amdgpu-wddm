@@ -187,9 +187,8 @@ try {
  Check 'link-register-import' { & python -B "$repo\tools\import\extract_link_regs.py" --check }
  Check 'blit-plan' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_blit_plan.ps1" -Root $Workspace -Out "$Out\blit-plan" -Kits "$Kits" }
  Check 'gpu-clock' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_gpu_clock.ps1" -Root $Workspace -Out "$Out\gpu-clock" -Kits "$Kits" }
- # The per-application graphics settings (docs/design/per-app-graphics-settings.md): the kernel-mode driver's
- # ReportAmdDriverVersion number scheme and decision, and the user-mode reader with its precedence and ranges.
- Check 'driver-version' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_driver_version.ps1" -Root $Workspace -Out "$Out\driver-version" -Kits "$Kits" }
+ # The installer owns version mapping; KMD must not rewrite OS device properties.
+ Check 'driver-version' { & powershell -NoProfile -File "$repo\tools\release\test-version-identity.ps1" }
  Check 'umd-app-settings' { $env:BC250_ROOT=$Workspace; & pwsh -NoProfile -File "$repo\tools\build\test-umd-app-settings.ps1" -OutputDir "$Out\umd-app-settings" }
  # The encoder MFT's source-against-sweep checks: every deblocking schedule the source admits still has a case
  # in tests\sweep.ps1 that holds it to the inbox decoder. The sweep itself needs a GPU and is not in this list;

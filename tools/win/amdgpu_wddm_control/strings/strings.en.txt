@@ -911,8 +911,6 @@ search.graphics.overlay.terms|src|-|FPS counter|frame time|overlay|frames per se
 search.graphics.latency|src|-|Low latency
 search.graphics.latency.terms|src|-|latency|input lag|frames ahead|render queue|Anti-Lag|Reflex|max frame latency
 search.graphics.overlay|src|-|Performance overlay
-search.graphics.amd-version|src|-|Report an AMD driver version
-search.graphics.amd-version.terms|src|-|driver version|old driver|outdated driver|driver warning|AMD|unsupported driver
 search.graphics.vk-present|src|-|Vulkan presentation
 search.graphics.vk-present.terms|src|-|Vulkan|present|presentation|black screen|frozen picture|compatibility
 search.graphics.vk-memory|src|-|When video memory is full
@@ -959,7 +957,6 @@ gfx.origin.stored|src|-|Stored for all games.
 gfx.origin.global|src|-|From the settings for all games: {0}.
 gfx.note.overlay|src|-|Works in DirectX 11 games for now.
 gfx.note.cpu-render|src|-|Much slower. A last resort for a DirectX 11 game that fails on the graphics chip.
-gfx.note.amd-version|src|-|For games that warn about an old graphics driver.
 gfx.note.vk-present|src|-|Compatibility is slower. Try it when a Vulkan game shows a black or frozen picture.
 gfx.note.sm|src|-|Some games fail with a newer shader model. Choose a lower one only for such a game.
 gfx.global.title|src|-|Settings for all games

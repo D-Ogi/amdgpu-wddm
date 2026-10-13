@@ -392,7 +392,6 @@ static void FanStart(BC250_DEVICE* d) { (void)d; }
 static void SmuMetricsStart(BC250_DEVICE* d) { (void)d; }
 static void DpmStart(BC250_DEVICE* d) { (void)d; }
 static void CpuStart(BC250_DEVICE* d) { (void)d; }
-static void DriverVersionStart(BC250_DEVICE* d) { (void)d; }
 static void InterlockedExchange(LONG* t, LONG v) { *t = v; }
 static unsigned stops;
 // The real teardown logs through its own subsystems: the ring grows while it runs, which is why the record marks

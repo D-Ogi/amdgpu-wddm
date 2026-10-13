@@ -14,7 +14,8 @@ $script:SettingsTableSchema = 1          # registry-defaults.json "schema" that 
 # The record for a package folder whose INF, installer and payload are final (manifest.json not needed yet).
 function New-CompatibilityRecord {
     param([Parameter(Mandatory)][string]$PackageRoot, [Parameter(Mandatory)][string]$Version, [Parameter(Mandatory)]$Firmware,
-        [Parameter(Mandatory)][string]$KmdBuild, [Parameter(Mandatory)][string]$KmdAbi, [Parameter(Mandatory)][string]$DriverVer)
+        [Parameter(Mandatory)][string]$KmdBuild, [Parameter(Mandatory)][string]$KmdAbi, [Parameter(Mandatory)][string]$DriverVer,
+        $VersionIdentity)
     $infRel = 'payload/kmd/bc250kmd.inf'
     $inf = Join-Path $PackageRoot ($infRel -replace '/', '\')
     $lines = [IO.File]::ReadAllLines($inf)
@@ -25,6 +26,7 @@ function New-CompatibilityRecord {
     return [ordered]@{
         schema = $script:CompatibilitySchema
         version = $Version
+        version_identity = $VersionIdentity
         engine = [ordered]@{ contract = $script:EngineContract; result_schema = $script:ResultSchema; event_schema = $script:EventSchema
             witness_schema = $script:WitnessSchema }
         # Older readers require reboot_directive=true and therefore refuse this new method safely.
@@ -110,6 +112,17 @@ function Test-CompatibilityRecord {
         if ([string]$rec.settings.table_schema -ne [string]$script:SettingsTableSchema) { Add-Reason 'compat.settings' "settings table schema $($rec.settings.table_schema), this engine reads $($script:SettingsTableSchema)" }
         $kmd = @($m.components | Where-Object { $_ -and $_.package_path -eq 'payload/kmd/bc250kmd.sys' }) | Select-Object -First 1
         if (-not $kmd -or ([string]$kmd.sha256).ToUpperInvariant() -ne ([string]$rec.kmd.sys_sha256).ToUpperInvariant()) { Add-Reason 'compat.kmd' 'the KMD image differs from the record' }
+        if ($null -ne $m.PSObject.Properties['version_identity']) {
+            try {
+                [void](Test-PackageVersionIdentity $m ([IO.File]::ReadAllText($inf)) ([string]$kmd.sha256))
+                $v = $rec.version_identity
+                if (-not $v -or $v.schema -ne 1 -or $v.release -cne $m.version_identity.release -or
+                    $v.product_quad -cne $m.version_identity.product_quad -or
+                    $v.inf.date -cne $m.version_identity.inf.date -or $v.inf.quad -cne $m.version_identity.inf.quad -or
+                    $v.kmd.build -cne $m.kmd_build -or $v.kmd.abi -cne $m.kmd_abi -or $v.kmd.sha256 -ine $kmd.sha256 -or
+                    $rec.kmd.driver_ver -cne $v.inf.quad) { throw 'compatibility version identity differs from manifest' }
+            } catch { Add-Reason 'compat.kmd' $_.Exception.Message }
+        }
     }
     return [pscustomobject]@{ ok = ($reasons.Count -eq 0); reasons = @($reasons); detail = ($details -join ' | '); record = $rec }
 }

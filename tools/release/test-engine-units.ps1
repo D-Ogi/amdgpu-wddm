@@ -319,9 +319,9 @@ $inventory = @(
 $rowsPnp = @(Get-OurDriverPackageRows -Packages $inventory)
 Check (((@($rowsPnp | ForEach-Object { "$($_.published)=$($_.version)" }) -join ', ') -eq 'oem9.inf=0.7.198.100, oem12.inf=0.7.208.100, oem15.inf=0.7.213.101')) 'structured inventory: only our packages, each with its version'
 $store = @(
-    [pscustomobject]@{ published = 'oem9.inf'; version = '0.7.198.100' }
-    [pscustomobject]@{ published = 'oem12.inf'; version = '0.7.208.100' }
-    [pscustomobject]@{ published = 'oem15.inf'; version = '0.7.213.101' })
+    [pscustomobject]@{ published = 'oem9.inf'; version = '0.7.198.100'; date = '10/01/2026' }
+    [pscustomobject]@{ published = 'oem12.inf'; version = '0.7.208.100'; date = '10/02/2026' }
+    [pscustomobject]@{ published = 'oem15.inf'; version = '0.7.213.101'; date = '10/03/2026' })
 $sp = Get-DriverStoreRemovePlan -Packages $store -BoundPublished 'oem15.inf' -PreviousVersion '0.7.208.100'
 Check (((@($sp.remove) -join ',') -eq 'oem9.inf') -and ((@($sp.keep) -join ',') -eq 'oem15.inf,oem12.inf') -and ($sp.previous -eq 'oem12.inf')) "the bound package and the one of the previous repair set stay, the older one goes (remove: $(@($sp.remove) -join ', '))"
 $sp = Get-DriverStoreRemovePlan -Packages $store -BoundPublished 'oem15.inf' -PreviousVersion $null

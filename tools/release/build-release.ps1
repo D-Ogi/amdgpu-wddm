@@ -38,7 +38,7 @@
 param(
     [string]$Root = $(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { Split-Path (Split-Path (Split-Path $PSScriptRoot)) }),
     [string]$Out,
-    [string]$DriverVer = '0.7.216.100',          # the release's own 4th field: ranks above the lab's x.y.z.1, names the package
+    [string]$DriverVer = '',                   # optional assertion of the mapped Windows INF quad; derived from Version
     [string]$Version = '0.7.216.100-tester.21',
     [string]$KitVersion = '10.0.26100.0',
     [string]$SetupApp,                           # required: the built setup window (build.ps1 output), copied to the top folder as setup.exe
@@ -187,7 +187,7 @@ foreach ($cfg in Get-ChildItem -LiteralPath (Join-Path $pkg 'payload') -Recurse 
 Write-Host 'installer and documents'
 # The logon tasks' scripts: the confirmation also writes the running-release witness (release-witness.ps1), and
 # start-window.ps1 is the window task's own script (BD-080), which the logged-on user runs with their own rights.
-$taskScripts = @('start-confirm.ps1', 'start-confirm-core.ps1', 'start-window.ps1', 'dwm-session.ps1', 'release-witness.ps1')
+$taskScripts = @('start-confirm.ps1', 'start-confirm-core.ps1', 'start-window.ps1', 'dwm-session.ps1', 'release-witness.ps1', 'version-identity.ps1')
 $inst = Join-Path $pkg 'installer'
 [void][IO.Directory]::CreateDirectory($inst)
 foreach ($f in Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'installer') -File) {
@@ -373,17 +373,18 @@ foreach ($program in @(
 if ($checkedPrograms -eq 0) { throw 'guide art: no packaged program was checked' }
 
 Write-Host 'driver version'
-# DriverVer is the only release rewrite. The display class forbids the Reboot directive (BD-152).
+# Stamp DriverVer and our product identity. The display class forbids Reboot (BD-152).
 # The installer defers binding through DiInstallDriverW(INSTALL_AS_SET), preserving BD-060 outside the INF.
 . (Join-Path $PSScriptRoot 'installer\common.ps1')
 . (Join-Path $PSScriptRoot 'installer\deferred-driver.ps1')
 $infPath = Join-Path $pkg 'payload\kmd\bc250kmd.inf'
 $infText = [IO.File]::ReadAllText($infPath)
 if (Test-InfHasReboot ($infText -split "`r?`n")) { throw 'display INF must not contain Reboot (BD-152)' }
-# Only the 4th field is the release's: the first three name the KMD build (kmd_version).
-$kmdBase = (([string]$sources.kmd_version) -split '\.')[0..2] -join '.'
-if ($DriverVer -notmatch ('^' + [regex]::Escape($kmdBase) + '\.\d+$')) { throw "DriverVer $DriverVer does not belong to KMD $($sources.kmd_version)" }
-if ($Version -notlike "$DriverVer-*") { throw "release version $Version does not start with DriverVer $DriverVer" }
+# BD-152: package identity is installation-owned. Never derive it from the embedded KMD build.
+$productQuad = Get-ProductPackageQuad $Version
+$mappedQuad = Get-PackageDriverQuad $productQuad
+if ($DriverVer -and $DriverVer -cne $mappedQuad) { throw "DriverVer $DriverVer differs from package mapping $mappedQuad" }
+$DriverVer = $mappedQuad
 # BD-150: the date is the release's too (release-sources.json driver_date), and the release must rank above the one it
 # supersedes. PnP orders packages of one rank by DriverVer date, then by version, and keeps the installed package on a
 # tie: tester.29 and 29v2 both said 10/12/2026,0.7.216.100, and the 29v2 install left the tester.29 KMD on the GPU. The
@@ -410,10 +411,13 @@ $oldDate = ConvertFrom-InfDate $Matches[1] 'supersedes.driver_ver'
 $oldVer = [version]$Matches[2]
 if (-not (($driverDate -gt $oldDate) -or (($driverDate -eq $oldDate) -and ([version]$DriverVer -gt $oldVer)))) {
     throw ("DriverVer $($sources.driver_date),$DriverVer does not rank above $($sources.supersedes.release) ($($sources.supersedes.driver_ver)): " +
-           'Windows would keep that package. Set a later driver_date, or a higher -DriverVer on the same date.')
+           'Windows would keep that package. Set a later driver_date, or a higher product package version on the same date.')
 }
 $driverDateText = $driverDate.ToString('MM/dd/yyyy', [Globalization.CultureInfo]::InvariantCulture)
 $infText = $rx.Replace($infText, { param($m) $m.Groups[1].Value + $driverDateText + ',' + $DriverVer + $m.Groups[4].Value })
+$productRx = [regex]'(?m)^(HKR,, ProductPackageVersion, 0x00000000, ")[0-9.]+("\r?)$'
+if ($productRx.Matches($infText).Count -ne 1) { throw 'INF must name ProductPackageVersion once' }
+$infText = $productRx.Replace($infText, { param($m) $m.Groups[1].Value + $productQuad + $m.Groups[2].Value })
 [IO.File]::WriteAllText($infPath, $infText)
 if ($infText -notmatch ('(?m)^DriverVer\s*=\s*' + [regex]::Escape("$driverDateText,$DriverVer") + '\s*$')) { throw 'DriverVer rewrite failed' }
 '  DriverVer {0},{1} (above {2}, {3})' -f $driverDateText, $DriverVer, $sources.supersedes.release, $sources.supersedes.driver_ver
@@ -491,7 +495,7 @@ if ($r.code -ne 0) { throw 'marker guard: a fix named in a source revision has n
 # The packaged INF's own settings against the defaults table this package carries (BD-091, tools\quality\inf_gates.py):
 # every setting the INF writes is the released value and carries NOCLOBBER, so an install this installer does not drive
 # cannot close one gate while another stays open. The packaged INF, not the repository's: the release re-stamps
-# DriverVer and adds the Reboot directive above, and it is the packaged file that runs on a tester's computer.
+# DriverVer, our product identity and the image comment above; the packaged file runs on a tester's computer.
 $pythonExe = (Get-Command python -ErrorAction SilentlyContinue).Source
 if (-not $pythonExe) { throw 'python is not on PATH: the inf-gates gate (BD-091) cannot run' }
 $r = Invoke-Headless -File $pythonExe -Arguments @((Join-Path $repo 'tools\quality\inf_gates.py'), '--inf', $infPath, '--defaults', (Join-Path $PSScriptRoot 'installer\registry-defaults.json'), '--out', (Join-Path $Out 'inf-gates')) -TimeoutSeconds 120
@@ -592,7 +596,8 @@ if (Test-Path -LiteralPath $componentSource -PathType Leaf) {
 . (Join-Path $PSScriptRoot 'installer\engine.ps1')
 . (Join-Path $PSScriptRoot 'installer\release-witness.ps1')
 . (Join-Path $PSScriptRoot 'installer\compatibility.ps1')
-$compat = New-CompatibilityRecord -PackageRoot $pkg -Version $Version -Firmware $firmware -KmdBuild ([string]$sources.kmd_version) -KmdAbi ([string]$sources.kmd_abi) -DriverVer $DriverVer
+$versionIdentity = New-PackageVersionIdentity -Release $Version -DriverDate $driverDateText -KmdBuild ([string]$sources.kmd_version) -KmdAbi ([string]$sources.kmd_abi) -KmdSha256 $kmdSha
+$compat = New-CompatibilityRecord -PackageRoot $pkg -Version $Version -Firmware $firmware -KmdBuild ([string]$sources.kmd_version) -KmdAbi ([string]$sources.kmd_abi) -DriverVer $DriverVer -VersionIdentity $versionIdentity
 if ($compat.no_live_rebind.method -ne 'di-install-as-set' -or $compat.no_live_rebind.reboot_directive) { throw 'compatibility record: deferred driver-set contract missing' }
 [IO.File]::WriteAllText((Join-Path $pkg $script:CompatibilityFile), ($compat | ConvertTo-Json -Depth 6))
 '  compatibility record: engine {0}, {1}, {2} firmware files, settings table schema {3}' -f $compat.engine.contract, $compat.no_live_rebind.method, @($compat.firmware.files).Count, $compat.settings.table_schema
@@ -677,6 +682,7 @@ $manifest = [ordered]@{
     release = $Version
     version = $Version
     kmd_version = $DriverVer
+    version_identity = $versionIdentity
     kmd_build = $sources.kmd_version
     kmd_abi = $sources.kmd_abi             # BC250_KMD_VERSION, what bc250kmd_cli info reports (start-confirm, verify)
     built_utc = [DateTime]::UtcNow.ToString('o')

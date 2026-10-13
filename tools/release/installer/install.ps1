@@ -581,8 +581,8 @@ function Invoke-Verify {
     $startState = Get-VerifyStartState -ProblemCode ([int]$dev[0].ConfigManagerErrorCode) -Status ([string]$pnp.Status)
     $drv = Get-CimInstance Win32_PnPSignedDriver -Filter "DeviceID='$($id -replace '\\', '\\')'" -ErrorAction SilentlyContinue
     $want = $null
-    if ($script:Manifest) { $want = $script:Manifest.kmd_version }
-    # The release's DriverVer (x.y.z.100) differs from every lab build, so the bound version names the package.
+    if ($script:Manifest) { $want = Get-ManifestDriverQuad $script:Manifest }
+    # The Windows INF quad names the package independently of the embedded KMD build.
     $inf = $null
     if ($drv) { $inf = $drv.InfName }
     # Win32_PnPSignedDriver leaves DriverProviderName empty for this package; the device property has the INF's Provider.
@@ -605,6 +605,12 @@ function Invoke-Verify {
             Add-Result 'driver image' $false "no readable bc250kmd.sys among the loaded drivers; package $($wantImage.Substring(0, 8))"
         } else {
             Add-Result 'driver image' ($loaded.sha256 -eq $wantImage) "loaded $($loaded.path) $($loaded.sha256.Substring(0, 8)), package $($wantImage.Substring(0, 8))"
+            if ($script:Manifest.version_identity -and $loaded.sha256 -eq $wantImage) {
+                try {
+                    $tags = Remove-LegacyDriverVersionTags -InstanceId $id -Manifest $script:Manifest -LoadedSha256 $loaded.sha256
+                    Add-Result 'package version identity' $true "INF, Windows properties and loaded KMD agree; $tags obsolete private tags removed"
+                } catch { Add-Result 'package version identity' $false $_.Exception.Message }
+            }
         }
     }
     # One read-only reading of the start-confirm task's inputs, in a child process (start-confirm.ps1 -Probe): the
@@ -671,7 +677,7 @@ function Invoke-Verify {
     Invoke-VerifyDiagnostics -DeviceState ([ordered]@{
             present = $true; instance_id = $id; problem_code = $dev[0].ConfigManagerErrorCode; status = [string]$pnp.Status
             service = $svc; driver_version = $(if ($drv) { [string]$drv.DriverVersion } else { $null }); inf = $inf
-            provider = [string]$provider; package_version = [string]$script:Manifest.kmd_version
+            provider = [string]$provider; package_version = (Get-ManifestDriverQuad $script:Manifest)
             reply_version = $replyVersion; last_stage = $lastStage; health_flags = $hflags
         }) -StartRecord (Read-VerifyStartRecord) -BootUtc (Get-StartRecordBootUtc) -BootId (Get-StartRecordBootId) -Context 'verify' -Info ${function:Add-Info}
     $uc = (Get-ItemProperty -LiteralPath $script:ParametersKey -Name UnconfirmedStarts -ErrorAction SilentlyContinue).UnconfirmedStarts

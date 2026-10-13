@@ -17,7 +17,7 @@ namespace AmdgpuWddmControl
         // image -> the chosen shader model ceiling ("6.8", "6.7", "6.6"), only when it differs from the stored one.
         readonly Dictionary<string, string> _smEdits = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        static readonly string[] GfxGraphicsNames = { "FrameRateLimit", "VSync", "Anisotropy", "MaxFrameLatency", "PerformanceOverlay", "RenderOnCpu", "ReportAmdDriverVersion" };
+        static readonly string[] GfxGraphicsNames = { "FrameRateLimit", "VSync", "Anisotropy", "MaxFrameLatency", "PerformanceOverlay", "RenderOnCpu" };
         // Empty while WsiRoute and MemoryOverflow wait for their ICD (GraphicsSettings.AwaitingIcd); with no name the
         // Vulkan section is not shown.
         static readonly string[] GfxVulkanNames = { };
@@ -84,19 +84,6 @@ namespace AmdgpuWddmControl
             string edit;
             bool edited = edits.TryGetValue(s.Name, out edit);
             Control input;
-            if (s.Name == "ReportAmdDriverVersion")
-            {
-                var box = Ui.Check(s.Title, c.Inner - Theme.S(40));
-                box.Checked = GraphicsSettings.Checked(view.Here, edited, edit);
-                box.CheckedChanged += (o, e) =>
-                {
-                    GraphicsSettings.Check(_gfxGlobalEdits, s, view.Here, box.Checked);
-                    BeginInvoke((Action)(() => ShowPage(_page, null, false)));
-                };
-                input = box;
-                c.Add(Ui.Row(box, Explain(s.Id, s.Title)));
-            }
-            else
             {
                 var items = GraphicsSettings.Items(view);
                 var combo = Choices(items.Select(x => x.Text).ToList(), s.Title, ChoiceMax(c.Inner));

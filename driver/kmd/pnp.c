@@ -238,9 +238,6 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     DpmStart(device);
     // After the governor: the CPU surface reads its settings and, if CpuTune is 1, starts its worker (cpu.c).
     CpuStart(device);
-    // The driver version that games read in the adapter's software key, for the ReportAmdDriverVersion setting
-    // (driver_version.c). Registry only, and never fails the start.
-    DriverVersionStart(device);
     BoardMemoryStart(device); // Read-only self-check; never fails display start.
     GuardStage(StageStartDone);
     GuardRecordStartStarted();      // BD-122: this start is not a reason for anything

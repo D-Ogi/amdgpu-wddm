@@ -36,7 +36,7 @@ writes one log line and then reads the next source.
 
 The two shells read the settings once per process, at the first device creation. A change takes effect at the next
 start of the application. The router reads `RenderOnCpu` at each `OpenAdapter` call, as it reads its `AppRouter`
-key. The KMD reads `ReportAmdDriverVersion` at each adapter start.
+key. The installed INF owns the Windows driver version.
 
 ## The settings
 
@@ -48,7 +48,6 @@ key. The KMD reads `ReportAmdDriverVersion` at each adapter start.
 | `MaxFrameLatency` | `AMDGPU_WDDM_MAX_FRAME_LATENCY` | 1-3 | works | works |
 | `PerformanceOverlay` | `AMDGPU_WDDM_PERFORMANCE_OVERLAY` | 0, 1 | works | not applied |
 | `RenderOnCpu` | `AMDGPU_WDDM_RENDER_ON_CPU` | 0, 1 | works, also for D3D10 | no CPU route |
-| `ReportAmdDriverVersion` | none | 0, 1 | global key only | global key only |
 
 "Works" in this table means that the host gates pass. The lab script `settings-lab.ps1` of the work directory
 checks each row on unit A.
@@ -209,11 +208,10 @@ the CPU route gets FL 10_0 (BD-088).
 
 D3D12 has no CPU route. No CPU route through lavapipe exists in any repository of this project.
 
-### ReportAmdDriverVersion
+### Installed driver version
 
-The KMD reads this value from the global key only, at each adapter start. The value 1 makes the driver report
-an AMD-scheme version number to programs that check the driver version. The section
-[The AMD-scheme driver version](#the-amd-scheme-driver-version) gives the scheme and the reason.
+The package sets the Windows driver version during installation. There is no
+runtime override. See [the version policy](#the-amd-scheme-driver-version).
 
 ## Log lines
 
@@ -255,129 +253,39 @@ process from mixing their values.
 
 ## The AMD-scheme driver version
 
-### The problem
+BD-152 makes the INF version an installation-owned property. The release builder
+maps product package `a.b.c.d` to Windows DriverVer `(a+40).b.c.d`. For example,
+product `0.7.216.103` maps to `40.7.216.103`. The embedded KMD build can differ.
+The manifest records the release name, product quad, INF date/quad, embedded KMD
+build/ABI and SYS hash as separate identities. The INF writes our own
+`ProductPackageVersion` value. It never writes the OS-owned `DriverVersion` value
+through AddReg.
 
-Some games compare the driver version of the adapter with a minimum version for each GPU vendor. For
-vendor `0x1002` they expect AMD numbering. The version `0.7.216.18` of this driver reads as a very old AMD driver.
-The game then shows a warning about known driver problems, and the player must close it at each start.
+Each INF field must be less than 65535. A product major above 65494 is refused,
+as are an invalid quad, date or suffix. PnP still compares rank first, then date,
+then version. The +40 mapping does not override a worse rank or an older date.
+BD-150's date/version supersedence gate remains in the release build.
 
-### The scheme
+The KMD no longer reads `ReportAmdDriverVersion`, visits video registry aliases
+or rewrites version properties at adapter start. The GUI has no such switch.
+On upgrade, installation must establish the new package binding. The installer compares
+the bound INF hash/date/quad, OS version properties, product value and loaded SYS.
+Only then does it remove our obsolete `Bc250DriverVersion` and
+`Bc250ReportedDriverVersion` tags. A mismatch keeps the tags for diagnosis and
+fails verification. No code restores `DriverVersion` from the old backup.
 
-The reported number is `(a + 40).b.c.d` for the installed number `a.b.c.d`. The installed `0.7.216.18` is reported
-as `40.7.216.18`. AMD's own driver 24.3.1 of March 2024 has the number `31.0.24027.1012`, as a comment of the
-Unreal Engine 5.4 `BaseHardware.ini` records. The first field 40 is above that by a margin of several years. The
-other three fields stay, so a support report still identifies the build of this driver.
+The previous implementation changed that OS property at runtime. BD-104 showed
+that an Unreal Engine check could read it through a video-key alias. That result
+explains the number policy, but does not permit the write. The Microsoft device
+installation contract prohibits changing `DriverVersion`, `DriverDate` and the
+other installation-owned properties in an adapter software key.
 
-### The mechanism
-
-The value that the setting changes is `DriverVersion` in the software key of the graphics adapter. That is the key
-that dxgkrnl names in `DXGK_DEVICE_INFO.DeviceRegistryPath`, the registry path of the software key of the adapter,
-about which the DDI reference says "Registry data should be written only to this path"
-(`ref/ddi-display/dispmprt.md`, `DXGK_DEVICE_INFO`). `IoOpenDeviceRegistryKey` with `PLUGPLAY_REGKEY_DRIVER` opens
-the same key, and that is how a graphics miniport writes its own registry information
-(`windows-driver-docs-pr/display/registering-hardware-information.md`,
-`windows-driver-docs-pr/install/opening-a-device-s-software-key.md`, staging `110f60ea`). On unit A it is
-
-```
-HKLM\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000
-```
-
-`EnumDisplayDevices` gives a second path to the same values and reports it as the `DeviceKey` of the adapter:
-
-```
-HKLM\SYSTEM\CurrentControlSet\Control\Video\{VideoID}\0000
-```
-
-Unreal Engine 4 reads the `DriverVersion` value of that path. Each numbered video key is a registry symbolic link: it
-holds a `REG_LINK` value `SymbolicLinkValue` whose target is the software key above, and an open that does not ask
-for `OBJ_OPENLINK` follows it. A write through either path therefore reaches the same value. Three results follow:
-
-- A second video key of the adapter finds the number in place and writes nothing.
-- The write also changes the version that Device Manager gives for the adapter.
-- The write changes the SetupAPI property `DEVPKEY_Device_DriverVersion`, because that property reads the
-  `DriverVersion` value of the same key. The Microsoft page of that property names its registry value
-  `REGSTR_VAL_DRIVERVERSION`, `DriverVersion`
-  (`windows-driver-docs-pr/install/devpkey-device-driverversion.md`, staging `110f60ea`).
-
-The KMD writes the software key, and it opens it by handle with `IoOpenDeviceRegistryKey`, not by a path of its own.
-The PnP manager creates that key when the device is installed, so an adapter start always reaches it. The first
-version of this code wrote only to `DeviceRegistryPath` as a path and refused it, because the guard admitted no path
-outside `Control\Video`, so the number never reached Unreal Engine (b23 lab 489). The second version wrote only
-through the video path, and that path is not there yet while the adapter starts. On the lab the
-`Control\Video\{VideoID}` key opened and held no numbered subkey, so nothing was written and the log said "this
-adapter has no video key" about a key that the same script read minutes later (BD-104, b24 round 2). The DDI makes
-that order plausible: the count of video present sources is an output parameter of `DxgkDdiStartDevice`, so dxgkrnl
-learns how many of those keys the adapter needs only when the start returns, and this code runs inside the start.
-
-After the software key the KMD still visits the video keys, for an installation where a numbered video key holds its
-own `DriverVersion` instead of a link. It finds them in two steps:
-
-1. It opens the adapter's hardware key (`IoOpenDeviceRegistryKey` with `PLUGPLAY_REGKEY_DEVICE`) and reads the
-   `VideoID` value, which holds the GUID of the video keys of this adapter.
-2. It opens `Control\Video\{VideoID}` and visits each subkey whose name is four decimal digits. One adapter can have
-   more than one such key, and `HKLM\HARDWARE\DEVICEMAP\VIDEO` names the same keys as `\Device\Video<n>`. The
-   development PC showed four of them for one adapter. The KMD visits at most 16 and says so in the log if there
-   are more.
-
-That pass normally finds nothing during a start, which is silent while the software key was reached. Its own
-`DeviceRegistryPath` fallback stays for a machine that has no `VideoID` and no software key of its own.
-
-The driver store keeps the INF number, and so does `Bc250DriverVersion`. Because an open can follow a symbolic link
-to a key other than the one the path names, the KMD guards every write the same way: it reads the name of the key
-that the open gives back, through `ZwQueryKey` with `KeyNameInformation`, and writes only when that name is a video
-key or one adapter key of the adapter class `{4d36e968-e325-11ce-bfc1-08002be10318}`. A path that the KMD builds
-itself is in addition admitted only below `Control\Video`.
-
-The guideline for device installation forbids this write. `install/opening-a-device-s-software-key.md:33-46`,
-staging `110f60ea`, holds the rule and names `DriverVersion` among the ten entries it covers:
-
-```
-You must not modify the values of the following registry entries (device properties) in a device's software key:
-  DriverDate, DriverDateData, DriverDesc, DriverVersion, InfPath, InfSection, InfSectionExt, MatchingDeviceId,
-  ProviderName, EnumPropPages32
-```
-
-The reason is on the same page: "These device properties represent a device's installation state", and "Changing
-driver version or driver date might break Windows Update functionality". The note of that page says that Windows
-imposes the restrictions
-"installation-time only", that "Values can be replicated for compatibility", and that a direct change of a value
-"during device installation" does not change internal state. That note is about writes during an installation. It
-gives no permission for a write after the installation, which is the write this driver does, so the prohibition
-holds for it (audit finding K1, 2026-10-10).
-
-The driver keeps the deviation closed. An install leaves `ReportAmdDriverVersion` absent, and the KMD reads an
-absent, unreadable or out-of-range value as 0. The `inf-gates` gate (`tools/quality/inf_gates.py`) fails if
-`bc250kmd.inf` or `registry-defaults.json` names the setting, and if an `AddReg` line of the package writes one of
-the ten device properties. The control application alone turns the setting on, for the tester who wants it.
-`Bc250DriverVersion` then keeps the installed number, the next start with the setting cleared writes it back, and
-the driver store copy is never touched. The gain is the games that refuse to run well against the number this
-driver installs. The cost is the installation state of the device, and Windows Update with it.
-
-A mechanism the platform supports has still to replace the setting: a version policy that the installation owns, or
-an application compatibility mechanism. Until then the write stays off by default.
-
-The two facts above were measured on the development PC on 2026-10-08, read-only, with
-`RegOpenKeyEx(REG_OPTION_OPEN_LINK)` and `RegQueryValueEx("SymbolicLinkValue")` on the video keys of its graphics
-adapter, and by comparing `DEVPKEY_Device_DriverVersion` of the devnode with the `DriverVersion` value of the class
-key that the link named. All four numbered video keys of that adapter named the same class key.
-
-At each adapter start the KMD reads `ReportAmdDriverVersion` and changes three values of each key it reaches:
-
-| Value | Content |
-|---|---|
-| `DriverVersion` | the AMD-scheme number while the setting is 1, the installed number otherwise |
-| `Bc250DriverVersion` | the installed number, while the setting is 1 |
-| `Bc250ReportedDriverVersion` | the number that the KMD wrote, while the setting is 1 |
-
-When the setting goes back to 0, the next start writes the installed number back and deletes the two backup values.
-A new driver installation writes its own number into `DriverVersion`. With the setting on, the next start reports
-the new number in the AMD scheme. With the setting off, the KMD keeps the new number and deletes only the backups.
-The KMD writes only when the name of the key it opened is a video key or one adapter key of the adapter class. A
-path that the KMD builds itself must in addition be below `\Control\Video\`.
-
-The driver store keeps the INF number, and `Bc250DriverVersion` holds it next to the reported number, so a support
-report can give both. The code is `driver/kmd/driver_version.c`, and `driver/kmd/driver_version.h` holds the
-decisions and the path of the key, which the host test checks.
+Sources: MicrosoftDocs/windows-driver-docs `110f60ea`,
+[software key](https://learn.microsoft.com/windows-hardware/drivers/install/opening-a-device-s-software-key),
+[DriverVer](https://learn.microsoft.com/windows-hardware/drivers/install/inf-driverver-directive),
+and [driver selection](https://learn.microsoft.com/windows-hardware/drivers/install/overview-of-the-driver-selection-process).
+Host tests cover identity mismatches, bounds and rollback ranking. The Ascent
+on a fresh and an upgraded install is a separate lab acceptance test.
 
 ### What Unreal Engine checks
 
@@ -400,7 +308,7 @@ key for the text of its message. The decision uses the number of `DriverVersion`
 those three values.
 
 Unreal Engine 5.4 reads the device property through the SetupAPI. That property reads the `DriverVersion` value of
-the class key, which is the key that the symbolic link of the video key leads to, so the setting changes the number
+the class key, which is the key that the symbolic link of the video key leads to, so installation sets the number
 that method 5 sees as well. Its D3D12 and Vulkan entries compare the driver date, and the INF date of this driver
 passes them. The lab check records the property next to the registry values, to check this on unit A. Method 5
 reads the `DeviceKey` only when the SetupAPI finds no adapter with the name of the D3D adapter.
@@ -417,8 +325,8 @@ A future entry that matches all versions from a value upward, with `>=`, would a
 | `driver/umd/dxvk/ddi-adapter.cpp`, `ddi-present.cpp` | the D3D11 shell |
 | `driver/umd/d3d12/adapter.cpp`, `native-tables.cpp` | the D3D12 shell |
 | `driver/umd/router/router-policy.h`, `router.cpp` | `RenderOnCpu` |
-| `driver/kmd/driver_version.c`, `driver_version.h` | `ReportAmdDriverVersion` |
-| `driver/kmd/test/driver_version_test.c` | host test, run by `driver/kmd/test/run_driver_version.ps1` |
+| `tools/release/installer/version-identity.ps1` | package version identity |
+| `tools/release/test-version-identity.ps1` | version and rollback host tests |
 
 The build scripts of the three UMDs run `test-umd-app-settings.ps1`. `tools/quality/quick.ps1` runs it and the
 driver version test as the checks `umd-app-settings` and `driver-version`.

@@ -72,7 +72,12 @@ Check ($inf -match ('(?m)^DriverVer\s*=\s*[\d/]+,' + [regex]::Escape([string]$m.
 # BD-150: the INF names the release and the signed KMD, so two packages with different KMDs never share an INF.
 $kmdSys = (Get-FileHash -LiteralPath (Join-Path $Package 'payload\kmd\bc250kmd.sys') -Algorithm SHA256).Hash
 Check ($inf -match ('(?m)^; release ' + [regex]::Escape([string]$m.version) + ', bc250kmd\.sys SHA256 ' + $kmdSys + '\r?$')) "INF identity line names release $($m.version) and bc250kmd.sys $($kmdSys.Substring(0, 8))"
-Check ([string]$m.version -like "$($m.kmd_version)-*") "release version $($m.version) carries the driver version"
+. (Join-Path $PSScriptRoot 'installer\version-identity.ps1')
+if ($m.version_identity) {
+    Check ((Test-PackageVersionIdentity $m $inf $kmdSys).quad -ceq (Get-PackageDriverQuad (Get-ProductPackageQuad $m.version))) 'mapped INF, product and embedded KMD identities agree'
+} else {
+    Check ([string]$m.version -like "$($m.kmd_version)-*") 'legacy release version carries its INF version'
+}
 $before = Get-Footprint
 
 'install -DryRun'

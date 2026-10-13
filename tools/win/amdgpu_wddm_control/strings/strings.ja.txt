@@ -893,8 +893,6 @@ search.graphics.overlay.terms|mt|72342a7f|FPS カウンター|フレーム時間
 search.graphics.latency|mt-safe|f3bcef3c|低遅延
 search.graphics.latency.terms|mt|5b07cf0e|遅延|入力遅延|インプットラグ|先行フレーム|レンダー キュー|Anti-Lag|Reflex
 search.graphics.overlay|mt-safe|37d49e6c|パフォーマンス オーバーレイ
-search.graphics.amd-version|mt-safe|e9b65d7d|AMD ドライバーのバージョンを報告
-search.graphics.amd-version.terms|mt|a3215411|ドライバーのバージョン|古いドライバー|ドライバーの警告|AMD|未対応のドライバー
 search.graphics.vk-present|mt-safe|cdee9cc4|Vulkan の表示方式
 search.graphics.vk-present.terms|mt|93c9bf20|Vulkan|表示|黒い画面|画面が止まる|互換性
 search.graphics.vk-memory|mt-safe|542ed595|ビデオ メモリが一杯のとき
@@ -941,7 +939,6 @@ gfx.origin.stored|mt-safe|2b5c4aeb|すべてのゲーム用に保存済み。
 gfx.origin.global|mt|6617fcee|すべてのゲームの設定から: {0}。
 gfx.note.overlay|mt|a4263f23|現在は DirectX 11 のゲームでのみ動作します。
 gfx.note.cpu-render|mt|0b9bf5df|大幅に遅くなります。グラフィックス チップで動作しない DirectX 11 ゲームの最後の手段です。
-gfx.note.amd-version|mt|7f26a73f|古いグラフィックス ドライバーについて警告するゲーム向けです。
 gfx.note.vk-present|mt|3d7eec4c|互換性は遅くなります。Vulkan ゲームの画面が黒い、または止まったままのときに試してください。
 gfx.note.sm|mt|3efcfd20|新しいシェーダー モデルで動作しないゲームがあります。そのようなゲームにだけ低いものを選んでください。
 gfx.global.title|mt-safe|c750f458|すべてのゲームの設定
