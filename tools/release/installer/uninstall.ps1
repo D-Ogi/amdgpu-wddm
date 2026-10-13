@@ -300,7 +300,9 @@ foreach ($s in @(@{ dir = 'System32'; flag = 'stub_existed' }, @{ dir = 'SysWOW6
 }
 $fwExisted = $false
 if ($state -and $state.firmware_dir_existed) { $fwExisted = $true }
-if (-not $fwExisted) {
+if ($state -and $state.firmware_delivery -ceq 'driver-store-v1') {
+    Write-Info 'firmware belongs to the driver package; no separate firmware folder is removed'
+} elseif (-not $fwExisted) {
     Invoke-Change "remove $($script:FirmwareInstallDir)" { Remove-PathOrSchedule $script:FirmwareInstallDir } | Out-Null
     $bcExisted = $false
     if ($state -and $state.bc250_dir_existed) { $bcExisted = $true }

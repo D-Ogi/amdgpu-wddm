@@ -7,9 +7,8 @@ numbers is wrong, the PSP is fed something that is not microcode, and on this pa
 looks exactly like "the PSP refused the command for reasons of its own".
 
 This tool reads the same numbers here, on the development PC, before any of it reaches
-the hardware. It also answers the question that comes up every time somebody drops a new
-firmware file into `C:\BC250\firmware\`: is this the same microcode that amdgpu loaded on
-unit A?
+the hardware. It compares a candidate firmware file with the microcode that amdgpu
+loaded on unit A. Current KMD packages load firmware from their Driver Store directory.
 
 The blobs themselves are not in this repository (`.gitignore`: `*.bin`). They live under
 `<BC250_ROOT>\ref\linux-firmware\amdgpu\` (`BC250_ROOT` is the workspace root, by default the
@@ -98,7 +97,7 @@ tail of the header (`ucode_feature_version`, `jt_offset`, `jt_size`, the rlc reg
 fields), which is why the boundary is at 32 and not at `header_size_bytes`. The eight
 files carry three different header sizes (44, 48, 104), so the three candidates cannot be
 confused with each other here. Since all eight agree, a mismatch on a file in
-`C:\BC250\firmware\` means the file was edited or is corrupt - worth acting on, even
+the firmware input directory means the file was edited or is corrupt - worth acting on, even
 though the kernel would not notice.
 
 ## PSP and TA containers

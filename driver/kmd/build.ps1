@@ -22,6 +22,7 @@ param(
     [Parameter(Mandatory)][string]$Out,
     [string]$UmdStub = '',
     [string]$KitVersion = '10.0.26100.0',
+    [string]$FirmwareDir,
     [string]$CertSubject = 'CN=BC-250 lab test signing',
     [switch]$ExportCommandsOnly,
     [switch]$CompileOnly,           # compile and link, no quality gates, no catalog, no signature (a gate)
@@ -181,6 +182,16 @@ if($CompileOnly) {
 }
 
 Copy-Item (Join-Path $here 'bc250kmd.inf') $pkg -Force
+# A signed development package follows the same immutable firmware layout. A
+# compile-only gate above has no external firmware dependency.
+. (Join-Path $repo 'tools\release\installer\firmware-package.ps1')
+if (-not $FirmwareDir) { $FirmwareDir = Join-Path (Split-Path (Split-Path $Kits)) 'ref\linux-firmware__WARN-AMD-blobs-never-commit\amdgpu' }
+$fwPin = Get-Content (Join-Path $repo 'tools\firmware\cyan_skillfish2.json') -Raw | ConvertFrom-Json
+$fwSource = (Get-Content (Join-Path $repo 'tools\release\release-sources.json') -Raw | ConvertFrom-Json).firmware
+if ($fwPin.commit -cne $fwSource.commit) { throw 'KMD firmware pin and release pin differ' }
+$fwPackage = [ordered]@{ delivery = 'driver-store-v1'; commit = $fwPin.commit; install_dir = '%13%'
+    files = @($fwPin.files) + @($fwSource.licence) }
+Copy-DriverStoreFirmware -Firmware $fwPackage -FromDir $FirmwareDir -Destination $pkg
 Write-Host 'catalog'
 Invoke-Tool "$wdk\bin\$KitVersion\x86\Inf2Cat.exe" @("/driver:$pkg", '/os:10_X64')
 
@@ -208,6 +219,7 @@ if ($UmdStub) {
     # The signed binary itself, copied: the second run must differ from the first in the INF and the DLL only.
     Copy-Item "$pkg\bc250kmd.sys" $pkgUmd -Force
     Copy-Item $dll $pkgUmd -Force
+    Copy-DriverStoreFirmware -Firmware $fwPackage -FromDir $FirmwareDir -Destination $pkgUmd
     Write-UmdInf (Join-Path $here 'bc250kmd.inf') (Join-Path $pkgUmd 'bc250kmd.inf')
     # Inf2Cat before the certificate is put there: the .cer is not a packaged file and Inf2Cat would object to it.
     # Signing the .sys does not disturb the catalog, which hashes the PE without its certificate table - which is

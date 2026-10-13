@@ -814,6 +814,8 @@ NTSTATUS GartCaptureAperture(BC250_DEVICE* Device, PAGING_APERTURE* Aperture);
 
 // psp.c
 struct _BC250_ESCAPE_PSP;
+NTSTATUS PspDriverInit(_In_ PDRIVER_OBJECT DriverObject);
+void PspDriverCleanup(void);
 NTSTATUS PspStart(_Inout_ BC250_DEVICE* Device);
 void PspStop(_Inout_ BC250_DEVICE* Device);
 // PASSIVE session excludes display clock firmware from PSP commands and teardown.

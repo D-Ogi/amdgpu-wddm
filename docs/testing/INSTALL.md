@@ -154,10 +154,11 @@ models as well. The page `docs/testing/llm-components.md` of the project has the
 
 ## GPU firmware
 
-The driver loads eight AMD firmware files from `C:\BC250\firmware`. This package does not contain them. The
+The driver loads eight AMD firmware files from its signed Driver Store package. The ZIP does not contain them. The
 installer downloads them, and the AMD licence text `LICENSE.amdgpu`, from the linux-firmware project at commit
 `2b8daaf611fbade74f26a5b58ec1defe6a02f5e0`, at every installation and upgrade. It checks the SHA256 of each file
-before it copies anything. If a file has a different SHA256, the installer stops and changes nothing.
+before it stages the driver. It also checks the size and membership of each binary
+in the signed catalog. A missing or changed file stops installation before staging.
 
 The installer tries the first address of each file, then the second (3 tries each):
 
@@ -263,7 +264,7 @@ longer have to run the release installer again for this.
 | Licence texts | `C:\Program Files\amdgpu-wddm\licenses` (the package's `licenses\` and `THIRD-PARTY.md`) |
 | Graphics registration | the GPU's software key: `UserModeDriverName`, `VulkanDriverName`, `OpenGLDriverName`, `OpenGLVersion`, `OpenGLFlags`. For 32-bit applications: `UserModeDriverNameWow` and `VulkanDriverNameWow`. This release writes no `OpenGLDriverNameWow`, `OpenGLVersionWow` or `OpenGLFlagsWow`: it has no 32-bit OpenGL driver (see "What this release does" below). The first entry of each `UserModeDriverName` value, the Direct3D 9 entry, holds `<>`. Also `HKLM\SOFTWARE\Khronos\Vulkan\Drivers` and `HKLM\SOFTWARE\WOW6432Node\Khronos\Vulkan\Drivers`. `uninstall.cmd` puts back an `OpenGL` value from before the install, with the registry type it had. It removes the ones it added, even when the installer state file is gone. An `OpenGL` value that belongs to another driver stays. It does all that whether or not Windows still shows the GPU, because the files the values name go with the install |
 | Router policy and profiles | `HKLM\SOFTWARE\amdgpu-wddm` |
-| GPU firmware | `C:\BC250\firmware` (8 files and `LICENSE.amdgpu`, downloaded from linux-firmware; see "GPU firmware"). A new folder is writable by administrators only; the access rights of `C:\BC250` itself do not change. Download staging: `C:\ProgramData\amdgpu-wddm\installer\firmware-staging`, removed after the copy |
+| GPU firmware | Eight binaries beside the KMD image in Driver Store. `LICENSE.amdgpu` is in the installed `licenses` folder. The installer downloads or retrieves pinned copies before staging. The repair set retains them for offline repair. |
 | Shortcuts of Nagi Control App | Start menu and desktop, for all users: "Nagi Control App", "Nagi Control App (recovery)" in the Start menu and "Nagi Control App" on the desktop. Both places are written by default. The setup window has a box for each place. On the command line `-NoStartMenuShortcut` and `-NoDesktopShortcut` leave one out. `-StartMenuShortcut` and `-DesktopShortcut` ask for a place an earlier run left out. The box you clear holds over the restarts of the installation. `uninstall.cmd` removes all three |
 | Start confirmation | two scheduled tasks, both at the logon of any user. "amdgpu-wddm start confirm" runs as the Local System account. "amdgpu-wddm start window" runs as the user who logs on, shows the clock window and starts the control application's sign-in notice |
 | Settings of the person who signs in | `HKCU\Software\amdgpu-wddm\Control` of that account (language, the switches of the control application, "Show the start check window after sign-in"). The application itself writes this key when you change a setting. The installer does not. No administrator rights, nothing for other accounts. `uninstall.cmd` removes the key of the account that runs it, and leaves the keys of other accounts |

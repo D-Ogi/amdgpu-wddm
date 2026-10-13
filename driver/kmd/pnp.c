@@ -613,5 +613,6 @@ void Bc250Unload(void)
     HangDetectorStop();     // its thread and DPC run this image's code: joined before the image goes
     InteropDriverUnload();  // likewise the power callback
     FanDriverUnload();      // likewise the fan watchdog and its bugcheck callback; the fan goes back to the board
+    PspDriverCleanup();     // retained images and device workers have drained before driver unload
     GuardCleanup();
 }

@@ -492,7 +492,9 @@ Check (-not (Test-Path -LiteralPath (Join-Path $Package 'payload\firmware'))) 'n
 Check (-not @(Get-ChildItem -LiteralPath $Package -Recurse -File -Filter '*.bin').Count) 'no .bin file in the package'
 Check (-not @($m.files | Where-Object { $_.path -like 'payload/firmware/*' }).Count) 'manifest files: no firmware'
 Check (@($m.firmware.files).Count -eq 9 -and [string]$m.firmware.commit -match '^[0-9a-f]{40}$') "manifest firmware: $(@($m.firmware.files).Count) files at $($m.firmware.commit)"
-Check (@($m.components | Where-Object { $_.role -eq 'firmware' -and $_.install_path -like 'C:\BC250\firmware\*' -and -not $_.package_path }).Count -eq 9) 'manifest components: 9 firmware files with install path and SHA256, no package path'
+Check (@($m.components | Where-Object { $_.role -eq 'firmware' -and -not $_.package_path }).Count -eq 9) 'manifest components: 9 firmware files with install path and SHA256, no package path'
+Check (Test-DriverStoreFirmware $m.firmware) 'manifest firmware: immutable Driver Store contract'
+Check (@($m.components | Where-Object { $_.role -eq 'firmware' -and $_.install_path -like 'DriverStore (bc250kmd.inf)\*.bin' }).Count -eq 8) 'eight firmware binaries belong to the Driver Store package'
 $fwWork = Join-Path $WorkBase ('firmware-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ'))
 $r = Invoke-Headless -File $ps51 -Arguments @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $PSScriptRoot 'test-firmware.ps1'), '-Installer', (Join-Path $Package 'installer'), '-Manifest', (Join-Path $Package 'manifest.json'), '-WorkRoot', $fwWork) -TimeoutSeconds 600
 "  (pid $($r.pid), exit $($r.code), no window)"

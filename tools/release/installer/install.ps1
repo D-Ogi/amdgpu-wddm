@@ -1265,6 +1265,7 @@ Enter-Stage 'firmware' 'GPU firmware'
 # checks each SHA256 before phase 2 changes anything, so a failed download leaves the computer and the phase as they
 # were.
 $fw = $script:Manifest.firmware
+$driverStoreFirmware = Test-DriverStoreFirmware $fw
 $fwStaging = Join-Path $script:StateDir 'firmware-staging'
 $fwFrom = $(if ($FirmwareDir) { "from $FirmwareDir" } else { "from linux-firmware $($fw.commit)" })
 if ($script:DryRunMode) {
@@ -1276,6 +1277,11 @@ if ($script:DryRunMode) {
 $fwStaged = Invoke-Change "get the $(@($fw.files).Count) GPU firmware files $fwFrom into $fwStaging and check each SHA256 (a file with another SHA256 stops the install before any change)" {
     Get-FirmwareStaged -Firmware $fw -Staging $fwStaging -FromDir $FirmwareDir
 }
+$hydrated = $null
+if ($driverStoreFirmware -and -not $script:DryRunMode) {
+    $hydrated = New-HydratedDriverPackage -Manifest $script:Manifest -PackageRoot $package -FirmwareDir $fwStaging -Parent $script:StateDir
+}
+try {
 # The closure before the driver package, which can end this run in a restart (driver-pending-restart).
 Initialize-Closure
 # The last safe point: from here to the end of phase 2 a cancel would leave a half-installed driver.
@@ -1354,7 +1360,8 @@ foreach ($row in @($script:OrphanRows | Where-Object { $_.state -eq 'remove' }))
 # BD-146: the old uninstall can still have deletes queued for files about to become current again. Cancel only
 # those exact destinations before Copy-FileSafe can keep a same-hash file. No unrelated rename/delete is changed.
 Invoke-Change 'keep the files of this installation from being removed at the next restart' {
-    $destinations = @(Get-InstallCopyDestinations -Package $package -InstallRoot $InstallRoot -PayloadDirs $dirs -FirmwareFiles @($fwStaged))
+    $legacyFirmwareCopies = if ($driverStoreFirmware) { @() } else { @($fwStaged) }
+    $destinations = @(Get-InstallCopyDestinations -Package $package -InstallRoot $InstallRoot -PayloadDirs $dirs -FirmwareFiles $legacyFirmwareCopies)
     $repaired = Repair-PendingFileRemovals -Destinations $destinations
     if ($repaired) { Write-EngineEvent 'pending-removals-cancelled' ([ordered]@{ count = $repaired }) }
 } | Out-Null
@@ -1403,10 +1410,12 @@ Invoke-Change "copy licenses\ and THIRD-PARTY.md -> $InstallRoot\licenses (the l
 # Facts about the computer before the install are recorded once and saved before the step that changes them. The stub
 # flags come from the first install of ours: a stub that was there before it is not ours and stays.
 foreach ($s in @(Get-LegacyStubPaths)) { [void](Set-StateValueOnce $state $s.flag (Test-Path -LiteralPath $s.path)) }
+if (-not $driverStoreFirmware) {
 $bc250Dir = Split-Path -Parent $script:FirmwareInstallDir
 [void](Set-StateValueOnce $state 'bc250_dir_existed' (Test-Path -LiteralPath $bc250Dir))
 $fwExisted = Set-StateValueOnce $state 'firmware_dir_existed' (Test-Path -LiteralPath $script:FirmwareInstallDir)
 if (-not $script:DryRunMode) { Save-InstallState $state }
+}
 # D3D9 goes through D3D9On12 (the D3D9 slot holds '<>', below): no stub is installed. The releases up to
 # 0.7.213.102-tester.17 installed bc250umd.dll in System32 and SysWOW64; it goes here, as uninstall.ps1 takes it.
 foreach ($s in @(Get-LegacyStubPaths)) {
@@ -1416,6 +1425,7 @@ foreach ($s in @(Get-LegacyStubPaths)) {
         Remove-PathOrSchedule $s.path
     } | Out-Null
 }
+if (-not $driverStoreFirmware) {
 $fwAcl = $(if ($fwExisted) { 'its existing access rights are kept' } else { 'created writable by administrators only' })
 Invoke-Change "copy the checked GPU firmware files (linux-firmware cyan_skillfish2_*.bin, LICENSE.amdgpu) from $fwStaging -> $($script:FirmwareInstallDir); $fwAcl; $bc250Dir itself is not changed" {
     # An existing C:\BC250 may hold other files: its access rights stay as they are. Only the firmware folder that
@@ -1439,6 +1449,12 @@ Invoke-Change "copy the checked GPU firmware files (linux-firmware cyan_skillfis
     if ((Test-FirmwareFolder $fw (Join-Path $script:Closure 'firmware')).Count) { [void](Save-ClosureFirmware -Firmware $fw -Closure $script:Closure -FromFiles @($fwStaged)) }
     Remove-Item -LiteralPath $fwStaging -Recurse -Force -ErrorAction SilentlyContinue
 } | Out-Null
+} else {
+    Invoke-Change 'keep the pinned firmware with this repair set; Driver Store owns the installed copies' {
+        [void](Save-ClosureFirmware -Firmware $fw -Closure $script:Closure -FromFiles @($fwStaged))
+        Set-StateValue $state 'firmware_delivery' 'driver-store-v1'
+    } | Out-Null
+}
 Save-Phase 'files-copied'
 Enter-Stage 'driver' 'Driver package'
 
@@ -1500,13 +1516,20 @@ if ($driverSetAction -in @('unknown-boot', 'invalid-receipt') -and -not $script:
 $pnp = $null
 if ($driverSetAction -eq 'stage' -or $script:DryRunMode) {
     $pnp = Invoke-Change 'DiInstallDriverW INSTALL_AS_SET payload\kmd (the GPU changes to it at the next restart)' {
-        $o = Invoke-DriverSetStage -InfFile $infFile
+        $stageInf = $infFile
+        if ($driverStoreFirmware) {
+            if (-not $hydrated) { throw 'firmware package was not hydrated' }
+            Assert-DriverCatalogSigner -Directory $hydrated.DirectoryPath -Certificate $cer
+            $stageInf = Join-Path $hydrated.DirectoryPath 'bc250kmd.inf'
+        }
+        $o = Invoke-DriverSetStage -InfFile $stageInf
         Set-StateValue $state 'driver_set' ([pscustomobject]@{ method = $o.method; inf_sha256 = $driverSetSha
             boot_id = $driverSetBoot; staged = $true; api_need_reboot = $o.api_need_reboot })
         Save-Phase 'driver-pending-restart'
         return $o
     }
 }
+} finally { if ($hydrated) { $hydrated.Dispose() } }
 $instance = $null
 if ($script:Device) { $instance = $script:Device.DeviceID }
 # Right after the driver package, before any branch: the observation covers the restart-pending case too.
@@ -1967,7 +1990,8 @@ Enter-Stage 'finish' 'Finish'
 # The closure of this package becomes the kept repair set, firmware included (WU-051, WU-058): a later repair needs
 # neither the downloaded folder nor the network.
 Invoke-Change "keep $($script:Closure) as the active repair set (with the installed firmware), the one before it as the previous set, remove older sets" {
-    [void](Complete-RepairSet -Manifest $script:Manifest -Closure $script:Closure -FirmwareFiles @(@($fw.files) | ForEach-Object { Join-Path $script:FirmwareInstallDir $_.name }))
+    $repairFirmware = if ($driverStoreFirmware) { Join-Path $script:Closure 'firmware' } else { $script:FirmwareInstallDir }
+    [void](Complete-RepairSet -Manifest $script:Manifest -Closure $script:Closure -FirmwareFiles @(@($fw.files) | ForEach-Object { Join-Path $repairFirmware $_.name }))
 } | Out-Null
 # BD-089: our older driver packages in the store. Every release adds one bc250kmd.inf package, Windows binds the newest
 # one, and until this release every older one stayed. Kept: the package the GPU is bound to now, and the package of the

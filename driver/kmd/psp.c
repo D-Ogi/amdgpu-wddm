@@ -40,9 +40,25 @@
 #define BC250_PSP_PAGES_BELOW    0x19000ull         // ring, command buffer, fence: three pages
 #define BC250_PSP_PAGES_LENGTH   0x3000ul
 #define BC250_PSP_MAX_FILE       0x100000ul         // the largest file is 268592 bytes
-// The global DOS device directory, not the caller's own (\??\ resolves per logon session, and a drive letter can be
-// redefined there): these bytes go to the PSP.
-#define BC250_PSP_FIRMWARE_DIR   L"\\GLOBAL??\\C:\\BC250\\firmware\\"
+// Only the immutable files of this image's signed Driver Store package. The OS
+// returns a kernel handle in DriverEntry (a system thread, PASSIVE_LEVEL); no
+// caller path, drive letter, registry override or legacy fallback is accepted.
+static HANDLE g_FirmwareDirectory;
+
+NTSTATUS PspDriverInit(_In_ PDRIVER_OBJECT DriverObject)
+{
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL || !PsIsSystemThread(PsGetCurrentThread()))
+        return STATUS_INVALID_DEVICE_STATE;
+    return IoGetDriverDirectory(DriverObject, DriverDirectoryImage, 0, &g_FirmwareDirectory);
+}
+
+void PspDriverCleanup(void)
+{
+    if (g_FirmwareDirectory != NULL) {
+        ZwClose(g_FirmwareDirectory);
+        g_FirmwareDirectory = NULL;
+    }
+}
 
 typedef struct _BC250_PSP {
     BC250_SEQUENCE Sequence;
@@ -81,30 +97,43 @@ static void FreeFiles(_Inout_ BC250_PSP_FILES* Files)
     }
 }
 
-static NTSTATUS ReadOneFile(_In_z_ const char* Name, _Outptr_ PUCHAR* Data, _Out_ ULONG* Size)
+static NTSTATUS ReadOneFile(enum bc250_fw_file Index, _Outptr_ PUCHAR* Data, _Out_ ULONG* Size)
 {
-    WCHAR path[128];
+    WCHAR path[64];
+    const char* name;
     UNICODE_STRING unicode;
     OBJECT_ATTRIBUTES attributes;
     IO_STATUS_BLOCK io;
-    FILE_STANDARD_INFORMATION info;
+    FILE_STANDARD_INFORMATION info = {0};
+    FILE_ATTRIBUTE_TAG_INFORMATION tag;
     HANDLE file = NULL;
     PUCHAR buffer = NULL;
     NTSTATUS status;
-    ULONG i, prefix = (ULONG)(sizeof(BC250_PSP_FIRMWARE_DIR) / sizeof(WCHAR)) - 1;
+    ULONG i;
 
     *Data = NULL;
     *Size = 0;
-    RtlCopyMemory(path, BC250_PSP_FIRMWARE_DIR, sizeof(BC250_PSP_FIRMWARE_DIR));
-    for (i = 0; Name[i] != 0 && prefix + i + 1 < RTL_NUMBER_OF(path); i++) path[prefix + i] = (WCHAR)Name[i];   // ASCII names
-    path[prefix + i] = 0;
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL || g_FirmwareDirectory == NULL)
+        return STATUS_INVALID_DEVICE_STATE;
+    if ((ULONG)Index >= BC250_FILE_COUNT) return STATUS_INVALID_PARAMETER;
+    name = bc250_fw_file_name(Index);  // Fixed compiled-in table, not user input.
+    for (i = 0; name[i] != 0; i++) {
+        if (i + 1 >= RTL_NUMBER_OF(path) || name[i] == '/' || name[i] == '\\' || name[i] == ':')
+            return STATUS_OBJECT_NAME_INVALID;
+        path[i] = (WCHAR)name[i];
+    }
+    path[i] = 0;
     RtlInitUnicodeString(&unicode, path);
-    InitializeObjectAttributes(&attributes, &unicode, OBJ_KERNEL_HANDLE | OBJ_CASE_INSENSITIVE, NULL, NULL);
+    InitializeObjectAttributes(&attributes, &unicode, OBJ_KERNEL_HANDLE | OBJ_CASE_INSENSITIVE | OBJ_DONT_REPARSE,
+                               g_FirmwareDirectory, NULL);
 
-    status = ZwCreateFile(&file, FILE_READ_DATA | SYNCHRONIZE, &attributes, &io, NULL, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ,
-                          FILE_OPEN, FILE_SYNCHRONOUS_IO_NONALERT | FILE_NON_DIRECTORY_FILE, NULL, 0);
+    // FileAttributeTagInformation requires FILE_READ_ATTRIBUTES (WDK contract).
+    status = ZwCreateFile(&file, FILE_READ_DATA | FILE_READ_ATTRIBUTES | SYNCHRONIZE, &attributes, &io, NULL, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ,
+                          FILE_OPEN, FILE_SYNCHRONOUS_IO_NONALERT | FILE_NON_DIRECTORY_FILE | FILE_OPEN_REPARSE_POINT, NULL, 0);
     if (!NT_SUCCESS(status)) return status;
-    status = ZwQueryInformationFile(file, &io, &info, sizeof(info), FileStandardInformation);
+    status = ZwQueryInformationFile(file, &io, &tag, sizeof(tag), FileAttributeTagInformation);
+    if (NT_SUCCESS(status) && (tag.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) status = STATUS_REPARSE_POINT_ENCOUNTERED;
+    if (NT_SUCCESS(status)) status = ZwQueryInformationFile(file, &io, &info, sizeof(info), FileStandardInformation);
     if (NT_SUCCESS(status) && (info.EndOfFile.QuadPart <= 0 || info.EndOfFile.QuadPart > BC250_PSP_MAX_FILE)) status = STATUS_FILE_TOO_LARGE;
     if (NT_SUCCESS(status))
     {
@@ -136,7 +165,7 @@ static NTSTATUS ReadFiles(_Out_ BC250_PSP_FILES* Files, _Out_ ULONG* FailedFile)
     *FailedFile = 0;
     for (i = 0; i < BC250_FILE_COUNT; i++)
     {
-        status = ReadOneFile(bc250_fw_file_name((enum bc250_fw_file)i), &Files->Data[i], &Files->Size[i]);
+        status = ReadOneFile((enum bc250_fw_file)i, &Files->Data[i], &Files->Size[i]);
         if (!NT_SUCCESS(status))
         {
             GuardLog("psp: firmware file %s: 0x%08X", bc250_fw_file_name((enum bc250_fw_file)i), status);

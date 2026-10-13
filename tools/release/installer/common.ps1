@@ -5,6 +5,7 @@
 # so the dry run executes the same code path as the real run, checks included.
 
 . (Join-Path $PSScriptRoot 'version-identity.ps1')
+. (Join-Path $PSScriptRoot 'firmware-package.ps1')
 
 $script:ReleaseName      = 'amdgpu-wddm'
 $script:ServiceName      = 'bc250kmd'
@@ -31,7 +32,7 @@ $script:RunOnceKey       = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunO
 $script:RunOnceName      = 'amdgpu-wddm-installer'
 $script:TaskName         = 'amdgpu-wddm start confirm'
 $script:WindowTaskName   = 'amdgpu-wddm start window'          # BD-080: the part that needs a session, not rights
-$script:FirmwareInstallDir      = 'C:\BC250\firmware'                 # compiled into the KMD (psp.c BC250_PSP_FIRMWARE_DIR)
+$script:FirmwareInstallDir      = 'C:\BC250\firmware'                 # legacy repair sets only; new KMD uses Driver Store
 $script:StateDir         = Join-Path $env:ProgramData 'amdgpu-wddm\installer'
 $script:StatePath        = Join-Path $script:StateDir 'state.json'
 $script:ProfileListKey   = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList'
@@ -819,6 +820,8 @@ function Test-PackageManifest {
             [void](Test-PackageVersionIdentity $m ([IO.File]::ReadAllText($inf)) (Get-Sha256 $sys))
         } catch { $bad += "version identity: $($_.Exception.Message)" }
     }
+    try { [void](Test-DriverStoreFirmware $m.firmware) }
+    catch { $bad += "firmware contract: $($_.Exception.Message)" }
     if ($bad.Count) { return @{ ok = $false; detail = ($bad -join '; '); manifest = $m } }
     return @{ ok = $true; detail = "$count files match manifest.json (version $($m.version))"; manifest = $m }
 }
@@ -865,6 +868,13 @@ function Test-FirmwareHosts {
 # Writes nothing but $Staging; returns the staged paths.
 function Get-FirmwareStaged {
     param([Parameter(Mandatory)]$Firmware, [Parameter(Mandatory)][string]$Staging, [string]$FromDir, [int]$Tries = 3, [int]$TimeoutSec = 60)
+    if ($FromDir -and (Test-SamePath $FromDir $Staging)) { throw 'firmware source and staging directory must differ' }
+    foreach ($f in @($Firmware.files)) {
+        $name = [string]$f.name
+        if (-not $name -or $name -cne [IO.Path]::GetFileName($name) -or $name -match '[:/\\]' -or $name -in @('.', '..')) {
+            throw 'firmware filename must be a basename'
+        }
+    }
     if (Test-Path -LiteralPath $Staging) { Remove-Item -LiteralPath $Staging -Recurse -Force }
     [void][IO.Directory]::CreateDirectory($Staging)
     Enable-Tls12
@@ -883,6 +893,7 @@ function Get-FirmwareStaged {
                 [IO.File]::Copy($src, $dst, $true)
                 $h = Get-Sha256 $dst
                 if ($h -ne $want) { throw "firmware: $src has SHA256 $h, this release pins $want" }
+                if ((Get-Item -LiteralPath $dst).Length -ne [long]$f.size) { throw "firmware: $src has another size than pinned" }
                 $got = $src
             } else {
                 foreach ($u in Get-FirmwareUrls $Firmware $f) {
@@ -892,7 +903,8 @@ function Get-FirmwareStaged {
                         try { Invoke-WebRequest -Uri $u -OutFile $dst -UseBasicParsing -TimeoutSec $TimeoutSec -UserAgent $script:DownloadUserAgent }
                         catch { $why += "$name try $i`: $($_.Exception.Message)"; continue }
                         $h = Get-Sha256 $dst
-                        if ($h -eq $want) { $got = $u } else { $why += "$name`: SHA256 $h"; Remove-Item -LiteralPath $dst -Force }
+                        if ($h -eq $want -and (Get-Item -LiteralPath $dst).Length -eq [long]$f.size) { $got = $u }
+                        else { $why += "$name`: SHA256 $h or size differs"; Remove-Item -LiteralPath $dst -Force }
                         break
                     }
                     if ($got) { break }
@@ -2633,8 +2645,14 @@ function Get-ReleaseFootprint {
     & $probe 'certificates' { $c = @(Get-OurCertificates); @{ present = ($c.Count -gt 0); detail = $(if ($c.Count) { @($c | ForEach-Object { "$($_.store) $($_.thumbprint)" }) -join ', ' } else { 'no certificate of ours in Root or TrustedPublisher' }) } }
     # Kept on purpose: the firmware folder and C:\BC250 when they were there before the install, and the control
     # application's own files (the tester's setting backups and action log).
-    $fwKept = [bool]($State -and $State.firmware_dir_existed)
-    & $probe 'GPU firmware' { $p = (Test-Path -LiteralPath $script:FirmwareInstallDir); @{ present = $p; detail = "$($script:FirmwareInstallDir)$(if (-not $p) { ' is gone' } elseif ($fwKept) { ' is there, and it was there before the install' } else { ' is there' })" } } $fwKept
+    if ($State -and $State.firmware_delivery -ceq 'driver-store-v1') {
+        # The Driver Store package checks above cover the new firmware. A legacy
+        # folder, if present, is neither a load source nor owned by this install.
+        & $probe 'GPU firmware' { @{ present = $false; detail = 'removed with the driver package; legacy firmware folder was not owned' } }
+    } else {
+        $fwKept = [bool]($State -and $State.firmware_dir_existed)
+        & $probe 'GPU firmware' { $p = (Test-Path -LiteralPath $script:FirmwareInstallDir); @{ present = $p; detail = "$($script:FirmwareInstallDir)$(if (-not $p) { ' is gone' } elseif ($fwKept) { ' is there, and it was there before the install' } else { ' is there' })" } } $fwKept
+    }
     & $probe 'control application data' { $d = Join-Path (Split-Path $script:StateDir) 'control'; $p = (Test-Path -LiteralPath $d); @{ present = $p; detail = "$d$(if ($p) { ' is there (the tester''s setting backups and action log)' } else { ' is gone' })" } } $true
     foreach ($name in 'system-tuning','system-tuning-recovery') {
         & $probe $name { $d = Join-Path (Split-Path $script:StateDir) $name; @{ present = (Test-Path -LiteralPath $d); detail = "$d is retained when present for optional Windows settings recovery" } } $true
@@ -3072,6 +3090,7 @@ function Test-FirmwareFolder($Firmware, [string]$Dir) {
     foreach ($f in @($Firmware.files)) {
         $p = Join-Path $Dir $f.name
         if (-not (Test-Path -LiteralPath $p -PathType Leaf)) { $bad += "$($f.name) missing" }
+        elseif ($null -ne $f.size -and (Get-Item -LiteralPath $p).Length -ne $f.size) { $bad += "$($f.name) has another size" }
         elseif ((Get-Sha256 $p) -ne ([string]$f.sha256).ToUpperInvariant()) { $bad += "$($f.name) has another SHA256" }
     }
     return , $bad

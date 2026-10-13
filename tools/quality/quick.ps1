@@ -386,6 +386,8 @@ try {
   @{n='gfx-pipeline-equal-fence';s='driver\kmd\test\run_gfx_pipeline.ps1';a=@('-Root',$Workspace,'-KmdOnly','-EqualityFence');Fails=$true}
   # -Root as well: this runner puts the compiler's TEMP under it, and a worktree's parent has no scratch\tmp.
   @{n='firmware-metadata-no-runtime';s='driver\kmd\test\run_firmware_metadata.ps1';a=@('-Root',$Workspace,'-Kits',$kits,'-Firmware',$firmware,'-OmitRuntimeFirmware');Fails=$true}
+  @{n='firmware-io';s='driver\kmd\test\run_firmware_io.ps1';a=@('-Kits',$kits)}
+  @{n='firmware-io-short-read';s='driver\kmd\test\run_firmware_io.ps1';a=@('-Kits',$kits,'-AcceptShort');Fails=$true}
   @{n='paging-mc';s='driver\kmd\test\run_paging_mc.ps1';a=@('-Kits',$kits)}
   @{n='paging-private';s='driver\kmd\test\run_paging_private.ps1';a=@('-Kits',$kits)}
   @{n='paging-private-slot-reuse';s='driver\kmd\test\run_paging_private.ps1';a=@('-Kits',$kits,'-ReuseFirstQueueSlot');Fails=$true}

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Fetch, verify and push the BC-250's AMD PSP firmware files.
 
-The eight files are linux-firmware's amdgpu/cyan_skillfish2_*.bin (the KMD's BC250_PSP_FIRMWARE_DIR reads
-them from C:\\BC250\\firmware\\ on the target, driver/kmd/psp.c). The manifest next to this file
+The eight files are linux-firmware's amdgpu/cyan_skillfish2_*.bin. New KMD packages load them from their
+own signed Driver Store directory. The push command is for legacy packages only. The manifest next to this file
 (cyan_skillfish2.json) pins the source commit, the download URLs, and every file's size and SHA-256; nothing
 here trusts a downloaded or already-present file without checking both against it. This tool is Windows-native
 Python standard library only (no pip install, no Linux needed anywhere) - "linux-firmware" is only the name of

@@ -19,6 +19,14 @@ DefaultDestDir = 13
 
 [SourceDisksFiles]
 bc250kmd.sys = 1
+cyan_skillfish2_ce.bin = 1
+cyan_skillfish2_me.bin = 1
+cyan_skillfish2_mec.bin = 1
+cyan_skillfish2_mec2.bin = 1
+cyan_skillfish2_pfp.bin = 1
+cyan_skillfish2_rlc.bin = 1
+cyan_skillfish2_sdma.bin = 1
+cyan_skillfish2_sdma1.bin = 1
 ;@UMD bc250umd.dll = 1
 
 ; The install section copies to DIRID 13 (driver store), which Windows has since 10.0.16299; InfVerif (HLK, code 1199)
@@ -42,6 +50,16 @@ HKR,, ProductPackageVersion, 0x00000000, "0.7.216.64"
 
 [Bc250_Files]
 bc250kmd.sys
+; Hash-pinned before Inf2Cat. The public ZIP omits these eight files; the installer
+; supplies and checks them before staging the signed, unchanged package.
+cyan_skillfish2_ce.bin
+cyan_skillfish2_me.bin
+cyan_skillfish2_mec.bin
+cyan_skillfish2_mec2.bin
+cyan_skillfish2_pfp.bin
+cyan_skillfish2_rlc.bin
+cyan_skillfish2_sdma.bin
+cyan_skillfish2_sdma1.bin
 
 ; ---------------------------------------------------------------------------------------------------------------
 ; M7 stage A, second run only. Commented out on purpose, and NOT by hand: the markers below are the contract

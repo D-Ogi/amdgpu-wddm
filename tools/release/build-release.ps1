@@ -41,6 +41,7 @@ param(
     [string]$DriverVer = '',                   # optional assertion of the mapped Windows INF quad; derived from Version
     [string]$Version = '0.7.216.100-tester.21',
     [string]$KitVersion = '10.0.26100.0',
+    [string]$FirmwareDir,                        # exact pinned inputs for Inf2Cat, never copied into the public ZIP
     [string]$SetupApp,                           # required: the built setup window (build.ps1 output), copied to the top folder as setup.exe
     [switch]$AllowLedgerDebt,                    # build although finished work for a release component is unlanded
     [string]$LedgerDebtReason,                   # required with -AllowLedgerDebt: recorded in the build log and manifest
@@ -319,7 +320,10 @@ $fwLicence = (Get-FileHash -LiteralPath (Join-Path $lic $sources.firmware.licenc
 if ($fwLicence -ne $sources.firmware.licence.sha256) { throw "licenses\LICENSE.amdgpu is $fwLicence, release-sources.json firmware.licence says $($sources.firmware.licence.sha256)" }
 $fwFiles = @(foreach ($f in $pin.files) { [ordered]@{ name = $f.name; path = "amdgpu/$($f.name)"; sha256 = $f.sha256.ToUpperInvariant(); size = $f.size } })
 $fwFiles += [ordered]@{ name = $sources.firmware.licence.name; path = $sources.firmware.licence.path; sha256 = $sources.firmware.licence.sha256; size = $sources.firmware.licence.size }
-$firmware = [ordered]@{ commit = $sources.firmware.commit; repository = $sources.firmware.repository; url_templates = @($sources.firmware.url_templates); install_dir = $sources.firmware.install_dir; files = $fwFiles }
+$firmware = [ordered]@{ delivery = 'driver-store-v1'; commit = $sources.firmware.commit; repository = $sources.firmware.repository; url_templates = @($sources.firmware.url_templates); install_dir = '%13%'; files = $fwFiles }
+. (Join-Path $PSScriptRoot 'installer\firmware-package.ps1')
+if (-not $FirmwareDir) { $FirmwareDir = Join-Path $Root 'ref\linux-firmware__WARN-AMD-blobs-never-commit\amdgpu' }
+Copy-DriverStoreFirmware -Firmware $firmware -FromDir $FirmwareDir -Destination (Join-Path $pkg 'payload\kmd')
 $installText = Get-Content -LiteralPath (Join-Path $pkg 'INSTALL.md') -Raw
 foreach ($f in $fwFiles) { if ($installText -notmatch [regex]::Escape($f.sha256.ToLowerInvariant())) { throw "INSTALL.md (GPU firmware) does not list $($f.name) with SHA256 $($f.sha256)" } }
 if ($installText -notmatch $firmware.commit) { throw "INSTALL.md (GPU firmware) does not name linux-firmware $($firmware.commit)" }
@@ -454,6 +458,12 @@ foreach ($f in 'bc250kmd.sys', 'bc250kmd.cat') {
     if (-not $s.SignerCertificate -or $s.SignerCertificate.Thumbprint -ne $release.Thumbprint) { throw "$f is not signed by the release certificate $($release.Thumbprint)" }
     '  {0} signed by {1}' -f $f, $release.Thumbprint
 }
+# The catalog was built from a complete package. Check its actual members before
+# excluding the eight inputs from the public ZIP; hydration must reproduce them.
+$ps51 = Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
+$r = Invoke-Headless -File $ps51 -Arguments @('-NoProfile', '-NonInteractive', '-File', (Join-Path $PSScriptRoot 'test-firmware-catalog.ps1'), '-Directory', $kmd) -TimeoutSeconds 60
+if ($r.code -ne 0) { throw "firmware catalog membership: $($r.text)" }
+foreach ($fwBlobName in Get-DriverStoreFirmwareNames) { Remove-Item -LiteralPath (Join-Path $kmd $fwBlobName) -Force }
 
 Write-Host 'gates'
 $forbidden = @(Get-ChildItem -LiteralPath $pkgRoot -Recurse -File | Where-Object { $_.Extension -in '.pfx', '.pass', '.pem', '.key', '.p12', '.pvk' })
@@ -541,7 +551,11 @@ foreach ($f in $sources.files + $extra) {
     $components += [ordered]@{ role = $f.component; package_path = $f.path; install_path = (Get-InstallLocation $f.path); version = $(if ($ver) { $ver.Trim() } else { $null }); sha256 = (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash }
 }
 # Downloaded at install time: no package path, the same install path and SHA256 check in the control application.
-foreach ($f in $fwFiles) { $components += [ordered]@{ role = 'firmware'; package_path = $null; install_path = "$($firmware.install_dir)\$($f.name)"; version = $null; sha256 = $f.sha256 } }
+foreach ($f in $fwFiles) {
+    $fwInstalled = if ($f.name -ceq 'LICENSE.amdgpu') { '<InstallDir>\licenses\LICENSE.amdgpu' }
+        else { "DriverStore (bc250kmd.inf)\$($f.name)" }
+    $components += [ordered]@{ role = 'firmware'; package_path = $null; install_path = $fwInstalled; version = $null; sha256 = $f.sha256 }
+}
 # The optional components of this release (installer\components.ps1): our llama.cpp build and our Ollama build are
 # release assets, not package files. tools\release\components.json is the pinned list; this writes it into the package
 # as installer\components.json with {release} expanded, and manifest.json names it under optional_components, so the
