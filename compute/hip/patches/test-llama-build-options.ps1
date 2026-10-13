@@ -1,7 +1,12 @@
 # Invoke the actual builder through a recording CMake fixture. No compiler or GPU runs.
 param(
     [Parameter(Mandatory=$true)][string]$Out,
-    [string]$Builder = ''
+    [string]$Builder = '',
+    # A reviewed source copy that already carries the complete set, used as the reference of the
+    # -ApplyPatches case: the three touched files are reverse-patched out of it and the patches are
+    # applied again, so the result must match it byte for byte. The case is skipped without it, so
+    # the test still runs where no such copy exists.
+    [string]$ApplyFrom = ''
 )
 $ErrorActionPreference='Stop'
 if ([string]::IsNullOrWhiteSpace($Builder)) {
@@ -9,10 +14,29 @@ if ([string]::IsNullOrWhiteSpace($Builder)) {
 }
 $out=Join-Path $Out ('builder-test-'+[guid]::NewGuid().ToString('N'))
 [void][IO.Directory]::CreateDirectory($out)
-$source=Join-Path $out 'source'
-[void][IO.Directory]::CreateDirectory((Join-Path $source 'ggml/src/ggml-cuda'))
-Set-Content (Join-Path $source 'ggml/src/ggml-cuda/common.cuh') '#ifndef BC250_HIP_NO_DEVICE_PRINTF'
-Set-Content (Join-Path $source 'ggml/src/ggml-cuda/ggml-cuda.cu') 'BC250_HIP_MAX_ALLOC_BYTES'
+# A fixture source that carries all four markers of the complete HIP source set. Each marker lives in
+# the file the builder reads it from, so a marker that moves to another file fails here.
+function New-FixtureSource([string]$root, [string[]]$without) {
+    [void][IO.Directory]::CreateDirectory((Join-Path $root 'ggml/src/ggml-cuda/vendors'))
+    $common = @('#ifndef BC250_HIP_NO_DEVICE_PRINTF', '!defined(BC250_HIP_NO_ASM_DP4A)') |
+        Where-Object { $without -notcontains $_ }
+    Set-Content (Join-Path $root 'ggml/src/ggml-cuda/common.cuh') $common
+    Set-Content (Join-Path $root 'ggml/src/ggml-cuda/ggml-cuda.cu') (
+        @('BC250_HIP_MAX_ALLOC_BYTES') | Where-Object { $without -notcontains $_ })
+    Set-Content (Join-Path $root 'ggml/src/ggml-cuda/vendors/hip.h') (
+        @('defined(__gfx1013__)') | Where-Object { $without -notcontains $_ })
+    return $root
+}
+$source = New-FixtureSource (Join-Path $out 'source') @()
+# The source sets that must be refused, one per missing change of the complete set. Before the set was
+# complete in this directory, the first of these built without a word and produced a binary whose
+# device code disagreed with the host about the launch geometry of the MoE expert kernel.
+$incomplete = @(
+    @{ name = 'no-rdna1';  marker = 'defined(__gfx1013__)' }
+    @{ name = 'no-dp4a';   marker = '!defined(BC250_HIP_NO_ASM_DP4A)' }
+    @{ name = 'no-printf'; marker = '#ifndef BC250_HIP_NO_DEVICE_PRINTF' }
+    @{ name = 'no-cap';    marker = 'BC250_HIP_MAX_ALLOC_BYTES' }
+)
 $shim=Join-Path $out 'cmake-shim.ps1'
 @'
 $a=@($args)
@@ -91,5 +115,49 @@ foreach($case in $cases){
     }
     $results+=@{name=$case.name;passed=$true;refused=$refused;message=$message}
 }
-@{builder_sha256=(Get-FileHash $Builder).Hash;scope='Actual builder with recording CMake shim; no compiler or GPU executed';cases=$results}|ConvertTo-Json -Depth 5|Set-Content (Join-Path $out 'results.json')
+# An incomplete source set is refused before anything is configured, and the refusal names the patch.
+foreach($case in $incomplete){
+    $build=Join-Path $out ('incomplete-'+$case.name)
+    [void][IO.Directory]::CreateDirectory($build)
+    $bad=New-FixtureSource (Join-Path $out ('source-'+$case.name)) @($case.marker)
+    $cache=Join-Path $build 'original.txt'
+    @('GGML_HIP:BOOL=ON','CMAKE_CXX_FLAGS:STRING=')|Set-Content $cache
+    $refused=$false;$message=''
+    try {& $Builder -Source $bad -Build $build -RocmRoot 'fixture-rocm' -OriginalCache $cache -CMake $shim | Out-Null}
+    catch {$refused=$true;$message=$_.Exception.Message}
+    if(!$refused){throw "an incomplete source set was accepted: $($case.name)"}
+    if($message -notmatch 'is missing 1 of the 4 HIP source changes'){throw "unclear refusal for $($case.name): $message"}
+    if(Test-Path (Join-Path $build 'configure-args.json')){throw "refused source set reached CMake: $($case.name)"}
+    $results+=@{name='incomplete-'+$case.name;passed=$true;refused=$true;message=$message}
+}
+# -ApplyPatches turns an unpatched copy of the real upstream file into a complete one, with the real
+# patch files and git apply. Only the two files the two new patches touch are needed here, taken from
+# the reference source copy and reverse-patched, so the test owns no copy of upstream.
+if($ApplyFrom){
+    $clean=Join-Path $out 'apply-source'
+    [void][IO.Directory]::CreateDirectory((Join-Path $clean 'ggml/src/ggml-cuda/vendors'))
+    foreach($rel in @('ggml/src/ggml-cuda/common.cuh','ggml/src/ggml-cuda/ggml-cuda.cu','ggml/src/ggml-cuda/vendors/hip.h')){
+        Copy-Item (Join-Path $ApplyFrom $rel) (Join-Path $clean $rel) -Force
+    }
+    & git -C $clean init -q
+    if($LASTEXITCODE){throw 'git init failed in the apply fixture'}
+    foreach($item in @('llama-no-device-printf.patch','llama-gfx1013-rdna1.patch','llama-no-asm-dp4a.patch','llama-bc250-allocation-cap.patch')){
+        & git -C $clean apply -R -p1 -- (Join-Path $PSScriptRoot $item)
+        if($LASTEXITCODE){throw "could not reverse $item out of the reference copy"}
+    }
+    $build=Join-Path $out 'apply'
+    [void][IO.Directory]::CreateDirectory($build)
+    $cache=Join-Path $build 'original.txt'
+    @('GGML_HIP:BOOL=ON','CMAKE_CXX_FLAGS:STRING=')|Set-Content $cache
+    $applied=& $Builder -Source $clean -Build $build -RocmRoot 'fixture-rocm' -OriginalCache $cache -CMake $shim -ApplyPatches
+    if($LASTEXITCODE){throw 'the builder failed with -ApplyPatches'}
+    if(@($applied|Where-Object{$_ -like 'applied: *'}).Count -ne 4){throw "-ApplyPatches did not apply all four: $($applied -join '; ')"}
+    foreach($rel in @('ggml/src/ggml-cuda/common.cuh','ggml/src/ggml-cuda/ggml-cuda.cu','ggml/src/ggml-cuda/vendors/hip.h')){
+        $a=(Get-Content (Join-Path $clean $rel) -Raw) -replace "`r`n","`n"
+        $b=(Get-Content (Join-Path $ApplyFrom $rel) -Raw) -replace "`r`n","`n"
+        if($a -ne $b){throw "after -ApplyPatches, $rel does not match the reference copy"}
+    }
+    $results+=@{name='apply-patches';passed=$true;refused=$false;message='all four applied; three files match the reference copy'}
+}
+@{builder_sha256=(Get-FileHash $Builder).Hash;scope='Actual builder with recording CMake shim; no compiler or GPU executed';reference_source=$ApplyFrom;cases=$results}|ConvertTo-Json -Depth 5|Set-Content (Join-Path $out 'results.json')
 Write-Output "PASS $($results.Count) builder cases; receipts: $out"

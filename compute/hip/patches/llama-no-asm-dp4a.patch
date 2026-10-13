@@ -1,0 +1,18 @@
+--- a/ggml/src/ggml-cuda/common.cuh
++++ b/ggml/src/ggml-cuda/common.cuh
+@@ -714,7 +714,14 @@
+     c = __builtin_amdgcn_sdot4(a, b, c, false);
+ #elif defined(RDNA3) || defined(RDNA4)
+     c = __builtin_amdgcn_sudot4( true, a, true, b, c, false);
+-#elif defined(RDNA1) || defined(__gfx900__)
++// BC-250 lane patch (M16, step 3): the inline assembly stays the default, and
++// -DBC250_HIP_NO_ASM_DP4A turns it off so that the generic C body can be measured against it on
++// the same build of everything else. Needed because the assembly is an optimisation barrier:
++// across eight accumulators it costs 2.2x the instructions and 4.5x the local-memory reads of
++// the plain C in a real MMQ kernel on gfx1013 (evidence/m16/gfx1013-dp4a-2026-10-09, and the
++// isolating compile in scratch\m16-hip\REVIEW-step3b.md section 4). gfx1013 has neither dot
++// instruction, so this branch gives it no instruction the compiler would not emit anyway.
++#elif (defined(RDNA1) || defined(__gfx900__)) && !defined(BC250_HIP_NO_ASM_DP4A)
+     int tmp1;
+     int tmp2;
+     asm("\n \
