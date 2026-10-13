@@ -57,6 +57,28 @@ Clone `ref/BC250-windowsDriverTest__WARN-no-licence-read-only-copy-nothing` @ `7
 
 Nobody has yet done the boring first step: read a handful of registers at correctly derived offsets and compare them with the values Linux reports on the same board. That is what `tools/diagusb` and experiment E01 are for.
 
+## AMD's own Windows display driver with the BC-250 device ID (lab, 2026-10-13)
+
+The community record says that every AMD driver ends in Code 43 because no shipping driver knows PCI
+`1002:13FE`. We tested whether the device ID is the only gate. It is not.
+
+- **Round 1.** The SoC package of AMD's Radeon driver 23.11.1 lists two related IDs, 13E9 and 13F8, in its
+  NaviLite section. We added `1002:13FE` to that section of its INF, signed the INF with our lab test
+  certificate and installed it on a separate Windows 11 test system (build 26300) of unit A. Windows bound the
+  driver to the GPU. The kernel driver failed in `DxgkDdiStartDevice`, and Windows reported Code 43.
+- **Round 2.** We also changed the two 13E9 keys of the device table in the kernel driver to 13FE. The driver
+  loaded, accepted the device and entered `DxgkDdiStartDevice`. It stopped there with its own event 3085,
+  "StartDevice Failed: Create SOC Service Manager failed". Windows reported Code 43 again. There was no bug
+  check and no hang, and the desktop stayed on the Microsoft Basic Display Adapter.
+- **What this means.** After the device ID, the next gate is an internal object of the kernel driver, its SoC
+  service manager. A static read of the driver finds two places where its creation can fail: the
+  initialization of an internal component (TTL), which runs in full only when a capability row matches the
+  device, and a memory reservation after it. The event carries no inner status, so the lab run does not tell
+  which of the two failed. We found no evidence for a missing ACPI method or a missing AMD platform driver.
+- **Scope.** Each round ran on the separate test system only, and we put our driver back after it. We
+  publish no AMD file, no patched image and no decompiled code. We do not plan another round until a
+  measurement can tell the two failure points apart.
+
 ## Licensing summary
 
 | Source | License | May we copy code? |
