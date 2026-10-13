@@ -122,6 +122,7 @@ plan.what.title|mt-safe|70fbb54b|これから行うこと
 plan.restarts.0|mt|b0a2c82a|Windows の再起動は不要です。
 plan.restarts.1|mt|2ae11afb|Windows が 1 回再起動します。もう一度サインインすると、セットアップは自動的に続行します。
 plan.restarts.2|mt|efc32bc9|Windows が 2 回再起動します。サインインするたびに、セットアップは自動的に続行します。
+plan.restarts.many|mt|40c9ca93|Windows は {0} 回再起動します。サインインするたびにセットアップが再開されます。
 plan.restarts.choice|mt|e2801100|再起動は短いカウントダウンのあとに自動で始まります。すぐに再起動することも、後回しにすることもできます。
 plan.change.test-mode|mt|7c5a1301|このドライバーを読み込めるように、Windows をテスト モードに切り替えます。
 plan.change.test-mode.note|mt|9a9c5086|デスクトップの隅に「テスト モード」と表示されます。ドライバーを削除すると元に戻ります。

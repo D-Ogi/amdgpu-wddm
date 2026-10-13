@@ -1,14 +1,15 @@
 # The compatibility record of a release package (GUI plan C7, B10): compatibility.json at the package root, written by
 # build-release.ps1 and listed in manifest.json like every other file. It states what a later engine needs to know
 # before it may install this package over a newer one (a rollback, G-RB from Ph 3): the engine contract and the
-# result version the package's installer speaks, the no-live-rebind boundary (the INF Reboot directive in every
-# install section, BD-060), the firmware set with its hashes, the settings table and the KMD it carries. A version
+# result version the package's installer speaks, the no-live-rebind method (BD-060, BD-152), the firmware set with
+# its hashes, the settings table and the KMD it carries. A version
 # number, a common signer or an earlier rollback on the lab admit nothing; only a record that verifies does.
 # Windows PowerShell 5.1 syntax only (the installer dot-sources it); build-release.ps1 (PowerShell 7) uses it too.
 
 $script:CompatibilitySchema = 'amdgpu-wddm.compatibility/1'
 $script:CompatibilityFile = 'compatibility.json'
 $script:SettingsTableSchema = 1          # registry-defaults.json "schema" that this engine reads
+. (Join-Path $PSScriptRoot 'deferred-driver.ps1')
 
 # The record for a package folder whose INF, installer and payload are final (manifest.json not needed yet).
 function New-CompatibilityRecord {
@@ -26,7 +27,9 @@ function New-CompatibilityRecord {
         version = $Version
         engine = [ordered]@{ contract = $script:EngineContract; result_schema = $script:ResultSchema; event_schema = $script:EventSchema
             witness_schema = $script:WitnessSchema }
-        no_live_rebind = [ordered]@{ inf = $infRel; inf_sha256 = (Get-Sha256 $inf); reboot_directive = [bool](Test-InfDefersDeviceRestart $lines)
+        # Older readers require reboot_directive=true and therefore refuse this new method safely.
+        no_live_rebind = [ordered]@{ inf = $infRel; inf_sha256 = (Get-Sha256 $inf); reboot_directive = $false
+            method = 'di-install-as-set'; flags = 0x40; helper_sha256 = (Get-Sha256 (Join-Path $PackageRoot 'installer\deferred-driver.ps1'))
             install_sections = [string[]](Get-InfInstallSections $lines) }
         firmware = [ordered]@{ commit = [string]$Firmware.commit; install_dir = [string]$Firmware.install_dir
             files = @(@($Firmware.files) | ForEach-Object { [ordered]@{ name = [string]$_.name; sha256 = ([string]$_.sha256).ToUpperInvariant() } }) }
@@ -75,9 +78,28 @@ function Test-CompatibilityRecord {
         if ([string]$rec.version -ne [string]$m.version) { Add-Reason 'compat.other-package' "record of $($rec.version) in package $($m.version)" }
         if ([string]$rec.engine.contract -ne $script:EngineContract -or [string]$rec.engine.result_schema -ne $script:ResultSchema) { Add-Reason 'compat.engine' "engine $($rec.engine.contract), result $($rec.engine.result_schema); this engine speaks $($script:EngineContract), $($script:ResultSchema)" }
         $inf = Join-Path $PackageRoot 'payload\kmd\bc250kmd.inf'
-        $infOk = (Test-Path -LiteralPath $inf) -and (Test-InfDefersDeviceRestart ([IO.File]::ReadAllLines($inf)))
-        if (-not $rec.no_live_rebind.reboot_directive -or -not $infOk) { Add-Reason 'compat.live-rebind' 'the INF lacks the Reboot directive in an install section: the package can restart a started GPU under the desktop (BD-060)' }
-        elseif ((Get-Sha256 $inf) -ne [string]$rec.no_live_rebind.inf_sha256) { Add-Reason 'compat.live-rebind' 'the INF is not the one the record describes' }
+        $infOk = Test-Path -LiteralPath $inf
+        $method = [string]$rec.no_live_rebind.method
+        if ($method -eq 'di-install-as-set') {
+            $helper = Join-Path $PackageRoot 'installer\deferred-driver.ps1'
+            $helperOk = (Test-Path -LiteralPath $helper) -and
+                ((Get-Sha256 $helper) -eq [string]$rec.no_live_rebind.helper_sha256) -and
+                (@($m.files | Where-Object { $_.path -eq 'installer/deferred-driver.ps1' }).Count -eq 1)
+            $infOk = $infOk -and -not (Test-InfHasReboot ([IO.File]::ReadAllLines($inf)))
+            if (-not $infOk -or -not $helperOk -or $rec.no_live_rebind.flags -ne 0x40 -or
+                $rec.no_live_rebind.reboot_directive -ne $false) {
+                Add-Reason 'compat.live-rebind' 'INSTALL_AS_SET contract, helper or display INF differs from the record (BD-152)'
+            }
+        } elseif (-not $method) {
+            # Read old rollback records only. New builds never add this invalid display-class directive.
+            $infOk = $infOk -and (Test-InfDefersDeviceRestart ([IO.File]::ReadAllLines($inf)))
+            if (-not $rec.no_live_rebind.reboot_directive -or -not $infOk) {
+                Add-Reason 'compat.live-rebind' 'legacy package lacks its recorded deferred binding method (BD-060)'
+            }
+        } else { Add-Reason 'compat.live-rebind' "unsupported deferred binding method: $method" }
+        if ((Test-Path -LiteralPath $inf) -and (Get-Sha256 $inf) -ne [string]$rec.no_live_rebind.inf_sha256) {
+            Add-Reason 'compat.live-rebind' 'the INF is not the one the record describes'
+        }
         $want = @(@($m.firmware.files) | ForEach-Object { "$($_.name)=$(([string]$_.sha256).ToUpperInvariant())" } | Sort-Object)
         $have = @(@($rec.firmware.files) | ForEach-Object { "$($_.name)=$(([string]$_.sha256).ToUpperInvariant())" } | Sort-Object)
         if (-not $want.Count -or (($want -join ';') -ne ($have -join ';'))) { Add-Reason 'compat.firmware' 'the firmware set of the record differs from manifest.json' }

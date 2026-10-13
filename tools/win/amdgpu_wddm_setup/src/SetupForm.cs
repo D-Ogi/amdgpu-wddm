@@ -884,7 +884,8 @@ namespace AmdgpuWddmSetup
             var steps = Card(Strings.T("plan.what.title"), Icons.Info);
             int restarts = d != null ? d.Restarts : 0;
             steps.Row(Icons.Restart, restarts > 0 ? Theme.Warn : Theme.Good,
-                Strings.T(restarts <= 0 ? "plan.restarts.0" : restarts == 1 ? "plan.restarts.1" : "plan.restarts.2"),
+                restarts > 2 ? Strings.T("plan.restarts.many", restarts) :
+                    Strings.T(restarts <= 0 ? "plan.restarts.0" : restarts == 1 ? "plan.restarts.1" : "plan.restarts.2"),
                 restarts > 0 ? Strings.T("plan.restarts.choice") : null);
             // What the installation changes about the way Windows starts, as plain information (owner, 2026-10-12:
             // "Przestan wymagac potwierdzen od uzytkownika"). The engine reads the same two states and acts on them

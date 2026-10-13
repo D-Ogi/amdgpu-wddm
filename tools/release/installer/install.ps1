@@ -1,10 +1,10 @@
 # amdgpu-wddm tester installer, v0. Run install.cmd as administrator from the unpacked package folder.
 #
 # Three phases, resumed automatically from %ProgramData%\amdgpu-wddm\installer\state.json:
-#   1. preflight, System Restore point, test signing on (asks first), then a restart. Skipped when test signing is
+#   1. preflight, System Restore point, test signing on, then an automatic restart. Skipped when test signing is
 #      already active in the running boot.
-#   2. certificate, driver package, user-mode drivers, registry, firmware, start-confirm task, control app; restart.
-#      The GPU changes driver at that restart: no device restart and no DWM restart under the running desktop.
+#   2. certificate, user-mode drivers, firmware, driver-set staging; automatic restart to bind the new KMD.
+#      Resume, check the binding, write registry and tasks; automatic configuration restart. No live GPU/DWM restart.
 #   3. verify: driver bound, version, start health, D3D12 device at feature level 12_1, Vulkan enumerates the GPU.
 # -DryRun runs every check and prints every change without making it. -Verify runs phase 3 only.
 # Network: the package does not contain the AMD GPU firmware. Phase 2 downloads it from linux-firmware at the commit
@@ -74,6 +74,7 @@ $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $package = Split-Path -Parent $here
 . (Join-Path $here 'common.ps1')
+. (Join-Path $here 'deferred-driver.ps1')
 . (Join-Path $here 'dwm-session.ps1')
 . (Join-Path $here 'engine.ps1')
 . (Join-Path $here 'release-witness.ps1')
@@ -457,8 +458,8 @@ function Save-Phase([string]$Phase) {
     Save-InstallState $state
 }
 # A restart that this install needs. The boot it was asked in goes into the state first (a boundary advances only in
-# a new boot). A run of the setup window ends here with the restart in its result: the window asks the user and
-# restarts Windows itself. The command line asks "Restart now?" and then asks Windows for a normal, planned restart:
+# a new boot). A setup-window run returns the restart to the window, which starts its countdown. The command line
+# starts its own countdown and requests a normal, planned restart:
 # programs may keep their unsaved work, and no restart is forced.
 function Request-Restart([string]$Why, [string]$ReasonId) {
     $boot = (Get-BootIdentity).boot_id
@@ -952,8 +953,13 @@ function Get-InstallSettingsImpact {
 $consents = @()
 $restarts = 0
 if ($action.action -in @('install', 'upgrade', 'repair', 'resume')) {
-    $restarts = 1
-    if ($state.phase -in @('new', 'testsigning-pending') -and -not $script:TestSigningActive) { $restarts = 2 }
+    $restarts = 2 # driver-set activation, then configuration
+    $planInf = Join-Path $package 'payload\kmd\bc250kmd.inf'
+    if ((Test-Path -LiteralPath $planInf) -and
+        (Get-DriverSetAction $state.driver_set (Get-Sha256 $planInf) ([string](Get-BootIdentity).boot_id)) -eq 'verify-binding') {
+        $restarts = 1 # this driver set has already crossed its shutdown boundary
+    }
+    if ($state.phase -in @('new', 'testsigning-pending') -and -not $script:TestSigningActive) { $restarts++ }
 }
 $script:PlannedRestarts = $restarts
 $firmwareSource = $(if (-not $FirmwareDir) { 'download' } elseif (Test-SamePath $FirmwareDir (Join-Path $package 'firmware')) { 'package-folder' } else { 'folder' })
@@ -1248,7 +1254,7 @@ else {
 }
 Enter-Stage 'firmware' 'GPU firmware'
 # Every step below can run again over its own result: files are compared by SHA256 and a file in use is replaced
-# by rename, registry values and the task are overwritten, pnputil accepts a package that is already there.
+# by rename, registry values and the task are overwritten, a staged driver set is checked after its restart.
 # The firmware comes first: every install downloads it again (or takes it from -FirmwareDir) into a staging folder and
 # checks each SHA256 before phase 2 changes anything, so a failed download leaves the computer and the phase as they
 # were.
@@ -1367,7 +1373,7 @@ if (Test-Path -LiteralPath (Join-Path $package 'payload\tools\hip')) {
 }
 # A release that does not register the encoder takes the registration and the files of an earlier install away again. A
 # repair with the switch off is therefore a rollback. The keys go first, in this stage, and the file after them, as
-# uninstall.ps1 does it: a step between the two (pnputil, the firmware, a restart, a failure of any of them) would
+# uninstall.ps1 does it: a step between the two (driver staging, the firmware, a restart, a failure of any of them) would
 # otherwise leave a COM registration that names a DLL which is gone, and every Media Foundation client that enumerates
 # hardware or asynchronous H.264 encoders would get an activation object that cannot be created.
 if ($mftAction -eq 'rollback' -and $mftKeys.Count) {
@@ -1430,9 +1436,9 @@ Invoke-Change "copy the checked GPU firmware files (linux-firmware cyan_skillfis
 Save-Phase 'files-copied'
 Enter-Stage 'driver' 'Driver package'
 
-# The driver settings as they are before the driver package: pnputil runs the INF's AddReg, which writes 0 into every
+# The driver settings as they are before staging: PnP later runs the INF's AddReg, which writes 0 into every
 # gate and counter it names. The upgrade rule below judges these values, never the INF's zeros. Kept in the state, so a
-# re-run after a failure past pnputil still judges the values from before the first pnputil of this install.
+# re-run after the driver-set restart still judges the values from before staging this install.
 $infParameterNames = Get-InfParameterNames (Join-Path $package 'payload\kmd\bc250kmd.inf')
 $judgedNames = @(@($infParameterNames) + @((ConvertTo-PairList (Get-Content -LiteralPath (Join-Path $here 'registry-defaults.json') -Raw | ConvertFrom-Json).defaults.parameters) | ForEach-Object { $_.Name })) | Select-Object -Unique
 $parametersBefore = @{}
@@ -1456,13 +1462,9 @@ $restoreNames = @(@($infParameterNames) + @($parametersBefore.Keys | Where-Objec
 $keptBack = @($parametersBefore.Keys | Where-Object { $_ -notin $judgedNames -and -not (Test-RestorableRegistryValue $parametersBefore[$_]) })
 if ($keptBack.Count) { Write-Warn2 "not written back after the driver package (the plan writes REG_DWORD, REG_SZ and REG_MULTI_SZ only): $($keptBack -join ', ')" }
 
-# The driver package. Its INF carries the Reboot directive (build-release.ps1): Windows installs the package but does
-# not restart a GPU that is already started (on Microsoft Basic Display or on the previous release), so the desktop
-# and DWM keep their device for the rest of this session (BD-060, common.ps1), and the GPU changes driver at the next
-# restart. A GPU that is not started can be installed at once, with the INF's closed gates (display only). pnputil's
-# exit code says only that the operation completed, with or without a restart required (Get-DriverPackageOutcome):
-# the binding check below decides. Nothing here stops or restarts DWM, and nothing touches the KMD's own state (the
-# BD-059 session marker included); the registry below opens the gates for the next start.
+# BD-152 / BD-060: INSTALL_AS_SET stages now and binds at the next shutdown. A saved receipt keeps a resumed
+# install from staging forever; a different, known boot permits the exact image checks below (BD-150).
+# No Reboot directive, live GPU rebind, or DWM restart. The KMD's session markers remain under its ownership.
 $infFile = Join-Path $package 'payload\kmd\bc250kmd.inf'
 # Observations around the driver package, in the log and in the state (dwm_observations, the last 12 of every run of
 # this install): the session's DWM instances (process ID and creation time) before it, right after it and at the end
@@ -1482,15 +1484,22 @@ function Add-DwmObservation([string]$Stage, $Instances, [string]$Device = $null)
 try { $dwmSession = Get-DesktopSessionId; if ($dwmSession) { $dwmBefore = Get-SessionDwm $dwmSession } } catch { Write-Log "   DWM reading: $($_.Exception.Message)" }
 Write-Info "DWM of session $dwmSession before the driver package: $(if (@($dwmBefore).Count) { (@($dwmBefore) | ForEach-Object { Format-DwmInstance $_ }) -join ', ' } else { 'none' })"
 if ($dwmSession) { Add-DwmObservation 'before the driver package' $dwmBefore }
-if (-not (Test-InfDefersDeviceRestart ([IO.File]::ReadAllLines($infFile)))) { throw 'payload\kmd\bc250kmd.inf has no Reboot directive: this package would restart the GPU under the running desktop' }
-$pnp = Invoke-Change 'pnputil /add-driver payload\kmd\bc250kmd.inf /install (the GPU changes to it at the next restart)' {
-    $n = Invoke-Native pnputil.exe @('/add-driver', $infFile, '/install')
-    Write-Log $n.text
-    # 259 is also what a re-run over an earlier run's install sees.
-    $o = Get-DriverPackageOutcome $n.code
-    if (-not $o.ok) { throw "pnputil failed ($($n.code)): $($n.text)" }
-    Write-Info "pnputil: $($o.text)"
-    return $o
+if (Test-InfHasReboot ([IO.File]::ReadAllLines($infFile))) { throw 'display INF contains the unsupported Reboot directive (BD-152)' }
+$driverSetBoot = [string](Get-BootIdentity).boot_id
+$driverSetSha = Get-Sha256 $infFile
+$driverSetAction = Get-DriverSetAction $state.driver_set $driverSetSha $driverSetBoot
+if ($driverSetAction -in @('unknown-boot', 'invalid-receipt') -and -not $script:DryRunMode) {
+    throw "cannot establish the driver set restart boundary: $driverSetAction"
+}
+$pnp = $null
+if ($driverSetAction -eq 'stage' -or $script:DryRunMode) {
+    $pnp = Invoke-Change 'DiInstallDriverW INSTALL_AS_SET payload\kmd (the GPU changes to it at the next restart)' {
+        $o = Invoke-DriverSetStage -InfFile $infFile
+        Set-StateValue $state 'driver_set' ([pscustomobject]@{ method = $o.method; inf_sha256 = $driverSetSha
+            boot_id = $driverSetBoot; staged = $true; api_need_reboot = $o.api_need_reboot })
+        Save-Phase 'driver-pending-restart'
+        return $o
+    }
 }
 $instance = $null
 if ($script:Device) { $instance = $script:Device.DeviceID }
@@ -1500,32 +1509,29 @@ if ($dwmSession) {
         $dwmAfter = Get-SessionDwm $dwmSession
         $devNow = $null
         if ($instance) { $devNow = Get-PnpDevice -InstanceId $instance -ErrorAction SilentlyContinue }
-        $devText = $(if ($pnp) { "$($pnp.text); device status $(if ($devNow) { $devNow.Status } else { 'unknown' })" } else { 'not run (dry run)' })
+        $devText = $(if ($pnp) { "$($pnp.text); device status $(if ($devNow) { $devNow.Status } else { 'unknown' })" }
+            elseif ($script:DryRunMode) { 'not run (dry run)' } else { "saved driver set: $driverSetAction; device status $(if ($devNow) { $devNow.Status } else { 'unknown' })" })
         Add-DwmObservation 'after the driver package' $dwmAfter $devText
         Write-Info "after the driver package: device: $devText; DWM: $(Compare-DwmReadings $dwmBefore $dwmAfter)"
     } catch { Write-Log "   DWM reading: $($_.Exception.Message)" }
 }
 $classKey = $null
 if (-not $script:DryRunMode) {
-    # BD-150: the files decide, not pnputil's exit code or the version (release-witness.ps1, Get-KmdImageDecision). The
-    # check reads the disk: the image of this boot stays the old one until the restart, and verify reads that one.
-    $script:CurrentStep = "check that the next start loads this package's bc250kmd.sys"
+    if ($driverSetAction -ne 'verify-binding') {
+        Save-Phase 'driver-pending-restart'
+        Set-ResumeAtLogon 'continue'
+        Request-Restart 'the staged GPU driver becomes available at shutdown. Its binding is checked after the next logon.' 'restart.driver-package'
+        Exit-Engine -Code 0 -Outcome 'restart-required' -MessageId 'result.restart-driver'
+    }
+    # BD-150: after the recorded restart, check the service and store images against this package. These are disk
+    # checks; the final verify step separately checks the loaded image. An API success alone proves neither.
+    $script:CurrentStep = "check the driver package binding after the recorded restart"
     $kmdImage = Get-KmdImageDecision -WantSha (Get-Sha256 (Join-Path $package 'payload\kmd\bc250kmd.sys')) -Store (Read-KmdStoreImages) -Service (Read-ServiceImage $script:ServiceName)
     if (-not $kmdImage.ok) { throw $kmdImage.detail }
     Write-Info "driver image: $($kmdImage.detail)"
     $svc = Get-DeviceServiceName -InstanceId $instance
     $script:CurrentStep = 'check that the GPU is bound to the new driver package'
-    if ($svc -ne $script:ServiceName -and $pnp.deferred) {
-        # A restart is required to finish the install. If the device's registry still names the old service, phase 2
-        # finishes after the restart instead of writing into the old driver's key; the inputs of this install stay in
-        # the state for that argument-free run.
-        Write-Info "the GPU is still on '$svc' until the restart: phase 2 continues after the next logon"
-        Save-Phase 'driver-pending-restart'
-        Set-ResumeAtLogon 'continue'
-        Request-Restart 'the GPU changes to the new driver package at the next start.' 'restart.driver-package'
-        Exit-Engine -Code 0 -Outcome 'restart-required' -MessageId 'result.restart-driver'
-    }
-    if ($svc -ne $script:ServiceName) { throw "the GPU is on '$svc' after pnputil, not on $($script:ServiceName)" }
+    if ($svc -ne $script:ServiceName) { throw "the GPU is on '$svc' after the driver set restart, not on $($script:ServiceName)" }
     $classKey = Get-DeviceDriverKey -InstanceId $instance
     if (-not $classKey) { throw 'no software key for the GPU' }
     Set-StateValue $state 'class_key' $classKey
@@ -1554,8 +1560,8 @@ function Invoke-RegistryDefaults([string]$Key, $Defaults, $Previous, [hashtable]
 # Gates: the registered lab configuration (EnableFullWddm 2 opens it at every start). Clocks: load-driven DPM up to
 # DpmMaxMHz, thermal limits are the driver's own. KeepLog 0: no log files on the tester's disk. UnconfirmedStarts 0 is
 # the INF's own reset (a GPU that was not started has already counted one display-only start). Judged on the values
-# from before pnputil; the INF's other values (EnableMmioWrite, EnableHangBugcheck) get their values from before
-# pnputil back.
+# from before driver staging; the INF's other values (EnableMmioWrite, EnableHangBugcheck) get their values from before
+# staging back.
 Invoke-RegistryDefaults $script:ParametersKey $regDefaults.defaults.parameters $applied.parameters $commandLineParameters ([ordered]@{ UnconfirmedStarts = 0 }) $parametersBefore $restoreNames -Reopen:$script:ReopenClosures
 
 # DisplayPort audio, the interrupt of the GPU's HD Audio function (BD-092, common.ps1). That function keeps the inbox
@@ -1942,6 +1948,7 @@ if ($null -ne $script:ComponentsManifest -and $componentsChosen.Count) {
 }
 
 Set-StateValue $state 'parameters_before_install' $null
+Set-StateValue $state 'driver_set' $null
 Set-StateValue $state 'firmware_commit' $fw.commit
 if ($dwmSession) {
     try {

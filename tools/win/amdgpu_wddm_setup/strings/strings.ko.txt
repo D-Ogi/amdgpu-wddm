@@ -122,6 +122,7 @@ plan.what.title|mt-safe|70fbb54b|진행할 내용
 plan.restarts.0|mt|b0a2c82a|Windows를 다시 시작할 필요가 없습니다.
 plan.restarts.1|mt|2ae11afb|Windows가 한 번 다시 시작됩니다. 다시 로그인하면 설치 프로그램이 자동으로 계속됩니다.
 plan.restarts.2|mt|efc32bc9|Windows가 두 번 다시 시작됩니다. 로그인할 때마다 설치 프로그램이 자동으로 계속됩니다.
+plan.restarts.many|mt|40c9ca93|Windows가 {0}번 다시 시작됩니다. 로그인할 때마다 설치 프로그램이 자동으로 계속됩니다.
 plan.restarts.choice|mt|e2801100|다시 시작은 짧은 카운트다운 후에 저절로 시작됩니다. 바로 다시 시작하거나 나중으로 미룰 수 있습니다.
 plan.change.test-mode|mt|7c5a1301|이 드라이버를 불러올 수 있도록 Windows를 테스트 모드로 전환합니다.
 plan.change.test-mode.note|mt|9a9c5086|바탕 화면 구석에 "테스트 모드"가 표시됩니다. 드라이버를 제거하면 다시 꺼집니다.

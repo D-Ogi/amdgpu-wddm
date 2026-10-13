@@ -135,7 +135,8 @@ Remove-Item -LiteralPath $prepared -Recurse -Force
 $r = Invoke-Ps51 @((Join-Path $kept 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard', '-Repair', '-NoComponents') -Offline -StateDir $state
 Check ($r.code -eq 0) "repair dry run from the kept set: exit $($r.code)"
 Check (($r.text -match "repairing $([regex]::Escape($ver)) \(-Repair, phase verified\)") -and ($r.text -match 'this run starts from its continuation closure') -and ($r.text -match [regex]::Escape("firmware: the folder of this package, $kept\firmware (no download)"))) 'repair: the kept set is its own closure and carries the firmware'
-Check (($r.text -notmatch 'https://') -and ($r.text -match 'would: pnputil /add-driver') -and ($r.text -notmatch 'would: bcdedit')) 'repair: phase 2 again, no download, no test-signing change'
+Check (($r.text -notmatch 'https://') -and ($r.text -match 'would: DiInstallDriverW INSTALL_AS_SET') -and
+    ($r.text -notmatch 'would: pnputil /add-driver') -and ($r.text -notmatch 'would: bcdedit')) 'repair: stage for restart, no live rebind, download or test-signing change'
 if ($r.code -ne 0) { $r.text }
 
 '[G-OFF] no network and no firmware: the ordinary package is refused before any change'
