@@ -992,12 +992,12 @@
         "host"
       ]
     },
-    "submit-watchdog-no-tdr-floor": {
+    "submit-watchdog-short-diagnostic": {
       "inputs": [
         "host"
       ]
     },
-    "submit-watchdog-clamp-tdr": {
+    "submit-watchdog-long-diagnostic": {
       "inputs": [
         "host"
       ]

@@ -443,7 +443,7 @@ typedef struct _BC250_WDDM {
     // staleness window of node 0 (under Lock, like the queue it watches).
     ULONG SubmitBudgetMs;
     ULONG SubmitTickMs;
-    ULONG SubmitTdrMs;                  // TdrDelay as read, in ms: what the budget was priced against
+    BOOLEAN PagingDiagnosticTaken;     // reset for each node-1 hardware head
     BC250_SUBMIT_WATCHDOG SubmitWatchdog;
     volatile LONG SubmitRearms;         // timer rearms, independent of activity observations
     volatile LONG SubmitActivityChanges;
@@ -1047,21 +1047,13 @@ static void WddmPreemptFence(_Inout_ BC250_DEVICE* Device, UINT FenceId, UINT No
 
 // KMD214: no fixed VMID any more. WDDM submits at BC250_VMID_AUTO (vmid_pool.h) and gfx.c chooses: VMID 1 with
 // EnableVmidPool 0, else a VMID per root from the pool. The VMID a job ran at comes back from GfxSubmitIb.
-// BD-114: the private submit watchdog's budget is no longer a constant. It was 500 ms, calibrated on a 28 us M6
-// dispatch (facts M57) against a 2 s WDDM default that is itself four times larger, and a dense 512-token LLM
-// prefill submits packets whose own execution time is 400 ms or more. Two kernel dumps of 2026-10-10 show what
-// the trip costs: a false timeout closes the node, the refusal that follows latches RefusalPending[0], that flag
-// blocks the DMA_PREEMPTED acknowledgement for ever, and the chain ends in bugcheck 0x116 because this part has
-// no GPU reset (facts M53). The budget now comes from the SubmitWatchdogMs setting, defaults from Windows' own
-// TdrDelay with a margin and is never shorter than it (submit_watchdog.h, scratch\bd114\ANALYSIS.md 7.1).
-//
+// BD-152: elapsed time only authorizes diagnostics; OS TDR owns recovery.
 // Two bounds that are NOT the watchdog's budget and keep the old number on purpose:
 //   - BC250_WDDM_HOLD_DEADLINE_MS bounds a CPU wait inside SubmitCommandVirtual, on a dxgkrnl worker thread.
 //     Letting it grow to a ten-second budget would block that thread for ten seconds, which is a different
 //     hazard from the one this change removes. A held submission that runs out still closes the node, so this
 //     is a remaining instance of the same class, recorded in docs/design/hang-recovery.md.
 //   - BC250_WDDM_STOP_DRAIN_MS bounds the drain of WddmStop. A device stop must not wait out a long budget.
-#define BC250_WDDM_SUBMIT_BUDGET_FLOOR_MS 500   // the floor a start logs against, and the pre-BD-114 value
 #define BC250_WDDM_HOLD_DEADLINE_MS 500
 #define BC250_WDDM_STOP_DRAIN_MS 600
 
@@ -1368,26 +1360,14 @@ void WddmGpuFence(_Inout_ BC250_DEVICE* Device)
     WddmQueueReport(wddm);
 }
 
-// Caller holds Lock. The epoch check and BOTH gate latches are one transaction.
-// The two acts below take only a short lifetime reference, a spin lock of their
-// own, an interlocked flag and an event; neither acquires GartLock or joins a
-// DPC. After unlock, the timeout tail may log, but must never change either gate.
-static BOOLEAN WddmLatchSubmitTimeoutLocked(BC250_DEVICE* Device, BC250_WDDM* Wddm, ULONGLONG Epoch)
+// Caller holds Lock. Latch one observation per head in the current recovery
+// epoch. This must not change a fence, admission gate or health witness.
+static BOOLEAN WddmLatchSubmitDiagnosticLocked(BC250_WDDM* Wddm, ULONGLONG Epoch)
 {
     if (Wddm->Stopping ||
         !Bc250HangTimeoutCurrent(&Wddm->Recovery[BC250_WDDM_NODE_3D], Epoch)) return FALSE;
-    Wddm->WatchdogFaulted[BC250_WDDM_NODE_3D] = TRUE;
-    Wddm->DeferredValid = FALSE;
-    // BD-120: the same two acts as GfxSubmitFail, with the witness close marked as the one the pending OS reset
-    // owns. A recovered ResetEngine reopens exactly this close (StartHealthRecovered); a refused reset and every
-    // other fault stay sticky, as before. The order matters only in that the mark is set while the witness is
-    // still open with its engines up, which StartHealthFaultPendingReset checks for itself.
-    // This whole latch is node 0's, whichever node's job the submit watchdog found at the head of GfxPending:
-    // it reads and writes Recovery[NODE_3D] and WatchdogFaulted[NODE_3D], and the mark it leaves is node 0's
-    // reset to answer for the same reason. A node-1 failure reaches the witness through the paging watchdog's
-    // GfxPagingSubmitFail, which is a sticky StartHealthFault and clears the mark.
-    StartHealthFaultPendingReset(Device);
-    GfxSubmitClose(Device);
+    if (Wddm->SubmitWatchdog.SnapshotTaken) return FALSE;
+    Wddm->SubmitWatchdog.SnapshotTaken = 1;
     return TRUE;
 }
 
@@ -1451,7 +1431,7 @@ static void WddmSubmitDpcCheck(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_ 
         // than the head stamp), and saying so twice means no refactor of one can fault a job before its budget.
         if (stale && head != NULL && now >= head->Deadline)
         {
-            timedOut = WddmLatchSubmitTimeoutLocked(device, wddm, epoch);
+            timedOut = WddmLatchSubmitDiagnosticLocked(wddm, epoch);
             fence = wddm->HwFence;
             node = wddm->HwNode;
             seq = wddm->HwSeq;
@@ -1464,7 +1444,7 @@ static void WddmSubmitDpcCheck(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_ 
             staleMs = (ULONG)(age / 10000ull);
             // Preserve HwPending: timeout is not a hardware completion.
         }
-        else if (head != NULL)
+        if (head != NULL)
         {
             LONG held;
 
@@ -1499,15 +1479,15 @@ static void WddmSubmitDpcCheck(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_ 
     wddm->SubmitChecks++;
     KeReleaseSpinLock(&wddm->Lock, irql);
     if (!timedOut) return;
-    // Stop further submissions, but leave the uncompleted fence visible to the OS.
-    // Its normal TDR path owns recovery. A later real fence may still complete this job.
+    // Diagnostic only: preserve admission, deferred work and real fence retirement.
+    // The scheduler's preemption clock, not this sampled inactivity, owns TDR.
     InterlockedIncrement(&wddm->HwTimeouts);
     // BD-114 (ANALYSIS.md 7.7): the measured numbers, not the constant. Until 0.7.216.27 this line printed the
     // budget itself, so "after 500 ms" meant "after at least 500 ms, by an unknown amount" and the offline
     // analysis of two bugchecks could bound a packet's duration but never measure one. Three numbers now:
     // head is how long the job has been at the head of the ring, queued how long it waited behind others before
     // that, and stale how long the progress token stood still - the quantity the watchdog actually judged.
-    GuardLog("wddm: HARDWARE FENCE TIMEOUT seq %lu fence %u: pending for OS TDR, ring closed", seq, fence);
+    GuardLog("wddm: submit diagnostic v2 seq %lu fence %u: observed inactivity, admission unchanged", seq, fence);
     GuardLog("wddm: timeout measured: head %lu ms, queued %lu ms, stale %lu ms, budget %lu ms", headMs, queuedMs,
              staleMs, budgetMs);
     // KMD193: who the job belonged to, then what the hardware held. Both once per timeout; the identity comes
@@ -1884,6 +1864,7 @@ void WddmGpuFencePaging(_Inout_ BC250_DEVICE* Device)
                     // a time, so there is no queue wait to separate (7.3) and no ring of its own to read for
                     // progress (7.2).
                     wddm->PagingDeadline=KeQueryInterruptTime()+10000ull*wddm->SubmitBudgetMs;
+                    wddm->PagingDiagnosticTaken=FALSE;
                     due.QuadPart=-10000ll*(LONGLONG)wddm->SubmitBudgetMs;
                     KeSetTimer(&wddm->PagingSubmitTimer,due,&wddm->PagingSubmitDpc);
                     InterlockedIncrement(&wddm->PagingHwSubmitted);
@@ -1940,23 +1921,22 @@ static void WddmPagingSubmitDpcCheck(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In
     if (device == NULL || (wddm = (BC250_WDDM*)device->Wddm) == NULL) return;
     WddmGpuFencePaging(device);         // late is still arrived
     KeAcquireSpinLock(&wddm->Lock, &irql);
-    if (wddm->PagingHwPending && !wddm->WatchdogFaulted[BC250_WDDM_NODE_COPY] &&
+    if (!wddm->Stopping && !wddm->Recovery[BC250_WDDM_NODE_COPY].ResetActive &&
+        wddm->PagingHwPending && !wddm->PagingDiagnosticTaken &&
+        !wddm->WatchdogFaulted[BC250_WDDM_NODE_COPY] &&
         KeQueryInterruptTime()>=wddm->PagingDeadline)
     {
         timedOut = TRUE;
         fence = wddm->PagingHwFence;
-        wddm->PagingDeferredValid = FALSE;
         seq = wddm->PagingHwSeq;
-        wddm->WatchdogFaulted[BC250_WDDM_NODE_COPY] = TRUE;
+        wddm->PagingDiagnosticTaken = TRUE;
         // Preserve PagingHwPending until a real fence or the OS recovery path.
     }
     KeReleaseSpinLock(&wddm->Lock, irql);
     if (!timedOut) return;
-    // As on node0, do not retire unexecuted paging commands. OS TDR sees the
-    // still-pending fence; closing node1 does not invent a successful memory transfer.
+    // As on node 0, elapsed time is not evidence of a failed transfer.
     InterlockedIncrement(&wddm->PagingHwTimeouts);
-    GfxPagingSubmitFail(device);
-    GuardLog("wddm: PAGING HARDWARE FENCE TIMEOUT after %lu ms (sequence %u): fence %u pending for OS TDR, node 1 closed",
+    GuardLog("wddm: paging diagnostic v2 after %lu ms (sequence %u): fence %u pending, admission unchanged",
              wddm->SubmitBudgetMs, seq, fence);
     // No completion report for a fence that has not arrived.
 }
@@ -2575,8 +2555,8 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
              Wddm->HwSubmitted, Wddm->HwCompleted, Wddm->HwTimeouts, Wddm->HwRefused, Wddm->SoftRecoveries);
     // Timer rearming is not activity. Head age is sampled software residence, not
     // a retirement timestamp or GPU execution duration.
-    GuardLog("wddm summary: submit watchdog %lu ms (TdrDelay %lu ms), %ld checks, %ld re-armed",
-             Wddm->SubmitBudgetMs, Wddm->SubmitTdrMs, Wddm->SubmitChecks, Wddm->SubmitRearms);
+    GuardLog("wddm summary: submit diagnostic v2 %lu ms (OS TdrDelay unavailable), %ld checks, %ld re-armed",
+             Wddm->SubmitBudgetMs, Wddm->SubmitChecks, Wddm->SubmitRearms);
     GuardLog("wddm summary: submit watchdog observations: activity %ld, primes %ld, gap resets %ld",
              Wddm->SubmitActivityChanges, Wddm->SubmitPrimes, Wddm->SubmitGapResets);
     GuardLog("wddm summary: sampled software-head high water %ld ms, queue wait %ld ms", Wddm->SubmitHeadMaxMs,
@@ -3167,23 +3147,12 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
         }
         wddm->PreemptionReportsLost = 0;
     }
-    // BD-114 (ANALYSIS.md 7.1), read once for this device start, before the timer it governs exists.
-    //
-    // The OS measures execution time itself and owns recovery: "The GPU scheduler ... detects when the GPU takes
-    // more than the permitted amount of time to execute a particular task ... The preempt operation has a 'wait'
-    // timeout, which is the actual TDR timeout" (timeout-detection-and-recovery.md:43), and TdrDelay "specifies
-    // the number of seconds that the GPU can delay the preempt request" (tdr-registry-keys.md:55). Our private
-    // watchdog closes the ring and takes a register snapshot. Its activity clock
-    // and the OS preemption clock have different epochs: either can expire first.
-    // Absent setting (the INF writes no value) = TdrDelay plus the margin;
-    // an operator's value is clamped and then raised to TdrDelay if it is shorter.
+    // BD-152: a start-latched diagnostic threshold, independent of OS TDR.
+    // A legacy SubmitWatchdogMs value no longer authorizes gate closure.
     {
-        int defaulted = 0, raised = 0;
+        int invalid = 0;
         ULONG requested = GuardReadSetting(L"SubmitWatchdogMs", 0);
-        ULONG tdrSeconds = GuardReadGraphicsSetting(L"TdrDelay", 0);
-
-        wddm->SubmitTdrMs = Bc250SubmitTdrMs(tdrSeconds);
-        wddm->SubmitBudgetMs = Bc250SubmitBudgetMs(requested, tdrSeconds, &defaulted, &raised);
+        wddm->SubmitBudgetMs = Bc250SubmitDiagnosticMs(requested, &invalid);
         wddm->SubmitTickMs = Bc250SubmitTickMs(wddm->SubmitBudgetMs);
         Bc250SubmitWatchdogIdle(&wddm->SubmitWatchdog);
         wddm->SubmitRearms = 0;             // one statement each: the counters are volatile, and a chained
@@ -3193,12 +3162,10 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
         wddm->SubmitChecks = 0;             // assignment reads each one back as the value of the next
         wddm->SubmitHeadMaxMs = 0;
         wddm->SubmitQueueMaxMs = 0;
-        GuardLog("wddm: submit watchdog %lu ms (TdrDelay %lu ms, setting %lu, %s), looks for progress every %lu ms",
-                 wddm->SubmitBudgetMs, wddm->SubmitTdrMs, requested,
-                 defaulted ? "default" : (raised ? "raised to TdrDelay" : "as asked"), wddm->SubmitTickMs);
-        if (wddm->SubmitBudgetMs > BC250_WDDM_SUBMIT_BUDGET_FLOOR_MS)
-            GuardLog("wddm: the %lu ms budget of every build before 0.7.216.27 tripped on legitimate compute"
-                     " packets (BD-114); the OS TDR owns recovery", (ULONG)BC250_WDDM_SUBMIT_BUDGET_FLOOR_MS);
+        GuardLog("wddm: submit diagnostic v2 %lu ms (setting %lu, %s), sample every %lu ms; OS TdrDelay unavailable",
+                 wddm->SubmitBudgetMs, requested,
+                 invalid ? "invalid, diagnostic default" : (requested == 0 ? "default" : "configured"),
+                 wddm->SubmitTickMs);
     }
     KeInitializeDpc(&wddm->SubmitDpc, WddmSubmitDpcRoutine, Device);
     KeInitializeTimer(&wddm->SubmitTimer);
@@ -3424,7 +3391,7 @@ void WddmStop(_Inout_ BC250_DEVICE* Device)
     // Stage C: GfxStop comes after this function (pnp.c) and the state below is about to be freed, so a packet
     // still on the ring gets a bounded moment to finish. PASSIVE_LEVEL. BC250_WDDM_STOP_DRAIN_MS ends the wait;
     // before BD-114 that bound was the watchdog's own 500 ms plus 100, and the watchdog could therefore end it
-    // first. It cannot now - the budget is at least TdrDelay - which is why the drain has a constant of its own.
+    // first. The diagnostic timer no longer closes admission; stop has its own deadline.
     {
         LARGE_INTEGER tick;
         ULONG waited;

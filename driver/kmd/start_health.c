@@ -171,9 +171,8 @@ void StartHealthFaultPendingReset(BC250_DEVICE* Device)
 // CONFIRMED reports the start. Only ConfirmedEpoch stays on the interval that CONFIRM measured.
 //
 // Of the three answers, only REOPENED undoes a close, and only the one this reset owns (PendingReset). REARMED
-// is the other ordering, and the normal one: Bc250SubmitBudgetMs is never shorter than TdrDelay
-// (submit_watchdog.h), so dxgkrnl usually reaches ResetEngine before our own latch fires, and the witness is
-// then still open. Nothing is there to reopen, but the interval it is reporting contains a GPU hang that no
+// is the normal OS-owned ordering: BD-152's private timers do not close the witness.
+// Nothing is there to reopen, but the interval contains a GPU hang that no
 // epoch of ours ever recorded, so it ends here too: a new epoch, no completions, the ready age re-clocked. The
 // epoch rule - a recovered reset always starts a new interval - therefore holds in both orderings, and a
 // CONFIRM in flight cannot certify an interval that contained the hang. The new epoch is returned in Epoch for

@@ -44,18 +44,18 @@ typedef struct {
     BC250_SUBMIT_WATCHDOG Watch;
     unsigned long BudgetMs, TickMs;
     unsigned long long Now, Token;
-    int Fired;                                  /* the watchdog closed the node in this run */
+    int Fired;                                  /* the model captured an inactivity diagnostic */
     unsigned FiredSeq;
     unsigned long FiredHeadMs, FiredQueuedMs, FiredStaleMs;
     unsigned long HeadMaxMs, QueueMaxMs;        /* sampled software-head age and queue wait, not GPU execution durations */
     unsigned Checks, Rearms, Primes, ActivityChanges, GapResets, Unchanged;
 } MODEL;
 
-static void ModelStart(MODEL* m, unsigned long requested, unsigned long tdrSeconds)
+static void ModelStart(MODEL* m, unsigned long requested)
 {
-    int defaulted = 0, raised = 0;
+    int invalid = 0;
     memset(m, 0, sizeof(*m));
-    m->BudgetMs = Bc250SubmitBudgetMs(requested, tdrSeconds, &defaulted, &raised);
+    m->BudgetMs = Bc250SubmitDiagnosticMs(requested, &invalid);
     m->TickMs = Bc250SubmitTickMs(m->BudgetMs);
     m->Now = MODEL_START_MS * MS;
     m->Token = 1ull;                            /* the hardware is never all zero in a healthy run */
@@ -177,63 +177,24 @@ static int AbortAtNotified(int jobOnRing, int completionPending, int lastKnown, 
 int main(void)
 {
     MODEL m;
-    unsigned long tdr, n;
+    unsigned long n;
     unsigned long long age;
     unsigned abortFence;
     BC250_SUBMIT_WATCHDOG w;
 
-    /* ---- 7.1: the budget is a setting, defaulted FROM TdrDelay, never shorter than it ------------------------
-     *
-     * "TdrDelay ... specifies the number of seconds that the GPU can delay the preempt request from the GPU
-     * scheduler ... 2 seconds is the default value" (tdr-registry-keys.md:53-55). The configured private duration
-     * is floored to this duration; the independent OS preemption clock is modeled below. */
-    CHECK(Bc250SubmitTdrMs(0) == 1000ul * BC250_SUBMIT_TDR_DEFAULT_S);  /* absent reads as Windows' own default */
-    CHECK(Bc250SubmitTdrMs(2) == 2000ul && Bc250SubmitTdrMs(10) == 10000ul);
-    /* A typo cannot overflow the arithmetic: the milliseconds plus the margin still fit in an unsigned long. */
-    CHECK(Bc250SubmitTdrMs(0xFFFFFFFFul) == BC250_SUBMIT_TDR_MAX_MS / 1000ul * 1000ul);
-    CHECK(Bc250SubmitTdrMs(0xFFFFFFFFul) <= 0xFFFFFFFFul - BC250_SUBMIT_MARGIN_MS);
-    /* And a TdrDelay above the clamp on an operator's own value is NOT cut down to it: that clamp belongs to a
-     * value somebody asked for. TdrDelay 400 s clamped to 300 s would put its duration 100 s below the
-     * configured OS duration. */
-    CHECK(Bc250SubmitTdrMs(400ul) == 400000ul && 400000ul > BC250_SUBMIT_BUDGET_MAX_MS);
+    /* Independent threshold, including malformed old override values. */
     {
-        int defaulted = 0, raised = 0;
-        /* The lab's own configuration: TdrDelay 10 s (the GUI's default, BD-079), no SubmitWatchdogMs. */
-        CHECK(Bc250SubmitBudgetMs(0, 10, &defaulted, &raised) == 10000ul + BC250_SUBMIT_MARGIN_MS);
-        CHECK(defaulted == 1 && raised == 0);
-        /* No TdrDelay either: Windows' own 2 s plus the margin, never a literal of ours. */
-        CHECK(Bc250SubmitBudgetMs(0, 0, &defaulted, &raised) == 2000ul + BC250_SUBMIT_MARGIN_MS);
-        CHECK(defaulted == 1 && raised == 0);
-        /* THE DEFECT, as a number: an operator (or a value left over from an old build) asks for the 500 ms that
-         * bugchecked unit A twice. It is raised to the OS's budget, and the start says that it was. */
-        CHECK(Bc250SubmitBudgetMs(500, 10, &defaulted, &raised) == 10000ul);
-        CHECK(defaulted == 0 && raised == 1);
-        /* A value above TdrDelay is taken as asked, and an absurd one is clamped. */
-        CHECK(Bc250SubmitBudgetMs(20000, 10, &defaulted, &raised) == 20000ul && raised == 0);
-        CHECK(Bc250SubmitBudgetMs(1000000ul, 10, &defaulted, &raised) == BC250_SUBMIT_BUDGET_MAX_MS);
-        /* An absurd TdrDelay, above the clamp on an operator's value: the floor still wins, because the OS
-         * really will wait that long. The clamp applies to what was asked for, and the floor applies last. */
-        CHECK(Bc250SubmitBudgetMs(0, 400, &defaulted, &raised) == 400000ul + BC250_SUBMIT_MARGIN_MS);
-        CHECK(defaulted == 1 && raised == 0);
-        CHECK(Bc250SubmitBudgetMs(500, 400, &defaulted, &raised) == 400000ul && raised == 1);
-        CHECK(Bc250SubmitBudgetMs(1000000ul, 400, &defaulted, &raised) == 400000ul && raised == 1);
-        /* THE FLOOR, over the whole range this driver can be configured with: whatever anybody writes anywhere,
-         * our configured duration is no shorter than TdrDelay; expiration order is not implied.
-         *
-         * The comparison is against the time the OS ITSELF will wait - TdrDelay as seconds, times 1000 - and
-         * not against this file's own copy of it. A comparison against Bc250SubmitTdrMs cannot see a clamp
-         * inside Bc250SubmitTdrMs that is too low, and that is the one error the invariant cannot survive. */
-        for (tdr = 0; tdr <= 1000ul; tdr++)
-        {
-            static const unsigned long asked[] = { 0ul, 1ul, 100ul, 500ul, 2000ul, 11999ul, 60000ul, 400000ul };
-            unsigned long osWaitMs = (tdr != 0ul ? tdr : (unsigned long)BC250_SUBMIT_TDR_DEFAULT_S) * 1000ul;
-
-            for (n = 0; n < sizeof(asked) / sizeof(asked[0]); n++)
-                CHECK(Bc250SubmitBudgetMs(asked[n], tdr, &defaulted, &raised) >= osWaitMs);
-        }
+        int invalid;
+        CHECK(Bc250SubmitDiagnosticMs(0, &invalid) == 12000 && !invalid);
+        CHECK(Bc250SubmitDiagnosticMs(500, &invalid) == 12000 && invalid);
+        CHECK(Bc250SubmitDiagnosticMs(999, &invalid) == 12000 && invalid);
+        CHECK(Bc250SubmitDiagnosticMs(1000, &invalid) == 1000 && !invalid);
+        CHECK(Bc250SubmitDiagnosticMs(300000, &invalid) == 300000 && !invalid);
+        CHECK(Bc250SubmitDiagnosticMs(300001, &invalid) == 12000 && invalid);
+        CHECK(Bc250SubmitDiagnosticMs(0xFFFFFFFFul, &invalid) == 12000 && invalid);
     }
     /* The look-for-progress cadence stays strictly inside the budget, or a window would restart for ever. */
-    for (n = 1; n <= BC250_SUBMIT_BUDGET_MAX_MS; n += 7ul)
+    for (n = 1; n <= BC250_SUBMIT_DIAGNOSTIC_MAX_MS; n += 7ul)
         CHECK(Bc250SubmitTickMs(n) >= 1ul && (n < 2ul || Bc250SubmitTickMs(n) < n));
     CHECK(Bc250SubmitTickMs(12000ul) == BC250_SUBMIT_TICK_MAX_MS);
     CHECK(Bc250SubmitTickMs(400ul) == 100ul);
@@ -245,7 +206,7 @@ int main(void)
 
     /* The g12 arm of the two dumps: ONE packet alone on the ring (its queue depth was 1), 3.2 s of work, the
      * token moving as the command processor walks the indirect buffers. It must not fire - and it did. */
-    ModelStart(&m, 0, 10);
+    ModelStart(&m, 0);
     CHECK(ModelSubmit(&m, 1));
     ModelRun(&m, 3200, 100);
     CHECK(!m.Fired);
@@ -254,13 +215,13 @@ int main(void)
 
     /* A modeled packet with a 400 ms token cadence (not a measured execution duration):
      * for twice the budget. Progress is progress even when it is slow. */
-    ModelStart(&m, 0, 10);
+    ModelStart(&m, 0);
     CHECK(ModelSubmit(&m, 1));
     ModelRun(&m, 2ul * m.BudgetMs, 400);
     CHECK(!m.Fired && m.Rearms > 0);
 
     /* A ring that shows no progress at all: the watchdog still catches it, and only after the whole budget. */
-    ModelStart(&m, 0, 10);
+    ModelStart(&m, 0);
     CHECK(ModelSubmit(&m, 1));
     ModelRun(&m, m.BudgetMs - m.TickMs, 0);
     CHECK(!m.Fired);                                    /* not one tick early */
@@ -269,7 +230,7 @@ int main(void)
     CHECK(m.FiredStaleMs >= m.BudgetMs);
 
     /* A token that moves once, late, inside a budget's worth of standing still, re-arms the whole budget. */
-    ModelStart(&m, 0, 10);
+    ModelStart(&m, 0);
     CHECK(ModelSubmit(&m, 1));
     ModelRun(&m, m.BudgetMs - m.TickMs, 0);
     CHECK(!m.Fired);
@@ -301,7 +262,7 @@ int main(void)
     CHECK(!Bc250SubmitWatchdogCheck(&w, 0ull, 500000ull * MS, 1000ull * MS, &age));
 
     /* R4: constant token has timer rearms but no activity, including the valid zero token. */
-    ModelStart(&m, 0, 10);
+    ModelStart(&m, 0);
     m.Token = 0ull;
     CHECK(ModelSubmit(&m, 1));
     ModelRun(&m, 1000, 0);
@@ -324,7 +285,7 @@ int main(void)
     CHECK(m.Primes == 2u && m.ActivityChanges == 0u);
 
     /* A/B/A/B can defer expiry indefinitely. These are activity changes, not proven forward progress. */
-    ModelStart(&m, 0, 10);
+    ModelStart(&m, 0);
     CHECK(ModelSubmit(&m, 1));
     for (n = 0; n < 100ul; n++) {
         m.Now += MS * m.TickMs;
@@ -336,7 +297,7 @@ int main(void)
 
     /* R3: independent clock origins. OS preemption begins 5 s after the software-head stamp.
      * Its 10 s TdrDelay ends later than this private 12 s stale window; no ordering guarantee. */
-    ModelStart(&m, 0, 10);
+    ModelStart(&m, 0);
     CHECK(ModelSubmit(&m, 1));
     {
         unsigned long long osPreempt = m.Now + 5000ull * MS;
@@ -348,7 +309,7 @@ int main(void)
 
     /* R4: samples at 250/500 ms, retirement at 600 ms. The retained high water is a
      * sampled software-head age lower bound, not retirement residence or shader duration. */
-    ModelStart(&m, 0, 10);
+    ModelStart(&m, 0);
     CHECK(ModelSubmit(&m, 1));
     ModelRun(&m, 500, 0);
     m.Now += 100ull * MS;
@@ -363,8 +324,8 @@ int main(void)
      * the identity of the deadline and of the two measured numbers, because the staleness window of 7.2 makes
      * the firing decision the same either way (the window restarts at every head change). Under the ring-write
      * rule of 0.7.216.26 the fourth packet's whole budget was gone before it began. */
-    ModelStart(&m, 0, 1);               /* TdrDelay 1 s: budget 3000 ms, tick 250 ms */
-    CHECK(m.BudgetMs == 1000ul + BC250_SUBMIT_MARGIN_MS);
+    ModelStart(&m, 3000);               /* TdrDelay 1 s: budget 3000 ms, tick 250 ms */
+    CHECK(m.BudgetMs == 3000ul);
     for (n = 1; n <= MODEL_PENDING_MAX; n++) CHECK(ModelSubmit(&m, (unsigned)n));
     CHECK(m.Count == MODEL_PENDING_MAX);
     CHECK(!ModelSubmit(&m, 99));        /* the ring is full; the eighth packet waits in software */
@@ -390,7 +351,7 @@ int main(void)
     CHECK(m.HeadMaxMs == 400ul);
 
     /* Appending work must never extend a running job's watchdog. The head's deadline is stamped once. */
-    ModelStart(&m, 0, 10);
+    ModelStart(&m, 0);
     CHECK(ModelSubmit(&m, 1));
     {
         unsigned long long stamped = m.Job[0].Deadline;
@@ -482,7 +443,7 @@ int main(void)
 
     /* A fire reports the three numbers it judged on, and they are MEASURED: the seventh packet of the q27 shape
      * waited 2.4 s for its turn and then stopped making progress. Neither number is the budget. */
-    ModelStart(&m, 0, 1);
+    ModelStart(&m, 3000);
     for (n = 1; n <= MODEL_PENDING_MAX; n++) CHECK(ModelSubmit(&m, (unsigned)n));
     for (n = 1; n < MODEL_PENDING_MAX; n++)
     {
@@ -499,7 +460,7 @@ int main(void)
     CHECK(m.FiredHeadMs >= m.FiredStaleMs);                             /* the stall is inside the head's time */
 
     printf("PASS: classification (constant zero, prime, gap, clock back, A/B/A/B), independent OS clock,"
-           " sampled head age, budget floor over 1001 TdrDelay values against the OS's own wait, progress re-arm (g12 3.2 s,"
+           " sampled head age, independent diagnostic threshold bounds, progress re-arm (g12 3.2 s,"
            " 400 ms packets, no progress,"
            " unwatched gap, clock back), head stamp (q27 7-deep, no extend), aborted fence (q27 232226/232228,"
            " six guards, wrap, record arithmetic), measured elapsed (head %lu ms, queued %lu ms, stale %lu ms,"

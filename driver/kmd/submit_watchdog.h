@@ -11,73 +11,26 @@
  * completed. The end of that chain is bugcheck 0x116, because this part has no working GPU reset (facts M53).
  * A false trip can therefore lead to a bugcheck when recovery cannot reopen the node.
  *
- * The duration floor and default margin are conservative policy, not an ordering guarantee. Windows times a
- * scheduler preemption request; this watchdog times sampled inactivity of a software queue head. Those clocks
- * have different origins, so this watchdog can still expire before Windows' TDR. Activity can postpone it
- * indefinitely, and inactivity is not proof that shader execution has stopped. */
+ * BD-152 removes that failure path: elapsed time permits diagnostics only. Windows times a scheduler
+ * preemption request; this observer times sampled inactivity of a software queue head. Those clocks have
+ * different origins. Activity can postpone diagnostics indefinitely, and inactivity is not proof that shader
+ * execution has stopped. */
 #ifndef BC250_SUBMIT_WATCHDOG_H
 #define BC250_SUBMIT_WATCHDOG_H
 
-/* ---- 7.1: the budget --------------------------------------------------------------------------------------- */
+/* BD-152: a diagnostic clock, independent of Windows' preemption/TDR clock.
+ * Reaching this threshold authorizes a bounded snapshot, never a gate closure,
+ * completion, preemption acknowledgement or engine reset. */
+#define BC250_SUBMIT_DIAGNOSTIC_VERSION 2u
+#define BC250_SUBMIT_DIAGNOSTIC_DEFAULT_MS 12000ul
+#define BC250_SUBMIT_DIAGNOSTIC_MIN_MS 1000ul
+#define BC250_SUBMIT_DIAGNOSTIC_MAX_MS 300000ul
 
-/* Windows' own TdrDelay when the value is absent from HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers
- * (tdr-registry-keys.md:55, "2 seconds is the default value"). Our installer writes 10 (BD-079). */
-#define BC250_SUBMIT_TDR_DEFAULT_S 2u
-
-/* Conservative default margin above the configured TdrDelay duration. The distinct clock origins mean
- * that this margin does not establish which watchdog expires first. */
-#define BC250_SUBMIT_MARGIN_MS 2000u
-
-/* The clamp on a value SOMEBODY ASKED FOR. Five minutes: an operator may ask for a long budget for an offline
- * compute run, and nothing in this driver wants a 32-bit millisecond count near its own overflow. It is not a
- * clamp on TdrDelay, and the difference is the whole of 7.1 - see BC250_SUBMIT_TDR_MAX_MS. */
-#define BC250_SUBMIT_BUDGET_MAX_MS 300000u
-
-/* The widest TdrDelay this arithmetic can carry: the milliseconds plus the margin must still fit in an unsigned
- * long (49 days, which no Windows configuration reaches).
- *
- * Deliberately NOT BC250_SUBMIT_BUDGET_MAX_MS, and this is the one line everything else in this file rests on.
- * Clamping TdrDelay to the operator's clamp would turn 7.1's invariant, "never shorter than TdrDelay", into
- * "never shorter than min(TdrDelay, 300 s)": with TdrDelay 400 s the budget would come out at 300 s and our
- * private duration would be 100 s below the configured OS duration. The
- * budget follows TdrDelay however long it is; only a value somebody asked for is clamped. */
-#define BC250_SUBMIT_TDR_MAX_MS (0xFFFFFFFFul - (unsigned long)BC250_SUBMIT_MARGIN_MS)
-
-/* TdrDelay as milliseconds. An absent or zero value reads as Windows' own default rather than as "no budget at
- * all", and the only clamp is the one the arithmetic below needs. */
-static __inline unsigned long Bc250SubmitTdrMs(unsigned long TdrDelaySeconds)
+static __inline unsigned long Bc250SubmitDiagnosticMs(unsigned long Requested, int* Invalid)
 {
-    unsigned long seconds = TdrDelaySeconds != 0ul ? TdrDelaySeconds : (unsigned long)BC250_SUBMIT_TDR_DEFAULT_S;
-
-    if (seconds > BC250_SUBMIT_TDR_MAX_MS / 1000ul)
-        seconds = BC250_SUBMIT_TDR_MAX_MS / 1000ul;
-    return seconds * 1000ul;
-}
-
-/* The budget of one device start. Requested is the SubmitWatchdogMs setting as read (0 = absent, which is the
- * shipping case: the INF writes no value, so a driver update never overrides an operator's choice).
- *
- * Absent: TdrDelay plus the margin. Present: the operator's value, clamped to BC250_SUBMIT_BUDGET_MAX_MS and
- * then RAISED to TdrDelay if it is shorter. The raise is not a courtesy - a budget below the OS's is the defect
- * this file exists for, and an operator who writes 500 here would reintroduce it. *Defaulted and *Raised say
- * which of the two happened, so the start can log what it did and why.
- *
- * The order matters: the operator's clamp is applied to the operator's value, and the TdrDelay floor is applied
- * last and wins over it. A clamp after the floor would cut the budget back below TdrDelay for any TdrDelay above
- * five minutes. This is a duration invariant, not a guarantee about the order of expiration. */
-static __inline unsigned long Bc250SubmitBudgetMs(unsigned long Requested, unsigned long TdrDelaySeconds,
-                                                  int* Defaulted, int* Raised)
-{
-    unsigned long tdr = Bc250SubmitTdrMs(TdrDelaySeconds);
-    unsigned long budget;
-
-    *Defaulted = 0;
-    *Raised = 0;
-    if (Requested == 0ul) { *Defaulted = 1; budget = tdr + (unsigned long)BC250_SUBMIT_MARGIN_MS; }
-    else budget = Requested > (unsigned long)BC250_SUBMIT_BUDGET_MAX_MS
-               ? (unsigned long)BC250_SUBMIT_BUDGET_MAX_MS : Requested;
-    if (budget < tdr) { budget = tdr; *Raised = 1; }
-    return budget;
+    *Invalid = Requested != 0ul &&
+        (Requested < BC250_SUBMIT_DIAGNOSTIC_MIN_MS || Requested > BC250_SUBMIT_DIAGNOSTIC_MAX_MS);
+    return Requested == 0ul || *Invalid ? BC250_SUBMIT_DIAGNOSTIC_DEFAULT_MS : Requested;
 }
 
 /* ---- 7.2: re-arm while progress is observed --------------------------------------------------------------- */
@@ -89,8 +42,7 @@ static __inline unsigned long Bc250SubmitBudgetMs(unsigned long Requested, unsig
  * DPC itself, and a head change re-arms it from the stamp).
  *
  * A budget of 3 ms or less yields a tick equal to the budget and the watchdog then never fires. That is the
- * conservative direction and it cannot be reached from the registry, because Bc250SubmitBudgetMs raises every
- * budget to TdrDelay and TdrDelay is at least 1 s in any configuration Windows accepts. */
+ * conservative direction and it cannot be reached from the registry, because the diagnostic threshold is at least 1 s. */
 #define BC250_SUBMIT_TICK_MAX_MS 250u
 #define BC250_SUBMIT_TICK_DIVISOR 4u
 
@@ -139,6 +91,7 @@ typedef struct BC250_SUBMIT_WATCHDOG {
     unsigned long long Checked;         /* previous check */
     int Primed;                         /* a window is open; 0 while no job is the head */
     int Observed;                       /* a token has actually been sampled in this window */
+    int SnapshotTaken;                  /* one diagnostic per head, reset on a new head */
     BC250_SUBMIT_OBSERVATION LastObservation;
 } BC250_SUBMIT_WATCHDOG;
 
@@ -151,6 +104,7 @@ static __inline void Bc250SubmitWatchdogArm(BC250_SUBMIT_WATCHDOG* Watchdog, uns
     Watchdog->Checked = Now;
     Watchdog->Primed = 1;
     Watchdog->Observed = 0;
+    Watchdog->SnapshotTaken = 0;
     Watchdog->LastObservation = BC250_SUBMIT_OBSERVATION_NONE;
 }
 
@@ -158,6 +112,7 @@ static __inline void Bc250SubmitWatchdogIdle(BC250_SUBMIT_WATCHDOG* Watchdog)
 {
     Watchdog->Primed = 0;
     Watchdog->Observed = 0;
+    Watchdog->SnapshotTaken = 0;
     Watchdog->LastObservation = BC250_SUBMIT_OBSERVATION_NONE;
 }
 

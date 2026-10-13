@@ -19,6 +19,7 @@
 #define TRUE 1
 #define FALSE 0
 #define BC250_WDDM_LOG_CALLS 8
+#define BC250_WDDM_NODE_COPY 1u
 #define BC250_VMID_AUTO 0xFFFFFFFEu   /* vmid_pool.h: the WDDM path lets gfx.c choose (KMD214) */
 #define STATUS_DEVICE_BUSY (-1)
 #define NT_SUCCESS(x) ((x)>=0)
@@ -45,7 +46,11 @@ typedef struct {
     LONG FaultSnapshots;                /* KMD193: register snapshots taken by the watchdog */
     /* BD-114: the submit watchdog's budget, its cadence and its staleness window, types as in wddm.c. The budget
      * is latched in WddmStart, which is above the extracted region, so main() sets it the way a start would. */
-    ULONG SubmitBudgetMs, SubmitTickMs, SubmitTdrMs;
+    ULONG SubmitBudgetMs, SubmitTickMs;
+    int PagingHwPending, PagingDiagnosticTaken, PagingDeferredValid;
+    ULONG PagingHwFence, PagingHwSeq;
+    ULONGLONG PagingDeadline;
+    LONG PagingHwTimeouts;
     BC250_SUBMIT_WATCHDOG SubmitWatchdog;
     BC250_HANG_NODE_STATE Recovery[2];
     volatile LONG SubmitActivityChanges, SubmitPrimes, SubmitGapResets;
@@ -122,11 +127,13 @@ static void GuardLog(const char* fmt,...) { (void)fmt; }
 #define ProgressExit(site,value) ((void)(site),(void)(value))
 static int GfxFenceArrived(BC250_DEVICE* d,ULONG v) { (void)d; return bc250_fence_reached(completed,v); }
 static void GfxSubmitFail(BC250_DEVICE* d) { (void)d; ++failures; }
-/* BD-120: the node-0 timeout latch now marks the witness close as the pending reset's own and closes the ring
- * gate in a second call. A latched timeout is still what this harness asserts never happens, so the mark is the
- * counted one of the two and the gate closure is a plain stub. */
-static void StartHealthFaultPendingReset(BC250_DEVICE* d) { (void)d; ++failures; }
-static void GfxSubmitClose(BC250_DEVICE* d) { (void)d; }
+static void WddmGpuFencePaging(BC250_DEVICE* d)
+{
+    BC250_WDDM* w=(BC250_WDDM*)d->Wddm;
+    if(w->PagingHwPending && completed==w->PagingHwSeq) {
+        w->PagingHwPending=0; reported=w->PagingHwFence;
+    }
+}
 #ifndef NO_RECOVERY_LEDGER
 static void WddmRecordFenceLedgerLocked(BC250_WDDM* w,UINT n,ULONGLONG e,UINT f,BOOLEAN hw)
 { (void)w; (void)n; (void)e; (void)hw; ledger=f; }
@@ -189,11 +196,10 @@ int main(void)
     /* BD-114: what WddmStart latches, with the lab's own configuration - TdrDelay 10 s (the GUI's default) and no
      * SubmitWatchdogMs - so the budget below is 12 s and the DPC looks for progress every 250 ms. The held
      * submission's own bound stays at BC250_WDDM_HOLD_DEADLINE_MS, which the generator reads from wddm.c. */
-    { int defaulted=0, raised=0;
-      w.SubmitTdrMs=Bc250SubmitTdrMs(10);
-      w.SubmitBudgetMs=Bc250SubmitBudgetMs(0,10,&defaulted,&raised);
+    { int invalid=0;
+      w.SubmitBudgetMs=Bc250SubmitDiagnosticMs(0,&invalid);
       w.SubmitTickMs=Bc250SubmitTickMs(w.SubmitBudgetMs);
-      CHECK(defaulted==1 && !raised && w.SubmitBudgetMs==12000 && w.SubmitTickMs==250); }
+      CHECK(!invalid && w.SubmitBudgetMs==12000 && w.SubmitTickMs==250); }
     w.FenceLedger[0].Epoch=1; mock_now=100;
     for(i=1;i<=7;i++) CHECK(WddmSubmitHardware(&d,&w,&c,0x4000,128,i,0,0));
     CHECK(w.GfxPending.Count==7 && w.HwFence==1 && w.HwPending && dispatches==7);
@@ -239,19 +245,23 @@ int main(void)
     for(i=1;i<=48;i++){ mock_now+=10000ull*250; WddmSubmitDpcRoutine(NULL,&d,NULL,NULL);
                         CHECK(!w.WatchdogFaulted[0] && failures==0 && w.SubmitRearms==(LONG)(1+i)); }
     mock_now+=10000ull*250; WddmSubmitDpcRoutine(NULL,&d,NULL,NULL);
-    CHECK(failures==1 && reported==9 && w.HwPending && w.WatchdogFaulted[0]);
+    CHECK(failures==0 && reported==9 && w.HwPending && !w.WatchdogFaulted[0]);
     CHECK(mock_now-6000000==10000ull*(12000+250));           /* the budget plus the look that opened the window */
-    /* The look that faults does not re-arm, so no further look is scheduled: a faulted node is not watched. The
-     * KTIMER itself is simply left alone, which is why this is a count and not a KeCancelTimer. */
-    CHECK(w.SubmitChecks==50 && w.SubmitRearms==49);
+    /* Diagnostic expiry keeps the observation timer and admission active. */
+    CHECK(w.SubmitChecks==50 && w.SubmitRearms==50);
     CHECK(snapshots==1);    /* KMD193: one register snapshot per timeout, no more */
     CHECK(vmidReports==1 && lastReportedVmid==ModelVmid(mock_seq));   /* KMD214: the timed-out job's VMID */
-    CHECK(!WddmSubmitHardware(&d,&w,&c,0x4000,128,11,0,0));
-    CHECK(reported==9);
+    CHECK(WddmSubmitHardware(&d,&w,&c,0x4000,128,11,0,0));
+    for(i=0;i<100;i++){ mock_now+=2500000; WddmSubmitDpcRoutine(NULL,&d,NULL,NULL); }
+    CHECK(snapshots==1 && failures==0 && !w.WatchdogFaulted[0]);
+    completed=mock_seq; WddmGpuFence(&d);
+    CHECK(reported==11 && !w.HwPending && !timer);
+    CHECK(WddmSubmitHardware(&d,&w,&c,0x4000,128,12,0,0));
+    CHECK(reported==11);
     // Recovery epoch mismatch may not retire stale hardware work.
 #ifndef NO_RECOVERY_LEDGER
     w.FenceLedger[0].Epoch=2; completed=mock_seq; WddmGpuFence(&d);
-    CHECK(reported==9 && w.HwPending);
+    CHECK(reported==11 && w.HwPending);
 #endif
     // The HIP dispatch journal: a tagged dispatch carries its ID from the ring write to its own retirement.
     memset(&w,0,sizeof(w)); w.FenceLedger[0].Epoch=1;
@@ -344,6 +354,30 @@ int main(void)
       mock_progress_available=TRUE;
       mock_now+=2500000; WddmSubmitDpcRoutine(NULL,&d,NULL,NULL);
       CHECK(w.SubmitGapResets==gaps+1 && failures==0 && !w.WatchdogFaulted[0]); }
+    /* Node 1: expiry preserves pending/deferred work and queue admission. A
+     * duplicate queued timer is bounded to one diagnostic; a late real fence
+     * remains retirable. Stop/reset suppress diagnostics from stale timers. */
+    memset(&w,0,sizeof(w)); mock_now=100; completed=reported=failures=0;
+    w.PagingHwPending=1; w.PagingDeferredValid=1; w.PagingHwSeq=55;
+    w.PagingHwFence=88; w.PagingDeadline=200; w.SubmitBudgetMs=12000;
+    WddmPagingSubmitDpcCheck(NULL,&d,NULL,NULL);
+    CHECK(!w.PagingDiagnosticTaken && !w.PagingHwTimeouts);
+    mock_now=200;
+    WddmPagingSubmitDpcCheck(NULL,&d,NULL,NULL);
+    CHECK(w.PagingDiagnosticTaken && w.PagingHwTimeouts==1);
+    CHECK(w.PagingHwPending && w.PagingDeferredValid && !w.WatchdogFaulted[1] && failures==0 && reported==0);
+    WddmPagingSubmitDpcCheck(NULL,&d,NULL,NULL);
+    CHECK(w.PagingHwTimeouts==1);
+    completed=55;
+    WddmPagingSubmitDpcCheck(NULL,&d,NULL,NULL);
+    CHECK(!w.PagingHwPending && reported==88 && !w.WatchdogFaulted[1]);
+    w.PagingHwPending=1; w.PagingHwSeq=56; w.PagingDiagnosticTaken=0;
+    w.Stopping=1;
+    WddmPagingSubmitDpcCheck(NULL,&d,NULL,NULL);
+    CHECK(!w.PagingDiagnosticTaken && w.PagingHwTimeouts==1);
+    w.Stopping=0; w.Recovery[1].ResetActive=1;
+    WddmPagingSubmitDpcCheck(NULL,&d,NULL,NULL);
+    CHECK(!w.PagingDiagnosticTaken && w.PagingHwTimeouts==1);
     printf("GFX WDDM actual submit/completion/watchdog: %u checks, %u failures\n",checks,bad);
     return bad ? 1:0;
 }
