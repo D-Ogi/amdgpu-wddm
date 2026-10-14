@@ -12,6 +12,10 @@
 #   -Tools     the installed tools folder, where poll-repro.ps1 takes the CLI, the DLL and start-confirm-core.ps1
 #   -Cases     a,b,c by default
 #   -CaseSeconds  how long each window stays (default 45)
+#   -Surface   flash-watch also reads the start window's own surface through its window DC, about every millisecond
+#              (target "surface"): a flash in DWM's frames that this target never shows is a state of DWM's copy of
+#              the window, not of the window itself
+#   -Plan      print what a run would do and exit: no task, no process, no file, on any computer
 #
 # Cases:
 #   a  the installed window, with the poll of start-confirm.ps1 on its real schedule (poll-repro.ps1, read-only)
@@ -45,7 +49,9 @@ param(
     [int]$CaseSeconds = 45,
     [int]$BoundSeconds = 170,
     [string]$Work = 'C:\BC250\tmp\flash',
-    [string]$TaskName = 'BC250 flash probe'
+    [string]$TaskName = 'BC250 flash probe',
+    [switch]$Surface,
+    [switch]$Plan
 )
 $ErrorActionPreference = 'Continue'
 $clock = [Diagnostics.Stopwatch]::StartNew()
@@ -136,6 +142,7 @@ function Invoke-Case([string]$Case) {
     Remove-Probe
     $deadlineMs = ($CaseSeconds + 4) * 1000
     $argText = (@($prefix, $deadlineMs, $ps, $windowScript, $CaseSeconds) | ForEach-Object { '"' + $_ + '"' }) -join ' '
+    if ($Surface) { $argText += ' surface' }
     $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
     $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Seconds ($CaseSeconds + 30)) `
         -MultipleInstances IgnoreNew -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
@@ -188,6 +195,11 @@ function Invoke-Case([string]$Case) {
         $mode, (Get-Field $window 'rect'), $(if ($overlay) { Get-Field $overlay 'rect' } else { 'none' }), ($endLine -replace '^end ', ''),
         $polls, $busy, $CaseSeconds)
     foreach ($l in ($log | Where-Object { $_ -match '^summary ' })) { $script:rows += "  $($l -replace '^summary ', '')" }
+    if ($Surface) {
+        $read = $log | Where-Object { $_ -match '^surface samples=' } | Select-Object -Last 1
+        $script:rows += "  $(if ($read) { $read } else { 'surface: no reader line' })"
+        if (-not ($log | Where-Object { $_ -match '^target surface ' })) { $script:bad += "case ${Case}: the window's surface was never read" }
+    }
     # The DPM samples of this case's window, one before it and one after it included.
     $dpmAll = Read-Dpm "$dir\dpm.csv" $zero $freq
     $dpm = @($dpmAll | Where-Object { $_.t -ge -1.5 -and $_.t -le $CaseSeconds + 1.5 })
@@ -198,7 +210,7 @@ function Invoke-Case([string]$Case) {
             $dpm.Count, $mhz[0], $mhz[-1], $changes.Count, [Math]::Max(0, $dpm.Count - 1))
         foreach ($c in $changes) { $script:rows += [string]::Format($inv, '    dpm change in +{0:F3}..+{1:F3} s: {2}', $c.t0, $c.t1, $c.what) }
     } else { $script:rows += '  dpm: no samples' }
-    foreach ($target in @('window', 'overlay')) {
+    foreach ($target in @('window', 'overlay', 'surface')) {
         $flashes = @($log | Where-Object { $_ -match "^flash target=$target " })
         $inside = 0
         $inDpm = 0
@@ -241,6 +253,24 @@ try {
     if ($caseList.Count * ($CaseSeconds + 5) + 10 -gt $BoundSeconds) { throw "refused: $($caseList.Count) cases of $CaseSeconds s do not fit in $BoundSeconds s" }
     $need = @($Watch, $Repro, $Sampler, $Shipped, (Join-Path $Tools 'bc250kmd_cli.exe'), (Join-Path $Tools 'bc250control.dll'), (Join-Path $Tools 'start-confirm-core.ps1'))
     if ($caseList -contains 'c') { $need += $Fixed }
+    $ps = Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    if ($Plan) {
+        # What a run would do, from the same parameters, on any computer: no task, no process, no file.
+        [string]::Format($inv, 'plan: {0} case(s) of {1} s, bound {2} s, surface {3}, work {4}\<utc>', $caseList.Count, $CaseSeconds,
+            $BoundSeconds, [bool]$Surface, $Work)
+        foreach ($f in $need) { "plan: file $f $(if ($f -and (Test-Path -LiteralPath $f -PathType Leaf)) { "sha256 $((Get-FileHash -LiteralPath $f -Algorithm SHA256).Hash)" } else { 'not on this computer' })" }
+        "plan: refusals checked on the target: explorer.exe at the console, the logon tasks and their scripts not running"
+        "plan: sampler, session 0, hidden: $ps -File $Sampler -Tools $Tools -Seconds <bound left - 4> -PeriodMs 1000 -Out <work>\dpm.csv"
+        foreach ($c in $caseList) {
+            $script = $(if ($c -eq 'c') { '<work>\fixed\start-window.ps1' } else { '<work>\shipped\start-window.ps1' })
+            "plan: case $c, $(if ($c -eq 'c') { 'the -Fixed window' } else { 'the installed window' }), $(if ($c -ne 'b') { 'with the poll' } else { 'no poll' })"
+            if ($c -ne 'b') { "plan:   poll, session 0, hidden: $ps -File $Repro -Tools $Tools -Seconds $($CaseSeconds + 1) -Out <work>\$c-polls.csv" }
+            "plan:   task '$TaskName', console user, Interactive, Limited, limit $($CaseSeconds + 30) s: <work>\flash-watch.exe <work>\$c $(($CaseSeconds + 4) * 1000) $ps $script $CaseSeconds$(if ($Surface) { ' surface' })"
+            "plan:   wait at most $($CaseSeconds + 12) s, then remove the task"
+        }
+        'plan: nothing was started, registered or written'
+        exit 0
+    }
     foreach ($f in $need) { if (-not $f -or -not (Test-Path -LiteralPath $f -PathType Leaf)) { throw "refused: no file '$f'" } }
 
     $explorer = Get-CimInstance Win32_Process -Filter "Name='explorer.exe'" -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -258,7 +288,6 @@ try {
     $overlay = @(Get-Process -Name 'bc250mon' -ErrorAction SilentlyContinue)
     "overlay bc250mon $(if ($overlay.Count) { "runs (pid $(($overlay | ForEach-Object { $_.Id }) -join ', '))" } else { 'not running' })"
 
-    $ps = Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
     $dir = Join-Path $Work ([DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss'))
     [void][IO.Directory]::CreateDirectory((Join-Path $dir 'shipped'))
     [void][IO.Directory]::CreateDirectory((Join-Path $dir 'fixed'))

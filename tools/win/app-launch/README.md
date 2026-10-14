@@ -87,6 +87,22 @@ is. Each case also gives the percentage of the intervals that have a change, to 
 Desktop Duplication shows what DWM composes. It does not show what the monitor then gets. A flash that is on the
 screen but not in these frames comes from a later stage: the present of DWM's frame, or the scanout.
 
+With `-Surface`, `flash-watch.exe` also reads the start window's own surface through its window DC (target
+`surface`). Each read is a BitBlt from `GetDC` of the window and a sleep of 1 ms, so the reads come about every 2 ms
+(72,041 reads in 150 s on the lab). GDI answers that read from the window's redirection surface, between two GDI calls
+on it. `<case>-surface.csv` gives each read with its QueryPerformanceCounter ticks before and after and its hash, on
+the clock of the DWM frames. A flash in DWM's frames that this target also shows is a state of the window itself. A
+flash in DWM's frames that this target never shows is a state of DWM's copy of the window, or a state that was shorter
+than the gap between two reads: a flash with the same hash as a state that the surface shows is the first kind. One
+long case is enough for this question:
+
+```
+python tools\win\target.py ps tools\win\app-launch\measure-flash.ps1 -Kit C:\BC250\tmp\flash-kit -Cases a -CaseSeconds 150 -Surface
+```
+
+`-Plan` prints what a run would do (the cases, the tasks, the commands and the files) and stops. It starts, registers
+and writes nothing, so it can run on any computer.
+
 The script refuses to run while the logon tasks or their scripts run, and when the console has no signed-in user.
 It runs the two window scripts as copies in its work folder, where no control application is next to them, so the
 window starts no sign-in notice. It stops only the processes that it started, and it removes its task on every

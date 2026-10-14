@@ -7,8 +7,11 @@
 // layered. When duplication cannot start, the rectangles are read from the screen through GDI every 2 ms instead,
 // which DWM answers with its last composed frame.
 //
-//   flash-watch.exe <out-prefix> <deadline-ms> <powershell.exe> <window script> <seconds>
+//   flash-watch.exe <out-prefix> <deadline-ms> <powershell.exe> <window script> <seconds> [surface]
 //   flash-watch.exe --self-test
+//
+// With "surface", a third target reads the start window's own surface through its window DC about every millisecond
+// (SurfaceLoop), so that a flash in DWM's frames can be told from a state that the window itself passed through.
 //
 // measure-flash.ps1 runs it in the console session through a scheduled task. All times are QueryPerformanceCounter
 // ticks, the clock that poll-repro.ps1 ([Diagnostics.Stopwatch]::GetTimestamp) and DXGI's LastPresentTime use too.
@@ -233,6 +236,8 @@ int64_t g_deadline = 0;
 std::wstring g_prefix;
 std::string g_mode = "none";
 uint64_t g_frames = 0;
+CRITICAL_SECTION g_logLock;             // the log is written by the frame loop and by the surface reader
+volatile LONG g_stop = 0;               // set when the frame loop ends; the surface reader stops then
 
 int64_t Qpc()
 {
@@ -245,10 +250,12 @@ void Log(const char *fmt, ...)
 {
     va_list a;
     va_start(a, fmt);
+    EnterCriticalSection(&g_logLock);
     std::vfprintf(g_log, fmt, a);
-    va_end(a);
     std::fputc('\n', g_log);
     std::fflush(g_log);
+    LeaveCriticalSection(&g_logLock);
+    va_end(a);
 }
 
 std::string Narrow(const wchar_t *w)
@@ -327,11 +334,14 @@ bool Intersect(const RECT &a, const RECT &b, RECT *out)
     return true;
 }
 
-// One watched window: the start window (the process this tool started) or the overlay (bc250mon.exe).
+// One watched window: the start window (the process this tool started) or the overlay (bc250mon.exe) in DWM's
+// frames, or the start window's own surface (mode "surface", read by SurfaceLoop).
 struct Target {
     const char *name;
     const wchar_t *exe;             // found by image name when not null
+    const char *mode = nullptr;     // the reading mode of this target's rows, when it is not the frame loop's
     DWORD pid = 0;
+    HWND volatile hwnd = nullptr;   // read by the surface reader too
     bool have = false;
     RECT rect = {};                 // desktop coordinates, physical pixels
     int64_t firstQpc = 0, lastLocate = 0;
@@ -364,6 +374,7 @@ struct Target {
         }
         have = true;
         rect = f.rect;
+        hwnd = f.hwnd;
     }
 
     // One frame's rectangle: a CSV row, and the detector.
@@ -379,14 +390,14 @@ struct Target {
         now.captureQpc = qpc;
         now.presentQpc = presentQpc;
         now.accumulated = accumulated;
-        now.mode = g_mode == "dda" ? "dda" : g_mode == "gdi" ? "gdi" : "none";
+        now.mode = mode ? mode : g_mode == "dda" ? "dda" : g_mode == "gdi" ? "gdi" : "none";
         ++analysed;
         mostNavy = max(mostNavy, now.c.navy);
         std::fprintf(g_csv, "%llu,%s,%lld,%lld,%u,%s,%d,%ld,%ld,%ld,%ld,%u,%u,%u,%u,%016llx\n",
                      (unsigned long long)g_frames, name, (long long)qpc, (long long)presentQpc, accumulated,
-                     g_mode.c_str(), dirty, d.left, d.top, d.right, d.bottom, now.c.navy, now.c.cyan, now.c.black,
+                     now.mode, dirty, d.left, d.top, d.right, d.bottom, now.c.navy, now.c.cyan, now.c.black,
                      now.c.other, (unsigned long long)now.hash);
-        if (window && !haveRef && now.c.cyan > 0 && now.c.navy * 2 > (uint32_t)(w * h))
+        if (window && !mode && !haveRef && now.c.cyan > 0 && now.c.navy * 2 > (uint32_t)(w * h))
             haveRef = WriteBmp(g_prefix + L"-ref.bmp", bgra, w, h, pitch);
         const uint64_t hash = now.hash;
         now.px.assign(bgra, bgra + (size_t)pitch * (h - 1) + (size_t)w * 4);
@@ -398,7 +409,7 @@ struct Target {
         ++flashes;
         std::string bmp = "-";
         if (bmps < kMaxBmps && !out.px.empty()) {
-            const std::wstring file = g_prefix + L"-" + std::wstring(window ? L"window" : L"overlay") + L"-" +
+            const std::wstring file = g_prefix + L"-" + std::wstring(name, name + std::strlen(name)) + L"-" +
                                       std::to_wstring(bmps) + L".bmp";
             if (WriteBmp(file, out.px.data(), w, h, out.pitch)) {
                 bmp = Narrow(file.c_str());
@@ -700,6 +711,83 @@ bool GdiLoop(Run &run)
     return samples > 0;
 }
 
+// ------------------------------------------------------------------------------------------------ the window's surface
+// With "surface": the start window's own pixels, read through its window DC about every millisecond, next to the
+// frames that DWM composes. A read of a redirected window's DC is answered from the window's redirection surface,
+// between two GDI calls on it. So a flash here is a state of the window's own surface; a flash in DWM's frames that
+// never shows here is a state of DWM's copy of it.
+struct Surface {
+    Target *window = nullptr;       // the frame loop's start window: its HWND
+    Target target{"surface", nullptr};
+    uint64_t samples = 0;
+    double slowest = 0;
+};
+
+DWORD WINAPI SurfaceLoop(void *p)
+{
+    Surface &s = *static_cast<Surface *>(p);
+    s.target.mode = "surface";
+    // Every read, with its own QPC before and after the BitBlt: the reads line up with DWM's presents, and the gaps
+    // between reads say how much of the time around a flash this target covered.
+    FILE *reads = nullptr;
+    if (_wfopen_s(&reads, (g_prefix + L"-surface.csv").c_str(), L"w") || !reads) { Log("surface csv failed"); return 0; }
+    setvbuf(reads, nullptr, _IOFBF, 1 << 20);
+    std::fprintf(reads, "read,qpc0,qpc1,hash\n");
+    HDC mem = CreateCompatibleDC(nullptr);
+    HBITMAP bmp = nullptr;
+    void *bits = nullptr;
+    int bw = 0, bh = 0;
+    uint64_t last = 0;
+    while (!g_stop && Qpc() < g_deadline) {
+        const HWND h = s.window->hwnd;
+        RECT rc = {};
+        if (!h || !GetClientRect(h, &rc) || rc.right <= 0 || rc.bottom <= 0) { Sleep(1); continue; }
+        if (!bmp || rc.right != bw || rc.bottom != bh) {
+            if (bmp) DeleteObject(bmp);
+            BITMAPINFO bi = {};
+            bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
+            bi.bmiHeader.biWidth = rc.right;
+            bi.bmiHeader.biHeight = -rc.bottom;
+            bi.bmiHeader.biPlanes = 1;
+            bi.bmiHeader.biBitCount = 32;
+            bi.bmiHeader.biCompression = BI_RGB;
+            bmp = CreateDIBSection(mem, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+            if (!bmp) { Log("surface dib failed"); break; }
+            SelectObject(mem, bmp);
+            bw = rc.right;
+            bh = rc.bottom;
+            s.target.rect = {0, 0, bw, bh};
+            s.target.have = true;
+            if (!s.target.firstQpc) s.target.firstQpc = Qpc();
+            Log("target surface hwnd=0x%p rect=0,0,%d,%d qpc=%lld", (void *)h, bw, bh, (long long)s.target.firstQpc);
+        }
+        HDC dc = GetDC(h);
+        if (!dc) { Sleep(1); continue; }
+        const int64_t t0 = Qpc();
+        BitBlt(mem, 0, 0, bw, bh, dc, 0, 0, SRCCOPY);
+        GdiFlush();
+        const int64_t t1 = Qpc();
+        ReleaseDC(h, dc);
+        s.slowest = max(s.slowest, (t1 - t0) * 1000.0 / g_freq);
+        ++s.samples;
+        uint64_t hash = 0;
+        Classify(static_cast<const uint8_t *>(bits), bw, bh, bw * 4, &hash);
+        std::fprintf(reads, "%llu,%lld,%lld,%016llx\n", (unsigned long long)s.samples, (long long)t0, (long long)t1,
+                     (unsigned long long)hash);
+        if (hash != last) {
+            const RECT whole = {0, 0, bw, bh};
+            s.target.Analyse(static_cast<const uint8_t *>(bits), bw * 4, (t0 + t1) / 2, 0, 0, 2, whole);
+            last = hash;
+        }
+        Sleep(1);
+    }
+    Log("surface samples=%llu slowest_ms=%.2f", (unsigned long long)s.samples, s.slowest);
+    std::fclose(reads);
+    if (bmp) DeleteObject(bmp);
+    DeleteDC(mem);
+    return 0;
+}
+
 DWORD WINAPI Watchdog(void *)
 {
     for (;;) {
@@ -717,6 +805,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int)
 {
     int argc = 0;
     wchar_t **argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+    InitializeCriticalSection(&g_logLock);
     if (argc == 2 && !wcscmp(argv[1], L"--self-test")) {
         // A windows-subsystem program has no console. Standard output is used when the caller gave one (a file);
         // otherwise the lines go into the parent's console, when there is one.
@@ -726,7 +815,8 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int)
         }
         return SelfTest();
     }
-    if (argc != 6) return 2;
+    if (argc != 6 && !(argc == 7 && !wcscmp(argv[6], L"surface"))) return 2;
+    const bool readSurface = argc == 7;
     LARGE_INTEGER f;
     QueryPerformanceFrequency(&f);
     g_freq = f.QuadPart;
@@ -774,6 +864,9 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int)
     }
     run.targets[0].pid = run.child.dwProcessId;
     Log("child pid=%lu qpc=%lld", run.child.dwProcessId, (long long)before);
+    Surface surface;
+    surface.window = &run.targets[0];
+    HANDLE surfaceThread = readSurface ? CreateThread(nullptr, 0, SurfaceLoop, &surface, 0, nullptr) : nullptr;
 
     bool read = haveDda && dda.Loop(run);
     if (!read && !run.Done()) {
@@ -782,6 +875,11 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int)
         Log("mode=gdi qpc=%lld", (long long)Qpc());
         for (auto &t : run.targets) t.staging.Reset();
         read = GdiLoop(run);
+    }
+    InterlockedExchange(&g_stop, 1);
+    if (surfaceThread) {
+        WaitForSingleObject(surfaceThread, 3000);
+        CloseHandle(surfaceThread);
     }
     if (run.ChildRunning()) {
         // Only the process this tool started, and only because it outlived the deadline.
@@ -792,10 +890,13 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int)
     DWORD code = STILL_ACTIVE;
     GetExitCodeProcess(run.child.hProcess, &code);
     timeEndPeriod(1);
-    for (const auto &t : run.targets)
-        Log("summary target=%s found=%d analysed=%llu changes=%llu flashes=%llu accumulated_misses=%llu", t.name,
-            t.have ? 1 : 0, (unsigned long long)t.analysed, (unsigned long long)t.detector.Changes(),
-            (unsigned long long)t.flashes, (unsigned long long)t.accumulatedMisses);
+    std::vector<const Target *> all;
+    for (const auto &t : run.targets) all.push_back(&t);
+    if (readSurface) all.push_back(&surface.target);
+    for (const Target *t : all)
+        Log("summary target=%s found=%d analysed=%llu changes=%llu flashes=%llu accumulated_misses=%llu", t->name,
+            t->have ? 1 : 0, (unsigned long long)t->analysed, (unsigned long long)t->detector.Changes(),
+            (unsigned long long)t->flashes, (unsigned long long)t->accumulatedMisses);
     Log("end frames=%llu child_exit=%lu window=%d", (unsigned long long)g_frames, code, run.targets[0].have ? 1 : 0);
     std::fclose(g_csv);
     std::fclose(g_log);
