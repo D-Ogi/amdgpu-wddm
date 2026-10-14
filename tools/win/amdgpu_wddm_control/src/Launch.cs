@@ -210,6 +210,7 @@ namespace AmdgpuWddmControl
         // itself to its content; one that does not takes the screen and scrolls, so the Close button stays reachable.
         void Fit()
         {
+            MaximumSize = Size.Empty;                   // the content's own size, not the one an earlier Fit allowed
             PerformLayout();
             _wanted = PreferredSize;
             if (_wanted.Width <= _area.Width && _wanted.Height <= _area.Height)
@@ -243,7 +244,8 @@ namespace AmdgpuWddmControl
             _close.MaximumSize = new Size(Math.Max(Theme.S(60), _inner - _close.Margin.Horizontal), 0);
             _buttons.Controls.Add(_close);
             CancelButton = _close;
-            Fit();
+            if (AutoSize) Fit();                        // a window that scrolls already keeps its size
+            else PerformLayout();
             if (Visible) Location = new Point(centre.X - Width / 2, centre.Y - Height / 2);
         }
 

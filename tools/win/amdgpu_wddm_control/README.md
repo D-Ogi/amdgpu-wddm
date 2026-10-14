@@ -41,7 +41,7 @@ One window per person and session (`src/SingleInstance.cs`). The first start of 
 `Local\amdgpu-wddm-control-window`. A later start finds it, sets the event `Local\amdgpu-wddm-control-window-activate`
 and exits 0 without a window. The first start then brings its window to the front: the loading window while it
 still starts, else the main window, restored when it is minimised, or the dialog that is open over it. Only the plain
-start (no arguments) takes part; `--action`, `--start-notice`, `--recovery` and the gates do not.
+start (no arguments) takes part. `--action`, `--start-notice`, `--recovery` and the gates do not.
 `tools/win/app-launch/measure-launch.ps1` measures the time to the first window on the lab.
 
 ## How it talks to the driver
