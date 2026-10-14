@@ -28,7 +28,7 @@
       "ships": {"libs/ddi/amdgpu_wddm_vkd3d.dll": ["amdgpu_wddm_vkd3d.dll"]}
     },
     "ddi-engine-lto": {
-      "description": "amdgpu_wddm_vkd3d.dll as released since b17: the ddi-engine options, byte for byte and in the same order, followed by b_ndebug, MSVC whole-program optimisation (/GL and /LTCG), /arch:AVX2, WARN and FIXME compiled out (VKD3D_NO_DEBUG_MESSAGES; TRACE is already out in release) and a linker map of the DLL for ETW attribution (the map does not change the image). The x64 engine of the release and its x86 (WoW64) build use this set",
+      "description": "amdgpu_wddm_vkd3d.dll as released since b17: the ddi-engine options, byte for byte and in the same order, followed by b_ndebug, MSVC whole-program optimisation (/GL and /LTCG), /arch:AVX2, WARN and FIXME compiled out (VKD3D_NO_DEBUG_MESSAGES; TRACE is already out in release) and a linker map of the DLL for ETW attribution (the map does not change the image). The x64 engine of the release and its x86 (WoW64) build . Debug information since rc5: -Ddebug=true, which adds /Z7 at compile and /DEBUG with /PDB: at link and nothing else, so the symbols of the shipped engine can be archived and matched. Measured on the release flavour x64: the image grows 512 bytes, .text keeps its virtual size, .rdata grows 208 bytes for the CODEVIEW record and the sections after it shift one page, and the instruction streams are identical, 783308 instructions each with the numbers masked",
       "options": [
         "-Dbuildtype=release",
         "-Denable_tests=false",
@@ -39,7 +39,8 @@
         "-Db_lto_mode=default",
         "-Dc_args=/arch:AVX2 -DVKD3D_NO_DEBUG_MESSAGES",
         "-Dcpp_args=/arch:AVX2",
-        "-Dcpp_link_args=/MAP"
+        "-Dcpp_link_args=/MAP",
+        "-Ddebug=true"
       ],
       "targets": [
         "libs/ddi/amdgpu_wddm_vkd3d.dll",
