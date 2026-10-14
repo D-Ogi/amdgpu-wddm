@@ -13,6 +13,11 @@
 #   3. neither binary imports a C runtime DLL (the MFT is loaded into Game Bar, Chromium and the frame
 #      server, exactly the situation that made the RADV ICD use /MT - see bc250-win\docs\build.md);
 #   4. the test's --selftest passes (H.264 table structure, bit writer round trip), with no GPU needed.
+#
+# -Lab builds the lab flavour of the transform (BD-167): it also reads BC250_MFT_TRACE, BC250_MFT_DEBLOCK,
+# BC250_MFT_SERIAL_DEBLOCK, BC250_MFT_STAGE_TIMING and BC250_MFT_DEPTH. Without it the DLL and mftreg.exe are the
+# release flavour, which has no lookup of those names. mfthost.exe always links a lab build of the core, because it
+# drives the deblocking schedules and the stage timing through those names; it never ships.
 
 # The workspace root: BC250_ROOT when the caller set it, else four levels up from this script
 # (driver\umd\mft-h264 -> the repository -> the workspace). Nothing of the build lands on C:.
@@ -20,7 +25,8 @@ param(
     [string]$Kits,
     [string]$Out,
     [string]$KitVersion = '10.0.26100.0',
-    [switch]$SkipSelfTest
+    [switch]$SkipSelfTest,
+    [switch]$Lab
 )
 
 $root = if ($env:BC250_ROOT) { $env:BC250_ROOT }
@@ -131,11 +137,24 @@ function Invoke-Tool([string]$exe, [string[]]$toolArgs, [string]$what) {
 
 $core = @('h264_tables.cpp', 'h264_syntax.cpp', 'h264_cavlc.cpp', 'gpu_pipeline.cpp',
           'encoder.cpp', 'mft_h264.cpp', 'mft_register.cpp')
+$labFlag = '/DAMDGPU_WDDM_LAB_FLAVOUR=1'
 $coreObjs = @()
 foreach ($c in $core) {
     $obj = Join-Path $Out ([IO.Path]::GetFileNameWithoutExtension($c) + '.obj')
-    Invoke-Tool $cl ($cflags + $inc + @("/Fo$obj", (Join-Path $src $c))) "cl $c"
+    Invoke-Tool $cl ($cflags + @(if ($Lab) { $labFlag }) + $inc + @("/Fo$obj", (Join-Path $src $c))) "cl $c"
     $coreObjs += $obj
+}
+# The host test's core: the lab flavour in either build (BD-167), in a directory of its own.
+$testCoreObjs = $coreObjs
+if (-not $Lab) {
+    $labCore = Join-Path $Out 'core-lab'
+    New-Item -ItemType Directory -Force $labCore | Out-Null
+    $testCoreObjs = @()
+    foreach ($c in $core) {
+        $obj = Join-Path $labCore ([IO.Path]::GetFileNameWithoutExtension($c) + '.obj')
+        Invoke-Tool $cl ($cflags + @($labFlag) + $inc + @("/Fo$obj", (Join-Path $src $c))) "cl $c (lab, host test)"
+        $testCoreObjs += $obj
+    }
 }
 
 # ---------------------------------------------------------------- the transform DLL
@@ -177,7 +196,7 @@ if (Test-Path -LiteralPath $exe) {
 }
 # dllmain.obj comes along so that the test registers the same class factory the DLL exposes.
 Invoke-Tool $link (@('/nologo', '/Brepro', '/INCREMENTAL:NO', "/OUT:$exe") +
-                   $coreObjs + @($dllObj) + $testObjs + $libpath + $libs) 'link mfthost'
+                   $testCoreObjs + @($dllObj) + $testObjs + $libpath + $libs) 'link mfthost'
 
 # ---------------------------------------------------------------- the registration tool
 

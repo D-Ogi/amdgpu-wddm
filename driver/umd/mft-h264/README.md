@@ -102,6 +102,11 @@ the same bytes, which `sweep.ps1` holds them to. They exist so that a lab machin
 misbehaves can be bisected without a rebuild; `mfthost.exe --deblock-mode rows|waves|serial` picks the
 same three from the command line, which is what the sweep's two schedule cases use.
 
+`BC250_MFT_STAGE_TIMING`, these two switches, `BC250_MFT_DEPTH` below and `BC250_MFT_TRACE` are
+read by a lab build of the transform only (`build.ps1 -Lab`, BD-167). The release transform runs as
+with each one unset: the wave schedule, no stage timing, the depth below, no trace. `mfthost.exe`
+always links the lab build of the core.
+
 **The one dispatch per wavefront is the default since 2026-10-10, and the single dispatch is off.**
 This is the change the independent audit of that day asked for (finding A11 / UMD-3). The single
 dispatch rests on something Direct3D does not promise: every macroblock row is one thread group, a
@@ -137,7 +142,7 @@ picture's dispatches and returns, `Encoder::RetireFrame` waits for the oldest on
 unit, so the entropy coding of one picture on the CPU overlaps the next picture's work on the GPU, and
 the blocking `Map` no longer stands in the middle of every picture. The depth is two unless the client
 asked for `CODECAPI_AVLowLatencyMode`, which gets one, because the frame of delivery delay a depth of
-two costs is the thing such a client asked not to have. `BC250_MFT_DEPTH` overrides both.
+two costs is the thing such a client asked not to have. `BC250_MFT_DEPTH` overrides both in a lab build.
 
 That setting is honoured in the middle of a segment, not only at the next flush, which is when a
 conferencing client sends it. The slot ring can only be resized while it is empty, so the transform

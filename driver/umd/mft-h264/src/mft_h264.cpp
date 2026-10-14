@@ -925,16 +925,18 @@ HRESULT Bc250H264Mft::EnsureEncoder()
 // work of the next, which is the serialisation worth removing, and costs one input period before the
 // first access unit comes out. A client that asked for low latency gets one, because that frame of
 // delivery delay is the thing it asked not to have. BC250_MFT_DEPTH overrides both, so a lab machine can
-// bisect without a rebuild. The environment is read once.
+// bisect without a rebuild. The environment is read once, by a lab build only (BD-167).
 uint32_t Bc250H264Mft::WantedPipelineDepth()
 {
     if (m_depthOverride < 0) {
         m_depthOverride = 0;
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
         char buf[8] = {};
         if (GetEnvironmentVariableA("BC250_MFT_DEPTH", buf, sizeof(buf)) > 0 &&
             buf[0] >= '1' && buf[0] <= '9') {
             m_depthOverride = buf[0] - '0';
         }
+#endif
     }
     return (m_depthOverride > 0) ? static_cast<uint32_t>(m_depthOverride)
                                  : (m_cfg.lowLatency ? 1u : kShippedPipelineDepth);
