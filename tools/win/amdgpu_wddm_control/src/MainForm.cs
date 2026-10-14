@@ -99,6 +99,9 @@ namespace AmdgpuWddmControl
                 // is rebuilt here when the two differ. Without it a 1240 px page stood in a 650 px column on the
                 // owner's 800x600 screen and was cut on the right, which is the finding of GitHub #38.
                 Load += (s, e) => { FitToScreens(); RebuildIfWidthChanged(); RefreshAll(); StartUpdateCheck(false); UpdateTimer(); };
+                // BD-174: a background step that fails says so on the page, the ordinary way, and the record in
+                // the log file names the step. The window itself lives on through any such failure.
+                Crash.Reporter = (where, e) => ReportBackgroundFailure();
                 VisibleChanged += (s, e) => UpdateTimer();
                 Resize += (s, e) => { UpdateTimer(); if (_guide != null) _guide.Paused = WindowState == FormWindowState.Minimized; };
                 ResizeEnd += (s, e) => RebuildIfWidthChanged();
@@ -619,6 +622,24 @@ namespace AmdgpuWddmControl
             MaybeNagiWallpaper();
         }
 
+        // BD-174: what Crash.Guard calls when a background step failed, from whatever thread failed. The page's
+        // result line is the ordinary place for the outcome of a step, so a background failure goes there as well.
+        // A window that is closing, or has no handle yet, says nothing: the record in the log file is the lasting
+        // part, and this call may never throw where it is called from.
+        void ReportBackgroundFailure()
+        {
+            try
+            {
+                if (_smoke || IsDisposed || Disposing || !IsHandleCreated) return;
+                BeginInvoke((Action)(() =>
+                {
+                    if (IsDisposed || Disposing) return;
+                    Result(Strings.T("action.background-failed"), false);
+                }));
+            }
+            catch (Exception) { }
+        }
+
         // The Nagi wallpaper of a verified install, once per install for this account (Wallpaper.cs), when the
         // sign-in run has not set it yet. Off the UI thread, once per window, and never in a render or a probe.
         bool _wallpaperChecked;
@@ -628,7 +649,7 @@ namespace AmdgpuWddmControl
             if (_wallpaperChecked || _smoke || ReadOnlyProbe || _fixture) return;
             _wallpaperChecked = true;
             var prefs = _prefs;
-            Crash.Background("wallpaper at start", () => NagiWallpaper.RunIfDue(prefs));
+            Crash.Background(Crash.WallpaperAtStart, () => NagiWallpaper.RunIfDue(prefs));
         }
 
         int _drvRead;       // the newest Driver card read; an older one that ends later is dropped
@@ -647,7 +668,7 @@ namespace AmdgpuWddmControl
             };
             int id = ++_drvRead;
             if (!background) { ApplyDriverCard(read()); return; }
-            Crash.Background("driver card read", () =>
+            Crash.Background(Crash.DriverCardRead, () =>
             {
                 var view = read();
                 try
@@ -859,6 +880,7 @@ namespace AmdgpuWddmControl
         {
             _timer.Stop();
             UpdateCheck.Finished -= OnUpdateFinished;
+            Crash.Reporter = null;              // a record of a late work item still lands in the file
             if (_guide != null) _guide.Stop();
             base.OnFormClosed(e);
         }

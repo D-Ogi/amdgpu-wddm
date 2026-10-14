@@ -394,6 +394,7 @@ page.help.intro|rev|ba52ab9c|Pomoc krok po kroku w typowych problemach, naprawa 
 action.working|rev|82f2bdf0|Trwa wprowadzanie zmian... Windows może poprosić o uprawnienia administratora.
 action.done|rev|ed251864|Gotowe.
 action.failed|rev|ee79203d|Zmiana nie została wprowadzona. Nic innego nie zmieniono. Przyczynę pokaże raport diagnostyczny utworzony na stronie Pomoc.
+action.background-failed|mt|4ec90c79|Jeden z kroków w tle nie został ukończony. Nic w sterowniku nie zostało zmienione. Co się stało, pokaże raport diagnostyczny utworzony na stronie Pomoc.
 action.not-elevated|rev|d6a4391d|Nie udzielono uprawnień administratora. Niczego nie zmieniono.
 action.cannot-read|rev|4f597aff|Nie można odczytać bieżących ustawień, więc niczego nie zmieniono.
 action.restart-failed|rev|0783bdf8|Windows nie uruchomił się ponownie. Uruchom go ponownie z menu Start.

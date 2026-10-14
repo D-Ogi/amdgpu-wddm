@@ -157,7 +157,7 @@ namespace AmdgpuWddmControl
             ShowPage(_page, null, false);
             var report = new BugReport(Redactor.ForThisPc());
             bool dxdiag = _reportDxdiag, caps = _reportCaps;
-            Task.Run(() => report.Collect(dxdiag, caps, true, _ => { })).ContinueWith(t =>
+            Task.Run(() => Crash.Watched("support report", () => report.Collect(dxdiag, caps, true, _ => { }))).ContinueWith(t =>
             {
                 _work = null; ComputeStatus();
                 if (t.IsFaulted) { _reportStatus = Strings.T("help.report.failed"); ShowPage(_page, null, false); return; }
@@ -183,7 +183,7 @@ namespace AmdgpuWddmControl
             _autoReportStarted = _autoReportRunning = true;
             _autoReportStatus = Strings.T("help.auto.collecting");
             ShowPage(_page, null, false);
-            Task.Run(() => StartupDiagnostics.SaveAutomatic()).ContinueWith(t => {
+            Task.Run(() => Crash.Watched("automatic diagnostics", () => StartupDiagnostics.SaveAutomatic())).ContinueWith(t => {
                 _autoReportRunning = false;
                 _autoReportStatus = t.IsFaulted ? Strings.T("help.auto.failed") : Strings.T("help.auto.saved", t.Result);
                 _reportStatus = _autoReportStatus; _reportOk = !t.IsFaulted;

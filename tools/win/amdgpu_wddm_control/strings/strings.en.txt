@@ -400,6 +400,7 @@ page.help.intro|src|-|Step-by-step help for common problems, repair and support 
 action.working|src|-|Working... Windows can ask for administrator permission.
 action.done|src|-|Done.
 action.failed|src|-|The change was not made. Nothing else was changed. A support report from Help shows why.
+action.background-failed|src|-|A background step did not finish. Nothing of the driver was changed. A support report from Help shows what happened.
 action.not-elevated|src|-|Administrator permission was not given. Nothing was changed.
 action.cannot-read|src|-|The current settings cannot be read, so nothing was changed.
 action.restart-failed|src|-|Windows did not restart. Restart it from the Start menu.

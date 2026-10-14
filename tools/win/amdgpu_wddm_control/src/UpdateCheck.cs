@@ -535,10 +535,10 @@ namespace AmdgpuWddmControl
             {
                 if (_busy != null) return false;
                 var job = new Job { Run = new CheckRun(_budget) };
-                job.Worker = new Thread(() => Work(job, installed)) { IsBackground = true, Name = "update check" };
+                job.Worker = new Thread(() => Crash.Guard("update check", () => Work(job, installed))) { IsBackground = true, Name = "update check" };
                 _busy = job;
                 job.Worker.Start();
-                new Thread(() => Supervise(job)) { IsBackground = true, Name = "update check deadline" }.Start();
+                new Thread(() => Crash.Guard("update check deadline", () => Supervise(job))) { IsBackground = true, Name = "update check deadline" }.Start();
                 return true;
             }
         }

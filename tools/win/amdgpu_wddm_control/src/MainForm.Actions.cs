@@ -52,7 +52,7 @@ namespace AmdgpuWddmControl
             ComputeStatus();
             Result(Strings.T("action.working"), true);
             Enabled = false;
-            Task.Run(() => Program.RunElevatedCode(verb.ToArray())).ContinueWith(t =>
+            Task.Run(() => Crash.Watched("recovery helper", () => Program.RunElevatedCode(verb.ToArray()))).ContinueWith(t =>
             {
                 Enabled = true;
                 _work = null;

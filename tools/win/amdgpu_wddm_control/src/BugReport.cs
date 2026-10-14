@@ -59,6 +59,10 @@ namespace AmdgpuWddmControl
             Add("settings.txt", "Driver settings in the registry, D3D12 application profiles and the graphics settings for games", Settings());
             progress("Reading the release logs");
             AddReleaseLogs();
+            // BD-174: what this application recorded when a background step failed, and what any thread recorded
+            // before a process-fatal exception ended it. A report made after the window vanished carries it.
+            Add("control-crash.log", "Background failures and process-fatal exceptions of this application (BD-174)",
+                Tail(Crash.LogPath()) ?? "No crash.log: this application has recorded no background failure for this account.");
             Add("system.txt", "Windows version, test signing, this application's version", SystemInfo());
             if (events)
             {

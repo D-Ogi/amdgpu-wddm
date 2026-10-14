@@ -839,5 +839,55 @@ static partial class UnitTests
             foreach (var line in kv.Value.Split('\n'))
                 if (line.Contains("\"CuModePending\"") && Regex.IsMatch(line, @"SetDword|SetValue|Dword\(|DeleteValue|Remove\(")) Check(false, "G-SRC: " + kv.Key + " writes or deletes CuModePending: " + line.Trim());
         Check(!Regex.IsMatch(files["MainForm.cs"] + files["MainForm.Actions.cs"], @"restart-device|RestartDevice"), "G-SRC: no device restart from the window");
+
+        // G-SRC (BD-174): every background body is guarded. An exception that escapes a ThreadPool work item or a
+        // plain thread ends the process at once, and on a machine with error reporting switched off it writes no
+        // event anywhere: that is how the window vanished between two clicks with nothing to read afterwards. So
+        // the body of every QueueUserWorkItem, Task.Run, StartNew and new Thread of this application runs through
+        // Crash.Guard (nobody waits for it: recorded, reported to the person, swallowed, the window lives) or
+        // Crash.Watched (a task waits for it: recorded and thrown on, and the waiter's continuation reports it).
+        // Crash.cs itself holds the one guarded work item that the rest of the application goes through.
+        // The check itself, on two bodies of its own: it sees the guard in one, refuses the other, and stops at the
+        // bracket that closes the call. A bracket inside a string is no bracket.
+        const string guardedBody = "Task.Run(() => Crash.Watched(\"x\", () => F(\"a)b\"))).ContinueWith(t => G());";
+        const string bareBody = "Task.Run(() => F(\"a)b\")).ContinueWith(t => G());";
+        Check(CallBody(guardedBody, guardedBody.IndexOf('(')).Contains("Crash.Watched("), "G-SRC: the guard check reads a guarded body as guarded");
+        Check(!CallBody(bareBody, bareBody.IndexOf('(')).Contains("Crash."), "G-SRC: the guard check refuses a body with no guard");
+        Check(!CallBody(guardedBody, guardedBody.IndexOf('(')).Contains("ContinueWith"), "G-SRC: the guard check stops at the bracket that closes the call");
+        int guarded = 0;
+        foreach (var kv in files.OrderBy(k => k.Key, StringComparer.Ordinal))
+        {
+            if (kv.Key == "Crash.cs") continue;
+            var text = Regex.Replace(kv.Value, @"//[^\n]*", "");
+            foreach (Match m in Regex.Matches(text, @"\b(QueueUserWorkItem|Task\.Run|Task\.Factory\.StartNew|new\s+Thread)\s*\("))
+            {
+                guarded++;
+                var body = CallBody(text, text.IndexOf('(', m.Index));
+                Check(body.Contains("Crash.Guard(") || body.Contains("Crash.Watched("),
+                    "G-SRC: " + kv.Key + " line " + (text.Substring(0, m.Index).Count(c => c == '\n') + 1) +
+                    ": the background body of " + Regex.Replace(m.Groups[1].Value, @"\s+", " ") + " runs through Crash.Guard or Crash.Watched");
+            }
+        }
+        Check(guarded >= 12, "G-SRC: background bodies found and held to a guard: " + guarded);
+    }
+
+    // The text of a call, from its opening bracket to the bracket that closes it, brackets inside strings and
+    // characters left out. A lambda given to the call is a part of that text, which is what the guard check reads.
+    static string CallBody(string text, int open)
+    {
+        int depth = 0;
+        for (int i = open; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (c == '"' || c == '\'')
+            {
+                char quote = c;
+                for (i++; i < text.Length && text[i] != quote; i++) if (text[i] == '\\') i++;
+                continue;
+            }
+            if (c == '(') depth++;
+            else if (c == ')' && --depth == 0) return text.Substring(open, i - open + 1);
+        }
+        return text.Substring(open);
     }
 }

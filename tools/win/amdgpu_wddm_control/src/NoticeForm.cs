@@ -204,7 +204,7 @@ namespace AmdgpuWddmControl
             if (_smoke) return;
             _clock.Restart();
             _tick.Start();
-            Task.Run(() => Program.RunElevatedCode("--action", "enable-driver")).ContinueWith(t =>
+            Task.Run(() => Crash.Watched("enable driver", () => Program.RunElevatedCode("--action", "enable-driver"))).ContinueWith(t =>
             {
                 int code = t.Status == TaskStatus.RanToCompletion ? t.Result : RecoveryRunner.Failed;
                 _tick.Stop();

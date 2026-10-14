@@ -21,7 +21,7 @@ namespace AmdgpuWddmControl
             if (_systemReading || _systemChanging || !IsHandleCreated) return;
             _systemReading = true;
             if (_page == "system") ShowPage(_page, null, false);
-            Task.Run(() => SystemTuningProcess.Read()).ContinueWith(task =>
+            Task.Run(() => Crash.Watched("Windows tuning read", () => SystemTuningProcess.Read())).ContinueWith(task =>
             {
                 if (IsDisposed || Disposing) return;
                 _systemReading = false;
@@ -131,7 +131,7 @@ namespace AmdgpuWddmControl
             bool restoreMachine = action == "RestoreAll" && _systemTuning.Items.Any(x => x.CanRestore && SystemTuning.Entry(x.Id).Scope == "Machine");
             _systemChanging = true;
             Result(Strings.T("system.working"), true);
-            Task.Run(() =>
+            Task.Run(() => Crash.Watched("Windows tuning change", () =>
             {
                 if (scope == "User") return SystemTuningProcess.ChangeUser(action, item);
                 if (action != "RestoreAll") return Program.RunElevatedCode(args);
@@ -141,7 +141,7 @@ namespace AmdgpuWddmControl
                 if (userCode == 0 && machineCode == 0) return 0;
                 // The other scope might already have changed, including when UAC was declined.
                 return userCode == SystemTuningProcess.Timeout || machineCode == SystemTuningProcess.Timeout ? SystemTuningProcess.Timeout : SystemTuningProcess.Failed;
-            }).ContinueWith(task =>
+            })).ContinueWith(task =>
             {
                 if (IsDisposed || Disposing) return;
                 _systemChanging = false;

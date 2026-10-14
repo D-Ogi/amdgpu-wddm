@@ -392,6 +392,7 @@ page.help.intro|mt|ba52ab9c|よくある問題の解決手順、修復、サポ�
 action.working|mt|82f2bdf0|処理しています... Windows から管理者のアクセス許可を求められる場合があります。
 action.done|mt-safe|ed251864|完了しました。
 action.failed|mt|ee79203d|変更は行われませんでした。他にも何も変更されていません。理由は、ヘルプから作成するサポート レポートで確認できます。
+action.background-failed|mt|4ec90c79|バックグラウンドの処理が完了しませんでした。ドライバーは何も変更されていません。何が起きたかは、ヘルプから作成するサポート レポートで確認できます。
 action.not-elevated|mt|d6a4391d|管理者のアクセス許可が与えられませんでした。何も変更されていません。
 action.cannot-read|mt|4f597aff|現在の設定を読み取れないため、何も変更されていません。
 action.restart-failed|mt|0783bdf8|Windows は再起動しませんでした。スタート メニューから再起動してください。

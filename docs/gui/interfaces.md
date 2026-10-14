@@ -293,3 +293,33 @@ file next to the history and replaces it. A failed write loses the history and n
 
 `src/Benchmark.cs` (`BenchHistory`, `BenchPaths`) holds the format and the rule. `test/BenchmarkTests.cs` decides
 every case above.
+
+## 8. The crash record of the control app (control app only, per user)
+
+The app records a background failure and a process-fatal exception in `crash.log` of its state directory,
+`%LOCALAPPDATA%\amdgpu-wddm` (`AMDGPU_WDDM_CONTROL_STATE` moves it for a build gate). Nothing else writes or
+reads the file, and the support report carries its tail as `control-crash.log`.
+
+The reason is BD-174. On 2026-10-14 the window disappeared between two clicks with no Application Error, no
+error report and no record in the event log. An exception on the UI thread cannot do that, because WinForms
+shows its dialog and the window lives. An exception that escapes a work item of the thread pool or a plain
+thread does: it ends the process at once, and a machine with error reporting switched off writes no event.
+
+So every background body of the app runs through one of two guards in `src/Crash.cs`, and `test/GuiTests.cs`
+(G-SRC) refuses a `QueueUserWorkItem`, a `Task.Run`, a `StartNew` or a `new Thread` whose body does not:
+
+| Guard | For | What it does |
+|---|---|---|
+| `Crash.Guard` | a body nobody waits for | records, tells the person through the page, swallows the exception |
+| `Crash.Watched` | a body a task waits for | records and throws on, so the waiting continuation reports it |
+
+A record holds the UTC moment, the place, the version of the app, and the type, message and stack of the
+exception and of every inner exception. One record stops at 8000 characters and the file starts again above
+1 MB. A record is appended with sharing, so two threads that fail together both leave one. The window says
+`action.background-failed` on its page for a failure of the first kind, and the step itself says what did not
+happen for the second kind. `Crash.Watch`, the first statement of `Main`, records a process-fatal exception
+from any thread before the process goes.
+
+A failure to write the record never makes anything worse: every path of the recorder catches its own errors,
+and an exception whose own message throws still leaves a record. `test/CrashTests.cs` decides these cases, and
+it starts each background item of the window with a body that throws.
