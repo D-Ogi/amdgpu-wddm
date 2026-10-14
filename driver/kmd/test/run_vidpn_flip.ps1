@@ -1,4 +1,4 @@
-# Host test of wddm.c's flip path (BD-170 r6, docs/design/vidpn-flip.md section 7.2): generate_vidpn_flip_test.py
+# Host test of wddm.c's flip path (BD-170 r7, docs/design/vidpn-flip.md section 7.2): generate_vidpn_flip_test.py
 # extracts the actual source into vidpn_flip_test.c, which models L and drives each edge at PASSIVE_LEVEL and at DIRQL.
 #
 #   pwsh driver\kmd\test\run_vidpn_flip.ps1
@@ -18,12 +18,16 @@ param(
     [string]$Out = "$Root\scratch\m9\vidpn-flip",
     [string]$Source = '',
     [ValidateSet('', 'all', 'high-takes-section', 'low-sync-ignored', 'even-during-program', 'writer-not-a-fact',
-                 'gate-closed-immediate', 'drained-read-failure', 'wu-faults', 'wu-unrecorded', 'wu-not-closed',
-                 'wu-unblank-unmarked', 'unproven-success', 'program-fault-success',
-                 'refused-keeps-new-record', 'deposit-not-owed', 'resume-not-marked', 'stale-deposit-programmed',
-                 'end-ignores-otg', 'end-in-faulting', 'end-without-section', 'invalidate-over-program',
+                 'gate-closed-immediate', 'wu-faults',
+                 'unproven-success', 'program-fault-success',
+                 'refused-keeps-new-record', 'deposit-not-owed', 'resume-not-marked',
+                 'end-ignores-otg', 'end-in-faulting', 'end-unlocked-fallback', 'invalidate-over-program',
                  'invalidate-gate-closed', 'flush-keeps-owed', 'owed-not-reported', 'fault-no-dpc', 'fault-no-reset',
-                 'fault-no-blank', 'fault-notify-twice', 'node-unbounded', 'destroy-unsynchronized',
+                 'fault-no-blank', 'fault-notify-twice', 'node-unbounded', 'destroy-preflight-ignored',
+                 'section-result-ignored', 'begin-without-bridge', 'begin-ignores-bridge-failure',
+                 'resume-unlocked-fallback', 'recovery-without-section', 'recovery-request-dropped',
+                 'exclusive-refused-success',
+                 'unsafe-next-vsync-deposit', 'unsafe-immediate-deposit',
                  'witness-before-decision', 'witness-changes-answer', 'witness-stale-compared',
                  'witness-lost-uncounted')][string]$Mutation = '',
     [switch]$Lab
@@ -50,21 +54,9 @@ $mutations = [ordered]@{
     'gate-closed-immediate' = @{ find = 'facts.Immediate = immediate && device->VidPnFlipEnabled ? 1u : 0u;'
         with = 'facts.Immediate = immediate ? 1u : 0u;'
         why = 'with the flip gate closed an immediate request reads the plane and can be U' }
-    'drained-read-failure' = @{ find = 'facts.Drained = DcnHubpDrained(device) == 1 ? 1u : 0u;'
-        with = 'facts.Drained = DcnHubpDrained(device) != 0 ? 1u : 0u;'
-        why = 'a failed DCHUBP_CNTL read counts as DRAINED' }
     'wu-faults' = @{ find = "    case BC250_FLIP_EDGE_DEPOSIT_UNPROVEN:`n"
         with = "    case BC250_FLIP_EDGE_DEPOSIT_UNPROVEN:`n        if (edge == BC250_FLIP_EDGE_DEPOSIT_UNPROVEN) { WddmFlipFault(device, wddm, BC250_FLIP_FAULT_UNPROVEN, WddmFlipNode(args)); flip->Result = STATUS_DEVICE_HARDWARE_ERROR; return TRUE; }`n"
         why = 'a writer conflict (W-u) enters E5 as a hardware fault' }
-    'wu-unrecorded' = @{ find = 'if (edge == BC250_FLIP_EDGE_DEPOSIT_UNPROVEN) WddmWuRecord(wddm, args, generation);'
-        with = 'if (edge == BC250_FLIP_EDGE_DEPOSIT_UNPROVEN && args == NULL) WddmWuRecord(wddm, args, generation);'
-        why = 'a W-u deposit leaves no record' }
-    'wu-not-closed' = @{ find = 'WddmWuClose(device, wddm, w->Generation + 1u, w->Answer, result);'
-        with = 'WddmWuClose(device, wddm, w->Generation, w->Answer, result);'
-        why = 'the writer''s End leaves its W-u records open, without the time to End' }
-    'wu-unblank-unmarked' = @{ find = 'wddm->WuRecords[n].Unblank = TRUE;'
-        with = 'wddm->WuRecords[n].Unblank = FALSE;'
-        why = 'a W-u deposit that the unblank programmed is recorded as End''s' }
     'unproven-success' = @{ find = 'if (result == BC250_FLIP_RESULT_UNPROVEN)'
         with = 'if (result == BC250_FLIP_RESULT_UNPROVEN && !immediate)'
         why = 'an immediate request without P'' is answered success' }
@@ -75,19 +67,17 @@ $mutations = [ordered]@{
         with = '(void)previous;'
         why = 'a refusal leaves the teardown record on a buffer the plane never had' }
     'deposit-not-owed' = @{ find = 'wddm->WriterDeposit = TRUE;'; with = ''
-        why = 'a deposit is not owed to End' }
-    'resume-not-marked' = @{ find = 'wddm->WriterResumed = TRUE;'; with = ''
+        why = 'a software-only deposit is lost when End invalidates the old Desired' }
+    'resume-not-marked' = @{ find = 'if (NT_SUCCESS(w->Status)) w->Wddm->WriterResumed = TRUE;'; with = ''
         why = 'a DRAINED readback counts after the writer resumed the plane' }
-    'stale-deposit-programmed' = @{ find = '&& wddm->DepositSequence == w->Desired.Sequence'; with = ''
-        why = 'an older deposit''s programming takes a newer deposit off End' }
     'end-ignores-otg' = @{ find = 'DcnOtgRunning(device))'; with = 'DcnOtgRunning(device) | 1)'
-        why = 'End programs a deposit with the OTG stopped, where no report follows' }
-    'end-in-faulting' = @{ find = 'owes && device->VidPnFlipEnabled && wddm->Faulting == 0'
-        with = 'owes && device->VidPnFlipEnabled'
+        why = 'End restores an owed Desired with the OTG stopped, where no report follows' }
+    'end-in-faulting' = @{ find = '(owes || restore) && device->VidPnFlipEnabled && wddm->Faulting == 0'
+        with = '(owes || restore) && device->VidPnFlipEnabled'
         why = 'End programs the plane in FAULTING' }
-    'end-without-section' = @{ find = 'status = WddmSection(Device, WddmWriterEndLocked, &w);'
-        with = 'status = STATUS_UNSUCCESSFUL;'
-        why = 'End programs the plane outside L' }
+    'end-unlocked-fallback' = @{ find = "status = WddmSection(Device, WddmWriterEndLocked, &w);`n    if (!NT_SUCCESS(status)) {"
+        with = "status = WddmSection(Device, WddmWriterEndLocked, &w);`n    if (!NT_SUCCESS(status)) {`n        (void)WddmWriterEndLocked(&w);"
+        why = 'a refused End performs its protected operation outside L' }
     'invalidate-over-program' = @{ find = 'if (w->Invalidate && !programmed && '
         with = 'if (w->Invalidate && (programmed || !programmed) && '
         why = 'End invalidates the Desired it has just programmed' }
@@ -99,8 +89,8 @@ $mutations = [ordered]@{
     'owed-not-reported' = @{ find = 'InterlockedIncrement(&wddm->OwedReported);'
         with = 'InterlockedIncrement(&wddm->OwedReported); wddm->DesiredOwed = TRUE;'
         why = 'the report that carries Desired does not complete the owed success' }
-    'fault-no-dpc' = @{ find = 'if (Device->Dxgk.DxgkCbQueueDpc != NULL) Device->Dxgk.DxgkCbQueueDpc(Device->Dxgk.DeviceHandle);'
-        with = 'if (Device->Dxgk.DxgkCbQueueDpc != NULL) (void)Device->Dxgk.DeviceHandle;'
+    'fault-no-dpc' = @{ find = "InterlockedExchange(&Wddm->FaultNotify, 1);`n    if (Device->Dxgk.DxgkCbQueueDpc != NULL) Device->Dxgk.DxgkCbQueueDpc(Device->Dxgk.DeviceHandle);"
+        with = "InterlockedExchange(&Wddm->FaultNotify, 1);`n    if (Device->Dxgk.DxgkCbQueueDpc != NULL) (void)Device->Dxgk.DeviceHandle;"
         why = 'E5 asks for no DPC, so the OS is never told' }
     'fault-no-reset' = @{ find = 'DXGK_PAGE_FAULT_FENCE_INVALID | DXGK_PAGE_FAULT_ADAPTER_RESET_REQUIRED'
         with = 'DXGK_PAGE_FAULT_FENCE_INVALID'
@@ -108,15 +98,41 @@ $mutations = [ordered]@{
     'fault-no-blank' = @{ find = 'Wddm->FaultBlank = DcnFaultBlank(Device);'
         with = 'Wddm->FaultBlank = Device == NULL ? DcnFaultBlank(Device) : 0;'
         why = 'E5 leaves the plane fetching' }
-    'fault-notify-twice' = @{ find = 'if (wddm == NULL || InterlockedExchange(&wddm->FaultNotify, 0) == 0) return;'
+    'fault-notify-twice' = @{ find = 'if (InterlockedExchange(&wddm->FaultNotify, 0) == 0) return;'
         with = 'if (wddm == NULL) return;'
         why = 'every DPC repeats the fault notification' }
     'node-unbounded' = @{ find = 'context != NULL && context->NodeOrdinal < BC250_WDDM_NODE_COUNT_MAX ?'
         with = 'context != NULL ?'
         why = 'E5 names a node the adapter does not have' }
-    'destroy-unsynchronized' = @{ find = 'const BOOLEAN writer = WddmPrimaryExclusiveBegin(Device, BC250_WRITER_DESTROY, &generation);'
-        with = 'const BOOLEAN writer = (BOOLEAN)(generation != 0);'
-        why = 'the destroy restore runs without the writer section' }
+    'destroy-preflight-ignored' = @{ find = 'if (!NT_SUCCESS(retired)) return retired;'; with = '(void)retired;'
+        why = 'destroy frees allocations although their retirement failed' }
+    'section-result-ignored' = @{ find = 'return NT_SUCCESS(status) && !returned ? STATUS_UNSUCCESSFUL : status;'
+        with = 'return status;'
+        why = 'a callback that ran nothing grants its protected operation' }
+    'begin-without-bridge' = @{ find = 'w->Status = w->Device->VidPnFlipEnabled ?'
+        with = 'w->Status = w->Device->VidPnFlipEnabled && !w->Device->VidPnFlipEnabled ?'
+        why = 'Begin authorizes a long writer without retiring the old application buffer' }
+    'begin-ignores-bridge-failure' = @{ find = "if (!NT_SUCCESS(w->Status)) {`n        if (wrote)"
+        with = "if (!NT_SUCCESS(w->Status) && NT_SUCCESS(w->Status)) {`n        if (wrote)"
+        why = 'Begin grants a writer after the bridge refused or failed its proof' }
+    'resume-unlocked-fallback' = @{ find = "status = WddmSection(Device, WddmWriterResumeLocked, &w);`n    if (!NT_SUCCESS(status)) {"
+        with = "status = WddmSection(Device, WddmWriterResumeLocked, &w);`n    if (!NT_SUCCESS(status)) {`n        (void)WddmWriterResumeLocked(&w);"
+        why = 'a refused Resume changes writer state outside L' }
+    'recovery-without-section' = @{ find = '(void)WddmSection(Device, WddmWriterRecoveryLocked, Device);'
+        with = '(void)WddmWriterRecoveryLocked(Device);'
+        why = 'the DPC enters FAULTING and writes the plane without acquiring L' }
+    'recovery-request-dropped' = @{ find = 'InterlockedExchange(&Wddm->WriterRecovery, 1);'
+        with = 'InterlockedExchange(&Wddm->WriterRecovery, 0);'
+        why = 'a refused writer section never reaches recovery at the next acquired section' }
+    'exclusive-refused-success' = @{ find = 'if (exclusive && immediate) { InterlockedIncrement(&wddm->ExclusiveRefused); flip->Result = status; }'
+        with = 'if (exclusive && immediate) { InterlockedIncrement(&wddm->ExclusiveRefused); flip->Result = STATUS_SUCCESS; }'
+        why = 'an immediate refusal acknowledges a surface that the writer never accepted' }
+    'unsafe-next-vsync-deposit' = @{ find = "if (device->VidPnFlipEnabled) {`n            InterlockedIncrement(&wddm->WriterBusy);"
+        with = "if (device->VidPnFlipEnabled && immediate) {`n            InterlockedIncrement(&wddm->WriterBusy);"
+        why = 'a next-VSync request is accepted although the active writer can miss its target retrace' }
+    'unsafe-immediate-deposit' = @{ find = "if (device->VidPnFlipEnabled) {`n            InterlockedIncrement(&wddm->WriterBusy);"
+        with = "if (device->VidPnFlipEnabled && !immediate) {`n            InterlockedIncrement(&wddm->WriterBusy);"
+        why = 'an immediate request is accepted without programming its requested surface in the call' }
 }
 
 # The lab flavour's controls (-Lab): the witnesses read after the shipping decision and never change it.

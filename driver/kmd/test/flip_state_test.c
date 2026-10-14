@@ -159,14 +159,15 @@ static void Drain(void)
 
 static void Codes(void)
 {
-    /* Four E5 codes and the W-u record's code, distinct, each inside DXGK_FAULT_ERROR_CODE.DeviceSpecificCode's 31
+    /* Six E5 codes and the W-u record's code, distinct, each inside DXGK_FAULT_ERROR_CODE.DeviceSpecificCode's 31
      * bits. */
     static const unsigned codes[] = { BC250_FLIP_FAULT_PROGRAM, BC250_FLIP_FAULT_UNPROVEN, BC250_FLIP_FAULT_OWED_STOPPED,
-                                      BC250_FLIP_FAULT_OVERLAP, BC250_FLIP_RECORD_WRITER_UNPROVEN };
+                                      BC250_FLIP_FAULT_OVERLAP, BC250_FLIP_FAULT_SECTION, BC250_FLIP_FAULT_BRIDGE,
+                                      BC250_FLIP_RECORD_WRITER_UNPROVEN };
     unsigned i, j;
-    for (i = 0; i < 5; i++) {
+    for (i = 0; i < sizeof(codes) / sizeof(codes[0]); i++) {
         CHECK(codes[i] != 0 && codes[i] < 0x80000000u);
-        for (j = i + 1; j < 5; j++) CHECK(codes[i] != codes[j]);
+        for (j = i + 1; j < sizeof(codes) / sizeof(codes[0]); j++) CHECK(codes[i] != codes[j]);
     }
 }
 

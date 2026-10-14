@@ -7,6 +7,7 @@
 #include "regs.generated.h"
 #include "dcn_2_0_1_sh_mask.h"
 #include "plane_format.h"
+#include "dcn_translate.h"
 typedef unsigned long ULONG;
 typedef uint64_t ULONGLONG;
 typedef int32_t NTSTATUS;
@@ -16,6 +17,8 @@ typedef int64_t LONGLONG;
 typedef int64_t LONG64;
 typedef unsigned char UCHAR, *PUCHAR;
 typedef struct { LONGLONG QuadPart; } LARGE_INTEGER;
+typedef struct { NTSTATUS Status; ULONG InterruptBefore, InterruptCleared, PendingBefore, PendingAfter; BOOLEAN Fresh; } BC250_DCN_WITNESS_ARM;
+typedef struct { ULONG Interrupt, Low1, High1, High2, Low2; ULONGLONG Earliest1, Earliest2; BOOLEAN Event; } BC250_DCN_WITNESS_READ;
 #define FIELD_OFFSET(type, field) offsetof(type, field)
 /* BD-170: bc250kmd.h's immediate-flip record, bounds and outcomes, as DcnImmediateObserve uses them. */
 #define BC250_DCN_IMMEDIATE_RECORDS 8u
@@ -36,8 +39,20 @@ typedef struct {
 } BC250_DCN_IMMEDIATE_RECORD;
 /* Modeset.PipeChanged: a committed scaled display mode (modeset.c); the escape refuses while it is set.
    M15.14: the plane format state DcnCaptureFirmwareFormat fills and DcnPlaneFormatRegisters reads. */
-typedef struct { volatile long DcnLockTimeouts; int VidPnFlipEnabled; struct { BOOLEAN PipeChanged; } Modeset;
+typedef struct { volatile long DcnLockTimeouts; int VidPnFlipEnabled;
+    struct { BOOLEAN PipeChanged, InheritedFixed; ULONG InheritedSupport; } Modeset;
     void *Mmio;
+    BOOLEAN DcnWriteEnabled, VramEnabled, DcnFirmwareKnown, DcnDiverged;
+    ULONG SourceWidth, SourceHeight;
+    struct { ULONG Width, Height, Pitch; LARGE_INTEGER PhysicAddress; } Post, RuntimePost;
+    void *Framebuffer, *RuntimeFramebuffer;
+    ULONGLONG RuntimeFramebufferLength;
+    LARGE_INTEGER RuntimeFramebufferPhysical;
+    volatile LONG RuntimeDisplayChanged, RuntimePostValid;
+    LARGE_INTEGER VramPhysical;
+    ULONGLONG VramMcBase, VramLength, FramebufferLength, DcnFirmwareAddress, DcnCurrentAddress;
+    ULONG DcnFirmwarePitch, DcnCurrentPitch;
+    volatile LONG DcnFormatRefused, DcnFlipRefused, DcnFormatChanges, DcnFlipsHardware, DcnSurfaceSequence;
     ULONG DcnFirmwareSurfaceConfig, DcnFirmwareHubpretControl, DcnFirmwareCnvcFormat;
     BOOLEAN DcnPlaneFormats; ULONG DcnPlaneFormat;
     volatile LONG DcnImmediateFlips, DcnImmediateSameFrame;
@@ -47,7 +62,10 @@ typedef struct { volatile long DcnLockTimeouts; int VidPnFlipEnabled; struct { B
     volatile LONG DcnImmediateLastFrame, DcnImmediateRecordNext;
     LONGLONG DcnQpcFrequency;
     BC250_DCN_IMMEDIATE_RECORD DcnImmediateRecords[BC250_DCN_IMMEDIATE_RECORDS]; } BC250_DEVICE;
-#define GuardLog(...) ((void)0)
+static void TestGuardLog(const char *format, ...);
+#define GuardLog TestGuardLog
+static ULONG DisplaySourceWidth(const BC250_DEVICE *d) { return d->SourceWidth; }
+static ULONG DisplaySourceHeight(const BC250_DEVICE *d) { return d->SourceHeight; }
 static long InterlockedIncrement(volatile long *value) { return ++*value; }
 static long InterlockedExchange(volatile long *p, long v) { long old = *p; *p = v; return old; }
 static long InterlockedCompareExchange(volatile long *p, long v, long c) { long old = *p; if (old == c) *p = v; return old; }
@@ -59,6 +77,9 @@ static void TestCopy(void *to, const void *from, size_t bytes);
 #define STATUS_DEVICE_BUSY ((NTSTATUS)0x80000011u)
 #define STATUS_DEVICE_NOT_READY ((NTSTATUS)0xC00000A3u)
 #define STATUS_INVALID_DEVICE_STATE ((NTSTATUS)0xC0000184u)
+#define STATUS_NOT_SUPPORTED ((NTSTATUS)0xC00000BBu)
+#define STATUS_ACCESS_DENIED ((NTSTATUS)0xC0000022u)
+#define STATUS_DEVICE_CONFIGURATION_ERROR ((NTSTATUS)0xC0000182u)
 #define BC250_KMD_VERSION 1
 #define RtlZeroMemory(p,n) memset(p,0,n)
 typedef struct {
@@ -78,6 +99,13 @@ static void DcnFlipCore(BC250_DEVICE *d, ULONGLONG address, BOOLEAN restore, ULO
 #define NT_SUCCESS(s) ((s) >= 0)
 static unsigned checks, failures;
 #define CHECK(x) do { ++checks; if (!(x)) { ++failures; printf("FAIL line %d: %s\n", __LINE__, #x); } } while (0)
+static unsigned protected_call, protected_logs;
+static void TestGuardLog(const char *format, ...)
+{
+    (void)format;
+    if (protected_call) protected_logs++;
+    CHECK(!protected_call);
+}
 static struct {
     unsigned ack_after, stalls, reads, writes, address_writes, triggers, format_writes, capture_reads;
     int locked, acknowledged, quiet;
@@ -93,10 +121,14 @@ static struct {
        FLIP_CONTROL read moves the QPC by read_cost ticks (the time a sample takes). */
     int observing, frozen, flip_read_fails, high_read;
     unsigned pending_reads, observe_reads, observe_stalls, primary_lag, primary_fails, low_fails, primary_reads;
-    unsigned supersede_at, read_cost;
+    unsigned supersede_at, read_cost, stall_cost, earliest_lag, earliest_reads;
+    int witness, witness_clear_sticky;
+    unsigned witness_reads, witness_writes, witness_fail_at, witness_pending_reads;
+    ULONG witness_before, witness_after, witness_interrupt;
+    int capturing, bridge;
     LONGLONG qpc;
     ULONG frame, position, high_noise;
-    ULONGLONG primary, primary_old, sample;
+    ULONGLONG primary, primary_old, sample, earliest_old;
     volatile LONG generation;
 } model;
 static unsigned slot_copies;
@@ -122,6 +154,38 @@ static LARGE_INTEGER KeQueryPerformanceCounter(LARGE_INTEGER *frequency)
 static NTSTATUS MmioDcnRead(const BC250_DEVICE *d, ULONG reg, ULONG *value)
 {
     (void)d;
+    if (model.witness) {
+        model.witness_reads++;
+        if (model.witness_fail_at == model.witness_reads) return STATUS_IO_TIMEOUT;
+        if (reg == BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL) {
+            *value = model.witness_pending_reads++ ? model.witness_after : model.witness_before;
+        } else if (reg == BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_FLIP_INTERRUPT) {
+            *value = model.witness_interrupt;
+        } else { CHECK(0); return STATUS_INVALID_PARAMETER; }
+        return STATUS_SUCCESS;
+    }
+    if (model.bridge && !model.locked && !model.observing) {
+        switch (reg) {
+        case BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL: *value=model.flip; break;
+        case BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE: *value=(ULONG)model.latched; break;
+        case BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE_HIGH: *value=(ULONG)(model.latched >> 32); break;
+        case BC250_REG_DMU_HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS: *value=(ULONG)model.latched; break;
+        case BC250_REG_DMU_HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH: *value=(ULONG)(model.latched >> 32); break;
+        case BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_PITCH: *value=model.pitch; break;
+        case BC250_REG_DMU_HUBP0_DCSURF_SURFACE_CONFIG: *value=model.config; break;
+        case BC250_REG_DMU_HUBPRET0_HUBPRET_CONTROL: *value=model.crossbar; break;
+        case BC250_REG_DMU_CNVC_CFG0_CNVC_SURFACE_PIXEL_FORMAT: *value=model.cnvc; break;
+        default: CHECK(0); return STATUS_INVALID_PARAMETER;
+        }
+        return STATUS_SUCCESS;
+    }
+    if (model.capturing && !model.locked) {
+        if (reg == BC250_REG_DMU_HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS) *value = (ULONG)model.latched;
+        else if (reg == BC250_REG_DMU_HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH) *value = (ULONG)(model.latched >> 32);
+        else if (reg == BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_PITCH) *value = model.pitch;
+        else { CHECK(0); return STATUS_INVALID_PARAMETER; }
+        return STATUS_SUCCESS;
+    }
     /* DcnCaptureFirmwareFormat's reads: once per start, outside any flip. */
     if (reg == BC250_REG_DMU_HUBP0_DCSURF_SURFACE_CONFIG || reg == BC250_REG_DMU_HUBPRET0_HUBPRET_CONTROL ||
         reg == BC250_REG_DMU_CNVC_CFG0_CNVC_SURFACE_PIXEL_FORMAT || reg == BC250_REG_DMU_CNVC_CFG0_FORMAT_CONTROL ||
@@ -159,7 +223,14 @@ static NTSTATUS MmioDcnRead(const BC250_DEVICE *d, ULONG reg, ULONG *value)
             model.high_read = 0;
             if (model.low_fails) { if (model.low_fails != ~0u) model.low_fails--; return STATUS_IO_TIMEOUT; }
             *value = (ULONG)model.sample;
-        } else if (reg == BC250_REG_DMU_OTG0_OTG_STATUS_FRAME_COUNT) *value = model.frame;
+        } else if (reg == BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE_HIGH) {
+            *value = (ULONG)((model.earliest_lag ? model.earliest_old : model.latched) >> 32);
+        } else if (reg == BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE) {
+            *value = (ULONG)(model.earliest_lag ? model.earliest_old : model.latched);
+            model.earliest_reads++;
+            if (model.earliest_lag && model.earliest_lag != ~0u) model.earliest_lag--;
+        } else if (reg == BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_PITCH) *value=model.pitch;
+        else if (reg == BC250_REG_DMU_OTG0_OTG_STATUS_FRAME_COUNT) *value = model.frame;
         else { CHECK(reg == BC250_REG_DMU_OTG0_OTG_STATUS_POSITION); *value = model.position; }
         return STATUS_SUCCESS;
     }
@@ -184,7 +255,7 @@ static void KeStallExecutionProcessor(ULONG us)
     if (model.observing) {
         CHECK(!model.locked);
         model.observe_stalls++;
-        if (!model.frozen) model.qpc += 10;
+        if (!model.frozen) model.qpc += model.stall_cost ? model.stall_cost : 10;
         return;
     }
     CHECK(model.locked && !model.acknowledged);
@@ -193,6 +264,23 @@ static void KeStallExecutionProcessor(ULONG us)
 static NTSTATUS MmioDcnWriteEx(const BC250_DEVICE *d, ULONG reg, ULONG value, BOOLEAN quiet)
 {
     (void)d;
+    if (model.witness) {
+        const ULONG events = HUBPREQ0_DCSURF_SURFACE_FLIP_INTERRUPT__SURFACE_FLIP_OCCURRED_MASK |
+                             HUBPREQ0_DCSURF_SURFACE_FLIP_INTERRUPT__SURFACE_FLIP_AWAY_OCCURRED_MASK;
+        const ULONG clears = HUBPREQ0_DCSURF_SURFACE_FLIP_INTERRUPT__SURFACE_FLIP_CLEAR_MASK |
+                             HUBPREQ0_DCSURF_SURFACE_FLIP_INTERRUPT__SURFACE_FLIP_AWAY_CLEAR_MASK;
+        const ULONG enables = HUBPREQ0_DCSURF_SURFACE_FLIP_INTERRUPT__SURFACE_FLIP_INT_MASK_MASK |
+                              HUBPREQ0_DCSURF_SURFACE_FLIP_INTERRUPT__SURFACE_FLIP_INT_TYPE_MASK |
+                              HUBPREQ0_DCSURF_SURFACE_FLIP_INTERRUPT__SURFACE_FLIP_AWAY_INT_MASK_MASK |
+                              HUBPREQ0_DCSURF_SURFACE_FLIP_INTERRUPT__SURFACE_FLIP_AWAY_INT_TYPE_MASK;
+        CHECK(reg == BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_FLIP_INTERRUPT && quiet);
+        CHECK((value & enables) == (model.witness_interrupt & enables));
+        CHECK(!(value & ~(enables | clears)));
+        model.witness_writes++;
+        model.witness_interrupt = (model.witness_interrupt & events) | value;
+        if (!model.witness_clear_sticky) model.witness_interrupt &= ~(events | clears);
+        return STATUS_SUCCESS;
+    }
     CHECK(quiet == model.quiet);
     CHECK(!model.observing);
     model.writes++;
@@ -204,6 +292,7 @@ static NTSTATUS MmioDcnWriteEx(const BC250_DEVICE *d, ULONG reg, ULONG value, BO
         CHECK(model.address_writes == 2);
         CHECK(value == 1);
         model.triggers++;
+        if (model.bridge) { model.observing=1; model.primary=model.latched; }
     } else {
         // Catch address/control publication before the hardware acknowledged the lock.
         CHECK(model.locked && model.acknowledged);
@@ -319,7 +408,7 @@ static void ImmediateObserve(void)
           BC250_DCN_IMMEDIATE_PRIMARY_OTHER);
     outcomes[BC250_DCN_IMMEDIATE_PRIMARY_OTHER]++;
     r = &d.DcnImmediateRecords[2];
-    CHECK(model.observe_stalls == BC250_DCN_IMMEDIATE_OBSERVE_US && r->Samples == BC250_DCN_IMMEDIATE_OBSERVE_US + 1);
+    CHECK(model.observe_stalls == BC250_DCN_IMMEDIATE_OBSERVE_US && r->Samples == BC250_DCN_IMMEDIATE_OBSERVE_US);
     CHECK(r->Observed == 0xB000 && r->ClearUs == 0 && r->DoneUs == -1 && r->EndUs == 50 && r->ReadStatus == 0);
     CHECK(d.DcnImmediateSameFrame == 1 && d.DcnImmediateDoneMaxUs == 2 && d.DcnImmediateObserveMaxUs == 50);
 
@@ -330,7 +419,7 @@ static void ImmediateObserve(void)
     CHECK(DcnImmediateObserve(&d, 0xD000, 0xD000, 4000, 4000, &model.generation, 4, 0x2u) == BC250_DCN_IMMEDIATE_PENDING);
     outcomes[BC250_DCN_IMMEDIATE_PENDING]++;
     r = &d.DcnImmediateRecords[3];
-    CHECK(model.observe_stalls == BC250_DCN_IMMEDIATE_OBSERVE_US && model.primary_reads == BC250_DCN_IMMEDIATE_OBSERVE_US + 1);
+    CHECK(model.observe_stalls == BC250_DCN_IMMEDIATE_OBSERVE_US && model.primary_reads == BC250_DCN_IMMEDIATE_OBSERVE_US);
     CHECK(r->ClearUs == -1 && r->DoneUs == -1 && r->Observed == 0xD000 && r->EndUs == 50);
 
     /* The bound counts from the end of the programming: a 40 us programming leaves the observation its 50 us. */
@@ -445,7 +534,7 @@ static void ImmediateObserve(void)
         CHECK(DcnImmediateObserve(&nofrequency, 0xD000, 0xD000, 13000, 14000, &model.generation, 4, 0x2u) ==
               BC250_DCN_IMMEDIATE_PENDING);
         r = &nofrequency.DcnImmediateRecords[0];
-        CHECK(model.observe_stalls == BC250_DCN_IMMEDIATE_OBSERVE_US && r->Samples == BC250_DCN_IMMEDIATE_OBSERVE_US + 1);
+        CHECK(model.observe_stalls == BC250_DCN_IMMEDIATE_OBSERVE_US && r->Samples == BC250_DCN_IMMEDIATE_OBSERVE_US);
         CHECK(r->ProgramUs == 0 && r->FirstUs == 0 && r->EndUs == 0);
     }
     /* The widths. The request and the readback are compared in the fields' widths (the high field has 16 bits), so
@@ -473,7 +562,7 @@ static void ImmediateObserve(void)
     }
     /* The bound is held after the witness reads. A sample takes 2.5 us here and a stall 1 us, so a sample starts every
        3.5 us: the fifteenth ends at 51.5 us and no sixteenth starts, although that one would start at 52.5 us and a
-       bound held at the sample start would take it. P' at a sample that started inside the bound and ended past it is
+       bound held only at the sample start would stall again. P' at a sample that started inside the bound and ended past it is
        P', not DONE_LATE, and the overrun is counted. */
     {
         BC250_DEVICE late = {0};
@@ -494,6 +583,182 @@ static void ImmediateObserve(void)
         CHECK(late.DcnImmediateDoneMaxUs == 49);
     }
     model.observing = 0;
+}
+/* Review R3 regression: a 49 us failed read plus a 1 us stall used to admit another poll exactly at 50 us.
+   A delayed stall covers interruption too. No second read means the outcome stays PENDING, not success. */
+static void ObserveAdmissionBoundary(void)
+{
+    const unsigned stalls[] = {10, 600};
+    unsigned n;
+    for (n = 0; n < sizeof(stalls) / sizeof(stalls[0]); n++) {
+        BC250_DEVICE d = {0};
+        const BC250_DCN_IMMEDIATE_RECORD *r;
+        d.Mmio = &model; d.DcnQpcFrequency = 10000000;
+        ObserveReset();
+        model.qpc = 10000; model.primary = 0xD000; model.pending_reads = 1;
+        model.read_cost = 490; model.stall_cost = stalls[n];
+        CHECK(DcnImmediateObserve(&d, 0xD000, 0xD000, 10000, 10000, &model.generation, 4, 2) ==
+              BC250_DCN_IMMEDIATE_PENDING);
+        r = &d.DcnImmediateRecords[0];
+        CHECK(r->Samples == 1 && model.primary_reads == 1 && model.observe_stalls == 1);
+        CHECK(r->FirstUs == 0 && r->DoneUs == -1 && r->EndUs == (LONG)((490 + stalls[n]) / 10));
+        CHECK(d.DcnImmediateOverruns == (stalls[n] > 10 ? 1 : 0));
+    }
+    model.observing = 0;
+}
+static void SourceDevice(BC250_DEVICE *d)
+{
+    memset(d, 0, sizeof(*d)); memset(&model, 0, sizeof(model));
+    d->Mmio = &model; d->VidPnFlipEnabled = TRUE; d->DcnWriteEnabled = TRUE;
+    d->VramEnabled = TRUE; d->VramMcBase = 0x100000; d->VramPhysical.QuadPart = 0x200000;
+    d->VramLength = 0x400000;
+    d->SourceWidth = d->Post.Width = d->RuntimePost.Width = 64;
+    d->SourceHeight = d->Post.Height = d->RuntimePost.Height = 16;
+    d->DcnFirmwarePitch = d->Post.Pitch = d->RuntimePost.Pitch = 256;
+    d->DcnFirmwareAddress = (ULONGLONG)d->VramPhysical.QuadPart;
+    d->Post.PhysicAddress.QuadPart = (LONGLONG)d->DcnFirmwareAddress;
+    d->DcnFirmwareKnown = TRUE; d->FramebufferLength = 4096;
+    d->DcnPlaneFormats = TRUE; d->DcnPlaneFormat = BC250_PLANE_FORMAT_ARGB8888;
+    model.quiet = TRUE; model.pitch = 63; model.latched = d->DcnFirmwareAddress;
+}
+/* No stub for DcnFlipSourceAddress or its programming/validation callees. Its success, format change,
+   first inherited flip and refusal paths all execute while the logging assertion represents L. */
+static void SourceAddressNoLog(void)
+{
+    BC250_DEVICE d;
+    BOOLEAN wrote;
+    ULONGLONG physical;
+    unsigned mode;
+    protected_logs = 0; protected_call = 1;
+    for (mode = 0; mode < 3; mode++) {
+        SourceDevice(&d);
+        if (mode == 1) { d.Modeset.InheritedFixed = TRUE; d.Modeset.InheritedSupport = 1; }
+        if (mode == 2) { d.DcnFirmwareKnown = FALSE; model.capturing = 1; }
+        CHECK(DcnFlipSourceAddress(&d, 0x101000, 256, BC250_PLANE_FORMAT_ARGB8888, 4096, TRUE,
+                                   &physical, &wrote) == STATUS_SUCCESS);
+        CHECK(wrote && physical == 0x201000 && model.latched == physical && !model.locked);
+        CHECK(d.DcnFlipsHardware == 1 && d.DcnSurfaceSequence == 2 && d.DcnImmediateFlips == 1);
+    }
+    SourceDevice(&d);
+    CHECK(DcnFlipSourceAddress(&d, 0x101000, 256, BC250_PLANE_FORMAT_ABGR8888, 4096, FALSE,
+                               &physical, &wrote) == STATUS_SUCCESS);
+    CHECK(wrote && d.DcnFormatChanges == 1 && model.format_writes == 3);
+    SourceDevice(&d); d.DcnPlaneFormats = FALSE;
+    CHECK(DcnFlipSourceAddress(&d, 0x101000, 256, BC250_PLANE_FORMAT_ABGR8888, 4096, TRUE,
+                               &physical, &wrote) == STATUS_NOT_SUPPORTED);
+    CHECK(!wrote && d.DcnFormatRefused == 1 && model.writes == 0);
+    SourceDevice(&d);
+    CHECK(DcnFlipSourceAddress(&d, 0x0, 256, BC250_PLANE_FORMAT_ARGB8888, 4096, TRUE,
+                               &physical, &wrote) == STATUS_ACCESS_DENIED);
+    CHECK(!wrote && d.DcnFlipRefused == 1 && model.writes == 0);
+    SourceDevice(&d); model.ack_after = 11;
+    CHECK(DcnFlipSourceAddress(&d, 0x101000, 256, BC250_PLANE_FORMAT_ARGB8888, 4096, TRUE,
+                               &physical, &wrote) == STATUS_IO_TIMEOUT);
+    CHECK(wrote && d.DcnFlipRefused == 1 && d.DcnSurfaceSequence == 2 && !model.locked);
+    CHECK(model.address_writes == 0);
+    CHECK(protected_logs == 0);
+    protected_call = 0;
+}
+static void WitnessQualification(void)
+{
+    BC250_DEVICE d;
+    BC250_DCN_WITNESS_ARM arm;
+    unsigned before, after, failure;
+    const ULONG pending = HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK;
+    for (before = 0; before <= 1; before++) for (after = 0; after <= 1; after++) {
+        SourceDevice(&d); model.witness = 1;
+        model.witness_before = before ? pending : 0; model.witness_after = after ? pending : 0;
+        model.witness_interrupt = HUBPREQ0_DCSURF_SURFACE_FLIP_INTERRUPT__SURFACE_FLIP_OCCURRED_MASK |
+                                  HUBPREQ0_DCSURF_SURFACE_FLIP_INTERRUPT__SURFACE_FLIP_INT_TYPE_MASK;
+        DcnWitnessArm(&d, TRUE, &arm);
+        CHECK(arm.Status == STATUS_SUCCESS && arm.Fresh == (!before && !after));
+        CHECK(arm.PendingBefore == model.witness_before && arm.PendingAfter == model.witness_after);
+        CHECK(model.witness_pending_reads == 2 && model.witness_writes == 1);
+    }
+    /* A failed read at every position, including either pending read, cannot qualify a fresh arm. */
+    for (failure = 1; failure <= 4; failure++) {
+        SourceDevice(&d); model.witness = 1; model.witness_fail_at = failure;
+        DcnWitnessArm(&d, TRUE, &arm);
+        CHECK(arm.Status == STATUS_IO_TIMEOUT && !arm.Fresh);
+    }
+    SourceDevice(&d); model.witness = 1; model.witness_clear_sticky = 1;
+    model.witness_interrupt = HUBPREQ0_DCSURF_SURFACE_FLIP_INTERRUPT__SURFACE_FLIP_OCCURRED_MASK;
+    DcnWitnessArm(&d, TRUE, &arm);
+    CHECK(arm.Status == STATUS_SUCCESS && !arm.Fresh && model.witness_writes == 2);
+    SourceDevice(&d); model.witness = 1;
+    DcnWitnessArm(&d, FALSE, &arm);
+    CHECK(arm.Status == STATUS_NOT_SUPPORTED && !arm.Fresh && model.witness_reads == 0 && model.witness_writes == 0);
+}
+static void BridgeDevice(BC250_DEVICE *d)
+{
+    SourceDevice(d);
+    d->Framebuffer=&model;d->RuntimeFramebuffer=&model;d->RuntimeFramebufferLength=4096;
+    d->RuntimeFramebufferPhysical.QuadPart=0x202000;d->DcnQpcFrequency=10000000;
+    model.bridge=1;model.generation=3;model.latched=0x203000;model.earliest_old=0x203000;
+    model.config=8;model.crossbar=0x00E40000;model.cnvc=8;
+}
+static void WriterBridge(void)
+{
+    BC250_DEVICE d;
+    BOOLEAN wrote;
+    protected_call=1;
+    BridgeDevice(&d);model.pending_reads=2;
+    CHECK(DcnWriterBridge(&d,&model.generation,3,&wrote)==STATUS_SUCCESS);
+    CHECK(wrote && model.latched==0x202000 && model.triggers==1 && model.observe_stalls==2);
+    CHECK(d.DcnImmediateRecords[0].Outcome==BC250_DCN_IMMEDIATE_DONE && model.generation==3);
+    // An already-effective owned bridge works without a write, including a stopped OTG or a blank HUBP.
+    BridgeDevice(&d);model.latched=0x202000;
+    CHECK(DcnWriterBridge(&d,&model.generation,3,&wrote)==STATUS_SUCCESS);
+    CHECK(!wrote && model.writes==0 && !model.observing);
+    BridgeDevice(&d);model.latched=d.DcnFirmwareAddress;
+    CHECK(DcnWriterBridge(&d,&model.generation,3,&wrote)==STATUS_SUCCESS);
+    CHECK(!wrote && model.writes==0 && !model.observing);
+    // Capacity and ownership are checked before any register write, not just membership in the VRAM aperture.
+    BridgeDevice(&d);d.RuntimeFramebufferLength=4095;
+    CHECK(DcnWriterBridge(&d,&model.generation,3,&wrote)==STATUS_INVALID_PARAMETER);
+    CHECK(!wrote && model.writes==0);
+    // Even an already-latched reserved base is unsafe when its verified extent is too short.
+    BridgeDevice(&d);d.RuntimeFramebufferLength=4095;model.latched=0x202000;
+    CHECK(DcnWriterBridge(&d,&model.generation,3,&wrote)==STATUS_INVALID_PARAMETER);
+    CHECK(!wrote && model.writes==0);
+    BridgeDevice(&d);d.RuntimeFramebuffer=NULL;d.Framebuffer=NULL;
+    CHECK(DcnWriterBridge(&d,&model.generation,3,&wrote)==STATUS_DEVICE_NOT_READY);
+    CHECK(!wrote && model.writes==0);
+    BridgeDevice(&d);d.RuntimeFramebufferPhysical.QuadPart=0x700000;
+    CHECK(DcnWriterBridge(&d,&model.generation,3,&wrote)==STATUS_INVALID_PARAMETER);
+    CHECK(!wrote && model.writes==0);
+    BridgeDevice(&d);d.VramMcBase=UINT64_MAX-4095;
+    CHECK(DcnWriterBridge(&d,&model.generation,3,&wrote)==STATUS_INVALID_PARAMETER);
+    CHECK(!wrote && model.writes==0);
+    // A written but unproved bridge is a hardware failure for the caller, never a successful writer admission.
+    BridgeDevice(&d);model.pending_reads=~0u;
+    CHECK(DcnWriterBridge(&d,&model.generation,3,&wrote)==STATUS_IO_TIMEOUT);
+    CHECK(wrote && d.DcnImmediateRecords[0].Outcome==BC250_DCN_IMMEDIATE_PENDING);
+    CHECK(model.observe_stalls==BC250_DCN_IMMEDIATE_OBSERVE_US);
+    BridgeDevice(&d);model.latched=0x202000;model.pending_reads=~0u;
+    model.flip=HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK;
+    CHECK(DcnWriterBridge(&d,&model.generation,3,&wrote)==STATUS_IO_TIMEOUT && wrote);
+    CHECK(d.DcnImmediateRecords[0].Outcome==BC250_DCN_IMMEDIATE_PENDING);
+    // r6 lab counterexample: pending is clear and PRIMARY is new, but EARLIEST still names the old application.
+    // A writer cannot be admitted while the old allocation remains eligible for scanout.
+    BridgeDevice(&d);model.earliest_lag=~0u;
+    CHECK(DcnWriterBridge(&d,&model.generation,3,&wrote)==STATUS_IO_TIMEOUT && wrote);
+    CHECK(d.DcnImmediateRecords[0].Outcome==BC250_DCN_IMMEDIATE_DONE);
+    CHECK(model.primary==0x202000 && model.earliest_old==0x203000 && model.earliest_reads>0);
+    CHECK(model.observe_stalls==BC250_DCN_IMMEDIATE_OBSERVE_US && model.qpc==500);
+    BridgeDevice(&d);model.earliest_lag=4;
+    CHECK(DcnWriterBridge(&d,&model.generation,3,&wrote)==STATUS_SUCCESS && wrote);
+    CHECK(model.earliest_reads==6 && model.observe_stalls==2);
+    // The stronger bridge observation shares the original deadline and rechecks it after a delayed stall.
+    BridgeDevice(&d);model.earliest_lag=~0u;model.read_cost=490;
+    CHECK(DcnWriterBridge(&d,&model.generation,3,&wrote)==STATUS_IO_TIMEOUT && wrote);
+    CHECK(model.earliest_reads==2 && model.observe_stalls==0);
+    BridgeDevice(&d);model.earliest_lag=~0u;model.stall_cost=600;
+    CHECK(DcnWriterBridge(&d,&model.generation,3,&wrote)==STATUS_IO_TIMEOUT && wrote);
+    CHECK(model.earliest_reads==2 && model.observe_stalls==1);
+    CHECK(protected_logs==0);
+    protected_call=0;
+    model.bridge=0;model.observing=0;
 }
 int main(void)
 {
@@ -647,6 +912,10 @@ int main(void)
     }
     FlipTypes();
     ImmediateObserve();
+    ObserveAdmissionBoundary();
+    SourceAddressNoLog();
+    WitnessQualification();
+    WriterBridge();
     printf("dcn flip: %u checks, %u failures\n", checks, failures);
     return failures ? 1 : 0;
 }

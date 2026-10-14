@@ -194,16 +194,6 @@ typedef struct _BC250_DCN_IMMEDIATE_RECORD {
     LONG EndUs;                 // the last sample
 } BC250_DCN_IMMEDIATE_RECORD;
 
-// BD-170 r6: Desired as Resume hands it to an unblank site (wddm.c's WddmWriterResume): the request's card address,
-// pitch, plane format (plane_format.h) and allocation bytes, and the deposit's sequence.
-typedef struct _BC250_WDDM_DESIRED {
-    ULONGLONG CardAddress;
-    ULONG Pitch;
-    ULONG PlaneFormat;
-    ULONGLONG Bytes;
-    ULONG Sequence;
-} BC250_WDDM_DESIRED;
-
 #define BC250_VISIBILITY_HISTORY_COUNT 16u
 typedef struct _BC250_VISIBILITY_EVENT {
     ULONG Call, Source, Requested;
@@ -792,6 +782,7 @@ NTSTATUS DcnStop(_Inout_ BC250_DEVICE* Device);
 NTSTATUS DcnSetVisibility(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible);
 NTSTATUS DcnRestorePostDisplay(_Inout_ BC250_DEVICE* Device); // any IRQL; no allocation/log/lock
 NTSTATUS DcnRuntimeSurface(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible);
+NTSTATUS DcnRestorePostDisplaySerialized(_Inout_ BC250_DEVICE* Device);
 NTSTATUS DcnFlipToFirmwareSurface(_Inout_ BC250_DEVICE* Device);   // the same without the unblank (modeset.c)
 
 // dcn.c (0.7.24, ADR 0011 point 3 step 3): SetVidPnSourceAddress's own path - the same M87 write sequence
@@ -827,6 +818,8 @@ ULONG DcnImmediateObserve(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddress, U
 // 1 or 0, and -1 when the read failed. DcnFaultBlank: one read-modify-write of HUBP0_DCHUBP_CNTL that sets HUBP_BLANK_EN and
 // HUBP_TTU_DISABLE.
 int DcnHubpDrained(_In_ const BC250_DEVICE* Device);
+NTSTATUS DcnWriterBridge(_Inout_ BC250_DEVICE* Device, _In_ volatile LONG* Generation,
+    ULONG ExpectedGeneration, _Out_ BOOLEAN* Wrote);
 int DcnOtgRunning(_In_ const BC250_DEVICE* Device);
 NTSTATUS DcnFaultBlank(_Inout_ BC250_DEVICE* Device);
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
@@ -839,7 +832,8 @@ typedef struct _BC250_DCN_WITNESS_ARM {
     NTSTATUS Status;            // the clear's reads and writes; STATUS_NOT_SUPPORTED when not armed
     ULONG InterruptBefore;      // HUBPREQ0_DCSURF_SURFACE_FLIP_INTERRUPT before the clear
     ULONG InterruptCleared;     // and after it
-    BOOLEAN Fresh;              // the clear left no event set: an event read after the decision is this flip's
+    ULONG PendingBefore, PendingAfter; // FLIP_CONTROL around the event clear
+    BOOLEAN Fresh;              // clear succeeded with no pending flip on either side
 } BC250_DCN_WITNESS_ARM;
 typedef struct _BC250_DCN_WITNESS_READ {
     ULONG Interrupt;            // SURFACE_FLIP_INTERRUPT after the decision
@@ -1275,22 +1269,17 @@ void WddmSourceVisibility(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible);   // d
 void WddmStop(_Inout_ BC250_DEVICE* Device);
 void WddmReportEngineFault(_In_ const BC250_DEVICE* Device, _In_z_ const char* Why);   // BD-167 (G3): CP fault -> close gfx node
 // The writers' primary transaction (the flip DDI's PrimarySequence) at PASSIVE_LEVEL: modeset.c, connector_link.c,
-// hdmi_link.c and wddm.c's destroy restore. BD-170 r6 (docs/design/vidpn-flip.md section 7.2): Begin, Resume and End
-// are each one section under the interrupt lock L. While a writer holds the transaction, SetVidPnSourceAddress deposits
-// a request as Desired and programs nothing. Begin is bounded and returns FALSE when it could not take it, and at once
-// in FAULTING; TRUE with nothing held when there is no full table. End programs a deposit, or a next-VSync success
-// that no report carried, with the next-VSync type while the OTG runs (E5 when it does not, nothing in FAULTING). End
-// with Invalidate says that the plane went back to the firmware surface: unless End programmed Desired, the next flip
-// is a change whatever address it carries, and no application surface is scanned out any more. Kind is the writer's
-// BC250_WRITER_* (flip_state.h), which a W-u record names.
+// hdmi_link.c and wddm.c's destroy restore. Begin proves that the hardware uses reserved storage before it publishes
+// WriterActive. Long work may use only driver-owned storage. Hardware flip requests remain unacknowledged while
+// that writer runs. End selects the retained Desired under L and programs it before releasing ownership. A failed
+// section never runs its operation: the caller receives failure and recovery is queued for a later legal section.
+// Invalidate keeps the reserved surface unless a new deposit must be programmed. No application address escapes L.
 #include "flip_state.h"
 BOOLEAN WddmPrimaryExclusiveBegin(_Inout_ BC250_DEVICE* Device, ULONG Kind, _Out_ ULONG* Generation);
-void WddmPrimaryExclusiveEnd(_Inout_ BC250_DEVICE* Device, ULONG Generation, BOOLEAN Invalidate);
-// Resume, before every unblank of a writer (dcn.c's DcnRuntimeSurface and DcnLinkSurfaceRestore): TRUE with Desired
-// when a deposit exists, which the unblank site may program in place of its own surface; after that programming,
-// WddmWriterDepositProgrammed with Desired's Sequence. FALSE with no active writer and above DISPATCH_LEVEL.
-BOOLEAN WddmWriterResume(_Inout_ BC250_DEVICE* Device, _Out_ BC250_WDDM_DESIRED* Desired);
-void WddmWriterDepositProgrammed(_Inout_ BC250_DEVICE* Device, ULONG Sequence);
+NTSTATUS WddmPrimaryExclusiveEnd(_Inout_ BC250_DEVICE* Device, ULONG Generation, BOOLEAN Invalidate);
+// Resume authorizes only reserved-buffer writes. An error prohibits those writes as well. Bugcheck/stop callbacks
+// use a distinct, explicitly OS-serialized entry; IRQL or a failed section never selects that entry implicitly.
+NTSTATUS WddmWriterResume(_Inout_ BC250_DEVICE* Device);
 // pnp.c's Bc250SetPowerState at the start of D3: dxgmms2 flushed the flip queue, so nothing is owed any more.
 void WddmFlipFlushed(_Inout_ BC250_DEVICE* Device);
 // pnp.c's Bc250DpcRoutine: E5's notification (DMA_PAGE_FAULTED) and drain record, a no-op unless E5 queued it.

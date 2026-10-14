@@ -673,6 +673,11 @@ ULONG DcnImmediateObserve(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddress, U
         {
             now = KeQueryPerformanceCounter(NULL);
             us = DcnQpcUs(now.QuadPart - ProgramStartQpc, frequency);
+            // Always admit the first observation, even if entry was delayed. Every additional sample must earn
+            // its budget again after the stall: an interruption there must not start another poll past the bound.
+            if (steps != 0 && (us - record.ProgramUs >= (LONG)BC250_DCN_IMMEDIATE_OBSERVE_US ||
+                              steps >= BC250_DCN_IMMEDIATE_OBSERVE_US))
+                break;
             if (steps == 0) record.FirstUs = us;
             record.Samples++;
             status = MmioDcnRead(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL, &value);
@@ -690,8 +695,8 @@ ULONG DcnImmediateObserve(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddress, U
                 record.DoneUs = us;
                 break;
             }
-            // The bound is held against a time taken after the witness reads, so that another sample starts only
-            // inside it. A step count ends it as well, so a counter that does not move cannot stretch the wait.
+            // Do not stall after an observation already consumed the budget. The admission check above repeats
+            // after the stall; the step cap also bounds a counter that does not move.
             now = KeQueryPerformanceCounter(NULL);
             if (DcnQpcUs(now.QuadPart - ProgramStartQpc, frequency) - record.ProgramUs >= (LONG)BC250_DCN_IMMEDIATE_OBSERVE_US ||
                 steps >= BC250_DCN_IMMEDIATE_OBSERVE_US)
@@ -708,7 +713,7 @@ ULONG DcnImmediateObserve(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddress, U
         if ((ULONG)InterlockedCompareExchange(Generation, 0, 0) != ExpectedGeneration)
             record.Outcome = BC250_DCN_IMMEDIATE_SUPERSEDED;
         else if (record.DoneUs >= 0)
-            record.Outcome = record.FirstUs - record.ProgramUs >= (LONG)BC250_DCN_IMMEDIATE_OBSERVE_US ?
+            record.Outcome = record.DoneUs - record.ProgramUs >= (LONG)BC250_DCN_IMMEDIATE_OBSERVE_US ?
                 BC250_DCN_IMMEDIATE_DONE_LATE : BC250_DCN_IMMEDIATE_DONE;
         else if (!NT_SUCCESS(record.ReadStatus)) record.Outcome = BC250_DCN_IMMEDIATE_READ_FAILED;
         else if (pendingSet) record.Outcome = BC250_DCN_IMMEDIATE_PENDING;
@@ -999,10 +1004,27 @@ NTSTATUS DcnSetVisibility(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible)
     return STATUS_SUCCESS;
 }
 
-static NTSTATUS DcnFirmwareSurfaceCore(_Inout_ BC250_DEVICE* Device, BOOLEAN Unblank)
+static NTSTATUS DcnRuntimeSurfaceAuthorized(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible, BOOLEAN Serialized);
+
+static NTSTATUS DcnResumeOwnedFetch(_Inout_ BC250_DEVICE* Device)
+{
+    ULONG value = 0;
+    NTSTATUS status = MmioDcnRead(Device, BC250_REG_DMU_HUBP0_DCHUBP_CNTL, &value);
+    if (NT_SUCCESS(status) && (value & (HUBP0_DCHUBP_CNTL__HUBP_BLANK_EN_MASK | HUBP0_DCHUBP_CNTL__HUBP_TTU_DISABLE_MASK)))
+        status = MmioDcnWriteEx(Device, BC250_REG_DMU_HUBP0_DCHUBP_CNTL,
+            value & ~(HUBP0_DCHUBP_CNTL__HUBP_BLANK_EN_MASK | HUBP0_DCHUBP_CNTL__HUBP_TTU_DISABLE_MASK), TRUE);
+    if (NT_SUCCESS(status)) InterlockedExchange(&Device->RuntimePlaneBlank, 0);
+    return status;
+}
+
+static NTSTATUS DcnFirmwareSurfaceCore(_Inout_ BC250_DEVICE* Device, BOOLEAN Unblank, BOOLEAN Serialized)
 {
     NTSTATUS status;
     ULONG waited=0;
+    if (!Serialized) {
+        status = WddmWriterResume(Device);
+        if (!NT_SUCCESS(status)) return status;
+    }
     // Captured before any address write, so this also covers a bugcheck midway
     // through a flip before DcnDiverged/current-address publication completed.
     if (!Device->DcnFirmwareKnown)
@@ -1019,6 +1041,8 @@ static NTSTATUS DcnFirmwareSurfaceCore(_Inout_ BC250_DEVICE* Device, BOOLEAN Unb
             DcnPlaneFormatRegisters(Device,BC250_PLANE_FORMAT_ARGB8888,&registers) ? &registers : NULL;
         status=DcnFlipWriteSequence(Device,Device->DcnFirmwareAddress,Device->DcnFirmwarePitch,4,format,FALSE,TRUE);
         if (!NT_SUCCESS(status)) return status;
+        status=DcnResumeOwnedFetch(Device);
+        if (!NT_SUCCESS(status)) return status;
         for (;;)
         {
             status=DcnCheckPostSurface(Device);
@@ -1030,6 +1054,8 @@ static NTSTATUS DcnFirmwareSurfaceCore(_Inout_ BC250_DEVICE* Device, BOOLEAN Unb
         if (!NT_SUCCESS(status)) return status;
     }
     if (Unblank) {
+        status=DcnResumeOwnedFetch(Device);
+        if (!NT_SUCCESS(status)) return status;
         status=DcnSetVisibility(Device,TRUE);
         if (!NT_SUCCESS(status)) return status;
     }
@@ -1044,7 +1070,16 @@ NTSTATUS DcnRestorePostDisplay(_Inout_ BC250_DEVICE* Device)
 {
     if (InterlockedCompareExchange(&Device->RuntimeDisplayChanged,0,0))
         return DcnRuntimeSurface(Device,TRUE);
-    return DcnFirmwareSurfaceCore(Device,TRUE);
+    return DcnFirmwareSurfaceCore(Device,TRUE,FALSE);
+}
+
+// Only the OS's serialized bugcheck/reset/stop callbacks use this entry. A failed normal writer section never
+// selects it, and high IRQL alone is not an authorization to bypass the writer protocol.
+NTSTATUS DcnRestorePostDisplaySerialized(_Inout_ BC250_DEVICE* Device)
+{
+    if (InterlockedCompareExchange(&Device->RuntimeDisplayChanged,0,0))
+        return DcnRuntimeSurfaceAuthorized(Device,TRUE,TRUE);
+    return DcnFirmwareSurfaceCore(Device,TRUE,TRUE);
 }
 
 // modeset.c, before the viewport grows: the plane back on the firmware surface, which holds the native size, so that
@@ -1054,7 +1089,7 @@ NTSTATUS DcnFlipToFirmwareSurface(_Inout_ BC250_DEVICE* Device)
 {
     if (InterlockedCompareExchange(&Device->RuntimeDisplayChanged,0,0))
         return DcnRuntimeSurface(Device,FALSE);
-    return DcnFirmwareSurfaceCore(Device,FALSE);
+    return DcnFirmwareSurfaceCore(Device,FALSE,FALSE);
 }
 
 static long RuntimeRead(void* Context, unsigned long Offset, unsigned long* Value)
@@ -1155,7 +1190,10 @@ void DcnWitnessArm(_In_ const BC250_DEVICE* Device, BOOLEAN Immediate, _Out_ BC2
     Arm->Status = STATUS_NOT_SUPPORTED;
     if (!Immediate) return;
     if (Device->Mmio == NULL || !Device->DcnWriteEnabled) { Arm->Status = STATUS_DEVICE_NOT_READY; return; }
-    status = MmioDcnRead(Device, DCN_WITNESS_EVENT_REG, &Arm->InterruptBefore);
+    // A clear event alone cannot attribute a later event to this request: an older pending flip may finish after
+    // the clear. L excludes other software writers; both pending samples must also exclude that hardware work.
+    status = MmioDcnRead(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL, &Arm->PendingBefore);
+    if (NT_SUCCESS(status)) status = MmioDcnRead(Device, DCN_WITNESS_EVENT_REG, &Arm->InterruptBefore);
     if (NT_SUCCESS(status))
         status = MmioDcnWriteEx(Device, DCN_WITNESS_EVENT_REG,
                                 (Arm->InterruptBefore & DCN_WITNESS_ENABLES) | DCN_WITNESS_CLEARS, TRUE);
@@ -1166,8 +1204,11 @@ void DcnWitnessArm(_In_ const BC250_DEVICE* Device, BOOLEAN Immediate, _Out_ BC2
         if (NT_SUCCESS(status)) status = MmioDcnRead(Device, DCN_WITNESS_EVENT_REG, &value);
     }
     Arm->InterruptCleared = value;
+    if (NT_SUCCESS(status))
+        status = MmioDcnRead(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL, &Arm->PendingAfter);
     Arm->Status = status;
-    Arm->Fresh = NT_SUCCESS(status) && !(value & DCN_WITNESS_EVENTS);
+    Arm->Fresh = NT_SUCCESS(status) && !(value & DCN_WITNESS_EVENTS) &&
+        !((Arm->PendingBefore | Arm->PendingAfter) & HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK);
 }
 
 NTSTATUS DcnWitnessRead(_In_ const BC250_DEVICE* Device, _Out_ BC250_DCN_WITNESS_READ* Read)
@@ -1188,9 +1229,10 @@ NTSTATUS DcnWitnessRead(_In_ const BC250_DEVICE* Device, _Out_ BC250_DCN_WITNESS
 }
 #endif
 
-// Caller owns the primary transaction, or OS bugcheck/stop serialization.
+// Caller owns the primary writer, or explicitly holds OS bugcheck/stop serialization.
 // No allocation, software lock, logger or floating-point work is reachable.
-NTSTATUS DcnRuntimeSurface(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible)
+static NTSTATUS DcnReservedSurfaceCore(_Inout_ BC250_DEVICE* Device, ULONG Width, ULONG Height, ULONG Pitch,
+    BOOLEAN Visible, BOOLEAN PreserveVisibility, BOOLEAN Serialized)
 {
     BC250_DISP_IO io={0};
     BC250_PLANE_REGISTERS format;
@@ -1198,36 +1240,35 @@ NTSTATUS DcnRuntimeSurface(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible)
     ULONG waited=0,pending=0,pitch=0,blank=0;
     BOOLEAN restoreVisible;
     NTSTATUS status;
-    if (!InterlockedCompareExchange(&Device->RuntimePostValid,0,0) ||
-        !Device->RuntimeFramebuffer || !Device->DcnPlaneFormats ||
-        !DcnSurfaceBytes(Device->RuntimePost.Width,Device->RuntimePost.Height,Device->RuntimePost.Pitch,&bytes) ||
+    if (!Device->RuntimeFramebuffer || !Device->DcnPlaneFormats ||
+        !DcnSurfaceBytes(Width,Height,Pitch,&bytes) ||
         bytes>Device->RuntimeFramebufferLength ||
-        Device->RuntimePost.PhysicAddress.QuadPart!=Device->RuntimeFramebufferPhysical.QuadPart ||
+        !DcnAddressFits((ULONGLONG)Device->RuntimeFramebufferPhysical.QuadPart,
+            (ULONGLONG)Device->VramPhysical.QuadPart,Device->VramLength,bytes) ||
         !DcnPlaneFormatRegisters(Device,BC250_PLANE_FORMAT_ARGB8888,&format))
         return STATUS_DEVICE_NOT_READY;
+    if (!Serialized) {
+        status = WddmWriterResume(Device);
+        if (!NT_SUCCESS(status)) return status;
+    }
     io.Context=Device; io.Read=RuntimeRead; io.Write=RuntimeWrite; io.Stall=RuntimeStall;
     io.BudgetUs=BC250_DCNFLIP_POLL_MAX_US;
     // Read hardware, not the cached DcnBlanked flag. A pending blank request
     // is preserved as blank even if CURRENT_BLANK_STATE has not caught up.
     status=MmioDcnRead(Device,BC250_REG_DMU_OTG0_OTG_BLANK_CONTROL,&blank);
     if (!NT_SUCCESS(status)) return status;
-    restoreVisible=Visible || !(blank & (OTG0_OTG_BLANK_CONTROL__OTG_BLANK_DATA_EN_MASK |
+    restoreVisible=Visible || (PreserveVisibility && !(blank & (OTG0_OTG_BLANK_CONTROL__OTG_BLANK_DATA_EN_MASK |
         OTG0_OTG_BLANK_CONTROL__OTG_BLANK_DE_MODE_MASK |
-        OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK));
+        OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK)));
     status=DcnSetVisibility(Device,FALSE);
     if (!NT_SUCCESS(status)) goto failed;
     InterlockedExchange(&Device->RuntimePlaneBlank,1);
     status=Bc250Dcn201PlaneBlank(&io,1);
     if (!NT_SUCCESS(status)) goto failed;
-    // BD-170 r6: Resume before the unblank below (docs/design/vidpn-flip.md section 7.2): from here on no DRAINED
-    // readback counts for this writer. The reserved buffer is the driver's own and the OS never releases it, so a
-    // deposit is not programmed here; the writer's End programs it. Nothing without a writer or above DISPATCH_LEVEL.
-    {
-        BC250_WDDM_DESIRED desired;
-        (void)WddmWriterResume(Device,&desired);
-    }
+    // Begin already proved a driver-owned bridge before publishing the writer. Only reserved buffers can be
+    // programmed outside L; application requests are refused while the writer owns the display.
     status=DcnFlipWriteSequence(Device,(ULONGLONG)Device->RuntimeFramebufferPhysical.QuadPart,
-        Device->RuntimePost.Pitch,4,&format,FALSE,TRUE);
+        Pitch,4,&format,FALSE,TRUE);
     if (!NT_SUCCESS(status)) goto failed;
     // DCN201 selects dcn10_program_pipe (Linux dcn201_init.c:101), which
     // programs the address then unblanks HUBP (dcn10_hwseq.c:3133-3136).
@@ -1244,7 +1285,7 @@ NTSTATUS DcnRuntimeSurface(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible)
         if (!NT_SUCCESS(status)) goto failed;
         if (!(pending&HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK) &&
             scanned==(ULONGLONG)Device->RuntimeFramebufferPhysical.QuadPart &&
-            ((pitch&HUBPREQ0_DCSURF_SURFACE_PITCH__PITCH_MASK)+1)*4==Device->RuntimePost.Pitch) break;
+            ((pitch&HUBPREQ0_DCSURF_SURFACE_PITCH__PITCH_MASK)+1)*4==Pitch) break;
         if (waited>=BC250_DCNFLIP_POLL_MAX_US) { status=STATUS_IO_TIMEOUT; goto failed; }
         KeStallExecutionProcessor(BC250_DCNFLIP_POLL_STEP_US);
         waited+=BC250_DCNFLIP_POLL_STEP_US;
@@ -1254,7 +1295,7 @@ NTSTATUS DcnRuntimeSurface(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible)
         if (!NT_SUCCESS(status)) goto failed;
     }
     Device->DcnCurrentAddress=(ULONGLONG)Device->RuntimeFramebufferPhysical.QuadPart;
-    Device->DcnCurrentPitch=Device->RuntimePost.Pitch;
+    Device->DcnCurrentPitch=Pitch;
     Device->DcnPlaneFormat=BC250_PLANE_FORMAT_ARGB8888;
     Device->DcnDiverged=TRUE; // different from the immutable firmware surface
     return STATUS_SUCCESS;
@@ -1265,6 +1306,20 @@ failed:
     InterlockedExchange(&Device->RuntimePlaneBlank,1);
     (void)Bc250Dcn201PlaneBlank(&io,1);
     return status;
+}
+
+static NTSTATUS DcnRuntimeSurfaceAuthorized(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible, BOOLEAN Serialized)
+{
+    if (!InterlockedCompareExchange(&Device->RuntimePostValid,0,0) ||
+        Device->RuntimePost.PhysicAddress.QuadPart!=Device->RuntimeFramebufferPhysical.QuadPart)
+        return STATUS_DEVICE_NOT_READY;
+    return DcnReservedSurfaceCore(Device,Device->RuntimePost.Width,Device->RuntimePost.Height,
+        Device->RuntimePost.Pitch,Visible,TRUE,Serialized);
+}
+
+NTSTATUS DcnRuntimeSurface(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible)
+{
+    return DcnRuntimeSurfaceAuthorized(Device,Visible,FALSE);
 }
 
 // Caller holds primary exclusion. No writes or ownership changes occur here.
@@ -1317,92 +1372,20 @@ NTSTATUS DcnLinkSurfaceCapture(BC250_DEVICE* Device, ULONG Width, ULONG Height, 
 
 NTSTATUS DcnLinkSurfaceRestore(BC250_DEVICE* Device, const BC250_LINK_SURFACE* Surface)
 {
-    BC250_DISP_IO io={0};
-    BC250_PLANE_REGISTERS format;
-    BC250_LINK_SURFACE target;
-    BC250_WDDM_DESIRED desired;
-    BOOLEAN deposit=FALSE;
-    ULONGLONG bytes,scanned=0;
-    ULONG waited=0,pending=0,pitch=0;
-    NTSTATUS status;
-    if (!Surface || !Device->VramEnabled || !Device->DcnPlaneFormats ||
-        Surface->Format!=BC250_PLANE_FORMAT_ARGB8888 || Surface->Visible>1 ||
-        !DcnSurfaceBytes(Surface->Width,Surface->Height,Surface->Pitch,&bytes) ||
-        !DcnAddressFits(Surface->Physical,(ULONGLONG)Device->VramPhysical.QuadPart,Device->VramLength,bytes) ||
-        !DcnPlaneFormatRegisters(Device,Surface->Format,&format)) return STATUS_DEVICE_NOT_READY;
-    io.Context=Device; io.Read=RuntimeRead; io.Write=RuntimeWrite; io.Stall=RuntimeStall;
-    io.BudgetUs=BC250_DCNFLIP_POLL_MAX_US;
-    status=DcnSetVisibility(Device,FALSE);
-    if (!NT_SUCCESS(status)) goto failed;
-    InterlockedExchange(&Device->RuntimePlaneBlank,1);
-    status=Bc250Dcn201PlaneBlank(&io,1);
-    if (!NT_SUCCESS(status)) goto failed;
-    // BD-170 r6: Resume before the unblank below (docs/design/vidpn-flip.md section 7.2). The saved surface may be the
-    // one an immediate deposit released, so a deposit is programmed in its place: Desired, in the saved mode's size.
-    // A deposit that does not fit that mode (another format, too few bytes, outside the carve-out) refuses the restore
-    // here, with the plane still blank: no unblank of a surface the OS may have released. The writer's End then
-    // decides Desired.
-    target=*Surface;
-    deposit=WddmWriterResume(Device,&desired);
-    if (deposit) {
-        ULONGLONG physical,need;
-        if (desired.PlaneFormat!=BC250_PLANE_FORMAT_ARGB8888 ||
-            !DcnTranslateCardAddress(desired.CardAddress,Device->VramMcBase,(ULONGLONG)Device->VramPhysical.QuadPart,
-                                     Device->VramLength,&physical) ||
-            !DcnSurfaceBytes(Surface->Width,Surface->Height,desired.Pitch,&need) || need>desired.Bytes ||
-            !DcnAddressFits(physical,(ULONGLONG)Device->VramPhysical.QuadPart,Device->VramLength,need))
-        { status=STATUS_DEVICE_NOT_READY; goto failed; }
-        target.Physical=physical;
-        target.Pitch=desired.Pitch;
-    }
-    status=DcnFlipWriteSequence(Device,target.Physical,
-        target.Pitch,4,&format,FALSE,TRUE);
-    if (!NT_SUCCESS(status)) goto failed;
-    // DCN201 selects dcn10_program_pipe (Linux dcn201_init.c:101), which
-    // programs the address then unblanks HUBP (dcn10_hwseq.c:3133-3136).
-    // hubp1_set_blank also disables TTU; no in-use progress while blank is
-    // guaranteed. Resume fetch from the validated saved buffer with OTG
-    // output still blank, then prove the frame-latched address took effect.
-    status=Bc250Dcn201PlaneBlank(&io,0);
-    if (!NT_SUCCESS(status)) goto failed;
-    InterlockedExchange(&Device->RuntimePlaneBlank,0);
-    for (;;) {
-        status=MmioDcnRead(Device,BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL,&pending);
-        if (NT_SUCCESS(status)) status=DcnReadScanoutPhysical(Device,&scanned);
-        if (NT_SUCCESS(status)) status=MmioDcnRead(Device,BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_PITCH,&pitch);
-        if (!NT_SUCCESS(status)) goto failed;
-        if (!(pending&HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK) &&
-            scanned==target.Physical &&
-            ((pitch&HUBPREQ0_DCSURF_SURFACE_PITCH__PITCH_MASK)+1)*4==target.Pitch) break;
-        if (waited>=BC250_DCNFLIP_POLL_MAX_US) { status=STATUS_IO_TIMEOUT; goto failed; }
-        KeStallExecutionProcessor(BC250_DCNFLIP_POLL_STEP_US);
-        waited+=BC250_DCNFLIP_POLL_STEP_US;
-    }
-    // The deposit is on the plane: End does not owe it again, unless a newer deposit came meanwhile.
-    if (deposit) WddmWriterDepositProgrammed(Device,desired.Sequence);
-    if (Surface->Visible) {
-        status=DcnSetVisibility(Device,TRUE);
-        if (!NT_SUCCESS(status)) goto failed;
-    }
-    Device->DcnCurrentAddress=target.Physical;
-    Device->DcnCurrentPitch=target.Pitch;
-    Device->DcnPlaneFormat=BC250_PLANE_FORMAT_ARGB8888;
-    Device->DcnDiverged=TRUE; // saved application surface may differ from firmware
-    return STATUS_SUCCESS;
-failed:
-    // Best-effort bounded cleanup. Preserve the original failure; a failed
-    // MMIO cleanup cannot establish physical blanking or a drained plane.
-    (void)DcnSetVisibility(Device,FALSE);
-    InterlockedExchange(&Device->RuntimePlaneBlank,1);
-    (void)Bc250Dcn201PlaneBlank(&io,1);
-    return status;
+    // Rollback restores the mode and its visibility, not a saved application allocation. The reserved runtime
+    // buffer outlives the long writer; the latest saved application primary is selected only by End under L.
+    if (!Surface || Surface->Format!=BC250_PLANE_FORMAT_ARGB8888 || Surface->Visible>1 ||
+        Surface->Physical!=(ULONGLONG)Device->RuntimeFramebufferPhysical.QuadPart)
+        return STATUS_DEVICE_NOT_READY;
+    return DcnReservedSurfaceCore(Device,Surface->Width,Surface->Height,Surface->Pitch,
+                                 Surface->Visible != 0 ? TRUE : FALSE,FALSE,FALSE);
 }
 
 NTSTATUS DcnStop(_Inout_ BC250_DEVICE* Device)
 {
     NTSTATUS status;
     DcnUnmapScanout(Device);
-    status=DcnRestorePostDisplay(Device);
+    status=DcnRestorePostDisplaySerialized(Device);
     GuardLog("dcnflip: stop: verified firmware scanout status 0x%08X",status);
     // After the firmware surface is back: the native viewport and scaler shape for the next owner (modeset.c). It
     // runs when the restore above failed as well; the screen of the next owner needs the shape either way.
@@ -1464,9 +1447,7 @@ NTSTATUS DcnFlipSourceAddress(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddres
     {
         if (!DcnPlaneFormatRegisters(Device,PlaneFormat,&registers))
         {
-            if (InterlockedIncrement(&Device->DcnFormatRefused) <= BC250_DCN_LOG_CALLS)
-                GuardLog("dcnflip: SetVidPnSourceAddress refused: plane format %s needs the firmware format",
-                         Bc250PlaneFormatText(PlaneFormat));
+            InterlockedIncrement(&Device->DcnFormatRefused);
             return STATUS_NOT_SUPPORTED;
         }
         format=&registers;
@@ -1478,8 +1459,7 @@ NTSTATUS DcnFlipSourceAddress(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddres
                                  Device->VramLength, &physical) ||
         !AddressAllowed(Device,physical,Pitch,DisplaySourceWidth(Device),DisplaySourceHeight(Device)))
     {
-        if (InterlockedIncrement(&Device->DcnFlipRefused) <= BC250_DCN_LOG_CALLS)
-            GuardLog("dcnflip: SetVidPnSourceAddress refused: card address 0x%llX does not translate inside the carve-out", CardAddress);
+        InterlockedIncrement(&Device->DcnFlipRefused);
         return STATUS_ACCESS_DENIED;
     }
     if (PhysicalOut != NULL) *PhysicalOut = physical;
@@ -1487,7 +1467,7 @@ NTSTATUS DcnFlipSourceAddress(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddres
 
     // Quiet = TRUE (review 16 section 24): a real present, potentially once per frame for as long as the
     // desktop is up - MmioDcnWrite's per-write GuardLog was sized for the escape's occasional calls, not this.
-    // The outcome is still logged, once, below, capped like every other counter here (BC250_DCN_LOG_CALLS).
+    // Only compact counters change here. The caller emits diagnostics after leaving the interrupt section.
     InterlockedIncrement(&Device->DcnSurfaceSequence);
     // BD-170 r6: from here on a failure is not proof that nothing was written (an MMIO failure is unknown).
     *Wrote = TRUE;
@@ -1502,26 +1482,113 @@ NTSTATUS DcnFlipSourceAddress(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddres
         if (format!=NULL)
         {
             Device->DcnPlaneFormat=PlaneFormat;
-            if (InterlockedIncrement(&Device->DcnFormatChanges) <= BC250_DCN_LOG_CALLS)
-                GuardLog("dcnflip: SetVidPnSourceAddress plane format %s -> %s",
-                         Bc250PlaneFormatText(current), Bc250PlaneFormatText(PlaneFormat));
+            InterlockedIncrement(&Device->DcnFormatChanges);
         }
         Device->DcnDiverged=(physical!=Device->DcnFirmwareAddress || Pitch!=Device->DcnFirmwarePitch ||
                              PlaneFormat!=BC250_PLANE_FORMAT_ARGB8888);
-        current=(ULONG)InterlockedIncrement(&Device->DcnFlipsHardware);
-        if (current==1 && Device->Modeset.InheritedFixed)
-            GuardLog("dcnflip: first inherited flip source %lux%lu pitch %lu target %ux%u support %lX",
-                DisplaySourceWidth(Device),DisplaySourceHeight(Device),Pitch,
-                Device->InheritedSignal.ActiveSize.cx,Device->InheritedSignal.ActiveSize.cy,
-                Device->Modeset.InheritedSupport);
-        if (current <= BC250_DCN_LOG_CALLS)
-            GuardLog("dcnflip: SetVidPnSourceAddress %s flip: card 0x%llX -> physical 0x%llX",
-                     Immediate ? "immediate" : "vsync", CardAddress, physical);
+        InterlockedIncrement(&Device->DcnFlipsHardware);
     }
-    else if (InterlockedIncrement(&Device->DcnFlipRefused) <= BC250_DCN_LOG_CALLS)
-        GuardLog("dcnflip: SetVidPnSourceAddress: the flip sequence failed or its lock was not acknowledged (0x%08X)", status);
+    else InterlockedIncrement(&Device->DcnFlipRefused);
     InterlockedIncrement(&Device->DcnSurfaceSequence);
     return status;
+}
+
+static BOOLEAN DcnWriterBridgeCurrent(_In_ const BC250_DEVICE* Device, ULONGLONG Physical, ULONG Pitch)
+{
+    ULONG pending = 0, pitch = 0, config = 0, crossbar = 0, cnvc = 0;
+    ULONGLONG scanned = 0, again = 0, primary = 0;
+    NTSTATUS status = MmioDcnRead(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL, &pending);
+    if (!NT_SUCCESS(status) || (pending & HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK)) return FALSE;
+    status = DcnReadScanoutPhysical(Device, &scanned);
+    if (NT_SUCCESS(status)) status = DcnReadPrimaryPhysical(Device, &primary);
+    if (NT_SUCCESS(status)) status = MmioDcnRead(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_PITCH, &pitch);
+    if (NT_SUCCESS(status)) status = MmioDcnRead(Device, BC250_REG_DMU_HUBP0_DCSURF_SURFACE_CONFIG, &config);
+    if (NT_SUCCESS(status)) status = MmioDcnRead(Device, BC250_REG_DMU_HUBPRET0_HUBPRET_CONTROL, &crossbar);
+    if (NT_SUCCESS(status)) status = MmioDcnRead(Device, BC250_REG_DMU_CNVC_CFG0_CNVC_SURFACE_PIXEL_FORMAT, &cnvc);
+    if (NT_SUCCESS(status)) status = DcnReadScanoutPhysical(Device, &again);
+    if (NT_SUCCESS(status)) status = MmioDcnRead(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL, &pending);
+    return NT_SUCCESS(status) && !(pending & HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK) &&
+        scanned == Physical && again == Physical && primary == Physical &&
+        ((pitch & HUBPREQ0_DCSURF_SURFACE_PITCH__PITCH_MASK) + 1) * 4 == Pitch &&
+        DcnPlaneFormatDecodeRegisters(config, crossbar, cnvc) == BC250_PLANE_FORMAT_ARGB8888;
+}
+
+// Writer admission runs under L while the OS still owns the old application primary. Install a driver-owned
+// bridge and prove its effective address before long writes or destruction of the previous display state. Later
+// blank/unblank operations then fetch only driver-owned storage. This helper never waits for a PASSIVE writer.
+NTSTATUS DcnWriterBridge(_Inout_ BC250_DEVICE* Device, _In_ volatile LONG* Generation, ULONG ExpectedGeneration,
+    _Out_ BOOLEAN* Wrote)
+{
+    ULONGLONG physical, length, bytes, offset, card, programmed = 0;
+    ULONG pitch, outcome, steps;
+    NTSTATUS status;
+    LARGE_INTEGER start, end, now;
+
+    *Wrote = FALSE;
+    if (!Device->Mmio || !Device->VidPnFlipEnabled || !Device->VramEnabled) return STATUS_DEVICE_NOT_READY;
+    // Firmware remains a valid owned bridge even when the preferred runtime buffer is available but has not yet
+    // been latched. This covers a stopped inherited pipe without a write that would need the stopped timing.
+    if (Device->Framebuffer && Device->DcnFirmwareKnown && Device->FramebufferLength &&
+        Device->DcnFirmwareAddress == (ULONGLONG)Device->Post.PhysicAddress.QuadPart &&
+        Device->DcnFirmwarePitch == Device->Post.Pitch &&
+        DcnSurfaceBytes(DisplaySourceWidth(Device), DisplaySourceHeight(Device), Device->DcnFirmwarePitch, &bytes) &&
+        bytes <= Device->FramebufferLength &&
+        DcnAddressFits(Device->DcnFirmwareAddress, (ULONGLONG)Device->VramPhysical.QuadPart, Device->VramLength, bytes) &&
+        DcnWriterBridgeCurrent(Device, Device->DcnFirmwareAddress, Device->DcnFirmwarePitch)) return STATUS_SUCCESS;
+    if (Device->RuntimeFramebuffer && Device->RuntimeFramebufferLength) {
+        physical = (ULONGLONG)Device->RuntimeFramebufferPhysical.QuadPart;
+        length = Device->RuntimeFramebufferLength;
+        pitch = InterlockedCompareExchange(&Device->RuntimeDisplayChanged, 0, 0) ? Device->RuntimePost.Pitch :
+            (Device->Modeset.InheritedFixed ? Device->Post.Pitch : DcnPrimaryPitch(DisplaySourceWidth(Device)));
+    } else if (Device->Framebuffer && Device->DcnFirmwareKnown && Device->FramebufferLength &&
+               Device->DcnFirmwareAddress == (ULONGLONG)Device->Post.PhysicAddress.QuadPart &&
+               Device->DcnFirmwarePitch == Device->Post.Pitch) {
+        physical = Device->DcnFirmwareAddress;
+        length = Device->FramebufferLength;
+        pitch = Device->DcnFirmwarePitch;
+    } else return STATUS_DEVICE_NOT_READY;
+    if (!DcnSurfaceBytes(DisplaySourceWidth(Device), DisplaySourceHeight(Device), pitch, &bytes) || bytes > length ||
+        !DcnAddressFits(physical, (ULONGLONG)Device->VramPhysical.QuadPart, Device->VramLength, bytes))
+        return STATUS_INVALID_PARAMETER;
+    // A prior writer or firmware may already own the effective surface, including while OTG is stopped. Require
+    // the exact validated bridge, stable effective address, no pending request, and matching pitch and format.
+    if (DcnWriterBridgeCurrent(Device, physical, pitch)) return STATUS_SUCCESS;
+    offset = physical - (ULONGLONG)Device->VramPhysical.QuadPart;
+    card = Device->VramMcBase + offset;
+    if (card < Device->VramMcBase) return STATUS_INVALID_PARAMETER;
+    start = KeQueryPerformanceCounter(NULL);
+    status = DcnFlipSourceAddress(Device, card, pitch, BC250_PLANE_FORMAT_ARGB8888, length, TRUE, &programmed, Wrote);
+    end = KeQueryPerformanceCounter(NULL);
+    if (!NT_SUCCESS(status)) return status;
+    // Flags 0 identifies an internal writer bridge, not an OS SetVidPnSourceAddress request.
+    outcome = DcnImmediateObserve(Device, card, programmed, start.QuadPart, end.QuadPart,
+                                  Generation, ExpectedGeneration, 0);
+    status = outcome == BC250_DCN_IMMEDIATE_DONE || outcome == BC250_DCN_IMMEDIATE_DONE_LATE ?
+        STATUS_SUCCESS : STATUS_IO_TIMEOUT;
+    if (!NT_SUCCESS(status)) return status;
+    // The r6 lab witnesses included Q=1 while EARLIEST_INUSE still named the old application buffer. Writer
+    // admission must retire the old scanout before long display writes, so Q alone is insufficient here. Use the
+    // remaining observation budget, never another 50 us, to prove the exact reserved surface effective with
+    // pending clear around it.
+    for (steps = 0; steps < BC250_DCN_IMMEDIATE_OBSERVE_US; steps++) {
+        BOOLEAN effective;
+        now = KeQueryPerformanceCounter(NULL);
+        if (DcnQpcUs(now.QuadPart - end.QuadPart, Device->DcnQpcFrequency) >= (LONG)BC250_DCN_IMMEDIATE_OBSERVE_US)
+            break;
+        if ((ULONG)InterlockedCompareExchange(Generation, 0, 0) != ExpectedGeneration) break;
+        effective = DcnWriterBridgeCurrent(Device, physical, pitch);
+        now = KeQueryPerformanceCounter(NULL);
+        if (DcnQpcUs(now.QuadPart - end.QuadPart, Device->DcnQpcFrequency) > (LONG)BC250_DCN_IMMEDIATE_OBSERVE_US) {
+            InterlockedIncrement(&Device->DcnImmediateOverruns);
+            break;
+        }
+        if (effective && (ULONG)InterlockedCompareExchange(Generation, 0, 0) == ExpectedGeneration)
+            return STATUS_SUCCESS;
+        if (DcnQpcUs(now.QuadPart - end.QuadPart, Device->DcnQpcFrequency) >= (LONG)BC250_DCN_IMMEDIATE_OBSERVE_US)
+            break;
+        KeStallExecutionProcessor(1);
+    }
+    return STATUS_IO_TIMEOUT;
 }
 
 // PROVENANCE: Linux AMD display dc/hubp/dcn10/dcn10_hubp.c (MIT),

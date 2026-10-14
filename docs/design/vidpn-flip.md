@@ -235,8 +235,8 @@ tells a latch from a programming.
 
 `DcnImmediateObserve` (`dcn.c`) samples P' after the programming, inside the flip transaction (under L, section
 7.2), with 1 us stalls between samples. The bound is 50 us (`BC250_DCN_IMMEDIATE_OBSERVE_US`) from the end of the
-programming sequence. It is held after the witness reads of each sample, so no sample starts past it, and a step
-count of 50 ends the loop too. A sample that started inside the bound can end past it: the end time is taken after
+programming sequence. The reader checks it before every additional sample, including after the 1 us stall.
+A step count of 50 also ends the loop. A sample that started inside the bound can end past it: the end time is taken after
 the loop, and such an observation is counted (`DcnImmediateOverruns`). The function writes no register and is legal
 up to `PROFILE_LEVEL - 1`. It checks at its start and at its end that the generation is still the one that the
 transaction set. Its outcome is one of these:
@@ -257,22 +257,13 @@ The record of each immediate flip keeps the request's `Flags.Value` as it came.
 (facts M903). That is not the duration of the DDI. The summary prints the time of the whole transaction inside L
 (`FlipLockedMaxUs`: admission, programming, observation and E5) next to the observation times.
 
-**Independent flips.** `VidSchiSubmitMmIoFlipCommand` has an internal check that ends in a breakpoint, which is
-bugcheck 0x119 without a kernel debugger. It fires when a flip without `FlipRestart` is queued behind an
-`IndependentFlipExclusive` entry that is still at the head. Any answer other than success keeps the entry at the
-head (facts M904). These flips do arrive: the driver declares `FlipIndependent` and `SupportDirectFlip`, and a lab
-session of 2026-10-11 counted 85862 immediate flips, each with `IndependentFlipExclusive`. So an immediate request
-with the flag that is refused before anything is written (a scan-out refusal, or a refusal of the programming
-before its write sequence ran) gets success with nothing programmed or published, counted `ExclusiveRefused`. The
-plane keeps the surface it has, and the next flip replaces it. The OS then releases the surface that was on screen,
-which the plane still reads until that next flip. The teardown record (`ScanoutObject`) still names that surface,
-so a destroy of it restores the firmware surface before the memory goes. A write into the released memory can show
-on screen until the next flip. This is a known hazard of these refusals only, kept from r5b. A programmed immediate
-request with the flag has no other route to success than P' (section 7.2).
+**Independent flips.** `VidSchiSubmitMmIoFlipCommand` has an internal check that can end in bugcheck 0x119.
+It fires when a flip without `FlipRestart` is queued behind an `IndependentFlipExclusive` entry still at the head.
+An error leaves that entry at the head (M904). This remains an OS risk after an admission or hardware failure.
 
-A vsync request with `IndependentFlipExclusive` keeps its failure answer, counted `ExclusiveFailed`. Success for it
-would be worse. Its entry would wait in `FlipWaitVSync` (5) for an address that no `CRTC_VSYNC` report carries, and
-the head timeout watches that state, so the end would be a TDR, which is bugcheck 0x116 here.
+r7 does not hide such failures with success. The old workaround let Windows release a primary that hardware still read.
+Both immediate and next-VSync refusals now remain errors. A valid ordinary immediate request succeeds only with its hardware proof.
+A request during an active hardware writer returns `STATUS_DEVICE_BUSY`, without publishing or completing it (section 7.2).
 
 **Next train: the MPO3 route.** With `HsyncInterruptCompletion`, the driver completes an immediate flip after the
 return, with a `CrtcVsyncWithMultiPlaneOverlay2` notification (`d3dkmddi.md:25271-25273`). That removes the
@@ -313,7 +304,7 @@ completion. `DmaFlipsRefused` counts it.
 3. `FlipInterval` (intervals 2 to 4) is not declared.
 4. The promotion test reads the hardware before the write. If the vsync flip latches between the two, the
    driver programs the same address again, which does no harm.
-5. The `ExclusiveRefused` hazard (independent flips, above).
+5. An independent-flip refusal can still reach the OS queue assertion described above. Writer contention returns BUSY without an unsafe success or E5.
 6. Whether dxgkrnl cancels a pending flip at a modeset commit is not read (`OwedInvalidated`, section 7.2).
 7. The dxgmms2 reading is static. F1 (section 7.2) counts the case in which a call above DISPATCH_LEVEL does not
    hold L.
@@ -336,238 +327,140 @@ request, request flags, the last `PRIMARY_SURFACE_ADDRESS` sample and read statu
 frame, scan position before and after, the first `DCSURF_FLIP_CONTROL` sample, and the programming, first-sample,
 pending-clear, done and end times.
 
-### 7.2 BD-170: the flip state machine
+### 7.2 BD-170: primary ownership during a writer
 
-r6 makes the flip DDI, the writers of the primary and the fault path one state machine. The decisions are in
-`driver/kmd/flip_state.h`, which reads no register and keeps no state. `wddm.c` reads the facts and acts on the
-answer. This section is the design. Two things decide it: a busy answer stops the source until the client goes away
-(facts M902), and P' holds in the call for every immediate flip measured (facts M903).
+r7 removes the r6 interval in which an immediate success could release a surface that hardware still read.
+A writer first moves scan-out to a reserved buffer owned by the driver. It proves that transition before it starts its long operation.
+Long writer operations use only reserved buffers. Only `End`, under L, can select an application surface again.
 
-**The lock L.** L is the interrupt lock of this driver's one MSI message: one message is asked for in the INF and
-one is granted (facts M38). Three paths hold L, and no other path does:
+**The contract.** An immediate success lets the OS release the previous primary before another VSync (M904).
+A next-VSync success leaves the entry waiting for its address in a real CRTC report.
+Desired is a record of the latest accepted address. It holds no independent allocation or residency reference.
+Safe retirement alone does not satisfy a flip request. The DDI must also program the requested primary on its required schedule.
+The local contract requires the following VSync, or an immediate flip without waiting for that retrace (`d3dkmddi.md:12801,12819`).
+No documented exception permits a long writer to return success and defer the requested primary until it finishes.
 
-1. The kernel's dispatch of the ISR (`Bc250InterruptRoutine`, `pnp.c`).
-2. dxgmms2's call of `SetVidPnSourceAddress` above DISPATCH_LEVEL. `VidSchiExecuteMmIoFlip` makes the call through
-   `DpSynchronizeExecution` (`VidSchiExecuteMmIoFlipAtISR`, facts M904).
-3. This driver's `DxgkCbSynchronizeExecution` sections (`WddmSection`), which run only from callers at or below
-   DISPATCH_LEVEL (`dispmprt.h`, `_IRQL_requires_max_(DISPATCH_LEVEL)`).
+The reserved runtime surface is carved out before `QUERYSEGMENT` (`driver/kmd/connector_buffer.c:8`).
+Its actual length bounds every bridge mode. The firmware surface is also excluded from the application segment.
+A software pointer to an application allocation is never treated as ownership of its VRAM.
 
-Code inside L never calls `DxgkCbSynchronizeExecution`: `WddmSection` refuses above DISPATCH_LEVEL
-(`STATUS_INVALID_DEVICE_STATE`) and with the callback missing (`STATUS_DEVICE_NOT_READY`), and the caller counts
-the refusal. Code inside L does not log, does not arm the VSync timer and does not wait for another path. Every
-field of the state machine is written inside L only.
+**The lock L.** L is the interrupt lock of this driver's single MSI message (M38).
+The ISR owns it. The high entry of `SetVidPnSourceAddress` also owns it through dxgmms2's synchronized call (M904).
+The low entry and writer sections acquire it through `DxgkCbSynchronizeExecution`, message 0.
+The callback is called only at or below DISPATCH_LEVEL. Code inside L never recursively takes it.
 
-**The two entries of the flip DDI.**
+Long link, ATOM, clock, scaler and audio work stays outside L. No writer waits at DIRQL for a PASSIVE thread.
+Hardware observation inside L is bounded. Diagnostics from `DcnFlipSourceAddress` do not format or print under L.
+The whole flip section has its own elapsed-time measurement, including lab witnesses.
 
-- The high entry is a call above DISPATCH_LEVEL (1616 of the 1641 calls of a03). dxgmms2 already holds L, so the
-  transaction runs directly (`FlipsAboveDispatch`). It writes no log line and does not arm the VSync.
-- The low entry is a call at or below DISPATCH_LEVEL. It runs the same transaction inside one section. When the
-  section fails, nothing runs: the DDI returns the status of the section, counted `LowSyncFailed`, with no arm. The
-  log lines and `WddmVSyncArm` come after the section.
-- `WddmFlipLocked` wraps the transaction in both entries and keeps the longest time inside L (`FlipLockedMaxUs`).
+**`Begin` and the first transition.** `WddmPrimaryExclusiveBegin` first serializes admission under L.
+Another active writer causes a bounded PASSIVE retry or refusal, never a fault for normal contention.
+Before it exposes `WriterActive`, it moves the plane to a driver-owned bridge and proves the hardware handoff.
+During this step the OS still retains the old primary, and another immediate call cannot enter L.
+A pre-write refusal leaves the writer unstarted. A failed write or an unproved hardware handoff enters explicit recovery.
 
-**The generation.** `PrimarySequence` is odd while a writer is between `Begin` and `End`, and while a flip transaction
-runs, so that the vblank DPC's lock-free reads (`WddmReadCompletedPrimary`) never cross either one.
+Blanking alone is insufficient. An old address can remain latched while HUBP is drained.
+Programming a new shadow address and resuming memory reads must not expose that old application address.
+The bridge handoff requires the stable effective `EARLIEST_INUSE` address to match the reserved surface, in addition to the requested address and clear pending bit.
+A requested-address readback with an old effective address is insufficient for this ownership transition.
+Every subsequent long writer transition moves between driver-owned surfaces, or keeps the plane drained.
 
-**What is proven about the pipe.** Each fact is a hardware readback inside L at the time that a rule uses it. A
-failed read proves nothing.
+**Requests while the writer runs.** A flip enters through the same serialized transaction as an ordinary flip.
+With hardware flips enabled, an otherwise admitted request returns `STATUS_DEVICE_BUSY` while `WriterActive` is set.
+This covers immediate and next-VSync requests, before any register write, Desired publication or teardown identity change.
+Normal writer contention does not enter E5 and never waits at DIRQL for the PASSIVE writer.
+The previous OS primary remains retained. No unprogrammed request is reported as a completed hardware flip.
+With the hardware gate closed, the existing software-report route retains its separate deposit behavior.
 
-| Fact | Readback | Used by |
+BUSY is a safety response, not a proved recovery mechanism for this legacy scheduler.
+M904 shows that an exclusive queue head can remain and lead to the later 0x119 assertion.
+M902 also records a BUSY head that stopped progress until a restart.
+The exact r7 artifact still needs a lab overlap trial. These risks remain open until that trial or a different completion contract resolves them.
+
+**Resume and rollback.** `WddmWriterResume` returns an explicit status and authorizes only a reserved-buffer operation.
+It does not return Desired to a caller outside L.
+`DcnRuntimeSurface` uses the reserved runtime buffer, with bounds from its allocation.
+`DcnLinkSurfaceRestore` also uses that buffer, with the old mode's geometry and visibility.
+Rollback metadata contains no application address. The old mode can therefore return after its former primary has been released.
+A capture after `Begin` supplies only the hardware visibility bit. Its address, pitch and format are never replayed.
+Hardware visibility and the OS logical `SourceVisible` are preserved separately, including an inherited cold start where they differ.
+A failed Resume section stops the operation before its writes.
+
+**End and the final transition.** `WddmPrimaryExclusiveEnd` selects the retained Desired under L.
+Hardware writer contention has accepted no newer primary, so this is the request retained at `Begin`, unless destroy invalidated it.
+The software-report route may have a newer deposit when the hardware gate is closed.
+It checks that address against the mode that the writer actually committed or restored.
+The final programming and ownership update occur in the same section, before the generation becomes even.
+No writer can later replay a saved application address.
+
+If the current Desired does not fit the final mode, the plane stays on the reserved bridge and the refusal is recorded.
+A successful programming does not imply a later VSync report. The hardware report still controls completion of a next-VSync entry.
+A detach, suspend or invalidating End retains the safe reserved or drained state when no valid primary must be resumed.
+With the flip gate closed, the existing software-report route remains separate from hardware ownership.
+
+**Every long writer follows the same protocol.** The references below identify the entry and final status handling.
+`Begin` protects the entire interval before the first long operation, not just the eventual register write.
+
+| Writer | Protected work outside L | Final ownership and error handling |
 | --- | --- | --- |
-| DRAINED | `HUBP0_DCHUBP_CNTL`: `HUBP_BLANK_EN`, `HUBP_TTU_DISABLE` and `HUBP_NO_OUTSTANDING_REQ` all 1, the end state of AMD's `hubp1_set_blank` | edge W-i, only while the writer has not resumed the plane |
-| OTG running | `OTG_CONTROL.OTG_MASTER_EN` (`DcnOtgRunning`: running, stopped, or the read failed) | `End` |
-| FAULTING | software, set by E5 only | every entry (F0), `Begin`, `End` |
+| Link commit and rollback, `connector_link.c:781` | Clock session, audio stop, HDMI handoff, `DisableOwned` and `Apply`. Rollback uses the reserved buffer with the previous mode's dimensions | `connector_link.c:868`: End selects current Desired. Its failure becomes the returned status and prevents audio restart |
+| Link disable, `connector_link.c:627` | AUX close, HUBP blank, stream and transmitter disable | `connector_link.c:637`: invalidating End, with its failure returned |
+| Link suspend, `connector_link.c:896` | Firmware or runtime buffer, then output visibility off | `connector_link.c:901`: invalidating End, with its failure returned |
+| Link resume, `connector_link.c:911` | Clock session, disable and mode replay, then visibility off | `connector_link.c:915` and `:930`: both early failure and normal exit call End and return its failure |
+| HDMI start, `hdmi_link.c:141` | Prediction, ATOM programming and timing measurement while hardware uses the bridge | `hdmi_link.c:170`: failed End is logged and blocks audio start |
+| HDMI stop, `hdmi_link.c:229` | Restore the inherited register journal while hardware uses a reserved buffer | `hdmi_link.c:233`: failed End makes the operation fail |
+| Modeset commit, `modeset.c:477` | Scaler programming. Growth selects a sufficiently large firmware surface | `modeset.c:497`: End status is returned and stored in `LastStatus` |
+| Modeset D3, `modeset.c:577` | Firmware surface and native shape, without proceeding after a failed surface change | `modeset.c:582`: End failure is stored in `LastStatus` and logged |
+| Modeset D0, `modeset.c:623` | Check the inherited pipe and program the retained scaler plan | `modeset.c:639`: End failure is stored in `LastStatus` and logged |
+| Allocation destroy, `wddm.c:8483` | Retire the affected primary and invalidate Desired under L before releasing its object | A failed section prevents the free. No fallback executes the protected callback without L |
 
-Visibility off is not a quiet state on this part. The driver blanks with `OTG_BLANK_DATA_EN` and the OTG running,
-so the HUBP reads and latches as with visibility on. Flips take E2 and E3 as usual, and a real VSync report
-carries the latched address, which is "the address that the pixel pipeline would read from if visibility were on"
-(`d3dkmddi.md:37739-37741`). A stopped OTG is not used as proof that nothing reads.
+**Section failures.** A failed `DxgkCbSynchronizeExecution` call grants no ownership.
+`Begin`, `Resume`, `End` and destroy preserve conservative state and return an error.
+They never call their protected function directly after the callback refused to synchronize.
+An independent atomic recovery request can be queued from the legal caller context.
+Recovery itself must acquire L, or be consumed by the next entry that already owns L.
+A failed End synchronization section does not publish an even generation, release the writer, or permit an application allocation to be freed.
 
-**The edges of a flip request**, inside L, in this order (`Bc250FlipEdge`):
+The callback can fail because the interrupt is not connected yet.
+This documented case also needs an explicit error, not an assumed substitute for the missing lock.
+Void power or audio wrappers keep a visible status and rely on the same recovery request.
+Returning an error from a destroy operation does not establish physical retention by itself. The driver performs no later unsynchronized use.
 
-- **F0, FAULTING.** E5 was entered. Nothing is programmed, and the DDI answers `STATUS_DEVICE_HARDWARE_ERROR`. The
-  OS keeps the previous primary referenced (facts M904) and recovers the adapter.
-- **F1, OVERLAP.** The generation is odd with no writer active, or a writer is active with an even generation. L did
-  not serialize this call, which facts M904 says cannot happen. E5 with code `0x170004`. It is a check in both
-  directions.
-- **A, REFUSED.** The admission (`scanout_admit.h`, the pitch and format rules) refused the request. Nothing is
-  published. It is a UMD or admission defect, not a pipe state, and not E5. The answer is the refusal status, or
-  success for an immediate `IndependentFlipExclusive` request (`ExclusiveRefused`, section 7.1).
-- **W, a writer is active.** Nothing is programmed now. The request is published as Desired (a deposit), and the
-  teardown record follows it:
-  - W-v, a next-VSync request: success. `End` or the writer's unblank programs it, and the first real VSync report
-    after that carries it.
-  - W-i, an immediate request while the plane is DRAINED and the writer has not resumed it: success. Nothing
-    reads the plane, and the writer's unblank or its `End` programs Desired before any read.
-  - W-u, any other immediate request: success with the deposit, as W-v and W-i. A writer conflict is a normal
-    state and not a fault, so W-u does not enter E5. It has its own count and a bounded record (below, "W-u: the
-    deposit and its hazard").
-- **E, PROGRAM.** No writer, an even generation. With the flip gate closed (`EnableVidPnFlip` 0) the request is
-  published only and gets success: the software timer reports Desired. A request for the address already published
-  and not pending gets success with nothing programmed. Every other request is programmed: E2 with
-  `SURFACE_FLIP_TYPE` 0 for a next-VSync request, E3 with type 1 for an immediate one, then P' is observed (section
-  7.1).
+**Ordinary flips.** With no writer, the transaction checks the request and programs the requested flip type.
+Next-VSync uses `SURFACE_FLIP_TYPE=0`. Immediate uses type 1 and the bounded P' observation described in section 7.1.
+A repeated pending address is promoted with an immediate write when required.
+An immediate hardware write without a completion proof enters recovery instead of returning success or an indefinitely busy head.
 
-The result of a programming (`Bc250FlipResult`):
+Admission refusals remain errors, including `IndependentFlipExclusive`. r7 removes the earlier success-without-retirement workaround.
+This preserves allocation ownership. It does not prove that Windows avoids its separate 0x119 queue assertion after such an error.
+That OS risk remains explicit, as does the need to admit every valid primary promised by the caps.
 
-| Result | When | Answer |
-| --- | --- | --- |
-| REFUSED | nothing was written (`DcnFlipSourceAddress`'s own checks) | A: the teardown record goes back to the previous object, nothing is published |
-| FAULT_PROGRAM | the write sequence ran and failed (an MMIO failure, or no acknowledge of the update lock) | E5, code `0x170001`: a failure is unknown, never proof that nothing was written |
-| UNPROVEN | an immediate request without P' | U: E5, code `0x170002`, Desired published, because the hardware has it |
-| SUCCESS | a next-VSync request, or an immediate request with P' | success |
+**Fault recovery.** FAULTING prevents further normal programming.
+The protected entry requests HUBP blank and queues deferred notification. It does not wait for a PASSIVE writer or notify recursively under L.
+The DPC enters its own section before it reports `DXGK_INTERRUPT_DMA_PAGE_FAULTED`.
+Its payload sets `DXGK_PAGE_FAULT_FENCE_INVALID` and `DXGK_PAGE_FAULT_ADAPTER_RESET_REQUIRED`.
+The fence and virtual address are zero. Unknown API, stage and bind fields stay unknown.
+The chosen node belongs to the first valid supplied context, or node 0 when no such context exists.
 
-**U is E5.** U is an immediate request that edge E programmed and whose completion the call cannot show: E3 without
-P'. It is never
-`STATUS_DEVICE_BUSY`, because a busy answer stops every flip of the source until the client goes away (facts M902),
-and it is never a longer poll at DIRQL. Success would let the OS release a surface that the plane may still read.
-P' held in the call for every immediate flip measured, the vertical blank included (facts M903), so U is a fault
-and not a state that the OS meets in normal operation.
+The bounded drain observation after notification is a record, not permission to release a still-used surface.
+No fabricated CRTC report completes the failed request.
+On this part the recorded recovery limitation can lead to bugcheck 0x116 (M53). A queued notification is not proof of successful recovery.
 
-**W-u: the deposit and its hazard.** An observation that expired, an MMIO failure, a writer conflict and a stopped
-pipe stay distinct, and only a hardware fault gets the recovery notification. W-u is a writer conflict. The request
-is deposited (Desired), the answer is success, and the writer's unblank or its `End` programs it. The transaction
-counts the edge (`FlipEdges`) and writes a record into a ring of 8 (`WddmWuRecord`): the code `0x170005`, the
-request (card address and flags), the generation, the writer (`BC250_WRITER_*` in `flip_state.h`, given to `Begin`),
-the deposit sequence and the time of the deposit. At the writer's `End`, `WddmWuClose` gives each open record of
-that writer its time to `End` (`ToEndUs`, the longest in `WuToEndMaxUs`) and how the deposit left the writer
-(`Bc250WuEnd`): programmed by the unblank, programmed by `End`, refused by `End` (Desired no longer fits), `End`
-failed, replaced by a newer deposit, or nothing to program. The summary prints the count, the records and the
-longest time. `0x170005` is the code of the record only. It is not an E5 code.
+**Lab witnesses.** `AMDGPU_WDDM_LAB_FLAVOUR` compiles the event and EARLIEST_INUSE witnesses only into the lab binary.
+An arm is fresh only when event clearing succeeds and no older flip is pending at arm time.
+Excluded or failed arms remain counted. They cannot establish per-request agreement.
+The production reader selects the result first. Later witness reads and comparisons never change that result.
+The event clear happens before programming, so a release control remains necessary when comparing timing.
 
-After a success the OS releases the surface that was on screen at once (section 7.1, point 2), and the client can
-write it again. The plane reads that surface until the writer blanks the plane, until the writer puts a surface of
-its own on the plane, or until `End` programs the deposit (with the next-VSync type, so one more frame). The
-writers do not all blank for their whole duration. In the source of this revision:
-
-| Writer | The plane reads the previous surface | Bound |
-| --- | --- | --- |
-| Link commit, `ConnectorLinkCommit` | From `Begin` (`connector_link.c:779`) to the plane blank in `DisableOwned` (:599, visibility off :601). Between them run the surface capture (:784), the PSP clock session (:788), the audio stop (:789) and the HDMI hand-off (:795). From the blank to the surface step of `Apply` (:724-725) the plane is drained (W-i). After it the plane reads the driver's own buffer (`DcnRuntimeSurface`), or the captured surface or the deposit (`DcnLinkSurfaceRestore`). The output unblanks at :729-730. | `ClockSessionEnter` waits at most for the rest of `LINK_DEADLINE_US`, 2 s (:22), counted from `Begin(c)` at :759 (:82, :86-92). A failure before the blank adds the cleanup's `LINK_CLEANUP_US`, 300 ms (:23). About 2.3 s. |
-| Link resume, `ConnectorLinkResume` | From `Begin` (:893) through `ClockSessionEnter` (:895) to `DisableOwned` (:898). | 2 s, as above. |
-| Link disable, `ConnectorLinkDisable` | From `Begin` (:626) through `CloseAux` (:598) to the plane blank (:599). | `CloseAux` runs on `LINK_CLEANUP_US`, 300 ms (:215-224). |
-| Link suspend, `ConnectorLinkSuspend` | From `Begin` (:879) to `DcnRuntimeSurface(FALSE)` (:880), which first blanks the output and the plane (`dcn.c:1202-1205`). An inherited link goes to the firmware surface (`DcnRestorePostDisplay`). | The 50 ms poll, `BC250_DCNFLIP_POLL_MAX_US` (`dcn.c:321`). |
-| HDMI start, `HdmiLinkStart` | The whole writer (`hdmi_link.c:141-169`): no blank. The prediction runs on a shadow with a simulated clock (`SHADOW_MAX_US`, `bc250_hdmi_link.c:586`). The timing check after the ATOM run (`hdmi_link.c:150`) measures TMDS over 8 frames. | The ATOM run, 100 ms of elapsed time (`bc250_hdmi_link.c:511`, :566-567), and the TMDS measurement, 500 ms (`display_tmds.h:82`). About 0.6 s. |
-| HDMI stop, `HdmiLinkStop` | The whole writer (`hdmi_link.c:221-225`): no blank. | A restore of the saved registers with a readback each, and no wait (`bc250_hdmi_link.c:366-386`). |
-| Modeset commit, D3 and D0 (`modeset.c:477`, :573, :614) | The whole writer: no blank. When the viewport grows (`modeset.c:407-411`) and at D3 (:575), the plane goes to the firmware surface first. | The firmware-surface poll, 50 ms (`dcn.c:1011`), and the pipe update, `MODESET_PIPE_BUDGET_US` 1 ms (`modeset.c:18`). |
-| Destroy restore, `WddmDestroyRestore` | From `Begin` (`wddm.c:8482`) to the firmware or runtime surface (`DcnRestorePostDisplay`, :8492). | The 50 ms polls (`dcn.c:321`). |
-
-So a W-u success can leave the previous surface on screen for at most about 2.3 s (a link commit) plus one frame
-after `End`. Every scan-out surface is in VRAM (admission) and the plane only reads, so the result is a wrong
-picture for that time: a frame that the client writes again, or memory that a destroy gave back. It is not a fault
-and not a write. `ToEndUs` and `WuToEndMaxUs` give the time on the lab.
-
-**The lab witnesses.** The lab flavour (`AMDGPU_WDDM_LAB_FLAVOUR`, the BD-167 switch) compares P' with two other
-witnesses for every immediate request that edge E programmed. The release flavour compiles none of it. Before the
-programming, `DcnWitnessArm` clears the event bits of `SURFACE_FLIP_INTERRUPT` with the sequence of a04, and marks
-the arm fresh when the readback shows them clear. Then the shipping reader decides (P', `Bc250FlipResult`, the
-result count), and that decision is recorded as such (Q). After the decision only, `DcnWitnessRead` reads the flip
-event (E), then `SURFACE_EARLIEST_INUSE` low word first and high word first (R1 and R2, each masked to its address
-field). `WddmWitness` counts per request: a failed read, a stale arm (not fresh), Q against E (fresh arms only), Q
-against R1, E against R1 (fresh arms only), and R1 against R2. The first 16 requests with a disagreement are kept
-whole (both reads, the request's card and normalized address, the generation, the raw words, the flags, Q, fresh,
-E), later ones are counted as lost, and the last request is always kept. The witnesses never change the answer.
-
-**The writers.** A writer changes the plane outside the flip DDI: a modeset commit, D3 and D0, the HDMI link start
-and stop, the connector link disable, commit, rollback, suspend and resume, and the destroy restore. It runs at
-PASSIVE_LEVEL and takes L for short sections only. Its long work runs outside L.
-
-- **`Begin`** (`WddmPrimaryExclusiveBegin`). In FAULTING it refuses at once (`WriterFaulting`), and the writer
-  reports busy as before. While another writer holds an odd generation it tries again, 200 times 10 us apart, with
-  the stall outside L, then refuses. A failed section refuses and is counted (`WriterHigh`, `WriterSyncFailed`).
-  Otherwise it makes the generation odd, sets `WriterActive` and clears the resume mark and the deposit.
-- **`Resume`** (`WddmWriterResume`), before every unblank of a writer (`DcnRuntimeSurface`,
-  `DcnLinkSurfaceRestore`). It sets the resume mark, so that no DRAINED readback counts for this writer from now
-  on, and hands a deposit, if there is one, to the unblank site. It does nothing with no writer active (the stop
-  path) and nothing above DISPATCH_LEVEL (the bugcheck callback restores the firmware surface through the same
-  site). The site programs the deposit in place of its own surface when the deposit fits the surface checks of the
-  mode that it restores. When it does not fit, the site answers `STATUS_DEVICE_NOT_READY`. After the poll, the site
-  reports the deposit as programmed (`WddmWriterDepositProgrammed`), and `End` does not program it again unless a
-  newer deposit came meanwhile.
-- **`End`** (`WddmPrimaryExclusiveEnd`). It owes a flip when a deposit was not programmed by an unblank, or when
-  Desired is a next-VSync success that no report has carried yet (`DesiredOwed`). With the gate open and not in
-  FAULTING, `Bc250WriterEnd` decides:
-  - Nothing owed: nothing.
-  - The OTG running: Desired is programmed with the next-VSync type, so that the next real report carries it. A
-    programming refusal (Desired no longer fits the source) drops it, counted `OwedInvalidated`. A failed write is
-    E5 with code `0x170001`.
-  - The OTG stopped, or its read failed: E5 with code `0x170003`. With the gate open, no timer makes a `CRTC_VSYNC`
-    (`WddmVSyncArm`), so nothing would complete the owed flip.
-
-  In FAULTING `End` programs nothing. With the gate closed `End` programs nothing, and the timer reports Desired as
-  published. Then the writer's invalidation applies (the plane is back on the firmware surface), except when `End`
-  programmed Desired over it, or when Desired is owed with the gate closed. `End` clears the writer marks and makes
-  the generation even. An `End` whose section fails runs without L, as every End did before r6, and is counted: a
-  generation left odd would turn every later flip into a deposit.
-
-**Desired and its lifetime.** Desired is the newest request that this driver answered success for, programmed or
-deposited. It holds no reference of its own. The OS holds the allocation while its flip entry waits, and then as
-the primary on screen until a newer flip completes. Desired ends:
-
-- At a newer success, inside L.
-- At the report that carries it. `WddmNotifyRoutine` clears `DesiredOwed` when the reported address is Desired
-  (`OwedReported`).
-- At `DestroyAllocation` of its object. The destroy restore is a writer: `Begin`, then inside L the teardown record
-  is taken and Desired is dropped, then the firmware surface goes back outside L, then `End` programs a deposit that
-  came meanwhile. When `Begin` is refused, the restore runs as before r6, without L, counted
-  `DestroyUnsynchronized`.
-- At D3, stop or teardown. dxgmms2 flushes the flip queue first (`VidSchFlushAdapter`, `VidSchFlushDevice`, facts
-  M904). At the start of D3, before the power writers, `WddmFlipFlushed` clears `DesiredOwed` (`FlipFlushes`), so
-  that their `End` does not program a flip into a pipe that goes down.
-- At an OS cancel of a waiting entry (`FlipRestart`). Desired can then name a cancelled allocation until the newer
-  flip programs. Admission puts every scan-out surface in VRAM, and the plane only reads it.
-
-**The vblank report.** With the gate open, the only `CRTC_VSYNC` source is the DCN `VUPDATE_NO_LOCK` interrupt
-(`WddmDcnVsync`). A report carries Desired when the hardware has latched it (`WddmReadCompletedPrimary`: an even
-generation, and `DcnFlipPending` clear for Desired). Otherwise it carries the address that the plane still reads,
-and only when that is not Desired. A vblank while the generation is odd is not reported. r5b's busy machinery is
-removed: no outstanding request, no 250 ms stuck mark, no report of the driver's own vblank with the VSync off.
-
-**E5.** E5 is entered inside L, from a flip (F1, U, a failed write) or from `End` (OTG stopped, a failed write):
-
-1. `WddmFlipFault` sets FAULTING. It stays set until stop or reset. A second fault is counted only (`FlipFaults`).
-2. It requests a blank: one read-modify-write of `HUBP0_DCHUBP_CNTL` that sets `HUBP_BLANK_EN` and
-   `HUBP_TTU_DISABLE` (`DcnFaultBlank`), with no wait.
-3. It does not notify inside L. It marks the notification and calls `DxgkCbQueueDpc`. A missing callback is
-   counted (`FaultNotifyFailed`). The DPC (`WddmFlipFaultDpc`, from `Bc250DpcRoutine` at DISPATCH_LEVEL) makes the
-   notification once per FAULTING, through `WddmReport`'s own section, which also queues the DPC that pairs it
-   (`d3dkmddi.md:2467-2481`). So no `DxgkCbNotifyInterrupt` call runs inside dxgmms2's own DIRQL flip call.
-4. The notification is `DXGK_INTERRUPT_DMA_PAGE_FAULTED`, a GPU error that needs OS recovery
-   (`d3dkmddi.md:46003-46007`). The payload:
-   - `PageFaultFlags`: `DXGK_PAGE_FAULT_FENCE_INVALID | DXGK_PAGE_FAULT_ADAPTER_RESET_REQUIRED`.
-   - `FaultedFenceId` 0 and `FaultedVirtualAddress` `D3DGPU_NULL`, because the fault has another cause.
-   - `FaultErrorCode.IsDeviceSpecificCode` 1, with the code of the fault (table below).
-   - The API sequence number, the pipeline stage and the bind table entry: `UNKNOWN`.
-   - `PageTableLevel` 0 and `FaultedProcessHandle` NULL.
-   - `NodeOrdinal`: the node of the first context that the flip call carries when it is a context of this driver,
-     else node 0 (the 3D node, also for a fault from `End`). `EngineOrdinal` 0, because each node has one engine.
-5. The DDI answers `STATUS_DEVICE_HARDWARE_ERROR` for the call that entered E5 and for every later call (F0).
-   `Begin` refuses in FAULTING, and `End` programs nothing.
-6. After the notification the DPC reads `HUBP0_DCHUBP_CNTL` at most 50 times, 1 us apart, and records DRAINED, or
-   UNKNOWN after the 50th read or at a failed read (`FaultDrain`, `FaultDrainReads`). The driver releases nothing
-   in either case: the OS still holds every surface that it did not see complete.
-
-| Code | Cause |
-| --- | --- |
-| `0x170001` | a write sequence ran and failed (a flip, or `End`) |
-| `0x170002` | U: an immediate request without P' |
-| `0x170003` | `End` owes a flip and the OTG is stopped, or its read failed |
-| `0x170004` | F1: the generation and the writer mark disagree |
-
-`0x170005` is not an E5 code: it is the code of a W-u record (above).
-
-On this part the recovery is bugcheck 0x116 (facts M53). That is the terminal outcome here, not evidence that the
-path recovers elsewhere.
-
-**The checks.** `driver/kmd/test/run_flip_state.ps1` drives every rule of `flip_state.h` and breaks each one in a
-copy (14 mutations). `driver/kmd/test/run_vidpn_flip.ps1` extracts the actual flip transaction, writers, E5, its
-DPC, the destroy restore and the vblank report from `wddm.c`, runs each case at both entries with a model of L that
-fails a check for a log line or a nested section inside L, and breaks each rule in a copy (29 mutations, among
-them the high entry taking a section, W-u entering E5, a W-u without its record or its End, End ignoring the OTG,
-Invalidate over a programmed Desired, and a fault that notifies twice). With `-Lab` it compiles the lab flavour,
-checks the witnesses, and breaks them in 4 more copies: a witness read before the decision, a witness that changes
-the answer, a stale event compared, and a disagreement past the bound that is not counted.
-`driver/kmd/test/run_dcn_flip.ps1` breaks each term of P', the bound held after the reads, and the overrun count (4
-mutations). `tools/quality/quick.ps1` runs all of them, and every mutation must fail.
+**Regression checks.** The tests execute extracted production functions, with synchronization assertions enabled.
+They cover old-primary destruction during a writer and prevent a later request from replacing Desired while that writer is active.
+The immediate and next-VSync conflict cases require BUSY, no publication and no contention fault.
+Rollback checks reject application addresses even when the capture returned one.
+They refuse `Begin`, `Resume`, `End` and destroy sections without exempting their protected operations from lock checks.
+The DCN tests include the actual source-address helper, so the no-log rule does not depend on a substitute.
+The observation boundary test admits no extra sample after the 1 us stall reaches the budget.
+The result class uses the successful sample's own start time, while the record also keeps the actual end time.
+Host fixtures establish these code properties. Lab results must still check the exact release and lab artifacts.
 
 ## 8. StopDevice ordering
 

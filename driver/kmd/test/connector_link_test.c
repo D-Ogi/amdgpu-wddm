@@ -9,6 +9,7 @@
 #include <stdarg.h>
 #include "../dcn_scale.h"
 #include "../flip_state.h"
+#include "../plane_format.h"
 #include "../dpaux.h"
 #include "../../shim/bc250_sink.h"
 #include "../../shim/bc250_atom_firmware.h"
@@ -39,7 +40,7 @@ typedef struct {
 } D3DKMDT_VIDEO_SIGNAL_INFO;
 typedef struct {
     ULONG Width, Height, Pitch, ColorFormat, TargetId;
-    ULONGLONG PhysicAddress;
+    LARGE_INTEGER PhysicAddress;
 } TEST_POST;
 #include "../connector_diag.h"
 #define RTL_NUMBER_OF(a) (sizeof(a)/sizeof((a)[0]))
@@ -54,7 +55,8 @@ typedef struct _BC250_DEVICE {
     unsigned PspSessionLock;
     BOOLEAN MmioPspEnabled,GpuStopUnconfirmed;
     unsigned char* RuntimeFramebuffer;
-    ULONGLONG RuntimeFramebufferLength, RuntimeFramebufferPhysical;
+    ULONGLONG RuntimeFramebufferLength;
+    LARGE_INTEGER RuntimeFramebufferPhysical;
     TEST_POST Post, RuntimePost;
     volatile LONG RuntimePostValid, RuntimePlaneBlank, RuntimeDisplayChanged;
     struct { volatile LONG SourceWidth, SourceHeight; ULONG Scaling,InheritedSupport;NTSTATUS InheritedPipeStatus;BC250_INHERITED_PIPE InheritedPipe; } Modeset;
@@ -103,6 +105,7 @@ static unsigned inherited_restores,inherited_frees,nested_primary,hdmi_fail_once
 static unsigned checks, failures, boundary_steps, fail_step, cancel_step, power_step, timeout_step;
 static unsigned operation_locks, primary_locks, spin_locks, fp_saved, fp_saves, fp_restores;
 static unsigned primary_enters, primary_exits, audio_starts, audio_stops, plan_calls, logs;
+static unsigned primary_end_fail;
 static char log_ring[64][512];
 static unsigned log_next,diag_locks;
 static unsigned char diag_snapshot[sizeof(((BC250_DEVICE*)0)->Connector)];
@@ -144,9 +147,14 @@ static void ConnectorOperationRelease(BC250_DEVICE* d)
 { CHECK(d==&device && operation_locks==1);--operation_locks; }
 static int scanout_object=1,last_invalidate;
 static int WddmPrimaryExclusiveBegin(BC250_DEVICE* d,ULONG k,ULONG* g)
-{ CHECK(d==&device && k>BC250_WRITER_NONE && k<BC250_WRITER_KINDS);if(primary_locks){++nested_primary;return 0;}if(acquire_fail)return 0;*g=77;++primary_locks;++primary_enters;return 1; }
-static void WddmPrimaryExclusiveEnd(BC250_DEVICE* d,ULONG g,BOOLEAN changed)
-{ CHECK(d==&device && primary_locks==1 && g==77);last_invalidate=changed;if(changed)scanout_object=0;--primary_locks;++primary_exits; }
+{ CHECK(d==&device && k>BC250_WRITER_NONE && k<BC250_WRITER_KINDS);if(primary_locks){++nested_primary;return 0;}if(acquire_fail)return 0;*g=77;++primary_locks;++primary_enters;scanned_surface=2;return 1; }
+static NTSTATUS WddmPrimaryExclusiveEnd(BC250_DEVICE* d,ULONG g,BOOLEAN changed)
+{
+    CHECK(d==&device && primary_locks==1 && g==77);
+    if(primary_end_fail)return STATUS_IO_DEVICE_ERROR;
+    last_invalidate=changed;if(changed)scanout_object=0;--primary_locks;++primary_exits;
+    return STATUS_SUCCESS;
+}
 static LONG InterlockedExchange(volatile LONG* p,LONG v) { LONG old=*p;*p=v;return old; }
 static void KeAcquireSpinLock(unsigned* p,KIRQL* old)
 {
@@ -180,27 +188,29 @@ static NTSTATUS DcnRuntimeSurface(BC250_DEVICE*,BOOLEAN);
 NTSTATUS ConnectorLinkRelease(BC250_DEVICE*);
 static NTSTATUS DcnRestorePostDisplay(BC250_DEVICE*);
 static long boundary_step(void*,const char*,int);
-static BC250_LINK_SURFACE original_surface={0x82000000ull,7680,1,1920,1080,1};
-static BC250_LINK_SURFACE last_restored,last_captured;
+static BC250_LINK_SURFACE last_restored;
+static ULONG captured_visible;
 NTSTATUS DcnLinkSurfaceCapture(BC250_DEVICE* d,ULONG w,ULONG h,BC250_LINK_SURFACE* surface) {
     long status=boundary_step(d->ConnectorLink,"capture-surface",0);
-    CHECK(primary_locks && w==1920 && h==1080);
+    CHECK(primary_locks && scanned_surface==2 && w==1920 && h==1080);
     if(!status) {
-        last_captured=original_surface;
-        last_captured.Visible=!otg_blank && !plane_blank;
-        if(scanned_surface==2) {
-            last_captured.Physical=d->RuntimeFramebufferPhysical;
-            last_captured.Pitch=d->RuntimePost.Pitch;
-        }
-        *surface=last_captured;
+        captured_visible=!otg_blank && !plane_blank;
+        // Only Visible is consumed. The deliberately different address and
+        // layout must never reach the rollback's reserved-buffer operation.
+        surface->Physical=0x82000000ull;surface->Pitch=256;
+        surface->Format=BC250_PLANE_FORMAT_ABGR2101010;
+        surface->Width=w;surface->Height=h;surface->Visible=captured_visible;
     }
     return status;
 }
 NTSTATUS DcnLinkSurfaceRestore(BC250_DEVICE* d,const BC250_LINK_SURFACE* surface) {
     long status=boundary_step(d->ConnectorLink,"restore-surface",0);
     CHECK(primary_locks && crtc_enabled && surface!=NULL);
-    CHECK(!memcmp(surface,&last_captured,sizeof(*surface)));
-    if(!status) {last_restored=*surface;scanned_surface=surface->Physical==original_surface.Physical?1:2;plane_blank=0;otg_blank=!surface->Visible;++original_surface_restores;}
+    CHECK(surface->Physical==(ULONGLONG)d->RuntimeFramebufferPhysical.QuadPart);
+    CHECK(surface->Width==link.Previous.Timing.HActive && surface->Height==link.Previous.Timing.VActive);
+    CHECK(surface->Pitch==link.Previous.Pitch && surface->Format==BC250_PLANE_FORMAT_ARGB8888);
+    CHECK(surface->Visible==captured_visible);
+    if(!status) {last_restored=*surface;scanned_surface=2;plane_blank=0;otg_blank=!surface->Visible;++original_surface_restores;}
     return status;
 }
 static void GuardLog(const char* format,...)
@@ -437,9 +447,9 @@ static NTSTATUS DcnRestorePostDisplay(BC250_DEVICE* d)
 long Bc250DpStreamUnblank(BC250_DISP_IO* io,unsigned khz,unsigned rate)
 { CHECK(crtc_enabled && !plane_blank && khz && rate==10);return io_step(io,"dp-unblank"); }
 long Bc250Dcn201OutputBlank(BC250_DISP_IO* io,unsigned w,unsigned h,int blank)
-{ long s=io_step(io,"output-video");CHECK(w && h && !blank && crtc_enabled && !plane_blank);if(!s)output_black=0;return s; }
+{ long s=io_step(io,"output-video");CHECK(w && h && crtc_enabled && !plane_blank);if(!s)output_black=(unsigned)blank;return s; }
 int Bc250HdmiStreamMute(BC250_HDMI_LINK* h,int mute)
-{ CHECK(!mute && tx_enabled && !plane_blank && !output_black);return step(h->Io.Context,"hdmi-unmute")?1:0; }
+{ CHECK(!mute && tx_enabled && !plane_blank && (!output_black || !link.RecoveryVisible));return step(h->Io.Context,"hdmi-unmute")?1:0; }
 
 static void reset(unsigned kind)
 {
@@ -450,7 +460,7 @@ static void reset(unsigned kind)
     inherited_restores=inherited_frees=nested_primary=hdmi_fail_once=0;
     device.Mmio=&fake_mmio;device.DcnWriteEnabled=1;device.ConnectorLink=&link;
     device.RuntimeFramebuffer=framebuffer;device.RuntimeFramebufferLength=sizeof(framebuffer);
-    device.RuntimeFramebufferPhysical=0x100000;device.Post.Width=1920;device.Post.Height=1080;device.Post.Pitch=7680;
+    device.RuntimeFramebufferPhysical.QuadPart=0x100000;device.Post.Width=1920;device.Post.Height=1080;device.Post.Pitch=7680;
     device.SourceVisible=1;device.ModeActive=1;device.RuntimePostValid=1;
     link.Device=&device;link.Io.Context=&link;link.Atom.Io.Context=&link;link.Atom.Io.Owned=LinkOwned;
     link.DmlWorkspace=workspace;link.AtomWorkspace=atom_workspace;link.CrystalKhz=27000;link.Inherited=1;link.Active=0;
@@ -472,6 +482,7 @@ static void reset(unsigned kind)
     boundary_steps=fail_step=cancel_step=power_step=timeout_step=0;
     operation_locks=primary_locks=spin_locks=fp_saved=fp_saves=fp_restores=0;
     primary_enters=primary_exits=audio_starts=audio_stops=plan_calls=logs=0;
+    primary_end_fail=0;
     test_irql=acquire_fail=hdmi_stop_fail=save_fail=plan_fail=bad_clocks=clock_reads=0;
     apply_count=plane_blank=otg_blank=output_black=aux_open=event_count=fault_triggered=0;
     persistent_aux_fail=firmware_frees=pool_frees=audio_debt=0;
@@ -491,7 +502,7 @@ static void success(void)
         CHECK(link.Completed==1 && !link.Refused && link.Phase==6 && audio_starts==1);
         CHECK(device.RuntimePostValid && device.SourceVisible && !plane_blank && !device.RuntimePlaneBlank && !otg_blank && !output_black);
         CHECK(device.RuntimePost.Width==1920 && device.RuntimePost.Pitch==7680);
-        CHECK(device.RuntimePost.PhysicAddress==device.RuntimeFramebufferPhysical);
+        CHECK(device.RuntimePost.PhysicAddress.QuadPart==device.RuntimeFramebufferPhysical.QuadPart);
         CHECK(link.Signal.PixelRate==148500000 && link.Signal.TotalSize.cx==2200);
         before("plane-blank","otg-off");before("tx-off","otg-off");before("pipe","pixel-clock");
         before("otg-program","output-program");before("output-program","otg-on");
@@ -585,6 +596,32 @@ static void disable_suspend_resume(void)
     CHECK(!NT_SUCCESS(ConnectorLinkResume(&device,7)));balanced();CHECK(link.Active && device.RuntimePostValid); // refused before mutation
     reset(BC250_SINK_HDMI);audio_debt=1;CHECK(ConnectorLinkDisable(&device,7)==STATUS_DEVICE_NOT_READY && !primary_enters && !boundary_steps);balanced();
     reset(BC250_SINK_HDMI);audio_debt=1;CHECK(ConnectorLinkSuspend(&device)==STATUS_DEVICE_NOT_READY && !primary_enters && !boundary_steps);balanced();
+}
+static void end_failure_propagation(void)
+{
+    unsigned arm,begin=checks,bad=failures;
+    // The production End preserves its writer state when synchronization
+    // fails. Each real caller must surface that failure and release only its
+    // unrelated PASSIVE locks. It must not start audio after a failed End.
+    for(arm=0;arm<6;++arm) {
+        reset(BC250_SINK_HDMI);
+        if(arm==3 || arm==4)CHECK(commit()==STATUS_SUCCESS);
+        if(arm==4)psp_wait_fail=1;
+        if(arm==5) {
+            device.HdmiLinkContext=&inherited_hdmi;
+            inherited_hdmi.Device=&device;inherited_hdmi.Link.Dirty=1;
+        }
+        primary_end_fail=1;
+        if(arm==0)CHECK(commit()==STATUS_IO_DEVICE_ERROR && !audio_starts && link.Refused==1);
+        if(arm==1)CHECK(ConnectorLinkDisable(&device,7)==STATUS_IO_DEVICE_ERROR);
+        if(arm==2)CHECK(ConnectorLinkSuspend(&device)==STATUS_IO_DEVICE_ERROR);
+        if(arm==3 || arm==4)CHECK(ConnectorLinkResume(&device,7)==STATUS_IO_DEVICE_ERROR);
+        if(arm==5)CHECK(!HdmiLinkStop(&device));
+        CHECK(primary_locks==1 && primary_enters==primary_exits+1);
+        CHECK(!operation_locks && !spin_locks && !fp_saved && !psp_locks && !link.ClockSession && !link.Owner);
+    }
+    printf("Connector End failure: %u checks, %u failures; six callers propagate and retain writer ownership\n",checks-begin,failures-bad);
+    reset(BC250_SINK_HDMI);
 }
 static void ownership_and_cleanup(void)
 {
@@ -734,8 +771,10 @@ static void cold_recovery(void)
             BC250_CONNECTOR_FAILURE_DIAG savedFailure;
             prepare_cold(kind);fail_step=n;
             CHECK(!NT_SUCCESS(commit()) && fault_triggered);balanced();
-            CHECK(link.Active && !device.SourceVisible && !device.ModeActive && scanned_surface==1);
-            CHECK(!otg_blank && !plane_blank);
+            CHECK(link.Active && !device.SourceVisible && !device.ModeActive);
+            CHECK(scanned_surface==(primary_enters?2u:1u) && !plane_blank);
+            CHECK(!otg_blank);
+            if(event_total("restore-surface"))CHECK(last_restored.Physical==(ULONGLONG)device.RuntimeFramebufferPhysical.QuadPart);
             CHECK(scanout_object && !last_invalidate);
             CHECK(!device.RuntimeDisplayChanged && !device.RuntimePostValid);
             CHECK(Bc250TargetTimingEqual(&link.Current.Timing,&inherited_timing));
@@ -811,7 +850,7 @@ static void inherited_journal_controls(void)
     prepare_cold(BC250_SINK_HDMI);hdmi_fail_once=1;
     CHECK(commit()==STATUS_DEVICE_DATA_ERROR);
     CHECK(!nested_primary && inherited_restores==2 && inherited_frees==1);
-    CHECK(link.Active && scanned_surface==1 && !otg_blank && !plane_blank);
+    CHECK(link.Active && scanned_surface==2 && !otg_blank && !plane_blank);
     CHECK(!device.SourceVisible && !device.ModeActive && !device.HdmiLinkContext);
     CHECK(device.Connector.FirstFailure.Step==BC250_LINK_HDMI_HANDOFF);
     CHECK(device.Connector.FirstFailure.HdmiRestore.Valid &&
@@ -823,7 +862,7 @@ static void inherited_journal_controls(void)
     CHECK(commit()==STATUS_SUCCESS && !nested_primary);
     prepare_cold(BC250_SINK_HDMI);hdmi_fail_once=1;
     CHECK(ConnectorLinkCommit(&device,&snapshot,NULL,0,0,D3DKMDT_VPPS_IDENTITY)==STATUS_DEVICE_DATA_ERROR);
-    CHECK(link.Active && scanned_surface==1 && !otg_blank && !plane_blank);
+    CHECK(link.Active && scanned_surface==2 && !otg_blank && !plane_blank);
     CHECK(!device.SourceVisible && !device.ModeActive && !nested_primary);
     CHECK(inherited_restores==2 && inherited_frees==1);
     CHECK(device.Connector.FirstFailure.Step==BC250_LINK_HDMI_HANDOFF &&
@@ -1066,6 +1105,7 @@ static void prepare_cleanup_preserved(void)
 }
 int main(void)
 {
+    end_failure_propagation();
     prepare_cleanup_preserved();
     programmed_clock_bound();
     psp_session_controls();

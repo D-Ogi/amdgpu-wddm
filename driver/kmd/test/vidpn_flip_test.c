@@ -1,6 +1,6 @@
 // Deterministic interleavings of actual source, not a multicore test.
 //
-// BD-170 r6 (docs/design/vidpn-flip.md section 7.2): the flip DDI's transaction, the writers' sections, E5 and the
+// BD-170 r7 (docs/design/vidpn-flip.md section 7.2): the flip DDI's transaction, the writers' sections, E5 and the
 // report of a VSync run under L, the interrupt lock of message 0. This fixture models L. DxgkCbSynchronizeExecution
 // runs its routine with in_lock set, at the device's interrupt level, and refuses a section inside a section, a caller
 // above DISPATCH_LEVEL and another message. The flip DDI's high entry runs with in_lock set, because dxgmms2 holds L
@@ -39,6 +39,7 @@ typedef struct { LONGLONG QuadPart; } LARGE_INTEGER;
 #define STATUS_ACCESS_DENIED ((NTSTATUS)0xC0000022u)
 #define STATUS_INVALID_PARAMETER ((NTSTATUS)0xC000000Du)
 #define STATUS_DEVICE_NOT_READY ((NTSTATUS)0xC00000A3u)
+#define STATUS_DEVICE_BUSY ((NTSTATUS)0x80000011u)
 #define STATUS_IO_TIMEOUT ((NTSTATUS)0xC00000B5u)
 #define STATUS_ILLEGAL_INSTRUCTION ((NTSTATUS)0xC000001Du)
 #define STATUS_NOT_SUPPORTED ((NTSTATUS)0xC00000BBu)
@@ -154,7 +155,7 @@ typedef struct {
 typedef struct { LONG Next; LONG ToEndMaxUs; BC250_WDDM_WU_RECORD Records[BC250_WDDM_WU_RECORDS]; } BC250_WDDM_WU_COPY;
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
 /* BD-170 r6, the lab flavour's witnesses: bc250kmd.h's arm and read, wddm.c's record and copy. */
-typedef struct { NTSTATUS Status; ULONG InterruptBefore, InterruptCleared; BOOLEAN Fresh; } BC250_DCN_WITNESS_ARM;
+typedef struct { NTSTATUS Status; ULONG InterruptBefore, InterruptCleared, PendingBefore, PendingAfter; BOOLEAN Fresh; } BC250_DCN_WITNESS_ARM;
 typedef struct {
     ULONG Interrupt; BOOLEAN Event; ULONG Low1, High1, High2, Low2; ULONGLONG Earliest1, Earliest2;
 } BC250_DCN_WITNESS_READ;
@@ -162,6 +163,7 @@ typedef struct {
 typedef struct {
     LONG Request; ULONG Generation, Flags, Outcome, Result; BOOLEAN Q, Fresh, E, R1, R2; NTSTATUS ArmStatus, ReadStatus;
     ULONGLONG Card, Physical, Earliest1, Earliest2; ULONG InterruptBefore, InterruptCleared, Interrupt;
+    ULONG PendingBefore, PendingAfter;
     ULONG Low1, High1, High2, Low2;
 } BC250_WDDM_WITNESS_RECORD;
 typedef struct {
@@ -180,8 +182,10 @@ typedef struct {
     volatile LONG Flips, FlipsAboveDispatch, VSyncReports, ReportFailures;
     volatile LONG ImmediatePromotions, DmaFlipsRefused;     /* BD-170 */
     volatile LONG ExclusiveRefused, ExclusiveFailed;
+    volatile LONG WriterBusy;
     /* BD-170 r6, the flip state machine's block (wddm.c says what each field is). */
     BOOLEAN WriterActive, WriterResumed, WriterDeposit, DesiredOwed;
+    volatile LONG WriterRecovery;
     ULONG DepositSequence;
     volatile LONG Faulting;
     ULONG FaultCode;
@@ -224,8 +228,6 @@ typedef struct {
     ULONG Frame; ULONG PositionBefore; ULONG PositionAfter; ULONG Control;
     LONG ProgramUs; LONG FirstUs; LONG ClearUs; LONG DoneUs; LONG EndUs;
 } BC250_DCN_IMMEDIATE_RECORD;
-/* BD-170 r6: Desired as Resume hands it out (bc250kmd.h). */
-typedef struct { ULONGLONG CardAddress; ULONG Pitch; ULONG PlaneFormat; ULONGLONG Bytes; ULONG Sequence; } BC250_WDDM_DESIRED;
 typedef struct {
     struct {ULONG Width,Height,Pitch;} Post,RuntimePost;
     BOOLEAN RuntimePostValid;
@@ -280,12 +282,17 @@ typedef struct {
 } DXGKARG_DESTROYALLOCATION;
 #define CHECK(x) do { ++checks; if(!(x)){++fails;printf("FAIL line %d: %s\n",__LINE__,#x);} } while(0)
 static unsigned checks,fails;
-/* L. in_lock: a section's routine or the high entry is running. allow_unlocked: the one test of End without its
- * section, which wddm.c runs without L on purpose. sync_refusals: the next sections the callback refuses.
- * before_section: work another processor finishes just before the next section takes L, once. */
-static int irq,in_lock,allow_unlocked;
-static unsigned syncs,sync_refusals;
+/* L. in_lock: a section's routine or the high entry is running. No test exempts a protected operation from L.
+ * sync_refusals: the next sections the callback refuses. sync_refuse_at: refuse the exact numbered section,
+ * including a later stage of a multi-section operation. before_section: work another processor finishes just
+ * before the next section takes L, once. */
+static int irq,in_lock;
+static unsigned syncs,sync_refusals,sync_refuse_at;
+static int sync_no_callback;
+static PKSYNCHRONIZE_ROUTINE sync_refuse_routine;
 static void (*before_section)(BC250_DEVICE*);
+static PKSYNCHRONIZE_ROUTINE after_section_routine;
+static void (*after_section)(BC250_DEVICE*);
 /* What the graphics kernel was told: CRTC_VSYNC reports (the last address), DMA_PAGE_FAULTED notifications (the last
  * payload), and DPC requests. */
 static unsigned reports,faults_notified,dpcs;
@@ -297,11 +304,17 @@ static NTSTATUS TestSync(HANDLE h,PKSYNCHRONIZE_ROUTINE routine,PVOID context,UL
     const int level=irq;
     CHECK(h!=NULL && message==0 && !in_lock && irq<=DISPATCH_LEVEL);
     ++syncs;
+    if(sync_no_callback){sync_no_callback=0;*returned=FALSE;return STATUS_SUCCESS;}
     if(sync_refusals){--sync_refusals;return STATUS_UNSUCCESSFUL;}
+    if(sync_refuse_at==syncs){sync_refuse_at=0;return STATUS_UNSUCCESSFUL;}
+    if(sync_refuse_routine==routine){sync_refuse_routine=NULL;return STATUS_UNSUCCESSFUL;}
     if(before_section){void (*first)(BC250_DEVICE*)=before_section;before_section=NULL;first((BC250_DEVICE*)h);}
     in_lock=1;irq=TEST_DIRQL;
     *returned=routine(context);
     in_lock=0;irq=level;
+    if(after_section && after_section_routine==routine){
+        void (*next)(BC250_DEVICE*)=after_section;after_section=NULL;after_section_routine=NULL;next((BC250_DEVICE*)h);
+    }
     return STATUS_SUCCESS;
 }
 /* DxgkCbNotifyInterrupt must be called inside L (wddm.c's WddmNotifyRoutine), never reentrantly. */
@@ -321,13 +334,12 @@ static void TestLog(void){CHECK(!in_lock && irq<=DISPATCH_LEVEL);++logs;}
 #define GuardLog(...) TestLog()
 static ULONG programmed_pitch;
 static ULONG programmed_format;     /* M15.14: the plane format the last written flip carried */
-static unsigned freed,journaled,restores,hardware,healthCompletions,pairedVsyncReports;
+static unsigned freed,journaled,hardware,healthCompletions,pairedVsyncReports;
 static ULONG healthSequence;
-static NTSTATUS restore_result,hardware_result;
+static NTSTATUS hardware_result;
 /* hardware_wrote: a failing DcnFlipSourceAddress had run its write sequence (E5) rather than refused before it (A). */
-static int hardware_wrote,pending,inject_update,inject_fallback_update,restore_writer,restore_flip;
-static DXGKARG_SETVIDPNSOURCEADDRESS restore_request;
-static NTSTATUS restore_answer;
+static int hardware_wrote,pending,inject_update,inject_fallback_update;
+static DXGKARG_SETVIDPNSOURCEADDRESS interleave_request;
 static LONGLONG plane_card,displayed;
 /* The teardown record a test requires while the plane is written (the lifetime tie), and how often it was seen. */
 static LONGLONG expect_record;
@@ -339,6 +351,10 @@ static int hubp_state,otg_state;
 static ULONG begin_kind;
 static unsigned hubp_reads,hubp_drain_after,otg_reads,fault_blanks;
 static NTSTATUS fault_blank_status;
+#define BRIDGE_CARD 0xF00000ull
+static unsigned bridge_writes;
+static NTSTATUS bridge_result;
+static BOOLEAN bridge_wrote;
 static LONG InterlockedCompareExchange(volatile LONG *p,LONG value,LONG compare){LONG old=*p;if(old==compare)*p=value;return old;}
 static LONG InterlockedExchange(volatile LONG *p,LONG value){LONG old=*p;*p=value;return old;}
 static LONGLONG InterlockedCompareExchange64(volatile LONGLONG *p,LONGLONG value,LONGLONG compare){LONGLONG old=*p;if(old==compare)*p=value;return old;}
@@ -361,9 +377,8 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddress(const HANDLE,const DXGKARG_SETVID
 void WddmDcnVsync(BC250_DEVICE*);
 void WddmFlipFaultDpc(BC250_DEVICE*);
 BOOLEAN WddmPrimaryExclusiveBegin(BC250_DEVICE*,ULONG,ULONG*);
-void WddmPrimaryExclusiveEnd(BC250_DEVICE*,ULONG,BOOLEAN);
-BOOLEAN WddmWriterResume(BC250_DEVICE*,BC250_WDDM_DESIRED*);
-void WddmWriterDepositProgrammed(BC250_DEVICE*,ULONG);
+NTSTATUS WddmPrimaryExclusiveEnd(BC250_DEVICE*,ULONG,BOOLEAN);
+NTSTATUS WddmWriterResume(BC250_DEVICE*);
 void WddmFlipFlushed(BC250_DEVICE*);
 /* The flip DDI as dxgmms2 calls it: at or below DISPATCH_LEVEL without L, above it inside L (facts M904). */
 static NTSTATUS Flip(BC250_DEVICE *d,const DXGKARG_SETVIDPNSOURCEADDRESS *request)
@@ -377,15 +392,6 @@ static NTSTATUS Flip(BC250_DEVICE *d,const DXGKARG_SETVIDPNSOURCEADDRESS *reques
 static void PagingJournalDestroy(ULONGLONG va,HANDLE h,ULONGLONG bytes,unsigned flags,ULONG pid,ULONG version,ULONGLONG gem)
 {(void)va;(void)h;(void)bytes;(void)flags;(void)pid;(void)version;(void)gem;++journaled;}
 static void WddmFreeObject(BC250_WDDM_OBJECT *o){if(o)++freed;}
-/* The destroy restore's own work, outside L. restore_writer: a writer held the generation meanwhile. restore_flip:
- * a flip on another processor during it. */
-static NTSTATUS DcnRestorePostDisplay(BC250_DEVICE *d)
-{
-    CHECK(!in_lock);
-    ++restores;restore_writer=d->Wddm->WriterActive && (d->Wddm->PrimarySequence&1);
-    if(restore_flip){restore_flip=0;restore_answer=Flip(d,&restore_request);}
-    return restore_result;
-}
 #define PHYS(card) ((ULONGLONG)(card)+0x400000000ull)  /* the stub's translation of a card address */
 static unsigned checks_at_vblank;
 static unsigned immediate_writes,observed,pending_samples;
@@ -407,7 +413,7 @@ static NTSTATUS DcnFlipSourceAddress(BC250_DEVICE *d,ULONGLONG address,ULONG pit
 {
     PHYSICAL_ADDRESS sample={-1};
     const BC250_PLANE_ENCODING *plane=Bc250PlaneEncoding(format);
-    CHECK(in_lock || allow_unlocked);
+    CHECK(in_lock);
     /* M15.14: every flip names a plane format with an encoding, and the pitch is whole pixels of it. */
     CHECK(plane!=NULL && plane && pitch%plane->BytesPerPixel==0 && pitch>=d->Post.Width*plane->BytesPerPixel);
     CHECK(bytes==(ULONGLONG)pitch*d->Post.Height);
@@ -454,6 +460,7 @@ static ULONG DcnImmediateObserve(BC250_DEVICE *d,ULONGLONG address,ULONGLONG phy
  * witness_*: what the read returns (the event, and whether EARLIEST_INUSE names the request in each order). */
 static unsigned witness_arms,witness_reads,witness_observed,witness_results,witness_hardware;
 static int witness_fresh=1,witness_event,witness_r1,witness_r2;
+static ULONG witness_pending_before,witness_pending_after;
 static NTSTATUS witness_status;
 static unsigned Results(const BC250_WDDM *w)
 {unsigned n=0,i;for(i=0;i<BC250_FLIP_RESULTS;i++)n+=(unsigned)w->FlipResults[i];return n;}
@@ -464,7 +471,8 @@ static void DcnWitnessArm(const BC250_DEVICE *d,BOOLEAN immediate,BC250_DCN_WITN
     if(!immediate)return;
     ++witness_arms;witness_observed=observed;witness_results=Results(d->Wddm);witness_hardware=hardware;
     arm->Status=STATUS_SUCCESS;arm->InterruptBefore=0x101;arm->InterruptCleared=witness_fresh?0:0x100;
-    arm->Fresh=witness_fresh?TRUE:FALSE;
+    arm->PendingBefore=witness_pending_before;arm->PendingAfter=witness_pending_after;
+    arm->Fresh=witness_fresh && !witness_pending_before && !witness_pending_after?TRUE:FALSE;
 }
 static NTSTATUS DcnWitnessRead(const BC250_DEVICE *d,BC250_DCN_WITNESS_READ *read)
 {
@@ -504,8 +512,18 @@ static int DcnHubpDrained(const BC250_DEVICE *d)
     if(hubp_drain_after) return hubp_reads>=hubp_drain_after?1:0;
     return hubp_state;
 }
-static int DcnOtgRunning(const BC250_DEVICE *d){(void)d;CHECK(in_lock || allow_unlocked);++otg_reads;return otg_state;}
-static NTSTATUS DcnFaultBlank(BC250_DEVICE *d){(void)d;CHECK(in_lock || allow_unlocked);++fault_blanks;return fault_blank_status;}
+static int DcnOtgRunning(const BC250_DEVICE *d){(void)d;CHECK(in_lock);++otg_reads;return otg_state;}
+static NTSTATUS DcnFaultBlank(BC250_DEVICE *d){(void)d;CHECK(in_lock);++fault_blanks;return fault_blank_status;}
+/* The reserved surface is not an application allocation. This stub is the boundary of the separate actual-DCN
+ * suite: success means that the immediate bridge passed P' before the old application allocation can be released. */
+static NTSTATUS DcnWriterBridge(BC250_DEVICE *d,volatile LONG *generation,ULONG expected,BOOLEAN *wrote)
+{
+    CHECK(in_lock && generation==&d->Wddm->PrimarySequence && (ULONG)*generation==expected && (expected&1));
+    CHECK(!d->Wddm->WriterActive);
+    ++bridge_writes;*wrote=NT_SUCCESS(bridge_result) || bridge_wrote;
+    if(NT_SUCCESS(bridge_result)){plane_card=displayed=(LONGLONG)BRIDGE_CARD;pending=0;}
+    return bridge_result;
+}
 /* BD-170: a writer the summary's copy can meet. Each copy of a record moves the slot's Version by writer_step
  * for writer_copies copies (a writer that finished one or more records meanwhile). */
 static unsigned record_copies,writer_copies;
@@ -537,23 +555,27 @@ static void Setup(BC250_DEVICE *d,BC250_WDDM *w,int level)
 {
     memset(d,0,sizeof(*d));memset(w,0,sizeof(*w));
     d->Post.Width=1366;d->Post.Height=768;d->Post.Pitch=5632;w->PrimaryPitch=5632;d->DcnQpcFrequency=1000000;
+    w->PrimaryBytes=5632ull*768;w->PrimaryPlaneFormat=BC250_PLANE_FORMAT_ARGB8888;
     d->Wddm=w;d->VidPnFlipEnabled=1;w->VSyncEnabled=1;w->ScanoutAdmitGate=TRUE;
     w->PrimaryAddress.QuadPart=0x1000;w->PrimarySegment=BC250_WDDM_SEGMENT_VRAM;
     d->Dxgk.DeviceHandle=d;d->Dxgk.DxgkCbSynchronizeExecution=TestSync;
     d->Dxgk.DxgkCbNotifyInterrupt=TestNotify;d->Dxgk.DxgkCbQueueDpc=TestQueueDpc;
-    irq=level?TEST_DIRQL:0;in_lock=allow_unlocked=0;syncs=sync_refusals=0;before_section=NULL;
+    irq=level?TEST_DIRQL:0;in_lock=0;syncs=sync_refusals=sync_refuse_at=0;sync_no_callback=0;
+    sync_refuse_routine=after_section_routine=NULL;before_section=after_section=NULL;
     reports=faults_notified=dpcs=0;reported=0;memset(&fault_data,0,sizeof(fault_data));
     arms=logs=stalls1=stalls10=0;
-    freed=journaled=restores=hardware=healthCompletions=pairedVsyncReports=0;healthSequence=0;
-    restore_result=hardware_result=STATUS_SUCCESS;
-    hardware_wrote=pending=inject_update=inject_fallback_update=restore_writer=restore_flip=0;restore_answer=0;
+    freed=journaled=hardware=healthCompletions=pairedVsyncReports=0;healthSequence=0;
+    hardware_result=STATUS_SUCCESS;
+    hardware_wrote=pending=inject_update=inject_fallback_update=0;
     plane_card=displayed=0x1000;programmed_pitch=programmed_format=0;expect_record=0;record_checked=0;
     hubp_state=1;otg_state=1;hubp_reads=hubp_drain_after=otg_reads=fault_blanks=0;fault_blank_status=STATUS_SUCCESS;
+    bridge_writes=0;bridge_result=STATUS_SUCCESS;bridge_wrote=FALSE;
     immediate_writes=observed=pending_samples=0;programmed_immediate=0;
     observe_outcome=BC250_DCN_IMMEDIATE_DONE;observed_flags=0;observed_address=0;
     ringGapVsyncs=0;begin_kind=BC250_WRITER_MODESET_COMMIT;
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
     witness_arms=witness_reads=0;witness_fresh=witness_event=witness_r1=witness_r2=1;witness_status=STATUS_SUCCESS;
+    witness_pending_before=witness_pending_after=0;
 #endif
 }
 /* The vblank DPC, at DISPATCH_LEVEL outside L. */
@@ -576,12 +598,10 @@ static BOOLEAN Begin(BC250_DEVICE *d,ULONG *generation)
 /* The summary's copy of the W-u records, from PASSIVE_LEVEL. */
 static BOOLEAN WuCopy(BC250_DEVICE *d,BC250_WDDM_WU_COPY *copy)
 {const int level=irq;BOOLEAN copied;irq=0;copied=WddmWuCopy(d,d->Wddm,copy);irq=level;return copied;}
-static BOOLEAN Resume(BC250_DEVICE *d,BC250_WDDM_DESIRED *desired)
-{const int level=irq;BOOLEAN deposit;irq=0;deposit=WddmWriterResume(d,desired);irq=level;return deposit;}
-static void End(BC250_DEVICE *d,ULONG generation,BOOLEAN invalidate)
-{const int level=irq;irq=0;WddmPrimaryExclusiveEnd(d,generation,invalidate);irq=level;}
-static void Programmed(BC250_DEVICE *d,ULONG sequence)
-{const int level=irq;irq=0;WddmWriterDepositProgrammed(d,sequence);irq=level;}
+static NTSTATUS Resume(BC250_DEVICE *d)
+{const int level=irq;NTSTATUS status;irq=0;status=WddmWriterResume(d);irq=level;return status;}
+static NTSTATUS End(BC250_DEVICE *d,ULONG generation,BOOLEAN invalidate)
+{const int level=irq;NTSTATUS status;irq=0;status=WddmPrimaryExclusiveEnd(d,generation,invalidate);irq=level;return status;}
 /* E5's notification as the DPC made it: DMA_PAGE_FAULTED with the payload of section 7.2. */
 static void CheckFault(ULONG code,UINT node)
 {
@@ -726,7 +746,7 @@ static void PlaneFormatFlips(void)
     CHECK(Flip(&d,&request)==STATUS_SUCCESS);
     CHECK(programmed_format==BC250_PLANE_FORMAT_ABGR8888 && w.ScanoutFlipsByFormat[BC250_PLANE_FORMAT_ABGR8888]==2);
     CHECK(Destroy(&d,&game)==STATUS_SUCCESS);
-    CHECK(restores==1 && w.PrimaryPlaneFormat==0 && w.PrimaryPitch==0);
+    CHECK(plane_card==(LONGLONG)BRIDGE_CARD && w.PrimaryPlaneFormat==0 && w.PrimaryPitch==0);
     request.hAllocation=NULL;request.PrimaryAddress.QuadPart=0x50000;w.PrimaryPitch=0;
     CHECK(Flip(&d,&request)==STATUS_SUCCESS);
     CHECK(programmed_format==BC250_PLANE_FORMAT_ARGB8888 && programmed_pitch==5632);
@@ -949,23 +969,23 @@ static void Publication(int level)
                 // Freeing the surface the plane is reading restores the firmware surface before
                 // the object goes: an application swap-chain buffer has no lifetime tie to the
                 // video present source, so this is the only thing between a crashed game and a
-                // plane scanning VRAM that VidMm has handed to somebody else. BD-170 r6: the restore
-                // is a writer, so a flip meanwhile is a deposit and not a programming under it.
-                freed=journaled=restores=0;restore_result=STATUS_SUCCESS;
+                // plane scanning VRAM that VidMm has handed to somebody else. Begin first proves a
+                // reserved bridge; flips during the writer are refused until End releases it.
+                freed=journaled=0;
                 // The flip lines are written per frame and spend their allowance in the first
                 // seconds; the teardown line keeps its own, so the one line that says the plane
                 // was taken back is still written after a long run.
                 w.ScanoutNotes=notes=BC250_WDDM_LOG_CALLS*4;
                 CHECK(Destroy(&d,&good)==STATUS_SUCCESS);
                 CHECK(w.ScanoutTeardowns==1 && w.ScanoutNotes==notes);
-                CHECK(restores==1 && restore_writer && freed==1 && journaled==1 && w.ScanoutObject==0);
+                CHECK(plane_card==(LONGLONG)BRIDGE_CARD && freed==1 && journaled==1 && w.ScanoutObject==0);
                 CHECK(w.PrimaryNeedsRestore && w.PrimaryAddress.QuadPart==0 && w.PrimaryPitch==0);
                 CHECK(w.PrimaryPlaneFormat==0);   // M15.14: the restore put the firmware's format back
                 CHECK(!w.DesiredOwed && !w.WriterActive && !(w.PrimarySequence&1) && w.DestroyUnsynchronized==0);
                 // Any other allocation's destroy touches neither the plane nor the record.
-                w.PrimaryNeedsRestore=FALSE;restores=0;freed=0;
+                w.PrimaryNeedsRestore=FALSE;freed=0;
                 CHECK(Destroy(&d,&umd)==STATUS_SUCCESS);
-                CHECK(restores==0 && freed==1 && !w.PrimaryNeedsRestore && w.ScanoutObject==0);
+                CHECK(freed==1 && !w.PrimaryNeedsRestore && w.ScanoutObject==0);
                 // The interleaving the tie exists for: dxgkrnl frees the buffer of a flip that is still
                 // inside SetVidPnSourceAddress, after the plane has been written with it. The record must
                 // already name that buffer while the plane is written, or a destroy on another processor
@@ -977,12 +997,12 @@ static void Publication(int level)
                     LONGLONG scanned;
                     request.hAllocation=&good;request.PrimarySegment=BC250_WDDM_SEGMENT_VRAM;
                     request.PrimaryAddress.QuadPart=0xE000;
-                    hardware_result=STATUS_SUCCESS;freed=journaled=restores=0;
+                    hardware_result=STATUS_SUCCESS;freed=journaled=0;
                     expect_record=(LONGLONG)good.Serial;
                     CHECK(Flip(&d,&request)==STATUS_SUCCESS);
                     CHECK(record_checked==1 && !expect_record);
                     CHECK(Destroy(&d,&good)==STATUS_SUCCESS);
-                    CHECK(restores==1 && freed==1 && journaled==1);
+                    CHECK(plane_card==(LONGLONG)BRIDGE_CARD && freed==1 && journaled==1);
                     CHECK(w.ScanoutTeardowns==teardowns+1 && w.ScanoutObject==0);
                     // A programming refused before its write sequence gave the plane no address it keeps, so
                     // the record goes back to the object the previous flip left there.
@@ -1022,17 +1042,17 @@ static void Publication(int level)
                     // new serial is what a freed object and the next allocation at its address look
                     // like, and it must not match: a pointer record would have matched and taken the
                     // plane back to the firmware surface for a buffer nobody destroyed.
-                    good.Serial=0x9002;freed=journaled=restores=0;
+                    good.Serial=0x9002;freed=journaled=0;
                     CHECK(Destroy(&d,&good)==STATUS_SUCCESS);
-                    CHECK(restores==0 && freed==1 && w.ScanoutObject==scanned);
+                    CHECK(freed==1 && w.ScanoutObject==scanned);
                     // A serial of 0 is the record's own "nothing is being scanned out" and must never
                     // match either, whatever the record holds.
-                    good.Serial=0;freed=journaled=restores=0;
+                    good.Serial=0;freed=journaled=0;
                     CHECK(Destroy(&d,&good)==STATUS_SUCCESS);
-                    CHECK(restores==0 && freed==1 && w.ScanoutObject==scanned);
-                    good.Serial=0x9001;freed=journaled=restores=0;
+                    CHECK(freed==1 && w.ScanoutObject==scanned);
+                    good.Serial=0x9001;freed=journaled=0;
                     CHECK(Destroy(&d,&good)==STATUS_SUCCESS);
-                    CHECK(restores==1 && w.ScanoutObject==0);
+                    CHECK(plane_card==(LONGLONG)BRIDGE_CARD && w.ScanoutObject==0);
                     w.PrimaryNeedsRestore=FALSE;
                 }
                 w.PrimaryPitch=5632;w.PrimaryAddress.QuadPart=0x4000;
@@ -1259,9 +1279,9 @@ static void FaultDpcs(void)
     d.Wddm=NULL;FaultDpc(&d);d.Wddm=&w;
     CHECK(faults_notified==0);
 }
-/* BD-170 r6: a write sequence that ran and failed is unknown, never proof that nothing was written: E5 with
- * BC250_FLIP_FAULT_PROGRAM. Nothing is published, and the teardown record keeps the new object, which the plane may now
- * read: its destroy still restores the firmware surface, without the writer section (Begin refuses in FAULTING). */
+/* A write sequence that ran and failed is unknown, never proof that nothing was written: E5 with
+ * BC250_FLIP_FAULT_PROGRAM. Nothing is published, and the teardown record keeps the new object, which the plane may
+ * read. Begin refuses in FAULTING, so destroy must keep the allocation instead of taking an unsynchronized fallback. */
 static void FaultProgram(int level)
 {
     BC250_WDDM w;BC250_DEVICE d;
@@ -1286,9 +1306,9 @@ static void FaultProgram(int level)
     CHECK(Flip(&d,&request)==STATUS_DEVICE_HARDWARE_ERROR && hardware==1 && w.FlipEdges[BC250_FLIP_EDGE_FAULTING]==1);
     FaultDpc(&d);
     CheckFault(BC250_FLIP_FAULT_PROGRAM,1);
-    CHECK(Destroy(&d,&game)==STATUS_SUCCESS);
-    CHECK(restores==1 && !restore_writer && w.DestroyUnsynchronized==1 && w.WriterFaulting==1 && w.ScanoutObject==0);
-    CHECK(w.PrimaryNeedsRestore && w.PrimaryAddress.QuadPart==0);
+    CHECK(!NT_SUCCESS(Destroy(&d,&game)));
+    CHECK(freed==0 && w.DestroyUnsynchronized==0 && w.WriterFaulting==1);
+    CHECK(w.ScanoutObject==(LONGLONG)game.Serial && w.PrimaryAddress.QuadPart==0x1000);
 }
 /* BD-170 r6: F1. A request that meets an odd generation with no writer, or a writer with an even generation, was not
  * serialized by L, which facts M904 says cannot happen: E5 with BC250_FLIP_FAULT_OVERLAP, nothing programmed. */
@@ -1309,294 +1329,178 @@ static void Overlap(int level)
         CheckFault(BC250_FLIP_FAULT_OVERLAP,0);
     }
 }
-/* BD-170 r6: the writers (modeset.c, connector_link.c, hdmi_link.c, the destroy restore), each a Begin, a Resume before
- * any unblank, and an End, each one section. Flips during a writer: W-v, W-i and W-u deposit Desired, W-u with a record
- * of its own. End
- * programs a deposit, or a next-VSync success no report carried, while the OTG runs; E5 when it does not; nothing in
- * FAULTING or with the flip gate closed. The writers run at PASSIVE_LEVEL; the flips at level. */
+/* R7 writer ownership: Begin retires the application surface through the reserved bridge before it publishes
+ * WriterActive. That proof does not fulfill a new request's immediate or next-VSync timing. Requests during a
+ * hardware writer are refused without publishing anything; End restores the original Desired inside L. */
 static void Writers(int level)
 {
     BC250_WDDM w;BC250_DEVICE d;
     DXGKARG_SETVIDPNSOURCEADDRESS request={0};
-    BC250_WDDM_OBJECT game={0};
-    BC250_WDDM_DESIRED desired;
+    BC250_WDDM_OBJECT game[3];
     BC250_WDDM_WU_COPY copy;
-    const BC250_WDDM_WU_RECORD *r;
     ULONG generation;
-    unsigned hw,sections,k;
-    game.Magic=BC250_WDDM_MAGIC_ALLOCATION;game.Serial=0x5001;game.UmdAlloc=1;game.ScanoutRequested=1;
-    game.ScanoutWidth=1366;game.ScanoutHeight=768;game.ScanoutPitch=5632;game.UmdBytes=5632ull*768;
-    game.ScanoutFormat=D3DDDIFMT_A8B8G8R8;
+    unsigned k,i,hw,sections,timing;
+    memset(game,0,sizeof(game));
+    for(i=0;i<3;i++){
+        game[i].Magic=BC250_WDDM_MAGIC_ALLOCATION;game[i].Serial=0x5001+i;game[i].UmdAlloc=1;game[i].ScanoutRequested=1;
+        game[i].ScanoutWidth=1366;game[i].ScanoutHeight=768;game[i].ScanoutPitch=5632;game[i].UmdBytes=5632ull*768;
+        game[i].ScanoutFormat=D3DDDIFMT_A8B8G8R8;
+    }
     request.PrimarySegment=BC250_WDDM_SEGMENT_VRAM;
+    for(k=BC250_WRITER_MODESET_COMMIT;k<BC250_WRITER_KINDS;k++)for(timing=0;timing<2;timing++){
+        Setup(&d,&w,level);begin_kind=k;
+        request.Flags.Value=0;request.hAllocation=&game[0];request.PrimaryAddress.QuadPart=0x30000;
+        CHECK(Flip(&d,&request)==STATUS_SUCCESS);
+        displayed=0x30000;Vblank(&d);
+        CHECK(reported==0x30000 && !w.DesiredOwed);
+        hw=hardware;
+        CHECK(Begin(&d,&generation));
+        CHECK(w.WriterActive && (w.PrimarySequence&1) && !w.WriterDeposit && !w.WriterResumed);
+        CHECK(bridge_writes==1 && plane_card==(LONGLONG)BRIDGE_CARD && hardware==hw);
+        /* W-u's old success could retire A without satisfying B's timing. Both timing modes keep A owned and
+         * unchanged, irrespective of the reserved bridge's DRAINED readback. */
+        hubp_state=(k%3)==0?1:(k%3)==1?0:-1;
+        request.hAllocation=&game[1];request.PrimaryAddress.QuadPart=0x40000;
+        request.Flags.Value=0;request.Flags.FlipImmediate=timing;request.Flags.FlipOnNextVSync=!timing;
+        CHECK(Flip(&d,&request)==STATUS_DEVICE_BUSY && !w.Faulting && !w.DesiredOwed);
+        CHECK(hardware==hw && plane_card==(LONGLONG)BRIDGE_CARD && w.ScanoutObject==(LONGLONG)game[0].Serial);
+        CHECK(w.PrimaryAddress.QuadPart==0x30000 && !w.WriterDeposit && w.WuRecordNext==0);
+        /* Resume authorizes reserved storage only. Neither a stale B nor C can become End's target. */
+        CHECK(Resume(&d)==STATUS_SUCCESS && w.WriterResumed);
+        request.hAllocation=&game[2];request.PrimaryAddress.QuadPart=0x50000;
+        CHECK(Flip(&d,&request)==STATUS_DEVICE_BUSY && !w.Faulting && !w.WriterDeposit);
+        CHECK(w.PrimaryAddress.QuadPart==0x30000 && w.ScanoutObject==(LONGLONG)game[0].Serial && !w.DesiredOwed);
+        CHECK(w.WriterBusy==2 && w.Flips==1 && w.WuRecordNext==0);
+        CHECK(Destroy(&d,&game[2])==STATUS_SUCCESS && freed==1);
+        CHECK(plane_card==(LONGLONG)BRIDGE_CARD && hardware==hw && w.WriterActive);
+        CHECK(End(&d,generation,FALSE)==STATUS_SUCCESS);
+        CHECK(hardware==hw+1 && plane_card==0x30000 && w.PrimaryAddress.QuadPart==0x30000);
+        CHECK(!w.WriterActive && !w.WriterDeposit && !(w.PrimarySequence&1));
+        CHECK(w.ScanoutObject==(LONGLONG)game[0].Serial && !w.PrimaryNeedsRestore && !w.DesiredOwed);
+        CHECK(w.FlipFaults==0 && fault_blanks==0 && faults_notified==0);
+        /* After End the OS can retry B. This real immediate completion can finally release A. */
+        request.hAllocation=&game[1];request.PrimaryAddress.QuadPart=0x40000;
+        request.Flags.Value=0;request.Flags.FlipImmediate=1;
+        CHECK(Flip(&d,&request)==STATUS_SUCCESS && plane_card==0x40000 && w.ScanoutObject==(LONGLONG)game[1].Serial);
+        CHECK(Destroy(&d,&game[0])==STATUS_SUCCESS && freed==2 && plane_card==0x40000);
+    }
 
-    /* Begin takes the generation in one section: odd from here on, a writer active, nothing resumed or deposited. */
+    /* A next-VSync flip accepted before Begin remains owed. Refusing a new request cannot consume that debt. */
     Setup(&d,&w,level);
-    CHECK(Begin(&d,&generation) && generation==0 && syncs==1);
-    CHECK(w.PrimarySequence==1 && w.WriterActive && !w.WriterResumed && !w.WriterDeposit);
-    /* W-v: a next-VSync request during the writer becomes Desired. Nothing is programmed and nothing read back. */
-    request.Flags.Value=0;request.PrimaryAddress.QuadPart=0x20000;
-    CHECK(Flip(&d,&request)==STATUS_SUCCESS);
-    CHECK(hardware==0 && hubp_reads==0 && w.FlipEdges[BC250_FLIP_EDGE_DEPOSIT_VSYNC]==1);
-    CHECK(w.PrimaryAddress.QuadPart==0x20000 && w.WriterDeposit && w.DesiredOwed && w.DepositSequence==1);
-    CHECK(w.PrimaryNeedsRestore && w.PrimarySequence==1 && w.Flips==1);
-    /* End programs the deposit with the next-VSync type while the OTG runs; the generation is even again. */
-    End(&d,generation,FALSE);
-    CHECK(hardware==1 && plane_card==0x20000 && !programmed_immediate && otg_reads==1 && w.EndPrograms==1);
-    CHECK(!w.WriterActive && !w.WriterDeposit && w.PrimarySequence==2 && w.PrimaryProgrammedSequence==2);
-    CHECK(!w.PrimaryNeedsRestore && w.DesiredOwed);
-    /* The first real report that carries Desired completes the owed success: the next End owes nothing. */
+    request.Flags.Value=0;request.hAllocation=NULL;request.PrimaryAddress.QuadPart=0x20000;
+    CHECK(Flip(&d,&request)==STATUS_SUCCESS && w.DesiredOwed);
+    CHECK(Begin(&d,&generation));
+    request.PrimaryAddress.QuadPart=0x21000;
+    CHECK(Flip(&d,&request)==STATUS_DEVICE_BUSY && !w.WriterDeposit && w.DesiredOwed);
+    CHECK(End(&d,generation,TRUE)==STATUS_SUCCESS && plane_card==0x20000);
+    CHECK(w.PrimaryAddress.QuadPart==0x20000 && !w.PrimaryNeedsRestore);
+    CHECK(w.DesiredOwed && !programmed_immediate);
     pending=0;displayed=0x20000;Vblank(&d);
     CHECK(reported==0x20000 && !w.DesiredOwed && w.OwedReported==1);
-    CHECK(Begin(&d,&generation) && generation==2);
-    End(&d,generation,FALSE);
-    CHECK(hardware==1 && otg_reads==1 && w.EndPrograms==1 && w.PrimarySequence==4);
-    /* W-i: an immediate request while the plane is proven drained and the writer has not resumed it: a deposit that
-     * owes no report. End programs it, with the next-VSync type, before any fetch. */
-    CHECK(Begin(&d,&generation) && generation==4);
-    request.Flags.Value=0;request.Flags.FlipImmediate=1;request.PrimaryAddress.QuadPart=0x21000;
-    CHECK(Flip(&d,&request)==STATUS_SUCCESS);
-    CHECK(hardware==1 && observed==0 && hubp_reads==1 && w.FlipEdges[BC250_FLIP_EDGE_DEPOSIT_DRAINED]==1);
-    CHECK(w.WriterDeposit && !w.DesiredOwed && w.DepositSequence==2);
-    End(&d,generation,FALSE);
-    CHECK(hardware==2 && plane_card==0x21000 && !programmed_immediate && w.EndPrograms==2 && !w.DesiredOwed);
+    CHECK(Begin(&d,&generation));
+    request.Flags.FlipImmediate=1;request.PrimaryAddress.QuadPart=0x22000;
+    CHECK(Flip(&d,&request)==STATUS_DEVICE_BUSY && !w.DesiredOwed);
+    CHECK(End(&d,generation,FALSE)==STATUS_SUCCESS && plane_card==0x20000);
 
-    /* W-u: an immediate request during a writer with the plane not drained, with its read failed, or after Resume
-     * (no DRAINED readback counts any more, even a drained one): a deposit and success like W-v and W-i, never E5 (a
-     * writer conflict is a normal state). Its record names the code, the writer, the generation and the request; End
-     * programs the deposit with the next-VSync type and writes the time from the deposit to End. */
-    for(k=0;k<3;k++){
-        Setup(&d,&w,level);
-        begin_kind=BC250_WRITER_LINK_COMMIT+k;
-        CHECK(Begin(&d,&generation) && w.WriterKind==BC250_WRITER_LINK_COMMIT+k);
-        request.Flags.Value=0;request.PrimaryAddress.QuadPart=0x30000;
-        CHECK(Flip(&d,&request)==STATUS_SUCCESS && w.WriterDeposit);
-        if(k==2){CHECK(Resume(&d,&desired) && w.WriterResumed);hubp_state=1;}
-        else hubp_state=k?-1:0;
-        request.Flags.Value=0;request.Flags.FlipImmediate=1;request.PrimaryAddress.QuadPart=0x31000;
-        CHECK(Flip(&d,&request)==STATUS_SUCCESS);
-        CHECK(w.FlipEdges[BC250_FLIP_EDGE_DEPOSIT_UNPROVEN]==1 && hubp_reads==1 && hardware==0);
-        CHECK(!w.Faulting && w.FlipFaults==0 && fault_blanks==0 && dpcs==0);
-        CHECK(w.PrimaryAddress.QuadPart==0x31000 && w.WriterDeposit && !w.DesiredOwed && w.DepositSequence==2);
-        r=&w.WuRecords[0];
-        CHECK(w.WuRecordNext==1 && r->Record==1 && r->Code==BC250_FLIP_RECORD_WRITER_UNPROVEN && r->Request==0x31000);
-        CHECK(r->Flags==request.Flags.Value && r->Generation==1 && r->Writer==BC250_WRITER_LINK_COMMIT+k);
-        CHECK(r->Deposit==2 && r->End==BC250_WU_OPEN && r->ToEndUs==-1 && !r->Unblank);
-        End(&d,generation,FALSE);
-        CHECK(hardware==1 && plane_card==0x31000 && !programmed_immediate && w.EndPrograms==1 && !w.Faulting);
-        CHECK(r->End==BC250_WU_END_PROGRAM && r->ToEndUs>0 && w.WuToEndMaxUs==r->ToEndUs);
-        CHECK(!w.WriterActive && w.PrimarySequence==2);
-    }
-    /* A W-u deposit that the writer's unblank programmed is recorded as such; one that a newer deposit replaced is
-     * superseded; End's refusal is End's. A record of an earlier writer is not closed again by a later End. */
-    Setup(&d,&w,level);
-    CHECK(Begin(&d,&generation));
-    hubp_state=0;
-    request.Flags.Value=0;request.Flags.FlipImmediate=1;request.PrimaryAddress.QuadPart=0x32000;
-    CHECK(Flip(&d,&request)==STATUS_SUCCESS && w.WuRecordNext==1);
-    CHECK(Resume(&d,&desired) && desired.CardAddress==0x32000 && desired.Sequence==1);
-    Programmed(&d,desired.Sequence);
-    CHECK(w.WuRecords[0].Unblank && w.WuRecords[0].End==BC250_WU_OPEN && !w.WriterDeposit);
-    request.PrimaryAddress.QuadPart=0x33000;
-    CHECK(Flip(&d,&request)==STATUS_SUCCESS && w.WuRecordNext==2);
-    request.PrimaryAddress.QuadPart=0x34000;
-    CHECK(Flip(&d,&request)==STATUS_SUCCESS && w.WuRecordNext==3 && w.FlipEdges[BC250_FLIP_EDGE_DEPOSIT_UNPROVEN]==3);
-    hardware_result=STATUS_ACCESS_DENIED;
-    End(&d,generation,FALSE);
-    hardware_result=STATUS_SUCCESS;
-    CHECK(w.WuRecords[0].End==BC250_WU_UNBLANK && w.WuRecords[1].End==BC250_WU_SUPERSEDED);
-    CHECK(w.WuRecords[2].End==BC250_WU_END_REFUSED && w.OwedInvalidated==1 && !w.Faulting);
-    CHECK(w.WuRecords[0].Writer==BC250_WRITER_MODESET_COMMIT && w.WuRecords[2].Generation==1);
-    CHECK(Begin(&d,&generation) && generation==2);
-    End(&d,generation,FALSE);
-    CHECK(w.WuRecords[2].End==BC250_WU_END_REFUSED && w.WuRecords[1].End==BC250_WU_SUPERSEDED);
-    /* The summary's copy: one section, every record as written; with the section refused, nothing. */
+    /* Resume with no writer exports no app state; high IRQL cannot acquire its section. */
     sections=syncs;
-    CHECK(WuCopy(&d,&copy) && syncs==sections+1 && copy.Next==3 && copy.ToEndMaxUs==w.WuToEndMaxUs);
-    CHECK(copy.Records[2].Request==0x34000 && copy.Records[2].End==BC250_WU_END_REFUSED && copy.Records[3].Record==0);
-    sync_refusals=1;
-    CHECK(!WuCopy(&d,&copy) && copy.Next==0 && copy.Records[0].Record==0);
-    /* End with the OTG stopped owes the W-u deposit: End's own E5 (BC250_FLIP_FAULT_OWED_STOPPED), recorded as such. */
-    Setup(&d,&w,level);
-    CHECK(Begin(&d,&generation));
-    hubp_state=0;
-    request.Flags.Value=0;request.Flags.FlipImmediate=1;request.PrimaryAddress.QuadPart=0x35000;
-    CHECK(Flip(&d,&request)==STATUS_SUCCESS && !w.Faulting);
-    otg_state=0;
-    End(&d,generation,FALSE);
-    CHECK(w.Faulting && w.FaultCode==BC250_FLIP_FAULT_OWED_STOPPED && w.WuRecords[0].End==BC250_WU_END_FAULT);
-    FaultDpc(&d);
-    CheckFault(BC250_FLIP_FAULT_OWED_STOPPED,0);
-    /* End in FAULTING programs nothing, not even a deposit it owes, and still ends. No flip path enters E5 while a
-     * writer holds the transaction, so FAULTING is set here directly. */
-    Setup(&d,&w,level);
-    CHECK(Begin(&d,&generation));
-    request.Flags.Value=0;request.PrimaryAddress.QuadPart=0x36000;
-    CHECK(Flip(&d,&request)==STATUS_SUCCESS && w.WriterDeposit && w.DesiredOwed);
-    w.Faulting=1;
-    End(&d,generation,FALSE);
-    CHECK(hardware==0 && otg_reads==0 && w.EndPrograms==0 && !w.WriterActive && w.PrimarySequence==2);
-
-    /* Resume hands the deposit to the unblank site; DepositProgrammed with its sequence takes it off End. A newer
-     * deposit after Resume is not taken off by the older sequence. */
-    Setup(&d,&w,level);
-    CHECK(Begin(&d,&generation));
-    request.hAllocation=&game;request.Flags.Value=0;request.PrimaryAddress.QuadPart=0x22000;
-    CHECK(Flip(&d,&request)==STATUS_SUCCESS && w.ScanoutObject==(LONGLONG)game.Serial);
-    sections=syncs;
-    CHECK(Resume(&d,&desired) && syncs==sections+1 && w.WriterResumed);
-    CHECK(desired.CardAddress==0x22000 && desired.Pitch==5632 && desired.PlaneFormat==BC250_PLANE_FORMAT_ABGR8888);
-    CHECK(desired.Bytes==5632ull*768 && desired.Sequence==1);
-    request.hAllocation=NULL;request.PrimaryAddress.QuadPart=0x23000;
-    CHECK(Flip(&d,&request)==STATUS_SUCCESS && w.DepositSequence==2 && w.ScanoutObject==0);
-    Programmed(&d,1);
-    CHECK(w.WriterDeposit && w.DepositsResumed==0 && w.PrimaryNeedsRestore);
-    Programmed(&d,2);
-    CHECK(!w.WriterDeposit && w.DepositsResumed==1 && !w.PrimaryNeedsRestore);
-    /* A next-VSync deposit is still owed a report: End programs it again so that the next real report carries it. */
-    End(&d,generation,FALSE);
-    CHECK(hardware==1 && plane_card==0x23000 && w.EndPrograms==1 && w.DesiredOwed);
-    /* An immediate deposit (W-i) that the unblank site programmed leaves End nothing to do. */
-    CHECK(Begin(&d,&generation));
-    request.Flags.Value=0;request.Flags.FlipImmediate=1;request.PrimaryAddress.QuadPart=0x24000;
-    CHECK(Flip(&d,&request)==STATUS_SUCCESS && w.FlipEdges[BC250_FLIP_EDGE_DEPOSIT_DRAINED]==1);
-    CHECK(Resume(&d,&desired) && desired.Sequence==3 && desired.CardAddress==0x24000);
-    Programmed(&d,desired.Sequence);
-    hw=hardware;
-    End(&d,generation,FALSE);
-    CHECK(hardware==hw && otg_reads==1 && w.EndPrograms==1 && !w.WriterActive);
-    /* Resume with no writer (the stop path): nothing, but a section. Above DISPATCH_LEVEL (the bugcheck callback):
-     * nothing, no section. With the section refused: nothing, counted. */
-    sections=syncs;memset(&desired,0x5A,sizeof(desired));
-    CHECK(!Resume(&d,&desired) && desired.CardAddress==0 && desired.Sequence==0 && syncs==sections+1);
-    CHECK(!w.WriterResumed);
+    CHECK(Resume(&d)==STATUS_INVALID_DEVICE_STATE && syncs==sections+1 && !w.WriterResumed);
     irq=TEST_DIRQL;
-    CHECK(!WddmWriterResume(&d,&desired) && syncs==sections+1);
+    CHECK(!NT_SUCCESS(WddmWriterResume(&d)) && syncs==sections+1);
     irq=level?TEST_DIRQL:0;
-    sync_refusals=1;
-    CHECK(!Resume(&d,&desired) && w.WriterSyncFailed==1);
-    /* With no writer, a programmed deposit sequence changes nothing. */
-    Programmed(&d,3);
-    CHECK(w.DepositsResumed==2 && !w.WriterDeposit);
 
-    /* End with a deposit owed and the OTG stopped, or its read failed: no report would ever carry the deposit (no
-     * timer makes a CRTC_VSYNC with the gate open), so E5 with BC250_FLIP_FAULT_OWED_STOPPED, on node 0. */
-    for(k=0;k<2;k++){
-        Setup(&d,&w,level);
-        CHECK(Begin(&d,&generation));
-        request.Flags.Value=0;request.PrimaryAddress.QuadPart=0x25000;
-        CHECK(Flip(&d,&request)==STATUS_SUCCESS);
-        otg_state=k?-1:0;
-        End(&d,generation,FALSE);
-        CHECK(hardware==0 && otg_reads==1 && w.Faulting && w.FaultCode==BC250_FLIP_FAULT_OWED_STOPPED);
-        CHECK(w.FaultNode==BC250_WDDM_NODE_3D && fault_blanks==1 && dpcs==1 && !w.WriterActive && w.PrimarySequence==2);
-        FaultDpc(&d);
-        CheckFault(BC250_FLIP_FAULT_OWED_STOPPED,0);
-    }
-    /* End's programming refused (the deposit no longer fits the source): dropped and counted, not a fault, and the
-     * next flip is a change whatever address it carries. */
-    Setup(&d,&w,level);
-    CHECK(Begin(&d,&generation));
-    request.Flags.Value=0;request.PrimaryAddress.QuadPart=0x26000;
-    CHECK(Flip(&d,&request)==STATUS_SUCCESS);
-    hardware_result=STATUS_ACCESS_DENIED;
-    End(&d,generation,FALSE);
-    CHECK(hardware==1 && w.OwedInvalidated==1 && !w.DesiredOwed && w.PrimaryNeedsRestore && !w.Faulting);
-    CHECK(w.EndPrograms==0 && w.PrimarySequence==2);
-    hardware_result=STATUS_SUCCESS;
-    CHECK(Flip(&d,&request)==STATUS_SUCCESS && hardware==2 && plane_card==0x26000 && !w.PrimaryNeedsRestore);
-    /* End's programming failed after its write sequence ran: E5 with BC250_FLIP_FAULT_PROGRAM. */
-    Setup(&d,&w,level);
-    CHECK(Begin(&d,&generation));
-    CHECK(Flip(&d,&request)==STATUS_SUCCESS);
-    hardware_result=STATUS_IO_TIMEOUT;hardware_wrote=1;
-    End(&d,generation,FALSE);
-    CHECK(w.Faulting && w.FaultCode==BC250_FLIP_FAULT_PROGRAM && w.EndPrograms==0 && w.PrimarySequence==2);
-    hardware_result=STATUS_SUCCESS;hardware_wrote=0;
-
-    /* Invalidate: the writer put the plane back on the firmware surface. With nothing owed the published primary
-     * and the teardown record go; when End programmed Desired over it, they stay. */
+    /* Invalidate removes the old Desired. A request refused during the writer cannot survive as a new Desired. */
     Setup(&d,&w,level);
     w.ScanoutObject=0x55;w.PrimaryPlaneFormat=BC250_PLANE_FORMAT_ARGB8888;
     CHECK(Begin(&d,&generation));
-    End(&d,generation,TRUE);
-    CHECK(otg_reads==0 && w.PrimaryAddress.QuadPart==0 && w.PrimaryNeedsRestore && w.PrimaryPitch==0);
-    CHECK(w.PrimaryPlaneFormat==0 && w.ScanoutObject==0);
+    CHECK(End(&d,generation,TRUE)==STATUS_SUCCESS);
+    CHECK(w.PrimaryAddress.QuadPart==0 && w.PrimaryNeedsRestore && w.PrimaryPitch==0 && w.ScanoutObject==0);
+    CHECK(plane_card==(LONGLONG)BRIDGE_CARD && hardware==0);
     w.PrimaryPitch=5632;
     CHECK(Begin(&d,&generation));
     request.Flags.Value=0;request.PrimaryAddress.QuadPart=0x27000;
-    CHECK(Flip(&d,&request)==STATUS_SUCCESS);
-    End(&d,generation,TRUE);
-    CHECK(plane_card==0x27000 && w.PrimaryAddress.QuadPart==0x27000 && !w.PrimaryNeedsRestore && w.PrimaryPitch==5632);
-    /* The flip gate closed: End programs nothing and reads nothing. Desired owed stays published for the software
-     * timer, so Invalidate leaves it; with nothing owed Invalidate applies. */
-    Setup(&d,&w,level);
-    d.VidPnFlipEnabled=0;
-    CHECK(Begin(&d,&generation));
-    request.Flags.Value=0;request.Flags.FlipImmediate=1;request.PrimaryAddress.QuadPart=0x28000;
-    CHECK(Flip(&d,&request)==STATUS_SUCCESS && w.FlipEdges[BC250_FLIP_EDGE_DEPOSIT_VSYNC]==1 && hubp_reads==0);
-    End(&d,generation,TRUE);
-    CHECK(hardware==0 && otg_reads==0 && w.PrimaryAddress.QuadPart==0x28000 && w.EndPrograms==0);
-    w.WriterDeposit=FALSE;w.DesiredOwed=FALSE;
-    CHECK(Begin(&d,&generation));
-    End(&d,generation,TRUE);
-    CHECK(w.PrimaryAddress.QuadPart==0 && w.PrimaryNeedsRestore);
-    w.PrimaryPitch=5632;
-    /* D3: dxgmms2 flushed the flip queue, so the owed success is not owed any more, and End programs nothing. */
+    CHECK(Flip(&d,&request)==STATUS_DEVICE_BUSY);
+    CHECK(End(&d,generation,TRUE)==STATUS_SUCCESS);
+    CHECK(plane_card==(LONGLONG)BRIDGE_CARD && w.PrimaryAddress.QuadPart==0 && w.PrimaryNeedsRestore);
+
+    /* A closed flip gate carries only software state. The timer still owns a next-VSync completion. */
+    Setup(&d,&w,level);d.VidPnFlipEnabled=0;
+    CHECK(Begin(&d,&generation) && bridge_writes==0);
+    request.Flags.Value=0;request.PrimaryAddress.QuadPart=0x28000;
+    CHECK(Flip(&d,&request)==STATUS_SUCCESS && w.DesiredOwed);
+    CHECK(End(&d,generation,TRUE)==STATUS_SUCCESS);
+    CHECK(hardware==0 && otg_reads==0 && w.PrimaryAddress.QuadPart==0x28000 && w.DesiredOwed);
+    CHECK(Begin(&d,&generation) && bridge_writes==0);
+    request.Flags.Value=0;request.Flags.FlipImmediate=1;request.PrimaryAddress.QuadPart=0x28500;
+    CHECK(Flip(&d,&request)==STATUS_SUCCESS && !w.DesiredOwed);
+    CHECK(hubp_reads==0 && w.FlipEdges[BC250_FLIP_EDGE_DEPOSIT_VSYNC]==2 && w.WuRecordNext==0);
+    CHECK(End(&d,generation,TRUE)==STATUS_SUCCESS);
+    CHECK(hardware==0 && otg_reads==0 && w.PrimaryAddress.QuadPart==0x28500);
+    /* D3 flush removes report debt before the power writer invalidates the primary. */
     Setup(&d,&w,level);
     request.Flags.Value=0;request.PrimaryAddress.QuadPart=0x29000;
-    CHECK(Flip(&d,&request)==STATUS_SUCCESS && w.DesiredOwed && hardware==1);
+    CHECK(Flip(&d,&request)==STATUS_SUCCESS && w.DesiredOwed);
     irq=0;WddmFlipFlushed(&d);irq=level?TEST_DIRQL:0;
     CHECK(!w.DesiredOwed && w.FlipFlushes==1);
-    CHECK(Begin(&d,&generation));
-    End(&d,generation,FALSE);
-    CHECK(hardware==1 && otg_reads==0);
-    sync_refusals=1;irq=0;WddmFlipFlushed(&d);irq=level?TEST_DIRQL:0;
-    CHECK(w.WriterSyncFailed==1 && w.FlipFlushes==1);
+    hw=hardware;CHECK(Begin(&d,&generation));CHECK(End(&d,generation,TRUE)==STATUS_SUCCESS);
+    CHECK(hardware==hw && w.PrimaryAddress.QuadPart==0);
 
-    /* Begin refused: another writer holds the generation for the whole bound, 200 tries 10 us apart (2 ms), each try
-     * one section and each stall outside L. */
-    Setup(&d,&w,level);
-    w.PrimarySequence=5;w.WriterActive=TRUE;
-    CHECK(!Begin(&d,&generation) && generation==0 && syncs==200 && stalls10==200 && w.PrimarySequence==5);
-    w.PrimarySequence=6;w.WriterActive=FALSE;
-    /* Begin in FAULTING at once, above DISPATCH_LEVEL with no section, with the section refused, and with no WDDM
-     * state (TRUE, nothing held). */
-    w.Faulting=1;sections=syncs;
-    CHECK(!Begin(&d,&generation) && w.WriterFaulting==1 && syncs==sections+1);
+    /* End cannot complete an owed application flip through a stopped or unreadable OTG. */
+    for(k=0;k<2;k++){
+        Setup(&d,&w,level);
+        request.PrimaryAddress.QuadPart=0x2A000;
+        CHECK(Flip(&d,&request)==STATUS_SUCCESS);CHECK(Begin(&d,&generation));
+        otg_state=k?-1:0;hw=hardware;
+        CHECK(End(&d,generation,FALSE)==STATUS_DEVICE_HARDWARE_ERROR);
+        CHECK(w.Faulting && w.FaultCode==BC250_FLIP_FAULT_OWED_STOPPED && hardware==hw && fault_blanks==1);
+    }
+
+    /* A refused bridge has not released the old allocation. Failure after a write is a hardware failure, not a
+     * normal writer conflict. The writer must never become active in either case. */
+    Setup(&d,&w,level);bridge_result=STATUS_ACCESS_DENIED;
+    CHECK(!Begin(&d,&generation) && !w.WriterActive && !(w.PrimarySequence&1));
+    CHECK(plane_card==0x1000 && hardware==0 && !w.Faulting);
+    Setup(&d,&w,level);bridge_result=STATUS_IO_TIMEOUT;bridge_wrote=TRUE;
+    CHECK(!Begin(&d,&generation) && !w.WriterActive && w.Faulting && fault_blanks==1);
+
+    /* A different writer owns the generation: Begin is bounded and never makes the interrupted writer progress. */
+    Setup(&d,&w,level);w.PrimarySequence=5;w.WriterActive=TRUE;
+    CHECK(!Begin(&d,&generation) && syncs==200 && stalls10==200 && w.PrimarySequence==5 && bridge_writes==0);
+    w.PrimarySequence=6;w.WriterActive=FALSE;w.Faulting=1;sections=syncs;
+    CHECK(!Begin(&d,&generation) && syncs==sections+1 && bridge_writes==0);
     w.Faulting=0;irq=TEST_DIRQL;
-    CHECK(!WddmPrimaryExclusiveBegin(&d,BC250_WRITER_HDMI_START,&generation) && w.WriterHigh==1 && syncs==sections+1);
-    irq=level?TEST_DIRQL:0;sync_refusals=1;
-    CHECK(!Begin(&d,&generation) && w.WriterSyncFailed==1 && w.PrimarySequence==6);
+    CHECK(!WddmPrimaryExclusiveBegin(&d,BC250_WRITER_HDMI_START,&generation) && syncs==sections+1);
+    irq=level?TEST_DIRQL:0;
     d.Wddm=NULL;generation=9;
     CHECK(Begin(&d,&generation) && generation==0);
-    End(&d,generation,TRUE);
-    d.Wddm=&w;
-    /* End with its section refused runs without L, counted, as every End did before r6, and still ends; a deposit it
-     * owes is still programmed. */
-    CHECK(Begin(&d,&generation) && generation==6);
-    request.Flags.Value=0;request.PrimaryAddress.QuadPart=0x2A000;
-    CHECK(Flip(&d,&request)==STATUS_SUCCESS);
-    sync_refusals=1;allow_unlocked=1;hw=hardware;
-    End(&d,generation,FALSE);
-    allow_unlocked=0;
-    CHECK(w.WriterSyncFailed==2 && !w.WriterActive && w.PrimarySequence==8 && hardware==hw+1 && w.EndPrograms==1);
+    CHECK(End(&d,generation,TRUE)==STATUS_SUCCESS);
+
+    /* The record-copy section is independently refused; no copied diagnostic data can grant ownership. */
+    Setup(&d,&w,level);sections=syncs;
+    CHECK(WuCopy(&d,&copy) && syncs==sections+1 && copy.Next==0);
+    sync_refusals=1;
+    CHECK(!WuCopy(&d,&copy) && copy.Next==0);
 }
-/* A flip on another processor that wins L just before a section: restore_request at PASSIVE_LEVEL. */
+/* A flip on another processor that wins L just before a section: interleave_request at PASSIVE_LEVEL. */
 static void FirstFlip(BC250_DEVICE *d)
 {
     const int level=irq;
-    irq=0;CHECK(Bc250WddmSetVidPnSourceAddress(d,&restore_request)==STATUS_SUCCESS);irq=level;
+    irq=0;CHECK(Bc250WddmSetVidPnSourceAddress(d,&interleave_request)==STATUS_SUCCESS);irq=level;
 }
-/* BD-170 r6: DestroyAllocation's restore is a writer. The record is taken inside L, the firmware surface restored
- * outside it with the generation held, and End invalidates the published primary. A flip during the restore is a
- * deposit that End programs. A Begin that is refused leaves the restore as before r6, counted. A record that a flip
- * moved on before the section restores nothing. */
+static void RefusedFlip(BC250_DEVICE *d)
+{
+    const int level=irq;
+    irq=0;CHECK(Bc250WddmSetVidPnSourceAddress(d,&interleave_request)==STATUS_DEVICE_BUSY);irq=level;
+}
+/* DestroyAllocation retires the application surface before it frees it. An active writer already owns a reserved
+ * bridge, so destroy can remove its matching Desired under L without nesting another writer or touching hardware. */
 static void DestroyWriter(void)
 {
     BC250_WDDM w;BC250_DEVICE d;
     DXGKARG_SETVIDPNSOURCEADDRESS request={0};
     BC250_WDDM_OBJECT game[4];
     unsigned i,sections;
+    ULONG generation;
     memset(game,0,sizeof(game));
     for(i=0;i<4;i++){
         game[i].Magic=BC250_WDDM_MAGIC_ALLOCATION;game[i].Serial=0x8001+i;game[i].UmdAlloc=1;game[i].ScanoutRequested=1;
@@ -1607,23 +1511,23 @@ static void DestroyWriter(void)
     request.PrimarySegment=BC250_WDDM_SEGMENT_VRAM;
     request.hAllocation=&game[0];request.PrimaryAddress.QuadPart=0x30000;
     CHECK(Flip(&d,&request)==STATUS_SUCCESS && w.ScanoutObject==(LONGLONG)game[0].Serial && w.DesiredOwed);
-    /* Begin, the record taken, End: three sections, the restore between them with the writer holding the generation. */
+    /* Begin proves the reserved bridge before Take clears the app Desired; End then closes ownership. */
     sections=syncs;
     CHECK(Destroy(&d,&game[0])==STATUS_SUCCESS);
-    CHECK(restores==1 && restore_writer && syncs==sections+3 && w.DestroyUnsynchronized==0);
+    CHECK(bridge_writes==1 && plane_card==(LONGLONG)BRIDGE_CARD && syncs>sections && w.DestroyUnsynchronized==0);
     CHECK(w.ScanoutObject==0 && w.PrimaryAddress.QuadPart==0 && w.PrimaryNeedsRestore && !w.DesiredOwed);
     CHECK(!w.WriterActive && !(w.PrimarySequence&1) && w.ScanoutTeardowns==1 && freed==1);
-    /* A flip on another processor during the restore, the compositor's primary: a deposit, which End programs, so the
-     * primary is not invalidated, and the record follows it. */
+    /* A flip on another processor after Begin is refused. It cannot replace the destroyed Desired or make End
+     * program a surface for which the caller never received success. */
     w.PrimaryPitch=5632;
     request.hAllocation=&game[1];request.PrimaryAddress.QuadPart=0x31000;
     CHECK(Flip(&d,&request)==STATUS_SUCCESS && w.ScanoutObject==(LONGLONG)game[1].Serial);
-    memset(&restore_request,0,sizeof(restore_request));
-    restore_request.PrimarySegment=BC250_WDDM_SEGMENT_VRAM;restore_request.PrimaryAddress.QuadPart=0x32000;
-    restore_flip=1;restores=0;
+    memset(&interleave_request,0,sizeof(interleave_request));
+    interleave_request.PrimarySegment=BC250_WDDM_SEGMENT_VRAM;interleave_request.PrimaryAddress.QuadPart=0x32000;
+    after_section_routine=WddmWriterBeginLocked;after_section=RefusedFlip;
     CHECK(Destroy(&d,&game[1])==STATUS_SUCCESS);
-    CHECK(restores==1 && restore_answer==STATUS_SUCCESS && w.FlipEdges[BC250_FLIP_EDGE_DEPOSIT_VSYNC]==1);
-    CHECK(plane_card==0x32000 && w.EndPrograms==1 && w.PrimaryAddress.QuadPart==0x32000 && !w.PrimaryNeedsRestore);
+    CHECK(after_section==NULL && w.FlipEdges[BC250_FLIP_EDGE_DEPOSIT_VSYNC]==1 && w.WriterBusy==1);
+    CHECK(plane_card==(LONGLONG)BRIDGE_CARD && w.EndPrograms==0 && w.PrimaryAddress.QuadPart==0 && w.PrimaryNeedsRestore);
     CHECK(w.ScanoutObject==0 && !w.WriterActive && !(w.PrimarySequence&1));
     /* The record moved on before the section: a flip on another processor won L first. Nothing taken, nothing
      * restored, and End does not invalidate the primary that flip published. */
@@ -1633,22 +1537,143 @@ static void DestroyWriter(void)
         static DXGKARG_SETVIDPNSOURCEADDRESS first;
         memset(&first,0,sizeof(first));
         first.PrimarySegment=BC250_WDDM_SEGMENT_VRAM;first.PrimaryAddress.QuadPart=0x34000;
-        restore_request=first;restores=0;
+        interleave_request=first;
         before_section=FirstFlip;
     }
     CHECK(Destroy(&d,&game[2])==STATUS_SUCCESS);
-    CHECK(restores==0 && w.ScanoutObject==0 && w.PrimaryAddress.QuadPart==0x34000 && !w.PrimaryNeedsRestore);
+    CHECK(w.ScanoutObject==0 && w.PrimaryAddress.QuadPart==0x34000 && !w.PrimaryNeedsRestore);
     CHECK(w.DestroyUnsynchronized==0 && !w.WriterActive && !(w.PrimarySequence&1));
-    /* Begin refused (another writer for the whole bound): the restore without L, counted, and the record still taken.
-     * No section after the 200 tries, and no End: the generation is the other writer's. */
+    /* Another writer owns a proved bridge: taking its Desired is safe, needs no nested Begin, and leaves its
+     * generation held. This is not the old unsynchronized restore after a failed Begin. */
     request.hAllocation=&game[3];request.PrimaryAddress.QuadPart=0x35000;
     CHECK(Flip(&d,&request)==STATUS_SUCCESS && w.ScanoutObject==(LONGLONG)game[3].Serial);
-    w.PrimarySequence++;w.WriterActive=TRUE;restores=0;sections=syncs;
+    CHECK(Begin(&d,&generation));sections=syncs;
     CHECK(Destroy(&d,&game[3])==STATUS_SUCCESS);
-    CHECK(restores==1 && w.DestroyUnsynchronized==1 && w.ScanoutObject==0 && w.PrimaryAddress.QuadPart==0);
-    CHECK(syncs==sections+200 && stalls10==200 && w.WriterActive && (w.PrimarySequence&1));
+    CHECK(w.DestroyUnsynchronized==0 && w.ScanoutObject==0 && w.PrimaryAddress.QuadPart==0);
+    CHECK(syncs>sections && stalls10==0 && w.WriterActive && (w.PrimarySequence&1));
+    CHECK(plane_card==(LONGLONG)BRIDGE_CARD);
+    CHECK(End(&d,generation,FALSE)==STATUS_SUCCESS);
 }
-/* BD-170 r6: the two entries of the flip DDI. Above DISPATCH_LEVEL dxgmms2 holds L: the transaction runs directly, no
+/* R2 regressions: the callback's failure did not run its routine. A failed acquisition must not run that routine
+ * directly, publish an End, restore a surface, or free the allocation that still owns the active scan-out. Every
+ * hardware stub keeps its L assertion enabled. The named-routine refusal targets a later stage without relying on
+ * how many safe sections Begin uses. */
+static void WriterSynchronizationRefusals(void)
+{
+    BC250_WDDM w;BC250_DEVICE d;
+    BC250_WDDM_OBJECT game={0};
+    DXGKARG_SETVIDPNSOURCEADDRESS request={0};
+    ULONG generation;
+    unsigned before;
+
+    Setup(&d,&w,0);
+    sync_refusals=1;
+    CHECK(!Begin(&d,&generation));
+    CHECK(w.WriterSyncFailed==1 && !w.WriterActive && w.PrimarySequence==0);
+    CHECK(hardware==0 && fault_blanks==0 && w.PrimaryAddress.QuadPart==0x1000);
+
+    Setup(&d,&w,0);
+    request.PrimarySegment=BC250_WDDM_SEGMENT_VRAM;request.PrimaryAddress.QuadPart=0x60000;
+    CHECK(Flip(&d,&request)==STATUS_SUCCESS);CHECK(Begin(&d,&generation));
+    before=hardware;sync_refusals=1;
+    CHECK(!NT_SUCCESS(Resume(&d)));
+    CHECK(w.WriterActive && !w.WriterResumed && (w.PrimarySequence&1) && !w.WriterDeposit && w.DesiredOwed);
+    CHECK(w.WriterSyncFailed==1 && hardware==before && w.PrimaryAddress.QuadPart==0x60000);
+
+    Setup(&d,&w,0);
+    CHECK(Flip(&d,&request)==STATUS_SUCCESS);CHECK(Begin(&d,&generation));
+    before=hardware;sync_refusals=1;
+    CHECK(!NT_SUCCESS(End(&d,generation,FALSE)));
+    CHECK(w.WriterSyncFailed==1 && hardware==before && w.EndPrograms==0);
+    CHECK(w.WriterActive && (w.PrimarySequence&1) && !w.WriterDeposit && w.DesiredOwed);
+    CHECK(w.PrimaryAddress.QuadPart==0x60000);
+
+    game.Magic=BC250_WDDM_MAGIC_ALLOCATION;game.Serial=0xA001;game.UmdAlloc=1;game.ScanoutRequested=1;
+    game.ScanoutWidth=1366;game.ScanoutHeight=768;game.ScanoutPitch=5632;game.UmdBytes=5632ull*768;
+    game.ScanoutFormat=D3DDDIFMT_A8B8G8R8;
+    Setup(&d,&w,0);
+    request.hAllocation=&game;request.PrimaryAddress.QuadPart=0x61000;
+    CHECK(Flip(&d,&request)==STATUS_SUCCESS);
+    displayed=0x61000;Vblank(&d);
+    before=hardware;sync_refusals=1;
+    CHECK(!NT_SUCCESS(Destroy(&d,&game)));
+    CHECK(freed==0 && hardware==before && w.ScanoutObject==(LONGLONG)game.Serial);
+    CHECK(w.PrimaryAddress.QuadPart==0x61000 && !w.WriterActive && !(w.PrimarySequence&1));
+
+    Setup(&d,&w,0);
+    CHECK(Flip(&d,&request)==STATUS_SUCCESS);
+    displayed=0x61000;Vblank(&d);
+    sync_refuse_routine=WddmDestroyTakeLocked;
+    CHECK(!NT_SUCCESS(Destroy(&d,&game)));
+    CHECK(sync_refuse_routine==NULL && freed==0);
+    CHECK(w.ScanoutObject==(LONGLONG)game.Serial && w.PrimaryAddress.QuadPart==0x61000);
+
+    /* The first member does not need retirement. A later failure must keep the complete list retryable, with no
+     * journal or free of the earlier member and no partial resource destruction. */
+    {
+        BC250_WDDM_OBJECT unrelated={BC250_WDDM_MAGIC_ALLOCATION},resource={BC250_WDDM_MAGIC_RESOURCE};
+        HANDLE list[2]={&unrelated,&game};
+        DXGKARG_DESTROYALLOCATION destroy={0};
+        Setup(&d,&w,0);CHECK(Flip(&d,&request)==STATUS_SUCCESS);
+        unrelated.Serial=0xA002;destroy.NumAllocations=2;destroy.pAllocationList=list;
+        destroy.Flags.DestroyResource=1;destroy.hResource=&resource;sync_refusals=1;
+        CHECK(!NT_SUCCESS(Bc250WddmDestroyAllocation(&d,&destroy)));
+        CHECK(freed==0 && journaled==0 && w.ScanoutObject==(LONGLONG)game.Serial);
+    }
+
+    /* Destroy's initial Take, Begin and second Take fail independently. A failed later Take keeps the bridge
+     * active, but still cannot free an object whose protected teardown did not complete. */
+    Setup(&d,&w,0);CHECK(Flip(&d,&request)==STATUS_SUCCESS);
+    sync_refuse_routine=WddmWriterBeginLocked;
+    CHECK(!NT_SUCCESS(Destroy(&d,&game)) && freed==0 && bridge_writes==0 && w.ScanoutObject==(LONGLONG)game.Serial);
+    Setup(&d,&w,0);CHECK(Flip(&d,&request)==STATUS_SUCCESS);
+    sync_refuse_at=syncs+3;
+    CHECK(!NT_SUCCESS(Destroy(&d,&game)) && freed==0 && bridge_writes==1);
+    CHECK(w.WriterActive && (w.PrimarySequence&1) && w.ScanoutObject==(LONGLONG)game.Serial);
+    CHECK(plane_card==(LONGLONG)BRIDGE_CARD && w.WriterRecovery);
+
+    /* The status alone is insufficient when the OS callback reports success without invoking the routine. */
+    Setup(&d,&w,0);
+    request.hAllocation=NULL;CHECK(Flip(&d,&request)==STATUS_SUCCESS);CHECK(Begin(&d,&generation));
+    before=hardware;sync_no_callback=1;
+    CHECK(End(&d,generation,FALSE)==STATUS_UNSUCCESSFUL);
+    CHECK(w.WriterActive && (w.PrimarySequence&1) && !w.WriterDeposit && w.DesiredOwed && hardware==before && w.WriterRecovery);
+}
+
+static void WriterRecovery(int level)
+{
+    BC250_WDDM w;BC250_DEVICE d;
+    DXGKARG_SETVIDPNSOURCEADDRESS request={0};
+    ULONG generation;
+    unsigned before;
+    Setup(&d,&w,level);
+    request.PrimarySegment=BC250_WDDM_SEGMENT_VRAM;request.PrimaryAddress.QuadPart=0x62000;
+    CHECK(Flip(&d,&request)==STATUS_SUCCESS);CHECK(Begin(&d,&generation));
+    before=hardware;sync_refusals=1;
+    CHECK(End(&d,generation,FALSE)==STATUS_UNSUCCESSFUL);
+    CHECK(w.WriterRecovery && !w.Faulting && w.WriterActive && !w.WriterDeposit && w.DesiredOwed);
+    CHECK(hardware==before && fault_blanks==0 && dpcs==1);
+    /* A refused recovery section keeps the request pending and still touches no protected state or MMIO. */
+    sync_refusals=1;FaultDpc(&d);
+    CHECK(w.WriterRecovery && !w.Faulting && hardware==before && fault_blanks==0 && faults_notified==0);
+    FaultDpc(&d);
+    CHECK(!w.WriterRecovery && w.Faulting && w.FaultCode==BC250_FLIP_FAULT_SECTION);
+    CHECK(hardware==before && fault_blanks==1 && w.WriterActive && !w.WriterDeposit && w.DesiredOwed && (w.PrimarySequence&1));
+    CheckFault(BC250_FLIP_FAULT_SECTION,0);
+    FaultDpc(&d);CHECK(faults_notified==1);
+    before=hardware;CHECK(End(&d,generation,FALSE)==STATUS_DEVICE_HARDWARE_ERROR);
+    CHECK(hardware==before && !w.WriterActive && !(w.PrimarySequence&1));
+    /* The next flip can instead consume the queued request, in either legal DDI entry. It must refuse this flip
+     * before any hardware programming or Desired update. */
+    Setup(&d,&w,level);CHECK(Begin(&d,&generation));sync_refusals=1;
+    CHECK(!NT_SUCCESS(Resume(&d)) && w.WriterRecovery);
+    before=hardware;
+    CHECK(Flip(&d,&request)==STATUS_DEVICE_HARDWARE_ERROR);
+    CHECK(!w.WriterRecovery && w.Faulting && w.FaultCode==BC250_FLIP_FAULT_SECTION && hardware==before);
+    CHECK(w.PrimaryAddress.QuadPart==0x1000 && !w.WriterDeposit);
+}
+
+/* The two entries of the flip DDI. Above DISPATCH_LEVEL dxgmms2 holds L: the transaction runs directly, no
  * section, no arm, no log line. At or below it: one section, then the logs and the arm. A section that fails ran
  * nothing: the request fails with the section's status, counted, and nothing is published or armed. */
 static void Entries(void)
@@ -1709,11 +1734,9 @@ static void GateClosed(int level)
     CHECK(hardware==0 && observed==0 && hubp_reads==0 && !w.DesiredOwed && !w.Faulting && w.Flips==2);
     CHECK(w.FlipEdges[BC250_FLIP_EDGE_PROGRAM]==2 && w.FlipResults[BC250_FLIP_RESULT_SUCCESS]==0);
 }
-/* BD-170 r6: IndependentFlipExclusive. dxgmms2 can bugcheck (0x119) on a failure answer for an immediate exclusive
- * request that stays at the head, so an admission refusal of one, and dcn.c's refusal before its write sequence, are
- * answered success with nothing programmed or published (ExclusiveRefused; the record kept, or put back). A next-VSync
- * request with the flag keeps its failure (ExclusiveFailed). A refusal is the only such case: an exclusive immediate
- * request programmed without P' is U like any other, and P' with the flags kept as they came is success. */
+/* IndependentFlipExclusive changes the counter, never a refused request into success. Admission and prewrite
+ * refusal keep the old primary and their status; a write without P' faults like any other immediate request.
+ * Returning success without retiring the old primary would authorize the OS to release a fetched surface. */
 static void Exclusive(int level)
 {
     BC250_WDDM w;BC250_DEVICE d;
@@ -1726,7 +1749,7 @@ static void Exclusive(int level)
     w.ScanoutObject=0x7100;
     request.PrimarySegment=BC250_WDDM_SEGMENT_VRAM;request.hAllocation=&game;request.PrimaryAddress.QuadPart=0x70000;
     request.Flags.Value=0x82u;
-    CHECK(Flip(&d,&request)==STATUS_SUCCESS);
+    CHECK(Flip(&d,&request)==STATUS_INVALID_PARAMETER);
     CHECK(w.ExclusiveRefused==1 && hardware==0 && w.PrimaryAddress.QuadPart==0x1000 && w.ScanoutObject==0x7100);
     CHECK(w.FlipEdges[BC250_FLIP_EDGE_REFUSED]==1 && !(w.PrimarySequence&1));
     request.Flags.Value=0x80u;
@@ -1735,7 +1758,7 @@ static void Exclusive(int level)
     CHECK(Flip(&d,&request)==STATUS_INVALID_PARAMETER && w.ExclusiveFailed==1 && w.ExclusiveRefused==1);
     /* dcn.c's refusal before its write sequence: the same answers, and the record goes back. */
     request.hAllocation=NULL;hardware_result=STATUS_ACCESS_DENIED;request.Flags.Value=0x82u;
-    CHECK(Flip(&d,&request)==STATUS_SUCCESS);
+    CHECK(Flip(&d,&request)==STATUS_ACCESS_DENIED);
     CHECK(w.ExclusiveRefused==2 && hardware==1 && w.PrimaryAddress.QuadPart==0x1000 && w.ScanoutObject==0x7100);
     CHECK(w.FlipResults[BC250_FLIP_RESULT_REFUSED]==1 && observed==0);
     request.Flags.Value=0x80u;
@@ -1854,6 +1877,7 @@ static void Witnesses(int level)
     CHECK(w.WitnessLast.R1 && w.WitnessLast.R2 && w.WitnessLast.Result==BC250_FLIP_RESULT_SUCCESS);
     CHECK(w.WitnessLast.Outcome==BC250_DCN_IMMEDIATE_DONE && w.WitnessLast.Card==0x40000);
     CHECK(w.WitnessLast.Physical==PHYS(0x40000) && w.WitnessLast.Generation==1 && w.WitnessLast.Flags==request.Flags.Value);
+    CHECK(w.WitnessLast.PendingBefore==0 && w.WitnessLast.PendingAfter==0);
     /* A next-VSync request is neither armed nor read. */
     request.Flags.Value=0;request.PrimaryAddress.QuadPart=0x41000;
     CHECK(Flip(&d,&request)==STATUS_SUCCESS && witness_arms==1 && witness_reads==1 && hardware==2);
@@ -1896,6 +1920,16 @@ static void Witnesses(int level)
      CHECK(WddmWitnessCopy(&d,&w,&copy) && syncs==sections+1 && copy.Kept==16 && copy.Lost==1 && copy.Qe==14);
      CHECK(copy.Records[15].Request==16 && copy.Last.Request==17);
      sync_refusals=1;CHECK(!WddmWitnessCopy(&d,&w,&copy) && copy.Requests==0);irq=lv;}
+    /* A prior flip pending at either side of the arm excludes Q/E correlation, while retaining the raw controls. */
+    for(k=0;k<2;k++){
+        Setup(&d,&w,level);witness_event=0;
+        witness_pending_before=k?0:0x10;witness_pending_after=k?0x10:0;
+        request.Flags.Value=0;request.Flags.FlipImmediate=1;request.PrimaryAddress.QuadPart=0x60000;
+        CHECK(Flip(&d,&request)==STATUS_SUCCESS && !w.Faulting);
+        CHECK(w.WitnessStale==1 && w.WitnessQe==0 && w.WitnessEr==0 && w.WitnessKept==1);
+        CHECK(!w.WitnessLast.Fresh && w.WitnessLast.PendingBefore==witness_pending_before);
+        CHECK(w.WitnessLast.PendingAfter==witness_pending_after);
+    }
 }
 #endif
 int main(void)
@@ -1908,6 +1942,7 @@ int main(void)
         FaultProgram(level);
         Overlap(level);
         Writers(level);
+        WriterRecovery(level);
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
         Witnesses(level);
 #endif
@@ -1918,6 +1953,7 @@ int main(void)
     PlaneFormatFlips();
     FaultDpcs();
     DestroyWriter();
+    WriterSynchronizationRefusals();
     Entries();
     VSyncControlHistory();
     RecordCopies();

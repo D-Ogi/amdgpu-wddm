@@ -434,13 +434,19 @@ Check 'ledger-call' { & pwsh -NoProfile -File "$repo\tools\release\test-ledger-c
   @{n='post-display';s='driver\kmd\test\run_post_display.ps1';a=@('-Root',$Workspace)}
   @{n='post-display-old-runtime-order';s='driver\kmd\test\run_post_display.ps1';a=@('-Root',$Workspace,'-OldRuntimeOrder');Fails=$true}
   @{n='post-display-wrong-saved-surface';s='driver\kmd\test\run_post_display.ps1';a=@('-Root',$Workspace,'-WrongSavedSurface');Fails=$true}
-  @{n='post-display-deposit-ignored';s='driver\kmd\test\run_post_display.ps1';a=@('-Root',$Workspace,'-DepositIgnored');Fails=$true}
-  @{n='post-display-deposit-early';s='driver\kmd\test\run_post_display.ps1';a=@('-Root',$Workspace,'-DepositProgrammedEarly');Fails=$true}
+  @{n='post-display-resume-refusal';s='driver\kmd\test\run_post_display.ps1';a=@('-Root',$Workspace,'-ResumeRefusalIgnored');Fails=$true}
+  @{n='post-display-application-surface';s='driver\kmd\test\run_post_display.ps1';a=@('-Root',$Workspace,'-SavedApplicationSurface');Fails=$true}
   @{n='dcn-flip';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace)}
   @{n='dcn-flip-pending-only';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','PendingOnly');Fails=$true}
   @{n='dcn-flip-address-only';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','AddressOnly');Fails=$true}
   @{n='dcn-flip-bound-at-start';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','BoundAtStart');Fails=$true}
   @{n='dcn-flip-overrun-uncounted';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','OverrunUncounted');Fails=$true}
+  @{n='dcn-flip-poll-after-stall';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','PollAfterStall');Fails=$true}
+  @{n='dcn-flip-pending-arm';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','PendingArmIgnored');Fails=$true}
+  @{n='dcn-flip-logger-under-lock';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','SourceAddressLogs');Fails=$true}
+  @{n='dcn-flip-bridge-proof';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','BridgeProofIgnored');Fails=$true}
+  @{n='dcn-flip-bridge-extent';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','BridgeExtentIgnored');Fails=$true}
+  @{n='dcn-flip-bridge-current';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','BridgeCurrentUnsafe');Fails=$true}
   @{n='flip-state';s='driver\kmd\test\run_flip_state.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
   @{n='flip-state-controls';s='driver\kmd\test\run_flip_state.ps1';a=@('-Root',$Workspace,'-Kits',$Kits,'-Mutation','all')}
   @{n='dcn-observation';s='driver\kmd\test\run_dcn_observation.ps1';a=@('-Root',$Workspace)}

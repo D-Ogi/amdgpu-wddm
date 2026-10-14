@@ -392,10 +392,10 @@ ULONG ModesetScalingSupport(_In_ const BC250_DEVICE* Device, ULONG Width, ULONG 
     return Bc250ScalingSupport(m->Level, Width, Height, Device->Post.Width, Device->Post.Height);
 }
 
-// The register work of a change, under the mutex and the primary transaction. Grow: the viewport becomes larger
-// than the surface the plane may be reading (dxgkrnl's previous primary, or a game's swap-chain buffer), so the
-// plane goes to the firmware surface first, which holds the native size. A shrink reads a part of what the plane
-// reads now and needs no flip.
+// The register work of a change, under the mutex and the primary transaction.
+// Begin already put the plane on a driver-owned bridge. Grow selects the
+// firmware surface, whose native dimensions cover the larger viewport. End
+// alone selects the latest application primary after the new shape is ready.
 static long ProgramLocked(_Inout_ BC250_DEVICE* Device, _In_ const BC250_SCALER_PLAN* Plan, BOOLEAN Grow,
                           _Out_ BOOLEAN* Invalidate)
 {
@@ -493,7 +493,11 @@ NTSTATUS ModesetCommit(_Inout_ BC250_DEVICE* Device, ULONG Width, ULONG Height, 
         m->PipeChanged = !native;
         m->Changes++;
     }
-    WddmPrimaryExclusiveEnd(Device, generation, invalidate);
+    {
+        const NTSTATUS finish=WddmPrimaryExclusiveEnd(Device, generation, invalidate);
+        if (!NT_SUCCESS(finish)) status=finish;
+        m->LastStatus=status;
+    }
     ExReleaseFastMutex(&m->Lock);
     GuardLog("display modes: commit %lux%lu %s -> 0x%08X%s", Width, Height, Bc250ScalingName(Scaling), (ULONG)status,
              invalidate ? ", firmware surface first" : "");
@@ -573,10 +577,14 @@ void ModesetPowerDown(_Inout_ BC250_DEVICE* Device)
         if (WddmPrimaryExclusiveBegin(Device, BC250_WRITER_MODESET_D3, &generation))
         {
             if (Device->DcnDiverged) flip = DcnFlipToFirmwareSurface(Device);
-            status = RestoreNative(Device, &result);
-            WddmPrimaryExclusiveEnd(Device, generation, TRUE);
+            status = NT_SUCCESS(flip) ? RestoreNative(Device, &result) : flip;
+            {
+                const NTSTATUS finish=WddmPrimaryExclusiveEnd(Device, generation, TRUE);
+                if (!NT_SUCCESS(finish)) status=finish;
+            }
         }
         else status = STATUS_DEVICE_BUSY;
+        m->LastStatus=status;
         m->Restores++;
         GuardLog("display modes: D3: firmware surface 0x%08X, native shape 0x%08X", (ULONG)flip, (ULONG)status);
     }
@@ -589,7 +597,7 @@ void ModesetPowerUp(_Inout_ BC250_DEVICE* Device)
     BC250_MODESET* m = &Device->Modeset;
     BC250_DISP_IO io;
     BC250_PIPE_SHAPE shape;
-    ULONG generation, maxLevel = BC250_DISPLAY_MODES_OFF, verdict = BC250_PIPE_VERDICT_COUNT;
+    ULONG generation = 0, maxLevel = BC250_DISPLAY_MODES_OFF, verdict = BC250_PIPE_VERDICT_COUNT;
     long status;
 
     if (InterlockedCompareExchange(&Device->RuntimeDisplayChanged,0,0)) return;
@@ -610,13 +618,16 @@ void ModesetPowerUp(_Inout_ BC250_DEVICE* Device)
     IoOpen(Device, &io, 0);
     status = Bc250PipeShapeRead(&io, &shape);
     if (status >= 0) verdict = Bc250PipeShapeCheck(&shape, Device->Post.Width, Device->Post.Height, &maxLevel);
-    if (status < 0 || maxLevel < m->Level ||
-        !WddmPrimaryExclusiveBegin(Device, BC250_WRITER_MODESET_D0, &generation))
+    if (NT_SUCCESS(status) && maxLevel < m->Level) status=STATUS_NOT_SUPPORTED;
+    if (NT_SUCCESS(status) &&
+        !WddmPrimaryExclusiveBegin(Device, BC250_WRITER_MODESET_D0, &generation)) status=STATUS_DEVICE_BUSY;
+    if (!NT_SUCCESS(status))
     {
         m->PipeChanged = FALSE;
         InterlockedExchange(&m->SourceWidth, (LONG)Device->Post.Width);
         InterlockedExchange(&m->SourceHeight, (LONG)Device->Post.Height);
         m->Scaling = BC250_SCALING_IDENTITY;
+        m->LastStatus=status;
         ExReleaseFastMutex(&m->Lock);
         GuardLog("display modes: D0: committed mode not programmed again: pipe %s (0x%08X)",
                  Bc250PipeVerdictText(verdict), (ULONG)status);
@@ -624,7 +635,11 @@ void ModesetPowerUp(_Inout_ BC250_DEVICE* Device)
     }
     IoOpen(Device, &io, MODESET_PIPE_BUDGET_US);
     status = Bc250ScalerProgram(&io, &m->Plan, &m->LastResult);
-    WddmPrimaryExclusiveEnd(Device, generation, FALSE);
+    {
+        const NTSTATUS finish=WddmPrimaryExclusiveEnd(Device, generation, FALSE);
+        if (!NT_SUCCESS(finish)) status=finish;
+        m->LastStatus=status;
+    }
     ExReleaseFastMutex(&m->Lock);
     GuardLog("display modes: D0: %lux%lu %s programmed again 0x%08X", m->Plan.SourceWidth, m->Plan.SourceHeight,
              Bc250ScalingName(m->Scaling), (ULONG)status);

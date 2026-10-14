@@ -1,4 +1,4 @@
-/* flip_state.h - BD-170 r6: the decisions of the flip state machine, without kernel calls.
+/* flip_state.h - BD-170 r7: the decisions of the flip state machine, without kernel calls.
  *
  * The design is docs/design/vidpn-flip.md section 7.2. Three paths decide with these functions, each under the
  * interrupt lock L of this driver's one MSI message (facts M38):
@@ -16,18 +16,10 @@
  *       not serialize this call, which facts M904 says cannot happen. E5.
  *   A   REFUSED: the admission (scanout_admit.h, the pitch and format rules) refused the request. Nothing is
  *       published. This is a UMD or admission defect, not a pipe state, and not E5.
- *   W   a writer is active (between Begin and End). Nothing is programmed now:
- *       W-v DEPOSIT_VSYNC: a next-VSync request becomes Desired. Success; End programs it, and the first real
- *           VSync report after that carries it.
- *       W-i DEPOSIT_DRAINED: an immediate request while the plane is proven drained (DCHUBP_CNTL: blank, TTU
- *           disabled, no outstanding request) and the writer has not resumed it. Success: nothing fetches, and the
- *           writer's unblank or its End programs Desired before any fetch.
- *       W-u DEPOSIT_UNPROVEN: any other immediate request during a writer. A deposit and success as well: a writer
- *           conflict is a normal state, not a hardware fault, and E5 is for hardware faults only. It has its own
- *           count and a record (code BC250_FLIP_RECORD_WRITER_UNPROVEN, the writer, the time to End), so that it
- *           stays distinct from an expired observation (E3 without P'). Until the writer blanks the plane, puts a
- *           surface of its own on it, or End programs Desired, the plane can read the surface before this request
- *           (section 7.2 gives that bound for each writer).
+ *   W   a writer is active (between Begin and End). The historical W-v/W-i/W-u labels classify the request.
+ *       With the hardware flip gate open all three return STATUS_DEVICE_BUSY before publishing anything.
+ *       Reserved storage protects the old primary, but does not implement the requested flip's timing.
+ *       With the gate closed only the existing software-reporting deposit route remains.
  *   E   PROGRAM: E2 (next VSync) or E3 (immediate) program the plane now.
  * After E: a refusal before the write sequence ran is A; a write sequence that ran and failed is E5 (an MMIO failure
  * is unknown, never proof that nothing was written); an immediate request without P' in the call is U.
@@ -44,6 +36,8 @@
 #define BC250_FLIP_FAULT_UNPROVEN 0x170002u         /* U: an immediate request whose completion the call cannot show */
 #define BC250_FLIP_FAULT_OWED_STOPPED 0x170003u     /* a writer's End owes a flip and the OTG is not running */
 #define BC250_FLIP_FAULT_OVERLAP 0x170004u          /* F1 */
+#define BC250_FLIP_FAULT_SECTION 0x170006u          /* protected section could not be acquired */
+#define BC250_FLIP_FAULT_BRIDGE 0x170007u           /* reserved bridge programming or retirement proof failed */
 /* The code of a W-u record (wddm.c's summary), from the same series so that a log search finds both. Never an E5
  * code: W-u does not enter E5. */
 #define BC250_FLIP_RECORD_WRITER_UNPROVEN 0x170005u
@@ -115,6 +109,7 @@ typedef enum _BC250_WRITER_BEGIN {
     BC250_WRITER_BEGIN_TAKE = 0,
     BC250_WRITER_BEGIN_RETRY,
     BC250_WRITER_BEGIN_FAULTING,
+    BC250_WRITER_BEGIN_REFUSED,         /* bridge admission refused before a write */
     BC250_WRITER_BEGINS
 } BC250_WRITER_BEGIN;
 
@@ -161,8 +156,9 @@ typedef enum _BC250_WRITER_KIND {
     BC250_WRITER_KINDS
 } BC250_WRITER_KIND;
 
-/* How a W-u deposit left its writer, decided at the writer's End. Unblank: the writer's unblank programmed this deposit
- * (Resume, then WddmWriterDepositProgrammed with its sequence). Current: no newer deposit came after it. Answer: End's
+/* Legacy deposit record classification, retained for diagnostic format compatibility. Hardware writer overlaps
+ * are now refused. Unblank means an earlier revision programmed the deposit before End. Current: no newer deposit
+ * came after it. Answer: End's
  * Bc250WriterEnd. Result: Bc250FlipResult of End's programming, read only for BC250_WRITER_END_PROGRAM. */
 typedef enum _BC250_WU_END {
     BC250_WU_OPEN = 0,                  /* the writer has not ended */

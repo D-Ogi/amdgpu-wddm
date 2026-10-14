@@ -321,6 +321,7 @@ typedef struct _BC250_WDDM_WITNESS_RECORD {
     ULONGLONG Card, Physical;   // the request, and as the plane holds it
     ULONGLONG Earliest1, Earliest2;     // EARLIEST_INUSE, masked, in the two orders
     ULONG InterruptBefore, InterruptCleared, Interrupt;
+    ULONG PendingBefore, PendingAfter;
     ULONG Low1, High1, High2, Low2;     // EARLIEST_INUSE raw words in read order
 } BC250_WDDM_WITNESS_RECORD;
 typedef struct _BC250_WDDM_WITNESS_COPY {
@@ -652,20 +653,21 @@ typedef struct _BC250_WDDM {
     volatile LONG FlipsAboveDispatch;           // of all SetVidPnSourceAddress calls, those that arrived at DIRQL
     volatile LONG ImmediatePromotions;          // BD-170: a pending flip reprogrammed for an immediate request
     volatile LONG DmaFlipsRefused;              // BD-170: Present calls for a flip with a DMA buffer, refused
-    // BD-170: ExclusiveRefused counts the immediate IndependentFlipExclusive requests that the admission (A) refused and
-    // that were answered success with nothing programmed or published; ExclusiveFailed the vsync ones, which keep
-    // their failure answer (Bc250WddmSetVidPnSourceAddress says why).
+    // Admission refusals remain failures, including independent immediate flips.
+    // Counters distinguish immediate and next-VSync exclusive requests.
     volatile LONG ExclusiveRefused;
     volatile LONG ExclusiveFailed;
-    // BD-170 r6, the flip state machine (flip_state.h, docs/design/vidpn-flip.md section 7.2). Every field of this
-    // block is written inside L, the interrupt lock of message 0: the flip transaction (WddmFlipLocked), the writer
-    // sections (WddmPrimaryExclusiveBegin, WddmWriterResume, WddmWriterDepositProgrammed, WddmPrimaryExclusiveEnd,
+    // BD-170 r7, the flip state machine (flip_state.h, docs/design/vidpn-flip.md section 7.2). Every field of this
+    // block is written inside L, except the atomic WriterRecovery request. L is the interrupt lock of message 0: the flip transaction (WddmFlipLocked), the writer
+    // sections (WddmPrimaryExclusiveBegin, WddmWriterResume, WddmPrimaryExclusiveEnd,
     // WddmFlipFlushed), E5 (WddmFlipFault) and WddmNotifyRoutine. The summary and the E5 DPC read them without L.
     // Desired is the published primary above (PrimaryAddress, PrimaryPitch, PrimaryPlaneFormat, PrimaryBytes,
     // PrimarySegment): the newest request this driver answered success for, programmed or deposited.
     BOOLEAN WriterActive;               // a writer is between Begin and End; PrimarySequence is odd for it
     BOOLEAN WriterResumed;              // the active writer called Resume: no DRAINED readback counts any more
-    BOOLEAN WriterDeposit;              // Desired was deposited during the active writer and nothing programmed it
+    BOOLEAN WriterDeposit;              // software-gate-closed Desired was deposited during the active writer
+    volatile LONG WriterBusy;           // hardware flips refused while a long writer owns the pipe
+    volatile LONG WriterRecovery;       // queued section failure; consumed only inside L
     BOOLEAN DesiredOwed;                // Desired is a next-VSync success that no CRTC_VSYNC report carried yet
     ULONG DepositSequence;              // advances at every deposit, so that a programmed deposit is the newest one
     volatile LONG Faulting;             // E5 was entered on this start (F0); this block is freed at the stop
@@ -678,7 +680,7 @@ typedef struct _BC250_WDDM {
     // Counts. Edges: each request by its edge (BC250_FLIP_EDGE_*). Results: the requests edge E programmed, by
     // Bc250FlipResult. Faults: E5 entries, a repeat in FAULTING included. Notified and NotifyFailed: the
     // DMA_PAGE_FAULTED notifications made and those that could not be made. WriterFaulting: Begin refused in
-    // FAULTING. WriterHigh: a writer section asked for above DISPATCH_LEVEL, run without L or not at all.
+    // FAULTING. WriterHigh: a writer section refused above DISPATCH_LEVEL.
     // WriterSyncFailed and LowSyncFailed: DxgkCbSynchronizeExecution failed for a writer section or for the flip
     // DDI's low entry. Deposits by Resume, End's programs, End's refusals (OwedInvalidated), the reports that carried
     // an owed Desired, the D3 flushes and the destroy restores whose Begin was refused.
@@ -3183,6 +3185,7 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
         GuardLog("wddm summary: flip end-programs %ld owed-invalidated %ld owed-reported %ld flushes %ld destroy-unsync %ld",
                  Wddm->EndPrograms, Wddm->OwedInvalidated, Wddm->OwedReported, Wddm->FlipFlushes,
                  Wddm->DestroyUnsynchronized);
+        GuardLog("wddm summary: flip writer-busy %ld recovery-pending %ld", Wddm->WriterBusy, Wddm->WriterRecovery);
         GuardLog("wddm summary: flip e5 %ld faulting %ld code 0x%06lX node %u blank %08lX",
                  Wddm->FlipFaults, Wddm->Faulting, Wddm->FaultCode, Wddm->FaultNode, (ULONG)Wddm->FaultBlank);
         GuardLog("wddm summary: flip e5 notified %ld failed %ld drain %ld/%ld; exclusive refused %ld failed %ld",
@@ -3238,6 +3241,8 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
                              r->R2 ? '1' : '0');
                     GuardLog("flip witness %lu req %ld: card 0x%llX phys 0x%llX earliest 0x%llX/0x%llX", k,
                              r->Request, r->Card, r->Physical, r->Earliest1, r->Earliest2);
+                    GuardLog("flip witness %lu req %ld: pending before %08lX after %08lX",
+                             k, r->Request, r->PendingBefore, r->PendingAfter);
                     GuardLog("flip witness %lu req %ld: arm %08lX read %08lX int %08lX/%08lX/%08lX "
                              "words %08lX %08lX %08lX %08lX", k, r->Request, (ULONG)r->ArmStatus,
                              (ULONG)r->ReadStatus, r->InterruptBefore, r->InterruptCleared, r->Interrupt, r->Low1,
@@ -5190,7 +5195,7 @@ static NTSTATUS Bc250WddmCreateAllocation(_In_ const HANDLE hAdapter, _Inout_ DX
     return STATUS_SUCCESS;
 }
 
-static void WddmDestroyRestore(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WDDM* Wddm, ULONGLONG Serial);
+static NTSTATUS WddmDestroyRestore(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WDDM* Wddm, ULONGLONG Serial);
 static DXGKDDI_DESTROYALLOCATION Bc250WddmDestroyAllocation;
 static NTSTATUS Bc250WddmDestroyAllocation(_In_ const HANDLE hAdapter,
                                            _In_ const DXGKARG_DESTROYALLOCATION* pDestroyAllocation)
@@ -5201,6 +5206,16 @@ static NTSTATUS Bc250WddmDestroyAllocation(_In_ const HANDLE hAdapter,
 
     if (WddmFirstCalls(wddm, WddmDdiDestroyAllocation))
         GuardLog("wddm: DestroyAllocation %u allocations", pDestroyAllocation->NumAllocations);
+    // Retire all relevant surfaces before freeing any handle. A failed protected
+    // section leaves the complete request retryable, without a partially freed list.
+    for (i = 0; i < pDestroyAllocation->NumAllocations; i++) {
+        BC250_WDDM_OBJECT* object = WddmObject(pDestroyAllocation->pAllocationList[i], BC250_WDDM_MAGIC_ALLOCATION);
+        if (object != NULL && wddm != NULL && object->Serial != 0 &&
+            InterlockedCompareExchange64(&wddm->ScanoutObject, 0, 0) == (LONG64)object->Serial) {
+            NTSTATUS retired = WddmDestroyRestore(device, wddm, object->Serial);
+            if (!NT_SUCCESS(retired)) return retired;
+        }
+    }
     for (i = 0; i < pDestroyAllocation->NumAllocations; i++) {
         BC250_WDDM_OBJECT* object = WddmObject(pDestroyAllocation->pAllocationList[i], BC250_WDDM_MAGIC_ALLOCATION);
         if (object != NULL)
@@ -5222,9 +5237,6 @@ static NTSTATUS Bc250WddmDestroyAllocation(_In_ const HANDLE hAdapter,
         // buffer the plane never held. WddmNewObject gives every object a nonzero serial under the lock,
         // which is what makes that unreachable; the test says so rather than relying on it.
         //   BD-170 r6: the restore is a writer (WddmDestroyRestore), which takes the record inside L.
-        if (object != NULL && wddm != NULL && object->Serial != 0 &&
-            InterlockedCompareExchange64(&wddm->ScanoutObject, 0, 0) == (LONG64)object->Serial)
-            WddmDestroyRestore(device, wddm, object->Serial);
         WddmFreeObject(object);
     }
     if (pDestroyAllocation->Flags.DestroyResource && pDestroyAllocation->hResource != NULL)
@@ -7988,9 +8000,11 @@ static NTSTATUS Bc250WddmPresent(_In_ const HANDLE hContext, _Inout_ DXGKARG_PRE
 static NTSTATUS WddmSection(_In_ BC250_DEVICE* Device, _In_ PKSYNCHRONIZE_ROUTINE Routine, _In_ PVOID Context)
 {
     BOOLEAN returned = FALSE;
+    NTSTATUS status;
     if (KeGetCurrentIrql() > DISPATCH_LEVEL) return STATUS_INVALID_DEVICE_STATE;
     if (Device->Dxgk.DxgkCbSynchronizeExecution == NULL) return STATUS_DEVICE_NOT_READY;
-    return Device->Dxgk.DxgkCbSynchronizeExecution(Device->Dxgk.DeviceHandle, Routine, Context, 0, &returned);
+    status = Device->Dxgk.DxgkCbSynchronizeExecution(Device->Dxgk.DeviceHandle, Routine, Context, 0, &returned);
+    return NT_SUCCESS(status) && !returned ? STATUS_UNSUCCESSFUL : status;
 }
 
 // E5 (section 7.2, E5 steps 1 to 3), inside L: FAULTING, the blank request, and the notification handed to the DPC.
@@ -8009,6 +8023,25 @@ static void WddmFlipFault(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WDDM* Wddm
     else InterlockedIncrement(&Wddm->FaultNotifyFailed);
 }
 
+// A refused interrupt section cannot grant its operation. The only change
+// outside L is this atomic recovery request. The DPC or next flip consumes it
+// inside a successfully acquired section; until then the writer stays owned.
+static void WddmWriterSectionFailure(BC250_DEVICE* Device, BC250_WDDM* Wddm, NTSTATUS Status)
+{
+    InterlockedIncrement(Status == STATUS_INVALID_DEVICE_STATE ? &Wddm->WriterHigh : &Wddm->WriterSyncFailed);
+    InterlockedExchange(&Wddm->WriterRecovery, 1);
+    if (Device->Dxgk.DxgkCbQueueDpc != NULL) Device->Dxgk.DxgkCbQueueDpc(Device->Dxgk.DeviceHandle);
+}
+
+static BOOLEAN WddmWriterRecoveryLocked(_In_ PVOID Context)
+{
+    BC250_DEVICE* device = (BC250_DEVICE*)Context;
+    BC250_WDDM* wddm = WddmOf(device);
+    if (wddm != NULL && InterlockedExchange(&wddm->WriterRecovery, 0) != 0)
+        WddmFlipFault(device, wddm, BC250_FLIP_FAULT_SECTION, BC250_WDDM_NODE_3D);
+    return TRUE;
+}
+
 // E5 steps 3 and 5, from pnp.c's Bc250DpcRoutine at DISPATCH_LEVEL, outside L. The notification: DMA_PAGE_FAULTED, "a
 // GPU error that needs OS recovery" (d3dkmddi.md:46003-46007), with the payload of section 7.2 (WDK shared/d3dkmddi.h
 // DmaPageFaulted, shared/d3dkmdt.h DXGK_PAGE_FAULT_FLAGS, DXGK_FAULT_ERROR_CODE and the UNKNOWN values). WddmReport makes
@@ -8022,7 +8055,10 @@ void WddmFlipFaultDpc(_Inout_ BC250_DEVICE* Device)
     ULONG reads, step;
     BOOLEAN notified;
 
-    if (wddm == NULL || InterlockedExchange(&wddm->FaultNotify, 0) == 0) return;
+    if (wddm == NULL) return;
+    if (InterlockedCompareExchange(&wddm->WriterRecovery, 0, 0) != 0)
+        (void)WddmSection(Device, WddmWriterRecoveryLocked, Device);
+    if (InterlockedExchange(&wddm->FaultNotify, 0) == 0) return;
     RtlZeroMemory(&data, sizeof(data));
     data.InterruptType = DXGK_INTERRUPT_DMA_PAGE_FAULTED;
     data.DmaPageFaulted.FaultedFenceId = 0;
@@ -8055,15 +8091,16 @@ void WddmFlipFaultDpc(_Inout_ BC250_DEVICE* Device)
 
 // The writers' sections. A writer (modeset.c, connector_link.c, hdmi_link.c, the destroy restore below) runs at
 // PASSIVE_LEVEL and takes L three times, each time for a short section: Begin, Resume before any unblank, End. Its long
-// work runs outside L. Between Begin and End the generation is odd and a flip request becomes a deposit (W).
+// work runs outside L. Between Begin and End the generation is odd. Hardware flip requests are refused; only
+// the gate-closed software-report route deposits Desired (the historical W labels).
 typedef struct _BC250_WDDM_WRITER {
     BC250_DEVICE* Device;
     BC250_WDDM* Wddm;
     ULONG Kind;
     ULONG Generation;
     BOOLEAN Invalidate;
+    NTSTATUS Status;
     ULONG Answer;
-    BC250_WDDM_DESIRED Desired;
 } BC250_WDDM_WRITER;
 
 // W-u (section 7.2), inside L: the record of a deposit that the flip transaction just made, in the next ring slot.
@@ -8156,6 +8193,8 @@ static void WddmWitness(_In_ BC250_DEVICE* Device, _Inout_ BC250_WDDM* Wddm, _In
     r.Fresh = Arm->Fresh ? TRUE : FALSE;
     r.InterruptBefore = Arm->InterruptBefore;
     r.InterruptCleared = Arm->InterruptCleared;
+    r.PendingBefore = Arm->PendingBefore;
+    r.PendingAfter = Arm->PendingAfter;
     r.ReadStatus = DcnWitnessRead(Device, &read);
     r.Interrupt = read.Interrupt;
     r.Low1 = read.Low1;
@@ -8226,15 +8265,28 @@ static BOOLEAN WddmWriterBeginLocked(_In_ PVOID Context)
     BC250_WDDM_WRITER* w = (BC250_WDDM_WRITER*)Context;
     BC250_WDDM* wddm = w->Wddm;
     const ULONG generation = (ULONG)wddm->PrimarySequence;
+    BOOLEAN wrote = FALSE;
 
+    (void)WddmWriterRecoveryLocked(w->Device);
     w->Answer = Bc250WriterBegin(wddm->Faulting != 0 ? 1u : 0u, generation & 1u);
     if (w->Answer != BC250_WRITER_BEGIN_TAKE) return TRUE;
+    // No immediate SUCCESS can interleave with retirement of the old app
+    // buffer. Publish the writer only after the reserved bridge is proven.
+    InterlockedExchange(&wddm->PrimarySequence, (LONG)(generation + 1u));
+    w->Status = w->Device->VidPnFlipEnabled ?
+        DcnWriterBridge(w->Device, &wddm->PrimarySequence, generation + 1u, &wrote) : STATUS_SUCCESS;
+    if (!NT_SUCCESS(w->Status)) {
+        if (wrote) WddmFlipFault(w->Device, wddm, BC250_FLIP_FAULT_BRIDGE, BC250_WDDM_NODE_3D);
+        InterlockedExchange(&wddm->PrimarySequence, (LONG)generation);
+        w->Answer = wrote ? BC250_WRITER_BEGIN_FAULTING : BC250_WRITER_BEGIN_REFUSED;
+        return TRUE;
+    }
     w->Generation = generation;
     wddm->WriterActive = TRUE;
     wddm->WriterResumed = FALSE;
     wddm->WriterDeposit = FALSE;
     wddm->WriterKind = w->Kind;
-    InterlockedExchange(&wddm->PrimarySequence, (LONG)(generation + 1u));
+    wddm->PrimaryNeedsRestore = TRUE;
     return TRUE;
 }
 
@@ -8260,89 +8312,44 @@ BOOLEAN WddmPrimaryExclusiveBegin(_Inout_ BC250_DEVICE* Device, ULONG Kind, _Out
         status = WddmSection(Device, WddmWriterBeginLocked, &w);
         if (!NT_SUCCESS(status))
         {
-            InterlockedIncrement(status == STATUS_INVALID_DEVICE_STATE ? &wddm->WriterHigh : &wddm->WriterSyncFailed);
+            WddmWriterSectionFailure(Device, wddm, status);
             return FALSE;
         }
         if (w.Answer == BC250_WRITER_BEGIN_TAKE) { *Generation = w.Generation; return TRUE; }
+        if (w.Answer == BC250_WRITER_BEGIN_REFUSED) return FALSE;
         if (w.Answer == BC250_WRITER_BEGIN_FAULTING) { InterlockedIncrement(&wddm->WriterFaulting); return FALSE; }
         KeStallExecutionProcessor(BC250_WDDM_EXCLUSIVE_STEP_US);
     }
     return FALSE;
 }
 
-// Resume (section 7.2, section 4), before every unblank of a writer: from here on no DRAINED readback counts for this
-// writer, and a deposit, if one exists, is handed to the unblank site. Nothing without an active writer (the stop
-// path) and nothing above DISPATCH_LEVEL (the bugcheck callback restores the firmware surface through the same site).
+// Only driver-owned bridge storage may escape L during a writer. Resume
+// grants that operation, never an application address or a stale Desired copy.
 static BOOLEAN WddmWriterResumeLocked(_In_ PVOID Context)
 {
     BC250_WDDM_WRITER* w = (BC250_WDDM_WRITER*)Context;
-    BC250_WDDM* wddm = w->Wddm;
-
-    w->Answer = 0;
-    if (!wddm->WriterActive) return TRUE;
-    wddm->WriterResumed = TRUE;
-    if (!wddm->WriterDeposit) return TRUE;
-    w->Answer = 1;
-    w->Desired.CardAddress = (ULONGLONG)wddm->PrimaryAddress.QuadPart;
-    w->Desired.Pitch = wddm->PrimaryPitch;
-    w->Desired.PlaneFormat = wddm->PrimaryPlaneFormat;
-    w->Desired.Bytes = wddm->PrimaryBytes;
-    w->Desired.Sequence = wddm->DepositSequence;
+    (void)WddmWriterRecoveryLocked(w->Device);
+    w->Status = w->Wddm->Faulting ? STATUS_DEVICE_HARDWARE_ERROR :
+        (w->Wddm->WriterActive ? STATUS_SUCCESS : STATUS_INVALID_DEVICE_STATE);
+    if (NT_SUCCESS(w->Status)) w->Wddm->WriterResumed = TRUE;
     return TRUE;
 }
 
-BOOLEAN WddmWriterResume(_Inout_ BC250_DEVICE* Device, _Out_ BC250_WDDM_DESIRED* Desired)
+NTSTATUS WddmWriterResume(_Inout_ BC250_DEVICE* Device)
 {
     BC250_WDDM* wddm = WddmOf(Device);
     BC250_WDDM_WRITER w;
-
-    RtlZeroMemory(Desired, sizeof(*Desired));
-    if (wddm == NULL || KeGetCurrentIrql() > DISPATCH_LEVEL) return FALSE;
+    NTSTATUS status;
+    if (wddm == NULL) return STATUS_SUCCESS;
     RtlZeroMemory(&w, sizeof(w));
     w.Device = Device;
     w.Wddm = wddm;
-    if (!NT_SUCCESS(WddmSection(Device, WddmWriterResumeLocked, &w)))
-    {
-        InterlockedIncrement(&wddm->WriterSyncFailed);
-        return FALSE;
+    status = WddmSection(Device, WddmWriterResumeLocked, &w);
+    if (!NT_SUCCESS(status)) {
+        WddmWriterSectionFailure(Device, wddm, status);
+        return status;
     }
-    *Desired = w.Desired;
-    return w.Answer != 0;
-}
-
-// The unblank site programmed the deposit that Resume handed it. It is no longer owed to End, unless a newer
-// deposit came meanwhile (the sequence differs).
-static BOOLEAN WddmWriterProgrammedLocked(_In_ PVOID Context)
-{
-    BC250_WDDM_WRITER* w = (BC250_WDDM_WRITER*)Context;
-    BC250_WDDM* wddm = w->Wddm;
-
-    ULONG n;
-
-    if (wddm->WriterActive && wddm->WriterDeposit && wddm->DepositSequence == w->Desired.Sequence)
-    {
-        wddm->WriterDeposit = FALSE;
-        wddm->PrimaryNeedsRestore = FALSE;
-        InterlockedIncrement(&wddm->DepositsResumed);
-        for (n = 0; n < BC250_WDDM_WU_RECORDS; n++)
-            if (wddm->WuRecords[n].Record != 0 && wddm->WuRecords[n].End == BC250_WU_OPEN &&
-                wddm->WuRecords[n].Deposit == w->Desired.Sequence)
-                wddm->WuRecords[n].Unblank = TRUE;
-    }
-    return TRUE;
-}
-
-void WddmWriterDepositProgrammed(_Inout_ BC250_DEVICE* Device, ULONG Sequence)
-{
-    BC250_WDDM* wddm = WddmOf(Device);
-    BC250_WDDM_WRITER w;
-
-    if (wddm == NULL) return;
-    RtlZeroMemory(&w, sizeof(w));
-    w.Device = Device;
-    w.Wddm = wddm;
-    w.Desired.Sequence = Sequence;
-    if (!NT_SUCCESS(WddmSection(Device, WddmWriterProgrammedLocked, &w))) InterlockedIncrement(&wddm->WriterSyncFailed);
+    return w.Status;
 }
 
 // The fields DestroyAllocation and an invalidating End reset when the plane goes back to the firmware surface, the
@@ -8356,53 +8363,53 @@ static void WddmPrimaryInvalidate(_Inout_ BC250_WDDM* Wddm)
     InterlockedExchange64(&Wddm->ScanoutObject, 0);
 }
 
-// End (section 7.2, section 4). A deposit, or a next-VSync success that no report carried, is programmed with the
-// next-VSync type while the OTG runs, so that the next real report carries it. With the OTG stopped, or its read
-// failed, nothing makes that report (no timer makes a CRTC_VSYNC with the flip gate open, WddmVSyncArm): E5. Desired
-// that no longer fits the source is the programming's refusal: dropped and counted (OwedInvalidated), and the next
-// flip is a change. With the flip gate closed nothing is programmed and the timer reports Desired as published. In
-// FAULTING nothing is programmed either (F0): the OS recovers the adapter and still holds every surface it did not
-// see complete.
+// End chooses the latest Desired while holding L. The long writer used only
+// reserved storage, so no application snapshot can be programmed after this
+// handoff. With no deposit, a non-invalidating writer restores its initial
+// Desired. A changed mode can refuse that old layout; the bridge remains safe.
 static BOOLEAN WddmWriterEndLocked(_In_ PVOID Context)
 {
     BC250_WDDM_WRITER* w = (BC250_WDDM_WRITER*)Context;
     BC250_DEVICE* device = w->Device;
     BC250_WDDM* wddm = w->Wddm;
-    const BOOLEAN owes = wddm->WriterDeposit || wddm->DesiredOwed;
     BOOLEAN programmed = FALSE;
+    const BOOLEAN owes = wddm->WriterDeposit || wddm->DesiredOwed;
+    const BOOLEAN restore = !w->Invalidate && wddm->PrimaryAddress.QuadPart != 0 && wddm->PrimaryPitch != 0;
     ULONG result = BC250_FLIP_RESULT_REFUSED;
 
+    w->Status = STATUS_SUCCESS;
+    if (!wddm->WriterActive || (ULONG)wddm->PrimarySequence != w->Generation + 1u) {
+        w->Status = STATUS_INVALID_DEVICE_STATE;
+        return TRUE;
+    }
+    (void)WddmWriterRecoveryLocked(device);
     w->Answer = BC250_WRITER_END_NOTHING;
-    if (owes && device->VidPnFlipEnabled && wddm->Faulting == 0)
-        w->Answer = Bc250WriterEnd(wddm->WriterDeposit ? 1u : 0u, wddm->DesiredOwed ? 1u : 0u, DcnOtgRunning(device));
-    if (w->Answer == BC250_WRITER_END_FAULT)
+    if ((owes || restore) && device->VidPnFlipEnabled && wddm->Faulting == 0)
+        w->Answer = Bc250WriterEnd(1u, 0u, DcnOtgRunning(device));
+    if (w->Answer == BC250_WRITER_END_FAULT) {
         WddmFlipFault(device, wddm, BC250_FLIP_FAULT_OWED_STOPPED, BC250_WDDM_NODE_3D);
-    else if (w->Answer == BC250_WRITER_END_PROGRAM)
-    {
+        w->Status = STATUS_DEVICE_HARDWARE_ERROR;
+    } else if (w->Answer == BC250_WRITER_END_PROGRAM) {
         BOOLEAN wrote = FALSE;
         const NTSTATUS status = DcnFlipSourceAddress(device, (ULONGLONG)wddm->PrimaryAddress.QuadPart,
             wddm->PrimaryPitch, wddm->PrimaryPlaneFormat, wddm->PrimaryBytes, FALSE, NULL, &wrote);
         result = Bc250FlipResult(wrote ? 1u : 0u, NT_SUCCESS(status) ? 1u : 0u, 0u, 0u);
-        switch (result)
-        {
-        case BC250_FLIP_RESULT_SUCCESS:
+        if (result == BC250_FLIP_RESULT_SUCCESS) {
             programmed = TRUE;
             wddm->PrimaryNeedsRestore = FALSE;
             InterlockedExchange(&wddm->PrimaryProgrammedSequence, (LONG)(w->Generation + 2u));
             InterlockedIncrement(&wddm->EndPrograms);
-            break;
-        case BC250_FLIP_RESULT_REFUSED:
+        } else if (result == BC250_FLIP_RESULT_REFUSED) {
             InterlockedIncrement(&wddm->OwedInvalidated);
             wddm->DesiredOwed = FALSE;
             wddm->PrimaryNeedsRestore = TRUE;
-            break;
-        default:
+            w->Status = status;
+        } else {
             WddmFlipFault(device, wddm, BC250_FLIP_FAULT_PROGRAM, BC250_WDDM_NODE_3D);
-            break;
+            w->Status = STATUS_DEVICE_HARDWARE_ERROR;
         }
     }
-    // Invalidate: the writer put the plane back on the firmware surface. Not when End programmed Desired over it, and
-    // not with the gate closed while Desired is owed, because the timer reports Desired as published.
+    if (wddm->Faulting) w->Status = STATUS_DEVICE_HARDWARE_ERROR;
     if (w->Invalidate && !programmed && !(owes && !device->VidPnFlipEnabled)) WddmPrimaryInvalidate(wddm);
     WddmWuClose(device, wddm, w->Generation + 1u, w->Answer, result);
     wddm->WriterDeposit = FALSE;
@@ -8412,27 +8419,24 @@ static BOOLEAN WddmWriterEndLocked(_In_ PVOID Context)
     return TRUE;
 }
 
-void WddmPrimaryExclusiveEnd(_Inout_ BC250_DEVICE* Device, ULONG Generation, BOOLEAN Invalidate)
+NTSTATUS WddmPrimaryExclusiveEnd(_Inout_ BC250_DEVICE* Device, ULONG Generation, BOOLEAN Invalidate)
 {
     BC250_WDDM* wddm = WddmOf(Device);
     BC250_WDDM_WRITER w;
     NTSTATUS status;
-
-    if (wddm == NULL) return;
+    if (wddm == NULL) return STATUS_SUCCESS;
     RtlZeroMemory(&w, sizeof(w));
     w.Device = Device;
     w.Wddm = wddm;
     w.Generation = Generation;
     w.Invalidate = Invalidate;
-    // End must happen: a generation left odd would turn every later flip into a deposit. A writer never calls it
-    // above DISPATCH_LEVEL, and a section that fails here failed nowhere before (Begin took L); either way it runs
-    // without L, as every End did before r6, and is counted.
     status = WddmSection(Device, WddmWriterEndLocked, &w);
-    if (!NT_SUCCESS(status))
-    {
-        InterlockedIncrement(status == STATUS_INVALID_DEVICE_STATE ? &wddm->WriterHigh : &wddm->WriterSyncFailed);
-        (void)WddmWriterEndLocked(&w);
+    if (!NT_SUCCESS(status)) {
+        WddmWriterSectionFailure(Device, wddm, status);
+        return status;
     }
+    if (w.Status == STATUS_INVALID_DEVICE_STATE) WddmWriterSectionFailure(Device, wddm, w.Status);
+    return w.Status;
 }
 
 // At the start of D3 (pnp.c's Bc250SetPowerState), before the power writers: dxgmms2 flushed the flip queue
@@ -8458,51 +8462,58 @@ void WddmFlipFlushed(_Inout_ BC250_DEVICE* Device)
     if (!NT_SUCCESS(WddmSection(Device, WddmFlipFlushedLocked, &w))) InterlockedIncrement(&wddm->WriterSyncFailed);
 }
 
-// DestroyAllocation's restore (section 7.2, section 4: Desired's lifetime), a writer since r6. Inside L the teardown
-// record is taken and Desired, which names the destroyed object while the record does, is dropped; outside L the
-// firmware surface goes back; End programs a deposit that came meanwhile. A Begin that is refused (FAULTING, or another
-// writer for 2 ms) leaves the restore as it was before r6, without L, counted (DestroyUnsynchronized).
+// A live writer owns only reserved storage. Its Desired may be invalidated
+// under L without waiting for the PASSIVE operation. Otherwise Begin first
+// retires the scanned application buffer to the reserved bridge.
 typedef struct _BC250_WDDM_DESTROY {
     BC250_WDDM* Wddm;
     ULONGLONG Serial;
     BOOLEAN Taken;
+    BOOLEAN NeedWriter;
 } BC250_WDDM_DESTROY;
 
 static BOOLEAN WddmDestroyTakeLocked(_In_ PVOID Context)
 {
     BC250_WDDM_DESTROY* d = (BC250_WDDM_DESTROY*)Context;
     BC250_WDDM* wddm = d->Wddm;
-
-    d->Taken = InterlockedCompareExchange64(&wddm->ScanoutObject, 0, (LONG64)d->Serial) == (LONG64)d->Serial;
-    if (!d->Taken) return TRUE;
+    d->NeedWriter = FALSE;
+    d->Taken = FALSE;
+    if ((ULONGLONG)wddm->ScanoutObject != d->Serial) return TRUE;
+    if (!wddm->WriterActive) { d->NeedWriter = TRUE; return TRUE; }
     wddm->DesiredOwed = FALSE;
     wddm->WriterDeposit = FALSE;
-    WddmPrimaryInvalidate(wddm);    // the next flip is a change, whatever address it carries
+    WddmPrimaryInvalidate(wddm);
+    d->Taken = TRUE;
     return TRUE;
 }
 
-static void WddmDestroyRestore(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WDDM* Wddm, ULONGLONG Serial)
+static NTSTATUS WddmDestroyRestore(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WDDM* Wddm, ULONGLONG Serial)
 {
     BC250_WDDM_DESTROY d;
     ULONG generation = 0;
-    NTSTATUS restored = STATUS_SUCCESS;
-    const BOOLEAN writer = WddmPrimaryExclusiveBegin(Device, BC250_WRITER_DESTROY, &generation);
-
+    NTSTATUS status, ended;
     d.Wddm = Wddm;
     d.Serial = Serial;
     d.Taken = FALSE;
-    if (!writer || !NT_SUCCESS(WddmSection(Device, WddmDestroyTakeLocked, &d)))
-    {
-        InterlockedIncrement(&Wddm->DestroyUnsynchronized);
-        (void)WddmDestroyTakeLocked(&d);
+    d.NeedWriter = FALSE;
+    status = WddmSection(Device, WddmDestroyTakeLocked, &d);
+    if (!NT_SUCCESS(status)) {
+        WddmWriterSectionFailure(Device, Wddm, status);
+        return status;
     }
-    if (d.Taken) restored = DcnRestorePostDisplay(Device);
-    if (writer) WddmPrimaryExclusiveEnd(Device, generation, d.Taken);
-    // Its own budget: the flip lines are written at the frame rate and would otherwise spend the whole allowance long
-    // before the one line that says the plane was taken back.
+    if (d.NeedWriter) {
+        if (!WddmPrimaryExclusiveBegin(Device, BC250_WRITER_DESTROY, &generation)) return STATUS_DEVICE_BUSY;
+        status = WddmSection(Device, WddmDestroyTakeLocked, &d);
+        if (!NT_SUCCESS(status)) {
+            WddmWriterSectionFailure(Device, Wddm, status);
+            return status;
+        }
+        ended = WddmPrimaryExclusiveEnd(Device, generation, d.Taken);
+        if (!NT_SUCCESS(ended)) return ended;
+    }
     if (d.Taken && InterlockedIncrement(&Wddm->ScanoutTeardowns) <= BC250_WDDM_LOG_CALLS)
-        GuardLog("wddm: DestroyAllocation freed the scanned-out surface; firmware surface restored 0x%08X%s",
-                 restored, writer ? "" : " (without the writer section)");
+        GuardLog("wddm: DestroyAllocation retired scanned surface to reserved storage");
+    return STATUS_SUCCESS;
 }
 
 // One flip request: the DDI's arguments, the answer, and what the low entry logs after its section.
@@ -8551,14 +8562,9 @@ static BOOLEAN WddmFlipTransaction(_In_ PVOID Context)
     const DXGKARG_SETVIDPNSOURCEADDRESS* args = flip->Args;
     const ULONG generation = (ULONG)wddm->PrimarySequence;
     const BOOLEAN immediate = args->Flags.FlipImmediate ? TRUE : FALSE;
-    // BD-170: dxgmms2 has an assertion that can end in bugcheck 0x119 (VidSchiSubmitMmIoFlipCommand) for a flip
-    // without FlipRestart queued behind an IndependentFlipExclusive entry still at the head, and a failure answer
-    // keeps the entry at the head. So an immediate request with this flag that the admission refused gets success
-    // with nothing programmed or published, counted (ExclusiveRefused): the plane keeps the surface it has and the
-    // teardown record (ScanoutObject) still names it. The surface the OS then releases may be the one the plane reads
-    // until the next flip: a known hazard, kept from r5b, for these refusals only. A vsync request with the flag keeps
-    // its failure answer, counted (ExclusiveFailed): success would put its entry into the vsync wait for an address
-    // that no CRTC_VSYNC report carries.
+    // A refusal cannot report completion: immediate SUCCESS retires the OS
+    // primary. M904's legacy exclusive queue assertion is an OS error-path
+    // risk, not permission to acknowledge an unimplemented request.
     const BOOLEAN exclusive = args->Flags.IndependentFlipExclusive ? TRUE : FALSE;
     const LONGLONG address = args->PrimaryAddress.QuadPart;
     BC250_FLIP_FACTS facts;
@@ -8639,6 +8645,7 @@ static BOOLEAN WddmFlipTransaction(_In_ PVOID Context)
     }
 
     RtlZeroMemory(&facts, sizeof(facts));
+    (void)WddmWriterRecoveryLocked(device);
     facts.Faulting = wddm->Faulting != 0 ? 1u : 0u;
     facts.GenerationOdd = generation & 1u;
     facts.WriterActive = wddm->WriterActive ? 1u : 0u;
@@ -8665,18 +8672,21 @@ static BOOLEAN WddmFlipTransaction(_In_ PVOID Context)
         flip->Result = STATUS_DEVICE_HARDWARE_ERROR;
         return TRUE;
     case BC250_FLIP_EDGE_REFUSED:
-        if (exclusive && immediate) { InterlockedIncrement(&wddm->ExclusiveRefused); flip->Result = STATUS_SUCCESS; }
+        if (exclusive && immediate) { InterlockedIncrement(&wddm->ExclusiveRefused); flip->Result = status; }
         else { if (exclusive) InterlockedIncrement(&wddm->ExclusiveFailed); flip->Result = status; }
         return TRUE;
     case BC250_FLIP_EDGE_DEPOSIT_VSYNC:
     case BC250_FLIP_EDGE_DEPOSIT_DRAINED:
     case BC250_FLIP_EDGE_DEPOSIT_UNPROVEN:
-        // W: the request becomes Desired and nothing is programmed now. The writer's unblank (Resume) or its End
-        // programs it. The teardown record follows Desired, as it follows a programming (below). W-u, an immediate
-        // request with the plane not proven drained, is a deposit too (section 7.2): a writer conflict is a normal
-        // state, and E5 is for hardware faults. Until the writer blanks the plane, puts a surface of its own on it or
-        // End programs Desired, the plane can read the surface before this request; its record says which writer and
-        // how long to End.
+        // A safe bridge does not implement the requested flip. Do not promise
+        // immediate or next-VSync presentation while a long writer owns the pipe.
+        // Refusal preserves OS ownership and is ordinary contention, not E5.
+        if (device->VidPnFlipEnabled) {
+            InterlockedIncrement(&wddm->WriterBusy);
+            flip->Result = STATUS_DEVICE_BUSY;
+            return TRUE;
+        }
+        // Gate-closed software reporting keeps its existing Desired route.
         InterlockedExchange64(&wddm->ScanoutObject, (LONG64)(scanoutObject ? scanoutObject->Serial : 0ull));
         WddmFlipPublish(wddm, args, pitch, bytes, planeFormat);
         wddm->PrimaryNeedsRestore = TRUE;
@@ -8752,7 +8762,7 @@ static BOOLEAN WddmFlipTransaction(_In_ PVOID Context)
             // Nothing written: A after the fact (DcnFlipSourceAddress's own checks). The record goes back to the object
             // the previous flip left there, unless a destroy took it away meanwhile.
             InterlockedCompareExchange64(&wddm->ScanoutObject, previous, record);
-            if (exclusive && immediate) { InterlockedIncrement(&wddm->ExclusiveRefused); status = STATUS_SUCCESS; }
+            if (exclusive && immediate) InterlockedIncrement(&wddm->ExclusiveRefused);
             else if (exclusive) InterlockedIncrement(&wddm->ExclusiveFailed);
             flip->Result = status;
         }

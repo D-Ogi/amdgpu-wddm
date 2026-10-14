@@ -2025,7 +2025,7 @@ NTSTATUS Bc250SystemDisplayEnable(_In_ const PVOID MiniportDeviceContext, _In_ c
         (ULONGLONG)post->Width*4>post->Pitch ||
         (ULONGLONG)post->Pitch*post->Height>length)
         return STATUS_DEVICE_NOT_READY;
-    status=DcnRestorePostDisplay(device);
+    status=DcnRestorePostDisplaySerialized(device);
     if (!NT_SUCCESS(status)) return status;
     if (!runtime) ModesetRestoreQuiet(device);
     *Width = post->Width;

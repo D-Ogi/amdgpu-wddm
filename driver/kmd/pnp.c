@@ -394,7 +394,7 @@ void Bc250ResetDevice(_In_ const PVOID MiniportDeviceContext)
     if (device == NULL || !AdapterOwnerIs(device->PhysicalDeviceObject)) return;
     if (device->Modeset.PipeChanged || device->RuntimeDisplayChanged)
     {
-        (void)DcnRestorePostDisplay(device);
+        (void)DcnRestorePostDisplaySerialized(device);
         ModesetRestoreQuiet(device);
     }
     FanResetDevice(device);

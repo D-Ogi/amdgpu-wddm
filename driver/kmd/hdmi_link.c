@@ -166,7 +166,15 @@ void HdmiLinkStartAudio(BC250_DEVICE *Device,BOOLEAN Resume)
         Device->InheritedSignal.ActiveSize.cx,Device->InheritedSignal.ActiveSize.cy,
         Device->InheritedSignal.PixelRate,c->Link.Count);
 done:
-    if (exclusive) WddmPrimaryExclusiveEnd(Device,generation,FALSE);
+    if (exclusive) {
+        status=WddmPrimaryExclusiveEnd(Device,generation,FALSE);
+        if (!NT_SUCCESS(status)) {
+            // End kept the ownership state and queued recovery. Do not start
+            // audio after a primary transaction that could not finish.
+            predictionRefused=TRUE;
+            GuardLog("hdmilink: primary transaction end failed 0x%08lX",status);
+        }
+    }
     if (workspace) ExFreePoolWithTag(workspace,'LwAB');
     if (plan) ExFreePoolWithTag(plan,'LpAB');
     AtomFirmwareRelease(&firmware);
@@ -215,15 +223,16 @@ void HdmiLinkGetRestoreFailure(BC250_DEVICE *Device, BC250_HDMI_RESTORE_DETAIL* 
 
 BOOLEAN HdmiLinkStop(BC250_DEVICE *Device)
 {
-    ULONG generation;BOOLEAN restored;
+    ULONG generation;BOOLEAN restored;NTSTATUS finish;
     if (KeGetCurrentIrql()!=PASSIVE_LEVEL) return FALSE;
     if (!Device->HdmiLinkContext) return TRUE;
     if (!WddmPrimaryExclusiveBegin(Device,BC250_WRITER_HDMI_STOP,&generation)) {
         GuardLog("hdmilink: restore deferred: primary busy");return FALSE;
     }
     restored=HdmiLinkStopOwned(Device);
-    WddmPrimaryExclusiveEnd(Device,generation,FALSE);
-    return restored;
+    finish=WddmPrimaryExclusiveEnd(Device,generation,FALSE);
+    if (!NT_SUCCESS(finish)) GuardLog("hdmilink: restore primary transaction end failed 0x%08lX",finish);
+    return restored && NT_SUCCESS(finish);
 }
 
 NTSTATUS HdmiLinkRelease(BC250_DEVICE *Device)

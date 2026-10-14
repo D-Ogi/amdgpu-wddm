@@ -1,4 +1,4 @@
-"""Extract the actual flip path of wddm.c into the vidpn_flip_test.c fixture (BD-170 r6, docs/design/vidpn-flip.md
+"""Extract the actual flip path of wddm.c into the vidpn_flip_test.c fixture (BD-170 r7, docs/design/vidpn-flip.md
 section 7.2): the report routine and WddmReport, the completion snapshot, the VSync switch's history, the hardware
 vsync's report, the summary's record copy, the DMA-flip refusal, the whole flip state machine block (the flip DDI, its
 transaction, the writers' sections, E5 and its DPC, the destroy restore), DestroyAllocation and ControlInterrupt.
