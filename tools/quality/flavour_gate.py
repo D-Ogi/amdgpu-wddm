@@ -1,6 +1,8 @@
 """BD-167 flavour gate: no raw diagnostic escape and no forbidden override name in the released binaries.
 
     python flavour_gate.py --flavour release --package <dir> [--out <dir>]
+    python flavour_gate.py --flavour release --package <package top> --manifest <files\\manifest.json>
+                           --negative-control <payload path> [--out <dir>]
     python flavour_gate.py --flavour release --kmd <bc250kmd.sys> --pe <file|dir> [--pe ...] [--out <dir>]
     python flavour_gate.py --flavour lab --kmd <bc250kmd.sys> --kmd-only
 
@@ -18,34 +20,59 @@ The declaration (flavour_gate.json next to this file) holds:
   - one marker for each family of raw escapes: a format string that only the lab handler of that family logs.
     The KMD links with /OPT:REF, so the marker is in the SYS when the handler is compiled and dispatched;
   - the FORBIDDEN override names, each with what it does and the files whose lab build must still hold it
-    (lab.every), or the reason no lab file holds it (lab.none). An item of lab.every is a file name (every copy
-    of that file) or a payload path such as d3d11/amdgpu_wddm_radv.dll (that copy only). A file's payload path
-    is its path under the last directory named payload, else under the scanned directory, in lower case with
-    forward slashes. Paths make the list exact: a copy of a file named by path items that is not listed must
-    not hold the name, and lab.note says why those copies lack it (for example another build line);
+    (lab.every), or the reason no lab file holds it (lab.none, which the lab arm verifies: no file of a lab set may
+    hold that name). An item of lab.every is a file name (every copy of that file) or a payload path such as
+    d3d11/amdgpu_wddm_radv.dll (that copy only). A file's payload path is its path under the last directory named
+    payload, else under the scanned directory, in lower case with forward slashes. A DriverStore member
+    (payload/kmd/<member>, the table of tools/release/driver_package.py) has the payload path of its input slot:
+    kmd/d3d11/amdgpu_wddm_radv_d3d11.dll is d3d11/amdgpu_wddm_radv.dll and
+    kmd/wow64/d3d12/amdgpu_wddm_vkd3d32.dll is wow64/d3d12/amdgpu_wddm_vkd3d.dll, so one declaration serves both
+    package layouts, and a file name item compares with the last part of the payload path. Paths make the list
+    exact: a copy of a file named by path items that is not listed must not hold the name, and lab.note says why
+    those copies lack it (for example another build line);
   - the ALLOWED names, each with the reason it stays, and the OUT-OF-SCOPE names, each with the reason. Neither
-    list fails a set; out-of-scope hits are recorded. A name in two lists is an error.
+    list fails a set; out-of-scope hits are recorded. A name in two lists is an error. An allowed entry can carry a
+    release_rule: in a release set, every file that holds the name must also hold each text of "requires" and no
+    whole C string of "refuses" (any letter case). An allowed reason that starts with "BD-167 follow-up" is an open
+    decision, and a release set fails while one is open;
+  - the PACKAGE slots: the payload path of every PE that a whole package of either flavour holds (setup.exe in the
+    top folder included). --manifest checks a package against this closed list.
+
+Windows reads environment names in any letter case, so a forbidden name also counts as a whole C string (NUL on
+both sides, ASCII or UTF-16LE) in another case, such as "radv_debug". Inside a longer text a name in another case
+is ordinary prose and does not count ("zink_debug & ZINK_DEBUG..." in an assertion message).
 
 Coverage: every identifier of this driver's own prefixes (BC250_, BC250<letters or digits>_ such as BC250DXVK_,
-and AMDGPU_WDDM_) that a scanned file holds, in ASCII or UTF-16LE, must be in one of the three lists. An
-undeclared one fails either flavour, so a new lookup cannot ship without a decision. The search has no left
-boundary, so that no neighbouring byte can hide a name: a longer identifier that only ends in such a name shows
-up as that name and must be declared too.
+and AMDGPU_WDDM_) that a scanned file holds, in ASCII or UTF-16LE, must be in one of the three lists, and so must
+the upper-case form of a whole C string that matches those prefixes in another case. An undeclared one fails
+either flavour, so a new lookup cannot ship without a decision. The search has no left boundary, so that no
+neighbouring byte can hide a name: a longer identifier that only ends in such a name shows up as that name and must
+be declared too.
 
 --flavour release passes when the KMD carries the release line, not the lab line and no escape marker, no
-scanned PE (the KMD included) carries a forbidden name as a whole word, in ASCII or UTF-16LE, and every prefixed
-identifier is declared.
+scanned PE (the KMD included) carries a forbidden name as a whole word, in ASCII or UTF-16LE, every prefixed
+identifier is declared, every release rule holds and no decision is open.
 --flavour lab passes when the KMD carries the lab line, not the release line, and every escape marker, and every
 scanned file named in a forbidden entry's lab.every carries that name, with at least one such file in the set (for a
-path item: a file at that path), no unlisted copy of a file named by path items carries it, and every prefixed
-identifier is declared. So a build that
-lost the lab switch, a marker list that no longer matches the handlers, or a path list that no longer matches the
-build lines, fails in the lab arm instead of passing in silence. --kmd-only checks the KMD alone. A lab set never passes as release and a release set never
-passes as lab.
+path item: a file at that path), no unlisted copy of a file named by path items carries it, no file carries a name
+whose entry says lab.none, and every prefixed identifier is declared. So a build that lost the lab switch, a marker
+list that no longer matches the handlers, or a path list that no longer matches the build lines, fails in the lab
+arm instead of passing in silence. --kmd-only checks the KMD alone. A lab set never passes as release and a release
+set never passes as lab.
 
-The gate fails closed: no flavour, a missing file, a file that is not a PE image, no KMD, two KMD files in a
-package, no other PE without --kmd-only, a malformed declaration, an entry without a reason, or a name in two
-lists. --out writes flavour-gate.json with the SHA256 of every scanned file and every finding.
+--manifest binds the scan to one package (tools/release/build-release.ps1 runs it after manifest.json is written,
+before the archive). Every PE under --package must be a row of the manifest (or its setup file) with the SHA256 of
+the bytes this run scanned, every PE row of the manifest must be scanned, and the payload paths of the scanned PEs
+must be the declaration's package slots, each exactly once. --negative-control <payload path> then adds a forbidden
+name and an undeclared prefixed name to the scanned bytes of that one file, in memory, and the per-file check must
+report both (release) or the undeclared one (lab); a scan that does not see them fails the set.
+
+The gate fails closed: no flavour, a missing file, a file with a PE suffix that is not a PE image, no KMD, two KMD
+files in a package, another kernel driver (.sys) in the set, two files with one payload path under one directory,
+no other PE without --kmd-only, a malformed declaration or manifest, an entry without a reason, or a name in two
+lists. A directory scan takes every file with a PE suffix and every other file that starts with a PE header. --out
+writes flavour-gate.json with the SHA256 of every scanned file, its payload path and every finding, and in
+--manifest mode the SHA256 of the manifest, the declaration and this gate.
 """
 import argparse
 import hashlib
@@ -63,10 +90,23 @@ WORD = re.compile(rb'[A-Za-z0-9_]')
 # character is not an underscore, so "BC250_FOO_%u" gives BC250_FOO and a bare prefix gives nothing.
 PREFIXED = re.compile(r'(?:BC250[A-Z0-9]*|AMDGPU_WDDM)_[A-Z0-9_]*[A-Z0-9]')
 UTF16_RUN = re.compile(rb'(?:[\x20-\x7e]\x00)+')
+# Whole C strings: a run of printable characters with a NUL after it. The run starts after a byte that is not
+# printable, so its first character can be a stray byte before the string; whole_strings() also tries the run
+# without it.
+ASCII_STRING = re.compile(rb'[\x20-\x7e]{3,}(?=\x00)')
+UTF16_STRING = re.compile(rb'(?:[\x20-\x7e]\x00){3,}(?=\x00\x00)')
+OPEN_DECISION = 'BD-167 follow-up'
+NEGATIVE_FORBIDDEN = 'RADV_DEBUG'
+NEGATIVE_UNDECLARED = 'BC250_FLAVOUR_GATE_NEGATIVE_CONTROL'
 
 
 class GateError(Exception):
     """The input cannot be judged: the gate fails closed."""
+
+
+def payload_path_ok(f):
+    return (isinstance(f, str) and f == f.lower() and '\\' not in f and ':' not in f and
+            all(p not in ('', '.', '..') for p in f.split('/')) and f.endswith(PE_SUFFIXES))
 
 
 def load_declaration(path):
@@ -115,12 +155,26 @@ def load_declaration(path):
                 raise GateError('declaration: %s %s listed twice' % (kind, e['name']))
             if kind == 'forbidden':
                 check_lab_field(e)
+            if 'release_rule' in e:
+                if kind != 'allowed':
+                    raise GateError('declaration: %s %s: only an allowed entry has a release_rule' % (kind, e['name']))
+                check_release_rule(e)
             names.append(e['name'])
         lists[kind] = names
     for a, b in (('forbidden', 'allowed'), ('forbidden', 'out_of_scope'), ('allowed', 'out_of_scope')):
         both = sorted(set(lists[a]) & set(lists[b]))
         if both:
             raise GateError('declaration: in both %s and %s: %s' % (a, b, ', '.join(both)))
+    package = d.get('package')
+    if (not isinstance(package, dict) or not isinstance(package.get('slots'), list) or not package['slots'] or
+            not all(payload_path_ok(s) for s in package['slots']) or
+            len(set(package['slots'])) != len(package['slots'])):
+        raise GateError('declaration: package.slots needs the distinct lower-case payload paths of a whole package')
+    if not isinstance(package.get('about'), str) or not package['about'].strip():
+        raise GateError('declaration: package.about is empty')
+    kmd_slots = [s for s in package['slots'] if s.endswith('.sys')]
+    if kmd_slots != ['kmd/' + kmd['file'].lower()]:
+        raise GateError('declaration: package.slots must hold kmd/%s and no other .sys' % kmd['file'].lower())
     return d
 
 
@@ -137,9 +191,7 @@ def check_lab_field(e):
         return
     files = lab['every']
     if (not isinstance(files, list) or not files or len(set(files)) != len(files) or
-            not all(isinstance(f, str) and f == f.lower() and '\\' not in f and ':' not in f and
-                    all(p not in ('', '.', '..') for p in f.split('/')) and f.endswith(PE_SUFFIXES)
-                    for f in files)):
+            not all(payload_path_ok(f) for f in files)):
         raise GateError('declaration: forbidden %s: lab.every needs distinct lower-case PE file names or payload '
                         'paths (d3d11/amdgpu_wddm_radv.dll)' % e['name'])
     paths = [f for f in files if '/' in f]
@@ -152,6 +204,44 @@ def check_lab_field(e):
     if paths and 'note' not in lab:
         raise GateError('declaration: forbidden %s: lab.every with paths needs lab.note, why the other copies '
                         'lack the name' % e['name'])
+
+
+def check_release_rule(e):
+    """{"requires": [texts], "refuses": [texts], "why": reason}: requires is not empty, every text is printable
+    ASCII."""
+    rule = e['release_rule']
+    if not isinstance(rule, dict) or set(rule) - {'requires', 'refuses', 'why'} or 'requires' not in rule:
+        raise GateError('declaration: allowed %s: release_rule needs requires (and refuses, why)' % e['name'])
+    for key in ('requires', 'refuses'):
+        texts = rule.get(key, [])
+        if (not isinstance(texts, list) or (key == 'requires' and not texts) or
+                not all(isinstance(t, str) and len(t) >= 3 and all(0x20 <= ord(c) <= 0x7e for c in t) for t in texts)):
+            raise GateError('declaration: allowed %s: release_rule.%s needs printable texts of 3 or more '
+                            'characters' % (e['name'], key))
+    if not isinstance(rule.get('why'), str) or not rule['why'].strip():
+        raise GateError('declaration: allowed %s: release_rule.why is empty' % e['name'])
+
+
+_MEMBERS = None
+
+
+def driverstore_members():
+    """{DriverStore member path under payload: its input slot}, in lower case, from the packager's own table
+    (tools/release/driver_package.py), with every optional member (the OpenGL ICD of both architectures, the
+    encoder MFT)."""
+    global _MEMBERS
+    if _MEMBERS is None:
+        sys.path.insert(0, str(HERE.parent / 'release'))
+        try:
+            import driver_package
+        except ImportError as e:
+            raise GateError('tools/release/driver_package.py cannot be imported: %s' % e)
+        finally:
+            sys.path.pop(0)
+        rows = driver_package.members({'opengl_icd': {'register': True, 'architectures': ['x64', 'x86']},
+                                       'mft_h264': {'register': True}})
+        _MEMBERS = {r['path'].split('/', 1)[1].lower(): r['source'].split('/', 1)[1].lower() for r in rows}
+    return _MEMBERS
 
 
 def read_pe(path):
@@ -168,10 +258,26 @@ def read_pe(path):
     return data
 
 
+def starts_as_pe(path):
+    """A file without a PE suffix that still starts with an MZ header: the scan takes it, and read_pe() judges it."""
+    try:
+        with open(path, 'rb') as f:
+            return f.read(2) == b'MZ'
+    except OSError as e:
+        raise GateError('%s: unreadable: %s' % (path, e))
+
+
 def has_text(data, text):
     """The whole C string as it is stored, terminator included: ASCII or UTF-16LE. With the terminator, the
     marker of RUN_DCN is not found inside the marker of RUN_DCNFLIP."""
     return (text + '\0').encode('ascii') in data or (text + '\0').encode('utf-16-le') in data
+
+
+def holds(data, text):
+    """A required text of a release rule: an identifier as a whole word (has_name), other text anywhere."""
+    if NAME.fullmatch(text):
+        return any(has_name(data, text))
+    return text.encode('ascii') in data or text.encode('utf-16-le') in data
 
 
 def _char(data, at, unit):
@@ -210,6 +316,18 @@ def has_name(data, name):
     return tuple(counts)
 
 
+def whole_strings(data):
+    """{(text, 'ascii' or 'utf16'): count} of the whole C strings of a file, each also without its first character
+    (which can be a stray byte before the string)."""
+    found = {}
+    for rx, enc, key in ((ASCII_STRING, 'latin-1', 'ascii'), (UTF16_STRING, 'utf-16-le', 'utf16')):
+        for m in rx.finditer(data):
+            s = m.group(0).decode(enc)
+            for t in (s, s[1:]) if len(s) > 3 else (s,):
+                found[(t, key)] = found.get((t, key), 0) + 1
+    return found
+
+
 def prefixed_names(data):
     """Every identifier of this driver's prefixes in a file, in ASCII or UTF-16LE (PREFIXED)."""
     names = {m.group(0) for m in PREFIXED.finditer(data.decode('latin-1'))}
@@ -220,11 +338,20 @@ def prefixed_names(data):
 
 def slot(root, f):
     """The payload path of a file found under a scanned directory: its path under the last directory named payload,
-    else under the scanned directory, in lower case with forward slashes."""
+    else under the scanned directory, in lower case with forward slashes; a DriverStore member has the payload path
+    of its input slot."""
     parts = [p.lower() for p in f.relative_to(root).parts]
     if 'payload' in parts[:-1]:
         parts = parts[len(parts) - parts[::-1].index('payload', 1):]
-    return '/'.join(parts)
+    s = '/'.join(parts)
+    if s.startswith('kmd/'):
+        return driverstore_members().get(s, s)
+    return s
+
+
+def base(slots, p):
+    """The file name a lab.every item compares with: the last part of the payload path."""
+    return slots[p].rsplit('/', 1)[-1]
 
 
 def collect(package, kmd, pes, kmd_name, slots=None):
@@ -236,12 +363,18 @@ def collect(package, kmd, pes, kmd_name, slots=None):
     for root in roots:
         r = pathlib.Path(root)
         if r.is_dir():
-            found = sorted(f for f in r.rglob('*') if f.is_file() and f.suffix.lower() in PE_SUFFIXES)
+            found = sorted(f for f in r.rglob('*') if f.is_file() and
+                           (f.suffix.lower() in PE_SUFFIXES or starts_as_pe(f)))
             if not found:
                 raise GateError('%s: no PE file (%s) under it' % (r, '/'.join(PE_SUFFIXES)))
-            files += found
+            here = {}
             for f in found:
-                slots.setdefault(f, slot(r, f))
+                s = slot(r, f)
+                if s in here:
+                    raise GateError('%s and %s: both have the payload path %s under %s' % (here[s], f, s, r))
+                here[s] = f
+                slots.setdefault(f, s)
+            files += found
         elif r.is_file():
             files.append(r)
             slots.setdefault(r, r.name.lower())
@@ -261,13 +394,72 @@ def collect(package, kmd, pes, kmd_name, slots=None):
     for f in files:
         if f.resolve() not in seen:
             seen.add(f.resolve())
+            if f.suffix.lower() == '.sys':
+                raise GateError('%s: another kernel driver in the set; the gate judges one KMD (%s) and has no policy '
+                                'for a second one' % (f, k))
             others.append(f)
     return k, others
 
 
-def check(decl, flavour, kmd_path, others, kmd_only=False, slots=None):
+def scan_file(decl, data, forbidden, out_of_scope, declared):
+    """The findings of one file: forbidden and out-of-scope names (ascii, utf16 and, for a whole C string in another
+    letter case, variant), and the undeclared prefixed identifiers."""
+    strings = whole_strings(data)
+    variants = {}
+    lowered = {}
+    for (t, enc), n in strings.items():
+        lowered[t.lower()] = lowered.get(t.lower(), 0) + n
+        u = t.upper()
+        if u != t:
+            variants.setdefault(u, {}).setdefault(enc, 0)
+            variants[u][enc] += n
+    hits, outside = {}, {}
+    for names, into in ((forbidden, hits), (out_of_scope, outside)):
+        for name in names:
+            a, u = has_name(data, name)
+            v = variants.get(name, {})
+            if a or u or v:
+                into[name] = {'ascii': a, 'utf16': u}
+                if v:
+                    into[name]['variant'] = dict(sorted(v.items()))
+    undeclared = set(prefixed_names(data))
+    undeclared.update(u for u in variants if PREFIXED.fullmatch(u))
+    return {'forbidden': hits, 'out_of_scope': outside, 'undeclared': sorted(undeclared - declared),
+            'strings_lower': lowered}
+
+
+def describe(hit):
+    text = 'ascii %d, utf16 %d' % (hit['ascii'], hit['utf16'])
+    if hit.get('variant'):
+        text += ', in another letter case %s' % ', '.join('%s %d' % kv for kv in hit['variant'].items())
+    return text
+
+
+def file_failures(decl, flavour, path, finding, data):
+    """The failures of one file's findings, the same for the real scan and for the negative control."""
+    failures = []
+    if flavour == 'release':
+        for name in sorted(finding['forbidden']):
+            failures.append('%s: %s (%s)' % (path, name, describe(finding['forbidden'][name])))
+        for e in decl['allowed']:
+            rule = e.get('release_rule')
+            if not rule or not any(has_name(data, e['name'])):
+                continue
+            for text in rule['requires']:
+                if not holds(data, text):
+                    failures.append('%s: holds %s but not %r: %s' % (path, e['name'], text, rule['why']))
+            for text in rule.get('refuses', []):
+                if finding['strings_lower'].get(text.lower()):
+                    failures.append('%s: holds %s and the string %r: %s' % (path, e['name'], text, rule['why']))
+    for name in finding['undeclared']:
+        failures.append('%s: %s is not declared: add it to the forbidden, allowed or out_of_scope list of the '
+                        'declaration (BD-167 coverage)' % (path, name))
+    return failures
+
+
+def check(decl, flavour, kmd_path, others, kmd_only=False, slots=None, blobs=None):
     """(failures, notes, record). slots: {path: payload path} from collect(); a path without one has only its file
-    name."""
+    name. blobs: {path: bytes} read already; the others are read here, once."""
     if flavour not in ('release', 'lab'):
         raise GateError('flavour must be release or lab, not %r' % flavour)
     if not others and not kmd_only:
@@ -275,7 +467,11 @@ def check(decl, flavour, kmd_path, others, kmd_only=False, slots=None):
     failures, notes = [], []
     k = decl['kmd']
     other = 'lab' if flavour == 'release' else 'release'
-    kmd = read_pe(kmd_path)
+    blobs = {} if blobs is None else blobs
+    for p in [kmd_path] + list(others):
+        if p not in blobs:
+            blobs[p] = read_pe(p)
+    kmd = blobs[kmd_path]
     record = {'flavour': flavour, 'kmd_only': bool(kmd_only), 'files': []}
 
     if not has_text(kmd, k['flavour_markers'][flavour]):
@@ -290,6 +486,11 @@ def check(decl, flavour, kmd_path, others, kmd_only=False, slots=None):
         if flavour == 'lab' and not present:
             failures.append('%s: lab KMD lacks the marker of %s (%r, %s): the marker list is stale or the '
                             'handler is gone' % (kmd_path, e['escapes'], e['marker'], e['source']))
+    if flavour == 'release':
+        for e in decl['allowed']:
+            if e['reason'].startswith(OPEN_DECISION):
+                failures.append('declaration: allowed %s is an open decision (%s): a release set needs every '
+                                'decision closed' % (e['name'], e['reason']))
 
     slots = dict(slots or {})
     for p in [kmd_path] + list(others):
@@ -299,24 +500,14 @@ def check(decl, flavour, kmd_path, others, kmd_only=False, slots=None):
     declared = set(forbidden) | set(out_of_scope) | {f['name'] for f in decl['allowed']}
     held = {}   # file -> set of forbidden names it holds
     for path in [kmd_path] + list(others):
-        data = kmd if path == kmd_path else read_pe(path)
-        hits, outside = {}, {}
-        for names, into in ((forbidden, hits), (out_of_scope, outside)):
-            for name in names:
-                a, u = has_name(data, name)
-                if a or u:
-                    into[name] = {'ascii': a, 'utf16': u}
-        held[path] = set(hits)
-        undeclared = sorted(prefixed_names(data) - declared)
+        data = blobs[path]
+        finding = scan_file(decl, data, forbidden, out_of_scope, declared)
+        held[path] = set(finding['forbidden'])
         record['files'].append({'path': str(path), 'slot': slots[path], 'sha256': hashlib.sha256(data).hexdigest().upper(),
-                                'forbidden': hits, 'out_of_scope': outside, 'undeclared': undeclared})
-        if flavour == 'release':
-            for name in sorted(hits):
-                failures.append('%s: %s (ascii %d, utf16 %d)' % (path, name, hits[name]['ascii'], hits[name]['utf16']))
-        for name in undeclared:
-            failures.append('%s: %s is not declared: add it to the forbidden, allowed or out_of_scope list of the '
-                            'declaration (BD-167 coverage)' % (path, name))
-        for name in sorted(outside):
+                                'forbidden': finding['forbidden'], 'out_of_scope': finding['out_of_scope'],
+                                'undeclared': finding['undeclared']})
+        failures += file_failures(decl, flavour, path, finding, data)
+        for name in sorted(finding['out_of_scope']):
             notes.append('%s: %s (out of scope, recorded)' % (path, name))
 
     if flavour == 'lab' and not kmd_only:
@@ -326,7 +517,7 @@ def check(decl, flavour, kmd_path, others, kmd_only=False, slots=None):
         scanned = [kmd_path] + list(others)
 
         def copies(item):
-            return [p for p in scanned if (slots[p] if '/' in item else pathlib.Path(p).name.lower()) == item]
+            return [p for p in scanned if (slots[p] if '/' in item else base(slots, p)) == item]
 
         for item in sorted({n for f in decl['forbidden'] for n in f['lab'].get('every', [])}):
             if not copies(item):
@@ -335,6 +526,10 @@ def check(decl, flavour, kmd_path, others, kmd_only=False, slots=None):
         for f in decl['forbidden']:
             every = f['lab'].get('every')
             if not every:
+                for p in scanned:
+                    if f['name'] in held[p]:
+                        failures.append('%s (%s): holds %s, but its entry says no lab file does (lab.none: %s): the '
+                                        'declaration is stale' % (p, slots[p], f['name'], f['lab']['none']))
                 continue
             for p in [p for item in every for p in copies(item)]:
                 if f['name'] not in held[p]:
@@ -342,22 +537,117 @@ def check(decl, flavour, kmd_path, others, kmd_only=False, slots=None):
                                     'lookup is gone and the declaration is stale' % (p, f['name'], f['where']))
             listed = {i.rsplit('/', 1)[1] for i in every if '/' in i}
             for p in scanned:
-                if pathlib.Path(p).name.lower() in listed and slots[p] not in every and f['name'] in held[p]:
+                if base(slots, p) in listed and slots[p] not in every and f['name'] in held[p]:
                     failures.append('%s (%s): holds %s, but lab.every lists only %s: the declaration is stale (%s)'
                                     % (p, slots[p], f['name'],
-                                       ', '.join(i for i in every if i.endswith('/' + pathlib.Path(p).name.lower())),
+                                       ', '.join(i for i in every if i.endswith('/' + base(slots, p))),
                                        f['lab']['note']))
     record['failures'], record['notes'] = failures, notes
     return failures, notes, record
 
 
+def bind_manifest(decl, manifest_path, package, record):
+    """Failures of the scan against one package's manifest.json: every scanned PE is a manifest row (or the setup
+    file) with the SHA256 of the scanned bytes, every PE row is scanned, and the scanned payload paths are the
+    declaration's package slots, each once. Adds the binding to the record."""
+    mp = pathlib.Path(manifest_path)
+    try:
+        raw = mp.read_bytes()
+        m = json.loads(raw.decode('utf-8-sig'))
+        rows = m['files']
+        setup = m['setup']
+        if not isinstance(rows, list) or not all(isinstance(r, dict) and isinstance(r.get('path'), str) and
+                                                 isinstance(r.get('sha256'), str) for r in rows):
+            raise ValueError('files rows need path and sha256')
+        if not isinstance(setup, dict) or not isinstance(setup.get('file'), str) or not isinstance(setup.get('sha256'), str):
+            raise ValueError('setup needs file and sha256')
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        raise GateError('manifest %s unreadable: %s' % (mp, e))
+    top = pathlib.Path(package).resolve()
+    root = mp.resolve().parent
+    if top != root and top not in root.parents:
+        raise GateError('manifest %s is not inside the package %s' % (mp, top))
+    expected = {}
+    for r in rows:
+        f = (root / r['path']).resolve()
+        if f.suffix.lower() in PE_SUFFIXES or (f.is_file() and starts_as_pe(f)):
+            if f in expected:
+                raise GateError('manifest %s: two rows for %s' % (mp, r['path']))
+            expected[f] = (r['path'], r['sha256'].upper())
+    s = (top / setup['file']).resolve()
+    if s in expected:
+        raise GateError('manifest %s: the setup file is also a files row' % mp)
+    expected[s] = ('setup:' + setup['file'], setup['sha256'].upper())
+    failures = []
+    scanned = {pathlib.Path(f['path']).resolve(): f for f in record['files']}
+    for f, (name, sha) in sorted(expected.items()):
+        got = scanned.get(f)
+        if got is None:
+            failures.append('manifest row %s: not scanned (no file at %s, or it is outside --package)' % (name, f))
+        elif got['sha256'] != sha:
+            failures.append('manifest row %s: SHA256 %s, the scanned file %s' % (name, sha, got['sha256']))
+        else:
+            got['manifest'] = name
+    for f, got in sorted(scanned.items()):
+        if f not in expected:
+            failures.append('%s: scanned, but no row of the manifest names it' % f)
+    have = {}
+    for got in record['files']:
+        have.setdefault(got['slot'], []).append(got['path'])
+    want = decl['package']['slots']
+    for s_ in want:
+        if s_ not in have:
+            failures.append('package slot %s: no file of the package has this payload path' % s_)
+    for s_, paths in sorted(have.items()):
+        if s_ not in want:
+            failures.append('%s: payload path %s is not a package slot of the declaration' % (', '.join(paths), s_))
+        elif len(paths) > 1:
+            failures.append('package slot %s: %d files (%s)' % (s_, len(paths), ', '.join(paths)))
+    record['manifest'] = {'path': str(mp), 'sha256': hashlib.sha256(raw).hexdigest().upper(),
+                          'pe_rows': len(expected), 'failures': len(failures)}
+    return failures
+
+
+def negative_control(decl, flavour, target, slots, blobs, record):
+    """Failures of the in-memory negative control on the file at one payload path: a forbidden name and an
+    undeclared prefixed name added to its scanned bytes must give the findings the real scan would give."""
+    paths = [p for p in blobs if slots.get(p) == target]
+    if len(paths) != 1:
+        raise GateError('--negative-control %s: %d scanned files have this payload path' % (target, len(paths)))
+    path = paths[0]
+    forbidden = [f['name'] for f in decl['forbidden']]
+    out_of_scope = [f['name'] for f in decl.get('out_of_scope', [])]
+    declared = set(forbidden) | set(out_of_scope) | {f['name'] for f in decl['allowed']}
+    if NEGATIVE_UNDECLARED in declared:
+        raise GateError('the negative control name %s is declared' % NEGATIVE_UNDECLARED)
+    name = NEGATIVE_FORBIDDEN if NEGATIVE_FORBIDDEN in forbidden else forbidden[0]
+    data = (blobs[path] + b'\0' + name.encode('ascii') + b'\0\0' + NEGATIVE_UNDECLARED.encode('utf-16-le') +
+            b'\0\0')
+    finding = scan_file(decl, data, forbidden, out_of_scope, declared)
+    got = file_failures(decl, flavour, path, finding, data)
+    want = [NEGATIVE_UNDECLARED] + ([name] if flavour == 'release' else [])
+    found = set(finding['undeclared']) | (set(finding['forbidden']) if flavour == 'release' else set())
+    missed = [w for w in want if w not in found or not any(w in g for g in got)]
+    record['negative_control'] = {'slot': target, 'path': str(path), 'injected': [name, NEGATIVE_UNDECLARED],
+                                  'expected': want, 'reported': len(got), 'missed': missed}
+    if missed:
+        return ['negative control on %s: the scan did not report %s in bytes that hold it' % (target, ', '.join(missed))]
+    return []
+
+
+def file_sha256(path):
+    return hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest().upper()
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument('--flavour', required=True, choices=('release', 'lab'))
-    p.add_argument('--package', default='', help='directory: every .dll/.sys/.exe under it is scanned')
+    p.add_argument('--package', default='', help='directory: every PE under it is scanned')
     p.add_argument('--kmd', default='', help='the KMD .sys (default: the one file named as kmd.file in --package)')
     p.add_argument('--pe', action='append', default=[], help='a UMD/ICD PE file or a directory of them')
     p.add_argument('--kmd-only', action='store_true', help='a KMD-only set: no UMD/ICD PE is required')
+    p.add_argument('--manifest', default='', help="the package's manifest.json: bind the scan to it (needs --package)")
+    p.add_argument('--negative-control', default='', help='payload path of one scanned file for the negative control')
     p.add_argument('--declaration', default=str(DECLARATION))
     p.add_argument('--out', default='')
     a = p.parse_args(argv)
@@ -365,9 +655,20 @@ def main(argv=None):
         decl = load_declaration(a.declaration)
         if not a.package and not a.kmd:
             raise GateError('pass --package or --kmd')
-        slots = {}
+        if a.manifest and (not a.package or a.kmd or a.pe or a.kmd_only):
+            raise GateError('--manifest judges one whole package: pass --package alone')
+        if a.negative_control and a.kmd_only:
+            raise GateError('--negative-control needs a UMD/ICD set, not --kmd-only')
+        slots, blobs = {}, {}
         kmd, others = collect(a.package, a.kmd, a.pe, decl['kmd']['file'], slots)
-        failures, notes, record = check(decl, a.flavour, kmd, others, a.kmd_only, slots)
+        failures, notes, record = check(decl, a.flavour, kmd, others, a.kmd_only, slots, blobs)
+        if a.manifest:
+            failures += bind_manifest(decl, a.manifest, a.package, record)
+            record['declaration_sha256'] = file_sha256(a.declaration)
+            record['gate_sha256'] = file_sha256(__file__)
+        if a.negative_control:
+            failures += negative_control(decl, a.flavour, a.negative_control.lower(), slots, blobs, record)
+        record['failures'] = failures
     except GateError as e:
         print('flavour gate: FAIL (closed): %s' % e)
         return 2
@@ -379,8 +680,14 @@ def main(argv=None):
         out = pathlib.Path(a.out)
         out.mkdir(parents=True, exist_ok=True)
         (out / 'flavour-gate.json').write_text(json.dumps(record, indent=1), encoding='utf-8')
-    print('flavour gate: %s, flavour %s, %d file(s), %d failure(s)'
-          % ('FAIL' if failures else 'PASS', a.flavour, len(record['files']), len(failures)))
+    extra = ''
+    if 'manifest' in record:
+        extra += ', manifest bound (%d PE rows)' % record['manifest']['pe_rows']
+    if 'negative_control' in record:
+        extra += ', negative control on %s %s' % (record['negative_control']['slot'],
+                                                 'missed' if record['negative_control']['missed'] else 'seen')
+    print('flavour gate: %s, flavour %s, %d file(s)%s, %d failure(s)'
+          % ('FAIL' if failures else 'PASS', a.flavour, len(record['files']), extra, len(failures)))
     return 1 if failures else 0
 
 

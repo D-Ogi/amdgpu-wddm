@@ -1,7 +1,7 @@
 {
  "schema": 1,
  "defect": "BD-167",
- "about": "Read by flavour_gate.py. The KMD markers are literals of driver/kmd/entry.c, display.c and lab_gate.c; test_flavour_gate.py checks that each one is still in the source. A forbidden name is one whose lookup the release flavour compiles out; its lab field names the files whose lab build must still hold it (every), or says why no lab file does (none). An item of every is a file name (every copy) or a payload path (that copy only); with paths the list is exact and note says why the other copies lack the name. An allowed name stays, for the reason given. An out-of-scope name is recorded where it is found and never fails. Every identifier of the prefixes BC250_, BC250<letters or digits>_ and AMDGPU_WDDM_ in a scanned file must be in one of the three lists (BD-167 coverage); an allowed entry whose reason starts with \"BD-167 follow-up\" is a decision that is still open.",
+ "about": "Read by flavour_gate.py. The KMD markers are literals of driver/kmd/entry.c, display.c and lab_gate.c; test_flavour_gate.py checks that each one is still in the source. A forbidden name is one whose lookup the release flavour compiles out; its lab field names the files whose lab build must still hold it (every), or says why no lab file does (none). An item of every is a file name (every copy) or a payload path (that copy only); with paths the list is exact and note says why the other copies lack the name. An allowed name stays, for the reason given. An out-of-scope name is recorded where it is found and never fails. Every identifier of the prefixes BC250_, BC250<letters or digits>_ and AMDGPU_WDDM_ in a scanned file must be in one of the three lists (BD-167 coverage); an allowed entry whose reason starts with \"BD-167 follow-up\" is a decision that is still open, and a release set fails while one is. A forbidden name counts in any letter case as a whole C string. An allowed entry's release_rule says what else a release file that holds the name must and must not hold. package.slots is the closed list of PE payload paths that --manifest requires.",
  "kmd": {
   "file": "bc250kmd.sys",
   "flavour_markers": {
@@ -1371,13 +1371,135 @@
      "amdgpu_wddm_mft_h264.dll"
     ]
    }
+  },
+  {
+   "name": "AMDGPU_WDDM_VKD3D_COMPILE_THREADS",
+   "where": "vkd3d-proton libs/vkd3d/cache.c (pipeline compile limiter)",
+   "does": "the slots of the pipeline compile limiter (2; 0 = no bound) (lead decision 2)",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_vkd3d.dll"
+    ]
+   }
+  },
+  {
+   "name": "AMDGPU_WDDM_VKD3D_COMPILE_THERMAL",
+   "where": "vkd3d-proton libs/vkd3d/cache.c (pipeline compile limiter)",
+   "does": "turns the thermal band of the pipeline compile limiter off (0) (lead decision 2)",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_vkd3d.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_HIP_GPU_COPY",
+   "where": "bc250-win compute/hip/runtime/hip_device.cpp",
+   "does": "0 puts the HIP copies back on the processor; the control arm of the BD-123 measurements. The release runtime always takes the GPU copy route (BD-123, fixed in tester.28) (lead decision 3)",
+   "lab": {
+    "every": [
+     "amdhip64.dll"
+    ]
+   }
+  },
+  {
+   "name": "VKD3D_LOG_FILE",
+   "where": "vkd3d-proton libs/vkd3d-common/debug.c",
+   "does": "writes the engine log to that file (lead decision 4)",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_vkd3d.dll"
+    ]
+   }
+  },
+  {
+   "name": "VKD3D_LOG_BUFFERED",
+   "where": "vkd3d-proton libs/vkd3d-common/debug.c",
+   "does": "buffers the VKD3D_LOG_FILE output (lead decision 4)",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_vkd3d.dll"
+    ]
+   }
+  },
+  {
+   "name": "VKD3D_QUEUE_PROFILE",
+   "where": "vkd3d-proton libs/vkd3d/queue_timeline.c",
+   "does": "writes a queue timeline trace to that file (lead decision 4)",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_vkd3d.dll"
+    ]
+   }
+  },
+  {
+   "name": "VKD3D_QUEUE_PROFILE_ABSOLUTE",
+   "where": "vkd3d-proton libs/vkd3d/queue_timeline.c",
+   "does": "absolute timestamps in the VKD3D_QUEUE_PROFILE trace (lead decision 4)",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_vkd3d.dll"
+    ]
+   }
+  },
+  {
+   "name": "DXVK_LOG_PATH",
+   "where": "dxvk src/util/log/log.cpp (Logger::getFileName), src/dxvk/dxvk_hang.cpp (dumpDeviceFaultInfo)",
+   "does": "writes the engine log into that directory (lead decision 4)",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_dxvk.dll"
+    ]
+   }
+  },
+  {
+   "name": "DXVK_LOG_LEVEL",
+   "where": "dxvk src/util/log/log.cpp (Logger::getMinLogLevel)",
+   "does": "the level of the engine log (lead decision 4)",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_dxvk.dll"
+    ]
+   }
+  },
+  {
+   "name": "RADV_FORCE_VRS",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (RADV ICDs)",
+   "does": "forces a variable shading rate on every draw; upstream calls it a test switch, and no release consumer sets it",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_radv.dll",
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
+   "name": "RADV_TEX_ANISO",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (RADV ICDs)",
+   "does": "forces an anisotropy filter on every sampler; the Anisotropy setting of the control application reaches the engines through d3d11.samplerAnisotropy and VKD3D_SAMPLER_ANISOTROPY, and nothing sets this variable",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_radv.dll",
+     "vulkan_radeon.dll"
+    ]
+   }
   }
  ],
  "allowed": [
   {
    "name": "AMDGPU_WDDM_LOG",
-   "where": "every shell and engine of this driver",
-   "reason": "our own support log: it chooses where diagnostics are written, it reads nothing. BD-167 follow-up, pending lead decision 1: it also takes file:<path>, the transport of the game log; the proposal limits the release flavour to that switch's file"
+   "where": "the D3D12 and D3D11 shells (driver/umd/d3d12/stdio-log.h), mesa-wddm src/util/u_amdgpu_wddm_stdio.c (triplet and system lines), vkd3d-proton libs/vkd3d-common/debug.c",
+   "reason": "Lead decision 1 (BD-167): release honours LOG only as the carrier of the GUI 'Record game logs' switch: a file: path inside %ProgramData%\\amdgpu-wddm\\logs\\games, with the GAMELOG marker naming this process. stderr and every other path are lab only. The file is opened only if it exists, as a plain disk file with one link, and is written only until the marker's instant and up to 64 MiB. The release_rule checks the built form of this: every release file that reads the name also holds the marker name and the folder, and has no \"stderr\" string",
+   "release_rule": {
+    "requires": [
+     "AMDGPU_WDDM_GAMELOG",
+     "amdgpu-wddm\\logs\\games"
+    ],
+    "refuses": [
+     "stderr"
+    ],
+    "why": "lead decision 1: a release file reads AMDGPU_WDDM_LOG only beside the game-log marker and only as a file in %ProgramData%\\amdgpu-wddm\\logs\\games; the stderr target is lab only"
+   }
   },
   {
    "name": "DXVK_HUD",
@@ -1462,22 +1584,7 @@
   {
    "name": "AMDGPU_WDDM_GAMELOG",
    "where": "mesa-wddm src/util/u_amdgpu_wddm_stdio.c (triplet and system lines); the D3D12 and D3D11 shells (stdio-log.h of the game log patch)",
-   "reason": "BD-167 follow-up, pending lead decision 1: the marker with which the first module of a process that records a game log tells the modules loaded later to write into the same file (the GameLogUntil switch of the control application); it names no path"
-  },
-  {
-   "name": "AMDGPU_WDDM_VKD3D_COMPILE_THREADS",
-   "where": "vkd3d-proton libs/vkd3d/cache.c (pipeline compile limiter)",
-   "reason": "BD-167 follow-up, pending lead decision 2: the slots of the pipeline compile limiter (2; 0 = no bound); env only, no user control yet"
-  },
-  {
-   "name": "AMDGPU_WDDM_VKD3D_COMPILE_THERMAL",
-   "where": "vkd3d-proton libs/vkd3d/cache.c (pipeline compile limiter)",
-   "reason": "BD-167 follow-up, pending lead decision 2: 0 turns the thermal band of the compile limiter off; env only, no user control yet"
-  },
-  {
-   "name": "BC250_HIP_GPU_COPY",
-   "where": "bc250-win compute/hip/runtime/hip_device.cpp",
-   "reason": "BD-167 follow-up, pending lead decision 3: 0 puts the HIP copies back on the processor, as the tester.28 notes tell users"
+   "reason": "Lead decision 1 (BD-167): the marker <pid>;<16 hex digits> with which the first module of a process that records a game log (the GUI 'Record game logs' switch, registry value GameLogUntil) tells the modules loaded later to write into the same file; a module honours AMDGPU_WDDM_LOG only when the marker names its own process. It names no path"
   }
  ],
  "out_of_scope": [
@@ -1540,6 +1647,57 @@
    "name": "BC250_ESCAPE_RUN_INTEROP",
    "where": "bc250-win driver/kmd/bc250kmd_escape.h; tools/win/bc250kmd_cli/bc250kmd_cli.c",
    "reason": "an escape code named in a message of the CLI; not a lookup"
+  },
+  {
+   "name": "AMDGPU_WDDM_CONTROL",
+   "where": "bc250-win tools/win/amdgpu_wddm_control (the .NET assembly name)",
+   "reason": "the assembly name of the control application in lower case, amdgpu_wddm_control, in its metadata and its application manifest; not a lookup. It is declared because Windows reads environment names in any letter case"
+  },
+  {
+   "name": "AMDGPU_WDDM_SETUP",
+   "where": "bc250-win tools/win/amdgpu_wddm_setup (the .NET assembly name)",
+   "reason": "the assembly name of the setup window in lower case, amdgpu_wddm_setup, in its metadata and its application manifest; not a lookup. It is declared because Windows reads environment names in any letter case"
   }
- ]
+ ],
+ "package": {
+  "about": "The payload path of every PE that a whole package of either flavour holds: the PE rows of tools/release/release-sources.json without \"payload/\", and setup.exe in the top folder. A DriverStore member has the payload path of its input slot. flavour_gate.py --manifest requires each slot exactly once and no other PE; test_flavour_gate.py checks this list against release-sources.json.",
+  "slots": [
+   "control/amdgpu_wddm_control.exe",
+   "control/bc250control.dll",
+   "d3d11/amdgpu_wddm_d3d11.dll",
+   "d3d11/amdgpu_wddm_dxvk.dll",
+   "d3d11/amdgpu_wddm_radv.dll",
+   "d3d12/amdgpu_wddm_d3d12.dll",
+   "d3d12/amdgpu_wddm_radv.dll",
+   "d3d12/amdgpu_wddm_vkd3d.dll",
+   "desktop/amdgpu_wddm_radv.dll",
+   "desktop/bc250d3d.dll",
+   "desktop/bc250d3d_router.dll",
+   "desktop/bc250d3d_zink.dll",
+   "kmd/bc250kmd.sys",
+   "mft/amdgpu_wddm_mft_h264.dll",
+   "opengl/amdgpu_wddm_gl.dll",
+   "redist/vc_redist.x64.exe",
+   "setup.exe",
+   "tools/amdgpu-state-installer.exe",
+   "tools/amdgpu_wddm_d3d12caps.exe",
+   "tools/bc250control.dll",
+   "tools/bc250kmd_cli.exe",
+   "tools/d3d11bench.exe",
+   "tools/hip/amdhip64.dll",
+   "tools/hip/bc250hipblas.dll",
+   "tools/hip/vadd.exe",
+   "tools/vulkaninfo.exe",
+   "vulkan/vulkan_radeon.dll",
+   "wow64/d3d11/amdgpu_wddm_d3d11.dll",
+   "wow64/d3d11/amdgpu_wddm_dxvk.dll",
+   "wow64/d3d11/amdgpu_wddm_radv.dll",
+   "wow64/d3d12/amdgpu_wddm_d3d12.dll",
+   "wow64/d3d12/amdgpu_wddm_radv.dll",
+   "wow64/d3d12/amdgpu_wddm_vkd3d.dll",
+   "wow64/desktop/bc250d3d.dll",
+   "wow64/desktop/bc250d3d_router.dll",
+   "wow64/vulkan/vulkan_radeon.dll"
+  ]
+ }
 }

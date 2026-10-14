@@ -11,14 +11,25 @@ the same file that holds the name fails the lab set. Every input the gate cannot
 driver source, so that a renamed log line fails here and not first on the lab. Coverage: one identifier of the
 driver's own prefixes that no list declares fails either flavour (the negative control), in ASCII, in UTF-16LE and
 in the KMD, and a declared one passes.
+
+Letter case: a forbidden name or a prefixed identifier as a whole C string in another case counts, inside prose it
+does not, and file names match in any case. A lab.none name in a lab file fails the lab set. The release rule of the
+game-log sink and an open decision fail a release set. A second .sys, two files with one payload path and a file with
+a PE header but no PE suffix are handled (fail closed, or scanned). A DriverStore member has its input slot's payload
+path. A whole package bound to its manifest passes in both layouts and both flavours; a missing, extra, changed or
+unlisted PE fails it; the negative control is seen, and a scan that cannot see it fails. The package slots of the
+declaration are the PE rows of release-sources.json.
 """
 import contextlib
+import hashlib
 import io
 import json
 import os
 from pathlib import Path
+import sys
 import tempfile
 import unittest
+from unittest import mock
 
 import flavour_gate as g
 
@@ -38,6 +49,9 @@ def pe(*strings, utf16=()):
 
 RELEASE_KMD = (K["flavour_markers"]["release"], "kmd: something every flavour logs")
 LAB_KMD = (K["flavour_markers"]["lab"],) + tuple(e["marker"] for e in K["lab_escape_markers"])
+# A file that reads the game-log sink, as the release rule of AMDGPU_WDDM_LOG wants it: the marker name and the folder.
+LOG = ("AMDGPU_WDDM_LOG", "AMDGPU_WDDM_GAMELOG", "amdgpu-wddm\\logs\\games")
+MEMBER_OF = {source: member.split("/", 1)[1] for member, source in g.driverstore_members().items()}
 
 
 def lab_items():
@@ -68,6 +82,25 @@ def slot_of(item):
     return item if "/" in item else "wow64/%d/%s" % (sorted(lab_items()).index(item), item)
 
 
+# The file that build-release.ps1 gives the negative control: an x86 DriverStore member.
+NEGATIVE = "wow64/d3d12/amdgpu_wddm_vkd3d.dll"
+
+
+def package_names(flavour):
+    """{package slot: [forbidden names its build holds]}: none in a release package; in a lab package, the names of
+    the lab.every items that name the slot by payload path or by file name."""
+    items = lab_items()
+    result = {}
+    for s in DECL["package"]["slots"]:
+        b = s.rsplit("/", 1)[-1]
+        result[s] = [] if flavour == "release" else sorted({n for i, names in items.items() if i in (s, b) for n in names})
+    return result
+
+
+def sha(data):
+    return hashlib.sha256(data).hexdigest().upper()
+
+
 class ReleaseFlavour(unittest.TestCase):
     def setUp(self):
         d = tempfile.TemporaryDirectory(dir=OUT)
@@ -84,7 +117,7 @@ class ReleaseFlavour(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             return g.main(list(args))
 
-    def release_set(self, umd=pe("AMDGPU_WDDM_LOG", "DXVK_HUD")):
+    def release_set(self, umd=pe(*LOG, "DXVK_HUD")):
         kmd = self.write("pkg/bc250kmd.sys", pe(*RELEASE_KMD))
         dll = self.write("pkg/umd/amdgpu_wddm_d3d11.dll", umd)
         return kmd, dll
@@ -94,16 +127,240 @@ class ReleaseFlavour(unittest.TestCase):
         self.assertEqual(self.run_gate("--flavour", "release", "--package", str(self.dir / "pkg")), 0)
         self.assertEqual(self.run_gate("--flavour", "lab", "--package", str(self.dir / "pkg")), 1)
 
-    def lab_set(self, drop_name=None, drop_file=None, extra=None):
+    def lab_set(self, drop_name=None, drop_file=None, extra=None, upper=False):
         """A lab package (lab_slots() under pkg/files/payload): the lab KMD and every file a lab.every item names,
         each holding its names, less one name of one copy ((payload path, name)) or every copy an item names when
-        asked; extra adds {payload path: names}."""
-        self.write("pkg/bc250kmd.sys", pe(*LAB_KMD))
+        asked; extra adds {payload path: names}; upper writes every file name in upper case."""
+        self.write("pkg/BC250KMD.SYS" if upper else "pkg/bc250kmd.sys", pe(*LAB_KMD))
         for s, names in sorted(dict(lab_slots(), **(extra or {})).items()):
             if drop_file in (s, s.rsplit("/", 1)[1]):
                 continue
             held = [n for n in names if drop_name != (s, n)]
-            self.write("pkg/files/payload/%s" % s, pe("AMDGPU_WDDM_LOG", *held))
+            self.write("pkg/files/payload/%s" % (s.upper() if upper else s), pe(*LOG, *held))
+
+    def package(self, flavour, layout="driverstore", drop=None, extra=None):
+        """A whole package under pkg: setup.exe in the top folder, every other package slot under files/payload (a
+        DriverStore member under payload/kmd when layout is driverstore), each file holding the names of its flavour,
+        a document, and files/manifest.json over all of them. drop leaves one slot out, extra adds {path under pkg:
+        bytes} before the manifest is written. Returns (pkg, manifest path)."""
+        top = self.dir / "pkg"
+        kmd = RELEASE_KMD if flavour == "release" else LAB_KMD
+        for s, names in sorted(package_names(flavour).items()):
+            if s == drop:
+                continue
+            if s == "setup.exe":
+                rel = "setup.exe"
+            elif layout == "driverstore" and s in MEMBER_OF:
+                rel = "files/payload/kmd/" + MEMBER_OF[s]
+            else:
+                rel = "files/payload/" + s
+            data = pe(*kmd) if s.endswith(".sys") else pe(*LOG, *names, "slot " + s)
+            self.write("pkg/" + rel, data)
+        self.write("pkg/files/INSTALL.md", b"how to install\n")
+        for rel, data in (extra or {}).items():
+            self.write("pkg/" + rel, data)
+        rows = [{"path": p.relative_to(top / "files").as_posix(), "sha256": sha(p.read_bytes()), "size": p.stat().st_size}
+                for p in sorted((top / "files").rglob("*")) if p.is_file()]
+        setup = top / "setup.exe"
+        manifest = {"schema": 1, "files": rows,
+                    "setup": {"file": "setup.exe", "sha256": sha(setup.read_bytes()) if setup.is_file() else "0" * 64,
+                              "size": setup.stat().st_size if setup.is_file() else 0}}
+        path = self.write("pkg/files/manifest.json", json.dumps(manifest, indent=1).encode("utf-8"))
+        return top, path
+
+    def run_package(self, flavour, top, manifest, *extra):
+        return self.run_gate("--flavour", flavour, "--package", str(top), "--manifest", str(manifest),
+                             "--negative-control", NEGATIVE, *extra)
+
+    def test_whole_package_passes_bound_to_its_manifest(self):
+        for flavour in ("release", "lab"):
+            for layout in ("driverstore", "plain"):
+                with self.subTest(flavour=flavour, layout=layout):
+                    self.setUp()
+                    top, manifest = self.package(flavour, layout)
+                    out = self.dir / "out"
+                    self.assertEqual(self.run_package(flavour, top, manifest, "--out", str(out)), 0)
+                    record = json.loads((out / "flavour-gate.json").read_text(encoding="utf-8"))
+                    self.assertEqual(sorted(f["slot"] for f in record["files"]), sorted(DECL["package"]["slots"]))
+                    self.assertTrue(all("manifest" in f for f in record["files"]))
+                    self.assertEqual(record["manifest"]["pe_rows"], len(DECL["package"]["slots"]))
+                    self.assertEqual(record["manifest"]["sha256"], sha(manifest.read_bytes()))
+                    self.assertEqual(record["declaration_sha256"], sha(g.DECLARATION.read_bytes()))
+                    self.assertEqual(record["gate_sha256"], sha(Path(g.__file__).read_bytes()))
+                    self.assertEqual(record["negative_control"]["slot"], NEGATIVE)
+                    self.assertEqual(record["negative_control"]["missed"], [])
+                    if layout == "driverstore":
+                        nc = Path(record["negative_control"]["path"]).as_posix()
+                        self.assertTrue(nc.endswith("payload/kmd/" + MEMBER_OF[NEGATIVE]), nc)
+                    other = "lab" if flavour == "release" else "release"
+                    self.assertEqual(self.run_package(other, top, manifest), 1)
+
+    def test_package_that_does_not_match_its_manifest_fails(self):
+        member = "files/payload/kmd/" + MEMBER_OF["wow64/vulkan/vulkan_radeon.dll"]
+        cases = {
+            "a slot left out": ({"drop": "wow64/vulkan/vulkan_radeon.dll"}, None),
+            "the setup file left out": ({"drop": "setup.exe"}, None),
+            "an extra PE in the manifest": ({"extra": {"files/payload/tools/extra.exe": pe("x")}}, None),
+            "a PE outside the manifest": ({}, lambda top: (top / "files/payload/tools/stray.dll").write_bytes(pe("x"))),
+            "a PE header without a PE suffix outside the manifest":
+                ({}, lambda top: (top / "files/payload/tools/hidden.bin").write_bytes(pe("x"))),
+            "a changed file": ({}, lambda top: (top / member).write_bytes(pe("changed after the manifest"))),
+            "a row without its file": ({}, lambda top: (top / member).unlink()),
+            "a changed setup file": ({}, lambda top: (top / "setup.exe").write_bytes(pe("changed setup"))),
+        }
+        for name, (kwargs, after) in cases.items():
+            with self.subTest(case=name):
+                self.setUp()
+                top, manifest = self.package("release", **kwargs)
+                if after:
+                    after(top)
+                self.assertEqual(self.run_package("release", top, manifest), 1)
+
+    def test_package_inputs_that_cannot_be_judged_fail_closed(self):
+        top, manifest = self.package("release")
+        elsewhere = self.write("elsewhere/manifest.json", manifest.read_bytes())
+        cases = {
+            "manifest outside the package": ["--package", str(top), "--manifest", str(elsewhere)],
+            "manifest with --pe": ["--package", str(top), "--manifest", str(manifest), "--pe", str(top)],
+            "negative control on no file": ["--package", str(top), "--manifest", str(manifest),
+                                            "--negative-control", "tools/none.dll"],
+            "unreadable manifest": ["--package", str(top), "--manifest", str(self.write("pkg/bad/manifest.json", b"{"))],
+            "manifest without setup": ["--package", str(top), "--manifest",
+                                       str(self.write("pkg/files/m2.json", json.dumps({"files": []}).encode("utf-8")))],
+        }
+        for name, args in cases.items():
+            with self.subTest(case=name):
+                self.assertEqual(self.run_gate("--flavour", "release", *args), 2)
+
+    def test_a_blind_scan_fails_the_negative_control(self):
+        # The real scan of a release package finds nothing either way; the negative control must catch a scan that
+        # cannot see what it looks for.
+        top, manifest = self.package("release")
+        out = self.dir / "out"
+        with mock.patch.object(g, "has_name", lambda data, name: (0, 0)), \
+                mock.patch.object(g, "prefixed_names", lambda data: set()), \
+                mock.patch.object(g, "whole_strings", lambda data: {}):
+            self.assertEqual(self.run_package("release", top, manifest, "--out", str(out)), 1)
+        record = json.loads((out / "flavour-gate.json").read_text(encoding="utf-8"))
+        self.assertEqual(len(record["negative_control"]["expected"]), 2)
+        self.assertEqual(sorted(record["negative_control"]["missed"]), sorted(record["negative_control"]["expected"]))
+
+    def test_forbidden_name_in_another_case_fails_release(self):
+        name = g.NEGATIVE_FORBIDDEN
+        self.assertIn(name, [f["name"] for f in DECL["forbidden"]])
+        for case, data in (("lower case", pe(*LOG, name.lower())),
+                           ("mixed case, UTF-16LE", pe(*LOG, utf16=(name.title(),))),
+                           ("after a stray byte", pe(*LOG) + b"\x01a" + name.lower().encode("ascii") + b"\0")):
+            with self.subTest(case=case):
+                self.release_set(data)
+                self.assertEqual(self.run_gate("--flavour", "release", "--package", str(self.dir / "pkg")), 1)
+        # Prose: the name in another case inside a longer text, as in an assertion message.
+        self.release_set(pe(*LOG, "assert(x || %s & 1)" % name.lower(), utf16=("see %s here" % name.lower(),)))
+        self.assertEqual(self.run_gate("--flavour", "release", "--package", str(self.dir / "pkg")), 0)
+
+    def test_prefixed_whole_string_in_another_case_needs_declaring(self):
+        for data in (pe(*LOG, "bc250_not_declared_anywhere"), pe(*LOG, utf16=("Amdgpu_Wddm_Not_Declared",))):
+            self.release_set(data)
+            self.assertEqual(self.run_gate("--flavour", "release", "--package", str(self.dir / "pkg")), 1)
+        self.release_set(pe(*LOG, "the bc250_not_declared_anywhere switch", "amdgpu_wddm_control", "amdgpu_wddm_setup"))
+        self.assertEqual(self.run_gate("--flavour", "release", "--package", str(self.dir / "pkg")), 0)
+
+    def test_release_rule_of_the_game_log_sink(self):
+        rule = {e["name"]: e for e in DECL["allowed"]}["AMDGPU_WDDM_LOG"]["release_rule"]
+        self.assertEqual(rule["requires"], ["AMDGPU_WDDM_GAMELOG", "amdgpu-wddm\\logs\\games"])
+        self.assertEqual(rule["refuses"], ["stderr"])
+        cases = {
+            "no marker, no folder": (pe("AMDGPU_WDDM_LOG"), 1),
+            "no folder": (pe("AMDGPU_WDDM_LOG", "AMDGPU_WDDM_GAMELOG"), 1),
+            "no marker": (pe("AMDGPU_WDDM_LOG", "amdgpu-wddm\\logs\\games"), 1),
+            "a longer marker name only": (pe("AMDGPU_WDDM_LOG", "AMDGPU_WDDM_GAMELOGX", "amdgpu-wddm\\logs\\games"), 1),
+            "the stderr string": (pe(*LOG, "stderr"), 1),
+            "the stderr string in UTF-16LE and upper case": (pe(*LOG, utf16=("STDERR",)), 1),
+            "stderr in prose": (pe(*LOG, "write to stderr now"), 0),
+            "the whole sink": (pe(*LOG), 0),
+            "stderr in a file without the sink": (pe("stderr", "DXVK_HUD"), 0),
+        }
+        for name, (data, code) in cases.items():
+            with self.subTest(case=name):
+                self.release_set(data)
+                self.assertEqual(self.run_gate("--flavour", "release", "--package", str(self.dir / "pkg")), code)
+
+    def test_open_decision_fails_release_only(self):
+        self.assertFalse([e["name"] for e in DECL["allowed"] if e["reason"].startswith(g.OPEN_DECISION)])
+        d = json.loads(g.DECLARATION.read_text(encoding="utf-8"))
+        d["allowed"][0]["reason"] = g.OPEN_DECISION + ", pending a lead decision"
+        decl = self.write("open.json", json.dumps(d).encode("utf-8"))
+        self.release_set()
+        self.assertEqual(self.run_gate("--flavour", "release", "--package", str(self.dir / "pkg"),
+                                       "--declaration", str(decl)), 1)
+        self.setUp()
+        decl = self.write("open.json", json.dumps(d).encode("utf-8"))
+        self.lab_set()
+        self.assertEqual(self.run_gate("--flavour", "lab", "--package", str(self.dir / "pkg"),
+                                       "--declaration", str(decl)), 0)
+
+    def test_lab_none_is_verified(self):
+        nones = [f["name"] for f in DECL["forbidden"] if "none" in f["lab"]]
+        self.assertTrue(nones, "the declaration has no lab.none entry to test with")
+        for name in nones:
+            with self.subTest(name=name):
+                self.setUp()
+                self.lab_set(extra={"extra/a.dll": [name]})
+                self.assertEqual(self.run_gate("--flavour", "lab", "--package", str(self.dir / "pkg")), 1)
+        self.setUp()
+        self.lab_set(extra={"extra/a.dll": []})
+        self.assertEqual(self.run_gate("--flavour", "lab", "--package", str(self.dir / "pkg")), 0)
+
+    def test_file_names_match_in_any_case(self):
+        self.lab_set(upper=True)
+        self.assertEqual(self.run_gate("--flavour", "lab", "--package", str(self.dir / "pkg")), 0)
+
+    def test_driverstore_members_have_their_input_slot(self):
+        members = g.driverstore_members()
+        self.assertEqual(members["kmd/d3d11/amdgpu_wddm_radv_d3d11.dll"], "d3d11/amdgpu_wddm_radv.dll")
+        self.assertEqual(members["kmd/wow64/d3d12/amdgpu_wddm_vkd3d32.dll"], "wow64/d3d12/amdgpu_wddm_vkd3d.dll")
+        self.assertIn(NEGATIVE, MEMBER_OF)
+        self.assertIn(NEGATIVE, DECL["package"]["slots"])
+        # One lab name less in one DriverStore copy fails the lab package, as in the plain layout.
+        s, names = next((s, n) for s, n in sorted(package_names("lab").items()) if s in MEMBER_OF and n)
+        top, manifest = self.package("lab")
+        (top / "files/payload/kmd" / MEMBER_OF[s]).write_bytes(pe(*LOG, *names[1:], "slot " + s))
+        self.assertEqual(self.run_gate("--flavour", "lab", "--package", str(top)), 1)
+
+    def test_second_kernel_driver_fails_closed(self):
+        self.release_set()
+        self.write("pkg/umd/filter.sys", pe("x"))
+        self.assertEqual(self.run_gate("--flavour", "release", "--package", str(self.dir / "pkg")), 2)
+        self.assertEqual(self.run_gate("--flavour", "release", "--kmd", str(self.dir / "pkg" / "bc250kmd.sys"),
+                                       "--pe", str(self.dir / "pkg" / "umd")), 2)
+
+    def test_two_files_with_one_payload_path_fail_closed(self):
+        self.write("pkg/files/payload/kmd/bc250kmd.sys", pe(*RELEASE_KMD))
+        self.write("pkg/files/payload/kmd/" + MEMBER_OF["d3d11/amdgpu_wddm_radv.dll"], pe("x"))
+        self.assertEqual(self.run_gate("--flavour", "release", "--package", str(self.dir / "pkg")), 0)
+        self.write("pkg/files/payload/d3d11/amdgpu_wddm_radv.dll", pe("y"))
+        self.assertEqual(self.run_gate("--flavour", "release", "--package", str(self.dir / "pkg")), 2)
+
+    def test_pe_header_without_pe_suffix_is_scanned(self):
+        self.release_set()
+        hidden = self.write("pkg/umd/payload.bin", pe(*LOG, g.NEGATIVE_FORBIDDEN))
+        self.assertEqual(self.run_gate("--flavour", "release", "--package", str(self.dir / "pkg")), 1)
+        hidden.write_bytes(b"MZ but no PE image")
+        self.assertEqual(self.run_gate("--flavour", "release", "--package", str(self.dir / "pkg")), 2)
+        hidden.write_bytes(b"plain data")
+        self.assertEqual(self.run_gate("--flavour", "release", "--package", str(self.dir / "pkg")), 0)
+
+    def test_package_slots_follow_the_release_sources(self):
+        rows = json.loads((REPO / "tools" / "release" / "release-sources.json").read_text(encoding="utf-8-sig"))["files"]
+        pes = {r["path"].lower().split("/", 1)[1] for r in rows if r["path"].lower().endswith(g.PE_SUFFIXES)}
+        self.assertEqual(set(DECL["package"]["slots"]), pes | {"setup.exe"})
+        sys.path.insert(0, str(REPO / "tools" / "release"))
+        try:
+            import driver_package
+        finally:
+            sys.path.pop(0)
+        fixed = {src.lower() for src, _ in driver_package.NATIVE + driver_package.WOW if src.endswith(g.PE_SUFFIXES)}
+        self.assertLessEqual(fixed, set(DECL["package"]["slots"]))
 
     def test_lab_set_passes_as_lab_only(self):
         self.lab_set()
@@ -167,7 +424,7 @@ class ReleaseFlavour(unittest.TestCase):
     def test_out_of_scope_name_is_recorded_not_failed(self):
         self.assertTrue(DECL.get("out_of_scope"), "the declaration has no out-of-scope entry to test with")
         name = DECL["out_of_scope"][0]["name"]
-        self.release_set(pe("AMDGPU_WDDM_LOG", name))
+        self.release_set(pe(*LOG, name))
         out = self.dir / "out"
         self.assertEqual(self.run_gate("--flavour", "release", "--package", str(self.dir / "pkg"), "--out", str(out)), 0)
         record = json.loads((out / "flavour-gate.json").read_text(encoding="utf-8"))
@@ -198,9 +455,9 @@ class ReleaseFlavour(unittest.TestCase):
     def test_forbidden_name_fails_release_in_either_encoding(self):
         for f in DECL["forbidden"]:
             with self.subTest(name=f["name"]):
-                self.release_set(pe("AMDGPU_WDDM_LOG", f["name"]))
+                self.release_set(pe(*LOG, f["name"]))
                 self.assertEqual(self.run_gate("--flavour", "release", "--package", str(self.dir / "pkg")), 1)
-                self.release_set(pe("AMDGPU_WDDM_LOG", utf16=(f["name"],)))
+                self.release_set(pe(*LOG, utf16=(f["name"],)))
                 self.assertEqual(self.run_gate("--flavour", "release", "--package", str(self.dir / "pkg")), 1)
 
     def test_name_inside_a_message_counts(self):
@@ -223,9 +480,9 @@ class ReleaseFlavour(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertFalse(any(name == e["name"] for k in ("forbidden", "allowed", "out_of_scope")
                                      for e in DECL.get(k, [])))
-                self.release_set(pe("AMDGPU_WDDM_LOG", name))
+                self.release_set(pe(*LOG, name))
                 self.assertEqual(self.run_gate("--flavour", "release", "--package", str(self.dir / "pkg")), 1)
-                self.release_set(pe("AMDGPU_WDDM_LOG", utf16=("x" + name,)))
+                self.release_set(pe(*LOG, utf16=("x" + name,)))
                 self.assertEqual(self.run_gate("--flavour", "release", "--package", str(self.dir / "pkg")), 1)
         self.setUp()
         self.lab_set(extra={"undeclared/a.dll": ["BC250_NOT_DECLARED_ANYWHERE"]})
@@ -238,7 +495,7 @@ class ReleaseFlavour(unittest.TestCase):
     def test_declared_prefixed_names_pass(self):
         allowed = [e["name"] for e in DECL["allowed"] if g.PREFIXED.fullmatch(e["name"])]
         self.assertTrue(allowed, "the declaration has no allowed prefixed name to test with")
-        self.release_set(pe("AMDGPU_WDDM_LOG", *allowed, *[e["name"] for e in DECL.get("out_of_scope", [])]))
+        self.release_set(pe(*LOG, *allowed, *[e["name"] for e in DECL.get("out_of_scope", [])]))
         self.assertEqual(self.run_gate("--flavour", "release", "--package", str(self.dir / "pkg")), 0)
 
     def test_prefixed_names(self):
@@ -315,6 +572,20 @@ class ReleaseFlavour(unittest.TestCase):
             "lab.none without reason": lambda d: d["forbidden"][0].update(lab={"none": " "}),
             "forbidden and out of scope": lambda d: d["out_of_scope"].append(
                 {"name": d["forbidden"][0]["name"], "where": "x", "reason": "x"}),
+            "no package slots": lambda d: d.pop("package"),
+            "package slot in upper case": lambda d: d["package"]["slots"].append("TOOLS/X.EXE"),
+            "package slot twice": lambda d: d["package"]["slots"].append(d["package"]["slots"][0]),
+            "package without the KMD": lambda d: d["package"].update(
+                slots=[s for s in d["package"]["slots"] if not s.endswith(".sys")]),
+            "package with a second .sys": lambda d: d["package"]["slots"].append("kmd/filter.sys"),
+            "release_rule on a forbidden entry": lambda d: d["forbidden"][0].update(
+                release_rule={"requires": ["abc"], "why": "x"}),
+            "release_rule without requires": lambda d: next(
+                e for e in d["allowed"] if "release_rule" in e).update(release_rule={"why": "x"}),
+            "release_rule with a short text": lambda d: next(
+                e for e in d["allowed"] if "release_rule" in e)["release_rule"].update(requires=["ab"]),
+            "release_rule without why": lambda d: next(
+                e for e in d["allowed"] if "release_rule" in e)["release_rule"].pop("why"),
         }
         for name, change in cases.items():
             with self.subTest(case=name):

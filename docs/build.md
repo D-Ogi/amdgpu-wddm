@@ -394,10 +394,30 @@ still hold it. It also gives the allowed and the out-of-scope names, each with i
 its file name (every copy) or by its payload path, for example `d3d11/amdgpu_wddm_radv.dll` (that copy only).
 The payload path is the path under the last directory named `payload`. Paths make the list exact: another
 copy of that file must not hold the name, and the entry's note says why the other copies do not have it. For
-example, `BC250_DRAW_STATS` is only in the RADV copies of the triplet build line.
+example, `BC250_DRAW_STATS` is only in the RADV copies of the triplet build line. A DriverStore member under
+`payload/kmd` has the payload path of its input slot in `tools/release/driver_package.py`. For example,
+`kmd/wow64/d3d12/amdgpu_wddm_vkd3d32.dll` is `wow64/d3d12/amdgpu_wddm_vkd3d.dll`. Thus one declaration
+serves both package layouts.
+
+Windows reads environment names in any letter case. Thus a forbidden name also counts as a whole C string in
+another case, for example `radv_debug`. Inside a longer text, it does not count. The coverage rule also applies
+to such strings. A lab set fails when a file holds a name whose entry says that no lab file holds it
+(`lab.none`).
+
+An allowed entry can have a release rule. `AMDGPU_WDDM_LOG` has one. A release file that holds that name must
+also hold `AMDGPU_WDDM_GAMELOG` and the folder `amdgpu-wddm\logs\games`. It must not hold the string `stderr`.
+An allowed entry whose reason starts with `BD-167 follow-up` is an open decision. A release set fails while
+one is open.
+
+`--manifest` binds the scan to one package. Each PE under `--package` must be a row of `manifest.json`, or its
+setup file, with the SHA256 of the scanned bytes. Each PE row of the manifest must be in the scan. The payload
+paths of the scan must be the `package.slots` of the declaration, each one time. `--negative-control` adds a
+forbidden name and an undeclared name to the scanned bytes of one file, in memory. The set fails if the scan
+does not report them.
 
 ```
-python tools/quality/flavour_gate.py --flavour release --package <package files directory> [--out <dir>]
+python tools/quality/flavour_gate.py --flavour release --package <package top folder> [--out <dir>]
+python tools/quality/flavour_gate.py --flavour release --package <package top folder> --manifest <files\manifest.json> --negative-control wow64/d3d12/amdgpu_wddm_vkd3d.dll [--out <dir>]
 python tools/quality/flavour_gate.py --flavour lab --kmd <bc250kmd.sys> --pe <file|dir> [--pe ...] [--out <dir>]
 python -m unittest discover -s tools/quality -p test_flavour_gate.py
 ```
