@@ -12,7 +12,7 @@ Configures and builds vkd3d-proton with a recorded meson option set (vkd3d-confi
               not exist upstream)
   ddi-engine-lto
               the ddi-engine options followed by the optimisation options of the released engine (LTO, AVX2,
-              WARN and FIXME compiled out, a linker map)
+              WARN and FIXME compiled out in release, a linker map). Lab keeps WARN and FIXME.
 
 -Arch x86 builds the 32-bit (WoW64) engine with vcvarsamd64_x86.bat (common.ps1), as build-dxvk.ps1 does.
 
@@ -74,7 +74,17 @@ $ErrorActionPreference = 'Stop'
 $configsPath = Join-Path $PSScriptRoot 'vkd3d-configs.json'
 $recipeConfig = (Get-Content -LiteralPath $configsPath -Raw | ConvertFrom-Json).configs.$Config
 $options = @($recipeConfig.options)
-if ($Lab) { $options += '-Damdgpu-wddm-lab-flavour=true' }
+if ($Lab) {
+  # BD-180: VKD3D_DEBUG/VKD3D_SHADER_DEBUG cannot enable warnings that the compiler removed.
+  # Keep the release recipe intact; remove only this complete c_args token for the lab flavour.
+  $options = @($options | ForEach-Object {
+    if ($_.StartsWith('-Dc_args=')) {
+      '-Dc_args=' + (($_.Substring('-Dc_args='.Length) -split '\s+' |
+        Where-Object { $_ -and $_ -ne '-DVKD3D_NO_DEBUG_MESSAGES' }) -join ' ')
+    } else { $_ }
+  })
+  $options += '-Damdgpu-wddm-lab-flavour=true'
+}
 $targets = @($recipeConfig.targets)
 
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
