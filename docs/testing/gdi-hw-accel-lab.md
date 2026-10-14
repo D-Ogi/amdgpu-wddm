@@ -29,9 +29,8 @@ the host tests cannot answer. Every trial outside the HLK job ends inside three 
    means the installed driver is not the build under test.
 6. Check the registry value. `EnableGdiHwAccel` must be 1 under the adapter's `Parameters` key,
    where the package INF writes it with NOCLOBBER.
-7. Start the thermal guard for the whole pass, and the camera watch beside it (the owner's
-   suspension of the camera was revoked on 2026-10-12, which `CLAUDE.md` records in its lab camera
-   paragraph).
+7. Start the thermal guard for the whole pass, and the camera watch beside it where the operator's
+   own lab rules allow a camera.
 
 If the capability line says `kernels 0`, stop. The driver reports no GDI acceleration, the HLK job
 does not apply, and nothing below tests the new code.
@@ -106,13 +105,22 @@ closes what it opened. The owner sees all of it happen on the lab's screen.
    says how far the field stays below it. It must stay below the bound, `capacity-short` must be 0,
    and the expectation from the producer measurement is that it stays at or under 65536 bytes. Keep
    it beside `peak rects`, which says how many sub-rectangles the largest call carried.
-8. Record the two lines of rule 3 and the input scope: `wddm: gdi ib-full<n> ib-over<n>
-   dma-short<n>` and `wddm: gdi above-producer<n> scope-refused<n>`. `ib-over` and `scope-refused`
-   must be 0: the first would mean the capacity arithmetic is wrong, the second that the bound is
-   below what a supported producer sends, and either is a result that stops the trial series.
-   `dma-short` says whether dxgkrnl gave this context a smaller buffer than it asked for, and
-   `above-producer` whether anything on this system sends more than the ordinary producer's own
-   65536-byte command buffer. Both are measurements and neither is a failure by itself.
+8. Record the lines of rule 3 and the input scope: `wddm: gdi ib-full<n> ib-over<n> dma-short<n>`,
+   `wddm: gdi above-producer<n> scope-refused<n>`, `wddm: gdi dma append<n> restart<n>
+   submitted<n>`, `wddm: gdi dma unknown<n> full<n> lost<n>` and `wddm: gdi committed dwords<n>`.
+   **Any drawing this driver dropped is a failed trial.** `batch-refused` is the count of dropped
+   calls and `omitted subrects` the drawing lost with them, whatever stopped the call: a command
+   buffer above the bound, a buffer an earlier call had filled (`ib-full`), a window that could not
+   be placed (`dma-unknown`, `dma-full`) or the unreachable checks (`ib-over`, `no-space`). None of
+   them is an acceptable observation about the operating system's capacity in an ordinary desktop
+   session, and each of them stops the trial series until the design page's limitation section or
+   the driver accounts for it. `ib-over`, `dma-lost` and `dma-short` are states the design says
+   cannot happen at all, so a nonzero value there is a defect of the driver.
+   `append`, `restart` and `submitted` are measurements of how dxgkrnl actually uses one DMA buffer,
+   and `above-producer` whether anything on this system sends more than the ordinary producer's own
+   65536-byte command buffer. Those three are measurements and no failure by themselves. Compare
+   `committed dwords` with `dwords` of the totals line: they are equal when nothing was dropped
+   after its stream was written.
 
 ## Trial 4: the off switch
 
@@ -168,15 +176,19 @@ goes into the facts graph with this evidence.
 | A timeout of the graphics engine | the guard log, event 4101, a black screen | a GDI DMA buffer did not finish. This part has no working GPU reset, so recover by a restart |
 | An artefact on the screen | the camera, and `mon.py screenshot` | a dropped operation, a wrong rectangle or wrong arithmetic. Note the window and the operation |
 | `wddm: RenderGdi1 ...` | the guard log | the path ran. The first lines carry the command count, the byte count and the dword count |
-| `overflow1` in such a line | the guard log | one command buffer did not fit the DMA buffer. Operations were dropped. Record the counts |
-| `call` above 0 in `wddm: gdi drops` | the stop lines | the driver refused a whole call. Every one of them dropped every operation of that call |
+| `overflow1` in such a line | the guard log | an item found no space after the batch was guaranteed, which the induction of `gdi_batch.c` makes unreachable. The whole call is dropped rather than drawn in part. A defect of the driver: record the counts and keep the log |
+| `call` above 0 in `wddm: gdi drops` | the stop lines | an argument of the call failed the admission tests, so the driver could not read the command buffer or write the DMA buffer. Every one of them dropped every operation of that call, and it is lost drawing like any other drop. The sub-rectangles are not in `omitted subrects`, because a call that cannot be walked cannot be counted |
 | `malformed`, `outside` above 0 | the same line | the command buffer did not hold what its own sizes said. Keep the log |
 | `item-refused` above 0 | the `wddm: gdi overflow` line at the stop | an admitted item could not be described by either emitter. The item drew nothing |
-| `batch-refused` above 0 | the `wddm: gdi batch-refused` line at the stop | one call held more sub-rectangles than its capacity can guarantee, so it drew nothing. It cannot happen inside `BC250_GDI_CMDBUF_BOUND`. Read `capacity-short`, `peak cmdlen` and `scope-refused` beside it. Together they say what the OS sent and whether the bound or the producer scope is what was wrong |
-| `capacity-short` above 0 | the `wddm: gdi capacity-short` line at the stop | the CDD sent a command buffer larger than the bound this context was sized for. By itself it costs nothing, because the call is still translated when what is in it fits. It is the one route to `batch-refused`. Record `peak cmdlen`. The bound cannot be raised far. One indirect buffer carries the worst case of 200 KiB and no more. A producer above that needs the compaction or multi-indirect-buffer work of the design page, not a larger number |
-| `scope-refused` above 0 | the `wddm: gdi above-producer` line at the stop | a call at or below the ordinary producer's own 65536-byte command buffer was refused whole. This is the result that stops the series: the input scope of the design is wrong. Keep the log, the length and the sub-rectangle count |
+| `batch-refused` above 0 | the `wddm: gdi batch-refused` line at the stop | a whole call drew nothing, whatever stopped it: every drop of a call reaches this counter, and `omitted subrects` is the drawing lost with them. In an ordinary desktop session this is a failed trial. Read `capacity-short`, `peak cmdlen`, `ib-full`, `dma-unknown` and `scope-refused` beside it: together they say what the OS sent and which limit the call met |
+| `capacity-short` above 0 | the `wddm: gdi capacity-short` line at the stop | a call's worst case was larger than the capacity it was given. The cause is a command buffer above the bound, or an earlier call that took part of the same DMA buffer. By itself it costs nothing, because the call is still translated when what is in it fits. Record `peak cmdlen`. The bound cannot be raised far. One indirect buffer carries the worst case of 200 KiB and no more. A producer above that needs the compaction or multi-indirect-buffer work of the design page, not a larger number |
+| `scope-refused` above 0 | the `wddm: gdi above-producer` line at the stop | a call at or below the ordinary producer's own 65536-byte command buffer drew nothing. This is a failed trial and it stops the series: an ordinary paint was lost. Keep the log, the length, the reason the dropped line names and the sub-rectangle count. A zero here is not a witness that nothing was dropped: read `omitted subrects` as well |
 | `ib-over` above 0 | the same line | the finished stream of a call passed what one indirect buffer can carry. The capacity arithmetic makes this unreachable, so a nonzero count is a defect of the driver and not of the input. The call drew nothing |
-| `ib-full`, `dma-short` above 0 | the same line | the OS side of the capacity: the DMA buffer was already full of earlier calls, or it was smaller than this context asked for. Record both numbers beside `peak cmdlen` |
+| `ib-full` above 0 | the same line | a call found the DMA buffer already filled by earlier calls to the length one indirect buffer can carry, so it drew nothing. It is a dropped paint, not an acceptable capacity observation: treat it as a failed trial and record `dma append`, `restart` and `submitted` beside it |
+| `dma-short` above 0 | the same line | a call at the start of a buffer reported less space than this context asked for, which `DXGK_CONTEXTINFO` says cannot happen. Keep the log |
+| `dma-unknown`, `dma-full` above 0 | the `wddm: gdi dma unknown` line at the stop | a call's place in its DMA buffer could not be established, or every slot of the context held unsubmitted output. The call drew nothing. Record the whole `dma` pair of lines: these say which ordering of calls and submissions the OS produced |
+| `dma-lost` above 0 | the same line | a record of a written buffer could not be kept, which the claim makes unreachable. A defect of the driver. The calls that follow into that buffer are dropped |
+| `committed dwords` below `dwords` | the `wddm: gdi committed` and `wddm: gdi totals` lines | a call's stream was generated and then dropped. The difference is dwords that never reached the ring, and the reason is in the `dropped` line of that call |
 | `above-producer` above 0 | the same line | something on this system sends longer command buffers than the measured producer does. Not a fault. It is the signal that the producer measurement no longer covers the field |
 | `fallback` above 0 | the same line | an item gave up the per-row engine path for a dispatch, which is the capacity contract working, not a fault |
 | the refusal classes | the same line | each count names one admission rule of `bc250_gdi_refusal`. A nonzero count is a case the host tests do not cover |

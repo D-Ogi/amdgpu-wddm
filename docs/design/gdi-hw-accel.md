@@ -29,12 +29,14 @@ clears `DriverSupportsCddDwmInterop`.
 
 This work goes to the train after tester.31. The reason is the capacity question of the review.
 [Where the bound comes from](#where-the-bound-comes-from) answers it from what one indirect buffer
-can carry, which is the hardware's own limit on any translation here, and [How far the bound is from
-the ordinary producer](#how-far-the-bound-is-from-the-ordinary-producer) says how much room that
-leaves against the producer the operating system binaries state, on every supported Windows line but
-one. [What a bound above one indirect buffer would
-take](#what-a-bound-above-one-indirect-buffer-would-take) names the two routes past that limit and
-says why this revision takes neither. The trains before it do not carry the function or
+can carry, which is the hardware's own limit on any translation here, [Which DMA buffer a call lies
+in](#which-dma-buffer-a-call-lies-in) says how the dwords already in a buffer are established rather
+than guessed, and [How far the bound is from the ordinary
+producer](#how-far-the-bound-is-from-the-ordinary-producer) says how much room that leaves against
+the producer the operating system binaries state, in the four files that were read. The capability
+still admits inputs this translation drops: [What this capability still does not
+complete](#what-this-capability-still-does-not-complete) states that limitation, with the routes out
+as a plan. The trains before it do not carry the function or
 the cap: [Whether DxgkDdiRenderGdi can be called
 today](#whether-dxgkddirendergdi-can-be-called-today) states what was established about that and
 what was not.
@@ -367,7 +369,8 @@ Three rules fix the class, and [gdi_batch.c](../../driver/kmd/gdi_batch.c) holds
    the ring emitter refuses the submission whole and the work stays outstanding for recovery. So
    `Bc250GdiCallCapacity` gives each call the smallest of three numbers, the space dxgkrnl reports
    for it, that encodable length, and that length less the dwords already written into the same
-   buffer by earlier calls. `Bc250GdiBatchBegin` clamps anything larger than that. The row path of
+   buffer by earlier calls. The third number is established for the buffer the call names, and the
+   next section is how. `Bc250GdiBatchBegin` clamps anything larger than that. The row path of
    rule 1 budgets inside the result, so a large DMA buffer cannot grant it unbounded space. The DMA buffer
    size is then computed from the largest command buffer whose worst case fits both ceilings
    (`Bc250GdiContextDmaBytes`), which is what keeps rule 2 unreachable inside the bound. A command
@@ -378,6 +381,39 @@ Rule 1 is what makes rule 2 a contract instead of a hope. The invariant is state
 `gdi_batch.c`: after `Begin` has said yes, no admitted sub-rectangle can be refused for want of
 space. `BC250_GDI_BATCH_NO_SPACE` is therefore unreachable, and the host test asserts that over a
 set of batches that includes the counterexample above.
+
+#### Which DMA buffer a call lies in
+
+The third number of rule 3 is a question about identity, and the DDI answers one half of it.
+`DXGKARG_RENDERGDI` names the buffer of a call by `pDmaBuffer`, "a pointer to the start of the DMA
+buffer, which is aligned on 4 KB", by `DmaBufferGpuVirtualAddress`, "the virtual address where the
+DMA buffer was paged in", and by `DmaSize`, "the size, in bytes, of the DMA buffer that `pDmaBuffer`
+points to". It does not say that one buffer carries one call, and neither it nor the submission guide
+gives an order of `RenderGdi` calls and submissions. A review of r4 demonstrated what follows for an
+answer read off the order of addresses: with two independent buffers of one context, 8 MiB apart and
+each holding one small paint, the distance between the allocations looked like two million dwords of
+prefix and the second call was dropped.
+
+So the dwords ahead of a call are tracked for the buffer the call names.
+`Bc250GdiDmaClaim` places the window of a call against the buffers this context has written into and
+that no submission has carried away:
+
+| What the window is | Result | Dwords ahead |
+|---|---|---|
+| exactly where our own output in a known buffer ended | append | what we wrote into that buffer |
+| the start of a known buffer | restart | none |
+| a 4 KB aligned address no known buffer explains | fresh | none |
+| any other address | unknown | the call is dropped |
+| a new buffer with every slot holding unsubmitted output | full | the call is dropped |
+
+`Bc250GdiDmaWrote` records what a call wrote, and `Bc250GdiDmaSubmitted` releases a buffer by the
+address range of the submission that took it, so a submission of one buffer cannot clear the record
+of another. Nothing but this driver writes hardware commands into a GDI context's DMA buffer, which
+is what makes an append exact instead of estimated. A context holds `BC250_GDI_DMA_SLOTS` buffers at
+a time, eight, and the ninth buffer with output of ours outstanding drops its call rather than
+forget a buffer. The five results are counted (`GdiRenderDmaAppend`, `GdiRenderDmaRestart`,
+`GdiRenderDmaUnknown`, `GdiRenderDmaFull`), so the field says which orderings the operating system
+actually produces, and the host test drives all of them, the review's two-buffer case included.
 
 #### Why rule 2 can never be reached
 
@@ -446,11 +482,15 @@ driver does not accept today. The host test drives the whole range in 1 MiB step
 answer never falls when the aperture grows, and pins the two ends of the step (32 MiB of aperture
 keeps the bound, 16 MiB falls to the floor).
 
-What happens if dxgkrnl gives less than the size asked for is handled and counted rather than
-assumed. `DmaBufferSize` is a starting size the OS may exceed or grow later, and each call reports
-its own remaining space, which is what the capacity comes from. A call whose buffer is smaller than
-this context asked for is counted in `GdiRenderDmaShort`, and a call that finds the buffer already
-filled to the encodable length is counted in `GdiRenderIbFull` and draws nothing.
+The capacity of each call comes from the space that call reports, whatever that is, so nothing here
+depends on the size asked for being granted. `DXGK_CONTEXTINFO` says the buffer "can never shrink
+smaller than the starting size that `DmaBufferSize` specifies", so `GdiRenderDmaShort` is the check
+of that sentence and not the handling of an allocation failure: it counts a call that was given the
+start of a buffer and reported less space than this context asked for. A call that continues inside
+a buffer reports the window it has left, which is smaller by design and never counted there. A call
+that finds the buffer already filled to the encodable length is counted in `GdiRenderIbFull`, and it
+drops the paint it was given, which the lab plan treats as a correctness result and not as an
+observation about the operating system.
 
 The review's case - one ColorFill with 793 disjoint one-pixel sub-rectangles, which the hand-picked
 256 KiB buffer refused whole - is 12736 bytes of command buffer, 6.5 per cent of the bound. The
@@ -467,22 +507,31 @@ rectangles a real paint has.
 
 A command buffer larger than the bound is not refused for being large. `Begin`'s own exact check
 still decides, and it accepts such a call whenever the sub-rectangles actually in it fit the
-capacity the call was given. Only a call that is both above the bound and full enough to exhaust
-that capacity is refused, and then the behaviour is defined, counted and visible:
+capacity the call was given. The capacity of a call is the capacity of what is left of its DMA
+buffer, so the bound is a statement about a buffer and not about a command length alone: a call
+inside the bound can still be dropped when earlier calls have taken part of the same buffer, and
+`GdiRenderIbFull` is that case. Whatever the cause, the behaviour of a dropped call is defined,
+counted and visible:
 
 - the call draws nothing. It does not draw a prefix, which would leave a half-painted window.
-- `GdiRenderBatchRefused` counts the call, `GdiRenderOmittedSubRects` adds the sub-rectangles that
-  were lost, `GdiRenderCapacityShort` counts the calls above the bound, and the guard log names the
-  count, the dwords needed, the capacity and the command length.
+- `WddmGdiDropCall` is the one exit for all of it, so `GdiRenderBatchRefused` counts every dropped
+  call and `GdiRenderOmittedSubRects` adds the sub-rectangles lost with it, whichever limit stopped
+  the call. The guard log names the reason, the count, the dwords needed, the capacity, the dwords
+  ahead and the command length. `GdiRenderCapacityShort` counts the calls whose worst case was
+  larger than the capacity they were given, which is a measurement and not a drop by itself.
+- `GdiRenderDwords` counts what the batches generated and `GdiRenderDwordsCommitted` what was handed
+  to the submitter. A call dropped after its stream was already written counts in the first and not
+  in the second, so no counter implies that discarded output reached the ring.
 - `GdiCmdBytesWanted` raises the size that every GDI context created afterwards asks for, up to what
   the aperture share and both ceilings allow. The room above the bound is narrow by construction:
   one indirect buffer carries the worst case of 200 KiB and not of 256 KiB, whatever the aperture
   is, so a request above that is ignored and the ladder's own bound is used.
-- `GdiRenderScopeRefused` counts a refusal at or below the command buffer of the ordinary producer,
-  with a line of its own in the log. It is the one number of this design that must stay at zero in
-  the field: it does not mean a producer was unusual, it means the input scope below is wrong.
-  `GdiRenderAboveProducer` counts the calls longer than that command buffer, which is the other half
-  of the same question.
+- `GdiRenderScopeRefused` counts a dropped call whose command buffer was at or below the one the
+  ordinary producer allocates, with a line of its own in the log, and every drop reaches it through
+  the same exit. A nonzero value is a correctness result: an ordinary paint was lost. A zero value
+  is not a witness that nothing was lost, because a longer call is a paint as well and
+  `GdiRenderOmittedSubRects` is where those are counted. `GdiRenderAboveProducer` counts the calls
+  longer than that command buffer, which is the other half of the same question.
 
 What that recovery cannot do is stated here rather than implied: it cannot fix the call it
 happened on, and it cannot enlarge the buffer of a context that already exists. `DXGK_CONTEXTINFO`
@@ -521,12 +570,47 @@ this driver goes through. Splitting means segment boundaries carried from the tr
 submission (`DXGKARG_RENDERGDI` does have `pDmaBufferPrivateData`, and a GDI context already
 receives private data for the software Present packet), the addresses and cache operations of each
 segment, and the fence and the completion of the whole submission rather than of its first part. It
-is a change to the shared submission path, it cannot be checked on this PC, and it would need a
-review of its own.
+is a change to the shared submission path that every user-mode submission goes through, and it would
+need a review and a lab round of its own. Most of it can be tested here: the packets, the segment
+boundaries, the overflow arithmetic, the ownership of each segment and the failure paths are host
+work, like the rest of this file's contract. What needs the lab is whether the hardware executes
+several indirect buffers of one submission the way the design says, and that the completion of the
+whole submission is still a single fence.
 
-So this revision takes neither. The bound is three times the whole command buffer of the only
-producer whose allocation has been measured, the measurement now covers every supported Windows line
-but one, and two counters report the day that stops being true.
+So this revision takes neither, and the limitation that follows is stated in the next section
+instead of being argued away.
+
+#### What this capability still does not complete
+
+This driver reports `SupportKernelModeCommandBuffer`, and the operating system may then send any
+command buffer the DDI admits. This translation does not complete all of them. A dense call above
+the bound is dropped as a whole, counted, and not drawn. The r3 review's 14000 one-pixel rectangles
+in 224080 bytes are the standing example: 1135366 dwords of worst case, which no single indirect
+buffer can carry at any DMA buffer size, so no size of allocation closes it. This is a limitation of
+the .32 implementation, not a closed question, and no counter here closes it either: a refusal
+counter is a diagnostic of the gap and not an enforcement of a scope.
+
+What is established is narrower, and it is worth having: the bound is three times the command buffer
+the canonical display driver allocates in the four files that were read, and the allocation is a
+literal of that producer on all four. The diagnostic producer inside dxgkrnl is not bounded by any
+of that, and this driver's own bound is what covers it up to 192 KiB.
+
+The route out, as a plan with its tests and not as work already done:
+
+1. the compact translation above, which moves the bound to about 420 KiB and would complete the
+   example. Its gate is the register-persistence assumption: a lab round that runs one indirect
+   buffer with a hoisted state block and many dispatches, against the host model carrying the same
+   state, and the host test extended to check each dispatch against that model.
+2. several indirect buffers for one DMA buffer, which removes the finite bound instead of moving it.
+   Its gates are a bounded representation of the segments in the private data of the DMA buffer, the
+   ownership and lifetime of each segment, the completion of a split submission as one fence, and
+   the host tests named above before any lab round.
+3. or an enforceable scope: the capability is reported only where the admitted input is bounded by
+   something this driver can rely on, and the behaviour outside it is right by construction rather
+   than counted. Nothing in the DDI offers that today, which is why it is a plan and not a design.
+
+Until one of those lands, the honest statement is the one this section makes, and
+`GdiRenderOmittedSubRects` is the number that says how often the gap was reached.
 
 #### How far the bound is from the ordinary producer
 
@@ -562,11 +646,14 @@ What those builds do, the same in all of them:
   are submitted. dxgkrnl copies that length into `CommandLength` with no test of its value.
 
 So a `DxgkDdiRenderGdi` call that comes from this chain, on these four files, carries at most
-65536 bytes. `BC250_GDI_CMDBUF_BOUND` is three times that, and the supported scope of this driver is
-23H2, 24H2, 25H2 and newer general-availability builds, of which the first three were read. The
-26300 build of the lab OS matrix was not read, and no public index serves that line yet, so that is
-the one gap in the statement. It is a statement about the ordinary path of the images that were
-measured, and not about every producer: the diagnostic producer
+65536 bytes. `BC250_GDI_CMDBUF_BOUND` is three times that. What this does not establish is said
+plainly: four exact files are four files. The supported scope of this driver is 23H2, 24H2, 25H2 and
+newer general-availability builds, and every one of those lines is serviced, so no sample of
+binaries states the allocation of a build nobody has read. The 26300 build of the lab OS matrix is
+one such build, and no public index serves that line yet. For the 26100 and 26200 files the whole
+chain from the allocation to the submission was read. For the Canary control only the allocation
+sites were. It is a statement about the ordinary path of the images that were measured, and not
+about every producer: the diagnostic producer
 inside dxgkrnl supplies a command buffer of its own (see "The second producer, and the shape it
 builds"), and nothing in the chain bounds that length. This is why the bound is derived from the
 driver's DMA ceiling instead.
@@ -935,6 +1022,20 @@ against the review's own probe, which links the production walker, planner and b
 (`scratch/gdi-hw/ib-bound-probe-r4` in the local workspace, the review's copy with the expectation
 table of its main function rewritten), and it prints 993312 dwords for the strips at this bound, 118 of them on the row
 path and ten dispatched.
+
+`TestDmaMap` holds the placement of a call inside its DMA buffer, with the cases review r4 asked
+for. Two independent buffers of one context, 8 MiB apart, each take a paint of their own and neither
+is read as a continuation of the other, which is the review's counterexample. A submission of the
+first buffer releases that buffer and leaves the second exactly as it was, and a submission that
+names neither releases nothing. Three calls in a row append inside one buffer at the offsets the
+emitter actually leaves, each one placed by the length of the calls before it, and their sum stays
+inside the encodable length and survives the length macro. A buffer filled to that length leaves the
+next call a capacity of zero, which is the counted drop and not an overflow. A window inside output
+of ours, a window off the 4 KB boundary, and a ninth buffer while eight hold unsubmitted output are
+the three cases that drop their call instead of assuming an empty buffer. The source-level probe of
+the review runs against the new admission prefix as well (`scratch/gdi-hw/prefix-probe-r5` in the
+local workspace): both of its independent buffers now reach `BatchBegin`, with no submission between
+them.
 
 Four negative controls were run against the gate, and each one was reverted after it failed:
 
