@@ -3,6 +3,9 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
+/* Plain integers, and the runner's include path holds driver\kmd: the count of the refusal
+ * classes that the extracted WddmStop walks. */
+#include "gdi_render.h"
 typedef int32_t NTSTATUS;
 typedef unsigned long ULONG;
 typedef unsigned UINT;
@@ -25,6 +28,12 @@ typedef struct {
     BC250_PAGING_JOB *PagingHead,*PagingTail;
     LIST_ENTRY Objects;
     struct {void *Buckets;} ObjectIndex;
+    /* The GDI totals the real WddmStop writes to the log. The count of the refusal classes comes
+     * from the shipping header, so a new class reaches this harness by itself. */
+    long long GdiRenderCalls,GdiRenderCommands,GdiRenderItems,GdiRenderDwords;
+    long long GdiRenderRefusedCall,GdiRenderMalformed,GdiRenderOutside,GdiRenderEmpty;
+    long long GdiRenderOverflow,GdiRenderKernelWanted,GdiRenderColorFillRedFirst;
+    long long GdiRenderRefused[Bc250GdiRefusals];
 } BC250_WDDM;
 typedef struct _BC250_DEVICE {
     BC250_WDDM *Wddm;
