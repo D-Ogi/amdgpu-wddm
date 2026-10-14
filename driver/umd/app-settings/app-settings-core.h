@@ -13,9 +13,6 @@
 // range, a value of another type, or an environment string that is not a decimal number is ignored with one log
 // line, and the next source is read. A 32-bit process reads the 64-bit registry view, as the router does (BD-064).
 //
-// ReportAmdDriverVersion (global only) is not read here: the kernel-mode driver reads it at adapter start
-// (driver/kmd/driver_version.c).
-//
 // This part is C++14 without exceptions and without the standard library containers, because the router DLL is
 // built that way (tools/build/build-umd-router.ps1); test-umd-app-settings.ps1 compiles it so. The shells include
 // app-settings.h, which adds what they do with the values.

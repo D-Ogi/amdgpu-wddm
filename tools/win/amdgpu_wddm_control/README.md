@@ -68,7 +68,6 @@ only these names, only under these keys, and only values inside the contract:
 | | `MaxFrameLatency` | DWORD | 1-3 | Low latency: frames ahead |
 | | `PerformanceOverlay` | DWORD | 1 on, 0 off | Performance overlay (DirectX 11 games for now) |
 | | `RenderOnCpu` | DWORD | 1 on, 0 off | Run DirectX 11 on the processor, a last resort. On the Games page. The card for all games shows it only when it is stored |
-| `Graphics` only | `ReportAmdDriverVersion` | DWORD | 1 on, 0 off | Report an AMD driver version (a check box) |
 | `Vulkan`, `Vulkan\Applications\<exe>` | `WsiRoute` | REG_SZ | `dxgi` (default), `gdi` | Vulkan presentation: Modern, Compatibility (not shown now, see below) |
 | | `MemoryOverflow` | REG_SZ | `allow` (default), `strict` | When the VRAM is full: use system memory, or report out of memory (not shown now, see below) |
 
