@@ -204,7 +204,7 @@ int main() {
     }
 
     // 6. The linear primary's bounded phase inside the destroy, with two phases on: the bound passes, the
-    //    device error is reported and the node is recorded at phase 0, so the next retirement releases it.
+    //    node is recorded at phase 0 without reporting an API error, so the next retirement releases it.
     {
         Fixture f;
         check(f.policy(1), "linear primary: policy set");
@@ -212,11 +212,11 @@ int main() {
         const uint64_t value = f.submit();
         auto* n = f.node(true);
         f.context.release(n);
-        const bool late = f.shell.errors == 1 && f.context.pending.load() == 1 && !f.shell.freed;
+        const bool late = !f.shell.errors && f.context.pending.load() == 1 && !f.shell.freed;
         f.fence.value = value;
         f.context.process_retired();
-        check(late && !f.context.pending.load() && f.shell.freed == 1,
-              "linear primary: one bounded phase inside the destroy, then one retirement point (late %u, "
+        check(late && !f.context.pending.load() && f.shell.freed == 1 && !f.shell.errors,
+              "linear primary: timeout retains memory without an API error, then one retirement point (late %u, "
               "freed %u)",
               unsigned(late), f.shell.freed);
     }

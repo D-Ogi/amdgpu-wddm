@@ -225,9 +225,11 @@ again:
                  static_cast<unsigned long long>(id));
     if (late) {
         log_line("release %llu: the work before this destroy did not retire in %u ms; the memory's release "
-                 "leaves its DDI",
+                 "leaves its DDI and the memory stays owned",
                  static_cast<unsigned long long>(id), in_ddi_bound_ms);
-        report(HRESULT_FROM_WIN32(ERROR_TIMEOUT));
+        // BD-180: this bound schedules a later retirement check; it does not prove device loss or
+        // invalidate the current API operation. The queued node retains the allocation until its
+        // marks retire. ERROR_TIMEOUT is not an admitted runtime error callback code.
     }
     if (recorded) {
         // Instrumentation item 5 of the trial 245 report: the release's identity and the first phase's

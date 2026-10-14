@@ -10,6 +10,7 @@
 #include "device-engine.h"
 #include "device-state.h"
 #include "heap-import.h"
+#include "ddi-entry.h"
 #include <bc250_host_bootstrap.h>
 #include <d3dkmthk.h>
 #include <atomic>
@@ -339,6 +340,90 @@ void recording(Device& device,Device& other){
      assert(scope.entered() && call(0,BC250_HOST_DESTROY_PAGING,&paging)==0);}
     assert(!failures.load() && !host_test_bind_recording(device,false) && !device.recording);
 }
+
+// BD-180: drive both production callback boundaries, not just the mapping helper. Invalid internal errors
+// remain failures, device-loss codes keep their meaning, and a callback still requires this device's scope.
+struct ErrorCapture {
+    Device* device{};
+    unsigned device_calls{},list_calls{};
+    HRESULT result{S_OK};
+    bool lost_at_callback{};
+};
+void APIENTRY capture_device_error(D3D12DDI_HRTDEVICE rt,HRESULT hr){
+    auto& c=*static_cast<ErrorCapture*>(rt.handle);
+    ++c.device_calls;c.result=hr;c.lost_at_callback=c.device->lost.load();
+}
+void APIENTRY capture_list_error(D3D12DDI_HRTCOMMANDLIST rt,HRESULT hr){
+    auto& c=*static_cast<ErrorCapture*>(rt.handle);
+    ++c.list_calls;c.result=hr;c.lost_at_callback=c.device->lost.load();
+}
+void reported_errors(Device& device,Device& other){
+    const auto saved_runtime=device.runtime;
+    const auto saved_device=device.callbacks.pfnSetErrorCb;
+    const auto saved_list=device.callbacks.pfnSetCommandListErrorCb;
+    ErrorCapture capture{&device};
+    device.runtime={&capture};
+    device.callbacks.pfnSetErrorCb=capture_device_error;
+    device.callbacks.pfnSetCommandListErrorCb=capture_list_error;
+    const D3D12DDI_HRTCOMMANDLIST list{&capture};
+    struct Case {HRESULT raw,admitted;bool removed;};
+    const Case cases[]={
+        {E_FAIL,E_OUTOFMEMORY,false},
+        {E_INVALIDARG,E_OUTOFMEMORY,false},
+        {E_UNEXPECTED,E_OUTOFMEMORY,false},
+        {E_NOTIMPL,E_OUTOFMEMORY,false},
+        {E_NOINTERFACE,E_OUTOFMEMORY,false},
+        {HRESULT_FROM_WIN32(ERROR_TIMEOUT),E_OUTOFMEMORY,false},
+        {kOwnerExpired,E_OUTOFMEMORY,false},
+        {E_OUTOFMEMORY,E_OUTOFMEMORY,false},
+        {DXGI_ERROR_DEVICE_REMOVED,D3DDDIERR_DEVICEREMOVED,true},
+        {DXGI_ERROR_DEVICE_RESET,D3DDDIERR_DEVICEREMOVED,true},
+        {DXGI_ERROR_DEVICE_HUNG,D3DDDIERR_DEVICEREMOVED,true},
+        {D3DDDIERR_DEVICEREMOVED,D3DDDIERR_DEVICEREMOVED,true}
+    };
+    for(const auto& c:cases){
+        device.lost=false;capture={&device};
+        {
+            DeviceEngineScope scope(device);assert(scope.entered());
+            host_test_report_list_error(device,list,c.raw);
+            assert(capture.list_calls==1 && !capture.device_calls && capture.result==c.admitted &&
+                   FAILED(capture.result));
+            report_device_error(device,c.raw);
+            assert(capture.device_calls==1 && capture.list_calls==1 && capture.result==c.admitted &&
+                   capture.lost_at_callback==c.removed && device.lost.load()==c.removed);
+            // A later error is still reported after loss; it cannot clear the sticky loss.
+            report_device_error(device,E_FAIL);
+            assert(capture.device_calls==2 && capture.result==E_OUTOFMEMORY &&
+                   device.lost.load()==c.removed);
+        }
+    }
+    // With no list callback the production hook uses the device channel exactly once.
+    device.lost=false;capture={&device};device.callbacks.pfnSetCommandListErrorCb=nullptr;
+    {
+        DeviceEngineScope scope(device);assert(scope.entered());
+        host_test_report_list_error(device,list,E_FAIL);
+    }
+    assert(capture.device_calls==1 && !capture.list_calls && capture.result==E_OUTOFMEMORY && !device.lost);
+    capture={&device};device.callbacks.pfnSetCommandListErrorCb=capture_list_error;
+    report_device_error(device,E_FAIL);
+    host_test_report_list_error(device,list,E_FAIL);
+    {
+        DeviceEngineScope scope(other);assert(scope.entered());
+        report_device_error(device,E_FAIL);
+        host_test_report_list_error(device,list,E_FAIL);
+    }
+    assert(!capture.device_calls && !capture.list_calls && !device.lost);
+    device.callbacks.pfnSetErrorCb=nullptr;
+    {
+        DeviceEngineScope scope(device);assert(scope.entered());
+        report_device_error(device,DXGI_ERROR_DEVICE_HUNG);
+    }
+    assert(!capture.device_calls && device.lost);
+    device.lost=false;device.runtime=saved_runtime;
+    device.callbacks.pfnSetErrorCb=saved_device;device.callbacks.pfnSetCommandListErrorCb=saved_list;
+    std::puts("PASS error boundaries: production list/device callbacks admit failure codes, preserve device loss, "
+              "route a missing list callback once, and refuse absent/foreign authority");
+}
 }
 int main(){
     Adapter adapter{};adapter.contract.luid=UINT64_C(0x0000000100000042);
@@ -364,6 +449,7 @@ int main(){
     shared_context(device);
     recording(device,other);
     assert(!errors.load() && !device.lost.load() && !other.lost.load());
+    reported_errors(device,other);
     // Everything created was released: the owners close without an unresolved object.
     assert(host_test_close_device_engine(other) && host_test_close_device_engine(device));
     assert(!live_instances.load() && !device.engine && !other.engine && !device.recording);
