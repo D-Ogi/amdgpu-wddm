@@ -246,8 +246,8 @@ static void TestWholeCommandAtPageEnd(void)
     CHECK(r.next == 0x30u);
 }
 
-/* The shape the diagnostic producer inside dxgkrnl builds (the diagnostic producer, gated by
- * that registry value): an 80-byte BitBlt whose pSubRects points at its own embedded DstRect, 0x18 bytes
+/* The shape the diagnostic producer inside dxgkrnl builds for the Windows driver tests, when its own
+ * gate is on: an 80-byte BitBlt whose pSubRects points at its own embedded DstRect, 0x18 bytes
  * into the command. The array overlaps the fixed part, which the containment floor admits because
  * the floor is the header. Three rectangles fit behind 0x18 in 80 bytes, four do not. */
 static void TestEmbeddedSubRects(void)

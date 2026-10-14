@@ -53,11 +53,18 @@ absent job means the capability did not reach the operating system.
 
 Nothing has to be configured for the second producer of these commands. dxgkrnl builds GDI commands
 of its own for the driver tests, with the sub-rectangle array inside the command's fixed part, and
-that producer is gated by that registry value or by the adapter's own DRT flag (the design page, "The
-second producer, and the shape it builds"). The driver admits the shape either way, so the trial is
-valid whether or not the HLK client was put into that mode. Record which it was: if the HLK client
-has that registry value set, note it beside the log package, because that run exercised the embedded
-shape as well as the canonical one.
+that producer is gated by a registry value or by a flag of the calling process, not of the adapter
+(the design page, "The second producer, and the shape it builds"). The driver admits the shape either
+way, so the trial is valid whether or not the HLK client was put into that mode.
+
+Record the configuration, and record it as configuration. Read that registry value on the HLK client
+before the run and note the answer beside the log package. Its name and key are in the local notes
+beside the binaries, outside this repository. An enabled gate does not say that the test called the
+producer, that the embedded-subrectangle branch was taken, or that such a command reached this
+driver, and the per-process route cannot be read from the registry at all, so an absent value does
+not exclude it. Only the driver's own counters say what arrived: `GdiRenderCommands` with
+`GdiRenderPeakCommandLength` for the calls, and the guard log for the shapes it dropped. Do not
+report the embedded shape as exercised unless a counter or a log line shows it.
 
 ## Trial 2: the HLK job, WoW64
 

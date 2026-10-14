@@ -27,12 +27,14 @@ function, and the gate `EnableGdiHwAccel` is on when the registry says nothing.
 So this driver now sets `SupportKernelModeCommandBuffer`, which promises all seven operations, and
 clears `DriverSupportsCddDwmInterop`.
 
-This work goes to the train after tester.31. The reason is the capacity question of the review, and
-[What bounds the command buffer](#what-bounds-the-command-buffer) answers it from the operating
-system binaries. Nothing of it can disturb the trains before it:
-[Whether DxgkDdiRenderGdi can be called today](#whether-dxgkddirendergdi-can-be-called-today) states
-that the shipped driver and the rc5 line have neither the cap nor the function, so the field cannot
-reach this path at all.
+This work goes to the train after tester.31. The reason is the capacity question of the review.
+[Where the bound comes from](#where-the-bound-comes-from) answers it from this driver's own DMA
+ceiling, and [How far the bound is from the ordinary
+producer](#how-far-the-bound-is-from-the-ordinary-producer) says how much room that leaves against
+the producer the operating system binaries state. The trains before it do not carry the function or
+the cap: [Whether DxgkDdiRenderGdi can be called
+today](#whether-dxgkddirendergdi-can-be-called-today) states what was established about that and
+what was not.
 
 Nothing of this has run on the lab. The host tests run the kernels' own source text on this
 processor, which proves the arithmetic and the addressing and says nothing about the instructions
@@ -355,9 +357,12 @@ Three rules fix the class, and [gdi_batch.c](../../driver/kmd/gdi_batch.c) holds
    code block, one bounded dispatch for each of them and the ring padding all fit. A refused call
    writes an empty DMA buffer: it draws nothing, rather than drawing a prefix and dropping the rest.
    `GdiRenderBatchRefused` counts those calls and the start log names the numbers.
-3. **The DMA buffer is sized so that rule 2 cannot fire.** The size is not chosen by hand. It is
-   computed from the largest command buffer this driver undertakes to translate, by the arithmetic
-   of rule 1 itself (`Bc250GdiContextDmaBytes`).
+3. **The DMA buffer is sized so that rule 2 cannot fire inside the bound.** The size is not
+   chosen by hand. It is computed from the largest command buffer this driver undertakes to
+   translate, by the arithmetic of rule 1 itself (`Bc250GdiContextDmaBytes`), and that bound is the
+   largest the driver's own DMA ceiling allows. A command buffer above the bound is the one case
+   where rule 2 can still fire, and the two sections below say what the bound is and what happens
+   above it.
 
 Rule 1 is what makes rule 2 a contract instead of a hope. The invariant is stated and proved in
 `gdi_batch.c`: after `Begin` has said yes, no admitted sub-rectangle can be refused for want of
@@ -377,122 +382,163 @@ local copy `ref/ddi-display/d3dkmddi.md` at lines 27128 and 27169, WDK 10.0.2610
 depend on how many sub-rectangles it has only if the array is inside the command, and `CommandSize`
 reaches to the next command, so the arrays of different commands cannot overlap. `WddmGdiCommand`'s
 caller enforces that reading already: a `pSubRects` that does not lie between the end of the
-command's fixed part and the start of the next command is counted in `GdiRenderOutside` and the
+command's header and the start of the next command is counted in `GdiRenderOutside` and the
 command is dropped, because it is the one input that cannot be bounds-checked any other way.
 
-The smallest command that can carry a sub-rectangle at all is ColorFill, at 8 bytes of `OpCode` and
-`CommandSize` plus a 40-byte argument. The only smaller command is Escape, which the driver ignores
-and which carries no sub-rectangle. So, with `L` for `CommandLength`:
+A sub-rectangle array may overlap the fixed part of its own command, which one producer does (see
+"The second producer, and the shape it builds"), so the floor of the count is the eight-byte header
+and not the opcode's fixed part. So, with `L` for `CommandLength`:
 
 ```
-sum over commands of 16 * NumSubRects <= L - 48        so    N <= (L - 48) / 16
+sum over commands of 16 * NumSubRects <= L - 8         so    N <= (L - 8) / 16
 capacity needed = acquire + codeMax + N * dispatchMax + granule - 1 = Bc250GdiCallDwords(L)
+                = 1359 + 81 * N dwords
 ```
 
 That is a constant factor of the input: 324 bytes of DMA buffer per 16 bytes of command buffer,
 20.25 to one. So a DMA buffer of `Bc250GdiContextDmaBytes(bound)` bytes translates every command
-buffer up to `bound`, and `Begin` cannot refuse inside it - not merely for the inputs anyone has
-tried, but for every input the producer is able to build. The host test asserts it by walking every
-possible `CommandLength` from 0 to the bound.
+buffer up to `bound`, whatever is inside it and whoever built it, and `Begin` cannot refuse inside
+it - not merely for the inputs anyone has tried, but for every input this contract admits. The host
+test asserts it by walking every possible `CommandLength` from 0 to the bound.
 
-`BC250_GDI_CMDBUF_BOUND` is 96 KiB, and the numbers that follow from it are: 6141 sub-rectangles in
-one call, 1998848 bytes of DMA buffer (499712 dwords), in the aperture segment the context already
-used. The review's case - one ColorFill with 793 disjoint one-pixel sub-rectangles, which the
-hand-picked 256 KiB buffer refused whole - is 12736 bytes of command buffer and is translated with
-1.1 per cent of the buffer used. The densest call the bound admits uses 8.6 per cent, because the
-budget reserves a full dispatch for each sub-rectangle while a one-pixel rectangle actually takes
-the seven-dword row path. The buffer is sized for the worst case, which is 6141 rectangles that
-each need a dispatch.
+#### Where the bound comes from
 
-#### What bounds the command buffer
+The bound is this driver's own number, and it is deliberately not read off a producer. It is the
+largest command buffer whose worst case still fits `BC250_GDI_DMA_BYTES_MAX`, the 32 MiB ceiling
+this driver puts on one GDI context's DMA buffer:
 
-The DDI does not publish the size of the command buffer that a GDI context receives. The producer of
-that buffer does. The canonical display driver `cdd.dll` is the only producer of these commands. It
-allocates the buffer, it fills it, and dxgkrnl gives its length to this driver without a change. The
-number is therefore a fact of the operating system binaries, and it was read from them.
+| | command buffer | sub-rectangles | worst case | DMA buffer asked for |
+| --- | --- | --- | --- | --- |
+| `BC250_GDI_CMDBUF_BOUND` | 1536 KiB | 98303 | 31855608 bytes | 31858688 bytes |
+| the next step up | 3072 KiB | 196607 | 63706104 bytes | above the ceiling, refused |
+| `BC250_GDI_CMDBUF_FLOOR` | 96 KiB | 6143 | 1995768 bytes | 1998848 bytes |
 
-The binaries read are `cdd.dll` 10.0.22621.6630 with `dxgkrnl.sys` 10.0.22621.6199, and `cdd.dll`
-10.0.26100.9444 with `dxgkrnl.sys` 10.0.26100.9444. These are the 23H2 line of the lab and the 24H2
-line. The 22621 file was taken by the image identity of the lab's own copy. The binaries and their
-disassembly stay outside this repository, because they are Microsoft's property. The addresses below
-are virtual addresses of the loaded image, as the public symbols of each build give them.
+The host test holds both ends of that: the worst case of the bound fits the ceiling, and the next
+step up does not (`Bc250GdiContextDmaBytes(BC250_GDI_CMDBUF_BOUND * 2)` is 0). That is what makes
+the number derived rather than chosen.
 
-The producer's own buffer, the same at both builds:
+The size asked for is bounded a second time, by what the aperture can afford.
+`Bc250GdiContextBound` takes the aperture this start was granted and steps the bound down by halves
+until the DMA buffer is at most an eighth of it, so that a GDI context cannot eat the segment its
+own surfaces live in. At the smallest aperture this driver accepts, 256 MiB, an eighth is 32 MiB and
+the full bound still fits. A 64 MiB aperture would give 384 KiB, and an aperture smaller than the
+floor's own cost gives the floor. The host test drives the whole range in 1 MiB steps and checks
+that the answer never falls when the aperture grows.
 
-- the producer's buffer constructor allocates the buffer
-  with `EngAllocMem` and the size that its caller gives.
-- the producer's device start creates the two buffers of the device, each with the literal size 0x10000.
-- the producer's buffer reset puts the write pointer at the base of the buffer, and the
-  limit at the base plus the literal 0x10000.
-- Each command builder computes its own fixed part plus `16 * count`, and refuses the command if the
-  write pointer plus that size passes the limit. The six fixed parts, each a literal of the builder
-  (26100 addresses, the instruction that adds it to the shifted count):
+The review's case - one ColorFill with 793 disjoint one-pixel sub-rectangles, which the hand-picked
+256 KiB buffer refused whole - is 12736 bytes of command buffer, 0.8 per cent of the bound. The
+second review's case, 6153 sub-rectangles in 98496 bytes, which the 96 KiB design refused by 40
+dwords, is 6.3 per cent of it. The densest call the bound itself admits uses the whole buffer,
+because the budget reserves a full dispatch for each sub-rectangle while a one-pixel rectangle
+actually takes the seven-dword row path. The buffer is sized for that worst case, not for the
+rectangles a real paint has.
 
-  The fixed parts are 0x30 for ColorFill, 0x48 for AlphaBlend, StretchBlt and
-  TransparentBlt, and 0x50 for BitBlt and ClearTypeBlend.
+#### What happens above the bound
 
-  These are the same six numbers that this driver computes from the WDK union as the header plus the
-  member the opcode names, which is why `Bc250GdiOpMinBytes` is the producer's own fixed part and not
-  a guess. [gdi_walk.c](../../driver/kmd/gdi_walk.c) asserts the equality at build time. Each builder
-  tests the write pointer against the same limit and then the same gate on the accumulated area. the ColorFill builder writes the opcode and the size into the command, and puts the sub-rectangle array directly behind its fixed part.
-- the producer's flush submits the bytes that were written, which is what it wrote. It puts that number at offset
-  0x10 of the submission structure, the buffer pointer at 0x20 and the allocation list at 0x30.
-- dxgkrnl's GDI entry gives that structure to dxgkrnl's render step as a `D3DKMT_RENDER`, eight bytes
-  in. The submitted length lands in `CommandLength`.
-- dxgkrnl's render step fills `DXGKARG_RENDERGDI`. The command address is `pNewCommandBuffer` plus
-  `CommandOffset`, and `CommandLength` is copied with no test of its value.
+A command buffer larger than the bound is not refused for being large. `Begin`'s own exact check
+still decides, and it accepts such a call whenever the sub-rectangles actually in it fit the
+capacity the call was given. Only a call that is both above the bound and full enough to exhaust
+that capacity is refused, and then the behaviour is defined, counted and visible:
 
-So the `CommandLength` of a `DxgkDdiRenderGdi` call is at most 65536 bytes at both builds.
-`BC250_GDI_CMDBUF_BOUND` of 96 KiB is above that maximum with half of it again to spare. A single
-command of 65536 bytes carries at most 4093 sub-rectangles, from the smallest fixed part of the six
-(ColorFill, 0x30). The largest fixed parts leave 4091. This driver counts with its own floor, the
-eight-byte header, which admits 4095 in 65536 bytes and 6143 in the 96 KiB bound: a count above what
-any producer can send, which is the safe direction for a capacity gate.
+- the call draws nothing. It does not draw a prefix, which would leave a half-painted window.
+- `GdiRenderBatchRefused` counts the call, `GdiRenderOmittedSubRects` adds the sub-rectangles that
+  were lost, `GdiRenderCapacityShort` counts the calls above the bound, and the guard log names the
+  count, the dwords needed, the capacity and the command length.
+- `GdiCmdBytesWanted` raises the size that every GDI context created afterwards asks for, up to what
+  the aperture share and the DMA ceiling allow.
 
-The size is a literal of the producer. No step of that chain reads a value that a display miniport
-driver gives, so the `DmaBufferSize` of our GDI context has no part in it.
+What that recovery cannot do is stated here rather than implied: it cannot fix the call it
+happened on, it cannot resize a context that already exists ("the DMA buffer can never shrink
+smaller than the starting size that **DmaBufferSize** specifies", and nothing resizes it upwards on
+demand), and a later context can fall back to a smaller bound again if the aperture or the ceiling
+says so. The counters are how the field tells us it happened. They do not fix anything, and they
+are not evidence that the omitted drawing ever reached the screen.
 
-What the producer does when a batch does not fit is this. The builder flushes the buffer and returns
-0. Its caller then calls
-the same builder a second time, as its fill callback does.
-The buffer is empty at the second call, so a command of at most 65536 bytes is accepted. If the
-second call also returns 0, that caller does not try again: it writes a watchdog entry, breaks into the kernel debugger
-when one is attached, and then clears its rectangle buffer and its count, which drops those rectangles. So the retry is a single retry, and the loss it can
-leave is Windows' own, not this driver's. What matters for the bound here is the other half: a
-command of more than 65536 bytes is never built, whatever the caller does with a refusal.
+There is no honest alternative inside this DDI. There is no status to ask for more space (the return
+table is success only), the `MultipassOffset` continuation of the `DxgkDdiRender` family is not
+documented for this function, and a processor fallback is impossible here because `RenderGdi`
+receives GPU virtual addresses and no mapped pointers, with no callback it may use to map one.
+
+#### How far the bound is from the ordinary producer
+
+The bound above does not need a producer's number, but it is worth knowing how much room it leaves.
+The DDI does not publish the size of the command buffer that a GDI context receives. The canonical
+display driver is the producer of these commands on the ordinary path: it allocates the buffer, it
+fills it, and dxgkrnl gives its length to this driver without a change. So the size is a fact of the
+operating system binaries, and it was measured in them.
+
+The binaries measured are `cdd.dll` 10.0.22621.6630 with `dxgkrnl.sys` 10.0.22621.6199, and
+`cdd.dll` 10.0.26100.9444 with `dxgkrnl.sys` 10.0.26100.9444: the 23H2 line of the lab and the 24H2
+line. They are Microsoft's property, so the binaries and their analysis stay outside this
+repository, in a local working directory with its own ledger entry. This page keeps the behaviour
+the driver relies on and no part of that analysis. It is a measurement of two builds, not a
+contract, and it is not what the capacity rests on.
+
+What those two builds do, the same in both:
+
+- The device gets two command buffers of 65536 bytes each. The size is a literal of the producer:
+  no step of the chain reads a value that a display miniport driver returns, so the `DmaBufferSize`
+  of our GDI context has no part in it.
+- A command is the DDI header plus the fixed part of its operation plus 16 bytes for each
+  sub-rectangle, and the six fixed parts are 0x30 for ColorFill, 0x48 for AlphaBlend, StretchBlt and
+  TransparentBlt, and 0x50 for BitBlt and ClearTypeBlend. These are the same six numbers that this
+  driver computes from the WDK union as the header plus the member the opcode names, which is why
+  `Bc250GdiOpMinBytes` is the producer's own fixed part and not a guess.
+  [gdi_walk.c](../../driver/kmd/gdi_walk.c) asserts the equality at build time. On this path the
+  sub-rectangle array follows the fixed part of its own command.
+- A command that would pass the end of the buffer is refused, and only the bytes that were written
+  are submitted. dxgkrnl copies that length into `CommandLength` with no test of its value.
+
+So a `DxgkDdiRenderGdi` call that comes from this chain, on these two builds, carries at most
+65536 bytes. That is 24 times below `BC250_GDI_CMDBUF_BOUND`. It is a statement about the ordinary
+path of the two images that were measured, and not about every producer: the diagnostic producer
+inside dxgkrnl supplies a command buffer of its own (see "The second producer, and the shape it
+builds"), and nothing in the chain bounds that length. This is why the bound is derived from the
+driver's DMA ceiling instead.
+
+A command of 65536 bytes carries at most 4093 sub-rectangles, from the smallest fixed part of the
+six. The largest fixed parts leave 4091. This driver counts with its own floor, the eight-byte
+header, which admits 4095 in 65536 bytes: more than that producer can write into that buffer, which
+is the safe direction for a capacity gate. Its own limit tests are its own protection and not ours.
+This driver's span check is what protects its reads, and a size that wrapped need not fail a size
+check merely because it wrapped. No reachable overflow of the producer's arithmetic was found, and
+none is assumed either way.
+
+What that producer does when a batch does not fit was measured as well, because it decides whose
+loss a refusal is. The builder flushes the buffer and refuses the command. Its caller retries once,
+and the buffer is empty at that second call, so the one capacity obstacle the first call met is
+gone. If the second call also refuses, that caller drops the rectangles it had accumulated. Its
+diagnostic for that case is conditional, on a flag of its own and on an attached kernel debugger, so
+on an ordinary machine that loss leaves no trace. The retry is a single retry, and the loss is
+Windows' own. What matters for the size question is the other half: the builder never writes a
+command larger than its own 65536-byte buffer, whatever its caller does with a refusal.
 
 Two more bounds of the same chain are worth the record, both of them smaller than they look:
 
-- 32 is not a ceiling on the allocations of a GDI submission. dxgkrnl compares
-  the count with 0x20 and, above it, branches to a path that allocates `8 * count` bytes of
-  pool memory with the tag `DxgK` and rejoins the same path. The number is the
-  threshold between an array on the stack and an array in the pool, not a refusal. The producer's own
-  allocation list holds 256 entries.
-- the producer's internal-bitmap start creates a third command buffer of 512 bytes, and that buffer is small because of what it carries: one BitBlt command, then the flush, the buffer destructor and
-  `EngFreeMem`. A BitBlt
-  is 0x50 bytes plus 16 for each sub-rectangle, so 512 bytes is ample for it. It can only make a
-  submitted length smaller.
+- 32 is not a ceiling on the allocations of a GDI submission. dxgkrnl compares the count with 32
+  and, above it, takes an array of pool memory instead of one on the stack. The number is the
+  threshold between those two allocations, not a refusal. The producer's own allocation list holds
+  256 entries.
+- The producer keeps a third command buffer of 512 bytes for its internal bitmaps, and that buffer
+  is small because of what it carries: one BitBlt with one rectangle, which is 0x50 bytes plus 16,
+  so 96 bytes in a 512-byte buffer. It can only make a submitted length smaller.
 
-The bound is thus the producer's and not a guess, for these two Windows lines. The builds read are
-the 23H2 line of the lab and the 24H2 line. 26200 and 26300 were not read, and a servicing revision
-of any line is a new binary. A later Windows could raise the literal, so the three measures below
-stay in the driver:
+The distance is thus measured and not guessed, for these two Windows lines. 26200 and 26300 were not
+measured, and a servicing revision of any line is a new binary. A later Windows could raise the
+literal, which would eat into the distance without touching the capacity argument, and the measures
+below stay in the driver because the distance is not what the capacity rests on:
 
 - `GdiRenderPeakCommandLength` records the largest `CommandLength` the field ever sends, so the
   bound becomes a measured number rather than a guess. Trial 3 of
   [the lab plan](../testing/gdi-hw-accel-lab.md) reports it.
 - A call whose command buffer is larger than the bound is counted in `GdiRenderCapacityShort` and
-  logged with its length and the capacity it got. It is a measurement and not a decision: `Begin`'s
-  own exact check still decides, and it accepts such a call whenever the sub-rectangles actually in
-  it fit. The same event raises `GdiCmdBytesWanted`, and every GDI context created afterwards asks
-  for a DMA buffer large enough for it, so one short call cannot repeat for the rest of the boot.
-- If a call is both above the bound and full enough that `Begin` refuses it, that call draws nothing:
-  the rectangles it would have painted keep the pixels they had, until the next paint of that area
-  reaches the driver. There is no honest alternative inside this DDI. There is no status to ask for
-  more space (the return table is success only), the `MultipassOffset` continuation of the
-  `DxgkDdiRender` family is not documented for this function, and a processor fallback is impossible
-  here because `RenderGdi` receives GPU virtual addresses and no mapped pointers, with no callback it
-  may use to map one.
+  logged with its length and the capacity it got, and it raises `GdiCmdBytesWanted` for the GDI
+  contexts created afterwards. What that can and cannot do is in "What happens above the bound": it
+  does not fix the call, it does not resize an existing context, and a later context can still
+  land on a smaller bound.
+- A refused call and the sub-rectangles it omitted are counted, so the field reports the event
+  instead of leaving a silently unpainted window. The same section says why there is no alternative
+  inside this DDI.
 
 `CreateContext` asks for the computed buffer only while the capability is reported, so a start
 without the kernels allocates what it did before. `DXGK_CONTEXTINFO` says of this size that "the DMA
@@ -502,13 +548,16 @@ translation uses.
 
 #### The second producer, and the shape it builds
 
-`cdd.dll` is not the only code that builds these commands. dxgkrnl has a producer of its own for the
-Windows driver tests: the diagnostic producer. Review r2 of 2026-10-14 found that
-one branch of it builds an 80-byte BitBlt whose `pSubRects` points at the `DstRect` embedded in the
-same command, 0x18 bytes in, rather than at an array behind the fixed part. The array therefore
-overlaps the fixed part of its own command.
+The canonical display driver is not the only code that builds these commands. dxgkrnl has a producer
+of its own for the Windows driver tests, and review r2 of 2026-10-14 measured two things about it.
+One branch of it takes a command buffer from its caller and tests that length only for nonzero,
+which is why the bound of this driver cannot be read off a producer at all. Another branch builds an
+80-byte BitBlt whose `pSubRects` points at the `DstRect` embedded in the same command, 0x18 bytes
+in, rather than at an array behind the fixed part. That array therefore overlaps the fixed part of
+its own command.
 
-That shape is admitted, not refused. The containment floor of
+That shape is admitted, not refused, and it is why the count floor of this driver is the header.
+The containment floor of
 [gdi_render.c](../../driver/kmd/gdi_render.c) is the eight-byte header, not the opcode's fixed part,
 so an array anywhere between the header and the end of the command is inside the command, and the
 count is still bounded by `(CommandSize - 8) / 16`. Every read stays inside the bytes the command
@@ -517,10 +566,21 @@ producer's business. The host test holds the shape in both its answers: three re
 an 80-byte command are drawn, four are not (`TestEmbeddedSubRects` of
 [gdi_walk_test.c](../../driver/kmd/test/gdi_walk_test.c)).
 
-This producer is gated, which is what the HLK configuration has to arrange. Both entries of
-the diagnostic producer call its own gate. That function answers yes in one of two ways: a flag of the caller is set, or a registry read returns a known value. The value it reads is named that registry value, a value under a graphics drivers key. So a test
-machine that has not been put into that mode never sees this producer, and a machine prepared for the
-Windows driver tests does. The driver needs no switch for it either way.
+This producer is gated, which is what the HLK configuration has to arrange. Both of its entries ask
+the same gate, and that gate answers yes in one of two ways: a flag of the calling process, not of
+the adapter, or a registry value under a graphics drivers key whose content a machine prepared for
+the Windows driver tests has. An ordinary machine has neither, and then this producer never runs.
+The value's name and the rest of the measurement are in the local notes beside the binaries, outside
+this repository.
+
+Being enabled is not being executed, and the two must not be confused in a result. A set
+per-process bit or a matching registry value makes the gate succeed. Neither states that a test
+called the escape, that it took the embedded-BitBlt branch, or that the call reached `RenderGdi`.
+The absence of the registry value does not exclude the per-process route either, so configuration is
+recorded as configuration, and the lab plan says how. What this driver gets from the shape is only that it is admitted: the
+host test proves the structural answer (three rectangles at 0x18 of an 80-byte command are drawn,
+four are not), and a lab trial would be needed to say that such a command was ever sent. The driver
+needs no switch for it either way.
 
 #### Whether `DxgkDdiRenderGdi` can be called today
 
@@ -532,15 +592,21 @@ driver's own caps, not the operating system:
   canonical display driver learns that it may build GDI commands for this adapter at all. Both
   builds answer the exclusive other half of that pair, `DriverSupportsCddDwmInterop`.
 - Neither build has a `DxgkDdiRenderGdi` or a `DxgkDdiRenderKm` member in its device-functions
-  table. The word does not appear in the source of either. dxgkrnl zeroes that table before it asks
-  the driver to fill it, so both pointers are NULL and there is nothing to call.
+  table. The word does not appear in the source at `b614581b` or at `cb4c3420`. dxgkrnl zeroes that
+  table before it asks the driver to fill it, so both pointers are NULL and there is nothing to
+  call. That is a statement about those two source trees, not about an rc5 artifact that was never
+  built from them.
 
-This work fills the `DxgkDdiRenderGdi` member unconditionally, and sets the cap only while
-`GdiHwAccel` is on, which is the feature switch. The function therefore exists in the table of a
-build of this branch, but dxgkrnl calls it only for a driver that answered the cap, so a build with
-the switch off behaves as tester.30 does. Until the switch is on in a shipped driver, nothing on
-the field reaches this path, which is why no part of it can regress a tester build. Every lab number
-in this page has to come from a build with the switch on.
+This branch is not the same shape. It fills the `DxgkDdiRenderGdi` member unconditionally, and sets
+the cap only while `GdiHwAccel` is on, which is the feature switch. So the function exists in the
+table of every build of this branch, and the guard that is actually established is two-fold: the
+canonical display driver learns from the cap whether it may build these commands at all, and the
+function itself returns success without touching the GPU while the switch is off
+(`Bc250WddmRenderGdi`'s first test in [wddm.c](../../driver/kmd/wddm.c)). Those two cover the ordinary
+`cdd.dll` route. They are not a proof that every diagnostic route into this function is excluded:
+the second producer above is gated by Windows and not by our cap, and what our switch gives there is
+the early return and not the absence of a call. Every lab number in this page has to come from a
+build with the switch on.
 
 ## The allocation types and the caps that change
 
