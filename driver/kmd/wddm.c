@@ -183,6 +183,19 @@ typedef struct _BC250_WDDM_KIND {
 #include "present_range.h"
 #include "present_snapshot.h"        // BD-065: the refusal reasons of the GPU Present allocation snapshot
 #include "scanout_admit.h"           // M15.14: which allocation SetVidPnSourceAddress may scan out
+#include "gdi_emit.h"                // HLK gap G1: the GDI contract layer and its DMA_DATA stream
+
+#define BC250_GDI_BIND_SLOTS 4u                  // the most allocation-list entries one command names
+// One pass must hold the whole command buffer, because the guaranteed contract DMA buffer model
+// gives no second one (display/using-the-guaranteed-contract-dma-buffer-model.md; the whole rule is
+// quoted at Bc250WddmRenderGdi below). 256 KiB is 65536 dwords: 9362
+// DMA_DATA rows, about eight full-screen 1080-row blits, or a thousand compute dispatches once
+// increment 2 lands. GdiRenderOverflow counts the command buffers that still did not fit, and the
+// lab says whether that number is ever nonzero.
+#define BC250_GDI_DMA_BYTES (256u * 1024u)
+// The smallest DMA buffer that can hold one row pair beside the cache operation, as a multiple of
+// the ring's eight-dword IB granule. A buffer below it is not translated at all.
+#define BC250_GDI_MIN_DWORDS 16u
 #include "../contract/bc250_scanout_caps.h"  // the trailer that publishes this start's scan-out answer
 C_ASSERT(sizeof(BC250_WDDM_ALLOCATION_PRIVATE)==32);
 C_ASSERT(sizeof(BC250_GDI_PRIVATE)==48);
@@ -224,6 +237,8 @@ typedef struct _BC250_WDDM_OBJECT {
     // BD-167 (V2): dxgkrnl's DXGK_CREATECONTEXTFLAGS.GdiContext, kept so the non-UMD submit arms admit a context
     // by the class dxgkrnl assigned it (SystemContext for VidMm/DWM, GdiContext for the CDD) rather than only by
     // "has no UMD private data". A UMD context is never a GDI context (CreateContext refuses that combination).
+    // HLK gap G1: it is also "the context that is used for GDI Hardware Acceleration"
+    // (display/initialization-and-dma-buffer-creation.md), and DxgkDdiRenderGdi admits no other context.
     BOOLEAN GdiContext;
     // BD-127: this context's BC2C blob carried BC250_UMD_C_COMPUTE and it was counted into the adapter's live
     // compute-context count. The flag is what DestroyContext counts out again, so a context that was never
@@ -832,6 +847,28 @@ typedef struct _BC250_WDDM {
     // take the plane back to the firmware surface for a buffer nobody destroyed. A serial is
     // adapter-unique, nonzero and never reused, so the compare can only ever match the object it means.
     volatile LONG64 ScanoutObject;
+
+    // HLK gap G1, kernel-mode GDI hardware acceleration (docs/design/gdi-hw-accel.md). The gate is
+    // EnableGdiHwAccel, read once at WddmStart; GdiHwAccel is that gate AND a translator that can
+    // perform every operation the OS may then send, which is what the capability bit promises.
+    // DxgkDdiRenderGdi cannot report anything (its return table bugchecks on any status but
+    // STATUS_SUCCESS), so these counters are the only account of what it did:
+    //   Calls/Commands/Items/Dwords  work done: calls, commands walked, sub-rectangles emitted, dwords
+    //   Refused[]                    by bc250_gdi_refusal, the admission's own classes
+    //   RefusedCall                  a call whose arguments were not translatable at all
+    //   Malformed                    a CommandSize the command buffer does not hold
+    //   Outside                      a sub-rectangle array outside its own command
+    //   Empty                        a command with no sub-rectangle, which paints nothing
+    //   Overflow                     a command buffer that did not fit one DMA buffer: dropped work
+    //   KernelWanted/Kernels[]       operations that need increment 2's compute kernels
+    //   ColorFillRedFirst            the one case where the header and the page disagree about Color
+    BOOLEAN GdiHwAccelGate;
+    BOOLEAN GdiHwAccel;
+    volatile LONG64 GdiRenderCalls, GdiRenderCommands, GdiRenderItems, GdiRenderDwords;
+    volatile LONG64 GdiRenderRefused[Bc250GdiRefusals];
+    volatile LONG64 GdiRenderKernels[Bc250GdiKernels];
+    volatile LONG64 GdiRenderRefusedCall, GdiRenderMalformed, GdiRenderOutside, GdiRenderEmpty;
+    volatile LONG64 GdiRenderOverflow, GdiRenderKernelWanted, GdiRenderColorFillRedFirst;
 } BC250_WDDM;
 
 // The gate-closed starting value of wddm->NodeCount (WddmStart) and of the DXGK_DRIVERCAPS answer before
@@ -3839,6 +3876,20 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     // switch from a refusal.
     wddm->ScanoutAdmitGate = (GuardReadSetting(L"EnableScanoutAdmit", 1) != 0);
     GuardLog("wddm: scan-out admission %s", wddm->ScanoutAdmitGate ? "on" : "off (0.7.205.1 behaviour)");
+    // HLK gap G1 (docs/design/gdi-hw-accel.md), read once for this start. The gate is the field off
+    // switch and is open by default; the capability bit needs more than the gate, which is what the
+    // second line decides.
+    //   SupportKernelModeCommandBuffer is a promise that every operation of DXGK_RENDERKM_OPERATION
+    // is performed, because DXGK_PRESENTATIONCAPS has no "cannot" bit for an individual one: once
+    // the bit is set, the OS sends AlphaBlend, StretchBlt, TransparentBlt and ClearTypeBlend as well
+    // as the two the DMA_DATA engine does exactly, and DxgkDdiRenderGdi cannot refuse them (its
+    // return table bugchecks on any status but STATUS_SUCCESS). So the bit follows the translator,
+    // not the gate: Bc250GdiKernelsPresent is increment 2's six compute kernels, and until they are
+    // in the image this start reports the capability exactly as the previous release did.
+    wddm->GdiHwAccelGate = (BOOLEAN)(GuardReadSetting(L"EnableGdiHwAccel", 1) != 0);
+    wddm->GdiHwAccel = (BOOLEAN)(wddm->GdiHwAccelGate && Bc250GdiKernelsPresent());
+    GuardLog("wddm: GDI hardware acceleration gate %u, kernels %u, capability %u",
+             (UINT)wddm->GdiHwAccelGate, (UINT)Bc250GdiKernelsPresent(), (UINT)wddm->GdiHwAccel);
     // M15.14 increment 2, read once for this start: whether the bc250_scanout_caps trailer tells the
     // compositor's user-mode driver that a client scan-out flip will be admitted. Absent = on from
     // 0.7.213, the train rule for a finished feature; 0 is the bisect switch and gives back 0.7.208.1
@@ -4292,6 +4343,22 @@ void WddmStop(_Inout_ BC250_DEVICE* Device)
     }
     GuardLog("wddm: stop, last completed fence %ld, %lu vsync ticks, %lu objects freed at the stop",
              wddm->LastCompletedFence, (ULONG)wddm->VSyncTicks, freed);
+    // The GDI totals of this adapter's lifetime, in one line, because the per-call lines above cover
+    // only the first calls and every overflow. The refusal classes keep the order of
+    // bc250_gdi_refusal, so a reader of this line needs the header and nothing else.
+    C_ASSERT(Bc250GdiRefusals == 11);
+    if (wddm->GdiRenderCalls != 0)
+        GuardLog("wddm: gdi totals calls%lld commands%lld items%lld dwords%lld refused-call%lld "
+                 "malformed%lld outside%lld empty%lld overflow%lld kernel-wanted%lld red-first%lld "
+                 "refusals %lld/%lld/%lld/%lld/%lld/%lld/%lld/%lld/%lld/%lld/%lld",
+                 wddm->GdiRenderCalls, wddm->GdiRenderCommands, wddm->GdiRenderItems,
+                 wddm->GdiRenderDwords, wddm->GdiRenderRefusedCall, wddm->GdiRenderMalformed,
+                 wddm->GdiRenderOutside, wddm->GdiRenderEmpty, wddm->GdiRenderOverflow,
+                 wddm->GdiRenderKernelWanted, wddm->GdiRenderColorFillRedFirst,
+                 wddm->GdiRenderRefused[0], wddm->GdiRenderRefused[1], wddm->GdiRenderRefused[2],
+                 wddm->GdiRenderRefused[3], wddm->GdiRenderRefused[4], wddm->GdiRenderRefused[5],
+                 wddm->GdiRenderRefused[6], wddm->GdiRenderRefused[7], wddm->GdiRenderRefused[8],
+                 wddm->GdiRenderRefused[9], wddm->GdiRenderRefused[10]);
     ExFreePoolWithTag(wddm->ObjectIndex.Buckets, BC250_WDDM_TAG);
     ExFreePoolWithTag(wddm, BC250_WDDM_TAG);
 }
@@ -4616,6 +4683,41 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
         // Match the hosted frontend's maximum shared texture extent (8192).
         caps->PresentationCaps.MaxTextureWidthShift = 2;
         caps->PresentationCaps.MaxTextureHeightShift = 2;
+    }
+    // HLK gap G1: GDI hardware acceleration, "a required feature starting with WDDM 1.1", mandatory
+    // for a full graphics and for a render-only driver in the feature caps table
+    // (display/wddm-driver-and-feature-caps.md:40) and tested by the HLK job "GDIHW_Functional test
+    // for GDI HW ACC (v1.1)". docs/design/gdi-hw-accel.md; the translator is Bc250WddmRenderGdi.
+    //   DriverSupportsCddDwmInterop is the alternative to it and not a companion: d3dkmddi.h reads
+    // that bit as "Driver does not support hardware GDI acceleration, but supports Cdd-Dwm interop",
+    // so the two are answered as the exclusive pair they are, and today's deployed answer (interop,
+    // no acceleration) is what a start without the kernels keeps.
+    //   The gdi-hardware-acceleration page adds one condition of its own: "The driver should report
+    // this type of support only if the cache-coherent GPU aperture segment exists and there's no
+    // significant performance penalty when the CPU accesses GPU memory." The aperture segment is
+    // declared CacheCoherent (which is also why NoCacheCoherentApertureMemory stays 0), and on this
+    // SoC the CPU and the GPU share the same DRAM, so the second half holds by construction.
+    if (wddm != NULL && wddm->GdiHwAccel) {
+        caps->PresentationCaps.SupportKernelModeCommandBuffer = 1;
+        caps->PresentationCaps.DriverSupportsCddDwmInterop = 0;
+        // 8192 x 8192, the extent gdi_render.c admits (its GDI_MAX_EXTENT), stated here whether or
+        // not the interop answer above already asked for it.
+        caps->PresentationCaps.MaxTextureWidthShift = 2;
+        caps->PresentationCaps.MaxTextureHeightShift = 2;
+        // The ClearType blend reads the destination and writes it in one kernel, so the OS need not
+        // hand us a temporary surface to read it from; TmpSurfAllocationIndex is then never read.
+        caps->PresentationCaps.NoTempSurfaceForClearTypeBlend = 1;
+        // Left clear on purpose, each one a "cannot" that the admission in gdi_render.c enforces:
+        //  - SupportAllBltRops: no ROP3 in BitBlt or ColorFill (the 256 ternary operations need the
+        //    brush the DDI does not describe here).
+        //  - SupportMirrorStretchBlt, SupportMonoStretchBltModes: no mirrored stretch, and no
+        //    BLACKONWHITE/WHITEONBLACK, so only COLORONCOLOR arrives.
+        //  - SupportSoftwareDeviceBitmaps: type-6 CPU-visible redirection bitmaps stay refused at
+        //    CreateAllocation (BD-060, WddmGdiAllocationPolicy refuses type > 4).
+        //  - SupportLinearHeap, StagingRectStartPitchAligned: no linear heap out of a staging
+        //    surface, and no pitch-aligned staging rectangle requirement.
+        // The No*SameBitmap* family above stays set: one allocation as both source and destination
+        // is the one case this driver refuses outright (gdi_render.c, Bc250GdiBadSameSurface).
     }
 
 
@@ -5062,6 +5164,14 @@ static NTSTATUS Bc250WddmCreateContext(_In_ const HANDLE hDevice, _Inout_ DXGKAR
     // no allocation or patch-location list to keep: with virtual addressing there is no patching to do at all.
     // One page, the size both reference drivers use (ROSD_COMMAND_BUFFER_SIZE, COS_COMMAND_BUFFER_SIZE).
     pCreateContext->ContextInfo.DmaBufferSize = PAGE_SIZE;
+    // HLK gap G1: a GDI context's DMA buffer is the one this driver writes commands into, and the
+    // guaranteed contract DMA buffer model leaves no second chance - "the display miniport driver
+    // must be able to translate one command buffer into exactly one DMA buffer", and a driver that
+    // answers out-of-space bugchecks the system. One page would hold 145 DMA_DATA rows; this asks
+    // for the size docs/design/gdi-hw-accel.md derives instead, and only while the capability is
+    // reported, so a start without it allocates exactly what it did before. GdiContext was set above.
+    if (object->GdiContext && parentWddm != NULL && parentWddm->GdiHwAccel)
+        pCreateContext->ContextInfo.DmaBufferSize = BC250_GDI_DMA_BYTES;
     // The aperture segment. Not 0 ("system memory"): for a GPU-VA context dxgmms2 maps the DMA buffer's VidMm
     // allocation into the context's address space, and with segment set 0 there is no allocation (E16 run 008).
     // Not the local segment either: DMA buffers may only come from aperture segments (facts M66).
@@ -8470,6 +8580,481 @@ static NTSTATUS WddmPresentDmaFlip(_In_opt_ BC250_WDDM* Wddm, _In_ const DXGKARG
     return STATUS_ILLEGAL_INSTRUCTION;
 }
 
+// ---- HLK gap G1: kernel-mode GDI hardware acceleration -----------------------------------------
+//
+// docs/design/gdi-hw-accel.md holds the design; this is the one layer that may see a WDK type. The
+// arithmetic, the admission and the command stream are gdi_pixel.h, gdi_render.c and gdi_emit.c,
+// which carry no WDK header and are tested on the development PC
+// (driver/kmd/test/run_gdi_render.ps1, the 'gdi-render' gate of tools/quality/quick.ps1).
+//
+// DxgkDdiRenderGdi, not DxgkDdiRenderKm: "DxgkDdiRenderGdi is used when submitting Windows Graphics
+// Device Interface (GDI) commands for contexts that support virtual addressing"
+// (ref/ddi-display/d3dkmddi.md, DXGKDDI_RENDERGDI), and every context this adapter creates declares
+// VirtualAddressing. DXGKARG_RENDERGDI has no patch-location list at all, so the absent
+// DxgkDdiPatch and ContextInfo.Caps.NoPatchingRequired stay exactly as they are.
+//
+// Two contract sentences shape everything below, and both are worth reading twice:
+//
+//   1. DXGKDDI_RENDERGDI's return table has two rows: STATUS_SUCCESS, "The submitted command is
+//      well-formed", and "(other) - All other return values will lead to the OS bugcheck".
+//   2. The guaranteed contract DMA buffer model (display/using-the-guaranteed-contract-dma-buffer-
+//      model.md): "The display miniport driver must be able to translate one command buffer into
+//      exactly one DMA buffer ... The display miniport driver cannot return status that indicates
+//      it is out of DMA buffer space ... doing so results in the video memory manager bug checking
+//      the system."
+//
+// So this function has no way to report anything. It returns STATUS_SUCCESS on every path, it never
+// returns STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER and it does not use MultipassOffset; a command it
+// cannot translate is counted, logged and dropped - a visible artefact on the screen, never a
+// bugcheck. That is also why the admission in gdi_render.c is exhaustive and host-tested: a mistake
+// there cannot be answered with an error code.
+
+
+// gdi_render.h and gdi_pixel.h are plain integers; these tie every one of them to the WDK's own ABI,
+// so a header change that moves a value breaks the build instead of the screen.
+C_ASSERT(BC250_GDIOP_BITBLT == DXGK_GDIOP_BITBLT);
+C_ASSERT(BC250_GDIOP_COLORFILL == DXGK_GDIOP_COLORFILL);
+C_ASSERT(BC250_GDIOP_ALPHABLEND == DXGK_GDIOP_ALPHABLEND);
+C_ASSERT(BC250_GDIOP_STRETCHBLT == DXGK_GDIOP_STRETCHBLT);
+C_ASSERT(BC250_GDIOP_ESCAPE == DXGK_GDIOP_ESCAPE);
+C_ASSERT(BC250_GDIOP_TRANSPARENTBLT == DXGK_GDIOP_TRANSPARENTBLT);
+C_ASSERT(BC250_GDIOP_CLEARTYPEBLEND == DXGK_GDIOP_CLEARTYPEBLEND);
+C_ASSERT(BC250_GDI_ROP_INVALID == DXGK_GDIROP_INVALID);
+C_ASSERT(BC250_GDI_ROP_SRCCOPY == DXGK_GDIROP_SRCCOPY);
+C_ASSERT(BC250_GDI_ROP_SRCINVERT == DXGK_GDIROP_SRCINVERT);
+C_ASSERT(BC250_GDI_ROP_SRCAND == DXGK_GDIROP_SRCAND);
+C_ASSERT(BC250_GDI_ROP_SRCOR == DXGK_GDIROP_SRCOR);
+C_ASSERT(BC250_GDI_ROP_ROP3 == DXGK_GDIROP_ROP3);
+C_ASSERT(BC250_GDI_CF_INVALID == DXGK_GDIROPCF_INVALID);
+C_ASSERT(BC250_GDI_CF_PATCOPY == DXGK_GDIROPCF_PATCOPY);
+C_ASSERT(BC250_GDI_CF_PATINVERT == DXGK_GDIROPCF_PATINVERT);
+C_ASSERT(BC250_GDI_CF_PDXN == DXGK_GDIROPCF_PDXN);
+C_ASSERT(BC250_GDI_CF_DSTINVERT == DXGK_GDIROPCF_DSTINVERT);
+C_ASSERT(BC250_GDI_CF_PATAND == DXGK_GDIROPCF_PATAND);
+C_ASSERT(BC250_GDI_CF_PATOR == DXGK_GDIROPCF_PATOR);
+C_ASSERT(BC250_GDI_CF_ROP3 == DXGK_GDIROPCF_ROP3);
+C_ASSERT(BC250_GDI_INVALID_GAMMA == D3DKM_INVALID_GAMMA_INDEX);
+C_ASSERT(BC250_GDISURFACE_TEXTURE == D3DKMDT_GDISURFACE_TEXTURE);
+C_ASSERT(BC250_GDISURFACE_STAGING_CPUVISIBLE == D3DKMDT_GDISURFACE_STAGING_CPUVISIBLE);
+C_ASSERT(BC250_GDISURFACE_STAGING == D3DKMDT_GDISURFACE_STAGING);
+C_ASSERT(BC250_GDISURFACE_LOOKUPTABLE == D3DKMDT_GDISURFACE_LOOKUPTABLE);
+// MaxTextureWidthShift 2 with DXGK_TEXTURE_SIZE_SHIFT 11 is 8192, which is the extent gdi_render.c
+// refuses above (its GDI_MAX_EXTENT). The caps answer and the admission come from the same number.
+C_ASSERT((1u << (2u + DXGK_TEXTURE_SIZE_SHIFT)) == 8192u);
+// The rectangles are copied field by field below; this only says that nothing was forgotten.
+C_ASSERT(sizeof(BC250_GDI_RECT) == sizeof(RECT));
+
+static void WddmGdiRect(const RECT* From, BC250_GDI_RECT* To)
+{
+    To->Left = From->left; To->Top = From->top; To->Right = From->right; To->Bottom = From->bottom;
+}
+
+// One command of the buffer, flattened into the plain record the contract layer admits. Only the
+// union member the opcode names is read; the sub-rectangle array and its count come back separately
+// because they still point into the OS command buffer. MinBytes is the smallest CommandSize this
+// command may have, which is what bounds that read: the fixed part plus this opcode's own member.
+// 0 for an opcode outside the table.
+static int WddmGdiCommand(const DXGK_RENDERKM_COMMAND* Command, BC250_GDI_OP* Op,
+                          const RECT** SubRects, UINT* SubCount, UINT* MinBytes)
+{
+    RtlZeroMemory(Op, sizeof(*Op));
+    *SubRects = NULL;
+    *SubCount = 0;
+    *MinBytes = (UINT)FIELD_OFFSET(DXGK_RENDERKM_COMMAND, Command);
+    Op->OpCode = (unsigned int)Command->OpCode;
+    switch (Command->OpCode)
+    {
+    case DXGK_GDIOP_BITBLT:
+        *MinBytes += sizeof(Command->Command.BitBlt);
+        WddmGdiRect(&Command->Command.BitBlt.SrcRect, &Op->SrcRect);
+        WddmGdiRect(&Command->Command.BitBlt.DstRect, &Op->DstRect);
+        Op->SrcAllocationIndex = Command->Command.BitBlt.SrcAllocationIndex;
+        Op->DstAllocationIndex = Command->Command.BitBlt.DstAllocationIndex;
+        Op->Rop = Command->Command.BitBlt.Rop;
+        Op->Rop3 = Command->Command.BitBlt.Rop3;
+        Op->SrcPitch = Command->Command.BitBlt.SrcPitch;
+        Op->DstPitch = Command->Command.BitBlt.DstPitch;
+        *SubRects = Command->Command.BitBlt.pSubRects;
+        *SubCount = Command->Command.BitBlt.NumSubRects;
+        break;
+    case DXGK_GDIOP_COLORFILL:
+        *MinBytes += sizeof(Command->Command.ColorFill);
+        WddmGdiRect(&Command->Command.ColorFill.DstRect, &Op->DstRect);
+        Op->DstAllocationIndex = Command->Command.ColorFill.DstAllocationIndex;
+        Op->Color = Command->Command.ColorFill.Color;
+        Op->Rop = Command->Command.ColorFill.Rop;
+        Op->Rop3 = Command->Command.ColorFill.Rop3;
+        *SubRects = Command->Command.ColorFill.pSubRects;
+        *SubCount = Command->Command.ColorFill.NumSubRects;
+        break;
+    case DXGK_GDIOP_ALPHABLEND:
+        *MinBytes += sizeof(Command->Command.AlphaBlend);
+        WddmGdiRect(&Command->Command.AlphaBlend.SrcRect, &Op->SrcRect);
+        WddmGdiRect(&Command->Command.AlphaBlend.DstRect, &Op->DstRect);
+        Op->SrcAllocationIndex = Command->Command.AlphaBlend.SrcAllocationIndex;
+        Op->DstAllocationIndex = Command->Command.AlphaBlend.DstAllocationIndex;
+        Op->SourceConstantAlpha = Command->Command.AlphaBlend.SourceConstantAlpha;
+        Op->SourceHasAlpha = Command->Command.AlphaBlend.SourceHasAlpha ? 1u : 0u;
+        Op->SrcPitch = Command->Command.AlphaBlend.SrcPitch;
+        *SubRects = Command->Command.AlphaBlend.pSubRects;
+        *SubCount = Command->Command.AlphaBlend.NumSubRects;
+        break;
+    case DXGK_GDIOP_STRETCHBLT:
+        *MinBytes += sizeof(Command->Command.StretchBlt);
+        WddmGdiRect(&Command->Command.StretchBlt.SrcRect, &Op->SrcRect);
+        WddmGdiRect(&Command->Command.StretchBlt.DstRect, &Op->DstRect);
+        Op->SrcAllocationIndex = Command->Command.StretchBlt.SrcAllocationIndex;
+        Op->DstAllocationIndex = Command->Command.StretchBlt.DstAllocationIndex;
+        // Read as bitfields, never from a transcribed mask: the union's Flags word holds Mode in its
+        // low 16 bits and the two mirror bits above them.
+        Op->Mode = Command->Command.StretchBlt.Mode;
+        Op->MirrorX = Command->Command.StretchBlt.MirrorX;
+        Op->MirrorY = Command->Command.StretchBlt.MirrorY;
+        Op->SrcPitch = Command->Command.StretchBlt.SrcPitch;
+        *SubRects = Command->Command.StretchBlt.pSubRects;
+        *SubCount = Command->Command.StretchBlt.NumSubRects;
+        break;
+    case DXGK_GDIOP_ESCAPE:
+        // "Driver ignores this command". No member of the union is read, so the fixed part is all
+        // this command has to hold.
+        break;
+    case DXGK_GDIOP_TRANSPARENTBLT:
+        *MinBytes += sizeof(Command->Command.TransparentBlt);
+        WddmGdiRect(&Command->Command.TransparentBlt.SrcRect, &Op->SrcRect);
+        WddmGdiRect(&Command->Command.TransparentBlt.DstRect, &Op->DstRect);
+        Op->SrcAllocationIndex = Command->Command.TransparentBlt.SrcAllocationIndex;
+        Op->DstAllocationIndex = Command->Command.TransparentBlt.DstAllocationIndex;
+        Op->Color = Command->Command.TransparentBlt.Color;
+        Op->HonorAlpha = Command->Command.TransparentBlt.Flags.HonorAlpha;
+        Op->SrcPitch = Command->Command.TransparentBlt.SrcPitch;
+        *SubRects = Command->Command.TransparentBlt.pSubRects;
+        *SubCount = Command->Command.TransparentBlt.NumSubRects;
+        break;
+    case DXGK_GDIOP_CLEARTYPEBLEND:
+        *MinBytes += sizeof(Command->Command.ClearTypeBlend);
+        WddmGdiRect(&Command->Command.ClearTypeBlend.DstRect, &Op->DstRect);
+        Op->DstAllocationIndex = Command->Command.ClearTypeBlend.DstAllocationIndex;
+        Op->TmpSurfAllocationIndex = Command->Command.ClearTypeBlend.TmpSurfAllocationIndex;
+        Op->GammaSurfAllocationIndex = Command->Command.ClearTypeBlend.GammaSurfAllocationIndex;
+        Op->AlphaSurfAllocationIndex = Command->Command.ClearTypeBlend.AlphaSurfAllocationIndex;
+        Op->DstToAlphaOffsetX = Command->Command.ClearTypeBlend.DstToAlphaOffsetX;
+        Op->DstToAlphaOffsetY = Command->Command.ClearTypeBlend.DstToAlphaOffsetY;
+        Op->Color = Command->Command.ClearTypeBlend.Color;
+        Op->Color2 = Command->Command.ClearTypeBlend.Color2;
+        Op->Gamma = Command->Command.ClearTypeBlend.Gamma;
+        Op->AlphaSurfPitch = Command->Command.ClearTypeBlend.AlphaSurfPitch;
+        *SubRects = Command->Command.ClearTypeBlend.pSubRects;
+        *SubCount = Command->Command.ClearTypeBlend.NumSubRects;
+        break;
+    default:
+        return 0;
+    }
+    Op->NumSubRects = *SubCount;
+    return 1;
+}
+
+// One allocation-list entry, as the contract layer needs it. The same discipline as
+// WddmSnapshotPresentAllocations: the handle is a value until the object index returns it, both
+// descriptors are compared and copied under the lock, and no object pointer escapes. Serial is the
+// backing allocation's adapter-unique identity, which is what tells two list entries naming one
+// allocation apart from two entries naming two.
+static int WddmGdiSurfaceAt(BC250_WDDM* Wddm, const BC250_WDDM_OBJECT* Context,
+    const DXGK_ALLOCATIONLIST* List, UINT ListSize, UINT Index,
+    BC250_GDI_SURFACE* Surface, ULONGLONG* Va, ULONGLONG* Serial)
+{
+    BC250_WDDM_ALLOCATION_PRIVATE allocation;
+    ULONG type = 0, bpp;
+    KIRQL irql;
+    int found = 0;
+
+    RtlZeroMemory(Surface, sizeof(*Surface));
+    RtlZeroMemory(&allocation, sizeof(allocation));
+    *Va = 0;
+    *Serial = 0;
+    if (Index >= ListSize) return 0;
+    KeAcquireSpinLock(&Wddm->Lock, &irql);
+    if (!Wddm->Stopping)
+    {
+        BC250_WDDM_OBJECT* opened = (BC250_WDDM_OBJECT*)Bc250ObjectIndexFind(&Wddm->ObjectIndex,
+            List[Index].hDeviceSpecificAllocation);
+        if (opened != NULL && opened->Magic == BC250_WDDM_MAGIC_OPENED && !opened->UmdAlloc &&
+            opened->OwnerDevice == Context->OwnerDevice)
+        {
+            BC250_WDDM_OBJECT* backing = WddmBackingAllocationLocked(Wddm, opened);
+            if (backing != NULL && !backing->UmdAlloc &&
+                RtlCompareMemory(&backing->Allocation, &opened->Allocation,
+                    sizeof(opened->Allocation)) == sizeof(opened->Allocation))
+            {
+                allocation = opened->Allocation;
+                type = opened->GdiType;
+                *Serial = backing->Serial;
+                found = 1;
+            }
+        }
+    }
+    KeReleaseSpinLock(&Wddm->Lock, irql);
+    if (!found) return 0;
+    bpp = WddmSurfaceFormatBpp(allocation.Format, BC250_SURFACE_GDI);
+    if (!bpp || !allocation.Width || !allocation.Height || !allocation.Size) return 0;
+    *Va = List[Index].VirtualAddress;
+    // The address is the one number here that a copy is written with: four-byte aligned, as the
+    // pitch contract (AlignmentShift 2) requires of every row, and its span must not wrap.
+    if (!*Va || (*Va & 3u) || *Va > MAXULONGLONG - (allocation.Size - 1u)) { *Va = 0; return 0; }
+    Surface->Width = allocation.Width;
+    Surface->Height = allocation.Height;
+    Surface->Pitch = allocation.Pitch;
+    Surface->Bpp = bpp;
+    Surface->Bytes = allocation.Size;
+    Surface->RedFirst = WddmRedFirst(allocation.Format) ? 1u : 0u;
+    // GdiType 0 is a legacy LB7A surface - a CDD or compositor surface that did not come through
+    // GetStandardAllocationDriverData - and D3DKMDT_GDISURFACETYPE has no such value. TEXTURE is the
+    // conservative reading: the command's own pitch member is ignored for that type, which is what
+    // we want for a surface whose pitch this driver placed itself.
+    Surface->Type = type ? type : BC250_GDISURFACE_TEXTURE;
+    Surface->Present = 1;
+    return 1;
+}
+
+
+// Resolve the allocation-list indices one command names into a small local table and rewrite the
+// command's indices to point at it, so that the contract layer never needs a 256-entry array. An
+// index that appears twice keeps one slot, which is what lets gdi_render.c's own same-allocation
+// refusal fire; two different indices that resolve to one allocation are caught here, by serial.
+static int WddmGdiBind(BC250_WDDM* Wddm, const BC250_WDDM_OBJECT* Context,
+    const DXGK_ALLOCATIONLIST* List, UINT ListSize, BC250_GDI_OP* Op,
+    BC250_GDI_SURFACE* Surfaces, ULONGLONG* Vas, UINT* Count)
+{
+    UINT* fields[BC250_GDI_BIND_SLOTS];
+    UINT originals[BC250_GDI_BIND_SLOTS] = {0};
+    ULONGLONG serials[BC250_GDI_BIND_SLOTS] = {0};
+    UINT used = 0, i, j;
+
+    *Count = 0;
+    // TmpSurfAllocationIndex is deliberately absent: NoTempSurfaceForClearTypeBlend is set, so that
+    // slot is never read and a nonsense value in it must change nothing.
+    fields[0] = &Op->DstAllocationIndex;
+    fields[1] = Bc250GdiOpHasSource(Op->OpCode) ? &Op->SrcAllocationIndex : NULL;
+    fields[2] = Op->OpCode == BC250_GDIOP_CLEARTYPEBLEND ? &Op->AlphaSurfAllocationIndex : NULL;
+    fields[3] = (Op->OpCode == BC250_GDIOP_CLEARTYPEBLEND && Op->Gamma != BC250_GDI_INVALID_GAMMA) ?
+        &Op->GammaSurfAllocationIndex : NULL;
+    for (i = 0; i < BC250_GDI_BIND_SLOTS; i++)
+    {
+        UINT original, slot;
+        if (fields[i] == NULL) continue;
+        original = *fields[i];
+        slot = used;
+        for (j = 0; j < used; j++)
+            if (originals[j] == original) { slot = j; break; }
+        if (slot == used)
+        {
+            if (!WddmGdiSurfaceAt(Wddm, Context, List, ListSize, original, &Surfaces[used],
+                                  &Vas[used], &serials[used]))
+                return 0;
+            originals[used] = original;
+            used++;
+        }
+        *fields[i] = slot;
+    }
+    for (i = 0; i < used; i++)
+        for (j = i + 1; j < used; j++)
+            if (serials[i] == serials[j]) return 0;
+    *Count = used;
+    return 1;
+}
+
+// The DMA buffer this command is built into must be neither a source nor a destination of its own
+// copies, the rule the Present producer states the same way.
+static int WddmGdiDisjoint(ULONGLONG Ib, UINT IbBytes, ULONGLONG Va, ULONGLONG Bytes)
+{
+    return Ib <= Va ? Va - Ib >= IbBytes : Ib - Va >= Bytes;
+}
+
+static DXGKDDI_RENDERGDI Bc250WddmRenderGdi;
+static NTSTATUS Bc250WddmRenderGdi(_In_ const HANDLE hContext, _Inout_ DXGKARG_RENDERGDI* pRenderGdi)
+{
+    BC250_WDDM_OBJECT* context = WddmObject(hContext, BC250_WDDM_MAGIC_CONTEXT);
+    BC250_WDDM* wddm = context != NULL ? (BC250_WDDM*)context->Device->Wddm : NULL;
+    const UCHAR* buffer;
+    unsigned int* out;
+    UINT bytes, offset, index, listSize;
+    unsigned int capacity, used = 0;
+    ULONGLONG ib;
+    LONG64 call;
+    int overflow = 0;
+
+    // Nothing here may fail the call (the return table above), so an argument that would make the
+    // translation unsafe ends it with an empty DMA buffer instead: dxgkrnl then submits no work of
+    // ours and the operations are dropped.
+    if (context == NULL || pRenderGdi == NULL) return STATUS_SUCCESS;
+    if (wddm == NULL || !wddm->GdiHwAccel) return STATUS_SUCCESS;
+    call = InterlockedIncrement64(&wddm->GdiRenderCalls);
+    buffer = (const UCHAR*)pRenderGdi->pCommand;
+    bytes = pRenderGdi->CommandLength;
+    out = (unsigned int*)pRenderGdi->pDmaBuffer;
+    ib = pRenderGdi->DmaBufferGpuVirtualAddress;
+    listSize = pRenderGdi->AllocationListSize;
+    capacity = pRenderGdi->DmaSize / 4u;
+    // "Access to the kernel buffers does not require protection from try/except code" (the
+    // DxgkDdiRenderKm Remarks), so the command buffer is read directly - but every offset into it is
+    // checked against CommandLength below, because a malformed buffer would otherwise be read past
+    // its end.
+    if (!context->GdiContext || context->NodeOrdinal != BC250_WDDM_NODE_3D ||
+        KeGetCurrentIrql() != PASSIVE_LEVEL ||
+        buffer == NULL || bytes < (UINT)FIELD_OFFSET(DXGK_RENDERKM_COMMAND, Command) || (bytes & 3u) ||
+        ((ULONG_PTR)buffer & 3u) || out == NULL || ((ULONG_PTR)out & 3u) || ib == 0 || (ib & 31u) ||
+        capacity < BC250_GFX_ACQUIRE_DWORDS + BC250_GDI_MIN_DWORDS ||
+        pRenderGdi->pAllocationList == NULL || listSize == 0)
+    {
+        InterlockedIncrement64(&wddm->GdiRenderRefusedCall);
+        return STATUS_SUCCESS;
+    }
+
+    for (offset = 0, index = 0; offset + (UINT)FIELD_OFFSET(DXGK_RENDERKM_COMMAND, Command) <= bytes; index++)
+    {
+        const DXGK_RENDERKM_COMMAND* command = (const DXGK_RENDERKM_COMMAND*)(buffer + offset);
+        BC250_GDI_SURFACE surfaces[BC250_GDI_BIND_SLOTS];
+        ULONGLONG vas[BC250_GDI_BIND_SLOTS], source;
+        BC250_GDI_OP op;
+        const RECT* subRects;
+        UINT subCount, minBytes, next, slots, sub, start = offset;
+        unsigned int pattern = 0;
+        int disjoint = 1;
+
+        if (!WddmGdiCommand(command, &op, &subRects, &subCount, &minBytes))
+        {
+            // An opcode outside the table has no size this driver can trust, so the rest of the
+            // buffer is not walked either.
+            InterlockedIncrement64(&wddm->GdiRenderRefused[Bc250GdiBadOpCode]);
+            break;
+        }
+        if (!Bc250GdiWalkStep(bytes, start, command->CommandSize, minBytes, &next))
+        {
+            InterlockedIncrement64(&wddm->GdiRenderMalformed);
+            break;
+        }
+        offset = next;
+        InterlockedIncrement64(&wddm->GdiRenderCommands);
+        if (op.OpCode == BC250_GDIOP_ESCAPE)
+        {
+            InterlockedIncrement64(&wddm->GdiRenderRefused[Bc250GdiSkip]);
+            continue;
+        }
+        if (subCount == 0 || subRects == NULL)
+        {
+            // Every page says the sub-rectangles are what is painted, bounded by DstRect, so a
+            // command with none paints nothing.
+            InterlockedIncrement64(&wddm->GdiRenderEmpty);
+            continue;
+        }
+        {
+            // CommandSize is "the size of the current rendering command, in bytes, including the
+            // value of OpCode and the number of sub-rectangles in the command", so the array lies
+            // inside this command. A pointer that does not is counted and the command dropped: it
+            // is the one input here that cannot be bounds-checked any other way.
+            ULONG_PTR first = (ULONG_PTR)subRects;
+            ULONG_PTR lowest = (ULONG_PTR)(buffer + start + minBytes);
+            ULONG_PTR limit = (ULONG_PTR)(buffer + start + command->CommandSize);
+            if (first < lowest || first > limit || (limit - first) / sizeof(RECT) < subCount)
+            {
+                InterlockedIncrement64(&wddm->GdiRenderOutside);
+                continue;
+            }
+        }
+        if (!WddmGdiBind(wddm, context, pRenderGdi->pAllocationList, listSize, &op,
+                         surfaces, vas, &slots))
+        {
+            InterlockedIncrement64(&wddm->GdiRenderRefused[Bc250GdiBadIndex]);
+            continue;
+        }
+        for (sub = 0; sub < slots; sub++)
+            if (!WddmGdiDisjoint(ib, pRenderGdi->DmaSize, vas[sub], surfaces[sub].Bytes)) disjoint = 0;
+        if (!disjoint)
+        {
+            InterlockedIncrement64(&wddm->GdiRenderRefused[Bc250GdiBadSurface]);
+            continue;
+        }
+        source = Bc250GdiOpHasSource(op.OpCode) ? vas[op.SrcAllocationIndex] : 0;
+        if (op.OpCode == BC250_GDIOP_COLORFILL)
+        {
+            // The one conversion of Color, once per command: the page documents it in A8R8G8B8 and
+            // the fill writes the destination's own channel order. A red-first destination is
+            // counted, because d3dkmddi.h's trailing comment reads Color as already being in the
+            // destination's format and only that case can tell the two readings apart.
+            pattern = Bc250GdiFromArgb(op.Color, surfaces[op.DstAllocationIndex].RedFirst);
+            if (surfaces[op.DstAllocationIndex].RedFirst)
+                InterlockedIncrement64(&wddm->GdiRenderColorFillRedFirst);
+        }
+        for (sub = 0; sub < subCount; sub++)
+        {
+            BC250_GDI_ITEM item;
+            BC250_GDI_RECT rect;
+            UINT rows = 0;
+            unsigned int written = 0;
+            int result, status;
+
+            WddmGdiRect(&subRects[sub], &rect);
+            status = Bc250GdiPlanItem(&op, surfaces, slots, &rect, &item);
+            if (status != Bc250GdiOk)
+            {
+                if ((UINT)status < (UINT)Bc250GdiRefusals)
+                    InterlockedIncrement64(&wddm->GdiRenderRefused[status]);
+                continue;
+            }
+            if (item.DstWidth == 0 || item.DstHeight == 0) continue;
+            if (item.Work == (unsigned int)Bc250GdiWorkKernel)
+            {
+                // Increment 2 (docs/design/gdi-hw-accel.md): the six compute kernels. Until they are
+                // in the image the capability bit stays clear, so no shipped configuration reaches
+                // this line - which is counted rather than assumed unreachable.
+                InterlockedIncrement64(&wddm->GdiRenderKernelWanted);
+                InterlockedIncrement64(&wddm->GdiRenderKernels[item.Kernel < (unsigned int)Bc250GdiKernels ?
+                    item.Kernel : 0u]);
+                continue;
+            }
+            if (used == 0)
+            {
+                // One cache operation per DMA buffer, before the first copy: the CDD writes its
+                // bitmaps with the CPU into cache-coherent aperture memory, and this is what makes
+                // those writes visible to the engine's L2 read. The same sequence the Present
+                // producer emits (gfx_v10_0_emit_mem_sync).
+                unsigned int got = Bc250EmitGfxAcquire(out, capacity);
+                if (got == 0) { overflow = 1; break; }
+                used = got;
+            }
+            result = Bc250EmitGdiItem(&item, source, vas[op.DstAllocationIndex], pattern, 0, &rows,
+                                      out + used, capacity - used, &written);
+            if (result == BC250_GDI_EMIT_NO_SPACE) { overflow = 1; break; }
+            if (result != BC250_GDI_EMIT_DONE)
+            {
+                // MORE cannot happen here: one pass always holds the tallest sub-rectangle the
+                // reported extents allow, and NO_SPACE above is the only other partial answer.
+                InterlockedIncrement64(&wddm->GdiRenderRefused[Bc250GdiBadSurface]);
+                continue;
+            }
+            used += written;
+            InterlockedIncrement64(&wddm->GdiRenderItems);
+            InterlockedAdd64(&wddm->GdiRenderDwords, (LONG64)written);
+        }
+        if (overflow) break;
+    }
+    if (overflow) InterlockedIncrement64(&wddm->GdiRenderOverflow);
+
+    if (used != 0)
+    {
+        // The GFX ring takes a 32-byte aligned IB, so the tail is padded with the CP's own NOP, the
+        // same word the Present IB pads with. The padding fits by construction: the acquire took
+        // eight dwords and every item was admitted against the remainder of a capacity that the
+        // entry check held at a multiple of eight above the acquire.
+        while ((used & 7u) != 0 && used < capacity) out[used++] = Bc250GfxCopyNop();
+        KeMemoryBarrier();
+        pRenderGdi->pDmaBuffer = (UCHAR*)pRenderGdi->pDmaBuffer + (SIZE_T)used * 4u;
+    }
+    if (call <= BC250_WDDM_LOG_CALLS || overflow)
+        GuardLog("wddm: RenderGdi%lld ctx%p commands%u bytes%u dwords%u list%u overflow%u",
+                 call, (void*)context, index, bytes, used, listSize, (UINT)overflow);
+    return STATUS_SUCCESS;
+}
+
 static DXGKDDI_PRESENT Bc250WddmPresent;
 static NTSTATUS Bc250WddmPresent(_In_ const HANDLE hContext, _Inout_ DXGKARG_PRESENT* pPresent)
 {
@@ -9903,6 +10488,12 @@ void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data)
     Data->DxgkDdiCalibrateGpuClock = Bc250WddmCalibrateGpuClock;
     Data->DxgkDdiFormatHistoryBuffer = Bc250WddmFormatHistoryBuffer;
     Data->DxgkDdiPresent = Bc250WddmPresent;
+    // HLK gap G1. The initialization page names DxgkDdiRenderKm, which is the physical-addressing
+    // entry point; DXGKDDI_RENDERGDI is the one "used when submitting ... GDI commands for contexts
+    // that support virtual addressing", and every context of this adapter has virtual addressing.
+    // It is in the table whatever the capability answer is, and reports nothing while the
+    // capability bit is clear, because dxgkrnl calls it only for a driver that set the bit.
+    Data->DxgkDdiRenderGdi = Bc250WddmRenderGdi;
     Data->DxgkDdiSetVidPnSourceAddress = Bc250WddmSetVidPnSourceAddress;
     // The other half of the flip contract. Claiming FlipOnVSyncMmIo without these two leaves dxgkrnl no way to
     // switch the VSync on and no way to ask where the beam is, and a queued flip is then never retired.
@@ -9910,8 +10501,9 @@ void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data)
     Data->DxgkDdiGetScanLine = Bc250WddmGetScanLine;
 
     // Left NULL on purpose: Patch and Render (physical addressing only), QueryCurrentFence, RecommendVidPnTopology,
-    // StopCapture, every overlay and multi-plane member, LinkDevice, SetDisplayPrivateDriverFormat, RenderKm,
-    // RenderGdi, ControlInterrupt2 (WDDM 2.1+), CancelCommand (CancelCommandAware = 0), MapCpuHostAperture and
+    // StopCapture, every overlay and multi-plane member, LinkDevice, SetDisplayPrivateDriverFormat, RenderKm
+    // (the physical-addressing GDI entry point; RenderGdi above is its virtual-addressing form, HLK gap G1),
+    // ControlInterrupt2 (WDDM 2.1+), CancelCommand (CancelCommandAware = 0), MapCpuHostAperture and
     // UnmapCpuHostAperture (no host aperture), SetVideoProtectedRegion, and everything the 2.1-3.1 headers append
     // after SetStablePowerState: the hardware-queue and hardware-scheduling DDIs (no HWS), the native-fence and
     // doorbell DDIs (no native fence, no user-mode submission), the flip-queue DDIs, SetTargetGamma and
