@@ -20,7 +20,8 @@ a PE header but no PE suffix are handled (fail closed, or scanned). A DriverStor
 path. A whole package bound to its manifest passes in both layouts and both flavours; a missing, extra, changed or
 unlisted PE fails it; the negative control is seen, and a scan that cannot see it fails. The package slots of the
 declaration are the PE rows of release-sources.json, and build-release.ps1 runs the gate on the payload and on the
-bound package.
+bound package. Every Mesa config that a release row builds defines NDEBUG in its release flavour, and a planted
+config without it fails.
 """
 import contextlib
 import hashlib
@@ -363,6 +364,34 @@ class ReleaseFlavour(unittest.TestCase):
             sys.path.pop(0)
         fixed = {src.lower() for src, _ in driver_package.NATIVE + driver_package.WOW if src.endswith(g.PE_SUFFIXES)}
         self.assertLessEqual(fixed, set(DECL["package"]["slots"]))
+
+    def test_release_mesa_configs_define_ndebug(self):
+        # Every Mesa config that a release row builds defines NDEBUG in its release flavour. The CPU and Zink UMDs
+        # take it only there (release_options), so their lab flavour keeps its asserts.
+        configs = json.loads((REPO / "tools" / "build" / "mesa-configs.json").read_text(encoding="utf-8-sig"))["configs"]
+        rows = json.loads((REPO / "tools" / "release" / "release-sources.json").read_text(encoding="utf-8-sig"))["files"]
+        self.assertEqual(g.mesa_release_without_ndebug(configs, rows), [])
+        built = {r["built_from"]["args"][r["built_from"]["args"].index("-Config") + 1] for r in rows
+                 if (r.get("built_from") or {}).get("recipe") == g.MESA_RECIPE}
+        self.assertLessEqual({"llvmpipe-umd", "zink-umd", "radv-mt", "radv-system", "zink-gl-icd"}, built)
+        for name in ("llvmpipe-umd", "zink-umd"):
+            self.assertNotIn("-Db_ndebug=true", configs[name]["options"], name + ": the lab flavour keeps asserts")
+            self.assertEqual(configs[name]["release_options"], ["-Db_ndebug=true"], name)
+        text = (REPO / "tools" / "build" / "build-mesa.ps1").read_text(encoding="utf-8")
+        self.assertIn("if ($forkFlavour -eq 'release') { $options += @($recipeConfig.release_options", text)
+        # Planted controls: any release config without it, or with a later false, fails; so does a config the
+        # file does not have.
+        for name in sorted(built):
+            planted = json.loads(json.dumps(configs))
+            for key in ("options", "release_options"):
+                planted[name][key] = [o for o in planted[name].get(key, []) if not o.startswith("-Db_ndebug=")]
+            self.assertIn(name, {c for c, _ in g.mesa_release_without_ndebug(planted, rows)}, name)
+        planted = json.loads(json.dumps(configs))
+        planted["zink-umd"]["release_options"].append("-Db_ndebug=false")
+        self.assertEqual({c for c, _ in g.mesa_release_without_ndebug(planted, rows)}, {"zink-umd"})
+        del planted["zink-umd"]
+        with self.assertRaises(g.GateError):
+            g.mesa_release_without_ndebug(planted, rows)
 
     def test_build_release_runs_the_gate(self):
         # On the whole payload before the submission CAB, and on the package bound to manifest.json before the zip.

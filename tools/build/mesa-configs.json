@@ -92,6 +92,7 @@
         "-Dzstd=disabled",
         "-Dgallium-d3d10-dll-name=bc250d3d"
       ],
+      "release_options": ["-Db_ndebug=true"],
       "targets": [
         "src/gallium/targets/d3d10umd/bc250d3d.dll",
         "src/gallium/targets/d3d10umd/bc250_ttn_control.exe",
@@ -119,6 +120,7 @@
         "-Dglx=disabled",
         "-Dzstd=disabled"
       ],
+      "release_options": ["-Db_ndebug=true"],
       "targets": ["src/gallium/targets/d3d10umd/bc250d3d_zink.dll"],
       "recorded_script": "experiments/E34-native-d3d-zink/build.cmd"
     },

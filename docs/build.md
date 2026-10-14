@@ -197,6 +197,9 @@ loses either patch shows up here instead of in a game. Last recorded run of the 
 
 Target `src/gallium/targets/d3d10umd/bc250d3d.dll`, plus the patch's test programs `bc250_ttn_control.exe`
 and `bc250_lp_test_arit.exe`. `b_vscrt=mt` matches LLVM's `/MT`, so the DLL imports no C runtime DLL.
+The release flavour adds `-Db_ndebug=true` (`release_options` in `mesa-configs.json`). Thus no assert and no
+debug-only parser is live in the shipped DLL. The lab flavour keeps the asserts. A tree without the flavour
+option builds the set above, as recorded.
 
 ### Native D3D10 UMD on Zink (`-Config zink-umd`)
 
@@ -207,7 +210,8 @@ and `bc250_lp_test_arit.exe`. `b_vscrt=mt` matches LLVM's `/MT`, so the DLL impo
 ```
 
 Target `src/gallium/targets/d3d10umd/bc250d3d_zink.dll`, linked against the DLL C runtime. Upstream
-`meson.build` refuses d3d10umd without softpipe or llvmpipe; the patched tree accepts Zink.
+`meson.build` refuses d3d10umd without softpipe or llvmpipe; the patched tree accepts Zink. The release flavour
+adds `-Db_ndebug=true`, as for `llvmpipe-umd`, and the lab flavour keeps the asserts.
 
 ### OpenGL on Zink (`-Config zink-gl`)
 
@@ -432,6 +436,9 @@ python -m unittest discover -s tools/quality -p test_flavour_gate.py
   `tools\win\bc250kmd_cli\test-flavour.ps1` on the usage text of the CLI that they built.
 - The self-test runs in the `quality-controls` check of `tools/quality/quick.ps1`, and `quick.ps1` builds the
   lab CLI as the `driver-state-cli-lab-x64` check.
+- `test_flavour_gate.py` checks the release flavour of each Mesa config that a release row of
+  `tools/release/release-sources.json` builds. It must define NDEBUG: the last `-Db_ndebug` of `options` and
+  `release_options` is `true`. A planted config without it fails.
 - Each fork has its own host test of the names that its release flavour must not read
   (`src/util/amdgpu_wddm_release_test.py` in Mesa, `src/ddi/release_flavour_test.py` in DXVK,
   `libs/ddi/release_flavour_test.py` in vkd3d-proton).

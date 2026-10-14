@@ -67,6 +67,12 @@ must be the declaration's package slots, each exactly once. --negative-control <
 name and an undeclared prefixed name to the scanned bytes of that one file, in memory, and the per-file check must
 report both (release) or the undeclared one (lab); a scan that does not see them fails the set.
 
+NDEBUG: the release flavour of every Mesa build config that a release row builds (tools/release/release-sources.json,
+tools/build/build-mesa.ps1 -Config) must define NDEBUG, so that no assert and no debug-only parser is live in a
+shipped DLL. Its option set is "options" and then "release_options" (tools/build/mesa-configs.json), and the last
+-Db_ndebug of the two must be true. mesa_release_without_ndebug() names every config that fails, and
+test_flavour_gate.py runs it on the repository's own files.
+
 The gate fails closed: no flavour, a missing file, a file with a PE suffix that is not a PE image, no KMD, two KMD
 files in a package, another kernel driver (.sys) in the set, two files with one payload path under one directory,
 no other PE without --kmd-only, a malformed declaration or manifest, an entry without a reason, or a name in two
@@ -242,6 +248,32 @@ def driverstore_members():
                                        'mft_h264': {'register': True}})
         _MEMBERS = {r['path'].split('/', 1)[1].lower(): r['source'].split('/', 1)[1].lower() for r in rows}
     return _MEMBERS
+
+
+MESA_RECIPE = 'tools/build/build-mesa.ps1'
+
+
+def mesa_release_without_ndebug(configs, rows):
+    """The Mesa configs (mesa-configs.json "configs") that a release row (release-sources.json "files") builds with
+    build-mesa.ps1 and whose release flavour does not define NDEBUG, as sorted (config, row path) pairs. The release
+    flavour is "options" and then "release_options", which build-mesa.ps1 adds without -Lab; meson takes the last
+    -Db_ndebug. A row without -Config, or a config the file does not have, cannot be judged."""
+    missing = []
+    for row in rows:
+        built = row.get('built_from') or {}
+        if built.get('recipe') != MESA_RECIPE:
+            continue
+        args = list(built.get('args') or [])
+        if '-Config' not in args or args.index('-Config') + 1 >= len(args):
+            raise GateError('%s: a %s row without -Config' % (row.get('path'), MESA_RECIPE))
+        name = args[args.index('-Config') + 1]
+        if name not in configs:
+            raise GateError('%s: -Config %s is not in mesa-configs.json' % (row.get('path'), name))
+        options = list(configs[name].get('options') or []) + list(configs[name].get('release_options') or [])
+        values = [o.split('=', 1)[1] for o in options if o.startswith('-Db_ndebug=')]
+        if not values or values[-1] != 'true':
+            missing.append((name, row.get('path')))
+    return sorted(missing)
 
 
 def read_pe(path):
