@@ -205,6 +205,138 @@ class ConfigRecordTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.check(flavour='debug')
 
+    # ------------------------------------------- a requested rebuild that cannot be done is a failure (R1)
+    def edit_a_capability(self):
+        """An edit that only the rebuild can see, so a silent fall-back to the no-workspace mode shows."""
+        target = self.member('payload/d3d11/amdgpu_wddm_d3d11.config')
+        values = list(struct.unpack(check.LAYOUT, target.read_bytes()))
+        values[6] += 1
+        target.write_bytes(struct.pack(check.LAYOUT, *values))
+
+    def test_a_workspace_without_the_pinned_input_fails(self):
+        self.edit_a_capability()
+        (self.workspace / 'build' / 'release' / 'x64' / 'amdgpu_wddm_dxvk.dll').unlink()
+        found = self.check()
+        self.assertTrue(any('does not hold this pinned lane input' in line for line in found), found)
+
+    def test_a_workspace_that_is_not_there_fails(self):
+        self.edit_a_capability()
+        found = check.problems(self.package, self.sources, 'release', self.root / 'no-such-workspace',
+                               log=lambda *a, **k: None)
+        self.assertTrue(any('does not hold this pinned lane input' in line for line in found), found)
+
+    def test_a_source_row_without_a_source_field_fails(self):
+        self.edit_a_capability()
+        for row in self.sources['files']:
+            if row['path'] == 'payload/d3d11/amdgpu_wddm_dxvk.dll' and row['flavour'] == 'release':
+                row.pop('source')
+        found = self.check()
+        self.assertTrue(any('names no workspace source' in line for line in found), found)
+
+    def test_a_source_row_that_is_absent_fails(self):
+        self.edit_a_capability()
+        self.sources['files'] = [row for row in self.sources['files']
+                                 if not (row['path'] == 'payload/d3d11/amdgpu_wddm_dxvk.dll'
+                                         and row['flavour'] == 'release')]
+        # The slot is gone from one flavour only, which the selection itself refuses.
+        with self.assertRaises(ValueError):
+            self.check()
+
+    def test_the_no_workspace_mode_says_what_it_did_not_check(self):
+        lines = []
+        self.assertEqual(check.problems(self.package, self.sources, 'release', None, log=lines.append), [])
+        self.assertTrue(any('--workspace was not given' in line for line in lines), lines)
+
+
+def config_v1(engine: bytes, icd: bytes, caps=CAPS[:7]) -> bytes:
+    """The older lane input: version 1, 108 bytes, seven capability DWORDs, its pins at 44 and 76."""
+    return struct.pack('<11I32s32s', check.MAGIC, 1, 108, 0, *caps,
+                       hashlib.sha256(engine).digest(), hashlib.sha256(icd).digest())
+
+
+class PrestageRecordTests(unittest.TestCase):
+    """The same records before staging: beside their lane files, pinning them by full-file SHA-256.
+
+    No image identity here, so these run anywhere. The controls are the ones the staged path has: both
+    architectures required, a corrupt header refused, a changed image caught, a stray record named. The v1
+    pair is the regression control: its pins are at 44 and 76, and a checker that reads v3's offsets rejects
+    a package that is correct.
+    """
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.addCleanup(self.tmp.cleanup)
+        self.package = self.root / 'files'
+        self.sources = self.build()
+
+    def build(self, record=config_v2):
+        rows = []
+        for arch, cfg_slot, engine_slot, icd_slot in LANES:
+            engine, icd = pe(f'{arch} engine'), pe(f'{arch} icd')
+            for slot, data in ((engine_slot, engine), (icd_slot, icd), (cfg_slot, record(engine, icd))):
+                path = self.package / slot
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(data)
+                rows.append({'path': slot, 'flavour': 'release', 'source': f'build/{arch}/' + slot,
+                             'size': len(data), 'sha256': hashlib.sha256(data).hexdigest().upper()})
+        return {'schema': 4, 'files': rows}
+
+    def check(self, flavour='release'):
+        return check.prestage_problems(self.package, self.sources, flavour, log=lambda *a, **k: None)
+
+    def test_a_v2_pair_passes(self):
+        self.assertEqual(self.check(), [])
+
+    def test_a_v1_pair_passes(self):
+        shutil.rmtree(self.package)
+        self.sources = self.build(record=config_v1)
+        self.assertEqual(self.check(), [])
+
+    def test_a_missing_x86_record_fails(self):
+        (self.package / 'payload/wow64/d3d11/amdgpu_wddm_d3d11.config').unlink()
+        found = self.check()
+        self.assertEqual(len(found), 1, found)
+        self.assertIn('x86: the package has no', found[0])
+
+    def test_no_records_at_all_fail(self):
+        for arch, cfg_slot, _, _ in LANES:
+            (self.package / cfg_slot).unlink()
+        self.assertEqual(len(self.check()), 2, self.check())
+
+    def test_a_corrupt_magic_fails_although_the_pins_are_right(self):
+        target = self.package / 'payload/d3d11/amdgpu_wddm_d3d11.config'
+        data = bytearray(target.read_bytes())
+        data[0] ^= 0xFF
+        target.write_bytes(bytes(data))
+        found = self.check()
+        self.assertTrue(any('magic' in line for line in found), found)
+
+    def test_a_wrong_version_field_fails(self):
+        target = self.package / 'payload/d3d11/amdgpu_wddm_d3d11.config'
+        values = list(struct.unpack('<17I32s32s', target.read_bytes()))
+        values[1] = 3                                     # a 132-byte record that claims v3 before staging
+        target.write_bytes(struct.pack('<17I32s32s', *values))
+        found = self.check()
+        self.assertTrue(any('version 3' in line for line in found), found)
+
+    def test_a_changed_engine_fails(self):
+        target = self.package / 'payload/d3d11/amdgpu_wddm_dxvk.dll'
+        target.write_bytes(target.read_bytes() + b'\0')
+        found = self.check()
+        self.assertTrue(any('pins the engine' in line for line in found), found)
+
+    def test_a_stray_record_fails(self):
+        stray = self.package / 'payload' / 'desktop' / 'amdgpu_wddm_d3d11.config'
+        stray.parent.mkdir(parents=True, exist_ok=True)
+        stray.write_bytes((self.package / 'payload/d3d11/amdgpu_wddm_d3d11.config').read_bytes())
+        found = self.check()
+        self.assertEqual(len(found), 1, found)
+        self.assertIn('does not name', found[0])
+
+    def test_an_unknown_flavour_is_refused(self):
+        with self.assertRaises(ValueError):
+            self.check(flavour='debug')
+
 
 if __name__ == '__main__':
     unittest.main()

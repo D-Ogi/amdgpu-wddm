@@ -57,6 +57,9 @@ checks the measured capability fields as well as the pins.
 A file that versioninfo.json lists under "built" (the KMD) is not stamped: its build compiles its own .rc with the
 header that `rc-header` writes from the same numbers and strings, and the gate checks it like a stamped file. The
 KMD's Authenticode digest is pinned in release-sources.json, so its resource has to be in the build, not added after.
+"built" is therefore a table of what writes each resource and not an exemption list; the only exemption list is the
+third-party one. Once a release names its stamping there, a shipped PE that the table does not claim is a package
+error, because nothing stamps it: that is how a slot added without a build step behind it is caught.
 """
 import argparse
 import array
@@ -375,7 +378,24 @@ def load_table(path=TABLE):
     for name in table["built"]:
         if name not in table["files"]:
             raise StampError(f"{path}: {name} is built with its resource but has no FileDescription in 'files'")
+    # The release's own table says what writes every resource it describes: without that, leaving a file out
+    # of 'built' would turn the refusal of an unclaimed shipped PE off instead of failing the release.
+    for name in table["files"]:
+        if name not in table["built"] and name not in table["exempt"]:
+            raise StampError(f"{path}: nothing in 'built' writes {name}'s version resource; name what does, "
+                             f"or give it a reason in 'exempt'")
     return table
+
+
+def declares_stamping(table):
+    """Does this table say what writes the version resource of every file it describes?
+
+    versioninfo.json does, and load_table refuses to read it otherwise, so a release always does and the
+    refusal in check_release is always on there. A host test that hands in a table of its own may name one
+    built file and no more; the gate then checks the resources it can and accuses nobody of having no build
+    step, because such a table does not claim to know."""
+    claimed = set(table.get("built") or ()) | set(table.get("exempt") or ())
+    return bool(table.get("built")) and set(table.get("files") or ()) <= claimed
 
 
 def inf_provider(inf):
@@ -843,16 +863,24 @@ def release_side(name):
 def member_sources(sources, flavour):
     """Each staged DriverStore member by its input slot: payload/kmd/d3d11/amdgpu_wddm_radv_d3d11.dll came
     from payload/d3d11/amdgpu_wddm_radv.dll, so its version resource names the lane file and not the member.
-    The mapping is followed in that direction only. It is empty when release-sources.json does not describe a
-    member set of this flavour at all (the legacy pins of a release before the two flavours, and the fixtures
-    of the host tests); the package is then checked under the names it carries."""
+    The mapping is followed in that direction only. It is empty when release-sources.json does not pin the
+    lane inputs of the member set at all, which is a file that describes no such package: the legacy pins of
+    a release before the two flavours, and the fixtures of the host tests. The package is then checked under
+    the names it carries.
+
+    A file that does pin them is a release manifest, and an invalid selection of it propagates: a flavour it
+    does not describe, a malformed row or a slot missing from one flavour. A gate that answered such a file
+    with "nothing to map" would check a release package under the wrong names and pass it."""
     data = sources if isinstance(sources, dict) else json.loads(Path(sources).read_text(encoding="utf-8-sig"))
     driver_package = release_side("driver_package")
-    try:
-        selected = release_side("release_flavour").select_sources(data, flavour)
-        return {row["path"]: row["source"] for row in driver_package.members(selected)}
-    except ValueError:
+    rows = data.get("files") if isinstance(data, dict) else None
+    if not isinstance(rows, list) or not rows:
         return {}
+    slots = {member["source"] for member in driver_package.members(data)}
+    if not any(isinstance(row, dict) and row.get("path") in slots for row in rows):
+        return {}
+    selected = release_side("release_flavour").select_sources(data, flavour)
+    return {member["path"]: member["source"] for member in driver_package.members(selected)}
 
 
 def check_release(package_top, version, sources, inf, table, log=print, require_signed=False, flavour="release",
@@ -887,6 +915,16 @@ def check_release(package_top, version, sources, inf, table, log=print, require_
             counts["exempt"] += 1
             log(f"  exempt     {rel}: {table['exempt'][name]}")
             continue
+        # "built" is a table of what writes each file's version resource, not an exemption list: a file
+        # listed there is checked exactly like a release-stamped one. What makes the table mean anything is
+        # this refusal: a shipped PE that nothing in it claims, and that is not pinned as third party, is a
+        # slot added to the package with no build step behind it. A table that names no stamping at all
+        # that does not claim to know what stamps everything it describes (the partial tables the host
+        # tests hand in) checks resources alone.
+        if declares_stamping(table) and name not in table["built"]:
+            problems.append(f"{rel}: nothing stamps it; name what writes its version resource in "
+                            f"{TABLE.name} under 'built', or pin it as third party")
+            continue
         found = check_file(p, version, company, table, file_name=name, flavour=flavour)
         if found:
             problems.extend(f"{rel}: {x}" for x in found)
@@ -905,27 +943,37 @@ def record_problems(package, sources, flavour, staged, workspace, log=print):
     """The D3D11 configuration records of the package, in whichever state the package is in.
 
     A staged package (its DriverStore members are there, the lane inputs are gone) carries version 3 records
-    whose pins are image identities, under names the DriverStore chose: tools/release/check_package_v3.py
-    owns that check, because it is also the module that owns the mapping and the image identity. Before
-    staging the records are still the v1/v2 originals beside the lane files they pin by full-file SHA-256,
-    which is what `release` re-points after stamping, so the gate checks them that way here."""
-    if not staged:
-        log(f"  release-sources.json names no {flavour} DriverStore member set: the package is checked under "
-            f"the names it carries")
-    if any((Path(package) / member).is_file() for member in staged):
+    whose pins are image identities, under names the DriverStore chose. Before staging the records are still
+    the v1/v2 originals beside the lane files they pin by full-file SHA-256, which is what `release`
+    re-points after stamping. tools/release/check_package_v3.py owns both checks, because it is also the
+    module that owns the mapping and the image identity, and in both of them the records that must exist
+    come from the source mapping and not from what the package happens to carry.
+
+    Only a release-sources.json with no source rows at all leaves the records to be found by name: the
+    legacy pins of a release before the two flavours, and the fixtures of the host tests."""
+    v3 = release_side("check_package_v3")
+    if staged:
         data = sources if isinstance(sources, dict) else json.loads(Path(sources).read_text(encoding="utf-8-sig"))
-        return release_side("check_package_v3").problems(package, data, flavour, workspace, log)
+        if any((Path(package) / member).is_file() for member in staged):
+            return v3.problems(package, data, flavour, workspace, log)
+        return v3.prestage_problems(package, data, flavour, log)
+    log(f"  release-sources.json carries no source rows: the records are checked under the names the "
+        f"package carries")
     problems = []
-    for cfg in sorted(Path(package).rglob(M14C_NAME)):
-        record = cfg.read_bytes()
-        for (name, _), pin in zip(M14C_PINS, m14c_pins(record)):
+    records = sorted(Path(package).rglob(M14C_NAME))
+    for cfg in records:
+        try:
+            pins = v3.original_pins(cfg.read_bytes())
+        except ValueError as exc:
+            problems.append(f"files/{cfg.relative_to(package).as_posix()}: {exc}")
+            continue
+        for (name, _), pin in zip(M14C_PINS, pins):
             sibling = cfg.parent / name
             have = hashlib.sha256(sibling.read_bytes()).hexdigest().upper() if sibling.is_file() else "no file"
             if have != pin:
                 problems.append(f"files/{cfg.relative_to(package).as_posix()}: pins {name} {pin[:8]}, "
                                 f"the package has {have[:8]}")
-    log(f"  {len(list(Path(package).rglob(M14C_NAME)))} D3D11 configuration records before staging, "
-        f"each pinned by full-file SHA-256")
+    log(f"  {len(records)} D3D11 configuration records before staging, each pinned by full-file SHA-256")
     return problems
 
 

@@ -25,7 +25,27 @@
     "vadd.exe": "amdgpu-wddm HIP self-check (experimental)"
   },
   "built": {
-    "bc250kmd.sys": "driver/kmd/bc250kmd.rc with version-stamp.h, compiled by driver/kmd/build.ps1: release-sources.json pins the KMD's Authenticode digest, so its resource is part of the build and a stamp after it would break the pin. The DirectX adapter record reads its DriverVersion from this file."
+    "bc250kmd.sys": "driver/kmd/bc250kmd.rc with version-stamp.h, compiled by driver/kmd/build.ps1: release-sources.json pins the KMD's Authenticode digest, so its resource is part of the build and a stamp after it would break the pin. The DirectX adapter record reads its DriverVersion from this file.",
+    "amdgpu_wddm_control.exe": "tools/win/amdgpu_wddm_control/build.ps1 stamps the win32 resource of this managed program through tools/build/version-stamp.ps1; its assembly attributes stay as they are, and Windows and the release gate read the resource",
+    "setup.exe": "tools/win/amdgpu_wddm_setup/build.ps1 stamps amdgpu_wddm_setup.exe under the name the release copies it as, through tools/build/version-stamp.ps1 -Names setup.exe",
+    "bc250control.dll": "tools/win/amdgpu_wddm_control/build.ps1 stamps it through tools/build/version-stamp.ps1 as its last step, after the gates that load the image it linked",
+    "bc250kmd_cli.exe": "tools/win/amdgpu_wddm_control/build.ps1 stamps it through tools/build/version-stamp.ps1 as its last step, beside bc250control.dll",
+    "bc250d3d_router.dll": "tools/build/build-umd-router.ps1 stamps it after the architecture check, as its last step before it prints the hash of what it built",
+    "bc250d3d.dll": "tools/build/build-mesa.ps1 -Config llvmpipe-umd stamps it from the 'ships' map of mesa-configs.json, as its last step before the build receipt",
+    "bc250d3d_zink.dll": "tools/build/build-mesa.ps1 -Config zink-umd stamps it from the 'ships' map of mesa-configs.json, as its last step before the build receipt",
+    "amdgpu_wddm_d3d11.dll": "tools/build/build-umd-dxvk.ps1 stamps it as its last step, after the import and export gates of the shell it builds",
+    "amdgpu_wddm_dxvk.dll": "tools/build/build-dxvk.ps1 -Config ddi-engine stamps it from the 'ships' map of dxvk-configs.json, as its last step before the build receipt",
+    "amdgpu_wddm_d3d12.dll": "tools/build/build-umd-d3d12.ps1 stamps it as its last step, after the export and adapter gates of the shell it builds",
+    "amdgpu_wddm_vkd3d.dll": "tools/build/build-vkd3d.ps1 stamps it from the 'ships' map of vkd3d-configs.json, as its last step before the build receipt",
+    "amdgpu_wddm_radv.dll": "the second stamped copy that tools/build/build-mesa.ps1 writes beside vulkan_radeon.dll, under the name the release ships it as",
+    "vulkan_radeon.dll": "tools/build/build-mesa.ps1 stamps it from the 'ships' map of mesa-configs.json; the same build writes a second stamped copy named amdgpu_wddm_radv.dll, because the resource names the file it belongs to",
+    "amdgpu_wddm_gl.dll": "tools/build/build-mesa.ps1 -Config zink-gl-icd stamps it from the 'ships' map of mesa-configs.json, as its last step before the build receipt",
+    "amdgpu_wddm_mft_h264.dll": "driver/umd/mft-h264/build.ps1 stamps it through tools/build/version-stamp.ps1 after the link, and leaves its two lab tools alone",
+    "amdgpu_wddm_d3d12caps.exe": "tools/win/d3d12caps/build.ps1 stamps it through tools/build/version-stamp.ps1; the probes that script also builds are lab tools and carry no resource",
+    "d3d11bench.exe": "tools/win/d3d11bench/build.ps1 stamps it through tools/build/version-stamp.ps1, after the architecture check of the image it built",
+    "amdhip64.dll": "compute/hip/build-runtime.ps1 stamps the shipped runtime through tools/build/version-stamp.ps1; the mock builds of the same name stay as they were linked",
+    "bc250hipblas.dll": "compute/hip/build-rebuilt-controls.ps1 stamps it through tools/build/version-stamp.ps1, with the samples beside it left alone",
+    "vadd.exe": "compute/hip/build-rebuilt-controls.ps1 stamps it through tools/build/version-stamp.ps1, with the samples beside it left alone"
   },
   "exempt": {}
 }
