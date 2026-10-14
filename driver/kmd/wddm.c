@@ -277,13 +277,17 @@ typedef struct _BC250_WDDM_OBJECT {
     // (display/initialization-and-dma-buffer-creation.md), and DxgkDdiRenderGdi admits no other context.
     BOOLEAN GdiContext;
     // Rule 3 of gdi_batch.h, per GDI context. GdiDmaBytes is the DMA buffer size this context asked
-    // dxgkrnl for, so a call can say whether it was given less. GdiIbBaseVa is the lowest DMA buffer
-    // address seen since the last submission of this context: dxgkrnl may fill one buffer with
-    // several calls, and the distance from that address is how many dwords of the indirect buffer
-    // the submitter will encode are spoken for already. A buffer refilled from its start takes the
-    // base down again and the submit path clears it, so neither needs a size from dxgkrnl.
+    // dxgkrnl for, which the DDI says is a floor the operating system keeps, so a call at the start
+    // of a buffer can check that sentence. GdiDma holds the DMA buffers this context has written
+    // into and not submitted since, which is where the dwords ahead of a call come from: dxgkrnl
+    // may fill one buffer with several calls before it submits it, and the whole buffer leaves as
+    // one indirect buffer. The DDI promises neither one call per buffer nor an order of calls and
+    // submissions, so nothing here is inferred from the order of addresses: a call this map cannot
+    // place is refused as a whole and counted. GdiDmaLock serialises the map alone, and is never
+    // held across the translation itself.
     ULONG GdiDmaBytes;
-    ULONGLONG GdiIbBaseVa;
+    BC250_GDI_DMA_MAP GdiDma;
+    KSPIN_LOCK GdiDmaLock;
     // BD-127: this context's BC2C blob carried BC250_UMD_C_COMPUTE and it was counted into the adapter's live
     // compute-context count. The flag is what DestroyContext counts out again, so a context that was never
     // counted (a GDI context, a refused blob, a version 2 blob) cannot lower the count.
@@ -936,12 +940,29 @@ typedef struct _BC250_WDDM {
     // the DMA buffer already filled to the length one indirect buffer can carry, so they had no
     // room at all; IbOverflow counts the ones whose finished stream would have passed that length,
     // which the capacity makes unreachable and which is therefore the counter that says the bound
-    // was computed wrongly; DmaShort counts the calls whose DMA buffer was smaller than the size
-    // this context asked dxgkrnl for. AboveProducer counts the calls longer than the command buffer
-    // of the ordinary producer, which is the design's established input scope, and ScopeRefused the
-    // refusals inside that scope - nonzero means the scope is wrong, not that a producer is unusual.
+    // was computed wrongly; DmaShort counts the calls that were given the start of a buffer and
+    // reported less space than this context asked dxgkrnl for, which DXGK_CONTEXTINFO says cannot
+    // happen. AboveProducer counts the calls longer than the command buffer of the ordinary
+    // producer, which is the input scope the design read, and ScopeRefused the drops inside that
+    // scope - nonzero means an ordinary paint was dropped, whatever the cause, and it is not a
+    // completeness witness while it is zero (docs/design/gdi-hw-accel.md, "What this capability
+    // still does not complete").
+    //   Every drop of a whole call goes through WddmGdiDropCall, so BatchRefused and
+    // OmittedSubRects cover all of them: the five below are which of them it was.
     volatile LONG64 GdiRenderIbFull, GdiRenderIbOverflow, GdiRenderDmaShort;
     volatile LONG64 GdiRenderAboveProducer, GdiRenderScopeRefused;
+    // Where the dwords ahead of a call came from (Bc250GdiDmaClaim). DmaAppend counts the calls that
+    // continued a buffer an earlier call had written into, DmaRestart the buffers offered again from
+    // their start, DmaUnknown the windows this driver could not place and DmaFull the calls that
+    // found every slot holding unsubmitted output. The last two drop the call. DmaLost counts a
+    // record that could not be kept after a successful translation, which the claim makes
+    // unreachable; a buffer in that state can then only be refused. DmaSubmitted counts the
+    // submissions that released a buffer of this context, and DwordsCommitted the dwords actually
+    // handed to the submitter, which is what GdiRenderDwords is read against: that one counts what
+    // the batch generated, this one what left.
+    volatile LONG64 GdiRenderDmaAppend, GdiRenderDmaRestart, GdiRenderDmaUnknown;
+    volatile LONG64 GdiRenderDmaFull, GdiRenderDmaLost, GdiRenderDmaSubmitted;
+    volatile LONG64 GdiRenderDwordsCommitted;
 } BC250_WDDM;
 
 // The gate-closed starting value of wddm->NodeCount (WddmStart) and of the DXGK_DRIVERCAPS answer before
@@ -4429,6 +4450,9 @@ void WddmStop(_Inout_ BC250_DEVICE* Device)
         GuardLog("wddm: gdi totals calls%lld commands%lld items%lld dwords%lld",
                  wddm->GdiRenderCalls, wddm->GdiRenderCommands, wddm->GdiRenderItems,
                  wddm->GdiRenderDwords);
+        // The dwords above are what the batches generated. These are the ones that left: a call
+        // dropped after its stream was written counts in the first number and not in this one.
+        GuardLog("wddm: gdi committed dwords%lld", wddm->GdiRenderDwordsCommitted);
         GuardLog("wddm: gdi drops call%lld malformed%lld outside%lld empty%lld",
                  wddm->GdiRenderRefusedCall, wddm->GdiRenderMalformed, wddm->GdiRenderOutside,
                  wddm->GdiRenderEmpty);
@@ -4440,13 +4464,21 @@ void WddmStop(_Inout_ BC250_DEVICE* Device)
         GuardLog("wddm: gdi capacity-short%lld peak cmdlen%lld want%ld omitted subrects%lld",
                  wddm->GdiRenderCapacityShort, wddm->GdiRenderPeakCommandLength,
                  wddm->GdiCmdBytesWanted, wddm->GdiRenderOmittedSubRects);
-        // Rule 3 and the scope self-checks. ib-full and dma-short are the operating system's side
-        // of the capacity; ib-over and scope-refused must both stay zero, and a line that shows
-        // either is the one the design page asks to be read first.
+        // Rule 3 and the scope self-checks. ib-full is a call that found no room left in a buffer
+        // earlier calls had filled, and it dropped that paint; ib-over, dma-short and dma-lost are
+        // states the design says cannot happen. scope-refused counts the drops of an ordinary
+        // producer's paint, whatever dropped it, and a nonzero value is a correctness result.
         GuardLog("wddm: gdi ib-full%lld ib-over%lld dma-short%lld",
                  wddm->GdiRenderIbFull, wddm->GdiRenderIbOverflow, wddm->GdiRenderDmaShort);
         GuardLog("wddm: gdi above-producer%lld scope-refused%lld",
                  wddm->GdiRenderAboveProducer, wddm->GdiRenderScopeRefused);
+        // Where the calls lay in their DMA buffers (Bc250GdiDmaClaim): how many continued a buffer,
+        // how many found one offered again from its start, how many could not be placed at all and
+        // were dropped, and how many submissions released a buffer of this context.
+        GuardLog("wddm: gdi dma append%lld restart%lld submitted%lld",
+                 wddm->GdiRenderDmaAppend, wddm->GdiRenderDmaRestart, wddm->GdiRenderDmaSubmitted);
+        GuardLog("wddm: gdi dma unknown%lld full%lld lost%lld",
+                 wddm->GdiRenderDmaUnknown, wddm->GdiRenderDmaFull, wddm->GdiRenderDmaLost);
         // The class numbers are bc250_gdi_refusal's own order, so a reader needs the header and
         // nothing else. A class that never happened says nothing, which keeps the stop short.
         for (klass = 0; klass < (int)Bc250GdiRefusals; klass++)
@@ -5231,6 +5263,9 @@ static NTSTATUS Bc250WddmCreateContext(_In_ const HANDLE hDevice, _Inout_ DXGKAR
     object->NodeOrdinal = pCreateContext->NodeOrdinal;
     object->SystemContext = (BOOLEAN)pCreateContext->Flags.SystemContext;
     object->GdiContext = (BOOLEAN)pCreateContext->Flags.GdiContext;   // BD-167 (V2): the context class dxgkrnl assigned
+    // HLK gap G1, before any branch that could use it: every GDI context carries the map of rule 3 (gdi_batch.h),
+    // whether or not this start reports the capability.
+    if (object->GdiContext) KeInitializeSpinLock(&object->GdiDmaLock);
     // KMD193: every BC250_PJ_GFX_SUBMIT record of a job on this context carries this process ID, so that a
     // faulting job in a dump names the process that owns the context rather than only a pointer value.
     object->CreatorProcessId = HandleToULong(PsGetCurrentProcessId());
@@ -5276,9 +5311,10 @@ static NTSTATUS Bc250WddmCreateContext(_In_ const HANDLE hDevice, _Inout_ DXGKAR
                                            (ULONG)parentWddm->GdiCmdBytesWanted);
         ULONG bytes = Bc250GdiContextDmaBytes(bound);
         if (bytes != 0) pCreateContext->ContextInfo.DmaBufferSize = bytes;
-        // What was asked for, so that a call given less can count it (GdiRenderDmaShort). The OS
-        // may allocate more and may grow the buffer later; neither is a problem, because the
-        // capacity of each call comes from the space that call reports.
+        // What was asked for, so that a call at the start of a buffer can check the floor the DDI
+        // promises (GdiRenderDmaShort). The OS may allocate more and may grow the buffer later;
+        // neither is a problem, because the capacity of each call comes from the space that call
+        // reports.
         object->GdiDmaBytes = (ULONG)pCreateContext->ContextInfo.DmaBufferSize;
         GuardLog("wddm: CreateContext: GDI dma %lu bytes for cmdbuf %lu of aperture %llu MiB",
                  bytes, bound, parent->Device->WddmAperture.bytes / PAGING_APERTURE_MIB);
@@ -7485,11 +7521,21 @@ static NTSTATUS Bc250WddmSubmitCommandVirtualImpl(_In_ const HANDLE hAdapter,
     }
     (void)WddmFirstCalls(wddm, WddmDdiSubmitCommandVirtual);    // the DDI's own call count, logging aside
     if (wddm != NULL && node < BC250_WDDM_NODE_COUNT_MAX) InterlockedIncrement(&wddm->PagingVirtualSubmits[node]);
-    // Rule 3 of gdi_batch.h: this DMA buffer is on its way to the ring as one indirect buffer, so
-    // whatever the next RenderGdi call into it finds is a fill that starts again. Clearing the base
-    // here is what keeps the dwords already spoken for from being counted twice; the lowest-address
-    // rule in the call itself is what covers a submission this driver never saw.
-    if (context != NULL && context->GdiContext) context->GdiIbBaseVa = 0;
+    // Rule 3 of gdi_batch.h: the DMA buffer of this submission is on its way to the ring as one
+    // indirect buffer, so the next RenderGdi call into it starts its fill again. Only the buffer
+    // this submission names is released, by its own address range, because a submission of one
+    // buffer says nothing about the content of another (review r4, section 2).
+    if (context != NULL && context->GdiContext && wddm != NULL)
+    {
+        KIRQL irql;
+        unsigned int freed;
+
+        KeAcquireSpinLock(&context->GdiDmaLock, &irql);
+        freed = Bc250GdiDmaSubmitted(&context->GdiDma, pSubmitCommand->DmaBufferVirtualAddress,
+                                     pSubmitCommand->DmaBufferSize);
+        KeReleaseSpinLock(&context->GdiDmaLock, irql);
+        if (freed != 0) InterlockedAdd64(&wddm->GdiRenderDmaSubmitted, (LONG64)freed);
+    }
     if (first)
         GuardLog("wddm: SubmitCommandVirtual fence %u node %u flags 0x%08X va 0x%llX size %u",
                  pSubmitCommand->SubmissionFenceId, node, pSubmitCommand->Flags.Value,
@@ -8903,6 +8949,29 @@ static unsigned int WddmGdiSubRectCount(const UCHAR* Buffer, UINT Bytes, UINT* C
     return (unsigned int)total;
 }
 
+// The one exit of a call that was admitted and drew nothing. Review r4 asked for exactly this: the
+// capacity of a call can run out for several reasons, and a reader of the counters must not have to
+// know which of them reaches which counter. So every drop of a whole call lands here, whatever
+// stopped it: BatchRefused counts the calls, OmittedSubRects the sub-rectangles lost with them, and
+// ScopeRefused the drops of a command buffer inside the input scope the design read. The caller
+// counts which of the drops it was. Nonzero ScopeRefused is a correctness result and not an
+// observation about the operating system's capacity (docs/testing/gdi-hw-accel-lab.md, trial 3).
+static void WddmGdiDropCall(_Inout_ BC250_WDDM* Wddm, LONG64 Call, _In_z_ const char* Why,
+                            UINT Bytes, unsigned int Planned, unsigned int Needed,
+                            unsigned int Capacity, unsigned int Ahead)
+{
+    InterlockedIncrement64(&Wddm->GdiRenderBatchRefused);
+    InterlockedAdd64(&Wddm->GdiRenderOmittedSubRects, (LONG64)Planned);
+    GuardLog("wddm: RenderGdi%lld dropped %s: subrects%u needs%u of%u ahead%u len%u", Call, Why,
+             Planned, Needed, Capacity, Ahead, Bytes);
+    if (Bytes <= BC250_GDI_PRODUCER_BYTES)
+    {
+        InterlockedIncrement64(&Wddm->GdiRenderScopeRefused);
+        GuardLog("wddm: RenderGdi%lld DROPPED INSIDE SCOPE %s: len%u subrects%u", Call, Why, Bytes,
+                 Planned);
+    }
+}
+
 static DXGKDDI_RENDERGDI Bc250WddmRenderGdi;
 static NTSTATUS Bc250WddmRenderGdi(_In_ const HANDLE hContext, _Inout_ DXGKARG_RENDERGDI* pRenderGdi)
 {
@@ -8915,11 +8984,14 @@ static NTSTATUS Bc250WddmRenderGdi(_In_ const HANDLE hContext, _Inout_ DXGKARG_R
     unsigned int capacity, used, planned, needed, ahead = 0, visited = 0;
     ULONGLONG ib;
     LONG64 call;
-    int overflow = 0;
+    int overflow = 0, place;
 
     // Nothing here may fail the call (the return table above), so an argument that would make the
     // translation unsafe ends it with an empty DMA buffer instead: dxgkrnl then submits no work of
-    // ours and the operations are dropped.
+    // ours and the operations are dropped. GdiRenderRefusedCall is this exit alone, and it stays
+    // outside the drop path below on purpose: that path counts the sub-rectangles a call held, and
+    // a call whose command buffer or DMA buffer fails these tests cannot be walked to find out what
+    // it held. The counter is the account of those, and the lab plan reads it as lost drawing too.
     if (context == NULL || pRenderGdi == NULL) return STATUS_SUCCESS;
     if (wddm == NULL || !wddm->GdiHwAccel) return STATUS_SUCCESS;
     call = InterlockedIncrement64(&wddm->GdiRenderCalls);
@@ -8944,83 +9016,91 @@ static NTSTATUS Bc250WddmRenderGdi(_In_ const HANDLE hContext, _Inout_ DXGKARG_R
         return STATUS_SUCCESS;
     }
 
-    // Rule 3 of gdi_batch.h, before anything else about this call is decided. The whole DMA buffer
-    // is submitted as one indirect buffer, whose length field is what any translation may fill, and
-    // dxgkrnl may put several calls in one buffer before it submits it: so this call may use only
-    // the part of that length the buffer has left. The base is the lowest address seen since this
-    // context's last submission, which is where the fill of this buffer began; a buffer that starts
-    // again takes the base down with it, and the submit path clears it.
-    if (context->GdiIbBaseVa == 0 || ib < context->GdiIbBaseVa) context->GdiIbBaseVa = ib;
+    // What this call brought, counted before anything about its capacity is decided: review r4
+    // found the length and the sub-rectangle account below a capacity exit, so a dropped call could
+    // leave no trace of its input at all. Nothing between here and the end of the function returns
+    // without the drop of a whole call being counted.
+    if ((LONG64)bytes > wddm->GdiRenderPeakCommandLength)
+        wddm->GdiRenderPeakCommandLength = (LONG64)bytes;
+    // Longer than the command buffer of the ordinary producer, which is the input scope the design
+    // read. Counted, because it is a producer the design did not read.
+    if (bytes > BC250_GDI_PRODUCER_BYTES) InterlockedIncrement64(&wddm->GdiRenderAboveProducer);
+    planned = WddmGdiSubRectCount(buffer, bytes, NULL);
+    if (planned > (unsigned int)wddm->GdiRenderPeakSubRects) wddm->GdiRenderPeakSubRects = planned;
+    // What this call's own command buffer could have asked for at worst. It is a measurement and a
+    // signal, not a decision: Begin's exact check below is what protects the buffer, and it accepts
+    // a call whose actual sub-rectangles still fit a smaller capacity.
+    needed = Bc250GdiCallDwords(bytes);
+
+    // Rule 3 of gdi_batch.h. The whole DMA buffer is submitted as one indirect buffer, whose length
+    // field is what any translation may fill, and dxgkrnl may put several calls in one buffer
+    // before it submits it: so this call may use only the part of that length the buffer has left.
+    // Which part that is comes from the buffers this context has written into, by the address the
+    // DDI gives for this one, and never from the order in which addresses arrived.
     {
-        ULONGLONG spoken = (ib - context->GdiIbBaseVa) / 4u;
-        ahead = spoken > 0xFFFFFFFFull ? 0xFFFFFFFFu : (unsigned int)spoken;
+        KIRQL irql;
+
+        KeAcquireSpinLock(&context->GdiDmaLock, &irql);
+        place = Bc250GdiDmaClaim(&context->GdiDma, ib, PAGE_SIZE, &ahead);
+        KeReleaseSpinLock(&context->GdiDmaLock, irql);
     }
-    // A DMA buffer smaller than the one this context asked for is the OS's right (DmaBufferSize is
-    // a starting size, and this driver has no continuation to ask for more), and it narrows the
-    // guarantee of the bound: counted here rather than discovered as a refusal later.
-    if (context->GdiDmaBytes != 0 &&
-        (ULONGLONG)pRenderGdi->DmaSize + (ULONGLONG)ahead * 4u < (ULONGLONG)context->GdiDmaBytes)
+    if (place == BC250_GDI_DMA_APPEND) InterlockedIncrement64(&wddm->GdiRenderDmaAppend);
+    else if (place == BC250_GDI_DMA_RESTART) InterlockedIncrement64(&wddm->GdiRenderDmaRestart);
+    if (place == BC250_GDI_DMA_UNKNOWN || place == BC250_GDI_DMA_FULL)
+    {
+        // Either this window is a position inside a DMA buffer that no reading of the DDI produces,
+        // or every slot of this context holds a buffer with output of ours that nothing has
+        // submitted. In both cases the dwords ahead of this call are not established, so no
+        // capacity may be computed for it and it draws nothing.
+        if (place == BC250_GDI_DMA_FULL) InterlockedIncrement64(&wddm->GdiRenderDmaFull);
+        else InterlockedIncrement64(&wddm->GdiRenderDmaUnknown);
+        WddmGdiDropCall(wddm, call, place == BC250_GDI_DMA_FULL ? "dma-full" : "dma-unknown", bytes,
+                        planned, needed, capacity, 0u);
+        return STATUS_SUCCESS;
+    }
+    // "The DMA buffer can grow and shrink after the context is created; however, the DMA buffer can
+    // never shrink smaller than the starting size that DmaBufferSize specifies" (DXGK_CONTEXTINFO).
+    // A call at the start of a buffer therefore reports at least the size this context asked for,
+    // and this counter is the check of that sentence, not the handling of an allocation failure. A
+    // call that continues inside a buffer reports the window it has left, which is smaller by
+    // design, so it is never counted here.
+    if (context->GdiDmaBytes != 0 && ahead == 0 &&
+        (ULONGLONG)pRenderGdi->DmaSize < (ULONGLONG)context->GdiDmaBytes)
         InterlockedIncrement64(&wddm->GdiRenderDmaShort);
     capacity = Bc250GdiCallCapacity(capacity, ahead);
     if (capacity < BC250_GFX_ACQUIRE_DWORDS + BC250_GDI_MIN_DWORDS)
     {
-        // The indirect buffer the submitter will encode has no room left for work of ours. The call
-        // draws nothing, which is the same defined refusal as a short buffer, and it is counted
-        // apart from it because the cause is the submission length and not the allocation.
+        // The indirect buffer the submitter will encode has no room left for work of ours, because
+        // earlier calls into the same buffer have filled it. The call draws nothing, which is the
+        // same drop as every other one and is counted with them.
         InterlockedIncrement64(&wddm->GdiRenderIbFull);
-        GuardLog("wddm: RenderGdi%lld no ib room: ahead%u dma%u cmdlen%u", call, ahead,
-                 pRenderGdi->DmaSize, bytes);
+        WddmGdiDropCall(wddm, call, "ib-full", bytes, planned, needed, capacity, ahead);
         return STATUS_SUCCESS;
     }
-    // Longer than the command buffer of the ordinary producer, which is the input scope this design
-    // establishes. Counted, because it is a producer the design did not read.
-    if (bytes > BC250_GDI_PRODUCER_BYTES) InterlockedIncrement64(&wddm->GdiRenderAboveProducer);
-
-    // The capacity of the whole call, settled before the first packet. The guaranteed contract gives
-    // one DMA buffer for one command buffer and no second pass, and RenderGdi has no status for a
-    // short buffer, so a call whose sub-rectangles cannot all be guaranteed is translated to an
-    // empty DMA buffer: it draws nothing, rather than drawing a prefix and dropping the rest from a
-    // call that reported success. gdi_batch.h carries the rule and the proof.
-    // What this call's own command buffer could have asked for at worst, which is the number the
-    // DMA buffer was sized against. It is a measurement and a signal, not a decision: Begin's exact
-    // check below is what protects the buffer, and it accepts a short-sized call whose actual
-    // sub-rectangles still fit.
-    if ((LONG64)bytes > wddm->GdiRenderPeakCommandLength)
-        wddm->GdiRenderPeakCommandLength = (LONG64)bytes;
-    needed = Bc250GdiCallDwords(bytes);
     if (needed == 0u || needed > capacity)
     {
         InterlockedIncrement64(&wddm->GdiRenderCapacityShort);
         if ((LONG)bytes > wddm->GdiCmdBytesWanted)
             InterlockedExchange(&wddm->GdiCmdBytesWanted, (LONG)bytes);
-        GuardLog("wddm: RenderGdi%lld cmdlen%u over bound: needs%u dwords of%u", call, bytes,
-                 needed, capacity);
+        GuardLog("wddm: RenderGdi%lld len%u over capacity: needs%u of%u ahead%u", call, bytes,
+                 needed, capacity, ahead);
     }
-    planned = WddmGdiSubRectCount(buffer, bytes, NULL);
-    if (planned > (unsigned int)wddm->GdiRenderPeakSubRects) wddm->GdiRenderPeakSubRects = planned;
+    // The capacity of the whole call, settled before the first packet. The guaranteed contract gives
+    // one DMA buffer for one command buffer and no second pass, and RenderGdi has no status for a
+    // short buffer, so a call whose sub-rectangles cannot all be guaranteed is translated to an
+    // empty DMA buffer: it draws nothing, rather than drawing a prefix and dropping the rest from a
+    // call that reported success. gdi_batch.h carries the rule and the proof.
     if (!Bc250GdiBatchBegin(&batch, out, capacity, ib, planned))
     {
-        // The defined refusal of a whole call, and the only one in this function. It is unreachable
-        // while the command buffer stays inside the bound this context was created with, which is
-        // the whole point of sizing the DMA buffer from that bound; it is reachable above it,
-        // because no producer is obliged to stay there and the DDI has no status to ask for more
-        // space. A call that cannot be translated whole draws nothing: a prefix of it would leave
-        // a half-drawn screen, and any status but success bugchecks Windows. What is lost is
-        // counted, not guessed at: GdiRenderOmittedSubRects is the number of sub-rectangles this
-        // adapter has dropped this way, and the line below names the call's own numbers.
-        InterlockedIncrement64(&wddm->GdiRenderBatchRefused);
-        InterlockedAdd64(&wddm->GdiRenderOmittedSubRects, (LONG64)planned);
-        GuardLog("wddm: RenderGdi%lld omitted: subrects%u needs%u dwords of%u, cmdlen%u", call,
-                 planned, Bc250GdiBatchDwords(planned), capacity, bytes);
-        // Inside the established input scope, so this refusal says the scope is wrong and not that
-        // a producer sent something unusual. Its own counter and its own line, because this is the
-        // one number of the whole capacity design that must stay at zero in the field.
-        if (bytes <= BC250_GDI_PRODUCER_BYTES)
-        {
-            InterlockedIncrement64(&wddm->GdiRenderScopeRefused);
-            GuardLog("wddm: RenderGdi%lld REFUSED INSIDE SCOPE: cmdlen%u subrects%u ahead%u", call,
-                     bytes, planned, ahead);
-        }
+        // The defined drop of a whole call. It is unreachable while the command buffer stays inside
+        // the bound this context was created with and the buffer is its own, which is the point of
+        // sizing the DMA buffer from that bound; it is reachable above the bound, because no
+        // producer is obliged to stay there and the DDI has no status to ask for more space, and
+        // inside the bound when an earlier call has taken part of the same buffer. A call that
+        // cannot be translated whole draws nothing: a prefix of it would leave a half-drawn screen,
+        // and any status but success bugchecks Windows. What is lost is counted, not guessed at.
+        WddmGdiDropCall(wddm, call, "batch", bytes, planned, Bc250GdiBatchDwords(planned), capacity,
+                        ahead);
         return STATUS_SUCCESS;
     }
 
@@ -9129,26 +9209,55 @@ static NTSTATUS Bc250WddmRenderGdi(_In_ const HANDLE hContext, _Inout_ DXGKARG_R
         }
         if (overflow) break;
     }
-    if (overflow) InterlockedIncrement64(&wddm->GdiRenderOverflow);
     used = Bc250GdiBatchEnd(&batch);
+    // What the batch generated, which is not yet what left: the two checks below can still drop all
+    // of it, and GdiRenderDwordsCommitted is the account of what was handed to the submitter.
     InterlockedAdd64(&wddm->GdiRenderDwords, (LONG64)batch.Dwords);
     InterlockedAdd64(&wddm->GdiRenderFallback, (LONG64)batch.Fallbacks);
     if ((LONG64)used > wddm->GdiRenderPeakDwords) wddm->GdiRenderPeakDwords = (LONG64)used;
+    // An item that found no space after Begin said yes is unreachable (the induction in
+    // gdi_batch.c), and the stream it leaves is a prefix of the call. A prefix is what this design
+    // never submits, so the whole call is dropped and counted like every other drop.
+    if (overflow)
+    {
+        InterlockedIncrement64(&wddm->GdiRenderOverflow);
+        WddmGdiDropCall(wddm, call, "no-space", bytes, planned, used, capacity, ahead);
+        used = 0;
+    }
     // The end of rule 3, as a check and not as an assumption: the capacity above is the encodable
     // length less what the buffer already holds, so this cannot happen. If it ever does, the stream
     // stays where it is and pDmaBuffer does not move, so the submission carries what was already
     // there and nothing of ours: the alternative is a submission the ring emitter must refuse
-    // whole, which would leave nonempty work outstanding for recovery.
+    // whole, which would leave nonempty work outstanding for recovery. The dwords above were
+    // generated and are not submitted, so this drop is counted with the others.
     if (used != 0 && (ULONGLONG)used + (ULONGLONG)ahead > BC250_GDI_IB_DWORDS_MAX)
     {
         InterlockedIncrement64(&wddm->GdiRenderIbOverflow);
         GuardLog("wddm: RenderGdi%lld IB OVERFLOW: dwords%u ahead%u of%u", call, used, ahead,
                  BC250_GDI_IB_DWORDS_MAX);
+        WddmGdiDropCall(wddm, call, "ib-over", bytes, planned, used, capacity, ahead);
         used = 0;
     }
 
     if (used != 0)
     {
+        KIRQL irql;
+        int kept;
+
+        // This buffer now holds these dwords of ours, which is what the next call into it has to
+        // subtract. Recorded before pDmaBuffer moves, so no state can say less than the buffer
+        // holds.
+        KeAcquireSpinLock(&context->GdiDmaLock, &irql);
+        kept = Bc250GdiDmaWrote(&context->GdiDma, ib, ahead, used);
+        KeReleaseSpinLock(&context->GdiDmaLock, irql);
+        if (!kept)
+        {
+            // Unreachable: the claim above took the slot this writes to. A buffer whose record is
+            // lost is not unsafe, because the next call into it cannot be placed and is dropped.
+            InterlockedIncrement64(&wddm->GdiRenderDmaLost);
+            GuardLog("wddm: RenderGdi%lld dma record lost: ahead%u dwords%u", call, ahead, used);
+        }
+        InterlockedAdd64(&wddm->GdiRenderDwordsCommitted, (LONG64)used);
         KeMemoryBarrier();
         pRenderGdi->pDmaBuffer = (UCHAR*)pRenderGdi->pDmaBuffer + (SIZE_T)used * 4u;
     }

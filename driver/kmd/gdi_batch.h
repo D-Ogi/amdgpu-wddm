@@ -34,9 +34,11 @@
  *      empty DMA buffer, which draws nothing and leaves nothing half drawn.
  *   3. The capacity those two rules work inside is not the DMA buffer alone. It is the smallest of
  *      the space dxgkrnl reports for the call, the length one indirect buffer can carry, and that
- *      length less whatever already lies in this DMA buffer: Bc250GdiCallCapacity. The row path of
- *      rule 1 is offered a budget inside that capacity, so a larger DMA buffer cannot grant it
- *      space the submitter is unable to encode.
+ *      length less the dwords this driver has already written into the same DMA buffer:
+ *      Bc250GdiCallCapacity. The row path of rule 1 is offered a budget inside that capacity, so a
+ *      larger DMA buffer cannot grant it space the submitter is unable to encode. The third term is
+ *      established for the buffer the call names, by the tracker below, and is never read off the
+ *      order of addresses.
  *
  * Rule 1 is what makes rule 2 a contract rather than a hope: after Begin has said yes, no admitted
  * sub-rectangle can be refused for want of space, and the host test asserts exactly that over a
@@ -51,6 +53,34 @@
  * submission stays outstanding for recovery. Nothing here would see that happen, which is why this
  * is a bound on what may be written and not a check at the end: the dwords are never allocated.
  * The constant is held against AMD's own field definition by C_ASSERT in gdi_dispatch.c.
+ *
+ * The third term of rule 3 is a question about identity, and the DDI answers only part of it.
+ * DXGKARG_RENDERGDI names the buffer of a call by pDmaBuffer, "a pointer to the start of the DMA
+ * buffer, which is aligned on 4 KB", by DmaBufferGpuVirtualAddress, "the virtual address where the
+ * DMA buffer was paged in", and by DmaSize, "the size, in bytes, of the DMA buffer that pDmaBuffer
+ * points to" (ref/ddi-display/d3dkmddi.md, DXGKARG_RENDERGDI, WDK 10.0.26100). It does not promise
+ * that one DMA buffer carries one call, and it does not promise any order of RenderGdi calls and
+ * submissions. Neither does the general submission guide, which separates the translation from the
+ * scheduler's submission. So the dwords already in a buffer are tracked for that buffer:
+ *
+ *   Bc250GdiDmaClaim places the window a call was given against the buffers this driver has written
+ *   into and that have not been submitted since. A window that continues exactly where our own
+ *   output in a buffer ended is an append, and the dwords ahead of it are the dwords we wrote into
+ *   it. A window at the start of a buffer already known is that buffer offered again from its
+ *   start, with nothing of ours ahead of it. A 4 KB aligned window that belongs to no buffer known
+ *   is the start of a DMA buffer, by the sentence quoted above, and again nothing of ours is ahead.
+ *   Any other window cannot be placed: that call is refused as a whole and counted, because a
+ *   prefix nobody can establish is not a prefix anyone may assume to be zero.
+ *
+ *   Bc250GdiDmaWrote records what a call wrote into the buffer it claimed, and
+ *   Bc250GdiDmaSubmitted releases the buffers one submission carried away, by the address range of
+ *   that submission, so a submission of one buffer cannot clear the state of another.
+ *
+ * Nothing but this driver writes hardware commands into a GDI context's DMA buffer, so what the
+ * tracker holds is the whole of what that buffer contains, which is what makes an append exact
+ * rather than estimated. The number of buffers one context can be tracked in at a time is
+ * BC250_GDI_DMA_SLOTS, and a context that would need more refuses the call instead of forgetting a
+ * buffer it has written into.
  *
  * With rule 3 in place, rule 2's refusal is unreachable for every command buffer up to a bound,
  * and the DDI gives the input bound its arithmetic:
@@ -106,12 +136,17 @@
  * is where the guarantee ends, not where the refusal starts: Begin is given the sub-rectangles the
  * walk actually counted, so a sparse call whose own work fits is translated whole however long its
  * command buffer is, and a call whose counted work does not fit the capacity is refused as a whole.
- * GdiRenderCapacityShort counts the calls whose worst case was larger than the capacity,
- * GdiRenderBatchRefused the calls actually refused, GdiRenderOmittedSubRects the sub-rectangles
- * lost with them, and the guard log names the length and the capacity of each. A refusal cannot
- * repair the call it happened on, and it cannot resize a context that already exists. There is no
- * honest alternative inside this DDI: a prefix of the call is a half-drawn screen, and any status
- * other than success bugchecks Windows.
+ * The guarantee is a statement about a whole DMA buffer, so a command buffer inside the bound can
+ * still be refused when the buffer it was given holds an earlier call of the same buffer: the
+ * capacity of rule 3, and not the length of the command buffer alone, is what Begin is asked
+ * about. GdiRenderCapacityShort counts the calls whose worst case was larger than the capacity they
+ * were given, GdiRenderBatchRefused every call refused as a whole, GdiRenderOmittedSubRects the
+ * sub-rectangles lost with them, and the guard log names the length, the capacity and the dwords
+ * ahead of each. A refusal cannot repair the call it happened on, and it cannot resize a context
+ * that already exists. There is no honest alternative inside this DDI: a prefix of the call is a
+ * half-drawn screen, and any status other than success bugchecks Windows. Every one of these
+ * refusals is work the capability admitted and did not draw, which is the limitation
+ * docs/design/gdi-hw-accel.md states and nothing here claims to have closed.
  *
  * The size asked for is bounded a second time, by policy: Bc250GdiContextBound steps the bound down
  * until the DMA buffer is at most BC250_GDI_DMA_APERTURE_SHARE of the aperture this start was
@@ -120,18 +155,21 @@
  * establish: concurrent contexts, their buffers and every other allocation compete for the same
  * segment. At every aperture this driver accepts, 256 MB and up, the share is 32 MB or more and the
  * whole bound fits, so the step-down does not reduce the bound anywhere in that range; it is there
- * for the smaller apertures a future start might report. What happens when dxgkrnl cannot give the
- * size asked for is handled rather than assumed: a call reports the space it has, the capacity of
- * that call is computed from it, and a short DMA buffer is counted (GdiRenderDmaShort) and visible
- * in the log.
+ * for the smaller apertures a future start might report. The capacity of each call is taken from the
+ * space that call reports, whatever that is, so nothing here depends on the size asked for being
+ * granted.
  *
  * The DMA buffer "can grow and shrink after the context is created; however, the DMA buffer can
  * never shrink smaller than the starting size that DmaBufferSize specifies" (DXGK_CONTEXTINFO), so
- * the size asked for is a floor on what the OS allocates and the capacity each call reports is used
- * as it comes. This implementation has no RenderGdi continuation and no on-demand enlargement: it
- * neither asks for a larger buffer in the middle of a call nor splits a call across buffers, and
- * dxgkrnl may fill one DMA buffer with several calls before submitting it, which is why rule 3
- * subtracts what is already there.
+ * the size asked for is a floor the operating system undertakes to keep. GdiRenderDmaShort is the
+ * check of that sentence and not a way of handling an allocation failure: it counts the calls that
+ * were given the start of a buffer and reported less space than this context asked for, which the
+ * contract says cannot happen, and a call that continues inside a buffer is never counted there,
+ * because the space it reports is the window it has left and not the size of the buffer. This
+ * implementation has no RenderGdi continuation and no on-demand enlargement: it neither asks for a
+ * larger buffer in the middle of a call nor splits a call across buffers, and dxgkrnl may fill one
+ * DMA buffer with several calls before submitting it, which is why rule 3 subtracts what is already
+ * there.
  *
  * This file is plain C over plain integers, like gdi_render.c, so the contract is tested on this PC
  * and not on the lab. Residency, cache state and the addresses themselves stay the caller's
@@ -172,18 +210,70 @@
  * that one indirect buffer can carry, 192 KB of command buffer, which holds at most 12287
  * sub-rectangles and costs 3986424 bytes of DMA buffer. The ordinary producer's whole command
  * buffer is 65536 bytes, three times smaller. The host test proves that the worst case of this
- * bound fits both ceilings, and that the next candidate fits neither. */
+ * bound fits both ceilings, and that the worst case of the next candidate passes the
+ * indirect-buffer ceiling although its DMA buffer would have fitted the policy ceiling. */
 #define BC250_GDI_CMDBUF_BOUND (192u * 1024u)
 
-/* The smallest bound this driver ever asks for, used when the aperture cannot afford the one above.
- * It is the bound of tester.30's design and costs 1995768 bytes of DMA buffer, which every aperture
- * this driver accepts can afford. */
+/* The smallest bound this driver ever asks for, used when the share below does not admit the one
+ * above. It is the bound of tester.30's design and costs 1995768 bytes of DMA buffer, which is
+ * inside the per-buffer share of every aperture this driver accepts. */
 #define BC250_GDI_CMDBUF_FLOOR (96u * 1024u)
 
 /* The share of the aperture segment a GDI context's DMA buffer may take: policy, as the comment
  * above says, and not a proof that the segment can afford it. The buffer is resident for every
  * submission of that context, and the surfaces it draws into live in the same segment. */
 #define BC250_GDI_DMA_APERTURE_SHARE 8u
+
+/* How many DMA buffers of one GDI context this driver can hold unsubmitted output in at a time.
+ * Every buffer a call writes into takes a slot until a submission carries that buffer away, and a
+ * context that would need one more refuses the call rather than forget a buffer it has written
+ * into. Eight is far above what any ordering of this DDI has shown: one buffer is the only case
+ * the field has produced so far, and the tracker counts the others if they ever arrive. */
+#define BC250_GDI_DMA_SLOTS 8u
+
+/* Where Bc250GdiDmaClaim placed a call inside its DMA buffer. The first three are the cases the
+ * call may be translated in, and the last two refuse it as a whole. */
+#define BC250_GDI_DMA_FRESH   0   /* the start of a buffer: nothing of ours is ahead of this call */
+#define BC250_GDI_DMA_APPEND  1   /* exactly where our own output in that buffer ended */
+#define BC250_GDI_DMA_RESTART 2   /* a buffer known, offered again from its start */
+#define BC250_GDI_DMA_UNKNOWN 3   /* the dwords ahead cannot be established from the DDI's own words */
+#define BC250_GDI_DMA_FULL    4   /* every slot holds a buffer with unsubmitted output of ours */
+
+/* One DMA buffer this context has written into. Base is the GPU virtual address our first write
+ * into that buffer began at, which the DDI gives as the address the buffer was paged in at, and
+ * Dwords is what this driver has written into it since. A slot with Dwords == 0 holds no output,
+ * so it may be taken for another buffer. Base == 0 is a free slot. */
+typedef struct BC250_GDI_DMA_SLOT {
+    unsigned long long Base;
+    unsigned int Dwords;
+} BC250_GDI_DMA_SLOT;
+
+/* The DMA buffers of one GDI context. Zeroed state is the whole of its initialisation. The caller
+ * owns the serialisation: these three functions are plain C over the structure and take no lock. */
+typedef struct BC250_GDI_DMA_MAP {
+    BC250_GDI_DMA_SLOT Slots[BC250_GDI_DMA_SLOTS];
+} BC250_GDI_DMA_MAP;
+
+/* Place the window a call was given, and claim a slot for it. WindowVa is
+ * DXGKARG_RENDERGDI.DmaBufferGpuVirtualAddress and PageBytes the alignment the DDI gives the start
+ * of a DMA buffer, which is 4096. *Ahead receives the dwords of ours that lie in that buffer before
+ * this call, and is 0 for every result but BC250_GDI_DMA_APPEND. Returns one of the five results
+ * above; the two refusals leave the map unchanged. */
+int Bc250GdiDmaClaim(BC250_GDI_DMA_MAP* Map, unsigned long long WindowVa, unsigned int PageBytes,
+                     unsigned int* Ahead);
+
+/* Record the dwords a claimed call wrote. WindowVa and Ahead are the ones the claim answered with.
+ * Returns 0 when the slot of that window is gone, which the claim makes unreachable and which the
+ * caller counts rather than ignores: a buffer whose record is lost can only be refused later. */
+int Bc250GdiDmaWrote(BC250_GDI_DMA_MAP* Map, unsigned long long WindowVa, unsigned int Ahead,
+                     unsigned int Dwords);
+
+/* Release every buffer of this context inside the address range one submission carried away, which
+ * is DXGKARG_SUBMITCOMMANDVIRTUAL.DmaBufferVirtualAddress and DmaBufferSize. Returns how many slots
+ * it freed, so a caller can count a submission that matched nothing. A range of zero bytes releases
+ * the buffer that begins at that address and nothing else. */
+unsigned int Bc250GdiDmaSubmitted(BC250_GDI_DMA_MAP* Map, unsigned long long BufferVa,
+                                  unsigned int Bytes);
 
 /* What Bc250GdiBatchItem did with an item. */
 #define BC250_GDI_BATCH_REFUSED  0   /* the item is not addressable; nothing was written */
@@ -218,9 +308,9 @@ unsigned int Bc250GdiMaxSubRects(unsigned int CommandBytes);
 unsigned int Bc250GdiCallDwords(unsigned int CommandBytes);
 
 /* Rule 3: the dwords one call may write. DmaDwords is the space dxgkrnl reports for this call and
- * AheadDwords is what already lies in the same DMA buffer before it, so that several calls into one
- * buffer cannot together exceed what the submitter can encode. 0 means this call has no room at
- * all and must translate nothing. */
+ * AheadDwords is what Bc250GdiDmaClaim established lies in the same DMA buffer before it, so that
+ * several calls into one buffer cannot together exceed what the submitter can encode. 0 means this
+ * call has no room at all and must translate nothing. */
 unsigned int Bc250GdiCallCapacity(unsigned int DmaDwords, unsigned int AheadDwords);
 
 /* The DMA buffer size to ask dxgkrnl for, in bytes, so that every command buffer up to
