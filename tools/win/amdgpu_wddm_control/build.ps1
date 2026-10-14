@@ -272,10 +272,18 @@ if (-not $NoSmoke) {
         'set-clocks'      = @(0, "delete $params DpmMaxMHz")
         'restart-compositor' = @(3, 'refused: restart-compositor is an operator escape', '--accept-bd060')
         # The CU setter (G-PLAN, plan v7 section 7): the dry run lists the helper's steps, in the helper's order.
-        'cu-mode:40'      = @(0, "S1 set $params CuMode = 40 (DWord)", 'S4 flush the key', 'undo: no', 'never restored')
+        'cu-mode:40'      = @(0, "S1 set $params CuMode = 40 (DWord)", "S1c set $params CuModeChosen = 0x28 (DWord)", 'S4 flush the key', 'undo: no', 'never restored')
         # The snapshot has no CuMode, so Standard (24) is a number to write, not a selection that is there already
         # (BD-077: an absent value reads to the release installer as a key it never configured).
-        'cu-mode:24'      = @(0, "S1 set $params CuMode = 24 (DWord)", 'verify the stock selection (24)', 'never restored')
+        'cu-mode:24'      = @(0, "S1 set $params CuMode = 24 (DWord)", "S1c set $params CuModeChosen = 0x18 (DWord)", 'verify the stock selection (24)', 'never restored')
+        # A count between the two (owner, 2026-10-14): the mask of the documented default set of 30 cores is written
+        # before CuMode, the record holds the whole request, and the note names the pairs in the words of the window.
+        'cu-mode:30'      = @(0, "S3 set $params CuDisableWgp = 0x84218 (DWord)", "S1 set $params CuMode = 40 (DWord)",
+                              "S1c set $params CuModeChosen = 0x8421828 (DWord)", 'Selects 30 of the 40 graphics cores.',
+                              'group 1 pair 4', 'leaves 30 of the 40 graphics cores')
+        # This snapshot carries no graphics-core reading, so a hand-picked set cannot be checked against the board
+        # and is refused before anything is written.
+        'cu-mode:map'     = @(3, 'refused: The graphics cores of this PC cannot be read')
         'cu-confirm'      = @(3, 'refused: No 40-core start is waiting for confirmation')
         'reset-defaults:keep' = @(0, 'note: Per-game settings are kept.')
         'game-undo'       = @(3, 'refused: There is no change of witcher3.exe to undo')
@@ -283,7 +291,8 @@ if (-not $NoSmoke) {
     foreach ($e in $expect.GetEnumerator()) {
         $action = $e.Key.Split(':')[0]
         $extra = @(switch ($e.Key) { 'enable-dpm' { '--ceiling', '1700' } 'set-clocks' { '--mode', 'unset', '--ceiling', 'unset' }
-            'cu-mode:40' { '--cu', '40' } 'cu-mode:24' { '--cu', '24' } 'reset-defaults:keep' { '--games', 'keep' } 'game-undo' { '--image', 'witcher3.exe' } })
+            'cu-mode:40' { '--cu', '40' } 'cu-mode:24' { '--cu', '24' } 'cu-mode:30' { '--cu', '30' }
+            'cu-mode:map' { '--cu', '30', '--cu-map', '0x84218' } 'reset-defaults:keep' { '--games', 'keep' } 'game-undo' { '--image', 'witcher3.exe' } })
         $r = Invoke-DryRun (@('--action', $action) + $extra + @('--dry-run', '--snapshot', $snapshot)) ($e.Key -replace ':', '-')
         if ($r.Code -ne $e.Value[0]) { throw "dry run $($e.Key): exit $($r.Code), $($e.Value[0]) expected: $($r.Text)" }
         foreach ($want in $e.Value | Select-Object -Skip 1) {
@@ -416,7 +425,10 @@ if (-not $NoSmoke) {
     if (($r.Code -ne 0 -and $r.Code -ne 3) -or -not $r.Text.Contains('dry run: nothing was written')) { throw "dry run on this PC failed (exit $($r.Code)): $($r.Text)" }
     $u = Invoke-DryRun @('--action', 'set-clocks', '--ceiling', '1500', '--dry-run', '--snapshot', $snapshot) 'set-clocks-without-mode'
     if ($u.Code -ne 2) { throw "set-clocks without --mode must be refused as usage (exit $($u.Code))" }
-    foreach ($bad in @(@('cu-mode'), @('cu-mode', '--cu', '32'), @('reopen-gpu-path', '--cu', '40'), @('game-profile', '--image', 'C:\x.exe', '--value', ''))) {
+    # A count outside 24 to 40 in twos, a count option on another action, and a chosen set on another action are
+    # usage errors; the counts in between are valid now (owner, 2026-10-14).
+    foreach ($bad in @(@('cu-mode'), @('cu-mode', '--cu', '33'), @('cu-mode', '--cu', '48'), @('reopen-gpu-path', '--cu', '40'),
+        @('reopen-gpu-path', '--cu-map', '0x10'), @('cu-mode', '--cu', '30', '--cu-map', 'zz'), @('game-profile', '--image', 'C:\x.exe', '--value', ''))) {
         $u = Invoke-DryRun (@('--action') + $bad + @('--dry-run', '--snapshot', $snapshot)) ('usage-' + ($bad -join '-' -replace '[^a-z0-9-]', ''))
         if ($u.Code -ne 2) { throw "--action $($bad -join ' ') must be refused as usage (exit $($u.Code))" }
     }

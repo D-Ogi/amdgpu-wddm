@@ -35,6 +35,9 @@ namespace AmdgpuWddmControl
             if (more != null)
             {
                 if (more.Cu != null) { verb.Add("--cu"); verb.Add(more.Cu.Value.ToString(CultureInfo.InvariantCulture)); }
+                // The set of pairs the person picked on the map, when it is not the default set of that number: the
+                // helper plans again from its own reading, so the mask has to reach its command line too (G-ARG).
+                if (more.CuMap != null) { verb.Add("--cu-map"); verb.Add("0x" + more.CuMap.Value.ToString("X", CultureInfo.InvariantCulture)); }
                 if (more.Games != null) { verb.Add("--games"); verb.Add(more.Games); }
                 if (more.Image != null) { verb.Add("--image"); verb.Add(more.Image); }
                 if (more.Value != null) { verb.Add("--value"); verb.Add(more.Value); }
@@ -128,7 +131,7 @@ namespace AmdgpuWddmControl
         void DiscardPage(string page)
         {
             if (page == "games") { _gameEdits.Clear(); _smEdits.Clear(); _gfxGameEdits.Clear(); }
-            if (page == "graphics") { _autoEdit = null; _ceilEdit = null; _ceilEdited = false; _cuEdit = null; _gfxGlobalEdits.Clear(); }
+            if (page == "graphics") { _autoEdit = null; _ceilEdit = null; _ceilEdited = false; _cuEdit = null; _cuMaskEdit = null; _gfxGlobalEdits.Clear(); }
             if (page == "display") _displayEdits.Clear();
         }
 

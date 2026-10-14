@@ -212,6 +212,54 @@ Check (($d.decision -eq 'installer') -and ($d.value -eq 0) -and $d.write) 'Uncon
 $text = Format-RegistryPlan $plan
 Check ($text -match 'DpmMaxMHz=1800 \(command line\)') "plan text: $($text.Substring(0, [Math]::Min(120, $text.Length)))..."
 
+'the number of graphics cores: release default 24, and a number a person chose stays (owner, 2026-10-14)'
+Check ($table.defaults.parameters.CuMode -eq 24) "the release default is the stock 24: $($table.defaults.parameters.CuMode)"
+# tester.30's own default was 40. Its record (Release\AppliedDefaults) holds that 40, so the 'update' rule takes it
+# back to 24 - unless the key says a person asked for it.
+$t30 = $table.defaults.parameters | ConvertTo-Json -Depth 6 | ConvertFrom-Json
+$t30.CuMode = 40
+$d = Get-Decision (Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $t30 -Current @{ CuMode = 40 }) 'CuMode'
+Check (($d.decision -eq 'update') -and ($d.value -eq 24) -and $d.write) "the 40 tester.30 applied as its default -> 24: $($d.decision)"
+$d = Get-Decision (Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $t30 -Current @{ CuMode = 40; CuModeChosen = 40 }) 'CuMode'
+Check (($d.decision -eq 'chosen') -and ($d.value -eq 40) -and -not $d.write) "a 40 with the record of a person's choice stays: $($d.decision)"
+# A chosen set of cores: CuMode 40 with the mask next to it, and the record of that very pair (40 | 0x84218 << 8).
+$chosen30 = @{ CuMode = 40; CuDisableWgp = 0x84218; CuModeChosen = 0x8421828 }
+$d = Get-Decision (Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $t30 -Current $chosen30) 'CuMode'
+Check (($d.decision -eq 'chosen') -and ($d.value -eq 40) -and -not $d.write) "30 cores chosen in the control application stay: $($d.decision)"
+$p = Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $t30 -Current $chosen30 -Restore @('CuDisableWgp', 'CuModeChosen')
+Check (((Get-Decision $p 'CuDisableWgp').decision -eq 'restored') -and ((Get-Decision $p 'CuModeChosen').decision -eq 'restored')) 'the mask and the record go back as they were: nobody judges them'
+Check ((Format-RegistryPlan $p) -match 'CuMode=40 CHOSEN \(asked for in the control application or on the install command line; default 24\)') 'the plan text says whose value it keeps'
+# A record that does not describe the key exactly is stale and decides nothing: a driver fallback that moved CuMode,
+# a mask that changed after the record was written, and a record of another number.
+foreach ($stale in @{ CuMode = 40; CuModeChosen = 24 }, @{ CuMode = 40; CuDisableWgp = 0x210; CuModeChosen = 0x8421828 },
+    @{ CuMode = 40; CuDisableWgp = 0x84218; CuModeChosen = 40 }) {
+    $d = Get-Decision (Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $t30 -Current $stale) 'CuMode'
+    Check (($d.decision -eq 'update') -and ($d.value -eq 24)) "a stale record (CuModeChosen $($stale.CuModeChosen), mask $($stale.CuDisableWgp)) is ignored: $($d.decision)"
+}
+# A 40 of a release that never wrote CuMode at all is the tester's own: kept, as before.
+$d = Get-Decision (Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current @{ CuMode = 40 }) 'CuMode'
+Check (($d.decision -eq 'kept') -and ($d.value -eq 40) -and -not $d.write) "a 40 under a release that never wrote CuMode: $($d.decision)"
+# With the stock 24 as the release default there is nothing for a repair to reopen: the driver's own step back to 24
+# is the number this release installs anyway, so the closure entry is inert (Get-DriverClosure returns nothing).
+foreach ($reopen in $false, $true) {
+    $p = Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $t30 -Current @{ CuMode = 24; CuModeClosedReason = 3 } -Reopen:$reopen
+    $d = Get-Decision $p 'CuMode'
+    Check (($d.decision -eq 'same') -and -not $d.PSObject.Properties['closure']) "the driver's own 24 under a release default of 24, repair $($reopen): $($d.decision), no closure to reopen"
+}
+# install.cmd -CuMode N is the tester's word, so the install writes the record with it. The mask stays whatever the
+# key holds, or the record would read as stale at the next upgrade.
+$e = Get-ExplicitParameters @{ CuMode = 40 } @{ CuDisableWgp = 0x84218 }
+Check ($e['CuModeChosen'] -eq 0x8421828) "-CuMode 40 over a mask of 30 cores records 0x$(('{0:X}' -f $e['CuModeChosen'])): the pair the key will hold"
+$e = Get-ExplicitParameters @{ CuMode = 24 } @{}
+Check ($e['CuModeChosen'] -eq 24) "-CuMode 24 on a key without a mask records 24"
+Check (-not (Get-ExplicitParameters @{ DpmMaxMHz = 1800 } @{}).ContainsKey('CuModeChosen')) 'an install without -CuMode records nothing'
+Check (-not (Get-ExplicitParameters @{ CuMode = 40 } @{ CuDisableWgp = 0x100000 }).ContainsKey('CuModeChosen')) 'a mask outside the four shader arrays: no record, and -CuMode still stands'
+$p = Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $t30 -Current @{ CuMode = 24; CuDisableWgp = 0x84218 } -Explicit (Get-ExplicitParameters @{ CuMode = 40 } @{ CuDisableWgp = 0x84218 })
+Check (((Get-Decision $p 'CuMode').decision -eq 'command') -and ((Get-Decision $p 'CuModeChosen').decision -eq 'command') -and ((Get-Decision $p 'CuModeChosen').value -eq 0x8421828)) '-CuMode writes the number and the record of it in one plan'
+# And the upgrade after that install keeps the number, because the record now describes the key.
+$d = Get-Decision (Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $t30 -Current @{ CuMode = 40; CuDisableWgp = 0x84218; CuModeChosen = 0x8421828 }) 'CuMode'
+Check ($d.decision -eq 'chosen') "the install after it reads the record it wrote: $($d.decision)"
+
 'record: Release\AppliedDefaults round trip'
 $json = $old | ConvertTo-Json -Depth 6 -Compress
 $back = $json | ConvertFrom-Json
@@ -316,7 +364,9 @@ try {
     $plan = Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current $whole -Owned ([ordered]@{ UnconfirmedStarts = 0 }) -After (Read-RegistryValues $k) -Restore $restore
     Write-RegistryPlan $k $plan
     $v = Read-RegistryValues $k
-    Check (((Get-Decision $plan 'CuMode').decision -eq 'same') -and ($v.CuMode -eq 40) -and ($v.CuModeConfirmed -eq 1)) "CuMode $($v.CuMode) and CuModeConfirmed $($v.CuModeConfirmed) back as before the driver package"
+    # The release default is the stock 24 now (owner, 2026-10-14) and this $Previous is a release that never wrote
+    # CuMode, so the 40 on the key is the tester's own: kept, and written back over the driver package's reset.
+    Check (((Get-Decision $plan 'CuMode').decision -eq 'kept') -and ($v.CuMode -eq 40) -and ($v.CuModeConfirmed -eq 1)) "CuMode $($v.CuMode) and CuModeConfirmed $($v.CuModeConfirmed) back as before the driver package"
     Check ($v.LabNote -eq 'unit A') "a REG_SZ value outside the table back as before: LabNote '$($v.LabNote)'"
     Check (-not $v.ContainsKey('SomeBlob')) 'a REG_BINARY value is not written back (the installer names it in its log)'
     Check ($v.DpmMaxMHz -eq 1200) "a value of the table that the tester changed is still kept: DpmMaxMHz $($v.DpmMaxMHz)"

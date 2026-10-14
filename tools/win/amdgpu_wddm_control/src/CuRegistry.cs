@@ -54,14 +54,19 @@ namespace AmdgpuWddmControl
         // never configured (BD-077).
         public void Delete(string name)
         {
-            if (name != "CuDisableWgp" && name != "CuModeConfirmed" && name != "CuModeClosedReason") throw new InvalidOperationException(name + " is not a value the setter removes");
+            if (name != "CuDisableWgp" && name != "CuModeConfirmed" && name != "CuModeClosedReason" && name != "CuModeChosen") throw new InvalidOperationException(name + " is not a value the setter removes");
             int s = _api.Delete(name);
             if (s != Success && s != FileNotFound) throw new CuRegistryException("delete", name, s);
         }
 
+        // Three values, each with the only shape the setter may give it: CuMode 40 or 24, CuDisableWgp a non-empty
+        // mask inside the board's topology, CuModeChosen an encoded request of one of those two modes.
         public void SetDword(string name, uint value)
         {
-            if (name != "CuMode" || (value != CuMode.Full && value != CuMode.Stock)) throw new InvalidOperationException("the setter writes only CuMode = 40 or CuMode = 24");
+            bool ok = (name == "CuMode" && (value == CuMode.Full || value == CuMode.Stock))
+                || (name == "CuDisableWgp" && value != 0 && (value & ~CuMode.AllowedDisable) == 0)
+                || (name == "CuModeChosen" && CuMode.EncodedRequest(value));
+            if (!ok) throw new InvalidOperationException("the setter does not write " + name + " = " + value);
             int s = _api.SetDword(name, value);
             if (s != Success) throw new CuRegistryException("set", name, s);
         }

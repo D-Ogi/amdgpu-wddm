@@ -7,6 +7,7 @@ cu.choice.all|src|-|Your choice: All (40).
 cu.choice.standard|src|-|Your choice: Standard (24).
 cu.choice.invalid|src|-|Your choice is not valid; choose Standard (24) or All (40).
 cu.choice.unreadable|src|-|Your choice cannot be read.
+cu.choice.some|src|-|Your choice: {0} graphics cores.
 cu.choice.driver-24|src|-|Standard (24) is set, but the driver chose that number, not you.
 cu.note.driver-24|src|-|Select All (40) and restart Windows to use all 40 cores again.
 cu.choice.after-restart|src|-|It applies after the next Windows restart.
@@ -22,26 +23,34 @@ cu.run.not-saved.next24|src|-|The next start uses 24 cores, as you chose.
 cu.run.fallback|src|-|The last 40-core start was not confirmed, so this start uses 24 cores.
 cu.run.refused|src|-|40 cores could not be used on this start.
 cu.run.unknown|src|-|The number of graphics cores cannot be read.
+cu.run.groups|src|-|Cores in each group now: {0}.
+cu.map.item|src|-|group {0} pair {1}
 cu.next.standard|src|-|Next start: 24 cores.
 cu.next.fallback|src|-|Next start: 24 cores, because the 40-core setting was not confirmed.
 cu.next.ask40|src|-|Next start: 40 cores, to be confirmed after the start.
-cu.next.ask40-limited|src|-|Next start: the 40-core setting with an earlier diagnostic core limit (fewer cores), to be confirmed after the start.
+cu.next.ask40-limited|src|-|Next start: {0} graphics cores, to be confirmed after the start.
 cu.next.confirmed40|src|-|Next start: 40 cores (confirmed earlier).
-cu.next.confirmed40-limited|src|-|Next start: the 40-core setting with an earlier diagnostic core limit (fewer cores), confirmed earlier.
+cu.next.confirmed40-limited|src|-|Next start: {0} graphics cores (confirmed earlier).
 cu.next.unknown|src|-|Next start: cannot be predicted.
 cu.refuse.target|src|-|Choose Standard (24) or All (40).
 cu.refuse.unreadable|src|-|The stored setting cannot be read.
 cu.refuse.already40|src|-|All (40) is selected already.
 cu.refuse.already24|src|-|Standard (24) is selected already.
+cu.refuse.already-some|src|-|{0} graphics cores are selected already.
+cu.refuse.map|src|-|Those pairs of graphics cores cannot be chosen on this PC.
 cu.preview.write40|src|-|Selects all 40 graphics cores.
 cu.preview.write24|src|-|Selects the standard 24 graphics cores.
 cu.preview.remove-closed|src|-|Records that the standard 24 graphics cores are your choice, not a step back the driver took by itself.
+cu.preview.write40-some|src|-|Selects {0} of the 40 graphics cores.
+cu.preview.set-disable|src|-|Turns these pairs of graphics cores off: {0}.
+cu.preview.write-chosen|src|-|Records this number as your choice, so a driver update keeps it.
+cu.preview.remove-chosen|src|-|Gives the number of graphics cores back to the setting of the installed driver.
 cu.preview.remove-confirmed|src|-|Removes the earlier confirmation of 40 cores, so the new setting is confirmed on its own start.
-cu.preview.remove-disable|src|-|An earlier diagnostic core limit is removed.
+cu.preview.remove-disable|src|-|Turns every pair of graphics cores on again.
 cu.result.nothing|src|-|Nothing was changed.
 cu.result.saved|src|-|Saved.
 cu.result.failed|src|-|The change could not be completed.
-cu.result.cleanup-incomplete|src|-|The cleanup is incomplete. The next start uses the standard 24 cores. An earlier diagnostic core limit that remains does not reduce them.
+cu.result.cleanup-incomplete|src|-|The cleanup is incomplete. The next start uses the standard 24 cores. Pairs of cores that stay turned off do not reduce them.
 cu.effect|src|-|More cores use more power and make more heat: about 30 W more at 1500 MHz on our test unit. This is a reference, not a promise for your PC.
 
 # ---- driver card (WU-043) ----
@@ -464,6 +473,15 @@ graphics.thermal|src|-|Heat protection is always on: from 87 °C the driver lowe
 graphics.cores.title|src|-|Graphics cores
 graphics.cores.24|src|-|Standard (24)
 graphics.cores.40|src|-|All (40)
+graphics.cores.count|src|-|How many graphics cores
+graphics.cores.count.item|src|-|{0} cores
+graphics.cores.map.show|src|-|Choose the pairs of cores yourself
+graphics.cores.map.help|src|-|Each pair is two graphics cores. If one pair makes the PC crash or freeze, turn that pair off and leave the others on.
+graphics.cores.map.unreadable|src|-|The pairs of cores of this PC cannot be read now, so they cannot be chosen. Choose a number of cores instead.
+graphics.cores.map.group|src|-|Group {0}
+graphics.cores.map.pair|src|-|Pair {0}
+graphics.cores.map.name|src|-|Group {0}, pair {1}: two graphics cores
+graphics.cores.map.fixed|src|-|always on
 graphics.not-installed|src|-|The driver is not installed, so there is nothing to set here.
 graphics.unsaved|src|-|You have changes that are not applied yet.
 graphics.saved|src|-|No unsaved changes.

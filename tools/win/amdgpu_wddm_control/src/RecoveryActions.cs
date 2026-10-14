@@ -687,7 +687,11 @@ namespace AmdgpuWddmControl
                 else if (a == "--mode" && uint.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out n)) { o.Mode = n; o.ModeGiven = true; i++; }
                 else if (a == "--ceiling" && args[i + 1] == "unset") { o.CeilingGiven = true; i++; }
                 else if (a == "--ceiling" && uint.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out n)) { o.Ceiling = n; o.CeilingGiven = true; i++; }
-                else if (a == "--cu" && (args[i + 1] == "24" || args[i + 1] == "40")) o.More.Cu = uint.Parse(args[++i], CultureInfo.InvariantCulture);
+                // --cu is the number of cores (24 to 40 in twos), so 24 and 40 keep the meaning they had.
+                // --cu-map is one hexadecimal CuDisableWgp mask for the cores that are not the default set of
+                // that number; the number has to agree with the mask (Recovery.cs refuses otherwise).
+                else if (a == "--cu" && uint.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out n) && CuMode.CoreChoices.Contains(n)) { o.More.Cu = n; i++; }
+                else if (a == "--cu-map" && uint.TryParse((args[i + 1] ?? "").Replace("0x", ""), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out n)) { o.More.CuMap = n; i++; }
                 else if (a == "--games" && (args[i + 1] == "keep" || args[i + 1] == "reset")) o.More.Games = args[++i];
                 else if (a == "--image" && Profiles.IsValidImage(args[i + 1])) o.More.Image = args[++i];
                 else if (a == "--value" && (args[i + 1].Length == 0 || Profiles.IsValidValue(args[i + 1]))) o.More.Value = args[++i];
@@ -709,6 +713,7 @@ namespace AmdgpuWddmControl
             if (o.Action != "set-clocks" && o.ModeGiven) return null;
             // Each of the newer options belongs to its actions only.
             if ((o.More.Cu != null) != (o.Action == "cu-mode")) return null;
+            if (o.More.CuMap != null && o.Action != "cu-mode") return null;
             if (o.More.Games != null && o.Action != "reset-defaults") return null;
             if ((o.More.Image != null) != o.Action.StartsWith("game-", StringComparison.Ordinal)) return null;
             // game-profile changes the switches (--value), the graphics settings (--gfx) or both; graphics-defaults
@@ -740,7 +745,7 @@ namespace AmdgpuWddmControl
             {
                 Console.Error.WriteLine("usage: --action <" + string.Join("|", Recovery.Actions) + "> [--ceiling MHz] [--dry-run [--snapshot file]] [--out file]");
                 Console.Error.WriteLine("       --action set-clocks --mode 1|unset --ceiling MHz|unset ...");
-                Console.Error.WriteLine("       --action cu-mode --cu 24|40 ...   --action reset-defaults [--games keep|reset] ...");
+                Console.Error.WriteLine("       --action cu-mode --cu 24|26|...|40 [--cu-map <hex CuDisableWgp>] ...   --action reset-defaults [--games keep|reset] ...");
                 Console.Error.WriteLine("       --action game-profile --image <name.exe> [--value <switches or \"\">] [--gfx <settings>] ...   --action game-undo|game-redo --image <name.exe> ...");
                 Console.Error.WriteLine("       --action graphics-defaults --gfx <settings> ...   (settings: Name=value,... or Name=unset, for example FrameRateLimit=60,VSync=unset)");
                 Console.Error.WriteLine("       --action tune-trial --curve <11 values in mV> [--window ms] ...   --action tune-keep|tune-stop|tune-reset ...");

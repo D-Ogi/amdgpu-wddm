@@ -52,7 +52,8 @@ static partial class UnitTests
         public CuStored Stored()
         {
             Func<string, uint?> g = k => { uint v; return Values.TryGetValue(k, out v) ? (uint?)v : null; };
-            return new CuStored { Mode = g("CuMode"), Disable = g("CuDisableWgp"), Confirmed = g("CuModeConfirmed"), Pending = g("CuModePending"), Closed = g("CuModeClosedReason") };
+            return new CuStored { Mode = g("CuMode"), Disable = g("CuDisableWgp"), Confirmed = g("CuModeConfirmed"), Pending = g("CuModePending"), Closed = g("CuModeClosedReason"),
+                Chosen = g("CuModeChosen") };
         }
     }
 
@@ -107,9 +108,17 @@ static partial class UnitTests
         // release installer as a key it never configured, which it then sets to the release default 40).
         Throws<InvalidOperationException>(() => reg.Delete("CuMode"), "R1 CuMode is never removed");
         Throws<InvalidOperationException>(() => reg.SetDword("CuMode", 32), "R1 only 24 and 40 are written");
+        // The mask and the record of the person's own count (owner, 2026-10-14): only a mask inside the board's
+        // topology and only a record of a request the driver takes.
+        Throws<InvalidOperationException>(() => reg.SetDword("CuDisableWgp", 0x100000), "R1 a mask outside the four shader arrays is never written");
+        Throws<InvalidOperationException>(() => reg.SetDword("CuDisableWgp", 0), "R1 an empty mask is removed, never written");
+        Throws<InvalidOperationException>(() => reg.SetDword("CuModeChosen", CuMode.Encode(32, 0)), "R1 a record of a mode the driver refuses is never written");
+        Throws<InvalidOperationException>(() => reg.SetDword("CuModeChosen", CuMode.Encode(24, 8)), "R1 a record of a stock mode with a mask is never written");
         api.SetStatus = 0; api.DeleteStatus = 0; api.FlushStatus = 0;
         reg.SetDword("CuMode", CuMode.Stock); reg.Delete("CuModeClosedReason");
         Check(api.Values.ContainsKey("CuMode") && api.Values["CuMode"] == 24, "R1 CuMode = 24 and the driver's record go through the checked registry");
+        reg.SetDword("CuDisableWgp", 0x84218); reg.SetDword("CuModeChosen", CuMode.Encode(40, 0x84218)); reg.Delete("CuModeChosen");
+        Check(api.Values["CuDisableWgp"] == 0x84218 && !api.Values.ContainsKey("CuModeChosen"), "R1 the mask and the record go through the checked registry");
 
         // Through the setter: the native codes decide the result.
         api = new FakeRegApi(); api.Values["CuMode"] = 24; api.Values["CuModeConfirmed"] = CuMode.Encode(40, 8); api.Values["CuDisableWgp"] = 8;
@@ -139,10 +148,13 @@ static partial class UnitTests
 
     const uint V = CuModeState.FlagValid, P = CuModeState.FlagPending, C = CuModeState.FlagConfirmed;
 
-    static CuStored St(uint? mode = null, uint? disable = null, uint? confirmed = null, uint? pending = null, uint? closed = null)
+    static CuStored St(uint? mode = null, uint? disable = null, uint? confirmed = null, uint? pending = null, uint? closed = null, uint? chosen = null)
     {
-        return new CuStored { Mode = mode, Disable = disable, Confirmed = confirmed, Pending = pending, Closed = closed };
+        return new CuStored { Mode = mode, Disable = disable, Confirmed = confirmed, Pending = pending, Closed = closed, Chosen = chosen };
     }
+
+    // The documented stock set of the board, for the map helpers.
+    static uint[] Stk() { return CuMode.DocumentedStockActive(); }
 
     static void CuLayout(string header)
     {
@@ -229,7 +241,7 @@ static partial class UnitTests
         Equal(CuClass.Fallback, v.Class, "F7 class"); Equal("Your choice: All (40). It applies after the next Windows restart.", v.Choice, "F7 choice");
         Check(v.OfferTry40, "F7 [Try 40 again] stays the Fallback state's next step"); Equal(CuNext.Ask40, v.Next, "F7 next start asks again");
         var plan = CuMode.Plan(St(24), 40);
-        Check(!plan.Refused && plan.Steps.Select(s => s.Kind).SequenceEqual(new[] { "write-40", "flush-readback" }), "F7 [Try 40 again] = the setter (S1, S4)");
+        Check(!plan.Refused && plan.Steps.Select(s => s.Kind).SequenceEqual(new[] { "write-40", "write-chosen", "flush-readback" }), "F7 [Try 40 again] = the setter (S1, S1c, S4)");
 
         // F8 / F9: the start-confirm task's fallback path or no task run: the snapshot is still Pending.
         foreach (var label in new[] { "F8", "F9" })
@@ -248,7 +260,7 @@ static partial class UnitTests
         // F12 40 -> 24 -> 40 with an old CuModeConfirmed: S2 removes it; the next start is Waiting, not Confirmed.
         var reg = new FakeCu(); reg.Values["CuModeConfirmed"] = 40;
         plan = CuMode.Plan(reg.Stored(), 40);
-        Check(plan.Steps.Select(s => s.Kind).SequenceEqual(new[] { "remove-confirmed", "write-40", "flush-readback" }), "F12 steps S2, S1, S4");
+        Check(plan.Steps.Select(s => s.Kind).SequenceEqual(new[] { "remove-confirmed", "write-40", "write-chosen", "flush-readback" }), "F12 steps S2, S1, S1c, S4");
         var res = CuMode.Execute(plan, reg);
         Check(res.Completed, "F12 completed"); Equal(CuNext.Ask40, CuMode.PredictAfter(res), "F12 next start asks (Waiting)");
         Check(!reg.Values.ContainsKey("CuModeConfirmed") && reg.Values["CuMode"] == 40, "F12 registry");
@@ -256,8 +268,8 @@ static partial class UnitTests
         // F13 a non-zero mask with All (40): the preview names its removal, the read-back shows it absent.
         reg = new FakeCu(); reg.Values["CuMode"] = 40; reg.Values["CuDisableWgp"] = 0x21; reg.Values["CuModeConfirmed"] = CuMode.Encode(40, 0x21);
         plan = CuMode.Plan(reg.Stored(), 40);
-        Check(plan.Preview.Contains("An earlier diagnostic core limit is removed."), "F13 preview names the removal");
-        Check(plan.Steps.Select(s => s.Kind).SequenceEqual(new[] { "remove-confirmed", "remove-disable", "flush-readback" }), "F13 steps S2, S3, S4");
+        Check(plan.Preview.Contains("Turns every pair of graphics cores on again."), "F13 preview names the removal");
+        Check(plan.Steps.Select(s => s.Kind).SequenceEqual(new[] { "remove-confirmed", "remove-disable", "write-chosen", "flush-readback" }), "F13 steps S2, S3, S1c, S4");
         res = CuMode.Execute(plan, reg);
         Check(res.Completed && res.ReadBack.Disable == null, "F13 read-back without the mask"); Equal(CuNext.Ask40, CuMode.PredictAfter(res), "F13 next start 40, asks");
         v = CuMode.View(Snap(V | C, 40, 0, 38), 5, St(40, 0x21, CuMode.Encode(40, 0x21)));
@@ -295,7 +307,7 @@ static partial class UnitTests
         plan = CuMode.Plan(reg.Stored(), 40);
         res = CuMode.Execute(plan, reg);
         Equal(CuNext.Ask40, CuMode.PredictAfter(res), "F14b old 40 without confirmation asks again");
-        Check(CuMode.ResultText(plan, res).Contains("earlier diagnostic core limit"), "F14b the remaining limit is named");
+        Check(CuMode.ResultText(plan, res).Contains("36 graphics cores"), "F14b the cores the remaining mask leaves are named: " + CuMode.ResultText(plan, res));
         Check(res.Log.Any(l => l.StartsWith("read back after the failure: CuMode 40")), "F14b read-back logged");
 
         // F14c Standard (24) from CuMode=40 with a valid mask and its confirmation, no Pending; S1 fails in three ways.
@@ -306,18 +318,24 @@ static partial class UnitTests
             if (sub == "b") reg.FailFlush = 0;
             if (sub == "c") reg.FailReadAfterFlush = 0;
             plan = CuMode.Plan(reg.Stored(), 24);
-            Check(plan.Steps.Select(s => s.Kind).SequenceEqual(new[] { "write-24", "verify-stock", "remove-confirmed", "remove-disable", "flush-readback" }), "F14c steps S1, verify, S2, S3, S4");
+            Check(plan.Steps.Select(s => s.Kind).SequenceEqual(new[] { "write-24", "verify-stock", "remove-confirmed", "remove-disable", "write-chosen", "flush-readback" }),
+                "F14c steps S1, verify, S2, S3, S1c, S4");
             res = CuMode.Execute(plan, reg);
             Check(!reg.Ops.Contains("delete CuModeConfirmed") && !reg.Ops.Contains("delete CuDisableWgp"), "F14c(" + sub + ") stops before S2 and S3");
             Check(reg.Values["CuDisableWgp"] == 3 && reg.Values["CuModeConfirmed"] == CuMode.Encode(40, 3), "F14c(" + sub + ") mask and confirmation untouched");
             Check(CuMode.ResultText(plan, res).StartsWith("The change could not be completed."), "F14c(" + sub + ") text");
             var next = CuMode.PredictAfter(res);
-            if (sub == "a") { Equal(CuNext.Confirmed40, next, "F14c(a) the masked 40 start"); Check(CuMode.NextText(res.ReadBack, next).Contains("diagnostic core limit"), "F14c(a) never an unmasked 40"); }
+            if (sub == "a")
+            {
+                Equal(CuNext.Confirmed40, next, "F14c(a) the masked 40 start");
+                var nt = CuMode.NextText(res.ReadBack, next);
+                Check(nt.Contains("36 graphics cores") && !nt.Contains("40 cores"), "F14c(a) never an unmasked 40: " + nt);
+            }
             else Equal(CuNext.Unknown, next, "F14c(" + sub + ") Unknown");
             // Review 927 R2: the choice comes from the read-back, independent of the prediction; 497.2: unknown only
             // when the verifying read failed.
             Equal(sub == "a" ? CuChoice.All40 : sub == "b" ? CuChoice.Standard24 : CuChoice.Unknown, CuMode.ChoiceAfter(res), "F14c(" + sub + ") choice");
-            Check(CuMode.ResultText(plan, res).Contains(sub == "a" ? "Your choice: All (40)." : sub == "b" ? "Your choice: Standard (24)." : "Your choice cannot be read."), "F14c(" + sub + ") choice text");
+            Check(CuMode.ResultText(plan, res).Contains(sub == "a" ? "Your choice: 36 graphics cores." : sub == "b" ? "Your choice: Standard (24)." : "Your choice cannot be read."), "F14c(" + sub + ") choice text");
             Equal(CuTransaction.PartialFailure, CuMode.Transaction(plan, res), "F14c(" + sub + ") partial failure");
         }
         // R2 / 497.1: a failed S4 flush of All (40) still shows the read-back choice All (40); the next start is unknown.
@@ -394,18 +412,28 @@ static partial class UnitTests
         Equal("Next start: 24 cores.", v.NextStart, "F16b a refused next start reads as 24 cores");
 
         // S5: the setter never writes CuModeConfirmed, never touches CuModePending, never the last-reason value.
-        foreach (var start in new[] { St(), St(40), St(40, 3, 40, 1), St(7, 0x100000, 9, 2), St(24, 1, 40), St(24, null, null, null, 3) })
+        foreach (var start in new[] { St(), St(40), St(40, 3, 40, 1), St(7, 0x100000, 9, 2), St(24, 1, 40), St(24, null, null, null, 3), St(40, 8, null, null, null, CuMode.Encode(40, 8)) })
             foreach (uint target in new uint[] { 24, 40 })
-            {
-                var p = CuMode.Plan(start, target);
-                Check(p.Steps.All(CuMode.Allowed), "S5 every step allowed");
-                Check(!p.Steps.Any(s => s.Name == "CuModePending" || s.Name == "CuModeLastReason" || (s.Kind.StartsWith("write-") && s.Name != "CuMode")), "S5 no Pending, no last-reason, writes only CuMode");
-            }
+                foreach (uint mask in new uint[] { 0, 8, 0x84218 })
+                {
+                    var p = CuMode.Plan(start, target, mask);
+                    Check(p.Steps.All(CuMode.Allowed), "S5 every step allowed");
+                    Check(!p.Steps.Any(s => s.Name == "CuModePending" || s.Name == "CuModeLastReason" || s.Name == "CuModeConfirmed" && s.Kind.StartsWith("write-")
+                        || (s.Kind.StartsWith("write-") && s.Name != "CuMode" && s.Name != "CuModeChosen" && s.Name != "CuDisableWgp")),
+                        "S5 no Pending, no last-reason, writes only CuMode, CuDisableWgp and CuModeChosen");
+                    Check(!p.Steps.Any(s => s.Kind == "write-disable") || target == 40, "S5 the stock target never writes a mask");
+                }
         Check(!CuMode.Allowed(new CuStep { Kind = "write-24", Name = "CuModePending", Value = 24 }) && !CuMode.Allowed(new CuStep { Kind = "write-40", Name = "CuModeConfirmed", Value = 40 })
             && !CuMode.Allowed(new CuStep { Kind = "remove-closed", Name = "CuModeLastReason" }), "S5 Allowed refuses the KMD's marks");
         Check(!CuMode.Allowed(new CuStep { Kind = "remove-mode", Name = "CuMode" }), "S5 CuMode is never deleted (BD-077)");
-        Check(CuMode.Plan(St(40), 40).Refused && CuMode.Plan(St(24), 24).Refused, "S6 nothing to change -> refused before any step");
-        Equal("Nothing was changed. All (40) is selected already.", CuMode.ResultText(CuMode.Plan(St(40), 40), new CuSetterResult()), "A3 nothing changed only on refusal");
+        // S6: nothing to change means the same request AND the same record of it. A 40 or a 24 without the record
+        // still has the record to write, so it is not "selected already".
+        var same40 = St(40, null, null, null, null, CuMode.Encode(40, 0));
+        var same24 = St(24, null, null, null, null, CuMode.Encode(24, 0));
+        Check(CuMode.Plan(same40, 40).Refused && CuMode.Plan(same24, 24).Refused, "S6 nothing to change -> refused before any step");
+        Check(!CuMode.Plan(St(40), 40).Refused && CuMode.Plan(St(40), 40).Steps.Select(s => s.Kind).SequenceEqual(new[] { "write-chosen", "flush-readback" }),
+            "S6 a 40 without the record is adopted as the person's choice");
+        Equal("Nothing was changed. All (40) is selected already.", CuMode.ResultText(CuMode.Plan(same40, 40), new CuSetterResult()), "A3 nothing changed only on refusal");
         Check(!CuMode.Plan(St(24, null, 40), 24).Refused, "a KMD-stored 24 with a leftover confirmation: the cleanup can run");
         Check(CuMode.Plan(St(24, null, 40), 24).Steps.All(s => s.Kind != "write-24"), "S1 leaves a stored 24 as it is");
         Check(CuMode.Plan(new CuStored { Unreadable = true }, 24).Refused, "unreadable values: refused");
@@ -414,8 +442,9 @@ static partial class UnitTests
         // configured" to the release installer, which writes the release default 40 over it, so the stock choice is
         // written out as 24 and the 24 survives every later install.
         var stock = CuMode.Plan(St(), 24);
-        Check(!stock.Refused && stock.Steps.Select(s => s.Kind).SequenceEqual(new[] { "write-24", "verify-stock", "flush-readback" }), "BD-077 an absent CuMode: the 24 is written");
-        Check(stock.Preview.SequenceEqual(new[] { "Selects the standard 24 graphics cores." }), "BD-077 one preview line for the written 24");
+        Check(!stock.Refused && stock.Steps.Select(s => s.Kind).SequenceEqual(new[] { "write-24", "verify-stock", "write-chosen", "flush-readback" }), "BD-077 an absent CuMode: the 24 is written");
+        Check(stock.Preview.SequenceEqual(new[] { "Selects the standard 24 graphics cores.", "Records this number as your choice, so a driver update keeps it." }),
+            "BD-077 the preview of the written 24 and its record");
         reg = new FakeCu();
         res = CuMode.Execute(CuMode.Plan(reg.Stored(), 24), reg);
         Check(res.Completed && reg.Values["CuMode"] == 24, "BD-077 the run writes CuMode = 24 on a key that had none");
@@ -424,8 +453,9 @@ static partial class UnitTests
         // The same for a 24 the driver wrote itself: the record is what makes that 24 the driver's, so taking the
         // record away is what makes the 24 the user's. Every later install then reads it as a choice ('kept').
         var adopt = CuMode.Plan(St(24, null, null, null, 3), 24);
-        Check(!adopt.Refused && adopt.Steps.Select(s => s.Kind).SequenceEqual(new[] { "verify-stock", "remove-closed", "flush-readback" }), "BD-077 a driver-written 24 can be adopted");
-        Check(adopt.Preview.SequenceEqual(new[] { "Records that the standard 24 graphics cores are your choice, not a step back the driver took by itself." }), "BD-077 the adoption says what it records");
+        Check(!adopt.Refused && adopt.Steps.Select(s => s.Kind).SequenceEqual(new[] { "verify-stock", "remove-closed", "write-chosen", "flush-readback" }), "BD-077 a driver-written 24 can be adopted");
+        Check(adopt.Preview.SequenceEqual(new[] { "Records that the standard 24 graphics cores are your choice, not a step back the driver took by itself.",
+            "Records this number as your choice, so a driver update keeps it." }), "BD-077 the adoption says what it records");
         reg = new FakeCu(); reg.Values["CuMode"] = 24; reg.Values["CuModeClosedReason"] = 3;
         res = CuMode.Execute(CuMode.Plan(reg.Stored(), 24), reg);
         Check(res.Completed && reg.Values["CuMode"] == 24 && !reg.Values.ContainsKey("CuModeClosedReason"), "BD-077 the adopted 24 stays, the driver's record goes");
@@ -439,7 +469,7 @@ static partial class UnitTests
         // All (40) over the record leaves it to the driver: the next start that reads a CuMode other than 24
         // deletes it itself (bc250_cu_decide clear_closed).
         var reopen = CuMode.Plan(St(24, null, null, null, 3), 40);
-        Check(reopen.Steps.Select(s => s.Kind).SequenceEqual(new[] { "write-40", "flush-readback" }), "BD-077 All (40) over the record is the plain 40 request");
+        Check(reopen.Steps.Select(s => s.Kind).SequenceEqual(new[] { "write-40", "write-chosen", "flush-readback" }), "BD-077 All (40) over the record is the plain 40 request");
 
         // The page must not call the driver's own 24 a choice of the user (review 2 finding 3).
         v = CuMode.View(Snap(V, 24, 0, 24), 5, St(24, null, null, null, 3));
@@ -465,6 +495,116 @@ static partial class UnitTests
         Equal(38u, CuMode.ActiveCus(8), "one disabled WGP takes two CUs"); Equal(40u, CuMode.ActiveCus(0), "no mask: 40");
         Check(CuMode.Prediction(new CuStored { Mode = 40, NotDurable = true }) == null, "497.1: values of a run that was not flushed predict nothing");
         Equal(CuChoice.All40, CuMode.Choice(new CuStored { Mode = 40, NotDurable = true }), "497.1: the choice still reads from the values");
+        CuCount();
+    }
+
+    // The count of cores and the map of pairs (owner, 2026-10-14): the topology the page offers, the documented
+    // default set of every count, a hand-picked map, and the record that makes a count the person's own choice.
+    static void CuCount()
+    {
+        Strings.Language = "en";
+        var stock = Stk();
+        Equal(24u, CuMode.Cores(stock), "the documented stock set is 24 cores");
+        Equal(0xC6318u, CuMode.Maskable(stock), "the WGPs a person may turn off (two per array)");
+        Equal(8u, CuMode.Bits(CuMode.Maskable(stock)), "eight free pairs = the 16 cores above the stock set");
+        Check(CuMode.CoreChoices.SequenceEqual(new uint[] { 24, 26, 28, 30, 32, 34, 36, 38, 40 }), "the counts the page offers");
+
+        // The documented default set of every count (docs/design/cu-mode.md, the count-to-mask table).
+        var table = new Dictionary<uint, uint> { { 40, 0 }, { 38, 0x00010 }, { 36, 0x00210 }, { 34, 0x04210 }, { 32, 0x84210 },
+            { 30, 0x84218 }, { 28, 0x84318 }, { 26, 0x86318 }, { 24, 0 } };
+        foreach (var e in table)
+        {
+            Equal(e.Value, CuMode.DefaultDisable(e.Key, stock), "the default set of " + e.Key + " cores");
+            uint mode, disable;
+            Check(CuMode.RequestFor(e.Key, stock, out mode, out disable), "the request of " + e.Key + " cores");
+            Equal(e.Key == 24 ? CuMode.Stock : CuMode.Full, mode, "the mode of " + e.Key + " cores");
+            Equal(e.Value, disable, "the mask of " + e.Key + " cores");
+            if (e.Key != 24) Equal(e.Key, CuMode.ActiveCus(disable), "the cores the mask of " + e.Key + " leaves");
+            Check((disable & ~CuMode.Maskable(stock)) == 0, "the set of " + e.Key + " never turns a stock-active pair off");
+        }
+        Equal("6, 8, 8, 8", CuMode.PerSaText(CuMode.MapOf(0x84218, stock)), "30 cores: the cores of each group");
+        Equal("10, 10, 10, 10", CuMode.PerSaText(CuMode.MapOf(0, stock)), "40 cores: ten in each group");
+        Equal("group 1 pair 4, group 1 pair 5", CuMode.MaskText(0x18), "the pairs a mask turns off, counted from 1");
+        uint m2, d2;
+        Check(!CuMode.RequestFor(25, stock, out m2, out d2) && !CuMode.RequestFor(22, stock, out m2, out d2), "an odd or too small count is not a choice");
+
+        // A hand-picked map: the stock-active pairs have to stay on, nothing outside the array's own pairs may be
+        // set, and a map with no extra pair is the stock path.
+        var on = CuMode.MapOf(0, stock);
+        Check(CuMode.RequestForMap(on, stock, out m2, out d2) && m2 == CuMode.Full && d2 == 0, "every pair on = All (40)");
+        Check(CuMode.RequestForMap(stock, stock, out m2, out d2) && m2 == CuMode.Stock && d2 == 0, "only the stock pairs on = the stock path");
+        var pick = new uint[] { 0xF, 0x17, 0x7, 0x1F };          // SA0 pair 5 off, SA1 pair 4 off, SA2 pairs 4 and 5 off
+        Check(CuMode.RequestForMap(pick, stock, out m2, out d2) && m2 == CuMode.Full, "a hand-picked map is a 40 request");
+        Equal((uint)((1 << 4) | (1 << 8) | (1 << 13) | (1 << 14)), d2, "the mask of the hand-picked map");
+        Equal(32u, CuMode.ActiveCus(d2), "the cores of the hand-picked map");
+        Check(CuMode.MapOf(d2, stock).SequenceEqual(pick), "the map reads back from its own mask");
+        Check(!CuMode.RequestForMap(new uint[] { 0x6, 0x7, 0x7, 0x7 }, stock, out m2, out d2), "a stock-active pair may not be turned off (INVALID_DISABLE)");
+        Check(!CuMode.RequestForMap(new uint[] { 0x2F, 0x7, 0x7, 0x7 }, stock, out m2, out d2), "a bit outside the five pairs of an array is refused");
+        Check(!CuMode.RequestForMap(new uint[] { 0x7, 0x7, 0x7 }, stock, out m2, out d2), "a map of the wrong length is refused");
+
+        // The stock set of THIS board, from the CU READ snapshot, and the boards this page cannot map.
+        var s = new CuModeState { Flags = CuModeState.FlagValid, StockCc = new uint[] { 0xFFF80000, 0xFFF80000, 0xFFF80000, 0xFFF80000 } };
+        Check(CuMode.StockActive(s) != null && CuMode.StockActive(s).SequenceEqual(stock), "the stock set of the snapshot (CC 0xFFF80000)");
+        s.StockCc = new uint[] { 0xFFE00000, 0xFFE00000, 0xFFE00000, 0xFFE00000 };
+        Check(CuMode.StockActive(s) == null, "a board whose firmware leaves every pair active is not this page's topology");
+        s.StockCc = new uint[] { 0xFFFE0000, 0xFFF80000, 0xFFF80000, 0xFFF80000 };
+        Check(CuMode.StockActive(s) == null, "a board with another stock count is not mapped");
+        s.StockCc = null;
+        Check(CuMode.StockActive(s) == null, "no snapshot of the stock registers: no map");
+        Check(CuMode.StockActive(new CuModeState { StockCc = new uint[] { 0xFFF80000, 0xFFF80000, 0xFFF80000, 0xFFF80000 } }) == null, "VALID=0: no map");
+        Check(CuMode.StockActive(null) == null, "no snapshot: no map");
+
+        // The encoded record of a request: only a mode the driver takes, and no mask next to the stock mode.
+        Check(CuMode.EncodedRequest(CuMode.Encode(40, 0)) && CuMode.EncodedRequest(CuMode.Encode(40, 0x84218)) && CuMode.EncodedRequest(CuMode.Encode(24, 0)),
+            "the records the setter writes");
+        Check(!CuMode.EncodedRequest(CuMode.Encode(24, 8)) && !CuMode.EncodedRequest(CuMode.Encode(32, 0)) && !CuMode.EncodedRequest(CuMode.Encode(40, 0x100000)),
+            "a record of a request the driver would refuse is never written");
+
+        // A count between the two: the mask is written before CuMode, the record holds the whole request, and the
+        // preview names the cores and the pairs.
+        var reg = new FakeCu(); reg.Values["CuMode"] = 24;
+        var plan = CuMode.Plan(reg.Stored(), CuMode.Full, 0x84218);
+        Check(plan.Steps.Select(x => x.Kind).SequenceEqual(new[] { "write-disable", "write-40", "write-chosen", "flush-readback" }), "30 cores: steps S3, S1, S1c, S4");
+        Equal(30u, plan.Cores, "30 cores: the cores of the plan");
+        Check(plan.Preview[0] == "Selects 30 of the 40 graphics cores." && plan.Preview[1].StartsWith("Turns these pairs of graphics cores off: group 1 pair 4"),
+            "30 cores: the preview names the count and the pairs: " + string.Join(" | ", plan.Preview.ToArray()));
+        var res = CuMode.Execute(plan, reg);
+        Check(res.Completed && reg.Values["CuMode"] == 40 && reg.Values["CuDisableWgp"] == 0x84218 && reg.Values["CuModeChosen"] == CuMode.Encode(40, 0x84218),
+            "30 cores: the mask, the mode and the record are written");
+        Equal(CuNext.Ask40, CuMode.PredictAfter(res), "30 cores: the next start asks for the confirmation");
+        Equal("Saved. Your choice: 30 graphics cores. It applies after the next Windows restart. Next start: 30 graphics cores, to be confirmed after the start.",
+            CuMode.ResultText(plan, res), "30 cores: the result text");
+        Check(CuMode.Plan(reg.Stored(), CuMode.Full, 0x84218).Refusal == "30 graphics cores are selected already.", "30 cores: the same request again is refused");
+        // Another count over it: only the mask and the record change.
+        plan = CuMode.Plan(reg.Stored(), CuMode.Full, 0x210);
+        Check(plan.Steps.Select(x => x.Kind).SequenceEqual(new[] { "write-disable", "write-chosen", "flush-readback" }), "36 over 30: the mask and the record");
+        Check(plan.Preview[0] == "Selects 36 of the 40 graphics cores.", "36 over 30: the count is named even without a CuMode write: " + plan.Preview[0]);
+        Check(CuMode.Execute(plan, reg).Completed && reg.Values["CuDisableWgp"] == 0x210, "36 over 30: the new mask");
+        // Back to the stock count: the mask, the confirmation and the record go.
+        plan = CuMode.Plan(reg.Stored(), CuMode.Stock);
+        res = CuMode.Execute(plan, reg);
+        Check(res.Completed && reg.Values["CuMode"] == 24 && !reg.Values.ContainsKey("CuDisableWgp") && reg.Values["CuModeChosen"] == CuMode.Encode(24, 0),
+            "the stock count takes the mask away and records the 24");
+        // A mask outside the topology never becomes a plan (the driver would answer INVALID_DISABLE).
+        Check(CuMode.Plan(St(24), CuMode.Full, 0x100000).Refused, "a mask outside the four arrays is refused before any step");
+
+        // 'Reset to defaults' hands the count back to the installed release: the record goes, nothing else.
+        reg = new FakeCu(); reg.Values["CuMode"] = 40; reg.Values["CuDisableWgp"] = 0x210; reg.Values["CuModeChosen"] = CuMode.Encode(40, 0x210);
+        plan = CuMode.Plan(reg.Stored(), CuMode.Stock, 0, false);
+        Check(plan.Steps.Select(x => x.Kind).SequenceEqual(new[] { "write-24", "verify-stock", "remove-disable", "remove-chosen", "flush-readback" }),
+            "reset: the record is removed, not written");
+        Check(plan.Preview.Contains("Gives the number of graphics cores back to the setting of the installed driver."), "reset: the preview says what it gives back");
+        res = CuMode.Execute(plan, reg);
+        Check(res.Completed && reg.Values["CuMode"] == 24 && !reg.Values.ContainsKey("CuModeChosen"), "reset: the 24 of the release without a record of a choice");
+        Check(CuMode.Plan(St(24), CuMode.Stock, 0, false).Refused, "reset: a stock 24 without a record is already the release setting");
+
+        // The window says the cores of each group while a mask is active.
+        var v = CuMode.View(new CuModeState { Flags = V | C, Applied = 40, Requested = 40, ActiveCus = 30, DisableMask = 0x84218, Generation = 5,
+            ActiveWgps = new uint[] { 0x7, 0xF, 0xF, 0xF } }, 5, St(40, 0x84218, CuMode.Encode(40, 0x84218), null, null, CuMode.Encode(40, 0x84218)));
+        Equal(CuClass.ConfirmedFewer, v.Class, "30 cores running: confirmed with fewer cores");
+        Equal("Running now: 30 cores (confirmed). Cores in each group now: 6, 8, 8, 8.", v.Running, "30 cores running: the groups are named");
+        Equal("Your choice: 30 graphics cores.", v.Choice, "30 cores running: the choice is the count");
+        Equal(30u, v.ChoiceCores, "30 cores running: the cores of the choice");
     }
 
     // Wraps a fake so that its n-th mutating or flush operation throws.

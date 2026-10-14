@@ -279,17 +279,18 @@ Default driver settings: automatic clock control (DPM) on, maximum 2000 MHz. The
 change. The driver writes no debug log files. To change the maximum clock at install time, use
 `install.cmd -DpmMaxMHz <1000-2000>`. An upgrade keeps a maximum clock that you set (see "Install").
 
-Graphics cores: the driver uses all 40 compute units of the GPU after a normal install. The firmware of the board
-switches on 24 of them. To keep that number, use `install.cmd -CuMode 24`. After the install, the Graphics page of
-Nagi Control App holds the same choice: "Standard (24)" or "All (40)". A new number applies at the next restart
-of Windows. The first start with 40 cores needs the confirmation of the small blue window after logon. Without that
-confirmation the next start goes back to 24 and records the reason. An installation and an upgrade keep that 24 and
-name it in the report, because the driver went back for a reason. `install.cmd -Repair` sets all 40 cores back. A 24
-that you chose yourself is kept by every install: the switch and the Graphics page both write the number 24 into the
-driver's settings, so a later install reads it as your choice. Where the driver went back to 24 by itself, the
-Graphics page says so and offers "All (40)" as the way back. The change writes one registry value and no firmware. All 40 cores
-give more performance in many games, and also more power and more heat. The game results that we publish are measured
-with all 40 cores. The page `docs/design/cu-mode.md` of the project has the whole description.
+Graphics cores: the driver uses 24 of the 40 compute units of the GPU after a normal install. This is the number the
+firmware of the board switches on. To install with all of them, use `install.cmd -CuMode 40`. After the install, the
+Graphics page of Nagi Control App holds the choice: a number of cores from "Standard (24)" to "All (40)" in steps of
+two, because the hardware switches the cores on in pairs. Under "Choose the pairs of cores yourself" the same page
+shows a map of the pairs, where you select each pair that the driver may use. A new number applies at the next
+restart of Windows. The first start with more than 24 cores needs the confirmation of the small blue window after
+logon. Without that confirmation the next start goes back to 24 and records the reason. The number that you select is
+kept by every later install: the Graphics page and the switch both record it as your choice. If one pair of cores
+makes this PC stop or restart, select that pair off on the map and leave the other pairs on. The change writes
+registry values and no firmware. More cores give more performance in many games, and also more power and more heat.
+The game results that we publish are measured with all 40 cores. The page `docs/design/cu-mode.md` of the project has
+the whole description.
 
 ## What works and what does not
 
@@ -379,10 +380,10 @@ with all 40 cores. The page `docs/design/cu-mode.md` of the project has the whol
   page and restart Windows. A normal installation, an upgrade and a plain re-run of `install.cmd` keep the closed path
   and name it in the report, because the driver closed it for a reason. If the driver closes the path again, make a
   bug report instead of repairing a second time.
-- The Graphics page shows 24 graphics cores and you never chose them: the driver went back to 24 after a start with
-  all 40 that nobody confirmed. Run `install.cmd -Repair` to get all 40 back, or select "All (40)" on the Graphics
-  page and restart Windows. An installation and an upgrade keep the 24 and name it in their report, the way they keep
-  a closed desktop path. If the driver goes back a second time, make a bug report.
+- The Graphics page shows 24 graphics cores and you selected more: the driver went back to 24 after a start with the
+  larger number that nobody confirmed. Select your number again on the Graphics page and restart Windows. 24 is the
+  number of a normal install, so a repair does not change it. If the driver goes back a second time, select a smaller
+  number, or turn one pair of cores off on the map, and make a bug report.
 - Windows 11 apps (the command bar of File Explorer, Task Manager) ignore mouse clicks, often after the screen went
   black for a moment, or `verify.cmd` shows `[warn] DWM restarted in this session`: WinUI pointer-input loss after the
   desktop compositor (DWM) is terminated and restarted reproduces on this Windows build also with Microsoft Basic

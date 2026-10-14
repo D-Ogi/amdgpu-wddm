@@ -39,7 +39,7 @@
       "DpmMode": 1,
       "DpmMaxMHz": 2000,
       "DpmIdleMHz": 500,
-      "CuMode": 40,
+      "CuMode": 24,
       "KeepLog": 0
     },
     "desktop_router": {

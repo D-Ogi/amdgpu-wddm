@@ -23,7 +23,9 @@ namespace AmdgpuWddmControl
         bool? _autoEdit;                                // null: as stored
         uint? _ceilEdit;                                // the edited ceiling, null: unchecked (only while _ceilEdited)
         bool _ceilEdited;
-        uint? _cuEdit;                                  // 24 or 40, null: as stored
+        uint? _cuEdit;                                  // the graphics cores picked on the page (24..40 in twos), null: as stored
+        uint? _cuMaskEdit;                              // the CuDisableWgp mask of that pick (0: every pair on), null: as stored
+        bool _cuMapOpen;                                // the map of the pairs is unfolded
         bool _keepGames = true;
 
         sealed class GameEntry
@@ -312,7 +314,44 @@ namespace AmdgpuWddmControl
 
         CuView CuNow() { return CuMode.View(_snap.Cu, _snap.Health != null ? (ulong?)_snap.Health.Generation : null, _snap.StoredCu(), _cuConfirmFailed); }
 
-        bool CuChoiceChanged { get { return _cuEdit != null && _cuEdit.Value != CuNow().ChoiceMode; } }
+        // The pick as the page shows it: the cores and the pairs that are off. Both come from the stored choice
+        // until a person changes one of them, and a change always sets both (SetCuCores, ToggleCuPair).
+        uint CuCoresShown { get { var c = _cuEdit ?? CuNow().ChoiceCores; return c == 0 ? CuMode.Stock : c; } }
+        uint CuMaskShown { get { return _cuEdit == null ? CuNow().ChoiceDisable : (_cuMaskEdit ?? 0); } }
+
+        bool CuChoiceChanged
+        {
+            get { var v = CuNow(); return _cuEdit != null && (_cuEdit.Value != v.ChoiceCores || (_cuMaskEdit ?? 0) != v.ChoiceDisable); }
+        }
+
+        // The WGPs of this board, from its own CU snapshot where it can be read; else the documented set, and then
+        // the map is read-only (the driver would refuse a mask built on a guess with INVALID_DISABLE).
+        uint[] CuTopology { get { return CuMode.StockActive(_snap.Cu) ?? CuMode.DocumentedStockActive(); } }
+        bool CuMappable { get { return CuMode.StockActive(_snap.Cu) != null; } }
+
+        void SetCuCores(uint cores)
+        {
+            _cuEdit = cores;
+            _cuMaskEdit = CuMode.DefaultDisable(cores, CuTopology);
+            ShowPage(_page, null, false);
+        }
+
+        void ToggleCuPair(int bit, bool on)
+        {
+            uint mask = CuMaskShown;
+            if (on) mask &= ~(1u << bit); else mask |= 1u << bit;
+            mask &= CuMode.Maskable(CuTopology);
+            _cuMaskEdit = mask;
+            _cuEdit = CuMode.ActiveCus(mask);
+            ShowPage(_page, null, false);
+        }
+
+        // The label of one number in the picker: the two familiar ones keep their words.
+        static string CuCoreChoiceText(uint cores)
+        {
+            return cores == CuMode.Stock ? Strings.T("graphics.cores.24")
+                : cores == CuMode.Full ? Strings.T("graphics.cores.40") : Strings.T("graphics.cores.count.item", cores);
+        }
 
         bool ApplyGraphics()
         {
@@ -325,8 +364,12 @@ namespace AmdgpuWddmControl
             }
             if (ok && CuChoiceChanged)
             {
-                ok = RunActionAndWait("cu-mode", new Recovery.PlanArgs { Cu = _cuEdit });
-                if (ok) _cuEdit = null;
+                // The mask travels only when it is not the default set of that number, so a plain choice of a
+                // number reads as one line in the plan and in the log.
+                uint cores = CuCoresShown, mask = CuMaskShown;
+                uint? map = mask == CuMode.DefaultDisable(cores, CuTopology) ? (uint?)null : mask;
+                ok = RunActionAndWait("cu-mode", new Recovery.PlanArgs { Cu = cores, CuMap = map });
+                if (ok) { _cuEdit = null; _cuMaskEdit = null; }
             }
             ShowPage(_page, null, false);
             return ok;
@@ -374,15 +417,45 @@ namespace AmdgpuWddmControl
                 cores.Add(Ui.Label(view.Choice, null, null, cores.Inner));
                 cores.Add(Ui.Dim(view.NextStart, cores.Inner));
                 if (!string.IsNullOrEmpty(view.Note)) cores.Add(Ui.Dim(view.Note, cores.Inner));
-                uint chosen = _cuEdit ?? view.ChoiceMode;
-                var r24 = Ui.Radio(Strings.T("graphics.cores.24"));
-                var r40 = Ui.Radio(Strings.T("graphics.cores.40"));
-                r24.Checked = chosen == CuMode.Stock; r40.Checked = chosen == CuMode.Full;
-                r24.CheckedChanged += (s, e) => { if (r24.Checked) { _cuEdit = CuMode.Stock; ShowPage(_page, null, false); } };
-                r40.CheckedChanged += (s, e) => { if (r40.Checked) { _cuEdit = CuMode.Full; ShowPage(_page, null, false); } };
-                cores.Add(Ui.WrapRow(cores.Inner, r24, r40, Explain("cores", Strings.T("graphics.cores.title"))));
-                if (chosen == CuMode.Full) cores.Add(Ui.Label(CuMode.EffectText(), null, Theme.Warn, cores.Inner));
+                // Level 1: how many cores. Nine numbers, 24 to 40 in twos, because one pair of cores is the
+                // smallest step the hardware has.
+                uint shown = CuCoresShown, mask = CuMaskShown;
+                var topology = CuTopology;
+                var pick = new DropChoice(CuMode.CoreChoices.Select(CuCoreChoiceText).ToList(), Strings.T("graphics.cores.count"), cores.Inner / 2);
+                pick.SelectedIndex = Array.IndexOf(CuMode.CoreChoices, shown);
+                pick.SelectionChangeCommitted += (s, e) => { if (pick.SelectedIndex >= 0) SetCuCores(CuMode.CoreChoices[pick.SelectedIndex]); };
+                cores.Add(Ui.WrapRow(cores.Inner, Ui.Label(Strings.T("graphics.cores.count")), pick, Explain("cores", Strings.T("graphics.cores.title"))));
+                if (shown > CuMode.Stock) cores.Add(Ui.Label(CuMode.EffectText(), null, Theme.Warn, cores.Inner));
                 cores.Add(Ui.Dim(Strings.T("cu.choice.after-restart"), cores.Inner));
+
+                // Level 2: the map. Each pair of cores is one cell; the pairs the firmware keeps on are fixed, the
+                // others can be turned off, and the number above follows the map.
+                var open = Ui.Check(Strings.T("graphics.cores.map.show"), cores.Inner - Theme.S(40));
+                open.Checked = _cuMapOpen;
+                open.CheckedChanged += (s, e) => { _cuMapOpen = open.Checked; ShowPage(_page, null, false); };
+                cores.Add(open);
+                if (_cuMapOpen)
+                {
+                    cores.Add(Ui.Dim(Strings.T("graphics.cores.map.help"), cores.Inner));
+                    if (!CuMappable) cores.Add(Ui.Label(Strings.T("graphics.cores.map.unreadable"), null, Theme.Warn, cores.Inner));
+                    for (int sa = 0; sa < CuMode.SaCount; sa++)
+                    {
+                        var row = Ui.WrapRow(cores.Inner, Ui.Label(Strings.T("graphics.cores.map.group", sa + 1)));
+                        for (int wgp = 0; wgp < CuMode.WgpPerSa; wgp++)
+                        {
+                            int bit = sa * CuMode.WgpPerSa + wgp;
+                            bool always = (topology[sa] & (1u << wgp)) != 0;
+                            var cell = Ui.Check(Strings.T("graphics.cores.map.pair", wgp + 1));
+                            cell.Checked = always || (mask & (1u << bit)) == 0;
+                            cell.Enabled = !always && CuMappable;
+                            cell.AccessibleName = Strings.T("graphics.cores.map.name", sa + 1, wgp + 1);
+                            if (always) cell.AccessibleDescription = Strings.T("graphics.cores.map.fixed");
+                            if (cell.Enabled) cell.CheckedChanged += (s, e) => ToggleCuPair(bit, cell.Checked);
+                            row.Controls.Add(cell);
+                        }
+                        cores.Add(row);
+                    }
+                }
                 var offers = Ui.WrapRow(cores.Inner);
                 if (view.OfferConfirm) offers.Controls.Add(Ui.Button(Strings.T("status.action.cu-confirm"), (s, e) => RunAction("cu-confirm"), true));
                 if (view.OfferReport) offers.Controls.Add(Ui.Button(Strings.T("help.report.create"), (s, e) => Navigate("help", "help.report")));

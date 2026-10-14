@@ -7,6 +7,7 @@ cu.choice.all|rev|c8029dd4|Twój wybór: Wszystkie (40).
 cu.choice.standard|rev|fa436287|Twój wybór: Standardowe (24).
 cu.choice.invalid|rev|9ed29361|Twój wybór jest nieprawidłowy; wybierz Standardowe (24) albo Wszystkie (40).
 cu.choice.unreadable|rev|ee127a9b|Nie można odczytać Twojego wyboru.
+cu.choice.some|mt|39a1d070|Twój wybór: {0} rdzeni graficznych.
 cu.choice.driver-24|mt|a8fa591b|Ustawione jest Standardowe (24), ale tę liczbę wybrał sterownik, nie Ty.
 cu.note.driver-24|mt|0199b2dd|Wybierz Wszystkie (40) i uruchom ponownie system Windows, aby znów używać wszystkich 40 rdzeni.
 cu.choice.after-restart|rev|07660ab1|Zacznie działać po następnym ponownym uruchomieniu systemu Windows.
@@ -22,26 +23,34 @@ cu.run.not-saved.next24|rev|0d9cc034|Następne uruchomienie użyje 24 rdzeni, zg
 cu.run.fallback|rev|c1cc5938|Ostatnie uruchomienie z 40 rdzeniami nie zostało potwierdzone, więc teraz działają 24 rdzenie.
 cu.run.refused|rev|9517c611|Przy tym uruchomieniu nie udało się użyć 40 rdzeni.
 cu.run.unknown|rev|39943c8f|Nie można odczytać liczby rdzeni graficznych.
+cu.run.groups|mt|4d770aed|Rdzenie w każdej grupie teraz: {0}.
+cu.map.item|mt|5905f8e5|grupa {0} para {1}
 cu.next.standard|rev|7c94a6f5|Następne uruchomienie: 24 rdzenie.
 cu.next.fallback|rev|d366069f|Następne uruchomienie: 24 rdzenie, bo ustawienie 40 rdzeni nie zostało potwierdzone.
 cu.next.ask40|rev|5af1df5d|Następne uruchomienie: 40 rdzeni, do potwierdzenia po uruchomieniu.
-cu.next.ask40-limited|rev|cb27c040|Następne uruchomienie: ustawienie 40 rdzeni z wcześniejszym diagnostycznym ograniczeniem liczby rdzeni (mniej rdzeni), do potwierdzenia po uruchomieniu.
+cu.next.ask40-limited|mt|95fdb1b4|Następne uruchomienie: {0} rdzeni graficznych, do potwierdzenia po uruchomieniu.
 cu.next.confirmed40|rev|59baaddb|Następne uruchomienie: 40 rdzeni (potwierdzone wcześniej).
-cu.next.confirmed40-limited|rev|487324b9|Następne uruchomienie: ustawienie 40 rdzeni z wcześniejszym diagnostycznym ograniczeniem liczby rdzeni (mniej rdzeni), potwierdzone wcześniej.
+cu.next.confirmed40-limited|mt|371afe5f|Następne uruchomienie: {0} rdzeni graficznych (potwierdzone wcześniej).
 cu.next.unknown|rev|8bb23e4f|Następne uruchomienie: nie można przewidzieć.
 cu.refuse.target|rev|84439e4b|Wybierz Standardowe (24) albo Wszystkie (40).
 cu.refuse.unreadable|rev|d945441d|Nie można odczytać zapisanego ustawienia.
 cu.refuse.already40|rev|4f5796de|Wszystkie (40) są już wybrane.
 cu.refuse.already24|rev|91c3ed3d|Standardowe (24) są już wybrane.
+cu.refuse.already-some|mt|ba20d575|{0} rdzeni graficznych jest już wybranych.
+cu.refuse.map|mt|1de01451|Tych par rdzeni graficznych nie można wybrać na tym komputerze.
 cu.preview.write40|rev|46267060|Wybiera wszystkie 40 rdzeni graficznych.
 cu.preview.write24|rev|3920ecbe|Wybiera standardowe 24 rdzenie graficzne.
 cu.preview.remove-closed|mt|93f4029d|Zapisuje, że standardowe 24 rdzenie graficzne to Twój wybór, a nie krok wstecz wykonany przez sterownik.
+cu.preview.write40-some|mt|0345f0c0|Wybiera {0} z 40 rdzeni graficznych.
+cu.preview.set-disable|mt|0056c790|Wyłącza te pary rdzeni graficznych: {0}.
+cu.preview.write-chosen|mt|2acbb148|Zapisuje tę liczbę jako Twój wybór, aby aktualizacja sterownika ją zachowała.
+cu.preview.remove-chosen|mt|4986238d|Oddaje liczbę rdzeni graficznych ustawieniu zainstalowanego sterownika.
 cu.preview.remove-confirmed|rev|d10b327e|Usuwa wcześniejsze potwierdzenie 40 rdzeni, aby nowe ustawienie zostało potwierdzone przy własnym uruchomieniu.
-cu.preview.remove-disable|rev|51075647|Wcześniejsze diagnostyczne ograniczenie liczby rdzeni zostanie usunięte.
+cu.preview.remove-disable|mt|7f38ddbb|Włącza ponownie każdą parę rdzeni graficznych.
 cu.result.nothing|rev|54ca5460|Nic nie zostało zmienione.
 cu.result.saved|rev|fca046cc|Zapisano.
 cu.result.failed|rev|ec48fa5b|Nie udało się dokończyć zmiany.
-cu.result.cleanup-incomplete|rev|894af8af|Porządkowanie jest niepełne. Następne uruchomienie użyje standardowych 24 rdzeni. Pozostałe wcześniejsze diagnostyczne ograniczenie liczby rdzeni ich nie zmniejsza.
+cu.result.cleanup-incomplete|mt|8e56e5c8|Porządkowanie jest niepełne. Następne uruchomienie użyje standardowych 24 rdzeni. Pary rdzeni, które pozostaną wyłączone, ich nie zmniejszają.
 cu.effect|rev|60ee9b9b|Więcej rdzeni zużywa więcej energii i wytwarza więcej ciepła: około 30 W więcej przy 1500 MHz na naszym egzemplarzu testowym. To wartość orientacyjna, nie obietnica dla Twojego komputera.
 
 # ---- driver card ----
@@ -455,6 +464,15 @@ graphics.thermal|rev|14bc2f1d|Ochrona przed przegrzaniem jest zawsze włączona:
 graphics.cores.title|rev|3b1c283f|Rdzenie graficzne
 graphics.cores.24|rev|99b1c87b|Standardowe (24)
 graphics.cores.40|rev|908ab6d1|Wszystkie (40)
+graphics.cores.count|mt|202ea951|Ile rdzeni graficznych
+graphics.cores.count.item|mt|18b460db|{0} rdzeni
+graphics.cores.map.show|mt|09bc7c18|Wybierz pary rdzeni samodzielnie
+graphics.cores.map.help|mt|c8e8a347|Każda para to dwa rdzenie graficzne. Jeśli jedna para powoduje awarię albo zawieszenie komputera, wyłącz tę parę i zostaw pozostałe włączone.
+graphics.cores.map.unreadable|mt|4a1e2bd6|Nie można teraz odczytać par rdzeni tego komputera, więc nie można ich wybrać. Wybierz zamiast tego liczbę rdzeni.
+graphics.cores.map.group|mt|e5d24a19|Grupa {0}
+graphics.cores.map.pair|mt|c2d4e788|Para {0}
+graphics.cores.map.name|mt|e7997c8a|Grupa {0}, para {1}: dwa rdzenie graficzne
+graphics.cores.map.fixed|mt|f017032a|zawsze włączona
 graphics.not-installed|rev|17713c9c|Sterownik nie jest zainstalowany, więc nie ma tu nic do ustawienia.
 graphics.unsaved|rev|fdb121dc|Masz zmiany, które nie są jeszcze zastosowane.
 graphics.saved|rev|75d79f0a|Brak niezapisanych zmian.

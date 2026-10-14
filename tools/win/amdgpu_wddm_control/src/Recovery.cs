@@ -95,7 +95,7 @@ namespace AmdgpuWddmControl
         {
             if (CuBadValues != null && CuBadValues.Count > 0) return new CuStored { Unreadable = true };
             return new CuStored { Mode = P("CuMode"), Disable = P("CuDisableWgp"), Confirmed = P("CuModeConfirmed"), Pending = P("CuModePending"),
-                Closed = P("CuModeClosedReason"), NotDurable = CuNotDurable };
+                Closed = P("CuModeClosedReason"), Chosen = P("CuModeChosen"), NotDurable = CuNotDurable };
         }
 
         public uint? P(string name)
@@ -1368,17 +1368,20 @@ namespace AmdgpuWddmControl
                     // the release default of the manifest, not the firmware's 24 (BD-077): with 40 as the default,
                     // a reset to "Standard (24)" would take the cores away that an install gives. A release that
                     // names no CuMode gets 24, which is what the driver runs when the value is absent.
+                    // The run records no choice of a person (Plan record: false) and takes an earlier one away: a
+                    // reset hands the number of cores back to the installed release, so the next release's own
+                    // default applies to it again.
                     long cuDefault;
                     bool cuNamed = s.DefaultParameters.TryGetValue("CuMode", out cuDefault);
                     if (!cuNamed) cuDefault = CuMode.Stock;
                     else if (cuDefault != CuMode.Stock && cuDefault != CuMode.Full)
                         return Refuse(p, "The release default CuMode = " + cuDefault + " is out of range.");
                     var storedCu = s.StoredCu();
-                    var cu = CuMode.Plan(storedCu, (uint)cuDefault);
+                    var cu = CuMode.Plan(storedCu, (uint)cuDefault, 0, false);
                     // The setter writes the stock choice out as CuMode = 24 (BD-077). Under a release that names no
                     // number, an explicit 24 is not a default of that release: a key with no number is then left
                     // without one, and the setter runs only for the work that remains (a stored number to change, a
-                    // leftover confirmation or mask, the driver's own record).
+                    // leftover confirmation or mask, the driver's own record, a record of a person's choice).
                     bool writesStockOnly = !cuNamed && storedCu.Mode == null && cu.Steps.Where(x => x.Changes).All(x => x.Kind == "write-24");
                     if (!cu.Refused && !writesStockOnly) { p.Cu = cu; p.Preview.AddRange(cu.Preview); }
                     else if (storedCu.Unreadable) p.Notes.Add("The graphics-core setting cannot be read and is left as it is.");
@@ -1449,13 +1452,39 @@ namespace AmdgpuWddmControl
                     p.Title = "Graphics cores";
                     p.Effect = "at the next restart of Windows";
                     p.Undoable = false;
-                    if (more.Cu == null) return Refuse(p, "No graphics-core choice given (--cu 24 or 40).");
-                    p.Cu = CuMode.Plan(s.StoredCu(), more.Cu.Value);
-                    if (p.Cu.Refused) { var why = p.Cu.Refusal; p.Cu = null; return Refuse(p, why); }
-                    p.Preview.AddRange(p.Cu.Preview);
-                    p.Change = string.Join(" ", p.Cu.Preview);
-                    if (more.Cu == CuMode.Full) { p.Preview.Add(CuMode.EffectText()); p.Notes.Add("Effect: more power and heat, reference about +30 W at 1500 MHz on the lab unit, not a promise."); }
-                    if (p.Cu.Before.Disable != null) p.Notes.Add("CuDisableWgp was 0x" + p.Cu.Before.Disable.Value.ToString("X", CultureInfo.InvariantCulture) + " (an earlier diagnostic core limit) and is removed.");
+                    if (more.Cu == null) return Refuse(p, "No graphics-core choice given (--cu 24 to 40 in twos).");
+                    {
+                        // The number alone takes the default set of that number; with --cu-map the person's own set,
+                        // which has to give exactly that number of cores. The WGPs a mask may name come from the
+                        // start's own stock registers, so a mask the driver would refuse (INVALID_DISABLE) is
+                        // refused here, before anything is written.
+                        var stockActive = CuMode.StockActive(s.Cu);
+                        uint cuTarget, cuDisable;
+                        if (more.CuMap != null)
+                        {
+                            if (stockActive == null) return Refuse(p, "The graphics cores of this PC cannot be read, so a chosen set of cores cannot be checked. Use --cu without --cu-map.");
+                            cuDisable = more.CuMap.Value;
+                            if ((cuDisable & ~CuMode.Maskable(stockActive)) != 0)
+                                return Refuse(p, "CuDisableWgp 0x" + cuDisable.ToString("X", CultureInfo.InvariantCulture) + " names cores the firmware of this board keeps on; only 0x"
+                                    + CuMode.Maskable(stockActive).ToString("X", CultureInfo.InvariantCulture) + " may be turned off.");
+                            if (CuMode.ActiveCus(cuDisable) != more.Cu.Value)
+                                return Refuse(p, "CuDisableWgp 0x" + cuDisable.ToString("X", CultureInfo.InvariantCulture) + " leaves " + CuMode.ActiveCus(cuDisable)
+                                    + " graphics cores, not the " + more.Cu.Value + " of --cu.");
+                            cuTarget = cuDisable == CuMode.Maskable(stockActive) ? CuMode.Stock : CuMode.Full;
+                            if (cuTarget == CuMode.Stock) cuDisable = 0;
+                        }
+                        else if (!CuMode.RequestFor(more.Cu.Value, stockActive ?? CuMode.DocumentedStockActive(), out cuTarget, out cuDisable))
+                            return Refuse(p, "The number of graphics cores has to be 24 to 40 in twos.");
+                        p.Cu = CuMode.Plan(s.StoredCu(), cuTarget, cuDisable);
+                        if (p.Cu.Refused) { var why = p.Cu.Refusal; p.Cu = null; return Refuse(p, why); }
+                        p.Preview.AddRange(p.Cu.Preview);
+                        p.Change = string.Join(" ", p.Cu.Preview);
+                        if (cuTarget == CuMode.Full) { p.Preview.Add(CuMode.EffectText()); p.Notes.Add("Effect: more power and heat, reference about +30 W at 1500 MHz on the lab unit, not a promise."); }
+                        if (cuDisable != 0) p.Notes.Add("CuDisableWgp 0x" + cuDisable.ToString("X", CultureInfo.InvariantCulture) + " keeps " + CuMode.MaskText(cuDisable)
+                            + " masked, which leaves " + p.Cu.Cores + " of the 40 graphics cores.");
+                        else if (p.Cu.Before.Disable != null) p.Notes.Add("CuDisableWgp was 0x" + p.Cu.Before.Disable.Value.ToString("X", CultureInfo.InvariantCulture) + " and is removed.");
+                        if (stockActive == null) p.Notes.Add("The cores of this PC cannot be read, so the default set of that number is used.");
+                    }
                     p.Notes.Add("The old values are saved for diagnosis only; they are never restored and undo does not offer them (S6).");
                     p.OfferRestart = true;
                     break;
@@ -1613,7 +1642,8 @@ namespace AmdgpuWddmControl
 
         public sealed class PlanArgs
         {
-            public uint? Cu;
+            public uint? Cu;                    // the graphics cores a person asked for: 24 to 40 in twos
+            public uint? CuMap;                 // the CuDisableWgp mask of a hand-picked set, instead of the default set of that number
             public string Games, Image, Value;
             // The graphics settings (GraphicsSettings.ParseEdits): graphics-defaults for all games, game-profile for
             // its game. "FrameRateLimit=60,VSync=unset".

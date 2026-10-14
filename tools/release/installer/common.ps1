@@ -443,6 +443,7 @@ function Set-MachinePath([string]$Value, $Kind) {
 #             tester.1 to tester.7, which kept no record): the tester did not change it, write the new default
 #   kept      any other value: the tester's (or the control application's) setting, left alone
 #   command   given on the install.cmd command line (-DpmMaxMHz, -CuMode): written
+#   chosen    a person asked for this very value and the driver still holds it (Get-UserChoice below): kept
 #   installer installer-owned (paths, counters): always written
 #   restored  a value the driver package's INF writes that is not in the table: the value from before the install
 #   reopened      the driver closed this switch itself and this install is a repair: the default is written again
@@ -483,7 +484,12 @@ function Format-RegistryValue($V) { if ($V -is [array]) { return '[' + (@($V | F
 #       DPM_SETTING_LAST_REASON at every start with the SMU online). After one more start the installer cannot tell
 #       such a driver's guard 0 from a 0 the tester wrote, and the value stays 'kept'. A reopen deletes nothing
 #       there, because the record is the reason of the last start and that start owns it.
-#   CuMode   written 24 with CuModeClosedReason, the reason of the fallback: 3 (a start with all 40 graphics cores
+#   CuMode   NOTE: from tester.31 the release default is 24 (owner, 2026-10-14), and Get-DriverClosure returns
+#       nothing where the default equals the closed value, so this entry decides nothing while that default holds:
+#       a fallback 24 is 'same' and no repair is offered for it. The entry stays as it is, so the rule below works
+#       again by itself if a later release goes back to 40. What a release default of 24 needs instead is
+#       Get-UserChoice, further down: the record of a number a person asked for.
+#       written 24 with CuModeClosedReason, the reason of the fallback: 3 (a start with all 40 graphics cores
 #       was never confirmed), or 2, 6, 7, 8 and 9 for a 40 that did not hold in the hardware (driver/kmd/cumode.c
 #       PersistFallback, from bc250_cu_decide force_stock and from bc250_cu_hardware_fallback). From KMD
 #       0.7.216.62 that record outlives its boot, because no later start overwrites it and only a start that reads
@@ -570,6 +576,59 @@ function Get-DriverClosure([string]$Name, $Current, $Default) {
     }
     return $null
 }
+# A value a person asked for, the mirror of a driver closure (BD-077 with the sign reversed). Release\AppliedDefaults
+# records what the previous installer wrote, not who decided the value, so a 40 the tester chose in the control
+# application and the 40 tester.30 applied as its own release default are the same registry state. With the release
+# default at 24 (owner, 2026-10-14) the 'update' rule would then take a chosen 40, or a chosen map of cores, away at
+# every upgrade, and nothing else tells the two apart: both end in a confirmed start, so CuModeConfirmed is 40 in
+# both, and tester.30's application never wrote a mask.
+#   CuMode   CuModeChosen holds the encoded request a person asked for (mode | disable << 8, so 24, 40, or
+#       40 | mask << 8). The control application's CU setter writes it on every run (src/CuMode.cs, step S1c), and
+#       so does install.cmd -CuMode. "Reset to defaults" removes it, which hands the number of cores back to the
+#       installed release. The driver neither reads nor writes it.
+# The record alone decides nothing: it has to match the two values next to it exactly, as they are before the
+# install. A record that does not (a driver fallback moved CuMode, or somebody edited the key) is stale and is
+# ignored, and a driver closure keeps its precedence over the record, because the driver's act is the later one.
+# Nothing has to clear a stale record: the encoding is one value per (mode, mask) pair, so a record matches again
+# only when the key holds exactly what that person asked for.
+$script:UserChoices = @{
+    CuMode = @{ record = 'CuModeChosen'; mask = 'CuDisableWgp' }
+}
+# Pure: the values this install writes on the strength of its command line, which is more than the switches name.
+# install.cmd -CuMode N is the tester's word about the number of graphics cores, so the install records it as a
+# choice of a person (CuModeChosen), the same record the control application writes. The mask stays whatever the key
+# holds, because the installer never writes one, so the record has to describe that same pair or Get-UserChoice
+# would read it as stale at the next upgrade. $Before is the key as it is before the install.
+function Get-ExplicitParameters([hashtable]$Command, $Before) {
+    $e = @{}
+    foreach ($k in @($Command.Keys)) { $e[$k] = $Command[$k] }
+    if (-not $e.ContainsKey('CuMode')) { return $e }
+    $mode = 0
+    try { $mode = [int64]$e['CuMode'] } catch { return $e }
+    if (($mode -lt 0) -or ($mode -gt 255)) { return $e }
+    $mask = 0
+    if (($Before -is [Collections.IDictionary]) -and $Before.ContainsKey('CuDisableWgp')) {
+        try { $mask = [int64]$Before['CuDisableWgp'] } catch { return $e }
+    }
+    if (($mask -lt 0) -or ($mask -gt 0xFFFFF)) { return $e }
+    $e['CuModeChosen'] = [int](($mode -band 0xFF) -bor ($mask -shl 8))
+    return $e
+}
+# Pure: the record of a person's choice behind one value, or $null. $Current is the whole key, because the record
+# and the mask sit next to the value.
+function Get-UserChoice([string]$Name, $Current) {
+    if ($Current -isnot [Collections.IDictionary]) { return $null }
+    $c = $script:UserChoices[$Name]
+    if ($null -eq $c) { return $null }
+    if (-not $Current.ContainsKey($Name) -or -not $Current.ContainsKey($c.record)) { return $null }
+    $mode = $null; $record = $null; $mask = 0
+    try { $mode = [int64]$Current[$Name]; $record = [int64]$Current[$c.record] } catch { return $null }
+    if ($c.ContainsKey('mask') -and $Current.ContainsKey($c.mask)) { try { $mask = [int64]$Current[$c.mask] } catch { return $null } }
+    if (($mode -lt 0) -or ($mode -gt 255) -or ($mask -lt 0)) { return $null }
+    if ($record -ne (($mode -band 0xFF) -bor ($mask -shl 8))) { return $null }
+    return [pscustomobject]@{ record = $c.record; value = $mode; mask = $mask
+        text = "the value $mode is the one a person asked for in the control application or on the install command line" }
+}
 # Pure: the defaults, what the previous installer wrote, what is in the key now (name -> value; absent = no entry),
 # the command-line values and the installer-owned values in; one entry per value out (name, value, decision, write).
 function Get-RegistryDefaultPlan {
@@ -591,6 +650,9 @@ function Get-RegistryDefaultPlan {
         elseif ($null -ne $closure) {
             if ($Reopen) { $decision = 'reopened'; $value = $d.Value } else { $decision = 'driver-closed'; $value = $cur }
         }
+        # Before 'update' and 'kept': a value a person asked for and the key still holds is theirs, whatever the
+        # previous installer happened to write (Get-UserChoice above).
+        elseif ($null -ne (Get-UserChoice $d.Name $Current)) { $decision = 'chosen'; $value = $cur }
         # Move the old release ceiling, including a manual 1500 choice. Other ceilings stay.
         elseif ($d.Name -eq 'DpmMaxMHz') {
             if (Test-RegistryValueSame $cur 1500) { $decision = 'update'; $value = $d.Value }
@@ -742,6 +804,7 @@ function Format-RegistryPlan($Plan) {
             'set'       { $parts += "$($e.name)=$(Format-RegistryValue $e.value) (new)" }
             'update'    { $parts += "$($e.name) $(Format-RegistryValue $e.current) -> $(Format-RegistryValue $e.value) (new default; not changed by the tester)" }
             'kept'      { $parts += "$($e.name)=$(Format-RegistryValue $e.value) KEPT (changed by the tester; default $(Format-RegistryValue $e.default))" }
+            'chosen'    { $parts += "$($e.name)=$(Format-RegistryValue $e.value) CHOSEN (asked for in the control application or on the install command line; default $(Format-RegistryValue $e.default))" }
             'reopened'  { $parts += "$($e.name) $(Format-RegistryValue $e.current) -> $(Format-RegistryValue $e.value) (reopened by this repair: $($e.closure), $($e.closure_record) $($e.closure_code) $($e.closure_reason))" }
             'driver-closed' { $parts += "$($e.name)=$(Format-RegistryValue $e.value) KEPT ($($e.closure), $($e.closure_record) $($e.closure_code) $($e.closure_reason); not a setting of the tester; default $(Format-RegistryValue $e.default); remedy: install.cmd -Repair)" }
             'command'   { $parts += "$($e.name)=$(Format-RegistryValue $e.value) (command line)" }
@@ -3148,12 +3211,12 @@ function Get-PreviousAppliedDefaults($RegistryDefaults, [string]$Record) {
 # Pure: rows from the plans. $Groups: a list of @{ group = <name>; plan = <Get-RegistryDefaultPlan result> }.
 function Get-SettingsImpact($Groups) {
     $rows = New-Object System.Collections.ArrayList
-    $sum = [ordered]@{ kept = 0; updated = 0; added = 0; unchanged = 0; command = 0; reopened = 0; driver_closed = 0 }
+    $sum = [ordered]@{ kept = 0; updated = 0; added = 0; unchanged = 0; command = 0; reopened = 0; driver_closed = 0; chosen = 0 }
     foreach ($g in @($Groups)) {
         foreach ($e in @($g.plan)) {
             if ($e.decision -eq 'installer' -or $e.decision -eq 'restored') { continue }
             switch ($e.decision) { 'kept' { $sum.kept++ } 'update' { $sum.updated++ } 'set' { $sum.added++ } 'same' { $sum.unchanged++ } 'command' { $sum.command++ }
-                'reopened' { $sum.reopened++ } 'driver-closed' { $sum.driver_closed++ } }
+                'reopened' { $sum.reopened++ } 'driver-closed' { $sum.driver_closed++ } 'chosen' { $sum.chosen++ } }
             # closure: the driver's own act in plain words, for the window and the support report. The reason code
             # stays in the installer's log (Format-RegistryPlan).
             $closure = $null

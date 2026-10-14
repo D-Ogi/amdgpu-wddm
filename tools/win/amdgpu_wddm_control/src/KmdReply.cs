@@ -49,6 +49,10 @@ namespace AmdgpuWddmControl
     {
         public uint Version, Flags, Requested, Applied, Reason, ActiveCus, DisableMask, PciId;
         public ulong Generation;
+        // Per shader array, from the same ABI 1 payload: what the firmware left (StockCc, which says which WGPs a
+        // person may turn off at all) and what this start runs (ActiveWgps). The Graphics page draws its map from
+        // them instead of assuming the topology.
+        public uint[] StockCc, StockSpi, ActiveWgps;
         public const uint FlagValid = 1, FlagPending = 2, FlagConfirmed = 4;
         public bool Has(uint flag) { return (Flags & flag) != 0; }
     }
@@ -267,10 +271,14 @@ namespace AmdgpuWddmControl
         {
             Head(b, CuModeBytes, CmdCuMode);
             if (U(b, 5) != 1) throw new FormatException("CU mode ABI " + U(b, 5) + ", 1 expected");
+            // The dword indexes follow BC250_ESCAPE_CU_MODE (driver/kmd/bc250kmd_escape.h): 14 RlcPgCntl,
+            // 15 RlcAonWgpMask, 16 StockCc[4], 20 StockSpi[4], 24 Cc[4], 28 User[4], 32 Spi[4], 36 ActiveWgps[4],
+            // and Generation at byte 160. The ABI is unchanged: these fields were always sent, never read here.
             return new CuModeState
             {
                 Version = U(b, 3), Flags = U(b, 7), Requested = U(b, 8), Applied = U(b, 9), Reason = U(b, 10),
                 ActiveCus = U(b, 11), DisableMask = U(b, 12), PciId = U(b, 13), Generation = Q(b, 160),
+                StockCc = Vector(b, 16, 4), StockSpi = Vector(b, 20, 4), ActiveWgps = Vector(b, 36, 4),
             };
         }
 

@@ -5,6 +5,7 @@ cu.choice.all|mt-safe|c8029dd4|選択: すべて (40)。
 cu.choice.standard|mt-safe|fa436287|選択: 標準 (24)。
 cu.choice.invalid|mt|9ed29361|選択が無効です。標準 (24) またはすべて (40) を選んでください。
 cu.choice.unreadable|mt|ee127a9b|選択を読み取れません。
+cu.choice.some|mt|39a1d070|あなたの選択: グラフィックスコア {0} 個。
 cu.choice.driver-24|mt|a8fa591b|標準 (24) が設定されていますが、この数を選んだのはドライバーであり、あなたではありません。
 cu.note.driver-24|mt|0199b2dd|すべて (40) を選び、Windows を再起動すると、再び 40 コアすべてを使用します。
 cu.choice.after-restart|mt|07660ab1|次回の Windows 再起動後に適用されます。
@@ -20,26 +21,34 @@ cu.run.not-saved.next24|mt|0d9cc034|次回の起動は、選択どおり 24 コ�
 cu.run.fallback|mt|c1cc5938|前回の 40 コアでの起動が確認されなかったため、今回の起動は 24 コアを使っています。
 cu.run.refused|mt|9517c611|今回の起動では 40 コアを使用できませんでした。
 cu.run.unknown|mt|39943c8f|グラフィックス コアの数を読み取れません。
+cu.run.groups|mt|4d770aed|現在の各グループのコア数: {0}。
+cu.map.item|mt|5905f8e5|グループ {0} ペア {1}
 cu.next.standard|mt|7c94a6f5|次回の起動: 24 コア。
 cu.next.fallback|mt|d366069f|次回の起動: 24 コア (40 コア設定が確認されなかったため)。
 cu.next.ask40|mt|5af1df5d|次回の起動: 40 コア (起動後に確認が必要)。
-cu.next.ask40-limited|mt|cb27c040|次回の起動: 以前の診断用コア制限付きの 40 コア設定 (コア数が少なくなります)、起動後に確認が必要。
+cu.next.ask40-limited|mt|95fdb1b4|次回の起動: グラフィックスコア {0} 個。起動後に確認します。
 cu.next.confirmed40|mt|59baaddb|次回の起動: 40 コア (確認済み)。
-cu.next.confirmed40-limited|mt|487324b9|次回の起動: 以前の診断用コア制限付きの 40 コア設定 (コア数が少なくなります)、確認済み。
+cu.next.confirmed40-limited|mt|371afe5f|次回の起動: グラフィックスコア {0} 個 (以前に確認済み)。
 cu.next.unknown|mt|8bb23e4f|次回の起動: 予測できません。
 cu.refuse.target|mt|84439e4b|標準 (24) またはすべて (40) を選んでください。
 cu.refuse.unreadable|mt|d945441d|保存されている設定を読み取れません。
 cu.refuse.already40|mt|4f5796de|すべて (40) はすでに選択されています。
 cu.refuse.already24|mt|91c3ed3d|標準 (24) はすでに選択されています。
+cu.refuse.already-some|mt|ba20d575|グラフィックスコア {0} 個はすでに選ばれています。
+cu.refuse.map|mt|1de01451|これらのグラフィックスコアのペアは、このPCでは選べません。
 cu.preview.write40|mt|46267060|40 個すべてのグラフィックス コアを選択します。
 cu.preview.write24|mt|3920ecbe|標準の 24 グラフィックス コアを選択します。
 cu.preview.remove-closed|mt|93f4029d|標準の 24 グラフィックス コアがドライバーによる後退ではなく、あなたの選択であることを記録します。
+cu.preview.write40-some|mt|0345f0c0|40 個のうち {0} 個のグラフィックスコアを選びます。
+cu.preview.set-disable|mt|0056c790|次のグラフィックスコアのペアをオフにします: {0}。
+cu.preview.write-chosen|mt|2acbb148|この数をあなたの選択として記録します。ドライバーを更新しても保たれます。
+cu.preview.remove-chosen|mt|4986238d|グラフィックスコアの数を、インストール済みドライバーの設定に戻します。
 cu.preview.remove-confirmed|mt|d10b327e|以前の 40 コアの確認を削除し、新しい設定がその起動で確認されるようにします。
-cu.preview.remove-disable|mt|51075647|以前の診断用コア制限が削除されます。
+cu.preview.remove-disable|mt|7f38ddbb|グラフィックスコアのすべてのペアをもう一度オンにします。
 cu.result.nothing|mt|54ca5460|何も変更されていません。
 cu.result.saved|mt-safe|fca046cc|保存しました。
 cu.result.failed|mt|ec48fa5b|変更を完了できませんでした。
-cu.result.cleanup-incomplete|mt|894af8af|整理が完了していません。次回の起動は標準の 24 コアを使います。残っている以前の診断用コア制限によってコア数が減ることはありません。
+cu.result.cleanup-incomplete|mt|8e56e5c8|整理が完了していません。次回の起動では標準の 24 コアを使います。オフのまま残るコアのペアは、この数を減らしません。
 cu.effect|mt|60ee9b9b|コアが増えると消費電力と発熱が増えます。当社のテスト機では 1500 MHz で約 30 W 増えました。これは参考値であり、お使いの PC での保証ではありません。
 
 # ---- driver card ----
@@ -453,6 +462,15 @@ graphics.thermal|mt|14bc2f1d|熱保護は常にオンです。87 °C からド�
 graphics.cores.title|mt-safe|3b1c283f|グラフィックス コア
 graphics.cores.24|mt-safe|99b1c87b|標準 (24)
 graphics.cores.40|mt-safe|908ab6d1|すべて (40)
+graphics.cores.count|mt|202ea951|グラフィックスコアの数
+graphics.cores.count.item|mt|18b460db|コア {0} 個
+graphics.cores.map.show|mt|09bc7c18|コアのペアを自分で選ぶ
+graphics.cores.map.help|mt|c8e8a347|1 ペアはグラフィックスコア 2 個です。あるペアでPCが停止したり固まる場合は、そのペアだけをオフにして、ほかはオンのままにします。
+graphics.cores.map.unreadable|mt|4a1e2bd6|このPCのコアのペアを今は読み取れないため、選べません。代わりにコアの数を選んでください。
+graphics.cores.map.group|mt|e5d24a19|グループ {0}
+graphics.cores.map.pair|mt|c2d4e788|ペア {0}
+graphics.cores.map.name|mt|e7997c8a|グループ {0}、ペア {1}: グラフィックスコア 2 個
+graphics.cores.map.fixed|mt|f017032a|常にオン
 graphics.not-installed|mt|17713c9c|ドライバーがインストールされていないため、ここで設定できるものはありません。
 graphics.unsaved|mt|fdb121dc|まだ適用されていない変更があります。
 graphics.saved|mt|75d79f0a|保存されていない変更はありません。

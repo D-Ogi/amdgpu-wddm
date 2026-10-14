@@ -10,21 +10,23 @@
 - The unlock does not flash the BIOS. It does not write the SPI flash, CMOS or NVRAM, and it does not change a
   clock or a voltage. The only lasting state is one registry value. Remove the value, restart, and the GPU
   has 24 CUs again.
-- The release default is 40. The board's firmware switches on 24. You choose 24 to go back, and that choice is
-  written into the key as `CuMode = 24`, so every later install keeps it.
-- A 40 CU start must reach a healthy desktop. If it does not, the next start goes back to 24 by itself and
-  records why. The record is `CuModeClosedReason`, and the release installer reads it: an install keeps that 24
-  and names it, `install.cmd -Repair` writes 40 again.
+- The release default is 24, the number the board's firmware switches on (owner, 2026-10-14. tester.30 shipped
+  40, BD-077). You choose any even number from 24 to 40, and that choice is written into the key together with
+  `CuModeChosen`, the record that every later install reads as your own choice.
+- A count above 24 must reach a healthy desktop. If it does not, the next start goes back to 24 by itself and
+  records why. The record is `CuModeClosedReason`. With 24 as the release default, an install writes that same 24
+  anyway, so there is nothing for `install.cmd -Repair` to reopen there.
 
 ## How to turn on 40 CUs
 
-A release install writes `CuMode = 40` by itself (the table of
-`tools/release/installer/registry-defaults.json`), so a fresh install starts with all 40 CUs and its first start
-asks for the confirmation below. The two ways to choose the number by hand:
+A release install writes `CuMode = 24` by itself (the table of
+`tools/release/installer/registry-defaults.json`), so a fresh install starts on the firmware's own 24 CUs and
+asks for no confirmation. The two ways to choose the number by hand:
 
-- **When you install:** `install.cmd -CuMode 40`, or `install.cmd -CuMode 24` for the firmware's number.
-- **After the install:** open the amdgpu-wddm control app, go to the Graphics page, select 40 compute units,
-  and restart Windows when the app offers it.
+- **When you install:** `install.cmd -CuMode 40` for all of them, or `install.cmd -CuMode 24`. The installer
+  writes `CuModeChosen` with the number, so the next upgrade keeps it.
+- **After the install:** open the amdgpu-wddm control app, go to the Graphics page, select the number of cores
+  (24 to 40 in twos) or pick the pairs yourself on the map, and restart Windows when the app offers it.
 
 After the restart, the start confirmation task (the small blue window after logon) confirms the 40 CU start
 once the desktop has run healthy for one minute. Do not end that task.
@@ -37,12 +39,14 @@ To check the result:
 - `CuModeLastReason` tells why a start applied 24. The reasons are in the "Settings and the boot guard" section
   below.
 
-To go back to 24, select 24 on the same page, or write `CuMode = 24` by hand, and restart. The page writes the
-number out as `CuMode = 24`. It does not delete the value. With 40 as the release default, a deleted value is a
-key that the release installer never configured, and the next install would write 40 over the choice.
+To go back to 24, select "Standard (24)" on the same page, or write `CuMode = 24` by hand, and restart. The page
+writes the number out as `CuMode = 24`. It does not delete the value: a deleted value is a key that the release
+installer never configured, which it then writes its own default over (BD-077).
 
 If one WGP of your board does not work, `CuDisableWgp` keeps it masked while the others run (see the settings
-table below). Only the WGPs that the firmware disables are accepted there.
+table below). Only the WGPs that the firmware disables are accepted there. The Graphics page writes that mask
+itself, either from the count you select (the default set of that count, in the table below) or from the map of
+pairs you pick yourself. One pair is one WGP, that is two CUs. The page never says "WGP" to the person.
 
 The lab unit first applied 40 CUs on a cold boot on 2026-09-30 (KMD 0.7.179.1: 40 counted on all four shader
 arrays). The release validation installs with `-CuMode 40` and checks the applied mode before it measures.
@@ -182,18 +186,61 @@ anything by the active CU count; the dispatch masks are all-ones, so the SPI mas
 ## Settings and the boot guard
 
 All values are REG_DWORD under `HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters`. None is in the
-INF; an absent `CuMode` means 24. The release installer writes `CuMode = 40` at an install, so the value is
+INF; an absent `CuMode` means 24. The release installer writes `CuMode = 24` at an install, so the value is
 absent only on a machine that this installer never configured (`tools/quality/inf_gates.py` `NOT_IN_INF` holds
 the name, because the INF must not clobber the boot guard's own writes).
 
 | Value | Written by | Meaning |
 |---|---|---|
 | `CuMode` | cumode tool, release installer, control app, driver on fallback | 24 or 40. Anything else: stock, reason `INVALID_SETTING` |
-| `CuDisableWgp` | cumode tool | with 40: WGPs kept masked, bit `sa * 5 + wgp`, stock-inactive WGPs only |
-| `CuModePending` | driver | the encoded 40 request (`mode | disable << 8`) of a start nobody confirmed |
+| `CuDisableWgp` | cumode tool, control app | with 40: WGPs kept masked, bit `sa * 5 + wgp`, stock-inactive WGPs only |
+| `CuModeChosen` | control app, release installer | the encoded request a person asked for (`mode \| disable << 8`). The driver neither reads nor writes it. The installer reads it to tell a number a person chose from a number a release applied |
+| `CuModePending` | driver | the encoded 40 request (`mode \| disable << 8`) of a start nobody confirmed |
 | `CuModeConfirmed` | driver | the encoded request a healthy start confirmed |
 | `CuModeLastApplied`, `CuModeLastReason` | driver | what the last start did, readable without the adapter |
 | `CuModeClosedReason` | driver on fallback | 0.7.216.62: the reason the driver itself wrote `CuMode` 24. `PersistFallback` writes it, a start that reads a `CuMode` other than 24 deletes it, a start that reads 24 (or no value) leaves it alone |
+
+**A count between 24 and 40** (owner, 2026-10-14). The hardware switches CUs on in pairs (one WGP), so the
+counts are 24 to 40 in twos. Every count above 24 is `CuMode = 40` with a `CuDisableWgp` mask. 24 is the stock
+path with no mask at all. The default set of a count takes the highest free WGP of shader array 0, then of 1, 2
+and 3, then the next one down, so the cores stay as even across the four arrays as the step allows
+(`CuMode.DefaultOrder`, `CuMode.DefaultDisable`):
+
+| Cores | `CuMode` | `CuDisableWgp` | Cores per shader array |
+|---|---|---|---|
+| 40 | 40 | absent | 10, 10, 10, 10 |
+| 38 | 40 | `0x00010` | 8, 10, 10, 10 |
+| 36 | 40 | `0x00210` | 8, 8, 10, 10 |
+| 34 | 40 | `0x04210` | 8, 8, 8, 10 |
+| 32 | 40 | `0x84210` | 8, 8, 8, 8 |
+| 30 | 40 | `0x84218` | 6, 8, 8, 8 |
+| 28 | 40 | `0x84318` | 6, 6, 8, 8 |
+| 26 | 40 | `0x86318` | 6, 6, 6, 8 |
+| 24 | 24 | removed | 6, 6, 6, 6 |
+
+A person who knows which pair of their board is broken picks the pairs themselves on the map of the Graphics
+page, which writes any mask inside `0xC6318` (the eight stock-inactive WGPs of this board). The window reads the
+board's own stock set from the CU READ snapshot (`StockCc`), so it never offers a pair the driver would refuse
+with `INVALID_DISABLE`. On a board whose stock set is not this one, the map is read-only and the counts use the
+documented set.
+
+**The record of a person's choice** (`CuModeChosen`, owner 2026-10-14). The release default is 24 and tester.30's
+was 40, and `Release\AppliedDefaults` records what the previous installer wrote, not who decided it: a 40 a
+person chose in the control application and the 40 tester.30 applied are the same registry state (both end in a
+confirmed start, so `CuModeConfirmed` is 40 in both, and tester.30 never wrote a mask). Nothing else tells them
+apart, so the upgrade needs its own record:
+
+- The control application writes `CuModeChosen` on every run of the CU setter (step `S1c`), and so does
+  `install.cmd -CuMode`. "Reset to defaults" removes it, which hands the number of cores back to the installed
+  release.
+- The installer reads it before the `update` and `kept` rules (`Get-UserChoice`, decision `chosen`). The record
+  has to describe `CuMode` and `CuDisableWgp` exactly as they are before the install. A record that does not (a
+  driver fallback moved `CuMode`, or somebody edited the key) is stale and decides nothing. Nothing has to clear
+  a stale record: one value stands for one (mode, mask) pair, so it matches again only when the key holds what
+  that person asked for.
+- A driver closure keeps its precedence over the record, because the driver's act is the later one.
+- The upgrade from tester.30 to tester.31 takes a chosen 40 away once, by design: tester.30 wrote no record, so
+  its 40 reads as the release default it was. The release notes say so, and the number is one click away.
 
 **Guard sequence for a 40 request.**
 
@@ -209,8 +256,8 @@ the name, because the INF must not clobber the boot guard's own writes).
   `READBACK`, `RESTORE_FAILED`).
 - 40 is never retried unasked: `cumode set 40` is the retry.
 
-**The record of a fallback** (0.7.216.62, BD-077). The release default is 40, so a 24 in the key is either the
-fallback's or the tester's, and the release installer has to tell them apart. `CuModeClosedReason` does that:
+**The record of a fallback** (0.7.216.62, BD-077). While the release default was 40, a 24 in the key was either
+the fallback's or the tester's, and the release installer had to tell them apart. `CuModeClosedReason` does that:
 
 - Only `PersistFallback` writes it, and the record goes in before the 24 it describes. A start that dies between
   the two writes leaves a record next to a `CuMode` that still asks for 40, and the next start deletes the record
@@ -232,8 +279,11 @@ fallback's or the tester's, and the release installer has to tell them apart. `C
   tester's value (`tools/release/README.md`). `DpmLastReason` is sound for `DpmMode` because no start but a
   fallback writes its three reasons.
 - The installer's side of the same contract is `$script:DriverClosures` in
-  `tools/release/installer/common.ps1`: an install keeps the 24 and names it, `install.cmd -Repair` writes 40
-  again and deletes the record.
+  `tools/release/installer/common.ps1`: an install keeps the 24 and names it, `install.cmd -Repair` writes the
+  release default again and deletes the record. With the release default back at 24 (owner, 2026-10-14) that
+  entry is inert: `Get-DriverClosure` returns nothing where the default equals the closed value, because an
+  install writes that same 24 anyway. The entry stays for a release whose default is 40 again, and
+  `tools/release/test-cu-mode-installer.ps1` holds it to both cases.
 
 **Confirmation.** It needs the healthy milestone the deploy procedure already uses: start-health READY,
 visible, completions, at least 60 s of it, fresh.
@@ -316,6 +366,18 @@ section above.
 - `firmware_metadata_test.c`: the caps patch runs after the template and the firmware section.
 - `start_health_test.c`: a durable confirmation confirms the CU mode outside the spin lock, a failed one does
   not; `StartHealthIsReady` equals the CONFIRM milestone.
+- The host side of the count and the map (owner, 2026-10-14):
+  - `tools/win/amdgpu_wddm_control/test/CuTests.cs` (`CuCount`): the count-to-mask table above, the stock set
+    read from a snapshot and the boards this page cannot map, a hand-picked map and every map the driver would
+    refuse, the record `CuModeChosen` and the plan that removes it, and the sentence that names the cores of
+    each group. The G-PLAN expectations of `build.ps1` hold the step order of 24, 30 and 40 and the refusal of
+    `--cu-map` without a reading of the board.
+  - `tools/release/test-cu-mode-installer.ps1` and `tools/release/test-registry-defaults.ps1`: the release
+    default 24, the upgrade rule, a stale record, the inert closure, and the record `install.cmd -CuMode`
+    writes.
+- The partial path has **not** run on hardware yet. Every count between 24 and 40 is new on the lab. The KMD
+  side of it (`bc250_cu_targets` per shader array, the caps patch from the readback) is unchanged since
+  0.7.216.64 and is covered by `run_cu_mode.ps1` "a disable mask" alone.
 
 ## Open questions
 
