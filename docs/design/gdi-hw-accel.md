@@ -27,6 +27,10 @@ function, and the gate `EnableGdiHwAccel` is on when the registry says nothing.
 So this driver now sets `SupportKernelModeCommandBuffer`, which promises all seven operations, and
 clears `DriverSupportsCddDwmInterop`.
 
+This work goes to the train after tester.31. The reason is the capacity question of the review, and
+[What bounds the command buffer](#what-bounds-the-command-buffer) answers it from the operating
+system binaries.
+
 Nothing of this has run on the lab. The host tests run the kernels' own source text on this
 processor, which proves the arithmetic and the addressing and says nothing about the instructions
 the compiler chose. The lab plan is
@@ -390,9 +394,58 @@ budget reserves a full dispatch for each sub-rectangle while a one-pixel rectang
 the seven-dword row path. The buffer is sized for the worst case, which is 6141 rectangles that
 each need a dispatch.
 
-What the DDI does not publish is the size of the command buffer dxgkrnl gives a GDI context, so that
-bound is this driver's choice and not the operating system's promise. Three things follow from that,
-and they are the whole of the residual risk:
+#### What bounds the command buffer
+
+The DDI does not publish the size of the command buffer that a GDI context receives. The producer of
+that buffer does. The canonical display driver `cdd.dll` is the only producer of these commands. It
+allocates the buffer, it fills it, and dxgkrnl gives its length to this driver without a change. The
+number is therefore a fact of the operating system binaries, and it was read from them.
+
+The binaries read are `cdd.dll` 10.0.22621.6630 with `dxgkrnl.sys` 10.0.22621.6199, and `cdd.dll`
+10.0.26100.9444 with `dxgkrnl.sys` 10.0.26100.9444. These are the 23H2 line of the lab and the 24H2
+line. The 22621 file was taken by the image identity of the lab's own copy. The binaries and their
+disassembly stay outside this repository, because they are Microsoft's property. The addresses below
+are virtual addresses of the loaded image, as the public symbols of each build give them.
+
+The producer's own buffer, the same at both builds:
+
+- the producer's buffer constructor allocates the buffer
+  with `EngAllocMem` and the size that its caller gives.
+- the producer's device start creates the two buffers of the device, each with the literal size 0x10000.
+- the producer's buffer reset puts the write pointer at the base of the buffer, and the
+  limit at the base plus the literal 0x10000.
+- Each command builder computes `0x30 + 16 * count` and refuses the command if the write pointer plus
+  that size passes the limit. the ColorFill builder does it  and. the BitBlt builder, the TransparentBlt builder,
+  the StretchBlt builder, the AlphaBlend builder and the ClearTypeBlend builder use the same
+  arithmetic, the same limit and the same gate on the accumulated area.
+- the producer's flush submits the bytes that were written, which is what it wrote. It puts that number at offset
+  0x10 of the submission structure, the buffer pointer at 0x20 and the allocation list at 0x30.
+- dxgkrnl's GDI entry gives that structure to dxgkrnl's render step as a `D3DKMT_RENDER`, eight bytes
+  in. The submitted length lands in `CommandLength`.
+- dxgkrnl's render step fills `DXGKARG_RENDERGDI`. The command address is `pNewCommandBuffer` plus
+  `CommandOffset`, and `CommandLength` is copied with no test of its value.
+
+So the `CommandLength` of a `DxgkDdiRenderGdi` call is at most 65536 bytes at both builds.
+`BC250_GDI_CMDBUF_BOUND` of 96 KiB is above that maximum with half of it again to spare. The largest
+command the producer can send is 65536 bytes, and it carries at most 4093 sub-rectangles.
+
+The size is a literal of the producer. No step of that chain reads a value that a display miniport
+driver gives, so the `DmaBufferSize` of our GDI context has no part in it.
+
+What the producer does when a batch does not fit is this. The builder flushes the buffer and returns
+0. Its caller then calls
+the same builder a second time, as its fill callback does.
+The buffer is empty at the second call, so each command of at most 65536 bytes is accepted. No
+drawing is lost by the refusal, and a length above 65536 bytes cannot arrive.
+
+Two more bounds of the same chain are worth the record:
+
+- dxgkrnl refuses a GDI submission of more than 32 allocations, although the producer's own allocation list holds 256 entries.
+- the producer's internal-bitmap start creates a third command buffer of 512 bytes, although the buffer reset gives each buffer the limit of 64 KiB. That
+  difference is Microsoft's business. It can only make a submitted length smaller.
+
+The bound is thus the producer's and not a guess, for these two Windows lines. A later Windows could
+raise it, so the three measures below stay in the driver:
 
 - `GdiRenderPeakCommandLength` records the largest `CommandLength` the field ever sends, so the
   bound becomes a measured number rather than a guess. Trial 3 of
