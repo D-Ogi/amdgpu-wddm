@@ -271,6 +271,14 @@ if (Test-Path -LiteralPath $pendingDir) {
 $setupSrc = Join-Path $SetupApp 'amdgpu_wddm_setup.exe'
 $setupPkg = Join-Path $pkgRoot 'setup.exe'
 Copy-Item -LiteralPath $setupSrc -Destination $setupPkg
+# BD-166: the PE files are final here, so every PE file of the payload and setup.exe gets this release's version
+# resource now, before Inf2Cat and signing (tools\build\versionstamp.py; the KMD has it from its own .rc). The stamp
+# also re-points each M14C record to the stamped engine and ICD. The gates below check the result and the order.
+$stampTool = Join-Path $repo 'tools\build\versionstamp.py'
+$stampInf = Join-Path $pkg 'payload\kmd\bc250kmd.inf'
+$r = Invoke-Headless -File $pythonExe -Arguments @($stampTool, 'release', '--package', $pkg, '--setup', $setupPkg, '--version', $Version, '--sources', (Join-Path $PSScriptRoot 'release-sources.json'), '--inf', $stampInf) -TimeoutSeconds 600
+$r.text
+if ($r.code -ne 0) { throw 'version resources: the package could not be stamped (see above)' }
 # A .NET application configuration file, when the build makes one, belongs to the exe under its new name.
 foreach ($f in Get-ChildItem -LiteralPath $SetupApp -File -Filter 'amdgpu_wddm_setup.exe.config') { Copy-Item -LiteralPath $f.FullName -Destination "$setupPkg.config" }
 $setupHash = (Get-FileHash -LiteralPath $setupPkg -Algorithm SHA256).Hash
@@ -464,12 +472,19 @@ $topFiles = @(Get-ChildItem -LiteralPath $pkgRoot -File | ForEach-Object { $_.Na
 $topDirs = @(Get-ChildItem -LiteralPath $pkgRoot -Directory | ForEach-Object { $_.Name } | Where-Object { $_ -ne 'files' })
 if ($topFiles.Count -or $topDirs.Count) { throw "the unpacked package's top folder may hold only setup.exe and files\: it also holds $(@($topFiles + $topDirs) -join ', ')" }
 '  top folder: setup.exe and files\ only'
+# BD-166: every PE file of the unpacked release carries this release's version resource (read back through the Windows
+# version API) unless release-sources.json marks it third_party, each M14C record pins its siblings, and the order was
+# stamp, Inf2Cat, signing: each signature still covers its file and each catalog lists the file's hash. --signed: this
+# release signs every PE file, so an unsigned one (or this gate placed before the signing) fails too.
+$r = Invoke-Headless -File $pythonExe -Arguments @($stampTool, 'check', '--package-top', $pkgRoot, '--version', $Version, '--sources', (Join-Path $PSScriptRoot 'release-sources.json'), '--inf', $stampInf, '--signed') -TimeoutSeconds 600
+$r.text
+if ($r.code -ne 0) { throw 'version resources: a PE file lacks the resource of this release, or a step ran out of order (see above)' }
 # The packaged copies against release-sources.json: each is its source byte for byte, the re-signed kernel driver keeps
 # its recorded Authenticode digest, and only an entry that names its "release_edits" (the INF) differs otherwise.
 if ($NoProvenance) {
     '  package provenance: GATE OFF by -NoProvenance (the commits of this candidate are not published yet)'
 } else {
-    $r = Invoke-Headless -File $pythonExe -Arguments ($provenanceArgs + @('--package', $pkg)) -TimeoutSeconds 300
+    $r = Invoke-Headless -File $pythonExe -Arguments ($provenanceArgs + @('--package', $pkg, '--package-version', $Version)) -TimeoutSeconds 600
     $r.text -split "`r?`n" | Where-Object { $_ -match '^(FAIL|provenance: (FAIL|PASS))' } | ForEach-Object { "  package $_" }
     if ($r.code -ne 0) { throw 'provenance: a packaged file is not the recorded one (see above)' }
 }

@@ -7,13 +7,14 @@ submodule, and a workspace root with the payload source files. A complete manife
 gate exists for must fail with its own message: an entry without provenance, a commit that no remote-tracking branch
 of the repository's URL holds, a submodule commit that is not published, a source or data file with other bytes, an
 "unverified" entry without a reason, a recipe that the recipe commit does not have, an unknown argument placeholder,
-a download that is not https, a packaged copy that is not its source, and a re-signed driver whose Authenticode digest
-changed. The Authenticode digest itself must ignore the checksum, the security directory and the certificate table.
+a download that is not https, a packaged copy that is not its source, a packaged PE file without the version resource
+of its release (--package-version, BD-166), and a re-signed driver whose Authenticode digest changed. The Authenticode digest itself must ignore the checksum, the security directory and the certificate table.
 rebuild-check.ps1 must keep the log of a failed build (with pwsh 7 on PATH; the test is skipped without it).
 BC250_TEST_OUT, when set, holds the temporary trees (quick.ps1 keeps them off drive C:).
 """
 import copy
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -67,6 +68,18 @@ def fake_pe(body, signature=b""):
     data = bytearray(image)
     data[optional + 64:optional + 68] = struct.pack("<I", 0x1234)  # a signer fills in the checksum
     data[security:security + 8] = struct.pack("<II", len(image), len(signature))
+    return bytes(data) + signature
+
+
+def add_signature(image, signature):
+    """A real PE image under a certificate table, as signtool writes it: zero padding to 8 bytes, a checksum, the
+    security directory entry and the table at the end."""
+    data = bytearray(image + b"\0" * (-len(image) % 8))
+    pe = struct.unpack_from("<I", data, 0x3C)[0]
+    optional = pe + 24
+    security = optional + (96 if struct.unpack_from("<H", data, optional)[0] == 0x10B else 112) + 4 * 8
+    struct.pack_into("<I", data, optional + 64, 0x1234)
+    struct.pack_into("<II", data, security, len(data), len(signature))
     return bytes(data) + signature
 
 
@@ -160,9 +173,10 @@ class Workspace:
         e.update(provenance_fields)
         return e
 
-    def check(self, manifest=None, package=None):
+    def check(self, manifest=None, package=None, package_version=None, package_flavour="release"):
         self.manifest_path.write_text(json.dumps(manifest or self.manifest), encoding="utf-8")
-        errors, rows, counts = provenance.check(self.manifest_path, self.root, self.tool, package)
+        errors, rows, counts = provenance.check(self.manifest_path, self.root, self.tool, package, package_version,
+                                                package_flavour)
         return errors, rows, counts
 
 
@@ -199,8 +213,8 @@ class ProvenanceGate(unittest.TestCase):
     def file(self, m, path):
         return next(f for f in m["files"] if f["path"] == path)
 
-    def assertFails(self, manifest, text, package=None):
-        errors, _, _ = self.ws.check(manifest, package)
+    def assertFails(self, manifest, text, package=None, package_version=None, package_flavour="release"):
+        errors, _, _ = self.ws.check(manifest, package, package_version, package_flavour)
         self.assertTrue(any(text in e for e in errors), f"no error with {text!r} in {errors}")
 
     def test_complete_manifest_passes(self):
@@ -370,6 +384,55 @@ class ProvenanceGate(unittest.TestCase):
         # Another image under the release signature fails.
         (package / "payload" / "driver.sys").write_bytes(fake_pe(b"\x02" * 64, b"release signature"))
         self.assertFails(m, "Authenticode digest of", package=package)
+
+    def test_package_version_stamps(self):
+        # BD-166: with --package-version a packaged PE file is its source with that release's version resource, made
+        # again by the gate; the driver row keeps its Authenticode rule and a non-PE row stays byte for byte.
+        self.fresh_workspace()
+        vs = provenance.load_versionstamp()
+        spec = importlib.util.spec_from_file_location("test_versionstamp", Path(vs.__file__).with_name("test_versionstamp.py"))
+        images = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(images)
+        engine = images.make_pe(sections=((b".text", b"\xc3" * 64, 0x60000020),))
+        (self.ws.root / "scratch" / "engine.dll").write_bytes(engine)
+        m = self.manifest()
+        row = self.file(m, "payload/engine.dll")
+        row["path"], row["sha256"] = "payload/d3d11/amdgpu_wddm_dxvk.dll", sha(engine)
+        package = Path(self.tmp) / "package"
+        for f in m["files"]:
+            dst = package / f["path"]
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(self.ws.root / f["source"], dst)
+        (package / "payload" / "kmd").mkdir(parents=True, exist_ok=True)
+        (package / "payload" / "kmd" / "bc250kmd.inf").write_text('[Strings]\nProvider = "amdgpu-wddm"\n', encoding="ascii")
+        version = "0.7.216.102-tester.31"
+        self.assertFails(m, "the source with the version resources of", package=package, package_version=version)
+        packaged = package / "payload" / "d3d11" / "amdgpu_wddm_dxvk.dll"
+        vs.stamp_file(packaged, version, "amdgpu-wddm", vs.load_table())
+        errors, _, _ = self.ws.check(m, package=package, package_version=version)
+        self.assertEqual(errors, [])
+        self.assertFails(m, "the source with the version resources of", package=package,
+                         package_version="0.7.216.103-tester.32")
+        # tester.31 signs every PE file after the stamp: the stamped image under a signature passes, the unstamped
+        # source under a signature does not.
+        stamped = packaged.read_bytes()
+        packaged.write_bytes(add_signature(stamped, b"release signature"))
+        errors, _, _ = self.ws.check(m, package=package, package_version=version)
+        self.assertEqual(errors, [])
+        packaged.write_bytes(add_signature(engine, b"release signature"))
+        self.assertFails(m, "the source with the version resources of", package=package, package_version=version)
+        packaged.write_bytes(stamped)
+        # The lab flavour of the same release: the gate of that flavour passes, the release one does not.
+        self.assertFails(m, "the source with the version resources of", package=package, package_version=version,
+                         package_flavour="lab")
+        shutil.copyfile(self.ws.root / "scratch" / "engine.dll", packaged)
+        vs.stamp_file(packaged, version, "amdgpu-wddm", vs.load_table(), flavour="lab")
+        errors, _, _ = self.ws.check(m, package=package, package_version=version, package_flavour="lab")
+        self.assertEqual(errors, [])
+        self.assertFails(m, "the source with the version resources of", package=package, package_version=version)
+        packaged.write_bytes(stamped)
+        # Without --package-version the gate is the byte-for-byte one of before.
+        self.assertFails(m, "the packaged copy is", package=package)
 
 
 class RebuildCheckLogs(unittest.TestCase):

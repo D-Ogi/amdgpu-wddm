@@ -263,7 +263,10 @@ a placeholder: `{src}`, `{out}`, `{root}`, `{input:<name>}`, `{payload:<package 
    that repository must contain the commit (`git branch -r --contains`). The recipe must exist at its commit. Each
    source file must have its recorded hash. A data file must be its blob, byte for byte.
 2. In the gates step, the check also reads the package (`--package`). Each packaged copy must be its source. A
-   re-signed file must have the recorded Authenticode digest. Only an entry with `release_edits` can differ.
+   re-signed file must have the recorded Authenticode digest. Only an entry with `release_edits` can differ. With
+   `--package-version`, a PE file must be its source with the version resource of that release, and an M14C record
+   must be its source with the hashes of the stamped engine and ICD. The check makes each stamp again and compares
+   the bytes, or the Authenticode digest when the release signed the file after the stamp (see "Version resources").
 
 `-RebuildCheck` also runs `rebuild-check.ps1`, which is slow and therefore off by default. That script builds each
 `built_from` entry again from its commit, in temporary work trees under `scratch\repro-builds\rb`. It compares the
@@ -278,6 +281,58 @@ pwsh -File tools\release\rebuild-check.ps1 -Twice -IncludeUnverified    # two bu
 
 When a rebuild gives the bytes of an `unverified` entry, the script reports it. Remove the `unverified` field in
 the same commit that records the result.
+
+## Version resources
+
+A game reads the user-mode driver version through DXGI `CheckInterfaceSupport`. The kernel takes that number from
+the file version of the first `UserModeDriverName` entry that is not `<>`, which is the router. A DLL without a
+version resource reads as 0.0.0.0 (BD-166). The release build therefore stamps every PE file of the package with one
+version resource, from `tools\build\versionstamp.py`:
+
+| Field | Value |
+|---|---|
+| `FILEVERSION`, `PRODUCTVERSION`, `FileVersion` | The AMD-scheme number of the package version: (a + 40).b.c.d, so 0.7.216.102 gives 40.7.216.102. Each field is at most 65534. |
+| `ProductVersion` | The package version text, for example `0.7.216.102-tester.31`. |
+| `CompanyName`, `ProductName` | The `Provider` string of `bc250kmd.inf`. |
+| `FileDescription` | `tools\build\versioninfo.json`, by file name. |
+| `InternalName`, `OriginalFilename` | The file name. |
+| `FILEFLAGS`, `PrivateBuild` | Release flavour: 0 and no `PrivateBuild`. Lab flavour (`--flavour lab`): `VS_FF_PRIVATEBUILD` and `PrivateBuild` "lab", with the same numbers. The gate checks one flavour, so a file of the other flavour fails it. |
+
+The stamp adds a resource section after the last section of the image. A .NET program already has a resource section
+as its last section, and the stamp writes that section again with every other resource kept. The code, the data, the
+debug directory and the PDB identity do not change, so symbols still match. The SizeOfImage changes, so a debugger
+that loads the image from a symbol store needs the stamped file. The stamp of one source and one version gives the
+same bytes each time.
+
+The order of the steps is: stamp, then Inf2Cat, then signing. A stamp after the catalog or after a signature is a
+defect, because the catalog hash and the signed digest then belong to other bytes. `build-release.ps1` runs the tool
+in two places:
+
+1. `versionstamp.py release --setup`, right after `setup.exe` is copied, when the PE files of the package are final
+   and before Inf2Cat and the first signature. It stamps every PE file of the payload and `setup.exe`, except the
+   `third_party` entries and the files that `versioninfo.json` lists under `built`. Then it writes the hashes of the
+   stamped engine and ICD into each M14C record, after it has checked that the record pinned the unstamped pair.
+   The capabilities in the record do not change.
+2. `versionstamp.py check --signed` in the gates step, after the last Inf2Cat and signing. Each PE file of the
+   unpacked release must carry the version resource of this release, read back through the Windows image loader
+   and the version API. A new PE file that has no `FileDescription` in `versioninfo.json` stops the build, and so
+   does a file without the resource. Each M14C record must pin its siblings. Each signature must still cover its
+   file (`WinVerifyTrust` gives `TRUST_E_BAD_DIGEST` for a file changed after signing), and each catalog under the
+   package must list the Authenticode hash of each of its members. With `--signed`, an unsigned PE file and a
+   package without a catalog entry fail too, so the gate cannot pass when it runs before those steps.
+
+The KMD is `built`: `release-sources.json` pins its Authenticode digest, so it gets its version resource from
+`driver\kmd\bc250kmd.rc` when it is compiled, not from a stamp. The KMD build writes the `version-stamp.h` of that
+resource with `versionstamp.py rc-header` (`--flavour lab`, or `--lab`, for the lab flavour), so the numbers and
+strings are the ones the gate expects, and links the compiled resource. The gate checks the KMD like a stamped file.
+The DirectX adapter record (`DXCACHE` `DriverVersion`) reads its number from the KMD.
+
+A lab-flavour package passes `--flavour lab` to `release` and `check` and `--package-flavour lab` to the provenance
+gate. The provenance gate with `--package-version` makes each stamp again from the source. When the release signs a
+file after the stamp, the packaged copy must have the Authenticode digest of the stamped image.
+`python -m unittest discover -s tools\build -p test_versionstamp.py` is the host test (the `version-stamp` check of
+`tools\quality\quick.ps1`). It runs the order tests on a real signed driver package when `BC250_SIGNED_PACKAGE`
+names the folder that holds `bc250kmd.sys` and `bc250kmd.cat`.
 
 PROVENANCE: vulkaninfo.exe 1.4.335 from Khronos Vulkan-Tools (LunarG build), Apache-2.0.
 PROVENANCE: linux-firmware `amdgpu/cyan_skillfish2_*.bin` at 2b8daaf611fbade74f26a5b58ec1defe6a02f5e0, redistributable per `LICENSE.amdgpu`. Not in the package and never committed: the installer downloads the files (kernel.org, GitLab mirror) or takes them from `-FirmwareDir`, checked against `tools/firmware/cyan_skillfish2.json`.

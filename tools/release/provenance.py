@@ -28,13 +28,17 @@ The gate (offline, no network, nothing is built):
   - the SHA-256 of each source file is the recorded one, a data file is its blob byte for byte, and a recorded
     Authenticode digest is the digest of the source file;
   - with --package, each packaged copy is its source byte for byte, a re-signed file has the recorded Authenticode
-    digest, and only an entry with "release_edits": "<what the release changes>" may differ otherwise;
+    digest, and only an entry with "release_edits": "<what the release changes>" may differ otherwise; with
+    --package-version, each packaged PE file is its source with the version resource of that release (of the
+    --package-flavour, release by default) and each M14C record its source with the pins of the stamped pair, both
+    made again here (tools/build/versionstamp.py, BD-166);
   - each text of "sources" that a lab tool reads as data (PARSED_SOURCES) starts with "bc250-win <commit>", that
     commit is the build commit of its payload row, and the kmd_abi of the KMD is BC250_KMD_VERSION at it.
 
 Usage:
   provenance.py check --sources release-sources.json --root <BC250_ROOT> --repo <recipe repository>
-                      [--package <package folder>] [--json <report.json>]
+                      [--package <package folder> [--package-version <release version> [--package-flavour lab]]]
+                      [--json <report.json>]
   provenance.py digest <file>...     SHA-256 and Authenticode digest of PE files
   provenance.py locate --sources ... --root ... --repo ... <repository name> <commit>
                                      the checkout that holds the commit (used by rebuild-check.ps1)
@@ -85,7 +89,21 @@ def authenticode_digest(path):
     certificate table are left out, in file order (tools/win/kmd-deploy/kmdcommon.py image_digest, which was
     validated against the digest signtool embeds). A signed file and its unsigned image give the same digest
     when the image needed no padding to an 8-byte boundary; signing with another key keeps the digest."""
+    return authenticode_digest_bytes(Path(path).read_bytes(), path)
+
+
+def is_signed(path):
+    """True when the PE file has a certificate table (its security directory entry is set)."""
     data = Path(path).read_bytes()
+    pe = int.from_bytes(data[0x3C:0x40], "little") if data[:2] == b"MZ" else 0
+    if not pe or data[pe:pe + 4] != b"PE\0\0":
+        return False
+    optional = pe + 24
+    security = optional + (96 if int.from_bytes(data[optional:optional + 2], "little") == 0x10B else 112) + 4 * 8
+    return int.from_bytes(data[security:security + 4], "little") != 0
+
+
+def authenticode_digest_bytes(data, path="image"):
     if data[:2] != b"MZ":
         raise ValueError(f"{path}: not a PE file")
     pe = int.from_bytes(data[0x3C:0x40], "little")
@@ -175,11 +193,71 @@ class Repositories:
         return branches
 
 
-def check(sources_path, root, repo, package=None):
-    """Returns (errors, rows, summary). rows: one dict per payload file."""
+def load_versionstamp():
+    """tools/build/versionstamp.py of this checkout (BD-166), loaded by path: tools/ is not a package."""
+    import importlib.util
+    path = Path(__file__).resolve().parents[1] / "build" / "versionstamp.py"
+    spec = importlib.util.spec_from_file_location("versionstamp", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def stamped_expectation(vs, stamp, f, src, package, by_path):
+    """The bytes that the packaged copy of a row must have when the release stamps its version resources, or None
+    when the release copies the row unchanged. A PE file is its source with this release's version resource (the
+    stamp is deterministic, so it is made again here); an M14C record is its source with the engine and ICD pins of
+    the packaged, stamped pair, and the source record must pin the source pair. A release that signs its PE files
+    after the stamp (tester.31) ships these bytes under a signature: stamped_copy_ok compares those by digest."""
+    name = Path(f.get("path", "")).name
+    if "third_party" in f or "authenticode_sha256" in f or "release_edits" in f:
+        return None
+    if name == vs.M14C_NAME:
+        record = src.read_bytes()
+        folder = str(Path(f["path"]).parent).replace("\\", "/")
+        packaged, pinned = [], vs.m14c_pins(record)
+        for (pin_name, _), pin in zip(vs.M14C_PINS, pinned):
+            sibling = by_path.get(f"{folder}/{pin_name}")
+            if sibling is None or sibling.get("sha256") != pin:
+                raise vs.StampError(f"the source record pins {pin_name} {pin[:8]}, which is not the source of "
+                                    f"{folder}/{pin_name}")
+            packaged.append(sha256_file(Path(package) / f"{folder}/{pin_name}".replace("/", "\\")))
+        return vs.repoint_m14c(record, *packaged)
+    if not vs.is_pe(src) or name in stamp["table"]["exempt"] or name in stamp["table"]["built"]:
+        return None
+    resource = vs.expected_resource(name, stamp["version"], stamp["company"], stamp["table"], stamp["flavour"])
+    return vs.stamp_bytes(src.read_bytes(), resource)
+
+
+def stamped_copy_ok(packaged, want):
+    """True when the packaged copy is the expected bytes, or those bytes under a signature that the release added
+    after the stamp: the same Authenticode digest, with the zero padding to 8 bytes that signtool puts before the
+    certificate table."""
+    if sha256_file(packaged) == sha256_bytes(want):
+        return True
+    try:
+        return is_signed(packaged) and authenticode_digest(packaged) == authenticode_digest_bytes(
+            want + b"\0" * (-len(want) % 8))
+    except ValueError:
+        return False
+
+
+def check(sources_path, root, repo, package=None, package_version=None, package_flavour="release"):
+    """Returns (errors, rows, summary). rows: one dict per payload file. With package_version, the packaged copies
+    carry the version resources of that release in that flavour (versionstamp.py)."""
     sources = json.loads(Path(sources_path).read_text(encoding="utf-8-sig"))
     errors = []
     rows = []
+    vs = stamp = None
+    if package and package_version:
+        vs = load_versionstamp()
+        try:
+            stamp = {"version": package_version, "table": vs.load_table(), "flavour": vs.check_flavour(package_flavour),
+                     "company": vs.inf_provider(Path(package) / "payload" / "kmd" / "bc250kmd.inf")}
+            vs.amd_version(package_version)
+        except (vs.StampError, OSError) as exc:
+            return [f"version stamp: {exc}"], rows, {}
+    by_path = {f.get("path"): f for f in sources.get("files", [])}
     table = sources.get("repositories")
     recipe_repo = sources.get("recipe_repository")
     if not isinstance(table, dict) or not table:
@@ -264,8 +342,18 @@ def check(sources_path, root, repo, package=None):
         if packaged is not None:
             # The packaged copy is the source byte for byte, unless the release signs it again (then the
             # Authenticode digest below decides) or edits it on purpose ("release_edits" says what).
+            want = None
+            if stamp is not None and packaged.is_file() and src.is_file():
+                try:
+                    want = stamped_expectation(vs, stamp, f, src, package, by_path)
+                except (vs.StampError, OSError) as exc:
+                    errors.append(f"{path}: version stamp: {exc}")
             if not packaged.is_file():
                 errors.append(f"{path}: not in the package {package}")
+            elif want is not None:
+                if not stamped_copy_ok(packaged, want):
+                    errors.append(f"{path}: the packaged copy is {sha256_file(packaged)[:8]}, the source with the "
+                                  f"version resources of {package_version} is {sha256_bytes(want)[:8]}")
             elif "authenticode_sha256" not in f and "release_edits" not in f and sha256_file(packaged) != sha:
                 errors.append(f"{path}: the packaged copy is {sha256_file(packaged)[:8]}, the entry says {sha[:8]}")
         if "authenticode_sha256" in f:
@@ -432,6 +520,9 @@ def main():
     c.add_argument("--root", required=True)
     c.add_argument("--repo", required=True)
     c.add_argument("--package")
+    c.add_argument("--package-version", help="the release version whose version resources the packaged PE files carry")
+    c.add_argument("--package-flavour", choices=("release", "lab"), default="release",
+                   help="the flavour of those version resources")
     c.add_argument("--json")
     d = sub.add_parser("digest")
     d.add_argument("files", nargs="+")
@@ -459,7 +550,8 @@ def main():
             return 1
         print(found)
         return 0
-    errors, rows, counts = check(args.sources, args.root, args.repo, args.package)
+    errors, rows, counts = check(args.sources, args.root, args.repo, args.package, args.package_version,
+                                 args.package_flavour)
     for r in rows:
         tag = {"recipe": "BUILD", "data": "DATA", "third_party": "THIRD"}.get(r["kind"], "?")
         if r.get("unverified"):

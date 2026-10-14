@@ -89,6 +89,12 @@ pwsh tools\build\test-umd-router.ps1 -HostedUmd <bc250d3d_zink.dll> -CpuUmd <bc2
 five UMD doubles from `tests/fake-umd.cpp` and the harness `tests/test-router.cpp`. Output goes to
 `<BC250_ROOT>\scratch\build\umd-router` unless `-OutputDir` says otherwise.
 
+The router of a release carries the version resource of that release (BD-166). The router is the first entry of
+`UserModeDriverName` that is not the empty D3D9 entry `<>`. The kernel reads the file version of that entry once for
+each adapter start, and DXGI `CheckInterfaceSupport` gives this number to a game as the user-mode driver version.
+Without a version resource, games read 0.0.0.0. This recipe builds the router without one. The release build stamps
+the router and every other PE file of the package (`tools/build/versionstamp.py`).
+
 `test-umd-router.ps1` lays out the router, the doubles and three real binaries (hosted UMD, CPU UMD, the DXVK shell
 with its config) and runs `test-router.exe`: each scenario in its own process on a private application hive, so no
 machine state is touched and no device is opened. The gate of `674AD261` ran 68 scenarios with 0 failures (hosted
