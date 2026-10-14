@@ -184,14 +184,16 @@ typedef struct _BC250_WDDM_KIND {
 #include "present_snapshot.h"        // BD-065: the refusal reasons of the GPU Present allocation snapshot
 #include "scanout_admit.h"           // M15.14: which allocation SetVidPnSourceAddress may scan out
 #include "gdi_emit.h"                // HLK gap G1: the GDI contract layer and its DMA_DATA stream
+#include "gdi_dispatch.h"            // HLK gap G1 increment 2: the compute dispatch of the six kernels
 
 #define BC250_GDI_BIND_SLOTS 4u                  // the most allocation-list entries one command names
 // One pass must hold the whole command buffer, because the guaranteed contract DMA buffer model
 // gives no second one (display/using-the-guaranteed-contract-dma-buffer-model.md; the whole rule is
 // quoted at Bc250WddmRenderGdi below). 256 KiB is 65536 dwords: 9362
-// DMA_DATA rows, about eight full-screen 1080-row blits, or a thousand compute dispatches once
-// increment 2 lands. GdiRenderOverflow counts the command buffers that still did not fit, and the
-// lab says whether that number is ever nonzero.
+// DMA_DATA rows, about eight full-screen 1080-row blits, or - once a buffer carries the 1280-dword
+// code block of the kernels - about 740 compute dispatches, which is 740 sub-rectangles.
+// GdiRenderOverflow counts the command buffers that still did not fit, and the lab says whether
+// that number is ever nonzero.
 #define BC250_GDI_DMA_BYTES (256u * 1024u)
 // The smallest DMA buffer that can hold one row pair beside the cache operation, as a multiple of
 // the ring's eight-dword IB granule. A buffer below it is not translated at all.
@@ -868,7 +870,7 @@ typedef struct _BC250_WDDM {
     volatile LONG64 GdiRenderRefused[Bc250GdiRefusals];
     volatile LONG64 GdiRenderKernels[Bc250GdiKernels];
     volatile LONG64 GdiRenderRefusedCall, GdiRenderMalformed, GdiRenderOutside, GdiRenderEmpty;
-    volatile LONG64 GdiRenderOverflow, GdiRenderKernelWanted, GdiRenderColorFillRedFirst;
+    volatile LONG64 GdiRenderOverflow, GdiRenderKernelRefused, GdiRenderColorFillRedFirst;
 } BC250_WDDM;
 
 // The gate-closed starting value of wddm->NodeCount (WddmStart) and of the DXGK_DRIVERCAPS answer before
@@ -3884,12 +3886,15 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     // the bit is set, the OS sends AlphaBlend, StretchBlt, TransparentBlt and ClearTypeBlend as well
     // as the two the DMA_DATA engine does exactly, and DxgkDdiRenderGdi cannot refuse them (its
     // return table bugchecks on any status but STATUS_SUCCESS). So the bit follows the translator,
-    // not the gate: Bc250GdiKernelsPresent is increment 2's six compute kernels, and until they are
-    // in the image this start reports the capability exactly as the previous release did.
+    // not the gate: Bc250GdiKernelsPresent is the six gfx1013 compute kernels of gdi_kernels.cl,
+    // and an image without them reports the capability exactly as the release before them did.
     wddm->GdiHwAccelGate = (BOOLEAN)(GuardReadSetting(L"EnableGdiHwAccel", 1) != 0);
     wddm->GdiHwAccel = (BOOLEAN)(wddm->GdiHwAccelGate && Bc250GdiKernelsPresent());
     GuardLog("wddm: GDI hardware acceleration gate %u, kernels %u, capability %u",
              (UINT)wddm->GdiHwAccelGate, (UINT)Bc250GdiKernelsPresent(), (UINT)wddm->GdiHwAccel);
+    if (wddm->GdiHwAccel)
+        GuardLog("wddm: gdi code %u kernels, %u bytes, sha256 %s", Bc250GdiCodeKernelCount(),
+                 Bc250GdiCodeBytes(), Bc250GdiCodeHash());
     // M15.14 increment 2, read once for this start: whether the bc250_scanout_caps trailer tells the
     // compositor's user-mode driver that a client scan-out flip will be admitted. Absent = on from
     // 0.7.213, the train rule for a finished feature; 0 is the bisect switch and gives back 0.7.208.1
@@ -4356,8 +4361,8 @@ void WddmStop(_Inout_ BC250_DEVICE* Device)
         GuardLog("wddm: gdi drops call%lld malformed%lld outside%lld empty%lld",
                  wddm->GdiRenderRefusedCall, wddm->GdiRenderMalformed, wddm->GdiRenderOutside,
                  wddm->GdiRenderEmpty);
-        GuardLog("wddm: gdi overflow%lld kernel-wanted%lld red-first%lld", wddm->GdiRenderOverflow,
-                 wddm->GdiRenderKernelWanted, wddm->GdiRenderColorFillRedFirst);
+        GuardLog("wddm: gdi overflow%lld kernel-refused%lld red-first%lld", wddm->GdiRenderOverflow,
+                 wddm->GdiRenderKernelRefused, wddm->GdiRenderColorFillRedFirst);
         // The class numbers are bc250_gdi_refusal's own order, so a reader needs the header and
         // nothing else. A class that never happened says nothing, which keeps the stop short.
         for (klass = 0; klass < (int)Bc250GdiRefusals; klass++)
@@ -8884,7 +8889,7 @@ static NTSTATUS Bc250WddmRenderGdi(_In_ const HANDLE hContext, _Inout_ DXGKARG_R
     unsigned int* out;
     UINT bytes, offset, index, listSize;
     unsigned int capacity, used = 0;
-    ULONGLONG ib;
+    ULONGLONG ib, codeVa = 0;
     LONG64 call;
     int overflow = 0;
 
@@ -9007,25 +9012,60 @@ static NTSTATUS Bc250WddmRenderGdi(_In_ const HANDLE hContext, _Inout_ DXGKARG_R
                 continue;
             }
             if (item.DstWidth == 0 || item.DstHeight == 0) continue;
-            if (item.Work == (unsigned int)Bc250GdiWorkKernel)
-            {
-                // Increment 2 (docs/design/gdi-hw-accel.md): the six compute kernels. Until they are
-                // in the image the capability bit stays clear, so no shipped configuration reaches
-                // this line - which is counted rather than assumed unreachable.
-                InterlockedIncrement64(&wddm->GdiRenderKernelWanted);
-                InterlockedIncrement64(&wddm->GdiRenderKernels[item.Kernel < (unsigned int)Bc250GdiKernels ?
-                    item.Kernel : 0u]);
-                continue;
-            }
             if (used == 0)
             {
-                // One cache operation per DMA buffer, before the first copy: the CDD writes its
-                // bitmaps with the CPU into cache-coherent aperture memory, and this is what makes
-                // those writes visible to the engine's L2 read. The same sequence the Present
-                // producer emits (gfx_v10_0_emit_mem_sync).
+                // One cache operation per DMA buffer, before the first copy or dispatch: the CDD
+                // writes its bitmaps with the CPU into cache-coherent aperture memory, and this is
+                // what makes those writes visible to the engine's L2 read. The same sequence the
+                // Present producer emits (gfx_v10_0_emit_mem_sync). Its GCR_CNTL also carries
+                // GLI_INV and GLK_INV, which is what lets a dispatch below fetch its instructions
+                // and its arguments out of this buffer: both were written by the processor after the
+                // last time those two caches were filled.
                 unsigned int got = Bc250EmitGfxAcquire(out, capacity);
                 if (got == 0) { overflow = 1; break; }
                 used = got;
+            }
+            if (item.Work == (unsigned int)Bc250GdiWorkKernel)
+            {
+                // One of the six compute kernels of gdi_kernels.cl. The code goes into this buffer
+                // once, behind a NOP, and every dispatch of the buffer runs from it.
+                BC250_GDI_KERNARG arg;
+                unsigned int got;
+                InterlockedIncrement64(&wddm->GdiRenderKernels[item.Kernel < (unsigned int)Bc250GdiKernels ?
+                    item.Kernel : 0u]);
+                if (!Bc250GdiKernarg(&op, surfaces, vas, slots, &item, &arg))
+                {
+                    // The item named a slot this call could not resolve to an address, which the
+                    // admission should have refused; counted and dropped rather than dispatched.
+                    InterlockedIncrement64(&wddm->GdiRenderKernelRefused);
+                    InterlockedIncrement64(&wddm->GdiRenderRefused[Bc250GdiBadSurface]);
+                    continue;
+                }
+                if (codeVa == 0)
+                {
+                    got = Bc250EmitGdiCode(out + used, capacity - used,
+                                           ib + (ULONGLONG)used * 4u, &codeVa);
+                    if (got == 0) { overflow = 1; break; }
+                    used += got;
+                    InterlockedAdd64(&wddm->GdiRenderDwords, (LONG64)got);
+                }
+                if (capacity - used < Bc250GdiDispatchDwords(ib + (ULONGLONG)used * 4u))
+                {
+                    overflow = 1;
+                    break;
+                }
+                got = Bc250EmitGdiDispatch(item.Kernel, &arg, codeVa, out + used, capacity - used,
+                                           ib + (ULONGLONG)used * 4u);
+                if (got == 0)
+                {
+                    InterlockedIncrement64(&wddm->GdiRenderKernelRefused);
+                    InterlockedIncrement64(&wddm->GdiRenderRefused[Bc250GdiBadSurface]);
+                    continue;
+                }
+                used += got;
+                InterlockedIncrement64(&wddm->GdiRenderItems);
+                InterlockedAdd64(&wddm->GdiRenderDwords, (LONG64)got);
+                continue;
             }
             result = Bc250EmitGdiItem(&item, source, vas[op.DstAllocationIndex], pattern, 0, &rows,
                                       out + used, capacity - used, &written);

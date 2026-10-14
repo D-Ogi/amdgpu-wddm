@@ -47,10 +47,10 @@
 
 /* The gamma lookup allocation's fixed shape, from the CLEARTYPEBLEND GammaSurfAllocationIndex
  * field: "8 bits per pixel, and the resolution is 512 x 16 pixels. Each row ... contains two
- * tables: gamma and inverse gamma. Each table has 256 entries." */
+ * tables: gamma and inverse gamma. Each table has 256 entries." The entry count itself is
+ * BC250_GDI_GAMMA_ENTRIES of gdi_pixel.h, which the kernels read too. */
 #define BC250_GDI_GAMMA_WIDTH   512u
 #define BC250_GDI_GAMMA_HEIGHT  16u
-#define BC250_GDI_GAMMA_ENTRIES 256u
 
 typedef struct BC250_GDI_RECT {
     int Left, Top, Right, Bottom;
@@ -180,12 +180,11 @@ typedef struct BC250_GDI_ITEM {
  * for an individual operation, so a driver that sets the bit is sent all seven and DxgkDdiRenderGdi
  * has no way to refuse one (its return table bugchecks on any status but STATUS_SUCCESS).
  *
- * Increment 1 of docs/design/gdi-hw-accel.md delivers this contract layer, the reference model and
- * the DMA_DATA stream of the two operations the CP performs exactly; the six compute kernels that
- * the blends, the stretch, the transparency and the ClearType blend need are increment 2. Until
- * they are in the image this returns 0, the capability bit stays clear, and the caps answer is
- * byte for byte what the previous release gave. It is a function and not a #if so that the gate,
- * the capability and the log line all read the same fact at a start. */
+ * The answer is the presence of the six gfx1013 kernels of gdi_kernels.cl in this driver image, so
+ * the function lives beside them in gdi_dispatch.c and reads the generated table rather than a
+ * constant: an image that lost a kernel answers 0, the capability bit stays clear, and the caps
+ * answer is byte for byte what the release before this one gave. It is a function and not a #if so
+ * that the gate, the capability and the log line all read the same fact at a start. */
 int Bc250GdiKernelsPresent(void);
 
 /* Whether an opcode reads a source allocation at all: BITBLT, ALPHABLEND, STRETCHBLT and

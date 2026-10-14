@@ -32,7 +32,7 @@ typedef struct {
      * from the shipping header, so a new class reaches this harness by itself. */
     long long GdiRenderCalls,GdiRenderCommands,GdiRenderItems,GdiRenderDwords;
     long long GdiRenderRefusedCall,GdiRenderMalformed,GdiRenderOutside,GdiRenderEmpty;
-    long long GdiRenderOverflow,GdiRenderKernelWanted,GdiRenderColorFillRedFirst;
+    long long GdiRenderOverflow,GdiRenderKernelRefused,GdiRenderColorFillRedFirst;
     long long GdiRenderRefused[Bc250GdiRefusals];
 } BC250_WDDM;
 typedef struct _BC250_DEVICE {

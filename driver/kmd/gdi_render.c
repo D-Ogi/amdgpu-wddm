@@ -102,13 +102,9 @@ static const BC250_GDI_SURFACE* SurfaceAt(const BC250_GDI_SURFACE* Surfaces, uns
     return &Surfaces[Index];
 }
 
-int Bc250GdiKernelsPresent(void)
-{
-    /* Increment 2 replaces this with the presence of the gfx1013 code object and its dispatch
-     * emitter. Nothing else in the driver may decide this: the capability bit, the start log and
-     * the operator's gate all read it here. */
-    return 0;
-}
+/* Bc250GdiKernelsPresent answers from the code object itself and so lives beside it, in
+ * gdi_dispatch.c. Nothing else in the driver may decide it: the capability bit, the start log and
+ * the operator's gate all read that one function. */
 
 /* Which allocation-list slots an opcode reads, and the arithmetic class it belongs to. Kept in one
  * place so admission, planning and the caller's own slot binding cannot disagree about what a
@@ -241,24 +237,17 @@ int Bc250GdiAdmitOp(const BC250_GDI_OP* Op, const BC250_GDI_SURFACE* Surfaces, u
     return Bc250GdiOk;
 }
 
+/* Both axes are Bc250GdiSourceCoord of gdi_pixel.h, which is the one text the kernels run too. */
 int Bc250GdiSourceX(const BC250_GDI_ITEM* Item, int Xd)
 {
-    unsigned int t;
     if (!Item || !Item->Wd) return 0;
-    if (Item->Ws == Item->Wd) return Item->SrcLeft + (Xd - Item->DstLeft0);
-    /* truncate((Xd - DstRect.left + 0.5) * Ws/Wd) + SrcRect.left, in integers. Xd - DstLeft0 is
-     * non-negative for every pixel of an admitted sub-rectangle, so the division is a floor. */
-    t = (unsigned int)(Xd - Item->DstLeft0);
-    return Item->SrcLeft + (int)((2u * t + 1u) * Item->Ws / (2u * Item->Wd));
+    return Bc250GdiSourceCoord(Item->SrcLeft, (unsigned int)(Xd - Item->DstLeft0), Item->Ws, Item->Wd);
 }
 
 int Bc250GdiSourceY(const BC250_GDI_ITEM* Item, int Yd)
 {
-    unsigned int t;
     if (!Item || !Item->Hd) return 0;
-    if (Item->Hs == Item->Hd) return Item->SrcTop + (Yd - Item->DstTop0);
-    t = (unsigned int)(Yd - Item->DstTop0);
-    return Item->SrcTop + (int)((2u * t + 1u) * Item->Hs / (2u * Item->Hd));
+    return Bc250GdiSourceCoord(Item->SrcTop, (unsigned int)(Yd - Item->DstTop0), Item->Hs, Item->Hd);
 }
 
 /* The work and kernel an admitted command maps to. One function so the classification is the same
