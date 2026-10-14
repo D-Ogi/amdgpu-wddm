@@ -37,6 +37,7 @@ namespace AmdgpuWddmSetup
             if (a.Mode == "smoke-start-failure") return SmokeStartFailure(a);
             if (a.Mode == "smoke-payload") return SmokePayload(a);
             if (a.Mode == "smoke-loading") return SmokeLoading(a);
+            if (a.Mode == "smoke-progress") return SmokeProgress(a);
 
             // Nothing in a window may end setup with the crash dialog of .NET: every widget draws itself, and a GDI+
             // failure in any of them reaches the message loop. The detail goes into a file the support file carries,
@@ -77,6 +78,27 @@ namespace AmdgpuWddmSetup
         // at 100 to 225 % and a 1024x768 and a large screen, built without being shown (LoadingWindow.Findings).
         // loading.txt: "ok: <n> windows" or the findings. The first line also says how long this process took to its
         // first loading window built: the part of a start the person waits for with nothing on the screen.
+        // --smoke-progress: an install run and a plan run played against the setup window, which is never shown
+        // (SetupForm.ProgressGate). progress.txt: what the strip did, then "ok" or the findings.
+        static int SmokeProgress(SetupArgs a)
+        {
+            var report = Path.Combine(a.SmokeDir, "progress.txt");
+            var w = new StringBuilder();
+            try
+            {
+                Directory.CreateDirectory(a.SmokeDir);
+                var findings = SetupForm.ProgressGate(Path.Combine(a.SmokeDir, "runs"), w);
+                w.AppendLine(findings.Count == 0 ? "ok" : string.Join(Environment.NewLine, findings));
+                File.WriteAllText(report, w.ToString(), new UTF8Encoding(false));
+                return findings.Count == 0 ? 0 : 1;
+            }
+            catch (Exception e)
+            {
+                try { File.WriteAllText(report, w + "smoke progress failed: " + e); } catch (Exception) { }
+                return 1;
+            }
+        }
+
         static int SmokeLoading(SetupArgs a)
         {
             var report = Path.Combine(a.SmokeDir, "loading.txt");

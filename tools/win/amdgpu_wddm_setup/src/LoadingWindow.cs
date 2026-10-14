@@ -277,7 +277,7 @@ namespace AmdgpuWddmSetup
             // The band of the strip moves while the window is on the screen and Windows animates; a screen that is
             // drawn and not shown keeps the band where it is (ProgressStrip.Phase).
             _tick = new System.Windows.Forms.Timer { Interval = 33 };
-            _tick.Tick += (s, e) => { _strip.Phase = (_strip.Phase + 0.012f) % 1f; if (_strip.Indeterminate) _strip.Invalidate(); };
+            _tick.Tick += (s, e) => _strip.Step(0.012f);
             if (animate) Shown += (s, e) => _tick.Start();
             FormClosed += (s, e) => { _tick.Stop(); _tick.Dispose(); };
         }
@@ -331,9 +331,7 @@ namespace AmdgpuWddmSetup
         {
             var centre = new Point(Left + Width / 2, Top + Height / 2);
             _line.Text = text;
-            _strip.Indeterminate = done == null;
-            _strip.Value = done ?? 0f;
-            _strip.Invalidate();
+            _strip.SetDone(done);
             if (AutoSize) Fit();                        // a window that scrolls already keeps its size
             else PerformLayout();
             if (Visible) Location = new Point(centre.X - Width / 2, centre.Y - Height / 2);
@@ -342,9 +340,7 @@ namespace AmdgpuWddmSetup
         public void Progress(float done)
         {
             if (IsDisposed) return;
-            _strip.Indeterminate = false;
-            _strip.Value = done;
-            _strip.Invalidate();
+            _strip.SetDone(done);
         }
 
         // ---- the window's own layout gate (--smoke-loading) ----------------------------------------------------

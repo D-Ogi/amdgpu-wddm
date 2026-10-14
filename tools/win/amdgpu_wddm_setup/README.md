@@ -84,6 +84,15 @@ this run's (A2): a stale or missing result reads "the installer stopped before i
 that changes may have been made; "nothing changed" is said only on a bound result that reports no change (A3).
 Cancel writes `<events>.cancel`, and only while the engine says it can stop. The window cannot be closed while the engine runs.
 
+The window reads the events every 250 ms. An event changes the progress screen in place (`src/WorkingView.cs`): the
+mark of a stage, the note, the Cancel button, the value of the strip or a new check row. The window builds the
+screen again only when its frame changes: the title, the stage list or the notice of cancelled removals. The strip
+then stays the same control. Until 2026-10-14 each batch of events built the whole screen again, also for the
+`step` event of each change. Each new control showed the background for one frame (owner: "co 6-8 sekund niebieski
+pasek od instalatora robi krótkie mignięcie"). `--smoke-progress <dir>` plays an install run of 30 s and a plan run
+of 10 s against the window, which is not shown. The strip must stay one control with one window handle, and no
+event may build the screen again. The strip is drawn again only when its value changes or its band moves.
+
 The window starts as the invoking user (`asInvoker`) and relaunches itself elevated at once (one UAC prompt);
 `--prepare-offline` stays unelevated.
 
@@ -128,7 +137,7 @@ which a PC without high contrast on could otherwise never draw). No step shows a
 against the real engine (plan and dry run). Every release package carries the window from 0.7.216.100-tester.28 on:
 `build-release.ps1` refuses to build without `-SetupApp`, and `test-dryrun.ps1` fails a package without it. The
 last step of the build is `tools/release/test-setup-exe.ps1`: the exe just built is packed around a package of its
-own, reads it back, and refuses seven damaged or empty exes.
+own, reads it back, and refuses nine damaged, doctored or empty exes.
 
 The icon of the window, and of the release's single setup file, is
 `tools/win/amdgpu_wddm_control/art/icon/nagi.ico`, the icon of the control application as well. `build.ps1` passes

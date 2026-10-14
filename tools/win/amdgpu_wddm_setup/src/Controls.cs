@@ -480,14 +480,53 @@ namespace AmdgpuWddmSetup
         // effects are off) keeps this first value, so the strip always shows a band and never an empty track.
         public float Phase = 0.42f;
 
+        // For the gate --smoke-progress: the strips this process made, and per strip the window handles it got and
+        // the times it asked to be drawn again (Invalidate).
+        public static int Made;
+        public int Handles, Invalidations;
+
         public ProgressStrip(int width)
         {
+            Made++;
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint | ControlStyles.ResizeRedraw, true);
             Width = width;
             Height = Theme.S(8);
             TabStop = false;
             AccessibleRole = AccessibleRole.ProgressBar;
             Margin = Theme.Pad(0, 6, 0, 16);
+        }
+
+        // The known part (0..1), or null for the moving band. The strip is drawn again only when that changes.
+        public void SetDone(float? done)
+        {
+            bool busy = !done.HasValue;
+            float value = done ?? 0f;
+            if (busy == Indeterminate && (busy || value == Value)) return;
+            Indeterminate = busy;
+            Value = value;
+            Invalidate();
+        }
+
+        // One step of the moving band, for the window's animation timer. A strip that shows a known part has no band,
+        // so it is not drawn again.
+        public void Step(float step)
+        {
+            if (!Indeterminate) return;
+            Phase += step;
+            if (Phase > 1f) Phase -= 1f;
+            Invalidate();
+        }
+
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            Handles++;
+            base.OnHandleCreated(e);
+        }
+
+        protected override void OnInvalidated(InvalidateEventArgs e)
+        {
+            Invalidations++;
+            base.OnInvalidated(e);
         }
 
         // A progress bar that says nothing is worse than no progress bar: the accessible object gives the part that

@@ -72,7 +72,7 @@ namespace AmdgpuWddmSetup
         // small-screen rule and the window's own size read it, so one render is the same picture on any PC.
         public int WorkWidth, WorkHeight;
 
-        public bool Headless { get { return Mode == "smoke-render" || Mode == "smoke-engine" || Mode == "smoke-start-failure" || Mode == "smoke-payload" || Mode == "smoke-loading" || Mode == "version"; } }
+        public bool Headless { get { return Mode == "smoke-render" || Mode == "smoke-engine" || Mode == "smoke-start-failure" || Mode == "smoke-payload" || Mode == "smoke-loading" || Mode == "smoke-progress" || Mode == "version"; } }
 
         // A handover name is this program's own: the prefix and 32 hex digits, so a name from the command line can
         // never reach another program's object.
@@ -145,6 +145,11 @@ namespace AmdgpuWddmSetup
                         a.SetMode("smoke-loading");
                         a.SmokeDir = next();
                         if (a.SmokeDir == null) a.Error = "--smoke-loading <out-dir>";
+                        break;
+                    case "--smoke-progress":
+                        a.SetMode("smoke-progress");
+                        a.SmokeDir = next();
+                        if (a.SmokeDir == null) a.Error = "--smoke-progress <out-dir>";
                         break;
                     case "--loading-handover":
                         a.Handover = next();

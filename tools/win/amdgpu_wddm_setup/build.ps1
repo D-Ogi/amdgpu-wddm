@@ -5,7 +5,8 @@
 #   pwsh tools\win\amdgpu_wddm_setup\build.ps1 -Out P:\BC-250\scratch\build\gui-setup\setup-app [-NoSmoke]
 #
 # Gates, in order, each stops the build:
-#   1. unit tests (test/UnitTests.cs, test/StartTests.cs: the order of the start): G-STR and G-NOINT over the tables, the engine contract against
+#   1. unit tests (test/UnitTests.cs, test/StartTests.cs: the order of the start, test/WorkingTests.cs: what the
+#      progress screen shows and which events change it): G-STR and G-NOINT over the tables, the engine contract against
 #      tools/release/installer (every check id, stage and message id has words), the event model and result binding
 #      (A2), the A3 texts, settings-impact lines, notes, prepared folders, guide ranks, arguments, quoting, and the
 #      native TOKEN_PRIVILEGES layout of the planned restart;
@@ -34,6 +35,9 @@
 #      it opens.
 #   4b. --smoke-loading: the loading window of the start in each of its stages, with the same layout and G-NOINT
 #      checks, at four DPIs, four languages, three text sizes and two screens;
+#   4c. --smoke-progress: an install run of 30 s and a plan run of 10 s played against the setup window: the progress
+#      strip stays one control with one window handle, no engine event builds the screen again, and the strip is
+#      drawn again only when its value changes or its band moves;
 #   5. tools\release\test-setup-exe.ps1: the exe is packed around a small package of its own (the single-file
 #      installer the release ships, owner 2026-10-12) and reads it back through --smoke-payload, and nine damaged, doctored
 #      or empty exes are offered to the reader and every one of them is refused.
@@ -60,10 +64,12 @@ $refs = 'mscorlib.dll', 'System.dll', 'System.Core.dll', 'System.Drawing.dll', '
 $pure = 'Strings.cs', 'Json.cs', 'EngineModel.cs', 'PlanText.cs', 'SetupArgs.cs', 'NoInternals.cs', 'Redactor.cs', 'SmallScreen.cs', 'InstallFlow.cs', 'Payload.cs' | ForEach-Object { Join-Path $here "src\$_" }
 # The order of the start: the loading window before every slow step (LoadingWindow.cs).
 $pure += 'StartSequence.cs' | ForEach-Object { Join-Path $here "src\$_" }
+# What the progress screen shows, and which engine events change it in place (WorkingView.cs).
+$pure += 'WorkingView.cs' | ForEach-Object { Join-Path $here "src\$_" }
 
 # 1. Unit tests of the pure parts.
 & $csc /nologo /noconfig /nostdlib+ @refs /target:exe /platform:x64 /warnaserror+ /langversion:7.3 /deterministic+ `
-    "/out:$obj\unit-tests.exe" @pure (Join-Path $here 'src\Native.cs') (Join-Path $here 'test\UnitTests.cs') (Join-Path $here 'test\StartTests.cs')
+    "/out:$obj\unit-tests.exe" @pure (Join-Path $here 'src\Native.cs') (Join-Path $here 'test\UnitTests.cs') (Join-Path $here 'test\StartTests.cs') (Join-Path $here 'test\WorkingTests.cs')
 if ($LASTEXITCODE -ne 0) { throw "unit test compile failed ($LASTEXITCODE)" }
 $unit = @(& "$obj\unit-tests.exe" $repo (Join-Path $here 'strings') | ForEach-Object { [string]$_ })
 $unitFailed = $LASTEXITCODE -ne 0
@@ -241,6 +247,15 @@ if (-not $NoSmoke) {
     $loading = Get-Content (Join-Path $dir 'loading.txt') -Raw -ErrorAction SilentlyContinue
     if ($code -ne 0 -or $loading -notmatch '^ok: ') { throw "smoke-loading (exit $code):`n$loading" }
     Write-Host "  loading window: $((($loading -split "`r?`n") | Where-Object { $_ }) -join ', ')"
+
+    # 4c. The progress screen under engine events (SetupForm.ProgressGate): the strip is never made again, never
+    #     gets a second window handle, and is drawn again only when its value changes or its band moves.
+    $dir = Join-Path $obj 'progress'
+    Remove-Item -Recurse -Force $dir -ErrorAction SilentlyContinue
+    $code = Invoke-Exe @('--smoke-progress', $dir) 300
+    $progress = Get-Content (Join-Path $dir 'progress.txt') -Raw -ErrorAction SilentlyContinue
+    if ($code -ne 0 -or $progress -notmatch '(?m)^ok\r?$') { throw "smoke-progress (exit $code):`n$progress" }
+    (($progress -split "`r?`n") | Where-Object { $_ -and $_ -ne 'ok' }) | ForEach-Object { Write-Host "  progress: $_" }
 
     # 5. The single-file installer (Payload.cs): the exe just built is packed around a small package of its own and
     #    read back through its --smoke-payload mode, then nine damaged, doctored or empty exes are offered to it and every one

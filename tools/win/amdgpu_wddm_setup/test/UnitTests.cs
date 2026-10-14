@@ -43,6 +43,7 @@ static partial class UnitTests
             NoConfirmations(repo);
             SingleFile();
             StartTests(repo);
+            WorkingViews();
             LocaleContracts();
             Quoting();
             NativeLayout();
