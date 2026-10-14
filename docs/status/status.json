@@ -3284,7 +3284,7 @@
       {
        "name": "pfnEnumerateMetaCommands",
        "function": "enumerate_no_meta_commands",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:598",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:600",
        "done": false,
        "reason": "only logs, counts, reads or writes zeros"
       },
@@ -3293,35 +3293,35 @@
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:620"
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:622"
       },
       {
        "name": "pfnCalcPrivateMetaCommandSize",
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:620"
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:622"
       },
       {
        "name": "pfnCreateMetaCommand",
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:620"
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:622"
       },
       {
        "name": "pfnDestroyMetaCommand",
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:620"
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:622"
       },
       {
        "name": "pfnGetMetaCommandRequiredParameterInfo",
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:620"
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:622"
       },
       {
        "name": "pfnCalcPrivateStateObjectSize",
@@ -3354,7 +3354,7 @@
       {
        "name": "pfnCheckDriverMatchingIdentifier",
        "function": "unrecognized_identifier",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:592",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:594",
        "done": false,
        "reason": "every return is a 'not supported' answer"
       },
@@ -3412,7 +3412,7 @@
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:620"
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:622"
       },
       {
        "name": "pfnCreateAmplificationShader",
@@ -3438,7 +3438,7 @@
       {
        "name": "pfnImplicitShaderCacheControl",
        "function": "no_implicit_shader_cache",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:612",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:614",
        "done": false,
        "reason": "only logs, counts, reads or writes zeros"
       }
@@ -3931,7 +3931,7 @@
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:679"
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:681"
       },
       {
        "name": "pfnPresent",
@@ -4162,7 +4162,7 @@
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:679"
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:681"
       },
       {
        "name": "pfnOMSetDepthBounds",
@@ -4212,14 +4212,14 @@
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:679"
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:681"
       },
       {
        "name": "pfnExecuteMetaCommand",
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:679"
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:681"
       },
       {
        "name": "pfnBuildRaytracingAccelerationStructure",
