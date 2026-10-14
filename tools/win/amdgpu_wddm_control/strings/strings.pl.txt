@@ -926,7 +926,7 @@ search.games.cpu-render.terms|rev|927301e2|renderowanie na CPU|renderowanie prog
 search.display.scaling|rev|22b1cb79|Skalowanie GPU
 help.setting.latency|rev|a684f1ab|Ile klatek procesor może przygotować przed układem graficznym. Mniej klatek sprawia, że gra szybciej reaguje na mysz i klawiaturę, ale może obniżyć liczbę klatek na sekundę. Działa w grach DirectX 11 i DirectX 12. Gra, która już teraz przygotowuje mniej klatek, zostaje bez zmian.
 help.setting.overlay|rev|78ee0e43|Pokazuje liczbę klatek na sekundę i czasy klatek w rogu gry. Na razie działa w grach DirectX 11.
-help.setting.vk-present|rev|e892e511|Sposób, w jaki gry Vulkan wyświetlają klatki. Tryb nowoczesny jest domyślny i szybszy. Tryb zgodności używa starszej, wolniejszej metody; wypróbuj go, gdy gra Vulkan pokazuje czarny lub zamrożony obraz.
+help.setting.vk-present|mt|68591c06|Sposób, w jaki gry Vulkan wyświetlają klatki, dla wszystkich gier naraz. Domyślny jest tryb zgodności. Tryb nowoczesny jest jeszcze w fazie testów i może zostawić grę Vulkan z czarnym lub zamrożonym obrazem. Jeśli tak się stanie, wybierz tryb zgodności.
 help.setting.vk-memory|rev|ec2dc30f|Co dostaje gra Vulkan, gdy pamięć wideo jest pełna. „Użyj pamięci systemowej” utrzymuje grę w działaniu, ale wolniej. „Zgłoś brak pamięci” informuje grę, aby mogła obniżyć swoje ustawienia.
 help.setting.sm|rev|f3b2ff18|Najwyższy model shaderów, który sterownik zgłasza grze DirectX 12. Domyślny to 6.8. Niektóre gry nie działają z nowszym modelem shaderów; dla takiej gry wybierz 6.7 lub 6.6.
 help.setting.cpu-render|mt|0d418439|Uruchamia DirectX 11 tej gry na procesorze zamiast na układzie graficznym. To jest znacznie wolniejsze i nie daje pełnego DirectX 11, więc większość gier wydanych po 2012 roku (na przykład Counter-Strike 2) się z tym nie uruchomi. Używaj tego tylko w ostateczności, dla starszej gry, która nie działa na układzie graficznym.
@@ -947,8 +947,8 @@ gfx.choice.latency|rev|ae07b17c|{0} klatki naprzód
 gfx.choice.on|rev|13001175|Włączone
 gfx.choice.off|rev|ca7981b4|Wyłączone
 gfx.choice.modern|rev|eef6c7f6|Nowoczesny
-gfx.choice.modern-default|rev|8716b3e7|Nowoczesny (domyślny)
 gfx.choice.compat|rev|b37ddf1f|Zgodność
+gfx.choice.compat-default|mt-safe|f4b472e3|Zgodność (domyślnie)
 gfx.choice.sysmem|rev|c50a771a|Użyj pamięci systemowej (wolniej, gra działa dalej)
 gfx.choice.sysmem-default|rev|5c867377|Użyj pamięci systemowej (domyślnie, wolniej, gra działa dalej)
 gfx.choice.oom|rev|2cd3164e|Zgłoś brak pamięci (gra może obniżyć ustawienia)
@@ -960,7 +960,7 @@ gfx.origin.stored|rev|2b5c4aeb|Zapisane dla wszystkich gier.
 gfx.origin.global|rev|6617fcee|Z ustawień dla wszystkich gier: {0}.
 gfx.note.overlay|rev|a4263f23|Na razie działa w grach DirectX 11.
 gfx.note.cpu-render|mt|b48a21b3|Znacznie wolniej, a większość gier wydanych po 2012 roku się z tym nie uruchomi. Ostateczność dla starszej gry DirectX 11, która nie działa na układzie graficznym.
-gfx.note.vk-present|rev|3d7eec4c|Tryb zgodności jest wolniejszy. Wypróbuj go, gdy gra Vulkan pokazuje czarny lub zamrożony obraz.
+gfx.note.vk-present|mt|a0dd8873|Tryb nowoczesny jest jeszcze w fazie testów. Jeśli gra Vulkan pokazuje czarny lub zamrożony obraz, wybierz tryb zgodności.
 gfx.note.sm|rev|3efcfd20|Niektóre gry nie działają z nowszym modelem shaderów. Niższy wybierz tylko dla takiej gry.
 gfx.global.title|rev|c750f458|Ustawienia dla wszystkich gier
 gfx.global.intro|rev|20a33c5c|Dotyczą każdej gry. Ustawienie danej gry na stronie Gry ma pierwszeństwo. Zmiany działają od następnego uruchomienia gry.

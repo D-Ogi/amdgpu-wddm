@@ -165,8 +165,8 @@ a tested capability, and the release notes must say so until a client asks for a
   shell and the DXVK front ask the same way (`driver/umd/d3d12/ddi-trace.h`,
   `driver/umd/dxvk/scanout-primary.h`). No arm measures this yet: step 2 runs the 64-bit client, and the
   x86 candidate has no arm.
-- The default is `dxgi` (`RADV_WDDM2_WSI_ROUTE_DEFAULT`). `gdi` from either source is the rollback, as
-  ADR 0018 point 2 asks. An invalid value also selects GDI, so a mistyped rollback still rolls back.
+- The default is `gdi` (`RADV_WDDM2_WSI_ROUTE_DEFAULT`) since BD-105. It was `dxgi` on the b26 candidate. `gdi`
+  from either source is the rollback, as ADR 0018 point 2 asks. An invalid value also selects GDI, so a mistyped rollback still rolls back.
 - **Application-local runtime modules do not change the route.** The presenter binds System32 `dxgi.dll` and
   `d3d12.dll` by full path and takes `CreateDXGIFactory2` and `D3D12CreateDevice` from those handles. It never
   looks up a runtime module by name. `util_load_system_library` loads with `LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR` and

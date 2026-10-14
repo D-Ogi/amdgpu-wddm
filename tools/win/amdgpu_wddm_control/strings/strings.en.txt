@@ -942,7 +942,7 @@ search.games.cpu-render.terms|src|-|CPU rendering|software rendering|WARP|proces
 search.display.scaling|src|-|GPU scaling
 help.setting.latency|src|-|How many frames the processor may prepare ahead of the graphics chip. Fewer frames make the game react faster to the mouse and keyboard, but can lower the frame rate. Works in DirectX 11 and DirectX 12 games. A game that already keeps fewer frames ahead is left as it is.
 help.setting.overlay|src|-|Shows the frame rate and frame times in a corner of the game. Works in DirectX 11 games for now.
-help.setting.vk-present|src|-|How Vulkan games show their frames. Modern is the default and is faster. Compatibility uses an older, slower way; try it when a Vulkan game shows a black or frozen picture.
+help.setting.vk-present|src|-|How Vulkan games show their frames, for all games at once. Compatibility is the default. Modern is still in testing and can leave a Vulkan game with a black or frozen picture. If that happens, choose Compatibility.
 help.setting.vk-memory|src|-|What a Vulkan game gets when the video memory is full. "Use system memory" keeps the game running, but slower. "Report out of memory" tells the game, so that it can lower its settings.
 help.setting.sm|src|-|The highest shader model the driver reports to a DirectX 12 game. 6.8 is the default. Some games fail with a newer shader model; for such a game, choose 6.7 or 6.6.
 help.setting.cpu-render|src|-|Runs this game's DirectX 11 on the processor instead of the graphics chip. This is much slower and does not offer full DirectX 11, so most games made after 2012 (for example Counter-Strike 2) do not start with it. Use it only as a last resort for an older game that fails on the graphics chip.
@@ -963,8 +963,8 @@ gfx.choice.latency|src|-|{0} frames ahead
 gfx.choice.on|src|-|On
 gfx.choice.off|src|-|Off
 gfx.choice.modern|src|-|Modern
-gfx.choice.modern-default|src|-|Modern (default)
 gfx.choice.compat|src|-|Compatibility
+gfx.choice.compat-default|src|-|Compatibility (default)
 gfx.choice.sysmem|src|-|Use system memory (slower, keeps running)
 gfx.choice.sysmem-default|src|-|Use system memory (default, slower, keeps running)
 gfx.choice.oom|src|-|Report out of memory (the game can lower its settings)
@@ -976,7 +976,7 @@ gfx.origin.stored|src|-|Stored for all games.
 gfx.origin.global|src|-|From the settings for all games: {0}.
 gfx.note.overlay|src|-|Works in DirectX 11 games for now.
 gfx.note.cpu-render|src|-|Much slower, and most games made after 2012 do not start with it. A last resort for an older DirectX 11 game that fails on the graphics chip.
-gfx.note.vk-present|src|-|Compatibility is slower. Try it when a Vulkan game shows a black or frozen picture.
+gfx.note.vk-present|src|-|Modern is still in testing. If a Vulkan game shows a black or frozen picture, choose Compatibility.
 gfx.note.sm|src|-|Some games fail with a newer shader model. Choose a lower one only for such a game.
 gfx.global.title|src|-|Settings for all games
 gfx.global.intro|src|-|These apply to every game. A game's own setting on the Games page wins over them. Changes apply the next time a game starts.
