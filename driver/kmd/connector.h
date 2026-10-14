@@ -38,6 +38,9 @@ typedef struct _BC250_CONNECTOR {
 
 void ConnectorInitialize(struct _BC250_DEVICE* Device);
 NTSTATUS ConnectorStart(struct _BC250_DEVICE* Device);
+// TRUE when a ConnectorStart refusal leaves a display the static inherited path
+// can present, so the adapter start continues (BD-169). PASSIVE, no lock.
+BOOLEAN ConnectorRefusalKeepsDisplay(const struct _BC250_DEVICE* Device);
 // PASSIVE, before removing MMIO. No operation/modeset lock held by caller.
 NTSTATUS ConnectorStop(struct _BC250_DEVICE* Device);
 NTSTATUS ConnectorSuspend(struct _BC250_DEVICE* Device);

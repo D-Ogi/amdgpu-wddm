@@ -77,12 +77,18 @@ NTSTATUS ModesetPrepareInherited(BC250_DEVICE* Device, const D3DKMDT_VIDEO_SIGNA
     BC250_INHERITED_PIPE second;
     BC250_DISP_IO io;
     NTSTATUS status;
-    // A preserved firmware pipe is not a mode we will program with DML/ATOM.
-    // Keep its source stride and clocks, including a running timing above the
-    // 300 MHz bound of connector_link.c:Plan. That bound still applies to every
-    // requested output mode. A fixed start exposes this inherited tuple only.
-    m->InheritedFixed = Device->Post.Width != Signal->ActiveSize.cx || Device->Post.Height != Signal->ActiveSize.cy ||
-        Signal->PixelRate > 300000000ull;
+    // A preserved firmware pipe is not a mode we will program with DML/ATOM: a
+    // fixed start exposes that inherited tuple only, and a source size that is
+    // not the target size is what the firmware having transformed it means.
+    // The 300 MHz bound of connector_link.c:Plan bounds the output timings this
+    // driver may program, and Plan applies it to every tuple it is given, the
+    // inherited one included. It says nothing about the source scaler, which
+    // leaves the output timing alone, and nothing about the start: a timing we
+    // cannot re-program is still a picture we can keep (BD-169). Adding it here
+    // in 0.7.216.64 published one mode instead of fifteen on an equal-size
+    // 2560x1440 at 120 Hz board, and failed its start whenever the inherited
+    // pipe read no support - a start 0.7.216.63 completed (#40, BD-144).
+    m->InheritedFixed = Device->Post.Width != Signal->ActiveSize.cx || Device->Post.Height != Signal->ActiveSize.cy;
     m->InheritedSupport = 0;
     RtlZeroMemory(&m->InheritedPipe, sizeof(m->InheritedPipe));
     RtlZeroMemory(&second, sizeof(second));

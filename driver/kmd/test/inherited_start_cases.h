@@ -3,11 +3,14 @@
 // the observed source/target classes; no fixture is a hardware pass.
 static void InheritedStartCases(void)
 {
+    // Scaled tuples only: the inherited route is for a transform the firmware
+    // applied. The equal-size 304.25 MHz tuple that 0.7.216.64 sent down this
+    // route moved to inherited_bd169_cases.h, where the start keeps it on the
+    // static path with its own source mode list (BD-169).
     static const struct { ULONG sw,sh,pitch,tw,th,ht,vt,pixel; } cases[]={
         {800,600,3328,1920,1080,2080,1119,174490000},
         {800,600,3328,2560,1440,2720,1492,304250000},
-        {1024,768,4096,1920,1080,2080,1119,174490000},
-        {2560,1440,10240,2560,1440,2720,1492,304250000}
+        {1024,768,4096,1920,1080,2080,1119,174490000}
     };
     unsigned i,autocal;
     for(autocal=0;autocal<=1;autocal++)for(i=0;i<RTL_NUMBER_OF(cases);i++) {
@@ -38,8 +41,7 @@ static void InheritedStartCases(void)
         mode.Format.Graphics.VisibleRegionSize=mode.Format.Graphics.PrimSurfSize;
         mode.Format.Graphics.Stride=d.Post.Pitch;mode.Format.Graphics.PixelFormat=21;
         path.VidPnTargetId=BC250_CHILD_UID;path.ContentTransformation.Rotation=D3DKMDT_VPPR_IDENTITY;
-        path.ContentTransformation.Scaling=i==3?D3DKMDT_VPPS_IDENTITY:
-            autocal?D3DKMDT_VPPS_CUSTOM:D3DKMDT_VPPS_STRETCHED;
+        path.ContentTransformation.Scaling=autocal?D3DKMDT_VPPS_CUSTOM:D3DKMDT_VPPS_STRETCHED;
         CHECK(DisplayInheritedModeMatches(&d,&mode,&path,&signal));
         {
             DXGKARG_COMMITVIDPN args={0};

@@ -375,6 +375,23 @@ static NTSTATUS ConnectorStartInherited(BC250_DEVICE* Device)
     return STATUS_SUCCESS;
 }
 
+// ConnectorStart plans and arms; it programs no output. Plan() runs DML and
+// refuses a tuple it cannot carry, ConnectorLinkPrepare writes no pipe, PLL or
+// PHY register, and the HPD arming and the published snapshot touch neither. A
+// refusal therefore leaves the firmware's own stream on the wire, and the static
+// inherited path presents it, as every release up to 0.7.216.63 did ("keeping
+// static inherited path"). The adapter start may fail only where nothing can be
+// presented: no inherited signal, or no source mode of the POST size.
+// InheritedFixed is that static path itself (a scaled firmware tuple, #38 and
+// BD-155, or a non-identity inherited transform). Its refusal does mean the
+// tuple cannot be described at all, and the start still fails there.
+BOOLEAN ConnectorRefusalKeepsDisplay(const BC250_DEVICE* Device)
+{
+    const BC250_MODESET* m=&Device->Modeset;
+    if (m->InheritedFixed || !Device->InheritedSignalValid) return FALSE;
+    return Bc250ModeListHas(&m->Modes,Device->Post.Width,Device->Post.Height) ? TRUE : FALSE;
+}
+
 NTSTATUS ConnectorStart(BC250_DEVICE* Device)
 {
     BC250_CONNECTOR* c = &Device->Connector;

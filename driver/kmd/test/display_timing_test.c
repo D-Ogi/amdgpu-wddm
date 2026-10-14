@@ -196,6 +196,7 @@ static void Adapter(BC250_DEVICE* d)
 #include "inherited_field38_cases.h"
 #include "inherited_start_cases.h"
 #include "inherited_negotiation_cases.h"
+#include "inherited_bd169_cases.h"
 int main(int argc,char** argv)
 {
     BC250_DEVICE d={0};D3DKMDT_VIDEO_SIGNAL_INFO s;unsigned before;
@@ -222,6 +223,7 @@ int main(int argc,char** argv)
     InheritedField38Cases();refusedLogs=0;
     InheritedStartCases();refusedLogs=0;
     NegotiationCases();refusedLogs=0;
+    Bd169Cases();refusedLogs=0;
     Mode(&d,1920,1200,2080,1235,154000000);
     CHECK(TestFillSignalInfo(&d,&s)==STATUS_SUCCESS && reads==2*TimingCount && refusedLogs==0);
     CHECK(s.TotalSize.cx==2080 && s.TotalSize.cy==1235 && s.ActiveSize.cx==1920 && s.ActiveSize.cy==1200);

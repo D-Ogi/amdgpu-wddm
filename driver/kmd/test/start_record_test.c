@@ -342,6 +342,12 @@ static NTSTATUS ConnectorBufferPrepare(BC250_DEVICE* d) {
     return STATUS_SUCCESS;
 }
 static NTSTATUS ConnectorStart(BC250_DEVICE* d) { (void)d;connectorStarts++;return connectorStatus; }
+// BD-169: whether a connector refusal leaves the static inherited path with a
+// display. The real predicate is connector.c's; the display-timing host test
+// owns its decision, and this test owns what the start does with it.
+static int connectorRefusalKeeps;
+static BOOLEAN ConnectorRefusalKeepsDisplay(const BC250_DEVICE* d)
+{ (void)d;return connectorRefusalKeeps ? TRUE : FALSE; }
 // What the record says at this point of the start, for the case where the machine never reaches the end of it, and
 // for the case where the write of the record was torn: nothing of the last start may still stand here.
 static WCHAR resultInsideStart[16], stepInsideStart[64];
@@ -432,6 +438,7 @@ static void Reset(void)
     opens = creates = closes = flushes = writeOps = stops = readyCalls = 0;
     failAt = 0; openStatus = createStatus = writeStatus = flushStatus = STATUS_SUCCESS;
     fbStatus = wddmStatus = timingStatus = smuStatus = guardStatus = connectorStatus = STATUS_SUCCESS;
+    connectorRefusalKeeps = 0;
     unconfirmed = 1; keepLog = 0; enableNativeSmu = 0; poolRefused = 0;
     ringTotal = 12; ringLongLines = 0; ringEmptyAt = -1; ringGrowOnStop = 0;
     wddmSubStep = NULL; g_Irql = PASSIVE_LEVEL;
@@ -520,6 +527,19 @@ int main(void)
             if (failures) { printf("  (step case: %s)\n", table[i].what); break; }
         }
     }
+    // ---- BD-169: a connector refusal that keeps a display completes the start ---------------------------
+    // ConnectorStart programs no output, so its refusal leaves the firmware's own
+    // stream on the wire. The case above is the other half: when nothing can be
+    // presented the step still fails and names itself (#38's scaled tuple).
+    {
+        unsigned starts;
+        Reset(); connectorStatus = STATUS_DEVICE_NOT_READY; connectorRefusalKeeps = 1;
+        starts = connectorStarts;                       // Reset() does not clear this counter
+        CHECK(Start() == STATUS_SUCCESS);
+        CHECK(RecordIs(L"started", L"-", L"-", 0, StageStartDone));
+        CHECK(connectorStarts == starts + 1 && readyCalls == 1 && stops == 0);
+    }
+
     // The sub-step half: WddmStart and GpuStartupInitialize name the phase inside them.
     Reset(); wddmStatus = STATUS_DEVICE_NOT_READY; wddmSubStep = L"psp-initialize";
     CHECK(Start() == STATUS_DEVICE_NOT_READY);

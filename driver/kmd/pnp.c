@@ -225,6 +225,15 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     // go through the passive owner and an OS-selected VidPN transaction.
     GuardStartStep(L"ConnectorStart");
     status=ConnectorStart(device);
+    // A connector that cannot be admitted or planned has programmed nothing, so
+    // the firmware's stream is still on the wire and the static inherited path
+    // owns the display (connector.c, BD-169). Only a refusal of that path itself
+    // leaves nothing to present, and that one still fails the start (#38).
+    if (!NT_SUCCESS(status) && ConnectorRefusalKeepsDisplay(device)) {
+        GuardLog("connector: start refused 0x%08lX; the static inherited path keeps the firmware stream",
+                 (ULONG)status);
+        status=STATUS_SUCCESS;
+    }
     if (!NT_SUCCESS(status)) goto failed;
     StartHealthReady(device,device->FullWddm && GfxStartupResources(device,TRUE));
     // Last: it watches a started device, and it never fails the start (EnableHangBugcheck, hang.c).
