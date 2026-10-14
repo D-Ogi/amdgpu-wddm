@@ -380,6 +380,103 @@ if (Test-Path -LiteralPath $windowFile) {
     Check ($confirmText -match '(?m)^Write-StartConfirmLog "exit [^\r\n]*Format-WindowTask') 'the exit line of every logon reports what the window task did, so a window half that never ran is in the log'
 }
 
+# The small blue window (owner, 2026-10-14: it flashed for a frame or two every few seconds). Both scripts make and
+# update it through one block of two functions, and that block draws every frame in one piece: no background erase
+# on the window, one buffered paint per change of the text, and nothing else. The forms below get a window handle
+# for the messages, and are never shown.
+'the start window draws every frame in one piece'
+function Get-WindowBlock([string]$Text) {
+    $m = [regex]::Match($Text, '(?s)# ---- the window: .*?# ---- end of the window [^\r\n]*')
+    if ($m.Success) { return ($m.Value -replace "`r`n", "`n") } else { return $null }
+}
+$windowSource = $(if (Test-Path -LiteralPath $windowFile) { [IO.File]::ReadAllText($windowFile) } else { '' })
+$block = Get-WindowBlock $windowSource
+Check ([bool]$block -and ($block -ceq (Get-WindowBlock $confirmText))) 'start-window.ps1 and start-confirm.ps1 carry the same window block'
+Check (($windowSource + $confirmText) -notmatch 'Windows\.Forms\.Label') 'neither script draws the text with a Label, a second window that WinForms paints on its own'
+Check ($windowSource -match '(?s)Add_Tick\(\{\s*#[^\r\n]*\r?\n\s*\[void\]\(Set-StartWindowText \$form' -and
+    $confirmText -match '(?s)Add_Tick\(\{\s*\[void\]\(Set-StartWindowText \$form') 'both timers change the text through Set-StartWindowText, which invalidates only on a change'
+$format = [regex]::Match($windowSource, '(?s)function Format-StartWindowText.*?\r?\n\}').Value
+if ($block -and $format) {
+    Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+    . ([scriptblock]::Create($block + "`n" + $format))
+    $flags = [Reflection.BindingFlags]'Instance, NonPublic'
+    $getStyle = [Windows.Forms.Control].GetMethod('GetStyle', $flags)
+    $wndProc = [Windows.Forms.Control].GetMethod('WndProc', $flags)
+    $text0 = Format-StartWindowText 30
+    $new = New-StartWindow $text0
+    # The window of tester.31 rc4 and before, as the reference for the look: a Form with a docked Label.
+    $old = New-Object Windows.Forms.Form
+    $old.FormBorderStyle = 'None'; $old.TopMost = $true; $old.ShowInTaskbar = $false; $old.ShowIcon = $false
+    $old.StartPosition = 'Manual'; $old.Location = New-Object Drawing.Point(8, 34)
+    $old.BackColor = [Drawing.Color]::Navy
+    $label = New-Object Windows.Forms.Label
+    $label.Dock = 'Fill'; $label.ForeColor = [Drawing.Color]::Cyan; $label.Font = New-Object Drawing.Font('Consolas', 9)
+    $label.Padding = New-Object Windows.Forms.Padding(4, 3, 4, 3)
+    $label.Text = $text0
+    $need = [Windows.Forms.TextRenderer]::MeasureText($label.Text, $label.Font)
+    $old.ClientSize = New-Object Drawing.Size(($need.Width + 12), ($need.Height + 8))
+    $old.Controls.Add($label)
+    try {
+        [void]$new.Handle; [void]$old.Handle
+        $styles = @('UserPaint', 'AllPaintingInWmPaint', 'OptimizedDoubleBuffer', 'Opaque') | Where-Object { -not $getStyle.Invoke($new, @([Windows.Forms.ControlStyles]$_)) }
+        Check ($styles.Count -eq 0 -and $new.Controls.Count -eq 0) "the window is one form that paints itself, double-buffered, with no erase$(if ($styles.Count) { ": not $($styles -join ', ')" })"
+        Check ($new.Location -eq $old.Location -and $new.ClientSize -eq $old.ClientSize -and $new.TopMost) "the window keeps its place and size ($($new.Location.X),$($new.Location.Y) $($new.ClientSize.Width)x$($new.ClientSize.Height))"
+
+        # WM_ERASEBKGND on a buffer filled with a colour the window never uses: the form must leave every pixel. The
+        # form of rc4 painted its navy there, straight on the window.
+        $erased = {
+            param($Control)
+            $bmp = New-Object Drawing.Bitmap($Control.ClientSize.Width, $Control.ClientSize.Height)
+            $g = [Drawing.Graphics]::FromImage($bmp)
+            $g.Clear([Drawing.Color]::FromArgb(255, 255, 0, 255))
+            $hdc = $g.GetHdc()
+            try { [void]$wndProc.Invoke($Control, @([Windows.Forms.Message]::Create($Control.Handle, 0x0014, $hdc, [IntPtr]::Zero))) }
+            finally { $g.ReleaseHdc($hdc); $g.Dispose() }
+            $changed = 0
+            for ($y = 0; $y -lt $bmp.Height; $y += 2) { for ($x = 0; $x -lt $bmp.Width; $x += 2) { if ($bmp.GetPixel($x, $y).ToArgb() -ne -65281) { $changed++ } } }
+            $bmp.Dispose()
+            return $changed
+        }
+        $newErase = & $erased $new
+        $oldErase = & $erased $old
+        Check ($newErase -eq 0 -and $oldErase -gt 0) "WM_ERASEBKGND draws nothing on the window ($newErase sampled pixels changed; the rc4 form changed $oldErase)"
+
+        # The look: the frame of the new form against the Label of the rc4 form, pixel for pixel. The Label covers
+        # that form's whole client area, so its picture is the window's; a hidden form prints no child of its own.
+        $shot = {
+            param($Control)
+            $bmp = New-Object Drawing.Bitmap($Control.Width, $Control.Height)
+            $Control.DrawToBitmap($bmp, (New-Object Drawing.Rectangle(0, 0, $Control.Width, $Control.Height)))
+            return $bmp
+        }
+        Check ($label.Bounds -eq $old.ClientRectangle) "the rc4 Label covers its form ($($label.Bounds))"
+        $a = & $shot $new; $b = & $shot $label
+        $diff = 0; $cyan = 0
+        for ($y = 0; $y -lt $a.Height; $y++) {
+            for ($x = 0; $x -lt $a.Width; $x++) {
+                $p = $a.GetPixel($x, $y)
+                if ($p.ToArgb() -ne $b.GetPixel($x, $y).ToArgb()) { $diff++ }
+                if ($p.G -gt 200 -and $p.B -gt 200 -and $p.R -lt 60) { $cyan++ }
+            }
+        }
+        Check ($diff -eq 0 -and $cyan -gt 100) "the window looks as before, pixel for pixel ($diff of $($a.Width * $a.Height) pixels differ, $cyan cyan)"
+        $a.Dispose(); $b.Dispose()
+
+        # Two minutes of the timer at 250 ms: an invalidation exactly when the text changes, never in between.
+        $script:invalidations = 0
+        $new.Add_Invalidated({ $script:invalidations++ })
+        $changes = 0; $said = 0; $shown = $text0
+        for ($i = 0; $i -lt 120; $i++) {
+            $t = Format-StartWindowText (30 - 0.25 * $i)
+            if (Set-StartWindowText $new $t) { $said++ }
+            if ($t -cne $shown) { $changes++; $shown = $t }
+        }
+        Check ($changes -eq 29 -and $said -eq $changes -and $script:invalidations -eq $changes -and [string]$new.Tag.Text -ceq $shown) "120 timer ticks: $changes text changes, $said reported, $($script:invalidations) invalidations, and the window holds the last text"
+    } finally { $new.Dispose(); $old.Dispose() }
+} else {
+    Check $false 'the window block and Format-StartWindowText are in start-window.ps1'
+}
+
 if ($fail) { "FAILED: $fail check(s)"; exit 1 }
 'session checks: all checks passed'
 exit 0
