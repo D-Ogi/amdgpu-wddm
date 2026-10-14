@@ -1,6 +1,8 @@
 # -Arch x86 builds the 32-bit shell for WoW64 processes (UserModeDriverNameWow) with vcvarsamd64_x86.bat (common.ps1),
 # and runs every host gate below as an x86 program.
-param([string]$OutputDir,[string]$VsInstall,[string]$MesaSource,[string]$VulkanInclude,[string]$EngineInclude,[ValidateSet('x64','x86')][string]$Arch='x64')
+# -Lab builds the lab flavour (BD-167): the shell also reads AMDGPU_WDDM_D3D12_EXPERIMENT from the environment.
+# Without it the shell is the release flavour, which has no lookup of that name (ddi-trace.h).
+param([string]$OutputDir,[string]$VsInstall,[string]$MesaSource,[string]$VulkanInclude,[string]$EngineInclude,[ValidateSet('x64','x86')][string]$Arch='x64',[switch]$Lab)
 $ErrorActionPreference='Stop'
 . "$PSScriptRoot\common.ps1"
 # Windows installer detection asks for elevation (a UAC prompt on the desktop of the build PC) before it starts a
@@ -44,6 +46,7 @@ try {
  # /GL and /arch:AVX2 (the DLL links with /LTCG): restored 2026-10-10 by owner decision, trial 171 corruption watched in the b29 lab acceptance.
  # /FC with /d1trimfile: __FILE__ and the anonymous-namespace names see the path below each tree only.
  $flags=@('/nologo','/std:c++20','/EHsc','/W4','/WX','/O2','/GL','/arch:AVX2',("/external:W" + $(if ($Arch -eq 'x86') { 1 } else { 0 })),'/MT','/DNOMINMAX','/Brepro','/FC',"/d1trimfile:$repo","/d1trimfile:$MesaSource","/d1trimfile:$VulkanInclude","/d1trimfile:$EngineInclude","/external:I$VulkanInclude","/external:I$EngineInclude","/external:I$MesaSource\src\util","/external:I$wdk","/external:I$wdk\..\shared", "/I$repo\driver\contract\third_party", "/I$repo\driver\contract\uapi-shim")
+ if($Lab){$flags+='/DAMDGPU_WDDM_LAB_FLAVOUR=1'}
  Push-Location $OutputDir
  try {
   if(Test-Path amdgpu_wddm_d3d12.dll){

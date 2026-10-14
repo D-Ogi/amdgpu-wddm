@@ -98,8 +98,9 @@ and engine workers do not acquire it merely by holding a pointer. Command-list
 entries resolve their owning shell through the engine context.
 
 Deferred command-list replay is on by default and read once per device; the
-experiment `deferred-replay-off` (`AMDGPU_WDDM_D3D12_EXPERIMENT`, see
-[ddi-trace.h](ddi-trace.h) for every default and its off switch) takes it back.
+experiment `deferred-replay-off` (the application profile, the machine-wide value
+or, in a lab build only, `AMDGPU_WDDM_D3D12_EXPERIMENT`, with every default and its
+off switch in [ddi-trace.h](ddi-trace.h)) takes it back.
 On, it uses engine-ddi's deferred command-list replay
 ([engine-ddi/README.md](engine-ddi/README.md)) with 8 rings of 4 MiB. Its worker
 threads are the one kind of engine-ddi thread that enters a device's runtime
@@ -271,8 +272,10 @@ directory holds either the diagnostic shell alone, which has no sibling loader
 and answers device creation with `DXGI_ERROR_UNSUPPORTED` (M768), or an accepted
 triplet. With an accepted triplet every process that creates a D3D12 device on
 the adapter, for example Task Manager's DirectX version probe, loads all three
-DLLs and a hosted Vulkan instance. Experiments (`AMDGPU_WDDM_D3D12_EXPERIMENT`)
-come from the process environment only, so such processes run the defaults.
+DLLs and a hosted Vulkan instance. Experiments come from the application profile,
+the machine-wide value and, in a lab build only, `AMDGPU_WDDM_D3D12_EXPERIMENT`
+(BD-167). Such processes have no profile, so they run the defaults unless the
+machine-wide value names a switch.
 The sparse policy stays at its default (value absent, on); the DWORD set to 0
 removes FL 12_x from processes started afterwards without removing D3D12.
 A file that a running process maps cannot be deleted or overwritten in place,

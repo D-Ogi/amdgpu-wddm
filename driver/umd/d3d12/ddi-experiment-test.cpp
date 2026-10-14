@@ -4,6 +4,8 @@
 // HKLM\SOFTWARE\amdgpu-wddm\D3D12, the "none" value, the refusals and the "-off" form every driver default is
 // read through. The registry part is read only: this test creates no key, so its own image has no profile, the
 // machine-wide value does not exist on a build machine, and both resolve to None without the variable.
+// The test runs in the flavour of the shell it is built with (build-umd-d3d12.ps1, -Lab or not): a lab build
+// checks that the variable wins, a release build that it changes nothing (BD-167).
 #include "ddi-trace.h"
 #include <cassert>
 #include <cstdio>
@@ -75,8 +77,10 @@ int main() {
     assert(!detail::application_profile_key(L"C:\\Games\\", key, 128));
     assert(!detail::application_profile_key(L"C:\\Games\\witcher3.exe", key, 40));
 
-    // The variable wins whenever it is present.
-    native12::DdiExperimentValue v = with_variable("raytracing-tier,present-cached");
+    native12::DdiExperimentValue v{};
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+    // Lab build: the variable wins whenever it is present.
+    v = with_variable("raytracing-tier,present-cached");
     assert(v.source == DdiExperimentSource::Environment && !std::strcmp(v.text, "raytracing-tier,present-cached"));
     v = with_variable("none");
     assert(v.source == DdiExperimentSource::Environment && !v.text[0]);
@@ -95,6 +99,16 @@ int main() {
     v = with_variable("deferred-replay-off");
     assert(v.source == DdiExperimentSource::Environment);
     assert(native12::ddi_experiment_off("deferred-replay"));
+#else
+    // Release build (BD-167): the shell has no lookup of the variable, so no value of it is a source, and the
+    // first read of the process (ddi_experiment_value) finds no list either.
+    for (const char* value : {"raytracing-tier,present-cached", "none", "", "Raytracing-Tier", "deferred-replay-off"}) {
+        v = with_variable(value);
+        assert(v.source == DdiExperimentSource::None && !v.text[0]);
+    }
+    assert(!native12::ddi_experiment_off("deferred-replay"));
+    assert(native12::ddi_experiment_listed("deferred-replay-off", "deferred-replay-off"));
+#endif
     assert(!native12::ddi_experiment_off("deferred-repla"));
     assert(!native12::ddi_experiment_off("replay"));
     assert(!native12::ddi_experiment_off(""));
@@ -117,7 +131,12 @@ int main() {
     assert(detail::application_profile(text, sizeof(text)) == 0 && !text[0]);
     assert(detail::machine_experiment(text, sizeof(text)) == 0 && !text[0]);
 
-    std::puts("PASS ddi experiment sources: syntax, matching, profile key, machine-wide value, variable "
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+    std::puts("PASS ddi experiment sources (lab build): syntax, matching, profile key, machine-wide value, variable "
               "precedence, none, refusals, the -off form of every default");
+#else
+    std::puts("PASS ddi experiment sources (release build): syntax, matching, profile key, machine-wide value, no "
+              "variable source, the -off form of every default");
+#endif
     return 0;
 }
