@@ -6,6 +6,7 @@
     "status-map",
     "ledger",
     "release-provenance",
+    "version-stamp",
     "app-route-lib",
     "system-tuning",
     "system-tuning-installer",

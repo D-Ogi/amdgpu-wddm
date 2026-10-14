@@ -91,6 +91,9 @@ try {
  # The provenance gate of the release payload (tools/release/provenance.py, run by build-release.ps1): its self-test on
  # throwaway repositories. The gate itself needs the payload files of a workspace, so the release build runs it.
  Check 'release-provenance' { $env:BC250_TEST_OUT=(New-Item -ItemType Directory -Force "$Out\release-provenance").FullName; & python -m unittest discover -s "$repo\tools\release" -p 'test_provenance.py' }
+ # BD-166: the version resource that the release build gives every PE file of the package (tools/build/versionstamp.py),
+ # on images that the test builds itself: the stamp, its read-back through the Windows image loader, the M14C pins.
+ Check 'version-stamp' { & python -m unittest discover -s "$repo\tools\build" -p 'test_versionstamp.py' }
  # The driver package's own AddReg against the release defaults table (BD-091): every setting the INF writes is the
  # released value and carries NOCLOBBER, so no install outside our installer closes a gate while another stays open.
  Check 'inf-gates' { & python "$repo\tools\quality\inf_gates.py" --inf "$repo\driver\kmd\bc250kmd.inf" --defaults "$repo\tools\release\installer\registry-defaults.json" --out "$Out\inf-gates" }
