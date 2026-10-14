@@ -13,6 +13,9 @@ It finds, in every .ps1, .psm1 and .cs file outside evidence/ (copies of scripts
   2. C#: a new Label or LinkLabel whose initializer has a Dock other than DockStyle.None and no AutoSize = true, or a
      variable made with new Label that gets such a Dock later and never AutoSize = true.
 Comments do not count. A Label made by a helper (the applications' Ui.Label sets AutoSize on) is not seen here.
+The rule is about Dock only, not Anchor: window position traces (2026-10-14, the header of LabelLayout.cs) found the
+intermediate 100x23 only with a Dock. Make the rule wider only after a trace shows an intermediate size for the
+other layout.
 
 ALLOWED lists the findings that are meant, each with its reason. An allowed finding that the scan no longer makes is
 an error too, so the list cannot hold a file that has changed. The start window of 84f35234

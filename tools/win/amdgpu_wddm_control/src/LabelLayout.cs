@@ -8,7 +8,8 @@
 // the start window of tester.31 rc4, which DWM composed when a composition fell into those 2 ms. Window position traces
 // on the development PC with hidden windows (2026-10-14): a Label with AutoSize off and Dock Fill, Top or Left, also in
 // a TableLayoutPanel cell, goes through 100x23; with AutoSize on, without Dock (whatever its Anchor), or with Anchor on
-// all four sides, it gets its final size at once or keeps its size.
+// all four sides, it gets its final size at once or keeps its size. Thus the rule is about Dock only, not Anchor. Make
+// it wider only after a trace shows an intermediate size for the other layout.
 //
 // The rule: a Label (or LinkLabel) with AutoSize off has no Dock. Anchor it to the sides that must follow the parent,
 // or turn AutoSize on. Check() holds the rule for every Label, and traces the mechanism itself on the labels whose
