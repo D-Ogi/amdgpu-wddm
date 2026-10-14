@@ -928,7 +928,7 @@ help.setting.amd-version|src|-|Some games warn that the graphics driver is old, 
 help.setting.vk-present|src|-|How Vulkan games show their frames. Modern is the default and is faster. Compatibility uses an older, slower way; try it when a Vulkan game shows a black or frozen picture.
 help.setting.vk-memory|src|-|What a Vulkan game gets when the video memory is full. "Use system memory" keeps the game running, but slower. "Report out of memory" tells the game, so that it can lower its settings.
 help.setting.sm|src|-|The highest shader model the driver reports to a DirectX 12 game. 6.8 is the default. Some games fail with a newer shader model; for such a game, choose 6.7 or 6.6.
-help.setting.cpu-render|src|-|Runs this game's DirectX 11 on the processor instead of the graphics chip. This is much slower. Use it only as a last resort for a game that fails on the graphics chip.
+help.setting.cpu-render|src|-|Runs this game's DirectX 11 on the processor instead of the graphics chip. This is much slower and does not offer full DirectX 11, so most games made after 2012 (for example Counter-Strike 2) do not start with it. Use it only as a last resort for an older game that fails on the graphics chip.
 gfx.choice.app|src|-|Application decides
 gfx.choice.inherit|src|-|Same as all games: {0}
 gfx.choice.inherit-short|src|-|Same as all games
@@ -958,7 +958,7 @@ gfx.origin.default|src|-|Not set: {0}.
 gfx.origin.stored|src|-|Stored for all games.
 gfx.origin.global|src|-|From the settings for all games: {0}.
 gfx.note.overlay|src|-|Works in DirectX 11 games for now.
-gfx.note.cpu-render|src|-|Much slower. A last resort for a DirectX 11 game that fails on the graphics chip.
+gfx.note.cpu-render|src|-|Much slower, and most games made after 2012 do not start with it. A last resort for an older DirectX 11 game that fails on the graphics chip.
 gfx.note.amd-version|src|-|For games that warn about an old graphics driver.
 gfx.note.vk-present|src|-|Compatibility is slower. Try it when a Vulkan game shows a black or frozen picture.
 gfx.note.sm|src|-|Some games fail with a newer shader model. Choose a lower one only for such a game.

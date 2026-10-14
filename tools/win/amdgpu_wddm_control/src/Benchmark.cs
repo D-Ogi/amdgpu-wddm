@@ -5,7 +5,7 @@
 // src/MainForm.Bench.cs.
 //
 // The package never ships and never downloads the game. The card measures a copy the person already has: the free
-// Quake II RTX of NVIDIA, from Steam (app 440900) or from a folder the person chooses.
+// Quake II RTX of NVIDIA, from Steam (app 1089130) or from a folder the person chooses.
 //
 // Why the test is two passes. Quake II RTX traces its rays through one of two Vulkan contracts, chosen by its own
 // cvar `ray_tracing_api`: a ray tracing pipeline, or a ray query inside an ordinary shader. The picture is the same;
@@ -239,13 +239,13 @@ namespace AmdgpuWddmControl
 
     public static class Q2Rtx
     {
-        public const string SteamAppId = "440900";
+        public const string SteamAppId = "1089130";
         public const string ExeName = "q2rtx.exe";
         public const string DataFolder = "baseq2";
         public const string PakName = "pak0.pak";
         public const string DemoEntry = "demos/q2demo1.dm2";
         public const string DemoName = "q2demo1";
-        public const string StoreUrl = "https://store.steampowered.com/app/440900/";
+        public const string StoreUrl = "https://store.steampowered.com/app/1089130/";
         public const string ReleasesUrl = "https://github.com/NVIDIA/Q2RTX/releases";
         public const int MaxLibraries = 32, MaxVdfBytes = Vdf.MaxBytes;
 
@@ -292,7 +292,7 @@ namespace AmdgpuWddmControl
             return list;
         }
 
-        // The install folder of app 440900 in the first library whose manifest names it; null when no library has it.
+        // The install folder of app 1089130 in the first library whose manifest names it; null when no library has it.
         public static string SteamInstallFolder(string steamPath, IBenchFiles files)
         {
             foreach (var library in SteamLibraries(steamPath, files))

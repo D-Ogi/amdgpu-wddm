@@ -910,7 +910,7 @@ help.setting.amd-version|mt|7604c528|일부 게임은 이 드라이버를 알지
 help.setting.vk-present|mt|e892e511|Vulkan 게임이 프레임을 표시하는 방식입니다. 최신 방식이 기본값이며 더 빠릅니다. 호환성 방식은 더 오래되고 느린 방법을 사용합니다. Vulkan 게임 화면이 검거나 멈출 때 사용해 보세요.
 help.setting.vk-memory|mt|ec2dc30f|비디오 메모리가 가득 찼을 때 Vulkan 게임에 주는 응답입니다. "시스템 메모리 사용"은 게임을 계속 실행하지만 느려집니다. "메모리 부족 알림"은 게임에 알려 게임이 설정을 낮출 수 있게 합니다.
 help.setting.sm|mt|f3b2ff18|드라이버가 DirectX 12 게임에 보고하는 최고 셰이더 모델입니다. 기본값은 6.8입니다. 일부 게임은 최신 셰이더 모델에서 실패합니다. 그런 게임에는 6.7 또는 6.6을 선택하세요.
-help.setting.cpu-render|mt|527d8d82|이 게임의 DirectX 11을 그래픽 칩 대신 프로세서에서 실행합니다. 훨씬 느립니다. 그래픽 칩에서 실패하는 게임을 위한 최후의 수단으로만 사용하세요.
+help.setting.cpu-render|mt|0d418439|이 게임의 DirectX 11을 그래픽 칩 대신 프로세서에서 실행합니다. 훨씬 느리고 DirectX 11의 모든 기능을 제공하지 않으므로, 2012년 이후에 나온 대부분의 게임(예: Counter-Strike 2)은 이 설정으로 시작되지 않습니다. 그래픽 칩에서 실패하는 오래된 게임을 위한 최후의 수단으로만 사용하세요.
 gfx.choice.app|mt-safe|e7f551b6|응용 프로그램이 결정
 gfx.choice.inherit|mt-safe|efd0e1d0|모든 게임과 동일: {0}
 gfx.choice.inherit-short|mt-safe|1123f3b7|모든 게임과 동일
@@ -940,7 +940,7 @@ gfx.origin.default|mt-safe|04e6cbc0|설정 안 됨: {0}.
 gfx.origin.stored|mt-safe|2b5c4aeb|모든 게임에 저장됨.
 gfx.origin.global|mt|6617fcee|모든 게임 설정에서: {0}.
 gfx.note.overlay|mt|a4263f23|현재는 DirectX 11 게임에서만 작동합니다.
-gfx.note.cpu-render|mt|0b9bf5df|훨씬 느립니다. 그래픽 칩에서 실패하는 DirectX 11 게임을 위한 최후의 수단입니다.
+gfx.note.cpu-render|mt|b48a21b3|훨씬 느리며, 2012년 이후에 나온 대부분의 게임은 이 설정으로 시작되지 않습니다. 그래픽 칩에서 실패하는 오래된 DirectX 11 게임을 위한 최후의 수단입니다.
 gfx.note.amd-version|mt|7f26a73f|오래된 그래픽 드라이버를 경고하는 게임용입니다.
 gfx.note.vk-present|mt|3d7eec4c|호환성 방식은 더 느립니다. Vulkan 게임 화면이 검거나 멈출 때 사용해 보세요.
 gfx.note.sm|mt|3efcfd20|일부 게임은 최신 셰이더 모델에서 실패합니다. 그런 게임에만 낮은 모델을 선택하세요.

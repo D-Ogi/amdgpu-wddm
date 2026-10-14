@@ -589,7 +589,19 @@ function Invoke-Verify {
     $provider = $null
     try { $provider = (Get-PnpDeviceProperty -InstanceId $id -KeyName DEVPKEY_Device_DriverProvider -ErrorAction Stop).Data } catch { }
     if (-not $provider -and $drv) { $provider = $drv.DriverProviderName }
-    Add-Result 'driver version' (($null -ne $drv) -and ($drv.DriverVersion -eq $want)) "installed $($drv.DriverVersion) from $inf (provider $provider), package $want"
+    # BD-161: the KMD's own records of a rewritten DriverVersion, in the adapter's software key (Control\Class\<Driver>).
+    $kmdBackup = $null; $kmdReported = $null
+    if ($drv -and $drv.DriverVersion -ne $want) {
+        try {
+            $swKey = (Get-PnpDeviceProperty -InstanceId $id -KeyName DEVPKEY_Device_Driver -ErrorAction Stop).Data
+            if ($swKey -match '^\{[0-9A-Fa-f-]{36}\}\\\d{4}$') {
+                $sw = Get-ItemProperty -LiteralPath "HKLM:\SYSTEM\CurrentControlSet\Control\Class\$swKey" -ErrorAction Stop
+                $kmdBackup = [string]$sw.Bc250DriverVersion; $kmdReported = [string]$sw.Bc250ReportedDriverVersion
+            }
+        } catch { }
+    }
+    $verCheck = Test-InstalledDriverVersion -Reading $(if ($drv) { [string]$drv.DriverVersion } else { $null }) -Want $want -Backup $kmdBackup -Reported $kmdReported
+    Add-Result 'driver version' $verCheck.ok "installed $($drv.DriverVersion) from $inf (provider $provider), package $want$($verCheck.note)"
     # BD-150: the version names the release family; the loaded image names the KMD. An equal DriverVer let 29v2 verify
     # pass on another KMD.
     $kmdComp = $null

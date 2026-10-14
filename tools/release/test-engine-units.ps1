@@ -761,6 +761,28 @@ Check ((-not $noStatus.started) -and ($noStatus.reason -match 'problem code 43')
 $okButOdd = Get-VerifyStartState -ProblemCode 0 -Status 'Unknown'
 Check ($okButOdd.started) 'problem code 0 decides on its own: a status this check does not know is not a failed start'
 
+'[BD-161] the driver version check with Report an AMD driver version on'
+$v = Test-InstalledDriverVersion -Reading '0.7.216.100' -Want '0.7.216.100'
+Check ($v.ok -and $v.note -eq '') 'the package number read as installed passes with no note'
+# The field case (Pawel, tester.29): the KMD rewrote the software key and keeps both of its records.
+$v = Test-InstalledDriverVersion -Reading '40.7.216.100' -Want '0.7.216.100' -Backup '0.7.216.100' -Reported '40.7.216.100'
+Check ($v.ok -and $v.note -match 'AMD numbering' -and $v.note -match 'installed 0\.7\.216\.100') "the KMD's rewrite with its two records passes and says why ($($v.note))"
+$v = Test-InstalledDriverVersion -Reading '40.7.216.100' -Want '0.7.216.100'
+Check (-not $v.ok) 'a 40.x reading without the KMD records fails: no arithmetic on the reading'
+$v = Test-InstalledDriverVersion -Reading '40.7.216.100' -Want '0.7.216.101' -Backup '0.7.216.100' -Reported '40.7.216.100'
+Check (-not $v.ok) 'records of another package fail (an older install the KMD has not rewritten yet)'
+$v = Test-InstalledDriverVersion -Reading '40.7.216.101' -Want '0.7.216.101' -Backup '0.7.216.101' -Reported '40.7.216.100'
+Check (-not $v.ok) 'a reading that is not the number the KMD wrote fails'
+$v = Test-InstalledDriverVersion -Reading '0.7.216.99' -Want '0.7.216.100' -Backup '0.7.216.100' -Reported '0.7.216.99'
+Check ($v.ok) 'the rule is the records, not the 40 offset'
+$v = Test-InstalledDriverVersion -Reading $null -Want '0.7.216.100'
+Check (-not $v.ok) 'no reading fails'
+$v = Test-InstalledDriverVersion -Reading '0.7.216.100' -Want $null
+Check (-not $v.ok) 'no package number fails'
+$verify = [IO.File]::ReadAllText((Join-Path $Installer 'install.ps1'))
+Check ($verify -match "Add-Result 'driver version' \`$verCheck\.ok") 'install.ps1 verify decides the driver version through Test-InstalledDriverVersion'
+Check ($verify -match 'Bc250ReportedDriverVersion') 'and reads the KMD records from the software key'
+
 '[#38] install.ps1 verify: a failed start skips the wait and the probes that need a started adapter'
 $verify = [IO.File]::ReadAllText((Join-Path $Installer 'install.ps1'))
 Check ($verify -match '\$startState = Get-VerifyStartState -ProblemCode \(\[int\]\$dev\[0\]\.ConfigManagerErrorCode\)') 'the start state comes from the device verify already read'

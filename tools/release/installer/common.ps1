@@ -920,6 +920,26 @@ function Get-VerifyStartState {
     return [pscustomobject]@{ started = $started; reason = $reason }
 }
 
+# BD-161: the 'driver version' check of verify. Win32_PnPSignedDriver reads DriverVersion from the adapter's software
+# key, and with the control app's "Report an AMD driver version" on (HKLM\SOFTWARE\amdgpu-wddm\Graphics
+# ReportAmdDriverVersion 1) the KMD rewrites that value at each start to the AMD-scheme number (driver/kmd/
+# driver_version.c) and keeps the installed one in Bc250DriverVersion and the number it wrote in
+# Bc250ReportedDriverVersion. A field verify (Pawel, tester.29) read 40.7.216.100 against 0.7.216.100 and failed a
+# working driver. The rewritten reading names this package only when the KMD's own two records say so: the backup is
+# the package number and the reading is the number the KMD wrote. No arithmetic on the reading itself.
+#
+# Reading: DriverVersion as read. Want: the package's kmd_version. Backup, Reported: the two KMD values of the
+# software key, $null when absent.
+function Test-InstalledDriverVersion {
+    param([AllowNull()][string]$Reading, [AllowNull()][string]$Want, [AllowNull()][string]$Backup, [AllowNull()][string]$Reported)
+    if ([string]::IsNullOrEmpty($Reading) -or [string]::IsNullOrEmpty($Want)) { return [pscustomobject]@{ ok = $false; note = '' } }
+    if ($Reading -eq $Want) { return [pscustomobject]@{ ok = $true; note = '' } }
+    if (($Backup -eq $Want) -and ($Reported -eq $Reading)) {
+        return [pscustomobject]@{ ok = $true; note = "; the driver reports $Reading in AMD numbering (Report an AMD driver version is on), installed $Backup" }
+    }
+    return [pscustomobject]@{ ok = $false; note = '' }
+}
+
 function Get-Bc250Device {
     # Present devices only, matched on the hardware ID the INF matches.
     $all = @(Get-CimInstance Win32_PnPEntity -ErrorAction SilentlyContinue | Where-Object { $_.DeviceID -like ($script:HardwareIdPrefix + '*') })

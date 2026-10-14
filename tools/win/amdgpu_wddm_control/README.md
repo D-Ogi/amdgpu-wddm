@@ -112,8 +112,8 @@ copy of Quake II RTX that the person already has. The package never holds the ga
 
 Where the game is. The card takes the folder the person chose (`BenchmarkFolder`, section 5 of
 `docs/gui/interfaces.md`) when there is one. Otherwise it reads `SteamPath` of `HKCU\Software\Valve\Steam`, every
-library of `steamapps\libraryfolders.vdf`, and the manifest `steamapps\appmanifest_440900.acf` of each library, and
-takes `steamapps\common\<installdir>` of the first library whose manifest names application 440900. The app parses
+library of `steamapps\libraryfolders.vdf`, and the manifest `steamapps\appmanifest_1089130.acf` of each library, and
+takes `steamapps\common\<installdir>` of the first library whose manifest names application 1089130. The app parses
 that Valve key-value text itself (`Vdf` in `src/Benchmark.cs`). It never reads text that Windows translated. A folder
 counts as a usable copy only with `q2rtx.exe` in it and `demos/q2demo1.dm2` in the directory of `baseq2\pak0.pak`,
 which is the scene the test runs. Without the scene the card says so and offers nothing to measure. With no copy at

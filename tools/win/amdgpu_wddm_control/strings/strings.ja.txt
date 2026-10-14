@@ -910,7 +910,7 @@ help.setting.amd-version|mt|7604c528|一部のゲームは、このドライバ�
 help.setting.vk-present|mt|e892e511|Vulkan ゲームがフレームを表示する方法です。モダンが既定で、より高速です。互換性は古くて遅い方法を使います。Vulkan ゲームの画面が黒い、または止まったままのときに試してください。
 help.setting.vk-memory|mt|ec2dc30f|ビデオ メモリが一杯になったときに Vulkan ゲームに返す内容です。「システムメモリを使う」ではゲームは動作を続けますが遅くなります。「メモリ不足を報告する」ではゲームに知らせ、ゲームが設定を下げられるようにします。
 help.setting.sm|mt|f3b2ff18|ドライバーが DirectX 12 ゲームに報告する最高のシェーダー モデルです。既定は 6.8 です。新しいシェーダー モデルで動作しないゲームがあります。そのようなゲームでは 6.7 または 6.6 を選んでください。
-help.setting.cpu-render|mt|527d8d82|このゲームの DirectX 11 を、グラフィックス チップではなくプロセッサーで実行します。大幅に遅くなります。グラフィックス チップで動作しないゲームの最後の手段としてだけ使ってください。
+help.setting.cpu-render|mt|0d418439|このゲームの DirectX 11 を、グラフィックス チップではなくプロセッサーで実行します。大幅に遅く、DirectX 11 のすべての機能は使えないため、2012 年以降に発売されたほとんどのゲーム (Counter-Strike 2 など) はこの設定では起動しません。グラフィックス チップで動作しない古いゲームの最後の手段としてだけ使ってください。
 gfx.choice.app|mt-safe|e7f551b6|アプリケーションに任せる
 gfx.choice.inherit|mt-safe|efd0e1d0|すべてのゲームと同じ: {0}
 gfx.choice.inherit-short|mt-safe|1123f3b7|すべてのゲームと同じ
@@ -940,7 +940,7 @@ gfx.origin.default|mt-safe|04e6cbc0|未設定: {0}。
 gfx.origin.stored|mt-safe|2b5c4aeb|すべてのゲーム用に保存済み。
 gfx.origin.global|mt|6617fcee|すべてのゲームの設定から: {0}。
 gfx.note.overlay|mt|a4263f23|現在は DirectX 11 のゲームでのみ動作します。
-gfx.note.cpu-render|mt|0b9bf5df|大幅に遅くなります。グラフィックス チップで動作しない DirectX 11 ゲームの最後の手段です。
+gfx.note.cpu-render|mt|b48a21b3|大幅に遅くなり、2012 年以降に発売されたほとんどのゲームはこの設定では起動しません。グラフィックス チップで動作しない古い DirectX 11 ゲームの最後の手段です。
 gfx.note.amd-version|mt|7f26a73f|古いグラフィックス ドライバーについて警告するゲーム向けです。
 gfx.note.vk-present|mt|3d7eec4c|互換性は遅くなります。Vulkan ゲームの画面が黒い、または止まったままのときに試してください。
 gfx.note.sm|mt|3efcfd20|新しいシェーダー モデルで動作しないゲームがあります。そのようなゲームにだけ低いものを選んでください。
