@@ -370,10 +370,17 @@ static NTSTATUS DisplayMapFramebuffer(BC250_DEVICE* d)
 static void DisplayUnmapFramebuffer(BC250_DEVICE* d) { (void)d; }
 static void DisplayLogFramebufferSample(BC250_DEVICE* d) { (void)d; }
 // GitHub #38: the real step names its registers through GuardStartDetail when it refuses (display_timing_refused.h).
+// BD-169: the inherited pipe's own refusal is written by this step even when the step succeeds, because an
+// equal-size pipe this driver cannot classify passes it and the start fails later, in ConnectorStart. The text is
+// ModesetPrepareInherited's (whose composition display_timing_test.c checks against the real gate names).
+static int inheritedGateDetail;
 static NTSTATUS DisplayPrepareInheritedTiming(BC250_DEVICE* d)
 {
     (void)d;
     if (!NT_SUCCESS(timingStatus)) GuardStartDetail(L"timing 0x%08X post %ux%u otg0 ctl %08X", timingStatus, 800u, 600u, 0u);
+    else if (inheritedGateDetail)
+        GuardStartDetail(L"inherited source 2720x1481 pitch 10880 target 2720x1481 total 3000x1500 pixel 483326400"
+                         L" support 00000000 pipe C00000BB valid 007FFFFF gate 14 tiling word 00000080");
     return timingStatus;
 }
 static void NoteInterruptResource(BC250_DEVICE* d) { (void)d; }
@@ -438,7 +445,7 @@ static void Reset(void)
     opens = creates = closes = flushes = writeOps = stops = readyCalls = 0;
     failAt = 0; openStatus = createStatus = writeStatus = flushStatus = STATUS_SUCCESS;
     fbStatus = wddmStatus = timingStatus = smuStatus = guardStatus = connectorStatus = STATUS_SUCCESS;
-    connectorRefusalKeeps = 0;
+    connectorRefusalKeeps = 0; inheritedGateDetail = 0;
     unconfirmed = 1; keepLog = 0; enableNativeSmu = 0; poolRefused = 0;
     ringTotal = 12; ringLongLines = 0; ringEmptyAt = -1; ringGrowOnStop = 0;
     wddmSubStep = NULL; g_Irql = PASSIVE_LEVEL;
@@ -538,6 +545,24 @@ int main(void)
         CHECK(Start() == STATUS_SUCCESS);
         CHECK(RecordIs(L"started", L"-", L"-", 0, StageStartDone));
         CHECK(connectorStarts == starts + 1 && readyCalls == 1 && stops == 0);
+    }
+    // BD-169: the check that refused the firmware pipe reaches the record of the step that fails. The classifier
+    // runs in the display step, which an equal-size pipe passes whatever its verdict; the start then fails in
+    // ConnectorStart, and that record is the file a tester sends us. Detail is written once, by the step that
+    // measured it, so the later failure must still carry the gate number, its name and the word it read.
+    {
+        PCWSTR detail;
+        Reset(); inheritedGateDetail = 1; connectorStatus = STATUS_DEVICE_NOT_READY;
+        CHECK((ULONG)Start() == (ULONG)STATUS_DEVICE_NOT_READY);
+        CHECK(RecordIs(L"failed", L"ConnectorStart", L"-", (ULONG)STATUS_DEVICE_NOT_READY, StageStartFailed));
+        detail = Str(L"Detail");
+        CHECK(detail != NULL && wcsstr(detail, L"gate 14 tiling word 00000080") != NULL);
+        CHECK(detail != NULL && wcsstr(detail, L"support 00000000") != NULL);
+        // A start that keeps the display is not a failure, so no record carries that line as a reason.
+        Reset(); inheritedGateDetail = 1; connectorStatus = STATUS_DEVICE_NOT_READY; connectorRefusalKeeps = 1;
+        CHECK(Start() == STATUS_SUCCESS);
+        CHECK(RecordIs(L"started", L"-", L"-", 0, StageStartDone));
+        CHECK(Find(2, L"Detail") < 0);
     }
 
     // The sub-step half: WddmStart and GpuStartupInitialize name the phase inside them.

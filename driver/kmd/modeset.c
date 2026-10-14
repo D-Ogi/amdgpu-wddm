@@ -75,6 +75,7 @@ NTSTATUS ModesetPrepareInherited(BC250_DEVICE* Device, const D3DKMDT_VIDEO_SIGNA
 {
     BC250_MODESET* m = &Device->Modeset;
     BC250_INHERITED_PIPE second;
+    BC250_INHERITED_PIPE_REASON reason = { BC250_PIPE_GATE_NONE, 0 };
     BC250_DISP_IO io;
     NTSTATUS status;
     // A preserved firmware pipe is not a mode we will program with DML/ATOM: a
@@ -93,15 +94,31 @@ NTSTATUS ModesetPrepareInherited(BC250_DEVICE* Device, const D3DKMDT_VIDEO_SIGNA
     // ConnectorRefusalKeepsDisplay's business, not the pixel rate's.
     m->InheritedFixed = Device->Post.Width != Signal->ActiveSize.cx || Device->Post.Height != Signal->ActiveSize.cy;
     m->InheritedSupport = 0;
+    m->InheritedGate = BC250_PIPE_GATE_NONE;
+    m->InheritedGateWord = 0;
     RtlZeroMemory(&m->InheritedPipe, sizeof(m->InheritedPipe));
     RtlZeroMemory(&second, sizeof(second));
     IoOpen(Device, &io, 0);
     status = Bc250InheritedPipeRead(&io, &m->InheritedPipe);
     if (NT_SUCCESS(status)) status = Bc250InheritedPipeRead(&io, &second);
-    if (NT_SUCCESS(status) && !Bc250InheritedPipeSame(&m->InheritedPipe, &second)) status = STATUS_DEVICE_BUSY;
-    if (NT_SUCCESS(status))
-        m->InheritedSupport = Bc250InheritedPipeSupport(&m->InheritedPipe, Device->Post.Width, Device->Post.Height,
-            Device->Post.Pitch, Signal->ActiveSize.cx, Signal->ActiveSize.cy);
+    // BD-169: whichever check refused this pipe, the start record names it and
+    // the word it read, so a support file from a board this driver cannot
+    // classify says which gate to extend. A failed read and a pipe that moved
+    // never reached the classifier, so they name themselves rather than leaving
+    // a stale or absent verdict to be read as one.
+    if (!NT_SUCCESS(status)) {
+        m->InheritedGate = BC250_PIPE_GATE_READS;
+        m->InheritedGateWord = m->InheritedPipe.Valid;
+    } else if (!Bc250InheritedPipeSame(&m->InheritedPipe, &second)) {
+        status = STATUS_DEVICE_BUSY;
+        m->InheritedGate = BC250_PIPE_GATE_UNSTABLE;
+        m->InheritedGateWord = m->InheritedPipe.Valid;
+    } else {
+        m->InheritedSupport = Bc250InheritedPipeSupportEx(&m->InheritedPipe, Device->Post.Width, Device->Post.Height,
+            Device->Post.Pitch, Signal->ActiveSize.cx, Signal->ActiveSize.cy, &reason);
+        m->InheritedGate = reason.Gate;
+        m->InheritedGateWord = reason.Word;
+    }
     if (NT_SUCCESS(status) && !m->InheritedSupport) status = STATUS_NOT_SUPPORTED;
     if (m->InheritedSupport && !(m->InheritedSupport & BC250_SCALING_BIT(BC250_SCALING_IDENTITY)))
         m->InheritedFixed = TRUE;
@@ -109,6 +126,9 @@ NTSTATUS ModesetPrepareInherited(BC250_DEVICE* Device, const D3DKMDT_VIDEO_SIGNA
     GuardLog("inherited: source %ux%u pitch %u target %ux%u fixed %u support %lX status %08lX valid %lX",
         Device->Post.Width, Device->Post.Height, Device->Post.Pitch, Signal->ActiveSize.cx, Signal->ActiveSize.cy,
         (UINT)m->InheritedFixed, m->InheritedSupport, (ULONG)status, m->InheritedPipe.Valid);
+    // Its own line, under the log's width limit: the number is the vocabulary, the name is for the reader.
+    GuardLog("inherited gate: %lu %s word %08lX",
+        m->InheritedGate, Bc250InheritedPipeGateText(m->InheritedGate), m->InheritedGateWord);
     GuardLog("display inherited: viewport %08lX/%08lX recout %08lX/%08lX mpc %08lX scl %08lX ratio %08lX/%08lX",
         m->InheritedPipe.Shape.ViewportStart, m->InheritedPipe.Shape.ViewportDimension,
         m->InheritedPipe.Shape.RecoutStart, m->InheritedPipe.Shape.RecoutSize, m->InheritedPipe.Shape.MpcSize,
@@ -121,12 +141,16 @@ NTSTATUS ModesetPrepareInherited(BC250_DEVICE* Device, const D3DKMDT_VIDEO_SIGNA
         m->InheritedPipe.SurfaceControl,m->InheritedPipe.MpccBottom,m->InheritedPipe.MpccControl,m->InheritedPipe.MpcOut);
     GuardLog("display inherited: autocal %08lX dscl control %08lX",
         m->InheritedPipe.Autocal,m->InheritedPipe.DsclControl);
-    if (m->InheritedFixed) {
-        GuardStartDetail(L"inherited source %ux%u pitch %u target %ux%u total %ux%u pixel %Iu support %08X pipe %08X valid %08X",
+    // A fixed start writes the Detail as before, and so does every pipe this
+    // driver could not classify, whose equal-size start fails later in
+    // ConnectorStart: that record is the one a tester sends us (BD-169), and
+    // without the gate it says only that admission refused.
+    if (m->InheritedFixed || !m->InheritedSupport)
+        GuardStartDetail(L"inherited source %ux%u pitch %u target %ux%u total %ux%u pixel %Iu support %08X pipe %08X valid %08X gate %u %hs word %08X",
             Device->Post.Width,Device->Post.Height,Device->Post.Pitch,Signal->ActiveSize.cx,Signal->ActiveSize.cy,
-            Signal->TotalSize.cx,Signal->TotalSize.cy,Signal->PixelRate,m->InheritedSupport,(ULONG)status,m->InheritedPipe.Valid);
-        return status;
-    }
+            Signal->TotalSize.cx,Signal->TotalSize.cy,Signal->PixelRate,m->InheritedSupport,(ULONG)status,m->InheritedPipe.Valid,
+            m->InheritedGate,Bc250InheritedPipeGateText(m->InheritedGate),m->InheritedGateWord);
+    if (m->InheritedFixed) return status;
     // Preserve the established 1:1 path. This admission extends it only to
     // separately proven scaled tuples; a failed diagnostic read grants none.
     return STATUS_SUCCESS;

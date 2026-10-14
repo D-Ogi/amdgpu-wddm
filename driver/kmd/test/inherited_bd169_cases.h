@@ -100,6 +100,7 @@ static void Bd169Cases(void)
         CHECK(TestFillSignalInfo(&d,&signal)==STATUS_SUCCESS);
         CHECK(!d.Modeset.InheritedFixed && d.Modeset.InheritedSupport==0);
         CHECK(d.Modeset.InheritedPipeStatus==STATUS_NOT_SUPPORTED && pipeWrites==0);
+        CHECK(d.Modeset.InheritedGate==BC250_PIPE_GATE_MPCC_MODE && d.Modeset.InheritedGateWord==0xFFFF0463ul);
         Bd169Programmable(&d);
         Bd169ModeList(&d,2560,1440,1920,1080);
         CHECK(!ConnectorNeedsInherited(&d));
@@ -124,6 +125,11 @@ static void Bd169Cases(void)
         CHECK(!d.Modeset.InheritedFixed && d.Modeset.InheritedSupport==0);
         CHECK(d.Modeset.InheritedPipeStatus==(i==0?STATUS_ACCESS_DENIED:STATUS_DEVICE_BUSY));
         CHECK(pipeWrites==0);
+        // Neither reached the classifier, so each names itself rather than
+        // leaving an absent verdict to be read as a gate.
+        CHECK(d.Modeset.InheritedGate==(i==0?(ULONG)BC250_PIPE_GATE_READS:(ULONG)BC250_PIPE_GATE_UNSTABLE));
+        CHECK(d.Modeset.InheritedGateWord==d.Modeset.InheritedPipe.Valid);
+        CHECK(i!=1 || d.Modeset.InheritedGateWord==BC250_INHERITED_PIPE_ALL);
         Bd169Programmable(&d);
         Bd169ModeList(&d,2560,1440,1920,1080);
         CHECK(!ConnectorNeedsInherited(&d) && !ConnectorRefusalKeepsDisplay(&d));
@@ -208,6 +214,7 @@ static void Bd169Cases(void)
         pipeRegisters[BC250_REG_DMU_MPCC0_MPCC_CONTROL/4]=3;
         CHECK(TestFillSignalInfo(&d,&signal)==STATUS_NOT_SUPPORTED);
         CHECK(d.Modeset.InheritedFixed && d.Modeset.InheritedSupport==0 && pipeWrites==0);
+        CHECK(d.Modeset.InheritedGate==BC250_PIPE_GATE_MPCC_MODE && d.Modeset.InheritedGateWord==3ul);
     }
     // Unit A's own native start, below the bound: unchanged by all of this.
     {
@@ -220,6 +227,78 @@ static void Bd169Cases(void)
         CHECK(!ConnectorNeedsInherited(&d) && ConnectorRefusalKeepsDisplay(&d));
         CHECK(ModesetScalingSupport(&d,1280,720)!=0 && pipeWrites==0);
         CHECK(ModesetValidateInherited(&d)==STATUS_SUCCESS && pipeWrites==0);
+    }
+    // ---- the check that refused, by number, name and word -----------------------------------------------------
+    // A board this classifier cannot place sends us one file: the start record.
+    // "Admission refused" is not a reading of it, so the first failing gate and
+    // the word that gate read go on the inherited: log line and into the
+    // record's Detail, and they are written even when this step continues (an
+    // equal-size pipe fails later, in the connector, and that failure's record
+    // is the one the tester sends). The gate numbers are a vocabulary: this
+    // table is also what keeps them from being renumbered under a field report.
+    {
+        static const struct { const char* what; unsigned long reg, bits; ULONG gate; } gates[]={
+            {"non-linear fetch",BC250_REG_DMU_HUBP0_DCSURF_TILING_CONFIG,
+             HUBP0_DCSURF_TILING_CONFIG__SW_MODE_MASK,BC250_PIPE_GATE_TILING},
+            {"compressed primary",BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_CONTROL,
+             HUBPREQ0_DCSURF_SURFACE_CONTROL__PRIMARY_SURFACE_DCC_EN_MASK,BC250_PIPE_GATE_DCC},
+            {"second timing generator",BC250_REG_DMU_OTG1_OTG_CONTROL,
+             OTG1_OTG_CONTROL__OTG_MASTER_EN_MASK,BC250_PIPE_GATE_OTG1},
+            {"mirrored surface",BC250_REG_DMU_HUBP0_DCSURF_SURFACE_CONFIG,
+             HUBP0_DCSURF_SURFACE_CONFIG__H_MIRROR_EN_MASK,BC250_PIPE_GATE_ROTATION},
+            {"two-layer blending",BC250_REG_DMU_MPCC0_MPCC_CONTROL,
+             MPCC0_MPCC_CONTROL__MPCC_MODE_MASK,BC250_PIPE_GATE_MPCC_MODE}
+        };
+        unsigned g;
+        for(g=0;g<RTL_NUMBER_OF(gates);g++) {
+            BC250_DEVICE d={0};D3DKMDT_VIDEO_SIGNAL_INFO signal;
+            wchar_t want[128];char wantLine[128];unsigned long word;unsigned before=failures;
+            Mode(&d,2560,1440,2720,1481,483326400);
+            Bd169Field40Pipe();
+            pipeRegisters[gates[g].reg/4]|=gates[g].bits;
+            word=pipeRegisters[gates[g].reg/4];
+            detail[0]=0;inheritedLine[0]=0;
+            CHECK(TestFillSignalInfo(&d,&signal)==STATUS_SUCCESS);   // equal size: this step continues
+            CHECK(d.Modeset.InheritedSupport==0 && d.Modeset.InheritedGate==gates[g].gate);
+            CHECK(d.Modeset.InheritedGateWord==word);                // the word that check read, unmasked
+            swprintf(want,RTL_NUMBER_OF(want),L"gate %u %hs word %08X",
+                (unsigned)gates[g].gate,Bc250InheritedPipeGateText(gates[g].gate),(unsigned)word);
+            snprintf(wantLine,sizeof(wantLine),"inherited gate: %u %s word %08X",
+                (unsigned)gates[g].gate,Bc250InheritedPipeGateText(gates[g].gate),(unsigned)word);
+            CHECK(wcsstr(detail,want)!=NULL);                        // the record a tester sends us
+            CHECK(strstr(inheritedLine,wantLine)!=NULL);             // and the kept log line
+            Bd169Programmable(&d);
+            Bd169ModeList(&d,2560,1440,1920,1080);
+            CHECK(!ConnectorRefusalKeepsDisplay(&d));                // none of these keeps the display
+            if(failures!=before)printf("  (gate case: %s)\n",gates[g].what);
+        }
+    }
+    {
+        // An argument gate: the word is the value the check read, which for the
+        // POST pitch is not a register of the pipe.
+        BC250_DEVICE d={0};D3DKMDT_VIDEO_SIGNAL_INFO signal;wchar_t want[128];
+        Mode(&d,2560,1440,2720,1481,483326400);
+        Bd169Field40Pipe();
+        d.Post.Pitch+=2;                                             // not a multiple of four
+        detail[0]=0;
+        CHECK(TestFillSignalInfo(&d,&signal)==STATUS_SUCCESS);
+        CHECK(d.Modeset.InheritedGate==BC250_PIPE_GATE_PITCH_ARG);
+        CHECK(d.Modeset.InheritedGateWord==d.Post.Pitch);
+        swprintf(want,RTL_NUMBER_OF(want),L"gate %u pitch-arg word %08X",
+            (unsigned)BC250_PIPE_GATE_PITCH_ARG,(unsigned)d.Post.Pitch);
+        CHECK(wcsstr(detail,want)!=NULL);
+    }
+    {
+        // A pipe that classifies refused nothing, and leaves no reason line
+        // behind for the next failure to be read with.
+        BC250_DEVICE d={0};D3DKMDT_VIDEO_SIGNAL_INFO signal;
+        Mode(&d,2560,1440,2720,1481,483326400);
+        Bd169Field40Pipe();
+        detail[0]=0;inheritedLine[0]=0;
+        CHECK(TestFillSignalInfo(&d,&signal)==STATUS_SUCCESS && d.Modeset.InheritedSupport!=0);
+        CHECK(d.Modeset.InheritedGate==BC250_PIPE_GATE_NONE && d.Modeset.InheritedGateWord==0);
+        CHECK(detail[0]==0);
+        CHECK(strstr(inheritedLine,"inherited gate: 0 none word 00000000")!=NULL);
     }
     // ---- the two cases of the BD-169 review, as supplied ------------------------------------------------------
     // Synthetic registers, not a field or hardware replay. The reviewer's first
