@@ -51,6 +51,14 @@ The job carries `Configdisplay.exe`, `Gditest_hw.exe` and `TDRWatch.exe`. It nee
 runs by itself. HLK offers it only while device bitmaps and GDI acceleration are both on, so an
 absent job means the capability did not reach the operating system.
 
+Nothing has to be configured for the second producer of these commands. dxgkrnl builds GDI commands
+of its own for the driver tests, with the sub-rectangle array inside the command's fixed part, and
+that producer is gated by that registry value or by the adapter's own DRT flag (the design page, "The
+second producer, and the shape it builds"). The driver admits the shape either way, so the trial is
+valid whether or not the HLK client was put into that mode. Record which it was: if the HLK client
+has that registry value set, note it beside the log package, because that run exercised the embedded
+shape as well as the canonical one.
+
 ## Trial 2: the HLK job, WoW64
 
 Run the same job in its WoW64 form on the same system. The 32-bit test binary exercises the 32-bit
