@@ -1,6 +1,6 @@
 {
-  "schema": 1,
-  "description": "The engine ABI engine-ddi builds against. tools/build/build-engine-ddi.ps1 refuses a header or engine DLL whose SHA-256 differs.",
+  "schema": 2,
+  "description": "The engine ABI engine-ddi builds against. tools/build/build-engine-ddi.ps1 refuses a header whose SHA-256 differs, and an engine DLL that is not the one its -Flavour pins. The release and the lab flavour (BD-167) are two builds of one source line, so each pins its own DLL; tools/build/engine_abi.py selects one, with the semantics of tools/release/release_flavour.py.",
   "abi_version": "1.3",
   "header_revision": "r5-draft with optional view-instancing contract revision 1",
   "repository": "vkd3d-proton fork of this project",
@@ -12,7 +12,16 @@
   "vulkan_headers_path": "khronos/Vulkan-Headers/include",
   "vulkan_headers_commit": "ee2ec5fd83dafce291024683b50dc89219333076",
   "engine_dll": "amdgpu_wddm_vkd3d.dll",
-  "engine_dll_dir": "scratch/d3d12-gaps/vi-r2/engine-x64/libs/ddi",
-  "engine_dll_sha256": "80217882D8BEB3BB0115E006034A380D12ED03BD10398EBC372A78027178CBA6",
-  "engine_dll_recipe": "vi-r2/build-engine.ps1 -Arch x64; release b477495e plus complete source delta in source-snapshot/pins.json"
+  "flavours": {
+    "release": {
+      "engine_dll_dir": "scratch/build/b34-engine-x64-release/libs/ddi",
+      "engine_dll_sha256": "pending",
+      "engine_dll_recipe": "tools/build/build-vkd3d.ps1 -Config ddi-engine-lto (no -Lab, so no diagnostic variable and no statistics counter); pinned from the tester.31 build. The single pin before the two flavours named the vi-r2 snapshot engine, engine-x64/libs/ddi and 80217882D8BEB3BB0115E006034A380D12ED03BD10398EBC372A78027178CBA6"
+    },
+    "lab": {
+      "engine_dll_dir": "scratch/build/b34-engine-x64-lab/libs/ddi",
+      "engine_dll_sha256": "pending",
+      "engine_dll_recipe": "tools/build/build-vkd3d.ps1 -Config ddi-engine-lto -Lab (the same option set plus -Damdgpu-wddm-lab-flavour=true, from the same source line); pinned from the tester.31 build"
+    }
+  }
 }

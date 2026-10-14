@@ -37,6 +37,8 @@ try {
  # A named early gate makes a regression in link input order fail before builds.
  # quality-controls also discovers the positive and negative package unit controls.
  Check 'x86-callconv' { & pwsh -NoProfile -File "$repo/tools/build/test-x86-callconv.ps1" -OutputDir "$Out/x86-callconv" }
+ # The two engine DLLs of one source line (BD-167): each flavour's own pin, and no run against the other's DLL.
+ Check 'engine-abi-flavour' { & python -m unittest discover -s "$repo\tools\build" -p 'test_engine_abi.py' }
  Check 'kmd-order' { & python "$repo\tools\quality\test_kmd_reproducible.py" --out "$Out\kmd-order" }
  # One namespace spans all KMD headers, including optional diagnostic commands.
  Check 'escape-commands' { & python "$repo\tools\quality\escape_commands.py" --root $repo --out "$Out\escape-commands"; if($LASTEXITCODE -eq 0){ & python -m unittest discover -s "$repo\tools\quality" -p 'test_escape_commands.py' } }

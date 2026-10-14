@@ -13,6 +13,7 @@ these scripts are its executable half.
 | `dxvk-configs.json` | the two DXVK option sets and their ninja targets |
 | `build-vkd3d.ps1` | meson + ninja for vkd3d-proton (`-Config per-app`, `ddi-engine`, `ddi-engine-lto`, `-Arch x64` or `x86`); same gate, records submodule commits and `widl` |
 | `vkd3d-configs.json` | the three vkd3d-proton option sets and their ninja targets |
+| `engine_abi.py`, `test_engine_abi.py` | selects the release or the lab engine DLL pin of `driver/umd/d3d12/engine-ddi/engine-abi.json` (`build-engine-ddi.ps1 -Flavour`), with the semantics of `tools/release/release_flavour.py`: neither flavour's DLL can pass the other's run |
 | `build-umd-router.ps1` | cl for the UMD router `bc250d3d_router.dll` (`driver/umd/router`), its UMD doubles and its host-test harness |
 | `test-umd-router.ps1` | the router's host gate on that output, with the hosted UMD, the CPU UMD and the DXVK shell named by parameter |
 | `pe_compare.py` | compares two PE images apart from the per-build timestamps and PDB GUID of a non-`/Brepro` link, and the CheckSum that covers them |
