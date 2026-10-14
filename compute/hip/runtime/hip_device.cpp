@@ -62,7 +62,9 @@ uint32_t read_ms(const char* name) {
 #endif
 
 // The name as it stands, for a switch that is a word and not a number. The same
-// MEASURED note applies: the operating system's environment and not getenv.
+// MEASURED note applies: the operating system's environment and not getenv. Every such switch is a lab build's, so a
+// release runtime has no reader either (BD-167).
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
 bool read_text(const char* name, char* text, size_t bytes) {
 #if defined(_WIN32)
     const DWORD got = GetEnvironmentVariableA(name, text, static_cast<DWORD>(bytes));
@@ -77,6 +79,7 @@ bool read_text(const char* name, char* text, size_t bytes) {
     return true;
 #endif
 }
+#endif
 
 // The batching policy of the process (section 8.1 of bc250hsa.h, which keeps policy out of
 // layer 1). A HIP program has no API for it, so it arrives in the environment:
@@ -136,12 +139,13 @@ void apply_batch_policy(bc250hsa_device* dev) {
 void apply_gpu_copy_policy(bc250hsa_device* dev) {
     char text[32];
     State& s = state();
+    // BD-167: the route switch, the fill route and the threshold are measurement arms of a lab build (the switch is
+    // the control arm of the route's measurement, README.md). A release runtime keeps the defaults: the route on, the
+    // processor fill for a mapped allocation, 4096 bytes.
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
     if (read_text("BC250_HIP_GPU_COPY", text, sizeof(text)) && std::strcmp(text, "0") == 0) {
         s.gpu_copy_enabled = false;
     }
-    // BD-167: the fill route and the threshold are measurement arms of a lab build. A release runtime keeps the
-    // defaults: the processor fill for a mapped allocation, 4096 bytes.
-#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
     if (read_text("BC250_HIP_GPU_FILL", text, sizeof(text)) && std::strcmp(text, "1") == 0) {
         s.gpu_fill_mapped = true;
     }
@@ -158,6 +162,8 @@ void apply_gpu_copy_policy(bc250hsa_device* dev) {
                          s.gpu_copy_min_bytes);
         }
     }
+#else
+    (void)text;
 #endif
     // A GPU copy waits for its own fence inside layer 1, so layer 1 needs the wait bound
     // this process uses everywhere else. Without it a copy of a short lab trial could

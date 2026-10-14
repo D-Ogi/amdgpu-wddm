@@ -97,6 +97,9 @@ been given.
 | `BC250_HIP_GPU_COPY_MIN` | bytes, digits only, up to 4294967295. 0 puts every copy on the GPU route. Any other text keeps the default and says so | 4096, below which the host processor is cheaper |
 | `BC250_HIP_GPU_FILL` | `0`, `1` | `0`, `hipMemset` of a device allocation stays a CPU write |
 
+Only a lab build reads these variables (`build-runtime.ps1 -Lab`, BD-167). The runtime of the release package reads
+none of them and always runs with the defaults of the last column.
+
 The last three are the device-to-host copy route. A `hipMalloc` buffer is VRAM behind a mapping
 that is not cached, so a CPU read of it runs at 0.21 GB/s against 15.6 GB/s the other way, and the
 logits of one generated token are a 1 MiB read of exactly that kind. With the route on, a
