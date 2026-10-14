@@ -22,7 +22,7 @@ typedef const void* PDXGKARG_SYSTEM_DISPLAY_ENABLE_FLAGS;
 typedef struct { long long QuadPart; } PHYSICAL_ADDRESS;
 typedef struct { UINT Width,Height,Pitch; D3DDDIFORMAT ColorFormat; PHYSICAL_ADDRESS PhysicAddress; } DXGK_DISPLAY_INFORMATION;
 typedef struct _BC250_DEVICE {
-    BOOLEAN VramEnabled;PHYSICAL_ADDRESS VramPhysical;ULONGLONG VramLength;
+    BOOLEAN VramEnabled;PHYSICAL_ADDRESS VramPhysical;ULONGLONG VramLength,VramMcBase;
     void *Mmio,*Framebuffer;
     SIZE_T FramebufferLength;
     DXGK_DISPLAY_INFORMATION Post,RuntimePost;
@@ -70,6 +70,7 @@ static struct {
     unsigned elapsed,latch_delay,writes;
     int locked,triggered,never_latch;
 } model;
+static int plane_is_blank;
 static long InterlockedIncrement(volatile long *v){return ++*v;}
 static long InterlockedCompareExchange(volatile long* v,long n,long old){long r=*v;if(r==old)*v=n;return r;}
 static long InterlockedExchange(volatile long* v,long n){long r=*v;*v=n;return r;}
@@ -102,6 +103,8 @@ static NTSTATUS MmioDcnWriteEx(const BC250_DEVICE*d,ULONG reg,ULONG value,BOOLEA
     if(!d->Mmio || !d->DcnWriteEnabled)return STATUS_DEVICE_NOT_READY;
     model.writes++;
     switch(reg){
+    case BC250_REG_DMU_HUBP0_DCHUBP_CNTL:
+        model.hubp=value;plane_is_blank=(value&HUBP0_DCHUBP_CNTL__HUBP_BLANK_EN_MASK)!=0;break;
     case BC250_REG_DMU_OTG0_OTG_BLANK_CONTROL:
         model.blank=value&~OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK;
         if(value&OTG0_OTG_BLANK_CONTROL__OTG_BLANK_DATA_EN_MASK)model.blank|=OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK;
@@ -126,7 +129,6 @@ static NTSTATUS MmioDcnWriteEx(const BC250_DEVICE*d,ULONG reg,ULONG value,BOOLEA
  * Counted here; the modeset host suite tests what it writes. It must run only after a successful restore. */
 static unsigned modeset_restores;
 static void ModesetRestoreQuiet(BC250_DEVICE*d){CHECK(!d->DcnDiverged);++modeset_restores;}
-static int plane_is_blank;
 static void KeStallExecutionProcessor(ULONG us)
 {
     CHECK(us==1 || us==100);model.elapsed+=us;
@@ -148,11 +150,26 @@ static long Bc250Dcn201PlaneBlank(BC250_DISP_IO* io,int blank)
     else { ++plane_unblanks; CHECK(model.blank&OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK); }
     return STATUS_SUCCESS;
 }
+/* Writer authorization is explicit. Its refusal must precede every write; no application address leaves WDDM. */
+static struct {
+    NTSTATUS status;
+    unsigned resumes,writes_at_resume;
+    int blank_at_resume;ULONGLONG requested_at_resume;
+} writer;
+static NTSTATUS WddmWriterResume(BC250_DEVICE*d)
+{
+    (void)d;
+    ++writer.resumes;writer.blank_at_resume=plane_is_blank;writer.requested_at_resume=model.requested;
+    writer.writes_at_resume=model.writes;
+    return writer.status;
+}
 /* ACTUAL_SOURCE */
 static void init(BC250_DEVICE*d,ULONG*fb)
 {
     memset(d,0,sizeof(*d));memset(&model,0,sizeof(model));memset(fb,0,96);
+    memset(&writer,0,sizeof(writer));plane_is_blank=0;
     d->Mmio=&model;d->Framebuffer=fb;d->FramebufferLength=96;
+    d->VramEnabled=TRUE;d->VramPhysical.QuadPart=0x400000000ll;d->VramLength=0x100000000ull;
     d->Post.Width=4;d->Post.Height=3;d->Post.Pitch=32;d->Post.ColorFormat=D3DDDIFMT_X8R8G8B8;
     d->DcnWriteEnabled=1;d->DcnFirmwareKnown=1;d->DcnFirmwarePitch=32;
     d->DcnFirmwareAddress=0x470000000ull;d->DcnCurrentAddress=0x480000000ull;d->DcnDiverged=1;
@@ -251,9 +268,14 @@ int main(void)
     Bc250SystemDisplayWrite(&d,src,4,1,16,0,0);CHECK(fb[0]==1 && fb[1]==2 && fb[2]==0);
     // Ordinary allocation handoff preserves OTG visibility, but must release
     // HUBP so a later application flip can scan out without a cold unblank.
+    // Authorization must precede writes, with no application address exported to this helper.
     model.blank=OTG0_OTG_BLANK_CONTROL__OTG_BLANK_DATA_EN_MASK|OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK;
+    memset(&writer,0,sizeof(writer));model.requested=0x123000;writes=model.writes;
     CHECK(DcnRuntimeSurface(&d,FALSE)==STATUS_SUCCESS);
     CHECK(!d.RuntimePlaneBlank && plane_unblanks==2 && (model.blank&OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK));
+    CHECK(writer.resumes==1 && writer.writes_at_resume==writes && writer.requested_at_resume==0x123000);
+    CHECK(model.scanned==0x490000000ull);
+    memset(&writer,0,sizeof(writer));
     // Hardware visibility wins over a deliberately stale software cache.
     model.blank=0;d.DcnBlanked=TRUE;model.elapsed=0;model.scanned=0;
     CHECK(DcnRuntimeSurface(&d,FALSE)==STATUS_SUCCESS);
@@ -265,6 +287,7 @@ int main(void)
     {
         BC250_LINK_SURFACE saved,refused;
         init(&d,fb);d.VramEnabled=TRUE;d.VramPhysical.QuadPart=0x400000000ll;d.VramLength=0x100000000ull;
+        memset(&writer,0,sizeof(writer));
         d.DcnPlaneFormats=TRUE;d.DcnFirmwareSurfaceConfig=8;
         d.DcnFirmwareHubpretControl=0x00E40000;d.DcnFirmwareCnvcFormat=8;
         model.config=8;model.crossbar=0x00E40000;model.cnvc=8;model.pitch=7;
@@ -290,15 +313,35 @@ int main(void)
         model.scanned=0x480000000ull;model.config=0xff;
         CHECK(DcnLinkSurfaceCapture(&d,4,3,&refused)==STATUS_INVALID_PARAMETER);
         model.config=8;model.scanned=0x490000000ull;fb[0]=0x12345678;
+        d.RuntimeFramebuffer=(UCHAR*)fb;d.RuntimeFramebufferLength=96;
+        d.RuntimeFramebufferPhysical.QuadPart=0x490000000ll;
+        // A stale application snapshot is never a restore candidate, even if its memory range is valid.
+        writes=model.writes;
+        CHECK(DcnLinkSurfaceRestore(&d,&saved)==STATUS_DEVICE_NOT_READY && model.writes==writes);
+        saved.Physical=(ULONGLONG)d.RuntimeFramebufferPhysical.QuadPart;
         CHECK(DcnLinkSurfaceRestore(&d,&saved)==STATUS_SUCCESS);
         CHECK(model.scanned==saved.Physical && !model.blank && !plane_is_blank && fb[0]==0x12345678);
+        CHECK(!d.RuntimePostValid); // inherited rollback uses explicit reserved geometry, not RuntimePost.
         saved.Visible=0;
         CHECK(DcnLinkSurfaceRestore(&d,&saved)==STATUS_SUCCESS);
         CHECK(d.DcnBlanked && plane_is_blank==0);
-        model.never_latch=1;model.elapsed=0;model.scanned=0;
-        saved.Visible=1;
+        model.never_latch=1;model.elapsed=0;model.scanned=0;saved.Visible=1;
         CHECK(DcnLinkSurfaceRestore(&d,&saved)==STATUS_IO_TIMEOUT);
-        CHECK(d.DcnBlanked && plane_is_blank && fb[0]==0x12345678);
+        CHECK(d.DcnBlanked && plane_is_blank && fb[0]==0x12345678 && writer.resumes==3);
+        // Every normal restore entry must abort before writes if Resume cannot acquire its section.
+        model.never_latch=0;writer.status=STATUS_DEVICE_NOT_READY;writes=model.writes;
+        CHECK(DcnLinkSurfaceRestore(&d,&saved)==STATUS_DEVICE_NOT_READY && model.writes==writes);
+        d.RuntimePost=d.Post;d.RuntimePost.PhysicAddress=d.RuntimeFramebufferPhysical;d.RuntimePostValid=1;
+        CHECK(DcnRuntimeSurface(&d,TRUE)==STATUS_DEVICE_NOT_READY && model.writes==writes);
+        d.RuntimeDisplayChanged=0;
+        CHECK(DcnRestorePostDisplay(&d)==STATUS_DEVICE_NOT_READY && model.writes==writes);
+        // Only the explicit OS-serialized entry bypasses normal writer authorization.
+        model.scanned=d.DcnFirmwareAddress;model.pitch=d.DcnFirmwarePitch/4-1;model.flip=0;
+        CHECK(DcnRestorePostDisplaySerialized(&d)==STATUS_SUCCESS);
+        CHECK(model.scanned==d.DcnFirmwareAddress);
+        writer.status=STATUS_SUCCESS;model.elapsed=0;saved.Physical+=4096;writes=model.writes;
+        CHECK(DcnLinkSurfaceRestore(&d,&saved)==STATUS_DEVICE_NOT_READY && model.writes==writes);
+
     }
     printf("post display restore: %u checks, %u failures\n",checks,failures);return failures?1:0;
 }

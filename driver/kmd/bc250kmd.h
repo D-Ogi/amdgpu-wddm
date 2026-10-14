@@ -153,6 +153,47 @@ typedef enum _BC250_STAGE {
     StageStartFailed = 91,
 } BC250_STAGE;
 
+// BD-170: the last immediate flips, one record each (dcn.c's DcnImmediateObserve). Written lock-free at any IRQL
+// under a sequence lock of its own: Version is odd while the writer fills the slot and even after it. The summary
+// copies a slot, compares Version before and after the copy, tries again up to BC250_DCN_IMMEDIATE_READS times and
+// prints a slot that kept changing as unavailable, never a mixture of two flips. One writer at a time: the records
+// are written inside the flip transaction, under the interrupt lock L (wddm.c's WddmFlipLocked). Evidence, not
+// control. Times are microseconds from the QPC sample taken just before the programming sequence; -1 is "not seen".
+#define BC250_DCN_IMMEDIATE_RECORDS 8u
+#define BC250_DCN_IMMEDIATE_READS 3u
+#define BC250_DCN_IMMEDIATE_OBSERVE_US 50u  // the observation bound after the programming: a few lines, not a refresh
+// The outcome of one observation. Only the first two are P' (docs/design/vidpn-flip.md section 7.2): SURFACE_FLIP_PENDING
+// first observed clear and DCSURF_PRIMARY_SURFACE_ADDRESS read back as the request at one sample, with the primary
+// generation unchanged across the observation. The others are the open edge U, which wddm.c answers.
+#define BC250_DCN_IMMEDIATE_DONE 1u         // inside the bound
+#define BC250_DCN_IMMEDIATE_DONE_LATE 2u    // at a first sample already past the bound: complete, the time an upper bound
+#define BC250_DCN_IMMEDIATE_PENDING 3u      // SURFACE_FLIP_PENDING still set at the bound
+#define BC250_DCN_IMMEDIATE_PRIMARY_OTHER 4u // pending clear, PRIMARY_SURFACE_ADDRESS on another address at the bound
+#define BC250_DCN_IMMEDIATE_READ_FAILED 5u  // the last sample could not read FLIP_CONTROL or PRIMARY_SURFACE_ADDRESS
+#define BC250_DCN_IMMEDIATE_SUPERSEDED 6u   // the primary generation moved during the observation (facts M904: cannot)
+#define BC250_DCN_IMMEDIATE_OUTCOMES 7u
+typedef struct _BC250_DCN_IMMEDIATE_RECORD {
+    volatile LONG Version;      // the slot's sequence lock, see above
+    LONG Sequence;              // 1 for the first immediate flip of this start
+    ULONG Generation;           // the primary generation (wddm.c's PrimarySequence) the request was published under
+    ULONG Outcome;              // BC250_DCN_IMMEDIATE_*
+    ULONG Flags;                // the request's DXGK_SETVIDPNSOURCEADDRESS_FLAGS.Value (IndependentFlipExclusive 0x80)
+    ULONGLONG CardAddress;      // the request
+    ULONGLONG Physical;         // the request as PRIMARY_SURFACE_ADDRESS holds it (physical, each word in its field)
+    ULONGLONG Observed;         // the last PRIMARY_SURFACE_ADDRESS sample (physical), 0 when it did not read
+    LONG ReadStatus;            // NTSTATUS of the last sample's reads
+    ULONG Samples;              // FLIP_CONTROL samples taken
+    ULONG Frame;                // OTG0_OTG_STATUS_FRAME_COUNT when the observation started
+    ULONG PositionBefore;       // OTG0_OTG_STATUS_POSITION when the observation started
+    ULONG PositionAfter;        // and when it ended
+    ULONG Control;              // the first HUBPREQ0_DCSURF_FLIP_CONTROL sample after the write sequence
+    LONG ProgramUs;             // the programming sequence: from the sample before it to the one after it returned
+    LONG FirstUs;               // the first observation sample
+    LONG ClearUs;               // the first sample with SURFACE_FLIP_PENDING clear
+    LONG DoneUs;                // the first sample with the full predicate
+    LONG EndUs;                 // the last sample
+} BC250_DCN_IMMEDIATE_RECORD;
+
 #define BC250_VISIBILITY_HISTORY_COUNT 16u
 typedef struct _BC250_VISIBILITY_EVENT {
     ULONG Call, Source, Requested;
@@ -299,6 +340,20 @@ typedef struct _BC250_DEVICE {
     volatile LONG DcnFlipsHardware;      // SetVidPnSourceAddress flips that reached the M87 write sequence
     volatile LONG DcnLockTimeouts;      // bounded OTG update-lock acknowledgement expired
     volatile LONG DcnFlipRefused;        // SetVidPnSourceAddress translation/range or programming refused
+    // BD-170: flips with DXGK_SETVIDPNSOURCEADDRESS_FLAGS.FlipImmediate (dcn.c's DcnImmediateObserve). Flips counts
+    // the immediate programmings, Outcomes each observation by its BC250_DCN_IMMEDIATE_* (index 0 unused). SameFrame
+    // counts those programmed in the same OTG frame as the immediate flip before them (several requests in one
+    // refresh). DoneMaxUs and DoneSumUs are DoneUs of the observations done inside the bound; ObserveMaxUs is the
+    // longest observation (EndUs, after the last sample's reads). Overruns counts the observations that ended past
+    // the bound. The whole transaction at the DDI's IRQL is wddm.c's FlipLockedMaxUs.
+    volatile LONG DcnImmediateFlips, DcnImmediateSameFrame;
+    volatile LONG DcnImmediateOutcomes[BC250_DCN_IMMEDIATE_OUTCOMES];
+    volatile LONG DcnImmediateDoneMaxUs, DcnImmediateObserveMaxUs, DcnImmediateOverruns;
+    volatile LONG64 DcnImmediateDoneSumUs;
+    volatile LONG DcnImmediateLastFrame;
+    volatile LONG DcnImmediateRecordNext;    // records written so far; slot = (n - 1) % BC250_DCN_IMMEDIATE_RECORDS
+    LONGLONG DcnQpcFrequency;               // KeQueryPerformanceCounter's frequency, read once by MmioStart
+    BC250_DCN_IMMEDIATE_RECORD DcnImmediateRecords[BC250_DCN_IMMEDIATE_RECORDS];
 
     // 2026-09-22 (ADR 0011 consequences, facts M97/M100): the present path's own destination once the flip is
     // live - a CPU mapping of whatever DcnCurrentAddress currently names, next to that field for the same
@@ -727,6 +782,7 @@ NTSTATUS DcnStop(_Inout_ BC250_DEVICE* Device);
 NTSTATUS DcnSetVisibility(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible);
 NTSTATUS DcnRestorePostDisplay(_Inout_ BC250_DEVICE* Device); // any IRQL; no allocation/log/lock
 NTSTATUS DcnRuntimeSurface(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible);
+NTSTATUS DcnRestorePostDisplaySerialized(_Inout_ BC250_DEVICE* Device);
 NTSTATUS DcnFlipToFirmwareSurface(_Inout_ BC250_DEVICE* Device);   // the same without the unblank (modeset.c)
 
 // dcn.c (0.7.24, ADR 0011 point 3 step 3): SetVidPnSourceAddress's own path - the same M87 write sequence
@@ -739,8 +795,70 @@ NTSTATUS DcnFlipToFirmwareSurface(_Inout_ BC250_DEVICE* Device);   // the same w
 // KiB/range rule. PlaneFormat (plane_format.h, 0.7.216.20) is the surface's plane format: its bytes a pixel are the
 // pitch's unit, and a format other than the plane's current one is programmed in the same locked update as the
 // address. STATUS_NOT_SUPPORTED for a format other than ARGB8888 when the firmware's format did not decode.
+// Immediate (BD-170) is DXGK_SETVIDPNSOURCEADDRESS_FLAGS.FlipImmediate: SURFACE_FLIP_TYPE 1 for this flip only,
+// 0 (the next VUPDATE) otherwise. DcnImmediateObserve below is the caller's bounded completion check. Wrote (BD-170
+// r6) is TRUE once the write sequence started: a failure with Wrote FALSE wrote nothing (the admission refused it),
+// and a failure with Wrote TRUE is unknown, never proof that nothing was written.
 NTSTATUS DcnFlipSourceAddress(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddress, ULONG Pitch, ULONG PlaneFormat,
-    ULONGLONG AllocationBytes, _Out_opt_ ULONGLONG* PhysicalOut);
+    ULONGLONG AllocationBytes, BOOLEAN Immediate, _Out_opt_ ULONGLONG* PhysicalOut, _Out_ BOOLEAN* Wrote);
+// BD-170: after an immediate flip, sample P' (SURFACE_FLIP_PENDING clear and PRIMARY_SURFACE_ADDRESS read back as
+// Physical) for at most BC250_DCN_IMMEDIATE_OBSERVE_US after the programming and record the result (dcn.c says why).
+// ProgramStartQpc and ProgramEndQpc are KeQueryPerformanceCounter just before DcnFlipSourceAddress and just after it
+// returned; Physical is that call's PhysicalOut. Generation is wddm.c's PrimarySequence and ExpectedGeneration the odd
+// value the transaction holds it at: another value at the start or the end of the observation is
+// BC250_DCN_IMMEDIATE_SUPERSEDED. Called inside L only (wddm.c's WddmFlipLocked); no lock, no log line.
+// Flags is the request's DXGK_SETVIDPNSOURCEADDRESS_FLAGS.Value, kept in the record as it came.
+// Returns the BC250_DCN_IMMEDIATE_* outcome; only DONE and DONE_LATE are P'.
+ULONG DcnImmediateObserve(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddress, ULONGLONG Physical,
+    LONGLONG ProgramStartQpc, LONGLONG ProgramEndQpc, _In_ volatile LONG* Generation, ULONG ExpectedGeneration,
+    ULONG Flags);
+// BD-170 r6 (docs/design/vidpn-flip.md section 7.2): the facts that wddm.c reads inside L, and E5's blank request. No
+// wait, no log line, any IRQL. DcnHubpDrained: 1 when HUBP0_DCHUBP_CNTL has HUBP_BLANK_EN, HUBP_TTU_DISABLE and
+// HUBP_NO_OUTSTANDING_REQ all set, 0 when not, -1 when the read failed. DcnOtgRunning: OTG0_OTG_CONTROL.OTG_MASTER_EN,
+// 1 or 0, and -1 when the read failed. DcnFaultBlank: one read-modify-write of HUBP0_DCHUBP_CNTL that sets HUBP_BLANK_EN and
+// HUBP_TTU_DISABLE.
+int DcnHubpDrained(_In_ const BC250_DEVICE* Device);
+#define BC250_DCN_WRITER_RETIRE_US 30000u
+typedef struct _BC250_DCN_WRITER_BRIDGE {
+    ULONGLONG Physical;
+    ULONG Pitch;
+    LONGLONG ProgramEndQpc;
+    BOOLEAN Retired;
+} BC250_DCN_WRITER_BRIDGE;
+// WriterActive and its odd Generation already belong to the caller under L. Validate and program the owned
+// bridge only; no frame-length wait inside L. Retired names a stable already-owned surface proved without a write.
+NTSTATUS DcnWriterBridge(_Inout_ BC250_DEVICE* Device, _In_ volatile LONG* Generation,
+    ULONG ExpectedGeneration, _Out_ BOOLEAN* Wrote, _Out_ BC250_DCN_WRITER_BRIDGE* Bridge);
+// PASSIVE_LEVEL and outside L, with WriterActive/BUSY retained. The 30 ms budget begins at ProgramEndQpc, including
+// time spent leaving L. No caller may release the old allocation or begin long display writes until this succeeds.
+NTSTATUS DcnWriterBridgeRetire(_Inout_ BC250_DEVICE* Device, _In_ volatile LONG* Generation,
+    ULONG ExpectedGeneration, _In_ const BC250_DCN_WRITER_BRIDGE* Bridge);
+int DcnOtgRunning(_In_ const BC250_DEVICE* Device);
+NTSTATUS DcnFaultBlank(_Inout_ BC250_DEVICE* Device);
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+// BD-170 r6, the lab flavour's witnesses (docs/design/vidpn-flip.md section 7.2), never in the release flavour. For an
+// immediate request that edge E programs: DcnWitnessArm, before the programming, clears the HUBP0 flip event so that
+// an event read later belongs to this flip (Fresh); DcnWitnessRead, after the shipping decision, reads the event (E)
+// and SURFACE_EARLIEST_INUSE in both word orders (R). Each pair is masked to its fields, as PRIMARY_SURFACE_ADDRESS is
+// for P'. Inside L, no wait, no log line. Arm does nothing for a request that is not immediate.
+typedef struct _BC250_DCN_WITNESS_ARM {
+    NTSTATUS Status;            // the clear's reads and writes; STATUS_NOT_SUPPORTED when not armed
+    ULONG InterruptBefore;      // HUBPREQ0_DCSURF_SURFACE_FLIP_INTERRUPT before the clear
+    ULONG InterruptCleared;     // and after it
+    ULONG PendingBefore, PendingAfter; // FLIP_CONTROL around the event clear
+    BOOLEAN Fresh;              // clear succeeded with no pending flip on either side
+} BC250_DCN_WITNESS_ARM;
+typedef struct _BC250_DCN_WITNESS_READ {
+    ULONG Interrupt;            // SURFACE_FLIP_INTERRUPT after the decision
+    BOOLEAN Event;              // its SURFACE_FLIP_OCCURRED
+    ULONG Low1, High1;          // EARLIEST_INUSE, low word first (AMD hubp1_is_flip_pending's order)
+    ULONG High2, Low2;          // then high word first (AMD hubp1_read_state's order)
+    ULONGLONG Earliest1;        // the first pair, masked
+    ULONGLONG Earliest2;        // the second pair, masked
+} BC250_DCN_WITNESS_READ;
+void DcnWitnessArm(_In_ const BC250_DEVICE* Device, BOOLEAN Immediate, _Out_ BC250_DCN_WITNESS_ARM* Arm);
+NTSTATUS DcnWitnessRead(_In_ const BC250_DEVICE* Device, _Out_ BC250_DCN_WITNESS_READ* Read);
+#endif
 // M15.14 (0.7.216.20): read the firmware's plane format registers once per start, before any flip can change them
 // (WddmStart). Read-only. Afterwards Device->DcnPlaneFormats says whether a flip may program another format.
 void DcnCaptureFirmwareFormat(_Inout_ BC250_DEVICE* Device);
@@ -1163,13 +1281,23 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device);   // required resources fail b
 void WddmSourceVisibility(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible);   // display.c's SetVidPnSourceVisibility
 void WddmStop(_Inout_ BC250_DEVICE* Device);
 void WddmReportEngineFault(_In_ const BC250_DEVICE* Device, _In_z_ const char* Why);   // BD-167 (G3): CP fault -> close gfx node
-// modeset.c: the primary transaction (the flip DDI's PrimarySequence) for a change of the source size at
-// PASSIVE_LEVEL. While it is held, SetVidPnSourceAddress answers STATUS_DEVICE_BUSY, as for a flip in progress.
-// Begin is bounded and returns FALSE when it could not take it; TRUE with nothing held when there is no full table.
-// End with Invalidate says that the plane went back to the firmware surface: the next flip is a change whatever
-// address it carries, and no application surface is scanned out any more.
-BOOLEAN WddmPrimaryExclusiveBegin(_Inout_ BC250_DEVICE* Device, _Out_ ULONG* Generation);
-void WddmPrimaryExclusiveEnd(_Inout_ BC250_DEVICE* Device, ULONG Generation, BOOLEAN Invalidate);
+// The writers' primary transaction (the flip DDI's PrimarySequence) at PASSIVE_LEVEL: modeset.c, connector_link.c,
+// hdmi_link.c and wddm.c's destroy restore. Begin publishes WriterActive under L, then proves retirement onto
+// reserved storage at PASSIVE_LEVEL before it sets WriterReady. Long work may use only driver-owned storage.
+// Hardware flip requests remain unacknowledged while
+// that writer runs. End selects the retained Desired under L and programs it before releasing ownership. A failed
+// section never runs its operation: the caller receives failure and recovery is queued for a later legal section.
+// Invalidate keeps the reserved surface unless a new deposit must be programmed. No application address escapes L.
+#include "flip_state.h"
+BOOLEAN WddmPrimaryExclusiveBegin(_Inout_ BC250_DEVICE* Device, ULONG Kind, _Out_ ULONG* Generation);
+NTSTATUS WddmPrimaryExclusiveEnd(_Inout_ BC250_DEVICE* Device, ULONG Generation, BOOLEAN Invalidate);
+// Resume authorizes only reserved-buffer writes. An error prohibits those writes as well. Bugcheck/stop callbacks
+// use a distinct, explicitly OS-serialized entry; IRQL or a failed section never selects that entry implicitly.
+NTSTATUS WddmWriterResume(_Inout_ BC250_DEVICE* Device);
+// pnp.c's Bc250SetPowerState at the start of D3: dxgmms2 flushed the flip queue, so nothing is owed any more.
+void WddmFlipFlushed(_Inout_ BC250_DEVICE* Device);
+// pnp.c's Bc250DpcRoutine: E5's notification (DMA_PAGE_FAULTED) and drain record, a no-op unless E5 queued it.
+void WddmFlipFaultDpc(_Inout_ BC250_DEVICE* Device);
 // PASSIVE/Level Three, software-owner retention only. Not wired to power DDIs
 // until the separate hardware suspend/restore coordinator is implemented.
 NTSTATUS WddmSuspendRetained(_Inout_ BC250_DEVICE* Device);

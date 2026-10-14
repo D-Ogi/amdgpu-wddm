@@ -31,6 +31,18 @@ class EscapeCommands(unittest.TestCase):
         sources["driver/kmd/future.h"] = "#define BC250_ESCAPE_QUERY_FUTURE 34u\n"
         self.assertIn("duplicate command number 34", gate.check_sources(sources)[1][0])
 
+    def test_shared_hip_command_collides_with_kmd_replug(self):
+        sources = self.fixture()
+        sources["driver/shim/include/bc250_hip_journal.h"] = "#define BC250_HIP_JOURNAL_COMMAND 35u\n"
+        sources["driver/kmd/replug.h"] = "#define BC250_ESCAPE_CONNECTOR_REPLUG 35u\n"
+        _, errors = gate.check_sources(sources)
+        self.assertEqual(1, len(errors))
+        self.assertIn("duplicate command number 35", errors[0])
+        self.assertIn("BC250_HIP_JOURNAL_COMMAND", errors[0])
+        self.assertIn("BC250_ESCAPE_CONNECTOR_REPLUG", errors[0])
+        sources["driver/kmd/replug.h"] = "#define BC250_ESCAPE_CONNECTOR_REPLUG 36u\n"
+        self.assertEqual([], gate.check_sources(sources)[1])
+
     def test_noncommands_and_comments_are_excluded(self):
         sources = self.fixture()
         sources["driver/kmd/fields.h"] = """
@@ -67,6 +79,8 @@ class EscapeCommands(unittest.TestCase):
         commands, errors = gate.check(Path(__file__).resolve().parents[2])
         self.assertEqual([], errors)
         self.assertGreaterEqual(len(commands), 33)
+        self.assertIn({"name": "BC250_HIP_JOURNAL_COMMAND", "number": 35},
+                      [{"name": c["name"], "number": c["number"]} for c in commands])
 
 
 if __name__ == "__main__":

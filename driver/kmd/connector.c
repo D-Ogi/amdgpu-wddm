@@ -167,6 +167,33 @@ static void DebounceDpc(PKDPC Dpc, PVOID Context, PVOID Arg1, PVOID Arg2)
     ConnectorDpc(Context);
 }
 
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+NTSTATUS ConnectorReplug(BC250_DEVICE* Device, ULONG* Generation, BOOLEAN* DpcQueued)
+{
+    BC250_CONNECTOR* c = &Device->Connector;
+    KIRQL irql;
+    NTSTATUS status = STATUS_DEVICE_NOT_READY;
+    *Generation = 0;
+    *DpcQueued = FALSE;
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL) return STATUS_INVALID_DEVICE_STATE;
+    // Same admission lock as ConnectorDrain. Queue before releasing it, so stop
+    // cannot finish its DPC drain and then receive this request. No MMIO or
+    // operation mutex here: the existing PASSIVE worker owns disable/discovery.
+    KeAcquireSpinLock(&c->Lock, &irql);
+    if (Device->FullWddm && c->Running && c->Enabled && !c->Suspended && c->WorkItem &&
+        !ReadAtomic(&Device->RetainedPowerPhase) && Device->Dxgk.DxgkCbQueueDpc) {
+        *Generation = (ULONG)InterlockedIncrement(&c->Generation);
+        InterlockedExchange(&c->Pending, 1);
+        *DpcQueued = Device->Dxgk.DxgkCbQueueDpc(Device->Dxgk.DeviceHandle);
+        // FALSE also means that the adapter already has a queued DPC. Pending
+        // remains set for that DPC (or the running worker's debounce rearm).
+        status = STATUS_SUCCESS;
+    }
+    KeReleaseSpinLock(&c->Lock, irql);
+    return status;
+}
+#endif
+
 BOOLEAN ConnectorInterrupt(BC250_DEVICE* Device)
 {
     BC250_CONNECTOR* c = &Device->Connector;

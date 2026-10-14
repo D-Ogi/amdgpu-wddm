@@ -5,6 +5,7 @@
 #include "wave_snapshot.h"
 #include "hip_journal.h"
 #include "paging_journal.h"
+#include "escape_commands.h"
 #include "log_rate.h"
 #include "display_timing.h"
 #include "hdmi_link.h"
@@ -570,12 +571,53 @@ static void WaveEscape(BC250_DEVICE* Device, BC250_ESCAPE_WAVES* Data, ULONG Fla
     Data->Snapshot.Header.Result = status;
 }
 
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+static void ConnectorReplugEscape(BC250_DEVICE* Device, BC250_ESCAPE_CONNECTOR_REPLUG_DATA* Data, ULONG Flags)
+{
+    ULONG abi = Data->AbiVersion, reserved = 0, i, generation = 0;
+    BOOLEAN queued = FALSE;
+    NTSTATUS status = STATUS_INVALID_PARAMETER;
+    D3DDDI_ESCAPEFLAGS required = {0};
+    for (i = 0; i < RTL_NUMBER_OF(Data->Reserved); ++i) reserved |= Data->Reserved[i];
+    RtlZeroMemory(Data, sizeof(*Data));
+    Data->Magic = BC250_ESCAPE_MAGIC;
+    Data->Command = BC250_ESCAPE_CONNECTOR_REPLUG;
+    Data->Version = BC250_KMD_VERSION;
+    Data->AbiVersion = BC250_CONNECTOR_REPLUG_ABI;
+    Data->Status = BC250_ESCAPE_STATUS_REFUSED;
+    required.NoAdapterSynchronization = 1;
+    // HardwareAccess would exclude the flip whose overlap this arm measures.
+    // The connector's queue lock and stop drain protect this software request.
+    if (!WaveCallerIsAdmin()) {
+        status = STATUS_ACCESS_DENIED;
+        Data->Status = BC250_ESCAPE_STATUS_NOT_ADMIN;
+    } else if (KeGetCurrentIrql() != PASSIVE_LEVEL) {
+        status = STATUS_INVALID_DEVICE_STATE;
+    } else if (Flags == required.Value && abi == BC250_CONNECTOR_REPLUG_ABI && !reserved) {
+        if (!LabDiagnosticsAllowed()) status = STATUS_ACCESS_DENIED;
+        else {
+            status = ConnectorReplug(Device, &generation, &queued);
+            if (NT_SUCCESS(status)) {
+                Data->Status = BC250_ESCAPE_STATUS_DONE;
+                LabEscapeAdmitted(LabEscapeConnectorReplug, "lab:connector-replug");
+                GuardLog("connector: lab replug generation %lu dpc queued %u", generation, queued);
+            }
+        }
+    }
+    Data->Generation = generation;
+    Data->DpcQueued = queued;
+    Data->NtStatus = (ULONG)status;
+}
+#endif
+
 NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Escape)
 {
     BC250_DEVICE* device = (BC250_DEVICE*)hAdapter;
     BC250_ESCAPE* data = (BC250_ESCAPE*)Escape->pPrivateDriverData;
     D3DDDI_ESCAPEFLAGS softwareRead = {0};
     ULONG command;
+
+    Bc250EscapeCommandsUnique();
 
     if (Escape->PrivateDriverDataSize >= 8 && data != NULL && data->Magic == BC250_ESCAPE_MAGIC &&
         data->Command == BC250_HIP_JOURNAL_COMMAND)
@@ -586,6 +628,14 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
     // they are answered ahead of the power-phase check (SoftwareReadEscape). The command is read once, so the read
     // that runs is the read that was admitted; every other flag combination takes the path below, as before.
     command = data->Command;
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+    if (command == BC250_ESCAPE_CONNECTOR_REPLUG) {
+        if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_CONNECTOR_REPLUG_DATA))
+            return STATUS_INVALID_PARAMETER;
+        ConnectorReplugEscape(device, (BC250_ESCAPE_CONNECTOR_REPLUG_DATA*)data, Escape->Flags.Value);
+        return STATUS_SUCCESS;
+    }
+#endif
     if (command == BC250_ESCAPE_RUN_BOARD_CAPS) {
         if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_BOARD_CAPS)) return STATUS_INVALID_PARAMETER;
         BoardProviderCaps(device, (BC250_ESCAPE_BOARD_CAPS*)data, Escape->Flags.Value);
@@ -2025,7 +2075,7 @@ NTSTATUS Bc250SystemDisplayEnable(_In_ const PVOID MiniportDeviceContext, _In_ c
         (ULONGLONG)post->Width*4>post->Pitch ||
         (ULONGLONG)post->Pitch*post->Height>length)
         return STATUS_DEVICE_NOT_READY;
-    status=DcnRestorePostDisplay(device);
+    status=DcnRestorePostDisplaySerialized(device);
     if (!NT_SUCCESS(status)) return status;
     if (!runtime) ModesetRestoreQuiet(device);
     *Width = post->Width;

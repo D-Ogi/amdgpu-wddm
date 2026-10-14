@@ -1,4 +1,5 @@
-// Immutable scanout identity saved under the WDDM primary transaction.
+// Scanout metadata read under the WDDM primary transaction. Rollback uses
+// reserved driver storage; a captured application address conveys no ownership.
 #pragma once
 struct _BC250_DEVICE;
 typedef struct BC250_LINK_SURFACE {

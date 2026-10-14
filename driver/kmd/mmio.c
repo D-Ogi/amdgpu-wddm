@@ -123,6 +123,19 @@ NTSTATUS MmioStart(_Inout_ BC250_DEVICE* Device)
     Device->DcnVsyncSkipSameAddressTime = Device->DcnVsyncSkipChangedGenerationTime = 0;
     Device->DcnFlipsHardware = 0;
     Device->DcnFlipRefused = 0;
+    // BD-170: the immediate flips of this start and their records.
+    Device->DcnImmediateFlips = Device->DcnImmediateSameFrame = 0;
+    RtlZeroMemory((void*)Device->DcnImmediateOutcomes, sizeof(Device->DcnImmediateOutcomes));
+    Device->DcnImmediateDoneMaxUs = Device->DcnImmediateObserveMaxUs = Device->DcnImmediateOverruns = 0;
+    Device->DcnImmediateDoneSumUs = 0;
+    Device->DcnImmediateLastFrame = Device->DcnImmediateRecordNext = 0;
+    RtlZeroMemory(Device->DcnImmediateRecords, sizeof(Device->DcnImmediateRecords));
+    {
+        // The frequency is fixed at boot: read it here once, not in every observation at the DDI's IRQL.
+        LARGE_INTEGER frequency;
+        (void)KeQueryPerformanceCounter(&frequency);
+        Device->DcnQpcFrequency = frequency.QuadPart;
+    }
     // 2026-09-22 (ADR 0011 consequences): the present path's own destination mapping, same reset rule and the
     // same trust as Device->Mmio just above - the stop path (WddmStop/DcnStop, dcn.c's DcnUnmapScanout) already
     // unmapped it; this only documents that a fresh start never inherits a stale pointer from the last one.
@@ -341,12 +354,22 @@ NTSTATUS MmioDcnWrite(_In_ const BC250_DEVICE* Device, ULONG Offset, ULONG Value
 // DcnFlipSourceAddress's own GuardLog already summarizes and caps (BC250_DCN_LOG_CALLS). Both hot paths call
 // this instead of MmioDcnWrite; the escape (DcnFlipCore, occasional, human-driven) still calls MmioDcnWrite and
 // keeps its per-write log, unchanged from 0.7.20.
+static BOOLEAN DcnWriteAllowed(ULONG Offset)
+{
+    if (InTable(g_MmioDcnWriteAllow, BC250_MMIO_DCN_WRITE_ALLOW_COUNT, Offset)) return TRUE;
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    // BD-170 r6, the lab flavour's witnesses (dcn.c's DcnWitnessArm): the clear of the flip event, nothing else.
+    if (InTable(g_MmioDcnLabWriteAllow, BC250_MMIO_DCN_LAB_WRITE_ALLOW_COUNT, Offset)) return TRUE;
+#endif
+    return FALSE;
+}
+
 NTSTATUS MmioDcnWriteEx(_In_ const BC250_DEVICE* Device, ULONG Offset, ULONG Value, BOOLEAN Quiet)
 {
     NTSTATUS status;
 
     if (Device->Mmio == NULL || !Device->DcnWriteEnabled) status = STATUS_DEVICE_NOT_READY;
-    else if ((Offset & 3) != 0 || Offset >= BC250_BAR5_LENGTH || !InTable(g_MmioDcnWriteAllow, BC250_MMIO_DCN_WRITE_ALLOW_COUNT, Offset))
+    else if ((Offset & 3) != 0 || Offset >= BC250_BAR5_LENGTH || !DcnWriteAllowed(Offset))
         status = STATUS_ACCESS_DENIED;
     else
     {

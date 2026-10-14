@@ -54,6 +54,7 @@ static void KeSetTimerEx(int*t,LARGE_INTEGER d,int ms,int*k){(void)t;(void)k;CHE
 static NTSTATUS DcnVsyncEnable(BC250_DEVICE*d,int on){CHECK(lockHeld);mmio++;if(enableStatus)return enableStatus;d->DcnVsyncArmed=on;return 0;}
 static int GfxSubmitReady(BC250_DEVICE*d){(void)d;CHECK(!lockHeld);return gfxReady;}
 static int GfxPagingSubmitReady(BC250_DEVICE*d){(void)d;CHECK(!lockHeld);return pagingReady;}
+static LONGLONG InterlockedExchange64(volatile LONGLONG*p,LONGLONG v){LONGLONG old=*p;CHECK(lockHeld);*p=v;return old;}
 static LARGE_INTEGER KeQueryPerformanceCounter(LARGE_INTEGER*f){LARGE_INTEGER n={1234};f->QuadPart=1000000;return n;}
 /* ACTUAL_SOURCE */
 static void setup(BC250_DEVICE*d,BC250_WDDM*w){

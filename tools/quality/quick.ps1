@@ -49,6 +49,7 @@ try {
  Check 'kmd-order' { & python "$repo\tools\quality\test_kmd_reproducible.py" --out "$Out\kmd-order" }
  # One namespace spans all KMD headers, including optional diagnostic commands.
  Check 'escape-commands' { & python "$repo\tools\quality\escape_commands.py" --root $repo --out "$Out\escape-commands"; if($LASTEXITCODE -eq 0){ & python -m unittest discover -s "$repo\tools\quality" -p 'test_escape_commands.py' } }
+ Check 'flavour-controls' { $env:BC250_TEST_OUT=(New-Item -ItemType Directory -Force "$Out\flavour-controls").FullName; & python -B -m unittest discover -s "$repo\tools\quality" -p 'test_flavour_gate.py' }
  Check 'facts' { & python "$repo\tools\facts\gen_facts.py" --root $repo --check; if($LASTEXITCODE -eq 0){ & python -m unittest discover -s "$repo\tools\facts" } }
  # Shares, denominators and modelled labels in the facts rows: a percentage must be the share of the
  # counts next to it, and a rate normalised to another clock must say which numbers the model made.
@@ -298,6 +299,11 @@ Check 'ledger-call' { & pwsh -NoProfile -File "$repo\tools\release\test-ledger-c
  Check 'gdi-admission' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_gdi_admission.ps1" -Root $Workspace -Out "$Out\gdi-admission" -Kits "$Kits" }
  Check 'display-modes' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_display_modes.ps1" -Root $Workspace -Out "$Out\display-modes" -Kits "$Kits" }
  Check 'vidpn-flip' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_vidpn_flip.ps1" -Root $Workspace -Out "$Out\vidpn-flip" }
+ # BD-170 r6: each rule of wddm.c's flip state machine broken in a copy of the extracted source; every one must fail.
+ Check 'vidpn-flip-controls' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_vidpn_flip.ps1" -Root $Workspace -Out "$Out\vidpn-flip-controls" -Mutation all }
+ # The lab flavour's witnesses (BD-167 switch): read after the shipping decision, never change it; each control must fail.
+ Check 'vidpn-flip-lab' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_vidpn_flip.ps1" -Root $Workspace -Out "$Out\vidpn-flip-lab" -Lab }
+ Check 'vidpn-flip-lab-controls' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_vidpn_flip.ps1" -Root $Workspace -Out "$Out\vidpn-flip-lab-controls" -Lab -Mutation all }
  Check 'scanout-admit' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_scanout_admit.ps1" -Root $Workspace -Out "$Out\scanout-admit" -Kits "$Kits" }
  Check 'dpaudio' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_dpaudio.ps1" -Root $Workspace -Out "$Out\dpaudio" -Kits "$Kits" }
  Check 'modeset' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_modeset.ps1" -Root $Workspace -Out "$Out\modeset" -Kits "$Kits" }
@@ -406,6 +412,8 @@ Check 'ledger-call' { & pwsh -NoProfile -File "$repo\tools\release\test-ledger-c
  $suites=@(
   @{n='link-atom';s='driver\kmd\test\run_link_atom.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
   @{n='connector-buffer';s='driver\kmd\test\run_connector_buffer.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
+  @{n='connector-replug';s='driver\kmd\test\run_connector_replug.ps1';a=@('-Kits',$Kits)}
+  @{n='lab-gate';s='driver\kmd\test\run_lab_gate.ps1';a=@('-Kits',$Kits)}
   @{n='connector-modes';s='driver\kmd\test\run_connector_modes.ps1';a=@('-Root',$Workspace)}
   @{n='connector-link';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits)}
   @{n='connector-link-stale-generation';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitGeneration','-ExpectFailure')}
@@ -429,7 +437,25 @@ Check 'ledger-call' { & pwsh -NoProfile -File "$repo\tools\release\test-ledger-c
   @{n='post-display';s='driver\kmd\test\run_post_display.ps1';a=@('-Root',$Workspace)}
   @{n='post-display-old-runtime-order';s='driver\kmd\test\run_post_display.ps1';a=@('-Root',$Workspace,'-OldRuntimeOrder');Fails=$true}
   @{n='post-display-wrong-saved-surface';s='driver\kmd\test\run_post_display.ps1';a=@('-Root',$Workspace,'-WrongSavedSurface');Fails=$true}
+  @{n='post-display-resume-refusal';s='driver\kmd\test\run_post_display.ps1';a=@('-Root',$Workspace,'-ResumeRefusalIgnored');Fails=$true}
+  @{n='post-display-application-surface';s='driver\kmd\test\run_post_display.ps1';a=@('-Root',$Workspace,'-SavedApplicationSurface');Fails=$true}
   @{n='dcn-flip';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace)}
+  @{n='dcn-flip-pending-only';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','PendingOnly');Fails=$true}
+  @{n='dcn-flip-address-only';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','AddressOnly');Fails=$true}
+  @{n='dcn-flip-bound-at-start';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','BoundAtStart');Fails=$true}
+  @{n='dcn-flip-overrun-uncounted';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','OverrunUncounted');Fails=$true}
+  @{n='dcn-flip-poll-after-stall';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','PollAfterStall');Fails=$true}
+  @{n='dcn-flip-pending-arm';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','PendingArmIgnored');Fails=$true}
+  @{n='dcn-flip-logger-under-lock';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','SourceAddressLogs');Fails=$true}
+  @{n='dcn-flip-bridge-proof';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','BridgeProofIgnored');Fails=$true}
+  @{n='dcn-flip-bridge-extent';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','BridgeExtentIgnored');Fails=$true}
+  @{n='dcn-flip-bridge-current';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','BridgeCurrentUnsafe');Fails=$true}
+  @{n='dcn-flip-retire-stall';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','BridgeRetirePostStall');Fails=$true}
+  @{n='dcn-flip-retire-deadline';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','BridgeRetirePostDeadline');Fails=$true}
+  @{n='dcn-flip-retire-irql';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','BridgeRetireAtDirql');Fails=$true}
+  @{n='dcn-flip-retire-frame';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','BridgeRetireOneFrame');Fails=$true}
+  @{n='flip-state';s='driver\kmd\test\run_flip_state.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
+  @{n='flip-state-controls';s='driver\kmd\test\run_flip_state.ps1';a=@('-Root',$Workspace,'-Kits',$Kits,'-Mutation','all')}
   @{n='dcn-observation';s='driver\kmd\test\run_dcn_observation.ps1';a=@('-Root',$Workspace)}
   @{n='dcn-observe';s='driver\kmd\test\run_dcn_observe.ps1';a=@('-Root',$Workspace)}
   @{n='display-timing';s='driver\kmd\test\run_display_timing.ps1';a=@('-Root',$Workspace)}

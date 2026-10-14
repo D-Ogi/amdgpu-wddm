@@ -68,6 +68,11 @@
     "escapes": "the lab gate itself (test signing + LabDiagnostics)",
     "marker": "labgate: CodeIntegrityOptions 0x%08X, test signing %s",
     "source": "driver/kmd/lab_gate.c"
+   },
+   {
+    "escapes": "CONNECTOR_REPLUG (BD-170 writer-overlap witness)",
+    "marker": "lab:connector-replug",
+    "source": "driver/kmd/display.c"
    }
   ]
  },

@@ -51,6 +51,7 @@ typedef struct {UINT Numerator,Denominator;} RATIONAL;
 typedef struct {UINT VideoStandard;REGION TotalSize,ActiveSize;RATIONAL VSyncFreq,HSyncFreq;SIZE_T PixelRate;UINT ScanLineOrdering;} D3DKMDT_VIDEO_SIGNAL_INFO;
 struct TEST_VIDPN_INTERFACE;
 #include "dcn_scale.h"
+#include "flip_state.h"
 #include "edid.h"
 #include "../shim/bc250_ddc.h"
 typedef struct {BC250_INHERITED_PIPE InheritedPipe;NTSTATUS InheritedPipeStatus;

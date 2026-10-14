@@ -27,6 +27,13 @@
 #include "object_index.h"
 #include "ring_gap.h"            // C48/C49: the node's own idle-gap accounting, the same object the ETW analysis used
 #include "notify_pairing.h"      // C50: which pass pairs a completion report with DxgkCbNotifyDpc
+#include "flip_state.h"          // BD-170 r6: the decisions of the flip state machine
+#include <limits.h>               // UINT_MAX, ULLONG_MAX: the UNKNOWN values of shared/d3dkmdt.h (BD-170 E5)
+// shared/d3dkmdt.h writes DXGK_PRIMITIVE_API_SEQUENCE_NUMBER_UNKNOWN as ULONGLONG_MAX, a name of ntintsafe.h. That
+// header redefines stdint.h's UINT32_MAX in this file, so the name gets limits.h's value of the same type instead.
+#ifndef ULONGLONG_MAX
+#define ULONGLONG_MAX ULLONG_MAX
+#endif
 #include "bc250kmd_escape.h"     // BC250_PJ_* record kinds of the paging journal
 #include "regs.generated.h"      // the CP/GRBM/GCVM offsets of the timeout snapshot (tools/regcalc)
 #include "ih_fault.h"            // GCVM_L2_PROTECTION_FAULT_STATUS field decode and the gfxhub CID names
@@ -261,6 +268,68 @@ typedef struct _BC250_PRESENT_OBSERVATION {
 // clock's own granularity is coarser than that error, and nothing in stage A depends on the exact number.
 #define BC250_WDDM_VSYNC_HZ 60
 #define BC250_WDDM_VSYNC_MS (1000 / BC250_WDDM_VSYNC_HZ)
+
+// BD-170: one call of ControlInterrupt for DXGK_INTERRUPT_CRTC_VSYNC (WddmVSyncControlNote). Call is 1 for the first
+// call of this start, Qpc its KeQueryPerformanceCounter, Owed the address of a next-VSync success that no report
+// carried yet at the time (0: none).
+#define BC250_WDDM_VSYNC_CONTROL_EVENTS 16u
+typedef struct _BC250_WDDM_VSYNC_CONTROL {
+    LONG Call;
+    BOOLEAN On;
+    LONGLONG Qpc;
+    LONGLONG Owed;
+} BC250_WDDM_VSYNC_CONTROL;
+
+// BD-170 r6: the record of one W-u deposit (flip_state.h, docs/design/vidpn-flip.md section 7.2), written inside L by
+// the flip transaction and closed by the writer's End. The last BC250_WDDM_WU_RECORDS are kept.
+#define BC250_WDDM_WU_RECORDS 8u
+typedef struct _BC250_WDDM_WU_RECORD {
+    LONG Record;                // 1, 2, ... in the order of the deposits; 0 for a slot never written
+    ULONG Code;                 // BC250_FLIP_RECORD_WRITER_UNPROVEN
+    ULONGLONG Request;          // the request's card address
+    ULONG Flags;                // its DXGK_SETVIDPNSOURCEADDRESS_FLAGS
+    ULONG Generation;           // the primary generation at the deposit (odd: the writer's)
+    ULONG Writer;               // the writer's BC250_WRITER_*
+    ULONG Deposit;              // DepositSequence of this deposit
+    BOOLEAN Unblank;            // the writer's unblank programmed this deposit
+    ULONG End;                  // BC250_WU_*, BC250_WU_OPEN until the writer's End
+    LONGLONG DepositQpc;
+    LONG ToEndUs;               // from the deposit to the writer's End; -1 until then
+} BC250_WDDM_WU_RECORD;
+// The summary's copy of them, taken in one section (wddm.c's WddmWuCopy).
+typedef struct _BC250_WDDM_WU_COPY {
+    LONG Next;
+    LONG ToEndMaxUs;
+    BC250_WDDM_WU_RECORD Records[BC250_WDDM_WU_RECORDS];
+} BC250_WDDM_WU_COPY;
+
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+// BD-170 r6, the lab flavour's witnesses (section 7.2), never in the release flavour: one immediate request that edge E
+// programmed, with the shipping decision first (Outcome, Result, Q) and the witnesses read after it (E, R).
+#define BC250_WDDM_WITNESS_RECORDS 16u
+typedef struct _BC250_WDDM_WITNESS_RECORD {
+    LONG Request;               // 1, 2, ... for the immediate requests edge E programmed
+    ULONG Generation;           // the transaction's (odd) primary generation
+    ULONG Flags;                // DXGK_SETVIDPNSOURCEADDRESS_FLAGS
+    ULONG Outcome;              // DcnImmediateObserve's BC250_DCN_IMMEDIATE_*, the shipping reader's
+    ULONG Result;               // Bc250FlipResult: the shipping decision, made before any witness read
+    BOOLEAN Q;                  // P' (DONE or DONE_LATE)
+    BOOLEAN Fresh;              // the flip event was cleared before the programming (DcnWitnessArm)
+    BOOLEAN E;                  // SURFACE_FLIP_OCCURRED after the decision
+    BOOLEAN R1, R2;             // EARLIEST_INUSE names the request: low word first, high word first
+    NTSTATUS ArmStatus, ReadStatus;
+    ULONGLONG Card, Physical;   // the request, and as the plane holds it
+    ULONGLONG Earliest1, Earliest2;     // EARLIEST_INUSE, masked, in the two orders
+    ULONG InterruptBefore, InterruptCleared, Interrupt;
+    ULONG PendingBefore, PendingAfter;
+    ULONG Low1, High1, High2, Low2;     // EARLIEST_INUSE raw words in read order
+} BC250_WDDM_WITNESS_RECORD;
+typedef struct _BC250_WDDM_WITNESS_COPY {
+    LONG Requests, ReadFailed, Stale, Qe, Qr, Er, Order, Lost, Kept;
+    BC250_WDDM_WITNESS_RECORD Records[BC250_WDDM_WITNESS_RECORDS];
+    BC250_WDDM_WITNESS_RECORD Last;
+} BC250_WDDM_WITNESS_COPY;
+#endif
 
 // Every paging builder reserves this OS-private slot before submission.
 // Storage belongs to the DMA buffer and is retained until its real fence.
@@ -582,6 +651,82 @@ typedef struct _BC250_WDDM {
     volatile LONGLONG BlitSourceLast;           // system physical of the last blit source, 0 if none translated
     volatile LONG Flips;                        // SetVidPnSourceAddress calls that changed the scanout address
     volatile LONG FlipsAboveDispatch;           // of all SetVidPnSourceAddress calls, those that arrived at DIRQL
+    volatile LONG ImmediatePromotions;          // BD-170: a pending flip reprogrammed for an immediate request
+    volatile LONG DmaFlipsRefused;              // BD-170: Present calls for a flip with a DMA buffer, refused
+    // Admission refusals remain failures, including independent immediate flips.
+    // Counters distinguish immediate and next-VSync exclusive requests.
+    volatile LONG ExclusiveRefused;
+    volatile LONG ExclusiveFailed;
+    // BD-170 r7, the flip state machine (flip_state.h, docs/design/vidpn-flip.md section 7.2). Every field of this
+    // block is written inside L, except the atomic WriterRecovery request. L is the interrupt lock of message 0: the flip transaction (WddmFlipLocked), the writer
+    // sections (WddmPrimaryExclusiveBegin, WddmWriterResume, WddmPrimaryExclusiveEnd,
+    // WddmFlipFlushed), E5 (WddmFlipFault) and WddmNotifyRoutine. The summary and the E5 DPC read them without L.
+    // Desired is the published primary above (PrimaryAddress, PrimaryPitch, PrimaryPlaneFormat, PrimaryBytes,
+    // PrimarySegment): the newest request this driver answered success for, programmed or deposited.
+    BOOLEAN WriterActive;               // a writer is between Begin and End; PrimarySequence is odd for it
+    BOOLEAN WriterResumed;              // the active writer called Resume: no DRAINED readback counts any more
+    BOOLEAN WriterDeposit;              // software-gate-closed Desired was deposited during the active writer
+    volatile LONG WriterBusy;           // hardware flips refused while a long writer owns the pipe
+    volatile LONG WriterBusyByKind[BC250_WRITER_KINDS];
+    volatile LONG WriterBridgePrograms, WriterBridgeRetired, WriterBridgeFailures;
+    BOOLEAN WriterReady;                // bridge retirement proved outside L, then committed under L
+    volatile LONG WriterRecovery;       // queued section failure; consumed only inside L
+    BOOLEAN DesiredOwed;                // Desired is a next-VSync success that no CRTC_VSYNC report carried yet
+    ULONG DepositSequence;              // advances at every deposit, so that a programmed deposit is the newest one
+    volatile LONG Faulting;             // E5 was entered on this start (F0); this block is freed at the stop
+    ULONG FaultCode;                    // the first fault's BC250_FLIP_FAULT_* code
+    UINT FaultNode;                     // and its node ordinal
+    NTSTATUS FaultBlank;                // DcnFaultBlank's status
+    volatile LONG FaultNotify;          // 1: the E5 DPC owes the DMA_PAGE_FAULTED notification
+    volatile LONG FaultDrain;           // the E5 DPC's drain record, BC250_FLIP_DRAIN_*
+    volatile LONG FaultDrainReads;      // and its reads of HUBP0_DCHUBP_CNTL
+    // Counts. Edges: each request by its edge (BC250_FLIP_EDGE_*). Results: the requests edge E programmed, by
+    // Bc250FlipResult. Faults: E5 entries, a repeat in FAULTING included. Notified and NotifyFailed: the
+    // DMA_PAGE_FAULTED notifications made and those that could not be made. WriterFaulting: Begin refused in
+    // FAULTING. WriterHigh: a writer section refused above DISPATCH_LEVEL.
+    // WriterSyncFailed and LowSyncFailed: DxgkCbSynchronizeExecution failed for a writer section or for the flip
+    // DDI's low entry. Deposits by Resume, End's programs, End's refusals (OwedInvalidated), the reports that carried
+    // an owed Desired, the D3 flushes and the destroy restores whose Begin was refused.
+    volatile LONG FlipEdges[BC250_FLIP_EDGES];
+    volatile LONG FlipResults[BC250_FLIP_RESULTS];
+    volatile LONG FlipFaults;
+    volatile LONG FaultNotified;
+    volatile LONG FaultNotifyFailed;
+    volatile LONG WriterFaulting;
+    volatile LONG WriterHigh;
+    volatile LONG WriterSyncFailed;
+    volatile LONG LowSyncFailed;
+    volatile LONG DepositsResumed;
+    volatile LONG EndPrograms;
+    volatile LONG OwedInvalidated;
+    volatile LONG OwedReported;
+    volatile LONG FlipFlushes;
+    volatile LONG DestroyUnsynchronized;
+    volatile LONG FlipLockedMaxUs;      // the longest flip transaction inside L, programming and E5 included
+    // W-u: the active writer's BC250_WRITER_* (Begin), the deposits' records and the longest time from a W-u deposit
+    // to its writer's End. FlipEdges[BC250_FLIP_EDGE_DEPOSIT_UNPROVEN] counts them.
+    ULONG WriterKind;
+    volatile LONG WuRecordNext;
+    volatile LONG WuToEndMaxUs;
+    BC250_WDDM_WU_RECORD WuRecords[BC250_WDDM_WU_RECORDS];
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    // BD-170 r6, lab flavour only (WddmWitness): per immediate request that edge E programmed, the disagreements of
+    // the shipping decision Q with the witnesses E and R read after it. ReadFailed: the witness reads failed. Stale: the
+    // event clear before the programming failed, so E is not compared. Qe, Qr, Er: Q against E, Q against R (low word
+    // first), E against R. Order: R low word first against R high word first. The first BC250_WDDM_WITNESS_RECORDS
+    // requests with any of these are kept, later ones counted (WitnessLost); WitnessLast is the last request whatever
+    // it showed.
+    volatile LONG WitnessRequests, WitnessReadFailed, WitnessStale, WitnessQe, WitnessQr, WitnessEr, WitnessOrder;
+    volatile LONG WitnessLost, WitnessKept;
+    BC250_WDDM_WITNESS_RECORD WitnessRecords[BC250_WDDM_WITNESS_RECORDS];
+    BC250_WDDM_WITNESS_RECORD WitnessLast;
+#endif
+    // BD-170: the CRTC_VSYNC switch of ControlInterrupt. Calls, On and Off count the calls. The last
+    // BC250_WDDM_VSYNC_CONTROL_EVENTS calls are kept, with their time and the address owed then.
+    volatile LONG VSyncControlCalls;
+    volatile LONG VSyncControlOn;
+    volatile LONG VSyncControlOff;
+    BC250_WDDM_VSYNC_CONTROL VSyncControl[BC250_WDDM_VSYNC_CONTROL_EVENTS];
     // M15.14. ScanoutFlips is the measurement the lab trial reads: of the flips above, those whose
     // allocation was an application's own scan-out surface rather than dxgkrnl's shared primary.
     // ScanoutAdmits counts every candidate by Bc250ScanoutAdmit's answer, so a trial that sees no
@@ -904,10 +1049,21 @@ typedef struct _BC250_WDDM_NOTIFY {
 static BOOLEAN WddmNotifyRoutine(_In_ PVOID Context)
 {
     BC250_WDDM_NOTIFY* notify = (BC250_WDDM_NOTIFY*)Context;
+    BC250_WDDM* wddm = (BC250_WDDM*)notify->Device->Wddm;
 
     notify->Device->Dxgk.DxgkCbNotifyInterrupt(notify->Device->Dxgk.DeviceHandle, &notify->Data);
     if (notify->Data.InterruptType == DXGK_INTERRUPT_CRTC_VSYNC)
+    {
         InterlockedExchange64(&notify->Device->DcnVsyncNotifyTime, (LONG64)KeQueryInterruptTime());
+        // BD-170 r6: inside L, like every write of DesiredOwed. The report that carries Desired completes the
+        // next-VSync success the OS waits for, so a writer's End no longer owes it (WddmWriterEndLocked).
+        if (wddm != NULL && wddm->DesiredOwed &&
+            notify->Data.CrtcVsync.PhysicalAddress.QuadPart == wddm->PrimaryAddress.QuadPart)
+        {
+            wddm->DesiredOwed = FALSE;
+            InterlockedIncrement(&wddm->OwedReported);
+        }
+    }
     return TRUE;
 }
 
@@ -2275,6 +2431,20 @@ static BOOLEAN WddmReadCompletedPrimary(_In_ BC250_DEVICE* Device, _In_ BC250_WD
     return TRUE;
 }
 
+// BD-170: one CRTC_VSYNC call of ControlInterrupt into the history the summary prints. Evidence only: the slot is
+// written without a lock, so a summary that meets a call in progress can print a mixed slot.
+static void WddmVSyncControlNote(_Inout_ BC250_WDDM* Wddm, BOOLEAN On)
+{
+    const LONG call = InterlockedIncrement(&Wddm->VSyncControlCalls);
+    BC250_WDDM_VSYNC_CONTROL* slot = &Wddm->VSyncControl[(ULONG)(call - 1) % BC250_WDDM_VSYNC_CONTROL_EVENTS];
+
+    InterlockedIncrement(On ? &Wddm->VSyncControlOn : &Wddm->VSyncControlOff);
+    slot->Call = call;
+    slot->On = On;
+    slot->Qpc = KeQueryPerformanceCounter(NULL).QuadPart;
+    slot->Owed = Wddm->DesiredOwed ? InterlockedCompareExchange64(&Wddm->PrimaryAddress.QuadPart, 0, 0) : 0;
+}
+
 // ---- the software VSync ------------------------------------------------------------------------------------------
 
 static KDEFERRED_ROUTINE WddmVSyncDpcRoutine;
@@ -2296,7 +2466,8 @@ static void WddmVSyncDpcTick(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_ PV
     InterlockedExchange64(&wddm->RingGapLastVsyncQpc, wddm->VSyncLast.QuadPart);   // C48: the software source
     InterlockedIncrement(&wddm->RingGapVsyncStampsTimer);   // 62.5 Hz, a different grid from the hardware vblank
     InterlockedIncrement(&wddm->VSyncTicks);
-    if (!wddm->VSyncEnabled) return;            // ControlInterrupt has not asked for CRTC_VSYNC
+    // ControlInterrupt has not asked for CRTC_VSYNC.
+    if (!wddm->VSyncEnabled) return;
 
     RtlZeroMemory(&data, sizeof(data));
     data.InterruptType = DXGK_INTERRUPT_CRTC_VSYNC;
@@ -2398,7 +2569,8 @@ void WddmDcnVsync(_Inout_ BC250_DEVICE* Device)
     if (wddm == NULL || !Device->VidPnFlipEnabled) return;
     if (InterlockedExchange(&Device->DcnVsyncAcked, 0) == 0) return;
     WddmRingGapVsync(wddm);             // C48: the vblank happened, whatever this function decides to report
-    if (WddmStopping(wddm) || !wddm->VSyncEnabled) return;
+    if (WddmStopping(wddm)) return;
+    if (!wddm->VSyncEnabled) return;
 
     RtlZeroMemory(&data, sizeof(data));
     data.InterruptType = DXGK_INTERRUPT_CRTC_VSYNC;
@@ -2499,6 +2671,41 @@ static void WddmStdAllocSummary(_In_ BC250_WDDM* Wddm)
     GuardLog("wddm summary: gdi type masks requested 0x%03lX refused 0x%03lX create-refused 0x%03lX "
              "rolled-back 0x%03lX open-refused 0x%03lX", m.Requested, m.Refused, m.CreateRefused,
              m.CreateRolledBack, m.OpenRefused);
+}
+
+// BD-170 r6: the W-u records, copied in one section (the flip state machine's block below).
+static BOOLEAN WddmWuCopy(_In_ BC250_DEVICE* Device, _In_ BC250_WDDM* Wddm, _Out_ BC250_WDDM_WU_COPY* Copy);
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+static BOOLEAN WddmWitnessCopy(_In_ BC250_DEVICE* Device, _In_ BC250_WDDM* Wddm, _Out_ BC250_WDDM_WITNESS_COPY* Copy);
+#endif
+
+// BD-170: a whole copy of one immediate-flip record under its sequence lock (bc250kmd.h): 1 copied, 0 never
+// written, 2 the slot kept changing for BC250_DCN_IMMEDIATE_READS tries. Never a mixture of two flips.
+static ULONG WddmImmediateRecordCopy(_In_ const BC250_DEVICE* Device, ULONG Slot, _Out_ BC250_DCN_IMMEDIATE_RECORD* Copy)
+{
+    const BC250_DCN_IMMEDIATE_RECORD* slot = &Device->DcnImmediateRecords[Slot % BC250_DCN_IMMEDIATE_RECORDS];
+    ULONG tries;
+    LONG before;
+
+    RtlZeroMemory(Copy, sizeof(*Copy));
+    for (tries = 0; tries < BC250_DCN_IMMEDIATE_READS; tries++)
+    {
+        if (tries) KeStallExecutionProcessor(1);    // a writer holds a slot for the copy of one record only
+        before = InterlockedCompareExchange((volatile LONG*)&slot->Version, 0, 0);
+        if (before == 0) return 0;
+        if (before & 1) continue;
+        RtlCopyMemory(Copy, (const void*)slot, sizeof(*Copy));
+        if (InterlockedCompareExchange((volatile LONG*)&slot->Version, 0, 0) == before) return 1;
+    }
+    RtlZeroMemory(Copy, sizeof(*Copy));
+    return 2;
+}
+
+static const char* WddmImmediateOutcomeText(ULONG Outcome)
+{
+    static const char* const text[BC250_DCN_IMMEDIATE_OUTCOMES] = {
+        "unknown", "done", "done-late", "pending", "primary-other", "read-failed", "superseded" };
+    return Outcome < BC250_DCN_IMMEDIATE_OUTCOMES ? text[Outcome] : "unknown";
 }
 
 static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
@@ -2943,6 +3150,152 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
     GuardLog("wddm summary: vidpn flip vsyncs %ld armed, %ld acked, %ld refused, %ld completion-deferred, %ld old-buffer-reports",
              Wddm->Device->DcnVsyncArmed, Wddm->Device->DcnVsyncTicks, Wddm->Device->DcnVsyncRefused,
              Wddm->Device->DcnVsyncDeferred, Wddm->Device->DcnVsyncOldBufferReports);
+    // BD-170: the immediate flips (dcn.c's DcnImmediateObserve) with their outcomes, the same-address promotions and
+    // the DMA flips Present refused; the flip state machine (section 7.2) by edge, result, writer and E5; then the
+    // last immediate-flip records, oldest first. The mean time to P' is sum / done. The counters are sampled without
+    // a lock like the lines above; each record is a whole copy under its own sequence lock.
+    {
+        const BC250_DEVICE* device = Wddm->Device;
+        const LONG next = device->DcnImmediateRecordNext;
+        ULONG n;
+        BC250_DCN_IMMEDIATE_RECORD record;
+        GuardLog("wddm summary: immediate %ld programmed, %ld same-frame, %ld promoted; Present DMA flips refused %ld",
+                 device->DcnImmediateFlips, device->DcnImmediateSameFrame, Wddm->ImmediatePromotions,
+                 Wddm->DmaFlipsRefused);
+        GuardLog("wddm summary: immediate outcome done %ld late %ld pending %ld primary-other %ld read-failed %ld superseded %ld",
+                 device->DcnImmediateOutcomes[BC250_DCN_IMMEDIATE_DONE],
+                 device->DcnImmediateOutcomes[BC250_DCN_IMMEDIATE_DONE_LATE],
+                 device->DcnImmediateOutcomes[BC250_DCN_IMMEDIATE_PENDING],
+                 device->DcnImmediateOutcomes[BC250_DCN_IMMEDIATE_PRIMARY_OTHER],
+                 device->DcnImmediateOutcomes[BC250_DCN_IMMEDIATE_READ_FAILED],
+                 device->DcnImmediateOutcomes[BC250_DCN_IMMEDIATE_SUPERSEDED]);
+        GuardLog("wddm summary: immediate done max %ld us sum %lld us, observe max %ld us overruns %ld, flip in L max %ld us",
+                 device->DcnImmediateDoneMaxUs, device->DcnImmediateDoneSumUs, device->DcnImmediateObserveMaxUs,
+                 device->DcnImmediateOverruns, Wddm->FlipLockedMaxUs);
+        // The edges in flip_state.h's order (F0 F1 A W-v W-i W-u E), the results of edge E (refused, success,
+        // program fault, U), and the exclusive answers of A.
+        GuardLog("wddm summary: flip edges f0 %ld f1 %ld a %ld wv %ld wi %ld wu %ld e %ld",
+                 Wddm->FlipEdges[BC250_FLIP_EDGE_FAULTING], Wddm->FlipEdges[BC250_FLIP_EDGE_OVERLAP],
+                 Wddm->FlipEdges[BC250_FLIP_EDGE_REFUSED], Wddm->FlipEdges[BC250_FLIP_EDGE_DEPOSIT_VSYNC],
+                 Wddm->FlipEdges[BC250_FLIP_EDGE_DEPOSIT_DRAINED], Wddm->FlipEdges[BC250_FLIP_EDGE_DEPOSIT_UNPROVEN],
+                 Wddm->FlipEdges[BC250_FLIP_EDGE_PROGRAM]);
+        GuardLog("wddm summary: flip results of e refused %ld ok %ld fault %ld u %ld",
+                 Wddm->FlipResults[BC250_FLIP_RESULT_REFUSED], Wddm->FlipResults[BC250_FLIP_RESULT_SUCCESS],
+                 Wddm->FlipResults[BC250_FLIP_RESULT_FAULT_PROGRAM], Wddm->FlipResults[BC250_FLIP_RESULT_UNPROVEN]);
+        GuardLog("wddm summary: flip writers faulting %ld high %ld sync-failed %ld low-sync-failed %ld resumed %ld",
+                 Wddm->WriterFaulting, Wddm->WriterHigh, Wddm->WriterSyncFailed, Wddm->LowSyncFailed,
+                 Wddm->DepositsResumed);
+        GuardLog("wddm summary: flip end-programs %ld owed-invalidated %ld owed-reported %ld flushes %ld destroy-unsync %ld",
+                 Wddm->EndPrograms, Wddm->OwedInvalidated, Wddm->OwedReported, Wddm->FlipFlushes,
+                 Wddm->DestroyUnsynchronized);
+        GuardLog("wddm summary: flip writer-busy %ld recovery-pending %ld", Wddm->WriterBusy, Wddm->WriterRecovery);
+        {
+            ULONG kind;
+            for (kind = 0; kind < BC250_WRITER_KINDS; kind++)
+                GuardLog("wddm summary: flip writer kind %lu busy %ld", kind, Wddm->WriterBusyByKind[kind]);
+        }
+        GuardLog("wddm summary: bridge programmed %ld retired %ld failed %ld",
+                 Wddm->WriterBridgePrograms, Wddm->WriterBridgeRetired, Wddm->WriterBridgeFailures);
+        GuardLog("wddm summary: flip e5 %ld faulting %ld code 0x%06lX node %u blank %08lX",
+                 Wddm->FlipFaults, Wddm->Faulting, Wddm->FaultCode, Wddm->FaultNode, (ULONG)Wddm->FaultBlank);
+        GuardLog("wddm summary: flip e5 notified %ld failed %ld drain %ld/%ld; exclusive refused %ld failed %ld",
+                 Wddm->FaultNotified, Wddm->FaultNotifyFailed, Wddm->FaultDrain, Wddm->FaultDrainReads,
+                 Wddm->ExclusiveRefused, Wddm->ExclusiveFailed);
+        // W-u (section 7.2): the deposits made with the plane not proven drained, each with its record code, writer,
+        // generation, request and time to the writer's End; then the longest such time. Oldest first.
+        {
+            static const char* const ends[BC250_WU_ENDS] = {
+                "open", "unblank", "end", "end-refused", "end-fault", "superseded", "dropped" };
+            BC250_WDDM_WU_COPY wu;
+            ULONG k;
+            if (!WddmWuCopy(Wddm->Device, Wddm, &wu))
+                GuardLog("wddm summary: flip wu %ld, records unavailable (no section)",
+                         Wddm->FlipEdges[BC250_FLIP_EDGE_DEPOSIT_UNPROVEN]);
+            else
+            {
+                GuardLog("wddm summary: flip wu %ld, records %ld, to-end max %ld us",
+                         Wddm->FlipEdges[BC250_FLIP_EDGE_DEPOSIT_UNPROVEN], wu.Next, wu.ToEndMaxUs);
+                for (k = 0; k < BC250_WDDM_WU_RECORDS; k++)
+                {
+                    const BC250_WDDM_WU_RECORD* r = &wu.Records[((ULONG)wu.Next + k) % BC250_WDDM_WU_RECORDS];
+                    if (r->Record == 0) continue;
+                    GuardLog("flip wu %ld: code 0x%06lX writer %lu gen %lu card 0x%llX flags 0x%03lX", r->Record,
+                             r->Code, r->Writer, r->Generation, r->Request, r->Flags);
+                    GuardLog("flip wu %ld: deposit %lu to-end %ld us %s", r->Record, r->Deposit, r->ToEndUs,
+                             r->End < BC250_WU_ENDS ? ends[r->End] : "unknown");
+                }
+            }
+        }
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+        // Lab flavour (WddmWitness): Q, the shipping decision, against the witnesses read after it. Three lines a
+        // record, each with its slot and request: the decision and the witnesses (q, fresh, e, r1, r2 as 0 or 1), the
+        // addresses, the raw words. Slot 16 is the last request, whatever it showed.
+        {
+            BC250_WDDM_WITNESS_COPY wc;
+            ULONG k;
+            if (!WddmWitnessCopy(Wddm->Device, Wddm, &wc))
+                GuardLog("wddm summary: flip witness (lab) unavailable (no section)");
+            else
+            {
+                GuardLog("wddm summary: flip witness (lab) requests %ld read-failed %ld stale %ld order %ld",
+                         wc.Requests, wc.ReadFailed, wc.Stale, wc.Order);
+                GuardLog("wddm summary: flip witness (lab) qe %ld qr %ld er %ld kept %ld lost %ld", wc.Qe, wc.Qr,
+                         wc.Er, wc.Kept, wc.Lost);
+                for (k = 0; k <= BC250_WDDM_WITNESS_RECORDS; k++)
+                {
+                    const BC250_WDDM_WITNESS_RECORD* r = k < BC250_WDDM_WITNESS_RECORDS ? &wc.Records[k] : &wc.Last;
+                    if (r->Request == 0 || (k < BC250_WDDM_WITNESS_RECORDS && k >= (ULONG)wc.Kept)) continue;
+                    GuardLog("flip witness %lu req %ld: gen %lu flags 0x%03lX outcome %lu result %lu "
+                             "q/fresh/e/r1/r2 %c%c%c%c%c", k, r->Request, r->Generation, r->Flags, r->Outcome,
+                             r->Result, r->Q ? '1' : '0', r->Fresh ? '1' : '0', r->E ? '1' : '0', r->R1 ? '1' : '0',
+                             r->R2 ? '1' : '0');
+                    GuardLog("flip witness %lu req %ld: card 0x%llX phys 0x%llX earliest 0x%llX/0x%llX", k,
+                             r->Request, r->Card, r->Physical, r->Earliest1, r->Earliest2);
+                    GuardLog("flip witness %lu req %ld: pending before %08lX after %08lX",
+                             k, r->Request, r->PendingBefore, r->PendingAfter);
+                    GuardLog("flip witness %lu req %ld: arm %08lX read %08lX int %08lX/%08lX/%08lX "
+                             "words %08lX %08lX %08lX %08lX", k, r->Request, (ULONG)r->ArmStatus,
+                             (ULONG)r->ReadStatus, r->InterruptBefore, r->InterruptCleared, r->Interrupt, r->Low1,
+                             r->High1, r->High2, r->Low2);
+                }
+            }
+        }
+#endif
+        {
+            const LONG calls = Wddm->VSyncControlCalls;
+            const LONG kept = calls < (LONG)BC250_WDDM_VSYNC_CONTROL_EVENTS ? calls : (LONG)BC250_WDDM_VSYNC_CONTROL_EVENTS;
+            LARGE_INTEGER frequency;
+            LONG k;
+            // The QPC now and its frequency, so that the age of each event below can be read from the log alone.
+            const LARGE_INTEGER now = KeQueryPerformanceCounter(&frequency);
+            GuardLog("wddm summary: vsync control %ld calls, on %ld off %ld, last %ld, QPC now %lld at %lld/s", calls,
+                     Wddm->VSyncControlOn, Wddm->VSyncControlOff, kept, now.QuadPart, frequency.QuadPart);
+            for (k = calls - kept; k < calls; k++)
+            {
+                const BC250_WDDM_VSYNC_CONTROL* event = &Wddm->VSyncControl[(ULONG)k % BC250_WDDM_VSYNC_CONTROL_EVENTS];
+                GuardLog("wddm vsync control %ld: %s qpc %lld owed 0x%llX", event->Call, event->On ? "on" : "off",
+                         event->Qpc, (ULONGLONG)event->Owed);
+            }
+        }
+        // Three lines a record. On the first, "physical" is the request and "seen" the last PRIMARY_SURFACE_ADDRESS
+        // sample, both physical. The second line's times are ProgramUs/FirstUs/ClearUs/DoneUs/EndUs (bc250kmd.h). The
+        // third line's "read S/N" is ReadStatus/Samples, and its flags are the request's.
+        for (n = 0; n < BC250_DCN_IMMEDIATE_RECORDS; n++)
+        {
+            const ULONG slot = ((ULONG)next + n) % BC250_DCN_IMMEDIATE_RECORDS;
+            const ULONG copied = WddmImmediateRecordCopy(device, slot, &record);
+            if (copied == 0) continue;
+            if (copied == 2) { GuardLog("immediate flip slot %lu: unavailable (changed during the copy)", slot); continue; }
+            GuardLog("immediate flip %ld: %s card 0x%llX physical 0x%llX seen 0x%llX",
+                     record.Sequence, WddmImmediateOutcomeText(record.Outcome), record.CardAddress, record.Physical,
+                     record.Observed);
+            GuardLog("immediate flip %ld: gen %lu frame %08lX pos %08lX..%08lX ctl %08lX us %ld/%ld/%ld/%ld/%ld",
+                     record.Sequence, record.Generation, record.Frame, record.PositionBefore, record.PositionAfter,
+                     record.Control, record.ProgramUs, record.FirstUs, record.ClearUs, record.DoneUs, record.EndUs);
+            GuardLog("immediate flip %ld: read %08lX/%lu flags 0x%03lX", record.Sequence, (ULONG)record.ReadStatus,
+                     record.Samples, record.Flags);
+        }
+    }
     // Independently sampled counters/times: no interrupt lock and no per-frame logging.
     // Counters/times are independently sampled, not an atomic incident record.
     GuardLog("vsync skip: odd %ld read %ld same %ld changed %ld",
@@ -3849,7 +4202,21 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
     // FlipIndependent: "WDDM 1.3 driver must support independent flip." is a refusal in the lab's dxgkrnl (behind
     // the same enforcement switch as DirectFlip). What it promises is that SetVidPnSourceAddress may be pointed at
     // a surface DWM did not present; ours takes whatever address it is given.
+    // FlipImmediateMmIo (BD-170): "the driver must support an immediate flip and a flip interval of one"
+    // (DXGK_FLIPCAPS). Without this cap an immediate flip (an exclusive-fullscreen present at SyncInterval 0) is a
+    // DMA-buffer flip: dxgkrnl passes Present a DMA buffer for it, ours wrote none, and the scheduler marked the
+    // device as an error (DxgKrnl VidSchMarkDeviceAsError reason 19 after its "DMABufferLength > 0" assertion), which
+    // the application saw as DXGI_ERROR_DEVICE_HUNG on its first Present (a02). With it the flip comes to
+    // SetVidPnSourceAddress with Flags.FlipImmediate, and the cap's promise is kept there: the flip takes effect
+    // without waiting for a vsync (d3dkmddi.md:21235-21239). DcnFlipSourceAddress programs SURFACE_FLIP_TYPE 1 for
+    // it, and DcnImmediateObserve (dcn.c) samples P', bounded, before the DDI returns, because dxgmms2 takes an
+    // immediate flip as complete at a success return (dcn.c says where that is read). No answer is busy: the state
+    // machine of docs/design/vidpn-flip.md section 7.2 answers every request (Bc250WddmSetVidPnSourceAddress). A
+    // pending vsync flip to the same address is promoted, and a flip that still arrives with a DMA buffer
+    // is refused (WddmPresentDmaFlip). The cap stands with the flip gate closed too (EnableVidPnFlip): then nothing
+    // is programmed or observed and the DDI returns success, as for every flip. docs/design/vidpn-flip.md section 7.
     caps->FlipCaps.FlipOnVSyncMmIo = 1;
+    caps->FlipCaps.FlipImmediateMmIo = 1;
     caps->FlipCaps.FlipIndependent = 1;
     caps->MaxQueuedFlipOnVSync = 1;
 
@@ -4838,6 +5205,7 @@ static NTSTATUS Bc250WddmCreateAllocation(_In_ const HANDLE hAdapter, _Inout_ DX
     return STATUS_SUCCESS;
 }
 
+static NTSTATUS WddmDestroyRestore(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WDDM* Wddm, ULONGLONG Serial);
 static DXGKDDI_DESTROYALLOCATION Bc250WddmDestroyAllocation;
 static NTSTATUS Bc250WddmDestroyAllocation(_In_ const HANDLE hAdapter,
                                            _In_ const DXGKARG_DESTROYALLOCATION* pDestroyAllocation)
@@ -4848,6 +5216,16 @@ static NTSTATUS Bc250WddmDestroyAllocation(_In_ const HANDLE hAdapter,
 
     if (WddmFirstCalls(wddm, WddmDdiDestroyAllocation))
         GuardLog("wddm: DestroyAllocation %u allocations", pDestroyAllocation->NumAllocations);
+    // Retire all relevant surfaces before freeing any handle. A failed protected
+    // section leaves the complete request retryable, without a partially freed list.
+    for (i = 0; i < pDestroyAllocation->NumAllocations; i++) {
+        BC250_WDDM_OBJECT* object = WddmObject(pDestroyAllocation->pAllocationList[i], BC250_WDDM_MAGIC_ALLOCATION);
+        if (object != NULL && wddm != NULL && object->Serial != 0 &&
+            InterlockedCompareExchange64(&wddm->ScanoutObject, 0, 0) == (LONG64)object->Serial) {
+            NTSTATUS retired = WddmDestroyRestore(device, wddm, object->Serial);
+            if (!NT_SUCCESS(retired)) return retired;
+        }
+    }
     for (i = 0; i < pDestroyAllocation->NumAllocations; i++) {
         BC250_WDDM_OBJECT* object = WddmObject(pDestroyAllocation->pAllocationList[i], BC250_WDDM_MAGIC_ALLOCATION);
         if (object != NULL)
@@ -4868,21 +5246,7 @@ static NTSTATUS Bc250WddmDestroyAllocation(_In_ const HANDLE hAdapter,
         // whose serial were 0 would match that and take the plane back to the firmware surface for a
         // buffer the plane never held. WddmNewObject gives every object a nonzero serial under the lock,
         // which is what makes that unreachable; the test says so rather than relying on it.
-        if (object != NULL && wddm != NULL && object->Serial != 0 &&
-            InterlockedCompareExchange64(&wddm->ScanoutObject, 0, (LONG64)object->Serial) ==
-            (LONG64)object->Serial) {
-            NTSTATUS restored = DcnRestorePostDisplay(device);
-            wddm->PrimaryNeedsRestore = TRUE;      // the next flip is a change, whatever address it carries
-            InterlockedExchange64(&wddm->PrimaryAddress.QuadPart, 0);
-            wddm->PrimaryPitch = 0;
-            wddm->PrimaryPlaneFormat = 0;          // the restore put the firmware's format back (M15.14)
-            // Its own budget: the flip lines are written at the frame rate and would otherwise spend the
-            // whole allowance long before the one line that says the plane was taken back.
-            if (InterlockedIncrement(&wddm->ScanoutTeardowns) <= BC250_WDDM_LOG_CALLS)
-                GuardLog("wddm: DestroyAllocation freed the scanned-out surface; firmware surface restored 0x%08X",
-                         restored);
-            (void)restored;     // the status is the log line's whole purpose; nothing here can act on it
-        }
+        //   BD-170 r6: the restore is a writer (WddmDestroyRestore), which takes the record inside L.
         WddmFreeObject(object);
     }
     if (pDestroyAllocation->Flags.DestroyResource && pDestroyAllocation->hResource != NULL)
@@ -7486,6 +7850,26 @@ static void WddmInteropUse(BC250_WDDM_OBJECT* Context, const DXGKARG_PRESENT* Pr
     if (!InteropUserBegin(Context->Device)) InterlockedExchange(&owner->InteropUser,0);
 }
 
+// BD-170: a flip that dxgkrnl sends down the DMA-buffer path. With FlipOnVSyncMmIo and FlipImmediateMmIo both
+// declared (WddmDriverCaps), every flip this driver does is an MMIO flip: Present gets
+// pDmaBuffer NULL and the flip itself arrives through SetVidPnSourceAddress (d3dkmddi.md:9701). A flip with a
+// DMA buffer needs commands that flip from the GPU's own stream, and this driver has none. Until BD-170 such a
+// call returned STATUS_SUCCESS with nothing written; dxgkrnl then asserted on the empty buffer (its AzureTriage
+// events 9323 and 9372 in the a02 trace) and put the device in error. Now it is refused with the status of the
+// DDI's table that says so, STATUS_ILLEGAL_INSTRUCTION (d3dkmddi.md:9640, "instructions that graphics hardware
+// cannot support"): no byte written, no pointer moved, no completion pretended. It is counted, and its first
+// calls are logged.
+static NTSTATUS WddmPresentDmaFlip(_In_opt_ BC250_WDDM* Wddm, _In_ const DXGKARG_PRESENT* Present)
+{
+    LONG count;
+    if (!Present->Flags.Flip || Present->pDmaBuffer == NULL) return STATUS_SUCCESS;
+    count = Wddm != NULL ? InterlockedIncrement(&Wddm->DmaFlipsRefused) : 1;
+    if (count <= BC250_WDDM_LOG_CALLS)
+        GuardLog("wddm: Present refused a DMA-buffer flip: flags 0x%08X, %u DMA bytes (this driver flips by MMIO only)",
+                 Present->Flags.Value, Present->DmaSize);
+    return STATUS_ILLEGAL_INSTRUCTION;
+}
+
 static DXGKDDI_PRESENT Bc250WddmPresent;
 static NTSTATUS Bc250WddmPresent(_In_ const HANDLE hContext, _Inout_ DXGKARG_PRESENT* pPresent)
 {
@@ -7546,6 +7930,10 @@ static NTSTATUS Bc250WddmPresent(_In_ const HANDLE hContext, _Inout_ DXGKARG_PRE
         GuardLog("wddm: Present dst (%d,%d)-(%d,%d) src (%d,%d)-(%d,%d) va 0x%llX", pPresent->DstRect.left, pPresent->DstRect.top,
                  pPresent->DstRect.right, pPresent->DstRect.bottom, pPresent->SrcRect.left, pPresent->SrcRect.top,
                  pPresent->SrcRect.right, pPresent->SrcRect.bottom, (ULONGLONG)pPresent->DmaBufferGpuVirtualAddress);
+    }
+    {
+        const NTSTATUS flip = WddmPresentDmaFlip(context ? (BC250_WDDM*)context->Device->Wddm : NULL, pPresent);
+        if (!NT_SUCCESS(flip)) return flip;
     }
     if (context != NULL && pPresent->Flags.Blt &&
         ((BC250_WDDM*)context->Device->Wddm)->GpuPresentGate) {
@@ -7608,50 +7996,909 @@ static NTSTATUS Bc250WddmPresent(_In_ const HANDLE hContext, _Inout_ DXGKARG_PRE
     return STATUS_SUCCESS;
 }
 
-// modeset.c's side of the primary transaction below (bc250kmd.h says what it is for). PASSIVE_LEVEL. The flip DDI
-// never spins on an odd generation; this side may, a little: at most 200 tries 10 us apart (2 ms), because the
-// other holder is a flip in progress on another processor, which ends in microseconds, or a modeset, which the
-// caller's own mutex already excludes.
+// ---- BD-170 r6: the flip state machine (docs/design/vidpn-flip.md section 7.2, flip_state.h) ----------------------
+//
+// L is the interrupt lock of this driver's one MSI message (message 0, facts M38). Three paths hold it and no other:
+// the kernel's dispatch of the ISR (pnp.c), dxgmms2's call of SetVidPnSourceAddress above DISPATCH_LEVEL (it makes the
+// call through DpSynchronizeExecution, facts M904), and this driver's DxgkCbSynchronizeExecution sections, which run
+// only from callers at or below DISPATCH_LEVEL (dispmprt.h, _IRQL_requires_max_(DISPATCH_LEVEL)). Code inside L never
+// calls DxgkCbSynchronizeExecution (WddmSection refuses above DISPATCH_LEVEL), never logs and never waits for the other
+// side. Every field of the state machine's block in BC250_WDDM is written inside L only.
+
+// One DxgkCbSynchronizeExecution section on message 0, from a caller at or below DISPATCH_LEVEL. Above it, or with
+// the callback missing, nothing runs and the caller decides (counted by the caller).
+static NTSTATUS WddmSection(_In_ BC250_DEVICE* Device, _In_ PKSYNCHRONIZE_ROUTINE Routine, _In_ PVOID Context)
+{
+    BOOLEAN returned = FALSE;
+    NTSTATUS status;
+    if (KeGetCurrentIrql() > DISPATCH_LEVEL) return STATUS_INVALID_DEVICE_STATE;
+    if (Device->Dxgk.DxgkCbSynchronizeExecution == NULL) return STATUS_DEVICE_NOT_READY;
+    status = Device->Dxgk.DxgkCbSynchronizeExecution(Device->Dxgk.DeviceHandle, Routine, Context, 0, &returned);
+    return NT_SUCCESS(status) && !returned ? STATUS_UNSUCCESSFUL : status;
+}
+
+// E5 (section 7.2, E5 steps 1 to 3), inside L: FAULTING, the blank request, and the notification handed to the DPC.
+// DxgkCbNotifyInterrupt is not made here: this may run inside dxgmms2's own DIRQL flip call, and the callback is not
+// documented as reentrant (d3dkmddi.md:2467-2481). The DPC that DxgkCbQueueDpc asks for makes it through WddmReport's
+// own section (WddmFlipFaultDpc). A fault in FAULTING is counted only.
+static void WddmFlipFault(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WDDM* Wddm, ULONG Code, UINT Node)
+{
+    InterlockedIncrement(&Wddm->FlipFaults);
+    if (InterlockedCompareExchange(&Wddm->Faulting, 1, 0) != 0) return;
+    Wddm->FaultCode = Code;
+    Wddm->FaultNode = Node;
+    Wddm->FaultBlank = DcnFaultBlank(Device);
+    InterlockedExchange(&Wddm->FaultNotify, 1);
+    if (Device->Dxgk.DxgkCbQueueDpc != NULL) Device->Dxgk.DxgkCbQueueDpc(Device->Dxgk.DeviceHandle);
+    else InterlockedIncrement(&Wddm->FaultNotifyFailed);
+}
+
+// A refused interrupt section cannot grant its operation. The only change
+// outside L is this atomic recovery request. The DPC or next flip consumes it
+// inside a successfully acquired section; until then the writer stays owned.
+static void WddmWriterSectionFailure(BC250_DEVICE* Device, BC250_WDDM* Wddm, NTSTATUS Status)
+{
+    InterlockedIncrement(Status == STATUS_INVALID_DEVICE_STATE ? &Wddm->WriterHigh : &Wddm->WriterSyncFailed);
+    InterlockedExchange(&Wddm->WriterRecovery, 1);
+    if (Device->Dxgk.DxgkCbQueueDpc != NULL) Device->Dxgk.DxgkCbQueueDpc(Device->Dxgk.DeviceHandle);
+}
+
+static BOOLEAN WddmWriterRecoveryLocked(_In_ PVOID Context)
+{
+    BC250_DEVICE* device = (BC250_DEVICE*)Context;
+    BC250_WDDM* wddm = WddmOf(device);
+    if (wddm != NULL && InterlockedExchange(&wddm->WriterRecovery, 0) != 0)
+        WddmFlipFault(device, wddm, BC250_FLIP_FAULT_SECTION, BC250_WDDM_NODE_3D);
+    return TRUE;
+}
+
+// E5 steps 3 and 5, from pnp.c's Bc250DpcRoutine at DISPATCH_LEVEL, outside L. The notification: DMA_PAGE_FAULTED, "a
+// GPU error that needs OS recovery" (d3dkmddi.md:46003-46007), with the payload of section 7.2 (WDK shared/d3dkmddi.h
+// DmaPageFaulted, shared/d3dkmdt.h DXGK_PAGE_FAULT_FLAGS, DXGK_FAULT_ERROR_CODE and the UNKNOWN values). WddmReport makes
+// the call inside its own section and queues the DPC that pairs it. Then the drain record: at most
+// BC250_FLIP_DRAIN_READS reads of HUBP0_DCHUBP_CNTL, 1 us apart. Nothing is released either way: the OS still holds
+// every surface it did not see complete. One notification per FAULTING.
+void WddmFlipFaultDpc(_Inout_ BC250_DEVICE* Device)
+{
+    BC250_WDDM* wddm = (BC250_WDDM*)Device->Wddm;
+    DXGKARGCB_NOTIFY_INTERRUPT_DATA data;
+    ULONG reads, step;
+    BOOLEAN notified;
+
+    if (wddm == NULL) return;
+    if (InterlockedCompareExchange(&wddm->WriterRecovery, 0, 0) != 0)
+        (void)WddmSection(Device, WddmWriterRecoveryLocked, Device);
+    if (InterlockedExchange(&wddm->FaultNotify, 0) == 0) return;
+    RtlZeroMemory(&data, sizeof(data));
+    data.InterruptType = DXGK_INTERRUPT_DMA_PAGE_FAULTED;
+    data.DmaPageFaulted.FaultedFenceId = 0;
+    data.DmaPageFaulted.FaultedPrimitiveAPISequenceNumber = DXGK_PRIMITIVE_API_SEQUENCE_NUMBER_UNKNOWN;
+    data.DmaPageFaulted.FaultedPipelineStage = DXGK_RENDER_PIPELINE_STAGE_UNKNOWN;
+    data.DmaPageFaulted.FaultedBindTableEntry = DXGK_BIND_TABLE_ENTRY_UNKNOWN;
+    data.DmaPageFaulted.PageFaultFlags =
+        (DXGK_PAGE_FAULT_FLAGS)(DXGK_PAGE_FAULT_FENCE_INVALID | DXGK_PAGE_FAULT_ADAPTER_RESET_REQUIRED);
+    data.DmaPageFaulted.FaultedVirtualAddress = 0;     // D3DGPU_NULL: the fault has another cause, the code says which
+    data.DmaPageFaulted.NodeOrdinal = wddm->FaultNode;
+    data.DmaPageFaulted.EngineOrdinal = 0;              // each node of this driver has one engine
+    data.DmaPageFaulted.PageTableLevel = 0;
+    data.DmaPageFaulted.FaultErrorCode.IsDeviceSpecificCode = 1;
+    data.DmaPageFaulted.FaultErrorCode.DeviceSpecificCode = wddm->FaultCode;
+    data.DmaPageFaulted.FaultedProcessHandle = NULL;
+    notified = WddmReport(Device, &data, FALSE);
+    InterlockedIncrement(notified ? &wddm->FaultNotified : &wddm->FaultNotifyFailed);
+    for (reads = 1;; reads++)
+    {
+        const int drained = DcnHubpDrained(Device);
+        step = Bc250FlipDrainStep(drained >= 0 ? 1u : 0u, drained == 1 ? 1u : 0u, reads);
+        if (step != BC250_FLIP_DRAIN_AGAIN) break;
+        KeStallExecutionProcessor(1);
+    }
+    InterlockedExchange(&wddm->FaultDrainReads, (LONG)reads);
+    InterlockedExchange(&wddm->FaultDrain, (LONG)step);
+    GuardLog("wddm: BD-170 E5 code 0x%06lX node %u blank 0x%08X notified %u drain %lu (1 drained, 2 unknown) reads %lu",
+             wddm->FaultCode, wddm->FaultNode, (ULONG)wddm->FaultBlank, notified ? 1u : 0u, step, reads);
+}
+
+// The writers' sections. A writer (modeset.c, connector_link.c, hdmi_link.c, the destroy restore below) runs at
+// PASSIVE_LEVEL and takes L for admission, retirement commit, Resume before any unblank, and End. Its long
+// work runs outside L. Between Begin and End the generation is odd. Hardware flip requests are refused; only
+// the gate-closed software-report route deposits Desired (the historical W labels).
+typedef struct _BC250_WDDM_WRITER {
+    BC250_DEVICE* Device;
+    BC250_WDDM* Wddm;
+    ULONG Kind;
+    ULONG Generation;
+    BOOLEAN Invalidate;
+    NTSTATUS Status;
+    ULONG Answer;
+    BOOLEAN Claimed;
+    BOOLEAN Wrote;
+    BC250_DCN_WRITER_BRIDGE Bridge;
+} BC250_WDDM_WRITER;
+
+// W-u (section 7.2), inside L: the record of a deposit that the flip transaction just made, in the next ring slot.
+static void WddmWuRecord(_Inout_ BC250_WDDM* Wddm, _In_ const DXGKARG_SETVIDPNSOURCEADDRESS* Args, ULONG Generation)
+{
+    const LONG record = InterlockedIncrement(&Wddm->WuRecordNext);
+    BC250_WDDM_WU_RECORD* r = &Wddm->WuRecords[(ULONG)(record - 1) % BC250_WDDM_WU_RECORDS];
+
+    RtlZeroMemory(r, sizeof(*r));
+    r->Record = record;
+    r->Code = BC250_FLIP_RECORD_WRITER_UNPROVEN;
+    r->Request = (ULONGLONG)Args->PrimaryAddress.QuadPart;
+    r->Flags = Args->Flags.Value;
+    r->Generation = Generation;
+    r->Writer = Wddm->WriterKind;
+    r->Deposit = Wddm->DepositSequence;
+    r->End = BC250_WU_OPEN;
+    r->DepositQpc = KeQueryPerformanceCounter(NULL).QuadPart;
+    r->ToEndUs = -1;
+}
+
+// W-u, inside L, at the writer's End: each open record of this writer gets its time to End and how it left the writer
+// (Bc250WuEnd). Answer and Result are End's own (Result only for BC250_WRITER_END_PROGRAM).
+static void WddmWuClose(_In_ const BC250_DEVICE* Device, _Inout_ BC250_WDDM* Wddm, ULONG Generation, ULONG Answer,
+                        ULONG Result)
+{
+    const LONGLONG now = KeQueryPerformanceCounter(NULL).QuadPart;
+    ULONG n;
+
+    for (n = 0; n < BC250_WDDM_WU_RECORDS; n++)
+    {
+        BC250_WDDM_WU_RECORD* r = &Wddm->WuRecords[n];
+        LONGLONG us = now - r->DepositQpc;
+        if (r->Record == 0 || r->End != BC250_WU_OPEN || r->Generation != Generation) continue;
+        us = Device->DcnQpcFrequency > 0 && us > 0 ? us * 1000000 / Device->DcnQpcFrequency : 0;
+        r->ToEndUs = us > 0x7FFFFFFF ? 0x7FFFFFFF : (LONG)us;
+        r->End = Bc250WuEnd(r->Unblank ? 1u : 0u, r->Deposit == Wddm->DepositSequence ? 1u : 0u, Answer, Result);
+        if (r->ToEndUs > Wddm->WuToEndMaxUs) Wddm->WuToEndMaxUs = r->ToEndUs;
+    }
+}
+
+// The summary's copy of the W-u records, in one section (the records change only inside L). FALSE when the section
+// could not run: the summary then says so and prints none.
+typedef struct _BC250_WDDM_WU_SECTION {
+    BC250_WDDM* Wddm;
+    BC250_WDDM_WU_COPY* Copy;
+} BC250_WDDM_WU_SECTION;
+
+static BOOLEAN WddmWuCopyLocked(_In_ PVOID Context)
+{
+    BC250_WDDM_WU_SECTION* s = (BC250_WDDM_WU_SECTION*)Context;
+    ULONG n;
+    s->Copy->Next = s->Wddm->WuRecordNext;
+    s->Copy->ToEndMaxUs = s->Wddm->WuToEndMaxUs;
+    for (n = 0; n < BC250_WDDM_WU_RECORDS; n++) s->Copy->Records[n] = s->Wddm->WuRecords[n];
+    return TRUE;
+}
+
+static BOOLEAN WddmWuCopy(_In_ BC250_DEVICE* Device, _In_ BC250_WDDM* Wddm, _Out_ BC250_WDDM_WU_COPY* Copy)
+{
+    BC250_WDDM_WU_SECTION s;
+    RtlZeroMemory(Copy, sizeof(*Copy));
+    s.Wddm = Wddm;
+    s.Copy = Copy;
+    return NT_SUCCESS(WddmSection(Device, WddmWuCopyLocked, &s));
+}
+
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+// BD-170 r6, lab flavour only (section 7.2, the witnesses), inside L, for an immediate request that edge E programmed,
+// AFTER its shipping decision: Outcome and Result are the decision as the shipping reader made it, recorded as such,
+// and only then are E and R read (DcnWitnessRead) and compared with Q. Nothing here changes the answer.
+static void WddmWitness(_In_ BC250_DEVICE* Device, _Inout_ BC250_WDDM* Wddm, _In_ const BC250_DCN_WITNESS_ARM* Arm,
+                        _In_ const DXGKARG_SETVIDPNSOURCEADDRESS* Args, ULONGLONG Physical, ULONG Generation,
+                        ULONG Outcome, ULONG Result)
+{
+    BC250_WDDM_WITNESS_RECORD r;
+    BC250_DCN_WITNESS_READ read;
+    BOOLEAN disagree = FALSE;
+
+    RtlZeroMemory(&r, sizeof(r));
+    r.Request = InterlockedIncrement(&Wddm->WitnessRequests);
+    r.Generation = Generation;
+    r.Flags = Args->Flags.Value;
+    r.Outcome = Outcome;
+    r.Result = Result;
+    r.Q = (Outcome == BC250_DCN_IMMEDIATE_DONE || Outcome == BC250_DCN_IMMEDIATE_DONE_LATE) ? TRUE : FALSE;
+    r.Card = (ULONGLONG)Args->PrimaryAddress.QuadPart;
+    r.Physical = Physical;
+    r.ArmStatus = Arm->Status;
+    r.Fresh = Arm->Fresh ? TRUE : FALSE;
+    r.InterruptBefore = Arm->InterruptBefore;
+    r.InterruptCleared = Arm->InterruptCleared;
+    r.PendingBefore = Arm->PendingBefore;
+    r.PendingAfter = Arm->PendingAfter;
+    r.ReadStatus = DcnWitnessRead(Device, &read);
+    r.Interrupt = read.Interrupt;
+    r.Low1 = read.Low1;
+    r.High1 = read.High1;
+    r.High2 = read.High2;
+    r.Low2 = read.Low2;
+    r.Earliest1 = read.Earliest1;
+    r.Earliest2 = read.Earliest2;
+    if (!NT_SUCCESS(r.ReadStatus))
+    {
+        InterlockedIncrement(&Wddm->WitnessReadFailed);
+        disagree = TRUE;
+    }
+    else
+    {
+        r.E = read.Event ? TRUE : FALSE;
+        r.R1 = read.Earliest1 == Physical ? TRUE : FALSE;
+        r.R2 = read.Earliest2 == Physical ? TRUE : FALSE;
+        if (!r.Fresh) { InterlockedIncrement(&Wddm->WitnessStale); disagree = TRUE; }
+        if (r.Fresh && r.Q != r.E) { InterlockedIncrement(&Wddm->WitnessQe); disagree = TRUE; }
+        if (r.Q != r.R1) { InterlockedIncrement(&Wddm->WitnessQr); disagree = TRUE; }
+        if (r.Fresh && r.E != r.R1) { InterlockedIncrement(&Wddm->WitnessEr); disagree = TRUE; }
+        if (r.R1 != r.R2) { InterlockedIncrement(&Wddm->WitnessOrder); disagree = TRUE; }
+    }
+    Wddm->WitnessLast = r;
+    if (!disagree) return;
+    if ((ULONG)Wddm->WitnessKept < BC250_WDDM_WITNESS_RECORDS) Wddm->WitnessRecords[Wddm->WitnessKept++] = r;
+    else InterlockedIncrement(&Wddm->WitnessLost);
+}
+
+typedef struct _BC250_WDDM_WITNESS_SECTION {
+    BC250_WDDM* Wddm;
+    BC250_WDDM_WITNESS_COPY* Copy;
+} BC250_WDDM_WITNESS_SECTION;
+
+static BOOLEAN WddmWitnessCopyLocked(_In_ PVOID Context)
+{
+    BC250_WDDM_WITNESS_SECTION* s = (BC250_WDDM_WITNESS_SECTION*)Context;
+    const BC250_WDDM* w = s->Wddm;
+    BC250_WDDM_WITNESS_COPY* c = s->Copy;
+    ULONG n;
+    c->Requests = w->WitnessRequests;
+    c->ReadFailed = w->WitnessReadFailed;
+    c->Stale = w->WitnessStale;
+    c->Qe = w->WitnessQe;
+    c->Qr = w->WitnessQr;
+    c->Er = w->WitnessEr;
+    c->Order = w->WitnessOrder;
+    c->Lost = w->WitnessLost;
+    c->Kept = w->WitnessKept;
+    for (n = 0; n < BC250_WDDM_WITNESS_RECORDS; n++) c->Records[n] = w->WitnessRecords[n];
+    c->Last = w->WitnessLast;
+    return TRUE;
+}
+
+static BOOLEAN WddmWitnessCopy(_In_ BC250_DEVICE* Device, _In_ BC250_WDDM* Wddm, _Out_ BC250_WDDM_WITNESS_COPY* Copy)
+{
+    BC250_WDDM_WITNESS_SECTION s;
+    RtlZeroMemory(Copy, sizeof(*Copy));
+    s.Wddm = Wddm;
+    s.Copy = Copy;
+    return NT_SUCCESS(WddmSection(Device, WddmWitnessCopyLocked, &s));
+}
+#endif
+
+static BOOLEAN WddmWriterBeginLocked(_In_ PVOID Context)
+{
+    BC250_WDDM_WRITER* w = (BC250_WDDM_WRITER*)Context;
+    BC250_WDDM* wddm = w->Wddm;
+    const ULONG generation = (ULONG)wddm->PrimarySequence;
+    (void)WddmWriterRecoveryLocked(w->Device);
+    w->Answer = Bc250WriterBegin(wddm->Faulting != 0 ? 1u : 0u, generation & 1u);
+    if (w->Answer != BC250_WRITER_BEGIN_TAKE) return TRUE;
+    // Publish BUSY before programming. Keep the old application allocation
+    // retained while EARLIEST catches up outside L, possibly at the next VSync.
+    w->Generation = generation;
+    w->Claimed = TRUE;
+    InterlockedExchange(&wddm->PrimarySequence, (LONG)(generation + 1u));
+    wddm->WriterActive = TRUE;
+    wddm->WriterReady = FALSE;
+    wddm->WriterResumed = FALSE;
+    wddm->WriterDeposit = FALSE;
+    wddm->WriterKind = w->Kind;
+    w->Status = w->Device->VidPnFlipEnabled ?
+        DcnWriterBridge(w->Device, &wddm->PrimarySequence, generation + 1u, &w->Wrote, &w->Bridge) : STATUS_SUCCESS;
+    if (w->Wrote) InterlockedIncrement(&wddm->WriterBridgePrograms);
+    if (!NT_SUCCESS(w->Status)) {
+        if (w->Wrote) {
+            InterlockedIncrement(&wddm->WriterBridgeFailures);
+            WddmFlipFault(w->Device, wddm, BC250_FLIP_FAULT_BRIDGE, BC250_WDDM_NODE_3D);
+        } else {
+            wddm->WriterActive = FALSE;
+            InterlockedExchange(&wddm->PrimarySequence, (LONG)generation);
+            w->Claimed = FALSE;
+        }
+        w->Answer = w->Wrote ? BC250_WRITER_BEGIN_FAULTING : BC250_WRITER_BEGIN_REFUSED;
+        return TRUE;
+    }
+    wddm->PrimaryNeedsRestore = TRUE;
+    return TRUE;
+}
+
+// Commit the PASSIVE retirement proof under L. A fault or changed owner during
+// the observation cannot grant the long operation, including allocation free.
+static BOOLEAN WddmWriterRetiredLocked(_In_ PVOID Context)
+{
+    BC250_WDDM_WRITER* w = (BC250_WDDM_WRITER*)Context;
+    BC250_WDDM* wddm = w->Wddm;
+    (void)WddmWriterRecoveryLocked(w->Device);
+    if (!wddm->WriterActive || (ULONG)wddm->PrimarySequence != w->Generation + 1u) {
+        w->Status = STATUS_INVALID_DEVICE_STATE;
+        WddmFlipFault(w->Device, wddm, BC250_FLIP_FAULT_SECTION, BC250_WDDM_NODE_3D);
+    } else if (wddm->Faulting) {
+        w->Status = STATUS_DEVICE_HARDWARE_ERROR;
+    } else if (!NT_SUCCESS(w->Status)) {
+        InterlockedIncrement(&wddm->WriterBridgeFailures);
+        WddmFlipFault(w->Device, wddm, BC250_FLIP_FAULT_BRIDGE, BC250_WDDM_NODE_3D);
+    } else {
+        if (w->Device->VidPnFlipEnabled) InterlockedIncrement(&wddm->WriterBridgeRetired);
+        wddm->WriterReady = TRUE;
+    }
+    return TRUE;
+}
+
+// modeset.c's side of the primary transaction (bc250kmd.h says what it is for). PASSIVE_LEVEL. Another writer's odd
+// generation is tried again, at most 200 tries 10 us apart (2 ms) with the stall outside L; FAULTING refuses at once.
 #define BC250_WDDM_EXCLUSIVE_TRIES 200u
 #define BC250_WDDM_EXCLUSIVE_STEP_US 10u
-BOOLEAN WddmPrimaryExclusiveBegin(_Inout_ BC250_DEVICE* Device, _Out_ ULONG* Generation)
+BOOLEAN WddmPrimaryExclusiveBegin(_Inout_ BC250_DEVICE* Device, ULONG Kind, _Out_ ULONG* Generation)
 {
     BC250_WDDM* wddm = WddmOf(Device);
+    BC250_WDDM_WRITER w;
+    NTSTATUS status;
     ULONG i;
 
     *Generation = 0;
     if (wddm == NULL) return TRUE;
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL) {
+        InterlockedIncrement(&wddm->WriterHigh);
+        return FALSE;
+    }
+    RtlZeroMemory(&w, sizeof(w));
+    w.Device = Device;
+    w.Wddm = wddm;
+    w.Kind = Kind;
     for (i = 0; i < BC250_WDDM_EXCLUSIVE_TRIES; i++)
     {
-        ULONG generation = (ULONG)InterlockedCompareExchange(&wddm->PrimarySequence, 0, 0);
-        if (!(generation & 1u) &&
-            (ULONG)InterlockedCompareExchange(&wddm->PrimarySequence, (LONG)(generation + 1u), (LONG)generation) ==
-            generation)
+        status = WddmSection(Device, WddmWriterBeginLocked, &w);
+        if (!NT_SUCCESS(status))
         {
-            *Generation = generation;
+            // No acquired owner and no write: ordinary BEGIN_REFUSED, no E5.
+            if (w.Claimed) WddmWriterSectionFailure(Device, wddm, status);
+            else InterlockedIncrement(&wddm->WriterSyncFailed);
+            return FALSE;
+        }
+        if (w.Answer == BC250_WRITER_BEGIN_TAKE) {
+            if (Device->VidPnFlipEnabled)
+                w.Status = DcnWriterBridgeRetire(Device, &wddm->PrimarySequence, w.Generation + 1u, &w.Bridge);
+            status = WddmSection(Device, WddmWriterRetiredLocked, &w);
+            if (!NT_SUCCESS(status)) {
+                WddmWriterSectionFailure(Device, wddm, status);
+                return FALSE;
+            }
+            if (!NT_SUCCESS(w.Status)) return FALSE;
+            *Generation = w.Generation;
             return TRUE;
         }
+        if (w.Answer == BC250_WRITER_BEGIN_REFUSED) return FALSE;
+        if (w.Answer == BC250_WRITER_BEGIN_FAULTING) { InterlockedIncrement(&wddm->WriterFaulting); return FALSE; }
         KeStallExecutionProcessor(BC250_WDDM_EXCLUSIVE_STEP_US);
     }
     return FALSE;
 }
 
-void WddmPrimaryExclusiveEnd(_Inout_ BC250_DEVICE* Device, ULONG Generation, BOOLEAN Invalidate)
+// Only driver-owned bridge storage may escape L during a writer. Resume
+// grants that operation, never an application address or a stale Desired copy.
+static BOOLEAN WddmWriterResumeLocked(_In_ PVOID Context)
+{
+    BC250_WDDM_WRITER* w = (BC250_WDDM_WRITER*)Context;
+    (void)WddmWriterRecoveryLocked(w->Device);
+    w->Status = w->Wddm->Faulting ? STATUS_DEVICE_HARDWARE_ERROR :
+        (w->Wddm->WriterActive && w->Wddm->WriterReady ? STATUS_SUCCESS : STATUS_INVALID_DEVICE_STATE);
+    if (NT_SUCCESS(w->Status)) w->Wddm->WriterResumed = TRUE;
+    return TRUE;
+}
+
+NTSTATUS WddmWriterResume(_Inout_ BC250_DEVICE* Device)
 {
     BC250_WDDM* wddm = WddmOf(Device);
+    BC250_WDDM_WRITER w;
+    NTSTATUS status;
+    if (wddm == NULL) return STATUS_SUCCESS;
+    RtlZeroMemory(&w, sizeof(w));
+    w.Device = Device;
+    w.Wddm = wddm;
+    status = WddmSection(Device, WddmWriterResumeLocked, &w);
+    if (!NT_SUCCESS(status)) {
+        WddmWriterSectionFailure(Device, wddm, status);
+        return status;
+    }
+    return w.Status;
+}
+
+// The fields DestroyAllocation and an invalidating End reset when the plane goes back to the firmware surface, the
+// plane format included (M15.14): the firmware surface is ARGB8888 (DcnFlipToFirmwareSurface).
+static void WddmPrimaryInvalidate(_Inout_ BC250_WDDM* Wddm)
+{
+    Wddm->PrimaryNeedsRestore = TRUE;
+    InterlockedExchange64(&Wddm->PrimaryAddress.QuadPart, 0);
+    Wddm->PrimaryPitch = 0;
+    Wddm->PrimaryPlaneFormat = 0;
+    InterlockedExchange64(&Wddm->ScanoutObject, 0);
+}
+
+// End chooses the latest Desired while holding L. The long writer used only
+// reserved storage, so no application snapshot can be programmed after this
+// handoff. With no deposit, a non-invalidating writer restores its initial
+// Desired. A changed mode can refuse that old layout; the bridge remains safe.
+static BOOLEAN WddmWriterEndLocked(_In_ PVOID Context)
+{
+    BC250_WDDM_WRITER* w = (BC250_WDDM_WRITER*)Context;
+    BC250_DEVICE* device = w->Device;
+    BC250_WDDM* wddm = w->Wddm;
+    BOOLEAN programmed = FALSE;
+    const BOOLEAN owes = wddm->WriterDeposit || wddm->DesiredOwed;
+    const BOOLEAN restore = !w->Invalidate && wddm->PrimaryAddress.QuadPart != 0 && wddm->PrimaryPitch != 0;
+    ULONG result = BC250_FLIP_RESULT_REFUSED;
+
+    w->Status = STATUS_SUCCESS;
+    if (!wddm->WriterActive || (ULONG)wddm->PrimarySequence != w->Generation + 1u) {
+        w->Status = STATUS_INVALID_DEVICE_STATE;
+        return TRUE;
+    }
+    (void)WddmWriterRecoveryLocked(device);
+    w->Answer = BC250_WRITER_END_NOTHING;
+    if ((owes || restore) && device->VidPnFlipEnabled && wddm->Faulting == 0)
+        w->Answer = Bc250WriterEnd(1u, 0u, DcnOtgRunning(device));
+    if (w->Answer == BC250_WRITER_END_FAULT) {
+        WddmFlipFault(device, wddm, BC250_FLIP_FAULT_OWED_STOPPED, BC250_WDDM_NODE_3D);
+        w->Status = STATUS_DEVICE_HARDWARE_ERROR;
+    } else if (w->Answer == BC250_WRITER_END_PROGRAM) {
+        BOOLEAN wrote = FALSE;
+        const NTSTATUS status = DcnFlipSourceAddress(device, (ULONGLONG)wddm->PrimaryAddress.QuadPart,
+            wddm->PrimaryPitch, wddm->PrimaryPlaneFormat, wddm->PrimaryBytes, FALSE, NULL, &wrote);
+        result = Bc250FlipResult(wrote ? 1u : 0u, NT_SUCCESS(status) ? 1u : 0u, 0u, 0u);
+        if (result == BC250_FLIP_RESULT_SUCCESS) {
+            programmed = TRUE;
+            wddm->PrimaryNeedsRestore = FALSE;
+            InterlockedExchange(&wddm->PrimaryProgrammedSequence, (LONG)(w->Generation + 2u));
+            InterlockedIncrement(&wddm->EndPrograms);
+        } else if (result == BC250_FLIP_RESULT_REFUSED) {
+            InterlockedIncrement(&wddm->OwedInvalidated);
+            wddm->DesiredOwed = FALSE;
+            wddm->PrimaryNeedsRestore = TRUE;
+            w->Status = status;
+        } else {
+            WddmFlipFault(device, wddm, BC250_FLIP_FAULT_PROGRAM, BC250_WDDM_NODE_3D);
+            w->Status = STATUS_DEVICE_HARDWARE_ERROR;
+        }
+    }
+    if (wddm->Faulting) w->Status = STATUS_DEVICE_HARDWARE_ERROR;
+    if (w->Invalidate && !programmed && !(owes && !device->VidPnFlipEnabled)) WddmPrimaryInvalidate(wddm);
+    WddmWuClose(device, wddm, w->Generation + 1u, w->Answer, result);
+    wddm->WriterDeposit = FALSE;
+    wddm->WriterResumed = FALSE;
+    wddm->WriterActive = FALSE;
+    wddm->WriterReady = FALSE;
+    InterlockedExchange(&wddm->PrimarySequence, (LONG)(w->Generation + 2u));
+    return TRUE;
+}
+
+NTSTATUS WddmPrimaryExclusiveEnd(_Inout_ BC250_DEVICE* Device, ULONG Generation, BOOLEAN Invalidate)
+{
+    BC250_WDDM* wddm = WddmOf(Device);
+    BC250_WDDM_WRITER w;
+    NTSTATUS status;
+    if (wddm == NULL) return STATUS_SUCCESS;
+    RtlZeroMemory(&w, sizeof(w));
+    w.Device = Device;
+    w.Wddm = wddm;
+    w.Generation = Generation;
+    w.Invalidate = Invalidate;
+    status = WddmSection(Device, WddmWriterEndLocked, &w);
+    if (!NT_SUCCESS(status)) {
+        WddmWriterSectionFailure(Device, wddm, status);
+        return status;
+    }
+    if (w.Status == STATUS_INVALID_DEVICE_STATE) WddmWriterSectionFailure(Device, wddm, w.Status);
+    return w.Status;
+}
+
+// At the start of D3 (pnp.c's Bc250SetPowerState), before the power writers: dxgmms2 flushed the flip queue
+// (VidSchFlushAdapter, VidSchFlushDevice, facts M904), so no next-VSync success is owed any more, and the D3 writers'
+// End must not program one into a pipe that is going down.
+static BOOLEAN WddmFlipFlushedLocked(_In_ PVOID Context)
+{
+    BC250_WDDM_WRITER* w = (BC250_WDDM_WRITER*)Context;
+    w->Wddm->DesiredOwed = FALSE;
+    InterlockedIncrement(&w->Wddm->FlipFlushes);
+    return TRUE;
+}
+
+void WddmFlipFlushed(_Inout_ BC250_DEVICE* Device)
+{
+    BC250_WDDM* wddm = WddmOf(Device);
+    BC250_WDDM_WRITER w;
 
     if (wddm == NULL) return;
-    if (Invalidate)
-    {
-        // The same fields DestroyAllocation resets when it takes the plane back (Bc250WddmDestroyAllocation),
-        // the plane format included (M15.14): the firmware surface is ARGB8888 (DcnFlipToFirmwareSurface).
-        wddm->PrimaryNeedsRestore = TRUE;
-        InterlockedExchange64(&wddm->PrimaryAddress.QuadPart, 0);
-        wddm->PrimaryPitch = 0;
-        wddm->PrimaryPlaneFormat = 0;
-        InterlockedExchange64(&wddm->ScanoutObject, 0);
+    RtlZeroMemory(&w, sizeof(w));
+    w.Device = Device;
+    w.Wddm = wddm;
+    if (!NT_SUCCESS(WddmSection(Device, WddmFlipFlushedLocked, &w))) InterlockedIncrement(&wddm->WriterSyncFailed);
+}
+
+// A live writer owns only reserved storage. Its Desired may be invalidated
+// under L without waiting for the PASSIVE operation. Otherwise Begin first
+// retires the scanned application buffer to the reserved bridge.
+typedef struct _BC250_WDDM_DESTROY {
+    BC250_WDDM* Wddm;
+    ULONGLONG Serial;
+    BOOLEAN Taken;
+    BOOLEAN NeedWriter;
+    BOOLEAN Refused;
+} BC250_WDDM_DESTROY;
+
+static BOOLEAN WddmDestroyTakeLocked(_In_ PVOID Context)
+{
+    BC250_WDDM_DESTROY* d = (BC250_WDDM_DESTROY*)Context;
+    BC250_WDDM* wddm = d->Wddm;
+    d->NeedWriter = FALSE;
+    d->Taken = FALSE;
+    d->Refused = FALSE;
+    if ((ULONGLONG)wddm->ScanoutObject != d->Serial) return TRUE;
+    if (!wddm->WriterActive) { d->NeedWriter = TRUE; return TRUE; }
+    // Begin has published BUSY but may still be retiring the old application
+    // surface at PASSIVE. Active alone does not authorize that object's free.
+    if (!wddm->WriterReady || wddm->Faulting) { d->Refused = TRUE; return TRUE; }
+    wddm->DesiredOwed = FALSE;
+    wddm->WriterDeposit = FALSE;
+    WddmPrimaryInvalidate(wddm);
+    d->Taken = TRUE;
+    return TRUE;
+}
+
+static NTSTATUS WddmDestroyRestore(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WDDM* Wddm, ULONGLONG Serial)
+{
+    BC250_WDDM_DESTROY d;
+    ULONG generation = 0;
+    NTSTATUS status, ended;
+    d.Wddm = Wddm;
+    d.Serial = Serial;
+    d.Taken = FALSE;
+    d.NeedWriter = FALSE;
+    d.Refused = FALSE;
+    status = WddmSection(Device, WddmDestroyTakeLocked, &d);
+    if (!NT_SUCCESS(status)) {
+        WddmWriterSectionFailure(Device, Wddm, status);
+        return status;
     }
-    InterlockedExchange(&wddm->PrimarySequence, (LONG)(Generation + 2u));
+    if (d.Refused) return STATUS_DEVICE_BUSY;
+    if (d.NeedWriter) {
+        if (!WddmPrimaryExclusiveBegin(Device, BC250_WRITER_DESTROY, &generation)) return STATUS_DEVICE_BUSY;
+        status = WddmSection(Device, WddmDestroyTakeLocked, &d);
+        if (!NT_SUCCESS(status)) {
+            WddmWriterSectionFailure(Device, Wddm, status);
+            return status;
+        }
+        ended = WddmPrimaryExclusiveEnd(Device, generation, d.Taken);
+        if (!NT_SUCCESS(ended)) return ended;
+        if (d.Refused) return STATUS_DEVICE_BUSY;
+    }
+    if (d.Taken && InterlockedIncrement(&Wddm->ScanoutTeardowns) <= BC250_WDDM_LOG_CALLS)
+        GuardLog("wddm: DestroyAllocation retired scanned surface to reserved storage");
+    return STATUS_SUCCESS;
+}
+
+// One flip request: the DDI's arguments, the answer, and what the low entry logs after its section.
+typedef struct _BC250_WDDM_FLIP {
+    BC250_DEVICE* Device;
+    BC250_WDDM* Wddm;
+    const DXGKARG_SETVIDPNSOURCEADDRESS* Args;
+    NTSTATUS Result;
+    BOOLEAN LogRefusal;                 // the scan-out refusal line, with Admit and Candidate
+    int Admit;
+    BC250_SCANOUT_CANDIDATE Candidate;
+    BOOLEAN LogScanout;                 // the scan-out flip line, with Physical, Pitch, Bytes and PlaneFormat
+    ULONGLONG Physical;
+    ULONG Pitch;
+    ULONGLONG Bytes;
+    ULONG PlaneFormat;
+} BC250_WDDM_FLIP;
+
+// E5's node (section 7.2, E5 step 3): the node of the first context that the flip call carries, when it is a context
+// of this driver, else node 0 (the 3D node). dxgkrnl passes the context handles this driver returned from CreateContext.
+static UINT WddmFlipNode(_In_ const DXGKARG_SETVIDPNSOURCEADDRESS* Args)
+{
+    const BC250_WDDM_OBJECT* context =
+        Args->ContextCount > 0 ? WddmObject(Args->Context[0], BC250_WDDM_MAGIC_CONTEXT) : NULL;
+    return context != NULL && context->NodeOrdinal < BC250_WDDM_NODE_COUNT_MAX ? context->NodeOrdinal : BC250_WDDM_NODE_3D;
+}
+
+// The request published as Desired (section 7.2): the address, the segment, the pitch, the bytes and the format.
+static void WddmFlipPublish(_Inout_ BC250_WDDM* Wddm, _In_ const DXGKARG_SETVIDPNSOURCEADDRESS* Args, ULONG Pitch,
+                            ULONGLONG Bytes, ULONG PlaneFormat)
+{
+    InterlockedExchange64(&Wddm->PrimaryAddress.QuadPart, Args->PrimaryAddress.QuadPart);
+    Wddm->PrimarySegment = Args->PrimarySegment;
+    Wddm->PrimaryPitch = Pitch;
+    Wddm->PrimaryBytes = Bytes;
+    Wddm->PrimaryPlaneFormat = PlaneFormat;
+}
+
+// The flip transaction, inside L: at DIRQL from dxgmms2's own synchronized call, or inside the low entry's section.
+// The edges of flip_state.h in their order: F0 FAULTING, F1 overlap, A admission, W a writer (deposit), E program.
+static BOOLEAN WddmFlipTransaction(_In_ PVOID Context)
+{
+    BC250_WDDM_FLIP* flip = (BC250_WDDM_FLIP*)Context;
+    BC250_DEVICE* device = flip->Device;
+    BC250_WDDM* wddm = flip->Wddm;
+    const DXGKARG_SETVIDPNSOURCEADDRESS* args = flip->Args;
+    const ULONG generation = (ULONG)wddm->PrimarySequence;
+    const BOOLEAN immediate = args->Flags.FlipImmediate ? TRUE : FALSE;
+    // A refusal cannot report completion: immediate SUCCESS retires the OS
+    // primary. M904's legacy exclusive queue assertion is an OS error-path
+    // risk, not permission to acknowledge an unimplemented request.
+    const BOOLEAN exclusive = args->Flags.IndependentFlipExclusive ? TRUE : FALSE;
+    const LONGLONG address = args->PrimaryAddress.QuadPart;
+    BC250_FLIP_FACTS facts;
+    ULONG edge, pitch, planeFormat;
+    const BC250_PLANE_ENCODING* plane;
+    ULONGLONG bytes = 0;
+    BOOLEAN changed, scanout = FALSE;
+    BC250_WDDM_OBJECT* scanoutObject = NULL;
+    NTSTATUS status = STATUS_SUCCESS;
+
+    // M15.14 increment 2, the kernel-side witness of the OS's flip mode, counted for every call, admitted or refused:
+    // these flags describe the video present source's mode, not this allocation. The bitfields are read, never a
+    // mask: the trailing comments of DXGK_SETVIDPNSOURCEADDRESS_FLAGS repeat 0x10 twice and are shifted by a bit from
+    // FlipStereoPreferRight on, so a transcribed number would report a run that did enter independent flip as a run
+    // that never did.
+    if (args->Flags.ModeChange) InterlockedIncrement(&wddm->ScanoutFlipFlags[0]);
+    if (args->Flags.FlipImmediate) InterlockedIncrement(&wddm->ScanoutFlipFlags[1]);
+    if (args->Flags.SharedPrimaryTransition) InterlockedIncrement(&wddm->ScanoutFlipFlags[2]);
+    if (args->Flags.IndependentFlipExclusive) InterlockedIncrement(&wddm->ScanoutFlipFlags[3]);
+    // A NULL allocation preserves current private properties; initially POST, whose format is the firmware's
+    // ARGB8888. The surface has the committed source mode's size (modeset.c). The bytes follow the format's own size,
+    // never a literal 4 (M15.14).
+    pitch=wddm->PrimaryPitch?wddm->PrimaryPitch:
+        (device->RuntimePostValid?device->RuntimePost.Pitch:device->Post.Pitch);
+    planeFormat=wddm->PrimaryPlaneFormat?wddm->PrimaryPlaneFormat:BC250_PLANE_FORMAT_ARGB8888;
+    plane=Bc250PlaneEncoding(planeFormat);
+    if (!plane || !DcnLinearSurfaceBytes(DisplaySourceWidth(device),DisplaySourceHeight(device),pitch,
+                                         plane->BytesPerPixel,&bytes))
+        status=STATUS_INVALID_PARAMETER;
+    if (args->hAllocation)
+    {
+        // M15.14. The rule lives in scanout_admit.h, is host-tested through each of its refusals, and is still
+        // followed by dcn.c's AddressAllowed, which holds the address itself against the firmware plane and the VRAM
+        // carve-out. dxgkrnl's own shared primary asks for no scan-out and is admitted by the same four checks.
+        BC250_WDDM_OBJECT* allocation=WddmObject(args->hAllocation,BC250_WDDM_MAGIC_ALLOCATION);
+        BC250_SCANOUT_CANDIDATE candidate;
+        int admit;
+        RtlZeroMemory(&candidate,sizeof(candidate));
+        if (allocation) {
+            // A BC2A allocation has no LB7A description, so its scan-out words are the description; an LB7A one
+            // describes itself and left those words zero.
+            candidate.UmdAlloc=allocation->UmdAlloc?1:0;
+            candidate.ScanoutRequested=allocation->ScanoutRequested?1:0;
+            candidate.Width=allocation->UmdAlloc?allocation->ScanoutWidth:allocation->Allocation.Width;
+            candidate.Height=allocation->UmdAlloc?allocation->ScanoutHeight:allocation->Allocation.Height;
+            candidate.Pitch=allocation->UmdAlloc?allocation->ScanoutPitch:allocation->Allocation.Pitch;
+            candidate.Format=allocation->UmdAlloc?allocation->ScanoutFormat:allocation->Allocation.Format;
+            candidate.Size=allocation->UmdAlloc?allocation->UmdBytes:allocation->Allocation.Size;
+            candidate.Segment=args->PrimarySegment;
+            candidate.Address=(ULONGLONG)args->PrimaryAddress.QuadPart;
+        }
+        // The predicate holds the candidate's 4 KiB alignment against the card address, which is what this DDI
+        // carries; the plane is given the translated physical one (dcn_translate.c). Page alignment survives that
+        // subtraction only while both bases are page-aligned themselves, so the invariant is checked here.
+        if (allocation && allocation->ScanoutRequested && !wddm->ScanoutAdmitGate)
+            admit=BC250_SCANOUT_GATED;      // the operator's switch: 0.7.205.1 behaviour for this start
+        else if (allocation && allocation->ScanoutRequested &&
+            ((device->VramMcBase | (ULONGLONG)device->VramPhysical.QuadPart) & 0xFFFull))
+            admit=BC250_SCANOUT_ALIGNMENT;
+        else
+            admit=Bc250ScanoutAdmit(allocation?&candidate:NULL,DisplaySourceWidth(device),DisplaySourceHeight(device),
+                                    BC250_WDDM_SEGMENT_VRAM,&pitch,&bytes);
+        InterlockedIncrement(&wddm->ScanoutAdmits[admit]);
+        if (candidate.ScanoutRequested) InterlockedIncrement(&wddm->ScanoutRequests);
+        if (admit!=BC250_SCANOUT_ADMIT_OK) {
+            // A refusal publishes nothing: the plane keeps the surface it has. The line is logged after L, with a
+            // budget of its own (a refusal recurs for the life of the swap chain).
+            status=STATUS_INVALID_PARAMETER;
+            if (candidate.ScanoutRequested) { flip->LogRefusal=TRUE; flip->Admit=admit; flip->Candidate=candidate; }
+        }
+        else {
+            scanout=candidate.ScanoutRequested?TRUE:FALSE;
+            if (scanout) scanoutObject=allocation;
+            // Admission guarantees a plane encoding of the row's own size (scanout_admit.h).
+            planeFormat=Bc250PlaneFormatOf(candidate.Format);
+            status=STATUS_SUCCESS;
+        }
+    }
+
+    RtlZeroMemory(&facts, sizeof(facts));
+    (void)WddmWriterRecoveryLocked(device);
+    facts.Faulting = wddm->Faulting != 0 ? 1u : 0u;
+    facts.GenerationOdd = generation & 1u;
+    facts.WriterActive = wddm->WriterActive ? 1u : 0u;
+    facts.Admitted = NT_SUCCESS(status) ? 1u : 0u;
+    // With the flip gate closed (EnableVidPnFlip) no request reaches the plane, so none is immediate for it.
+    facts.Immediate = immediate && device->VidPnFlipEnabled ? 1u : 0u;
+    facts.Resumed = wddm->WriterResumed ? 1u : 0u;
+    // A readback only where a rule uses it: an immediate request during a writer (W-i).
+    if (facts.WriterActive && facts.Immediate) facts.Drained = DcnHubpDrained(device) == 1 ? 1u : 0u;
+    edge = Bc250FlipEdge(&facts);
+    InterlockedIncrement(&wddm->FlipEdges[edge]);
+    // The format is part of what the plane shows: the same address in another format is a change.
+    changed = wddm->PrimaryNeedsRestore || wddm->PrimaryAddress.QuadPart != address || pitch != wddm->PrimaryPitch ||
+              planeFormat != wddm->PrimaryPlaneFormat;
+
+    switch (edge)
+    {
+    case BC250_FLIP_EDGE_FAULTING:
+        // F0: nothing is programmed. The OS keeps the previous primary referenced (facts M904) and recovers.
+        flip->Result = STATUS_DEVICE_HARDWARE_ERROR;
+        return TRUE;
+    case BC250_FLIP_EDGE_OVERLAP:
+        WddmFlipFault(device, wddm, BC250_FLIP_FAULT_OVERLAP, WddmFlipNode(args));
+        flip->Result = STATUS_DEVICE_HARDWARE_ERROR;
+        return TRUE;
+    case BC250_FLIP_EDGE_REFUSED:
+        if (exclusive && immediate) { InterlockedIncrement(&wddm->ExclusiveRefused); flip->Result = status; }
+        else { if (exclusive) InterlockedIncrement(&wddm->ExclusiveFailed); flip->Result = status; }
+        return TRUE;
+    case BC250_FLIP_EDGE_DEPOSIT_VSYNC:
+    case BC250_FLIP_EDGE_DEPOSIT_DRAINED:
+    case BC250_FLIP_EDGE_DEPOSIT_UNPROVEN:
+        // A safe bridge does not implement the requested flip. Do not promise
+        // immediate or next-VSync presentation while a long writer owns the pipe.
+        // Refusal preserves OS ownership and is ordinary contention, not E5.
+        if (device->VidPnFlipEnabled) {
+            InterlockedIncrement(&wddm->WriterBusy);
+            if (wddm->WriterKind < BC250_WRITER_KINDS)
+                InterlockedIncrement(&wddm->WriterBusyByKind[wddm->WriterKind]);
+            flip->Result = STATUS_DEVICE_BUSY;
+            return TRUE;
+        }
+        // Gate-closed software reporting keeps its existing Desired route.
+        InterlockedExchange64(&wddm->ScanoutObject, (LONG64)(scanoutObject ? scanoutObject->Serial : 0ull));
+        WddmFlipPublish(wddm, args, pitch, bytes, planeFormat);
+        wddm->PrimaryNeedsRestore = TRUE;
+        wddm->WriterDeposit = TRUE;
+        wddm->DepositSequence++;
+        wddm->DesiredOwed = immediate ? FALSE : TRUE;
+        if (changed) InterlockedIncrement(&wddm->Flips);
+        if (edge == BC250_FLIP_EDGE_DEPOSIT_UNPROVEN) WddmWuRecord(wddm, args, generation);
+        flip->Result = STATUS_SUCCESS;
+        return TRUE;
+    default:
+        break;
+    }
+
+    // E: no writer, an even generation. The generation is odd while this transaction runs, so that the vblank DPC's
+    // lock-free reads (WddmReadCompletedPrimary) never cross it.
+    InterlockedExchange(&wddm->PrimarySequence, (LONG)(generation + 1u));
+    if (!device->VidPnFlipEnabled)
+    {
+        // The flip gate is closed (EnableVidPnFlip): publish only. The software timer reports Desired.
+        WddmFlipPublish(wddm, args, pitch, bytes, planeFormat);
+        wddm->PrimaryNeedsRestore = FALSE;
+        wddm->DesiredOwed = immediate ? FALSE : TRUE;
+        if (changed) { InterlockedIncrement(&wddm->Flips); InterlockedExchange64(&wddm->ScanoutObject, 0); }
+        flip->Result = STATUS_SUCCESS;
+    }
+    else if (!changed && !(immediate && DcnFlipPending(device, (ULONGLONG)address)))
+    {
+        // The address is published already. A next-VSync request waits for the report that carries it; an immediate
+        // one is complete by the stricter vblank test (DcnFlipPending: the pending bit clear and EARLIEST_INUSE on it).
+        wddm->DesiredOwed = immediate ? FALSE : TRUE;
+        flip->Result = STATUS_SUCCESS;
+    }
+    else
+    {
+        // E2 and E3. An immediate request for the address already published but still pending after a next-VSync
+        // request for it is programmed again with the immediate type (same-address promotion). The teardown record
+        // is taken before the plane is programmed, not after: a record published after the write would leave a window
+        // in which DestroyAllocation frees a buffer the plane reads, with no way back on a part with no GPU reset
+        // (facts M53). A record taken for a buffer the plane has not reached yet only restores the firmware surface
+        // early, which the next flip undoes.
+        const LONG64 record = (LONG64)(scanoutObject ? scanoutObject->Serial : 0ull);
+        const LONG64 previous = InterlockedExchange64(&wddm->ScanoutObject, record);
+        LONGLONG programStart;
+        BOOLEAN wrote = FALSE;
+        ULONG proof = 0, result, outcome = 0;
+        ULONGLONG physical = 0;
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+        // Lab flavour (WddmWitness): the flip event cleared before the programming and outside the observation's
+        // bound, so that an event read after the decision is this flip's.
+        BC250_DCN_WITNESS_ARM witnessArm;
+        DcnWitnessArm(device, immediate, &witnessArm);
+#endif
+        programStart = KeQueryPerformanceCounter(NULL).QuadPart;
+        status = DcnFlipSourceAddress(device, (ULONGLONG)address, pitch, planeFormat, bytes, immediate, &physical,
+                                      &wrote);
+        if (wrote && NT_SUCCESS(status) && immediate)
+        {
+            const LONGLONG programEnd = KeQueryPerformanceCounter(NULL).QuadPart;
+            outcome = DcnImmediateObserve(device, (ULONGLONG)address, physical, programStart, programEnd,
+                                          &wddm->PrimarySequence, generation + 1u, args->Flags.Value);
+            proof = (outcome == BC250_DCN_IMMEDIATE_DONE || outcome == BC250_DCN_IMMEDIATE_DONE_LATE) ? 1u : 0u;
+        }
+        result = Bc250FlipResult(wrote ? 1u : 0u, NT_SUCCESS(status) ? 1u : 0u, immediate ? 1u : 0u, proof);
+        InterlockedIncrement(&wddm->FlipResults[result]);
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+        // Lab flavour: the witnesses, after the decision and never before it.
+        if (wrote && NT_SUCCESS(status) && immediate)
+            WddmWitness(device, wddm, &witnessArm, args, physical, generation + 1u, outcome, result);
+#endif
+        if (result == BC250_FLIP_RESULT_REFUSED)
+        {
+            // Nothing written: A after the fact (DcnFlipSourceAddress's own checks). The record goes back to the object
+            // the previous flip left there, unless a destroy took it away meanwhile.
+            InterlockedCompareExchange64(&wddm->ScanoutObject, previous, record);
+            if (exclusive && immediate) InterlockedIncrement(&wddm->ExclusiveRefused);
+            else if (exclusive) InterlockedIncrement(&wddm->ExclusiveFailed);
+            flip->Result = status;
+        }
+        else if (result == BC250_FLIP_RESULT_FAULT_PROGRAM)
+        {
+            // The write sequence ran and failed: unknown, never proof that nothing was written. E5; the record keeps
+            // the new object, which the plane may now read.
+            WddmFlipFault(device, wddm, BC250_FLIP_FAULT_PROGRAM, WddmFlipNode(args));
+            flip->Result = STATUS_DEVICE_HARDWARE_ERROR;
+        }
+        else
+        {
+            // Programmed. Desired is the request in both cases, because the hardware has it: SUCCESS, or U (E3
+            // without P'), which is E5 (section 7.2; facts M903: P' held in the call for every immediate flip
+            // measured, the vertical blank included).
+            if (!changed) InterlockedIncrement(&wddm->ImmediatePromotions);
+            if (planeFormat < BC250_PLANE_FORMATS) InterlockedIncrement(&wddm->ScanoutFlipsByFormat[planeFormat]);
+            WddmFlipPublish(wddm, args, pitch, bytes, planeFormat);
+            wddm->PrimaryNeedsRestore = FALSE;
+            InterlockedExchange(&wddm->PrimaryProgrammedSequence, (LONG)(generation + 2u));
+            if (changed) InterlockedIncrement(&wddm->Flips);
+            if (changed && scanout)
+            {
+                // Only a flip the hardware was written with counts as a scan-out flip, and its line gives the address
+                // the plane was given, so that the display side of an ETW capture can be matched to this allocation.
+                InterlockedIncrement(&wddm->ScanoutFlips);
+                flip->LogScanout = TRUE;
+                flip->Physical = physical;
+                flip->Pitch = pitch;
+                flip->Bytes = bytes;
+                flip->PlaneFormat = planeFormat;
+            }
+            if (result == BC250_FLIP_RESULT_UNPROVEN)
+            {
+                WddmFlipFault(device, wddm, BC250_FLIP_FAULT_UNPROVEN, WddmFlipNode(args));
+                flip->Result = STATUS_DEVICE_HARDWARE_ERROR;
+            }
+            else
+            {
+                wddm->DesiredOwed = immediate ? FALSE : TRUE;
+                flip->Result = STATUS_SUCCESS;
+            }
+        }
+    }
+    InterlockedExchange(&wddm->PrimarySequence, (LONG)(generation + 2u));
+    return TRUE;
+}
+
+// The transaction and its time inside L, the programming, the observation and E5 included: what the high entry spends
+// at the device's IRQL (FlipLockedMaxUs, in the summary). Only code inside L writes the maximum.
+static BOOLEAN WddmFlipLocked(_In_ PVOID Context)
+{
+    BC250_WDDM_FLIP* flip = (BC250_WDDM_FLIP*)Context;
+    const LONGLONG frequency = flip->Device->DcnQpcFrequency;
+    const LONGLONG start = KeQueryPerformanceCounter(NULL).QuadPart;
+    LONGLONG us;
+
+    (void)WddmFlipTransaction(Context);
+    us = KeQueryPerformanceCounter(NULL).QuadPart - start;
+    if (frequency > 0 && us > 0)
+    {
+        us = us * 1000000 / frequency;
+        if (us > 0x7FFFFFFF) us = 0x7FFFFFFF;
+        if ((LONG)us > flip->Wddm->FlipLockedMaxUs) flip->Wddm->FlipLockedMaxUs = (LONG)us;
+    }
+    return TRUE;
 }
 
 static DXGKDDI_SETVIDPNSOURCEADDRESS Bc250WddmSetVidPnSourceAddress;
@@ -7660,200 +8907,50 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddress(_In_ const HANDLE hAdapter,
 {
     BC250_DEVICE* device = (BC250_DEVICE*)hAdapter;
     BC250_WDDM* wddm = WddmOf(hAdapter);
-
     // This is the one DDI in the table whose ceiling is above DISPATCH_LEVEL: d3dkmddi.h annotates it
-    // _IRQL_requires_min_(PASSIVE_LEVEL) / _IRQL_requires_max_(PROFILE_LEVEL - 1), because a flip may be programmed
-    // from the VSync interrupt itself. Everything below is therefore either interlocked or refused up there:
-    // GuardLog takes a spin lock for its ring, and WddmVSyncArm takes ours and calls KeSetTimerEx, and neither is
-    // legal at DIRQL. The arm being skipped costs nothing in practice - SetVidPnSourceVisibility runs at
-    // PASSIVE_LEVEL and has armed the timer long before any flip arrives - and the count below says how often it
-    // happened, so the assumption is measured rather than hoped for.
+    // _IRQL_requires_max_(PROFILE_LEVEL - 1), and a driver with FlipOnVSyncMmIo gets its flips "at device interrupt
+    // request level (DIRQL)" (d3dkmddi.md:12801). Two entries (section 7.2): above DISPATCH_LEVEL dxgmms2 already holds
+    // L (facts M904), and the transaction runs directly; at or below it, the same transaction runs inside one
+    // DxgkCbSynchronizeExecution section. Log lines and WddmVSyncArm come after the transaction, for the low entry only:
+    // GuardLog drops a line above DISPATCH_LEVEL, and WddmVSyncArm takes a spin lock.
     const BOOLEAN high = (KeGetCurrentIrql() > DISPATCH_LEVEL);
+    BC250_WDDM_FLIP flip;
 
     if (pSetVidPnSourceAddress->VidPnSourceId != 0) return STATUS_INVALID_PARAMETER;
     if (wddm == NULL) return STATUS_DEVICE_NOT_READY;
+    RtlZeroMemory(&flip, sizeof(flip));
+    flip.Device = device;
+    flip.Wddm = wddm;
+    flip.Args = pSetVidPnSourceAddress;
+    if (high)
     {
-        ULONG generation = (ULONG)InterlockedCompareExchange(&wddm->PrimarySequence, 0, 0);
-        BOOLEAN changed;
-        ULONG pitch;
-        ULONG planeFormat;              // M15.14 (0.7.216.20): plane_format.h format of this flip's surface
-        const BC250_PLANE_ENCODING* plane;
-        ULONGLONG bytes = 0;
-        BOOLEAN scanout = FALSE;        // M15.14: this flip's allocation was an application scan-out surface
-        BOOLEAN written = FALSE;        // the display hardware was actually written, not only admitted
-        BC250_WDDM_OBJECT* scanoutObject = NULL;   // the admitted scan-out allocation, for the teardown record
-        ULONGLONG physical = 0;         // the address the plane was given, for the scan-out log line
-        NTSTATUS status = STATUS_SUCCESS;
-        // Nonblocking ownership: a high-IRQL caller must never spin behind a
-        // preempted lower-IRQL programmer. The generation also protects vsync's
-        // address + FLIP_PENDING snapshot from crossing this transaction.
-        if ((generation & 1u) ||
-            (ULONG)InterlockedCompareExchange(&wddm->PrimarySequence, (LONG)(generation + 1u),
-                                             (LONG)generation) != generation)
-            return STATUS_DEVICE_BUSY;
-        // M15.14 increment 2, the kernel-side witness of the OS's flip mode. Counted here, inside the
-        // transaction, so each accepted call counts exactly once - a call refused above with
-        // STATUS_DEVICE_BUSY will be retried - and for every call, admitted or refused: these flags
-        // describe the video present source's mode, not this allocation, and a refusal that arrives after
-        // the OS has taken SharedPrimaryTransition is the shape that blanks the output. The bitfields are
-        // read, never a mask: the trailing comments of DXGK_SETVIDPNSOURCEADDRESS_FLAGS repeat 0x10 twice
-        // and are shifted by a bit from FlipStereoPreferRight on, so a transcribed number would report a
-        // run that did enter independent flip as a run that never did. Interlocked and legal at DIRQL.
-        if (pSetVidPnSourceAddress->Flags.ModeChange) InterlockedIncrement(&wddm->ScanoutFlipFlags[0]);
-        if (pSetVidPnSourceAddress->Flags.FlipImmediate) InterlockedIncrement(&wddm->ScanoutFlipFlags[1]);
-        if (pSetVidPnSourceAddress->Flags.SharedPrimaryTransition) InterlockedIncrement(&wddm->ScanoutFlipFlags[2]);
-        if (pSetVidPnSourceAddress->Flags.IndependentFlipExclusive) InterlockedIncrement(&wddm->ScanoutFlipFlags[3]);
-        // A NULL allocation preserves current private properties; initially POST, whose format is the
-        // firmware's ARGB8888. The surface has the committed source mode's size (modeset.c), which this
-        // transaction excludes from changing under it. The bytes follow the format's own size, never a
-        // literal 4 (M15.14).
-        pitch=wddm->PrimaryPitch?wddm->PrimaryPitch:
-            (device->RuntimePostValid?device->RuntimePost.Pitch:device->Post.Pitch);
-        planeFormat=wddm->PrimaryPlaneFormat?wddm->PrimaryPlaneFormat:BC250_PLANE_FORMAT_ARGB8888;
-        plane=Bc250PlaneEncoding(planeFormat);
-        if (!plane || !DcnLinearSurfaceBytes(DisplaySourceWidth(device),DisplaySourceHeight(device),pitch,
-                                             plane->BytesPerPixel,&bytes))
-            status=STATUS_INVALID_PARAMETER;
-        if (pSetVidPnSourceAddress->hAllocation)
-        {
-            // M15.14. Until 0.7.205.1 this clause refused every application allocation outright, which is
-            // why no game buffer could scan out. The rule now lives in scanout_admit.h, is host-tested
-            // through each of its refusals, and is still followed by dcn.c's AddressAllowed, which holds
-            // the address itself against the firmware plane and the VRAM carve-out. Nothing about
-            // dxgkrnl's own shared primary changes: it asks for no scan-out and is admitted by the same
-            // four checks it always was.
-            BC250_WDDM_OBJECT* allocation=WddmObject(pSetVidPnSourceAddress->hAllocation,BC250_WDDM_MAGIC_ALLOCATION);
-            BC250_SCANOUT_CANDIDATE candidate;
-            int admit;
-            RtlZeroMemory(&candidate,sizeof(candidate));
-            if (allocation) {
-                candidate.UmdAlloc=allocation->UmdAlloc?1:0;
-                candidate.ScanoutRequested=allocation->ScanoutRequested?1:0;
-                // A BC2A allocation has no LB7A description, so its scan-out words are the description;
-                // an LB7A one describes itself and left those words zero.
-                candidate.Width=allocation->UmdAlloc?allocation->ScanoutWidth:allocation->Allocation.Width;
-                candidate.Height=allocation->UmdAlloc?allocation->ScanoutHeight:allocation->Allocation.Height;
-                candidate.Pitch=allocation->UmdAlloc?allocation->ScanoutPitch:allocation->Allocation.Pitch;
-                candidate.Format=allocation->UmdAlloc?allocation->ScanoutFormat:allocation->Allocation.Format;
-                candidate.Size=allocation->UmdAlloc?allocation->UmdBytes:allocation->Allocation.Size;
-                candidate.Segment=pSetVidPnSourceAddress->PrimarySegment;
-                candidate.Address=(ULONGLONG)pSetVidPnSourceAddress->PrimaryAddress.QuadPart;
-            }
-            // The predicate holds the candidate's 4 KiB alignment against the card address, which is what
-            // this DDI carries; the plane is given the translated physical one (dcn_translate.c:
-            // Address - VramMcBase + VramPhysical). Page alignment survives that subtraction only while
-            // both bases are page-aligned themselves, so the invariant is checked here instead of
-            // assumed, and a board that broke it refuses scan-out rather than programming a plane at a
-            // misaligned address. Checked before the predicate, so that a refusal still leaves the
-            // transaction's pitch and bytes exactly as they were.
-            if (allocation && allocation->ScanoutRequested && !wddm->ScanoutAdmitGate)
-                admit=BC250_SCANOUT_GATED;      // the operator's switch: 0.7.205.1 behaviour for this start
-            else if (allocation && allocation->ScanoutRequested &&
-                ((device->VramMcBase | (ULONGLONG)device->VramPhysical.QuadPart) & 0xFFFull))
-                admit=BC250_SCANOUT_ALIGNMENT;
-            else
-                admit=Bc250ScanoutAdmit(allocation?&candidate:NULL,DisplaySourceWidth(device),DisplaySourceHeight(device),
-                                        BC250_WDDM_SEGMENT_VRAM,&pitch,&bytes);
-            InterlockedIncrement(&wddm->ScanoutAdmits[admit]);
-            if (candidate.ScanoutRequested) InterlockedIncrement(&wddm->ScanoutRequests);
-            if (admit!=BC250_SCANOUT_ADMIT_OK) {
-                // A refusal leaves pitch and bytes as this transaction computed them for a NULL
-                // allocation, and publishes nothing: the plane keeps the surface it has.
-                status=STATUS_INVALID_PARAMETER;
-                // The scan-out lines have a budget of their own rather than WddmFirstCalls': that
-                // helper counts the DDI call as a side effect, and a call refused here programmed
-                // nothing, so counting it would make "address calls" a denominator of two different
-                // things. It would also spend the shared eight-line budget at the frame rate of a
-                // refusal, which recurs for the life of the swap chain, and bury the one line that
-                // says which clause refused it.
-                if (candidate.ScanoutRequested && InterlockedIncrement(&wddm->ScanoutNotes)<=BC250_WDDM_LOG_CALLS)
-                    GuardLog("wddm: scan-out refused: %s (%lux%lu pitch %lu format %lu segment %lu address 0x%llX)",
-                             Bc250ScanoutStatusText(admit),candidate.Width,candidate.Height,candidate.Pitch,
-                             candidate.Format,candidate.Segment,candidate.Address);
-            }
-            else {
-                scanout=candidate.ScanoutRequested?TRUE:FALSE;
-                if (scanout) scanoutObject=allocation;
-                // Admission guarantees a plane encoding of the row's own size (scanout_admit.h).
-                planeFormat=Bc250PlaneFormatOf(candidate.Format);
-                status=STATUS_SUCCESS;
-            }
-        }
-        // The format is part of what the plane shows: the same address in another format is a change.
-        changed = wddm->PrimaryNeedsRestore || InterlockedCompareExchange64(&wddm->PrimaryAddress.QuadPart, 0, 0) !=
-                  pSetVidPnSourceAddress->PrimaryAddress.QuadPart || pitch!=wddm->PrimaryPitch ||
-                  planeFormat!=wddm->PrimaryPlaneFormat;
-        if (high) InterlockedIncrement(&wddm->FlipsAboveDispatch);
-        if (NT_SUCCESS(status) && changed && device->VidPnFlipEnabled) {
-            // The teardown record is taken before the plane is programmed, not after. The write to HUBP0 is
-            // what makes this allocation the one the display core reads; a record published after it leaves a
-            // window in which DestroyAllocation compares the buffer it is about to free against the previous
-            // flip's object, misses, and frees a buffer the plane is reading, with no DcnRestorePostDisplay
-            // and no way back on a part with no GPU reset (facts M53). The other order costs nothing: a
-            // record taken for a buffer the plane has not reached yet only restores the firmware surface
-            // early, which the next flip undoes.
-            const LONG64 record=(LONG64)(scanoutObject?scanoutObject->Serial:0ull);
-            LONG64 previous=InterlockedExchange64(&wddm->ScanoutObject,record);
-            status=DcnFlipSourceAddress(device,(ULONGLONG)pSetVidPnSourceAddress->PrimaryAddress.QuadPart,pitch,
-                                       planeFormat,bytes,scanout?&physical:NULL);
-            written=NT_SUCCESS(status);
-            if (written && planeFormat<BC250_PLANE_FORMATS) InterlockedIncrement(&wddm->ScanoutFlipsByFormat[planeFormat]);
-            // A failed programming sequence gave the plane no address it keeps, so the record goes back to the
-            // object the previous flip left there - unless a destroy has taken the record away meanwhile, in
-            // which case that destroy owns the restore and the record must stay empty.
-            if (!written)
-                InterlockedCompareExchange64(&wddm->ScanoutObject,previous,record);
-        }
-        if (NT_SUCCESS(status))
-        {
-            // Publish only after the programming sequence succeeds. A refused
-            // request leaves both fields and Flips unchanged; the same address
-            // can be submitted again and still takes the hardware path.
-            InterlockedExchange64(&wddm->PrimaryAddress.QuadPart, pSetVidPnSourceAddress->PrimaryAddress.QuadPart);
-            wddm->PrimaryNeedsRestore=FALSE;
-            wddm->PrimarySegment = pSetVidPnSourceAddress->PrimarySegment;
-            wddm->PrimaryPitch=pitch;wddm->PrimaryBytes=bytes;
-            wddm->PrimaryPlaneFormat=planeFormat;
-            if (changed) {
-                InterlockedIncrement(&wddm->Flips);
-                // Only a flip the hardware was written with counts as a scan-out flip. With the flip
-                // gate closed (EnableVidPnFlip) this DDI still succeeds and still publishes, and a
-                // counter that moved there would report the whole increment's headline result on a
-                // machine where no address ever reached HUBP0.
-                if (scanout && written) {
-                    InterlockedIncrement(&wddm->ScanoutFlips);
-                    // The address the plane was given, so that the display side of an ETW capture
-                    // (DxgKrnl VSyncInterrupt's ScannedPhysicalAddress) can be matched to this
-                    // allocation rather than to the compositor's own primary.
-                    // The raw Flags word rides along: it is the one place a reader can see which bits the
-                    // OS actually set on a flip this driver programmed, without trusting the shifted
-                    // trailing comments of DXGK_SETVIDPNSOURCEADDRESS_FLAGS in d3dkmddi.h. The refusal
-                    // line is deliberately left as it is - its worst case is already baselined over the
-                    // log line's width (BD-070), and the flags of a refused flip are in the summary.
-                    if (InterlockedIncrement(&wddm->ScanoutNotes)<=BC250_WDDM_LOG_CALLS)
-                        GuardLog("wddm: scan-out flip: card 0x%llX physical 0x%llX pitch %lu bytes %llu flags 0x%08X fmt %lu",
-                                 (ULONGLONG)pSetVidPnSourceAddress->PrimaryAddress.QuadPart,physical,pitch,bytes,
-                                 pSetVidPnSourceAddress->Flags.Value,planeFormat);
-                }
-                // The teardown record follows the plane: an application surface while one is being
-                // scanned out, nothing while the compositor's own primary is. A flip the hardware was
-                // written with took the record above, before it programmed; what is left here is the flip
-                // the hardware never saw, which happens with the flip gate closed (EnableVidPnFlip) and
-                // must leave no record of a plane that was given no address.
-                if (!written) InterlockedExchange64(&wddm->ScanoutObject,(LONG64)0);
-                if (device->VidPnFlipEnabled)
-                    InterlockedExchange(&wddm->PrimaryProgrammedSequence,(LONG)(generation+2u));
-            }
-        }
-        InterlockedExchange(&wddm->PrimarySequence, (LONG)(generation + 2u));
-        if (!NT_SUCCESS(status)) return status;
+        (void)WddmFirstCalls(wddm, WddmDdiSetVidPnSourceAddress);  // the count only: FALSE above DISPATCH_LEVEL
+        InterlockedIncrement(&wddm->FlipsAboveDispatch);
+        (void)WddmFlipLocked(&flip);
+        return flip.Result;
     }
-    if (WddmFirstCalls(wddm, WddmDdiSetVidPnSourceAddress))     // FALSE above DISPATCH_LEVEL, count taken all the same
-        GuardLog("wddm: SetVidPnSourceAddress segment %u address 0x%llX flags 0x%08X (firmware framebuffer 0x%llX)",
+    {
+        // A failed section ran nothing: nothing is published or programmed, and the request fails like a refusal.
+        const NTSTATUS section = WddmSection(device, WddmFlipLocked, &flip);
+        if (!NT_SUCCESS(section)) { InterlockedIncrement(&wddm->LowSyncFailed); return section; }
+    }
+    if (flip.LogRefusal && InterlockedIncrement(&wddm->ScanoutNotes)<=BC250_WDDM_LOG_CALLS)
+        GuardLog("wddm: scan-out refused: %s (%lux%lu pitch %lu format %lu segment %lu address 0x%llX)",
+                 Bc250ScanoutStatusText(flip.Admit),flip.Candidate.Width,flip.Candidate.Height,flip.Candidate.Pitch,
+                 flip.Candidate.Format,flip.Candidate.Segment,flip.Candidate.Address);
+    // The raw Flags word rides along on the scan-out flip line: it is the one place a reader can see which bits the
+    // OS set on a flip this driver programmed, without trusting the shifted trailing comments in d3dkmddi.h.
+    if (flip.LogScanout && InterlockedIncrement(&wddm->ScanoutNotes)<=BC250_WDDM_LOG_CALLS)
+        GuardLog("wddm: scan-out flip: card 0x%llX physical 0x%llX pitch %lu bytes %llu flags 0x%08X fmt %lu",
+                 (ULONGLONG)pSetVidPnSourceAddress->PrimaryAddress.QuadPart,flip.Physical,flip.Pitch,flip.Bytes,
+                 pSetVidPnSourceAddress->Flags.Value,flip.PlaneFormat);
+    if (WddmFirstCalls(wddm, WddmDdiSetVidPnSourceAddress))
+        GuardLog("wddm: SetVidPnSourceAddress segment %u address 0x%llX flags 0x%08X (firmware framebuffer 0x%llX) -> 0x%08X",
                  pSetVidPnSourceAddress->PrimarySegment, (ULONGLONG)pSetVidPnSourceAddress->PrimaryAddress.QuadPart,
-                 pSetVidPnSourceAddress->Flags.Value, (ULONGLONG)device->Post.PhysicAddress.QuadPart);
-    if (!high) WddmVSyncArm(device, TRUE);      // a flip has been queued: something must retire it
-    return STATUS_SUCCESS;
+                 pSetVidPnSourceAddress->Flags.Value, (ULONGLONG)device->Post.PhysicAddress.QuadPart,
+                 (ULONG)flip.Result);
+    WddmVSyncArm(device, TRUE);         // a flip has been queued: something must retire it
+    return flip.Result;
 }
 
 // ---- interrupts ---------------------------------------------------------------------------------------------------
@@ -7876,6 +8973,7 @@ static NTSTATUS Bc250WddmControlInterrupt(_In_ const HANDLE hAdapter, _In_ const
         if (wddm != NULL)
         {
             wddm->VSyncEnabled = EnableInterrupt;
+            WddmVSyncControlNote(wddm, EnableInterrupt);
             if (EnableInterrupt) WddmVSyncArm(device, TRUE);
         }
         break;

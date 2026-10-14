@@ -1,0 +1,702 @@
+== idle 0-60 s: 06.0-idle-0.txt -> 06.0-idle-60.txt (65 a04 lines after)
+  DIAGNOSTIC, lab flavour only (BD-170): immediate flips answered by P' in the call, then sampled at vblank
+  P pending first observed clear, A primary=request, Q P' (P, A, generation kept), H/L inuse high/low first
+  E flip event, W flip-away event, R earliest_inuse; vtotal 1119 vblank 1116-36, one vsync flip in 16
+  flip control2 first 00000040 last 00000040 changes 0, flip interrupt first 00050000, busy 0
+  vblank samples 41, generation discards 0
+  I: seen 0 sampled 0 read-failed 0 (call max 0 us since start)
+  I P' in the call: done 0 late 0 pending 0 primary-other 0 read-failed 0 superseded 0  (done+late answered success, the others busy)
+  I closes: event 0 bound 0 next 0 gen 0 busy 0
+  I excluded: repeat 0 format 0 pitch 0 blank 0 stopped 0 prior 0 clear 0 read 0
+  I in the call, us after the programming: <1 | 1-2 | 2-5 | 5-10 | 10-20 | 20-50 | >=50 | never
+    P pending first observed clear       0     0     0     0     0     0     0     0
+    A primary reads request              0     0     0     0     0     0     0     0
+    Q P' (P+A, gen kept)                 0     0     0     0     0     0     0     0
+    H INUSE high first                   0     0     0     0     0     0     0     0
+    L INUSE low first                    0     0     0     0     0     0     0     0
+    E flip event (OCCURRED)              0     0     0     0     0     0     0     0
+    W flip-away event                    0     0     0     0     0     0     0     0
+    R EARLIEST_INUSE                     0     0     0     0     0     0     0     0
+  I after the call, frames from the programming: 0 | 1 | 2 | 3 | 4+ | never
+    P pending first observed clear       0     0     0     0     0     0
+    A primary reads request              0     0     0     0     0     0
+    Q P' (P+A, gen kept)                 0     0     0     0     0     0
+    H INUSE high first                   0     0     0     0     0     0
+    L INUSE low first                    0     0     0     0     0     0
+    E flip event (OCCURRED)              0     0     0     0     0     0
+    W flip-away event                    0     0     0     0     0     0
+    R EARLIEST_INUSE                     0     0     0     0     0     0
+  I line of the programming: 0/8 | 1/8 | 2/8 | 3/8 | 4/8 | 5/8 | 6/8 | 7/8 | vblank
+    P' held in the call                  0     0     0     0     0     0     0     0     0
+    P' not in the call                   0     0     0     0     0     0     0     0     0
+  I not sampled: programming in 0/8, 1/8, 2/8, 3/8, 4/8, 5/8, 6/8, 7/8, vblank
+  I in the vertical blank: 0 flips, P' held in the call for 0
+  V: seen 85 sampled 5 read-failed 0 (call max 65 us since start)
+  V P' in the call: done 0 late 0 pending 5 primary-other 0 read-failed 0 superseded 0  (evidence only)
+  V closes: event 5 bound 0 next 0 gen 0 busy 0
+  V excluded: repeat 0 format 0 pitch 0 blank 0 stopped 0 prior 0 clear 0 read 0
+  V in the call, us after the programming: <1 | 1-2 | 2-5 | 5-10 | 10-20 | 20-50 | >=50 | never
+    P pending first observed clear       0     0     0     0     0     0     0     5
+    A primary reads request              2     3     0     0     0     0     0     0
+    Q P' (P+A, gen kept)                 0     0     0     0     0     0     0     5
+    H INUSE high first                   0     0     0     0     0     0     0     5
+    L INUSE low first                    0     0     0     0     0     0     0     5
+    E flip event (OCCURRED)              0     0     0     0     0     0     0     5
+    W flip-away event                    0     0     0     0     0     0     0     5
+    R EARLIEST_INUSE                     0     0     0     0     0     0     0     5
+  V after the call, frames from the programming: 0 | 1 | 2 | 3 | 4+ | never
+    P pending first observed clear       0     5     0     0     0     0
+    A primary reads request              0     5     0     0     0     0
+    Q P' (P+A, gen kept)                 0     5     0     0     0     0
+    H INUSE high first                   0     0     0     0     0     5
+    L INUSE low first                    0     0     0     0     0     5
+    E flip event (OCCURRED)              0     5     0     0     0     0
+    W flip-away event                    0     5     0     0     0     0
+    R EARLIEST_INUSE                     0     5     0     0     0     0
+  V line of the programming: 0/8 | 1/8 | 2/8 | 3/8 | 4/8 | 5/8 | 6/8 | 7/8 | vblank
+    P' held in the call                  0     0     0     0     0     0     0     0     0
+    P' not in the call                   0     3     2     0     0     0     0     0     0
+  V not sampled: programming in 0/8, 3/8, 4/8, 5/8, 6/8, 7/8, vblank
+  V in the vertical blank: 0 flips, P' held in the call for 0
+  records of this trial: 4 (ring: the last 12 immediate and 4 vsync)
+    V38 f004 g1230 out P close E n7 rf0 gap 9 us 5/55 fr 002755 ln 160/165
+    V38 call x00 P-1 A6 Q-1 H-1 L-1 E-1 W-1 R-1 irq 00050000 00050000
+    V38 po vb1 11618us P1 A1 Q1 H-1 L-1 E1 W1 R1
+    V38 req 273199000 old 2729B0000 end 273199000 0 0
+    V39 f004 g1262 out P close E n8 rf0 gap 8 us 4/59 fr 0028E0 ln 190/195
+    V39 call x00 P-1 A5 Q-1 H-1 L-1 E-1 W-1 R-1 irq 00050000 00050000
+    V39 po vb1 11287us P1 A1 Q1 H-1 L-1 E1 W1 R1
+    V39 req 2758F0000 old 273199000 end 2758F0000 0 0
+    V40 f004 g1294 out P close E n7 rf0 gap 21 us 4/65 fr 0028F1 ln 419/425
+    V40 call x00 P-1 A5 Q-1 H-1 L-1 E-1 W-1 R-1 irq 00050000 00050000
+    V40 po vb1 8546us P1 A1 Q1 H-1 L-1 E1 W1 R1
+    V40 req 2729B0000 old 2758F0000 end 2729B0000 0 0
+    V41 f004 g1326 out P close E n8 rf0 gap 9 us 5/62 fr 002901 ln 407/412
+    V41 call x00 P-1 A5 Q-1 H-1 L-1 E-1 W-1 R-1 irq 00050000 00050000
+    V41 po vb1 8679us P1 A1 Q1 H-1 L-1 E1 W1 R1
+    V41 req 273199000 old 2729B0000 end 273199000 0 0
+== 06.2: 06.2-flips-before.txt -> 06.2-flips-after.txt (113 a04 lines after)
+  DIAGNOSTIC, lab flavour only (BD-170): immediate flips answered by P' in the call, then sampled at vblank
+  P pending first observed clear, A primary=request, Q P' (P, A, generation kept), H/L inuse high/low first
+  E flip event, W flip-away event, R earliest_inuse; vtotal 1119 vblank 1116-36, one vsync flip in 16
+  flip control2 first 00000040 last 00000040 changes 0, flip interrupt first 00050000, busy 0
+  vblank samples 85, generation discards 2
+  I: seen 612 sampled 612 read-failed 0 (call max 12 us since start)
+  I P' in the call: done 612 late 0 pending 0 primary-other 0 read-failed 0 superseded 0  (done+late answered success, the others busy)
+  I closes: event 25 bound 0 next 585 gen 2 busy 0
+  I excluded: repeat 0 format 0 pitch 0 blank 0 stopped 0 prior 0 clear 0 read 0
+  I in the call, us after the programming: <1 | 1-2 | 2-5 | 5-10 | 10-20 | 20-50 | >=50 | never
+    P pending first observed clear     469   143     0     0     0     0     0     0
+    A primary reads request            469   143     0     0     0     0     0     0
+    Q P' (P+A, gen kept)               469   143     0     0     0     0     0     0
+    H INUSE high first                   0     0     0     0     0     0     0   612
+    L INUSE low first                    0     0     0     0     0     0     0   612
+    E flip event (OCCURRED)            469   143     0     0     0     0     0     0
+    W flip-away event                  469   143     0     0     0     0     0     0
+    R EARLIEST_INUSE                   469   143     0     0     0     0     0     0
+  I after the call, frames from the programming: 0 | 1 | 2 | 3 | 4+ | never
+    P pending first observed clear     586    24     0     0     0     2
+    A primary reads request            586    24     0     0     0     2
+    Q P' (P+A, gen kept)                 6    19     0     0     0   587
+    H INUSE high first                   0     0     0     0     0   612
+    L INUSE low first                    0     0     0     0     0   612
+    E flip event (OCCURRED)            586    24     0     0     0     2
+    W flip-away event                  586    24     0     0     0     2
+    R EARLIEST_INUSE                   586    24     0     0     0     2
+  I line of the programming: 0/8 | 1/8 | 2/8 | 3/8 | 4/8 | 5/8 | 6/8 | 7/8 | vblank
+    P' held in the call                 70    72    76    78    80    86    75    75    20
+    P' not in the call                   0     0     0     0     0     0     0     0     0
+  I not sampled: programming in none
+  I in the vertical blank: 20 flips, P' held in the call for 20
+  V: seen 306 sampled 19 read-failed 0 (call max 69 us since start)
+  V P' in the call: done 0 late 0 pending 19 primary-other 0 read-failed 0 superseded 0  (evidence only)
+  V closes: event 19 bound 0 next 0 gen 0 busy 0
+  V excluded: repeat 0 format 0 pitch 0 blank 0 stopped 0 prior 0 clear 0 read 0
+  V in the call, us after the programming: <1 | 1-2 | 2-5 | 5-10 | 10-20 | 20-50 | >=50 | never
+    P pending first observed clear       0     0     0     0     0     0     0    19
+    A primary reads request             15     4     0     0     0     0     0     0
+    Q P' (P+A, gen kept)                 0     0     0     0     0     0     0    19
+    H INUSE high first                   0     0     0     0     0     0     0    19
+    L INUSE low first                    0     0     0     0     0     0     0    19
+    E flip event (OCCURRED)              0     0     0     0     0     0     0    19
+    W flip-away event                    0     0     0     0     0     0     0    19
+    R EARLIEST_INUSE                     0     0     0     0     0     0     0    19
+  V after the call, frames from the programming: 0 | 1 | 2 | 3 | 4+ | never
+    P pending first observed clear       0    19     0     0     0     0
+    A primary reads request              0    19     0     0     0     0
+    Q P' (P+A, gen kept)                 0    19     0     0     0     0
+    H INUSE high first                   0     0     0     0     0    19
+    L INUSE low first                    0     0     0     0     0    19
+    E flip event (OCCURRED)              0    19     0     0     0     0
+    W flip-away event                    0    19     0     0     0     0
+    R EARLIEST_INUSE                     0    19     0     0     0     0
+  V line of the programming: 0/8 | 1/8 | 2/8 | 3/8 | 4/8 | 5/8 | 6/8 | 7/8 | vblank
+    P' held in the call                  0     0     0     0     0     0     0     0     0
+    P' not in the call                  12     1     0     1     2     2     1     0    12
+  V not sampled: programming in 2/8, 7/8
+  V in the vertical blank: 12 flips, P' held in the call for 0
+  records of this trial: 16 (ring: the last 12 immediate and 4 vsync)
+    I601 f002 g2676 out D close N n1 rf0 gap 0 us 4/4 fr 003B91 ln 804/805
+    I601 call x00 P4 A4 Q4 H-1 L-1 E4 W4 R4 irq 00050000 00050000
+    I601 po vb0 222us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I601 req 28C3D9000 old 28BBF0000 end 28C3D9000 0 0
+    I602 f002 g2678 out D close N n1 rf0 gap 0 us 4/4 fr 003B91 ln 823/824
+    I602 call x00 P4 A4 Q4 H-1 L-1 E4 W4 R4 irq 00050000 00050000
+    I602 po vb0 225us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I602 req 28CBC2000 old 28C3D9000 end 28CBC2000 0 0
+    I603 f002 g2680 out D close N n1 rf0 gap 0 us 4/4 fr 003B91 ln 842/843
+    I603 call x00 P4 A4 Q4 H-1 L-1 E4 W4 R4 irq 00050000 00050000
+    I603 po vb0 226us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I603 req 28BBF0000 old 28CBC2000 end 28BBF0000 0 0
+    I604 f002 g2682 out D close N n1 rf0 gap 0 us 4/4 fr 003B91 ln 861/862
+    I604 call x00 P4 A4 Q4 H-1 L-1 E4 W4 R4 irq 00050000 00050000
+    I604 po vb0 222us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I604 req 28C3D9000 old 28BBF0000 end 28C3D9000 0 0
+    I605 f002 g2684 out D close N n1 rf0 gap 0 us 4/4 fr 003B91 ln 880/881
+    I605 call x00 P4 A4 Q4 H-1 L-1 E4 W4 R4 irq 00050000 00050000
+    I605 po vb0 224us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I605 req 28CBC2000 old 28C3D9000 end 28CBC2000 0 0
+    I606 f002 g2686 out D close N n1 rf0 gap 0 us 4/4 fr 003B91 ln 899/900
+    I606 call x00 P4 A4 Q4 H-1 L-1 E4 W4 R4 irq 00050000 00050000
+    I606 po vb0 238us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I606 req 28BBF0000 old 28CBC2000 end 28BBF0000 0 0
+    I607 f002 g2688 out D close N n1 rf0 gap 0 us 4/4 fr 003B91 ln 920/920
+    I607 call x00 P4 A4 Q4 H-1 L-1 E4 W4 R4 irq 00050000 00050000
+    I607 po vb0 222us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I607 req 28C3D9000 old 28BBF0000 end 28C3D9000 0 0
+    I608 f002 g2690 out D close N n1 rf0 gap 0 us 4/4 fr 003B91 ln 938/939
+    I608 call x00 P4 A4 Q4 H-1 L-1 E4 W4 R4 irq 00050000 00050000
+    I608 po vb0 221us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I608 req 28CBC2000 old 28C3D9000 end 28CBC2000 0 0
+    I609 f002 g2692 out D close N n1 rf0 gap 0 us 4/4 fr 003B91 ln 957/958
+    I609 call x00 P4 A4 Q4 H-1 L-1 E4 W4 R4 irq 00050000 00050000
+    I609 po vb0 227us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I609 req 28BBF0000 old 28CBC2000 end 28BBF0000 0 0
+    I610 f002 g2694 out D close N n1 rf0 gap 0 us 5/5 fr 003B91 ln 976/977
+    I610 call x00 P5 A5 Q5 H-1 L-1 E5 W5 R5 irq 00050000 00050000
+    I610 po vb0 219us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I610 req 28C3D9000 old 28BBF0000 end 28C3D9000 0 0
+    I611 f002 g2696 out D close N n1 rf0 gap 0 us 4/5 fr 003B91 ln 995/996
+    I611 call x00 P5 A5 Q5 H-1 L-1 E5 W5 R5 irq 00050000 00050000
+    I611 po vb0 223us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I611 req 28CBC2000 old 28C3D9000 end 28CBC2000 0 0
+    I612 f002 g2698 out D close E n1 rf0 gap 0 us 4/4 fr 003B91 ln 1014/1014
+    I612 call x00 P4 A4 Q4 H-1 L-1 E4 W4 R4 irq 00050000 00050000
+    I612 po vb1 1407us P1 A1 Q1 H-1 L-1 E1 W1 R1
+    I612 req 28BBF0000 old 28CBC2000 end 28BBF0000 0 0
+    V57 f004 g3076 out P close E n8 rf0 gap 9 us 5/63 fr 003C66 ln 17/22
+    V57 call x00 P-1 A6 Q-1 H-1 L-1 E-1 W-1 R-1 irq 00050000 00050000
+    V57 po vb1 13334us P1 A1 Q1 H-1 L-1 E1 W1 R1
+    V57 req 274799000 old 273FB0000 end 274799000 0 0
+    V58 f004 g3108 out P close E n8 rf0 gap 8 us 5/61 fr 003C84 ln 732/737
+    V58 call x00 P-1 A5 Q-1 H-1 L-1 E-1 W-1 R-1 irq 00050000 00050000
+    V58 po vb1 4813us P1 A1 Q1 H-1 L-1 E1 W1 R1
+    V58 req 274799000 old 27E199000 end 274799000 0 0
+    V59 f004 g3140 out P close E n8 rf0 gap 9 us 5/62 fr 003C94 ln 588/594
+    V59 call x00 P-1 A5 Q-1 H-1 L-1 E-1 W-1 R-1 irq 00050000 00050000
+    V59 po vb1 6523us P1 A1 Q1 H-1 L-1 E1 W1 R1
+    V59 req 27D9B0000 old 274799000 end 27D9B0000 0 0
+    V60 f004 g3172 out P close E n6 rf0 gap 19 us 5/60 fr 003CA5 ln 562/567
+    V60 call x00 P-1 A5 Q-1 H-1 L-1 E-1 W-1 R-1 irq 00050000 00050000
+    V60 po vb1 6835us P1 A1 Q1 H-1 L-1 E1 W1 R1
+    V60 req 27E199000 old 27D9B0000 end 27E199000 0 0
+== 06.3: 06.3-flips-before.txt -> 06.3-flips-after.txt (113 a04 lines after)
+  DIAGNOSTIC, lab flavour only (BD-170): immediate flips answered by P' in the call, then sampled at vblank
+  P pending first observed clear, A primary=request, Q P' (P, A, generation kept), H/L inuse high/low first
+  E flip event, W flip-away event, R earliest_inuse; vtotal 1119 vblank 1116-36, one vsync flip in 16
+  flip control2 first 00000040 last 00000040 changes 0, flip interrupt first 00050000, busy 0
+  vblank samples 757, generation discards 2
+  I: seen 628 sampled 628 read-failed 0 (call max 12 us since start)
+  I P' in the call: done 628 late 0 pending 0 primary-other 0 read-failed 0 superseded 0  (done+late answered success, the others busy)
+  I closes: event 628 bound 0 next 0 gen 0 busy 0
+  I excluded: repeat 0 format 0 pitch 0 blank 0 stopped 0 prior 1 clear 0 read 0
+  I in the call, us after the programming: <1 | 1-2 | 2-5 | 5-10 | 10-20 | 20-50 | >=50 | never
+    P pending first observed clear     184   442     1     0     0     0     0     0
+    A primary reads request            184   442     1     0     0     0     0     0
+    Q P' (P+A, gen kept)               184   442     1     0     0     0     0     0
+    H INUSE high first                   0     0     0     0     0     0     0   627
+    L INUSE low first                    0     0     0     0     0     0     0   627
+    E flip event (OCCURRED)            184   442     1     0     0     0     0     0
+    W flip-away event                  184   442     1     0     0     0     0     0
+    R EARLIEST_INUSE                   184   442     1     0     0     0     0     0
+  I after the call, frames from the programming: 0 | 1 | 2 | 3 | 4+ | never
+    P pending first observed clear       5   622     0     0     0     0
+    A primary reads request              5   622     0     0     0     0
+    Q P' (P+A, gen kept)                 5   622     0     0     0     0
+    H INUSE high first                   0     0     0     0     0   627
+    L INUSE low first                    0     0     0     0     0   627
+    E flip event (OCCURRED)              5   622     0     0     0     0
+    W flip-away event                    5   622     0     0     0     0
+    R EARLIEST_INUSE                     5   622     0     0     0     0
+  I line of the programming: 0/8 | 1/8 | 2/8 | 3/8 | 4/8 | 5/8 | 6/8 | 7/8 | vblank
+    P' held in the call                 81    76    74    85    78    79    74    80    23
+    P' not in the call                   0     0     0     0     0     0     0     0     0
+  I not sampled: programming in none
+  I in the vertical blank: 23 flips, P' held in the call for 23
+  V: seen 705 sampled 44 read-failed 0 (call max 69 us since start)
+  V P' in the call: done 0 late 0 pending 44 primary-other 0 read-failed 0 superseded 0  (evidence only)
+  V closes: event 44 bound 0 next 0 gen 0 busy 0
+  V excluded: repeat 0 format 0 pitch 0 blank 0 stopped 0 prior 0 clear 0 read 0
+  V in the call, us after the programming: <1 | 1-2 | 2-5 | 5-10 | 10-20 | 20-50 | >=50 | never
+    P pending first observed clear       0     0     0     0     0     0     0    44
+    A primary reads request             28    16     0     0     0     0     0     0
+    Q P' (P+A, gen kept)                 0     0     0     0     0     0     0    44
+    H INUSE high first                   0     0     0     0     0     0     0    44
+    L INUSE low first                    0     0     0     0     0     0     0    44
+    E flip event (OCCURRED)              0     0     0     0     0     0     0    44
+    W flip-away event                    0     0     0     0     0     0     0    44
+    R EARLIEST_INUSE                     0     0     0     0     0     0     0    44
+  V after the call, frames from the programming: 0 | 1 | 2 | 3 | 4+ | never
+    P pending first observed clear       0    44     0     0     0     0
+    A primary reads request              0    44     0     0     0     0
+    Q P' (P+A, gen kept)                 0    44     0     0     0     0
+    H INUSE high first                   0     0     0     0     0    44
+    L INUSE low first                    0     0     0     0     0    44
+    E flip event (OCCURRED)              0    44     0     0     0     0
+    W flip-away event                    0    44     0     0     0     0
+    R EARLIEST_INUSE                     0    44     0     0     0     0
+  V line of the programming: 0/8 | 1/8 | 2/8 | 3/8 | 4/8 | 5/8 | 6/8 | 7/8 | vblank
+    P' held in the call                  0     0     0     0     0     0     0     0     0
+    P' not in the call                   4     6     3    11     6     5     3     6     0
+  V not sampled: programming in vblank
+  V in the vertical blank: 0 flips, P' held in the call for 0
+  records of this trial: 16 (ring: the last 12 immediate and 4 vsync)
+    I1229 f002 g4478 out D close E n1 rf0 gap 0 us 5/6 fr 0049BA ln 846/847
+    I1229 call x00 P6 A6 Q6 H-1 L-1 E6 W6 R6 irq 00050000 00050000
+    I1229 po vb1 3458us P1 A1 Q1 H-1 L-1 E1 W1 R1
+    I1229 req 28CF82000 old 28C799000 end 28CF82000 0 0
+    I1230 f002 g4480 out D close E n1 rf0 gap 0 us 5/6 fr 0049BB ln 1053/1054
+    I1230 call x00 P6 A6 Q6 H-1 L-1 E6 W6 R6 irq 00050000 00050000
+    I1230 po vb1 938us P1 A1 Q1 H-1 L-1 E1 W1 R1
+    I1230 req 28BFB0000 old 28CF82000 end 28BFB0000 0 0
+    I1231 f002 g4482 out D close E n1 rf0 gap 0 us 5/6 fr 0049BD ln 138/139
+    I1231 call x00 P6 A6 Q6 H-1 L-1 E6 W6 R6 irq 00050000 00050000
+    I1231 po vb1 11881us P1 A1 Q1 H-1 L-1 E1 W1 R1
+    I1231 req 28C799000 old 28BFB0000 end 28C799000 0 0
+    I1232 f002 g4484 out D close E n1 rf0 gap 0 us 5/5 fr 0049BE ln 340/340
+    I1232 call x00 P5 A5 Q5 H-1 L-1 E5 W5 R5 irq 00050000 00050000
+    I1232 po vb1 9483us P1 A1 Q1 H-1 L-1 E1 W1 R1
+    I1232 req 28CF82000 old 28C799000 end 28CF82000 0 0
+    I1233 f002 g4486 out D close E n1 rf0 gap 0 us 5/6 fr 0049BF ln 544/545
+    I1233 call x00 P6 A6 Q6 H-1 L-1 E6 W6 R6 irq 00050000 00050000
+    I1233 po vb1 7042us P1 A1 Q1 H-1 L-1 E1 W1 R1
+    I1233 req 28BFB0000 old 28CF82000 end 28BFB0000 0 0
+    I1234 f002 g4488 out D close E n1 rf0 gap 0 us 5/6 fr 0049C0 ln 757/758
+    I1234 call x00 P6 A6 Q6 H-1 L-1 E6 W6 R6 irq 00050000 00050000
+    I1234 po vb1 4517us P1 A1 Q1 H-1 L-1 E1 W1 R1
+    I1234 req 28C799000 old 28BFB0000 end 28C799000 0 0
+    I1235 f002 g4490 out D close E n1 rf0 gap 0 us 5/6 fr 0049C1 ln 969/970
+    I1235 call x00 P6 A6 Q6 H-1 L-1 E6 W6 R6 irq 00050000 00050000
+    I1235 po vb1 1947us P1 A1 Q1 H-1 L-1 E1 W1 R1
+    I1235 req 28CF82000 old 28C799000 end 28CF82000 0 0
+    I1236 f002 g4492 out D close E n1 rf0 gap 0 us 5/6 fr 0049C3 ln 57/58
+    I1236 call x00 P6 A6 Q6 H-1 L-1 E6 W6 R6 irq 00050000 00050000
+    I1236 po vb1 12892us P1 A1 Q1 H-1 L-1 E1 W1 R1
+    I1236 req 28BFB0000 old 28CF82000 end 28BFB0000 0 0
+    I1237 f002 g4494 out D close E n1 rf0 gap 0 us 5/6 fr 0049C4 ln 254/254
+    I1237 call x00 P6 A6 Q6 H-1 L-1 E6 W6 R6 irq 00050000 00050000
+    I1237 po vb1 10506us P1 A1 Q1 H-1 L-1 E1 W1 R1
+    I1237 req 28C799000 old 28BFB0000 end 28C799000 0 0
+    I1238 f002 g4496 out D close E n1 rf0 gap 0 us 5/6 fr 0049C5 ln 463/463
+    I1238 call x00 P6 A6 Q6 H-1 L-1 E6 W6 R6 irq 00050000 00050000
+    I1238 po vb1 8016us P1 A1 Q1 H-1 L-1 E1 W1 R1
+    I1238 req 28CF82000 old 28C799000 end 28CF82000 0 0
+    I1239 f002 g4498 out D close E n1 rf0 gap 0 us 5/6 fr 0049C6 ln 668/669
+    I1239 call x00 P6 A6 Q6 H-1 L-1 E6 W6 R6 irq 00050000 00050000
+    I1239 po vb1 5569us P1 A1 Q1 H-1 L-1 E1 W1 R1
+    I1239 req 28BFB0000 old 28CF82000 end 28BFB0000 0 0
+    I1240 f002 g4500 out D close E n1 rf0 gap 0 us 5/6 fr 0049C7 ln 879/879
+    I1240 call x00 P6 A6 Q6 H-1 L-1 E6 W6 R6 irq 00050000 00050000
+    I1240 po vb1 3026us P1 A1 Q1 H-1 L-1 E1 W1 R1
+    I1240 req 28C799000 old 28BFB0000 end 28C799000 0 0
+    V101 f004 g5744 out P close E n8 rf0 gap 9 us 5/63 fr 004CC2 ln 211/216
+    V101 call x00 P-1 A5 Q-1 H-1 L-1 E-1 W-1 R-1 irq 00050000 00050000
+    V101 po vb1 11018us P1 A1 Q1 H-1 L-1 E1 W1 R1
+    V101 req 2758F0000 old 274999000 end 2758F0000 0 0
+    V102 f004 g5778 out P close E n8 rf0 gap 8 us 5/60 fr 004CE0 ln 463/468
+    V102 call x00 P-1 A5 Q-1 H-1 L-1 E-1 W-1 R-1 irq 00050000 00050000
+    V102 po vb1 8021us P1 A1 Q1 H-1 L-1 E1 W1 R1
+    V102 req 274199000 old 2739B0000 end 274199000 0 0
+    V103 f004 g5810 out P close E n7 rf0 gap 9 us 5/55 fr 004CF0 ln 550/555
+    V103 call x00 P-1 A6 Q-1 H-1 L-1 E-1 W-1 R-1 irq 00050000 00050000
+    V103 po vb1 6976us P1 A1 Q1 H-1 L-1 E1 W1 R1
+    V103 req 274982000 old 274199000 end 274982000 0 0
+    V104 f004 g5842 out P close E n8 rf0 gap 9 us 5/62 fr 004D01 ln 515/520
+    V104 call x00 P-1 A5 Q-1 H-1 L-1 E-1 W-1 R-1 irq 00050000 00050000
+    V104 po vb1 7426us P1 A1 Q1 H-1 L-1 E1 W1 R1
+    V104 req 2739B0000 old 274982000 end 2739B0000 0 0
+== 06.6: 06.6-flips-before.txt -> 06.6-flips-after.txt (113 a04 lines after)
+  DIAGNOSTIC, lab flavour only (BD-170): immediate flips answered by P' in the call, then sampled at vblank
+  P pending first observed clear, A primary=request, Q P' (P, A, generation kept), H/L inuse high/low first
+  E flip event, W flip-away event, R earliest_inuse; vtotal 1119 vblank 1116-36, one vsync flip in 16
+  flip control2 first 00000040 last 00000040 changes 0, flip interrupt first 00050000, busy 1
+  vblank samples 802, generation discards 4
+  I: seen 612 sampled 612 read-failed 0 (call max 12 us since start)
+  I P' in the call: done 612 late 0 pending 0 primary-other 0 read-failed 0 superseded 0  (done+late answered success, the others busy)
+  I closes: event 23 bound 0 next 587 gen 2 busy 0
+  I excluded: repeat 0 format 0 pitch 0 blank 0 stopped 0 prior 0 clear 0 read 0
+  I in the call, us after the programming: <1 | 1-2 | 2-5 | 5-10 | 10-20 | 20-50 | >=50 | never
+    P pending first observed clear     499   113     0     0     0     0     0     0
+    A primary reads request            499   113     0     0     0     0     0     0
+    Q P' (P+A, gen kept)               499   113     0     0     0     0     0     0
+    H INUSE high first                   0     0     0     0     0     0     0   612
+    L INUSE low first                    0     0     0     0     0     0     0   612
+    E flip event (OCCURRED)            499   113     0     0     0     0     0     0
+    W flip-away event                  499   113     0     0     0     0     0     0
+    R EARLIEST_INUSE                   499   113     0     0     0     0     0     0
+  I after the call, frames from the programming: 0 | 1 | 2 | 3 | 4+ | never
+    P pending first observed clear     589    21     0     0     0     2
+    A primary reads request            589    21     0     0     0     2
+    Q P' (P+A, gen kept)                10    13     0     0     0   589
+    H INUSE high first                   0     0     0     0     0   612
+    L INUSE low first                    0     0     0     0     0   612
+    E flip event (OCCURRED)            589    21     0     0     0     2
+    W flip-away event                  589    21     0     0     0     2
+    R EARLIEST_INUSE                   589    21     0     0     0     2
+  I line of the programming: 0/8 | 1/8 | 2/8 | 3/8 | 4/8 | 5/8 | 6/8 | 7/8 | vblank
+    P' held in the call                 74    77    78    74    76    73    80    80    23
+    P' not in the call                   0     0     0     0     0     0     0     0     0
+  I not sampled: programming in none
+  I in the vertical blank: 23 flips, P' held in the call for 23
+  V: seen 338 sampled 22 read-failed 0 (call max 69 us since start)
+  V P' in the call: done 0 late 0 pending 22 primary-other 0 read-failed 0 superseded 0  (evidence only)
+  V closes: event 22 bound 0 next 0 gen 0 busy 0
+  V excluded: repeat 0 format 0 pitch 0 blank 0 stopped 0 prior 0 clear 0 read 0
+  V in the call, us after the programming: <1 | 1-2 | 2-5 | 5-10 | 10-20 | 20-50 | >=50 | never
+    P pending first observed clear       0     0     0     0     0     0     0    22
+    A primary reads request              8    14     0     0     0     0     0     0
+    Q P' (P+A, gen kept)                 0     0     0     0     0     0     0    22
+    H INUSE high first                   0     0     0     0     0     0     0    22
+    L INUSE low first                    0     0     0     0     0     0     0    22
+    E flip event (OCCURRED)              0     0     0     0     0     0     0    22
+    W flip-away event                    0     0     0     0     0     0     0    22
+    R EARLIEST_INUSE                     0     0     0     0     0     0     0    22
+  V after the call, frames from the programming: 0 | 1 | 2 | 3 | 4+ | never
+    P pending first observed clear       0    22     0     0     0     0
+    A primary reads request              0    22     0     0     0     0
+    Q P' (P+A, gen kept)                 0    22     0     0     0     0
+    H INUSE high first                   0     0     0     0     0    22
+    L INUSE low first                    0     0     0     0     0    22
+    E flip event (OCCURRED)              0    22     0     0     0     0
+    W flip-away event                    0    22     0     0     0     0
+    R EARLIEST_INUSE                     0    22     0     0     0     0
+  V line of the programming: 0/8 | 1/8 | 2/8 | 3/8 | 4/8 | 5/8 | 6/8 | 7/8 | vblank
+    P' held in the call                  0     0     0     0     0     0     0     0     0
+    P' not in the call                  12     4     2     1     0     2     0     1    12
+  V not sampled: programming in 4/8, 6/8
+  V in the vertical blank: 12 flips, P' held in the call for 0
+  records of this trial: 16 (ring: the last 12 immediate and 4 vsync)
+    I1841 f002 g7664 out D close N n1 rf0 gap 0 us 4/4 fr 005C88 ln 246/246
+    I1841 call x00 P4 A4 Q4 H-1 L-1 E4 W4 R4 irq 00050000 00050000
+    I1841 po vb0 212us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I1841 req 274699000 old 273EB0000 end 274699000 0 0
+    I1842 f002 g7666 out D close N n1 rf0 gap 0 us 4/5 fr 005C88 ln 264/264
+    I1842 call x00 P5 A5 Q5 H-1 L-1 E5 W5 R5 irq 00050000 00050000
+    I1842 po vb0 215us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I1842 req 274E82000 old 274699000 end 274E82000 0 0
+    I1843 f002 g7668 out D close N n1 rf0 gap 0 us 4/4 fr 005C88 ln 282/283
+    I1843 call x00 P4 A4 Q4 H-1 L-1 E4 W4 R4 irq 00050000 00050000
+    I1843 po vb0 216us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I1843 req 273EB0000 old 274E82000 end 273EB0000 0 0
+    I1844 f002 g7670 out D close N n1 rf0 gap 0 us 4/5 fr 005C88 ln 301/301
+    I1844 call x00 P5 A5 Q5 H-1 L-1 E5 W5 R5 irq 00050000 00050000
+    I1844 po vb0 212us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I1844 req 274699000 old 273EB0000 end 274699000 0 0
+    I1845 f002 g7672 out D close N n1 rf0 gap 0 us 4/5 fr 005C88 ln 319/319
+    I1845 call x00 P5 A5 Q5 H-1 L-1 E5 W5 R5 irq 00050000 00050000
+    I1845 po vb0 215us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I1845 req 274E82000 old 274699000 end 274E82000 0 0
+    I1846 f002 g7674 out D close N n1 rf0 gap 0 us 4/4 fr 005C88 ln 337/337
+    I1846 call x00 P4 A4 Q4 H-1 L-1 E4 W4 R4 irq 00050000 00050000
+    I1846 po vb0 216us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I1846 req 273EB0000 old 274E82000 end 273EB0000 0 0
+    I1847 f002 g7676 out D close N n1 rf0 gap 0 us 4/4 fr 005C88 ln 355/356
+    I1847 call x00 P4 A4 Q4 H-1 L-1 E4 W4 R4 irq 00050000 00050000
+    I1847 po vb0 212us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I1847 req 274699000 old 273EB0000 end 274699000 0 0
+    I1848 f002 g7678 out D close N n1 rf0 gap 0 us 4/4 fr 005C88 ln 373/374
+    I1848 call x00 P4 A4 Q4 H-1 L-1 E4 W4 R4 irq 00050000 00050000
+    I1848 po vb0 221us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I1848 req 274E82000 old 274699000 end 274E82000 0 0
+    I1849 f002 g7680 out D close N n1 rf0 gap 0 us 4/5 fr 005C88 ln 392/393
+    I1849 call x00 P5 A5 Q5 H-1 L-1 E5 W5 R5 irq 00050000 00050000
+    I1849 po vb0 220us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I1849 req 273EB0000 old 274E82000 end 273EB0000 0 0
+    I1850 f002 g7682 out D close N n1 rf0 gap 0 us 4/5 fr 005C88 ln 411/411
+    I1850 call x00 P5 A5 Q5 H-1 L-1 E5 W5 R5 irq 00050000 00050000
+    I1850 po vb0 211us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I1850 req 274699000 old 273EB0000 end 274699000 0 0
+    I1851 f002 g7684 out D close N n1 rf0 gap 0 us 4/5 fr 005C88 ln 429/429
+    I1851 call x00 P5 A5 Q5 H-1 L-1 E5 W5 R5 irq 00050000 00050000
+    I1851 po vb0 213us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I1851 req 274E82000 old 274699000 end 274E82000 0 0
+    I1852 f002 g7686 out D close G n1 rf0 gap 0 us 4/5 fr 005C88 ln 447/447
+    I1852 call x00 P5 A5 Q5 H-1 L-1 E5 W5 R5 irq 00050000 00050000
+    I1852 po vb0 8165us P-1 A-1 Q-1 H-1 L-1 E-1 W-1 R-1
+    I1852 req 273EB0000 old 274E82000 end 273EB0000 0 0
+    V123 f004 g7694 out P close E n8 rf0 gap 8 us 4/58 fr 005C9D ln 1115/1
+    V123 call x00 P-1 A5 Q-1 H-1 L-1 E-1 W-1 R-1 irq 00050000 00050000
+    V123 po vb1 201us P1 A1 Q1 H-1 L-1 E1 W1 R1
+    V123 req 27D9B0000 old 273EB0000 end 27D9B0000 0 0
+    V124 f004 g7726 out P close E n7 rf0 gap 9 us 5/55 fr 005CB1 ln 311/316
+    V124 call x00 P-1 A6 Q-1 H-1 L-1 E-1 W-1 R-1 irq 00050000 00050000
+    V124 po vb1 9826us P1 A1 Q1 H-1 L-1 E1 W1 R1
+    V124 req 27E199000 old 27D9B0000 end 27E199000 0 0
+    V125 f004 g7758 out P close E n8 rf0 gap 8 us 5/61 fr 005CC1 ln 430/435
+    V125 call x00 P-1 A5 Q-1 H-1 L-1 E-1 W-1 R-1 irq 00050000 00050000
+    V125 po vb1 8412us P1 A1 Q1 H-1 L-1 E1 W1 R1
+    V125 req 273EB0000 old 27E199000 end 273EB0000 0 0
+    V126 f004 g7790 out P close E n8 rf0 gap 8 us 4/58 fr 005CD1 ln 162/167
+    V126 call x00 P-1 A4 Q-1 H-1 L-1 E-1 W-1 R-1 irq 00050000 00050000
+    V126 po vb1 11570us P1 A1 Q1 H-1 L-1 E1 W1 R1
+    V126 req 27D9B0000 old 273EB0000 end 27D9B0000 0 0
+== 06.8: 06.8-flips-before.txt -> 06.8-flips-after.txt (113 a04 lines after)
+  DIAGNOSTIC, lab flavour only (BD-170): immediate flips answered by P' in the call, then sampled at vblank
+  P pending first observed clear, A primary=request, Q P' (P, A, generation kept), H/L inuse high/low first
+  E flip event, W flip-away event, R earliest_inuse; vtotal 1119 vblank 1116-36, one vsync flip in 16
+  flip control2 first 00000040 last 00000040 changes 0, flip interrupt first 00050000, busy 1
+  vblank samples 2028, generation discards 4
+  I: seen 62341 sampled 62341 read-failed 0 (call max 18 us since start)
+  I P' in the call: done 62341 late 0 pending 0 primary-other 0 read-failed 0 superseded 0  (done+late answered success, the others busy)
+  I closes: event 1175 bound 0 next 61166 gen 0 busy 0
+  I excluded: repeat 0 format 0 pitch 0 blank 0 stopped 0 prior 0 clear 0 read 0
+  I in the call, us after the programming: <1 | 1-2 | 2-5 | 5-10 | 10-20 | 20-50 | >=50 | never
+    P pending first observed clear   48867 13465     6     2     1     0     0     0
+    A primary reads request          48867 13465     6     2     1     0     0     0
+    Q P' (P+A, gen kept)             48867 13465     6     2     1     0     0     0
+    H INUSE high first                   0     0     0     0     0     0     0 62341
+    L INUSE low first                    0     0     0     0     0     0     0 62341
+    E flip event (OCCURRED)          48867 13465     6     2     1     0     0     0
+    W flip-away event                48867 13465     6     2     1     0     0     0
+    R EARLIEST_INUSE                 48867 13465     6     2     1     0     0     0
+  I after the call, frames from the programming: 0 | 1 | 2 | 3 | 4+ | never
+    P pending first observed clear   61206  1135     0     0     0     0
+    A primary reads request          61206  1135     0     0     0     0
+    Q P' (P+A, gen kept)               805   370     0     0     0 61166
+    H INUSE high first                   0     0     0     0     0 62341
+    L INUSE low first                    0     0     0     0     0 62341
+    E flip event (OCCURRED)          61206  1135     0     0     0     0
+    W flip-away event                61206  1135     0     0     0     0
+    R EARLIEST_INUSE                 61206  1135     0     0     0     0
+  I line of the programming: 0/8 | 1/8 | 2/8 | 3/8 | 4/8 | 5/8 | 6/8 | 7/8 | vblank
+    P' held in the call               7798  7794  7797  7812  7807  7812  7781  7740  2178
+    P' not in the call                   0     0     0     0     0     0     0     0     0
+  I not sampled: programming in none
+  I in the vertical blank: 2178 flips, P' held in the call for 2178
+  V: seen 822 sampled 51 read-failed 0 (call max 76 us since start)
+  V P' in the call: done 0 late 0 pending 51 primary-other 0 read-failed 0 superseded 0  (evidence only)
+  V closes: event 51 bound 0 next 0 gen 0 busy 0
+  V excluded: repeat 0 format 0 pitch 0 blank 0 stopped 0 prior 0 clear 0 read 0
+  V in the call, us after the programming: <1 | 1-2 | 2-5 | 5-10 | 10-20 | 20-50 | >=50 | never
+    P pending first observed clear       0     0     0     0     0     0     0    51
+    A primary reads request             23    28     0     0     0     0     0     0
+    Q P' (P+A, gen kept)                 0     0     0     0     0     0     0    51
+    H INUSE high first                   0     0     0     0     0     0     0    51
+    L INUSE low first                    0     0     0     0     0     0     0    51
+    E flip event (OCCURRED)              0     0     0     0     0     0     0    51
+    W flip-away event                    0     0     0     0     0     0     0    51
+    R EARLIEST_INUSE                     0     0     0     0     0     0     0    51
+  V after the call, frames from the programming: 0 | 1 | 2 | 3 | 4+ | never
+    P pending first observed clear       0    51     0     0     0     0
+    A primary reads request              0    51     0     0     0     0
+    Q P' (P+A, gen kept)                 0    51     0     0     0     0
+    H INUSE high first                   0     0     0     0     0    51
+    L INUSE low first                    0     0     0     0     0    51
+    E flip event (OCCURRED)              0    51     0     0     0     0
+    W flip-away event                    0    51     0     0     0     0
+    R EARLIEST_INUSE                     0    51     0     0     0     0
+  V line of the programming: 0/8 | 1/8 | 2/8 | 3/8 | 4/8 | 5/8 | 6/8 | 7/8 | vblank
+    P' held in the call                  0     0     0     0     0     0     0     0     0
+    P' not in the call                  38     2     3     5     2     1     0     0     0
+  V not sampled: programming in 6/8, 7/8, vblank
+  V in the vertical blank: 0 flips, P' held in the call for 0
+  records of this trial: 16 (ring: the last 12 immediate and 4 vsync)
+    I64182 f082 g132646 out D close N n1 rf0 gap 0 us 4/4 fr 006EB7 ln 215/215
+    I64182 call x00 P4 A4 Q4 H-1 L-1 E4 W4 R4 irq 00050000 00050000
+    I64182 po vb0 219us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I64182 req 28B7D9000 old 28AFF0000 end 28B7D9000 0 0
+    I64183 f082 g132648 out D close N n1 rf0 gap 0 us 4/4 fr 006EB7 ln 233/234
+    I64183 call x00 P4 A4 Q4 H-1 L-1 E4 W4 R4 irq 00050000 00050000
+    I64183 po vb0 218us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I64183 req 2815F0000 old 28B7D9000 end 2815F0000 0 0
+    I64184 f082 g132650 out D close N n1 rf0 gap 0 us 4/4 fr 006EB7 ln 252/252
+    I64184 call x00 P4 A4 Q4 H-1 L-1 E4 W4 R4 irq 00050000 00050000
+    I64184 po vb0 228us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I64184 req 28AFF0000 old 2815F0000 end 28AFF0000 0 0
+    I64185 f082 g132652 out D close N n1 rf0 gap 0 us 8/8 fr 006EB7 ln 271/272
+    I64185 call x00 P8 A8 Q8 H-1 L-1 E8 W8 R8 irq 00050000 00050000
+    I64185 po vb0 222us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I64185 req 28B7D9000 old 28AFF0000 end 28B7D9000 0 0
+    I64186 f082 g132654 out D close N n1 rf0 gap 0 us 4/4 fr 006EB7 ln 290/291
+    I64186 call x00 P4 A4 Q4 H-1 L-1 E4 W4 R4 irq 00050000 00050000
+    I64186 po vb0 242us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I64186 req 2815F0000 old 28B7D9000 end 2815F0000 0 0
+    I64187 f082 g132656 out D close N n1 rf0 gap 0 us 5/5 fr 006EB7 ln 311/311
+    I64187 call x00 P5 A5 Q5 H-1 L-1 E5 W5 R5 irq 00050000 00050000
+    I64187 po vb0 224us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I64187 req 28AFF0000 old 2815F0000 end 28AFF0000 0 0
+    I64188 f082 g132658 out D close N n1 rf0 gap 0 us 4/4 fr 006EB7 ln 330/330
+    I64188 call x00 P4 A4 Q4 H-1 L-1 E4 W4 R4 irq 00050000 00050000
+    I64188 po vb0 220us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I64188 req 28B7D9000 old 28AFF0000 end 28B7D9000 0 0
+    I64189 f082 g132660 out D close N n1 rf0 gap 0 us 4/4 fr 006EB7 ln 349/349
+    I64189 call x00 P4 A4 Q4 H-1 L-1 E4 W4 R4 irq 00050000 00050000
+    I64189 po vb0 217us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I64189 req 2815F0000 old 28B7D9000 end 2815F0000 0 0
+    I64190 f082 g132662 out D close N n1 rf0 gap 0 us 4/4 fr 006EB7 ln 367/368
+    I64190 call x00 P4 A4 Q4 H-1 L-1 E4 W4 R4 irq 00050000 00050000
+    I64190 po vb0 221us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I64190 req 28AFF0000 old 2815F0000 end 28AFF0000 0 0
+    I64191 f082 g132664 out D close N n1 rf0 gap 0 us 4/4 fr 006EB7 ln 386/386
+    I64191 call x00 P4 A4 Q4 H-1 L-1 E4 W4 R4 irq 00050000 00050000
+    I64191 po vb0 219us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I64191 req 28B7D9000 old 28AFF0000 end 28B7D9000 0 0
+    I64192 f082 g132666 out D close N n1 rf0 gap 0 us 4/4 fr 006EB7 ln 404/405
+    I64192 call x00 P4 A4 Q4 H-1 L-1 E4 W4 R4 irq 00050000 00050000
+    I64192 po vb0 212us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I64192 req 2815F0000 old 28B7D9000 end 2815F0000 0 0
+    I64193 f082 g132668 out D close E n1 rf0 gap 0 us 5/5 fr 006EB7 ln 422/423
+    I64193 call x00 P5 A5 Q5 H-1 L-1 E5 W5 R5 irq 00050000 00050000
+    I64193 po vb1 8520us P1 A1 Q1 H-1 L-1 E1 W1 R1
+    I64193 req 28AFF0000 old 2815F0000 end 28AFF0000 0 0
+    V174 f084 g134008 out P close E n8 rf0 gap 9 us 5/63 fr 00726B ln 55/60
+    V174 call x00 P-1 A6 Q-1 H-1 L-1 E-1 W-1 R-1 irq 00050000 00050000
+    V174 po vb1 12879us P1 A1 Q1 H-1 L-1 E1 W1 R1
+    V174 req 28AFF0000 old 2815F0000 end 28AFF0000 0 0
+    V175 f004 g134040 out P close E n8 rf0 gap 8 us 5/60 fr 00727D ln 198/203
+    V175 call x00 P-1 A5 Q-1 H-1 L-1 E-1 W-1 R-1 irq 00050000 00050000
+    V175 po vb1 11173us P1 A1 Q1 H-1 L-1 E1 W1 R1
+    V175 req 273EB0000 old 27E199000 end 273EB0000 0 0
+    V176 f004 g134072 out P close E n7 rf0 gap 9 us 5/55 fr 00728D ln 526/531
+    V176 call x00 P-1 A6 Q-1 H-1 L-1 E-1 W-1 R-1 irq 00050000 00050000
+    V176 po vb1 7309us P1 A1 Q1 H-1 L-1 E1 W1 R1
+    V176 req 27D9B0000 old 273EB0000 end 27D9B0000 0 0
+    V177 f004 g134104 out P close E n7 rf0 gap 9 us 5/55 fr 00729D ln 490/495
+    V177 call x00 P-1 A6 Q-1 H-1 L-1 E-1 W-1 R-1 irq 00050000 00050000
+    V177 po vb1 7736us P1 A1 Q1 H-1 L-1 E1 W1 R1
+    V177 req 27E199000 old 27D9B0000 end 27E199000 0 0
+== 06.9: 06.9-flips-before.txt -> 06.9-flips-after.txt (113 a04 lines after)
+  DIAGNOSTIC, lab flavour only (BD-170): immediate flips answered by P' in the call, then sampled at vblank
+  P pending first observed clear, A primary=request, Q P' (P, A, generation kept), H/L inuse high/low first
+  E flip event, W flip-away event, R earliest_inuse; vtotal 1119 vblank 1116-36, one vsync flip in 16
+  flip control2 first 00000040 last 00000040 changes 0, flip interrupt first 00050000, busy 1
+  vblank samples 3197, generation discards 4
+  I: seen 52032 sampled 52032 read-failed 0 (call max 18 us since start)
+  I P' in the call: done 52032 late 0 pending 0 primary-other 0 read-failed 0 superseded 0  (done+late answered success, the others busy)
+  I closes: event 1085 bound 0 next 50947 gen 0 busy 0
+  I excluded: repeat 0 format 0 pitch 0 blank 0 stopped 0 prior 0 clear 0 read 0
+  I in the call, us after the programming: <1 | 1-2 | 2-5 | 5-10 | 10-20 | 20-50 | >=50 | never
+    P pending first observed clear   37700 14323     9     0     0     0     0     0
+    A primary reads request          37700 14323     9     0     0     0     0     0
+    Q P' (P+A, gen kept)             37700 14323     9     0     0     0     0     0
+    H INUSE high first                   0     0     0     0     0     0     0 52032
+    L INUSE low first                    0     0     0     0     0     0     0 52032
+    E flip event (OCCURRED)          37700 14323     9     0     0     0     0     0
+    W flip-away event                37700 14323     9     0     0     0     0     0
+    R EARLIEST_INUSE                 37700 14323     9     0     0     0     0     0
+  I after the call, frames from the programming: 0 | 1 | 2 | 3 | 4+ | never
+    P pending first observed clear   50976  1056     0     0     0     0
+    A primary reads request          50976  1056     0     0     0     0
+    Q P' (P+A, gen kept)               659   426     0     0     0 50947
+    H INUSE high first                   0     0     0     0     0 52032
+    L INUSE low first                    0     0     0     0     0 52032
+    E flip event (OCCURRED)          50976  1056     0     0     0     0
+    W flip-away event                50976  1056     0     0     0     0
+    R EARLIEST_INUSE                 50976  1056     0     0     0     0
+  I line of the programming: 0/8 | 1/8 | 2/8 | 3/8 | 4/8 | 5/8 | 6/8 | 7/8 | vblank
+    P' held in the call               6510  6513  6492  6506  6524  6486  6523  6478  1778
+    P' not in the call                   0     0     0     0     0     0     0     0     0
+  I not sampled: programming in none
+  I in the vertical blank: 1778 flips, P' held in the call for 1778
+  V: seen 1352 sampled 84 read-failed 0 (call max 76 us since start)
+  V P' in the call: done 0 late 0 pending 84 primary-other 0 read-failed 0 superseded 0  (evidence only)
+  V closes: event 84 bound 0 next 0 gen 0 busy 0
+  V excluded: repeat 0 format 0 pitch 0 blank 0 stopped 0 prior 0 clear 0 read 0
+  V in the call, us after the programming: <1 | 1-2 | 2-5 | 5-10 | 10-20 | 20-50 | >=50 | never
+    P pending first observed clear       0     0     0     0     0     0     0    84
+    A primary reads request             15    69     0     0     0     0     0     0
+    Q P' (P+A, gen kept)                 0     0     0     0     0     0     0    84
+    H INUSE high first                   0     0     0     0     0     0     0    84
+    L INUSE low first                    0     0     0     0     0     0     0    84
+    E flip event (OCCURRED)              0     0     0     0     0     0     0    84
+    W flip-away event                    0     0     0     0     0     0     0    84
+    R EARLIEST_INUSE                     0     0     0     0     0     0     0    84
+  V after the call, frames from the programming: 0 | 1 | 2 | 3 | 4+ | never
+    P pending first observed clear       0    84     0     0     0     0
+    A primary reads request              0    84     0     0     0     0
+    Q P' (P+A, gen kept)                 0    84     0     0     0     0
+    H INUSE high first                   0     0     0     0     0    84
+    L INUSE low first                    0     0     0     0     0    84
+    E flip event (OCCURRED)              0    84     0     0     0     0
+    W flip-away event                    0    84     0     0     0     0
+    R EARLIEST_INUSE                     0    84     0     0     0     0
+  V line of the programming: 0/8 | 1/8 | 2/8 | 3/8 | 4/8 | 5/8 | 6/8 | 7/8 | vblank
+    P' held in the call                  0     0     0     0     0     0     0     0     0
+    P' not in the call                  68     4     5     2     4     1     0     0    68
+  V not sampled: programming in 6/8, 7/8
+  V in the vertical blank: 68 flips, P' held in the call for 0
+  records of this trial: 16 (ring: the last 12 immediate and 4 vsync)
+    I116214 f082 g238324 out D close N n1 rf0 gap 0 us 4/4 fr 007B95 ln 226/227
+    I116214 call x00 P4 A4 Q4 H-1 L-1 E4 W4 R4 irq 00050000 00050000
+    I116214 po vb0 275us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I116214 req 28F299000 old 28EAB0000 end 28F299000 0 0
+    I116215 f082 g238326 out D close N n1 rf0 gap 0 us 4/5 fr 007B95 ln 250/250
+    I116215 call x00 P5 A5 Q5 H-1 L-1 E5 W5 R5 irq 00050000 00050000
+    I116215 po vb0 276us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I116215 req 2815F0000 old 28F299000 end 2815F0000 0 0
+    I116216 f082 g238328 out D close N n1 rf0 gap 0 us 4/5 fr 007B95 ln 273/273
+    I116216 call x00 P5 A5 Q5 H-1 L-1 E5 W5 R5 irq 00050000 00050000
+    I116216 po vb0 271us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I116216 req 28EAB0000 old 2815F0000 end 28EAB0000 0 0
+    I116217 f082 g238330 out D close N n1 rf0 gap 0 us 4/5 fr 007B95 ln 296/296
+    I116217 call x00 P5 A5 Q5 H-1 L-1 E5 W5 R5 irq 00050000 00050000
+    I116217 po vb0 273us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I116217 req 28F299000 old 28EAB0000 end 28F299000 0 0
+    I116218 f082 g238332 out D close N n1 rf0 gap 0 us 4/4 fr 007B95 ln 319/320
+    I116218 call x00 P4 A4 Q4 H-1 L-1 E4 W4 R4 irq 00050000 00050000
+    I116218 po vb0 271us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I116218 req 2815F0000 old 28F299000 end 2815F0000 0 0
+    I116219 f082 g238334 out D close N n1 rf0 gap 0 us 4/4 fr 007B95 ln 342/343
+    I116219 call x00 P4 A4 Q4 H-1 L-1 E4 W4 R4 irq 00050000 00050000
+    I116219 po vb0 268us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I116219 req 28EAB0000 old 2815F0000 end 28EAB0000 0 0
+    I116220 f082 g238336 out D close N n1 rf0 gap 0 us 4/4 fr 007B95 ln 365/365
+    I116220 call x00 P4 A4 Q4 H-1 L-1 E4 W4 R4 irq 00050000 00050000
+    I116220 po vb0 267us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I116220 req 28F299000 old 28EAB0000 end 28F299000 0 0
+    I116221 f082 g238338 out D close N n1 rf0 gap 0 us 4/4 fr 007B95 ln 387/388
+    I116221 call x00 P4 A4 Q4 H-1 L-1 E4 W4 R4 irq 00050000 00050000
+    I116221 po vb0 281us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I116221 req 2815F0000 old 28F299000 end 2815F0000 0 0
+    I116222 f082 g238340 out D close N n1 rf0 gap 0 us 4/5 fr 007B95 ln 411/412
+    I116222 call x00 P5 A5 Q5 H-1 L-1 E5 W5 R5 irq 00050000 00050000
+    I116222 po vb0 274us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I116222 req 28EAB0000 old 2815F0000 end 28EAB0000 0 0
+    I116223 f082 g238342 out D close N n1 rf0 gap 0 us 4/4 fr 007B95 ln 434/435
+    I116223 call x00 P4 A4 Q4 H-1 L-1 E4 W4 R4 irq 00050000 00050000
+    I116223 po vb0 273us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I116223 req 28F299000 old 28EAB0000 end 28F299000 0 0
+    I116224 f082 g238344 out D close N n1 rf0 gap 0 us 4/4 fr 007B95 ln 458/458
+    I116224 call x00 P4 A4 Q4 H-1 L-1 E4 W4 R4 irq 00050000 00050000
+    I116224 po vb0 280us P0 A0 Q-1 H-1 L-1 E0 W0 R0
+    I116224 req 2815F0000 old 28F299000 end 2815F0000 0 0
+    I116225 f082 g238346 out D close E n1 rf0 gap 0 us 4/4 fr 007B95 ln 481/482
+    I116225 call x00 P4 A4 Q4 H-1 L-1 E4 W4 R4 irq 00050000 00050000
+    I116225 po vb1 7763us P1 A1 Q1 H-1 L-1 E1 W1 R1
+    I116225 req 28EAB0000 old 2815F0000 end 28EAB0000 0 0
+    V258 f084 g240760 out P close E n8 rf0 gap 8 us 5/62 fr 0080F3 ln 20/26
+    V258 call x00 P-1 A6 Q-1 H-1 L-1 E-1 W-1 R-1 irq 00050000 00050000
+    V258 po vb1 13288us P1 A1 Q1 H-1 L-1 E1 W1 R1
+    V258 req 28F3F0000 old 2815F0000 end 28F3F0000 0 0
+    V259 f004 g240792 out P close E n8 rf0 gap 8 us 5/59 fr 008103 ln 655/660
+    V259 call x00 P-1 A5 Q-1 H-1 L-1 E-1 W-1 R-1 irq 00050000 00050000
+    V259 po vb1 5773us P1 A1 Q1 H-1 L-1 E1 W1 R1
+    V259 req 27D9B0000 old 273EB0000 end 27D9B0000 0 0
+    V260 f004 g240824 out P close E n7 rf0 gap 9 us 5/56 fr 008113 ln 504/509
+    V260 call x00 P-1 A6 Q-1 H-1 L-1 E-1 W-1 R-1 irq 00050000 00050000
+    V260 po vb1 7513us P1 A1 Q1 H-1 L-1 E1 W1 R1
+    V260 req 27E199000 old 27D9B0000 end 27E199000 0 0
+    V261 f004 g240856 out P close E n8 rf0 gap 8 us 4/59 fr 008123 ln 406/412
+    V261 call x00 P-1 A5 Q-1 H-1 L-1 E-1 W-1 R-1 irq 00050000 00050000
+    V261 po vb1 8684us P1 A1 Q1 H-1 L-1 E1 W1 R1
+    V261 req 273EB0000 old 27E199000 end 273EB0000 0 0

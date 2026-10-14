@@ -56,6 +56,7 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
     caps->MemoryManagementCaps.GpuMmuSupported = 1;
     caps->GpuEngineTopology.NbAsymetricProcessingNodes = BC250_WDDM_NODE_COUNT;
     caps->FlipCaps.FlipOnVSyncMmIo = 1;
+    caps->FlipCaps.FlipImmediateMmIo = 1;
     caps->FlipCaps.FlipIndependent = 1;
     caps->MaxQueuedFlipOnVSync = 1;
     return STATUS_SUCCESS;
@@ -453,6 +454,13 @@ class NegativeFixtures(unittest.TestCase):
         wddm = drop(drop(GOOD_WDDM, "Data->DxgkDdiControlInterrupt"), "Data->DxgkDdiGetScanLine")
         result, _ = statuses(wddm=wddm)
         self.assertOnlyViolation(result, "R04-FLIPONVSYNCMMIO")
+
+    def test_vsync_flip_cap_without_the_immediate_one(self):
+        """BD-170: the 0.7.216.64 caps. An immediate flip is then a DMA flip, and the Present that writes no DMA
+        buffer for a flip makes dxgkrnl remove the device."""
+        wddm = drop(GOOD_WDDM, "caps->FlipCaps.FlipImmediateMmIo")
+        result, _ = statuses(wddm=wddm)
+        self.assertOnlyViolation(result, "R40-FLIPIMMEDIATEMMIO")
 
     def test_table_version_not_the_compiled_one(self):
         """ADR 0019 B1: a table that declares 3.1 in a binary compiled at 2.0 would hand dxgkrnl a 0x340-byte

@@ -6,6 +6,7 @@
 #include "hdmi_link.h"
 #include "dcn_translate.h"
 #include "connector_surface.h"
+#include "plane_format.h"
 #include "dpaux.h"
 #include "../shim/bc250_link_atom.h"
 #include "../shim/bc250_link_regs.h"
@@ -616,14 +617,14 @@ static NTSTATUS DisableOwned(CONNECTOR_LINK* c)
 
 NTSTATUS ConnectorLinkDisable(BC250_DEVICE* Device,ULONG Generation)
 {
-    CONNECTOR_LINK* c=Device->ConnectorLink;ULONG primary;NTSTATUS status;KIRQL irql;
+    CONNECTOR_LINK* c=Device->ConnectorLink;ULONG primary;NTSTATUS status,finish;KIRQL irql;
     if(!c)return STATUS_DEVICE_NOT_READY;
     DpAudioStop(Device);
     if(!DpAudioQuiesced(Device))return STATUS_DEVICE_NOT_READY;
     // .35's journal belongs to the inherited timing only. Discharge it before
     // this owner changes any clocks; otherwise stop could replay it over HDMI.
     if(!HdmiLinkStop(Device))return STATUS_DEVICE_DATA_ERROR;
-    if(!WddmPrimaryExclusiveBegin(Device,&primary))return STATUS_DEVICE_BUSY;
+    if(!WddmPrimaryExclusiveBegin(Device,BC250_WRITER_LINK_DISABLE,&primary))return STATUS_DEVICE_BUSY;
     Begin(c,Generation,TRUE);status=DisableOwned(c);End(c);
     // A detach ends the rollback scope. A later sink, even with the same mode,
     // must never receive the previous monitor's timing as error recovery.
@@ -633,7 +634,8 @@ NTSTATUS ConnectorLinkDisable(BC250_DEVICE* Device,ULONG Generation)
     KeAcquireSpinLock(&Device->DpAudio.Lock,&irql);
     Device->DpAudio.PortId=0;Device->DpAudio.OsManufacturer=0;Device->DpAudio.OsProduct=0;
     KeReleaseSpinLock(&Device->DpAudio.Lock,irql);
-    WddmPrimaryExclusiveEnd(Device,primary,TRUE);
+    finish=WddmPrimaryExclusiveEnd(Device,primary,TRUE);
+    if(!NT_SUCCESS(finish))status=finish;
     return status;
 }
 
@@ -748,7 +750,7 @@ NTSTATUS ConnectorLinkCommit(BC250_DEVICE* Device,const BC250_CONNECTOR_SNAPSHOT
     const BC250_TARGET_TIMING* Timing,ULONG SourceWidth,ULONG SourceHeight,
     D3DKMDT_VIDPN_PRESENT_PATH_SCALING Scaling)
 {
-    CONNECTOR_LINK* c;ULONG i,primary=0;NTSTATUS status,rollback=STATUS_NOT_SUPPORTED;KIRQL irql;
+    CONNECTOR_LINK* c;ULONG i,primary=0;NTSTATUS status,finish=STATUS_SUCCESS,rollback=STATUS_NOT_SUPPORTED;KIRQL irql;
     BOOLEAN exclusive=FALSE,changed=FALSE;
     BC250_LINK_SURFACE previousSurface={0};
     BC250_CONNECTOR_FAILURE_DIAG originalFailure={0};
@@ -776,13 +778,25 @@ NTSTATUS ConnectorLinkCommit(BC250_DEVICE* Device,const BC250_CONNECTOR_SNAPSHOT
     }
     // An active old link must have a complete recovery plan before mutating it.
     if(c->Active && !c->Current.Valid) {status=STATUS_NOT_SUPPORTED;goto done;}
-    if(!WddmPrimaryExclusiveBegin(Device,&primary)) {status=STATUS_DEVICE_BUSY;goto done;}
+    if(!WddmPrimaryExclusiveBegin(Device,BC250_WRITER_LINK_COMMIT,&primary)) {status=STATUS_DEVICE_BUSY;goto done;}
     exclusive=TRUE;c->Previous=c->Current;c->Previous.Valid=c->Active && c->Current.Valid;
     c->RecoveryVisible=Device->SourceVisible;c->RecoveryModeActive=Device->ModeActive;
     if(c->Previous.Valid) {
+        BC250_LINK_SURFACE bridge={0};
+        // Begin already retired the application's surface onto the reserved
+        // bridge. Rollback needs its mode and visibility, never an application
+        // address that an immediate deposit can release while this writer runs.
         LinkStep(c,BC250_LINK_SURFACE_CAPTURE,FALSE);
-        status=DcnLinkSurfaceCapture(Device,c->Previous.Timing.HActive,c->Previous.Timing.VActive,&previousSurface);
+        status=DcnLinkSurfaceCapture(Device,c->Previous.Timing.HActive,c->Previous.Timing.VActive,&bridge);
         if(!NT_SUCCESS(status))goto done;
+        previousSurface.Physical=(ULONGLONG)Device->RuntimeFramebufferPhysical.QuadPart;
+        previousSurface.Pitch=c->Previous.Pitch;
+        previousSurface.Width=c->Previous.Timing.HActive;
+        previousSurface.Height=c->Previous.Timing.VActive;
+        previousSurface.Format=BC250_PLANE_FORMAT_ARGB8888;
+        // Hardware visibility and the OS logical SourceVisible can differ at
+        // an inherited cold start. Restore each to its own saved value.
+        previousSurface.Visible=bridge.Visible;
     }
     LinkStep(c,BC250_LINK_AUDIO,FALSE);
     status=ClockSessionEnter(c);if(!NT_SUCCESS(status))goto done;
@@ -847,15 +861,18 @@ done:
         RetainFailure(Device,&c->Failure);
         LogFailure(&c->Failure,"admission");
     }
-    // Verified rollback restored the tracked allocation itself. Keep its
-    // ScanoutObject so DestroyAllocation cannot free a still-scanned buffer.
+    // Rollback restored the reserved bridge. Only End may select the latest
+    // application surface, under the interrupt lock that also accepts deposits.
     ClockSessionLeave(c);
-    if(exclusive)WddmPrimaryExclusiveEnd(Device,primary,changed && !NT_SUCCESS(rollback));
+    if(exclusive) {
+        finish=WddmPrimaryExclusiveEnd(Device,primary,changed && !NT_SUCCESS(rollback));
+        if(!NT_SUCCESS(finish))status=finish;
+    }
     if(NT_SUCCESS(status))++c->Completed;else ++c->Refused;
     GuardLog("connector-link: commit generation %lu attempts %lu completed %lu refused %lu active %u status %08lX",
         Snapshot->Generation,c->Attempts,c->Completed,c->Refused,c->Active,(ULONG)status);
     End(c);
-    if(changed && c->Active && (NT_SUCCESS(status)||NT_SUCCESS(rollback)))DpAudioStart(Device);
+    if(NT_SUCCESS(finish) && changed && c->Active && (NT_SUCCESS(status)||NT_SUCCESS(rollback)))DpAudioStart(Device);
     ConnectorOperationRelease(Device);return status;
 }
 
@@ -872,28 +889,32 @@ NTSTATUS ConnectorLinkCurrentSignal(BC250_DEVICE* Device,D3DKMDT_VIDEO_SIGNAL_IN
 
 NTSTATUS ConnectorLinkSuspend(BC250_DEVICE* Device)
 {
-    CONNECTOR_LINK* c=Device->ConnectorLink;ULONG generation;NTSTATUS status;
+    CONNECTOR_LINK* c=Device->ConnectorLink;ULONG generation;NTSTATUS status,finish;
     if(!c)return STATUS_SUCCESS;
     DpAudioStop(Device);
     if(!DpAudioQuiesced(Device))return STATUS_DEVICE_NOT_READY;
-    if(!WddmPrimaryExclusiveBegin(Device,&generation))return STATUS_DEVICE_BUSY;
+    if(!WddmPrimaryExclusiveBegin(Device,BC250_WRITER_LINK_SUSPEND,&generation))return STATUS_DEVICE_BUSY;
     status=c->Inherited?DcnRestorePostDisplay(Device):DcnRuntimeSurface(Device,FALSE);
     if(NT_SUCCESS(status))status=DcnSetVisibility(Device,FALSE);
     if(NT_SUCCESS(status))Device->SourceVisible=FALSE;
     if(NT_SUCCESS(status))c->Suspended=TRUE;
-    WddmPrimaryExclusiveEnd(Device,generation,TRUE);return status;
+    finish=WddmPrimaryExclusiveEnd(Device,generation,TRUE);
+    return NT_SUCCESS(finish)?status:finish;
 }
 
 NTSTATUS ConnectorLinkResume(BC250_DEVICE* Device,ULONG Generation)
 {
-    CONNECTOR_LINK* c=Device->ConnectorLink;ULONG primary;NTSTATUS status;
+    CONNECTOR_LINK* c=Device->ConnectorLink;ULONG primary;NTSTATUS status,finish;
     if(!c)return STATUS_DEVICE_NOT_READY;
     if(c->Inherited) {c->Suspended=FALSE;return STATUS_SUCCESS;}
     if(!c->Current.Valid)return STATUS_DEVICE_NOT_READY;
-    if(!WddmPrimaryExclusiveBegin(Device,&primary))return STATUS_DEVICE_BUSY;
+    if(!WddmPrimaryExclusiveBegin(Device,BC250_WRITER_LINK_RESUME,&primary))return STATUS_DEVICE_BUSY;
     Begin(c,Generation,FALSE);c->Next=c->Current;
     status=ClockSessionEnter(c);
-    if(!NT_SUCCESS(status)) {End(c);WddmPrimaryExclusiveEnd(Device,primary,FALSE);return status;}
+    if(!NT_SUCCESS(status)) {
+        End(c);finish=WddmPrimaryExclusiveEnd(Device,primary,FALSE);
+        return NT_SUCCESS(finish)?status:finish;
+    }
     InterlockedExchange(&Device->RuntimePostValid,0);
     status=DisableOwned(c);if(NT_SUCCESS(status))status=Apply(c,&c->Next,c->Caps,NULL);
     if(NT_SUCCESS(status)) {
@@ -906,7 +927,8 @@ NTSTATUS ConnectorLinkResume(BC250_DEVICE* Device,ULONG Generation)
         Begin(c,Generation,TRUE);(void)DisableOwned(c);
         c->Active=FALSE;Device->SourceVisible=FALSE;InterlockedExchange(&Device->RuntimePostValid,0);
     }
-    ClockSessionLeave(c);End(c);WddmPrimaryExclusiveEnd(Device,primary,TRUE);return status;
+    ClockSessionLeave(c);End(c);finish=WddmPrimaryExclusiveEnd(Device,primary,TRUE);
+    return NT_SUCCESS(finish)?status:finish;
 }
 
 NTSTATUS ConnectorLinkRelease(BC250_DEVICE* Device)

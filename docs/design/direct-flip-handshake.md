@@ -399,8 +399,10 @@ The rollback ladder, in order. Each rung assumes less than the one above it:
 - **The D3D11 client.** The D3D11 shell does not set the SCANOUT bit yet, so a D3D11 game stays composed.
 - **10-bit and HDR.** The kernel's scan-out format table admits 8-bit `SCANOUT_PRIMARY` rows only. The
   rule compares the storage row, so it refuses a 10-bit pair honestly until that table is wider.
-- **The interval bound.** `FlipImmediateMmIo` and `FlipInterval` are not declared, so a chain at present
-  interval 0 cannot reach independent flip on this driver. `DdiPresentForIFlip` is not declared either,
+- **The interval bound.** `FlipInterval` is not declared. `FlipImmediateMmIo` is declared since BD-170
+  (2026-10-14, `vidpn-flip.md` section 7.1), so a flip at present interval 0 is an MMIO flip with
+  `Flags.FlipImmediate`. The driver programs it with the immediate flip type and does not wait for a vsync.
+  `DdiPresentForIFlip` is not declared,
   and it is the only safe refusal point for a present that might become an independent flip.
 
 Nie wszystko od razu - not everything at once.

@@ -1,4 +1,4 @@
-param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\m9\bd003-011\restore",[string]$Source='',[switch]$OldRuntimeOrder,[switch]$WrongSavedSurface)
+param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\m9\bd003-011\restore",[string]$Source='',[switch]$OldRuntimeOrder,[switch]$WrongSavedSurface,[switch]$ResumeRefusalIgnored,[switch]$SavedApplicationSurface)
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 if(-not $Source){$Source="$repo\driver\kmd"}
@@ -33,6 +33,29 @@ if($WrongSavedSurface) {
     $anchor='*Surface=saved;return STATUS_SUCCESS;'
     if(([regex]::Matches($text,[regex]::Escape($anchor))).Count -ne 1){throw 'Saved surface mutation anchor changed'}
     $text=$text.Replace($anchor,'saved.Physical=Device->DcnFirmwareAddress;*Surface=saved;return STATUS_SUCCESS;')
+    [IO.File]::WriteAllText($path,$text)
+}
+# BD-170 r7: a failed Resume cannot authorize any write; rollback cannot import a saved application address.
+if($ResumeRefusalIgnored) {
+    $path="$Out\post_display_actual.c"
+    $text=[IO.File]::ReadAllText($path)
+    $pattern='status = WddmWriterResume\(Device\);\r?\n        if \(!NT_SUCCESS\(status\)\) return status;'
+    if(([regex]::Matches($text,$pattern)).Count -ne 2){throw 'Resume refusal mutation anchor changed'}
+    $text=[regex]::Replace($text,$pattern,'status = WddmWriterResume(Device); (void)status;')
+    [IO.File]::WriteAllText($path,$text)
+}
+if($SavedApplicationSurface) {
+    $path="$Out\post_display_actual.c"
+    $text=[IO.File]::ReadAllText($path)
+    $guard='Surface->Physical!=(ULONGLONG)Device->RuntimeFramebufferPhysical.QuadPart'
+    $callPattern='return DcnReservedSurfaceCore\(Device,Surface->Width,Surface->Height,Surface->Pitch,\s+Surface->Visible != 0 \? TRUE : FALSE,FALSE,FALSE\);'
+    $calls=[regex]::Matches($text,$callPattern)
+    if($calls.Count -ne 1){throw 'Owned restore call anchor changed'}
+    $call=$calls[0].Value
+    if(([regex]::Matches($text,[regex]::Escape($guard))).Count -ne 1 -or
+       ([regex]::Matches($text,[regex]::Escape($call))).Count -ne 1){throw 'Owned restore mutation anchor changed'}
+    $text=$text.Replace($guard,'Surface->Physical==0').Replace($call,
+        'Device->RuntimeFramebufferPhysical.QuadPart=(long long)Surface->Physical; '+$call)
     [IO.File]::WriteAllText($path,$text)
 }
 & $cl /nologo /TC /W4 /WX /O2 /MT "/I$repo\driver\kmd" "/I$repo\third_party\linux-amdgpu" "/I$($msvc.FullName)\include" "/I$sdk\Include\10.0.26100.0\ucrt" "/Fo$Out\" "/Fe$Out\post_display_test.exe" "$Out\post_display_actual.c" "$repo\driver\kmd\dcn_translate.c" /link "/LIBPATH:$($msvc.FullName)\lib\x64" "/LIBPATH:$libs\ucrt\x64" "/LIBPATH:$libs\um\x64"
