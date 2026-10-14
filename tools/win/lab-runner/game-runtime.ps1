@@ -728,7 +728,7 @@ if($DryRun){
   $m=try{Read-SteamManifest}catch{@(-1,'')}
   Gate 'steam state' ($m[0] -eq [int]$gp.steam.require_state_flags) ('StateFlags '+$m[0]+' build '+$m[1])
   'app profile '+$(try{[string](Get-ItemProperty -LiteralPath ('HKLM:\SOFTWARE\amdgpu-wddm\D3D12\Applications\'+$appImage) -Name Experiment -ErrorAction Stop).Experiment}catch{'none'})
-  if($armed.Count){'WARNING launch through Steam: the game gets the Steam client''s environment, so these lab knobs do not apply: '+($armed -join ', ')}
+  if($armed.Count){'launch through Steam: whether these armed lab knobs reach the game is resolved at the launch and recorded per variable in env_delivery; a client this runner did not start falls back to '+$(if($gp.steam.env_fallback){[string]$gp.steam.env_fallback}else{'refuse'})+': '+($armed -join ', ')}
  }
  foreach($image in $routerImages){
   $decision=Get-RouterDecision $image
