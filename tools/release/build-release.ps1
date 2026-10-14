@@ -42,6 +42,10 @@ param(
     [string]$Version = '0.7.216.100-tester.21',
     [string]$KitVersion = '10.0.26100.0',
     [string]$FirmwareDir,                        # exact pinned inputs for Inf2Cat, never copied into the public ZIP
+    [string]$SubmissionCab,                      # unsigned CAB for EV signing; includes the complete INF payload
+    [string]$KmdPdb,                             # matching symbols for submission, never installed as driver files
+    [bool]$MockAttestation = $true,               # embed our signature on every driver PE until Partner Center signs it
+    [ValidateSet('pinned-test','system')][string]$ExpectedSigningRoot = 'pinned-test',
     [string]$SetupApp,                           # required: the built setup window (build.ps1 output), copied to the top folder as setup.exe
     [switch]$AllowLedgerDebt,                    # build although finished work for a release component is unlanded
     [string]$LedgerDebtReason,                   # required with -AllowLedgerDebt: recorded in the build log and manifest
@@ -54,6 +58,7 @@ param(
 # Release and provenance rebuilds always execute the gates, including nested analysis.
 $env:BC250_GATE_NOCACHE = '1'
 $ErrorActionPreference = 'Stop'
+if (-not $MockAttestation -and -not $NoProvenance) { throw 'release builds require mock-attestation signatures until Partner Center supplies the package' }
 . (Join-Path $PSScriptRoot 'headless.ps1')
 # The setup window is the default entry of an ordinary user, so a package without it is not a release.
 if (-not $SetupApp) { throw '-SetupApp is required: build the setup window with tools\win\amdgpu_wddm_setup\build.ps1 -Out <dir> and pass that folder' }
@@ -79,7 +84,8 @@ $wdk = Join-Path $Root 'toolchain\nuget\microsoft.windows.wdk.x64\c'
 $sdk = Join-Path $Root 'toolchain\nuget\microsoft.windows.sdk.cpp\c'
 $signtool = Join-Path $sdk "bin\$KitVersion\x64\signtool.exe"
 $inf2cat = Join-Path $wdk "bin\$KitVersion\x86\Inf2Cat.exe"
-foreach ($t in $signtool, $inf2cat) { if (-not (Test-Path -LiteralPath $t)) { throw "missing tool $t" } }
+$infverif = Join-Path $wdk "tools\$KitVersion\x64\InfVerif.exe"
+foreach ($t in $signtool, $inf2cat, $infverif) { if (-not (Test-Path -LiteralPath $t)) { throw "missing tool $t" } }
 
 # Work ledger gate: a release must not ship a component whose finished fix is still unlanded,
 # and must not be cut over a ledger that hides new work or claims a landing nobody can verify
@@ -130,6 +136,12 @@ if (-not (Test-Path -LiteralPath $ledgerTool)) {
     }
 }
 
+$resolvedOut = [IO.Path]::GetFullPath($Out).TrimEnd('\')
+foreach ($ownedOutput in $pkgRoot,$zip) {
+    if (-not [string]::Equals((Split-Path ([IO.Path]::GetFullPath($ownedOutput))), $resolvedOut, [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'release output escaped the chosen output directory'
+    }
+}
 if (Test-Path -LiteralPath $pkgRoot) { Remove-Item -LiteralPath $pkgRoot -Recurse -Force }
 if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
 [void][IO.Directory]::CreateDirectory($pkg)
@@ -329,6 +341,15 @@ $firmware = [ordered]@{ delivery = 'driver-store-v1'; commit = $sources.firmware
 . (Join-Path $PSScriptRoot 'installer\firmware-package.ps1')
 if (-not $FirmwareDir) { $FirmwareDir = Join-Path $Root 'ref\linux-firmware__WARN-AMD-blobs-never-commit\amdgpu' }
 Copy-DriverStoreFirmware -Firmware $firmware -FromDir $FirmwareDir -Destination (Join-Path $pkg 'payload\kmd')
+# DriverStore staging is before Inf2Cat. Keep the input pins unchanged; the
+# mapping records the destination of each source slot and the two ICD JSON edits.
+$driverPackageReport = Join-Path $pkg 'installer\driver-package.json'
+$r = Invoke-Headless -File $pythonExe -Arguments @((Join-Path $PSScriptRoot 'driver_package.py'), '--package', $pkg,
+    '--sources', (Join-Path $PSScriptRoot 'release-sources.json'), '--report', $driverPackageReport) -TimeoutSeconds 180
+if ($r.code -ne 0) { throw "DriverStore staging: $($r.text)" }
+$driverPackage = Get-Content -LiteralPath $driverPackageReport -Raw | ConvertFrom-Json
+$driverMembersBySource = @{}
+foreach ($member in $driverPackage.members) { $driverMembersBySource[[string]$member.source] = $member }
 $installText = Get-Content -LiteralPath (Join-Path $pkg 'INSTALL.md') -Raw
 foreach ($f in $fwFiles) { if ($installText -notmatch [regex]::Escape($f.sha256.ToLowerInvariant())) { throw "INSTALL.md (GPU firmware) does not list $($f.name) with SHA256 $($f.sha256)" } }
 if ($installText -notmatch $firmware.commit) { throw "INSTALL.md (GPU firmware) does not name linux-firmware $($firmware.commit)" }
@@ -445,18 +466,55 @@ function Invoke-Sign([string]$Path) {
 Invoke-Sign (Join-Path $kmd 'bc250kmd.sys')
 # BD-150: Windows names a driver package by its INF, so two packages with different bc250kmd.sys files must never share
 # one INF: pnputil answers "Already exists in the system" for the second and keeps the first one's KMD. One comment line
-# under DriverVer names the release and the signed KMD, so the INF changes whenever the KMD does.
+# under DriverVer names the release and every payload hash, including user-mode
+# files. A UMD-only update must get a distinct package identity too.
 $kmdSha = (Get-FileHash -LiteralPath (Join-Path $kmd 'bc250kmd.sys') -Algorithm SHA256).Hash
 $infText = [IO.File]::ReadAllText($infPath)
 $dvLine = [regex]'(?m)^DriverVer\s*=.*$'
 if ($dvLine.Matches($infText).Count -ne 1) { throw 'bc250kmd.inf: expected exactly one DriverVer line' }
-$identity = "; release $Version, bc250kmd.sys SHA256 $kmdSha"
+$payloadIdentity = @("bc250kmd.sys=$kmdSha")
+$payloadIdentity += @(Get-ChildItem -LiteralPath $kmd -Recurse -File | Where-Object { $_.Extension -notin '.inf','.cat' -and $_.Name -ne 'bc250kmd.sys' } | Sort-Object FullName | ForEach-Object {
+    $_.FullName.Substring($kmd.Length + 1).Replace('\','/') + '=' + (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash
+})
+$hasher = [Security.Cryptography.SHA256]::Create()
+try { $payloadDigest = [BitConverter]::ToString($hasher.ComputeHash([Text.Encoding]::UTF8.GetBytes(($payloadIdentity -join "`n")))).Replace('-','') }
+finally { $hasher.Dispose() }
+$identity = "; release $Version, bc250kmd.sys SHA256 $kmdSha, submitted driver payload SHA256 $payloadDigest"
 $infText = $dvLine.Replace($infText, { param($m) $cr = $(if ($m.Value.EndsWith("`r")) { "`r" } else { '' }); $m.Value.TrimEnd("`r") + $cr + "`n" + $identity + $cr })
 [IO.File]::WriteAllText($infPath, $infText)
 '  INF identity: {0}' -f $identity
+foreach ($mode in '/w','/h') {
+    $r = Invoke-Headless -File $infverif -Arguments @($mode, $infPath) -TimeoutSeconds 120
+    if ($r.code -ne 0) { throw "InfVerif $mode failed: $($r.text)" }
+}
 $r = Invoke-Headless -File $inf2cat -Arguments @("/driver:$kmd", '/os:10_X64', '/uselocaltime') -TimeoutSeconds 300
 if ($r.code -ne 0) { throw "Inf2Cat failed: $($r.text)" }
 Invoke-Sign (Join-Path $kmd 'bc250kmd.cat')
+if ($SubmissionCab) {
+    # The submission contains the original images and exact symbols. The local
+    # test-signing simulation below produces the separately installed package.
+    if (-not $KmdPdb) {
+        $inputSys = Join-Path $Root ([string]($sources.files | Where-Object path -ceq 'payload/kmd/bc250kmd.sys').source)
+        $KmdPdb = Join-Path (Split-Path $inputSys) 'bc250kmd.pdb'
+        if (-not (Test-Path -LiteralPath $KmdPdb)) { $KmdPdb = Join-Path (Split-Path (Split-Path $inputSys)) 'bc250kmd.pdb' }
+    }
+    . (Join-Path $PSScriptRoot 'submission-cab.ps1')
+    New-DriverSubmissionCab -DriverDirectory $kmd -Destination $SubmissionCab -KmdPdb $KmdPdb `
+        -PdbReader (Join-Path $Root 'toolchain\llvm-23.1.2-win64\bin\llvm-pdbutil.exe')
+}
+if ($MockAttestation) {
+    . (Join-Path $PSScriptRoot 'mock-attestation.ps1')
+    Invoke-DriverMockAttestation -DriverDirectory $kmd -ImageIdentityFile (Join-Path $Out 'driver-image-identities.json') `
+        -SignTool $signtool -Inf2Cat $inf2cat -TestCertificate $cer -ExpectedRoot $ExpectedSigningRoot -KmdAlreadySigned `
+        -SignFile { param([string]$Path) Invoke-Sign $Path }
+    # Signing changes whole-file hashes; the v3 D3D11 code identity stays fixed.
+    foreach ($member in $driverPackage.members) {
+        $memberPath = Join-Path $pkg ([string]$member.path)
+        $member.sha256 = (Get-FileHash -LiteralPath $memberPath -Algorithm SHA256).Hash
+        $member.size = (Get-Item -LiteralPath $memberPath).Length
+    }
+    [IO.File]::WriteAllText($driverPackageReport, ($driverPackage | ConvertTo-Json -Depth 20), [Text.UTF8Encoding]::new($false))
+}
 $pass = $null
 foreach ($f in 'bc250kmd.sys', 'bc250kmd.cat') {
     $s = Get-AuthenticodeSignature -LiteralPath (Join-Path $kmd $f)
@@ -468,12 +526,14 @@ foreach ($f in 'bc250kmd.sys', 'bc250kmd.cat') {
 $ps51 = Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
 $r = Invoke-Headless -File $ps51 -Arguments @('-NoProfile', '-NonInteractive', '-File', (Join-Path $PSScriptRoot 'test-firmware-catalog.ps1'), '-Directory', $kmd) -TimeoutSeconds 60
 if ($r.code -ne 0) { throw "firmware catalog membership: $($r.text)" }
+Test-DriverCatalogMembers -Directory $kmd -Names @($driverPackage.members | ForEach-Object { [string]$_.member })
 foreach ($fwBlobName in Get-DriverStoreFirmwareNames) { Remove-Item -LiteralPath (Join-Path $kmd $fwBlobName) -Force }
 
 Write-Host 'gates'
 $forbidden = @(Get-ChildItem -LiteralPath $pkgRoot -Recurse -File | Where-Object { $_.Extension -in '.pfx', '.pass', '.pem', '.key', '.p12', '.pvk' })
 if ($forbidden.Count) { throw "private-key material in the package: $($forbidden.FullName -join ', ')" }
-$blobs = @(Get-ChildItem -LiteralPath $pkgRoot -Recurse -File | Where-Object { $_.Extension -eq '.bin' -or $_.FullName -like '*\payload\firmware\*' })
+$blobs = @(Get-ChildItem -LiteralPath $pkgRoot -Recurse -File | Where-Object {
+    ($_.Extension -eq '.bin' -and $_.FullName -ne (Join-Path $kmd 'amdgpu-state.bin')) -or $_.FullName -like '*\payload\firmware\*' })
 if ($blobs.Count) { throw "AMD firmware in the package (the installer downloads it): $($blobs.FullName -join ', ')" }
 '  no private-key material, no firmware file'
 # The unpacked release's top folder: setup.exe (with its configuration file, when there is one) and the one folder
@@ -536,7 +596,7 @@ Write-Host 'manifest'
 function Get-InstallLocation([string]$PackagePath) {
     $leaf = Split-Path $PackagePath -Leaf
     switch -Regex ($PackagePath) {
-        '^payload/kmd/' { return "DriverStore (bc250kmd.inf)\$leaf" }
+        '^payload/kmd/(.+)$' { return ('DriverStore (bc250kmd.inf)\' + $Matches[1].Replace('/', '\')) }
         '^payload/system32/' { return "%SystemRoot%\System32\$leaf" }
         '^payload/syswow64/' { return "%SystemRoot%\SysWOW64\$leaf" }
         '^payload/wow64/(\w+)/' { return "<InstallDir>\wow64\$($Matches[1])\$leaf" }
@@ -553,9 +613,11 @@ function Get-InstallLocation([string]$PackagePath) {
 $components = @()
 $extra = @($taskScripts | ForEach-Object { [pscustomobject]@{ component = 'tool'; path = "payload/tools/$_" } }) + @([pscustomobject]@{ component = 'certificate'; path = 'payload/cert/amdgpu-wddm-release.cer' }) + $tuningRows + $wallpaperRows
 foreach ($f in $sources.files + $extra) {
-    $p = Join-Path $pkg ($f.path -replace '/', '\')
+    $packagePath = [string]$f.path
+    if ($driverMembersBySource.ContainsKey($packagePath)) { $packagePath = [string]$driverMembersBySource[$packagePath].path }
+    $p = Join-Path $pkg ($packagePath -replace '/', '\')
     $ver = (Get-Item -LiteralPath $p).VersionInfo.FileVersion
-    $components += [ordered]@{ role = $f.component; package_path = $f.path; install_path = (Get-InstallLocation $f.path); version = $(if ($ver) { $ver.Trim() } else { $null }); sha256 = (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash }
+    $components += [ordered]@{ role = $f.component; package_path = $packagePath; install_path = (Get-InstallLocation $packagePath); version = $(if ($ver) { $ver.Trim() } else { $null }); sha256 = (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash }
 }
 # Downloaded at install time: no package path, the same install path and SHA256 check in the control application.
 foreach ($f in $fwFiles) {
@@ -654,7 +716,8 @@ if ($sources.PSObject.Properties['mft_h264']) {
         clsid = [string]$sources.mft_h264.clsid; friendly_name = [string]$sources.mft_h264.friendly_name }
     if ($mftRelease.clsid -ne $script:MftClsid) { throw "release-sources.json mft_h264.clsid $($mftRelease.clsid) is not the installer's $($script:MftClsid)" }
     if ($mftRelease.friendly_name -ne $script:MftFriendlyName) { throw "release-sources.json mft_h264.friendly_name '$($mftRelease.friendly_name)' is not the installer's '$($script:MftFriendlyName)'" }
-    if ($mftRelease.package_path -ne $script:MftPackagePath) { throw "release-sources.json mft_h264.package_path $($mftRelease.package_path) is not the installer's $($script:MftPackagePath)" }
+    if ($driverMembersBySource.ContainsKey($mftRelease.package_path)) { $mftRelease.package_path = [string]$driverMembersBySource[$mftRelease.package_path].path }
+    if ($mftRelease.register -and $mftRelease.package_path -ne 'payload/kmd/mft/amdgpu_wddm_mft_h264.dll') { throw 'MFT must be part of the DriverStore package' }
     if ($mftRelease.register -and -not (Test-Path -LiteralPath (Join-Path $pkg ($mftRelease.package_path -replace '/', '\')))) {
         throw "release-sources.json registers the H.264 encoder MFT, but the package has no $($mftRelease.package_path): add its files row"
     }
@@ -678,6 +741,12 @@ if ($name -ne (Split-Path -Leaf $pkgRoot)) { throw "build-release: the package n
 # installer\common.ps1 Get-OpenGlPayloadProblems, so the build and the gates read one rule.
 $glRelease = $null
 if ($sources.PSObject.Properties['opengl_icd']) {
+    # The source slots keep their build provenance; only the release descriptor
+    # changes to the catalog-covered package paths before payload verification.
+    foreach ($property in 'package_path','package_path_wow') {
+        $oldGlPath = [string]$sources.opengl_icd.$property
+        if ($driverMembersBySource.ContainsKey($oldGlPath)) { $sources.opengl_icd.$property = [string]$driverMembersBySource[$oldGlPath].path }
+    }
     $gl = Get-OpenGlReleaseSwitch -Manifest $sources -PackageRoot $pkg
     $glRelease = [ordered]@{ register = [bool]$gl.register; architectures = @($gl.architectures)
         package_path = [string]$gl.package_path; package_path_wow = [string]$gl.package_path_wow
@@ -699,6 +768,13 @@ if ($sources.PSObject.Properties['opengl_icd']) {
 }
 $manifest = [ordered]@{
     schema = 1
+    driver_package = $driverPackage
+    driver_signing = [ordered]@{
+        mode = $(if ($MockAttestation) { 'mock-attestation' } else { 'candidate-no-mock' })
+        verification = $ExpectedSigningRoot
+        certificate_thumbprint = $release.Thumbprint
+        submitted_payload_sha256 = $payloadDigest
+    }
     name = $name
     release = $Version
     version = $Version

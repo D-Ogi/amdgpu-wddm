@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include "adapter-config.h"
+#include "../../contract/amdgpu_driver_package.h"
 #include <string>
 #include <vector>
 namespace {
@@ -36,10 +37,10 @@ extern "C" __declspec(dllexport) HRESULT APIENTRY OpenAdapter10_2(D3D10DDIARG_OP
     try {
         std::wstring directory;HRESULT hr=configuration_directory(directory);if(FAILED(hr))return hr;
         bc250::umd::AdapterConfigRecord2 record{};DWORD bytes=0;
-        hr=read_record(directory+L"amdgpu_wddm_d3d11.config",record,bytes);if(FAILED(hr))return hr;
+        hr=read_record(directory+AMDGPU_D3D11_CONFIG_FILE,record,bytes);if(FAILED(hr))return hr;
         bc250::umd::AdapterConfiguration config{};
         hr=bc250::umd::decode_adapter_config(&record,bytes,config);if(FAILED(hr))return hr;
-        const std::wstring engine=directory+L"amdgpu_wddm_dxvk.dll",icd=directory+L"amdgpu_wddm_radv.dll";
+        const std::wstring engine=directory+AMDGPU_DXVK_FILE,icd=directory+AMDGPU_D3D11_ICD_FILE;
         config.engine_path=engine.c_str();config.icd_path=icd.c_str();
         return bc250::umd::open_render_adapter(*args,config);
     } catch(const std::bad_alloc &) {return E_OUTOFMEMORY;}

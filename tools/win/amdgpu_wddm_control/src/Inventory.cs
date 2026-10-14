@@ -20,7 +20,7 @@ namespace AmdgpuWddmControl
     public sealed class InventoryState
     {
         public bool AdapterFound, DevicePresent;
-        public string ReleaseVersion = "", ReleaseDir = "", KmdImage = "";
+        public string ReleaseVersion = "", ReleaseDir = "", KmdImage = "", DriverPackageRoot = "";
         public string DeviceService = "";
         public uint DeviceProblem;
         public string AdapterName = "", DriverVersion = "", DriverDate = "", Provider = "", InfPath = "";
@@ -48,6 +48,21 @@ namespace AmdgpuWddmControl
             catch (Exception e) { s.Notes.Add("release key: " + e.Message); }
             foreach (var c in s.Components) Describe(c, hashes);
             return s;
+        }
+
+        public static string GraphicsDirectory(string legacyDirectory)
+        {
+            try
+            {
+                var s = new InventoryState();
+                ReadDisplayKey(s);
+                if (!s.AdapterFound) return "";
+                if (s.DriverPackageRoot.Length == 0) return legacyDirectory;
+                ReadService(s);
+                return string.Equals(s.DriverPackageRoot.TrimEnd('\\'), Path.GetDirectoryName(s.KmdImage),
+                    StringComparison.OrdinalIgnoreCase) ? s.DriverPackageRoot : "";
+            }
+            catch (Exception) { return ""; }
         }
 
         // A REG_SZ value only (interfaces.md section 2): missing, another kind or unreadable is "" (unknown).
@@ -78,12 +93,16 @@ namespace AmdgpuWddmControl
                         s.DriverDate = key.GetValue("DriverDate") as string ?? "";
                         s.Provider = key.GetValue("ProviderName") as string ?? "";
                         s.InfPath = key.GetValue("InfPath") as string ?? "";
+                        s.DriverPackageRoot = Sz(key, "AmdgpuDriverPackage");
                         foreach (var valueName in key.GetValueNames().OrderBy(n => n, StringComparer.OrdinalIgnoreCase))
                         {
                             if (!valueName.EndsWith("DriverName", StringComparison.OrdinalIgnoreCase) &&
                                 !valueName.EndsWith("DriverNameWow", StringComparison.OrdinalIgnoreCase)) continue;
                             foreach (var file in Strings(key.GetValue(valueName)))
+                            {
+                                if (file == "<>") continue; // Empty D3D9 slot, never a file-system path.
                                 s.Components.Add(new Component { Role = valueName, Path = ResolveDriverFile(file, valueName.EndsWith("Wow", StringComparison.OrdinalIgnoreCase)) });
+                            }
                         }
                         return;
                     }

@@ -63,8 +63,10 @@ try {
         # is not redirected by RegOverridePredefKey. Never ship this test DLL.
         $fixtureObj = Join-Path $obj 'fixture'
         New-Item -ItemType Directory -Force $fixtureObj | Out-Null
-        & cl.exe /nologo @opt $crt /W4 /WX /LD @repro /DBC250_ROUTER_STATE_FIXTURE "/Fo$fixtureObj\" "$src\router.cpp" @front "$src\tests\state-fixture.cpp" "/Fe:$OutputDir\bc250d3d_router-test.dll" /link /Brepro /LTCG advapi32.lib
+        & cl.exe /nologo @opt $crt /W4 /WX /LD @repro /DBC250_ROUTER_STATE_FIXTURE /DBC250_ROUTER_TEST_LOADER_OVERRIDES "/Fo$fixtureObj\" "$src\router.cpp" @front "$src\tests\state-fixture.cpp" "/Fe:$OutputDir\bc250d3d_router-test.dll" /link /Brepro /LTCG advapi32.lib
         if ($LASTEXITCODE -ne 0) { throw 'router test fixture build failed' }
+        & cl.exe /nologo @opt $crt /W4 /WX /LD @repro /DBC250_ROUTER_STATE_FIXTURE "/Fo$fixtureObj\" "$src\router.cpp" @front "$src\tests\state-fixture.cpp" "/Fe:$OutputDir\bc250d3d_router-package-test.dll" /link /Brepro /LTCG advapi32.lib
+        if ($LASTEXITCODE -ne 0) { throw 'router package-path fixture build failed' }
 
         & cl.exe /nologo /O2 $crt /W4 /WX @repro "/Fo$obj\host\state-test.obj" "$src\tests\test-state.cpp" "/Fe:$OutputDir\test-state.exe" /link /Brepro
         if ($LASTEXITCODE -ne 0) { throw 'router state test build failed' }
@@ -87,15 +89,20 @@ try {
         # These cases use only UMD doubles and a private hive. None runs as dwm.exe,
         # publishes a desktop-route record, opens an adapter or starts a window.
         $fixture = Join-Path $OutputDir ('quality\state-fixture-' + [Guid]::NewGuid().ToString('N'))
-        foreach ($dir in 'router','cpu','hives','routelogs') {
+        foreach ($dir in 'router','cpu','hives','routelogs','relocated\desktop','relocated\d3d11') {
             New-Item -ItemType Directory -Force (Join-Path $fixture $dir) | Out-Null
         }
         Copy-Item -LiteralPath "$OutputDir\bc250d3d_router-test.dll" -Destination "$fixture\router\bc250d3d_router.dll"
-        Copy-Item -LiteralPath "$OutputDir\fake-hosted.dll" -Destination "$fixture\router\bc250d3d_zink.dll"
+        $suffix = if ($Arch -eq 'x86') { '32' } else { '' }
+        Copy-Item -LiteralPath "$OutputDir\fake-hosted.dll" -Destination "$fixture\router\bc250d3d_zink$suffix.dll"
         Copy-Item -LiteralPath "$OutputDir\fake-cpu.dll" -Destination "$fixture\cpu\bc250d3d.dll"
+        Copy-Item -LiteralPath "$OutputDir\bc250d3d_router-package-test.dll" -Destination "$fixture\relocated\desktop\bc250d3d_router.dll"
+        Copy-Item -LiteralPath "$OutputDir\fake-cpu.dll" -Destination "$fixture\relocated\desktop\bc250d3d$suffix.dll"
+        Copy-Item -LiteralPath "$OutputDir\fake-app.dll" -Destination "$fixture\relocated\d3d11\amdgpu_wddm_d3d11$suffix.dll"
         foreach ($case in 'route-kill-switch','route-switches-off','route-switches-absent',
             'route-latched-on','route-latched-closed','route-latched-partial','route-latched-wrong-type',
-            'route-switches-not-required','route-require-wrong-type') {
+            'route-switches-not-required','route-require-wrong-type','route-default-cpu-path',
+            'route-relocated-cpu','route-relocated-gpu','route-package-cpu-override','route-package-gpu-override') {
             & "$OutputDir\test-router.exe" child $case $fixture
             if ($LASTEXITCODE -ne 0) { throw "router state fixture failed: $case" }
         }

@@ -178,6 +178,12 @@ class Repositories:
 def check(sources_path, root, repo, package=None):
     """Returns (errors, rows, summary). rows: one dict per payload file."""
     sources = json.loads(Path(sources_path).read_text(encoding="utf-8-sig"))
+    driver_paths = {}
+    if package and (Path(package) / "installer/driver-package.json").is_file():
+        # Derive the mapping from this source contract, never from an unchecked
+        # report supplied with a candidate. Signed DLLs must retain code identity.
+        from driver_package import members
+        driver_paths = {r["source"]: r for r in members(sources)}
     errors = []
     rows = []
     table = sources.get("repositories")
@@ -258,7 +264,8 @@ def check(sources_path, root, repo, package=None):
         for key in ("unsigned_sha256", "authenticode_sha256"):
             if key in f and not HEX64.match(f[key] or ""):
                 errors.append(f"{path}: {key} {f[key]!r} is not 64 upper-case hex digits")
-        packaged = Path(package) / path.replace("/", "\\") if package else None
+        destination = driver_paths[path]["path"] if path in driver_paths else path
+        packaged = Path(package) / destination.replace("/", "\\") if package else None
         if "release_edits" in f and (not isinstance(f["release_edits"], str) or not f["release_edits"].strip()):
             errors.append(f"{path}: 'release_edits' needs the edits as text")
         if packaged is not None:
@@ -266,6 +273,31 @@ def check(sources_path, root, repo, package=None):
             # Authenticode digest below decides) or edits it on purpose ("release_edits" says what).
             if not packaged.is_file():
                 errors.append(f"{path}: not in the package {package}")
+            elif path in driver_paths and path.endswith(".json"):
+                expected = json.loads(src.read_text(encoding="utf-8-sig"))
+                expected["ICD"]["library_path"] = ".\\" + ("vulkan_radeon32.dll" if driver_paths[path]["arch"] == "x86" else "vulkan_radeon.dll")
+                if packaged.read_bytes() != (json.dumps(expected, indent=2) + "\n").encode("utf-8"):
+                    errors.append(f"{path}: unexpected ICD manifest edit in DriverStore package")
+            elif path in driver_paths and path.endswith('.config'):
+                from driver_package import signing_safe_config
+                pair = [next((item for item in sources['files'] if item['path'] ==
+                              str(Path(path).with_name(name)).replace('\\', '/')), None)
+                        for name in ('amdgpu_wddm_dxvk.dll', 'amdgpu_wddm_radv.dll')]
+                try:
+                    if not all(pair):
+                        raise ValueError('missing original backend pair')
+                    expected = signing_safe_config(src.read_bytes(), *[Path(root) / item['source'] for item in pair])
+                    if packaged.read_bytes() != expected:
+                        errors.append(f'{path}: unexpected caps or image-identity edit')
+                except (OSError, ValueError) as exc:
+                    errors.append(f'{path}: {exc}')
+            elif path in driver_paths and packaged.suffix.lower() in ('.dll', '.exe'):
+                from image_identity import image_digest
+                try:
+                    if image_digest(src) != image_digest(packaged):
+                        errors.append(f'{path}: signing changed the PE image identity')
+                except (OSError, ValueError) as exc:
+                    errors.append(f'{path}: {exc}')
             elif "authenticode_sha256" not in f and "release_edits" not in f and sha256_file(packaged) != sha:
                 errors.append(f"{path}: the packaged copy is {sha256_file(packaged)[:8]}, the entry says {sha[:8]}")
         if "authenticode_sha256" in f:

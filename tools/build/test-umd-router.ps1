@@ -61,7 +61,8 @@ $gate = Join-Path ([IO.Path]::GetFullPath($OutputDir)) $stamp
 $layout = Join-Path $gate 'layout'
 $out = Join-Path $gate 'results'
 foreach ($d in @('router','router-wow','cpu','cpu-real','fail','umd','umd-noicd','umd-diag','umd-diag\logs','umd-router','icd-alt','dwm','hives',
-                 'routelogs','diaglogs','diaglogs-env','app','app-noexport','app-real','app-real-noconfig','logonui','pickerhost','applogs')) {
+                 'routelogs','diaglogs','diaglogs-env','app','app-noexport','app-real','app-real-noconfig','logonui','pickerhost','applogs',
+                 'relocated\desktop','relocated\d3d11')) {
     [void](New-Item -ItemType Directory -Force -Path (Join-Path $layout $d))
 }
 [void](New-Item -ItemType Directory -Force -Path $out)
@@ -76,6 +77,10 @@ Put "$Build\fake-cpu.dll" 'cpu\bc250d3d.dll'
 # The 32-bit router's default CPU UMD is bc250d3d.dll next to it (route-wow-default-cpu-beside-router).
 Put "$Build\bc250d3d_router-test.dll" 'router-wow\bc250d3d_router.dll'
 Put "$Build\fake-cpu.dll" 'router-wow\bc250d3d.dll'
+Put "$Build\fake-cpu.dll" 'router-wow\bc250d3d32.dll'
+Put "$Build\bc250d3d_router-package-test.dll" 'relocated\desktop\bc250d3d_router.dll'
+foreach ($n in 'bc250d3d.dll','bc250d3d32.dll') { Put "$Build\fake-cpu.dll" "relocated\desktop\$n" }
+foreach ($n in 'amdgpu_wddm_d3d11.dll','amdgpu_wddm_d3d1132.dll') { Put "$Build\fake-app.dll" "relocated\d3d11\$n" }
 Put "$Build\fake-fail.dll" 'fail\fake-fail.dll'
 Put "$Build\fake-app.dll" 'app\amdgpu_wddm_d3d11.dll'
 Put "$Build\fake-nooa102.dll" 'app-noexport\amdgpu_wddm_d3d11.dll'

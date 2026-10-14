@@ -688,17 +688,27 @@ class PackageCheck:
     # -- files ---------------------------------------------------------------------------------------
 
     def collect_files(self):
-        entries = sorted(p for p in self.dir.iterdir() if p.is_file())
+        entries = []
+        # A DIRID 13 package keeps source subdirectories. Never silently skip
+        # its UMDs or follow links out of the package being checked.
+        pending = [self.dir]
+        while pending:
+            for p in sorted(pending.pop().iterdir()):
+                if p.is_symlink() or (hasattr(p, "is_junction") and p.is_junction()):
+                    self.report.error("package", "PKG002", "linked package member: %s" % p.relative_to(self.dir))
+                elif p.is_dir():
+                    pending.append(p)
+                elif p.is_file():
+                    entries.append(p)
+        entries.sort()
         for p in entries:
+            if p.name.lower() in self.files:
+                self.report.error("package", "PKG003", "duplicate package basename: %s" % p.name)
+                continue
             self.files[p.name.lower()] = p
         self.report.facts["files"] = [
-            {"name": p.name, "size": p.stat().st_size, "sha256": sha256_file(p)} for p in entries
+            {"name": p.relative_to(self.dir).as_posix(), "size": p.stat().st_size, "sha256": sha256_file(p)} for p in entries
         ]
-        subdirs = [p.name for p in self.dir.iterdir() if p.is_dir()]
-        if subdirs:
-            self.report.note("package", "PKG002",
-                             "the package directory has subdirectories; nothing here looks inside them",
-                             ", ".join(sorted(subdirs)))
         self.report.facts["package"] = str(self.dir)
 
     def find_inf(self):
@@ -907,6 +917,7 @@ class PackageCheck:
         inf, r = self.inf, self.report
 
         # [SourceDisksNames] / [SourceDisksFiles]
+        source_dirs = {}
         disks = set()
         for name in list(inf.sections):
             if name == "sourcedisksnames" or name.startswith("sourcedisksnames."):
@@ -917,6 +928,7 @@ class PackageCheck:
                     if not line.key:
                         continue
                     self.source_disks[line.key.lower()] = line.values[0] if line.values else ""
+                    source_dirs[line.key.lower()] = line.values[1].replace("/", "\\").lower() if len(line.values) > 1 else ""
                     disk = line.values[0] if line.values else ""
                     if disks and disk and disk not in disks:
                         r.error("inf", "CPY001", "[SourceDisksFiles] %s names disk %s, absent from "
@@ -926,9 +938,11 @@ class PackageCheck:
 
         # dirids per CopyFiles section
         dest = {}
+        dest_dirs = {}
         for line in inf.get("destinationdirs"):
             if line.key:
                 dest[line.key.lower()] = line.values[0] if line.values else ""
+                dest_dirs[line.key.lower()] = line.values[1].replace("/", "\\").lower() if len(line.values) > 1 else ""
         default_dest = dest.get("defaultdestdir", "")
         r.facts["default_dest_dir"] = default_dest
 
@@ -970,6 +984,13 @@ class PackageCheck:
                 r.error("inf", "CPY007", "%s is copied by [%s] but is not in the directory" % (name, section))
             else:
                 r.ok("inf", "CPY008", "%s copied by [%s] to dirid %s, present" % (name, section, dirid or "?"))
+                actual = str(self.files[name].parent.relative_to(self.dir)).replace("/", "\\").lower()
+                if actual == ".":
+                    actual = ""
+                if actual != source_dirs.get(name, ""):
+                    r.error("inf", "CPY012", "%s is outside its SourceDisksFiles subdirectory" % name)
+            if dirid == "13" and source_dirs.get(name, "") != dest_dirs.get(section.lower(), dest_dirs.get("defaultdestdir", "")):
+                r.error("inf", "CPY013", "%s DIRID 13 source and destination subdirectories differ" % name)
         for name in sorted(self.source_disks):
             self.referenced.add(name)
             if name not in self.files:
@@ -1073,6 +1094,8 @@ class PackageCheck:
             # each distinct name is checked once, so the report does not say the same thing three times.
             seen = set()
             for dll in values:
+                if dll == "<>":
+                    continue  # D3D9On12 fallback marker, not a DLL filename.
                 leaf = Path(dll.replace("\\", "/")).name.lower()
                 if leaf in seen:
                     continue

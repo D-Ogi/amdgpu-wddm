@@ -23,6 +23,7 @@ struct Adapter {
     D3DKMT_HANDLE unresolved_version_adapter=0;
     bool offers_wddm22=false; // frozen at open, shared by version discovery and device creation
     unsigned char engine_sha256[32]{},icd_sha256[32]{};
+    bool authenticode=false;
     std::wstring engine_path,icd_path;
     EngineModules modules;
     std::mutex mutex;
@@ -139,7 +140,7 @@ HRESULT APIENTRY create(D3D10DDI_HADAPTER handle,D3D10DDIARG_CREATEDEVICE *args)
     try {
         std::lock_guard<std::mutex> lock(a->mutex);
         if (!a->modules.loaded()) {
-            HRESULT hr=a->modules.open(a->engine_path.c_str(),a->icd_path.c_str(),a->engine_sha256,a->icd_sha256);
+            HRESULT hr=a->modules.open(a->engine_path.c_str(),a->icd_path.c_str(),a->engine_sha256,a->icd_sha256,a->authenticode);
             if (FAILED(hr)) {failure_diagnostic("module load",hr);return hr;}
         }
         // Allocate retention storage before any callback can create live state.
@@ -185,6 +186,7 @@ HRESULT open_render_adapter(D3D10DDIARG_OPENADAPTER &args,const AdapterConfigura
         a->engine_path=config.engine_path;a->icd_path=config.icd_path;
         std::memcpy(a->engine_sha256,config.engine_sha256,sizeof(a->engine_sha256));
         std::memcpy(a->icd_sha256,config.icd_sha256,sizeof(a->icd_sha256));
+        a->authenticode=config.authenticode;
         HRESULT hr=query_adapter_identity(args.hRTAdapter.handle,args.pAdapterCallbacks->pfnQueryAdapterInfoCb,a->luid);
         if (FAILED(hr)) return hr;
         // Read once per adapter, before any device: every device and the advertised caps get the same answer.

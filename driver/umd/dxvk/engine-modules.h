@@ -11,7 +11,7 @@ public:
     EngineModules(const EngineModules &)=delete;
     EngineModules &operator=(const EngineModules &)=delete;
     HRESULT open(const wchar_t *enginePath,const wchar_t *icdPath,
-        const unsigned char *engineSha256=nullptr,const unsigned char *icdSha256=nullptr);
+        const unsigned char *engineSha256=nullptr,const unsigned char *icdSha256=nullptr,bool authenticode=false);
     void close();
     const BC250_DXVK_ENGINE_FUNCS &functions() const { return functions_; }
     PFN_vkGetInstanceProcAddr get_instance_proc_addr() const { return get_; }

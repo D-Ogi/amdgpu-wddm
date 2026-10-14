@@ -1,0 +1,10 @@
+# Decisions for state-store migration and the package version identity.
+E22 driver/kmd/bc250kmd.inf The old experimental EnableVidPnFlip AddReg comment was removed by state migration 6282d18d. The setting remains in driver/state/catalog.json and the generated defaults, with its current production value.
+C50 driver/kmd/bc250kmd.inf State migration 6282d18d moved NotifyDpcInReport from the old live registry defaults to the driver state catalog. DPC notification code and its contract remain in the KMD.
+M819 driver/kmd/bc250kmd.inf State migration 6282d18d moved the DP audio switches to driver/state/catalog.json. The current generated defaults retain the enabled audio settings.
+M820 driver/kmd/bc250kmd.inf State migration 6282d18d removed the shared legacy DP audio AddReg comment. Audio capability and endpoint code remain, with settings in the driver state catalog.
+BD-091 driver/kmd/bc250kmd.inf The legacy NOCLOBBER explanations were removed by 6282d18d. The installer now preserves mutable state through the driver-owned catalog transaction instead of overwriting live registry defaults.
+BD-092 driver/kmd/bc250kmd.inf State migration 6282d18d removed the old EnableDpAudio AddReg explanation. The catalog and generated defaults retain EnableDpAudio=1.
+C50 tools/win/bc250mon/src/MeasurementGuardProvider.cs State migration 6282d18d removed the legacy service-registry flag inventory. This is not removal of DPC notification pairing in the KMD.
+BD-059 tools/release/installer/install.ps1 Commit 494c2587 replaced the legacy INF staging block with the display-package transaction without an INF Reboot directive. The session marker remains owned by the KMD. Current migration also hydrates the driver-owned state catalog.
+BD-104 driver/kmd/driver_version.c Runtime device-version rewriting was deliberately retired by a67364ad. Windows reads the single mapped package version from the INF. There is no runtime alias writer to retain.

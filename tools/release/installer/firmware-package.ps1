@@ -59,8 +59,8 @@ function Test-DriverCatalogMembers {
     Initialize-FirmwarePackageNative
     $cat = Join-Path $Directory 'bc250kmd.cat'
     foreach ($name in $Names) {
-        if ($name -cne [IO.Path]::GetFileName($name) -or $name.Contains(':') -or $name.Contains('/')) { throw 'invalid catalog member basename' }
-        if (-not [AmdgpuWddm.CatalogMembership]::Contains($cat, (Join-Path $Directory $name))) {
+        $relative = [AmdgpuWddm.PackageStage]::MemberPath($name)
+        if (-not [AmdgpuWddm.CatalogMembership]::Contains($cat, (Join-Path $Directory $relative))) {
             throw "signed catalog does not contain these file bytes: $name"
         }
     }
@@ -76,7 +76,7 @@ function New-HydratedDriverPackage {
     $inputs = @($Manifest.files | Where-Object { $_.path -clike 'payload/kmd/*' })
     $names = @($inputs | ForEach-Object { ([string]$_.path).Substring(12) })
     $infText=[IO.File]::ReadAllText((Join-Path $PackageRoot 'payload\kmd\bc250kmd.inf'))
-    Assert-DriverStatePackageMembers -Names $names -InfText $infText
+    Assert-DriverStatePackageMembers -Names $names -InfText $infText -DriverPackage $Manifest.driver_package
     Initialize-FirmwarePackageNative
     $scope = New-Object AmdgpuWddm.PackageStage $Parent
     try {
@@ -107,9 +107,24 @@ function New-HydratedDriverPackage {
 }
 
 function Assert-DriverStatePackageMembers {
-    param([string[]]$Names,[string]$InfText)
+    param([string[]]$Names,[string]$InfText,$DriverPackage)
     $required=@('bc250kmd.inf','bc250kmd.sys','bc250kmd.cat')
     if($InfText -match '(?im)^\s*HKR\s*,\s*,\s*AmdgpuStateCatalog\s*,'){$required+='amdgpu-state.bin'}
+    if ($DriverPackage) {
+        if ($DriverPackage.schema -ne 1 -or $DriverPackage.root -cne 'payload/kmd' -or
+            $InfText -notmatch '(?im)^\[Amdgpu_UserModeDriver\]\s*$') { throw 'invalid DriverStore UMD contract' }
+        Initialize-FirmwarePackageNative
+        $leaves = @{}
+        foreach ($row in @($DriverPackage.members)) {
+            $member = [AmdgpuWddm.PackageStage]::MemberPath([string]$row.member)
+            if ([string]$row.path -cne ('payload/kmd/' + $member.Replace('\','/'))) { throw 'DriverStore member path disagrees' }
+            $leaf = [IO.Path]::GetFileName($member)
+            if ($leaves.ContainsKey($leaf)) { throw "duplicate DriverStore basename: $leaf" }
+            $leaves[$leaf] = $true
+            $required += $member.Replace('\','/')
+        }
+        if ($DriverPackage.members.Count -lt 24) { throw 'incomplete DriverStore UMD contract' }
+    } elseif ($InfText -match '(?im)^\[Amdgpu_UserModeDriver\]\s*$') { throw 'missing DriverStore UMD contract' }
     if($Names.Count -ne $required.Count){throw 'invalid manifest KMD payload set'}
     foreach($name in $required) {
         if(@($Names | Where-Object {$_ -ceq $name}).Count -ne 1){throw "missing or duplicate KMD payload: $name"}

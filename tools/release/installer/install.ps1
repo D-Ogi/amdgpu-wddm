@@ -834,6 +834,16 @@ function Invoke-Verify {
     # The 64-bit registration: the four UserModeDriverName slots (the D3D9 slot holds '<>', so that D3D9 goes
     # through D3D9On12) and VulkanDriverName. Registration only: the D3D12 and Vulkan checks above create the devices.
     $gpuSwKey = Get-DeviceDriverKey -InstanceId $id
+    $verifiedGraphicsRoot = $InstallRoot
+    if ($gpuSwKey -and (Test-DriverStoreUmdPackage $script:Manifest)) {
+        try {
+            $verifiedGraphicsRoot = Get-DriverPackageRoot -ClassKey $gpuSwKey
+            if (-not $verifiedGraphicsRoot) { throw 'bound adapter has no DriverStore UMD package identity' }
+            $packageProblems = @(Test-DriverPackageRegistration -Manifest $script:Manifest -ClassKey $gpuSwKey -Root $verifiedGraphicsRoot)
+            $packageProblems += @(Get-LegacyUmdValues -InstallRoot $InstallRoot | ForEach-Object { "legacy UMD override or duplicate ICD: $($_.name)" })
+            Add-Result 'DriverStore UMD set' ($packageProblems.Count -eq 0) $(if ($packageProblems.Count) { $packageProblems -join '; ' } else { 'INF registration and every installed member match the package manifest' })
+        } catch { Add-Result 'DriverStore UMD set' $false $_.Exception.Message; $verifiedGraphicsRoot = $InstallRoot }
+    }
     if (-not $gpuSwKey) { Add-Result 'D3D registration' $false 'no software key for the GPU' }
     else {
         $reg = @(Test-UmdRegistration -InstallRoot $InstallRoot -ClassKey $gpuSwKey)
@@ -878,7 +888,7 @@ function Invoke-Verify {
     # right is a warning with its remedy, not a failed verification.
     try {
         $mftSwitch = Get-MftReleaseSwitch -Manifest $script:Manifest -PackageRoot $null
-        $mftInstalled = Join-Path $InstallRoot $mftSwitch.install_path
+        $mftInstalled = Join-Path $verifiedGraphicsRoot $mftSwitch.install_path
         if (-not $mftSwitch.register) {
             Add-Info 'H.264 encoder' "not registered by this release; keys of ours on this computer: $(@(Get-MftRegistrationKeysPresent -ClassesKey $script:ClassesKey).Count)"
         } elseif ($script:DryRunMode) {
@@ -1323,6 +1333,7 @@ Enter-Stage 'firmware' 'GPU firmware'
 # were.
 $fw = $script:Manifest.firmware
 $driverStoreFirmware = Test-DriverStoreFirmware $fw
+$driverStoreUmd = Test-DriverStoreUmdPackage $script:Manifest
 $fwStaging = Join-Path $script:StateDir 'firmware-staging'
 $fwFrom = $(if ($FirmwareDir) { "from $FirmwareDir" } else { "from linux-firmware $($fw.commit)" })
 if ($script:DryRunMode) {
@@ -1378,7 +1389,7 @@ Invoke-Change "add the release test certificate $($cert.Thumbprint) to LocalMach
 } | Out-Null
 
 # Files. Each payload directory goes to the same name under the install root; wow64 holds the x86 builds (BD-064).
-$dirs = @('d3d12', 'desktop', 'd3d11', 'vulkan', 'wow64', 'tools')
+$dirs = if ($driverStoreUmd) { @('tools') } else { @('d3d12', 'desktop', 'd3d11', 'vulkan', 'wow64', 'tools') }
 if (Test-Path -LiteralPath (Join-Path $package 'payload\system-tuning')) { $dirs += 'system-tuning' }
 if (-not $NoControlApp -and (Test-Path -LiteralPath (Join-Path $package 'payload\control'))) { $dirs += 'control' }
 # The H.264 encoder Media Foundation transform (M15.11, driver/umd/mft-h264/INSTALL.md): the release decides whether
@@ -1390,7 +1401,7 @@ $mftKeys = @(Get-MftRegistrationKeysPresent -ClassesKey $script:ClassesKey)
 $mftAction = Get-MftAction -Switch $mft -PresentKeys $mftKeys -DirPresent (Test-Path -LiteralPath (Split-Path $mftDll))
 if ($mft.register) {
     if (-not $mft.present) { throw "manifest.json registers the H.264 encoder MFT, but this package has no $($mft.package_path)" }
-    $dirs += $mft.payload_dir
+    if (-not $driverStoreUmd) { $dirs += $mft.payload_dir }
 }
 # The OpenGL ICD (BD-076, GitHub issue #8): the release decides whether it is registered at all and for which
 # architectures (manifest.json "opengl_icd" with its "architectures" list), and the decision is taken here, before
@@ -1407,13 +1418,25 @@ $glDirWow = Split-Path (Join-Path $InstallRoot $gl.install_path_wow)  # <install
 if ($gl.register) {
     $glMissing = @(@(Get-OpenGlArchFiles -Switch $gl) | Where-Object { -not $_.present } | ForEach-Object { $_.package_path })
     if ($glMissing.Count) { throw "manifest.json registers the OpenGL ICD for $(@($gl.architectures) -join ' and '), but this package has no $($glMissing -join ' and ')" }
-    if ($gl.register_x64) { $dirs += $gl.payload_dir }
+    if ($gl.register_x64 -and -not $driverStoreUmd) { $dirs += $gl.payload_dir }
 }
 # BD-089: what the release installed here installed and this one does not, before the new payload goes in. The rows
 # come from the plan that this run printed before any change (above); each removal names the file and the release that
 # installed it. The SHA256 is read again here, so a file that somebody changed between the plan and this step stays.
 # A file in use goes at the next restart (Remove-PathOrSchedule).
+$deferredUmdOrphans = @()
+if ($driverStoreUmd -and $state.PSObject.Properties['umd_retired_files']) {
+    $deferredUmdOrphans = @(Get-RetiredUmdFilePlan -InstallRoot $InstallRoot -Rows @($state.umd_retired_files))
+}
 foreach ($row in @($script:OrphanRows | Where-Object { $_.state -eq 'remove' })) {
+    # The old router still needs its old absolute overrides until the new INF
+    # has bound. Do not strand it across the first BD-152 restart.
+    $prefix = [IO.Path]::GetFullPath($InstallRoot).TrimEnd('\') + '\'
+    if ($driverStoreUmd -and $row.path.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase) -and
+        $row.path.Substring($prefix.Length) -match '^(desktop|d3d11|d3d12|vulkan|wow64|opengl|mft)\\') {
+        $deferredUmdOrphans += $row
+        continue
+    }
     Invoke-Change "remove $($row.path): installed by $($row.from_version), not in $packageVersion" {
         if (-not (Test-Path -LiteralPath $row.path -PathType Leaf)) { Write-Info "already gone: $($row.path)"; return }
         $now = Get-Sha256 $row.path
@@ -1422,6 +1445,13 @@ foreach ($row in @($script:OrphanRows | Where-Object { $_.state -eq 'remove' }))
     } | Out-Null
 }
 # BD-146: the old uninstall can still have deletes queued for files about to become current again. Cancel only
+if ($driverStoreUmd) {
+    # The new manifest is copied before the first restart. Preserve the exact
+    # old file plan first, so the continuation cannot lose its orphan list.
+    $deferredUmdOrphans = @(Get-RetiredUmdFilePlan -InstallRoot $InstallRoot -Rows $deferredUmdOrphans)
+    Set-StateValue $state 'umd_retired_files' $deferredUmdOrphans
+    Save-InstallState $state
+}
 # those exact destinations before Copy-FileSafe can keep a same-hash file. No unrelated rename/delete is changed.
 Invoke-Change 'keep the files of this installation from being removed at the next restart' {
     $legacyFirmwareCopies = if ($driverStoreFirmware) { @() } else { @($fwStaged) }
@@ -1696,8 +1726,40 @@ foreach ($audio in @($audioPlan | Where-Object { $_.write })) {
     }
 }
 
+# The installed INF owns the complete graphics registration on new packages.
+# Resolve it after the recorded PnP restart; no previous FileRepository path is reused.
+if ($driverStoreUmd) {
+    if ($script:DryRunMode) {
+        $graphicsRoot = '%13%'
+        foreach ($row in @(Get-DriverPackageRegistration -Package $script:Manifest.driver_package -Root $graphicsRoot)) {
+            Write-Info "INF $classKey $($row.name) [$($row.kind)] = $(@($row.value) -join ' | ')"
+        }
+    } else {
+        $graphicsRoot = Get-DriverPackageRoot -ClassKey $classKey
+        if (-not $graphicsRoot) { throw 'bound package lacks its DriverStore UMD identity' }
+        $problems = @(Test-DriverPackageRegistration -Manifest $script:Manifest -ClassKey $classKey -Root $graphicsRoot)
+        if ($problems.Count) { throw ($problems -join '; ') }
+    }
+    $mftDll = Join-Path $graphicsRoot $mft.install_path
+    $legacyUmd = @(Get-LegacyUmdValues -InstallRoot $InstallRoot)
+    if (-not $state.PSObject.Properties['umd_migration']) {
+        Set-StateValue $state 'umd_migration' ([pscustomobject]@{schema=1; install_root=$InstallRoot; values=$legacyUmd})
+        Save-InstallState $state
+    }
+    Invoke-Change 'remove legacy router paths and duplicate global Vulkan entries; retain route policy' {
+        Remove-LegacyUmdValues -Rows $legacyUmd
+    } | Out-Null
+    Set-StateValue $state 'khronos_value' $null
+    Set-StateValue $state 'khronos_wow_value' $null
+    Set-StateValue $state 'opengl_icd' $null
+} else {
 # Graphics registration in the GPU's software key: the D3D9 slot '<>' (D3D9On12 on our D3D12 driver), the D3D10/11
 # slots, the D3D12 slot, Vulkan.
+Invoke-Change 'clear the DriverStore UMD marker for the bound legacy rollback package' {
+    # An older INF has no DelReg for a value introduced by a newer package.
+    # This executes after its binding/restart boundary, before legacy paths.
+    Remove-ItemProperty -LiteralPath $classKey -Name AmdgpuDriverPackage -ErrorAction SilentlyContinue
+} | Out-Null
 $umd = Get-UmdNames $InstallRoot
 $icdJson = Join-Path $InstallRoot 'vulkan\radeon_icd.json'
 Invoke-Change ("$classKey UserModeDriverName = " + (Format-UmdNames $umd) + "; VulkanDriverName = $icdJson") {
@@ -1814,6 +1876,8 @@ if ($gl.register) {
     Set-StateValue $state 'opengl_icd' $null
 }
 
+} # legacy Program Files graphics registration
+
 # The H.264 encoder MFT (M15.11): route A of driver/umd/mft-h264/INSTALL.md, machine wide under
 # HKLM\SOFTWARE\Classes, which is what HKCR gives every process. A client that wants the encoder of one adapter asks
 # Media Foundation with MFT_ENUM_ADAPTER_LUID; the registration holds no LUID and cannot hold one, because Windows
@@ -1866,8 +1930,28 @@ if ($mftAction -eq 'register') {
 # Allow dxdiag.exe only lifted the old component rule, and Deny witcher3.exe kept two RADV builds out of one process,
 # which the D3D11 and D3D12 paths no longer have (one ICD).
 # The *Wow paths are what the x86 router (32-bit processes) loads; the policy values are shared (BD-064).
-Invoke-RegistryDefaults "$($script:SoftwareKey)\DesktopRouter" $regDefaults.defaults.desktop_router $applied.desktop_router @{} ([ordered]@{ CpuUmdPath = (Join-Path $InstallRoot 'desktop\bc250d3d.dll'); CpuUmdPathWow = (Join-Path $InstallRoot 'wow64\desktop\bc250d3d.dll') })
-Invoke-RegistryDefaults "$($script:SoftwareKey)\AppRouter" $regDefaults.defaults.app_router $applied.app_router @{} ([ordered]@{ GpuUmdPath = (Join-Path $InstallRoot 'd3d11\amdgpu_wddm_d3d11.dll'); GpuUmdPathWow = (Join-Path $InstallRoot 'wow64\d3d11\amdgpu_wddm_d3d11.dll') })
+$desktopPaths = if ($driverStoreUmd) { @{} } else { [ordered]@{ CpuUmdPath = (Join-Path $InstallRoot 'desktop\bc250d3d.dll'); CpuUmdPathWow = (Join-Path $InstallRoot 'wow64\desktop\bc250d3d.dll') } }
+$appPaths = if ($driverStoreUmd) { @{} } else { [ordered]@{ GpuUmdPath = (Join-Path $InstallRoot 'd3d11\amdgpu_wddm_d3d11.dll'); GpuUmdPathWow = (Join-Path $InstallRoot 'wow64\d3d11\amdgpu_wddm_d3d11.dll') } }
+Invoke-RegistryDefaults "$($script:SoftwareKey)\DesktopRouter" $regDefaults.defaults.desktop_router $applied.desktop_router @{} $desktopPaths
+Invoke-RegistryDefaults "$($script:SoftwareKey)\AppRouter" $regDefaults.defaults.app_router $applied.app_router @{} $appPaths
+if (-not $driverStoreUmd -and $state.PSObject.Properties['umd_migration']) {
+    Invoke-Change 'restore the retained legacy UMD registration overrides for the rollback package' {
+        Restore-LegacyUmdValues -Rows @($state.umd_migration.values) -InstallRoot $InstallRoot
+    } | Out-Null
+}
+foreach ($row in $deferredUmdOrphans) {
+    Invoke-Change "remove legacy UMD $($row.path) after the new INF binding and route migration" {
+        if (-not (Test-Path -LiteralPath $row.path -PathType Leaf)) { return }
+        if ((Get-Sha256 $row.path) -ine $row.sha256) {
+            throw "legacy UMD changed during migration: $($row.path)"
+        }
+        Remove-PathOrSchedule $row.path
+    } | Out-Null
+}
+if ($driverStoreUmd) {
+    Set-StateValue $state 'umd_retired_files' @()
+    Save-InstallState $state
+}
 # How long Windows waits for the graphics before it resets them: TdrDelay under Windows' own GraphicsDrivers key
 # (BD-079; tools\win\amdgpu_wddm_control\src\TdrSetting.cs holds the rules and the range). Windows waits 2 s while
 # the value is absent, and this part has no working GPU reset, so a picture that needs longer than the wait does not

@@ -22,7 +22,11 @@ try {
         & cl.exe @options @includes /Fe:engine-modules-test.exe "$repo\driver\umd\dxvk\engine-modules.cpp" "$repo\driver\umd\dxvk\engine-modules-test.cpp"
         if ($LASTEXITCODE -ne 0) { throw 'Loader compilation failed' }
         $fixture=Join-Path $OutputDir 'engine-modules-fixture.dll'
-        & .\engine-modules-test.exe $fixture (Get-FileHash -LiteralPath $fixture -Algorithm SHA256).Hash
+        $pins=Join-Path $OutputDir 'image-identities.json'
+        & python -B "$repo\tools\release\image_identity.py" --directory $OutputDir --write $pins
+        if ($LASTEXITCODE -ne 0) { throw 'Image identity calculation failed' }
+        $imageDigest=(Get-Content -LiteralPath $pins -Raw | ConvertFrom-Json).'engine-modules-fixture.dll'
+        & .\engine-modules-test.exe $fixture (Get-FileHash -LiteralPath $fixture -Algorithm SHA256).Hash $imageDigest
         if ($LASTEXITCODE -ne 0) { throw 'Loader test failed' }
     } finally { Pop-Location }
 } finally { Restore-ProcessEnvironment $saved }

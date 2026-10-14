@@ -45,6 +45,7 @@ function Get-KmdDriverStorePackages {
             Published = $published
             Version = $version
             Date = $package.Date.ToString('yyyy-MM-dd', [Globalization.CultureInfo]::InvariantCulture)
+            PackageRoot = Split-Path ([string]$package.OriginalFileName)
         }
     }
     return $ours
@@ -74,8 +75,19 @@ function Inventory {
     }
     $mft = 'HKLM:\SOFTWARE\Classes\CLSID\{A32438F0-0D79-4CA9-A5BF-9F3C80837253}'
     if (Test-Path -LiteralPath $mft) { 'LEFT mft clsid' } else { 'gone mft clsid' }
-    $ours = @(Get-KmdDriverStorePackages | ForEach-Object { '{0} {1} {2}' -f $_.Published, $_.Date, $_.Version })
+    $packages = @(Get-KmdDriverStorePackages)
+    $ours = @($packages | ForEach-Object { '{0} {1} {2}' -f $_.Published, $_.Date, $_.Version })
     'driver store bc250kmd packages: {0} {1}' -f $ours.Count, ($ours -join '; ')
+    foreach ($package in $packages) {
+        # Read only packages DISM identified as our INF, never a file-name scan
+        # through other vendors' packages. PnP owns their eventual removal.
+        $store = Join-Path $env:windir 'System32\DriverStore\FileRepository'
+        if ((Split-Path $package.PackageRoot) -ine $store -or (Split-Path $package.PackageRoot -Leaf) -notlike 'bc250kmd.inf_*') {
+            throw 'unexpected DriverStore directory for the registered package'
+        }
+        $umd = @(Get-ChildItem -LiteralPath $package.PackageRoot -Recurse -File -Filter '*.dll')
+        'LEFT DriverStore UMDs {0}: {1} files' -f $package.Published, $umd.Count
+    }
     $t = @(Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { $_.TaskName -like 'amdgpu-wddm*' } | ForEach-Object { $_.TaskName })
     'scheduled tasks amdgpu-wddm*: {0} {1}' -f $t.Count, ($t -join ', ')
     'lab emergency task present: {0}' -f [bool](Get-ScheduledTask -TaskName 'Lab emergency channel' -ErrorAction SilentlyContinue)

@@ -6,6 +6,7 @@
 
 . (Join-Path $PSScriptRoot 'version-identity.ps1')
 . (Join-Path $PSScriptRoot 'firmware-package.ps1')
+. (Join-Path $PSScriptRoot 'driver-package.ps1')
 
 $script:ReleaseName      = 'amdgpu-wddm'
 $script:ServiceName      = 'bc250kmd'
@@ -1716,6 +1717,8 @@ function Test-UmdRegistration {
     param([Parameter(Mandatory)][string]$InstallRoot, [Parameter(Mandatory)][string]$ClassKey)
     $problems = @()
     $c = Get-ItemProperty -LiteralPath $ClassKey -ErrorAction SilentlyContinue
+    $driverRoot = Get-DriverPackageRoot -ClassKey $ClassKey
+    if ($driverRoot) { $InstallRoot = $driverRoot }
     $want = Get-UmdNames $InstallRoot
     if ($null -eq $c.UserModeDriverName) { $problems += 'UserModeDriverName is missing' }
     else {
@@ -1732,11 +1735,18 @@ function Test-UmdRegistration {
 # needs no Vulkan ICD registration. With the D3D12 slot a 32-bit D3D9 application gets D3D9On12 on our GPU, the same
 # route as a 64-bit one. The x86 router and the x86 D3D12 shell read the 64-bit policy keys; the router also reads its
 # own *Wow path values. The x86 builds link the C runtime statically: no x86 Visual C++ runtime is needed.
-function Get-WowUmdNames([string]$InstallRoot) {
-    $router = Join-Path $InstallRoot 'wow64\desktop\bc250d3d_router.dll'
-    return @($script:D3d9SlotName, $router, $router, (Join-Path $InstallRoot 'wow64\d3d12\amdgpu_wddm_d3d12.dll'))
+function Get-WowUmdNames([string]$InstallRoot, [switch]$DriverStore) {
+    $suffix = if ($DriverStore) { '32' } else { '' }
+    $router = Join-Path $InstallRoot "wow64\desktop\bc250d3d_router$suffix.dll"
+    return @($script:D3d9SlotName, $router, $router, (Join-Path $InstallRoot "wow64\d3d12\amdgpu_wddm_d3d12$suffix.dll"))
 }
-function Get-WowFiles([string]$InstallRoot) {
+function Get-WowFiles([string]$InstallRoot, [switch]$DriverStore) {
+    if ($DriverStore) {
+        return @('desktop\bc250d3d_router32.dll', 'desktop\bc250d3d32.dll', 'd3d11\amdgpu_wddm_d3d1132.dll',
+            'd3d11\amdgpu_wddm_dxvk32.dll', 'd3d11\amdgpu_wddm_radv_d3d1132.dll',
+            'd3d12\amdgpu_wddm_d3d1232.dll', 'd3d12\amdgpu_wddm_vkd3d32.dll',
+            'd3d12\amdgpu_wddm_radv_d3d1232.dll', 'vulkan\vulkan_radeon32.dll' | ForEach-Object { Join-Path $InstallRoot "wow64\$_" })
+    }
     return @('desktop\bc250d3d_router.dll', 'desktop\bc250d3d.dll', 'd3d11\amdgpu_wddm_d3d11.dll', 'd3d11\amdgpu_wddm_dxvk.dll', 'd3d11\amdgpu_wddm_radv.dll',
         'd3d12\amdgpu_wddm_d3d12.dll', 'd3d12\amdgpu_wddm_vkd3d.dll', 'd3d12\amdgpu_wddm_radv.dll', 'vulkan\vulkan_radeon.dll' | ForEach-Object { Join-Path $InstallRoot "wow64\$_" })
 }
@@ -1798,20 +1808,30 @@ function Test-WowRegistration {
         [string]$SoftwareKey = $script:SoftwareKey, [string[]]$Files = (Get-WowFiles $InstallRoot))
     $problems = @()
     $c = Get-ItemProperty -LiteralPath $ClassKey -ErrorAction SilentlyContinue
-    $want = Get-WowUmdNames $InstallRoot
+    $legacyRoot = $InstallRoot
+    $driverRoot = Get-DriverPackageRoot -ClassKey $ClassKey
+    if ($driverRoot) {
+        $InstallRoot = $driverRoot
+        if (-not $PSBoundParameters.ContainsKey('Files')) { $Files = Get-WowFiles -InstallRoot $driverRoot -DriverStore }
+    }
+    $want = Get-WowUmdNames -InstallRoot $InstallRoot -DriverStore:([bool]$driverRoot)
     if ($null -eq $c.UserModeDriverNameWow) { $problems += 'UserModeDriverNameWow is missing' }
     else {
         $have = @($c.UserModeDriverNameWow)
         if (($have.Count -ne $want.Count) -or (($have -join '|') -ne ($want -join '|'))) { $problems += "UserModeDriverNameWow is $(Format-UmdNames $have), expected $(Format-UmdNames $want)" }
     }
-    $icd = Join-Path $InstallRoot 'wow64\vulkan\radeon_icd.json'
+    $icd = Join-Path $InstallRoot $(if ($driverRoot) { 'wow64\vulkan\radeon_icd32.json' } else { 'wow64\vulkan\radeon_icd.json' })
     if ((@($c.VulkanDriverNameWow) -join '|') -ne $icd) { $problems += "VulkanDriverNameWow is '$(@($c.VulkanDriverNameWow) -join ' | ')'" }
     $k = Get-Item -LiteralPath $KhronosKey -ErrorAction SilentlyContinue
-    if (-not $k -or $k.GetValue($icd) -ne 0) { $problems += "$KhronosKey has no '$icd' = 0" }
+    if ($driverRoot) {
+        foreach ($entry in @($icd, (Join-Path $legacyRoot 'wow64\vulkan\radeon_icd.json'))) {
+            if ($k -and $k.GetValueNames() -contains $entry) { $problems += "duplicate global Vulkan entry: $entry" }
+        }
+    } elseif (-not $k -or $k.GetValue($icd) -ne 0) { $problems += "$KhronosKey has no '$icd' = 0" }
     $cpu = (Get-ItemProperty -LiteralPath "$SoftwareKey\DesktopRouter" -Name CpuUmdPathWow -ErrorAction SilentlyContinue).CpuUmdPathWow
-    if ($cpu -ne (Join-Path $InstallRoot 'wow64\desktop\bc250d3d.dll')) { $problems += "DesktopRouter CpuUmdPathWow is '$cpu'" }
+    if (($driverRoot -and $cpu) -or (-not $driverRoot -and $cpu -ne (Join-Path $InstallRoot 'wow64\desktop\bc250d3d.dll'))) { $problems += "DesktopRouter CpuUmdPathWow is '$cpu'" }
     $gpu = (Get-ItemProperty -LiteralPath "$SoftwareKey\AppRouter" -Name GpuUmdPathWow -ErrorAction SilentlyContinue).GpuUmdPathWow
-    if ($gpu -ne (Join-Path $InstallRoot 'wow64\d3d11\amdgpu_wddm_d3d11.dll')) { $problems += "AppRouter GpuUmdPathWow is '$gpu'" }
+    if (($driverRoot -and $gpu) -or (-not $driverRoot -and $gpu -ne (Join-Path $InstallRoot 'wow64\d3d11\amdgpu_wddm_d3d11.dll'))) { $problems += "AppRouter GpuUmdPathWow is '$gpu'" }
     foreach ($f in $Files) {
         $m = Get-PeMachine $f
         if ($null -eq $m) { $problems += "$f missing or not an image" } elseif ($m -ne 0x14C) { $problems += ('{0} is not x86 (machine 0x{1:X})' -f $f, $m) }
@@ -1940,8 +1960,8 @@ function Get-OpenGlReleaseSwitch {
     if ($s -and $s.package_path) { $rel = [string]$s.package_path }
     $relWow = $script:OpenGlPackagePathWow
     if ($s -and $s.package_path_wow) { $relWow = [string]$s.package_path_wow }
-    if ($rel -notmatch '^payload/[A-Za-z0-9_-]+/[A-Za-z0-9_.-]+\.dll$') { throw "opengl_icd package_path '$rel': expected payload/<directory>/<name>.dll" }
-    if ($relWow -notmatch '^payload/wow64/[A-Za-z0-9_-]+/[A-Za-z0-9_.-]+\.dll$') { throw "opengl_icd package_path_wow '$relWow': expected payload/wow64/<directory>/<name>.dll" }
+    if ($rel -notmatch '^payload/(?:kmd/)?opengl/[A-Za-z0-9_-]+\.dll$') { throw "invalid OpenGL package path: $rel" }
+    if ($relWow -notmatch '^payload/(?:kmd/)?wow64/opengl/[A-Za-z0-9_-]+\.dll$') { throw "invalid WoW64 OpenGL package path: $relWow" }
     $version = $script:OpenGlVersion
     if ($s -and $null -ne $s.version) { $version = [int]$s.version }
     $flags = $script:OpenGlFlags
@@ -1978,8 +1998,8 @@ function Get-OpenGlReleaseSwitch {
         package_path     = $rel
         package_path_wow = $relWow
         payload_dir      = ($rel -split '/')[1]                               # the payload directory install.ps1 copies
-        install_path     = ($rel -replace '^payload/', '') -replace '/', '\'  # under the install root
-        install_path_wow = ($relWow -replace '^payload/', '') -replace '/', '\'
+        install_path     = ($rel -replace '^payload/(?:kmd/)?', '') -replace '/', '\'
+        install_path_wow = ($relWow -replace '^payload/(?:kmd/)?', '') -replace '/', '\'
         source           = $source
         source_wow       = $sourceWow
         present          = $present
@@ -2112,6 +2132,8 @@ function Test-OpenGlIcdFile {
 function Test-OpenGlRegistration {
     param([Parameter(Mandatory)][string]$InstallRoot, [Parameter(Mandatory)][string]$ClassKey, [Parameter(Mandatory)]$Switch)
     $problems = @()
+    $driverRoot = Get-DriverPackageRoot -ClassKey $ClassKey
+    if ($driverRoot) { $InstallRoot = $driverRoot }
     $plan = Get-OpenGlRegistrationPlan -Switch $Switch -InstallRoot $InstallRoot
     $c = Read-RegistryValues $ClassKey
     foreach ($i in $plan) {

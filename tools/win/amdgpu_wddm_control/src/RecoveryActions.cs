@@ -107,8 +107,9 @@ namespace AmdgpuWddmControl
             string installDir = "";
             using (var k = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\amdgpu-wddm\Release"))
                 if (k != null) installDir = Convert.ToString(k.GetValue("InstallDir") ?? "");
-            s.GpuDesktopModules = installDir.Length > 0 &&
-                new[] { "bc250d3d_router.dll", "bc250d3d_zink.dll", "amdgpu_wddm_radv.dll" }.All(f => File.Exists(Path.Combine(installDir, "desktop", f)));
+            string graphicsDir = Inventory.GraphicsDirectory(installDir);
+            s.GpuDesktopModules = graphicsDir.Length > 0 &&
+                new[] { "bc250d3d_router.dll", "bc250d3d_zink.dll", "amdgpu_wddm_radv.dll" }.All(f => File.Exists(Path.Combine(graphicsDir, "desktop", f)));
             ReadDefaults(s, installDir);
 
             ReadTask(s);

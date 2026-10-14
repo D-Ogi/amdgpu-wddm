@@ -9,7 +9,7 @@
 # package), RouteLogDirectory = <Root>\logs, Allow, and Deny with the package's deny_always names. Other values go.
 # Receipt: <Root>\receipts\policy-<UTC>.json, also on stdout.
 param([Parameter(Mandatory)][ValidateSet('cpu','allowlist','gpu-default','remove')][string]$Mode,
-      [string]$Allow='',[string]$Deny='',[string]$Root='C:\BC250\m14\app-route-001')
+      [string]$Allow='',[string]$Deny='',[string]$Root='C:\BC250\m14\app-route-001',[switch]$InstalledPackage)
 $ErrorActionPreference='Stop'
 . "$Root\ops\durable.ps1"
 . "$Root\ops\approute-lib.ps1"
@@ -27,10 +27,14 @@ try {
   if([Microsoft.Win32.Registry]::LocalMachine.OpenSubKey($keyPath,$false)){throw 'Key still present after delete'}
   $r.after=$null
  } else {
-  $desired=Get-AppPolicyDesired -Mode $Mode -Allow (ConvertTo-AppList $Allow) -Deny (ConvertTo-AppList $Deny) -Manifest $m -Root $Root
+  # Installed DriverStore routers resolve both architectures from their own
+  # module. The policy changes routing only, never the installed DLL paths.
+  $desired=Get-AppPolicyDesired -Mode $Mode -Allow (ConvertTo-AppList $Allow) -Deny (ConvertTo-AppList $Deny) -Manifest $m -Root $Root -InstalledPackage:$InstalledPackage
   if(!$desired.partial){
-   $shell=[string]$desired.values['GpuUmdPath'].value
-   if((Get-AppFileSha $shell) -ne [string]$m.gpu.files.($m.gpu.shell)){throw "GPU UMD $shell is not the package's"}
+   if(!$InstalledPackage){
+    $shell=[string]$desired.values['GpuUmdPath'].value
+    if((Get-AppFileSha $shell) -ne [string]$m.gpu.files.($m.gpu.shell)){throw "GPU UMD $shell is not the package's"}
+   }
    if(!(Test-Path -LiteralPath $desired.values['RouteLogDirectory'].value -PathType Container)){throw 'Log directory missing; run app-stage.ps1 first'}
   }
   $expected=Get-AppPolicyExpected $desired $before

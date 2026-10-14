@@ -189,7 +189,7 @@ $dev = @(Get-Bc250Device)
 if ($dev.Count -eq 1) {
     $key = Get-DeviceDriverKey -InstanceId $dev[0].DeviceID
     $svc = Get-DeviceServiceName -InstanceId $dev[0].DeviceID
-    if ($key -and $svc -eq $script:ServiceName) {
+    if ($key -and $svc -eq $script:ServiceName -and -not (Get-DriverPackageRoot -ClassKey $key)) {
         Invoke-Change "remove UserModeDriverName, UserModeDriverNameWow, VulkanDriverName and VulkanDriverNameWow from $key" {
             foreach ($n in 'UserModeDriverName', 'UserModeDriverNameWow', 'VulkanDriverName', 'VulkanDriverNameWow') { Remove-ItemProperty -LiteralPath $key -Name $n -ErrorAction SilentlyContinue }
         } | Out-Null
@@ -206,6 +206,7 @@ if ($dev.Count -eq 1) {
 $glKeys = @(Get-OpenGlRegisteredClassKeys -PreferredKey $(if ($dev.Count -eq 1) { Get-DeviceDriverKey -InstanceId $dev[0].DeviceID } else { $null }))
 if (-not $glKeys.Count) { Write-Info 'the OpenGL ICD registration: no OpenGL value in any display class key' }
 foreach ($glKey in $glKeys) {
+    if (Get-DriverPackageRoot -ClassKey $glKey) { continue } # PnP owns this package's HKR values.
     $glNow = Read-RegistryValues $glKey
     $glPrev = @()
     if ($state -and $state.PSObject.Properties['opengl_icd_previous'] -and $state.opengl_icd_previous) { $glPrev = @($state.opengl_icd_previous) }

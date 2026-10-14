@@ -5,6 +5,8 @@ namespace bc250::umd {
 // Little-endian fixed-width deployment record beside amdgpu_wddm_d3d11.dll.
 // Version 1 (108 bytes) records FL10_0..FL11_1 adapters. Version 2 (132 bytes)
 // adds the FL12 capabilities after other_precision; an FL12 maximum needs it.
+// Version 3 uses the v2 layout and SHA-256 Authenticode image digests, so
+// Partner Center can replace embedded signatures without changing these pins.
 struct AdapterConfigRecord {
     UINT32 magic,version,size,reserved;
     UINT32 maximum,doubles,compute,logic_op,tile_based,pixel_precision,other_precision;
@@ -20,7 +22,7 @@ struct AdapterConfigRecord2 {
 static_assert(sizeof(AdapterConfigRecord2)==132);
 inline constexpr UINT32 adapter_config_magic=0x4334314d; // M14C
 inline HRESULT decode_adapter_config(const AdapterConfigRecord2 &r,AdapterConfiguration &out) {
-    const bool v2=r.version==2;
+    const bool v2=r.version==2 || r.version==3;
     if(r.magic!=adapter_config_magic || (r.version!=1 && !v2) ||
        r.size!=(v2 ? sizeof(AdapterConfigRecord2) : sizeof(AdapterConfigRecord)) || r.reserved ||
        r.doubles>1 || r.compute>1 || r.logic_op>1 || r.tile_based>1) return E_INVALIDARG;
@@ -46,6 +48,7 @@ inline HRESULT decode_adapter_config(const AdapterConfigRecord2 &r,AdapterConfig
     // valid_adapter_caps refuses FL12 caps below FL12_0 and an FL12 maximum without them (a v1 record).
     if(!valid_adapter_caps(caps))return E_INVALIDARG;
     out.caps=caps;
+    out.authenticode=r.version==3;
     std::memcpy(out.engine_sha256,r.engine_sha256,32);std::memcpy(out.icd_sha256,r.icd_sha256,32);
     return S_OK;
 }

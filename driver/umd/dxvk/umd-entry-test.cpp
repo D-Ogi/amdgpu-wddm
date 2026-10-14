@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include "adapter-config.h"
+#include "../../contract/amdgpu_driver_package.h"
 #include "../../contract/bc250_adapter_identity.h"
 #include "../../contract/bc250_scanout_caps.h"
 #include <string>
@@ -21,7 +22,7 @@ void write_record(const std::wstring &path,const AdapterConfigRecord &record,DWO
 int wmain(int argc,wchar_t **argv) {
     CHECK(argc==2);
     const std::wstring dll=argv[1];const auto slash=dll.find_last_of(L"\\/");CHECK(slash!=std::wstring::npos);
-    const auto config=dll.substr(0,slash+1)+L"amdgpu_wddm_d3d11.config";
+    const auto config=dll.substr(0,slash+1)+AMDGPU_D3D11_CONFIG_FILE;
     DeleteFileW(config.c_str());
     HMODULE module=LoadLibraryExW(dll.c_str(),nullptr,LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_SYSTEM32);
     CHECK(module);
@@ -66,6 +67,13 @@ int wmain(int argc,wchar_t **argv) {
     entries=0;CHECK(table.pfnGetSupportedVersions(args.hAdapter,&entries,nullptr)==S_OK && entries==1);
     CHECK(table.pfnGetCaps(args.hAdapter,&capArgs)==S_OK && pipelines.Caps==15);
     CHECK(table.pfnCloseAdapter(args.hAdapter)==S_OK);
+    record2.version=3;write2(record2,sizeof(record2));
+    AdapterConfiguration decoded{};
+    CHECK(decode_adapter_config(record2,decoded)==S_OK && decoded.authenticode);
+    CHECK(open(&args)==S_OK);CHECK(table.pfnCloseAdapter(args.hAdapter)==S_OK);
+    record2.version=4;write2(record2,sizeof(record2));CHECK(open(&args)==E_INVALIDARG);
+    record2.version=2;
+    CHECK(decode_adapter_config(record2,decoded)==S_OK && !decoded.authenticode);
     CHECK(FreeLibrary(module));CHECK(DeleteFileW(config.c_str()));
-    std::puts("PASS exported OpenAdapter10_2: missing/malformed configuration, v1/v2 records, negotiation and close (no GPU)");
+    std::puts("PASS exported OpenAdapter10_2: missing/malformed configuration, v1/v2/v3 records, negotiation and close (no GPU)");
 }

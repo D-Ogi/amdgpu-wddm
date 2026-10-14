@@ -7,13 +7,13 @@
 #include <string>
 using namespace bc250::umd;
 int wmain(int argc,wchar_t **argv) {
-    if (argc!=3 || std::wcslen(argv[2])!=64) return 2;
-    unsigned char digest[32]{};
-    for(unsigned i=0;i<32;++i) {
-        wchar_t pair[]={argv[2][2*i],argv[2][2*i+1],0};wchar_t *end=nullptr;
+    if (argc!=4 || std::wcslen(argv[2])!=64 || std::wcslen(argv[3])!=64) return 2;
+    unsigned char digest[32]{}, imageDigest[32]{};
+    for(unsigned input=2;input<=3;++input) for(unsigned i=0;i<32;++i) {
+        wchar_t pair[]={argv[input][2*i],argv[input][2*i+1],0};wchar_t *end=nullptr;
         const auto value=std::wcstoul(pair,&end,16);
         if(end!=pair+2 || value>255) return 2;
-        digest[i]=static_cast<unsigned char>(value);
+        (input==2?digest:imageDigest)[i]=static_cast<unsigned char>(value);
     }
     {
         VerifiedArtifact artifact;
@@ -32,6 +32,15 @@ int wmain(int argc,wchar_t **argv) {
     if(modules.open(argv[1],argv[1],wrong,digest)!=HRESULT_FROM_WIN32(ERROR_CRC) || modules.loaded())std::abort();
     if(modules.open(argv[1],argv[1],digest,wrong)!=HRESULT_FROM_WIN32(ERROR_CRC) || modules.loaded())std::abort();
     if(modules.open(argv[1],argv[1],digest,digest)!=S_OK || !modules.loaded())std::abort();
+    modules.close();
+    // v3 uses the Windows image digest, including the same file lock and rollback.
+    if(modules.open(argv[1],argv[1],wrong,imageDigest,true)!=HRESULT_FROM_WIN32(ERROR_CRC) || modules.loaded())std::abort();
+    if(modules.open(argv[1],argv[1],imageDigest,wrong,true)!=HRESULT_FROM_WIN32(ERROR_CRC) || modules.loaded())std::abort();
+    if(modules.open(argv[1],argv[1],imageDigest,imageDigest,true)!=S_OK || !modules.loaded())std::abort();
+    HANDLE changed=CreateFileW(argv[1],GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,
+        nullptr,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr);
+    if(changed!=INVALID_HANDLE_VALUE){CloseHandle(changed);std::abort();}
+    if(GetLastError()!=ERROR_SHARING_VIOLATION)std::abort();
     modules.close();
     if (modules.open(L"engine.dll",argv[1])!=E_INVALIDARG || modules.loaded()) std::abort();
     if (modules.open(argv[1],argv[1])!=S_OK || !modules.loaded() || !modules.functions().CreateDevice) std::abort();

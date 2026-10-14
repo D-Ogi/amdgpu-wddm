@@ -1797,13 +1797,29 @@ static void Child(const std::string &s)
         std::string log = AppLog();
         CHECK(Has(log, "route=cpu reason=app-mode-cpu fallback=0") && Has(log, "cpu_source=router-directory"), "route log: %s", log.c_str());
 #endif
+    } else if (s == "route-relocated-cpu" || s == "route-relocated-gpu" ||
+               s == "route-package-cpu-override" || s == "route-package-gpu-override") {
+        // No path overrides: move the entire package and let the router find
+        // its CPU sibling or the application UMD in the neighbouring folder.
+        const bool cpu = s == "route-relocated-cpu" || s == "route-package-cpu-override";
+        SetSz(AppKey, L"Mode", cpu ? L"cpu" : L"gpu-default");
+        if (s == "route-package-cpu-override" || s == "route-package-gpu-override") {
+            for (const auto name : {L"CpuUmdPath", L"CpuUmdPathWow", L"HostedUmdPath", L"HostedUmdPathWow"})
+                SetSz(RouterKey, name, L"C:\\untrusted-package\\replacement.dll");
+            for (const auto name : {L"GpuUmdPath", L"GpuUmdPathWow"})
+                SetSz(AppKey, name, L"C:\\untrusted-package\\replacement.dll");
+        }
+        OverrideHklm();
+        Opened o = Open(LoadAt(L"relocated\\desktop\\bc250d3d_router.dll"), "OpenAdapter10_2");
+        const unsigned long long tag = cpu ? CpuTag102 : AppTag102;
+        CHECK(o.hr == S_OK && o.tag == tag, "hr=%08lx tag=%llu", o.hr, (unsigned long long)o.tag);
     } else if (s == "route-default-cpu-path") {
-        // No router key at all: CPU UMD from the compiled default, which does not exist on the host (32-bit router:
-        // bc250d3d.dll next to the router, absent from layout\router).
+        // No router key and no CPU sibling: fail closed instead of looking in
+        // a previous package, the current directory or a compiled lab path.
         Switches(false, false); OverrideHklm();
         Opened o = Open(LoadAt(L"router\\bc250d3d_router.dll"), "OpenAdapter10_2");
         CHECK(o.hr == HRESULT_FROM_WIN32(ERROR_MOD_NOT_FOUND) || o.hr == HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND),
-              "hr=%08lx (expected module or path not found for C:\\BC250\\m15\\desktop-umd173-007\\bc250d3d.dll)", o.hr);
+              "hr=%08lx (expected missing sibling)", o.hr);
     } else if (s == "route-dwm-name") {
         // Run from <layout>\dwm\dwm.exe: the real process-name rule, no HostedClients.
         RouterBase(false); Switches(true, true);
@@ -2550,7 +2566,7 @@ static void Child(const std::string &s)
             lines = {"route=cpu reason=app-mode-invalid fallback=0", "mode_source=list-invalid"};
         } else if (s == "app-gpu-umd-unset") {
             AppBase(L"gpu-default", nullptr);
-            lines = {"route=cpu reason=app-gpu-umd-unset fallback=0", "gpu_source=absent"};
+            lines = {"route=cpu reason=app-default fallback=1", "gpu_source=router-directory"};
         } else if (s == "app-gpu-umd-relative") {
             AppBase(L"gpu-default", nullptr); SetSz(AppKey, GpuUmdPathName, L"amdgpu_wddm_d3d11.dll");
             lines = {"route=cpu reason=app-gpu-umd-unset fallback=0", "gpu_source=registry-invalid"};
@@ -2713,6 +2729,8 @@ static int RunAll(const std::wstring &out)
         {"route-switches-not-required", nullptr, {}}, {"route-require-wrong-type", nullptr, {}},
         {"route-hosted-fails", nullptr, {}}, {"route-hosted-missing", nullptr, {}}, {"route-hosted-relative", nullptr, {}},
         {"route-default-cpu-path", nullptr, {}}, {"route-other-bitness-paths", nullptr, {}},
+        {"route-relocated-cpu", nullptr, {}}, {"route-relocated-gpu", nullptr, {}},
+        {"route-package-cpu-override", nullptr, {}}, {"route-package-gpu-override", nullptr, {}},
 #ifndef _WIN64
         {"route-wow-default-cpu-beside-router", nullptr, {}},
 #endif

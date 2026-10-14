@@ -1,5 +1,7 @@
 # Tester release package
 
+The [DriverStore package contract](../../docs/design/driverstore-package.md) describes the installed graphics files, migration, submission CAB and signature checks.
+
 Layout of the unpacked release (owner, 2026-10-11): the top folder holds `setup.exe` and one folder, `files\`, which
 holds everything else (`manifest.json`, `install.cmd`, `uninstall.cmd`, `verify.cmd`, `prepare-offline.cmd`,
 `installer\`, `payload\`, `licenses\`, the documents). `files\` is therefore the package root that `manifest.json`

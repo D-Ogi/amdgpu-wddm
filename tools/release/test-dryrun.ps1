@@ -71,7 +71,11 @@ $inf = [IO.File]::ReadAllText((Join-Path $Package 'payload\kmd\bc250kmd.inf'))
 Check ($inf -match ('(?m)^DriverVer\s*=\s*[\d/]+,' + [regex]::Escape([string]$m.kmd_version) + '\s*$')) "INF DriverVer = manifest kmd_version $($m.kmd_version)"
 # BD-150: the INF names the release and the signed KMD, so two packages with different KMDs never share an INF.
 $kmdSys = (Get-FileHash -LiteralPath (Join-Path $Package 'payload\kmd\bc250kmd.sys') -Algorithm SHA256).Hash
-Check ($inf -match ('(?m)^; release ' + [regex]::Escape([string]$m.version) + ', bc250kmd\.sys SHA256 ' + $kmdSys + '\r?$')) "INF identity line names release $($m.version) and bc250kmd.sys $($kmdSys.Substring(0, 8))"
+$identitySuffix = if (Test-DriverStoreUmdPackage $m) {
+    if ([string]$m.driver_signing.submitted_payload_sha256 -notmatch '\A[0-9A-F]{64}\z') { throw 'missing submitted driver payload identity' }
+    ', submitted driver payload SHA256 ' + [string]$m.driver_signing.submitted_payload_sha256
+} else { '' }
+Check ($inf -match ('(?m)^; release ' + [regex]::Escape([string]$m.version) + ', bc250kmd\.sys SHA256 ' + $kmdSys + $identitySuffix + '\r?$')) "INF identity line names release $($m.version) and bc250kmd.sys $($kmdSys.Substring(0, 8))"
 . (Join-Path $PSScriptRoot 'installer\version-identity.ps1')
 if ($m.version_identity) {
     Check ((Test-PackageVersionIdentity $m $inf $kmdSys).quad -ceq (Get-PackageDriverQuad (Get-ProductPackageQuad $m.version))) 'mapped INF, product and embedded KMD identities agree'
@@ -172,6 +176,15 @@ Check ($dg.code -eq 0) "diagnostics: the field case / a started driver / every h
 # D3D9 goes through D3D9On12: the D3D9 slot holds '<>' in both views (an empty first entry stops the adapter
 # on newer display kernels), and no stub is copied.
 Check ($r.text -notmatch 'would: copy payload\\(system32|syswow64)|bc250umd\.dll -> ') 'no D3D9 stub is copied (System32 or SysWOW64)'
+$driverStoreUmd = [bool]$m.driver_package
+if ($driverStoreUmd) {
+    Check ($r.text -match 'INF .+ UserModeDriverName \[MultiString\] = <> \| %13%\\desktop\\bc250d3d_router\.dll \| %13%\\desktop\\bc250d3d_router\.dll \| %13%\\d3d12\\amdgpu_wddm_d3d12\.dll') 'INF owns x64 D3D slots'
+    Check ($r.text -match 'INF .+ UserModeDriverNameWow \[MultiString\] = <> \| %13%\\wow64\\desktop\\bc250d3d_router32\.dll \| %13%\\wow64\\desktop\\bc250d3d_router32\.dll \| %13%\\wow64\\d3d12\\amdgpu_wddm_d3d1232\.dll') 'INF owns x86 D3D slots'
+    Check ($r.text -match 'INF .+ VulkanDriverNameWow \[MultiString\] = %13%\\wow64\\vulkan\\radeon_icd32\.json') 'INF owns x86 Vulkan discovery'
+    Check ($r.text -notmatch 'would: copy payload\\(desktop|wow64|d3d11|d3d12|vulkan|opengl|mft) ->') 'no adapter library is copied to Program Files'
+    Check ($r.text -notmatch 'would: .*Khronos\\Vulkan\\Drivers.* = 0') 'no global Vulkan duplicate is created'
+    Check ($r.text -match 'remove legacy router paths and duplicate global Vulkan entries') 'upgrade removes stale overrides after binding'
+} else {
 Check ($r.text -match "would: .+ UserModeDriverName = <> \| [^|]+\\desktop\\bc250d3d_router\.dll \| [^|]+\\desktop\\bc250d3d_router\.dll \| [^|]+\\d3d12\\amdgpu_wddm_d3d12\.dll; VulkanDriverName = ") "UserModeDriverName: D3D9 slot <> (D3D9On12), the router in the D3D10 and D3D11 slots, the D3D12 shell"
 Check ($r.text -notmatch 'UserModeDriverName(Wow)? = bc250umd') 'no slot names the D3D9 stub'
 # BD-064: 32-bit processes get the x86 builds: D3D9 (<>)/10/11/12 slots, the x86 Vulkan ICD, the router's Wow paths.
@@ -179,16 +192,18 @@ Check ($r.text -match 'would: copy payload\\wow64 -> .+\\wow64 ') 'phase 2 insta
 Check ($r.text -match "would: .+ UserModeDriverNameWow = <> \| [^|]+\\wow64\\desktop\\bc250d3d_router\.dll \| [^|]+\\wow64\\desktop\\bc250d3d_router\.dll \| [^|]+\\wow64\\d3d12\\amdgpu_wddm_d3d12\.dll; VulkanDriverNameWow = [^;\r\n]+\\wow64\\vulkan\\radeon_icd\.json") 'UserModeDriverNameWow: D3D9 slot <> (D3D9On12), two x86 routers, the x86 D3D12 shell; VulkanDriverNameWow'
 Check ($r.text -match "would: HKLM:\\SOFTWARE\\WOW6432Node\\Khronos\\Vulkan\\Drivers '[^']+\\wow64\\vulkan\\radeon_icd\.json' = 0") 'the x86 ICD in the WOW6432Node Khronos list'
 Check (($r.text -match 'DesktopRouter: .*CpuUmdPathWow=[^;\r\n]+\\wow64\\desktop\\bc250d3d\.dll') -and ($r.text -match 'AppRouter: .*GpuUmdPathWow=[^;\r\n]+\\wow64\\d3d11\\amdgpu_wddm_d3d11\.dll')) 'the x86 router paths are installer-owned'
+}
 # The H.264 encoder MFT (M15.11, driver/umd/mft-h264/INSTALL.md): manifest.json "mft_h264" says whether this release
 # registers the transform, and the dry run shows every key it would write, or that it writes none.
-$mftPath = 'payload/mft/amdgpu_wddm_mft_h264.dll'
+$mftPath = if ($driverStoreUmd) { 'payload/kmd/mft/amdgpu_wddm_mft_h264.dll' } else { 'payload/mft/amdgpu_wddm_mft_h264.dll' }
 $mftOn = [bool]($m.mft_h264 -and $m.mft_h264.register)
 Check ((-not $m.mft_h264) -or (($m.mft_h264.clsid -eq '{A32438F0-0D79-4CA9-A5BF-9F3C80837253}') -and ($m.mft_h264.package_path -eq $mftPath) -and ($m.mft_h264.friendly_name -eq 'BC-250 H.264 Encoder MFT'))) "manifest mft_h264: register $mftOn, class id and name as INSTALL.md gives them"
 if ($mftOn) {
     Check (@($m.files | Where-Object { $_.path -eq $mftPath }).Count -eq 1) "the package carries $mftPath"
-    Check (@($m.components | Where-Object { $_.package_path -eq $mftPath -and $_.install_path -eq '<InstallDir>\mft\amdgpu_wddm_mft_h264.dll' }).Count -eq 1) 'manifest components: the encoder goes to <InstallDir>\mft'
-    Check ($r.text -match 'would: copy payload\\mft -> [^\r\n]+\\mft \(same SHA256') 'phase 2 installs the encoder DLL'
-    Check ($r.text -match 'H\.264 encoder MFT: BC-250 H\.264 Encoder MFT \{A32438F0-0D79-4CA9-A5BF-9F3C80837253\}, registration values from payload/mft/amdgpu_wddm_mft_h264\.dll') 'the registration values come out of the shipped DLL'
+    $mftInstalled = if ($driverStoreUmd) { 'DriverStore (bc250kmd.inf)\mft\amdgpu_wddm_mft_h264.dll' } else { '<InstallDir>\mft\amdgpu_wddm_mft_h264.dll' }
+    Check (@($m.components | Where-Object { $_.package_path -eq $mftPath -and $_.install_path -eq $mftInstalled }).Count -eq 1) 'manifest components: encoder location matches the delivery contract'
+    if (-not $driverStoreUmd) { Check ($r.text -match 'would: copy payload\\mft -> [^\r\n]+\\mft \(same SHA256') 'phase 2 installs the encoder DLL' }
+    Check ($r.text -match ('registration values from ' + [regex]::Escape($mftPath))) 'the registration values come out of the shipped DLL'
     Check ($r.text -match 'would: register the H\.264 encoder MFT: HKLM:\\SOFTWARE\\Classes\\CLSID\\\{A32438F0-0D79-4CA9-A5BF-9F3C80837253\} = ''BC-250 H\.264 Encoder MFT'', InprocServer32 = [^\r\n]+\\mft\\amdgpu_wddm_mft_h264\.dll \(ThreadingModel Both\)') 'the plan names the COM server key and its DLL path'
     Check ($r.text -match 'MediaFoundation\\Transforms\\A32438F0-0D79-4CA9-A5BF-9F3C80837253: MFTFlags 0x00000006, InputTypes \d+ bytes, OutputTypes \d+, Attributes \d+;') 'the plan names MFTFlags 0x00000006 and the three binary values with their sizes'
     Check ($r.text -match 'MediaFoundation\\Transforms\\Categories\\F79EAC7D-E545-4387-BDEE-D647D7BDE42A\\A32438F0-0D79-4CA9-A5BF-9F3C80837253 \(the key is the category membership') 'the plan names the category membership key'
@@ -209,6 +224,15 @@ $glOn = [bool]($m.opengl_icd -and $m.opengl_icd.register)
 $glArch = @()
 if ($m.opengl_icd -and $m.opengl_icd.architectures) { $glArch = @($m.opengl_icd.architectures | ForEach-Object { [string]$_ }) }
 $glX86 = [bool]($glArch -contains 'x86')
+if ($driverStoreUmd) {
+    if ($glOn) {
+        Check ($m.opengl_icd.package_path -eq 'payload/kmd/opengl/amdgpu_wddm_gl.dll') 'OpenGL uses the DriverStore package path'
+        Check ($r.text -match 'INF .+ OpenGLDriverName \[MultiString\] = %13%\\opengl\\amdgpu_wddm_gl\.dll') 'OpenGL registration comes from the INF'
+        Check ($r.text -match 'INF .+ OpenGLFlags \[DWord\] = 1') 'OpenGL flags retained'
+        Check ($r.text -match 'INF .+ OpenGLVersion \[DWord\] = 1') 'OpenGL version retained'
+        if (-not $glX86) { Check ($r.text -notmatch 'INF .+ OpenGLDriverNameWow') 'no undeclared x86 OpenGL registration' }
+    }
+} else {
 Check ((-not $m.opengl_icd) -or (($m.opengl_icd.package_path -eq 'payload/opengl/amdgpu_wddm_gl.dll') -and ($m.opengl_icd.package_path_wow -eq 'payload/wow64/opengl/amdgpu_wddm_gl.dll') -and (@('REG_MULTI_SZ', 'REG_SZ') -contains [string]$m.opengl_icd.value_type) -and ([int]$m.opengl_icd.version -ge 1))) "manifest opengl_icd: register $glOn, both package paths, $([string]$m.opengl_icd.value_type), version $([string]$m.opengl_icd.version), flags $([string]$m.opengl_icd.flags)"
 Check ((-not $glOn) -or (@($glArch).Count -and (@($glArch | Where-Object { @('x64', 'x86') -notcontains $_ }).Count -eq 0))) "manifest opengl_icd: the architecture list is named and known ($($glArch -join ', '))"
 if ($glOn) {
@@ -233,6 +257,7 @@ if ($glOn) {
 } else {
     Check ($r.text -match 'OpenGL ICD: not registered by this release') 'the dry run says this release registers no OpenGL ICD'
     Check ($r.text -notmatch 'would: copy payload\\opengl|OpenGLDriverName = ') 'nothing of the OpenGL ICD is installed'
+}
 }
 'OpenGL ICD registration (test-opengl-icd.ps1 under 5.1, HKCU scratch key)'
 $rg = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-opengl-icd.ps1'), '-Installer', (Join-Path $Package 'installer'), '-Package', $Package)
@@ -416,10 +441,15 @@ try { $r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun'
 Check ($r.code -eq 0) "install over $oldVersion`: exit $($r.code)"
 Check ($r.text -match ("files of the installed release " + [regex]::Escape($oldVersion) + " that " + [regex]::Escape($pkgVersion) + " does not install: 2 \(1 to remove, 1 changed after that install and kept, 0 already gone\)")) 'the plan names the count before any change'
 Check ($r.text -match ('to remove in the files stage: ' + [regex]::Escape($orphan))) 'the plan names the file it removes, before the first step'
-Check ($r.text -match ('would: remove ' + [regex]::Escape($orphan) + ': installed by ' + [regex]::Escape($oldVersion))) 'the files stage removes it and names the release that installed it'
+if ($driverStoreUmd) {
+    Check ($r.text -match ('would: remove legacy UMD ' + [regex]::Escape($orphan) + ' after the new INF binding')) 'legacy UMD removal follows new INF binding'
+} else {
+    Check ($r.text -match ('would: remove ' + [regex]::Escape($orphan) + ': installed by ' + [regex]::Escape($oldVersion))) 'the files stage removes it and names the release that installed it'
+}
 Check ($r.text -match ('kept: ' + [regex]::Escape($orphanChanged) + ' was installed by ' + [regex]::Escape($oldVersion))) 'a file whose bytes are not the ones of that install is kept and reported'
 # Nothing is removed by a wildcard: every removal line names one of the two files of the older manifest.
-$removals = @([regex]::Matches($r.text, '(?m)^\s*\[dry run\] would: remove (.+?): installed by ') | ForEach-Object { $_.Groups[1].Value })
+$removePattern = if ($driverStoreUmd) { '(?m)^\s*\[dry run\] would: remove legacy UMD (.+?) after the new INF binding' } else { '(?m)^\s*\[dry run\] would: remove (.+?): installed by ' }
+$removals = @([regex]::Matches($r.text, $removePattern) | ForEach-Object { $_.Groups[1].Value })
 Check (((@($removals) -join ' | ') -eq $orphan)) "one removal, and only the file the older manifest names: $(@($removals) -join ', ')"
 Check ((Test-Path -LiteralPath $orphan) -and (Test-Path -LiteralPath $orphanChanged) -and (Test-Path -LiteralPath $someoneElse)) 'the dry run removes nothing, the file that belongs to nobody''s release included'
 Check ($r.text -notmatch 'would: pnputil /delete-driver') 'no driver package is deleted while the package the GPU uses cannot be read'
@@ -489,7 +519,7 @@ Check ((Get-FileHash -LiteralPath (Join-Path $Package 'payload\tools\bc250contro
 
 'GPU firmware: not in the package, downloaded at install time (test-firmware.ps1 under 5.1, real download into a scratch folder)'
 Check (-not (Test-Path -LiteralPath (Join-Path $Package 'payload\firmware'))) 'no payload\firmware in the package'
-Check (-not @(Get-ChildItem -LiteralPath $Package -Recurse -File -Filter '*.bin').Count) 'no .bin file in the package'
+Check (-not @(Get-ChildItem -LiteralPath $Package -Recurse -File -Filter '*.bin' | Where-Object { $_.FullName -ine (Join-Path $Package 'payload\kmd\amdgpu-state.bin') }).Count) 'no firmware binary in the public package; state catalog is included'
 Check (-not @($m.files | Where-Object { $_.path -like 'payload/firmware/*' }).Count) 'manifest files: no firmware'
 Check (@($m.firmware.files).Count -eq 9 -and [string]$m.firmware.commit -match '^[0-9a-f]{40}$') "manifest firmware: $(@($m.firmware.files).Count) files at $($m.firmware.commit)"
 Check (@($m.components | Where-Object { $_.role -eq 'firmware' -and -not $_.package_path }).Count -eq 9) 'manifest components: 9 firmware files with install path and SHA256, no package path'

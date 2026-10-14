@@ -906,7 +906,6 @@ search.games.cpu-render.terms|rev|927301e2|renderowanie na CPU|renderowanie prog
 search.display.scaling|rev|22b1cb79|Skalowanie GPU
 help.setting.latency|rev|a684f1ab|Ile klatek procesor może przygotować przed układem graficznym. Mniej klatek sprawia, że gra szybciej reaguje na mysz i klawiaturę, ale może obniżyć liczbę klatek na sekundę. Działa w grach DirectX 11 i DirectX 12. Gra, która już teraz przygotowuje mniej klatek, zostaje bez zmian.
 help.setting.overlay|rev|78ee0e43|Pokazuje liczbę klatek na sekundę i czasy klatek w rogu gry. Na razie działa w grach DirectX 11.
-help.setting.amd-version|rev|7604c528|Niektóre gry ostrzegają, że sterownik graficzny jest stary, bo nie znają tego sterownika. Po włączeniu sterownik podaje numer wersji, który te gry akceptują. Sam sterownik się nie zmienia.
 help.setting.vk-present|rev|e892e511|Sposób, w jaki gry Vulkan wyświetlają klatki. Tryb nowoczesny jest domyślny i szybszy. Tryb zgodności używa starszej, wolniejszej metody; wypróbuj go, gdy gra Vulkan pokazuje czarny lub zamrożony obraz.
 help.setting.vk-memory|rev|ec2dc30f|Co dostaje gra Vulkan, gdy pamięć wideo jest pełna. „Użyj pamięci systemowej” utrzymuje grę w działaniu, ale wolniej. „Zgłoś brak pamięci” informuje grę, aby mogła obniżyć swoje ustawienia.
 help.setting.sm|rev|f3b2ff18|Najwyższy model shaderów, który sterownik zgłasza grze DirectX 12. Domyślny to 6.8. Niektóre gry nie działają z nowszym modelem shaderów; dla takiej gry wybierz 6.7 lub 6.6.

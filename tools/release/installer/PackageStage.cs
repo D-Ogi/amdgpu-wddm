@@ -18,6 +18,8 @@ namespace AmdgpuWddm
         readonly List<SafeFileHandle> parents = new List<SafeFileHandle>();
         readonly List<FileStream> files = new List<FileStream>();
         readonly List<string> owned = new List<string>();
+        readonly List<string> subdirectories = new List<string>();
+        readonly List<SafeFileHandle> subdirectoryLocks = new List<SafeFileHandle>();
         SafeFileHandle directory;
         bool sealedFiles, created;
         public string DirectoryPath { get; private set; }
@@ -100,12 +102,49 @@ namespace AmdgpuWddm
             } catch { Dispose(); throw; }
         }
 
-        public void Copy(string source, string leaf, long length)
+        public static string MemberPath(string member)
+        {
+            // Canonical package-relative paths only. Reject ADS, traversal,
+            // drive/UNC paths, Win32 aliases, trailing dots and empty segments.
+            if (String.IsNullOrEmpty(member) || member.Length > 240)
+                throw new IOException("Invalid package member path");
+            string normal = member.Replace('/', '\\');
+            foreach (string part in normal.Split('\\')) {
+                if (!System.Text.RegularExpressions.Regex.IsMatch(part, @"\A[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*\z") ||
+                    System.Text.RegularExpressions.Regex.IsMatch(part, @"\A(?:CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])(?:\.|\z)",
+                        System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                    throw new IOException("Invalid package member path");
+            }
+            return normal;
+        }
+
+        void AddMemberDirectories(string member)
+        {
+            string relative = Path.GetDirectoryName(member);
+            if (String.IsNullOrEmpty(relative)) return;
+            string at = DirectoryPath;
+            foreach (string part in relative.Split('\\')) {
+                at = Path.Combine(at, part);
+                if (subdirectories.Contains(at)) continue;
+                var acl = new DirectorySecurity();
+                acl.SetSecurityDescriptorSddlForm("O:BAG:BAD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)");
+                byte[] descriptor = acl.GetSecurityDescriptorBinaryForm();
+                var pinned = GCHandle.Alloc(descriptor, GCHandleType.Pinned);
+                try {
+                    var sa = new SecurityAttributes { Length = (uint)Marshal.SizeOf(typeof(SecurityAttributes)), Descriptor = pinned.AddrOfPinnedObject() };
+                    if (!CreateDirectoryW(at, ref sa)) throw new Win32Exception(Marshal.GetLastWin32Error());
+                    subdirectories.Add(at);
+                    subdirectoryLocks.Add(LockDirectory(at));
+                } finally { pinned.Free(); }
+            }
+        }
+
+        public void Copy(string source, string member, long length)
         {
             if (directory == null || sealedFiles) throw new InvalidOperationException("Package is closed or sealed");
-            if (String.IsNullOrEmpty(leaf) || leaf != Path.GetFileName(leaf) || leaf.IndexOfAny(new[] { ':', '/', '\\' }) >= 0 || leaf == "." || leaf == "..")
-                throw new IOException("Package member must be a basename");
-            string target = Path.Combine(DirectoryPath, leaf);
+            string relative = MemberPath(member);
+            AddMemberDirectories(relative);
+            string target = Path.Combine(DirectoryPath, relative);
             using (var src = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read)) {
                 if (length <= 0 || src.Length != length) throw new IOException("Package member length differs from manifest");
                 using (var dst = new FileStream(target, FileMode.CreateNew, FileAccess.Write, FileShare.None)) {
@@ -130,19 +169,25 @@ namespace AmdgpuWddm
         public void Dispose()
         {
             foreach (var f in files) f.Dispose(); files.Clear();
-            if (directory != null) { directory.Dispose(); directory = null; }
             // Delete only files this object created; never recurse through an
             // unexpected child. Parent handles still prevent path replacement.
             if (DirectoryPath != null && created) {
                 try {
                     if ((File.GetAttributes(DirectoryPath) & FileAttributes.ReparsePoint) == 0) {
                         foreach (string path in owned) File.Delete(path);
+                        for (int i = subdirectories.Count - 1; i >= 0; --i) {
+                            if (i < subdirectoryLocks.Count) subdirectoryLocks[i].Dispose();
+                            Directory.Delete(subdirectories[i], false);
+                        }
+                        if (directory != null) { directory.Dispose(); directory = null; }
                         Directory.Delete(DirectoryPath, false);
                     }
                 } catch (IOException) { } catch (UnauthorizedAccessException) { }
                 DirectoryPath = null;
                 created = false;
             }
+            foreach (var h in subdirectoryLocks) h.Dispose(); subdirectoryLocks.Clear(); subdirectories.Clear();
+            if (directory != null) { directory.Dispose(); directory = null; }
             for (int i = parents.Count - 1; i >= 0; --i) parents[i].Dispose(); parents.Clear();
         }
     }

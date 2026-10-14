@@ -371,6 +371,31 @@ class ProvenanceGate(unittest.TestCase):
         (package / "payload" / "driver.sys").write_bytes(fake_pe(b"\x02" * 64, b"release signature"))
         self.assertFails(m, "Authenticode digest of", package=package)
 
+    def test_driverstore_manifest_edit_is_exact(self):
+        self.fresh_workspace()
+        m = self.manifest()
+        data = b'{"ICD":{"library_path":"original.dll","api_version":"1.3.0"}}'
+        src = self.ws.root / 'scratch/ds-icd.json'
+        src.write_bytes(data)
+        m['files'] = [{
+            'component': 'vulkan', 'path': 'payload/vulkan/radeon_icd.json',
+            'source': 'scratch/ds-icd.json', 'sha256': sha(data),
+            'third_party': {'url': 'https://example.com/icd.json', 'version': '1', 'sha256': sha(data)}}]
+        package = Path(self.tmp) / 'driverstore'
+        (package / 'installer').mkdir(parents=True)
+        # An untrusted report cannot redirect the provenance comparison.
+        (package / 'installer/driver-package.json').write_text('{"members":[]}')
+        dst = package / 'payload/kmd/vulkan/radeon_icd.json'
+        dst.parent.mkdir(parents=True)
+        expected = json.loads(data)
+        expected['ICD']['library_path'] = '.\\vulkan_radeon.dll'
+        dst.write_bytes((json.dumps(expected, indent=2) + '\n').encode())
+        errors, _, _ = self.ws.check(m, package)
+        self.assertEqual(errors, [])
+        expected['ICD']['api_version'] = '1.4.0'
+        dst.write_bytes((json.dumps(expected, indent=2) + '\n').encode())
+        self.assertFails(m, 'unexpected ICD manifest edit', package=package)
+
 
 class RebuildCheckLogs(unittest.TestCase):
     """rebuild-check.ps1 on two recipes: one gives the recorded bytes, one fails. The failed build keeps its log at

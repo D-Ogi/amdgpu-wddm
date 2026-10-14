@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include "adapter-caps.h"
+#include "../../contract/amdgpu_driver_package.h"
 #include "device-state.h"
 #include "adapter-query-scope.h"
 #include "host-contract.h"
@@ -104,9 +105,9 @@ HRESULT load_caps(Adapter& adapter,AdapterCapsOwner& owner) {
     path.resize(slash+1);
     // Only siblings of this UMD and system dependencies, never the game's directory or PATH.
     constexpr DWORD search=LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_SYSTEM32;
-    owner.engine=LoadLibraryExW((path+L"amdgpu_wddm_vkd3d.dll").c_str(),nullptr,search);
+    owner.engine=LoadLibraryExW((path+AMDGPU_VKD3D_FILE).c_str(),nullptr,search);
     if(!owner.engine)return HRESULT_FROM_WIN32(GetLastError());
-    owner.icd=LoadLibraryExW((path+L"amdgpu_wddm_radv.dll").c_str(),nullptr,search);
+    owner.icd=LoadLibraryExW((path+AMDGPU_D3D12_ICD_FILE).c_str(),nullptr,search);
     if(!owner.icd)return HRESULT_FROM_WIN32(GetLastError());
     auto getter=reinterpret_cast<PFN_BC250_VKD3D_ENGINE_GET_FUNCS>(GetProcAddress(owner.engine,BC250_VKD3D_ENGINE_GET_FUNCS_NAME));
     auto get=reinterpret_cast<PFN_vkGetInstanceProcAddr>(GetProcAddress(owner.icd,"vk_icdGetInstanceProcAddr"));

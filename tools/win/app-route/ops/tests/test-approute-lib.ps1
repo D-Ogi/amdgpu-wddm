@@ -84,6 +84,9 @@ Reject 'allowlist without names' {Get-AppPolicyDesired -Mode allowlist -Manifest
 $d=Get-AppPolicyDesired -Mode gpu-default -Manifest $manifest -Root $root
 Check 'gpu-default: deny_always only, no Allow' (!$d.values.Contains('Allow') -and (@($d.values['Deny'].value) -join '|') -ceq 'witcher3.exe|composition-control.exe')
 Reject 'unknown mode' {Get-AppPolicyDesired -Mode GPU -Manifest $manifest -Root $root}
+$installed=Get-AppPolicyDesired -Mode gpu-default -Manifest $manifest -Root $root -InstalledPackage
+Check 'DriverStore policy has no native or WoW DLL path override' (!$installed.values.Contains('GpuUmdPath') -and !$installed.values.Contains('GpuUmdPathWow'))
+Check 'DriverStore policy preserves deny rules and mode' (($installed.values.Deny.value -join '|') -ceq 'witcher3.exe|composition-control.exe' -and $installed.values.Mode.value -ceq 'gpu-default')
 $before=[ordered]@{Mode=@{kind='String';value='allowlist'};Allow=@{kind='MultiString';value=[string[]]@('a.exe')};GpuUmdPath=@{kind='String';value='C:\x.dll'}}
 $e=Get-AppPolicyExpected (Get-AppPolicyDesired -Mode cpu -Manifest $manifest -Root $root) $before
 Check 'cpu keeps the other values' ((@($e.Keys | Sort-Object) -join '|') -ceq 'Allow|GpuUmdPath|Mode' -and $e['Mode'].value -ceq 'cpu' -and @($e['Allow'].value)[0] -ceq 'a.exe')
