@@ -96,7 +96,12 @@ $Build = [IO.Path]::GetFullPath($Build)
 # -Db_ndebug=true for llvmpipe-umd and zink-umd, so that no assert and no debug-only parser is live in the shipped
 # DLL. Their lab flavour keeps the asserts. A tree without the flavour option builds exactly the recorded set.
 $forkFlavour = Get-AmdgpuWddmFlavour $Source -Lab:$Lab
-if ($forkFlavour -eq 'release') { $options += @($recipeConfig.release_options | Where-Object { $_ }) }
+# A config without a release_options key is normal (nothing extra in its release flavour), but
+# common.ps1 sets Set-StrictMode -Version 3.0, under which reading an absent property is an error,
+# not $null - so the key is looked up before it is read.
+if ($forkFlavour -eq 'release' -and $recipeConfig.PSObject.Properties['release_options']) {
+  $options += @($recipeConfig.release_options | Where-Object { $_ })
+}
 $options = Add-ReproducibleMesonOptions $options $Source $Build -Arch $Arch
 
 if (-not (Test-Path -LiteralPath (Join-Path $Source 'meson.build'))) { throw "$Source is not a Mesa source tree (no meson.build)" }

@@ -87,7 +87,12 @@ $Build = [IO.Path]::GetFullPath($Build)
 # BD-167: the release flavour of a fork that declares the flavour also takes the config's release_options, as in
 # build-mesa.ps1 and build-dxvk.ps1. No config here has one: ddi-engine-lto defines NDEBUG in both flavours.
 $forkFlavour = Get-AmdgpuWddmFlavour $Source -Lab:$Lab
-if ($forkFlavour -eq 'release') { $options += @($recipeConfig.release_options | Where-Object { $_ }) }
+# A config without a release_options key is normal (nothing extra in its release flavour), but
+# common.ps1 sets Set-StrictMode -Version 3.0, under which reading an absent property is an error,
+# not $null - so the key is looked up before it is read.
+if ($forkFlavour -eq 'release' -and $recipeConfig.PSObject.Properties['release_options']) {
+  $options += @($recipeConfig.release_options | Where-Object { $_ })
+}
 $options = Add-ReproducibleMesonOptions $options $Source $Build -Arch $Arch
 
 if (-not (Test-Path -LiteralPath (Join-Path $Source 'libs\vkd3d\vkd3d_private.h'))) { throw "$Source is not a vkd3d-proton source tree" }
