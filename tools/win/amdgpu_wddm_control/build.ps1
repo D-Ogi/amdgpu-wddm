@@ -260,6 +260,8 @@ if (-not $NoSmoke) {
     [IO.File]::WriteAllBytes($badBoardFixture, [byte[]]@(0))
     $r = Invoke-DryRun @('--action', 'fan-auto', '--dry-run', '--snapshot', $snapshot, '--board-fixture', $badBoardFixture) 'board-fixture-malformed'
     if ($r.Code -ne 1 -or -not $r.Text.Contains('board fixture failed:')) { throw "malformed board fixture must be refused (exit $($r.Code)): $($r.Text)" }
+    # RegWrite renders this legacy logical identifier in plans. RecoveryActions.Write routes it through
+    # DriverStateBatch, not directly to this registry key; these assertions test preview text, not storage.
     $params = 'HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters'
     $expect = [ordered]@{
         'reopen-gpu-path' = @(0, "set $params EnableGpuPresentBlit = 1 (DWord)", "delete $params InteropClosedReason")
@@ -303,17 +305,16 @@ if (-not $NoSmoke) {
         'tune-stop'   = @(3, 'refused: No curve trial is running.')
         'tune-reset'  = @(3, 'refused: The default curve is in use already.')
         'cpu-enable'  = @(3, 'refused: Processor tuning is on already.')
-        'cpu-disable' = @(0, "delete $params CpuTune", 'at the next restart of Windows')
+        'cpu-disable' = @(0, "set $params CpuTune = 0 (DWord)", 'at the next restart of Windows')
         'cpu-readback' = @(0, 'tuning request cpu-readback')
         'cpu-trial'   = @(0, 'tuning request cpu-trial', 'undervolt 8 steps', 'window 120000 ms')
         'cpu-keep'    = @(3, 'refused: No processor trial is running.')
         'cpu-reset'   = @(3, 'refused: The processor has its default settings already.')
         'core-mask'   = @(0, 'tuning request core-mask, cores 8', 'at the next restart of Windows')
-        # WU-042: "Reset driver settings" is the one control that puts the standard settings back. Processor tuning
-        # goes to the release's CpuTune, which is 1 here as in registry-defaults.json, so a stored 1 is left alone
-        # (a leading "!" means the text must not be there). The tuning steps of a machine that has settings
-        # stored and the writes of a CpuTune 0 or absent are gated by the host tests (TunerStandardSteps,
-        # TunerResetCpuTune); this snapshot has none stored.
+        # WU-042: this saved snapshot predates StateSchema 2. Its CpuTune is already the release default 1,
+        # so the legacy reset leaves it alone (a leading "!" means the text must not be there). Current
+        # StateSchema 2 resets clear overrides, including an override equal to the default; test that below.
+        # TunerStandardSteps and TunerResetCpuTune cover the stored tuning settings and legacy reset cases.
         'reset-defaults' = @(0, "!$params CpuTune", 'at the next restart of Windows')
         # The fan card (docs/design/fan.md Part B): the driver runs the standard curve with nothing stored.
         'fan-auto'    = @(0, 'tuning request fan-board', 'takes effect: at once', 'undo: no')
@@ -335,6 +336,33 @@ if (-not $NoSmoke) {
             if ($want.StartsWith('!')) {
                 if ($r.Text.Contains($want.Substring(1))) { throw "dry run $($e.Key): '$($want.Substring(1))' must not be there: $($r.Text)" }
             } elseif (-not $r.Text.Contains($want)) { throw "dry run $($e.Key): '$want' missing: $($r.Text)" }
+        }
+    }
+    # Current-state CLI controls: Disable writes zero, while Reset removes the override and exposes the
+    # factory default. An absent override must stay absent even though the effective CpuTune is one.
+    foreach ($cpuOverride in @('zero', 'one', 'absent')) {
+        $current = Get-Content -LiteralPath $tuned -Raw | ConvertFrom-Json
+        $rawCpu = if ($cpuOverride -eq 'zero') { 0 } else { 1 }
+        $current.Parameters.CpuTune = $rawCpu
+        $overrides = if ($cpuOverride -eq 'absent') { @{} } else { @{ CpuTune = $rawCpu } }
+        $current | Add-Member -NotePropertyName StateSchema -NotePropertyValue 2 -Force
+        $current | Add-Member -NotePropertyName ParameterOverrides -NotePropertyValue $overrides -Force
+        $currentPath = Join-Path $obj "snapshot-tuner-state2-$cpuOverride.json"
+        $current | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $currentPath -Encoding UTF8
+        $r = Invoke-DryRun @('--action', 'reset-defaults', '--games', 'keep', '--dry-run', '--snapshot', $currentPath) "state2-reset-$cpuOverride"
+        if ($r.Code -ne 0 -or -not $r.Text.Contains('dry run: nothing was written')) {
+            throw "state v2 reset $cpuOverride failed (exit $($r.Code)): $($r.Text)"
+        }
+        $wantClear = $cpuOverride -ne 'absent'
+        if ($r.Text.Contains("delete $params CpuTune") -ne $wantClear -or $r.Text.Contains("set $params CpuTune")) {
+            throw "state v2 reset $cpuOverride must clear only an existing CpuTune override: $($r.Text)"
+        }
+        if ($cpuOverride -eq 'one') {
+            $r = Invoke-DryRun @('--action', 'cpu-disable', '--dry-run', '--snapshot', $currentPath) 'state2-cpu-disable'
+            if ($r.Code -ne 0 -or -not $r.Text.Contains("set $params CpuTune = 0 (DWord)") -or
+                $r.Text.Contains("delete $params CpuTune") -or -not $r.Text.Contains('dry run: nothing was written')) {
+                throw "state v2 cpu-disable must store zero (exit $($r.Code)): $($r.Text)"
+            }
         }
     }
     # A curve under the driver's own floor, a core count this board does not take, and a trial without a curve: the
