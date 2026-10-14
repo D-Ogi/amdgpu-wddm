@@ -350,6 +350,9 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
  Check 'open-allocation-keep-earlier' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_open_allocation.ps1" -Root $Workspace -Out "$Out\open-allocation-keep-earlier" -Kits "$Kits" -Mutation '--keep-earlier' -ExpectFailure }
  Check 'open-allocation-count-at-once' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_open_allocation.ps1" -Root $Workspace -Out "$Out\open-allocation-count-at-once" -Kits "$Kits" -Mutation '--count-at-once' -ExpectFailure }
  Check 'gdi-render' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_gdi_render.ps1" -Root $Workspace -Out "$Out\gdi-render" -Kits "$Kits" }
+ # The walk of the OS command buffer, with the page behind the buffer inaccessible: the review r1
+ # over-read was invisible to a test that only compares return values (driver\kmd\gdi_walk.h).
+ Check 'gdi-walk' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_gdi_walk.ps1" -Root $Workspace -Out "$Out\gdi-walk" -Kits "$Kits" }
  # The GDI compute path: the code object gate (which rebuilds the kernels where the device compiler
  # is present and checks the recorded hashes where it is not) and the dispatch host test.
  Check 'gdi-kernels' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_gdi_kernels.ps1" -Root $Workspace -Out "$Out\gdi-kernels" -Kits "$Kits" }

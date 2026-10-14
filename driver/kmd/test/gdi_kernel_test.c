@@ -822,7 +822,7 @@ static void TestColourOrder(void)
  * item that could take the per-row engine path must give it up to the items behind it. */
 #define BATCH_TIGHT_DWORDS (256u * 1024u / 4u)
 /* The most sub-rectangles a bounded command buffer can carry; the dense cases drive that many. */
-#define BATCH_SUBRECTS ((BC250_GDI_CMDBUF_BOUND - BC250_GDI_MIN_COMMAND_BYTES) / \
+#define BATCH_SUBRECTS ((BC250_GDI_CMDBUF_BOUND - BC250_GDI_RECT_FLOOR_BYTES) / \
                         BC250_GDI_SUBRECT_BYTES)
 
 static unsigned int g_batch[BATCH_DWORDS];
@@ -1028,12 +1028,16 @@ static void TestBatchCapacity(void)
     /* A count that cannot be budgeted at all refuses the call rather than wrapping. */
     CHECK_EQ(Bc250GdiBatchDwords(0xFFFFFFFFu), 0u);
 
-    /* The producer's input bound: a command buffer of L bytes carries at most (L - 48) / 16
-     * sub-rectangles, because the array of a command lies inside that command. */
+    /* The producer's input bound: a command buffer of L bytes carries at most (L - 8) / 16
+     * sub-rectangles, because the array of a command lies inside that command. The floor is the
+     * command header, because the array may overlap the fixed part behind it. */
     CHECK_EQ(Bc250GdiMaxSubRects(0), 0u);
-    CHECK_EQ(Bc250GdiMaxSubRects(BC250_GDI_MIN_COMMAND_BYTES), 0u);
-    CHECK_EQ(Bc250GdiMaxSubRects(BC250_GDI_MIN_COMMAND_BYTES + BC250_GDI_SUBRECT_BYTES - 1u), 0u);
-    CHECK_EQ(Bc250GdiMaxSubRects(BC250_GDI_MIN_COMMAND_BYTES + BC250_GDI_SUBRECT_BYTES), 1u);
+    CHECK_EQ(Bc250GdiMaxSubRects(BC250_GDI_RECT_FLOOR_BYTES), 0u);
+    CHECK_EQ(Bc250GdiMaxSubRects(BC250_GDI_RECT_FLOOR_BYTES + BC250_GDI_SUBRECT_BYTES - 1u), 0u);
+    CHECK_EQ(Bc250GdiMaxSubRects(BC250_GDI_RECT_FLOOR_BYTES + BC250_GDI_SUBRECT_BYTES), 1u);
+    /* The smallest command that can carry one is still a ColorFill of 48 bytes, and the bound
+     * gives it two, which is what fits when its array starts at the header. */
+    CHECK_EQ(Bc250GdiMaxSubRects(BC250_GDI_MIN_COMMAND_BYTES), 2u);
     CHECK_EQ(Bc250GdiMaxSubRects(BC250_GDI_CMDBUF_BOUND), BATCH_SUBRECTS);
     CHECK_EQ(Bc250GdiCallDwords(BC250_GDI_CMDBUF_BOUND), Bc250GdiBatchDwords(BATCH_SUBRECTS));
 
@@ -1064,7 +1068,10 @@ static void TestBatchCapacity(void)
         /* The review's own case: one ColorFill with 793 disjoint one-pixel sub-rectangles, which
          * the old 256 KiB buffer refused whole. Its command buffer is 12736 bytes, well inside the
          * bound, and nothing about it is special any more. */
-        CHECK_EQ(Bc250GdiMaxSubRects(48u + 793u * 16u), 793u);
+        /* The bound is an upper bound of what a command buffer of that size can carry, so it gives
+         * this one two more than it holds: the floor is the eight-byte header, and this command's
+         * own array starts behind a fixed part of 48 bytes. */
+        CHECK_EQ(Bc250GdiMaxSubRects(48u + 793u * 16u), 795u);
         CHECK_EQ(Bc250GdiBatchBegin(&batch, g_batch, dma / 4u, IB_VA, 793u), 1);
         CHECK_EQ(Bc250GdiBatchBegin(&batch, g_batch, dma / 4u, IB_VA, BATCH_SUBRECTS), 1);
     }

@@ -945,108 +945,184 @@ static void SeedMemory(void)
 /* One surface pair inside g_memory: the source at offset 0, the destination at DST_AT. */
 #define DST_AT 0x80000u
 
-/* The structure both passes of RenderGdi read, and the one case that made this function necessary:
- * a command which states more sub-rectangles than its own bytes can hold. The counting pass used to
- * add that number to the budget of the whole call, which then refused every good command beside it.
- * The answer must be SKIP: walk on, draw nothing, count nothing. */
+/* The two stages both passes of RenderGdi read a command with, in the order gdi_walk.h fixes.
+ * Stage 1 is the size, from the header and the opcode alone. Stage 2 is what the decoded body says
+ * about the sub-rectangle array. Two defects live here, and both reviews of 2026-10-14 found one.
+ *   r2: a command which states more sub-rectangles than its own bytes can hold. The counting pass
+ * used to add that number to the budget of the whole call, which then refused every good command
+ * beside it. The answer must be SKIP: walk on, draw nothing, count nothing.
+ *   r1: a truncated final command used to be decoded before its size was checked, which read up to
+ * 40 bytes past CommandLength. The size therefore fails in stage 1, where no field of the body has
+ * been read at all. Step below is the wrapper's order, and run_gdi_walk.ps1 holds the real wrapper
+ * to it against an inaccessible page. */
+static int Step(const BC250_GDI_CMD_VIEW* v, unsigned int* next, unsigned int* why)
+{
+    if (!Bc250GdiCommandSize(v, next, why)) return BC250_GDI_CMD_STOP;
+    return Bc250GdiCommandRects(v, why);
+}
+
 static void TestCommandStep(void)
 {
     const unsigned long long base = 0x0000000010000000ull;
-    const unsigned int min = 16u, rect = 16u;
+    const unsigned int min = 16u, rect = 16u, head = 8u;
     BC250_GDI_CMD_VIEW v;
     unsigned int next, why;
 
+    /* Stage 0: the two fields of the header are read before anything else, so the header itself
+     * must fit first. */
+    CHECK_EQ(Bc250GdiHeaderFits(8u, 0u, 8u), 1);
+    CHECK_EQ(Bc250GdiHeaderFits(7u, 0u, 8u), 0);
+    CHECK_EQ(Bc250GdiHeaderFits(16u, 8u, 8u), 1);
+    CHECK_EQ(Bc250GdiHeaderFits(16u, 12u, 8u), 0);
+    CHECK_EQ(Bc250GdiHeaderFits(16u, 20u, 8u), 0);
+    CHECK_EQ(Bc250GdiHeaderFits(64u, 0u, 0u), 0);
+    CHECK_EQ(Bc250GdiHeaderFits(64u, 0u, 6u), 0);
+
+    /* Stage 1 alone: the truncated final command of review r1. A ColorFill needs 48 bytes, and a
+     * command buffer that ends at 8 or at 44 holds no such command. Both answers come out of the
+     * size step, which is the only reason the body is never read. */
+    memset(&v, 0, sizeof(v));
+    v.BufferBytes = 8u; v.Offset = 0; v.CommandBytes = 8u; v.MinBytes = 48u; v.HeaderBytes = head;
+    v.RectBytes = rect; v.Base = base;
+    CHECK_EQ(Bc250GdiCommandSize(&v, &next, &why), 0);
+    CHECK_EQ(why, BC250_GDI_WHY_MALFORMED);
+    CHECK_EQ(next, 0u);
+    v.BufferBytes = 44u; v.CommandBytes = 44u;
+    CHECK_EQ(Bc250GdiCommandSize(&v, &next, &why), 0);
+    CHECK_EQ(next, 0u);
+    v.BufferBytes = 64u; v.CommandBytes = 64u;
+    CHECK_EQ(Bc250GdiCommandSize(&v, &next, &why), 1);
+    CHECK_EQ(next, 64u);
+    /* A fixed part smaller than the header would admit a command that does not hold its own opcode
+     * and size. The caller cannot produce it, and the stage refuses it anyway. */
+    v.MinBytes = 4u;
+    CHECK_EQ(Bc250GdiCommandSize(&v, &next, &why), 0);
+    v.MinBytes = 48u;
+
     /* A command of 48 bytes holds two sub-rectangles behind its fixed part, and not three. */
     memset(&v, 0, sizeof(v));
-    v.BufferBytes = 256u; v.Offset = 0; v.CommandBytes = 48u; v.MinBytes = min; v.RectBytes = rect;
-    v.Base = base; v.First = base + min; v.SubCount = 2u; v.HaveRects = 1;
-    CHECK_EQ(Bc250GdiCommandStep(&v, &next, &why), BC250_GDI_CMD_DRAW);
+    v.BufferBytes = 256u; v.Offset = 0; v.CommandBytes = 48u; v.MinBytes = min; v.HeaderBytes = head;
+    v.RectBytes = rect; v.Base = base; v.First = base + min; v.SubCount = 2u; v.HaveRects = 1;
+    CHECK_EQ(Step(&v, &next, &why), BC250_GDI_CMD_DRAW);
     CHECK_EQ(why, BC250_GDI_WHY_DRAW);
     CHECK_EQ(next, 48u);
     v.SubCount = 3u;
-    CHECK_EQ(Bc250GdiCommandStep(&v, &next, &why), BC250_GDI_CMD_SKIP);
+    CHECK_EQ(Step(&v, &next, &why), BC250_GDI_CMD_SKIP);
     CHECK_EQ(why, BC250_GDI_WHY_OUTSIDE);
     /* The walk still goes on, which is the whole point: one bad command is not the end of the
      * buffer, and its count never reaches the budget. */
     CHECK_EQ(next, 48u);
     /* The malformed count itself. */
     v.SubCount = 0xFFFFFFFFu;
-    CHECK_EQ(Bc250GdiCommandStep(&v, &next, &why), BC250_GDI_CMD_SKIP);
+    CHECK_EQ(Step(&v, &next, &why), BC250_GDI_CMD_SKIP);
     CHECK_EQ(why, BC250_GDI_WHY_OUTSIDE);
     CHECK_EQ(next, 48u);
 
-    /* The array below the fixed part, and at the very end of the command. */
+    /* The array inside the fixed part is admitted, because it is still inside the command. The
+     * diagnostic producer of dxgkrnl builds exactly that: an 80-byte BitBlt whose pSubRects points
+     * at the DstRect at command + 0x18. Below the header it is refused, because those eight bytes
+     * are the opcode and the size. */
     v.SubCount = 1u;
     v.First = base + min - 1u;
-    CHECK_EQ(Bc250GdiCommandStep(&v, &next, &why), BC250_GDI_CMD_SKIP);
+    CHECK_EQ(Step(&v, &next, &why), BC250_GDI_CMD_DRAW);
+    v.First = base + head;
+    v.SubCount = 2u;
+    CHECK_EQ(Step(&v, &next, &why), BC250_GDI_CMD_DRAW);
+    v.SubCount = 3u;
+    CHECK_EQ(Step(&v, &next, &why), BC250_GDI_CMD_SKIP);
     CHECK_EQ(why, BC250_GDI_WHY_OUTSIDE);
+    v.SubCount = 1u;
+    v.First = base + head - 1u;
+    CHECK_EQ(Step(&v, &next, &why), BC250_GDI_CMD_SKIP);
+    CHECK_EQ(why, BC250_GDI_WHY_OUTSIDE);
+    v.First = base;
+    CHECK_EQ(Step(&v, &next, &why), BC250_GDI_CMD_SKIP);
+    /* The array at the very end of the command holds nothing. */
     v.First = base + 48u;
-    CHECK_EQ(Bc250GdiCommandStep(&v, &next, &why), BC250_GDI_CMD_SKIP);
+    CHECK_EQ(Step(&v, &next, &why), BC250_GDI_CMD_SKIP);
     v.First = base + 32u;
-    CHECK_EQ(Bc250GdiCommandStep(&v, &next, &why), BC250_GDI_CMD_DRAW);
+    CHECK_EQ(Step(&v, &next, &why), BC250_GDI_CMD_DRAW);
+
+    /* The diagnostic producer's own command, with its real numbers: BitBlt, 80 bytes, one
+     * sub-rectangle at command + 0x18, which is 24 bytes into a fixed part of 80. */
+    memset(&v, 0, sizeof(v));
+    v.BufferBytes = 80u; v.Offset = 0; v.CommandBytes = 80u; v.MinBytes = 80u; v.HeaderBytes = head;
+    v.RectBytes = rect; v.Base = base; v.First = base + 0x18u; v.SubCount = 1u; v.HaveRects = 1;
+    CHECK_EQ(Step(&v, &next, &why), BC250_GDI_CMD_DRAW);
+    CHECK_EQ(why, BC250_GDI_WHY_DRAW);
+    CHECK_EQ(next, 80u);
+    /* Three of them still fit behind that offset, and four do not. */
+    v.SubCount = 3u;
+    CHECK_EQ(Step(&v, &next, &why), BC250_GDI_CMD_DRAW);
+    v.SubCount = 4u;
+    CHECK_EQ(Step(&v, &next, &why), BC250_GDI_CMD_SKIP);
 
     /* A command further along the buffer, with its array exactly filling the rest of it. */
     memset(&v, 0, sizeof(v));
-    v.BufferBytes = 256u; v.Offset = 48u; v.CommandBytes = 64u; v.MinBytes = min; v.RectBytes = rect;
-    v.Base = base; v.First = base + 64u; v.SubCount = 3u; v.HaveRects = 1;
-    CHECK_EQ(Bc250GdiCommandStep(&v, &next, &why), BC250_GDI_CMD_DRAW);
+    v.BufferBytes = 256u; v.Offset = 48u; v.CommandBytes = 64u; v.MinBytes = min; v.HeaderBytes = head;
+    v.RectBytes = rect; v.Base = base; v.First = base + 64u; v.SubCount = 3u; v.HaveRects = 1;
+    CHECK_EQ(Step(&v, &next, &why), BC250_GDI_CMD_DRAW);
     CHECK_EQ(next, 112u);
     v.SubCount = 4u;
-    CHECK_EQ(Bc250GdiCommandStep(&v, &next, &why), BC250_GDI_CMD_SKIP);
+    CHECK_EQ(Step(&v, &next, &why), BC250_GDI_CMD_SKIP);
 
     /* An escape counts nothing, whatever it says about sub-rectangles. */
     memset(&v, 0, sizeof(v));
-    v.BufferBytes = 256u; v.CommandBytes = 16u; v.MinBytes = min; v.RectBytes = rect;
-    v.Base = base; v.First = 0; v.SubCount = 0xFFFFFFFFu; v.Escape = 1;
-    CHECK_EQ(Bc250GdiCommandStep(&v, &next, &why), BC250_GDI_CMD_SKIP);
+    v.BufferBytes = 256u; v.CommandBytes = 16u; v.MinBytes = min; v.HeaderBytes = head;
+    v.RectBytes = rect; v.Base = base; v.First = 0; v.SubCount = 0xFFFFFFFFu; v.Escape = 1;
+    CHECK_EQ(Step(&v, &next, &why), BC250_GDI_CMD_SKIP);
     CHECK_EQ(why, BC250_GDI_WHY_ESCAPE);
     CHECK_EQ(next, 16u);
 
     /* No array, or none to point at. */
     memset(&v, 0, sizeof(v));
-    v.BufferBytes = 256u; v.CommandBytes = 48u; v.MinBytes = min; v.RectBytes = rect; v.Base = base;
-    v.SubCount = 5u; v.First = base + min; v.HaveRects = 0;
-    CHECK_EQ(Bc250GdiCommandStep(&v, &next, &why), BC250_GDI_CMD_SKIP);
+    v.BufferBytes = 256u; v.CommandBytes = 48u; v.MinBytes = min; v.HeaderBytes = head;
+    v.RectBytes = rect; v.Base = base; v.SubCount = 5u; v.First = base + min; v.HaveRects = 0;
+    CHECK_EQ(Step(&v, &next, &why), BC250_GDI_CMD_SKIP);
     CHECK_EQ(why, BC250_GDI_WHY_EMPTY);
     v.HaveRects = 1; v.SubCount = 0;
-    CHECK_EQ(Bc250GdiCommandStep(&v, &next, &why), BC250_GDI_CMD_SKIP);
+    CHECK_EQ(Step(&v, &next, &why), BC250_GDI_CMD_SKIP);
     CHECK_EQ(why, BC250_GDI_WHY_EMPTY);
 
     /* A size the buffer does not hold stops the walk, and says so, because the next command cannot
      * be found any more. */
     memset(&v, 0, sizeof(v));
-    v.BufferBytes = 256u; v.Offset = 240u; v.CommandBytes = 20u; v.MinBytes = min; v.RectBytes = rect;
-    v.Base = base; v.First = base + 240u + min; v.SubCount = 1u; v.HaveRects = 1;
-    CHECK_EQ(Bc250GdiCommandStep(&v, &next, &why), BC250_GDI_CMD_STOP);
+    v.BufferBytes = 256u; v.Offset = 240u; v.CommandBytes = 20u; v.MinBytes = min;
+    v.HeaderBytes = head; v.RectBytes = rect; v.Base = base; v.First = base + 240u + min;
+    v.SubCount = 1u; v.HaveRects = 1;
+    CHECK_EQ(Step(&v, &next, &why), BC250_GDI_CMD_STOP);
     CHECK_EQ(why, BC250_GDI_WHY_MALFORMED);
     CHECK_EQ(next, 0u);
     v.CommandBytes = 12u;
-    CHECK_EQ(Bc250GdiCommandStep(&v, &next, &why), BC250_GDI_CMD_STOP);
+    CHECK_EQ(Step(&v, &next, &why), BC250_GDI_CMD_STOP);
     v.CommandBytes = 18u;
-    CHECK_EQ(Bc250GdiCommandStep(&v, &next, &why), BC250_GDI_CMD_STOP);
+    CHECK_EQ(Step(&v, &next, &why), BC250_GDI_CMD_STOP);
 
     /* A rectangle of no size would divide by zero. It is refused, not used. */
     memset(&v, 0, sizeof(v));
-    v.BufferBytes = 256u; v.CommandBytes = 48u; v.MinBytes = min; v.RectBytes = 0;
-    v.Base = base; v.First = base + min; v.SubCount = 1u; v.HaveRects = 1;
-    CHECK_EQ(Bc250GdiCommandStep(&v, &next, &why), BC250_GDI_CMD_SKIP);
+    v.BufferBytes = 256u; v.CommandBytes = 48u; v.MinBytes = min; v.HeaderBytes = head;
+    v.RectBytes = 0; v.Base = base; v.First = base + min; v.SubCount = 1u; v.HaveRects = 1;
+    CHECK_EQ(Step(&v, &next, &why), BC250_GDI_CMD_SKIP);
     CHECK_EQ(why, BC250_GDI_WHY_OUTSIDE);
 
     /* A command buffer at the very top of the address space: the limit wraps, so nothing is inside
      * it. The arithmetic says so instead of admitting the whole address space. */
     memset(&v, 0, sizeof(v));
-    v.BufferBytes = 256u; v.CommandBytes = 48u; v.MinBytes = min; v.RectBytes = rect;
-    v.Base = 0xFFFFFFFFFFFFFFF0ull; v.First = v.Base + min; v.SubCount = 1u; v.HaveRects = 1;
-    CHECK_EQ(Bc250GdiCommandStep(&v, &next, &why), BC250_GDI_CMD_SKIP);
+    v.BufferBytes = 256u; v.CommandBytes = 48u; v.MinBytes = min; v.HeaderBytes = head;
+    v.RectBytes = rect; v.Base = 0xFFFFFFFFFFFFFFF0ull; v.First = v.Base + min; v.SubCount = 1u;
+    v.HaveRects = 1;
+    CHECK_EQ(Step(&v, &next, &why), BC250_GDI_CMD_SKIP);
     CHECK_EQ(why, BC250_GDI_WHY_OUTSIDE);
 
     /* The caller's own mistakes. */
     memset(&v, 0, sizeof(v));
-    v.BufferBytes = 256u; v.CommandBytes = 48u; v.MinBytes = min; v.RectBytes = rect;
-    v.Base = base; v.First = base + min; v.SubCount = 1u; v.HaveRects = 1;
-    CHECK_EQ(Bc250GdiCommandStep(NULL, &next, &why), BC250_GDI_CMD_STOP);
-    CHECK_EQ(Bc250GdiCommandStep(&v, NULL, &why), BC250_GDI_CMD_STOP);
-    CHECK_EQ(Bc250GdiCommandStep(&v, &next, NULL), BC250_GDI_CMD_STOP);
+    v.BufferBytes = 256u; v.CommandBytes = 48u; v.MinBytes = min; v.HeaderBytes = head;
+    v.RectBytes = rect; v.Base = base; v.First = base + min; v.SubCount = 1u; v.HaveRects = 1;
+    CHECK_EQ(Bc250GdiCommandSize(NULL, &next, &why), 0);
+    CHECK_EQ(Bc250GdiCommandSize(&v, NULL, &why), 0);
+    CHECK_EQ(Bc250GdiCommandSize(&v, &next, NULL), 0);
+    CHECK_EQ(Bc250GdiCommandRects(NULL, &why), BC250_GDI_CMD_SKIP);
+    CHECK_EQ(Bc250GdiCommandRects(&v, NULL), BC250_GDI_CMD_SKIP);
 }
 
 static void TestStreamCase(const BC250_GDI_OP* op, const BC250_GDI_SURFACE* s, unsigned int count,

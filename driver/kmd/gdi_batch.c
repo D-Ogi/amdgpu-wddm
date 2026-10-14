@@ -43,8 +43,8 @@ unsigned int Bc250GdiBatchDwords(unsigned int subRects)
  * sub-rectangle count under 2^28, and Bc250GdiBatchDwords saturates to 0 above 2^32 dwords. */
 unsigned int Bc250GdiMaxSubRects(unsigned int commandBytes)
 {
-    if (commandBytes <= BC250_GDI_MIN_COMMAND_BYTES) return 0u;
-    return (commandBytes - BC250_GDI_MIN_COMMAND_BYTES) / BC250_GDI_SUBRECT_BYTES;
+    if (commandBytes <= BC250_GDI_RECT_FLOOR_BYTES) return 0u;
+    return (commandBytes - BC250_GDI_RECT_FLOOR_BYTES) / BC250_GDI_SUBRECT_BYTES;
 }
 
 unsigned int Bc250GdiCallDwords(unsigned int commandBytes)

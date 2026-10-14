@@ -186,6 +186,7 @@ typedef struct _BC250_WDDM_KIND {
 #include "gdi_emit.h"                // HLK gap G1: the GDI contract layer and its DMA_DATA stream
 #include "gdi_dispatch.h"            // HLK gap G1 increment 2: the compute dispatch of the six kernels
 #include "gdi_batch.h"               // HLK gap G1 increment 2: the capacity contract of one call
+#include "gdi_walk.h"                // HLK gap G1: the bounded walk of the OS command buffer
 
 #define BC250_GDI_BIND_SLOTS 4u                  // the most allocation-list entries one command names
 // One pass must hold the whole command buffer, because the guaranteed contract DMA buffer model
@@ -211,6 +212,9 @@ typedef struct _BC250_WDDM_KIND {
 C_ASSERT(sizeof(RECT) == BC250_GDI_SUBRECT_BYTES);
 C_ASSERT(FIELD_OFFSET(DXGK_RENDERKM_COMMAND, Command) + sizeof(DXGK_GDIARG_COLORFILL) ==
          BC250_GDI_MIN_COMMAND_BYTES);
+// The floor of the count bound is the command header, because a sub-rectangle array may overlap its
+// own command's fixed part (gdi_batch.h, BC250_GDI_RECT_FLOOR_BYTES).
+C_ASSERT(FIELD_OFFSET(DXGK_RENDERKM_COMMAND, Command) == BC250_GDI_RECT_FLOOR_BYTES);
 C_ASSERT(sizeof(DXGK_GDIARG_COLORFILL) <= sizeof(DXGK_GDIARG_BITBLT));
 C_ASSERT(sizeof(DXGK_GDIARG_COLORFILL) <= sizeof(DXGK_GDIARG_ALPHABLEND));
 C_ASSERT(sizeof(DXGK_GDIARG_COLORFILL) <= sizeof(DXGK_GDIARG_STRETCHBLT));
@@ -8704,115 +8708,6 @@ C_ASSERT((1u << (2u + DXGK_TEXTURE_SIZE_SHIFT)) == 8192u);
 // The rectangles are copied field by field below; this only says that nothing was forgotten.
 C_ASSERT(sizeof(BC250_GDI_RECT) == sizeof(RECT));
 
-static void WddmGdiRect(const RECT* From, BC250_GDI_RECT* To)
-{
-    To->Left = From->left; To->Top = From->top; To->Right = From->right; To->Bottom = From->bottom;
-}
-
-// One command of the buffer, flattened into the plain record the contract layer admits. Only the
-// union member the opcode names is read; the sub-rectangle array and its count come back separately
-// because they still point into the OS command buffer. MinBytes is the smallest CommandSize this
-// command may have, which is what bounds that read: the fixed part plus this opcode's own member.
-// 0 for an opcode outside the table.
-static int WddmGdiCommand(const DXGK_RENDERKM_COMMAND* Command, BC250_GDI_OP* Op,
-                          const RECT** SubRects, UINT* SubCount, UINT* MinBytes)
-{
-    RtlZeroMemory(Op, sizeof(*Op));
-    *SubRects = NULL;
-    *SubCount = 0;
-    *MinBytes = (UINT)FIELD_OFFSET(DXGK_RENDERKM_COMMAND, Command);
-    Op->OpCode = (unsigned int)Command->OpCode;
-    switch (Command->OpCode)
-    {
-    case DXGK_GDIOP_BITBLT:
-        *MinBytes += sizeof(Command->Command.BitBlt);
-        WddmGdiRect(&Command->Command.BitBlt.SrcRect, &Op->SrcRect);
-        WddmGdiRect(&Command->Command.BitBlt.DstRect, &Op->DstRect);
-        Op->SrcAllocationIndex = Command->Command.BitBlt.SrcAllocationIndex;
-        Op->DstAllocationIndex = Command->Command.BitBlt.DstAllocationIndex;
-        Op->Rop = Command->Command.BitBlt.Rop;
-        Op->Rop3 = Command->Command.BitBlt.Rop3;
-        Op->SrcPitch = Command->Command.BitBlt.SrcPitch;
-        Op->DstPitch = Command->Command.BitBlt.DstPitch;
-        *SubRects = Command->Command.BitBlt.pSubRects;
-        *SubCount = Command->Command.BitBlt.NumSubRects;
-        break;
-    case DXGK_GDIOP_COLORFILL:
-        *MinBytes += sizeof(Command->Command.ColorFill);
-        WddmGdiRect(&Command->Command.ColorFill.DstRect, &Op->DstRect);
-        Op->DstAllocationIndex = Command->Command.ColorFill.DstAllocationIndex;
-        Op->Color = Command->Command.ColorFill.Color;
-        Op->Rop = Command->Command.ColorFill.Rop;
-        Op->Rop3 = Command->Command.ColorFill.Rop3;
-        *SubRects = Command->Command.ColorFill.pSubRects;
-        *SubCount = Command->Command.ColorFill.NumSubRects;
-        break;
-    case DXGK_GDIOP_ALPHABLEND:
-        *MinBytes += sizeof(Command->Command.AlphaBlend);
-        WddmGdiRect(&Command->Command.AlphaBlend.SrcRect, &Op->SrcRect);
-        WddmGdiRect(&Command->Command.AlphaBlend.DstRect, &Op->DstRect);
-        Op->SrcAllocationIndex = Command->Command.AlphaBlend.SrcAllocationIndex;
-        Op->DstAllocationIndex = Command->Command.AlphaBlend.DstAllocationIndex;
-        Op->SourceConstantAlpha = Command->Command.AlphaBlend.SourceConstantAlpha;
-        Op->SourceHasAlpha = Command->Command.AlphaBlend.SourceHasAlpha ? 1u : 0u;
-        Op->SrcPitch = Command->Command.AlphaBlend.SrcPitch;
-        *SubRects = Command->Command.AlphaBlend.pSubRects;
-        *SubCount = Command->Command.AlphaBlend.NumSubRects;
-        break;
-    case DXGK_GDIOP_STRETCHBLT:
-        *MinBytes += sizeof(Command->Command.StretchBlt);
-        WddmGdiRect(&Command->Command.StretchBlt.SrcRect, &Op->SrcRect);
-        WddmGdiRect(&Command->Command.StretchBlt.DstRect, &Op->DstRect);
-        Op->SrcAllocationIndex = Command->Command.StretchBlt.SrcAllocationIndex;
-        Op->DstAllocationIndex = Command->Command.StretchBlt.DstAllocationIndex;
-        // Read as bitfields, never from a transcribed mask: the union's Flags word holds Mode in its
-        // low 16 bits and the two mirror bits above them.
-        Op->Mode = Command->Command.StretchBlt.Mode;
-        Op->MirrorX = Command->Command.StretchBlt.MirrorX;
-        Op->MirrorY = Command->Command.StretchBlt.MirrorY;
-        Op->SrcPitch = Command->Command.StretchBlt.SrcPitch;
-        *SubRects = Command->Command.StretchBlt.pSubRects;
-        *SubCount = Command->Command.StretchBlt.NumSubRects;
-        break;
-    case DXGK_GDIOP_ESCAPE:
-        // "Driver ignores this command". No member of the union is read, so the fixed part is all
-        // this command has to hold.
-        break;
-    case DXGK_GDIOP_TRANSPARENTBLT:
-        *MinBytes += sizeof(Command->Command.TransparentBlt);
-        WddmGdiRect(&Command->Command.TransparentBlt.SrcRect, &Op->SrcRect);
-        WddmGdiRect(&Command->Command.TransparentBlt.DstRect, &Op->DstRect);
-        Op->SrcAllocationIndex = Command->Command.TransparentBlt.SrcAllocationIndex;
-        Op->DstAllocationIndex = Command->Command.TransparentBlt.DstAllocationIndex;
-        Op->Color = Command->Command.TransparentBlt.Color;
-        Op->HonorAlpha = Command->Command.TransparentBlt.Flags.HonorAlpha;
-        Op->SrcPitch = Command->Command.TransparentBlt.SrcPitch;
-        *SubRects = Command->Command.TransparentBlt.pSubRects;
-        *SubCount = Command->Command.TransparentBlt.NumSubRects;
-        break;
-    case DXGK_GDIOP_CLEARTYPEBLEND:
-        *MinBytes += sizeof(Command->Command.ClearTypeBlend);
-        WddmGdiRect(&Command->Command.ClearTypeBlend.DstRect, &Op->DstRect);
-        Op->DstAllocationIndex = Command->Command.ClearTypeBlend.DstAllocationIndex;
-        Op->TmpSurfAllocationIndex = Command->Command.ClearTypeBlend.TmpSurfAllocationIndex;
-        Op->GammaSurfAllocationIndex = Command->Command.ClearTypeBlend.GammaSurfAllocationIndex;
-        Op->AlphaSurfAllocationIndex = Command->Command.ClearTypeBlend.AlphaSurfAllocationIndex;
-        Op->DstToAlphaOffsetX = Command->Command.ClearTypeBlend.DstToAlphaOffsetX;
-        Op->DstToAlphaOffsetY = Command->Command.ClearTypeBlend.DstToAlphaOffsetY;
-        Op->Color = Command->Command.ClearTypeBlend.Color;
-        Op->Color2 = Command->Command.ClearTypeBlend.Color2;
-        Op->Gamma = Command->Command.ClearTypeBlend.Gamma;
-        Op->AlphaSurfPitch = Command->Command.ClearTypeBlend.AlphaSurfPitch;
-        *SubRects = Command->Command.ClearTypeBlend.pSubRects;
-        *SubCount = Command->Command.ClearTypeBlend.NumSubRects;
-        break;
-    default:
-        return 0;
-    }
-    Op->NumSubRects = *SubCount;
-    return 1;
-}
-
 // One allocation-list entry, as the contract layer needs it. The same discipline as
 // WddmSnapshotPresentAllocations: the handle is a value until the object index returns it, both
 // descriptors are compared and copied under the lock, and no object pointer escapes. Serial is the
@@ -8929,44 +8824,10 @@ static int WddmGdiDisjoint(ULONGLONG Ib, UINT IbBytes, ULONGLONG Va, ULONGLONG B
     return Ib <= Va ? Va - Ib >= IbBytes : Ib - Va >= Bytes;
 }
 
-// One command's structure, for both passes of RenderGdi: the opcode table, the walk step and the
-// containment of the sub-rectangle array inside the command. Both passes call this and nothing else,
-// so the walk which counts and the walk which translates cannot disagree. They used to: the count
-// added SubCount before the containment check that the translation applies, so one command with a
-// malformed count raised the budget of the whole call, and a call whose budget cannot be guaranteed
-// draws nothing. Review r2 of 2026-10-14 found that total loss built out of one bad command.
-//   WDDM_GDI_STRUCT_* is BC250_GDI_CMD_* plus the one answer this layer adds, an opcode the table
-// does not describe. That answer stops the walk, like a malformed size, because a command of unknown
-// length leaves no way to reach the next one.
-#define WDDM_GDI_WHY_OPCODE 5u
-static int WddmGdiStructure(const UCHAR* Buffer, UINT Bytes, UINT Offset, BC250_GDI_OP* Op,
-                            const RECT** SubRects, UINT* SubCount, UINT* Next, UINT* Why)
-{
-    const DXGK_RENDERKM_COMMAND* command = (const DXGK_RENDERKM_COMMAND*)(Buffer + Offset);
-    BC250_GDI_CMD_VIEW view;
-    UINT minBytes;
-
-    *Next = 0;
-    *Why = WDDM_GDI_WHY_OPCODE;
-    if (!WddmGdiCommand(command, Op, SubRects, SubCount, &minBytes)) return BC250_GDI_CMD_STOP;
-    RtlZeroMemory(&view, sizeof(view));
-    view.BufferBytes = Bytes;
-    view.Offset = Offset;
-    view.CommandBytes = command->CommandSize;
-    view.MinBytes = minBytes;
-    view.SubCount = *SubCount;
-    view.RectBytes = (UINT)sizeof(RECT);
-    view.Base = (ULONGLONG)(ULONG_PTR)Buffer;
-    view.First = (ULONGLONG)(ULONG_PTR)*SubRects;
-    view.Escape = Op->OpCode == BC250_GDIOP_ESCAPE;
-    view.HaveRects = *SubRects != NULL;
-    return Bc250GdiCommandStep(&view, Next, Why);
-}
-
 // The sub-rectangles the whole command buffer holds, which is what gdi_batch.c budgets the call
 // with. Only a command the translation will draw adds its count, which is what keeps this number
 // inside the input's own bound: an admitted command of L bytes carries at most
-// (L - MinBytes) / sizeof(RECT) sub-rectangles, because the array is inside the command. The count
+// (L - 8) / sizeof(RECT) sub-rectangles, because the array is inside the command. The count
 // saturates rather than wraps, and a saturated count refuses the call.
 static unsigned int WddmGdiSubRectCount(const UCHAR* Buffer, UINT Bytes, UINT* Commands)
 {
@@ -8978,7 +8839,7 @@ static unsigned int WddmGdiSubRectCount(const UCHAR* Buffer, UINT Bytes, UINT* C
     for (offset = 0, index = 0; offset + (UINT)FIELD_OFFSET(DXGK_RENDERKM_COMMAND, Command) <= Bytes;
          index++)
     {
-        int kind = WddmGdiStructure(Buffer, Bytes, offset, &op, &subRects, &subCount, &next, &why);
+        int kind = Bc250GdiWalkCommand(Buffer, Bytes, offset, &op, &subRects, &subCount, &next, &why);
 
         if (kind == BC250_GDI_CMD_STOP) break;
         offset = next;
@@ -9074,13 +8935,13 @@ static NTSTATUS Bc250WddmRenderGdi(_In_ const HANDLE hContext, _Inout_ DXGKARG_R
         unsigned int pattern = 0;
         int disjoint = 1;
         // The structure of this command, read exactly as the counting walk above read it.
-        int kind = WddmGdiStructure(buffer, bytes, start, &op, &subRects, &subCount, &next, &why);
+        int kind = Bc250GdiWalkCommand(buffer, bytes, start, &op, &subRects, &subCount, &next, &why);
 
         if (kind == BC250_GDI_CMD_STOP)
         {
             // An opcode outside the table has no size this driver can trust, and neither has a
             // command whose size the buffer does not hold, so the rest of the buffer is not walked.
-            if (why == WDDM_GDI_WHY_OPCODE)
+            if (why == BC250_GDI_WHY_OPCODE)
                 InterlockedIncrement64(&wddm->GdiRenderRefused[Bc250GdiBadOpCode]);
             else
                 InterlockedIncrement64(&wddm->GdiRenderMalformed);
@@ -9130,7 +8991,7 @@ static NTSTATUS Bc250WddmRenderGdi(_In_ const HANDLE hContext, _Inout_ DXGKARG_R
             int result, status;
 
             visited++;
-            WddmGdiRect(&subRects[sub], &rect);
+            Bc250GdiWalkRect(&subRects[sub], &rect);
             status = Bc250GdiPlanItem(&op, surfaces, slots, &rect, &item);
             if (status != Bc250GdiOk)
             {

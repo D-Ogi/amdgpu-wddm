@@ -49,15 +49,16 @@
  *
  * A command's length can depend on how many sub-rectangles it has only if they are inside it, and
  * CommandSize reaches to the next command, so the array of one command lies inside that command and
- * the arrays of different commands do not overlap. wddm.c enforces exactly that reading and drops a
- * pSubRects that points outside the command it belongs to. Therefore, writing L for CommandLength
- * and taking ColorFill as the smallest command that can carry a sub-rectangle at all:
+ * the arrays of different commands do not overlap. gdi_walk.c enforces exactly that reading and
+ * drops a pSubRects that points outside the command it belongs to. An array may overlap its own
+ * command's fixed part, which one producer does, so the floor of the count is the eight-byte header.
+ * Therefore, writing L for CommandLength:
  *
- *     sum over commands of 16 * NumSubRects <= L - 48,  so  N <= (L - 48) / 16
+ *     sum over commands of 16 * NumSubRects <= L - 8,  so  N <= (L - 8) / 16
  *
  * and with the bounded cost of rule 1 the whole call needs at most
  *
- *     acquire + codeMax + ((L - 48) / 16) * dispatchMax + granule - 1   dwords,
+ *     acquire + codeMax + ((L - 8) / 16) * dispatchMax + granule - 1   dwords,
  *
  * which is Bc250GdiCallDwords(L). It is a constant factor of the input: 324 bytes of DMA buffer per
  * 16 bytes of command buffer, 20.25 to one. So a driver that asks dxgkrnl for
@@ -65,8 +66,11 @@
  * refusal in Begin is then unreachable for the whole admitted input domain, not merely for the
  * inputs anyone has tried.
  *
- * What the DDI does not publish is the size of the command buffer dxgkrnl gives a GDI context, so
- * that bound is this driver's choice (BC250_GDI_CMDBUF_BOUND in wddm.c) and not the OS's promise.
+ * The DDI does not publish the size of the command buffer dxgkrnl gives a GDI context. The
+ * ordinary producer does: cdd.dll allocates 64 KB and never submits more (docs/design/gdi-hw-accel.md,
+ * "What bounds the command buffer"). The bound here is 96 KB, above that maximum, and it stays this
+ * driver's own number, because a diagnostic path inside dxgkrnl can supply a command buffer of its
+ * own and nothing documents its size.
  * A call above it is counted and logged, every GDI context created afterwards asks for a DMA buffer
  * large enough for it, and docs/design/gdi-hw-accel.md says what such a call shows on screen. The
  * DMA buffer "can grow and shrink after the context is created; however, the DMA buffer can never
@@ -87,12 +91,20 @@
 #define BC250_GDI_SUBRECT_BYTES 16u
 #define BC250_GDI_MIN_COMMAND_BYTES 48u
 
-/* The largest command buffer this driver undertakes to translate in one call. Nothing in the DDI
- * publishes the size dxgkrnl actually uses for a GDI context, so this is a choice, and it is the
- * number the GDI context's DMA buffer size is computed from: 96 KB of command buffer holds at most
- * 6141 sub-rectangles and costs about 1.9 MB of DMA buffer. The field's real figure is measured
- * (GdiRenderPeakCommandLength), a call above the bound is counted, and the next GDI context asks
- * for a buffer that fits it. */
+/* The floor of the count bound, which is the command's header and not its fixed part. A command's
+ * sub-rectangle array may overlap its own fixed part: the diagnostic producer inside dxgkrnl builds
+ * an 80-byte BitBlt whose pSubRects points at the DstRect inside it (docs/design/gdi-hw-accel.md,
+ * "What bounds the command buffer"). Such a command is admitted, because the array still lies
+ * inside the command, so the budget has to allow it. FIELD_OFFSET(DXGK_RENDERKM_COMMAND, Command),
+ * held against the WDK by C_ASSERT in gdi_walk.c. */
+#define BC250_GDI_RECT_FLOOR_BYTES 8u
+
+/* The largest command buffer this driver undertakes to translate in one call, and the number the
+ * GDI context's DMA buffer size is computed from: 96 KB of command buffer holds at most 6143
+ * sub-rectangles and costs about 2 MB of DMA buffer. It is above the 64 KB the ordinary producer
+ * can submit, and it stays a choice, because the DDI publishes no size. The field's real figure is
+ * measured (GdiRenderPeakCommandLength), a call above the bound is counted, and the next GDI
+ * context asks for a buffer that fits it. */
 #define BC250_GDI_CMDBUF_BOUND (96u * 1024u)
 
 /* A ceiling on what any adaptation may ask dxgkrnl for, so a nonsense CommandLength cannot turn

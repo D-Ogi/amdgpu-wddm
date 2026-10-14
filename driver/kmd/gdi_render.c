@@ -455,25 +455,48 @@ int Bc250GdiWalkStep(unsigned int BufferBytes, unsigned int Offset, unsigned int
     return 1;
 }
 
-int Bc250GdiCommandStep(const BC250_GDI_CMD_VIEW* View, unsigned int* Next, unsigned int* Why)
+int Bc250GdiHeaderFits(unsigned int BufferBytes, unsigned int Offset, unsigned int HeaderBytes)
+{
+    if (!HeaderBytes || (HeaderBytes & 3u)) return 0;
+    if (Offset > BufferBytes) return 0;
+    return HeaderBytes <= BufferBytes - Offset;
+}
+
+int Bc250GdiCommandSize(const BC250_GDI_CMD_VIEW* View, unsigned int* Next, unsigned int* Why)
+{
+    if (!Next || !Why) return 0;
+    *Next = 0;
+    *Why = BC250_GDI_WHY_MALFORMED;
+    if (!View) return 0;
+    /* The fixed part of this opcode's command is at least the header, and the header is what the
+     * caller has already read. A MinBytes below it would admit a command whose own opcode and size
+     * are not inside it. */
+    if (View->MinBytes < View->HeaderBytes) return 0;
+    if (!Bc250GdiHeaderFits(View->BufferBytes, View->Offset, View->HeaderBytes)) return 0;
+    if (!Bc250GdiWalkStep(View->BufferBytes, View->Offset, View->CommandBytes, View->MinBytes, Next))
+        return 0;
+    return 1;
+}
+
+int Bc250GdiCommandRects(const BC250_GDI_CMD_VIEW* View, unsigned int* Why)
 {
     unsigned long long lowest, limit;
 
-    if (!Next || !Why) return BC250_GDI_CMD_STOP;
-    *Next = 0;
-    *Why = BC250_GDI_WHY_MALFORMED;
-    if (!View) return BC250_GDI_CMD_STOP;
-    if (!Bc250GdiWalkStep(View->BufferBytes, View->Offset, View->CommandBytes, View->MinBytes, Next))
-        return BC250_GDI_CMD_STOP;
+    if (!Why) return BC250_GDI_CMD_SKIP;
+    *Why = BC250_GDI_WHY_OUTSIDE;
+    if (!View) return BC250_GDI_CMD_SKIP;
     /* The order of the three answers below is the order the translation pass applies them, because
      * a count and a translation that disagree are the defect this function exists to remove. */
     if (View->Escape) { *Why = BC250_GDI_WHY_ESCAPE; return BC250_GDI_CMD_SKIP; }
     if (!View->SubCount || !View->HaveRects) { *Why = BC250_GDI_WHY_EMPTY; return BC250_GDI_CMD_SKIP; }
     *Why = BC250_GDI_WHY_OUTSIDE;
-    if (!View->RectBytes) return BC250_GDI_CMD_SKIP;
+    if (!View->RectBytes || View->MinBytes < View->HeaderBytes) return BC250_GDI_CMD_SKIP;
+    if (View->CommandBytes < View->MinBytes) return BC250_GDI_CMD_SKIP;
     /* Addresses, in 64 bits, so that an array below the command cannot become a large offset. The
-     * two wrap guards cover a command buffer at the very top of the address space. */
-    lowest = View->Base + (unsigned long long)View->Offset + View->MinBytes;
+     * two wrap guards cover a command buffer at the very top of the address space. The floor is the
+     * header, not the fixed part: the array may overlap the fixed part, as the diagnostic producer
+     * inside dxgkrnl builds it, and such a command is still read inside its own bytes. */
+    lowest = View->Base + (unsigned long long)View->Offset + View->HeaderBytes;
     limit = View->Base + (unsigned long long)View->Offset + View->CommandBytes;
     if (lowest < View->Base || limit < View->Base) return BC250_GDI_CMD_SKIP;
     if (View->First < lowest || View->First > limit) return BC250_GDI_CMD_SKIP;

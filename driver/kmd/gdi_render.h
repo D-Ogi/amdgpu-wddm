@@ -235,8 +235,8 @@ int Bc250GdiSourceY(const BC250_GDI_ITEM* Item, int Yd);
  * malformed buffer can overrun is host-tested. CommandBytes is the current command's CommandSize
  * and Offset its start; *Next is Offset + CommandBytes. 0 means the buffer does not hold this
  * command: a size below the minimum, a size that is not a multiple of four, or an end past
- * BufferBytes. MinBytes is the size of a DXGK_RENDERKM_COMMAND's fixed part, which wddm.c passes
- * from the WDK's own sizeof. */
+ * BufferBytes. MinBytes is the fixed size of this command's opcode, which gdi_walk.c passes from
+ * the WDK's own layout (Bc250GdiOpMinBytes). */
 int Bc250GdiWalkStep(unsigned int BufferBytes, unsigned int Offset, unsigned int CommandBytes,
                      unsigned int MinBytes, unsigned int* Next);
 
@@ -248,18 +248,29 @@ int Bc250GdiWalkStep(unsigned int BufferBytes, unsigned int Offset, unsigned int
  *
  * The count that comes out of this is therefore bounded by the command buffer itself. A command
  * carries its own sub-rectangle array (DXGK_RENDERKM_COMMAND.CommandSize, d3dkmddi.md:27128 and
- * :27169), so an admitted command of L bytes offers at most (L - MinBytes) / RectBytes of them.
+ * :27169), so an admitted command of L bytes offers at most (L - HeaderBytes) / RectBytes of them.
+ * The floor is the header and not the fixed part, because the array may overlap the fixed part: a
+ * producer inside dxgkrnl builds an 80-byte BitBlt whose pSubRects points at its own embedded
+ * DstRect (docs/design/gdi-hw-accel.md, "What bounds the command buffer"). Such a command is read
+ * safely, because the array still lies inside the command, and it is admitted.
+ *
+ * The two stages of this record are the order of gdi_walk.h, and the split is not decoration: the
+ * sizes are checked before any field of the body exists. Bc250GdiCommandSize reads BufferBytes,
+ * Offset, CommandBytes, MinBytes and HeaderBytes, which come from the header and the opcode alone.
+ * Bc250GdiCommandRects reads the rest, which the caller may fill in only after the first stage has
+ * said yes.
  *
  * Base and First are addresses and not offsets, because an array outside the command buffer must
- * not become an offset first. RectBytes is sizeof(RECT) and MinBytes the fixed part of
- * DXGK_RENDERKM_COMMAND, both passed from the WDK's own sizeof by the caller, as Bc250GdiWalkStep
- * takes MinBytes. Escape and HaveRects are field reads of the caller: the opcode table and the
- * sub-rectangle pointer are WDK types, which this header does not have. */
+ * not become an offset first. RectBytes is sizeof(RECT), MinBytes the fixed part of this opcode's
+ * command and HeaderBytes the fixed part of DXGK_RENDERKM_COMMAND itself, all passed from the WDK's
+ * own layout by the caller. Escape and HaveRects are field reads of the caller: the opcode table
+ * and the sub-rectangle pointer are WDK types, which this header does not have. */
 typedef struct _BC250_GDI_CMD_VIEW {
     unsigned int BufferBytes;       /* the whole command buffer */
     unsigned int Offset;            /* this command's start in it */
     unsigned int CommandBytes;      /* its CommandSize */
-    unsigned int MinBytes;          /* the fixed part of a command */
+    unsigned int MinBytes;          /* the fixed part of this opcode's command */
+    unsigned int HeaderBytes;       /* the fixed part of DXGK_RENDERKM_COMMAND, before the union */
     unsigned int SubCount;          /* its sub-rectangle count, as the command states it */
     unsigned int RectBytes;         /* sizeof(RECT) */
     unsigned long long Base;        /* the command buffer's address */
@@ -278,7 +289,18 @@ typedef struct _BC250_GDI_CMD_VIEW {
 #define BC250_GDI_WHY_OUTSIDE 3     /* SKIP: the array is not inside the command */
 #define BC250_GDI_WHY_DRAW 4        /* DRAW */
 
-int Bc250GdiCommandStep(const BC250_GDI_CMD_VIEW* View, unsigned int* Next, unsigned int* Why);
+/* Stage 0: the command buffer holds a command header at Offset, so OpCode and CommandSize may be
+ * read. Nothing of the command may be read before this answers 1. */
+int Bc250GdiHeaderFits(unsigned int BufferBytes, unsigned int Offset, unsigned int HeaderBytes);
+
+/* Stage 1: the size of this command, from the header and the opcode. 1 means the whole command,
+ * fixed part included, lies inside the buffer, and *Next is the offset of the command behind it.
+ * 0 is BC250_GDI_CMD_STOP with *Why set, and then no field of the body may be read. */
+int Bc250GdiCommandSize(const BC250_GDI_CMD_VIEW* View, unsigned int* Next, unsigned int* Why);
+
+/* Stage 2: what the decoded body says about the sub-rectangle array. BC250_GDI_CMD_SKIP or _DRAW,
+ * never _STOP: the walk continues either way, because stage 1 has already found the next command. */
+int Bc250GdiCommandRects(const BC250_GDI_CMD_VIEW* View, unsigned int* Why);
 
 /* MultipassOffset, packed as the Supporting Kernel-Mode Command Buffers page suggests: the high 16
  * bits are the index of the command being translated and the low 16 bits the number of
