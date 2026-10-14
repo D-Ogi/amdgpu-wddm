@@ -422,6 +422,10 @@ python tools/quality/flavour_gate.py --flavour lab --kmd <bc250kmd.sys> --pe <fi
 python -m unittest discover -s tools/quality -p test_flavour_gate.py
 ```
 
+- `tools/release/build-release.ps1` runs the gate two times, with the negative control. The first run is on the
+  whole payload, before the submission CAB. The second run is after `manifest.json`, with `--manifest`, before
+  the zip. The receipts are `flavour-gate-payload\flavour-gate.json` and `flavour-gate\flavour-gate.json` under
+  `-Out`.
 - `driver\kmd\build.ps1` runs the gate on the linked SYS of each build (`--kmd-only`).
 - The two CLI build scripts run `tools\win\bc250kmd_cli\test-flavour.ps1` on the CLI that they built.
 - The self-test runs in the `quality-controls` check of `tools/quality/quick.ps1`, and `quick.ps1` builds the

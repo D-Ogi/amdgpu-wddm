@@ -499,6 +499,21 @@ foreach ($mode in '/w','/h') {
 $r = Invoke-Headless -File $inf2cat -Arguments @("/driver:$kmd", '/os:10_X64', '/uselocaltime') -TimeoutSeconds 300
 if ($r.code -ne 0) { throw "Inf2Cat failed: $($r.text)" }
 Invoke-Sign (Join-Path $kmd 'bc250kmd.cat')
+# BD-167: the flavour gate (tools/quality/flavour_gate.py) on the PE images of this package. A release package has no
+# raw diagnostic escape in the KMD and no forbidden override name in any PE; a lab package has every lab-only name
+# where the declaration expects it. The KMD build ran the KMD-only check; this one sees every user-mode copy, the x86
+# and DriverStore copies included. It runs twice: here, on the whole payload before the submission CAB exists, and
+# after manifest.json, on the package bound to that manifest. Both runs add a forbidden name and an undeclared name to
+# the scanned bytes of one staged UMD (in memory) and fail if the scan does not report them. The receipts are
+# flavour-gate-payload\ and flavour-gate\ under -Out.
+function Invoke-FlavourGate([string]$Receipt, [string[]]$Arguments) {
+    $gateArgs = @('-I', (Join-Path $repo 'tools\quality\flavour_gate.py'), '--flavour', $Flavour, '--package', $pkgRoot,
+                  '--negative-control', 'wow64/d3d12/amdgpu_wddm_vkd3d.dll', '--out', (Join-Path $Out $Receipt)) + $Arguments
+    $r = Invoke-Headless -File $pythonExe -Arguments $gateArgs -TimeoutSeconds 600
+    if ($r.code -ne 0) { throw "flavour gate ($Flavour, $Receipt): $($r.text)" }
+    '  ' + @($r.text -split "`r?`n" | Where-Object { $_ -like 'flavour gate: *' })[-1]
+}
+Invoke-FlavourGate 'flavour-gate-payload' @()
 if ($SubmissionCab) {
     # The submission contains the original images and exact symbols. The local
     # test-signing simulation below produces the separately installed package.
@@ -822,6 +837,7 @@ $manifest = [ordered]@{
 $cv = Test-CompatibilityRecord -PackageRoot $pkg
 if (-not $cv.ok) { throw "compatibility record does not verify: $($cv.detail)" }
 '  compatibility record verifies against the package'
+Invoke-FlavourGate 'flavour-gate' @('--manifest', (Join-Path $pkg 'manifest.json'))
 Compress-Archive -Path $pkgRoot -DestinationPath $zip
 '{0} files under files\ plus setup.exe, package {1}' -f $files.Count, $pkgRoot
 'zip {0} SHA256 {1}' -f $zip, (Get-FileHash -LiteralPath $zip).Hash

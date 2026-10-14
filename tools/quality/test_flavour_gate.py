@@ -18,7 +18,8 @@ game-log sink and an open decision fail a release set. A second .sys, two files 
 a PE header but no PE suffix are handled (fail closed, or scanned). A DriverStore member has its input slot's payload
 path. A whole package bound to its manifest passes in both layouts and both flavours; a missing, extra, changed or
 unlisted PE fails it; the negative control is seen, and a scan that cannot see it fails. The package slots of the
-declaration are the PE rows of release-sources.json.
+declaration are the PE rows of release-sources.json, and build-release.ps1 runs the gate on the payload and on the
+bound package.
 """
 import contextlib
 import hashlib
@@ -361,6 +362,20 @@ class ReleaseFlavour(unittest.TestCase):
             sys.path.pop(0)
         fixed = {src.lower() for src, _ in driver_package.NATIVE + driver_package.WOW if src.endswith(g.PE_SUFFIXES)}
         self.assertLessEqual(fixed, set(DECL["package"]["slots"]))
+
+    def test_build_release_runs_the_gate(self):
+        # On the whole payload before the submission CAB, and on the package bound to manifest.json before the zip.
+        text = (REPO / "tools" / "release" / "build-release.ps1").read_text(encoding="utf-8")
+        cab = text.index("if ($SubmissionCab) {")
+        manifest = text.index("[IO.File]::WriteAllText((Join-Path $pkg 'manifest.json')")
+        archive = text.index("Compress-Archive -Path $pkgRoot")
+        self.assertEqual(text.count("'tools\\quality\\flavour_gate.py'"), 1, "one path to the gate")
+        runs = [i for i in range(len(text)) if text.startswith("Invoke-FlavourGate ", i)]
+        self.assertEqual(len(runs), 2, "two runs of the gate")
+        self.assertLess(runs[0], cab)
+        self.assertTrue(manifest < runs[1] < archive)
+        self.assertIn("'--negative-control', '%s'" % NEGATIVE, text)
+        self.assertIn("'--manifest'", text)
 
     def test_lab_set_passes_as_lab_only(self):
         self.lab_set()
