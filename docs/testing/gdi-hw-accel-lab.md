@@ -18,7 +18,10 @@ the host tests cannot answer. Every trial outside the HLK job ends inside three 
 1. Read the lab state in `STATE.md` and check which driver is installed.
 2. Check the thermal rule, which is the campaign's and not a new one: stop when Tctl holds 87
    degrees Celsius for 10 seconds, or at once at 89, and cool the board down between trials.
-3. Install the driver under test. Check the SHA256 of the loaded KMD against the built file.
+3. Put the driver under test in place. An installed package is one way. A single-image arm is the
+   other: the shared KMD lab kit puts the image in the driver store folder the service loads from,
+   keeps the original by hash and gives it back afterwards. Check the SHA256 of the loaded KMD
+   against the built file either way.
 4. Read the guard log. Find the line `wddm: GDI hardware acceleration gate 1, kernels 1,
    capability 1`, and the line behind it, `wddm: gdi code 6 kernels, 5120 bytes, sha256 <hash>`.
 5. Compare that hash with `BC250_GDI_CODE_SHA256` of
@@ -98,14 +101,35 @@ present path as the previous release does. This trial proves the field off switc
 
 The GDI acceleration page asks for "no significant performance penalty when the CPU accesses GPU
 memory", and nothing on this host can answer that. The design page records it as an assumption. This
-trial measures it. Keep it inside three minutes.
+trial measures it with [tools/win/gdi-cpuwrite](../../tools/win/gdi-cpuwrite/gdi-cpuwrite.c). Keep it
+inside three minutes.
 
-1. Write a bounded test that allocates one `D3DKMDT_GDISURFACE_STAGING_CPUVISIBLE` surface, maps it
-   the way the CDD does, and writes it sequentially with the processor. 16 MiB, three passes.
-2. Measure the same write into ordinary system memory of the same size in the same run.
-3. Record both rates, the surface's segment and the mapping the driver gave it. Numbers only, no
-   screen output.
-4. Repeat once with the driver stopped, to separate our mapping from the board's memory.
+The operating system's own GDI surface is out of reach of a user-mode process.
+`D3DKMT_CREATESTANDARDALLOCATION` of WDK 10.0.26100 holds one union member, `ExistingHeapData`
+(`ref/ddi-display/d3dkmthk.md:21498` of the workspace reference set). No process can ask dxgkrnl for
+a `D3DKMDT_GDISURFACE_STAGING_CPUVISIBLE` surface from user mode. The tool therefore asks this driver
+directly, with a 48-byte LB7A block and the GDI1 trailer of type 2. CreateAllocation then runs
+`Bc250Lb7aAdmit` and places that allocation with the same `WddmGdiAllocationPolicy` call a staging
+surface of the CDD takes. The measurement covers our own mapping policy, which is what the assumption
+is about.
+
+1. Build the client with `tools/win/gdi-cpuwrite/build.ps1`. The build compares both private-data
+   magic numbers and the four policy lines against `driver/kmd/gdi_private.h`, so a tool that reports
+   a placement the driver no longer makes does not build.
+2. Run it on the lab, 16 MiB and three passes. It opens no window and it needs no desktop.
+3. Record the `POLICY`, `CPUWRITE` and `PENALTY` lines. One run covers three memory classes: ordinary
+   committed pages, a type-0 surface and a type-2 staging surface.
+4. Record all three kinds of access to each class. The store, the copy and the read are each a kind
+   the kernel fallback performs.
+
+The baseline is cached memory of the same size, and 16 MiB is partly in the processor's cache. That
+is the comparison this question needs. A GDI operation touches a small rectangle, so the kernel
+fallback gets the same cache.
+
+A stop of the driver is not part of this trial. The allocation needs our device, which a stopped
+driver does not give. A device stop also leaves the processor about 20 percent slower until a restart
+(K137), which would make the two halves of such a comparison different machines. The system-memory
+class of the same run is the separation the plan asked for.
 
 What it decides: a penalty that makes the capability dishonest. BD-021 and BD-022 are this project's
 own cache-policy findings, and the 2026-09-29 game110 history turned on a cached versus an uncached

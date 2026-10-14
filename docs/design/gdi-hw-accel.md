@@ -459,10 +459,15 @@ A segment that is cache coherent for correctness can still be slow for the proce
 So the condition is recorded here as an assumption with a measurement attached: the lab plan
 measures the processor's write rate into a CPU-visible GDI staging surface and compares it with a
 plain system-memory write of the same size
-([docs/testing/gdi-hw-accel-lab.md](../testing/gdi-hw-accel-lab.md), trial 5). Until that number
-exists, "no significant penalty" is a claim this driver makes to the operating system on the
-strength of the segment's declaration alone, and the capability can be withdrawn with
-`EnableGdiHwAccel` if the number says otherwise.
+([docs/testing/gdi-hw-accel-lab.md](../testing/gdi-hw-accel-lab.md), trial 5). The client of that
+trial is [tools/win/gdi-cpuwrite](../../tools/win/gdi-cpuwrite/gdi-cpuwrite.c). It asks this driver
+for a type-2 surface through the LB7A private data, because no user-mode process can ask dxgkrnl for
+a standard GDI surface. The placement is therefore the same `WddmGdiAllocationPolicy` answer the
+CDD's staging surface gets: the aperture, cached, CPU-visible. The trial records that policy, the
+three access rates of each memory class and the ratio against ordinary memory. Until those numbers
+exist, "no significant penalty" is a claim this driver makes to the operating system on the strength
+of the segment's declaration alone, and the capability can be withdrawn with `EnableGdiHwAccel` if
+the numbers say otherwise.
 
 ## Preemption and TDR
 
