@@ -8,7 +8,7 @@ rem                         line still reaches the engine, so install.cmd -Conso
 rem Exit code 10 = this window handed over to an elevated one (UAC), which shows the result.
 set AMDGPU_WDDM_LAUNCHER=%~f0
 set AMDGPU_WDDM_LAUNCHER_FIXED=
-rem -Console selects the console and nothing else. It is taken out of the command line here, and every other
+rem -Console selects the console without a final pause. It is taken out of the command line here, and every other
 rem argument goes to the engine in its own order and with its quotation marks. "shift /1" keeps %0, so %~dp0
 rem below still names this folder.
 set "AMDGPU_WDDM_CONSOLE="
@@ -41,10 +41,12 @@ if not defined AMDGPU_WDDM_ARGS if /i "%AMDGPU_WDDM_ROOTNAME%"=="files" if exist
 call :engine%AMDGPU_WDDM_ARGS%
 
 :finish
-if %ERRORLEVEL%==10 exit /b 0
+set "AMDGPU_WDDM_EXIT=%ERRORLEVEL%"
+if %AMDGPU_WDDM_EXIT%==10 exit /b 0
+if defined AMDGPU_WDDM_CONSOLE exit /b %AMDGPU_WDDM_EXIT%
 echo.
 pause
-exit /b %ERRORLEVEL%
+exit /b %AMDGPU_WDDM_EXIT%
 
 :engine
 %SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0installer\install.ps1" %*

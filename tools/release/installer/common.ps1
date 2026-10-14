@@ -2994,6 +2994,8 @@ function Resolve-OrphanFilePlan {
     param($Plan)
     $rows = @()
     foreach ($row in @($Plan)) {
+        # An empty function result arrives as null; @($null) contains one null item in PS 5.1.
+        if ($null -eq $row) { continue }
         $state = 'absent'
         $have = $null
         if (Test-Path -LiteralPath $row.path -PathType Leaf) {

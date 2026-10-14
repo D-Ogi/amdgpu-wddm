@@ -293,6 +293,8 @@ $plan = @(Get-OrphanFilePlan -PreviousManifest $prevManifest -NewManifest $newMa
 $want = @((Join-Path $bdRoot 'desktop\old_helper.dll'), (Join-Path $bdRoot 'tools\moved.exe'))
 Check (((@($plan | ForEach-Object { $_.path } | Sort-Object) -join ' | ') -eq ((@($want | Sort-Object) -join ' | '))) -and -not @($plan | Where-Object { $_.from_version -ne '0.7.212.100-tester.14' }).Count) "an upgrade removes what the installed release installed and this one does not, the moved file at its old place included, and names the release that installed it: $(@($plan | ForEach-Object { $_.path }) -join ', ')"
 Check (-not @(Get-OrphanFilePlan -PreviousManifest $newManifest -NewManifest $newManifest -InstallRoot $bdRoot -SystemDir $bdSys -SysWowDir $bdWow).Count) 'a reinstall or repair of the same version removes nothing'
+Check (-not @(Resolve-OrphanFilePlan (Get-OrphanFilePlan -PreviousManifest $newManifest -NewManifest $newManifest -InstallRoot $bdRoot -SystemDir $bdSys -SysWowDir $bdWow)).Count) 'an empty repair plan also resolves without a null LiteralPath (BD-172)'
+Check (-not @(Resolve-OrphanFilePlan @()).Count -and -not @(Resolve-OrphanFilePlan $null).Count) 'empty and null orphan inputs produce no rows'
 $stubPrev = New-Bd089Manifest -Version '0.7.212.100-tester.14' -Paths @('payload/system32/bc250umd.dll', 'payload/syswow64/bc250umd.dll')
 $stubNew = New-Bd089Manifest -Version '0.7.213.101-tester.16' -Paths @('payload/system32/bc250umd.dll')
 $stubPlan = @(Get-OrphanFilePlan -PreviousManifest $stubPrev -NewManifest $stubNew -InstallRoot $bdRoot -SystemDir $bdSys -SysWowDir $bdWow)
@@ -310,6 +312,20 @@ $rows = @(Resolve-OrphanFilePlan (Get-OrphanFilePlan -PreviousManifest $resolveP
 $states = @{}; foreach ($row in $rows) { $states[$row.path] = $row.state }
 Check ((@($rows).Count -eq 3) -and ($states[$sameFile] -eq 'remove') -and ($states[$changedFile] -eq 'changed') -and ($states[(Join-Path $bdRoot 'tools\gone.dll')] -eq 'absent')) "the file with the recorded SHA256 is removed, the one with other bytes is kept and reported, the one that is gone is absent: $(@($rows | ForEach-Object { "$(Split-Path $_.path -Leaf)=$($_.state)" }) -join ', ')"
 Check (([IO.File]::ReadAllText($changedFile) -eq $keptText) -and (Test-Path -LiteralPath $sameFile)) 'the plan reads only: no file is removed while it is computed'
+
+# BD-172 / DriverStore: the old UMD locations disappear from the installed map even though the DLLs
+# remain in the new manifest, under payload/kmd. Only unchanged, previously owned files can be removed.
+$legacyPaths = @('payload/desktop/bc250umd.dll', 'payload/d3d12/amdgpu_wddm_d3d12.dll', 'payload/wow64/d3d12/amdgpu_wddm_d3d12.dll')
+$legacyHashes = @{}
+foreach ($path in $legacyPaths) {
+    $dest = Get-InstalledPathOfPackageFile -PackagePath $path -InstallRoot $bdRoot -SystemDir $bdSys -SysWowDir $bdWow
+    Write-Text $dest 'old UMD bytes'
+    $legacyHashes[$path] = Get-TextSha 'old UMD bytes'
+}
+$migrationOld = New-Bd089Manifest -Version 'tester.30' -Paths $legacyPaths -Hashes $legacyHashes
+$migrationNew = New-Bd089Manifest -Version 'tester.31' -Paths @('payload/kmd/bc250umd.dll', 'payload/kmd/amdgpu_wddm_d3d12.dll', 'payload/kmd/amdgpu_wddm_d3d12_32.dll')
+$migrationRows = @(Resolve-OrphanFilePlan (Get-OrphanFilePlan -PreviousManifest $migrationOld -NewManifest $migrationNew -InstallRoot $bdRoot -SystemDir $bdSys -SysWowDir $bdWow))
+Check ($migrationRows.Count -eq 3 -and @($migrationRows | Where-Object { $_.state -ne 'remove' }).Count -eq 0) 'DriverStore migration selects all three unchanged old UMD copies for removal'
 
 $inventory = @(
     [pscustomobject]@{ Driver = 'oem9.inf'; OriginalFileName = 'bc250kmd.inf'; Version = '0.7.198.100' }
