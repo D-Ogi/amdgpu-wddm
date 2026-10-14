@@ -628,7 +628,7 @@ namespace AmdgpuWddmControl
             if (_wallpaperChecked || _smoke || ReadOnlyProbe || _fixture) return;
             _wallpaperChecked = true;
             var prefs = _prefs;
-            System.Threading.ThreadPool.QueueUserWorkItem(_ => NagiWallpaper.RunIfDue(prefs));
+            Crash.Background("wallpaper at start", () => NagiWallpaper.RunIfDue(prefs));
         }
 
         int _drvRead;       // the newest Driver card read; an older one that ends later is dropped
@@ -647,7 +647,7 @@ namespace AmdgpuWddmControl
             };
             int id = ++_drvRead;
             if (!background) { ApplyDriverCard(read()); return; }
-            System.Threading.ThreadPool.QueueUserWorkItem(_ =>
+            Crash.Background("driver card read", () =>
             {
                 var view = read();
                 try

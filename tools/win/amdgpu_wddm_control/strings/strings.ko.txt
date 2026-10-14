@@ -70,6 +70,7 @@ drv.released.none|mt|63087412|출시일: 업데이트를 확인하면 알 수 �
 upd.available|mt|68e4656c|업데이트 있음: {0}
 upd.uptodate|mt|39fd9eaf|최신 릴리스를 사용 중입니다.
 upd.newest|mt|ffd32b15|최신 릴리스는 {0}입니다.
+upd.ahead|mt|d8273d3e|설치된 드라이버가 최신 릴리스({0})보다 새롭습니다.
 upd.incomplete|mt|fc36062b|최신 {0}개 릴리스 중 더 새로운 릴리스가 없습니다.
 upd.failed|mt|bf1dd0e0|업데이트를 확인할 수 없었습니다. 나중에 다시 시도하세요.
 upd.rate-limited|mt|2c365d35|업데이트 서비스가 잠시 기다리라고 요청했습니다. {0} 이후에 다시 확인할 수 있습니다.

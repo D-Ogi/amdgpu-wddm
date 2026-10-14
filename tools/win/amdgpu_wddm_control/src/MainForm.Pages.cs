@@ -324,7 +324,7 @@ namespace AmdgpuWddmControl
                 // The lock may take up to 2 s (docs/design/recent-launches.md): off the UI thread.
                 clear.Enabled = false;
                 clearResult.Text = "";
-                System.Threading.ThreadPool.QueueUserWorkItem(_ =>
+                Crash.Background("clear recent games", () =>
                 {
                     var r = RecentLaunches.Clear(new LocalRecentFiles());
                     var list = RecentLaunches.Read(new LocalRecentFiles());
@@ -377,7 +377,7 @@ namespace AmdgpuWddmControl
             {
                 wallSet.Enabled = wallRestore.Enabled = false;
                 wallResult.Text = "";
-                System.Threading.ThreadPool.QueueUserWorkItem(_ =>
+                Crash.Background("wallpaper from Settings", () =>
                 {
                     var id = work();
                     try { BeginInvoke((Action)(() => { wallResult.Text = Strings.T(id); wallSet.Enabled = wallRestore.Enabled = true; })); }

@@ -72,6 +72,7 @@ drv.released.none|rev|63087412|Wydano: wiadomo po sprawdzeniu aktualizacji.
 upd.available|rev|68e4656c|Dostępna aktualizacja: {0}
 upd.uptodate|rev|39fd9eaf|Masz najnowsze wydanie.
 upd.newest|rev|ffd32b15|Najnowsze wydanie to {0}.
+upd.ahead|mt|d8273d3e|Twój sterownik jest nowszy niż najnowsze wydanie ({0}).
 upd.incomplete|rev|fc36062b|Brak nowszego wydania wśród {0} najnowszych wydań.
 upd.failed|rev|bf1dd0e0|Nie udało się sprawdzić aktualizacji. Spróbuj ponownie później.
 upd.rate-limited|rev|2c365d35|Usługa aktualizacji poprosiła o odczekanie. Możesz sprawdzić ponownie po {0}.

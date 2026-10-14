@@ -317,11 +317,15 @@ namespace AmdgpuWddmControl
         // The pick as the page shows it: the cores and the pairs that are off. Both come from the stored choice
         // until a person changes one of them, and a change always sets both (SetCuCores, ToggleCuPair).
         uint CuCoresShown { get { var c = _cuEdit ?? CuNow().ChoiceCores; return c == 0 ? CuMode.Stock : c; } }
-        uint CuMaskShown { get { return _cuEdit == null ? CuNow().ChoiceDisable : (_cuMaskEdit ?? 0); } }
+        // The pairs the map draws. The stored choice goes through CuMode.ChoiceMapMask, so the stock choice draws the
+        // firmware's own set instead of every pair (a stored 24 drew 40 cores before that rule).
+        uint CuMaskShown { get { return _cuEdit == null ? CuMode.ChoiceMapMask(CuNow(), CuTopology) : (_cuMaskEdit ?? 0); } }
 
         bool CuChoiceChanged
         {
-            get { var v = CuNow(); return _cuEdit != null && (_cuEdit.Value != v.ChoiceCores || (_cuMaskEdit ?? 0) != v.ChoiceDisable); }
+            // The pick is compared with the map of the stored choice, not with its bare CuDisableWgp: at a stored
+            // stock choice both are the firmware's set, so a pair turned on and off again is no change.
+            get { var v = CuNow(); return _cuEdit != null && (_cuEdit.Value != v.ChoiceCores || (_cuMaskEdit ?? 0) != CuMode.ChoiceMapMask(v, CuTopology)); }
         }
 
         // The WGPs of this board, from its own CU snapshot where it can be read; else the documented set, and then
@@ -332,7 +336,9 @@ namespace AmdgpuWddmControl
         void SetCuCores(uint cores)
         {
             _cuEdit = cores;
-            _cuMaskEdit = CuMode.DefaultDisable(cores, CuTopology);
+            // The map of the stock count is the firmware's own set, the same one the stored stock choice draws, so
+            // the number and the map agree at once and the first pair turned on reads 26 cores.
+            _cuMaskEdit = cores <= CuMode.Stock ? CuMode.Maskable(CuTopology) : CuMode.DefaultDisable(cores, CuTopology);
             ShowPage(_page, null, false);
         }
 
@@ -366,8 +372,10 @@ namespace AmdgpuWddmControl
             {
                 // The mask travels only when it is not the default set of that number, so a plain choice of a
                 // number reads as one line in the plan and in the log.
+                // The stock count has no mask of its own: its map is the firmware's set, which is what a plain 24
+                // asks for, so nothing but the number travels.
                 uint cores = CuCoresShown, mask = CuMaskShown;
-                uint? map = mask == CuMode.DefaultDisable(cores, CuTopology) ? (uint?)null : mask;
+                uint? map = cores <= CuMode.Stock || mask == CuMode.DefaultDisable(cores, CuTopology) ? (uint?)null : mask;
                 ok = RunActionAndWait("cu-mode", new Recovery.PlanArgs { Cu = cores, CuMap = map });
                 if (ok) { _cuEdit = null; _cuMaskEdit = null; }
             }

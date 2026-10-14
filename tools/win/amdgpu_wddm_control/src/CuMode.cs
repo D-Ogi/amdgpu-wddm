@@ -260,6 +260,30 @@ namespace AmdgpuWddmControl
             return true;
         }
 
+        // The mask the map draws for a stored choice. The stock choice stores no mask at all (the driver reads a 24
+        // and returns before CuDisableWgp, so the setter writes none), and a map drawn from that 0 shows every pair
+        // on: 40 cores under a picker that says 24, which is what the lab arm of 2026-10-14 found. The stock choice
+        // runs the firmware's own set, so every pair a person may turn on is drawn off. A choice that cannot be read
+        // or that the driver would refuse draws the same stock set, because that is what the next start applies.
+        public static uint ChoiceMapMask(CuView v, uint[] stockActive)
+        {
+            if (stockActive == null) return 0;
+            uint maskable = Maskable(stockActive);
+            if (v == null || v.ChoiceCores <= Stock) return maskable;
+            return v.ChoiceDisable & maskable;
+        }
+
+        // The cores a map with this mask draws: the pairs the firmware keeps on are always on, the others follow the
+        // mask. The map and the number above it have to agree, so this is the number the tests count.
+        public static uint MapCores(uint mask, uint[] stockActive)
+        {
+            if (stockActive == null) return 0;
+            var on = MapOf(mask, stockActive);
+            var drawn = new uint[stockActive.Length];
+            for (int i = 0; i < drawn.Length; i++) drawn[i] = on[i] | stockActive[i];
+            return Cores(drawn);
+        }
+
         // The per-array WGPs a 40 request with this mask leaves on, for the map.
         public static uint[] MapOf(uint disable, uint[] stockActive)
         {

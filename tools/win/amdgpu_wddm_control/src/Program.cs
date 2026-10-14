@@ -59,6 +59,9 @@ namespace AmdgpuWddmControl
         [STAThread]
         static int Main(string[] args)
         {
+            // BD-174: a process-fatal exception leaves a record of its own, because a machine with Windows Error
+            // Reporting switched off writes none. It changes nothing else (Crash.cs).
+            Crash.Watch();
             if (args.Length == 1 && args[0] == "--startup-diagnostics-worker") return StartupDiagnostics.Worker();
             if (args.Length == 1 && args[0] == "--version") { Console.WriteLine(ProductName + " " + VersionText); return 0; }
             if (args.Length > 0 && args[0] == "--bc250-board-memory-action") return UmaActions.Run(args);

@@ -70,6 +70,7 @@ drv.released.none|mt|63087412|リリース日: 更新を確認すると分かり
 upd.available|mt|68e4656c|更新があります: {0}
 upd.uptodate|mt|39fd9eaf|最新のリリースです。
 upd.newest|mt|ffd32b15|最新のリリースは {0} です。
+upd.ahead|mt|d8273d3e|お使いのドライバーは最新のリリース ({0}) より新しいです。
 upd.incomplete|mt|fc36062b|最新の {0} 件のリリースの中に新しいリリースはありません。
 upd.failed|mt|bf1dd0e0|更新を確認できませんでした。後でもう一度お試しください。
 upd.rate-limited|mt|2c365d35|更新サービスから待つよう求められました。{0} 以降にもう一度確認できます。

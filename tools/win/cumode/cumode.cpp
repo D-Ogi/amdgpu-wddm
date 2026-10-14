@@ -243,7 +243,8 @@ static int Status()
     if (ReadTemperature(path, &milliC)) Say(L"temperature  %.1f C%s", milliC / 1000.0, milliC >= 87000 ? L"  STOP AND COOL DOWN" : L"");
     else Say(L"temperature  unavailable%s", IsAdmin() ? L"" : L" (needs an administrator)");
     if (data.Flags & BC250_CU_MODE_FLAG_PENDING)
-        Say(L"note         40 CUs are pending: run `cumode confirm` once the desktop has run healthy for a minute.");
+        Say(L"note         %lu cores are pending: run `cumode confirm` once the desktop has run healthy for a minute.",
+            data.ActiveCus ? data.ActiveCus : data.Applied);
     if ((modeSet ? mode : 24ul) != data.Applied)
         Say(L"note         the setting differs from this start: it applies at the next start (reboot).");
     return 0;
@@ -343,14 +344,17 @@ static int Confirm(unsigned long waitSeconds)
             Say(L"the CU mode escape failed: 0x%08lX", status);
             return 3;
         }
+        // Applied is the mode word (24 or 40); ActiveCus is what the registers count, which a CuDisableWgp mask makes
+        // smaller. Every line here names the counted cores, so a confirmed 30-core start never reads as 40.
+        unsigned long cus = data.ActiveCus ? data.ActiveCus : data.Applied;
         if (!(data.Flags & BC250_CU_MODE_FLAG_PENDING)) {
-            Say(data.Applied == BC250_CU_MODE_FULL ? L"40 CUs are confirmed; nothing pending." :
-                                                    L"this start runs %lu CUs; nothing to confirm.", data.Applied);
+            Say(data.Applied == BC250_CU_MODE_FULL ? L"%lu of 40 cores are confirmed; nothing pending." :
+                                                    L"this start runs %lu cores; nothing to confirm.", cus);
             return 0;
         }
         status = CuModeEscape(path, &data, BC250_CU_MODE_OP_CONFIRM, data.Generation);
         if (NT_SUCCESS(status) && data.Status == BC250_ESCAPE_STATUS_DONE && NT_SUCCESS((NTSTATUS)data.NtStatus)) {
-            Say(L"40 CUs confirmed for this request; later starts keep them.");
+            Say(L"%lu of 40 cores are confirmed for this request; later starts keep them.", cus);
             return 0;
         }
         if ((NTSTATUS)data.NtStatus != (NTSTATUS)0xC00000A3L /* STATUS_DEVICE_NOT_READY */ || GetTickCount64() >= deadline) {

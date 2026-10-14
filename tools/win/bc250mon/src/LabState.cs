@@ -29,6 +29,12 @@ namespace Bc250Mon
 
         public int CuMode = DefaultCuMode;
         /// <summary>
+        /// The file named `cuMode` itself. Without it the expectation follows the machine's own recorded choice
+        /// (`Parameters\CuModeChosen`) and falls back to the default, so a lab that wants a fixed number says so in
+        /// the file and nothing else can overrule it (OperatingPointRules.ExpectedCus).
+        /// </summary>
+        public bool CuModeSet;
+        /// <summary>
         /// Expected REG_DWORDs of the miniport's `Parameters` key, over and above the installer's record. A
         /// null value switches a check off, which is how a deliberate lab deviation is admitted.
         /// </summary>
@@ -87,7 +93,10 @@ namespace Bc250Mon
                 if (root == null) { x.Error = "empty"; return x; }
                 object cu;
                 if (root.TryGetValue("cuMode", out cu) && cu != null)
+                {
                     x.CuMode = Convert.ToInt32(cu, CultureInfo.InvariantCulture);
+                    x.CuModeSet = true;
+                }
                 object parameters;
                 if (root.TryGetValue("parameters", out parameters))
                 {

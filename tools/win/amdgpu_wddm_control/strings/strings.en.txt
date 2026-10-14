@@ -72,6 +72,7 @@ drv.released.none|src|-|Released: known after an update check.
 upd.available|src|-|Update available: {0}
 upd.uptodate|src|-|You have the newest release.
 upd.newest|src|-|The newest release is {0}.
+upd.ahead|src|-|Your driver is newer than the newest release ({0}).
 upd.incomplete|src|-|No newer release among the newest {0} releases.
 upd.failed|src|-|Could not check for updates. Try again later.
 upd.rate-limited|src|-|The update service asked us to wait. You can check again after {0}.

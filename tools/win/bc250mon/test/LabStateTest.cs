@@ -280,7 +280,8 @@ static class LabStateTest
         Check(none.CuMode == 40 && none.Parameters.Count == 0 && none.Error == null, "empty file: 40 CU expected");
         LabExpectations x = ExpectationsFile.Parse(
             "{\"schema\":1,\"cuMode\":24,\"parameters\":{\"DpmMaxMHz\":2000,\"KeepLog\":null}}");
-        Check(x.CuMode == 24 && x.Parameters["DpmMaxMHz"] == 2000 && x.Parameters["KeepLog"] == null && x.Error == null,
+        Check(none.CuMode == 40 && !none.CuModeSet, "an empty file names no cuMode of its own");
+        Check(x.CuModeSet && x.CuMode == 24 && x.Parameters["DpmMaxMHz"] == 2000 && x.Parameters["KeepLog"] == null && x.Error == null,
               "file values, a null switches a check off");
         Check(x.Parameters.ContainsKey("dpmmaxmhz"), "parameter names are compared without case");
         LabExpectations broken = ExpectationsFile.Parse("{not json");
@@ -396,9 +397,46 @@ static class LabStateTest
         Check(Value(rows, "CU setting") == "no Parameters key", "no Parameters key is stated");
 
         // A lab that deliberately runs the harvest: the expectation file decides, not the code.
-        var expect24 = new LabExpectations { CuMode = 24 };
+        var expect24 = new LabExpectations { CuMode = 24, CuModeSet = true };
         Check(LevelOf(CuRows(lost, expect24), "CU") == Level.Good, "expectations.json cuMode 24 makes 24 CU green");
         Check(LevelOf(CuRows(Cu40(), expect24), "CU") == Level.Warn, "and 40 CU amber against that expectation");
+
+        // A count the person chose (CuModeChosen, written by the control app and by install.cmd -CuMode): the panel
+        // judges the start against that count, not against a 40 nobody asked for. The app offers 24 to 40 in twos
+        // since 2026-10-14, and the lab ran 30 and 28 cores that day.
+        var chosen30 = Cu40();
+        chosen30.CuDisableWgp = 0x84218;
+        chosen30.Chosen = 40 | (0x84218 << 8);
+        chosen30.Confirmed = 40 | (0x84218 << 8);
+        chosen30.Escape = Escape(40, 40, 30, GoodCuFlags, 0);
+        rows = CuRows(chosen30, x);
+        Check(LevelOf(rows, "CU") == Level.Good && Value(rows, "CU").Contains("30 counted") && !Value(rows, "CU").Contains("expected"),
+              "a chosen 30 running 30 cores is green: " + Value(rows, "CU"));
+        Check(LevelOf(rows, "CU setting") == Level.Good && Value(rows, "CU setting").Contains("WGP mask 0x84218"),
+              "and its setting row is green, with the mask named: " + Value(rows, "CU setting"));
+        Check(OperatingPointRules.ExpectedCus(chosen30, x) == 30, "the expectation follows the recorded choice");
+        Check(OperatingPointRules.ExpectedCus(Cu40(), x) == 40, "with no choice recorded the expectation stays 40");
+        Check(LevelOf(CuRows(chosen30, expect24), "CU") == Level.Warn,
+              "expectations.json still overrules a recorded choice");
+        var chosenShort = Cu40();                       // a chosen 30 that came up as 40: amber, and it says 30
+        chosenShort.Chosen = 40 | (0x84218 << 8);
+        rows = CuRows(chosenShort, x);
+        Check(LevelOf(rows, "CU") == Level.Warn && Value(rows, "CU").Contains("expected 30"),
+              "a start that misses the chosen count is amber and names it: " + Value(rows, "CU"));
+        var chosen24 = new CuModeView
+        {
+            ParametersPresent = true, CuMode = 24, LastApplied = 24, LastReason = 0, Chosen = 24,
+            HaveEscape = true, Escape = Escape(24, 24, 24, CuModeSnapshot.FlagValid | CuModeSnapshot.FlagConsistent, 0), EscapeUtc = Now,
+        };
+        rows = CuRows(chosen24, x);
+        Check(LevelOf(rows, "CU") == Level.Good && LevelOf(rows, "CU setting") == Level.Good,
+              "a chosen stock 24 is green on both rows: " + Value(rows, "CU") + " / " + Value(rows, "CU setting"));
+        var chosenJunk = Cu40();
+        chosenJunk.Chosen = 32;                         // not a request the driver takes: no expectation comes from it
+        Check(OperatingPointRules.ExpectedCus(chosenJunk, x) == 40, "a record that is not an encoded request is ignored");
+        Check(CuModeView.DecodeCus(40 | (0xC4310 << 8)) == 28, "the hand-picked 28 of the arm decodes to 28 cores");
+        Check(CuModeView.DecodeCus(null) == null && CuModeView.DecodeCus(24 | (0x10 << 8)) == null && CuModeView.DecodeCus(40 | (0x100000 << 8)) == null,
+              "no record, a mask beside the stock mode and a mask outside the topology decode to nothing");
 
         // CuDisableWgp is a supported setting: mode 40 applies, one WGP stays masked, and the part runs 38 of
         // 40 units. The mode word says 40, so only the counted units answer the question the panel exists for.

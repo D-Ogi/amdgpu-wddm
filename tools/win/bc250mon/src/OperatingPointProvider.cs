@@ -33,6 +33,12 @@ namespace Bc250Mon
     {
         public bool ParametersPresent;              // the miniport's Parameters key exists
         public int? CuMode, CuDisableWgp, Pending, Confirmed, LastApplied, LastReason;
+        /// <summary>
+        /// `Parameters\CuModeChosen`: the encoded request (`bc250_cu_encode(mode, disable)`) that a person asked
+        /// for, written by the control app and by `install.cmd -CuMode`. The driver neither reads nor writes it, so
+        /// it is the one value on this machine that says a count was chosen rather than defaulted.
+        /// </summary>
+        public int? Chosen;
         public bool HaveEscape;
         public CuModeSnapshot Escape;
         public string EscapeError;                  // why the escape has no answer (an old control DLL says so)
@@ -83,6 +89,39 @@ namespace Bc250Mon
             {
                 if (EscapeValid) return Escape.Requested != 0 ? Escape.Requested : CuModeSnapshot.Stock;
                 return Setting;
+            }
+        }
+
+        /// <summary>
+        /// The units the person's own choice asks for, decoded from `CuModeChosen`: 24 for the stock choice, else 40
+        /// less two per masked WGP. Null when no choice is recorded or the record is not a request the driver takes,
+        /// which is the case this panel exists for: a release install that chose nothing.
+        /// </summary>
+        public uint? ChosenCus { get { return DecodeCus(Chosen); } }
+
+        /// <summary>The units an encoded request (`bc250_cu_encode`) runs. Null for anything else.</summary>
+        public static uint? DecodeCus(int? encoded)
+        {
+            if (!encoded.HasValue || encoded.Value < 0) return null;
+            uint mode = (uint)encoded.Value & 0xFF, disable = (uint)encoded.Value >> 8;
+            if ((disable & ~0xFFFFFu) != 0) return null;
+            if (mode == CuModeSnapshot.Stock) return disable == 0 ? (uint?)CuModeSnapshot.Stock : null;
+            if (mode != CuModeSnapshot.Full) return null;
+            uint bits = 0;
+            for (uint m = disable; m != 0; m &= m - 1) bits++;
+            return CuModeSnapshot.Full - 2 * bits;
+        }
+
+        /// <summary>The units this setting (`CuMode` with `CuDisableWgp`) would give the next start.</summary>
+        public uint? SettingCus
+        {
+            get
+            {
+                var mode = Setting;
+                if (!mode.HasValue || mode.Value != CuModeSnapshot.Full) return mode;
+                uint bits = 0;
+                for (uint m = (uint)(CuDisableWgp.HasValue ? CuDisableWgp.Value : 0) & 0xFFFFFu; m != 0; m &= m - 1) bits++;
+                return CuModeSnapshot.Full - 2 * bits;
             }
         }
 
@@ -254,9 +293,26 @@ namespace Bc250Mon
             return reason == 3 || reason == 6 || reason == 7 || reason == 8 || reason == 9;
         }
 
+        /// <summary>
+        /// The counted units the lab expects of a start: `expectations.json` when it names `cuMode`, else the
+        /// person's own choice (`CuModeChosen`, which the control app and `install.cmd -CuMode` write), else the 40
+        /// of docs/design/cu-mode.md. The order matters in both directions. A chosen count has to win, or a
+        /// deliberate 30-core start reads amber against a 40 nobody asked for (the control app offers 24 to 40 in
+        /// twos since 2026-10-14). A machine with no choice at all still expects 40, which is the 2026-10-05
+        /// regression this panel exists for: the install carried no `CuMode`, the driver harvested to 24, and three
+        /// days of game numbers were 24 CU numbers.
+        /// </summary>
+        public static uint ExpectedCus(CuModeView v, LabExpectations x)
+        {
+            if (x != null && x.CuModeSet) return (uint)x.CuMode;
+            uint? chosen = v != null ? v.ChosenCus : null;
+            if (chosen.HasValue) return chosen.Value;
+            return (uint)(x != null ? x.CuMode : LabExpectations.DefaultCuMode);
+        }
+
         public static void AddCuRows(Panel panel, CuModeView v, LabExpectations x)
         {
-            uint expected = (uint)x.CuMode;
+            uint expected = ExpectedCus(v, x);
             uint? applied = v.Applied;
             uint? counted = v.Counted;
             var text = new StringBuilder();
@@ -326,11 +382,11 @@ namespace Bc250Mon
                 else if (v.SettingPending) value += ", pending";
                 else if (otherMark) value += ", the mark on disk names another request: the next start is pending";
                 else if (v.Encoded.HasValue) value += ", the next start marks it pending";
-                // A mask holds the counted units below the mode, so a mode that equals the expectation still
-                // cannot reach it: the next start applies fewer units than the measurement assumes.
-                bool maskedBelow = v.CuDisableWgp.HasValue && v.CuDisableWgp.Value != 0;
+                // The row judges the units the setting gives, not the mode word: a mask holds 40 below the mode, so
+                // mode 40 with a mask is green only where that smaller count is the expected one (a chosen 30).
+                uint settingCus = v.SettingCus ?? setting.Value;
                 panel.Rows.Add(new Row("CU setting", value,
-                    setting.Value == expected && !otherMark && !maskedBelow ? Level.Good : Level.Warn));
+                    settingCus == expected && !otherMark ? Level.Good : Level.Warn));
             }
 
             if (v.Reason != 0)
@@ -727,6 +783,7 @@ namespace Bc250Mon
                 ParametersPresent = parameters.Present,
                 CuMode = parameters.Get("CuMode"),
                 CuDisableWgp = parameters.Get("CuDisableWgp"),
+                Chosen = parameters.Get("CuModeChosen"),
                 Pending = parameters.Get("CuModePending"),
                 Confirmed = parameters.Get("CuModeConfirmed"),
                 LastApplied = parameters.Get("CuModeLastApplied"),

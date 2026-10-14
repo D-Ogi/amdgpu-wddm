@@ -280,7 +280,7 @@ as it differs from the lab's expectation.
 | Row | Source | Amber | Red |
 |---|---|---|---|
 | `CU` | `BC250_ESCAPE_RUN_CU_MODE` op READ through `Bc250CuMode`: the mode this start applied, the units the registers count, and the pending or confirmed mark. Without a snapshot, `Parameters\CuModeLastApplied`, marked as a driver record | the counted units differ from the expectation. 40 applied and nobody confirmed it. The registers name different WGPs on the shader arrays (`VALID` without `CONSISTENT`). This start did not run the CU stage | a request for 40 units that applied 24, or 0 units applied (the stock restore failed) |
-| `CU setting` | `Parameters\CuMode` and `CuDisableWgp`, against the encoded request in `CuModePending` and `CuModeConfirmed`: what the next start applies | the setting differs from the expectation. The mark on disk names another request, so the next start is pending. A `CuDisableWgp` mask holds the next start under a full expectation. An absent `CuMode` reads `the next start harvests to 24` | - |
+| `CU setting` | `Parameters\CuMode` and `CuDisableWgp`, against the encoded request in `CuModePending` and `CuModeConfirmed`: what the next start applies | the units the setting gives (the mode less two per masked WGP) differ from the expectation. The mark on disk names another request, so the next start is pending. An absent `CuMode` reads `the next start harvests to 24` | - |
 | `CU reason` | `Parameters\CuModeLastReason` or the snapshot, by the name of `enum bc250_cu_reason`. The row appears only when the reason is not `none` | any other reason | the five reasons that make the driver write `CuMode = 24` durably: `PENDING_UNCONFIRMED`, `POWER_GATING`, `STOCK_UNEXPECTED`, `READBACK`, `RESTORE_FAILED` |
 | `CU snapshot` | why the escape gave no answer. The row appears only then | always | - |
 | `DPM` | the governor's snapshot: mode, `GOVERNING`, the confirmation, `PAUSED` and `STABLE` | `PAUSED`. `STABLE`: a D3D12 client called `SetStablePowerState` and pinned the clock to the floor. A snapshot older than 30 seconds, or a read that failed after it | `PENDING` without `CONFIRMED` (a restart falls back to fixed-lab), or mode DPM without `GOVERNING` |
@@ -336,7 +336,11 @@ record of the applied defaults.
 { "schema": 1, "cuMode": 40, "parameters": { "DpmMaxMHz": 2000, "KeepLog": null } }
 ```
 
-- `cuMode` drives the `CU` row and the `CuMode` expectation of the `Parameters` row together. The default is 40.
+- `cuMode` drives the `CU` row and the `CuMode` expectation of the `Parameters` row together. When the file names
+  it, nothing else overrules it. Without the file, the two CU rows expect the count the person chose on this
+  machine (`Parameters\CuModeChosen`, the encoded request the control app and `install.cmd -CuMode` write: 24, or
+  40 less two units per masked WGP), and 40 where no choice is recorded. So a deliberate 30-core start reads green
+  and an install that chose nothing and harvested to 24 still reads amber, which is the regression above.
 - `parameters` adds expectations, and replaces an installed default where the lab deviates on purpose.
 - A `null` value switches that one comparison off.
 - A file that does not parse never hides the defaults. The panel keeps the default expectations and shows the

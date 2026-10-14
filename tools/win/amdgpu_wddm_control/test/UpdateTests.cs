@@ -110,6 +110,25 @@ static partial class UnitTests
         Check(UpdateCheck.InstalledReleased(current, null) == null && UpdateCheck.InstalledReleased(current, "garbage") == null, "R8: no Released date without a readable install");
         text = UpdateCheck.CardText(current, "0.7.200.0-tester.1", false);
         Check(!text.Contains("You have") && !text.Contains("Update available"), "R8: another (newer) install is not \"up to date\" until the next check: " + text);
+
+        // A driver newer than the newest published release (lab arm of 2026-10-14: a tester.31 candidate beside a
+        // published tester.30): the card says the driver is newer and never holds the older release up as an offer,
+        // and the older release's publication date goes with it.
+        Check(text == "Your driver is newer than the newest release (0.7.199.100-tester.12).",
+            "a newer installed release is named as newer, with no date of the older one: " + text);
+        var newest = ReleaseVersion.Parse("v0.7.199.100-tester.12");
+        Check(UpdateCheck.Ahead("0.7.200.0-tester.1", newest) && UpdateCheck.Ahead("0.7.199.100", newest),
+            "a newer release and a stable release of the same base are both ahead");
+        Check(!UpdateCheck.Ahead("0.7.199.100-tester.12", newest) && !UpdateCheck.Ahead("0.7.199.100-tester.11", newest),
+            "the same release and an older one are not ahead");
+        // A candidate or lab build is no release tag at all; its four numbers still place it, and only strictly.
+        Check(UpdateCheck.Ahead("0.7.199.101-tester.13rc4", newest), "a candidate build with higher numbers is ahead");
+        Check(!UpdateCheck.Ahead("0.7.199.100-tester.13rc4", newest), "a candidate build of the same four numbers says nothing");
+        Check(!UpdateCheck.Ahead("0.7.199.99-tester.13rc4", newest) && !UpdateCheck.Ahead(null, newest) && !UpdateCheck.Ahead("custom-build", newest) &&
+            !UpdateCheck.Ahead("0.7.199.101-tester.13rc4", null), "lower numbers, no version and no release are not ahead");
+        text = UpdateCheck.CardText(current, "0.7.199.101-tester.13rc4", false);
+        Check(text == "Your driver is newer than the newest release (0.7.199.100-tester.12).",
+            "a candidate build newer than the newest release is told so, not offered that release: " + text);
         var legacy = new UpdateCache { LastAttemptUtc = current.LastAttemptUtc, LastSuccessUtc = current.LastSuccessUtc, LastAttemptOutcome = "UpToDate", InstalledTag = "v0.7.199.100-tester.12",
             InstalledPublishedUtc = "2026-10-05T00:00:00Z" };
         Check(!UpdateCheck.CardText(legacy, "0.7.199.100-tester.12", false).Contains("You have") && UpdateCheck.InstalledReleased(legacy, "0.7.199.100-tester.12") == null,

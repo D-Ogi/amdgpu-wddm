@@ -65,7 +65,7 @@ $pure = 'KmdReply.cs', 'Profiles.cs', 'Redactor.cs', 'ManifestCheck.cs', 'Recove
     'AppSettings.cs', 'Guide.cs', 'RecentLaunches.cs', 'Sensors.cs', 'CacheInventory.cs', 'DisplayInfo.cs', 'Hints.cs', 'GameGroups.cs',
     'SettingsSearch.cs', 'HomeStatus.cs', 'PlainPlan.cs', 'HelpGuides.cs', 'CuRegistry.cs', 'Tuner.cs', 'TunerPlan.cs', 'TunerView.cs', 'FanPlan.cs', 'GraphicsSettings.cs', 'TdrSetting.cs',
     'LayoutRules.cs', 'UmaSetting.cs', 'BoardCapabilities.cs', 'SystemTuning.cs', 'Benchmark.cs', 'StartupDiagnosticData.cs', 'DiagnosticWorker.cs',
-    'StartNotice.cs', 'Wallpaper.cs' |
+    'StartNotice.cs', 'Wallpaper.cs', 'Crash.cs' |
     ForEach-Object { Join-Path $here "src\$_" }
 
 # Build the capability fixture from the actual provider and shipping shim tables, without adapter access.

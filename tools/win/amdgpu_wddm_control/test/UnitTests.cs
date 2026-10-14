@@ -1333,6 +1333,7 @@ static partial class UnitTests
         DriverCardTests();
         BenchmarkTests(args[0]);
         UpdateTests(args[0]);
+        CrashTests();
         GuiTests(args[0]);
         OracleTests();
         if (args.Length == 2) Console.WriteLine("confirmation rule compared with " + args[1]);

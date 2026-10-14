@@ -598,6 +598,32 @@ static partial class UnitTests
         Check(res.Completed && reg.Values["CuMode"] == 24 && !reg.Values.ContainsKey("CuModeChosen"), "reset: the 24 of the release without a record of a choice");
         Check(CuMode.Plan(St(24), CuMode.Stock, 0, false).Refused, "reset: a stock 24 without a record is already the release setting");
 
+        // The map of the stored choice (lab arm of 2026-10-14, step 1): the number the picker shows and the pairs the
+        // map draws are one answer, so the map of every stored choice draws exactly that many cores. A stored 24
+        // keeps no mask in the registry at all, and the map of that 0 used to draw all 20 pairs - 40 cores under a
+        // picker that said 24.
+        var running40 = new CuModeState { Flags = V | C, Applied = 40, Requested = 40, ActiveCus = 40, Generation = 7,
+            ActiveWgps = new uint[] { 0x1F, 0x1F, 0x1F, 0x1F }, StockCc = new uint[] { 0xFFF80000, 0xFFF80000, 0xFFF80000, 0xFFF80000 } };
+        Func<CuStored, uint> drawn = st => CuMode.MapCores(CuMode.ChoiceMapMask(CuMode.View(running40, 7, st), stock), stock);
+        uint hand28 = 0xC4310;          // the hand-picked map of the arm: 8, 6, 8, 6 cores
+        Equal(28u, CuMode.ActiveCus(hand28), "the hand-picked map of the arm is 28 cores");
+        Equal("8, 6, 8, 6", CuMode.PerSaText(CuMode.MapOf(hand28, stock)), "28 cores: the cores of each group");
+        Equal(24u, drawn(St(24, null, null, null, null, CuMode.Encode(24, 0))), "a stored 24 draws 24 cores, not 40");
+        Equal(CuMode.Maskable(stock), CuMode.ChoiceMapMask(CuMode.View(running40, 7, St(24)), stock), "a stored 24 draws the firmware's own set");
+        Equal(30u, drawn(St(40, 0x84218, null, null, null, CuMode.Encode(40, 0x84218))), "a stored 30 draws 30 cores");
+        Equal(28u, drawn(St(40, hand28, null, null, null, CuMode.Encode(40, hand28))), "the hand-picked 28 draws 28 cores");
+        Equal(40u, drawn(St(40, null, null, null, null, CuMode.Encode(40, 0))), "a stored 40 draws 40 cores");
+        Equal(24u, drawn(St(7)), "a stored value the driver refuses draws the 24 the next start applies");
+        Equal(24u, drawn(new CuStored { Unreadable = true }), "an unreadable choice draws the 24 the next start applies");
+        Equal(24u, drawn(St()), "an absent CuMode draws 24");
+        // The first pair a person turns on at a stored 24 is two cores, not sixteen.
+        uint from24 = CuMode.ChoiceMapMask(CuMode.View(running40, 7, St(24)), stock);
+        int firstFree = 0;
+        while ((CuMode.Maskable(stock) & (1u << firstFree)) == 0) firstFree++;
+        Equal(26u, CuMode.ActiveCus(from24 & ~(1u << firstFree)), "the first pair turned on at a stored 24 gives 26 cores");
+        Equal(24u, CuMode.ActiveCus(from24), "and turning it off again is the stock count");
+        Equal(0u, CuMode.ChoiceMapMask(CuMode.View(running40, 7, St(24)), null), "a board with no topology has no map");
+
         // The window says the cores of each group while a mask is active.
         var v = CuMode.View(new CuModeState { Flags = V | C, Applied = 40, Requested = 40, ActiveCus = 30, DisableMask = 0x84218, Generation = 5,
             ActiveWgps = new uint[] { 0x7, 0xF, 0xF, 0xF } }, 5, St(40, 0x84218, CuMode.Encode(40, 0x84218), null, null, CuMode.Encode(40, 0x84218)));

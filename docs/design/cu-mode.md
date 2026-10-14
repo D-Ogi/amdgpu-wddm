@@ -28,8 +28,10 @@ asks for no confirmation. The two ways to choose the number by hand:
 - **After the install:** open the amdgpu-wddm control app, go to the Graphics page, select the number of cores
   (24 to 40 in twos) or pick the pairs yourself on the map, and restart Windows when the app offers it.
 
-After the restart, the start confirmation task (the small blue window after logon) confirms the 40 CU start
-once the desktop has run healthy for one minute. Do not end that task.
+After the restart, the start confirmation task (the small blue window after logon) confirms the unlocked start
+once the desktop has run healthy for one minute. Do not end that task. That task is why a start of a release
+install reads as confirmed and not as pending by the time anyone looks: the window and `cumode status` then show
+`CONFIRMED` with `CuModeConfirmed` already written, which is the designed state, not a deviation.
 
 To check the result:
 
@@ -223,6 +225,13 @@ page, which writes any mask inside `0xC6318` (the eight stock-inactive WGPs of t
 board's own stock set from the CU READ snapshot (`StockCc`), so it never offers a pair the driver would refuse
 with `INVALID_DISABLE`. On a board whose stock set is not this one, the map is read-only and the counts use the
 documented set.
+The map and the count above it are one answer, so the map of every stored choice draws exactly the cores that
+choice runs (`CuMode.ChoiceMapMask` with `CuMode.MapCores`). The stock choice is the case that needs saying: it
+stores no mask at all, because the driver reads a 24 and returns before `CuDisableWgp`, so a map drawn from that
+absent mask would show all twenty pairs on - 40 cores under a picker that says 24, which is what the lab arm of
+2026-10-14 found in its first step. A stored stock choice therefore draws the firmware's own set: the eight free
+pairs off, and the first one a person turns on reads 26 cores. A choice that cannot be read, or one the driver
+would refuse, draws the same stock set, because that is what the next start applies.
 
 **The record of a person's choice** (`CuModeChosen`, owner 2026-10-14). The release default is 24 and tester.30's
 was 40, and `Release\AppliedDefaults` records what the previous installer wrote, not who decided it: a 40 a
@@ -371,13 +380,22 @@ section above.
     read from a snapshot and the boards this page cannot map, a hand-picked map and every map the driver would
     refuse, the record `CuModeChosen` and the plan that removes it, and the sentence that names the cores of
     each group. The G-PLAN expectations of `build.ps1` hold the step order of 24, 30 and 40 and the refusal of
-    `--cu-map` without a reading of the board.
+    `--cu-map` without a reading of the board.    The same group holds the map of a stored choice: a stored 24, 30, the hand-picked 28 and 40 each draw
+    exactly that many cores, and the first pair turned on at a stored 24 gives 26.
+  - `tools/win/bc250mon/test-lab-state.ps1`: the lab overlay judges a start against the count the person chose
+    (`CuModeChosen`), against `expectations.json` where it names `cuMode`, and against 40 where nothing was
+    chosen - so a deliberate 30-core start reads green and the 2026-10-05 regression still reads amber.
   - `tools/release/test-cu-mode-installer.ps1` and `tools/release/test-registry-defaults.ps1`: the release
     default 24, the upgrade rule, a stale record, the inert closure, and the record `install.cmd -CuMode`
     writes.
-- The partial path has **not** run on hardware yet. Every count between 24 and 40 is new on the lab. The KMD
-  side of it (`bc250_cu_targets` per shader array, the caps patch from the readback) is unchanged since
-  0.7.216.64 and is covered by `run_cu_mode.ps1` "a disable mask" alone.
+- The partial path ran on hardware on 2026-10-14 (unit A, tester.31 rc4 candidate). Two counts held: 30 cores
+  from the default set `0x84218` (6, 8, 8, 8) and a hand-picked 28 from `0xC4310` (8, 6, 8, 6). In both, the
+  registers read back the asked-for WGPs on all four shader arrays, the escape counted the cores of the mask,
+  `RADV_DEBUG=info` printed the same `num_cu`, and `vkfillcheck` passed with no failure. The driver kept the
+  usual pending-then-confirmed sequence for each (mode, mask) pair of its own.
+- The record of that arm also carries the two defects it found: the map at a stored stock choice (fixed above)
+  and BD-175, where the installer's RunOnce continuation wrote its pre-restart settings snapshot over a choice
+  made in the control application in between.
 
 ## Open questions
 
