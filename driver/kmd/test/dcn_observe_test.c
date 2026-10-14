@@ -6,6 +6,7 @@
 #include "bc250kmd_escape.h"
 #include "wave_snapshot.h"
 #include "../shim/include/bc250_hip_journal.h"
+#include "escape_commands.h"
 #define C_ASSERT(x) _Static_assert(x,#x)
 #define RTL_NUMBER_OF(a) (sizeof(a)/sizeof((a)[0]))
 #define RtlZeroMemory(p,n) memset(p,0,n)

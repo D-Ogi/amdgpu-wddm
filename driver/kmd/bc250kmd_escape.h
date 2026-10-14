@@ -1980,7 +1980,7 @@ typedef char BC250_DPAUDIO_OBS_FIT_CHECK[(BC250_DPAUDIO_OBS_COUNT <= BC250_DPAUD
 
 // Board provider ABI 1. Query only; all reserved input and output words are zero.
 #define BC250_ESCAPE_RUN_BOARD_CAPS 33u
-#define BC250_ESCAPE_CONNECTOR_REPLUG 35u // lab only; 34 is GET_WAVES in wave_snapshot.h
+#define BC250_ESCAPE_CONNECTOR_REPLUG 36u // lab only; 34 is GET_WAVES, 35 is the HIP journal upload
 #define BC250_CONNECTOR_REPLUG_ABI 1u
 typedef struct _BC250_ESCAPE_CONNECTOR_REPLUG_DATA {
     unsigned long Magic, Command, Status, Version;

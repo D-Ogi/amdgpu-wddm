@@ -462,6 +462,7 @@ so memory can remain allocated during failed recovery. This is a known limit. A 
 
 **Lab witnesses.** `AMDGPU_WDDM_LAB_FLAVOUR` compiles the event and EARLIEST_INUSE witnesses only into the lab binary.
 The lab-only `bc250kmd_cli connector replug` command requires test signing, `LabDiagnostics=1` and an effective administrator token.
+Its escape command is 36. Command 35 remains the shared HIP journal upload.
 It increments the connector generation, sets Pending and queues the existing DPC and worker.
 The worker performs the real disconnect, discovery and reconnect sequence. The escape does not fabricate child notifications.
 The release image omits this escape and the raw diagnostic handlers. A linked-image flavour gate checks both builds.
@@ -480,6 +481,8 @@ The DCN tests include the actual source-address helper, so the no-log rule does 
 The observation boundary test admits no extra sample after the 1 us stall reaches the budget.
 The result class uses the successful sample's own start time, while the record also keeps the actual end time.
 Host fixtures establish these code properties. Lab results must still check the exact release and lab artifacts.
+The replug test runs the actual CLI initializer, escape flags and complete miniport dispatcher with a substituted KMT call.
+It checks both build flavours and preserves HIP dispatch. Restoring command 35 fails the test and the compile-time namespace check.
 
 ## 8. StopDevice ordering
 

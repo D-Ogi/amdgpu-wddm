@@ -1,6 +1,6 @@
-"""Check the private escape command namespace across every KMD header.
+"""Check private escape commands across KMD headers and the shared HIP ABI.
 
-Command definitions use BC250_ESCAPE_*. MAGIC, STATUS_* and FLAG_* describe
+Command definitions use BC250_ESCAPE_* or BC250_HIP_JOURNAL_COMMAND. MAGIC, STATUS_* and FLAG_* describe
 other fields of the wire format. All other definitions must be literal DWORDs.
 Conditional definitions are checked together so build variants cannot collide.
 """
@@ -10,7 +10,7 @@ from pathlib import Path
 import re
 
 
-DEFINE = re.compile(r"^[ \t]*#[ \t]*define[ \t]+(BC250_ESCAPE_\w+)\b(.*)$", re.MULTILINE)
+DEFINE = re.compile(r"^[ \t]*#[ \t]*define[ \t]+(BC250_ESCAPE_\w+|BC250_HIP_JOURNAL_COMMAND)\b(.*)$", re.MULTILINE)
 LITERAL = re.compile(r"(?:0[xX][0-9a-fA-F]+|[0-9]+)(?:[uU](?:[lL]{1,2})?|[lL]{1,2}[uU]?)?$")
 
 
@@ -54,6 +54,10 @@ def check_sources(sources):
 
 def check(root):
     headers = sorted(p for p in (root / "driver" / "kmd").rglob("*") if p.is_file() and p.suffix.lower() == ".h")
+    shared = root / "driver/shim/include/bc250_hip_journal.h"
+    if not shared.is_file():
+        return [], ["missing shared escape ABI: driver/shim/include/bc250_hip_journal.h"]
+    headers.append(shared)
     return check_sources({p.relative_to(root).as_posix(): p.read_text(encoding="utf-8-sig") for p in headers})
 
 

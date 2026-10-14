@@ -1282,8 +1282,9 @@ void WddmSourceVisibility(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible);   // d
 void WddmStop(_Inout_ BC250_DEVICE* Device);
 void WddmReportEngineFault(_In_ const BC250_DEVICE* Device, _In_z_ const char* Why);   // BD-167 (G3): CP fault -> close gfx node
 // The writers' primary transaction (the flip DDI's PrimarySequence) at PASSIVE_LEVEL: modeset.c, connector_link.c,
-// hdmi_link.c and wddm.c's destroy restore. Begin proves that the hardware uses reserved storage before it publishes
-// WriterActive. Long work may use only driver-owned storage. Hardware flip requests remain unacknowledged while
+// hdmi_link.c and wddm.c's destroy restore. Begin publishes WriterActive under L, then proves retirement onto
+// reserved storage at PASSIVE_LEVEL before it sets WriterReady. Long work may use only driver-owned storage.
+// Hardware flip requests remain unacknowledged while
 // that writer runs. End selects the retained Desired under L and programs it before releasing ownership. A failed
 // section never runs its operation: the caller receives failure and recovery is queued for a later legal section.
 // Invalidate keeps the reserved surface unless a new deposit must be programmed. No application address escapes L.

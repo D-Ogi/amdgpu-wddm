@@ -37,6 +37,12 @@ typedef struct {
 typedef struct {
     BC250_CONNECTOR Connector;
     BOOLEAN FullWddm;
+    /* The dispatcher fixture includes this helper fixture and uses these fields. */
+    void* Mmio;
+    BOOLEAN MmioWriteEnabled,VramEnabled,VramWriteEnabled,MmioGartEnabled,MmioPspEnabled;
+    BOOLEAN MmioGfxEnabled,MmioIhEnabled,DcnWriteEnabled;
+    int Smu;
+    struct { ULONG Width,Height,Pitch,ColorFormat; } Post;
     volatile LONG RetainedPowerPhase;
     struct { BOOLEAN (*DxgkCbQueueDpc)(void*); void* DeviceHandle; } Dxgk;
 } BC250_DEVICE;

@@ -5,9 +5,7 @@
 #include "wave_snapshot.h"
 #include "hip_journal.h"
 #include "paging_journal.h"
-#ifdef AMDGPU_WDDM_LAB_FLAVOUR
-#include "lab_gate.h"
-#endif
+#include "escape_commands.h"
 #include "log_rate.h"
 #include "display_timing.h"
 #include "hdmi_link.h"
@@ -618,6 +616,8 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
     BC250_ESCAPE* data = (BC250_ESCAPE*)Escape->pPrivateDriverData;
     D3DDDI_ESCAPEFLAGS softwareRead = {0};
     ULONG command;
+
+    Bc250EscapeCommandsUnique();
 
     if (Escape->PrivateDriverDataSize >= 8 && data != NULL && data->Magic == BC250_ESCAPE_MAGIC &&
         data->Command == BC250_HIP_JOURNAL_COMMAND)
