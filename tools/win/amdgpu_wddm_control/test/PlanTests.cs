@@ -56,14 +56,19 @@ static partial class UnitTests
         Equal(p.Cu.Preview.Count, p.Preview.Count, "cu-mode 24: the dialog's preview is the plan's change list");
         Check(p.Notes.Any(n => n.Contains("0x21")), "cu-mode: the exact old mask goes to the plan");
         p = Recovery.Plan("cu-mode", s, more: new Recovery.PlanArgs { Cu = 40 });
-        Check(!p.Refused && p.Cu.Steps.Select(x => x.Kind).SequenceEqual(new[] { "remove-confirmed", "remove-disable", "flush-readback" }), "cu-mode 40 with a mask: S2, S3, S4");
+        Check(!p.Refused && p.Cu.Steps.Select(x => x.Kind).SequenceEqual(new[] { "remove-confirmed", "remove-disable", "write-chosen", "flush-readback" }), "cu-mode 40 with a mask: S2, S3, S1c, S4");
         Check(p.Preview.Contains(CuMode.EffectText()), "cu-mode 40: the effect text before the switch");
         // BD-077: with no CuMode in the key the number is not stored at all, so Standard (24) is a change to write;
         // only a stored 24 with nothing else left over is "selected already".
         var pStock = Recovery.Plan("cu-mode", WithDefaults(), more: new Recovery.PlanArgs { Cu = 24 });
         Check(!pStock.Refused && pStock.Cu.Steps.Any(x => x.Kind == "write-24"), "cu-mode 24 with no stored number: the 24 is written");
+        // "Selected already" needs the record of the choice next to the 24 as well (owner, 2026-10-14): a 24 with no
+        // record is a number the installed release wrote, and the run that records it as a choice still has work.
         var stored24 = WithDefaults(); stored24.Parameters["CuMode"] = 24;
-        Check(Recovery.Plan("cu-mode", stored24, more: new Recovery.PlanArgs { Cu = 24 }).Refusal == "Standard (24) is selected already.", "cu-mode 24 when 24 is stored: refused");
+        Check(Recovery.Plan("cu-mode", stored24, more: new Recovery.PlanArgs { Cu = 24 }).Cu.Steps.Select(x => x.Kind)
+            .SequenceEqual(new[] { "verify-stock", "write-chosen", "flush-readback" }), "cu-mode 24 over a 24 of the release: the choice is recorded");
+        stored24.Parameters["CuModeChosen"] = CuMode.Encode(24, 0);
+        Check(Recovery.Plan("cu-mode", stored24, more: new Recovery.PlanArgs { Cu = 24 }).Refusal == "Standard (24) is selected already.", "cu-mode 24 when 24 is stored and recorded: refused");
         // A 24 the driver wrote itself can be adopted: the run takes its record away, so that every later install
         // reads the 24 as a choice of the tester (review 2 finding 1).
         var driver24 = WithDefaults(); driver24.Parameters["CuMode"] = 24; driver24.Parameters["CuModeClosedReason"] = 3;

@@ -1,4 +1,4 @@
-param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\build\bd018",[switch]$AssumePhaseHz,[switch]$OldDescribe60)
+param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\build\bd018",[switch]$AssumePhaseHz,[switch]$OldDescribe60,[switch]$OldPixelRateFixed)
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $env:TEMP=Join-Path $Root 'scratch\tmp';$env:TMP=$env:TEMP
@@ -46,11 +46,19 @@ foreach($signature in @('static ULONG InheritedScalingDefault(','NTSTATUS Modese
     $inherited+=$modeset.Substring($first,$last-$first)+"`n"
 }
 $connector=Get-Content (Join-Path $repo 'driver\kmd\connector.c') -Raw
-foreach($signature in @('static BOOLEAN ConnectorNeedsInherited(','static NTSTATUS ConnectorStartInherited(')){
+foreach($signature in @('static BOOLEAN ConnectorNeedsInherited(','static NTSTATUS ConnectorStartInherited(','BOOLEAN ConnectorRefusalKeepsDisplay(')){
     $first=$connector.IndexOf($signature)
     $last=$connector.IndexOf("`n}",$first)+3
     if($first -lt 0 -or $last -lt $first){throw "Missing body: $signature"}
     $inherited+=$connector.Substring($first,$last-$first)+"`n"
+}
+# BD-169 mutation control: put 0.7.216.64's pixel-rate clause back. Every
+# inherited timing above 300 MHz then takes the fixed inherited route, and
+# the BD-169 cases must fail.
+if($OldPixelRateFixed){
+    $anchor='m->InheritedFixed = Device->Post.Width != Signal->ActiveSize.cx || Device->Post.Height != Signal->ActiveSize.cy;'
+    if(!$inherited.Contains($anchor)){throw 'BD-169 mutation anchor missing'}
+    $inherited=$inherited.Replace($anchor,$anchor.TrimEnd(';')+" ||`n        Signal->PixelRate > 300000000ull;")
 }
 [IO.File]::WriteAllText((Join-Path $Out 'inherited_actual.inc'),$inherited)
 $wddm=Get-Content (Join-Path $repo 'driver\kmd\wddm.c') -Raw

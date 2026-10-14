@@ -8,6 +8,8 @@
 param([Parameter(Mandatory)][ValidatePattern('^kmd[0-9]{3}(-(?!1-)[1-9][0-9]*)?-deploy[0-9]{3}$')][string]$Attempt)
 $ErrorActionPreference = 'Stop'
 $dir = "C:\BC250\m15\$Attempt"; $t = "$dir\kmd-transition"
+. "$t\legacy-state.ps1"
+Assert-KmdLegacyState $dir
 . "$t\identity.ps1"; . "$t\durable.ps1"; . "$t\registration.ps1"; . "$t\verify-cpu.ps1"; . "$t\parameters.ps1"; . "$t\hang-detector.ps1"
 $saved = Get-Content "$dir\baseline.json" -Raw | ConvertFrom-Json
 $gpu = Get-PnpDevice -ErrorAction SilentlyContinue | Where-Object { $_.InstanceId -match 'VEN_1002&DEV_13FE' } | Select-Object -First 1

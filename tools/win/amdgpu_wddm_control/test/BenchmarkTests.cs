@@ -104,12 +104,12 @@ static partial class UnitTests
     // Valve's key-value text, in both shapes libraryfolders.vdf has had, and every way it can be damaged.
     static void BenchVdf()
     {
-        var modern = "\"libraryfolders\"\n{\n\t\"0\"\n\t{\n\t\t\"path\"\t\t\"C:\\\\Program Files (x86)\\\\Steam\"\n\t\t\"label\"\t\t\"\"\n\t\t\"apps\"\n\t\t{\n\t\t\t\"440900\"\t\"3041986285\"\n\t\t}\n\t}\n\t\"1\"\n\t{\n\t\t\"path\"\t\t\"D:\\\\SteamLibrary\"\n\t}\n}\n";
+        var modern = "\"libraryfolders\"\n{\n\t\"0\"\n\t{\n\t\t\"path\"\t\t\"C:\\\\Program Files (x86)\\\\Steam\"\n\t\t\"label\"\t\t\"\"\n\t\t\"apps\"\n\t\t{\n\t\t\t\"1089130\"\t\"3041986285\"\n\t\t}\n\t}\n\t\"1\"\n\t{\n\t\t\"path\"\t\t\"D:\\\\SteamLibrary\"\n\t}\n}\n";
         var tree = Vdf.Parse(modern);
         Check(tree != null, "benchmark: the library file parses");
         Equal(@"C:\Program Files (x86)\Steam", tree.Text("libraryfolders", "0", "path"), "benchmark: a path with an escaped separator");
         Equal(@"D:\SteamLibrary", tree.Text("libraryfolders", "1", "path"), "benchmark: the second library");
-        Equal("3041986285", tree.Text("libraryfolders", "0", "apps", "440900"), "benchmark: a nested block is read");
+        Equal("3041986285", tree.Text("libraryfolders", "0", "apps", "1089130"), "benchmark: a nested block is read");
         Equal("", tree.Text("libraryfolders", "0", "label"), "benchmark: an empty value is a value");
         Equal(null, tree.Text("libraryfolders", "0"), "benchmark: a block has no text of its own");
         Equal(null, tree.Text("libraryfolders", "2", "path"), "benchmark: an absent key is absent");
@@ -204,7 +204,7 @@ static partial class UnitTests
         Equal(InstallVerdict.NotFound, Q2Rtx.Inspect(Game, null).Verdict, "benchmark: without a way to read files nothing is found");
         Check(Q2Rtx.AllowedLink(Q2Rtx.StoreUrl) && Q2Rtx.AllowedLink(Q2Rtx.ReleasesUrl), "benchmark: the two pages of the game may be opened");
         Check(!Q2Rtx.AllowedLink("https://example.com/") && !Q2Rtx.AllowedLink(null), "benchmark: no other address may be opened");
-        Check(Q2Rtx.StoreUrl.Contains("440900") && Q2Rtx.SteamAppId == "440900", "benchmark: the Steam application is 440900");
+        Check(Q2Rtx.StoreUrl.Contains("1089130") && Q2Rtx.SteamAppId == "1089130", "benchmark: the Steam application is 1089130");
     }
 
     // The Steam walk: the install, every library of the file, the manifest of this application only.
@@ -215,8 +215,8 @@ static partial class UnitTests
             .Folder(steam)
             .Text(Path.Combine(steam, "steamapps", "libraryfolders.vdf"),
                 "\"libraryfolders\"\n{\n\"0\"\n{\n\"path\" \"" + steam.Replace("\\", "\\\\") + "\"\n}\n\"1\"\n{\n\"path\" \"" + second.Replace("\\", "\\\\") + "\"\n}\n}\n")
-            .Text(Path.Combine(second, "steamapps", "appmanifest_440900.acf"),
-                "\"AppState\"\n{\n\"appid\" \"440900\"\n\"name\" \"Quake II RTX\"\n\"installdir\" \"Quake II RTX\"\n}\n")
+            .Text(Path.Combine(second, "steamapps", "appmanifest_1089130.acf"),
+                "\"AppState\"\n{\n\"appid\" \"1089130\"\n\"name\" \"Quake II RTX\"\n\"installdir\" \"Quake II RTX\"\n}\n")
             .Folder(Path.Combine(second, "steamapps", "common", "Quake II RTX"));
         var libraries = Q2Rtx.SteamLibraries(steam, files);
         Check(libraries.Count == 2 && libraries[0] == steam && libraries[1] == second, "benchmark: the install and every library of the file: " + string.Join(" | ", libraries));
@@ -229,17 +229,17 @@ static partial class UnitTests
         // A manifest of another application in this file's place, a folder the manifest names but Steam removed, and
         // an install folder that tries to leave the common folder: none of them becomes an install.
         var wrongApp = ReadyGame().Folder(steam)
-            .Text(Path.Combine(steam, "steamapps", "appmanifest_440900.acf"), "\"AppState\"\n{\n\"appid\" \"292030\"\n\"installdir\" \"The Witcher 3\"\n}\n")
+            .Text(Path.Combine(steam, "steamapps", "appmanifest_1089130.acf"), "\"AppState\"\n{\n\"appid\" \"292030\"\n\"installdir\" \"The Witcher 3\"\n}\n")
             .Folder(Path.Combine(steam, "steamapps", "common", "The Witcher 3"));
         Equal(null, Q2Rtx.SteamInstallFolder(steam, wrongApp), "benchmark: a manifest of another application is not this game");
         var missing = ReadyGame().Folder(steam)
-            .Text(Path.Combine(steam, "steamapps", "appmanifest_440900.acf"), "\"AppState\"\n{\n\"appid\" \"440900\"\n\"installdir\" \"Quake II RTX\"\n}\n");
+            .Text(Path.Combine(steam, "steamapps", "appmanifest_1089130.acf"), "\"AppState\"\n{\n\"appid\" \"1089130\"\n\"installdir\" \"Quake II RTX\"\n}\n");
         Equal(null, Q2Rtx.SteamInstallFolder(steam, missing), "benchmark: a manifest whose folder is gone is not an install");
         foreach (var bad in new[] { null, "", "   ", "..", ".", @"..\..\Windows", "a/b", @"C:\Windows", "a|b", new string('x', 200) })
             Check(!Q2Rtx.PlainFolderName(bad), "benchmark: an install folder name that is not one folder is refused: " + (bad ?? "null"));
         Check(Q2Rtx.PlainFolderName("Quake II RTX") && Q2Rtx.PlainFolderName(" Quake II RTX "), "benchmark: a plain install folder name is taken");
         var escape = ReadyGame().Folder(steam)
-            .Text(Path.Combine(steam, "steamapps", "appmanifest_440900.acf"), "\"AppState\"\n{\n\"appid\" \"440900\"\n\"installdir\" \"..\\\\..\\\\Windows\"\n}\n");
+            .Text(Path.Combine(steam, "steamapps", "appmanifest_1089130.acf"), "\"AppState\"\n{\n\"appid\" \"1089130\"\n\"installdir\" \"..\\\\..\\\\Windows\"\n}\n");
         Equal(null, Q2Rtx.SteamInstallFolder(steam, escape), "benchmark: a manifest cannot point the card out of the common folder");
         var damaged = ReadyGame().Folder(steam).Text(Path.Combine(steam, "steamapps", "libraryfolders.vdf"), "\"libraryfolders\"\n{\n\"0\"\n");
         Equal(1, Q2Rtx.SteamLibraries(steam, damaged).Count, "benchmark: a damaged library file leaves the install itself");
@@ -557,7 +557,11 @@ static partial class UnitTests
         // Two texts: the band our own board drew, and the line that says why a run lands anywhere inside it.
         Check(card.Contains("if (UmaSetting.Visible(_uma))") && Regex.Matches(card, @"bench\.reference").Count == 2,
             "benchmark: our own board's numbers are shown only on a board the app identified as a BC-250");
-        Check(card.Contains("if (_smoke || ReadOnlyProbe)"), "benchmark: a build gate searches no folder of the PC that builds it");
+        // The search is part of the window's reading (WindowReading.cs), which a gate run asks for with gate set.
+        var reading = File.ReadAllText(Path.Combine(dir, "WindowReading.cs"));
+        int gate = reading.IndexOf("if (!gate)", StringComparison.Ordinal), find = reading.IndexOf("BenchLocator.Find(", StringComparison.Ordinal);
+        Check(File.ReadAllText(Path.Combine(dir, "MainForm.cs")).Contains("WindowReading.Read(_prefs, _smoke || ReadOnlyProbe)") && gate > 0 && find > gate &&
+            !card.Contains("BenchLocator.Find("), "benchmark: a build gate searches no folder of the PC that builds it");
         Check(Regex.IsMatch(card, @"BenchRunner\.Start\(_bench, InstalledVersion, OnBenchmarkProgress\)"), "benchmark: the card starts the one runner");
         Check(card.Contains("BeginInvoke") && !Regex.IsMatch(Regex.Replace(card, @"//[^\n]*", ""), @"WaitForExit|Thread\.Sleep|\.Wait\(\)"),
             "benchmark: the window never waits for the game on its own thread");

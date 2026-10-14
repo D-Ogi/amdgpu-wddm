@@ -110,7 +110,7 @@ static void RtlInitUnicodeString(UNICODE_STRING* s, PCWSTR t)
 
 static int g_Irql = PASSIVE_LEVEL;
 static int KeGetCurrentIrql(void) { return g_Irql; }
-static struct { PWSTR Buffer; } g_ParametersPath;
+static int stateReady; static int DriverStateReady(void){return stateReady;}
 
 // ---- the GuardLog ring, recorded so the self-check line can be asserted ---------------------------------------
 #define MAXLOGS 64
@@ -342,6 +342,12 @@ static NTSTATUS ConnectorBufferPrepare(BC250_DEVICE* d) {
     return STATUS_SUCCESS;
 }
 static NTSTATUS ConnectorStart(BC250_DEVICE* d) { (void)d;connectorStarts++;return connectorStatus; }
+// BD-169: whether a connector refusal leaves the static inherited path with a
+// display. The real predicate is connector.c's; the display-timing host test
+// owns its decision, and this test owns what the start does with it.
+static int connectorRefusalKeeps;
+static BOOLEAN ConnectorRefusalKeepsDisplay(const BC250_DEVICE* d)
+{ (void)d;return connectorRefusalKeeps ? TRUE : FALSE; }
 // What the record says at this point of the start, for the case where the machine never reaches the end of it, and
 // for the case where the write of the record was torn: nothing of the last start may still stand here.
 static WCHAR resultInsideStart[16], stepInsideStart[64];
@@ -364,10 +370,17 @@ static NTSTATUS DisplayMapFramebuffer(BC250_DEVICE* d)
 static void DisplayUnmapFramebuffer(BC250_DEVICE* d) { (void)d; }
 static void DisplayLogFramebufferSample(BC250_DEVICE* d) { (void)d; }
 // GitHub #38: the real step names its registers through GuardStartDetail when it refuses (display_timing_refused.h).
+// BD-169: the inherited pipe's own refusal is written by this step even when the step succeeds, because an
+// equal-size pipe this driver cannot classify passes it and the start fails later, in ConnectorStart. The text is
+// ModesetPrepareInherited's (whose composition display_timing_test.c checks against the real gate names).
+static int inheritedGateDetail;
 static NTSTATUS DisplayPrepareInheritedTiming(BC250_DEVICE* d)
 {
     (void)d;
     if (!NT_SUCCESS(timingStatus)) GuardStartDetail(L"timing 0x%08X post %ux%u otg0 ctl %08X", timingStatus, 800u, 600u, 0u);
+    else if (inheritedGateDetail)
+        GuardStartDetail(L"inherited source 2720x1481 pitch 10880 target 2720x1481 total 3000x1500 pixel 483326400"
+                         L" support 00000000 pipe C00000BB valid 007FFFFF gate 14 tiling word 00000080");
     return timingStatus;
 }
 static void NoteInterruptResource(BC250_DEVICE* d) { (void)d; }
@@ -392,7 +405,6 @@ static void FanStart(BC250_DEVICE* d) { (void)d; }
 static void SmuMetricsStart(BC250_DEVICE* d) { (void)d; }
 static void DpmStart(BC250_DEVICE* d) { (void)d; }
 static void CpuStart(BC250_DEVICE* d) { (void)d; }
-static void DriverVersionStart(BC250_DEVICE* d) { (void)d; }
 static void InterlockedExchange(LONG* t, LONG v) { *t = v; }
 static unsigned stops;
 // The real teardown logs through its own subsystems: the ring grows while it runs, which is why the record marks
@@ -432,10 +444,11 @@ static void Reset(void)
     opens = creates = closes = flushes = writeOps = stops = readyCalls = 0;
     failAt = 0; openStatus = createStatus = writeStatus = flushStatus = STATUS_SUCCESS;
     fbStatus = wddmStatus = timingStatus = smuStatus = guardStatus = connectorStatus = STATUS_SUCCESS;
+    connectorRefusalKeeps = 0; inheritedGateDetail = 0;
     unconfirmed = 1; keepLog = 0; enableNativeSmu = 0; poolRefused = 0;
     ringTotal = 12; ringLongLines = 0; ringEmptyAt = -1; ringGrowOnStop = 0;
     wddmSubStep = NULL; g_Irql = PASSIVE_LEVEL;
-    g_ParametersPath.Buffer = (PWSTR)L"\\Registry\\Machine\\...\\Parameters";
+    stateReady = 1;
     ownerIdentity = &ownedPdo;
     dev.PhysicalDeviceObject = &ownedPdo;
     iface.Size = (ULONG)sizeof(iface);
@@ -520,6 +533,37 @@ int main(void)
             if (failures) { printf("  (step case: %s)\n", table[i].what); break; }
         }
     }
+    // ---- BD-169: a connector refusal that keeps a display completes the start ---------------------------
+    // ConnectorStart programs no output, so its refusal leaves the firmware's own
+    // stream on the wire. The case above is the other half: when nothing can be
+    // presented the step still fails and names itself (#38's scaled tuple).
+    {
+        unsigned starts;
+        Reset(); connectorStatus = STATUS_DEVICE_NOT_READY; connectorRefusalKeeps = 1;
+        starts = connectorStarts;                       // Reset() does not clear this counter
+        CHECK(Start() == STATUS_SUCCESS);
+        CHECK(RecordIs(L"started", L"-", L"-", 0, StageStartDone));
+        CHECK(connectorStarts == starts + 1 && readyCalls == 1 && stops == 0);
+    }
+    // BD-169: the check that refused the firmware pipe reaches the record of the step that fails. The classifier
+    // runs in the display step, which an equal-size pipe passes whatever its verdict; the start then fails in
+    // ConnectorStart, and that record is the file a tester sends us. Detail is written once, by the step that
+    // measured it, so the later failure must still carry the gate number, its name and the word it read.
+    {
+        PCWSTR detail;
+        Reset(); inheritedGateDetail = 1; connectorStatus = STATUS_DEVICE_NOT_READY;
+        CHECK((ULONG)Start() == (ULONG)STATUS_DEVICE_NOT_READY);
+        CHECK(RecordIs(L"failed", L"ConnectorStart", L"-", (ULONG)STATUS_DEVICE_NOT_READY, StageStartFailed));
+        detail = Str(L"Detail");
+        CHECK(detail != NULL && wcsstr(detail, L"gate 14 tiling word 00000080") != NULL);
+        CHECK(detail != NULL && wcsstr(detail, L"support 00000000") != NULL);
+        // A start that keeps the display is not a failure, so no record carries that line as a reason.
+        Reset(); inheritedGateDetail = 1; connectorStatus = STATUS_DEVICE_NOT_READY; connectorRefusalKeeps = 1;
+        CHECK(Start() == STATUS_SUCCESS);
+        CHECK(RecordIs(L"started", L"-", L"-", 0, StageStartDone));
+        CHECK(Find(2, L"Detail") < 0);
+    }
+
     // The sub-step half: WddmStart and GpuStartupInitialize name the phase inside them.
     Reset(); wddmStatus = STATUS_DEVICE_NOT_READY; wddmSubStep = L"psp-initialize";
     CHECK(Start() == STATUS_DEVICE_NOT_READY);
@@ -674,7 +718,7 @@ int main(void)
     Reset(); g_Irql = DISPATCH_LEVEL;
     GuardRecordStartFailed(STATUS_ACCESS_DENIED);
     CHECK(opens == 0 && creates == 0 && writeOps == 0 && LoggedTimes("IRQL or no Parameters path") == 1);
-    Reset(); g_ParametersPath.Buffer = NULL;
+    Reset(); stateReady = 0;
     GuardRecordStartFailed(STATUS_ACCESS_DENIED);
     CHECK(opens == 0 && creates == 0 && writeOps == 0 && LoggedTimes("IRQL or no Parameters path") == 1);
     // A start that works answers exactly as before: no stop, two records, two flushes, nothing else.

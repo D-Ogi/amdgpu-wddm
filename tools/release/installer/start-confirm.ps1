@@ -42,6 +42,7 @@ if (-not $ExpectedVersion) {
     if (-not $ExpectedVersion) { $ExpectedVersion = '0x000700D8' }   # this release's kmd_abi; test-dryrun.ps1 gates it
 }
 . (Join-Path $here 'start-confirm-core.ps1')
+. (Join-Path $here 'state-reader.ps1')
 # The boot identity (Get-BootIdentity), loaded here and not only before the witness at the end: the start record's
 # reading needs this boot's start time from the one place that defines it (start-confirm-core.ps1
 # Get-StartRecordBootUtc), and -Probe exits before the witness block.
@@ -56,7 +57,6 @@ try { . (Join-Path $here 'release-witness.ps1') } catch { $script:witnessLoadErr
 $clock = [Diagnostics.Stopwatch]::StartNew()
 $cli = Join-Path $here 'bc250kmd_cli.exe'
 $dll = [IO.Path]::GetFullPath((Join-Path $here 'bc250control.dll'))
-$parametersKey = 'SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters'
 $log = Join-Path $env:ProgramData 'amdgpu-wddm\start-confirm.log'
 $script:exitCode = 1
 $script:lastReason = $null
@@ -89,15 +89,17 @@ if (-not $Probe) {
     } catch { Write-StartConfirmLog "DWM baseline: $($_.Exception.Message)" }
 }
 function Read-Parameter([string]$Name) {
-    $k = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey($parametersKey)
-    if (!$k) { return 'no key' }
-    try { $v = $k.GetValue($Name, $null); if ($null -eq $v) { return 'absent' }; return [string]$v } finally { $k.Dispose() }
+    try {
+        $values=Read-DriverStateValues -Cli $cli -MaxAgeMilliseconds 1000
+        if(-not $values.ContainsKey($Name)){return 'absent'}
+        return [string]$values[$Name]
+    } catch { return "unreadable: $($_.Exception.Message)" }
 }
 # BD-122: the KMD's record of the last start that did not reach a started device (Parameters\StartRecord,
 # guard.c). Read with no gate and without the driver, which is the point: a device with Code 43 answers no escape.
 # The record's own values only; the rule that makes them current is in start-confirm-core.ps1.
 function Read-StartRecord {
-    $k = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey("$parametersKey\$script:StartRecordKey")
+    $k = Open-DriverStateRecordView -Cli $cli -Path $script:StartRecordKey
     if (!$k) { return $null }
     try { return Read-StartRecordFromKey $k } finally { $k.Dispose() }
 }
@@ -164,8 +166,10 @@ function Get-FallbackView {
 # The window runs as the user who logged on (start-window.ps1, the task below), where this script cannot see it: a
 # different session, and under Local System no desktop at all. What it can read is the task's own record, so the log
 # of this run says whether the window half ran and what it reported. start-window.ps1's exit codes: 0 shown and
-# closed, 2 could not be shown. 267009 is "running", and the task is absent on a machine where an older release
-# registered the single task only. This never throws and never changes the run's outcome; it is a log line.
+# closed, 2 could not be shown, 3 turned off by the person. Nagi Control App, which starts that script for the task
+# (--start-window), passes those through and adds 4 (it stopped the script at its bound) and 5 (it could not start
+# the script). 267009 is "running", and the task is absent on a machine where an older release registered the single
+# task only. This never throws and never changes the run's outcome; it is a log line.
 $windowTaskName = 'amdgpu-wddm start window'   # common.ps1 $script:WindowTaskName; test-session-checks.ps1 holds the two together
 function Format-WindowTask {
     try {
@@ -255,6 +259,62 @@ function Invoke-Tick {
     return $step
 }
 
+# ---- the window: start-window.ps1 and start-confirm.ps1 carry this block alike (test-session-checks.ps1) ----------
+# The small blue window, drawn in one piece (owner, 2026-10-14: it flashed for a frame or two every few seconds). One
+# form that draws itself, with no child control: every change of the text is one WM_PAINT that paints background and
+# text into an off-screen buffer and puts the result on the window with one copy. Nothing paints on the window
+# itself between two such copies. ControlStyles:
+#   UserPaint, AllPaintingInWmPaint  WM_ERASEBKGND paints nothing; the background is part of the one paint
+#   OptimizedDoubleBuffer            the paint goes into a buffer, and the window gets the finished frame in one copy
+#   Opaque                           Invalidate asks Windows for no background erase at all (InvalidateRect, FALSE)
+# A form of WinForms erases its background on the window itself (ScrollableControl clears AllPaintingInWmPaint), and
+# the Label that drew the text up to tester.31 rc4 was a second window on top of it. On the lab (2026-10-14,
+# tools\win\app-launch\measure-flash.ps1, fact M898), DWM composed a frame of navy with only part of the text at 10
+# of 89 text changes of the Label window, and at none of 44 changes of this window. Reads of the Label window's own
+# surface found that partial frame at 125 of 150 changes, for about 2 ms each: the window itself held it, and DWM
+# showed it whenever it composed in those 2 ms. The surface of this window had it at none of 149 changes. The cause
+# is the Label's layout: at each new text, Label.AdjustSize gave the docked Label (AutoSize off) its requested size,
+# 100x23, and the form docked it again. In between, the form painted the uncovered area navy and the small Label
+# kept the top left corner of its text.
+# The look is the Label's, pixel for pixel: Consolas 9, cyan on navy, the text at (4, 3) through GDI+ DrawString
+# with the Label's string format, as a PowerShell host draws a Label (it never switches compatible text rendering
+# off). The window is sized to its two lines at the longest countdown, so no text is cut at any scale or font size.
+function New-StartWindow([string]$Text) {
+    $form = New-Object Windows.Forms.Form
+    $form.FormBorderStyle = 'None'; $form.TopMost = $true; $form.ShowInTaskbar = $false; $form.ShowIcon = $false
+    $form.StartPosition = 'Manual'; $form.Location = New-Object Drawing.Point(8, 34)
+    $form.BackColor = [Drawing.Color]::Navy
+    # Control.SetStyle is protected; a script reaches it through reflection, which needs no compiler and no rights.
+    $setStyle = [Windows.Forms.Control].GetMethod('SetStyle', [Reflection.BindingFlags]'Instance, NonPublic')
+    [void]$setStyle.Invoke($form, @([Windows.Forms.ControlStyles]'UserPaint, AllPaintingInWmPaint, OptimizedDoubleBuffer, Opaque', $true))
+    $font = New-Object Drawing.Font('Consolas', 9)
+    $form.Tag = @{ Text = $Text; Font = $font }
+    $need = [Windows.Forms.TextRenderer]::MeasureText($Text, $font)
+    $form.ClientSize = New-Object Drawing.Size(($need.Width + 12), ($need.Height + 8))
+    $form.Add_Paint({
+        param($window, $e)
+        try {
+            $e.Graphics.Clear([Drawing.Color]::Navy)
+            $face = New-Object Drawing.RectangleF(4, 3, ($window.ClientSize.Width - 8), ($window.ClientSize.Height - 6))
+            $ink = New-Object Drawing.SolidBrush([Drawing.Color]::Cyan)
+            $format = New-Object Drawing.StringFormat
+            $format.HotkeyPrefix = 'Show'
+            try { $e.Graphics.DrawString([string]$window.Tag.Text, $window.Tag.Font, $ink, $face, $format) }
+            finally { $ink.Dispose(); $format.Dispose() }
+        } catch { }
+    })
+    return $form
+}
+# The text changes only when it is different: then the window is invalidated once, and the next WM_PAINT draws it.
+# True when it changed. The countdown changes once a second, which is the presentation the window exists for.
+function Set-StartWindowText($Form, [string]$Text) {
+    if ([string]$Form.Tag.Text -ceq $Text) { return $false }
+    $Form.Tag.Text = $Text
+    $Form.Invalidate()
+    return $true
+}
+# ---- end of the window --------------------------------------------------------------------------------------------
+
 if ($NoWindow) {
     # The run of the Local System task: no window, no form, no assembly to load. The window of this logon is
     # start-window.ps1's, in the user's own session; this loop keeps the time bound of the task either way.
@@ -268,13 +328,6 @@ if ($NoWindow) {
     # The windowed run, as it has always been. Every variable here stays in the script's own scope, which an if or
     # else block does not change: the timer's handler reads $label, $timer and $form while ShowDialog runs.
     Add-Type -AssemblyName System.Windows.Forms, System.Drawing
-    $form = New-Object Windows.Forms.Form
-    $form.FormBorderStyle = 'None'; $form.TopMost = $true; $form.ShowInTaskbar = $false; $form.ShowIcon = $false
-    $form.StartPosition = 'Manual'; $form.Location = New-Object Drawing.Point(8, 34)
-    $form.BackColor = [Drawing.Color]::Navy
-    $label = New-Object Windows.Forms.Label
-    $label.Dock = 'Fill'; $label.ForeColor = [Drawing.Color]::Cyan; $label.Font = New-Object Drawing.Font('Consolas', 9)
-    $label.Padding = New-Object Windows.Forms.Padding(4, 3, 4, 3)
     # The text of start-window.ps1 (what the window is for, a countdown that is also the changing text DWM presents);
     # this run ends with the confirmation, so the countdown is its upper bound.
     $windowText = {
@@ -283,14 +336,11 @@ if ($NoWindow) {
         ("Nagi start check: confirming that the GPU driver started correctly.`r`n" +
             'Nothing to do. This window closes by itself within {0}:{1:00}.') -f [int][Math]::Floor($s / 60), ($s % 60)
     }
-    $label.Text = & $windowText $Seconds
-    $need = [Windows.Forms.TextRenderer]::MeasureText($label.Text, $label.Font)
-    $form.ClientSize = New-Object Drawing.Size(($need.Width + 12), ($need.Height + 8))
-    $form.Controls.Add($label)
+    $form = New-StartWindow (& $windowText $Seconds)
     $timer = New-Object Windows.Forms.Timer
     $timer.Interval = 250
     $timer.Add_Tick({
-        $label.Text = & $windowText ($Seconds - $clock.Elapsed.TotalSeconds)
+        [void](Set-StartWindowText $form (& $windowText ($Seconds - $clock.Elapsed.TotalSeconds)))
         $step = Invoke-Tick
         if ($step) { $script:exitCode = [int]$step.code; $script:lastReason = $step.reason; $timer.Stop(); $form.Close() }
     })

@@ -20,6 +20,8 @@ typedef struct _BC250_MODESET {
     BC250_INHERITED_PIPE InheritedPipe;     // read before any TMDS exit, even with display modes off
     LONG InheritedPipeStatus;
     ULONG InheritedSupport;                // transformations equivalent to the saved source/target tuple
+    ULONG InheritedGate;                   // enum bc250_pipe_gate: the first check that refused that pipe
+    ULONG InheritedGateWord;               // the word that check read (BD-169: the start record carries both)
     BOOLEAN InheritedFixed;                // scaler/timing retained; only the GOP source is offered
     volatile LONG InheritedSupportCalls, InheritedCofuncCalls, InheritedCommitCalls; // first 16 calls per start
     LONG AuxStatus;                         // the AUX session's result (0 = the EDID was read)

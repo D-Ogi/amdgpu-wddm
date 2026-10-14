@@ -1,0 +1,12 @@
+Dock Fill, AutoSize off (rc4)      '61 C': 0,0 400x120 -> 0,0 400x120; positions on the way: 0,0 100x23 flags 0x0016 | 0,0 400x120 flags 0x0016
+Dock Fill, AutoSize off (rc4)      '62 C': 0,0 400x120 -> 0,0 400x120; positions on the way: 0,0 100x23 flags 0x0016 | 0,0 400x120 flags 0x0016
+Dock Fill, AutoSize off (rc4)      '100 C': 0,0 400x120 -> 0,0 400x120; positions on the way: 0,0 100x23 flags 0x0016 | 0,0 400x120 flags 0x0016
+Dock Fill, AutoSize off (rc4)      'A longer text that wraps inside the maximum width of the label, with more words than fit.': 0,0 400x120 -> 0,0 400x120; positions on the way: 0,0 100x23 flags 0x0016 | 0,0 400x120 flags 0x0016
+AutoSize, MaximumSize, flow        '61 C': 3,0 28x17 -> 3,0 28x17; positions on the way: none
+AutoSize, MaximumSize, flow        '62 C': 3,0 28x17 -> 3,0 28x17; positions on the way: none
+AutoSize, MaximumSize, flow        '100 C': 3,0 28x17 -> 3,0 34x17; positions on the way: 3,0 34x17 flags 0x0016
+AutoSize, MaximumSize, flow        'A longer text that wraps inside the maximum width of the label, with more words than fit.': 3,0 34x17 -> 3,0 229x30; positions on the way: 3,0 229x30 flags 0x0016
+AutoSize, MaximumSize, table cell  '61 C': 78,0 28x17 -> 78,0 28x17; positions on the way: none
+AutoSize, MaximumSize, table cell  '62 C': 78,0 28x17 -> 78,0 28x17; positions on the way: none
+AutoSize, MaximumSize, table cell  '100 C': 78,0 28x17 -> 78,0 34x17; positions on the way: 78,0 34x17 flags 0x0016
+AutoSize, MaximumSize, table cell  'A longer text that wraps inside the maximum width of the label, with more words than fit.': 78,0 34x17 -> 78,0 229x30; positions on the way: 78,0 229x30 flags 0x0016

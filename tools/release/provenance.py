@@ -225,8 +225,34 @@ def check(sources_path, root, repo, package=None, package_version=None, package_
     of the `recipe.json` records that the component builds leave behind: with it the gate also refuses a build
     whose source tree was not clean (`build_records_ok`)."""
     sources = json.loads(Path(sources_path).read_text(encoding="utf-8-sig"))
+    from release_flavour import select_sources
+    try:
+        sources = select_sources(sources, flavour or sources.get('flavour', 'release'))
+    except (KeyError, TypeError, ValueError) as error:
+        return [f"{sources_path}: flavour selection: {error}"], [], {}
+    if package and (Path(package) / 'manifest.json').is_file():
+        manifest = json.loads((Path(package) / 'manifest.json').read_text(encoding='utf-8-sig'))
+        if manifest.get('flavour', 'release') != sources['flavour']:
+            return ['package and source flavours differ'], [], {}
+    driver_paths = {}
+    if package and (Path(package) / "installer/driver-package.json").is_file():
+        # Derive the mapping from this source contract, never from an unchecked
+        # report supplied with a candidate. Signed DLLs must retain code identity.
+        from driver_package import members
+        driver_paths = {r["source"]: r for r in members(sources)}
     errors = []
     rows = []
+    if package and package_version:
+        # The version and the flavour the package claims, read by the tool that owns both (BD-166). The resources
+        # in the files are the business of `versionstamp.py check --signed`, which runs after the last signing
+        # step: this script compares a packaged copy with its pinned source and nothing else.
+        vs = load_versionstamp()
+        try:
+            vs.check_flavour(package_flavour)
+            vs.amd_version(package_version)
+        except (vs.StampError, OSError) as exc:
+            return [f"version stamp: {exc}"], rows, {}
+    by_path = {f.get("path"): f for f in sources.get("files", [])}
     table = sources.get("repositories")
     recipe_repo = sources.get("recipe_repository")
     if not isinstance(table, dict) or not table:
@@ -256,17 +282,6 @@ def check(sources_path, root, repo, package=None, package_version=None, package_
         branches = repos.published(name, commit)
         if not branches:
             errors.append(f"{where}: {name} {commit[:8]} is on no remote-tracking branch of {table[name]['url']} "
-    if package and package_version:
-        # The version and the flavour the package claims, read by the tool that owns both (BD-166). The resources
-        # in the files are the business of `versionstamp.py check --signed`, which runs after the last signing
-        # step: this script compares a packaged copy with its pinned source and nothing else.
-        vs = load_versionstamp()
-        try:
-            vs.check_flavour(package_flavour)
-            vs.amd_version(package_version)
-        except (vs.StampError, OSError) as exc:
-            return [f"version stamp: {exc}"], rows, {}
-    by_path = {f.get("path"): f for f in sources.get("files", [])}
                           f"(push the branch that carries it, then fetch)")
             return None
         return branches
@@ -316,7 +331,8 @@ def check(sources_path, root, repo, package=None, package_version=None, package_
         for key in ("unsigned_sha256", "authenticode_sha256"):
             if key in f and not HEX64.match(f[key] or ""):
                 errors.append(f"{path}: {key} {f[key]!r} is not 64 upper-case hex digits")
-        packaged = Path(package) / path.replace("/", "\\") if package else None
+        destination = driver_paths[path]["path"] if path in driver_paths else path
+        packaged = Path(package) / destination.replace("/", "\\") if package else None
         if "release_edits" in f and (not isinstance(f["release_edits"], str) or not f["release_edits"].strip()):
             errors.append(f"{path}: 'release_edits' needs the edits as text")
         if packaged is not None:
@@ -325,6 +341,31 @@ def check(sources_path, root, repo, package=None, package_version=None, package_
             # purpose ("release_edits" says what).
             if not packaged.is_file():
                 errors.append(f"{path}: not in the package {package}")
+            elif path in driver_paths and path.endswith(".json"):
+                expected = json.loads(src.read_text(encoding="utf-8-sig"))
+                expected["ICD"]["library_path"] = ".\\" + ("vulkan_radeon32.dll" if driver_paths[path]["arch"] == "x86" else "vulkan_radeon.dll")
+                if packaged.read_bytes() != (json.dumps(expected, indent=2) + "\n").encode("utf-8"):
+                    errors.append(f"{path}: unexpected ICD manifest edit in DriverStore package")
+            elif path in driver_paths and path.endswith('.config'):
+                from driver_package import signing_safe_config
+                pair = [next((item for item in sources['files'] if item['path'] ==
+                              str(Path(path).with_name(name)).replace('\\', '/')), None)
+                        for name in ('amdgpu_wddm_dxvk.dll', 'amdgpu_wddm_radv.dll')]
+                try:
+                    if not all(pair):
+                        raise ValueError('missing original backend pair')
+                    expected = signing_safe_config(src.read_bytes(), *[Path(root) / item['source'] for item in pair])
+                    if packaged.read_bytes() != expected:
+                        errors.append(f'{path}: unexpected caps or image-identity edit')
+                except (OSError, ValueError) as exc:
+                    errors.append(f'{path}: {exc}')
+            elif path in driver_paths and packaged.suffix.lower() in ('.dll', '.exe'):
+                from image_identity import image_digest
+                try:
+                    if image_digest(src) != image_digest(packaged):
+                        errors.append(f'{path}: signing changed the PE image identity')
+                except (OSError, ValueError) as exc:
+                    errors.append(f'{path}: {exc}')
             elif "authenticode_sha256" not in f and "release_edits" not in f and sha256_file(packaged) != sha:
                 errors.append(f"{path}: the packaged copy is {sha256_file(packaged)[:8]}, the entry says {sha[:8]}")
         if "authenticode_sha256" in f:
@@ -445,67 +486,12 @@ def check(sources_path, root, repo, package=None, package_version=None, package_
                     continue
                 errors.append(f"{where}: argument {a!r} has an unknown placeholder {m.group(0)}")
     sources_ok(sources, recipe_repo, repos, errors)
-    return errors, rows, counts
-
-
-def sources_ok(sources, recipe_repo, repos, errors):
-    """Each text of PARSED_SOURCES starts with 'bc250-win <commit>', the commit is the build commit of its payload
-    row, and for the KMD the manifest's kmd_abi is BC250_KMD_VERSION at that commit. A payload without the row
-    has nothing for the lab tool to read."""
-    texts = sources.get("sources") if isinstance(sources.get("sources"), dict) else {}
-    for key, row_path in PARSED_SOURCES.items():
-        row = next((f for f in sources.get("files", []) if f.get("path") == row_path), None)
-        if row is None:
-            continue
-        where = f"sources.{key}"
-        text = texts.get(key)
-        found = SOURCE_COMMIT.match(text) if isinstance(text, str) else None
-        if not found:
-            errors.append(f"{where}: must start with 'bc250-win <commit>' (release-baseline.py reads the commit there "
-                          f"with re.match), and it starts {str(text)[:48]!r}")
-            continue
-        built = row.get("built_from") if isinstance(row.get("built_from"), dict) else {}
-        commit = built.get("commit")
-        if built.get("repo") != recipe_repo or not isinstance(commit, str) or not commit.startswith(found.group(1)):
-            errors.append(f"{where}: names bc250-win {found.group(1)[:8]}, but {row_path} is built from "
-                          f"{built.get('repo')} {str(commit)[:8]}")
-            continue
-        if key != "kmd":
-            continue
-        checkout = repos.find(recipe_repo, commit)
-        if checkout is None:
-            continue  # the built_from check of the row already says that the commit is in no checkout
-        code, header = git(checkout, "show", f"{commit}:driver/kmd/bc250kmd_escape.h")
-        versions = KMD_VERSION.findall(header) if code == 0 else []
-        abi = "0x" + versions[0][2:].upper() if len(versions) == 1 else None
-        if abi is None or abi != str(sources.get("kmd_abi")):
-            errors.append(f"{where}: kmd_abi {sources.get('kmd_abi')} is not BC250_KMD_VERSION {abi} of "
-                          f"driver/kmd/bc250kmd_escape.h at {commit[:8]}")
-
-
-def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    sub = parser.add_subparsers(dest="command", required=True)
-    c = sub.add_parser("check")
-    c.add_argument("--sources", required=True)
-    c.add_argument("--root", required=True)
-    c.add_argument("--repo", required=True)
-    c.add_argument("--package")
-    c.add_argument("--json")
-    d = sub.add_parser("digest")
-    d.add_argument("files", nargs="+")
-    loc = sub.add_parser("locate")
-    loc.add_argument("--sources", required=True)
-    loc.add_argument("--root", required=True)
-    loc.add_argument("--repo", required=True)
-    loc.add_argument("name")
-    loc.add_argument("commit")
     pairs_ok(sources, recipe_repo, repos, errors)
     if build_records is not None:
         counts["build_records"] = build_records_ok(build_records, sources, errors)
-    args = parser.parse_args()
-    if args.command == "digest":
-        for f in args.files:
+    return errors, rows, counts
+
+
 BUILD_RECORD = "recipe.json"
 
 
@@ -632,43 +618,41 @@ def lineage(repos, repo, mine, theirs):
     return "lag" if behind or ahead else "forked"
 
 
-            print(f"{sha256_file(f)}  {authenticode_digest(f)}  {f}")
-        return 0
-    if args.command == "locate":
-        # The checkout of a repository that holds the commit (rebuild-check.ps1 makes its work trees from it).
-        sources = json.loads(Path(args.sources).read_text(encoding="utf-8-sig"))
-        table = sources.get("repositories", {})
-        if args.name not in table:
-            print(f"repository {args.name!r} is not in 'repositories'", file=sys.stderr)
-            return 1
-        found = Repositories(table, args.root, args.repo).find(args.name, args.commit)
-        if found is None:
-            print(f"{args.name} {args.commit} is in no checkout", file=sys.stderr)
-            return 1
-        print(found)
-        return 0
-    errors, rows, counts = check(args.sources, args.root, args.repo, args.package, args.package_version,
-                                 args.package_flavour, flavour=args.flavour,
-                                 build_records=args.build_records)
-    for r in rows:
-        tag = {"recipe": "BUILD", "data": "DATA", "third_party": "THIRD"}.get(r["kind"], "?")
-        if r.get("unverified"):
-            tag += " (unverified)"
-        branch = f"  [{r['branches'][0]}{' +%d' % (len(r['branches']) - 1) if len(r['branches']) > 1 else ''}]" \
-            if r.get("branches") else ""
-        print(f"  {tag:<20} {r['path']}  {r.get('origin', '')}{branch}")
-    if counts:
-        print(f"provenance: {counts['files']} payload files: {counts['recipe']} built by a recipe "
-              f"({counts['reproducible']} claim a bit-identical rebuild, {counts['unverified']} unverified), "
-              f"{counts['data']} data files from a commit, {counts['third_party']} third-party")
-    unverified = [r for r in rows if r.get("unverified")]
-    if unverified:
-        print(f"provenance: {len(unverified)} unverified entries:")
-        for r in unverified:
-            print(f"  {r['path']}: {r['unverified']}")
-    if args.json:
-        Path(args.json).write_text(json.dumps({"errors": errors, "counts": counts, "files": rows}, indent=1),
-                                   encoding="utf-8")
+def sources_ok(sources, recipe_repo, repos, errors):
+    """Each text of PARSED_SOURCES starts with 'bc250-win <commit>', the commit is the build commit of its payload
+    row, and for the KMD the manifest's kmd_abi is BC250_KMD_VERSION at that commit. A payload without the row
+    has nothing for the lab tool to read."""
+    texts = sources.get("sources") if isinstance(sources.get("sources"), dict) else {}
+    for key, row_path in PARSED_SOURCES.items():
+        row = next((f for f in sources.get("files", []) if f.get("path") == row_path), None)
+        if row is None:
+            continue
+        where = f"sources.{key}"
+        text = texts.get(key)
+        found = SOURCE_COMMIT.match(text) if isinstance(text, str) else None
+        if not found:
+            errors.append(f"{where}: must start with 'bc250-win <commit>' (release-baseline.py reads the commit there "
+                          f"with re.match), and it starts {str(text)[:48]!r}")
+            continue
+        built = row.get("built_from") if isinstance(row.get("built_from"), dict) else {}
+        commit = built.get("commit")
+        if built.get("repo") != recipe_repo or not isinstance(commit, str) or not commit.startswith(found.group(1)):
+            errors.append(f"{where}: names bc250-win {found.group(1)[:8]}, but {row_path} is built from "
+                          f"{built.get('repo')} {str(commit)[:8]}")
+            continue
+        if key != "kmd":
+            continue
+        checkout = repos.find(recipe_repo, commit)
+        if checkout is None:
+            continue  # the built_from check of the row already says that the commit is in no checkout
+        code, header = git(checkout, "show", f"{commit}:driver/kmd/bc250kmd_escape.h")
+        versions = KMD_VERSION.findall(header) if code == 0 else []
+        abi = "0x" + versions[0][2:].upper() if len(versions) == 1 else None
+        if abi is None or abi != str(sources.get("kmd_abi")):
+            errors.append(f"{where}: kmd_abi {sources.get('kmd_abi')} is not BC250_KMD_VERSION {abi} of "
+                          f"driver/kmd/bc250kmd_escape.h at {commit[:8]}")
+
+
 def check_commits(sources_path, root, repo):
     """Every full commit id the manifest names is an object of a checkout of its repository.
 
@@ -731,14 +715,18 @@ def check_commits(sources_path, root, repo):
     return errors, notes, len(found)
 
 
-    for e in errors:
-        print(f"FAIL {e}")
-    print(f"provenance: {'FAIL, ' + str(len(errors)) + ' errors' if errors else 'PASS'}")
-    return 1 if errors else 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())
+def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = parser.add_subparsers(dest="command", required=True)
+    c = sub.add_parser("check")
+    c.add_argument("--sources", required=True)
+    c.add_argument("--root", required=True)
+    c.add_argument("--repo", required=True)
+    c.add_argument("--package")
+    c.add_argument("--package-version", help="the release version whose version resources the packaged PE files carry")
+    c.add_argument("--package-flavour", choices=("release", "lab"), default="release",
+                   help="the flavour of those version resources")
+    c.add_argument("--json")
     c.add_argument('--flavour', choices=('release', 'lab'))
     c.add_argument("--build-records",
                    help="a directory holding the recipe.json records of the builds that made this release: with "
@@ -748,6 +736,19 @@ if __name__ == "__main__":
     cm.add_argument("--sources", required=True)
     cm.add_argument("--root", required=True)
     cm.add_argument("--repo", required=True)
+    d = sub.add_parser("digest")
+    d.add_argument("files", nargs="+")
+    loc = sub.add_parser("locate")
+    loc.add_argument("--sources", required=True)
+    loc.add_argument("--root", required=True)
+    loc.add_argument("--repo", required=True)
+    loc.add_argument("name")
+    loc.add_argument("commit")
+    args = parser.parse_args()
+    if args.command == "digest":
+        for f in args.files:
+            print(f"{sha256_file(f)}  {authenticode_digest(f)}  {f}")
+        return 0
     if args.command == "commits":
         errors, notes, checked = check_commits(args.sources, args.root, args.repo)
         for n in notes:
@@ -757,3 +758,46 @@ if __name__ == "__main__":
         print(f"commits: {checked} commit id(s) named, "
               f"{'FAIL, ' + str(len(errors)) + ' of them in no checkout' if errors else 'PASS'}")
         return 1 if errors else 0
+    if args.command == "locate":
+        # The checkout of a repository that holds the commit (rebuild-check.ps1 makes its work trees from it).
+        sources = json.loads(Path(args.sources).read_text(encoding="utf-8-sig"))
+        table = sources.get("repositories", {})
+        if args.name not in table:
+            print(f"repository {args.name!r} is not in 'repositories'", file=sys.stderr)
+            return 1
+        found = Repositories(table, args.root, args.repo).find(args.name, args.commit)
+        if found is None:
+            print(f"{args.name} {args.commit} is in no checkout", file=sys.stderr)
+            return 1
+        print(found)
+        return 0
+    errors, rows, counts = check(args.sources, args.root, args.repo, args.package, args.package_version,
+                                 args.package_flavour, flavour=args.flavour,
+                                 build_records=args.build_records)
+    for r in rows:
+        tag = {"recipe": "BUILD", "data": "DATA", "third_party": "THIRD"}.get(r["kind"], "?")
+        if r.get("unverified"):
+            tag += " (unverified)"
+        branch = f"  [{r['branches'][0]}{' +%d' % (len(r['branches']) - 1) if len(r['branches']) > 1 else ''}]" \
+            if r.get("branches") else ""
+        print(f"  {tag:<20} {r['path']}  {r.get('origin', '')}{branch}")
+    if counts:
+        print(f"provenance: {counts['files']} payload files: {counts['recipe']} built by a recipe "
+              f"({counts['reproducible']} claim a bit-identical rebuild, {counts['unverified']} unverified), "
+              f"{counts['data']} data files from a commit, {counts['third_party']} third-party")
+    unverified = [r for r in rows if r.get("unverified")]
+    if unverified:
+        print(f"provenance: {len(unverified)} unverified entries:")
+        for r in unverified:
+            print(f"  {r['path']}: {r['unverified']}")
+    if args.json:
+        Path(args.json).write_text(json.dumps({"errors": errors, "counts": counts, "files": rows}, indent=1),
+                                   encoding="utf-8")
+    for e in errors:
+        print(f"FAIL {e}")
+    print(f"provenance: {'FAIL, ' + str(len(errors)) + ' errors' if errors else 'PASS'}")
+    return 1 if errors else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

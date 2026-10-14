@@ -23,6 +23,11 @@ Path(sys.argv[1]).with_name('gfx_pipeline_defines.inc').write_text('\n'.join(def
 gfx=(source/'driver/kmd/gfx.c').read_text()
 Path(sys.argv[1]).write_text(function(s,'static BOOLEAN WddmStopping(')+function(gfx,'void GfxRetireSignal(')+s[a:b])
 
+# Compile the actual node-1 diagnostic, too. Its fence-arrival hook is supplied
+# by the harness; the timer policy and admission decisions come from wddm.c.
+with Path(sys.argv[1]).open('a') as out:
+    out.write(function(s, 'static void WddmPagingSubmitDpcCheck('))
+
 # The RADV tree holding the WDDM winsys: argv[3], the runner's -MesaSource; none with -KmdOnly. The old default, a
 # path next to the repository, named nothing in a worktree.
 if len(sys.argv)<4 or not sys.argv[3]: sys.exit(0)

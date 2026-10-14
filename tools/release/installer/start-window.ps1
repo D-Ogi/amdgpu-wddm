@@ -1,6 +1,12 @@
 # The logon window of a tester PC: the scheduled task "amdgpu-wddm start window" (install.ps1 registers it from the
 # plan of common.ps1: at the logon of any user, for the Users group, limited run level) runs this once per logon.
 #
+# The task does not run powershell.exe itself. It runs Nagi Control App as `amdgpu_wddm_control.exe --start-window
+# -Seconds N`, a windows program, which starts this script through powershell.exe with no console window and gives
+# back its exit code (StartWindowHost.cs). powershell.exe as the task's own program is a console program: on the lab
+# its console was a Windows Terminal window that was still on the screen when this window closed (fact M899). Only an
+# install without the control application (-NoControlApp) runs this script through powershell.exe directly.
+#
 # It does two things in the session of the person who just signed in, and neither of them needs any rights:
 #   1. It starts the sign-in notice of Nagi Control App (--start-notice). The control application reads the
 #      driver's start itself and shows a window ONLY when the driver is not running: a start the driver's own guard
@@ -45,6 +51,8 @@
 #   0  the window was shown and closed itself, or -Seconds was below one
 #   2  the window could not be shown (no WinForms assembly, no window station, a host that is not STA)
 #   3  the person turned the window off in the application; nothing was shown and nothing is wrong
+# The control application that starts this script adds two codes of its own: 4 it stopped this script at -Seconds
+# plus 30 s, 5 it could not start this script (StartWindowHost.cs).
 # The confirmation of the same logon runs as Local System, reads that result and writes it into its own log, so a
 # window half that never ran is visible in C:\ProgramData\amdgpu-wddm\start-confirm.log. A failure here still fails
 # no logon: the confirmation's own fallback keeps the machine off Microsoft Basic Display.
@@ -96,28 +104,72 @@ function Format-StartWindowText([double]$Left) {
     return ("Nagi start check: confirming that the GPU driver started correctly.`r`n" +
         'Nothing to do. This window closes by itself in {0}:{1:00}.') -f [int][Math]::Floor($s / 60), ($s % 60)
 }
+# ---- the window: start-window.ps1 and start-confirm.ps1 carry this block alike (test-session-checks.ps1) ----------
+# The small blue window, drawn in one piece (owner, 2026-10-14: it flashed for a frame or two every few seconds). One
+# form that draws itself, with no child control: every change of the text is one WM_PAINT that paints background and
+# text into an off-screen buffer and puts the result on the window with one copy. Nothing paints on the window
+# itself between two such copies. ControlStyles:
+#   UserPaint, AllPaintingInWmPaint  WM_ERASEBKGND paints nothing; the background is part of the one paint
+#   OptimizedDoubleBuffer            the paint goes into a buffer, and the window gets the finished frame in one copy
+#   Opaque                           Invalidate asks Windows for no background erase at all (InvalidateRect, FALSE)
+# A form of WinForms erases its background on the window itself (ScrollableControl clears AllPaintingInWmPaint), and
+# the Label that drew the text up to tester.31 rc4 was a second window on top of it. On the lab (2026-10-14,
+# tools\win\app-launch\measure-flash.ps1, fact M898), DWM composed a frame of navy with only part of the text at 10
+# of 89 text changes of the Label window, and at none of 44 changes of this window. Reads of the Label window's own
+# surface found that partial frame at 125 of 150 changes, for about 2 ms each: the window itself held it, and DWM
+# showed it whenever it composed in those 2 ms. The surface of this window had it at none of 149 changes. The cause
+# is the Label's layout: at each new text, Label.AdjustSize gave the docked Label (AutoSize off) its requested size,
+# 100x23, and the form docked it again. In between, the form painted the uncovered area navy and the small Label
+# kept the top left corner of its text.
+# The look is the Label's, pixel for pixel: Consolas 9, cyan on navy, the text at (4, 3) through GDI+ DrawString
+# with the Label's string format, as a PowerShell host draws a Label (it never switches compatible text rendering
+# off). The window is sized to its two lines at the longest countdown, so no text is cut at any scale or font size.
+function New-StartWindow([string]$Text) {
+    $form = New-Object Windows.Forms.Form
+    $form.FormBorderStyle = 'None'; $form.TopMost = $true; $form.ShowInTaskbar = $false; $form.ShowIcon = $false
+    $form.StartPosition = 'Manual'; $form.Location = New-Object Drawing.Point(8, 34)
+    $form.BackColor = [Drawing.Color]::Navy
+    # Control.SetStyle is protected; a script reaches it through reflection, which needs no compiler and no rights.
+    $setStyle = [Windows.Forms.Control].GetMethod('SetStyle', [Reflection.BindingFlags]'Instance, NonPublic')
+    [void]$setStyle.Invoke($form, @([Windows.Forms.ControlStyles]'UserPaint, AllPaintingInWmPaint, OptimizedDoubleBuffer, Opaque', $true))
+    $font = New-Object Drawing.Font('Consolas', 9)
+    $form.Tag = @{ Text = $Text; Font = $font }
+    $need = [Windows.Forms.TextRenderer]::MeasureText($Text, $font)
+    $form.ClientSize = New-Object Drawing.Size(($need.Width + 12), ($need.Height + 8))
+    $form.Add_Paint({
+        param($window, $e)
+        try {
+            $e.Graphics.Clear([Drawing.Color]::Navy)
+            $face = New-Object Drawing.RectangleF(4, 3, ($window.ClientSize.Width - 8), ($window.ClientSize.Height - 6))
+            $ink = New-Object Drawing.SolidBrush([Drawing.Color]::Cyan)
+            $format = New-Object Drawing.StringFormat
+            $format.HotkeyPrefix = 'Show'
+            try { $e.Graphics.DrawString([string]$window.Tag.Text, $window.Tag.Font, $ink, $face, $format) }
+            finally { $ink.Dispose(); $format.Dispose() }
+        } catch { }
+    })
+    return $form
+}
+# The text changes only when it is different: then the window is invalidated once, and the next WM_PAINT draws it.
+# True when it changed. The countdown changes once a second, which is the presentation the window exists for.
+function Set-StartWindowText($Form, [string]$Text) {
+    if ([string]$Form.Tag.Text -ceq $Text) { return $false }
+    $Form.Tag.Text = $Text
+    $Form.Invalidate()
+    return $true
+}
+# ---- end of the window --------------------------------------------------------------------------------------------
 try {
     Add-Type -AssemblyName System.Windows.Forms, System.Drawing
     $clock = [Diagnostics.Stopwatch]::StartNew()
     # The same small window as the windowed run of start-confirm.ps1, in the same place: a tester who has seen one
     # has seen the other (docs\testing\INSTALL.md, "The small blue window after logon").
-    $form = New-Object Windows.Forms.Form
-    $form.FormBorderStyle = 'None'; $form.TopMost = $true; $form.ShowInTaskbar = $false; $form.ShowIcon = $false
-    $form.StartPosition = 'Manual'; $form.Location = New-Object Drawing.Point(8, 34)
-    $form.BackColor = [Drawing.Color]::Navy
-    $label = New-Object Windows.Forms.Label
-    $label.Dock = 'Fill'; $label.ForeColor = [Drawing.Color]::Cyan; $label.Font = New-Object Drawing.Font('Consolas', 9)
-    $label.Padding = New-Object Windows.Forms.Padding(4, 3, 4, 3)
-    $label.Text = Format-StartWindowText $Seconds
-    # Sized to its two lines at the longest countdown, so no text is cut at any scale or font size.
-    $need = [Windows.Forms.TextRenderer]::MeasureText($label.Text, $label.Font)
-    $form.ClientSize = New-Object Drawing.Size(($need.Width + 12), ($need.Height + 8))
-    $form.Controls.Add($label)
+    $form = New-StartWindow (Format-StartWindowText $Seconds)
     $timer = New-Object Windows.Forms.Timer
     $timer.Interval = 250
     $timer.Add_Tick({
         # The changing text is the point: it is what makes DWM present this window's frames.
-        $label.Text = Format-StartWindowText ($Seconds - $clock.Elapsed.TotalSeconds)
+        [void](Set-StartWindowText $form (Format-StartWindowText ($Seconds - $clock.Elapsed.TotalSeconds)))
         if ($clock.Elapsed.TotalSeconds -ge $Seconds) { $timer.Stop(); $form.Close() }
     })
     $timer.Start()

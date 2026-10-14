@@ -79,7 +79,7 @@ Write-Host 'generate (the binding, with the kernel primitives and the mailbox ow
 $source = Get-Content -LiteralPath $Source -Raw
 $needle = '#include "bc250kmd.h"'
 if (-not $source.Contains($needle)) { throw "$Source no longer includes the miniport header: the mock cannot replace it" }
-[IO.File]::WriteAllText((Join-Path $Out 'cpu-native.inc'), $source.Replace($needle, '#include "cpu_native_mock.h"'),
+[IO.File]::WriteAllText((Join-Path $Out 'cpu-native.inc'), $source.Replace($needle, '#include "cpu_native_mock.h"').Replace('#include "state_kernel.h"',''),
     [Text.UTF8Encoding]::new($false))
 
 Write-Host 'compile (binding, user mode)'

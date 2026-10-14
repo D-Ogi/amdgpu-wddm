@@ -11,6 +11,7 @@ def main():
     p.add_argument("--omit-generation", action="store_true")
     p.add_argument("--omit-open-cleanup", action="store_true")
     p.add_argument("--omit-cold-recovery", action="store_true")
+    p.add_argument("--omit-prepare-cleanup", action="store_true")
     p.add_argument("--omit-first-failure", action="store_true")
     p.add_argument("--nested-hdmi-stop", action="store_true")
     p.add_argument("--omit-diagnostic-replay", action="store_true")
@@ -62,6 +63,11 @@ def main():
             if body.count(needle) != 1:
                 raise SystemExit("Generation negative-control anchor changed")
             body = body.replace(needle, "1")
+        if args.omit_prepare_cleanup and name == "ConnectorLinkPrepare":
+            needle = "Device->ConnectorLinkCleanup=ConnectorLinkRelease(Device);"
+            if body.count(needle) != 1:
+                raise SystemExit("Prepare cleanup propagation anchor changed")
+            body = body.replace(needle, "(void)ConnectorLinkRelease(Device);")
         if args.omit_open_cleanup and name == "OpenContext":
             needle = "if(c->AtomWorkspace)ExFreePoolWithTag(c->AtomWorkspace,LINK_WORK_TAG);"
             if body.count(needle) != 1:
@@ -101,6 +107,26 @@ def main():
     (args.out / "hdmi_stop_types.inc").write_text(hdmi_types, encoding="utf-8")
     (args.out / "hdmi_stop_bodies.inc").write_text("\n".join(hdmi_bodies), encoding="utf-8")
     print(f"hdmi_link.c SHA256 {hashlib.sha256(hdmi_source.read_bytes()).hexdigest()}; 3 unchanged stop/detail bodies")
+    # BD-169 review: the decision a refused start makes about the hardware it touched reads the terminal
+    # cleanup result that ConnectorLinkPrepare keeps on the device, so the real decision belongs with the
+    # real prepare and release. It needs nothing of connector.c but the device field.
+    connector_source = source.with_name("connector.c")
+    connector = connector_source.read_text(encoding="utf-8")
+    decisions = []
+    for name in ("ConnectorRefusalPreserved",):
+        match = list(re.finditer(r"(?m)^(?:BOOLEAN|NTSTATUS|void) " + name + r"\([^;]*?\)\s*\{", connector))
+        if len(match) != 1:
+            raise SystemExit(f"Expected one {name} definition")
+        start = match[0].start()
+        end = connector.index("{", start) + 1
+        depth = 1
+        while depth:
+            depth += (connector[end] == "{") - (connector[end] == "}")
+            end += 1
+        decisions.append(connector[start:end])
+    (args.out / "connector_decision.inc").write_text("\n".join(decisions), encoding="utf-8")
+    print(f"connector.c SHA256 {hashlib.sha256(connector_source.read_bytes()).hexdigest()};"
+          f" {len(decisions)} unchanged refusal decision body")
     (args.out / "connector_link_types.inc").write_text(types, encoding="utf-8")
     (args.out / "connector_link_bodies.inc").write_text("\n".join(chunks), encoding="utf-8")
     print(f"connector_link.c SHA256 {hashlib.sha256(source.read_bytes()).hexdigest()}; {len(names)} unchanged bodies"

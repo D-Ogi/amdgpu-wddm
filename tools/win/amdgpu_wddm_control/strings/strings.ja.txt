@@ -5,6 +5,7 @@ cu.choice.all|mt-safe|c8029dd4|選択: すべて (40)。
 cu.choice.standard|mt-safe|fa436287|選択: 標準 (24)。
 cu.choice.invalid|mt|9ed29361|選択が無効です。標準 (24) またはすべて (40) を選んでください。
 cu.choice.unreadable|mt|ee127a9b|選択を読み取れません。
+cu.choice.some|mt|39a1d070|あなたの選択: グラフィックスコア {0} 個。
 cu.choice.driver-24|mt|a8fa591b|標準 (24) が設定されていますが、この数を選んだのはドライバーであり、あなたではありません。
 cu.note.driver-24|mt|0199b2dd|すべて (40) を選び、Windows を再起動すると、再び 40 コアすべてを使用します。
 cu.choice.after-restart|mt|07660ab1|次回の Windows 再起動後に適用されます。
@@ -20,26 +21,34 @@ cu.run.not-saved.next24|mt|0d9cc034|次回の起動は、選択どおり 24 コ�
 cu.run.fallback|mt|c1cc5938|前回の 40 コアでの起動が確認されなかったため、今回の起動は 24 コアを使っています。
 cu.run.refused|mt|9517c611|今回の起動では 40 コアを使用できませんでした。
 cu.run.unknown|mt|39943c8f|グラフィックス コアの数を読み取れません。
+cu.run.groups|mt|4d770aed|現在の各グループのコア数: {0}。
+cu.map.item|mt|5905f8e5|グループ {0} ペア {1}
 cu.next.standard|mt|7c94a6f5|次回の起動: 24 コア。
 cu.next.fallback|mt|d366069f|次回の起動: 24 コア (40 コア設定が確認されなかったため)。
 cu.next.ask40|mt|5af1df5d|次回の起動: 40 コア (起動後に確認が必要)。
-cu.next.ask40-limited|mt|cb27c040|次回の起動: 以前の診断用コア制限付きの 40 コア設定 (コア数が少なくなります)、起動後に確認が必要。
+cu.next.ask40-limited|mt|95fdb1b4|次回の起動: グラフィックスコア {0} 個。起動後に確認します。
 cu.next.confirmed40|mt|59baaddb|次回の起動: 40 コア (確認済み)。
-cu.next.confirmed40-limited|mt|487324b9|次回の起動: 以前の診断用コア制限付きの 40 コア設定 (コア数が少なくなります)、確認済み。
+cu.next.confirmed40-limited|mt|371afe5f|次回の起動: グラフィックスコア {0} 個 (以前に確認済み)。
 cu.next.unknown|mt|8bb23e4f|次回の起動: 予測できません。
 cu.refuse.target|mt|84439e4b|標準 (24) またはすべて (40) を選んでください。
 cu.refuse.unreadable|mt|d945441d|保存されている設定を読み取れません。
 cu.refuse.already40|mt|4f5796de|すべて (40) はすでに選択されています。
 cu.refuse.already24|mt|91c3ed3d|標準 (24) はすでに選択されています。
+cu.refuse.already-some|mt|ba20d575|グラフィックスコア {0} 個はすでに選ばれています。
+cu.refuse.map|mt|1de01451|これらのグラフィックスコアのペアは、このPCでは選べません。
 cu.preview.write40|mt|46267060|40 個すべてのグラフィックス コアを選択します。
 cu.preview.write24|mt|3920ecbe|標準の 24 グラフィックス コアを選択します。
 cu.preview.remove-closed|mt|93f4029d|標準の 24 グラフィックス コアがドライバーによる後退ではなく、あなたの選択であることを記録します。
+cu.preview.write40-some|mt|0345f0c0|40 個のうち {0} 個のグラフィックスコアを選びます。
+cu.preview.set-disable|mt|0056c790|次のグラフィックスコアのペアをオフにします: {0}。
+cu.preview.write-chosen|mt|2acbb148|この数をあなたの選択として記録します。ドライバーを更新しても保たれます。
+cu.preview.remove-chosen|mt|4986238d|グラフィックスコアの数を、インストール済みドライバーの設定に戻します。
 cu.preview.remove-confirmed|mt|d10b327e|以前の 40 コアの確認を削除し、新しい設定がその起動で確認されるようにします。
-cu.preview.remove-disable|mt|51075647|以前の診断用コア制限が削除されます。
+cu.preview.remove-disable|mt|7f38ddbb|グラフィックスコアのすべてのペアをもう一度オンにします。
 cu.result.nothing|mt|54ca5460|何も変更されていません。
 cu.result.saved|mt-safe|fca046cc|保存しました。
 cu.result.failed|mt|ec48fa5b|変更を完了できませんでした。
-cu.result.cleanup-incomplete|mt|894af8af|整理が完了していません。次回の起動は標準の 24 コアを使います。残っている以前の診断用コア制限によってコア数が減ることはありません。
+cu.result.cleanup-incomplete|mt|8e56e5c8|整理が完了していません。次回の起動では標準の 24 コアを使います。オフのまま残るコアのペアは、この数を減らしません。
 cu.effect|mt|60ee9b9b|コアが増えると消費電力と発熱が増えます。当社のテスト機では 1500 MHz で約 30 W 増えました。これは参考値であり、お使いの PC での保証ではありません。
 
 # ---- driver card ----
@@ -61,6 +70,7 @@ drv.released.none|mt|63087412|リリース日: 更新を確認すると分かり
 upd.available|mt|68e4656c|更新があります: {0}
 upd.uptodate|mt|39fd9eaf|最新のリリースです。
 upd.newest|mt|ffd32b15|最新のリリースは {0} です。
+upd.ahead|mt|d8273d3e|お使いのドライバーは最新のリリース ({0}) より新しいです。
 upd.incomplete|mt|fc36062b|最新の {0} 件のリリースの中に新しいリリースはありません。
 upd.failed|mt|bf1dd0e0|更新を確認できませんでした。後でもう一度お試しください。
 upd.rate-limited|mt|2c365d35|更新サービスから待つよう求められました。{0} 以降にもう一度確認できます。
@@ -382,6 +392,7 @@ page.help.intro|mt|ba52ab9c|よくある問題の解決手順、修復、サポ�
 action.working|mt|82f2bdf0|処理しています... Windows から管理者のアクセス許可を求められる場合があります。
 action.done|mt-safe|ed251864|完了しました。
 action.failed|mt|ee79203d|変更は行われませんでした。他にも何も変更されていません。理由は、ヘルプから作成するサポート レポートで確認できます。
+action.background-failed|mt|4ec90c79|バックグラウンドの処理が完了しませんでした。ドライバーは何も変更されていません。何が起きたかは、ヘルプから作成するサポート レポートで確認できます。
 action.not-elevated|mt|d6a4391d|管理者のアクセス許可が与えられませんでした。何も変更されていません。
 action.cannot-read|mt|4f597aff|現在の設定を読み取れないため、何も変更されていません。
 action.restart-failed|mt|0783bdf8|Windows は再起動しませんでした。スタート メニューから再起動してください。
@@ -453,6 +464,15 @@ graphics.thermal|mt|14bc2f1d|熱保護は常にオンです。87 °C からド�
 graphics.cores.title|mt-safe|3b1c283f|グラフィックス コア
 graphics.cores.24|mt-safe|99b1c87b|標準 (24)
 graphics.cores.40|mt-safe|908ab6d1|すべて (40)
+graphics.cores.count|mt|202ea951|グラフィックスコアの数
+graphics.cores.count.item|mt|18b460db|コア {0} 個
+graphics.cores.map.show|mt|09bc7c18|コアのペアを自分で選ぶ
+graphics.cores.map.help|mt|c8e8a347|1 ペアはグラフィックスコア 2 個です。あるペアでPCが停止したり固まる場合は、そのペアだけをオフにして、ほかはオンのままにします。
+graphics.cores.map.unreadable|mt|4a1e2bd6|このPCのコアのペアを今は読み取れないため、選べません。代わりにコアの数を選んでください。
+graphics.cores.map.group|mt|e5d24a19|グループ {0}
+graphics.cores.map.pair|mt|c2d4e788|ペア {0}
+graphics.cores.map.name|mt|e7997c8a|グループ {0}、ペア {1}: グラフィックスコア 2 個
+graphics.cores.map.fixed|mt|f017032a|常にオン
 graphics.not-installed|mt|17713c9c|ドライバーがインストールされていないため、ここで設定できるものはありません。
 graphics.unsaved|mt|fdb121dc|まだ適用されていない変更があります。
 graphics.saved|mt|75d79f0a|保存されていない変更はありません。
@@ -893,8 +913,6 @@ search.graphics.overlay.terms|mt|72342a7f|FPS カウンター|フレーム時間
 search.graphics.latency|mt-safe|f3bcef3c|低遅延
 search.graphics.latency.terms|mt|5b07cf0e|遅延|入力遅延|インプットラグ|先行フレーム|レンダー キュー|Anti-Lag|Reflex
 search.graphics.overlay|mt-safe|37d49e6c|パフォーマンス オーバーレイ
-search.graphics.amd-version|mt-safe|e9b65d7d|AMD ドライバーのバージョンを報告
-search.graphics.amd-version.terms|mt|a3215411|ドライバーのバージョン|古いドライバー|ドライバーの警告|AMD|未対応のドライバー
 search.graphics.vk-present|mt-safe|cdee9cc4|Vulkan の表示方式
 search.graphics.vk-present.terms|mt|93c9bf20|Vulkan|表示|黒い画面|画面が止まる|互換性
 search.graphics.vk-memory|mt-safe|542ed595|ビデオ メモリが一杯のとき
@@ -906,11 +924,10 @@ search.games.cpu-render.terms|mt|927301e2|CPU レンダリング|ソフトウェ
 search.display.scaling|mt-safe|22b1cb79|GPU スケーリング
 help.setting.latency|mt|a684f1ab|プロセッサーがグラフィックス チップより先に準備できるフレーム数です。少ないほどマウスやキーボードへの反応が速くなりますが、フレーム レートが下がることがあります。DirectX 11 と DirectX 12 のゲームで動作します。すでに先行フレーム数が少ないゲームはそのままです。
 help.setting.overlay|mt|78ee0e43|ゲームの隅にフレーム レートとフレーム時間を表示します。現在は DirectX 11 のゲームでのみ動作します。
-help.setting.amd-version|mt|7604c528|一部のゲームは、このドライバーを知らないため、グラフィックス ドライバーが古いと警告します。オンにすると、ドライバーはそれらのゲームが受け付けるバージョン番号を報告します。ドライバー自体は変わりません。
 help.setting.vk-present|mt|e892e511|Vulkan ゲームがフレームを表示する方法です。モダンが既定で、より高速です。互換性は古くて遅い方法を使います。Vulkan ゲームの画面が黒い、または止まったままのときに試してください。
 help.setting.vk-memory|mt|ec2dc30f|ビデオ メモリが一杯になったときに Vulkan ゲームに返す内容です。「システムメモリを使う」ではゲームは動作を続けますが遅くなります。「メモリ不足を報告する」ではゲームに知らせ、ゲームが設定を下げられるようにします。
 help.setting.sm|mt|f3b2ff18|ドライバーが DirectX 12 ゲームに報告する最高のシェーダー モデルです。既定は 6.8 です。新しいシェーダー モデルで動作しないゲームがあります。そのようなゲームでは 6.7 または 6.6 を選んでください。
-help.setting.cpu-render|mt|527d8d82|このゲームの DirectX 11 を、グラフィックス チップではなくプロセッサーで実行します。大幅に遅くなります。グラフィックス チップで動作しないゲームの最後の手段としてだけ使ってください。
+help.setting.cpu-render|mt|0d418439|このゲームの DirectX 11 を、グラフィックス チップではなくプロセッサーで実行します。大幅に遅く、DirectX 11 のすべての機能は使えないため、2012 年以降に発売されたほとんどのゲーム (Counter-Strike 2 など) はこの設定では起動しません。グラフィックス チップで動作しない古いゲームの最後の手段としてだけ使ってください。
 gfx.choice.app|mt-safe|e7f551b6|アプリケーションに任せる
 gfx.choice.inherit|mt-safe|efd0e1d0|すべてのゲームと同じ: {0}
 gfx.choice.inherit-short|mt-safe|1123f3b7|すべてのゲームと同じ
@@ -940,8 +957,7 @@ gfx.origin.default|mt-safe|04e6cbc0|未設定: {0}。
 gfx.origin.stored|mt-safe|2b5c4aeb|すべてのゲーム用に保存済み。
 gfx.origin.global|mt|6617fcee|すべてのゲームの設定から: {0}。
 gfx.note.overlay|mt|a4263f23|現在は DirectX 11 のゲームでのみ動作します。
-gfx.note.cpu-render|mt|0b9bf5df|大幅に遅くなります。グラフィックス チップで動作しない DirectX 11 ゲームの最後の手段です。
-gfx.note.amd-version|mt|7f26a73f|古いグラフィックス ドライバーについて警告するゲーム向けです。
+gfx.note.cpu-render|mt|b48a21b3|大幅に遅くなり、2012 年以降に発売されたほとんどのゲームはこの設定では起動しません。グラフィックス チップで動作しない古い DirectX 11 ゲームの最後の手段です。
 gfx.note.vk-present|mt|3d7eec4c|互換性は遅くなります。Vulkan ゲームの画面が黒い、または止まったままのときに試してください。
 gfx.note.sm|mt|3efcfd20|新しいシェーダー モデルで動作しないゲームがあります。そのようなゲームにだけ低いものを選んでください。
 gfx.global.title|mt-safe|c750f458|すべてのゲームの設定
@@ -1216,3 +1232,29 @@ settings.wallpaper.restored-partial|mt|c85e565d|以前の背景はスライド�
 settings.wallpaper.restore-failed|mt|7af0bb53|以前の背景に戻せませんでした。その画像はこの PC にもうありません。Windows の設定の [個人用設定] > [背景] で背景を選んでください。
 settings.wallpaper.nothing-saved|mt|d8f54a55|このアカウントには以前の背景が保存されていないため、戻すものはありません。
 help.setting.wallpaper|mt|18d99de4|インストーラーは、確認済みのインストールの後、ボックスがオフにされていない限り、各ユーザーに Nagi の壁紙を一度だけ設定し、その前にそのユーザーの背景を保存します。[Nagi の壁紙を設定] は画像をもう一度設定します。[以前の壁紙に戻す] は保存した背景に戻します。スライドショーや Windows スポットライトは最後の画像としてのみ戻ります。Windows の設定の [個人用設定] > [背景] で再びオンにしてください。どちらのボタンも自分の背景だけを変更し、管理者の権限は必要ありません。
+# "Record game logs" (src/GameLog.cs): the timed switch of the Help page.
+gamelog.title|mt|d9a04c61|ゲームのログを記録する
+gamelog.intro|mt|c1bbf41a|助けてくれる人からゲームのログを求められたら、ここで記録をオンにしてからゲームを始めてください。記録中は、各ゲームがグラフィックスに何を要求したかを書いたファイルを作ります。記録は選んだ時間が過ぎると自動で止まるので、うっかりオンのままにすることはありません。
+gamelog.label|mt|e3aac753|記録する時間
+gamelog.choice.recommended|mt|81c7ab30|{0} 分 (ちょうどよい長さ)
+gamelog.choice.one-minute|mt|e67b6f61|1 分
+gamelog.choice.minutes|mt|87086105|{0} 分
+gamelog.now.off|mt|c952f548|記録はオフです。何も書き込まれていません。
+gamelog.now.on|mt|8bf8c99c|記録はオンです。残り {0} 分。今すぐゲームを始めてください。
+gamelog.now.on.one-minute|mt|4302708c|記録はオンです。残り 1 分。今すぐゲームを始めてください。
+gamelog.where|mt|85e11f4f|ファイルは共有のプログラム データ フォルダーの {0} に保存されます。これまでに {2} 個、合計 {1} MB です。サポート レポートには新しいものが入ります。
+gamelog.start|mt|bb8b2bb3|{0} 分間記録する
+gamelog.stop|mt|6ebe3863|今すぐ止める
+gamelog.open|mt|e241ab00|フォルダーを開く
+gamelog.open-failed|mt|9bbdcc09|フォルダーを開けませんでした。
+gamelog.unreadable|mt|9245ad83|このコンピューターでは記録をオンにできません。
+search.help.gamelog|mt|d9a04c61|ゲームのログを記録する
+search.help.gamelog.terms|mt|ec6f3356|ログ|記録|ゲームのログ|診断|トレース|ゲームの問題を報告
+help.setting.gamelog|mt|5e282183|選んだ分数のあいだ、ゲームがグラフィックスに何を要求したかを記録し、ゲームごとに 1 つのファイルを作ります。記録をオンにしてゲームを始め、問題が起きるまで遊んでから、サポート レポートを作ってください。新しいファイルがそこに入ります。記録は時間が過ぎると自動で止まり、各ファイルは 64 MB で止まります。ファイルはただのテキストなので、自分で読むこともできます。
+plan.title.game-log-on|mt|d9a04c61|ゲームのログを記録する
+plan.title.game-log-off|mt|30cf650b|ゲームのログの記録を止める
+plan.line.gamelog-on|mt|7075c578|選んだ時間が過ぎるまで、ゲームはグラフィックスに何を要求したかのログを書きます。
+plan.line.gamelog-off|mt|1898e356|ゲームはログを書かなくなります。すでに書かれたファイルはそのまま残ります。
+launch.starting|mt|ff3dab00|起動しています。最初にこのコンピューターを確認するため、数秒かかります。
+launch.slow|mt|653d44fd|Windows の応答が遅いため、起動にいつもより時間がかかっています。応答がそろうとアプリが開きます。このウィンドウを閉じることもできます。
+launch.close|mt|7d9eb7ac|閉じる

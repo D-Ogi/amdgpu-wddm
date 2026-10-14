@@ -367,12 +367,12 @@ $un = [IO.File]::ReadAllText((Join-Path $Installer 'uninstall.ps1'))
 Check ($src -match 'Get-OpenGlReleaseSwitch -Manifest \$script:Manifest -PackageRoot \$package') 'install.ps1 takes the switch from the manifest of the package'
 Check ($src -match 'throw "manifest\.json registers the OpenGL ICD for \$\(@\(\$gl\.architectures\) -join '' and ''\), but this package has no') 'install.ps1 refuses a package that registers an architecture without carrying its file'
 Check ($src -match 'Get-OpenGlArchFiles -Switch \$gl\) \| Where-Object \{ -not \$_\.present \}') 'the refusal walks the architecture list, so a package that lists x86 without the x86 file is refused'
-Check ($src -match 'if \(\$gl\.register_x64\) \{ \$dirs \+= \$gl\.payload_dir \}') 'the 64-bit payload directory is installed only by a release that registers x64'
+Check ($src -match 'if \(\$gl\.register_x64 -and -not \$driverStoreUmd\) \{ \$dirs \+= \$gl\.payload_dir \}') 'only a legacy x64 OpenGL package copies its ICD to Program Files'
 Check (($src -match 'Get-OpenGlUnregisteredValueNames -Switch \$gl') -and ($src -match '-Names \$glOff')) 'install.ps1 takes away the values of an architecture it does not register'
 # The record of the release installed here, read before this run replaces it: it is the only exact answer to
 # whether the values of the other architecture are ours.
 $posWroteRead = $src.IndexOf('$glWroteBefore = @()')
-$posWroteSet = $src.IndexOf("Set-StateValue `$state 'opengl_icd'")
+$posWroteSet = $src.IndexOf("Set-StateValue `$state 'opengl_icd'", $posWroteRead)
 Check (($posWroteRead -gt 0) -and ($posWroteRead -lt $posWroteSet) -and ($src -match '-Wrote \$glWroteBefore')) 'that step reads the earlier record before this run replaces it'
 Check ($src -match 'Remove-PathOrSchedule \$glDirWow') 'install.ps1 removes the 32-bit ICD of an earlier install when it does not register x86'
 Check ($src -match "Add-Info 'OpenGL ICD \(32-bit\)'") 'verify says in one line that 32-bit OpenGL programs keep the renderer of Windows itself'

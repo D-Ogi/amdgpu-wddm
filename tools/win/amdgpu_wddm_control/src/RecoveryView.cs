@@ -94,7 +94,7 @@ namespace AmdgpuWddmControl
             if (_collecting) return;
             Say("help.report.collecting");
             var report = new BugReport(Redactor.ForThisPc());
-            Task.Run(() => report.Collect(false, false, true, _ => { })).ContinueWith(t =>
+            Task.Run(() => Crash.Watched("support report", () => report.Collect(false, false, true, _ => { }))).ContinueWith(t =>
             {
                 if (t.IsFaulted) { Say("help.report.failed"); return; }
                 var path = BugReport.DefaultPath(DateTime.Now);
@@ -110,7 +110,7 @@ namespace AmdgpuWddmControl
         {
             _collecting = true;
             Say("help.auto.collecting");
-            Task.Run(() => StartupDiagnostics.SaveAutomatic()).ContinueWith(t => {
+            Task.Run(() => Crash.Watched("automatic diagnostics", () => StartupDiagnostics.SaveAutomatic())).ContinueWith(t => {
                 _collecting = false;
                 if (IsDisposed || Disposing) return;
                 _result.Text = t.IsFaulted ? Strings.T("help.auto.failed") : Strings.T("help.auto.saved", t.Result);

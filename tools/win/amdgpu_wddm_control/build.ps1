@@ -14,7 +14,8 @@
 # Recovery dry runs (--action X --dry-run: nothing is written, no UAC) against test/snapshot-bd059.json and this PC,
 # the recovery view without bc250control.dll (--smoke-recovery), the hidden-window cost (--smoke-perf, G-PERF),
 # the sign-in notice in both its cases, four languages and four scales on a small and a large screen
-# (--smoke-notice: it fits the screen, overlaps nothing, names no internals, closes with Escape),
+# (--smoke-notice: it fits the screen, overlaps nothing, names no internals, closes with Escape), the loading window
+# of the start in both its states with the same checks (--smoke-loading),
 # the place a rebuilt page keeps and the place of the buttons in every state of a benchmark run (--smoke-scroll), and
 # the render gates (G-RENDER, G-NOINT, G-A11Y): --smoke-render of the 9 pages at 96, 120, 144 and 192 DPI in the four
 # languages, at text scale 150 %, with the guide character on (the default of an installed application) and two runs
@@ -71,9 +72,12 @@ $refs = 'mscorlib.dll', 'System.dll', 'System.Core.dll', 'System.Drawing.dll', '
 $pure = 'KmdReply.cs', 'Profiles.cs', 'Redactor.cs', 'ManifestCheck.cs', 'Recovery.cs', 'Strings.cs', 'CuMode.cs', 'DriverCard.cs', 'UpdateCheck.cs',
     'AppSettings.cs', 'Guide.cs', 'RecentLaunches.cs', 'Sensors.cs', 'CacheInventory.cs', 'DisplayInfo.cs', 'Hints.cs', 'GameGroups.cs',
     'SettingsSearch.cs', 'HomeStatus.cs', 'PlainPlan.cs', 'HelpGuides.cs', 'CuRegistry.cs', 'Tuner.cs', 'TunerPlan.cs', 'TunerView.cs', 'FanPlan.cs', 'GraphicsSettings.cs', 'TdrSetting.cs',
-    'LayoutRules.cs', 'UmaSetting.cs', 'BoardCapabilities.cs', 'SystemTuning.cs', 'Benchmark.cs', 'StartupDiagnosticData.cs', 'DiagnosticWorker.cs',
-    'StartNotice.cs', 'Wallpaper.cs' |
+    'GameLog.cs', 'HangRecord.cs',
+    'LayoutRules.cs', 'UmaSetting.cs', 'BoardCapabilities.cs', 'SystemTuning.cs', 'Benchmark.cs', 'StartupDiagnosticData.cs', 'DiagnosticWorker.cs', 'DriverState.cs',
+    'StartNotice.cs', 'Wallpaper.cs', 'Crash.cs', 'StartWindowHost.cs' |
     ForEach-Object { Join-Path $here "src\$_" }
+# The start of the window: the order of the loading window and the guard against a second window (Launch.cs).
+$pure += 'SingleInstance.cs', 'LaunchSequence.cs' | ForEach-Object { Join-Path $here "src\$_" }
 
 # Build the capability fixture from the actual provider and shipping shim tables, without adapter access.
 $providerOut = Join-Path $obj 'board-provider'
@@ -109,13 +113,18 @@ if ($LASTEXITCODE -ne 0) { throw 'unit tests failed' }
 
 # 2. bc250control.dll, the same translation unit and flags as tools\win\bc250kmd_cli\build.ps1.
 $env:INCLUDE = ''; $env:LIB = ''
-& $cl @('/nologo', '/W4', '/WX', '/O2', '/MT', '/LD', '/Brepro', '/DBC250_CONTROL_DLL', '/D_CRT_SECURE_NO_WARNINGS',
+# /Z7 on the state client and on both products below: the debug information rides in the objects, so the two
+# shipped native files get a PDB from /DEBUG at the link and no compiler database is written beside them.
+$stateFlags = @('/O2','/MT','/Brepro','/Z7',"/I$($msvc.FullName)\include","/I$sdk\Include\$KitVersion\ucrt",
+    "/I$sdk\Include\$KitVersion\um","/I$sdk\Include\$KitVersion\shared")
+$stateObjects = & (Join-Path $repo 'tools\state\build-objects.ps1') -Compiler $cl -Out "$obj\state" -Flags $stateFlags -Exports
+& $cl @('/nologo', '/W4', '/WX', '/O2', '/MT', '/LD', '/Brepro', '/Z7', '/DBC250_CONTROL_DLL', '/D_CRT_SECURE_NO_WARNINGS',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/Fo$obj\bc250control.obj", "/Fe$Out\bc250control.dll",
     (Join-Path $repo 'tools\win\bc250kmd_cli\bc250kmd_cli.c')) @stateObjects @('/link', '/Brepro', '/DEBUG',
     '/OPT:REF', '/OPT:ICF', '/PDBALTPATH:%_PDB%', "/IMPLIB:$obj\bc250control.lib",
     "/LIBPATH:$(Join-Path $msvc.FullName 'lib\x64')", "/LIBPATH:$sdkLib\ucrt\x64", "/LIBPATH:$sdkLib\um\x64",
-    'gdi32.lib', 'setupapi.lib', 'advapi32.lib') |
+    'gdi32.lib', 'setupapi.lib', 'advapi32.lib','onecore.lib','uuid.lib') |
     ForEach-Object { if ($_ -notmatch '^\s*$|^Microsoft|^Copyright|^\S+\.c$|Creating library|bc250control.lib') { Write-Host "  $_" } }
 if ($LASTEXITCODE -ne 0) { throw "bc250control.dll build failed ($LASTEXITCODE)" }
 Remove-Item "$Out\bc250control.exp", "$Out\bc250control.lib" -ErrorAction SilentlyContinue
@@ -129,7 +138,7 @@ Remove-Item "$Out\bc250control.exp", "$Out\bc250control.lib" -ErrorAction Silent
     (Join-Path $repo 'tools\win\bc250kmd_cli\bc250kmd_cli.c')) @stateObjects @('/link', '/Brepro', '/DEBUG',
     '/OPT:REF', '/OPT:ICF', '/PDBALTPATH:%_PDB%',
     "/LIBPATH:$(Join-Path $msvc.FullName 'lib\x64')", "/LIBPATH:$sdkLib\ucrt\x64", "/LIBPATH:$sdkLib\um\x64",
-    'gdi32.lib', 'setupapi.lib', 'advapi32.lib') |
+    'gdi32.lib', 'setupapi.lib', 'advapi32.lib','onecore.lib','uuid.lib') |
     ForEach-Object { if ($_ -notmatch '^\s*$|^Microsoft|^Copyright|^\S+\.c$') { Write-Host "  $_" } }
 if ($LASTEXITCODE -ne 0) { throw "bc250kmd_cli.exe build failed ($LASTEXITCODE)" }
 $usage = & "$Out\bc250kmd_cli.exe" 2>&1 | ForEach-Object { [string]$_ }
@@ -162,8 +171,16 @@ if (-not (Test-Path -LiteralPath $icon -PathType Leaf)) { throw "application ico
 # The same file as a resource as well (MainForm): the window's icon is then the authored image for the size Windows
 # asks for, instead of one 32x32 image rescaled on a high-resolution screen.
 $resources += "/resource:$icon,nagi.ico"
-& $csc /nologo /noconfig /nostdlib+ @refs /target:winexe /platform:x64 /optimize+ /warnaserror+ /langversion:7.3 /deterministic+ `
-    "/win32manifest:$here\app.manifest" "/win32icon:$icon" "/out:$Out\amdgpu_wddm_control.exe" @resources @((Get-ChildItem "$here\src\*.cs").FullName | Sort-Object)
+# /debug:portable: the application ships, so it gets a portable PDB, which the release archives beside the
+# candidate and the manifest names by the GUID of the exe's own debug directory. csc has no /PDBALTPATH, and it
+# records the path it is given, so the call is made from the output directory with relative names: otherwise
+# the shipped exe would carry the absolute path of this build PC.
+Push-Location -LiteralPath $Out
+try {
+    & $csc /nologo /noconfig /nostdlib+ @refs /target:winexe /platform:x64 /optimize+ /warnaserror+ /langversion:7.3 /deterministic+ `
+        /debug:portable /pdb:amdgpu_wddm_control.pdb `
+        "/win32manifest:$here\app.manifest" "/win32icon:$icon" "/out:amdgpu_wddm_control.exe" @resources @((Get-ChildItem "$here\src\*.cs").FullName | Sort-Object)
+} finally { Pop-Location }
 if ($LASTEXITCODE -ne 0) { throw "csc failed ($LASTEXITCODE)" }
 $systemTuningOutput = Join-Path $Out 'system-tuning'
 New-Item -ItemType Directory -Force -Path $systemTuningOutput | Out-Null
@@ -266,6 +283,8 @@ if (-not $NoSmoke) {
     [IO.File]::WriteAllBytes($badBoardFixture, [byte[]]@(0))
     $r = Invoke-DryRun @('--action', 'fan-auto', '--dry-run', '--snapshot', $snapshot, '--board-fixture', $badBoardFixture) 'board-fixture-malformed'
     if ($r.Code -ne 1 -or -not $r.Text.Contains('board fixture failed:')) { throw "malformed board fixture must be refused (exit $($r.Code)): $($r.Text)" }
+    # RegWrite renders this legacy logical identifier in plans. RecoveryActions.Write routes it through
+    # DriverStateBatch, not directly to this registry key; these assertions test preview text, not storage.
     $params = 'HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters'
     $expect = [ordered]@{
         'reopen-gpu-path' = @(0, "set $params EnableGpuPresentBlit = 1 (DWord)", "delete $params InteropClosedReason")
@@ -281,10 +300,18 @@ if (-not $NoSmoke) {
         'set-clocks'      = @(0, "delete $params DpmMaxMHz")
         'restart-compositor' = @(3, 'refused: restart-compositor is an operator escape', '--accept-bd060')
         # The CU setter (G-PLAN, plan v7 section 7): the dry run lists the helper's steps, in the helper's order.
-        'cu-mode:40'      = @(0, "S1 set $params CuMode = 40 (DWord)", 'S4 flush the key', 'undo: no', 'never restored')
+        'cu-mode:40'      = @(0, "S1 set $params CuMode = 40 (DWord)", "S1c set $params CuModeChosen = 0x28 (DWord)", 'S4 flush the key', 'undo: no', 'never restored')
         # The snapshot has no CuMode, so Standard (24) is a number to write, not a selection that is there already
         # (BD-077: an absent value reads to the release installer as a key it never configured).
-        'cu-mode:24'      = @(0, "S1 set $params CuMode = 24 (DWord)", 'verify the stock selection (24)', 'never restored')
+        'cu-mode:24'      = @(0, "S1 set $params CuMode = 24 (DWord)", "S1c set $params CuModeChosen = 0x18 (DWord)", 'verify the stock selection (24)', 'never restored')
+        # A count between the two (owner, 2026-10-14): the mask of the documented default set of 30 cores is written
+        # before CuMode, the record holds the whole request, and the note names the pairs in the words of the window.
+        'cu-mode:30'      = @(0, "S3 set $params CuDisableWgp = 0x84218 (DWord)", "S1 set $params CuMode = 40 (DWord)",
+                              "S1c set $params CuModeChosen = 0x8421828 (DWord)", 'Selects 30 of the 40 graphics cores.',
+                              'group 1 pair 4', 'leaves 30 of the 40 graphics cores')
+        # This snapshot carries no graphics-core reading, so a hand-picked set cannot be checked against the board
+        # and is refused before anything is written.
+        'cu-mode:map'     = @(3, 'refused: The graphics cores of this PC cannot be read')
         'cu-confirm'      = @(3, 'refused: No 40-core start is waiting for confirmation')
         'reset-defaults:keep' = @(0, 'note: Per-game settings are kept.')
         'game-undo'       = @(3, 'refused: There is no change of witcher3.exe to undo')
@@ -292,7 +319,8 @@ if (-not $NoSmoke) {
     foreach ($e in $expect.GetEnumerator()) {
         $action = $e.Key.Split(':')[0]
         $extra = @(switch ($e.Key) { 'enable-dpm' { '--ceiling', '1700' } 'set-clocks' { '--mode', 'unset', '--ceiling', 'unset' }
-            'cu-mode:40' { '--cu', '40' } 'cu-mode:24' { '--cu', '24' } 'reset-defaults:keep' { '--games', 'keep' } 'game-undo' { '--image', 'witcher3.exe' } })
+            'cu-mode:40' { '--cu', '40' } 'cu-mode:24' { '--cu', '24' } 'cu-mode:30' { '--cu', '30' }
+            'cu-mode:map' { '--cu', '30', '--cu-map', '0x84218' } 'reset-defaults:keep' { '--games', 'keep' } 'game-undo' { '--image', 'witcher3.exe' } })
         $r = Invoke-DryRun (@('--action', $action) + $extra + @('--dry-run', '--snapshot', $snapshot)) ($e.Key -replace ':', '-')
         if ($r.Code -ne $e.Value[0]) { throw "dry run $($e.Key): exit $($r.Code), $($e.Value[0]) expected: $($r.Text)" }
         foreach ($want in $e.Value | Select-Object -Skip 1) {
@@ -309,17 +337,16 @@ if (-not $NoSmoke) {
         'tune-stop'   = @(3, 'refused: No curve trial is running.')
         'tune-reset'  = @(3, 'refused: The default curve is in use already.')
         'cpu-enable'  = @(3, 'refused: Processor tuning is on already.')
-        'cpu-disable' = @(0, "delete $params CpuTune", 'at the next restart of Windows')
+        'cpu-disable' = @(0, "set $params CpuTune = 0 (DWord)", 'at the next restart of Windows')
         'cpu-readback' = @(0, 'tuning request cpu-readback')
         'cpu-trial'   = @(0, 'tuning request cpu-trial', 'undervolt 8 steps', 'window 120000 ms')
         'cpu-keep'    = @(3, 'refused: No processor trial is running.')
         'cpu-reset'   = @(3, 'refused: The processor has its default settings already.')
         'core-mask'   = @(0, 'tuning request core-mask, cores 8', 'at the next restart of Windows')
-        # WU-042: "Reset driver settings" is the one control that puts the standard settings back. Processor tuning
-        # goes to the release's CpuTune, which is 1 here as in registry-defaults.json, so a stored 1 is left alone
-        # (a leading "!" means the text must not be there). The tuning steps of a machine that has settings
-        # stored and the writes of a CpuTune 0 or absent are gated by the host tests (TunerStandardSteps,
-        # TunerResetCpuTune); this snapshot has none stored.
+        # WU-042: this saved snapshot predates StateSchema 2. Its CpuTune is already the release default 1,
+        # so the legacy reset leaves it alone (a leading "!" means the text must not be there). Current
+        # StateSchema 2 resets clear overrides, including an override equal to the default; test that below.
+        # TunerStandardSteps and TunerResetCpuTune cover the stored tuning settings and legacy reset cases.
         'reset-defaults' = @(0, "!$params CpuTune", 'at the next restart of Windows')
         # The fan card (docs/design/fan.md Part B): the driver runs the standard curve with nothing stored.
         'fan-auto'    = @(0, 'tuning request fan-board', 'takes effect: at once', 'undo: no')
@@ -341,6 +368,33 @@ if (-not $NoSmoke) {
             if ($want.StartsWith('!')) {
                 if ($r.Text.Contains($want.Substring(1))) { throw "dry run $($e.Key): '$($want.Substring(1))' must not be there: $($r.Text)" }
             } elseif (-not $r.Text.Contains($want)) { throw "dry run $($e.Key): '$want' missing: $($r.Text)" }
+        }
+    }
+    # Current-state CLI controls: Disable writes zero, while Reset removes the override and exposes the
+    # factory default. An absent override must stay absent even though the effective CpuTune is one.
+    foreach ($cpuOverride in @('zero', 'one', 'absent')) {
+        $current = Get-Content -LiteralPath $tuned -Raw | ConvertFrom-Json
+        $rawCpu = if ($cpuOverride -eq 'zero') { 0 } else { 1 }
+        $current.Parameters.CpuTune = $rawCpu
+        $overrides = if ($cpuOverride -eq 'absent') { @{} } else { @{ CpuTune = $rawCpu } }
+        $current | Add-Member -NotePropertyName StateSchema -NotePropertyValue 2 -Force
+        $current | Add-Member -NotePropertyName ParameterOverrides -NotePropertyValue $overrides -Force
+        $currentPath = Join-Path $obj "snapshot-tuner-state2-$cpuOverride.json"
+        $current | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $currentPath -Encoding UTF8
+        $r = Invoke-DryRun @('--action', 'reset-defaults', '--games', 'keep', '--dry-run', '--snapshot', $currentPath) "state2-reset-$cpuOverride"
+        if ($r.Code -ne 0 -or -not $r.Text.Contains('dry run: nothing was written')) {
+            throw "state v2 reset $cpuOverride failed (exit $($r.Code)): $($r.Text)"
+        }
+        $wantClear = $cpuOverride -ne 'absent'
+        if ($r.Text.Contains("delete $params CpuTune") -ne $wantClear -or $r.Text.Contains("set $params CpuTune")) {
+            throw "state v2 reset $cpuOverride must clear only an existing CpuTune override: $($r.Text)"
+        }
+        if ($cpuOverride -eq 'one') {
+            $r = Invoke-DryRun @('--action', 'cpu-disable', '--dry-run', '--snapshot', $currentPath) 'state2-cpu-disable'
+            if ($r.Code -ne 0 -or -not $r.Text.Contains("set $params CpuTune = 0 (DWord)") -or
+                $r.Text.Contains("delete $params CpuTune") -or -not $r.Text.Contains('dry run: nothing was written')) {
+                throw "state v2 cpu-disable must store zero (exit $($r.Code)): $($r.Text)"
+            }
         }
     }
     # A curve under the driver's own floor, a core count this board does not take, and a trial without a curve: the
@@ -419,13 +473,50 @@ if (-not $NoSmoke) {
         if ($u.Code -ne 2) { throw "--action $($bad -join ' ') must be refused as usage (exit $($u.Code))" }
     }
     Write-Host "  graphics waiting time: $($tdr.Count) plans and refusals, 5 usage errors"
+    # "Record game logs" (src/GameLog.cs): the one QWORD and the folder step, the refusals of a recording time
+    # outside 1..60 minutes, and switching off with nothing recording. The recorded snapshots have no
+    # GameLogUntil, which is the state of a machine where nobody ever switched recording on. The instant written
+    # is this moment, so the gate checks the value name and its type and not the number.
+    $diagKey = 'HKLM\SOFTWARE\amdgpu-wddm\Diagnostics'
+    $gameLog = [ordered]@{
+        'on10'    = @(@('game-log-on', '--minutes', '10'), 0, "set $diagKey GameLogUntil = ", '(QWord)',
+                      'prepare %ProgramData%\amdgpu-wddm\logs\games', 'Users create files', 'prune that folder to 512 MiB',
+                      'Records the driver''s game logs for 10 minutes', 'takes effect: the next time a game starts', 'undo: yes')
+        'on1'     = @(@('game-log-on', '--minutes', '1'), 0, 'game logs for 1 minute,')
+        'on60'    = @(@('game-log-on', '--minutes', '60'), 0, 'game logs for 60 minutes,')
+        'on0'     = @(@('game-log-on', '--minutes', '0'), 3, 'refused: The recording time must be between 1 and 60 minutes.')
+        'on61'    = @(@('game-log-on', '--minutes', '61'), 3, 'refused: The recording time must be between 1 and 60 minutes.')
+        'off'     = @(@('game-log-off'), 3, 'refused: The game logs are not being recorded.')
+    }
+    foreach ($e in $gameLog.GetEnumerator()) {
+        $r = Invoke-DryRun (@('--action') + $e.Value[0] + @('--dry-run', '--snapshot', $snapshot)) "gamelog-$($e.Key)"
+        if ($r.Code -ne $e.Value[1]) { throw "dry run game log $($e.Key): exit $($r.Code), $($e.Value[1]) expected: $($r.Text)" }
+        foreach ($want in $e.Value | Select-Object -Skip 2) {
+            if (-not $r.Text.Contains($want)) { throw "dry run game log $($e.Key): '$want' missing: $($r.Text)" }
+        }
+        if (-not $r.Text.Contains('dry run: nothing was written')) { throw "dry run game log $($e.Key): no closing line" }
+    }
+    # A recording time belongs to game-log-on alone, and switching on without one is not a plan at all.
+    foreach ($bad in @(@('game-log-on'), @('game-log-on', '--minutes', 'ten'), @('game-log-on', '--minutes', '-5'),
+            @('game-log-off', '--minutes', '10'), @('tdr-delay', '--tdr', '10', '--minutes', '10'), @('reset-defaults', '--minutes', '10'))) {
+        $u = Invoke-DryRun (@('--action') + $bad + @('--dry-run', '--snapshot', $snapshot)) ('usage-gamelog-' + ($bad -join '-' -replace '[^a-zA-Z0-9-]', ''))
+        if ($u.Code -ne 2) { throw "--action $($bad -join ' ') must be refused as usage (exit $($u.Code))" }
+    }
+    # The dry run writes nothing, so the state of this PC decides whether switching off is a change or a refusal:
+    # both are a pass, a usage error is not.
+    $r = Invoke-DryRun @('--action', 'game-log-off', '--dry-run') 'gamelog-off-this-pc'
+    if ($r.Code -ne 0 -and $r.Code -ne 3) { throw "dry run of switching the game logs off on this PC (exit $($r.Code)): $($r.Text)" }
+    Write-Host "  game logs: $($gameLog.Count) plans and refusals, 6 usage errors"
     $r = Invoke-DryRun @('--action', 'reopen-gpu-path', '--snapshot', $snapshot) 'snapshot-without-dry-run'
     if ($r.Code -ne 2) { throw "a recorded snapshot without --dry-run must be refused (exit $($r.Code))" }
     $r = Invoke-DryRun @('--action', 'reopen-gpu-path', '--dry-run') 'this-pc'
     if (($r.Code -ne 0 -and $r.Code -ne 3) -or -not $r.Text.Contains('dry run: nothing was written')) { throw "dry run on this PC failed (exit $($r.Code)): $($r.Text)" }
     $u = Invoke-DryRun @('--action', 'set-clocks', '--ceiling', '1500', '--dry-run', '--snapshot', $snapshot) 'set-clocks-without-mode'
     if ($u.Code -ne 2) { throw "set-clocks without --mode must be refused as usage (exit $($u.Code))" }
-    foreach ($bad in @(@('cu-mode'), @('cu-mode', '--cu', '32'), @('reopen-gpu-path', '--cu', '40'), @('game-profile', '--image', 'C:\x.exe', '--value', ''))) {
+    # A count outside 24 to 40 in twos, a count option on another action, and a chosen set on another action are
+    # usage errors; the counts in between are valid now (owner, 2026-10-14).
+    foreach ($bad in @(@('cu-mode'), @('cu-mode', '--cu', '33'), @('cu-mode', '--cu', '48'), @('reopen-gpu-path', '--cu', '40'),
+        @('reopen-gpu-path', '--cu-map', '0x10'), @('cu-mode', '--cu', '30', '--cu-map', 'zz'), @('game-profile', '--image', 'C:\x.exe', '--value', ''))) {
         $u = Invoke-DryRun (@('--action') + $bad + @('--dry-run', '--snapshot', $snapshot)) ('usage-' + ($bad -join '-' -replace '[^a-z0-9-]', ''))
         if ($u.Code -ne 2) { throw "--action $($bad -join ' ') must be refused as usage (exit $($u.Code))" }
     }
@@ -482,40 +573,6 @@ namespace BuildGate { public static class Wts {
         }
         # Eight observers at once on an empty record: the lock and the atomic replace leave one valid file with this
         # session's DWM and no temporary files (reviewer 911).
-    # "Record game logs" (src/GameLog.cs): the one QWORD and the folder step, the refusals of a recording time
-    # outside 1..60 minutes, and switching off with nothing recording. The recorded snapshots have no
-    # GameLogUntil, which is the state of a machine where nobody ever switched recording on. The instant written
-    # is this moment, so the gate checks the value name and its type and not the number.
-    $diagKey = 'HKLM\SOFTWARE\amdgpu-wddm\Diagnostics'
-    $gameLog = [ordered]@{
-        'on10'    = @(@('game-log-on', '--minutes', '10'), 0, "set $diagKey GameLogUntil = ", '(QWord)',
-                      'prepare %ProgramData%\amdgpu-wddm\logs\games', 'Users create files', 'prune that folder to 512 MiB',
-                      'Records the driver''s game logs for 10 minutes', 'takes effect: the next time a game starts', 'undo: yes')
-        'on1'     = @(@('game-log-on', '--minutes', '1'), 0, 'game logs for 1 minute,')
-        'on60'    = @(@('game-log-on', '--minutes', '60'), 0, 'game logs for 60 minutes,')
-        'on0'     = @(@('game-log-on', '--minutes', '0'), 3, 'refused: The recording time must be between 1 and 60 minutes.')
-        'on61'    = @(@('game-log-on', '--minutes', '61'), 3, 'refused: The recording time must be between 1 and 60 minutes.')
-        'off'     = @(@('game-log-off'), 3, 'refused: The game logs are not being recorded.')
-    }
-    foreach ($e in $gameLog.GetEnumerator()) {
-        $r = Invoke-DryRun (@('--action') + $e.Value[0] + @('--dry-run', '--snapshot', $snapshot)) "gamelog-$($e.Key)"
-        if ($r.Code -ne $e.Value[1]) { throw "dry run game log $($e.Key): exit $($r.Code), $($e.Value[1]) expected: $($r.Text)" }
-        foreach ($want in $e.Value | Select-Object -Skip 2) {
-            if (-not $r.Text.Contains($want)) { throw "dry run game log $($e.Key): '$want' missing: $($r.Text)" }
-        }
-        if (-not $r.Text.Contains('dry run: nothing was written')) { throw "dry run game log $($e.Key): no closing line" }
-    }
-    # A recording time belongs to game-log-on alone, and switching on without one is not a plan at all.
-    foreach ($bad in @(@('game-log-on'), @('game-log-on', '--minutes', 'ten'), @('game-log-on', '--minutes', '-5'),
-            @('game-log-off', '--minutes', '10'), @('tdr-delay', '--tdr', '10', '--minutes', '10'), @('reset-defaults', '--minutes', '10'))) {
-        $u = Invoke-DryRun (@('--action') + $bad + @('--dry-run', '--snapshot', $snapshot)) ('usage-gamelog-' + ($bad -join '-' -replace '[^a-zA-Z0-9-]', ''))
-        if ($u.Code -ne 2) { throw "--action $($bad -join ' ') must be refused as usage (exit $($u.Code))" }
-    }
-    # The dry run writes nothing, so the state of this PC decides whether switching off is a change or a refusal:
-    # both are a pass, a usage error is not.
-    $r = Invoke-DryRun @('--action', 'game-log-off', '--dry-run') 'gamelog-off-this-pc'
-    if ($r.Code -ne 0 -and $r.Code -ne 3) { throw "dry run of switching the game logs off on this PC (exit $($r.Code)): $($r.Text)" }
-    Write-Host "  game logs: $($gameLog.Count) plans and refusals, 6 usage errors"
         $observations = Join-Path $env:AMDGPU_WDDM_CONTROL_STATE 'dwm-observations.json'
         Remove-Item $observations
         $racers = 1..8 | ForEach-Object {
@@ -572,6 +629,15 @@ if (-not $NoSmoke) {
     $notice = Get-Content $file -Raw -ErrorAction SilentlyContinue
     if ($p.ExitCode -ne 0) { throw "notice smoke (exit $($p.ExitCode)): $notice" }
     Write-Host "  sign-in notice: $((($notice -split "`r?`n") | Where-Object { $_ } | Select-Object -First 1))"
+
+    # The loading window of the start (Launch.cs): both states, the same matrix as the notice, built without being
+    # shown. The same checks, and the guide's picture must be there when the exe carries it.
+    $file = Join-Path $obj 'smoke-loading.txt'
+    $p = Start-Process -FilePath "$Out\amdgpu_wddm_control.exe" -ArgumentList '--smoke-loading', "`"$file`"" -PassThru -WindowStyle Hidden
+    if (-not $p.WaitForExit(120000)) { $p.Kill(); throw 'loading smoke did not exit within 120 s' }
+    $loading = Get-Content $file -Raw -ErrorAction SilentlyContinue
+    if ($p.ExitCode -ne 0) { throw "loading smoke (exit $($p.ExitCode)): $loading" }
+    Write-Host "  loading window: $((($loading -split "`r?`n") | Where-Object { $_ }) -join ', ')"
 
     # A rebuilt page keeps the place the person scrolled to (F1 of the b23 lab round) and the card the person reads
     # keeps its place while a card above it grows (F7 of the second round): the Performance page of the recorded
@@ -632,12 +698,12 @@ if (-not $NoSmoke) {
     if ($failed.Count) { throw "render gates:`n$($failed -join "`n")" }
     Write-Host "  render: $($runs.Count) runs (9 pages, 96-192 DPI, 4 languages, text 150 %, Nagi on by default and two runs with her off, language switch, tuning states, 6 runs over five screen sizes from 800x600 up): no findings ($obj\render)"
 }
-Get-ChildItem $Out -File | ForEach-Object {
-    '{0,9}  {1}  {2}' -f $_.Length, (Get-FileHash $_.FullName -Algorithm SHA256).Hash.Substring(0, 8), $_.Name
-}
 # BD-166: the two native files of this build that the release ships carry their version resource from here. The
 # stamp is the last step, after every gate above has run against the images this build linked.
 & pwsh -NoProfile -File (Join-Path $repo 'tools\build\version-stamp.ps1') -Version $Version -Flavour $Flavour `
     "$Out\bc250control.dll" "$Out\bc250kmd_cli.exe" "$Out\amdgpu_wddm_control.exe"
 if ($LASTEXITCODE -ne 0) { throw 'the version stamp of the control application files failed' }
 
+Get-ChildItem $Out -File | ForEach-Object {
+    '{0,9}  {1}  {2}' -f $_.Length, (Get-FileHash $_.FullName -Algorithm SHA256).Hash.Substring(0, 8), $_.Name
+}

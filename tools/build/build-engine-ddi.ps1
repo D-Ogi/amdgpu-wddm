@@ -12,7 +12,9 @@
 #   With -NativeOnly the script stops here, and it needs no engine DLL and no GPU.
 #   3. Harness library (AMDGPU_WDDM_ENGINE_DDI_HARNESS) and engine-ddi-harness.exe, which plays the runtime and the
 #      shell against the real engine DLL on this PC's GPU (Vulkan loader, first hardware adapter unless -Adapter).
-#   4. Runs, unless -NoRun: the engine DLL's SHA-256 must equal engine_dll_sha256 in engine-abi.json; caps-test.exe
+#   4. Runs, unless -NoRun: the engine DLL's SHA-256 must equal the engine_dll_sha256 that engine-abi.json pins
+#      for -Flavour (release or lab, BD-167; tools/build/engine_abi.py selects it, so neither flavour's DLL can
+#      pass the other's run, and a flavour with no DLL pinned yet stops the run); caps-test.exe
 #      --engine (query_adapter_caps on the real engine), then the harness, and the harness again with
 #      --deferred-replay (every device context replays its lists' engine calls on workers); with -Vvl a further
 #      harness run under the Khronos validation layer (toolchain\vvl) with synchronization validation, which must
@@ -37,14 +39,22 @@ param(
     # Steps 0 to 2 only: the static library the shell links, and its host tests.
     [switch]$NativeOnly,
     # Target architecture: x86 builds the library of the 32-bit (WoW64) shell with vcvarsamd64_x86.bat (common.ps1).
-    [ValidateSet('x64', 'x86')][string]$Arch = 'x64'
+    [ValidateSet('x64', 'x86')][string]$Arch = 'x64',
+    # Which of the two engine DLLs of one source line the runs load (BD-167): the release flavour reads no
+    # diagnostic variable and has no statistics, the lab flavour keeps both. engine-abi.json pins one DLL per
+    # flavour and engine_abi.py selects it, so a lab DLL can never pass a release run.
+    [ValidateSet('release', 'lab')][string]$Flavour = 'release'
 )
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\common.ps1"
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $root = Get-Bc250Root $repo
 $src = Join-Path $repo 'driver\umd\d3d12\engine-ddi'
-$pin = Get-Content -Raw -LiteralPath (Join-Path $src 'engine-abi.json') | ConvertFrom-Json
+$pinPath = Join-Path $src 'engine-abi.json'
+$selector = Join-Path $PSScriptRoot 'engine_abi.py'
+$selected = & python -I $selector --pin $pinPath --flavour $Flavour 2>&1
+if ($LASTEXITCODE -ne 0) { throw "engine-abi.json: no $Flavour pin ($selector): $($selected -join ' ')" }
+$pin = $selected -join "`n" | ConvertFrom-Json
 if (-not $OutputDir) { $OutputDir = Join-Path $root 'scratch\build\d3d12-engine-ddi' }
 # Default locations under the workspace root, from the pin: the fork checkout and the engine DLL's build directory.
 if (-not $EngineSource) { $EngineSource = Join-Path $root ($pin.source_checkout -replace '/', '\') }
@@ -146,9 +156,10 @@ try {
     if ($NoRun) { Write-Host 'build only (-NoRun)'; return }
     if (-not (Test-Path -LiteralPath $EngineDll)) { throw "engine DLL $EngineDll does not exist" }
     $engineSha = (Get-FileHash -Algorithm SHA256 -LiteralPath $EngineDll).Hash
-    if ($engineSha -ne $pin.engine_dll_sha256) {
-        throw "engine DLL $EngineDll has SHA-256 $engineSha; engine-abi.json pins $($pin.engine_dll_sha256)"
-    }
+    # The same selection decides the verdict (engine_abi.py check_engine_dll): the DLL is the one this
+    # flavour pins, or the run stops here. A flavour with no DLL built yet (pending) also stops here.
+    $verdict = & python -I $selector --pin $pinPath --flavour $Flavour --engine-dll $EngineDll 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "engine DLL $EngineDll is not the $Flavour engine: $($verdict -join ' ')" }
 
     function Invoke-Run([string]$Tag, [string]$Exe, [bool]$WithVvl, [string[]]$Extra = @()) {
         $runDir = Join-Path $OutputDir "run-$Tag"
@@ -201,6 +212,7 @@ try {
             validation_first  = @($validation | Select-Object -First 5 | ForEach-Object Line)
             adapter_line      = ($stdout | Select-String -Pattern '^adapter:' | Select-Object -First 1).Line
             engine_abi        = "$($pin.abi_version) $($pin.header_revision), commit $($pin.commit)"
+            engine_flavour    = $Flavour
             engine_sha256     = $engineSha
             executable_sha256 = (Get-FileHash -Algorithm SHA256 (Join-Path $OutputDir $Exe)).Hash
         }

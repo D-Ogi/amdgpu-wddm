@@ -51,12 +51,11 @@
 #include <tlhelp32.h>       // `budget <image>`: a process by its image name
 
 #include "../../../driver/kmd/bc250kmd_escape.h"     // shared with the driver, never copied
+#include "../../../driver/state/client.h"
 #include "../../../driver/kmd/regs.generated.h"      // `read <name>`: the named READ_REG offsets, from gen_regs.py
 #include "../../../third_party/linux-amdgpu/dcn_2_0_1_sh_mask.h"  // `dpaudio`: field masks to decode the reply
 
 #define BC250_DEFAULT_HWID L"PCI\\VEN_1002&DEV_13FE"
-#define BC250_SERVICE_KEY  L"SYSTEM\\CurrentControlSet\\Services\\bc250kmd"
-#define BC250_PARAMETERS   BC250_SERVICE_KEY L"\\Parameters"
 
 // Mirrors enum BC250_STAGE in driver/kmd/bc250kmd.h; tools/win/bc250mon/test_stages.py watches that copy of
 // the same table, and this one is checked against it by tools/win/bc250kmd_cli/test_stages.py.
@@ -1372,11 +1371,11 @@ BC250_CONTROL_API LONG WINAPI Bc250LogRead(ULONG from, BC250_ESCAPE_LOG *data, U
     data->From = from;
     status = TelemetryEscape(data, sizeof(*data));
     if (!NT_SUCCESS(status)) return status;
+    if (data->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) return (LONG)0xC00000BB;
     // BD-168: a driver up to 0.7.216.101 answers NOT_ADMIN with NtStatus 0, and the branch below then
     // reported STATUS_DEVICE_NOT_READY ("the driver is not ready") for a plain lack of administrator
     // rights. Name the refusal here too, so the message is right against an older driver as well.
     if (data->Status == BC250_ESCAPE_STATUS_NOT_ADMIN) return (LONG)0xC0000022;
-    if (data->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) return (LONG)0xC00000BB;
     if (data->Status != BC250_ESCAPE_STATUS_DONE)
         return data->NtStatus ? (LONG)data->NtStatus : (LONG)0xC00000A3;
     if (data->Magic != BC250_ESCAPE_MAGIC || data->Command != BC250_ESCAPE_GET_LOG ||
@@ -2530,7 +2529,7 @@ static int Fbdump(const WCHAR *path)
     return 0;
 }
 
-// ---- stages: the registry ------------------------------------------------------------------------------------
+// ---- stages: the shared service state ------------------------------------------------------------------------------------
 
 static int ReadDword(const WCHAR *key, const WCHAR *name, DWORD *value)
 {
@@ -2538,35 +2537,54 @@ static int ReadDword(const WCHAR *key, const WCHAR *name, DWORD *value)
     return RegGetValueW(HKEY_LOCAL_MACHINE, key, name, RRF_RT_REG_DWORD, &type, value, &size) == ERROR_SUCCESS;
 }
 
-// BD-122: the KMD's reason for the last start that did not reach a started device, from
-// Parameters\StartRecord. LastStage 91 says only that a step of the start failed; this names the step, the
-// NTSTATUS, the time and the driver log lines that ran up to it. It is a registry read, so it answers on a
-// device with Code 43, which cannot answer an escape at all - that is the whole point of the record. Read only.
-static int ReadString(const WCHAR *key, const WCHAR *name, WCHAR *buffer, DWORD bytes)
+static int StageReadError;
+static int ReadState(AMDGPU_WINDOWS_STATE *state, const char *path, const char *name,
+                     void *data, DWORD bytes)
 {
-    DWORD size = bytes, type = 0;
-    buffer[0] = 0;
-    return RegGetValueW(HKEY_LOCAL_MACHINE, key, name, RRF_RT_REG_SZ, &type, buffer, &size) == ERROR_SUCCESS;
+    AMDGPU_STATE_VALUE value = { 0 };
+    DWORD error = AmdgpuClientRead(state, path, name, 0, &value, data, bytes);
+    if (!error && value.status == AMDGPU_STATE_OK) return 1;
+    if (value.status != AMDGPU_STATE_ABSENT) {
+        fprintf(stderr, "state %s/%s: status=%u error=%lu\n", path, name, value.status, error);
+        StageReadError = 1;
+    }
+    return 0;
+}
+static int ReadStateDword(AMDGPU_WINDOWS_STATE *state, const char *path, const char *name, DWORD *value)
+{
+    return ReadState(state, path, name, value, sizeof(*value));
 }
 
-static void StartRecord(void)
+// BD-122: the KMD's reason for the last start that did not reach a started device, from
+// The shared StartRecord. LastStage 91 says only that a step of the start failed; this names the step, the
+// NTSTATUS, the time and the driver log lines that ran up to it. It is a registry read, so it answers on a
+// device with Code 43, which cannot answer an escape at all - that is the whole point of the record. Read only.
+static int ReadString(AMDGPU_WINDOWS_STATE *state, const char *path, const char *name, WCHAR *buffer, DWORD bytes)
 {
-    static const WCHAR *record = BC250_PARAMETERS L"\\StartRecord";
+    buffer[0] = 0;
+    return ReadState(state, path, name, buffer, bytes);
+}
+
+static void StartRecord(AMDGPU_WINDOWS_STATE *state)
+{
+    static const char *record = "StartRecord";
     WCHAR result[32], step[96], sub[96], when[40], detail[400];
     DWORD status = 0, stage = 0, starts = 0, version = 0;
     int failure;
 
-    if (!ReadString(record, L"Result", result, sizeof(result))) {
+    if (!ReadString(state, record, "Result", result, sizeof(result))) {
+        if (StageReadError) return;
         printf("StartRecord  -  (no record: a KMD before 0.7.216.30, or no start has written one)\n");
         return;
     }
-    if (!ReadString(record, L"Step", step, sizeof(step))) wcscpy_s(step, 96, L"-");
-    if (!ReadString(record, L"SubStep", sub, sizeof(sub))) wcscpy_s(sub, 96, L"-");
-    if (!ReadString(record, L"TimeUtc", when, sizeof(when))) wcscpy_s(when, 40, L"-");
-    (void)ReadDword(record, L"Status", &status);
-    (void)ReadDword(record, L"Stage", &stage);
-    (void)ReadDword(record, L"UnconfirmedStarts", &starts);
-    (void)ReadDword(record, L"Version", &version);
+    if (!ReadString(state, record, "Step", step, sizeof(step))) wcscpy_s(step, 96, L"-");
+    if (!ReadString(state, record, "SubStep", sub, sizeof(sub))) wcscpy_s(sub, 96, L"-");
+    if (!ReadString(state, record, "TimeUtc", when, sizeof(when))) wcscpy_s(when, 40, L"-");
+    (void)ReadStateDword(state, record, "Status", &status);
+    (void)ReadStateDword(state, record, "Stage", &stage);
+    (void)ReadStateDword(state, record, "UnconfirmedStarts", &starts);
+    (void)ReadStateDword(state, record, "Version", &version);
+    if (StageReadError) return;
     printf("StartRecord  %ls, step %ls / %ls, status 0x%08lX%s%s\n", result, step, sub, (unsigned long)status,
            StatusName((NTSTATUS)status)[0] ? " " : "", StatusName((NTSTATUS)status));
     printf("             stage %lu %s, at %ls, UnconfirmedStarts %lu, written by 0x%08lX\n", stage,
@@ -2579,23 +2597,22 @@ static void StartRecord(void)
                : "the last start neither failed nor finished: see LastStage and StageHistory above");
         return;
     }
-    if (ReadString(record, L"Detail", detail, sizeof(detail)) && detail[0])
+    if (ReadString(state, record, "Detail", detail, sizeof(detail)) && detail[0])
         printf("             detail %ls\n", detail);
     // The kept ring lines, oldest first, as one REG_MULTI_SZ. Bounded by the driver to 64 lines of 159
     // characters; the buffer here holds more than that, and a longer value is simply read short.
     {
         WCHAR lines[64 * 160 + 2];
-        DWORD size = sizeof(lines), type = 0;
         const WCHAR *p;
 
-        if (RegGetValueW(HKEY_LOCAL_MACHINE, record, L"Log", RRF_RT_REG_MULTI_SZ, &type, lines, &size) != ERROR_SUCCESS)
+        if (!ReadState(state, record, "Log", lines, sizeof(lines)))
             return;
         for (p = lines; *p; p += wcslen(p) + 1) printf("  log        %ls\n", p);
     }
 }
 
 // BD-124: the record the KMD writes when Windows stops a device whose start nothing had confirmed, from
-// Parameters\\StopRecord (guard.c GuardRecordStopBegin and GuardRecordStopDone). It is a registry read, like the
+// The shared StopRecord (guard.c GuardRecordStopBegin and GuardRecordStopDone). It is a registry read, like the
 // start record above, so it answers on a device with Code 43. Three rules of this record differ from the start
 // record's and this reader states each of them in words:
 //   a confirmed start that Windows stops later writes nothing, and a start that failed writes nothing either
@@ -2629,31 +2646,33 @@ static int BootIdOfThisBoot(DWORD *value, const char **source)
     return ReadDword(key, L"BootId", value);
 }
 
-static void StopRecord(void)
+static void StopRecord(AMDGPU_WINDOWS_STATE *state)
 {
-    static const WCHAR *record = BC250_PARAMETERS L"\\StopRecord";
+    static const char *record = "StopRecord";
     WCHAR result[32], step[96], sub[96], when[40], done[40], detail[400];
     DWORD status = 0, stage = 0, startStage = 0, health = 0, boot = 0, lines = 0, version = 0, now = 0;
     const char *nowSource = "";
     int haveBoot, haveNow;
 
-    if (!ReadString(record, L"Result", result, sizeof(result))) {
+    if (!ReadString(state, record, "Result", result, sizeof(result))) {
+        if (StageReadError) return;
         printf("StopRecord   -  (none: a KMD before 0.7.216.39, no unconfirmed start of this boot was stopped,\n");
         printf("                or the last start failed and its reason is the start record above)\n");
         return;
     }
-    if (!ReadString(record, L"Step", step, sizeof(step))) wcscpy_s(step, 96, L"-");
-    if (!ReadString(record, L"SubStep", sub, sizeof(sub))) wcscpy_s(sub, 96, L"-");
-    if (!ReadString(record, L"TimeUtc", when, sizeof(when))) wcscpy_s(when, 40, L"-");
-    if (!ReadString(record, L"StopTimeUtc", done, sizeof(done))) wcscpy_s(done, 40, L"-");
-    (void)ReadDword(record, L"Status", &status);
-    (void)ReadDword(record, L"Stage", &stage);
-    (void)ReadDword(record, L"StartStage", &startStage);
-    (void)ReadDword(record, L"HealthFlags", &health);
-    (void)ReadDword(record, L"LogLines", &lines);
-    (void)ReadDword(record, L"Version", &version);
-    haveBoot = ReadDword(record, L"BootId", &boot);
+    if (!ReadString(state, record, "Step", step, sizeof(step))) wcscpy_s(step, 96, L"-");
+    if (!ReadString(state, record, "SubStep", sub, sizeof(sub))) wcscpy_s(sub, 96, L"-");
+    if (!ReadString(state, record, "TimeUtc", when, sizeof(when))) wcscpy_s(when, 40, L"-");
+    if (!ReadString(state, record, "StopTimeUtc", done, sizeof(done))) wcscpy_s(done, 40, L"-");
+    (void)ReadStateDword(state, record, "Status", &status);
+    (void)ReadStateDword(state, record, "Stage", &stage);
+    (void)ReadStateDword(state, record, "StartStage", &startStage);
+    (void)ReadStateDword(state, record, "HealthFlags", &health);
+    (void)ReadStateDword(state, record, "LogLines", &lines);
+    (void)ReadStateDword(state, record, "Version", &version);
+    haveBoot = ReadStateDword(state, record, "BootId", &boot);
     haveNow = BootIdOfThisBoot(&now, &nowSource);
+    if (StageReadError) return;
     printf("StopRecord   %ls, step %ls / %ls, status 0x%08lX (no reason: StopDevice carries none)\n",
            result, step, sub, (unsigned long)status);
     printf("             stage %lu %s, start stage %lu %s, health flags %lu\n", stage, StageName(stage),
@@ -2662,8 +2681,9 @@ static void StopRecord(void)
     {
         WCHAR generation[32], epoch[32];
 
-        if (!ReadString(record, L"Generation", generation, sizeof(generation))) wcscpy_s(generation, 32, L"-");
-        if (!ReadString(record, L"Epoch", epoch, sizeof(epoch))) wcscpy_s(epoch, 32, L"-");
+        if (!ReadString(state, record, "Generation", generation, sizeof(generation))) wcscpy_s(generation, 32, L"-");
+        if (!ReadString(state, record, "Epoch", epoch, sizeof(epoch))) wcscpy_s(epoch, 32, L"-");
+        if (StageReadError) return;
         printf("             generation %ls, epoch %ls, at %ls, finished %ls, %lu log line(s), ABI 0x%08lX\n",
                generation, epoch, when, done, lines, (unsigned long)version);
     }
@@ -2678,14 +2698,13 @@ static void StopRecord(void)
         printf("             BootId %lu, and this boot's number cannot be read, so the record cannot be placed\n", boot);
     else
         printf("             no BootId in the record, so only its time can place it\n");
-    if (ReadString(record, L"Detail", detail, sizeof(detail)) && detail[0])
+    if (ReadString(state, record, "Detail", detail, sizeof(detail)) && detail[0])
         printf("             detail %ls\n", detail);
     {
         WCHAR kept[64 * 160 + 2];
-        DWORD size = sizeof(kept), type = 0;
         const WCHAR *p;
 
-        if (RegGetValueW(HKEY_LOCAL_MACHINE, record, L"Log", RRF_RT_REG_MULTI_SZ, &type, kept, &size) != ERROR_SUCCESS)
+        if (!ReadState(state, record, "Log", kept, sizeof(kept)))
             return;
         for (p = kept; *p; p += wcslen(p) + 1) printf("  stop log   %ls\n", p);
     }
@@ -2693,86 +2712,57 @@ static void StopRecord(void)
 
 static int Stages(void)
 {
-    HKEY key;
+    AMDGPU_WINDOWS_STATE *state = NULL;
     DWORD stage = 0, starts = 0;
     WCHAR history[1024];
-    DWORD size = sizeof(history), type = 0;
-    LSTATUS s = RegOpenKeyExW(HKEY_LOCAL_MACHINE, BC250_SERVICE_KEY, 0, KEY_READ, &key);
-
-    if (s == ERROR_FILE_NOT_FOUND) {
-        printf("bc250kmd is not installed (no HKLM\\%ls)\n", BC250_SERVICE_KEY);
+    DWORD error = AmdgpuClientOpen(&state, 0);
+    int result = 0;
+    StageReadError = 0;
+    if (error == ERROR_SERVICE_DOES_NOT_EXIST) {
+        printf("bc250kmd is not installed\n");
         return 2;
     }
-    if (s != ERROR_SUCCESS) {
-        fprintf(stderr, "cannot open HKLM\\%ls, error %lu\n", BC250_SERVICE_KEY, (unsigned long)s);
+    if (error) {
+        fprintf(stderr, "cannot open bc250kmd state, error %lu\n", error);
         return 1;
     }
-    RegCloseKey(key);
-
-    printf("service      installed (HKLM\\%ls)\n", BC250_SERVICE_KEY);
-    if (ReadDword(BC250_PARAMETERS, L"LastStage", &stage))
+    printf("service      installed (shared service state)\n");
+    if (ReadStateDword(state, "", "LastStage", &stage))
         printf("LastStage    %lu %s\n", stage, StageName(stage));
-    else
+    else if (!StageReadError)
         printf("LastStage    -  (the driver has not written one yet)\n");
-
-    if (RegGetValueW(HKEY_LOCAL_MACHINE, BC250_PARAMETERS, L"StageHistory", RRF_RT_REG_SZ, &type, history, &size) == ERROR_SUCCESS)
+    if (ReadString(state, "", "StageHistory", history, sizeof(history)))
         printf("StageHistory %ls\n", history);
-    else
-        printf("StageHistory -\n");
-
-    // BD-122: why the last start did not reach a started device, which the two lines above cannot say. Printed
-    // before the counter below, because that one decides this command's exit code and returns.
-    StartRecord();
-    // BD-124: and why Windows stopped a start that did reach a started device, which the start record cannot say.
-    StopRecord();
-
-    if (ReadDword(BC250_PARAMETERS, L"UnconfirmedStarts", &starts)) {
+    else if (!StageReadError) printf("StageHistory -\n");
+    StartRecord(state);
+    StopRecord(state);
+    if (ReadStateDword(state, "", "UnconfirmedStarts", &starts)) {
         printf("starts       %lu unconfirmed%s\n", starts,
                starts >= 2 ? "  (the guard refuses to start: run 'bc250kmd_cli confirm')" : "");
-        return starts >= 2 ? 3 : 0;
-    }
-    printf("starts       -\n");
-    return 0;
+        result = starts >= 2 ? 3 : 0;
+    } else if (!StageReadError) printf("starts       -\n");
+    AmdgpuClientClose(state);
+    return StageReadError ? 1 : result;
 }
 
 static int Confirm(void)
 {
-    HKEY key;
-    DWORD zero = 0, disposition = 0;
-    LSTATUS s = RegOpenKeyExW(HKEY_LOCAL_MACHINE, BC250_SERVICE_KEY, 0, KEY_READ, &key);
-
-    // Never bring the service key into being: an empty Services\bc250kmd would be a puzzle for whoever looks
-    // at the machine next, and this tool is run on machines where the driver is deliberately not installed.
-    if (s == ERROR_FILE_NOT_FOUND) {
-        fprintf(stderr, "bc250kmd is not installed (no HKLM\\%ls), nothing to confirm\n", BC250_SERVICE_KEY);
+    AMDGPU_WINDOWS_STATE *state = NULL;
+    DWORD zero = 0;
+    DWORD error = AmdgpuClientOpen(&state, 1);
+    if (error == ERROR_SERVICE_DOES_NOT_EXIST) {
+        fprintf(stderr, "bc250kmd is not installed, nothing to confirm\n");
         return 2;
     }
-    if (s != ERROR_SUCCESS) {
-        fprintf(stderr, "cannot open HKLM\\%ls, error %lu%s\n", BC250_SERVICE_KEY, (unsigned long)s,
-                s == ERROR_ACCESS_DENIED ? " (is this an elevated prompt?)" : "");
+    if (error) {
+        fprintf(stderr, "cannot open bc250kmd state, error %lu\n", error);
         return 1;
     }
-    RegCloseKey(key);
-
-    s = RegCreateKeyExW(HKEY_LOCAL_MACHINE, BC250_PARAMETERS, 0, NULL, REG_OPTION_NON_VOLATILE,
-                        KEY_SET_VALUE | KEY_QUERY_VALUE, NULL, &key, &disposition);
-    if (s != ERROR_SUCCESS) {
-        fprintf(stderr, "cannot open HKLM\\%ls, error %lu%s\n", BC250_PARAMETERS, (unsigned long)s,
-                s == ERROR_ACCESS_DENIED ? " (is this an elevated prompt?)" : "");
-        return 1;
-    }
-    s = RegSetValueExW(key, L"UnconfirmedStarts", 0, REG_DWORD, (const BYTE *)&zero, sizeof(zero));
-    if (s != ERROR_SUCCESS) {
-        RegCloseKey(key);
-        fprintf(stderr, "cannot write UnconfirmedStarts, error %lu\n", (unsigned long)s);
-        return 1;
-    }
-    // RegFlushKey requires KEY_QUERY_VALUE and returns the persistence status.
-    // Closing the handle or rereading zero is not proof it reached the disk.
-    s = RegFlushKey(key);
-    RegCloseKey(key);
-    if (s != ERROR_SUCCESS) {
-        fprintf(stderr, "cannot persist UnconfirmedStarts = 0, flush error %lu\n", (unsigned long)s);
+    // The common store returns success only after its checked persistence flush.
+    error = AmdgpuClientWrite(state, "", "UnconfirmedStarts", AMDGPU_STATE_DWORD, &zero, sizeof(zero));
+    AmdgpuClientClose(state);
+    if (error) {
+        fprintf(stderr, "cannot persist UnconfirmedStarts = 0, error %lu\n", error);
         return 1;
     }
     printf("UnconfirmedStarts = 0 (flushed to disk)\n");
@@ -3730,7 +3720,7 @@ static int DpmCurve(int argc, WCHAR **argv)
 // which the processor count follows after the next Windows restart. "cpu search [steps]" walks the undervolt one
 // step at a time; the load between the steps is the caller's business, so the wrapper script runs it.
 //
-// The whole surface is off until CpuTune is 1 in the driver's Parameters key. Every write needs an administrator.
+// The whole surface is off until the effective CpuTune setting is 1. Every write needs an administrator.
 #define CPU_ERRORS 7
 C_ASSERT(CPU_ERRORS == BC250_CPU_REQUEST_ERROR_COUNT);   // a new reason must not reach an operator as "?"
 static const char *const g_CpuError[CPU_ERRORS] = {
@@ -3878,7 +3868,7 @@ static int CpuWrite(unsigned long op, const BC250_ESCAPE_CPU *in, const char *na
                    "could only be the P-state top, under the boost. A Windows restart is the way out; the "
                    "undervolt and the temperature cap still work\n");
         else if (c.NtStatus == 0xC0000184ul)
-            printf("# STATUS_INVALID_DEVICE_STATE: CpuTune must be 1 in the driver's Parameters key, and a keep or "
+            printf("# STATUS_INVALID_DEVICE_STATE: the effective CpuTune setting must be 1, and a keep or "
                    "a cancel needs a trial in flight\n");
         if (c.NtStatus == 0xC00000A3ul)
             printf("# STATUS_DEVICE_NOT_READY: the read stage has not answered yet. Run `bc250kmd_cli cpu readback` "
@@ -4386,11 +4376,13 @@ static int Bc250BoardMemoryProbeCommand(void)
 }
 
 #include "waves_command.h"
+#include "state_command.h"
 
 int wmain(int argc, wchar_t **argv)
 {
     if (argc < 2) {
         fprintf(stderr, "usage: bc250kmd_cli info [hardware-id] | list | stages | confirm\n"
+                        "       bc250kmd_cli state catalog | paths | snapshot | get <name> [path] [--override] | set <name> <DWORD> [path] | clear <name> [path]\n"
                         "       bc250kmd_cli health read | health confirm <generation> <epoch>\n"
                         "       bc250kmd_cli waves [saved] [--expect-idle | --expect-pc <hex-start> <hex-end>]\n"
                         "       bc250kmd_cli bc250-board-memory-probe                    (admin; fixed HAL reads only, no CMOS write)\n"
@@ -4429,6 +4421,7 @@ int wmain(int argc, wchar_t **argv)
                         "       default hardware id: %ls\n", BC250_DEFAULT_HWID);
         return 2;
     }
+    if (!_wcsicmp(argv[1], L"state")) return StateCommand(argc,argv);
     if (!_wcsicmp(argv[1], L"cpu")) return Cpu(argc,argv);
     if (!_wcsicmp(argv[1], L"waves")) return WavesCommand(argc,argv);
     if (!_wcsicmp(argv[1], L"bc250-board-memory-probe") && argc == 2) return Bc250BoardMemoryProbeCommand();

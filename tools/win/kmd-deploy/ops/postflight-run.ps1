@@ -6,6 +6,8 @@ param([Parameter(Mandatory)][ValidatePattern('^kmd[0-9]{3}(-(?!1-)[1-9][0-9]*)?-
  [Parameter(Mandatory)][ValidatePattern('^[A-Fa-f0-9]{64}$')][string]$ManifestSha256)
 $ErrorActionPreference='Stop'
 $d="C:\BC250\m15\$Attempt"
+. "$d\kmd-transition\legacy-state.ps1"
+Assert-KmdLegacyState $d
 . "$d\kmd-transition\identity.ps1"
 . "$d\kmd-transition\verify-stage.ps1"
 . "$d\kmd168-transition\invoke-bounded.ps1"

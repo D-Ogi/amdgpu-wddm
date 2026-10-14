@@ -374,11 +374,11 @@ pwsh driver\kmd\test\run_<name>.ps1 ...                                         
 
 ## Firmware
 
-The KMD loads eight PSP firmware files at runtime from `C:\BC250\firmware\` on the target
-(`BC250_PSP_FIRMWARE_DIR`, `driver/kmd/psp.c`): `amdgpu/cyan_skillfish2_{ce,me,mec,mec2,pfp,rlc,sdma,sdma1}.bin`
+The KMD loads eight PSP firmware files from its Driver Store image directory
+(`IoGetDriverDirectory`, `driver/kmd/psp.c`): `amdgpu/cyan_skillfish2_{ce,me,mec,mec2,pfp,rlc,sdma,sdma1}.bin`
 from linux-firmware commit `2b8daaf611fbade74f26a5b58ec1defe6a02f5e0`. `tools/firmware/fetch_firmware.py fetch`
 downloads them over HTTPS from the linux-firmware repository and checks size and SHA-256 against
-`tools/firmware/cyan_skillfish2.json`; `push` copies verified files to the target
+`tools/firmware/cyan_skillfish2.json`. Supply the files through `-FirmwareDir` when you build or install a package
 ([tools/firmware](../tools/firmware/README.md)).
 
 PROVENANCE: linux-firmware, redistributable per LICENSE.amdgpu.
@@ -391,7 +391,7 @@ ssh. The target's working directory is `C:\BC250\`, scratch `C:\BC250\tmp\`.
 | What | On the target | How (reference) |
 |---|---|---|
 | KMD package | driver store | `pnputil /add-driver bc250kmd.inf /install`; every install closes the registry gates ([driver/kmd/README.md](../driver/kmd/README.md), `experiments/E16-full-wddm-stage-a/e16_target.ps1`) |
-| PSP firmware | `C:\BC250\firmware\` | `tools/firmware/fetch_firmware.py push` |
+| PSP firmware | Driver Store, beside the KMD image | Signed package. Installer checks all eight files before staging |
 | D3D UMD (`bc250d3d.dll`, `bc250d3d_zink.dll`) | a directory under `C:\BC250\` | the adapter's class key `UserModeDriverName` names the DLL by full path (`experiments/E26-wddm-desktop/mesa-probe.ps1`) |
 | Vulkan ICD (`vulkan_radeon.dll` + JSON manifest) | a directory under `C:\BC250\` | manifest registered under `HKLM\SOFTWARE\Khronos\Vulkan\Drivers` and in the adapter's `VulkanDriverName` (`experiments/E33-m12-applications/install-system-icd.ps1`) |
 | Zink OpenGL (`opengl32.dll`, `libgallium_wgl.dll`) | next to the application | app-local, no system registration |

@@ -11,12 +11,12 @@
 #include <wchar.h>
 #include "../../../driver/kmd/bc250kmd_escape.h"
 #include "../../../driver/kmd/wave_snapshot.h"
+#include "../../../driver/state/client.h"
 C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_WAVES, Status) == 8);
 C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_WAVES, Version) == 12);
 C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_WAVES, Snapshot) == 32);
 
 #define BC250_DEFAULT_HWID L"fake-adapter"
-#define BC250_PARAMETERS L"fake-parameters"
 static unsigned Checks, Failures, Opens, Closes, Escapes, Reads;
 static BOOL Admin = TRUE, TokenOk = TRUE;
 static int OpenFail;
@@ -80,20 +80,23 @@ static NTSTATUS APIENTRY FakeEscape(const D3DKMT_ESCAPE *escape)
     return EscapeResult;
 }
 
-static LSTATUS APIENTRY FakeRead(HKEY key, LPCWSTR path, LPCWSTR name, DWORD flags,
-                                LPDWORD type, PVOID data, LPDWORD bytes)
+static DWORD WINAPI FakeStateOpen(AMDGPU_WINDOWS_STATE **state, DWORD writable)
+{
+    CHECK(!writable); *state = (AMDGPU_WINDOWS_STATE *)1; return ERROR_SUCCESS;
+}
+static void WINAPI FakeStateClose(AMDGPU_WINDOWS_STATE *state) { CHECK(state == (AMDGPU_WINDOWS_STATE *)1); }
+static DWORD WINAPI FakeRead(AMDGPU_WINDOWS_STATE *state, const char *path, const char *name,
+                             DWORD effective, AMDGPU_STATE_VALUE *value, void *data, DWORD bytes)
 {
     ++Reads;
-    CHECK(key == HKEY_LOCAL_MACHINE);
-    CHECK(wcscmp(path, BC250_PARAMETERS L"\\HangRecovery\\Waves") == 0);
-    CHECK(wcscmp(name, L"Snapshot") == 0);
-    CHECK(flags == RRF_RT_REG_BINARY);
-    CHECK(*bytes == sizeof(Fixture));
-    *type = ReadType;
-    if (ReadResult) return ReadResult;
+    CHECK(state == (AMDGPU_WINDOWS_STATE *)1);
+    CHECK(strcmp(path, "HangRecovery\\Waves") == 0 && strcmp(name, "Snapshot") == 0);
+    CHECK(!effective && bytes == sizeof(Fixture));
+    memset(value, 0, sizeof(*value));
+    value->type = ReadType; value->bytes = ReadBytes;
+    if (ReadResult) { value->status = AMDGPU_STATE_IO; return ReadResult; }
     CHECK(ReadBytes <= sizeof(Fixture));
     if (ReadBytes <= sizeof(Fixture)) memcpy(data, &Fixture, ReadBytes);
-    *bytes = ReadBytes;
     return ERROR_SUCCESS;
 }
 
@@ -118,7 +121,9 @@ static PVOID WINAPI FakeFreeSid(PSID sid) { CHECK(sid == (PSID)(ULONG_PTR)42); r
 #define CheckTokenMembership FakeMember
 #define FreeSid FakeFreeSid
 #define D3DKMTEscape FakeEscape
-#define RegGetValueW FakeRead
+#define AmdgpuClientOpen FakeStateOpen
+#define AmdgpuClientClose FakeStateClose
+#define AmdgpuClientRead FakeRead
 #define printf Capture
 #include "waves_command.h"
 #undef printf
@@ -312,7 +317,7 @@ static void CommandTests(void)
     Reset(0); Oversized = 1; CHECK(WavesCommand(2, plain) == 1);
     Reset(0); Admin = FALSE; CHECK(WavesCommand(2, plain) == 3 && !Opens && !Reads);
     Reset(0); TokenOk = FALSE; CHECK(WavesCommand(3, saved) == 3 && !Opens && !Reads);
-    Reset(1); Fixture.Header.Kind = BC250_WAVE_KIND_PRE_KILL; CHECK(WavesCommand(3, saved) == 0 && Reads == 1 && !Opens);
+    Reset(1); Fixture.Header.Kind = BC250_WAVE_KIND_PRE_KILL; CHECK(WavesCommand(3, saved) == 0 && Reads == 1 && !Opens && !Escapes);
     CHECK(strstr(Output, "historical snapshot; not verified against latest recovery record") != NULL);
     Reset(0); CHECK(WavesCommand(3, saved) == 1);
     Reset(0); ReadBytes = 16; CHECK(WavesCommand(3, saved) == 1);

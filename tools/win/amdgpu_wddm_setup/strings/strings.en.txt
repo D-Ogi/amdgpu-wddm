@@ -27,6 +27,9 @@ elevation.declined|src|-|Setup needs administrator permission to install or repa
 payload.damaged|src|-|This setup file is damaged: the installation files it carries are not the ones it was built with. Nothing was changed. Download the release again.
 payload.already-running|src|-|Setup is already running on this PC. Finish the installation in the window that is open; nothing was changed here.
 payload.folder|src|-|Setup cannot prepare the folder it keeps the installation files in: it belongs to another account on this PC, or it is not a normal folder. Nothing was changed. Remove that folder, which the support file names, and start this file again.
+loading.starting|src|-|Getting setup ready.
+loading.permission|src|-|Windows now asks whether setup may make changes to this PC. Choose Yes to continue.
+loading.unpacking|src|-|Unpacking and checking the installation files. This takes a few seconds.
 
 # ---- welcome ----
 welcome.title|src|-|Install Nagi, the graphics driver for the ASRock BC-250

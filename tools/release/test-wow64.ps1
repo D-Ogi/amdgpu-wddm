@@ -13,6 +13,11 @@
 param([Parameter(Mandatory)][string]$Package, [Parameter(Mandatory)][string]$WorkRoot)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $Package 'installer\common.ps1')
+$layoutManifest = Get-Content -LiteralPath (Join-Path $Package 'manifest.json') -Raw | ConvertFrom-Json
+if (Test-DriverStoreUmdPackage $layoutManifest) {
+    & (Join-Path $PSScriptRoot 'test-driverstore-umd.ps1') -Package $Package -WorkRoot $WorkRoot
+    return
+}
 $fail = 0
 function Check([bool]$Ok, [string]$Text) { if ($Ok) { "  PASS $Text" } else { "  FAIL $Text"; $script:fail++ } }
 # The undecorated export names of a PE image (x86 or x64), read from its export directory.

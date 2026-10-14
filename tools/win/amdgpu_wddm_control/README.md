@@ -15,7 +15,7 @@ terminology, where one English term keeps one Polish word, so each line carries 
 |---|---|
 | Home | One status card with one recommended action, Getting started, recent games, monitor, driver and graphics summaries |
 | Games | One entry per game file name: recent games, stored profiles, graphics settings, the release's defaults and added games. Per game: the D3D12 application profile as grouped check boxes with origin and cost, and the highest shader model. Also the game's own graphics and Vulkan settings (below), Apply/Discard, Undo/Redo and "Recommended" |
-| Graphics | Automatic clocks and the ceiling (1000-2000 MHz on the 100 MHz grid) and the compute unit choice (section 7 of the plan). "Advanced tuning", closed by default: the graphics voltage curve, the processor's clock limit, undervolt and temperature cap, and the processor core count (`docs/design/tuner.md`). Each tuning change is a trial that the driver takes back by itself unless kept. The settings for all games (below). Restore defaults (keep or reset the games) with undo. Sharpening and anti-aliasing as "Coming later" |
+| Graphics | Automatic clocks and the ceiling (1000-2000 MHz on the 100 MHz grid) and the compute unit choice (section 7 of the plan). The number of cores runs from 24 to 40 in twos. Behind "Choose the pairs of cores yourself" sits a map of the four groups of five pairs. There a person turns on the pairs the firmware leaves off, one at a time (owner, 2026-10-14: a board with one or two broken units). "Advanced tuning", closed by default: the graphics voltage curve, the processor's clock limit, undervolt and temperature cap, and the processor core count (`docs/design/tuner.md`). Each tuning change is a trial that the driver takes back by itself unless kept. The settings for all games (below). Restore defaults (keep or reset the games) with undo. Sharpening and anti-aliasing as "Coming later" |
 | Display | The monitors Windows reports. Per monitor: the resolution, refresh rate and GPU scaling from the modes Windows lists. A change stays only when the person keeps it within 15 s (below). Identify and a link to the Windows display settings. HDR and VRR as "Coming later" |
 | Performance | Live load, temperature, clock, video memory, power and fan (every 2 s, only while shown and not minimized), the shader cache sizes. Each row says "No reading" when the driver gives no fresh value: power needs KMD 0.7.215 (the SMU metrics table, RUN_DPM ABI 3), the fan KMD 0.7.213.1. Voltage goes only into the support report. The ray tracing benchmark (below) |
 | Driver | The installed release, whether Windows runs it, the update check (Settings can turn the check at start off) |
@@ -25,6 +25,24 @@ terminology, where one English term keeps one Polish word, so each line carries 
 
 `--recovery` opens a small recovery view that never loads `bc250control.dll`: the installed release, the symptom
 guides, Repair, Restart Windows and the support report.
+
+## Start
+
+The app shows a small loading window first: Nagi, the name of the app and one line of text (owner, 2026-10-14). The
+loading window reads nothing from the computer. When it is on the screen, the app reads the state of the computer on
+a worker thread (`src/WindowReading.cs`: the device through WMI, the driver's answers, the scheduled task, the cached
+update check, the recent launches and the benchmark's game folder) and builds the main window at the same time. The
+main window opens with that reading, and the loading window closes after it (`src/LaunchSequence.cs` holds the order,
+`src/Launch.cs` does it). A start that takes more than 8 s says so and offers to close the loading window. Before
+this change, all of that ran on the thread that draws, before the first picture: on a PC without a BC-250 about
+0.3 s from the start of the process to the loading window, against about 1.1 s to the old first window.
+
+One window per person and session (`src/SingleInstance.cs`). The first start of the window owns the named mutex
+`Local\amdgpu-wddm-control-window`. A later start finds it, sets the event `Local\amdgpu-wddm-control-window-activate`
+and exits 0 without a window. The first start then brings its window to the front: the loading window while it
+still starts, else the main window, restored when it is minimised, or the dialog that is open over it. Only the plain
+start (no arguments) takes part. `--action`, `--start-notice`, `--recovery` and the gates do not.
+`tools/win/app-launch/measure-launch.ps1` measures the time to the first window on the lab.
 
 ## How it talks to the driver
 
@@ -68,7 +86,6 @@ only these names, only under these keys, and only values inside the contract:
 | | `MaxFrameLatency` | DWORD | 1-3 | Low latency: frames ahead |
 | | `PerformanceOverlay` | DWORD | 1 on, 0 off | Performance overlay (DirectX 11 games for now) |
 | | `RenderOnCpu` | DWORD | 1 on, 0 off | Run DirectX 11 on the processor, a last resort. On the Games page. The card for all games shows it only when it is stored |
-| `Graphics` only | `ReportAmdDriverVersion` | DWORD | 1 on, 0 off | Report an AMD driver version (a check box) |
 | `Vulkan`, `Vulkan\Applications\<exe>` | `WsiRoute` | REG_SZ | `dxgi` (default), `gdi` | Vulkan presentation: Modern, Compatibility (not shown now, see below) |
 | | `MemoryOverflow` | REG_SZ | `allow` (default), `strict` | When the VRAM is full: use system memory, or report out of memory (not shown now, see below) |
 
@@ -112,8 +129,8 @@ copy of Quake II RTX that the person already has. The package never holds the ga
 
 Where the game is. The card takes the folder the person chose (`BenchmarkFolder`, section 5 of
 `docs/gui/interfaces.md`) when there is one. Otherwise it reads `SteamPath` of `HKCU\Software\Valve\Steam`, every
-library of `steamapps\libraryfolders.vdf`, and the manifest `steamapps\appmanifest_440900.acf` of each library, and
-takes `steamapps\common\<installdir>` of the first library whose manifest names application 440900. The app parses
+library of `steamapps\libraryfolders.vdf`, and the manifest `steamapps\appmanifest_1089130.acf` of each library, and
+takes `steamapps\common\<installdir>` of the first library whose manifest names application 1089130. The app parses
 that Valve key-value text itself (`Vdf` in `src/Benchmark.cs`). It never reads text that Windows translated. A folder
 counts as a usable copy only with `q2rtx.exe` in it and `demos/q2demo1.dm2` in the directory of `baseq2\pak0.pak`,
 which is the scene the test runs. Without the scene the card says so and offers nothing to measure. With no copy at
@@ -238,11 +255,13 @@ observed in this session while the GPU route is selected.
 | `set-clocks --mode 1\|unset --ceiling N\|unset` | `DpmMode` 1 or removed, `DpmMaxMHz` N or removed (the Performance page) | next restart (offered) | as above, or a mode other than 1 (the fixed clock is the unchecked default) |
 | `reset-defaults [--games keep\|reset]` | the manifest's defaults of `EnableGpuPresentBlit`, `EnableCddDwmInterop`, `DpmMode`, `DpmMaxMHz` and `DwmForceCpu`; delete `InteropClosedReason`; the release's graphics cores. The release's `CpuTune` when the stored value is another one or absent, and `CpuTune` deleted when the release names none. Every graphics setting for all games removed. With `--games reset`, every game profile set to the release's recommendation or removed, and every game's graphics settings removed with their empty keys | next restart (offered) | the manifest has no `"defaults"`, or one is missing or out of range; `--games reset` without the release's game list; all at their defaults already |
 | `undo` | the values the newest undoable backup found (not per-game changes, not the graphics-core part) | next restart (offered), or the next game start when it puts back only graphics settings | nothing to undo; the backup names a value outside the list; it would put DWM on the GPU route with the switches closed |
-| `cu-mode --cu 24\|40` | the graphics-core values through `CuMode.Plan` (plan section 7). `CuMode` is written as 24 or 40, and never deleted (BD-077). A deleted value is a key the release installer never configured, so it writes the release default 40 over it. An earlier confirmation and mask go. A chosen 24 takes the driver's own `CuModeClosedReason` with it. Not undoable: the old values are kept for diagnosis | next restart (offered) | no choice. The stored state cannot be read. The choice is there already: a stored 24 with no record and nothing left over |
+| `cu-mode --cu 24\|26\|...\|40 [--cu-map <hex>]` | the graphics-core values through `CuMode.Plan` (plan section 7). The number of cores is 24 to 40 in twos, because the hardware switches them on in pairs. 24 is the stock path. Every number above it is `CuMode` 40 with a `CuDisableWgp` mask: the documented default set of that number, or the set `--cu-map` names (docs/design/cu-mode.md). `CuMode` is written as 24 or 40, and never deleted (BD-077). A deleted value is a key the release installer never configured, so it writes the release default over it. An earlier confirmation goes. `CuModeChosen` records the whole request, so the next upgrade keeps the number a person asked for. A chosen 24 takes the driver's own `CuModeClosedReason` with it. Not undoable: the old values are kept for diagnosis | next restart (offered) | no choice. The stored state cannot be read. The mask names cores the firmware of the board keeps on, or leaves another number of cores than `--cu`. A chosen set without a reading of the board. The choice is there already: the same request with its record already on the key |
 | `cu-confirm` | the start-health confirmation of a 40-core start | at once | the driver is not running; no 40-core start waits |
 | `game-profile --image <exe> [--value <list>] [--gfx <settings>]` | `Experiment` of `HKLM\SOFTWARE\amdgpu-wddm\D3D12\Applications\<exe>` (an empty list removes the key), and the game's graphics settings (`Name=value` or `Name=unset`, comma-separated) | next start of the game | not a file name, not a catalog list, not a list of settings in the contract, the settings cannot be read, or stored already |
 | `game-undo\|game-redo --image <exe>` | the game's values before its newest change (undo) or before its newest undo (redo), its graphics settings included | next start of the game | nothing to undo or redo for that game |
 | `graphics-defaults --gfx <settings>` | the graphics settings for all games under `Graphics` and `Vulkan` (as `--gfx` above) | next game start | not a list of settings in the contract, the settings cannot be read, or stored already |
+| `game-log-on --minutes N` | `GameLogUntil` of `HKLM\SOFTWARE\amdgpu-wddm\Diagnostics` (REG_QWORD, the UTC FILETIME at which recording stops), and the folder `%ProgramData%\amdgpu-wddm\logs\games` with its access list, pruned to 512 MiB | next game start | N is not 1-60, or the value cannot be read |
+| `game-log-off` | delete `GameLogUntil` | next game start | nothing is recording, or the value cannot be read |
 | `restart-compositor --accept-bd060` | nothing; stops the active session's DWM, Windows starts a new one (operator escape, not in the window, not undoable) | at once | `--accept-bd060` is missing |
 
 The only values any action or undo may write are those in the table (`Recovery.Allowed`): never the temperature
@@ -255,25 +274,6 @@ since undo applies these files), writes, logs every step to `control-actions.log
 value back (a failed write restores the backup at once) and reports the result. Exit codes: 0 done, 1 failed,
 2 usage, 3 refused, 5 needs administrator (4, "fell back to the CPU route", belonged to the DWM watchdog of 0.3 and
 earlier, which restarted DWM).
-
-### Operator escape: restart-compositor
-
-For a desktop that does not respond (no window draws, no input) when Windows cannot be restarted the normal way, an
-operator can restart the desktop compositor from an elevated prompt or over SSH:
-| `game-log-on --minutes N` | `GameLogUntil` of `HKLM\SOFTWARE\amdgpu-wddm\Diagnostics` (REG_QWORD, the UTC FILETIME at which recording stops), and the folder `%ProgramData%\amdgpu-wddm\logs\games` with its access list, pruned to 512 MiB | next game start | N is not 1-60, or the value cannot be read |
-| `game-log-off` | delete `GameLogUntil` | next game start | nothing is recording, or the value cannot be read |
-
-```powershell
-amdgpu_wddm_control.exe --action restart-compositor --accept-bd060 --out escape.txt
-```
-
-Without `--accept-bd060` the action is refused (exit 3). It changes no setting: for the CPU route after the restart,
-run `desktop-cpu` first. The helper records the running DWM and opens one handle to it (query, terminate and
-synchronize access), checks the process id, session, creation time and that it still runs through that handle, and
-terminates that same handle; any mismatch refuses and stops nothing. It then waits up to 20 s for a DWM in the same
-session created after the stopped one, records it for that session and logs both. Warning:
-after a DWM restart some Windows 11 apps, for example the Explorer command bar and Task Manager, can ignore mouse
-clicks until Windows restarts (BD-060). Restart Windows as soon as you can. The window never offers this action.
 
 ### Record game logs
 
@@ -292,6 +292,23 @@ Three bounds hold a switch somebody forgets: the instant (the sink checks it on 
 the folder pruned to 512 MiB oldest-first before each recording starts. A support report takes the newest five
 files, at most 20 MiB in total, redacted like every other entry, with a `game-logs/README.txt` that lists what it
 took and what it left out. An `AMDGPU_WDDM_LOG` a process already carries always wins over the switch.
+
+### Operator escape: restart-compositor
+
+For a desktop that does not respond (no window draws, no input) when Windows cannot be restarted the normal way, an
+operator can restart the desktop compositor from an elevated prompt or over SSH:
+
+```powershell
+amdgpu_wddm_control.exe --action restart-compositor --accept-bd060 --out escape.txt
+```
+
+Without `--accept-bd060` the action is refused (exit 3). It changes no setting: for the CPU route after the restart,
+run `desktop-cpu` first. The helper records the running DWM and opens one handle to it (query, terminate and
+synchronize access), checks the process id, session, creation time and that it still runs through that handle, and
+terminates that same handle; any mismatch refuses and stops nothing. It then waits up to 20 s for a DWM in the same
+session created after the stopped one, records it for that session and logs both. Warning:
+after a DWM restart some Windows 11 apps, for example the Explorer command bar and Task Manager, can ignore mouse
+clicks until Windows restarts (BD-060). Restart Windows as soon as you can. The window never offers this action.
 
 ```powershell
 amdgpu_wddm_control.exe --action reopen-gpu-path --dry-run --out plan.txt    # states and plan, nothing written, no UAC
@@ -394,7 +411,9 @@ the state BD-059 leaves behind on KMD 0.7.197, against its expected writes or re
 refused; one dry run of this PC; where the build is not elevated, one real run that must stop with exit 5 and still
 write `--out`), `--smoke-recovery <file>` (the recovery view built without a window; fails when `bc250control.dll`
 is loaded), `--smoke-perf <file>` (the window built hidden: no live timer, no ticks, no animation frame, start under
-5 s, private memory under 300 MB) and `--smoke-render <dir> <scale> [--lang xx] [--text-scale f] [--no-nagi]
+5 s, private memory under 300 MB), `--smoke-loading <file>` (the loading window in both its states, four
+languages, four scales, text at 100, 150 and 225 %, a 1024x768 and a large screen, with the checks of the sign-in
+notice) and `--smoke-render <dir> <scale> [--lang xx] [--text-scale f] [--no-nagi]
 [--switch-to xx] [--fixture <snapshot.json>] [--work-area <w>x<h>]` in 39 runs: four languages at 1, 1.25, 1.5 and 2, with
 `test/snapshot-bd059.json` and the tuning snapshots as the fixtures, text at 150 %, two runs with the guide
 character off (she is on in every other run, as she is after an install), two language
@@ -409,6 +428,21 @@ panel is in the window, the side panel shows on a small screen or is missing on 
 (G-SMALL), the window is wider or taller than the screen it is drawn for or its page does not follow the column
 left after the window was clamped (G-ORDER), or a language switch leaves old texts behind. The unit tests also check
 every string table: each id in each language, no stale translation (G-STR), no internals in the texts (G-NOINT).
+
+Two more gates hold what the start window flash of tester.31 rc4 taught (fact M898):
+
+- `--smoke-labels <file>` builds every window and page without showing it: the main window with this PC's state and
+  with the three recorded snapshots, the sign-in notice, the loading window, the dialogs and the recovery view. It
+  fails on a `Label` with AutoSize off and a `Dock`, because `Label.AdjustSize` gives such a label its requested size
+  (100x23) at each change of its text before the parent docks it again. On the labels whose text a timer changes, it
+  also traces the window positions while their digits change, and fails on any size other than the final one. It
+  passes only when its negative control (the rc4 window, a docked Label) fails and its positive control (the
+  application's own label) passes. `tools/quality/winforms_labels.py` reads the same layout in the PowerShell and C#
+  of the rest of the repository.
+- The image does not depend on the line ends of the checkout. `csc` embeds the string tables and `app.manifest` byte
+  for byte, so the build embeds copies of them with LF line ends. Step 3b builds the image again from copies of the
+  sources with every text input in CRLF and in LF and compares the bytes. A control build with the CRLF tables as
+  given must differ.
 
 ### The icon of the application
 

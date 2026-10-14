@@ -388,7 +388,7 @@ lost, as before.
 Killing at watchdog time would cut the freeze from about 10 s to the watchdog's own budget. It would also turn the
 hang into an ordinary `DMA_COMPLETED`: the guilty application would keep its device and read garbage. Only a
 successful `DxgkDdiResetEngine` lets dxgkrnl put the guilty device into the error state while the system device
-carries on. The watchdog therefore still only closes the ring and records its register snapshot.
+carries on. Since BD-152, the private timer records diagnostics without closing the ring.
 
 ## The private submit watchdog
 
@@ -405,46 +405,46 @@ step after the first is unconditional, in both captured boots. **A false trip of
 frame. It is a bugcheck.** The analysis is `scratch/bd114/ANALYSIS.md` (local, not in this repository). The
 decisions are `driver/kmd/submit_watchdog.h` and the host suite is `test/submit_watchdog_test.c`.
 
-### The budget is a setting, and it is never shorter than the OS's
+### Diagnostic threshold, independent of OS TDR (BD-152)
 
-The OS measures execution time itself and owns recovery: "The GPU scheduler ... detects when the GPU takes more
-than the permitted amount of time to execute a particular task ... The preempt operation has a 'wait' timeout,
-which is the actual TDR timeout" (`display/timeout-detection-and-recovery.md`), and `TdrDelay` "specifies the
-number of seconds that the GPU can delay the preempt request from the GPU scheduler ... 2 seconds is the default
-value" (`display/tdr-registry-keys.md`). The private budget is conservatively floored at that duration. Its epoch differs: Windows waits from
-its preemption request, while this watchdog measures head admission and last observed activity. Adding 2 s does
-not establish which timeout fires first. Either ordering must preserve the recovery protocol.
+Both private timers are diagnostic-only. They never close admission, discard
+deferred work, complete a fence or acknowledge preemption because time elapsed.
+Windows owns the preemption clock and TDR. The KMD does not read the OS
+`TdrDelay` registry value. The GUI still owns that Windows setting, with the
+owner's 10 s default.
 
-`SubmitWatchdogMs` is a REG_DWORD under the service's `Parameters` key, read once in `WddmStart` the way
-`HangRecoveryMode` is. The INF does not write it, so the shipping case is the absent value, and the absent value
-is `TdrDelay` plus a 2 s margin: 12 s on the lab, where the GUI writes `TdrDelay` 10, and 4 s on a machine that
-has no `TdrDelay` at all. `TdrDelay` is read from Windows' own
-`HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers` through `GuardReadGraphicsSetting`, which opens that
-key for `KEY_READ` alone. An operator's own value is taken as asked, clamped to five minutes, and **raised to
-`TdrDelay` if it is shorter** - a value of 500 here would put BD-114 back, so it cannot be set. The start says
-which of the three happened:
+`SubmitWatchdogMs` now sets only the diagnostic threshold. Absence or zero uses
+12000 ms. Values from 1000 through 300000 ms are accepted. Any other value uses
+the diagnostic default and is logged as invalid. A legacy override cannot
+authorize a private timeout fault. These bounds do not predict OS expiry.
+The start and summary identify diagnostic schema v2 and report OS TdrDelay as
+unavailable. The old timeout counters count observations under this schema,
+not failures or resets.
 
-    wddm: submit watchdog 12000 ms (TdrDelay 10000 ms, setting 0, default), looks for progress every 250 ms
+Node 0 captures at most one snapshot per software head and recovery epoch. It
+continues sampling and accepting work until a real error or the OS stops it.
+Node 1 records at most one observation for each pending paging packet. Neither
+timer fabricates completion. A late hardware fence can still retire normally.
+Stopping, resetting and a changed head suppress stale observations. The lock
+and timer cancellation protocol remain in force.
 
-The five-minute clamp belongs to the value somebody asked for, and only to it. `TdrDelay` itself is not clamped
-to five minutes and the floor is applied last, so the invariant is "never shorter than `TdrDelay`" and not "never
-shorter than `min(TdrDelay, 300 s)`": with `TdrDelay` 400 s the budget is 400 s (402 s when the setting is
-absent). This compares durations, not absolute expiry times. The two clocks start at different events. The only clamp on `TdrDelay` is `BC250_SUBMIT_TDR_MAX_MS`, which exists so that the milliseconds
-plus the margin still fit in a `ULONG`. `run_submit_watchdog.ps1` holds that order with `-ClampTdrToBudgetMax`,
-and the floor test compares the budget with the OS's own wait (`TdrDelay` x 1000) rather than with this driver's
-own copy of it, because a comparison against the copy cannot see a clamp inside the copy.
+The 500 ms `BC250_WDDM_HOLD_DEADLINE_MS` still bounds a CPU wait in
+`SubmitCommandVirtual`. Its refusal can still close the node. This separate
+BD-114 limitation remains. The 600 ms `BC250_WDDM_STOP_DRAIN_MS` also remains.
+Neither wait grows with the diagnostic threshold.
 
-Node 1 (paging) gets the same budget. Its hang class is not BD-114's, but its refusal path is the same one-way
-door to a 0x116, and the argument does not care which ring the packet is on. Two bounds keep a constant of their
-own and are deliberately NOT the watchdog's budget. `BC250_WDDM_HOLD_DEADLINE_MS` (500 ms) bounds a CPU wait
-inside `SubmitCommandVirtual`, on a dxgkrnl worker thread, and letting it grow to a ten-second budget would block
-that thread for ten seconds. `BC250_WDDM_STOP_DRAIN_MS` (600 ms) bounds the drain of `WddmStop`, which must not
-wait out a long budget. A held submission that runs out of its 500 ms still closes the node, so that is a
-remaining instance of the same class, and it is in the "Limits" list below.
+Host checks compile the actual node-0 and node-1 checks with simulated hardware.
+They cover repeated expiry, admission after observation, late completion,
+stop/reset suppression and the existing recovery epoch protocol. Lab acceptance
+is separate: dense HIP/Vulkan prefill at `-ub 512`, long-packet retirement,
+Q2RTX and RotTR. A deliberate hang requires its own scheduled trial.
+
+Contract: [Timeout detection and recovery](https://learn.microsoft.com/en-us/windows-hardware/drivers/display/timeout-detection-and-recovery).
+Local source revision: MicrosoftDocs/windows-driver-docs `110f60ea`.
 
 ### The observation window restarts when activity changes
 
-The budget alone is a floor, not an answer. The old watchdog had one input, wall clock, so it could not tell a
+The threshold alone does not establish a hardware fault. The old watchdog had one input, wall clock, so it could not tell a
 healthy job from a dead one at all. The DPC now looks for progress every `min(budget / 4, 250)` ms and re-arms
 itself, and what it looks at is a 64-bit token mixed out of the things that move while a node-0 packet is healthy:
 the submission fence slot the command processor writes, the ring read pointer `CP_RB0_RPTR`, and the `CP_IB1` and
@@ -606,12 +606,11 @@ calls `GfxReopenAfterAbort`. A new epoch starts, `READY` returns with the engine
 because visibility and mode belong to the display and the hang never touched them, and completions count again,
 so the flags reach a healthy boot's value once the usual ready age and freshness hold.
 
-The two orderings of the hang both end in a new epoch. `Bc250SubmitBudgetMs` is never shorter than `TdrDelay`
-(`driver/kmd/submit_watchdog.h`), so dxgkrnl usually reaches `ResetEngine` before our own latch fires. The
-witness is then still open and there is no close to undo, but the interval it reports contains a GPU hang that
-no epoch recorded, so the recovered commit ends that interval as well: a new epoch, no completions, the ready
-age re-clocked, `Closed` untouched. The KMD log says which of the three happened, in one line with the new
-epoch: reopened, still open, or closed by a fault of its own.
+Since BD-152 the private timer does not close the witness. An OS recovery still
+starts a new epoch: it clears completion freshness and resets the ready age.
+An independent real fault remains sticky. The preserved recovery policy can
+distinguish an open witness from a close owned by a pending reset. Elapsed-time
+diagnostics no longer produce that close.
 
 Five properties hold by construction:
 

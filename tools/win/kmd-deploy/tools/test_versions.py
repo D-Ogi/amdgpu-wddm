@@ -71,6 +71,9 @@ def pe(image_byte, cert, trailing=b''):
 
 
 def synthetic():
+    for marker in ('DefaultsV2', 'AmdgpuStateCatalog', 'amdgpu-state.bin'):
+        check('shared state package is refused before source inspection: ' + marker,
+              refused(k.check_detector, marker, None, None, 'candidate', contains='legacy transition kit'))
     # parse_version: 0.7.R.B, canonical decimal fields, B >= 1.
     check('0.7.175.1 is (175, 1)', k.parse_version('0.7.175.1', 't') == (175, 1))
     check('0.7.216.16 is (216, 16)', k.parse_version('0.7.216.16', 't') == (216, 16))

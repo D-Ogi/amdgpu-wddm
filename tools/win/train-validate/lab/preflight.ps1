@@ -15,14 +15,16 @@ $ErrorActionPreference = 'Continue'
 $bad = @()
 $inst = [string](Get-ItemProperty 'HKLM:\SOFTWARE\amdgpu-wddm\Release' -Name InstallRoot).InstallRoot
 $cli = Join-Path $inst 'tools\bc250kmd_cli.exe'
-$par = 'HKLM:\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters'
+$stateReader = Join-Path $inst 'tools\state-reader.ps1'
+if (-not (Test-Path -LiteralPath $stateReader)) { throw 'This train validator requires the schema-2 state reader' }
+. $stateReader
 $boot = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime
 "utc $([DateTime]::UtcNow.ToString('o')) boot $($boot.ToUniversalTime().ToString('o')) uptime_s $([Math]::Round(([DateTime]::Now - $boot).TotalSeconds, 1))"
 "installroot $inst"
 $health = (& $cli health read 2>&1) -join ' '
 "health: $health"
 if ($health -notmatch 'flags=15') { $bad += 'start health is not flags=15' }
-$p = Get-ItemProperty $par -ErrorAction SilentlyContinue
+$p = Read-DriverStateValues -Cli $cli
 "params: CuMode=$($p.CuMode) CuModeLastApplied=$($p.CuModeLastApplied) CuModeConfirmed=$($p.CuModeConfirmed) DpmMode=$($p.DpmMode) DpmMaxMHz=$($p.DpmMaxMHz) DpmIdleMHz=$($p.DpmIdleMHz) HangRecoveryMode=$($p.HangRecoveryMode)"
 if ([int]$p.CuModeConfirmed -ne $Cu) { $bad += "CuModeConfirmed is $($p.CuModeConfirmed), wanted $Cu" }
 if ($null -ne $p.DpmMode -and [int]$p.DpmMode -eq 0) { $bad += 'DpmMode is 0: the clock control is switched off (a bugcheck leaves it so)' }

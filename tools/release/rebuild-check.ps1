@@ -196,7 +196,7 @@ try {
         $runs = @(@{ tag = 'first'; base = Join-Path $dir 'a' })
         if ($Twice) { $runs += @{ tag = 'second'; base = Join-Path $dir 'bb' } }
         foreach ($r in $runs) {
-            $r.map = @{ src = Join-Path $r.base 'src'; out = Join-Path $r.base 'out'; root = $Root; inputs = @{} }
+            $r.map = @{ src = Join-Path $r.base 'src'; out = Join-Path $r.base 'out'; root = $Root; inputs = @{}; version = $Version; flavour = $Flavour }
             $r.recipeTree = if ($b.repo -eq $recipeRepo -and $recipeCommit -eq $b.commit) { $r.map.src } else { Join-Path $r.base 'recipe' }
             if ($b.inputs) {
                 foreach ($n in $b.inputs.Keys) {

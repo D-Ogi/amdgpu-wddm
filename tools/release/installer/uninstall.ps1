@@ -20,6 +20,7 @@ $package = Split-Path -Parent $here
 . (Join-Path $here 'system-tuning.ps1')
 if ($RestoreSystemTuning -and $KeepSystemTuning) { throw 'Choose either -RestoreSystemTuning or -KeepSystemTuning.' }
 . (Join-Path $here 'components.ps1')
+. (Join-Path $here 'state-lifecycle.ps1')
 $script:DryRunMode = [bool]$DryRun
 # Host tests only: a dry run can read its installer state from a test folder (as install.ps1).
 if ($DryRun -and $env:AMDGPU_WDDM_TEST_STATE_DIR) {
@@ -32,6 +33,12 @@ if ([Environment]::Is64BitOperatingSystem -and -not [Environment]::Is64BitProces
     exit $LASTEXITCODE
 }
 if (-not $DryRun -and -not (Test-IsAdmin)) { Invoke-SelfElevation -ScriptPath $MyInvocation.MyCommand.Path -Bound $PSBoundParameters }
+if(-not $DryRun) {
+    [void][IO.Directory]::CreateDirectory($script:StateDir)
+    Set-StateDirAccess
+    try {$script:UninstallLock=New-Object IO.FileStream -ArgumentList (Join-Path $script:StateDir 'engine.lock'),([IO.FileMode]::OpenOrCreate),([IO.FileAccess]::ReadWrite),([IO.FileShare]::None)}
+    catch {throw 'another installer, repair or rollback is changing this installation; resume uninstall when it finishes'}
+}
 if (-not $DryRun) { $script:LogPath = Join-Path $env:TEMP ('amdgpu-wddm-uninstall-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ') + '.log') }
 
 Write-Host "amdgpu-wddm uninstaller$(if ($DryRun) { ' - DRY RUN, nothing will be changed' })" -ForegroundColor White
@@ -47,6 +54,18 @@ if ($lab.Count) { Write-Warn2 "a development-lab installation ($($lab -join ', '
 # Inventory must succeed before the first change. A failed read is not an empty driver store.
 try { $pkgs = @(Get-OurDriverPackages) }
 catch { Write-Fail "Driver-store inventory could not be read. No removal was started: $($_.Exception.Message)"; exit 6 }
+$removalDevice=$null
+if($pkgs.Count -or ($state -and $state.driver_state_removal)) {
+    $devices=@(Get-Bc250Device)
+    if($devices.Count -ne 1){throw 'state archive requires exactly one identified target device'}
+    $removalDevice=[string]$devices[0].DeviceID
+    if(-not $state){throw 'state archive requires the existing installer identity; no removal was started'}
+    $product=Get-ProductPackageQuad ([string]$state.package_version)
+    Invoke-Change 'freeze settings, stop the device, and durably archive final state before removing any component' {
+        Save-DriverStateBeforeRemoval -State $state -Worker (Join-Path $root 'tools\amdgpu-state-installer.exe') `
+            -Product $product -Device $removalDevice -Save {param($s) Save-InstallState $s}
+    } | Out-Null
+}
 # Running the uninstaller IS the answer (owner, 2026-10-12: "Przestan wymagac potwierdzen od uzytkownika"): nothing
 # here asks the user to type YES for what they started. -Yes stays accepted, so every script written for the older
 # uninstaller keeps working, and the refusals that protect a machine (a development-lab installation above, an
@@ -170,7 +189,7 @@ $dev = @(Get-Bc250Device)
 if ($dev.Count -eq 1) {
     $key = Get-DeviceDriverKey -InstanceId $dev[0].DeviceID
     $svc = Get-DeviceServiceName -InstanceId $dev[0].DeviceID
-    if ($key -and $svc -eq $script:ServiceName) {
+    if ($key -and $svc -eq $script:ServiceName -and -not (Get-DriverPackageRoot -ClassKey $key)) {
         Invoke-Change "remove UserModeDriverName, UserModeDriverNameWow, VulkanDriverName and VulkanDriverNameWow from $key" {
             foreach ($n in 'UserModeDriverName', 'UserModeDriverNameWow', 'VulkanDriverName', 'VulkanDriverNameWow') { Remove-ItemProperty -LiteralPath $key -Name $n -ErrorAction SilentlyContinue }
         } | Out-Null
@@ -187,6 +206,7 @@ if ($dev.Count -eq 1) {
 $glKeys = @(Get-OpenGlRegisteredClassKeys -PreferredKey $(if ($dev.Count -eq 1) { Get-DeviceDriverKey -InstanceId $dev[0].DeviceID } else { $null }))
 if (-not $glKeys.Count) { Write-Info 'the OpenGL ICD registration: no OpenGL value in any display class key' }
 foreach ($glKey in $glKeys) {
+    if (Get-DriverPackageRoot -ClassKey $glKey) { continue } # PnP owns this package's HKR values.
     $glNow = Read-RegistryValues $glKey
     $glPrev = @()
     if ($state -and $state.PSObject.Properties['opengl_icd_previous'] -and $state.opengl_icd_previous) { $glPrev = @($state.opengl_icd_previous) }
@@ -257,18 +277,18 @@ if (-not $DryRun) {
         exit 6
     }
 }
+if($removalDevice) {
+    Invoke-Change 'enable the archived, removed device for its inbox display driver' {
+        $enabled=Invoke-Native pnputil.exe @('/enable-device',$removalDevice)
+        if($enabled.code -notin @(0,3010)){throw "inbox device enable failed: $($enabled.text)"}
+    } | Out-Null
+}
 Invoke-Change 'pnputil /scan-devices (bind the GPU to its inbox driver now)' { [void](Invoke-Native pnputil.exe @('/scan-devices')) } | Out-Null
 $serviceKey = Split-Path $script:ParametersKey
 Invoke-Change "remove the bc250kmd service entry and its settings in $serviceKey (sc.exe delete; finished at the restart if the driver is still loaded)" {
     if (Get-Service -Name $script:ServiceName -ErrorAction SilentlyContinue) { [void](Invoke-Native sc.exe @('delete', $script:ServiceName)) }
-    # The settings of the driver live under this key (Parameters: the gates, the DPM values, CuMode, the tuning the
-    # control application wrote). sc.exe delete takes the whole key, but a key without the values that make it a
-    # service is not a service to sc.exe, and a value left there would become the "tester's own setting" that the next
-    # install keeps (Get-RegistryDefaultPlan). So the key goes here whatever sc.exe did.
-    if (Test-Path -LiteralPath $serviceKey) {
-        Remove-Item -LiteralPath $serviceKey -Recurse -Force -ErrorAction SilentlyContinue
-        if (Test-Path -LiteralPath $serviceKey) { Write-Warn2 "$serviceKey is still there: Windows removes it at the restart that ends this uninstall. Run uninstall.cmd again after the restart if a new install reports settings of this one." }
-    }
+    # SCM owns S and Parameters lifetime. The verified protected final archive and
+    # independent original board record remain under DriverData after deletion.
 } | Out-Null
 
 Write-Step 'Files'
@@ -300,7 +320,9 @@ foreach ($s in @(@{ dir = 'System32'; flag = 'stub_existed' }, @{ dir = 'SysWOW6
 }
 $fwExisted = $false
 if ($state -and $state.firmware_dir_existed) { $fwExisted = $true }
-if (-not $fwExisted) {
+if ($state -and $state.firmware_delivery -ceq 'driver-store-v1') {
+    Write-Info 'firmware belongs to the driver package; no separate firmware folder is removed'
+} elseif (-not $fwExisted) {
     Invoke-Change "remove $($script:FirmwareInstallDir)" { Remove-PathOrSchedule $script:FirmwareInstallDir } | Out-Null
     $bcExisted = $false
     if ($state -and $state.bc250_dir_existed) { $bcExisted = $true }

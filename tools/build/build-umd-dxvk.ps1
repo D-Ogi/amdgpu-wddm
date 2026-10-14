@@ -71,11 +71,11 @@ try {
         Write-Host 'Build only: no configuration, engine or ICD is installed or selected.' 
     } finally { Pop-Location }
 } finally { Restore-ProcessEnvironment $saved }
-
-
-
 # BD-166: the shipped file carries its version resource from this build, the step that knows what it produced.
 Set-Bc250VersionStamp -Repo $repo -Files @((Join-Path $OutputDir 'amdgpu_wddm_d3d11.dll')) -Names @('amdgpu_wddm_d3d11.dll') `
     -Version $Version -Flavour $Flavour
 '{0}  amdgpu_wddm_d3d11.dll' -f (Get-FileHash -LiteralPath (Join-Path $OutputDir 'amdgpu_wddm_d3d11.dll')).Hash
+
+
+
 

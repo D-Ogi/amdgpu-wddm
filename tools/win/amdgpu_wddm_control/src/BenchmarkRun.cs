@@ -48,18 +48,17 @@ namespace AmdgpuWddmControl
             }
             System.Threading.ThreadPool.QueueUserWorkItem(_ =>
             {
-                try { Run(install, driver, report); }
-                catch (Exception) { }
-                finally
+                // BD-174: the failure of a run is recorded and told to the person. Crash.Guard never throws, so
+                // the run is always finished below, and the window never waits for a benchmark that died on its
+                // own worker thread.
+                Crash.Guard("benchmark run", () => Run(install, driver, report));
+                BenchProgress last;
+                lock (Gate)
                 {
-                    BenchProgress last;
-                    lock (Gate)
-                    {
-                        _busy = false; _cancel = false;
-                        last = new BenchProgress { Stage = BenchProgress.Finished, Busy = false, Run = _progress.Run };
-                    }
-                    Publish(report, last);
+                    _busy = false; _cancel = false;
+                    last = new BenchProgress { Stage = BenchProgress.Finished, Busy = false, Run = _progress.Run };
                 }
+                Publish(report, last);
             });
             return true;
         }

@@ -1,5 +1,7 @@
 # Tester release package
 
+The [DriverStore package contract](../../docs/design/driverstore-package.md) describes the installed graphics files, migration, submission CAB and signature checks.
+
 Layout of the unpacked release (owner, 2026-10-11): the top folder holds `setup.exe` and one folder, `files\`, which
 holds everything else (`manifest.json`, `install.cmd`, `uninstall.cmd`, `verify.cmd`, `prepare-offline.cmd`,
 `installer\`, `payload\`, `licenses\`, the documents). `files\` is therefore the package root that `manifest.json`
@@ -72,10 +74,14 @@ scratch folder lands beside the unpacked release, never inside it.
 
 v0 ships the binaries as they run on the lab (tester.11: KMD 0.7.200.1 re-signed, code unchanged, INF DriverVer 0.7.200.100 so that it outranks every lab build of 0.7.200 and the bound package is identifiable, plus the INF `Reboot` directive; desktop on the GPU route, DwmForceCpu 0, gated by RequireKmdSwitches); a rebuild from
 the exact commits with `/Brepro` is planned for v1. Install paths differ from the lab's: everything under
-`%ProgramFiles%\amdgpu-wddm`, except the firmware, which the KMD reads from the compiled-in `C:\BC250\firmware`.
+`%ProgramFiles%\amdgpu-wddm`. Legacy releases read firmware from `C:\BC250\firmware`.
 
-v1 items: the KMD reads its firmware from the driver store (INF `DestinationDirs`) instead of the hard-coded
-`C:\BC250\firmware`; reproducible rebuild of every component; the control application edits the D3D11 allowlist; the
+BD-152 moves firmware into the signed Driver Store package. The public ZIP keeps
+the INF and catalog but omits the binaries. Before staging, the installer checks
+their sizes, hashes and catalog membership in a protected private directory.
+Offline installs use `-FirmwareDir`. Old repair sets retain their old load path.
+
+v1 items: reproducible rebuild of every component; the control application edits the D3D11 allowlist; the
 .sys file version matches the INF DriverVer (the release re-stamps only the INF: 0.7.200.100 against the file's
 0.7.200.1). Done for tester.11 (KMD 5116c058 = 0aec4c58 + the DPM warm zone, with the INF strings of 1fccb978): the adapter string is "BC-250 GPU (amdgpu-wddm)" (it was
 "BC-250 GPU (bc250kmd, display-only, lab build)") and the INF Provider is "amdgpu-wddm" (it was "BC-250 lab (D-Ogi)").
@@ -282,8 +288,6 @@ pwsh -File tools\release\rebuild-check.ps1 -Twice -IncludeUnverified    # two bu
 When a rebuild gives the bytes of an `unverified` entry, the script reports it. Remove the `unverified` field in
 the same commit that records the result.
 
-PROVENANCE: vulkaninfo.exe 1.4.335 from Khronos Vulkan-Tools (LunarG build), Apache-2.0.
-PROVENANCE: linux-firmware `amdgpu/cyan_skillfish2_*.bin` at 2b8daaf611fbade74f26a5b58ec1defe6a02f5e0, redistributable per `LICENSE.amdgpu`. Not in the package and never committed: the installer downloads the files (kernel.org, GitLab mirror) or takes them from `-FirmwareDir`, checked against `tools/firmware/cyan_skillfish2.json`.
 ## Version resources
 
 A game reads the user-mode driver version through DXGI `CheckInterfaceSupport`. The kernel takes that number from
@@ -336,3 +340,5 @@ file after the stamp, the packaged copy must have the Authenticode digest of the
 `tools\quality\quick.ps1`). It runs the order tests on a real signed driver package when `BC250_SIGNED_PACKAGE`
 names the folder that holds `bc250kmd.sys` and `bc250kmd.cat`.
 
+PROVENANCE: vulkaninfo.exe 1.4.335 from Khronos Vulkan-Tools (LunarG build), Apache-2.0.
+PROVENANCE: linux-firmware `amdgpu/cyan_skillfish2_*.bin` at 2b8daaf611fbade74f26a5b58ec1defe6a02f5e0, redistributable per `LICENSE.amdgpu`. Not in the package and never committed: the installer downloads the files (kernel.org, GitLab mirror) or takes them from `-FirmwareDir`, checked against `tools/firmware/cyan_skillfish2.json`.

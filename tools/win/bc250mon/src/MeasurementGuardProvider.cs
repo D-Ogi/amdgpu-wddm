@@ -5,7 +5,7 @@
 // The 24 CU regression of 2026-10-05 is the general case this panel covers. `CuMode` is in no INF and in no
 // installer default table, so a tester release install left it out, the driver harvested to 24, and three days
 // of Witcher 3 and Rise of the Tomb Raider numbers were taken at 24 CU. Any other setting can be lost the same
-// way. The rule: the live `Parameters` key is compared with `HKLM\SOFTWARE\amdgpu-wddm\Release\AppliedDefaults`,
+// way. The rule: effective settings from the shared state client are compared with `HKLM\SOFTWARE\amdgpu-wddm\Release\AppliedDefaults`,
 // the record the installer writes of its own table, and with the lab's `expectations.json` on top of it.
 //
 // Cost: two registry key reads, one BootId read, up to six File.Exists, and the short marker files, the release
@@ -126,66 +126,10 @@ namespace Bc250Mon
             return false;
         }
 
-        /// <summary>
-        /// What the driver does with a name that is not in the `Parameters` key at all. Absent is not always a
-        /// deviation: `EnableGpuPresentBlit` and `EnableCddDwmInterop` are on when absent since 0.7.181
-        /// (driver/kmd/interop_policy.h, `BC250_INTEROP_FLAG_*_ABSENT`), so reporting them as a difference was
-        /// amber for a setting that is in force. Everything else here reads its value with an explicit default
-        /// (`GuardReadSetting(name, default)` in the driver, or `BC250_DPM_DEFAULT_*` and
-        /// `BC250_CU_MODE_STOCK`), and for those an absent value really is a different machine. A name not in
-        /// this table keeps the old behaviour: absent is reported as a difference, because nothing here knows
-        /// what it means.
-        /// </summary>
-        static readonly Dictionary<string, int> Absent = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
-        {
-            { "EnableGpuPresentBlit", 1 },      // interop_policy.c Switch(): ABSENT means the switch is on
-            { "EnableCddDwmInterop", 1 },
-            { "OfferComposedSourceModes", 1 },  // wddm.c: GuardReadSetting(..., 1)
-            { "EnableScanoutAdmit", 1 },        // wddm.c: GuardReadSetting(..., 1), the M15.14 scan-out gate
-            { "EnableDirectFlipHandshake", 1 }, // wddm.c: absent = on from 0.7.213, the caps trailer of route C
-            { "NotifyDpcInReport", 1 },         // wddm.c: absent = on from 0.7.213 (C50, notify_pairing.h)
-            { "EnableHwmon", 1 },               // hwmon.c: absent = on from 0.7.213, the board's monitor, read only
-            { "EnableVmidPool", 1 },            // gfx.c: absent = on from 0.7.214, a VMID per page-table root
-            { "EnableFanControl", 1 },          // fan.c: GuardReadSetting(..., 1), the case fan control (Part B)
-            { "EnableSmuMetrics", 1 },          // smu_metrics.c: GuardReadSetting(..., 1), the SMU metrics table (0.7.215)
-            { "EnableDpAudio", 1 },             // dpaudio.c: GuardReadSetting(..., 1), DP audio at all (0.7.215)
-            { "EnableDpAudioEndpoint", 1 },     // dpaudio.c: GuardReadSetting(..., 1), the Azalia endpoint (step 1)
-            { "EnableDpAudioStream", 1 },       // dpaudio.c: GuardReadSetting(..., 1), the DP audio stream (0.7.216)
-            { "EnableDpAudioContainerId", 1 },  // dpaudio.c: GuardReadSetting(DPAUDIO_SETTING_CONTAINER, 1), step 4
-            { "EnableScanoutPlaneFormats", 1 }, // wddm.c: GuardReadSetting(..., 1), the scan-out plane formats
-            { "EnableDisplayModes", 2 },        // modeset.c: GuardReadSetting(..., 2), EDID and scaled modes (0.7.216.19)
-            { "HangRecoveryMode", 1 },          // wddm.c: GuardReadSetting(..., 1), stage-1 hang recovery (0.7.216.18)
-            { "SubmitWatchdogMs", 0 },          // wddm.c: GuardReadSetting(..., 0), and 0 means "price the submit
-                                                // watchdog from TdrDelay" (submit_watchdog.h, BD-114 7.1). The INF
-                                                // writes no value, so absent is the shipping case.
-            { "CpuTune", 0 },                   // cpu.c: absent = 0, read-only; the INF writes 1 from 0.7.216
-            { "CuMode", 24 },                   // cumode.c: absent = 24, the firmware's harvest
-            { "DpmMode", 0 },                   // dpm.c: BC250_DPM_DEFAULT_MODE = BC250_DPM_MODE_FIXED
-            { "DpmMaxMHz", 2000 },              // dpm.c: BC250_DPM_DEFAULT_MAX_MHZ (2000 since 2026-10-10)
-            { "DpmIdleMHz", 500 },              // dpm.c: BC250_DPM_IDLE_MHZ, the idle point when the name is absent
-            { "EnableMmio", 0 }, { "EnableMmioWrite", 0 }, { "EnableVram", 0 }, { "EnableVramWrite", 0 },
-            { "EnableGart", 0 }, { "EnablePsp", 0 }, { "EnableGfx", 0 }, { "EnableIh", 0 },
-            { "EnableDcnWrite", 0 }, { "EnableVidPnFlip", 0 }, { "EnableGpuVa", 0 }, { "EnableGpuSubmit", 0 },
-            { "EnablePagingNode", 0 }, { "EnablePresentBlit", 0 }, { "EnableFullWddm", 0 },
-            { "EnableNativeSmu", 0 }, { "EnableNativePteCopy", 0 }, { "EnableHandleIdentityProbe", 0 },
-            { "KeepLog", 0 },
-        };
-
-        /// <summary>The driver's own default for an absent value, or null when this table does not know it.</summary>
-        public static int? AbsentDefault(string name)
-        {
-            int value;
-            return name != null && Absent.TryGetValue(name, out value) ? (int?)value : null;
-        }
-
-        /// <summary>
-        /// The value in force: the one in the key, or the driver's default for an absent name. Null when the name
-        /// is absent and no default is known.
-        /// </summary>
+        /// <summary>The effective value returned by the common state client. No local defaults.</summary>
         public static int? InForce(RegistryDwords parameters, string name)
         {
-            int? live = parameters == null ? null : parameters.Get(name);
-            return live.HasValue ? live : AbsentDefault(name);
+            return parameters == null ? null : parameters.Get(name);
         }
 
         /// <summary>
@@ -207,7 +151,7 @@ namespace Bc250Mon
         {
             if (!v.Parameters.Present)
             {
-                panel.Rows.Add(new Row("Parameters", v.Parameters.Error ?? "no bc250kmd Parameters key", Level.Warn));
+                panel.Rows.Add(new Row("Parameters", v.Parameters.Error ?? "driver state unavailable", Level.Warn));
                 return;
             }
             Dictionary<string, int?> expected = Expected(v.Installed, x);
@@ -222,7 +166,8 @@ namespace Bc250Mon
                 int? live = v.Parameters.Get(pair.Key);
                 int? force = InForce(v.Parameters, pair.Key);
                 if (force.HasValue && force.Value == want) continue;
-                string how = live.HasValue
+                string failure = v.Parameters.Failure(pair.Key);
+                string how = failure != null ? failure : live.HasValue
                     ? live.Value.ToString(CultureInfo.InvariantCulture)
                     : force.HasValue
                         ? "absent, so " + force.Value.ToString(CultureInfo.InvariantCulture)
@@ -232,7 +177,7 @@ namespace Bc250Mon
                 // A gate the driver latches at start is red when what is in force is 0 and the expectation is
                 // not: an absent `DpmMode` is fixed-lab just as surely as an explicit 0.
                 bool latchedOff = IsLatchedGate(pair.Key) && want != 0 && force.HasValue && force.Value == 0;
-                if (latchedOff) level = Level.Error;
+                if (latchedOff || failure != null) level = Level.Error;
                 else if (level == Level.Good) level = Level.Warn;
             }
             string text;
@@ -334,9 +279,9 @@ namespace Bc250Mon
                 int? live = v.Parameters.Get(pair.Key);
                 int? force = InForce(v.Parameters, pair.Key);
                 if (force.HasValue && force.Value == pair.Value.Value) continue;
-                differences.Add(pair.Key + "=" + (live.HasValue ? live.Value.ToString(CultureInfo.InvariantCulture) : "-"));
+                differences.Add(pair.Key + "=" + (v.Parameters.Failure(pair.Key) ?? (live.HasValue ? live.Value.ToString(CultureInfo.InvariantCulture) : "-")));
             }
-            parts.Add("parameters=" + (!v.Parameters.Present ? "absent"
+            parts.Add("parameters=" + (!v.Parameters.Present ? (v.Parameters.Error ?? "unavailable")
                 : differences.Count == 0 ? "as expected" : string.Join(",", differences.ToArray())));
             var markers = new List<string>();
             foreach (var marker in v.Markers)
@@ -426,7 +371,7 @@ namespace Bc250Mon
             var view = new MeasurementGuardView
             {
                 NowUtc = DateTime.UtcNow,
-                Parameters = RegistryDwords.Read(Registry.LocalMachine, OperatingPointProvider.ParametersKey),
+                Parameters = RegistryDwords.Read(),
                 Markers = ReadMarkers(),
                 Release = ReadRelease(),
             };

@@ -15,6 +15,7 @@ struct AdapterConfiguration {
     AdapterCaps caps;
     unsigned char engine_sha256[32]{};
     unsigned char icd_sha256[32]{};
+    bool authenticode=false;
     SparsePolicyQuery sparse_policy=nullptr; // nullptr: the adapter key through gdi32
     WddmVersionQuery wddm_version=nullptr; // nullptr: the OS-visible WDDM version through gdi32
 };

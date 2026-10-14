@@ -1,4 +1,4 @@
-param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\build\submit-watchdog",[switch]$FlatFiveHundred,[switch]$NoTdrFloor,[switch]$IgnoreProgress,[switch]$StampAtRingWrite,[switch]$ReportWithPendingCompletion,[switch]$NoFenceRange,[switch]$LogTheConstant,[switch]$RearmOutsideLock,[switch]$ClampTdrToBudgetMax,[switch]$CountUnchangedAsActivity,[switch]$CountPrimeAsActivity,[switch]$CountGapAsActivity,[switch]$IgnoreAlternatingActivity,[switch]$AssumeOsClockAtHead,[switch]$HeadAgeAtRetirement)
+param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\build\submit-watchdog",[switch]$FlatFiveHundred,[switch]$AllowTooShortDiagnostic,[switch]$IgnoreProgress,[switch]$StampAtRingWrite,[switch]$ReportWithPendingCompletion,[switch]$NoFenceRange,[switch]$LogTheConstant,[switch]$RearmOutsideLock,[switch]$AllowTooLongDiagnostic,[switch]$CountUnchangedAsActivity,[switch]$CountPrimeAsActivity,[switch]$CountGapAsActivity,[switch]$IgnoreAlternatingActivity,[switch]$AssumeOsClockAtHead,[switch]$HeadAgeAtRetirement)
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $env:TEMP=Join-Path $Out 'tmp';$env:TMP=$env:TEMP; New-Item -ItemType Directory -Force $env:TEMP | Out-Null
@@ -8,12 +8,9 @@ New-Item -ItemType Directory -Force $Out | Out-Null
 # pattern of run_hang_recovery.ps1 and run_vmid_pool.ps1). Each control must fail by a CHECK or a source check,
 # not by a build error, or it proves nothing.
 #
-#   -FlatFiveHundred              7.1: the default budget is the old 500 ms literal, not TdrDelay plus a margin.
-#   -NoTdrFloor                   7.1: an operator's value is no longer raised to TdrDelay. This is the exact
-#                                      configuration that bugchecked unit A twice on 2026-10-10.
-#   -ClampTdrToBudgetMax          7.1: TdrDelay is clamped to the clamp that belongs to an operator's own value,
-#                                      so the floor becomes min(TdrDelay, 300 s) and a TdrDelay above it has our
-#                                      watchdog duration below the configured OS duration.
+#   -FlatFiveHundred             replace the diagnostic default with the old 500 ms value.
+#   -AllowTooShortDiagnostic     accept a malformed override below the minimum.
+#   -AllowTooLongDiagnostic      accept an override above the bounded diagnostic range.
 #   -IgnoreProgress               7.2: the watchdog judges by wall clock alone, as every build before this one.
 #   -StampAtRingWrite             7.3: the budget is counted from the ring write again, so a queued packet pays
 #                                      for its wait.
@@ -64,7 +61,7 @@ if($RearmOutsideLock){
 }
 # 7.1 reaches the registry, and the flat constant is gone from the whole driver.
 if($wddm -notmatch 'GuardReadSetting\(L"SubmitWatchdogMs", 0\)'){Write-Output 'FAIL source check: wddm.c does not read the SubmitWatchdogMs setting (BD-114 7.1)';exit 1}
-if($wddm -notmatch 'GuardReadGraphicsSetting\(L"TdrDelay", 0\)'){Write-Output 'FAIL source check: wddm.c does not read TdrDelay (BD-114 7.1)';exit 1}
+if($wddm -match 'GuardReadGraphicsSetting'){throw 'KMD must not read the OS TDR setting'}
 $flat=Get-ChildItem "$repo\driver\kmd\*" -Recurse -File | Where-Object { $_.Extension -in '.c','.h' } |
     Select-String -SimpleMatch 'BC250_WDDM_SUBMIT_TIMEOUT_MS'
 if($flat){Write-Output "FAIL source check: BC250_WDDM_SUBMIT_TIMEOUT_MS is back in $($flat[0].Path) (BD-114 7.1)";exit 1}
@@ -123,19 +120,13 @@ Ordered (Body $wddm 'static BOOLEAN WddmBeginSubmissionLocked(') 'WddmBeginSubmi
 # ---- the copies the host test compiles --------------------------------------------------------------------------
 $watchdog=Get-Content "$repo\driver\kmd\submit_watchdog.h" -Raw
 if($FlatFiveHundred){
-    $live='    if (Requested == 0ul) { *Defaulted = 1; budget = tdr + (unsigned long)BC250_SUBMIT_MARGIN_MS; }'
-    if(!$watchdog.Contains($live)){throw 'negative control: the default budget moved'}
-    $watchdog=$watchdog.Replace($live,'    if (Requested == 0ul) { *Defaulted = 1; budget = 500ul; (void)tdr; }')
+    $watchdog=$watchdog.Replace('#define BC250_SUBMIT_DIAGNOSTIC_DEFAULT_MS 12000ul','#define BC250_SUBMIT_DIAGNOSTIC_DEFAULT_MS 500ul')
 }
-if($ClampTdrToBudgetMax){
-    $live="    if (seconds > BC250_SUBMIT_TDR_MAX_MS / 1000ul)`n        seconds = BC250_SUBMIT_TDR_MAX_MS / 1000ul;"
-    if(!$watchdog.Contains($live)){throw 'negative control: the TdrDelay clamp moved'}
-    $watchdog=$watchdog.Replace($live,"    if (seconds > (unsigned long)BC250_SUBMIT_BUDGET_MAX_MS / 1000ul)`n        seconds = (unsigned long)BC250_SUBMIT_BUDGET_MAX_MS / 1000ul;")
+if($AllowTooShortDiagnostic){
+    $watchdog=$watchdog.Replace('Requested < BC250_SUBMIT_DIAGNOSTIC_MIN_MS','Requested < 1ul')
 }
-if($NoTdrFloor){
-    $live='    if (budget < tdr) { budget = tdr; *Raised = 1; }'
-    if(!$watchdog.Contains($live)){throw 'negative control: the TdrDelay floor moved'}
-    $watchdog=$watchdog.Replace($live,'    if (budget < tdr && tdr == 0xDEADul) { budget = tdr; *Raised = 1; }')
+if($AllowTooLongDiagnostic){
+    $watchdog=$watchdog.Replace('Requested > BC250_SUBMIT_DIAGNOSTIC_MAX_MS','Requested > 0xFFFFFFFFul')
 }
 if($IgnoreProgress){
     $live='    else if (Progress != Watchdog->Progress)'

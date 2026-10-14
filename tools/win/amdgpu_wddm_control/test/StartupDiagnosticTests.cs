@@ -83,6 +83,8 @@ static partial class UnitTests
             System.Reflection.Assembly.GetExecutingAssembly().Location, "--diagnostic-worker-fixture"), 1500);
         Check(clock.ElapsedMilliseconds < 3000, "blocked provider is bounded by worker deadline");
         Check(output.Contains("fixture-ready") && output.Contains("report is partial"), "partial worker output retained on timeout");
+        if (!output.Contains("fixture-ready") || !output.Contains("report is partial"))
+            Console.WriteLine("  worker fixture result: " + output.Replace("\r", "").Replace("\n", " | "));
         var pid = System.Text.RegularExpressions.Regex.Match(output, @"fixture-ready (\d+)");
         bool alive = false;
         if (pid.Success)

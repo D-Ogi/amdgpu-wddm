@@ -22,5 +22,9 @@ $msvc=Get-ChildItem "$vs\VC\Tools\MSVC" -Directory | Sort-Object Name | Select-O
 $sdk=Join-Path $Root 'toolchain\nuget\microsoft.windows.sdk.cpp\c';$libs=Join-Path $Root 'toolchain\nuget\microsoft.windows.sdk.cpp.x64\c'
 & "$($msvc.FullName)\bin\Hostx64\x64\cl.exe" /nologo /TC /W4 /WX /wd4201 /O2 /MT "/I$repo\driver\kmd" "/I$($msvc.FullName)\include" "/I$sdk\Include\10.0.26100.0\ucrt" "/Fo$Out\" "/Fe$Out\paging_queue_test.exe" "$Out\test.c" "$repo\driver\kmd\paging_private.c" /link "/LIBPATH:$($msvc.FullName)\lib\x64" "/LIBPATH:$libs\ucrt\x64" "/LIBPATH:$libs\um\x64"
 if($LASTEXITCODE -ne 0){throw 'paging queue host build failed'}
-& "$Out\paging_queue_test.exe"
-if($ExpectFailure){if($LASTEXITCODE -eq 0){throw "negative control $Mutation unexpectedly passed"};Write-Host "Expected negative control $Mutation failed";exit 0};exit $LASTEXITCODE
+$lines=@(& "$Out\paging_queue_test.exe");$code=$LASTEXITCODE;$lines | Write-Output
+if($ExpectFailure){
+ if($code -ne 1 -or -not ($lines -match '^FAIL ')){throw "negative control $Mutation did not fail a runtime check (exit $code)"}
+ Write-Host "Expected negative control $Mutation failed";exit 0
+}
+exit $code

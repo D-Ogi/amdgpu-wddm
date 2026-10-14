@@ -153,7 +153,7 @@ $native = $source.Replace($needle, '#include "hwmon_native_mock.h"')
 # watchdog's timer, the bugcheck callback and the request mutex).
 $fanSource = Use-Mutation (Get-Content -LiteralPath (Join-Path $kmd 'fan.c') -Raw) 'binding'
 if (-not $fanSource.Contains($needle)) { throw "driver\kmd\fan.c no longer includes the miniport header: the mock cannot replace it" }
-[IO.File]::WriteAllText((Join-Path $Out 'fan-native.inc'), $fanSource.Replace($needle, '#include "fan_native_mock.h"'),
+[IO.File]::WriteAllText((Join-Path $Out 'fan-native.inc'), $fanSource.Replace($needle, '#include "fan_native_mock.h"').Replace('#include "state_kernel.h"',''),
     [Text.UTF8Encoding]::new($false))
 [IO.File]::WriteAllText((Join-Path $Out 'hwmon-fan.inc'), $source.Replace($needle, '#include "fan_native_mock.h"'),
     [Text.UTF8Encoding]::new($false))

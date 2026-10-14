@@ -44,6 +44,8 @@ try {
  # A named early gate makes a regression in link input order fail before builds.
  # quality-controls also discovers the positive and negative package unit controls.
  Check 'x86-callconv' { & pwsh -NoProfile -File "$repo/tools/build/test-x86-callconv.ps1" -OutputDir "$Out/x86-callconv" }
+ # The two engine DLLs of one source line (BD-167): each flavour's own pin, and no run against the other's DLL.
+ Check 'engine-abi-flavour' { & python -m unittest discover -s "$repo\tools\build" -p 'test_engine_abi.py' }
  Check 'kmd-order' { & python "$repo\tools\quality\test_kmd_reproducible.py" --out "$Out\kmd-order" }
  # One namespace spans all KMD headers, including optional diagnostic commands.
  Check 'escape-commands' { & python "$repo\tools\quality\escape_commands.py" --root $repo --out "$Out\escape-commands"; if($LASTEXITCODE -eq 0){ & python -m unittest discover -s "$repo\tools\quality" -p 'test_escape_commands.py' } }
@@ -56,13 +58,13 @@ try {
  Check 'doclint' { & python "$repo\tools\quality\doclint.py" --root $repo --out "$Out\doclint" }
  # Status maps and release tool controls run in Full (required by build-release.ps1), not KmdPackage.
  Check 'status-map' { & python "$repo\tools\quality\kmd_status_profile.py" --repo $repo --profile $Profile --kits $Kits --out "$Out\status-map"; if($LASTEXITCODE -eq 0){ & python -m unittest discover -s "$repo\tools\docs" -p 'test_*.py' } }
- Check 'ledger' { & python -m unittest discover -s "$repo\tools\win\ledger" }
- # Windows PowerShell 5.1 for the app-route test, because that is the shell its ops scripts run in on the lab.
  # Its deadline is 600 s in gate-inputs.json, not the 300 s it had: measured over the 15 full suites of the rc1 to
  # rc5 candidates of train b34 on the development PC, this gate takes 179 s to 300 s and lost five of those runs to
  # the deadline itself (its slowest pass was 299.9 s). The work is Python unit tests, so under the 24 workers of
  # the full profile it competes for the same cores as every other Python gate, and that is where the spread comes
  # from. 600 s is twice the slowest pass, so a loaded machine no longer decides the result.
+ Check 'ledger' { & python -m unittest discover -s "$repo\tools\win\ledger" }
+ # Windows PowerShell 5.1 for the app-route test, because that is the shell its ops scripts run in on the lab.
  Check 'app-route-lib' { & powershell -NoProfile -ExecutionPolicy Bypass -File "$repo\tools\win\app-route\ops\tests\test-approute-lib.ps1" -Out "$Out\app-route-lib" }
  # Settings apply/restore runs against a fake system. Never change this PC's services, tasks or registry.
  Check 'system-tuning' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\tools\win\system-tuning\test-system-tuning.ps1" -Out "$Out\system-tuning" }
@@ -107,18 +109,64 @@ Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compil
  Check 'guardlog-width' { & python "$repo\tools\quality\guardlog_width.py" --kmd "$repo\driver\kmd" --baseline "$repo\tools\quality\guardlog_width_baseline.txt" --out "$Out\guardlog-width" }
  # The provenance gate of the release payload (tools/release/provenance.py, run by build-release.ps1): its self-test on
  # throwaway repositories. The gate itself needs the payload files of a workspace, so the release build runs it.
- Check 'release-provenance' { $env:BC250_TEST_OUT=(New-Item -ItemType Directory -Force "$Out\release-provenance").FullName; & python -m unittest discover -s "$repo\tools\release" -p 'test_provenance.py' }
- # The driver package's own AddReg against the release defaults table (BD-091): every setting the INF writes is the
  # Its deadline is 600 s in gate-inputs.json, not the 180 s of the manifest: the work takes 113 s to 171 s on the
  # development PC (rc1, rc2, rc3 and two runs of rc4 of train b34), and at 180 s the load of the machine decided the
  # result. rc4 lost a whole package build to that margin. A gate with 10 per cent of room over its own cost is a
  # flaky gate, not a strict one. 300 s was not enough either: over the 15 full suites of rc1 to rc5 this gate ran
  # 149 s to 266 s and still lost two of them at 300 s, so it gets the same 600 s as the ledger gate, for the same
  # reason - both are Python unit tests among the 24 workers of the full profile.
+ Check 'release-provenance' { $env:BC250_TEST_OUT=(New-Item -ItemType Directory -Force "$Out\release-provenance").FullName; & python -m unittest discover -s "$repo\tools\release" -p 'test_provenance.py' }
+ Check 'release-driver-package' { $env:TEMP=(New-Item -ItemType Directory -Force "$Out\release-driver-package").FullName; $env:TMP=$env:TEMP; & python -m unittest discover -s "$repo\tools\release" -p 'test_driver_package.py' }
+ Check 'release-flavour' { & python -m unittest discover -s "$repo\tools\release" -p 'test_release_flavour.py' }
+ # BD-166: the D3D11 configuration record of a staged package (tools/release/check_package_v3.py). b15 shipped a new
+ # ICD with the old record and every D3D11 device failed with ERROR_CRC, so the record is checked in the package that
+ # ships. The test stages a package of its own images: no device and no machine state.
+ Check 'release-package-v3' { $env:TEMP=(New-Item -ItemType Directory -Force "$Out\release-package-v3").FullName; $env:TMP=$env:TEMP; & python -m unittest discover -s "$repo\tools\release" -p 'test_check_package_v3.py' }
+ # The symbols of the shipped files (tools/release/symbols.py): a crash report, a lab dump and a debugger session
+ # need the symbols of the exact bytes that ran, so the release archives them beside its build and the manifest
+ # says which file belongs to which byte. The controls run on crafted images: no compiler and no machine state.
+ Check 'release-symbols' { $env:TEMP=(New-Item -ItemType Directory -Force "$Out\release-symbols").FullName; $env:TMP=$env:TEMP; & python -m unittest discover -s "$repo\tools\release" -p 'test_symbols.py' }
+ # BD-166: the version resource that the release build gives every PE file of the package (tools/build/versionstamp.py),
+ # on images that the test builds itself: the stamp, its read-back through the Windows image loader, the M14C pins.
+ Check 'version-stamp' { & python -m unittest discover -s "$repo\tools\build" -p 'test_versionstamp.py' }
+ # BD-166: which records a release must carry, and the refusal of a shipped PE that nothing in versioninfo.json
+ # stamps, both through the public release gate (tools/build/versionstamp.py check_release).
+ Check 'version-stamp-records' { & python -m unittest discover -s "$repo\tools\build" -p 'test_versionstamp_records.py' }
+ # The driver package's own AddReg against the release defaults table (BD-091): every setting the INF writes is the
  # released value and carries NOCLOBBER, so no install outside our installer closes a gate while another stays open.
  Check 'inf-gates' { & python "$repo\tools\quality\inf_gates.py" --inf "$repo\driver\kmd\bc250kmd.inf" --defaults "$repo\tools\release\installer\registry-defaults.json" --out "$Out\inf-gates" }
+ Check 'driver-state-x64' { & pwsh -NoProfile -File "$repo\tools\state\test.ps1" -Kits "$Kits" -Out "$Out\driver-state-x64" -Arch x64 }
+ Check 'driver-state-x86' { & pwsh -NoProfile -File "$repo\tools\state\test.ps1" -Kits "$Kits" -Out "$Out\driver-state-x86" -Arch x86 }
+ Check 'stored-fan-choice' { & pwsh -NoProfile -File "$repo\tools\state\test-fan-choice.ps1" -Kits "$Kits" -Out "$Out\stored-fan-choice" }
+ Check 'driver-state-kernel' { & pwsh -NoProfile -File "$repo\tools\state\test-kernel.ps1" -Kits "$Kits" -Out "$Out\driver-state-kernel" }
+ Check 'driver-state-package' { & powershell -NoProfile -NonInteractive -File "$repo\tools\release\test-state-package.ps1" -Out "$Out\driver-state-package" }
+ Check 'driver-state-installer' { & pwsh -NoProfile -File "$repo\driver\state\installer-build.ps1" -Kits "$Kits" -Out "$Out\driver-state-installer" -Test }
+ Check 'driver-state-lifecycle' { & powershell -NoProfile -NonInteractive -File "$repo\tools\release\test-state-lifecycle.ps1" }
+ Check 'driver-state-rollback' { & powershell -NoProfile -NonInteractive -File "$repo\tools\release\test-legacy-rollback.ps1" }
+ Check 'driver-state-consumer-syntax' { & powershell -NoProfile -NonInteractive -File "$repo\tools\state\test-consumer-syntax.ps1" }
+ # Native consumers link the same state ABI. These gates never open a device or a window.
+ Check 'driver-state-cli-x64' { & pwsh -NoProfile -File "$repo\tools\win\bc250kmd_cli\build.ps1" -Kits "$Kits" -Out "$Out\driver-state-cli-x64" -Arch x64 }
+ Check 'driver-state-cli-x86' { & pwsh -NoProfile -File "$repo\tools\win\bc250kmd_cli\build.ps1" -Kits "$Kits" -Out "$Out\driver-state-cli-x86" -Arch x86 }
+ Check 'driver-state-cumode-x64' { & pwsh -NoProfile -File "$repo\tools\win\cumode\build.ps1" -Kits "$Kits" -Out "$Out\driver-state-cumode-x64" -Arch x64 }
+ Check 'driver-state-cumode-x86' { & pwsh -NoProfile -File "$repo\tools\win\cumode\build.ps1" -Kits "$Kits" -Out "$Out\driver-state-cumode-x86" -Arch x86 }
+ Check 'driver-state-client-x64' { & pwsh -NoProfile -File "$repo\tools\state\test-client.ps1" -Kits "$Kits" -Out "$Out\driver-state-client-x64" -Arch x64 }
+ Check 'driver-state-client-x86' { & pwsh -NoProfile -File "$repo\tools\state\test-client.ps1" -Kits "$Kits" -Out "$Out\driver-state-client-x86" -Arch x86 }
+ Check 'driver-state-gui-batch' { & pwsh -NoProfile -File "$repo\tools\state\test-gui-batch.ps1" -Kits "$Kits" -Out "$Out\driver-state-gui-batch" }
+ Check 'driver-state-overlay' {
+  & pwsh -NoProfile -File "$repo\tools\win\bc250mon\test-state.ps1" -Out "$Out\driver-state-overlay"
+  if($LASTEXITCODE -eq 0){ & pwsh -NoProfile -File "$repo\tools\win\bc250mon\test-lab-state.ps1" -Out "$Out\driver-state-overlay-lab" }
+ }
+ Check 'driver-state-infverif' {
+  $infverif=Join-Path $Kits 'microsoft.windows.wdk.x64\c\tools\10.0.26100.0\x64\infverif.exe'
+  if(-not (Test-Path -LiteralPath $infverif)){throw "InfVerif is required: $infverif"}
+  & $infverif /h /v "$repo\driver\kmd\bc250kmd.inf"
+ }
  # Upgrade defaults and explicit clock choices must survive the same registry writes as an installation.
  Check 'registry-defaults' { & powershell -NoProfile -File "$repo\tools\release\test-registry-defaults.ps1" }
+# The work ledger gate must judge the manifest the builder is building from, not the published one. This parses
+# build-release.ps1 and demands that the ledger call and the manifest read name one variable, so a path that is
+# passed but wrong fails here instead of turning a train's own integrations into release debt.
+Check 'ledger-call' { & pwsh -NoProfile -File "$repo\tools\release\test-ledger-call.ps1" -Out "$Out\ledger-call" }
  # BD-077: the installer half of the CU mode setting. The -CuMode switch must reach the registry plan, and
  # docs\testing\INSTALL.md must state the number of compute units of an install that does not use the switch.
  Check 'cu-mode-installer' { & powershell -NoProfile -File "$repo\tools\release\test-cu-mode-installer.ps1" -Repo $repo }
@@ -132,14 +180,13 @@ Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compil
  # two logon tasks (who confirms a driver start, and at whose logon). It writes files under Out and registers no
  # task. Until now it ran only inside test-dryrun.ps1, which needs a built package.
  Check 'session-checks' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\tools\release\test-session-checks.ps1" -WorkRoot "$Out\session-checks" }
+ # Fact M898: a WinForms Label with a Dock and AutoSize off goes through 100x23 at each change of its text, which is
+ # how the start window of rc4 flashed. The control application holds the rule at run time (--smoke-labels in its
+ # build); this reads the installer's and the tools' PowerShell and the other C# windows. Its controls run in
+ # quality-controls (test_winforms_labels.py).
+ Check 'winforms-labels' { & python "$repo\tools\quality\winforms_labels.py" --root $repo }
  # BD-076: the OpenGL ICD registration of the installer. The architecture list of the release, the values of each
  # architecture in it, the ICD file check, the restore plan of the uninstaller and the step of an install that
- # BD-166: the D3D11 configuration record of a staged package (tools/release/check_package_v3.py). b15 shipped a new
- # BD-166: the version resource that the release build gives every PE file of the package (tools/build/versionstamp.py),
- Check 'version-stamp' { & python -m unittest discover -s "$repo\tools\build" -p 'test_versionstamp.py' }
- # BD-166: which records a release must carry, and the refusal of a shipped PE that nothing in versioninfo.json
- # stamps, both through the public release gate (tools/build/versionstamp.py check_release).
- Check 'version-stamp-records' { & python -m unittest discover -s "$repo\tools\build" -p 'test_versionstamp_records.py' }
  # registers fewer architectures than the computer holds. It writes a scratch key under HKCU and a folder under
  # %TEMP% and removes both. Like session-checks above it ran only inside test-dryrun.ps1, which needs a built
  # package, so a change of the registration could reach a release before any gate read it. Windows PowerShell 5.1,
@@ -218,9 +265,8 @@ Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compil
  Check 'link-register-import' { & python -B "$repo\tools\import\extract_link_regs.py" --check }
  Check 'blit-plan' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_blit_plan.ps1" -Root $Workspace -Out "$Out\blit-plan" -Kits "$Kits" }
  Check 'gpu-clock' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_gpu_clock.ps1" -Root $Workspace -Out "$Out\gpu-clock" -Kits "$Kits" }
- # The per-application graphics settings (docs/design/per-app-graphics-settings.md): the kernel-mode driver's
- # ReportAmdDriverVersion number scheme and decision, and the user-mode reader with its precedence and ranges.
- Check 'driver-version' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_driver_version.ps1" -Root $Workspace -Out "$Out\driver-version" -Kits "$Kits" }
+ # The installer owns version mapping; KMD must not rewrite OS device properties.
+ Check 'driver-version' { & powershell -NoProfile -File "$repo\tools\release\test-version-identity.ps1" }
  Check 'umd-app-settings' { $env:BC250_ROOT=$Workspace; & pwsh -NoProfile -File "$repo\tools\build\test-umd-app-settings.ps1" -OutputDir "$Out\umd-app-settings" }
  # The encoder MFT's source-against-sweep checks: every deblocking schedule the source admits still has a case
  # in tests\sweep.ps1 that holds it to the inbox decoder. The sweep itself needs a GPU and is not in this list;
@@ -317,6 +363,7 @@ Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compil
   @{n='connector-link-stale-generation';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitGeneration','-ExpectFailure')}
   @{n='connector-link-open-cleanup';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitOpenCleanup','-ExpectFailure')}
   @{n='connector-link-cold-recovery';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitColdRecovery','-ExpectFailure')}
+  @{n='connector-link-prepare-cleanup';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitPrepareCleanup','-ExpectFailure')}
   @{n='connector-link-first-failure';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitFirstFailure','-ExpectFailure')}
   @{n='connector-link-nested-hdmi';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-NestedHdmiStop','-ExpectFailure')}
   @{n='connector-link-diagnostic-replay';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitDiagnosticReplay','-ExpectFailure')}
@@ -414,8 +461,8 @@ Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compil
   @{n='recovery-protocol-ReopenWitnessOnRefusal';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-ReopenWitnessOnRefusal');Fails=$true}
   @{n='recovery-protocol-RefusalClosesEveryNode';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-RefusalClosesEveryNode');Fails=$true}
   @{n='submit-watchdog-flat-500';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-FlatFiveHundred');Fails=$true}
-  @{n='submit-watchdog-no-tdr-floor';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-NoTdrFloor');Fails=$true}
-  @{n='submit-watchdog-clamp-tdr';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-ClampTdrToBudgetMax');Fails=$true}
+  @{n='submit-watchdog-short-diagnostic';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-AllowTooShortDiagnostic');Fails=$true}
+  @{n='submit-watchdog-long-diagnostic';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-AllowTooLongDiagnostic');Fails=$true}
   @{n='submit-watchdog-ignore-progress';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-IgnoreProgress');Fails=$true}
   @{n='submit-watchdog-stamp-at-ring-write';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-StampAtRingWrite');Fails=$true}
   @{n='submit-watchdog-report-with-pending';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-ReportWithPendingCompletion');Fails=$true}
@@ -428,6 +475,8 @@ Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compil
   @{n='gfx-pipeline-equal-fence';s='driver\kmd\test\run_gfx_pipeline.ps1';a=@('-Root',$Workspace,'-KmdOnly','-EqualityFence');Fails=$true}
   # -Root as well: this runner puts the compiler's TEMP under it, and a worktree's parent has no scratch\tmp.
   @{n='firmware-metadata-no-runtime';s='driver\kmd\test\run_firmware_metadata.ps1';a=@('-Root',$Workspace,'-Kits',$kits,'-Firmware',$firmware,'-OmitRuntimeFirmware');Fails=$true}
+  @{n='firmware-io';s='driver\kmd\test\run_firmware_io.ps1';a=@('-Kits',$kits)}
+  @{n='firmware-io-short-read';s='driver\kmd\test\run_firmware_io.ps1';a=@('-Kits',$kits,'-AcceptShort');Fails=$true}
   @{n='paging-mc';s='driver\kmd\test\run_paging_mc.ps1';a=@('-Kits',$kits)}
   @{n='paging-private';s='driver\kmd\test\run_paging_private.ps1';a=@('-Kits',$kits)}
   @{n='paging-private-slot-reuse';s='driver\kmd\test\run_paging_private.ps1';a=@('-Kits',$kits,'-ReuseFirstQueueSlot');Fails=$true}

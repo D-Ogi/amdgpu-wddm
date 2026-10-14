@@ -83,7 +83,7 @@ namespace AmdgpuWddmControl
             if (p.ConfirmStart) d.Changes.Add(Strings.T("plan.line.confirm-start"));
 
             bool atRestart = p.Effect == "at the next restart of Windows";
-            bool atGame = p.Action.StartsWith("game-", StringComparison.Ordinal);
+            bool atGame = Recovery.AboutOneGame(p.Action);
             bool atGames = p.Effect == "the next time a game starts";
             var image = p.GameImage ?? p.GameWrites.Keys.FirstOrDefault();
             d.Notes.Insert(0, atGame && image != null ? Strings.T("plan.when.game", image) : atRestart ? Strings.T("plan.when.restart")

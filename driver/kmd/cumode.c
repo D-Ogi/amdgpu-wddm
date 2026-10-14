@@ -36,6 +36,7 @@
 // Mądry Polak po szkodzie - a Pole is wise after the damage; the driver tries to be wise before it.
 #include "bc250kmd.h"
 #include "bc250kmd_escape.h"
+#include "state_kernel.h"
 #include "amdgpu.h"
 #include "umd_caps.h"
 
@@ -141,7 +142,7 @@ static BOOLEAN QueryPresent(PCWSTR Name, unsigned int* Value)
     if (NT_SUCCESS(status)) return TRUE;
     *Value = 0;
     if (status != STATUS_OBJECT_NAME_NOT_FOUND)
-        GuardLog("cumode: reading %ws failed 0x%08X, treated as absent", Name, status);
+        GuardLog("cumode: reading %ws failed 0x%08X, the CU state group is refused", Name, status);
     return FALSE;
 }
 
@@ -244,6 +245,14 @@ void CuModePrepare(BC250_DEVICE* Device)
     (void)QueryPresent(CU_SETTING_PENDING, &r->pending);
     (void)QueryPresent(CU_SETTING_CONFIRMED, &r->confirmed);
     r->closed_present = QueryPresent(CU_SETTING_CLOSED, &r->closed);
+    if (!DriverStateGroupEnabled(AMDGPU_STATE_GROUP_CU)) {
+        d->mode = BC250_CU_MODE_STOCK;
+        d->reason = BC250_CU_REASON_REGISTRY;
+        s->Pending = s->Confirmed = FALSE;
+        // The stock hook must still run on a warm restart after an unlocked
+        // start. Refuse the request without consuming its safety records.
+        goto InstallStock;
+    }
     r->sa_count = BC250_SHADER_ENGINES * BC250_SH_PER_SE;
     r->wgps_per_sa = BC250_MAX_CU_PER_SH / 2;
     bc250_cu_decide(r, d);
@@ -277,6 +286,7 @@ void CuModePrepare(BC250_DEVICE* Device)
     }
     s->Confirmed = d->confirmed && d->mode == BC250_CU_MODE_FULL;
 
+InstallStock:
     s->StockRecord = ReadStockRecord(&s->Hw);
     s->Hw.have_stock = s->StockRecord;
     s->Hw.mode = d->mode;

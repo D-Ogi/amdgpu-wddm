@@ -7,6 +7,7 @@
 //                     G-SMALL, the owner's rule of 2026-10-12: the right-hand panel is out of the window on a small
 //                     screen (RenderOptions.WorkArea, so the render never reads the screen it runs on) and in it on a
 //                     screen with room for it.
+//   CheckLabels(...)  --smoke-labels: every page under the label layout rule of LabelLayout.cs (fact M898).
 //   UseFixture(...)   a recorded snapshot and demo games instead of this PC's state, so that the cards with
 //                     warnings, games and the CU section are drawn too. Nothing is written in any of them.
 using System;
@@ -72,6 +73,30 @@ namespace AmdgpuWddmControl
                     ActiveValid = true, ReadValid = true, WriteAllowed = true, BackupAvailable = false,
                     ActiveBytes = (ulong)inUseMiB << 20, RequestedMiB = inUseMiB, ObservedBlock = block,
                 };
+            }
+            // The graphics cores as a BC-250 answers them (owner, 2026-10-14): the firmware's own stock set (CC
+            // 0xFFF80000 per shader array, so pairs 1 to 3 of each group are fixed and 4 and 5 are free) and a
+            // confirmed start of 30 of the 40 cores. Without this the map of pairs can only be drawn read-only,
+            // and no render gate would ever measure a cell a person can click.
+            if (_snap.Cu == null && BoardCapabilities.Current.Allows(BoardCapabilities.Gpu))
+            {
+                const uint mask = 0x84218;          // the documented default set of 30 cores (docs/design/cu-mode.md)
+                _snap.Cu = new CuModeState
+                {
+                    Flags = CuModeState.FlagValid | CuModeState.FlagConfirmed,
+                    Requested = CuMode.Full, Applied = CuMode.Full, ActiveCus = CuMode.ActiveCus(mask), DisableMask = mask,
+                    Generation = _snap.Health != null ? _snap.Health.Generation : 0,
+                    StockCc = new uint[] { 0xFFF80000, 0xFFF80000, 0xFFF80000, 0xFFF80000 },
+                    StockSpi = new uint[] { 7, 7, 7, 7 },
+                    ActiveWgps = CuMode.MapOf(mask, CuMode.DocumentedStockActive()),
+                };
+                if (_snap.P("CuMode") == null)
+                {
+                    _snap.Parameters["CuMode"] = CuMode.Full;
+                    _snap.Parameters["CuDisableWgp"] = mask;
+                    _snap.Parameters["CuModeConfirmed"] = CuMode.Encode(CuMode.Full, mask);
+                    _snap.Parameters["CuModeChosen"] = CuMode.Encode(CuMode.Full, mask);
+                }
             }
             // The "Now" card with every row filled: a recorded snapshot keeps its mode, reason and ceiling, and gets the
             // live readings it never recorded (37 % load, 62 C, the clock of its mode, 78 W from the SMU metrics table).
@@ -284,6 +309,38 @@ namespace AmdgpuWddmControl
                     if (_fixture && page == "system")
                         foreach (var anchor in new[] { "system.background", "system.updates", "system.drivers", "system.drive" })
                             if (!_anchors.ContainsKey(anchor)) w.AppendLine(where + ": Windows setting missing for this board: " + anchor);
+                    // The map of the pairs of graphics cores (owner, 2026-10-14) is folded away until a person asks
+                    // for it, so no run above draws its four rows of five check boxes. The page is measured again
+                    // with the map open, by the same rules, and folded back before the next page.
+                    if (page == "graphics" && !_cuMapOpen)
+                    {
+                        _cuMapOpen = true;
+                        ShowPage(page, null, false);
+                        PerformLayout();
+                        CreateHandles(this);
+                        string open = page + "-cumap" + size.Name;
+                        Snap(Path.Combine(o.Directory, open + ".png"));
+                        var mapPage = _content.Controls.Count > 0 ? _content.Controls[0] : null;
+                        if (mapPage != null)
+                        {
+                            var end = LastShown(mapPage);
+                            int endsAt = _content.PointToClient(end.Parent.PointToScreen(end.Location)).Y + end.Height;
+                            int range = _content.DisplayRectangle.Bottom + _content.Padding.Bottom;
+                            if (endsAt > range) w.AppendLine(open + ": the last control " + Label(end) + " ends at " + endsAt + ", outside the scroll range " + range);
+                            var wide = LayoutRules.PageWidthFinding(open, mapPage.Width, PageColumnWidth, Theme.S(2));
+                            if (wide != null) w.AppendLine(wide);
+                        }
+                        else w.AppendLine(open + ": empty page");
+                        foreach (var p in Overlaps(this)) w.AppendLine(open + ": " + p);
+                        foreach (var p in Overflows(this)) w.AppendLine(open + ": " + p);
+                        foreach (var p in NoInternals(Texts(this, true))) w.AppendLine(open + ": G-NOINT " + p);
+                        foreach (var p in Accessibility(this)) w.AppendLine(open + ": G-A11Y " + p);
+                        foreach (var p in Backdrops(this)) w.AppendLine(open + ": G-BACKDROP " + p);
+                        _cuMapOpen = false;
+                        ShowPage(page, null, false);
+                        PerformLayout();
+                        CreateHandles(this);
+                    }
                     if (_guide == null || string.IsNullOrEmpty(_guide.Text2)) w.AppendLine(where + ": the guide panel has no text");
                     if (_guide != null && _guide.ArtShown && !_prefs.ShowNagi) w.AppendLine(where + ": G-ART art shown with Show Nagi unchecked");
                     // The other direction, which no gate held before: with Show Nagi on, the art embedded and the
@@ -347,6 +404,20 @@ namespace AmdgpuWddmControl
                 foreach (var p in Overlaps(this)) w.AppendLine("home after the switch: " + p);
             }
             return w.ToString();
+        }
+
+        // --smoke-labels: the shell and every page, at the default window size, under the label layout rule
+        // (LabelLayout.cs). The labels a timer changes (_live) are among the labels checked, and the tally counts them.
+        internal void CheckLabels(LabelLayout.Tally t, string state)
+        {
+            ClientSize = Theme.Sz(1240, 760);
+            BuildShell();
+            foreach (var page in PageNames)
+            {
+                ShowPage(page, null, false);
+                PerformLayout();
+                LabelLayout.Check(this, "main window, " + state + ", " + page, t, new HashSet<Label>(_live.Values));
+            }
         }
 
         // G-BACKDROP (BD-137): a control that paints itself leaves no pixel of its client rectangle unpainted.

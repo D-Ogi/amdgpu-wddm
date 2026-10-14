@@ -14,22 +14,28 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Web.Script.Serialization;
-using Microsoft.Win32;
+
 
 namespace Bc250Mon
 {
     /// <summary>
     /// What the lab expects of itself, from `expectations.json` in the monitor data directory. The file is
-    /// optional: without it the expectation is 40 compute units and the installer's own record of the applied
+    /// optional: without it the expectation is 24 compute units and the installer's own record of the applied
     /// defaults (`HKLM\SOFTWARE\amdgpu-wddm\Release\AppliedDefaults`).
     /// </summary>
     public sealed class LabExpectations
     {
-        public const int DefaultCuMode = 40;        // all five WGPs of every shader array (docs/design/cu-mode.md)
+        public const int DefaultCuMode = 24;        // stock default from tester.31 (docs/design/cu-mode.md)
 
         public int CuMode = DefaultCuMode;
         /// <summary>
-        /// Expected REG_DWORDs of the miniport's `Parameters` key, over and above the installer's record. A
+        /// The file named `cuMode` itself. Without it the expectation follows the machine's own recorded choice
+        /// (`Parameters\CuModeChosen`) and falls back to the default, so a lab that wants a fixed number says so in
+        /// the file and nothing else can overrule it (OperatingPointRules.ExpectedCus).
+        /// </summary>
+        public bool CuModeSet;
+        /// <summary>
+        /// Expected effective DWORD settings, over and above the installer's record. A
         /// null value switches a check off, which is how a deliberate lab deviation is admitted.
         /// </summary>
         public Dictionary<string, int?> Parameters = new Dictionary<string, int?>(StringComparer.OrdinalIgnoreCase);
@@ -87,7 +93,10 @@ namespace Bc250Mon
                 if (root == null) { x.Error = "empty"; return x; }
                 object cu;
                 if (root.TryGetValue("cuMode", out cu) && cu != null)
+                {
                     x.CuMode = Convert.ToInt32(cu, CultureInfo.InvariantCulture);
+                    x.CuModeSet = true;
+                }
                 object parameters;
                 if (root.TryGetValue("parameters", out parameters))
                 {
@@ -103,36 +112,49 @@ namespace Bc250Mon
         }
     }
 
-    /// <summary>One read of a registry key's REG_DWORD values. Other value kinds are ignored.</summary>
+    /// <summary>Effective root DWORDs with their overrides, sources and errors.</summary>
     public sealed class RegistryDwords
     {
         public bool Present;
         public string Error;
         public Dictionary<string, int> Values = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        public Dictionary<string, int> Overrides = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        public Dictionary<string, string> Sources = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        public Dictionary<string, string> Errors = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         public int? Get(string name)
         {
             int v;
-            return Values.TryGetValue(name, out v) ? (int?)v : null;
+            return !Errors.ContainsKey(name) && Values.TryGetValue(name, out v) ? (int?)v : null;
         }
-
-        public static RegistryDwords Read(RegistryKey hive, string subKey)
+        public string Failure(string name)
+        {
+            string error;
+            return Errors.TryGetValue(name, out error) ? error : null;
+        }
+        public static RegistryDwords Read()
         {
             var result = new RegistryDwords();
             try
             {
-                using (var key = hive.OpenSubKey(subKey, false))
+                using (var state = DriverState.Open())
                 {
-                    if (key == null) return result;
                     result.Present = true;
-                    foreach (string name in key.GetValueNames())
+                    foreach (var spec in state.Catalog)
                     {
-                        object value = key.GetValue(name);
-                        if (value is int) result.Values[name] = (int)value;
+                        if (spec.Path.Length != 0 || spec.Type != 4) continue;
+                        DriverStateValue raw = state.Read(spec.Path, spec.Name, false);
+                        if (raw.Ok) result.Overrides[spec.Name] = (int)raw.Data;
+                        else if (!raw.Absent) { result.Errors[spec.Name] = raw.Failure; continue; }
+                        DriverStateValue value = spec.Kind == 0 ? state.Read(spec.Path, spec.Name, true) : raw;
+                        if (value.Ok) {
+                            result.Values[spec.Name] = (int)value.Data;
+                            result.Sources[spec.Name] = value.SourceName;
+                        } else if (!value.Absent) result.Errors[spec.Name] = value.Failure;
                     }
                 }
             }
-            catch (Exception e) { result.Error = e.Message; }
+            catch (Exception e) { result.Error = e.Message; result.Present = false; }
             return result;
         }
     }

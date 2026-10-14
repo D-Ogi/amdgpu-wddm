@@ -264,8 +264,9 @@ else {
 'BD-080: the logon tasks'
 $confirmScript = 'C:\Program Files\amdgpu-wddm\tools\start-confirm.ps1'
 $windowScript = 'C:\Program Files\amdgpu-wddm\tools\start-window.ps1'
+$windowHost = 'C:\Program Files\amdgpu-wddm\control\amdgpu_wddm_control.exe'
 $plan = $null
-if (Get-Command Get-LogonTaskPlan -ErrorAction SilentlyContinue) { $plan = @(Get-LogonTaskPlan -ConfirmScript $confirmScript -WindowScript $windowScript) }
+if (Get-Command Get-LogonTaskPlan -ErrorAction SilentlyContinue) { $plan = @(Get-LogonTaskPlan -ConfirmScript $confirmScript -WindowScript $windowScript -WindowHost $windowHost) }
 Check ($null -ne $plan) 'common.ps1 states the logon tasks as a plan (Get-LogonTaskPlan)'
 if ($plan) {
     $problems = @(Test-LogonTaskPlan $plan)
@@ -276,7 +277,23 @@ if ($plan) {
     Check ((@($plan | Where-Object { $_.trigger.kind -eq 'at-logon' -and -not $_.trigger.user }).Count) -eq $plan.Count) 'both tasks trigger at the logon of any user (no account on the trigger)'
     Check (($w.principal.id -eq 'S-1-5-32-545') -and ($w.principal.run_level -eq 'Limited')) "the window runs with the logged-on user's own rights: $($w.principal.id), $($w.principal.run_level)"
     Check (($c.arguments -match '(?i)\s-NoWindow(\s|$)') -and ($c.arguments -like "*`"$confirmScript`"*")) "the confirmation runs $($c.execute) headless over the installed script: $($c.arguments)"
-    Check (($w.arguments -like "*`"$windowScript`"*") -and ($w.arguments -notmatch '(?i)start-confirm')) "the window runs its own script: $($w.arguments)"
+    # M899: the window task runs the control application, a windows program, which starts the script with no console
+    # window. powershell.exe in the task gave the person a Windows Terminal window at sign-in.
+    Check (($w.execute -eq $windowHost) -and ($w.arguments -eq '--start-window -Seconds 120') -and ($w.script -eq $windowScript) -and (-not $w.console)) "the window runs the control application of this install, which starts its own script with no console window: $($w.execute) $($w.arguments)"
+    # An install without the control application (-NoControlApp) keeps powershell.exe, and the plan says why.
+    $plainPlan = @(Get-LogonTaskPlan -ConfirmScript $confirmScript -WindowScript $windowScript)
+    $pw = @($plainPlan | Where-Object { $_.role -eq 'window' })[0]
+    $plainProblems = @(Test-LogonTaskPlan $plainPlan)
+    Check (($plainProblems.Count -eq 0) -and ($pw.execute -eq 'powershell.exe') -and ($pw.arguments -like "*`"$windowScript`"*") -and ($pw.arguments -notmatch '(?i)start-confirm') -and [string]$pw.console) "without the control application the window runs powershell.exe over its own script and the plan says why: $($pw.console)$(if ($plainProblems.Count) { ' (' + ($plainProblems -join '; ') + ')' } else { '' })"
+    # The PE reader of the host rule: a windows program, a console program, and files that are not programs.
+    $sys = Join-Path $env:SystemRoot 'System32'
+    $txt = Join-Path $WorkRoot ('pe-subsystem-' + [guid]::NewGuid().ToString('N') + '.txt')
+    [void](New-Item -ItemType Directory -Force -Path $WorkRoot)
+    [IO.File]::WriteAllText($txt, 'MZ is not enough')
+    try {
+        $readings = @((Get-PeSubsystem (Join-Path $env:SystemRoot 'explorer.exe')), (Get-PeSubsystem (Join-Path $sys 'cmd.exe')), (Get-PeSubsystem $txt), (Get-PeSubsystem (Join-Path $sys 'no-such-file.exe')))
+    } finally { Remove-Item -LiteralPath $txt -Force -ErrorAction SilentlyContinue }
+    Check (($readings[0] -eq 2) -and ($readings[1] -eq 3) -and ($null -eq $readings[2]) -and ($null -eq $readings[3])) "Get-PeSubsystem: explorer.exe $($readings[0]), cmd.exe $($readings[1]), a text file '$($readings[2])', no file '$($readings[3])' (expected 2, 3, none, none)"
     Check ((@($plan | ForEach-Object { [string]$_.name } | Sort-Object -Unique).Count -eq 2) -and ($plan[0].name -eq $script:TaskName) -and ($plan[1].name -eq $script:WindowTaskName)) "two tasks, both named after the release: '$($plan[0].name)', '$($plan[1].name)'"
     # The negative controls: each one is the plan with one rule broken, and every one of them must be reported.
     function Copy-Plan($Source) {
@@ -300,6 +317,10 @@ if ($plan) {
         @{ name = 'a task not named after the release'; break = { param($p) $p[1].name = 'start window' }; says = "uninstaller's sweep" }
         @{ name = 'a task without a time limit'; break = { param($p) $p[0].minutes = 0 }; says = 'no execution time limit' }
         @{ name = 'only the window registered'; break = { param($p) $p[0].role = 'window' }; says = '0 confirmation tasks' }
+        @{ name = 'the window through powershell.exe with no reason (M899)'; break = { param($p) $p[1].execute = 'powershell.exe'; $p[1].arguments = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$windowScript`" -Seconds 120"; $p[1].console = $null }; says = 'console program' }
+        @{ name = 'the host not asked for the window'; break = { param($p) $p[1].arguments = '-Seconds 120' }; says = '--start-window' }
+        @{ name = 'the host of another install'; break = { param($p) $p[1].execute = 'D:\Other\amdgpu-wddm\control\amdgpu_wddm_control.exe' }; says = 'different installs' }
+        @{ name = 'a console program as the host'; break = { param($p) $p[1].execute = (Join-Path $env:SystemRoot 'System32\cmd.exe'); $p[1].script = (Join-Path $env:SystemRoot 'tools\start-window.ps1') }; says = 'PE subsystem 3' }
     )
     foreach ($ctl in $controls) {
         $broken = Copy-Plan $plan
@@ -378,6 +399,103 @@ if (Test-Path -LiteralPath $windowFile) {
     Check ($confirmText -match "(?m)^\`$windowTaskName = '$([regex]::Escape($script:WindowTaskName))'") "start-confirm.ps1 names the same window task as the plan ('$($script:WindowTaskName)')"
     Check ((@([regex]::Matches($confirmText, '(?m)^function Format-WindowTask')).Count -eq 1) -and ($confirmText -match 'Get-ScheduledTaskInfo')) 'start-confirm.ps1 reads the window task (state, last run, last result)'
     Check ($confirmText -match '(?m)^Write-StartConfirmLog "exit [^\r\n]*Format-WindowTask') 'the exit line of every logon reports what the window task did, so a window half that never ran is in the log'
+}
+
+# The small blue window (owner, 2026-10-14: it flashed for a frame or two every few seconds). Both scripts make and
+# update it through one block of two functions, and that block draws every frame in one piece: no background erase
+# on the window, one buffered paint per change of the text, and nothing else. The forms below get a window handle
+# for the messages, and are never shown.
+'the start window draws every frame in one piece'
+function Get-WindowBlock([string]$Text) {
+    $m = [regex]::Match($Text, '(?s)# ---- the window: .*?# ---- end of the window [^\r\n]*')
+    if ($m.Success) { return ($m.Value -replace "`r`n", "`n") } else { return $null }
+}
+$windowSource = $(if (Test-Path -LiteralPath $windowFile) { [IO.File]::ReadAllText($windowFile) } else { '' })
+$block = Get-WindowBlock $windowSource
+Check ([bool]$block -and ($block -ceq (Get-WindowBlock $confirmText))) 'start-window.ps1 and start-confirm.ps1 carry the same window block'
+Check (($windowSource + $confirmText) -notmatch 'Windows\.Forms\.Label') 'neither script draws the text with a Label, a second window that WinForms paints on its own'
+Check ($windowSource -match '(?s)Add_Tick\(\{\s*#[^\r\n]*\r?\n\s*\[void\]\(Set-StartWindowText \$form' -and
+    $confirmText -match '(?s)Add_Tick\(\{\s*\[void\]\(Set-StartWindowText \$form') 'both timers change the text through Set-StartWindowText, which invalidates only on a change'
+$format = [regex]::Match($windowSource, '(?s)function Format-StartWindowText.*?\r?\n\}').Value
+if ($block -and $format) {
+    Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+    . ([scriptblock]::Create($block + "`n" + $format))
+    $flags = [Reflection.BindingFlags]'Instance, NonPublic'
+    $getStyle = [Windows.Forms.Control].GetMethod('GetStyle', $flags)
+    $wndProc = [Windows.Forms.Control].GetMethod('WndProc', $flags)
+    $text0 = Format-StartWindowText 30
+    $new = New-StartWindow $text0
+    # The window of tester.31 rc4 and before, as the reference for the look: a Form with a docked Label.
+    $old = New-Object Windows.Forms.Form
+    $old.FormBorderStyle = 'None'; $old.TopMost = $true; $old.ShowInTaskbar = $false; $old.ShowIcon = $false
+    $old.StartPosition = 'Manual'; $old.Location = New-Object Drawing.Point(8, 34)
+    $old.BackColor = [Drawing.Color]::Navy
+    $label = New-Object Windows.Forms.Label
+    $label.Dock = 'Fill'; $label.ForeColor = [Drawing.Color]::Cyan; $label.Font = New-Object Drawing.Font('Consolas', 9)
+    $label.Padding = New-Object Windows.Forms.Padding(4, 3, 4, 3)
+    $label.Text = $text0
+    $need = [Windows.Forms.TextRenderer]::MeasureText($label.Text, $label.Font)
+    $old.ClientSize = New-Object Drawing.Size(($need.Width + 12), ($need.Height + 8))
+    $old.Controls.Add($label)
+    try {
+        [void]$new.Handle; [void]$old.Handle
+        $styles = @('UserPaint', 'AllPaintingInWmPaint', 'OptimizedDoubleBuffer', 'Opaque') | Where-Object { -not $getStyle.Invoke($new, @([Windows.Forms.ControlStyles]$_)) }
+        Check ($styles.Count -eq 0 -and $new.Controls.Count -eq 0) "the window is one form that paints itself, double-buffered, with no erase$(if ($styles.Count) { ": not $($styles -join ', ')" })"
+        Check ($new.Location -eq $old.Location -and $new.ClientSize -eq $old.ClientSize -and $new.TopMost) "the window keeps its place and size ($($new.Location.X),$($new.Location.Y) $($new.ClientSize.Width)x$($new.ClientSize.Height))"
+
+        # WM_ERASEBKGND on a buffer filled with a colour the window never uses: the form must leave every pixel. The
+        # form of rc4 painted its navy there, straight on the window.
+        $erased = {
+            param($Control)
+            $bmp = New-Object Drawing.Bitmap($Control.ClientSize.Width, $Control.ClientSize.Height)
+            $g = [Drawing.Graphics]::FromImage($bmp)
+            $g.Clear([Drawing.Color]::FromArgb(255, 255, 0, 255))
+            $hdc = $g.GetHdc()
+            try { [void]$wndProc.Invoke($Control, @([Windows.Forms.Message]::Create($Control.Handle, 0x0014, $hdc, [IntPtr]::Zero))) }
+            finally { $g.ReleaseHdc($hdc); $g.Dispose() }
+            $changed = 0
+            for ($y = 0; $y -lt $bmp.Height; $y += 2) { for ($x = 0; $x -lt $bmp.Width; $x += 2) { if ($bmp.GetPixel($x, $y).ToArgb() -ne -65281) { $changed++ } } }
+            $bmp.Dispose()
+            return $changed
+        }
+        $newErase = & $erased $new
+        $oldErase = & $erased $old
+        Check ($newErase -eq 0 -and $oldErase -gt 0) "WM_ERASEBKGND draws nothing on the window ($newErase sampled pixels changed; the rc4 form changed $oldErase)"
+
+        # The look: the frame of the new form against the Label of the rc4 form, pixel for pixel. The Label covers
+        # that form's whole client area, so its picture is the window's; a hidden form prints no child of its own.
+        $shot = {
+            param($Control)
+            $bmp = New-Object Drawing.Bitmap($Control.Width, $Control.Height)
+            $Control.DrawToBitmap($bmp, (New-Object Drawing.Rectangle(0, 0, $Control.Width, $Control.Height)))
+            return $bmp
+        }
+        Check ($label.Bounds -eq $old.ClientRectangle) "the rc4 Label covers its form ($($label.Bounds))"
+        $a = & $shot $new; $b = & $shot $label
+        $diff = 0; $cyan = 0
+        for ($y = 0; $y -lt $a.Height; $y++) {
+            for ($x = 0; $x -lt $a.Width; $x++) {
+                $p = $a.GetPixel($x, $y)
+                if ($p.ToArgb() -ne $b.GetPixel($x, $y).ToArgb()) { $diff++ }
+                if ($p.G -gt 200 -and $p.B -gt 200 -and $p.R -lt 60) { $cyan++ }
+            }
+        }
+        Check ($diff -eq 0 -and $cyan -gt 100) "the window looks as before, pixel for pixel ($diff of $($a.Width * $a.Height) pixels differ, $cyan cyan)"
+        $a.Dispose(); $b.Dispose()
+
+        # Two minutes of the timer at 250 ms: an invalidation exactly when the text changes, never in between.
+        $script:invalidations = 0
+        $new.Add_Invalidated({ $script:invalidations++ })
+        $changes = 0; $said = 0; $shown = $text0
+        for ($i = 0; $i -lt 120; $i++) {
+            $t = Format-StartWindowText (30 - 0.25 * $i)
+            if (Set-StartWindowText $new $t) { $said++ }
+            if ($t -cne $shown) { $changes++; $shown = $t }
+        }
+        Check ($changes -eq 29 -and $said -eq $changes -and $script:invalidations -eq $changes -and [string]$new.Tag.Text -ceq $shown) "120 timer ticks: $changes text changes, $said reported, $($script:invalidations) invalidations, and the window holds the last text"
+    } finally { $new.Dispose(); $old.Dispose() }
+} else {
+    Check $false 'the window block and Format-StartWindowText are in start-window.ps1'
 }
 
 if ($fail) { "FAILED: $fail check(s)"; exit 1 }

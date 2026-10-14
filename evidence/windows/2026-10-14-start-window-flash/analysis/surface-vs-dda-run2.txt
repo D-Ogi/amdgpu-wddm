@@ -1,0 +1,151 @@
+case a: DDA window rows 190, surface content changes 276, surface reads 72041
+  read gaps ms: median 2.08 p99 2.16 max 7.44
+  self-check: 150 of 150 regular DDA contents also read from the surface (same hash)
+  a surface content: navy 16769 cyan 1190 black 0 other 1073
+  DDA window flashes 21 over 162 contents; surface flashes 125
+  DDA flash +12.855 s 13.3 ms other-content cyan 206: 31 reads in [-50 ms, +13.3 ms], largest gap 2.14 ms; same picture read from the surface within 200 reads: no; nearest surface flash +1021.9 ms earlier-content cyan 206 hash =
+  DDA flash +21.044 s 13.4 ms earlier-content cyan 206: 29 reads in [-50 ms, +13.4 ms], largest gap 5.13 ms; same picture read from the surface within 200 reads: yes; nearest surface flash -1.0 ms earlier-content cyan 206 hash =
+  DDA flash +25.887 s 12.4 ms earlier-content cyan 206: 29 reads in [-50 ms, +12.4 ms], largest gap 3.17 ms; same picture read from the surface within 200 reads: yes; nearest surface flash -2.5 ms earlier-content cyan 206 hash =
+  DDA flash +29.953 s 1.4 ms earlier-content cyan 206: 25 reads in [-50 ms, +1.4 ms], largest gap 2.14 ms; same picture read from the surface within 200 reads: no; nearest surface flash +1004.0 ms earlier-content cyan 206 hash =
+  DDA flash +31.983 s 12.0 ms earlier-content cyan 206: 29 reads in [-50 ms, +12.0 ms], largest gap 3.15 ms; same picture read from the surface within 200 reads: yes; nearest surface flash -3.0 ms earlier-content cyan 206 hash =
+  DDA flash +58.899 s 13.6 ms earlier-content cyan 206: 30 reads in [-50 ms, +13.6 ms], largest gap 2.15 ms; same picture read from the surface within 200 reads: yes; nearest surface flash -2.9 ms earlier-content cyan 206 hash =
+  DDA flash +71.823 s 13.3 ms earlier-content cyan 206: 31 reads in [-50 ms, +13.3 ms], largest gap 2.14 ms; same picture read from the surface within 200 reads: yes; nearest surface flash -1.9 ms earlier-content cyan 206 hash =
+  DDA flash +80.840 s 13.4 ms earlier-content cyan 206: 31 reads in [-50 ms, +13.4 ms], largest gap 2.14 ms; same picture read from the surface within 200 reads: yes; nearest surface flash -1.6 ms earlier-content cyan 206 hash =
+  DDA flash +106.877 s 14.4 ms earlier-content cyan 206: 30 reads in [-50 ms, +14.4 ms], largest gap 2.37 ms; same picture read from the surface within 200 reads: yes; nearest surface flash -2.0 ms earlier-content cyan 206 hash =
+  DDA flash +126.963 s 13.6 ms other-content cyan 738: 31 reads in [-50 ms, +13.6 ms], largest gap 2.14 ms; same picture read from the surface within 200 reads: no; nearest surface flash -2.0 ms earlier-content cyan 206 hash !=
+  DDA flash +130.032 s 13.0 ms earlier-content cyan 206: 30 reads in [-50 ms, +13.0 ms], largest gap 2.18 ms; same picture read from the surface within 200 reads: yes; nearest surface flash -2.6 ms earlier-content cyan 206 hash =
+  DDA flash +133.860 s 13.0 ms earlier-content cyan 206: 30 reads in [-50 ms, +13.0 ms], largest gap 2.41 ms; same picture read from the surface within 200 reads: yes; nearest surface flash -2.4 ms earlier-content cyan 206 hash =
+  DDA flash +149.867 s 27.6 ms black cyan 0: 23 reads in [-50 ms, +27.6 ms], largest gap 2.13 ms; same picture read from the surface within 200 reads: no; nearest surface flash -8.2 ms earlier-content cyan 206 hash !=
+  DDA flash +149.976 s 14.1 ms black cyan 0: 0 reads in [-50 ms, +14.1 ms], largest gap None ms; same picture read from the surface within 200 reads: no; nearest surface flash -117.0 ms earlier-content cyan 206 hash !=
+  DDA flash +149.990 s 26.2 ms black cyan 0: 0 reads in [-50 ms, +26.2 ms], largest gap None ms; same picture read from the surface within 200 reads: no; nearest surface flash -131.1 ms earlier-content cyan 206 hash !=
+  DDA flash +150.016 s 13.8 ms black cyan 0: 0 reads in [-50 ms, +13.8 ms], largest gap None ms; same picture read from the surface within 200 reads: no; nearest surface flash -157.3 ms earlier-content cyan 206 hash !=
+  DDA flash +150.030 s 14.5 ms black cyan 0: 0 reads in [-50 ms, +14.5 ms], largest gap None ms; same picture read from the surface within 200 reads: no; nearest surface flash -171.1 ms earlier-content cyan 206 hash !=
+  DDA flash +150.045 s 13.0 ms black cyan 1: 0 reads in [-50 ms, +13.0 ms], largest gap None ms; same picture read from the surface within 200 reads: no; nearest surface flash -185.6 ms earlier-content cyan 206 hash !=
+  DDA flash +150.058 s 14.4 ms black cyan 31: 0 reads in [-50 ms, +14.4 ms], largest gap None ms; same picture read from the surface within 200 reads: no; nearest surface flash -198.6 ms earlier-content cyan 206 hash !=
+  DDA flash +150.072 s 26.1 ms black cyan 39: 0 reads in [-50 ms, +26.1 ms], largest gap None ms; same picture read from the surface within 200 reads: no; nearest surface flash -213.0 ms earlier-content cyan 206 hash !=
+  DDA flash +150.098 s 13.4 ms not-the-window cyan 60: 0 reads in [-50 ms, +13.4 ms], largest gap None ms; same picture read from the surface within 200 reads: no; nearest surface flash -239.1 ms earlier-content cyan 206 hash !=
+  surface flash +0.979 s 2.0 ms other-content navy 18659 cyan 206 bmp a-surface-0.bmp; nearest DDA flash 11876.1 ms
+  surface flash +2.003 s 2.0 ms earlier-content navy 18659 cyan 206 bmp a-surface-1.bmp; nearest DDA flash 10851.4 ms
+  surface flash +3.027 s 2.0 ms earlier-content navy 18659 cyan 206 bmp a-surface-2.bmp; nearest DDA flash 9827.2 ms
+  surface flash +3.814 s 2.0 ms earlier-content navy 18659 cyan 206 bmp a-surface-3.bmp; nearest DDA flash 9040.3 ms
+  surface flash +4.841 s 4.0 ms earlier-content navy 18659 cyan 206 bmp a-surface-4.bmp; nearest DDA flash 8014.1 ms
+  surface flash +5.898 s 1.9 ms earlier-content navy 18659 cyan 206 bmp a-surface-5.bmp; nearest DDA flash 6957.2 ms
+  surface flash +6.922 s 2.0 ms earlier-content navy 18659 cyan 206 bmp a-surface-6.bmp; nearest DDA flash 5933.1 ms
+  surface flash +7.961 s 2.0 ms earlier-content navy 18659 cyan 206 bmp a-surface-7.bmp; nearest DDA flash 4893.3 ms
+  surface flash +10.039 s 2.0 ms earlier-content navy 18659 cyan 206 bmp a-surface-8.bmp; nearest DDA flash 2815.3 ms
+  surface flash +11.036 s 2.1 ms earlier-content navy 18659 cyan 206 bmp a-surface-9.bmp; nearest DDA flash 1818.9 ms
+  surface flash +11.829 s 2.1 ms earlier-content navy 18659 cyan 206 bmp a-surface-10.bmp; nearest DDA flash 1025.5 ms
+  surface flash +13.877 s 2.0 ms earlier-content navy 18659 cyan 206 bmp a-surface-11.bmp; nearest DDA flash 1021.9 ms
+  surface flash +14.888 s 2.1 ms earlier-content navy 18659 cyan 206 bmp a-surface-12.bmp; nearest DDA flash 2032.9 ms
+  surface flash +15.956 s 4.1 ms earlier-content navy 18659 cyan 206 bmp a-surface-13.bmp; nearest DDA flash 3101.5 ms
+  surface flash +16.963 s 2.0 ms earlier-content navy 18659 cyan 206 bmp a-surface-14.bmp; nearest DDA flash 4080.9 ms
+  surface flash +17.958 s 2.0 ms earlier-content navy 18659 cyan 206 bmp a-surface-15.bmp; nearest DDA flash 3086.0 ms
+  surface flash +19.012 s 1.9 ms earlier-content navy 18659 cyan 206 bmp a-surface-16.bmp; nearest DDA flash 2032.4 ms
+  surface flash +20.038 s 2.1 ms earlier-content navy 18659 cyan 206 bmp a-surface-17.bmp; nearest DDA flash 1006.4 ms
+  surface flash +21.043 s 2.0 ms earlier-content navy 18659 cyan 206 bmp a-surface-18.bmp; nearest DDA flash 1.0 ms
+  surface flash +21.818 s 2.0 ms earlier-content navy 18659 cyan 206 bmp a-surface-19.bmp; nearest DDA flash 773.8 ms
+  surface flash +22.842 s 2.0 ms earlier-content navy 18659 cyan 206 bmp a-surface-20.bmp; nearest DDA flash 1797.8 ms
+  surface flash +24.861 s 2.0 ms earlier-content navy 18659 cyan 206 bmp a-surface-21.bmp; nearest DDA flash 1025.8 ms
+  surface flash +25.885 s 3.8 ms earlier-content navy 18659 cyan 206 bmp a-surface-22.bmp; nearest DDA flash 2.5 ms
+  surface flash +26.909 s 2.0 ms earlier-content navy 18659 cyan 206 bmp a-surface-23.bmp; nearest DDA flash 1021.6 ms
+  surface flash +27.932 s 2.1 ms earlier-content navy 18659 cyan 206 bmp a-surface-24.bmp; nearest DDA flash 2021.7 ms
+  surface flash +28.940 s 2.0 ms earlier-content navy 18659 cyan 206 bmp a-surface-25.bmp; nearest DDA flash 1012.9 ms
+  surface flash +30.957 s 2.0 ms earlier-content navy 18659 cyan 206 bmp a-surface-26.bmp; nearest DDA flash 1004.0 ms
+  surface flash +31.980 s 1.9 ms earlier-content navy 18659 cyan 206 bmp a-surface-27.bmp; nearest DDA flash 3.0 ms
+  surface flash +32.992 s 2.0 ms earlier-content navy 18659 cyan 206 bmp a-surface-28.bmp; nearest DDA flash 1008.8 ms
+  surface flash +34.014 s 2.1 ms earlier-content navy 18659 cyan 206 bmp a-surface-29.bmp; nearest DDA flash 2031.3 ms
+  surface flash +35.052 s 2.1 ms earlier-content navy 18659 cyan 206 bmp a-surface-30.bmp; nearest DDA flash 3069.5 ms
+  surface flash +35.844 s 1.9 ms earlier-content navy 18659 cyan 206 bmp a-surface-31.bmp; nearest DDA flash 3861.0 ms
+  surface flash +36.881 s 2.1 ms earlier-content navy 18659 cyan 206 bmp a-surface-32.bmp; nearest DDA flash 4898.7 ms
+  surface flash +37.918 s 2.0 ms earlier-content navy 18659 cyan 206 bmp a-surface-33.bmp; nearest DDA flash 5934.9 ms
+  surface flash +39.991 s 2.0 ms earlier-content navy 18659 cyan 206 bmp a-surface-34.bmp; nearest DDA flash 8007.9 ms
+  surface flash +42.070 s 2.0 ms earlier-content navy 18659 cyan 206 bmp a-surface-35.bmp; nearest DDA flash 10087.1 ms
+  surface flash +42.846 s 2.1 ms earlier-content navy 18659 cyan 206 bmp a-surface-36.bmp; nearest DDA flash 10863.2 ms
+  surface flash +43.883 s 2.0 ms earlier-content navy 18659 cyan 206 bmp a-surface-37.bmp; nearest DDA flash 11900.5 ms
+  surface flash +44.906 s 2.1 ms earlier-content navy 18659 cyan 206 bmp a-surface-38.bmp; nearest DDA flash 12923.1 ms
+  surface flash +47.982 s 2.1 ms earlier-content navy 18659 cyan 206 bmp a-surface-39.bmp; nearest DDA flash 10917.0 ms
+  surface flash +49.034 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 9864.4 ms
+  surface flash +49.823 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 9075.9 ms
+  surface flash +50.847 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 8051.9 ms
+  surface flash +51.885 s 1.9 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 7013.6 ms
+  surface flash +52.909 s 2.1 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 5989.7 ms
+  surface flash +53.976 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 4922.6 ms
+  surface flash +54.998 s 2.1 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 3900.5 ms
+  surface flash +56.055 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 2843.5 ms
+  surface flash +56.835 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 2064.0 ms
+  surface flash +57.858 s 2.1 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 1040.9 ms
+  surface flash +58.896 s 4.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 2.9 ms
+  surface flash +59.903 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 1003.9 ms
+  surface flash +60.955 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 2055.7 ms
+  surface flash +61.980 s 2.1 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 3081.6 ms
+  surface flash +62.988 s 2.1 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 4088.9 ms
+  surface flash +64.040 s 1.9 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 5141.2 ms
+  surface flash +65.867 s 2.1 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 5956.5 ms
+  surface flash +67.921 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 3902.3 ms
+  surface flash +68.970 s 1.9 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 2853.2 ms
+  surface flash +70.009 s 2.1 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 1814.4 ms
+  surface flash +71.044 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 779.0 ms
+  surface flash +71.821 s 1.9 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 1.9 ms
+  surface flash +72.832 s 2.1 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 1009.1 ms
+  surface flash +73.869 s 2.1 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 2045.9 ms
+  surface flash +74.906 s 2.1 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 3083.0 ms
+  surface flash +79.815 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 1024.5 ms
+  surface flash +80.838 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 1.6 ms
+  surface flash +81.864 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 1024.2 ms
+  surface flash +82.885 s 1.9 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 2045.7 ms
+  surface flash +84.978 s 2.1 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 4138.2 ms
+  surface flash +85.983 s 2.1 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 5143.5 ms
+  surface flash +87.005 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 6164.8 ms
+  surface flash +88.811 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 7970.9 ms
+  surface flash +89.833 s 1.9 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 8993.3 ms
+  surface flash +90.869 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 10029.5 ms
+  surface flash +91.906 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 11066.1 ms
+  surface flash +95.008 s 2.1 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 11869.0 ms
+  surface flash +96.031 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 10845.7 ms
+  surface flash +96.820 s 2.1 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 10057.1 ms
+  surface flash +97.844 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 9032.7 ms
+  surface flash +98.900 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 7977.2 ms
+  surface flash +99.935 s 2.1 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 6942.1 ms
+  surface flash +100.987 s 2.1 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 5889.3 ms
+  surface flash +102.025 s 2.1 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 4851.6 ms
+  surface flash +103.046 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 3830.7 ms
+  surface flash +104.848 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 2028.8 ms
+  surface flash +105.855 s 1.9 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 1021.7 ms
+  surface flash +106.875 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 2.0 ms
+  surface flash +107.914 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 1036.8 ms
+  surface flash +108.937 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 2060.0 ms
+  surface flash +110.988 s 2.1 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 4111.7 ms
+  surface flash +112.045 s 1.9 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 5168.0 ms
+  surface flash +112.836 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 5959.3 ms
+  surface flash +113.828 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 6951.2 ms
+  surface flash +115.859 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 8982.3 ms
+  surface flash +116.869 s 1.9 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 9991.9 ms
+  surface flash +117.906 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 9057.7 ms
+  surface flash +118.961 s 2.1 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 8002.8 ms
+  surface flash +121.038 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 5925.0 ms
+  surface flash +121.830 s 2.1 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 5133.9 ms
+  surface flash +122.870 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 4093.8 ms
+  surface flash +123.861 s 2.1 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 3102.8 ms
+  surface flash +124.882 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 2081.3 ms
+  surface flash +125.906 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 1057.5 ms
+  surface flash +126.961 s 1.9 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 2.0 ms
+  surface flash +127.985 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 1021.7 ms
+  surface flash +128.979 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 1052.4 ms
+  surface flash +130.029 s 1.9 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 2.6 ms
+  surface flash +131.052 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 1020.6 ms
+  surface flash +131.845 s 2.1 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 1813.1 ms
+  surface flash +133.858 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 2.4 ms
+  surface flash +134.893 s 4.1 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 1033.4 ms
+  surface flash +135.931 s 2.1 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 2070.9 ms
+  surface flash +136.970 s 2.1 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 3109.8 ms
+  surface flash +137.994 s 2.1 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 4133.9 ms
+  surface flash +139.003 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 5143.4 ms
+  surface flash +140.043 s 2.8 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 6182.5 ms
+  surface flash +140.833 s 1.9 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 6972.8 ms
+  surface flash +141.856 s 2.1 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 7996.0 ms
+  surface flash +142.911 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 6956.3 ms
+  surface flash +143.935 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 5932.3 ms
+  surface flash +144.990 s 2.1 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 4877.1 ms
+  surface flash +145.999 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 3868.5 ms
+  surface flash +147.037 s 2.0 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 2830.6 ms
+  surface flash +149.859 s 4.6 ms earlier-content navy 18659 cyan 206 bmp -; nearest DDA flash 8.2 ms

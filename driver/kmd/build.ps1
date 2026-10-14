@@ -152,6 +152,8 @@ foreach($group in $groups) {
 }
 $commands | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $Out 'compile_commands.json') -Encoding utf8
 if($ExportCommandsOnly) { Write-Host 'compile commands exported; no compilation or deployment'; return }
+& python -B (Join-Path $repo 'tools\state\generate.py') --check
+if ($LASTEXITCODE) { throw 'State catalog, immutable defaults and INF differ' }
 # -CompileOnly is the compiler as a gate: the same three cl.exe calls and the same link as a real package build,
 # with no quality gates, no identity manifest, no catalog and no signature. It exists because the quality gate
 # itself only EXPORTED these commands (quick.ps1 'kmd-commands' -ExportCommandsOnly), so a C error in
@@ -164,8 +166,6 @@ if(-not $CompileOnly) {
     if($LASTEXITCODE -ne 0) { throw 'Fast quality gates failed; KMD package not built' }
 }
 
-Invoke-Tool (Join-Path $bin 'cl.exe') ($clFlags + $shimInc + $sources + $shimSources)
-Invoke-Tool (Join-Path $bin 'cl.exe') ($clFlags + $shimInc + @("/I$repo\driver\shim", '/TC', '/wd4245') + $shimGfxSources)
 if ($Flavour -eq 'lab' -and -not $PackageVersion) { throw '-Flavour lab needs -PackageVersion: a flavour of no release' }
 # BD-166: the version resource, compiled before the link because the kernel driver cannot be stamped afterwards
 # (the release pins its Authenticode digest, and a stamp after the signature would break it). versionstamp.py
@@ -186,12 +186,14 @@ if ($PackageVersion) {
         "/I$sdk\Include\$KitVersion\um", "/I$sdk\Include\$KitVersion\shared", (Join-Path $here 'bc250kmd.rc'))
     if (-not (Test-Path -LiteralPath $res)) { throw "rc.exe wrote no $res" }
 }
+Invoke-Tool (Join-Path $bin 'cl.exe') ($clFlags + $shimInc + $sources + $shimSources)
+Invoke-Tool (Join-Path $bin 'cl.exe') ($clFlags + $shimInc + @("/I$repo\driver\shim", '/TC', '/wd4245') + $shimGfxSources)
 Invoke-Tool (Join-Path $bin 'cl.exe') ($clFlags + $shimInc + @('/TC', '/wd4244', '/wd4701', '/wd4100') + $importSources)
 Write-Host 'link'
 Invoke-Tool (Join-Path $bin 'link.exe') (@('/nologo', '/DRIVER', '/SUBSYSTEM:NATIVE,10.00', '/ENTRY:DriverEntry', '/NODEFAULTLIB', '/RELEASE',
     '/DEBUG', '/OPT:REF', '/OPT:ICF', '/MACHINE:X64', "/LIBPATH:$wdk\Lib\$KitVersion\km\x64",
     '/Brepro', '/PDBALTPATH:%_PDB%',  # a content hash instead of a timestamp, and the PDB by name, not by path
-    'aux_klib.lib', 'displib.lib', 'ntoskrnl.lib', 'hal.lib', 'bufferoverflowfastfailk.lib', 'libcntpr.lib', 'ntstrsafe.lib',
+    'aux_klib.lib', 'displib.lib', 'ntoskrnl.lib', 'hal.lib', 'bufferoverflowfastfailk.lib', 'libcntpr.lib', 'ntstrsafe.lib', 'cng.lib',
     "/OUT:$pkg\bc250kmd.sys", "/PDB:$Out\bc250kmd.pdb", "/MAP:$Out\bc250kmd.map") +
     (Get-OrdinalBuildFiles "$obj\*.obj") +                  # fixed order: /OPT:ICF folds by input order
     @($res | Where-Object { $_ }))                          # the version resource, named here and never globbed
@@ -211,6 +213,17 @@ if($CompileOnly) {
 }
 
 Copy-Item (Join-Path $here 'bc250kmd.inf') $pkg -Force
+Copy-Item (Join-Path $repo 'driver\state\amdgpu-state.bin') $pkg -Force
+# A signed development package follows the same immutable firmware layout. A
+# compile-only gate above has no external firmware dependency.
+. (Join-Path $repo 'tools\release\installer\firmware-package.ps1')
+if (-not $FirmwareDir) { $FirmwareDir = Join-Path (Split-Path (Split-Path $Kits)) 'ref\linux-firmware__WARN-AMD-blobs-never-commit\amdgpu' }
+$fwPin = Get-Content (Join-Path $repo 'tools\firmware\cyan_skillfish2.json') -Raw | ConvertFrom-Json
+$fwSource = (Get-Content (Join-Path $repo 'tools\release\release-sources.json') -Raw | ConvertFrom-Json).firmware
+if ($fwPin.commit -cne $fwSource.commit) { throw 'KMD firmware pin and release pin differ' }
+$fwPackage = [ordered]@{ delivery = 'driver-store-v1'; commit = $fwPin.commit; install_dir = '%13%'
+    files = @($fwPin.files) + @($fwSource.licence) }
+Copy-DriverStoreFirmware -Firmware $fwPackage -FromDir $FirmwareDir -Destination $pkg
 Write-Host 'catalog'
 Invoke-Tool "$wdk\bin\$KitVersion\x86\Inf2Cat.exe" @("/driver:$pkg", '/os:10_X64')
 
@@ -237,7 +250,9 @@ if ($UmdStub) {
     Write-Host 'umd package'
     # The signed binary itself, copied: the second run must differ from the first in the INF and the DLL only.
     Copy-Item "$pkg\bc250kmd.sys" $pkgUmd -Force
+    Copy-Item "$pkg\amdgpu-state.bin" $pkgUmd -Force
     Copy-Item $dll $pkgUmd -Force
+    Copy-DriverStoreFirmware -Firmware $fwPackage -FromDir $FirmwareDir -Destination $pkgUmd
     Write-UmdInf (Join-Path $here 'bc250kmd.inf') (Join-Path $pkgUmd 'bc250kmd.inf')
     # Inf2Cat before the certificate is put there: the .cer is not a packaged file and Inf2Cat would object to it.
     # Signing the .sys does not disturb the catalog, which hashes the PE without its certificate table - which is

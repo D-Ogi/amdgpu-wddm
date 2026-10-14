@@ -84,8 +84,44 @@ this run's (A2): a stale or missing result reads "the installer stopped before i
 that changes may have been made; "nothing changed" is said only on a bound result that reports no change (A3).
 Cancel writes `<events>.cancel`, and only while the engine says it can stop. The window cannot be closed while the engine runs.
 
+The window reads the events every 250 ms. An event changes the progress screen in place (`src/WorkingView.cs`): the
+mark of a stage, the note, the Cancel button, the value of the strip or a new check row. The window builds the
+screen again only when its frame changes: the title, the stage list or the notice of cancelled removals. The strip
+then stays the same control. Until 2026-10-14 each batch of events built the whole screen again, also for the
+`step` event of each change. Each new control showed the background for one frame (owner: "co 6-8 sekund niebieski
+pasek od instalatora robi krótkie mignięcie"). `--smoke-progress <dir>` plays an install run of 30 s and a plan run
+of 10 s against the window, which is not shown. The strip must stay one control with one window handle, and no
+event may build the screen again. The strip is drawn again only when its value changes or its band moves.
+
 The window starts as the invoking user (`asInvoker`) and relaunches itself elevated at once (one UAC prompt);
 `--prepare-offline` stays unelevated.
+
+## Start
+
+The owner, 2026-10-14: "instalator z exe także ładuje się dość długo - także potrzebuje od razu okienka ładowania".
+Every run with a window opens a small loading window first (`src/LoadingWindow.cs`): Nagi's welcome picture, the
+name of the program, one line of text and the progress strip. The slow steps come only after Windows has drawn it.
+`src/StartSequence.cs` holds that order, and the unit tests check it against a recorder:
+
+1. The loading window.
+2. The look at the file (the first opening of the single file is the one Windows Defender scans, up to 1.2 s on the
+   development PC), on a worker thread.
+3. Without administrator rights: a line that tells what Windows asks and which answer continues, then the UAC
+   prompt. The loading window
+   stays until the elevated copy has its own loading window on the screen. The first copy gives the elevated copy
+   the name of an event in the session namespace (`--loading-handover amdgpu-wddm-setup-loading-<32 hex>`), and the
+   elevated copy sets it when its window is drawn. Without the event the first copy closes after 1.5 s, and in any
+   case after 30 s or when the elevated copy ends.
+4. With a payload: the lock of one unpacking, then the unpacking (368 MB, 4-12 s) with a progress bar on a worker
+   thread. `Payload.Extract` reports bytes done of payload length plus twice the size of the files (the copy and the
+   check). A person who closes the loading window stops the unpacking first, and the folder is removed.
+5. The setup window, drawn before the loading window closes. A refused prompt, another unpacking run and a damaged
+   payload are told in a message box over the loading window, with the exit codes as before (5, 8, 7).
+
+`--smoke-loading <dir>` builds the loading window headless in each of its stages, with the layout and G-NOINT checks
+of the setup screens. It also records `first-window-ms`: the time from the start of the process until the first
+loading window has its handle and its layout. Nothing is drawn on a screen there.
+`tools/win/app-launch/measure-launch.ps1` measures the time to the first window on the lab, with a real screen.
 
 ## Build and test
 
@@ -101,7 +137,7 @@ which a PC without high contrast on could otherwise never draw). No step shows a
 against the real engine (plan and dry run). Every release package carries the window from 0.7.216.100-tester.28 on:
 `build-release.ps1` refuses to build without `-SetupApp`, and `test-dryrun.ps1` fails a package without it. The
 last step of the build is `tools/release/test-setup-exe.ps1`: the exe just built is packed around a package of its
-own, reads it back, and refuses seven damaged or empty exes.
+own, reads it back, and refuses nine damaged, doctored or empty exes.
 
 The icon of the window, and of the release's single setup file, is
 `tools/win/amdgpu_wddm_control/art/icon/nagi.ico`, the icon of the control application as well. `build.ps1` passes

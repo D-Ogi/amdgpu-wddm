@@ -40,10 +40,15 @@ Try-Line 'counters:' {
 # GuardRecordHangRecovery), so they outlive the log ring and the 0x116 that a refusal leads to. Cumulative over
 # the life of the install and never reset here: a total, not "since this boot".
 Try-Line 'hangrecord:' {
-    $r = Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters\HangRecovery' -ErrorAction SilentlyContinue
-    if ($null -eq $r) { 'absent' }
+    . (Join-Path $script:inst 'tools\state-reader.ps1')
+    $r = Read-DriverStateValues -Cli $script:cli -Path 'HangRecovery'
+    if ($r.Count -eq 0) { 'absent' }
     else { 'attempts={0} recovered={1} not_drained={2} refused={3} last_verdict={4}' -f
-             [int]$r.Attempts, [int]$r.Recovered, [int]$r.NotDrained, [int]$r.Refused, [int]$r.LastVerdict } }
+             $(if($r.ContainsKey('Attempts')){$r.Attempts}else{'absent'}),
+             $(if($r.ContainsKey('Recovered')){$r.Recovered}else{'absent'}),
+             $(if($r.ContainsKey('NotDrained')){$r.NotDrained}else{'absent'}),
+             $(if($r.ContainsKey('Refused')){$r.Refused}else{'absent'}),
+             $(if($r.ContainsKey('LastVerdict')){$r.LastVerdict}else{'absent'}) } }
 @($log | Select-String 'hang|recover|reset|FAULT|TIMEOUT') | Select-Object -Last $Lines |
     ForEach-Object { 'logline ' + $_.Line.Trim().Substring(0, [Math]::Min(200, $_.Line.Trim().Length)) }
 Try-Line 'display:' {

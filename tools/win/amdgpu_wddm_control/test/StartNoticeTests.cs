@@ -162,7 +162,8 @@ static partial class UnitTests
         Check(!r.Written && r.Error != null && r.Error.Contains("flush"), "a failed flush is never hidden: " + r);
         api = new FakeRegApi(); api.Values[GuardReset.ValueName] = 2; api.QueryStatus = 5;
         r = GuardReset.Run(api);
-        Check(r.Written && r.Before == null && r.After == null, "a count that cannot be read is reported as unknown, and the write still counts: " + r);
+        Check(!r.Written && r.Error != null, "an unreadable count cannot be treated as a successful reset: " + r);
+        Equal(2u, api.Values[GuardReset.ValueName], "an unreadable count is not overwritten");
         r = GuardReset.Run(null);
         Check(!r.Written && r.Error != null, "no registry access: an error, never a silent pass");
 

@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.Eventing.Reader;
+using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -59,9 +60,13 @@ namespace AmdgpuWddmControl
             Add("settings.txt", "Driver settings in the registry, D3D12 application profiles and the graphics settings for games", Settings());
             progress("Reading the release logs");
             AddReleaseLogs();
-            Add("system.txt", "Windows version, test signing, this application's version", SystemInfo());
             progress("Reading the game logs");
             AddGameLogs();
+            // BD-174: what this application recorded when a background step failed, and what any thread recorded
+            // before a process-fatal exception ended it. A report made after the window vanished carries it.
+            Add("control-crash.log", "Background failures and process-fatal exceptions of this application (BD-174)",
+                Tail(Crash.LogPath()) ?? "No crash.log: this application has recorded no background failure for this account.");
+            Add("system.txt", "Windows version, test signing, this application's version", SystemInfo());
             if (events)
             {
                 progress("Reading the event logs");
@@ -157,7 +162,14 @@ namespace AmdgpuWddmControl
             while (pages++ < 64)        // the ring is 1024 lines, 64 a page: 16 pages, the rest is a live stream
             {
                 var page = Kmd.LogPage(from);
-                if (page.Value == null) { w.AppendLine("log read stopped: " + page.Error + " (0x" + ((uint)page.Status).ToString("X8") + ")"); break; }
+                if (page.Value == null)
+                {
+                    w.AppendLine("log read stopped: " + page.Error + " (0x" + ((uint)page.Status).ToString("X8") + ")");
+                    // The log ring names physical addresses, so the driver gives it to administrators only
+                    // (driver/kmd/display.c LogEscape). Say what to do instead of leaving a bare status (BD-168).
+                    if ((uint)page.Status == 0xC0000022u) w.AppendLine("# the driver log needs administrator rights: start this application with Run as administrator and create the report again");
+                    break;
+                }
                 if (pages == 1) w.AppendLine(string.Format("# {0} lines since the driver loaded, {1} lost to the wrap, {2} dropped above DISPATCH_LEVEL", page.Value.Total, page.Value.Lost, page.Value.Above));
                 foreach (var l in page.Value.Lines) { w.AppendLine(string.Format("{0,6} {1,6}.{2:000} {3}", l.Sequence, l.Milliseconds / 1000, l.Milliseconds % 1000, l.Text)); lines++; }
                 if (page.Value.Returned == 0 || page.Value.Next <= from) break;
@@ -206,7 +218,7 @@ namespace AmdgpuWddmControl
             {
                 using (var f = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
                 {
-                    long skip = Math.Max(0, f.Length - LogBytesLimit);
+                    long skip = Math.Max(0, f.Length - limit);
                     f.Seek(skip, SeekOrigin.Begin);
                     using (var r = new StreamReader(f, Encoding.UTF8, true))
                         return (skip > 0 ? "[... first " + skip + " bytes left out ...]\n" : "") + r.ReadToEnd();
@@ -236,29 +248,6 @@ namespace AmdgpuWddmControl
             }
         }
 
-        static string Settings()
-        {
-            var w = new StringBuilder();
-            // The hang record is a SUBKEY of Parameters (driver/kmd/guard.c GuardRecordHangRecovery), so reading
-            // the values of Parameters alone never showed it. A field report of a DWM crash needs it: it says
-            // whether the driver attempted a stage-1 hang recovery in this boot, and when (BD-168). How its
-            // values are printed is src/HangRecord.cs, which the unit tests compile.
-            foreach (var key in new[] { DpmSettings.RegistryPath, DpmSettings.RegistryPath + "\\" + HangRecord.SubKey })
-            {
-                w.AppendLine("[HKLM\\" + key + "]");
-                try
-                {
-                    var values = SettingsStore.ReadAll(key);
-                    foreach (var kv in values.OrderBy(k => k.Key)) w.AppendLine(kv.Key + " = " + HangRecord.Value(kv.Key, kv.Value));
-                    // An absent key reads as no values, and that is the answer to "did the driver ever
-                    // attempt a hang recovery here": say it, so the empty heading is not read as a failure.
-                    if (values.Count == 0) w.AppendLine("# no values: the key does not exist");
-                }
-                catch (Exception e) { w.AppendLine("unreadable: " + e.Message); }
-            }
-            w.AppendLine("[HKLM\\" + Profiles.RegistryPath + "]");
-            try { foreach (var kv in SettingsStore.ReadProfiles()) w.AppendLine(kv.Key + " Experiment = " + kv.Value); }
-            catch (Exception e) { w.AppendLine("unreadable: " + e.Message); }
         // The game logs of the timed switch (GameLog.cs): the newest GameLog.ReportFileCount files, at most
         // GameLog.ReportBytesLimit in total, newest first, each one redacted like every other entry. A whole log
         // and not its tail: a cut log reads as a game that stopped where the cut is. A report of a machine that
@@ -286,6 +275,29 @@ namespace AmdgpuWddmControl
             }
         }
 
+        static string Settings()
+        {
+            var w = new StringBuilder();
+            // The hang record is a SUBKEY of Parameters (driver/kmd/guard.c GuardRecordHangRecovery), so reading
+            // the values of Parameters alone never showed it. A field report of a DWM crash needs it: it says
+            // whether the driver attempted a stage-1 hang recovery in this boot, and when (BD-168). How its
+            // values are printed is src/HangRecord.cs, which the unit tests compile.
+            foreach (var key in new[] { DpmSettings.RegistryPath, DpmSettings.RegistryPath + "\\" + HangRecord.SubKey })
+            {
+                w.AppendLine("[HKLM\\" + key + "]");
+                try
+                {
+                    var values = SettingsStore.ReadAll(key);
+                    foreach (var kv in values.OrderBy(k => k.Key)) w.AppendLine(kv.Key + " = " + HangRecord.Value(kv.Key, kv.Value));
+                    // An absent key reads as no values, and that is the answer to "did the driver ever
+                    // attempt a hang recovery here": say it, so the empty heading is not read as a failure.
+                    if (values.Count == 0) w.AppendLine("# no values: the key does not exist");
+                }
+                catch (Exception e) { w.AppendLine("unreadable: " + e.Message); }
+            }
+            w.AppendLine("[HKLM\\" + Profiles.RegistryPath + "]");
+            try { foreach (var kv in SettingsStore.ReadProfiles()) w.AppendLine(kv.Key + " Experiment = " + kv.Value); }
+            catch (Exception e) { w.AppendLine("unreadable: " + e.Message); }
             // The graphics and Vulkan settings for games: every stored value as it is, then the value in force for all
             // games and for each game with its own key, and where it comes from (GraphicsSettings.Report).
             w.AppendLine();

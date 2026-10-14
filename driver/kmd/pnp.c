@@ -2,12 +2,16 @@
 #include "bc250kmd.h"
 #include "adapter_owner.h"
 #include "hdmi_link.h"
+#include "state_kernel.h"
 
 NTSTATUS Bc250AddDevice(_In_ const PDEVICE_OBJECT PhysicalDeviceObject, _Outptr_ PVOID* MiniportDeviceContext)
 {
     BC250_DEVICE* device;
+    NTSTATUS stateStatus;
 
     *MiniportDeviceContext = NULL;
+    stateStatus=DriverStateValidateDevice(PhysicalDeviceObject);
+    if(!NT_SUCCESS(stateStatus))return stateStatus;
     if (!AdapterOwnerClaim(PhysicalDeviceObject)) return STATUS_DEVICE_BUSY;
     device = (BC250_DEVICE*)ExAllocatePool2(POOL_FLAG_NON_PAGED, sizeof(*device), BC250_TAG);
     if (device == NULL) {
@@ -225,6 +229,15 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     // go through the passive owner and an OS-selected VidPN transaction.
     GuardStartStep(L"ConnectorStart");
     status=ConnectorStart(device);
+    // A connector that cannot be admitted or planned has programmed nothing, so
+    // the firmware's stream is still on the wire and the static inherited path
+    // owns the display (connector.c, BD-169). Only a refusal of that path itself
+    // leaves nothing to present, and that one still fails the start (#38).
+    if (!NT_SUCCESS(status) && ConnectorRefusalKeepsDisplay(device)) {
+        GuardLog("connector: start refused 0x%08lX; the static inherited path keeps the firmware stream",
+                 (ULONG)status);
+        status=STATUS_SUCCESS;
+    }
     if (!NT_SUCCESS(status)) goto failed;
     StartHealthReady(device,device->FullWddm && GfxStartupResources(device,TRUE));
     // Last: it watches a started device, and it never fails the start (EnableHangBugcheck, hang.c).
@@ -238,9 +251,6 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     DpmStart(device);
     // After the governor: the CPU surface reads its settings and, if CpuTune is 1, starts its worker (cpu.c).
     CpuStart(device);
-    // The driver version that games read in the adapter's software key, for the ReportAmdDriverVersion setting
-    // (driver_version.c). Registry only, and never fails the start.
-    DriverVersionStart(device);
     BoardMemoryStart(device); // Read-only self-check; never fails display start.
     GuardStage(StageStartDone);
     GuardRecordStartStarted();      // BD-122: this start is not a reason for anything
@@ -616,5 +626,6 @@ void Bc250Unload(void)
     HangDetectorStop();     // its thread and DPC run this image's code: joined before the image goes
     InteropDriverUnload();  // likewise the power callback
     FanDriverUnload();      // likewise the fan watchdog and its bugcheck callback; the fan goes back to the board
+    PspDriverCleanup();     // retained images and device workers have drained before driver unload
     GuardCleanup();
 }

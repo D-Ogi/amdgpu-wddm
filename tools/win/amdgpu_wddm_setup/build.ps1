@@ -5,7 +5,8 @@
 #   pwsh tools\win\amdgpu_wddm_setup\build.ps1 -Out P:\BC-250\scratch\build\gui-setup\setup-app [-NoSmoke]
 #
 # Gates, in order, each stops the build:
-#   1. unit tests (test/UnitTests.cs): G-STR and G-NOINT over the tables, the engine contract against
+#   1. unit tests (test/UnitTests.cs, test/StartTests.cs: the order of the start, test/WorkingTests.cs: what the
+#      progress screen shows and which events change it): G-STR and G-NOINT over the tables, the engine contract against
 #      tools/release/installer (every check id, stage and message id has words), the event model and result binding
 #      (A2), the A3 texts, settings-impact lines, notes, prepared folders, guide ranks, arguments, quoting, and the
 #      native TOKEN_PRIVILEGES layout of the planned restart;
@@ -32,6 +33,11 @@
 #      box or option button of its own and its Install button is never off. G-SHORTCUT holds the two shortcut
 #      options of the same instruction: the plan screen offers the Start menu and the desktop, and both are on when
 #      it opens.
+#   4b. --smoke-loading: the loading window of the start in each of its stages, with the same layout and G-NOINT
+#      checks, at four DPIs, four languages, three text sizes and two screens;
+#   4c. --smoke-progress: an install run of 30 s and a plan run of 10 s played against the setup window: the progress
+#      strip stays one control with one window handle, no engine event builds the screen again, and the strip is
+#      drawn again only when its value changes or its band moves;
 #   5. tools\release\test-setup-exe.ps1: the exe is packed around a small package of its own (the single-file
 #      installer the release ships, owner 2026-10-12) and reads it back through --smoke-payload, and nine damaged, doctored
 #      or empty exes are offered to the reader and every one of them is refused.
@@ -62,10 +68,14 @@ $exe = Join-Path $Out 'amdgpu_wddm_setup.exe'
 $refs = 'mscorlib.dll', 'System.dll', 'System.Core.dll', 'System.Drawing.dll', 'System.Windows.Forms.dll', 'System.IO.Compression.dll',
     'System.IO.Compression.FileSystem.dll', 'System.Web.Extensions.dll' | ForEach-Object { "/reference:$fx\$_" }
 $pure = 'Strings.cs', 'Json.cs', 'EngineModel.cs', 'PlanText.cs', 'SetupArgs.cs', 'NoInternals.cs', 'Redactor.cs', 'SmallScreen.cs', 'InstallFlow.cs', 'Payload.cs' | ForEach-Object { Join-Path $here "src\$_" }
+# The order of the start: the loading window before every slow step (LoadingWindow.cs).
+$pure += 'StartSequence.cs' | ForEach-Object { Join-Path $here "src\$_" }
+# What the progress screen shows, and which engine events change it in place (WorkingView.cs).
+$pure += 'WorkingView.cs' | ForEach-Object { Join-Path $here "src\$_" }
 
 # 1. Unit tests of the pure parts.
 & $csc /nologo /noconfig /nostdlib+ @refs /target:exe /platform:x64 /warnaserror+ /langversion:7.3 /deterministic+ `
-    "/out:$obj\unit-tests.exe" @pure (Join-Path $here 'src\Native.cs') (Join-Path $here 'test\UnitTests.cs')
+    "/out:$obj\unit-tests.exe" @pure (Join-Path $here 'src\Native.cs') (Join-Path $here 'test\UnitTests.cs') (Join-Path $here 'test\StartTests.cs') (Join-Path $here 'test\WorkingTests.cs')
 if ($LASTEXITCODE -ne 0) { throw "unit test compile failed ($LASTEXITCODE)" }
 $unit = @(& "$obj\unit-tests.exe" $repo (Join-Path $here 'strings') | ForEach-Object { [string]$_ })
 $unitFailed = $LASTEXITCODE -ne 0
@@ -240,6 +250,25 @@ if (-not $NoSmoke) {
     }
     Write-Host "  render: $(@(Get-ChildItem (Join-Path $obj 'render-1-en-text1') -Filter *.png).Count) screens x $($renders.Count) (4 DPIs x 4 languages + 150 % text + 2 without the guide character + 2 in high contrast + 6 runs over five screen sizes from 800x600 up), no overlap or overflow, the guide art and the right-hand panel where they belong, G-A11Y, G-CHROME, G-SMALL, G-CONSENT, G-SHORTCUT and G-NOINT clean ($obj\render-*)"
 
+    # 4b. The loading window of the start (LoadingWindow.cs) in each of its stages, four languages, four scales, three
+    #     text sizes and a 1024x768 and a large screen: it fits or scrolls, nothing overlaps or overflows, no internals,
+    #     every text in the tables, the guide's picture where the exe carries it.
+    $dir = Join-Path $obj 'loading'
+    Remove-Item -Recurse -Force $dir -ErrorAction SilentlyContinue
+    $code = Invoke-Exe @('--smoke-loading', $dir) 300
+    $loading = Get-Content (Join-Path $dir 'loading.txt') -Raw -ErrorAction SilentlyContinue
+    if ($code -ne 0 -or $loading -notmatch '^ok: ') { throw "smoke-loading (exit $code):`n$loading" }
+    Write-Host "  loading window: $((($loading -split "`r?`n") | Where-Object { $_ }) -join ', ')"
+
+    # 4c. The progress screen under engine events (SetupForm.ProgressGate): the strip is never made again, never
+    #     gets a second window handle, and is drawn again only when its value changes or its band moves.
+    $dir = Join-Path $obj 'progress'
+    Remove-Item -Recurse -Force $dir -ErrorAction SilentlyContinue
+    $code = Invoke-Exe @('--smoke-progress', $dir) 300
+    $progress = Get-Content (Join-Path $dir 'progress.txt') -Raw -ErrorAction SilentlyContinue
+    if ($code -ne 0 -or $progress -notmatch '(?m)^ok\r?$') { throw "smoke-progress (exit $code):`n$progress" }
+    (($progress -split "`r?`n") | Where-Object { $_ -and $_ -ne 'ok' }) | ForEach-Object { Write-Host "  progress: $_" }
+
     # 5. The single-file installer (Payload.cs): the exe just built is packed around a small package of its own and
     #    read back through its --smoke-payload mode, then nine damaged, doctored or empty exes are offered to it and every one
     #    of them must be refused. This runs here, with the exe in hand, so a reader that would unpack a doctored
@@ -251,12 +280,12 @@ if (-not $NoSmoke) {
     Write-Host "  $($oneOk[0]) (the payload read, checked and unpacked; 9 damaged, doctored or empty exes refused)"
 }
 
-Get-ChildItem $Out -File | ForEach-Object {
-    '{0,9}  {1}  {2}' -f $_.Length, (Get-FileHash $_.FullName -Algorithm SHA256).Hash.Substring(0, 8), $_.Name
-}
 # BD-166: the release copies this program to the top of the package as setup.exe and rewrites no PE file, so the
 # version resource is written here, under the name it is shipped as.
 & pwsh -NoProfile -File (Join-Path $repo 'tools\build\version-stamp.ps1') -Version $Version -Flavour $Flavour `
     -Names setup.exe "$Out\amdgpu_wddm_setup.exe"
 if ($LASTEXITCODE -ne 0) { throw 'the version stamp of the setup window failed' }
 
+Get-ChildItem $Out -File | ForEach-Object {
+    '{0,9}  {1}  {2}' -f $_.Length, (Get-FileHash $_.FullName -Algorithm SHA256).Hash.Substring(0, 8), $_.Name
+}

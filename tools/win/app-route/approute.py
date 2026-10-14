@@ -356,6 +356,7 @@ def main():
     s.add_argument('mode', choices=['cpu', 'allowlist', 'gpu-default', 'remove'])
     s.add_argument('--allow', default='')
     s.add_argument('--deny', default='')
+    s.add_argument('--installed-package', action='store_true', help='change policy for package-relative DriverStore UMDs without DLL path overrides')
     s = sub.add_parser('status')
     s.add_argument('--no-mappers', action='store_true')
     s.add_argument('--tail', type=int, default=40)
@@ -393,6 +394,8 @@ def main():
         r = lab_script(t, 'router-swap.ps1', ['-Action', a.action], timeout=150)
     elif a.cmd == 'policy':
         args = ['-Mode', a.mode] + (['-Allow', a.allow] if a.allow else []) + (['-Deny', a.deny] if a.deny else [])
+        if a.installed_package:
+            args += ['-InstalledPackage']
         r = lab_script(t, 'app-policy.ps1', args, timeout=60)
     elif a.cmd == 'status':
         r = lab_script(t, 'app-status.ps1', ['-Tail', str(a.tail)] + (['-NoMappers'] if a.no_mappers else []), timeout=150)

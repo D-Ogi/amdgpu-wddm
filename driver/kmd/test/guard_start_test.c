@@ -23,6 +23,7 @@ typedef const wchar_t* PCWSTR;
 #define STATUS_DEVICE_BUSY (-7L)
 #define NT_SUCCESS(s) ((s)>=0)
 #define PASSIVE_LEVEL 0
+#define REG_DWORD 4
 #define BC250_MAX_UNCONFIRMED_STARTS 2u
 #define StageStartEnter 30u
 #define StageStartGuardPassed 31u
@@ -49,6 +50,14 @@ static NTSTATUS WriteDword(HANDLE key,PCWSTR name,ULONG value)
 {(void)key;writes++;if(!NT_SUCCESS(writeStatus))return writeStatus;if(!wcscmp(name,L"EnableFullWddm"))settingGate=value;else cached=value;return STATUS_SUCCESS;}
 static NTSTATUS ZwFlushKey(HANDLE key){(void)key;flushes++;if(NT_SUCCESS(flushStatus))durable=cached;return flushStatus;}
 static void ZwClose(HANDLE key){(void)key;closes++;}
+/* The state adapter has its own raw-type/default tests. Here its durable path
+ * uses the same failing registry model as the boot-budget record writer. */
+static NTSTATUS DriverStateNumber(PCWSTR child,PCWSTR name,BOOLEAN effective,ULONG* value)
+{HANDLE key;NTSTATUS s;(void)child;(void)effective;*value=0;s=OpenParameters(&key);if(!NT_SUCCESS(s))return s;
+ s=ReadDword(key,name,value);ZwClose(key);return s;}
+static NTSTATUS DriverStateSet(PCWSTR child,PCWSTR name,ULONG type,const void* data,ULONG bytes)
+{HANDLE key;NTSTATUS s;(void)child;(void)type;(void)bytes;s=OpenParameters(&key);if(!NT_SUCCESS(s))return s;
+ s=WriteDword(key,name,*(const ULONG*)data);if(NT_SUCCESS(s))s=ZwFlushKey(key);ZwClose(key);return s;}
 static void GuardLog(const char* format,...){logs++;strcpy_s(lastLog,sizeof(lastLog),format);}
 static void GuardStage(ULONG stage){if(stage==StageStartGuardPassed)admissions++;}
 /* BD-090: the volatile GuardBoot key, which a reboot drops. */

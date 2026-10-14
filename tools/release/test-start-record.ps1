@@ -3,7 +3,7 @@
 #
 #   powershell -NoProfile -File tools\release\test-start-record.ps1 [-Installer <package>\installer] [-Out <dir>]
 #
-# The fixtures are written as real registry values under a scratch key of HKCU (removed at the end) and read back
+# The fixtures are written in an in-memory typed record store and read back
 # through the one reader that start-confirm.ps1 and the installer use:
 #   a step failure (the GitHub #38 shape: Code 43, LastStage 91, now with the step and the NTSTATUS),
 #   the boot-loop guard's refusal,
@@ -13,18 +13,23 @@
 #   a stop record with the seven values of its own, from this boot and from an earlier one, and a torn one,
 #   no record at all (a KMD before 0.7.216.30).
 # Then the extraction the installer's verify step performs on the probe's output, and the source rules that keep
-# both consumers honest. Runs under Windows PowerShell 5.1 and PowerShell 7; nothing outside HKCU is touched.
+# both consumers honest. Runs under Windows PowerShell 5.1 and PowerShell 7 without host registry access.
 param([string]$Installer = (Join-Path (Split-Path $PSScriptRoot) 'release\installer'), [string]$Out = '')
 $ErrorActionPreference = 'Stop'
 if (-not (Test-Path -LiteralPath (Join-Path $Installer 'start-confirm-core.ps1'))) {
     $Installer = Join-Path $PSScriptRoot 'installer'
 }
 . (Join-Path $Installer 'start-confirm-core.ps1')
+. (Join-Path $Installer 'state-reader.ps1')
+. (Join-Path $PSScriptRoot 'test-record-store.ps1')
+$script:FixtureBootUtc=[datetime]::UtcNow.AddHours(-1)
+function Get-BootIdentity {return @{boot_id=387;boot_utc=$script:FixtureBootUtc.ToString('o')}}
+function Get-CimInstance {return [pscustomobject]@{LastBootUpTime=$script:FixtureBootUtc}}
 $fail = 0
 function Check([bool]$Ok, [string]$Text) { if ($Ok) { "  PASS $Text" } else { "  FAIL $Text"; $script:fail++ } }
 
 $scratch = 'Software\amdgpu-wddm-start-record-test'
-$root = [Microsoft.Win32.Registry]::CurrentUser
+$root = New-RecordFixtureKey
 $root.DeleteSubKeyTree($scratch, $false)
 function New-Fixture([string]$Name, [hashtable]$Values) {
     $k = $root.CreateSubKey("$scratch\$Name")
@@ -188,6 +193,8 @@ try {
     $probeFile = Join-Path ([IO.Path]::GetTempPath()) ('amdgpu-bootutc-' + [guid]::NewGuid().ToString('N').Substring(0, 8) + '.ps1')
     $probeBody = @(
         '$ErrorActionPreference = ''Stop''',
+        'function Get-ItemProperty { return [pscustomobject]@{BootId=387} }',
+        'function Get-CimInstance { return [pscustomobject]@{LastBootUpTime=[datetime]''2026-10-11T22:19:45Z''} }',
         ". '$(Join-Path $Installer 'start-confirm-core.ps1')'",
         '$before = [bool](Get-Command -Name Get-BootIdentity -CommandType Function -ErrorAction SilentlyContinue)',
         '$c1 = [Diagnostics.Stopwatch]::StartNew(); $a = Get-StartRecordBootUtc; $t1 = [int]$c1.ElapsedMilliseconds',
@@ -288,10 +295,9 @@ try {
     # source they used.
     $savedShared = $env:AMDGPU_WDDM_TEST_SHARED_BOOT_ID
     try {
-        $env:AMDGPU_WDDM_TEST_SHARED_BOOT_ID = $null
-        $live = $null
-        try { $live = [int64]([int64][Runtime.InteropServices.Marshal]::ReadInt32([IntPtr]0x7FFE02C4) -band [int64]4294967295) } catch { $live = $null }
-        Check ($null -ne $live -and $live -gt 0) "this host maps KUSER_SHARED_DATA and its BootId is a number ($live)"
+        $env:AMDGPU_WDDM_TEST_SHARED_BOOT_ID = '388'
+        $live = 388
+        Check ($live -gt 0) 'the synthetic shared page supplies a positive BootId'
         Check ((Get-SharedBootId) -eq $live) 'and the reader of that page gives exactly that number'
         $reading = Get-StartRecordBootIdReading
         Check ([string]$reading.source -ceq 'KUSER_SHARED_DATA' -and [int64]$reading.boot_id -eq $live) 'so this boot''s reading comes from the page, and says so'
@@ -354,9 +360,19 @@ try {
     $detail = "$view; $record"
     Check ($detail -match 'device problem 43' -and $detail -match '0xC0000022') "verify's one line now carries both"
 
-    '7. the source rules both consumers must keep'
+    '7. shared-state record protocol does not collapse errors into absence'
+    $sharedRunner={param($exe,$arguments) @{code=0;text='{"abi":1,"error":0,"items":[{"path":"StartRecord","name":"Result","kind":"record","record":{"status":"ok","type":1,"bytes":16,"value":"failed"}},{"path":"StartRecord","name":"Status","kind":"record","record":{"status":"ok","type":4,"bytes":4,"value":3221225506}}]}'}}
+    $view=Open-DriverStateRecordView -Path StartRecord -Cli fixture.exe -Runner $sharedRunner
+    $sharedRecord=Read-StartRecordFromKey $view
+    Check ($sharedRecord.Result -eq 'failed' -and $sharedRecord.Status -eq 3221225506) 'shared-state typed record reaches the existing formatter'
+    $deniedRunner={param($exe,$arguments) @{code=0;text='{"abi":1,"error":0,"items":[{"path":"StartRecord","name":"Result","kind":"record","record":{"status":"access","os_error":5}}]}'}}
+    $denied=$false;try{Open-DriverStateRecordView -Path StartRecord -Cli fixture.exe -Runner $deniedRunner}catch{$denied=$true}
+    Check $denied 'unreadable shared record is an error, not an absent record'
+
+    '8. the source rules both consumers must keep'
     $sc = [IO.File]::ReadAllText((Join-Path $Installer 'start-confirm.ps1'))
     Check ($sc -match 'function Read-StartRecord \{') 'start-confirm.ps1 reads the record'
+    Check ($sc -match 'Open-DriverStateRecordView' -and $sc -notmatch 'Services\\bc250kmd\\Parameters') 'start-confirm reads only shared state'
     Check ($sc -match '(?m)^Write-StartRecordLog?$') 'and writes it into its log at every logon'
     Check ($sc -match 'start record: \$\(Format-StartRecord -Record \(Read-StartRecord\) -BootUtc \$script:bootUtc\)') 'and into its exit line'
     Check ($sc -match 'Write-StartRecordLog -Lines \$script:StartRecordMaxLogLines') 'the probe prints every kept line'

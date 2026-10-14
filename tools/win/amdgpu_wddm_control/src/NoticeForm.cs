@@ -204,7 +204,7 @@ namespace AmdgpuWddmControl
             if (_smoke) return;
             _clock.Restart();
             _tick.Start();
-            Task.Run(() => Program.RunElevatedCode("--action", "enable-driver")).ContinueWith(t =>
+            Task.Run(() => Crash.Watched("enable driver", () => Program.RunElevatedCode("--action", "enable-driver"))).ContinueWith(t =>
             {
                 int code = t.Status == TaskStatus.RanToCompletion ? t.Result : RecoveryRunner.Failed;
                 _tick.Stop();
@@ -256,7 +256,7 @@ namespace AmdgpuWddmControl
         // ---- the window's own layout gate (BD-137) -------------------------------------------------------------
         // Every case, every language and every scale, built without being shown: nothing overlaps, nothing is cut
         // off on the right, nothing reaches outside the screen, and every button has a name a screen reader can
-        // read. Program.cs --smoke-notice runs it in the build.
+        // read. Program.cs --smoke-notice runs it in the build. The loading window (Launch.cs) uses the same checks.
         public static string Findings(StartNoticeCase noticeCase, Size workArea)
         {
             var w = new StringBuilder();
@@ -296,7 +296,7 @@ namespace AmdgpuWddmControl
 
         static IEnumerable<Control> Kids(Control c) { return c.Controls.Cast<Control>(); }
 
-        static IEnumerable<string> Texts(Control root)
+        internal static IEnumerable<string> Texts(Control root)
         {
             foreach (var c in Kids(root))
             {
@@ -305,7 +305,7 @@ namespace AmdgpuWddmControl
             }
         }
 
-        static IEnumerable<Button> Buttons(Control root)
+        internal static IEnumerable<Button> Buttons(Control root)
         {
             foreach (var c in Kids(root))
             {
@@ -314,7 +314,7 @@ namespace AmdgpuWddmControl
             }
         }
 
-        static IEnumerable<string> Overlaps(Control parent)
+        internal static IEnumerable<string> Overlaps(Control parent)
         {
             var kids = Kids(parent).ToList();
             for (int i = 0; i < kids.Count; i++)
@@ -331,7 +331,7 @@ namespace AmdgpuWddmControl
         // asked: there the content is meant to be larger than the box, and the person reaches it with the scroll
         // bar. Height matters as much as width: a window cut off at its foot loses the buttons, which is worse
         // than one cut off on the right, where only the end of a sentence goes missing.
-        static IEnumerable<string> Overflows(Control root)
+        internal static IEnumerable<string> Overflows(Control root)
         {
             foreach (var c in Kids(root))
             {

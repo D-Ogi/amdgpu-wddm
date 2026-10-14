@@ -21,6 +21,9 @@
 #include <string.h>
 #undef WIN32_NO_STATUS
 #include <ntstatus.h>
+#include "../../state/state.h"
+/* The boost-probe suite models a valid CPU group. The state suite tests reads. */
+static BOOLEAN DriverStateGroupEnabled(ULONG group) { return group == AMDGPU_STATE_GROUP_CPU; }
 
 static volatile LONG native_checks, native_failures;
 #define CHECK(x) do { InterlockedIncrement(&native_checks); if (!(x)) { InterlockedIncrement(&native_failures); \

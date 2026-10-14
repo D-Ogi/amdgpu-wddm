@@ -24,15 +24,22 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text;
-using Microsoft.Win32;
+
 
 namespace Bc250Mon
 {
     /// <summary>The CU mode registry record and, when it answered, the escape snapshot.</summary>
     public sealed class CuModeView
     {
-        public bool ParametersPresent;              // the miniport's Parameters key exists
+        public bool ParametersPresent;              // the shared state store opened
         public int? CuMode, CuDisableWgp, Pending, Confirmed, LastApplied, LastReason;
+        public string SettingSource;
+        /// <summary>
+        /// `Parameters\CuModeChosen`: the encoded request (`bc250_cu_encode(mode, disable)`) that a person asked
+        /// for, written by the control app and by `install.cmd -CuMode`. The driver neither reads nor writes it, so
+        /// it is the one value on this machine that says a count was chosen rather than defaulted.
+        /// </summary>
+        public int? Chosen;
         public bool HaveEscape;
         public CuModeSnapshot Escape;
         public string EscapeError;                  // why the escape has no answer (an old control DLL says so)
@@ -67,13 +74,13 @@ namespace Bc250Mon
                 return LastApplied.HasValue ? (uint?)(uint)LastApplied.Value : null;
             }
         }
-        /// <summary>What the next start will apply: `CuMode`, and an absent value means the firmware's 24.</summary>
+        /// <summary>What the next start will apply, resolved by the common state client.</summary>
         public uint? Setting
         {
             get
             {
                 if (CuMode.HasValue) return (uint)CuMode.Value;
-                return ParametersPresent ? (uint?)CuModeSnapshot.Stock : null;
+                return null; // Defaults were resolved by the common state client.
             }
         }
         /// <summary>What this start was asked for. The escape reports 0 for an absent setting, which means 24.</summary>
@@ -87,6 +94,39 @@ namespace Bc250Mon
         }
 
         /// <summary>
+        /// The units the person's own choice asks for, decoded from `CuModeChosen`: 24 for the stock choice, else 40
+        /// less two per masked WGP. Null when no choice is recorded or the record is not a request the driver takes,
+        /// which is the case this panel exists for: a release install that chose nothing.
+        /// </summary>
+        public uint? ChosenCus { get { return DecodeCus(Chosen); } }
+
+        /// <summary>The units an encoded request (`bc250_cu_encode`) runs. Null for anything else.</summary>
+        public static uint? DecodeCus(int? encoded)
+        {
+            if (!encoded.HasValue || encoded.Value < 0) return null;
+            uint mode = (uint)encoded.Value & 0xFF, disable = (uint)encoded.Value >> 8;
+            if ((disable & ~0xFFFFFu) != 0) return null;
+            if (mode == CuModeSnapshot.Stock) return disable == 0 ? (uint?)CuModeSnapshot.Stock : null;
+            if (mode != CuModeSnapshot.Full) return null;
+            uint bits = 0;
+            for (uint m = disable; m != 0; m &= m - 1) bits++;
+            return CuModeSnapshot.Full - 2 * bits;
+        }
+
+        /// <summary>The units this setting (`CuMode` with `CuDisableWgp`) would give the next start.</summary>
+        public uint? SettingCus
+        {
+            get
+            {
+                var mode = Setting;
+                if (!mode.HasValue || mode.Value != CuModeSnapshot.Full) return mode;
+                uint bits = 0;
+                for (uint m = (uint)(CuDisableWgp.HasValue ? CuDisableWgp.Value : 0) & 0xFFFFFu; m != 0; m &= m - 1) bits++;
+                return CuModeSnapshot.Full - 2 * bits;
+            }
+        }
+
+        /// <summary>
         /// `bc250_cu_encode(CuMode, CuDisableWgp)` of what `Parameters` asks for: the exact value `CuModePending`
         /// and `CuModeConfirmed` hold (bc250_cu_mode.h). Only a 40 request is encoded; `bc250_cu_decide` writes 0
         /// for 24 and clears a leftover mark. Null when the setting is not a 40 request.
@@ -95,8 +135,8 @@ namespace Bc250Mon
         {
             get
             {
-                if (!CuMode.HasValue || CuMode.Value != (int)CuModeSnapshot.Full) return null;
-                return (CuMode.Value & 0xFF) | ((CuDisableWgp.HasValue ? CuDisableWgp.Value : 0) << 8);
+                if (!CuMode.HasValue || CuMode.Value != (int)CuModeSnapshot.Full || !CuDisableWgp.HasValue) return null;
+                return (CuMode.Value & 0xFF) | (CuDisableWgp.Value << 8);
             }
         }
         /// <summary>
@@ -254,9 +294,28 @@ namespace Bc250Mon
             return reason == 3 || reason == 6 || reason == 7 || reason == 8 || reason == 9;
         }
 
+        /// <summary>
+        /// The counted units the lab expects of a start: `expectations.json` when it names `cuMode`, else the
+        /// person's own choice (`CuModeChosen`, which the control app and `install.cmd -CuMode` write), else
+        /// `LabExpectations.DefaultCuMode`, the count the release installs by itself (24 since tester.31: the owner
+        /// reversed the 40 of tester.30 on 2026-10-14, docs/design/cu-mode.md). The order matters in both
+        /// directions. A chosen count has to win, or a deliberate 30-core start reads amber against a count nobody
+        /// asked for (the control app offers 24 to 40 in twos since 2026-10-14). And a lab that wants more than the
+        /// install gives says so in the file or asks for it with `install.cmd -CuMode`, which is the lesson of
+        /// 2026-10-05: the install carried no `CuMode`, the driver harvested to 24, and three days of game numbers
+        /// were 24 CU numbers while every report assumed 40.
+        /// </summary>
+        public static uint ExpectedCus(CuModeView v, LabExpectations x)
+        {
+            if (x != null && x.CuModeSet) return (uint)x.CuMode;
+            uint? chosen = v != null ? v.ChosenCus : null;
+            if (chosen.HasValue) return chosen.Value;
+            return (uint)(x != null ? x.CuMode : LabExpectations.DefaultCuMode);
+        }
+
         public static void AddCuRows(Panel panel, CuModeView v, LabExpectations x)
         {
-            uint expected = (uint)x.CuMode;
+            uint expected = ExpectedCus(v, x);
             uint? applied = v.Applied;
             uint? counted = v.Counted;
             var text = new StringBuilder();
@@ -310,12 +369,11 @@ namespace Bc250Mon
 
             uint? setting = v.Setting;
             if (!setting.HasValue)
-                panel.Rows.Add(new Row("CU setting", "no Parameters key", Level.Info));
+                panel.Rows.Add(new Row("CU setting", "driver state unavailable", Level.Info));
             else
             {
-                string value = v.CuMode.HasValue
-                    ? "CuMode " + v.CuMode.Value.ToString(CultureInfo.InvariantCulture)
-                    : "CuMode absent: the next start harvests to 24";
+                string value = "CuMode " + setting.Value.ToString(CultureInfo.InvariantCulture);
+                if (!string.IsNullOrEmpty(v.SettingSource)) value += " (" + v.SettingSource + ")";
                 if (v.CuDisableWgp.HasValue && v.CuDisableWgp.Value != 0)
                     value += " less WGP mask 0x" + v.CuDisableWgp.Value.ToString("X", CultureInfo.InvariantCulture);
                 // The marks hold bc250_cu_encode(mode, disable), so "confirmed" is only true of this exact
@@ -460,7 +518,7 @@ namespace Bc250Mon
             if (!v.Effective.HasValue)
             {
                 panel.Rows.Add(new Row("Interop", v.EscapeError ?? (v.ParametersPresent
-                    ? "no InteropLastState record" : "no Parameters key"), Level.Info));
+                    ? "no InteropLastState record" : "driver state unavailable"), Level.Info));
                 return;
             }
             int effective = v.Effective.Value, requested = v.Requested.Value;
@@ -589,7 +647,6 @@ namespace Bc250Mon
 
     public sealed class OperatingPointProvider : IProvider
     {
-        public const string ParametersKey = @"SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters";
 
         readonly ILabStateSource _source;
         readonly DpmFeed _dpm;
@@ -630,8 +687,11 @@ namespace Bc250Mon
             if (!paused) ReadEscapes();
 
             var view = new OperatingPointView { Paused = paused, NowUtc = DateTime.UtcNow };
-            RegistryDwords parameters = RegistryDwords.Read(Registry.LocalMachine, ParametersKey);
+            RegistryDwords parameters = RegistryDwords.Read();
             view.Cu = BuildCu(parameters);
+            if (parameters.Error != null) panel.Rows.Add(new Row("State", parameters.Error, Level.Error));
+            foreach (var error in parameters.Errors)
+                panel.Rows.Add(new Row("State " + error.Key, error.Value, Level.Error));
             view.Dpm = _dpm != null ? _dpm.Read() : new DpmView { Error = "no telemetry feed" };
             view.Health = new StartHealthView
             {
@@ -724,11 +784,14 @@ namespace Bc250Mon
 
         CuModeView BuildCu(RegistryDwords parameters)
         {
+            string source; parameters.Sources.TryGetValue("CuMode", out source);
             return new CuModeView
             {
                 ParametersPresent = parameters.Present,
                 CuMode = parameters.Get("CuMode"),
+                SettingSource = source,
                 CuDisableWgp = parameters.Get("CuDisableWgp"),
+                Chosen = parameters.Get("CuModeChosen"),
                 Pending = parameters.Get("CuModePending"),
                 Confirmed = parameters.Get("CuModeConfirmed"),
                 LastApplied = parameters.Get("CuModeLastApplied"),

@@ -23,6 +23,8 @@ function Flush-ExistingFile {
 }
 function Set-DurablePresentGates {
  param([ValidateSet(0,1)][int]$Value)
+ . "$PSScriptRoot\legacy-state.ps1"
+ Assert-KmdLegacyState
  if(-not ('BC250TrialRegistryFlush' -as [type])) {
   Add-Type -TypeDefinition 'using System;
 using System.Runtime.InteropServices;

@@ -1,5 +1,5 @@
 param([Parameter(Mandatory)][string]$Out,[Parameter(Mandatory)][string]$Kits,
-      [switch]$OmitGeneration,[switch]$OmitOpenCleanup,[switch]$OmitColdRecovery,
+      [switch]$OmitGeneration,[switch]$OmitOpenCleanup,[switch]$OmitColdRecovery,[switch]$OmitPrepareCleanup,
       [switch]$OmitFirstFailure,[switch]$NestedHdmiStop,[switch]$OmitDiagnosticReplay,[switch]$WriteRequestedValue,[switch]$WrongRecoveryTarget,[switch]$ExpectFailure)
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path "$PSScriptRoot/../../..").Path
@@ -11,6 +11,7 @@ try {
     if($OmitGeneration){$extract+='--omit-generation'}
     if($OmitOpenCleanup){$extract+='--omit-open-cleanup'}
     if($OmitColdRecovery){$extract+='--omit-cold-recovery'}
+    if($OmitPrepareCleanup){$extract+='--omit-prepare-cleanup'}
     if($OmitFirstFailure){$extract+='--omit-first-failure'}
     if($NestedHdmiStop){$extract+='--nested-hdmi-stop'}
     if($OmitDiagnosticReplay){$extract+='--omit-diagnostic-replay'}
@@ -32,7 +33,7 @@ try {
     $result | Set-Content -Encoding UTF8 "$Out/result.log"
     $result | Write-Output
     if($ExpectFailure) {
-        if((!$OmitGeneration -and !$OmitOpenCleanup -and !$OmitColdRecovery -and !$OmitFirstFailure -and !$NestedHdmiStop -and !$OmitDiagnosticReplay -and !$WriteRequestedValue -and !$WrongRecoveryTarget) -or $code -ne 1 -or !($result -match '^FAIL line ')){throw 'Negative control did not execute an assertion failure'}
+        if((!$OmitGeneration -and !$OmitOpenCleanup -and !$OmitColdRecovery -and !$OmitPrepareCleanup -and !$OmitFirstFailure -and !$NestedHdmiStop -and !$OmitDiagnosticReplay -and !$WriteRequestedValue -and !$WrongRecoveryTarget) -or $code -ne 1 -or !($result -match '^FAIL line ')){throw 'Negative control did not execute an assertion failure'}
         Write-Output 'Connector transaction negative control: expected assertion failure'
     } elseif($code){throw 'Connector transaction assertions failed'}
 } finally {$env:TEMP=$oldTemp;$env:TMP=$oldTmp}

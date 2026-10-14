@@ -98,7 +98,15 @@ namespace AmdgpuWddmControl
                 // can move it: whatever column is left after that is the column the page is built for, so the page
                 // is rebuilt here when the two differ. Without it a 1240 px page stood in a 650 px column on the
                 // owner's 800x600 screen and was cut on the right, which is the finding of GitHub #38.
-                Load += (s, e) => { FitToScreens(); RebuildIfWidthChanged(); RefreshAll(); StartUpdateCheck(false); UpdateTimer(); };
+                Load += (s, e) =>
+                {
+                    FitToScreens(); RebuildIfWidthChanged();
+                    if (_startReading != null) { var r = _startReading; _startReading = null; Apply(r); } else RefreshAll();
+                    StartUpdateCheck(false); UpdateTimer();
+                };
+                // BD-174: a background step that fails says so on the page, the ordinary way, and the record in
+                // the log file names the step. The window itself lives on through any such failure.
+                Crash.Reporter = (where, e) => ReportBackgroundFailure();
                 VisibleChanged += (s, e) => UpdateTimer();
                 Resize += (s, e) => { UpdateTimer(); if (_guide != null) _guide.Paused = WindowState == FormWindowState.Minimized; };
                 ResizeEnd += (s, e) => RebuildIfWidthChanged();
@@ -591,32 +599,55 @@ namespace AmdgpuWddmControl
 
         // ---- data --------------------------------------------------------------------------------------------------
 
-        void ReadRecent()
-        {
-            var list = RecentLaunches.Read(new LocalRecentFiles());
-            _recent = list.Entries;
-            _recentState = list.State;
-        }
-
         public void RefreshAll()
         {
             if (_page == "system") { ReadSystemTuning(); return; }
             if (_fixture) { ComputeStatus(); ShowPage(_page, null, false); return; }
-            try { _inv = Inventory.Read(false); } catch (Exception) { _inv = new InventoryState(); }
-            try { Kmd.RefreshBoardCapabilities();
-            _snap = RecoveryProbe.Read("window"); } catch (Exception) { _snap = new RecoverySnapshot { DriverError = "unreadable", ReadFailed = true }; }
-            var vram = Kmd.VideoMemory();
-            _vram = vram.Value;
-            _uma = Kmd.BoardMemoryQuery().Value;
-            _fan = Kmd.Hwmon().Value;
-            _upd = UpdateCheck.LoadCache();
-            ReadRecent();
-            ReadBenchmark();
+            Apply(WindowReading.Read(_prefs, _smoke || ReadOnlyProbe));
+        }
+
+        // The reading the start made while the loading window showed (Launch.cs). It is taken in the Load handler,
+        // before the window is first drawn; a window that is given none reads in its Load handler, as it always did.
+        WindowReading _startReading;
+
+        public void UseStartReading(WindowReading reading) { _startReading = reading; }
+
+        // What a reading puts in the window. On the user-interface thread; the reading itself can come from any.
+        void Apply(WindowReading r)
+        {
+            _inv = r.Inventory;
+            _snap = r.Snapshot;
+            _vram = r.Vram;
+            _uma = r.Uma;
+            _fan = r.Fan;
+            _upd = r.Update;
+            _recent = r.Recent.Entries;
+            _recentState = r.Recent.State;
+            _bench = r.Bench;
+            _benchHistory = r.BenchHistory;
             ReadDriverCard(!_smoke && !ReadOnlyProbe);
             ComputeStatus();
             ShowPage(_page, null, false);
             MaybeAutomaticDiagnostics();
             MaybeNagiWallpaper();
+        }
+
+        // BD-174: what Crash.Guard calls when a background step failed, from whatever thread failed. The page's
+        // result line is the ordinary place for the outcome of a step, so a background failure goes there as well.
+        // A window that is closing, or has no handle yet, says nothing: the record in the log file is the lasting
+        // part, and this call may never throw where it is called from.
+        void ReportBackgroundFailure()
+        {
+            try
+            {
+                if (_smoke || IsDisposed || Disposing || !IsHandleCreated) return;
+                BeginInvoke((Action)(() =>
+                {
+                    if (IsDisposed || Disposing) return;
+                    Result(Strings.T("action.background-failed"), false);
+                }));
+            }
+            catch (Exception) { }
         }
 
         // The Nagi wallpaper of a verified install, once per install for this account (Wallpaper.cs), when the
@@ -628,7 +659,7 @@ namespace AmdgpuWddmControl
             if (_wallpaperChecked || _smoke || ReadOnlyProbe || _fixture) return;
             _wallpaperChecked = true;
             var prefs = _prefs;
-            System.Threading.ThreadPool.QueueUserWorkItem(_ => NagiWallpaper.RunIfDue(prefs));
+            Crash.Background(Crash.WallpaperAtStart, () => NagiWallpaper.RunIfDue(prefs));
         }
 
         int _drvRead;       // the newest Driver card read; an older one that ends later is dropped
@@ -647,7 +678,7 @@ namespace AmdgpuWddmControl
             };
             int id = ++_drvRead;
             if (!background) { ApplyDriverCard(read()); return; }
-            System.Threading.ThreadPool.QueueUserWorkItem(_ =>
+            Crash.Background(Crash.DriverCardRead, () =>
             {
                 var view = read();
                 try
@@ -859,6 +890,7 @@ namespace AmdgpuWddmControl
         {
             _timer.Stop();
             UpdateCheck.Finished -= OnUpdateFinished;
+            Crash.Reporter = null;              // a record of a late work item still lands in the file
             if (_guide != null) _guide.Stop();
             base.OnFormClosed(e);
         }

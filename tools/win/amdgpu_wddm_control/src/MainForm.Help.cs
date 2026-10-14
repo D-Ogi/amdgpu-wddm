@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -19,10 +20,10 @@ namespace AmdgpuWddmControl
         // The waiting time for the graphics the person picked but has not saved yet (TdrSetting.cs); null: the stored
         // one is shown.
         uint? _tdrEdit;
-
         // How long the next recording of game logs is to run (GameLog.cs). Nothing is stored until the person
         // presses the button, so this is the choice of the window, not of the machine.
         uint _gameLogMinutes = GameLog.DefaultMinutes;
+
         Control BuildHelp(int width)
         {
             var p = Frame("help", width);
@@ -70,8 +71,8 @@ namespace AmdgpuWddmControl
             p.Controls.Add(repair);
 
             p.Controls.Add(BuildTdrCard(width));
-
             p.Controls.Add(BuildGameLogCard(width));
+
             var restart = new CardPanel(Strings.T("search.help.restart"), width);
             Mark("help.restart", restart);
             restart.Add(Ui.Dim(Strings.T("help.restart.text"), restart.Inner));
@@ -153,7 +154,6 @@ namespace AmdgpuWddmControl
             return c;
         }
 
-        void CreateReport()
         // "Record game logs" (GameLog.cs). While it is off the card offers a length and a start button; while it
         // runs it says how long is left, offers "Stop now" and the folder. The countdown is in the driver's own
         // value, so every rebuild of the page reads it fresh and the window keeps no timer of its own, as the
@@ -215,6 +215,7 @@ namespace AmdgpuWddmControl
             catch (Exception) { Result(Strings.T("gamelog.open-failed"), false); }
         }
 
+        void CreateReport()
         {
             if (_smoke || _work != null || _autoReportRunning) return;
             _work = GuideCause.CreatingReport; ComputeStatus();
@@ -222,7 +223,7 @@ namespace AmdgpuWddmControl
             ShowPage(_page, null, false);
             var report = new BugReport(Redactor.ForThisPc());
             bool dxdiag = _reportDxdiag, caps = _reportCaps;
-            Task.Run(() => report.Collect(dxdiag, caps, true, _ => { })).ContinueWith(t =>
+            Task.Run(() => Crash.Watched("support report", () => report.Collect(dxdiag, caps, true, _ => { }))).ContinueWith(t =>
             {
                 _work = null; ComputeStatus();
                 if (t.IsFaulted) { _reportStatus = Strings.T("help.report.failed"); ShowPage(_page, null, false); return; }
@@ -248,7 +249,7 @@ namespace AmdgpuWddmControl
             _autoReportStarted = _autoReportRunning = true;
             _autoReportStatus = Strings.T("help.auto.collecting");
             ShowPage(_page, null, false);
-            Task.Run(() => StartupDiagnostics.SaveAutomatic()).ContinueWith(t => {
+            Task.Run(() => Crash.Watched("automatic diagnostics", () => StartupDiagnostics.SaveAutomatic())).ContinueWith(t => {
                 _autoReportRunning = false;
                 _autoReportStatus = t.IsFaulted ? Strings.T("help.auto.failed") : Strings.T("help.auto.saved", t.Result);
                 _reportStatus = _autoReportStatus; _reportOk = !t.IsFaulted;

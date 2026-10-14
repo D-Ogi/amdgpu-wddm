@@ -28,6 +28,8 @@ namespace AmdgpuWddmControl
         public bool DriverInstalled { get; set; }                   // Services\bc250kmd\Parameters exists
         public bool RouterInstalled { get; set; }                   // SOFTWARE\amdgpu-wddm\DesktopRouter exists
         public Dictionary<string, long> Parameters { get; set; }    // REG_DWORD values of Parameters (absent: not listed)
+        public int StateSchema { get; set; }                        // 2: common service state; 0: old saved snapshot
+        public Dictionary<string, long> ParameterOverrides { get; set; } // raw values, distinct from effective defaults
         public long? DwmForceCpu { get; set; }
         public long? RequireKmdSwitches { get; set; }
         public string DriverError { get; set; }                     // null when the escapes answered
@@ -61,8 +63,6 @@ namespace AmdgpuWddmControl
         // "nothing stored, read without trouble" and plans the release default, as a fresh machine does.
         public long? TdrDelay { get; set; }
         public string TdrError { get; set; }
-        // The desktop compositor of the active interactive session (BD-060): what is running now, and every DWM the
-        // observers saw in this session of this boot, this reading included.
 
         // "Record game logs" (GameLog.cs): the stored instant at which recording stops, as a UTC FILETIME, or null
         // when nothing is stored (recording is off). GameLogError names why the value could not be read.
@@ -71,6 +71,8 @@ namespace AmdgpuWddmControl
         // How many log files the folder holds and how many bytes they are, for the window and the support report.
         public int GameLogFiles { get; set; }
         public long GameLogBytes { get; set; }
+        // The desktop compositor of the active interactive session (BD-060): what is running now, and every DWM the
+        // observers saw in this session of this boot, this reading included.
         public DwmReading DwmNow { get; set; }
         public DwmObservations DwmHistory { get; set; }
         // The newest DwmForceCpu write that read back (route-written.json, written by the helper after the read-back):
@@ -103,7 +105,7 @@ namespace AmdgpuWddmControl
         {
             if (CuBadValues != null && CuBadValues.Count > 0) return new CuStored { Unreadable = true };
             return new CuStored { Mode = P("CuMode"), Disable = P("CuDisableWgp"), Confirmed = P("CuModeConfirmed"), Pending = P("CuModePending"),
-                Closed = P("CuModeClosedReason"), NotDurable = CuNotDurable };
+                Closed = P("CuModeClosedReason"), Chosen = P("CuModeChosen"), NotDurable = CuNotDurable };
         }
 
         public uint? P(string name)
@@ -127,7 +129,7 @@ namespace AmdgpuWddmControl
         public string Path { get; set; }
         public string Name { get; set; }
         public bool Delete { get; set; }
-        public string Kind { get; set; }        // DWord, String (the Vulkan settings and an undo) or QWord (only an undo)
+        public string Kind { get; set; }        // DWord, String (the Vulkan settings and an undo) or QWord (the game-log switch and an undo)
         public long Number { get; set; }
         public string Text { get; set; }
         // Removes the key Path itself (Name null). Only a game's empty Graphics or Vulkan key; the helper checks that it
@@ -135,6 +137,7 @@ namespace AmdgpuWddmControl
         public bool DeleteKey { get; set; }
 
         public static RegWrite Dword(string path, string name, uint value) { return new RegWrite { Path = path, Name = name, Kind = "DWord", Number = value }; }
+        public static RegWrite Qword(string path, string name, long value) { return new RegWrite { Path = path, Name = name, Kind = "QWord", Number = value }; }
         public static RegWrite Str(string path, string name, string value) { return new RegWrite { Path = path, Name = name, Kind = "String", Text = value }; }
         public static RegWrite Remove(string path, string name) { return new RegWrite { Path = path, Name = name, Delete = true }; }
         public static RegWrite RemoveKey(string path) { return new RegWrite { Path = path, DeleteKey = true }; }
@@ -161,12 +164,12 @@ namespace AmdgpuWddmControl
         // (RecoveryActions.EnableDriver). It writes no value of Writes, because the count is outside the allow-list
         // of the actions and of the undo on purpose (StartNotice.cs, GuardReset).
         public bool EnableDriver;
-        public string UndoOf;                  // undo: the backup file it restores
-        // The CU setter's steps (section 7 S1-S6), run after Writes, never restored; CuConfirm: the CU CONFIRM escape.
-        public CuSetterPlan Cu;
         // game-log-on: the helper also prepares %ProgramData%\amdgpu-wddm\logs\games (its access list) and prunes
         // the folder to GameLog.FolderBytesLimit. No registry value of its own, so it is a flag and not a write.
         public bool GameLogFolder;
+        public string UndoOf;                  // undo: the backup file it restores
+        // The CU setter's steps (section 7 S1-S6), run after Writes, never restored; CuConfirm: the CU CONFIRM escape.
+        public CuSetterPlan Cu;
         public bool CuConfirm;
         // The tuning request of this plan (the voltage curve or the processor). It writes no registry value: the
         // helper sends one escape and the driver owns the trial window and the revert (docs/design/tuner.md).
@@ -229,15 +232,15 @@ namespace AmdgpuWddmControl
                 w.AppendLine("  then a kernel restart of the graphics device, a bounded wait for the device and the driver,");
                 w.AppendLine("  then the start-health CONFIRM of the new start, and the count to 0 again if it stays unconfirmed");
             }
-            if (RestartCompositor) w.AppendLine("  stop DWM in the active session; Windows starts a new one (operator escape)");
-            foreach (var n in Notes) w.AppendLine("note: " + n);
-            w.AppendLine("undo: " + (Undoable ? "yes (Undo last action)" : "no"));
             if (GameLogFolder)
             {
                 w.AppendLine("  prepare %ProgramData%\\" + GameLog.FolderBelowProgramData +
                     " (Administrators and SYSTEM full, Users create files, the creator owns what it wrote)");
                 w.AppendLine("  then prune that folder to " + (GameLog.FolderBytesLimit >> 20) + " MiB, oldest first, never the newest file");
             }
+            if (RestartCompositor) w.AppendLine("  stop DWM in the active session; Windows starts a new one (operator escape)");
+            foreach (var n in Notes) w.AppendLine("note: " + n);
+            w.AppendLine("undo: " + (Undoable ? "yes (Undo last action)" : "no"));
             return w.ToString();
         }
     }
@@ -443,10 +446,10 @@ namespace AmdgpuWddmControl
             if (string.Equals(path, ParametersPath, StringComparison.OrdinalIgnoreCase)) return ParameterNames.Contains(name);
             if (string.Equals(path, RouterPath, StringComparison.OrdinalIgnoreCase)) return RouterNames.Contains(name);
             if (TdrSetting.Allowed(path, name)) return true;
+            if (GameLog.Allowed(path, name)) return true;
             return GraphicsSettings.Allowed(path, name);
         }
 
-            if (GameLog.Allowed(path, name)) return true;
         // The CU setter's set only (G-PLAN): CuMode written as 40 or as 24, and CuDisableWgp, CuModeConfirmed and
         // CuModeClosedReason removed. CuMode is never removed: the stock choice is written out (BD-077).
         public static bool CuAllowed(RegWrite w)
@@ -463,6 +466,13 @@ namespace AmdgpuWddmControl
         }
 
         public static string GamePath(string image) { return Profiles.RegistryPath + "\\" + image; }
+
+        // The actions about ONE game's settings: they take --image and nothing else does. The name of an action is
+        // not the test (game-log-on and game-log-off also begin with "game-", and the prefix test used to make the
+        // helper demand an image for them).
+        public static readonly string[] GameImageActions = { "game-profile", "game-undo", "game-redo" };
+
+        public static bool AboutOneGame(string action) { return GameImageActions.Contains(action); }
 
         // ---- the decision rules ----------------------------------------------------------------------------------
 
@@ -1176,16 +1186,6 @@ namespace AmdgpuWddmControl
                 add("Graphics waiting time", TdrSetting.ValueName + " " + s.Tdr().Value + " s." + tdrRelease,
                     tdrKnown && s.Tdr().Value < tdrWanted ? "warn" : "ok", null, null);
 
-            // The installer's start-confirm task: found, absent, or unknown when the Task Scheduler refused this reader
-            // (BD-141: the task runs as Local System, and an app without administrator rights may not read it). For
-            // unknown, the task's own log, which every user can read, is its evidence.
-            var presence = Presence(s);
-            if (presence == TaskPresence.Absent)
-                add("Start confirmation task", "The release's logon task is not installed. Run the release installer again.", "warn", null, null);
-            else if (presence == TaskPresence.Unknown)
-            {
-                string why = "The release's logon task cannot be read from here (" + s.TaskReadError + "): it runs as Local System, which an app without administrator rights may not read.";
-                if (s.ConfirmLogRunUtc == null)
             // "Record game logs" (GameLog.cs): whether the switch is on, and what the folder holds. A report of a
             // machine that was recording has to say so, because the lines in it came from this switch and not from
             // an AMDGPU_WDDM_LOG somebody set.
@@ -1202,6 +1202,16 @@ namespace AmdgpuWddmControl
                     until.Value > DateTime.UtcNow ? "info" : "ok", until.Value > DateTime.UtcNow ? "game-log-off" : null,
                     until.Value > DateTime.UtcNow ? "Stop now" : null);
 
+            // The installer's start-confirm task: found, absent, or unknown when the Task Scheduler refused this reader
+            // (BD-141: the task runs as Local System, and an app without administrator rights may not read it). For
+            // unknown, the task's own log, which every user can read, is its evidence.
+            var presence = Presence(s);
+            if (presence == TaskPresence.Absent)
+                add("Start confirmation task", "The release's logon task is not installed. Run the release installer again.", "warn", null, null);
+            else if (presence == TaskPresence.Unknown)
+            {
+                string why = "The release's logon task cannot be read from here (" + s.TaskReadError + "): it runs as Local System, which an app without administrator rights may not read.";
+                if (s.ConfirmLogRunUtc == null)
                     add("Start confirmation task", why + " Its log (start-confirm.log) records no run of it either: if the driver's start stays unconfirmed, run the release installer again.",
                         "warn", null, null);
                 else
@@ -1223,6 +1233,8 @@ namespace AmdgpuWddmControl
             if (!string.Equals(w.Path, ParametersPath, StringComparison.OrdinalIgnoreCase))
                 return w.Name == "DwmForceCpu" && !w.Delete && s.DwmForceCpu == w.Number;
             var now = s.P(w.Name);
+            if (s.StateSchema == 2 && w.Delete)
+                return s.ParameterOverrides != null && !s.ParameterOverrides.ContainsKey(w.Name);
             return w.Delete ? now == null : now != null && now.Value == w.Number;
         }
 
@@ -1348,11 +1360,11 @@ namespace AmdgpuWddmControl
                         return Refuse(p, "Only DpmMode 1 is written; leave automatic clocks unchecked for the fixed clock (driver default).");
                     if (ceiling != null && !DpmSettings.IsValidCeiling(ceiling.Value)) return Refuse(p, "The ceiling " + ceiling + " MHz is not one of 1000, 1100 ... 2000 MHz.");
                     var stored = s.P("DpmMaxMHz");
-                    var clock = DpmSettings.PlanWrites(s.P("DpmMode"), stored, automatic, action == "enable-dpm" ? ceiling ?? stored : ceiling);
+                    var clock = DpmSettings.PlanWrites(s.P("DpmMode"), stored, automatic, action == "enable-dpm" ? ceiling ?? stored : ceiling, s.StateSchema == 2);
                     if (action == "enable-dpm" && ceiling == null) clock.RemoveAll(w => w.Name == "DpmMaxMHz");
                     p.Writes.AddRange(clock);
                     if (p.Writes.Count == 0) return Refuse(p, "These clock settings are stored already.");
-                    p.Change = string.Join(" ", p.Writes.Select(w => w.Name == "DpmMode" ? (w.Delete ? "Removes DpmMode: the fixed clock of 1000 MHz (driver default)." : "Automatic clocks (DpmMode 1).")
+                    p.Change = string.Join(" ", p.Writes.Select(w => w.Name == "DpmMode" ? (w.Delete ? "Removes DpmMode: the fixed clock of 1000 MHz (driver default)." : w.Number == 0 ? "Fixed clock of 1000 MHz (DpmMode 0)." : "Automatic clocks (DpmMode 1).")
                         : w.Delete ? "Removes the clock ceiling: " + DpmSettings.DefaultMaxMHz + " MHz (driver default)." : "Clock ceiling " + w.Number + " MHz (DpmMaxMHz)."));
                     p.Effect = "at the next restart of Windows";
                     if (ceiling > DpmSettings.DefaultMaxMHz && automatic) p.Notes.Add("A ceiling above " + DpmSettings.DefaultMaxMHz + " MHz makes the GPU hotter and uses more power. Make sure the case has good air flow.");
@@ -1362,6 +1374,8 @@ namespace AmdgpuWddmControl
                 case "reset-defaults":
                     p.Title = "Reset driver settings to the release defaults";
                     p.Effect = "at the next restart of Windows";
+                    if (s.StateSchema == 2 && s.ParameterOverrides == null)
+                        return Refuse(p, "The stored driver settings could not be read. No settings were changed.");
                     if (s.DefaultParameters == null || s.DefaultRouter == null)
                         return Refuse(p, "The installed release has no list of default settings" + (s.DefaultsError != null ? " (" + s.DefaultsError + ")" : "") + ". Run the release installer again to reset.");
                     foreach (var name in DefaultParameterNames)
@@ -1370,7 +1384,7 @@ namespace AmdgpuWddmControl
                         if (!s.DefaultParameters.TryGetValue(name, out v)) return Refuse(p, "The release defaults do not name " + name + ".");
                         bool ok = name == "DpmMaxMHz" ? DpmSettings.IsValidCeiling((uint)v) : v == 0 || v == 1;
                         if (v < 0 || v > uint.MaxValue || !ok) return Refuse(p, "The release default " + name + " = " + v + " is out of range.");
-                        p.Writes.Add(RegWrite.Dword(ParametersPath, name, (uint)v));
+                        p.Writes.Add(s.StateSchema == 2 ? RegWrite.Remove(ParametersPath, name) : RegWrite.Dword(ParametersPath, name, (uint)v));
                     }
                     long cpu;
                     if (!s.DefaultRouter.TryGetValue("DwmForceCpu", out cpu) || (cpu != 0 && cpu != 1)) return Refuse(p, "The release defaults have no valid DwmForceCpu.");
@@ -1404,17 +1418,20 @@ namespace AmdgpuWddmControl
                     // the release default of the manifest, not the firmware's 24 (BD-077): with 40 as the default,
                     // a reset to "Standard (24)" would take the cores away that an install gives. A release that
                     // names no CuMode gets 24, which is what the driver runs when the value is absent.
+                    // The run records no choice of a person (Plan record: false) and takes an earlier one away: a
+                    // reset hands the number of cores back to the installed release, so the next release's own
+                    // default applies to it again.
                     long cuDefault;
                     bool cuNamed = s.DefaultParameters.TryGetValue("CuMode", out cuDefault);
                     if (!cuNamed) cuDefault = CuMode.Stock;
                     else if (cuDefault != CuMode.Stock && cuDefault != CuMode.Full)
                         return Refuse(p, "The release default CuMode = " + cuDefault + " is out of range.");
                     var storedCu = s.StoredCu();
-                    var cu = CuMode.Plan(storedCu, (uint)cuDefault);
+                    var cu = CuMode.Plan(storedCu, (uint)cuDefault, 0, false);
                     // The setter writes the stock choice out as CuMode = 24 (BD-077). Under a release that names no
                     // number, an explicit 24 is not a default of that release: a key with no number is then left
                     // without one, and the setter runs only for the work that remains (a stored number to change, a
-                    // leftover confirmation or mask, the driver's own record).
+                    // leftover confirmation or mask, the driver's own record, a record of a person's choice).
                     bool writesStockOnly = !cuNamed && storedCu.Mode == null && cu.Steps.Where(x => x.Changes).All(x => x.Kind == "write-24");
                     if (!cu.Refused && !writesStockOnly) { p.Cu = cu; p.Preview.AddRange(cu.Preview); }
                     else if (storedCu.Unreadable) p.Notes.Add("The graphics-core setting cannot be read and is left as it is.");
@@ -1485,13 +1502,39 @@ namespace AmdgpuWddmControl
                     p.Title = "Graphics cores";
                     p.Effect = "at the next restart of Windows";
                     p.Undoable = false;
-                    if (more.Cu == null) return Refuse(p, "No graphics-core choice given (--cu 24 or 40).");
-                    p.Cu = CuMode.Plan(s.StoredCu(), more.Cu.Value);
-                    if (p.Cu.Refused) { var why = p.Cu.Refusal; p.Cu = null; return Refuse(p, why); }
-                    p.Preview.AddRange(p.Cu.Preview);
-                    p.Change = string.Join(" ", p.Cu.Preview);
-                    if (more.Cu == CuMode.Full) { p.Preview.Add(CuMode.EffectText()); p.Notes.Add("Effect: more power and heat, reference about +30 W at 1500 MHz on the lab unit, not a promise."); }
-                    if (p.Cu.Before.Disable != null) p.Notes.Add("CuDisableWgp was 0x" + p.Cu.Before.Disable.Value.ToString("X", CultureInfo.InvariantCulture) + " (an earlier diagnostic core limit) and is removed.");
+                    if (more.Cu == null) return Refuse(p, "No graphics-core choice given (--cu 24 to 40 in twos).");
+                    {
+                        // The number alone takes the default set of that number; with --cu-map the person's own set,
+                        // which has to give exactly that number of cores. The WGPs a mask may name come from the
+                        // start's own stock registers, so a mask the driver would refuse (INVALID_DISABLE) is
+                        // refused here, before anything is written.
+                        var stockActive = CuMode.StockActive(s.Cu);
+                        uint cuTarget, cuDisable;
+                        if (more.CuMap != null)
+                        {
+                            if (stockActive == null) return Refuse(p, "The graphics cores of this PC cannot be read, so a chosen set of cores cannot be checked. Use --cu without --cu-map.");
+                            cuDisable = more.CuMap.Value;
+                            if ((cuDisable & ~CuMode.Maskable(stockActive)) != 0)
+                                return Refuse(p, "CuDisableWgp 0x" + cuDisable.ToString("X", CultureInfo.InvariantCulture) + " names cores the firmware of this board keeps on; only 0x"
+                                    + CuMode.Maskable(stockActive).ToString("X", CultureInfo.InvariantCulture) + " may be turned off.");
+                            if (CuMode.ActiveCus(cuDisable) != more.Cu.Value)
+                                return Refuse(p, "CuDisableWgp 0x" + cuDisable.ToString("X", CultureInfo.InvariantCulture) + " leaves " + CuMode.ActiveCus(cuDisable)
+                                    + " graphics cores, not the " + more.Cu.Value + " of --cu.");
+                            cuTarget = cuDisable == CuMode.Maskable(stockActive) ? CuMode.Stock : CuMode.Full;
+                            if (cuTarget == CuMode.Stock) cuDisable = 0;
+                        }
+                        else if (!CuMode.RequestFor(more.Cu.Value, stockActive ?? CuMode.DocumentedStockActive(), out cuTarget, out cuDisable))
+                            return Refuse(p, "The number of graphics cores has to be 24 to 40 in twos.");
+                        p.Cu = CuMode.Plan(s.StoredCu(), cuTarget, cuDisable);
+                        if (p.Cu.Refused) { var why = p.Cu.Refusal; p.Cu = null; return Refuse(p, why); }
+                        p.Preview.AddRange(p.Cu.Preview);
+                        p.Change = string.Join(" ", p.Cu.Preview);
+                        if (cuTarget == CuMode.Full) { p.Preview.Add(CuMode.EffectText()); p.Notes.Add("Effect: more power and heat, reference about +30 W at 1500 MHz on the lab unit, not a promise."); }
+                        if (cuDisable != 0) p.Notes.Add("CuDisableWgp 0x" + cuDisable.ToString("X", CultureInfo.InvariantCulture) + " keeps " + CuMode.MaskText(cuDisable)
+                            + " masked, which leaves " + p.Cu.Cores + " of the 40 graphics cores.");
+                        else if (p.Cu.Before.Disable != null) p.Notes.Add("CuDisableWgp was 0x" + p.Cu.Before.Disable.Value.ToString("X", CultureInfo.InvariantCulture) + " and is removed.");
+                        if (stockActive == null) p.Notes.Add("The cores of this PC cannot be read, so the default set of that number is used.");
+                    }
                     p.Notes.Add("The old values are saved for diagnosis only; they are never restored and undo does not offer them (S6).");
                     p.OfferRestart = true;
                     break;
@@ -1583,6 +1626,43 @@ namespace AmdgpuWddmControl
                     break;
                 }
 
+                case "game-log-on":
+                {
+                    // "Record game logs" (GameLog.cs). The driver does not have to be running: the shells and the
+                    // engines read the switch themselves, and a person whose game does not start at all is exactly
+                    // the person who needs the log. It takes effect the next time a game starts, because a shell
+                    // reads the switch once, when it loads.
+                    p.Title = "Record game logs";
+                    p.Effect = "the next time a game starts";
+                    p.Undoable = true;
+                    if (more.Minutes == null) return Refuse(p, "No recording time given.");
+                    if (!GameLog.IsValidMinutes(more.Minutes.Value))
+                        return Refuse(p, "The recording time must be between " + GameLog.MinMinutes + " and " + GameLog.MaxMinutes + " minutes.");
+                    if (s.GameLogError != null) return Refuse(p, "The recording switch cannot be read, so it is not changed: " + s.GameLogError);
+                    // The instant is this reading's clock. The helper plans again from its own snapshot before it
+                    // writes, so the number that is written is never older than that run.
+                    var startedAt = DateTime.UtcNow;
+                    try { p.Writes.AddRange(GameLog.PlanOn(more.Minutes.Value, startedAt)); }
+                    catch (ArgumentException e) { return Refuse(p, e.Message); }
+                    p.GameLogFolder = true;
+                    p.Change = GameLog.DescribeOn(more.Minutes.Value, startedAt);
+                    p.Notes.Add("The logs name the games that run while recording is on, and they go into a folder every user of this computer can read.");
+                    break;
+                }
+
+                case "game-log-off":
+                {
+                    p.Title = "Record game logs";
+                    p.Effect = "the next time a game starts";
+                    p.Undoable = true;
+                    if (more.Minutes != null) return Refuse(p, "Stopping the recording takes no recording time.");
+                    if (s.GameLogError != null) return Refuse(p, "The recording switch cannot be read, so it is not changed: " + s.GameLogError);
+                    p.Writes.AddRange(GameLog.PlanOff(s.GameLogUntil));
+                    if (p.Writes.Count == 0) return Refuse(p, "The game logs are not being recorded.");
+                    p.Change = GameLog.DescribeOff();
+                    break;
+                }
+
                 case "tune-trial":
                 case "tune-keep":
                 case "tune-stop":
@@ -1626,43 +1706,6 @@ namespace AmdgpuWddmControl
                     var v = t.Values.FirstOrDefault(x => GameImage(x.Path) != null && string.Equals(GameImage(x.Path), more.Image, StringComparison.OrdinalIgnoreCase) && x.Name == Profiles.ValueName);
                     if (v != null) p.GameWrites[more.Image] = v.Existed ? v.Text ?? "" : "";
                     // The game's graphics and Vulkan values of that change, and its keys left empty by the restore.
-                case "game-log-on":
-                {
-                    // "Record game logs" (GameLog.cs). The driver does not have to be running: the shells and the
-                    // engines read the switch themselves, and a person whose game does not start at all is exactly
-                    // the person who needs the log. It takes effect the next time a game starts, because a shell
-                    // reads the switch once, when it loads.
-                    p.Title = "Record game logs";
-                    p.Effect = "the next time a game starts";
-                    p.Undoable = true;
-                    if (more.Minutes == null) return Refuse(p, "No recording time given.");
-                    if (!GameLog.IsValidMinutes(more.Minutes.Value))
-                        return Refuse(p, "The recording time must be between " + GameLog.MinMinutes + " and " + GameLog.MaxMinutes + " minutes.");
-                    if (s.GameLogError != null) return Refuse(p, "The recording switch cannot be read, so it is not changed: " + s.GameLogError);
-                    // The instant is this reading's clock. The helper plans again from its own snapshot before it
-                    // writes, so the number that is written is never older than that run.
-                    var startedAt = DateTime.UtcNow;
-                    try { p.Writes.AddRange(GameLog.PlanOn(more.Minutes.Value, startedAt)); }
-                    catch (ArgumentException e) { return Refuse(p, e.Message); }
-                    p.GameLogFolder = true;
-                    p.Change = GameLog.DescribeOn(more.Minutes.Value, startedAt);
-                    p.Notes.Add("The logs name the games that run while recording is on, and they go into a folder every user of this computer can read.");
-                    break;
-                }
-
-                case "game-log-off":
-                {
-                    p.Title = "Record game logs";
-                    p.Effect = "the next time a game starts";
-                    p.Undoable = true;
-                    if (more.Minutes != null) return Refuse(p, "Stopping the recording takes no recording time.");
-                    if (s.GameLogError != null) return Refuse(p, "The recording switch cannot be read, so it is not changed: " + s.GameLogError);
-                    p.Writes.AddRange(GameLog.PlanOff(s.GameLogUntil));
-                    if (p.Writes.Count == 0) return Refuse(p, "The game logs are not being recorded.");
-                    p.Change = GameLog.DescribeOff();
-                    break;
-                }
-
                     foreach (var g in t.Values.Where(x => string.Equals(GraphicsSettings.AppImage(x.Path), more.Image, StringComparison.OrdinalIgnoreCase)))
                     {
                         if (!Allowed(g.Path, g.Name)) return Refuse(p, "The saved change names " + g.Name + ", which this app does not change.");
@@ -1686,7 +1729,8 @@ namespace AmdgpuWddmControl
 
         public sealed class PlanArgs
         {
-            public uint? Cu;
+            public uint? Cu;                    // the graphics cores a person asked for: 24 to 40 in twos
+            public uint? CuMap;                 // the CuDisableWgp mask of a hand-picked set, instead of the default set of that number
             public string Games, Image, Value;
             // The graphics settings (GraphicsSettings.ParseEdits): graphics-defaults for all games, game-profile for
             // its game. "FrameRateLimit=60,VSync=unset".
@@ -1697,6 +1741,8 @@ namespace AmdgpuWddmControl
             public uint? Window, CpuClock, CpuUv, CpuTemp, Cores;
             // tdr-delay: the waiting time in seconds that the person chose (TdrSetting.Choices).
             public uint? Tdr;
+            // game-log-on: how many minutes of game logs to record (GameLog.Choices).
+            public uint? Minutes;
             // The fan card: the choice (standard, quiet, performance, custom) and a custom curve as "40:50,60:70,...".
             public string FanProfile, FanCurve;
             public uint? FanTestPct;            // fan-test: the duty of the short test
@@ -1741,8 +1787,6 @@ namespace AmdgpuWddmControl
             foreach (var b in list)
             {
                 if (b.Action == "game-profile") return null;
-            // game-log-on: how many minutes of game logs to record (GameLog.Choices).
-            public uint? Minutes;
                 if (b.Action == "game-undo" && !undone.Contains(b.File)) return b;
             }
             return null;

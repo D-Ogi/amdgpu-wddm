@@ -25,6 +25,7 @@ using System.Security.AccessControl;
 using System.Security.Cryptography;
 using System.Security.Principal;
 using System.Text;
+using System.Threading;
 
 namespace AmdgpuWddmSetup
 {
@@ -181,22 +182,40 @@ namespace AmdgpuWddmSetup
 
         // root: the folder that holds the version folders. protect: give it and the version folder the permission
         // list of Access (an install always does; --smoke-payload unpacks into a plain folder of its own instead,
-        // so that the reader can be tested without administrator rights).
-        public static string Extract(string root, bool protect)
+        // so that the reader can be tested without administrator rights). progress: (done, total) in bytes of work,
+        // called on the thread that unpacks: the package's own hash, every file written and every file checked, so
+        // the loading window can show how far the work is (LoadingWindow.cs). cancel: the person closed the loading
+        // window; the version folder is removed and OperationCanceledException ends the call.
+        public static string Extract(string root, bool protect, Action<long, long> progress = null, CancellationToken cancel = default(CancellationToken))
         {
             var head = ReadHead(OwnFile);
             if (head == null) throw new InvalidDataException("this setup program carries no package");
             string listText, version;
-            using (var f = new FileStream(OwnFile, FileMode.Open, FileAccess.Read, FileShare.Read))
+            List<Entry> entries;
+            // One buffer of 1 MB for every read. The check of each file read in 4 KB steps before, which cost 0.9 to
+            // 3.3 s for the 368 MB of a release on the PC that builds it, against 0.35 to 0.38 s in 1 MB steps.
+            var buffer = new byte[1 << 20];
+            long done = 0, total = 0;
+            Action<long> step = n =>
             {
-                var payloadSha = Section(f, head.PayloadOffset, head.PayloadLength, null);
-                if (payloadSha != head.PayloadSha256) throw new InvalidDataException("the package inside this setup program is damaged");
+                cancel.ThrowIfCancellationRequested();
+                done += n;
+                if (progress != null) progress(done, total);
+            };
+            using (var f = new FileStream(OwnFile, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16))
+            {
+                // The list first, because it gives the size of the work. Nothing is unpacked before the package also
+                // matches its own hash below.
                 var listBytes = new MemoryStream();
-                var listSha = Section(f, head.ListOffset, head.ListLength, listBytes);
+                var listSha = Section(f, head.ListOffset, head.ListLength, listBytes, buffer, null);
                 if (listSha != head.ListSha256) throw new InvalidDataException("the file list inside this setup program is damaged");
                 listText = new UTF8Encoding(false).GetString(listBytes.ToArray());
+                entries = ParseList(listText, out version);
+                total = head.PayloadLength;
+                foreach (var e in entries) total += 2 * e.Size;
+                var payloadSha = Section(f, head.PayloadOffset, head.PayloadLength, null, buffer, step);
+                if (payloadSha != head.PayloadSha256) throw new InvalidDataException("the package inside this setup program is damaged");
             }
-            var entries = ParseList(listText, out version);
             if (!SafeRelative(version)) throw new InvalidDataException("the package inside this setup program names no usable version");
             var dir = Path.Combine(root, version);
             if (protect) { Access.PrepareRoot(root); Access.ResetFolder(dir); }
@@ -205,33 +224,25 @@ namespace AmdgpuWddmSetup
                 Remove(dir);
                 Directory.CreateDirectory(dir);
             }
-            using (var f = new FileStream(OwnFile, FileMode.Open, FileAccess.Read, FileShare.Read))
-            {
-                f.Seek(head.PayloadOffset, SeekOrigin.Begin);
-                using (var section = new Window(f, head.PayloadLength))
-                using (var zip = new ZipArchive(section, ZipArchiveMode.Read))
-                {
-                    foreach (var e in zip.Entries)
-                    {
-                        if (e.FullName.EndsWith("/")) continue;
-                        var rel = e.FullName.Replace('/', '\\');
-                        if (!SafeRelative(rel)) throw new InvalidDataException("the package holds a path outside the folder: " + e.FullName);
-                        var target = Path.Combine(dir, rel);
-                        Directory.CreateDirectory(Path.GetDirectoryName(target));
-                        e.ExtractToFile(target, true);
-                    }
-                }
-            }
             // Every file against the list, after it is on the disk and before anything uses it.
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var e in entries)
+            try
             {
-                var path = Path.Combine(dir, e.Path);
-                var info = new FileInfo(path);
-                if (!info.Exists) throw new InvalidDataException("the package is missing " + e.Path);
-                if (info.Length != e.Size) throw new InvalidDataException("the unpacked " + e.Path + " has the wrong size");
-                if (FileSha256(path) != e.Sha256) throw new InvalidDataException("the unpacked " + e.Path + " is not the file this setup was built with");
-                seen.Add(e.Path);
+                Unpack(head, dir, buffer, step);
+                foreach (var e in entries)
+                {
+                    var path = Path.Combine(dir, e.Path);
+                    var info = new FileInfo(path);
+                    if (!info.Exists) throw new InvalidDataException("the package is missing " + e.Path);
+                    if (info.Length != e.Size) throw new InvalidDataException("the unpacked " + e.Path + " has the wrong size");
+                    if (FileSha256(path, buffer, step) != e.Sha256) throw new InvalidDataException("the unpacked " + e.Path + " is not the file this setup was built with");
+                    seen.Add(e.Path);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                try { Remove(dir); } catch (Exception) { }
+                throw;
             }
             foreach (var path in Directory.GetFiles(dir, "*", SearchOption.AllDirectories))
             {
@@ -258,8 +269,9 @@ namespace AmdgpuWddmSetup
                 var dir = Path.GetDirectoryName(packageRoot.TrimEnd('\\'));
                 if (string.IsNullOrEmpty(dir)) return;
                 var parent = Path.GetDirectoryName(dir.TrimEnd('\\'));
-                if (parent == null || !parent.TrimEnd('\\').Equals(Root.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)) return;
+                if (parent == null || !parent.TrimEnd('\\').Equals(root.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)) return;
                 Remove(dir);
+                RemoveRootIfEmpty(root);
             }
             catch (Exception) { }
         }
@@ -271,7 +283,6 @@ namespace AmdgpuWddmSetup
         // stayed in %ProgramData% for good, which is the one path every fresh install takes.
         //
         // A version that is not a plain name, or a folder that is not inside Root, is left alone: this is given a
-                RemoveRootIfEmpty(root);
         // version read from a manifest on the disk, and a name like ..\.. must not reach Directory.Delete.
         public static void CleanupVersion(string version) { CleanupVersion(version, Root); }
 
@@ -281,9 +292,9 @@ namespace AmdgpuWddmSetup
             try
             {
                 if (string.IsNullOrEmpty(version) || !SafeRelative(version) || version.IndexOf('\\') >= 0) return;
-                var dir = Path.Combine(Root, version);
+                var dir = Path.Combine(root, version);
                 var parent = Path.GetDirectoryName(dir.TrimEnd('\\'));
-                if (parent == null || !parent.TrimEnd('\\').Equals(Root.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)) return;
+                if (parent == null || !parent.TrimEnd('\\').Equals(root.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)) return;
                 Remove(dir);
                 RemoveRootIfEmpty(root);
             }
@@ -319,6 +330,39 @@ namespace AmdgpuWddmSetup
             Directory.Delete(dir, true);
         }
 
+        // Every file of the zip section into dir. The copy is the one ZipArchiveEntry.ExtractToFile makes (the file
+        // replaced, its time the entry's), in steps that the progress and the cancel can follow.
+        static void Unpack(Head head, string dir, byte[] buffer, Action<long> step)
+        {
+            using (var f = new FileStream(OwnFile, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16))
+            {
+                f.Seek(head.PayloadOffset, SeekOrigin.Begin);
+                using (var section = new Window(f, head.PayloadLength))
+                using (var zip = new ZipArchive(section, ZipArchiveMode.Read))
+                {
+                    foreach (var e in zip.Entries)
+                    {
+                        if (e.FullName.EndsWith("/")) continue;
+                        var rel = e.FullName.Replace('/', '\\');
+                        if (!SafeRelative(rel)) throw new InvalidDataException("the package holds a path outside the folder: " + e.FullName);
+                        var target = Path.Combine(dir, rel);
+                        Directory.CreateDirectory(Path.GetDirectoryName(target));
+                        using (var from = e.Open())
+                        using (var to = new FileStream(target, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 16))
+                        {
+                            int n;
+                            while ((n = from.Read(buffer, 0, buffer.Length)) > 0)
+                            {
+                                to.Write(buffer, 0, n);
+                                step(n);
+                            }
+                        }
+                        File.SetLastWriteTime(target, e.LastWriteTime.DateTime);
+                    }
+                }
+            }
+        }
+
         // ---- bytes -------------------------------------------------------------------------------------------------
 
         static int Read(Stream s, byte[] buffer, int count)
@@ -333,11 +377,10 @@ namespace AmdgpuWddmSetup
             return got;
         }
 
-        // The SHA-256 of a section of the file, copied into sink when one is given.
-        static string Section(FileStream f, long offset, long length, Stream sink)
+        // The SHA-256 of a section of the file, copied into sink when one is given; step counts the bytes read.
+        static string Section(FileStream f, long offset, long length, Stream sink, byte[] buffer, Action<long> step)
         {
             f.Seek(offset, SeekOrigin.Begin);
-            var buffer = new byte[64 * 1024];
             long left = length;
             using (var sha = SHA256.Create())
             {
@@ -349,17 +392,30 @@ namespace AmdgpuWddmSetup
                     sha.TransformBlock(buffer, 0, got, null, 0);
                     if (sink != null) sink.Write(buffer, 0, got);
                     left -= got;
+                    if (step != null) step(got);
                 }
                 sha.TransformFinalBlock(new byte[0], 0, 0);
                 return Hex(sha.Hash, 0, sha.Hash.Length);
             }
         }
 
-        public static string FileSha256(string path)
+        public static string FileSha256(string path) { return FileSha256(path, new byte[1 << 20], null); }
+
+        // In steps of the buffer's size; the file's own buffer is off, because every read is already a large one.
+        static string FileSha256(string path, byte[] buffer, Action<long> step)
         {
-            using (var f = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+            using (var f = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1, FileOptions.SequentialScan))
             using (var sha = SHA256.Create())
-                return Hex(sha.ComputeHash(f), 0, 32);
+            {
+                int n;
+                while ((n = f.Read(buffer, 0, buffer.Length)) > 0)
+                {
+                    sha.TransformBlock(buffer, 0, n, null, 0);
+                    if (step != null) step(n);
+                }
+                sha.TransformFinalBlock(buffer, 0, 0);
+                return Hex(sha.Hash, 0, 32);
+            }
         }
 
         public static string Hex(byte[] b, int offset, int count)
@@ -436,6 +492,25 @@ namespace AmdgpuWddmSetup
                 return s;
             }
 
+            // The rules of the folder that holds the version folders: the list above, and the account that creates
+            // the folder, so that the run which made it can remove it again (BD-163). That access rule is not
+            // inherited: the version folders and the files below them stay administrators and SYSTEM only, with
+            // read and run for Users, so nobody can plant a file where the checked package goes. The owner is
+            // Administrators where the process may set it, as before.
+            public static DirectorySecurity RootRules()
+            {
+                var s = Rules();
+                try
+                {
+                    var me = WindowsIdentity.GetCurrent().User;
+                    if (me != null)
+                        s.AddAccessRule(new FileSystemAccessRule(me, FileSystemRights.FullControl,
+                            InheritanceFlags.None, PropagationFlags.None, AccessControlType.Allow));
+                }
+                catch (Exception) { }     // a run that cannot read its own account keeps the list above
+                return s;
+            }
+
             // The accounts a folder on the way to the unpacked package may belong to: SYSTEM, the Administrators
             // group (which owns everything an elevated process creates), TrustedInstaller, and the account running
             // this setup, which is an administrator because setup runs elevated. Anybody else owning one of these
@@ -492,44 +567,6 @@ namespace AmdgpuWddmSetup
                 }
                 AssertLocation(shared);
                 var info = new DirectoryInfo(root);
-            // The rules of the folder that holds the version folders: the list above, and the account that creates
-            // the folder, so that the run which made it can remove it again (BD-163). That access rule is not
-            // inherited: the version folders and the files below them stay administrators and SYSTEM only, with
-            // read and run for Users, so nobody can plant a file where the checked package goes. The owner is
-            // Administrators where the process may set it, as before.
-            public static DirectorySecurity RootRules()
-            {
-                var s = Rules();
-                try
-                {
-                    var me = WindowsIdentity.GetCurrent().User;
-                    if (me != null)
-                        s.AddAccessRule(new FileSystemAccessRule(me, FileSystemRights.FullControl,
-                            InheritanceFlags.None, PropagationFlags.None, AccessControlType.Allow));
-                }
-                catch (Exception) { }     // a run that cannot read its own account keeps the list above
-                return s;
-            }
-
-            // The rules of the folder that holds the version folders: the list above, and the account that creates
-            // the folder, so that the run which made it can remove it again (BD-163). That access rule is not
-            // inherited: the version folders and the files below them stay administrators and SYSTEM only, with
-            // read and run for Users, so nobody can plant a file where the checked package goes. The owner is
-            // Administrators where the process may set it, as before.
-            public static DirectorySecurity RootRules()
-            {
-                var s = Rules();
-                try
-                {
-                    var me = WindowsIdentity.GetCurrent().User;
-                    if (me != null)
-                        s.AddAccessRule(new FileSystemAccessRule(me, FileSystemRights.FullControl,
-                            InheritanceFlags.None, PropagationFlags.None, AccessControlType.Allow));
-                }
-                catch (Exception) { }     // a run that cannot read its own account keeps the list above
-                return s;
-            }
-
                 if (!info.Exists) info.Create(RootRules());   // BD-163: with this run's account on the list
                 else
                 {

@@ -2,10 +2,24 @@
   "schema": 1,
   "timeout": 180,
   "release_only": [
+    "driver-state-package",
+    "driver-state-installer",
+    "driver-state-lifecycle",
+    "driver-state-rollback",
+    "driver-state-consumer-syntax",
+    "driver-state-cli-x64",
+    "driver-state-cli-x86",
+    "driver-state-cumode-x64",
+    "driver-state-cumode-x86",
+    "driver-state-overlay",
+    "driver-state-client-x64",
+    "driver-state-client-x86",
+    "driver-state-gui-batch",
     "x86-callconv",
     "status-map",
     "ledger",
     "release-provenance",
+    "version-stamp",
     "app-route-lib",
     "system-tuning",
     "system-tuning-installer",
@@ -19,7 +33,6 @@
     "kd-dump-triage",
     "smartplug",
     "hostwatch",
-    "version-stamp",
     "lab-emerg",
     "lab-runner",
     "target-boot",
@@ -33,6 +46,7 @@
     "start-record-consumers",
     "installer-diagnostics",
     "session-checks",
+    "winforms-labels",
     "opengl-icd",
     "radv-contract",
     "umd-contract",
@@ -112,21 +126,6 @@
     }
   ],
   "checks": {
-    "kmd-order": {
-      "inputs": [
-        "host"
-      ]
-    },
-    "escape-commands": {
-      "inputs": [
-        "host"
-      ]
-    },
-    "claim-shares": {
-      "inputs": [
-        "documents"
-      ]
-    },
     "driver-state-x64": {
       "inputs": [
         "host"
@@ -217,6 +216,21 @@
         "host"
       ]
     },
+    "kmd-order": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "escape-commands": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "claim-shares": {
+      "inputs": [
+        "documents"
+      ]
+    },
     "doclint": {
       "inputs": [
         "documents"
@@ -239,6 +253,16 @@
       ],
       "artifacts": [
         "kmd/compile_commands.json"
+      ]
+    },
+    "kmd-version-rc": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "ledger-call": {
+      "inputs": [
+        "host"
       ]
     },
     "kmd-contract": {
@@ -342,16 +366,6 @@
       ]
     },
     "board-memory-write": {
-      "inputs": [
-        "host"
-      ]
-    },
-    "kmd-version-rc": {
-      "inputs": [
-        "host"
-      ]
-    },
-    "ledger-call": {
       "inputs": [
         "host"
       ]
@@ -619,6 +633,11 @@
       ]
     },
     "connector-link-cold-recovery": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "connector-link-prepare-cleanup": {
       "inputs": [
         "host"
       ]
@@ -1093,12 +1112,12 @@
         "host"
       ]
     },
-    "submit-watchdog-no-tdr-floor": {
+    "submit-watchdog-short-diagnostic": {
       "inputs": [
         "host"
       ]
     },
-    "submit-watchdog-clamp-tdr": {
+    "submit-watchdog-long-diagnostic": {
       "inputs": [
         "host"
       ]
@@ -1348,6 +1367,11 @@
       "inputs": [
         "host"
       ]
+    },
+    "release-symbols": {
+      "inputs": [
+        "host"
+      ]
     }
   },
   "toolchain_environment": [
@@ -1355,8 +1379,3 @@
     "LIB"
   ]
 }
-    },
-    "release-symbols": {
-      "inputs": [
-        "host"
-      ]

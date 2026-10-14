@@ -6,11 +6,9 @@
 # (problem code CM_PROB_FAILED_POST_START, status Error, the start record of that boot, no start-health reading,
 # LastStage 79) must come out as "start failure, collect". A healthy reading of the same shape must come out as
 # "no start failure". Then the readers: the setupapi.dev.log section picker, the driver's log folder, the size and
-# time bounds, and the whole file against records written as real registry values in a scratch key of HKCU, which
-# the test removes again. The last section holds the callers to their part of the contract.
+# time bounds, and the whole file against an in-memory record store.
 #
-# Nothing outside HKCU and -WorkRoot is written. The System log of this computer is read once, bounded, because the
-# collector reads it on a tester's PC as well. Runs under Windows PowerShell 5.1 and PowerShell 7.
+# Only -WorkRoot files are written. Registry, Windows metadata and events are synthetic.
 param(
     [string]$Installer = (Join-Path (Split-Path $PSScriptRoot) 'release\installer'),
     [string]$WorkRoot = (Join-Path ([IO.Path]::GetTempPath()) ('amdgpu-wddm-diagnostics-' + [guid]::NewGuid().ToString('N').Substring(0, 8)))
@@ -19,12 +17,20 @@ $ErrorActionPreference = 'Stop'
 if (-not (Test-Path -LiteralPath (Join-Path $Installer 'diagnostics.ps1'))) { $Installer = Join-Path $PSScriptRoot 'installer' }
 . (Join-Path $Installer 'start-confirm-core.ps1')
 . (Join-Path $Installer 'diagnostics.ps1')
+. (Join-Path $Installer 'state-reader.ps1')
+. (Join-Path $PSScriptRoot 'test-record-store.ps1')
+$PSDefaultParameterValues['Write-StartFailureDiagnostics:EventReader']={{param($query,$limit)
+    [pscustomobject]@{TimeCreated=[datetime]'2026-10-11T22:20:00Z';Level=2;Id=42;Message='synthetic driver event'}}}
+$PSDefaultParameterValues['Write-StartFailureDiagnostics:WindowsReader']={{'Windows fixture; no host metadata read'}}
+$script:HostReadAttempts=0
+function Get-WinEvent {$script:HostReadAttempts++;throw 'host event access is forbidden in this fixture'}
+function Get-DiagnosticsWindowsLines {$script:HostReadAttempts++;throw 'host Windows metadata access is forbidden in this fixture'}
 $fail = 0
 function Check([bool]$Ok, [string]$Text) { if ($Ok) { "  PASS $Text" } else { "  FAIL $Text"; $script:fail++ } }
 
 $scratch = 'Software\amdgpu-wddm-diagnostics-test'
 $parameters = "$scratch\Parameters"
-$root = [Microsoft.Win32.Registry]::CurrentUser
+$root = New-RecordFixtureKey
 $root.DeleteSubKeyTree($scratch, $false)
 [void][IO.Directory]::CreateDirectory($WorkRoot)
 function New-RecordKey([string]$Name, [hashtable]$Values) {
@@ -384,13 +390,20 @@ try {
         $sp = [string]$s.provider
         $sl = [string]$s.log
         Check ([bool]$sl) "$sp names the log it is read from"
-        $links = $null
-        try { $links = @((Get-WinEvent -ListProvider $sp -ErrorAction Stop).LogLinks | ForEach-Object { [string]$_.LogName }) } catch { }
-        if ($null -eq $links) { "  SKIP $sp is not registered on this computer, so its logs cannot be checked here" }
-        else { Check ($links -contains $sl) "$sp writes to $sl (its logs: $($links -join ', '))" }
+        $links = if($sp -eq 'Microsoft-Windows-DxgKrnl'){@('Microsoft-Windows-DxgKrnl-Admin','Microsoft-Windows-DxgKrnl-Operational')}else{@('System')}
+        Check ($links -contains $sl) "$sp selects its declared fixture channel $sl"
     }
 
-    '8. the contract of the callers'
+    '8. shared-state diagnostics retain typed failures'
+    $sharedRunner={param($exe,$arguments) @{code=0;text='{"abi":1,"error":0,"items":[{"path":"StartRecord","name":"Result","kind":"record","record":{"status":"ok","type":1,"bytes":16,"value":"failed"}}]}'}}
+    $lines=Get-DiagnosticsRecordLines -Root $root -ParametersSubKey '' -SubKey StartRecord -StartRecord -StateRunner $sharedRunner
+    Check (($lines -join "`n") -match 'FAILED') 'production diagnostic reader uses the shared protocol'
+    $deniedRunner={param($exe,$arguments) @{code=5;text='{"abi":1,"error":5,"items":[]}'}}
+    $denied=$false;try{Get-DiagnosticsRecordLines -Root $root -ParametersSubKey '' -SubKey StartRecord -StartRecord -StateRunner $deniedRunner}catch{$denied=$true}
+    Check $denied 'denied shared state cannot report an absent StartRecord'
+
+    '9. the contract of the callers'
+    Check ($script:HostReadAttempts -eq 0) 'every event and Windows metadata query used the injected fixture'
     $inst = [IO.File]::ReadAllText((Join-Path $Installer 'install.ps1'))
     Check ($inst -match "(?m)^\. \(Join-Path \`$here 'diagnostics\.ps1'\)") 'install.ps1 loads the collector'
     Check (@([regex]::Matches($inst, 'Invoke-VerifyDiagnostics')).Count -ge 3) 'and calls it from verify, at the device check and after the start health'

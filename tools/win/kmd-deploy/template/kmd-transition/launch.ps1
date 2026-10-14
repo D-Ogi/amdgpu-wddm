@@ -1,6 +1,8 @@
 # Entry point for an independent scheduled task, after host admission.
 param([Parameter(Mandatory)][string]$Directory,[Parameter(Mandatory)][string]$ManifestSha256)
 $ErrorActionPreference='Stop'
+. "$PSScriptRoot\legacy-state.ps1"
+Assert-KmdLegacyState $Directory
 $origin=[Diagnostics.Stopwatch]::GetTimestamp()
 $frequency=[Diagnostics.Stopwatch]::Frequency
 . "$PSScriptRoot\verify-stage.ps1"

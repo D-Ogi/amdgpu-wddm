@@ -50,7 +50,7 @@ namespace AmdgpuWddmControl
             if (MessageBox.Show(this, prompt, Strings.T("uma.title"), MessageBoxButtons.OKCancel,
                 MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.OK) return;
             Enabled = false;
-            Task.Run(() => Program.RunElevatedCode("--bc250-board-memory-action", restore ? "restore" : target.ToString(CultureInfo.InvariantCulture), confirmed)).ContinueWith(t =>
+            Task.Run(() => Crash.Watched("board memory change", () => Program.RunElevatedCode("--bc250-board-memory-action", restore ? "restore" : target.ToString(CultureInfo.InvariantCulture), confirmed))).ContinueWith(t =>
             {
                 Enabled = true;
                 int code = t.Status == TaskStatus.RanToCompletion ? t.Result : 1;

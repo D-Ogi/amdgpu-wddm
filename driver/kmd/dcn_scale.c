@@ -310,77 +310,138 @@ int Bc250InheritedPipeSame(const BC250_INHERITED_PIPE* A, const BC250_INHERITED_
     return 1;
 }
 
+// BD-169: the gate numbers are the vocabulary of a field support file (the start
+// record's Detail and the inherited: log line carry the number and the word that
+// decided it), so a report from a board this classifier refuses says which check
+// to extend. Keep the text short and stable: it is read next to the number.
+const char* Bc250InheritedPipeGateText(unsigned long Gate)
+{
+    static const char* const text[BC250_PIPE_GATE_COUNT] = {
+        "none", "reads", "source-size", "target-size", "pitch-arg", "viewport-start", "viewport-size",
+        "mpc-size", "mpcc-top", "mpc-out", "dcc", "odm", "otg1", "rotation", "tiling", "pitch-reg",
+        "mpcc-mode", "mpcc-bottom", "pixel-format", "recout", "autocal-mode", "autocal-pipe",
+        "autocal-dscl", "autocal-upscale", "autocal-coef", "bypass-recout", "coef-power",
+        "ratio-h-zero", "ratio-v-zero", "ratio-h", "ratio-v", "ratio-upscale", "dscl-mode", "unstable"
+    };
+    return Gate < BC250_PIPE_GATE_COUNT ? text[Gate] : "gate";
+}
+
+static unsigned long Refuse(BC250_INHERITED_PIPE_REASON* Reason, unsigned long Gate, unsigned long Word)
+{
+    Reason->Gate = Gate;
+    Reason->Word = Word;
+    return 0;
+}
+
+static unsigned long Pair16(unsigned long Low, unsigned long High)
+{
+    return ((Low & 0xFFFFul) << 16) | (High & 0xFFFFul);
+}
+
 unsigned long Bc250InheritedPipeSupport(const BC250_INHERITED_PIPE* P,
     unsigned long W, unsigned long H, unsigned long Pitch, unsigned long TW, unsigned long TH)
+{
+    BC250_INHERITED_PIPE_REASON reason;
+    return Bc250InheritedPipeSupportEx(P, W, H, Pitch, TW, TH, &reason);
+}
+
+// One gate per statement, in the order the checks ran before BD-169 split them,
+// so Reason names the *first* one that refused. The verdict is unchanged: the
+// host suite (driver/kmd/test/inherited_pipe_cases.h) compares every word table
+// against the old decision.
+unsigned long Bc250InheritedPipeSupportEx(const BC250_INHERITED_PIPE* P,
+    unsigned long W, unsigned long H, unsigned long Pitch, unsigned long TW, unsigned long TH,
+    BC250_INHERITED_PIPE_REASON* Reason)
 {
     const BC250_PIPE_SHAPE* s = &P->Shape;
     BC250_RECT recout, wanted;
     unsigned long mode, scaling, support = 0, mpccMode, autocal;
     unsigned long long ratio, actual;
     int ratioMatches = 1;
-    if (P->Valid != BC250_INHERITED_PIPE_ALL || !DimensionOk(W) || !DimensionOk(H) ||
-        !DimensionOk(TW) || !DimensionOk(TH) || Pitch < W * 4ul || Pitch % 4ul) return 0;
-    if (s->ViewportStart != 0 ||
-        Bc250DispGet(s->ViewportDimension, HUBP0_DCSURF_PRI_VIEWPORT_DIMENSION__PRI_VIEWPORT_WIDTH_MASK) != W ||
-        Bc250DispGet(s->ViewportDimension, HUBP0_DCSURF_PRI_VIEWPORT_DIMENSION__PRI_VIEWPORT_HEIGHT_MASK) != H ||
-        Bc250DispGet(s->MpcSize, DSCL0_MPC_SIZE__MPC_WIDTH_MASK) != TW ||
-        Bc250DispGet(s->MpcSize, DSCL0_MPC_SIZE__MPC_HEIGHT_MASK) != TH ||
-        Bc250DispGet(s->MpccTopSel, MPCC0_MPCC_TOP_SEL__MPCC_TOP_SEL_MASK) != 0 ||
-        Bc250DispGet(P->MpcOut, MPC_OUT0_MUX__MPC_OUT_MUX_MASK) != 0 ||
-        (P->SurfaceControl & HUBPREQ0_DCSURF_SURFACE_CONTROL__PRIMARY_SURFACE_DCC_EN_MASK) ||
-        Bc250DispGet(s->OdmSource, ODM0_OPTC_DATA_SOURCE_SELECT__OPTC_SEG0_SRC_SEL_MASK) != 0 ||
-        (P->Otg1 & OTG1_OTG_CONTROL__OTG_MASTER_EN_MASK) ||
-        (P->SurfaceConfig & (HUBP0_DCSURF_SURFACE_CONFIG__ROTATION_ANGLE_MASK |
-                            HUBP0_DCSURF_SURFACE_CONFIG__H_MIRROR_EN_MASK)) ||
-        (P->TilingConfig & HUBP0_DCSURF_TILING_CONFIG__SW_MODE_MASK) ||
-        (Bc250DispGet(P->Pitch, HUBPREQ0_DCSURF_SURFACE_PITCH__PITCH_MASK) + 1ul) * 4ul != Pitch)
-        return 0;
+    Reason->Gate = BC250_PIPE_GATE_NONE;
+    Reason->Word = 0;
+    if (P->Valid != BC250_INHERITED_PIPE_ALL) return Refuse(Reason, BC250_PIPE_GATE_READS, P->Valid);
+    if (!DimensionOk(W) || !DimensionOk(H)) return Refuse(Reason, BC250_PIPE_GATE_SOURCE_SIZE, Pair16(W, H));
+    if (!DimensionOk(TW) || !DimensionOk(TH)) return Refuse(Reason, BC250_PIPE_GATE_TARGET_SIZE, Pair16(TW, TH));
+    if (Pitch < W * 4ul || Pitch % 4ul) return Refuse(Reason, BC250_PIPE_GATE_PITCH_ARG, Pitch);
+    if (s->ViewportStart != 0) return Refuse(Reason, BC250_PIPE_GATE_VIEWPORT_START, s->ViewportStart);
+    if (Bc250DispGet(s->ViewportDimension, HUBP0_DCSURF_PRI_VIEWPORT_DIMENSION__PRI_VIEWPORT_WIDTH_MASK) != W ||
+        Bc250DispGet(s->ViewportDimension, HUBP0_DCSURF_PRI_VIEWPORT_DIMENSION__PRI_VIEWPORT_HEIGHT_MASK) != H)
+        return Refuse(Reason, BC250_PIPE_GATE_VIEWPORT_SIZE, s->ViewportDimension);
+    if (Bc250DispGet(s->MpcSize, DSCL0_MPC_SIZE__MPC_WIDTH_MASK) != TW ||
+        Bc250DispGet(s->MpcSize, DSCL0_MPC_SIZE__MPC_HEIGHT_MASK) != TH)
+        return Refuse(Reason, BC250_PIPE_GATE_MPC_SIZE, s->MpcSize);
+    if (Bc250DispGet(s->MpccTopSel, MPCC0_MPCC_TOP_SEL__MPCC_TOP_SEL_MASK) != 0)
+        return Refuse(Reason, BC250_PIPE_GATE_MPCC_TOP, s->MpccTopSel);
+    if (Bc250DispGet(P->MpcOut, MPC_OUT0_MUX__MPC_OUT_MUX_MASK) != 0)
+        return Refuse(Reason, BC250_PIPE_GATE_MPC_OUT, P->MpcOut);
+    if (P->SurfaceControl & HUBPREQ0_DCSURF_SURFACE_CONTROL__PRIMARY_SURFACE_DCC_EN_MASK)
+        return Refuse(Reason, BC250_PIPE_GATE_DCC, P->SurfaceControl);
+    if (Bc250DispGet(s->OdmSource, ODM0_OPTC_DATA_SOURCE_SELECT__OPTC_SEG0_SRC_SEL_MASK) != 0)
+        return Refuse(Reason, BC250_PIPE_GATE_ODM, s->OdmSource);
+    if (P->Otg1 & OTG1_OTG_CONTROL__OTG_MASTER_EN_MASK) return Refuse(Reason, BC250_PIPE_GATE_OTG1, P->Otg1);
+    if (P->SurfaceConfig & (HUBP0_DCSURF_SURFACE_CONFIG__ROTATION_ANGLE_MASK |
+                            HUBP0_DCSURF_SURFACE_CONFIG__H_MIRROR_EN_MASK))
+        return Refuse(Reason, BC250_PIPE_GATE_ROTATION, P->SurfaceConfig);
+    if (P->TilingConfig & HUBP0_DCSURF_TILING_CONFIG__SW_MODE_MASK)
+        return Refuse(Reason, BC250_PIPE_GATE_TILING, P->TilingConfig);
+    if ((Bc250DispGet(P->Pitch, HUBPREQ0_DCSURF_SURFACE_PITCH__PITCH_MASK) + 1ul) * 4ul != Pitch)
+        return Refuse(Reason, BC250_PIPE_GATE_PITCH_REG, P->Pitch);
     // dc/inc/hw/mpc.h: mode 1 passes the top layer through; the bottom
     // selector is unused. Mode 2 retains the established disconnected-bottom
     // requirement. Mode 0 bypass and mode 3 two-layer blending are not ours.
     mpccMode = Bc250DispGet(P->MpccControl, MPCC0_MPCC_CONTROL__MPCC_MODE_MASK);
-    if (mpccMode != 1ul && (mpccMode != 2ul ||
-        Bc250DispGet(P->MpccBottom, MPCC0_MPCC_BOT_SEL__MPCC_BOT_SEL_MASK) != 0xFul)) return 0;
+    if (mpccMode != 1ul && mpccMode != 2ul) return Refuse(Reason, BC250_PIPE_GATE_MPCC_MODE, P->MpccControl);
+    if (mpccMode == 2ul && Bc250DispGet(P->MpccBottom, MPCC0_MPCC_BOT_SEL__MPCC_BOT_SEL_MASK) != 0xFul)
+        return Refuse(Reason, BC250_PIPE_GATE_MPCC_BOTTOM, P->MpccBottom);
     // dcn10_hubp.c: RGB8888 uses surface format 8; no YUV or metadata decoding.
-    if (Bc250DispGet(P->SurfaceConfig, HUBP0_DCSURF_SURFACE_CONFIG__SURFACE_PIXEL_FORMAT_MASK) != 8ul) return 0;
+    if (Bc250DispGet(P->SurfaceConfig, HUBP0_DCSURF_SURFACE_CONFIG__SURFACE_PIXEL_FORMAT_MASK) != 8ul)
+        return Refuse(Reason, BC250_PIPE_GATE_PIXEL_FORMAT, P->SurfaceConfig);
     recout.X = Bc250DispGet(s->RecoutStart, DSCL0_RECOUT_START__RECOUT_START_X_MASK);
     recout.Y = Bc250DispGet(s->RecoutStart, DSCL0_RECOUT_START__RECOUT_START_Y_MASK);
     recout.Width = Bc250DispGet(s->RecoutSize, DSCL0_RECOUT_SIZE__RECOUT_WIDTH_MASK);
     recout.Height = Bc250DispGet(s->RecoutSize, DSCL0_RECOUT_SIZE__RECOUT_HEIGHT_MASK);
     if (!recout.Width || !recout.Height || recout.X > TW || recout.Y > TH ||
-        recout.Width > TW - recout.X || recout.Height > TH - recout.Y) return 0;
+        recout.Width > TW - recout.X || recout.Height > TH - recout.Y)
+        return Refuse(Reason, BC250_PIPE_GATE_RECOUT, s->RecoutSize);
     mode = Bc250DispGet(s->SclMode, DSCL0_SCL_MODE__DSCL_MODE_MASK);
     autocal = Bc250DispGet(P->Autocal, DSCL0_DSCL_AUTOCAL__AUTOCAL_MODE_MASK);
     // Firmware automatic centering and replication (modes 2/3) need a
     // separate geometry contract. NUM_PIPE/PIPE_ID are inactive when
     // AUTOCAL_MODE_OFF selects manual calculation (dcn10_dpp_dscl.c).
-    if (autocal > 1ul) return 0;
+    if (autocal > 1ul) return Refuse(Reason, BC250_PIPE_GATE_AUTOCAL_MODE, P->Autocal);
     if (autocal == 1ul) {
         // dcn10_dpp_dscl.c enum dscl_autocal_mode: automatic scale computes
         // ratio AND phase and requires DSCL_MODE=1. Manual ratio registers
         // may be stale, including 1.0; do not validate them as active input.
         // Nonzero automatic pipe fields have no verified encoding here.
-        if ((P->Autocal & (DSCL0_DSCL_AUTOCAL__AUTOCAL_NUM_PIPE_MASK |
-                          DSCL0_DSCL_AUTOCAL__AUTOCAL_PIPE_ID_MASK)) ||
-            mode != DSCL_MODE_444_RGB_ENABLE || W > recout.Width || H > recout.Height ||
-            Bc250DispGet(s->MemPwrCtrl, DSCL0_DSCL_MEM_PWR_CTRL__LUT_MEM_PWR_FORCE_MASK)) return 0;
+        if (P->Autocal & (DSCL0_DSCL_AUTOCAL__AUTOCAL_NUM_PIPE_MASK |
+                          DSCL0_DSCL_AUTOCAL__AUTOCAL_PIPE_ID_MASK))
+            return Refuse(Reason, BC250_PIPE_GATE_AUTOCAL_PIPE, P->Autocal);
+        if (mode != DSCL_MODE_444_RGB_ENABLE) return Refuse(Reason, BC250_PIPE_GATE_AUTOCAL_DSCL, s->SclMode);
+        if (W > recout.Width || H > recout.Height)
+            return Refuse(Reason, BC250_PIPE_GATE_AUTOCAL_UPSCALE, s->RecoutSize);
+        if (Bc250DispGet(s->MemPwrCtrl, DSCL0_DSCL_MEM_PWR_CTRL__LUT_MEM_PWR_FORCE_MASK))
+            return Refuse(Reason, BC250_PIPE_GATE_AUTOCAL_COEF, s->MemPwrCtrl);
         // Classify the automatic transform from viewport and recout below.
         // Full-target recout is STRETCHED; centering and aspect preservation
         // use the same rectangle matcher as manual ratios. This names the
         // existing transform only: commit still keeps every pipe register.
     } else if (mode == DSCL_MODE_444_BYPASS) {
-        if (recout.Width != W || recout.Height != H) return 0;
+        if (recout.Width != W || recout.Height != H)
+            return Refuse(Reason, BC250_PIPE_GATE_BYPASS_RECOUT, s->RecoutSize);
     } else if (mode == DSCL_MODE_444_RGB_ENABLE) {
-        if (Bc250DispGet(s->MemPwrCtrl, DSCL0_DSCL_MEM_PWR_CTRL__LUT_MEM_PWR_FORCE_MASK)) return 0;
+        if (Bc250DispGet(s->MemPwrCtrl, DSCL0_DSCL_MEM_PWR_CTRL__LUT_MEM_PWR_FORCE_MASK))
+            return Refuse(Reason, BC250_PIPE_GATE_COEF_POWER, s->MemPwrCtrl);
         // dpp1_dscl_set_manual_ratio_init: Q3.19 ratio stored as Q3.24. Allow
         // one Q3.19 unit for the firmware's rounding; never accept a zero ratio.
         ratio = ((unsigned long long)W << 24) / recout.Width;
         actual = P->RatioH & DSCL0_SCL_HORZ_FILTER_SCALE_RATIO__SCL_H_SCALE_RATIO_MASK;
-        if (!actual) return 0;
+        if (!actual) return Refuse(Reason, BC250_PIPE_GATE_RATIO_H_ZERO, P->RatioH);
         if ((actual > ratio ? actual - ratio : ratio - actual) > 32u) ratioMatches = 0;
         ratio = ((unsigned long long)H << 24) / recout.Height;
         actual = P->RatioV & DSCL0_SCL_VERT_FILTER_SCALE_RATIO__SCL_V_SCALE_RATIO_MASK;
-        if (!actual) return 0;
+        if (!actual) return Refuse(Reason, BC250_PIPE_GATE_RATIO_V_ZERO, P->RatioV);
         if ((actual > ratio ? actual - ratio : ratio - actual) > 32u) ratioMatches = 0;
         if (!ratioMatches) {
             // Retain a firmware unity-ratio pipe with a larger output as
@@ -388,11 +449,13 @@ unsigned long Bc250InheritedPipeSupport(const BC250_INHERITED_PIPE* P,
             // source viewport/stride. We neither enlarge the source nor
             // change ratios, phases, boundary mode, coefficients or timing.
             // This is image preservation, not proof of edge/black fill.
-            if (P->RatioH != (ONE19 << 5) || P->RatioV != (ONE19 << 5) ||
-                W > recout.Width || H > recout.Height) return 0;
+            if (P->RatioH != (ONE19 << 5)) return Refuse(Reason, BC250_PIPE_GATE_RATIO_H, P->RatioH);
+            if (P->RatioV != (ONE19 << 5)) return Refuse(Reason, BC250_PIPE_GATE_RATIO_V, P->RatioV);
+            if (W > recout.Width || H > recout.Height)
+                return Refuse(Reason, BC250_PIPE_GATE_RATIO_UPSCALE, s->RecoutSize);
             return BC250_SCALING_BIT(BC250_SCALING_CUSTOM);
         }
-    } else return 0;
+    } else return Refuse(Reason, BC250_PIPE_GATE_DSCL_MODE, s->SclMode);
     for (scaling = 0; scaling < BC250_SCALING_CUSTOM; ++scaling) {
         if (Bc250ScalingRecout(W, H, TW, TH, scaling, &wanted) >= 0 &&
             wanted.X == recout.X && wanted.Y == recout.Y && wanted.Width == recout.Width &&
@@ -400,7 +463,6 @@ unsigned long Bc250InheritedPipeSupport(const BC250_INHERITED_PIPE* P,
     }
     return support ? support : BC250_SCALING_BIT(BC250_SCALING_CUSTOM);
 }
-
 // ---- the register writes ---------------------------------------------------------------------------------------
 
 static unsigned long Pair(unsigned long LowMask, unsigned long Low, unsigned long HighMask, unsigned long High)

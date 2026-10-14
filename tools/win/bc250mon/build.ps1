@@ -26,6 +26,7 @@ if (Get-Command python -ErrorAction SilentlyContinue) {
 & (Join-Path $here 'test-graphics-summary.ps1') -Out (Join-Path $Out 'graphics-summary-check')
 & (Join-Path $here 'test-telemetry.ps1') -Out (Join-Path $Out 'telemetry-check')
 & (Join-Path $here 'test-graphics-api.ps1') -Out (Join-Path $Out 'graphics-api-check')
+& (Join-Path $here 'test-state.ps1') -Out (Join-Path $Out 'state-check')
 & (Join-Path $here 'test-lab-state.ps1') -Out (Join-Path $Out 'lab-state-check')
 
 $refs = 'System.dll', 'System.Core.dll', 'System.Drawing.dll', 'System.Windows.Forms.dll', 'System.Web.Extensions.dll' |

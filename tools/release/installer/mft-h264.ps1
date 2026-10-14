@@ -7,10 +7,8 @@
 # Windows PowerShell 5.1 syntax only: install.ps1 and uninstall.ps1 dot-source this file.
 #
 # Two points differ from INSTALL.md on purpose:
-#  - the DLL goes to <install root>\mft\, not to %SystemRoot%\System32 (DIRID 11). COM activates the transform
-#    through the full path in InprocServer32, so System32 gives nothing, and the install root keeps the uninstall
-#    complete: the whole tree goes at once and no file of ours stays behind in System32. The install root takes the
-#    read rights of %ProgramFiles%, which every recording process needs, an AppContainer client included.
+#  - current packages copy the DLL to the INF's DIRID 13 mft subdirectory. COM activates it through the full
+#    bound path in InprocServer32. Legacy package rollback still uses <install root>\mft\.
 #  - nothing is written in the WOW6432Node view. The DLL is x64, so a 32-bit Media Foundation client could not load
 #    it, and a 32-bit registration would only offer it one.
 #
@@ -73,7 +71,7 @@ function Get-MftReleaseSwitch {
     if ($s -and $s.register) { $register = $true }
     $rel = $script:MftPackagePath
     if ($s -and $s.package_path) { $rel = [string]$s.package_path }
-    if ($rel -notmatch '^payload/[A-Za-z0-9_-]+/[A-Za-z0-9_.-]+\.dll$') { throw "mft_h264 package_path '$rel': expected payload/<directory>/<name>.dll" }
+    if ($rel -notmatch '^payload/(?:kmd/)?mft/amdgpu_wddm_mft_h264\.dll$') { throw "invalid MFT package path: $rel" }
     $source = $null
     $present = $false
     if ($PackageRoot) {
@@ -84,7 +82,7 @@ function Get-MftReleaseSwitch {
         register     = $register
         package_path = $rel
         payload_dir  = ($rel -split '/')[1]                             # the payload directory install.ps1 copies
-        install_path = ($rel -replace '^payload/', '') -replace '/', '\' # under the install root
+        install_path = ($rel -replace '^payload/(?:kmd/)?', '') -replace '/', '\'
         source       = $source
         present      = $present
         name         = $script:MftFriendlyName

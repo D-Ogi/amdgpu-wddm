@@ -7,6 +7,7 @@ cu.choice.all|rev|c8029dd4|Twój wybór: Wszystkie (40).
 cu.choice.standard|rev|fa436287|Twój wybór: Standardowe (24).
 cu.choice.invalid|rev|9ed29361|Twój wybór jest nieprawidłowy; wybierz Standardowe (24) albo Wszystkie (40).
 cu.choice.unreadable|rev|ee127a9b|Nie można odczytać Twojego wyboru.
+cu.choice.some|mt|39a1d070|Twój wybór: {0} rdzeni graficznych.
 cu.choice.driver-24|mt|a8fa591b|Ustawione jest Standardowe (24), ale tę liczbę wybrał sterownik, nie Ty.
 cu.note.driver-24|mt|0199b2dd|Wybierz Wszystkie (40) i uruchom ponownie system Windows, aby znów używać wszystkich 40 rdzeni.
 cu.choice.after-restart|rev|07660ab1|Zacznie działać po następnym ponownym uruchomieniu systemu Windows.
@@ -22,26 +23,34 @@ cu.run.not-saved.next24|rev|0d9cc034|Następne uruchomienie użyje 24 rdzeni, zg
 cu.run.fallback|rev|c1cc5938|Ostatnie uruchomienie z 40 rdzeniami nie zostało potwierdzone, więc teraz działają 24 rdzenie.
 cu.run.refused|rev|9517c611|Przy tym uruchomieniu nie udało się użyć 40 rdzeni.
 cu.run.unknown|rev|39943c8f|Nie można odczytać liczby rdzeni graficznych.
+cu.run.groups|mt|4d770aed|Rdzenie w każdej grupie teraz: {0}.
+cu.map.item|mt|5905f8e5|grupa {0} para {1}
 cu.next.standard|rev|7c94a6f5|Następne uruchomienie: 24 rdzenie.
 cu.next.fallback|rev|d366069f|Następne uruchomienie: 24 rdzenie, bo ustawienie 40 rdzeni nie zostało potwierdzone.
 cu.next.ask40|rev|5af1df5d|Następne uruchomienie: 40 rdzeni, do potwierdzenia po uruchomieniu.
-cu.next.ask40-limited|rev|cb27c040|Następne uruchomienie: ustawienie 40 rdzeni z wcześniejszym diagnostycznym ograniczeniem liczby rdzeni (mniej rdzeni), do potwierdzenia po uruchomieniu.
+cu.next.ask40-limited|mt|95fdb1b4|Następne uruchomienie: {0} rdzeni graficznych, do potwierdzenia po uruchomieniu.
 cu.next.confirmed40|rev|59baaddb|Następne uruchomienie: 40 rdzeni (potwierdzone wcześniej).
-cu.next.confirmed40-limited|rev|487324b9|Następne uruchomienie: ustawienie 40 rdzeni z wcześniejszym diagnostycznym ograniczeniem liczby rdzeni (mniej rdzeni), potwierdzone wcześniej.
+cu.next.confirmed40-limited|mt|371afe5f|Następne uruchomienie: {0} rdzeni graficznych (potwierdzone wcześniej).
 cu.next.unknown|rev|8bb23e4f|Następne uruchomienie: nie można przewidzieć.
 cu.refuse.target|rev|84439e4b|Wybierz Standardowe (24) albo Wszystkie (40).
 cu.refuse.unreadable|rev|d945441d|Nie można odczytać zapisanego ustawienia.
 cu.refuse.already40|rev|4f5796de|Wszystkie (40) są już wybrane.
 cu.refuse.already24|rev|91c3ed3d|Standardowe (24) są już wybrane.
+cu.refuse.already-some|mt|ba20d575|{0} rdzeni graficznych jest już wybranych.
+cu.refuse.map|mt|1de01451|Tych par rdzeni graficznych nie można wybrać na tym komputerze.
 cu.preview.write40|rev|46267060|Wybiera wszystkie 40 rdzeni graficznych.
 cu.preview.write24|rev|3920ecbe|Wybiera standardowe 24 rdzenie graficzne.
 cu.preview.remove-closed|mt|93f4029d|Zapisuje, że standardowe 24 rdzenie graficzne to Twój wybór, a nie krok wstecz wykonany przez sterownik.
+cu.preview.write40-some|mt|0345f0c0|Wybiera {0} z 40 rdzeni graficznych.
+cu.preview.set-disable|mt|0056c790|Wyłącza te pary rdzeni graficznych: {0}.
+cu.preview.write-chosen|mt|2acbb148|Zapisuje tę liczbę jako Twój wybór, aby aktualizacja sterownika ją zachowała.
+cu.preview.remove-chosen|mt|4986238d|Oddaje liczbę rdzeni graficznych ustawieniu zainstalowanego sterownika.
 cu.preview.remove-confirmed|rev|d10b327e|Usuwa wcześniejsze potwierdzenie 40 rdzeni, aby nowe ustawienie zostało potwierdzone przy własnym uruchomieniu.
-cu.preview.remove-disable|rev|51075647|Wcześniejsze diagnostyczne ograniczenie liczby rdzeni zostanie usunięte.
+cu.preview.remove-disable|mt|7f38ddbb|Włącza ponownie każdą parę rdzeni graficznych.
 cu.result.nothing|rev|54ca5460|Nic nie zostało zmienione.
 cu.result.saved|rev|fca046cc|Zapisano.
 cu.result.failed|rev|ec48fa5b|Nie udało się dokończyć zmiany.
-cu.result.cleanup-incomplete|rev|894af8af|Porządkowanie jest niepełne. Następne uruchomienie użyje standardowych 24 rdzeni. Pozostałe wcześniejsze diagnostyczne ograniczenie liczby rdzeni ich nie zmniejsza.
+cu.result.cleanup-incomplete|mt|8e56e5c8|Porządkowanie jest niepełne. Następne uruchomienie użyje standardowych 24 rdzeni. Pary rdzeni, które pozostaną wyłączone, ich nie zmniejszają.
 cu.effect|rev|60ee9b9b|Więcej rdzeni zużywa więcej energii i wytwarza więcej ciepła: około 30 W więcej przy 1500 MHz na naszym egzemplarzu testowym. To wartość orientacyjna, nie obietnica dla Twojego komputera.
 
 # ---- driver card ----
@@ -63,6 +72,7 @@ drv.released.none|rev|63087412|Wydano: wiadomo po sprawdzeniu aktualizacji.
 upd.available|rev|68e4656c|Dostępna aktualizacja: {0}
 upd.uptodate|rev|39fd9eaf|Masz najnowsze wydanie.
 upd.newest|rev|ffd32b15|Najnowsze wydanie to {0}.
+upd.ahead|mt|d8273d3e|Twój sterownik jest nowszy niż najnowsze wydanie ({0}).
 upd.incomplete|rev|fc36062b|Brak nowszego wydania wśród {0} najnowszych wydań.
 upd.failed|rev|bf1dd0e0|Nie udało się sprawdzić aktualizacji. Spróbuj ponownie później.
 upd.rate-limited|rev|2c365d35|Usługa aktualizacji poprosiła o odczekanie. Możesz sprawdzić ponownie po {0}.
@@ -384,6 +394,7 @@ page.help.intro|rev|ba52ab9c|Pomoc krok po kroku w typowych problemach, naprawa 
 action.working|rev|82f2bdf0|Trwa wprowadzanie zmian... Windows może poprosić o uprawnienia administratora.
 action.done|rev|ed251864|Gotowe.
 action.failed|rev|ee79203d|Zmiana nie została wprowadzona. Nic innego nie zmieniono. Przyczynę pokaże raport diagnostyczny utworzony na stronie Pomoc.
+action.background-failed|mt|4ec90c79|Jeden z kroków w tle nie został ukończony. Nic w sterowniku nie zostało zmienione. Co się stało, pokaże raport diagnostyczny utworzony na stronie Pomoc.
 action.not-elevated|rev|d6a4391d|Nie udzielono uprawnień administratora. Niczego nie zmieniono.
 action.cannot-read|rev|4f597aff|Nie można odczytać bieżących ustawień, więc niczego nie zmieniono.
 action.restart-failed|rev|0783bdf8|Windows nie uruchomił się ponownie. Uruchom go ponownie z menu Start.
@@ -455,6 +466,15 @@ graphics.thermal|rev|14bc2f1d|Ochrona przed przegrzaniem jest zawsze włączona:
 graphics.cores.title|rev|3b1c283f|Rdzenie graficzne
 graphics.cores.24|rev|99b1c87b|Standardowe (24)
 graphics.cores.40|rev|908ab6d1|Wszystkie (40)
+graphics.cores.count|mt|202ea951|Ile rdzeni graficznych
+graphics.cores.count.item|mt|18b460db|{0} rdzeni
+graphics.cores.map.show|mt|09bc7c18|Wybierz pary rdzeni samodzielnie
+graphics.cores.map.help|mt|c8e8a347|Każda para to dwa rdzenie graficzne. Jeśli jedna para powoduje awarię albo zawieszenie komputera, wyłącz tę parę i zostaw pozostałe włączone.
+graphics.cores.map.unreadable|mt|4a1e2bd6|Nie można teraz odczytać par rdzeni tego komputera, więc nie można ich wybrać. Wybierz zamiast tego liczbę rdzeni.
+graphics.cores.map.group|mt|e5d24a19|Grupa {0}
+graphics.cores.map.pair|mt|c2d4e788|Para {0}
+graphics.cores.map.name|mt|e7997c8a|Grupa {0}, para {1}: dwa rdzenie graficzne
+graphics.cores.map.fixed|mt|f017032a|zawsze włączona
 graphics.not-installed|rev|17713c9c|Sterownik nie jest zainstalowany, więc nie ma tu nic do ustawienia.
 graphics.unsaved|rev|fdb121dc|Masz zmiany, które nie są jeszcze zastosowane.
 graphics.saved|rev|75d79f0a|Brak niezapisanych zmian.
@@ -895,8 +915,6 @@ search.graphics.overlay.terms|rev|72342a7f|licznik FPS|FPS|czas klatki|frame tim
 search.graphics.latency|rev|f3bcef3c|Niskie opóźnienie
 search.graphics.latency.terms|rev|5b07cf0e|opóźnienie|input lag|opóźnienie sterowania|kolejka klatek|Anti-Lag|Reflex
 search.graphics.overlay|rev|37d49e6c|Nakładka wydajności
-search.graphics.amd-version|rev|e9b65d7d|Zgłaszaj wersję sterownika AMD
-search.graphics.amd-version.terms|rev|a3215411|wersja sterownika|stary sterownik|przestarzały sterownik|ostrzeżenie o sterowniku|AMD
 search.graphics.vk-present|rev|cdee9cc4|Wyświetlanie w grach Vulkan
 search.graphics.vk-present.terms|rev|93c9bf20|Vulkan|wyświetlanie|czarny ekran|zamrożony obraz|zgodność
 search.graphics.vk-memory|rev|542ed595|Gdy pamięć wideo jest pełna
@@ -908,11 +926,10 @@ search.games.cpu-render.terms|rev|927301e2|renderowanie na CPU|renderowanie prog
 search.display.scaling|rev|22b1cb79|Skalowanie GPU
 help.setting.latency|rev|a684f1ab|Ile klatek procesor może przygotować przed układem graficznym. Mniej klatek sprawia, że gra szybciej reaguje na mysz i klawiaturę, ale może obniżyć liczbę klatek na sekundę. Działa w grach DirectX 11 i DirectX 12. Gra, która już teraz przygotowuje mniej klatek, zostaje bez zmian.
 help.setting.overlay|rev|78ee0e43|Pokazuje liczbę klatek na sekundę i czasy klatek w rogu gry. Na razie działa w grach DirectX 11.
-help.setting.amd-version|rev|7604c528|Niektóre gry ostrzegają, że sterownik graficzny jest stary, bo nie znają tego sterownika. Po włączeniu sterownik podaje numer wersji, który te gry akceptują. Sam sterownik się nie zmienia.
 help.setting.vk-present|rev|e892e511|Sposób, w jaki gry Vulkan wyświetlają klatki. Tryb nowoczesny jest domyślny i szybszy. Tryb zgodności używa starszej, wolniejszej metody; wypróbuj go, gdy gra Vulkan pokazuje czarny lub zamrożony obraz.
 help.setting.vk-memory|rev|ec2dc30f|Co dostaje gra Vulkan, gdy pamięć wideo jest pełna. „Użyj pamięci systemowej” utrzymuje grę w działaniu, ale wolniej. „Zgłoś brak pamięci” informuje grę, aby mogła obniżyć swoje ustawienia.
 help.setting.sm|rev|f3b2ff18|Najwyższy model shaderów, który sterownik zgłasza grze DirectX 12. Domyślny to 6.8. Niektóre gry nie działają z nowszym modelem shaderów; dla takiej gry wybierz 6.7 lub 6.6.
-help.setting.cpu-render|rev|527d8d82|Uruchamia DirectX 11 tej gry na procesorze zamiast na układzie graficznym. To jest znacznie wolniejsze. Używaj tego tylko w ostateczności, dla gry, która nie działa na układzie graficznym.
+help.setting.cpu-render|mt|0d418439|Uruchamia DirectX 11 tej gry na procesorze zamiast na układzie graficznym. To jest znacznie wolniejsze i nie daje pełnego DirectX 11, więc większość gier wydanych po 2012 roku (na przykład Counter-Strike 2) się z tym nie uruchomi. Używaj tego tylko w ostateczności, dla starszej gry, która nie działa na układzie graficznym.
 gfx.choice.app|rev|e7f551b6|Decyduje aplikacja
 gfx.choice.inherit|rev|efd0e1d0|Jak dla wszystkich gier: {0}
 gfx.choice.inherit-short|rev|1123f3b7|Jak dla wszystkich gier
@@ -942,8 +959,7 @@ gfx.origin.default|rev|04e6cbc0|Nie ustawiono: {0}.
 gfx.origin.stored|rev|2b5c4aeb|Zapisane dla wszystkich gier.
 gfx.origin.global|rev|6617fcee|Z ustawień dla wszystkich gier: {0}.
 gfx.note.overlay|rev|a4263f23|Na razie działa w grach DirectX 11.
-gfx.note.cpu-render|rev|0b9bf5df|Znacznie wolniej. Ostateczność dla gry DirectX 11, która nie działa na układzie graficznym.
-gfx.note.amd-version|rev|7f26a73f|Dla gier, które ostrzegają przed starym sterownikiem graficznym.
+gfx.note.cpu-render|mt|b48a21b3|Znacznie wolniej, a większość gier wydanych po 2012 roku się z tym nie uruchomi. Ostateczność dla starszej gry DirectX 11, która nie działa na układzie graficznym.
 gfx.note.vk-present|rev|3d7eec4c|Tryb zgodności jest wolniejszy. Wypróbuj go, gdy gra Vulkan pokazuje czarny lub zamrożony obraz.
 gfx.note.sm|rev|3efcfd20|Niektóre gry nie działają z nowszym modelem shaderów. Niższy wybierz tylko dla takiej gry.
 gfx.global.title|rev|c750f458|Ustawienia dla wszystkich gier
@@ -1218,3 +1234,29 @@ settings.wallpaper.restored-partial|mt|c85e565d|Poprzednim tłem był pokaz slaj
 settings.wallpaper.restore-failed|mt|7af0bb53|Nie udało się przywrócić poprzedniego tła: jego obrazu nie ma już na tym komputerze. Wybierz tło w Ustawieniach systemu Windows: Personalizacja, Tło.
 settings.wallpaper.nothing-saved|mt|d8f54a55|Dla Twojego konta nie zapisano poprzedniego tła, więc nie ma czego przywracać.
 help.setting.wallpaper|mt|18d99de4|Instalator ustawia tapetę Nagi raz dla każdej osoby po sprawdzonej instalacji, chyba że wyczyszczono jej pole, i najpierw zapisuje tło, które ta osoba miała. „Ustaw tapetę Nagi” ustawia obraz ponownie. „Przywróć moją poprzednią tapetę” przywraca zapisane tło. Pokaz slajdów lub Windows Spotlight wraca tylko jako ostatni obraz: włącz go ponownie w Ustawieniach systemu Windows: Personalizacja, Tło. Oba przyciski zmieniają tylko Twoje własne tło i nie wymagają uprawnień administratora.
+# "Record game logs" (src/GameLog.cs): przelacznik czasowy na stronie Pomoc.
+gamelog.title|mt|d9a04c61|Zapisuj dzienniki gier
+gamelog.intro|mt|c1bbf41a|Jeśli osoba, która Ci pomaga, poprosi o dziennik gry, włącz tu zapisywanie, a potem uruchom grę. Gdy zapisywanie działa, każda gra tworzy plik z tym, o co poprosiła grafikę. Zapisywanie kończy się samo po wybranym czasie, więc nie zostawisz go włączonego przez przypadek.
+gamelog.label|mt|e3aac753|Zapisuj przez
+gamelog.choice.recommended|mt|81c7ab30|{0} minut (dobra długość)
+gamelog.choice.one-minute|mt|e67b6f61|1 minuta
+gamelog.choice.minutes|mt|87086105|{0} minut
+gamelog.now.off|mt|c952f548|Zapisywanie jest wyłączone. Nic nie jest zapisywane.
+gamelog.now.on|mt|8bf8c99c|Zapisywanie jest włączone: zostało {0} minut. Uruchom teraz grę.
+gamelog.now.on.one-minute|mt|4302708c|Zapisywanie jest włączone: została 1 minuta. Uruchom teraz grę.
+gamelog.where|mt|85e11f4f|Pliki są przechowywane w {0} we wspólnym folderze danych programów, dotąd {2} plik(ów), razem {1} MB. Raport pomocy bierze najnowsze z nich.
+gamelog.start|mt|bb8b2bb3|Zapisuj przez {0} minut
+gamelog.stop|mt|6ebe3863|Zatrzymaj teraz
+gamelog.open|mt|e241ab00|Otwórz folder
+gamelog.open-failed|mt|9bbdcc09|Nie udało się otworzyć folderu.
+gamelog.unreadable|mt|9245ad83|Na tym komputerze nie można włączyć zapisywania.
+search.help.gamelog|mt|d9a04c61|Zapisuj dzienniki gier
+search.help.gamelog.terms|mt|ec6f3356|dziennik|dzienniki|log|logi|zapisywanie|rejestrowanie|dziennik gry|diagnostyka|zgłoś problem z grą
+help.setting.gamelog|mt|5e282183|Zapisuje, o co gry proszą grafikę, przez wybraną liczbę minut, i tworzy jeden plik na grę. Włącz zapisywanie, uruchom grę, graj do chwili, gdy pojawi się problem, a potem utwórz raport pomocy: najnowsze pliki trafią do niego. Zapisywanie kończy się samo, gdy czas minie, a każdy plik zatrzymuje się na 64 MB. Pliki są zwykłym tekstem i możesz je przeczytać samodzielnie.
+plan.title.game-log-on|mt|d9a04c61|Zapisuj dzienniki gier
+plan.title.game-log-off|mt|30cf650b|Zatrzymaj zapisywanie dzienników gier
+plan.line.gamelog-on|mt|7075c578|Gry będą zapisywać dziennik tego, o co proszą grafikę, do końca wybranego czasu.
+plan.line.gamelog-off|mt|1898e356|Gry przestaną zapisywać dzienniki. Zapisane już pliki zostają.
+launch.starting|mt|ff3dab00|Uruchamianie. Aplikacja najpierw sprawdza ten komputer, co trwa kilka sekund.
+launch.slow|mt|653d44fd|Uruchamianie trwa dłużej niż zwykle, bo Windows odpowiada powoli. Aplikacja otworzy się, gdy dostanie odpowiedzi. Możesz też zamknąć to okno.
+launch.close|mt|7d9eb7ac|Zamknij

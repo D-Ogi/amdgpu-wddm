@@ -239,14 +239,18 @@ namespace AmdgpuWddmControl
             var candidate = ReleaseVersion.Parse(c.CandidateTag);
             var mine = ReleaseVersion.Parse(installed);
             bool success = c.LastSuccessUtc != null, latest = success && c.LastSuccessUtc == c.LastAttemptUtc, same = CheckedThisInstall(c, installed);
-            if (candidate != null && mine != null && candidate.CompareTo(mine) > 0) lines.Add(Strings.T("upd.available", candidate.Text));
+            // A driver newer than the newest published release says so and nothing else: neither "update available"
+            // nor the bare "the newest release is X", which reads as an offer to a person who is already past it.
+            bool ahead = Ahead(installed, candidate);
+            if (ahead) lines.Add(Strings.T("upd.ahead", candidate.Text));
+            else if (candidate != null && mine != null && candidate.CompareTo(mine) > 0) lines.Add(Strings.T("upd.available", candidate.Text));
             else if (candidate != null && mine == null) lines.Add(Strings.T("upd.newest", candidate.Text));
             else if (latest && same && c.LastAttemptOutcome == "UpToDate") lines.Add(Strings.T("upd.uptodate"));
             else if (latest && same && c.LastAttemptOutcome == "Incomplete") lines.Add(Strings.T("upd.incomplete", PerPage * MaxPages));
             if (c.LastAttemptOutcome == "Failed") lines.Add(Strings.T("upd.failed"));
             if (c.LastAttemptOutcome == "RateLimited") lines.Add(Strings.T("upd.rate-limited", Local(c.NextAllowedUtc)));
             if (success && c.LastSuccessUtc != c.LastAttemptUtc) lines.Add(Strings.T("upd.last-success", Local(c.LastSuccessUtc)));
-            if (candidate != null && Recovery.Utc(c.CandidatePublishedUtc) != null && (mine == null || candidate.CompareTo(mine) > 0))
+            if (candidate != null && !ahead && Recovery.Utc(c.CandidatePublishedUtc) != null && (mine == null || candidate.CompareTo(mine) > 0))
                 lines.Add(Strings.T("upd.released", Recovery.Utc(c.CandidatePublishedUtc).Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)));
             return string.Join(" ", lines);
         }
@@ -266,6 +270,28 @@ namespace AmdgpuWddmControl
             var t = Recovery.Utc(c != null ? c.InstalledPublishedUtc : null);
             return tag != null && mine != null && tag.CompareTo(mine) == 0 && CheckedThisInstall(c, installed) && t != null
                 ? t.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) : null;
+        }
+
+        // A build string that is not a release tag of the grammar: a release candidate or a lab build
+        // (0.7.216.102-tester.31rc4). Its four numbers still place it against a release, because every build raises
+        // them and no tester or candidate suffix does.
+        static readonly Regex BaseGrammar = new Regex(@"^v?(?<a>\d{1,6})\.(?<b>\d{1,6})\.(?<c>\d{1,6})\.(?<d>\d{1,6})(-.+)?$", RegexOptions.CultureInvariant);
+
+        // Whether the running driver is newer than this release: by the whole tag when the installed build is a
+        // release of the grammar, else by the four numbers alone and only when they are strictly greater (with the
+        // same four numbers an unknown suffix says nothing about the order). The card must not hold the newest
+        // published release up to a person whose own driver is newer than it.
+        public static bool Ahead(string installed, ReleaseVersion release)
+        {
+            if (release == null) return false;
+            var mine = ReleaseVersion.Parse(installed);
+            if (mine != null) return mine.CompareTo(release) > 0;
+            var m = BaseGrammar.Match(installed ?? "");
+            if (!m.Success) return false;
+            Func<string, int> n = g => int.Parse(m.Groups[g].Value, CultureInfo.InvariantCulture);
+            foreach (var d in new[] { n("a").CompareTo(release.A), n("b").CompareTo(release.B), n("c").CompareTo(release.C), n("d").CompareTo(release.D) })
+                if (d != 0) return d > 0;
+            return false;
         }
 
         public static bool IsCandidateNewer(UpdateCache c, string installed)
@@ -509,10 +535,10 @@ namespace AmdgpuWddmControl
             {
                 if (_busy != null) return false;
                 var job = new Job { Run = new CheckRun(_budget) };
-                job.Worker = new Thread(() => Work(job, installed)) { IsBackground = true, Name = "update check" };
+                job.Worker = new Thread(() => Crash.Guard("update check", () => Work(job, installed))) { IsBackground = true, Name = "update check" };
                 _busy = job;
                 job.Worker.Start();
-                new Thread(() => Supervise(job)) { IsBackground = true, Name = "update check deadline" }.Start();
+                new Thread(() => Crash.Guard("update check deadline", () => Supervise(job))) { IsBackground = true, Name = "update check deadline" }.Start();
                 return true;
             }
         }

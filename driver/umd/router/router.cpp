@@ -8,7 +8,7 @@
 // route is decided at every OpenAdapter10/OpenAdapter10_2 call from:
 //
 //   HKLM\SOFTWARE\amdgpu-wddm\DesktopRouter   (the GPU DWM kit's fixed interface; read for every process)
-//     CpuUmdPath          REG_SZ     CPU UMD, absolute path (default: the compiled DefaultCpuUmdPath below)
+//     CpuUmdPath          REG_SZ     lab override; absent: the CPU UMD beside this router
 //                                    (32-bit router: CpuUmdPathWow, default bc250d3d.dll next to this DLL)
 //     HostedUmdPath       REG_SZ     hosted UMD, absolute path (default: bc250d3d_zink.dll next to this DLL)
 //                                    (32-bit router: HostedUmdPathWow, same default)
@@ -27,8 +27,8 @@
 //   HKLM\SOFTWARE\amdgpu-wddm\AppRouter       (applications only; never read for dwm.exe or a HostedClients entry)
 //     Mode                REG_SZ     cpu | allowlist | gpu-default. Absent = cpu (the application kill switch); any
 //                                    other string or value kind = invalid, which routes like cpu
-//     GpuUmdPath          REG_SZ     application GPU UMD, absolute path; absent or not absolute = every application
-//                                    on the CPU UMD (reason app-gpu-umd-unset). No compiled default.
+//     GpuUmdPath          REG_SZ     lab override; absent: ../d3d11/<shell> beside this package's desktop folder.
+//                                    Invalid explicit overrides refuse the GPU route (app-gpu-umd-unset).
 //                                    (32-bit router: GpuUmdPathWow)
 //     Allow               REG_MULTI_SZ  image base names routed to the GPU UMD in allowlist mode
 //     Deny                REG_MULTI_SZ  image base names kept on the CPU UMD in both modes (Deny wins over Allow).
@@ -45,7 +45,7 @@
 //   exports OpenAdapter10_2 only. The Direct3D 10.0 runtime of Windows 11 does not call OpenAdapter10 when
 //   OpenAdapter10_2 is exported: it opens this router through OpenAdapter10_2 and creates a D3D11-family device,
 //   so a D3D10.0 application takes the AppRouter decision like a D3D11 one (BD-081, measured 2026-10-07).
-//   HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters
+//   Shared service state through driver/state/client.h
 //     InteropLastState    REG_DWORD, KMD 0.7.181 and later (driver/kmd/interop.c InteropStart): effective bits |
 //                         requested bits << 8, written at every full adapter start. Both switches count as on
 //                         when the effective bits 1 (EnableGpuPresentBlit) and 2 (EnableCddDwmInterop) are both
@@ -80,17 +80,18 @@
 #include <cstdio>
 #include <cwchar>
 #include "router-policy.h"
+#include "router-state.h"
 #include "router-identity.h"
 #include "front-adapter.h"
 #include "../app-settings/app-settings-core.h"
 #include "../../contract/bc250_desktop_route.h"
+#include "../../contract/amdgpu_driver_package.h"
 
 #pragma comment(lib, "advapi32.lib")
 
 using namespace bc250router;
 
 #ifdef _WIN64
-static const wchar_t DefaultCpuUmdPath[] = L"C:\\BC250\\m15\\desktop-umd173-007\\bc250d3d.dll";
 static const wchar_t CpuUmdPathValue[] = L"CpuUmdPath";
 static const wchar_t HostedUmdPathValue[] = L"HostedUmdPath";
 static const wchar_t GpuUmdPathValue[] = L"GpuUmdPath";
@@ -105,13 +106,12 @@ static const REGSAM RegistryView = 0;
 static const wchar_t CpuUmdPathValue[] = L"CpuUmdPathWow";
 static const wchar_t HostedUmdPathValue[] = L"HostedUmdPathWow";
 static const wchar_t GpuUmdPathValue[] = L"GpuUmdPathWow";
-static const wchar_t DefaultCpuUmdFile[] = L"bc250d3d.dll";
 static const REGSAM RegistryView = KEY_WOW64_64KEY;
 #endif
 static const wchar_t RouterKey[] = L"SOFTWARE\\amdgpu-wddm\\DesktopRouter";
 static const wchar_t AppRouterKey[] = L"SOFTWARE\\amdgpu-wddm\\AppRouter";
-static const wchar_t KmdParametersKey[] = L"SYSTEM\\CurrentControlSet\\Services\\bc250kmd\\Parameters";
-static const wchar_t HostedUmdFile[] = L"bc250d3d_zink.dll";
+static const wchar_t DefaultCpuUmdFile[] = AMDGPU_CPU_UMD_FILE;
+static const wchar_t HostedUmdFile[] = AMDGPU_HOSTED_UMD_FILE;
 static const size_t PathChars = 1024;
 static const DWORD ClientsBytes = 4096;
 static const DWORD AppListBytes = 16384;
@@ -207,6 +207,7 @@ static void ReadConfig(Config *c)
     c->require_switches = 1;
     HKEY key = nullptr;
     if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, RouterKey, 0, KEY_QUERY_VALUE | RegistryView, &key) == ERROR_SUCCESS) {
+#ifdef BC250_ROUTER_TEST_LOADER_OVERRIDES
         if (ReadString(key, CpuUmdPathValue, c->cpu, PathChars) && IsAbsolute(c->cpu)) c->cpu_source = "registry";
         else c->cpu[0] = 0;
         if (ReadString(key, HostedUmdPathValue, c->hosted, PathChars)) {
@@ -214,6 +215,7 @@ static void ReadConfig(Config *c)
             // the route falls back to the CPU UMD, visible in the route line.
             c->hosted_source = IsAbsolute(c->hosted) ? "registry" : "registry-invalid";
         }
+#endif
         DWORD v = 0;
         // Fail safe: a kill switch of the wrong type counts as set; a requirement of the wrong type as required.
         switch (ReadDword(key, L"DwmForceCpu", &v)) {
@@ -237,10 +239,6 @@ static void ReadConfig(Config *c)
         RegCloseKey(key);
     }
     if (!c->cpu[0]) {
-#ifdef _WIN64
-        wcscpy_s(c->cpu, DefaultCpuUmdPath);
-        c->cpu_source = "default";
-#else
         wchar_t dir[PathChars];
         ModuleDirectory(dir, PathChars);
         if (dir[0] && _snwprintf_s(c->cpu, PathChars, _TRUNCATE, L"%ls\\%ls", dir, DefaultCpuUmdFile) > 0)
@@ -249,7 +247,6 @@ static void ReadConfig(Config *c)
             c->cpu[0] = 0;
             c->cpu_source = "unavailable";
         }
-#endif
     }
     if (!c->hosted_source) {
         wchar_t dir[PathChars];
@@ -261,26 +258,10 @@ static void ReadConfig(Config *c)
             c->hosted_source = "unavailable";
         }
     }
-    c->switch_source = "unreadable";
-    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, KmdParametersKey, 0, KEY_QUERY_VALUE | RegistryView, &key) == ERROR_SUCCESS) {
-        DWORD v = 0;
-        switch (ReadDword(key, L"InteropLastState", &v)) {
-        case Dword::Value:
-            c->switch_source = "latched";
-            c->blit_on = (v & 1) != 0;
-            c->interop_on = (v & 2) != 0;
-            break;
-        case Dword::Other:
-            c->switch_source = "latched-invalid";
-            break;
-        case Dword::Absent:
-            c->switch_source = "settings";
-            c->blit_on = ReadDword(key, L"EnableGpuPresentBlit", &v) == Dword::Value && v == 1;
-            c->interop_on = ReadDword(key, L"EnableCddDwmInterop", &v) == Dword::Value && v == 1;
-            break;
-        }
-        RegCloseKey(key);
-    }
+    const RouterKmdState kmd = ReadRouterKmdState();
+    c->switch_source = kmd.source;
+    c->blit_on = kmd.blit_on;
+    c->interop_on = kmd.interop_on;
 }
 
 // The AppRouter key. Fail safe throughout: anything unreadable keeps applications on the CPU UMD.
@@ -301,14 +282,33 @@ static void ReadAppConfig(AppConfig *a)
         break;
     case Text::Other: a->mode = AppMode::Invalid; a->mode_source = "registry-invalid"; break;
     }
-    switch (ReadText(key, GpuUmdPathValue, RRF_RT_REG_SZ, a->gpu, sizeof(a->gpu))) {
-    case Text::Absent: a->gpu_source = "absent"; break;
+    // Production modules stay inside the package which Windows selected.
+    // Overrides exist only in the private-hive host fixture, never in the DLL
+    // linked with the real state client or shipped by the release recipe.
+#ifdef BC250_ROUTER_TEST_LOADER_OVERRIDES
+    const Text pathValue = ReadText(key, GpuUmdPathValue, RRF_RT_REG_SZ, a->gpu, sizeof(a->gpu));
+#else
+    const Text pathValue = Text::Absent;
+#endif
+    switch (pathValue) {
+    case Text::Absent: {
+        // A package update chooses a new FileRepository directory. The default
+        // must follow this router, not a registry path to the preceding package.
+        wchar_t dir[PathChars], candidate[PathChars];
+        ModuleDirectory(dir, PathChars);
+        if (dir[0] && _snwprintf_s(candidate, PathChars, _TRUNCATE, L"%ls\\%ls", dir, AMDGPU_APP_UMD_RELATIVE) > 0) {
+            const DWORD n = GetFullPathNameW(candidate, PathChars, a->gpu, nullptr);
+            if (n && n < PathChars) a->gpu_source = "router-directory";
+            else a->gpu[0] = 0;
+        }
+        break;
+    }
     case Text::Value:
         a->gpu_source = a->gpu[0] && IsAbsolute(a->gpu) ? "registry" : "registry-invalid";
         break;
     case Text::Other: a->gpu_source = "registry-invalid"; break;
     }
-    if (strcmp(a->gpu_source, "registry")) a->gpu[0] = 0;
+    if (strcmp(a->gpu_source, "registry") && strcmp(a->gpu_source, "router-directory")) a->gpu[0] = 0;
     // A list that exists but cannot be read must not widen the GPU route: the whole mode turns invalid.
     const Text deny = ReadText(key, L"Deny", RRF_RT_REG_MULTI_SZ, a->deny, sizeof(a->deny));
     const Text allow = ReadText(key, L"Allow", RRF_RT_REG_MULTI_SZ, a->allow, sizeof(a->allow));

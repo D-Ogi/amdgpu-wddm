@@ -62,6 +62,7 @@ param(
     [switch]$ApplySystemTuning,              # optional reversible Windows tuning; absent = keep Windows settings
     [switch]$SkipSystemTuning,               # explicitly clear an earlier opt-in when resuming
     [switch]$Repair,                        # install the same, already verified version again
+    [string]$RollbackPackage,               # explicit schema 2 -> supported legacy package, current engine owns every phase
     [string]$FirmwareDir,                   # offline: the 9 firmware files (INSTALL.md, "GPU firmware") instead of a download
     [string[]]$Components,                  # unattended: exactly these optional components (ids of components.json)
     [switch]$NoComponents,                  # unattended: no optional component, and no question about one
@@ -85,6 +86,21 @@ $package = Split-Path -Parent $here
 . (Join-Path $here 'mft-h264.ps1')
 . (Join-Path $here 'system-tuning.ps1')
 . (Join-Path $here 'components.ps1')
+. (Join-Path $here 'state-lifecycle.ps1')
+. (Join-Path $here 'state-reader.ps1')
+. (Join-Path $here 'legacy-rollback.ps1')
+$enginePackage=$package
+$engineHere=$here
+$legacyRollback=[bool]$RollbackPackage
+if($legacyRollback) {
+    $RollbackPackage=$ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($RollbackPackage)
+    $PSBoundParameters['RollbackPackage']=$RollbackPackage
+    $package=$RollbackPackage
+    $here=Join-Path $package 'installer'
+    if($Verify -or $Repair -or $PSBoundParameters.ContainsKey('DpmMaxMHz') -or $CuMode) {
+        throw 'rollback preserves the captured settings; tuning and repair are separate operations'
+    }
+}
 if ($Plan) { $DryRun = [Management.Automation.SwitchParameter]$true }
 $script:DryRunMode = [bool]$DryRun
 # Host tests only: a dry run can read its installer state from a test folder (an upgrade over a given state).
@@ -282,6 +298,12 @@ $script:Closure = $null
 $script:Continuation = $null
 function Set-ResumeAtLogon([ValidateSet('continue', 'verify')][string]$Kind) {
     $c = Get-ContinuationCommand -Kind $Kind -Closure $script:Closure -InstallRoot $InstallRoot -Gui ([bool]$script:GuiMode)
+    if($legacyRollback -and $Kind -eq 'continue') {
+        if(-not $script:BridgeClosure){throw 'rollback continuation has no retained current engine'}
+        $c=[pscustomobject]@{exe=(Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe');arguments=@(
+            '-NoProfile','-ExecutionPolicy','Bypass','-File',(Join-Path $script:BridgeClosure 'installer\install.ps1'),
+            '-RollbackPackage',$script:Closure,'-HoldWindow')}
+    }
     $command = Format-CommandLine $c.exe $c.arguments
     $script:Continuation = [ordered]@{ kind = $Kind; exe = $c.exe; arguments = @($c.arguments); command = $command; closure = $script:Closure }
     Invoke-Change "RunOnce entry '$($script:RunOnceName)' -> $command (runs at the next logon)" {
@@ -294,6 +316,15 @@ function Set-ResumeAtLogon([ValidateSet('continue', 'verify')][string]$Kind) {
 # only checks it. From then on an offline install reads its firmware from the closure, also after the restart.
 function Initialize-Closure {
     if ($script:Closure) { return }
+    if($legacyRollback) {
+        $engineIntegrity=Test-PackageManifest -PackageRoot $enginePackage
+        if(-not $engineIntegrity.ok){throw "rollback engine package: $($engineIntegrity.detail)"}
+        $script:BridgeClosure=Get-ClosureDir $engineIntegrity.manifest.version
+        if(Test-SamePath $script:BridgeClosure (Get-ClosureDir $packageVersion)){throw 'rollback target must differ from current engine package'}
+        Invoke-Change 'retain the complete current engine and SYSTEM worker for the rollback continuation' {
+            [void](Save-ContinuationClosure -PackageRoot $enginePackage -Manifest $engineIntegrity.manifest -Destination $script:BridgeClosure)
+        } | Out-Null
+    }
     $script:Closure = Get-ClosureDir $packageVersion
     if (Test-SamePath $package $script:Closure) { Write-Info "this run starts from its continuation closure $($script:Closure)" }
     Invoke-Change "stage the continuation closure: every file of this package and $(if ($FirmwareDir) { "the firmware folder $FirmwareDir" } else { 'no firmware folder (downloaded in phase 2)' }) into $($script:Closure), each SHA256 checked there" {
@@ -317,6 +348,10 @@ if (-not $installedVersion -and -not ($DryRun -and $env:AMDGPU_WDDM_TEST_STATE_D
     $installedVersion = (Get-ItemProperty -LiteralPath "$($script:SoftwareKey)\Release" -Name Version -ErrorAction SilentlyContinue).Version
 }
 $action = Get-InstallAction -State $early -PackageVersion $packageVersion -InstalledVersion $installedVersion -Repair $Repair
+if($legacyRollback) {
+    $action=[ordered]@{action=$(if($early.legacy_rollback -and $early.package_version -eq $packageVersion){'resume'}else{'upgrade'});
+        message='Explicit legacy rollback: device stays disabled until the current state has been restored'}
+}
 if ($Verify) { $action = [ordered]@{ action = 'verify'; message = $null } }
 if ($early) { Write-Info "installed: $(if ($installedVersion) { $installedVersion } else { 'unknown version' }), phase $($early.phase); package: $packageVersion; action: $($action.action)" }
 $script:EngineAction = $action.action
@@ -390,6 +425,10 @@ if ($ComponentDir) { $ModelDir = Get-ModelSourceDir $ComponentDir }
 if (-not $ModelDir) { $ModelDir = Get-PackageModelDir $package }
 if ($ModelDir -and $ModelDir -ne $ComponentDir) { Write-Info "models: the folder $ModelDir (no download for a model that is there)" }
 $commandLineParameters = $installInputs.parameters
+$freshCommandLineParameters = @($PSBoundParameters.Keys | Where-Object {
+    $_ -eq 'DpmMaxMHz' -or ($_ -eq 'CuMode' -and [int]$PSBoundParameters['CuMode'] -ne 0)
+})
+$freshRepair = $PSBoundParameters.ContainsKey('Repair') -and [bool]$PSBoundParameters['Repair']
 $NoControlApp = [switch](@($installInputs.switches) -contains 'NoControlApp')
 $NoReboot = [switch](@($installInputs.switches) -contains 'NoReboot')
 $Force = [switch](@($installInputs.switches) -contains 'Force')
@@ -491,10 +530,10 @@ function Request-Restart([string]$Why, [string]$ReasonId) {
 # the driver, which is the point - a device at problem code 43 answers no escape.
 function Read-VerifyStartRecord {
     try {
-        $k = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey("SYSTEM\CurrentControlSet\Services\$($script:ServiceName)\Parameters\$($script:StartRecordKey)")
+        $k = Open-DriverStateRecordView -Path $script:StartRecordKey -Cli (Join-Path $InstallRoot 'tools\bc250kmd_cli.exe')
         if (-not $k) { return $null }
         try { return Read-StartRecordFromKey $k } finally { $k.Dispose() }
-    } catch { return $null }
+    } catch { return [ordered]@{Result='unreadable';Detail=[string]$_.Exception.Message} }
 }
 function Invoke-VerifyDiagnostics {
     # $BootIdSource names where $BootId came from, so the file says whether this boot's number is the one the
@@ -581,15 +620,23 @@ function Invoke-Verify {
     $startState = Get-VerifyStartState -ProblemCode ([int]$dev[0].ConfigManagerErrorCode) -Status ([string]$pnp.Status)
     $drv = Get-CimInstance Win32_PnPSignedDriver -Filter "DeviceID='$($id -replace '\\', '\\')'" -ErrorAction SilentlyContinue
     $want = $null
-    if ($script:Manifest) { $want = $script:Manifest.kmd_version }
-    # The release's DriverVer (x.y.z.100) differs from every lab build, so the bound version names the package.
+    if ($script:Manifest) { $want = Get-ManifestDriverQuad $script:Manifest }
+    # The Windows INF quad names the package independently of the embedded KMD build.
     $inf = $null
     if ($drv) { $inf = $drv.InfName }
     # Win32_PnPSignedDriver leaves DriverProviderName empty for this package; the device property has the INF's Provider.
     $provider = $null
     try { $provider = (Get-PnpDeviceProperty -InstanceId $id -KeyName DEVPKEY_Device_DriverProvider -ErrorAction Stop).Data } catch { }
     if (-not $provider -and $drv) { $provider = $drv.DriverProviderName }
-    Add-Result 'driver version' (($null -ne $drv) -and ($drv.DriverVersion -eq $want)) "installed $($drv.DriverVersion) from $inf (provider $provider), package $want"
+    $versionTags=$null
+    if(-not $script:Manifest.version_identity) {
+        $versionKey=Get-DeviceDriverKey -InstanceId $id
+        if($versionKey){$versionTags=Get-ItemProperty -LiteralPath $versionKey -ErrorAction Stop}
+    }
+    $verCheck=Test-InstalledDriverVersion -Installed ([string]$drv.DriverVersion) -Expected $want `
+        -Original ([string]$versionTags.Bc250DriverVersion) -Reported ([string]$versionTags.Bc250ReportedDriverVersion) `
+        -InstallationOwned ([bool]$script:Manifest.version_identity)
+    Add-Result 'driver version' $verCheck.ok "installed $($drv.DriverVersion) from $inf (provider $provider), package $want$($verCheck.note)"
     # BD-150: the version names the release family; the loaded image names the KMD. An equal DriverVer let 29v2 verify
     # pass on another KMD.
     $kmdComp = $null
@@ -605,6 +652,12 @@ function Invoke-Verify {
             Add-Result 'driver image' $false "no readable bc250kmd.sys among the loaded drivers; package $($wantImage.Substring(0, 8))"
         } else {
             Add-Result 'driver image' ($loaded.sha256 -eq $wantImage) "loaded $($loaded.path) $($loaded.sha256.Substring(0, 8)), package $($wantImage.Substring(0, 8))"
+            if ($script:Manifest.version_identity -and $loaded.sha256 -eq $wantImage) {
+                try {
+                    $tags = Remove-LegacyDriverVersionTags -InstanceId $id -Manifest $script:Manifest -LoadedSha256 $loaded.sha256
+                    Add-Result 'package version identity' $true "INF, Windows properties and loaded KMD agree; $tags obsolete private tags removed"
+                } catch { Add-Result 'package version identity' $false $_.Exception.Message }
+            }
         }
     }
     # One read-only reading of the start-confirm task's inputs, in a child process (start-confirm.ps1 -Probe): the
@@ -671,12 +724,15 @@ function Invoke-Verify {
     Invoke-VerifyDiagnostics -DeviceState ([ordered]@{
             present = $true; instance_id = $id; problem_code = $dev[0].ConfigManagerErrorCode; status = [string]$pnp.Status
             service = $svc; driver_version = $(if ($drv) { [string]$drv.DriverVersion } else { $null }); inf = $inf
-            provider = [string]$provider; package_version = [string]$script:Manifest.kmd_version
+            provider = [string]$provider; package_version = (Get-ManifestDriverQuad $script:Manifest)
             reply_version = $replyVersion; last_stage = $lastStage; health_flags = $hflags
         }) -StartRecord (Read-VerifyStartRecord) -BootUtc (Get-StartRecordBootUtc) -BootId (Get-StartRecordBootId) -Context 'verify' -Info ${function:Add-Info}
-    $uc = (Get-ItemProperty -LiteralPath $script:ParametersKey -Name UnconfirmedStarts -ErrorAction SilentlyContinue).UnconfirmedStarts
-    Add-Result 'boot-loop guard' (($null -eq $uc) -or ([int]$uc -lt 2)) "UnconfirmedStarts $uc (the start-confirm task resets it after each logon)"
-    $p = Get-ItemProperty -LiteralPath $script:ParametersKey -ErrorAction SilentlyContinue
+    $stateReadError=$null;$p=$null
+    try {$p=[pscustomobject](Read-DriverStateValues -Cli (Join-Path $InstallRoot 'tools\bc250kmd_cli.exe'))}
+    catch {$stateReadError=[string]$_.Exception.Message}
+    Add-Result 'shared state' ($null -eq $stateReadError) $(if($stateReadError){$stateReadError}else{'validated catalog and active generation'})
+    $uc=$p.UnconfirmedStarts
+    Add-Result 'boot-loop guard' (($null -eq $stateReadError) -and ($null -ne $uc) -and ([int64]$uc -lt 2)) "UnconfirmedStarts $uc (the start-confirm task resets it after each logon)"
     # The full WDDM gate: 0 (the INF's value) starts the KMD display-only, with no GPU work at all.
     $closed = @($p.PSObject.Properties | Where-Object { $_.Name -like 'Enable*' -and $_.Value -is [int] -and $_.Value -eq 0 } | ForEach-Object { $_.Name })
     Add-Result 'full WDDM gate' (($p.EnableFullWddm -eq 1) -or ($p.EnableFullWddm -eq 2)) "EnableFullWddm $($p.EnableFullWddm) (2 = open at every start)$(if ($closed.Count) { '; gates at 0: ' + ($closed -join ', ') })"
@@ -782,6 +838,16 @@ function Invoke-Verify {
     # The 64-bit registration: the four UserModeDriverName slots (the D3D9 slot holds '<>', so that D3D9 goes
     # through D3D9On12) and VulkanDriverName. Registration only: the D3D12 and Vulkan checks above create the devices.
     $gpuSwKey = Get-DeviceDriverKey -InstanceId $id
+    $verifiedGraphicsRoot = $InstallRoot
+    if ($gpuSwKey -and (Test-DriverStoreUmdPackage $script:Manifest)) {
+        try {
+            $verifiedGraphicsRoot = Get-DriverPackageRoot -ClassKey $gpuSwKey
+            if (-not $verifiedGraphicsRoot) { throw 'bound adapter has no DriverStore UMD package identity' }
+            $packageProblems = @(Test-DriverPackageRegistration -Manifest $script:Manifest -ClassKey $gpuSwKey -Root $verifiedGraphicsRoot)
+            $packageProblems += @(Get-LegacyUmdValues -InstallRoot $InstallRoot | ForEach-Object { "legacy UMD override or duplicate ICD: $($_.name)" })
+            Add-Result 'DriverStore UMD set' ($packageProblems.Count -eq 0) $(if ($packageProblems.Count) { $packageProblems -join '; ' } else { 'INF registration and every installed member match the package manifest' })
+        } catch { Add-Result 'DriverStore UMD set' $false $_.Exception.Message; $verifiedGraphicsRoot = $InstallRoot }
+    }
     if (-not $gpuSwKey) { Add-Result 'D3D registration' $false 'no software key for the GPU' }
     else {
         $reg = @(Test-UmdRegistration -InstallRoot $InstallRoot -ClassKey $gpuSwKey)
@@ -826,7 +892,7 @@ function Invoke-Verify {
     # right is a warning with its remedy, not a failed verification.
     try {
         $mftSwitch = Get-MftReleaseSwitch -Manifest $script:Manifest -PackageRoot $null
-        $mftInstalled = Join-Path $InstallRoot $mftSwitch.install_path
+        $mftInstalled = Join-Path $verifiedGraphicsRoot $mftSwitch.install_path
         if (-not $mftSwitch.register) {
             Add-Info 'H.264 encoder' "not registered by this release; keys of ours on this computer: $(@(Get-MftRegistrationKeysPresent -ClassesKey $script:ClassesKey).Count)"
         } elseif ($script:DryRunMode) {
@@ -938,7 +1004,7 @@ function Get-InstallSettingsImpact {
             closure='Settings are checked by the protected migration before driver staging.'})
     }
     $groups = @(
-        @{ group = 'parameters'; plan = (Get-RegistryDefaultPlan -Defaults $tbl.defaults.parameters -Previous $prev.applied.parameters -Current $params -Explicit $commandLineParameters -Reopen:$script:ReopenClosures) }
+        @{ group = 'parameters'; plan = $parameterPlan }
         @{ group = 'desktop_router'; plan = (Get-RegistryDefaultPlan -Defaults $tbl.defaults.desktop_router -Previous $prev.applied.desktop_router -Current (Read-RegistryValues "$($script:SoftwareKey)\DesktopRouter")) }
         @{ group = 'app_router'; plan = (Get-RegistryDefaultPlan -Defaults $tbl.defaults.app_router -Previous $prev.applied.app_router -Current (Read-RegistryValues "$($script:SoftwareKey)\AppRouter")) }
         @{ group = 'graphics_drivers'; plan = (Get-RegistryDefaultPlan -Defaults $tbl.defaults.graphics_drivers -Previous $prev.applied.graphics_drivers -Current (Read-RegistryValues $script:GraphicsDriversKey)) }
@@ -975,6 +1041,12 @@ $compat = $null
 if ($action.action -ne 'verify' -and $script:Manifest) {
     try { $cv = Test-CompatibilityRecord -PackageRoot $package -CheckedManifest $script:Manifest; $compat = [ordered]@{ ok = $cv.ok; reasons = @($cv.reasons) }; if (-not $cv.ok) { Write-Log "   compatibility record: $($cv.detail)" } } catch { Write-Log "   compatibility record: $($_.Exception.Message)" }
 }
+if($legacyRollback) {
+    $script:RollbackTarget=Get-LegacyRollbackTarget -PackageRoot $package -FirmwareDir $FirmwareDir
+    if(-not $early -or -not $early.driver_state -or $early.driver_state.phase -ne 'acknowledged') {
+        throw 'legacy rollback requires a completed schema 2 installation'
+    }
+}
 Write-EngineEvent 'decision' ([ordered]@{ action = $action.action; message = $action.message; installed_version = $installedVersion; package_version = $packageVersion; phase = [string]$state.phase
     consents = @($consents); consents_given = [ordered]@{ test_signing = [bool]$AcceptTestSigning; bitlocker = $BitLocker }; restarts = $restarts
     firmware_source = $firmwareSource; firmware_dir = $FirmwareDir; notes = @($notes); secure_boot = $script:SecureBoot; bitlocker = $script:BitLockerState
@@ -987,7 +1059,7 @@ Write-EngineEvent 'decision' ([ordered]@{ action = $action.action; message = $ac
 Write-SystemTuningPlan -Selected ([bool]$ApplySystemTuning) -Manifest $script:Manifest
 if ($action.action -in @('install', 'upgrade', 'repair', 'resume')) {
     $impact = Get-InstallSettingsImpact
-    Write-Info ("settings: {0} kept as changed by you, {1} updated to a new default, {2} added, {3} unchanged, {4} from the command line, {5} reopened after the driver closed them, {6} left closed by the driver" -f $impact.summary.kept, $impact.summary.updated, $impact.summary.added, $impact.summary.unchanged, $impact.summary.command, $impact.summary.reopened, $impact.summary.driver_closed)
+    Write-Info ("settings: {0} kept as changed by you, {1} updated to a new default, {2} added, {3} unchanged, {4} from the command line, {5} reopened after the driver closed them, {6} left closed by the driver, {7} kept as you asked for them" -f $impact.summary.kept, $impact.summary.updated, $impact.summary.added, $impact.summary.unchanged, $impact.summary.command, $impact.summary.reopened, $impact.summary.driver_closed, $impact.summary.chosen)
     foreach ($row in @($impact.rows | Where-Object { $_.decision -ne 'same' })) { Write-Log ("   setting {0}\{1}: {2} {3} -> {4}{5}" -f $row.group, $row.name, $row.decision, (Format-RegistryValue $row.current), (Format-RegistryValue $row.value), $(if ($row.closure) { " ($($row.closure))" } else { '' })) }
     foreach ($row in @($impact.rows | Where-Object { $_.decision -eq 'driver-closed' })) { Write-Info "$($row.name) stays as the driver left it: $($row.closure). Remedy: run install.cmd -Repair." }
     Write-EngineEvent 'settings-plan' ([ordered]@{ summary = $impact.summary; rows = @($impact.rows) })
@@ -1264,6 +1336,8 @@ Enter-Stage 'firmware' 'GPU firmware'
 # checks each SHA256 before phase 2 changes anything, so a failed download leaves the computer and the phase as they
 # were.
 $fw = $script:Manifest.firmware
+$driverStoreFirmware = Test-DriverStoreFirmware $fw
+$driverStoreUmd = Test-DriverStoreUmdPackage $script:Manifest
 $fwStaging = Join-Path $script:StateDir 'firmware-staging'
 $fwFrom = $(if ($FirmwareDir) { "from $FirmwareDir" } else { "from linux-firmware $($fw.commit)" })
 if ($script:DryRunMode) {
@@ -1275,12 +1349,24 @@ if ($script:DryRunMode) {
 $fwStaged = Invoke-Change "get the $(@($fw.files).Count) GPU firmware files $fwFrom into $fwStaging and check each SHA256 (a file with another SHA256 stops the install before any change)" {
     Get-FirmwareStaged -Firmware $fw -Staging $fwStaging -FromDir $FirmwareDir
 }
+$hydrated = $null
+if ($driverStoreFirmware -and -not $script:DryRunMode) {
+    $hydrated = New-HydratedDriverPackage -Manifest $script:Manifest -PackageRoot $package -FirmwareDir $fwStaging -Parent $script:StateDir
+}
+try {
 # The closure before the driver package, which can end this run in a restart (driver-pending-restart).
 Initialize-Closure
 # The last safe point: from here to the end of phase 2 a cancel would leave a half-installed driver.
 Invoke-CancelPoint 'before-driver-install'
 Set-CancelAvailable $false 'driver-install'
 $script:InPhase2 = $true
+if($legacyRollback) {
+    $script:RollbackWorker=Join-Path $script:BridgeClosure 'payload\tools\amdgpu-state-installer.exe'
+    Invoke-Change 'freeze current settings, disable the device persistently, capture final state and protect the rollback package identity' {
+        [void](Start-LegacyRollback -State $state -Target $script:RollbackTarget -Device $script:Device.DeviceID `
+            -Worker $script:RollbackWorker -SourceInf (Get-DeviceDriverPackage -InstanceId $script:Device.DeviceID) -Save {param($s) Save-InstallState $s})
+    } | Out-Null
+}
 if ($state.phase -notin @('testsigning-active')) { Write-Info "continuing an earlier run (phase $($state.phase)): finished steps are skipped" }
 Enter-Stage 'files' 'Files'
 
@@ -1307,7 +1393,7 @@ Invoke-Change "add the release test certificate $($cert.Thumbprint) to LocalMach
 } | Out-Null
 
 # Files. Each payload directory goes to the same name under the install root; wow64 holds the x86 builds (BD-064).
-$dirs = @('d3d12', 'desktop', 'd3d11', 'vulkan', 'wow64', 'tools')
+$dirs = if ($driverStoreUmd) { @('tools') } else { @('d3d12', 'desktop', 'd3d11', 'vulkan', 'wow64', 'tools') }
 if (Test-Path -LiteralPath (Join-Path $package 'payload\system-tuning')) { $dirs += 'system-tuning' }
 if (-not $NoControlApp -and (Test-Path -LiteralPath (Join-Path $package 'payload\control'))) { $dirs += 'control' }
 # The H.264 encoder Media Foundation transform (M15.11, driver/umd/mft-h264/INSTALL.md): the release decides whether
@@ -1319,7 +1405,7 @@ $mftKeys = @(Get-MftRegistrationKeysPresent -ClassesKey $script:ClassesKey)
 $mftAction = Get-MftAction -Switch $mft -PresentKeys $mftKeys -DirPresent (Test-Path -LiteralPath (Split-Path $mftDll))
 if ($mft.register) {
     if (-not $mft.present) { throw "manifest.json registers the H.264 encoder MFT, but this package has no $($mft.package_path)" }
-    $dirs += $mft.payload_dir
+    if (-not $driverStoreUmd) { $dirs += $mft.payload_dir }
 }
 # The OpenGL ICD (BD-076, GitHub issue #8): the release decides whether it is registered at all and for which
 # architectures (manifest.json "opengl_icd" with its "architectures" list), and the decision is taken here, before
@@ -1336,13 +1422,25 @@ $glDirWow = Split-Path (Join-Path $InstallRoot $gl.install_path_wow)  # <install
 if ($gl.register) {
     $glMissing = @(@(Get-OpenGlArchFiles -Switch $gl) | Where-Object { -not $_.present } | ForEach-Object { $_.package_path })
     if ($glMissing.Count) { throw "manifest.json registers the OpenGL ICD for $(@($gl.architectures) -join ' and '), but this package has no $($glMissing -join ' and ')" }
-    if ($gl.register_x64) { $dirs += $gl.payload_dir }
+    if ($gl.register_x64 -and -not $driverStoreUmd) { $dirs += $gl.payload_dir }
 }
 # BD-089: what the release installed here installed and this one does not, before the new payload goes in. The rows
 # come from the plan that this run printed before any change (above); each removal names the file and the release that
 # installed it. The SHA256 is read again here, so a file that somebody changed between the plan and this step stays.
 # A file in use goes at the next restart (Remove-PathOrSchedule).
+$deferredUmdOrphans = @()
+if ($driverStoreUmd -and $state.PSObject.Properties['umd_retired_files']) {
+    $deferredUmdOrphans = @(Get-RetiredUmdFilePlan -InstallRoot $InstallRoot -Rows @($state.umd_retired_files))
+}
 foreach ($row in @($script:OrphanRows | Where-Object { $_.state -eq 'remove' })) {
+    # The old router still needs its old absolute overrides until the new INF
+    # has bound. Do not strand it across the first BD-152 restart.
+    $prefix = [IO.Path]::GetFullPath($InstallRoot).TrimEnd('\') + '\'
+    if ($driverStoreUmd -and $row.path.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase) -and
+        $row.path.Substring($prefix.Length) -match '^(desktop|d3d11|d3d12|vulkan|wow64|opengl|mft)\\') {
+        $deferredUmdOrphans += $row
+        continue
+    }
     Invoke-Change "remove $($row.path): installed by $($row.from_version), not in $packageVersion" {
         if (-not (Test-Path -LiteralPath $row.path -PathType Leaf)) { Write-Info "already gone: $($row.path)"; return }
         $now = Get-Sha256 $row.path
@@ -1351,9 +1449,17 @@ foreach ($row in @($script:OrphanRows | Where-Object { $_.state -eq 'remove' }))
     } | Out-Null
 }
 # BD-146: the old uninstall can still have deletes queued for files about to become current again. Cancel only
+if ($driverStoreUmd) {
+    # The new manifest is copied before the first restart. Preserve the exact
+    # old file plan first, so the continuation cannot lose its orphan list.
+    $deferredUmdOrphans = @(Get-RetiredUmdFilePlan -InstallRoot $InstallRoot -Rows $deferredUmdOrphans)
+    Set-StateValue $state 'umd_retired_files' $deferredUmdOrphans
+    Save-InstallState $state
+}
 # those exact destinations before Copy-FileSafe can keep a same-hash file. No unrelated rename/delete is changed.
 Invoke-Change 'keep the files of this installation from being removed at the next restart' {
-    $destinations = @(Get-InstallCopyDestinations -Package $package -InstallRoot $InstallRoot -PayloadDirs $dirs -FirmwareFiles @($fwStaged))
+    $legacyFirmwareCopies = if ($driverStoreFirmware) { @() } else { @($fwStaged) }
+    $destinations = @(Get-InstallCopyDestinations -Package $package -InstallRoot $InstallRoot -PayloadDirs $dirs -FirmwareFiles $legacyFirmwareCopies)
     $repaired = Repair-PendingFileRemovals -Destinations $destinations
     if ($repaired) { Write-EngineEvent 'pending-removals-cancelled' ([ordered]@{ count = $repaired }) }
 } | Out-Null
@@ -1402,10 +1508,12 @@ Invoke-Change "copy licenses\ and THIRD-PARTY.md -> $InstallRoot\licenses (the l
 # Facts about the computer before the install are recorded once and saved before the step that changes them. The stub
 # flags come from the first install of ours: a stub that was there before it is not ours and stays.
 foreach ($s in @(Get-LegacyStubPaths)) { [void](Set-StateValueOnce $state $s.flag (Test-Path -LiteralPath $s.path)) }
+if (-not $driverStoreFirmware) {
 $bc250Dir = Split-Path -Parent $script:FirmwareInstallDir
 [void](Set-StateValueOnce $state 'bc250_dir_existed' (Test-Path -LiteralPath $bc250Dir))
 $fwExisted = Set-StateValueOnce $state 'firmware_dir_existed' (Test-Path -LiteralPath $script:FirmwareInstallDir)
 if (-not $script:DryRunMode) { Save-InstallState $state }
+}
 # D3D9 goes through D3D9On12 (the D3D9 slot holds '<>', below): no stub is installed. The releases up to
 # 0.7.213.102-tester.17 installed bc250umd.dll in System32 and SysWOW64; it goes here, as uninstall.ps1 takes it.
 foreach ($s in @(Get-LegacyStubPaths)) {
@@ -1415,6 +1523,7 @@ foreach ($s in @(Get-LegacyStubPaths)) {
         Remove-PathOrSchedule $s.path
     } | Out-Null
 }
+if (-not $driverStoreFirmware) {
 $fwAcl = $(if ($fwExisted) { 'its existing access rights are kept' } else { 'created writable by administrators only' })
 Invoke-Change "copy the checked GPU firmware files (linux-firmware cyan_skillfish2_*.bin, LICENSE.amdgpu) from $fwStaging -> $($script:FirmwareInstallDir); $fwAcl; $bc250Dir itself is not changed" {
     # An existing C:\BC250 may hold other files: its access rights stay as they are. Only the firmware folder that
@@ -1438,34 +1547,20 @@ Invoke-Change "copy the checked GPU firmware files (linux-firmware cyan_skillfis
     if ((Test-FirmwareFolder $fw (Join-Path $script:Closure 'firmware')).Count) { [void](Save-ClosureFirmware -Firmware $fw -Closure $script:Closure -FromFiles @($fwStaged)) }
     Remove-Item -LiteralPath $fwStaging -Recurse -Force -ErrorAction SilentlyContinue
 } | Out-Null
+} else {
+    Invoke-Change 'keep the pinned firmware with this repair set; Driver Store owns the installed copies' {
+        [void](Save-ClosureFirmware -Firmware $fw -Closure $script:Closure -FromFiles @($fwStaged))
+        Set-StateValue $state 'firmware_delivery' 'driver-store-v1'
+    } | Out-Null
+}
 Save-Phase 'files-copied'
 Enter-Stage 'driver' 'Driver package'
 
-# The driver settings as they are before staging: PnP later runs the INF's AddReg, which writes 0 into every
-# gate and counter it names. The upgrade rule below judges these values, never the INF's zeros. Kept in the state, so a
-# re-run after the driver-set restart still judges the values from before staging this install.
-$infParameterNames = Get-InfParameterNames (Join-Path $package 'payload\kmd\bc250kmd.inf')
-$judgedNames = @(@($infParameterNames) + @((ConvertTo-PairList (Get-Content -LiteralPath (Join-Path $here 'registry-defaults.json') -Raw | ConvertFrom-Json).defaults.parameters) | ForEach-Object { $_.Name })) | Select-Object -Unique
-$parametersBefore = @{}
-if ($state.PSObject.Properties['parameters_before_install'] -and ($null -ne $state.parameters_before_install)) {
-    foreach ($p in $state.parameters_before_install.PSObject.Properties) { $parametersBefore[$p.Name] = $p.Value }
-    Write-Info "driver settings from before the first driver package install of this run: $($parametersBefore.Count) values"
-} else {
-    # The whole key, not only the names this release judges. The driver package install takes the other values of the
-    # service key away, and a value this release knows nothing about is still the tester's setting: unit A lost
-    # CuMode 40 at every release install until this release, which halved its compute units with nothing saying so.
-    $all = Read-RegistryValues $script:ParametersKey
-    foreach ($n in $all.Keys) { $parametersBefore[$n] = $all[$n] }
-    Set-StateValue $state 'parameters_before_install' ([pscustomobject]$parametersBefore)
-    Save-InstallState $state
-    Write-Info "driver settings before the driver package: $($parametersBefore.Count) values under Parameters, $(@(@($judgedNames) | Where-Object { $parametersBefore.ContainsKey($_) }).Count) of $(@($judgedNames).Count) judged by this release"
-}
-# Values outside the table and outside the command line go back as they were (Get-RegistryDefaultPlan -Restore): the
-# INF's own names, and every other value the key held before. A value whose type the plan cannot write back is named
-# here and left to the driver package.
-$restoreNames = @(@($infParameterNames) + @($parametersBefore.Keys | Where-Object { $_ -notin $judgedNames -and (Test-RestorableRegistryValue $parametersBefore[$_]) })) | Select-Object -Unique
-$keptBack = @($parametersBefore.Keys | Where-Object { $_ -notin $judgedNames -and -not (Test-RestorableRegistryValue $parametersBefore[$_]) })
-if ($keptBack.Count) { Write-Warn2 "not written back after the driver package (the plan writes REG_DWORD, REG_SZ and REG_MULTI_SZ only): $($keptBack -join ', ')" }
+# Typed migration preserves explicit absence, types and bounded bytes. The early
+# snapshot and final old-driver stop are merged by the first new KMD. Factory
+# defaults are in Parameters\DefaultsV2 and never overwrite the legacy input.
+$stateWorker = Join-Path $InstallRoot 'tools\amdgpu-state-installer.exe'
+if($legacyRollback){$stateWorker=$script:RollbackWorker}
 
 # BD-152 / BD-060: INSTALL_AS_SET stages now and binds at the next shutdown. A saved receipt keeps a resumed
 # install from staging forever; a different, known boot permits the exact image checks below (BD-150).
@@ -1499,14 +1594,35 @@ if ($driverSetAction -in @('unknown-boot', 'invalid-receipt') -and -not $script:
 }
 $pnp = $null
 if ($driverSetAction -eq 'stage' -or $script:DryRunMode) {
+    if($legacyRollback) {
+        Set-ResumeAtLogon 'continue'
+        Invoke-Change 'remove superseded driver ranks while the captured device remains disabled' {
+            Remove-LegacyRollbackDriverSets -State $state -Worker $stateWorker
+        } | Out-Null
+    }
+    if(-not $legacyRollback) {
+    Invoke-Change 'freeze state writers and publish the protected state handoff before INF staging' {
+        Save-DriverSettingsComparison -State $state -Worker $stateWorker -Device $script:Device.DeviceID `
+            -InfSha256 $driverSetSha -Save {param($s) Save-InstallState $s}
+        [void](Start-DriverStateTransaction -State $state -Worker $stateWorker -Product (Get-ProductPackageQuad $script:Manifest.version) `
+            -Device $script:Device.DeviceID -InfSha256 $driverSetSha -Save {param($s) Save-InstallState $s})
+    } | Out-Null
+    }
     $pnp = Invoke-Change 'DiInstallDriverW INSTALL_AS_SET payload\kmd (the GPU changes to it at the next restart)' {
-        $o = Invoke-DriverSetStage -InfFile $infFile
+        $stageInf = $infFile
+        if ($driverStoreFirmware) {
+            if (-not $hydrated) { throw 'firmware package was not hydrated' }
+            Assert-DriverCatalogSigner -Directory $hydrated.DirectoryPath -Certificate $cer
+            $stageInf = Join-Path $hydrated.DirectoryPath 'bc250kmd.inf'
+        }
+        $o = Invoke-DriverSetStage -InfFile $stageInf
         Set-StateValue $state 'driver_set' ([pscustomobject]@{ method = $o.method; inf_sha256 = $driverSetSha
             boot_id = $driverSetBoot; staged = $true; api_need_reboot = $o.api_need_reboot })
         Save-Phase 'driver-pending-restart'
         return $o
     }
 }
+} finally { if ($hydrated) { $hydrated.Dispose() } }
 $instance = $null
 if ($script:Device) { $instance = $script:Device.DeviceID }
 # Right after the driver package, before any branch: the observation covers the restart-pending case too.
@@ -1541,6 +1657,12 @@ if (-not $script:DryRunMode) {
     $classKey = Get-DeviceDriverKey -InstanceId $instance
     if (-not $classKey) { throw 'no software key for the GPU' }
     Set-StateValue $state 'class_key' $classKey
+    if($legacyRollback) {
+        Complete-LegacyRollback -State $state -Worker $stateWorker -Operation restore -Save {param($s) Save-InstallState $s}
+    } else {
+        Complete-DriverStateTransaction -State $state -Worker $stateWorker -Product (Get-ProductPackageQuad $script:Manifest.version) `
+            -Device $instance -InfSha256 $driverSetSha -Save {param($s) Save-InstallState $s}
+    }
 } else { $classKey = "HKLM:\SYSTEM\CurrentControlSet\Control\Class\$($script:DisplayClassGuid)\<device's key after install>" }
 Save-Phase 'driver-installed'
 Enter-Stage 'settings' 'Driver settings, graphics registration, start-confirm task'
@@ -1557,10 +1679,9 @@ $record = (Get-ItemProperty -LiteralPath "$($script:SoftwareKey)\Release" -Name 
 if ($record) { try { $applied = $record | ConvertFrom-Json } catch { Write-Warn2 "Release\AppliedDefaults does not parse: $($_.Exception.Message)" } }
 if (-not $applied) { $applied = $regDefaults.legacy_applied; $appliedSource = 'the defaults of tester.1 to tester.7 (no record)' }
 Write-Info "previous installer defaults: $appliedSource"
-function Invoke-RegistryDefaults([string]$Key, $Defaults, $Previous, [hashtable]$Explicit = @{}, $Owned = $null, [hashtable]$Before = $null, [string[]]$Restore = @(), [switch]$Reopen) {
+function Invoke-RegistryDefaults([string]$Key, $Defaults, $Previous, [hashtable]$Explicit = @{}, $Owned = $null) {
     $now = Read-RegistryValues $Key
-    if ($null -eq $Before) { $plan = Get-RegistryDefaultPlan -Defaults $Defaults -Previous $Previous -Current $now -Explicit $Explicit -Owned $Owned -Reopen:$Reopen }
-    else { $plan = Get-RegistryDefaultPlan -Defaults $Defaults -Previous $Previous -Current $Before -Explicit $Explicit -Owned $Owned -After $now -Restore $Restore -Reopen:$Reopen }
+    $plan = Get-RegistryDefaultPlan -Defaults $Defaults -Previous $Previous -Current $now -Explicit $Explicit -Owned $Owned
     Invoke-Change ("${Key}: " + (Format-RegistryPlan $plan)) { Write-RegistryPlan $Key $plan } | Out-Null
 }
 # Gates: the registered lab configuration (EnableFullWddm 2 opens it at every start). Clocks: load-driven DPM up to
@@ -1617,8 +1738,40 @@ foreach ($audio in @($audioPlan | Where-Object { $_.write })) {
     }
 }
 
+# The installed INF owns the complete graphics registration on new packages.
+# Resolve it after the recorded PnP restart; no previous FileRepository path is reused.
+if ($driverStoreUmd) {
+    if ($script:DryRunMode) {
+        $graphicsRoot = '%13%'
+        foreach ($row in @(Get-DriverPackageRegistration -Package $script:Manifest.driver_package -Root $graphicsRoot)) {
+            Write-Info "INF $classKey $($row.name) [$($row.kind)] = $(@($row.value) -join ' | ')"
+        }
+    } else {
+        $graphicsRoot = Get-DriverPackageRoot -ClassKey $classKey
+        if (-not $graphicsRoot) { throw 'bound package lacks its DriverStore UMD identity' }
+        $problems = @(Test-DriverPackageRegistration -Manifest $script:Manifest -ClassKey $classKey -Root $graphicsRoot)
+        if ($problems.Count) { throw ($problems -join '; ') }
+    }
+    $mftDll = Join-Path $graphicsRoot $mft.install_path
+    $legacyUmd = @(Get-LegacyUmdValues -InstallRoot $InstallRoot)
+    if (-not $state.PSObject.Properties['umd_migration']) {
+        Set-StateValue $state 'umd_migration' ([pscustomobject]@{schema=1; install_root=$InstallRoot; values=$legacyUmd})
+        Save-InstallState $state
+    }
+    Invoke-Change 'remove legacy router paths and duplicate global Vulkan entries; retain route policy' {
+        Remove-LegacyUmdValues -Rows $legacyUmd
+    } | Out-Null
+    Set-StateValue $state 'khronos_value' $null
+    Set-StateValue $state 'khronos_wow_value' $null
+    Set-StateValue $state 'opengl_icd' $null
+} else {
 # Graphics registration in the GPU's software key: the D3D9 slot '<>' (D3D9On12 on our D3D12 driver), the D3D10/11
 # slots, the D3D12 slot, Vulkan.
+Invoke-Change 'clear the DriverStore UMD marker for the bound legacy rollback package' {
+    # An older INF has no DelReg for a value introduced by a newer package.
+    # This executes after its binding/restart boundary, before legacy paths.
+    Remove-ItemProperty -LiteralPath $classKey -Name AmdgpuDriverPackage -ErrorAction SilentlyContinue
+} | Out-Null
 $umd = Get-UmdNames $InstallRoot
 $icdJson = Join-Path $InstallRoot 'vulkan\radeon_icd.json'
 Invoke-Change ("$classKey UserModeDriverName = " + (Format-UmdNames $umd) + "; VulkanDriverName = $icdJson") {
@@ -1735,6 +1888,8 @@ if ($gl.register) {
     Set-StateValue $state 'opengl_icd' $null
 }
 
+} # legacy Program Files graphics registration
+
 # The H.264 encoder MFT (M15.11): route A of driver/umd/mft-h264/INSTALL.md, machine wide under
 # HKLM\SOFTWARE\Classes, which is what HKCR gives every process. A client that wants the encoder of one adapter asks
 # Media Foundation with MFT_ENUM_ADAPTER_LUID; the registration holds no LUID and cannot hold one, because Windows
@@ -1787,8 +1942,28 @@ if ($mftAction -eq 'register') {
 # Allow dxdiag.exe only lifted the old component rule, and Deny witcher3.exe kept two RADV builds out of one process,
 # which the D3D11 and D3D12 paths no longer have (one ICD).
 # The *Wow paths are what the x86 router (32-bit processes) loads; the policy values are shared (BD-064).
-Invoke-RegistryDefaults "$($script:SoftwareKey)\DesktopRouter" $regDefaults.defaults.desktop_router $applied.desktop_router @{} ([ordered]@{ CpuUmdPath = (Join-Path $InstallRoot 'desktop\bc250d3d.dll'); CpuUmdPathWow = (Join-Path $InstallRoot 'wow64\desktop\bc250d3d.dll') })
-Invoke-RegistryDefaults "$($script:SoftwareKey)\AppRouter" $regDefaults.defaults.app_router $applied.app_router @{} ([ordered]@{ GpuUmdPath = (Join-Path $InstallRoot 'd3d11\amdgpu_wddm_d3d11.dll'); GpuUmdPathWow = (Join-Path $InstallRoot 'wow64\d3d11\amdgpu_wddm_d3d11.dll') })
+$desktopPaths = if ($driverStoreUmd) { @{} } else { [ordered]@{ CpuUmdPath = (Join-Path $InstallRoot 'desktop\bc250d3d.dll'); CpuUmdPathWow = (Join-Path $InstallRoot 'wow64\desktop\bc250d3d.dll') } }
+$appPaths = if ($driverStoreUmd) { @{} } else { [ordered]@{ GpuUmdPath = (Join-Path $InstallRoot 'd3d11\amdgpu_wddm_d3d11.dll'); GpuUmdPathWow = (Join-Path $InstallRoot 'wow64\d3d11\amdgpu_wddm_d3d11.dll') } }
+Invoke-RegistryDefaults "$($script:SoftwareKey)\DesktopRouter" $regDefaults.defaults.desktop_router $applied.desktop_router @{} $desktopPaths
+Invoke-RegistryDefaults "$($script:SoftwareKey)\AppRouter" $regDefaults.defaults.app_router $applied.app_router @{} $appPaths
+if (-not $driverStoreUmd -and $state.PSObject.Properties['umd_migration']) {
+    Invoke-Change 'restore the retained legacy UMD registration overrides for the rollback package' {
+        Restore-LegacyUmdValues -Rows @($state.umd_migration.values) -InstallRoot $InstallRoot
+    } | Out-Null
+}
+foreach ($row in $deferredUmdOrphans) {
+    Invoke-Change "remove legacy UMD $($row.path) after the new INF binding and route migration" {
+        if (-not (Test-Path -LiteralPath $row.path -PathType Leaf)) { return }
+        if ((Get-Sha256 $row.path) -ine $row.sha256) {
+            throw "legacy UMD changed during migration: $($row.path)"
+        }
+        Remove-PathOrSchedule $row.path
+    } | Out-Null
+}
+if ($driverStoreUmd) {
+    Set-StateValue $state 'umd_retired_files' @()
+    Save-InstallState $state
+}
 # How long Windows waits for the graphics before it resets them: TdrDelay under Windows' own GraphicsDrivers key
 # (BD-079; tools\win\amdgpu_wddm_control\src\TdrSetting.cs holds the rules and the range). Windows waits 2 s while
 # the value is absent, and this part has no working GPU reset, so a picture that needs longer than the wait does not
@@ -1849,7 +2024,13 @@ Invoke-Change "$($script:SoftwareKey)\Release: RepairSetup = $repairSetup (when 
 # against the plan's own rules (Test-LogonTaskPlan) and then registers exactly what the plan says.
 $sc = Join-Path $InstallRoot 'tools\start-confirm.ps1'
 $sw = Join-Path $InstallRoot 'tools\start-window.ps1'
-$logonPlan = @(Get-LogonTaskPlan -ConfirmScript $sc -WindowScript $sw)
+# The window's host: the control application of this install, which starts the script with no console window
+# (common.ps1 Get-LogonTaskPlan, M899). Without it (-NoControlApp, or a package without one) the plan keeps
+# powershell.exe and says why.
+$windowHost = $null
+if ($script:Manifest -and $script:Manifest.control_app_exe -and ($dirs -contains 'control')) { $windowHost = Join-Path $InstallRoot ('control\' + $script:Manifest.control_app_exe) }
+$logonPlan = @(Get-LogonTaskPlan -ConfirmScript $sc -WindowScript $sw -WindowHost $windowHost)
+if (-not $windowHost) { Write-Info 'logon window: no control application in this install, so the window task runs powershell.exe and a console window can appear at sign-in' }
 # The rules of the plan run here, over the plan this install registers, and not only in the host test: a plan that
 # breaks them (the Administrators principal of the defect, a trigger bound to one account, a confirmation without
 # an administrator token) stops the install instead of leaving behind a task that never runs at a standard user's
@@ -1965,6 +2146,7 @@ if ($null -ne $script:ComponentsManifest -and $componentsChosen.Count) {
 }
 
 Set-StateValue $state 'parameters_before_install' $null
+Set-StateValue $state 'driver_settings_compare' $null
 Set-StateValue $state 'driver_set' $null
 Set-StateValue $state 'firmware_commit' $fw.commit
 if ($dwmSession) {
@@ -1978,7 +2160,8 @@ Enter-Stage 'finish' 'Finish'
 # The closure of this package becomes the kept repair set, firmware included (WU-051, WU-058): a later repair needs
 # neither the downloaded folder nor the network.
 Invoke-Change "keep $($script:Closure) as the active repair set (with the installed firmware), the one before it as the previous set, remove older sets" {
-    [void](Complete-RepairSet -Manifest $script:Manifest -Closure $script:Closure -FirmwareFiles @(@($fw.files) | ForEach-Object { Join-Path $script:FirmwareInstallDir $_.name }))
+    $repairFirmware = if ($driverStoreFirmware) { Join-Path $script:Closure 'firmware' } else { $script:FirmwareInstallDir }
+    [void](Complete-RepairSet -Manifest $script:Manifest -Closure $script:Closure -FirmwareFiles @(@($fw.files) | ForEach-Object { Join-Path $repairFirmware $_.name }))
 } | Out-Null
 # BD-089: our older driver packages in the store. Every release adds one bc250kmd.inf package, Windows binds the newest
 # one, and until this release every older one stayed. Kept: the package the GPU is bound to now, and the package of the
@@ -2006,6 +2189,11 @@ if ($storePlan) {
     }
 }
 Invoke-SelectedSystemTuning -Selected ([bool]$ApplySystemTuning) -Action ApplyRecommended -PackageRoot $package
+if($legacyRollback) {
+    Invoke-Change 'enable the exact legacy driver only after its complete payload, firmware, settings and tasks are in place' {
+        Complete-LegacyRollback -State $state -Worker $stateWorker -Operation enable -Save {param($s) Save-InstallState $s}
+    } | Out-Null
+}
 Clear-InstallInputs $state
 Save-Phase 'installed'
 Set-ResumeAtLogon 'verify'

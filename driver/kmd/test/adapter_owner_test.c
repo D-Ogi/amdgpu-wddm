@@ -32,6 +32,8 @@ typedef struct {
 } BC250_DEVICE;
 #define CHECK(x) do { InterlockedIncrement(&checks); if(!(x)){InterlockedIncrement(&failures);printf("FAIL CHECK %u\n",(unsigned)__LINE__);fflush(stdout);ExitProcess(1);} } while(0)
 static void touch(void) { InterlockedIncrement(&touches); }
+/* Device-identity validation is exercised by driver-state, not the owner mock. */
+static NTSTATUS DriverStateValidateDevice(PDEVICE_OBJECT device) { (void)device; return STATUS_SUCCESS; }
 static void KeInitializeMutex(int* mutex,int level) { CHECK(!*mutex && !level);*mutex=1;touch(); }
 static void* allocate(size_t bytes) { InterlockedIncrement(&allocations); return failAllocation ? NULL : calloc(1,bytes); }
 static void release(void* value) { InterlockedIncrement(&frees); free(value); }

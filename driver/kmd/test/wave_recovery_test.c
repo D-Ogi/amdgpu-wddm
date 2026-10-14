@@ -52,7 +52,7 @@ typedef struct { int unused; } BC250_DEVICE;
 #define RtlZeroMemory(p,n) memset(p,0,n)
 static unsigned checks, failures;
 #define CHECK(c) do { ++checks; if (!(c)) { ++failures; printf("FAIL line %u: %s\n",__LINE__,#c); } } while(0)
-static UNICODE_STRING g_ParametersPath={L"Parameters"};
+static int DriverStateReady(void){return 1;}
 static ULONG pending, persistedPending, attempts, verdict, adminMask, systemMask;
 static unsigned flushes, writes, dataOrder, clearOrder, handles, allocations, captures;
 static int irql, failSecurity, failData, failMarker, failFlush, failAllocate, failOpen, failChild;

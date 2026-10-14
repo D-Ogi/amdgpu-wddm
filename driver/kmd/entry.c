@@ -76,8 +76,14 @@ NTSTATUS DriverEntry(_In_ PDRIVER_OBJECT DriverObject, _In_ PUNICODE_STRING Regi
 {
     NTSTATUS status;
 
-    status = GuardInit(RegistryPath);
+    status = GuardInit(DriverObject);
     if (!NT_SUCCESS(status)) return status;
+    status = PspDriverInit(DriverObject);
+    if (!NT_SUCCESS(status)) {
+        GuardLog("psp: image directory unavailable 0x%08X", status);
+        GuardCleanup();
+        return status;
+    }
     PagingJournalInit();
     InteropDriverInit();    // \Callback\PowerState: a clean restart ends the GPU DWM session (BD-059)
     GuardStage(StageDriverEntry);
@@ -86,6 +92,7 @@ NTSTATUS DriverEntry(_In_ PDRIVER_OBJECT DriverObject, _In_ PUNICODE_STRING Regi
                             : InitializeDisplayOnly(DriverObject, RegistryPath);
     if (!NT_SUCCESS(status)) {
         InteropDriverUnload();
+        PspDriverCleanup();
         GuardCleanup();
     }
     return status;

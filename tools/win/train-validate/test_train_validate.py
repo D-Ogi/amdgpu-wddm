@@ -976,7 +976,8 @@ class HangRecoveryCount(unittest.TestCase):
 
     def test_the_gate_reads_the_drivers_own_record(self):
         text = (LAB / "gate.ps1").read_text(encoding="utf-8")
-        self.assertIn(r"Services\bc250kmd\Parameters\HangRecovery", text)
+        self.assertIn("Read-DriverStateValues -Cli $script:cli -Path 'HangRecovery'", text)
+        self.assertNotIn(r"Services\bc250kmd\Parameters\HangRecovery", text)
         self.assertIn("hangrecord:", text)
 
 

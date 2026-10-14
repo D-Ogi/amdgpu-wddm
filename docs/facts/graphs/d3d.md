@@ -11,17 +11,19 @@ flowchart LR
   M574["M574"]
   M575["M575"]
   M774["M774"]
+  M781["M781"]
+  M782["M782"]
   M801["M801"]
   M838["M838"]
   M839["M839"]
+  M900["M900"]
   M575 ==>|supersedes| M574
   M801 ==>|supersedes| M774
-  M900["M900"]
   M839 -.->|refutes| M838
-  classDef other stroke-dasharray:4 3
-```
   M900 ==>|supports| M781
   M900 ==>|supports| M782
+  classDef other stroke-dasharray:4 3
+```
 
 ## References
 

@@ -27,6 +27,9 @@ elevation.declined|rev|0a586e33|Instalator potrzebuje uprawnień administratora,
 payload.damaged|rev|44795d7b|Ten plik instalatora jest uszkodzony: pliki instalacyjne w jego środku nie zgadzają się z tymi, z których go zbudowano. Nic nie zostało zmienione. Pobierz wydanie ponownie.
 payload.already-running|rev|45dca71f|Instalator już działa na tym komputerze. Zakończ instalację w otwartym oknie; tutaj nic nie zostało zmienione.
 payload.folder|rev|78be926d|Instalator nie może przygotować folderu, w którym trzyma pliki instalacyjne: folder należy do innego konta na tym komputerze albo nie jest zwykłym folderem. Nic nie zostało zmienione. Usuń go, a potem uruchom ten plik ponownie. Jego ścieżkę znajdziesz w pliku diagnostycznym.
+loading.starting|mt|ff87e28a|Przygotowywanie instalatora.
+loading.permission|mt|2d672b09|Windows zapyta teraz, czy instalator może wprowadzać zmiany na tym komputerze. Wybierz Tak, aby kontynuować.
+loading.unpacking|mt|a96e5550|Rozpakowywanie i sprawdzanie plików instalacyjnych. To potrwa kilka sekund.
 
 # ---- welcome ----
 welcome.title|mt|1d5a1bfb|Instalacja Nagi, sterownika grafiki dla ASRock BC-250

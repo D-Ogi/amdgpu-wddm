@@ -15,6 +15,10 @@ sshd penalises repeated connections.
 python tools/win/app-route/approute.py policy cpu
 ```
 
+For an installed DriverStore package, add `--installed-package` to the `policy` command.
+The policy then selects the route without writing an absolute UMD path.
+The default mode remains for the older standalone lab kit.
+
 This writes `Mode=cpu` into `HKLM\SOFTWARE\amdgpu-wddm\AppRouter` and changes nothing else. Every application
 that opens an adapter after it goes to the CPU UMD. The allow list and the paths stay in the key, so a later
 `policy allowlist` or `policy gpu-default` returns without a repackage.

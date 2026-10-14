@@ -463,6 +463,10 @@ NTSTATUS ConnectorLinkPrepare(BC250_DEVICE* Device,BC250_SINK* Sink,ULONG Genera
     BOOLEAN created=c==NULL;
     if(!Sink || Sink->Kind==BC250_SINK_NONE || Sink->TargetCount>BC250_EDID_MAX_MODES)
         return STATUS_INVALID_PARAMETER;
+    // This attempt owns the terminal-cleanup result from here on: no earlier
+    // attempt's restore failure, and no absence of one, is left to be read as
+    // this attempt's (BD-169).
+    Device->ConnectorLinkCleanup=STATUS_SUCCESS;
     GuardLog("connector-link: sink generation %lu kind %u adapter %u max %lu kHz limit %lu kHz",
         Generation,(unsigned)Sink->Kind,(unsigned)Sink->Adapter.type,
         (ULONG)Sink->Adapter.max_tmds_khz,(ULONG)Sink->MaxPixelClockKhz);
@@ -515,8 +519,18 @@ done:
     GuardLog("connector-link: prepare generation %lu targets %lu status %08lX",Generation,count,(ULONG)status);
     End(c);
     // A retry must re-run cold admission. A half-prepared context must not
-    // bypass the inherited recovery contract on the next discovery.
-    if(created && !NT_SUCCESS(status)) (void)ConnectorLinkRelease(Device);
+    // bypass the inherited recovery contract on the next discovery. The release
+    // is terminal: it frees the context and clears Device->ConnectorLink, so the
+    // caller's own release can only answer SUCCESS afterwards. Its result is
+    // therefore kept on the device, because a failed AUX restore leaves the
+    // session open (dpaux.c) and that obligation outlives this context
+    // (BD-169 review). The retry contract is unchanged: the release still runs.
+    if(created && !NT_SUCCESS(status)) {
+        Device->ConnectorLinkCleanup=ConnectorLinkRelease(Device);
+        if(!NT_SUCCESS(Device->ConnectorLinkCleanup))
+            GuardLog("connector-link: prepare cleanup %08lX outlives this context",
+                (ULONG)Device->ConnectorLinkCleanup);
+    }
     return status;
 }
 

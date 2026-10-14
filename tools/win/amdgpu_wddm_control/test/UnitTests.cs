@@ -954,6 +954,8 @@ static partial class UnitTests
         Equal("DpmMode=1", Show(DpmSettings.PlanWrites(null, null, true, null)), "clocks: automatic checked writes DpmMode 1 only");
         Equal("", Show(DpmSettings.PlanWrites(null, null, false, null)), "clocks: checked, then unchecked before Apply: nothing written");
         Equal("DpmMode- DpmMaxMHz-", Show(DpmSettings.PlanWrites(1, 1500, false, null)), "clocks: unchecking after a save removes both values");
+        Equal("DpmMode=0 DpmMaxMHz-", Show(DpmSettings.PlanWrites(1, 1500, false, null, true)),
+            "state v2: fixed clocks write zero; absence would restore automatic clocks");
         Equal("", Show(DpmSettings.PlanWrites(0, null, false, null)), "clocks: the driver's fallback 0 stays when unchecked");
         Equal("DpmMaxMHz=1800", Show(DpmSettings.PlanWrites(1, null, true, 1800)), "clocks: the exact ceiling is written");
         Equal("", Show(DpmSettings.PlanWrites(null, 1700, false, 1700)), "clocks: a stored ceiling shown checked is not rewritten");
@@ -1208,9 +1210,10 @@ static partial class UnitTests
 
     // BD-060, statically: no source stops, kills or signals DWM except the operator escape, and none restarts Windows
     // other than through WindowsRestart (ExitWindowsEx without force). The Kill() calls allowed: the bug report's own
-    // timed-out child tool, the benchmark game that could not be put into its job object, and StopCompositor of the
-    // escape, reached only from a plan with RestartCompositor, which only restart-compositor with --accept-bd060
-    // gives and the window never asks for.
+    // timed-out child tool, the benchmark game that could not be put into its job object, the logon window's script
+    // that the start window host started and that ran past its bound, and StopCompositor of the escape, reached only
+    // from a plan with RestartCompositor, which only restart-compositor with --accept-bd060 gives and the window never
+    // asks for.
     static void NoDwmRestart(string root)
     {
         var dir = Path.Combine(root, @"tools\win\amdgpu_wddm_control\src");
@@ -1241,6 +1244,15 @@ static partial class UnitTests
                 Equal(1, k, "static check: Windows tuning kills only its bounded child");
                 Check(text.Contains("using (var process = Process.Start(start))") && text.Contains("try { process.Kill(); }") &&
                     !text.Contains("GetProcessById") && !text.Contains("GetProcesses"), "static check: Windows tuning child handle belongs to this invocation");
+            }
+            // StartWindowHost.cs ends one process: the start-window.ps1 it started itself, when the script runs past
+            // -Seconds plus the slack.
+            else if (name == "StartWindowHost.cs")
+            {
+                Equal(1, k, "static check: StartWindowHost.cs kills only the window script it started itself");
+                Check(text.Contains("try { p = Process.Start(plan); }") && text.Contains("if (p.WaitForExit(boundMs)) return p.ExitCode;") &&
+                    text.Contains("try { p.Kill();") && !text.Contains("GetProcessById") && !text.Contains("GetProcesses"),
+                    "static check: the start window host's Kill() is the child of this invocation, after its bound");
             }
             // BenchmarkRun.cs ends one process: the benchmark game this app started itself, and only when that game
             // could not be put into the job object that would otherwise have ended it. Without that one ending the
@@ -1277,7 +1289,7 @@ static partial class UnitTests
             foreach (var l in text.Split('\n').Where(x => x.Contains("\"dwm\"")))
                 Check(l.Contains("GetProcessesByName(\"dwm\")"), "static check: " + name + " only reads the dwm process: " + l.Trim());
         }
-        Equal(4, kills, "static check: own bounded diagnostic and tuning children, and the benchmark's own game");
+        Equal(5, kills, "static check: own bounded diagnostic, tuning and start window children, and the benchmark's own game");
         var rules = File.ReadAllText(Path.Combine(dir, "Recovery.cs"));
         Check(rules.Contains("if (!operatorAccepted)") && System.Text.RegularExpressions.Regex.Matches(rules, @"RestartCompositor = true").Count == 1,
             "static check: only the accepted escape plans a DWM stop");
@@ -1299,6 +1311,7 @@ static partial class UnitTests
             System.Threading.Thread.Sleep(60000);
             return 0;
         }
+        if (args.Length == 2 && args[0] == "--single-instance-second") return SecondStart(args[1]);
         if (args.Length != 1 && args.Length != 2) { Console.WriteLine("usage: unit-tests <repository root> [<start-confirm-core.ps1>]"); return 2; }
         var header = File.ReadAllText(Path.Combine(args[0], @"driver\kmd\bc250kmd_escape.h"));
         Strings.Directory = Path.Combine(args[0], @"tools\win\amdgpu_wddm_control\strings");
@@ -1322,9 +1335,13 @@ static partial class UnitTests
         RecoveryRules(args[0], header, args.Length == 2 ? args[1] : null);
         PlanAdditions(args[0]);
         StartNoticeTests(args[0]);
+        StartWindowHostTests();
+        LaunchTests(args[0]);
         WallpaperTests(args[0]);
         GraphicsSettingsTests();
         TdrTests(args[0]);
+        GameLogTests(args[0]);
+        HangRecordTests(args[0]);
         UmaTests(args[0]);
         SystemTuningTests();
         TunerTests(args[0], header);
@@ -1333,6 +1350,7 @@ static partial class UnitTests
         DriverCardTests();
         BenchmarkTests(args[0]);
         UpdateTests(args[0]);
+        CrashTests(args[0]);
         GuiTests(args[0]);
         OracleTests();
         if (args.Length == 2) Console.WriteLine("confirmation rule compared with " + args[1]);
@@ -1340,5 +1358,3 @@ static partial class UnitTests
         return _failed == 0 ? 0 : 1;
     }
 }
-        GameLogTests(args[0]);
-        HangRecordTests(args[0]);

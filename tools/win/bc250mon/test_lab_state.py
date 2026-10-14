@@ -307,66 +307,31 @@ class RegistryNameTest(unittest.TestCase):
         for gate in gates:
             self.assertIn(gate, defaults, gate + ' is not a name the installer applies')
 
-    def test_cu_mode_is_still_outside_the_installer_table(self):
-        """
-        The reason the panel adds `CuMode` to the expectations itself: no installer default carries it, so a
-        release install leaves 24 behind. If a release ever does apply it, this test fails and the expectations
-        default can be reconsidered.
-        """
+    def test_cu_mode_matches_stock_release_default(self):
         defaults = json.loads(text(REGISTRY_DEFAULTS))['defaults']['parameters']
-        self.assertNotIn('CuMode', defaults)
+        self.assertEqual(defaults['CuMode'], 24)
+        self.assertIn('public const int DefaultCuMode = 24;', text(NAMES_CS))
         self.assertIn('expected["CuMode"] = x.CuMode;', text(GUARD_CS))
 
-    def test_parameters_key_path(self):
-        self.assertIn(r'SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters', text(POINT_CS))
+    def test_state_client_has_no_legacy_registry_path(self):
+        for source in (POINT_CS, GUARD_CS, NAMES_CS, HERE / 'src/KmdProvider.cs'):
+            self.assertNotIn(r'Services\bc250kmd\Parameters', text(source))
+        self.assertIn('RegistryDwords.Read()', text(POINT_CS))
+        self.assertIn('RegistryDwords.Read()', text(GUARD_CS))
 
 
-class AbsentDefaultTest(unittest.TestCase):
-    """
-    The panel's own table of what the driver does with a name that is not in the Parameters key. It decides
-    whether "absent" is a deviation, so every entry has to agree with the driver's reader.
-    """
+class StateDefaultContractTest(unittest.TestCase):
+    def test_defaults_have_one_owner(self):
+        self.assertNotIn('Dictionary<string, int> Absent', text(GUARD_CS))
+        self.assertNotIn('AbsentDefault(', text(GUARD_CS))
+        self.assertIn('state.Read(spec.Path, spec.Name, true)', text(NAMES_CS))
+        self.assertIn('else if (!raw.Absent)', text(NAMES_CS))
 
-    def table(self):
-        body = re.search(r'Dictionary<string, int> Absent = new[^{]*\{(.*?)\n        \};', text(GUARD_CS), re.S)
-        assert body, 'the Absent table was not found in MeasurementGuardProvider.cs'
-        return dict((name, int(value)) for name, value in re.findall(r'\{ "(\w+)", (\d+) \}', body.group(1)))
-
-    def test_guard_read_setting_defaults(self):
-        """Every GuardReadSetting(L"Name", N) of the driver that the table knows must carry the same N."""
-        table = self.table()
-        seen = 0
-        for path in sorted((REPO / 'driver/kmd').glob('*.c')):
-            for name, value in re.findall(r'GuardReadSetting\(L"(\w+)",\s*(\d+)\)', text(path)):
-                if name in table:
-                    seen += 1
-                    self.assertEqual(table[name], int(value), '%s in %s' % (name, path.name))
-        self.assertGreater(seen, 10, 'no driver reader was matched: the regular expression went stale')
-
-    def test_the_two_interop_switches_are_on_when_absent(self):
-        """The entries that make this table worth having: absent means 1, not a difference from the default 1."""
-        table = self.table()
-        self.assertEqual(table['EnableGpuPresentBlit'], 1)
-        self.assertEqual(table['EnableCddDwmInterop'], 1)
-        self.assertRegex(text(INTEROP_POLICY_H), r'an absent value means 1 \(on\)')
-        self.assertIn('if (v->state == BC250_INTEROP_ABSENT) { *requested |= bit;', text(INTEROP_POLICY_C))
-
-    def test_dpm_and_cu_defaults(self):
-        table = self.table()
-        self.assertEqual(table['DpmMaxMHz'], define(DPM_HEADER, 'BC250_DPM_DEFAULT_MAX_MHZ'))
-        self.assertEqual(table['CuMode'], define(CU_HEADER, 'BC250_CU_MODE_STOCK'))
-        # BC250_DPM_DEFAULT_MODE is BC250_DPM_MODE_FIXED, which the escape header numbers.
-        self.assertRegex(header(DPM_HEADER), r'#define\s+BC250_DPM_DEFAULT_MODE\s+BC250_DPM_MODE_FIXED')
-        self.assertEqual(table['DpmMode'], define(DPM_HEADER, 'BC250_DPM_MODE_FIXED'))
-
-    def test_every_installer_default_is_known(self):
-        """
-        A name the installer applies whose absent meaning the table does not know would be reported as plain
-        "absent", which is the old behaviour and never wrong - but it is worth knowing when one appears.
-        """
-        table = self.table()
-        defaults = json.loads(text(REGISTRY_DEFAULTS))['defaults']['parameters']
-        self.assertEqual([name for name in defaults if name not in table], [])
+    def test_effective_raw_source_and_errors_are_kept(self):
+        source = text(NAMES_CS)
+        for field in ('Overrides', 'Sources', 'Errors'):
+            self.assertIn('result.' + field + '[spec.Name]', source)
+        self.assertIn('!Errors.ContainsKey(name)', source)
 
 
 class DpmErrorToleranceTest(unittest.TestCase):

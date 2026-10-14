@@ -58,7 +58,7 @@ function ConvertTo-AppList {
 # The AppRouter values a mode writes. cpu: Mode alone (the application kill switch; every other value stays).
 # allowlist and gpu-default: everything, exactly; Deny always carries the package's deny_always names.
 function Get-AppPolicyDesired {
- param([Parameter(Mandatory)][string]$Mode,[string[]]$Allow=@(),[string[]]$Deny=@(),[Parameter(Mandatory)]$Manifest,[Parameter(Mandatory)][string]$Root)
+ param([Parameter(Mandatory)][string]$Mode,[string[]]$Allow=@(),[string[]]$Deny=@(),[Parameter(Mandatory)]$Manifest,[Parameter(Mandatory)][string]$Root,[switch]$InstalledPackage)
  if ($Mode -cnotin $script:AppModes) { throw "Unknown mode $Mode" }
  $v = [ordered]@{}
  $v['Mode'] = @{kind='String'; value=$Mode}
@@ -66,7 +66,7 @@ function Get-AppPolicyDesired {
  $deny = ConvertTo-AppList ((@($Deny) + @($Manifest.deny_always)) -join ',')
  $allow = ConvertTo-AppList (@($Allow) -join ',')
  if ($Mode -eq 'allowlist' -and !$allow.Count) { throw 'allowlist needs at least one -Allow name' }
- $v['GpuUmdPath'] = @{kind='String'; value=(Join-Path (Join-Path $Root $Manifest.gpu.dir) $Manifest.gpu.shell)}
+ if (!$InstalledPackage) { $v['GpuUmdPath'] = @{kind='String'; value=(Join-Path (Join-Path $Root $Manifest.gpu.dir) $Manifest.gpu.shell)} }
  $v['RouteLogDirectory'] = @{kind='String'; value=(Join-Path $Root 'logs')}
  if ($allow.Count) { $v['Allow'] = @{kind='MultiString'; value=$allow} }
  if ($deny.Count) { $v['Deny'] = @{kind='MultiString'; value=$deny} }

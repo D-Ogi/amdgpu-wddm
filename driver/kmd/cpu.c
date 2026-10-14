@@ -37,6 +37,7 @@
 //   CoreMaskPending, CoreMaskConfirmed   the same two marks for the mask
 #include "bc250kmd.h"
 #include "bc250kmd_escape.h"
+#include "state_kernel.h"
 
 #define CPU_SETTING_TUNE L"CpuTune"
 #define CPU_SETTING_LAB L"CpuLab"
@@ -118,7 +119,7 @@ static BOOLEAN CpuQueryPresent(PCWSTR Name, ULONG* Value)
     *Value = NT_SUCCESS(status) ? value : 0;
     if (NT_SUCCESS(status)) return TRUE;
     if (status != STATUS_OBJECT_NAME_NOT_FOUND)
-        GuardLog("cpu: reading %ws failed 0x%08X, treated as absent", Name, status);
+        GuardLog("cpu: reading %ws failed 0x%08X, the CPU state group is refused", Name, status);
     return FALSE;
 }
 
@@ -943,6 +944,7 @@ void CpuStart(BC250_DEVICE* Device)
         if (value > BC250_CPU_TRIAL_MAX_MS) value = BC250_CPU_TRIAL_MAX_MS;
         s->TrialMs = value;
     } else s->TrialMs = BC250_CPU_TRIAL_MS;
+    if (!DriverStateGroupEnabled(AMDGPU_STATE_GROUP_CPU)) s->Enabled = FALSE;
     if (!s->Enabled) {
         GuardLog("cpu: the CPU surface is off (CpuTune %lu, WDDM %u, SMU %u, queue 3 %u): read-only, no thread, "
                  "no message", tune, Device->FullWddm ? 1u : 0u, Device->Smu.Online ? 1u : 0u,
@@ -961,6 +963,18 @@ void CpuStart(BC250_DEVICE* Device)
     s->Stored.temp_c = s->Stored.temp_given ? value : 0;
     pendingPresent = CpuQueryPresent(CPU_SETTING_PENDING, &pending);
     (void)CpuQueryPresent(CPU_SETTING_CONFIRMED, &confirmed);
+    maskPresent = CpuQueryPresent(CPU_SETTING_CORE_MASK, &mask);
+    corePendingPresent = CpuQueryPresent(CPU_SETTING_CORE_PENDING, &corePending);
+    (void)CpuQueryPresent(CPU_SETTING_CORE_CONFIRMED, &coreConfirmed);
+    // A failed safety-record read is not a missing pending marker. All startup
+    // inputs are read before any fallback edits or CPU worker can run.
+    if (!DriverStateGroupEnabled(AMDGPU_STATE_GROUP_CPU)) {
+        s->Enabled = FALSE;
+        RtlZeroMemory(&s->Stored, sizeof(s->Stored));
+        GuardLog("cpu: state read refused, no settings changed and no worker started");
+        CpuUnlock(s);
+        return;
+    }
     if (s->Stored.max_given || s->Stored.uv_given || s->Stored.temp_given) {
         enum bc250_cpu_error error = bc250_cpu_settings_check(&s->Stored, s->Lab ? 1 : 0);
         if (pendingPresent) {
@@ -991,9 +1005,6 @@ void CpuStart(BC250_DEVICE* Device)
     }
     // The core mask, with its own two marks: a mask that the firmware took and the machine then did not survive
     // comes back as the stock mask.
-    maskPresent = CpuQueryPresent(CPU_SETTING_CORE_MASK, &mask);
-    corePendingPresent = CpuQueryPresent(CPU_SETTING_CORE_PENDING, &corePending);
-    (void)CpuQueryPresent(CPU_SETTING_CORE_CONFIRMED, &coreConfirmed);
     s->CoreMaskStored = maskPresent ? mask : 0;
     if (maskPresent && bc250_cpu_mask_allowed(mask) && mask != BC250_CPU_MASK_STOCK) {
         if (corePendingPresent) {

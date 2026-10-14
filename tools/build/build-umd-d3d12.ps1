@@ -39,6 +39,8 @@ if(!(Test-Path -LiteralPath $engineLib)){throw 'Native engine-ddi library missin
 & "$PSScriptRoot\test-umd-recent-launch.ps1" -OutputDir (Join-Path $OutputDir 'quality\recent-launch') -VsInstall $VsInstall -Arch $Arch
 # The per-application graphics settings that CreateDevice and Present read.
 & "$PSScriptRoot\test-umd-app-settings.ps1" -OutputDir (Join-Path $OutputDir 'quality\app-settings') -VsInstall $VsInstall -Arch $Arch
+# The diagnostic sink of every shell and engine: the switch, the timed recording and its bounds (stdio-log.h).
+& "$PSScriptRoot\test-umd-stdio-log.ps1" -OutputDir (Join-Path $OutputDir 'quality\stdio-log') -VsInstall $VsInstall -Arch $Arch
 $saved=Save-ProcessEnvironment
 try {
  $env:TEMP=$OutputDir;$env:TMP=$OutputDir
@@ -217,8 +219,8 @@ try {
   if($LASTEXITCODE){throw 'Adapter KMT probe help failed'}
  } finally {Pop-Location}
 } finally {Restore-ProcessEnvironment $saved}
-Write-Host 'Adapter caps linked; functional device tables and deployment remain separate gates.'
 # BD-166: the shipped file carries its version resource from this build, the step that knows what it produced.
 Set-Bc250VersionStamp -Repo $repo -Files @((Join-Path $OutputDir 'amdgpu_wddm_d3d12.dll')) -Names @('amdgpu_wddm_d3d12.dll') `
     -Version $Version -Flavour $Flavour
 '{0}  amdgpu_wddm_d3d12.dll' -f (Get-FileHash -LiteralPath (Join-Path $OutputDir 'amdgpu_wddm_d3d12.dll')).Hash
+Write-Host 'Adapter caps linked; functional device tables and deployment remain separate gates.'

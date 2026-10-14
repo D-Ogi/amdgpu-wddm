@@ -1,7 +1,9 @@
 // Nagi Setup: the setup window for the Nagi graphics driver, amdgpu-wddm (GUI plan v7 phase 1, WU-001, WU-044, WU-047,
 // WU-048, WU-051, WU-058). Arguments: SetupArgs.cs. The window runs as the invoking user and starts itself again as
 // administrator for an install, an update, a repair or a continuation (one UAC prompt); preparing an offline folder
-// needs no administrator. The headless entries (--smoke-render, --smoke-engine) never show a window.
+// needs no administrator. A small loading window is on the screen from the start, through the administrator prompt and
+// the unpacking of a single file, until the setup window opens (LoadingWindow.cs). The headless entries
+// (--smoke-render, --smoke-engine, --smoke-payload, --smoke-loading) never show a window.
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -34,6 +36,8 @@ namespace AmdgpuWddmSetup
             if (a.Mode == "smoke-engine") return SmokeEngine(a);
             if (a.Mode == "smoke-start-failure") return SmokeStartFailure(a);
             if (a.Mode == "smoke-payload") return SmokePayload(a);
+            if (a.Mode == "smoke-loading") return SmokeLoading(a);
+            if (a.Mode == "smoke-progress") return SmokeProgress(a);
 
             // Nothing in a window may end setup with the crash dialog of .NET: every widget draws itself, and a GDI+
             // failure in any of them reaches the message loop. The detail goes into a file the support file carries,
@@ -43,56 +47,91 @@ namespace AmdgpuWddmSetup
             AppDomain.CurrentDomain.UnhandledException += (s, e) => Unexpected(a, e.ExceptionObject as Exception);
             Strings.Language = Native.ChosenLanguage() ?? Strings.SystemLanguage();
             Theme.Fonts();
-            // A single file that carries the whole package (Payload.cs, owner 2026-10-12). It has to unpack itself
-            // into a folder only administrators may write, so it needs the administrator prompt whatever it was
-            // started for; a setup.exe that has its files\ folder beside it carries no payload and is unchanged.
-            // --package names another release than the one in the file, and a folder beside the exe is the zip
-            // layout: in both cases the payload is not used, because the layout the user prepared is the one they
-            // asked for ("behaves as today", owner 2026-10-12). a.Package is read before it is overwritten below.
-            bool carries = Payload.Carries(Payload.Present(), a.Package, SetupForm.HasPackage(SetupForm.DefaultPackage()));
-            if ((a.Mode != "prepare-offline" || carries) && !Native.IsElevated())
+            // The loading window first, before anything reads the file or asks Windows for anything (StartSequence.cs,
+            // LoadingWindow.cs). Then, as before: a single file that carries the whole package (Payload.cs, owner
+            // 2026-10-12) has to unpack itself into a folder only administrators may write, so it needs the
+            // administrator prompt whatever it was started for; a setup.exe that has its files\ folder beside it
+            // carries no payload and is unchanged. --package names another release than the one in the file, and a
+            // folder beside the exe is the zip layout: in both cases the payload is not used, because the layout the
+            // user prepared is the one they asked for ("behaves as today", owner 2026-10-12). One unpacking at a time
+            // (Payload.RunMutexName): a second copy of the same file would reset the folder the first one is
+            // installing from, and the first install would die on a missing file.
+            var start = new SetupStart(a, argv);
+            Application.Run(start);
+            return start.ExitCode;
+        }
+
+        // A detail no screen shows, in the file the support file carries.
+        public static void Problem(SetupArgs a, string text)
+        {
+            try
             {
-                if (Native.RelaunchElevated(argv)) return 0;
-                MessageBox.Show(Strings.T("elevation.declined"), ProductName, MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return 5;
+                var dir = a.RunRoot ?? Path.Combine(Path.GetTempPath(), "amdgpu-wddm-setup");
+                Directory.CreateDirectory(dir);
+                File.AppendAllText(Path.Combine(dir, "setup-window-problem.txt"),
+                    DateTime.UtcNow.ToString("o") + " " + VersionText + " " + text + Environment.NewLine, new UTF8Encoding(false));
             }
-            if (carries)
+            catch (Exception) { }
+        }
+
+        // --smoke-loading: the loading window in each stage, the four languages, 96 to 192 DPI, the text of Windows
+        // at 100 to 225 % and a 1024x768 and a large screen, built without being shown (LoadingWindow.Findings).
+        // loading.txt: "ok: <n> windows" or the findings. The first line also says how long this process took to its
+        // first loading window built: the part of a start the person waits for with nothing on the screen.
+        // --smoke-progress: an install run and a plan run played against the setup window, which is never shown
+        // (SetupForm.ProgressGate). progress.txt: what the strip did, then "ok" or the findings.
+        static int SmokeProgress(SetupArgs a)
+        {
+            var report = Path.Combine(a.SmokeDir, "progress.txt");
+            var w = new StringBuilder();
+            try
             {
-                // One unpacking at a time (Payload.RunMutexName): a second copy of the same file would reset the
-                // folder the first one is installing from, and the first install would die on a missing file.
-                bool mine;
-                _run = new Mutex(true, Payload.RunMutexName, out mine);
-                if (!mine)
-                {
-                    try { mine = _run.WaitOne(0); } catch (AbandonedMutexException) { mine = true; }
-                    if (!mine)
-                    {
-                        MessageBox.Show(Strings.T("payload.already-running"), ProductName, MessageBoxButtons.OK, MessageBoxIcon.Information);
-                        return 8;
-                    }
-                }
-                try { a.Package = Payload.Extract(); }
-                catch (Exception e)
-                {
-                    // The package in the file is damaged, it does not match the list it came with, or the folder it
-                    // unpacks into cannot be made safe. Nothing is installed from it: the words say so, the detail
-                    // goes where every unexpected detail goes.
-                    try
-                    {
-                        var dir = a.RunRoot ?? Path.Combine(Path.GetTempPath(), "amdgpu-wddm-setup");
-                        Directory.CreateDirectory(dir);
-                        File.AppendAllText(Path.Combine(dir, "setup-window-problem.txt"),
-                            DateTime.UtcNow.ToString("o") + " " + VersionText + " payload: " + e + Environment.NewLine, new UTF8Encoding(false));
-                    }
-                    catch (Exception) { }
-                    MessageBox.Show(Strings.T(e is Payload.FolderException ? "payload.folder" : "payload.damaged"),
-                        ProductName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return 7;
-                }
-                a.PayloadPackage = a.Package;
+                Directory.CreateDirectory(a.SmokeDir);
+                var findings = SetupForm.ProgressGate(Path.Combine(a.SmokeDir, "runs"), w);
+                w.AppendLine(findings.Count == 0 ? "ok" : string.Join(Environment.NewLine, findings));
+                File.WriteAllText(report, w.ToString(), new UTF8Encoding(false));
+                return findings.Count == 0 ? 0 : 1;
             }
-            Application.Run(new SetupForm(a, false));
-            return 0;
+            catch (Exception e)
+            {
+                try { File.WriteAllText(report, w + "smoke progress failed: " + e); } catch (Exception) { }
+                return 1;
+            }
+        }
+
+        static int SmokeLoading(SetupArgs a)
+        {
+            var report = Path.Combine(a.SmokeDir, "loading.txt");
+            try
+            {
+                Directory.CreateDirectory(a.SmokeDir);
+                var w = new StringBuilder();
+                var screens = new[] { new System.Drawing.Size(1024, 728), new System.Drawing.Size(1920, 1032) };
+                int built = 0;
+                long firstMs = -1;
+                foreach (var lang in Strings.Languages)
+                    foreach (var scale in new[] { 1f, 1.25f, 1.5f, 2f })
+                        foreach (var textScale in new[] { 1f, 1.5f, 2.25f })
+                            foreach (var screen in screens)
+                                foreach (var stage in LoadingWindow.Stages)
+                                {
+                                    Strings.Language = lang;
+                                    Theme.Init(scale, textScale, false);
+                                    w.Append(LoadingWindow.Findings(stage, screen));
+                                    if (firstMs < 0)
+                                        using (var p = Process.GetCurrentProcess())
+                                            firstMs = (long)(DateTime.Now - p.StartTime).TotalMilliseconds;
+                                    built++;
+                                }
+                File.WriteAllText(report, (w.Length == 0 ? "ok: " + built + " windows" : w.ToString()) + Environment.NewLine +
+                    "first-window-ms: " + firstMs + Environment.NewLine, new UTF8Encoding(false));
+                return w.Length == 0 ? 0 : 1;
+            }
+            catch (Exception e)
+            {
+                try { File.WriteAllText(report, "smoke loading failed: " + e); } catch (Exception) { }
+                return 1;
+            }
         }
 
         // --smoke-payload: the package this exe carries, read and checked exactly as an install reads it, and
@@ -107,10 +146,21 @@ namespace AmdgpuWddmSetup
                 Directory.CreateDirectory(a.SmokeDir);
                 var head = Payload.ReadHead(Assembly.GetExecutingAssembly().Location);
                 if (head == null) { File.WriteAllText(report, "no payload" + Environment.NewLine); Console.Error.WriteLine("no payload"); return 3; }
-                var package = Payload.Extract(Path.Combine(a.SmokeDir, "unpacked"), false);
+                // The progress the loading window shows: every step counted, never backwards, and the last step at
+                // the size of the whole work.
+                long steps = 0, last = 0, size = 0;
+                bool forward = true;
+                var package = Payload.Extract(Path.Combine(a.SmokeDir, "unpacked"), false, (done, total) =>
+                {
+                    steps++;
+                    if (done < last) forward = false;
+                    last = done;
+                    size = total;
+                });
                 var files = Directory.GetFiles(Path.GetDirectoryName(package.TrimEnd('\\')), "*", SearchOption.AllDirectories);
                 var w = new StringBuilder();
                 w.AppendLine("payload ok");
+                w.AppendLine("progress " + steps + " steps, " + last + " of " + size + " bytes" + (forward ? "" : ", backwards"));
                 w.AppendLine("package " + package);
                 w.AppendLine("files " + files.Length);
                 w.AppendLine("payload-sha256 " + head.PayloadSha256);
@@ -127,10 +177,6 @@ namespace AmdgpuWddmSetup
                 return 4;
             }
         }
-
-        // The mutex of this run, held until the process ends: a field, so that nothing collects it while the
-        // install is still going on.
-        static Mutex _run;
 
         static int _unexpected;
 

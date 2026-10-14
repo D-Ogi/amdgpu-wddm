@@ -7,6 +7,7 @@ cu.choice.all|src|-|Your choice: All (40).
 cu.choice.standard|src|-|Your choice: Standard (24).
 cu.choice.invalid|src|-|Your choice is not valid; choose Standard (24) or All (40).
 cu.choice.unreadable|src|-|Your choice cannot be read.
+cu.choice.some|src|-|Your choice: {0} graphics cores.
 cu.choice.driver-24|src|-|Standard (24) is set, but the driver chose that number, not you.
 cu.note.driver-24|src|-|Select All (40) and restart Windows to use all 40 cores again.
 cu.choice.after-restart|src|-|It applies after the next Windows restart.
@@ -22,26 +23,34 @@ cu.run.not-saved.next24|src|-|The next start uses 24 cores, as you chose.
 cu.run.fallback|src|-|The last 40-core start was not confirmed, so this start uses 24 cores.
 cu.run.refused|src|-|40 cores could not be used on this start.
 cu.run.unknown|src|-|The number of graphics cores cannot be read.
+cu.run.groups|src|-|Cores in each group now: {0}.
+cu.map.item|src|-|group {0} pair {1}
 cu.next.standard|src|-|Next start: 24 cores.
 cu.next.fallback|src|-|Next start: 24 cores, because the 40-core setting was not confirmed.
 cu.next.ask40|src|-|Next start: 40 cores, to be confirmed after the start.
-cu.next.ask40-limited|src|-|Next start: the 40-core setting with an earlier diagnostic core limit (fewer cores), to be confirmed after the start.
+cu.next.ask40-limited|src|-|Next start: {0} graphics cores, to be confirmed after the start.
 cu.next.confirmed40|src|-|Next start: 40 cores (confirmed earlier).
-cu.next.confirmed40-limited|src|-|Next start: the 40-core setting with an earlier diagnostic core limit (fewer cores), confirmed earlier.
+cu.next.confirmed40-limited|src|-|Next start: {0} graphics cores (confirmed earlier).
 cu.next.unknown|src|-|Next start: cannot be predicted.
 cu.refuse.target|src|-|Choose Standard (24) or All (40).
 cu.refuse.unreadable|src|-|The stored setting cannot be read.
 cu.refuse.already40|src|-|All (40) is selected already.
 cu.refuse.already24|src|-|Standard (24) is selected already.
+cu.refuse.already-some|src|-|{0} graphics cores are selected already.
+cu.refuse.map|src|-|Those pairs of graphics cores cannot be chosen on this PC.
 cu.preview.write40|src|-|Selects all 40 graphics cores.
 cu.preview.write24|src|-|Selects the standard 24 graphics cores.
 cu.preview.remove-closed|src|-|Records that the standard 24 graphics cores are your choice, not a step back the driver took by itself.
+cu.preview.write40-some|src|-|Selects {0} of the 40 graphics cores.
+cu.preview.set-disable|src|-|Turns these pairs of graphics cores off: {0}.
+cu.preview.write-chosen|src|-|Records this number as your choice, so a driver update keeps it.
+cu.preview.remove-chosen|src|-|Gives the number of graphics cores back to the setting of the installed driver.
 cu.preview.remove-confirmed|src|-|Removes the earlier confirmation of 40 cores, so the new setting is confirmed on its own start.
-cu.preview.remove-disable|src|-|An earlier diagnostic core limit is removed.
+cu.preview.remove-disable|src|-|Turns every pair of graphics cores on again.
 cu.result.nothing|src|-|Nothing was changed.
 cu.result.saved|src|-|Saved.
 cu.result.failed|src|-|The change could not be completed.
-cu.result.cleanup-incomplete|src|-|The cleanup is incomplete. The next start uses the standard 24 cores. An earlier diagnostic core limit that remains does not reduce them.
+cu.result.cleanup-incomplete|src|-|The cleanup is incomplete. The next start uses the standard 24 cores. Pairs of cores that stay turned off do not reduce them.
 cu.effect|src|-|More cores use more power and make more heat: about 30 W more at 1500 MHz on our test unit. This is a reference, not a promise for your PC.
 
 # ---- driver card (WU-043) ----
@@ -63,6 +72,7 @@ drv.released.none|src|-|Released: known after an update check.
 upd.available|src|-|Update available: {0}
 upd.uptodate|src|-|You have the newest release.
 upd.newest|src|-|The newest release is {0}.
+upd.ahead|src|-|Your driver is newer than the newest release ({0}).
 upd.incomplete|src|-|No newer release among the newest {0} releases.
 upd.failed|src|-|Could not check for updates. Try again later.
 upd.rate-limited|src|-|The update service asked us to wait. You can check again after {0}.
@@ -390,6 +400,7 @@ page.help.intro|src|-|Step-by-step help for common problems, repair and support 
 action.working|src|-|Working... Windows can ask for administrator permission.
 action.done|src|-|Done.
 action.failed|src|-|The change was not made. Nothing else was changed. A support report from Help shows why.
+action.background-failed|src|-|A background step did not finish. Nothing of the driver was changed. A support report from Help shows what happened.
 action.not-elevated|src|-|Administrator permission was not given. Nothing was changed.
 action.cannot-read|src|-|The current settings cannot be read, so nothing was changed.
 action.restart-failed|src|-|Windows did not restart. Restart it from the Start menu.
@@ -464,6 +475,15 @@ graphics.thermal|src|-|Heat protection is always on: from 87 °C the driver lowe
 graphics.cores.title|src|-|Graphics cores
 graphics.cores.24|src|-|Standard (24)
 graphics.cores.40|src|-|All (40)
+graphics.cores.count|src|-|How many graphics cores
+graphics.cores.count.item|src|-|{0} cores
+graphics.cores.map.show|src|-|Choose the pairs of cores yourself
+graphics.cores.map.help|src|-|Each pair is two graphics cores. If one pair makes the PC crash or freeze, turn that pair off and leave the others on.
+graphics.cores.map.unreadable|src|-|The pairs of cores of this PC cannot be read now, so they cannot be chosen. Choose a number of cores instead.
+graphics.cores.map.group|src|-|Group {0}
+graphics.cores.map.pair|src|-|Pair {0}
+graphics.cores.map.name|src|-|Group {0}, pair {1}: two graphics cores
+graphics.cores.map.fixed|src|-|always on
 graphics.not-installed|src|-|The driver is not installed, so there is nothing to set here.
 graphics.unsaved|src|-|You have changes that are not applied yet.
 graphics.saved|src|-|No unsaved changes.
@@ -911,8 +931,6 @@ search.graphics.overlay.terms|src|-|FPS counter|frame time|overlay|frames per se
 search.graphics.latency|src|-|Low latency
 search.graphics.latency.terms|src|-|latency|input lag|frames ahead|render queue|Anti-Lag|Reflex|max frame latency
 search.graphics.overlay|src|-|Performance overlay
-search.graphics.amd-version|src|-|Report an AMD driver version
-search.graphics.amd-version.terms|src|-|driver version|old driver|outdated driver|driver warning|AMD|unsupported driver
 search.graphics.vk-present|src|-|Vulkan presentation
 search.graphics.vk-present.terms|src|-|Vulkan|present|presentation|black screen|frozen picture|compatibility
 search.graphics.vk-memory|src|-|When video memory is full
@@ -924,11 +942,10 @@ search.games.cpu-render.terms|src|-|CPU rendering|software rendering|WARP|proces
 search.display.scaling|src|-|GPU scaling
 help.setting.latency|src|-|How many frames the processor may prepare ahead of the graphics chip. Fewer frames make the game react faster to the mouse and keyboard, but can lower the frame rate. Works in DirectX 11 and DirectX 12 games. A game that already keeps fewer frames ahead is left as it is.
 help.setting.overlay|src|-|Shows the frame rate and frame times in a corner of the game. Works in DirectX 11 games for now.
-help.setting.amd-version|src|-|Some games warn that the graphics driver is old, because they do not know this driver. With this on, the driver reports a version number that these games accept. The driver itself does not change.
 help.setting.vk-present|src|-|How Vulkan games show their frames. Modern is the default and is faster. Compatibility uses an older, slower way; try it when a Vulkan game shows a black or frozen picture.
 help.setting.vk-memory|src|-|What a Vulkan game gets when the video memory is full. "Use system memory" keeps the game running, but slower. "Report out of memory" tells the game, so that it can lower its settings.
 help.setting.sm|src|-|The highest shader model the driver reports to a DirectX 12 game. 6.8 is the default. Some games fail with a newer shader model; for such a game, choose 6.7 or 6.6.
-help.setting.cpu-render|src|-|Runs this game's DirectX 11 on the processor instead of the graphics chip. This is much slower. Use it only as a last resort for a game that fails on the graphics chip.
+help.setting.cpu-render|src|-|Runs this game's DirectX 11 on the processor instead of the graphics chip. This is much slower and does not offer full DirectX 11, so most games made after 2012 (for example Counter-Strike 2) do not start with it. Use it only as a last resort for an older game that fails on the graphics chip.
 gfx.choice.app|src|-|Application decides
 gfx.choice.inherit|src|-|Same as all games: {0}
 gfx.choice.inherit-short|src|-|Same as all games
@@ -958,8 +975,7 @@ gfx.origin.default|src|-|Not set: {0}.
 gfx.origin.stored|src|-|Stored for all games.
 gfx.origin.global|src|-|From the settings for all games: {0}.
 gfx.note.overlay|src|-|Works in DirectX 11 games for now.
-gfx.note.cpu-render|src|-|Much slower. A last resort for a DirectX 11 game that fails on the graphics chip.
-gfx.note.amd-version|src|-|For games that warn about an old graphics driver.
+gfx.note.cpu-render|src|-|Much slower, and most games made after 2012 do not start with it. A last resort for an older DirectX 11 game that fails on the graphics chip.
 gfx.note.vk-present|src|-|Compatibility is slower. Try it when a Vulkan game shows a black or frozen picture.
 gfx.note.sm|src|-|Some games fail with a newer shader model. Choose a lower one only for such a game.
 gfx.global.title|src|-|Settings for all games
@@ -1235,3 +1251,29 @@ settings.wallpaper.restored-partial|src|-|Your previous background was a slidesh
 settings.wallpaper.restore-failed|src|-|Your previous background could not be brought back: its picture is no longer on this PC. Choose a background in Windows Settings, Personalization, Background.
 settings.wallpaper.nothing-saved|src|-|No previous background is saved for your account, so there is nothing to restore.
 help.setting.wallpaper|src|-|The installer sets the Nagi wallpaper once for each person after a checked installation, unless its box was cleared, and saves the background that person had first. "Set the Nagi wallpaper" sets the picture again. "Restore my previous wallpaper" brings back the saved background. A slideshow or Windows Spotlight comes back as its last picture only: turn it on again in Windows Settings, Personalization, Background. Both buttons change only your own background and need no administrator rights.
+# "Record game logs" (src/GameLog.cs): the timed switch of the Help page.
+gamelog.title|src|-|Record game logs
+gamelog.intro|src|-|If somebody who helps you asks for a log of a game, switch recording on here and then start the game. While recording runs, every game writes a file that says what it asked the graphics for. Recording stops by itself after the time you pick, so you cannot leave it on by accident.
+gamelog.label|src|-|Record for
+gamelog.choice.recommended|src|-|{0} minutes (a good length)
+gamelog.choice.one-minute|src|-|1 minute
+gamelog.choice.minutes|src|-|{0} minutes
+gamelog.now.off|src|-|Recording is off. Nothing is being written.
+gamelog.now.on|src|-|Recording is on: {0} minutes left. Start the game now.
+gamelog.now.on.one-minute|src|-|Recording is on: 1 minute left. Start the game now.
+gamelog.where|src|-|The files are kept in {0} under the shared program data folder, {2} file(s) so far, {1} MB in total. A support report takes the newest of them.
+gamelog.start|src|-|Record for {0} minutes
+gamelog.stop|src|-|Stop now
+gamelog.open|src|-|Open the folder
+gamelog.open-failed|src|-|The folder could not be opened.
+gamelog.unreadable|src|-|Recording cannot be switched on this computer.
+search.help.gamelog|src|-|Record game logs
+search.help.gamelog.terms|src|-|log|logs|logging|record|game log|diagnostics|trace|report a game problem
+help.setting.gamelog|src|-|Records what games ask the graphics for, for the number of minutes you pick, and writes one file per game. Switch it on, start the game, play until the problem happens, then create a support report: the newest files go into it. Recording stops by itself when the time is over, and each file stops at 64 MB. The files are plain text and you can read them yourself.
+plan.title.game-log-on|src|-|Record game logs
+plan.title.game-log-off|src|-|Stop recording game logs
+plan.line.gamelog-on|src|-|Games write a log of what they ask the graphics for, until the time you chose is over.
+plan.line.gamelog-off|src|-|Games stop writing logs. The files already written are kept.
+launch.starting|src|-|Starting. The app checks this computer first, which takes a few seconds.
+launch.slow|src|-|The start takes longer than usual, because Windows answers slowly. The app opens when it has the answers. You can also close this window.
+launch.close|src|-|Close

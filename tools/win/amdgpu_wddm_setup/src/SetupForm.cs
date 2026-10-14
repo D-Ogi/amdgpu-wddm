@@ -79,6 +79,17 @@ namespace AmdgpuWddmSetup
         ResultMark _resultMark;
         IconRow _elapsedRow;
         int _contentWidth;
+        // The progress screen on the window (Checking or Working), kept between engine events: what it shows, the
+        // frame it was built with, and the controls that an event changes in place (UpdateWorking).
+        WorkingView _working;
+        string _workingFrame;
+        readonly List<IconRow> _stageRows = new List<IconRow>();
+        IconRow _noteRow, _waitingRow;
+        FlatButton _cancel;
+        CardPanel _checkCard;
+
+        // For the gate --smoke-progress: the screens that Show built from nothing.
+        public int Builds { get; private set; }
 
         public SetupForm(SetupArgs args, bool smoke)
         {
@@ -251,20 +262,21 @@ namespace AmdgpuWddmSetup
         // the install - the one with no payload of its own - removes the folder of the version it just installed,
         // by name; otherwise the whole unpacked release would stay in %ProgramData% for good, which is what every
         // install of a single file used to do.
+        // BD-163: a run that unpacked the package itself removes what it unpacked even when it only planned or dry
+        // ran. A plan and a dry run change nothing on the computer, so the unpacked release must not stay behind
+        // either. A pending restart is the one reason to keep the folder, and it is read first for that reason.
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
             base.OnFormClosed(e);
-            if (_smoke || _args.DryRun || RestartPending()) return;
+            if (RestartPending()) return;
             if (!string.IsNullOrEmpty(_args.PayloadPackage)) { Payload.Cleanup(_args.PayloadPackage); return; }
+            if (_smoke || _args.DryRun) return;
             Payload.CleanupVersion(PackageVersion(_package));
         }
 
         // The window lets go of everything it owns here, and not in OnFormClosing: a close that is cancelled (by
         // another handler) would otherwise leave a window whose language switch no longer rebuilds it, and a form
         // that is disposed without being closed (every form of a headless run) would never let go at all.
-        // BD-163: a run that unpacked the package itself removes what it unpacked even when it only planned or dry
-        // ran. A plan and a dry run change nothing on the computer, so the unpacked release must not stay behind
-        // either. A pending restart is the one reason to keep the folder, and it is read first for that reason.
         protected override void Dispose(bool disposing)
         {
             if (disposing)
@@ -468,7 +480,7 @@ namespace AmdgpuWddmSetup
 
         void BuildRail()
         {
-            _rail.Controls.Clear();
+            ClearAndDispose(_rail);
             bool prepare = _flow == "prepare";
             var steps = prepare ? new[] { "rail.folder", "rail.prepare", "rail.finish" } : new[] { "rail.welcome", "rail.check", "rail.plan", "rail.install", "rail.finish" };
             var glyphs = prepare ? PrepareGlyphs : StepGlyphs;
@@ -522,10 +534,17 @@ namespace AmdgpuWddmSetup
 
         public void Show(Screen screen)
         {
+            // An engine event on the progress screen changes the screen in place: a stage's mark, the note, the Cancel
+            // button, the value of the strip or a new check row. The window used to build the whole screen again for
+            // every batch of events, also for the 'step' event of every change an install makes: the strip, the rows
+            // and the rail became new windows several times a minute, and each new window showed the background for a
+            // frame before it drew itself (owner, 2026-10-14: "co 6-8 sekund niebieski pasek od instalatora robi
+            // krótkie mignięcie").
+            if (screen == Current && (screen == Screen.Checking || screen == Screen.Working) && UpdateWorking(screen == Screen.Checking)) return;
+            Builds++;
             // A short crossfade over the screen that leaves (200 ms or less). Only when the screen really changes and
-            // never while an engine run is live: the window redraws the Working screen on every batch of engine
-            // events, and a fade per event cost a full-window picture every quarter second on a PC that has no
-            // driver yet. Off without Windows animation effects, and never in a headless render.
+            // never while an engine run is live: a stage list that grows during a run is not a new screen. Off without
+            // Windows animation effects, and never in a headless render.
             bool same = screen == Current && _content.Controls.Count > 0;
             FadeOverlay fade = null;
             if (!_smoke && !same && (_client == null || _client.Finished) && IsHandleCreated && Visible && Theme.Animations && _column != null && _column.Width > 0)
@@ -537,9 +556,19 @@ namespace AmdgpuWddmSetup
             string focused = same ? FocusKey(ActiveControl) : null;
             int scroll = same ? -_content.AutoScrollPosition.Y : 0;
             Current = screen;
+            // A progress screen that is built again (its stage list changed) keeps its strip: a new strip is a new
+            // window, and its band would start again at the left.
+            var strip = same && (screen == Screen.Checking || screen == Screen.Working) && _progress != null && !_progress.IsDisposed && _progress.Parent == _content ? _progress : null;
+            if (strip != null) _content.Controls.Remove(strip);
             _progress = null;
             _resultMark = null;
             _elapsedRow = null;
+            _working = null;
+            _workingFrame = null;
+            _stageRows.Clear();
+            _noteRow = _waitingRow = null;
+            _cancel = null;
+            _checkCard = null;
             _centreContent = false;
             // Every control of the screen that leaves is disposed below, the countdown's line among them: its timer
             // stops here, and BuildRestart starts a new one when the restart screen is built again.
@@ -558,13 +587,14 @@ namespace AmdgpuWddmSetup
             switch (screen)
             {
                 case Screen.Welcome: BuildWelcome(); break;
-                case Screen.Checking: BuildWorking(true); break;
+                case Screen.Checking: BuildWorking(true, strip); break;
                 case Screen.Plan: BuildPlan(); break;
-                case Screen.Working: BuildWorking(false); break;
+                case Screen.Working: BuildWorking(false, strip); break;
                 case Screen.Restart: BuildRestart(); break;
                 case Screen.Result: BuildResult(); break;
                 case Screen.Prepare: BuildPrepare(); break;
             }
+            if (strip != null && strip.Parent == null) strip.Dispose();
             // The space below the screen is the last control's bottom margin: a spacer panel after a label took the
             // label's text as its name for a screen reader.
             var lastControl = _content.Controls[_content.Controls.Count - 1];
@@ -748,74 +778,110 @@ namespace AmdgpuWddmSetup
             _package = _preparedProblem == null ? dir : _ownPackage;
         }
 
-        // Checking (a plan run) and Working (a real run) share the progress screen.
-        void BuildWorking(bool checking)
+        // Checking (a plan run) and Working (a real run) share the progress screen. WorkingView says what it shows; the
+        // controls that an engine event can change are kept for UpdateWorking. strip: the strip of the same screen
+        // built before, or null for a new one.
+        void BuildWorking(bool checking, ProgressStrip strip)
         {
-            var run = _active;
-            string titleId = checking ? "checking.title" : _flow == "prepare" ? "working.prepare.title" : _flow == "repair" ? "working.repair.title" : _flow == "continue" ? "working.continue.title" : "working.title";
-            Title(Strings.T(titleId));
-            Status(Strings.T(checking ? "checking.body" : _flow == "prepare" ? "working.prepare.body" : "working.body"), StatusLine.State.Busy);
-            PendingRemovalNotice();
-            _progress = new ProgressStrip(_contentWidth);
-            _progress.AccessibleName = Strings.T(titleId);
+            var v = WorkingNow(checking);
+            Title(Strings.T(v.TitleId));
+            Status(Strings.T(v.BodyId), StatusLine.State.Busy);
+            if (v.PendingRemovals) PendingRemovalLine();
+            _progress = strip ?? new ProgressStrip(_contentWidth);
+            _progress.AccessibleName = Strings.T(v.TitleId);
             _content.Controls.Add(_progress);
+            _progress.SetDone(v.Progress);
             _elapsedRow = Line(Icons.Clock, Theme.Dim, Strings.T("working.elapsed", Elapsed()), Theme.Dim);
+            _working = v;
+            _workingFrame = WorkingFrame(v);
             if (checking)
             {
-                var card = Card(Strings.T("checking.list"), Icons.Shield);
-                foreach (var c in run == null ? new List<CheckRow>() : run.Checks) AddCheck(card, c);
-                if (run == null || run.Checks.Count == 0) card.Row(Icons.Ring, Theme.Dim, Strings.T("checking.waiting"));
+                _checkCard = Card(Strings.T("checking.list"), Icons.Shield);
+                foreach (var c in v.Checks) AddCheck(_checkCard, c);
+                if (v.Checks.Count == 0) _waitingRow = _checkCard.Row(Icons.Ring, Theme.Dim, Strings.T("checking.waiting"));
                 return;
             }
             var stages = Card(Strings.T("working.stages"), Icons.Gear);
-            var mode = run != null && run.Mode != null ? run.Mode : (_flow == "prepare" ? "prepare-offline" : "run");
-            var action = run != null && run.Decision != null ? run.Decision.Action : null;
-            var expected = EngineRun.ExpectedStages(mode, action).ToList();
-            // A stage the fixed list does not know (an optional one, such as the extras of the package) goes where the
-            // run actually reached it: right after the stage before it. Appending it at the end would put the current
-            // stage last and mark every real stage as finished (the index arithmetic below reads the order).
-            int at = -1;
-            foreach (var s in run == null ? new List<string>() : run.Stages)
+            for (int i = 0; i < v.StageIds.Count; i++)
             {
-                int known = expected.IndexOf(s);
-                if (known >= 0) { at = known; continue; }
-                at = at + 1;
-                if (at < 0) at = 0;
-                if (at > expected.Count) at = expected.Count;
-                expected.Insert(at, s);
+                var row = stages.Row(Icons.Ring, Theme.Dim, "");
+                StageLook(row, v.StageIds[i], v.Marks[i]);
+                _stageRows.Add(row);
             }
-            int current = run == null || run.CurrentStage == null ? -1 : expected.IndexOf(run.CurrentStage);
-            // Whether the run stopped in this stage. The engine writes its result event before its process ends, so
-            // this screen is drawn once more with an outcome already known: restart-required and already are normal
-            // endings of an install, and the stage the run reached in them is done, not crossed out in red.
-            bool stopped = run != null && ResultView.StoppedIn(run.ResultOutcome);
-            int finished = 0;
-            for (int i = 0; i < expected.Count; i++)
+            _noteRow = Line(Icons.Info, Theme.Dim, Strings.T(v.NoteId), Theme.Dim);
+            if (v.CancelShown)
             {
-                bool done = i < current || (run != null && run.ResultOutcome != null && i <= current && !stopped);
-                bool failed = stopped && i == current;
-                bool on = i == current && !done && !failed;
-                if (done) finished++;
-                var text = Strings.Has("stage." + expected[i]) ? Strings.T("stage." + expected[i]) : Strings.T("stage.other");
-                stages.Row(done ? Icons.Check : failed ? Icons.Cancel : on ? Icons.Play : Icons.Ring,
-                    done ? Theme.Good : failed ? Theme.Accent : on ? Theme.Teal : Theme.Dim,
-                    text, null, on).HeadColor = done ? Theme.Text : failed ? Theme.Accent : on ? Theme.Text : Theme.Dim;
+                _cancel = AddButton("ui.cancel", (s, e) => CancelRun());
+                _cancel.Enabled = v.CancelEnabled;
             }
-            if (expected.Count > 0 && current >= 0)
+        }
+
+        WorkingView WorkingNow(bool checking)
+        {
+            return WorkingView.Of(_active, _flow, checking, _client != null && _client.CancelRequested, PendingRemovalsCancelled());
+        }
+
+        // The frame of a progress screen and what the window built it for: a screen of another width or language is
+        // built again.
+        string WorkingFrame(WorkingView v)
+        {
+            return v.Frame + "|" + _contentWidth + "|" + Strings.Language;
+        }
+
+        // The look of one stage row: its glyph, its colours and its weight say whether the stage is done, stopped the
+        // run, runs now or is still to come.
+        static void StageLook(IconRow row, string id, StageMark mark)
+        {
+            row.Head = Strings.Has("stage." + id) ? Strings.T("stage." + id) : Strings.T("stage.other");
+            row.Glyph = mark == StageMark.Done ? Icons.Check : mark == StageMark.Failed ? Icons.Cancel : mark == StageMark.Current ? Icons.Play : Icons.Ring;
+            row.GlyphColor = mark == StageMark.Done ? Theme.Good : mark == StageMark.Failed ? Theme.Accent : mark == StageMark.Current ? Theme.Teal : Theme.Dim;
+            row.HeadColor = mark == StageMark.Failed ? Theme.Accent : mark == StageMark.Waiting ? Theme.Dim : Theme.Text;
+            row.Strong = mark == StageMark.Current;
+            row.Done();
+        }
+
+        // An engine event on the progress screen that is on the window: the controls that show something new change,
+        // and nothing is built. False when the screen must be built again: another frame (the title, the stage list,
+        // the notice, the Cancel button), checks that are not the listed ones with more after them, or controls that
+        // are gone (a new frame of the window after a change of language, scale or screen).
+        bool UpdateWorking(bool checking)
+        {
+            if (_working == null || _working.Checking != checking || _progress == null || _progress.IsDisposed || _progress.Parent != _content) return false;
+            var v = WorkingNow(checking);
+            if (WorkingFrame(v) != _workingFrame || (checking && !v.ExtendsChecks(_working))) return false;
+            for (int i = 0; i < v.Marks.Count; i++)
+                if (v.Marks[i] != _working.Marks[i])
+                {
+                    StageLook(_stageRows[i], v.StageIds[i], v.Marks[i]);
+                    _stageRows[i].Invalidate();
+                }
+            if (_noteRow != null && v.NoteId != _working.NoteId)
             {
-                _progress.Indeterminate = false;
-                _progress.Value = Math.Min(1f, (finished + 0.5f) / expected.Count);
+                _noteRow.Head = Strings.T(v.NoteId);
+                _noteRow.Done().Invalidate();
             }
-            string note;
-            if (_client != null && _client.CancelRequested) note = "working.cancel.requested";
-            else if (run != null && run.CancelAvailable) note = "working.cancel.available";
-            else note = "working.cancel.unavailable";
-            Line(Icons.Info, Theme.Dim, Strings.T(note), Theme.Dim);
-            if (_flow != "prepare")
+            if (_cancel != null) _cancel.Enabled = v.CancelEnabled;
+            _progress.SetDone(v.Progress);
+            if (checking && v.Checks.Count > _working.Checks.Count)
             {
-                var cancel = AddButton("ui.cancel", (s, e) => { if (_client != null && _client.RequestCancel()) Show(Screen.Working); });
-                cancel.Enabled = run != null && run.CancelAvailable && !(_client != null && _client.CancelRequested);
+                if (_waitingRow != null)
+                {
+                    _checkCard.Body.Controls.Remove(_waitingRow);
+                    _waitingRow.Dispose();
+                    _waitingRow = null;
+                }
+                for (int i = _working.Checks.Count; i < v.Checks.Count; i++) AddCheck(_checkCard, v.Checks[i]);
+                AssignTabOrder();
+                Unnamed(_checkCard);
             }
+            _working = v;
+            return true;
+        }
+
+        // Cancel asks the engine to stop at its next safe point; the note then says so and the button is off.
+        void CancelRun()
+        {
+            if (_client != null && _client.RequestCancel()) Show(Screen.Working);
         }
 
         string Elapsed()
@@ -1147,10 +1213,15 @@ namespace AmdgpuWddmSetup
 
         void PendingRemovalNotice()
         {
-            if ((_active != null && _active.PendingRemovalsCancelled > 0) ||
-                _runs.Any(r => r.Run != null && r.Run.PendingRemovalsCancelled > 0))
-                Line(Icons.Info, Theme.Dim, Strings.T("install.pending-removals-cancelled"), Theme.Dim);
+            if (PendingRemovalsCancelled()) PendingRemovalLine();
         }
+
+        bool PendingRemovalsCancelled()
+        {
+            return (_active != null && _active.PendingRemovalsCancelled > 0) || _runs.Any(r => r.Run != null && r.Run.PendingRemovalsCancelled > 0);
+        }
+
+        void PendingRemovalLine() { Line(Icons.Info, Theme.Dim, Strings.T("install.pending-removals-cancelled"), Theme.Dim); }
 
         void BuildPrepare()
         {
@@ -1282,6 +1353,12 @@ namespace AmdgpuWddmSetup
         {
             if (_client == null || IsDisposed || !IsHandleCreated) return;
             if (!_client.Poll()) return;
+            EngineChanged();
+        }
+
+        // New events of the live run, or its end. A live run's screen changes in place (Show, UpdateWorking).
+        void EngineChanged()
+        {
             if (!_client.Finished) { Show(Current); return; }
             Finish(_client);
         }
@@ -1293,12 +1370,7 @@ namespace AmdgpuWddmSetup
             if (IsDisposed) return;
             if (_progress != null && !_progress.IsDisposed && _progress.IsHandleCreated)
             {
-                if (Theme.Animations)
-                {
-                    _progress.Phase += 0.012f;
-                    if (_progress.Phase > 1f) _progress.Phase = 0f;
-                    _progress.Invalidate();
-                }
+                if (Theme.Animations) _progress.Step(0.012f);
                 if (_elapsedRow != null)
                 {
                     var text = Strings.T("working.elapsed", Elapsed());
@@ -1577,6 +1649,95 @@ namespace AmdgpuWddmSetup
             }
         }
 
+        // ---- the progress gate (--smoke-progress) ------------------------------------------------------------------
+        // An install run of 30 s and a plan run of 10 s, played against a window that is never shown. Animate runs at
+        // the 33 ms ticks of its timer, and EngineChanged at each 250 ms tick of the poll that read new events, as
+        // PollEngine calls it. The events are the ones the engine writes: a 'step' for every change (install.ps1), a
+        // stage now and then, the cancel offer and its end, a check of the plan every second; the Cancel button is
+        // pressed once. The strip stays one control with one window handle, no event builds the screen again, and
+        // the strip is drawn again only when what it shows changes: its value, or the moving band while no stage is
+        // known. A stage that the list does not know builds the screen once, with the same strip.
+        public static List<string> ProgressGate(string runRoot, StringBuilder log)
+        {
+            var findings = new List<string>();
+            Strings.Language = "en";
+            foreach (var plan in new[] { false, true })
+                using (var form = new SetupForm(SetupArgs.Parse(new[] { "--run-root", runRoot }), true))
+                    form.PlayRun(plan, plan ? 10000 : 30000, log, findings);
+            return findings;
+        }
+
+        void PlayRun(bool plan, int ms, StringBuilder log, List<string> findings)
+        {
+            var name = plan ? "plan" : "install";
+            var client = NewClient();
+            _client = client;
+            _active = client.Run;
+            _runKind = name;
+            _runStarted = DateTime.UtcNow;
+            int seq = 0;
+            Action<string, string> ev = (type, fields) => client.Run.Apply("{\"schema\":\"" + EngineRun.EventSchema + "\",\"invocation\":\"" + client.Invocation +
+                "\",\"seq\":" + (++seq) + ",\"utc\":\"2026-10-14T08:00:00Z\",\"type\":\"" + type + "\"" + (fields.Length > 0 ? "," + fields : "") + "}");
+            ev("start", "\"mode\":\"" + (plan ? "plan" : "run") + "\",\"gui\":true,\"dry_run\":false,\"package\":\"P\",\"contract\":\"" + EngineRun.Contract + "\",\"phase\":null");
+            if (!plan)
+            {
+                ev("stage", "\"id\":\"preflight\"");
+                ev("decision", "\"action\":\"install\"");
+                ev("cancel", "\"available\":true,\"where\":\"before-changes\"");
+            }
+            Show(plan ? Screen.Checking : Screen.Working);
+            CreateHandles(this);
+            PerformLayout();
+            var strip = _progress;
+            int made = ProgressStrip.Made, builds = Builds, drawn = strip.Invalidations, ticks = 0, batches = 0, changes = 0;
+            var checks = new[] { "package.ok", "admin.ok", "windows.ok", "other" };
+            var stages = new Dictionary<int, string> { { 7000, "test-signing" }, { 14000, "install" }, { 21000, "firmware" }, { 28000, "files" } };
+            float? shown = strip.Indeterminate ? (float?)null : strip.Value;
+            for (int t = 1; t <= ms; t++)
+            {
+                if (t % 33 == 0) { Animate(); ticks++; }
+                if (t % 250 != 0) continue;
+                int before = seq;
+                if (plan && t % 1000 == 0)
+                    ev("check", "\"id\":\"" + checks[(t / 1000) % checks.Length] + "\",\"result\":\"ok\",\"name\":\"x\",\"detail\":\"gate\"");
+                if (!plan && t % 2000 == 0) ev("step", "\"description\":\"x\",\"dry_run\":false");
+                if (!plan && t == 500) ev("install-action", "\"action\":\"install\",\"boot_id\":41");
+                string stage;
+                if (!plan && stages.TryGetValue(t, out stage)) ev("stage", "\"id\":\"" + stage + "\"");
+                if (!plan && t == 14000) ev("cancel", "\"available\":false,\"where\":\"driver-install\"");
+                if (seq != before) { batches++; EngineChanged(); }
+                if (!plan && t == 1000) CancelRun();
+                float? now = strip.Indeterminate ? (float?)null : strip.Value;
+                if (now != shown) { changes++; shown = now; }
+            }
+            int redrawn = strip.Invalidations - drawn;
+            int expected = changes + (strip.Indeterminate && Theme.Animations ? ticks : 0);
+            log.AppendLine(name + ", " + ms / 1000 + " s: " + ticks + " animation ticks, " + batches + " polls with new events, " + (Builds - builds) +
+                " screens built, " + (ProgressStrip.Made - made) + " strips made, " + strip.Handles + " handle of the strip, drawn " + redrawn +
+                " times (" + changes + " value changes" + (strip.Indeterminate ? ", " + (Theme.Animations ? ticks + " band steps" : "no band steps: animation effects are off") : "") + ")");
+            if (_progress != strip || ProgressStrip.Made != made) findings.Add(name + ": the strip was made again");
+            if (strip.Handles != 1) findings.Add(name + ": the strip got " + strip.Handles + " window handles");
+            if (Builds != builds) findings.Add(name + ": the screen was built " + (Builds - builds) + " times");
+            if (redrawn != expected) findings.Add(name + ": the strip was drawn " + redrawn + " times, " + expected + " expected");
+            if (plan)
+            {
+                int rows = _checkCard == null ? -1 : _checkCard.Body.Controls.Count;
+                if (_waitingRow != null || rows != ms / 1000) findings.Add("plan: " + rows + " check rows for " + ms / 1000 + " checks");
+                return;
+            }
+            if (changes != stages.Count) findings.Add("install: " + changes + " value changes for " + stages.Count + " stages");
+            var marks = string.Join(",", _working.Marks.Select(m => m.ToString()));
+            if (marks != "Done,Done,Done,Done,Current,Waiting,Waiting,Waiting" || _working.NoteId != "working.cancel.requested" || _cancel == null || _cancel.Enabled)
+                findings.Add("install: the screen shows " + marks + ", " + _working.NoteId + ", Cancel " + (_cancel != null && _cancel.Enabled ? "on" : "off"));
+            // A stage that the list does not know: the list changes, so the screen is built again, with the same strip.
+            ev("stage", "\"id\":\"extras\"");
+            EngineChanged();
+            log.AppendLine("install, a stage the list does not know: " + (Builds - builds) + " screen built, " + (ProgressStrip.Made - made) + " strips made, " +
+                strip.Handles + " handle of the strip, stages " + string.Join(",", _working.StageIds));
+            if (Builds - builds != 1 || _progress != strip || ProgressStrip.Made != made || strip.Handles != 1 || _working.StageIds.IndexOf("extras") != 5)
+                findings.Add("install: a new stage did not keep the strip");
+        }
+
         // ---- headless rendering and checks (G-RENDER, G-A11Y, G-NOINT) --------------------------------------------
 
         // Builds a screen from fixture data without running an engine.
@@ -1599,6 +1760,8 @@ namespace AmdgpuWddmSetup
             _prepFromWelcome = f.Flow == "prepare";
             _supportSaved = f.SupportSaved;
             _tipTurn = f.TipTurn;
+            // A fixture is one picture built from nothing, never an update of the screen of the fixture before it.
+            _working = null;
             // The elapsed time of a run in a drawn screen: a fixed 42 seconds, so every render of the same screen is
             // the same picture.
             _runStarted = DateTime.UtcNow - TimeSpan.FromSeconds(42);

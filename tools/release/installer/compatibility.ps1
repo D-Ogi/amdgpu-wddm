@@ -14,7 +14,8 @@ $script:SettingsTableSchema = 1          # registry-defaults.json "schema" that 
 # The record for a package folder whose INF, installer and payload are final (manifest.json not needed yet).
 function New-CompatibilityRecord {
     param([Parameter(Mandatory)][string]$PackageRoot, [Parameter(Mandatory)][string]$Version, [Parameter(Mandatory)]$Firmware,
-        [Parameter(Mandatory)][string]$KmdBuild, [Parameter(Mandatory)][string]$KmdAbi, [Parameter(Mandatory)][string]$DriverVer)
+        [Parameter(Mandatory)][string]$KmdBuild, [Parameter(Mandatory)][string]$KmdAbi, [Parameter(Mandatory)][string]$DriverVer,
+        $VersionIdentity)
     $infRel = 'payload/kmd/bc250kmd.inf'
     $inf = Join-Path $PackageRoot ($infRel -replace '/', '\')
     $lines = [IO.File]::ReadAllLines($inf)
@@ -22,17 +23,23 @@ function New-CompatibilityRecord {
     $table = Join-Path $PackageRoot ($tableRel -replace '/', '\')
     $tbl = Get-Content -LiteralPath $table -Raw | ConvertFrom-Json
     $setup = Get-PackageSetupExe $PackageRoot
+    $fwRecord = [ordered]@{ commit = [string]$Firmware.commit; install_dir = [string]$Firmware.install_dir
+        files = @(@($Firmware.files) | ForEach-Object { [ordered]@{ name = [string]$_.name; sha256 = ([string]$_.sha256).ToUpperInvariant() } }) }
+    if (Test-DriverStoreFirmware $Firmware) {
+        $fwRecord.delivery = 'driver-store-v1'
+        $fwRecord.files = @($Firmware.files | ForEach-Object { [ordered]@{ name = [string]$_.name; sha256 = ([string]$_.sha256).ToUpperInvariant(); size = [long]$_.size } })
+    }
     return [ordered]@{
         schema = $script:CompatibilitySchema
         version = $Version
+        version_identity = $VersionIdentity
         engine = [ordered]@{ contract = $script:EngineContract; result_schema = $script:ResultSchema; event_schema = $script:EventSchema
             witness_schema = $script:WitnessSchema }
         # Older readers require reboot_directive=true and therefore refuse this new method safely.
         no_live_rebind = [ordered]@{ inf = $infRel; inf_sha256 = (Get-Sha256 $inf); reboot_directive = $false
             method = 'di-install-as-set'; flags = 0x40; helper_sha256 = (Get-Sha256 (Join-Path $PackageRoot 'installer\deferred-driver.ps1'))
             install_sections = [string[]](Get-InfInstallSections $lines) }
-        firmware = [ordered]@{ commit = [string]$Firmware.commit; install_dir = [string]$Firmware.install_dir
-            files = @(@($Firmware.files) | ForEach-Object { [ordered]@{ name = [string]$_.name; sha256 = ([string]$_.sha256).ToUpperInvariant() } }) }
+        firmware = $fwRecord
         settings = [ordered]@{ table = $tableRel; table_schema = $tbl.schema; table_sha256 = (Get-Sha256 $table)
             groups = @($tbl.defaults.PSObject.Properties | ForEach-Object { $_.Name }) }
         kmd = [ordered]@{ build = $KmdBuild; abi = $KmdAbi; driver_ver = $DriverVer; sys_sha256 = (Get-Sha256 (Join-Path $PackageRoot 'payload\kmd\bc250kmd.sys')) }
@@ -103,13 +110,35 @@ function Test-CompatibilityRecord {
         $want = @(@($m.firmware.files) | ForEach-Object { "$($_.name)=$(([string]$_.sha256).ToUpperInvariant())" } | Sort-Object)
         $have = @(@($rec.firmware.files) | ForEach-Object { "$($_.name)=$(([string]$_.sha256).ToUpperInvariant())" } | Sort-Object)
         if (-not $want.Count -or (($want -join ';') -ne ($have -join ';'))) { Add-Reason 'compat.firmware' 'the firmware set of the record differs from manifest.json' }
-        elseif ($FirmwareDir) {
+        try {
+            $storeFirmware = Test-DriverStoreFirmware $m.firmware
+            if ((Test-DriverStoreFirmware $rec.firmware) -ne $storeFirmware) { throw 'firmware delivery differs from manifest' }
+            if ($storeFirmware) {
+                if ($rec.firmware.commit -cne $m.firmware.commit) { throw 'firmware revision differs from manifest' }
+                foreach ($f in $m.firmware.files) {
+                    $recordFile = @($rec.firmware.files | Where-Object { $_.name -ceq $f.name })[0]
+                    if ($recordFile.size -ne $f.size) { throw 'firmware size differs from manifest' }
+                }
+            }
+        } catch { Add-Reason 'compat.firmware' $_.Exception.Message }
+        if ($FirmwareDir) {
             $bad = Test-FirmwareFolder $m.firmware $FirmwareDir
             if ($bad.Count) { Add-Reason 'compat.firmware-incomplete' "${FirmwareDir}: $($bad -join '; ')" }
         }
         if ([string]$rec.settings.table_schema -ne [string]$script:SettingsTableSchema) { Add-Reason 'compat.settings' "settings table schema $($rec.settings.table_schema), this engine reads $($script:SettingsTableSchema)" }
         $kmd = @($m.components | Where-Object { $_ -and $_.package_path -eq 'payload/kmd/bc250kmd.sys' }) | Select-Object -First 1
         if (-not $kmd -or ([string]$kmd.sha256).ToUpperInvariant() -ne ([string]$rec.kmd.sys_sha256).ToUpperInvariant()) { Add-Reason 'compat.kmd' 'the KMD image differs from the record' }
+        if ($null -ne $m.PSObject.Properties['version_identity']) {
+            try {
+                [void](Test-PackageVersionIdentity $m ([IO.File]::ReadAllText($inf)) ([string]$kmd.sha256))
+                $v = $rec.version_identity
+                if (-not $v -or $v.schema -ne 1 -or $v.release -cne $m.version_identity.release -or
+                    $v.product_quad -cne $m.version_identity.product_quad -or
+                    $v.inf.date -cne $m.version_identity.inf.date -or $v.inf.quad -cne $m.version_identity.inf.quad -or
+                    $v.kmd.build -cne $m.kmd_build -or $v.kmd.abi -cne $m.kmd_abi -or $v.kmd.sha256 -ine $kmd.sha256 -or
+                    $rec.kmd.driver_ver -cne $v.inf.quad) { throw 'compatibility version identity differs from manifest' }
+            } catch { Add-Reason 'compat.kmd' $_.Exception.Message }
+        }
     }
     return [pscustomobject]@{ ok = ($reasons.Count -eq 0); reasons = @($reasons); detail = ($details -join ' | '); record = $rec }
 }

@@ -85,7 +85,11 @@ static void retention(void) {
  check(w.PagingHwPending&&!w.WatchdogFaulted[1]&&!failureCount,"node 1 does not fire one clock tick before the budget");
  now=w.PagingDeadline;WddmPagingSubmitDpcRoutine(NULL,&d,NULL,NULL);
  check(w.PagingHead==slot&&slot->Borrowed&&w.PagingHwPending&&!completionCount,"timeout retains borrowed memory and pending fence");
- check(w.WatchdogFaulted[1]&&failureCount==1,"timeout closes engine admission");
+ /* Private deadlines are diagnostic-only (ba9a1d1f); only OS recovery owns admission. */
+ check(!w.WatchdogFaulted[1]&&!failureCount&&w.PagingDiagnosticTaken&&w.PagingHwTimeouts==1,
+       "diagnostic timeout leaves admission and outstanding work unchanged");
+ WddmPagingSubmitDpcRoutine(NULL,&d,NULL,NULL);
+ check(w.PagingHwTimeouts==1&&!failureCount,"one diagnostic for the same pending head");
  arrived=activeSeq;WddmGpuFencePaging(&d);
  check(completionCount==1&&!w.PagingHead,"late real fence permits retirement");
  check(allocationCalls==before&&!allocated,"timeout path never allocates/frees OS memory");

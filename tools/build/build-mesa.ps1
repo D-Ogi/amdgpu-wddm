@@ -255,7 +255,13 @@ try {
         if (-not (Test-Path -LiteralPath $f)) { throw "ninja succeeded but $f is missing" }
         $artifacts[$t] = [ordered]@{ bytes = (Get-Item -LiteralPath $f).Length; sha256 = Get-FileSha256 $f }
     }
+    foreach ($rel in $stamped.Keys) {
+        $f = $stamped[$rel]
+        $artifacts[$rel] = [ordered]@{ bytes = (Get-Item -LiteralPath $f).Length; sha256 = Get-FileSha256 $f
+                                       stamp = [ordered]@{ name = (Split-Path -Leaf $f); flavour = $Flavour } }
+    }
     $recipe['artifacts'] = $artifacts
+    if ($stamped.Count) { $recipe['stamp'] = [ordered]@{ version = $Version; flavour = $Flavour } }
     $recipe.status = 'built'
     Write-Recipe $recipePath $recipe
     foreach ($t in $artifacts.Keys) { '{0}  {1}' -f $artifacts[$t].sha256, $t }

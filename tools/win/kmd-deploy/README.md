@@ -7,6 +7,11 @@ version-specific is left in the scripts.
 
 Only the steps marked LAB touch unit A. Every lab trial stays within three minutes.
 
+This transition kit supports legacy state schema 1 only. Each entry checks both pinned package
+images and INFs, then binds the installed service image to those pins before any side effect.
+Schema 2, unreadable evidence and unknown schemas stop the attempt. Shared-state packages use
+the current package installer. The historical CU telemetry writers are retired.
+
 ## Inputs
 
 - `--package DIR`: the candidate. A directory with `bc250kmd.sys`, `.inf`, `.cat`, `bc250-lab-test.cer` and the

@@ -45,6 +45,11 @@ void BoardMemoryStart(BC250_DEVICE* device)
         !InterlockedCompareExchange64(&device->UmaActiveBytes, 0, 0)) goto done;
     if (!BoardMemoryDetect(&transport, block)) goto done;
     device->BoardMemoryMapping = transport.mapping;
+    if (!NT_SUCCESS(DriverStateSeedBoard(device))) {
+        state.blocked = 1;
+        state.result = BC250_UMA_READ_FAILED;
+        goto done;
+    }
     bc250_uma_transport_io(&transport, &io);
     BoardMemoryStoreIo(device, &store);
     BoardMemoryServiceStart(&state, &io, &store);

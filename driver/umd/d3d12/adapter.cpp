@@ -125,10 +125,10 @@ HRESULT APIENTRY caps(D3D12DDI_HADAPTER h,const D3D12DDIARG_GETCAPS* a) {
             const auto* models=static_cast<const D3D12DDI_D3D12_SHADER_MODELS_DATA_0011*>(a->pData);
             if(models->pNumShaderModelsSupported){
                 const UINT count=*models->pNumShaderModelsSupported;
-                amdgpu_wddm_log::print("d3d12-caps shader-models count=%u array=%u values=",count,unsigned(models->pShaderModelsSupported!=nullptr));
+                char list[64*9+1]{};int at=0;
                 if(models->pShaderModelsSupported && count<=64)
-                    for(UINT i=0;i<count;++i)amdgpu_wddm_log::print(" %08x",unsigned(models->pShaderModelsSupported[i]));
-                amdgpu_wddm_log::print("\n");
+                    for(UINT i=0;i<count;++i)at+=std::snprintf(list+at,sizeof(list)-at," %08x",unsigned(models->pShaderModelsSupported[i]));
+                amdgpu_wddm_log::print("d3d12-caps shader-models count=%u array=%u values=%s\n",count,unsigned(models->pShaderModelsSupported!=nullptr),list);
             }
         }
     }

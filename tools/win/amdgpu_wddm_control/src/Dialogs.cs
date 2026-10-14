@@ -73,6 +73,9 @@ namespace AmdgpuWddmControl
             using (var d = new ThreeWayDialog(title, text)) { d.ShowDialog(owner); return d._answer; }
         }
 
+        // One of each dialog as --smoke-labels builds it, never shown (LabelLayout.cs).
+        internal static Form Sample() { return new ThreeWayDialog("t", "t"); }
+
         // G-A11Y: Escape (the dialog's cancel button) keeps editing, Enter saves.
         public static bool EscapeKeepsEditing()
         {
@@ -103,6 +106,15 @@ namespace AmdgpuWddmControl
         {
             using (var d = new ConfirmDialog(p, hints)) return d.ShowDialog(owner) == DialogResult.OK;
         }
+
+        internal static Form Sample()
+        {
+            var p = new PlainDialog { Title = "t" };
+            p.Changes.Add("t"); p.Notes.Add("t");
+            var hints = new HintDecision();
+            hints.Lines.Add("t");
+            return new ConfirmDialog(p, hints);
+        }
     }
 
     sealed class RestartDialog : ThemedDialog
@@ -120,6 +132,13 @@ namespace AmdgpuWddmControl
         public static bool Ask(IWin32Window owner, HintDecision hints)
         {
             using (var d = new RestartDialog(hints ?? new HintDecision())) return d.ShowDialog(owner) == DialogResult.OK;
+        }
+
+        internal static Form Sample()
+        {
+            var hints = new HintDecision();
+            hints.Lines.Add("t");
+            return new RestartDialog(hints);
         }
     }
 
@@ -154,6 +173,11 @@ namespace AmdgpuWddmControl
         {
             using (var d = new KeepDisplayDialog()) return d.ShowDialog(owner) == DialogResult.OK;
         }
+
+        internal static KeepDisplayDialog Sample() { return new KeepDisplayDialog(); }
+
+        // The line the timer changes every second while the dialog is open.
+        internal Label Countdown { get { return _count; } }
     }
 
     // The number of a monitor drawn on that monitor: borderless, topmost, no focus taken, closes after 3 s.
@@ -167,7 +191,13 @@ namespace AmdgpuWddmControl
             BackColor = Theme.Nav; ForeColor = Theme.Text;
             var size = Theme.Sz(320, 200);
             Bounds = new Rectangle(screen.X + Theme.S(40), screen.Y + Theme.S(40), size.Width, size.Height);
-            var l = new Label { Text = text, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Font = new Font(Theme.Title.FontFamily, Theme.Title.Size * 2.2f, FontStyle.Bold, GraphicsUnit.Pixel), ForeColor = Theme.Text };
+            // Anchored to all four sides, not docked: a docked Label with AutoSize off goes through 100x23 at a change
+            // of its text (LabelLayout.cs, fact M898).
+            var l = new Label
+            {
+                Text = text, Bounds = new Rectangle(Point.Empty, ClientSize), Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
+                TextAlign = ContentAlignment.MiddleCenter, Font = new Font(Theme.Title.FontFamily, Theme.Title.Size * 2.2f, FontStyle.Bold, GraphicsUnit.Pixel), ForeColor = Theme.Text,
+            };
             Controls.Add(l);
             _close.Tick += (s, e) => Close();
         }

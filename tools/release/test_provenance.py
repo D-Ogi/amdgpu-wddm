@@ -180,6 +180,11 @@ class Workspace:
                                                 package_flavour, build_records=build_records)
         return errors, rows, counts
 
+    def commits(self, manifest=None):
+        """The commit check that runs for a candidate as well (provenance.check_commits)."""
+        self.manifest_path.write_text(json.dumps(manifest or self.manifest), encoding="utf-8")
+        return provenance.check_commits(self.manifest_path, self.root, self.tool)
+
 
 class ProvenanceGate(unittest.TestCase):
     """One workspace for the tests that change only the manifest; a test that changes a repository or a file makes
@@ -193,11 +198,6 @@ class ProvenanceGate(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         remove_tree(cls.shared_tmp)
-    def commits(self, manifest=None):
-        """The commit check that runs for a candidate as well (provenance.check_commits)."""
-        self.manifest_path.write_text(json.dumps(manifest or self.manifest), encoding="utf-8")
-        return provenance.check_commits(self.manifest_path, self.root, self.tool)
-
 
     def setUp(self):
         self.tmp = self.shared_tmp
@@ -232,6 +232,25 @@ class ProvenanceGate(unittest.TestCase):
         self.assertEqual(counts["third_party"], 1)
         self.assertEqual(counts["unverified"], 0)
         self.assertTrue(all(r["branches"] == ["origin/main"] for r in rows if r["kind"] != "third_party"))
+
+    def test_flavour_selection_and_manifest_agree(self):
+        manifest = self.manifest()
+        manifest['schema'] = 4
+        manifest['files'] = [dict(row, flavour=flavour)
+                             for row in manifest['files'] for flavour in ('release', 'lab')]
+        self.ws.manifest_path.write_text(json.dumps(manifest), encoding='utf-8')
+        for flavour in ('release', 'lab'):
+            errors, rows, counts = provenance.check(self.ws.manifest_path, self.ws.root, self.ws.tool,
+                                                   flavour=flavour)
+            self.assertEqual(errors, [])
+            self.assertEqual(counts['files'], 5)
+            self.assertEqual(len(rows), 5)
+        with tempfile.TemporaryDirectory(dir=self.tmp) as temp:
+            package = Path(temp)
+            (package / 'manifest.json').write_text('{"flavour":"lab"}', encoding='utf-8')
+            errors, _, _ = provenance.check(self.ws.manifest_path, self.ws.root, self.ws.tool, package,
+                                            flavour='release')
+            self.assertEqual(errors, ['package and source flavours differ'])
 
     def test_entry_without_provenance_fails(self):
         m = self.manifest()
@@ -280,38 +299,6 @@ class ProvenanceGate(unittest.TestCase):
         m = self.manifest()
         self.file(m, "payload/engine.dll")["built_from"]["commit"] = git(self.ws.engine, "rev-parse", "HEAD")
         self.assertFails(m, "submodule sub/part: part")
-
-    def test_fork_build_needs_recipe_commit(self):
-        m = self.manifest()
-        del self.file(m, "payload/engine.dll")["built_from"]["recipe_commit"]
-        self.assertFails(m, "needs 'recipe_commit'")
-
-    def test_source_with_other_bytes_fails(self):
-        self.fresh_workspace()
-        (self.ws.root / "scratch" / "built.dll").write_bytes(b"other bytes")
-        self.assertFails(None, "the entry says")
-
-    def test_data_file_with_other_blob_fails(self):
-        m = self.manifest()
-        self.file(m, "payload/icd.json")["built_from"]["path"] = "build.ps1"
-        self.assertFails(m, "as checked out, the entry says")
-
-    def test_unverified_needs_reason(self):
-        m = self.manifest()
-        self.file(m, "payload/built.dll")["unverified"] = " "
-        self.assertFails(m, "'unverified' needs the reason as text")
-        # Three words are not a reason either: the gate asks for the sentence that says why these bytes
-        # have no bit-identical rebuild, at least 40 characters and 6 words of it.
-        self.file(m, "payload/built.dll")["unverified"] = "built before /Brepro"
-        self.assertFails(m, "which is not a reason")
-        self.file(m, "payload/built.dll")["unverified"] = (
-            "These bytes were built before the recipe carried /Brepro, so no rebuild of that commit "
-            "can give them again."
-        )
-        errors, rows, counts = self.ws.check(m)
-        self.assertEqual(errors, [])
-        self.assertEqual(counts["unverified"], 1)
-        self.assertEqual(counts["reproducible"], 2)
 
     def wow64_pair(self, m):
         """A 32-bit row beside payload/engine.dll: the same component, the same bytes, the other architecture."""
@@ -388,38 +375,38 @@ class ProvenanceGate(unittest.TestCase):
         errors, _, _ = self.ws.check(m)
         self.assertEqual([e for e in errors if "different sources" in e or "diverged" in e], [])
 
-    def test_missing_recipe_fails(self):
+    def test_fork_build_needs_recipe_commit(self):
         m = self.manifest()
-        self.file(m, "payload/built.dll")["built_from"]["recipe"] = "missing.ps1"
-        self.assertFails(m, "recipe missing.ps1 does not exist")
+        del self.file(m, "payload/engine.dll")["built_from"]["recipe_commit"]
+        self.assertFails(m, "needs 'recipe_commit'")
 
-    def test_unknown_placeholder_fails(self):
-        m = self.manifest()
-        self.file(m, "payload/built.dll")["built_from"]["args"].append("{input:absent}")
-        self.assertFails(m, "unknown placeholder {input:absent}")
+    def test_source_with_other_bytes_fails(self):
+        self.fresh_workspace()
+        (self.ws.root / "scratch" / "built.dll").write_bytes(b"other bytes")
+        self.assertFails(None, "the entry says")
 
-    def test_inputs(self):
+    def test_data_file_with_other_blob_fails(self):
         m = self.manifest()
-        b = self.file(m, "payload/built.dll")["built_from"]
-        b["inputs"] = {"engine": {"repo": "engine", "commit": self.ws.engine_commit},
-                       "caps": {"inline": {"a": 1}}, "data": {"repo": "tool", "commit": self.ws.tool_commit,
-                                                              "paths": ["data"]}}
-        b["args"] += ["{input:engine}", "{input:caps}", "{input:data}/icd.json", "{payload:payload/icd.json}"]
-        errors, _, _ = self.ws.check(m)
+        self.file(m, "payload/icd.json")["built_from"]["path"] = "build.ps1"
+        self.assertFails(m, "as checked out, the entry says")
+
+    def test_unverified_needs_reason(self):
+        m = self.manifest()
+        self.file(m, "payload/built.dll")["unverified"] = " "
+        self.assertFails(m, "'unverified' needs the reason as text")
+        # Three words are not a reason either: the gate asks for the sentence that says why these bytes
+        # have no bit-identical rebuild, at least 40 characters and 6 words of it.
+        self.file(m, "payload/built.dll")["unverified"] = "built before /Brepro"
+        self.assertFails(m, "which is not a reason")
+        self.file(m, "payload/built.dll")["unverified"] = (
+            "These bytes were built before the recipe carried /Brepro, so no rebuild of that commit "
+            "can give them again."
+        )
+        errors, rows, counts = self.ws.check(m)
         self.assertEqual(errors, [])
-        b["inputs"]["data"]["commit"] = "1" * 40
-        self.assertFails(m, "input data: tool 11111111 is in no checkout")
+        self.assertEqual(counts["unverified"], 1)
+        self.assertEqual(counts["reproducible"], 2)
 
-    def test_the_kmd_source_text_starts_with_its_build_commit(self):
-        # scratch/m15/native-caps001/release-baseline.py reads the commit at the start of sources.kmd with re.match
-        # and the KMD ABI at that commit. Round 9 of tester.27 began the text with a sentence, and the pin-baseline
-        # arm refused the installed package on the lab.
-        m = self.manifest()
-        self.file(m, "payload/driver.sys")["path"] = "payload/kmd/bc250kmd.sys"
-        commit = self.ws.tool_commit
-        m["kmd_abi"] = "0x000700D8"
-        m["sources"] = {"kmd": f"bc250-win {commit} (train/b29), the b29 train driver 0.7.216.28. New in round 9."}
-        errors, _, _ = self.ws.check(m)
     def records(self, trees):
         """A directory of recipe.json records, one per build, as tools/build/build-*.ps1 leave behind. Each
         entry of `trees` is (name, source section)."""
@@ -481,6 +468,38 @@ class ProvenanceGate(unittest.TestCase):
         errors, _, _ = self.ws.check(build_records=self.records([]))
         self.assertTrue(any("no recipe.json under" in e for e in errors), errors)
 
+    def test_missing_recipe_fails(self):
+        m = self.manifest()
+        self.file(m, "payload/built.dll")["built_from"]["recipe"] = "missing.ps1"
+        self.assertFails(m, "recipe missing.ps1 does not exist")
+
+    def test_unknown_placeholder_fails(self):
+        m = self.manifest()
+        self.file(m, "payload/built.dll")["built_from"]["args"].append("{input:absent}")
+        self.assertFails(m, "unknown placeholder {input:absent}")
+
+    def test_inputs(self):
+        m = self.manifest()
+        b = self.file(m, "payload/built.dll")["built_from"]
+        b["inputs"] = {"engine": {"repo": "engine", "commit": self.ws.engine_commit},
+                       "caps": {"inline": {"a": 1}}, "data": {"repo": "tool", "commit": self.ws.tool_commit,
+                                                              "paths": ["data"]}}
+        b["args"] += ["{input:engine}", "{input:caps}", "{input:data}/icd.json", "{payload:payload/icd.json}"]
+        errors, _, _ = self.ws.check(m)
+        self.assertEqual(errors, [])
+        b["inputs"]["data"]["commit"] = "1" * 40
+        self.assertFails(m, "input data: tool 11111111 is in no checkout")
+
+    def test_the_kmd_source_text_starts_with_its_build_commit(self):
+        # scratch/m15/native-caps001/release-baseline.py reads the commit at the start of sources.kmd with re.match
+        # and the KMD ABI at that commit. Round 9 of tester.27 began the text with a sentence, and the pin-baseline
+        # arm refused the installed package on the lab.
+        m = self.manifest()
+        self.file(m, "payload/driver.sys")["path"] = "payload/kmd/bc250kmd.sys"
+        commit = self.ws.tool_commit
+        m["kmd_abi"] = "0x000700D8"
+        m["sources"] = {"kmd": f"bc250-win {commit} (train/b29), the b29 train driver 0.7.216.28. New in round 9."}
+        errors, _, _ = self.ws.check(m)
         self.assertEqual(errors, [])
         m["sources"]["kmd"] = f"bc250-win {commit[:8]} (train/b29), the short form release-baseline.py also reads."
         errors, _, _ = self.ws.check(m)
@@ -527,38 +546,6 @@ class ProvenanceGate(unittest.TestCase):
         (package / "payload" / "driver.sys").write_bytes(fake_pe(b"\x02" * 64, b"release signature"))
         self.assertFails(m, "Authenticode digest of", package=package)
 
-
-class RebuildCheckLogs(unittest.TestCase):
-    """rebuild-check.ps1 on two recipes: one gives the recorded bytes, one fails. The failed build keeps its log at
-    the path that its FAIL line names; the work trees of both builds go, and so does the directory of the match."""
-
-    def setUp(self):
-        if not shutil.which("pwsh"):
-            self.skipTest("pwsh 7 is not on PATH")
-        self.tmp = tempfile.mkdtemp(prefix="rebuild-", dir=OUT)
-        self.ws = Workspace(self.tmp)
-
-    def tearDown(self):
-        remove_tree(self.tmp)
-
-    def test_a_failed_build_keeps_its_log(self):
-        ws = self.ws
-        (ws.tool / "fail.ps1").write_bytes(b"Write-Output 'recipe ran: it fails on purpose'\nexit 1\n")
-        (ws.tool / "make.ps1").write_bytes(b"param([string]$Out)\n[IO.File]::WriteAllBytes((Join-Path $Out "
-                                           b"'built.dll'), [Text.Encoding]::ASCII.GetBytes('built bytes'))\n")
-        git(ws.tool, "add", "-A")
-        git(ws.tool, "commit", "-q", "-m", "recipes")
-        commit = git(ws.tool, "rev-parse", "HEAD")
-        m = copy.deepcopy(ws.manifest)
-        # The script passes its own repository for "{repo}", so the test names the checkout.
-        m["repositories"]["tool"]["checkouts"] = [str(ws.tool)]
-        built = next(f for f in m["files"] if f["path"] == "payload/built.dll")
-        built["built_from"] = {"repo": "tool", "commit": commit, "recipe": "make.ps1", "args": ["-Out", "{out}"],
-                               "output": "built.dll"}
-        broken = copy.deepcopy(built)
-        broken["path"] = "payload/broken.dll"
-        broken["built_from"]["recipe"] = "fail.ps1"
-        m["files"].append(broken)
     def test_driverstore_manifest_edit_is_exact(self):
         self.fresh_workspace()
         m = self.manifest()
@@ -675,6 +662,38 @@ class RebuildCheckLogs(unittest.TestCase):
         errors, _, _ = self.ws.check(m, package=package, package_version=version, package_flavour="lab")
         self.assertEqual(errors, [])
 
+
+class RebuildCheckLogs(unittest.TestCase):
+    """rebuild-check.ps1 on two recipes: one gives the recorded bytes, one fails. The failed build keeps its log at
+    the path that its FAIL line names; the work trees of both builds go, and so does the directory of the match."""
+
+    def setUp(self):
+        if not shutil.which("pwsh"):
+            self.skipTest("pwsh 7 is not on PATH")
+        self.tmp = tempfile.mkdtemp(prefix="rebuild-", dir=OUT)
+        self.ws = Workspace(self.tmp)
+
+    def tearDown(self):
+        remove_tree(self.tmp)
+
+    def test_a_failed_build_keeps_its_log(self):
+        ws = self.ws
+        (ws.tool / "fail.ps1").write_bytes(b"Write-Output 'recipe ran: it fails on purpose'\nexit 1\n")
+        (ws.tool / "make.ps1").write_bytes(b"param([string]$Out)\n[IO.File]::WriteAllBytes((Join-Path $Out "
+                                           b"'built.dll'), [Text.Encoding]::ASCII.GetBytes('built bytes'))\n")
+        git(ws.tool, "add", "-A")
+        git(ws.tool, "commit", "-q", "-m", "recipes")
+        commit = git(ws.tool, "rev-parse", "HEAD")
+        m = copy.deepcopy(ws.manifest)
+        # The script passes its own repository for "{repo}", so the test names the checkout.
+        m["repositories"]["tool"]["checkouts"] = [str(ws.tool)]
+        built = next(f for f in m["files"] if f["path"] == "payload/built.dll")
+        built["built_from"] = {"repo": "tool", "commit": commit, "recipe": "make.ps1", "args": ["-Out", "{out}"],
+                               "output": "built.dll"}
+        broken = copy.deepcopy(built)
+        broken["path"] = "payload/broken.dll"
+        broken["built_from"]["recipe"] = "fail.ps1"
+        m["files"].append(broken)
         ws.manifest_path.write_text(json.dumps(m), encoding="utf-8")
         work = Path(self.tmp) / "rb"
         r = subprocess.run(["pwsh", "-NoProfile", "-File", str(Path(__file__).with_name("rebuild-check.ps1")),

@@ -174,6 +174,10 @@ typedef struct _BC250_DEVICE {
     BC250_MODESET Modeset;             // modeset.c: the EDID, the source modes, pipe 0's scaler and viewport
     BC250_CONNECTOR Connector;         // ISR/DPC/passive owner of the single physical connector
     PVOID ConnectorLink;               // PASSIVE-only clock/PHY/timing transaction, connector_link.c
+    // BD-169: the result of a terminal release that connector_link.c performed itself, which nobody else can
+    // ask for afterwards: the context is freed and ConnectorLink is NULL, so a second release answers SUCCESS.
+    // A caller that has to know whether the hardware is still as the firmware left it reads this as well.
+    NTSTATUS ConnectorLinkCleanup;
     volatile LONG RetainedPowerPhase; // 0 active, 1 suspending, 2 suspended, 3 restoring, 4 failed
     DEVICE_POWER_STATE RetainedDownState;
     POWER_ACTION RetainedDownAction;
@@ -463,8 +467,6 @@ NTSTATUS CpuConfirm(BC250_DEVICE* Device, _In_z_ const char* Why);
 void CpuLogSummary(BC250_DEVICE* Device);
 void CpuRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEAN Admin, ULONG EscapeFlags);
 
-// driver_version.c: the per-application graphics setting ReportAmdDriverVersion, at each adapter start
-void DriverVersionStart(BC250_DEVICE* Device);
 
 typedef struct BC250_BOARD_MEMORY_PROVIDER {
     void (*Query)(BC250_DEVICE*, BC250_ESCAPE_BOARD_MEMORY*);
@@ -564,7 +566,7 @@ typedef struct _BC250_SEQUENCE {
 } BC250_SEQUENCE;
 
 // guard.c
-NTSTATUS GuardInit(_In_ PUNICODE_STRING RegistryPath);
+NTSTATUS GuardInit(_In_ PDRIVER_OBJECT DriverObject);
 void GuardCleanup(void);
 void GuardStage(BC250_STAGE Stage);
 BC250_STAGE GuardLastStage(void);
@@ -577,7 +579,6 @@ ULONG GuardConsumeSetting(_In_z_ PCWSTR Name, ULONG Default);  // the same, and 
 // one value this driver reads there is TdrDelay, the OS's own timeout budget, which our private submit watchdog
 // must never undercut (submit_watchdog.h). Read-only: nothing in this driver writes that key - the installer
 // does (tools/release/installer/install.ps1, BD-079).
-ULONG GuardReadGraphicsSetting(_In_z_ PCWSTR Name, ULONG Default);
 NTSTATUS GuardQuerySetting(_In_z_ PCWSTR Name, _Out_ ULONG* Value); // absent is STATUS_OBJECT_NAME_NOT_FOUND
 NTSTATUS GuardStoreSetting(_In_z_ PCWSTR Name, ULONG Value);        // written and flushed
 NTSTATUS GuardDeleteSetting(_In_z_ PCWSTR Name);                    // deleted and flushed; absent is success
@@ -817,6 +818,8 @@ NTSTATUS GartCaptureAperture(BC250_DEVICE* Device, PAGING_APERTURE* Aperture);
 
 // psp.c
 struct _BC250_ESCAPE_PSP;
+NTSTATUS PspDriverInit(_In_ PDRIVER_OBJECT DriverObject);
+void PspDriverCleanup(void);
 NTSTATUS PspStart(_Inout_ BC250_DEVICE* Device);
 void PspStop(_Inout_ BC250_DEVICE* Device);
 // PASSIVE session excludes display clock firmware from PSP commands and teardown.

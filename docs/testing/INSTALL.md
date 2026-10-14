@@ -154,10 +154,11 @@ models as well. The page `docs/testing/llm-components.md` of the project has the
 
 ## GPU firmware
 
-The driver loads eight AMD firmware files from `C:\BC250\firmware`. This package does not contain them. The
+The driver loads eight AMD firmware files from its signed Driver Store package. The ZIP does not contain them. The
 installer downloads them, and the AMD licence text `LICENSE.amdgpu`, from the linux-firmware project at commit
 `2b8daaf611fbade74f26a5b58ec1defe6a02f5e0`, at every installation and upgrade. It checks the SHA256 of each file
-before it copies anything. If a file has a different SHA256, the installer stops and changes nothing.
+before it stages the driver. It also checks the size and membership of each binary
+in the signed catalog. A missing or changed file stops installation before staging.
 
 The installer tries the first address of each file, then the second (3 tries each):
 
@@ -205,11 +206,13 @@ confirms a start as well:
   window of its own. It reads the driver's start health and confirms the start. The driver accepts a confirmation
   only from an administrator, which is why this task does not run as the user who logs on.
 - "amdgpu-wddm start window" runs as the user who logs on, with that user's own rights (the Users group,
-  `S-1-5-32-545`, limited run level). It shows the small blue window and nothing else: it never opens the driver
-  and changes no setting. The window stays for the full two minutes, because this task does not read the
-  confirmation's progress. Earlier releases closed it as soon as the start was confirmed, usually after about one
-  minute. If it does not run, the confirmation still keeps the computer off Microsoft Basic Display, and the next
-  start runs at the fixed clock.
+  `S-1-5-32-545`, limited run level). It shows the small blue window and nothing else: it never opens the driver and
+  changes no setting. The task starts Nagi Control App with `--start-window`, and the control application starts the
+  window script without a console window. An install without the control application (`-NoControlApp`) starts the
+  script with `powershell.exe`, and then a console window can show at sign-in. The window stays for the full two
+  minutes, because this task does not read the confirmation's progress. Earlier releases closed it as soon as the
+  start was confirmed, usually after about one minute. If it does not run, the confirmation still keeps the computer
+  off Microsoft Basic Display, and the next start runs at the fixed clock.
 
 The confirmation writes its results to `C:\ProgramData\amdgpu-wddm\start-confirm.log`. Its last line of each logon
 also reports the state, the last run time and the last result of the window task, so a window that did not run or
@@ -257,13 +260,13 @@ longer have to run the release installer again for this.
 | Test certificate | LocalMachine Root and TrustedPublisher stores |
 | Microsoft Visual C++ 2015-2022 Redistributable (x64) | installed by Microsoft's own installer from `payload\redist\vc_redist.x64.exe`, only when `System32` has no `vcruntime140.dll`, `vcruntime140_1.dll` or `msvcp140.dll`, or one of them is older than 14.44. Microsoft's files go where Microsoft puts them. `uninstall.cmd` leaves this runtime in place, because other programs use it |
 | Kernel-mode driver | driver package `bc250kmd.inf` (driver store, service `bc250kmd`) |
-| Driver settings | `HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters` |
+| Driver settings | The shared service state returned by Windows. Nagi Control App and `bc250kmd_cli state` use the same reader. Installation defaults remain separate from user choices and driver records. See `docs/design/driver-state.md` |
 | User-mode drivers | `C:\Program Files\amdgpu-wddm\` (`d3d12`, `desktop`, `d3d11`, `vulkan`, `opengl`, `wow64`, `tools`, `control`, `mft`). Nothing goes into `C:\Windows\System32` or `C:\Windows\SysWOW64`. An install over an earlier release removes the `bc250umd.dll` that it put there |
 | H.264 encoder (Media Foundation) | `HKLM\SOFTWARE\Classes\CLSID\{A32438F0-0D79-4CA9-A5BF-9F3C80837253}` with its `InprocServer32`, `HKLM\SOFTWARE\Classes\MediaFoundation\Transforms` (the encoder's own key and its membership in the video encoder category). These keys are for the whole computer. `uninstall.cmd` removes them, and so does a later release that does not install the encoder |
 | Licence texts | `C:\Program Files\amdgpu-wddm\licenses` (the package's `licenses\` and `THIRD-PARTY.md`) |
 | Graphics registration | the GPU's software key: `UserModeDriverName`, `VulkanDriverName`, `OpenGLDriverName`, `OpenGLVersion`, `OpenGLFlags`. For 32-bit applications: `UserModeDriverNameWow` and `VulkanDriverNameWow`. This release writes no `OpenGLDriverNameWow`, `OpenGLVersionWow` or `OpenGLFlagsWow`: it has no 32-bit OpenGL driver (see "What this release does" below). The first entry of each `UserModeDriverName` value, the Direct3D 9 entry, holds `<>`. Also `HKLM\SOFTWARE\Khronos\Vulkan\Drivers` and `HKLM\SOFTWARE\WOW6432Node\Khronos\Vulkan\Drivers`. `uninstall.cmd` puts back an `OpenGL` value from before the install, with the registry type it had. It removes the ones it added, even when the installer state file is gone. An `OpenGL` value that belongs to another driver stays. It does all that whether or not Windows still shows the GPU, because the files the values name go with the install |
 | Router policy and profiles | `HKLM\SOFTWARE\amdgpu-wddm` |
-| GPU firmware | `C:\BC250\firmware` (8 files and `LICENSE.amdgpu`, downloaded from linux-firmware; see "GPU firmware"). A new folder is writable by administrators only; the access rights of `C:\BC250` itself do not change. Download staging: `C:\ProgramData\amdgpu-wddm\installer\firmware-staging`, removed after the copy |
+| GPU firmware | Eight binaries beside the KMD image in Driver Store. `LICENSE.amdgpu` is in the installed `licenses` folder. The installer downloads or retrieves pinned copies before staging. The repair set retains them for offline repair. |
 | Shortcuts of Nagi Control App | Start menu and desktop, for all users: "Nagi Control App", "Nagi Control App (recovery)" in the Start menu and "Nagi Control App" on the desktop. Both places are written by default. The setup window has a box for each place. On the command line `-NoStartMenuShortcut` and `-NoDesktopShortcut` leave one out. `-StartMenuShortcut` and `-DesktopShortcut` ask for a place an earlier run left out. The box you clear holds over the restarts of the installation. `uninstall.cmd` removes all three |
 | Start confirmation | two scheduled tasks, both at the logon of any user. "amdgpu-wddm start confirm" runs as the Local System account. "amdgpu-wddm start window" runs as the user who logs on, shows the clock window and starts the control application's sign-in notice |
 | Settings of the person who signs in | `HKCU\Software\amdgpu-wddm\Control` of that account (language, the switches of the control application, "Show the start check window after sign-in"). The application itself writes this key when you change a setting. The installer does not. No administrator rights, nothing for other accounts. `uninstall.cmd` removes the key of the account that runs it, and leaves the keys of other accounts |
@@ -279,24 +282,25 @@ Default driver settings: automatic clock control (DPM) on, maximum 2000 MHz. The
 change. The driver writes no debug log files. To change the maximum clock at install time, use
 `install.cmd -DpmMaxMHz <1000-2000>`. An upgrade keeps a maximum clock that you set (see "Install").
 
-Graphics cores: the driver uses all 40 compute units of the GPU after a normal install. The firmware of the board
-switches on 24 of them. To keep that number, use `install.cmd -CuMode 24`. After the install, the Graphics page of
-Nagi Control App holds the same choice: "Standard (24)" or "All (40)". A new number applies at the next restart
-of Windows. The first start with 40 cores needs the confirmation of the small blue window after logon. Without that
-confirmation the next start goes back to 24 and records the reason. An installation and an upgrade keep that 24 and
-name it in the report, because the driver went back for a reason. `install.cmd -Repair` sets all 40 cores back. A 24
-that you chose yourself is kept by every install: the switch and the Graphics page both write the number 24 into the
-driver's settings, so a later install reads it as your choice. Where the driver went back to 24 by itself, the
-Graphics page says so and offers "All (40)" as the way back. The change writes one registry value and no firmware. All 40 cores
-give more performance in many games, and also more power and more heat. The game results that we publish are measured
-with all 40 cores. The page `docs/design/cu-mode.md` of the project has the whole description.
+Graphics cores: the driver uses 24 of the 40 compute units of the GPU after a normal install. This is the number the
+firmware of the board switches on. To install with all of them, use `install.cmd -CuMode 40`. After the install, the
+Graphics page of Nagi Control App holds the choice: a number of cores from "Standard (24)" to "All (40)" in steps of
+two, because the hardware switches the cores on in pairs. Under "Choose the pairs of cores yourself" the same page
+shows a map of the pairs, where you select each pair that the driver may use. A new number applies at the next
+restart of Windows. The first start with more than 24 cores needs the confirmation of the small blue window after
+logon. Without that confirmation the next start goes back to 24 and records the reason. The number that you select is
+kept by every later install: the Graphics page and the switch both record it as your choice. If one pair of cores
+makes this PC stop or restart, select that pair off on the map and leave the other pairs on. The change writes
+registry values and no firmware. More cores give more performance in many games, and also more power and more heat.
+The game results that we publish are measured with all 40 cores. The page `docs/design/cu-mode.md` of the project has
+the whole description.
 
 ## What works and what does not
 
 - Desktop composition (DWM) runs on the GPU (`DwmForceCpu` 0 in `HKLM\SOFTWARE\amdgpu-wddm\DesktopRouter`). When the
   driver has closed the GPU desktop path (for example after a start that ended in a crash or a power loss), DWM uses
-  the CPU route by itself. "Reopen the GPU desktop path" on the Recovery page of Nagi Control App opens it again,
-  and so does `install.cmd -Repair`. `DwmForceCpu` 1 keeps the
+  the CPU route by itself. "Reopen the GPU desktop path" on the Recovery page of Nagi Control App opens it again.
+  `DwmForceCpu` 1 keeps the
   desktop on the CPU route. An upgrade keeps the value you set.
 - Direct3D 12 applications run on the GPU through the Windows Direct3D 12 runtime, at feature level 12_1.
 - Vulkan applications run on the GPU through the Vulkan ICD.
@@ -379,10 +383,10 @@ with all 40 cores. The page `docs/design/cu-mode.md` of the project has the whol
   page and restart Windows. A normal installation, an upgrade and a plain re-run of `install.cmd` keep the closed path
   and name it in the report, because the driver closed it for a reason. If the driver closes the path again, make a
   bug report instead of repairing a second time.
-- The Graphics page shows 24 graphics cores and you never chose them: the driver went back to 24 after a start with
-  all 40 that nobody confirmed. Run `install.cmd -Repair` to get all 40 back, or select "All (40)" on the Graphics
-  page and restart Windows. An installation and an upgrade keep the 24 and name it in their report, the way they keep
-  a closed desktop path. If the driver goes back a second time, make a bug report.
+- The Graphics page shows 24 graphics cores and you selected more: the driver went back to 24 after a start with the
+  larger number that nobody confirmed. Select your number again on the Graphics page and restart Windows. 24 is the
+  number of a normal install, so a repair does not change it. If the driver goes back a second time, select a smaller
+  number, or turn one pair of cores off on the map, and make a bug report.
 - Windows 11 apps (the command bar of File Explorer, Task Manager) ignore mouse clicks, often after the screen went
   black for a moment, or `verify.cmd` shows `[warn] DWM restarted in this session`: WinUI pointer-input loss after the
   desktop compositor (DWM) is terminated and restarted reproduces on this Windows build also with Microsoft Basic
@@ -423,7 +427,7 @@ The zip file contains these files:
 | `driver-state.txt` | driver version; clock control (mode, maximum, clocks, voltage, temperature, load, throttle reason); start health; desktop composition (CPU or GPU); video memory statistics |
 | `driver-log.txt` | the driver's internal log ring |
 | `installed-files.txt` | release version and folder; Device Manager status and problem code; the GPU's driver key (INF version and date, driver name values); driver, Vulkan manifest and library files with file version and SHA-256 |
-| `settings.txt` | the driver settings (`Services\bc250kmd\Parameters`) and the Direct3D 12 application profiles |
+| `settings.txt` | the shared driver settings, their read status, and the Direct3D 12 application profiles |
 | `system.txt` | Windows build, test signing state, application version, UTC time |
 | `events.txt` | System log entries of the last 24 hours from the display driver, DirectX kernel, DWM, crash reporting, power and Plug and Play, and application errors that name the driver, DWM, Direct3D or Vulkan |
 | `dxdiag.txt` | `dxdiag /t` output (only if you select it; it takes about one minute) |

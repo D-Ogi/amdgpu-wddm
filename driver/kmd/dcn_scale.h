@@ -109,14 +109,68 @@ typedef struct _BC250_INHERITED_PIPE {
 #define BC250_INHERITED_PIPE_ALL ((1ul << BC250_INHERITED_PIPE_READS) - 1ul)
 long Bc250InheritedPipeRead(BC250_DISP_IO* Io, BC250_INHERITED_PIPE* Pipe);
 int Bc250InheritedPipeSame(const BC250_INHERITED_PIPE* A, const BC250_INHERITED_PIPE* B);
+// BD-169: which check refused the pipe, and the word that check read. A support
+// file from the field carries these two numbers, so the gate numbers are a
+// vocabulary: append, never renumber or reuse one. Word is the register word for
+// a register gate and the argument for an argument gate (the comments say which).
+enum bc250_pipe_gate {
+    BC250_PIPE_GATE_NONE = 0,               // the pipe is supported; Word is 0
+    BC250_PIPE_GATE_READS = 1,              // not every register read back (Word: the Valid mask)
+    BC250_PIPE_GATE_SOURCE_SIZE = 2,        // the POST source size is out of range (Word: width << 16 | height)
+    BC250_PIPE_GATE_TARGET_SIZE = 3,        // the active size is out of range (Word: width << 16 | height)
+    BC250_PIPE_GATE_PITCH_ARG = 4,          // the POST pitch is short or unaligned (Word: the pitch)
+    BC250_PIPE_GATE_VIEWPORT_START = 5,     // PRI_VIEWPORT_START is not 0,0
+    BC250_PIPE_GATE_VIEWPORT_SIZE = 6,      // PRI_VIEWPORT_DIMENSION is not the source size
+    BC250_PIPE_GATE_MPC_SIZE = 7,           // MPC_SIZE is not the target size
+    BC250_PIPE_GATE_MPCC_TOP = 8,           // MPCC 0 is not fed by DPP 0
+    BC250_PIPE_GATE_MPC_OUT = 9,            // OPP 0 is not fed by MPCC 0
+    BC250_PIPE_GATE_DCC = 10,               // the primary surface is DCC-compressed
+    BC250_PIPE_GATE_ODM = 11,               // OPTC segment 0 is not fed by OPP 0
+    BC250_PIPE_GATE_OTG1 = 12,              // OTG1 is also running
+    BC250_PIPE_GATE_ROTATION = 13,          // the surface is rotated or mirrored (Word: SURFACE_CONFIG)
+    BC250_PIPE_GATE_TILING = 14,            // the fetch layout is not linear (Word: TILING_CONFIG)
+    BC250_PIPE_GATE_PITCH_REG = 15,         // DCSURF_SURFACE_PITCH is not the POST pitch
+    BC250_PIPE_GATE_MPCC_MODE = 16,         // MPCC_MODE is neither 1 nor 2 (Word: MPCC_CONTROL)
+    BC250_PIPE_GATE_MPCC_BOTTOM = 17,       // MPCC_MODE 2 with a connected bottom layer (Word: MPCC_BOT_SEL)
+    BC250_PIPE_GATE_PIXEL_FORMAT = 18,      // SURFACE_PIXEL_FORMAT is not 8 (RGB8888) (Word: SURFACE_CONFIG)
+    BC250_PIPE_GATE_RECOUT = 19,            // the recout is empty or outside the target (Word: RECOUT_SIZE)
+    BC250_PIPE_GATE_AUTOCAL_MODE = 20,      // AUTOCAL_MODE is centering or replication (Word: DSCL_AUTOCAL)
+    BC250_PIPE_GATE_AUTOCAL_PIPE = 21,      // AUTOCAL_NUM_PIPE/PIPE_ID are set (Word: DSCL_AUTOCAL)
+    BC250_PIPE_GATE_AUTOCAL_DSCL = 22,      // automatic scale without DSCL_MODE 444 RGB (Word: SCL_MODE)
+    BC250_PIPE_GATE_AUTOCAL_UPSCALE = 23,   // automatic scale with a recout under the source (Word: RECOUT_SIZE)
+    BC250_PIPE_GATE_AUTOCAL_COEF = 24,      // automatic scale with the coefficient memory off (Word: MEM_PWR_CTRL)
+    BC250_PIPE_GATE_BYPASS_RECOUT = 25,     // scaler bypass with a recout other than the source (Word: RECOUT_SIZE)
+    BC250_PIPE_GATE_COEF_POWER = 26,        // manual scale with the coefficient memory off (Word: MEM_PWR_CTRL)
+    BC250_PIPE_GATE_RATIO_H_ZERO = 27,      // the horizontal ratio register is zero (Word: the ratio)
+    BC250_PIPE_GATE_RATIO_V_ZERO = 28,      // the vertical ratio register is zero (Word: the ratio)
+    BC250_PIPE_GATE_RATIO_H = 29,           // the horizontal ratio is neither the recout's nor unity (Word: the ratio)
+    BC250_PIPE_GATE_RATIO_V = 30,           // the vertical ratio is neither the recout's nor unity (Word: the ratio)
+    BC250_PIPE_GATE_RATIO_UPSCALE = 31,     // a unity-ratio pipe with a recout under the source (Word: RECOUT_SIZE)
+    BC250_PIPE_GATE_DSCL_MODE = 32,         // DSCL_MODE is neither bypass nor 444 RGB (Word: SCL_MODE)
+    // Set by the pipe's reader (modeset.c), not by the classifier, which never
+    // saw the pipe in these two cases.
+    BC250_PIPE_GATE_UNSTABLE = 33,          // the two reads disagreed (Word: the Valid mask)
+    BC250_PIPE_GATE_COUNT
+};
+typedef struct _BC250_INHERITED_PIPE_REASON {
+    unsigned long Gate;                     // enum bc250_pipe_gate: the first check that refused
+    unsigned long Word;                     // the word that check read
+} BC250_INHERITED_PIPE_REASON;
+const char* Bc250InheritedPipeGateText(unsigned long Gate);
+
 // A set of equivalent VidPN transformations for exactly the saved tuple.
 // Custom preserves the firmware image without claiming a standard scaling
 // transform (a non-standard rectangle or a manual unity-ratio enlarged recout).
 // It never grants permission to program a different pipe. Return 0 if
 // the readback does not prove a linear, unrotated RGB source feeding OTG0.
+// The Ex form names the first check that refused, for the start record; the
+// plain form is the same decision without it.
 unsigned long Bc250InheritedPipeSupport(const BC250_INHERITED_PIPE* Pipe,
     unsigned long SourceWidth, unsigned long SourceHeight, unsigned long Pitch,
     unsigned long TargetWidth, unsigned long TargetHeight);
+unsigned long Bc250InheritedPipeSupportEx(const BC250_INHERITED_PIPE* Pipe,
+    unsigned long SourceWidth, unsigned long SourceHeight, unsigned long Pitch,
+    unsigned long TargetWidth, unsigned long TargetHeight, BC250_INHERITED_PIPE_REASON* Reason);
 // The verdict for a native active size; *MaxLevel is the highest display-modes level the shape allows.
 unsigned long Bc250PipeShapeCheck(const BC250_PIPE_SHAPE* Shape, unsigned long NativeWidth,
                                   unsigned long NativeHeight, unsigned long* MaxLevel);

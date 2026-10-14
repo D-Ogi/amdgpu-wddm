@@ -84,11 +84,11 @@ if ($RefusalClosesEveryNode) {
     if (!$source.Contains($tailLive)) { throw 'refusal node anchor changed' }
     $source = $source.Replace($tailLive, '    if (1) StartHealthClose(device);')
 }
-$latch = 'static BOOLEAN ' + (Function-Body $source 'WddmLatchSubmitTimeoutLocked').Text
+$latch = 'static BOOLEAN ' + (Function-Body $source 'WddmLatchSubmitDiagnosticLocked').Text
 if ($LatchFaultsStickily) {
-    $live = 'StartHealthFaultPendingReset(Device);'
+    $live = 'Wddm->SubmitWatchdog.SnapshotTaken = 1;'
     if (!$latch.Contains($live)) { throw 'timeout latch witness anchor changed' }
-    $latch = $latch.Replace($live, 'StartHealthFault(Device);')
+    $latch = $latch.Replace($live, $live + ' Wddm->WatchdogFaulted[0] = TRUE;')
 }
 $mock = @'
 typedef int BOOLEAN;
@@ -112,6 +112,7 @@ typedef struct { int GfxClosed; int Calls; void *Gfx; int HealthFault, HealthPen
 typedef struct {
     int Stopping, Lock, SubmitTimer;
     BC250_HANG_NODE_STATE Recovery[2];
+    struct { int SnapshotTaken; } SubmitWatchdog;
     int WatchdogFaulted[2], DeferredValid, CompletionPending[2], ActiveSubmissions[2];
     unsigned NoteCalls, NotedFence[2];
 } BC250_WDDM;
@@ -226,29 +227,31 @@ static void test_timeout_latch(void)
     ULONGLONG observed = w.Recovery[0].Epoch;
     d.Gfx = &gfx;
     w.DeferredValid = 1;
-    CHECK(WddmLatchSubmitTimeoutLocked(&d, &w, observed));
-    CHECK(d.GfxClosed && w.WatchdogFaulted[0] && !w.DeferredValid && d.Calls == 1);
+    CHECK(WddmLatchSubmitDiagnosticLocked(&w, observed));
+    CHECK(!d.GfxClosed && !w.WatchdogFaulted[0] && w.DeferredValid && d.Calls == 0);
+    CHECK(!WddmLatchSubmitDiagnosticLocked(&w, observed));
     recover(&d, &w);
 #ifdef TIMEOUT_AFTER_UNLOCK
     GfxSubmitFail(&d);
 #endif
     CHECK(!d.GfxClosed && !w.WatchdogFaulted[0]);
-    CHECK(!WddmLatchSubmitTimeoutLocked(&d, &w, observed));
-    CHECK(!d.GfxClosed && !w.WatchdogFaulted[0] && d.Calls == 1);
+    CHECK(!WddmLatchSubmitDiagnosticLocked(&w, observed));
+    CHECK(!d.GfxClosed && !w.WatchdogFaulted[0] && d.Calls == 0);
     /* Opposite order: reset completed before the stale action tries to commit. */
     observed = w.Recovery[0].Epoch;
     recover(&d, &w);
-    CHECK(!WddmLatchSubmitTimeoutLocked(&d, &w, observed));
-    CHECK(!d.GfxClosed && !w.WatchdogFaulted[0] && d.Calls == 1);
+    CHECK(!WddmLatchSubmitDiagnosticLocked(&w, observed));
+    CHECK(!d.GfxClosed && !w.WatchdogFaulted[0] && d.Calls == 0);
     CHECK(Bc250HangResetBegin(&w.Recovery[0], 0));
-    CHECK(!WddmLatchSubmitTimeoutLocked(&d, &w, w.Recovery[0].Epoch));
+    CHECK(!WddmLatchSubmitDiagnosticLocked(&w, w.Recovery[0].Epoch));
     Bc250HangResetEnd(&w.Recovery[0], 0, 0);
     w.Stopping = 1;
-    CHECK(!WddmLatchSubmitTimeoutLocked(&d, &w, w.Recovery[0].Epoch));
-    CHECK(d.Calls == 1);
+    CHECK(!WddmLatchSubmitDiagnosticLocked(&w, w.Recovery[0].Epoch));
+    CHECK(d.Calls == 0);
     w.Stopping = 0;
-    CHECK(WddmLatchSubmitTimeoutLocked(&d, &w, w.Recovery[0].Epoch));
-    CHECK(d.Calls == 2 && d.GfxClosed && w.WatchdogFaulted[0]);
+    w.SubmitWatchdog.SnapshotTaken = 0;
+    CHECK(WddmLatchSubmitDiagnosticLocked(&w, w.Recovery[0].Epoch));
+    CHECK(d.Calls == 0 && !d.GfxClosed && !w.WatchdogFaulted[0]);
     {
         BC250_GFX g;
         ULONG value = 0;
@@ -299,7 +302,7 @@ if ($tailAt -lt 0) { throw 'refusal tail missing' }
 $tail=$reset.Substring($tailAt+'refuseReset:'.Length)
 if (!$tail.Contains('StartHealthClose(device);') -or $tail.Contains('GfxSubmitClose(') -or $tail.Contains('GfxReopenAfterAbort(')) { $admissionOk=$false }
 # BD-120. Where the start witness is closed and where it is reopened, read off the production source:
-#  - the node-0 timeout latch marks its close as the pending reset's own and faults nothing stickily;
+#  - the node-0 diagnostic latch leaves admission and health unchanged;
 #  - the reopen stands in the recovered block, still under the wddm->Lock that validated the epoch and
 #    reopened the gfx gate, which is why no reader can see node 0 admitting work while the witness reports
 #    the hang;
@@ -307,7 +310,7 @@ if (!$tail.Contains('StartHealthClose(device);') -or $tail.Contains('GfxSubmitCl
 #    It closes with StartHealthClose on node 0, which clears the mark, and with the keep-mark close on any
 #    other node, whose refusal says nothing about node 0.
 $witnessOk = $true
-if (!$latch.Contains('StartHealthFaultPendingReset(Device);') -or $latch.Contains('GfxSubmitFail(')) { $witnessOk = $false }
+if ($latch.Contains('StartHealthFault') -or $latch.Contains('GfxSubmit') -or $latch.Contains('WatchdogFaulted[0] = TRUE')) { $witnessOk = $false }
 if (!$tail.Contains('if (pResetEngine->NodeOrdinal == BC250_WDDM_NODE_3D) StartHealthClose(device);') -or
     !$tail.Contains('else StartHealthCloseKeepPendingReset(device);')) { $witnessOk = $false }
 $reopenCall = $reset.IndexOf('StartHealthRecovered(device')

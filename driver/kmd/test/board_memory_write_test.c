@@ -59,6 +59,8 @@ void BoardMemoryStoreIo(BC250_DEVICE* d,struct board_memory_store* st) {
 }
 void AblBoardMemoryProbeRequest(BC250_DEVICE* d,BC250_ESCAPE_BOARD_MEMORY_PROBE* p,BOOLEAN a,ULONG f)
 {(void)d;(void)p;(void)a;(void)f;}
+/* The state suite owns seed persistence; this suite exercises the board transport. */
+NTSTATUS DriverStateSeedBoard(BC250_DEVICE* d) { (void)d; return STATUS_SUCCESS; }
 /* ACTUAL_WRITE */
 /* ACTUAL_UMA */
 static BC250_ESCAPE_BOARD_MEMORY request(unsigned op) {

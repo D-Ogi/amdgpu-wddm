@@ -1,0 +1,63 @@
+start 11:08:24Z
+console user BC250-A\bc250 session 1
+default terminal of BC250-A\bc250 (HKU\<sid>\Console\%%Startup): DelegationConsole absent, DelegationTerminal absent
+console window processes before the run in session 1: 0
+work C:\BC250\tmp\console-proof\20261014-110839
+file C:\BC250\tmp\console-proof\20261014-110839\control\amdgpu_wddm_control.exe sha256 0232F4F78521A5A4AD085770BB817BA5B063EB9E1651F135E600A21CE77660FC
+file C:\BC250\tmp\console-proof\20261014-110839\control\bc250control.dll sha256 150CFA0F271CD9A53E743241F579F1F3E386840048A33295A28BEEFEB54F8273
+file C:\BC250\tmp\console-proof\20261014-110839\tools\start-window.ps1 sha256 608DC6F5BD22B4A682735FBD9A449DB62E188AE954073721EBE2472850C026E0
+file C:\BC250\tmp\console-kit\common.ps1 sha256 869E3592F7FA02CC036871E7194FA51C18A85C912907FAF630EBDC95616DD617
+form a: task program powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "C:\BC250\tmp\console-proof\20261014-110839\tools\start-window.ps1" -Seconds 15
+form a: plan rules all held (console: no control application in this install (-NoControlApp): a console window can appear at sign-in)
+form a: task result 0, 19 s, 21 process(es) created in session 1 (trace-a.csv)
+  2026-10-14T11:08:43.909Z powershell.exe pid 2348 parent 2124: "powershell.exe" -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "C:\BC250\tmp\console-proof\20261014-110839\tools\start-window.ps1" -Seconds 15
+  2026-10-14T11:08:43.909Z conhost.exe pid 4724 parent 2348: \??\C:\Windows\system32\conhost.exe 0x4
+  2026-10-14T11:08:43.909Z OpenConsole.exe pid 8716 parent 1256: "C:\Program Files\WindowsApps\Microsoft.WindowsTerminal_1.24.12741.0_x64__8wekyb3d8bbwe\OpenConsole.exe" -Embedding
+  2026-10-14T11:08:43.909Z WindowsTerminal.exe pid 9952 parent 1256: "C:\Program Files\WindowsApps\Microsoft.WindowsTerminal_1.24.12741.0_x64__8wekyb3d8bbwe\WindowsTerminal.exe" -Embedding
+  2026-10-14T11:08:45.923Z bc250kmd_cli.exe pid 3768 parent 5248: 
+  2026-10-14T11:08:45.923Z conhost.exe pid 7284 parent 3768: 
+  2026-10-14T11:08:45.923Z amdgpu_wddm_control.exe pid 3392 parent 2348: 
+  2026-10-14T11:08:45.923Z bc250kmd_cli.exe pid 6520 parent 5248: 
+  2026-10-14T11:08:45.923Z conhost.exe pid 6756 parent 6520: 
+  2026-10-14T11:08:50.962Z bc250kmd_cli.exe pid 9844 parent 5248: 
+  2026-10-14T11:08:50.962Z conhost.exe pid 5232 parent 9844: 
+  2026-10-14T11:08:51.969Z bc250kmd_cli.exe pid 8956 parent 5248: 
+  2026-10-14T11:08:51.969Z conhost.exe pid 10760 parent 8956: 
+  2026-10-14T11:08:56.000Z bc250kmd_cli.exe pid 8976 parent 5248: 
+  2026-10-14T11:08:56.000Z conhost.exe pid 8084 parent 8976: 
+  2026-10-14T11:08:57.006Z bc250kmd_cli.exe pid 11088 parent 5248: 
+  2026-10-14T11:08:57.006Z conhost.exe pid 8756 parent 11088: 
+  2026-10-14T11:09:01.205Z bc250kmd_cli.exe pid 2096 parent 5248: 
+  2026-10-14T11:09:01.205Z conhost.exe pid 2076 parent 2096: 
+  2026-10-14T11:09:02.219Z bc250kmd_cli.exe pid 2592 parent 5248: 
+  2026-10-14T11:09:02.219Z conhost.exe pid 2668 parent 2592: 
+form a: console window processes 2: OpenConsole.exe pid 8716, WindowsTerminal.exe pid 9952
+form a: console window
+form b: task program C:\BC250\tmp\console-proof\20261014-110839\control\amdgpu_wddm_control.exe --start-window -Seconds 15
+form b: plan rules all held
+form b: task result 0, 16.8 s, 20 process(es) created in session 1 (trace-b.csv)
+  2026-10-14T11:09:06.258Z bc250kmd_cli.exe pid 5188 parent 5248: 
+  2026-10-14T11:09:06.258Z conhost.exe pid 4336 parent 5188: 
+  2026-10-14T11:09:07.269Z bc250kmd_cli.exe pid 3344 parent 5248: 
+  2026-10-14T11:09:07.269Z powershell.exe pid 2700 parent 8728: "C:\Windows\system32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "C:\BC250\tmp\console-proof\20261014-110839\tools\start-window.ps1" -Seconds 15
+  2026-10-14T11:09:07.269Z conhost.exe pid 4340 parent 2700: \??\C:\Windows\system32\conhost.exe 0x4
+  2026-10-14T11:09:07.269Z amdgpu_wddm_control.exe pid 8728 parent 2124: "C:\BC250\tmp\console-proof\20261014-110839\control\amdgpu_wddm_control.exe" --start-window -Seconds 15
+  2026-10-14T11:09:07.269Z conhost.exe pid 3348 parent 3344: 
+  2026-10-14T11:09:07.269Z amdgpu_wddm_control.exe pid 11636 parent 2700: 
+  2026-10-14T11:09:10.291Z bc250kmd_cli.exe pid 9832 parent 5248: 
+  2026-10-14T11:09:10.291Z conhost.exe pid 9456 parent 9832: 
+  2026-10-14T11:09:12.304Z bc250kmd_cli.exe pid 6292 parent 5248: 
+  2026-10-14T11:09:12.304Z conhost.exe pid 8676 parent 6292: 
+  2026-10-14T11:09:16.335Z bc250kmd_cli.exe pid 7548 parent 5248: 
+  2026-10-14T11:09:16.335Z conhost.exe pid 11832 parent 7548: 
+  2026-10-14T11:09:17.342Z bc250kmd_cli.exe pid 6040 parent 5248: 
+  2026-10-14T11:09:17.342Z conhost.exe pid 5440 parent 6040: 
+  2026-10-14T11:09:21.450Z bc250kmd_cli.exe pid 1712 parent 5248: 
+  2026-10-14T11:09:21.450Z conhost.exe pid 11084 parent 1712: 
+  2026-10-14T11:09:22.457Z bc250kmd_cli.exe pid 11188 parent 5248: 
+  2026-10-14T11:09:22.457Z conhost.exe pid 11668 parent 11188: 
+form b: console window processes 0
+form b: the task's process pid 8728, its powershell.exe over the copy pid 2700
+form b: no console window
+verdict: form a console window, form b no console window, 49.7 s
+exit 0 at 11:09:16Z

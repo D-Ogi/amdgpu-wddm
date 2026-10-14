@@ -47,6 +47,7 @@ typedef struct _BC250_DEVICE {
     BOOLEAN DcnWriteEnabled, SourceVisible, ModeActive, InheritedSignalValid;
     D3DKMDT_VIDEO_SIGNAL_INFO InheritedSignal;
     void* ConnectorLink;
+    NTSTATUS ConnectorLinkCleanup;
     void* HdmiLinkContext;
     void* Psp;
     unsigned PspSessionLock;
@@ -274,6 +275,8 @@ static void ExFreePoolWithTag(void* p,ULONG tag)
 #include "hdmi_stop_bodies.inc"
 static ULONG Protocol(const BC250_SINK* Sink);
 #include "connector_link_bodies.inc"
+/* BD-169 review: connector.c's own decision about a refused start, unchanged. */
+#include "connector_decision.inc"
 
 /* Model each hardware boundary as a cancellation-aware call, as the real I/O
  * callbacks require. Failure is one-shot so rollback is independently testable.
@@ -1022,8 +1025,47 @@ static void programmed_clock_bound(void)
     CHECK(Plan(&link,&snapshot.Sink,&timing,&mode)==STATUS_SUCCESS && mode.Valid);
     End(&link);balanced();
 }
+// BD-169 review: a cold prepare that fails releases its own context, and that
+// release is the only one that meets a failed AUX restore: the caller's release
+// answers SUCCESS for the freed context, while dpaux.c keeps the session open on
+// purpose. The decision a refused start makes must therefore read all three
+// results, or it preserves a display over hardware it did not restore.
+static void prepare_cleanup_preserved(void)
+{
+    NTSTATUS prepare,release;unsigned dirty;
+    // The control: a cold prepare that restores AUX, released by its caller.
+    reset(BC250_SINK_DP);device.ConnectorLink=NULL;
+    prepare=ConnectorLinkPrepare(&device,&snapshot.Sink,7);
+    CHECK(NT_SUCCESS(prepare) && NT_SUCCESS(device.ConnectorLinkCleanup));
+    release=ConnectorLinkRelease(&device);
+    CHECK(NT_SUCCESS(release) && !aux_open && !device.ConnectorLink);
+    CHECK(ConnectorRefusalPreserved(&device,STATUS_SUCCESS,release));
+    // The other two terms still count when the cleanup is clean.
+    CHECK(!ConnectorRefusalPreserved(&device,STATUS_DEVICE_NOT_READY,release));
+    CHECK(!ConnectorRefusalPreserved(&device,STATUS_SUCCESS,STATUS_DEVICE_NOT_READY));
+    balanced();
+    // A restore that keeps failing: the prepare fails, its own release cannot
+    // close the session either, and the start refuses to call that preserved.
+    reset(BC250_SINK_DP);device.ConnectorLink=NULL;persistent_aux_fail=1;
+    prepare=ConnectorLinkPrepare(&device,&snapshot.Sink,7);
+    dirty=aux_open;
+    CHECK(!NT_SUCCESS(prepare) && dirty && !device.ConnectorLink);
+    CHECK(device.ConnectorLinkCleanup==STATUS_IO_DEVICE_ERROR);
+    release=ConnectorLinkRelease(&device);
+    CHECK(NT_SUCCESS(release));     // nothing is left to release: NULL answers success
+    CHECK(!ConnectorRefusalPreserved(&device,STATUS_SUCCESS,release));
+    balanced();
+    // The next attempt owns the result again: no stale obligation of a previous
+    // one, and none missing because this one released nothing.
+    reset(BC250_SINK_DP);device.ConnectorLink=NULL;
+    prepare=ConnectorLinkPrepare(&device,&snapshot.Sink,7);
+    release=ConnectorLinkRelease(&device);
+    CHECK(NT_SUCCESS(prepare) && ConnectorRefusalPreserved(&device,STATUS_SUCCESS,release));
+    balanced();
+}
 int main(void)
 {
+    prepare_cleanup_preserved();
     programmed_clock_bound();
     psp_session_controls();
     distinct_recovery_target();

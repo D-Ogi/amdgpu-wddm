@@ -1,0 +1,30 @@
+camera: blue excess off 77.2, on 33.1; window on from 1791971610.363 to 1791971760.166 (149.803 s); edges inside: 0
+lab: window from 1791971619.909 to 1791971768.774 (148.865 s); camera - lab -9.546 / -8.608, used -9.546
+camera one-frame outliers in the text cells (threshold 1.68): 6
+   +  27.614 s dgreen  +1.83; nearest DDA flash +1.728 s (earlier-content)
+   +  32.290 s dgreen  +2.24; nearest DDA flash +0.308 s (earlier-content)
+   +  42.255 s dgreen  +2.07; nearest DDA flash +10.273 s (earlier-content)
+   +  42.816 s dgreen  +1.77; nearest DDA flash +10.834 s (earlier-content)
+   + 128.831 s dgreen  -1.88; nearest DDA flash -1.200 s (earlier-content)
+   + 131.445 s dgreen  -1.74; nearest DDA flash +1.414 s (earlier-content)
+   DDA flash +  12.854 s other-content   cyan  206: camera green 92.1 92.7 92.2 92.0 93.3
+   DDA flash +  21.043 s earlier-content cyan  206: camera green 93.9 93.4 94.1 94.2 91.8
+   DDA flash +  25.886 s earlier-content cyan  206: camera green 91.2 92.0 93.2 92.4 93.4
+   DDA flash +  29.952 s earlier-content cyan  206: camera green 92.2 91.5 93.0 92.9 92.5
+   DDA flash +  31.982 s earlier-content cyan  206: camera green 93.2 94.7 94.2 93.5 92.2
+   DDA flash +  58.898 s earlier-content cyan  206: camera green 93.4 93.7 94.6 94.2 93.9
+   DDA flash +  71.822 s earlier-content cyan  206: camera green 92.4 92.5 92.2 92.7 92.5
+   DDA flash +  80.839 s earlier-content cyan  206: camera green 93.8 94.8 94.0 94.2 93.5
+   DDA flash + 106.876 s earlier-content cyan  206: camera green 93.2 93.4 93.5 93.5 93.4
+   DDA flash + 126.963 s other-content   cyan  738: camera green 94.3 94.9 94.8 93.9 95.6
+   DDA flash + 130.031 s earlier-content cyan  206: camera green 92.7 92.6 93.7 93.9 93.4
+   DDA flash + 133.859 s earlier-content cyan  206: camera green 94.7 93.9 94.7 94.2 94.3
+   DDA flash + 149.866 s black           cyan    0: camera green 94.2 102.6 99.1 100.7 104.7
+   DDA flash + 149.975 s black           cyan    0: camera green 100.7 104.7 107.0 108.0 108.0
+   DDA flash + 149.989 s black           cyan    0: camera green 104.7 107.0 108.0 108.0 108.0
+   DDA flash + 150.015 s black           cyan    0: camera green 104.7 107.0 108.0 108.0 108.0
+   DDA flash + 150.029 s black           cyan    0: camera green 107.0 108.0 108.0 108.0 107.7
+   DDA flash + 150.044 s black           cyan    1: camera green 107.0 108.0 108.0 108.0 107.7
+   DDA flash + 150.057 s black           cyan   31: camera green 107.0 108.0 108.0 108.0 107.7
+   DDA flash + 150.071 s black           cyan   39: camera green 108.0 108.0 108.0 107.7 107.1
+   DDA flash + 150.097 s not-the-window  cyan   60: camera green 108.0 108.0 108.0 107.7 107.1

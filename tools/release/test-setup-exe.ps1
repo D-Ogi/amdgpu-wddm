@@ -103,6 +103,11 @@ Check ($ok.code -eq 0) "the packed installer reads its own payload (exit $($ok.c
 Check ($ok.report -match 'payload ok') 'the summary says the payload is good'
 Check ($ok.report -match [regex]::Escape($version)) 'the summary names the release of the payload'
 Check ($ok.report -match "files $($packageFiles.Count)") "the summary counts the $($packageFiles.Count) files"
+# The progress the loading window shows while the file unpacks (LoadingWindow.cs): it moves, never backwards, and
+# ends at the size of the whole work (the package's hash, every file written, every file checked).
+$progress = [regex]::Match($ok.report, '(?m)^progress (\d+) steps, (\d+) of (\d+) bytes\r?$')
+Check ($progress.Success -and [int64]$progress.Groups[1].Value -gt 0 -and $progress.Groups[2].Value -eq $progress.Groups[3].Value) `
+    "the unpacking reports its progress to the end ($(if ($progress.Success) { $progress.Value.Trim() } else { 'no progress line' }))"
 $unpacked = Join-Path $ok.dir "unpacked\$version"
 Check (Test-Path -LiteralPath (Join-Path $unpacked 'files\manifest.json') -PathType Leaf) 'the package was unpacked'
 $same = $true

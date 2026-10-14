@@ -238,9 +238,11 @@ function Read-YesNo {
     for ($i = 0; $i -lt 3; $i++) {
         $reply = $null
         try { $reply = Read-Host "   $Question [$shown]" } catch { Write-Info "$Question -> the console cannot be read: the default is used"; return $Default }
-        $t = ([string]$reply).Trim().ToLowerInvariant()
+        # Windows PowerShell 5.1 can return NullString at EOF, even after a string cast.
+        $t = [string]$reply
         Write-Log "   asked: $Question -> '$reply'"
-        if (-not $t) { return $Default }
+        if ([string]::IsNullOrWhiteSpace($t)) { return $Default }
+        $t = $t.Trim().ToLowerInvariant()
         if ($t -in @('y', 'yes')) { return $true }
         if ($t -in @('n', 'no')) { return $false }
         Write-Host '   Please answer yes or no, or press Enter for the default.'

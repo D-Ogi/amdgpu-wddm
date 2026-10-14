@@ -38,9 +38,15 @@
 param(
     [string]$Root = $(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { Split-Path (Split-Path (Split-Path $PSScriptRoot)) }),
     [string]$Out,
-    [string]$DriverVer = '0.7.216.100',          # the release's own 4th field: ranks above the lab's x.y.z.1, names the package
+    [string]$DriverVer = '',                   # optional assertion of the mapped Windows INF quad; derived from Version
     [string]$Version = '0.7.216.100-tester.21',
+    [ValidateSet('release','lab')][string]$Flavour = 'release',
     [string]$KitVersion = '10.0.26100.0',
+    [string]$FirmwareDir,                        # exact pinned inputs for Inf2Cat, never copied into the public ZIP
+    [string]$SubmissionCab,                      # unsigned CAB for EV signing; includes the complete INF payload
+    [string]$KmdPdb,                             # matching symbols for submission, never installed as driver files
+    [bool]$MockAttestation = $true,               # embed our signature on every driver PE until Partner Center signs it
+    [ValidateSet('pinned-test','system')][string]$ExpectedSigningRoot = 'pinned-test',
     [string]$SetupApp,                           # required: the built setup window (build.ps1 output), copied to the top folder as setup.exe
     [switch]$AllowLedgerDebt,                    # build although finished work for a release component is unlanded
     [string]$LedgerDebtReason,                   # required with -AllowLedgerDebt: recorded in the build log and manifest
@@ -55,13 +61,29 @@ param(
 # Release and provenance rebuilds always execute the gates, including nested analysis.
 $env:BC250_GATE_NOCACHE = '1'
 $ErrorActionPreference = 'Stop'
+if ($Flavour -eq 'lab' -and $SubmissionCab) { throw 'a lab package cannot be submitted for attestation' }
+if (-not $MockAttestation -and -not $NoProvenance) { throw 'release builds require mock-attestation signatures until Partner Center supplies the package' }
 . (Join-Path $PSScriptRoot 'headless.ps1')
 # The setup window is the default entry of an ordinary user, so a package without it is not a release.
 if (-not $SetupApp) { throw '-SetupApp is required: build the setup window with tools\win\amdgpu_wddm_setup\build.ps1 -Out <dir> and pass that folder' }
 if (-not (Test-Path -LiteralPath (Join-Path $SetupApp 'amdgpu_wddm_setup.exe'))) { throw "-SetupApp ${SetupApp}: no amdgpu_wddm_setup.exe" }
 if (-not $Out) { $Out = Join-Path $Root 'scratch\release\out' }
+# An -Out that already holds the output of an earlier run is refused here, in the first second, and by name. Two
+# things went wrong in train b34 rc4 without this: the quality suite failed 5 minutes in, deep inside app-route-lib
+# ("Fresh (empty) directory required", that gate's own rule, which stays), and a second run would have mixed its
+# gate receipts and its package tree with the ones before it. -ReuseOut is for an incremental rebuild of the same
+# version into the same folder; a candidate always gets a folder of its own.
+if (-not $ReuseOut -and (Test-Path -LiteralPath $Out)) {
+    $left = @(Get-ChildItem -LiteralPath $Out -Force)
+    if ($left.Count) {
+        throw ("-Out $Out is not empty: $($left.Count) entr$(if ($left.Count -eq 1) { 'y' } else { 'ies' }), " +
+               "for example '$($left[0].Name)'. Remove that folder and run again, so that no file of an earlier " +
+               'build reaches this package, or pass -ReuseOut to build into it as it is.')
+    }
+}
 $repo = Split-Path (Split-Path $PSScriptRoot)
 $name = "amdgpu-wddm-tester-$Version"
+if ($Flavour -eq 'lab') { $name += '-lab' }
 $pkgRoot = Join-Path $Out $name      # what the zip unpacks to: setup.exe and files\
 $pkg = Join-Path $pkgRoot 'files'    # the package root: manifest.json and everything the installer reads
 $zip = "$pkgRoot.zip"
@@ -88,19 +110,6 @@ foreach ($requiredStateFile in @('payload/kmd/amdgpu-state.bin','payload/tools/a
 }
 $secrets = Join-Path $Root 'secrets\release'
 $pfx = Join-Path $secrets 'amdgpu-wddm-release.pfx'
-# An -Out that already holds the output of an earlier run is refused here, in the first second, and by name. Two
-# things went wrong in train b34 rc4 without this: the quality suite failed 5 minutes in, deep inside app-route-lib
-# ("Fresh (empty) directory required", that gate's own rule, which stays), and a second run would have mixed its
-# gate receipts and its package tree with the ones before it. -ReuseOut is for an incremental rebuild of the same
-# version into the same folder; a candidate always gets a folder of its own.
-if (-not $ReuseOut -and (Test-Path -LiteralPath $Out)) {
-    $left = @(Get-ChildItem -LiteralPath $Out -Force)
-    if ($left.Count) {
-        throw ("-Out $Out is not empty: $($left.Count) entr$(if ($left.Count -eq 1) { 'y' } else { 'ies' }), " +
-               "for example '$($left[0].Name)'. Remove that folder and run again, so that no file of an earlier " +
-               'build reaches this package, or pass -ReuseOut to build into it as it is.')
-    }
-}
 $cer = Join-Path $secrets 'amdgpu-wddm-release.cer'
 $passFile = Join-Path $secrets 'amdgpu-wddm-release.pass'
 foreach ($f in $pfx, $cer, $passFile) { if (-not (Test-Path -LiteralPath $f)) { throw "missing ${f}: run tools\release\new-release-cert.ps1 once" } }
@@ -176,6 +185,12 @@ if (-not (Test-Path -LiteralPath $ledgerTool)) {
     }
 }
 
+$resolvedOut = [IO.Path]::GetFullPath($Out).TrimEnd('\')
+foreach ($ownedOutput in $pkgRoot,$zip) {
+    if (-not [string]::Equals((Split-Path ([IO.Path]::GetFullPath($ownedOutput))), $resolvedOut, [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'release output escaped the chosen output directory'
+    }
+}
 if (Test-Path -LiteralPath $pkgRoot) { Remove-Item -LiteralPath $pkgRoot -Recurse -Force }
 if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
 [void][IO.Directory]::CreateDirectory($pkg)
@@ -226,7 +241,7 @@ if ($NoProvenance) {
 }
 if ($RebuildCheck) {
     $pwshExe = (Get-Process -Id $PID).Path
-    $r = Invoke-Headless -File $pwshExe -Arguments @('-NoProfile', '-File', (Join-Path $PSScriptRoot 'rebuild-check.ps1'), '-Root', $Root, '-Report', (Join-Path $Out 'rebuild-check.json')) -TimeoutSeconds 21600
+    $r = Invoke-Headless -File $pwshExe -Arguments @('-NoProfile', '-File', (Join-Path $PSScriptRoot 'rebuild-check.ps1'), '-Root', $Root, '-Sources', $sourcesPath, '-Report', (Join-Path $Out 'rebuild-check.json')) -TimeoutSeconds 21600
     $r.text
     if ($r.code -ne 0) { throw 'rebuild check: a payload file that claims a bit-identical rebuild did not rebuild to its bytes (see above)' }
 }
@@ -247,7 +262,7 @@ foreach ($cfg in Get-ChildItem -LiteralPath (Join-Path $pkg 'payload') -Recurse 
 Write-Host 'installer and documents'
 # The logon tasks' scripts: the confirmation also writes the running-release witness (release-witness.ps1), and
 # start-window.ps1 is the window task's own script (BD-080), which the logged-on user runs with their own rights.
-$taskScripts = @('start-confirm.ps1', 'start-confirm-core.ps1', 'start-window.ps1', 'dwm-session.ps1', 'release-witness.ps1')
+$taskScripts = @('start-confirm.ps1', 'start-confirm-core.ps1', 'start-window.ps1', 'dwm-session.ps1', 'release-witness.ps1', 'version-identity.ps1', 'state-reader.ps1')
 $inst = Join-Path $pkg 'installer'
 [void][IO.Directory]::CreateDirectory($inst)
 foreach ($f in Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'installer') -File) {
@@ -331,6 +346,13 @@ if (Test-Path -LiteralPath $pendingDir) {
 $setupSrc = Join-Path $SetupApp 'amdgpu_wddm_setup.exe'
 $setupPkg = Join-Path $pkgRoot 'setup.exe'
 Copy-Item -LiteralPath $setupSrc -Destination $setupPkg
+# BD-166: this script never rewrites a PE file. Every shipped user-mode PE carries its version resource from the
+# component build that produced it, the kernel driver from its own compiled .rc, and the two .NET applications from
+# their own build. The release only reads the result back: `versionstamp.py check --signed` near the end of this
+# script, after the last signing step. A stamp here would change a file that release-sources.json already pins, so
+# the packaged copy could no longer equal its source (tools\build\versionstamp.py, tools\build\versioninfo.json).
+$stampTool = Join-Path $repo 'tools\build\versionstamp.py'
+$stampInf = Join-Path $pkg 'payload\kmd\bc250kmd.inf'
 # A .NET application configuration file, when the build makes one, belongs to the exe under its new name.
 foreach ($f in Get-ChildItem -LiteralPath $SetupApp -File -Filter 'amdgpu_wddm_setup.exe.config') { Copy-Item -LiteralPath $f.FullName -Destination "$setupPkg.config" }
 $setupHash = (Get-FileHash -LiteralPath $setupPkg -Algorithm SHA256).Hash
@@ -346,13 +368,6 @@ Copy-Item -LiteralPath (Join-Path $repo 'NOTICE') -Destination (Join-Path $lic '
 foreach ($l in $sources.licenses) {
     $src = Join-Path $repo ($l.source -replace '/', '\')
     $h = (Get-FileHash -LiteralPath $src -Algorithm SHA256).Hash
-# BD-166: this script never rewrites a PE file. Every shipped user-mode PE carries its version resource from the
-# component build that produced it, the kernel driver from its own compiled .rc, and the two .NET applications from
-# their own build. The release only reads the result back: `versionstamp.py check --signed` near the end of this
-# script, after the last signing step. A stamp here would change a file that release-sources.json already pins, so
-# the packaged copy could no longer equal its source (tools\build\versionstamp.py, tools\build\versioninfo.json).
-$stampTool = Join-Path $repo 'tools\build\versionstamp.py'
-$stampInf = Join-Path $pkg 'payload\kmd\bc250kmd.inf'
     if ($h -ne $l.sha256) { throw "licence text $($l.source) is $h, release-sources.json says $($l.sha256) ($($l.repository) $($l.path) @ $($l.ref))" }
     Copy-Item -LiteralPath $src -Destination (Join-Path $lic $l.file)
     '  {0}  licence      {1}  ({2} {3} @ {4})' -f $h.Substring(0, 8), $l.file, $l.repository, $l.path, $l.ref
@@ -386,7 +401,19 @@ $fwLicence = (Get-FileHash -LiteralPath (Join-Path $lic $sources.firmware.licenc
 if ($fwLicence -ne $sources.firmware.licence.sha256) { throw "licenses\LICENSE.amdgpu is $fwLicence, release-sources.json firmware.licence says $($sources.firmware.licence.sha256)" }
 $fwFiles = @(foreach ($f in $pin.files) { [ordered]@{ name = $f.name; path = "amdgpu/$($f.name)"; sha256 = $f.sha256.ToUpperInvariant(); size = $f.size } })
 $fwFiles += [ordered]@{ name = $sources.firmware.licence.name; path = $sources.firmware.licence.path; sha256 = $sources.firmware.licence.sha256; size = $sources.firmware.licence.size }
-$firmware = [ordered]@{ commit = $sources.firmware.commit; repository = $sources.firmware.repository; url_templates = @($sources.firmware.url_templates); install_dir = $sources.firmware.install_dir; files = $fwFiles }
+$firmware = [ordered]@{ delivery = 'driver-store-v1'; commit = $sources.firmware.commit; repository = $sources.firmware.repository; url_templates = @($sources.firmware.url_templates); install_dir = '%13%'; files = $fwFiles }
+. (Join-Path $PSScriptRoot 'installer\firmware-package.ps1')
+if (-not $FirmwareDir) { $FirmwareDir = Join-Path $Root 'ref\linux-firmware__WARN-AMD-blobs-never-commit\amdgpu' }
+Copy-DriverStoreFirmware -Firmware $firmware -FromDir $FirmwareDir -Destination (Join-Path $pkg 'payload\kmd')
+# DriverStore staging is before Inf2Cat. Keep the input pins unchanged; the
+# mapping records the destination of each source slot and the two ICD JSON edits.
+$driverPackageReport = Join-Path $pkg 'installer\driver-package.json'
+$r = Invoke-Headless -File $pythonExe -Arguments @((Join-Path $PSScriptRoot 'driver_package.py'), '--package', $pkg,
+    '--sources', $sourcesPath, '--flavour', $Flavour, '--report', $driverPackageReport) -TimeoutSeconds 180
+if ($r.code -ne 0) { throw "DriverStore staging: $($r.text)" }
+$driverPackage = Get-Content -LiteralPath $driverPackageReport -Raw | ConvertFrom-Json
+$driverMembersBySource = @{}
+foreach ($member in $driverPackage.members) { $driverMembersBySource[[string]$member.source] = $member }
 $installText = Get-Content -LiteralPath (Join-Path $pkg 'INSTALL.md') -Raw
 foreach ($f in $fwFiles) { if ($installText -notmatch [regex]::Escape($f.sha256.ToLowerInvariant())) { throw "INSTALL.md (GPU firmware) does not list $($f.name) with SHA256 $($f.sha256)" } }
 if ($installText -notmatch $firmware.commit) { throw "INSTALL.md (GPU firmware) does not name linux-firmware $($firmware.commit)" }
@@ -440,17 +467,18 @@ foreach ($program in @(
 if ($checkedPrograms -eq 0) { throw 'guide art: no packaged program was checked' }
 
 Write-Host 'driver version'
-# DriverVer is the only release rewrite. The display class forbids the Reboot directive (BD-152).
+# Stamp DriverVer and our product identity. The display class forbids Reboot (BD-152).
 # The installer defers binding through DiInstallDriverW(INSTALL_AS_SET), preserving BD-060 outside the INF.
 . (Join-Path $PSScriptRoot 'installer\common.ps1')
 . (Join-Path $PSScriptRoot 'installer\deferred-driver.ps1')
 $infPath = Join-Path $pkg 'payload\kmd\bc250kmd.inf'
 $infText = [IO.File]::ReadAllText($infPath)
 if (Test-InfHasReboot ($infText -split "`r?`n")) { throw 'display INF must not contain Reboot (BD-152)' }
-# Only the 4th field is the release's: the first three name the KMD build (kmd_version).
-$kmdBase = (([string]$sources.kmd_version) -split '\.')[0..2] -join '.'
-if ($DriverVer -notmatch ('^' + [regex]::Escape($kmdBase) + '\.\d+$')) { throw "DriverVer $DriverVer does not belong to KMD $($sources.kmd_version)" }
-if ($Version -notlike "$DriverVer-*") { throw "release version $Version does not start with DriverVer $DriverVer" }
+# BD-152: package identity is installation-owned. Never derive it from the embedded KMD build.
+$productQuad = Get-ProductPackageQuad $Version
+$mappedQuad = Get-PackageDriverQuad $productQuad
+if ($DriverVer -and $DriverVer -cne $mappedQuad) { throw "DriverVer $DriverVer differs from package mapping $mappedQuad" }
+$DriverVer = $mappedQuad
 # BD-150: the date is the release's too (release-sources.json driver_date), and the release must rank above the one it
 # supersedes. PnP orders packages of one rank by DriverVer date, then by version, and keeps the installed package on a
 # tie: tester.29 and 29v2 both said 10/12/2026,0.7.216.100, and the 29v2 install left the tester.29 KMD on the GPU. The
@@ -477,10 +505,13 @@ $oldDate = ConvertFrom-InfDate $Matches[1] 'supersedes.driver_ver'
 $oldVer = [version]$Matches[2]
 if (-not (($driverDate -gt $oldDate) -or (($driverDate -eq $oldDate) -and ([version]$DriverVer -gt $oldVer)))) {
     throw ("DriverVer $($sources.driver_date),$DriverVer does not rank above $($sources.supersedes.release) ($($sources.supersedes.driver_ver)): " +
-           'Windows would keep that package. Set a later driver_date, or a higher -DriverVer on the same date.')
+           'Windows would keep that package. Set a later driver_date, or a higher product package version on the same date.')
 }
 $driverDateText = $driverDate.ToString('MM/dd/yyyy', [Globalization.CultureInfo]::InvariantCulture)
 $infText = $rx.Replace($infText, { param($m) $m.Groups[1].Value + $driverDateText + ',' + $DriverVer + $m.Groups[4].Value })
+$productRx = [regex]'(?m)^(PackageProductVersion\s*=\s*")[0-9.]+("\r?)$'
+if ($productRx.Matches($infText).Count -ne 1) { throw 'INF must define PackageProductVersion once' }
+$infText = $productRx.Replace($infText, { param($m) $m.Groups[1].Value + $productQuad + $m.Groups[2].Value })
 [IO.File]::WriteAllText($infPath, $infText)
 if ($infText -notmatch ('(?m)^DriverVer\s*=\s*' + [regex]::Escape("$driverDateText,$DriverVer") + '\s*$')) { throw 'DriverVer rewrite failed' }
 '  DriverVer {0},{1} (above {2}, {3})' -f $driverDateText, $DriverVer, $sources.supersedes.release, $sources.supersedes.driver_ver
@@ -499,29 +530,74 @@ function Invoke-Sign([string]$Path) {
 Invoke-Sign (Join-Path $kmd 'bc250kmd.sys')
 # BD-150: Windows names a driver package by its INF, so two packages with different bc250kmd.sys files must never share
 # one INF: pnputil answers "Already exists in the system" for the second and keeps the first one's KMD. One comment line
-# under DriverVer names the release and the signed KMD, so the INF changes whenever the KMD does.
+# under DriverVer names the release and every payload hash, including user-mode
+# files. A UMD-only update must get a distinct package identity too.
 $kmdSha = (Get-FileHash -LiteralPath (Join-Path $kmd 'bc250kmd.sys') -Algorithm SHA256).Hash
 $infText = [IO.File]::ReadAllText($infPath)
 $dvLine = [regex]'(?m)^DriverVer\s*=.*$'
 if ($dvLine.Matches($infText).Count -ne 1) { throw 'bc250kmd.inf: expected exactly one DriverVer line' }
-$identity = "; release $Version, bc250kmd.sys SHA256 $kmdSha"
+$payloadIdentity = @("bc250kmd.sys=$kmdSha")
+$payloadIdentity += @(Get-ChildItem -LiteralPath $kmd -Recurse -File | Where-Object { $_.Extension -notin '.inf','.cat' -and $_.Name -ne 'bc250kmd.sys' } | Sort-Object FullName | ForEach-Object {
+    $_.FullName.Substring($kmd.Length + 1).Replace('\','/') + '=' + (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash
+})
+$hasher = [Security.Cryptography.SHA256]::Create()
+try { $payloadDigest = [BitConverter]::ToString($hasher.ComputeHash([Text.Encoding]::UTF8.GetBytes(($payloadIdentity -join "`n")))).Replace('-','') }
+finally { $hasher.Dispose() }
+$identity = "; release $Version, bc250kmd.sys SHA256 $kmdSha, submitted driver payload SHA256 $payloadDigest"
 $infText = $dvLine.Replace($infText, { param($m) $cr = $(if ($m.Value.EndsWith("`r")) { "`r" } else { '' }); $m.Value.TrimEnd("`r") + $cr + "`n" + $identity + $cr })
 [IO.File]::WriteAllText($infPath, $infText)
 '  INF identity: {0}' -f $identity
+foreach ($mode in '/w','/h') {
+    $r = Invoke-Headless -File $infverif -Arguments @($mode, $infPath) -TimeoutSeconds 120
+    if ($r.code -ne 0) { throw "InfVerif $mode failed: $($r.text)" }
+}
 $r = Invoke-Headless -File $inf2cat -Arguments @("/driver:$kmd", '/os:10_X64', '/uselocaltime') -TimeoutSeconds 300
 if ($r.code -ne 0) { throw "Inf2Cat failed: $($r.text)" }
 Invoke-Sign (Join-Path $kmd 'bc250kmd.cat')
+if ($SubmissionCab) {
+    # The submission contains the original images and exact symbols. The local
+    # test-signing simulation below produces the separately installed package.
+    if (-not $KmdPdb) {
+        $inputSys = Join-Path $Root ([string]($sources.files | Where-Object path -ceq 'payload/kmd/bc250kmd.sys').source)
+        $KmdPdb = Join-Path (Split-Path $inputSys) 'bc250kmd.pdb'
+        if (-not (Test-Path -LiteralPath $KmdPdb)) { $KmdPdb = Join-Path (Split-Path (Split-Path $inputSys)) 'bc250kmd.pdb' }
+    }
+    . (Join-Path $PSScriptRoot 'submission-cab.ps1')
+    New-DriverSubmissionCab -DriverDirectory $kmd -Destination $SubmissionCab -KmdPdb $KmdPdb `
+        -PdbReader (Join-Path $Root 'toolchain\llvm-23.1.2-win64\bin\llvm-pdbutil.exe')
+}
+if ($MockAttestation) {
+    . (Join-Path $PSScriptRoot 'mock-attestation.ps1')
+    Invoke-DriverMockAttestation -DriverDirectory $kmd -ImageIdentityFile (Join-Path $Out 'driver-image-identities.json') `
+        -SignTool $signtool -Inf2Cat $inf2cat -TestCertificate $cer -ExpectedRoot $ExpectedSigningRoot -KmdAlreadySigned `
+        -SignFile { param([string]$Path) Invoke-Sign $Path }
+    # Signing changes whole-file hashes; the v3 D3D11 code identity stays fixed.
+    foreach ($member in $driverPackage.members) {
+        $memberPath = Join-Path $pkg ([string]$member.path)
+        $member.sha256 = (Get-FileHash -LiteralPath $memberPath -Algorithm SHA256).Hash
+        $member.size = (Get-Item -LiteralPath $memberPath).Length
+    }
+    [IO.File]::WriteAllText($driverPackageReport, ($driverPackage | ConvertTo-Json -Depth 20), [Text.UTF8Encoding]::new($false))
+}
 $pass = $null
 foreach ($f in 'bc250kmd.sys', 'bc250kmd.cat') {
     $s = Get-AuthenticodeSignature -LiteralPath (Join-Path $kmd $f)
     if (-not $s.SignerCertificate -or $s.SignerCertificate.Thumbprint -ne $release.Thumbprint) { throw "$f is not signed by the release certificate $($release.Thumbprint)" }
     '  {0} signed by {1}' -f $f, $release.Thumbprint
 }
+# The catalog was built from a complete package. Check its actual members before
+# excluding the eight inputs from the public ZIP; hydration must reproduce them.
+$ps51 = Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
+$r = Invoke-Headless -File $ps51 -Arguments @('-NoProfile', '-NonInteractive', '-File', (Join-Path $PSScriptRoot 'test-firmware-catalog.ps1'), '-Directory', $kmd) -TimeoutSeconds 60
+if ($r.code -ne 0) { throw "firmware catalog membership: $($r.text)" }
+Test-DriverCatalogMembers -Directory $kmd -Names @($driverPackage.members | ForEach-Object { [string]$_.member })
+foreach ($fwBlobName in Get-DriverStoreFirmwareNames) { Remove-Item -LiteralPath (Join-Path $kmd $fwBlobName) -Force }
 
 Write-Host 'gates'
 $forbidden = @(Get-ChildItem -LiteralPath $pkgRoot -Recurse -File | Where-Object { $_.Extension -in '.pfx', '.pass', '.pem', '.key', '.p12', '.pvk' })
 if ($forbidden.Count) { throw "private-key material in the package: $($forbidden.FullName -join ', ')" }
-$blobs = @(Get-ChildItem -LiteralPath $pkgRoot -Recurse -File | Where-Object { $_.Extension -eq '.bin' -or $_.FullName -like '*\payload\firmware\*' })
+$blobs = @(Get-ChildItem -LiteralPath $pkgRoot -Recurse -File | Where-Object {
+    ($_.Extension -eq '.bin' -and $_.FullName -ne (Join-Path $kmd 'amdgpu-state.bin')) -or $_.FullName -like '*\payload\firmware\*' })
 if ($blobs.Count) { throw "AMD firmware in the package (the installer downloads it): $($blobs.FullName -join ', ')" }
 '  no private-key material, no firmware file'
 # The unpacked release's top folder: setup.exe (with its configuration file, when there is one) and the one folder
@@ -531,6 +607,17 @@ $topFiles = @(Get-ChildItem -LiteralPath $pkgRoot -File | ForEach-Object { $_.Na
 $topDirs = @(Get-ChildItem -LiteralPath $pkgRoot -Directory | ForEach-Object { $_.Name } | Where-Object { $_ -ne 'files' })
 if ($topFiles.Count -or $topDirs.Count) { throw "the unpacked package's top folder may hold only setup.exe and files\: it also holds $(@($topFiles + $topDirs) -join ', ')" }
 '  top folder: setup.exe and files\ only'
+# BD-166: every PE file of the unpacked release carries this release's version resource (read back through the Windows
+# version API) unless release-sources.json marks it third_party, each M14C record pins its siblings, and the order was
+# stamp, Inf2Cat, signing: each signature still covers its file and each catalog lists the file's hash. --signed: this
+# release signs every PE file, so an unsigned one (or this gate placed before the signing) fails too.
+# --workspace: without it the check skips the capability comparison of each staged record, and -NoProvenance also
+# removes the provenance gate's own reconstruction, so such a candidate would have no capability coverage at all.
+# After the check v3 revision a missing or unpinned lane input fails instead of being skipped quietly, which is
+# what makes passing the workspace safe to insist on here.
+$r = Invoke-Headless -File $pythonExe -Arguments @($stampTool, 'check', '--package-top', $pkgRoot, '--version', $Version, '--sources', $sourcesPath, '--inf', $stampInf, '--signed', '--flavour', $Flavour, '--workspace', $Root) -TimeoutSeconds 600
+$r.text
+if ($r.code -ne 0) { throw 'version resources: a PE file lacks the resource of this release, or a step ran out of order (see above)' }
 # The packaged copies against release-sources.json: each is its source byte for byte, the re-signed kernel driver keeps
 # its recorded Authenticode digest, and only an entry that names its "release_edits" (the INF) differs otherwise.
 if ($NoProvenance) {
@@ -550,6 +637,8 @@ if ($r.code -ne 0) { throw 'a script does not parse under Windows PowerShell 5.1
 $r = Invoke-Headless -File $ps51 -Arguments @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $PSScriptRoot 'test-cli-commands.ps1'), '-Cli', (Join-Path $pkg 'payload\tools\bc250kmd_cli.exe'), '-Sources', $sourcesPath) -TimeoutSeconds 60
 $r.text
 if ($r.code -ne 0) { throw 'bc250kmd_cli.exe lacks a form of cli-commands.json, or the CLI and the control DLL come from different builds' }
+. (Join-Path $PSScriptRoot 'state-package.ps1')
+Test-DriverStatePackage -Package $pkg -CatalogSource (Join-Path $repo 'driver\state\amdgpu-state.bin')
 # No fix lost its comment on the way into this release (test-marker-guard.ps1). A train merge or a rebase can drop
 # a fix together with the host tests that covered it, and then nothing else here notices.
 $pwshExe = (Get-Process -Id $PID).Path
@@ -557,9 +646,9 @@ $r = Invoke-Headless -File $pwshExe -Arguments @('-NoProfile', '-File', (Join-Pa
 $r.text
 if ($r.code -ne 0) { throw 'marker guard: a fix named in a source revision has no comment in this release (see above)' }
 # The packaged INF's own settings against the defaults table this package carries (BD-091, tools\quality\inf_gates.py):
-# every setting the INF writes is the released value and carries NOCLOBBER, so an install this installer does not drive
-# cannot close one gate while another stays open. The packaged INF, not the repository's: the release re-stamps
-# DriverVer and adds the Reboot directive above, and it is the packaged file that runs on a tester's computer.
+# every immutable default the INF writes is the generated released value; runtime overrides belong to the shared
+# state generation and survive through the installer transaction. The packaged INF, not the repository's: it re-stamps
+# DriverVer, our product identity and the image comment above; the packaged file runs on a tester's computer.
 $pythonExe = (Get-Command python -ErrorAction SilentlyContinue).Source
 if (-not $pythonExe) { throw 'python is not on PATH: the inf-gates gate (BD-091) cannot run' }
 $r = Invoke-Headless -File $pythonExe -Arguments @((Join-Path $repo 'tools\quality\inf_gates.py'), '--inf', $infPath, '--defaults', (Join-Path $PSScriptRoot 'installer\registry-defaults.json'), '--out', (Join-Path $Out 'inf-gates')) -TimeoutSeconds 120
@@ -577,13 +666,30 @@ $qualityCmd = Join-Path $repo 'tools\quality\quick.cmd'
 $qualityOut = Join-Path $Out 'quality-full'
 & $qualityCmd $Root $qualityOut $repo 'Full' (Join-Path $Root 'toolchain\nuget')
 if ($LASTEXITCODE -ne 0) { throw 'Full uncached release quality gates failed' }
+# A gate whose input is not in this repository records a SKIP with its reason instead of dying on a missing file
+# (quick.ps1, CheckIf), and the suite still ends with 0. That is right for a bare working copy and wrong here: the
+# gates below read the user-mode driver's Mesa tree, its build database and the MSVC compiler, all of which a
+# release build has in front of it, so a SKIP of one of them means this package was cut without the gate that reads
+# the shipped user-mode sources. The exit code does not say so, so the receipt is read.
+$mustRun = @('umd-contract', 'umd-analysis', 'surface-control', 'kmd-contract', 'kmd-analysis', 'allocation-identity',
+             'hang-witness', 'object-index')
+$qualityReceipt = Join-Path $qualityOut 'result.json'
+if (-not (Test-Path -LiteralPath $qualityReceipt)) { throw "the quality suite left no receipt at $qualityReceipt" }
+$qualityChecks = (Get-Content -LiteralPath $qualityReceipt -Raw | ConvertFrom-Json).checks
+$notRun = @()
+foreach ($name in $mustRun) {
+    $row = @($qualityChecks | Where-Object { $_.name -eq $name })
+    if ($row.Count -ne 1) { $notRun += "${name}: not in the receipt"; continue }
+    if ($row[0].status -ne 'PASS') { $notRun += "$name $($row[0].status): $($row[0].reason)" }
+}
+if ($notRun.Count) { throw ("a release needs every gate of the user-mode sources: " + ($notRun -join '; ')) }
 
 Write-Host 'manifest'
 # Where each payload directory lands on the tester PC (install.ps1 does the copying).
 function Get-InstallLocation([string]$PackagePath) {
     $leaf = Split-Path $PackagePath -Leaf
     switch -Regex ($PackagePath) {
-        '^payload/kmd/' { return "DriverStore (bc250kmd.inf)\$leaf" }
+        '^payload/kmd/(.+)$' { return ('DriverStore (bc250kmd.inf)\' + $Matches[1].Replace('/', '\')) }
         '^payload/system32/' { return "%SystemRoot%\System32\$leaf" }
         '^payload/syswow64/' { return "%SystemRoot%\SysWOW64\$leaf" }
         '^payload/wow64/(\w+)/' { return "<InstallDir>\wow64\$($Matches[1])\$leaf" }
@@ -600,25 +706,20 @@ function Get-InstallLocation([string]$PackagePath) {
 $components = @()
 $extra = @($taskScripts | ForEach-Object { [pscustomobject]@{ component = 'tool'; path = "payload/tools/$_" } }) + @([pscustomobject]@{ component = 'certificate'; path = 'payload/cert/amdgpu-wddm-release.cer' }) + $tuningRows + $wallpaperRows
 foreach ($f in $sources.files + $extra) {
-    $p = Join-Path $pkg ($f.path -replace '/', '\')
+    $packagePath = [string]$f.path
+    if ($driverMembersBySource.ContainsKey($packagePath)) { $packagePath = [string]$driverMembersBySource[$packagePath].path }
+    $p = Join-Path $pkg ($packagePath -replace '/', '\')
     $ver = (Get-Item -LiteralPath $p).VersionInfo.FileVersion
-    $components += [ordered]@{ role = $f.component; package_path = $f.path; install_path = (Get-InstallLocation $f.path); version = $(if ($ver) { $ver.Trim() } else { $null }); sha256 = (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash }
+    $components += [ordered]@{ role = $f.component; package_path = $packagePath; install_path = (Get-InstallLocation $packagePath); version = $(if ($ver) { $ver.Trim() } else { $null }); sha256 = (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash }
 }
 # Downloaded at install time: no package path, the same install path and SHA256 check in the control application.
-foreach ($f in $fwFiles) { $components += [ordered]@{ role = 'firmware'; package_path = $null; install_path = "$($firmware.install_dir)\$($f.name)"; version = $null; sha256 = $f.sha256 } }
+foreach ($f in $fwFiles) {
+    $fwInstalled = if ($f.name -ceq 'LICENSE.amdgpu') { '<InstallDir>\licenses\LICENSE.amdgpu' }
+        else { "DriverStore (bc250kmd.inf)\$($f.name)" }
+    $components += [ordered]@{ role = 'firmware'; package_path = $null; install_path = $fwInstalled; version = $null; sha256 = $f.sha256 }
+}
 # The optional components of this release (installer\components.ps1): our llama.cpp build and our Ollama build are
 # release assets, not package files. tools\release\components.json is the pinned list; this writes it into the package
-# BD-166: every PE file of the unpacked release carries this release's version resource (read back through the Windows
-# version API) unless release-sources.json marks it third_party, each M14C record pins its siblings, and the order was
-# stamp, Inf2Cat, signing: each signature still covers its file and each catalog lists the file's hash. --signed: this
-# release signs every PE file, so an unsigned one (or this gate placed before the signing) fails too.
-# --workspace: without it the check skips the capability comparison of each staged record, and -NoProvenance also
-# removes the provenance gate's own reconstruction, so such a candidate would have no capability coverage at all.
-# After the check v3 revision a missing or unpinned lane input fails instead of being skipped quietly, which is
-# what makes passing the workspace safe to insist on here.
-$r = Invoke-Headless -File $pythonExe -Arguments @($stampTool, 'check', '--package-top', $pkgRoot, '--version', $Version, '--sources', $sourcesPath, '--inf', $stampInf, '--signed', '--flavour', $Flavour, '--workspace', $Root) -TimeoutSeconds 600
-$r.text
-if ($r.code -ne 0) { throw 'version resources: a PE file lacks the resource of this release, or a step ran out of order (see above)' }
 # as installer\components.json with {release} expanded, and manifest.json names it under optional_components, so the
 # existing package-integrity check covers it like every other file. A component whose asset SHA-256 is not filled in
 # has no pin: it stays in the list, the installer refuses it with a plain message and downloads nothing. A package can
@@ -666,29 +767,13 @@ if (Test-Path -LiteralPath $componentSource -PathType Leaf) {
     foreach ($id in $cmUnpinned) { "  WARNING: component '$id' has no SHA-256 in tools\release\components.json: this package will refuse it. Upload its zip as a release asset and fill size and sha256." }
 } else { '  components: tools\release\components.json is not in this workspace: this package offers no optional component' }
 
-# A gate whose input is not in this repository records a SKIP with its reason instead of dying on a missing file
-# (quick.ps1, CheckIf), and the suite still ends with 0. That is right for a bare working copy and wrong here: the
-# gates below read the user-mode driver's Mesa tree, its build database and the MSVC compiler, all of which a
-# release build has in front of it, so a SKIP of one of them means this package was cut without the gate that reads
-# the shipped user-mode sources. The exit code does not say so, so the receipt is read.
-$mustRun = @('umd-contract', 'umd-analysis', 'surface-control', 'kmd-contract', 'kmd-analysis', 'allocation-identity',
-             'hang-witness', 'object-index')
-$qualityReceipt = Join-Path $qualityOut 'result.json'
-if (-not (Test-Path -LiteralPath $qualityReceipt)) { throw "the quality suite left no receipt at $qualityReceipt" }
-$qualityChecks = (Get-Content -LiteralPath $qualityReceipt -Raw | ConvertFrom-Json).checks
-$notRun = @()
-foreach ($name in $mustRun) {
-    $row = @($qualityChecks | Where-Object { $_.name -eq $name })
-    if ($row.Count -ne 1) { $notRun += "${name}: not in the receipt"; continue }
-    if ($row[0].status -ne 'PASS') { $notRun += "$name $($row[0].status): $($row[0].reason)" }
-}
-if ($notRun.Count) { throw ("a release needs every gate of the user-mode sources: " + ($notRun -join '; ')) }
 # The compatibility record (installer\compatibility.ps1, GUI plan C7): written from the final INF, installer and payload,
 # listed in manifest.json like every other file, and verified below once the manifest exists.
 . (Join-Path $PSScriptRoot 'installer\engine.ps1')
 . (Join-Path $PSScriptRoot 'installer\release-witness.ps1')
 . (Join-Path $PSScriptRoot 'installer\compatibility.ps1')
-$compat = New-CompatibilityRecord -PackageRoot $pkg -Version $Version -Firmware $firmware -KmdBuild ([string]$sources.kmd_version) -KmdAbi ([string]$sources.kmd_abi) -DriverVer $DriverVer
+$versionIdentity = New-PackageVersionIdentity -Release $Version -DriverDate $driverDateText -KmdBuild ([string]$sources.kmd_version) -KmdAbi ([string]$sources.kmd_abi) -KmdSha256 $kmdSha
+$compat = New-CompatibilityRecord -PackageRoot $pkg -Version $Version -Firmware $firmware -KmdBuild ([string]$sources.kmd_version) -KmdAbi ([string]$sources.kmd_abi) -DriverVer $DriverVer -VersionIdentity $versionIdentity
 if ($compat.no_live_rebind.method -ne 'di-install-as-set' -or $compat.no_live_rebind.reboot_directive) { throw 'compatibility record: deferred driver-set contract missing' }
 [IO.File]::WriteAllText((Join-Path $pkg $script:CompatibilityFile), ($compat | ConvertTo-Json -Depth 6))
 '  compatibility record: engine {0}, {1}, {2} firmware files, settings table schema {3}' -f $compat.engine.contract, $compat.no_live_rebind.method, @($compat.firmware.files).Count, $compat.settings.table_schema
@@ -724,7 +809,8 @@ if ($sources.PSObject.Properties['mft_h264']) {
         clsid = [string]$sources.mft_h264.clsid; friendly_name = [string]$sources.mft_h264.friendly_name }
     if ($mftRelease.clsid -ne $script:MftClsid) { throw "release-sources.json mft_h264.clsid $($mftRelease.clsid) is not the installer's $($script:MftClsid)" }
     if ($mftRelease.friendly_name -ne $script:MftFriendlyName) { throw "release-sources.json mft_h264.friendly_name '$($mftRelease.friendly_name)' is not the installer's '$($script:MftFriendlyName)'" }
-    if ($mftRelease.package_path -ne $script:MftPackagePath) { throw "release-sources.json mft_h264.package_path $($mftRelease.package_path) is not the installer's $($script:MftPackagePath)" }
+    if ($driverMembersBySource.ContainsKey($mftRelease.package_path)) { $mftRelease.package_path = [string]$driverMembersBySource[$mftRelease.package_path].path }
+    if ($mftRelease.register -and $mftRelease.package_path -ne 'payload/kmd/mft/amdgpu_wddm_mft_h264.dll') { throw 'MFT must be part of the DriverStore package' }
     if ($mftRelease.register -and -not (Test-Path -LiteralPath (Join-Path $pkg ($mftRelease.package_path -replace '/', '\')))) {
         throw "release-sources.json registers the H.264 encoder MFT, but the package has no $($mftRelease.package_path): add its files row"
     }
@@ -748,6 +834,12 @@ if ($name -ne (Split-Path -Leaf $pkgRoot)) { throw "build-release: the package n
 # installer\common.ps1 Get-OpenGlPayloadProblems, so the build and the gates read one rule.
 $glRelease = $null
 if ($sources.PSObject.Properties['opengl_icd']) {
+    # The source slots keep their build provenance; only the release descriptor
+    # changes to the catalog-covered package paths before payload verification.
+    foreach ($property in 'package_path','package_path_wow') {
+        $oldGlPath = [string]$sources.opengl_icd.$property
+        if ($driverMembersBySource.ContainsKey($oldGlPath)) { $sources.opengl_icd.$property = [string]$driverMembersBySource[$oldGlPath].path }
+    }
     $gl = Get-OpenGlReleaseSwitch -Manifest $sources -PackageRoot $pkg
     $glRelease = [ordered]@{ register = [bool]$gl.register; architectures = @($gl.architectures)
         package_path = [string]$gl.package_path; package_path_wow = [string]$gl.package_path_wow
@@ -767,12 +859,38 @@ if ($sources.PSObject.Properties['opengl_icd']) {
         '  OpenGL ICD: not registered by this release'
     }
 }
+# The symbols of the shipped files (symbols.py). A crash report from a tester, a dump from the lab and a
+# debugger session all need the symbols of the exact bytes that ran, and a PDB is larger than the driver, so
+# the package carries none of them: the archive stands beside this build, one directory per flavour, mirroring
+# the payload layout (three builds of the RADV ICD all record the name vulkan_radeon.pdb). The manifest records
+# the GUID and age of each PE's own debug directory, which no other build repeats, so the archived file can be
+# tied to the shipped byte later. The archive never goes into the package and never onto GitHub.
+Write-Host 'symbols'
+$symbolArchive = Join-Path $Out "symbols\$Flavour"
+$symbolRecords = Join-Path $Out "symbols-$Flavour.json"
+$r = Invoke-Headless -File $pythonExe -Arguments @((Join-Path $PSScriptRoot 'symbols.py'), 'archive',
+    '--sources', $sourcesPath, '--root', $Root, '--package', $pkg, '--out', $symbolArchive,
+    '--records', $symbolRecords) -TimeoutSeconds 600
+$r.text
+if ($r.code -ne 0) { throw 'symbols: a shipped file has no symbol file of its own build (see above)' }
+$symbols = [ordered]@{ archive = "symbols/$Flavour"; in_package = $false
+    files = (Get-Content -LiteralPath $symbolRecords -Raw | ConvertFrom-Json) }
+
 $manifest = [ordered]@{
     schema = 1
+    driver_package = $driverPackage
+    flavour = $Flavour
+    driver_signing = [ordered]@{
+        mode = $(if ($MockAttestation) { 'mock-attestation' } else { 'candidate-no-mock' })
+        verification = $ExpectedSigningRoot
+        certificate_thumbprint = $release.Thumbprint
+        submitted_payload_sha256 = $payloadDigest
+    }
     name = $name
     release = $Version
     version = $Version
     kmd_version = $DriverVer
+    version_identity = $versionIdentity
     kmd_build = $sources.kmd_version
     kmd_abi = $sources.kmd_abi             # BC250_KMD_VERSION, what bc250kmd_cli info reports (start-confirm, verify)
     built_utc = [DateTime]::UtcNow.ToString('o')
@@ -795,6 +913,7 @@ $manifest = [ordered]@{
     opengl_icd = $glRelease       # the OpenGL ICD switch (BD-076); absent in a release that has no GL ICD at all
     optional_components = $optionalComponents   # the extras (installer/components.json); $null in a release without any
     sources = $sources.sources
+    symbols = $symbols            # where this build's symbol files are, and which file belongs to which byte
     firmware = $firmware
     defaults = $regDefaults.defaults
     licenses = @($sources.licenses | ForEach-Object { [ordered]@{ file = "licenses/$($_.file)"; repository = $_.repository; path = $_.path; ref = $_.ref; sha256 = $_.sha256 } })
@@ -802,6 +921,12 @@ $manifest = [ordered]@{
     files = $files
 }
 [IO.File]::WriteAllText((Join-Path $pkg 'manifest.json'), ($manifest | ConvertTo-Json -Depth 8))
+# The archive read back against the package that ships, the way the version stamps are read back: every PE of
+# the package has its symbol file in the archive, and that file carries the identity the PE names.
+$r = Invoke-Headless -File $pythonExe -Arguments @((Join-Path $PSScriptRoot 'symbols.py'), 'check',
+    '--package', $pkg, '--symbols', $symbolArchive) -TimeoutSeconds 600
+$r.text
+if ($r.code -ne 0) { throw 'symbols: the archive does not match the package that ships (see above)' }
 $cv = Test-CompatibilityRecord -PackageRoot $pkg
 if (-not $cv.ok) { throw "compatibility record does not verify: $($cv.detail)" }
 '  compatibility record verifies against the package'
@@ -815,55 +940,8 @@ Compress-Archive -Path $pkgRoot -DestinationPath $zip
 # nothing. make-setup-exe.ps1 -Check is the gate - it reads the exe back and compares every file of the payload with
 # the file of this package, byte for byte, and -ReleaseZip compares it with the entries of the zip written above, so an exe
 # whose payload is not the files of this release's archive cannot be published.
-$setupOne = Join-Path $Out "amdgpu-wddm-setup-$Version.exe"
+$setupSuffix = if ($Flavour -eq 'lab') { '-lab' } else { '' }
+$setupOne = Join-Path $Out "amdgpu-wddm-setup-$Version$setupSuffix.exe"
 & (Join-Path $PSScriptRoot 'make-setup-exe.ps1') -PackageTop $pkgRoot -Out $setupOne -Check -ReleaseZip $zip | ForEach-Object { "  $_" }
 if (-not (Test-Path -LiteralPath $setupOne -PathType Leaf)) { throw "make-setup-exe.ps1 wrote no $setupOne" }
 'single exe {0} SHA256 {1}' -f $setupOne, (Get-FileHash -LiteralPath $setupOne).Hash
-# The symbols of the shipped files (symbols.py). A crash report from a tester, a dump from the lab and a
-# debugger session all need the symbols of the exact bytes that ran, and a PDB is larger than the driver, so
-# the package carries none of them: the archive stands beside this build, one directory per flavour, mirroring
-# the payload layout (three builds of the RADV ICD all record the name vulkan_radeon.pdb). The manifest records
-# the GUID and age of each PE's own debug directory, which no other build repeats, so the archived file can be
-# tied to the shipped byte later. The archive never goes into the package and never onto GitHub.
-Write-Host 'symbols'
-$symbolArchive = Join-Path $Out "symbols\$Flavour"
-$symbolRecords = Join-Path $Out "symbols-$Flavour.json"
-$r = Invoke-Headless -File $pythonExe -Arguments @((Join-Path $PSScriptRoot 'symbols.py'), 'archive',
-    '--sources', $sourcesPath, '--root', $Root, '--package', $pkg, '--out', $symbolArchive,
-    '--records', $symbolRecords) -TimeoutSeconds 600
-$r.text
-if ($r.code -ne 0) { throw 'symbols: a shipped file has no symbol file of its own build (see above)' }
-$symbols = [ordered]@{ archive = "symbols/$Flavour"; in_package = $false
-    files = (Get-Content -LiteralPath $symbolRecords -Raw | ConvertFrom-Json) }
-
-    symbols = $symbols            # where this build's symbol files are, and which file belongs to which byte
-# The archive read back against the package that ships, the way the version stamps are read back: every PE of
-# the package has its symbol file in the archive, and that file carries the identity the PE names.
-$r = Invoke-Headless -File $pythonExe -Arguments @((Join-Path $PSScriptRoot 'symbols.py'), 'check',
-    '--package', $pkg, '--symbols', $symbolArchive) -TimeoutSeconds 600
-$r.text
-if ($r.code -ne 0) { throw 'symbols: the archive does not match the package that ships (see above)' }
-# The symbols of the shipped files (symbols.py). A crash report from a tester, a dump from the lab and a
-# debugger session all need the symbols of the exact bytes that ran, and a PDB is larger than the driver, so
-# the package carries none of them: the archive stands beside this build, one directory per flavour, mirroring
-# the payload layout (three builds of the RADV ICD all record the name vulkan_radeon.pdb). The manifest records
-# the GUID and age of each PE's own debug directory, which no other build repeats, so the archived file can be
-# tied to the shipped byte later. The archive never goes into the package and never onto GitHub.
-Write-Host 'symbols'
-$symbolArchive = Join-Path $Out "symbols\$Flavour"
-$symbolRecords = Join-Path $Out "symbols-$Flavour.json"
-$r = Invoke-Headless -File $pythonExe -Arguments @((Join-Path $PSScriptRoot 'symbols.py'), 'archive',
-    '--sources', $sourcesPath, '--root', $Root, '--package', $pkg, '--out', $symbolArchive,
-    '--records', $symbolRecords) -TimeoutSeconds 600
-$r.text
-if ($r.code -ne 0) { throw 'symbols: a shipped file has no symbol file of its own build (see above)' }
-$symbols = [ordered]@{ archive = "symbols/$Flavour"; in_package = $false
-    files = (Get-Content -LiteralPath $symbolRecords -Raw | ConvertFrom-Json) }
-
-    symbols = $symbols            # where this build's symbol files are, and which file belongs to which byte
-# The archive read back against the package that ships, the way the version stamps are read back: every PE of
-# the package has its symbol file in the archive, and that file carries the identity the PE names.
-$r = Invoke-Headless -File $pythonExe -Arguments @((Join-Path $PSScriptRoot 'symbols.py'), 'check',
-    '--package', $pkg, '--symbols', $symbolArchive) -TimeoutSeconds 600
-$r.text
-if ($r.code -ne 0) { throw 'symbols: the archive does not match the package that ships (see above)' }

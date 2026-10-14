@@ -41,6 +41,9 @@ typedef void* PVOID;
 /* ACTUAL_JOB_TYPE */
 typedef struct {
  BC250_PAGING_JOB *PagingHead,*PagingTail;
+ LONG PagingDiagnosticTaken;
+ /* Queue-only recovery input; the preemption harness substitutes the real state type. */
+ struct {BOOLEAN ResetActive;} Recovery[2];
  ULONGLONG PagingDeadline,PagingHwEpoch;
  /* FENCE_LEDGER_FIELD */
  int Stopping,WatchdogFaulted[2],PagingHwPending,PagingDeferredValid,PreemptionPending[2];

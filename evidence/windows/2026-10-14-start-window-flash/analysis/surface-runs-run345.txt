@@ -1,0 +1,38 @@
+== run3 (20261014-110945)
+71654 reads, 151 runs, 151 hashes; runs of 1-3 reads: 1, hashes [('f707b8a381a645e3', 1)]
+   0.0000 s  25f00dbe2339f1a9  reads   472     973.00 ms  seen 1x
+   0.9749 s  341a8031c80e2466  reads   383     796.22 ms  seen 1x
+   1.7731 s  0b7e54760e7567d8  reads   492    1021.20 ms  seen 1x
+   2.7962 s  77ac29b21efe3b86  reads   502    1044.68 ms  seen 1x
+   3.8430 s  ad1116271b720c5c  reads   496    1027.27 ms  seen 1x
+   4.8721 s  f2e0f286bf9960a2  reads   493    1018.88 ms  seen 1x
+   5.8930 s  3540284529f4c17d  reads   492    1019.34 ms  seen 1x
+   6.9142 s  7bfc62ab918b46fd  reads   490    1019.60 ms  seen 1x
+   7.9360 s  b3cc05438aff16bf  reads   498    1035.47 ms  seen 1x
+
+== run4 (20261014-111307)
+28739 reads, 107 runs, 61 hashes; runs of 1-3 reads: 47, hashes [('69b00b13dfdbc8af', 47)]
+   0.0000 s  bba9005c8b13be8a  reads   423     881.48 ms  seen 1x
+   0.8834 s  69b00b13dfdbc8af  reads     1       0.13 ms  seen 47x
+   0.8854 s  4a6e18b24e2a87b7  reads   487    1013.15 ms  seen 1x
+   1.9003 s  69b00b13dfdbc8af  reads     1       0.20 ms  seen 47x
+   1.9023 s  50514e3e465a5189  reads   496    1030.36 ms  seen 1x
+   2.9348 s  69b00b13dfdbc8af  reads     2       2.03 ms  seen 47x
+   2.9389 s  a6c3246784ab89c7  reads   386     799.12 ms  seen 1x
+   3.7399 s  69b00b13dfdbc8af  reads     1       0.12 ms  seen 47x
+   3.7419 s  9e64ca1c97847638  reads   492    1024.63 ms  seen 1x
+repeated short states: 46; reads in them Counter({1: 40, 2: 6}); gap from the previous read median 1.96 ms, to the next 1.92 ms
+
+== run5 (20261014-111441)
+28085 reads, 117 runs, 62 hashes; runs of 1-3 reads: 56, hashes [('69b00b13dfdbc8af', 55), ('f707b8a381a645e3', 1)]
+   0.0000 s  bba9005c8b13be8a  reads    33      66.08 ms  seen 1x
+   0.0682 s  69b00b13dfdbc8af  reads     2       2.06 ms  seen 56x
+   0.0723 s  4a6e18b24e2a87b7  reads   233     489.65 ms  seen 1x
+   0.5638 s  69b00b13dfdbc8af  reads     1       0.28 ms  seen 56x
+   0.5658 s  50514e3e465a5189  reads   504    1049.58 ms  seen 1x
+   1.6173 s  69b00b13dfdbc8af  reads     1       0.15 ms  seen 56x
+   1.6192 s  a6c3246784ab89c7  reads   366     756.80 ms  seen 1x
+   2.3781 s  69b00b13dfdbc8af  reads     1       0.14 ms  seen 56x
+   2.3801 s  9e64ca1c97847638  reads   501    1043.76 ms  seen 1x
+repeated short states: 55; reads in them Counter({1: 48, 2: 7}); gap from the previous read median 2.02 ms, to the next 1.87 ms
+

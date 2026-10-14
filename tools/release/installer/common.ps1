@@ -4,6 +4,10 @@
 # Every change to the system goes through Invoke-Change. In a dry run it prints what it would do and does nothing,
 # so the dry run executes the same code path as the real run, checks included.
 
+. (Join-Path $PSScriptRoot 'version-identity.ps1')
+. (Join-Path $PSScriptRoot 'firmware-package.ps1')
+. (Join-Path $PSScriptRoot 'driver-package.ps1')
+
 $script:ReleaseName      = 'amdgpu-wddm'
 $script:ServiceName      = 'bc250kmd'
 $script:HardwareIdPrefix = 'PCI\VEN_1002&DEV_13FE'          # bc250kmd.inf [Models.NTamd64.10.0...22631]
@@ -29,7 +33,7 @@ $script:RunOnceKey       = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunO
 $script:RunOnceName      = 'amdgpu-wddm-installer'
 $script:TaskName         = 'amdgpu-wddm start confirm'
 $script:WindowTaskName   = 'amdgpu-wddm start window'          # BD-080: the part that needs a session, not rights
-$script:FirmwareInstallDir      = 'C:\BC250\firmware'                 # compiled into the KMD (psp.c BC250_PSP_FIRMWARE_DIR)
+$script:FirmwareInstallDir      = 'C:\BC250\firmware'                 # legacy repair sets only; new KMD uses Driver Store
 $script:StateDir         = Join-Path $env:ProgramData 'amdgpu-wddm\installer'
 $script:StatePath        = Join-Path $script:StateDir 'state.json'
 $script:ProfileListKey   = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList'
@@ -443,6 +447,7 @@ function Set-MachinePath([string]$Value, $Kind) {
 #             tester.1 to tester.7, which kept no record): the tester did not change it, write the new default
 #   kept      any other value: the tester's (or the control application's) setting, left alone
 #   command   given on the install.cmd command line (-DpmMaxMHz, -CuMode): written
+#   chosen    a person asked for this very value and the driver still holds it (Get-UserChoice below): kept
 #   installer installer-owned (paths, counters): always written
 #   restored  a value the driver package's INF writes that is not in the table: the value from before the install
 #   reopened      the driver closed this switch itself and this install is a repair: the default is written again
@@ -483,7 +488,12 @@ function Format-RegistryValue($V) { if ($V -is [array]) { return '[' + (@($V | F
 #       DPM_SETTING_LAST_REASON at every start with the SMU online). After one more start the installer cannot tell
 #       such a driver's guard 0 from a 0 the tester wrote, and the value stays 'kept'. A reopen deletes nothing
 #       there, because the record is the reason of the last start and that start owns it.
-#   CuMode   written 24 with CuModeClosedReason, the reason of the fallback: 3 (a start with all 40 graphics cores
+#   CuMode   NOTE: from tester.31 the release default is 24 (owner, 2026-10-14), and Get-DriverClosure returns
+#       nothing where the default equals the closed value, so this entry decides nothing while that default holds:
+#       a fallback 24 is 'same' and no repair is offered for it. The entry stays as it is, so the rule below works
+#       again by itself if a later release goes back to 40. What a release default of 24 needs instead is
+#       Get-UserChoice, further down: the record of a number a person asked for.
+#       written 24 with CuModeClosedReason, the reason of the fallback: 3 (a start with all 40 graphics cores
 #       was never confirmed), or 2, 6, 7, 8 and 9 for a 40 that did not hold in the hardware (driver/kmd/cumode.c
 #       PersistFallback, from bc250_cu_decide force_stock and from bc250_cu_hardware_fallback). From KMD
 #       0.7.216.62 that record outlives its boot, because no later start overwrites it and only a start that reads
@@ -570,6 +580,59 @@ function Get-DriverClosure([string]$Name, $Current, $Default) {
     }
     return $null
 }
+# A value a person asked for, the mirror of a driver closure (BD-077 with the sign reversed). Release\AppliedDefaults
+# records what the previous installer wrote, not who decided the value, so a 40 the tester chose in the control
+# application and the 40 tester.30 applied as its own release default are the same registry state. With the release
+# default at 24 (owner, 2026-10-14) the 'update' rule would then take a chosen 40, or a chosen map of cores, away at
+# every upgrade, and nothing else tells the two apart: both end in a confirmed start, so CuModeConfirmed is 40 in
+# both, and tester.30's application never wrote a mask.
+#   CuMode   CuModeChosen holds the encoded request a person asked for (mode | disable << 8, so 24, 40, or
+#       40 | mask << 8). The control application's CU setter writes it on every run (src/CuMode.cs, step S1c), and
+#       so does install.cmd -CuMode. "Reset to defaults" removes it, which hands the number of cores back to the
+#       installed release. The driver neither reads nor writes it.
+# The record alone decides nothing: it has to match the two values next to it exactly, as they are before the
+# install. A record that does not (a driver fallback moved CuMode, or somebody edited the key) is stale and is
+# ignored, and a driver closure keeps its precedence over the record, because the driver's act is the later one.
+# Nothing has to clear a stale record: the encoding is one value per (mode, mask) pair, so a record matches again
+# only when the key holds exactly what that person asked for.
+$script:UserChoices = @{
+    CuMode = @{ record = 'CuModeChosen'; mask = 'CuDisableWgp' }
+}
+# Pure: the values this install writes on the strength of its command line, which is more than the switches name.
+# install.cmd -CuMode N is the tester's word about the number of graphics cores, so the install records it as a
+# choice of a person (CuModeChosen), the same record the control application writes. The mask stays whatever the key
+# holds, because the installer never writes one, so the record has to describe that same pair or Get-UserChoice
+# would read it as stale at the next upgrade. $Before is the key as it is before the install.
+function Get-ExplicitParameters([hashtable]$Command, $Before) {
+    $e = @{}
+    foreach ($k in @($Command.Keys)) { $e[$k] = $Command[$k] }
+    if (-not $e.ContainsKey('CuMode')) { return $e }
+    $mode = 0
+    try { $mode = [int64]$e['CuMode'] } catch { return $e }
+    if (($mode -lt 0) -or ($mode -gt 255)) { return $e }
+    $mask = 0
+    if (($Before -is [Collections.IDictionary]) -and $Before.ContainsKey('CuDisableWgp')) {
+        try { $mask = [int64]$Before['CuDisableWgp'] } catch { return $e }
+    }
+    if (($mask -lt 0) -or ($mask -gt 0xFFFFF)) { return $e }
+    $e['CuModeChosen'] = [int](($mode -band 0xFF) -bor ($mask -shl 8))
+    return $e
+}
+# Pure: the record of a person's choice behind one value, or $null. $Current is the whole key, because the record
+# and the mask sit next to the value.
+function Get-UserChoice([string]$Name, $Current) {
+    if ($Current -isnot [Collections.IDictionary]) { return $null }
+    $c = $script:UserChoices[$Name]
+    if ($null -eq $c) { return $null }
+    if (-not $Current.ContainsKey($Name) -or -not $Current.ContainsKey($c.record)) { return $null }
+    $mode = $null; $record = $null; $mask = 0
+    try { $mode = [int64]$Current[$Name]; $record = [int64]$Current[$c.record] } catch { return $null }
+    if ($c.ContainsKey('mask') -and $Current.ContainsKey($c.mask)) { try { $mask = [int64]$Current[$c.mask] } catch { return $null } }
+    if (($mode -lt 0) -or ($mode -gt 255) -or ($mask -lt 0)) { return $null }
+    if ($record -ne (($mode -band 0xFF) -bor ($mask -shl 8))) { return $null }
+    return [pscustomobject]@{ record = $c.record; value = $mode; mask = $mask
+        text = "the value $mode is the one a person asked for in the control application or on the install command line" }
+}
 # Pure: the defaults, what the previous installer wrote, what is in the key now (name -> value; absent = no entry),
 # the command-line values and the installer-owned values in; one entry per value out (name, value, decision, write).
 function Get-RegistryDefaultPlan {
@@ -591,6 +654,9 @@ function Get-RegistryDefaultPlan {
         elseif ($null -ne $closure) {
             if ($Reopen) { $decision = 'reopened'; $value = $d.Value } else { $decision = 'driver-closed'; $value = $cur }
         }
+        # Before 'update' and 'kept': a value a person asked for and the key still holds is theirs, whatever the
+        # previous installer happened to write (Get-UserChoice above).
+        elseif ($null -ne (Get-UserChoice $d.Name $Current)) { $decision = 'chosen'; $value = $cur }
         # Move the old release ceiling, including a manual 1500 choice. Other ceilings stay.
         elseif ($d.Name -eq 'DpmMaxMHz') {
             if (Test-RegistryValueSame $cur 1500) { $decision = 'update'; $value = $d.Value }
@@ -742,6 +808,7 @@ function Format-RegistryPlan($Plan) {
             'set'       { $parts += "$($e.name)=$(Format-RegistryValue $e.value) (new)" }
             'update'    { $parts += "$($e.name) $(Format-RegistryValue $e.current) -> $(Format-RegistryValue $e.value) (new default; not changed by the tester)" }
             'kept'      { $parts += "$($e.name)=$(Format-RegistryValue $e.value) KEPT (changed by the tester; default $(Format-RegistryValue $e.default))" }
+            'chosen'    { $parts += "$($e.name)=$(Format-RegistryValue $e.value) CHOSEN (asked for in the control application or on the install command line; default $(Format-RegistryValue $e.default))" }
             'reopened'  { $parts += "$($e.name) $(Format-RegistryValue $e.current) -> $(Format-RegistryValue $e.value) (reopened by this repair: $($e.closure), $($e.closure_record) $($e.closure_code) $($e.closure_reason))" }
             'driver-closed' { $parts += "$($e.name)=$(Format-RegistryValue $e.value) KEPT ($($e.closure), $($e.closure_record) $($e.closure_code) $($e.closure_reason); not a setting of the tester; default $(Format-RegistryValue $e.default); remedy: install.cmd -Repair)" }
             'command'   { $parts += "$($e.name)=$(Format-RegistryValue $e.value) (command line)" }
@@ -810,6 +877,15 @@ function Test-PackageManifest {
         if (-not $exe) { $bad += "missing $([string]$m.setup.file)" }
         elseif ((Get-Sha256 $exe) -ne ([string]$m.setup.sha256)) { $bad += "changed $([string]$m.setup.file)" }
     }
+    if ($m.PSObject.Properties['version_identity']) {
+        try {
+            $inf = Join-Path $PackageRoot 'payload\kmd\bc250kmd.inf'
+            $sys = Join-Path $PackageRoot 'payload\kmd\bc250kmd.sys'
+            [void](Test-PackageVersionIdentity $m ([IO.File]::ReadAllText($inf)) (Get-Sha256 $sys))
+        } catch { $bad += "version identity: $($_.Exception.Message)" }
+    }
+    try { [void](Test-DriverStoreFirmware $m.firmware) }
+    catch { $bad += "firmware contract: $($_.Exception.Message)" }
     if ($bad.Count) { return @{ ok = $false; detail = ($bad -join '; '); manifest = $m } }
     return @{ ok = $true; detail = "$count files match manifest.json (version $($m.version))"; manifest = $m }
 }
@@ -856,6 +932,13 @@ function Test-FirmwareHosts {
 # Writes nothing but $Staging; returns the staged paths.
 function Get-FirmwareStaged {
     param([Parameter(Mandatory)]$Firmware, [Parameter(Mandatory)][string]$Staging, [string]$FromDir, [int]$Tries = 3, [int]$TimeoutSec = 60)
+    if ($FromDir -and (Test-SamePath $FromDir $Staging)) { throw 'firmware source and staging directory must differ' }
+    foreach ($f in @($Firmware.files)) {
+        $name = [string]$f.name
+        if (-not $name -or $name -cne [IO.Path]::GetFileName($name) -or $name -match '[:/\\]' -or $name -in @('.', '..')) {
+            throw 'firmware filename must be a basename'
+        }
+    }
     if (Test-Path -LiteralPath $Staging) { Remove-Item -LiteralPath $Staging -Recurse -Force }
     [void][IO.Directory]::CreateDirectory($Staging)
     Enable-Tls12
@@ -874,6 +957,7 @@ function Get-FirmwareStaged {
                 [IO.File]::Copy($src, $dst, $true)
                 $h = Get-Sha256 $dst
                 if ($h -ne $want) { throw "firmware: $src has SHA256 $h, this release pins $want" }
+                if ((Get-Item -LiteralPath $dst).Length -ne [long]$f.size) { throw "firmware: $src has another size than pinned" }
                 $got = $src
             } else {
                 foreach ($u in Get-FirmwareUrls $Firmware $f) {
@@ -883,7 +967,8 @@ function Get-FirmwareStaged {
                         try { Invoke-WebRequest -Uri $u -OutFile $dst -UseBasicParsing -TimeoutSec $TimeoutSec -UserAgent $script:DownloadUserAgent }
                         catch { $why += "$name try $i`: $($_.Exception.Message)"; continue }
                         $h = Get-Sha256 $dst
-                        if ($h -eq $want) { $got = $u } else { $why += "$name`: SHA256 $h"; Remove-Item -LiteralPath $dst -Force }
+                        if ($h -eq $want -and (Get-Item -LiteralPath $dst).Length -eq [long]$f.size) { $got = $u }
+                        else { $why += "$name`: SHA256 $h or size differs"; Remove-Item -LiteralPath $dst -Force }
                         break
                     }
                     if ($got) { break }
@@ -1695,6 +1780,8 @@ function Test-UmdRegistration {
     param([Parameter(Mandatory)][string]$InstallRoot, [Parameter(Mandatory)][string]$ClassKey)
     $problems = @()
     $c = Get-ItemProperty -LiteralPath $ClassKey -ErrorAction SilentlyContinue
+    $driverRoot = Get-DriverPackageRoot -ClassKey $ClassKey
+    if ($driverRoot) { $InstallRoot = $driverRoot }
     $want = Get-UmdNames $InstallRoot
     if ($null -eq $c.UserModeDriverName) { $problems += 'UserModeDriverName is missing' }
     else {
@@ -1711,11 +1798,18 @@ function Test-UmdRegistration {
 # needs no Vulkan ICD registration. With the D3D12 slot a 32-bit D3D9 application gets D3D9On12 on our GPU, the same
 # route as a 64-bit one. The x86 router and the x86 D3D12 shell read the 64-bit policy keys; the router also reads its
 # own *Wow path values. The x86 builds link the C runtime statically: no x86 Visual C++ runtime is needed.
-function Get-WowUmdNames([string]$InstallRoot) {
-    $router = Join-Path $InstallRoot 'wow64\desktop\bc250d3d_router.dll'
-    return @($script:D3d9SlotName, $router, $router, (Join-Path $InstallRoot 'wow64\d3d12\amdgpu_wddm_d3d12.dll'))
+function Get-WowUmdNames([string]$InstallRoot, [switch]$DriverStore) {
+    $suffix = if ($DriverStore) { '32' } else { '' }
+    $router = Join-Path $InstallRoot "wow64\desktop\bc250d3d_router$suffix.dll"
+    return @($script:D3d9SlotName, $router, $router, (Join-Path $InstallRoot "wow64\d3d12\amdgpu_wddm_d3d12$suffix.dll"))
 }
-function Get-WowFiles([string]$InstallRoot) {
+function Get-WowFiles([string]$InstallRoot, [switch]$DriverStore) {
+    if ($DriverStore) {
+        return @('desktop\bc250d3d_router32.dll', 'desktop\bc250d3d32.dll', 'd3d11\amdgpu_wddm_d3d1132.dll',
+            'd3d11\amdgpu_wddm_dxvk32.dll', 'd3d11\amdgpu_wddm_radv_d3d1132.dll',
+            'd3d12\amdgpu_wddm_d3d1232.dll', 'd3d12\amdgpu_wddm_vkd3d32.dll',
+            'd3d12\amdgpu_wddm_radv_d3d1232.dll', 'vulkan\vulkan_radeon32.dll' | ForEach-Object { Join-Path $InstallRoot "wow64\$_" })
+    }
     return @('desktop\bc250d3d_router.dll', 'desktop\bc250d3d.dll', 'd3d11\amdgpu_wddm_d3d11.dll', 'd3d11\amdgpu_wddm_dxvk.dll', 'd3d11\amdgpu_wddm_radv.dll',
         'd3d12\amdgpu_wddm_d3d12.dll', 'd3d12\amdgpu_wddm_vkd3d.dll', 'd3d12\amdgpu_wddm_radv.dll', 'vulkan\vulkan_radeon.dll' | ForEach-Object { Join-Path $InstallRoot "wow64\$_" })
 }
@@ -1777,20 +1871,30 @@ function Test-WowRegistration {
         [string]$SoftwareKey = $script:SoftwareKey, [string[]]$Files = (Get-WowFiles $InstallRoot))
     $problems = @()
     $c = Get-ItemProperty -LiteralPath $ClassKey -ErrorAction SilentlyContinue
-    $want = Get-WowUmdNames $InstallRoot
+    $legacyRoot = $InstallRoot
+    $driverRoot = Get-DriverPackageRoot -ClassKey $ClassKey
+    if ($driverRoot) {
+        $InstallRoot = $driverRoot
+        if (-not $PSBoundParameters.ContainsKey('Files')) { $Files = Get-WowFiles -InstallRoot $driverRoot -DriverStore }
+    }
+    $want = Get-WowUmdNames -InstallRoot $InstallRoot -DriverStore:([bool]$driverRoot)
     if ($null -eq $c.UserModeDriverNameWow) { $problems += 'UserModeDriverNameWow is missing' }
     else {
         $have = @($c.UserModeDriverNameWow)
         if (($have.Count -ne $want.Count) -or (($have -join '|') -ne ($want -join '|'))) { $problems += "UserModeDriverNameWow is $(Format-UmdNames $have), expected $(Format-UmdNames $want)" }
     }
-    $icd = Join-Path $InstallRoot 'wow64\vulkan\radeon_icd.json'
+    $icd = Join-Path $InstallRoot $(if ($driverRoot) { 'wow64\vulkan\radeon_icd32.json' } else { 'wow64\vulkan\radeon_icd.json' })
     if ((@($c.VulkanDriverNameWow) -join '|') -ne $icd) { $problems += "VulkanDriverNameWow is '$(@($c.VulkanDriverNameWow) -join ' | ')'" }
     $k = Get-Item -LiteralPath $KhronosKey -ErrorAction SilentlyContinue
-    if (-not $k -or $k.GetValue($icd) -ne 0) { $problems += "$KhronosKey has no '$icd' = 0" }
+    if ($driverRoot) {
+        foreach ($entry in @($icd, (Join-Path $legacyRoot 'wow64\vulkan\radeon_icd.json'))) {
+            if ($k -and $k.GetValueNames() -contains $entry) { $problems += "duplicate global Vulkan entry: $entry" }
+        }
+    } elseif (-not $k -or $k.GetValue($icd) -ne 0) { $problems += "$KhronosKey has no '$icd' = 0" }
     $cpu = (Get-ItemProperty -LiteralPath "$SoftwareKey\DesktopRouter" -Name CpuUmdPathWow -ErrorAction SilentlyContinue).CpuUmdPathWow
-    if ($cpu -ne (Join-Path $InstallRoot 'wow64\desktop\bc250d3d.dll')) { $problems += "DesktopRouter CpuUmdPathWow is '$cpu'" }
+    if (($driverRoot -and $cpu) -or (-not $driverRoot -and $cpu -ne (Join-Path $InstallRoot 'wow64\desktop\bc250d3d.dll'))) { $problems += "DesktopRouter CpuUmdPathWow is '$cpu'" }
     $gpu = (Get-ItemProperty -LiteralPath "$SoftwareKey\AppRouter" -Name GpuUmdPathWow -ErrorAction SilentlyContinue).GpuUmdPathWow
-    if ($gpu -ne (Join-Path $InstallRoot 'wow64\d3d11\amdgpu_wddm_d3d11.dll')) { $problems += "AppRouter GpuUmdPathWow is '$gpu'" }
+    if (($driverRoot -and $gpu) -or (-not $driverRoot -and $gpu -ne (Join-Path $InstallRoot 'wow64\d3d11\amdgpu_wddm_d3d11.dll'))) { $problems += "AppRouter GpuUmdPathWow is '$gpu'" }
     foreach ($f in $Files) {
         $m = Get-PeMachine $f
         if ($null -eq $m) { $problems += "$f missing or not an image" } elseif ($m -ne 0x14C) { $problems += ('{0} is not x86 (machine 0x{1:X})' -f $f, $m) }
@@ -1919,8 +2023,8 @@ function Get-OpenGlReleaseSwitch {
     if ($s -and $s.package_path) { $rel = [string]$s.package_path }
     $relWow = $script:OpenGlPackagePathWow
     if ($s -and $s.package_path_wow) { $relWow = [string]$s.package_path_wow }
-    if ($rel -notmatch '^payload/[A-Za-z0-9_-]+/[A-Za-z0-9_.-]+\.dll$') { throw "opengl_icd package_path '$rel': expected payload/<directory>/<name>.dll" }
-    if ($relWow -notmatch '^payload/wow64/[A-Za-z0-9_-]+/[A-Za-z0-9_.-]+\.dll$') { throw "opengl_icd package_path_wow '$relWow': expected payload/wow64/<directory>/<name>.dll" }
+    if ($rel -notmatch '^payload/(?:kmd/)?opengl/[A-Za-z0-9_-]+\.dll$') { throw "invalid OpenGL package path: $rel" }
+    if ($relWow -notmatch '^payload/(?:kmd/)?wow64/opengl/[A-Za-z0-9_-]+\.dll$') { throw "invalid WoW64 OpenGL package path: $relWow" }
     $version = $script:OpenGlVersion
     if ($s -and $null -ne $s.version) { $version = [int]$s.version }
     $flags = $script:OpenGlFlags
@@ -1957,8 +2061,8 @@ function Get-OpenGlReleaseSwitch {
         package_path     = $rel
         package_path_wow = $relWow
         payload_dir      = ($rel -split '/')[1]                               # the payload directory install.ps1 copies
-        install_path     = ($rel -replace '^payload/', '') -replace '/', '\'  # under the install root
-        install_path_wow = ($relWow -replace '^payload/', '') -replace '/', '\'
+        install_path     = ($rel -replace '^payload/(?:kmd/)?', '') -replace '/', '\'
+        install_path_wow = ($relWow -replace '^payload/(?:kmd/)?', '') -replace '/', '\'
         source           = $source
         source_wow       = $sourceWow
         present          = $present
@@ -2091,6 +2195,8 @@ function Test-OpenGlIcdFile {
 function Test-OpenGlRegistration {
     param([Parameter(Mandatory)][string]$InstallRoot, [Parameter(Mandatory)][string]$ClassKey, [Parameter(Mandatory)]$Switch)
     $problems = @()
+    $driverRoot = Get-DriverPackageRoot -ClassKey $ClassKey
+    if ($driverRoot) { $InstallRoot = $driverRoot }
     $plan = Get-OpenGlRegistrationPlan -Switch $Switch -InstallRoot $InstallRoot
     $c = Read-RegistryValues $ClassKey
     foreach ($i in $plan) {
@@ -2318,7 +2424,15 @@ function Get-OurDriverPackageRows {
         $seen[$published] = $true
         $version = [string]$p.Version
         if (-not ($version -as [version])) { throw "Driver-store inventory has no valid version for $published" }
-        $r += [pscustomobject]@{ published = $published.ToLowerInvariant(); version = $version }
+        # DISM supplies a DateTime. Unreadable/stringified dates are not inferred
+        # from a localized display string and cannot authorize fallback pruning.
+        $date = $null
+        if ($p.Date -is [DateTime]) { $date = $p.Date.Date.ToString('MM/dd/yyyy', [Globalization.CultureInfo]::InvariantCulture) }
+        elseif ([string]$p.Date -match '\A([0-9]{4})-([0-9]{2})-([0-9]{2})(?:T00:00:00(?:Z)?)?\z') {
+            $candidate = "$($Matches[2])/$($Matches[3])/$($Matches[1])"
+            try { [void](ConvertTo-DriverDate $candidate); $date = $candidate } catch { }
+        }
+        $r += [pscustomobject]@{ published = $published.ToLowerInvariant(); version = $version; date = $date }
     }
     return $r
 }
@@ -2360,8 +2474,20 @@ function Get-DriverStoreRemovePlan {
     $why = $null
     if ($PreviousVersion -and -not $rollback.Count) { $why = "the previous repair set ($PreviousVersion) has no package in the store" }
     if (-not $rollback.Count -and $others.Count) {
-        $rollback = @(@($others | Sort-Object { [version]$_.version } -Descending)[0])
-        if (-not $PreviousVersion) { $why = 'no previous repair set is recorded: the newest of the other packages is kept for a rollback' }
+        # PnP orders packages of equal rank by INF date first, then quad. A high
+        # mapped version cannot substitute for an unknown date. Keep ambiguous
+        # candidates rather than inventing a rollback order.
+        $ranked = @()
+        foreach ($p in $others) {
+            try { $ranked += [pscustomobject]@{ row = $p; date = (ConvertTo-DriverDate ([string]$p.date)); quad = (ConvertTo-DriverQuad ([string]$p.version)) } }
+            catch { return [pscustomobject]@{ keep = $names; remove = @(); previous = $null; why = "cannot rank $($p.published) by INF date and version" } }
+        }
+        $sorted = @($ranked | Sort-Object -Property date, quad -Descending)
+        $top = $sorted[0]
+        $ties = @($sorted | Where-Object { $_.date -eq $top.date -and $_.quad -eq $top.quad })
+        if ($ties.Count -ne 1) { return [pscustomobject]@{ keep = $names; remove = @(); previous = $null; why = 'ambiguous rollback packages with equal INF date and version' } }
+        $rollback = @($top.row)
+        if (-not $PreviousVersion) { $why = 'no previous repair set is recorded: the newest INF date/quad is kept for a rollback' }
     }
     $keep = @($BoundPublished) + @($rollback | ForEach-Object { $_.published })
     return [pscustomobject]@{ keep = @($keep | Select-Object -Unique); remove = @($others | Where-Object { $keep -notcontains $_.published } | ForEach-Object { $_.published }); previous = @($rollback | ForEach-Object { $_.published })[0]; why = $why }
@@ -2371,7 +2497,44 @@ function Get-RepairSetDriverVersion([string]$Version) {
     if (-not $Version) { return $null }
     $m = Join-Path (Get-ClosureDir $Version) 'manifest.json'
     if (-not (Test-Path -LiteralPath $m)) { return $null }
-    try { return [string](Get-Content -LiteralPath $m -Raw | ConvertFrom-Json).kmd_version } catch { return $null }
+    try { return Get-ManifestDriverQuad (Get-Content -LiteralPath $m -Raw | ConvertFrom-Json) } catch { return $null }
+}
+
+# BD-152: remove only our obsolete backup tags, after a real package bind has
+# restored the OS-owned DriverVersion. Never restore that OS value ourselves.
+# A stale opt-in install that does not bind correctly keeps its tags for diagnosis.
+function Remove-LegacyDriverVersionTags {
+    param([string]$InstanceId, $Manifest, [string]$LoadedSha256)
+    if (-not $Manifest.version_identity) { return 0 }
+    $want = Get-ManifestDriverQuad $Manifest
+    if ($LoadedSha256 -ine $Manifest.version_identity.kmd.sha256) { throw 'version cleanup requires the new loaded KMD' }
+    if ((Get-DeviceServiceName $InstanceId) -cne $script:ServiceName) { throw 'version cleanup requires our bound service' }
+    $infName = Get-DeviceDriverPackage $InstanceId
+    if ($infName -notmatch '\Aoem[0-9]+\.inf\z') { throw 'version cleanup requires the bound OEM INF' }
+    $infPath = Join-Path (Join-Path $env:windir 'INF') $infName
+    $expected = @($Manifest.files | Where-Object { $_.path -ceq 'payload/kmd/bc250kmd.inf' })
+    if ($expected.Count -ne 1 -or (Get-Sha256 $infPath) -ine $expected[0].sha256) { throw 'bound INF differs from this package' }
+    [void](Test-PackageVersionIdentity $Manifest ([IO.File]::ReadAllText($infPath)) $LoadedSha256)
+    $property = (Get-PnpDeviceProperty -InstanceId $InstanceId -KeyName DEVPKEY_Device_DriverVersion -ErrorAction Stop).Data
+    $key = Get-DeviceDriverKey $InstanceId
+    if ($key -notmatch '\AHKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\\{4d36e968-e325-11ce-bfc1-08002be10318\}\\[0-9]{4}\z') {
+        throw 'invalid adapter software key for version cleanup'
+    }
+    $values = Get-ItemProperty -LiteralPath $key -ErrorAction Stop
+    if ([string]$property -cne $want -or [string]$values.DriverVersion -cne $want -or
+        [string]$values.ProductPackageVersion -cne [string]$Manifest.version_identity.product_quad) {
+        throw 'Windows version properties disagree with the installed INF; rebind the package before cleanup'
+    }
+    $removed = 0
+    foreach ($name in 'Bc250DriverVersion', 'Bc250ReportedDriverVersion') {
+        if ($values.PSObject.Properties[$name]) {
+            Invoke-Change "remove obsolete private version tag $name after verified binding" {
+                Remove-ItemProperty -LiteralPath $key -Name $name -ErrorAction Stop
+            }
+            $removed++
+        }
+    }
+    return $removed
 }
 # Our Vulkan ICD registrations in both views of the registry: the value names that name a folder of ours. The
 # installer writes one name per view, the full path of radeon_icd.json under the install root; an older release of
@@ -2424,9 +2587,29 @@ function Get-OurScheduledTasks {
 # translates the SID on that computer and compares the result, and never compares the string 'S-1-5-32-545'.
 # The logon type of a group principal is Windows' own ('Group'); the installer states it in this plan and does not
 # pass it to New-ScheduledTaskPrincipal, which takes it with -UserId.
+#
+# What the window task runs (owner, 2026-10-14). powershell.exe is a console program: Windows gives it a console when
+# it creates the process, and -WindowStyle Hidden hides that console only after PowerShell has started. Where Windows
+# Terminal is the default terminal the console is a Terminal window, and on the lab that window was still on the
+# screen when the start window closed (fact M899). The window task therefore runs Nagi Control App, a windows-subsystem
+# program, as `--start-window -Seconds N` (-WindowHost, the installed control application). It starts this
+# install's start-window.ps1 (tools\ next to its own control\ folder) with CREATE_NO_WINDOW, so no console window
+# exists, and returns the script's exit code (StartWindowHost.cs). Only an install without the control application
+# (-NoControlApp) keeps powershell.exe for the window, and the plan says so in 'console'.
 function Get-LogonTaskPlan {
-    param([Parameter(Mandatory)][string]$ConfirmScript, [Parameter(Mandatory)][string]$WindowScript, [int]$Seconds = 120)
+    param([Parameter(Mandatory)][string]$ConfirmScript, [Parameter(Mandatory)][string]$WindowScript, [string]$WindowHost, [int]$Seconds = 120)
     $host51 = '-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File'
+    if ($WindowHost) {
+        $windowExecute = $WindowHost
+        $windowArguments = "--start-window -Seconds $Seconds"
+        $windowConsole = $null
+        $windowWhat = "$WindowHost --start-window, which runs $WindowScript with no console window"
+    } else {
+        $windowExecute = 'powershell.exe'
+        $windowArguments = "$host51 `"$WindowScript`" -Seconds $Seconds"
+        $windowConsole = 'no control application in this install (-NoControlApp): a console window can appear at sign-in'
+        $windowWhat = "$WindowScript through powershell.exe ($windowConsole)"
+    }
     return @(
         [ordered]@{
             role      = 'confirm'
@@ -2441,14 +2624,33 @@ function Get-LogonTaskPlan {
         [ordered]@{
             role      = 'window'
             name      = $script:WindowTaskName
-            execute   = 'powershell.exe'
-            arguments = "$host51 `"$WindowScript`" -Seconds $Seconds"
+            execute   = $windowExecute
+            arguments = $windowArguments
+            script    = $WindowScript
+            console   = $windowConsole
             principal = [ordered]@{ kind = 'group'; id = 'S-1-5-32-545'; logon_type = 'Group'; run_level = 'Limited' }
             trigger   = [ordered]@{ kind = 'at-logon'; user = $null }
             minutes   = 3
-            what      = "at the logon of any user, with that user's own rights (Users, S-1-5-32-545): $WindowScript"
+            what      = "at the logon of any user, with that user's own rights (Users, S-1-5-32-545): $windowWhat"
         }
     )
+}
+# The subsystem field of a PE file's optional header: 2 a windows program (no console), 3 a console program, $null for
+# a file that is not there or not a PE. Reads 4 KiB at most and never runs the file.
+function Get-PeSubsystem {
+    param([string]$Path)
+    try {
+        if (-not $Path -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+        $fs = [IO.File]::OpenRead($Path)
+        try {
+            $buf = New-Object byte[] 4096
+            $n = $fs.Read($buf, 0, $buf.Length)
+        } finally { $fs.Dispose() }
+        if ($n -lt 64 -or $buf[0] -ne 0x4D -or $buf[1] -ne 0x5A) { return $null }
+        $pe = [BitConverter]::ToInt32($buf, 0x3C)
+        if ($pe -lt 0 -or $pe + 24 + 70 -gt $n -or [BitConverter]::ToUInt32($buf, $pe) -ne 0x00004550) { return $null }
+        return [int][BitConverter]::ToUInt16($buf, $pe + 24 + 68)
+    } catch { return $null }
 }
 # The rules of the plan above, as the list of what is wrong with a plan; an empty list is a plan that holds them.
 # The host test runs it over the installer's plan and over a plan with the principal of the defect, which must fail.
@@ -2463,11 +2665,11 @@ function Test-LogonTaskPlan {
         if ($t.trigger.user) { [void]$bad.Add("task '$n' triggers at the logon of '$($t.trigger.user)' only; every logon has to run it") }
         if ([string]$t.principal.id -eq 'S-1-5-32-544') { [void]$bad.Add("task '$n' is registered for the Administrators group (S-1-5-32-544): it never runs at the logon of a standard user (BD-080)") }
         if ([int]$t.minutes -le 0) { [void]$bad.Add("task '$n' has no execution time limit") }
-        if ([string]$t.execute -ne 'powershell.exe') { [void]$bad.Add("task '$n' runs '$($t.execute)', not powershell.exe") }
     }
     $confirm = @($tasks | Where-Object { $_.role -eq 'confirm' })
     if ($confirm.Count -ne 1) { [void]$bad.Add("the plan has $($confirm.Count) confirmation tasks, not one"); return @($bad) }
     $c = $confirm[0]
+    if ([string]$c.execute -ne 'powershell.exe') { [void]$bad.Add("the confirmation runs '$($c.execute)', not powershell.exe") }
     if (([string]$c.principal.kind -ne 'user') -or ([string]$c.principal.id -ne 'S-1-5-18')) { [void]$bad.Add("the confirmation runs as $($c.principal.kind) $($c.principal.id), not as Local System (S-1-5-18)") }
     if ([string]$c.principal.logon_type -ne 'ServiceAccount') { [void]$bad.Add("the confirmation asks for logon type '$($c.principal.logon_type)', not ServiceAccount") }
     if ([string]$c.principal.run_level -ne 'Highest') { [void]$bad.Add("the confirmation asks for run level '$($c.principal.run_level)': the KMD refuses CONFIRM to a caller who is not an administrator") }
@@ -2480,6 +2682,19 @@ function Test-LogonTaskPlan {
     if (([string]$w.principal.kind -ne 'group') -or ([string]$w.principal.id -ne 'S-1-5-32-545')) { [void]$bad.Add("the window is registered for $($w.principal.kind) $($w.principal.id), not for the Users group (S-1-5-32-545) that every interactive account belongs to") }
     if ([string]$w.principal.run_level -ne 'Limited') { [void]$bad.Add("the window asks for run level '$($w.principal.run_level)': it needs no rights, and a standard user has none to give it") }
     if ([string]$w.name -eq [string]$c.name) { [void]$bad.Add('both tasks carry the same name') }
+    # The window's host (M899): a windows program that starts the window's own script with no console window. A
+    # console program is allowed only when the plan states why (an install without the control application).
+    $we = [string]$w.execute
+    if ($we -eq 'powershell.exe') {
+        if (-not [string]$w.console) { [void]$bad.Add("the window runs powershell.exe, a console program, and the plan gives no reason: Windows gives it a console window at sign-in (M899); the control application's --start-window runs the script with none") }
+        if ([string]$w.arguments -notlike "*`"$([string]$w.script)`"*") { [void]$bad.Add("the window does not run its own script ($($w.script)): $($w.arguments)") }
+    } else {
+        if ([string]$w.arguments -notmatch '^--start-window -Seconds \d+$') { [void]$bad.Add("the window's host is not asked for --start-window -Seconds N: '$($w.arguments)'") }
+        $hosted = Join-Path (Split-Path (Split-Path $we -Parent) -Parent) 'tools\start-window.ps1'
+        if ($hosted -ne [string]$w.script) { [void]$bad.Add("the window's host starts $hosted, not its own script $($w.script): the host and the script are of different installs") }
+        $sub = Get-PeSubsystem $we
+        if (($null -ne $sub) -and ($sub -ne 2)) { [void]$bad.Add("the window's host $we is a console program (PE subsystem $sub, not 2): Windows gives it a console window at sign-in (M899)") }
+    }
     return @($bad)
 }
 # Our test certificates in the two machine stores, by subject: the certificate of this release and of any older one.
@@ -2567,8 +2782,14 @@ function Get-ReleaseFootprint {
     & $probe 'certificates' { $c = @(Get-OurCertificates); @{ present = ($c.Count -gt 0); detail = $(if ($c.Count) { @($c | ForEach-Object { "$($_.store) $($_.thumbprint)" }) -join ', ' } else { 'no certificate of ours in Root or TrustedPublisher' }) } }
     # Kept on purpose: the firmware folder and C:\BC250 when they were there before the install, and the control
     # application's own files (the tester's setting backups and action log).
-    $fwKept = [bool]($State -and $State.firmware_dir_existed)
-    & $probe 'GPU firmware' { $p = (Test-Path -LiteralPath $script:FirmwareInstallDir); @{ present = $p; detail = "$($script:FirmwareInstallDir)$(if (-not $p) { ' is gone' } elseif ($fwKept) { ' is there, and it was there before the install' } else { ' is there' })" } } $fwKept
+    if ($State -and $State.firmware_delivery -ceq 'driver-store-v1') {
+        # The Driver Store package checks above cover the new firmware. A legacy
+        # folder, if present, is neither a load source nor owned by this install.
+        & $probe 'GPU firmware' { @{ present = $false; detail = 'removed with the driver package; legacy firmware folder was not owned' } }
+    } else {
+        $fwKept = [bool]($State -and $State.firmware_dir_existed)
+        & $probe 'GPU firmware' { $p = (Test-Path -LiteralPath $script:FirmwareInstallDir); @{ present = $p; detail = "$($script:FirmwareInstallDir)$(if (-not $p) { ' is gone' } elseif ($fwKept) { ' is there, and it was there before the install' } else { ' is there' })" } } $fwKept
+    }
     & $probe 'control application data' { $d = Join-Path (Split-Path $script:StateDir) 'control'; $p = (Test-Path -LiteralPath $d); @{ present = $p; detail = "$d$(if ($p) { ' is there (the tester''s setting backups and action log)' } else { ' is gone' })" } } $true
     foreach ($name in 'system-tuning','system-tuning-recovery') {
         & $probe $name { $d = Join-Path (Split-Path $script:StateDir) $name; @{ present = (Test-Path -LiteralPath $d); detail = "$d is retained when present for optional Windows settings recovery" } } $true
@@ -2888,6 +3109,8 @@ function Resolve-OrphanFilePlan {
     param($Plan)
     $rows = @()
     foreach ($row in @($Plan)) {
+        # An empty function result arrives as null; @($null) contains one null item in PS 5.1.
+        if ($null -eq $row) { continue }
         $state = 'absent'
         $have = $null
         if (Test-Path -LiteralPath $row.path -PathType Leaf) {
@@ -3006,6 +3229,7 @@ function Test-FirmwareFolder($Firmware, [string]$Dir) {
     foreach ($f in @($Firmware.files)) {
         $p = Join-Path $Dir $f.name
         if (-not (Test-Path -LiteralPath $p -PathType Leaf)) { $bad += "$($f.name) missing" }
+        elseif ($null -ne $f.size -and (Get-Item -LiteralPath $p).Length -ne $f.size) { $bad += "$($f.name) has another size" }
         elseif ((Get-Sha256 $p) -ne ([string]$f.sha256).ToUpperInvariant()) { $bad += "$($f.name) has another SHA256" }
     }
     return , $bad
@@ -3128,12 +3352,12 @@ function Get-PreviousAppliedDefaults($RegistryDefaults, [string]$Record) {
 # Pure: rows from the plans. $Groups: a list of @{ group = <name>; plan = <Get-RegistryDefaultPlan result> }.
 function Get-SettingsImpact($Groups) {
     $rows = New-Object System.Collections.ArrayList
-    $sum = [ordered]@{ kept = 0; updated = 0; added = 0; unchanged = 0; command = 0; reopened = 0; driver_closed = 0 }
+    $sum = [ordered]@{ kept = 0; updated = 0; added = 0; unchanged = 0; command = 0; reopened = 0; driver_closed = 0; chosen = 0 }
     foreach ($g in @($Groups)) {
         foreach ($e in @($g.plan)) {
             if ($e.decision -eq 'installer' -or $e.decision -eq 'restored') { continue }
             switch ($e.decision) { 'kept' { $sum.kept++ } 'update' { $sum.updated++ } 'set' { $sum.added++ } 'same' { $sum.unchanged++ } 'command' { $sum.command++ }
-                'reopened' { $sum.reopened++ } 'driver-closed' { $sum.driver_closed++ } }
+                'reopened' { $sum.reopened++ } 'driver-closed' { $sum.driver_closed++ } 'chosen' { $sum.chosen++ } }
             # closure: the driver's own act in plain words, for the window and the support report. The reason code
             # stays in the installer's log (Format-RegistryPlan).
             $closure = $null

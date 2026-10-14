@@ -1,5 +1,5 @@
-// Automatic failed-start report. This worker never loads the driver DLL or
-// sends an escape. Its parent kills it at the collection deadline if an OS
+// Automatic failed-start report. State uses the registry-only native adapter;
+// this worker sends no escape. Its parent kills it at the deadline if an OS
 // provider blocks. Reports stay local and pass through the common redactor.
 using System;
 using System.Diagnostics;
@@ -59,11 +59,10 @@ namespace AmdgpuWddmControl
 
         static void RegistryRecord(StartupDiagnosticData data, string record)
         {
-            using (var root = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64))
-            using (var key = root.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters\" + record))
+            using (var key = DriverStateKey.Open(record))
             {
                 if (key == null) { data.Add("Absent (older drivers may not write this record).\n"); return; }
-                foreach (string name in Fields)
+                foreach (string name in Fields.Intersect(key.GetValueNames()))
                 {
                     if (!data.Active) break;
                     object value = key.GetValue(name, null, RegistryValueOptions.DoNotExpandEnvironmentNames);

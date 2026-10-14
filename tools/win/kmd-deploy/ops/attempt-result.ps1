@@ -12,21 +12,14 @@ Get-ChildItem -LiteralPath $d -File -Recurse | Where-Object { $_.Name -match 've
   "=== $($_.Name) $($_.LastWriteTimeUtc.ToString('HH:mm:ss'))"
   Get-Content -LiteralPath $_.FullName -Tail 40 | ForEach-Object { $_.Substring(0, [Math]::Min(200, $_.Length)) }
 }
-"--- registry"
-$k = 'HKLM:\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters'
-(Get-Item $k).Property | Where-Object { $_ -match '^(Unconfirmed|LastStage|StageHistory|KeepStatus|Dpm|Cu)' } | ForEach-Object { "$_ = $((Get-ItemProperty $k).$_)" }
-# BD-122: the KMD's reason for a start that did not reach a started device (guard.c, Parameters\StartRecord). The
-# step and the NTSTATUS are what LastStage 91 above cannot say, and the kept log lines are the ring a Code 43
-# device can no longer answer for. Read-only, and absent on a KMD before 0.7.216.30.
-$r = "$k\StartRecord"
-if (Test-Path -LiteralPath $r) {
-  "--- start record"
-  $sr = Get-ItemProperty -LiteralPath $r
-  foreach ($n in @('Result', 'Step', 'SubStep', 'TimeUtc', 'Stage', 'UnconfirmedStarts', 'Detail')) { "$n = $($sr.$n)" }
-  if ($null -ne $sr.Status) { 'Status = 0x{0:X8}' -f ([uint32]([int64]$sr.Status -band [int64]4294967295)) }
-  if ($null -ne $sr.Version) { 'Version = 0x{0:X8}' -f ([uint32]([int64]$sr.Version -band [int64]4294967295)) }
-  @($sr.Log) | Where-Object { $_ } | ForEach-Object { "log: $_" }
-} else { "--- start record: absent (KMD before 0.7.216.30)" }
+"--- shared state"
+# The installed client reads startup records without opening a GPU, including Code 43.
+$cli=Join-Path ([string](Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\amdgpu-wddm\Release' -Name InstallRoot -ErrorAction Stop).InstallRoot) 'tools\bc250kmd_cli.exe'
+$text=& $cli state snapshot 2>&1|Out-String
+if($LASTEXITCODE -ne 0){throw "Shared state read failed: $text"}
+$state=$text|ConvertFrom-Json
+if($state.abi -ne 1 -or $state.error -ne 0){throw 'Invalid shared state snapshot'}
+$state.items|Where-Object {$_.path -eq 'StartRecord' -or ($_.path -eq '' -and $_.name -match '^(Unconfirmed|LastStage|StageHistory|KeepStatus|Dpm|Cu)')}|ConvertTo-Json -Depth 8
 "--- driverstore"
 # Keep the complete package record: field labels are localized, INF filenames are not.
 # This is a report only; it never selects a package for removal.

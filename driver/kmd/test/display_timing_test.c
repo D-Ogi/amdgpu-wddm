@@ -25,8 +25,12 @@ typedef struct {long long QuadPart;} LARGE_INTEGER;
 #define WddmDdiDescribeAllocation 1u
 static unsigned guardLines;
 static char lastGuard[512];
+// BD-169: more lines follow the gate line, so keep that one too: it is the line a field support file is read
+// against, and its gate number, name and word are asserted here.
+static char inheritedLine[512];
 static void GuardLog(const char* fmt,...)
-{va_list args;va_start(args,fmt);vsnprintf(lastGuard,sizeof(lastGuard),fmt,args);va_end(args);guardLines++;}
+{va_list args;va_start(args,fmt);vsnprintf(lastGuard,sizeof(lastGuard),fmt,args);va_end(args);guardLines++;
+ if(!strncmp(lastGuard,"inherited gate: ",16))memcpy(inheritedLine,lastGuard,sizeof(inheritedLine));}
 #define STATUS_SUCCESS 0L
 #define STATUS_NOT_SUPPORTED (-1L)
 #define STATUS_DEVICE_DATA_ERROR (-2L)
@@ -50,7 +54,7 @@ struct TEST_VIDPN_INTERFACE;
 #include "edid.h"
 #include "../shim/bc250_ddc.h"
 typedef struct {BC250_INHERITED_PIPE InheritedPipe;NTSTATUS InheritedPipeStatus;
-    ULONG InheritedSupport;BOOLEAN InheritedFixed;
+    ULONG InheritedSupport;BOOLEAN InheritedFixed;ULONG InheritedGate,InheritedGateWord;
     volatile long InheritedSupportCalls,InheritedCofuncCalls,InheritedCommitCalls;
     ULONG Requested;BOOLEAN EdidValid,DpcdValid;BC250_DUAL_MODE_ADAPTER Adapter;
     ULONG Level,Refusals,Commits,Changes,Busy,Scaling;
@@ -60,7 +64,7 @@ typedef struct {BC250_INHERITED_PIPE InheritedPipe;NTSTATUS InheritedPipeStatus;
 typedef struct {void* Mmio;int FullWddm,ComposedSourceModes,DcnWriteEnabled;struct {ULONG Width,Height,Pitch;} Post;
     D3DKMDT_VIDEO_SIGNAL_INFO InheritedSignal;BOOLEAN InheritedSignalValid,InheritedTmds;BC250_MODESET Modeset;
     BOOLEAN ModeActive,CommitSeen; ULONG CommittedSourceWidth,CommittedSourceHeight,CommittedSourceFormat;
-    struct {ULONG StartAccepted;} Connector;
+    struct {ULONG StartAccepted,StartPreserved;} Connector;
     struct {NTSTATUS (*DxgkCbQueryVidPnInterface)(void*,unsigned,const struct TEST_VIDPN_INTERFACE**);
         void *DxgkCbSynchronizeExecution,*DxgkCbQueueDpc,*DxgkCbIndicateChildStatus;} Dxgk;
 } BC250_DEVICE;
@@ -196,6 +200,7 @@ static void Adapter(BC250_DEVICE* d)
 #include "inherited_field38_cases.h"
 #include "inherited_start_cases.h"
 #include "inherited_negotiation_cases.h"
+#include "inherited_bd169_cases.h"
 int main(int argc,char** argv)
 {
     BC250_DEVICE d={0};D3DKMDT_VIDEO_SIGNAL_INFO s;unsigned before;
@@ -222,6 +227,7 @@ int main(int argc,char** argv)
     InheritedField38Cases();refusedLogs=0;
     InheritedStartCases();refusedLogs=0;
     NegotiationCases();refusedLogs=0;
+    Bd169Cases();refusedLogs=0;
     Mode(&d,1920,1200,2080,1235,154000000);
     CHECK(TestFillSignalInfo(&d,&s)==STATUS_SUCCESS && reads==2*TimingCount && refusedLogs==0);
     CHECK(s.TotalSize.cx==2080 && s.TotalSize.cy==1235 && s.ActiveSize.cx==1920 && s.ActiveSize.cy==1200);

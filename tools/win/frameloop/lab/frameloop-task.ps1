@@ -79,19 +79,32 @@ function Read-ClockPoint {
 function Read-OperatingPoint {
     [ordered]@{ utc = [DateTime]::UtcNow.ToString('o'); tctl_c = Read-Tctl; clock = Read-ClockPoint }
 }
-# The compute units the driver was asked for. This is the registry record, not the counted units: the
+function Convert-FrameloopState { param([string]$Text)
+    $snapshot = $Text | ConvertFrom-Json -ErrorAction Stop
+    if ($snapshot.abi -ne 1 -or $snapshot.error -ne 0) { throw 'Invalid shared state snapshot' }
+    $record = [ordered]@{ parameters_present = $true; state = [ordered]@{} }
+    foreach ($name in 'CuMode', 'CuDisableWgp', 'CuModeConfirmed', 'CuModeLastApplied') {
+        $item = @($snapshot.items | Where-Object { $_.path -eq '' -and $_.name -eq $name })
+        if ($item.Count -ne 1) { throw "State catalog missing or duplicate: $name" }
+        $value = if ($item[0].kind -eq 'setting') { $item[0].effective } else { $item[0].record }
+        $record.state[$name] = $value
+        if ($value.status -notin @('ok','absent') -or ($value.status -eq 'ok' -and ($value.type -ne 4 -or $value.error -ne 0 -or
+            ($value.value -isnot [int] -and $value.value -isnot [long]) -or $value.value -lt 0 -or $value.value -gt [uint32]::MaxValue))) {
+            throw "Shared state $name failed: $($value.status), Windows error $($value.error)"
+        }
+        $record[$name] = if ($value.status -eq 'ok') { [long]$value.value } else { $null }
+    }
+    return $record
+}
+# The compute units the driver was asked for. This is the shared state record, not the counted units: the
 # escape that counts them needs the control DLL, and the overlay's own panel says a record without a
 # start that ran the CU stage can be stale. A reader of these numbers checks them against the overlay.
 $cuRecord = [ordered]@{ parameters_present = $false }
 try {
-    $pk = 'HKLM:\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters'
-    if (Test-Path -LiteralPath $pk) {
-        $values = Get-ItemProperty -LiteralPath $pk -ErrorAction Stop
-        $cuRecord.parameters_present = $true
-        foreach ($name in 'CuMode', 'CuDisableWgp', 'CuModeConfirmed', 'CuModeLastApplied') {
-            $cuRecord[$name] = if ($null -ne $values.$name) { [int]$values.$name } else { $null }
-        }
-    }
+    if (-not $cli) { throw 'Shared state client unavailable' }
+    $stateText = & $cli state snapshot 2>&1 | Out-String
+    if ($LASTEXITCODE -ne 0) { throw "Shared state snapshot failed: $stateText" }
+    $cuRecord = Convert-FrameloopState $stateText
 } catch { $cuRecord.error = $_.Exception.Message }
 
 $null = New-Item -ItemType Directory -Force -Path $runs

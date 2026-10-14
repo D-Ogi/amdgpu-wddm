@@ -1,7 +1,5 @@
-// The CU setter's registry access (review 927 R1): one handle to the driver's Parameters key, checked Win32 calls
-// (RegQueryValueExW, RegDeleteValueW, RegSetValueExW, RegFlushKey) whose LSTATUS is kept, so that "not found" is told
-// apart from every other failure and a failed flush is never hidden. CheckedCuRegistry is pure over IRegApi, so the
-// tests inject native return codes; Win32RegApi is the live implementation the elevated helper uses.
+// The CU setter retains one common state batch through its checked sequence and
+// readback. CheckedCuRegistry is pure over IRegApi for injected native failures.
 using System;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
@@ -54,14 +52,19 @@ namespace AmdgpuWddmControl
         // never configured (BD-077).
         public void Delete(string name)
         {
-            if (name != "CuDisableWgp" && name != "CuModeConfirmed" && name != "CuModeClosedReason") throw new InvalidOperationException(name + " is not a value the setter removes");
+            if (name != "CuDisableWgp" && name != "CuModeConfirmed" && name != "CuModeClosedReason" && name != "CuModeChosen") throw new InvalidOperationException(name + " is not a value the setter removes");
             int s = _api.Delete(name);
             if (s != Success && s != FileNotFound) throw new CuRegistryException("delete", name, s);
         }
 
+        // Three values, each with the only shape the setter may give it: CuMode 40 or 24, CuDisableWgp a non-empty
+        // mask inside the board's topology, CuModeChosen an encoded request of one of those two modes.
         public void SetDword(string name, uint value)
         {
-            if (name != "CuMode" || (value != CuMode.Full && value != CuMode.Stock)) throw new InvalidOperationException("the setter writes only CuMode = 40 or CuMode = 24");
+            bool ok = (name == "CuMode" && (value == CuMode.Full || value == CuMode.Stock))
+                || (name == "CuDisableWgp" && value != 0 && (value & ~CuMode.AllowedDisable) == 0)
+                || (name == "CuModeChosen" && CuMode.EncodedRequest(value));
+            if (!ok) throw new InvalidOperationException("the setter does not write " + name + " = " + value);
             int s = _api.SetDword(name, value);
             if (s != Success) throw new CuRegistryException("set", name, s);
         }
@@ -75,52 +78,19 @@ namespace AmdgpuWddmControl
 
     public sealed class Win32RegApi : IRegApi, IDisposable
     {
-        const int KeyQueryValue = 0x0001, KeySetValue = 0x0002, KeyWow64_64 = 0x0100;
-        static readonly UIntPtr HkeyLocalMachine = new UIntPtr(0x80000002u);
-        readonly SafeRegistryHandle _key;
-
-        // Opens HKLM\<path> for query and set; throws with the LSTATUS when it cannot.
-        public Win32RegApi(string path)
+        readonly DriverStateKey state;
+        readonly DriverStateBatch ownedBatch;
+        public Win32RegApi(string path, DriverStateBatch batch = null)
         {
-            IntPtr h;
-            int s = RegOpenKeyExW(HkeyLocalMachine, path, 0, KeyQueryValue | KeySetValue | KeyWow64_64, out h);
-            if (s != 0) throw new CuRegistryException("open", @"HKLM\" + path, s);
-            _key = new SafeRegistryHandle(h, true);
+            if (batch == null) batch = ownedBatch = DriverStateBatch.Begin();
+            try { state = batch.OpenPath(path); }
+            catch { if (ownedBatch != null) ownedBatch.Dispose(); throw; }
         }
-
-        public int Query(string name, out uint type, out byte[] data)
-        {
-            data = null;
-            int size = 0;
-            int s = RegQueryValueExW(_key, name, IntPtr.Zero, out type, null, ref size);
-            if (s != 0) return s;
-            var buf = new byte[size];
-            s = RegQueryValueExW(_key, name, IntPtr.Zero, out type, buf, ref size);
-            if (s == 0) { data = new byte[size]; Array.Copy(buf, data, size); }
-            return s;
-        }
-
-        public int Delete(string name) { return RegDeleteValueW(_key, name); }
-
-        public int SetDword(string name, uint value) { return RegSetValueExW(_key, name, 0, 4, BitConverter.GetBytes(value), 4); }
-
-        public int Flush() { return RegFlushKey(_key); }
-
-        public void Dispose() { _key.Dispose(); }
-
-        [DllImport("advapi32.dll", CharSet = CharSet.Unicode)]
-        static extern int RegOpenKeyExW(UIntPtr hKey, string subKey, int options, int samDesired, out IntPtr result);
-
-        [DllImport("advapi32.dll", CharSet = CharSet.Unicode)]
-        static extern int RegQueryValueExW(SafeRegistryHandle hKey, string valueName, IntPtr reserved, out uint type, byte[] data, ref int size);
-
-        [DllImport("advapi32.dll", CharSet = CharSet.Unicode)]
-        static extern int RegDeleteValueW(SafeRegistryHandle hKey, string valueName);
-
-        [DllImport("advapi32.dll", CharSet = CharSet.Unicode)]
-        static extern int RegSetValueExW(SafeRegistryHandle hKey, string valueName, int reserved, uint type, byte[] data, int size);
-
-        [DllImport("advapi32.dll")]
-        static extern int RegFlushKey(SafeRegistryHandle hKey);
+        public int Query(string name, out uint type, out byte[] data) { return state.Query(name, out type, out data); }
+        public int Delete(string name) { return state.Clear(name); }
+        public int SetDword(string name, uint value) { return state.SetDword(name, value); }
+        // Every common-adapter mutation already includes a checked flush.
+        public int Flush() { return 0; }
+        public void Dispose() { try { state.Dispose(); } finally { if (ownedBatch != null) ownedBatch.Dispose(); } }
     }
 }
