@@ -26,11 +26,19 @@ The declaration (flavour_gate.json next to this file) holds:
   - the ALLOWED names, each with the reason it stays, and the OUT-OF-SCOPE names, each with the reason. Neither
     list fails a set; out-of-scope hits are recorded. A name in two lists is an error.
 
---flavour release passes when the KMD carries the release line, not the lab line and no escape marker, and no
-scanned PE (the KMD included) carries a forbidden name as a whole word, in ASCII or UTF-16LE.
+Coverage: every identifier of this driver's own prefixes (BC250_, BC250<letters or digits>_ such as BC250DXVK_,
+and AMDGPU_WDDM_) that a scanned file holds, in ASCII or UTF-16LE, must be in one of the three lists. An
+undeclared one fails either flavour, so a new lookup cannot ship without a decision. The search has no left
+boundary, so that no neighbouring byte can hide a name: a longer identifier that only ends in such a name shows
+up as that name and must be declared too.
+
+--flavour release passes when the KMD carries the release line, not the lab line and no escape marker, no
+scanned PE (the KMD included) carries a forbidden name as a whole word, in ASCII or UTF-16LE, and every prefixed
+identifier is declared.
 --flavour lab passes when the KMD carries the lab line, not the release line, and every escape marker, and every
 scanned file named in a forbidden entry's lab.every carries that name, with at least one such file in the set (for a
-path item: a file at that path), and no unlisted copy of a file named by path items carries it. So a build that
+path item: a file at that path), no unlisted copy of a file named by path items carries it, and every prefixed
+identifier is declared. So a build that
 lost the lab switch, a marker list that no longer matches the handlers, or a path list that no longer matches the
 build lines, fails in the lab arm instead of passing in silence. --kmd-only checks the KMD alone. A lab set never passes as release and a release set never
 passes as lab.
@@ -51,6 +59,10 @@ DECLARATION = HERE / 'flavour_gate.json'
 PE_SUFFIXES = ('.dll', '.sys', '.exe')
 NAME = re.compile(r'[A-Z][A-Z0-9_]{2,}')
 WORD = re.compile(rb'[A-Za-z0-9_]')
+# The identifiers of this driver's own prefixes, which the declaration must cover (BD-167 coverage). The last
+# character is not an underscore, so "BC250_FOO_%u" gives BC250_FOO and a bare prefix gives nothing.
+PREFIXED = re.compile(r'(?:BC250[A-Z0-9]*|AMDGPU_WDDM)_[A-Z0-9_]*[A-Z0-9]')
+UTF16_RUN = re.compile(rb'(?:[\x20-\x7e]\x00)+')
 
 
 class GateError(Exception):
@@ -198,6 +210,14 @@ def has_name(data, name):
     return tuple(counts)
 
 
+def prefixed_names(data):
+    """Every identifier of this driver's prefixes in a file, in ASCII or UTF-16LE (PREFIXED)."""
+    names = {m.group(0) for m in PREFIXED.finditer(data.decode('latin-1'))}
+    for run in UTF16_RUN.finditer(data):
+        names.update(m.group(0) for m in PREFIXED.finditer(run.group(0).decode('utf-16-le')))
+    return names
+
+
 def slot(root, f):
     """The payload path of a file found under a scanned directory: its path under the last directory named payload,
     else under the scanned directory, in lower case with forward slashes."""
@@ -276,6 +296,7 @@ def check(decl, flavour, kmd_path, others, kmd_only=False, slots=None):
         slots.setdefault(p, pathlib.Path(p).name.lower())
     forbidden = [f['name'] for f in decl['forbidden']]
     out_of_scope = [f['name'] for f in decl.get('out_of_scope', [])]
+    declared = set(forbidden) | set(out_of_scope) | {f['name'] for f in decl['allowed']}
     held = {}   # file -> set of forbidden names it holds
     for path in [kmd_path] + list(others):
         data = kmd if path == kmd_path else read_pe(path)
@@ -286,11 +307,15 @@ def check(decl, flavour, kmd_path, others, kmd_only=False, slots=None):
                 if a or u:
                     into[name] = {'ascii': a, 'utf16': u}
         held[path] = set(hits)
+        undeclared = sorted(prefixed_names(data) - declared)
         record['files'].append({'path': str(path), 'slot': slots[path], 'sha256': hashlib.sha256(data).hexdigest().upper(),
-                                'forbidden': hits, 'out_of_scope': outside})
+                                'forbidden': hits, 'out_of_scope': outside, 'undeclared': undeclared})
         if flavour == 'release':
             for name in sorted(hits):
                 failures.append('%s: %s (ascii %d, utf16 %d)' % (path, name, hits[name]['ascii'], hits[name]['utf16']))
+        for name in undeclared:
+            failures.append('%s: %s is not declared: add it to the forbidden, allowed or out_of_scope list of the '
+                            'declaration (BD-167 coverage)' % (path, name))
         for name in sorted(outside):
             notes.append('%s: %s (out of scope, recorded)' % (path, name))
 

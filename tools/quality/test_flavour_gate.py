@@ -8,7 +8,9 @@ longer identifier that only contains a forbidden name must not, and an out-of-sc
 A lab set fails when one named file lacks one of its lab-only names or is missing, so a build that lost the lab
 switch cannot pass in silence. An item of lab.every with a payload path names that copy only, and an unlisted copy of
 the same file that holds the name fails the lab set. Every input the gate cannot judge must fail closed. The declaration next to the gate must load, and every KMD marker in it must still be a literal of the
-driver source, so that a renamed log line fails here and not first on the lab.
+driver source, so that a renamed log line fails here and not first on the lab. Coverage: one identifier of the
+driver's own prefixes that no list declares fails either flavour (the negative control), in ASCII, in UTF-16LE and
+in the KMD, and a declared one passes.
 """
 import contextlib
 import io
@@ -214,6 +216,35 @@ class ReleaseFlavour(unittest.TestCase):
         data = pe("x") + b"\x01A" + b"RADV_DEBUG\0" + b"LOG\0" + "ZINK_DEBUG".encode("utf-16-le") + b"\0\0"
         self.assertEqual(g.has_name(data, "RADV_DEBUG"), (1, 0))
         self.assertEqual(g.has_name(data, "ZINK_DEBUG"), (0, 1))
+
+    def test_undeclared_prefixed_name_fails(self):
+        # The negative control of the coverage rule: one name of the driver's prefixes that no list declares.
+        for name in ("BC250_NOT_DECLARED_ANYWHERE", "AMDGPU_WDDM_NOT_DECLARED", "BC250XYZ_NOT_DECLARED"):
+            with self.subTest(name=name):
+                self.assertFalse(any(name == e["name"] for k in ("forbidden", "allowed", "out_of_scope")
+                                     for e in DECL.get(k, [])))
+                self.release_set(pe("AMDGPU_WDDM_LOG", name))
+                self.assertEqual(self.run_gate("--flavour", "release", "--package", str(self.dir / "pkg")), 1)
+                self.release_set(pe("AMDGPU_WDDM_LOG", utf16=("x" + name,)))
+                self.assertEqual(self.run_gate("--flavour", "release", "--package", str(self.dir / "pkg")), 1)
+        self.setUp()
+        self.lab_set(extra={"undeclared/a.dll": ["BC250_NOT_DECLARED_ANYWHERE"]})
+        self.assertEqual(self.run_gate("--flavour", "lab", "--package", str(self.dir / "pkg")), 1)
+        self.setUp()
+        self.write("pkg/bc250kmd.sys", pe(*RELEASE_KMD, "RowCount must be 1..BC250_NOT_DECLARED_ANYWHERE"))
+        self.write("pkg/a.dll", pe("x"))
+        self.assertEqual(self.run_gate("--flavour", "release", "--package", str(self.dir / "pkg")), 1)
+
+    def test_declared_prefixed_names_pass(self):
+        allowed = [e["name"] for e in DECL["allowed"] if g.PREFIXED.fullmatch(e["name"])]
+        self.assertTrue(allowed, "the declaration has no allowed prefixed name to test with")
+        self.release_set(pe("AMDGPU_WDDM_LOG", *allowed, *[e["name"] for e in DECL.get("out_of_scope", [])]))
+        self.assertEqual(self.run_gate("--flavour", "release", "--package", str(self.dir / "pkg")), 0)
+
+    def test_prefixed_names(self):
+        data = pe("BC250_FOO_%u", "xxBC250DXVK_BAR=1", "BC250_", "bc250_lower", "BC250d3d_zink.dll",
+                  utf16=("AMDGPU_WDDM_WIDE",)) + b"\x01AMDGPU_WDDM_RAW\0"
+        self.assertEqual(g.prefixed_names(data), {"BC250_FOO", "BC250DXVK_BAR", "AMDGPU_WDDM_WIDE", "AMDGPU_WDDM_RAW"})
 
     def test_forbidden_name_in_the_kmd_fails_release(self):
         self.write("pkg/bc250kmd.sys", pe(*RELEASE_KMD, "GALLIUM_DRIVER"))
