@@ -420,6 +420,8 @@ example, `BC250_DRAW_STATS` is only in the RADV copies of the triplet build line
 `kmd/wow64/d3d12/amdgpu_wddm_vkd3d32.dll` is `wow64/d3d12/amdgpu_wddm_vkd3d.dll`. Thus one declaration
 serves both package layouts.
 
+Asserts are live in the lab flavour of three components only, and that is a decision, not an oversight (lead, 2026-10-14). The lab build keeps them where the config leaves `NDEBUG` undefined: `llvmpipe-umd` and `zink-umd` (`b_ndebug=if-release` in a `debugoptimized` build, which resolves to false) and the DXVK engine (`b_ndebug=false`). The RADV and Zink GL ICD configs and the vkd3d engine define `NDEBUG` in both flavours, as they did before the flavour split, so an assert in those arms is compiled out in the lab flavour too. An assert that fires therefore fires in three of the ten shipped build arms. This is why the gate judges a release file by its own bytes and never by a difference from its lab twin.
+
 Windows reads environment names in any letter case. Thus a forbidden name also counts as a whole C string in
 another case, for example `radv_debug`. Inside a longer text, it does not count. The coverage rule also applies
 to such strings. A lab set fails when a file holds a name whose entry says that no lab file holds it
