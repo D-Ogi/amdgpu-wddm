@@ -24,7 +24,8 @@ the host tests cannot answer. Every trial outside the HLK job ends inside three 
 5. Compare that hash with `BC250_GDI_CODE_SHA256` of
    [driver/kmd/gdi_kernels.generated.h](../../driver/kmd/gdi_kernels.generated.h). A different hash
    means the installed driver is not the build under test.
-6. Check the registry value. `EnableGdiHwAccel` must be 1 under the adapter's `DefaultsV2` key.
+6. Check the registry value. `EnableGdiHwAccel` must be 1 under the adapter's `Parameters` key,
+   where the package INF writes it with NOCLOBBER.
 7. Start the thermal guard for the whole pass, and the camera watch beside it (the owner's
    suspension of the camera was revoked on 2026-10-12, which `CLAUDE.md` records in its lab camera
    paragraph).
@@ -57,14 +58,24 @@ runs points at the package and not at the translation.
 
 Run this trial on the 22631 system, which is the default entry. Keep it inside three minutes.
 
-1. Open the guard log in one window and the overlay in another.
-2. Tell the owner through the overlay what is about to happen.
-3. Open Notepad, Registry Editor and Device Manager. All three draw with GDI.
-4. Drag a classic window across the screen. Drag it between the two monitors as well.
-5. Open and close the Start menu, then open Explorer and scroll a long folder listing.
-6. Resize a window by its border, slowly, so the operating system repaints it many times.
-7. Take a screenshot with `mon.py screenshot` and compare it with what the camera sees.
-8. Stop the driver. Read the `wddm: gdi totals` line that the stop writes.
+The work itself is driven and not typed: an SSH session has no desktop, so the workload runs in the
+lab user's own session as a one-shot task, the way the game input server does. It opens Registry
+Editor and Device Manager, which are classic windows the CDD draws through GDI, moves each of them
+across the whole virtual screen, resizes them by steps, scrolls their own classic controls, and
+closes what it opened. The owner sees all of it happen on the lab's screen.
+
+1. Tell the owner through the overlay what is about to happen.
+2. Read the driver's GDI lines. The start line must say `gate 1`.
+3. Run the workload once, bounded, and keep the record it writes: the windows it opened, and how
+   many moves, resizes, scrolls and forced repaints it asked for.
+4. Take a screenshot with `mon.py screenshot` and compare it with what the camera sees. Both must
+   show an ordinary desktop: no torn window, no black rectangle, no stale content.
+5. Read the driver's GDI lines again, and the totals of the stop. The stop writes
+   `wddm: gdi totals` into the log ring, so the log file of the stop (`KeepLog`) carries it over the
+   restart that stopped the driver. A stop of the device on purpose is not needed, and it would
+   leave the processor slower until the next restart (K137).
+6. Check the counters of that line: `item-refused`, `batch-refused` and `fallback`. The first two
+   must be 0 in an ordinary desktop session.
 
 ## Trial 4: the off switch
 
