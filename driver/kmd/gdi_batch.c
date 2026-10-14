@@ -27,6 +27,14 @@
  * sub-rectangle can be refused for want of space, and BC250_GDI_BATCH_NO_SPACE is unreachable.
  * It is still returned rather than ignored, because an unreachable state that corrupts a command
  * stream is worse than one that stops it, and because the host test asserts that it never happens.
+ *
+ * Capacity itself is bounded before any of this starts (rule 3 of gdi_batch.h): Begin clamps it to
+ * BC250_GDI_IB_DWORDS_MAX, the length one indirect buffer can carry. Every term of the induction is
+ * inside Capacity, the row path included, because the row path is offered the dwords left over
+ * after the whole right-hand side of I(k+1) and nothing else. So a DMA buffer larger than one
+ * indirect buffer cannot turn into a stream the submitter would have to refuse, and the sentence
+ * "an item takes the dispatch instead" covers that case too: the rows of a tall rectangle stop at
+ * the capacity like everything else.
  */
 
 unsigned int Bc250GdiBatchDwords(unsigned int subRects)
@@ -52,11 +60,27 @@ unsigned int Bc250GdiCallDwords(unsigned int commandBytes)
     return Bc250GdiBatchDwords(Bc250GdiMaxSubRects(commandBytes));
 }
 
+/* What one call may write: the space this call was given, never more than one indirect buffer can
+ * carry, and never more than the part of that length this DMA buffer has left. dxgkrnl may fill one
+ * buffer with several calls before it submits it, and the submitter encodes the whole buffer as one
+ * indirect buffer, so the second term is what keeps a sequence of guaranteed calls inside the one
+ * length the packet can name. */
+unsigned int Bc250GdiCallCapacity(unsigned int dmaDwords, unsigned int aheadDwords)
+{
+    unsigned int room;
+    if (aheadDwords >= BC250_GDI_IB_DWORDS_MAX) return 0u;
+    room = BC250_GDI_IB_DWORDS_MAX - aheadDwords;
+    return dmaDwords < room ? dmaDwords : room;
+}
+
 unsigned int Bc250GdiContextDmaBytes(unsigned int commandBytesBound)
 {
     unsigned int dwords = Bc250GdiCallDwords(commandBytesBound);
     unsigned long long bytes;
     if (dwords == 0u) return 0u;
+    /* A bound whose worst case one indirect buffer cannot carry is not a bound this driver can
+     * promise, whatever size of DMA buffer it asked for. */
+    if (dwords > BC250_GDI_IB_DWORDS_MAX) return 0u;
     bytes = (unsigned long long)dwords * 4u;
     /* A whole number of 4 KB pages, which is what the video memory manager allocates anyway. */
     bytes = (bytes + 4095u) & ~4095ull;
@@ -109,6 +133,9 @@ int Bc250GdiBatchBegin(BC250_GDI_BATCH* batch, unsigned int* out, unsigned int c
     if (!batch) return 0;
     for (i = 0; i < sizeof(*batch); i++) ((unsigned char*)batch)[i] = 0;
     if (!out || capacity == 0u || ib == 0 || (ib & 3u)) return 0;
+    /* Rule 3, held here and not only in the caller: whatever the caller believes it has, the batch
+     * works inside the length one indirect buffer can carry. */
+    if (capacity > BC250_GDI_IB_DWORDS_MAX) capacity = BC250_GDI_IB_DWORDS_MAX;
     need = Bc250GdiBatchDwords(subRects);
     if (need == 0u || need > capacity) return 0;
     batch->Out = out;

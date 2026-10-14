@@ -1,6 +1,9 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 #include "gdi_dispatch.h"
 #include "gdi_kernels.generated.h"
+/* For BC250_GDI_IB_DWORDS_MAX and the ring granule only: this is the one file of the GDI path that
+ * has AMD's packet definitions, so it is where that constant is held against them. */
+#include "gdi_batch.h"
 #include "../amdgpu-import/nvd.h"
 
 /*
@@ -25,6 +28,20 @@
  * masks and the code object the compiler produced. Nothing here is typed (CLAUDE.md hard rules 1
  * and 2), and the dword counts below are the only arithmetic.
  */
+
+/* Rule 3 of gdi_batch.h, held against AMD's own definition of the field it comes from rather than
+ * typed twice. PACKET3_INDIRECT_BUFFER__IB_SIZE() masks to the length field and shifts by nothing
+ * (nvd.h), so a length that comes back unchanged is a length the packet can carry, which is the
+ * question bc250_gfx_emit_ib() asks of every submission this driver makes. The second line is what
+ * makes the constant a maximum: the next granule up does not survive the field. A plain typedef and
+ * not C_ASSERT, because this file is compiled by the host test as well. */
+typedef char bc250_gdi_ib_max_fits[
+    PACKET3_INDIRECT_BUFFER__IB_SIZE(BC250_GDI_IB_DWORDS_MAX) == BC250_GDI_IB_DWORDS_MAX ? 1 : -1];
+typedef char bc250_gdi_ib_max_is_max[
+    PACKET3_INDIRECT_BUFFER__IB_SIZE(BC250_GDI_IB_DWORDS_MAX + BC250_GDI_RING_GRANULE) !=
+    BC250_GDI_IB_DWORDS_MAX + BC250_GDI_RING_GRANULE ? 1 : -1];
+typedef char bc250_gdi_ib_max_granule[
+    (BC250_GDI_IB_DWORDS_MAX % BC250_GDI_RING_GRANULE) == 0u ? 1 : -1];
 
 /* A type-3 packet carrying n+1 body dwords costs n+2 dwords in all (nvd.h's PACKET3 writes COUNT
  * as n). A SET_SH_REG of `count` registers has one offset dword and `count` values, so n = count. */

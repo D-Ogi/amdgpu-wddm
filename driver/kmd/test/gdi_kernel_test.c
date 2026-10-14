@@ -62,6 +62,22 @@ STATIC_CHECK(kernarg_scalars, BC250_GDI_RUN_SCALARS ==
              (BC250_GDI_KERNARG_BYTES / 4u) - BC250_GDI_ARG_DSTPITCH);
 STATIC_CHECK(kernel_count, BC250_GDI_KERNEL_COUNT == (unsigned)Bc250GdiKernels - 1u);
 
+/* Rule 3 of gdi_batch.h: BC250_GDI_IB_DWORDS_MAX against the packet field the submitter encodes it
+ * into. PACKET3_INDIRECT_BUFFER__IB_SIZE() masks to the field and shifts by nothing, so a length
+ * that comes back unchanged is a length the packet can carry, which is the question
+ * bc250_gfx_emit_ib() asks of every submission; the next granule up does not survive it, which is
+ * what makes the constant a maximum. gdi_dispatch.c holds the same statements in the driver. */
+STATIC_CHECK(ib_max_fits,
+             PACKET3_INDIRECT_BUFFER__IB_SIZE(BC250_GDI_IB_DWORDS_MAX) == BC250_GDI_IB_DWORDS_MAX);
+STATIC_CHECK(ib_max_is_max,
+             PACKET3_INDIRECT_BUFFER__IB_SIZE(BC250_GDI_IB_DWORDS_MAX + BC250_GDI_RING_GRANULE) !=
+             BC250_GDI_IB_DWORDS_MAX + BC250_GDI_RING_GRANULE);
+STATIC_CHECK(ib_max_granule, (BC250_GDI_IB_DWORDS_MAX % BC250_GDI_RING_GRANULE) == 0u);
+/* The two command-buffer lengths of the r3 review's reproducer, against the bound: the dense
+ * BitBlt is above it and the ColorFill of tall strips is far inside it. */
+STATIC_CHECK(ib_case_dense_above_bound, 224080u > BC250_GDI_CMDBUF_BOUND);
+STATIC_CHECK(ib_case_strips_inside_bound, 2096u < BC250_GDI_CMDBUF_BOUND);
+
 /* ================================================================================================
  * the arena: one flat space with a GPU virtual address of its own
  * ============================================================================================== */
@@ -816,14 +832,20 @@ static void TestColourOrder(void)
 
 /* What wddm.c asks dxgkrnl for, for a command buffer of BC250_GDI_CMDBUF_BOUND bytes. The test
  * checks the two against each other rather than repeating the arithmetic. */
-#define BATCH_BYTES (2u * 1024u * 1024u)
+/* Large enough for the longest stream the submitter can encode (BC250_GDI_IB_DWORDS_MAX), because
+ * the review's dense row-path case is translated here at exactly that capacity. */
+#define BATCH_BYTES (4u * 1024u * 1024u)
 #define BATCH_DWORDS (BATCH_BYTES / 4u)
+/* What Begin works inside when it is handed this whole buffer: rule 3 clamps the capacity to what
+ * one indirect buffer can carry, which is a granule below the buffer's own size. */
+#define BATCH_CAP_DWORDS (BATCH_DWORDS < BC250_GDI_IB_DWORDS_MAX ? BATCH_DWORDS : \
+                          BC250_GDI_IB_DWORDS_MAX)
 /* The capacity the hand-picked 256 KiB buffer used to give. Kept as a tight case: it is where an
  * item that could take the per-row engine path must give it up to the items behind it. */
 #define BATCH_TIGHT_DWORDS (256u * 1024u / 4u)
 /* The most sub-rectangles the smallest bound this driver asks for can carry. The dense cases that
- * are translated and compared drive that many: the whole bound is 16 times larger, and running
- * 98303 dispatches through the host model says nothing the 6143 below do not. The budget cases use
+ * are translated and compared drive that many: the whole bound is twice as large, and running
+ * 12287 dispatches through the host model says nothing the 6143 below do not. The budget cases use
  * the whole bound, which is where the capacity theorem has to hold. */
 #define BATCH_SUBRECTS ((BC250_GDI_CMDBUF_FLOOR - BC250_GDI_RECT_FLOOR_BYTES) / \
                         BC250_GDI_SUBRECT_BYTES)
@@ -1054,9 +1076,11 @@ static void TestBatchCapacity(void)
         CHECK(dma != 0u);
         CHECK_EQ(dma & 4095u, 0u);
         CHECK(Bc250GdiCallDwords(BC250_GDI_CMDBUF_BOUND) <= dma / 4u);
-        /* The bound is the largest the DMA ceiling allows, so its worst case fits the ceiling and
-         * the next step up does not. That is what makes the number derived rather than chosen. */
+        /* The bound is the largest candidate on the ladder that both ceilings allow, so its worst
+         * case fits them and the next candidate's does not. That is what makes the number derived
+         * rather than chosen. Which ceiling stops it is asserted in TestIbBound. */
         CHECK(dma <= BC250_GDI_DMA_BYTES_MAX);
+        CHECK(Bc250GdiCallDwords(BC250_GDI_CMDBUF_BOUND) <= BC250_GDI_IB_DWORDS_MAX);
         CHECK_EQ(Bc250GdiContextDmaBytes(BC250_GDI_CMDBUF_BOUND * 2u), 0u);
         /* And the floor always fits, whatever the ceiling is. */
         CHECK(Bc250GdiContextDmaBytes(BC250_GDI_CMDBUF_FLOOR) != 0u);
@@ -1071,14 +1095,21 @@ static void TestBatchCapacity(void)
         CHECK_EQ(Bc250GdiContextBound(256ull * 1024u * 1024u, 0u), BC250_GDI_CMDBUF_BOUND);
         CHECK_EQ(Bc250GdiContextBound(384ull * 1024u * 1024u, 0u), BC250_GDI_CMDBUF_BOUND);
         CHECK_EQ(Bc250GdiContextBound(447ull * 1024u * 1024u, 0u), BC250_GDI_CMDBUF_BOUND);
-        /* 64 MiB of aperture allows 8 MiB of DMA buffer, which is the 384 KiB bound. */
-        CHECK_EQ(Bc250GdiContextBound(64ull * 1024u * 1024u, 0u), 384u * 1024u);
+        /* The step down, at the apertures where the share is the binding number. 32 MiB allows
+         * 4 MiB of DMA buffer, which the whole bound fits inside; 16 MiB allows 2 MiB, which it
+         * does not, and the ladder has nothing between the bound and the floor. */
+        CHECK_EQ(Bc250GdiContextBound(32ull * 1024u * 1024u, 0u), BC250_GDI_CMDBUF_BOUND);
+        CHECK_EQ(Bc250GdiContextBound(16ull * 1024u * 1024u, 0u), BC250_GDI_CMDBUF_FLOOR);
         /* And an aperture too small for even the floor still gets the floor: a GDI context with no
          * DMA buffer at all would draw nothing ever, which is worse than a large share. */
         CHECK_EQ(Bc250GdiContextBound(1ull * 1024u * 1024u, 0u), BC250_GDI_CMDBUF_FLOOR);
-        /* What an earlier short call asked for is taken when it is larger than the bound and the
-         * aperture can still afford it, and ignored when the DMA ceiling cannot meet it. */
-        CHECK_EQ(Bc250GdiContextBound(447ull * 1024u * 1024u, 1600u * 1024u), 1600u * 1024u);
+        /* What an earlier short call asked for is taken when it is larger than the bound and both
+         * ceilings can still meet it, and ignored when neither can. The range where that happens is
+         * narrow on purpose: one indirect buffer carries the worst case of 200 KiB and not of
+         * 256 KiB, whatever the aperture is. */
+        CHECK_EQ(Bc250GdiContextBound(447ull * 1024u * 1024u, 200u * 1024u), 200u * 1024u);
+        CHECK_EQ(Bc250GdiContextBound(447ull * 1024u * 1024u, 256u * 1024u),
+                 BC250_GDI_CMDBUF_BOUND);
         CHECK_EQ(Bc250GdiContextBound(447ull * 1024u * 1024u, 4096u * 1024u),
                  BC250_GDI_CMDBUF_BOUND);
         CHECK_EQ(Bc250GdiContextBound(447ull * 1024u * 1024u, 0xFFFFFFFFu),
@@ -1137,14 +1168,14 @@ static void TestBatchCapacity(void)
     CHECK_EQ(Bc250GdiBatchBegin(&batch, g_batch, BATCH_DWORDS,
                                 IB_VA, 0xFFFFFFFFu), 0);
     CHECK_EQ(Bc250GdiBatchBegin(&batch, g_batch, BATCH_DWORDS, IB_VA,
-                                BATCH_DWORDS / Bc250GdiDispatchDwordsMax()), 0);
+                                BATCH_CAP_DWORDS / Bc250GdiDispatchDwordsMax()), 0);
     CHECK_EQ(memcmp(g_batch, g_scratch, sizeof(g_batch)), 0);
     /* The largest batch a given capacity guarantees, and one above it. This is the refusal the
      * review objected to, and it is still here, one sub-rectangle above whatever the buffer can
      * hold - but now the buffer is sized so that no command buffer inside the bound can reach it,
      * which the theorem above asserts. */
-    for (i = BATCH_DWORDS / Bc250GdiDispatchDwordsMax(); i > 0u; i--)
-        if (Bc250GdiBatchDwords(i) <= BATCH_DWORDS) break;
+    for (i = BATCH_CAP_DWORDS / Bc250GdiDispatchDwordsMax(); i > 0u; i--)
+        if (Bc250GdiBatchDwords(i) <= BATCH_CAP_DWORDS) break;
     CHECK(i > BATCH_SUBRECTS);
     CHECK_EQ(Bc250GdiBatchBegin(&batch, g_batch, BATCH_DWORDS, IB_VA, i), 1);
     CHECK_EQ(Bc250GdiBatchBegin(&batch, g_batch, BATCH_DWORDS, IB_VA, i + 1u), 0);
@@ -1205,6 +1236,158 @@ static void TestBatchCapacity(void)
         RunBatch("bitblt srccopy 793 one-pixel subrects", BC250_GDIOP_BITBLT,
                  BC250_GDI_ROP_SRCCOPY, 0, 793u, 1u, dwords, 0u);
     }
+}
+
+/* ================================================================================================
+ * rule 3: what one indirect buffer can carry, and the three cases of the r3 review
+ * ============================================================================================== */
+
+/* One call of `count` disjoint sub-rectangles of `width` by `height`, out of a command buffer of
+ * `commandBytes` bytes, into a capacity of `capacity` dwords. Nothing is decoded and nothing is
+ * run, so the surfaces are described rather than placed in the arena and the addresses are outside
+ * it: what is asserted is the fate of every item and the length of the finished stream. */
+static void IbBoundCase(const char* what, unsigned int opcode, unsigned int rop,
+                        unsigned int colour, unsigned int commandBytes, unsigned int count,
+                        unsigned int width, unsigned int height, unsigned int capacity,
+                        int expectBegin)
+{
+    BC250_GDI_SURFACE s[4];
+    BC250_GDI_BATCH batch;
+    BC250_GDI_OP op;
+    BC250_GDI_RECT whole;
+    unsigned long long vas[4];
+    unsigned int i, used, planned, drawn = 0, pattern = 0;
+
+    memset(s, 0, sizeof(s));
+    for (i = 0; i < 4u; i++) {
+        s[i].Width = count * width;
+        s[i].Height = height;
+        s[i].Bpp = 4u;
+        s[i].Pitch = 4u * count * width;
+        s[i].Bytes = (unsigned long long)s[i].Pitch * height;
+        s[i].Type = BC250_GDISURFACE_TEXTURE;
+        s[i].Present = 1u;
+        /* Far from the arena and far from the indirect buffer: an address nothing here reads. */
+        vas[i] = 0x0000000A00000000ull + (unsigned long long)i * 0x10000000ull;
+    }
+    whole = Rect(0, 0, (int)(count * width), (int)height);
+    op = Op(opcode, whole, whole);
+    op.Rop = rop;
+    op.Color = colour;
+    op.NumSubRects = count;
+    if (opcode == BC250_GDIOP_COLORFILL) pattern = colour;
+
+    /* What the walk would promise Begin for a command buffer of that size, which is the number the
+     * production wrapper passes and is at least the rectangles this command holds. */
+    planned = Bc250GdiMaxSubRects(commandBytes);
+    CHECK(planned >= count);
+    if (!expectBegin) {
+        /* Above the bound: the counted refusal of rule 2, and nothing written. */
+        CHECK_EQ(Bc250GdiBatchBegin(&batch, g_batch, capacity, IB_VA, planned), 0);
+        return;
+    }
+    CHECK_EQ(Bc250GdiBatchBegin(&batch, g_batch, capacity, IB_VA, planned), 1);
+    for (i = 0; i < count; i++) {
+        BC250_GDI_RECT sub = Rect((int)(i * width), 0, (int)((i + 1u) * width), (int)height);
+        BC250_GDI_ITEM item;
+        int result;
+        CHECK_EQ(Bc250GdiPlanItem(&op, s, 4, &sub, &item), Bc250GdiOk);
+        result = Bc250GdiBatchItem(&batch, &op, s, vas, 4, &item, pattern, planned - i);
+        /* The contract: after Begin said yes, every admitted sub-rectangle is drawn by one path or
+         * the other. A row path that ran out of budget takes the dispatch, it does not drop. */
+        CHECK(result == BC250_GDI_BATCH_ROWS || result == BC250_GDI_BATCH_DISPATCH);
+        if (result == BC250_GDI_BATCH_ROWS || result == BC250_GDI_BATCH_DISPATCH) drawn++;
+    }
+    used = Bc250GdiBatchEnd(&batch);
+    CHECK_EQ(drawn, count);
+    CHECK_EQ(batch.Items, count);
+    CHECK(used <= capacity);
+    /* The end of it: the stream the submitter would encode, against the predicate the ring emitter
+     * applies to every submission (bc250_gfx_emit_ib, with this macro). */
+    CHECK(used <= BC250_GDI_IB_DWORDS_MAX);
+    CHECK_EQ((unsigned int)PACKET3_INDIRECT_BUFFER__IB_SIZE(used), used);
+    if (used == 0u || used > BC250_GDI_IB_DWORDS_MAX)
+        fprintf(stderr, "FAIL %s: %u dwords of a capacity of %u\n", what, used, capacity);
+}
+
+static void TestIbBound(void)
+{
+    BC250_GDI_BATCH batch;
+    unsigned int dma = Bc250GdiContextDmaBytes(BC250_GDI_CMDBUF_BOUND);
+    unsigned int shipped = Bc250GdiCallCapacity(dma / 4u, 0u);
+    unsigned int ceiling = Bc250GdiCallCapacity(BC250_GDI_DMA_BYTES_MAX / 4u, 0u);
+
+    /* The constant itself is held against the packet field by the STATIC_CHECKs at the top of this
+     * file, which is where a constant expression belongs. What is left for run time is the
+     * arithmetic that uses it. */
+
+    /* The capacity of one call: the space it was given, what one indirect buffer can carry, and
+     * that length less the dwords the same buffer already holds. */
+    CHECK_EQ(Bc250GdiCallCapacity(1024u, 0u), 1024u);
+    CHECK_EQ(ceiling, BC250_GDI_IB_DWORDS_MAX);
+    CHECK_EQ(Bc250GdiCallCapacity(BC250_GDI_DMA_BYTES_MAX / 4u, 1048000u),
+             BC250_GDI_IB_DWORDS_MAX - 1048000u);
+    CHECK_EQ(Bc250GdiCallCapacity(1024u, BC250_GDI_IB_DWORDS_MAX - 16u), 16u);
+    CHECK_EQ(Bc250GdiCallCapacity(1024u, BC250_GDI_IB_DWORDS_MAX), 0u);
+    CHECK_EQ(Bc250GdiCallCapacity(1024u, 0xFFFFFFFFu), 0u);
+    CHECK_EQ(Bc250GdiCallCapacity(0u, 0u), 0u);
+
+    /* And the same clamp inside Begin, for a caller that hands over a whole DMA buffer without
+     * rule 3's arithmetic: the batch works inside the encodable length, so the row path cannot be
+     * given space the submitter is unable to name. This is the review's case 1 at its root. */
+    CHECK_EQ(Bc250GdiBatchBegin(&batch, g_batch, 0xFFFFFFFFu, IB_VA, 1u), 1);
+    CHECK_EQ(batch.Capacity, BC250_GDI_IB_DWORDS_MAX);
+    CHECK_EQ(Bc250GdiBatchBegin(&batch, g_batch, BC250_GDI_DMA_BYTES_MAX / 4u, IB_VA, 1u), 1);
+    CHECK_EQ(batch.Capacity, BC250_GDI_IB_DWORDS_MAX);
+
+    /* Which ceiling chooses the bound: the next candidate on the ladder is refused because no
+     * single indirect buffer can carry its worst case, and its DMA buffer would have fitted the
+     * policy ceiling with room to spare. */
+    CHECK(dma != 0u);
+    CHECK(shipped != 0u && shipped <= BC250_GDI_IB_DWORDS_MAX);
+    CHECK(Bc250GdiCallDwords(BC250_GDI_CMDBUF_BOUND) <= BC250_GDI_IB_DWORDS_MAX);
+    CHECK(Bc250GdiCallDwords(BC250_GDI_CMDBUF_BOUND * 2u) > BC250_GDI_IB_DWORDS_MAX);
+    CHECK(Bc250GdiCallDwords(BC250_GDI_CMDBUF_BOUND * 2u) * 4u < BC250_GDI_DMA_BYTES_MAX);
+    CHECK_EQ(Bc250GdiContextDmaBytes(BC250_GDI_CMDBUF_BOUND * 2u), 0u);
+
+    /* Case 1 of the review. One ColorFill of 128 separate 1 by 1200 strips is 2096 command bytes,
+     * and every strip is a row item of 8400 dwords: offered the whole of a large DMA buffer, the
+     * batch emitted 1075208 dwords, which the submitter cannot encode and does not truncate. The
+     * capacity is what stops the row path now, and every strip is still drawn. Twice: with the
+     * capacity a context of this bound has, and with the whole policy ceiling offered, which is
+     * what the reproducer did. */
+    IbBoundCase("colorfill 128 strips of 1x1200, the shipped capacity", BC250_GDIOP_COLORFILL,
+                BC250_GDI_CF_PATCOPY, 0x80C03412u, 2096u, 128u, 1u, 1200u, shipped, 1);
+    IbBoundCase("colorfill 128 strips of 1x1200, the whole ceiling", BC250_GDIOP_COLORFILL,
+                BC250_GDI_CF_PATCOPY, 0x80C03412u, 2096u, 128u, 1u, 1200u, ceiling, 1);
+    /* The positive control of the same shape at a quarter of the height: 64 strips of 1 by 300
+     * cost 134400 dwords together, so the clamp is nowhere near them and the call is translated
+     * the way it was before this change. */
+    IbBoundCase("colorfill 64 strips of 1x300, well inside the clamp", BC250_GDIOP_COLORFILL,
+                BC250_GDI_CF_PATCOPY, 0x2011AA33u, 1072u, 64u, 1u, 300u, shipped, 1);
+
+    /* Case 2 of the review. A BitBlt of 14000 separate one-pixel rectangles is 224080 command
+     * bytes, above this driver's bound, and its worst case is 1135366 dwords, which no single
+     * indirect buffer can carry at any DMA size. So the whole of its behaviour is the counted
+     * refusal of rule 2, at both capacities. */
+    CHECK(Bc250GdiCallDwords(224080u) > BC250_GDI_IB_DWORDS_MAX);
+    IbBoundCase("bitblt 14000 one-pixel rects, the shipped capacity", BC250_GDIOP_BITBLT,
+                BC250_GDI_ROP_SRCINVERT, 0, 224080u, 14000u, 1u, 1u, shipped, 0);
+    IbBoundCase("bitblt 14000 one-pixel rects, the whole ceiling", BC250_GDIOP_BITBLT,
+                BC250_GDI_ROP_SRCINVERT, 0, 224080u, 14000u, 1u, 1u, ceiling, 0);
+
+    /* Case 3 of the review: 98313 rectangles in 1573088 command bytes, which this design refused
+     * before the change as well. The refusal is the same, and now it is the encodable length and
+     * not a policy number that makes it the right one. */
+    CHECK(Bc250GdiMaxSubRects(1573088u) >= 98313u);
+    CHECK(Bc250GdiBatchDwords(98313u) > BC250_GDI_IB_DWORDS_MAX);
+    CHECK_EQ(Bc250GdiBatchBegin(&batch, g_batch, ceiling, IB_VA, 98313u), 0);
+    CHECK_EQ(Bc250GdiBatchBegin(&batch, g_batch, shipped, IB_VA, 98313u), 0);
+
+    /* The densest call the bound does guarantee, at the capacity it is sized for: 12287
+     * sub-rectangles of one dispatch each, which is the worst case of the whole design. */
+    CHECK_EQ(Bc250GdiBatchBegin(&batch, g_batch, shipped, IB_VA, BOUND_SUBRECTS), 1);
+    CHECK(Bc250GdiBatchDwords(BOUND_SUBRECTS) <= shipped);
 }
 
 /* ================================================================================================
@@ -1327,6 +1510,7 @@ int main(void)
     TestClearTypeBlend();
     TestColourOrder();
     TestBatchCapacity();
+    TestIbBound();
     printf("gdi_kernel_test: %d checks, %d failures\n", g_checks, g_failures);
     return g_failures ? 1 : 0;
 }
