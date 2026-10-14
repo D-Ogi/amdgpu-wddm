@@ -384,36 +384,70 @@ set of batches that includes the counterexample above.
 
 #### Which DMA buffer a call lies in
 
-The third number of rule 3 is a question about identity, and the DDI answers one half of it.
-`DXGKARG_RENDERGDI` names the buffer of a call by `pDmaBuffer`, "a pointer to the start of the DMA
-buffer, which is aligned on 4 KB", by `DmaBufferGpuVirtualAddress`, "the virtual address where the
-DMA buffer was paged in", and by `DmaSize`, "the size, in bytes, of the DMA buffer that `pDmaBuffer`
-points to". It does not say that one buffer carries one call, and neither it nor the submission guide
-gives an order of `RenderGdi` calls and submissions. A review of r4 demonstrated what follows for an
-answer read off the order of addresses: with two independent buffers of one context, 8 MiB apart and
-each holding one small paint, the distance between the allocations looked like two million dwords of
-prefix and the second call was dropped.
+The last two numbers of rule 3 are a question about identity, and the DDI answers it with an address
+and a length. `DXGKARG_RENDERGDI` names the buffer of a call by `pDmaBuffer`, "a pointer to the start
+of the DMA buffer, which is aligned on 4 KB", by `DmaBufferGpuVirtualAddress`, "the virtual address
+where the DMA buffer was paged in", and by `DmaSize`, "the size, in bytes, of the DMA buffer that
+`pDmaBuffer` points to". The same two fields of `DXGKARG_RENDER` are declared `[out]` and `[in]`,
+with the driver's own obligation spelled out: "the driver should set `pDmaBuffer` to the next empty
+byte that follows the last byte that the driver wrote to". So a call is given a window and the extent
+it lies in, and that pair is the only identity on offer. Nothing says that one buffer carries one
+call, and neither the DDI nor the submission guide gives an order of `RenderGdi` calls and
+submissions.
 
-So the dwords ahead of a call are tracked for the buffer the call names.
-`Bc250GdiDmaClaim` places the window of a call against the buffers this context has written into and
-that no submission has carried away:
+Two reviews have built the counterexamples that shaped this. A review of r4 found that the lowest
+address seen since the last submission is not an identity: with two independent buffers 8 MiB apart,
+each holding one small paint, the distance between the allocations looked like two million dwords of
+prefix and the second call was dropped. A review of r5 found that adjacency is not an identity
+either: an empty buffer that began exactly where the first one ended, with its own full size, was
+taken for a continuation of it, and the ordinary producer's 64 KiB worth of drawing was refused in a
+buffer that was entirely free.
+
+So a buffer is its extent and nothing else. `Bc250GdiDmaClaim` places the window of a call inside the
+extents of the buffers this context holds output in, and reserves the slot of that buffer until the
+call publishes what it wrote or gives the claim back:
 
 | What the window is | Result | Dwords ahead |
 |---|---|---|
-| exactly where our own output in a known buffer ended | append | what we wrote into that buffer |
-| the start of a known buffer | restart | none |
-| a 4 KB aligned address no known buffer explains | fresh | none |
-| any other address | unknown | the call is dropped |
-| a new buffer with every slot holding unsubmitted output | full | the call is dropped |
+| inside the extent of a buffer we hold output in, exactly where that output ended | append | what we wrote into that buffer |
+| inside no extent, on a 4 KB boundary, with a slot free | fresh | none |
+| inside an extent, anywhere else in it, or in a buffer another call is translating into | unknown | the call is dropped |
+| inside no extent and off the 4 KB boundary, or across the start of a buffer we hold | unknown | the call is dropped |
+| inside no extent, with every slot taken | full | the call is dropped |
 
-`Bc250GdiDmaWrote` records what a call wrote, and `Bc250GdiDmaSubmitted` releases a buffer by the
-address range of the submission that took it, so a submission of one buffer cannot clear the record
-of another. Nothing but this driver writes hardware commands into a GDI context's DMA buffer, which
-is what makes an append exact instead of estimated. A context holds `BC250_GDI_DMA_SLOTS` buffers at
-a time, eight, and the ninth buffer with output of ours outstanding drops its call rather than
-forget a buffer. The five results are counted (`GdiRenderDmaAppend`, `GdiRenderDmaRestart`,
-`GdiRenderDmaUnknown`, `GdiRenderDmaFull`), so the field says which orderings the operating system
-actually produces, and the host test drives all of them, the review's two-buffer case included.
+The room a claim answers with is what the buffer has left behind the window, which is the smaller of
+that extent and the length the call reports. A call that continues inside a buffer therefore cannot
+be handed the whole buffer's length by a `DmaSize` that names the buffer rather than the window,
+whichever of the two readings the operating system means. `Bc250GdiDmaPublish` records what the call
+wrote against the generation of its own claim, so a claim can never record into a slot that was
+released and taken again in between. `Bc250GdiDmaAbort` gives back a claim that wrote nothing, which
+every refused call does, and frees the slot when the buffer held nothing before.
+`Bc250GdiDmaSubmitted` releases a buffer by the address range of the submission that took it, so a
+submission of one buffer cannot clear the record of another. It leaves a reserved slot alone
+(`GdiRenderDmaRaced`) rather than retiring a buffer under a call that is still deciding its length.
+
+Nothing but this driver writes hardware commands into a GDI context's DMA buffer, which is what makes
+a continuation exact instead of estimated. A context holds `BC250_GDI_DMA_SLOTS` buffers at a time,
+eight, counting the buffer of every call in flight. That is an implementation bound of this driver
+and not a limit of the DDI, and the ninth buffer drops its call rather than forget a buffer or steal
+a reservation. Every result is counted (`GdiRenderDmaAppend`, `GdiRenderDmaUnknown`,
+`GdiRenderDmaFull`, `GdiRenderDmaRaced`), so the field says which orderings the operating system
+actually produces, and the host test drives all of them, both reviews' counterexamples with their own
+numbers included. No trial of this capability has reported any of these counters yet, so none of
+these orderings is claimed to happen or claimed not to: they are the states the code is prepared
+for, and the counters are how a trial would say which of them the operating system produces.
+
+The record lives in this driver's own per-context map. `DXGKARG_RENDERGDI` does carry
+`pDmaBufferPrivateData`, and a tag or a generation in it is a possible home for the same state.
+Nothing here establishes that it could not hold one. The map is a choice, taken because the
+documented meaning of the field beside it is "the number of bytes that remain in the private data
+structure ... for the current operation", which is a cursor with a lifetime of its own, and a
+record this driver owns needs neither.
+
+A publication that is refused is treated as a dropped call and not as a detail of bookkeeping: the
+dwords stay where they are, `pDmaBuffer` does not move, the submission carries what was already there
+and nothing of ours, and `GdiRenderDmaLost` is counted with the other drops. The claim makes it
+unreachable, which is why it is a counter and not a recovery path.
 
 #### Why rule 2 can never be reached
 
@@ -510,8 +544,11 @@ still decides, and it accepts such a call whenever the sub-rectangles actually i
 capacity the call was given. The capacity of a call is the capacity of what is left of its DMA
 buffer, so the bound is a statement about a buffer and not about a command length alone: a call
 inside the bound can still be dropped when earlier calls have taken part of the same buffer, and
-`GdiRenderIbFull` is that case. Whatever the cause, the behaviour of a dropped call is defined,
-counted and visible:
+`GdiRenderIbFull` is that case. The window a call is given can also be too small for the
+smallest batch this driver writes, which `GdiRenderDmaSmall` counts: that is a refusal of output
+space and not a malformed input, so it leaves the admission block of unsafe arguments and goes
+through the same accounting as every other drop, with the input it lost. Whatever the cause, the
+behaviour of a dropped call is defined, counted and visible:
 
 - the call draws nothing. It does not draw a prefix, which would leave a half-painted window.
 - `WddmGdiDropCall` is the one exit for all of it, so `GdiRenderBatchRefused` counts every dropped
@@ -601,13 +638,22 @@ The route out, as a plan with its tests and not as work already done:
    example. Its gate is the register-persistence assumption: a lab round that runs one indirect
    buffer with a hoisted state block and many dispatches, against the host model carrying the same
    state, and the host test extended to check each dispatch against that model.
-2. several indirect buffers for one DMA buffer, which removes the finite bound instead of moving it.
-   Its gates are a bounded representation of the segments in the private data of the DMA buffer, the
+2. several indirect buffers for one DMA buffer, which removes the 20-bit length limit of one
+   indirect buffer instead of moving it. It does not remove every finite bound: the DMA
+   allocation and the representation of its segments still bound what one call may write. Its
+   gates are a bounded representation of those segments in the private data of the DMA buffer, the
    ownership and lifetime of each segment, the completion of a split submission as one fence, and
    the host tests named above before any lab round.
 3. or an enforceable scope: the capability is reported only where the admitted input is bounded by
    something this driver can rely on, and the behaviour outside it is right by construction rather
    than counted. Nothing in the DDI offers that today, which is why it is a plan and not a design.
+
+A second bound of this implementation belongs in the same list, although it is not a bound of the
+DDI: one GDI context is tracked in at most eight DMA buffers at a time, counting the buffer of
+every call in flight, and a ninth drops its call. Nothing in the DDI says that eight is enough,
+and no trial has yet reported the counter either way, so it is a number this driver chose and
+counts (`GdiRenderDmaFull`). A dropped call is lost drawing whichever of these bounds stopped it,
+which is why the lab plan treats any of them as a failed trial.
 
 Until one of those lands, the honest statement is the one this section makes, and
 `GdiRenderOmittedSubRects` is the number that says how often the gap was reached.
@@ -1023,19 +1069,33 @@ against the review's own probe, which links the production walker, planner and b
 table of its main function rewritten), and it prints 993312 dwords for the strips at this bound, 118 of them on the row
 path and ten dispatched.
 
-`TestDmaMap` holds the placement of a call inside its DMA buffer, with the cases review r4 asked
-for. Two independent buffers of one context, 8 MiB apart, each take a paint of their own and neither
-is read as a continuation of the other, which is the review's counterexample. A submission of the
-first buffer releases that buffer and leaves the second exactly as it was, and a submission that
-names neither releases nothing. Three calls in a row append inside one buffer at the offsets the
-emitter actually leaves, each one placed by the length of the calls before it, and their sum stays
-inside the encodable length and survives the length macro. A buffer filled to that length leaves the
-next call a capacity of zero, which is the counted drop and not an overflow. A window inside output
-of ours, a window off the 4 KB boundary, and a ninth buffer while eight hold unsubmitted output are
-the three cases that drop their call instead of assuming an empty buffer. The source-level probe of
-the review runs against the new admission prefix as well (`scratch/gdi-hw/prefix-probe-r5` in the
-local workspace): both of its independent buffers now reach `BatchBegin`, with no submission between
-them.
+`TestDmaMap` holds the placement of a call inside its DMA buffer, with the cases both reviews asked
+for and their own numbers. Review r4's counterexample: two independent buffers of one context, 8 MiB
+apart, each take a paint of their own and neither is read as a continuation of the other, a
+submission of the first releases that buffer and leaves the second exactly as it was, and a
+submission that names neither releases nothing. Review r5's two counterexamples: a 3989504-byte
+buffer filled to its own size, and an empty buffer that starts exactly where it ends, which is its
+own buffer with its own room and takes the 64 KiB worst case of the ordinary producer. And a claim
+that has not published yet, which keeps its slot while every other slot is used, refuses the ninth
+buffer, and publishes its own dwords afterwards, while the claim of a call that is gone cannot
+publish into the slot that was released and taken again. Eight buffers allocated back to back are eight buffers,
+which is the adjacency case over and over. Three calls in a row continue inside one buffer at the
+offsets the emitter actually leaves, each one placed by the length of the calls before it, and their
+sum stays inside the encodable length and survives the length macro. A buffer filled to that length
+leaves the next call a capacity of zero, which is the counted drop and not an overflow, and the
+publication of more than that length is refused. A window inside output of ours, a window at the
+start of a buffer we already hold output in, a window off the 4 KB boundary, a window across the
+start of a buffer of ours, and a ninth buffer are the cases that drop their call instead of assuming
+an empty buffer.
+
+The source-level probe of the reviews runs against the new admission prefix as well
+(`scratch/gdi-hw/prefix-probe-r6` in the local workspace, whose prefix is taken out of `wddm.c`
+mechanically so that no line of it is transcribed): both independent buffers reach `BatchBegin`, the
+adjacent empty buffer reaches it with nothing ahead of it, a continuation inside a recorded extent is
+admitted as an append, and the three refusals - a window of a buffer another call holds, a context
+with every slot taken, and a window too small for the smallest batch - each return success with one
+dropped call, one dropped call inside the input scope and one sub-rectangle omitted, and with the
+malformed-input counter untouched.
 
 Four negative controls were run against the gate, and each one was reverted after it failed:
 

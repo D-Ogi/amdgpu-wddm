@@ -106,21 +106,24 @@ closes what it opened. The owner sees all of it happen on the lab's screen.
    and the expectation from the producer measurement is that it stays at or under 65536 bytes. Keep
    it beside `peak rects`, which says how many sub-rectangles the largest call carried.
 8. Record the lines of rule 3 and the input scope: `wddm: gdi ib-full<n> ib-over<n> dma-short<n>`,
-   `wddm: gdi above-producer<n> scope-refused<n>`, `wddm: gdi dma append<n> restart<n>
-   submitted<n>`, `wddm: gdi dma unknown<n> full<n> lost<n>` and `wddm: gdi committed dwords<n>`.
-   **Any drawing this driver dropped is a failed trial.** `batch-refused` is the count of dropped
-   calls and `omitted subrects` the drawing lost with them, whatever stopped the call: a command
-   buffer above the bound, a buffer an earlier call had filled (`ib-full`), a window that could not
-   be placed (`dma-unknown`, `dma-full`) or the unreachable checks (`ib-over`, `no-space`). None of
-   them is an acceptable observation about the operating system's capacity in an ordinary desktop
-   session, and each of them stops the trial series until the design page's limitation section or
-   the driver accounts for it. `ib-over`, `dma-lost` and `dma-short` are states the design says
-   cannot happen at all, so a nonzero value there is a defect of the driver.
-   `append`, `restart` and `submitted` are measurements of how dxgkrnl actually uses one DMA buffer,
+   `wddm: gdi above-producer<n> scope-refused<n>`, `wddm: gdi dma append<n> submitted<n>
+   raced<n>`, `wddm: gdi dma unknown<n> full<n> small<n> lost<n>` and `wddm: gdi committed
+   dwords<n>`. **Any drawing this driver dropped is a failed trial.** `batch-refused` is the count
+   of dropped calls and `omitted subrects` the drawing lost with them, whatever stopped the call: a
+   command buffer above the bound, a buffer an earlier call had filled (`ib-full`), a window too
+   small for the smallest batch (`small`), a window that could not be placed or a context with
+   every slot taken (`unknown`, `full`), or the unreachable checks (`ib-over`, `lost`,
+   `no-space`). None of them is an acceptable observation about the operating system's capacity in
+   an ordinary desktop session, and each of them stops the trial series until the design page's
+   limitation section or the driver accounts for it. `ib-over`, `lost` and `dma-short` are states
+   the design says cannot happen at all, so a nonzero value there is a defect of the driver.
+   `append`, `submitted` and `raced` are measurements of how dxgkrnl actually uses one DMA buffer,
    and `above-producer` whether anything on this system sends more than the ordinary producer's own
-   65536-byte command buffer. Those three are measurements and no failure by themselves. Compare
-   `committed dwords` with `dwords` of the totals line: they are equal when nothing was dropped
-   after its stream was written.
+   65536-byte command buffer. Those four are measurements and no failure by themselves, and a
+   nonzero `raced` is the first witness of a submission arriving while a call of this context is
+   still translating: record it with the whole pair of `dma` lines, because the design is prepared
+   for that ordering and has never seen it. Compare `committed dwords` with `dwords` of the totals
+   line: they are equal when nothing was dropped after its stream was written.
 
 ## Trial 4: the off switch
 
@@ -180,14 +183,15 @@ goes into the facts graph with this evidence.
 | `call` above 0 in `wddm: gdi drops` | the stop lines | an argument of the call failed the admission tests, so the driver could not read the command buffer or write the DMA buffer. Every one of them dropped every operation of that call, and it is lost drawing like any other drop. The sub-rectangles are not in `omitted subrects`, because a call that cannot be walked cannot be counted |
 | `malformed`, `outside` above 0 | the same line | the command buffer did not hold what its own sizes said. Keep the log |
 | `item-refused` above 0 | the `wddm: gdi overflow` line at the stop | an admitted item could not be described by either emitter. The item drew nothing |
-| `batch-refused` above 0 | the `wddm: gdi batch-refused` line at the stop | a whole call drew nothing, whatever stopped it: every drop of a call reaches this counter, and `omitted subrects` is the drawing lost with them. In an ordinary desktop session this is a failed trial. Read `capacity-short`, `peak cmdlen`, `ib-full`, `dma-unknown` and `scope-refused` beside it: together they say what the OS sent and which limit the call met |
+| `batch-refused` above 0 | the `wddm: gdi batch-refused` line at the stop | a whole call drew nothing, whatever stopped it: every drop of a call reaches this counter, and `omitted subrects` is the drawing lost with them. In an ordinary desktop session this is a failed trial. Read `capacity-short`, `peak cmdlen`, `ib-full`, `small`, `unknown` and `scope-refused` beside it: together they say what the OS sent and which limit the call met |
 | `capacity-short` above 0 | the `wddm: gdi capacity-short` line at the stop | a call's worst case was larger than the capacity it was given. The cause is a command buffer above the bound, or an earlier call that took part of the same DMA buffer. By itself it costs nothing, because the call is still translated when what is in it fits. Record `peak cmdlen`. The bound cannot be raised far. One indirect buffer carries the worst case of 200 KiB and no more. A producer above that needs the compaction or multi-indirect-buffer work of the design page, not a larger number |
 | `scope-refused` above 0 | the `wddm: gdi above-producer` line at the stop | a call at or below the ordinary producer's own 65536-byte command buffer drew nothing. This is a failed trial and it stops the series: an ordinary paint was lost. Keep the log, the length, the reason the dropped line names and the sub-rectangle count. A zero here is not a witness that nothing was dropped: read `omitted subrects` as well |
 | `ib-over` above 0 | the same line | the finished stream of a call passed what one indirect buffer can carry. The capacity arithmetic makes this unreachable, so a nonzero count is a defect of the driver and not of the input. The call drew nothing |
-| `ib-full` above 0 | the same line | a call found the DMA buffer already filled by earlier calls to the length one indirect buffer can carry, so it drew nothing. It is a dropped paint, not an acceptable capacity observation: treat it as a failed trial and record `dma append`, `restart` and `submitted` beside it |
+| `ib-full` above 0 | the same line | a call found the DMA buffer already filled by earlier calls to the length one indirect buffer can carry, so it drew nothing. It is a dropped paint, not an acceptable capacity observation: treat it as a failed trial and record `dma append`, `submitted` and `raced` beside it |
 | `dma-short` above 0 | the same line | a call at the start of a buffer reported less space than this context asked for, which `DXGK_CONTEXTINFO` says cannot happen. Keep the log |
-| `dma-unknown`, `dma-full` above 0 | the `wddm: gdi dma unknown` line at the stop | a call's place in its DMA buffer could not be established, or every slot of the context held unsubmitted output. The call drew nothing. Record the whole `dma` pair of lines: these say which ordering of calls and submissions the OS produced |
-| `dma-lost` above 0 | the same line | a record of a written buffer could not be kept, which the claim makes unreachable. A defect of the driver. The calls that follow into that buffer are dropped |
+| `unknown`, `full`, `small` above 0 | the `wddm: gdi dma unknown` line at the stop | a call's place in its DMA buffer could not be established. Or every one of the eight slots was taken. Or the window of the call was too small for the smallest batch. The call drew nothing in each case. Record the whole `dma` pair of lines: these say which ordering of calls and submissions the OS produced |
+| `raced` above 0 | the `wddm: gdi dma append` line at the stop | a submission named a buffer while a call of this context was still translating into it. The slot was kept, so nothing was lost. This is the first observation of that ordering: record it with the `dma` lines and the submission's own log line |
+| `lost` above 0 | the `wddm: gdi dma unknown` line at the stop | a call could not publish what it had written, so its whole call was dropped and its pointer was not advanced. The design says this cannot happen: a nonzero value is a defect of the driver, with the `dma publish refused` line beside it |
 | `committed dwords` below `dwords` | the `wddm: gdi committed` and `wddm: gdi totals` lines | a call's stream was generated and then dropped. The difference is dwords that never reached the ring, and the reason is in the `dropped` line of that call |
 | `above-producer` above 0 | the same line | something on this system sends longer command buffers than the measured producer does. Not a fault. It is the signal that the producer measurement no longer covers the field |
 | `fallback` above 0 | the same line | an item gave up the per-row engine path for a dispatch, which is the capacity contract working, not a fault |
