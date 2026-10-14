@@ -36,8 +36,9 @@ code=sub(code,' LONG PagingQueueBorrowed,', ''' LONG SubmittedNode[2],Preemption
  UINT RejectedFence[2]; KDPC* ReportDpc;
  BOOLEAN NotifyDpcInReport;
  LONG CompletionRetries[2],CompletionsDropped[2],PreemptionReportsLost;
- BC250_HANG_NODE_STATE Recovery[BC250_WDDM_NODE_COUNT_MAX];
  LONG PagingQueueBorrowed,''')
+code=sub(code,' struct {BOOLEAN ResetActive;} Recovery[2];',
+         ' BC250_HANG_NODE_STATE Recovery[BC250_WDDM_NODE_COUNT_MAX];')
 # e2e35ed4 (2026-10-10, BD-114) gave the report pass the M15.12 hang-recovery node state: the publication gate
 # (Bc250HangReportBegin/End), the reset gate and the scheduler boundary. hang_recovery.h says of itself that it
 # holds the pure decisions with no kernel types and no I/O, so the harness includes it exactly as it includes

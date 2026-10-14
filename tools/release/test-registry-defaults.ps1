@@ -279,7 +279,7 @@ try {
     Write-RegistryPlan $k $plan
     $v = Read-RegistryValues $k
     Check ($v.EnableFullWddm -eq 2) "EnableFullWddm $($v.EnableFullWddm) after the write (judged before the reset: $((Get-Decision $plan 'EnableFullWddm').decision), rewritten)"
-    $gates = @(ConvertTo-PairList $table.defaults.parameters | Where-Object { $_.Name -like 'Enable*' -and $_.Name -ne 'EnableCddDwmInterop' } | Where-Object { -not (Test-RegistryValueSame $v[$_.Name] $_.Value) } | ForEach-Object { $_.Name })
+    $gates = @(ConvertTo-PairList $table.defaults.parameters | Where-Object { $_.Name -like 'Enable*' -and $_.Name -notin @('EnableCddDwmInterop','EnableMmioWrite','EnableHangBugcheck') } | Where-Object { -not (Test-RegistryValueSame $v[$_.Name] $_.Value) } | ForEach-Object { $_.Name })
     Check ($gates.Count -eq 0) "every table gate back at its default$(if ($gates.Count) { ': not ' + ($gates -join ', ') })"
     Check (($v.DpmMaxMHz -eq 1200) -and ($v.EnableCddDwmInterop -eq 0)) "tester values kept over the reset: DpmMaxMHz $($v.DpmMaxMHz), EnableCddDwmInterop $($v.EnableCddDwmInterop)"
     Check (($v.EnableMmioWrite -eq 1) -and ($v.EnableHangBugcheck -eq 1)) "INF-only values as before the install: EnableMmioWrite $($v.EnableMmioWrite), EnableHangBugcheck $($v.EnableHangBugcheck)"
@@ -316,7 +316,7 @@ try {
     $plan = Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current $whole -Owned ([ordered]@{ UnconfirmedStarts = 0 }) -After (Read-RegistryValues $k) -Restore $restore
     Write-RegistryPlan $k $plan
     $v = Read-RegistryValues $k
-    Check (((Get-Decision $plan 'CuMode').decision -eq 'same') -and ($v.CuMode -eq 40) -and ($v.CuModeConfirmed -eq 1)) "CuMode $($v.CuMode) and CuModeConfirmed $($v.CuModeConfirmed) back as before the driver package"
+    Check (((Get-Decision $plan 'CuMode').decision -eq 'kept') -and ($v.CuMode -eq 40) -and ($v.CuModeConfirmed -eq 1)) "CuMode $($v.CuMode) and CuModeConfirmed $($v.CuModeConfirmed) back as before the driver package"
     Check ($v.LabNote -eq 'unit A') "a REG_SZ value outside the table back as before: LabNote '$($v.LabNote)'"
     Check (-not $v.ContainsKey('SomeBlob')) 'a REG_BINARY value is not written back (the installer names it in its log)'
     Check ($v.DpmMaxMHz -eq 1200) "a value of the table that the tester changed is still kept: DpmMaxMHz $($v.DpmMaxMHz)"

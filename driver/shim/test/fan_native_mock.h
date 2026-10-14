@@ -23,6 +23,9 @@ static unsigned int native_stall_dispatch_max_us;   /* and the largest single on
 static void NativeStall(unsigned int usec);
 #define NATIVE_STALL_HOOK(usec) NativeStall(usec)
 #include "hwmon_native_mock.h"
+#include "../../state/state.h"
+/* The fan transport fixture supplies a valid state group. */
+static BOOLEAN DriverStateGroupEnabled(ULONG group) { return group == AMDGPU_STATE_GROUP_FAN; }
 
 static void NativeStall(unsigned int usec)
 {

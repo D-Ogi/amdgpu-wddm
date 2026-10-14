@@ -100,6 +100,8 @@ static void Fresh(int enable)
     FanInitialize(&device);
     native_busy = &device.Fan.Busy;
     NativeSetSetting(L"EnableHwmon", 1);
+    /* The state store resolves the catalog default before this binding reads it. */
+    NativeSetSetting(L"FanLoadBoost", 1);
     if (enable >= 0) NativeSetSetting(L"EnableFanControl", (ULONG)enable);
 }
 
@@ -613,14 +615,16 @@ static void escape(void)
     FanStop(&device, BC250_FAN_REASON_STOP);
     CHECK(AtRest() && CleanWrites(0));
 
-    /* A stored custom curve the policy refuses runs the standard curve, and the log says so. */
+    /* An invalid stored curve closes ownership; it must not silently select another curve. */
     Fresh(1);
     NativeSetSetting(L"FanMode", 1);
     NativeSetSetting(L"FanProfile", 0);
     NativeSetSetting(L"FanCurvePoints", 1);
     NativeSetSetting(L"FanCurve0", (50u << 8) | 50u);
     Start();
-    CHECK(device.Fan.Ctl.profile == BC250_FAN_PROFILE_STANDARD && native_log_has("is refused"));
+    CHECK(!device.Fan.Enabled && device.Fan.Gate == BC250_FAN_GATE_SETTING && native_log_has("control closed"));
+    Second(80000);
+    CHECK(!Held() && AtRest());
     FanStop(&device, BC250_FAN_REASON_STOP);
 }
 
@@ -631,7 +635,7 @@ static void load_boost(void)
     BC250_ESCAPE_FAN f;
     unsigned int i;
 
-    /* The setting is absent, so the feed-forward is on. The arm of 2026-10-10: 99 % busy at 1500 MHz, 112 W. */
+    /* The catalog default enables feed-forward. The arm of 2026-10-10: 99 % busy at 1500 MHz, 112 W. */
     Fresh(1);
     Start();
     CHECK(device.Fan.Ctl.boost_enabled && native_log_has("load boost on"));
