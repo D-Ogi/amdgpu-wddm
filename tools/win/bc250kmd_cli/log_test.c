@@ -103,6 +103,8 @@ BOOL WINAPI FakeSetupDiDestroyDeviceInfoList(HDEVINFO DeviceInfoSet)
 typedef struct {
     int Before184;                  // refuse every NoAdapterSynchronization escape, as up to 0.7.183.1
     int Beside;                     // 0.7.216.24 and later: the polling form's block goes beside the ring (BD-097)
+    int NotAdmin;                   // the caller is not an administrator, so LogEscape refuses the read
+    int NotAdminWritesNtStatus;     // and does it as 0.7.216.102 and later do: NtStatus as well as Status (BD-168)
     unsigned long Total;            // lines in the ring (no wrap: the cases stay under BC250_LOG_RING_LINES)
     unsigned long SummaryLines;     // lines one LOG_SUMMARY writes
     unsigned long Opens, Closes;
@@ -156,6 +158,14 @@ NTSTATUS APIENTRY FakeD3DKMTEscape(const D3DKMT_ESCAPE *escape)
         return (NTSTATUS)0xC00000A3L;                           // STATUS_DEVICE_NOT_READY
     }
     log->Version = BC250_KMD_VERSION;
+    // LogEscape: the log ring names physical addresses, so a caller who is not an administrator is refused
+    // after the build is written and before anything is read. Up to 0.7.216.101 the refusal wrote Status
+    // alone, which is the whole of BD-168.
+    if (g_driver.NotAdmin) {
+        log->Status = BC250_ESCAPE_STATUS_NOT_ADMIN;
+        if (g_driver.NotAdminWritesNtStatus) log->NtStatus = (unsigned long)0xC0000022L;   // STATUS_ACCESS_DENIED
+        return STATUS_SUCCESS;
+    }
     // LogEscape: the summary only as a Level Two call.
     if (summary && !hard) {
         log->Status = BC250_ESCAPE_STATUS_REFUSED;
@@ -377,6 +387,39 @@ int main(void)
     Reset(0, 300, 100);
     Check(Run(L"only", 0) == 2 && g_driver.Opens == 0, "log only: usage error, no escape");
     Check(Run(L"4294967295", 1) == 2 && Run(L"-1", 1) == 2 && g_driver.Opens == 0, "the sentinel as a number: usage error");
+
+    // BD-168: the support report of GitHub #40 was taken without administrator rights and printed "log read
+    // stopped: The driver is not ready (0xC00000A3)". The report reads the ring through the DLL export, not
+    // through the command above, and that export is what must name the refusal - against a driver that writes
+    // NtStatus and one that does not.
+    {
+        BC250_ESCAPE_LOG page;
+        LONG r;
+
+        Reset(0, 300, 100);
+        g_driver.NotAdmin = 1;
+        r = Bc250LogRead(0, &page, (ULONG)sizeof(page));
+        Check(r == (LONG)0xC0000022L, "not admin: the exported read is access denied, not 'the driver is not ready'");
+        Check(page.Status == BC250_ESCAPE_STATUS_NOT_ADMIN, "not admin: the reply says which refusal it was");
+        Check(page.Version == BC250_KMD_VERSION, "not admin: a refused caller still learns the build");
+        Check(page.Returned == 0, "not admin: no line is returned");
+
+        Reset(0, 300, 100);
+        g_driver.NotAdmin = g_driver.NotAdminWritesNtStatus = 1;
+        r = Bc250LogRead(0, &page, (ULONG)sizeof(page));
+        Check(r == (LONG)0xC0000022L, "not admin: a driver that sets NtStatus gives the same answer");
+
+        // A driver that is simply too old is still 'not ready', so the two cases stay distinguishable.
+        Reset(1, 300, 100);
+        r = Bc250LogRead(0, &page, (ULONG)sizeof(page));
+        Check(r == (LONG)0xC00000A3L, "before 184: the exported read is still 'the driver is not ready'");
+    }
+
+    // The command's own message is unchanged: it never went through the export.
+    Reset(0, 300, 100);
+    g_driver.NotAdmin = 1;
+    rc = Run(L"250", 0);
+    Check(rc == 3 && Contains("refused: caller is not an administrator\n"), "not admin: the tool says what is wrong");
 
     printf("log_test: %d checks, %d failures\n", g_checks, g_failures);
     return g_failures ? 1 : 0;

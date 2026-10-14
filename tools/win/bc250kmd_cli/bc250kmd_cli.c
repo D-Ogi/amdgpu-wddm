@@ -1372,6 +1372,10 @@ BC250_CONTROL_API LONG WINAPI Bc250LogRead(ULONG from, BC250_ESCAPE_LOG *data, U
     data->From = from;
     status = TelemetryEscape(data, sizeof(*data));
     if (!NT_SUCCESS(status)) return status;
+    // BD-168: a driver up to 0.7.216.101 answers NOT_ADMIN with NtStatus 0, and the branch below then
+    // reported STATUS_DEVICE_NOT_READY ("the driver is not ready") for a plain lack of administrator
+    // rights. Name the refusal here too, so the message is right against an older driver as well.
+    if (data->Status == BC250_ESCAPE_STATUS_NOT_ADMIN) return (LONG)0xC0000022;
     if (data->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) return (LONG)0xC00000BB;
     if (data->Status != BC250_ESCAPE_STATUS_DONE)
         return data->NtStatus ? (LONG)data->NtStatus : (LONG)0xC00000A3;

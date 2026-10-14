@@ -223,7 +223,15 @@ static NTSTATUS PagingJournalEscape(_In_ const BC250_DEVICE* device, _In_ const 
 
     if (Escape->PrivateDriverDataSize < sizeof(BC250_ESCAPE_PAGING_JOURNAL)) return STATUS_INVALID_PARAMETER;
     journal->Version = BC250_KMD_VERSION;
-    if (!CallerIsAdmin()) { journal->Status = BC250_ESCAPE_STATUS_NOT_ADMIN; return STATUS_SUCCESS; }
+    // BD-168: NtStatus as well, the same omission as LogEscape had above. No shipping consumer reads this reply's
+    // NtStatus today, and that is the reason to set it now rather than when one does: a reader that falls back to
+    // STATUS_DEVICE_NOT_READY on a zero would report that the driver is not ready, and the next reader of this
+    // escape would hunt a device fault that is a missing administrator right.
+    if (!CallerIsAdmin()) {
+        journal->Status = BC250_ESCAPE_STATUS_NOT_ADMIN;
+        journal->NtStatus = (ULONG)STATUS_ACCESS_DENIED;
+        return STATUS_SUCCESS;
+    }
     page = (BC250_PAGING_JOURNAL_RECORD*)ExAllocatePool2(POOL_FLAG_NON_PAGED,
                                                          BC250_PAGING_JOURNAL_MAX * sizeof(BC250_PAGING_JOURNAL_RECORD),
                                                          BC250_TAG);
@@ -279,7 +287,14 @@ static NTSTATUS LogEscape(_In_ BC250_DEVICE* device, _In_ const DXGKARG_ESCAPE* 
 
     if (Escape->PrivateDriverDataSize < sizeof(BC250_ESCAPE_LOG)) return STATUS_INVALID_PARAMETER;
     log->Version = BC250_KMD_VERSION;   // before any refusal, so that a refused caller still learns the build
-    if (!CallerIsAdmin()) { log->Status = BC250_ESCAPE_STATUS_NOT_ADMIN; return STATUS_SUCCESS; }
+    // BD-168: NtStatus as well, not Status alone. Bc250LogRead reports data->NtStatus when the reply is not
+    // DONE and falls back to STATUS_DEVICE_NOT_READY when it is zero, so a support report taken without
+    // administrator rights said "the driver is not ready" and kept no lines (GitHub #40 on tester.30).
+    if (!CallerIsAdmin()) {
+        log->Status = BC250_ESCAPE_STATUS_NOT_ADMIN;
+        log->NtStatus = (ULONG)STATUS_ACCESS_DENIED;
+        return STATUS_SUCCESS;
+    }
 
     // The summary walks the WDDM state that WddmStop frees, and what keeps the two apart is dxgkrnl's
     // synchronization (see WddmSummary). With HardwareAccess, and without NoAdapterSynchronization, the escape
