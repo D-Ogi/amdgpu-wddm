@@ -94,8 +94,39 @@ static void Bd169Cases(void)
         CHECK(!ConnectorRefusalKeepsDisplay(&d));
         d.Modeset.Modes.Count=0;CHECK(!ConnectorRefusalKeepsDisplay(&d));
     }
+    // A pipe we cannot read at all, and one that moves between the two reads.
+    // At equal size the POST tuple still describes the display, so the start
+    // holds and the diagnostic keeps the real status, as before 0.7.216.64.
+    for(i=0;i<2;i++) {
+        BC250_DEVICE d={0};D3DKMDT_VIDEO_SIGNAL_INFO signal;
+        Mode(&d,2560,1440,2720,1481,483326400);
+        Bd169Field40Pipe();
+        if(i==0)pipeReadFailure=1;else pipeTear=1;
+        CHECK(TestFillSignalInfo(&d,&signal)==STATUS_SUCCESS);
+        CHECK(!d.Modeset.InheritedFixed && d.Modeset.InheritedSupport==0);
+        CHECK(d.Modeset.InheritedPipeStatus==(i==0?STATUS_ACCESS_DENIED:STATUS_DEVICE_BUSY));
+        CHECK(pipeWrites==0);
+        Bd169Programmable(&d);
+        Bd169ModeList(&d,2560,1440,1920,1080);
+        CHECK(!ConnectorNeedsInherited(&d) && ConnectorRefusalKeepsDisplay(&d));
+        CHECK(ModesetScalingSupport(&d,1920,1080)!=0);
+        // The same two failures on a scaled tuple do fail the start: there the
+        // verified pipe is the only description of the display (#38).
+        {
+            BC250_DEVICE s={0};D3DKMDT_VIDEO_SIGNAL_INFO scaled;
+            Mode(&s,2560,1440,2720,1492,304250000);
+            s.Post.Width=800;s.Post.Height=600;s.Post.Pitch=3328;
+            PipeFixture(s.Post.Width,s.Post.Height,2560,1440);
+            pipeRegisters[BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_PITCH/4]=s.Post.Pitch/4-1;
+            if(i==0)pipeReadFailure=1;else pipeTear=1;
+            CHECK(TestFillSignalInfo(&s,&scaled)==(i==0?STATUS_ACCESS_DENIED:STATUS_DEVICE_BUSY));
+            CHECK(s.Modeset.InheritedFixed && s.Modeset.InheritedSupport==0 && pipeWrites==0);
+        }
+    }
     // #38 unchanged: a scaled firmware tuple is the inherited route, its refusal
-    // leaves nothing to present, and the start fails there (BD-155).
+    // leaves nothing to present, and the start fails there (BD-155). The field
+    // record of that board reads support 0x10 (CUSTOM) with status SUCCESS, so
+    // it is not a support-0 case; the fixture's layout classifies on its own.
     {
         BC250_DEVICE d={0};D3DKMDT_VIDEO_SIGNAL_INFO signal;
         Mode(&d,2560,1440,2720,1492,304250000);
