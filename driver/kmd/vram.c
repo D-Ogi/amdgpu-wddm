@@ -10,6 +10,7 @@
 #include "bc250kmd.h"
 #include "bc250kmd_escape.h"
 #include "regs.generated.h"
+#include "lab_gate.h"          // BD-167: Access()/VramEscape() below are the lab-only VRAM read/write escape
 
 #define PCI_BAR0_OFFSET 0x10
 #define BC250_VRAM_MAX_LENGTH (16ull << 30)
@@ -195,6 +196,10 @@ PVOID VramMapCpuRange(_In_ const BC250_DEVICE* Device, PHYSICAL_ADDRESS Physical
     return MmMapIoSpaceEx(Physical,Length,protection);
 }
 
+// BD-167: the raw VRAM read/write-any-offset primitive. It reads and writes the carve-out at a caller-supplied
+// offset, so it is the memory read-anything finding (K1) and is compiled only into the lab flavour. The WDDM
+// mapping path (VramStart, VramMapCpuRange, VramMappingProtection) above is separate and stays in every build.
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
 static NTSTATUS Access(_In_ const BC250_DEVICE* Device, ULONG Path, ULONGLONG Offset, BOOLEAN Write, _Inout_ ULONG* Value)
 {
     PHYSICAL_ADDRESS page;
@@ -273,3 +278,4 @@ void VramEscape(_In_ const BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_MEMORY* Da
     Data->NtStatus = (unsigned long)status;
     Data->Status = NT_SUCCESS(status) ? BC250_ESCAPE_STATUS_DONE : BC250_ESCAPE_STATUS_REFUSED;
 }
+#endif /* AMDGPU_WDDM_LAB_FLAVOUR */

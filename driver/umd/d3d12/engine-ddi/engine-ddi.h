@@ -447,7 +447,8 @@ uint32_t pso_detach_summary() noexcept;
 // Knobs, for measurements only, read once per process from the environment, else from the file BC250_ENTRY_CFG names
 // (KEY=VALUE lines; a '#' line is a comment). With that variable unset no file is read: there is no machine-wide knob
 // file, for the reasons the ICD removed its own (entry.cpp, mesa 0bb2d1ea). A knob therefore reaches a game that Steam
-// starts through BC250_ENTRY_CFG in the environment of the process that starts it:
+// starts through BC250_ENTRY_CFG in the environment of the process that starts it. All of them are a lab build's
+// (BD-167, build-umd-d3d12.ps1 -Lab): a release engine reads none and runs the default below.
 //   BC250_ENTRY_PATH   one letter per arm, rotated every BC250_ENTRY_PHASE_MS (default 2000) at the shell's Present;
 //                      a single letter fixes the arm; without it, b. a: the shell's entry; b: the direct entry;
 //                      c: the direct entry, with spinning replay workers looking for work every BC250_ENTRY_POLL_US

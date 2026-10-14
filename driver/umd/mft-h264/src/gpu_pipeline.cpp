@@ -77,14 +77,21 @@ const char* GpuStageName(uint32_t stage)
     }
 }
 
+// BD-167: BC250_MFT_TRACE, BC250_MFT_DEBLOCK, BC250_MFT_SERIAL_DEBLOCK, BC250_MFT_STAGE_TIMING and BC250_MFT_DEPTH
+// (mft_h264.cpp) are a lab build's switches (build.ps1 -Lab). A release transform reads none of them and runs as
+// with each one unset: no trace, the wave schedule, no stage timing, the shipped depth.
 int MftTraceOn()
 {
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
     static int state = -1;
     if (state < 0) {
         char buf[8];
         state = (GetEnvironmentVariableA("BC250_MFT_TRACE", buf, sizeof(buf)) > 0) ? 1 : 0;
     }
     return state;
+#else
+    return 0;
+#endif
 }
 
 void MftTrace(const char* fmt, ...)
@@ -324,6 +331,7 @@ HRESULT GpuEncoder::CompileShaders()
 DeblockMode DeblockModeFromEnvironment()
 {
     DeblockMode mode = DeblockMode::Waves;
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
     char buf[16] = {};
     if (GetEnvironmentVariableA("BC250_MFT_DEBLOCK", buf, sizeof(buf)) > 0 &&
         (buf[0] == 'r' || buf[0] == 'R')) {
@@ -332,6 +340,7 @@ DeblockMode DeblockModeFromEnvironment()
     if (GetEnvironmentVariableA("BC250_MFT_SERIAL_DEBLOCK", nullptr, 0) != 0) {
         mode = DeblockMode::Serial;
     }
+#endif
     return mode;
 }
 
@@ -454,12 +463,14 @@ HRESULT GpuEncoder::Initialize(ID3D11Device* device, uint32_t visibleWidth, uint
 
     // Per-stage GPU timing, read once here so that the encode path only tests an integer.
     m_stageLevel = 0;
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
     {
         char buf[8] = {};
         if (GetEnvironmentVariableA("BC250_MFT_STAGE_TIMING", buf, sizeof(buf)) > 0) {
             m_stageLevel = (buf[0] == '2') ? 2u : 1u;
         }
     }
+#endif
     // How the deblocking wavefront is driven; see DeblockMode. Read once, for the same reason.
     m_deblockMode = DeblockModeFromEnvironment();
 
@@ -512,12 +523,14 @@ HRESULT GpuEncoder::SetPipelineDepth(uint32_t depth)
     // The per-dispatch and per-stage marks are one array of queries, recorded by Submit and read by
     // Collect, so two pictures in flight would interleave their marks and the profile would be of
     // neither of them. A measurement run is serial by construction; it says what one picture costs,
-    // not what the pipeline delivers.
+    // not what the pipeline delivers. Only a lab build measures (BD-167).
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
     if (depth > 1 && m_stageLevel != 0) {
         MftTrace("pipeline depth %u refused: BC250_MFT_STAGE_TIMING times one picture at a time\n",
                  depth);
         depth = 1;
     }
+#endif
     if (depth == m_depth) {
         return S_OK;
     }

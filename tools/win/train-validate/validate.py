@@ -51,7 +51,7 @@ def plan_text(plan: manifest.Plan, out_dir: Path, train: str) -> str:
     lines = [f"train validation plan ({train or 'train not named'})", ""]
     lines += [f"package : {package.name}",
               f"          release {package.release}, KMD build {package.kmd_build}, ABI {package.kmd_abi}, "
-              f"built {package.built_utc}",
+              f"built {package.built_utc}, flavour {package.flavour or 'not recorded (before BD-167)'}",
               f"          {package.directory.as_posix()}",
               f"zip     : {package.zip_path.as_posix() if package.zip_path else 'ABSENT'}",
               f"          sha256 {package.zip_sha256 or '-'}, {package.zip_bytes} bytes",

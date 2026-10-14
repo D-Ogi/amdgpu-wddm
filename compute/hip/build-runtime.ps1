@@ -19,6 +19,12 @@
 # -DisableGpu builds an optional product DLL that refuses device opening. It requires
 # -Bc250hsaLib and does not change the enabled mock fixtures used by the host gates.
 #
+# -Lab builds the lab flavour of the product DLL (BD-167): it also reads the measurement arms BC250_HIP_BATCH*,
+# BC250_HIP_BARRIER, BC250_HIP_PM4_STATE_CACHE, BC250_HIP_GPU_FILL, BC250_HIP_GPU_COPY_MIN, the wait bounds
+# BC250_HIP_WAIT_* and the log BC250_HIP_LOG*. Without it the product DLL is the release flavour, which has no lookup
+# of those names. The mock DLLs, the host tests and the samples they run are always built as the lab flavour: they
+# drive those switches and never ship. vadd.exe at the output root follows the flavour of the product DLL.
+#
 # -Rebuild compiles the committed code object fixture again with the AMDGPU clang and compares
 # its SHA-256 with the hash in tests\data\PROVENANCE-runtime.txt. It is off by default, because
 # the fixture exists so that the host test runs on a machine with no AMDGPU compiler.
@@ -51,8 +57,12 @@ param(
     # flavour. Without -Version nothing is stamped and the build says so: a host build and a quality
     # gate are not a release, and the release reads every resource back before it ships.
     [string]$Version = '',
-    [ValidateSet('release', 'lab')][string]$Flavour = 'release'
+    [ValidateSet('release', 'lab')][string]$Flavour = 'release',
+    [switch]$Lab
 )
+# One flavour, two names: -Lab is BD-167's and -Flavour is BD-166's, and the release passes the one it knows.
+# Without this line a caller that passes one knob alone ships a release-flavour binary stamped lab, or the reverse.
+if ($Lab) { $Flavour = 'lab' } elseif ($Flavour -eq 'lab') { $Lab = $true }
 
 $ErrorActionPreference = 'Stop'
 if ($DisableGpu -and (-not $Bc250hsaLib -or -not (Test-Path -LiteralPath $Bc250hsaLib -PathType Leaf))) {
@@ -115,6 +125,11 @@ $libpaths = @("/LIBPATH:$(Join-Path $msvc.FullName 'lib\x64')", "/LIBPATH:$sdkLi
 # lab kit worthless.
 $libpaths = @('/Brepro') + $libpaths
 $warn = @('/nologo', '/W4', '/WX', '/O2', '/Brepro', '/D_CRT_SECURE_NO_WARNINGS', '/DBC250_HIP_BUILD_DLL')
+# BD-167: every test piece is the lab flavour ($warn below, which the tests use); the product DLL takes the flavour
+# of the build ($productWarn).
+$labFlag = '/DAMDGPU_WDDM_LAB_FLAVOUR=1'
+$productWarn = $warn + @(if ($Lab) { $labFlag })
+$warn = $warn + @($labFlag)
 
 function Invoke-Cl([string[]]$Arguments, [string]$What) {
     $env:INCLUDE = ''; $env:LIB = ''
@@ -320,7 +335,7 @@ if ($Bc250hsaLib -and (Test-Path $Bc250hsaLib)) {
     # /MT, so a /MD link of this DLL pulls LIBCMT and MSVCRT into one module: the linker says
     # LNK4098 and the module gets two C runtimes, each with its own heap. Second, the DLL goes
     # to the lab beside a program: a /MT module needs no Visual C runtime on the target.
-    Invoke-Cl ($warn + $productFlags + @('/LD', '/MT', '/std:c++17', '/EHsc', "/Fo$productObjDir\", "/Fe$productDll") +
+    Invoke-Cl ($productWarn + $productFlags + @('/LD', '/MT', '/std:c++17', '/EHsc', "/Fo$productObjDir\", "/Fe$productDll") +
         $includes + $runtimeSources + @($dllSource, $Bc250hsaLib) +
         @('/link', "/DEF:$def") + $libpaths + @('gdi32.lib')) 'amdhip64.dll (bc250hsa)'
 } else {
@@ -424,6 +439,9 @@ if ($SkipClang -or -not (Test-Path $clang)) {
     # amdhip64.dll and of the tests do not have this property: they are reproducible.
     $flags = @('-x', 'hip', '--offload-arch=gfx1013', '--target=x86_64-pc-windows-msvc',
         '-nogpuinc', '-O2', '-std=c++17', "-I$(Join-Path $hip 'include')")
+    # The samples below run against the mock DLL, a lab build, and set its switches (vadd --wait-total).
+    $releaseFlags = $flags
+    $flags += '-DAMDGPU_WDDM_LAB_FLAVOUR=1'
     if ($DeviceLibPath -and (Test-Path $DeviceLibPath)) {
         $flags += "--hip-device-lib-path=$DeviceLibPath"
     } else {
@@ -441,8 +459,17 @@ if ($SkipClang -or -not (Test-Path $clang)) {
 
     # The lab takes the sample from the output root, next to the product DLL. The mock build of
     # the DLL stays in mock\ and must never reach the lab: it runs no instruction, so a green
-    # run of it would prove nothing about the hardware.
-    Copy-Item $sampleExe (Join-Path $Out 'vadd.exe') -Force
+    # run of it would prove nothing about the hardware. A release build compiles that copy again
+    # without the lab flavour (BD-167), as build-rebuilt-controls.ps1 does for the shipped one.
+    if ($Lab) {
+        Copy-Item $sampleExe (Join-Path $Out 'vadd.exe') -Force
+    } else {
+        $releaseSampleFlags = $releaseFlags
+        if (-not ($DeviceLibPath -and (Test-Path $DeviceLibPath))) { $releaseSampleFlags += '-nogpulib' }
+        else { $releaseSampleFlags += "--hip-device-lib-path=$DeviceLibPath" }
+        & $clang @releaseSampleFlags -o (Join-Path $Out 'vadd.exe') (Join-Path $hip 'samples\vadd.hip') "-L$Out"
+        if ($LASTEXITCODE -ne 0) { $env:PATH = $savedPath; throw "clang failed for the release vadd.exe ($LASTEXITCODE)" }
+    }
 
     # Run it against the mock DLL, which sits next to the executable in mock\. --wait-total is
     # the switch that a lab trial uses to keep every wait short, so the build exercises it.

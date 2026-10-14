@@ -387,8 +387,13 @@ namespace AmdgpuWddmControl
         }
 
         // AMDGPU_WDDM_CONTROL_STATE moves both copies to one directory (the build's gates, so that a build records
-        // nothing in the profile of the PC that builds).
+        // nothing in the profile of the PC that builds). A lab build's only (BD-167): the gates of a release build run
+        // its lab twin.
+#if AMDGPU_WDDM_LAB_FLAVOUR
         static string StateOverride { get { var d = Environment.GetEnvironmentVariable("AMDGPU_WDDM_CONTROL_STATE"); return string.IsNullOrEmpty(d) ? null : d; } }
+#else
+        static string StateOverride { get { return null; } }
+#endif
 
         static string UserObservations
         {

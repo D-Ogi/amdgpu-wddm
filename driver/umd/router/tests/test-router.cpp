@@ -1876,6 +1876,11 @@ static void Child(const std::string &s)
             SetSz(HostedKey, L"DiagnosticsDirectory", Layout + L"\\diaglogs");
         }
         if (s == "umd-diag-default-dir") SetDw(HostedKey, L"Diagnostics", 1);
+        // BD-167: only a lab-flavour hosted UMD reads the trial environment (BC250_D3D_ZINK_LUID, BC250_UMD_DIAG,
+        // BC250_UMD_DIAG_DIR). A release one must behave as with those variables unset. The flavour is told as the
+        // release gate tells it: the variable's name is in the lab DLL and absent from the release one.
+        const bool envRead = Has(ReadAll(Layout + L"\\" + dir + L"\\bc250d3d_zink.dll"), "BC250_D3D_ZINK_LUID");
+        printf("  hosted UMD flavour: %s\n", envRead ? "lab" : "release");
         if (s == "umd-no-trailer" || s == "umd-env-luid-fallback") QueryMode = Query::NoTrailer;
         if (s == "umd-callback-fails") QueryMode = Query::Fail;
         if (s == "umd-bad-version") QueryMode = Query::BadVersion;
@@ -1884,7 +1889,11 @@ static void Child(const std::string &s)
         OverrideHklm();
         HMODULE m = LoadAt(dir + L"\\bc250d3d_zink.dll");
         Opened o = Open(m, s == "umd-openadapter10" ? "OpenAdapter10" : "OpenAdapter10_2");
-        const bool expectOk = s == "umd-identity" || s == "umd-env-luid-fallback" || s == "umd-env-luid-match" ||
+        // Release: the LUID variable is not read, so a fallback without the trailer fails as umd-no-trailer does,
+        // and a mismatched or invalid value no longer refuses the adapter's own identity.
+        const bool envRejects = s == "umd-env-luid-mismatch" || s == "umd-env-luid-invalid";
+        const bool expectOk = s == "umd-identity" || (s == "umd-env-luid-fallback" && envRead) || s == "umd-env-luid-match" ||
+                              (envRejects && !envRead) ||
                               s == "umd-registry-icd" || s == "umd-diag-registry" || s == "umd-diag-env" ||
                               s == "umd-diag-default-dir" || s == "umd-openadapter10";
         if (expectOk) {
@@ -1896,8 +1905,8 @@ static void Child(const std::string &s)
         } else {
             CHECK(FAILED(o.hr), "hr=%08lx, expected a failure", o.hr);
         }
-        if (s == "umd-no-trailer") CHECK(o.hr == E_NOINTERFACE, "hr=%08lx", o.hr);
-        if (s == "umd-env-luid-mismatch" || s == "umd-env-luid-invalid") CHECK(o.hr == E_INVALIDARG, "hr=%08lx", o.hr);
+        if (s == "umd-no-trailer" || (s == "umd-env-luid-fallback" && !envRead)) CHECK(o.hr == E_NOINTERFACE, "hr=%08lx", o.hr);
+        if (envRejects && envRead) CHECK(o.hr == E_INVALIDARG, "hr=%08lx", o.hr);
         if (s == "umd-no-icd" || s == "umd-registry-icd-missing") CHECK(o.hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND), "hr=%08lx", o.hr);
         if (s == "umd-callback-fails") CHECK(o.hr == E_FAIL, "hr=%08lx", o.hr);
         if (s == "umd-zero-luid") CHECK(o.hr == E_UNEXPECTED, "hr=%08lx", o.hr);
@@ -1907,10 +1916,13 @@ static void Child(const std::string &s)
         } else {
             CHECK(QueryCalls == 0, "an unusable ICD must refuse the adapter before querying it");
         }
-        // Diagnostics off (every scenario but the diag ones): no log directory or file may appear.
-        const bool diag = s.rfind("umd-diag-", 0) == 0;
+        // Diagnostics off (every scenario but the diag ones, and umd-diag-env on a release UMD, which reads neither
+        // variable): no log directory or file may appear.
+        const bool diag = s.rfind("umd-diag-", 0) == 0 && (s != "umd-diag-env" || envRead);
         if (!diag) CHECK(!Exists(Layout + L"\\umd\\logs"), "diagnostics off created umd\\logs");
         std::wstring logName = L"\\bc250d3d_zink-" + ExeBase() + L"-" + std::to_wstring(GetCurrentProcessId()) + L".log";
+        if (s == "umd-diag-env" && !envRead)
+            CHECK(!Exists(Layout + L"\\diaglogs-env" + logName), "a release UMD followed BC250_UMD_DIAG_DIR");
         std::wstring logDir = s == "umd-diag-registry" ? Layout + L"\\diaglogs" : s == "umd-diag-env" ? Layout + L"\\diaglogs-env" :
                               Layout + L"\\umd-diag\\logs";
         if (diag) {

@@ -3,8 +3,10 @@
 // interactive, after Session. The "copy" verb then runs the bench, so commands and receipts keep their form.
 //
 // It measures what the UMD's deferred-replay experiment changes: the CPU time a recording thread spends in
-// command-list calls, per frame. The trial runner sets AMDGPU_WDDM_D3D12_EXPERIMENT from BC250_TRIAL_EXPERIMENT; the
-// client only reports the value it sees, so one binary runs both arms of the A/B.
+// command-list calls, per frame. The arm is the application profile of this client's image (the REG_SZ value
+// Experiment of HKLM\SOFTWARE\amdgpu-wddm\D3D12\Applications\amdgpu_wddm_d3d12_queue.exe), which both shell flavours
+// read; a release shell has no lookup of AMDGPU_WDDM_D3D12_EXPERIMENT (BD-167). The client only reports what it
+// sees in each source, so one binary runs both arms of the A/B.
 //
 // A frame is LISTS command lists of DRAWS draws each, recorded, executed in EXECUTES ExecuteCommandLists calls, a
 // fence signalled and waited for, and every word the draws wrote compared. Each draw changes state as a game does:
@@ -30,6 +32,7 @@
 // counted frame, written after each phase, never inside a measured span. No window is made.
 #include "recordbench-programs.h"
 #include "recordbench-oracle.h"
+#pragma comment(lib,"advapi32.lib") // RegGetValueA: the application profile and the machine-wide value
 
 namespace recordbench {
 static_assert(cbv_stride==D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT,"root CBVs at the placement alignment");
@@ -512,19 +515,32 @@ inline HRESULT recordbench_run(Session& s){
     if(BCryptGenRandom(nullptr,reinterpret_cast<PUCHAR>(&sh.seed),sizeof(sh.seed),BCRYPT_USE_SYSTEM_PREFERRED_RNG)<0){delete shared;return E_FAIL;}
     LARGE_INTEGER frequency{};QueryPerformanceFrequency(&frequency);sh.qpf=static_cast<double>(frequency.QuadPart);
     sh.cycles_per_us=calibrate(sh.qpf);
-    // What the UMD reads once per process (ddi_experiment_name, ddi-trace.h): absent, or the text when it is at most
-    // 95 lower-case letters, digits, hyphens and commas; anything else it reads as none.
-    char experiment[96]{};
-    {   char text[128]{};SetLastError(ERROR_SUCCESS);
-        const DWORD length=GetEnvironmentVariableA("AMDGPU_WDDM_D3D12_EXPERIMENT",text,sizeof(text));
-        bool valid=length<sizeof(experiment);
-        for(const char c:text)if(c && !((c>='a' && c<='z') || (c>='0' && c<='9') || c==',' || c=='-'))valid=false;
-        if(!length)strcpy_s(experiment,GetLastError()==ERROR_ENVVAR_NOT_FOUND?"absent":"empty");
-        else strcpy_s(experiment,valid?text:"invalid, read as none");
+    // What the shell reads once per process (resolve_experiment, driver/umd/d3d12/ddi-trace.h): a lab shell takes
+    // AMDGPU_WDDM_D3D12_EXPERIMENT when the process has it; either flavour then takes the application profile of this
+    // image, then the machine-wide value of HKLM\SOFTWARE\amdgpu-wddm\D3D12. Each source is reported as absent, empty,
+    // invalid (read as none: not lower-case letters, digits, hyphens and commas, or too long) or its text. The first
+    // word names the arm a release shell runs, and a lab shell too while the variable is absent, as in the A/B. The
+    // text is cut at 127 characters: both labels below must fit the 512-byte trace line of Session::event.
+    char experiment[128]{};
+    {   auto syntax=[](const char* t){for(;*t;++t)if(!((*t>='a' && *t<='z') || (*t>='0' && *t<='9') || *t==',' || *t=='-'))return false;return true;};
+        auto registry=[&](const char* key,char* text,DWORD bytes)->const char*{
+            const LSTATUS status=RegGetValueA(HKEY_LOCAL_MACHINE,key,"Experiment",RRF_RT_REG_SZ,nullptr,text,&bytes);
+            if(status==ERROR_FILE_NOT_FOUND)return nullptr;
+            return status!=ERROR_SUCCESS || !syntax(text)?"invalid":text[0]?text:"empty";};
+        char image[MAX_PATH]{};const DWORD n=GetModuleFileNameA(nullptr,image,MAX_PATH);
+        const char* name=image;for(const char* p=image;*p;++p)if(*p=='\\' || *p=='/')name=p+1;
+        char key[64+MAX_PATH]{};sprintf_s(key,"SOFTWARE\\amdgpu-wddm\\D3D12\\Applications\\%s",n && n<MAX_PATH?name:"?");
+        char profile_text[256]{},machine_text[256]{},env[256]{};
+        const char* profile=registry(key,profile_text,sizeof(profile_text));
+        const char* machine=registry("SOFTWARE\\amdgpu-wddm\\D3D12",machine_text,sizeof(machine_text));
+        SetLastError(ERROR_SUCCESS);const DWORD length=GetEnvironmentVariableA("AMDGPU_WDDM_D3D12_EXPERIMENT",env,sizeof(env));
+        const char* environment=!length?(GetLastError()==ERROR_ENVVAR_NOT_FOUND?"absent":"empty"):length<sizeof(env) && syntax(env)?env:"invalid";
+        _snprintf_s(experiment,sizeof(experiment),_TRUNCATE,"%s %s (profile %s, machine %s, environment %s)",profile?"profile":machine?"machine":"none",
+            profile?profile:machine?machine:"absent",profile?profile:"absent",machine?machine:"absent",environment);
     }
     char label[400]{};
     sprintf_s(label,"Record bench seed %016llx, lists %u, draws per list %u, executes %u, work us per group %u, phases until %llu ms, "
-        "cycles per us %.1f, AMDGPU_WDDM_D3D12_EXPERIMENT %s",sh.seed,lists,draws,executes,work_us,bench_end-begin,sh.cycles_per_us,experiment);
+        "cycles per us %.1f, experiment %s",sh.seed,lists,draws,executes,work_us,bench_end-begin,sh.cycles_per_us,experiment);
     s.event("after",label);
     HRESULT result=sh.cycles_per_us>0?setup(sh):E_FAIL;
     if(FAILED(result)){s.event("after","Record bench setup failed",result);delete shared;return result;}
@@ -544,7 +560,7 @@ inline HRESULT recordbench_run(Session& s){
     const bool clean=SUCCEEDED(result) && phases==phase_count && !t.mismatches && !t.removals && !t.failures && !s.pending && joined;
     const double end_rate=calibrate(sh.qpf);
     sprintf_s(label,"Record bench: phases measured %u of %u, frames %llu, words %llu, mismatches %llu, mismatched draws %llu, removals %u, "
-        "failures %u, %llu ms, cycles per us at the end %.1f, AMDGPU_WDDM_D3D12_EXPERIMENT %s",phases,static_cast<unsigned>(phase_count),
+        "failures %u, %llu ms, cycles per us at the end %.1f, experiment %s",phases,static_cast<unsigned>(phase_count),
         t.frames,t.words,t.mismatches,t.mismatched_draws,t.removals,t.failures,GetTickCount64()-begin,end_rate,experiment);
     const HRESULT hr=clean?S_OK:FAILED(result)?result:E_FAIL;
     s.event("after",label,hr);

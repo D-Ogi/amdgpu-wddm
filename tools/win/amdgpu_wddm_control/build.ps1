@@ -4,7 +4,14 @@
 # packages under -Kits. Deterministic: the same sources give the same bytes (csc /deterministic, cl/link /Brepro).
 #
 #   pwsh tools\win\amdgpu_wddm_control\build.ps1 -Kits P:\BC-250\toolchain\nuget -Out P:\BC-250\scratch\release\control-app\build\app
-#        [-StartConfirmCore <release installer's start-confirm-core.ps1>] [-Oracle <directory of the review oracles>]
+#        [-StartConfirmCore <release installer's start-confirm-core.ps1>] [-Oracle <directory of the review oracles>] [-Lab]
+#
+# -Lab builds bc250control.dll and bc250kmd_cli.exe in the lab flavour (BD-167, AMDGPU_WDDM_LAB_FLAVOUR): the CLI
+# then also has the raw diagnostic verbs, whose escapes only a lab KMD has. The application of a lab build also reads
+# AMDGPU_WDDM_CONTROL_STATE, _INSTALLER, _NO_DLL and _STRINGS; a release build reads none of them. The gates run the
+# application with AMDGPU_WDDM_CONTROL_STATE, so that a build records nothing in the profile of the PC that builds:
+# a release build therefore runs them on a lab twin of its application (the same sources and resources with the lab
+# define, in obj\gate beside copies of the files it loads from its own directory), and the unit tests are always lab.
 #
 # Gates, in order, each stops the build: the unit tests (test/UnitTests.cs against driver/kmd/bc250kmd_escape.h, the
 # KMD's interop, guard and DPM sources, the D3D12 shell's switch names, and with -StartConfirmCore the installer's
@@ -51,8 +58,11 @@ param(
     # and a quality gate are not a release, and the release reads every resource back before it ships.
     # amdgpu_wddm_control.exe is managed and carries its version from its own compile, so no stamp touches it.
     [string]$Version = '',
-    [ValidateSet('release', 'lab')][string]$Flavour = 'release'
+    [ValidateSet('release', 'lab')][string]$Flavour = 'release',
+    [switch]$Lab
 )
+# One flavour, two names: -Lab is BD-167's and -Flavour is BD-166's, and the release passes the one it knows.
+if ($Lab) { $Flavour = 'lab' } elseif ($Flavour -eq 'lab') { $Lab = $true }
 
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -102,7 +112,7 @@ $env:AMDGPU_WDDM_SYSTEM_TUNING_FIXTURES = Join-Path $obj 'system-tuning-fixtures
     -File (Join-Path $repo 'tools\win\system-tuning\test-system-tuning.ps1') -Out $env:AMDGPU_WDDM_SYSTEM_TUNING_FIXTURES
 if ($LASTEXITCODE -ne 0) { throw 'system tuning fake-system tests failed' }
 & $csc /nologo /noconfig /nostdlib+ @refs /target:exe /platform:x64 /warnaserror+ /langversion:7.3 /deterministic+ `
-    "/out:$obj\unit-tests.exe" @pure (Get-ChildItem "$here\test\*.cs").FullName
+    /define:AMDGPU_WDDM_LAB_FLAVOUR "/out:$obj\unit-tests.exe" @pure (Get-ChildItem "$here\test\*.cs").FullName
 if ($LASTEXITCODE -ne 0) { throw "unit test compile failed ($LASTEXITCODE)" }
 $unitArgs = @($repo) + @(if ($StartConfirmCore) { (Resolve-Path $StartConfirmCore).Path })
 & "$obj\unit-tests.exe" @unitArgs | ForEach-Object { Write-Host "  $_" }
@@ -118,7 +128,8 @@ $env:INCLUDE = ''; $env:LIB = ''
 $stateFlags = @('/O2','/MT','/Brepro','/Z7',"/I$($msvc.FullName)\include","/I$sdk\Include\$KitVersion\ucrt",
     "/I$sdk\Include\$KitVersion\um","/I$sdk\Include\$KitVersion\shared")
 $stateObjects = & (Join-Path $repo 'tools\state\build-objects.ps1') -Compiler $cl -Out "$obj\state" -Flags $stateFlags -Exports
-& $cl @('/nologo', '/W4', '/WX', '/O2', '/MT', '/LD', '/Brepro', '/Z7', '/DBC250_CONTROL_DLL', '/D_CRT_SECURE_NO_WARNINGS',
+$labDefine = @(if ($Lab) { '/DAMDGPU_WDDM_LAB_FLAVOUR=1' })
+& $cl @labDefine @('/nologo', '/W4', '/WX', '/O2', '/MT', '/LD', '/Brepro', '/Z7', '/DBC250_CONTROL_DLL', '/D_CRT_SECURE_NO_WARNINGS',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/Fo$obj\bc250control.obj", "/Fe$Out\bc250control.dll",
     (Join-Path $repo 'tools\win\bc250kmd_cli\bc250kmd_cli.c')) @stateObjects @('/link', '/Brepro', '/DEBUG',
@@ -129,10 +140,15 @@ $stateObjects = & (Join-Path $repo 'tools\state\build-objects.ps1') -Compiler $c
 if ($LASTEXITCODE -ne 0) { throw "bc250control.dll build failed ($LASTEXITCODE)" }
 Remove-Item "$Out\bc250control.exp", "$Out\bc250control.lib" -ErrorAction SilentlyContinue
 
+# The raw diagnostic verbs of the CLI against a fake adapter, in the flavour of this build (BD-167, test-verbs.ps1):
+# a lab CLI must reach the escape of each handler, a release CLI must answer "unknown command" and open no adapter.
+& (Join-Path $repo 'tools\win\bc250kmd_cli\test-verbs.ps1') -Kits $Kits -Out (Join-Path $obj 'verbs') -KitVersion $KitVersion `
+    -Lab:$Lab | ForEach-Object { Write-Host $_ }
+
 # 2b. bc250kmd_cli.exe from the same translation unit and the same flags, without BC250_CONTROL_DLL: the release ships
 # the CLI and the DLL of one build, so the CLI has every command the DLL's source has (tester.10 shipped a CLI of the
 # KMD branch without health, clock, telemetry, vram and sdmaib). Without arguments it prints its usage and exits 2.
-& $cl @('/nologo', '/W4', '/WX', '/O2', '/MT', '/Brepro', '/Z7', '/D_CRT_SECURE_NO_WARNINGS',
+& $cl @labDefine @('/nologo', '/W4', '/WX', '/O2', '/MT', '/Brepro', '/Z7', '/D_CRT_SECURE_NO_WARNINGS',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/Fo$obj\bc250kmd_cli.obj", "/Fe$Out\bc250kmd_cli.exe",
     (Join-Path $repo 'tools\win\bc250kmd_cli\bc250kmd_cli.c')) @stateObjects @('/link', '/Brepro', '/DEBUG',
@@ -144,6 +160,9 @@ if ($LASTEXITCODE -ne 0) { throw "bc250kmd_cli.exe build failed ($LASTEXITCODE)"
 $usage = & "$Out\bc250kmd_cli.exe" 2>&1 | ForEach-Object { [string]$_ }
 if ($LASTEXITCODE -ne 2 -or -not ($usage -match '^usage: bc250kmd_cli ')) { throw "bc250kmd_cli.exe without arguments: exit $LASTEXITCODE, no usage" }
 Write-Host "  bc250kmd_cli.exe usage: $(@($usage).Count) lines"
+& (Join-Path $repo 'tools\win\bc250kmd_cli\test-flavour.ps1') -Cli "$Out\bc250kmd_cli.exe" -Flavour $(if ($Lab) { 'lab' } else { 'release' }) |
+    ForEach-Object { Write-Host "  $_" }
+if ($LASTEXITCODE -ne 0) { throw 'bc250kmd_cli.exe is not the flavour this build asked for (test-flavour.ps1)' }
 
 # 3. The application, with the string tables embedded.
 # The lists are sorted: csc writes types and resources in input order, and a directory listing comes in the order of
@@ -171,6 +190,9 @@ if (-not (Test-Path -LiteralPath $icon -PathType Leaf)) { throw "application ico
 # The same file as a resource as well (MainForm): the window's icon is then the authored image for the size Windows
 # asks for, instead of one 32x32 image rescaled on a high-resolution screen.
 $resources += "/resource:$icon,nagi.ico"
+$csFlavour = @(if ($Lab) { '/define:AMDGPU_WDDM_LAB_FLAVOUR' })
+# One list of sources for both compiles: this one and, in a release build, the lab twin below.
+$appSources = @((Get-ChildItem "$here\src\*.cs").FullName | Sort-Object)
 # /debug:portable: the application ships, so it gets a portable PDB, which the release archives beside the
 # candidate and the manifest names by the GUID of the exe's own debug directory. csc has no /PDBALTPATH, and it
 # records the path it is given, so the call is made from the output directory with relative names: otherwise
@@ -179,7 +201,7 @@ Push-Location -LiteralPath $Out
 try {
     & $csc /nologo /noconfig /nostdlib+ @refs /target:winexe /platform:x64 /optimize+ /warnaserror+ /langversion:7.3 /deterministic+ `
         /debug:portable /pdb:amdgpu_wddm_control.pdb `
-        "/win32manifest:$here\app.manifest" "/win32icon:$icon" "/out:amdgpu_wddm_control.exe" @resources @((Get-ChildItem "$here\src\*.cs").FullName | Sort-Object)
+        @csFlavour "/win32manifest:$here\app.manifest" "/win32icon:$icon" "/out:amdgpu_wddm_control.exe" @resources @appSources
 } finally { Pop-Location }
 if ($LASTEXITCODE -ne 0) { throw "csc failed ($LASTEXITCODE)" }
 $systemTuningOutput = Join-Path $Out 'system-tuning'
@@ -187,6 +209,29 @@ New-Item -ItemType Directory -Force -Path $systemTuningOutput | Out-Null
 foreach ($part in 'system-tuning.ps1', 'SystemTuning.Core.psm1', 'SystemTuning.Native.psm1') {
     Copy-Item -LiteralPath (Join-Path $repo "tools\win\system-tuning\$part") -Destination (Join-Path $systemTuningOutput $part)
 }
+# The application the gates below run (BD-167): the built one in a lab build; in a release build its lab twin, the same
+# compile with the lab define, in obj\gate beside copies of the files the application loads from its own directory.
+$app = "$Out\amdgpu_wddm_control.exe"
+if (-not $Lab) {
+    $gateDir = Join-Path $obj 'gate'
+    Remove-Item -Recurse -Force $gateDir -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Force $gateDir | Out-Null
+    Get-ChildItem $Out -File | Where-Object { $_.Name -ne 'amdgpu_wddm_control.exe' } | Copy-Item -Destination $gateDir
+    Copy-Item -Recurse $systemTuningOutput $gateDir
+    $app = Join-Path $gateDir 'amdgpu_wddm_control.exe'
+    & $csc /nologo /noconfig /nostdlib+ @refs /target:winexe /platform:x64 /optimize+ /warnaserror+ /langversion:7.3 /deterministic+ `
+        /define:AMDGPU_WDDM_LAB_FLAVOUR "/win32manifest:$here\app.manifest" "/win32icon:$icon" "/out:$app" @resources @appSources
+    if ($LASTEXITCODE -ne 0) { throw "csc failed for the lab twin ($LASTEXITCODE)" }
+}
+# The application holds the switch names of its flavour only: a lab build all four, a release build none. Literals of a
+# .NET image are UTF-16 in its user string heap.
+$appBytes = [IO.File]::ReadAllBytes("$Out\amdgpu_wddm_control.exe")
+$appImage = [Text.Encoding]::Unicode.GetString($appBytes) + [Text.Encoding]::Unicode.GetString($appBytes, 1, $appBytes.Length - 1)
+$labNames = 'AMDGPU_WDDM_CONTROL_STATE', 'AMDGPU_WDDM_CONTROL_INSTALLER', 'AMDGPU_WDDM_CONTROL_NO_DLL', 'AMDGPU_WDDM_CONTROL_STRINGS'
+$held = @($labNames | Where-Object { $appImage.Contains($_) })
+if ($Lab -and $held.Count -ne $labNames.Count) { throw "amdgpu_wddm_control.exe (lab) lacks $(@($labNames | Where-Object { $held -notcontains $_ }) -join ', ')" }
+if (-not $Lab -and $held.Count) { throw "amdgpu_wddm_control.exe (release) holds $($held -join ', ')" }
+Write-Host "  application flavour: $(if ($Lab) { 'lab' } else { 'release' }), $($held.Count) of $($labNames.Count) lab variables in the image"
 # The exe declares its framework (A5: SecurityProtocolType.SystemDefault means the OS's TLS choice only for a 4.7+ target).
 $image = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes("$Out\amdgpu_wddm_control.exe"))
 if (-not $image.Contains('.NETFramework,Version=v4.8')) { throw 'amdgpu_wddm_control.exe does not declare TargetFramework .NETFramework,Version=v4.8' }
@@ -207,7 +252,7 @@ Remove-Item -Recurse -Force $env:AMDGPU_WDDM_CONTROL_STATE -ErrorAction Silently
 if (-not $NoSmoke) {
     $smoke = Join-Path $obj 'smoke.txt'
     Remove-Item $smoke -ErrorAction SilentlyContinue
-    $p = Start-Process -FilePath "$Out\amdgpu_wddm_control.exe" -ArgumentList '--smoke', "`"$smoke`"" -PassThru -WindowStyle Hidden
+    $p = Start-Process -FilePath $app -ArgumentList '--smoke', "`"$smoke`"" -PassThru -WindowStyle Hidden
     if (-not $p.WaitForExit(60000)) { $p.Kill(); throw 'smoke run did not exit within 60 s' }
     $text = if (Test-Path $smoke) { Get-Content $smoke -Raw } else { '' }
     if ($p.ExitCode -ne 0 -or $text -notmatch '(?m)^Status: ') { throw "smoke run failed (exit $($p.ExitCode)): $text" }
@@ -216,7 +261,7 @@ if (-not $NoSmoke) {
     # The report path: a zip with the fixed entries and without this PC's user or computer name.
     $zip = Join-Path $obj 'report-smoke.zip'
     Remove-Item $zip, "$zip.error.txt" -ErrorAction SilentlyContinue
-    $p = Start-Process -FilePath "$Out\amdgpu_wddm_control.exe" -ArgumentList '--smoke-report', "`"$zip`"" -PassThru -WindowStyle Hidden
+    $p = Start-Process -FilePath $app -ArgumentList '--smoke-report', "`"$zip`"" -PassThru -WindowStyle Hidden
     if (-not $p.WaitForExit(60000)) { $p.Kill(); throw 'report smoke run did not exit within 60 s' }
     if ($p.ExitCode -ne 0 -or -not (Test-Path $zip)) { throw "report smoke run failed (exit $($p.ExitCode))" }
     Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -243,7 +288,7 @@ if (-not $NoSmoke) {
     # ended every such worker with 0xE0434352 before its first line, and the smoke runs above never start it. The
     # text is checked here and not kept: it must run to its end with exit 0 and name neither this PC's user nor its
     # computer.
-    $start = New-Object Diagnostics.ProcessStartInfo("$Out\amdgpu_wddm_control.exe", '--startup-diagnostics-worker')
+    $start = New-Object Diagnostics.ProcessStartInfo($app, '--startup-diagnostics-worker')
     $start.UseShellExecute = $false; $start.CreateNoWindow = $true
     $start.RedirectStandardOutput = $true; $start.StandardOutputEncoding = New-Object Text.UTF8Encoding($false)
     $worker = [Diagnostics.Process]::Start($start)
@@ -268,7 +313,7 @@ if (-not $NoSmoke) {
         $file = Join-Path $obj "dry-$Name.txt"
         Remove-Item $file -ErrorAction SilentlyContinue
         $quoted = $ArgList | ForEach-Object { if ($_ -match ' ') { "`"$_`"" } else { $_ } }
-        $p = Start-Process -FilePath "$Out\amdgpu_wddm_control.exe" -ArgumentList (@($quoted) + @('--out', "`"$file`"")) -PassThru -WindowStyle Hidden
+        $p = Start-Process -FilePath $app -ArgumentList (@($quoted) + @('--out', "`"$file`"")) -PassThru -WindowStyle Hidden
         if (-not $p.WaitForExit(60000)) { $p.Kill(); throw "dry run $Name did not exit within 60 s" }
         [pscustomobject]@{ Code = $p.ExitCode; Text = $(if (Test-Path $file) { Get-Content $file -Raw } else { '' }) }
     }
@@ -576,7 +621,7 @@ namespace BuildGate { public static class Wts {
         $observations = Join-Path $env:AMDGPU_WDDM_CONTROL_STATE 'dwm-observations.json'
         Remove-Item $observations
         $racers = 1..8 | ForEach-Object {
-            Start-Process -FilePath "$Out\amdgpu_wddm_control.exe" -ArgumentList '--status', '--out', "`"$(Join-Path $obj "status-race-$_.txt")`"" -PassThru -WindowStyle Hidden
+            Start-Process -FilePath $app -ArgumentList '--status', '--out', "`"$(Join-Path $obj "status-race-$_.txt")`"" -PassThru -WindowStyle Hidden
         }
         foreach ($p in $racers) { if (-not $p.WaitForExit(60000)) { $p.Kill(); throw 'a concurrent --status did not exit within 60 s' } if ($p.ExitCode -ne 0) { throw "a concurrent --status failed (exit $($p.ExitCode))" } }
         $file = Get-Content $observations -Raw | ConvertFrom-Json
@@ -609,12 +654,12 @@ namespace BuildGate { public static class Wts {
 if (-not $NoSmoke) {
     # The recovery view never loads bc250control.dll (WU-068); a hidden window costs nothing (G-PERF).
     $file = Join-Path $obj 'smoke-recovery.txt'
-    $p = Start-Process -FilePath "$Out\amdgpu_wddm_control.exe" -ArgumentList '--smoke-recovery', "`"$file`"" -PassThru -WindowStyle Hidden
+    $p = Start-Process -FilePath $app -ArgumentList '--smoke-recovery', "`"$file`"" -PassThru -WindowStyle Hidden
     if (-not $p.WaitForExit(60000)) { $p.Kill(); throw 'recovery smoke did not exit within 60 s' }
     if ($p.ExitCode -ne 0) { throw "recovery smoke (exit $($p.ExitCode)): $(Get-Content $file -Raw -ErrorAction SilentlyContinue)" }
     Write-Host "  recovery view: built, bc250control.dll not loaded"
     $file = Join-Path $obj 'smoke-perf.txt'
-    $p = Start-Process -FilePath "$Out\amdgpu_wddm_control.exe" -ArgumentList '--smoke-perf', "`"$file`"" -PassThru -WindowStyle Hidden
+    $p = Start-Process -FilePath $app -ArgumentList '--smoke-perf', "`"$file`"" -PassThru -WindowStyle Hidden
     if (-not $p.WaitForExit(60000)) { $p.Kill(); throw 'perf smoke did not exit within 60 s' }
     $perf = Get-Content $file -Raw -ErrorAction SilentlyContinue
     if ($p.ExitCode -ne 0) { throw "perf smoke (exit $($p.ExitCode)): $perf" }
@@ -624,7 +669,7 @@ if (-not $NoSmoke) {
     # a large one, built without being shown. It must fit the screen, overlap nothing, overflow nothing, name no
     # driver internals and close with Escape (BD-137 found overlapping texts on Microsoft Basic Display).
     $file = Join-Path $obj 'smoke-notice.txt'
-    $p = Start-Process -FilePath "$Out\amdgpu_wddm_control.exe" -ArgumentList '--smoke-notice', "`"$file`"" -PassThru -WindowStyle Hidden
+    $p = Start-Process -FilePath $app -ArgumentList '--smoke-notice', "`"$file`"" -PassThru -WindowStyle Hidden
     if (-not $p.WaitForExit(120000)) { $p.Kill(); throw 'notice smoke did not exit within 120 s' }
     $notice = Get-Content $file -Raw -ErrorAction SilentlyContinue
     if ($p.ExitCode -ne 0) { throw "notice smoke (exit $($p.ExitCode)): $notice" }
@@ -644,7 +689,7 @@ if (-not $NoSmoke) {
     # fixture, scrolled, then rebuilt as a progress report rebuilds it, and every state of a benchmark run with the
     # buttons measured against the view.
     $file = Join-Path $obj 'smoke-scroll.txt'
-    $p = Start-Process -FilePath "$Out\amdgpu_wddm_control.exe" -ArgumentList '--smoke-scroll', "`"$file`"", '--fixture', "`"$(Join-Path $here 'test\snapshot-bd059.json')`"", '--board-fixture', "`"$env:AMDGPU_WDDM_BOARD_FIXTURE`"" -PassThru -WindowStyle Hidden
+    $p = Start-Process -FilePath $app -ArgumentList '--smoke-scroll', "`"$file`"", '--fixture', "`"$(Join-Path $here 'test\snapshot-bd059.json')`"", '--board-fixture', "`"$env:AMDGPU_WDDM_BOARD_FIXTURE`"" -PassThru -WindowStyle Hidden
     if (-not $p.WaitForExit(60000)) { $p.Kill(); throw 'scroll smoke did not exit within 60 s' }
     if ($p.ExitCode -ne 0) { throw "scroll smoke (exit $($p.ExitCode)): $(Get-Content $file -Raw -ErrorAction SilentlyContinue)" }
     Write-Host '  rebuilt page: the place is kept, and the buttons of a run stay where they are'
@@ -691,7 +736,7 @@ if (-not $NoSmoke) {
         # A build without art (-NagiArt '') cannot draw her, so every run of it renders the text-only panel: the
         # guide character is on by default, and a run with her on and no picture is a finding, by design.
         if (-not $artResourceNames.Count -and $renderArgs -notcontains '--no-nagi') { $renderArgs += '--no-nagi' }
-        $p = Start-Process -FilePath "$Out\amdgpu_wddm_control.exe" -ArgumentList $renderArgs -PassThru -WindowStyle Hidden
+        $p = Start-Process -FilePath $app -ArgumentList $renderArgs -PassThru -WindowStyle Hidden
         if (-not $p.WaitForExit(120000)) { $p.Kill(); throw "render $($r[0]) did not exit within 120 s" }
         if ($p.ExitCode -ne 0) { $failed += "$($r[0]): $(Get-Content (Join-Path $dir 'layout.txt') -Raw -ErrorAction SilentlyContinue)" }
     }

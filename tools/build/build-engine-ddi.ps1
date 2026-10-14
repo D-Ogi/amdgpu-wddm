@@ -43,8 +43,14 @@ param(
     # Which of the two engine DLLs of one source line the runs load (BD-167): the release flavour reads no
     # diagnostic variable and has no statistics, the lab flavour keeps both. engine-abi.json pins one DLL per
     # flavour and engine_abi.py selects it, so a lab DLL can never pass a release run.
-    [ValidateSet('release', 'lab')][string]$Flavour = 'release'
+    [ValidateSet('release', 'lab')][string]$Flavour = 'release',
+    # The lab flavour (BD-167; build-umd-d3d12.ps1 -Lab passes it): the library also reads AMDGPU_WDDM_DDI_TRACE and
+    # the entry path knobs (BC250_ENTRY_*). Without it, the release flavour, which has no lookup of those names.
+    [switch]$Lab
 )
+# One flavour, two names: -Lab is BD-167's and -Flavour is BD-166's, and the release passes the one it knows.
+# Without this line a caller that passes one knob alone ships a release-flavour binary stamped lab, or the reverse.
+if ($Lab) { $Flavour = 'lab' } elseif ($Flavour -eq 'lab') { $Lab = $true }
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\common.ps1"
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
@@ -96,6 +102,7 @@ try {
         '/Brepro', '/FC', "/d1trimfile:$repo", "/d1trimfile:$EngineSource", "/d1trimfile:$VulkanInclude",
                "/external:I$wdk", "/external:I$wdk\..\shared", "/external:I$VulkanInclude", "/external:I$EngineInclude",
                "/I$src")
+    if ($Lab) { $flags += '/DAMDGPU_WDDM_LAB_FLAVOUR=1' }
     $harnessFlag = '/DAMDGPU_WDDM_ENGINE_DDI_HARNESS'
 
     # A native step's verdict is its exit code. Windows PowerShell 5.1 turns every stderr line of a native command

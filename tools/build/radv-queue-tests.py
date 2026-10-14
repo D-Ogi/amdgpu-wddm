@@ -12,6 +12,13 @@ Two test programs, each case in its own process:
 The cases are every entry of each file's own tests[] table, so a new test runs
 without a change here. Each executable keeps its source's name: the deferred
 destroy witness checks its own module name in the logged stack.
+
+Both flavours of a build run (BD-167); the record names the flavour, read from
+the recorded compile command. A release build reads no BC250_* knob and writes
+no deferred destroy log, so a check on that log prints SKIP and a test that
+needs a knob prints one SKIP line and returns. In a release build a case with
+SKIP lines and no failure passes; every other case needs a passed check. The
+lab build stays the full gate: there a SKIP line is a failure.
 """
 import argparse
 import hashlib
@@ -32,7 +39,9 @@ TIMEOUT = 60
 # at files of this run (the configuration at one that does not exist, so no test reads C:\BC250\tmp).
 KNOBS = ('BC250_DEFERRED_DESTROY', 'BC250_DEFERRED_WITNESS', 'BC250_DEFERRED_CAP_MB', 'BC250_IB_NOCOPY',
          'BC250_IB_DWORDS', 'BC250_DEFERRED_SUMMARY_S', 'BC250_SUBMIT_COALESCE', 'BC250_GATHER_SLOTS',
-         'BC250_PROGRESS_FENCE', 'BC250_TRACE_SUBMITS', 'BC250_DRAW_STATS')
+         'BC250_PROGRESS_FENCE', 'BC250_TRACE_SUBMITS', 'BC250_DRAW_STATS', 'BC250_BARRIER_TRACK',
+         'BC250_MAKERESIDENT_LEGACY', 'AMDGPU_WDDM_DDI_TRACE')
+LAB_MACRO = 'AMDGPU_WDDM_LAB_FLAVOUR'
 SYSLIBS = ['kernel32.lib', 'synchronization.lib', 'ws2_32.lib', 'advapi32.lib',
            'user32.lib', 'dbghelp.lib', 'ole32.lib', 'shlwapi.lib']
 
@@ -98,11 +107,28 @@ def run_tests(exe, vdir, tests, env):
             out + '\n--- stderr ---\n' + err)
         fails = [l for l in out.splitlines() if l.startswith('FAIL')]
         passes = [l for l in out.splitlines() if l.startswith('PASS')]
+        skips = [l for l in out.splitlines() if l.startswith('SKIP')]
         summary = [l for l in out.splitlines() if l.startswith('tests=')]
         results[t] = dict(exit=code if isinstance(code, str) else '0x%X' % (code & 0xFFFFFFFF),
                           passed=code == 0, checks_passed=len(passes), checks_failed=len(fails),
-                          first_failures=fails[:4], summary=summary[0] if summary else None)
+                          checks_skipped=len(skips), skip_reasons=skips[:4], first_failures=fails[:4],
+                          summary=summary[0] if summary else None)
     return results
+
+
+def flavour(argv):
+    """'lab' when the recorded compile command defines the lab macro, else 'release' (BD-167)."""
+    return 'lab' if any(re.match(r'[-/]D' + LAB_MACRO + r'(=|$)', a) for a in argv) else 'release'
+
+
+def case_ok(item, which):
+    """A case passes with exit 0, no failed check and a passed check; in a release build SKIP lines stand in
+    for the passed check. A lab build compiles every check, so a SKIP there is a failure."""
+    if not item['passed'] or item['checks_failed']:
+        return False
+    if which == 'lab':
+        return item['checks_passed'] > 0 and not item['checks_skipped']
+    return item['checks_passed'] > 0 or item['checks_skipped'] > 0
 
 
 def build_program(out, log, test, rel, links):
@@ -153,16 +179,16 @@ def main():
     ok = True
     with (out / 'build.log').open('w', encoding='utf-8', errors='replace') as log:
         for test, rel, links, _ in programs:
+            which = flavour(compile_command(rel)[1])
             exe = build_program(out, log, test, rel, links)
             vdir = out / test.stem
             vdir.mkdir()
             results = run_tests(str(exe), str(vdir), table(test), env)
-            record['programs'][test.stem] = {'exe_sha256': sha(exe), 'results': results}
+            record['programs'][test.stem] = {'exe_sha256': sha(exe), 'flavour': which, 'results': results}
             for name, item in results.items():
-                print(f"{test.stem} {name}: exit={item['exit']}, checks={item['checks_passed']}, "
-                      f"failures={item['checks_failed']}")
-            ok = ok and all(v['passed'] and v['checks_passed'] > 0 and not v['checks_failed']
-                            for v in results.values())
+                print(f"{test.stem} ({which}) {name}: exit={item['exit']}, checks={item['checks_passed']}, "
+                      f"failures={item['checks_failed']}, skipped={item['checks_skipped']}")
+            ok = ok and all(case_ok(v, which) for v in results.values())
     (out / 'record.json').write_text(json.dumps(record, indent=2))
     return 0 if ok else 1
 

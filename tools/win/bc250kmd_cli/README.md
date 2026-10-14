@@ -177,6 +177,29 @@ Headers and import libraries come from the SDK NuGet packages, the compiler from
 the same flow as `tools\win\bc250rd\build.ps1`, without the driver and the signing. On the target it lives in
 `C:\BC250\kmd\`.
 
+## Release and lab flavours
+
+A release build (the default) has no raw diagnostic verbs: `read`, `write`, `memory`, `vread`, `vwrite`,
+`vcompare`, `vtable`, `gart`, `psp`, `gfx`, `ih`, `fence`, `ib`, `dcn`, `dcnflip`, `sdmacopy`, `sdmaib` and
+`fbdump`. A release CLI answers each of them with `unknown command` and exit code 2. Their escapes exist only in a
+lab KMD, and a lab KMD answers them only with test signing on and `LabDiagnostics = 1` (`driver/kmd/lab_gate.c`,
+BD-167). `build.ps1 -Lab` defines `AMDGPU_WDDM_LAB_FLAVOUR` and builds the CLI and `bc250control.dll` with these
+verbs. `tools\win\amdgpu_wddm_control\build.ps1 -Lab` does the same for the copies in the control app.
+
+Both flavours keep every form that a release install calls (`tools/release/cli-commands.json`). Both build scripts
+run two gates in the flavour of the build:
+
+- Before the CLI is compiled, `test-verbs.ps1` builds and runs `verbs_test.c`. The test gives every raw verb
+  each argument shape that its handler accepts, against a fake adapter. In a lab build, each command line must reach
+  its handler and send the escape command of that handler. In a release build, each one must be an unknown command,
+  also in upper case, and must open no adapter. No real adapter is opened and no escape reaches a driver.
+- After the CLI is compiled, `test-flavour.ps1` runs it once, without arguments. The usage text of each flavour must
+  have the release forms. A lab CLI must name every raw verb, and a release CLI must name none of them. No raw verb
+  runs against the PC that builds, because a CLI of the wrong flavour would act on it.
+
+`test_lab_verbs.py` holds the verb lists of the dispatch, of `verbs_test.c` and of `test-flavour.ps1` to one
+another. `quick.ps1` builds the lab flavour as the `driver-state-cli-lab-x64` check.
+
 ## Typed clock client
 
 `clock read` returns one paired KMD MHz/VID/temperature sample; `clock set MHz mV`

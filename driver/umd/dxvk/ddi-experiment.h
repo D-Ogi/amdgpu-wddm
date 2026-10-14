@@ -3,7 +3,8 @@
 //
 // Shape and parser are the D3D12 shell's (driver/umd/d3d12/ddi-trace.h): a comma-separated list of lower-case
 // names, read once per process. The first source that exists wins:
-//   1. AMDGPU_WDDM_D3D11_EXPERIMENT in the process environment, "none" and empty included,
+//   1. AMDGPU_WDDM_D3D11_EXPERIMENT in the process environment, "none" and empty included, in a lab build only
+//      (BD-167: AMDGPU_WDDM_LAB_FLAVOUR, build-umd-dxvk.ps1 -Lab; a release shell has no lookup of the name),
 //   2. the REG_SZ value "Experiment" of HKLM\SOFTWARE\amdgpu-wddm\D3D11\Applications\<image file name>,
 //   3. the REG_SZ value "Experiment" of HKLM\SOFTWARE\amdgpu-wddm\D3D11.
 // A value outside the syntax, or one too long, names no switch. Only the variable name and the registry path
@@ -39,12 +40,15 @@ inline int image_profile(char *text,size_t capacity) noexcept {
 struct Value { char text[256]{}; };
 inline Value resolve() noexcept {
     Value v{};
+    bool valid=true;
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
     SetLastError(ERROR_SUCCESS);
     const DWORD n=GetEnvironmentVariableA("AMDGPU_WDDM_D3D11_EXPERIMENT",v.text,sizeof(v.text));
-    bool valid=true;
     if (n || GetLastError()!=ERROR_ENVVAR_NOT_FOUND) {
         valid=n<sizeof(v.text);
-    } else {
+    } else
+#endif
+    {
         int found=image_profile(v.text,sizeof(v.text));
         if (!found) found=native12::ddi_detail::registry_experiment(L"SOFTWARE\\amdgpu-wddm\\D3D11",v.text,sizeof(v.text));
         valid=found>=0;

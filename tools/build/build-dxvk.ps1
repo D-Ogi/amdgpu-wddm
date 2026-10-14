@@ -51,8 +51,14 @@ param(
     # -Flavour is that release's flavour. An artifact no release ships is not stamped, and without -Version
     # nothing is: a host build is not a release, and the release reads every resource back before it ships.
     [string]$Version = '',
-    [ValidateSet('release', 'lab')][string]$Flavour = 'release'
+    [ValidateSet('release', 'lab')][string]$Flavour = 'release',
+    # BD-167: the lab flavour (-Damdgpu-wddm-lab-flavour=true). Without it the fork builds its release flavour,
+    # which has no lookup of the override variables; the fork's own host test describes them.
+    [switch]$Lab
 )
+# One flavour, two names: -Lab is BD-167's and -Flavour is BD-166's, and the release passes the one it knows.
+# Without this line a caller that passes one knob alone ships a release-flavour binary stamped lab, or the reverse.
+if ($Lab) { $Flavour = 'lab' } elseif ($Flavour -eq 'lab') { $Lab = $true }
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'common.ps1')
@@ -60,6 +66,7 @@ $ErrorActionPreference = 'Stop'
 $configsPath = Join-Path $PSScriptRoot 'dxvk-configs.json'
 $recipeConfig = (Get-Content -LiteralPath $configsPath -Raw | ConvertFrom-Json).configs.$Config
 $options = @($recipeConfig.options)
+if ($Lab) { $options += '-Damdgpu-wddm-lab-flavour=true' }
 $targets = @($recipeConfig.targets)
 
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
@@ -139,6 +146,7 @@ try {
         submodules      = Get-SubmoduleStatus $Source
         build_dir       = $Build
         meson_options   = $options
+        flavour         = Get-AmdgpuWddmFlavour $Source -Lab:$Lab
         ninja_targets   = $targets
         environment     = [ordered]@{
             vs_install          = $vs

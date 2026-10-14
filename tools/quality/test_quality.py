@@ -62,6 +62,8 @@ class QualityControls(unittest.TestCase):
             receipt['status']='FAIL'
             with self.assertRaises(ValueError):verify(receipt,{'driver.dll':path})
 
+    @unittest.skipUnless(shutil.which('cl'), 'MSVC cl.exe is not on PATH: run from a Visual Studio developer '
+                         'environment (tools/build/common.ps1 Import-VsDevEnvironment)')
     @patch.dict(os.environ, {'BC250_GATE_NOCACHE': '0'})
     def test_analysis_cache_and_warning(self):
         cl = find_cl()

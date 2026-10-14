@@ -372,6 +372,72 @@ pwsh driver\shim\test\run.ps1 -Out <dir> -Kits <BC250_ROOT>\toolchain\nuget    (
 pwsh driver\kmd\test\run_<name>.ps1 ...                                          (-Root/-Out or -Out/-Kits)
 ```
 
+## Release and lab flavours (BD-167)
+
+An attestation-signed driver must not give user mode a raw read, write or submit primitive. Its engines must not
+load shader code, a configuration or another driver from a path that an environment variable names. The release
+flavour removes both at compile time. One switch names the lab flavour in every component: the C macro
+`AMDGPU_WDDM_LAB_FLAVOUR`. A build without it is the release flavour, and the release flavour is the default.
+
+| Component | Build script | Only in the lab flavour |
+|---|---|---|
+| KMD | `driver\kmd\build.ps1 -Lab` | The raw register, memory, submit and scan-out escapes. A lab KMD answers them only with test signing on and `LabDiagnostics = 1` (`driver/kmd/lab_gate.c`). |
+| Mesa, DXVK and vkd3d-proton forks | `tools\build\build-mesa.ps1`, `build-dxvk.ps1`, `build-vkd3d.ps1`, each with `-Lab` (meson option `amdgpu-wddm-lab-flavour=true`) | The lookups of the forbidden environment variables. These are shader replacement and dumps, debug and experiment flags, cache paths, driver traces, log files, software devices, fault injection and statistics. |
+| D3D11 and D3D12 shells | `tools\build\build-umd-dxvk.ps1 -Lab`, `build-umd-d3d12.ps1 -Lab` | `AMDGPU_WDDM_D3D11_EXPERIMENT` and `AMDGPU_WDDM_D3D12_EXPERIMENT` as a source of the experiment list. |
+| CLI and `bc250control.dll` | `tools\win\bc250kmd_cli\build.ps1 -Lab`, `tools\win\amdgpu_wddm_control\build.ps1 -Lab` | The raw diagnostic verbs (`tools/win/bc250kmd_cli/README.md`). |
+
+`tools/quality/flavour_gate.py` checks the built bytes, not the sources. A release set fails on a raw escape
+marker in the KMD or on a forbidden name in any scanned PE file, in ASCII or UTF-16LE. A lab set fails when a
+file lost one of its lab-only names, so a build that lost the switch cannot pass. The declaration
+`tools/quality/flavour_gate.json` gives each forbidden name, what it does and the files whose lab build must
+still hold it. It also gives the allowed and the out-of-scope names, each with its reason. A file is named by
+its file name (every copy) or by its payload path, for example `d3d11/amdgpu_wddm_radv.dll` (that copy only).
+The payload path is the path under the last directory named `payload`. Paths make the list exact: another
+copy of that file must not hold the name, and the entry's note says why the other copies do not have it. For
+example, `BC250_DRAW_STATS` is only in the RADV copies of the triplet build line. A DriverStore member under
+`payload/kmd` has the payload path of its input slot in `tools/release/driver_package.py`. For example,
+`kmd/wow64/d3d12/amdgpu_wddm_vkd3d32.dll` is `wow64/d3d12/amdgpu_wddm_vkd3d.dll`. Thus one declaration
+serves both package layouts.
+
+Windows reads environment names in any letter case. Thus a forbidden name also counts as a whole C string in
+another case, for example `radv_debug`. Inside a longer text, it does not count. The coverage rule also applies
+to such strings. A lab set fails when a file holds a name whose entry says that no lab file holds it
+(`lab.none`).
+
+An allowed entry can have a release rule. `AMDGPU_WDDM_LOG` has one. A release file that holds that name must
+also hold `AMDGPU_WDDM_GAMELOG` and the folder `amdgpu-wddm\logs\games`. It must not hold the string `stderr`.
+An allowed entry whose reason starts with `BD-167 follow-up` is an open decision. A release set fails while
+one is open.
+
+`--manifest` binds the scan to one package. Each PE under `--package` must be a row of `manifest.json`, or its
+setup file, with the SHA256 of the scanned bytes. Each PE row of the manifest must be in the scan. The payload
+paths of the scan must be the `package.slots` of the declaration, each one time. `--negative-control` adds a
+forbidden name and an undeclared name to the scanned bytes of one file, in memory. The set fails if the scan
+does not report them.
+
+```
+python tools/quality/flavour_gate.py --flavour release --package <package top folder> [--out <dir>]
+python tools/quality/flavour_gate.py --flavour release --package <package top folder> --manifest <files\manifest.json> --negative-control wow64/d3d12/amdgpu_wddm_vkd3d.dll [--out <dir>]
+python tools/quality/flavour_gate.py --flavour lab --kmd <bc250kmd.sys> --pe <file|dir> [--pe ...] [--out <dir>]
+python -m unittest discover -s tools/quality -p test_flavour_gate.py
+```
+
+- `tools/release/build-release.ps1` runs the gate two times, with the negative control. The first run is on the
+  whole payload, before the submission CAB. The second run is after `manifest.json`, with `--manifest`, before
+  the zip. The receipts are `flavour-gate-payload\flavour-gate.json` and `flavour-gate\flavour-gate.json` under
+  `-Out`.
+- `driver\kmd\build.ps1` runs the gate on the linked SYS of each build (`--kmd-only`).
+- The two CLI build scripts run `tools\win\bc250kmd_cli\test-verbs.ps1` before they compile the CLI. It runs
+  every raw diagnostic verb against a fake adapter, in the flavour of the build. Then they run
+  `tools\win\bc250kmd_cli\test-flavour.ps1` on the usage text of the CLI that they built.
+- The self-test runs in the `quality-controls` check of `tools/quality/quick.ps1`, and `quick.ps1` builds the
+  lab CLI as the `driver-state-cli-lab-x64` check.
+- Each fork has its own host test of the names that its release flavour must not read
+  (`src/util/amdgpu_wddm_release_test.py` in Mesa, `src/ddi/release_flavour_test.py` in DXVK,
+  `libs/ddi/release_flavour_test.py` in vkd3d-proton).
+- `tools/release/release_flavour.py` is a different tool. It selects the payload of each flavour for
+  `tools/release/build-release.ps1`.
+
 ## Firmware
 
 The KMD loads eight PSP firmware files from its Driver Store image directory

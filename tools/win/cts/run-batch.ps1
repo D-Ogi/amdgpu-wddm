@@ -21,7 +21,10 @@ ICD selection (-Route):
              C:\BC250\m15\registration002\amdgpu_wddm_radv.dll, i.e. the RADV the D3D12 tiled resources use.
   registered the system vulkan-1.dll and whatever ICD is registered under HKLM\SOFTWARE\Khronos\Vulkan\Drivers.
 RADV exposes sparse binding to a stand-alone Vulkan process only with RADV_EXPERIMENTAL=sparse (the D3D12
-host passes its policy through the instance chain instead), so the child gets -Experimental (default sparse).
+host passes its policy through the instance chain instead), so the child gets -Experimental (default sparse);
+-Experimental none sets no RADV_EXPERIMENTAL. -Perftest sets RADV_PERFTEST. Both are lab-flavour variables: a
+release ICD has no lookup of either (BD-167), so a run that sets one on the direct route stops (exit 3) unless the
+ICD file holds the variable's name, i.e. is a lab-flavour build. The registered route is not checked.
 
 Exit codes: 0 batch complete, only Pass/NotSupported (warnings listed); 1 batch complete with other results;
 2 incomplete, call again with the same arguments to resume; 3 stop the sweep (device lost, a case timed out,
@@ -52,6 +55,7 @@ Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'   # no CLIXML progress records on the ssh stream
 $clock = [Diagnostics.Stopwatch]::StartNew()
+if ($Experimental -eq 'none') { $Experimental = '' }
 $utf8 = New-Object Text.UTF8Encoding($false)
 
 # target.py ps copies this script to C:\BC250\tmp before running it, so the package root is not
@@ -67,6 +71,11 @@ function Write-Text([string]$Path, [string]$Text) { [IO.File]::WriteAllText($Pat
 function Append-Text([string]$Path, [string]$Text) { [IO.File]::AppendAllText($Path, $Text, $utf8) }
 function Write-Json([string]$Path, $Object) { Write-Text $Path (($Object | ConvertTo-Json -Depth 6) + "`n") }
 function Get-Sha([string]$Path) { (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash }
+# Whether a binary holds a variable's name as a whole ASCII word: the lookup a lab-flavour ICD keeps (BD-167).
+function Test-HasName([string]$Path, [string]$Name) {
+    $text = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($Path))
+    return [regex]::IsMatch($text, '(?<![A-Za-z0-9_])' + $Name + '(?![A-Za-z0-9_])')
+}
 function Utc { [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.fffZ') }
 # Owner STOP flag of the lab overlay (no overlay = no flag).
 function Test-OwnerStop {
@@ -134,6 +143,11 @@ try {
         if (-not (Test-Path -LiteralPath $IcdPath)) { throw "stop: ICD $IcdPath not found" }
         $icdSha = Get-Sha $IcdPath
         if ($IcdSha256 -and $icdSha -ne $IcdSha256.ToUpperInvariant()) { throw "stop: ICD hash $icdSha, expected $IcdSha256" }
+        foreach ($pair in @(@('RADV_EXPERIMENTAL', $Experimental), @('RADV_PERFTEST', $Perftest))) {
+            if ($pair[1] -and -not (Test-HasName $IcdPath $pair[0])) {
+                throw "stop: this run sets $($pair[0])=$($pair[1]), and $IcdPath has no lookup of it: a release-flavour ICD (BD-167). Use a lab-flavour ICD, or -Experimental none for a run that needs no experimental feature"
+            }
+        }
         $directSrc = Join-Path $Root 'direct\cts-direct.dll'
         $icdDir = Join-Path $runDir ('icd-' + $icdSha.Substring(0, 8))
         New-Item -ItemType Directory -Force -Path $icdDir | Out-Null
@@ -196,7 +210,8 @@ try {
                 'VK_LOADER_DRIVERS_DISABLE', 'VK_INSTANCE_LAYERS', 'VK_LOADER_LAYERS_ENABLE', 'VK_LAYER_PATH')) {
             if ($psi.EnvironmentVariables.ContainsKey($n)) { $psi.EnvironmentVariables.Remove($n) }
         }
-        $psi.EnvironmentVariables['RADV_EXPERIMENTAL'] = $Experimental
+        if ($psi.EnvironmentVariables.ContainsKey('RADV_EXPERIMENTAL')) { $psi.EnvironmentVariables.Remove('RADV_EXPERIMENTAL') }
+        if ($Experimental) { $psi.EnvironmentVariables['RADV_EXPERIMENTAL'] = $Experimental }
         if ($psi.EnvironmentVariables.ContainsKey('RADV_PERFTEST')) { $psi.EnvironmentVariables.Remove('RADV_PERFTEST') }
         if ($Perftest) { $psi.EnvironmentVariables['RADV_PERFTEST'] = $Perftest }
         $info.arguments = $argList

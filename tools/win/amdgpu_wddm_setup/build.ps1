@@ -2,7 +2,11 @@
 # install on a tester's PC), with the string tables embedded. The compiler comes from the installed Visual Studio, as
 # for the control app. Deterministic: the same sources give the same bytes (csc /deterministic).
 #
-#   pwsh tools\win\amdgpu_wddm_setup\build.ps1 -Out P:\BC-250\scratch\build\gui-setup\setup-app [-NoSmoke]
+#   pwsh tools\win\amdgpu_wddm_setup\build.ps1 -Out P:\BC-250\scratch\build\gui-setup\setup-app [-NoSmoke] [-Lab]
+#
+# -Lab builds the lab flavour (BD-167, AMDGPU_WDDM_LAB_FLAVOUR): the window then also reads AMDGPU_WDDM_SETUP_STRINGS, a
+# directory of string tables in place of the embedded ones. A release build has no lookup of it; the unit tests are
+# always lab, and no gate below uses the variable.
 #
 # Gates, in order, each stops the build:
 #   1. unit tests (test/UnitTests.cs, test/StartTests.cs: the order of the start, test/WorkingTests.cs: what the
@@ -52,8 +56,11 @@ param(
     # -Flavour is that release's flavour. Without -Version nothing is stamped and the build says so: a host build
     # and a quality gate are not a release, and the release reads every resource back before it ships.
     [string]$Version = '',
-    [ValidateSet('release', 'lab')][string]$Flavour = 'release'
+    [ValidateSet('release', 'lab')][string]$Flavour = 'release',
+    [switch]$Lab
 )
+# One flavour, two names: -Lab is BD-167's and -Flavour is BD-166's, and the release passes the one it knows.
+if ($Lab) { $Flavour = 'lab' } elseif ($Flavour -eq 'lab') { $Lab = $true }
 
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -75,7 +82,7 @@ $pure += 'WorkingView.cs' | ForEach-Object { Join-Path $here "src\$_" }
 
 # 1. Unit tests of the pure parts.
 & $csc /nologo /noconfig /nostdlib+ @refs /target:exe /platform:x64 /warnaserror+ /langversion:7.3 /deterministic+ `
-    "/out:$obj\unit-tests.exe" @pure (Join-Path $here 'src\Native.cs') (Join-Path $here 'test\UnitTests.cs') (Join-Path $here 'test\StartTests.cs') (Join-Path $here 'test\WorkingTests.cs')
+    /define:AMDGPU_WDDM_LAB_FLAVOUR "/out:$obj\unit-tests.exe" @pure (Join-Path $here 'src\Native.cs') (Join-Path $here 'test\UnitTests.cs') (Join-Path $here 'test\StartTests.cs') (Join-Path $here 'test\WorkingTests.cs')
 if ($LASTEXITCODE -ne 0) { throw "unit test compile failed ($LASTEXITCODE)" }
 $unit = @(& "$obj\unit-tests.exe" $repo (Join-Path $here 'strings') | ForEach-Object { [string]$_ })
 $unitFailed = $LASTEXITCODE -ne 0
@@ -112,16 +119,24 @@ if (-not (Test-Path -LiteralPath $icon -PathType Leaf)) { throw "application ico
 # The same file as a resource as well (SetWindowIcon): the window's icon is then the authored 16, 20, 24, ... 256
 # image for the size Windows asks for, instead of one 32x32 image rescaled on a high-resolution screen.
 $resources += "/resource:$icon,nagi.ico"
+$csFlavour = @(if ($Lab) { '/define:AMDGPU_WDDM_LAB_FLAVOUR' })
 # /debug:portable, from the output directory with relative names, for the reason the control application's
 # build states: the installer ships, so it gets a portable PDB, and csc records the path it is given.
 Push-Location -LiteralPath $Out
 try {
     & $csc /nologo /noconfig /nostdlib+ @refs /target:winexe /platform:x64 /optimize+ /warnaserror+ /langversion:7.3 /deterministic+ `
         /debug:portable /pdb:amdgpu_wddm_setup.pdb `
-        "/win32manifest:$here\app.manifest" "/win32icon:$icon" "/out:amdgpu_wddm_setup.exe" @resources @((Get-ChildItem "$here\src\*.cs").FullName | Sort-Object)
+        @csFlavour "/win32manifest:$here\app.manifest" "/win32icon:$icon" "/out:amdgpu_wddm_setup.exe" @resources @((Get-ChildItem "$here\src\*.cs").FullName | Sort-Object)
 } finally { Pop-Location }
 if ($LASTEXITCODE -ne 0) { throw "csc failed ($LASTEXITCODE)" }
-$image = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($exe))
+# The flavour (BD-167): the variable's name, a UTF-16 literal in the image's user string heap, is there in a lab build
+# and absent from a release build.
+$exeBytes = [IO.File]::ReadAllBytes($exe)
+$wide = [Text.Encoding]::Unicode.GetString($exeBytes) + [Text.Encoding]::Unicode.GetString($exeBytes, 1, $exeBytes.Length - 1)
+$held = $wide.Contains('AMDGPU_WDDM_SETUP_STRINGS')
+if ($held -ne [bool]$Lab) { throw "amdgpu_wddm_setup.exe ($(if ($Lab) { 'lab' } else { 'release' })) $(if ($held) { 'holds' } else { 'lacks' }) AMDGPU_WDDM_SETUP_STRINGS" }
+Write-Host "  flavour: $(if ($Lab) { 'lab, reads AMDGPU_WDDM_SETUP_STRINGS' } else { 'release, no AMDGPU_WDDM_SETUP_STRINGS in the image' })"
+$image = [Text.Encoding]::ASCII.GetString($exeBytes)
 if (-not $image.Contains('.NETFramework,Version=v4.8')) { throw 'amdgpu_wddm_setup.exe does not declare TargetFramework .NETFramework,Version=v4.8' }
 Write-Host '  target framework: .NETFramework,Version=v4.8 declared'
 $missingArt = @($artResourceNames | Where-Object { -not $image.Contains($_) })

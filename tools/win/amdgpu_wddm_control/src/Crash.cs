@@ -47,14 +47,20 @@ namespace AmdgpuWddmControl
         public static string DirectoryForTests;
 
         // AMDGPU_WDDM_CONTROL_STATE moves the app's state directory, which the build's own gates set, so a gate
-        // that makes the application record something writes it below the build and not into a profile.
+        // that makes the application record something writes it below the build and not into a profile. A lab
+        // build's only (BD-167): the gates of a release build run its lab twin, and the release image holds no
+        // name of a diagnostic variable.
         public static string Folder()
         {
             if (DirectoryForTests != null) return DirectoryForTests;
+#if AMDGPU_WDDM_LAB_FLAVOUR
             var over = Environment.GetEnvironmentVariable("AMDGPU_WDDM_CONTROL_STATE");
             return string.IsNullOrEmpty(over)
                 ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "amdgpu-wddm")
                 : over;
+#else
+            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "amdgpu-wddm");
+#endif
         }
 
         public static string LogPath() { return Path.Combine(Folder(), "crash.log"); }

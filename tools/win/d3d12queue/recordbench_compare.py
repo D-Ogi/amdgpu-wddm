@@ -15,11 +15,13 @@ import sys
 from pathlib import Path
 
 PHASES = ("burst", "interleaved", "threaded")
-START = re.compile(r"Record bench seed [0-9a-f]{16}, .*cycles per us (?P<rate>[0-9.]+), AMDGPU_WDDM_D3D12_EXPERIMENT (?P<experiment>.+)")
+# "experiment" since BD-167 (the arm in the application profile); sessions recorded before it name the variable.
+START = re.compile(r"Record bench seed [0-9a-f]{16}, .*cycles per us (?P<rate>[0-9.]+), "
+                   r"(?:AMDGPU_WDDM_D3D12_EXPERIMENT|experiment) (?P<experiment>.+)")
 WALL = re.compile(r"Record bench (?P<phase>\w+) wall us: .*; cpu ms per frame: main thread (?P<thread>[0-9.]+), "
                   r"process (?P<process>[0-9.]+), over (?P<span>[0-9.]+) ms")
 FINAL = re.compile(r"Record bench: phases measured (?P<phases>\d+) of 3, frames (?P<frames>\d+), words (?P<words>\d+), "
-                   r"mismatches (?P<mismatches>\d+), .*cycles per us at the end (?P<end_rate>[0-9.]+), AMDGPU_WDDM_D3D12_EXPERIMENT .+")
+                   r"mismatches (?P<mismatches>\d+), .*cycles per us at the end (?P<end_rate>[0-9.]+), (?:AMDGPU_WDDM_D3D12_EXPERIMENT|experiment) .+")
 
 
 def session(directory):

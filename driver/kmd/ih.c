@@ -36,6 +36,7 @@
 #include "bc250_gmc.h"
 #include "bc250_ih.h"
 #include "ih_fault.h"               // KMD193: the UTCL2 fault decode and its per-second bucket, host-tested
+#include "lab_gate.h"               // BD-167: IhEscape() is the lab-only user entry to the IH diagnostic
 
 #define BC250_IH_TAG 'hI2B'
 #define BC250_IH_RB_ENABLE 0x00000001ul     // IH_RB_CNTL.RB_ENABLE (osssys_5_0_0_sh_mask.h), for the "is it off" read only
@@ -195,6 +196,10 @@ static BOOLEAN Consume(_In_ const BC250_DEVICE* Device, _Inout_ BC250_IH* ih)
     {
         ULONG errors = 0;
         BOOLEAN reportFault = FALSE;
+        // BD-167 (G3): a CP privilege or decode fault seen this round. Captured under the stats lock, acted on
+        // after the release (like the UTCL2 report), so the node close and its log line run outside the lock.
+        BOOLEAN cpFault = FALSE;
+        ULONG cpFaultSrc = 0, cpFaultRing = 0, cpFaultVmid = 0, cpFaultCount = 0;
         // KMD193: one whole second is the fault bucket. Taken once per round, outside the lock, and callable
         // at any IRQL (ntddk.h); the bucket key must not depend on how many vectors the round decodes.
         ULONGLONG second = KeQueryInterruptTime() / 10000000ull;
@@ -227,6 +232,17 @@ static BOOLEAN Consume(_In_ const BC250_DEVICE* Device, _Inout_ BC250_IH* ih)
                 faultReport = ih->Faults;
                 reportFault = TRUE;
             }
+            // BD-167 (G3): a CP privileged-register / privileged-instruction / bad-op fault. The CP has stopped on
+            // the guilty job; remember it and close the owning engine after the lock so dxgkrnl tears the context
+            // down, instead of only counting the vector in Note() below.
+            if (Bc250IhIsCpPrivFault(entry.client_id, entry.src_id))
+            {
+                cpFault = TRUE;
+                cpFaultSrc = entry.src_id;
+                cpFaultRing = entry.ring_id;
+                cpFaultVmid = entry.vmid;
+                cpFaultCount++;
+            }
             Note(&ih->Stats, &entry);
             budget--;
         }
@@ -236,6 +252,16 @@ static BOOLEAN Consume(_In_ const BC250_DEVICE* Device, _Inout_ BC250_IH* ih)
 
         // KMD193: before the Active check below - a fault matters most on the way down.
         if (reportFault) IhFaultReport(Device, &faultReport);
+        // BD-167 (G3): a CP privilege/decode fault closes the gfx node (node 0: every gfx and compute submission
+        // runs there) through the recovery path, so QueryEngineStatus reports it unresponsive and dxgkrnl removes
+        // the faulting context. GfxVmidReport names who held the vector's VMID.
+        if (cpFault)
+        {
+            GuardLog("ih: CP %s fault, vmid %lu ring 0x%lX src %lu, %lu this round; closing gfx node for recovery",
+                     Bc250IhCpPrivFaultName(cpFaultSrc), cpFaultVmid, cpFaultRing, cpFaultSrc, cpFaultCount);
+            GfxVmidReport(Device, "ih: CP fault vector", cpFaultVmid);
+            WddmReportEngineFault(Device, Bc250IhCpPrivFaultName(cpFaultSrc));
+        }
         if (ih->Active == 0) return FALSE;
         ih->Rptr = rptr;
         // Publish even an unchanged RPTR: a serviced MSI must be rearmed.
@@ -708,10 +734,15 @@ static void IhExecute(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_IH* Dat
 }
 
 // Diagnostic commands and device startup share the same implementation.
+// BD-167: the user-reachable IH escape entry exists only in the lab flavour. IhExecute() stays in every build
+// because IhInitializeHardware drives it during bring-up; the release removes this user-data entry point (also
+// unreachable: display.c compiles out its arm).
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
 void IhEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_IH* Data)
 {
     IhExecute(Device,Data);
 }
+#endif
 
 // PASSIVE_LEVEL. Caller owns nonpaged report storage through this synchronous
 // call. Keep detailed partial-progress output for the eventual startup unwind.

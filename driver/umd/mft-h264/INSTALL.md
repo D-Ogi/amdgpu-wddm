@@ -197,4 +197,5 @@ adapter. If the transform is absent, check in this order:
 The transform writes nothing unless `BC250_MFT_TRACE` is set in the environment of the recording
 process. With it set, every `ProcessMessage`, `ProcessInput`, `ProcessOutput` and event queue
 operation is traced, which is what found the sink writer deadlock. Belongs in the support report, not
-in the user interface.
+in the user interface. Only a lab build of the transform (`build.ps1 -Lab`) reads the variable (BD-167).
+The release transform writes nothing, whatever the environment holds.

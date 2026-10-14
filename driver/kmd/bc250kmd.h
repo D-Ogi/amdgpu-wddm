@@ -1161,6 +1161,7 @@ void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data);
 NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device);   // required resources fail before paging DDIs begin
 void WddmSourceVisibility(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible);   // display.c's SetVidPnSourceVisibility
 void WddmStop(_Inout_ BC250_DEVICE* Device);
+void WddmReportEngineFault(_In_ const BC250_DEVICE* Device, _In_z_ const char* Why);   // BD-167 (G3): CP fault -> close gfx node
 // modeset.c: the primary transaction (the flip DDI's PrimarySequence) for a change of the source size at
 // PASSIVE_LEVEL. While it is held, SetVidPnSourceAddress answers STATUS_DEVICE_BUSY, as for a flip in progress.
 // Begin is bounded and returns FALSE when it could not take it; TRUE with nothing held when there is no full table.

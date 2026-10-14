@@ -221,7 +221,9 @@ it. A system driver cannot end the application's process for that, least of all 
   usage at 627 MiB. `TrimMemory` brought it to 55 MiB in about 15 ms, and the engine's own count went from
   336 MiB to 16 MiB.
 - **Test switch.** `BC250DXVK_TEST_OOM=1` at device creation arms an injection outside the ABI: plain
-  allocations fail while `BC250DXVK_TEST_OOM_NOW=1` is set in the process. The engine test uses it.
+  allocations fail while `BC250DXVK_TEST_OOM_NOW=1` is set in the process. The engine test uses it. Only a lab
+  build of the engine (`AMDGPU_WDDM_LAB_FLAVOUR`) reads the two switches. A release engine has no lookup of
+  them, and its engine test skips the injected cases (BD-167).
 
 Offer, reclaim and residency priority work on whole allocations. DXVK suballocates, so they need a separate
 design (see Gaps).

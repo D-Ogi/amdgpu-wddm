@@ -1,11 +1,17 @@
 # -Arch x86 builds the 32-bit shell for WoW64 processes (UserModeDriverNameWow) with vcvarsamd64_x86.bat (common.ps1),
 # and runs every host gate below as an x86 program.
+# -Lab builds the lab flavour (BD-167): the shell also reads AMDGPU_WDDM_D3D12_EXPERIMENT and AMDGPU_WDDM_DDI_TRACE
+# from the environment, and its engine-ddi library (build-engine-ddi.ps1 -Lab) the trace and the entry path knobs
+# BC250_ENTRY_*. Without it the shell is the release flavour, which has no lookup of those names (ddi-trace.h).
 param([string]$OutputDir,[string]$VsInstall,[string]$MesaSource,[string]$VulkanInclude,[string]$EngineInclude,[ValidateSet('x64','x86')][string]$Arch='x64',
       # BD-166: the version resource this build writes into the file it ships, as its last step. -Version is the
       # package version (default: kmd_version of tools\release\release-sources.json), -Flavour the flavour of the
       # release this build is for. Without -Version nothing is stamped and the
       # build says so; the release reads every resource back before it ships.
-      [string]$Version='',[ValidateSet('release','lab')][string]$Flavour='release')
+      [string]$Version='',[ValidateSet('release','lab')][string]$Flavour='release',[switch]$Lab)
+# One flavour, two names: -Lab is BD-167's and -Flavour is BD-166's, and the release passes the one it knows.
+# Without this line a caller that passes one knob alone ships a release-flavour binary stamped lab, or the reverse.
+if ($Lab) { $Flavour = 'lab' } elseif ($Flavour -eq 'lab') { $Lab = $true }
 $ErrorActionPreference='Stop'
 . "$PSScriptRoot\common.ps1"
 # Windows installer detection asks for elevation (a UAC prompt on the desktop of the build PC) before it starts a
@@ -31,6 +37,7 @@ $engineSource=Split-Path -Parent (Split-Path -Parent $EngineInclude)
 $engineBuild=Join-Path $OutputDir 'engine-ddi'
 $engineArgs=@('-NoProfile','-File',"$PSScriptRoot\build-engine-ddi.ps1",'-OutputDir',$engineBuild,'-EngineSource',$engineSource,'-VulkanInclude',$VulkanInclude,'-NativeOnly','-Arch',$Arch)
 if($VsInstall){$engineArgs+=@('-VsInstall',$VsInstall)}
+if($Lab){$engineArgs+='-Lab'}
 & pwsh @engineArgs
 if($LASTEXITCODE){throw 'Native engine-ddi build or host gates failed'}
 $engineLib=Join-Path $engineBuild 'engine-ddi.lib'
@@ -51,6 +58,7 @@ try {
  # /GL and /arch:AVX2 (the DLL links with /LTCG): restored 2026-10-10 by owner decision, trial 171 corruption watched in the b29 lab acceptance.
  # /FC with /d1trimfile: __FILE__ and the anonymous-namespace names see the path below each tree only.
  $flags=@('/nologo','/std:c++20','/EHsc','/W4','/WX','/O2','/GL','/arch:AVX2',("/external:W" + $(if ($Arch -eq 'x86') { 1 } else { 0 })),'/MT','/DNOMINMAX','/Brepro','/Zi','/FC',"/d1trimfile:$repo","/d1trimfile:$MesaSource","/d1trimfile:$VulkanInclude","/d1trimfile:$EngineInclude","/external:I$VulkanInclude","/external:I$EngineInclude","/external:I$MesaSource\src\util","/external:I$wdk","/external:I$wdk\..\shared", "/I$repo\driver\contract\third_party", "/I$repo\driver\contract\uapi-shim")
+ if($Lab){$flags+='/DAMDGPU_WDDM_LAB_FLAVOUR=1'}
  Push-Location $OutputDir
  try {
   if(Test-Path amdgpu_wddm_d3d12.dll){

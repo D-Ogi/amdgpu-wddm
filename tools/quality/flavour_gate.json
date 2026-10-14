@@ -1,0 +1,1719 @@
+{
+ "schema": 1,
+ "defect": "BD-167",
+ "about": "Read by flavour_gate.py. The KMD markers are literals of driver/kmd/entry.c, display.c and lab_gate.c; test_flavour_gate.py checks that each one is still in the source. A forbidden name is one whose lookup the release flavour compiles out; its lab field names the files whose lab build must still hold it (every), or says why no lab file does (none). An item of every is a file name (every copy) or a payload path (that copy only); with paths the list is exact and note says why the other copies lack the name. An allowed name stays, for the reason given. An out-of-scope name is recorded where it is found and never fails. Every identifier of the prefixes BC250_, BC250<letters or digits>_ and AMDGPU_WDDM_ in a scanned file must be in one of the three lists (BD-167 coverage); an allowed entry whose reason starts with \"BD-167 follow-up\" is a decision that is still open, and a release set fails while one is. A forbidden name counts in any letter case as a whole C string. An allowed entry's release_rule says what else a release file that holds the name must and must not hold. package.slots is the closed list of PE payload paths that --manifest requires.",
+ "kmd": {
+  "file": "bc250kmd.sys",
+  "flavour_markers": {
+   "release": "kmd: BD-167 flavour release (no raw diagnostic escapes)",
+   "lab": "kmd: BD-167 flavour lab (raw diagnostic escapes, test signing + LabDiagnostics)"
+  },
+  "lab_escape_markers": [
+   {
+    "escapes": "GET_MEMORY, VRAM_READ, VRAM_WRITE (K1/K3)",
+    "marker": "raw escape GET_MEMORY/VRAM_READ/VRAM_WRITE",
+    "source": "driver/kmd/display.c"
+   },
+   {
+    "escapes": "READ_REG, WRITE_REG (K2/K9)",
+    "marker": "raw escape READ_REG/WRITE_REG",
+    "source": "driver/kmd/display.c"
+   },
+   {
+    "escapes": "RUN_GART (K9)",
+    "marker": "raw escape RUN_GART",
+    "source": "driver/kmd/display.c"
+   },
+   {
+    "escapes": "RUN_PSP (K9)",
+    "marker": "raw escape RUN_PSP",
+    "source": "driver/kmd/display.c"
+   },
+   {
+    "escapes": "RUN_GFX (K8)",
+    "marker": "raw escape RUN_GFX",
+    "source": "driver/kmd/display.c"
+   },
+   {
+    "escapes": "RUN_FENCE (K8)",
+    "marker": "raw escape RUN_FENCE",
+    "source": "driver/kmd/display.c"
+   },
+   {
+    "escapes": "RUN_SDMACOPY, RUN_SDMAIB (K8)",
+    "marker": "raw escape RUN_SDMACOPY/RUN_SDMAIB",
+    "source": "driver/kmd/display.c"
+   },
+   {
+    "escapes": "RUN_IH",
+    "marker": "raw escape RUN_IH",
+    "source": "driver/kmd/display.c"
+   },
+   {
+    "escapes": "RUN_DCN",
+    "marker": "raw escape RUN_DCN",
+    "source": "driver/kmd/display.c"
+   },
+   {
+    "escapes": "RUN_DCNFLIP",
+    "marker": "raw escape RUN_DCNFLIP",
+    "source": "driver/kmd/display.c"
+   },
+   {
+    "escapes": "RUN_FBDUMP",
+    "marker": "raw escape RUN_FBDUMP",
+    "source": "driver/kmd/display.c"
+   },
+   {
+    "escapes": "the lab gate itself (test signing + LabDiagnostics)",
+    "marker": "labgate: CodeIntegrityOptions 0x%08X, test signing %s",
+    "source": "driver/kmd/lab_gate.c"
+   }
+  ]
+ },
+ "forbidden": [
+  {
+   "name": "MESA_SPIRV_READ_PATH",
+   "where": "mesa-wddm src/compiler/spirv/spirv_to_nir.c (RADV ICDs, zink UMD, OpenGL ICD)",
+   "does": "replaces each SPIR-V module with a file of the same hash from that directory",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_gl.dll",
+     "amdgpu_wddm_radv.dll",
+     "bc250d3d_zink.dll",
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
+   "name": "MESA_SHADER_READ_PATH",
+   "where": "mesa-wddm src/mesa/main/shaderapi.c (OpenGL ICD)",
+   "does": "replaces GLSL source with a file of the same hash from that directory",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_gl.dll"
+    ]
+   }
+  },
+  {
+   "name": "MESA_SHADER_CAPTURE_PATH",
+   "where": "mesa-wddm src/mesa/main/shaderapi.c (OpenGL ICD)",
+   "does": "writes the source of every linked program to that directory",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_gl.dll"
+    ]
+   }
+  },
+  {
+   "name": "MESA_LOADER_DRIVER_OVERRIDE",
+   "where": "mesa-wddm src/gallium/auxiliary/driver_trace/tr_screen.c (CPU UMD, zink UMD, OpenGL ICD); src/loader/loader.c is not built on Windows",
+   "does": "names another gallium driver; in these targets it selects which screen the trace wrapper takes",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_gl.dll",
+     "bc250d3d.dll",
+     "bc250d3d_zink.dll"
+    ]
+   }
+  },
+  {
+   "name": "GALLIUM_DRIVER",
+   "where": "mesa-wddm src/gallium/auxiliary/target-helpers/sw_helper.h, inline_sw_helper.h, src/gallium/targets/d3d10umd/d3d10_gdi.c, src/gallium/targets/wgl/wgl.c",
+   "does": "selects the gallium driver (llvmpipe, softpipe, zink, d3d12) in place of the built-in choice",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_gl.dll",
+     "bc250d3d.dll"
+    ]
+   }
+  },
+  {
+   "name": "RADV_DEBUG",
+   "where": "mesa-wddm src/amd/vulkan/radv_instance.c (RADV ICDs)",
+   "does": "debug flags: turn off compression, HiZ, DCC, fast clears, binning, NGG, mesh shaders, ray tracing and the shader cache (nodcc, nohiz, nocache, nongg, nort, ...), force full synchronisation (fullsync, syncshaders), dump shaders, IR, IBs and BO history (shaders, asm, ir, dumpibs, bo_history), select the LLVM back end (llvm), arm hang reporting (hang), print device information (info, startup)",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_radv.dll",
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
+   "name": "RADV_PERFTEST",
+   "where": "mesa-wddm src/amd/vulkan/radv_instance.c (RADV ICDs)",
+   "does": "experimental paths: wave32/wave64 choice (cswave32, pswave32, gewave32, rtwave64), NGG culling (nggc), DCC with MSAA (dccmsaa), smart access memory (sam, nosam), local BOs, DMA shaders, the NIR cache, RT continuation shaders (rtcps), GTT spill and low-latency video",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_radv.dll",
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
+   "name": "ACO_DEBUG",
+   "where": "mesa-wddm src/amd/compiler/aco_ir.cpp (RADV ICDs)",
+   "does": "compiler flags: turn IR and register-allocation validation on or off (validateir, validatera, validateopt, novalidate), turn off value numbering, optimisation and scheduling (novn, noopt, nosched), print performance and liveness information (perfinfo, liveinfo)",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_radv.dll",
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
+   "name": "NIR_DEBUG",
+   "where": "mesa-wddm src/compiler/nir/nir.c (CPU and Zink UMD lines, which build without NDEBUG); src/util/u_amdgpu_wddm_stdio.c (triplet line, the explicit debug list that keeps stderr)",
+   "does": "NIR flags: validation off (novalidate) or extended, every shader round-tripped through clone and serialize after each pass, metadata invalidated, and shader dumps",
+   "lab": {
+    "every": [
+     "bc250d3d.dll",
+     "bc250d3d_zink.dll",
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll (hosted line), vulkan/vulkan_radeon.dll and wow64/vulkan/vulkan_radeon.dll (system line) do not hold NIR_DEBUG in either flavour: those lines build with NDEBUG, so nir.c has no reader, and they keep no explicit debug list. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "ZINK_DEBUG",
+   "where": "mesa-wddm src/gallium/drivers/zink/zink_screen.c (zink UMD, OpenGL ICD)",
+   "does": "zink flags: dump NIR, SPIR-V and TGSI, force synchronisation and synchronous flushes, change descriptor set count, command reordering, render pass tracking and loads/stores, turn off async and optimised pipeline compiles, shader objects, precompilation and GENERAL layouts",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_gl.dll",
+     "bc250d3d_zink.dll"
+    ]
+   }
+  },
+  {
+   "name": "MESA_SPIRV_DUMP_PATH",
+   "where": "mesa-wddm src/compiler/spirv/spirv_to_nir.c (RADV ICDs, zink UMD, OpenGL ICD)",
+   "does": "writes every SPIR-V module to that directory",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_gl.dll",
+     "amdgpu_wddm_radv.dll",
+     "bc250d3d_zink.dll",
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
+   "name": "MESA_SPIRV_FAIL_DUMP_PATH",
+   "where": "mesa-wddm src/compiler/spirv/spirv_to_nir.c (RADV ICDs, zink UMD, OpenGL ICD)",
+   "does": "writes each SPIR-V module that the compiler refused to that directory",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_gl.dll",
+     "amdgpu_wddm_radv.dll",
+     "bc250d3d_zink.dll",
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
+   "name": "MESA_SHADER_DUMP_PATH",
+   "where": "mesa-wddm src/mesa/main/shaderapi.c (OpenGL ICD)",
+   "does": "writes the source of every GLSL shader to that directory",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_gl.dll"
+    ]
+   }
+  },
+  {
+   "name": "MESA_SHADER_CACHE_DIR",
+   "where": "mesa-wddm src/util/disk_cache_os.c, src/util/disk_cache.c",
+   "does": "moves the disk cache of compiled shader code to that directory; the release flavour keeps the built-in place",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_gl.dll",
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
+   "name": "MESA_GLSL_CACHE_DIR",
+   "where": "mesa-wddm src/util/disk_cache_os.c, src/util/disk_cache.c",
+   "does": "the deprecated name of MESA_SHADER_CACHE_DIR",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_gl.dll",
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
+   "name": "DRIRC_CONFIGDIR",
+   "where": "mesa-wddm src/util/xmlconfig.c",
+   "does": "reads driver configuration files from that directory in place of the built-in one",
+   "lab": {
+    "none": "WITH_XMLCONFIG is 0 in every Windows recipe, so neither flavour compiles the lookup; the guard keeps the name out if a recipe ever turns it on"
+   }
+  },
+  {
+   "name": "XDG_CACHE_HOME",
+   "where": "mesa-wddm src/util/disk_cache_os.c; dxvk src/dxvk/dxvk_shader_cache.cpp",
+   "does": "moves the disk cache of compiled shader code under another home directory; the release flavour keeps the cache under %LOCALAPPDATA%",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_dxvk.dll",
+     "amdgpu_wddm_gl.dll",
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
+   "name": "MESA_DISK_CACHE_READ_ONLY_FOZ_DBS",
+   "where": "mesa-wddm src/util/fossilize_db.c",
+   "does": "loads read-only Fossilize databases of compiled shader code from the paths it lists",
+   "lab": {
+    "none": "the Fossilize cache is not compiled in the Windows builds, so no lab DLL holds the name; the guard keeps it out if a recipe ever turns it on"
+   }
+  },
+  {
+   "name": "MESA_DISK_CACHE_READ_ONLY_FOZ_DBS_DYNAMIC_LIST",
+   "where": "mesa-wddm src/util/fossilize_db.c",
+   "does": "reads a file that lists further read-only Fossilize databases and loads them while the process runs",
+   "lab": {
+    "none": "the Fossilize cache is not compiled in the Windows builds, so no lab DLL holds the name; the guard keeps it out if a recipe ever turns it on"
+   }
+  },
+  {
+   "name": "RADV_EXPERIMENTAL",
+   "where": "mesa-wddm src/amd/vulkan/radv_instance.c (RADV ICDs)",
+   "does": "turns on experimental features (sparse binding, video decode and encode, emulated ray tracing, bfloat16, transfer queue and others); the host policy of the D3D12 shell still decides on sparse binding",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_radv.dll",
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
+   "name": "MESA_VK_TRACE",
+   "where": "mesa-wddm src/vulkan/runtime/vk_instance.c (RADV ICDs); dxvk src/dxvk/dxvk_instance.cpp; vkd3d-proton libs/vkd3d/device_workarounds.c",
+   "does": "turns on a driver trace (rmv, rgp, rra and others) that writes captures to disk; the engines turn on debug labels for it",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_dxvk.dll",
+     "amdgpu_wddm_radv.dll",
+     "amdgpu_wddm_vkd3d.dll",
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
+   "name": "MESA_VK_TRACE_TRIGGER",
+   "where": "mesa-wddm src/vulkan/runtime/vk_instance.c (RADV ICDs)",
+   "does": "names a file whose creation starts a driver trace capture",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_radv.dll",
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
+   "name": "MESA_VK_TRACE_FRAME",
+   "where": "mesa-wddm src/vulkan/runtime/vk_instance.c (RADV ICDs)",
+   "does": "the frame number at which a driver trace capture starts",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_radv.dll",
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
+   "name": "MESA_VK_TRACE_PER_SUBMIT",
+   "where": "mesa-wddm src/vulkan/runtime/vk_instance.c (RADV ICDs)",
+   "does": "captures a driver trace for every submission in place of every frame",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_radv.dll",
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
+   "name": "LIBGL_ALWAYS_SOFTWARE",
+   "where": "mesa-wddm src/gallium/auxiliary/target-helpers/sw_helper.h, inline_sw_helper.h, src/gallium/targets/wgl/wgl.c, src/gallium/drivers/d3d12/d3d12_dxgi_screen.cpp, src/gallium/drivers/zink/zink_screen.c",
+   "does": "forces a software renderer (llvmpipe, WARP or lavapipe) in place of the GPU; no installer, router or document of this driver uses it as a user feature",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_gl.dll",
+     "bc250d3d_zink.dll"
+    ]
+   }
+  },
+  {
+   "name": "MESA_DRICONF_EXECUTABLE_OVERRIDE",
+   "where": "mesa-wddm src/util/xmlconfig.c (driParseConfigFiles)",
+   "does": "names another executable, so that the driver configuration of that application (its driconf profile of workarounds and options) applies to this process",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_gl.dll",
+     "amdgpu_wddm_radv.dll",
+     "bc250d3d_zink.dll",
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
+   "name": "RADV_TRAP_HANDLER_EXCP",
+   "where": "mesa-wddm src/amd/vulkan/radv_instance.c (RADV ICDs)",
+   "does": "selects the exceptions that the shader trap handler reports (memory violations, float division by zero, overflow, underflow)",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_radv.dll",
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
+   "name": "RADV_PROFILE_PSTATE",
+   "where": "mesa-wddm src/amd/vulkan/radv_instance.c (RADV ICDs)",
+   "does": "the power state (standard, min_sclk, min_mclk, peak) that RADV asks for while a profiler captures; the release flavour takes peak, the value of an unset variable",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_radv.dll",
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
+   "name": "RADV_QUEUE_DISABLE",
+   "where": "mesa-wddm src/amd/vulkan/radv_instance.c (RADV ICDs)",
+   "does": "hides queue families (graphics, compute, video, transfer, sparse) from the application",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_radv.dll",
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
+   "name": "RADV_FORCE_VRS_CONFIG_FILE",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (RADV ICDs)",
+   "does": "reads a forced variable shading rate from that file and follows changes to it",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_radv.dll",
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
+   "name": "RADV_BVH_STATS_FILE",
+   "where": "mesa-wddm src/amd/vulkan/radv_instance.h (radv_bvh_stats_file: radv_device.c, tools/radv_rra.c)",
+   "does": "writes statistics of every acceleration structure build to that file",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_radv.dll",
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
+   "name": "MESA_LOG_FILE",
+   "where": "mesa-wddm src/util/log.c",
+   "does": "writes the Mesa log to that file",
+   "lab": {
+    "none": "util/log.c reads it only outside Windows (#if !DETECT_OS_WINDOWS), so no Windows build holds it; the guard keeps the name out if that ever changes"
+   }
+  },
+  {
+   "name": "MESA_LOG_FILE_AUTO",
+   "where": "mesa-wddm src/util/log.c",
+   "does": "writes the Mesa log to a file of its own for each process",
+   "lab": {
+    "none": "util/log.c reads it only outside Windows (#if !DETECT_OS_WINDOWS), so no Windows build holds it; the guard keeps the name out if that ever changes"
+   }
+  },
+  {
+   "name": "GALLIUM_LOG_FILE",
+   "where": "mesa-wddm src/util/os_misc.c",
+   "does": "writes the gallium log to that file",
+   "lab": {
+    "none": "os_misc.c reads it only in a MESA_DEBUG build and every Windows recipe is a release build, so no recipe build holds it; the guard keeps the name out of a debug build of the release flavour"
+   }
+  },
+  {
+   "name": "D3D_ALWAYS_SOFTWARE",
+   "where": "mesa-wddm src/gallium/drivers/zink/zink_screen.c (zink UMD, OpenGL ICD)",
+   "does": "makes zink pick a software Vulkan device in place of the GPU; nothing in this driver sets it, and Render on CPU is the route of the router to the CPU UMD",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_gl.dll",
+     "bc250d3d_zink.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_DRAW_STATS",
+   "where": "mesa-wddm src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c (triplet line); vkd3d-proton libs/vkd3d/command.c (also from C:\\BC250\\tmp\\amdgpu_wddm_radv.cfg)",
+   "does": "statistics counters: RADV counts what the application records in its command buffers and the engine counts its barriers, and both log the totals",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll",
+     "amdgpu_wddm_vkd3d.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll (hosted line), vulkan/vulkan_radeon.dll and wow64/vulkan/vulkan_radeon.dll (system line, x64 and x86) do not hold BC250_DRAW_STATS in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_BARRIER_TRACK",
+   "where": "mesa-wddm src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c (triplet line)",
+   "does": "0 turns off the barrier tracking with which RADV skips flushes that an application barrier without an image does not need, so that RADV flushes as upstream does; the release flavour keeps the tracking on",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll (hosted line), vulkan/vulkan_radeon.dll and wow64/vulkan/vulkan_radeon.dll (system line, x64 and x86) do not hold BC250_BARRIER_TRACK in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "VKD3D_SHADER_OVERRIDE",
+   "where": "vkd3d-proton libs/vkd3d-shader/vkd3d_shader_main.c, libs/vkd3d/device_workarounds.c",
+   "does": "replaces each shader with a SPIR-V file of the same hash from that directory",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_vkd3d.dll"
+    ]
+   }
+  },
+  {
+   "name": "VKD3D_SHADER_DUMP_PATH",
+   "where": "vkd3d-proton libs/vkd3d-shader/vkd3d_shader_main.c, libs/vkd3d/device_workarounds.c",
+   "does": "writes every DXBC, DXIL and SPIR-V shader to that directory",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_vkd3d.dll"
+    ]
+   }
+  },
+  {
+   "name": "VKD3D_SHADER_CACHE_PATH",
+   "where": "vkd3d-proton libs/vkd3d/cache.c, libs/vkd3d/device_workarounds.c",
+   "does": "moves the pipeline library that holds compiled shader code to that directory",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_vkd3d.dll"
+    ]
+   }
+  },
+  {
+   "name": "VKD3D_SHADER_QUIRKS",
+   "where": "vkd3d-proton libs/vkd3d-shader/vkd3d_shader_main.c (vkd3d_shader_init_quirk_table)",
+   "does": "reads a file of shader hash ranges with code generation quirks (wave size, denorms, feedback loops, barriers)",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_vkd3d.dll"
+    ]
+   }
+  },
+  {
+   "name": "VKD3D_BARRIER_HASHES",
+   "where": "vkd3d-proton libs/vkd3d/breadcrumbs.c",
+   "does": "reads a file of shader hash ranges around which the breadcrumb tracer adds barriers",
+   "lab": {
+    "none": "breadcrumbs.c is not in the engine build; the guard keeps the name out if it ever is"
+   }
+  },
+  {
+   "name": "VKD3D_CONFIG_FILE",
+   "where": "none in vkd3d-proton (a Wine vkd3d name)",
+   "does": "reads a configuration file from that path",
+   "lab": {
+    "none": "vkd3d-proton has no lookup of it; forbidden so that an engine that gains one fails here"
+   }
+  },
+  {
+   "name": "VKD3D_PATH",
+   "where": "none in vkd3d-proton (a Wine vkd3d name)",
+   "does": "loads the vkd3d libraries from that directory",
+   "lab": {
+    "none": "vkd3d-proton has no lookup of it; forbidden so that an engine that gains one fails here"
+   }
+  },
+  {
+   "name": "DXVK_SHADER_DUMP_PATH",
+   "where": "dxvk src/dxvk/dxvk_shader.cpp, src/d3d11/d3d11_options.cpp, src/d3d9/d3d9_options.cpp",
+   "does": "writes every shader to that directory",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_dxvk.dll"
+    ]
+   }
+  },
+  {
+   "name": "DXVK_SHADER_READ_PATH",
+   "where": "none in this DXVK tree (older DXVK releases had it)",
+   "does": "replaces shaders with files from that directory",
+   "lab": {
+    "none": "this DXVK tree has no lookup of it; forbidden so that a rebase that brings it back fails here"
+   }
+  },
+  {
+   "name": "DXVK_SHADER_CACHE_PATH",
+   "where": "dxvk src/dxvk/dxvk_shader_cache.cpp",
+   "does": "moves the shader cache that holds compiled shader code to that directory",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_dxvk.dll"
+    ]
+   }
+  },
+  {
+   "name": "DXVK_CONFIG_FILE",
+   "where": "dxvk src/util/config/config.cpp",
+   "does": "reads a configuration file from that path in place of dxvk.conf next to the application",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_dxvk.dll"
+    ]
+   }
+  },
+  {
+   "name": "DXVK_DEBUG",
+   "where": "dxvk src/dxvk/dxvk_instance.cpp",
+   "does": "debug modes: turns on the Vulkan validation layer, command markers and hang tracking (validation, markers, hang)",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_dxvk.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250DXVK_TEST_OOM",
+   "where": "dxvk src/dxvk/dxvk_memory.cpp (DxvkMemoryAllocator)",
+   "does": "fault injection: at device creation it arms the out-of-memory test switch BC250DXVK_TEST_OOM_NOW",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_dxvk.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250DXVK_TEST_OOM_NOW",
+   "where": "dxvk src/dxvk/dxvk_memory.cpp (isOutOfMemoryInjected)",
+   "does": "fault injection: while it is set in an armed process, plain device memory allocations fail as out of memory",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_dxvk.dll"
+    ]
+   }
+  },
+  {
+   "name": "AMDGPU_WDDM_D3D12_EXPERIMENT",
+   "where": "bc250-win driver/umd/d3d12/ddi-trace.h",
+   "does": "turns off driver defaults per process; the HKLM application profile and machine value stay",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_d3d12.dll"
+    ]
+   }
+  },
+  {
+   "name": "AMDGPU_WDDM_D3D11_EXPERIMENT",
+   "where": "bc250-win driver/umd/dxvk/ddi-experiment.h",
+   "does": "turns off driver defaults per process; the HKLM machine value stays",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_d3d11.dll"
+    ]
+   }
+  },
+  {
+   "name": "AMDGPU_WDDM_D3D11_SCANOUT",
+   "where": "bc250-win driver/umd/dxvk/scanout-primary.h (read_scanout_source)",
+   "does": "asks for the D3D11 scan-out of the primary per process (M15.14 operator switch); the release flavour takes the HKLM machine value ScanoutPrimary, as with the variable unset",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_d3d11.dll"
+    ]
+   }
+  },
+  {
+   "name": "AMDGPU_WDDM_DDI_TRACE",
+   "where": "bc250-win driver/umd/d3d12/ddi-trace.h, engine-ddi/context.cpp; mesa-wddm src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c (triplet line), radv_wddm2_cs.c",
+   "does": "the DDI trace: every DDI call, or with 2 its failures, to the debugger",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll",
+     "amdgpu_wddm_d3d12.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll (hosted line), vulkan/vulkan_radeon.dll and wow64/vulkan/vulkan_radeon.dll (system line, x64 and x86) do not hold AMDGPU_WDDM_DDI_TRACE in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "AMDGPU_WDDM_LOG_PDD",
+   "where": "mesa-wddm src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c (triplet and system lines)",
+   "does": "dumps the private driver data of every submission as hex on the amdgpu-wddm log stream",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll",
+     "vulkan_radeon.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll (hosted line) does not hold AMDGPU_WDDM_LOG_PDD in either flavour: its build line has no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "AMDGPU_WDDM_VKD3D_PSO_LOG",
+   "where": "vkd3d-proton libs/vkd3d/cache.c (vkd3d_driver_cache_init)",
+   "does": "writes a log of every pipeline creation to <pipeline cache>.pso-log.txt",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_vkd3d.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250DXVK_MEASURE_WORKER_THREADS",
+   "where": "dxvk src/ddi/ddi_engine.cpp (CreateDevice)",
+   "does": "measurement: hands Vulkan calls to DXVK's worker threads, against rule E2 of the engine ABI",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_dxvk.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_ENTRY_CFG",
+   "where": "bc250-win driver/umd/d3d12/engine-ddi/entry.cpp (load_knobs)",
+   "does": "reads a knob file of the entry-path measurement from that path",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_d3d12.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_ENTRY_LOG",
+   "where": "bc250-win driver/umd/d3d12/engine-ddi/entry.cpp (open_log)",
+   "does": "writes the rows of the entry-path measurement to that file (%p is the process id)",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_d3d12.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_ENTRY_PATH",
+   "where": "bc250-win driver/umd/d3d12/engine-ddi/entry.cpp (load_knobs)",
+   "does": "selects an arm of the entry-path experiment in place of the direct entry",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_d3d12.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_ENTRY_STATS",
+   "where": "bc250-win driver/umd/d3d12/engine-ddi/entry.cpp (load_knobs)",
+   "does": "statistics of the entry-path measurement",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_d3d12.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_ENTRY_PHASE_MS",
+   "where": "bc250-win driver/umd/d3d12/engine-ddi/entry.cpp (load_knobs)",
+   "does": "the phase length of the entry-path measurement",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_d3d12.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_ENTRY_PAD_US",
+   "where": "bc250-win driver/umd/d3d12/engine-ddi/entry.cpp (load_knobs)",
+   "does": "the padding of the entry-path measurement",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_d3d12.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_ENTRY_POLL_US",
+   "where": "bc250-win driver/umd/d3d12/engine-ddi/entry.cpp (load_knobs)",
+   "does": "the poll interval of the entry-path measurement",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_d3d12.dll"
+    ]
+   }
+  },
+  {
+   "name": "AMDGPU_WDDM_CONTROL_STATE",
+   "where": "bc250-win tools/win/amdgpu_wddm_control/src/RecoveryActions.cs, Benchmark.cs",
+   "does": "moves the DWM records and the benchmark directory of the application to that directory (a build gate)",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_control.exe"
+    ]
+   }
+  },
+  {
+   "name": "AMDGPU_WDDM_CONTROL_INSTALLER",
+   "where": "bc250-win tools/win/amdgpu_wddm_control/src/DriverCard.cs",
+   "does": "reads the installer files of the Driver card from that directory, without the Administrators or SYSTEM owner check",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_control.exe"
+    ]
+   }
+  },
+  {
+   "name": "AMDGPU_WDDM_CONTROL_NO_DLL",
+   "where": "bc250-win tools/win/amdgpu_wddm_control/src/Native.cs",
+   "does": "fault injection: every driver read answers as if bc250control.dll were missing",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_control.exe"
+    ]
+   }
+  },
+  {
+   "name": "AMDGPU_WDDM_CONTROL_STRINGS",
+   "where": "bc250-win tools/win/amdgpu_wddm_control/src/Strings.cs",
+   "does": "reads the string tables of the application from that directory in place of the embedded ones",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_control.exe"
+    ]
+   }
+  },
+  {
+   "name": "AMDGPU_WDDM_SETUP_STRINGS",
+   "where": "bc250-win tools/win/amdgpu_wddm_setup/src/Strings.cs",
+   "does": "reads the string tables of the setup window from that directory in place of the embedded ones",
+   "lab": {
+    "every": [
+     "setup.exe"
+    ]
+   }
+  },
+  {
+   "name": "BC250_MAKERESIDENT_LEGACY",
+   "where": "mesa-wddm src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c (triplet line)",
+   "does": "bisect: the MakeResident flags of before the overflow policy",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll (hosted line), vulkan/vulkan_radeon.dll and wow64/vulkan/vulkan_radeon.dll (system line, x64 and x86) do not hold BC250_MAKERESIDENT_LEGACY in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_DEFERRED_DESTROY",
+   "where": "mesa-wddm src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c (triplet line)",
+   "does": "bisect: 0 destroys buffers at once instead of after the GPU is done with them; the release flavour keeps the host policy, else on",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll (hosted line), vulkan/vulkan_radeon.dll and wow64/vulkan/vulkan_radeon.dll (system line, x64 and x86) do not hold BC250_DEFERRED_DESTROY in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_DEFERRED_WITNESS",
+   "where": "mesa-wddm src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c (triplet line)",
+   "does": "diagnostic: the witness lines of deferred destruction",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll (hosted line), vulkan/vulkan_radeon.dll and wow64/vulkan/vulkan_radeon.dll (system line, x64 and x86) do not hold BC250_DEFERRED_WITNESS in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_DEFERRED_CAP_MB",
+   "where": "mesa-wddm src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c (triplet line)",
+   "does": "tuning: the cap of memory held for deferred destruction (512 MB)",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll (hosted line), vulkan/vulkan_radeon.dll and wow64/vulkan/vulkan_radeon.dll (system line, x64 and x86) do not hold BC250_DEFERRED_CAP_MB in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_DEFERRED_LOG",
+   "where": "mesa-wddm src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c (triplet line)",
+   "does": "writes the log of deferred destruction to that file",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll (hosted line), vulkan/vulkan_radeon.dll and wow64/vulkan/vulkan_radeon.dll (system line, x64 and x86) do not hold BC250_DEFERRED_LOG in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_DEFERRED_SUMMARY_S",
+   "where": "mesa-wddm src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c (triplet line)",
+   "does": "diagnostic: the period of the deferred destruction summary (30 s)",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll (hosted line), vulkan/vulkan_radeon.dll and wow64/vulkan/vulkan_radeon.dll (system line, x64 and x86) do not hold BC250_DEFERRED_SUMMARY_S in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_SUBMIT_COALESCE",
+   "where": "mesa-wddm src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c (triplet line)",
+   "does": "bisect: 0 stops merging signals and waits into one submission; the release flavour keeps the host policy, else 1",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll (hosted line), vulkan/vulkan_radeon.dll and wow64/vulkan/vulkan_radeon.dll (system line, x64 and x86) do not hold BC250_SUBMIT_COALESCE in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_GATHER_SLOTS",
+   "where": "mesa-wddm src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c (triplet line)",
+   "does": "tuning: the gather slot count (16); the release flavour keeps the host policy, else 16",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll (hosted line), vulkan/vulkan_radeon.dll and wow64/vulkan/vulkan_radeon.dll (system line, x64 and x86) do not hold BC250_GATHER_SLOTS in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_PROGRESS_FENCE",
+   "where": "mesa-wddm src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c (triplet line)",
+   "does": "bisect: the progress fence route (gpu); the release flavour keeps the host policy, else gpu",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll (hosted line), vulkan/vulkan_radeon.dll and wow64/vulkan/vulkan_radeon.dll (system line, x64 and x86) do not hold BC250_PROGRESS_FENCE in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_IB_NOCOPY",
+   "where": "mesa-wddm src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c (triplet line)",
+   "does": "bisect: copies every IB instead of calling it from the gather slot",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll (hosted line), vulkan/vulkan_radeon.dll and wow64/vulkan/vulkan_radeon.dll (system line, x64 and x86) do not hold BC250_IB_NOCOPY in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_IB_DWORDS",
+   "where": "mesa-wddm src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c (triplet, system and hosted lines)",
+   "does": "diagnostic: cuts the copied IB short",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_radv.dll",
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_TRACE_SUBMITS",
+   "where": "mesa-wddm src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c (triplet, system and hosted lines)",
+   "does": "diagnostic: writes a line for every submission",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_radv.dll",
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_BVH_BUILD",
+   "where": "mesa-wddm src/vulkan/runtime/vk_acceleration_structure.c (system line)",
+   "does": "BD-102 diagnostic: another acceleration structure builder",
+   "lab": {
+    "every": [
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_WSI_IFLIP",
+   "where": "mesa-wddm src/vulkan/wsi/wsi_common_win32.cpp (system line)",
+   "does": "bisect: 0 goes back to the b27 swap chain instead of the independent flip chain",
+   "lab": {
+    "every": [
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_WSI_IFLIP_SCALING",
+   "where": "mesa-wddm src/vulkan/wsi/wsi_common_win32.cpp (system line)",
+   "does": "bisect: turns the scaling clause of an independent flip chain off",
+   "lab": {
+    "every": [
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_WSI_IFLIP_TEARING",
+   "where": "mesa-wddm src/vulkan/wsi/wsi_common_win32.cpp (system line)",
+   "does": "bisect: turns the tearing clause of an independent flip chain off",
+   "lab": {
+    "every": [
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_WSI_IFLIP_BUFFERS",
+   "where": "mesa-wddm src/vulkan/wsi/wsi_common_win32.cpp (system line)",
+   "does": "bisect: the buffer count of an independent flip chain",
+   "lab": {
+    "every": [
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_WSI_IFLIP_WINDOWHOOK",
+   "where": "mesa-wddm src/vulkan/wsi/wsi_common_win32.cpp (system line)",
+   "does": "bisect: turns the window hook of an independent flip chain off",
+   "lab": {
+    "every": [
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_WSI_PRESENT_LOG",
+   "where": "mesa-wddm src/vulkan/wsi/wsi_common_win32.cpp (system line)",
+   "does": "writes a present log (CSV) to that file",
+   "lab": {
+    "every": [
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_HOSTED_ICD",
+   "where": "mesa-wddm src/gallium/frontends/d3d10umd/Bc250Config.cpp, Device.cpp, targets/d3d10umd/d3d10_gdi.c (zink UMD)",
+   "does": "loads the Vulkan ICD of the hosted UMD from that path in place of the HKLM IcdPath or the ICD next to the DLL",
+   "lab": {
+    "every": [
+     "bc250d3d_zink.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_HOSTED_RENDER",
+   "where": "mesa-wddm src/gallium/frontends/d3d10umd/Bc250Config.cpp (zink UMD)",
+   "does": "diagnostic: 0 takes the old loader-based screen; the release flavour always takes the hosted screen",
+   "lab": {
+    "every": [
+     "bc250d3d_zink.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_D3D_RUNTIME_PROBE",
+   "where": "mesa-wddm src/gallium/frontends/d3d10umd/Bc250Config.cpp (zink UMD)",
+   "does": "diagnostic: 0 turns the runtime probe off",
+   "lab": {
+    "every": [
+     "bc250d3d_zink.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_D3D_ZINK_LUID",
+   "where": "mesa-wddm src/gallium/frontends/d3d10umd/Bc250Config.cpp, targets/d3d10umd/d3d10_gdi.c (zink UMD)",
+   "does": "a trial override and cross-check of the adapter LUID; the release flavour takes the KMD identity trailer",
+   "lab": {
+    "every": [
+     "bc250d3d_zink.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_D3D_IMPORT_PROBE_HANDLE",
+   "where": "mesa-wddm src/gallium/frontends/d3d10umd/Resource.cpp (zink UMD)",
+   "does": "diagnostic: imports a foreign NT handle (E34 probe)",
+   "lab": {
+    "every": [
+     "bc250d3d_zink.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_D3D_RUNTIME_INVENTORY",
+   "where": "mesa-wddm src/gallium/frontends/d3d10umd/DxgiFns.cpp, Resource.cpp (zink UMD)",
+   "does": "diagnostic: shares every resource and logs it",
+   "lab": {
+    "every": [
+     "bc250d3d_zink.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_HOST_AUDIT",
+   "where": "mesa-wddm src/gallium/drivers/zink/zink_context.c, zink_resource.c, src/gallium/frontends/d3d10umd/Device.cpp, DxgiFns.cpp, Resource.cpp (zink UMD)",
+   "does": "diagnostic: audit lines of the hosted UMD",
+   "lab": {
+    "every": [
+     "bc250d3d_zink.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_AUDIT_MARKER",
+   "where": "mesa-wddm src/gallium/drivers/zink/zink_resource.c (zink UMD)",
+   "does": "diagnostic: audit marker lines",
+   "lab": {
+    "every": [
+     "bc250d3d_zink.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_UPLOAD_AUDIT",
+   "where": "mesa-wddm src/gallium/auxiliary/util/u_upload_mgr.c (zink UMD)",
+   "does": "diagnostic: audit lines of the upload manager",
+   "lab": {
+    "every": [
+     "bc250d3d_zink.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_HOST_TEST_CREATE",
+   "where": "mesa-wddm src/gallium/frontends/d3d10umd/Device.cpp (zink UMD)",
+   "does": "fault injection: fails device creation",
+   "lab": {
+    "every": [
+     "bc250d3d_zink.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_HOST_TEST_LOSS",
+   "where": "mesa-wddm src/gallium/frontends/d3d10umd/Device.cpp (zink UMD)",
+   "does": "fault injection: reports a lost device",
+   "lab": {
+    "every": [
+     "bc250d3d_zink.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_HOST_TRACE_DDI",
+   "where": "mesa-wddm src/gallium/frontends/d3d10umd/Device.cpp (zink UMD)",
+   "does": "diagnostic: a line for every DDI call of the hosted UMD",
+   "lab": {
+    "every": [
+     "bc250d3d_zink.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_HOST_TRACE_SAMPLER",
+   "where": "mesa-wddm src/gallium/drivers/zink/nir_to_spirv/nir_to_spirv.c, zink_context.c, zink_descriptors.c (zink UMD)",
+   "does": "diagnostic: sampler trace lines on stderr",
+   "lab": {
+    "every": [
+     "bc250d3d_zink.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_UMD_DIAG",
+   "where": "mesa-wddm src/gallium/frontends/d3d10umd/Bc250Config.cpp (zink UMD)",
+   "does": "diagnostic: turns the hosted UMD diagnostics on per process; the release flavour takes the HKLM value Diagnostics",
+   "lab": {
+    "every": [
+     "bc250d3d_zink.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_UMD_DIAG_DIR",
+   "where": "mesa-wddm src/gallium/frontends/d3d10umd/Bc250Config.cpp (zink UMD)",
+   "does": "writes the hosted UMD diagnostics (stderr) to that directory; the release flavour takes the HKLM value DiagnosticsDirectory, else <DLL directory>\\logs",
+   "lab": {
+    "every": [
+     "bc250d3d_zink.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_UMD_VERBOSE",
+   "where": "mesa-wddm src/gallium/frontends/d3d10umd/Bc250Config.cpp (zink UMD), Debug.cpp (CPU UMD)",
+   "does": "diagnostic: forces the diagnostics on and traces every entry",
+   "lab": {
+    "every": [
+     "bc250d3d.dll",
+     "bc250d3d_zink.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_HIP_BATCH",
+   "where": "bc250-win compute/hip/runtime/hip_device.cpp (apply_batch_policy)",
+   "does": "measurement arm: 0 turns dispatch batching off",
+   "lab": {
+    "every": [
+     "amdhip64.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_HIP_BATCH_MAX",
+   "where": "bc250-win compute/hip/runtime/hip_device.cpp (apply_batch_policy)",
+   "does": "measurement: the dispatches of one batch",
+   "lab": {
+    "every": [
+     "amdhip64.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_HIP_BATCH_HOLD_US",
+   "where": "bc250-win compute/hip/runtime/hip_device.cpp (apply_batch_policy)",
+   "does": "measurement: how long a batch is held",
+   "lab": {
+    "every": [
+     "amdhip64.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_HIP_BARRIER",
+   "where": "bc250-win compute/hip/runtime/hip_device.cpp (apply_batch_policy)",
+   "does": "measurement arm: full takes the full barrier in place of the light one",
+   "lab": {
+    "every": [
+     "amdhip64.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_HIP_PM4_STATE_CACHE",
+   "where": "bc250-win compute/hip/runtime/hip_device.cpp (apply_batch_policy)",
+   "does": "measurement arm: 0 turns the compute state cache off",
+   "lab": {
+    "every": [
+     "amdhip64.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_HIP_GPU_COPY_MIN",
+   "where": "bc250-win compute/hip/runtime/hip_device.cpp",
+   "does": "measurement: the smallest copy that goes to the GPU (4096 bytes)",
+   "lab": {
+    "every": [
+     "amdhip64.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_HIP_GPU_FILL",
+   "where": "bc250-win compute/hip/runtime/hip_device.cpp",
+   "does": "measurement arm: 1 fills a mapped allocation on the GPU",
+   "lab": {
+    "every": [
+     "amdhip64.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_HIP_WAIT_SLICE_MS",
+   "where": "bc250-win compute/hip/runtime/hip_device.cpp (read_ms)",
+   "does": "a lab wait bound: the slice of one wait",
+   "lab": {
+    "every": [
+     "amdhip64.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_HIP_WAIT_TOTAL_MS",
+   "where": "bc250-win compute/hip/runtime/hip_device.cpp (read_ms); compute/hip/samples/vadd.hip",
+   "does": "a lab wait bound: every wait of the runtime in all; vadd --wait-total sets it",
+   "lab": {
+    "every": [
+     "amdhip64.dll",
+     "vadd.exe"
+    ]
+   }
+  },
+  {
+   "name": "BC250_HIP_LOG",
+   "where": "bc250-win compute/hip/runtime/hip_log.cpp",
+   "does": "writes the runtime log to stderr or to that file",
+   "lab": {
+    "every": [
+     "amdhip64.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_HIP_LOG_LEVEL",
+   "where": "bc250-win compute/hip/runtime/hip_log.cpp",
+   "does": "the level of the runtime log",
+   "lab": {
+    "every": [
+     "amdhip64.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_MFT_DEBLOCK",
+   "where": "bc250-win driver/umd/mft-h264/src/gpu_pipeline.cpp (DeblockModeFromEnvironment)",
+   "does": "measurement: rows takes the single-dispatch deblocking schedule, which can filter in the wrong order",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_mft_h264.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_MFT_SERIAL_DEBLOCK",
+   "where": "bc250-win driver/umd/mft-h264/src/gpu_pipeline.cpp (DeblockModeFromEnvironment)",
+   "does": "diagnostic: deblocks one macroblock at a time",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_mft_h264.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_MFT_DEPTH",
+   "where": "bc250-win driver/umd/mft-h264/src/mft_h264.cpp (WantedPipelineDepth)",
+   "does": "a lab override of the pipeline depth",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_mft_h264.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_MFT_STAGE_TIMING",
+   "where": "bc250-win driver/umd/mft-h264/src/gpu_pipeline.cpp (Initialize)",
+   "does": "diagnostic: GPU timestamps per stage or per dispatch",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_mft_h264.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_MFT_TRACE",
+   "where": "bc250-win driver/umd/mft-h264/src/gpu_pipeline.cpp (MftTraceOn)",
+   "does": "diagnostic: traces every transform call to the debugger",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_mft_h264.dll"
+    ]
+   }
+  },
+  {
+   "name": "AMDGPU_WDDM_VKD3D_COMPILE_THREADS",
+   "where": "vkd3d-proton libs/vkd3d/cache.c (pipeline compile limiter)",
+   "does": "the slots of the pipeline compile limiter (2; 0 = no bound) (lead decision 2)",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_vkd3d.dll"
+    ]
+   }
+  },
+  {
+   "name": "AMDGPU_WDDM_VKD3D_COMPILE_THERMAL",
+   "where": "vkd3d-proton libs/vkd3d/cache.c (pipeline compile limiter)",
+   "does": "turns the thermal band of the pipeline compile limiter off (0) (lead decision 2)",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_vkd3d.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_HIP_GPU_COPY",
+   "where": "bc250-win compute/hip/runtime/hip_device.cpp",
+   "does": "0 puts the HIP copies back on the processor; the control arm of the BD-123 measurements. The release runtime always takes the GPU copy route (BD-123, fixed in tester.28) (lead decision 3)",
+   "lab": {
+    "every": [
+     "amdhip64.dll"
+    ]
+   }
+  },
+  {
+   "name": "VKD3D_LOG_FILE",
+   "where": "vkd3d-proton libs/vkd3d-common/debug.c",
+   "does": "writes the engine log to that file (lead decision 4)",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_vkd3d.dll"
+    ]
+   }
+  },
+  {
+   "name": "VKD3D_LOG_BUFFERED",
+   "where": "vkd3d-proton libs/vkd3d-common/debug.c",
+   "does": "buffers the VKD3D_LOG_FILE output (lead decision 4)",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_vkd3d.dll"
+    ]
+   }
+  },
+  {
+   "name": "VKD3D_QUEUE_PROFILE",
+   "where": "vkd3d-proton libs/vkd3d/queue_timeline.c",
+   "does": "writes a queue timeline trace to that file (lead decision 4)",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_vkd3d.dll"
+    ]
+   }
+  },
+  {
+   "name": "VKD3D_QUEUE_PROFILE_ABSOLUTE",
+   "where": "vkd3d-proton libs/vkd3d/queue_timeline.c",
+   "does": "absolute timestamps in the VKD3D_QUEUE_PROFILE trace (lead decision 4)",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_vkd3d.dll"
+    ]
+   }
+  },
+  {
+   "name": "DXVK_LOG_PATH",
+   "where": "dxvk src/util/log/log.cpp (Logger::getFileName), src/dxvk/dxvk_hang.cpp (dumpDeviceFaultInfo)",
+   "does": "writes the engine log into that directory (lead decision 4)",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_dxvk.dll"
+    ]
+   }
+  },
+  {
+   "name": "DXVK_LOG_LEVEL",
+   "where": "dxvk src/util/log/log.cpp (Logger::getMinLogLevel)",
+   "does": "the level of the engine log (lead decision 4)",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_dxvk.dll"
+    ]
+   }
+  },
+  {
+   "name": "RADV_FORCE_VRS",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (RADV ICDs)",
+   "does": "forces a variable shading rate on every draw; upstream calls it a test switch, and no release consumer sets it",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_radv.dll",
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
+   "name": "RADV_TEX_ANISO",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (RADV ICDs)",
+   "does": "forces an anisotropy filter on every sampler; the Anisotropy setting of the control application reaches the engines through d3d11.samplerAnisotropy and VKD3D_SAMPLER_ANISOTROPY, and nothing sets this variable",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_radv.dll",
+     "vulkan_radeon.dll"
+    ]
+   }
+  }
+ ],
+ "allowed": [
+  {
+   "name": "AMDGPU_WDDM_LOG",
+   "where": "the D3D12 and D3D11 shells (driver/umd/d3d12/stdio-log.h), mesa-wddm src/util/u_amdgpu_wddm_stdio.c (triplet and system lines), vkd3d-proton libs/vkd3d-common/debug.c",
+   "reason": "Lead decision 1 (BD-167): release honours LOG only as the carrier of the GUI 'Record game logs' switch: a file: path inside %ProgramData%\\amdgpu-wddm\\logs\\games, with the GAMELOG marker naming this process. stderr and every other path are lab only. The file is opened only if it exists, as a plain disk file with one link, and is written only until the marker's instant and up to 64 MiB. The release_rule checks the built form of this: every release file that reads the name also holds the marker name and the folder, and has no \"stderr\" string",
+   "release_rule": {
+    "requires": [
+     "AMDGPU_WDDM_GAMELOG",
+     "amdgpu-wddm\\logs\\games"
+    ],
+    "refuses": [
+     "stderr"
+    ],
+    "why": "lead decision 1: a release file reads AMDGPU_WDDM_LOG only beside the game-log marker and only as a file in %ProgramData%\\amdgpu-wddm\\logs\\games; the stderr target is lab only"
+   }
+  },
+  {
+   "name": "DXVK_HUD",
+   "where": "dxvk src/dxvk/hud",
+   "reason": "the user-visible overlay; it draws statistics and loads no code"
+  },
+  {
+   "name": "DXVK_CONFIG",
+   "where": "dxvk src/util/config/config.cpp",
+   "reason": "an inline option string parsed against the option table; no option names a file of code. driver/umd/dxvk/ddi-adapter.cpp sets it in-process (sampler anisotropy, HUD)"
+  },
+  {
+   "name": "VKD3D_CONFIG",
+   "where": "vkd3d-proton libs/vkd3d/device.c (vkd3d_config_flags_init_once)",
+   "reason": "flags parsed against vkd3d_config_options with vkd3d_parse_debug_options; no flag names a file"
+  },
+  {
+   "name": "VKD3D_SHADER_DEBUG",
+   "where": "vkd3d-proton libs/vkd3d-common/debug.c",
+   "reason": "the log level of the shader channel (env_for_channel): it chooses how much the engine prints, nothing else"
+  },
+  {
+   "name": "VKD3D_DEBUG",
+   "where": "vkd3d-proton libs/vkd3d-common/debug.c (env_for_channel)",
+   "reason": "the log level of the API channel, one of a fixed list of level names: it chooses how much the engine prints (into the switch's file beside a marker of this process, else stderr or the debugger), nothing else. The two TRACE_ON branches (libs/vkd3d/command.c) print, or set has_replaced_shaders, which nothing reads; VKD3D_LOG_FILE and VKD3D_LOG_BUFFERED are lab only"
+  },
+  {
+   "name": "DXIL_SPIRV_CONFIG",
+   "where": "vkd3d-proton subprojects/dxil-spirv/dxil_converter.cpp, libs/vkd3d/device.c",
+   "reason": "three fixed keywords (wmma_rdna3_workaround, wmma_conv_hack, debug_simulate_min16float_min_spec); no path"
+  },
+  {
+   "name": "VKD3D_SAMPLER_ANISOTROPY",
+   "where": "vkd3d-proton engine; driver/umd/d3d12/adapter.cpp sets it in-process",
+   "reason": "a number that the driver's own application setting passes to the engine"
+  },
+  {
+   "name": "MESA_GLSL_CACHE_DISABLE",
+   "where": "mesa-wddm src/util/disk_cache_os.c",
+   "reason": "turns the shader disk cache off; it reads nothing"
+  },
+  {
+   "name": "MESA_DEBUG",
+   "where": "mesa-wddm src/util/log.c, src/util/xmlconfig.c, src/mesa/main/errors.c and debug.c (OpenGL ICD line), src/util/u_amdgpu_wddm_stdio.c (triplet line)",
+   "reason": "chooses whether messages are printed (\"silent\", or any value in a build with NDEBUG). The flags of set_debug_flags exist only without NDEBUG, and no shipped DLL that links mesa/main is built that way; api-tiling-linear, read outside that guard, changes texture allocation and is lab only (debug.c, OpenGL ICD line)"
+  },
+  {
+   "name": "MESA_LOG",
+   "where": "mesa-wddm src/util/log.c; src/util/u_amdgpu_wddm_stdio.c (triplet line)",
+   "reason": "chooses the loggers: none, stderr or the debugger on Windows, and an Android-only wait. No value names a file: MESA_LOG_FILE is read only outside Windows and only in the lab flavour"
+  },
+  {
+   "name": "MESA_SHADER_CACHE_SHOW_STATS",
+   "where": "mesa-wddm src/util/disk_cache.c; src/util/u_amdgpu_wddm_stdio.c (triplet line)",
+   "reason": "counts the hits and misses of the shader disk cache and prints one line when the cache is destroyed"
+  },
+  {
+   "name": "LP_NUM_THREADS",
+   "where": "mesa-wddm src/gallium/drivers/llvmpipe/lp_screen.c",
+   "reason": "the llvmpipe thread count of the CPU UMD"
+  },
+  {
+   "name": "AMDGPU_WDDM_FRAME_RATE_LIMIT",
+   "where": "bc250-win driver/umd/app-settings/app-settings-core.h (D3D11 and D3D12 shells, router)",
+   "reason": "user feature: the per-process override of the registry value FrameRateLimit, which the Games page of the control application writes (GraphicsSettings.cs)"
+  },
+  {
+   "name": "AMDGPU_WDDM_VSYNC",
+   "where": "bc250-win driver/umd/app-settings/app-settings-core.h (D3D11 and D3D12 shells, router)",
+   "reason": "user feature: the per-process override of the registry value VSync, which the Games page of the control application writes (GraphicsSettings.cs)"
+  },
+  {
+   "name": "AMDGPU_WDDM_ANISOTROPY",
+   "where": "bc250-win driver/umd/app-settings/app-settings-core.h (D3D11 and D3D12 shells, router)",
+   "reason": "user feature: the per-process override of the registry value Anisotropy, which the Games page of the control application writes (GraphicsSettings.cs)"
+  },
+  {
+   "name": "AMDGPU_WDDM_MAX_FRAME_LATENCY",
+   "where": "bc250-win driver/umd/app-settings/app-settings-core.h (D3D11 and D3D12 shells, router)",
+   "reason": "user feature: the per-process override of the registry value MaxFrameLatency, which the Games page of the control application writes (GraphicsSettings.cs)"
+  },
+  {
+   "name": "AMDGPU_WDDM_PERFORMANCE_OVERLAY",
+   "where": "bc250-win driver/umd/app-settings/app-settings-core.h (D3D11 and D3D12 shells, router)",
+   "reason": "user feature: the per-process override of the registry value PerformanceOverlay, which the Games page of the control application writes (GraphicsSettings.cs)"
+  },
+  {
+   "name": "AMDGPU_WDDM_RENDER_ON_CPU",
+   "where": "bc250-win driver/umd/app-settings/app-settings-core.h (D3D11 and D3D12 shells, router)",
+   "reason": "user feature: the per-process override of the registry value RenderOnCpu, which the Games page of the control application writes (GraphicsSettings.cs)"
+  },
+  {
+   "name": "AMDGPU_WDDM_VK_MEM_OVERFLOW",
+   "where": "mesa-wddm src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c (triplet line)",
+   "reason": "user feature: the per-process override of the registry value MemoryOverflow, which the Games page of the control application writes (GraphicsSettings.cs)"
+  },
+  {
+   "name": "AMDGPU_WDDM_VK_WSI",
+   "where": "mesa-wddm src/amd/vulkan/winsys/wddm2/radv_wddm2_wsi.c (system line)",
+   "reason": "user feature: the per-program override of the registry value WsiRoute, which the Games page of the control application writes (GraphicsSettings.cs); the tester.28 notes document AMDGPU_WDDM_VK_WSI=dxgi"
+  },
+  {
+   "name": "AMDGPU_WDDM_GAMELOG",
+   "where": "mesa-wddm src/util/u_amdgpu_wddm_stdio.c (triplet and system lines); the D3D12 and D3D11 shells (stdio-log.h of the game log patch)",
+   "reason": "Lead decision 1 (BD-167): the marker <pid>;<16 hex digits> with which the first module of a process that records a game log (the GUI 'Record game logs' switch, registry value GameLogUntil) tells the modules loaded later to write into the same file; a module honours AMDGPU_WDDM_LOG only when the marker names its own process. It names no path"
+  }
+ ],
+ "out_of_scope": [
+  {
+   "name": "VK_INSTANCE_LAYERS",
+   "where": "the Vulkan loader (system component); dxvk and vkd3d-proton name it",
+   "reason": "system loader behaviour for every Vulkan application, not this driver's lookup; out of BD-167 scope. Its hits are recorded, never failed"
+  },
+  {
+   "name": "AMDGPU_WDDM_DXVK",
+   "where": "dxvk src/ddi/amdgpu_wddm_dxvk.def",
+   "reason": "the LIBRARY name of the engine DLL's export directory; not a lookup"
+  },
+  {
+   "name": "BC250_DXVK_DEVICE_CREATE_INFO",
+   "where": "dxvk src/ddi/bc250_dxvk_engine.h",
+   "reason": "a structure name of the engine ABI in the engine's symbols; not a lookup"
+  },
+  {
+   "name": "BC250_R",
+   "where": "dxvk src/ddi/ddi_shader.cpp; bc250-win driver/umd/d3d12/engine-ddi/shader-container/shader-container.cpp",
+   "reason": "the semantic name of the shader containers that the shells build; not a lookup"
+  },
+  {
+   "name": "BC250_S",
+   "where": "bc250-win driver/umd/d3d12/engine-ddi/shader-container/shader-container.cpp",
+   "reason": "a semantic name of the shader containers that the D3D12 shell builds; not a lookup"
+  },
+  {
+   "name": "BC250_FBDUMP_MAX_ROWS",
+   "where": "bc250-win driver/kmd/bc250kmd_escape.h (the refusal text of FbdumpEscape)",
+   "reason": "a constant named in a KMD message; not a lookup. RUN_FBDUMP itself is checked by the kmd section"
+  },
+  {
+   "name": "BC250_ESCAPE_GET_INFO",
+   "where": "bc250-win driver/kmd/bc250kmd_escape.h; tools/win/bc250kmd_cli/bc250kmd_cli.c",
+   "reason": "an escape code named in a message of the CLI; not a lookup"
+  },
+  {
+   "name": "BC250_ESCAPE_RUN_CPU",
+   "where": "bc250-win driver/kmd/bc250kmd_escape.h; tools/win/bc250kmd_cli/bc250kmd_cli.c",
+   "reason": "an escape code named in a message of the CLI; not a lookup"
+  },
+  {
+   "name": "BC250_ESCAPE_RUN_DPM",
+   "where": "bc250-win driver/kmd/bc250kmd_escape.h; tools/win/bc250kmd_cli/bc250kmd_cli.c",
+   "reason": "an escape code named in a message of the CLI; not a lookup"
+  },
+  {
+   "name": "BC250_ESCAPE_RUN_DPM_CURVE",
+   "where": "bc250-win driver/kmd/bc250kmd_escape.h; tools/win/bc250kmd_cli/bc250kmd_cli.c",
+   "reason": "an escape code named in a message of the CLI; not a lookup"
+  },
+  {
+   "name": "BC250_ESCAPE_RUN_DPM_TUNE",
+   "where": "bc250-win driver/kmd/bc250kmd_escape.h; tools/win/bc250kmd_cli/bc250kmd_cli.c",
+   "reason": "an escape code named in a message of the CLI; not a lookup"
+  },
+  {
+   "name": "BC250_ESCAPE_RUN_INTEROP",
+   "where": "bc250-win driver/kmd/bc250kmd_escape.h; tools/win/bc250kmd_cli/bc250kmd_cli.c",
+   "reason": "an escape code named in a message of the CLI; not a lookup"
+  },
+  {
+   "name": "AMDGPU_WDDM_CONTROL",
+   "where": "bc250-win tools/win/amdgpu_wddm_control (the .NET assembly name)",
+   "reason": "the assembly name of the control application in lower case, amdgpu_wddm_control, in its metadata and its application manifest; not a lookup. It is declared because Windows reads environment names in any letter case"
+  },
+  {
+   "name": "AMDGPU_WDDM_SETUP",
+   "where": "bc250-win tools/win/amdgpu_wddm_setup (the .NET assembly name)",
+   "reason": "the assembly name of the setup window in lower case, amdgpu_wddm_setup, in its metadata and its application manifest; not a lookup. It is declared because Windows reads environment names in any letter case"
+  }
+ ],
+ "package": {
+  "about": "The payload path of every PE that a whole package of either flavour holds: the PE rows of tools/release/release-sources.json without \"payload/\", and setup.exe in the top folder. A DriverStore member has the payload path of its input slot. flavour_gate.py --manifest requires each slot exactly once and no other PE; test_flavour_gate.py checks this list against release-sources.json.",
+  "slots": [
+   "control/amdgpu_wddm_control.exe",
+   "control/bc250control.dll",
+   "d3d11/amdgpu_wddm_d3d11.dll",
+   "d3d11/amdgpu_wddm_dxvk.dll",
+   "d3d11/amdgpu_wddm_radv.dll",
+   "d3d12/amdgpu_wddm_d3d12.dll",
+   "d3d12/amdgpu_wddm_radv.dll",
+   "d3d12/amdgpu_wddm_vkd3d.dll",
+   "desktop/amdgpu_wddm_radv.dll",
+   "desktop/bc250d3d.dll",
+   "desktop/bc250d3d_router.dll",
+   "desktop/bc250d3d_zink.dll",
+   "kmd/bc250kmd.sys",
+   "mft/amdgpu_wddm_mft_h264.dll",
+   "opengl/amdgpu_wddm_gl.dll",
+   "redist/vc_redist.x64.exe",
+   "setup.exe",
+   "tools/amdgpu-state-installer.exe",
+   "tools/amdgpu_wddm_d3d12caps.exe",
+   "tools/bc250control.dll",
+   "tools/bc250kmd_cli.exe",
+   "tools/d3d11bench.exe",
+   "tools/hip/amdhip64.dll",
+   "tools/hip/bc250hipblas.dll",
+   "tools/hip/vadd.exe",
+   "tools/vulkaninfo.exe",
+   "vulkan/vulkan_radeon.dll",
+   "wow64/d3d11/amdgpu_wddm_d3d11.dll",
+   "wow64/d3d11/amdgpu_wddm_dxvk.dll",
+   "wow64/d3d11/amdgpu_wddm_radv.dll",
+   "wow64/d3d12/amdgpu_wddm_d3d12.dll",
+   "wow64/d3d12/amdgpu_wddm_radv.dll",
+   "wow64/d3d12/amdgpu_wddm_vkd3d.dll",
+   "wow64/desktop/bc250d3d.dll",
+   "wow64/desktop/bc250d3d_router.dll",
+   "wow64/vulkan/vulkan_radeon.dll"
+  ]
+ }
+}

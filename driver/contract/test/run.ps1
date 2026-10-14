@@ -183,7 +183,9 @@ Write-Host "bc250_caps_test.exe exit code $code"
 # Everything above checks the blob against itself and against Mesa. This checks it against unit A:
 # compare_radv_info.py diffs the radeon_info this test derives against the one RADV derived on the
 # real GPU (RADV_DEBUG=info). It is the only step here that can catch a value that is internally
-# consistent and still wrong, which has happened.
+# consistent and still wrong, which has happened. The reference is a Linux RADV capture (E14); a capture
+# through our Windows ICD needs a lab-flavour build, because a release ICD has no lookup of RADV_DEBUG
+# (BD-167).
 #
 # Its result is reported but does NOT change this script's exit code. It passes today; keeping it
 # advisory means a Mesa bump in ref\mesa, which changes which fields exist, cannot break the build

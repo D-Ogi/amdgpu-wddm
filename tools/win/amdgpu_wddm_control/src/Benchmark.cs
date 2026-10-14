@@ -615,14 +615,19 @@ namespace AmdgpuWddmControl
     // Our own directories: the game's one writable directory and the history file. The game folder is only read.
     public static class BenchPaths
     {
+        // AMDGPU_WDDM_CONTROL_STATE moves the directory for the build's gates, in a lab build only (BD-167).
         static string Root
         {
             get
             {
+#if AMDGPU_WDDM_LAB_FLAVOUR
                 var over = Environment.GetEnvironmentVariable("AMDGPU_WDDM_CONTROL_STATE");
                 var local = string.IsNullOrEmpty(over)
                     ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "amdgpu-wddm")
                     : over;
+#else
+                var local = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "amdgpu-wddm");
+#endif
                 return Path.Combine(local, BenchHistory.FolderName);
             }
         }

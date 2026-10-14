@@ -18,7 +18,9 @@
 // at its first call, from BC250_HIP_WAIT_TOTAL_MS, so the switch sets that variable before the
 // first HIP call. A lab trial must stay inside three minutes, and the default of the library is
 // 120 seconds for one wait (design decision 10): a dispatch that never retires would hold the
-// lab far longer than the trial allows.
+// lab far longer than the trial allows. BD-167: the runtime reads that variable in a lab build only, so the switch
+// sets it in a lab build of this sample only (-DAMDGPU_WDDM_LAB_FLAVOUR=1); a release build takes the switch and
+// says that the runtime's own bound stands.
 //
 // --scale-order <after|before|omit> is the negative control of the event between the two
 // streams. The second kernel multiplies C by VADD_SCALE_FACTOR, which is not 1, so the expected
@@ -77,7 +79,9 @@ static int set_wait_total(const char* ms) {
     if (ms == NULL || ms[0] == '\0') {
         return 0;
     }
-#if defined(_WIN32)
+#if !defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    return 1;
+#elif defined(_WIN32)
     return _putenv_s("BC250_HIP_WAIT_TOTAL_MS", ms) == 0;
 #else
     return setenv("BC250_HIP_WAIT_TOTAL_MS", ms, 1) == 0;
@@ -225,7 +229,11 @@ int main(int argc, char** argv) {
                 printf("vadd: cannot set the wait bound to '%s'\n", argv[i]);
                 return 2;
             }
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
             printf("vadd: every wait of the runtime is bounded to %s ms in all\n", argv[i]);
+#else
+            printf("vadd: --wait-total %s has no effect: the release runtime keeps its own wait bound\n", argv[i]);
+#endif
         } else {
             printf("vadd: unknown argument '%s'\n", argv[i]);
             printf("vadd: usage: vadd.exe [--expect-compute] [--wait-total <ms>]"

@@ -487,15 +487,23 @@ int wmain(int argc, wchar_t** argv) {
 
     // The engine keeps its disk shader cache in %LOCALAPPDATA%\amdgpu-wddm\vkd3d. The harness points LOCALAPPDATA
     // at localappdata beside itself, before the engine's first device reads it, so no run writes to the profile;
-    // without that directory the cache is off (VKD3D_SHADER_CACHE_PATH=0).
+    // without that directory the cache is off (VKD3D_CONFIG pipeline_library_app_cache). BD-167: not
+    // VKD3D_SHADER_CACHE_PATH=0, which the release engine does not read; vkd3d-proton ORs the VKD3D_CONFIG flag into
+    // the embedder's defaults in both flavours, and flags the caller already set stay.
     wchar_t full[MAX_PATH];
     const DWORD self = GetModuleFileNameW(nullptr, full, MAX_PATH);
     wchar_t* slash = self && self < MAX_PATH ? std::wcsrchr(full, L'\\') : nullptr;
     if (slash && wcscpy_s(slash + 1, MAX_PATH - (slash + 1 - full), L"localappdata") == 0 &&
-        (CreateDirectoryW(full, nullptr) || GetLastError() == ERROR_ALREADY_EXISTS))
+        (CreateDirectoryW(full, nullptr) || GetLastError() == ERROR_ALREADY_EXISTS)) {
         SetEnvironmentVariableW(L"LOCALAPPDATA", full);
-    else
-        SetEnvironmentVariableW(L"VKD3D_SHADER_CACHE_PATH", L"0");
+    } else {
+        wchar_t config[512];
+        const DWORD held = GetEnvironmentVariableW(L"VKD3D_CONFIG", config, 512);
+        if (held == 0 || held >= 512 - 32) config[0] = L'\0';
+        else wcscat_s(config, L",");
+        wcscat_s(config, L"pipeline_library_app_cache");
+        SetEnvironmentVariableW(L"VKD3D_CONFIG", config);
+    }
 
     // The shell's loads: an absolute path, dependencies from the DLL's own directory and System32 only.
     HMODULE engine_dll = nullptr;

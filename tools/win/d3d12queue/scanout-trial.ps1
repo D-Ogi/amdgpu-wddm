@@ -16,8 +16,12 @@
 #   pwsh -File scanout-trial.ps1 -Client C:\BC250\flip\amdgpu_wddm_d3d12_queue.exe `
 #        -Cli C:\BC250\bc250kmd_cli.exe -Directory C:\BC250\tmp\flip-001 -Experiment scanout-flip
 #
-# -Experiment is the per-instance switch the D3D12 shell reads from AMDGPU_WDDM_D3D12_EXPERIMENT, and it names
-# the arm. M15.14 increment 3 made the scan-out primary the shell's default, so an empty list names no arm: it is
+# -Experiment is the switch list of the D3D12 shell, and it names the arm. The script writes it as the client's
+# application profile (the REG_SZ value Experiment of HKLM\SOFTWARE\amdgpu-wddm\D3D12\Applications\<client file
+# name>, driver/umd/d3d12/ddi-trace.h) for the length of the trial and then puts back what was there. Both shell
+# flavours read the profile; a release shell has no lookup of AMDGPU_WDDM_D3D12_EXPERIMENT (BD-167), and the
+# wrapper clears that variable so that a lab shell reads the profile too.
+# M15.14 increment 3 made the scan-out primary the shell's default, so an empty list names no arm: it is
 # the control arm on an increment-2 shell and the scan-out arm on an increment-3 one. The script therefore
 # refuses an empty list. scanout-flip-off is the control arm on both shells: the client must present every
 # frame exactly and the scan-out counters must not move. scanout-flip, or scanout-flip-<width>x<height>, is the
@@ -390,7 +394,8 @@ $stdout = Join-Path $root 'client.out'
 $stderr = Join-Path $root 'client.err'
 $wrapper = Join-Path $root 'run-client.cmd'
 $lines = @('@echo off')
-$lines += "set AMDGPU_WDDM_D3D12_EXPERIMENT=$Experiment"
+# Cleared, not set: the environment would win over the profile in a lab shell, and a release shell ignores it.
+$lines += 'set AMDGPU_WDDM_D3D12_EXPERIMENT='
 $lines += "set AMDGPU_WDDM_D3D12_FLIP_FRAMES=$Frames"
 $lines += "set AMDGPU_WDDM_D3D12_FLIP_BUFFERS=$Buffers"
 $lines += "`"$Client`" --interactive `"$root`" --deadline $Seconds > `"$stdout`" 2> `"$stderr`""
@@ -405,6 +410,15 @@ if ($OverlayPause -and -not (Test-Path -LiteralPath $OverlayPause)) {
         $pausedByUs = $true
     }
 }
+# The arm as the client's application profile, in the 64-bit view the installer and the shells use. What was
+# there before is put back in the finally block below, so a profile of the operator's survives the trial.
+$profileName = [IO.Path]::GetFileName($Client)
+$profilePath = 'SOFTWARE\amdgpu-wddm\D3D12\Applications\' + $profileName
+$hklm = [Microsoft.Win32.RegistryKey]::OpenBaseKey([Microsoft.Win32.RegistryHive]::LocalMachine, [Microsoft.Win32.RegistryView]::Registry64)
+$existingKey = $hklm.OpenSubKey($profilePath)
+$profileKeyExisted = $null -ne $existingKey
+$profilePrevious = if ($existingKey) { $existingKey.GetValue('Experiment', $null) } else { $null }
+if ($existingKey) { $existingKey.Close() }
 $started = Get-Date
 $deadline = $started.AddSeconds($Seconds + 20)
 $action = New-ScheduledTaskAction -Execute $wrapper -WorkingDirectory $root
@@ -412,6 +426,10 @@ $principal = New-ScheduledTaskPrincipal -UserId $User -LogonType Interactive -Ru
 Register-ScheduledTask -TaskName $TaskName -Action $action -Principal $principal -Force | Out-Null
 $taskState = 'not started'
 try {
+    $profileKey = $hklm.CreateSubKey($profilePath)
+    $profileKey.SetValue('Experiment', $Experiment, [Microsoft.Win32.RegistryValueKind]::String)
+    $profileKey.Close()
+    Write-Host "profile: HKLM\$profilePath Experiment = $Experiment"
     Start-ScheduledTask -TaskName $TaskName
     $sequence = 0
     foreach ($command in 'create-device', 'create-queue', 'copy', 'status', 'exit') {
@@ -440,6 +458,14 @@ try {
     Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($Client)) -ErrorAction SilentlyContinue |
         ForEach-Object { Stop-Process -Id $_.Id -Force; Write-Host "stopped leftover client $($_.Id)" }
     if ($pausedByUs) { Remove-Item -LiteralPath $OverlayPause -ErrorAction SilentlyContinue }
+    if (-not $profileKeyExisted) { $hklm.DeleteSubKeyTree($profilePath, $false) }
+    else {
+        $profileKey = $hklm.OpenSubKey($profilePath, $true)
+        if ($null -eq $profilePrevious) { $profileKey.DeleteValue('Experiment', $false) }
+        else { $profileKey.SetValue('Experiment', $profilePrevious, [Microsoft.Win32.RegistryValueKind]::String) }
+        $profileKey.Close()
+    }
+    $hklm.Close()
 }
 $exitLine = if (Test-Path -LiteralPath $stdout) { (Select-String -LiteralPath $stdout -Pattern 'client_exit (\d+)' | Select-Object -Last 1) } else { $null }
 $exit = if ($exitLine) { [int]$exitLine.Matches[0].Groups[1].Value } else { -1 }
@@ -466,6 +492,7 @@ $trialResult = [pscustomobject]@{
     utc          = $started.ToUniversalTime().ToString('o')
     client       = (Get-FileHash -LiteralPath $Client).Hash
     experiment   = $Experiment
+    experiment_source = "profile HKLM\$profilePath"
     arm          = $armName
     seconds      = $Seconds
     frames       = $Frames

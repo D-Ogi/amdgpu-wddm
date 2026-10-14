@@ -1,5 +1,7 @@
 # Rebuild shipped HIP samples and HIPBLAS after a device-header change.
 # Runs only the independent HIPBLAS CPU core test. No GPU executable is run.
+# -Lab builds the lab flavour of the samples (BD-167): vadd --wait-total and the hipbench arms set the runtime's
+# switches, which only a lab runtime (build-runtime.ps1 -Lab) reads. Without it, vadd.exe holds no switch name.
 param(
     [Parameter(Mandatory)][string]$Root,
     [Parameter(Mandatory)][string]$Out,
@@ -10,8 +12,12 @@ param(
     # flavour. Without -Version nothing is stamped and the build says so: a host build and a quality
     # gate are not a release, and the release reads every resource back before it ships.
     [string]$Version = '',
-    [ValidateSet('release', 'lab')][string]$Flavour = 'release'
+    [ValidateSet('release', 'lab')][string]$Flavour = 'release',
+    [switch]$Lab
 )
+# One flavour, two names: -Lab is BD-167's and -Flavour is BD-166's, and the release passes the one it knows.
+# Without this line a caller that passes one knob alone ships a release-flavour binary stamped lab, or the reverse.
+if ($Lab) { $Flavour = 'lab' } elseif ($Flavour -eq 'lab') { $Lab = $true }
 $ErrorActionPreference = 'Stop'
 if (-not $ClangBin) { $ClangBin = Join-Path $Root 'toolchain/llvm-amdgpu-22.1.8/mingw64/bin' }
 $clang = Join-Path $ClangBin 'clang.exe'
@@ -55,6 +61,7 @@ try {
         # Shared sample-oracle headers define static helpers used only by their
         # separate host tests (vadd_produced); do not edit those production inputs.
         '-Wno-unused-function', "-I$PSScriptRoot/include")
+    if ($Lab) { $flags += '-DAMDGPU_WDDM_LAB_FLAVOUR=1' }
     foreach ($name in @('vadd', 'hipbench')) {
         $exe = Join-Path $Out "$name.exe"
         & $clang @flags (Join-Path $PSScriptRoot "samples/$name.hip") "-L$importDir" -o $exe

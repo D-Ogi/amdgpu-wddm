@@ -711,6 +711,14 @@ class Runner:
                 self.writer(f"[skip] {arm.id}: {reason}")
                 self.records.append(self._skip(arm, reason))
                 continue
+            # BD-167: an arm that sets a lab-only variable measures nothing on a release package. A package
+            # from before the manifest field keeps every lookup, so it runs the arm.
+            if arm.arm.get("flavour") == "lab" and self.plan.package.flavour == "release":
+                reason = (f"{arm.id} sets a variable that only a lab-flavour build reads, and "
+                          f"{self.plan.package.name} is the release flavour: validate a lab package for it")
+                self.writer(f"[skip] {arm.id}: {reason}")
+                self.records.append(self._skip(arm, reason))
+                continue
             if arm.kind != "operator":
                 stopped, why = self.stop_flag_set()
                 if stopped:

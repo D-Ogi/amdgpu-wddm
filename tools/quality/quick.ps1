@@ -147,6 +147,8 @@ Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compil
  # Native consumers link the same state ABI. These gates never open a device or a window.
  Check 'driver-state-cli-x64' { & pwsh -NoProfile -File "$repo\tools\win\bc250kmd_cli\build.ps1" -Kits "$Kits" -Out "$Out\driver-state-cli-x64" -Arch x64 }
  Check 'driver-state-cli-x86' { & pwsh -NoProfile -File "$repo\tools\win\bc250kmd_cli\build.ps1" -Kits "$Kits" -Out "$Out\driver-state-cli-x86" -Arch x86 }
+ # The lab flavour of the CLI (BD-167: the raw diagnostic verbs) compiles too; test-flavour.ps1 checks both builds.
+ Check 'driver-state-cli-lab-x64' { & pwsh -NoProfile -File "$repo\tools\win\bc250kmd_cli\build.ps1" -Kits "$Kits" -Out "$Out\driver-state-cli-lab-x64" -Arch x64 -Lab }
  Check 'driver-state-cumode-x64' { & pwsh -NoProfile -File "$repo\tools\win\cumode\build.ps1" -Kits "$Kits" -Out "$Out\driver-state-cumode-x64" -Arch x64 }
  Check 'driver-state-cumode-x86' { & pwsh -NoProfile -File "$repo\tools\win\cumode\build.ps1" -Kits "$Kits" -Out "$Out\driver-state-cumode-x86" -Arch x86 }
  Check 'driver-state-client-x64' { & pwsh -NoProfile -File "$repo\tools\state\test-client.ps1" -Kits "$Kits" -Out "$Out\driver-state-client-x64" -Arch x64 }

@@ -46,6 +46,7 @@ namespace AmdgpuWddmSetup
         static string _language = "en";
 
         // AMDGPU_WDDM_SETUP_STRINGS: a directory with strings.<lang>.txt read instead of the embedded tables (tests).
+        // A lab build's only (BD-167); a release build reads the embedded tables unless Directory is set.
         public static string Directory { get; set; }
 
         public static event Action LanguageChanged;
@@ -97,7 +98,11 @@ namespace AmdgpuWddmSetup
 
         static string ReadSource(string language)
         {
+#if AMDGPU_WDDM_LAB_FLAVOUR
             var dir = Directory ?? Environment.GetEnvironmentVariable("AMDGPU_WDDM_SETUP_STRINGS");
+#else
+            var dir = Directory;
+#endif
             if (!string.IsNullOrEmpty(dir))
             {
                 var path = Path.Combine(dir, "strings." + language + ".txt");

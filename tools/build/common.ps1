@@ -227,6 +227,18 @@ function Add-ReproducibleMesonOptions([string[]]$Options, [string]$Source, [stri
     return @($merged)
 }
 
+# BD-167: the flavour of a fork build, for recipe.json. A fork branch that carries the release series declares the
+# meson option amdgpu-wddm-lab-flavour (default false), so it builds the release flavour unless -Lab passes true.
+# A branch without the series has no flavour, and -Lab is refused there before meson rejects the unknown option.
+function Get-AmdgpuWddmFlavour([string]$Source, [switch]$Lab) {
+    $declared = @('meson.options', 'meson_options.txt' | ForEach-Object { Join-Path $Source $_ } | Where-Object {
+            (Test-Path -LiteralPath $_) -and (Select-String -LiteralPath $_ -SimpleMatch "'amdgpu-wddm-lab-flavour'" -Quiet) }).Count -gt 0
+    if ($Lab -and -not $declared) { throw "-Lab: $Source declares no amdgpu-wddm-lab-flavour option (no BD-167 series on this branch)" }
+    if ($Lab) { return 'lab' }
+    if ($declared) { return 'release' }
+    return 'none (no amdgpu-wddm-lab-flavour option)'
+}
+
 function Write-Recipe([string]$Path, $Recipe) {
     $json = ($Recipe | ConvertTo-Json -Depth 10) -replace "`r`n", "`n"
     [IO.File]::WriteAllText($Path, $json + "`n", [Text.UTF8Encoding]::new($false))

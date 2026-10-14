@@ -18,6 +18,7 @@
 #include "bc250kmd.h"
 #include "bc250kmd_escape.h"
 #include "bc250_gmc.h"
+#include "lab_gate.h"          // BD-167: GartEscape() is the lab-only user entry to the GART diagnostic
 
 #define BC250_GART_TAG 'gC2B'
 // Where amdgpu put its GART table on this unit (E03: MC 0xF5FFE00000, the top 2 MB of VRAM), and E08 read it.
@@ -308,10 +309,16 @@ static void GartExecute(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_GART*
 }
 
 // Diagnostic commands and device startup share the same implementation.
+// BD-167: the user-reachable GART escape entry exists only in the lab flavour. GartExecute() stays in every
+// build because GartInitializeHardware (startup.c) drives it with driver-built state during bring-up; what the
+// release removes is this user-data entry point, which is also unreachable because display.c compiles out its
+// dispatch arm.
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
 void GartEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_GART* Data)
 {
     GartExecute(Device,Data);
 }
+#endif
 
 // PASSIVE_LEVEL. Caller owns nonpaged report storage through this synchronous
 // call. Keep detailed partial-progress output for the eventual startup unwind.

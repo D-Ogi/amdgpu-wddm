@@ -34,6 +34,9 @@ param(
     [string]$CertSubject = 'CN=BC-250 lab test signing',
     [switch]$ExportCommandsOnly,
     [switch]$CompileOnly,           # compile and link, no quality gates, no catalog, no signature (a gate)
+    [switch]$Lab,                   # BD-167: the lab flavour. Compiles in the raw memory/register/submit/scanout
+                                    # escapes (lab_gate.h), which answer only with test signing on and
+                                    # Parameters\LabDiagnostics = 1. tools\release\build-release.ps1 never sets it.
     [string]$QualityWorkspace = ''
 )
 
@@ -138,6 +141,9 @@ $clFlags = @('/nologo', '/c', '/kernel', '/GS-', '/W4', '/WX', '/we4013', '/we40
     "/I$wdk\Include\$KitVersion\km", "/I$wdk\Include\$KitVersion\km\crt", "/I$wdk\Include\$KitVersion\shared",
     "/I$sdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\um",
     "/Fo$obj\", "/Fd$obj\cl.pdb")
+# BD-167: the lab flavour adds the raw diagnostic escapes; the release flavour (the default) does not contain them.
+if ($Lab) { $clFlags += '/DAMDGPU_WDDM_LAB_FLAVOUR=1' }
+Write-Host ("flavour: {0}" -f ($(if ($Lab) { 'LAB (raw diagnostic escapes compiled in, gated by test signing + LabDiagnostics)' } else { 'RELEASE (no raw diagnostic escapes)' })))
 # Emit the exact per-file commands for targeted static analysis and build auditing.
 $commands = @()
 $groups = @(
@@ -204,6 +210,11 @@ Copy-Item "$pkg\bc250kmd.sys" (Join-Path $Out 'bc250kmd.unsigned.sys') -Force
 Write-Host 'stack budget'
 & python (Join-Path $repo 'tools\win\stackbudget.py') "$pkg\bc250kmd.sys" '--map' "$Out\bc250kmd.map"
 if ($LASTEXITCODE -ne 0) { throw 'stack budget: a function allocates too much stack for a kernel thread (see above)' }
+
+# BD-167: the linked SYS is the flavour this build names, by its own bytes (flavour line, no or every raw escape).
+Write-Host 'flavour gate'
+& python (Join-Path $repo 'tools\quality\flavour_gate.py') '--flavour' $(if ($Lab) { 'lab' } else { 'release' }) '--kmd' "$pkg\bc250kmd.sys" '--kmd-only'
+if ($LASTEXITCODE -ne 0) { throw 'flavour gate: the linked SYS is not the flavour this build names (see above)' }
 
 if($CompileOnly) {
     # The unsigned bytes, so that a gate run can be compared with the package build of the same tree by hand.

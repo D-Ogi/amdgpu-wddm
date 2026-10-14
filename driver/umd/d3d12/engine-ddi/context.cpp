@@ -16,12 +16,17 @@ namespace {
 // capture the debugger's log and not stderr (game-runtime.ps1), so without this copy the lines below (a release
 // that cannot prove retirement, a release past its bound, a queue destroyed unretired, a fence anomaly) never reach
 // any record of a game run. Bounded like the shell's failure notes; the sink line (stdio-log.h) is unchanged.
+// BD-167: a lab build's switch, as in ddi-trace.h; a release engine behaves as with it unset.
 bool debugger_lines() noexcept {
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
     static const bool on = []() noexcept {
         char value[2]{};
         return GetEnvironmentVariableA("AMDGPU_WDDM_DDI_TRACE", value, sizeof(value)) == 1 && value[0] == '2';
     }();
     return on;
+#else
+    return false;
+#endif
 }
 std::atomic<int> debugger_budget{1024};
 // log_refusal writes its debugger line whatever the switches say, so that capture-share and any attached

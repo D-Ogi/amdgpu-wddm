@@ -275,7 +275,8 @@ inline int run(const char* directory,unsigned duration,AdapterMode mode=AdapterM
     session.trace=CreateFileW((session.root/L"trace.jsonl").c_str(),GENERIC_WRITE,FILE_SHARE_READ,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);
     if(session.trace==INVALID_HANDLE_VALUE)return 2;
 #ifdef INTERACTIVE_RADV_EXPERIMENTAL
-    // Diagnostic build only: the hosted ICD reads this from the process environment.
+    // Diagnostic build only: the hosted ICD reads this from the process environment. A lab ICD does; a release ICD
+    // has no lookup of RADV_EXPERIMENTAL (BD-167), so on a release package this variant runs the defaults.
 #define INTERACTIVE_TEXT2(token) #token
 #define INTERACTIVE_TEXT(token) INTERACTIVE_TEXT2(token)
     session.event("after","Process RADV_EXPERIMENTAL=" INTERACTIVE_TEXT(INTERACTIVE_RADV_EXPERIMENTAL),

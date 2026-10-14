@@ -61,6 +61,17 @@ function Get-AvailableMemoryMiB {
 # Temp-Now goes on to the overlay.
 $releaseRoot=[string](Get-ItemProperty 'HKLM:\SOFTWARE\amdgpu-wddm\Release' -Name InstallRoot -ErrorAction SilentlyContinue).InstallRoot
 $script:ReleaseCli=if($releaseRoot){Join-Path $releaseRoot 'tools\bc250kmd_cli.exe'}else{''}
+# BD-167: the flavour of the installed package, from InstallRoot\manifest.json (build-release.ps1 -Flavour). A release
+# package has no lookup of AMDGPU_WDDM_D3D12_EXPERIMENT, RADV_PERFTEST, MESA_SPIRV_FAIL_DUMP_PATH or
+# VKD3D_SHADER_DUMP_PATH; 'lab', and 'legacy' (a package from before the field, every lookup present), keep them.
+# 'unknown': no install root or no manifest (the offline dry run).
+function Get-DriverFlavour{
+ if(!$releaseRoot){return 'unknown'}
+ $m=Join-Path $releaseRoot 'manifest.json'
+ if(!(Test-Path -LiteralPath $m)){return 'unknown'}
+ $f=try{[string](Get-Content -LiteralPath $m -Raw|ConvertFrom-Json).flavour}catch{''}
+ if($f){$f}else{'legacy'}
+}
 # The installed release's bc250kmd_cli.exe is the only KMD client (owner, 2026-10-08: the harness needs nothing
 # from the old lab directories). A missing client, or a query form its usage does not list, is an error that says so.
 function Resolve-KmdClient([string]$Release,[string]$Form){
@@ -703,6 +714,10 @@ if($DryRun){
  # 825e4a49: the game's old msvcp140.dll under a newer STL's mutex). The session's msvcp140.dll module note shows it.
  $crt=@(@('msvcp140.dll','vcruntime140.dll','vcruntime140_1.dll')|Where-Object{Test-Path -LiteralPath (Join-Path $game $_)})
  'game-local C++ runtime '+$(if($crt.Count){@($crt|ForEach-Object{$_+' '+[string](Get-Item -LiteralPath (Join-Path $game $_)).VersionInfo.FileVersion}) -join ', '}else{'none in '+$game})
+ $flavour=Get-DriverFlavour
+ $armed=@(@(@('config.experiment',[bool]$stageConfig.experiment),@('radv-perftest.txt',(Test-Path -LiteralPath 'C:\BC250\tools\radv-perftest.txt')),
+            @('shader-dump.on',(Test-Path -LiteralPath 'C:\BC250\tools\shader-dump.on')))|Where-Object{$_[1]}|ForEach-Object{$_[0]})
+ Gate 'driver flavour' ($flavour -ne 'release' -or !$armed.Count) ($flavour+$(if($armed.Count){'; lab knobs armed: '+($armed -join ', ')}else{''}))
  $mb=Get-AvailableMemoryMiB
  Gate 'available memory' ($mb -ge 3500) ([string]$mb+' MB of 3500 (the low-memory pre-step otherwise)')
  $tempNow=Temp-Now
@@ -713,6 +728,7 @@ if($DryRun){
   $m=try{Read-SteamManifest}catch{@(-1,'')}
   Gate 'steam state' ($m[0] -eq [int]$gp.steam.require_state_flags) ('StateFlags '+$m[0]+' build '+$m[1])
   'app profile '+$(try{[string](Get-ItemProperty -LiteralPath ('HKLM:\SOFTWARE\amdgpu-wddm\D3D12\Applications\'+$appImage) -Name Experiment -ErrorAction Stop).Experiment}catch{'none'})
+  if($armed.Count){'WARNING launch through Steam: the game gets the Steam client''s environment, so these lab knobs do not apply: '+($armed -join ', ')}
  }
  foreach($image in $routerImages){
   $decision=Get-RouterDecision $image
@@ -753,10 +769,16 @@ try{
  Registry-Gate
  # Started outside the Steam client: the game's Steam module needs its application id (066 ended in it).
  $env:SteamAppId=[string]$gp.app_id;$env:SteamGameId=[string]$gp.app_id
+ # BD-167: the knobs below are lab-flavour knobs. On a release package they would do nothing, so an armed one ends
+ # the session before the launch instead of measuring the defaults under its name.
+ $result.driver_flavour=Get-DriverFlavour
+ $labDriver=$result.driver_flavour -ne 'release'
+ Note ('driver flavour '+$result.driver_flavour)
  # One named driver deviation for this measurement (config.experiment, set at Stage from BC250_TRIAL_EXPERIMENT),
  # inherited by the game as by the client in runtime.ps1. 105: present-cached.
  $config=Get-Content "$d\config.json" -Raw|ConvertFrom-Json
  $result.experiment=if($config.PSObject.Properties.Name -contains 'experiment'){[string]$config.experiment}else{''}
+ if($result.experiment -and !$labDriver){throw ('config.experiment '+$result.experiment+' needs a lab package: a release D3D12 shell has no lookup of AMDGPU_WDDM_D3D12_EXPERIMENT (BD-167) and reads only the application profile HKLM\SOFTWARE\amdgpu-wddm\D3D12\Applications\'+$appImage)}
  # adapter109+: without the variable the shell reads the image's application profile (HKLM\SOFTWARE\amdgpu-wddm\
  # D3D12\Applications\witcher3.exe), so a trial without an experiment says "none" and stays independent of it.
  # Older shells read "none" as an unknown name, i.e. no switch, as before.
@@ -773,16 +795,21 @@ try{
  # holding the RADV_PERFTEST value, recorded in the result, removed again by the operator after that session.
  $perftestFile='C:\BC250\tools\radv-perftest.txt'
  $result.radv_perftest=if(Test-Path -LiteralPath $perftestFile){[string](Get-Content -LiteralPath $perftestFile -Raw).Trim()}else{''}
+ if($result.radv_perftest -and !$labDriver){throw ($perftestFile+' arms RADV_PERFTEST='+$result.radv_perftest+', but the installed package is the release flavour, whose ICDs have no lookup of it (BD-167): install the lab package or remove the file')}
  if($result.radv_perftest){$env:RADV_PERFTEST=$result.radv_perftest}else{Remove-Item Env:RADV_PERFTEST -ErrorAction SilentlyContinue}
  Note ('radv_perftest '+$(if($result.radv_perftest){$result.radv_perftest}else{'none'}))
  # 111 ended in a ray tracing pipeline whose SPIR-V the ICD refused (vtn_structured_cfg.c:744, then the debug
  # build's break). Mesa writes a refused module here, and only a refused one, for offline analysis.
- $spirvFail=Join-Path $out 'spirv-fail'
- $null=New-Item -ItemType Directory -Force -Path $spirvFail
- $env:MESA_SPIRV_FAIL_DUMP_PATH=$spirvFail
+ # A release ICD has no lookup of the variable (BD-167), so a release session makes no directory that stays empty.
+ if($labDriver){
+  $spirvFail=Join-Path $out 'spirv-fail'
+  $null=New-Item -ItemType Directory -Force -Path $spirvFail
+  $env:MESA_SPIRV_FAIL_DUMP_PATH=$spirvFail
+ }else{Remove-Item Env:MESA_SPIRV_FAIL_DUMP_PATH -ErrorAction SilentlyContinue;Note 'spirv-fail dump off: release ICDs'}
  # Every shader the engine receives (DXIL, RT libraries as <hash>.lib.dxil), armed by a marker file on the lab
  # and written outside the attempt so the archive stays small; 113 needs the DXIL of 2d05bfd12deaa283.
  if(Test-Path -LiteralPath 'C:\BC250\tools\shader-dump.on'){
+  if(!$labDriver){throw 'C:\BC250\tools\shader-dump.on arms VKD3D_SHADER_DUMP_PATH, but the installed package is the release flavour, whose engine has no lookup of it (BD-167): install the lab package or remove the file'}
   $shaderDump=Join-Path 'C:\BC250\tmp' ('shader-dump-'+(Split-Path $d -Leaf))
   $null=New-Item -ItemType Directory -Force -Path $shaderDump
   $env:VKD3D_SHADER_DUMP_PATH=$shaderDump
@@ -850,6 +877,14 @@ try{
   # launcher-configuration.json).
   $result.app_profile=try{[string](Get-ItemProperty -LiteralPath ('HKLM:\SOFTWARE\amdgpu-wddm\D3D12\Applications\'+$appImage) -Name Experiment -ErrorAction Stop).Experiment}catch{''}
   Note ('app_profile '+$(if($result.app_profile){$result.app_profile}else{'none'}))
+  # BD-167: the knobs above go into this script's environment, which a game that Steam starts does not get. The
+  # result says so, so that no one reads the defaults as a measurement under a knob's name.
+  $knobs=@(@(@('config.experiment',[bool]$result.experiment),@('radv-perftest.txt',[bool]$result.radv_perftest),
+             @('shader-dump.on',(Test-Path -LiteralPath 'C:\BC250\tools\shader-dump.on')))|Where-Object{$_[1]}|ForEach-Object{$_[0]})
+  if($knobs.Count){
+   $result.launch_route='steam';$result.knobs_applied=$false;$result.knobs_not_applied=$knobs
+   Note ('WARNING launch through Steam: the game gets the Steam client''s environment, so these lab knobs do not apply: '+($knobs -join ', '))
+  }
   if(!$result.steam_processes){throw 'Steam client not running'}
   # 254: with an update pending, -applaunch starts the update (45 GB staged there) and launches the game only after
   # it, outside the trial. Launch only an app Steam reports as fully installed and current (StateFlags 4).

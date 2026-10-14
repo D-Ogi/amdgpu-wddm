@@ -41,6 +41,13 @@
 # reason=app-dialog-host) and app-dialog-host-allow (the same image in Allow, route=gpu reason=app-default). The
 # policy suite carries the decision table for the list. 92 scenarios.
 #
+# BD-167: a release-flavour hosted UMD reads no trial environment. The four scenarios that set one
+# (umd-env-luid-fallback, -mismatch, -invalid and umd-diag-env) tell the flavour from the DLL, as the release gate
+# does (the name BC250_D3D_ZINK_LUID in it or not), and expect a lab UMD to follow the variables and a release one to
+# behave as with them unset. -HostedUmd takes either flavour. 96 scenarios, 0 failed on 2026-10-14 with the
+# tester.31rc4 hosted UMD (lab behaviour) and with a copy of it whose variable names were changed to names nobody
+# sets (release behaviour); the harness before this change fails those four scenarios over that copy.
+#
 #   pwsh tools\build\test-umd-router.ps1 -HostedUmd <bc250d3d_zink.dll> -CpuUmd <bc250d3d.dll> -AppPackage <dir>
 #        [-Build <build-umd-router.ps1 output>] [-OutputDir <dir>]
 param(

@@ -7,7 +7,8 @@ adapter1002:13fe. Run under the bounded M14 harness, not directly on the host.
 
 Three independent devices test creation, Map WRITE_DISCARD, and UpdateSubresource.
 The injected path uses the engine's explicit test switch; it does not exhaust physical
-memory. Creation OOM must leave a healthy device and permit a later successful create.
+memory. Only a lab-flavour engine has that switch (BD-167). With a release
+amdgpu_wddm_dxvk.dll, --inject fails because no allocation fails. Creation OOM must leave a healthy device and permit a later successful create.
 Update must expose sticky removal. Write-only Map may return runtime fallback memory;
 it must leave sticky removal, and a subsequent Map READ of a staging buffer created
 before injection must expose device removal. The healthy control must map READ normally.

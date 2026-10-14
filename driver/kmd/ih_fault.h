@@ -14,6 +14,37 @@
 // soc15_ih_clientid.h: SOC15_IH_CLIENTID_UTCL2. The gfxhub's faults arrive on it (amdgpu
 // gmc_v10_0_process_interrupt treats anything but SOC15_IH_CLIENTID_VMC as the gfxhub).
 #define BC250_IH_UTCL2_CLIENT 0x1Bu
+// BD-167 (G3): the command processor's privilege and decode faults. The CP raises these when a submitted IB
+// writes a privileged register, runs a privileged instruction, or holds a bad opcode; amdgpu's handlers
+// (gfx_v10_0_priv_reg_irq / _priv_inst_irq, gfx_v10_0.c) force the guilty process into a GPU reset. This driver
+// only counted the vectors (Note()), so a faulting job blocked the CP in silence. The client and source ids are
+// from the vendored AMD headers (third_party/linux-amdgpu), reproduced here with that provenance because the KMD
+// side, like BC250_IH_UTCL2_CLIENT above, does not include them:
+//   soc15_ih_clientid.h:53   SOC15_IH_CLIENTID_GRBM_CP = 0x14
+//   irqsrcs_gfx_10_1.h:33    GFX_10_1__SRCID__CP_BAD_OPCODE_ERROR = 183
+//   irqsrcs_gfx_10_1.h:34    GFX_10_1__SRCID__CP_PRIV_REG_FAULT   = 184
+//   irqsrcs_gfx_10_1.h:35    GFX_10_1__SRCID__CP_PRIV_INSTR_FAULT = 185
+#define BC250_IH_GRBM_CP_CLIENT     0x14u
+#define BC250_IH_CP_BAD_OPCODE      183u
+#define BC250_IH_CP_PRIV_REG_FAULT  184u
+#define BC250_IH_CP_PRIV_INSTR_FAULT 185u
+
+// TRUE when the vector is a CP privilege or decode fault (host-testable; same decode in the DPC and the host
+// test, like the UTCL2 decode above). Reason text for the witness line, no WDK types.
+static __inline int Bc250IhIsCpPrivFault(unsigned long ClientId, unsigned long SourceId)
+{
+    return ClientId == BC250_IH_GRBM_CP_CLIENT &&
+           (SourceId == BC250_IH_CP_BAD_OPCODE || SourceId == BC250_IH_CP_PRIV_REG_FAULT ||
+            SourceId == BC250_IH_CP_PRIV_INSTR_FAULT);
+}
+
+static __inline const char* Bc250IhCpPrivFaultName(unsigned long SourceId)
+{
+    if (SourceId == BC250_IH_CP_PRIV_REG_FAULT) return "privileged register";
+    if (SourceId == BC250_IH_CP_PRIV_INSTR_FAULT) return "privileged instruction";
+    if (SourceId == BC250_IH_CP_BAD_OPCODE) return "bad opcode";
+    return "cp fault";
+}
 // amdgpu gmc_v10_0_process_interrupt (reference/linux v6.18 gmc_v10_0.c:106-113): the fault address is
 // src_data[0] << 12 with bits 44-47 from src_data[1], bit 0x20 says write, bit 0x80 says retry.
 #define BC250_IH_FAULT_WRITE 0x20u

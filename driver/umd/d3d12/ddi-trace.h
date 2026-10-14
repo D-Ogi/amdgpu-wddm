@@ -16,14 +16,19 @@ namespace native12 {
 // AMDGPU_WDDM_DDI_TRACE: 1 is the full trace, two lines per call, on the AMDGPU_WDDM_LOG sink (stdio-log.h:
 // nothing unless that switch names one). 2 is failures only, for a process that makes millions of calls:
 // nothing on success, one debugger-output line per failed call or reported device error, and silence after the
-// budget is spent.
+// budget is spent. BD-167: a lab build's switch (build-umd-d3d12.ps1 -Lab); a release shell has no lookup of the
+// name and behaves as with it unset.
 inline int ddi_trace_mode() noexcept {
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
     static const int mode=[]() noexcept {
         char value[2]{};
         if(GetEnvironmentVariableA("AMDGPU_WDDM_DDI_TRACE",value,sizeof(value))!=1)return 0;
         return value[0]=='1'?1:value[0]=='2'?2:0;
     }();
     return mode;
+#else
+    return 0;
+#endif
 }
 inline bool ddi_trace_enabled() noexcept {return ddi_trace_mode()==1;}
 inline std::atomic<uint64_t> ddi_trace_sequence{};
@@ -98,7 +103,7 @@ inline void ddi_failure_note(const char* name,HRESULT outcome) noexcept {
 //
 // Where the list comes from, first source that exists wins:
 //   1. AMDGPU_WDDM_D3D12_EXPERIMENT in the process environment, "none" and empty included. A trial sets it
-//      so that it never inherits a profile.
+//      so that it never inherits a profile. Lab builds only (BD-167): a release shell skips this source.
 //   2. the REG_SZ value "Experiment" of HKLM\SOFTWARE\amdgpu-wddm\D3D12\Applications\<image file name>, the
 //      application profile (M15.7), for an application-specific workaround shipped by the package.
 //   3. the REG_SZ value "Experiment" of HKLM\SOFTWARE\amdgpu-wddm\D3D12, which turns a default off for the
@@ -106,7 +111,7 @@ inline void ddi_failure_note(const char* name,HRESULT outcome) noexcept {
 // Registry key names compare without case; both values take the same syntax.
 enum class DdiExperimentSource : unsigned {
     None,         // no variable, no profile for this image and no machine-wide value
-    Environment,  // AMDGPU_WDDM_D3D12_EXPERIMENT, "none" and empty included
+    Environment,  // AMDGPU_WDDM_D3D12_EXPERIMENT, "none" and empty included (lab builds only)
     Profile,      // the image's application profile
     Machine,      // the machine-wide value under HKLM\SOFTWARE\amdgpu-wddm\D3D12
     Invalid,      // a value outside the syntax or too long: no switch
@@ -163,13 +168,19 @@ inline int application_profile(char* text,size_t capacity) noexcept {
 inline int machine_experiment(char* text,size_t capacity) noexcept {
     return registry_experiment(L"SOFTWARE\\amdgpu-wddm\\D3D12",text,capacity);
 }
+// BD-167: the environment variable is a source in a lab build only (AMDGPU_WDDM_LAB_FLAVOUR, build-umd-d3d12.ps1 -Lab). A
+// release shell has no lookup of it, so the name is not in the DLL, and the profile and the machine-wide value,
+// which only an administrator writes, are its sources.
 inline DdiExperimentValue resolve_experiment() noexcept {
     DdiExperimentValue v{};
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
     SetLastError(ERROR_SUCCESS);
     const DWORD n=GetEnvironmentVariableA("AMDGPU_WDDM_D3D12_EXPERIMENT",v.text,sizeof(v.text));
     if(n || GetLastError()!=ERROR_ENVVAR_NOT_FOUND){
         v.source=n<sizeof(v.text)?DdiExperimentSource::Environment:DdiExperimentSource::Invalid;
-    } else {
+    } else
+#endif
+    {
         int found=application_profile(v.text,sizeof(v.text));
         DdiExperimentSource source=DdiExperimentSource::Profile;
         if(found==0){found=machine_experiment(v.text,sizeof(v.text));source=DdiExperimentSource::Machine;}
