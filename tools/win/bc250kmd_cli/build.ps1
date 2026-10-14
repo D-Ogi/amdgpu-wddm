@@ -30,7 +30,7 @@ $repo = (Resolve-Path (Join-Path $here '..\..\..')).Path
 # MSVC gives an anonymous namespace (a hash of the source path) see only the path below the repository. Two builds
 # of one commit in two directories give the same bytes (docs/design/reproducible-builds.md).
 $repro = @('/Brepro', '/FC', "/d1trimfile:$repo")
-$flavour = @(if ($Lab) { '/DAMDGPU_WDDM_LAB_FLAVOUR=1' })
+$labDefine = @(if ($Lab) { '/DAMDGPU_WDDM_LAB_FLAVOUR=1' })
 
 # bc250kmd_cli.c repeats the driver's BC250_STAGE numbers. Refuse to build a tool that names them wrongly.
 if (Get-Command python -ErrorAction SilentlyContinue) {
@@ -60,7 +60,7 @@ $testOut = Join-Path $Out 'test'
 New-Item -ItemType Directory -Force $testOut | Out-Null
 foreach ($source in 'log_test', 'waves_test', 'state_command_test') {
 $testObjects = @(); if ($source -eq 'log_test') { $testObjects = $stateObjects }
-& $cl @repro @flavour @('/nologo', '/W4', '/WX', '/Od', '/MT', '/D_CRT_SECURE_NO_WARNINGS',
+& $cl @repro @labDefine @('/nologo', '/W4', '/WX', '/Od', '/MT', '/D_CRT_SECURE_NO_WARNINGS',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/Fo$testOut\$source.obj", "/Fe$testOut\$source.exe",
     (Join-Path $here "$source.c")) @testObjects @('/link', '/Brepro', "/LIBPATH:$(Join-Path $msvc.FullName "lib\$Arch")",
@@ -72,7 +72,7 @@ if ($LASTEXITCODE -ne 0) { throw "cl failed on $source.c ($LASTEXITCODE)" }
 if ($LASTEXITCODE -ne 0) { throw "$source.c failed" }
 }
 
-& $cl @repro @flavour @('/nologo', '/W4', '/WX', '/O2', '/MT', '/D_CRT_SECURE_NO_WARNINGS',
+& $cl @repro @labDefine @('/nologo', '/W4', '/WX', '/O2', '/MT', '/D_CRT_SECURE_NO_WARNINGS',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/Fo$Out\bc250kmd_cli.obj", "/Fe$Out\bc250kmd_cli.exe",
     (Join-Path $here 'bc250kmd_cli.c')) @stateObjects @('/link', '/Brepro', "/LIBPATH:$(Join-Path $msvc.FullName "lib\$Arch")",
@@ -87,7 +87,7 @@ if ($LASTEXITCODE -ne 0) { throw 'bc250kmd_cli.exe is not the flavour this build
 $stateExports = @(& "$repo\tools\state\build-objects.ps1" -Compiler $cl -Out "$Out\state-exports" -Flags $stateFlags -Exports)
 
 # The monitor uses the same adapter selection and typed request code in-process.
-& $cl @repro @flavour @('/nologo', '/W4', '/WX', '/O2', '/MT', '/LD', '/DBC250_CONTROL_DLL', '/D_CRT_SECURE_NO_WARNINGS',
+& $cl @repro @labDefine @('/nologo', '/W4', '/WX', '/O2', '/MT', '/LD', '/DBC250_CONTROL_DLL', '/D_CRT_SECURE_NO_WARNINGS',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/Fo$Out\bc250control.obj", "/Fe$Out\bc250control.dll",
     (Join-Path $here 'bc250kmd_cli.c')) @stateExports @('/link', '/Brepro', "/LIBPATH:$(Join-Path $msvc.FullName "lib\$Arch")",

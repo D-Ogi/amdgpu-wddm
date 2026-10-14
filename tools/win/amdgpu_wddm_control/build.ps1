@@ -113,8 +113,8 @@ $env:INCLUDE = ''; $env:LIB = ''
 $stateFlags = @('/O2','/MT','/Brepro',"/I$($msvc.FullName)\include","/I$sdk\Include\$KitVersion\ucrt",
     "/I$sdk\Include\$KitVersion\um","/I$sdk\Include\$KitVersion\shared")
 $stateObjects = & (Join-Path $repo 'tools\state\build-objects.ps1') -Compiler $cl -Out "$obj\state" -Flags $stateFlags -Exports
-$flavour = @(if ($Lab) { '/DAMDGPU_WDDM_LAB_FLAVOUR=1' })
-& $cl @flavour @('/nologo', '/W4', '/WX', '/O2', '/MT', '/LD', '/Brepro', '/DBC250_CONTROL_DLL', '/D_CRT_SECURE_NO_WARNINGS',
+$labDefine = @(if ($Lab) { '/DAMDGPU_WDDM_LAB_FLAVOUR=1' })
+& $cl @labDefine @('/nologo', '/W4', '/WX', '/O2', '/MT', '/LD', '/Brepro', '/DBC250_CONTROL_DLL', '/D_CRT_SECURE_NO_WARNINGS',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/Fo$obj\bc250control.obj", "/Fe$Out\bc250control.dll",
     (Join-Path $repo 'tools\win\bc250kmd_cli\bc250kmd_cli.c')) @stateObjects @('/link', '/Brepro', "/IMPLIB:$obj\bc250control.lib",
@@ -127,7 +127,7 @@ Remove-Item "$Out\bc250control.exp", "$Out\bc250control.lib" -ErrorAction Silent
 # 2b. bc250kmd_cli.exe from the same translation unit and the same flags, without BC250_CONTROL_DLL: the release ships
 # the CLI and the DLL of one build, so the CLI has every command the DLL's source has (tester.10 shipped a CLI of the
 # KMD branch without health, clock, telemetry, vram and sdmaib). Without arguments it prints its usage and exits 2.
-& $cl @flavour @('/nologo', '/W4', '/WX', '/O2', '/MT', '/Brepro', '/D_CRT_SECURE_NO_WARNINGS',
+& $cl @labDefine @('/nologo', '/W4', '/WX', '/O2', '/MT', '/Brepro', '/D_CRT_SECURE_NO_WARNINGS',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/Fo$obj\bc250kmd_cli.obj", "/Fe$Out\bc250kmd_cli.exe",
     (Join-Path $repo 'tools\win\bc250kmd_cli\bc250kmd_cli.c')) @stateObjects @('/link', '/Brepro',
