@@ -209,7 +209,11 @@ try {
     $stamped = [ordered]@{}
     foreach ($t in $targets) {
         $names = @()
-        if ($recipeConfig.ships -and $recipeConfig.ships.PSObject.Properties.Name -contains $t) { $names = @($recipeConfig.ships.$t) }
+        # A config without a ships map (per-app) stamps nothing. The key is looked up before it is read, as
+        # release_options is: under Set-StrictMode -Version 3.0 reading an absent key is an error, not $null.
+        if ($recipeConfig.PSObject.Properties['ships'] -and $recipeConfig.ships.PSObject.Properties.Name -contains $t) {
+            $names = @($recipeConfig.ships.$t)
+        }
         if ($names.Count -eq 0) { continue }
         $built = Join-Path $Build ($t -replace '/', '\')
         if (-not (Test-Path -LiteralPath $built)) { throw "ninja succeeded but $built is missing" }

@@ -50,6 +50,7 @@
     "winforms-labels",
     "control-app",
     "flavour-sources",
+    "recipe-configs",
     "opengl-icd",
     "radv-contract",
     "umd-contract",
@@ -1375,6 +1376,11 @@
       ]
     },
     "flavour-sources": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "recipe-configs": {
       "inputs": [
         "host"
       ]

@@ -224,6 +224,12 @@ Check 'ledger-call' { & pwsh -NoProfile -File "$repo\tools\release\test-ledger-c
  # guard (tools\quality\flavour_sources.py). The build proves the same thing on the built image; this names the
  # file and the line without a compiler. Both gates' planted controls run in quality-controls.
  Check 'flavour-sources' { & python "$repo\tools\quality\flavour_sources.py" --root $repo --out "$Out\flavour-sources" }
+ # Every recipe config resolves in both flavours, and every read of a config's key finds the key or looks it up
+ # first (tools\quality\check-recipe-configs.ps1). Under the Set-StrictMode 3.0 of common.ps1 an absent key is an
+ # error: the release flavour of nine configs stopped on release_options before meson ran, and three configs would
+ # have stopped on the ships map after ninja in either flavour. It runs each script's own option resolution, 24 of
+ # them, needs no source checkout and compiles nothing, in 2 s. Its planted controls run in quality-controls.
+ Check 'recipe-configs' { & pwsh -NoProfile -File "$repo\tools\quality\check-recipe-configs.ps1" -Repo $repo -Out "$Out\recipe-configs" }
  # BD-076: the OpenGL ICD registration of the installer. The architecture list of the release, the values of each
  # architecture in it, the ICD file check, the restore plan of the uninstaller and the step of an install that
  # registers fewer architectures than the computer holds. It writes a scratch key under HKCU and a folder under
