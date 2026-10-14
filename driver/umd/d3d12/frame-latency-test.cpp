@@ -60,13 +60,52 @@ DWORD WINAPI checked_timer_wait(HANDLE timer,DWORD timeout) {
 #include <vector>
 
 namespace {
-// The witness lines must reach the AMDGPU_WDDM_LOG sink of the shell, not the debugger alone: a lab trial reads
-// that file and has no debugger. stdio-log.h reads the switch once, on its first use, so main() sets it first.
-constexpr char kLogName[]="frame-latency-test-witness.log";
+// The witness lines must reach the shell's real file sink: a lab trial reads that file and has no debugger.
+// Like stdio-log-test's joined-marker cases, both flavours use a valid marker of this process and a file directly
+// in its private ProgramData tree. The marker bypasses the registry switch; no machine state is read or changed.
+std::string witness_path;
 int failures=0;
 void check(bool ok,const char* what) {
     std::printf("%s %s\n",ok?"PASS":"FAIL",what);
     if(!ok)++failures;
+}
+
+bool prepare_witness_log() {
+    namespace detail=amdgpu_wddm_log::detail;
+    namespace game_log=amdgpu_wddm_log::game_log;
+    char directory[MAX_PATH]{};
+    const DWORD length=GetCurrentDirectoryA(sizeof(directory),directory);
+    check(length>0 && length<sizeof(directory),"witness: the test working directory fits");
+    if(!length || length>=sizeof(directory))return false;
+    const std::string private_data=std::string(directory)+"\\frame-latency-test";
+    for(const std::string& path:{private_data,private_data+"\\amdgpu-wddm",
+                              private_data+"\\amdgpu-wddm\\logs",private_data+"\\"+game_log::kFolder}){
+        if(!CreateDirectoryA(path.c_str(),nullptr) && GetLastError()!=ERROR_ALREADY_EXISTS){
+            check(false,"witness: the private log directory is created");
+            return false;
+        }
+    }
+    witness_path=private_data+"\\"+game_log::kFolder+"\\frame-latency-test-witness.log";
+    if(!DeleteFileA(witness_path.c_str()) && GetLastError()!=ERROR_FILE_NOT_FOUND){
+        check(false,"witness: any previous test log is removed");
+        return false;
+    }
+    FILE* const first=detail::open_append(witness_path.c_str());
+    check(first!=nullptr,"witness: this process creates the file before the sink joins it");
+    if(!first)return false;
+    std::fclose(first);
+    const unsigned long long until=detail::now_filetime()+300ull*10000000ull;
+    char marker[48]{};
+    const bool ready=detail::marker_value(marker,sizeof(marker),GetCurrentProcessId(),until) &&
+        SetEnvironmentVariableA("ProgramData",private_data.c_str()) &&
+        SetEnvironmentVariableA(game_log::kVariable,("file:"+witness_path).c_str()) &&
+        SetEnvironmentVariableA(game_log::kMarkerVariable,marker);
+    check(ready,"witness: the private folder and timed marker are set for this process");
+    if(!ready)return false;                         // do not let logging fall back to the host's switch
+    const auto& sink=detail::sink();                // the same memoized sink the witness lines use
+    const bool joined=sink.file && sink.until==until && sink.cap==game_log::kFileCapBytes;
+    check(joined,"witness: the real sink joins the file with its time and size bounds");
+    return joined;
 }
 
 // A substitute of the device progress source (device-progress.h). Every snapshot carries one mark whose value
@@ -349,7 +388,7 @@ void test_witness_lines() {
     std::string text;
     // _fsopen, not fopen_s: the shell's sink still holds this file open for append, and fopen_s asks for
     // exclusive access.
-    FILE* const file=_fsopen(kLogName,"rb",_SH_DENYNO);
+    FILE* const file=_fsopen(witness_path.c_str(),"rb",_SH_DENYNO);
     check(file!=nullptr,"witness: the log file of this process opens for reading");
     if(file){
         char buffer[4096];
@@ -372,11 +411,8 @@ void test_witness_lines() {
 }
 
 int main() {
-    // Before anything logs: stdio-log.h reads AMDGPU_WDDM_LOG once, on the first line it prints.
-    DeleteFileA(kLogName);
-    const std::string sink=std::string("file:")+kLogName;
-    if(!SetEnvironmentVariableA("AMDGPU_WDDM_LOG",sink.c_str()))
-        check(false,"witness: the log switch is set for this process");
+    // Before anything logs: stdio-log.h chooses the sink once, on its first use.
+    if(!prepare_witness_log())return 1;
     test_cancelled_timer_wait();
     test_two_callers_one_timer();
     test_slot();
