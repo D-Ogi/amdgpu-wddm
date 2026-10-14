@@ -57,6 +57,12 @@ tools/win/amdgpu_wddm_control/art/wallpaper/*.nwp binary
 # may normalize.
 docs/media/** binary
 
+# The GDI compute kernels are an input of a hash: driver/kmd/gdi_kernels.generated.h records the
+# SHA-256 of gdi_kernels.cl and gdi_pixel.h, and tools/gpu/gdi_kernels.py --check compares it with
+# the files in the tree. They are stored with LF line endings, so that every checkout gives the
+# bytes that hash names and a fresh worktree does not fail the gate.
+*.cl text eol=lf
+
 # HIP device sources are stored with LF line endings, so that a rebuild of a committed
 # code object compiles the same bytes on every checkout.
 *.hip text eol=lf
