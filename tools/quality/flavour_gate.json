@@ -565,6 +565,16 @@
    }
   },
   {
+   "name": "DXVK_SHADER_CACHE",
+   "where": "dxvk src/ddi/shader_cache_policy.cpp, src/dxvk/dxvk_shader_cache.cpp",
+   "does": "disables the default shader cache for diagnostics",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_dxvk.dll"
+    ]
+   }
+  },
+  {
    "name": "DXVK_SHADER_CACHE_PATH",
    "where": "dxvk src/dxvk/dxvk_shader_cache.cpp",
    "does": "moves the shader cache that holds compiled shader code to that directory",
