@@ -37,6 +37,10 @@ namespace {
 // instances, and each one copies the environment when it starts. A _putenv_s of the program
 // therefore never reaches a getenv of this DLL, while GetEnvironmentVariable reads the one
 // block that both of them write.
+//
+// BD-167: every number this reads is a lab build's switch (build-runtime.ps1 -Lab). A release runtime reads none of
+// them and runs as with each one unset: the library's wait bound, the batching defaults.
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
 uint32_t read_ms(const char* name) {
     char text[32];
 #if defined(_WIN32)
@@ -55,6 +59,7 @@ uint32_t read_ms(const char* name) {
     const unsigned long value = std::strtoul(text, nullptr, 10);
     return value > 0xFFFFFFFFul ? 0xFFFFFFFFu : static_cast<uint32_t>(value);
 }
+#endif
 
 // The name as it stands, for a switch that is a word and not a number. The same
 // MEASURED note applies: the operating system's environment and not getenv.
@@ -97,12 +102,15 @@ void apply_batch_policy(bc250hsa_device* dev) {
     // An absent variable takes the default, and the default is on, so only an explicit 0
     // turns batching off. read_ms answers 0 for both, which is why the text is read here.
     policy.enabled = 1u;
+    policy.light_barrier = 1u;
+    // BD-167: the switches are the measurement arms of a lab build. A release runtime keeps the defaults above, with
+    // max_dispatches and max_hold_us 0 (the library's), and the compute state cache on.
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
     if (read_text("BC250_HIP_BATCH", text, sizeof(text)) && std::strcmp(text, "0") == 0) {
         policy.enabled = 0u;
     }
     policy.max_dispatches = read_ms("BC250_HIP_BATCH_MAX");
     policy.max_hold_us = read_ms("BC250_HIP_BATCH_HOLD_US");
-    policy.light_barrier = 1u;
     if (read_text("BC250_HIP_BARRIER", text, sizeof(text)) && std::strcmp(text, "full") == 0) {
         policy.light_barrier = 0u;
     }
@@ -110,6 +118,9 @@ void apply_batch_policy(bc250hsa_device* dev) {
         std::strcmp(text, "0") == 0) {
         state().dispatch_flags |= BC250HSA_DISPATCH_FULL_STATE;
     }
+#else
+    (void)text;
+#endif
     const bc250hsa_status status = bc250hsa_batch_policy_set(dev, &policy);
     if (status != BC250HSA_OK) {
         std::fprintf(stderr, "amdhip64: the backend refused the batching policy (%s); the"
@@ -128,6 +139,9 @@ void apply_gpu_copy_policy(bc250hsa_device* dev) {
     if (read_text("BC250_HIP_GPU_COPY", text, sizeof(text)) && std::strcmp(text, "0") == 0) {
         s.gpu_copy_enabled = false;
     }
+    // BD-167: the fill route and the threshold are measurement arms of a lab build. A release runtime keeps the
+    // defaults: the processor fill for a mapped allocation, 4096 bytes.
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
     if (read_text("BC250_HIP_GPU_FILL", text, sizeof(text)) && std::strcmp(text, "1") == 0) {
         s.gpu_fill_mapped = true;
     }
@@ -144,6 +158,7 @@ void apply_gpu_copy_policy(bc250hsa_device* dev) {
                          s.gpu_copy_min_bytes);
         }
     }
+#endif
     // A GPU copy waits for its own fence inside layer 1, so layer 1 needs the wait bound
     // this process uses everywhere else. Without it a copy of a short lab trial could
     // wait the library's 120 s default (bc250hsa.h rule 6).
@@ -192,8 +207,10 @@ hipError_t device(bc250hsa_device** out) {
         // runtime would lose the very line the lab needs (defect BD-110). With
         // BC250_HIP_LOG unset this reads one local static and returns.
         log_start();
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
         s.wait_slice_ms = read_ms("BC250_HIP_WAIT_SLICE_MS");
         s.wait_total_ms = read_ms("BC250_HIP_WAIT_TOTAL_MS");
+#endif
         // The interface version of the library we were built against. A different major value
         // means the contract moved, and a wrong contract must not reach the hardware.
         if (bc250hsa_abi_version_major() != BC250HSA_ABI_VERSION_MAJOR) {

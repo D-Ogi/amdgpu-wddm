@@ -1,10 +1,13 @@
 # Rebuild shipped HIP samples and HIPBLAS after a device-header change.
 # Runs only the independent HIPBLAS CPU core test. No GPU executable is run.
+# -Lab builds the lab flavour of the samples (BD-167): vadd --wait-total and the hipbench arms set the runtime's
+# switches, which only a lab runtime (build-runtime.ps1 -Lab) reads. Without it, vadd.exe holds no switch name.
 param(
     [Parameter(Mandatory)][string]$Root,
     [Parameter(Mandatory)][string]$Out,
     [Parameter(Mandatory)][string]$ImportLibrary,
-    [string]$ClangBin = ''
+    [string]$ClangBin = '',
+    [switch]$Lab
 )
 $ErrorActionPreference = 'Stop'
 if (-not $ClangBin) { $ClangBin = Join-Path $Root 'toolchain/llvm-amdgpu-22.1.8/mingw64/bin' }
@@ -49,6 +52,7 @@ try {
         # Shared sample-oracle headers define static helpers used only by their
         # separate host tests (vadd_produced); do not edit those production inputs.
         '-Wno-unused-function', "-I$PSScriptRoot/include")
+    if ($Lab) { $flags += '-DAMDGPU_WDDM_LAB_FLAVOUR=1' }
     foreach ($name in @('vadd', 'hipbench')) {
         $exe = Join-Path $Out "$name.exe"
         & $clang @flags (Join-Path $PSScriptRoot "samples/$name.hip") "-L$importDir" -o $exe

@@ -43,6 +43,9 @@ bool       g_on = false;
 bool       g_own_stream = false;
 uint32_t   g_level = BC250HSA_LOG_INFO;
 
+// BD-167: the switch is a lab build's (build-runtime.ps1 -Lab). A release runtime reads neither variable, installs
+// no sink and writes nothing of its own, as with BC250_HIP_LOG unset.
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
 // The operating system's environment and not getenv, for the reason hip_device.cpp states: a
 // program with the static C runtime and this DLL with the dynamic one keep two copies.
 bool env_text(const char* name, char* text, size_t bytes) {
@@ -59,6 +62,7 @@ bool env_text(const char* name, char* text, size_t bytes) {
     return true;
 #endif
 }
+#endif
 
 const char* level_name(uint32_t level) {
     switch (level) {
@@ -85,6 +89,7 @@ unsigned long this_thread() {
 #endif
 }
 
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
 // The sink layer 1 writes through. It takes the same lock as our own lines, so a message of the
 // library and a message of this runtime never interleave inside one line.
 void sink(void* ctx, uint32_t level, const char* message) {
@@ -133,6 +138,9 @@ void start() {
                  bc250hsa_abi_version_major(), bc250hsa_abi_version_minor());
     std::fflush(out);
 }
+#else
+void start() {}
+#endif
 
 }  // namespace
 
