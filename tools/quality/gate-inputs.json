@@ -522,6 +522,11 @@
         "host"
       ]
     },
+    "connector-link-prepare-cleanup": {
+      "inputs": [
+        "host"
+      ]
+    },
     "connector-link-first-failure": {
       "inputs": [
         "host"

@@ -385,6 +385,20 @@ static NTSTATUS ConnectorStartInherited(BC250_DEVICE* Device)
 // InheritedFixed is that static path itself (a scaled firmware tuple, #38 and
 // BD-155, or a non-identity inherited transform). Its refusal does mean the
 // tuple cannot be described at all, and the start still fails there.
+// The one place that decides whether a refused start left the hardware as the
+// firmware had it. Three results have to agree, and each is a hardware
+// obligation this start took on: the HPD disarm, the caller's own release, and
+// the terminal release that ConnectorLinkPrepare performed inside itself. That
+// last one is why this is a function: the inner release frees the context and
+// clears Device->ConnectorLink, so the caller's release answers SUCCESS for a
+// NULL context, and a failed AUX restore (which dpaux.c keeps open on purpose)
+// would otherwise be preserved as "nothing happened" (BD-169 review).
+BOOLEAN ConnectorRefusalPreserved(const BC250_DEVICE* Device, NTSTATUS Hpd, NTSTATUS Release)
+{
+    return (NT_SUCCESS(Hpd) && NT_SUCCESS(Release) &&
+            NT_SUCCESS(Device->ConnectorLinkCleanup)) ? TRUE : FALSE;
+}
+
 BOOLEAN ConnectorRefusalKeepsDisplay(const BC250_DEVICE* Device)
 {
     const BC250_MODESET* m=&Device->Modeset;
@@ -420,6 +434,7 @@ NTSTATUS ConnectorStart(BC250_DEVICE* Device)
     RtlZeroMemory(&c->FirstRecovery,sizeof(c->FirstRecovery));
     c->StartKind=c->StartAdapter=c->StartLimit=c->StartTargets=c->StartAccepted=0;
     c->StartPreserved=0;        // earned per return path below (BD-169)
+    Device->ConnectorLinkCleanup=STATUS_SUCCESS;     // no earlier attempt's cleanup is this start's
     c->StartStatus=STATUS_NOT_SUPPORTED;
     if (!Device->FullWddm) {
         // Display-only does not own a hardware connector.
@@ -485,15 +500,16 @@ NTSTATUS ConnectorStart(BC250_DEVICE* Device)
         InterlockedExchange(&c->Enabled, 0);
         InterlockedExchange(&c->Running, 0);
         release = ConnectorLinkRelease(Device);
-        if (NT_SUCCESS(hpd) && NT_SUCCESS(release)) c->StartPreserved=1;
-        else GuardLog("connector: start refusal left HPD %08lX release %08lX; no static fallback",
-                      (ULONG)hpd,(ULONG)release);
+        if (ConnectorRefusalPreserved(Device, hpd, release)) c->StartPreserved=1;
+        else GuardLog("connector: start refusal left HPD %08lX release %08lX prepare %08lX; no static fallback",
+                      (ULONG)hpd,(ULONG)release,(ULONG)Device->ConnectorLinkCleanup);
         InterlockedIncrement(&c->Refusals);
     }
     c->LastStatus = c->StartStatus = status;
     ConnectorOperationRelease(Device);
     ConnectorSnapshotRelease(snapshot);
-    GuardLog("connector: start generation %lu status %08lX inherited stream preserved", generation, (ULONG)status);
+    GuardLog("connector: start generation %lu status %08lX inherited stream preserved %lu",
+        generation, (ULONG)status, c->StartPreserved);
     return status;
 }
 

@@ -276,6 +276,7 @@ try {
   @{n='connector-link-stale-generation';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitGeneration','-ExpectFailure')}
   @{n='connector-link-open-cleanup';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitOpenCleanup','-ExpectFailure')}
   @{n='connector-link-cold-recovery';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitColdRecovery','-ExpectFailure')}
+  @{n='connector-link-prepare-cleanup';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitPrepareCleanup','-ExpectFailure')}
   @{n='connector-link-first-failure';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitFirstFailure','-ExpectFailure')}
   @{n='connector-link-nested-hdmi';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-NestedHdmiStop','-ExpectFailure')}
   @{n='connector-link-diagnostic-replay';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitDiagnosticReplay','-ExpectFailure')}

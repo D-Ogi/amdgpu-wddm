@@ -174,6 +174,10 @@ typedef struct _BC250_DEVICE {
     BC250_MODESET Modeset;             // modeset.c: the EDID, the source modes, pipe 0's scaler and viewport
     BC250_CONNECTOR Connector;         // ISR/DPC/passive owner of the single physical connector
     PVOID ConnectorLink;               // PASSIVE-only clock/PHY/timing transaction, connector_link.c
+    // BD-169: the result of a terminal release that connector_link.c performed itself, which nobody else can
+    // ask for afterwards: the context is freed and ConnectorLink is NULL, so a second release answers SUCCESS.
+    // A caller that has to know whether the hardware is still as the firmware left it reads this as well.
+    NTSTATUS ConnectorLinkCleanup;
     volatile LONG RetainedPowerPhase; // 0 active, 1 suspending, 2 suspended, 3 restoring, 4 failed
     DEVICE_POWER_STATE RetainedDownState;
     POWER_ACTION RetainedDownAction;
