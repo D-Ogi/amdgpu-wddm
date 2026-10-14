@@ -843,3 +843,27 @@ $r = Invoke-Headless -File $pythonExe -Arguments @((Join-Path $PSScriptRoot 'sym
     '--package', $pkg, '--symbols', $symbolArchive) -TimeoutSeconds 600
 $r.text
 if ($r.code -ne 0) { throw 'symbols: the archive does not match the package that ships (see above)' }
+# The symbols of the shipped files (symbols.py). A crash report from a tester, a dump from the lab and a
+# debugger session all need the symbols of the exact bytes that ran, and a PDB is larger than the driver, so
+# the package carries none of them: the archive stands beside this build, one directory per flavour, mirroring
+# the payload layout (three builds of the RADV ICD all record the name vulkan_radeon.pdb). The manifest records
+# the GUID and age of each PE's own debug directory, which no other build repeats, so the archived file can be
+# tied to the shipped byte later. The archive never goes into the package and never onto GitHub.
+Write-Host 'symbols'
+$symbolArchive = Join-Path $Out "symbols\$Flavour"
+$symbolRecords = Join-Path $Out "symbols-$Flavour.json"
+$r = Invoke-Headless -File $pythonExe -Arguments @((Join-Path $PSScriptRoot 'symbols.py'), 'archive',
+    '--sources', $sourcesPath, '--root', $Root, '--package', $pkg, '--out', $symbolArchive,
+    '--records', $symbolRecords) -TimeoutSeconds 600
+$r.text
+if ($r.code -ne 0) { throw 'symbols: a shipped file has no symbol file of its own build (see above)' }
+$symbols = [ordered]@{ archive = "symbols/$Flavour"; in_package = $false
+    files = (Get-Content -LiteralPath $symbolRecords -Raw | ConvertFrom-Json) }
+
+    symbols = $symbols            # where this build's symbol files are, and which file belongs to which byte
+# The archive read back against the package that ships, the way the version stamps are read back: every PE of
+# the package has its symbol file in the archive, and that file carries the identity the PE names.
+$r = Invoke-Headless -File $pythonExe -Arguments @((Join-Path $PSScriptRoot 'symbols.py'), 'check',
+    '--package', $pkg, '--symbols', $symbolArchive) -TimeoutSeconds 600
+$r.text
+if ($r.code -ne 0) { throw 'symbols: the archive does not match the package that ships (see above)' }

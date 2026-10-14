@@ -102,8 +102,14 @@ if (-not (Test-Path -LiteralPath $icon -PathType Leaf)) { throw "application ico
 # The same file as a resource as well (SetWindowIcon): the window's icon is then the authored 16, 20, 24, ... 256
 # image for the size Windows asks for, instead of one 32x32 image rescaled on a high-resolution screen.
 $resources += "/resource:$icon,nagi.ico"
-& $csc /nologo /noconfig /nostdlib+ @refs /target:winexe /platform:x64 /optimize+ /warnaserror+ /langversion:7.3 /deterministic+ `
-    "/win32manifest:$here\app.manifest" "/win32icon:$icon" "/out:$exe" @resources @((Get-ChildItem "$here\src\*.cs").FullName | Sort-Object)
+# /debug:portable, from the output directory with relative names, for the reason the control application's
+# build states: the installer ships, so it gets a portable PDB, and csc records the path it is given.
+Push-Location -LiteralPath $Out
+try {
+    & $csc /nologo /noconfig /nostdlib+ @refs /target:winexe /platform:x64 /optimize+ /warnaserror+ /langversion:7.3 /deterministic+ `
+        /debug:portable /pdb:amdgpu_wddm_setup.pdb `
+        "/win32manifest:$here\app.manifest" "/win32icon:$icon" "/out:amdgpu_wddm_setup.exe" @resources @((Get-ChildItem "$here\src\*.cs").FullName | Sort-Object)
+} finally { Pop-Location }
 if ($LASTEXITCODE -ne 0) { throw "csc failed ($LASTEXITCODE)" }
 $image = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($exe))
 if (-not $image.Contains('.NETFramework,Version=v4.8')) { throw 'amdgpu_wddm_setup.exe does not declare TargetFramework .NETFramework,Version=v4.8' }

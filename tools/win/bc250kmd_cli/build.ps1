@@ -42,6 +42,8 @@ foreach ($test in 'test-start-health.ps1', 'test-confirm.ps1', 'test-telemetry.p
 $env:INCLUDE = ''; $env:LIB = ''
 # log_test.c: the tool's log paging against a fake driver, i.e. which escapes take the adapter lock (BD-054).
 # Refuse to build a tool whose `log summary` would again idle the GPU once per page.
+# /Z7 here as well, so the state client's objects carry their debug information into the tool's PDB.
+$stateFlags = $repro + @('/O2', '/MT', '/Z7', '/D_CRT_SECURE_NO_WARNINGS',
 # Both tests replace hardware access. The wave test also decodes fixed values
 # and checks damaged saved snapshots. Build no tool past a failing test.
 $testOut = Join-Path $Out 'test'
@@ -59,7 +61,9 @@ if ($LASTEXITCODE -ne 0) { throw "cl failed on $source.c ($LASTEXITCODE)" }
 if ($LASTEXITCODE -ne 0) { throw "$source.c failed" }
 }
 
-& $cl @repro @('/nologo', '/W4', '/WX', '/O2', '/MT', '/D_CRT_SECURE_NO_WARNINGS',
+# The tool ships, so it gets a PDB: /Z7 in the object and /DEBUG at the link (archived beside the candidate,
+# named in the manifest by GUID and age).
+& $cl @repro @('/nologo', '/W4', '/WX', '/O2', '/MT', '/Z7', '/D_CRT_SECURE_NO_WARNINGS',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/Fo$Out\bc250kmd_cli.obj", "/Fe$Out\bc250kmd_cli.exe",
     (Join-Path $here 'bc250kmd_cli.c'), '/link', '/Brepro', "/LIBPATH:$(Join-Path $msvc.FullName 'lib\x64')",
@@ -69,7 +73,7 @@ if ($LASTEXITCODE -ne 0) { throw "$source.c failed" }
 if ($LASTEXITCODE -ne 0) { throw "cl failed ($LASTEXITCODE)" }
 
 # The monitor uses the same adapter selection and typed request code in-process.
-& $cl @repro @('/nologo', '/W4', '/WX', '/O2', '/MT', '/LD', '/DBC250_CONTROL_DLL', '/D_CRT_SECURE_NO_WARNINGS',
+& $cl @repro @('/nologo', '/W4', '/WX', '/O2', '/MT', '/LD', '/Z7', '/DBC250_CONTROL_DLL', '/D_CRT_SECURE_NO_WARNINGS',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/Fo$Out\bc250control.obj", "/Fe$Out\bc250control.dll",
     (Join-Path $here 'bc250kmd_cli.c'), '/link', '/Brepro', "/LIBPATH:$(Join-Path $msvc.FullName 'lib\x64')",

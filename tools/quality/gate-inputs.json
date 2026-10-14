@@ -1354,3 +1354,8 @@
     "LIB"
   ]
 }
+    },
+    "release-symbols": {
+      "inputs": [
+        "host"
+      ]
