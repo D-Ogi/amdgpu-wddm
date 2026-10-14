@@ -369,6 +369,7 @@ static NTSTATUS DisplayMapFramebuffer(BC250_DEVICE* d)
 }
 static void DisplayUnmapFramebuffer(BC250_DEVICE* d) { (void)d; }
 static void DisplayLogFramebufferSample(BC250_DEVICE* d) { (void)d; }
+static void DisplayDrawBootLogo(BC250_DEVICE* d) { (void)d; }   /* the boot-screen mascot: never fails a start */
 // GitHub #38: the real step names its registers through GuardStartDetail when it refuses (display_timing_refused.h).
 // BD-169: the inherited pipe's own refusal is written by this step even when the step succeeds, because an
 // equal-size pipe this driver cannot classify passes it and the start fails later, in ConnectorStart. The text is

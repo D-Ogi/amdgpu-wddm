@@ -1152,6 +1152,7 @@ NTSTATUS DisplayPrepareInheritedTiming(_Inout_ BC250_DEVICE* Device);
 NTSTATUS DisplayValidateInheritedSignal(BC250_DEVICE* Device);
 NTSTATUS DisplayMapFramebuffer(_Inout_ BC250_DEVICE* Device);
 void DisplayLogFramebufferSample(_In_ BC250_DEVICE* Device);
+void DisplayDrawBootLogo(_In_ BC250_DEVICE* Device);    // the boot-screen mascot (boot_logo.h), start only
 void DisplayUnmapFramebuffer(_Inout_ BC250_DEVICE* Device);
 
 // wddm.c (M7 stage A, ADR 0008). Everything here is inert while the EnableFullWddm gate is closed.

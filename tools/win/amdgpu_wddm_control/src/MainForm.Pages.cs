@@ -169,6 +169,7 @@ namespace AmdgpuWddmControl
                 p.Controls.Add(c);
             }
             if (modes.Count == 0) p.Controls.Add(Ui.Dim(Strings.T("perf.no-reading"), width));
+            p.Controls.Add(BuildBootLogo(width));
             var win = new CardPanel(Strings.T("display.windows.title"), width);
             win.Add(Ui.Dim(Strings.T("display.windows.text"), win.Inner));
             var open = Ui.Button(Strings.T("display.windows.open"), (s, e) => OpenWindowsSettings(DisplayInfo.WindowsDisplaySettings));

@@ -1258,3 +1258,17 @@ plan.line.gamelog-off|mt|1898e356|ゲームはログを書かなくなります�
 launch.starting|mt|ff3dab00|起動しています。最初にこのコンピューターを確認するため、数秒かかります。
 launch.slow|mt|653d44fd|Windows の応答が遅いため、起動にいつもより時間がかかっています。応答がそろうとアプリが開きます。このウィンドウを閉じることもできます。
 launch.close|mt|7d9eb7ac|閉じる
+
+# ---- the picture on the start screen (BootLogoSetting.cs, docs/design/boot-logo.md) ----
+display.boot-logo.title|mt-safe|a6b69697|起動画面
+display.boot-logo|mt|a3ca25a1|Windows の起動中に画像を表示する
+display.boot-logo.help|mt|33890302|Windows の起動中、画面には黒い背景に回転するリングが表示されます。これを有効にすると、ドライバーがリングの上に Nagi の画像を一度だけ描画し、デスクトップが表示されると画像は消えます。新しい設定は Windows を再起動した後に有効になります。
+display.boot-logo.state-on|mt|7399a125|Windows の起動中に画像が表示されます。
+display.boot-logo.state-off|mt|225caa0e|起動画面は Windows が描画するままになります。
+display.boot-logo.refuse.on-already|mt|bc05af2f|画像はすでに Windows の起動中に表示されています。
+display.boot-logo.refuse.off-already|mt|7a148b33|画像はすでに Windows の起動中に表示されていません。
+plan.line.boot-logo-on|mt|a13a3df6|Windows の起動中に画面へ画像を描画します。
+plan.line.boot-logo-off|mt|225caa0e|起動画面は Windows が描画するままになります。
+search.display.boot-logo|mt-safe|778d098c|起動画面の画像
+search.display.boot-logo.terms|mt-safe|0baabdd9|起動|スタート画面|ロゴ|画像|マスコット|nagi|スプラッシュ|リング
+help.setting.boot-logo|mt|84cc314f|Windows の起動中、回転するリングの黒い背景の上に、ドライバーがマスコットを描画できるようにします。最初から有効です。起動画面を Windows が描画するそのままにしたい場合は無効にしてください。新しい設定は Windows を再起動した後に有効になります。

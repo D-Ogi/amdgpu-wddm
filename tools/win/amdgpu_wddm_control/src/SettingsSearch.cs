@@ -35,6 +35,9 @@ namespace AmdgpuWddmControl
             E("games.rt", "games"), E("games.present", "games"), E("games.cpu", "games"), E("games.sm", "games"), E("games.cpu-render", "games"),
             E("games.undo", "games"), E("games.add", "games"),
             E("display.resolution", "display"), E("display.scaling", "display"), E("display.identify", "display"), E("display.scale", "display"),
+            // The picture on the start screen (BootLogoSetting.cs): a person looks for "boot" or "logo", which are
+            // not the words of the card itself.
+            E("display.boot-logo", "display"),
             E("perf.sensors", "performance"), E("perf.fan", "performance"), E("perf.cache", "performance"),
             // Full fan speed under a heavy load (fan.md rule 10): on the fan card, and the words a person types
             // about it ("loud", "noise") are not the words of the card itself.

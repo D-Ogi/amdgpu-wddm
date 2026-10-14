@@ -1277,3 +1277,17 @@ plan.line.gamelog-off|src|-|Games stop writing logs. The files already written a
 launch.starting|src|-|Starting. The app checks this computer first, which takes a few seconds.
 launch.slow|src|-|The start takes longer than usual, because Windows answers slowly. The app opens when it has the answers. You can also close this window.
 launch.close|src|-|Close
+
+# ---- the picture on the start screen (BootLogoSetting.cs, docs/design/boot-logo.md) ----
+display.boot-logo.title|src|-|Start screen
+display.boot-logo|src|-|Show the picture while Windows starts
+display.boot-logo.help|src|-|While Windows starts, the screen shows a spinning ring on black. With this on, the driver draws the picture of Nagi above the ring, once, and the picture goes as soon as the desktop appears. A new setting works after you restart Windows.
+display.boot-logo.state-on|src|-|The picture is shown while Windows starts.
+display.boot-logo.state-off|src|-|The start screen stays as Windows draws it.
+display.boot-logo.refuse.on-already|src|-|The picture is shown while Windows starts already.
+display.boot-logo.refuse.off-already|src|-|The picture is not shown while Windows starts already.
+plan.line.boot-logo-on|src|-|The picture is drawn on the screen while Windows starts.
+plan.line.boot-logo-off|src|-|The start screen stays as Windows draws it.
+search.display.boot-logo|src|-|Picture on the start screen
+search.display.boot-logo.terms|src|-|boot|start screen|logo|picture|mascot|nagi|splash|spinner
+help.setting.boot-logo|src|-|Lets the driver draw the mascot on the screen while Windows starts, over the black background of the spinning ring. It is on from the start. Switch it off if you want the start screen exactly as Windows draws it; a new setting works after you restart Windows.

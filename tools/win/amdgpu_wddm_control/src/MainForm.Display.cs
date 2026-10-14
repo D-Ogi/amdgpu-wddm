@@ -56,6 +56,25 @@ namespace AmdgpuWddmControl
         }
 
         // The rows of one monitor's card: resolution, refresh rate, scaling, and Apply / Discard for this monitor.
+        // The picture on the start screen (BootLogoSetting.cs, docs/design/boot-logo.md). The driver reads the
+        // setting when it starts, so the card says that a new choice works after the next restart of Windows.
+        CardPanel BuildBootLogo(int width)
+        {
+            var card = new CardPanel(Strings.T("display.boot-logo.title"), width);
+            bool on = BootLogoSetting.On(_snap.P(BootLogoSetting.ValueName));
+            var box = Ui.Check(Strings.T("display.boot-logo"), card.Inner - Theme.S(40));
+            box.Checked = on;
+            box.CheckedChanged += (s, e) =>
+            {
+                if (box.Checked == on) return;
+                RunAction(box.Checked ? "boot-logo-on" : "boot-logo-off");
+            };
+            card.Add(box);
+            Mark("display.boot-logo", box);
+            card.Add(Ui.Dim(Strings.T("display.boot-logo.help"), card.Inner));
+            return card;
+        }
+
         void AddDisplayChoices(CardPanel c, DisplayMode m, int number, string title)
         {
             var modes = DisplayInfo.Modes(m.Device);

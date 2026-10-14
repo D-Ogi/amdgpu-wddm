@@ -12,6 +12,11 @@
 #include "display_modes.h"
 #include "dcn_translate.h"          // DcnPrimaryPitch: the pitch of a primary of a smaller source mode
 #include "lab_gate.h"               // BD-167: the raw diagnostic escapes below are lab-only
+#include "boot_logo.h"              // the boot-screen mascot drawn into the firmware's framebuffer at start
+
+// The settings DisplayDrawBootLogo reads. On by default: a new feature of a release is usable after the install.
+#define BC250_BOOT_LOGO_DEFAULT 1ul
+#define BC250_BOOT_LOGO_ANCHOR_DEFAULT 350ul
 
 static ULONG g_Presents;
 
@@ -92,6 +97,106 @@ void DisplayLogFramebufferSample(_In_ BC250_DEVICE* Device)
             }
         }
     }
+}
+
+// What the display is fetching at the moment the picture is in the surface. The lab trials of 2026-10-14 could
+// not answer that with a camera: its frames show the mascot on the panel and then a black screen, and a
+// photograph of a black screen does not say whether the pipe was blanked, pointed at another surface, or given
+// black pixels by the first present. The log did not carry the address either, because the "display inherited:
+// surface" field is SurfaceConfig, a format register, not an address.
+// Three reads this driver already performs elsewhere, once per start, after the draw.
+// A failed read says so and prints no value: a zero address with a zero blank state would read as "scanning out
+// nothing", which is a conclusion drawn from a register that was never read.
+static void DisplayLogBootLogoScanout(_In_ BC250_DEVICE* Device)
+{
+    ULONG low = 0, high = 0, control = 0, blank = 0;
+    const char* which = "the primary surface address";
+    NTSTATUS status;
+
+    status = MmioDcnRead(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS, &low);
+    if (NT_SUCCESS(status))
+        status = MmioDcnRead(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH, &high);
+    if (NT_SUCCESS(status))
+    {
+        which = "the OTG control";
+        status = MmioDcnRead(Device, BC250_REG_DMU_OTG0_OTG_CONTROL, &control);
+    }
+    if (NT_SUCCESS(status))
+    {
+        which = "the OTG blank control";
+        status = MmioDcnRead(Device, BC250_REG_DMU_OTG0_OTG_BLANK_CONTROL, &blank);
+    }
+    if (!NT_SUCCESS(status))
+    {
+        GuardLog("boot logo: scanout not read at %s, status 0x%08X", which, (ULONG)status);
+        return;
+    }
+    GuardLog("boot logo: scanout 0x%llX inherited 0x%llX otg master %u blank %u control 0x%08X",
+             ((ULONGLONG)high << 32) | low, (ULONGLONG)Device->Post.PhysicAddress.QuadPart,
+             (control & OTG0_OTG_CONTROL__OTG_MASTER_EN_MASK) ? 1u : 0u,
+             (blank & OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK) ? 1u : 0u, blank);
+}
+
+// The boot-screen mascot, drawn once in DxgkDdiStartDevice and nowhere else (boot_logo.h, docs/design/boot-logo.md).
+//
+// The window it is in the surface is between this point and the first present: the firmware's display pipe is
+// still scanning out the surface the GOP left, and this driver has not yet committed a VidPN. After the first
+// present the compositor owns every pixel of that surface, so nothing here needs to undo itself.
+//
+// Four conditions, all of them refusals and none of them a start failure:
+//   1. The setting BootLogo (REG_DWORD under the driver's Parameters, 1 by default) is 1.
+//   2. The framebuffer is mapped, and its format and pitch were already proved by DisplayMapFramebuffer.
+//   3. Post.TargetId is D3DDDI_ID_UNINITIALIZED. The documentation of DxgkCbAcquirePostDisplayOwnership says
+//      that an uninitialized target "typically occurs after a system boot", and that "in the case of a
+//      driver-to-driver upgrade, the previous driver will have provided the target identifier". An upgrade start
+//      hands over a running desktop, not a boot screen: the mascot must not be painted over it.
+//   4. The picture fits (boot_logo.c decides).
+// The bugcheck display is a separate path (Bc250SystemDisplayEnable/Write) and never reaches this code.
+void DisplayDrawBootLogo(_In_ BC250_DEVICE* Device)
+{
+    BC250_BOOT_LOGO_TARGET target;
+    BC250_BOOT_LOGO_RESULT result;
+    ULONG written = 0, anchor, microseconds;
+    LARGE_INTEGER frequency;
+    LONGLONG begin, end;
+
+    // Said, not silent: a support file that holds no "boot logo:" line at all cannot tell a driver whose owner
+    // turned the picture off from one in which this code never ran.
+    if (GuardReadSetting(L"BootLogo", BC250_BOOT_LOGO_DEFAULT) != 1)
+    {
+        GuardLog("boot logo: off by setting (BootLogo 0)");
+        return;
+    }
+    if (Device->Framebuffer == NULL) { GuardLog("boot logo: no framebuffer"); return; }
+    if (Device->Post.TargetId != D3DDDI_ID_UNINITIALIZED)
+    {
+        GuardLog("boot logo: skipped, target %u is a driver handoff, not a boot", Device->Post.TargetId);
+        return;
+    }
+    if ((ULONGLONG)Device->Post.Pitch * Device->Post.Height > Device->FramebufferLength)
+    {
+        GuardLog("boot logo: skipped, mapping shorter than the surface");
+        return;
+    }
+    anchor = GuardReadSetting(L"BootLogoAnchorPermille", BC250_BOOT_LOGO_ANCHOR_DEFAULT);
+    target.Width = Device->Post.Width;
+    target.Height = Device->Post.Height;
+    target.Pitch = Device->Post.Pitch;
+    target.AnchorPermille = anchor;
+    // Timed: this is the only write this driver makes to the inherited surface with a known byte count, so the
+    // microseconds and the pixels together are the write-combine rate of that mapping, measured on the real
+    // surface at every start instead of guessed. Nothing depends on the number; it is for the log.
+    begin = KeQueryPerformanceCounter(&frequency).QuadPart;
+    result = Bc250BootLogoDraw(Device->Framebuffer, Bc250BootLogoAsset(), &target, &written);
+    end = KeQueryPerformanceCounter(NULL).QuadPart;
+    microseconds = (frequency.QuadPart > 0 && end > begin)
+                 ? (ULONG)(((ULONGLONG)(end - begin) * 1000000ull) / (ULONGLONG)frequency.QuadPart) : 0;
+    GuardLog("boot logo: %s on %ux%u anchor %u, %u pixels, %u bytes, %u us",
+             Bc250BootLogoResultText(result), target.Width, target.Height, anchor, written, written * 4u,
+             microseconds);
+    // After the draw, so it reports the hardware's state while the picture is in the surface. It answers the
+    // question the camera could not: whether the inherited surface is the one being scanned out at that moment.
+    DisplayLogBootLogoScanout(Device);
 }
 
 void DisplayUnmapFramebuffer(_Inout_ BC250_DEVICE* Device)

@@ -1260,3 +1260,17 @@ plan.line.gamelog-off|mt|1898e356|Gry przestaną zapisywać dzienniki. Zapisane 
 launch.starting|mt|ff3dab00|Uruchamianie. Aplikacja najpierw sprawdza ten komputer, co trwa kilka sekund.
 launch.slow|mt|653d44fd|Uruchamianie trwa dłużej niż zwykle, bo Windows odpowiada powoli. Aplikacja otworzy się, gdy dostanie odpowiedzi. Możesz też zamknąć to okno.
 launch.close|mt|7d9eb7ac|Zamknij
+
+# ---- the picture on the start screen (BootLogoSetting.cs, docs/design/boot-logo.md) ----
+display.boot-logo.title|mt-safe|a6b69697|Ekran startowy
+display.boot-logo|mt|a3ca25a1|Pokazuj obrazek podczas uruchamiania Windows
+display.boot-logo.help|mt|33890302|Podczas uruchamiania Windows ekran pokazuje obracające się kółko na czarnym tle. Gdy to jest włączone, sterownik rysuje nad kółkiem obrazek Nagi, jeden raz, a obrazek znika, gdy tylko pojawi się pulpit. Nowe ustawienie działa po ponownym uruchomieniu Windows.
+display.boot-logo.state-on|mt|7399a125|Obrazek jest pokazywany podczas uruchamiania Windows.
+display.boot-logo.state-off|mt|225caa0e|Ekran startowy zostaje taki, jaki rysuje go Windows.
+display.boot-logo.refuse.on-already|mt|bc05af2f|Obrazek jest już pokazywany podczas uruchamiania Windows.
+display.boot-logo.refuse.off-already|mt|7a148b33|Obrazek już nie jest pokazywany podczas uruchamiania Windows.
+plan.line.boot-logo-on|mt|a13a3df6|Obrazek jest rysowany na ekranie podczas uruchamiania Windows.
+plan.line.boot-logo-off|mt|225caa0e|Ekran startowy zostaje taki, jaki rysuje go Windows.
+search.display.boot-logo|mt-safe|778d098c|Obrazek na ekranie startowym
+search.display.boot-logo.terms|mt-safe|0baabdd9|rozruch|ekran startowy|logo|obrazek|maskotka|nagi|powitanie|kółko
+help.setting.boot-logo|mt|84cc314f|Pozwala sterownikowi rysować maskotkę na ekranie podczas uruchamiania Windows, na czarnym tle obracającego się kółka. Jest włączone od początku. Wyłącz to, jeśli chcesz ekran startowy dokładnie taki, jaki rysuje go Windows; nowe ustawienie działa po ponownym uruchomieniu Windows.

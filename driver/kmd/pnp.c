@@ -186,6 +186,9 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     status=ConnectorBufferPrepare(device);
     GuardLog("connector: handoff reservation status %08lX",(ULONG)status);
     DisplayLogFramebufferSample(device);   // after VramStart, so the carve-out view exists when that gate is open
+    // After the sample, so the sample keeps reading what the firmware left, and before WddmStart, so the picture
+    // is on the screen for the whole of the start that follows. Never fails the start (display.c).
+    DisplayDrawBootLogo(device);
     GartStart(device);      // same rule
     PspStart(device);       // same rule
     GpuMemStart(device);    // same rule

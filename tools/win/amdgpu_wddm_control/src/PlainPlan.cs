@@ -37,6 +37,9 @@ namespace AmdgpuWddmControl
                 // Full fan speed under heavy load (fan.md rule 10). On is the driver's default, so the delete form
                 // is the "on" sentence here, the other way round from the switches above.
                 case "FanLoadBoost": return w.Delete || w.Number == 1 ? "plan.line.fan-boost-on" : "plan.line.fan-boost-off";
+                // The picture on the start screen (boot-logo.md). On is the driver's default, so the delete form
+                // is the "on" sentence here as well.
+                case "BootLogo": return w.Delete || w.Number != 0 ? "plan.line.boot-logo-on" : "plan.line.boot-logo-off";
                 // The waiting time for the graphics (TdrSetting.cs). The app only ever writes a number; the delete
                 // form is here for an undo of a backup taken before the value existed.
                 case TdrSetting.ValueName: return w.Delete ? "plan.line.tdr-default" : "plan.line.tdr";

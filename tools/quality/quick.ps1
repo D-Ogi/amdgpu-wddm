@@ -309,6 +309,9 @@ Check 'ledger-call' { & pwsh -NoProfile -File "$repo\tools\release\test-ledger-c
  Check 'link-command-import' { & python -B "$repo\tools\import\extract_link_commands.py" --check }
  Check 'link-register-import' { & python -B "$repo\tools\import\extract_link_regs.py" --check }
  Check 'blit-plan' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_blit_plan.ps1" -Root $Workspace -Out "$Out\blit-plan" -Kits "$Kits" }
+ # The boot-screen mascot (docs/design/boot-logo.md): the run-length decoder, the placement and the blend, against
+ # an independent pixel oracle, plus the shipped asset's own self-check and its size budget.
+ Check 'boot-logo' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_boot_logo.ps1" -Root $Workspace -Out "$Out\boot-logo" -Kits "$Kits" }
  Check 'gpu-clock' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_gpu_clock.ps1" -Root $Workspace -Out "$Out\gpu-clock" -Kits "$Kits" }
  # The installer owns version mapping; KMD must not rewrite OS device properties.
  Check 'driver-version' { & powershell -NoProfile -File "$repo\tools\release\test-version-identity.ps1" }
