@@ -10,7 +10,7 @@ using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using AmdgpuWddmSetup;
 
-static class UnitTests
+static partial class UnitTests
 {
     static int _failed, _passed;
 
@@ -42,6 +42,7 @@ static class UnitTests
             SmallScreens();
             NoConfirmations(repo);
             SingleFile();
+            StartTests(repo);
             LocaleContracts();
             Quoting();
             NativeLayout();

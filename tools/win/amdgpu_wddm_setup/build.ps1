@@ -5,7 +5,7 @@
 #   pwsh tools\win\amdgpu_wddm_setup\build.ps1 -Out P:\BC-250\scratch\build\gui-setup\setup-app [-NoSmoke]
 #
 # Gates, in order, each stops the build:
-#   1. unit tests (test/UnitTests.cs): G-STR and G-NOINT over the tables, the engine contract against
+#   1. unit tests (test/UnitTests.cs, test/StartTests.cs: the order of the start): G-STR and G-NOINT over the tables, the engine contract against
 #      tools/release/installer (every check id, stage and message id has words), the event model and result binding
 #      (A2), the A3 texts, settings-impact lines, notes, prepared folders, guide ranks, arguments, quoting, and the
 #      native TOKEN_PRIVILEGES layout of the planned restart;
@@ -32,6 +32,8 @@
 #      box or option button of its own and its Install button is never off. G-SHORTCUT holds the two shortcut
 #      options of the same instruction: the plan screen offers the Start menu and the desktop, and both are on when
 #      it opens.
+#   4b. --smoke-loading: the loading window of the start in each of its stages, with the same layout and G-NOINT
+#      checks, at four DPIs, four languages, three text sizes and two screens;
 #   5. tools\release\test-setup-exe.ps1: the exe is packed around a small package of its own (the single-file
 #      installer the release ships, owner 2026-10-12) and reads it back through --smoke-payload, and nine damaged, doctored
 #      or empty exes are offered to the reader and every one of them is refused.
@@ -56,10 +58,12 @@ $exe = Join-Path $Out 'amdgpu_wddm_setup.exe'
 $refs = 'mscorlib.dll', 'System.dll', 'System.Core.dll', 'System.Drawing.dll', 'System.Windows.Forms.dll', 'System.IO.Compression.dll',
     'System.IO.Compression.FileSystem.dll', 'System.Web.Extensions.dll' | ForEach-Object { "/reference:$fx\$_" }
 $pure = 'Strings.cs', 'Json.cs', 'EngineModel.cs', 'PlanText.cs', 'SetupArgs.cs', 'NoInternals.cs', 'Redactor.cs', 'SmallScreen.cs', 'InstallFlow.cs', 'Payload.cs' | ForEach-Object { Join-Path $here "src\$_" }
+# The order of the start: the loading window before every slow step (LoadingWindow.cs).
+$pure += 'StartSequence.cs' | ForEach-Object { Join-Path $here "src\$_" }
 
 # 1. Unit tests of the pure parts.
 & $csc /nologo /noconfig /nostdlib+ @refs /target:exe /platform:x64 /warnaserror+ /langversion:7.3 /deterministic+ `
-    "/out:$obj\unit-tests.exe" @pure (Join-Path $here 'src\Native.cs') (Join-Path $here 'test\UnitTests.cs')
+    "/out:$obj\unit-tests.exe" @pure (Join-Path $here 'src\Native.cs') (Join-Path $here 'test\UnitTests.cs') (Join-Path $here 'test\StartTests.cs')
 if ($LASTEXITCODE -ne 0) { throw "unit test compile failed ($LASTEXITCODE)" }
 $unit = @(& "$obj\unit-tests.exe" $repo (Join-Path $here 'strings') | ForEach-Object { [string]$_ })
 $unitFailed = $LASTEXITCODE -ne 0
@@ -227,6 +231,16 @@ if (-not $NoSmoke) {
         if ($code -ne 0 -or $layout -notmatch '^ok: ') { throw "render at scale $($r[0]), $($r[1]), text $($r[2]) $($extra -join ' ') (exit $code):`n$layout" }
     }
     Write-Host "  render: $(@(Get-ChildItem (Join-Path $obj 'render-1-en-text1') -Filter *.png).Count) screens x $($renders.Count) (4 DPIs x 4 languages + 150 % text + 2 without the guide character + 2 in high contrast + 6 runs over five screen sizes from 800x600 up), no overlap or overflow, the guide art and the right-hand panel where they belong, G-A11Y, G-CHROME, G-SMALL, G-CONSENT, G-SHORTCUT and G-NOINT clean ($obj\render-*)"
+
+    # 4b. The loading window of the start (LoadingWindow.cs) in each of its stages, four languages, four scales, three
+    #     text sizes and a 1024x768 and a large screen: it fits or scrolls, nothing overlaps or overflows, no internals,
+    #     every text in the tables, the guide's picture where the exe carries it.
+    $dir = Join-Path $obj 'loading'
+    Remove-Item -Recurse -Force $dir -ErrorAction SilentlyContinue
+    $code = Invoke-Exe @('--smoke-loading', $dir) 300
+    $loading = Get-Content (Join-Path $dir 'loading.txt') -Raw -ErrorAction SilentlyContinue
+    if ($code -ne 0 -or $loading -notmatch '^ok: ') { throw "smoke-loading (exit $code):`n$loading" }
+    Write-Host "  loading window: $((($loading -split "`r?`n") | Where-Object { $_ }) -join ', ')"
 
     # 5. The single-file installer (Payload.cs): the exe just built is packed around a small package of its own and
     #    read back through its --smoke-payload mode, then nine damaged, doctored or empty exes are offered to it and every one

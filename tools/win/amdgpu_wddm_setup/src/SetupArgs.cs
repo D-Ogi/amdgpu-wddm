@@ -27,6 +27,13 @@
 //                                             The folder is a plain one, so the reader can be tested without
 //                                             administrator rights; an install always unpacks into the protected
 //                                             %ProgramData%\amdgpu-wddm\setup instead
+//   amdgpu_wddm_setup.exe --smoke-loading <out-dir>
+//                                             no window: the loading window (LoadingWindow.cs) in each of its stages,
+//                                             four languages, four scales, three text sizes and two screens, checked;
+//                                             findings in <out-dir>\loading.txt
+//   (internal) --loading-handover <name>     given by the copy that asks for administrator rights to the copy it
+//                                             starts: the name of the event the new copy sets when its own loading
+//                                             window is on the screen, so the first one can close its window then
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -42,6 +49,9 @@ namespace AmdgpuWddmSetup
         // Set by Program when this exe carried the package inside itself and unpacked it (Payload.cs): the folder
         // the window removes when the run ends with no restart pending. Never a command-line option.
         public string PayloadPackage;
+        // The event of the copy that started this one as administrator (--loading-handover); null when none did.
+        public string Handover;
+        public const string HandoverPrefix = "amdgpu-wddm-setup-loading-";
         public bool DryRun, ApplySystemTuning;
         // The two shortcut options of the plan screen, both on unless a switch states otherwise (owner, 2026-10-12).
         // null is "nothing was stated": the screen opens the box on the answer the engine reports, and the run that
@@ -62,7 +72,17 @@ namespace AmdgpuWddmSetup
         // small-screen rule and the window's own size read it, so one render is the same picture on any PC.
         public int WorkWidth, WorkHeight;
 
-        public bool Headless { get { return Mode == "smoke-render" || Mode == "smoke-engine" || Mode == "smoke-start-failure" || Mode == "smoke-payload" || Mode == "version"; } }
+        public bool Headless { get { return Mode == "smoke-render" || Mode == "smoke-engine" || Mode == "smoke-start-failure" || Mode == "smoke-payload" || Mode == "smoke-loading" || Mode == "version"; } }
+
+        // A handover name is this program's own: the prefix and 32 hex digits, so a name from the command line can
+        // never reach another program's object.
+        public static bool HandoverName(string name)
+        {
+            if (name == null || !name.StartsWith(HandoverPrefix, StringComparison.Ordinal) || name.Length != HandoverPrefix.Length + 32) return false;
+            for (int k = HandoverPrefix.Length; k < name.Length; k++)
+                if ("0123456789abcdef".IndexOf(name[k]) < 0) return false;
+            return true;
+        }
 
         public static SetupArgs Parse(string[] args)
         {
@@ -121,6 +141,15 @@ namespace AmdgpuWddmSetup
                         a.SmokeDir = next();
                         if (a.SmokeDir == null) a.Error = "--smoke-payload <out-dir>";
                         break;
+                    case "--smoke-loading":
+                        a.SetMode("smoke-loading");
+                        a.SmokeDir = next();
+                        if (a.SmokeDir == null) a.Error = "--smoke-loading <out-dir>";
+                        break;
+                    case "--loading-handover":
+                        a.Handover = next();
+                        if (!HandoverName(a.Handover)) a.Error = "--loading-handover needs a name of this program";
+                        break;
                     case "--script": a.Script = next(); if (a.Script != "install.ps1" && a.Script != "prepare-offline.ps1") a.Error = "--script install.ps1 or prepare-offline.ps1"; break;
                     case "--no-nagi": a.NoNagi = true; break;
                     case "--work-area":
@@ -148,6 +177,7 @@ namespace AmdgpuWddmSetup
             if (a.Error == null && a.NoNagi && a.Mode != "smoke-render") a.Error = "--no-nagi only with --smoke-render";
             if (a.Error == null && a.HighContrast && a.Mode != "smoke-render") a.Error = "--high-contrast only with --smoke-render";
             if (a.Error == null && a.WorkWidth > 0 && a.Mode != "smoke-render") a.Error = "--work-area only with --smoke-render";
+            if (a.Error == null && a.Handover != null && a.Headless) a.Error = "--loading-handover only with a window";
             return a;
         }
 

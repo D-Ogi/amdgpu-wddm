@@ -71,13 +71,19 @@ namespace AmdgpuWddmSetup
                 return new WindowsPrincipal(id).IsInRole(WindowsBuiltInRole.Administrator);
         }
 
-        // Starts this program again as administrator with the same arguments (one UAC prompt). False when the user
-        // declined the prompt.
-        public static bool RelaunchElevated(string[] args)
+        // Starts this program again as administrator with the same arguments (one UAC prompt). Null when the user
+        // declined the prompt, else the new process, which the caller disposes. owner: the loading window, so the
+        // prompt belongs to a window the person sees (LoadingWindow.cs); .NET hands the shell that window only with
+        // ErrorDialog on, and a declined prompt shows no dialog of the shell. It may be called from any thread:
+        // Process.Start runs the shell's call on a thread of its own when the caller's is not a single-threaded one.
+        public static Process RelaunchElevated(string[] args, IntPtr owner)
         {
-            var psi = new ProcessStartInfo(Assembly.GetExecutingAssembly().Location, CommandLine.Join(args)) { UseShellExecute = true, Verb = "runas" };
-            try { using (Process.Start(psi)) return true; }
-            catch (Win32Exception) { return false; }
+            var psi = new ProcessStartInfo(Assembly.GetExecutingAssembly().Location, CommandLine.Join(args))
+            {
+                UseShellExecute = true, Verb = "runas", ErrorDialog = owner != IntPtr.Zero, ErrorDialogParentHandle = owner,
+            };
+            try { return Process.Start(psi); }
+            catch (Win32Exception) { return null; }
         }
 
         const string ControlKey = @"Software\amdgpu-wddm\Control";
