@@ -619,6 +619,7 @@ facts:
     date_from: "evidence-path"
     claim: "ROV and conservative rasterization tier 3 exact through the system runtime at FL 12_1 (conformance client 2BB5CC0D, 2026-10-01, kernel driver 0.7.185.1, GPU-composed desktop). The ROV subtest (43 overlapping triangles) matches its CPU oracle, 0 of 12288, on every ICD tried; the reversed-order oracle and the same shader without ROV each differ in 4096 of 4096 pixels (237-240). Conservative tier 3 with SV_InnerCoverage fails on the ICD registered then, 85077E29 (153 partly covered pixels not shaded, 237), and on DECB5C8A with overestimation and underestimation together (the same 153 read as fully covered, 238). It passes 0 of 12288 on 2A13235D, which also enables MSAA for that case (239, 240; Mesa fork commit 75020046). The client has not been rerun on the triplets registered after 2026-10-01. Its source is `tools/win/conformance-clients`"
     status_text: "MEASURED (unit A)"
+    detail: "The rerun on a later release is M900 (tester.30, 2026-10-13): the same three subtests pass, so the sentence about no rerun after 2026-10-01 is history"
     evidence: "[E50, section 4](../evidence/windows/2026-10-02-E50-native-d3d12-system-runtime/RESULT.md)"
   - id: M782
     status: MEASURED
@@ -764,3 +765,12 @@ facts:
     evidence: "[D3D9On12 x64 and x86](../evidence/windows/2026-10-08-d3d9on12/RESULT.md)"
     edges:
       - {"type": "uses", "to": "M768"}
+  - id: M900
+    status: MEASURED
+    date: "2026-10-13"
+    claim: "The D3D12 conformance client of M781 and M782 passes on the published 0.7.216.101-tester.30 triplet through the system runtime at FL 12_1 (client F1FA4329, 2026-10-13 15:09Z, one run): ROV 0 of 12288 mismatches, conservative rasterization tier 3 with inner coverage 0 of 12288, indirect DispatchRays 0 of 694 in five variants with 54 GPU-written arguments. Every negative control differs as designed (reversed-order oracle 4096 of 4096, plain UAV 4096 of 4096, standard against conservative oracle 98 pixels, count-1 image against count-2 oracle 32 of 128). The client reads device 12_1, max 12_1, ROVs 1, conservative tier 3, raytracing tier 1.1, shader model 6_6. Shell 81D22B56, engine 80217882, ICD EF863272; the kernel driver was the 0.7.216.64 candidate image 97B836CC (BD-155), whose change is scanout code that this offscreen client does not reach"
+    status_text: "MEASURED (unit A, one run)"
+    evidence: "[E59](../evidence/windows/2026-10-13-E59-m153-conformance-tester30/RESULT.md)"
+    edges:
+      - {"type": "supports", "to": "M781"}
+      - {"type": "supports", "to": "M782"}

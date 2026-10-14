@@ -16,9 +16,12 @@ flowchart LR
   M839["M839"]
   M575 ==>|supersedes| M574
   M801 ==>|supersedes| M774
+  M900["M900"]
   M839 -.->|refutes| M838
   classDef other stroke-dasharray:4 3
 ```
+  M900 ==>|supports| M781
+  M900 ==>|supports| M782
 
 ## References
 
