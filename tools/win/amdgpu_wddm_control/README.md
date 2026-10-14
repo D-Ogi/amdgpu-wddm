@@ -326,7 +326,8 @@ The second line of the file is for scripts such as the installer's verify:
 `dwm-restart: observed|unknown-history|unknown (boot B, session N, session start <utc>, DWM process P started <utc>,
 instances seen K, watched since <utc> by <observer>)`, with `-` for a value that cannot be read, followed by every
 Recovery state. `AMDGPU_WDDM_CONTROL_STATE=<dir>` moves both copies of the record to one directory (the build's
-gates use it, so a build records nothing in the profile of the PC that builds).
+gates use it, so a build records nothing in the profile of the PC that builds). Only a lab build reads it (BD-167);
+`build.ps1` without `-Lab` runs its gates on a lab twin of the application.
 
 ## Bug report
 

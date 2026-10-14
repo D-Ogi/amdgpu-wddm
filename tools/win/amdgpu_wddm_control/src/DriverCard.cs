@@ -506,16 +506,26 @@ namespace AmdgpuWddmControl
     {
         public const int MaxFile = 4 << 20;
 
+        // AMDGPU_WDDM_CONTROL_INSTALLER (a lab build's only, BD-167): another installer directory, read without the owner
+        // check. A release build reads %ProgramData%\amdgpu-wddm\installer with the owner check, as with the variable unset.
         static string Installer
         {
             get
             {
+#if AMDGPU_WDDM_LAB_FLAVOUR
                 var over = Environment.GetEnvironmentVariable("AMDGPU_WDDM_CONTROL_INSTALLER");
                 return !string.IsNullOrEmpty(over) ? over : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "amdgpu-wddm", "installer");
+#else
+                return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "amdgpu-wddm", "installer");
+#endif
             }
         }
 
+#if AMDGPU_WDDM_LAB_FLAVOUR
         static bool Fixture { get { return Environment.GetEnvironmentVariable("AMDGPU_WDDM_CONTROL_INSTALLER") != null; } }
+#else
+        static bool Fixture { get { return false; } }
+#endif
 
         static string Text(byte[] b) { return b == null ? null : new UTF8Encoding(false).GetString(b).TrimStart('﻿'); }
 

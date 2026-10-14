@@ -271,7 +271,7 @@ no other value of that key.
 
 The ray tracing benchmark card of the Performance page keeps what this computer measured, and nothing else keeps or
 reads it. Both paths are below `%LOCALAPPDATA%\amdgpu-wddm\benchmarks` (the app's state directory, which
-`AMDGPU_WDDM_CONTROL_STATE` moves for a build gate, so a build writes nothing into a profile):
+`AMDGPU_WDDM_CONTROL_STATE` moves for a build gate in a lab build only, so a build writes nothing into a profile):
 
 | Path | What it holds |
 |---|---|
