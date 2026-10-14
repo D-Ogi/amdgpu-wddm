@@ -1,0 +1,36 @@
+camera edges: [(np.float64(1791969648.59), 'up'), (np.float64(1791969693.618), 'down'), (np.float64(1791969699.177), 'up'), (np.float64(1791969699.228), 'down'), (np.float64(1791969749.098), 'up'), (np.float64(1791969793.991), 'down')]
+case a: lab appear 1791969658.831 leave 1791969702.824 flashes 8 ticks 53
+case b: lab appear 1791969710.467 leave 1791969754.271 flashes 11 ticks 46
+case c: lab appear 1791969760.338 leave 1791969803.169 flashes 0 ticks 44
+offsets camera-lab: [np.float64(-10.241), np.float64(-9.207), np.float64(-11.29), np.float64(-55.043), np.float64(-11.24), np.float64(-9.178)]
+offset used -10.741 s
+case a: green mean 143.53 sd 0.34; one-frame outliers 7
+   outlier at lab 1791969673.138 (+14.307 s) dgreen -2.68; nearest tick +0.485 s; nearest DDA flash +0.489 s (earlier-content)
+   outlier at lab 1791969684.221 (+25.390 s) dgreen -2.66; nearest tick +0.482 s; nearest DDA flash +0.494 s (earlier-content)
+   outlier at lab 1791969685.238 (+26.407 s) dgreen -1.36; nearest tick +0.474 s; nearest DDA flash +0.484 s (earlier-content)
+   outlier at lab 1791969686.267 (+27.436 s) dgreen -2.49; nearest tick +0.490 s; nearest DDA flash +0.493 s (earlier-content)
+   outlier at lab 1791969688.110 (+29.279 s) dgreen -2.59; nearest tick +0.478 s; nearest DDA flash +0.491 s (earlier-content)
+   outlier at lab 1791969689.151 (+30.320 s) dgreen -2.00; nearest tick +0.492 s; nearest DDA flash +0.494 s (earlier-content)
+   outlier at lab 1791969694.286 (+35.455 s) dgreen -2.15; nearest tick +0.491 s; nearest DDA flash +0.504 s (earlier-content)
+   DDA flash +12.035 s other-content 12.4 ms: camera green around it 143.6 143.0 143.6 144.0 143.3 143.3 143.5
+   DDA flash +13.818 s earlier-content 4.0 ms: camera green around it 143.1 143.6 143.1 143.3 143.2 143.5 143.3
+   DDA flash +24.896 s earlier-content 11.5 ms: camera green around it 143.4 143.7 143.2 143.9 143.4 143.3 143.3
+   DDA flash +25.923 s earlier-content 10.1 ms: camera green around it 143.8 143.1 143.8 143.6 143.6 143.3 143.7
+   DDA flash +26.944 s earlier-content 3.4 ms: camera green around it 143.6 143.5 143.7 143.5 143.0 144.1 143.8
+   DDA flash +28.788 s earlier-content 12.8 ms: camera green around it 143.2 143.8 143.9 143.2 143.9 144.1 143.6
+   DDA flash +29.826 s earlier-content 1.7 ms: camera green around it 144.0 143.9 143.8 143.9 143.3 144.3 143.4
+   DDA flash +34.951 s earlier-content 12.8 ms: camera green around it 143.6 143.7 143.5 143.2 143.4 143.5 143.5
+case b: green mean 142.12 sd 0.39; one-frame outliers 1
+   outlier at lab 1791969746.032 (+35.565 s) dgreen -2.14; nearest tick -0.288 s; nearest DDA flash +0.513 s (other-content)
+   DDA flash +35.052 s other-content 1.2 ms: camera green around it 141.6 141.7 141.3 141.6 141.9 141.9 141.4
+   DDA flash +43.804 s earlier-content 13.4 ms: camera green around it 141.9 141.4 141.6 141.5 141.6 141.8 141.5
+   DDA flash +43.817 s black 30.3 ms: camera green around it 141.9 141.4 141.6 141.5 141.6 141.8 141.5
+   DDA flash +43.915 s black 14.5 ms: camera green around it 141.5 141.6 141.8 141.5 142.0 141.5 141.7
+   DDA flash +43.929 s black 13.0 ms: camera green around it 141.5 141.6 141.8 141.5 142.0 141.5 141.7
+   DDA flash +43.942 s black 13.7 ms: camera green around it 141.5 141.6 141.8 141.5 142.0 141.5 141.7
+   DDA flash +43.956 s black 26.4 ms: camera green around it 141.6 141.8 141.5 142.0 141.5 141.7 141.9
+   DDA flash +43.982 s black 24.4 ms: camera green around it 141.6 141.8 141.5 142.0 141.5 141.7 141.9
+   DDA flash +44.007 s black 14.2 ms: camera green around it 141.8 141.5 142.0 141.5 141.7 141.9 141.5
+   DDA flash +44.021 s black 14.1 ms: camera green around it 141.8 141.5 142.0 141.5 141.7 141.9 141.5
+   DDA flash +44.035 s not-the-window 13.3 ms: camera green around it 141.5 142.0 141.5 141.7 141.9 141.5 142.1
+case c: green mean 143.79 sd 0.30; one-frame outliers 0

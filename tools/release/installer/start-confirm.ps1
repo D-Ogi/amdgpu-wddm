@@ -265,8 +265,10 @@ function Invoke-Tick {
 #   Opaque                           Invalidate asks Windows for no background erase at all (InvalidateRect, FALSE)
 # A form of WinForms erases its background on the window itself (ScrollableControl clears AllPaintingInWmPaint), and
 # the Label that drew the text up to tester.31 rc4 was a second window on top of it. On the lab (2026-10-14,
-# tools\win\app-launch\measure-flash.ps1), DWM composed a frame of navy with only part of the text at 9 of 99 text
-# changes of the Label window, and at none of 44 changes of this window.
+# tools\win\app-launch\measure-flash.ps1, fact M898), DWM composed a frame of navy with only part of the text at 10
+# of 89 text changes of the Label window, and at none of 44 changes of this window. Reads of the Label window's own
+# surface found that partial frame at 125 of 150 changes, for about 2 ms each: the window itself held it, and DWM
+# showed it whenever it composed in those 2 ms.
 # The look is the Label's, pixel for pixel: Consolas 9, cyan on navy, the text at (4, 3) through GDI+ DrawString
 # with the Label's string format, as a PowerShell host draws a Label (it never switches compatible text rendering
 # off). The window is sized to its two lines at the longest countdown, so no text is cut at any scale or font size.

@@ -1,0 +1,101 @@
+overlay bitmaps 89, bytes 286860806
+reference a-920x872 from 11 bitmaps
+reference a-920x890 from 19 bitmaps
+reference b-920x872 from 39 bitmaps
+reference c-920x872 from 20 bitmaps
+case a start: 19 frames from -0.597 to +0.142 s (740 ms), at most 132900 pixels darker by 6+, box 0,16..919,889 in the overlay = screen 988,28..1907,901
+  -0.597 s: 38497 px, box 0,17..919,889 (screen 988,29..1907,901), fill 5 %, mean darker 60
+  -0.577 s: 42111 px, box 0,17..919,889 (screen 988,29..1907,901), fill 5 %, mean darker 56
+  -0.561 s: 43974 px, box 0,17..919,889 (screen 988,29..1907,901), fill 5 %, mean darker 55
+  -0.547 s: 48479 px, box 0,17..919,889 (screen 988,29..1907,901), fill 6 %, mean darker 51
+  -0.514 s: 50348 px, box 0,17..919,889 (screen 988,29..1907,901), fill 6 %, mean darker 50
+  -0.495 s: 51609 px, box 0,17..919,889 (screen 988,29..1907,901), fill 6 %, mean darker 49
+  -0.471 s: 52359 px, box 0,17..919,889 (screen 988,29..1907,901), fill 7 %, mean darker 49
+  -0.445 s: 52842 px, box 0,17..919,889 (screen 988,29..1907,901), fill 7 %, mean darker 48
+  -0.427 s: 52767 px, box 0,16..919,889 (screen 988,28..1907,901), fill 7 %, mean darker 48
+  -0.397 s: 52991 px, box 0,16..919,889 (screen 988,28..1907,901), fill 7 %, mean darker 48
+  -0.375 s: 52945 px, box 0,16..919,889 (screen 988,28..1907,901), fill 7 %, mean darker 48
+  -0.107 s: 45847 px, box 0,16..919,889 (screen 988,28..1907,901), fill 6 %, mean darker 54
+  -0.094 s: 45847 px, box 0,16..919,889 (screen 988,28..1907,901), fill 6 %, mean darker 54
+  +0.015 s: 36205 px, box 0,16..919,889 (screen 988,28..1907,901), fill 5 %, mean darker 63
+  +0.027 s: 96759 px, box 0,16..919,889 (screen 988,28..1907,901), fill 12 %, mean darker 38
+  +0.066 s: 110042 px, box 0,16..886,889 (screen 988,28..1874,901), fill 14 %, mean darker 38
+  +0.088 s: 121545 px, box 0,16..886,889 (screen 988,28..1874,901), fill 16 %, mean darker 36
+  +0.115 s: 129539 px, box 0,16..886,889 (screen 988,28..1874,901), fill 17 %, mean darker 35
+  +0.142 s: 132900 px, box 0,16..886,889 (screen 988,28..1874,901), fill 17 %, mean darker 35
+case a end: 11 frames from +45.080 to +45.280 s (200 ms), at most 13348 pixels darker by 6+, box 0,218..371,871 in the overlay = screen 988,230..1359,883
+  +45.080 s: 13348 px, box 0,218..371,871 (screen 988,230..1359,883), fill 5 %, mean darker 17
+  +45.099 s: 13348 px, box 0,218..371,871 (screen 988,230..1359,883), fill 5 %, mean darker 17
+  +45.144 s: 12198 px, box 0,221..367,871 (screen 988,233..1355,883), fill 5 %, mean darker 15
+  +45.159 s: 11149 px, box 0,223..363,871 (screen 988,235..1351,883), fill 5 %, mean darker 15
+  +45.185 s: 8517 px, box 0,227..359,870 (screen 988,239..1347,882), fill 4 %, mean darker 13
+  +45.198 s: 7672 px, box 0,230..359,863 (screen 988,242..1347,875), fill 3 %, mean darker 12
+  +45.213 s: 6737 px, box 0,232..359,854 (screen 988,244..1347,866), fill 3 %, mean darker 10
+  +45.225 s: 5569 px, box 16,234..359,849 (screen 1004,246..1347,861), fill 3 %, mean darker 8
+  +45.240 s: 5174 px, box 95,236..359,849 (screen 1083,248..1347,861), fill 3 %, mean darker 6
+  +45.265 s: 38 px, box 244,237..359,849 (screen 1232,249..1347,861), fill 0 %, mean darker 6
+  +45.280 s: 10 px, box 248,237..359,849 (screen 1236,249..1347,861), fill 0 %, mean darker 6
+case b start: 28 frames from -0.683 to -0.113 s (570 ms), at most 42304 pixels darker by 6+, box 0,15..680,871 in the overlay = screen 988,27..1668,883
+  -0.683 s: 2245 px, box 0,16..680,786 (screen 988,28..1668,798), fill 0 %, mean darker 32
+  -0.676 s: 2280 px, box 0,16..680,786 (screen 988,28..1668,798), fill 0 %, mean darker 32
+  -0.662 s: 2635 px, box 0,16..680,786 (screen 988,28..1668,798), fill 1 %, mean darker 29
+  -0.647 s: 4138 px, box 2,16..680,786 (screen 990,28..1668,798), fill 1 %, mean darker 21
+  -0.633 s: 5620 px, box 0,16..680,786 (screen 988,28..1668,798), fill 1 %, mean darker 17
+  -0.619 s: 8664 px, box 0,16..680,786 (screen 988,28..1668,798), fill 2 %, mean darker 14
+  -0.605 s: 9517 px, box 0,16..680,786 (screen 988,28..1668,798), fill 2 %, mean darker 13
+  -0.579 s: 10203 px, box 0,16..680,786 (screen 988,28..1668,798), fill 2 %, mean darker 13
+  -0.553 s: 10603 px, box 0,16..680,786 (screen 988,28..1668,798), fill 2 %, mean darker 13
+  -0.523 s: 11194 px, box 0,16..680,786 (screen 988,28..1668,798), fill 2 %, mean darker 12
+  -0.501 s: 11291 px, box 0,16..680,786 (screen 988,28..1668,798), fill 2 %, mean darker 12
+  -0.487 s: 11316 px, box 0,16..680,786 (screen 988,28..1668,798), fill 2 %, mean darker 12
+  -0.473 s: 11281 px, box 0,15..680,786 (screen 988,27..1668,798), fill 2 %, mean darker 12
+  -0.460 s: 11403 px, box 0,15..680,786 (screen 988,27..1668,798), fill 2 %, mean darker 12
+  -0.445 s: 11422 px, box 0,15..680,786 (screen 988,27..1668,798), fill 2 %, mean darker 12
+  -0.417 s: 11420 px, box 0,15..680,786 (screen 988,27..1668,798), fill 2 %, mean darker 13
+  -0.388 s: 4814 px, box 0,16..680,786 (screen 988,28..1668,798), fill 1 %, mean darker 19
+  -0.340 s: 4750 px, box 0,16..680,786 (screen 988,28..1668,798), fill 1 %, mean darker 19
+  -0.291 s: 4547 px, box 0,16..680,786 (screen 988,28..1668,798), fill 1 %, mean darker 19
+  -0.266 s: 8444 px, box 0,16..680,871 (screen 988,28..1668,883), fill 1 %, mean darker 24
+  -0.248 s: 32577 px, box 0,16..680,816 (screen 988,28..1668,828), fill 6 %, mean darker 20
+  -0.222 s: 39629 px, box 0,16..680,786 (screen 988,28..1668,798), fill 8 %, mean darker 21
+  -0.207 s: 40776 px, box 0,16..680,786 (screen 988,28..1668,798), fill 8 %, mean darker 20
+  -0.192 s: 41406 px, box 0,16..680,786 (screen 988,28..1668,798), fill 8 %, mean darker 20
+  -0.169 s: 41689 px, box 0,16..680,786 (screen 988,28..1668,798), fill 8 %, mean darker 20
+  -0.153 s: 42023 px, box 0,16..680,786 (screen 988,28..1668,798), fill 8 %, mean darker 20
+  -0.129 s: 42120 px, box 0,16..680,786 (screen 988,28..1668,798), fill 8 %, mean darker 20
+  -0.113 s: 42304 px, box 0,16..680,786 (screen 988,28..1668,798), fill 8 %, mean darker 20
+case b end: 11 frames from +44.696 to +44.902 s (205 ms), at most 42364 pixels darker by 6+, box 0,15..680,786 in the overlay = screen 988,27..1668,798
+  +44.696 s: 42364 px, box 0,16..680,786 (screen 988,28..1668,798), fill 8 %, mean darker 20
+  +44.714 s: 11500 px, box 0,15..680,786 (screen 988,27..1668,798), fill 2 %, mean darker 13
+  +44.734 s: 11500 px, box 0,15..680,786 (screen 988,27..1668,798), fill 2 %, mean darker 13
+  +44.781 s: 8074 px, box 0,16..680,786 (screen 988,28..1668,798), fill 2 %, mean darker 15
+  +44.796 s: 7108 px, box 0,16..680,786 (screen 988,28..1668,798), fill 1 %, mean darker 16
+  +44.809 s: 6063 px, box 0,16..680,786 (screen 988,28..1668,798), fill 1 %, mean darker 18
+  +44.822 s: 4866 px, box 0,16..680,786 (screen 988,28..1668,798), fill 1 %, mean darker 20
+  +44.849 s: 2725 px, box 0,16..680,786 (screen 988,28..1668,798), fill 1 %, mean darker 31
+  +44.873 s: 2360 px, box 0,16..680,786 (screen 988,28..1668,798), fill 0 %, mean darker 35
+  +44.887 s: 2359 px, box 0,16..680,786 (screen 988,28..1668,798), fill 0 %, mean darker 35
+  +44.902 s: 2352 px, box 0,16..680,786 (screen 988,28..1668,798), fill 0 %, mean darker 35
+case c start: 20 frames from -0.644 to -0.103 s (541 ms), at most 54025 pixels darker by 6+, box 0,41..680,871 in the overlay = screen 988,53..1668,883
+  -0.644 s: 1224 px, box 16,50..680,773 (screen 1004,62..1668,785), fill 0 %, mean darker 27
+  -0.624 s: 2228 px, box 0,50..680,773 (screen 988,62..1668,785), fill 0 %, mean darker 17
+  -0.593 s: 8694 px, box 0,50..680,773 (screen 988,62..1668,785), fill 2 %, mean darker 10
+  -0.570 s: 10618 px, box 0,50..680,773 (screen 988,62..1668,785), fill 2 %, mean darker 9
+  -0.553 s: 10941 px, box 0,50..680,773 (screen 988,62..1668,785), fill 2 %, mean darker 9
+  -0.526 s: 11384 px, box 0,46..680,773 (screen 988,58..1668,785), fill 2 %, mean darker 9
+  -0.504 s: 11644 px, box 0,43..680,773 (screen 988,55..1668,785), fill 2 %, mean darker 9
+  -0.485 s: 11506 px, box 0,43..680,773 (screen 988,55..1668,785), fill 2 %, mean darker 9
+  -0.456 s: 11550 px, box 0,42..680,773 (screen 988,54..1668,785), fill 2 %, mean darker 9
+  -0.432 s: 11603 px, box 0,41..680,773 (screen 988,53..1668,785), fill 2 %, mean darker 9
+  -0.319 s: 54025 px, box 0,50..680,773 (screen 988,62..1668,785), fill 11 %, mean darker 20
+  -0.311 s: 50273 px, box 0,50..680,773 (screen 988,62..1668,785), fill 10 %, mean darker 21
+  -0.293 s: 50273 px, box 0,50..680,773 (screen 988,62..1668,785), fill 10 %, mean darker 21
+  -0.249 s: 50228 px, box 0,50..680,773 (screen 988,62..1668,785), fill 10 %, mean darker 21
+  -0.223 s: 49646 px, box 0,50..680,773 (screen 988,62..1668,785), fill 10 %, mean darker 21
+  -0.196 s: 48823 px, box 0,50..680,773 (screen 988,62..1668,785), fill 10 %, mean darker 21
+  -0.170 s: 46955 px, box 0,50..680,773 (screen 988,62..1668,785), fill 10 %, mean darker 22
+  -0.154 s: 45225 px, box 0,50..680,773 (screen 988,62..1668,785), fill 9 %, mean darker 21
+  -0.129 s: 34431 px, box 0,50..680,819 (screen 988,62..1668,831), fill 7 %, mean darker 21
+  -0.103 s: 7778 px, box 0,50..680,871 (screen 988,62..1668,883), fill 1 %, mean darker 21
+case c end: no darker pixels
+picture C:\BC250\tmp\flash\run1-console.png: b-overlay-14.bmp (-0.445 s) beside b-overlay-27.bmp (-0.113 s), half size, bytes 33814

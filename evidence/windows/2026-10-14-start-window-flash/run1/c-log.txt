@@ -1,0 +1,34 @@
+start qpc=3610345956 freq=10000000 filetime=134364433582235336 session=1 console=1
+adapter index=0 vendor=0x1002 device=0x13fe name=BC-250 GPU (amdgpu-wddm)
+output adapter=0 index=0 attached=1 desktop=0,0,1920,1080
+adapter index=1 vendor=0x1414 device=0x008c name=Microsoft Basic Render Driver
+dda mode=1920x1080 format=87 rotation=1 system_memory=0
+mode=dda
+child pid=3896 qpc=3611353583
+target overlay pid=5268 hwnd=0x000000000003003C rect=988,12,920,872 qpc=3611478507
+flash target=overlay qpc=3615333547 ms=20.1 kind=other-content navy=798 cyan=0 black=79297 other=722145 hash=cff1b10e3de8df3c next=bf6dfc044972b92f since_target_ms=385 bmp=c-overlay-0.bmp frame=6 present=3615333547 capture=3615334834 accumulated=1 mode=dda
+flash target=overlay qpc=3615534584 ms=31.1 kind=other-content navy=798 cyan=0 black=83018 other=718424 hash=bf6dfc044972b92f next=2ad3c1d8dd8836e9 since_target_ms=405 bmp=c-overlay-1.bmp frame=7 present=3615534584 capture=3615535737 accumulated=2 mode=dda
+flash target=overlay qpc=3615845225 ms=22.5 kind=other-content navy=816 cyan=0 black=85273 other=716151 hash=2ad3c1d8dd8836e9 next=c4b107f72598feed since_target_ms=436 bmp=c-overlay-2.bmp frame=8 present=3615845225 capture=3615846243 accumulated=2 mode=dda
+flash target=overlay qpc=3616070507 ms=16.9 kind=other-content navy=853 cyan=0 black=86152 other=715235 hash=c4b107f72598feed next=eff33939e7a88f3a since_target_ms=459 bmp=c-overlay-3.bmp frame=9 present=3616070507 capture=3616071805 accumulated=2 mode=dda
+flash target=overlay qpc=3616239841 ms=27.3 kind=other-content navy=847 cyan=0 black=86286 other=715107 hash=eff33939e7a88f3a next=7686a3195d95de81 since_target_ms=476 bmp=c-overlay-4.bmp frame=10 present=3616239841 capture=3616241100 accumulated=1 mode=dda
+flash target=overlay qpc=3616512611 ms=22.4 kind=other-content navy=847 cyan=0 black=86475 other=714918 hash=7686a3195d95de81 next=8c9ce15d470bf479 since_target_ms=503 bmp=c-overlay-5.bmp frame=11 present=3616512611 capture=3616513724 accumulated=2 mode=dda
+flash target=overlay qpc=3616736202 ms=18.3 kind=other-content navy=841 cyan=0 black=86513 other=714886 hash=8c9ce15d470bf479 next=4a8457cece4bdd99 since_target_ms=525 bmp=c-overlay-6.bmp frame=12 present=3616736202 capture=3616737491 accumulated=2 mode=dda
+flash target=overlay qpc=3616918753 ms=29.2 kind=other-content navy=838 cyan=0 black=86502 other=714900 hash=4a8457cece4bdd99 next=bf63d07956a680a1 since_target_ms=544 bmp=c-overlay-7.bmp frame=13 present=3616918753 capture=3616920164 accumulated=1 mode=dda
+flash target=overlay qpc=3617210322 ms=24.2 kind=other-content navy=843 cyan=0 black=86577 other=714820 hash=bf63d07956a680a1 next=ad3611f11b08d0c4 since_target_ms=573 bmp=c-overlay-8.bmp frame=14 present=3617210322 capture=3617211685 accumulated=2 mode=dda
+flash target=overlay qpc=3617452429 ms=25.8 kind=other-content navy=844 cyan=0 black=86518 other=714878 hash=ad3611f11b08d0c4 next=af56c4a033ee6310 since_target_ms=597 bmp=c-overlay-9.bmp frame=15 present=3617452429 capture=3617454023 accumulated=2 mode=dda
+flash target=overlay qpc=3618579245 ms=8.3 kind=other-content navy=931 cyan=0 black=165596 other=635713 hash=105b49168f365016 next=0a09bc507a5300c5 since_target_ms=710 bmp=c-overlay-10.bmp frame=18 present=3618579245 capture=3618580271 accumulated=1 mode=dda
+flash target=overlay qpc=3618661823 ms=18.4 kind=other-content navy=907 cyan=0 black=164217 other=637116 hash=0a09bc507a5300c5 next=fad8573cdea33656 since_target_ms=718 bmp=c-overlay-11.bmp frame=19 present=3618661823 capture=3618673445 accumulated=1 mode=dda
+flash target=overlay qpc=3618845421 ms=43.8 kind=other-content navy=907 cyan=0 black=164217 other=637116 hash=fad8573cdea33656 next=d1cff0f78fd2f9a5 since_target_ms=736 bmp=c-overlay-12.bmp frame=20 present=3618845421 capture=3618846493 accumulated=2 mode=dda
+flash target=overlay qpc=3619283662 ms=25.7 kind=other-content navy=907 cyan=0 black=163849 other=637484 hash=d1cff0f78fd2f9a5 next=28ad4963e9edbc7a since_target_ms=780 bmp=c-overlay-13.bmp frame=23 present=3619283662 capture=3619284768 accumulated=1 mode=dda
+flash target=overlay qpc=3619540449 ms=27.1 kind=other-content navy=901 cyan=0 black=160304 other=641035 hash=28ad4963e9edbc7a next=29a5261bce79d554 since_target_ms=806 bmp=c-overlay-14.bmp frame=24 present=3619540449 capture=3619541468 accumulated=2 mode=dda
+flash target=overlay qpc=3619811854 ms=25.7 kind=other-content navy=892 cyan=0 black=153997 other=647351 hash=29a5261bce79d554 next=9974131bc2ae954b since_target_ms=833 bmp=c-overlay-15.bmp frame=25 present=3619811854 capture=3619812988 accumulated=2 mode=dda
+flash target=overlay qpc=3620068663 ms=16.3 kind=other-content navy=863 cyan=0 black=143547 other=657830 hash=9974131bc2ae954b next=9a039c3afcef8139 since_target_ms=859 bmp=c-overlay-16.bmp frame=26 present=3620068663 capture=3620070504 accumulated=2 mode=dda
+flash target=overlay qpc=3620231933 ms=24.6 kind=other-content navy=842 cyan=0 black=138163 other=663235 hash=9a039c3afcef8139 next=b46d8013fa1ae51f since_target_ms=875 bmp=c-overlay-17.bmp frame=27 present=3620231933 capture=3620232777 accumulated=1 mode=dda
+flash target=overlay qpc=3620477952 ms=26.5 kind=other-content navy=801 cyan=0 black=122355 other=679084 hash=b46d8013fa1ae51f next=e7908afa5e94e690 since_target_ms=899 bmp=c-overlay-18.bmp frame=28 present=3620477952 capture=3620479299 accumulated=2 mode=dda
+flash target=overlay qpc=3620743102 ms=21.9 kind=other-content navy=798 cyan=0 black=87668 other=713774 hash=e7908afa5e94e690 next=c1615322b296acac since_target_ms=926 bmp=c-overlay-19.bmp frame=29 present=3620743102 capture=3620744300 accumulated=2 mode=dda
+target window pid=3896 hwnd=0x0000000000040240 rect=8,34,488,39 qpc=3621772201
+child exited qpc=4070616217
+dda frames=202 timeouts=2128 access_lost=0
+summary target=window found=1 analysed=45 changes=45 flashes=0 accumulated_misses=0
+summary target=overlay found=1 analysed=105 changes=100 flashes=20 accumulated_misses=15
+end frames=202 child_exit=0 window=1

@@ -1,0 +1,29 @@
+case a: window rect 8,34,488,39; regular contents 45 (+ the last one)
+   ref 488x39, text x 7..458 y 5..29
+   + 12.062 s  12.4 ms other-content    dirty 0,0,488,39; 488x39, text x 7..99 y 5..22; hash 4aabba0c843e6455
+   + 13.845 s   4.0 ms earlier-content  dirty 0,0,488,39; 488x39, text x 7..99 y 5..22; hash 4aabba0c843e6455
+   + 24.923 s  11.5 ms earlier-content  dirty 0,0,488,39; 488x39, text x 7..99 y 5..22; hash 4aabba0c843e6455
+   + 25.950 s  10.1 ms earlier-content  dirty 0,0,488,39; 488x39, text x 7..99 y 5..22; hash 4aabba0c843e6455
+   + 26.971 s   3.4 ms earlier-content  dirty 0,0,488,39; 488x39, text x 7..99 y 5..22; hash 4aabba0c843e6455
+   + 28.815 s  12.8 ms earlier-content  dirty 0,0,488,39; 488x39, text x 7..99 y 5..22; hash 4aabba0c843e6455
+   + 29.853 s   1.7 ms earlier-content  dirty 0,0,488,39; 488x39, text x 7..99 y 5..22; hash 4aabba0c843e6455
+   + 34.978 s  12.8 ms earlier-content  dirty 0,0,488,39; 488x39, text x 7..99 y 5..22; hash 4aabba0c843e6455
+   overlay at the start (-2..+1 s): 28 rows +-1.049..+0.556 s, black 83011..240192 (first 83011, last 238672)
+   overlay at the end (44.3..46.8 s): 14 rows +44.783..+45.302 s, black 78901..238681 (first 238681, last 78901)
+case b: window rect 8,34,488,39; regular contents 44 (+ the last one)
+   + 35.919 s   1.2 ms other-content    dirty 0,0,488,39; 488x39, text x 7..99 y 5..22; hash 4aabba0c843e6455
+   + 44.671 s  13.4 ms earlier-content  dirty 0,0,488,39; 488x39, text x 7..99 y 5..22; hash 4aabba0c843e6455
+   + 44.684 s  30.3 ms black            dirty 0,0,488,39; 488x39, text x 4..319 y 0..35; hash 0da0df9fbec44c8a
+   + 44.781 s  14.5 ms black            dirty 0,0,488,39; 488x39, text x 4..109 y 0..38; hash 09745ab71a78f348
+   + 44.796 s  13.0 ms black            dirty 0,0,488,39; 488x39, text x 4..109 y 0..38; hash 140315aecd964e72
+   + 44.809 s  13.7 ms black            dirty 0,0,488,39; 488x39, text x 4..109 y 0..38; hash a4f9c199a27d7b6d
+   + 44.822 s  26.4 ms black            dirty 0,0,488,39; 488x39, text x 4..109 y 0..38; hash ff6fbc6e549ae1e7
+   + 44.849 s  24.4 ms black            dirty 0,0,488,39; 488x39, text x 4..129 y 0..38; hash 27a1992ac173c7e1
+   + 44.873 s  14.2 ms black            dirty 0,0,488,39; 488x39, text x 4..129 y 0..38; hash 4d6cc3b09777b5b8
+   + 44.887 s  14.1 ms black            dirty 0,0,488,39; 488x39, text x 4..129 y 0..38; hash d213b604486e3faf
+   + 44.902 s  13.3 ms not-the-window   dirty 0,0,488,39; 488x39, text x 4..129 y 0..38; hash 698cfb490f80e20c
+   overlay at the start (-2..+1 s): 37 rows +-1.045..+0.602 s, black 78900..154194 (first 78900, last 154192)
+   overlay at the end (43.9..46.4 s): 15 rows +44.203..+45.207 s, black 78901..154195 (first 154195, last 78901)
+case c: window rect 8,34,488,39; regular contents 44 (+ the last one)
+   overlay at the start (-2..+1 s): 29 rows +-1.016..+0.026 s, black 78901..165596 (first 78901, last 78901)
+   overlay at the end (43.8..46.3 s): 3 rows +44.258..+45.273 s, black 78903..78903 (first 78903, last 78903)
