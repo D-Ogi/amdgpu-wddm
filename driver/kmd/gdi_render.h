@@ -240,6 +240,46 @@ int Bc250GdiSourceY(const BC250_GDI_ITEM* Item, int Yd);
 int Bc250GdiWalkStep(unsigned int BufferBytes, unsigned int Offset, unsigned int CommandBytes,
                      unsigned int MinBytes, unsigned int* Next);
 
+/* One command's structure, as both passes of RenderGdi must read it. The pass which counts
+ * sub-rectangles and the pass which translates them walk the same buffer, so a command the
+ * translation drops may not be counted either: one malformed SubCount would otherwise raise the
+ * budget of the whole call, and a call whose budget cannot be guaranteed draws nothing. That is a
+ * total loss built out of one bad command, which review r2 of 2026-10-14 found.
+ *
+ * The count that comes out of this is therefore bounded by the command buffer itself. A command
+ * carries its own sub-rectangle array (DXGK_RENDERKM_COMMAND.CommandSize, d3dkmddi.md:27128 and
+ * :27169), so an admitted command of L bytes offers at most (L - MinBytes) / RectBytes of them.
+ *
+ * Base and First are addresses and not offsets, because an array outside the command buffer must
+ * not become an offset first. RectBytes is sizeof(RECT) and MinBytes the fixed part of
+ * DXGK_RENDERKM_COMMAND, both passed from the WDK's own sizeof by the caller, as Bc250GdiWalkStep
+ * takes MinBytes. Escape and HaveRects are field reads of the caller: the opcode table and the
+ * sub-rectangle pointer are WDK types, which this header does not have. */
+typedef struct _BC250_GDI_CMD_VIEW {
+    unsigned int BufferBytes;       /* the whole command buffer */
+    unsigned int Offset;            /* this command's start in it */
+    unsigned int CommandBytes;      /* its CommandSize */
+    unsigned int MinBytes;          /* the fixed part of a command */
+    unsigned int SubCount;          /* its sub-rectangle count, as the command states it */
+    unsigned int RectBytes;         /* sizeof(RECT) */
+    unsigned long long Base;        /* the command buffer's address */
+    unsigned long long First;       /* the sub-rectangle array's address */
+    int Escape;                     /* the command is an escape, which this driver does not run */
+    int HaveRects;                  /* the sub-rectangle pointer is not null */
+} BC250_GDI_CMD_VIEW;
+
+#define BC250_GDI_CMD_STOP 0        /* the buffer does not hold this command: both passes stop */
+#define BC250_GDI_CMD_SKIP 1        /* walkable, paints nothing, and counts nothing */
+#define BC250_GDI_CMD_DRAW 2        /* walkable, and SubCount sub-rectangles lie inside it */
+
+#define BC250_GDI_WHY_MALFORMED 0   /* STOP: the size is not one the buffer holds */
+#define BC250_GDI_WHY_ESCAPE 1      /* SKIP: an escape */
+#define BC250_GDI_WHY_EMPTY 2       /* SKIP: no sub-rectangle at all */
+#define BC250_GDI_WHY_OUTSIDE 3     /* SKIP: the array is not inside the command */
+#define BC250_GDI_WHY_DRAW 4        /* DRAW */
+
+int Bc250GdiCommandStep(const BC250_GDI_CMD_VIEW* View, unsigned int* Next, unsigned int* Why);
+
 /* MultipassOffset, packed as the Supporting Kernel-Mode Command Buffers page suggests: the high 16
  * bits are the index of the command being translated and the low 16 bits the number of
  * sub-rectangles of it already done. A command with more than 65535 sub-rectangles, or a buffer

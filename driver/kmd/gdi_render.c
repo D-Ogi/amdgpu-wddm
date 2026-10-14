@@ -455,6 +455,33 @@ int Bc250GdiWalkStep(unsigned int BufferBytes, unsigned int Offset, unsigned int
     return 1;
 }
 
+int Bc250GdiCommandStep(const BC250_GDI_CMD_VIEW* View, unsigned int* Next, unsigned int* Why)
+{
+    unsigned long long lowest, limit;
+
+    if (!Next || !Why) return BC250_GDI_CMD_STOP;
+    *Next = 0;
+    *Why = BC250_GDI_WHY_MALFORMED;
+    if (!View) return BC250_GDI_CMD_STOP;
+    if (!Bc250GdiWalkStep(View->BufferBytes, View->Offset, View->CommandBytes, View->MinBytes, Next))
+        return BC250_GDI_CMD_STOP;
+    /* The order of the three answers below is the order the translation pass applies them, because
+     * a count and a translation that disagree are the defect this function exists to remove. */
+    if (View->Escape) { *Why = BC250_GDI_WHY_ESCAPE; return BC250_GDI_CMD_SKIP; }
+    if (!View->SubCount || !View->HaveRects) { *Why = BC250_GDI_WHY_EMPTY; return BC250_GDI_CMD_SKIP; }
+    *Why = BC250_GDI_WHY_OUTSIDE;
+    if (!View->RectBytes) return BC250_GDI_CMD_SKIP;
+    /* Addresses, in 64 bits, so that an array below the command cannot become a large offset. The
+     * two wrap guards cover a command buffer at the very top of the address space. */
+    lowest = View->Base + (unsigned long long)View->Offset + View->MinBytes;
+    limit = View->Base + (unsigned long long)View->Offset + View->CommandBytes;
+    if (lowest < View->Base || limit < View->Base) return BC250_GDI_CMD_SKIP;
+    if (View->First < lowest || View->First > limit) return BC250_GDI_CMD_SKIP;
+    if ((limit - View->First) / View->RectBytes < View->SubCount) return BC250_GDI_CMD_SKIP;
+    *Why = BC250_GDI_WHY_DRAW;
+    return BC250_GDI_CMD_DRAW;
+}
+
 unsigned int Bc250GdiPackPass(unsigned int Command, unsigned int SubRect)
 {
     if (Command > BC250_GDI_PASS_MAX || SubRect > BC250_GDI_PASS_MAX) return 0;

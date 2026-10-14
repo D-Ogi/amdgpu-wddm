@@ -945,6 +945,110 @@ static void SeedMemory(void)
 /* One surface pair inside g_memory: the source at offset 0, the destination at DST_AT. */
 #define DST_AT 0x80000u
 
+/* The structure both passes of RenderGdi read, and the one case that made this function necessary:
+ * a command which states more sub-rectangles than its own bytes can hold. The counting pass used to
+ * add that number to the budget of the whole call, which then refused every good command beside it.
+ * The answer must be SKIP: walk on, draw nothing, count nothing. */
+static void TestCommandStep(void)
+{
+    const unsigned long long base = 0x0000000010000000ull;
+    const unsigned int min = 16u, rect = 16u;
+    BC250_GDI_CMD_VIEW v;
+    unsigned int next, why;
+
+    /* A command of 48 bytes holds two sub-rectangles behind its fixed part, and not three. */
+    memset(&v, 0, sizeof(v));
+    v.BufferBytes = 256u; v.Offset = 0; v.CommandBytes = 48u; v.MinBytes = min; v.RectBytes = rect;
+    v.Base = base; v.First = base + min; v.SubCount = 2u; v.HaveRects = 1;
+    CHECK_EQ(Bc250GdiCommandStep(&v, &next, &why), BC250_GDI_CMD_DRAW);
+    CHECK_EQ(why, BC250_GDI_WHY_DRAW);
+    CHECK_EQ(next, 48u);
+    v.SubCount = 3u;
+    CHECK_EQ(Bc250GdiCommandStep(&v, &next, &why), BC250_GDI_CMD_SKIP);
+    CHECK_EQ(why, BC250_GDI_WHY_OUTSIDE);
+    /* The walk still goes on, which is the whole point: one bad command is not the end of the
+     * buffer, and its count never reaches the budget. */
+    CHECK_EQ(next, 48u);
+    /* The malformed count itself. */
+    v.SubCount = 0xFFFFFFFFu;
+    CHECK_EQ(Bc250GdiCommandStep(&v, &next, &why), BC250_GDI_CMD_SKIP);
+    CHECK_EQ(why, BC250_GDI_WHY_OUTSIDE);
+    CHECK_EQ(next, 48u);
+
+    /* The array below the fixed part, and at the very end of the command. */
+    v.SubCount = 1u;
+    v.First = base + min - 1u;
+    CHECK_EQ(Bc250GdiCommandStep(&v, &next, &why), BC250_GDI_CMD_SKIP);
+    CHECK_EQ(why, BC250_GDI_WHY_OUTSIDE);
+    v.First = base + 48u;
+    CHECK_EQ(Bc250GdiCommandStep(&v, &next, &why), BC250_GDI_CMD_SKIP);
+    v.First = base + 32u;
+    CHECK_EQ(Bc250GdiCommandStep(&v, &next, &why), BC250_GDI_CMD_DRAW);
+
+    /* A command further along the buffer, with its array exactly filling the rest of it. */
+    memset(&v, 0, sizeof(v));
+    v.BufferBytes = 256u; v.Offset = 48u; v.CommandBytes = 64u; v.MinBytes = min; v.RectBytes = rect;
+    v.Base = base; v.First = base + 64u; v.SubCount = 3u; v.HaveRects = 1;
+    CHECK_EQ(Bc250GdiCommandStep(&v, &next, &why), BC250_GDI_CMD_DRAW);
+    CHECK_EQ(next, 112u);
+    v.SubCount = 4u;
+    CHECK_EQ(Bc250GdiCommandStep(&v, &next, &why), BC250_GDI_CMD_SKIP);
+
+    /* An escape counts nothing, whatever it says about sub-rectangles. */
+    memset(&v, 0, sizeof(v));
+    v.BufferBytes = 256u; v.CommandBytes = 16u; v.MinBytes = min; v.RectBytes = rect;
+    v.Base = base; v.First = 0; v.SubCount = 0xFFFFFFFFu; v.Escape = 1;
+    CHECK_EQ(Bc250GdiCommandStep(&v, &next, &why), BC250_GDI_CMD_SKIP);
+    CHECK_EQ(why, BC250_GDI_WHY_ESCAPE);
+    CHECK_EQ(next, 16u);
+
+    /* No array, or none to point at. */
+    memset(&v, 0, sizeof(v));
+    v.BufferBytes = 256u; v.CommandBytes = 48u; v.MinBytes = min; v.RectBytes = rect; v.Base = base;
+    v.SubCount = 5u; v.First = base + min; v.HaveRects = 0;
+    CHECK_EQ(Bc250GdiCommandStep(&v, &next, &why), BC250_GDI_CMD_SKIP);
+    CHECK_EQ(why, BC250_GDI_WHY_EMPTY);
+    v.HaveRects = 1; v.SubCount = 0;
+    CHECK_EQ(Bc250GdiCommandStep(&v, &next, &why), BC250_GDI_CMD_SKIP);
+    CHECK_EQ(why, BC250_GDI_WHY_EMPTY);
+
+    /* A size the buffer does not hold stops the walk, and says so, because the next command cannot
+     * be found any more. */
+    memset(&v, 0, sizeof(v));
+    v.BufferBytes = 256u; v.Offset = 240u; v.CommandBytes = 20u; v.MinBytes = min; v.RectBytes = rect;
+    v.Base = base; v.First = base + 240u + min; v.SubCount = 1u; v.HaveRects = 1;
+    CHECK_EQ(Bc250GdiCommandStep(&v, &next, &why), BC250_GDI_CMD_STOP);
+    CHECK_EQ(why, BC250_GDI_WHY_MALFORMED);
+    CHECK_EQ(next, 0u);
+    v.CommandBytes = 12u;
+    CHECK_EQ(Bc250GdiCommandStep(&v, &next, &why), BC250_GDI_CMD_STOP);
+    v.CommandBytes = 18u;
+    CHECK_EQ(Bc250GdiCommandStep(&v, &next, &why), BC250_GDI_CMD_STOP);
+
+    /* A rectangle of no size would divide by zero. It is refused, not used. */
+    memset(&v, 0, sizeof(v));
+    v.BufferBytes = 256u; v.CommandBytes = 48u; v.MinBytes = min; v.RectBytes = 0;
+    v.Base = base; v.First = base + min; v.SubCount = 1u; v.HaveRects = 1;
+    CHECK_EQ(Bc250GdiCommandStep(&v, &next, &why), BC250_GDI_CMD_SKIP);
+    CHECK_EQ(why, BC250_GDI_WHY_OUTSIDE);
+
+    /* A command buffer at the very top of the address space: the limit wraps, so nothing is inside
+     * it. The arithmetic says so instead of admitting the whole address space. */
+    memset(&v, 0, sizeof(v));
+    v.BufferBytes = 256u; v.CommandBytes = 48u; v.MinBytes = min; v.RectBytes = rect;
+    v.Base = 0xFFFFFFFFFFFFFFF0ull; v.First = v.Base + min; v.SubCount = 1u; v.HaveRects = 1;
+    CHECK_EQ(Bc250GdiCommandStep(&v, &next, &why), BC250_GDI_CMD_SKIP);
+    CHECK_EQ(why, BC250_GDI_WHY_OUTSIDE);
+
+    /* The caller's own mistakes. */
+    memset(&v, 0, sizeof(v));
+    v.BufferBytes = 256u; v.CommandBytes = 48u; v.MinBytes = min; v.RectBytes = rect;
+    v.Base = base; v.First = base + min; v.SubCount = 1u; v.HaveRects = 1;
+    CHECK_EQ(Bc250GdiCommandStep(NULL, &next, &why), BC250_GDI_CMD_STOP);
+    CHECK_EQ(Bc250GdiCommandStep(&v, NULL, &why), BC250_GDI_CMD_STOP);
+    CHECK_EQ(Bc250GdiCommandStep(&v, &next, NULL), BC250_GDI_CMD_STOP);
+}
+
 static void TestStreamCase(const BC250_GDI_OP* op, const BC250_GDI_SURFACE* s, unsigned int count,
                            const BC250_GDI_RECT* sub, unsigned int pattern, unsigned int capacity)
 {
@@ -1120,6 +1224,7 @@ int main(void)
     TestTransform();
     TestPlan();
     TestWalkAndPass();
+    TestCommandStep();
     TestStream();
     TestStreamRefusals();
     printf("gdi_render_test: %d checks, %d failures\n", g_checks, g_failures);

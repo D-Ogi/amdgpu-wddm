@@ -8929,24 +8929,60 @@ static int WddmGdiDisjoint(ULONGLONG Ib, UINT IbBytes, ULONGLONG Va, ULONGLONG B
     return Ib <= Va ? Va - Ib >= IbBytes : Ib - Va >= Bytes;
 }
 
+// One command's structure, for both passes of RenderGdi: the opcode table, the walk step and the
+// containment of the sub-rectangle array inside the command. Both passes call this and nothing else,
+// so the walk which counts and the walk which translates cannot disagree. They used to: the count
+// added SubCount before the containment check that the translation applies, so one command with a
+// malformed count raised the budget of the whole call, and a call whose budget cannot be guaranteed
+// draws nothing. Review r2 of 2026-10-14 found that total loss built out of one bad command.
+//   WDDM_GDI_STRUCT_* is BC250_GDI_CMD_* plus the one answer this layer adds, an opcode the table
+// does not describe. That answer stops the walk, like a malformed size, because a command of unknown
+// length leaves no way to reach the next one.
+#define WDDM_GDI_WHY_OPCODE 5u
+static int WddmGdiStructure(const UCHAR* Buffer, UINT Bytes, UINT Offset, BC250_GDI_OP* Op,
+                            const RECT** SubRects, UINT* SubCount, UINT* Next, UINT* Why)
+{
+    const DXGK_RENDERKM_COMMAND* command = (const DXGK_RENDERKM_COMMAND*)(Buffer + Offset);
+    BC250_GDI_CMD_VIEW view;
+    UINT minBytes;
+
+    *Next = 0;
+    *Why = WDDM_GDI_WHY_OPCODE;
+    if (!WddmGdiCommand(command, Op, SubRects, SubCount, &minBytes)) return BC250_GDI_CMD_STOP;
+    RtlZeroMemory(&view, sizeof(view));
+    view.BufferBytes = Bytes;
+    view.Offset = Offset;
+    view.CommandBytes = command->CommandSize;
+    view.MinBytes = minBytes;
+    view.SubCount = *SubCount;
+    view.RectBytes = (UINT)sizeof(RECT);
+    view.Base = (ULONGLONG)(ULONG_PTR)Buffer;
+    view.First = (ULONGLONG)(ULONG_PTR)*SubRects;
+    view.Escape = Op->OpCode == BC250_GDIOP_ESCAPE;
+    view.HaveRects = *SubRects != NULL;
+    return Bc250GdiCommandStep(&view, Next, Why);
+}
+
 // The sub-rectangles the whole command buffer holds, which is what gdi_batch.c budgets the call
-// with. The same two helpers as the translation below, in the same order, so this walk stops exactly
-// where that one will; a sub-rectangle the admission later refuses costs nothing but a larger
-// budget. The count saturates rather than wraps, and a saturated count refuses the call.
+// with. Only a command the translation will draw adds its count, which is what keeps this number
+// inside the input's own bound: an admitted command of L bytes carries at most
+// (L - MinBytes) / sizeof(RECT) sub-rectangles, because the array is inside the command. The count
+// saturates rather than wraps, and a saturated count refuses the call.
 static unsigned int WddmGdiSubRectCount(const UCHAR* Buffer, UINT Bytes, UINT* Commands)
 {
     ULONGLONG total = 0;
-    UINT offset, index, next, subCount, minBytes;
+    UINT offset, index, next, subCount, why;
     const RECT* subRects;
     BC250_GDI_OP op;
 
     for (offset = 0, index = 0; offset + (UINT)FIELD_OFFSET(DXGK_RENDERKM_COMMAND, Command) <= Bytes;
          index++)
     {
-        const DXGK_RENDERKM_COMMAND* command = (const DXGK_RENDERKM_COMMAND*)(Buffer + offset);
-        if (!WddmGdiCommand(command, &op, &subRects, &subCount, &minBytes)) break;
-        if (!Bc250GdiWalkStep(Bytes, offset, command->CommandSize, minBytes, &next)) break;
+        int kind = WddmGdiStructure(Buffer, Bytes, offset, &op, &subRects, &subCount, &next, &why);
+
+        if (kind == BC250_GDI_CMD_STOP) break;
         offset = next;
+        if (kind != BC250_GDI_CMD_DRAW) continue;
         total += subCount;
         if (total > 0xFFFFFFFFull) { total = 0xFFFFFFFFull; break; }
     }
@@ -9030,54 +9066,38 @@ static NTSTATUS Bc250WddmRenderGdi(_In_ const HANDLE hContext, _Inout_ DXGKARG_R
 
     for (offset = 0, index = 0; offset + (UINT)FIELD_OFFSET(DXGK_RENDERKM_COMMAND, Command) <= bytes; index++)
     {
-        const DXGK_RENDERKM_COMMAND* command = (const DXGK_RENDERKM_COMMAND*)(buffer + offset);
         BC250_GDI_SURFACE surfaces[BC250_GDI_BIND_SLOTS];
         ULONGLONG vas[BC250_GDI_BIND_SLOTS];
         BC250_GDI_OP op;
         const RECT* subRects;
-        UINT subCount, minBytes, next, slots, sub, start = offset;
+        UINT subCount, next, slots, sub, why, start = offset;
         unsigned int pattern = 0;
         int disjoint = 1;
+        // The structure of this command, read exactly as the counting walk above read it.
+        int kind = WddmGdiStructure(buffer, bytes, start, &op, &subRects, &subCount, &next, &why);
 
-        if (!WddmGdiCommand(command, &op, &subRects, &subCount, &minBytes))
+        if (kind == BC250_GDI_CMD_STOP)
         {
-            // An opcode outside the table has no size this driver can trust, so the rest of the
-            // buffer is not walked either.
-            InterlockedIncrement64(&wddm->GdiRenderRefused[Bc250GdiBadOpCode]);
-            break;
-        }
-        if (!Bc250GdiWalkStep(bytes, start, command->CommandSize, minBytes, &next))
-        {
-            InterlockedIncrement64(&wddm->GdiRenderMalformed);
+            // An opcode outside the table has no size this driver can trust, and neither has a
+            // command whose size the buffer does not hold, so the rest of the buffer is not walked.
+            if (why == WDDM_GDI_WHY_OPCODE)
+                InterlockedIncrement64(&wddm->GdiRenderRefused[Bc250GdiBadOpCode]);
+            else
+                InterlockedIncrement64(&wddm->GdiRenderMalformed);
             break;
         }
         offset = next;
         InterlockedIncrement64(&wddm->GdiRenderCommands);
-        if (op.OpCode == BC250_GDIOP_ESCAPE)
+        if (kind == BC250_GDI_CMD_SKIP)
         {
-            InterlockedIncrement64(&wddm->GdiRenderRefused[Bc250GdiSkip]);
+            // An escape is not ours to run. A command with no sub-rectangle paints nothing, because
+            // every page says the sub-rectangles are what is painted, bounded by DstRect. An array
+            // that is not inside its own command is the one input here that cannot be bounds-checked
+            // any other way, and `CommandSize` is what says it must be inside.
+            if (why == BC250_GDI_WHY_ESCAPE) InterlockedIncrement64(&wddm->GdiRenderRefused[Bc250GdiSkip]);
+            else if (why == BC250_GDI_WHY_EMPTY) InterlockedIncrement64(&wddm->GdiRenderEmpty);
+            else InterlockedIncrement64(&wddm->GdiRenderOutside);
             continue;
-        }
-        if (subCount == 0 || subRects == NULL)
-        {
-            // Every page says the sub-rectangles are what is painted, bounded by DstRect, so a
-            // command with none paints nothing.
-            InterlockedIncrement64(&wddm->GdiRenderEmpty);
-            continue;
-        }
-        {
-            // CommandSize is "the size of the current rendering command, in bytes, including the
-            // value of OpCode and the number of sub-rectangles in the command", so the array lies
-            // inside this command. A pointer that does not is counted and the command dropped: it
-            // is the one input here that cannot be bounds-checked any other way.
-            ULONG_PTR first = (ULONG_PTR)subRects;
-            ULONG_PTR lowest = (ULONG_PTR)(buffer + start + minBytes);
-            ULONG_PTR limit = (ULONG_PTR)(buffer + start + command->CommandSize);
-            if (first < lowest || first > limit || (limit - first) / sizeof(RECT) < subCount)
-            {
-                InterlockedIncrement64(&wddm->GdiRenderOutside);
-                continue;
-            }
         }
         if (!WddmGdiBind(wddm, context, pRenderGdi->pAllocationList, listSize, &op,
                          surfaces, vas, &slots))

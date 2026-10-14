@@ -271,8 +271,10 @@ The steps:
    the DMA buffer must be present, aligned and large enough.
 2. It counts the sub-rectangles of the whole command buffer and settles the capacity of the call
    before it writes anything, which is the subject of the next section.
-3. It walks the command buffer. `Bc250GdiWalkStep` holds every offset inside `CommandLength` and
-   refuses a `CommandSize` that the buffer does not hold.
+3. It walks the command buffer. `Bc250GdiCommandStep` is the structure of one command, and both
+   walks use it and nothing else. It holds every offset inside `CommandLength` through
+   `Bc250GdiWalkStep`, refuses a `CommandSize` that the buffer does not hold, and answers whether
+   the command's sub-rectangle array lies inside the command itself.
 4. It flattens each command into `BC250_GDI_OP`, which holds the fields of all six argument
    structures. `C_ASSERT` lines tie every plain constant of the contract layer to the WDK values.
 5. It resolves the allocation list indices that the command names. Each index gives one surface
@@ -287,6 +289,18 @@ The steps:
    writes its bitmaps with the processor, and the acquire makes those writes visible to the engine's
    level two cache read, its instruction reads and its scalar reads.
 8. It advances `pDmaBuffer` by what the batch wrote.
+
+The two walks must agree command for command, and one function is how that is kept true. The count
+of step 2 and the translation of step 3 to 8 read the same buffer. A command the translation drops
+may not be counted, because the count is the budget of the whole call, and a call whose budget
+cannot be guaranteed draws nothing. The counting walk once added a command's stated sub-rectangle
+count before the check which holds that array inside the command. One command with a malformed count
+could therefore refuse every good command beside it, which review r2 of 2026-10-14 found. The count
+is now the count of what the translation will draw. That is also what keeps the number inside the
+input's own bound: an admitted command of `L` bytes carries at most `(L - MinBytes) / 16`
+sub-rectangles, because the array is inside the command. A host case set holds
+`Bc250GdiCommandStep` to each answer, the malformed count among them, and the case set fails when
+the containment check is removed.
 
 `DxgkDdiSubmitCommandVirtual` needs no new arm. A GDI DMA buffer is a non present, non user mode
 command buffer with bytes in it, which the existing stage C submits to the graphics ring. The GDI
