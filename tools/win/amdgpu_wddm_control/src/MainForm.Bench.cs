@@ -3,7 +3,7 @@
 // src/Benchmark.cs and the run is in src/BenchmarkRun.cs, so this file only draws and reports.
 //
 // The card never searches the disk while a page is only being drawn for a gate (--smoke, --smoke-render): the
-// search happens in RefreshAll, which those runs do not reach, and the fixture supplies a found copy for the render
+// search happens in WindowReading.Read, which skips it for those runs, and the fixture supplies a found copy for the render
 // matrix. That keeps every build free of a file listing it has no business making.
 using System;
 using System.Collections.Generic;
@@ -20,21 +20,10 @@ namespace AmdgpuWddmControl
         List<RunRecord> _benchHistory;
         string _benchNote;                      // the answer to the last folder choice, until the card is left
 
-        // Where the game is, and what this computer measured before. A gate run (--smoke, --smoke-render of this PC,
-        // --smoke-perf) searches nothing: a build must list no folder of the PC that builds it, and the render matrix
-        // gets a found copy from the fixture instead.
-        void ReadBenchmark()
-        {
-            if (_smoke || ReadOnlyProbe)
-            {
-                _bench = new InstallState();
-                _benchHistory = new List<RunRecord>();
-                return;
-            }
-            var files = new LocalBenchFiles();
-            try { _bench = BenchLocator.Find(_prefs.BenchmarkFolder, files); } catch (Exception) { _bench = new InstallState(); }
-            try { _benchHistory = BenchPaths.ReadHistory(); } catch (Exception) { _benchHistory = new List<RunRecord>(); }
-        }
+        // Where the game is, and what this computer measured before, come with the window's reading
+        // (WindowReading.Read). A gate run (--smoke, --smoke-render of this PC, --smoke-perf) searches nothing: a
+        // build must list no folder of the PC that builds it, and the render matrix gets a found copy from the
+        // fixture instead.
 
         Control BuildBenchmarkCard(int width)
         {

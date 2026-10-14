@@ -98,7 +98,12 @@ namespace AmdgpuWddmControl
                 // can move it: whatever column is left after that is the column the page is built for, so the page
                 // is rebuilt here when the two differ. Without it a 1240 px page stood in a 650 px column on the
                 // owner's 800x600 screen and was cut on the right, which is the finding of GitHub #38.
-                Load += (s, e) => { FitToScreens(); RebuildIfWidthChanged(); RefreshAll(); StartUpdateCheck(false); UpdateTimer(); };
+                Load += (s, e) =>
+                {
+                    FitToScreens(); RebuildIfWidthChanged();
+                    if (_startReading != null) { var r = _startReading; _startReading = null; Apply(r); } else RefreshAll();
+                    StartUpdateCheck(false); UpdateTimer();
+                };
                 VisibleChanged += (s, e) => UpdateTimer();
                 Resize += (s, e) => { UpdateTimer(); if (_guide != null) _guide.Paused = WindowState == FormWindowState.Minimized; };
                 ResizeEnd += (s, e) => RebuildIfWidthChanged();
@@ -591,27 +596,32 @@ namespace AmdgpuWddmControl
 
         // ---- data --------------------------------------------------------------------------------------------------
 
-        void ReadRecent()
-        {
-            var list = RecentLaunches.Read(new LocalRecentFiles());
-            _recent = list.Entries;
-            _recentState = list.State;
-        }
-
         public void RefreshAll()
         {
             if (_page == "system") { ReadSystemTuning(); return; }
             if (_fixture) { ComputeStatus(); ShowPage(_page, null, false); return; }
-            try { _inv = Inventory.Read(false); } catch (Exception) { _inv = new InventoryState(); }
-            try { Kmd.RefreshBoardCapabilities();
-            _snap = RecoveryProbe.Read("window"); } catch (Exception) { _snap = new RecoverySnapshot { DriverError = "unreadable", ReadFailed = true }; }
-            var vram = Kmd.VideoMemory();
-            _vram = vram.Value;
-            _uma = Kmd.BoardMemoryQuery().Value;
-            _fan = Kmd.Hwmon().Value;
-            _upd = UpdateCheck.LoadCache();
-            ReadRecent();
-            ReadBenchmark();
+            Apply(WindowReading.Read(_prefs, _smoke || ReadOnlyProbe));
+        }
+
+        // The reading the start made while the loading window showed (Launch.cs). It is taken in the Load handler,
+        // before the window is first drawn; a window that is given none reads in its Load handler, as it always did.
+        WindowReading _startReading;
+
+        public void UseStartReading(WindowReading reading) { _startReading = reading; }
+
+        // What a reading puts in the window. On the user-interface thread; the reading itself can come from any.
+        void Apply(WindowReading r)
+        {
+            _inv = r.Inventory;
+            _snap = r.Snapshot;
+            _vram = r.Vram;
+            _uma = r.Uma;
+            _fan = r.Fan;
+            _upd = r.Update;
+            _recent = r.Recent.Entries;
+            _recentState = r.Recent.State;
+            _bench = r.Bench;
+            _benchHistory = r.BenchHistory;
             ReadDriverCard(!_smoke && !ReadOnlyProbe);
             ComputeStatus();
             ShowPage(_page, null, false);

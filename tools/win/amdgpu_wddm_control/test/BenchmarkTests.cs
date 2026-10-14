@@ -557,7 +557,11 @@ static partial class UnitTests
         // Two texts: the band our own board drew, and the line that says why a run lands anywhere inside it.
         Check(card.Contains("if (UmaSetting.Visible(_uma))") && Regex.Matches(card, @"bench\.reference").Count == 2,
             "benchmark: our own board's numbers are shown only on a board the app identified as a BC-250");
-        Check(card.Contains("if (_smoke || ReadOnlyProbe)"), "benchmark: a build gate searches no folder of the PC that builds it");
+        // The search is part of the window's reading (WindowReading.cs), which a gate run asks for with gate set.
+        var reading = File.ReadAllText(Path.Combine(dir, "WindowReading.cs"));
+        int gate = reading.IndexOf("if (!gate)", StringComparison.Ordinal), find = reading.IndexOf("BenchLocator.Find(", StringComparison.Ordinal);
+        Check(File.ReadAllText(Path.Combine(dir, "MainForm.cs")).Contains("WindowReading.Read(_prefs, _smoke || ReadOnlyProbe)") && gate > 0 && find > gate &&
+            !card.Contains("BenchLocator.Find("), "benchmark: a build gate searches no folder of the PC that builds it");
         Check(Regex.IsMatch(card, @"BenchRunner\.Start\(_bench, InstalledVersion, OnBenchmarkProgress\)"), "benchmark: the card starts the one runner");
         Check(card.Contains("BeginInvoke") && !Regex.IsMatch(Regex.Replace(card, @"//[^\n]*", ""), @"WaitForExit|Thread\.Sleep|\.Wait\(\)"),
             "benchmark: the window never waits for the game on its own thread");
