@@ -1,8 +1,14 @@
-// BD-169: a start that 0.7.216.63 completed must still complete. 0.7.216.64 sent
-// every inherited timing above 300 MHz down the inherited route (modeset.c) and
-// let a connector refusal fail the adapter start (pnp.c). Both together turn an
-// equal-size board whose pipe reads no support into Code 43, and even a board
-// whose pipe classifies loses its source mode list.
+// BD-169: a start that 0.7.216.63 completed with a validated pipe must still
+// complete. 0.7.216.64 sent every inherited timing above 300 MHz down the fixed
+// inherited route (modeset.c) and let a connector refusal fail the adapter start
+// (pnp.c). Together they publish one source mode instead of fifteen on a board
+// whose pipe classifies, and fail the start outright when it does not.
+//
+// What the start may keep is one pipe: stable, validated, identity, with only
+// programmable connector admission missing. An unreadable pipe, a moving pipe,
+// an unhandled fetch layout and a refusal whose own cleanup failed are not that,
+// and each still fails the start. Equal source and target sizes establish none
+// of it, and a mode-list entry is not a contract.
 //
 // The first group carries the register words GitHub #40's board logged on
 // 0.7.216.61 (Acer KG271U on DP, 2560x1440, pitch 10240, MPCC mode 1 with a
@@ -22,12 +28,14 @@ static void Bd169Field40Pipe(void)
 }
 
 // The programmable connector's own prerequisites, so that the route selector
-// under test decides on the inherited tuple and not on a missing EDID.
+// under test decides on the inherited tuple and not on a missing EDID, and the
+// refusal it will meet is a planning one whose cleanup succeeded.
 static void Bd169Programmable(BC250_DEVICE* d)
 {
     d->Modeset.Requested=BC250_DISPLAY_MODES_SCALED;d->Modeset.Level=BC250_DISPLAY_MODES_SCALED;
     d->Modeset.EdidValid=TRUE;d->Modeset.DpcdValid=TRUE;d->DcnWriteEnabled=TRUE;
     d->Dxgk.DxgkCbSynchronizeExecution=d;d->Dxgk.DxgkCbQueueDpc=d;d->Dxgk.DxgkCbIndicateChildStatus=d;
+    d->Connector.StartPreserved=1;
 }
 
 static void Bd169ModeList(BC250_DEVICE* d,ULONG w,ULONG h,ULONG sw,ULONG sh)
@@ -39,13 +47,15 @@ static void Bd169ModeList(BC250_DEVICE* d,ULONG w,ULONG h,ULONG sw,ULONG sh)
 
 static void Bd169Cases(void)
 {
-    // Equal source and target above the Plan() bound: the firmware applied no
-    // transform, the scaler needs no output programming, and the start holds.
+    // Equal source and target above the Plan() bound, pipe validated as the
+    // identity transform: the firmware applied none, the scaler needs no output
+    // programming, and the start holds with its own source mode list.
     static const struct { ULONG w,h,ht,vt,pixel; } above[]={
-        {2560,1440,2720,1481,483326400},    // #40, 120 Hz (totals inferred)
-        {2560,1440,2720,1492,304250000}     // BD-144, 75 Hz; was the 4th BD-155 case
+        {2560,1440,2720,1481,483326400},    // #40's class, 120 Hz (totals inferred)
+        {2560,1440,2720,1492,304250000}      // BD-144, 75 Hz; was the 4th BD-155 case
     };
     unsigned i;
+    testConnectorEnabled=FALSE;             // the static path has no enabled connector
     for(i=0;i<RTL_NUMBER_OF(above);i++) {
         BC250_DEVICE d={0};D3DKMDT_VIDEO_SIGNAL_INFO signal;
         Mode(&d,above[i].w,above[i].h,above[i].ht,above[i].vt,above[i].pixel);
@@ -67,13 +77,21 @@ static void Bd169Cases(void)
         // the connector's. 0.7.216.64 answered 0 for every non-native size.
         CHECK(ModesetScalingSupport(&d,above[i].w,above[i].h)!=0);
         CHECK(ModesetScalingSupport(&d,1920,1080)!=0);
-        CHECK(pipeWrites==0);
+        // A refusal that wrote and could not restore it keeps no display, even
+        // with this pipe: the hardware state is then unknown.
+        d.Connector.StartPreserved=0;
+        CHECK(!ConnectorRefusalKeepsDisplay(&d));
+        d.Connector.StartPreserved=1;
+        CHECK(ConnectorRefusalKeepsDisplay(&d));
+        // The D0 of that start verifies the retained output timing, which this
+        // driver did not program. Unchanged registers pass.
+        CHECK(ModesetValidateInherited(&d)==STATUS_SUCCESS && pipeWrites==0);
+        CHECK(DisplayValidateInheritedSignal(&d)==STATUS_SUCCESS);
     }
     // The same board when the pipe classifies as nothing we name: MPCC mode 3
-    // (two-layer blending) stands in for #40's own 0.7.216.61 verdict, whose
-    // bottom-selector gate rejected MPCC mode 1 (`support 0 status C00000BB`).
-    // The published tuple is the POST tuple either way, so the start holds and
-    // the identity transform comes from that tuple, not from the registers.
+    // (two-layer blending) stands in for any unhandled fetch or ownership
+    // layout. The source size is the POST size and the mode list still holds
+    // it, and neither admits the pipe: the start fails at the connector gate.
     {
         BC250_DEVICE d={0};D3DKMDT_VIDEO_SIGNAL_INFO signal;
         Mode(&d,2560,1440,2720,1481,483326400);
@@ -85,18 +103,18 @@ static void Bd169Cases(void)
         Bd169Programmable(&d);
         Bd169ModeList(&d,2560,1440,1920,1080);
         CHECK(!ConnectorNeedsInherited(&d));
-        CHECK(ConnectorRefusalKeepsDisplay(&d));
-        CHECK(ModesetScalingSupport(&d,2560,1440)!=0 && ModesetScalingSupport(&d,1920,1080)!=0);
-        // Nothing to present is still a failed start: no signal, or a mode list
-        // without the POST size.
+        CHECK(!ConnectorRefusalKeepsDisplay(&d));
+        // Nothing to present is a failed start for the same reason: no signal,
+        // or a mode list without the POST size.
         d.InheritedSignalValid=FALSE;CHECK(!ConnectorRefusalKeepsDisplay(&d));
         d.InheritedSignalValid=TRUE;Bd169ModeList(&d,1920,1080,1280,720);
         CHECK(!ConnectorRefusalKeepsDisplay(&d));
         d.Modeset.Modes.Count=0;CHECK(!ConnectorRefusalKeepsDisplay(&d));
     }
     // A pipe we cannot read at all, and one that moves between the two reads.
-    // At equal size the POST tuple still describes the display, so the start
-    // holds and the diagnostic keeps the real status, as before 0.7.216.64.
+    // The start's first gate still passes, because the POST tuple describes an
+    // equal-size source; what neither grants is a pipe the driver may own, so
+    // the connector refusal fails the start.
     for(i=0;i<2;i++) {
         BC250_DEVICE d={0};D3DKMDT_VIDEO_SIGNAL_INFO signal;
         Mode(&d,2560,1440,2720,1481,483326400);
@@ -108,10 +126,9 @@ static void Bd169Cases(void)
         CHECK(pipeWrites==0);
         Bd169Programmable(&d);
         Bd169ModeList(&d,2560,1440,1920,1080);
-        CHECK(!ConnectorNeedsInherited(&d) && ConnectorRefusalKeepsDisplay(&d));
-        CHECK(ModesetScalingSupport(&d,1920,1080)!=0);
-        // The same two failures on a scaled tuple do fail the start: there the
-        // verified pipe is the only description of the display (#38).
+        CHECK(!ConnectorNeedsInherited(&d) && !ConnectorRefusalKeepsDisplay(&d));
+        // The same two failures on a scaled tuple fail the start one gate
+        // earlier, in ModesetPrepareInherited (#38).
         {
             BC250_DEVICE s={0};D3DKMDT_VIDEO_SIGNAL_INFO scaled;
             Mode(&s,2560,1440,2720,1492,304250000);
@@ -121,6 +138,43 @@ static void Bd169Cases(void)
             if(i==0)pipeReadFailure=1;else pipeTear=1;
             CHECK(TestFillSignalInfo(&s,&scaled)==(i==0?STATUS_ACCESS_DENIED:STATUS_DEVICE_BUSY));
             CHECK(s.Modeset.InheritedFixed && s.Modeset.InheritedSupport==0 && pipeWrites==0);
+        }
+    }
+    // D0 of the static path: the retained output timing is verified because this
+    // driver did not program it, and the boot scaler snapshot is not, because a
+    // committed runtime source scale differs from it legitimately.
+    for(i=0;i<5;i++) {
+        BC250_DEVICE d={0};D3DKMDT_VIDEO_SIGNAL_INFO signal;
+        NTSTATUS expected;
+        Mode(&d,2560,1440,2720,1481,483326400);
+        Bd169Field40Pipe();
+        CHECK(TestFillSignalInfo(&d,&signal)==STATUS_SUCCESS && !d.Modeset.InheritedFixed);
+        Bd169Programmable(&d);
+        Bd169ModeList(&d,2560,1440,1920,1080);
+        switch(i) {
+        case 0: expected=STATUS_SUCCESS; break;                                 // unchanged
+        case 1: values[TimingPhase]+=1000000u; expected=STATUS_DEVICE_BUSY; break;   // another clock
+        case 2: values[TimingHTotal]+=1; expected=STATUS_DEVICE_BUSY; break;         // another total
+        case 3: readFailure=reads+1; expected=STATUS_ACCESS_DENIED; break;           // unreadable
+        default:                                                                     // the scaler moved
+            // A later source-scale commit leaves the boot snapshot behind. The
+            // timing is the question on this path, so D0 still passes.
+            pipeRegisters[BC250_REG_DMU_DSCL0_RECOUT_SIZE/4]=1280ul|(720ul<<16);
+            expected=STATUS_SUCCESS; break;
+        }
+        CHECK(ModesetValidateInherited(&d)==expected);
+        CHECK(pipeWrites==0);
+        // Two gates of that check, both unchanged by BD-169: a connector that
+        // programmed its own mode has its own resume, and display-only never
+        // measured a timing to verify.
+        if(i==1) {
+            testConnectorEnabled=TRUE;
+            CHECK(ModesetValidateInherited(&d)==STATUS_SUCCESS);
+            testConnectorEnabled=FALSE;
+            d.FullWddm=0;
+            CHECK(ModesetValidateInherited(&d)==STATUS_SUCCESS);
+            d.FullWddm=1;
+            CHECK(ModesetValidateInherited(&d)==STATUS_DEVICE_BUSY);
         }
     }
     // #38 unchanged: a scaled firmware tuple is the inherited route, its refusal
@@ -141,6 +195,10 @@ static void Bd169Cases(void)
         CHECK(!ConnectorRefusalKeepsDisplay(&d));
         CHECK(ConnectorStartInherited(&d)==STATUS_SUCCESS && d.Connector.StartAccepted==1);
         CHECK(d.Modeset.Modes.Count==1 && d.Modeset.Modes.Modes[0].Width==d.Post.Width);
+        // Its D0 keeps both halves: the timing and the boot scaler snapshot.
+        CHECK(ModesetValidateInherited(&d)==STATUS_SUCCESS && pipeWrites==0);
+        pipeRegisters[BC250_REG_DMU_DSCL0_RECOUT_SIZE/4]=1280ul|(720ul<<16);
+        CHECK(ModesetValidateInherited(&d)==STATUS_DEVICE_BUSY);
         d.Modeset.InheritedSupport=0;
         CHECK(ConnectorStartInherited(&d)==STATUS_NOT_SUPPORTED && !ConnectorRefusalKeepsDisplay(&d));
         // A scaled tuple the pipe does not describe fails the start itself, in
@@ -161,5 +219,42 @@ static void Bd169Cases(void)
         Bd169ModeList(&d,1920,1080,1280,720);
         CHECK(!ConnectorNeedsInherited(&d) && ConnectorRefusalKeepsDisplay(&d));
         CHECK(ModesetScalingSupport(&d,1280,720)!=0 && pipeWrites==0);
+        CHECK(ModesetValidateInherited(&d)==STATUS_SUCCESS && pipeWrites==0);
+    }
+    // ---- the two cases of the BD-169 review, as supplied ------------------------------------------------------
+    // Synthetic registers, not a field or hardware replay. The reviewer's first
+    // case needs the static path's disabled connector, which the fixture global
+    // carries, so this sets it; the assertions are the reviewer's.
+    {
+        BC250_DEVICE probe={0}; D3DKMDT_VIDEO_SIGNAL_INFO signal;
+        NTSTATUS direct, through, fixedControl;
+        Mode(&probe,2560,1440,2720,1481,483326400);
+        testConnectorEnabled=FALSE;
+        CHECK(TestFillSignalInfo(&probe,&signal)==STATUS_SUCCESS);
+        CHECK(!probe.Modeset.InheritedFixed);
+        // Same POST geometry and pointer, different running clock after retained D3.
+        values[TimingPhase]+=1000000u;
+        direct=DisplayValidateInheritedSignal(&probe);
+        through=ModesetValidateInherited(&probe);
+        probe.Modeset.InheritedFixed=TRUE;
+        fixedControl=ModesetValidateInherited(&probe);
+        CHECK(direct==STATUS_DEVICE_BUSY && fixedControl==STATUS_DEVICE_BUSY);
+        CHECK(through==STATUS_DEVICE_BUSY); // Required retained timing rejection.
+    }
+    {
+        BC250_DEVICE probe={0}; D3DKMDT_VIDEO_SIGNAL_INFO signal;
+        ULONG level=0, shapeVerdict;
+        Mode(&probe,2560,1440,2720,1481,483326400);
+        pipeRegisters[BC250_REG_DMU_HUBP0_DCSURF_TILING_CONFIG/4] |=
+            1ul << HUBP0_DCSURF_TILING_CONFIG__SW_MODE__SHIFT;
+        CHECK(TestFillSignalInfo(&probe,&signal)==STATUS_SUCCESS);
+        CHECK(probe.Modeset.InheritedSupport==0 && probe.Modeset.InheritedPipeStatus==STATUS_NOT_SUPPORTED);
+        shapeVerdict=Bc250PipeShapeCheck(&probe.Modeset.InheritedPipe.Shape,2560,1440,&level);
+        Bd169Programmable(&probe);
+        probe.Modeset.Level=level;
+        Bd169ModeList(&probe,2560,1440,1920,1080);
+        CHECK(level==BC250_DISPLAY_MODES_SCALED); // Old shape gate does not validate surface layout.
+        CHECK(!ConnectorRefusalKeepsDisplay(&probe)); // Required refusal of unhandled fetch layout.
+        CHECK(shapeVerdict<BC250_PIPE_VERDICT_COUNT);
     }
 }

@@ -388,7 +388,21 @@ static NTSTATUS ConnectorStartInherited(BC250_DEVICE* Device)
 BOOLEAN ConnectorRefusalKeepsDisplay(const BC250_DEVICE* Device)
 {
     const BC250_MODESET* m=&Device->Modeset;
+    // What the start may keep is one pipe: a stable, validated identity pipe
+    // whose only missing piece is programmable connector admission.
+    // StartPreserved excludes a refusal that wrote and could not restore.
+    // The pipe status excludes an unreadable and a moving pipe, and the IDENTITY
+    // bit is the whole fetch and ownership contract of Bc250InheritedPipeSupport:
+    // the POST-sized viewport at the POST pitch, a linear untiled surface with
+    // no DCC and no rotation, pixel format 8, the top MPCC layer with nothing
+    // blended under it, OTG1 not master and the MPC output on our pipe. Equal
+    // source and target sizes do not establish any of that, so a mode-list
+    // entry is not a contract: without the IDENTITY bit this driver cannot
+    // promise that its own buffers will scan out, and the start fails (BD-169).
+    if (!Device->Connector.StartPreserved) return FALSE;
     if (m->InheritedFixed || !Device->InheritedSignalValid) return FALSE;
+    if (!NT_SUCCESS(m->InheritedPipeStatus)) return FALSE;
+    if (!(m->InheritedSupport & BC250_SCALING_BIT(BC250_SCALING_IDENTITY))) return FALSE;
     return Bc250ModeListHas(&m->Modes,Device->Post.Width,Device->Post.Height) ? TRUE : FALSE;
 }
 
@@ -405,12 +419,17 @@ NTSTATUS ConnectorStart(BC250_DEVICE* Device)
     RtlZeroMemory(&c->FirstFailure,sizeof(c->FirstFailure));
     RtlZeroMemory(&c->FirstRecovery,sizeof(c->FirstRecovery));
     c->StartKind=c->StartAdapter=c->StartLimit=c->StartTargets=c->StartAccepted=0;
+    c->StartPreserved=0;        // earned per return path below (BD-169)
     c->StartStatus=STATUS_NOT_SUPPORTED;
     if (!Device->FullWddm) {
         // Display-only does not own a hardware connector.
+        c->StartPreserved=1;
         return c->LastStatus=c->StartStatus=STATUS_SUCCESS;
     }
     if (ConnectorNeedsInherited(Device)) {
+        // Route selection and admission only: no discovery transaction and
+        // no register write on either outcome.
+        c->StartPreserved=1;
         status=ConnectorStartInherited(Device);
         c->LastStatus=c->StartStatus=status;
         if (!NT_SUCCESS(status)) InterlockedIncrement(&c->Refusals);
@@ -418,13 +437,13 @@ NTSTATUS ConnectorStart(BC250_DEVICE* Device)
     }
     if (!c->WorkItem) c->WorkItem = IoAllocateWorkItem(Device->PhysicalDeviceObject);
     if (!c->WorkItem) {
-        c->LastStatus=c->StartStatus=STATUS_INSUFFICIENT_RESOURCES;
+        c->LastStatus=c->StartStatus=STATUS_INSUFFICIENT_RESOURCES;c->StartPreserved=1;
         GuardLog("connector: start work-item allocation failed");return c->StartStatus;
     }
     generation = (ULONG)InterlockedIncrement(&c->Generation);
     snapshot = AllocateSnapshot(generation);
     if (!snapshot) {
-        c->LastStatus=c->StartStatus=STATUS_INSUFFICIENT_RESOURCES;
+        c->LastStatus=c->StartStatus=STATUS_INSUFFICIENT_RESOURCES;c->StartPreserved=1;
         GuardLog("connector: start snapshot allocation failed");return c->StartStatus;
     }
     snapshot->Sink.Kind = Device->Modeset.DpcdValid ? BC250_SINK_DP :
@@ -455,10 +474,20 @@ NTSTATUS ConnectorStart(BC250_DEVICE* Device)
         snapshot = NULL;
         InterlockedExchange(&c->Enabled, 1);
     } else {
-        (void)SynchronizeHpd(Device, FALSE);
+        // The planning refusal itself writes nothing (connector_link.c: Plan
+        // reads clocks and runs DML), but this path disarms HPD and releases
+        // the link context, and the DP branch of the prepare may have opened
+        // AUX. The static inherited path may only be told that it still owns
+        // a firmware display when those restores succeeded; otherwise the
+        // hardware state is unknown and the start must fail (BD-169).
+        NTSTATUS hpd = SynchronizeHpd(Device, FALSE);
+        NTSTATUS release;
         InterlockedExchange(&c->Enabled, 0);
         InterlockedExchange(&c->Running, 0);
-        (void)ConnectorLinkRelease(Device);
+        release = ConnectorLinkRelease(Device);
+        if (NT_SUCCESS(hpd) && NT_SUCCESS(release)) c->StartPreserved=1;
+        else GuardLog("connector: start refusal left HPD %08lX release %08lX; no static fallback",
+                      (ULONG)hpd,(ULONG)release);
         InterlockedIncrement(&c->Refusals);
     }
     c->LastStatus = c->StartStatus = status;

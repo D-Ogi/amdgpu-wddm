@@ -60,7 +60,7 @@ typedef struct {BC250_INHERITED_PIPE InheritedPipe;NTSTATUS InheritedPipeStatus;
 typedef struct {void* Mmio;int FullWddm,ComposedSourceModes,DcnWriteEnabled;struct {ULONG Width,Height,Pitch;} Post;
     D3DKMDT_VIDEO_SIGNAL_INFO InheritedSignal;BOOLEAN InheritedSignalValid,InheritedTmds;BC250_MODESET Modeset;
     BOOLEAN ModeActive,CommitSeen; ULONG CommittedSourceWidth,CommittedSourceHeight,CommittedSourceFormat;
-    struct {ULONG StartAccepted;} Connector;
+    struct {ULONG StartAccepted,StartPreserved;} Connector;
     struct {NTSTATUS (*DxgkCbQueryVidPnInterface)(void*,unsigned,const struct TEST_VIDPN_INTERFACE**);
         void *DxgkCbSynchronizeExecution,*DxgkCbQueueDpc,*DxgkCbIndicateChildStatus;} Dxgk;
 } BC250_DEVICE;

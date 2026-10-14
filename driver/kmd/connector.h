@@ -33,6 +33,10 @@ typedef struct _BC250_CONNECTOR {
     BC250_CONNECTOR_FAILURE_DIAG FirstFailure;
     BC250_CONNECTOR_RECOVERY_DIAG FirstRecovery;
     ULONG StartKind, StartAdapter, StartLimit, StartTargets, StartAccepted;
+    // 1 when the start's refusal left the hardware as the firmware had it: it
+    // wrote nothing, or every restore of what it wrote succeeded. A planning
+    // refusal qualifies; a failed AUX restore or HPD disarm does not (BD-169).
+    ULONG StartPreserved;
     NTSTATUS StartStatus;
 } BC250_CONNECTOR;
 

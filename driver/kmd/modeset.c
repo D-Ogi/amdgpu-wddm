@@ -85,9 +85,12 @@ NTSTATUS ModesetPrepareInherited(BC250_DEVICE* Device, const D3DKMDT_VIDEO_SIGNA
     // inherited one included. It says nothing about the source scaler, which
     // leaves the output timing alone, and nothing about the start: a timing we
     // cannot re-program is still a picture we can keep (BD-169). Adding it here
-    // in 0.7.216.64 published one mode instead of fifteen on an equal-size
-    // 2560x1440 at 120 Hz board, and failed its start whenever the inherited
-    // pipe read no support - a start 0.7.216.63 completed (#40, BD-144).
+    // in 0.7.216.64 publishes one mode instead of fifteen on an equal-size
+    // 2560x1440 at 120 Hz board (#40's class; the support-0 words of that field
+    // record are 0.7.216.61's, whose MPCC bottom-selector gate .63 relaxed, so
+    // this driver should classify that pipe). Where the pipe does read no
+    // support the clause also fails the start, and what may then continue is
+    // ConnectorRefusalKeepsDisplay's business, not the pixel rate's.
     m->InheritedFixed = Device->Post.Width != Signal->ActiveSize.cx || Device->Post.Height != Signal->ActiveSize.cy;
     m->InheritedSupport = 0;
     RtlZeroMemory(&m->InheritedPipe, sizeof(m->InheritedPipe));
@@ -143,7 +146,25 @@ NTSTATUS ModesetValidateInherited(BC250_DEVICE* Device)
     BC250_INHERITED_PIPE current, second, saved;
     BC250_DISP_IO io;
     NTSTATUS status;
-    if (!m->InheritedFixed) return STATUS_SUCCESS;
+    if (!m->InheritedFixed) {
+        // BD-169: the retained output timing is this driver's to verify whenever
+        // it did not program that timing, fixed source scaling or not. The
+        // static inherited path runs with the connector disabled and keeps the
+        // firmware's own stream, so a D0 that finds another clock, another total
+        // or no readable timing is not the signal this start published, and
+        // PowerRestoreDisplay must not re-arm on it. Display-only never measured
+        // a timing, and a connector that programmed its own mode has its own
+        // resume. The saved pipe snapshot below is a different question: it is
+        // the firmware's transform, which only a fixed start promised to keep,
+        // and a committed runtime source scale differs from it legitimately.
+        if (!Device->FullWddm || !Device->InheritedSignalValid || ConnectorIsEnabled(Device))
+            return STATUS_SUCCESS;
+        status = DisplayValidateInheritedSignal(Device);
+        if (!NT_SUCCESS(status))
+            GuardLog("display modes: D0 retained timing refused 0x%08lX; no display write or VSync re-arm",
+                     (ULONG)status);
+        return status;
+    }
     status = DisplayValidateInheritedSignal(Device);
     if (!NT_SUCCESS(status)) return status;
     RtlZeroMemory(&current,sizeof(current));RtlZeroMemory(&second,sizeof(second));
