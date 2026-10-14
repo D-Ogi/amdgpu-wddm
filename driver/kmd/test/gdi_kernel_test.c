@@ -42,6 +42,9 @@
 static int g_failures, g_checks;
 /* Set around a case whose planned item is an engine item and must be run through its kernel. */
 static int g_forceKernel;
+/* Nonzero to fill the alpha surface with one word instead of the pattern, so that a case can reach
+ * the two unconditional ClearType sentences (a component of A that is 0 or 0xFF) deliberately. */
+static unsigned int g_alphaFill;
 
 #define CHECK(cond) \
     do { g_checks++; if (!(cond)) { fprintf(stderr, "FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond); g_failures++; } } while (0)
@@ -102,6 +105,10 @@ static void SeedMemory(void)
         unsigned int row = i / 512u, byte = i % 512u, value = byte & 0xFFu;
         g_memory[GAMMA_AT + i] = byte < 256u ? (unsigned char)((value * (row + 1u) / 16u) & 0xFFu)
                                              : (unsigned char)(255u - value);
+    }
+    if (g_alphaFill != 0u) {
+        /* The alpha allocation of Scene: 256 by 128, four bytes a pixel. */
+        for (i = 0; i < 256u * 128u * 4u; i += 4u) Store32(g_memory + ALPHA_AT + i, g_alphaFill);
     }
     memcpy(g_expected, g_memory, MEM_BYTES);
 }
@@ -271,12 +278,14 @@ static void ReferenceKernel(const BC250_GDI_OP* op, const BC250_GDI_SURFACE* sur
                     redFirst);
                 break;
             case Bc250GdiKernelTransparentBlt:
-                /* The key is in the surface's format too, and this model works per channel, so the
-                 * key is what the source word becomes when both are read as A8R8G8B8. */
+                /* The key is "the physical transparent color in the source surface, in 32-bit ARGB
+                 * unsigned pixel format (as defined by the D3DDDIFMT_A8R8G8B8 value ...)"
+                 * (ref/ddi-display/d3dkmddi.md:22037), so it enters the comparison as it arrived
+                 * while the source and destination words are converted into that order. */
                 out = Bc250GdiFromArgb(
                     Bc250GdiTransparentPixel(Bc250GdiToArgb(src, redFirst),
                                              Bc250GdiToArgb(dst, redFirst),
-                                             Bc250GdiToArgb(op->Color, redFirst),
+                                             op->Color,
                                              op->HonorAlpha),
                     redFirst);
                 break;
@@ -288,11 +297,13 @@ static void ReferenceKernel(const BC250_GDI_OP* op, const BC250_GDI_SURFACE* sur
                                         item->AlphaOffset +
                                         (unsigned long long)y * item->AlphaPitch +
                                         4u * (unsigned long long)x);
+                /* Both foreground colours are "in 32-bit ARGB unsigned pixel format", gamma
+                 * corrected and not (:21701, :21721), so they are not converted either. */
                 out = Bc250GdiFromArgb(
                     Bc250GdiClearTypePixel(Bc250GdiToArgb(dst, redFirst),
                                            Bc250GdiToArgb(a, alphaRedFirst),
-                                           Bc250GdiToArgb(op->Color, redFirst),
-                                           Bc250GdiToArgb(op->Color2, redFirst),
+                                           op->Color,
+                                           op->Color2,
                                            item->GammaValid,
                                            gamma, gamma + BC250_GDI_GAMMA_ENTRIES),
                     redFirst);
@@ -691,6 +702,13 @@ static void TestColourOrder(void)
     /* Distinct in red and in blue, so a swap cannot hide: red 0xC0, blue 0x12. */
     const unsigned int colour = 0x80C03412u;
 
+    /* The three colour fields of this DDI do not share one encoding, so each is tested against its
+     * own contract line rather than against one rule for all three. The model above now carries
+     * each field's own encoding, which is what makes these cases decide anything: a conversion
+     * applied twice shows up as a kernel that disagrees with the model, pixel for pixel. */
+
+    /* ColorFill.Color: "Color in the format of the destination surface" (d3dkmddi.md:21793, the
+     * WDK declaration), so the dword lands as it arrived for both channel orders. */
     for (redFirst = 0; redFirst <= 1u; redFirst++) {
         BC250_GDI_OP op = Op(BC250_GDIOP_COLORFILL, Rect(0, 0, 0, 0), Rect(4, 4, 12, 12));
         BC250_GDI_RECT sub = op.DstRect;
@@ -701,31 +719,94 @@ static void TestColourOrder(void)
         g_forceKernel = 1;
         RunCase("colorfill patcopy colour order", &op, s, 4, &layout, &sub);
         g_forceKernel = 0;
-        /* "Color in the format of the destination surface": the dword lands as it arrived, for
-         * both channel orders, and never the red-blue exchange of it. */
         CHECK_EQ(Load32(g_memory + layout.At[0] + 4u * s[0].Pitch + 4u * 4u), colour);
         CHECK(Load32(g_memory + layout.At[0] + 4u * s[0].Pitch + 4u * 4u) !=
               Bc250GdiSwapRb(colour));
     }
 
-    /* The TransparentBlt key is compared with source pixels, so it is in the surface order too: on
-     * a red-first pair the key that matches is the source word itself and not its exchange. */
+    /* TransparentBlt.Color: "the physical transparent color in the source surface, in 32-bit ARGB
+     * unsigned pixel format (as defined by the D3DDDIFMT_A8R8G8B8 value ...)" (:22037). It is NOT
+     * in the surface's order, which the review shows: on an A8B8G8R8 destination a key packed in
+     * the surface's order makes the kernel copy the pixel it was asked to keep. Both cases assert
+     * the destination word itself, so the outcome does not depend on the model. */
     for (redFirst = 0; redFirst <= 1u; redFirst++) {
-        BC250_GDI_OP op = Op(BC250_GDIOP_TRANSPARENTBLT, Rect(0, 0, 8, 8), Rect(0, 0, 8, 8));
+        /* The source is taken one pixel to the right, so that the source word and the destination
+         * word under it are different numbers: the seed is a single ramp and the two allocations
+         * start a whole number of its periods apart. */
+        BC250_GDI_OP op = Op(BC250_GDIOP_TRANSPARENTBLT, Rect(1, 0, 9, 8), Rect(0, 0, 8, 8));
         BC250_GDI_RECT sub = op.DstRect;
-        unsigned int raw;
+        unsigned int raw, kept, key;
         Scene(s, &layout, redFirst, 0);
         SeedMemory();
-        raw = Load32(g_memory + layout.At[1]) | 0xFF000000u;   /* the source pixel at (0,0) */
+        raw = Load32(g_memory + layout.At[1] + 4u);     /* the source pixel at (1,0) */
+        kept = Load32(g_memory + layout.At[0]);         /* the destination pixel at (0,0) */
+        key = Bc250GdiToArgb(raw, redFirst);            /* the same pixel, in the key's own order */
+        /* The seed gives every pixel unequal red and blue (its bytes step by 37), so the exchange
+         * of this key is a different number and the two cases below cannot coincide. */
+        CHECK(Bc250GdiByte(key, 16) != (key & 0xFFu));
+        CHECK(raw != kept);
+
         op.HonorAlpha = 1u;
-        /* The key as the surface holds the pixel. Under the other reading the kernel would compare
-         * an A8R8G8B8 source word with a red-first key, miss, and copy the pixel the model keeps,
-         * so the arena comparison inside RunCase is what decides between the two readings. */
-        op.Color = raw;
-        RunCase("transparentblt key order", &op, s, 4, &layout, &sub);
-        /* And the exchange of that key, which must not match. */
-        op.Color = Bc250GdiSwapRb(raw);
-        RunCase("transparentblt key order, exchanged", &op, s, 4, &layout, &sub);
+        op.Color = key;
+        RunCase("transparentblt key in a8r8g8b8", &op, s, 4, &layout, &sub);
+        /* The key matches that source pixel, so it is not copied. */
+        CHECK_EQ(Load32(g_memory + layout.At[0]), kept);
+
+        op.Color = Bc250GdiSwapRb(key);
+        RunCase("transparentblt key exchanged", &op, s, 4, &layout, &sub);
+        /* The exchanged key matches nothing, so the pixel is copied. */
+        CHECK_EQ(Load32(g_memory + layout.At[0]), raw);
+
+        /* And a key no pixel of the source can hold: HonorAlpha compares the whole word, so an
+         * alpha byte of 0xFF over a pattern whose alpha bytes are not 0xFF matches nowhere. */
+        op.Color = 0xFF000000u | (key & 0x00FFFFFFu);
+        if (Bc250GdiByte(key, 24) != 0xFFu)
+        {
+            RunCase("transparentblt key that matches nothing", &op, s, 4, &layout, &sub);
+            CHECK_EQ(Load32(g_memory + layout.At[0]), raw);
+        }
+    }
+
+    /* ClearTypeBlend.Color2: the foreground colour "in 32-bit ARGB unsigned pixel format", not
+     * gamma corrected (:21721). With every component of A at 0xFF the DDI's unconditional sentence
+     * demands the output component be Color2's, so the destination word is Color2's three channels
+     * in the destination's order - which is the direct witness for this field. */
+    for (redFirst = 0; redFirst <= 1u; redFirst++) {
+        BC250_GDI_OP op = Op(BC250_GDIOP_CLEARTYPEBLEND, Rect(0, 0, 0, 0), Rect(8, 4, 24, 12));
+        BC250_GDI_RECT sub = op.DstRect;
+        unsigned int got;
+        Scene(s, &layout, redFirst, 0);
+        op.Color = colour;
+        op.Color2 = 0x00D01256u;                 /* red 0xD0, blue 0x56, unequal */
+        g_alphaFill = 0xFFFFFFFFu;
+        RunCase("cleartypeblend color2 in a8r8g8b8", &op, s, 4, &layout, &sub);
+        g_alphaFill = 0u;
+        /* the destination pixel at (8,4), the sub-rectangle's own corner */
+        got = Bc250GdiToArgb(Load32(g_memory + layout.At[0] + 4u * s[0].Pitch + 4u * 8u),
+                             redFirst);
+        CHECK_EQ(got & 0x00FFFFFFu, op.Color2 & 0x00FFFFFFu);
+    }
+
+    /* ClearTypeBlend.Color: the same encoding, gamma corrected (:21701). A is 0x80 everywhere, so
+     * neither sentence fires and the blend itself reads Color. The two runs differ only by the
+     * exchange of red and blue in Color, so a driver that converted the field would produce the
+     * same pixels twice; the model comparison inside RunCase is what fails then. */
+    for (redFirst = 0; redFirst <= 1u; redFirst++) {
+        unsigned int at, straight, exchanged;
+        BC250_GDI_OP op = Op(BC250_GDIOP_CLEARTYPEBLEND, Rect(0, 0, 0, 0), Rect(8, 4, 24, 12));
+        BC250_GDI_RECT sub = op.DstRect;
+        Scene(s, &layout, redFirst, 0);
+        at = 4u * s[0].Pitch + 4u * 8u;                  /* the pixel at (8,4) */
+        op.Color2 = 0x00445566u;
+        g_alphaFill = 0x80808080u;
+        op.Color = colour & 0x00FFFFFFu;
+        RunCase("cleartypeblend color in a8r8g8b8", &op, s, 4, &layout, &sub);
+        straight = Load32(g_memory + layout.At[0] + at);
+        op.Color = Bc250GdiSwapRb(colour & 0x00FFFFFFu);
+        RunCase("cleartypeblend color exchanged", &op, s, 4, &layout, &sub);
+        exchanged = Load32(g_memory + layout.At[0] + at);
+        g_alphaFill = 0u;
+        CHECK(straight != exchanged);
     }
 }
 

@@ -322,12 +322,26 @@ int Bc250GdiKernarg(const BC250_GDI_OP* op, const BC250_GDI_SURFACE* surfaces,
     arg->Hs = item->Hs;
     arg->Hd = item->Hd;
 
-    /* The colour fields, each in the channel order its own kernel reads them in. A Color of this
-     * DDI is in its surface's own format, which is what the WDK header says of each of them; the
-     * conversion below is therefore TO A8R8G8B8 for the kernels that work per channel, and none at
-     * all for the two that are bitwise in the surface's own order. The header wins over the DDI
-     * reference page, which documents all three fields in A8R8G8B8; the two readings differ only
-     * for a red-first destination, which wddm.c counts for the lab. */
+    /* The colour fields, each in the channel order its own kernel reads it in. The three fields do
+     * not share one rule, and the headers say which is which:
+     *
+     *   DXGK_GDIARG_COLORFILL.Color is "Color in the format of the destination surface"
+     *   (ref/ddi-display/d3dkmddi.md:21793, the WDK 10.0.26100 declaration; the reference page's
+     *   own prose says A8R8G8B8 at :21825 instead, and the header wins), and the fill kernel writes
+     *   it into the destination word without looking at a channel: it is a pass-through.
+     *
+     *   DXGK_GDIARG_TRANSPARENTBLT.Color is "the physical transparent color in the source surface,
+     *   in 32-bit ARGB unsigned pixel format (as defined by the D3DDDIFMT_A8R8G8B8 value ...)"
+     *   (:22037), and DXGK_GDIARG_CLEARTYPEBLEND.Color/Color2 are the foreground colour "in 32-bit
+     *   ARGB unsigned pixel format" gamma corrected and not (:21701, :21721); neither header line
+     *   (:21654, :21659) names the destination's format. Their kernels convert the source,
+     *   destination and alpha words to A8R8G8B8 themselves - Bc250GdiToArgb at gdi_kernels.cl:150
+     *   and :168-169 - and pass these fields on untouched, so a conversion here would apply the
+     *   swap twice and, on a red-first destination, make the transparency key match the pixels it
+     *   should have kept.
+     *
+     * So nothing is converted in this function, and the per-channel work stays in the kernel where
+     * the destination's order is already known. */
     switch (item->Kernel) {
     case Bc250GdiKernelColorFillRop:
         arg->Rop = op->Rop;
@@ -341,14 +355,15 @@ int Bc250GdiKernarg(const BC250_GDI_OP* op, const BC250_GDI_SURFACE* surfaces,
         if (op->SourceHasAlpha) arg->Flags |= BC250_GDI_FLAG_SRC_HAS_ALPHA;
         break;
     case Bc250GdiKernelTransparentBlt:
-        /* The key is compared with source pixels, and the admission proved that the source and the
-         * destination share one channel order, so the destination's order is the key's too. */
-        arg->Color = Bc250GdiToArgb(op->Color, dstRedFirst);
+        /* The key is A8R8G8B8 and the kernel compares it with a source pixel it has converted to
+         * A8R8G8B8 itself, so the key travels as it arrived. */
+        arg->Color = op->Color;
         if (op->HonorAlpha) arg->Flags |= BC250_GDI_FLAG_HONOR_ALPHA;
         break;
     case Bc250GdiKernelClearTypeBlend:
-        arg->Color = Bc250GdiToArgb(op->Color, dstRedFirst);
-        arg->Color2 = Bc250GdiToArgb(op->Color2, dstRedFirst);
+        /* Both foreground colours are A8R8G8B8, like the blend the kernel performs. */
+        arg->Color = op->Color;
+        arg->Color2 = op->Color2;
         if (!Bc250GdiSlotVa(surfaces, vas, count, op->AlphaSurfAllocationIndex, item->AlphaOffset,
                             &arg->Alpha))
             return 0;
