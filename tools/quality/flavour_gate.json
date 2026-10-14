@@ -162,6 +162,22 @@
    }
   },
   {
+   "name": "NIR_DEBUG",
+   "where": "mesa-wddm src/compiler/nir/nir.c (CPU and Zink UMD lines, which build without NDEBUG); src/util/u_amdgpu_wddm_stdio.c (triplet line, the explicit debug list that keeps stderr)",
+   "does": "NIR flags: validation off (novalidate) or extended, every shader round-tripped through clone and serialize after each pass, metadata invalidated, and shader dumps",
+   "lab": {
+    "every": [
+     "bc250d3d.dll",
+     "bc250d3d_zink.dll",
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll (hosted line), vulkan/vulkan_radeon.dll and wow64/vulkan/vulkan_radeon.dll (system line) do not hold NIR_DEBUG in either flavour: those lines build with NDEBUG, so nir.c has no reader, and they keep no explicit debug list. That is by build line, not by flavour"
+   }
+  },
+  {
    "name": "ZINK_DEBUG",
    "where": "mesa-wddm src/gallium/drivers/zink/zink_screen.c (zink UMD, OpenGL ICD)",
    "does": "zink flags: dump NIR, SPIR-V and TGSI, force synchronisation and synchronous flushes, change descriptor set count, command reordering, render pass tracking and loads/stores, turn off async and optimised pipeline compiles, shader objects, precompilation and GENERAL layouts",
@@ -1502,6 +1518,11 @@
    "reason": "the log level of the shader channel (env_for_channel): it chooses how much the engine prints, nothing else"
   },
   {
+   "name": "VKD3D_DEBUG",
+   "where": "vkd3d-proton libs/vkd3d-common/debug.c (env_for_channel)",
+   "reason": "the log level of the API channel, one of a fixed list of level names: it chooses how much the engine prints (into the switch's file beside a marker of this process, else stderr or the debugger), nothing else. The two TRACE_ON branches (libs/vkd3d/command.c) print, or set has_replaced_shaders, which nothing reads; VKD3D_LOG_FILE and VKD3D_LOG_BUFFERED are lab only"
+  },
+  {
    "name": "DXIL_SPIRV_CONFIG",
    "where": "vkd3d-proton subprojects/dxil-spirv/dxil_converter.cpp, libs/vkd3d/device.c",
    "reason": "three fixed keywords (wmma_rdna3_workaround, wmma_conv_hack, debug_simulate_min16float_min_spec); no path"
@@ -1515,6 +1536,21 @@
    "name": "MESA_GLSL_CACHE_DISABLE",
    "where": "mesa-wddm src/util/disk_cache_os.c",
    "reason": "turns the shader disk cache off; it reads nothing"
+  },
+  {
+   "name": "MESA_DEBUG",
+   "where": "mesa-wddm src/util/log.c, src/util/xmlconfig.c, src/mesa/main/errors.c and debug.c (OpenGL ICD line), src/util/u_amdgpu_wddm_stdio.c (triplet line)",
+   "reason": "chooses whether messages are printed (\"silent\", or any value in a build with NDEBUG). The flags of set_debug_flags exist only without NDEBUG, and no shipped DLL that links mesa/main is built that way; api-tiling-linear, read outside that guard, changes texture allocation and is lab only (debug.c, OpenGL ICD line)"
+  },
+  {
+   "name": "MESA_LOG",
+   "where": "mesa-wddm src/util/log.c; src/util/u_amdgpu_wddm_stdio.c (triplet line)",
+   "reason": "chooses the loggers: none, stderr or the debugger on Windows, and an Android-only wait. No value names a file: MESA_LOG_FILE is read only outside Windows and only in the lab flavour"
+  },
+  {
+   "name": "MESA_SHADER_CACHE_SHOW_STATS",
+   "where": "mesa-wddm src/util/disk_cache.c; src/util/u_amdgpu_wddm_stdio.c (triplet line)",
+   "reason": "counts the hits and misses of the shader disk cache and prints one line when the cache is destroyed"
   },
   {
    "name": "LP_NUM_THREADS",
