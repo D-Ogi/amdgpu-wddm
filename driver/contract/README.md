@@ -340,7 +340,8 @@ never called - consistent with the measured `userq_ip_mask` = 0, and with the du
 **Worth re-running after any Mesa bump**, as a check on the output rather than a missing input:
 `RADV_DEBUG=info vulkaninfo --summary` on unit A, then `compare_radv_info.py`. A new Mesa can add
 a field that `ac_query_gpu_info()` hard-fails on - `has_smem_with_null_prt_bug` is already on that
-trajectory.
+trajectory. On Windows the capture needs the lab flavour of our ICD: the release flavour has no
+lookup of `RADV_DEBUG` (BD-167) and prints nothing.
 
 **Measured but not carried.** `GDS_CONFIG` came back with `gds_total_size` 64 KiB,
 `gws_per_compute_partition` 64 and `oa_per_compute_partition` 16. `ac_query_gpu_info()` does not

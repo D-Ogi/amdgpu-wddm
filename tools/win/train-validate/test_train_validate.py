@@ -123,13 +123,14 @@ def small_manifest(**overrides) -> dict:
     return data
 
 
-def fake_package(tmp: Path, with_zip: bool = True) -> Package:
+def fake_package(tmp: Path, with_zip: bool = True, flavour: str | None = None) -> Package:
     directory = tmp / "amdgpu-wddm-tester-0.7.0-tester.1"
     directory.mkdir(parents=True, exist_ok=True)
-    (directory / "manifest.json").write_text(json.dumps({
-        "name": directory.name, "release": "0.7.0-tester.1", "version": "0.7.0-tester.1",
-        "kmd_build": "0.7.0.1", "kmd_abi": "0x000700D8", "built_utc": "2026-10-10T07:45:30Z"}),
-        encoding="utf-8")
+    data = {"name": directory.name, "release": "0.7.0-tester.1", "version": "0.7.0-tester.1",
+            "kmd_build": "0.7.0.1", "kmd_abi": "0x000700D8", "built_utc": "2026-10-10T07:45:30Z"}
+    if flavour is not None:
+        data["flavour"] = flavour
+    (directory / "manifest.json").write_text(json.dumps(data), encoding="utf-8")
     # A real package has its zip beside the directory, and the arms that install it name the zip and its
     # hash. The tests keep one, a few bytes long, so that the hashing path runs as it does in a train.
     if with_zip:
@@ -2075,6 +2076,61 @@ class DestructiveArm(unittest.TestCase):
                      python="python", already_good={"zipcheck"})
         records = {r.id: r for r in run.run(plan.arms)}
         self.assertEqual(records["uninstall"].verdict, PASS)
+
+
+class LabFlavourArm(unittest.TestCase):
+    """BD-167: an arm that sets a lab-only variable runs on a lab package and is skipped on a release one."""
+
+    def setUp(self):
+        self.tmp = Path(self.enterContext(__import__("tempfile").TemporaryDirectory()))
+        self.clock = FakeClock()
+
+    def data(self):
+        data = small_manifest()
+        data["arms"][0]["flavour"] = "lab"
+        return data
+
+    def records(self, flavour):
+        plan = manifest.build(fake_package(self.tmp, flavour=flavour), self.data(), arm_ids=["smoke"],
+                              out_dir=self.tmp / "out", roots=(HERE.parents[2], self.tmp), python="python")
+        shell = FakeShell([("mon.py stop?", Completed(0, "no stop request")),
+                           ("temp.py", Completed(0, "Tctl 58.0 C")),
+                           ("vk-smoke.ps1", Completed(0, "smoke ok")),
+                           ("gate.ps1", Completed(0, GATE_OK))])
+        run = Runner(plan, shell, self.tmp / "out", clock=self.clock, writer=lambda *a: None, python="python")
+        return {r.id: r for r in run.run(plan.arms)}, shell
+
+    def test_the_shipped_wave64_arm_needs_a_lab_package_and_cts_rt_sets_no_experimental_feature(self):
+        arms = {arm["id"]: arm for arm in manifest.load_manifest()["arms"]}
+        self.assertEqual(arms["cts-rt-wave64"]["flavour"], "lab")
+        self.assertNotIn("flavour", arms["cts-rt"], "the default-mode CTS arm runs on the release package")
+        argv = step_argvs(arms["cts-rt"])[0]
+        self.assertEqual(argv[argv.index("-Experimental") + 1], "none")
+
+    def test_a_release_package_skips_the_arm_and_says_why(self):
+        records, shell = self.records("release")
+        self.assertEqual(records["smoke"].verdict, SKIPPED)
+        self.assertIn("release flavour", records["smoke"].reason)
+        self.assertEqual(shell.said("vk-smoke.ps1"), [])
+
+    def test_a_lab_package_and_a_package_from_before_the_field_run_it(self):
+        for flavour in ("lab", None):
+            with self.subTest(flavour=flavour):
+                records, shell = self.records(flavour)
+                self.assertEqual(records["smoke"].verdict, PASS)
+                self.assertTrue(shell.said("vk-smoke.ps1"))
+
+    def test_the_package_reads_its_flavour_and_refuses_an_unknown_one(self):
+        self.assertEqual(fake_package(self.tmp, flavour="release").flavour, "release")
+        self.assertEqual(fake_package(self.tmp, flavour=None).flavour, "")
+        with self.assertRaises(ManifestError):
+            fake_package(self.tmp, flavour="debug")
+
+    def test_an_arm_names_no_other_flavour(self):
+        data = small_manifest()
+        data["arms"][0]["flavour"] = "release"
+        with self.assertRaises(ManifestError):
+            manifest.build(fake_package(self.tmp), data, python="python")
 
 
 class ValueJudgement(unittest.TestCase):

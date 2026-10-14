@@ -1081,6 +1081,8 @@
           "direct",
           "-IcdPath",
           "C:\\Program Files\\amdgpu-wddm\\vulkan\\vulkan_radeon.dll",
+          "-Experimental",
+          "none",
           "-BoundSeconds",
           "150"
         ]
@@ -1105,13 +1107,14 @@
       "failure_classes": [
         "BD-102"
       ],
-      "note": "The CTS runner pins the route, the driver's hash and the case list per RunId and refuses a change, so the RunId carries the release. The three NotRun cases are the known ones of the pinned CTS revision, and the batch runner ends rc 1 because of them, which is why this arm names 1 among the exit codes it reads as an answer; the case count and 'complete=True' decide. The lab needs the CTS package at C:\\BC250\\cts."
+      "note": "The CTS runner pins the route, the driver's hash and the case list per RunId and refuses a change, so the RunId carries the release. The three NotRun cases are the known ones of the pinned CTS revision, and the batch runner ends rc 1 because of them, which is why this arm names 1 among the exit codes it reads as an answer; the case count and 'complete=True' decide. The lab needs the CTS package at C:\\BC250\\cts. -Experimental none: no ray tracing case needs sparse binding, and a release ICD has no lookup of RADV_EXPERIMENTAL (BD-167), so the runner would refuse the default 'sparse' on the release package."
     },
     {
       "id": "cts-rt-wave64",
       "title": "BD-074: the ray query dynamic indexing case under rtwave64, and in the default mode",
       "kind": "lab",
       "bound_s": 170,
+      "flavour": "lab",
       "run": [
         [
           "python",
@@ -1164,7 +1167,7 @@
       "depends_on": [
         "preflight"
       ],
-      "note": "The same shape as cts-rt, on the one case the defect fails: dEQP-VK.ray_query.misc.dynamic_indexing, from batches/rt-k97-di1.txt. The first step sets RADV_PERFTEST=rtwave64, the second leaves it unset, and each step carries its own RunId because the runner pins the route, the driver's hash and the variable per RunId. Both steps must end rc 0: this arm names no exit code among the answers it reads, unlike cts-rt, because a list of one case has no NotRun case to end the runner at rc 1. The result line reads the exit code of the first step, the rtwave64 one. The existing cts-rt arm runs the default mode only and would not have caught this defect.",
+      "note": "The same shape as cts-rt, on the one case the defect fails: dEQP-VK.ray_query.misc.dynamic_indexing, from batches/rt-k97-di1.txt. It needs a lab package (flavour lab): a release ICD has no lookup of RADV_PERFTEST (BD-167), so the runner skips the arm on a release package, and run-batch.ps1 refuses a release ICD for both steps. The first step sets RADV_PERFTEST=rtwave64, the second leaves it unset, and each step carries its own RunId because the runner pins the route, the driver's hash and the variable per RunId. Both steps must end rc 0: this arm names no exit code among the answers it reads, unlike cts-rt, because a list of one case has no NotRun case to end the runner at rc 1. The result line reads the exit code of the first step, the rtwave64 one. The existing cts-rt arm runs the default mode only and would not have caught this defect.",
       "failure_classes": [
         "BD-074"
       ]

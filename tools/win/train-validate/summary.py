@@ -164,7 +164,8 @@ def write(plan, records: list[ArmRecord], out_dir: Path, texts: dict | None = No
     lines += [
         f"Package under test: `{package.name}.zip`, SHA-256 `{package.zip_sha256 or 'not hashed'}`, "
         f"{package.zip_bytes} bytes, KMD build {package.kmd_build}, ABI {package.kmd_abi}, built "
-        f"{package.built_utc}. The suite ran the arms below from `{out_dir.as_posix()}`; every value in the "
+        f"{package.built_utc}, flavour {package.flavour or 'not recorded'}. The suite ran the arms below from "
+        f"`{out_dir.as_posix()}`; every value in the "
         f"table comes from the raw log named in its row. Written {now}.", ""]
     counts = {}
     for record in records:

@@ -24,6 +24,11 @@ GAME_KINDS = ("game", "operator")
 # An arm that changes the board's memory carve-out says which way: `set` writes the size the games run at, and
 # `restore` puts back the size before the change. `game_window` orders the game arms between the two.
 BOARD_MEMORY_MARKS = ("set", "restore")
+# BD-167: an arm that sets a variable only the lab flavour reads (RADV_PERFTEST, RADV_EXPERIMENTAL, RADV_DEBUG)
+# says `"flavour": "lab"`. On a release package, whose binaries have no lookup of the variable, it would measure
+# the defaults under its own name, so the runner skips it there and says why.
+ARM_FLAVOURS = ("lab",)
+PACKAGE_FLAVOURS = ("release", "lab")
 
 
 class ManifestError(Exception):
@@ -113,6 +118,9 @@ class Package:
     # the message names the folder that was searched and not the package root's parent, which is the unpacked
     # release's own top folder under the current layout.
     zip_dir: Path | None = None
+    # manifest.json "flavour" (build-release.ps1 -Flavour): release or lab. Empty for a package built before
+    # BD-167, which keeps every lookup the lab flavour keeps.
+    flavour: str = ""
 
     # The folder that holds the package's own files inside the unpacked release (owner, 2026-10-11: the top folder
     # holds setup.exe and this one folder).
@@ -130,6 +138,9 @@ class Package:
             raise ManifestError(f"no manifest.json in {directory}: that is not a release package")
         data = json.loads(manifest.read_text(encoding="utf-8"))
         name = data.get("name") or directory.name
+        flavour = str(data.get("flavour") or "")
+        if flavour and flavour not in PACKAGE_FLAVOURS:
+            raise ManifestError(f"{manifest}: flavour {flavour!r} is not one of {', '.join(PACKAGE_FLAVOURS)}")
         # The zip lies beside the folder it unpacks to, which is the parent of files\ in the current layout and the
         # package root itself in a release built before it.
         top = directory.parent if directory.name == cls.FILES_DIR else directory
@@ -142,7 +153,7 @@ class Package:
         return cls(directory=directory, release=data.get("release") or data.get("version") or name, name=name,
                    kmd_build=data.get("kmd_build", ""), kmd_abi=data.get("kmd_abi", ""),
                    built_utc=data.get("built_utc", ""), zip_path=zip_path, zip_sha256=digest, zip_bytes=size,
-                   zip_dir=zip_dir)
+                   zip_dir=zip_dir, flavour=flavour)
 
 
 @dataclass
@@ -245,6 +256,9 @@ def check_manifest(data: dict) -> None:
         for dependency in arm.get("depends_on", ()):
             if dependency not in seen:
                 raise ManifestError(f"{arm_id}: depends on {dependency}, which does not come before it")
+        if arm.get("flavour") not in (None, *ARM_FLAVOURS):
+            raise ManifestError(f"{arm_id}: flavour is {', '.join(ARM_FLAVOURS)} for an arm that needs a lab package, "
+                                f"not {arm['flavour']!r}")
         guard = arm.get("needs_verified")
         if guard and guard not in seen:
             raise ManifestError(f"{arm_id}: it needs {guard} to verify the package, and {guard} does not "
