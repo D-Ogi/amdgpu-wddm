@@ -38,6 +38,32 @@ unsigned int Bc250GdiBatchDwords(unsigned int subRects)
     return need > 0xFFFFFFFFull ? 0u : (unsigned int)need;
 }
 
+/* The input bound of gdi_batch.h, and the size that follows from it. Division, not multiplication,
+ * so nothing here can overflow: the largest CommandBytes an unsigned int can hold gives a
+ * sub-rectangle count under 2^28, and Bc250GdiBatchDwords saturates to 0 above 2^32 dwords. */
+unsigned int Bc250GdiMaxSubRects(unsigned int commandBytes)
+{
+    if (commandBytes <= BC250_GDI_MIN_COMMAND_BYTES) return 0u;
+    return (commandBytes - BC250_GDI_MIN_COMMAND_BYTES) / BC250_GDI_SUBRECT_BYTES;
+}
+
+unsigned int Bc250GdiCallDwords(unsigned int commandBytes)
+{
+    return Bc250GdiBatchDwords(Bc250GdiMaxSubRects(commandBytes));
+}
+
+unsigned int Bc250GdiContextDmaBytes(unsigned int commandBytesBound)
+{
+    unsigned int dwords = Bc250GdiCallDwords(commandBytesBound);
+    unsigned long long bytes;
+    if (dwords == 0u) return 0u;
+    bytes = (unsigned long long)dwords * 4u;
+    /* A whole number of 4 KB pages, which is what the video memory manager allocates anyway. */
+    bytes = (bytes + 4095u) & ~4095ull;
+    if (bytes > BC250_GDI_DMA_BYTES_MAX) return 0u;
+    return (unsigned int)bytes;
+}
+
 /* The right-hand side of I(k+1): what the items behind this one are owed. */
 static unsigned int BatchReserve(const BC250_GDI_BATCH* batch, unsigned int remaining)
 {

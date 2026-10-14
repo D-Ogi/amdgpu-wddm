@@ -313,7 +313,7 @@ dwords on the first column, and the second column no longer fitted and was dropp
 reported success. The rows of one sub-rectangle are O(height), and nothing bounded them against the
 sub-rectangles behind them.
 
-Two rules fix the class, and [gdi_batch.c](../../driver/kmd/gdi_batch.c) holds both:
+Three rules fix the class, and [gdi_batch.c](../../driver/kmd/gdi_batch.c) holds all three:
 
 1. **Every admitted sub-rectangle has a bounded cost.** One compute dispatch is 80 dwords, 81 with
    the worst-case alignment padding, whatever the rectangle's size. The per-row DMA_DATA path is
@@ -327,18 +327,80 @@ Two rules fix the class, and [gdi_batch.c](../../driver/kmd/gdi_batch.c) holds b
    code block, one bounded dispatch for each of them and the ring padding all fit. A refused call
    writes an empty DMA buffer: it draws nothing, rather than drawing a prefix and dropping the rest.
    `GdiRenderBatchRefused` counts those calls and the start log names the numbers.
+3. **The DMA buffer is sized so that rule 2 cannot fire.** The size is not chosen by hand. It is
+   computed from the largest command buffer this driver undertakes to translate, by the arithmetic
+   of rule 1 itself (`Bc250GdiContextDmaBytes`).
 
 Rule 1 is what makes rule 2 a contract instead of a hope. The invariant is stated and proved in
 `gdi_batch.c`: after `Begin` has said yes, no admitted sub-rectangle can be refused for want of
 space. `BC250_GDI_BATCH_NO_SPACE` is therefore unreachable, and the host test asserts that over a
 set of batches that includes the counterexample above.
 
-`BC250_GDI_DMA_BYTES` is 256 KiB, which is 65536 dwords, and what it bounds now is the number of
-sub-rectangles and not their area: 8 dwords of cache operation, at most 1344 for the code block and
-7 of padding leave room for 792 bounded dispatches. A full-screen fill of 1920 by 1080 is one
-dispatch. `CreateContext` asks for the buffer only while the capability is reported, so a start
-without the kernels allocates what it did before. `GdiRenderPeakSubRects` records the largest batch
-the field ever sent, so the number can be raised with evidence rather than by guess.
+#### Why rule 2 can never be reached
+
+A refusal that returns success and draws nothing is a lost drawing call, so a bound on the input is
+needed, not a larger cutoff. The DDI gives one. `DXGK_RENDERKM_COMMAND.CommandSize` is "the size of
+the current command, in bytes. This is equal to the number of bytes from the beginning of
+DXGK_RENDERKM_COMMAND up to the next command", and the same page's Remarks say that "each command
+varies in length depending on the value of the **OpCode** member and the number of sub-rectangles in
+the command"
+([DXGK_RENDERKM_COMMAND](https://learn.microsoft.com/windows-hardware/drivers/ddi/d3dkmddi/ns-d3dkmddi-_dxgk_renderkm_command),
+local copy `ref/ddi-display/d3dkmddi.md` at lines 27128 and 27169, WDK 10.0.26100). A length can
+depend on how many sub-rectangles it has only if the array is inside the command, and `CommandSize`
+reaches to the next command, so the arrays of different commands cannot overlap. `WddmGdiCommand`'s
+caller enforces that reading already: a `pSubRects` that does not lie between the end of the
+command's fixed part and the start of the next command is counted in `GdiRenderOutside` and the
+command is dropped, because it is the one input that cannot be bounds-checked any other way.
+
+The smallest command that can carry a sub-rectangle at all is ColorFill, at 8 bytes of `OpCode` and
+`CommandSize` plus a 40-byte argument. The only smaller command is Escape, which the driver ignores
+and which carries no sub-rectangle. So, with `L` for `CommandLength`:
+
+```
+sum over commands of 16 * NumSubRects <= L - 48        so    N <= (L - 48) / 16
+capacity needed = acquire + codeMax + N * dispatchMax + granule - 1 = Bc250GdiCallDwords(L)
+```
+
+That is a constant factor of the input: 324 bytes of DMA buffer per 16 bytes of command buffer,
+20.25 to one. So a DMA buffer of `Bc250GdiContextDmaBytes(bound)` bytes translates every command
+buffer up to `bound`, and `Begin` cannot refuse inside it - not merely for the inputs anyone has
+tried, but for every input the producer is able to build. The host test asserts it by walking every
+possible `CommandLength` from 0 to the bound.
+
+`BC250_GDI_CMDBUF_BOUND` is 96 KiB, and the numbers that follow from it are: 6141 sub-rectangles in
+one call, 1998848 bytes of DMA buffer (499712 dwords), in the aperture segment the context already
+used. The review's case - one ColorFill with 793 disjoint one-pixel sub-rectangles, which the
+hand-picked 256 KiB buffer refused whole - is 12736 bytes of command buffer and is translated with
+1.1 per cent of the buffer used. The densest call the bound admits uses 8.6 per cent, because the
+budget reserves a full dispatch for each sub-rectangle while a one-pixel rectangle actually takes
+the seven-dword row path. The buffer is sized for the worst case, which is 6141 rectangles that
+each need a dispatch.
+
+What the DDI does not publish is the size of the command buffer dxgkrnl gives a GDI context, so that
+bound is this driver's choice and not the operating system's promise. Three things follow from that,
+and they are the whole of the residual risk:
+
+- `GdiRenderPeakCommandLength` records the largest `CommandLength` the field ever sends, so the
+  bound becomes a measured number rather than a guess. Trial 3 of
+  [the lab plan](../testing/gdi-hw-accel-lab.md) reports it.
+- A call whose command buffer is larger than the bound is counted in `GdiRenderCapacityShort` and
+  logged with its length and the capacity it got. It is a measurement and not a decision: `Begin`'s
+  own exact check still decides, and it accepts such a call whenever the sub-rectangles actually in
+  it fit. The same event raises `GdiCmdBytesWanted`, and every GDI context created afterwards asks
+  for a DMA buffer large enough for it, so one short call cannot repeat for the rest of the boot.
+- If a call is both above the bound and full enough that `Begin` refuses it, that call draws nothing:
+  the rectangles it would have painted keep the pixels they had, until the next paint of that area
+  reaches the driver. There is no honest alternative inside this DDI. There is no status to ask for
+  more space (the return table is success only), the `MultipassOffset` continuation of the
+  `DxgkDdiRender` family is not documented for this function, and a processor fallback is impossible
+  here because `RenderGdi` receives GPU virtual addresses and no mapped pointers, with no callback it
+  may use to map one.
+
+`CreateContext` asks for the computed buffer only while the capability is reported, so a start
+without the kernels allocates what it did before. `DXGK_CONTEXTINFO` says of this size that "the DMA
+buffer can never shrink smaller than the starting size that **DmaBufferSize** specifies", and that
+it can grow. The computed size is therefore a floor, and each call's own `DmaSize` is what the
+translation uses.
 
 ## The allocation types and the caps that change
 
@@ -473,30 +535,45 @@ alpha component must give the background component, and an alpha component of 0x
 branch does not, and its formula yields `Color` where the sentence demands `Color2`. The driver
 applies both sentences after either branch.
 
-**The colour format of every Color field.** The DDI reference states that `Color` is "in 32-bit
-ARGB unsigned pixel format (as defined by the D3DDDIFMT_A8R8G8B8 value)". The WDK header says
-something else, and says it for each of the fields: "Color in the format of the destination surface"
-on `DXGK_GDIARG_COLORFILL`, "Foreground color in a 32-bit surface format" on the two
-`DXGK_GDIARG_CLEARTYPEBLEND` colours. A header of the WDK the build uses wins over a page
-(CLAUDE.md, References), so this driver reads all of them as the header does: a field is in its
-surface's own channel order.
+**The colour format of each Color field, one field at a time.** The three fields do not share one
+rule, and reading them as if they did was the defect review r2 found.
 
-What that changes is who converts what. A ColorFill writes the dword as it arrived, because its
-arithmetic is bitwise in the destination's order. The TransparentBlt key and the two ClearType
-colours are converted to A8R8G8B8 once per command, because those kernels work per channel and
-convert their pixels the same way. The two readings differ only for a red-first destination, which no
-CDD surface seen so far is, and the driver counts that case so the lab can say whether it ever
-happens.
+`DXGK_GDIARG_COLORFILL.Color` is "Color in the format of the destination surface" in the WDK
+10.0.26100 declaration, while the reference page's prose says A8R8G8B8 for the same field. A header
+of the WDK the build uses wins over a page (CLAUDE.md, References), so the fill writes the dword as
+it arrived. Its arithmetic is bitwise in the destination's order and never looks at a channel. The
+two readings differ only for a red-first destination, which no CDD surface seen so far is, and
+`GdiRenderColorFillRedFirst` counts that case so the lab can say whether it ever happens.
 
-The host test states this in bytes rather than sharing the assumption with the driver: for a
-red-first destination and a colour whose red and blue bytes differ, a PATCOPY fill must leave the
-colour itself in the destination and never the red-blue exchange of it, and a TransparentBlt key
-that equals a source word must suppress that pixel while the exchange of the same key must not.
-Putting the page's reading back into the driver fails five of those cases.
+`DXGK_GDIARG_TRANSPARENTBLT.Color` is "the physical transparent color in the source surface, in
+32-bit ARGB unsigned pixel format (as defined by the D3DDDIFMT_A8R8G8B8 value ...)". The two
+`DXGK_GDIARG_CLEARTYPEBLEND` colours are the foreground colour "in 32-bit ARGB unsigned pixel
+format", one mapped through the gamma tables and one not. Their header lines say "Foreground color
+in a 32-bit surface format", which does not name the destination's format and does not contradict
+the page. These three fields are therefore passed to the kernels unchanged. The kernels convert the
+source, destination and alpha words to A8R8G8B8 themselves and compare or blend in that order, so a
+conversion in the driver would apply the exchange twice. On a red-first destination that made the
+transparency key match the pixels it was asked to keep, and copy them.
 
-One assumption is also recorded. The sub-rectangle array of a command must lie inside that command,
-which follows from the `CommandSize` wording. The driver checks it, counts a pointer that lies
-outside and drops that command.
+The host test states each field in bytes rather than sharing an assumption with the driver. Every
+case below runs for both channel orders, with colours whose red and blue bytes differ. A PATCOPY
+fill leaves the colour itself in the destination and never its exchange. A TransparentBlt key equal
+to the source pixel in A8R8G8B8 suppresses that pixel, the exchange of that key copies it, and a key
+no source pixel can hold copies it. A ClearType blend over an alpha surface of 0xFF puts `Color2`'s
+three channels in the destination in the destination's order, and exchanging red and blue in `Color`
+changes the blended pixel. The reference model carries each field's own encoding, which is what
+makes these cases decide anything. Putting the conversion back into the driver fails fourteen of
+them.
+
+One assumption is also recorded, and it is the one the capacity proof rests on. The sub-rectangle
+array of a command must lie inside that command, which follows from the `CommandSize` wording and
+from the Remarks sentence that a command's length depends on how many sub-rectangles it has. The
+driver checks it, counts a pointer that lies outside in `GdiRenderOutside` and drops that command.
+Without this reading `CommandLength` would bound nothing, and the DMA buffer could not be sized
+against the input at all. With it, the bound of
+[the capacity section](#why-rule-2-can-never-be-reached) follows. A pointer outside the command is the only input this driver cannot bounds-check any other
+way, and dropping such a command is the same answer the guaranteed contract gives a command buffer
+it calls invalid by definition.
 
 ## Host tests
 
@@ -558,8 +635,12 @@ Four negative controls were run against the gate, and each one was reverted afte
 - replacing the batch reserve with the per-item capacity of increment 1 dropped an admitted
   sub-rectangle in the one-dword-short case, which is the review's defect reproduced inside our own
   gate.
-- putting the DDI reference's A8R8G8B8 reading of `Color` back into the driver failed five cases of
-  the red-first fill, and doing the same to the TransparentBlt key failed its two.
+- putting the DDI reference's A8R8G8B8 reading of `ColorFill.Color` back into the driver failed five
+  cases of the red-first fill.
+- converting `TransparentBlt.Color` and the two `ClearTypeBlend` colours into the destination's order
+  - the reading review r2 rejected - failed fourteen cases, among them the two direct witnesses: a
+  key that must suppress a pixel copied it, and a full-coverage ClearType blend put `Color2`'s
+  channels in the wrong order.
 
 What the host tests do NOT prove, stated plainly: the gfx1013 machine code. They run the C and not
 the instructions the build extracted from the code object, so they say nothing about instruction

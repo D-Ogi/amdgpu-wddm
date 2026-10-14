@@ -65,7 +65,12 @@ across the whole virtual screen, resizes them by steps, scrolls their own classi
 closes what it opened. The owner sees all of it happen on the lab's screen.
 
 1. Tell the owner through the overlay what is about to happen.
-2. Read the driver's GDI lines. The start line must say `gate 1`.
+2. Read the driver's GDI lines. The start line must say `gate 1`. Record the
+   `wddm: CreateContext: GDI dma <bytes> bytes for cmdbuf <bound>` line of the first GDI context:
+   the DMA buffer this driver asked for is about 1.9 MB, which is an order larger than the page-sized
+   buffer of every other context, and this trial is the first time dxgkrnl is asked for it. A context
+   creation that fails here, or a line that never appears, is the result, and the bound can be
+   lowered with the arithmetic of `Bc250GdiContextDmaBytes`.
 3. Run the workload once, bounded, and keep the record it writes: the windows it opened, and how
    many moves, resizes, scrolls and forced repaints it asked for.
 4. Take a screenshot with `mon.py screenshot` and compare it with what the camera sees. Both must
@@ -76,6 +81,12 @@ closes what it opened. The owner sees all of it happen on the lab's screen.
    leave the processor slower until the next restart (K137).
 6. Check the counters of that line: `item-refused`, `batch-refused` and `fallback`. The first two
    must be 0 in an ordinary desktop session.
+7. Record `wddm: gdi capacity-short<n> peak cmdlen<bytes> want<bytes>`. `peak cmdlen` is the largest
+   command buffer the CDD actually sent, and it is the number the DMA buffer size was chosen against:
+   it must stay below `BC250_GDI_CMDBUF_BOUND` (98304 bytes), and `capacity-short` must be 0. This is
+   the measurement that turns the bound from a choice into evidence - the DDI publishes no size for a
+   GDI context's command buffer. Keep it beside `peak rects`, which says how many sub-rectangles the
+   largest call carried.
 
 ## Trial 4: the off switch
 
@@ -110,11 +121,12 @@ goes into the facts graph with this evidence.
 | A timeout of the graphics engine | the guard log, event 4101, a black screen | a GDI DMA buffer did not finish. This part has no working GPU reset, so recover by a restart |
 | An artefact on the screen | the camera, and `mon.py screenshot` | a dropped operation, a wrong rectangle or wrong arithmetic. Note the window and the operation |
 | `wddm: RenderGdi1 ...` | the guard log | the path ran. The first lines carry the command count, the byte count and the dword count |
-| `overflow1` in such a line | the guard log | one command buffer did not fit in 256 KiB. Operations were dropped. Record the counts |
+| `overflow1` in such a line | the guard log | one command buffer did not fit the DMA buffer. Operations were dropped. Record the counts |
 | `call` above 0 in `wddm: gdi drops` | the stop lines | the driver refused a whole call. Every one of them dropped every operation of that call |
 | `malformed`, `outside` above 0 | the same line | the command buffer did not hold what its own sizes said. Keep the log |
 | `item-refused` above 0 | the `wddm: gdi overflow` line at the stop | an admitted item could not be described by either emitter. The item drew nothing |
-| `batch-refused` above 0 | the `wddm: gdi batch-refused` line at the stop | a command buffer held more sub-rectangles than 256 KiB can guarantee, so that call drew nothing. Read `peak rects` beside it: that is what the buffer size has to grow to |
+| `batch-refused` above 0 | the `wddm: gdi batch-refused` line at the stop | one call held more sub-rectangles than its DMA buffer can guarantee, so it drew nothing. It cannot happen inside `BC250_GDI_CMDBUF_BOUND`. Read `capacity-short` and `peak cmdlen` beside it. Together they say which command buffer size the OS used, and what the bound has to grow to |
+| `capacity-short` above 0 | the `wddm: gdi capacity-short` line at the stop | the CDD sent a command buffer larger than the bound the DMA buffer was sized for. By itself it costs nothing, because the call is still translated when what is in it fits. It is the one route to `batch-refused`. It also raises the size every later GDI context asks for. Record `peak cmdlen` and raise the bound |
 | `fallback` above 0 | the same line | an item gave up the per-row engine path for a dispatch, which is the capacity contract working, not a fault |
 | the refusal classes | the same line | each count names one admission rule of `bc250_gdi_refusal`. A nonzero count is a case the host tests do not cover |
 | `red-first` above 0 | the same line | a ColorFill reached a red-first destination, where the colour format of the contract is not certain |

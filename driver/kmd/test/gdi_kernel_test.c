@@ -814,8 +814,16 @@ static void TestColourOrder(void)
  * the capacity contract of a whole call (gdi_batch.h)
  * ============================================================================================== */
 
-#define BATCH_BYTES (256u * 1024u)                    /* what wddm.c asks dxgkrnl for */
+/* What wddm.c asks dxgkrnl for, for a command buffer of BC250_GDI_CMDBUF_BOUND bytes. The test
+ * checks the two against each other rather than repeating the arithmetic. */
+#define BATCH_BYTES (2u * 1024u * 1024u)
 #define BATCH_DWORDS (BATCH_BYTES / 4u)
+/* The capacity the hand-picked 256 KiB buffer used to give. Kept as a tight case: it is where an
+ * item that could take the per-row engine path must give it up to the items behind it. */
+#define BATCH_TIGHT_DWORDS (256u * 1024u / 4u)
+/* The most sub-rectangles a bounded command buffer can carry; the dense cases drive that many. */
+#define BATCH_SUBRECTS ((BC250_GDI_CMDBUF_BOUND - BC250_GDI_MIN_COMMAND_BYTES) / \
+                        BC250_GDI_SUBRECT_BYTES)
 
 static unsigned int g_batch[BATCH_DWORDS];
 static unsigned int g_scratch[BATCH_DWORDS];
@@ -919,11 +927,14 @@ static void RunBatch(const char* what, unsigned int opcode, unsigned int rop, un
     BC250_GDI_BATCH batch;
     LAYOUT layout;
     BC250_GDI_OP op;
-    BC250_GDI_ITEM items[8];
+    /* Static, because a dense call has thousands of sub-rectangles and these are per-item records,
+     * not per-pixel ones. */
+    static BC250_GDI_ITEM items[BATCH_SUBRECTS];
+    static unsigned int results[BATCH_SUBRECTS], starts[BATCH_SUBRECTS], ends[BATCH_SUBRECTS];
     unsigned long long vas[4], codeVa = 0, ib = IB_VA;
-    unsigned int results[8], starts[8], ends[8], i, used, pattern = 0;
+    unsigned int i, used, pattern = 0;
 
-    if (columns > 8u) { CHECK(0); return; }
+    if (columns > BATCH_SUBRECTS) { CHECK(0); return; }
     TallScene(s, &layout, columns, height, 0);
     for (i = 0; i < 4u; i++) vas[i] = ARENA_VA + layout.At[i];
     op = Op(opcode, Rect(0, 0, (int)columns, (int)height), Rect(0, 0, (int)columns, (int)height));
@@ -1017,6 +1028,47 @@ static void TestBatchCapacity(void)
     /* A count that cannot be budgeted at all refuses the call rather than wrapping. */
     CHECK_EQ(Bc250GdiBatchDwords(0xFFFFFFFFu), 0u);
 
+    /* The producer's input bound: a command buffer of L bytes carries at most (L - 48) / 16
+     * sub-rectangles, because the array of a command lies inside that command. */
+    CHECK_EQ(Bc250GdiMaxSubRects(0), 0u);
+    CHECK_EQ(Bc250GdiMaxSubRects(BC250_GDI_MIN_COMMAND_BYTES), 0u);
+    CHECK_EQ(Bc250GdiMaxSubRects(BC250_GDI_MIN_COMMAND_BYTES + BC250_GDI_SUBRECT_BYTES - 1u), 0u);
+    CHECK_EQ(Bc250GdiMaxSubRects(BC250_GDI_MIN_COMMAND_BYTES + BC250_GDI_SUBRECT_BYTES), 1u);
+    CHECK_EQ(Bc250GdiMaxSubRects(BC250_GDI_CMDBUF_BOUND), BATCH_SUBRECTS);
+    CHECK_EQ(Bc250GdiCallDwords(BC250_GDI_CMDBUF_BOUND), Bc250GdiBatchDwords(BATCH_SUBRECTS));
+
+    /* And the size that follows from it: a whole number of pages, enough for that worst case, and
+     * no larger than the test's own buffer, which is what the dense cases below translate into. */
+    {
+        unsigned int dma = Bc250GdiContextDmaBytes(BC250_GDI_CMDBUF_BOUND);
+        CHECK(dma != 0u);
+        CHECK_EQ(dma & 4095u, 0u);
+        CHECK(Bc250GdiCallDwords(BC250_GDI_CMDBUF_BOUND) <= dma / 4u);
+        CHECK(dma <= BATCH_BYTES);
+        CHECK(dma > BATCH_BYTES / 2u);              /* 256 KiB would not have been enough */
+        /* A bound no DMA buffer may be asked for is refused, not rounded down. */
+        CHECK_EQ(Bc250GdiContextDmaBytes(0xFFFFFFFFu), 0u);
+        CHECK(Bc250GdiContextDmaBytes(BC250_GDI_DMA_BYTES_MAX) == 0u ||
+              Bc250GdiContextDmaBytes(BC250_GDI_DMA_BYTES_MAX) <= BC250_GDI_DMA_BYTES_MAX);
+
+        /* The theorem: with that capacity, Begin accepts every command buffer up to the bound,
+         * whatever the producer put in it. One step of the loop is one possible CommandLength. */
+        for (i = 0; i <= BC250_GDI_CMDBUF_BOUND; i += BC250_GDI_SUBRECT_BYTES) {
+            if (!Bc250GdiBatchBegin(&batch, g_batch, dma / 4u, IB_VA,
+                                    Bc250GdiMaxSubRects(i))) {
+                CHECK_EQ(i, 0u);                   /* which must never happen; i names the case */
+                break;
+            }
+        }
+        g_checks++;                                 /* the loop above is one assertion */
+        /* The review's own case: one ColorFill with 793 disjoint one-pixel sub-rectangles, which
+         * the old 256 KiB buffer refused whole. Its command buffer is 12736 bytes, well inside the
+         * bound, and nothing about it is special any more. */
+        CHECK_EQ(Bc250GdiMaxSubRects(48u + 793u * 16u), 793u);
+        CHECK_EQ(Bc250GdiBatchBegin(&batch, g_batch, dma / 4u, IB_VA, 793u), 1);
+        CHECK_EQ(Bc250GdiBatchBegin(&batch, g_batch, dma / 4u, IB_VA, BATCH_SUBRECTS), 1);
+    }
+
     /* Begin refuses a batch it cannot guarantee, and writes nothing. */
     TallScene(s, &layout, 2u, 16u, 0);
     memset(g_batch, 0xA5, sizeof(g_batch));
@@ -1026,12 +1078,16 @@ static void TestBatchCapacity(void)
     CHECK_EQ(Bc250GdiBatchBegin(&batch, g_batch, BATCH_DWORDS, IB_VA,
                                 BATCH_DWORDS / Bc250GdiDispatchDwordsMax()), 0);
     CHECK_EQ(memcmp(g_batch, g_scratch, sizeof(g_batch)), 0);
-    /* And the largest batch it does guarantee is the number the design page quotes for 256 KiB. */
+    /* The largest batch a given capacity guarantees, and one above it. This is the refusal the
+     * review objected to, and it is still here, one sub-rectangle above whatever the buffer can
+     * hold - but now the buffer is sized so that no command buffer inside the bound can reach it,
+     * which the theorem above asserts. */
     for (i = BATCH_DWORDS / Bc250GdiDispatchDwordsMax(); i > 0u; i--)
         if (Bc250GdiBatchDwords(i) <= BATCH_DWORDS) break;
-    CHECK_EQ(i, 792u);
+    CHECK(i > BATCH_SUBRECTS);
     CHECK_EQ(Bc250GdiBatchBegin(&batch, g_batch, BATCH_DWORDS, IB_VA, i), 1);
     CHECK_EQ(Bc250GdiBatchBegin(&batch, g_batch, BATCH_DWORDS, IB_VA, i + 1u), 0);
+    CHECK_EQ(memcmp(g_batch, g_scratch, sizeof(g_batch)), 0);
     /* A buffer address that is not dword aligned, and no buffer at all. */
     CHECK_EQ(Bc250GdiBatchBegin(&batch, g_batch, BATCH_DWORDS, IB_VA + 1u, 1u), 0);
     CHECK_EQ(Bc250GdiBatchBegin(&batch, 0, BATCH_DWORDS, IB_VA, 1u), 0);
@@ -1040,7 +1096,7 @@ static void TestBatchCapacity(void)
      * 8192 rows. The first takes 57344 dwords of rows, which leaves the second nowhere near enough
      * for its own, so it is dispatched instead of being lost. */
     RunBatch("colorfill 2x8192, the lost column", BC250_GDIOP_COLORFILL, BC250_GDI_CF_PATCOPY,
-             0x80C03412u, 2u, 8192u, BATCH_DWORDS, 1u);
+             0x80C03412u, 2u, 8192u, BATCH_TIGHT_DWORDS, 1u);
     /* The same two columns in a buffer a granule short of what the engine path for the first and
      * the bounded path for the second would need together. This is where rule 1 alone is not
      * enough: the first column must give up its rows although they would fit, because the second
@@ -1063,17 +1119,31 @@ static void TestBatchCapacity(void)
              0x80C03412u, 2u, 512u, BATCH_DWORDS, 0u);
     /* The same for a copy and for a 1:1 stretch, which are the other two engine items. */
     RunBatch("bitblt srccopy 2x8192", BC250_GDIOP_BITBLT, BC250_GDI_ROP_SRCCOPY, 0,
-             2u, 8192u, BATCH_DWORDS, 1u);
+             2u, 8192u, BATCH_TIGHT_DWORDS, 1u);
     RunBatch("bitblt srccopy 2x512", BC250_GDIOP_BITBLT, BC250_GDI_ROP_SRCCOPY, 0,
              2u, 512u, BATCH_DWORDS, 0u);
-    RunBatch("stretchblt 1:1 2x8192", BC250_GDIOP_STRETCHBLT, 0, 0, 2u, 8192u, BATCH_DWORDS, 1u);
+    RunBatch("stretchblt 1:1 2x8192", BC250_GDIOP_STRETCHBLT, 0, 0, 2u, 8192u,
+             BATCH_TIGHT_DWORDS, 1u);
     /* Four columns of 4096 rows: the first two fit the engine path and the rest do not, so a batch
      * mixes the two paths and still draws everything. */
     RunBatch("colorfill 4x4096, mixed paths", BC250_GDIOP_COLORFILL, BC250_GDI_CF_PATCOPY,
-             0x2011AA33u, 4u, 4096u, BATCH_DWORDS, 2u);
+             0x2011AA33u, 4u, 4096u, BATCH_TIGHT_DWORDS, 2u);
     /* A kernel operation needs no fallback and no engine path at all. */
     RunBatch("bitblt srcand 2x8192, kernels only", BC250_GDIOP_BITBLT, BC250_GDI_ROP_SRCAND, 0,
              2u, 8192u, BATCH_DWORDS, 0u);
+
+    /* The review's case, translated and run rather than merely budgeted: 793 disjoint one-pixel
+     * sub-rectangles of one ColorFill, every one of them drawn. Then the densest call the bound
+     * admits, which is the worst case the DMA buffer was sized for. */
+    {
+        unsigned int dwords = Bc250GdiContextDmaBytes(BC250_GDI_CMDBUF_BOUND) / 4u;
+        RunBatch("colorfill 793 one-pixel subrects", BC250_GDIOP_COLORFILL, BC250_GDI_CF_PATCOPY,
+                 0x80C03412u, 793u, 1u, dwords, 0u);
+        RunBatch("colorfill the densest bounded call", BC250_GDIOP_COLORFILL,
+                 BC250_GDI_CF_PATCOPY, 0x2011AA33u, BATCH_SUBRECTS, 1u, dwords, 0u);
+        RunBatch("bitblt srccopy 793 one-pixel subrects", BC250_GDIOP_BITBLT,
+                 BC250_GDI_ROP_SRCCOPY, 0, 793u, 1u, dwords, 0u);
+    }
 }
 
 /* ================================================================================================

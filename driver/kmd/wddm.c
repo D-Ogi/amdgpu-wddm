@@ -190,16 +190,32 @@ typedef struct _BC250_WDDM_KIND {
 #define BC250_GDI_BIND_SLOTS 4u                  // the most allocation-list entries one command names
 // One pass must hold the whole command buffer, because the guaranteed contract DMA buffer model
 // gives no second one (display/using-the-guaranteed-contract-dma-buffer-model.md; the whole rule is
-// quoted at gdi_batch.h). 256 KiB is 65536 dwords, and what bounds a call is the number of
-// sub-rectangles and not their area: every one of them costs at most one compute dispatch, which is
-// 87 dwords, so this buffer guarantees 736 of them beside the cache operation and the 1280-dword
-// code block. A call with more is refused whole by Bc250GdiBatchBegin and counted in
-// GdiRenderBatchRefused; GdiRenderPeakSubRects says how close the field ever came.
-#define BC250_GDI_DMA_BYTES (256u * 1024u)
+// quoted at gdi_batch.h). So the DMA buffer is not a round number chosen here: it is computed from
+// the largest command buffer this driver undertakes to translate, by the arithmetic of the capacity
+// induction itself (Bc250GdiContextDmaBytes). The sub-rectangles of a command live inside the
+// command, so a command buffer of L bytes holds at most (L - 48) / 16 of them, each costing at most
+// one bounded dispatch; 96 KiB therefore comes to about 1.9 MB of DMA buffer and 6141 guaranteed
+// sub-rectangles in one call. Below that bound Bc250GdiBatchBegin cannot refuse; above it a call is
+// counted in GdiRenderCapacityShort and every GDI context created afterwards asks for a buffer that
+// fits it. GdiRenderPeakCommandLength says what the field actually produces. The bound itself is
+// BC250_GDI_CMDBUF_BOUND, in gdi_batch.h with the proof and the host test that checks it.
 // The smallest DMA buffer that can hold one row pair beside the cache operation, as a multiple of
 // the ring's eight-dword IB granule. A buffer below it is not translated at all.
 #define BC250_GDI_MIN_DWORDS 16u
 #include "../contract/bc250_scanout_caps.h"  // the trailer that publishes this start's scan-out answer
+// The two numbers gdi_batch.h's input bound is written with. sizeof(RECT) is the stride of the
+// sub-rectangle array, and ColorFill is the smallest command that can carry one at all - the other
+// five arguments are larger, and the one smaller command, Escape, carries no sub-rectangle ("Driver
+// ignores this command"). If a future WDK changes either, the build stops here instead of inflating
+// a bound that no longer follows from the headers.
+C_ASSERT(sizeof(RECT) == BC250_GDI_SUBRECT_BYTES);
+C_ASSERT(FIELD_OFFSET(DXGK_RENDERKM_COMMAND, Command) + sizeof(DXGK_GDIARG_COLORFILL) ==
+         BC250_GDI_MIN_COMMAND_BYTES);
+C_ASSERT(sizeof(DXGK_GDIARG_COLORFILL) <= sizeof(DXGK_GDIARG_BITBLT));
+C_ASSERT(sizeof(DXGK_GDIARG_COLORFILL) <= sizeof(DXGK_GDIARG_ALPHABLEND));
+C_ASSERT(sizeof(DXGK_GDIARG_COLORFILL) <= sizeof(DXGK_GDIARG_STRETCHBLT));
+C_ASSERT(sizeof(DXGK_GDIARG_COLORFILL) <= sizeof(DXGK_GDIARG_TRANSPARENTBLT));
+C_ASSERT(sizeof(DXGK_GDIARG_COLORFILL) <= sizeof(DXGK_GDIARG_CLEARTYPEBLEND));
 C_ASSERT(sizeof(BC250_WDDM_ALLOCATION_PRIVATE)==32);
 C_ASSERT(sizeof(BC250_GDI_PRIVATE)==48);
 
@@ -879,6 +895,13 @@ typedef struct _BC250_WDDM {
     // which is why no decision reads them.
     volatile LONG64 GdiRenderBatchRefused, GdiRenderFallback;
     volatile LONG64 GdiRenderPeakSubRects, GdiRenderPeakDwords;
+    // CapacityShort counts the calls whose command buffer was larger than the bound this adapter's
+    // DMA buffers were sized for - the only way Begin's refusal can be reached at all. PeakCommandLength
+    // is the largest CommandLength seen, which is what turns that bound into a measured number.
+    volatile LONG64 GdiRenderCapacityShort, GdiRenderPeakCommandLength;
+    // Raised past BC250_GDI_CMDBUF_BOUND by such a call, and read by the next CreateContext, so one
+    // short call cannot repeat for the rest of the boot. Advisory: nothing refuses a call on it.
+    volatile LONG GdiCmdBytesWanted;
 } BC250_WDDM;
 
 // The gate-closed starting value of wddm->NodeCount (WddmStart) and of the DXGK_DRIVERCAPS answer before
@@ -4374,6 +4397,9 @@ void WddmStop(_Inout_ BC250_DEVICE* Device)
         GuardLog("wddm: gdi batch-refused%lld fallback%lld peak rects%lld dwords%lld",
                  wddm->GdiRenderBatchRefused, wddm->GdiRenderFallback,
                  wddm->GdiRenderPeakSubRects, wddm->GdiRenderPeakDwords);
+        GuardLog("wddm: gdi capacity-short%lld peak cmdlen%lld want%ld",
+                 wddm->GdiRenderCapacityShort, wddm->GdiRenderPeakCommandLength,
+                 wddm->GdiCmdBytesWanted);
         // The class numbers are bc250_gdi_refusal's own order, so a reader needs the header and
         // nothing else. A class that never happened says nothing, which keeps the stop short.
         for (klass = 0; klass < (int)Bc250GdiRefusals; klass++)
@@ -5193,7 +5219,19 @@ static NTSTATUS Bc250WddmCreateContext(_In_ const HANDLE hDevice, _Inout_ DXGKAR
     // for the size docs/design/gdi-hw-accel.md derives instead, and only while the capability is
     // reported, so a start without it allocates exactly what it did before. GdiContext was set above.
     if (object->GdiContext && parentWddm != NULL && parentWddm->GdiHwAccel)
-        pCreateContext->ContextInfo.DmaBufferSize = BC250_GDI_DMA_BYTES;
+    {
+        // The bound of this adapter, which starts at BC250_GDI_CMDBUF_BOUND and only ever rises: a
+        // call that arrived above it has already told us the field needs more than the constant.
+        ULONG bound = BC250_GDI_CMDBUF_BOUND;
+        ULONG wanted = (ULONG)parentWddm->GdiCmdBytesWanted;
+        ULONG bytes;
+        if (wanted > bound) bound = wanted;
+        bytes = Bc250GdiContextDmaBytes(bound);
+        // 0 means the bound does not fit BC250_GDI_DMA_BYTES_MAX; the constant one always does.
+        if (bytes == 0) bytes = Bc250GdiContextDmaBytes(BC250_GDI_CMDBUF_BOUND);
+        if (bytes != 0) pCreateContext->ContextInfo.DmaBufferSize = bytes;
+        GuardLog("wddm: CreateContext: GDI dma %lu bytes for cmdbuf %lu", bytes, bound);
+    }
     // The aperture segment. Not 0 ("system memory"): for a GPU-VA context dxgmms2 maps the DMA buffer's VidMm
     // allocation into the context's address space, and with segment set 0 there is no allocation (E16 run 008).
     // Not the local segment either: DMA buffers may only come from aperture segments (facts M66).
@@ -8925,7 +8963,7 @@ static NTSTATUS Bc250WddmRenderGdi(_In_ const HANDLE hContext, _Inout_ DXGKARG_R
     unsigned int* out;
     BC250_GDI_BATCH batch;
     UINT bytes, offset, index, listSize;
-    unsigned int capacity, used, planned, visited = 0;
+    unsigned int capacity, used, planned, needed, visited = 0;
     ULONGLONG ib;
     LONG64 call;
     int overflow = 0;
@@ -8962,10 +9000,28 @@ static NTSTATUS Bc250WddmRenderGdi(_In_ const HANDLE hContext, _Inout_ DXGKARG_R
     // short buffer, so a call whose sub-rectangles cannot all be guaranteed is translated to an
     // empty DMA buffer: it draws nothing, rather than drawing a prefix and dropping the rest from a
     // call that reported success. gdi_batch.h carries the rule and the proof.
+    // What this call's own command buffer could have asked for at worst, which is the number the
+    // DMA buffer was sized against. It is a measurement and a signal, not a decision: Begin's exact
+    // check below is what protects the buffer, and it accepts a short-sized call whose actual
+    // sub-rectangles still fit.
+    if ((LONG64)bytes > wddm->GdiRenderPeakCommandLength)
+        wddm->GdiRenderPeakCommandLength = (LONG64)bytes;
+    needed = Bc250GdiCallDwords(bytes);
+    if (needed == 0u || needed > capacity)
+    {
+        InterlockedIncrement64(&wddm->GdiRenderCapacityShort);
+        if ((LONG)bytes > wddm->GdiCmdBytesWanted)
+            InterlockedExchange(&wddm->GdiCmdBytesWanted, (LONG)bytes);
+        GuardLog("wddm: RenderGdi%lld cmdlen%u over bound: needs%u dwords of%u", call, bytes,
+                 needed, capacity);
+    }
     planned = WddmGdiSubRectCount(buffer, bytes, NULL);
     if (planned > (unsigned int)wddm->GdiRenderPeakSubRects) wddm->GdiRenderPeakSubRects = planned;
     if (!Bc250GdiBatchBegin(&batch, out, capacity, ib, planned))
     {
+        // Unreachable while the command buffer stays inside the bound above, which is the whole
+        // point of sizing the DMA buffer from it; the branch stays because a call that cannot be
+        // translated must draw nothing rather than a prefix of itself.
         InterlockedIncrement64(&wddm->GdiRenderBatchRefused);
         GuardLog("wddm: RenderGdi%lld batch subrects%u needs%u dwords of%u", call, planned,
                  Bc250GdiBatchDwords(planned), capacity);
