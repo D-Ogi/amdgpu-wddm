@@ -3,7 +3,8 @@
     python -m unittest discover -s tools/quality      # the 'quality-controls' gate of quick.ps1
 
 Synthetic PE images: a release set must pass as release and fail as lab, a lab set the other way round. One
-escape marker, one forbidden name in ASCII or in UTF-16LE, or the wrong flavour line must fail the release set; a
+escape marker, one forbidden name in ASCII or in UTF-16LE (each declared name in turn, with or without the driver's
+prefixes, and the record names it), or the wrong flavour line must fail the release set; a
 longer identifier that only contains a forbidden name must not, and an out-of-scope name is recorded, not failed.
 A lab set fails when one named file lacks one of its lab-only names or is missing, so a build that lost the lab
 switch cannot pass in silence. An item of lab.every with a payload path names that copy only, and an unlisted copy of
@@ -468,12 +469,26 @@ class ReleaseFlavour(unittest.TestCase):
             self.assertTrue(g.has_text(data, long_))
 
     def test_forbidden_name_fails_release_in_either_encoding(self):
+        # The planted-name control: every declared forbidden name, whatever its prefix, planted in a release
+        # fixture fails the scan, and the failure is that name in that file alone. Coverage does not find a name
+        # outside the driver's prefixes (VKD3D_LOG_FILE, RADV_DEBUG), so only the forbidden list can.
+        unprefixed = [f["name"] for f in DECL["forbidden"] if not g.PREFIXED.fullmatch(f["name"])]
+        self.assertTrue({"VKD3D_LOG_FILE", "DXVK_LOG_PATH", "RADV_DEBUG"} <= set(unprefixed))
+        out = self.dir / "out"
         for f in DECL["forbidden"]:
-            with self.subTest(name=f["name"]):
-                self.release_set(pe(*LOG, f["name"]))
-                self.assertEqual(self.run_gate("--flavour", "release", "--package", str(self.dir / "pkg")), 1)
-                self.release_set(pe(*LOG, utf16=(f["name"],)))
-                self.assertEqual(self.run_gate("--flavour", "release", "--package", str(self.dir / "pkg")), 1)
+            for enc, umd in (("ascii", pe(*LOG, f["name"])), ("utf16", pe(*LOG, utf16=(f["name"],)))):
+                with self.subTest(name=f["name"], encoding=enc):
+                    _, dll = self.release_set(umd)
+                    self.assertEqual(self.run_gate("--flavour", "release", "--package", str(self.dir / "pkg"),
+                                                   "--out", str(out)), 1)
+                    record = json.loads((out / "flavour-gate.json").read_text(encoding="utf-8"))
+                    found = {r["slot"]: r["forbidden"] for r in record["files"]}
+                    self.assertEqual(sorted(found), ["bc250kmd.sys", "umd/amdgpu_wddm_d3d11.dll"])
+                    self.assertEqual(found["bc250kmd.sys"], {})
+                    hit = found["umd/amdgpu_wddm_d3d11.dll"]
+                    self.assertEqual(list(hit), [f["name"]])
+                    self.assertEqual(hit[f["name"]][enc], 1)
+                    self.assertEqual(record["failures"], ["%s: %s (%s)" % (dll, f["name"], g.describe(hit[f["name"]]))])
 
     def test_name_inside_a_message_counts(self):
         self.release_set(pe("* WARNING: RADV_DEBUG=hang is costly *"))

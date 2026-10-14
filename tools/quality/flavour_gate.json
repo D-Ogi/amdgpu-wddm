@@ -447,10 +447,9 @@
      "d3d12/amdgpu_wddm_radv.dll",
      "wow64/d3d11/amdgpu_wddm_radv.dll",
      "wow64/d3d12/amdgpu_wddm_radv.dll",
-     "wow64/vulkan/vulkan_radeon.dll",
      "amdgpu_wddm_vkd3d.dll"
     ],
-    "note": "desktop/amdgpu_wddm_radv.dll (hosted line) and vulkan/vulkan_radeon.dll (system line) do not hold BC250_DRAW_STATS in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+    "note": "desktop/amdgpu_wddm_radv.dll (hosted line), vulkan/vulkan_radeon.dll and wow64/vulkan/vulkan_radeon.dll (system line, x64 and x86) do not hold BC250_DRAW_STATS in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
    }
   },
   {
@@ -462,10 +461,9 @@
      "d3d11/amdgpu_wddm_radv.dll",
      "d3d12/amdgpu_wddm_radv.dll",
      "wow64/d3d11/amdgpu_wddm_radv.dll",
-     "wow64/d3d12/amdgpu_wddm_radv.dll",
-     "wow64/vulkan/vulkan_radeon.dll"
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
     ],
-    "note": "desktop/amdgpu_wddm_radv.dll (hosted line) and vulkan/vulkan_radeon.dll (system line) do not hold BC250_BARRIER_TRACK in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+    "note": "desktop/amdgpu_wddm_radv.dll (hosted line), vulkan/vulkan_radeon.dll and wow64/vulkan/vulkan_radeon.dll (system line, x64 and x86) do not hold BC250_BARRIER_TRACK in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
    }
   },
   {
@@ -640,10 +638,9 @@
      "d3d12/amdgpu_wddm_radv.dll",
      "wow64/d3d11/amdgpu_wddm_radv.dll",
      "wow64/d3d12/amdgpu_wddm_radv.dll",
-     "wow64/vulkan/vulkan_radeon.dll",
      "amdgpu_wddm_d3d12.dll"
     ],
-    "note": "desktop/amdgpu_wddm_radv.dll (hosted line) and vulkan/vulkan_radeon.dll (system line) do not hold AMDGPU_WDDM_DDI_TRACE in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+    "note": "desktop/amdgpu_wddm_radv.dll (hosted line), vulkan/vulkan_radeon.dll and wow64/vulkan/vulkan_radeon.dll (system line, x64 and x86) do not hold AMDGPU_WDDM_DDI_TRACE in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
    }
   },
   {
@@ -810,10 +807,9 @@
      "d3d11/amdgpu_wddm_radv.dll",
      "d3d12/amdgpu_wddm_radv.dll",
      "wow64/d3d11/amdgpu_wddm_radv.dll",
-     "wow64/d3d12/amdgpu_wddm_radv.dll",
-     "wow64/vulkan/vulkan_radeon.dll"
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
     ],
-    "note": "desktop/amdgpu_wddm_radv.dll (hosted line) and vulkan/vulkan_radeon.dll (system line) do not hold BC250_MAKERESIDENT_LEGACY in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+    "note": "desktop/amdgpu_wddm_radv.dll (hosted line), vulkan/vulkan_radeon.dll and wow64/vulkan/vulkan_radeon.dll (system line, x64 and x86) do not hold BC250_MAKERESIDENT_LEGACY in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
    }
   },
   {
@@ -825,10 +821,9 @@
      "d3d11/amdgpu_wddm_radv.dll",
      "d3d12/amdgpu_wddm_radv.dll",
      "wow64/d3d11/amdgpu_wddm_radv.dll",
-     "wow64/d3d12/amdgpu_wddm_radv.dll",
-     "wow64/vulkan/vulkan_radeon.dll"
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
     ],
-    "note": "desktop/amdgpu_wddm_radv.dll (hosted line) and vulkan/vulkan_radeon.dll (system line) do not hold BC250_DEFERRED_DESTROY in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+    "note": "desktop/amdgpu_wddm_radv.dll (hosted line), vulkan/vulkan_radeon.dll and wow64/vulkan/vulkan_radeon.dll (system line, x64 and x86) do not hold BC250_DEFERRED_DESTROY in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
    }
   },
   {
@@ -840,10 +835,9 @@
      "d3d11/amdgpu_wddm_radv.dll",
      "d3d12/amdgpu_wddm_radv.dll",
      "wow64/d3d11/amdgpu_wddm_radv.dll",
-     "wow64/d3d12/amdgpu_wddm_radv.dll",
-     "wow64/vulkan/vulkan_radeon.dll"
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
     ],
-    "note": "desktop/amdgpu_wddm_radv.dll (hosted line) and vulkan/vulkan_radeon.dll (system line) do not hold BC250_DEFERRED_WITNESS in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+    "note": "desktop/amdgpu_wddm_radv.dll (hosted line), vulkan/vulkan_radeon.dll and wow64/vulkan/vulkan_radeon.dll (system line, x64 and x86) do not hold BC250_DEFERRED_WITNESS in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
    }
   },
   {
@@ -855,10 +849,9 @@
      "d3d11/amdgpu_wddm_radv.dll",
      "d3d12/amdgpu_wddm_radv.dll",
      "wow64/d3d11/amdgpu_wddm_radv.dll",
-     "wow64/d3d12/amdgpu_wddm_radv.dll",
-     "wow64/vulkan/vulkan_radeon.dll"
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
     ],
-    "note": "desktop/amdgpu_wddm_radv.dll (hosted line) and vulkan/vulkan_radeon.dll (system line) do not hold BC250_DEFERRED_CAP_MB in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+    "note": "desktop/amdgpu_wddm_radv.dll (hosted line), vulkan/vulkan_radeon.dll and wow64/vulkan/vulkan_radeon.dll (system line, x64 and x86) do not hold BC250_DEFERRED_CAP_MB in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
    }
   },
   {
@@ -870,10 +863,9 @@
      "d3d11/amdgpu_wddm_radv.dll",
      "d3d12/amdgpu_wddm_radv.dll",
      "wow64/d3d11/amdgpu_wddm_radv.dll",
-     "wow64/d3d12/amdgpu_wddm_radv.dll",
-     "wow64/vulkan/vulkan_radeon.dll"
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
     ],
-    "note": "desktop/amdgpu_wddm_radv.dll (hosted line) and vulkan/vulkan_radeon.dll (system line) do not hold BC250_DEFERRED_LOG in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+    "note": "desktop/amdgpu_wddm_radv.dll (hosted line), vulkan/vulkan_radeon.dll and wow64/vulkan/vulkan_radeon.dll (system line, x64 and x86) do not hold BC250_DEFERRED_LOG in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
    }
   },
   {
@@ -885,10 +877,9 @@
      "d3d11/amdgpu_wddm_radv.dll",
      "d3d12/amdgpu_wddm_radv.dll",
      "wow64/d3d11/amdgpu_wddm_radv.dll",
-     "wow64/d3d12/amdgpu_wddm_radv.dll",
-     "wow64/vulkan/vulkan_radeon.dll"
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
     ],
-    "note": "desktop/amdgpu_wddm_radv.dll (hosted line) and vulkan/vulkan_radeon.dll (system line) do not hold BC250_DEFERRED_SUMMARY_S in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+    "note": "desktop/amdgpu_wddm_radv.dll (hosted line), vulkan/vulkan_radeon.dll and wow64/vulkan/vulkan_radeon.dll (system line, x64 and x86) do not hold BC250_DEFERRED_SUMMARY_S in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
    }
   },
   {
@@ -900,10 +891,9 @@
      "d3d11/amdgpu_wddm_radv.dll",
      "d3d12/amdgpu_wddm_radv.dll",
      "wow64/d3d11/amdgpu_wddm_radv.dll",
-     "wow64/d3d12/amdgpu_wddm_radv.dll",
-     "wow64/vulkan/vulkan_radeon.dll"
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
     ],
-    "note": "desktop/amdgpu_wddm_radv.dll (hosted line) and vulkan/vulkan_radeon.dll (system line) do not hold BC250_SUBMIT_COALESCE in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+    "note": "desktop/amdgpu_wddm_radv.dll (hosted line), vulkan/vulkan_radeon.dll and wow64/vulkan/vulkan_radeon.dll (system line, x64 and x86) do not hold BC250_SUBMIT_COALESCE in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
    }
   },
   {
@@ -915,10 +905,9 @@
      "d3d11/amdgpu_wddm_radv.dll",
      "d3d12/amdgpu_wddm_radv.dll",
      "wow64/d3d11/amdgpu_wddm_radv.dll",
-     "wow64/d3d12/amdgpu_wddm_radv.dll",
-     "wow64/vulkan/vulkan_radeon.dll"
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
     ],
-    "note": "desktop/amdgpu_wddm_radv.dll (hosted line) and vulkan/vulkan_radeon.dll (system line) do not hold BC250_GATHER_SLOTS in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+    "note": "desktop/amdgpu_wddm_radv.dll (hosted line), vulkan/vulkan_radeon.dll and wow64/vulkan/vulkan_radeon.dll (system line, x64 and x86) do not hold BC250_GATHER_SLOTS in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
    }
   },
   {
@@ -930,10 +919,9 @@
      "d3d11/amdgpu_wddm_radv.dll",
      "d3d12/amdgpu_wddm_radv.dll",
      "wow64/d3d11/amdgpu_wddm_radv.dll",
-     "wow64/d3d12/amdgpu_wddm_radv.dll",
-     "wow64/vulkan/vulkan_radeon.dll"
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
     ],
-    "note": "desktop/amdgpu_wddm_radv.dll (hosted line) and vulkan/vulkan_radeon.dll (system line) do not hold BC250_PROGRESS_FENCE in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+    "note": "desktop/amdgpu_wddm_radv.dll (hosted line), vulkan/vulkan_radeon.dll and wow64/vulkan/vulkan_radeon.dll (system line, x64 and x86) do not hold BC250_PROGRESS_FENCE in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
    }
   },
   {
@@ -945,10 +933,9 @@
      "d3d11/amdgpu_wddm_radv.dll",
      "d3d12/amdgpu_wddm_radv.dll",
      "wow64/d3d11/amdgpu_wddm_radv.dll",
-     "wow64/d3d12/amdgpu_wddm_radv.dll",
-     "wow64/vulkan/vulkan_radeon.dll"
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
     ],
-    "note": "desktop/amdgpu_wddm_radv.dll (hosted line) and vulkan/vulkan_radeon.dll (system line) do not hold BC250_IB_NOCOPY in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+    "note": "desktop/amdgpu_wddm_radv.dll (hosted line), vulkan/vulkan_radeon.dll and wow64/vulkan/vulkan_radeon.dll (system line, x64 and x86) do not hold BC250_IB_NOCOPY in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
    }
   },
   {
@@ -979,9 +966,8 @@
    "does": "BD-102 diagnostic: another acceleration structure builder",
    "lab": {
     "every": [
-     "vulkan/vulkan_radeon.dll"
-    ],
-    "note": "wow64/vulkan/vulkan_radeon.dll is the x86 ICD of the triplet line, which has no lookup of BC250_BVH_BUILD in either flavour: by build line, not by flavour"
+     "vulkan_radeon.dll"
+    ]
    }
   },
   {
@@ -990,9 +976,8 @@
    "does": "bisect: 0 goes back to the b27 swap chain instead of the independent flip chain",
    "lab": {
     "every": [
-     "vulkan/vulkan_radeon.dll"
-    ],
-    "note": "wow64/vulkan/vulkan_radeon.dll is the x86 ICD of the triplet line, which has no lookup of BC250_WSI_IFLIP in either flavour: by build line, not by flavour"
+     "vulkan_radeon.dll"
+    ]
    }
   },
   {
@@ -1001,9 +986,8 @@
    "does": "bisect: turns the scaling clause of an independent flip chain off",
    "lab": {
     "every": [
-     "vulkan/vulkan_radeon.dll"
-    ],
-    "note": "wow64/vulkan/vulkan_radeon.dll is the x86 ICD of the triplet line, which has no lookup of BC250_WSI_IFLIP_SCALING in either flavour: by build line, not by flavour"
+     "vulkan_radeon.dll"
+    ]
    }
   },
   {
@@ -1012,9 +996,8 @@
    "does": "bisect: turns the tearing clause of an independent flip chain off",
    "lab": {
     "every": [
-     "vulkan/vulkan_radeon.dll"
-    ],
-    "note": "wow64/vulkan/vulkan_radeon.dll is the x86 ICD of the triplet line, which has no lookup of BC250_WSI_IFLIP_TEARING in either flavour: by build line, not by flavour"
+     "vulkan_radeon.dll"
+    ]
    }
   },
   {
@@ -1023,9 +1006,8 @@
    "does": "bisect: the buffer count of an independent flip chain",
    "lab": {
     "every": [
-     "vulkan/vulkan_radeon.dll"
-    ],
-    "note": "wow64/vulkan/vulkan_radeon.dll is the x86 ICD of the triplet line, which has no lookup of BC250_WSI_IFLIP_BUFFERS in either flavour: by build line, not by flavour"
+     "vulkan_radeon.dll"
+    ]
    }
   },
   {
@@ -1034,9 +1016,8 @@
    "does": "bisect: turns the window hook of an independent flip chain off",
    "lab": {
     "every": [
-     "vulkan/vulkan_radeon.dll"
-    ],
-    "note": "wow64/vulkan/vulkan_radeon.dll is the x86 ICD of the triplet line, which has no lookup of BC250_WSI_IFLIP_WINDOWHOOK in either flavour: by build line, not by flavour"
+     "vulkan_radeon.dll"
+    ]
    }
   },
   {
@@ -1045,9 +1026,8 @@
    "does": "writes a present log (CSV) to that file",
    "lab": {
     "every": [
-     "vulkan/vulkan_radeon.dll"
-    ],
-    "note": "wow64/vulkan/vulkan_radeon.dll is the x86 ICD of the triplet line, which has no lookup of BC250_WSI_PRESENT_LOG in either flavour: by build line, not by flavour"
+     "vulkan_radeon.dll"
+    ]
    }
   },
   {
