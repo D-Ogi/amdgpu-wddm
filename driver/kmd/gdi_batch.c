@@ -64,6 +64,34 @@ unsigned int Bc250GdiContextDmaBytes(unsigned int commandBytesBound)
     return (unsigned int)bytes;
 }
 
+/* The bound this context is created with. The candidates are the bound and its halves down to the
+ * floor, so the step down is coarse on purpose: a GDI context that cannot have the whole bound
+ * should still have a large one, and the number has to be the same for every context of the same
+ * start. Nothing here reads hardware, so the host test drives every aperture the driver accepts. */
+unsigned int Bc250GdiContextBound(unsigned long long apertureBytes, unsigned int wanted)
+{
+    unsigned long long share;
+    unsigned int bound;
+
+    if (apertureBytes == 0ull) return BC250_GDI_CMDBUF_FLOOR;
+    share = apertureBytes / BC250_GDI_DMA_APERTURE_SHARE;
+
+    /* What an earlier short call asked for, if it is larger than the bound and still affordable. A
+     * context cannot be resized, so this only ever helps the contexts created after that call. */
+    if (wanted > BC250_GDI_CMDBUF_BOUND)
+    {
+        unsigned int bytes = Bc250GdiContextDmaBytes(wanted);
+        if (bytes != 0u && (unsigned long long)bytes <= share) return wanted;
+    }
+
+    for (bound = BC250_GDI_CMDBUF_BOUND; bound > BC250_GDI_CMDBUF_FLOOR; bound /= 2u)
+    {
+        unsigned int bytes = Bc250GdiContextDmaBytes(bound);
+        if (bytes != 0u && (unsigned long long)bytes <= share) return bound;
+    }
+    return BC250_GDI_CMDBUF_FLOOR;
+}
+
 /* The right-hand side of I(k+1): what the items behind this one are owed. */
 static unsigned int BatchReserve(const BC250_GDI_BATCH* batch, unsigned int remaining)
 {

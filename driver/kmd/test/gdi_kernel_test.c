@@ -821,8 +821,13 @@ static void TestColourOrder(void)
 /* The capacity the hand-picked 256 KiB buffer used to give. Kept as a tight case: it is where an
  * item that could take the per-row engine path must give it up to the items behind it. */
 #define BATCH_TIGHT_DWORDS (256u * 1024u / 4u)
-/* The most sub-rectangles a bounded command buffer can carry; the dense cases drive that many. */
-#define BATCH_SUBRECTS ((BC250_GDI_CMDBUF_BOUND - BC250_GDI_RECT_FLOOR_BYTES) / \
+/* The most sub-rectangles the smallest bound this driver asks for can carry. The dense cases that
+ * are translated and compared drive that many: the whole bound is 16 times larger, and running
+ * 98303 dispatches through the host model says nothing the 6143 below do not. The budget cases use
+ * the whole bound, which is where the capacity theorem has to hold. */
+#define BATCH_SUBRECTS ((BC250_GDI_CMDBUF_FLOOR - BC250_GDI_RECT_FLOOR_BYTES) / \
+                        BC250_GDI_SUBRECT_BYTES)
+#define BOUND_SUBRECTS ((BC250_GDI_CMDBUF_BOUND - BC250_GDI_RECT_FLOOR_BYTES) / \
                         BC250_GDI_SUBRECT_BYTES)
 
 static unsigned int g_batch[BATCH_DWORDS];
@@ -1038,8 +1043,9 @@ static void TestBatchCapacity(void)
     /* The smallest command that can carry one is still a ColorFill of 48 bytes, and the bound
      * gives it two, which is what fits when its array starts at the header. */
     CHECK_EQ(Bc250GdiMaxSubRects(BC250_GDI_MIN_COMMAND_BYTES), 2u);
-    CHECK_EQ(Bc250GdiMaxSubRects(BC250_GDI_CMDBUF_BOUND), BATCH_SUBRECTS);
-    CHECK_EQ(Bc250GdiCallDwords(BC250_GDI_CMDBUF_BOUND), Bc250GdiBatchDwords(BATCH_SUBRECTS));
+    CHECK_EQ(Bc250GdiMaxSubRects(BC250_GDI_CMDBUF_FLOOR), BATCH_SUBRECTS);
+    CHECK_EQ(Bc250GdiMaxSubRects(BC250_GDI_CMDBUF_BOUND), BOUND_SUBRECTS);
+    CHECK_EQ(Bc250GdiCallDwords(BC250_GDI_CMDBUF_BOUND), Bc250GdiBatchDwords(BOUND_SUBRECTS));
 
     /* And the size that follows from it: a whole number of pages, enough for that worst case, and
      * no larger than the test's own buffer, which is what the dense cases below translate into. */
@@ -1048,8 +1054,54 @@ static void TestBatchCapacity(void)
         CHECK(dma != 0u);
         CHECK_EQ(dma & 4095u, 0u);
         CHECK(Bc250GdiCallDwords(BC250_GDI_CMDBUF_BOUND) <= dma / 4u);
-        CHECK(dma <= BATCH_BYTES);
-        CHECK(dma > BATCH_BYTES / 2u);              /* 256 KiB would not have been enough */
+        /* The bound is the largest the DMA ceiling allows, so its worst case fits the ceiling and
+         * the next step up does not. That is what makes the number derived rather than chosen. */
+        CHECK(dma <= BC250_GDI_DMA_BYTES_MAX);
+        CHECK_EQ(Bc250GdiContextDmaBytes(BC250_GDI_CMDBUF_BOUND * 2u), 0u);
+        /* And the floor always fits, whatever the ceiling is. */
+        CHECK(Bc250GdiContextDmaBytes(BC250_GDI_CMDBUF_FLOOR) != 0u);
+        CHECK(Bc250GdiContextDmaBytes(BC250_GDI_CMDBUF_FLOOR) <= BATCH_BYTES);
+
+        /* The bound a context is created with: the whole bound where the aperture can afford an
+         * eighth of it, stepped down where it cannot, the floor where the aperture is unknown.
+         * The apertures below are the ones this driver accepts (256 MiB minimum, 384 default,
+         * 447 maximum) plus two it does not, because the function is pure arithmetic and the
+         * caller's value comes from a capture it does not control. */
+        CHECK_EQ(Bc250GdiContextBound(0ull, 0u), BC250_GDI_CMDBUF_FLOOR);
+        CHECK_EQ(Bc250GdiContextBound(256ull * 1024u * 1024u, 0u), BC250_GDI_CMDBUF_BOUND);
+        CHECK_EQ(Bc250GdiContextBound(384ull * 1024u * 1024u, 0u), BC250_GDI_CMDBUF_BOUND);
+        CHECK_EQ(Bc250GdiContextBound(447ull * 1024u * 1024u, 0u), BC250_GDI_CMDBUF_BOUND);
+        /* 64 MiB of aperture allows 8 MiB of DMA buffer, which is the 384 KiB bound. */
+        CHECK_EQ(Bc250GdiContextBound(64ull * 1024u * 1024u, 0u), 384u * 1024u);
+        /* And an aperture too small for even the floor still gets the floor: a GDI context with no
+         * DMA buffer at all would draw nothing ever, which is worse than a large share. */
+        CHECK_EQ(Bc250GdiContextBound(1ull * 1024u * 1024u, 0u), BC250_GDI_CMDBUF_FLOOR);
+        /* What an earlier short call asked for is taken when it is larger than the bound and the
+         * aperture can still afford it, and ignored when the DMA ceiling cannot meet it. */
+        CHECK_EQ(Bc250GdiContextBound(447ull * 1024u * 1024u, 1600u * 1024u), 1600u * 1024u);
+        CHECK_EQ(Bc250GdiContextBound(447ull * 1024u * 1024u, 4096u * 1024u),
+                 BC250_GDI_CMDBUF_BOUND);
+        CHECK_EQ(Bc250GdiContextBound(447ull * 1024u * 1024u, 0xFFFFFFFFu),
+                 BC250_GDI_CMDBUF_BOUND);
+        /* A wanted below the bound changes nothing, and the answer never falls as the aperture
+         * grows. The step is one MiB, which is the unit the aperture setting itself takes. */
+        CHECK_EQ(Bc250GdiContextBound(384ull * 1024u * 1024u, 4096u), BC250_GDI_CMDBUF_BOUND);
+        {
+            unsigned int previous = 0;
+            unsigned long long aperture;
+            for (aperture = 0; aperture <= 512ull * 1024u * 1024u;
+                 aperture += 1024u * 1024u) {
+                unsigned int chosen = Bc250GdiContextBound(aperture, 0u);
+                unsigned int need = Bc250GdiContextDmaBytes(chosen);
+                CHECK(chosen >= BC250_GDI_CMDBUF_FLOOR && chosen <= BC250_GDI_CMDBUF_BOUND);
+                CHECK(need != 0u && need <= BC250_GDI_DMA_BYTES_MAX);
+                /* The share is kept wherever the floor itself leaves room for it. */
+                if (chosen != BC250_GDI_CMDBUF_FLOOR)
+                    CHECK((unsigned long long)need <= aperture / BC250_GDI_DMA_APERTURE_SHARE);
+                if (aperture != 0) CHECK(chosen >= previous);
+                previous = chosen;
+            }
+        }
         /* A bound no DMA buffer may be asked for is refused, not rounded down. */
         CHECK_EQ(Bc250GdiContextDmaBytes(0xFFFFFFFFu), 0u);
         CHECK(Bc250GdiContextDmaBytes(BC250_GDI_DMA_BYTES_MAX) == 0u ||
@@ -1058,6 +1110,8 @@ static void TestBatchCapacity(void)
         /* The theorem: with that capacity, Begin accepts every command buffer up to the bound,
          * whatever the producer put in it. One step of the loop is one possible CommandLength. */
         for (i = 0; i <= BC250_GDI_CMDBUF_BOUND; i += BC250_GDI_SUBRECT_BYTES) {
+            /* Begin writes nothing, so the arena pointer is not dereferenced here; what is being
+             * checked is the arithmetic of the whole-call budget against the capacity. */
             if (!Bc250GdiBatchBegin(&batch, g_batch, dma / 4u, IB_VA,
                                     Bc250GdiMaxSubRects(i))) {
                 CHECK_EQ(i, 0u);                   /* which must never happen; i names the case */
@@ -1143,10 +1197,10 @@ static void TestBatchCapacity(void)
      * sub-rectangles of one ColorFill, every one of them drawn. Then the densest call the bound
      * admits, which is the worst case the DMA buffer was sized for. */
     {
-        unsigned int dwords = Bc250GdiContextDmaBytes(BC250_GDI_CMDBUF_BOUND) / 4u;
+        unsigned int dwords = Bc250GdiContextDmaBytes(BC250_GDI_CMDBUF_FLOOR) / 4u;
         RunBatch("colorfill 793 one-pixel subrects", BC250_GDIOP_COLORFILL, BC250_GDI_CF_PATCOPY,
                  0x80C03412u, 793u, 1u, dwords, 0u);
-        RunBatch("colorfill the densest bounded call", BC250_GDIOP_COLORFILL,
+        RunBatch("colorfill the densest call of the floor", BC250_GDIOP_COLORFILL,
                  BC250_GDI_CF_PATCOPY, 0x2011AA33u, BATCH_SUBRECTS, 1u, dwords, 0u);
         RunBatch("bitblt srccopy 793 one-pixel subrects", BC250_GDIOP_BITBLT,
                  BC250_GDI_ROP_SRCCOPY, 0, 793u, 1u, dwords, 0u);

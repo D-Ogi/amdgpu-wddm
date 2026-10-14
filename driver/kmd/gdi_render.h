@@ -251,8 +251,8 @@ int Bc250GdiWalkStep(unsigned int BufferBytes, unsigned int Offset, unsigned int
  * :27169), so an admitted command of L bytes offers at most (L - HeaderBytes) / RectBytes of them.
  * The floor is the header and not the fixed part, because the array may overlap the fixed part: a
  * producer inside dxgkrnl builds an 80-byte BitBlt whose pSubRects points at its own embedded
- * DstRect (docs/design/gdi-hw-accel.md, "What bounds the command buffer"). Such a command is read
- * safely, because the array still lies inside the command, and it is admitted.
+ * DstRect (docs/design/gdi-hw-accel.md, "The second producer, and the shape it builds"). Such a
+ * command is read safely, because the array still lies inside the command, and it is admitted.
  *
  * The two stages of this record are the order of gdi_walk.h, and the split is not decoration: the
  * sizes are checked before any field of the body exists. Bc250GdiCommandSize reads BufferBytes,

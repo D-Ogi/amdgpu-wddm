@@ -17,9 +17,9 @@
 /* The producer builds these commands as its own fixed part plus 16 bytes for each sub-rectangle.
  * cdd.dll 10.0.22621.6630 and 10.0.26100.9444 use 0x30 for ColorFill, 0x48 for AlphaBlend,
  * TransparentBlt and StretchBlt, and 0x50 for BitBlt and ClearTypeBlend (see
- * docs/design/gdi-hw-accel.md, "What bounds the command buffer"). The sizes this driver computes
- * from the WDK union are the same six numbers, which is what makes MinBytes the producer's fixed
- * part and not a guess. A WDK layout change that breaks the equality breaks the capacity
+ * docs/design/gdi-hw-accel.md, "How far the bound is from the ordinary producer"). The sizes this
+ * driver computes from the WDK union are the same six numbers, which is what makes MinBytes the
+ * producer's fixed part and not a guess. A WDK layout change that breaks the equality breaks the capacity
  * arithmetic with it, so it stops the build here. */
 C_ASSERT(GDI_HEADER_BYTES == 8u);
 C_ASSERT(GDI_HEADER_BYTES + GDI_MEMBER_BYTES(ColorFill) == 0x30u);
