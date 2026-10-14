@@ -87,7 +87,7 @@ only these names, only under these keys, and only values inside the contract:
 | | `PerformanceOverlay` | DWORD | 1 on, 0 off | Performance overlay (DirectX 11 games for now) |
 | | `RenderOnCpu` | DWORD | 1 on, 0 off | Run DirectX 11 on the processor, a last resort. On the Games page. The card for all games shows it only when it is stored |
 | `Vulkan` | `WsiRoute` | REG_SZ | `gdi` (default since BD-105), `dxgi` | Vulkan presentation for all games: Compatibility, Modern (not shown now, see below). The ICD reads no `WsiRoute` of `Vulkan\Applications\<exe>` |
-| `Vulkan`, `Vulkan\Applications\<exe>` | `MemoryOverflow` | REG_SZ | `allow` (default), `strict` | When the VRAM is full: use system memory, or report out of memory (not shown now, see below) |
+| `Vulkan`, `Vulkan\Applications\<exe>` | `MemoryOverflow` | REG_SZ | `allow` (default), `strict` | When the VRAM is full (DirectX 11 and 12 games only): use system memory, or report out of memory (not shown now, see below) |
 
 The two Vulkan values are not offered (`GraphicsSettings.AwaitingIcd`). The system Vulkan ICD (64-bit, and 32-bit from
 tester.31) reads `WsiRoute` for all games only. Beside the default `gdi`, the values it takes (`dxgi`,

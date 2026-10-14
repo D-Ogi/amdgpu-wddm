@@ -918,7 +918,7 @@ search.graphics.overlay|rev|37d49e6c|Nakładka wydajności
 search.graphics.vk-present|rev|cdee9cc4|Wyświetlanie w grach Vulkan
 search.graphics.vk-present.terms|rev|93c9bf20|Vulkan|wyświetlanie|czarny ekran|zamrożony obraz|zgodność
 search.graphics.vk-memory|rev|542ed595|Gdy pamięć wideo jest pełna
-search.graphics.vk-memory.terms|rev|ac5d910a|VRAM|pamięć wideo|brak pamięci|pełna pamięć|pamięć systemowa|Vulkan
+search.graphics.vk-memory.terms|mt|f744c892|VRAM|pamięć wideo|brak pamięci|pełna pamięć|pamięć systemowa|DirectX 11|DirectX 12
 search.games.sm|rev|0dbc5bc7|Najwyższy model shaderów
 search.games.sm.terms|rev|ab586346|model shaderów|shader model|SM 6.8|SM 6.7|SM 6.6|shader
 search.games.cpu-render|rev|bf157885|Uruchamiaj DirectX 11 na procesorze
@@ -927,7 +927,7 @@ search.display.scaling|rev|22b1cb79|Skalowanie GPU
 help.setting.latency|rev|a684f1ab|Ile klatek procesor może przygotować przed układem graficznym. Mniej klatek sprawia, że gra szybciej reaguje na mysz i klawiaturę, ale może obniżyć liczbę klatek na sekundę. Działa w grach DirectX 11 i DirectX 12. Gra, która już teraz przygotowuje mniej klatek, zostaje bez zmian.
 help.setting.overlay|rev|78ee0e43|Pokazuje liczbę klatek na sekundę i czasy klatek w rogu gry. Na razie działa w grach DirectX 11.
 help.setting.vk-present|mt|68591c06|Sposób, w jaki gry Vulkan wyświetlają klatki, dla wszystkich gier naraz. Domyślny jest tryb zgodności. Tryb nowoczesny jest jeszcze w fazie testów i może zostawić grę Vulkan z czarnym lub zamrożonym obrazem. Jeśli tak się stanie, wybierz tryb zgodności.
-help.setting.vk-memory|rev|ec2dc30f|Co dostaje gra Vulkan, gdy pamięć wideo jest pełna. „Użyj pamięci systemowej” utrzymuje grę w działaniu, ale wolniej. „Zgłoś brak pamięci” informuje grę, aby mogła obniżyć swoje ustawienia.
+help.setting.vk-memory|mt|50303e03|Co dostaje gra DirectX 11 lub DirectX 12, gdy pamięć wideo jest pełna, dla jednej gry lub dla wszystkich gier. Nie dotyczy gier Vulkan. „Użyj pamięci systemowej” utrzymuje grę w działaniu, ale wolniej. „Zgłoś brak pamięci” informuje grę, aby mogła obniżyć swoje ustawienia.
 help.setting.sm|rev|f3b2ff18|Najwyższy model shaderów, który sterownik zgłasza grze DirectX 12. Domyślny to 6.8. Niektóre gry nie działają z nowszym modelem shaderów; dla takiej gry wybierz 6.7 lub 6.6.
 help.setting.cpu-render|mt|0d418439|Uruchamia DirectX 11 tej gry na procesorze zamiast na układzie graficznym. To jest znacznie wolniejsze i nie daje pełnego DirectX 11, więc większość gier wydanych po 2012 roku (na przykład Counter-Strike 2) się z tym nie uruchomi. Używaj tego tylko w ostateczności, dla starszej gry, która nie działa na układzie graficznym.
 gfx.choice.app|rev|e7f551b6|Decyduje aplikacja

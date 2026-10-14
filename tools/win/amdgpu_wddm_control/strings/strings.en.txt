@@ -934,7 +934,7 @@ search.graphics.overlay|src|-|Performance overlay
 search.graphics.vk-present|src|-|Vulkan presentation
 search.graphics.vk-present.terms|src|-|Vulkan|present|presentation|black screen|frozen picture|compatibility
 search.graphics.vk-memory|src|-|When video memory is full
-search.graphics.vk-memory.terms|src|-|VRAM|video memory|out of memory|memory full|system memory|Vulkan
+search.graphics.vk-memory.terms|src|-|VRAM|video memory|out of memory|memory full|system memory|DirectX 11|DirectX 12
 search.games.sm|src|-|Highest shader model
 search.games.sm.terms|src|-|shader model|SM 6.8|SM 6.7|SM 6.6|shader|DirectX 12
 search.games.cpu-render|src|-|Run DirectX 11 on the processor
@@ -943,7 +943,7 @@ search.display.scaling|src|-|GPU scaling
 help.setting.latency|src|-|How many frames the processor may prepare ahead of the graphics chip. Fewer frames make the game react faster to the mouse and keyboard, but can lower the frame rate. Works in DirectX 11 and DirectX 12 games. A game that already keeps fewer frames ahead is left as it is.
 help.setting.overlay|src|-|Shows the frame rate and frame times in a corner of the game. Works in DirectX 11 games for now.
 help.setting.vk-present|src|-|How Vulkan games show their frames, for all games at once. Compatibility is the default. Modern is still in testing and can leave a Vulkan game with a black or frozen picture. If that happens, choose Compatibility.
-help.setting.vk-memory|src|-|What a Vulkan game gets when the video memory is full. "Use system memory" keeps the game running, but slower. "Report out of memory" tells the game, so that it can lower its settings.
+help.setting.vk-memory|src|-|What a DirectX 11 or DirectX 12 game gets when the video memory is full, for one game or for all games. It does not apply to Vulkan games. "Use system memory" keeps the game running, but slower. "Report out of memory" tells the game, so that it can lower its settings.
 help.setting.sm|src|-|The highest shader model the driver reports to a DirectX 12 game. 6.8 is the default. Some games fail with a newer shader model; for such a game, choose 6.7 or 6.6.
 help.setting.cpu-render|src|-|Runs this game's DirectX 11 on the processor instead of the graphics chip. This is much slower and does not offer full DirectX 11, so most games made after 2012 (for example Counter-Strike 2) do not start with it. Use it only as a last resort for an older game that fails on the graphics chip.
 gfx.choice.app|src|-|Application decides

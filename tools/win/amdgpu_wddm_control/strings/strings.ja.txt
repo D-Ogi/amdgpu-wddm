@@ -916,7 +916,7 @@ search.graphics.overlay|mt-safe|37d49e6c|パフォーマンス オーバーレ�
 search.graphics.vk-present|mt-safe|cdee9cc4|Vulkan の表示方式
 search.graphics.vk-present.terms|mt|93c9bf20|Vulkan|表示|黒い画面|画面が止まる|互換性
 search.graphics.vk-memory|mt-safe|542ed595|ビデオ メモリが一杯のとき
-search.graphics.vk-memory.terms|mt|ac5d910a|VRAM|ビデオ メモリ|メモリ不足|システム メモリ|Vulkan
+search.graphics.vk-memory.terms|mt|f744c892|VRAM|ビデオ メモリ|メモリ不足|システム メモリ|DirectX 11|DirectX 12
 search.games.sm|mt-safe|0dbc5bc7|最高シェーダー モデル
 search.games.sm.terms|mt|ab586346|シェーダー モデル|shader model|SM 6.8|SM 6.7|SM 6.6|シェーダー
 search.games.cpu-render|mt-safe|bf157885|DirectX 11 をプロセッサーで実行
@@ -925,7 +925,7 @@ search.display.scaling|mt-safe|22b1cb79|GPU スケーリング
 help.setting.latency|mt|a684f1ab|プロセッサーがグラフィックス チップより先に準備できるフレーム数です。少ないほどマウスやキーボードへの反応が速くなりますが、フレーム レートが下がることがあります。DirectX 11 と DirectX 12 のゲームで動作します。すでに先行フレーム数が少ないゲームはそのままです。
 help.setting.overlay|mt|78ee0e43|ゲームの隅にフレーム レートとフレーム時間を表示します。現在は DirectX 11 のゲームでのみ動作します。
 help.setting.vk-present|mt|68591c06|Vulkan ゲームがフレームを表示する方法です。すべてのゲームに適用されます。既定は互換性です。モダンはまだテスト中で、Vulkan ゲームの画面が黒い、または止まったままになることがあります。その場合は互換性を選んでください。
-help.setting.vk-memory|mt|ec2dc30f|ビデオ メモリが一杯になったときに Vulkan ゲームに返す内容です。「システムメモリを使う」ではゲームは動作を続けますが遅くなります。「メモリ不足を報告する」ではゲームに知らせ、ゲームが設定を下げられるようにします。
+help.setting.vk-memory|mt|50303e03|ビデオ メモリが一杯になったときに DirectX 11 または DirectX 12 のゲームに返す内容です。ゲームごと、またはすべてのゲームに設定できます。Vulkan ゲームには適用されません。「システムメモリを使う」ではゲームは動作を続けますが遅くなります。「メモリ不足を報告する」ではゲームに知らせ、ゲームが設定を下げられるようにします。
 help.setting.sm|mt|f3b2ff18|ドライバーが DirectX 12 ゲームに報告する最高のシェーダー モデルです。既定は 6.8 です。新しいシェーダー モデルで動作しないゲームがあります。そのようなゲームでは 6.7 または 6.6 を選んでください。
 help.setting.cpu-render|mt|0d418439|このゲームの DirectX 11 を、グラフィックス チップではなくプロセッサーで実行します。大幅に遅く、DirectX 11 のすべての機能は使えないため、2012 年以降に発売されたほとんどのゲーム (Counter-Strike 2 など) はこの設定では起動しません。グラフィックス チップで動作しない古いゲームの最後の手段としてだけ使ってください。
 gfx.choice.app|mt-safe|e7f551b6|アプリケーションに任せる
