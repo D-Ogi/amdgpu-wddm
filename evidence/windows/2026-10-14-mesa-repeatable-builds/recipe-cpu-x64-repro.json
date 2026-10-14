@@ -1,0 +1,174 @@
+{
+  "recipe": "mesa",
+  "schema": 1,
+  "config": "llvmpipe-umd",
+  "description": "Desktop D3D10 UMD: Gallium d3d10umd frontend on llvmpipe/softpipe, statically linked LLVM, static CRT",
+  "utc": "2026-10-14T05:43:03.6981694Z",
+  "status": "built",
+  "recipe_identity": {
+    "repository_commit": "97b0f39ebc04f8c23c1b2110b9ee0d15034713f6",
+    "files_sha256": {
+      "build-mesa.ps1": "C4876C3CF781A97F8067BAD7BF1034E6200F8181F8AF76C81A0ABE1DB57F33F9",
+      "mesa-configs.json": "F0B44C832B0C85F70C719690413EE545D57E28B05A90545958EF9589C4C7A5EF",
+      "common.ps1": "C759F33D3ACD194FE647128D226780C6A469AC485F9DDAD8230BB61ED8D215B9"
+    }
+  },
+  "bc250_root": "P:\\BC-250",
+  "source": {
+    "path": "P:\\BC-250\\scratch\\train\\b34-build\\mesa\\cpu",
+    "git": true,
+    "commit": "cd87dbaca87750d2354e83e8de7a43520da23628",
+    "describe": "amdgpu-wddm-d3d10umd-llvmpipe-2026-09-26-20-gcd87dbac",
+    "modified_entries": 0,
+    "untracked_entries": 0,
+    "worktree_diff_sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+    "version_file": "26.3.0-devel",
+    "note": "worktree_diff_sha256 is the SHA-256 of \"git diff --binary HEAD\" (tracked files only)"
+  },
+  "build_dir": "P:\\BC-250\\scratch\\train\\b34-build\\icd\\cpu-x64-repro",
+  "meson_options": [
+    "-Dbuildtype=debugoptimized",
+    "-Dforce_fallback_for=zlib",
+    "-Dllvm=enabled",
+    "-Dshared-llvm=disabled",
+    "-Damd-use-llvm=false",
+    "-Dvulkan-drivers=[]",
+    "-Dgallium-drivers=llvmpipe,softpipe",
+    "-Dgallium-d3d10umd=true",
+    "-Dopengl=false",
+    "-Db_vscrt=mt",
+    "-Ddefault_library=static",
+    "-Dplatforms=windows",
+    "-Dvideo-codecs=[]",
+    "-Degl=disabled",
+    "-Dglx=disabled",
+    "-Dzstd=disabled",
+    "-Dgallium-d3d10-dll-name=bc250d3d",
+    "-Dc_args=/Brepro /FC /d1trimfile:P:\\BC-250\\scratch\\train\\b34-build\\mesa\\cpu /d1trimfile:P:\\BC-250\\scratch\\train\\b34-build\\icd\\cpu-x64-repro",
+    "-Dcpp_args=/Brepro /FC /d1trimfile:P:\\BC-250\\scratch\\train\\b34-build\\mesa\\cpu /d1trimfile:P:\\BC-250\\scratch\\train\\b34-build\\icd\\cpu-x64-repro",
+    "-Dc_link_args=/Brepro /PDBALTPATH:%_PDB%",
+    "-Dcpp_link_args=/Brepro /PDBALTPATH:%_PDB%"
+  ],
+  "ninja_targets": [
+    "src/gallium/targets/d3d10umd/bc250d3d.dll",
+    "src/gallium/targets/d3d10umd/bc250_ttn_control.exe",
+    "src/gallium/targets/d3d10umd/bc250_lp_test_arit.exe"
+  ],
+  "environment": {
+    "vs_install": "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools",
+    "arch": "x64",
+    "vc_tools_version": "14.44.35207",
+    "windows_sdk_version": "10.0.26100.0",
+    "path_prepended": [
+      "P:\\BC-250\\scratch\\llvm2312-build\\bin",
+      "P:\\BC-250\\toolchain\\winflexbison-2.5.25"
+    ],
+    "include_prepended": [
+      "P:\\BC-250\\toolchain\\nuget\\microsoft.windows.wdk.x64\\c\\Include\\10.0.26100.0\\um",
+      "P:\\BC-250\\toolchain\\nuget\\microsoft.windows.wdk.x64\\c\\Include\\10.0.26100.0\\shared"
+    ],
+    "pythonpath": "P:\\BC-250\\scratch\\py",
+    "llvm_config": "P:\\BC-250\\scratch\\llvm2312-build\\bin\\llvm-config.exe",
+    "temp": "P:\\BC-250\\scratch\\tmp"
+  },
+  "tools": {
+    "python": {
+      "path": "C:\\Python314\\python.exe",
+      "version": "Python 3.14.0"
+    },
+    "meson": "1.12.0",
+    "mako": "1.4.1",
+    "ninja": {
+      "path": "C:\\msys64\\mingw64\\bin\\ninja.exe",
+      "version": "1.11.1"
+    },
+    "cl": {
+      "path": "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64\\cl.exe",
+      "version": "19.44.35221"
+    },
+    "win_flex": "win_flex.exe 2.6.4",
+    "win_bison": "bison (GNU Bison) 3.8.2",
+    "glslangValidator": null,
+    "llvm_config": "23.1.2"
+  },
+  "gate": {
+    "logged_build_options": [
+      "-Dbuildtype=debugoptimized",
+      "-Dforce_fallback_for=zlib",
+      "-Dllvm=enabled",
+      "-Dshared-llvm=disabled",
+      "-Damd-use-llvm=false",
+      "-Dvulkan-drivers=[]",
+      "-Dgallium-drivers=llvmpipe,softpipe",
+      "-Dgallium-d3d10umd=true",
+      "-Dopengl=false",
+      "-Db_vscrt=mt",
+      "-Ddefault_library=static",
+      "-Dplatforms=windows",
+      "-Dvideo-codecs=[]",
+      "-Degl=disabled",
+      "-Dglx=disabled",
+      "-Dzstd=disabled",
+      "-Dgallium-d3d10-dll-name=bc250d3d",
+      "-Dc_args=/Brepro /FC /d1trimfile:P:\\BC-250\\scratch\\train\\b34-build\\mesa\\cpu /d1trimfile:P:\\BC-250\\scratch\\train\\b34-build\\icd\\cpu-x64-repro",
+      "-Dcpp_args=/Brepro /FC /d1trimfile:P:\\BC-250\\scratch\\train\\b34-build\\mesa\\cpu /d1trimfile:P:\\BC-250\\scratch\\train\\b34-build\\icd\\cpu-x64-repro",
+      "-Dc_link_args=/Brepro /PDBALTPATH:%_PDB%",
+      "-Dcpp_link_args=/Brepro /PDBALTPATH:%_PDB%"
+    ],
+    "same_set": true,
+    "same_order": true,
+    "missing": [],
+    "extra": []
+  },
+  "probes": [
+    "Dependency expat for host machine skipped: feature expat disabled",
+    "Dependency libglvnd for host machine skipped: feature glvnd disabled",
+    "Dependency libva-win32 for host machine skipped: feature gallium-va disabled",
+    "Dependency libzstd for host machine skipped: feature zstd disabled",
+    "Dependency zlib for host machine from subproject subprojects/zlib-1.3.1 found: YES 1.3.1",
+    "Found CMake: C:\\msys64\\mingw64\\bin\\cmake.exe (3.25.2)",
+    "Found ninja-1.11.1 at C:\\msys64\\mingw64\\bin\\ninja.exe",
+    "Found pkg-config: YES (C:\\msys64\\mingw64\\bin\\pkg-config.exe) 1.8.0",
+    "llvm-config found: YES (P:\\BC-250\\scratch\\llvm2312-build\\bin\\llvm-config.exe) 23.1.2",
+    "Program decode.py found: YES (C:\\Python314\\python.exe P:\\BC-250\\scratch\\train\\b34-build\\mesa\\cpu\\src\\compiler\\isaspec\\decode.py)",
+    "Program dumpbin found: YES (C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64\\dumpbin.exe)",
+    "Program encode.py found: YES (C:\\Python314\\python.exe P:\\BC-250\\scratch\\train\\b34-build\\mesa\\cpu\\src\\compiler\\isaspec\\encode.py)",
+    "Program glslangValidator found: NO",
+    "Program install_megadrivers.py found: YES (C:\\Python314\\python.exe P:\\BC-250\\scratch\\train\\b34-build\\mesa\\cpu\\bin\\install_megadrivers.py)",
+    "Program ln found: NO",
+    "Program python3.14 found: YES 3.14.0 3.14.0 (C:\\ProgramData\\chocolatey\\bin\\python3.14.exe)",
+    "Program python3.15 found: NO",
+    "Program python3.16 found: NO",
+    "Program sphinx-build skipped: feature html-docs disabled",
+    "Program symbols-check.py found: YES (C:\\Python314\\python.exe P:\\BC-250\\scratch\\train\\b34-build\\mesa\\cpu\\bin\\symbols-check.py)",
+    "Program win_bison found: YES (P:\\BC-250\\toolchain\\winflexbison-2.5.25\\win_bison.exe)",
+    "Program win_flex found: YES (P:\\BC-250\\toolchain\\winflexbison-2.5.25\\win_flex.exe)",
+    "Run-time dependency libelf found: NO  (tried pkg-config and cmake)",
+    "Run-time dependency libudev found: NO  (tried pkg-config and cmake)",
+    "Run-time dependency libunwind found: NO  (tried pkg-config and cmake)",
+    "Run-time dependency LLVM (modules: bitwriter, core, engine, executionengine, instcombine, mcdisassembler, mcjit, native, scalaropts, transformutils, coroutines, lto) found: YES 23.1.2",
+    "Run-time dependency lua found: NO  (tried pkg-config)",
+    "Run-time dependency lua-5.3 found: NO  (tried pkg-config and cmake)",
+    "Run-time dependency lua-5.4 found: NO  (tried pkg-config and cmake)",
+    "Run-time dependency lua5.3 found: NO  (tried pkg-config and cmake)",
+    "Run-time dependency lua5.4 found: NO  (tried pkg-config and cmake)",
+    "Run-time dependency lua53 found: NO  (tried pkg-config and cmake)",
+    "Run-time dependency lua54 found: NO  (tried pkg-config and cmake)",
+    "Run-time dependency spirv-tools found: NO  (tried pkg-config and cmake)",
+    "Run-time dependency valgrind found: NO  (tried pkg-config)"
+  ],
+  "artifacts": {
+    "src/gallium/targets/d3d10umd/bc250d3d.dll": {
+      "bytes": 68666880,
+      "sha256": "CCD26AB98377DF0DE5CB862B5EFAC17086A9CD43797BA4E0884FFDBDF09D0EDE"
+    },
+    "src/gallium/targets/d3d10umd/bc250_ttn_control.exe": {
+      "bytes": 11661824,
+      "sha256": "CA561CDF4D2851C2AFAE1CE5DB02CD61D51C6E42EEF469310BCB5B9349690720"
+    },
+    "src/gallium/targets/d3d10umd/bc250_lp_test_arit.exe": {
+      "bytes": 54873088,
+      "sha256": "BFA0F250913091A6B1BBCAE5C7BFFBDC3046C29AE262D0EE488BF6EEC60461DF"
+    }
+  }
+}
