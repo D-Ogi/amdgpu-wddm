@@ -143,6 +143,8 @@
     "driver-state-client-x64": { "inputs": ["host"] },
     "driver-state-client-x86": { "inputs": ["host"] },
     "driver-state-gui-batch": { "inputs": ["host"] },
+    "release-package-v3": { "inputs": ["host"] },
+    "version-stamp-records": { "inputs": ["host"] },
     "kmd-order": {
       "inputs": [
         "host"
