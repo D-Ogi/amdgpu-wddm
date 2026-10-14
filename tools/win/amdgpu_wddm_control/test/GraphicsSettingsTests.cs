@@ -48,6 +48,9 @@ static partial class UnitTests
         Equal(6, GraphicsSettings.All.Length, "contract: six settings offered");
         Equal(2, GraphicsSettings.AwaitingIcd.Length, "contract: two Vulkan settings wait for their ICD");
         Check(GraphicsSettings.AwaitingIcd.All(s => GraphicsSettings.Find(s.Name) == null && s.Root == GraphicsSettings.VulkanPath), "contract: a Vulkan setting that waits is not offered");
+        var routeSetting = GraphicsSettings.AwaitingIcd.First(s => s.Name == "WsiRoute");
+        Check(routeSetting.GlobalOnly && routeSetting.SameAsAbsent == "gdi" && Strings.T(routeSetting.AbsentTextId) == "Compatibility (default)",
+            "contract: WsiRoute is for all games only and gdi is its default (the system ICD reads no game key; BD-105)");
         var contract = GraphicsSettings.All.Concat(GraphicsSettings.AwaitingIcd).ToArray();
         Equal(contract.Length, contract.Select(s => s.Id).Distinct().Count(), "contract: the ids are unique");
         foreach (var s in contract)
@@ -151,8 +154,9 @@ static partial class UnitTests
         v = view("MemoryOverflow", "witcher3.exe");
         Check(v.Source == "global-invalid" && v.Effective == "allow", "precedence: an invalid Vulkan text means allow");
         Check(GraphicsSettings.OriginText(v, false).EndsWith("The driver uses: Use system memory (slower, keeps running).", StringComparison.Ordinal), "origin: what an invalid MemoryOverflow means");
+        // WsiRoute is for all games only: the ICD reads no game key, so a game's value changes nothing.
         v = view("WsiRoute", "witcher3.exe");
-        Check(v.Source == "game" && v.Effective == "dxgi-composition", "precedence: the game's dxgi-composition wins over gdi");
+        Check(v.Source == "global" && v.Effective == "gdi" && v.Game.State == GfxState.Absent, "precedence: a game's WsiRoute is not read, the value for all games applies");
         v = view("WsiRoute", "other.exe");
         Check(v.Source == "global" && v.Effective == "gdi", "precedence: another game gets gdi");
         v = view("MaxFrameLatency", "witcher3.exe");
@@ -161,13 +165,17 @@ static partial class UnitTests
         Equal("Changed, not applied yet", GraphicsSettings.OriginText(v, true), "origin: an edit");
         Check(GraphicsSettings.Find("ReportAmdDriverVersion") == null, "version belongs to the installed package");
         // A game's invalid value wins even over a valid one for all games (the readers stop at the first source).
-        var k2 = new List<GfxKey> { GKey(GraphicsSettings.VulkanPath, 1, "WsiRoute", "dxgi"), GKey(W3V, 0, "WsiRoute", "bogus") };
-        v = GraphicsSettings.View(AnySetting("WsiRoute"), k2, "witcher3.exe");
-        Check(v.Source == "game-invalid" && v.Effective == "gdi", "precedence: the game's invalid route wins and means gdi");
+        var k2 = new List<GfxKey> { GKey(GraphicsSettings.VulkanPath, 1, "MemoryOverflow", "strict"), GKey(W3V, 0, "MemoryOverflow", "bogus") };
+        v = GraphicsSettings.View(AnySetting("MemoryOverflow"), k2, "witcher3.exe");
+        Check(v.Source == "game-invalid" && v.Effective == "allow", "precedence: the game's invalid MemoryOverflow wins and means allow");
         // An empty text for the game is absent: the value for all games applies.
-        k2 = new List<GfxKey> { GKey(GraphicsSettings.VulkanPath, 1, "WsiRoute", "gdi"), GKey(W3V, 0, "WsiRoute", "") };
+        k2 = new List<GfxKey> { GKey(GraphicsSettings.VulkanPath, 1, "MemoryOverflow", "strict"), GKey(W3V, 0, "MemoryOverflow", "") };
+        v = GraphicsSettings.View(AnySetting("MemoryOverflow"), k2, "witcher3.exe");
+        Check(v.Source == "global" && v.Effective == "strict", "precedence: an empty text is absent");
+        // WsiRoute: not even a game's invalid value is read.
+        k2 = new List<GfxKey> { GKey(GraphicsSettings.VulkanPath, 1, "WsiRoute", "dxgi"), GKey(W3V, 0, "WsiRoute", "bogus") };
         v = GraphicsSettings.View(AnySetting("WsiRoute"), k2, "witcher3.exe");
-        Check(v.Source == "global" && v.Effective == "gdi", "precedence: an empty text is absent");
+        Check(v.Source == "global" && v.Effective == "dxgi", "precedence: a game's invalid WsiRoute is not read either");
         Check(GraphicsSettings.View(GraphicsSettings.Find("VSync"), null, "witcher3.exe").Source == "default", "precedence: no keys at all");
 
         // The report: stored values and effective values per scope, invalid ones named.
@@ -191,7 +199,7 @@ static partial class UnitTests
     // The choice list and the selection: a stored value is shown as it is and never rewritten by looking at it.
     static void GfxChoices()
     {
-        var keys = new List<GfxKey> { GKey(GraphicsSettings.GraphicsPath, 1, "FrameRateLimit", 58, "PerformanceOverlay", 7), GKey(W3V, 0, "WsiRoute", "dxgi-composition") };
+        var keys = new List<GfxKey> { GKey(GraphicsSettings.GraphicsPath, 1, "FrameRateLimit", 58, "PerformanceOverlay", 7), GKey(GraphicsSettings.VulkanPath, 1, "WsiRoute", "dxgi-composition") };
         var fps = GraphicsSettings.Find("FrameRateLimit");
         var all = GraphicsSettings.View(fps, keys, null);
         var items = GraphicsSettings.Items(all);
@@ -228,11 +236,12 @@ static partial class UnitTests
         GraphicsSettings.Choose(edits, fps, all.Here, items.First(i => i.Value == "60"));
         Equal("60", edits["FrameRateLimit"], "choose: 60");
 
-        // Set outside this app (dxgi-composition): kept and shown as such.
-        var route = GraphicsSettings.View(AnySetting("WsiRoute"), keys, "witcher3.exe");
+        // Set outside this app (dxgi-composition, for all games: WsiRoute has no game value): kept and shown as such.
+        var route = GraphicsSettings.View(AnySetting("WsiRoute"), keys, null);
         var rItems = GraphicsSettings.Items(route);
         Check(rItems.Last().Kept && rItems.Last().Text == "Set outside this app", "items: dxgi-composition is set outside this app");
-        Check(rItems.Any(i => i.Value == "dxgi") && rItems.Any(i => i.Value == "gdi"), "items: a game can pick Modern or Compatibility");
+        Check(rItems[0].Absent && rItems[0].Text == "Compatibility (default)" && rItems.Any(i => i.Value == "dxgi") && !rItems.Any(i => i.Value == "gdi"),
+            "items: Compatibility is the default, Modern the other choice");
         Equal(rItems.Count - 1, GraphicsSettings.Selected(rItems, route.Here, false, null), "selected: the value set outside");
 
     }

@@ -11,9 +11,11 @@
 //     PerformanceOverlay  1 on (works in DirectX 11 games for now), 0 off
 //     RenderOnCpu         1: the game's DirectX 11 runs on the processor (much slower, a last resort), 0 off
 //   HKLM\SOFTWARE\amdgpu-wddm\Vulkan                           REG_SZ values for all games
-//   HKLM\SOFTWARE\amdgpu-wddm\Vulkan\Applications\<image>      REG_SZ values for one game
-//     WsiRoute            dxgi (the default) or gdi; the reader also takes dxgi-composition, which this app does not
-//                         offer, and takes any other value as gdi (radv_wddm2_wsi_route.h)
+//   HKLM\SOFTWARE\amdgpu-wddm\Vulkan\Applications\<image>      REG_SZ values for one game (MemoryOverflow only)
+//     WsiRoute            for all games only: the system Vulkan ICD reads no WsiRoute of a game's key
+//                         (radv_wddm2_wsi.c). gdi (the default since BD-105) or dxgi; the reader also takes
+//                         dxgi-composition, which this app does not offer, and takes any other value as gdi
+//                         (radv_wddm2_wsi_route.h)
 //     MemoryOverflow      allow (the default) or strict; any other value selects allow (radv_wddm2_mem_overflow.h)
 //     Case does not matter and an empty string counts as absent.
 //   The two Vulkan values are not offered in this release (AwaitingIcd below).
@@ -121,14 +123,16 @@ namespace AmdgpuWddmControl
             new GfxSetting { Name = "RenderOnCpu", Id = "cpu-render", Root = GraphicsPath, GameFirst = true, SameAsAbsent = "0", AbsentTextId = "gfx.choice.off", Presets = new[] { "1", "0" }, Valid = Bool },
         };
 
-        // The Vulkan settings wait for the ICD that reads them: the vk-wsi-dxgi line and the per-application keys of the
-        // Mesa fork, which the b23 release does not carry. No ICD of b23 reads WsiRoute, and the 64-bit system Vulkan ICD
-        // does not read MemoryOverflow. The owner's GUI rule is no control that does nothing or works only for some
+        // The Vulkan settings are not offered. The system Vulkan ICD (64-bit, and 32-bit from tester.31) reads WsiRoute
+        // for all games only, and the values it takes beside the default gdi (dxgi, dxgi-composition) select the DXGI
+        // route, which presents no frame on the lab (BD-105). It does not read MemoryOverflow: only the RADV inside the
+        // D3D11 and D3D12 drivers does. The owner's GUI rule is no control that does nothing or works only for some
         // programs, so they are not in All: no row, no search entry, no write and no --gfx name. The support report
-        // still lists their stored values. They go back into All with the train that carries that ICD line.
+        // still lists their stored values. Each goes back into All when its ICD makes it a control that works for every
+        // program.
         public static readonly GfxSetting[] AwaitingIcd =
         {
-            new GfxSetting { Name = "WsiRoute", Id = "vk-present", Root = VulkanPath, Text = true, SameAsAbsent = "dxgi", AbsentTextId = "gfx.choice.modern-default",
+            new GfxSetting { Name = "WsiRoute", Id = "vk-present", Root = VulkanPath, Text = true, GlobalOnly = true, SameAsAbsent = "gdi", AbsentTextId = "gfx.choice.compat-default",
                 Presets = new[] { "dxgi", "gdi" }, InvalidMeans = "gdi", OtherValid = new[] { "dxgi-composition" } },
             new GfxSetting { Name = "MemoryOverflow", Id = "vk-memory", Root = VulkanPath, Text = true, SameAsAbsent = "allow", AbsentTextId = "gfx.choice.sysmem-default",
                 Presets = new[] { "allow", "strict" }, InvalidMeans = "allow" },
