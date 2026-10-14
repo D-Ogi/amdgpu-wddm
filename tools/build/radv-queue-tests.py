@@ -111,7 +111,8 @@ def run_tests(exe, vdir, tests, env):
         summary = [l for l in out.splitlines() if l.startswith('tests=')]
         results[t] = dict(exit=code if isinstance(code, str) else '0x%X' % (code & 0xFFFFFFFF),
                           passed=code == 0, checks_passed=len(passes), checks_failed=len(fails),
-                          checks_skipped=len(skips), first_failures=fails[:4], summary=summary[0] if summary else None)
+                          checks_skipped=len(skips), skip_reasons=skips[:4], first_failures=fails[:4],
+                          summary=summary[0] if summary else None)
     return results
 
 
