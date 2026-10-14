@@ -412,9 +412,12 @@ class ReleaseFlavour(unittest.TestCase):
         for recipe, name in ((mesa, "llvmpipe-umd"), (mesa, "zink-umd"), (dxvk, "ddi-engine")):
             self.assertNotIn("-Db_ndebug=true", configs[recipe][name]["options"], name + ": the lab flavour keeps asserts")
             self.assertEqual(configs[recipe][name]["release_options"], ["-Db_ndebug=true"], name)
+        # The release flavour's if may also look the key up before the read: under the Set-StrictMode 3.0 of
+        # common.ps1 a config without release_options cannot read it.
+        added = re.compile(r"if \(\$forkFlavour -eq 'release'[^{\r\n]*\) \{\s*\$options \+= @\(\$recipeConfig\.release_options")
         for recipe in g.NDEBUG_RECIPES:
             text = (REPO / recipe).read_text(encoding="utf-8")
-            self.assertIn("if ($forkFlavour -eq 'release') { $options += @($recipeConfig.release_options", text, recipe)
+            self.assertRegex(text, added, recipe)
             self.assertIn("flavour         = $forkFlavour", text, recipe)
         # Planted controls: any release config without it, or with a later false, fails; so does a config, or a
         # recipe's whole file, that the gate does not have.
