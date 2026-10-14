@@ -269,34 +269,76 @@ The steps:
 
 1. It admits the call. The context must be the GDI context, the node must be the graphics node, and
    the DMA buffer must be present, aligned and large enough.
-2. It walks the command buffer. `Bc250GdiWalkStep` holds every offset inside `CommandLength` and
+2. It counts the sub-rectangles of the whole command buffer and settles the capacity of the call
+   before it writes anything, which is the subject of the next section.
+3. It walks the command buffer. `Bc250GdiWalkStep` holds every offset inside `CommandLength` and
    refuses a `CommandSize` that the buffer does not hold.
-3. It flattens each command into `BC250_GDI_OP`, which holds the fields of all six argument
+4. It flattens each command into `BC250_GDI_OP`, which holds the fields of all six argument
    structures. `C_ASSERT` lines tie every plain constant of the contract layer to the WDK values.
-4. It resolves the allocation list indices that the command names. Each index gives one surface
+5. It resolves the allocation list indices that the command names. Each index gives one surface
    record and one GPU virtual address. The lookup copies both descriptors under the object lock,
    the same discipline the GPU present producer uses.
-5. It admits the operation and plans each sub-rectangle. `Bc250GdiAdmitOp` and `Bc250GdiPlanItem`
+6. It admits the operation and plans each sub-rectangle. `Bc250GdiAdmitOp` and `Bc250GdiPlanItem`
    prove that every byte the commands touch lies inside its allocation.
-6. It emits one cache operation for the whole DMA buffer, before the first copy or dispatch. The
-   CDD writes its bitmaps with the processor into cache coherent aperture memory, and the acquire
-   makes those writes visible to the engine's level two cache read, its instruction reads and its
-   scalar reads.
-7. It emits the packets of each admitted sub-rectangle. The first sub-rectangle that needs a kernel
-   also puts the code into the buffer, once, and every dispatch of that buffer runs from it.
-8. It pads the tail to the 32 byte granule of the ring with the command processor's own no operation
-   word, and advances `pDmaBuffer`.
+7. It offers each admitted sub-rectangle to [gdi_batch.c](../../driver/kmd/gdi_batch.c), which owns
+   everything the DMA buffer holds: the one cache operation in front of the first item, the code
+   block in front of the first dispatch, the choice between the engine path and a dispatch, and the
+   tail padding to the 32 byte granule of the ring. The cache operation goes first because the CDD
+   writes its bitmaps with the processor, and the acquire makes those writes visible to the engine's
+   level two cache read, its instruction reads and its scalar reads.
+8. It advances `pDmaBuffer` by what the batch wrote.
 
 `DxgkDdiSubmitCommandVirtual` needs no new arm. A GDI DMA buffer is a non present, non user mode
 command buffer with bytes in it, which the existing stage C submits to the graphics ring. The GDI
 context gets its root page table from `DxgkDdiSetRootPageTable` like any other context.
 
-The DMA buffer size is the one number the guaranteed contract forces. `BC250_GDI_DMA_BYTES` is 256
-KiB, which is 65536 dwords. That holds 9362 copy rows, about eight full screen blits of 1080 rows,
-or, once a buffer carries the 1280 dword code block, about 740 compute dispatches of 86 dwords
-each. `CreateContext` asks for it only while the capability is reported, so a start without the
-kernels allocates what it did before. `GdiRenderOverflow` counts
-the command buffers that still did not fit, and the lab says whether that number is ever nonzero.
+### The capacity of one call
+
+The guaranteed contract DMA buffer model gives one DMA buffer for one command buffer and nothing
+else: "The display miniport driver must be able to translate one command buffer into exactly one DMA
+buffer and one patch-location list. If this translation is not possible, the user-mode command
+buffer is, by definition, invalid. The display miniport driver cannot return status that indicates
+it is out of DMA buffer space"
+([using-the-guaranteed-contract-dma-buffer-model.md](https://learn.microsoft.com/windows-hardware/drivers/display/using-the-guaranteed-contract-dma-buffer-model),
+local copy at revision 110f60ea). `DxgkDdiRenderGdi` has no status for it either: its table is
+`STATUS_SUCCESS`, and every other value bugchecks. `DXGKARG_RENDERGDI` does carry a
+`MultipassOffset`, which the `DxgkDdiRender` family uses together with
+`STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER`, but that status is not in this function's table, so this
+driver does not return it. Whether the operating system would accept it here is a question for the
+lab and not for a shipped driver.
+
+So capacity cannot be a per-item question, and a review of increment 1 reproduced exactly what
+happens when it is. A 2 by 8192 ColorFill with two disjoint 1 by 8192 sub-rectangles spent 57344
+dwords on the first column, and the second column no longer fitted and was dropped from a call that
+reported success. The rows of one sub-rectangle are O(height), and nothing bounded them against the
+sub-rectangles behind them.
+
+Two rules fix the class, and [gdi_batch.c](../../driver/kmd/gdi_batch.c) holds both:
+
+1. **Every admitted sub-rectangle has a bounded cost.** One compute dispatch is 80 dwords, 81 with
+   the worst-case alignment padding, whatever the rectangle's size. The per-row DMA_DATA path is
+   cheaper for a short rectangle and unbounded for a tall one, so it is an optimisation and never an
+   obligation: an item whose rows do not fit the dwords left over after the bounded cost of
+   everything behind it is dispatched instead. `Bc250GdiItemToKernel` names the kernel that performs
+   the same operation, which is `gdi_bitblt_rop` at SRCCOPY for a copy, `gdi_stretchblt` for a 1:1
+   StretchBlt and `gdi_colorfill_rop` at PATCOPY for a fill.
+2. **The whole batch is checked before anything is written.** `Bc250GdiBatchBegin` takes the number
+   of sub-rectangles the command buffer holds and refuses the call unless the cache operation, the
+   code block, one bounded dispatch for each of them and the ring padding all fit. A refused call
+   writes an empty DMA buffer: it draws nothing, rather than drawing a prefix and dropping the rest.
+   `GdiRenderBatchRefused` counts those calls and the start log names the numbers.
+
+Rule 1 is what makes rule 2 a contract instead of a hope. The invariant is stated and proved in
+`gdi_batch.c`: after `Begin` has said yes, no admitted sub-rectangle can be refused for want of
+space. `BC250_GDI_BATCH_NO_SPACE` is therefore unreachable, and the host test asserts that over a
+set of batches that includes the counterexample above.
+
+`BC250_GDI_DMA_BYTES` is 256 KiB, which is 65536 dwords, and what it bounds now is the number of
+sub-rectangles and not their area: 8 dwords of cache operation, at most 1344 for the code block and
+7 of padding leave room for 792 bounded dispatches. A full-screen fill of 1920 by 1080 is one
+dispatch. `CreateContext` asks for the buffer only while the capability is reported, so a start
+without the kernels allocates what it did before. `GdiRenderPeakSubRects` records the largest batch
+the field ever sent, so the number can be raised with evidence rather than by guess.
 
 ## The allocation types and the caps that change
 
@@ -337,9 +379,28 @@ The capability answer of `WddmDriverCaps` changes only while `GdiHwAccel` is tru
 
 The GDI acceleration page adds one condition of its own. "The driver should report this type of
 support only if the cache-coherent GPU aperture segment exists and there's no significant
-performance penalty when the CPU accesses GPU memory." The aperture segment is declared cache
-coherent, which is also why `NoCacheCoherentApertureMemory` stays 0. The processor and the GPU share
-one memory on this part, so the second half holds by construction.
+performance penalty when the CPU accesses GPU memory."
+
+The first half is a fact of this driver's own segment description: the aperture segment is declared
+cache coherent, which is also why `NoCacheCoherentApertureMemory` stays 0. What the CDD then writes
+with the processor are the two CPU-visible surface types, and the mapping it writes them through is
+the one `DxgkDdiAcquireSwizzlingRange` and the allocation's own segment preference give it, not a
+mapping of our choosing.
+
+The second half is NOT proved, and an earlier draft of this page claimed it held "by construction"
+because the processor and the engine share one memory. That does not follow. Physical sharing says
+nothing about the cache policy of a mapping or about its write-combining behaviour, and this project
+has measured both ways round on this part: BD-021 and BD-022 are cache-policy and alias-scope
+findings of ours, and the 2026-09-29 game110 history turned on a cached versus an uncached mapping.
+A segment that is cache coherent for correctness can still be slow for the processor.
+
+So the condition is recorded here as an assumption with a measurement attached: the lab plan
+measures the processor's write rate into a CPU-visible GDI staging surface and compares it with a
+plain system-memory write of the same size
+([docs/testing/gdi-hw-accel-lab.md](../testing/gdi-hw-accel-lab.md), trial 5). Until that number
+exists, "no significant penalty" is a claim this driver makes to the operating system on the
+strength of the segment's declaration alone, and the capability can be withdrawn with
+`EnableGdiHwAccel` if the number says otherwise.
 
 ## Preemption and TDR
 
@@ -412,11 +473,26 @@ alpha component must give the background component, and an alpha component of 0x
 branch does not, and its formula yields `Color` where the sentence demands `Color2`. The driver
 applies both sentences after either branch.
 
-**The ColorFill colour format.** The DDI reference states that `Color` is "in 32-bit ARGB unsigned
-pixel format (as defined by the D3DDDIFMT_A8R8G8B8 value)". The trailing comment in d3dkmddi.h says
-"Color in the format of the destination surface" instead. The two readings differ only for a red
-first destination, which no CDD surface seen so far is. The driver follows the page and counts the
-red first case, so the lab can say whether it ever happens.
+**The colour format of every Color field.** The DDI reference states that `Color` is "in 32-bit
+ARGB unsigned pixel format (as defined by the D3DDDIFMT_A8R8G8B8 value)". The WDK header says
+something else, and says it for each of the fields: "Color in the format of the destination surface"
+on `DXGK_GDIARG_COLORFILL`, "Foreground color in a 32-bit surface format" on the two
+`DXGK_GDIARG_CLEARTYPEBLEND` colours. A header of the WDK the build uses wins over a page
+(CLAUDE.md, References), so this driver reads all of them as the header does: a field is in its
+surface's own channel order.
+
+What that changes is who converts what. A ColorFill writes the dword as it arrived, because its
+arithmetic is bitwise in the destination's order. The TransparentBlt key and the two ClearType
+colours are converted to A8R8G8B8 once per command, because those kernels work per channel and
+convert their pixels the same way. The two readings differ only for a red-first destination, which no
+CDD surface seen so far is, and the driver counts that case so the lab can say whether it ever
+happens.
+
+The host test states this in bytes rather than sharing the assumption with the driver: for a
+red-first destination and a colour whose red and blue bytes differ, a PATCOPY fill must leave the
+colour itself in the destination and never the red-blue exchange of it, and a TransparentBlt key
+that equals a source word must suppress that pixel while the exchange of the same key must not.
+Putting the page's reading back into the driver fails five of those cases.
 
 One assumption is also recorded. The sub-rectangle array of a command must lie inside that command,
 which follows from the `CommandSize` wording. The driver checks it, counts a pointer that lies
@@ -463,9 +539,27 @@ Four things make that comparison worth something:
   the comparison.
 - the comparison is the whole arena, so a kernel that writes one byte outside its rectangle fails.
 
-Two negative controls were run against it. Packing `Dx0` as zero instead of the sub-rectangle's
-offset inside `DstRect` failed the clipped stretch case alone, and exchanging the gamma and inverse
-gamma pointers inside the kernel failed every ClearType case. Both passed again when reverted.
+The same gate holds the capacity contract of a whole call. `TestBatchCapacity` drives
+`gdi_batch.c` over batches of tall columns, the shape of the review's counterexample, and asserts
+three things: that `Bc250GdiBatchBegin` refuses what it cannot guarantee and writes nothing, that
+after it says yes every sub-rectangle is drawn by one path or the other, and that the arena ends up
+exactly as the reference model says. Each item's span in the buffer is checked as well, so an
+engine item must hold the production rows byte for byte and a dispatched item must name the kernel
+of its own operation. The cases are the 2 by 8192 ColorFill that increment 1 lost, the same pair at
+512 rows that increment 1 handled, the same pair in a buffer one bounded path short of both, a copy
+and a 1:1 stretch of the same shape, a four-column batch where the two paths mix inside one call,
+and a kernel operation that needs no fallback at all.
+
+Four negative controls were run against the gate, and each one was reverted after it failed:
+
+- packing `Dx0` as zero instead of the sub-rectangle's offset inside `DstRect` failed the clipped
+  stretch case alone.
+- exchanging the gamma and the inverse gamma pointers inside the kernel failed every ClearType case.
+- replacing the batch reserve with the per-item capacity of increment 1 dropped an admitted
+  sub-rectangle in the one-dword-short case, which is the review's defect reproduced inside our own
+  gate.
+- putting the DDI reference's A8R8G8B8 reading of `Color` back into the driver failed five cases of
+  the red-first fill, and doing the same to the TransparentBlt key failed its two.
 
 What the host tests do NOT prove, stated plainly: the gfx1013 machine code. They run the C and not
 the instructions the build extracted from the code object, so they say nothing about instruction
