@@ -21,7 +21,17 @@
  * which enumerates all 256 alpha values against a double-precision oracle.
  */
 
-#ifdef __OPENCL_VERSION__
+/* BC250_GDI_CL is the host test's way in: it compiles gdi_kernels.cl as host C over this same
+ * branch, so the text the GPU runs is the text the test runs (driver/kmd/test/gdi_kernel_host.h).
+ *
+ * __OPENCL_C_VERSION__ is the macro clang predefines for OpenCL C, and the one tested here.
+ * __OPENCL_VERSION__ is NOT predefined by clang 22.1.8 and a guard on it silently takes the host
+ * arm: under -cl-std=CL2.0 that still compiles, because an unqualified pointer parameter is then
+ * __generic and a __global argument converts to it, and the kernels would read the gamma rows with
+ * flat loads instead of global ones. BC250_GDI_PIXEL_CL below is the witness that this arm was
+ * taken, and gdi_kernels.cl refuses to compile without it. */
+#if defined(__OPENCL_C_VERSION__) || defined(BC250_GDI_CL)
+#define BC250_GDI_PIXEL_CL 1
 typedef uint  bc250_u32;
 typedef int   bc250_i32;
 #define BC250_GDI_FN static inline
@@ -54,6 +64,30 @@ typedef int          bc250_i32;
 
 /* D3DKM_INVALID_GAMMA_INDEX, d3dkmddi.h line 586. */
 #define BC250_GDI_INVALID_GAMMA 0xFFFFFFFFu
+
+/* One row of the gamma lookup allocation holds two tables of this many entries (the
+ * CLEARTYPEBLEND GammaSurfAllocationIndex field; the row's whole shape is in gdi_render.h). It is
+ * here and not there because gdi_kernels.cl cannot include gdi_render.h: that header declares
+ * functions, and a kernel translation unit must hold nothing but the kernels. */
+#define BC250_GDI_GAMMA_ENTRIES 256u
+
+/* The work-group shape of every kernel in gdi_kernels.cl. One number for all six, because the
+ * dispatch emitter programs one COMPUTE_NUM_THREAD_X/Y pair and the build gates the shape the code
+ * object asks for against this. 8 by 8 is 64 work items, which is two gfx1013 waves of 32 lanes
+ * with no remainder, and a row of 8 pixels is 32 bytes: one cache line of the destination for every
+ * four rows of the group, whatever the pitch's alignment. */
+#define BC250_GDI_GROUP_X 8u
+#define BC250_GDI_GROUP_Y 8u
+
+/* The `flags` kernarg: the per-command booleans that the six kernels read, in one dword, so that
+ * the kernarg layout does not change when an operation gains one. gdi_dispatch.c builds the word
+ * from BC250_GDI_OP and the surfaces; the host test builds it the same way through the same
+ * function. */
+#define BC250_GDI_FLAG_RED_FIRST       0x1u   /* destination and source are A8B8G8R8/X8B8G8R8 */
+#define BC250_GDI_FLAG_ALPHA_RED_FIRST 0x2u   /* the ClearType alpha surface is, independently */
+#define BC250_GDI_FLAG_GAMMA_VALID     0x4u   /* Gamma was a row index, not D3DKM_INVALID_GAMMA */
+#define BC250_GDI_FLAG_SRC_HAS_ALPHA   0x8u   /* DXGK_GDIARG_ALPHABLEND.SourceHasAlpha */
+#define BC250_GDI_FLAG_HONOR_ALPHA     0x10u  /* D3DKM_TRANSPARENTBLTFLAGS.HonorAlpha */
 
 /* ---- channel order ------------------------------------------------------------------------------
  * Canonical here is ARGB: A<<24 | R<<16 | G<<8 | B, which is exactly D3DDDIFMT_A8R8G8B8, the format
@@ -94,6 +128,23 @@ BC250_GDI_FN bc250_u32 Bc250GdiDiv255Round(bc250_u32 N)
 BC250_GDI_FN bc250_u32 Bc250GdiMulDiv255(bc250_u32 A, bc250_u32 B)
 {
     return Bc250GdiDiv255Round(A * B);
+}
+
+/* ---- the destination-to-source transform of one axis ---------------------------------------------
+ * The STRETCHBLT Remarks: Xs = truncate((Xd - DstRect.left + 0.5) * Ws/Wd + SrcRect.left). T is
+ * Xd - DstRect.left, which is non-negative for every pixel of an admitted sub-rectangle, so the
+ * division is a floor and the whole formula is exact in integers:
+ *     Xs = SrcLeft + (2*T + 1) * Ws / (2*Wd)
+ * With Ws == Wd it reduces to the translation the BITBLT Remarks give, and that arm is taken
+ * separately because the kernels run it per pixel and this part has no integer divider. The
+ * largest numerator an admitted command can reach is (2*8191 + 1) * 8192, which is under 2^28.
+ * The host test checks the result against the defining inequality in 64-bit integers.
+ */
+BC250_GDI_FN bc250_i32 Bc250GdiSourceCoord(bc250_i32 Src0, bc250_u32 T, bc250_u32 S, bc250_u32 D)
+{
+    if (D == 0u) return 0;
+    if (S == D) return Src0 + (bc250_i32)T;
+    return Src0 + (bc250_i32)((2u * T + 1u) * S / (2u * D));
 }
 
 BC250_GDI_FN bc250_u32 Bc250GdiByte(bc250_u32 Pixel, bc250_u32 Shift)
