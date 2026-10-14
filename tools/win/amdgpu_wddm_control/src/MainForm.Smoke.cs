@@ -7,6 +7,7 @@
 //                     G-SMALL, the owner's rule of 2026-10-12: the right-hand panel is out of the window on a small
 //                     screen (RenderOptions.WorkArea, so the render never reads the screen it runs on) and in it on a
 //                     screen with room for it.
+//   CheckLabels(...)  --smoke-labels: every page under the label layout rule of LabelLayout.cs (fact M898).
 //   UseFixture(...)   a recorded snapshot and demo games instead of this PC's state, so that the cards with
 //                     warnings, games and the CU section are drawn too. Nothing is written in any of them.
 using System;
@@ -347,6 +348,20 @@ namespace AmdgpuWddmControl
                 foreach (var p in Overlaps(this)) w.AppendLine("home after the switch: " + p);
             }
             return w.ToString();
+        }
+
+        // --smoke-labels: the shell and every page, at the default window size, under the label layout rule
+        // (LabelLayout.cs). The labels a timer changes (_live) are among the labels checked, and the tally counts them.
+        internal void CheckLabels(LabelLayout.Tally t, string state)
+        {
+            ClientSize = Theme.Sz(1240, 760);
+            BuildShell();
+            foreach (var page in PageNames)
+            {
+                ShowPage(page, null, false);
+                PerformLayout();
+                LabelLayout.Check(this, "main window, " + state + ", " + page, t, new HashSet<Label>(_live.Values));
+            }
         }
 
         // G-BACKDROP (BD-137): a control that paints itself leaves no pixel of its client rectangle unpainted.

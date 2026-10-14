@@ -410,6 +410,21 @@ panel is in the window, the side panel shows on a small screen or is missing on 
 left after the window was clamped (G-ORDER), or a language switch leaves old texts behind. The unit tests also check
 every string table: each id in each language, no stale translation (G-STR), no internals in the texts (G-NOINT).
 
+Two more gates hold what the start window flash of tester.31 rc4 taught (fact M898):
+
+- `--smoke-labels <file>` builds every window and page without showing it: the main window with this PC's state and
+  with the three recorded snapshots, the sign-in notice, the loading window, the dialogs and the recovery view. It
+  fails on a `Label` with AutoSize off and a `Dock`, because `Label.AdjustSize` gives such a label its requested size
+  (100x23) at each change of its text before the parent docks it again. On the labels whose text a timer changes, it
+  also traces the window positions while their digits change, and fails on any size other than the final one. It
+  passes only when its negative control (the rc4 window, a docked Label) fails and its positive control (the
+  application's own label) passes. `tools/quality/winforms_labels.py` reads the same layout in the PowerShell and C#
+  of the rest of the repository.
+- The image does not depend on the line ends of the checkout. `csc` embeds the string tables and `app.manifest` byte
+  for byte, so the build embeds copies of them with LF line ends. Step 3b builds the image again from copies of the
+  sources with every text input in CRLF and in LF and compares the bytes. A control build with the CRLF tables as
+  given must differ.
+
 ### The icon of the application
 
 `art/icon/nagi.ico` is the icon of `amdgpu_wddm_control.exe`, of the shortcuts the installer writes and of the

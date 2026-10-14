@@ -8,14 +8,17 @@
 #
 # Gates, in order, each stops the build: the unit tests (test/UnitTests.cs against driver/kmd/bc250kmd_escape.h, the
 # KMD's interop, guard and DPM sources, the D3D12 shell's switch names, and with -StartConfirmCore the installer's
-# confirmation rule), the DLL and app compiles with warnings as errors, a smoke run of the exe with --smoke (no
+# confirmation rule), the DLL and app compiles with warnings as errors, the same image from the sources with CRLF and
+# with LF line ends (step 3b, with a control that must differ), a smoke run of the exe with --smoke (no
 # window: the pages are built and refreshed once, their text written to smoke.txt), the bug report smoke, the start
 # diagnostics worker as the window starts it (no console, output redirected: BD-142), and the
 # Recovery dry runs (--action X --dry-run: nothing is written, no UAC) against test/snapshot-bd059.json and this PC,
 # the recovery view without bc250control.dll (--smoke-recovery), the hidden-window cost (--smoke-perf, G-PERF),
 # the sign-in notice in both its cases, four languages and four scales on a small and a large screen
 # (--smoke-notice: it fits the screen, overlaps nothing, names no internals, closes with Escape), the loading window
-# of the start in both its states with the same checks (--smoke-loading),
+# of the start in both its states with the same checks (--smoke-loading), the label layout rule of fact M898 over
+# every window and page (--smoke-labels: no docked Label with AutoSize off, no Label that goes through another size at
+# a change of its text, after a negative and a positive control),
 # the place a rebuilt page keeps and the place of the buttons in every state of a benchmark run (--smoke-scroll), and
 # the render gates (G-RENDER, G-NOINT, G-A11Y): --smoke-render of the 9 pages at 96, 120, 144 and 192 DPI in the four
 # languages, at text scale 150 %, with the guide character on (the default of an installed application) and two runs
@@ -133,7 +136,21 @@ Write-Host "  bc250kmd_cli.exe usage: $(@($usage).Count) lines"
 # 3. The application, with the string tables embedded.
 # The lists are sorted: csc writes types and resources in input order, and a directory listing comes in the order of
 # the file system, which the recipe does not own.
-$resources = @(Get-ChildItem "$here\strings\strings.*.txt" | Sort-Object Name | ForEach-Object { "/resource:$($_.FullName),$($_.Name)" })
+# The image must not depend on the line ends of the checkout either. git's text=auto gives the text files CRLF in a
+# Windows checkout and LF in other checkouts, and csc embeds the string tables and app.manifest byte for byte: a build
+# from a checkout of 76782f69 differed from the lab's build of the same commit only in the line ends of three string
+# tables. So both go in from copies with LF line ends (Strings.Parse reads either). The C# sources give the same image
+# with either line end. Step 3b checks all three.
+function Copy-LineEnds([string]$From, [string]$To, [string]$Eol) {
+    # Latin-1 maps every byte to one character and back, so only the line ends change (UTF-8 has no 0x0D or 0x0A byte
+    # inside a character).
+    $latin1 = [Text.Encoding]::GetEncoding(28591)
+    $text = $latin1.GetString([IO.File]::ReadAllBytes($From)).Replace("`r`n", "`n")
+    if ($Eol -eq 'crlf') { $text = $text.Replace("`n", "`r`n") }
+    New-Item -ItemType Directory -Force (Split-Path -Parent $To) | Out-Null
+    [IO.File]::WriteAllBytes($To, $latin1.GetBytes($text))
+}
+$resources = @()
 # The guide art of the repository (art\nagi) is embedded by default: an installed application shows the guide
 # character without the tester finding a setting first. The names of the resources are checked in the built image
 # below, so a renamed or lost file stops the build instead of shipping a text-only panel.
@@ -156,9 +173,51 @@ if (-not (Test-Path -LiteralPath $icon -PathType Leaf)) { throw "application ico
 # The same file as a resource as well (MainForm): the window's icon is then the authored image for the size Windows
 # asks for, instead of one 32x32 image rescaled on a high-resolution screen.
 $resources += "/resource:$icon,nagi.ico"
-& $csc /nologo /noconfig /nostdlib+ @refs /target:winexe /platform:x64 /optimize+ /warnaserror+ /langversion:7.3 /deterministic+ `
-    "/win32manifest:$here\app.manifest" "/win32icon:$icon" "/out:$Out\amdgpu_wddm_control.exe" @resources @((Get-ChildItem "$here\src\*.cs").FullName | Sort-Object)
-if ($LASTEXITCODE -ne 0) { throw "csc failed ($LASTEXITCODE)" }
+# The compile, for this build and for step 3b. $Root holds src\, strings\ and app.manifest. -AsGiven embeds the tables
+# and the manifest with the line ends they have, which only the control of step 3b does.
+function Invoke-AppCompile([string]$Root, [string]$Work, [string]$Exe, [switch]$AsGiven) {
+    $tables = @(Get-ChildItem "$Root\strings\strings.*.txt" | Sort-Object Name)
+    $manifest = Join-Path $Root 'app.manifest'
+    if (-not $AsGiven) {
+        $lf = Join-Path $Work 'lf'
+        Remove-Item -Recurse -Force $lf -ErrorAction SilentlyContinue
+        foreach ($t in $tables) { Copy-LineEnds $t.FullName (Join-Path $lf $t.Name) 'lf' }
+        $tables = @($tables | ForEach-Object { Get-Item (Join-Path $lf $_.Name) })
+        Copy-LineEnds $manifest (Join-Path $lf 'app.manifest') 'lf'
+        $manifest = Join-Path $lf 'app.manifest'
+    }
+    $tableResources = @($tables | ForEach-Object { "/resource:$($_.FullName),$($_.Name)" })
+    & $csc /nologo /noconfig /nostdlib+ @refs /target:winexe /platform:x64 /optimize+ /warnaserror+ /langversion:7.3 /deterministic+ `
+        "/win32manifest:$manifest" "/win32icon:$icon" "/out:$Exe" @tableResources @resources @((Get-ChildItem "$Root\src\*.cs").FullName | Sort-Object)
+    if ($LASTEXITCODE -ne 0) { throw "csc failed ($LASTEXITCODE)" }
+}
+Invoke-AppCompile $here (Join-Path $obj 'app') "$Out\amdgpu_wddm_control.exe"
+
+# 3b. Line ends (owner goal: reproducible builds). Copies of the sources with every text input of the application
+# (src\*.cs, strings\strings.*.txt, app.manifest) in CRLF, and again in LF, must both give this build's image byte for
+# byte. The control: the CRLF copy, compiled with its tables and manifest as given, must give another image, or this
+# step could not see a dependence on the line ends at all. Every image has the name of the real one, because csc takes
+# the assembly and module names from it.
+$image0 = (Get-FileHash "$Out\amdgpu_wddm_control.exe" -Algorithm SHA256).Hash
+foreach ($eol in 'crlf', 'lf') {
+    $tree = Join-Path $obj "eol\$eol"
+    Remove-Item -Recurse -Force $tree -ErrorAction SilentlyContinue
+    foreach ($f in @(Get-ChildItem "$here\src\*.cs") + @(Get-ChildItem "$here\strings\strings.*.txt") + @(Get-Item "$here\app.manifest")) {
+        Copy-LineEnds $f.FullName (Join-Path $tree $f.FullName.Substring($here.Length + 1)) $eol
+    }
+    $exe = Join-Path $obj "eol\$eol-image\amdgpu_wddm_control.exe"
+    New-Item -ItemType Directory -Force (Split-Path -Parent $exe) | Out-Null
+    Invoke-AppCompile $tree (Join-Path $obj "eol\$eol-work") $exe
+    $h = (Get-FileHash $exe -Algorithm SHA256).Hash
+    if ($h -ne $image0) { throw "line ends: the sources in $($eol.ToUpper()) give the image $($h.Substring(0, 8)), this build $($image0.Substring(0, 8))" }
+}
+$exe = Join-Path $obj 'eol\control-image\amdgpu_wddm_control.exe'
+New-Item -ItemType Directory -Force (Split-Path -Parent $exe) | Out-Null
+Invoke-AppCompile (Join-Path $obj 'eol\crlf') (Join-Path $obj 'eol\control-work') $exe -AsGiven
+if ((Get-FileHash $exe -Algorithm SHA256).Hash -eq $image0) {
+    throw 'line ends: the control (the CRLF tables and manifest as given) gives this image too, so step 3b sees nothing'
+}
+Write-Host "  line ends: the sources in CRLF and in LF give this image ($($image0.Substring(0, 8))); the CRLF tables as given give another"
 $systemTuningOutput = Join-Path $Out 'system-tuning'
 New-Item -ItemType Directory -Force -Path $systemTuningOutput | Out-Null
 foreach ($part in 'system-tuning.ps1', 'SystemTuning.Core.psm1', 'SystemTuning.Native.psm1') {
@@ -541,6 +600,20 @@ if (-not $NoSmoke) {
     $loading = Get-Content $file -Raw -ErrorAction SilentlyContinue
     if ($p.ExitCode -ne 0) { throw "loading smoke (exit $($p.ExitCode)): $loading" }
     Write-Host "  loading window: $((($loading -split "`r?`n") | Where-Object { $_ }) -join ', ')"
+
+    # The label layout rule (LabelLayout.cs, fact M898): no window or page of the application has a Label with AutoSize
+    # off and a Dock, and no Label goes through another size while its text changes. The pages are built with this PC's
+    # state and the three recorded ones; the smoke first proves that it finds the start window of rc4 (a docked Label)
+    # and passes the application's own label.
+    $file = Join-Path $obj 'smoke-labels.txt'
+    $labelArgs = @('--smoke-labels', "`"$file`"")
+    foreach ($s in 'snapshot-bd059.json', 'snapshot-tuner.json', 'snapshot-tuner-off.json') { $labelArgs += @('--fixture', "`"$(Join-Path $here "test\$s")`"") }
+    $labelArgs += @('--board-fixture', "`"$env:AMDGPU_WDDM_BOARD_FIXTURE`"")
+    $p = Start-Process -FilePath "$Out\amdgpu_wddm_control.exe" -ArgumentList $labelArgs -PassThru -WindowStyle Hidden
+    if (-not $p.WaitForExit(120000)) { $p.Kill(); throw 'label smoke did not exit within 120 s' }
+    $labels = Get-Content $file -Raw -ErrorAction SilentlyContinue
+    if ($p.ExitCode -ne 0) { throw "label smoke (exit $($p.ExitCode)): $labels" }
+    Write-Host "  labels: $((($labels -split "`r?`n") | Where-Object { $_ } | Select-Object -First 1))"
 
     # A rebuilt page keeps the place the person scrolled to (F1 of the b23 lab round) and the card the person reads
     # keeps its place while a card above it grows (F7 of the second round): the Performance page of the recorded

@@ -109,6 +109,11 @@ try {
  # two logon tasks (who confirms a driver start, and at whose logon). It writes files under Out and registers no
  # task. Until now it ran only inside test-dryrun.ps1, which needs a built package.
  Check 'session-checks' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\tools\release\test-session-checks.ps1" -WorkRoot "$Out\session-checks" }
+ # Fact M898: a WinForms Label with a Dock and AutoSize off goes through 100x23 at each change of its text, which is
+ # how the start window of rc4 flashed. The control application holds the rule at run time (--smoke-labels in its
+ # build); this reads the installer's and the tools' PowerShell and the other C# windows. Its controls run in
+ # quality-controls (test_winforms_labels.py).
+ Check 'winforms-labels' { & python "$repo\tools\quality\winforms_labels.py" --root $repo }
  # BD-076: the OpenGL ICD registration of the installer. The architecture list of the release, the values of each
  # architecture in it, the ICD file check, the restore plan of the uninstaller and the step of an install that
  # registers fewer architectures than the computer holds. It writes a scratch key under HKCU and a folder under

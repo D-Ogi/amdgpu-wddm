@@ -26,6 +26,10 @@
 //                                                    memory (G-PERF)
 //   amdgpu_wddm_control.exe --smoke-loading <file>   no window: the loading window in both states, every language and
 //                                                    scale, with its layout gate; findings go to <file>
+//   amdgpu_wddm_control.exe --smoke-labels <file> [--fixture <snapshot.json>]... [--board-fixture <file>]
+//                                                    no window: every window and page of the application under the
+//                                                    label layout rule (LabelLayout.cs, fact M898), after its negative
+//                                                    and positive controls; findings go to <file>
 //   amdgpu_wddm_control.exe --smoke-scroll <file> --fixture <snapshot.json>
 //                                                    no window: a rebuilt page keeps the place the person scrolled
 //                                                    to, and the buttons of a benchmark run stay where they are in
@@ -93,6 +97,7 @@ namespace AmdgpuWddmControl
                 return 0;
             }
             if (args.Length == 2 && args[0] == "--smoke-loading") return SmokeLoading(args[1]);
+            if (args.Length >= 2 && args[0] == "--smoke-labels") return SmokeLabels(args);
             if (args.Length != 0) { MessageBox.Show("Unknown arguments.", ProductName); return 2; }
             // One window per person and session (SingleInstance.cs): a later start brings the open window forward
             // and ends here, before it builds anything. The first start shows the loading window first (Launch.cs).
@@ -143,6 +148,71 @@ namespace AmdgpuWddmControl
             catch (Exception e)
             {
                 try { File.WriteAllText(path, "smoke loading failed: " + e); } catch (Exception) { }
+                return 1;
+            }
+        }
+
+        // The label layout rule (LabelLayout.cs, fact M898) over every window of the application, built without being
+        // shown: its negative and positive controls first, then the main window's pages with this PC's state and with
+        // each recorded state, the sign-in notice, the loading window, the dialogs and the recovery view. An empty
+        // findings list is a pass, and only if the trace reached labels that a timer changes.
+        static int SmokeLabels(string[] args)
+        {
+            string path = args[1];
+            try
+            {
+                var fixtures = new System.Collections.Generic.List<string>();
+                for (int i = 2; i < args.Length; i++)
+                {
+                    if (args[i] == "--fixture" && i + 1 < args.Length) fixtures.Add(args[++i]);
+                    else if (args[i] == "--board-fixture" && i + 1 < args.Length) BoardCapabilities.Replace(BoardCapabilities.Parse(File.ReadAllBytes(args[++i])));
+                    else throw new ArgumentException("unknown option " + args[i]);
+                }
+                Strings.Language = "en";
+                Theme.Init(1f, 1f);
+                var w = new System.Text.StringBuilder(LabelLayout.SelfCheck());
+                var t = new LabelLayout.Tally();
+                var states = new System.Collections.Generic.List<string> { null };
+                states.AddRange(fixtures);
+                foreach (var fixture in states)
+                    using (var form = new MainForm(true, new AppPrefs(new MemoryPrefStore()) { Language = "en" }))
+                    {
+                        form.CreateControlTree();
+                        if (fixture != null) form.UseFixture(new System.Web.Script.Serialization.JavaScriptSerializer().Deserialize<RecoverySnapshot>(File.ReadAllText(fixture)));
+                        else form.RefreshAll();
+                        form.CheckLabels(t, fixture == null ? "this PC" : Path.GetFileName(fixture));
+                    }
+                int mainLive = t.Live;
+                var screen = new System.Drawing.Size(1920, 1032);
+                foreach (var c in new[] { StartNoticeCase.Guard, StartNoticeCase.Failed })
+                    using (var f = new NoticeForm(c, true, screen)) LabelLayout.Check(f, "sign-in notice, " + c, t);
+                foreach (var slow in new[] { false, true })
+                    using (var f = new LoadingWindow(true, true, screen))
+                    {
+                        var h = f.Handle;
+                        if (slow) f.SaySlow();
+                        LabelLayout.Check(f, "loading window" + (slow ? ", slow" : ""), t);
+                    }
+                foreach (var f in new[] { ThreeWayDialog.Sample(), ConfirmDialog.Sample(), RestartDialog.Sample(),
+                    new IdentifyForm(new System.Drawing.Rectangle(0, 0, 1920, 1080), "1"), new ReportPreview(new BugReport(Redactor.ForThisPc()), "report.zip") })
+                    using (f) LabelLayout.Check(f, f.GetType().Name, t);
+                int beforeKeep = t.Live;
+                using (var d = KeepDisplayDialog.Sample()) LabelLayout.Check(d, "KeepDisplayDialog", t, new[] { d.Countdown });
+                if (mainLive == 0) w.AppendLine("the trace reached no label of the main window that a timer changes");
+                if (t.Live != beforeKeep + 1) w.AppendLine("the trace did not reach the countdown of the display dialog");
+                Kmd.Blocked = true;
+                using (var view = new RecoveryView()) LabelLayout.Check(view, "recovery view", t);
+                foreach (var x in t.Findings) w.AppendLine(x);
+                string text = w.ToString();
+                File.WriteAllText(path, text.Length == 0
+                    ? "no findings: negative control found, positive control passed, " + t.Windows + " windows and pages, " + t.Labels +
+                      " labels, " + t.Live + " of them texts that a timer changes" + Environment.NewLine
+                    : text);
+                return text.Length == 0 ? 0 : 1;
+            }
+            catch (Exception e)
+            {
+                try { File.WriteAllText(path, "smoke labels failed: " + e); } catch (Exception) { }
                 return 1;
             }
         }
