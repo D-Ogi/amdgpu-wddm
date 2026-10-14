@@ -28,13 +28,21 @@ The gate (offline, no network, nothing is built):
   - the SHA-256 of each source file is the recorded one, a data file is its blob byte for byte, and a recorded
     Authenticode digest is the digest of the source file;
   - with --package, each packaged copy is its source byte for byte, a re-signed file has the recorded Authenticode
-    digest, and only an entry with "release_edits": "<what the release changes>" may differ otherwise;
+    digest or, inside the driver package, the same PE image identity, and only an entry with
+    "release_edits": "<what the release changes>" may differ otherwise. The version resources are already in the
+    pinned sources, because each component build stamps its own output (BD-166), so --package-version and
+    --package-flavour are read here as a version and a flavour name and checked by versionstamp.py;
   - each text of "sources" that a lab tool reads as data (PARSED_SOURCES) starts with "bc250-win <commit>", that
     commit is the build commit of its payload row, and the kmd_abi of the KMD is BC250_KMD_VERSION at it.
 
 Usage:
   provenance.py check --sources release-sources.json --root <BC250_ROOT> --repo <recipe repository>
-                      [--package <package folder>] [--json <report.json>]
+                      [--package <package folder> [--package-version <release version> [--package-flavour lab]]]
+                      [--json <report.json>]
+  provenance.py commits --sources release-sources.json --root <BC250_ROOT> --repo <recipe repository>
+                      every full commit id the manifest names, in a field or inside a text, is an object of a
+                      checkout of its repository. This one runs for a lab candidate as well, where the whole gate
+                      above is off: it asks whether the id exists, never whether it is published.
   provenance.py digest <file>...     SHA-256 and Authenticode digest of PE files
   provenance.py locate --sources ... --root ... --repo ... <repository name> <commit>
                                      the checkout that holds the commit (used by rebuild-check.ps1)
@@ -49,6 +57,15 @@ from pathlib import Path
 
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 HEX64 = re.compile(r"^[0-9A-F]{64}$")
+# A full commit id inside a prose text. The texts of `role` and of `sources` name commits that no field of the
+# manifest repeats, so a stale one is invisible to every other check: the b34 candidates named
+# 97b0f39e3bb99ba22a06c59cf5bd2f7a02e3a6a2 24 times, which is no object of this repository, while the head was
+# 97b0f39ebc04f8c23c1b2110b9ee0d15034713f6. Both read 97b0f39e in the short form, and the gate below is off for a
+# candidate, so a shipping build would have been the first to refuse it.
+PROSE_COMMIT = re.compile(r"\b[0-9a-f]{40}\b")
+# Commit ids of projects that the `repositories` table does not name and no checkout here holds: the firmware
+# project and the licence refs of upstream projects. The manifest names them, and commits_ok does not look for them.
+FOREIGN_COMMIT_PATHS = ("firmware.", "sources.firmware", "licenses[")
 PLACEHOLDER = re.compile(r"\{([a-z_]+)(?::([^}]+))?\}")
 SIMPLE_PLACEHOLDERS = {"src", "out", "root"}
 # The texts of `sources` that a lab tool reads as data, each with the payload row whose build it must name.
@@ -175,8 +192,24 @@ class Repositories:
         return branches
 
 
-def check(sources_path, root, repo, package=None):
-    """Returns (errors, rows, summary). rows: one dict per payload file."""
+def load_versionstamp():
+    """tools/build/versionstamp.py of this checkout (BD-166), loaded by path: tools/ is not a package."""
+    import importlib.util
+    path = Path(__file__).resolve().parents[1] / "build" / "versionstamp.py"
+    spec = importlib.util.spec_from_file_location("versionstamp", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def check(sources_path, root, repo, package=None, package_version=None, package_flavour="release",
+          flavour=None, build_records=None):
+    """Returns (errors, rows, summary). rows: one dict per payload file. `flavour` picks the manifest rows of
+    that flavour of the release. `package_version` and `package_flavour` are the release the package claims to
+    be: they are read as a version and a flavour name here, and the version resources themselves are checked by
+    `versionstamp.py check --signed`, because the release stamps nothing (BD-166). `build_records` is a directory
+    of the `recipe.json` records that the component builds leave behind: with it the gate also refuses a build
+    whose source tree was not clean (`build_records_ok`)."""
     sources = json.loads(Path(sources_path).read_text(encoding="utf-8-sig"))
     errors = []
     rows = []
@@ -209,6 +242,17 @@ def check(sources_path, root, repo, package=None):
         branches = repos.published(name, commit)
         if not branches:
             errors.append(f"{where}: {name} {commit[:8]} is on no remote-tracking branch of {table[name]['url']} "
+    if package and package_version:
+        # The version and the flavour the package claims, read by the tool that owns both (BD-166). The resources
+        # in the files are the business of `versionstamp.py check --signed`, which runs after the last signing
+        # step: this script compares a packaged copy with its pinned source and nothing else.
+        vs = load_versionstamp()
+        try:
+            vs.check_flavour(package_flavour)
+            vs.amd_version(package_version)
+        except (vs.StampError, OSError) as exc:
+            return [f"version stamp: {exc}"], rows, {}
+    by_path = {f.get("path"): f for f in sources.get("files", [])}
                           f"(push the branch that carries it, then fetch)")
             return None
         return branches
@@ -263,7 +307,8 @@ def check(sources_path, root, repo, package=None):
             errors.append(f"{path}: 'release_edits' needs the edits as text")
         if packaged is not None:
             # The packaged copy is the source byte for byte, unless the release signs it again (then the
-            # Authenticode digest below decides) or edits it on purpose ("release_edits" says what).
+            # Authenticode digest below, or the image identity of a DriverStore member, decides) or edits it on
+            # purpose ("release_edits" says what).
             if not packaged.is_file():
                 errors.append(f"{path}: not in the package {package}")
             elif "authenticode_sha256" not in f and "release_edits" not in f and sha256_file(packaged) != sha:
@@ -441,9 +486,138 @@ def main():
     loc.add_argument("--repo", required=True)
     loc.add_argument("name")
     loc.add_argument("commit")
+    pairs_ok(sources, recipe_repo, repos, errors)
+    if build_records is not None:
+        counts["build_records"] = build_records_ok(build_records, sources, errors)
     args = parser.parse_args()
     if args.command == "digest":
         for f in args.files:
+BUILD_RECORD = "recipe.json"
+
+
+def build_records_ok(records_dir, sources, errors):
+    """Every build record under this directory describes a clean source tree at a commit the release pins.
+
+    `tools/build/build-*.ps1` write a `recipe.json` beside each build, whose `source` section comes from
+    `Get-SourceIdentity` in `tools/build/common.ps1`: the commit of the tree the build read, how many entries
+    of it were modified or untracked, and the hash of `git diff --binary HEAD`. A build from a tree with
+    uncommitted work ships bytes that no commit holds; the rc4 manifest of tester.31 had to say exactly that
+    about itself, and one engine tree on this workstation was found carrying six modified files from another
+    piece of work. With the records in hand the release refuses such a build instead of describing it.
+    """
+    root = Path(records_dir)
+    if not root.is_dir():
+        errors.append(f"build records: {records_dir} is not a directory")
+        return 0
+    pinned = {b["commit"] for b in (f.get("built_from") or {} for f in sources.get("files", []))
+              if isinstance(b.get("commit"), str)}
+    records = sorted(root.rglob(BUILD_RECORD))
+    if not records:
+        errors.append(f"build records: no {BUILD_RECORD} under {records_dir}; a release says which tree each "
+                      f"component was built from")
+        return 0
+    for path in records:
+        where = f"build record {path.relative_to(root).as_posix()}"
+        try:
+            record = json.loads(path.read_text(encoding="utf-8-sig"))
+        except (OSError, ValueError) as exc:
+            errors.append(f"{where}: unreadable ({exc})")
+            continue
+        source = record.get("source")
+        if not isinstance(source, dict):
+            errors.append(f"{where}: no 'source' section")
+            continue
+        if not source.get("git"):
+            errors.append(f"{where}: {source.get('path')} is no git checkout, so its bytes come from no commit")
+            continue
+        commit = source.get("commit")
+        if not isinstance(commit, str) or not HEX40.match(commit):
+            errors.append(f"{where}: source commit {commit!r} is not a full 40-digit commit id")
+            continue
+        modified, untracked = source.get("modified_entries"), source.get("untracked_entries")
+        if modified is None or untracked is None:
+            errors.append(f"{where}: the record does not say whether the tree was clean (no modified_entries "
+                          f"or untracked_entries)")
+        elif modified or untracked:
+            errors.append(f"{where}: the build tree {source.get('path')} was not clean at {commit[:8]} "
+                          f"({modified} modified, {untracked} untracked, diff "
+                          f"{str(source.get('worktree_diff_sha256'))[:8]}); commit the work or build from a "
+                          f"clean checkout")
+        if pinned and commit not in pinned:
+            errors.append(f"{where}: its source commit {commit[:8]} is pinned by no row of this release")
+    return len(records)
+
+
+def pairs_ok(sources, recipe_repo, repos, errors):
+    """The x64 and the x86 build of one component come from one commit, or the row says why they do not.
+
+    `payload/wow64/<rest>` is the 32-bit build of `payload/<rest>`: the same component, the same source, two
+    architectures. Nothing made them move together, and a pin that lags is invisible in a diff of the manifest:
+    the x86 desktop UMD of train b34 was pinned at a commit five behind its x64 pair, and the only way anyone
+    noticed was a reproducibility measurement of the two files. A game that loads the 32-bit DLL then runs code
+    that no 64-bit test covered.
+
+    So the two rows carry the same `built_from.commit`, or the wow64 row carries `pair_skew`, a sentence that
+    says why. A pair whose commits are two sides of a fork is no lag at all, so its sentence must name both
+    commits in their short form. The reason then stops covering the pair as soon as either pin moves, which is
+    what a known difference deserves and a blanket excuse does not.
+
+    A differing `recipe_commit` is a different matter: the build script is ours and moves with every train. It
+    passes on its own while one recipe commit is an ancestor of the other, which is a newer script and not
+    another source, and it asks for the same sentence when the two have forked. Ancestry is only asked of a
+    checkout that holds both commits, so a computer without that repository reports nothing instead of guessing.
+    """
+    by_path = {f.get("path"): f for f in sources.get("files", []) if isinstance(f, dict)}
+    for path, row in sorted(by_path.items()):
+        if not isinstance(path, str) or not path.startswith("payload/wow64/"):
+            continue
+        sibling_path = "payload/" + path[len("payload/wow64/"):]
+        sibling = by_path.get(sibling_path)
+        if sibling is None:
+            continue                      # a 32-bit file with no 64-bit counterpart is not a pair
+        mine = row.get("built_from") if isinstance(row.get("built_from"), dict) else {}
+        theirs = sibling.get("built_from") if isinstance(sibling.get("built_from"), dict) else {}
+        differ = [f for f in ("commit", "recipe_commit")
+                  if mine.get(f) is not None or theirs.get(f) is not None
+                  if mine.get(f) != theirs.get(f)]
+        if "recipe_commit" in differ and lineage(repos, recipe_repo, mine.get("recipe_commit"),
+                                                 theirs.get("recipe_commit")) != "forked":
+            differ.remove("recipe_commit")
+        if not differ:
+            continue
+        said = row.get("pair_skew")
+        said = said.strip() if isinstance(said, str) else ""
+        where = f"{path} and {sibling_path}"
+        what = ", ".join(f"{f} {str(mine.get(f))[:8]} against {str(theirs.get(f))[:8]}" for f in differ)
+        if len(said) < 40 or len(said.split()) < 6:
+            errors.append(f"{where}: the pair is built from different sources ({what}). Pin both at one commit, "
+                          f"or write in 'pair_skew' of the wow64 row why the two differ (a sentence: at least 40 "
+                          f"characters and 6 words)")
+            continue
+        if "commit" not in differ or lineage(repos, mine.get("repo") if mine.get("repo") == theirs.get("repo")
+                                             else None, mine.get("commit"), theirs.get("commit")) != "forked":
+            continue
+        short = [str(c)[:8] for c in (mine.get("commit"), theirs.get("commit"))]
+        if not all(s in said for s in short):
+            errors.append(f"{where}: {short[0]} and {short[1]} are on diverged commits of {mine.get('repo')}, "
+                          f"neither behind the other, so one of the two builds carries work the other has not "
+                          f"got. A 'pair_skew' for a fork names both commits ({short[0]} and {short[1]}), so "
+                          f"that it stops covering the pair when either pin moves")
+
+
+def lineage(repos, repo, mine, theirs):
+    """"lag" while one of the two commits is an ancestor of the other, "forked" while neither is, and "unknown"
+    without the two commits in one checkout of `repo`."""
+    if not repo or not isinstance(mine, str) or not isinstance(theirs, str):
+        return "unknown"
+    checkout = repos.find(repo, mine)
+    if checkout is None or repos.find(repo, theirs) is None:
+        return "unknown"
+    behind = git(checkout, "merge-base", "--is-ancestor", mine, theirs)[0] == 0
+    ahead = git(checkout, "merge-base", "--is-ancestor", theirs, mine)[0] == 0
+    return "lag" if behind or ahead else "forked"
+
+
             print(f"{sha256_file(f)}  {authenticode_digest(f)}  {f}")
         return 0
     if args.command == "locate":
@@ -459,7 +633,9 @@ def main():
             return 1
         print(found)
         return 0
-    errors, rows, counts = check(args.sources, args.root, args.repo, args.package)
+    errors, rows, counts = check(args.sources, args.root, args.repo, args.package, args.package_version,
+                                 args.package_flavour, flavour=args.flavour,
+                                 build_records=args.build_records)
     for r in rows:
         tag = {"recipe": "BUILD", "data": "DATA", "third_party": "THIRD"}.get(r["kind"], "?")
         if r.get("unverified"):
@@ -479,6 +655,68 @@ def main():
     if args.json:
         Path(args.json).write_text(json.dumps({"errors": errors, "counts": counts, "files": rows}, indent=1),
                                    encoding="utf-8")
+def check_commits(sources_path, root, repo):
+    """Every full commit id the manifest names is an object of a checkout of its repository.
+
+    Two kinds, and this check runs for a lab candidate as well, where the gate above is off:
+      - a field: `commit` and `recipe_commit`, with the `repo` of the object that holds it (or of the payload row
+        around it);
+      - a text: a 40-digit id inside any other text, that is `role` and the texts of `sources`. Such an id names
+        this project or one of its forks, so it has to be an object of a checkout of some repository of the table.
+    Publication is not asked here: that is the gate above, and a candidate has nothing published yet. A repository
+    with no checkout on this computer is named in the notes, never guessed at.
+    Returns (errors, notes, checked).
+    """
+    sources = json.loads(Path(sources_path).read_text(encoding="utf-8-sig"))
+    table = sources.get("repositories") if isinstance(sources.get("repositories"), dict) else {}
+    recipe_repo = sources.get("recipe_repository")
+    errors, notes, found = [], [], []
+    if not table or recipe_repo not in table:
+        return [f"{sources_path}: no 'repositories' table with its 'recipe_repository'"], notes, 0
+    repos = Repositories(table, root, repo)
+    present = [name for name in table if any(c.exists() for c in repos.checkouts(name))]
+    for name in table:
+        if name not in present:
+            notes.append(f"{name}: no checkout on this computer, so the commits it names were not looked for")
+    if not present:
+        return errors, notes, 0
+
+    def walk(node, where, scope):
+        if isinstance(node, dict):
+            scope = node["repo"] if isinstance(node.get("repo"), str) else scope
+            for key, value in node.items():
+                walk(value, f"{where}.{key}" if where else key, scope)
+        elif isinstance(node, list):
+            for index, value in enumerate(node):
+                walk(value, f"{where}[{index}]", scope)
+        elif isinstance(node, str):
+            if where.startswith(FOREIGN_COMMIT_PATHS):
+                return
+            key = where.split(".")[-1].split("[")[0]
+            if HEX40.match(node):
+                # `commit` is a commit of the repository in scope; `recipe_commit` is always one of the recipe
+                # repository, whatever is built from it (the docstring above).
+                owner = {"commit": scope, "recipe_commit": recipe_repo}.get(key)
+                found.append((where, owner, node))
+                return
+            for one in dict.fromkeys(PROSE_COMMIT.findall(node)):
+                found.append((f"{where} (text)", None, one))
+
+    walk(sources, "", None)
+    for where, scope, commit in found:
+        if scope is not None:
+            if scope not in table:
+                errors.append(f"{where}: repository {scope!r} is not in 'repositories'")
+            elif scope in present and repos.find(scope, commit) is None:
+                tried = ", ".join(str(c) for c in repos.checkouts(scope))
+                errors.append(f"{where}: {scope} {commit} is no object of {tried}")
+            continue
+        if not any(repos.find(name, commit) for name in present):
+            errors.append(f"{where}: {commit} is no object of any checkout of {', '.join(present)} "
+                          f"(its short form {commit[:8]} can read like the right one)")
+    return errors, notes, len(found)
+
+
     for e in errors:
         print(f"FAIL {e}")
     print(f"provenance: {'FAIL, ' + str(len(errors)) + ' errors' if errors else 'PASS'}")
@@ -487,3 +725,21 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+    c.add_argument('--flavour', choices=('release', 'lab'))
+    c.add_argument("--build-records",
+                   help="a directory holding the recipe.json records of the builds that made this release: with "
+                        "it the gate refuses a component built from a tree that was not clean, and a record "
+                        "whose source commit no row pins")
+    cm = sub.add_parser("commits")
+    cm.add_argument("--sources", required=True)
+    cm.add_argument("--root", required=True)
+    cm.add_argument("--repo", required=True)
+    if args.command == "commits":
+        errors, notes, checked = check_commits(args.sources, args.root, args.repo)
+        for n in notes:
+            print(f"  note: {n}")
+        for e in errors:
+            print(f"FAIL {e}")
+        print(f"commits: {checked} commit id(s) named, "
+              f"{'FAIL, ' + str(len(errors)) + ' of them in no checkout' if errors else 'PASS'}")
+        return 1 if errors else 0

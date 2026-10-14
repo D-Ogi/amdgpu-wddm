@@ -48,7 +48,9 @@ param(
     [string]$NoLedgerReason,                     # required with -NoLedger: recorded in the build log and manifest
     [switch]$NoProvenance,                       # lab candidate: build although the payload commits are not published yet
     [string]$NoProvenanceReason,                 # required with -NoProvenance: recorded in the build log and manifest
-    [switch]$RebuildCheck                        # also rebuild every payload file that claims a bit-identical rebuild (slow)
+    [string]$BuildRecords,                       # directory of the component builds' recipe.json: the gate then refuses a build from a tree that was not clean
+    [switch]$RebuildCheck,                       # also rebuild every payload file that claims a bit-identical rebuild (slow)
+    [switch]$ReuseOut                            # build into an -Out that already holds files (an incremental rebuild of the same version)
 )
 # Release and provenance rebuilds always execute the gates, including nested analysis.
 $env:BC250_GATE_NOCACHE = '1'
@@ -63,9 +65,42 @@ $name = "amdgpu-wddm-tester-$Version"
 $pkgRoot = Join-Path $Out $name      # what the zip unpacks to: setup.exe and files\
 $pkg = Join-Path $pkgRoot 'files'    # the package root: manifest.json and everything the installer reads
 $zip = "$pkgRoot.zip"
-$sources = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'release-sources.json') -Raw | ConvertFrom-Json
+# Two paths of the manifest, each read once and passed on, so that no gate resolves one for itself and judges
+# another build than this one:
+#   $manifestPath  the whole manifest of the release, both flavours. Every gate that judges the RELEASE reads it
+#                  (the commit check below, the work ledger): a row of the other flavour is still a row of this
+#                  release, and a ledger entry is not per flavour, so given the subset the ledger would call the
+#                  other flavour's integrations unlanded and the build would refuse for the wrong reason.
+#   $sourcesPath   the rows this build stages, the subset the flavour selects.
+$pythonExe = (Get-Command python -ErrorAction SilentlyContinue).Source
+if (-not $pythonExe) { throw 'python is not on PATH: the flavour selection, the commit check and the ledger gate cannot run' }
+[void][IO.Directory]::CreateDirectory($Out)
+$manifestPath = Join-Path $PSScriptRoot 'release-sources.json'
+$sourcesPath = Join-Path $Out ("selected-sources-$Flavour.json")
+$selection = Invoke-Headless -File $pythonExe -Arguments @((Join-Path $PSScriptRoot 'release_flavour.py'),
+    '--sources', $manifestPath, '--flavour', $Flavour, '--out', $sourcesPath) -TimeoutSeconds 30
+if ($selection.code -ne 0) { throw "flavour input selection: $($selection.text)" }
+$sources = Get-Content -LiteralPath $sourcesPath -Raw | ConvertFrom-Json
+foreach ($requiredStateFile in @('payload/kmd/amdgpu-state.bin','payload/tools/amdgpu-state-installer.exe')) {
+    if (@($sources.files | Where-Object {$_.path -ceq $requiredStateFile}).Count -ne 1) {
+        throw "release-sources.json must pin exactly one $requiredStateFile from the state migration build"
+    }
+}
 $secrets = Join-Path $Root 'secrets\release'
 $pfx = Join-Path $secrets 'amdgpu-wddm-release.pfx'
+# An -Out that already holds the output of an earlier run is refused here, in the first second, and by name. Two
+# things went wrong in train b34 rc4 without this: the quality suite failed 5 minutes in, deep inside app-route-lib
+# ("Fresh (empty) directory required", that gate's own rule, which stays), and a second run would have mixed its
+# gate receipts and its package tree with the ones before it. -ReuseOut is for an incremental rebuild of the same
+# version into the same folder; a candidate always gets a folder of its own.
+if (-not $ReuseOut -and (Test-Path -LiteralPath $Out)) {
+    $left = @(Get-ChildItem -LiteralPath $Out -Force)
+    if ($left.Count) {
+        throw ("-Out $Out is not empty: $($left.Count) entr$(if ($left.Count -eq 1) { 'y' } else { 'ies' }), " +
+               "for example '$($left[0].Name)'. Remove that folder and run again, so that no file of an earlier " +
+               'build reaches this package, or pass -ReuseOut to build into it as it is.')
+    }
+}
 $cer = Join-Path $secrets 'amdgpu-wddm-release.cer'
 $passFile = Join-Path $secrets 'amdgpu-wddm-release.pass'
 foreach ($f in $pfx, $cer, $passFile) { if (-not (Test-Path -LiteralPath $f)) { throw "missing ${f}: run tools\release\new-release-cert.ps1 once" } }
@@ -73,7 +108,19 @@ $wdk = Join-Path $Root 'toolchain\nuget\microsoft.windows.wdk.x64\c'
 $sdk = Join-Path $Root 'toolchain\nuget\microsoft.windows.sdk.cpp\c'
 $signtool = Join-Path $sdk "bin\$KitVersion\x64\signtool.exe"
 $inf2cat = Join-Path $wdk "bin\$KitVersion\x86\Inf2Cat.exe"
-foreach ($t in $signtool, $inf2cat) { if (-not (Test-Path -LiteralPath $t)) { throw "missing tool $t" } }
+$infverif = Join-Path $wdk "tools\$KitVersion\x64\InfVerif.exe"
+foreach ($t in $signtool, $inf2cat, $infverif) { if (-not (Test-Path -LiteralPath $t)) { throw "missing tool $t" } }
+# Every full commit id release-sources.json names, in a field and inside a text, is an object of a checkout of its
+# repository (provenance.py commits). This runs for a lab candidate as well, which is the point: -NoProvenance takes
+# the whole provenance gate off, and train b34 then carried a commit that no object of this repository is
+# (97b0f39e3bb9..., 24 times, while the head was 97b0f39ebc04...; both read 97b0f39e in the short form) through four
+# candidates. Publication is not asked here, only existence, so a work-tree candidate passes it.
+Write-Host 'commits'
+$r = Invoke-Headless -File $pythonExe -Arguments @((Join-Path $PSScriptRoot 'provenance.py'), 'commits',
+    '--sources', $manifestPath, '--root', $Root,
+    '--repo', (Split-Path (Split-Path $PSScriptRoot))) -TimeoutSeconds 300
+$r.text -split "`r?`n" | Where-Object { $_ -match '^(FAIL|\s+note:|commits:)' } | ForEach-Object { "  $($_.Trim())" }
+if ($r.code -ne 0) { throw 'release-sources.json names a commit that is in no checkout of its repository (see above)' }
 
 # Work ledger gate: a release must not ship a component whose finished fix is still unlanded,
 # and must not be cut over a ledger that hides new work or claims a landing nobody can verify
@@ -97,7 +144,12 @@ if (-not (Test-Path -LiteralPath $ledgerTool)) {
     Write-Host "work ledger: reason: $NoLedgerReason"
 } else {
     Write-Host "work ledger: checking $Version against the release components"
-    $ledgerOut = & python $ledgerTool --root $Root check --release $Version 2>&1
+    # The ledger counts a fork entry as landed only when its commit is an ancestor of a release pin, so it must
+    # read the manifest of THIS build. Without the path it reads the published one, and every integration of this
+    # train (BD-049, the draw path, the async engine) stays unlanded and the build refuses for the wrong reason.
+    # The whole manifest, not the flavour's subset: both flavours ship from this one source line, and an entry
+    # whose pin sits in the other flavour's rows is landed all the same.
+    $ledgerOut = & python $ledgerTool --root $Root check --release $Version --release-sources $manifestPath 2>&1
     $ledgerExit = $LASTEXITCODE
     $ledgerOut | ForEach-Object { "  $_" }
     if ($ledgerExit -gt 1) {
@@ -145,7 +197,15 @@ foreach ($f in $sources.files) {
 Write-Host 'provenance'
 $pythonExe = (Get-Command python -ErrorAction SilentlyContinue).Source
 if (-not $pythonExe) { throw 'python is not on PATH: the provenance gate cannot run' }
-$provenanceArgs = @((Join-Path $PSScriptRoot 'provenance.py'), 'check', '--sources', (Join-Path $PSScriptRoot 'release-sources.json'), '--root', $Root, '--repo', $repo)
+$provenanceArgs = @((Join-Path $PSScriptRoot 'provenance.py'), 'check', '--sources', $sourcesPath, '--flavour', $Flavour, '--root', $Root, '--repo', $repo)
+# -BuildRecords: the directory that holds the recipe.json of every component build of this release. With it the
+# gate also refuses a component whose source tree was not clean, which a commit id alone cannot show: one engine
+# tree on the development PC was found carrying six modified files of another piece of work, and the bytes of
+# such a build are in no commit.
+if ($BuildRecords) {
+    if (-not (Test-Path -LiteralPath $BuildRecords)) { throw "-BuildRecords $BuildRecords does not exist" }
+    $provenanceArgs += @('--build-records', $BuildRecords)
+}
 # A lab candidate is built from a work tree on purpose: the lab test comes before the commit (owner rule), so the
 # commit that the payload rows would name does not exist yet and no remote-tracking branch can contain it. The gate
 # is then off for this build, the reason is required, and manifest.json carries both, so a package that nobody could
@@ -286,6 +346,13 @@ Copy-Item -LiteralPath (Join-Path $repo 'NOTICE') -Destination (Join-Path $lic '
 foreach ($l in $sources.licenses) {
     $src = Join-Path $repo ($l.source -replace '/', '\')
     $h = (Get-FileHash -LiteralPath $src -Algorithm SHA256).Hash
+# BD-166: this script never rewrites a PE file. Every shipped user-mode PE carries its version resource from the
+# component build that produced it, the kernel driver from its own compiled .rc, and the two .NET applications from
+# their own build. The release only reads the result back: `versionstamp.py check --signed` near the end of this
+# script, after the last signing step. A stamp here would change a file that release-sources.json already pins, so
+# the packaged copy could no longer equal its source (tools\build\versionstamp.py, tools\build\versioninfo.json).
+$stampTool = Join-Path $repo 'tools\build\versionstamp.py'
+$stampInf = Join-Path $pkg 'payload\kmd\bc250kmd.inf'
     if ($h -ne $l.sha256) { throw "licence text $($l.source) is $h, release-sources.json says $($l.sha256) ($($l.repository) $($l.path) @ $($l.ref))" }
     Copy-Item -LiteralPath $src -Destination (Join-Path $lic $l.file)
     '  {0}  licence      {1}  ({2} {3} @ {4})' -f $h.Substring(0, 8), $l.file, $l.repository, $l.path, $l.ref
@@ -469,7 +536,7 @@ if ($topFiles.Count -or $topDirs.Count) { throw "the unpacked package's top fold
 if ($NoProvenance) {
     '  package provenance: GATE OFF by -NoProvenance (the commits of this candidate are not published yet)'
 } else {
-    $r = Invoke-Headless -File $pythonExe -Arguments ($provenanceArgs + @('--package', $pkg)) -TimeoutSeconds 300
+    $r = Invoke-Headless -File $pythonExe -Arguments ($provenanceArgs + @('--package', $pkg, '--package-version', $Version, '--package-flavour', $Flavour)) -TimeoutSeconds 600
     $r.text -split "`r?`n" | Where-Object { $_ -match '^(FAIL|provenance: (FAIL|PASS))' } | ForEach-Object { "  package $_" }
     if ($r.code -ne 0) { throw 'provenance: a packaged file is not the recorded one (see above)' }
 }
@@ -478,8 +545,9 @@ $r = Invoke-Headless -File $ps51 -Arguments @('-NoProfile', '-NonInteractive', '
 $r.text
 if ($r.code -ne 0) { throw 'a script does not parse under Windows PowerShell 5.1' }
 # The CLI answers every form the installer and the lab kits call (cli-commands.json), and it and both copies of
-# bc250control.dll come from one build.
-$r = Invoke-Headless -File $ps51 -Arguments @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $PSScriptRoot 'test-cli-commands.ps1'), '-Cli', (Join-Path $pkg 'payload\tools\bc250kmd_cli.exe'), '-Sources', (Join-Path $PSScriptRoot 'release-sources.json')) -TimeoutSeconds 60
+# bc250control.dll come from one build. This one reads the flavour's subset, not the whole manifest: it demands a
+# single row per packaged path, and the whole manifest holds one row per flavour for each of them.
+$r = Invoke-Headless -File $ps51 -Arguments @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $PSScriptRoot 'test-cli-commands.ps1'), '-Cli', (Join-Path $pkg 'payload\tools\bc250kmd_cli.exe'), '-Sources', $sourcesPath) -TimeoutSeconds 60
 $r.text
 if ($r.code -ne 0) { throw 'bc250kmd_cli.exe lacks a form of cli-commands.json, or the CLI and the control DLL come from different builds' }
 # No fix lost its comment on the way into this release (test-marker-guard.ps1). A train merge or a rebase can drop
@@ -540,6 +608,17 @@ foreach ($f in $sources.files + $extra) {
 foreach ($f in $fwFiles) { $components += [ordered]@{ role = 'firmware'; package_path = $null; install_path = "$($firmware.install_dir)\$($f.name)"; version = $null; sha256 = $f.sha256 } }
 # The optional components of this release (installer\components.ps1): our llama.cpp build and our Ollama build are
 # release assets, not package files. tools\release\components.json is the pinned list; this writes it into the package
+# BD-166: every PE file of the unpacked release carries this release's version resource (read back through the Windows
+# version API) unless release-sources.json marks it third_party, each M14C record pins its siblings, and the order was
+# stamp, Inf2Cat, signing: each signature still covers its file and each catalog lists the file's hash. --signed: this
+# release signs every PE file, so an unsigned one (or this gate placed before the signing) fails too.
+# --workspace: without it the check skips the capability comparison of each staged record, and -NoProvenance also
+# removes the provenance gate's own reconstruction, so such a candidate would have no capability coverage at all.
+# After the check v3 revision a missing or unpinned lane input fails instead of being skipped quietly, which is
+# what makes passing the workspace safe to insist on here.
+$r = Invoke-Headless -File $pythonExe -Arguments @($stampTool, 'check', '--package-top', $pkgRoot, '--version', $Version, '--sources', $sourcesPath, '--inf', $stampInf, '--signed', '--flavour', $Flavour, '--workspace', $Root) -TimeoutSeconds 600
+$r.text
+if ($r.code -ne 0) { throw 'version resources: a PE file lacks the resource of this release, or a step ran out of order (see above)' }
 # as installer\components.json with {release} expanded, and manifest.json names it under optional_components, so the
 # existing package-integrity check covers it like every other file. A component whose asset SHA-256 is not filled in
 # has no pin: it stays in the list, the installer refuses it with a plain message and downloads nothing. A package can
@@ -587,6 +666,23 @@ if (Test-Path -LiteralPath $componentSource -PathType Leaf) {
     foreach ($id in $cmUnpinned) { "  WARNING: component '$id' has no SHA-256 in tools\release\components.json: this package will refuse it. Upload its zip as a release asset and fill size and sha256." }
 } else { '  components: tools\release\components.json is not in this workspace: this package offers no optional component' }
 
+# A gate whose input is not in this repository records a SKIP with its reason instead of dying on a missing file
+# (quick.ps1, CheckIf), and the suite still ends with 0. That is right for a bare working copy and wrong here: the
+# gates below read the user-mode driver's Mesa tree, its build database and the MSVC compiler, all of which a
+# release build has in front of it, so a SKIP of one of them means this package was cut without the gate that reads
+# the shipped user-mode sources. The exit code does not say so, so the receipt is read.
+$mustRun = @('umd-contract', 'umd-analysis', 'surface-control', 'kmd-contract', 'kmd-analysis', 'allocation-identity',
+             'hang-witness', 'object-index')
+$qualityReceipt = Join-Path $qualityOut 'result.json'
+if (-not (Test-Path -LiteralPath $qualityReceipt)) { throw "the quality suite left no receipt at $qualityReceipt" }
+$qualityChecks = (Get-Content -LiteralPath $qualityReceipt -Raw | ConvertFrom-Json).checks
+$notRun = @()
+foreach ($name in $mustRun) {
+    $row = @($qualityChecks | Where-Object { $_.name -eq $name })
+    if ($row.Count -ne 1) { $notRun += "${name}: not in the receipt"; continue }
+    if ($row[0].status -ne 'PASS') { $notRun += "$name $($row[0].status): $($row[0].reason)" }
+}
+if ($notRun.Count) { throw ("a release needs every gate of the user-mode sources: " + ($notRun -join '; ')) }
 # The compatibility record (installer\compatibility.ps1, GUI plan C7): written from the final INF, installer and payload,
 # listed in manifest.json like every other file, and verified below once the manifest exists.
 . (Join-Path $PSScriptRoot 'installer\engine.ps1')
@@ -723,3 +819,27 @@ $setupOne = Join-Path $Out "amdgpu-wddm-setup-$Version.exe"
 & (Join-Path $PSScriptRoot 'make-setup-exe.ps1') -PackageTop $pkgRoot -Out $setupOne -Check -ReleaseZip $zip | ForEach-Object { "  $_" }
 if (-not (Test-Path -LiteralPath $setupOne -PathType Leaf)) { throw "make-setup-exe.ps1 wrote no $setupOne" }
 'single exe {0} SHA256 {1}' -f $setupOne, (Get-FileHash -LiteralPath $setupOne).Hash
+# The symbols of the shipped files (symbols.py). A crash report from a tester, a dump from the lab and a
+# debugger session all need the symbols of the exact bytes that ran, and a PDB is larger than the driver, so
+# the package carries none of them: the archive stands beside this build, one directory per flavour, mirroring
+# the payload layout (three builds of the RADV ICD all record the name vulkan_radeon.pdb). The manifest records
+# the GUID and age of each PE's own debug directory, which no other build repeats, so the archived file can be
+# tied to the shipped byte later. The archive never goes into the package and never onto GitHub.
+Write-Host 'symbols'
+$symbolArchive = Join-Path $Out "symbols\$Flavour"
+$symbolRecords = Join-Path $Out "symbols-$Flavour.json"
+$r = Invoke-Headless -File $pythonExe -Arguments @((Join-Path $PSScriptRoot 'symbols.py'), 'archive',
+    '--sources', $sourcesPath, '--root', $Root, '--package', $pkg, '--out', $symbolArchive,
+    '--records', $symbolRecords) -TimeoutSeconds 600
+$r.text
+if ($r.code -ne 0) { throw 'symbols: a shipped file has no symbol file of its own build (see above)' }
+$symbols = [ordered]@{ archive = "symbols/$Flavour"; in_package = $false
+    files = (Get-Content -LiteralPath $symbolRecords -Raw | ConvertFrom-Json) }
+
+    symbols = $symbols            # where this build's symbol files are, and which file belongs to which byte
+# The archive read back against the package that ships, the way the version stamps are read back: every PE of
+# the package has its symbol file in the archive, and that file carries the identity the PE names.
+$r = Invoke-Headless -File $pythonExe -Arguments @((Join-Path $PSScriptRoot 'symbols.py'), 'check',
+    '--package', $pkg, '--symbols', $symbolArchive) -TimeoutSeconds 600
+$r.text
+if ($r.code -ne 0) { throw 'symbols: the archive does not match the package that ships (see above)' }

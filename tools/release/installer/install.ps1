@@ -927,10 +927,15 @@ if ($script:VerifyOnly) {
 function Get-InstallSettingsImpact {
     $tbl = Get-Content -LiteralPath (Join-Path $here 'registry-defaults.json') -Raw | ConvertFrom-Json
     $prev = Get-PreviousAppliedDefaults $tbl ((Get-ItemProperty -LiteralPath "$($script:SoftwareKey)\Release" -Name AppliedDefaults -ErrorAction SilentlyContinue).AppliedDefaults)
-    $params = Read-RegistryValues $script:ParametersKey
-    # A re-run past the driver package judges the values from before its reset, as phase 2 does.
-    if ($state -and $state.PSObject.Properties['parameters_before_install'] -and $null -ne $state.parameters_before_install) {
-        $params = @{}; foreach ($p in $state.parameters_before_install.PSObject.Properties) { $params[$p.Name] = $p.Value }
+    $params=@{};$parameterPlan=@()
+    try {
+        $params=Read-DriverStateValues -Cli (Join-Path $InstallRoot 'tools\bc250kmd_cli.exe') -Override
+        $parameterPlan=Get-RegistryDefaultPlan -Defaults $tbl.defaults.parameters -Previous $prev.applied.parameters -Current $params -Explicit (Get-ExplicitParameters $commandLineParameters $params) -Reopen:$script:ReopenClosures
+    } catch {
+        # Before the first migrated generation, only the SYSTEM export can judge
+        # legacy choices. The preview states that gap and does not invent defaults.
+        $parameterPlan=@([pscustomobject]@{name='state migration';decision='unavailable';current=$null;value=$null;default=$null;present=$false;
+            closure='Settings are checked by the protected migration before driver staging.'})
     }
     $groups = @(
         @{ group = 'parameters'; plan = (Get-RegistryDefaultPlan -Defaults $tbl.defaults.parameters -Previous $prev.applied.parameters -Current $params -Explicit $commandLineParameters -Reopen:$script:ReopenClosures) }
@@ -1464,7 +1469,8 @@ if ($keptBack.Count) { Write-Warn2 "not written back after the driver package (t
 
 # BD-152 / BD-060: INSTALL_AS_SET stages now and binds at the next shutdown. A saved receipt keeps a resumed
 # install from staging forever; a different, known boot permits the exact image checks below (BD-150).
-# No Reboot directive, live GPU rebind, or DWM restart. The KMD's session markers remain under its ownership.
+# No Reboot directive, live GPU rebind, or DWM restart. The KMD's session markers (BD-059) remain under its
+# ownership.
 $infFile = Join-Path $package 'payload\kmd\bc250kmd.inf'
 # Observations around the driver package, in the log and in the state (dwm_observations, the last 12 of every run of
 # this install): the session's DWM instances (process ID and creation time) before it, right after it and at the end
@@ -1559,10 +1565,21 @@ function Invoke-RegistryDefaults([string]$Key, $Defaults, $Previous, [hashtable]
 }
 # Gates: the registered lab configuration (EnableFullWddm 2 opens it at every start). Clocks: load-driven DPM up to
 # DpmMaxMHz, thermal limits are the driver's own. KeepLog 0: no log files on the tester's disk. UnconfirmedStarts 0 is
-# the INF's own reset (a GPU that was not started has already counted one display-only start). Judged on the values
-# from before driver staging; the INF's other values (EnableMmioWrite, EnableHangBugcheck) get their values from before
-# staging back.
-Invoke-RegistryDefaults $script:ParametersKey $regDefaults.defaults.parameters $applied.parameters $commandLineParameters ([ordered]@{ UnconfirmedStarts = 0 }) $parametersBefore $restoreNames -Reopen:$script:ReopenClosures
+# the INF's own reset (a GPU that was not started has already counted one display-only start).
+# BD-175: use the live shared state after migration. Never replay parameters_before_install or restore
+# values deleted by a later control-app choice. Runtime records are not installer defaults.
+if(-not $legacyRollback) {
+Invoke-Change 'apply release setting policy through the validated shared-state resolver' {
+    $before=Get-DriverSettingsComparison -State $state -Device $instance -InfSha256 $driverSetSha
+    Invoke-DriverStateDefaults -Cli (Join-Path $InstallRoot 'tools\bc250kmd_cli.exe') -Defaults $regDefaults.defaults.parameters `
+        -Previous $applied.parameters -Explicit $commandLineParameters -Before $before `
+        -FreshExplicit $freshCommandLineParameters -Reopen:$script:ReopenClosures -FreshReopen:$freshRepair -RecordChoices
+} | Out-Null
+# The record of a person's choice is not a setting, and it has one writer: -RecordChoices above, which writes
+# CuModeChosen through the state client inside the same resolver run that sets CuMode (state-lifecycle.ps1).
+# A second writer here, straight into the Parameters key, would race that one and could put a value back that a
+# later control-app choice deleted (BD-175).
+}
 
 # DisplayPort audio, the interrupt of the GPU's HD Audio function (BD-092, common.ps1). That function keeps the inbox
 # HDAudBus driver, and the inbox INF leaves it on a line interrupt, where the stream interrupts of this board never

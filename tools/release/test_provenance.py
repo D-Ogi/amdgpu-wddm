@@ -160,9 +160,11 @@ class Workspace:
         e.update(provenance_fields)
         return e
 
-    def check(self, manifest=None, package=None):
+    def check(self, manifest=None, package=None, package_version=None, package_flavour="release",
+              build_records=None):
         self.manifest_path.write_text(json.dumps(manifest or self.manifest), encoding="utf-8")
-        errors, rows, counts = provenance.check(self.manifest_path, self.root, self.tool, package)
+        errors, rows, counts = provenance.check(self.manifest_path, self.root, self.tool, package, package_version,
+                                                package_flavour, build_records=build_records)
         return errors, rows, counts
 
 
@@ -178,6 +180,11 @@ class ProvenanceGate(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         remove_tree(cls.shared_tmp)
+    def commits(self, manifest=None):
+        """The commit check that runs for a candidate as well (provenance.check_commits)."""
+        self.manifest_path.write_text(json.dumps(manifest or self.manifest), encoding="utf-8")
+        return provenance.check_commits(self.manifest_path, self.root, self.tool)
+
 
     def setUp(self):
         self.tmp = self.shared_tmp
@@ -293,6 +300,81 @@ class ProvenanceGate(unittest.TestCase):
         self.assertEqual(counts["unverified"], 1)
         self.assertEqual(counts["reproducible"], 2)
 
+    def wow64_pair(self, m):
+        """A 32-bit row beside payload/engine.dll: the same component, the same bytes, the other architecture."""
+        pair = copy.deepcopy(self.file(m, "payload/engine.dll"))
+        pair["path"] = "payload/wow64/engine.dll"
+        m["files"].append(pair)
+        return pair
+
+    def test_a_pair_from_one_commit_passes(self):
+        m = self.manifest()
+        self.wow64_pair(m)
+        errors, _, _ = self.ws.check(m)
+        self.assertEqual([e for e in errors if "different sources" in e or "diverged" in e], [])
+
+    def test_a_pair_from_two_commits_needs_a_reason(self):
+        """The fault of train b34: the x86 desktop UMD was pinned five commits behind its x64 pair, and nothing
+        in the manifest said so. A lag is allowed, a silent one is not."""
+        self.fresh_workspace()
+        git(self.ws.engine, "commit", "-q", "--allow-empty", "-m", "the x64 build moves on")
+        git(self.ws.engine, "push", "-q", "origin", "HEAD:refs/heads/main")
+        git(self.ws.engine, "fetch", "-q", "origin")
+        moved = git(self.ws.engine, "rev-parse", "HEAD")
+        m = self.manifest()
+        pair = self.wow64_pair(m)
+        self.file(m, "payload/engine.dll")["built_from"]["commit"] = moved
+        self.assertFails(m, "the pair is built from different sources")
+        pair["pair_skew"] = "behind"
+        self.assertFails(m, "at least 40 characters and 6 words")
+        pair["pair_skew"] = ("the 32-bit build is not rebuilt yet, so it stays at the commit of the shipped file "
+                             "until train b35 rebuilds it")
+        errors, _, _ = self.ws.check(m)
+        self.assertEqual([e for e in errors if "different sources" in e or "diverged" in e], [])
+        # The recipe is our own build script and moves with every train, so a newer one asks for nothing.
+        pair["built_from"]["commit"] = moved
+        del pair["pair_skew"]
+        git(self.ws.tool, "commit", "-q", "--allow-empty", "-m", "the build script moves on")
+        git(self.ws.tool, "push", "-q", "origin", "HEAD:refs/heads/main")
+        git(self.ws.tool, "fetch", "-q", "origin")
+        self.file(m, "payload/engine.dll")["built_from"]["recipe_commit"] = git(self.ws.tool, "rev-parse", "HEAD")
+        errors, _, _ = self.ws.check(m)
+        self.assertEqual([e for e in errors if "different sources" in e or "diverged" in e], [])
+        # A build script of another line is a skew again: the two builds then ran different code.
+        git(self.ws.tool, "checkout", "-q", "-b", "other", self.ws.tool_commit)
+        git(self.ws.tool, "commit", "-q", "--allow-empty", "-m", "another line of the build script")
+        git(self.ws.tool, "push", "-q", "origin", "HEAD:refs/heads/other")
+        git(self.ws.tool, "fetch", "-q", "origin")
+        pair["built_from"]["recipe_commit"] = git(self.ws.tool, "rev-parse", "HEAD")
+        self.assertFails(m, "recipe_commit")
+
+    def test_a_diverged_pair_is_no_lag(self):
+        """Two sides of a fork mean one build carries work the other has not got, which is no lag. A sentence
+        about a lag does not cover it, and the reason that does names both commits, so that it expires with the
+        next pin that moves."""
+        self.fresh_workspace()
+        base = self.ws.engine_commit
+        git(self.ws.engine, "checkout", "-q", "-b", "side", base)
+        git(self.ws.engine, "commit", "-q", "--allow-empty", "-m", "a commit of another line")
+        side = git(self.ws.engine, "rev-parse", "HEAD")
+        git(self.ws.engine, "push", "-q", "origin", "HEAD:refs/heads/side")
+        git(self.ws.engine, "checkout", "-q", "-")
+        git(self.ws.engine, "commit", "-q", "--allow-empty", "-m", "the line the release follows")
+        git(self.ws.engine, "push", "-q", "origin", "HEAD:refs/heads/main")
+        git(self.ws.engine, "fetch", "-q", "origin")
+        head = git(self.ws.engine, "rev-parse", "HEAD")
+        m = self.manifest()
+        pair = self.wow64_pair(m)
+        self.file(m, "payload/engine.dll")["built_from"]["commit"] = head
+        pair["built_from"]["commit"] = side
+        pair["pair_skew"] = ("the 32-bit build is not rebuilt yet, so it stays at the commit of the shipped file "
+                             "until train b35 rebuilds it")
+        self.assertFails(m, "are on diverged commits")
+        pair["pair_skew"] = (f"the 32-bit file is built from the {side[:8]} line and the 64-bit one from "
+                             f"{head[:8]}, two lines the next train brings together")
+        errors, _, _ = self.ws.check(m)
+        self.assertEqual([e for e in errors if "different sources" in e or "diverged" in e], [])
+
     def test_missing_recipe_fails(self):
         m = self.manifest()
         self.file(m, "payload/built.dll")["built_from"]["recipe"] = "missing.ps1"
@@ -325,6 +407,67 @@ class ProvenanceGate(unittest.TestCase):
         m["kmd_abi"] = "0x000700D8"
         m["sources"] = {"kmd": f"bc250-win {commit} (train/b29), the b29 train driver 0.7.216.28. New in round 9."}
         errors, _, _ = self.ws.check(m)
+    def records(self, trees):
+        """A directory of recipe.json records, one per build, as tools/build/build-*.ps1 leave behind. Each
+        entry of `trees` is (name, source section)."""
+        root = Path(self.tmp) / f"records-{self.id().rsplit('.', 1)[-1]}"
+        if root.is_dir():
+            remove_tree(str(root))
+        for name, source in trees:
+            d = root / name
+            d.mkdir(parents=True)
+            (d / "recipe.json").write_text(json.dumps({"recipe": name, "schema": 1, "source": source}),
+                                           encoding="utf-8")
+        root.mkdir(parents=True, exist_ok=True)
+        return str(root)
+
+    def tree(self, commit, modified=0, untracked=0, **more):
+        source = {"path": f"P:/build/{commit[:6]}", "git": True, "commit": commit,
+                  "modified_entries": modified, "untracked_entries": untracked,
+                  "worktree_diff_sha256": "DE" * 32 if (modified or untracked) else None}
+        source.update(more)
+        return source
+
+    def test_clean_build_records_pass(self):
+        """The release names the tree every component was built from, and each one was clean at a pinned commit."""
+        records = self.records([("engine", self.tree(self.ws.engine_commit)),
+                                ("tool", self.tree(self.ws.tool_commit))])
+        errors, _, counts = self.ws.check(build_records=records)
+        self.assertEqual(errors, [])
+        self.assertEqual(counts["build_records"], 2)
+
+    def test_a_dirty_build_tree_fails(self):
+        """The negative control: one modified tracked file in the tree a component was built from. Those bytes
+        are in no commit, so the release must not describe them as coming from one."""
+        records = self.records([("engine", self.tree(self.ws.engine_commit, modified=1))])
+        errors, _, _ = self.ws.check(build_records=records)
+        self.assertTrue(any("was not clean" in e and "1 modified" in e for e in errors), errors)
+
+    def test_an_untracked_file_in_the_build_tree_fails(self):
+        records = self.records([("engine", self.tree(self.ws.engine_commit, untracked=2))])
+        errors, _, _ = self.ws.check(build_records=records)
+        self.assertTrue(any("2 untracked" in e for e in errors), errors)
+
+    def test_a_record_of_a_commit_no_row_pins_fails(self):
+        records = self.records([("engine", self.tree("9" * 40))])
+        errors, _, _ = self.ws.check(build_records=records)
+        self.assertTrue(any("is pinned by no row" in e for e in errors), errors)
+
+    def test_a_record_that_says_nothing_about_cleanliness_fails(self):
+        source = {"path": "P:/build/x", "git": True, "commit": self.ws.tool_commit}
+        records = self.records([("tool", source)])
+        errors, _, _ = self.ws.check(build_records=records)
+        self.assertTrue(any("does not say whether the tree was clean" in e for e in errors), errors)
+
+    def test_a_tree_that_is_no_checkout_fails(self):
+        records = self.records([("tool", {"path": "P:/build/loose", "git": False})])
+        errors, _, _ = self.ws.check(build_records=records)
+        self.assertTrue(any("is no git checkout" in e for e in errors), errors)
+
+    def test_no_build_record_at_all_fails(self):
+        errors, _, _ = self.ws.check(build_records=self.records([]))
+        self.assertTrue(any("no recipe.json under" in e for e in errors), errors)
+
         self.assertEqual(errors, [])
         m["sources"]["kmd"] = f"bc250-win {commit[:8]} (train/b29), the short form release-baseline.py also reads."
         errors, _, _ = self.ws.check(m)
@@ -403,6 +546,122 @@ class RebuildCheckLogs(unittest.TestCase):
         broken["path"] = "payload/broken.dll"
         broken["built_from"]["recipe"] = "fail.ps1"
         m["files"].append(broken)
+    def test_driverstore_manifest_edit_is_exact(self):
+        self.fresh_workspace()
+        m = self.manifest()
+        data = b'{"ICD":{"library_path":"original.dll","api_version":"1.3.0"}}'
+        src = self.ws.root / 'scratch/ds-icd.json'
+        src.write_bytes(data)
+        m['files'] = [{
+            'component': 'vulkan', 'path': 'payload/vulkan/radeon_icd.json',
+            'source': 'scratch/ds-icd.json', 'sha256': sha(data),
+            'third_party': {'url': 'https://example.com/icd.json', 'version': '1', 'sha256': sha(data)}}]
+        package = Path(self.tmp) / 'driverstore'
+        (package / 'installer').mkdir(parents=True)
+        # An untrusted report cannot redirect the provenance comparison.
+        (package / 'installer/driver-package.json').write_text('{"members":[]}')
+        dst = package / 'payload/kmd/vulkan/radeon_icd.json'
+        dst.parent.mkdir(parents=True)
+        expected = json.loads(data)
+        expected['ICD']['library_path'] = '.\\vulkan_radeon.dll'
+        dst.write_bytes((json.dumps(expected, indent=2) + '\n').encode())
+        errors, _, _ = self.ws.check(m, package)
+        self.assertEqual(errors, [])
+        expected['ICD']['api_version'] = '1.4.0'
+        dst.write_bytes((json.dumps(expected, indent=2) + '\n').encode())
+        self.assertFails(m, 'unexpected ICD manifest edit', package=package)
+
+    def test_the_commits_of_the_manifest_exist(self):
+        errors, notes, checked = self.ws.commits()
+        self.assertEqual(errors, [])
+        self.assertEqual(notes, [])
+        self.assertGreaterEqual(checked, 5)
+
+    def test_a_commit_of_a_field_that_is_no_object_fails(self):
+        m = self.manifest()
+        self.file(m, "payload/built.dll")["built_from"]["commit"] = "0" * 40
+        errors, _, _ = self.ws.commits(m)
+        self.assertTrue(any("files[0].built_from.commit" in e and "is no object of" in e for e in errors), errors)
+
+    def test_a_commit_inside_a_text_that_is_no_object_fails(self):
+        """The fault of train b34: a stale id in prose, which no field repeats and the short form hides."""
+        m = self.manifest()
+        self.file(m, "payload/built.dll")["role"] = f"the shell (tool {'a' * 40}, train/b34)"
+        errors, _, _ = self.ws.commits(m)
+        self.assertTrue(any("files[0].role (text)" in e and "a" * 40 in e for e in errors), errors)
+
+    def test_a_commit_inside_a_text_that_is_an_object_passes(self):
+        m = self.manifest()
+        self.file(m, "payload/built.dll")["role"] = f"the shell (tool {self.ws.tool_commit}, train/b34)"
+        self.assertEqual(self.ws.commits(m)[0], [])
+
+    def test_recipe_commit_is_read_as_one_of_the_recipe_repository(self):
+        """A fork row's recipe_commit names this repository, never the fork, whatever `repo` the row carries."""
+        m = self.manifest()
+        self.file(m, "payload/engine.dll")["built_from"]["recipe_commit"] = self.ws.engine_commit
+        errors, _, _ = self.ws.commits(m)
+        self.assertTrue(any("recipe_commit" in e and "tool" in e for e in errors), errors)
+
+    def test_an_unpublished_commit_passes_the_commit_check(self):
+        """A lab candidate builds from a work tree, so nothing it names is published yet. The full gate refuses
+        that (test_unpublished_commit_fails); this check asks only whether the object is there."""
+        self.fresh_workspace()
+        (self.ws.tool / "late.txt").write_text("late\n")
+        git(self.ws.tool, "add", "-A")
+        git(self.ws.tool, "commit", "-q", "-m", "not pushed")
+        m = self.manifest()
+        self.file(m, "payload/built.dll")["built_from"]["commit"] = git(self.ws.tool, "rev-parse", "HEAD")
+        self.assertEqual(self.ws.commits(m)[0], [])
+
+    def test_a_repository_with_no_checkout_here_is_a_note(self):
+        m = self.manifest()
+        m["repositories"]["engine"]["checkouts"] = [str(Path(self.tmp) / "nowhere")]
+        errors, notes, _ = self.ws.commits(m)
+        self.assertEqual(errors, [])
+        self.assertTrue(any("engine: no checkout on this computer" in n for n in notes), notes)
+
+    def test_the_release_stamps_nothing(self):
+        """BD-166 as the lead and the reviewer settled it: each component build stamps its own output, the manifest pins
+        the stamped file, and the release only copies it. So a packaged PE equals its pinned source whatever
+        --package-version says, and a release that stamped the package again would fail here. The version and the
+        flavour names are still read, because a package may not claim a version that does not map."""
+        self.fresh_workspace()
+        vs = provenance.load_versionstamp()
+        spec = importlib.util.spec_from_file_location("test_versionstamp", Path(vs.__file__).with_name("test_versionstamp.py"))
+        images = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(images)
+        version = "0.7.216.102-tester.31"
+        # The source as a component build leaves it: a PE that already carries the release's version resource.
+        engine = images.make_pe(sections=((b".text", b"\xc3" * 64, 0x60000020),))
+        source = self.ws.root / "scratch" / "engine.dll"
+        source.write_bytes(engine)
+        vs.stamp_file(source, version, "amdgpu-wddm", vs.load_table(), file_name="amdgpu_wddm_dxvk.dll")
+        stamped = source.read_bytes()
+        m = self.manifest()
+        row = self.file(m, "payload/engine.dll")
+        row["path"], row["sha256"] = "payload/d3d11/amdgpu_wddm_dxvk.dll", sha(stamped)
+        package = Path(self.tmp) / "package"
+        for f in m["files"]:
+            dst = package / f["path"]
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(self.ws.root / f["source"], dst)
+        (package / "payload" / "kmd").mkdir(parents=True, exist_ok=True)
+        (package / "payload" / "kmd" / "bc250kmd.inf").write_text('[Strings]\nProvider = "amdgpu-wddm"\n', encoding="ascii")
+        packaged = package / "payload" / "d3d11" / "amdgpu_wddm_dxvk.dll"
+        errors, _, _ = self.ws.check(m, package=package, package_version=version)
+        self.assertEqual(errors, [])
+        # A release that stamped the packaged copy again changes bytes the manifest pins, and that is the fault.
+        vs.stamp_file(packaged, "0.7.216.103-tester.32", "amdgpu-wddm", vs.load_table())  # the shipped name
+        self.assertFails(m, "the packaged copy is", package=package, package_version=version)
+        packaged.write_bytes(stamped)
+        # The two names are read by the tool that owns them.
+        self.assertFails(m, "version stamp", package=package, package_version="tester.31")
+        self.assertFails(m, "flavour", package=package, package_version=version, package_flavour="labb")
+        # The lab flavour of the same release passes here as well: this gate does not read resources, and
+        # versionstamp.py check --signed is what tells a lab file from a release one.
+        errors, _, _ = self.ws.check(m, package=package, package_version=version, package_flavour="lab")
+        self.assertEqual(errors, [])
+
         ws.manifest_path.write_text(json.dumps(m), encoding="utf-8")
         work = Path(self.tmp) / "rb"
         r = subprocess.run(["pwsh", "-NoProfile", "-File", str(Path(__file__).with_name("rebuild-check.ps1")),
