@@ -187,6 +187,28 @@ Check 'ledger-call' { & pwsh -NoProfile -File "$repo\tools\release\test-ledger-c
  # build); this reads the installer's and the tools' PowerShell and the other C# windows. Its controls run in
  # quality-controls (test_winforms_labels.py).
  Check 'winforms-labels' { & python "$repo\tools\quality\winforms_labels.py" --root $repo }
+ # The application the tester clicks was in no gate of this suite, and two defects of the b34 merges reached the
+ # tree because of it: the source list of its two compiles lost its assignment, so the release flavour's lab twin
+ # compiled no file at all (CS5001), and Crash.cs read a lab-only setting in every flavour, so the release image
+ # carried the name of a diagnostic variable. Both were found by hand, days apart. These three gates close that:
+ # the build itself, and the two static rules whose cost is seconds and which name the line.
+ #
+ # control-app is the build with -NoSmoke: the unit tests, the native DLL and CLI compiles, both flavours of the
+ # application, the lab twin, and the image's flavour check. -NoSmoke leaves out only what starts the application
+ # as a process (the smoke, report, recovery, perf, notice, loading, scroll and render runs), which needs a desktop
+ # and minutes of it; the release build still runs all of them. It also passes -StartConfirmCore, which nothing
+ # else does, so the rule the installer confirms a driver start by is read here too. Its deadline is 600 s, not
+ # the 180 s of the manifest: the build takes 72 s on the idle development PC and this gate competes with 23
+ # others for the same cores, and a gate with no room over its own cost is a flaky gate (the same reason the
+ # ledger and release-provenance gates hold 600 s).
+ Check 'control-app' { & pwsh -NoProfile -File "$repo\tools\win\amdgpu_wddm_control\build.ps1" -Kits "$Kits" -Out "$Out\control-app" -NoSmoke -StartConfirmCore "$repo\tools\release\installer\start-confirm-core.ps1" }
+ # Every variable a build recipe reads is written somewhere in that recipe (tools\quality\check-unassigned.ps1,
+ # PowerShell's own parser). This is the rule the lost assignment broke, and it reads all 105 recipes in 3 s.
+ Check 'script-variables' { & pwsh -NoProfile -File "$repo\tools\quality\check-unassigned.ps1" -Recipes -Repo $repo }
+ # Every read of one of the four lab-only settings in the control application's sources is inside its flavour
+ # guard (tools\quality\flavour_sources.py). The build proves the same thing on the built image; this names the
+ # file and the line without a compiler. Both gates' planted controls run in quality-controls.
+ Check 'flavour-sources' { & python "$repo\tools\quality\flavour_sources.py" --root $repo --out "$Out\flavour-sources" }
  # BD-076: the OpenGL ICD registration of the installer. The architecture list of the release, the values of each
  # architecture in it, the ICD file check, the restore plan of the uninstaller and the step of an install that
  # registers fewer architectures than the computer holds. It writes a scratch key under HKCU and a folder under

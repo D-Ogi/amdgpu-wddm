@@ -78,10 +78,28 @@ static partial class UnitTests
         Check(Encoding.UTF8.GetByteCount(StartupDiagnosticData.Tail(file, 31)) < 100, "bounded odd UTF16 tail");
         File.WriteAllText(file, setup, new UTF8Encoding(false));
         Equal(setup, StartupDiagnosticData.Tail(file, 1024 * 1024), "UTF8 reader");
-        var clock = System.Diagnostics.Stopwatch.StartNew();
-        var output = DiagnosticWorker.Run(new System.Diagnostics.ProcessStartInfo(
-            System.Reflection.Assembly.GetExecutingAssembly().Location, "--diagnostic-worker-fixture"), 1500);
-        Check(clock.ElapsedMilliseconds < 3000, "blocked provider is bounded by worker deadline");
+        // The fixture prints its pid and then blocks, so Run always reaches its deadline. What the deadline has
+        // to be longer than is this PC starting a second managed process and draining one line of its output,
+        // and that is not bounded by anything: in the full 24-worker quality suite of train b34 a 1500 ms
+        // deadline twice killed the fixture before it printed, and the same two checks passed at once on the
+        // idle machine. A gate whose result the load of the machine decides is a flaky gate, not a strict one
+        // (the reason the ledger and release-provenance gates hold 600 s), so the fast deadline is tried first
+        // and a longer one follows it. What is under test is the deadline's effect, not its length: partial
+        // output is kept, the elapsed time stays near the deadline, and the worker process is really killed.
+        string output = "";
+        long elapsedMs = 0;
+        int deadlineMs = 0;
+        foreach (int tryMs in new[] { 1500, 6000, 20000 })
+        {
+            deadlineMs = tryMs;
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            output = DiagnosticWorker.Run(new System.Diagnostics.ProcessStartInfo(
+                System.Reflection.Assembly.GetExecutingAssembly().Location, "--diagnostic-worker-fixture"), tryMs);
+            elapsedMs = clock.ElapsedMilliseconds;
+            if (output.Contains("fixture-ready")) break;
+            Console.WriteLine("  worker fixture printed nothing within " + tryMs + " ms; retrying with a longer deadline");
+        }
+        Check(elapsedMs < deadlineMs * 2, "blocked provider is bounded by worker deadline");
         Check(output.Contains("fixture-ready") && output.Contains("report is partial"), "partial worker output retained on timeout");
         if (!output.Contains("fixture-ready") || !output.Contains("report is partial"))
             Console.WriteLine("  worker fixture result: " + output.Replace("\r", "").Replace("\n", " | "));

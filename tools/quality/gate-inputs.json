@@ -48,6 +48,8 @@
     "installer-diagnostics",
     "session-checks",
     "winforms-labels",
+    "control-app",
+    "flavour-sources",
     "opengl-icd",
     "radv-contract",
     "umd-contract",
@@ -1357,6 +1359,22 @@
     },
     "quality-controls": {
       "timeout": 300
+    },
+    "control-app": {
+      "inputs": [
+        "host"
+      ],
+      "timeout": 600
+    },
+    "script-variables": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "flavour-sources": {
+      "inputs": [
+        "host"
+      ]
     },
     "ledger": {
       "timeout": 600
