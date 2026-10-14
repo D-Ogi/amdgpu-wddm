@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include <stdarg.h>
 #include "../dcn_scale.h"
+#include "../flip_state.h"
 #include "../dpaux.h"
 #include "../../shim/bc250_sink.h"
 #include "../../shim/bc250_atom_firmware.h"
@@ -142,8 +143,8 @@ static void ConnectorOperationAcquire(BC250_DEVICE* d)
 static void ConnectorOperationRelease(BC250_DEVICE* d)
 { CHECK(d==&device && operation_locks==1);--operation_locks; }
 static int scanout_object=1,last_invalidate;
-static int WddmPrimaryExclusiveBegin(BC250_DEVICE* d,ULONG* g)
-{ CHECK(d==&device);if(primary_locks){++nested_primary;return 0;}if(acquire_fail)return 0;*g=77;++primary_locks;++primary_enters;return 1; }
+static int WddmPrimaryExclusiveBegin(BC250_DEVICE* d,ULONG k,ULONG* g)
+{ CHECK(d==&device && k>BC250_WRITER_NONE && k<BC250_WRITER_KINDS);if(primary_locks){++nested_primary;return 0;}if(acquire_fail)return 0;*g=77;++primary_locks;++primary_enters;return 1; }
 static void WddmPrimaryExclusiveEnd(BC250_DEVICE* d,ULONG g,BOOLEAN changed)
 { CHECK(d==&device && primary_locks==1 && g==77);last_invalidate=changed;if(changed)scanout_object=0;--primary_locks;++primary_exits; }
 static LONG InterlockedExchange(volatile LONG* p,LONG v) { LONG old=*p;*p=v;return old; }
@@ -804,7 +805,7 @@ static void inherited_journal_controls(void)
     CHECK(!device.HdmiLinkContext && !primary_locks && !inherited_hdmi.Owner);
     HdmiLinkGetRestoreFailure(&device,&detail);CHECK(!detail.Valid && !detail.ReadbackValid);
     device.HdmiLinkContext=&inherited_hdmi;
-    CHECK(WddmPrimaryExclusiveBegin(&device,&generation));
+    CHECK(WddmPrimaryExclusiveBegin(&device,BC250_WRITER_HDMI_STOP,&generation));
     CHECK(HdmiLinkStopOwned(&device) && !nested_primary && inherited_frees==2);
     CHECK(primary_locks==1);WddmPrimaryExclusiveEnd(&device,generation,FALSE);
     prepare_cold(BC250_SINK_HDMI);hdmi_fail_once=1;

@@ -10,8 +10,8 @@ static void ExAcquireFastMutex(int* lock){++*lock;}
 static void ExReleaseFastMutex(int* lock){--*lock;}
 static LONG InterlockedExchange(LONG* value,LONG next){LONG old=*value;*value=next;return old;}
 static LONG InterlockedIncrement(volatile LONG* value){return ++*value;}
-static BOOLEAN WddmPrimaryExclusiveBegin(BC250_DEVICE* d,ULONG* gen)
-{(void)d;*gen=0;commitTransactions++;return TRUE;}
+static BOOLEAN WddmPrimaryExclusiveBegin(BC250_DEVICE* d,ULONG kind,ULONG* gen)
+{(void)d;(void)kind;*gen=0;commitTransactions++;return TRUE;}
 static void WddmPrimaryExclusiveEnd(BC250_DEVICE* d,ULONG gen,BOOLEAN invalid)
 {(void)d;(void)gen;(void)invalid;}
 static long ProgramLocked(BC250_DEVICE* d,const BC250_SCALER_PLAN* p,BOOLEAN grow,BOOLEAN* invalid)

@@ -380,6 +380,14 @@
       "require": [{"cap_true": "FlipCaps.FlipOnVSyncMmIo"}]
     },
     {
+      "id": "R40-FLIPIMMEDIATEMMIO",
+      "declaration": "DXGK_DRIVERCAPS.FlipCaps.FlipOnVSyncMmIo = 1 (DxgkDdiPresent writes no DMA buffer for a flip)",
+      "requires_text": "FlipImmediateMmIo = 1, so that an immediate flip is an MMIO flip too and dxgkrnl never asks DxgkDdiPresent for a flip DMA buffer",
+      "source": "LEARN ns-d3dkmddi-_dxgk_flipcaps: FlipInterval 'the driver must support an immediate flip and a flip interval of one', FlipOnVSyncMmIo 'No generation of a DMA buffer', FlipImmediateMmIo 'takes effect immediately following a call to DxgkDdiSetVidPnSourceAddress'. Measured BD-170 (2026-10-14, arm a02, KMD .64): without FlipImmediateMmIo an exclusive-fullscreen present at SyncInterval 0 is a DMA flip (DxgKrnl Flip event MMIOFlip=false), the empty DMA buffer trips dxgkrnl's 'DMABufferLength > 0' assertion and VidSchMarkDeviceAsError reason 19 removes the device",
+      "when": [{"cap_true": "FlipCaps.FlipOnVSyncMmIo"}],
+      "require": [{"cap_true": "FlipCaps.FlipImmediateMmIo"}]
+    },
+    {
       "id": "R34-PAGINGBUFFER-SEGMENT",
       "declaration": "DXGK_QUERYSEGMENTOUT4.PagingBufferSegmentId names a segment (it is not 0)",
       "requires_text": "that segment carries Flags.Aperture: VidMm allocates the paging buffer from an aperture segment or, with id 0, from system memory, and from nothing else",

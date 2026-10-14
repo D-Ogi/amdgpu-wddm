@@ -1,0 +1,1437 @@
+# a03 trial 1 (kmd-r5b) dxgkrnl.etl excerpt: xperf -a dumper, MMIOFlip/Flip/CancelFlip/ClearFlipDevice/PendingFlipsForThisEntry rows and VSyncInterrupt runs (same scanned address merged), 2.4 s to the end of the trace. Times in us from the trace start (14:23:49.196Z). MMIOFlip Flags 2 = FlipImmediate, 4 = FlipOnNextVSync.
+   2402943  Flip "Unknown" (1892) 0x0000000000000000 0 0xffffe685c16bad10 1 true true
+   2403160  MMIOFlip "Unknown" (   4) seq 3321 phys 0xF403199000 present 1219 flags 4
+   2411806 ..    2411806  VSyncInterrupt x1 scanned 0xF403199000
+   2414882  ClearFlipDevice "Unknown" (2424) 0xffffd2025ca0a050 0
+   2425194 ..    2438467  VSyncInterrupt x2 scanned 0xF403199000
+   2451831 ..    2465201  VSyncInterrupt x2 scanned 0xF406C30000
+   2478483 ..    2478483  VSyncInterrupt x1 scanned 0xF406C30000
+   2489223  Flip "Unknown" (2424) 0x0000000000000000 0 0xffffe685c8f63610 0 true true
+   2489304  MMIOFlip "Unknown" (   4) seq 1 phys 0xF41C770000 present 1 flags 2
+   2491480  Flip "Unknown" (2424) 0x0000000000000000 0 0xffffe685c8f65010 0 true true
+   2491830 ..    2491830  VSyncInterrupt x1 scanned 0xF41C770000
+   2492351  Flip "Unknown" (2424) 0x0000000000000000 0 0xffffe685c8f63610 0 true true
+   2505174 ..    2505174  VSyncInterrupt x1 scanned 0xF41C770000
+   2518520 ..    2518520  VSyncInterrupt x1 scanned 0xF41C770000
+   2531866 ..    2531866  VSyncInterrupt x1 scanned 0xF41C770000
+   2545236 ..    3025437  VSyncInterrupt x37 scanned 0xF41C770000
+   3038742 ..   10641534  VSyncInterrupt x571 scanned 0xF41C770000
+  10654847 ..   10654847  VSyncInterrupt x1 scanned 0xF41C770000
+  10658067  ClearFlipDevice "Unknown" (2424) 0xffffd20260e71660 0
+  10658071  CancelFlip "Unknown" (2424) scanned 0xf41c770000 present 1 type 5
+  10658074  CancelFlip "Unknown" (2424) scanned -1 present 2 type 5
+  10658075  CancelFlip "Unknown" (2424) scanned -1 present 3 type 5
+  10668259 ..   10668259  VSyncInterrupt x1 scanned 0xF41C770000
+  10681500 ..   10681500  VSyncInterrupt x1 scanned 0xF41C770000
+  10694886 ..   10694886  VSyncInterrupt x1 scanned 0xF41C770000
+  10708179 ..   10721526  VSyncInterrupt x2 scanned 0xF41C770000
+  10724287  Flip "Unknown" (1892) 0x0000000000000000 0 0xffffe685c16bc910 1 true true
+  10724409  MMIOFlip "Unknown" (   4) seq 3326 phys 0xF4029B0000 present 1221 flags 4
+  10734854 ..   10734854  VSyncInterrupt x1 scanned 0xF4029B0000
+  10739202  Flip "Unknown" (1892) 0x0000000000000000 0 0xffffe685c16bad10 1 true true
+  10739737  MMIOFlip "Unknown" (   4) seq 3328 phys 0xF403199000 present 1222 flags 4
+  10748247 ..   10748247  VSyncInterrupt x1 scanned 0xF403199000
+  10753265  Flip "Unknown" (1892) 0x0000000000000000 0 0xffffe685c16bba10 1 true true
+  10753686  MMIOFlip "Unknown" (   4) seq 3332 phys 0xF4058F0000 present 1223 flags 4
+  10761545 ..   10761545  VSyncInterrupt x1 scanned 0xF4058F0000
+  10763589  Flip "Unknown" (1892) 0x0000000000000000 0 0xffffe685c16bc910 1 true true
+  10763888  MMIOFlip "Unknown" (   4) seq 3336 phys 0xF4029B0000 present 1224 flags 4
+  10774923 ..   10774923  VSyncInterrupt x1 scanned 0xF4029B0000
+  10776854  Flip "Unknown" (1892) 0x0000000000000000 0 0xffffe685c16bad10 1 true true
+  10777160  MMIOFlip "Unknown" (   4) seq 3340 phys 0xF403199000 present 1225 flags 4
+  10788205 ..   10788205  VSyncInterrupt x1 scanned 0xF403199000
+  10790358  Flip "Unknown" (1892) 0x0000000000000000 0 0xffffe685c16bba10 1 true true
+  10790383  MMIOFlip "Unknown" (   4) seq 3343 phys 0xF4058F0000 present 1226 flags 4
+  10801558 ..   10801558  VSyncInterrupt x1 scanned 0xF4058F0000
+  10803410  Flip "Unknown" (1892) 0x0000000000000000 0 0xffffe685c16bc910 1 true true
+  10803433  MMIOFlip "Unknown" (   4) seq 3344 phys 0xF4029B0000 present 1227 flags 4
+  10814884 ..   10814884  VSyncInterrupt x1 scanned 0xF4029B0000
+  10816737  Flip "Unknown" (1892) 0x0000000000000000 0 0xffffe685c16bad10 1 true true
+  10816759  MMIOFlip "Unknown" (   4) seq 3345 phys 0xF403199000 present 1228 flags 4
+  10828238 ..   10828238  VSyncInterrupt x1 scanned 0xF403199000
+  10830532  Flip "Unknown" (1892) 0x0000000000000000 0 0xffffe685c16bba10 1 true true
+  10830575  MMIOFlip "Unknown" (   4) seq 3346 phys 0xF4058F0000 present 1229 flags 4
+  10841559 ..   10841559  VSyncInterrupt x1 scanned 0xF4058F0000
+  10850525  Flip "Unknown" (1892) 0x0000000000000000 0 0xffffe685c16bc910 1 true true
+  10851031  MMIOFlip "Unknown" (   4) seq 3348 phys 0xF4029B0000 present 1230 flags 4
+  10854904 ..   10854904  VSyncInterrupt x1 scanned 0xF4029B0000
+  10857305  ClearFlipDevice "Unknown" (10824) 0xffffd2025ca0a050 0
+  10868297 ..   10868297  VSyncInterrupt x1 scanned 0xF4029B0000
+  10881591 ..   10881591  VSyncInterrupt x1 scanned 0xF4111B0000
+  10894991 ..   10894991  VSyncInterrupt x1 scanned 0xF4111B0000
+  10908249 ..   10908249  VSyncInterrupt x1 scanned 0xF4111B0000
+  10918039  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  10918133  MMIOFlip "Unknown" (   4) seq 1 phys 0xF41C770000 present 1 flags 4
+  10920656  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  10921017  PendingFlipsForThisEntry "Unknown" (   4) 0 4294967295 3 4 0 1 0 0 4294967295
+  10921588 ..   10921588  VSyncInterrupt x1 scanned 0xF41C770000
+  10921599  MMIOFlip "Unknown" (   0) seq 3 phys 0xF4111B0000 present 2 flags 4
+  10921637  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  10921922  PendingFlipsForThisEntry "Unknown" (   4) 0 4294967295 6 4 0 1 0 0 4294967295
+  10922312  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  10935031 ..   10935031  VSyncInterrupt x1 scanned 0xF4111B0000
+  10935051  MMIOFlip "Unknown" (   0) seq 6 phys 0xF41C770000 present 3 flags 4
+  10935105  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  10948313 ..   10948313  VSyncInterrupt x1 scanned 0xF41C770000
+  10948328  MMIOFlip "Unknown" (   0) seq 9 phys 0xF4111B0000 present 4 flags 4
+  10948375  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  10961650 ..   10961650  VSyncInterrupt x1 scanned 0xF4111B0000
+  10961671  MMIOFlip "Unknown" (   0) seq 12 phys 0xF41C770000 present 5 flags 4
+  10961721  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  10974999 ..   10974999  VSyncInterrupt x1 scanned 0xF41C770000
+  10975013  MMIOFlip "Unknown" (   0) seq 14 phys 0xF4111B0000 present 6 flags 4
+  10975060  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  10988294 ..   10988294  VSyncInterrupt x1 scanned 0xF4111B0000
+  10988308  MMIOFlip "Unknown" (   0) seq 16 phys 0xF41C770000 present 7 flags 4
+  10988317  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  11001631 ..   11001631  VSyncInterrupt x1 scanned 0xF41C770000
+  11001646  MMIOFlip "Unknown" (   0) seq 18 phys 0xF4111B0000 present 8 flags 4
+  11001656  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  11015004 ..   11015004  VSyncInterrupt x1 scanned 0xF4111B0000
+  11015018  MMIOFlip "Unknown" (   0) seq 20 phys 0xF41C770000 present 9 flags 4
+  11015065  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  11028341 ..   11028341  VSyncInterrupt x1 scanned 0xF41C770000
+  11028356  MMIOFlip "Unknown" (   0) seq 23 phys 0xF4111B0000 present 10 flags 4
+  11028403  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  11041684 ..   11041684  VSyncInterrupt x1 scanned 0xF4111B0000
+  11041700  MMIOFlip "Unknown" (   0) seq 26 phys 0xF41C770000 present 11 flags 4
+  11041750  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  11055018 ..   11055018  VSyncInterrupt x1 scanned 0xF41C770000
+  11055033  MMIOFlip "Unknown" (   0) seq 28 phys 0xF4111B0000 present 12 flags 4
+  11055081  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  11068380 ..   11068380  VSyncInterrupt x1 scanned 0xF4111B0000
+  11068394  MMIOFlip "Unknown" (   0) seq 30 phys 0xF41C770000 present 13 flags 4
+  11068441  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  11081694 ..   11081694  VSyncInterrupt x1 scanned 0xF41C770000
+  11081708  MMIOFlip "Unknown" (   0) seq 32 phys 0xF4111B0000 present 14 flags 4
+  11081754  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  11094999 ..   11094999  VSyncInterrupt x1 scanned 0xF4111B0000
+  11095013  MMIOFlip "Unknown" (   0) seq 34 phys 0xF41C770000 present 15 flags 4
+  11095024  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  11108371 ..   11108371  VSyncInterrupt x1 scanned 0xF41C770000
+  11108385  MMIOFlip "Unknown" (   0) seq 37 phys 0xF4111B0000 present 16 flags 4
+  11108431  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  11121709 ..   11121709  VSyncInterrupt x1 scanned 0xF4111B0000
+  11121723  MMIOFlip "Unknown" (   0) seq 39 phys 0xF41C770000 present 17 flags 4
+  11121770  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  11135048 ..   11135048  VSyncInterrupt x1 scanned 0xF41C770000
+  11135063  MMIOFlip "Unknown" (   0) seq 42 phys 0xF4111B0000 present 18 flags 4
+  11135118  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  11148422 ..   11148422  VSyncInterrupt x1 scanned 0xF4111B0000
+  11148437  MMIOFlip "Unknown" (   0) seq 44 phys 0xF41C770000 present 19 flags 4
+  11148493  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  11161690 ..   11161690  VSyncInterrupt x1 scanned 0xF41C770000
+  11161704  MMIOFlip "Unknown" (   0) seq 46 phys 0xF4111B0000 present 20 flags 4
+  11161716  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  11175062 ..   11175062  VSyncInterrupt x1 scanned 0xF4111B0000
+  11175076  MMIOFlip "Unknown" (   0) seq 48 phys 0xF41C770000 present 21 flags 4
+  11175123  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  11188436 ..   11188436  VSyncInterrupt x1 scanned 0xF41C770000
+  11188452  MMIOFlip "Unknown" (   0) seq 50 phys 0xF4111B0000 present 22 flags 4
+  11188499  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  11201744 ..   11201744  VSyncInterrupt x1 scanned 0xF4111B0000
+  11201763  MMIOFlip "Unknown" (   0) seq 52 phys 0xF41C770000 present 23 flags 4
+  11201810  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  11215077 ..   11215077  VSyncInterrupt x1 scanned 0xF41C770000
+  11215091  MMIOFlip "Unknown" (   0) seq 54 phys 0xF4111B0000 present 24 flags 4
+  11215137  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  11228382 ..   11228382  VSyncInterrupt x1 scanned 0xF4111B0000
+  11228398  MMIOFlip "Unknown" (   0) seq 56 phys 0xF41C770000 present 25 flags 4
+  11228408  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  11241753 ..   11241753  VSyncInterrupt x1 scanned 0xF41C770000
+  11241767  MMIOFlip "Unknown" (   0) seq 58 phys 0xF4111B0000 present 26 flags 4
+  11241813  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  11255113 ..   11255113  VSyncInterrupt x1 scanned 0xF4111B0000
+  11255128  MMIOFlip "Unknown" (   0) seq 60 phys 0xF41C770000 present 27 flags 4
+  11255174  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  11268430 ..   11268430  VSyncInterrupt x1 scanned 0xF41C770000
+  11268444  MMIOFlip "Unknown" (   0) seq 63 phys 0xF4111B0000 present 28 flags 4
+  11268491  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  11281739 ..   11281739  VSyncInterrupt x1 scanned 0xF4111B0000
+  11281753  MMIOFlip "Unknown" (   0) seq 65 phys 0xF41C770000 present 29 flags 4
+  11281799  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  11295146 ..   11295146  VSyncInterrupt x1 scanned 0xF41C770000
+  11295160  MMIOFlip "Unknown" (   0) seq 68 phys 0xF4111B0000 present 30 flags 4
+  11295211  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  11308443 ..   11308443  VSyncInterrupt x1 scanned 0xF4111B0000
+  11308457  MMIOFlip "Unknown" (   0) seq 71 phys 0xF41C770000 present 31 flags 4
+  11308504  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  11321750 ..   11321750  VSyncInterrupt x1 scanned 0xF41C770000
+  11321767  MMIOFlip "Unknown" (   0) seq 73 phys 0xF4111B0000 present 32 flags 4
+  11321778  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  11335110 ..   11335110  VSyncInterrupt x1 scanned 0xF4111B0000
+  11335125  MMIOFlip "Unknown" (   0) seq 75 phys 0xF41C770000 present 33 flags 4
+  11335144  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  11348459 ..   11348459  VSyncInterrupt x1 scanned 0xF41C770000
+  11348474  MMIOFlip "Unknown" (   0) seq 77 phys 0xF4111B0000 present 34 flags 4
+  11348520  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  11361797 ..   11361797  VSyncInterrupt x1 scanned 0xF4111B0000
+  11361811  MMIOFlip "Unknown" (   0) seq 80 phys 0xF41C770000 present 35 flags 4
+  11361858  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  11375152 ..   11375152  VSyncInterrupt x1 scanned 0xF41C770000
+  11375167  MMIOFlip "Unknown" (   0) seq 82 phys 0xF4111B0000 present 36 flags 4
+  11375218  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  11388460 ..   11388460  VSyncInterrupt x1 scanned 0xF4111B0000
+  11388482  MMIOFlip "Unknown" (   0) seq 84 phys 0xF41C770000 present 37 flags 4
+  11388503  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  11401783 ..   11401783  VSyncInterrupt x1 scanned 0xF41C770000
+  11401798  MMIOFlip "Unknown" (   0) seq 86 phys 0xF4111B0000 present 38 flags 4
+  11401829  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  11415138 ..   11415138  VSyncInterrupt x1 scanned 0xF4111B0000
+  11415153  MMIOFlip "Unknown" (   0) seq 88 phys 0xF41C770000 present 39 flags 4
+  11415189  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  11428468 ..   11428468  VSyncInterrupt x1 scanned 0xF41C770000
+  11428490  MMIOFlip "Unknown" (   0) seq 91 phys 0xF4111B0000 present 40 flags 4
+  11428545  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  11441826 ..   11441826  VSyncInterrupt x1 scanned 0xF4111B0000
+  11441840  MMIOFlip "Unknown" (   0) seq 93 phys 0xF41C770000 present 41 flags 4
+  11441887  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  11455201 ..   11455201  VSyncInterrupt x1 scanned 0xF41C770000
+  11455215  MMIOFlip "Unknown" (   0) seq 95 phys 0xF4111B0000 present 42 flags 4
+  11455261  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  11468470 ..   11468470  VSyncInterrupt x1 scanned 0xF4111B0000
+  11468484  MMIOFlip "Unknown" (   0) seq 97 phys 0xF41C770000 present 43 flags 4
+  11468531  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  11481841 ..   11481841  VSyncInterrupt x1 scanned 0xF41C770000
+  11481856  MMIOFlip "Unknown" (   0) seq 99 phys 0xF4111B0000 present 44 flags 4
+  11481903  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  11495219 ..   11495219  VSyncInterrupt x1 scanned 0xF4111B0000
+  11495233  MMIOFlip "Unknown" (   0) seq 101 phys 0xF41C770000 present 45 flags 4
+  11495281  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  11508516 ..   11508516  VSyncInterrupt x1 scanned 0xF41C770000
+  11508530  MMIOFlip "Unknown" (   0) seq 103 phys 0xF4111B0000 present 46 flags 4
+  11508577  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  11521856 ..   11521856  VSyncInterrupt x1 scanned 0xF4111B0000
+  11521871  MMIOFlip "Unknown" (   0) seq 105 phys 0xF41C770000 present 47 flags 4
+  11521917  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  11535203 ..   11535203  VSyncInterrupt x1 scanned 0xF41C770000
+  11535217  MMIOFlip "Unknown" (   0) seq 107 phys 0xF4111B0000 present 48 flags 4
+  11535263  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  11548499 ..   11548499  VSyncInterrupt x1 scanned 0xF4111B0000
+  11548513  MMIOFlip "Unknown" (   0) seq 109 phys 0xF41C770000 present 49 flags 4
+  11548524  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  11561875 ..   11561875  VSyncInterrupt x1 scanned 0xF41C770000
+  11561890  MMIOFlip "Unknown" (   0) seq 111 phys 0xF4111B0000 present 50 flags 4
+  11561946  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  11575245 ..   11575245  VSyncInterrupt x1 scanned 0xF4111B0000
+  11575260  MMIOFlip "Unknown" (   0) seq 113 phys 0xF41C770000 present 51 flags 4
+  11575307  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  11588547 ..   11588547  VSyncInterrupt x1 scanned 0xF41C770000
+  11588561  MMIOFlip "Unknown" (   0) seq 116 phys 0xF4111B0000 present 52 flags 4
+  11588608  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  11601885 ..   11601885  VSyncInterrupt x1 scanned 0xF4111B0000
+  11601899  MMIOFlip "Unknown" (   0) seq 118 phys 0xF41C770000 present 53 flags 4
+  11601945  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  11615260 ..   11615260  VSyncInterrupt x1 scanned 0xF41C770000
+  11615276  MMIOFlip "Unknown" (   0) seq 120 phys 0xF4111B0000 present 54 flags 4
+  11615323  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  11628563 ..   11628563  VSyncInterrupt x1 scanned 0xF4111B0000
+  11628578  MMIOFlip "Unknown" (   0) seq 122 phys 0xF41C770000 present 55 flags 4
+  11628625  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  11641866 ..   11641866  VSyncInterrupt x1 scanned 0xF41C770000
+  11641882  MMIOFlip "Unknown" (   0) seq 124 phys 0xF4111B0000 present 56 flags 4
+  11641894  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  11655242 ..   11655242  VSyncInterrupt x1 scanned 0xF4111B0000
+  11655256  MMIOFlip "Unknown" (   0) seq 126 phys 0xF41C770000 present 57 flags 4
+  11655303  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  11668577 ..   11668577  VSyncInterrupt x1 scanned 0xF41C770000
+  11668591  MMIOFlip "Unknown" (   0) seq 128 phys 0xF4111B0000 present 58 flags 4
+  11668638  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  11681880 ..   11681880  VSyncInterrupt x1 scanned 0xF4111B0000
+  11681893  MMIOFlip "Unknown" (   0) seq 131 phys 0xF41C770000 present 59 flags 4
+  11681941  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  11695290 ..   11695290  VSyncInterrupt x1 scanned 0xF41C770000
+  11695305  MMIOFlip "Unknown" (   0) seq 134 phys 0xF4111B0000 present 60 flags 4
+  11695351  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  11708591 ..   11708591  VSyncInterrupt x1 scanned 0xF4111B0000
+  11708606  MMIOFlip "Unknown" (   0) seq 136 phys 0xF41C770000 present 61 flags 4
+  11708652  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  11721930 ..   11721930  VSyncInterrupt x1 scanned 0xF41C770000
+  11721944  MMIOFlip "Unknown" (   0) seq 138 phys 0xF4111B0000 present 62 flags 4
+  11721990  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  11735273 ..   11735273  VSyncInterrupt x1 scanned 0xF4111B0000
+  11735288  MMIOFlip "Unknown" (   0) seq 140 phys 0xF41C770000 present 63 flags 4
+  11735335  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  11748607 ..   11748607  VSyncInterrupt x1 scanned 0xF41C770000
+  11748621  MMIOFlip "Unknown" (   0) seq 142 phys 0xF4111B0000 present 64 flags 4
+  11748668  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  11761944 ..   11761944  VSyncInterrupt x1 scanned 0xF4111B0000
+  11761960  MMIOFlip "Unknown" (   0) seq 144 phys 0xF41C770000 present 65 flags 4
+  11762007  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  11775249 ..   11775249  VSyncInterrupt x1 scanned 0xF41C770000
+  11775264  MMIOFlip "Unknown" (   0) seq 146 phys 0xF4111B0000 present 66 flags 4
+  11775274  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  11788614 ..   11788614  VSyncInterrupt x1 scanned 0xF4111B0000
+  11788629  MMIOFlip "Unknown" (   0) seq 148 phys 0xF41C770000 present 67 flags 4
+  11788677  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  11801958 ..   11801958  VSyncInterrupt x1 scanned 0xF41C770000
+  11801973  MMIOFlip "Unknown" (   0) seq 150 phys 0xF4111B0000 present 68 flags 4
+  11802019  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  11815298 ..   11815298  VSyncInterrupt x1 scanned 0xF4111B0000
+  11815313  MMIOFlip "Unknown" (   0) seq 153 phys 0xF41C770000 present 69 flags 4
+  11815359  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  11828614 ..   11828614  VSyncInterrupt x1 scanned 0xF41C770000
+  11828630  MMIOFlip "Unknown" (   0) seq 155 phys 0xF4111B0000 present 70 flags 4
+  11828678  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  11841974 ..   11841974  VSyncInterrupt x1 scanned 0xF4111B0000
+  11841989  MMIOFlip "Unknown" (   0) seq 157 phys 0xF41C770000 present 71 flags 4
+  11842035  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  11855346 ..   11855346  VSyncInterrupt x1 scanned 0xF41C770000
+  11855361  MMIOFlip "Unknown" (   0) seq 159 phys 0xF4111B0000 present 72 flags 4
+  11855408  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  11868616 ..   11868616  VSyncInterrupt x1 scanned 0xF4111B0000
+  11868631  MMIOFlip "Unknown" (   0) seq 161 phys 0xF41C770000 present 73 flags 4
+  11868642  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  11881955 ..   11881955  VSyncInterrupt x1 scanned 0xF41C770000
+  11881969  MMIOFlip "Unknown" (   0) seq 163 phys 0xF4111B0000 present 74 flags 4
+  11882016  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  11895363 ..   11895363  VSyncInterrupt x1 scanned 0xF4111B0000
+  11895377  MMIOFlip "Unknown" (   0) seq 165 phys 0xF41C770000 present 75 flags 4
+  11895424  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  11908665 ..   11908665  VSyncInterrupt x1 scanned 0xF41C770000
+  11908679  MMIOFlip "Unknown" (   0) seq 168 phys 0xF4111B0000 present 76 flags 4
+  11908726  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  11921969 ..   11921969  VSyncInterrupt x1 scanned 0xF4111B0000
+  11921985  MMIOFlip "Unknown" (   0) seq 170 phys 0xF41C770000 present 77 flags 4
+  11922031  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  11935342 ..   11935342  VSyncInterrupt x1 scanned 0xF41C770000
+  11935357  MMIOFlip "Unknown" (   0) seq 172 phys 0xF4111B0000 present 78 flags 4
+  11935403  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  11948680 ..   11948680  VSyncInterrupt x1 scanned 0xF4111B0000
+  11948695  MMIOFlip "Unknown" (   0) seq 174 phys 0xF41C770000 present 79 flags 4
+  11948741  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  11962017 ..   11962017  VSyncInterrupt x1 scanned 0xF41C770000
+  11962032  MMIOFlip "Unknown" (   0) seq 176 phys 0xF4111B0000 present 80 flags 4
+  11962078  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  11975323 ..   11975323  VSyncInterrupt x1 scanned 0xF4111B0000
+  11975344  MMIOFlip "Unknown" (   0) seq 178 phys 0xF41C770000 present 81 flags 4
+  11975393  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  11988695 ..   11988695  VSyncInterrupt x1 scanned 0xF41C770000
+  11988709  MMIOFlip "Unknown" (   0) seq 180 phys 0xF4111B0000 present 82 flags 4
+  11988756  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  12002065 ..   12002065  VSyncInterrupt x1 scanned 0xF4111B0000
+  12002080  MMIOFlip "Unknown" (   0) seq 182 phys 0xF41C770000 present 83 flags 4
+  12002091  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  12015349 ..   12015349  VSyncInterrupt x1 scanned 0xF41C770000
+  12015363  MMIOFlip "Unknown" (   0) seq 184 phys 0xF4111B0000 present 84 flags 4
+  12015411  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  12028709 ..   12028709  VSyncInterrupt x1 scanned 0xF4111B0000
+  12028723  MMIOFlip "Unknown" (   0) seq 186 phys 0xF41C770000 present 85 flags 4
+  12028769  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  12042051 ..   12042051  VSyncInterrupt x1 scanned 0xF41C770000
+  12042068  MMIOFlip "Unknown" (   0) seq 189 phys 0xF4111B0000 present 86 flags 4
+  12042115  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  12055409 ..   12055409  VSyncInterrupt x1 scanned 0xF4111B0000
+  12055423  MMIOFlip "Unknown" (   0) seq 191 phys 0xF41C770000 present 87 flags 4
+  12055470  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  12068724 ..   12068724  VSyncInterrupt x1 scanned 0xF41C770000
+  12068738  MMIOFlip "Unknown" (   0) seq 193 phys 0xF4111B0000 present 88 flags 4
+  12068786  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  12082062 ..   12082062  VSyncInterrupt x1 scanned 0xF4111B0000
+  12082076  MMIOFlip "Unknown" (   0) seq 195 phys 0xF41C770000 present 89 flags 4
+  12082122  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  12095366 ..   12095366  VSyncInterrupt x1 scanned 0xF41C770000
+  12095381  MMIOFlip "Unknown" (   0) seq 198 phys 0xF4111B0000 present 90 flags 4
+  12095392  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  12108735 ..   12108735  VSyncInterrupt x1 scanned 0xF4111B0000
+  12108749  MMIOFlip "Unknown" (   0) seq 200 phys 0xF41C770000 present 91 flags 4
+  12108795  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  12122076 ..   12122076  VSyncInterrupt x1 scanned 0xF41C770000
+  12122091  MMIOFlip "Unknown" (   0) seq 202 phys 0xF4111B0000 present 92 flags 4
+  12122137  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  12135415 ..   12135415  VSyncInterrupt x1 scanned 0xF4111B0000
+  12135429  MMIOFlip "Unknown" (   0) seq 205 phys 0xF41C770000 present 93 flags 4
+  12135475  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  12148753 ..   12148753  VSyncInterrupt x1 scanned 0xF41C770000
+  12148767  MMIOFlip "Unknown" (   0) seq 207 phys 0xF4111B0000 present 94 flags 4
+  12148813  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  12162101 ..   12162101  VSyncInterrupt x1 scanned 0xF4111B0000
+  12162115  MMIOFlip "Unknown" (   0) seq 209 phys 0xF41C770000 present 95 flags 4
+  12162162  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  12175430 ..   12175430  VSyncInterrupt x1 scanned 0xF41C770000
+  12175445  MMIOFlip "Unknown" (   0) seq 211 phys 0xF4111B0000 present 96 flags 4
+  12175491  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  12188767 ..   12188767  VSyncInterrupt x1 scanned 0xF4111B0000
+  12188782  MMIOFlip "Unknown" (   0) seq 213 phys 0xF41C770000 present 97 flags 4
+  12188795  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  12202106 ..   12202106  VSyncInterrupt x1 scanned 0xF41C770000
+  12202120  MMIOFlip "Unknown" (   0) seq 215 phys 0xF4111B0000 present 98 flags 4
+  12202166  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  12215444 ..   12215444  VSyncInterrupt x1 scanned 0xF4111B0000
+  12215458  MMIOFlip "Unknown" (   0) seq 217 phys 0xF41C770000 present 99 flags 4
+  12215504  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  12228782 ..   12228782  VSyncInterrupt x1 scanned 0xF41C770000
+  12228797  MMIOFlip "Unknown" (   0) seq 219 phys 0xF4111B0000 present 100 flags 4
+  12228843  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  12242123 ..   12242123  VSyncInterrupt x1 scanned 0xF4111B0000
+  12242138  MMIOFlip "Unknown" (   0) seq 221 phys 0xF41C770000 present 101 flags 4
+  12242185  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  12255459 ..   12255459  VSyncInterrupt x1 scanned 0xF41C770000
+  12255474  MMIOFlip "Unknown" (   0) seq 223 phys 0xF4111B0000 present 102 flags 4
+  12255521  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  12268797 ..   12268797  VSyncInterrupt x1 scanned 0xF4111B0000
+  12268812  MMIOFlip "Unknown" (   0) seq 225 phys 0xF41C770000 present 103 flags 4
+  12268859  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  12282135 ..   12282135  VSyncInterrupt x1 scanned 0xF41C770000
+  12282149  MMIOFlip "Unknown" (   0) seq 228 phys 0xF4111B0000 present 104 flags 4
+  12282169  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  12295473 ..   12295473  VSyncInterrupt x1 scanned 0xF4111B0000
+  12295487  MMIOFlip "Unknown" (   0) seq 230 phys 0xF41C770000 present 105 flags 4
+  12295534  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  12308813 ..   12308813  VSyncInterrupt x1 scanned 0xF41C770000
+  12308827  MMIOFlip "Unknown" (   0) seq 232 phys 0xF4111B0000 present 106 flags 4
+  12308875  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  12322117 ..   12322117  VSyncInterrupt x1 scanned 0xF4111B0000
+  12322133  MMIOFlip "Unknown" (   0) seq 235 phys 0xF41C770000 present 107 flags 4
+  12322145  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  12335479 ..   12335479  VSyncInterrupt x1 scanned 0xF41C770000
+  12335493  MMIOFlip "Unknown" (   0) seq 237 phys 0xF4111B0000 present 108 flags 4
+  12335539  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  12348827 ..   12348827  VSyncInterrupt x1 scanned 0xF4111B0000
+  12348841  MMIOFlip "Unknown" (   0) seq 239 phys 0xF41C770000 present 109 flags 4
+  12348888  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  12362165 ..   12362165  VSyncInterrupt x1 scanned 0xF41C770000
+  12362180  MMIOFlip "Unknown" (   0) seq 242 phys 0xF4111B0000 present 110 flags 4
+  12362226  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  12375504 ..   12375504  VSyncInterrupt x1 scanned 0xF4111B0000
+  12375519  MMIOFlip "Unknown" (   0) seq 245 phys 0xF41C770000 present 111 flags 4
+  12375565  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  12388842 ..   12388842  VSyncInterrupt x1 scanned 0xF41C770000
+  12388856  MMIOFlip "Unknown" (   0) seq 247 phys 0xF4111B0000 present 112 flags 4
+  12388903  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  12402180 ..   12402180  VSyncInterrupt x1 scanned 0xF4111B0000
+  12402194  MMIOFlip "Unknown" (   0) seq 249 phys 0xF41C770000 present 113 flags 4
+  12402241  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  12415484 ..   12415484  VSyncInterrupt x1 scanned 0xF41C770000
+  12415499  MMIOFlip "Unknown" (   0) seq 252 phys 0xF4111B0000 present 114 flags 4
+  12415509  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  12428827 ..   12428827  VSyncInterrupt x1 scanned 0xF4111B0000
+  12428843  MMIOFlip "Unknown" (   0) seq 254 phys 0xF41C770000 present 115 flags 4
+  12428911  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  12442169 ..   12442169  VSyncInterrupt x1 scanned 0xF41C770000
+  12442190  MMIOFlip "Unknown" (   0) seq 256 phys 0xF4111B0000 present 116 flags 4
+  12442250  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  12455505 ..   12455505  VSyncInterrupt x1 scanned 0xF4111B0000
+  12455521  MMIOFlip "Unknown" (   0) seq 259 phys 0xF41C770000 present 117 flags 4
+  12455535  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  12468889 ..   12468889  VSyncInterrupt x1 scanned 0xF41C770000
+  12468910  MMIOFlip "Unknown" (   0) seq 262 phys 0xF4111B0000 present 118 flags 4
+  12468957  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  12482210 ..   12482210  VSyncInterrupt x1 scanned 0xF4111B0000
+  12482224  MMIOFlip "Unknown" (   0) seq 265 phys 0xF41C770000 present 119 flags 4
+  12482274  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  12495547 ..   12495547  VSyncInterrupt x1 scanned 0xF41C770000
+  12495562  MMIOFlip "Unknown" (   0) seq 267 phys 0xF4111B0000 present 120 flags 4
+  12495608  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  12508910 ..   12508910  VSyncInterrupt x1 scanned 0xF4111B0000
+  12508925  MMIOFlip "Unknown" (   0) seq 269 phys 0xF41C770000 present 121 flags 4
+  12508972  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  12522234 ..   12522234  VSyncInterrupt x1 scanned 0xF41C770000
+  12522249  MMIOFlip "Unknown" (   0) seq 271 phys 0xF4111B0000 present 122 flags 4
+  12522295  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  12535561 ..   12535561  VSyncInterrupt x1 scanned 0xF4111B0000
+  12535576  MMIOFlip "Unknown" (   0) seq 273 phys 0xF41C770000 present 123 flags 4
+  12535622  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  12548900 ..   12548900  VSyncInterrupt x1 scanned 0xF41C770000
+  12548921  MMIOFlip "Unknown" (   0) seq 275 phys 0xF4111B0000 present 124 flags 4
+  12548927  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  12562243 ..   12562243  VSyncInterrupt x1 scanned 0xF4111B0000
+  12562258  MMIOFlip "Unknown" (   0) seq 277 phys 0xF41C770000 present 125 flags 4
+  12562304  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  12575577 ..   12575577  VSyncInterrupt x1 scanned 0xF41C770000
+  12575591  MMIOFlip "Unknown" (   0) seq 279 phys 0xF4111B0000 present 126 flags 4
+  12575639  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  12588949 ..   12588949  VSyncInterrupt x1 scanned 0xF4111B0000
+  12588964  MMIOFlip "Unknown" (   0) seq 282 phys 0xF41C770000 present 127 flags 4
+  12589010  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  12602253 ..   12602253  VSyncInterrupt x1 scanned 0xF41C770000
+  12602267  MMIOFlip "Unknown" (   0) seq 284 phys 0xF4111B0000 present 128 flags 4
+  12602314  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  12615591 ..   12615591  VSyncInterrupt x1 scanned 0xF4111B0000
+  12615605  MMIOFlip "Unknown" (   0) seq 286 phys 0xF41C770000 present 129 flags 4
+  12615652  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  12628964 ..   12628964  VSyncInterrupt x1 scanned 0xF41C770000
+  12628979  MMIOFlip "Unknown" (   0) seq 288 phys 0xF4111B0000 present 130 flags 4
+  12629025  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  12642239 ..   12642239  VSyncInterrupt x1 scanned 0xF4111B0000
+  12642253  MMIOFlip "Unknown" (   0) seq 290 phys 0xF41C770000 present 131 flags 4
+  12642264  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  12655605 ..   12655605  VSyncInterrupt x1 scanned 0xF41C770000
+  12655620  MMIOFlip "Unknown" (   0) seq 292 phys 0xF4111B0000 present 132 flags 4
+  12655666  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  12668979 ..   12668979  VSyncInterrupt x1 scanned 0xF4111B0000
+  12668993  MMIOFlip "Unknown" (   0) seq 294 phys 0xF41C770000 present 133 flags 4
+  12669040  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  12682284 ..   12682284  VSyncInterrupt x1 scanned 0xF41C770000
+  12682299  MMIOFlip "Unknown" (   0) seq 297 phys 0xF4111B0000 present 134 flags 4
+  12682346  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  12695621 ..   12695621  VSyncInterrupt x1 scanned 0xF4111B0000
+  12695637  MMIOFlip "Unknown" (   0) seq 299 phys 0xF41C770000 present 135 flags 4
+  12695684  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  12708993 ..   12708993  VSyncInterrupt x1 scanned 0xF41C770000
+  12709008  MMIOFlip "Unknown" (   0) seq 301 phys 0xF4111B0000 present 136 flags 4
+  12709054  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  12722297 ..   12722297  VSyncInterrupt x1 scanned 0xF4111B0000
+  12722312  MMIOFlip "Unknown" (   0) seq 303 phys 0xF41C770000 present 137 flags 4
+  12722358  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  12735635 ..   12735635  VSyncInterrupt x1 scanned 0xF41C770000
+  12735649  MMIOFlip "Unknown" (   0) seq 305 phys 0xF4111B0000 present 138 flags 4
+  12735661  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  12748974 ..   12748974  VSyncInterrupt x1 scanned 0xF4111B0000
+  12748988  MMIOFlip "Unknown" (   0) seq 307 phys 0xF41C770000 present 139 flags 4
+  12749035  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  12762311 ..   12762311  VSyncInterrupt x1 scanned 0xF41C770000
+  12762325  MMIOFlip "Unknown" (   0) seq 309 phys 0xF4111B0000 present 140 flags 4
+  12762372  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  12775650 ..   12775650  VSyncInterrupt x1 scanned 0xF4111B0000
+  12775665  MMIOFlip "Unknown" (   0) seq 311 phys 0xF41C770000 present 141 flags 4
+  12775712  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  12789023 ..   12789023  VSyncInterrupt x1 scanned 0xF41C770000
+  12789038  MMIOFlip "Unknown" (   0) seq 313 phys 0xF4111B0000 present 142 flags 4
+  12789084  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  12802327 ..   12802327  VSyncInterrupt x1 scanned 0xF4111B0000
+  12802342  MMIOFlip "Unknown" (   0) seq 315 phys 0xF41C770000 present 143 flags 4
+  12802388  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  12815665 ..   12815665  VSyncInterrupt x1 scanned 0xF41C770000
+  12815681  MMIOFlip "Unknown" (   0) seq 317 phys 0xF4111B0000 present 144 flags 4
+  12815727  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  12829038 ..   12829038  VSyncInterrupt x1 scanned 0xF4111B0000
+  12829053  MMIOFlip "Unknown" (   0) seq 319 phys 0xF41C770000 present 145 flags 4
+  12829100  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  12842341 ..   12842341  VSyncInterrupt x1 scanned 0xF41C770000
+  12842356  MMIOFlip "Unknown" (   0) seq 321 phys 0xF4111B0000 present 146 flags 4
+  12842402  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  12855679 ..   12855679  VSyncInterrupt x1 scanned 0xF4111B0000
+  12855695  MMIOFlip "Unknown" (   0) seq 323 phys 0xF41C770000 present 147 flags 4
+  12855741  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  12869010 ..   12869010  VSyncInterrupt x1 scanned 0xF41C770000
+  12869026  MMIOFlip "Unknown" (   0) seq 325 phys 0xF4111B0000 present 148 flags 4
+  12869037  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  12882322 ..   12882322  VSyncInterrupt x1 scanned 0xF4111B0000
+  12882337  MMIOFlip "Unknown" (   0) seq 327 phys 0xF41C770000 present 149 flags 4
+  12882347  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  12895694 ..   12895694  VSyncInterrupt x1 scanned 0xF41C770000
+  12895709  MMIOFlip "Unknown" (   0) seq 329 phys 0xF4111B0000 present 150 flags 4
+  12895756  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  12909067 ..   12909067  VSyncInterrupt x1 scanned 0xF4111B0000
+  12909082  MMIOFlip "Unknown" (   0) seq 332 phys 0xF41C770000 present 151 flags 4
+  12909128  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  12922337 ..   12922337  VSyncInterrupt x1 scanned 0xF41C770000
+  12922351  MMIOFlip "Unknown" (   0) seq 334 phys 0xF4111B0000 present 152 flags 4
+  12922397  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  12935709 ..   12935709  VSyncInterrupt x1 scanned 0xF4111B0000
+  12935723  MMIOFlip "Unknown" (   0) seq 336 phys 0xF41C770000 present 153 flags 4
+  12935769  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  12949082 ..   12949082  VSyncInterrupt x1 scanned 0xF41C770000
+  12949097  MMIOFlip "Unknown" (   0) seq 338 phys 0xF4111B0000 present 154 flags 4
+  12949144  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  12962351 ..   12962351  VSyncInterrupt x1 scanned 0xF4111B0000
+  12962365  MMIOFlip "Unknown" (   0) seq 341 phys 0xF41C770000 present 155 flags 4
+  12962378  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  12975690 ..   12975690  VSyncInterrupt x1 scanned 0xF41C770000
+  12975705  MMIOFlip "Unknown" (   0) seq 343 phys 0xF4111B0000 present 156 flags 4
+  12975751  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  12989065 ..   12989065  VSyncInterrupt x1 scanned 0xF4111B0000
+  12989086  MMIOFlip "Unknown" (   0) seq 345 phys 0xF41C770000 present 157 flags 4
+  12989134  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  13002400 ..   13002400  VSyncInterrupt x1 scanned 0xF41C770000
+  13002414  MMIOFlip "Unknown" (   0) seq 348 phys 0xF4111B0000 present 158 flags 4
+  13002460  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  13015712 ..   13015712  VSyncInterrupt x1 scanned 0xF4111B0000
+  13015730  MMIOFlip "Unknown" (   0) seq 350 phys 0xF41C770000 present 159 flags 4
+  13015780  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  13029077 ..   13029077  VSyncInterrupt x1 scanned 0xF41C770000
+  13029093  MMIOFlip "Unknown" (   0) seq 352 phys 0xF4111B0000 present 160 flags 4
+  13029139  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  13042416 ..   13042416  VSyncInterrupt x1 scanned 0xF4111B0000
+  13042432  MMIOFlip "Unknown" (   0) seq 354 phys 0xF41C770000 present 161 flags 4
+  13042479  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  13055750 ..   13055750  VSyncInterrupt x1 scanned 0xF41C770000
+  13055765  MMIOFlip "Unknown" (   0) seq 356 phys 0xF4111B0000 present 162 flags 4
+  13055811  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  13069091 ..   13069091  VSyncInterrupt x1 scanned 0xF4111B0000
+  13069107  MMIOFlip "Unknown" (   0) seq 358 phys 0xF41C770000 present 163 flags 4
+  13069152  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  13082430 ..   13082430  VSyncInterrupt x1 scanned 0xF41C770000
+  13082444  MMIOFlip "Unknown" (   0) seq 360 phys 0xF4111B0000 present 164 flags 4
+  13082491  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  13095752 ..   13095752  VSyncInterrupt x1 scanned 0xF4111B0000
+  13095766  MMIOFlip "Unknown" (   0) seq 363 phys 0xF41C770000 present 165 flags 4
+  13095777  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  13109106 ..   13109106  VSyncInterrupt x1 scanned 0xF41C770000
+  13109120  MMIOFlip "Unknown" (   0) seq 365 phys 0xF4111B0000 present 166 flags 4
+  13109166  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  13122444 ..   13122444  VSyncInterrupt x1 scanned 0xF4111B0000
+  13122459  MMIOFlip "Unknown" (   0) seq 367 phys 0xF41C770000 present 167 flags 4
+  13122505  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  13135823 ..   13135823  VSyncInterrupt x1 scanned 0xF41C770000
+  13135837  MMIOFlip "Unknown" (   0) seq 370 phys 0xF4111B0000 present 168 flags 4
+  13135848  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  13149121 ..   13149121  VSyncInterrupt x1 scanned 0xF4111B0000
+  13149138  MMIOFlip "Unknown" (   0) seq 372 phys 0xF41C770000 present 169 flags 4
+  13149184  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  13162465 ..   13162465  VSyncInterrupt x1 scanned 0xF41C770000
+  13162480  MMIOFlip "Unknown" (   0) seq 374 phys 0xF4111B0000 present 170 flags 4
+  13162540  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  13175800 ..   13175800  VSyncInterrupt x1 scanned 0xF4111B0000
+  13175814  MMIOFlip "Unknown" (   0) seq 377 phys 0xF41C770000 present 171 flags 4
+  13175870  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  13189129 ..   13189129  VSyncInterrupt x1 scanned 0xF41C770000
+  13189143  MMIOFlip "Unknown" (   0) seq 379 phys 0xF4111B0000 present 172 flags 4
+  13189157  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  13202478 ..   13202478  VSyncInterrupt x1 scanned 0xF4111B0000
+  13202494  MMIOFlip "Unknown" (   0) seq 381 phys 0xF41C770000 present 173 flags 4
+  13202542  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  13215812 ..   13215812  VSyncInterrupt x1 scanned 0xF41C770000
+  13215827  MMIOFlip "Unknown" (   0) seq 383 phys 0xF4111B0000 present 174 flags 4
+  13215874  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  13229150 ..   13229150  VSyncInterrupt x1 scanned 0xF4111B0000
+  13229165  MMIOFlip "Unknown" (   0) seq 386 phys 0xF41C770000 present 175 flags 4
+  13229212  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  13242490 ..   13242490  VSyncInterrupt x1 scanned 0xF41C770000
+  13242505  MMIOFlip "Unknown" (   0) seq 388 phys 0xF4111B0000 present 176 flags 4
+  13242551  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  13255826 ..   13255826  VSyncInterrupt x1 scanned 0xF4111B0000
+  13255841  MMIOFlip "Unknown" (   0) seq 391 phys 0xF41C770000 present 177 flags 4
+  13255887  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  13269200 ..   13269200  VSyncInterrupt x1 scanned 0xF41C770000
+  13269214  MMIOFlip "Unknown" (   0) seq 394 phys 0xF4111B0000 present 178 flags 4
+  13269261  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  13282503 ..   13282503  VSyncInterrupt x1 scanned 0xF4111B0000
+  13282518  MMIOFlip "Unknown" (   0) seq 396 phys 0xF41C770000 present 179 flags 4
+  13282544  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  13295841 ..   13295841  VSyncInterrupt x1 scanned 0xF41C770000
+  13295856  MMIOFlip "Unknown" (   0) seq 398 phys 0xF4111B0000 present 180 flags 4
+  13295902  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  13309144 ..   13309144  VSyncInterrupt x1 scanned 0xF4111B0000
+  13309159  MMIOFlip "Unknown" (   0) seq 400 phys 0xF41C770000 present 181 flags 4
+  13309169  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  13322518 ..   13322518  VSyncInterrupt x1 scanned 0xF41C770000
+  13322533  MMIOFlip "Unknown" (   0) seq 402 phys 0xF4111B0000 present 182 flags 4
+  13322580  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  13335856 ..   13335856  VSyncInterrupt x1 scanned 0xF4111B0000
+  13335870  MMIOFlip "Unknown" (   0) seq 404 phys 0xF41C770000 present 183 flags 4
+  13335918  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  13349229 ..   13349229  VSyncInterrupt x1 scanned 0xF41C770000
+  13349243  MMIOFlip "Unknown" (   0) seq 406 phys 0xF4111B0000 present 184 flags 4
+  13349294  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  13362532 ..   13362532  VSyncInterrupt x1 scanned 0xF4111B0000
+  13362547  MMIOFlip "Unknown" (   0) seq 408 phys 0xF41C770000 present 185 flags 4
+  13362593  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  13375870 ..   13375870  VSyncInterrupt x1 scanned 0xF41C770000
+  13375885  MMIOFlip "Unknown" (   0) seq 410 phys 0xF4111B0000 present 186 flags 4
+  13375931  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  13389244 ..   13389244  VSyncInterrupt x1 scanned 0xF4111B0000
+  13389259  MMIOFlip "Unknown" (   0) seq 412 phys 0xF41C770000 present 187 flags 4
+  13389307  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f71f10 1 true true
+  13402547 ..   13402547  VSyncInterrupt x1 scanned 0xF41C770000
+  13402562  MMIOFlip "Unknown" (   0) seq 414 phys 0xF4111B0000 present 188 flags 4
+  13402608  Flip "Unknown" (10824) 0x0000000000000000 0 0xffffe685c8f72f10 1 true true
+  13406746  ClearFlipDevice "Unknown" (10824) 0xffffd2025fab5010 0
+  13406752  CancelFlip "Unknown" (10824) scanned -1 present 189 type 5
+  13406755  CancelFlip "Unknown" (10824) scanned -1 present 190 type 5
+  13415853 ..   13429193  VSyncInterrupt x2 scanned 0xF4111B0000
+  13442513 ..   13455852  VSyncInterrupt x2 scanned 0xF4111B0000
+  13462318  Flip "Unknown" (1892) 0x0000000000000000 0 0xffffe685c16bba10 1 true true
+  13462420  MMIOFlip "Unknown" (   4) seq 3353 phys 0xF4058F0000 present 1232 flags 4
+  13469200 ..   13469200  VSyncInterrupt x1 scanned 0xF4058F0000
+  13473157  ClearFlipDevice "Unknown" (1892) 0xffffd2025ca0a050 0
+  13482582 ..   13602630  VSyncInterrupt x10 scanned 0xF4058F0000
+  13615911 ..   13695948  VSyncInterrupt x7 scanned 0xF4058F0000
+  13709286 ..   13735977  VSyncInterrupt x3 scanned 0xF4058F0000
+  13749311 ..   13749311  VSyncInterrupt x1 scanned 0xF4058F0000
+  13762640 ..   13762640  VSyncInterrupt x1 scanned 0xF4058F0000
+  13775994 ..   13775994  VSyncInterrupt x1 scanned 0xF4058F0000
+  13789327 ..   13789327  VSyncInterrupt x1 scanned 0xF4058F0000
+  13802653 ..   13802653  VSyncInterrupt x1 scanned 0xF4058F0000
+  13816003 ..   13816003  VSyncInterrupt x1 scanned 0xF4041B0000
+  13829322 ..   13829322  VSyncInterrupt x1 scanned 0xF4041B0000
+  13842668 ..   13855997  VSyncInterrupt x2 scanned 0xF4041B0000
+  13860140  Flip "Unknown" (3980) 0x0000000000000000 0 0xffffe685c8f70c10 0 true true
+  13860236  MMIOFlip "Unknown" (   4) seq 1 phys 0xF4058F0000 present 1 flags 2
+  13862983  Flip "Unknown" (3980) 0x0000000000000000 0 0xffffe685c8f6fb10 0 true true
+  13863914  Flip "Unknown" (3980) 0x0000000000000000 0 0xffffe685c8f71d10 0 true true
+  13869394 ..   13869394  VSyncInterrupt x1 scanned 0xF4058F0000
+  13882694 ..   14429593  VSyncInterrupt x42 scanned 0xF4058F0000
+  14442934 ..   14482921  VSyncInterrupt x4 scanned 0xF4058F0000
+  14496259 ..   14509631  VSyncInterrupt x2 scanned 0xF4058F0000
+  14522930 ..   22152431  VSyncInterrupt x573 scanned 0xF4058F0000
+  22165792 ..   22165792  VSyncInterrupt x1 scanned 0xF4058F0000
+  22171869  ClearFlipDevice "Unknown" (3980) 0xffffd2025fab5010 0
+  22171874  CancelFlip "Unknown" (3980) scanned 0xf4058f0000 present 1 type 5
+  22171877  CancelFlip "Unknown" (3980) scanned -1 present 2 type 5
+  22171879  CancelFlip "Unknown" (3980) scanned -1 present 3 type 5
+  22179167 ..   22179167  VSyncInterrupt x1 scanned 0xF4058F0000
+  22192419 ..   22192419  VSyncInterrupt x1 scanned 0xF4058F0000
+  22205783 ..   22205783  VSyncInterrupt x1 scanned 0xF4058F0000
+  22219097 ..   22299126  VSyncInterrupt x7 scanned 0xF4058F0000
+  22312445 ..   22325781  VSyncInterrupt x2 scanned 0xF4058F0000
+  22326355  Flip "Unknown" (1892) 0x0000000000000000 0 0xffffe685c8f76810 1 true true
+  22326428  MMIOFlip "Unknown" (   4) seq 3 phys 0xF4039B0000 present 3 flags 4
+  22339140 ..   22339140  VSyncInterrupt x1 scanned 0xF4039B0000
+  22352479 ..   22352479  VSyncInterrupt x1 scanned 0xF4039B0000
+  22358041  Flip "Unknown" (1892) 0x0000000000000000 0 0xffffe685c8f75f10 1 true true
+  22358063  MMIOFlip "Unknown" (   4) seq 4 phys 0xF404199000 present 4 flags 4
+  22365796 ..   22365796  VSyncInterrupt x1 scanned 0xF404199000
+  22374175  ClearFlipDevice "Unknown" (7972) 0xffffd202686737d0 0
+  22379181 ..   22379181  VSyncInterrupt x1 scanned 0xF404199000
+  22392486 ..   22405824  VSyncInterrupt x2 scanned 0xF406C30000
+  22419145 ..   22432484  VSyncInterrupt x2 scanned 0xF406C30000
+  22439373  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  22439441  MMIOFlip "Unknown" (   4) seq 1 phys 0xF40E330000 present 1 flags 4
+  22441651  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  22441990  PendingFlipsForThisEntry "Unknown" (   4) 0 4294967295 4 4 0 1 0 0 4294967295
+  22442566  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  22445871 ..   22445871  VSyncInterrupt x1 scanned 0xF40E330000
+  22445885  MMIOFlip "Unknown" (   0) seq 4 phys 0xF411970000 present 2 flags 4
+  22445931  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  22459234 ..   22459234  VSyncInterrupt x1 scanned 0xF411970000
+  22459252  MMIOFlip "Unknown" (   0) seq 7 phys 0xF406C30000 present 3 flags 4
+  22459297  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  22472549 ..   22472549  VSyncInterrupt x1 scanned 0xF406C30000
+  22472567  MMIOFlip "Unknown" (   0) seq 10 phys 0xF40E330000 present 4 flags 4
+  22472612  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  22485886 ..   22485886  VSyncInterrupt x1 scanned 0xF40E330000
+  22485902  MMIOFlip "Unknown" (   0) seq 12 phys 0xF411970000 present 5 flags 4
+  22485911  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  22499259 ..   22499259  VSyncInterrupt x1 scanned 0xF411970000
+  22499275  MMIOFlip "Unknown" (   0) seq 14 phys 0xF406C30000 present 6 flags 4
+  22499320  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  22512562 ..   22512562  VSyncInterrupt x1 scanned 0xF406C30000
+  22512577  MMIOFlip "Unknown" (   0) seq 16 phys 0xF40E330000 present 7 flags 4
+  22512622  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  22525866 ..   22525866  VSyncInterrupt x1 scanned 0xF40E330000
+  22525881  MMIOFlip "Unknown" (   0) seq 18 phys 0xF411970000 present 8 flags 4
+  22525925  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  22539239 ..   22539239  VSyncInterrupt x1 scanned 0xF411970000
+  22539253  MMIOFlip "Unknown" (   0) seq 20 phys 0xF406C30000 present 9 flags 4
+  22539298  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  22552578 ..   22552578  VSyncInterrupt x1 scanned 0xF406C30000
+  22552592  MMIOFlip "Unknown" (   0) seq 22 phys 0xF40E330000 present 10 flags 4
+  22552637  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  22565915 ..   22565915  VSyncInterrupt x1 scanned 0xF40E330000
+  22565930  MMIOFlip "Unknown" (   0) seq 25 phys 0xF411970000 present 11 flags 4
+  22565975  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  22579254 ..   22579254  VSyncInterrupt x1 scanned 0xF411970000
+  22579273  MMIOFlip "Unknown" (   0) seq 28 phys 0xF406C30000 present 12 flags 4
+  22579312  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  22592591 ..   22592591  VSyncInterrupt x1 scanned 0xF406C30000
+  22592605  MMIOFlip "Unknown" (   0) seq 31 phys 0xF40E330000 present 13 flags 4
+  22592650  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  22605906 ..   22605906  VSyncInterrupt x1 scanned 0xF40E330000
+  22605924  MMIOFlip "Unknown" (   0) seq 33 phys 0xF411970000 present 14 flags 4
+  22605946  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  22619241 ..   22619241  VSyncInterrupt x1 scanned 0xF411970000
+  22619256  MMIOFlip "Unknown" (   0) seq 36 phys 0xF406C30000 present 15 flags 4
+  22619309  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  22632572 ..   22632572  VSyncInterrupt x1 scanned 0xF406C30000
+  22632583  MMIOFlip "Unknown" (   0) seq 39 phys 0xF40E330000 present 16 flags 4
+  22632636  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  22645945 ..   22645945  VSyncInterrupt x1 scanned 0xF40E330000
+  22645959  MMIOFlip "Unknown" (   0) seq 41 phys 0xF411970000 present 17 flags 4
+  22645969  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  22659246 ..   22659246  VSyncInterrupt x1 scanned 0xF411970000
+  22659259  MMIOFlip "Unknown" (   0) seq 43 phys 0xF406C30000 present 18 flags 4
+  22659267  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  22672621 ..   22672621  VSyncInterrupt x1 scanned 0xF406C30000
+  22672634  MMIOFlip "Unknown" (   0) seq 45 phys 0xF40E330000 present 19 flags 4
+  22672682  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  22685959 ..   22685959  VSyncInterrupt x1 scanned 0xF40E330000
+  22685973  MMIOFlip "Unknown" (   0) seq 48 phys 0xF411970000 present 20 flags 4
+  22686018  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  22699297 ..   22699297  VSyncInterrupt x1 scanned 0xF411970000
+  22699311  MMIOFlip "Unknown" (   0) seq 51 phys 0xF406C30000 present 21 flags 4
+  22699356  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  22712689 ..   22712689  VSyncInterrupt x1 scanned 0xF406C30000
+  22712703  MMIOFlip "Unknown" (   0) seq 54 phys 0xF40E330000 present 22 flags 4
+  22712748  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  22725974 ..   22725974  VSyncInterrupt x1 scanned 0xF40E330000
+  22725988  MMIOFlip "Unknown" (   0) seq 57 phys 0xF411970000 present 23 flags 4
+  22726033  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  22739281 ..   22739281  VSyncInterrupt x1 scanned 0xF411970000
+  22739295  MMIOFlip "Unknown" (   0) seq 60 phys 0xF406C30000 present 24 flags 4
+  22739304  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  22752671 ..   22752671  VSyncInterrupt x1 scanned 0xF406C30000
+  22752685  MMIOFlip "Unknown" (   0) seq 63 phys 0xF40E330000 present 25 flags 4
+  22752696  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  22765989 ..   22765989  VSyncInterrupt x1 scanned 0xF40E330000
+  22766002  MMIOFlip "Unknown" (   0) seq 65 phys 0xF411970000 present 26 flags 4
+  22766047  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  22779327 ..   22779327  VSyncInterrupt x1 scanned 0xF411970000
+  22779340  MMIOFlip "Unknown" (   0) seq 68 phys 0xF406C30000 present 27 flags 4
+  22779385  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  22792717 ..   22792717  VSyncInterrupt x1 scanned 0xF406C30000
+  22792731  MMIOFlip "Unknown" (   0) seq 71 phys 0xF40E330000 present 28 flags 4
+  22792776  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  22806003 ..   22806003  VSyncInterrupt x1 scanned 0xF40E330000
+  22806017  MMIOFlip "Unknown" (   0) seq 73 phys 0xF411970000 present 29 flags 4
+  22806062  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  22819341 ..   22819341  VSyncInterrupt x1 scanned 0xF411970000
+  22819355  MMIOFlip "Unknown" (   0) seq 75 phys 0xF406C30000 present 30 flags 4
+  22819400  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  22832740 ..   22832740  VSyncInterrupt x1 scanned 0xF406C30000
+  22832753  MMIOFlip "Unknown" (   0) seq 77 phys 0xF40E330000 present 31 flags 4
+  22832809  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  22845984 ..   22845984  VSyncInterrupt x1 scanned 0xF40E330000
+  22845998  MMIOFlip "Unknown" (   0) seq 80 phys 0xF411970000 present 32 flags 4
+  22846034  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  22859357 ..   22859357  VSyncInterrupt x1 scanned 0xF411970000
+  22859371  MMIOFlip "Unknown" (   0) seq 83 phys 0xF406C30000 present 33 flags 4
+  22859417  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  22872735 ..   22872735  VSyncInterrupt x1 scanned 0xF406C30000
+  22872748  MMIOFlip "Unknown" (   0) seq 85 phys 0xF40E330000 present 34 flags 4
+  22872793  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  22886032 ..   22886032  VSyncInterrupt x1 scanned 0xF40E330000
+  22886046  MMIOFlip "Unknown" (   0) seq 88 phys 0xF411970000 present 35 flags 4
+  22886091  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  22899371 ..   22899371  VSyncInterrupt x1 scanned 0xF411970000
+  22899385  MMIOFlip "Unknown" (   0) seq 90 phys 0xF406C30000 present 36 flags 4
+  22899429  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  22912744 ..   22912744  VSyncInterrupt x1 scanned 0xF406C30000
+  22912763  MMIOFlip "Unknown" (   0) seq 92 phys 0xF40E330000 present 37 flags 4
+  22912808  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  22926047 ..   22926047  VSyncInterrupt x1 scanned 0xF40E330000
+  22926061  MMIOFlip "Unknown" (   0) seq 94 phys 0xF411970000 present 38 flags 4
+  22926105  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  22939386 ..   22939386  VSyncInterrupt x1 scanned 0xF411970000
+  22939399  MMIOFlip "Unknown" (   0) seq 97 phys 0xF406C30000 present 39 flags 4
+  22939444  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  22952749 ..   22952749  VSyncInterrupt x1 scanned 0xF406C30000
+  22952762  MMIOFlip "Unknown" (   0) seq 100 phys 0xF40E330000 present 40 flags 4
+  22952807  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  22966062 ..   22966062  VSyncInterrupt x1 scanned 0xF40E330000
+  22966075  MMIOFlip "Unknown" (   0) seq 103 phys 0xF411970000 present 41 flags 4
+  22966120  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  22979400 ..   22979400  VSyncInterrupt x1 scanned 0xF411970000
+  22979414  MMIOFlip "Unknown" (   0) seq 106 phys 0xF406C30000 present 42 flags 4
+  22979459  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  22992740 ..   22992740  VSyncInterrupt x1 scanned 0xF406C30000
+  22992754  MMIOFlip "Unknown" (   0) seq 108 phys 0xF40E330000 present 43 flags 4
+  22992798  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  23006077 ..   23006077  VSyncInterrupt x1 scanned 0xF40E330000
+  23006090  MMIOFlip "Unknown" (   0) seq 111 phys 0xF411970000 present 44 flags 4
+  23006135  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  23019415 ..   23019415  VSyncInterrupt x1 scanned 0xF411970000
+  23019429  MMIOFlip "Unknown" (   0) seq 114 phys 0xF406C30000 present 45 flags 4
+  23019474  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  23032756 ..   23032756  VSyncInterrupt x1 scanned 0xF406C30000
+  23032769  MMIOFlip "Unknown" (   0) seq 117 phys 0xF40E330000 present 46 flags 4
+  23032813  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  23046091 ..   23046091  VSyncInterrupt x1 scanned 0xF40E330000
+  23046104  MMIOFlip "Unknown" (   0) seq 120 phys 0xF411970000 present 47 flags 4
+  23046149  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  23059429 ..   23059429  VSyncInterrupt x1 scanned 0xF411970000
+  23059450  MMIOFlip "Unknown" (   0) seq 123 phys 0xF406C30000 present 48 flags 4
+  23059496  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  23072735 ..   23072735  VSyncInterrupt x1 scanned 0xF406C30000
+  23072749  MMIOFlip "Unknown" (   0) seq 126 phys 0xF40E330000 present 49 flags 4
+  23072794  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  23086073 ..   23086073  VSyncInterrupt x1 scanned 0xF40E330000
+  23086086  MMIOFlip "Unknown" (   0) seq 129 phys 0xF411970000 present 50 flags 4
+  23086096  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  23099444 ..   23099444  VSyncInterrupt x1 scanned 0xF411970000
+  23099458  MMIOFlip "Unknown" (   0) seq 131 phys 0xF406C30000 present 51 flags 4
+  23099485  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  23112817 ..   23112817  VSyncInterrupt x1 scanned 0xF406C30000
+  23112830  MMIOFlip "Unknown" (   0) seq 134 phys 0xF40E330000 present 52 flags 4
+  23112875  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  23126088 ..   23126088  VSyncInterrupt x1 scanned 0xF40E330000
+  23126101  MMIOFlip "Unknown" (   0) seq 136 phys 0xF411970000 present 53 flags 4
+  23126146  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  23139459 ..   23139459  VSyncInterrupt x1 scanned 0xF411970000
+  23139472  MMIOFlip "Unknown" (   0) seq 139 phys 0xF406C30000 present 54 flags 4
+  23139517  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  23152807 ..   23152807  VSyncInterrupt x1 scanned 0xF406C30000
+  23152820  MMIOFlip "Unknown" (   0) seq 142 phys 0xF40E330000 present 55 flags 4
+  23152865  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  23166103 ..   23166103  VSyncInterrupt x1 scanned 0xF40E330000
+  23166117  MMIOFlip "Unknown" (   0) seq 144 phys 0xF411970000 present 56 flags 4
+  23166163  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  23179440 ..   23179440  VSyncInterrupt x1 scanned 0xF411970000
+  23179453  MMIOFlip "Unknown" (   0) seq 147 phys 0xF406C30000 present 57 flags 4
+  23179498  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  23192847 ..   23192847  VSyncInterrupt x1 scanned 0xF406C30000
+  23192861  MMIOFlip "Unknown" (   0) seq 150 phys 0xF40E330000 present 58 flags 4
+  23192870  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  23206150 ..   23206150  VSyncInterrupt x1 scanned 0xF40E330000
+  23206164  MMIOFlip "Unknown" (   0) seq 153 phys 0xF411970000 present 59 flags 4
+  23206176  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  23219456 ..   23219456  VSyncInterrupt x1 scanned 0xF411970000
+  23219472  MMIOFlip "Unknown" (   0) seq 156 phys 0xF406C30000 present 60 flags 4
+  23219518  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  23232828 ..   23232828  VSyncInterrupt x1 scanned 0xF406C30000
+  23232842  MMIOFlip "Unknown" (   0) seq 159 phys 0xF40E330000 present 61 flags 4
+  23232886  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  23246168 ..   23246168  VSyncInterrupt x1 scanned 0xF40E330000
+  23246184  MMIOFlip "Unknown" (   0) seq 162 phys 0xF411970000 present 62 flags 4
+  23246233  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  23259469 ..   23259469  VSyncInterrupt x1 scanned 0xF411970000
+  23259482  MMIOFlip "Unknown" (   0) seq 164 phys 0xF406C30000 present 63 flags 4
+  23259493  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  23272846 ..   23272846  VSyncInterrupt x1 scanned 0xF406C30000
+  23272859  MMIOFlip "Unknown" (   0) seq 167 phys 0xF40E330000 present 64 flags 4
+  23272904  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  23286194 ..   23286194  VSyncInterrupt x1 scanned 0xF40E330000
+  23286215  MMIOFlip "Unknown" (   0) seq 169 phys 0xF411970000 present 65 flags 4
+  23286234  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  23299494 ..   23299494  VSyncInterrupt x1 scanned 0xF411970000
+  23299515  MMIOFlip "Unknown" (   0) seq 172 phys 0xF406C30000 present 66 flags 4
+  23299531  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  23312859 ..   23312859  VSyncInterrupt x1 scanned 0xF406C30000
+  23312875  MMIOFlip "Unknown" (   0) seq 175 phys 0xF40E330000 present 67 flags 4
+  23312923  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  23326199 ..   23326199  VSyncInterrupt x1 scanned 0xF40E330000
+  23326216  MMIOFlip "Unknown" (   0) seq 177 phys 0xF411970000 present 68 flags 4
+  23326266  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  23339571 ..   23339571  VSyncInterrupt x1 scanned 0xF411970000
+  23339585  MMIOFlip "Unknown" (   0) seq 180 phys 0xF406C30000 present 69 flags 4
+  23339630  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  23352847 ..   23352847  VSyncInterrupt x1 scanned 0xF406C30000
+  23352866  MMIOFlip "Unknown" (   0) seq 182 phys 0xF40E330000 present 70 flags 4
+  23352936  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  23366263 ..   23366263  VSyncInterrupt x1 scanned 0xF40E330000
+  23366285  MMIOFlip "Unknown" (   0) seq 184 phys 0xF411970000 present 71 flags 4
+  23366339  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  23379548 ..   23379548  VSyncInterrupt x1 scanned 0xF411970000
+  23379562  MMIOFlip "Unknown" (   0) seq 186 phys 0xF406C30000 present 72 flags 4
+  23379608  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  23392852 ..   23392852  VSyncInterrupt x1 scanned 0xF406C30000
+  23392867  MMIOFlip "Unknown" (   0) seq 188 phys 0xF40E330000 present 73 flags 4
+  23392913  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  23406224 ..   23406224  VSyncInterrupt x1 scanned 0xF40E330000
+  23406237  MMIOFlip "Unknown" (   0) seq 191 phys 0xF411970000 present 74 flags 4
+  23406282  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  23419563 ..   23419563  VSyncInterrupt x1 scanned 0xF411970000
+  23419576  MMIOFlip "Unknown" (   0) seq 193 phys 0xF406C30000 present 75 flags 4
+  23419621  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  23432901 ..   23432901  VSyncInterrupt x1 scanned 0xF406C30000
+  23432914  MMIOFlip "Unknown" (   0) seq 196 phys 0xF40E330000 present 76 flags 4
+  23432959  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  23446273 ..   23446273  VSyncInterrupt x1 scanned 0xF40E330000
+  23446286  MMIOFlip "Unknown" (   0) seq 198 phys 0xF411970000 present 77 flags 4
+  23446331  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  23459577 ..   23459577  VSyncInterrupt x1 scanned 0xF411970000
+  23459592  MMIOFlip "Unknown" (   0) seq 201 phys 0xF406C30000 present 78 flags 4
+  23459637  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  23472915 ..   23472915  VSyncInterrupt x1 scanned 0xF406C30000
+  23472929  MMIOFlip "Unknown" (   0) seq 204 phys 0xF40E330000 present 79 flags 4
+  23472974  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  23486288 ..   23486288  VSyncInterrupt x1 scanned 0xF40E330000
+  23486301  MMIOFlip "Unknown" (   0) seq 207 phys 0xF411970000 present 80 flags 4
+  23486346  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  23499591 ..   23499591  VSyncInterrupt x1 scanned 0xF411970000
+  23499606  MMIOFlip "Unknown" (   0) seq 209 phys 0xF406C30000 present 81 flags 4
+  23499649  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  23512930 ..   23512930  VSyncInterrupt x1 scanned 0xF406C30000
+  23512943  MMIOFlip "Unknown" (   0) seq 212 phys 0xF40E330000 present 82 flags 4
+  23512988  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  23526288 ..   23526288  VSyncInterrupt x1 scanned 0xF40E330000
+  23526302  MMIOFlip "Unknown" (   0) seq 214 phys 0xF411970000 present 83 flags 4
+  23526347  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  23539606 ..   23539606  VSyncInterrupt x1 scanned 0xF411970000
+  23539619  MMIOFlip "Unknown" (   0) seq 216 phys 0xF406C30000 present 84 flags 4
+  23539664  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  23552944 ..   23552944  VSyncInterrupt x1 scanned 0xF406C30000
+  23552957  MMIOFlip "Unknown" (   0) seq 218 phys 0xF40E330000 present 85 flags 4
+  23553002  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  23566318 ..   23566318  VSyncInterrupt x1 scanned 0xF40E330000
+  23566333  MMIOFlip "Unknown" (   0) seq 221 phys 0xF411970000 present 86 flags 4
+  23566378  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  23579621 ..   23579621  VSyncInterrupt x1 scanned 0xF411970000
+  23579635  MMIOFlip "Unknown" (   0) seq 224 phys 0xF406C30000 present 87 flags 4
+  23579680  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  23592959 ..   23592959  VSyncInterrupt x1 scanned 0xF406C30000
+  23592972  MMIOFlip "Unknown" (   0) seq 227 phys 0xF40E330000 present 88 flags 4
+  23593017  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  23606268 ..   23606268  VSyncInterrupt x1 scanned 0xF40E330000
+  23606281  MMIOFlip "Unknown" (   0) seq 230 phys 0xF411970000 present 89 flags 4
+  23606326  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  23619602 ..   23619602  VSyncInterrupt x1 scanned 0xF411970000
+  23619615  MMIOFlip "Unknown" (   0) seq 232 phys 0xF406C30000 present 90 flags 4
+  23619660  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  23632940 ..   23632940  VSyncInterrupt x1 scanned 0xF406C30000
+  23632954  MMIOFlip "Unknown" (   0) seq 235 phys 0xF40E330000 present 91 flags 4
+  23632999  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  23646346 ..   23646346  VSyncInterrupt x1 scanned 0xF40E330000
+  23646360  MMIOFlip "Unknown" (   0) seq 238 phys 0xF411970000 present 92 flags 4
+  23646396  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  23659651 ..   23659651  VSyncInterrupt x1 scanned 0xF411970000
+  23659664  MMIOFlip "Unknown" (   0) seq 241 phys 0xF406C30000 present 93 flags 4
+  23659709  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  23672954 ..   23672954  VSyncInterrupt x1 scanned 0xF406C30000
+  23672968  MMIOFlip "Unknown" (   0) seq 243 phys 0xF40E330000 present 94 flags 4
+  23673012  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  23686361 ..   23686361  VSyncInterrupt x1 scanned 0xF40E330000
+  23686375  MMIOFlip "Unknown" (   0) seq 246 phys 0xF411970000 present 95 flags 4
+  23686419  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  23699665 ..   23699665  VSyncInterrupt x1 scanned 0xF411970000
+  23699678  MMIOFlip "Unknown" (   0) seq 249 phys 0xF406C30000 present 96 flags 4
+  23699724  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  23712969 ..   23712969  VSyncInterrupt x1 scanned 0xF406C30000
+  23712982  MMIOFlip "Unknown" (   0) seq 252 phys 0xF40E330000 present 97 flags 4
+  23713027  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  23726330 ..   23726330  VSyncInterrupt x1 scanned 0xF40E330000
+  23726344  MMIOFlip "Unknown" (   0) seq 255 phys 0xF411970000 present 98 flags 4
+  23726389  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  23739686 ..   23739686  VSyncInterrupt x1 scanned 0xF411970000
+  23739700  MMIOFlip "Unknown" (   0) seq 258 phys 0xF406C30000 present 99 flags 4
+  23739710  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  23753018 ..   23753018  VSyncInterrupt x1 scanned 0xF406C30000
+  23753032  MMIOFlip "Unknown" (   0) seq 261 phys 0xF40E330000 present 100 flags 4
+  23753042  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  23766320 ..   23766320  VSyncInterrupt x1 scanned 0xF40E330000
+  23766332  MMIOFlip "Unknown" (   0) seq 264 phys 0xF411970000 present 101 flags 4
+  23766378  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  23779661 ..   23779661  VSyncInterrupt x1 scanned 0xF411970000
+  23779674  MMIOFlip "Unknown" (   0) seq 267 phys 0xF406C30000 present 102 flags 4
+  23779683  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  23793032 ..   23793032  VSyncInterrupt x1 scanned 0xF406C30000
+  23793046  MMIOFlip "Unknown" (   0) seq 270 phys 0xF40E330000 present 103 flags 4
+  23793090  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  23806405 ..   23806405  VSyncInterrupt x1 scanned 0xF40E330000
+  23806419  MMIOFlip "Unknown" (   0) seq 273 phys 0xF411970000 present 104 flags 4
+  23806464  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  23819709 ..   23819709  VSyncInterrupt x1 scanned 0xF411970000
+  23819722  MMIOFlip "Unknown" (   0) seq 276 phys 0xF406C30000 present 105 flags 4
+  23819768  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  23833047 ..   23833047  VSyncInterrupt x1 scanned 0xF406C30000
+  23833061  MMIOFlip "Unknown" (   0) seq 279 phys 0xF40E330000 present 106 flags 4
+  23833100  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  23846376 ..   23846376  VSyncInterrupt x1 scanned 0xF40E330000
+  23846390  MMIOFlip "Unknown" (   0) seq 282 phys 0xF411970000 present 107 flags 4
+  23846401  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  23859723 ..   23859723  VSyncInterrupt x1 scanned 0xF411970000
+  23859736  MMIOFlip "Unknown" (   0) seq 285 phys 0xF406C30000 present 108 flags 4
+  23859780  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  23873062 ..   23873062  VSyncInterrupt x1 scanned 0xF406C30000
+  23873075  MMIOFlip "Unknown" (   0) seq 288 phys 0xF40E330000 present 109 flags 4
+  23873120  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  23886412 ..   23886412  VSyncInterrupt x1 scanned 0xF40E330000
+  23886425  MMIOFlip "Unknown" (   0) seq 291 phys 0xF411970000 present 110 flags 4
+  23886470  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  23899742 ..   23899742  VSyncInterrupt x1 scanned 0xF411970000
+  23899755  MMIOFlip "Unknown" (   0) seq 294 phys 0xF406C30000 present 111 flags 4
+  23899800  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  23913077 ..   23913077  VSyncInterrupt x1 scanned 0xF406C30000
+  23913090  MMIOFlip "Unknown" (   0) seq 297 phys 0xF40E330000 present 112 flags 4
+  23913135  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  23926441 ..   23926441  VSyncInterrupt x1 scanned 0xF40E330000
+  23926455  MMIOFlip "Unknown" (   0) seq 299 phys 0xF411970000 present 113 flags 4
+  23926500  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  23939720 ..   23939720  VSyncInterrupt x1 scanned 0xF411970000
+  23939734  MMIOFlip "Unknown" (   0) seq 302 phys 0xF406C30000 present 114 flags 4
+  23939780  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  23953091 ..   23953091  VSyncInterrupt x1 scanned 0xF406C30000
+  23953105  MMIOFlip "Unknown" (   0) seq 304 phys 0xF40E330000 present 115 flags 4
+  23953115  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  23966432 ..   23966432  VSyncInterrupt x1 scanned 0xF40E330000
+  23966445  MMIOFlip "Unknown" (   0) seq 307 phys 0xF411970000 present 116 flags 4
+  23966490  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  23979768 ..   23979768  VSyncInterrupt x1 scanned 0xF411970000
+  23979782  MMIOFlip "Unknown" (   0) seq 310 phys 0xF406C30000 present 117 flags 4
+  23979827  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  23993106 ..   23993106  VSyncInterrupt x1 scanned 0xF406C30000
+  23993119  MMIOFlip "Unknown" (   0) seq 312 phys 0xF40E330000 present 118 flags 4
+  23993165  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  24006479 ..   24006479  VSyncInterrupt x1 scanned 0xF40E330000
+  24006492  MMIOFlip "Unknown" (   0) seq 315 phys 0xF411970000 present 119 flags 4
+  24006537  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  24019783 ..   24019783  VSyncInterrupt x1 scanned 0xF411970000
+  24019797  MMIOFlip "Unknown" (   0) seq 318 phys 0xF406C30000 present 120 flags 4
+  24019841  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  24033121 ..   24033121  VSyncInterrupt x1 scanned 0xF406C30000
+  24033135  MMIOFlip "Unknown" (   0) seq 321 phys 0xF40E330000 present 121 flags 4
+  24033179  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  24046468 ..   24046468  VSyncInterrupt x1 scanned 0xF40E330000
+  24046481  MMIOFlip "Unknown" (   0) seq 324 phys 0xF411970000 present 122 flags 4
+  24046525  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  24059797 ..   24059797  VSyncInterrupt x1 scanned 0xF411970000
+  24059810  MMIOFlip "Unknown" (   0) seq 326 phys 0xF406C30000 present 123 flags 4
+  24059855  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  24073103 ..   24073103  VSyncInterrupt x1 scanned 0xF406C30000
+  24073124  MMIOFlip "Unknown" (   0) seq 329 phys 0xF40E330000 present 124 flags 4
+  24073171  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  24086504 ..   24086504  VSyncInterrupt x1 scanned 0xF40E330000
+  24086517  MMIOFlip "Unknown" (   0) seq 332 phys 0xF411970000 present 125 flags 4
+  24086562  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  24099812 ..   24099812  VSyncInterrupt x1 scanned 0xF411970000
+  24099825  MMIOFlip "Unknown" (   0) seq 335 phys 0xF406C30000 present 126 flags 4
+  24099870  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  24113150 ..   24113150  VSyncInterrupt x1 scanned 0xF406C30000
+  24113164  MMIOFlip "Unknown" (   0) seq 338 phys 0xF40E330000 present 127 flags 4
+  24113208  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  24126488 ..   24126488  VSyncInterrupt x1 scanned 0xF40E330000
+  24126501  MMIOFlip "Unknown" (   0) seq 341 phys 0xF411970000 present 128 flags 4
+  24126546  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  24139796 ..   24139796  VSyncInterrupt x1 scanned 0xF411970000
+  24139812  MMIOFlip "Unknown" (   0) seq 344 phys 0xF406C30000 present 129 flags 4
+  24139861  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  24153139 ..   24153139  VSyncInterrupt x1 scanned 0xF406C30000
+  24153154  MMIOFlip "Unknown" (   0) seq 346 phys 0xF40E330000 present 130 flags 4
+  24153167  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  24166478 ..   24166478  VSyncInterrupt x1 scanned 0xF40E330000
+  24166493  MMIOFlip "Unknown" (   0) seq 349 phys 0xF411970000 present 131 flags 4
+  24166523  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  24179808 ..   24179808  VSyncInterrupt x1 scanned 0xF411970000
+  24179823  MMIOFlip "Unknown" (11804) seq 352 phys 0xF406C30000 present 132 flags 4
+  24179835  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  24193191 ..   24193191  VSyncInterrupt x1 scanned 0xF406C30000
+  24193211  MMIOFlip "Unknown" (   0) seq 354 phys 0xF40E330000 present 133 flags 4
+  24193226  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  24206514 ..   24206514  VSyncInterrupt x1 scanned 0xF40E330000
+  24206527  MMIOFlip "Unknown" (   0) seq 357 phys 0xF411970000 present 134 flags 4
+  24206566  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  24219855 ..   24219855  VSyncInterrupt x1 scanned 0xF411970000
+  24219868  MMIOFlip "Unknown" (   0) seq 359 phys 0xF406C30000 present 135 flags 4
+  24219913  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  24233194 ..   24233194  VSyncInterrupt x1 scanned 0xF406C30000
+  24233208  MMIOFlip "Unknown" (   0) seq 361 phys 0xF40E330000 present 136 flags 4
+  24233253  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  24246533 ..   24246533  VSyncInterrupt x1 scanned 0xF40E330000
+  24246547  MMIOFlip "Unknown" (   0) seq 363 phys 0xF411970000 present 137 flags 4
+  24246591  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  24259897 ..   24259897  VSyncInterrupt x1 scanned 0xF411970000
+  24259910  MMIOFlip "Unknown" (   0) seq 366 phys 0xF406C30000 present 138 flags 4
+  24259955  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  24273176 ..   24273176  VSyncInterrupt x1 scanned 0xF406C30000
+  24273190  MMIOFlip "Unknown" (   0) seq 369 phys 0xF40E330000 present 139 flags 4
+  24273236  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  24286547 ..   24286547  VSyncInterrupt x1 scanned 0xF40E330000
+  24286561  MMIOFlip "Unknown" (   0) seq 372 phys 0xF411970000 present 140 flags 4
+  24286571  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  24299935 ..   24299935  VSyncInterrupt x1 scanned 0xF411970000
+  24299949  MMIOFlip "Unknown" (   0) seq 375 phys 0xF406C30000 present 141 flags 4
+  24299958  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  24313194 ..   24313194  VSyncInterrupt x1 scanned 0xF406C30000
+  24313212  MMIOFlip "Unknown" (   0) seq 377 phys 0xF40E330000 present 142 flags 4
+  24313262  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  24326561 ..   24326561  VSyncInterrupt x1 scanned 0xF40E330000
+  24326575  MMIOFlip "Unknown" (   0) seq 380 phys 0xF411970000 present 143 flags 4
+  24326620  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  24339900 ..   24339900  VSyncInterrupt x1 scanned 0xF411970000
+  24339914  MMIOFlip "Unknown" (   0) seq 383 phys 0xF406C30000 present 144 flags 4
+  24339959  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  24353238 ..   24353238  VSyncInterrupt x1 scanned 0xF406C30000
+  24353252  MMIOFlip "Unknown" (   0) seq 385 phys 0xF40E330000 present 145 flags 4
+  24353297  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  24366577 ..   24366577  VSyncInterrupt x1 scanned 0xF40E330000
+  24366591  MMIOFlip "Unknown" (   0) seq 387 phys 0xF411970000 present 146 flags 4
+  24366636  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  24379918 ..   24379918  VSyncInterrupt x1 scanned 0xF411970000
+  24379932  MMIOFlip "Unknown" (   0) seq 389 phys 0xF406C30000 present 147 flags 4
+  24379941  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  24393219 ..   24393219  VSyncInterrupt x1 scanned 0xF406C30000
+  24393233  MMIOFlip "Unknown" (   0) seq 391 phys 0xF40E330000 present 148 flags 4
+  24393244  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  24406591 ..   24406591  VSyncInterrupt x1 scanned 0xF40E330000
+  24406604  MMIOFlip "Unknown" (   0) seq 393 phys 0xF411970000 present 149 flags 4
+  24406650  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  24419970 ..   24419970  VSyncInterrupt x1 scanned 0xF411970000
+  24419984  MMIOFlip "Unknown" (   0) seq 395 phys 0xF406C30000 present 150 flags 4
+  24420029  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  24433268 ..   24433268  VSyncInterrupt x1 scanned 0xF406C30000
+  24433282  MMIOFlip "Unknown" (   0) seq 398 phys 0xF40E330000 present 151 flags 4
+  24433326  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  24446605 ..   24446605  VSyncInterrupt x1 scanned 0xF40E330000
+  24446619  MMIOFlip "Unknown" (   0) seq 401 phys 0xF411970000 present 152 flags 4
+  24446664  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  24459995 ..   24459995  VSyncInterrupt x1 scanned 0xF411970000
+  24460008  MMIOFlip "Unknown" (   0) seq 404 phys 0xF406C30000 present 153 flags 4
+  24460053  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  24473281 ..   24473281  VSyncInterrupt x1 scanned 0xF406C30000
+  24473295  MMIOFlip "Unknown" (   0) seq 407 phys 0xF40E330000 present 154 flags 4
+  24473304  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  24486586 ..   24486586  VSyncInterrupt x1 scanned 0xF40E330000
+  24486599  MMIOFlip "Unknown" (   0) seq 410 phys 0xF411970000 present 155 flags 4
+  24486643  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  24499975 ..   24499975  VSyncInterrupt x1 scanned 0xF411970000
+  24499996  MMIOFlip "Unknown" (   0) seq 412 phys 0xF406C30000 present 156 flags 4
+  24500058  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  24513312 ..   24513312  VSyncInterrupt x1 scanned 0xF406C30000
+  24513334  MMIOFlip "Unknown" (   0) seq 415 phys 0xF40E330000 present 157 flags 4
+  24513390  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  24526635 ..   24526635  VSyncInterrupt x1 scanned 0xF40E330000
+  24526649  MMIOFlip "Unknown" (   0) seq 418 phys 0xF411970000 present 158 flags 4
+  24526695  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  24539974 ..   24539974  VSyncInterrupt x1 scanned 0xF411970000
+  24539987  MMIOFlip "Unknown" (   0) seq 420 phys 0xF406C30000 present 159 flags 4
+  24540032  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  24553346 ..   24553346  VSyncInterrupt x1 scanned 0xF406C30000
+  24553360  MMIOFlip "Unknown" (   0) seq 422 phys 0xF40E330000 present 160 flags 4
+  24553405  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  24566649 ..   24566649  VSyncInterrupt x1 scanned 0xF40E330000
+  24566662  MMIOFlip "Unknown" (   0) seq 424 phys 0xF411970000 present 161 flags 4
+  24566707  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  24579988 ..   24579988  VSyncInterrupt x1 scanned 0xF411970000
+  24580001  MMIOFlip "Unknown" (   0) seq 426 phys 0xF406C30000 present 162 flags 4
+  24580047  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  24593361 ..   24593361  VSyncInterrupt x1 scanned 0xF406C30000
+  24593374  MMIOFlip "Unknown" (   0) seq 428 phys 0xF40E330000 present 163 flags 4
+  24593419  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  24606665 ..   24606665  VSyncInterrupt x1 scanned 0xF40E330000
+  24606679  MMIOFlip "Unknown" (   0) seq 431 phys 0xF411970000 present 164 flags 4
+  24606724  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  24619969 ..   24619969  VSyncInterrupt x1 scanned 0xF411970000
+  24619982  MMIOFlip "Unknown" (   0) seq 433 phys 0xF406C30000 present 165 flags 4
+  24620027  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  24633348 ..   24633348  VSyncInterrupt x1 scanned 0xF406C30000
+  24633362  MMIOFlip "Unknown" (   0) seq 436 phys 0xF40E330000 present 166 flags 4
+  24633408  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  24646648 ..   24646648  VSyncInterrupt x1 scanned 0xF40E330000
+  24646664  MMIOFlip "Unknown" (2448) seq 439 phys 0xF411970000 present 167 flags 4
+  24646676  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  24660035 ..   24660035  VSyncInterrupt x1 scanned 0xF411970000
+  24660057  MMIOFlip "Unknown" (   0) seq 442 phys 0xF406C30000 present 168 flags 4
+  24660112  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  24673356 ..   24673356  VSyncInterrupt x1 scanned 0xF406C30000
+  24673370  MMIOFlip "Unknown" (   0) seq 445 phys 0xF40E330000 present 169 flags 4
+  24673415  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  24686729 ..   24686729  VSyncInterrupt x1 scanned 0xF40E330000
+  24686743  MMIOFlip "Unknown" (   0) seq 448 phys 0xF411970000 present 170 flags 4
+  24686788  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  24700033 ..   24700033  VSyncInterrupt x1 scanned 0xF411970000
+  24700046  MMIOFlip "Unknown" (   0) seq 450 phys 0xF406C30000 present 171 flags 4
+  24700092  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  24713337 ..   24713337  VSyncInterrupt x1 scanned 0xF406C30000
+  24713351  MMIOFlip "Unknown" (   0) seq 452 phys 0xF40E330000 present 172 flags 4
+  24713396  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  24726710 ..   24726710  VSyncInterrupt x1 scanned 0xF40E330000
+  24726724  MMIOFlip "Unknown" (   0) seq 455 phys 0xF411970000 present 173 flags 4
+  24726769  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  24740047 ..   24740047  VSyncInterrupt x1 scanned 0xF411970000
+  24740061  MMIOFlip "Unknown" (   0) seq 458 phys 0xF406C30000 present 174 flags 4
+  24740071  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  24753385 ..   24753385  VSyncInterrupt x1 scanned 0xF406C30000
+  24753398  MMIOFlip "Unknown" (   0) seq 461 phys 0xF40E330000 present 175 flags 4
+  24753443  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  24766728 ..   24766728  VSyncInterrupt x1 scanned 0xF40E330000
+  24766747  MMIOFlip "Unknown" (   0) seq 463 phys 0xF411970000 present 176 flags 4
+  24766791  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  24780067 ..   24780067  VSyncInterrupt x1 scanned 0xF411970000
+  24780084  MMIOFlip "Unknown" (   0) seq 466 phys 0xF406C30000 present 177 flags 4
+  24780132  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  24793400 ..   24793400  VSyncInterrupt x1 scanned 0xF406C30000
+  24793414  MMIOFlip "Unknown" (   0) seq 469 phys 0xF40E330000 present 178 flags 4
+  24793459  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  24806813 ..   24806813  VSyncInterrupt x1 scanned 0xF40E330000
+  24806826  MMIOFlip "Unknown" (   0) seq 472 phys 0xF411970000 present 179 flags 4
+  24806872  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  24820040 ..   24820040  VSyncInterrupt x1 scanned 0xF411970000
+  24820053  MMIOFlip "Unknown" (   0) seq 474 phys 0xF406C30000 present 180 flags 4
+  24820063  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  24833415 ..   24833415  VSyncInterrupt x1 scanned 0xF406C30000
+  24833428  MMIOFlip "Unknown" (   0) seq 477 phys 0xF40E330000 present 181 flags 4
+  24833438  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  24846797 ..   24846797  VSyncInterrupt x1 scanned 0xF40E330000
+  24846812  MMIOFlip "Unknown" (   0) seq 480 phys 0xF411970000 present 182 flags 4
+  24846824  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  24860057 ..   24860057  VSyncInterrupt x1 scanned 0xF411970000
+  24860071  MMIOFlip "Unknown" (   0) seq 482 phys 0xF406C30000 present 183 flags 4
+  24860116  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  24873430 ..   24873430  VSyncInterrupt x1 scanned 0xF406C30000
+  24873443  MMIOFlip "Unknown" (   0) seq 485 phys 0xF40E330000 present 184 flags 4
+  24873488  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  24886803 ..   24886803  VSyncInterrupt x1 scanned 0xF40E330000
+  24886817  MMIOFlip "Unknown" (   0) seq 487 phys 0xF411970000 present 185 flags 4
+  24886862  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ac910 1 true true
+  24900106 ..   24900106  VSyncInterrupt x1 scanned 0xF411970000
+  24900119  MMIOFlip "Unknown" (   0) seq 490 phys 0xF406C30000 present 186 flags 4
+  24900164  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46cdc10 1 true true
+  24913446 ..   24913446  VSyncInterrupt x1 scanned 0xF406C30000
+  24913458  MMIOFlip "Unknown" (   0) seq 493 phys 0xF40E330000 present 187 flags 4
+  24913504  Flip "Unknown" (7972) 0x0000000000000000 0 0xffffe685c46ad510 1 true true
+  24917444  ClearFlipDevice "Unknown" (7972) 0xffffd2025ff4b010 0
+  24917449  CancelFlip "Unknown" (7972) scanned -1 present 188 type 5
+  24917451  CancelFlip "Unknown" (7972) scanned -1 present 189 type 5
+  24926821 ..   24926821  VSyncInterrupt x1 scanned 0xF40E330000
+  24940137 ..   24940137  VSyncInterrupt x1 scanned 0xF406C30000
+  24953413 ..   24966751  VSyncInterrupt x2 scanned 0xF406C30000
+  24974518  Flip "Unknown" (1892) 0x0000000000000000 0 0xffffe685c8f75f10 1 true true
+  24974604  MMIOFlip "Unknown" (   4) seq 5 phys 0xF404199000 present 7 flags 4
+  24980132 ..   24980132  VSyncInterrupt x1 scanned 0xF404199000
+  24980147  ClearFlipDevice "Unknown" (1892) 0xffffd202686737d0 0
+  24993527 ..   25100140  VSyncInterrupt x9 scanned 0xF404199000
+  25113473 ..   25193517  VSyncInterrupt x7 scanned 0xF404199000
+  25206854 ..   25233533  VSyncInterrupt x3 scanned 0xF404199000
+  25246904 ..   25246904  VSyncInterrupt x1 scanned 0xF404199000
+  25260214 ..   25260214  VSyncInterrupt x1 scanned 0xF404199000
+  25273545 ..   25273545  VSyncInterrupt x1 scanned 0xF404199000
+  25286884 ..   25286884  VSyncInterrupt x1 scanned 0xF404199000
+  25300223 ..   25313545  VSyncInterrupt x2 scanned 0xF4041B0000
+  25326884 ..   25326884  VSyncInterrupt x1 scanned 0xF4041B0000
+  25333576  Flip "Unknown" (5424) 0x0000000000000000 0 0xffffe685c8f6dd10 0 true true
+  25333668  MMIOFlip "Unknown" (   4) seq 1 phys 0xF4058F0000 present 1 flags 2
+  25335774  Flip "Unknown" (5424) 0x0000000000000000 0 0xffffe685c8f6f310 0 true true
+  25336531  Flip "Unknown" (5424) 0x0000000000000000 0 0xffffe685c8f6dd10 0 true true
+  25340284 ..   25340284  VSyncInterrupt x1 scanned 0xF4058F0000
+  25353656 ..   25727065  VSyncInterrupt x29 scanned 0xF4058F0000
+  25740418 ..   25780440  VSyncInterrupt x4 scanned 0xF4058F0000
+  25793779 ..   25807109  VSyncInterrupt x2 scanned 0xF4058F0000
+  25820415 ..   33663328  VSyncInterrupt x589 scanned 0xF4058F0000
+  33676653 ..   33676653  VSyncInterrupt x1 scanned 0xF4058F0000
+  33680960  ClearFlipDevice "Unknown" (5424) 0xffffd20262991010 0
+  33680964  CancelFlip "Unknown" (5424) scanned 0xf4058f0000 present 1 type 5
+  33680967  CancelFlip "Unknown" (5424) scanned -1 present 2 type 5
+  33680969  CancelFlip "Unknown" (5424) scanned -1 present 3 type 5
+  33690019 ..   33690019  VSyncInterrupt x1 scanned 0xF4058F0000
+  33703316 ..   33703316  VSyncInterrupt x1 scanned 0xF4058F0000
+  33716652 ..   33716652  VSyncInterrupt x1 scanned 0xF4058F0000
+  33729997 ..   33796678  VSyncInterrupt x6 scanned 0xF4058F0000
+  33810006 ..   33823342  VSyncInterrupt x2 scanned 0xF4058F0000
+  33834579  Flip "Unknown" (1892) 0x0000000000000000 0 0xffffe685c8f74010 1 true true
+  33834659  MMIOFlip "Unknown" (   4) seq 2 phys 0xF4039B0000 present 3 flags 4
+  33836680 ..   33836680  VSyncInterrupt x1 scanned 0xF4039B0000
+  33850029 ..   33850029  VSyncInterrupt x1 scanned 0xF4039B0000
+  33851397  Flip "Unknown" (1892) 0x0000000000000000 0 0xffffe685c8f73710 1 true true
+  33851425  MMIOFlip "Unknown" (   4) seq 3 phys 0xF404199000 present 4 flags 4
+  33863356 ..   33863356  VSyncInterrupt x1 scanned 0xF404199000
+  33872699  Flip "Unknown" (1892) 0x0000000000000000 0 0xffffe685c8f71710 1 true true
+  33872725  MMIOFlip "Unknown" (   4) seq 4 phys 0xF4058F0000 present 5 flags 4
+  33875994  ClearFlipDevice "Unknown" ( 716) 0xffffd2025fc2d4a0 0
+  33876694 ..   33890079  VSyncInterrupt x2 scanned 0xF4058F0000
+  33903386 ..   33903386  VSyncInterrupt x1 scanned 0xF40DA80000
+  33916741 ..   33916741  VSyncInterrupt x1 scanned 0xF40DA80000
+  33930043 ..   33930043  VSyncInterrupt x1 scanned 0xF40DA80000
+  33939285  Flip "Unknown" ( 716) 0x0000000000000000 0 0xffffe685c46c2c10 1 true true
+  33939360  MMIOFlip "Unknown" (   4) seq 1 phys 0xF4111B0000 present 1 flags 4
+  33943403 ..   34036832  VSyncInterrupt x8 scanned 0xF4111B0000
+  34042279  ClearFlipDevice "Unknown" ( 716) 0xffffd20262bb2820 0
+  34042342  Flip "Unknown" ( 716) 0x0000000000000000 0 0xffffe685c46d1f10 0 true true
+  34042491  MMIOFlip "Unknown" (   4) seq 3 phys 0xF40DA80000 present 2 flags 2
+  34050113 ..   47361675  VSyncInterrupt x999 scanned 0xF40DA80000
+  47374987 ..   47388340  VSyncInterrupt x2 scanned 0xF40DA80000
+  47401664 ..   47401664  VSyncInterrupt x1 scanned 0xF40DA80000
+  47415071 ..   47415071  VSyncInterrupt x1 scanned 0xF40DA80000
+  47428353 ..   47428353  VSyncInterrupt x1 scanned 0xF40DA80000
+  47441693 ..   47521705  VSyncInterrupt x7 scanned 0xF40DA80000
+  47535063 ..   47535063  VSyncInterrupt x1 scanned 0xF40DA80000
+  47548388 ..   47548388  VSyncInterrupt x1 scanned 0xF40DA80000
+  47561724 ..   47561724  VSyncInterrupt x1 scanned 0xF40DA80000
+  47575061 ..   47575061  VSyncInterrupt x1 scanned 0xF40DA80000
+  47588404 ..   47588404  VSyncInterrupt x1 scanned 0xF40DA80000
+  47601736 ..   47601736  VSyncInterrupt x1 scanned 0xF40DA80000
+  47615076 ..   47615076  VSyncInterrupt x1 scanned 0xF40DA80000
+  47628413 ..   47628413  VSyncInterrupt x1 scanned 0xF40DA80000
+  47641752 ..   47641752  VSyncInterrupt x1 scanned 0xF40DA80000
+  47655090 ..   47655090  VSyncInterrupt x1 scanned 0xF40DA80000
+  47668428 ..   47668428  VSyncInterrupt x1 scanned 0xF40DA80000
+  47681787 ..   47801828  VSyncInterrupt x10 scanned 0xF40DA80000
+  47815155 ..   47815155  VSyncInterrupt x1 scanned 0xF40DA80000
+  47828486 ..   47828486  VSyncInterrupt x1 scanned 0xF40DA80000
+  47841821 ..   47841821  VSyncInterrupt x1 scanned 0xF40DA80000
+  47855164 ..   47855164  VSyncInterrupt x1 scanned 0xF40DA80000
+  47868501 ..   47868501  VSyncInterrupt x1 scanned 0xF40DA80000
+  47881892 ..   47908527  VSyncInterrupt x3 scanned 0xF40DA80000
+  47921875 ..   47921875  VSyncInterrupt x1 scanned 0xF40DA80000
+  47935194 ..   47935194  VSyncInterrupt x1 scanned 0xF40DA80000
+  47948569 ..   48055314  VSyncInterrupt x9 scanned 0xF40DA80000
+  48068608 ..   48068608  VSyncInterrupt x1 scanned 0xF40DA80000
+  48081915 ..   48081915  VSyncInterrupt x1 scanned 0xF40DA80000
+  48095299 ..   48095299  VSyncInterrupt x1 scanned 0xF40DA80000
+  48108746 ..   48135314  VSyncInterrupt x3 scanned 0xF40DA80000
+  48148653 ..   48148653  VSyncInterrupt x1 scanned 0xF40DA80000
+  48161994 ..   48161994  VSyncInterrupt x1 scanned 0xF40DA80000
+  48175332 ..   48175332  VSyncInterrupt x1 scanned 0xF40DA80000
+  48188668 ..   48188668  VSyncInterrupt x1 scanned 0xF40DA80000
+  48202056 ..   48202056  VSyncInterrupt x1 scanned 0xF40DA80000
+  48215311 ..   48215311  VSyncInterrupt x1 scanned 0xF40DA80000
+  48228692 ..   48228692  VSyncInterrupt x1 scanned 0xF40DA80000
+  48242070 ..   48242070  VSyncInterrupt x1 scanned 0xF40DA80000
+  48255358 ..   48255358  VSyncInterrupt x1 scanned 0xF40DA80000
+  48268698 ..   48268698  VSyncInterrupt x1 scanned 0xF40DA80000
+  48282106 ..   48282106  VSyncInterrupt x1 scanned 0xF40DA80000
+  48295375 ..   48295375  VSyncInterrupt x1 scanned 0xF40DA80000
+  48308697 ..   48308697  VSyncInterrupt x1 scanned 0xF40DA80000
+  48322018 ..   48322018  VSyncInterrupt x1 scanned 0xF40DA80000
+  48335391 ..   48335391  VSyncInterrupt x1 scanned 0xF40DA80000
+  48348766 ..   48348766  VSyncInterrupt x1 scanned 0xF40DA80000
+  48362031 ..   48362031  VSyncInterrupt x1 scanned 0xF40DA80000
+  48375403 ..   48375403  VSyncInterrupt x1 scanned 0xF40DA80000
+  48388748 ..   48388748  VSyncInterrupt x1 scanned 0xF40DA80000
+  48402079 ..   48402079  VSyncInterrupt x1 scanned 0xF40DA80000
+  48415385 ..   48415385  VSyncInterrupt x1 scanned 0xF40DA80000
+  48428793 ..   48428793  VSyncInterrupt x1 scanned 0xF40DA80000
+  48442096 ..   48442096  VSyncInterrupt x1 scanned 0xF40DA80000
+  48455396 ..   48455396  VSyncInterrupt x1 scanned 0xF40DA80000
+  48468820 ..   48468820  VSyncInterrupt x1 scanned 0xF40DA80000
+  48482109 ..   48482109  VSyncInterrupt x1 scanned 0xF40DA80000
+  48495446 ..   48495446  VSyncInterrupt x1 scanned 0xF40DA80000
+  48508794 ..   48508794  VSyncInterrupt x1 scanned 0xF40DA80000
+  48522122 ..   48522122  VSyncInterrupt x1 scanned 0xF40DA80000
+  48535432 ..   48535432  VSyncInterrupt x1 scanned 0xF40DA80000
+  48548800 ..   48548800  VSyncInterrupt x1 scanned 0xF40DA80000
+  48562157 ..   48562157  VSyncInterrupt x1 scanned 0xF40DA80000
+  48575476 ..   48575476  VSyncInterrupt x1 scanned 0xF40DA80000
+  48588814 ..   48588814  VSyncInterrupt x1 scanned 0xF40DA80000
+  48602172 ..   48602172  VSyncInterrupt x1 scanned 0xF40DA80000
+  48615492 ..   48615492  VSyncInterrupt x1 scanned 0xF40DA80000
+  48628797 ..   48628797  VSyncInterrupt x1 scanned 0xF40DA80000
+  48642168 ..   48642168  VSyncInterrupt x1 scanned 0xF40DA80000
+  48655506 ..   48655506  VSyncInterrupt x1 scanned 0xF40DA80000
+  48668844 ..   48668844  VSyncInterrupt x1 scanned 0xF40DA80000
+  48682184 ..   48682184  VSyncInterrupt x1 scanned 0xF40DA80000
+  48695555 ..   48695555  VSyncInterrupt x1 scanned 0xF40DA80000
+  48708860 ..   48708860  VSyncInterrupt x1 scanned 0xF40DA80000
+  48722196 ..   48722196  VSyncInterrupt x1 scanned 0xF40DA80000
+  48735570 ..   48735570  VSyncInterrupt x1 scanned 0xF40DA80000
+  48748879 ..   48748879  VSyncInterrupt x1 scanned 0xF40DA80000
+  48762178 ..   48762178  VSyncInterrupt x1 scanned 0xF40DA80000
+  48775594 ..   48775594  VSyncInterrupt x1 scanned 0xF40DA80000
+  48788890 ..   48788890  VSyncInterrupt x1 scanned 0xF40DA80000
+  48802195 ..   48802195  VSyncInterrupt x1 scanned 0xF40DA80000
+  48815565 ..   48815565  VSyncInterrupt x1 scanned 0xF40DA80000
+  48828937 ..   48828937  VSyncInterrupt x1 scanned 0xF40DA80000
+  48842242 ..   48842242  VSyncInterrupt x1 scanned 0xF40DA80000
+  48855547 ..   48855547  VSyncInterrupt x1 scanned 0xF40DA80000
+  48868920 ..   48868920  VSyncInterrupt x1 scanned 0xF40DA80000
+  48882256 ..   48882256  VSyncInterrupt x1 scanned 0xF40DA80000
+  48895594 ..   48895594  VSyncInterrupt x1 scanned 0xF40DA80000
+  48908949 ..   48908949  VSyncInterrupt x1 scanned 0xF40DA80000
+  48922272 ..   48922272  VSyncInterrupt x1 scanned 0xF40DA80000
+  48935610 ..   48935610  VSyncInterrupt x1 scanned 0xF40DA80000
+  48948950 ..   48948950  VSyncInterrupt x1 scanned 0xF40DA80000
+  48962252 ..   48962252  VSyncInterrupt x1 scanned 0xF40DA80000
+  48975595 ..   48975595  VSyncInterrupt x1 scanned 0xF40DA80000
+  48988964 ..   48988964  VSyncInterrupt x1 scanned 0xF40DA80000
+  49002275 ..   49002275  VSyncInterrupt x1 scanned 0xF40DA80000
+  49015692 ..   49015692  VSyncInterrupt x1 scanned 0xF40DA80000
+  49028977 ..   49028977  VSyncInterrupt x1 scanned 0xF40DA80000
+  49042315 ..   49042315  VSyncInterrupt x1 scanned 0xF40DA80000
+  49055704 ..   49055704  VSyncInterrupt x1 scanned 0xF40DA80000
+  49068991 ..   49068991  VSyncInterrupt x1 scanned 0xF40DA80000
+  49082297 ..   49082297  VSyncInterrupt x1 scanned 0xF40DA80000
+  49095668 ..   49095668  VSyncInterrupt x1 scanned 0xF40DA80000
+  49109023 ..   49109023  VSyncInterrupt x1 scanned 0xF40DA80000
+  49122343 ..   49122343  VSyncInterrupt x1 scanned 0xF40DA80000
+  49135682 ..   49135682  VSyncInterrupt x1 scanned 0xF40DA80000
+  49149021 ..   49149021  VSyncInterrupt x1 scanned 0xF40DA80000
+  49162393 ..   49162393  VSyncInterrupt x1 scanned 0xF40DA80000
+  49175664 ..   49175664  VSyncInterrupt x1 scanned 0xF40DA80000
+  49189035 ..   49189035  VSyncInterrupt x1 scanned 0xF40DA80000
+  49202409 ..   49202409  VSyncInterrupt x1 scanned 0xF40DA80000
+  49215712 ..   49215712  VSyncInterrupt x1 scanned 0xF40DA80000
+  49229049 ..   49229049  VSyncInterrupt x1 scanned 0xF40DA80000
+  49242423 ..   49242423  VSyncInterrupt x1 scanned 0xF40DA80000
+  49255735 ..   49255735  VSyncInterrupt x1 scanned 0xF40DA80000
+  49269065 ..   49269065  VSyncInterrupt x1 scanned 0xF40DA80000
+  49282438 ..   49282438  VSyncInterrupt x1 scanned 0xF40DA80000
+  49295747 ..   49295747  VSyncInterrupt x1 scanned 0xF40DA80000
+  49309051 ..   49309051  VSyncInterrupt x1 scanned 0xF40DA80000
+  49322454 ..   49322454  VSyncInterrupt x1 scanned 0xF40DA80000
+  49335755 ..   49335755  VSyncInterrupt x1 scanned 0xF40DA80000
+  49349095 ..   49349095  VSyncInterrupt x1 scanned 0xF40DA80000
+  49362438 ..   49362438  VSyncInterrupt x1 scanned 0xF40DA80000
+  49375808 ..   49375808  VSyncInterrupt x1 scanned 0xF40DA80000
+  49389108 ..   49389108  VSyncInterrupt x1 scanned 0xF40DA80000
+  49402415 ..   49402415  VSyncInterrupt x1 scanned 0xF40DA80000
+  49415848 ..   49415848  VSyncInterrupt x1 scanned 0xF40DA80000
+  49429123 ..   49429123  VSyncInterrupt x1 scanned 0xF40DA80000
+  49442462 ..   49602494  VSyncInterrupt x13 scanned 0xF40DA80000
+  49615821 ..   49615821  VSyncInterrupt x1 scanned 0xF40DA80000
+  49629150 ..   49629150  VSyncInterrupt x1 scanned 0xF40DA80000
+  49642511 ..   50162771  VSyncInterrupt x40 scanned 0xF40DA80000
+  50176031 ..   50696255  VSyncInterrupt x40 scanned 0xF40DA80000
+  50709594 ..   51243133  VSyncInterrupt x41 scanned 0xF40DA80000
+  51256470 ..   51790015  VSyncInterrupt x41 scanned 0xF40DA80000
+  51803301 ..   52336875  VSyncInterrupt x41 scanned 0xF40DA80000
+  52350211 ..   52603594  VSyncInterrupt x20 scanned 0xF40DA80000

@@ -22,7 +22,7 @@ typedef const void* PDXGKARG_SYSTEM_DISPLAY_ENABLE_FLAGS;
 typedef struct { long long QuadPart; } PHYSICAL_ADDRESS;
 typedef struct { UINT Width,Height,Pitch; D3DDDIFORMAT ColorFormat; PHYSICAL_ADDRESS PhysicAddress; } DXGK_DISPLAY_INFORMATION;
 typedef struct _BC250_DEVICE {
-    BOOLEAN VramEnabled;PHYSICAL_ADDRESS VramPhysical;ULONGLONG VramLength;
+    BOOLEAN VramEnabled;PHYSICAL_ADDRESS VramPhysical;ULONGLONG VramLength,VramMcBase;
     void *Mmio,*Framebuffer;
     SIZE_T FramebufferLength;
     DXGK_DISPLAY_INFORMATION Post,RuntimePost;
@@ -148,6 +148,30 @@ static long Bc250Dcn201PlaneBlank(BC250_DISP_IO* io,int blank)
     else { ++plane_unblanks; CHECK(model.blank&OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK); }
     return STATUS_SUCCESS;
 }
+/* BD-170 r6: Desired as the writer's Resume hands it out (bc250kmd.h), and the two calls of wddm.c an unblank site
+ * makes. The stub hands out the deposit a test sets, and records what the plane and the address registers held when
+ * Resume ran (it must run with the plane blank and before the write sequence) and which deposit was programmed. */
+typedef struct {ULONGLONG CardAddress;ULONG Pitch;ULONG PlaneFormat;ULONGLONG Bytes;ULONG Sequence;} BC250_WDDM_DESIRED;
+static struct {
+    int has;BC250_WDDM_DESIRED desired;
+    unsigned resumes,programmed;ULONG sequence;
+    int blank_at_resume;ULONGLONG requested_at_resume;
+} writer;
+static BOOLEAN WddmWriterResume(BC250_DEVICE*d,BC250_WDDM_DESIRED*desired)
+{
+    (void)d;
+    ++writer.resumes;writer.blank_at_resume=plane_is_blank;writer.requested_at_resume=model.requested;
+    memset(desired,0,sizeof(*desired));
+    if(!writer.has)return FALSE;
+    *desired=writer.desired;return TRUE;
+}
+static void WddmWriterDepositProgrammed(BC250_DEVICE*d,ULONG sequence)
+{
+    (void)d;
+    /* Only after the poll proved the deposit on the plane. */
+    CHECK(model.scanned==model.requested && !(model.flip&HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK));
+    ++writer.programmed;writer.sequence=sequence;
+}
 /* ACTUAL_SOURCE */
 static void init(BC250_DEVICE*d,ULONG*fb)
 {
@@ -251,9 +275,17 @@ int main(void)
     Bc250SystemDisplayWrite(&d,src,4,1,16,0,0);CHECK(fb[0]==1 && fb[1]==2 && fb[2]==0);
     // Ordinary allocation handoff preserves OTG visibility, but must release
     // HUBP so a later application flip can scan out without a cold unblank.
+    // BD-170 r6: Resume runs once, with the plane blank and before the write sequence. A deposit is not programmed
+    // here (the reserved buffer is the driver's own): the plane gets the reserved buffer, and End owes the deposit.
     model.blank=OTG0_OTG_BLANK_CONTROL__OTG_BLANK_DATA_EN_MASK|OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK;
+    memset(&writer,0,sizeof(writer));writer.has=1;
+    writer.desired.CardAddress=0x10000;writer.desired.Pitch=32;writer.desired.PlaneFormat=BC250_PLANE_FORMAT_ARGB8888;
+    writer.desired.Bytes=96;writer.desired.Sequence=3;model.requested=0x123000;
     CHECK(DcnRuntimeSurface(&d,FALSE)==STATUS_SUCCESS);
     CHECK(!d.RuntimePlaneBlank && plane_unblanks==2 && (model.blank&OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK));
+    CHECK(writer.resumes==1 && writer.blank_at_resume && writer.requested_at_resume==0x123000);
+    CHECK(writer.programmed==0 && model.scanned==0x490000000ull);
+    memset(&writer,0,sizeof(writer));
     // Hardware visibility wins over a deliberately stale software cache.
     model.blank=0;d.DcnBlanked=TRUE;model.elapsed=0;model.scanned=0;
     CHECK(DcnRuntimeSurface(&d,FALSE)==STATUS_SUCCESS);
@@ -265,6 +297,7 @@ int main(void)
     {
         BC250_LINK_SURFACE saved,refused;
         init(&d,fb);d.VramEnabled=TRUE;d.VramPhysical.QuadPart=0x400000000ll;d.VramLength=0x100000000ull;
+        memset(&writer,0,sizeof(writer));
         d.DcnPlaneFormats=TRUE;d.DcnFirmwareSurfaceConfig=8;
         d.DcnFirmwareHubpretControl=0x00E40000;d.DcnFirmwareCnvcFormat=8;
         model.config=8;model.crossbar=0x00E40000;model.cnvc=8;model.pitch=7;
@@ -299,6 +332,40 @@ int main(void)
         saved.Visible=1;
         CHECK(DcnLinkSurfaceRestore(&d,&saved)==STATUS_IO_TIMEOUT);
         CHECK(d.DcnBlanked && plane_is_blank && fb[0]==0x12345678);
+        CHECK(writer.resumes==3 && writer.programmed==0);
+        // BD-170 r6: a deposit (a flip during the writer) replaces the saved surface, which the OS may have released:
+        // programmed after Resume with the plane blank, proven on the plane by the same poll, then reported as
+        // programmed with its sequence. The saved mode's size, Desired's pitch.
+        model.never_latch=0;model.elapsed=0;model.scanned=0x480000000ull;
+        memset(&writer,0,sizeof(writer));writer.has=1;
+        writer.desired.CardAddress=0x90000000ull;writer.desired.Pitch=64;
+        writer.desired.PlaneFormat=BC250_PLANE_FORMAT_ARGB8888;writer.desired.Bytes=64*3;writer.desired.Sequence=7;
+        CHECK(DcnLinkSurfaceRestore(&d,&saved)==STATUS_SUCCESS);
+        CHECK(writer.resumes==1 && writer.blank_at_resume && writer.requested_at_resume!=0x490000000ull);
+        CHECK(model.requested==0x490000000ull && model.scanned==0x490000000ull && model.pitch==15);
+        CHECK(writer.programmed==1 && writer.sequence==7);
+        CHECK(d.DcnCurrentAddress==0x490000000ull && d.DcnCurrentPitch==64 && !d.DcnBlanked && !plane_is_blank);
+        // A deposit that does not fit the saved mode refuses the restore before any write, with the plane blank:
+        // another format, too few bytes, a card address outside the carve-out, and one not page aligned.
+        {
+            static const struct {ULONGLONG card;ULONG format;ULONGLONG bytes;} unfit[]={
+                {0x90000000ull,BC250_PLANE_FORMAT_ABGR8888,64*3},
+                {0x90000000ull,BC250_PLANE_FORMAT_ARGB8888,64*3-1},
+                {0x100000000ull,BC250_PLANE_FORMAT_ARGB8888,64*3},
+                {0x90000010ull,BC250_PLANE_FORMAT_ARGB8888,64*3}};
+            unsigned k;
+            for(k=0;k<sizeof(unfit)/sizeof(unfit[0]);k++){
+                const ULONGLONG requested=model.requested;
+                writer.desired.CardAddress=unfit[k].card;writer.desired.PlaneFormat=unfit[k].format;
+                writer.desired.Bytes=unfit[k].bytes;writer.programmed=0;
+                CHECK(DcnLinkSurfaceRestore(&d,&saved)==STATUS_DEVICE_NOT_READY);
+                CHECK(model.requested==requested && plane_is_blank && d.DcnBlanked && writer.programmed==0);
+            }
+        }
+        // No deposit: the saved surface, as before r6, and nothing reported as programmed.
+        memset(&writer,0,sizeof(writer));model.elapsed=0;
+        CHECK(DcnLinkSurfaceRestore(&d,&saved)==STATUS_SUCCESS);
+        CHECK(model.scanned==saved.Physical && d.DcnCurrentAddress==saved.Physical && writer.resumes==1 && !writer.programmed);
     }
     printf("post display restore: %u checks, %u failures\n",checks,failures);return failures?1:0;
 }

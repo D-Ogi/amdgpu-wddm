@@ -1,0 +1,19 @@
+2026-10-14T16:43:23Z step 01: precheck
+2026-10-14T16:43:27Z step 02: push
+2026-10-14T16:43:38Z step 03: swap-sys
+2026-10-14T16:43:47Z step 04: restart
+2026-10-14T16:46:20Z step 05: read-start
+2026-10-14T16:46:33Z step 06.0: idle control: DWM idle for 60 s, a04 lines at 0, 30 and 60 s
+2026-10-14T16:47:43Z step 06.1: x64 release shell cand3-x64
+2026-10-14T16:47:47Z step 06.2: trial a04-1: x64 exclusive fullscreen, three buffers, interval 0 (four cases) and 1
+2026-10-14T16:48:35Z step 06.3: trial a04-2: x64 -mk, three buffers, interval 0 and 1, with a camera burst
+2026-10-14T16:49:33Z step 06.5: x86 release shell cand3-x86
+2026-10-14T16:49:37Z step 06.6: trial a04-3: WoW64 exclusive fullscreen, three buffers, interval 0 and 1
+2026-10-14T16:50:26Z step 06.8: D3D12 control: frameloop set bd170
+2026-10-14T16:51:21Z step 06.9: Vulkan control: vkcube over DXGI, IMMEDIATE then FIFO
+2026-10-14T16:52:07Z step 06.10: desktop: overlay back, scan-out and screenshot
+2026-10-14T16:52:24Z step 07: restore-sys
+2026-10-14T16:52:34Z step 08: restart
+2026-10-14T16:55:10Z step 09: postcheck
+2026-10-14T16:55:16Z step 09: original KMD B0E01A869298CF85E14827B4CBD6840DD8C7955374FB9E4E1698A640FFB9760E loaded
+2026-10-14T16:55:18Z step 10: done

@@ -467,6 +467,8 @@ void Bc250DpcRoutine(_In_ const PVOID MiniportDeviceContext)
     if (IhTakeVsync((BC250_DEVICE*)MiniportDeviceContext))
         DcnVsyncFromVector((BC250_DEVICE*)MiniportDeviceContext);
     WddmDcnVsync((BC250_DEVICE*)MiniportDeviceContext);
+    // BD-170 r6: E5's notification and drain record, a no-op unless E5 queued this DPC (wddm.c's WddmFlipFault).
+    WddmFlipFaultDpc((BC250_DEVICE*)MiniportDeviceContext);
     WddmDpc((BC250_DEVICE*)MiniportDeviceContext);      // returns at once unless the full table is in use
     ConnectorDpc((BC250_DEVICE*)MiniportDeviceContext);
     ProgressExit(ProgressSiteDeviceDpc, 0);
@@ -579,6 +581,9 @@ NTSTATUS Bc250SetPowerState(_In_ const PVOID MiniportDeviceContext, _In_ ULONG D
         // silence is the safe side of a diagnostic that bugchecks.
         // FanPause after DpmPause: no fan step runs while the governor is paused, and the board has the fan out of D0.
         if (DevicePowerState!=PowerDeviceD0) {
+            // BD-170 r6: dxgmms2 flushed the flip queue before this call (facts M904), so the power writers below owe
+            // no flip (wddm.c's WddmFlipFlushed).
+            WddmFlipFlushed(device);
             HangDetectorPause(); CpuPause(device); DpmPause(device); FanPause(device);
             DpAudioStop(device);    // AUDIO_ENABLED 0 before the display block goes down
             if (ConnectorIsEnabled(device)) {

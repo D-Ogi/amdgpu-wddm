@@ -83,6 +83,7 @@
 #define BC250_REG_DMU_CNVC_CFG0_FORMAT_CONTROL 0x10640ul
 #define BC250_REG_DMU_MPCC0_MPCC_CONTROL 0x11CD0ul
 #define BC250_REG_DMU_CNVC_CFG0_ALPHA_2BIT_LUT 0x10674ul
+#define BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_FLIP_INTERRUPT 0x0EB80ul
 #define BC250_REG_DMU_OTG0_OTG_STATUS_POSITION 0x14028ul
 #define BC250_REG_DMU_OTG0_OTG_GLOBAL_CONTROL0 0x14140ul
 #define BC250_REG_CLK_CLK4_0_CLK4_CLK2_CURRENT_CNT 0x6C9FCul
@@ -1894,6 +1895,15 @@ static const unsigned long g_MmioDcnWriteAllow[BC250_MMIO_DCN_WRITE_ALLOW_COUNT]
     0x0EA94, 0x0EB1C, 0x0EB28, 0x0EB2C, 0x0EB68, 0x0EB6C, 0x0ECA8, 0x1063C, 0x13FE8, 0x14008,
     0x1406C, 0x14128, 0x1412C,
 };
+
+// BD-170 r6 (dcn.c's DcnWitnessArm): the lab flavour's extra DCN writes (gen_regs.py's DCN_LAB_WRITE_REGISTERS).
+// Not compiled into the release flavour; MmioDcnWriteEx checks it after g_MmioDcnWriteAllow.
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+#define BC250_MMIO_DCN_LAB_WRITE_ALLOW_COUNT 1
+static const unsigned long g_MmioDcnLabWriteAllow[BC250_MMIO_DCN_LAB_WRITE_ALLOW_COUNT] = {
+    0x0EB80,
+};
+#endif
 
 #endif
 

@@ -474,7 +474,7 @@ NTSTATUS ModesetCommit(_Inout_ BC250_DEVICE* Device, ULONG Width, ULONG Height, 
         ExReleaseFastMutex(&m->Lock);
         return STATUS_SUCCESS;
     }
-    if (!WddmPrimaryExclusiveBegin(Device, &generation))
+    if (!WddmPrimaryExclusiveBegin(Device, BC250_WRITER_MODESET_COMMIT, &generation))
     {
         m->Busy++;
         ExReleaseFastMutex(&m->Lock);
@@ -570,7 +570,7 @@ void ModesetPowerDown(_Inout_ BC250_DEVICE* Device)
     ExAcquireFastMutex(&m->Lock);
     if (m->PipeChanged && !m->Suspended)
     {
-        if (WddmPrimaryExclusiveBegin(Device, &generation))
+        if (WddmPrimaryExclusiveBegin(Device, BC250_WRITER_MODESET_D3, &generation))
         {
             if (Device->DcnDiverged) flip = DcnFlipToFirmwareSurface(Device);
             status = RestoreNative(Device, &result);
@@ -610,7 +610,8 @@ void ModesetPowerUp(_Inout_ BC250_DEVICE* Device)
     IoOpen(Device, &io, 0);
     status = Bc250PipeShapeRead(&io, &shape);
     if (status >= 0) verdict = Bc250PipeShapeCheck(&shape, Device->Post.Width, Device->Post.Height, &maxLevel);
-    if (status < 0 || maxLevel < m->Level || !WddmPrimaryExclusiveBegin(Device, &generation))
+    if (status < 0 || maxLevel < m->Level ||
+        !WddmPrimaryExclusiveBegin(Device, BC250_WRITER_MODESET_D0, &generation))
     {
         m->PipeChanged = FALSE;
         InterlockedExchange(&m->SourceWidth, (LONG)Device->Post.Width);

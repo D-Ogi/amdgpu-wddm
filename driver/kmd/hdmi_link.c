@@ -138,7 +138,9 @@ void HdmiLinkStartAudio(BC250_DEVICE *Device,BOOLEAN Resume)
     if (!c || !plan || !workspace) { GuardLog("hdmilink: refused: workspace allocation");goto done; }
     c->Device=Device;c->Owner=KeGetCurrentThread();
     io.Context=c;io.Owned=Owned;io.Allowed=Allowed;io.Read=Read;io.Write=Write;io.NowUs=NowUs;io.DelayUs=Delay;
-    if (!WddmPrimaryExclusiveBegin(Device,&generation)) { GuardLog("hdmilink: refused: primary busy");goto done; }
+    if (!WddmPrimaryExclusiveBegin(Device,BC250_WRITER_HDMI_START,&generation)) {
+        GuardLog("hdmilink: refused: primary busy");goto done;
+    }
     exclusive=TRUE;
     if (Predict(c,&io,&firmware.Image,plan,workspace)) { predictionRefused=TRUE;goto done; }
     result=Bc250HdmiLinkStart(&c->Link,&io,&firmware.Image,plan,workspace,Bc250AtomContextSize(),
@@ -216,7 +218,7 @@ BOOLEAN HdmiLinkStop(BC250_DEVICE *Device)
     ULONG generation;BOOLEAN restored;
     if (KeGetCurrentIrql()!=PASSIVE_LEVEL) return FALSE;
     if (!Device->HdmiLinkContext) return TRUE;
-    if (!WddmPrimaryExclusiveBegin(Device,&generation)) {
+    if (!WddmPrimaryExclusiveBegin(Device,BC250_WRITER_HDMI_STOP,&generation)) {
         GuardLog("hdmilink: restore deferred: primary busy");return FALSE;
     }
     restored=HdmiLinkStopOwned(Device);

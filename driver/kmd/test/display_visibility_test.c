@@ -65,6 +65,7 @@ static LONG64 TestInterruptTime;
 static int TestReadFail;
 static LONG64 KeQueryInterruptTime(void){return ++TestInterruptTime;}
 static LONG64 InterlockedExchange64(volatile LONG64*p,LONG64 v){LONG64 old=*p;CHECK(model.irq);*p=v;return old;}
+static LONG64 InterlockedCompareExchange64(volatile LONG64*p,LONG64 v,LONG64 c){LONG64 old=*p;if(old==c)*p=v;return old;}
 static LARGE_INTEGER KeQueryPerformanceCounter(LARGE_INTEGER*frequency)
 {
     LARGE_INTEGER value;
@@ -125,6 +126,9 @@ static BOOLEAN WddmFirstCalls(BC250_WDDM* wddm,BC250_WDDM_DDI ddi)
 {
     (void)ddi;if(wddm==NULL)return FALSE;model.ddi_calls++;return FALSE;
 }
+/* BD-170: the VSync switch's history is wddm.c's evidence, host-tested in vidpn_flip_test.c. Here only its calls. */
+static unsigned controlNotes;
+static void WddmVSyncControlNote(BC250_WDDM* wddm,BOOLEAN on){(void)on;CHECK(wddm!=NULL);controlNotes++;}
 /* ACTUAL_SOURCE */
 int main(void)
 {
@@ -248,5 +252,12 @@ int main(void)
     CHECK(!w.VSyncEnabled && model.arms==arms+1);
     CHECK(Bc250WddmControlInterrupt(NULL,DXGK_INTERRUPT_CRTC_VSYNC,TRUE)==STATUS_SUCCESS);
     CHECK(model.arms==arms+1 && model.ddi_calls==4);
+    CHECK(controlNotes==2);     // the two CRTC_VSYNC calls with an adapter
+    // BD-170 r6: no flip answer of this driver waits for the OS's VSync DPC (no request is ever answered busy,
+    // docs/design/vidpn-flip.md section 7.2), so the switch changes the VSync report and the history only.
+    CHECK(Bc250WddmControlInterrupt(&d,DXGK_INTERRUPT_CRTC_VSYNC,FALSE)==STATUS_SUCCESS && !w.VSyncEnabled);
+    CHECK(Bc250WddmControlInterrupt(&d,DXGK_INTERRUPT_CRTC_VSYNC,TRUE)==STATUS_SUCCESS && w.VSyncEnabled);
+    CHECK(Bc250WddmControlInterrupt(&d,DXGK_INTERRUPT_CRTC_VSYNC,FALSE)==STATUS_SUCCESS && !w.VSyncEnabled);
+    CHECK(controlNotes==5);
     printf("display visibility/sync: %u checks, %u failures\n",checks,failures);return failures?1:0;
 }

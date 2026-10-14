@@ -193,6 +193,11 @@ DCN_WRITE_REGISTERS = ["mmHUBPREQ0_DCSURF_SURFACE_PITCH", "mmOTG0_OTG_MASTER_UPD
                        "mmHUBP0_DCSURF_SURFACE_CONFIG", "mmHUBPRET0_HUBPRET_CONTROL",
                        "mmCNVC_CFG0_CNVC_SURFACE_PIXEL_FORMAT"]
 
+# BD-170 r6, the lab flavour's witnesses (dcn.c's DcnWitnessArm): the clear of the HUBP0 flip event before an immediate
+# flip. A table of its own, emitted only for the lab flavour (AMDGPU_WDDM_LAB_FLAVOUR), so that the release KMD's write
+# allow list does not change.
+DCN_LAB_WRITE_REGISTERS = ["mmHUBPREQ0_DCSURF_SURFACE_FLIP_INTERRUPT"]
+
 # ADR 0011 point 3: the DCN 2.0.1 ("DMU") display controller's registers, read-only, the first step before any
 # write to this block (docs/adr/0011-present-is-a-flip.md). HUBPREQn and HUBPn for n in 0..3 (one instance of
 # each per scanout pipe), OTGm for m in 0..1 (the two timing generators), plus DCHUBBUB_CTRL_STATUS. DMU has
@@ -228,6 +233,8 @@ DCN_PRIVATE_READ_REGISTERS += DCN_TIMING_READ_REGISTERS + ["mmOTG0_OTG_BLANK_CON
 DCN_PRIVATE_READ_REGISTERS += ["mmHUBP0_DCSURF_SURFACE_CONFIG", "mmHUBPRET0_HUBPRET_CONTROL",
     "mmCNVC_CFG0_CNVC_SURFACE_PIXEL_FORMAT", "mmCNVC_CFG0_FORMAT_CONTROL", "mmMPCC0_MPCC_CONTROL",
     "mmCNVC_CFG0_ALPHA_2BIT_LUT"]
+# BD-170 r6, the lab flavour's witnesses: SURFACE_FLIP_INTERRUPT is on DCN_REGISTERS already; named here for a define.
+DCN_PRIVATE_READ_REGISTERS += ["mmHUBPREQ0_DCSURF_SURFACE_FLIP_INTERRUPT"]
 NAMED += [("DMU", name) for name in DCN_PRIVATE_READ_REGISTERS + ["mmOTG0_OTG_STATUS_POSITION", "mmOTG0_OTG_GLOBAL_CONTROL0"]]
 NAMED += [("CLK", "mmCLK4_0_CLK4_CLK2_CURRENT_CNT")]
 # BD-122 (GitHub #38): a refused inherited timing logs whether the firmware drove OTG1 instead of OTG0. Read only,
@@ -588,6 +595,18 @@ def main():
     out += ["    " + ", ".join(f"0x{o:05X}" for o in dcn_write[i:i + 10]) + "," for i in range(0, len(dcn_write), 10)]
     out += ["};", ""]
     summary.append(f"{len(dcn_write)} in the DCN flip's write list")
+    dcn_lab_write = sorted({offset(maps, "DMU", name) for name in DCN_LAB_WRITE_REGISTERS})
+    for off in dcn_lab_write:
+        if off not in dcn_allow or off in dcn_write:
+            sys.exit(f"dcn lab write: 0x{off:05X} must be on the read table and not on DCN_WRITE_REGISTERS")
+    out += ["// BD-170 r6 (dcn.c's DcnWitnessArm): the lab flavour's extra DCN writes (gen_regs.py's DCN_LAB_WRITE_REGISTERS).",
+            "// Not compiled into the release flavour; MmioDcnWriteEx checks it after g_MmioDcnWriteAllow.",
+            "#if defined(AMDGPU_WDDM_LAB_FLAVOUR)",
+            f"#define BC250_MMIO_DCN_LAB_WRITE_ALLOW_COUNT {len(dcn_lab_write)}",
+            "static const unsigned long g_MmioDcnLabWriteAllow[BC250_MMIO_DCN_LAB_WRITE_ALLOW_COUNT] = {"]
+    out += ["    " + ", ".join(f"0x{o:05X}" for o in dcn_lab_write) + ","]
+    out += ["};", "#endif", ""]
+    summary.append(f"{len(dcn_lab_write)} in the lab flavour's DCN write list")
 
     for ip, name in NAMED:
         if offset(maps, ip, name) not in reads and offset(maps, ip, name) not in sequenced and offset(maps, ip, name) not in dcn_allow:

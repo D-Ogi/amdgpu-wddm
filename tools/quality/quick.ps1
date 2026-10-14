@@ -298,6 +298,11 @@ Check 'ledger-call' { & pwsh -NoProfile -File "$repo\tools\release\test-ledger-c
  Check 'gdi-admission' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_gdi_admission.ps1" -Root $Workspace -Out "$Out\gdi-admission" -Kits "$Kits" }
  Check 'display-modes' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_display_modes.ps1" -Root $Workspace -Out "$Out\display-modes" -Kits "$Kits" }
  Check 'vidpn-flip' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_vidpn_flip.ps1" -Root $Workspace -Out "$Out\vidpn-flip" }
+ # BD-170 r6: each rule of wddm.c's flip state machine broken in a copy of the extracted source; every one must fail.
+ Check 'vidpn-flip-controls' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_vidpn_flip.ps1" -Root $Workspace -Out "$Out\vidpn-flip-controls" -Mutation all }
+ # The lab flavour's witnesses (BD-167 switch): read after the shipping decision, never change it; each control must fail.
+ Check 'vidpn-flip-lab' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_vidpn_flip.ps1" -Root $Workspace -Out "$Out\vidpn-flip-lab" -Lab }
+ Check 'vidpn-flip-lab-controls' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_vidpn_flip.ps1" -Root $Workspace -Out "$Out\vidpn-flip-lab-controls" -Lab -Mutation all }
  Check 'scanout-admit' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_scanout_admit.ps1" -Root $Workspace -Out "$Out\scanout-admit" -Kits "$Kits" }
  Check 'dpaudio' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_dpaudio.ps1" -Root $Workspace -Out "$Out\dpaudio" -Kits "$Kits" }
  Check 'modeset' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_modeset.ps1" -Root $Workspace -Out "$Out\modeset" -Kits "$Kits" }
@@ -429,7 +434,15 @@ Check 'ledger-call' { & pwsh -NoProfile -File "$repo\tools\release\test-ledger-c
   @{n='post-display';s='driver\kmd\test\run_post_display.ps1';a=@('-Root',$Workspace)}
   @{n='post-display-old-runtime-order';s='driver\kmd\test\run_post_display.ps1';a=@('-Root',$Workspace,'-OldRuntimeOrder');Fails=$true}
   @{n='post-display-wrong-saved-surface';s='driver\kmd\test\run_post_display.ps1';a=@('-Root',$Workspace,'-WrongSavedSurface');Fails=$true}
+  @{n='post-display-deposit-ignored';s='driver\kmd\test\run_post_display.ps1';a=@('-Root',$Workspace,'-DepositIgnored');Fails=$true}
+  @{n='post-display-deposit-early';s='driver\kmd\test\run_post_display.ps1';a=@('-Root',$Workspace,'-DepositProgrammedEarly');Fails=$true}
   @{n='dcn-flip';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace)}
+  @{n='dcn-flip-pending-only';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','PendingOnly');Fails=$true}
+  @{n='dcn-flip-address-only';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','AddressOnly');Fails=$true}
+  @{n='dcn-flip-bound-at-start';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','BoundAtStart');Fails=$true}
+  @{n='dcn-flip-overrun-uncounted';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','OverrunUncounted');Fails=$true}
+  @{n='flip-state';s='driver\kmd\test\run_flip_state.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
+  @{n='flip-state-controls';s='driver\kmd\test\run_flip_state.ps1';a=@('-Root',$Workspace,'-Kits',$Kits,'-Mutation','all')}
   @{n='dcn-observation';s='driver\kmd\test\run_dcn_observation.ps1';a=@('-Root',$Workspace)}
   @{n='dcn-observe';s='driver\kmd\test\run_dcn_observe.ps1';a=@('-Root',$Workspace)}
   @{n='display-timing';s='driver\kmd\test\run_display_timing.ps1';a=@('-Root',$Workspace)}

@@ -16,6 +16,7 @@
 #include "dcn_2_0_1_sh_mask.h"       // field masks for the decoded summary only; every offset comes from regcalc
 #include "dcn_translate.h"           // ADR 0011 point 3 step 3: the WDDM flip's host-testable address conversion
 #include "plane_format.h"            // M15.14: the plane's pixel format per flip
+#include "flip_state.h"              // BD-170 r6: the DRAINED fact (Bc250FlipDrained)
 #include "../shim/bc250_dcn201_pipe.h"
 #include <ntstrsafe.h>
 
@@ -505,8 +506,15 @@ void DcnCaptureFirmwareFormat(_Inout_ BC250_DEVICE* Device)
 // address, so the new format and the new address latch at the same update and no frame shows one without the
 // other. dcn20_program_pipe likewise programs dpp_setup and hubp_program_surface_config under the pipe's lock
 // (dc/hwss/dcn20/dcn20_hwseq.c:1747 and :1843). NULL writes exactly the register set of 0.7.216.18.
+// Immediate (BD-170): the flip type of this flip. dcn201_hubp_funcs uses hubp1_program_surface_flip_and_addr
+// (dc/hubp/dcn201/dcn201_hubp.c:115, dc/hubp/dcn10/dcn10_hubp.c:349), which writes SURFACE_FLIP_TYPE =
+// flip_immediate before the address, inside the TG master update lock that dcn201_pipe_control_lock takes
+// (dc/core/dc.c:4194 lock, :4398 update_plane_addr, :4406 unlock). 0 latches the address at the next VUPDATE,
+// 1 is AMD's immediate flip, which dcn201_update_plane_addr records as the current address at once
+// (dc/hwss/dcn201/dcn201_hwseq.c:156-157). FALSE writes the value 0.7.216.64 wrote. The two stereo-sync fields
+// hubp1 clears for a mono plane stay as the firmware left them, as since M87, so a vsync flip is unchanged.
 static NTSTATUS DcnFlipWriteSequence(_Inout_ BC250_DEVICE* Device, ULONGLONG Target, ULONG Pitch,
-    ULONG BytesPerPixel, _In_opt_ const BC250_PLANE_REGISTERS* Format, BOOLEAN Quiet)
+    ULONG BytesPerPixel, _In_opt_ const BC250_PLANE_REGISTERS* Format, BOOLEAN Immediate, BOOLEAN Quiet)
 {
     NTSTATUS status;
     ULONG value = 0, waited = 0;
@@ -533,7 +541,8 @@ static NTSTATUS DcnFlipWriteSequence(_Inout_ BC250_DEVICE* Device, ULONGLONG Tar
     }
     if (NT_SUCCESS(status)) status = MmioDcnRead(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL, &value);
     if (NT_SUCCESS(status)) status = MmioDcnWriteEx(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL,
-        value & ~HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_TYPE_MASK, Quiet);
+        (value & ~HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_TYPE_MASK) |
+        (Immediate ? HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_TYPE_MASK : 0), Quiet);
     // AMD hubp2 also updates only the two graphics TMZ fields here. Our
     // unprotected surfaces clear those fields without erasing other controls.
     if (NT_SUCCESS(status)) status = MmioDcnRead(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_CONTROL, &value);
@@ -564,6 +573,170 @@ static NTSTATUS DcnFlipWriteSequence(_Inout_ BC250_DEVICE* Device, ULONGLONG Tar
         (void)MmioDcnWriteEx(Device, BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK, 0, Quiet);
     }
     return status;
+}
+
+// BD-170: when an immediate flip has taken effect, and so when the surface it replaced may be used again.
+//
+// The contract. DXGK_FLIPCAPS.FlipImmediateMmIo is a flip that "takes effect immediately following a call to
+// DxgkDdiSetVidPnSourceAddress without waiting for the next vertical sync" (local ref/ddi-display/d3dkmddi.md:
+// 21235-21239). For the return value the DDI page documents only "STATUS_SUCCESS if it succeeds; otherwise, it
+// returns one of the error codes defined in Ntstatus.h" (d3dkmddi.md:12791). The rest comes from the binary,
+// dxgmms2 10.0.22621.6199 (the lab's 22631) and 10.0.26100.9549, read by function (docs/design/vidpn-flip.md section
+// 7.1, facts M904). VidSchiExecuteMmIoFlip completes an immediate flip's entry and releases the previous primary at a
+// success status: nothing waits for a CRTC_VSYNC report (wddm.c's WddmDcnVsync). Any other status leaves the entry at
+// the head of its flip queue with the previous primary still referenced, and the VSync DPC executes it again once a
+// VSync, with no count and no time limit. A busy answer therefore holds the source until a restart (the a03 trial),
+// and r6 has none (docs/design/vidpn-flip.md section 7.2, flip_state.h).
+//
+// The witness. P' holds at one sample when SURFACE_FLIP_PENDING is clear ("pending first observed clear", not a
+// latch) and DCSURF_PRIMARY_SURFACE_ADDRESS, read high word first, reads back as the request in the field widths of
+// that register, with the primary generation unchanged. EARLIEST_INUSE is not part of it: in a03 it named the old
+// surface until the next vblank while the pending bit cleared about 2 us after the programming. hubp1_is_flip_pending
+// (dc/hubp/dcn10/dcn10_hubp.c:751-777) is the stricter vblank test, and DcnFlipPending below keeps it for the reports.
+//
+// The bound. The samples run inside the flip transaction, under the interrupt lock L (wddm.c, WddmFlipLocked), right
+// after the programming, with 1 us stalls between samples. BC250_DCN_IMMEDIATE_OBSERVE_US is counted from the end of
+// the programming sequence and held after the witness reads of each sample, so no sample starts past it; a step count
+// ends the loop as well. A sample that started inside the bound can end past it: EndUs is taken after the loop, and an
+// observation that ended past the bound is counted in DcnImmediateOverruns. 50 us is 4.2 lines of the lab's 1920x1080
+// 75 Hz mode (11.9 us a line), and Microsoft asks for KeStallExecutionProcessor waits below 50 us. DONE is P' at a
+// sample that started inside the bound; DONE_LATE is P' at a first sample that started after it, so that its time is
+// an upper bound only. Every other outcome is edge U of section 7.2, which wddm.c answers with E5 (facts M903). The
+// record keeps the request's flags as they came. The generation is
+// read at both ends of the observation; under L nothing can move it, so SUPERSEDED counts the case facts M904 says
+// cannot happen.
+static LONG DcnQpcUs(LONGLONG Ticks, LONGLONG Frequency)
+{
+    LONGLONG us;
+    if (Ticks <= 0 || Frequency <= 0) return 0;
+    us = Ticks * 1000000 / Frequency;
+    return us < 0x7FFFFFFF ? (LONG)us : 0x7FFFFFFF;
+}
+
+static void DcnImmediateMax(_Inout_ volatile LONG* Max, LONG Value)
+{
+    LONG max;
+    for (max = *Max; Value > max; max = *Max)
+        if (InterlockedCompareExchange(Max, Value, max) == max) break;
+}
+
+// The request as DCSURF_PRIMARY_SURFACE_ADDRESS and its _HIGH word hold it: each word in its field's width.
+static ULONGLONG DcnPrimaryNormalized(ULONGLONG Physical)
+{
+    return ((((Physical >> 32) & HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH__PRIMARY_SURFACE_ADDRESS_HIGH_MASK)) << 32) |
+           (Physical & HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS__PRIMARY_SURFACE_ADDRESS_MASK);
+}
+
+// DCSURF_PRIMARY_SURFACE_ADDRESS read back, high word first, each word masked to its field.
+static NTSTATUS DcnReadPrimaryPhysical(_In_ const BC250_DEVICE* Device, _Out_ ULONGLONG* Physical)
+{
+    ULONG high = 0, low = 0;
+    NTSTATUS status = MmioDcnRead(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH, &high);
+    if (NT_SUCCESS(status)) status = MmioDcnRead(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS, &low);
+    *Physical = ((ULONGLONG)(high & HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH__PRIMARY_SURFACE_ADDRESS_HIGH_MASK) << 32) |
+                (low & HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS__PRIMARY_SURFACE_ADDRESS_MASK);
+    return status;
+}
+
+ULONG DcnImmediateObserve(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddress, ULONGLONG Physical,
+    LONGLONG ProgramStartQpc, LONGLONG ProgramEndQpc, _In_ volatile LONG* Generation, ULONG ExpectedGeneration,
+    ULONG Flags)
+{
+    BC250_DCN_IMMEDIATE_RECORD record;
+    BC250_DCN_IMMEDIATE_RECORD* slot;
+    const LONGLONG frequency = Device->DcnQpcFrequency;
+    const ULONGLONG request = DcnPrimaryNormalized(Physical);
+    LARGE_INTEGER now;
+    LONG us;
+    ULONGLONG primary = 0;
+    ULONG value, steps;
+    LONG sequence, previousFrame;
+    BOOLEAN pendingSet = TRUE;
+    NTSTATUS status;
+
+    RtlZeroMemory(&record, sizeof(record));
+    record.CardAddress = CardAddress;
+    record.Physical = request;
+    record.Flags = Flags;
+    record.Generation = ExpectedGeneration;
+    record.ReadStatus = STATUS_DEVICE_NOT_READY;
+    record.FirstUs = record.ClearUs = record.DoneUs = record.EndUs = -1;
+    record.ProgramUs = DcnQpcUs(ProgramEndQpc - ProgramStartQpc, frequency);
+    if (Device->Mmio == NULL) record.Outcome = BC250_DCN_IMMEDIATE_READ_FAILED;
+    else if ((ULONG)InterlockedCompareExchange(Generation, 0, 0) != ExpectedGeneration)
+        record.Outcome = BC250_DCN_IMMEDIATE_SUPERSEDED;
+    else
+    {
+        (void)MmioDcnRead(Device, BC250_REG_DMU_OTG0_OTG_STATUS_FRAME_COUNT, &record.Frame);
+        (void)MmioDcnRead(Device, BC250_REG_DMU_OTG0_OTG_STATUS_POSITION, &record.PositionBefore);
+        for (steps = 0;; steps++)
+        {
+            now = KeQueryPerformanceCounter(NULL);
+            us = DcnQpcUs(now.QuadPart - ProgramStartQpc, frequency);
+            if (steps == 0) record.FirstUs = us;
+            record.Samples++;
+            status = MmioDcnRead(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL, &value);
+            if (NT_SUCCESS(status))
+            {
+                if (steps == 0) record.Control = value;
+                pendingSet = (value & HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK) != 0;
+                if (!pendingSet && record.ClearUs < 0) record.ClearUs = us;
+                status = DcnReadPrimaryPhysical(Device, &primary);
+            }
+            record.ReadStatus = status;
+            record.Observed = NT_SUCCESS(status) ? primary : 0;
+            if (NT_SUCCESS(status) && !pendingSet && primary == request)
+            {
+                record.DoneUs = us;
+                break;
+            }
+            // The bound is held against a time taken after the witness reads, so that another sample starts only
+            // inside it. A step count ends it as well, so a counter that does not move cannot stretch the wait.
+            now = KeQueryPerformanceCounter(NULL);
+            if (DcnQpcUs(now.QuadPart - ProgramStartQpc, frequency) - record.ProgramUs >= (LONG)BC250_DCN_IMMEDIATE_OBSERVE_US ||
+                steps >= BC250_DCN_IMMEDIATE_OBSERVE_US)
+                break;
+            KeStallExecutionProcessor(1);
+        }
+        // EndUs is after the last sample's reads. P' at a sample that started inside the bound is P' (the witness is
+        // what that sample read); its reads ending past the bound, or a first sample already past it, are counted.
+        now = KeQueryPerformanceCounter(NULL);
+        record.EndUs = DcnQpcUs(now.QuadPart - ProgramStartQpc, frequency);
+        if (record.EndUs - record.ProgramUs > (LONG)BC250_DCN_IMMEDIATE_OBSERVE_US)
+            InterlockedIncrement(&Device->DcnImmediateOverruns);
+        (void)MmioDcnRead(Device, BC250_REG_DMU_OTG0_OTG_STATUS_POSITION, &record.PositionAfter);
+        if ((ULONG)InterlockedCompareExchange(Generation, 0, 0) != ExpectedGeneration)
+            record.Outcome = BC250_DCN_IMMEDIATE_SUPERSEDED;
+        else if (record.DoneUs >= 0)
+            record.Outcome = record.FirstUs - record.ProgramUs >= (LONG)BC250_DCN_IMMEDIATE_OBSERVE_US ?
+                BC250_DCN_IMMEDIATE_DONE_LATE : BC250_DCN_IMMEDIATE_DONE;
+        else if (!NT_SUCCESS(record.ReadStatus)) record.Outcome = BC250_DCN_IMMEDIATE_READ_FAILED;
+        else if (pendingSet) record.Outcome = BC250_DCN_IMMEDIATE_PENDING;
+        else record.Outcome = BC250_DCN_IMMEDIATE_PRIMARY_OTHER;
+    }
+
+    InterlockedIncrement(&Device->DcnImmediateOutcomes[record.Outcome]);
+    if (record.Outcome == BC250_DCN_IMMEDIATE_DONE)
+    {
+        InterlockedExchangeAdd64(&Device->DcnImmediateDoneSumUs, record.DoneUs);
+        DcnImmediateMax(&Device->DcnImmediateDoneMaxUs, record.DoneUs);
+    }
+    if (record.EndUs >= 0) DcnImmediateMax(&Device->DcnImmediateObserveMaxUs, record.EndUs);
+    sequence = InterlockedIncrement(&Device->DcnImmediateRecordNext);
+    if (record.Samples)
+    {
+        previousFrame = InterlockedExchange(&Device->DcnImmediateLastFrame, (LONG)record.Frame);
+        if (sequence > 1 && previousFrame == (LONG)record.Frame) InterlockedIncrement(&Device->DcnImmediateSameFrame);
+    }
+    // The slot's sequence lock (BC250_DCN_IMMEDIATE_RECORD): odd while the fields change, even again after them.
+    record.Sequence = sequence;
+    slot = &Device->DcnImmediateRecords[(ULONG)(sequence - 1) % BC250_DCN_IMMEDIATE_RECORDS];
+    InterlockedIncrement(&slot->Version);
+    RtlCopyMemory((PUCHAR)slot + FIELD_OFFSET(BC250_DCN_IMMEDIATE_RECORD, Sequence),
+                  (const UCHAR*)&record + FIELD_OFFSET(BC250_DCN_IMMEDIATE_RECORD, Sequence),
+                  sizeof(record) - FIELD_OFFSET(BC250_DCN_IMMEDIATE_RECORD, Sequence));
+    InterlockedIncrement(&slot->Version);
+    return record.Outcome;
 }
 
 // M87's poll: HUBPREQ0_DCSURF_FLIP_CONTROL bit 0x100 (SURFACE_FLIP_PENDING), 100 us steps, up to 50 ms - the
@@ -646,7 +819,7 @@ static void DcnFlipCore(_Inout_ BC250_DEVICE* Device, ULONGLONG Physical, BOOLEA
     if (Device->DcnPlaneFormats && Device->DcnPlaneFormat!=BC250_PLANE_FORMAT_ARGB8888 &&
         DcnPlaneFormatRegisters(Device,BC250_PLANE_FORMAT_ARGB8888,&registers)) format=&registers;
     InterlockedIncrement(&Device->DcnSurfaceSequence);
-    status=DcnFlipWriteSequence(Device,target,pitch,4,format,FALSE);
+    status=DcnFlipWriteSequence(Device,target,pitch,4,format,FALSE,FALSE);
     if (!NT_SUCCESS(status))
     {
         InterlockedIncrement(&Device->DcnSurfaceSequence);
@@ -844,7 +1017,7 @@ static NTSTATUS DcnFirmwareSurfaceCore(_Inout_ BC250_DEVICE* Device, BOOLEAN Unb
         BC250_PLANE_REGISTERS registers;
         const BC250_PLANE_REGISTERS* format=
             DcnPlaneFormatRegisters(Device,BC250_PLANE_FORMAT_ARGB8888,&registers) ? &registers : NULL;
-        status=DcnFlipWriteSequence(Device,Device->DcnFirmwareAddress,Device->DcnFirmwarePitch,4,format,TRUE);
+        status=DcnFlipWriteSequence(Device,Device->DcnFirmwareAddress,Device->DcnFirmwarePitch,4,format,FALSE,TRUE);
         if (!NT_SUCCESS(status)) return status;
         for (;;)
         {
@@ -909,6 +1082,112 @@ static void RuntimeStall(void* Context, unsigned long Microseconds)
     KeStallExecutionProcessor(Microseconds);
 }
 
+// BD-170 r6, the facts of docs/design/vidpn-flip.md section 7.2 that wddm.c reads inside L. No wait, no log: these run
+// in the flip transaction at DIRQL and in the writer sections.
+// DRAINED: one readback of HUBP0_DCHUBP_CNTL (flip_state.h, Bc250FlipDrained). 1 DRAINED, 0 not, -1 the read failed,
+// which is not DRAINED either.
+int DcnHubpDrained(_In_ const BC250_DEVICE* Device)
+{
+    ULONG value = 0;
+    const NTSTATUS status = Device->Mmio != NULL ? MmioDcnRead(Device, BC250_REG_DMU_HUBP0_DCHUBP_CNTL, &value) :
+                                                   STATUS_DEVICE_NOT_READY;
+    if (!NT_SUCCESS(status)) return -1;
+    return Bc250FlipDrained(1u, (value & HUBP0_DCHUBP_CNTL__HUBP_BLANK_EN_MASK) != 0,
+                            (value & HUBP0_DCHUBP_CNTL__HUBP_TTU_DISABLE_MASK) != 0,
+                            (value & HUBP0_DCHUBP_CNTL__HUBP_NO_OUTSTANDING_REQ_MASK) != 0) ? 1 : 0;
+}
+
+// OTG running: OTG0_OTG_CONTROL.OTG_MASTER_EN. 1 running, 0 stopped, -1 the read failed (Bc250WriterEnd).
+int DcnOtgRunning(_In_ const BC250_DEVICE* Device)
+{
+    ULONG value = 0;
+    if (Device->Mmio == NULL || !NT_SUCCESS(MmioDcnRead(Device, BC250_REG_DMU_OTG0_OTG_CONTROL, &value))) return -1;
+    return (value & OTG0_OTG_CONTROL__OTG_MASTER_EN_MASK) ? 1 : 0;
+}
+
+// E5 step 2: one read-modify-write of HUBP0_DCHUBP_CNTL that sets HUBP_BLANK_EN and HUBP_TTU_DISABLE, the two fields
+// AMD hubp1_set_blank sets, and no wait for HUBP_NO_OUTSTANDING_REQ (the DPC records that, WddmFlipFaultDpc). The
+// write goes through the pipe's own allow list (RuntimeWrite), as Bc250Dcn201PlaneBlank's does.
+NTSTATUS DcnFaultBlank(_Inout_ BC250_DEVICE* Device)
+{
+    ULONG value = 0;
+    long status;
+    if (!Device->Mmio || !Device->DcnWriteEnabled) return STATUS_DEVICE_NOT_READY;
+    status = RuntimeRead(Device, BC250_REG_DMU_HUBP0_DCHUBP_CNTL, &value);
+    if (status >= 0)
+    {
+        InterlockedExchange(&Device->RuntimePlaneBlank, 1);
+        status = RuntimeWrite(Device, BC250_REG_DMU_HUBP0_DCHUBP_CNTL,
+                              value | HUBP0_DCHUBP_CNTL__HUBP_BLANK_EN_MASK | HUBP0_DCHUBP_CNTL__HUBP_TTU_DISABLE_MASK);
+    }
+    return (NTSTATUS)status;
+}
+
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+// BD-170 r6, the lab flavour's witnesses (bc250kmd.h). The flip event is the HUBP flip interrupt from which amdgpu
+// sends its page-flip event (amdgpu_dm.c dm_pflip_high_irq; irq_service_dcn201.c maps HUBP0_FLIP_INTERRUPT to
+// DC_IRQ_SOURCE_PFLIP1 with the ack SURFACE_FLIP_CLEAR, written as 1). The clear writes the four enable fields as
+// found and both CLEAR fields 1, reads back, and writes a CLEAR field that reads back 1 to 0 again, so that it cannot
+// hold the next event down: the sequence of BD-170 a04 (evidence 2026-10-14-bd170-a04-latch), which ran on the lab.
+// No other code of this driver writes the register, and nothing sets SURFACE_FLIP_INT_MASK, so the IH gets no new
+// source.
+#define DCN_WITNESS_EVENTS (HUBPREQ0_DCSURF_SURFACE_FLIP_INTERRUPT__SURFACE_FLIP_OCCURRED_MASK | \
+                            HUBPREQ0_DCSURF_SURFACE_FLIP_INTERRUPT__SURFACE_FLIP_AWAY_OCCURRED_MASK)
+#define DCN_WITNESS_CLEARS (HUBPREQ0_DCSURF_SURFACE_FLIP_INTERRUPT__SURFACE_FLIP_CLEAR_MASK | \
+                            HUBPREQ0_DCSURF_SURFACE_FLIP_INTERRUPT__SURFACE_FLIP_AWAY_CLEAR_MASK)
+#define DCN_WITNESS_ENABLES (HUBPREQ0_DCSURF_SURFACE_FLIP_INTERRUPT__SURFACE_FLIP_INT_MASK_MASK | \
+                             HUBPREQ0_DCSURF_SURFACE_FLIP_INTERRUPT__SURFACE_FLIP_INT_TYPE_MASK | \
+                             HUBPREQ0_DCSURF_SURFACE_FLIP_INTERRUPT__SURFACE_FLIP_AWAY_INT_MASK_MASK | \
+                             HUBPREQ0_DCSURF_SURFACE_FLIP_INTERRUPT__SURFACE_FLIP_AWAY_INT_TYPE_MASK)
+
+#define DCN_WITNESS_EVENT_REG BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_FLIP_INTERRUPT
+#define DCN_WITNESS_LOW_REG BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE
+#define DCN_WITNESS_HIGH_REG BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE_HIGH
+#define DCN_WITNESS_LOW_MASK HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE__SURFACE_EARLIEST_INUSE_ADDRESS_MASK
+#define DCN_WITNESS_HIGH_MASK HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE_HIGH__SURFACE_EARLIEST_INUSE_ADDRESS_HIGH_MASK
+
+void DcnWitnessArm(_In_ const BC250_DEVICE* Device, BOOLEAN Immediate, _Out_ BC250_DCN_WITNESS_ARM* Arm)
+{
+    ULONG value = 0;
+    NTSTATUS status;
+
+    RtlZeroMemory(Arm, sizeof(*Arm));
+    Arm->Status = STATUS_NOT_SUPPORTED;
+    if (!Immediate) return;
+    if (Device->Mmio == NULL || !Device->DcnWriteEnabled) { Arm->Status = STATUS_DEVICE_NOT_READY; return; }
+    status = MmioDcnRead(Device, DCN_WITNESS_EVENT_REG, &Arm->InterruptBefore);
+    if (NT_SUCCESS(status))
+        status = MmioDcnWriteEx(Device, DCN_WITNESS_EVENT_REG,
+                                (Arm->InterruptBefore & DCN_WITNESS_ENABLES) | DCN_WITNESS_CLEARS, TRUE);
+    if (NT_SUCCESS(status)) status = MmioDcnRead(Device, DCN_WITNESS_EVENT_REG, &value);
+    if (NT_SUCCESS(status) && (value & DCN_WITNESS_CLEARS))
+    {
+        status = MmioDcnWriteEx(Device, DCN_WITNESS_EVENT_REG, value & DCN_WITNESS_ENABLES, TRUE);
+        if (NT_SUCCESS(status)) status = MmioDcnRead(Device, DCN_WITNESS_EVENT_REG, &value);
+    }
+    Arm->InterruptCleared = value;
+    Arm->Status = status;
+    Arm->Fresh = NT_SUCCESS(status) && !(value & DCN_WITNESS_EVENTS);
+}
+
+NTSTATUS DcnWitnessRead(_In_ const BC250_DEVICE* Device, _Out_ BC250_DCN_WITNESS_READ* Read)
+{
+    NTSTATUS status;
+
+    RtlZeroMemory(Read, sizeof(*Read));
+    if (Device->Mmio == NULL) return STATUS_DEVICE_NOT_READY;
+    status = MmioDcnRead(Device, DCN_WITNESS_EVENT_REG, &Read->Interrupt);
+    if (NT_SUCCESS(status)) status = MmioDcnRead(Device, DCN_WITNESS_LOW_REG, &Read->Low1);
+    if (NT_SUCCESS(status)) status = MmioDcnRead(Device, DCN_WITNESS_HIGH_REG, &Read->High1);
+    if (NT_SUCCESS(status)) status = MmioDcnRead(Device, DCN_WITNESS_HIGH_REG, &Read->High2);
+    if (NT_SUCCESS(status)) status = MmioDcnRead(Device, DCN_WITNESS_LOW_REG, &Read->Low2);
+    Read->Event = (Read->Interrupt & HUBPREQ0_DCSURF_SURFACE_FLIP_INTERRUPT__SURFACE_FLIP_OCCURRED_MASK) != 0;
+    Read->Earliest1 = ((ULONGLONG)(Read->High1 & DCN_WITNESS_HIGH_MASK) << 32) | (Read->Low1 & DCN_WITNESS_LOW_MASK);
+    Read->Earliest2 = ((ULONGLONG)(Read->High2 & DCN_WITNESS_HIGH_MASK) << 32) | (Read->Low2 & DCN_WITNESS_LOW_MASK);
+    return status;
+}
+#endif
+
 // Caller owns the primary transaction, or OS bugcheck/stop serialization.
 // No allocation, software lock, logger or floating-point work is reachable.
 NTSTATUS DcnRuntimeSurface(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible)
@@ -940,8 +1219,15 @@ NTSTATUS DcnRuntimeSurface(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible)
     InterlockedExchange(&Device->RuntimePlaneBlank,1);
     status=Bc250Dcn201PlaneBlank(&io,1);
     if (!NT_SUCCESS(status)) goto failed;
+    // BD-170 r6: Resume before the unblank below (docs/design/vidpn-flip.md section 7.2): from here on no DRAINED
+    // readback counts for this writer. The reserved buffer is the driver's own and the OS never releases it, so a
+    // deposit is not programmed here; the writer's End programs it. Nothing without a writer or above DISPATCH_LEVEL.
+    {
+        BC250_WDDM_DESIRED desired;
+        (void)WddmWriterResume(Device,&desired);
+    }
     status=DcnFlipWriteSequence(Device,(ULONGLONG)Device->RuntimeFramebufferPhysical.QuadPart,
-        Device->RuntimePost.Pitch,4,&format,TRUE);
+        Device->RuntimePost.Pitch,4,&format,FALSE,TRUE);
     if (!NT_SUCCESS(status)) goto failed;
     // DCN201 selects dcn10_program_pipe (Linux dcn201_init.c:101), which
     // programs the address then unblanks HUBP (dcn10_hwseq.c:3133-3136).
@@ -1033,6 +1319,9 @@ NTSTATUS DcnLinkSurfaceRestore(BC250_DEVICE* Device, const BC250_LINK_SURFACE* S
 {
     BC250_DISP_IO io={0};
     BC250_PLANE_REGISTERS format;
+    BC250_LINK_SURFACE target;
+    BC250_WDDM_DESIRED desired;
+    BOOLEAN deposit=FALSE;
     ULONGLONG bytes,scanned=0;
     ULONG waited=0,pending=0,pitch=0;
     NTSTATUS status;
@@ -1048,8 +1337,26 @@ NTSTATUS DcnLinkSurfaceRestore(BC250_DEVICE* Device, const BC250_LINK_SURFACE* S
     InterlockedExchange(&Device->RuntimePlaneBlank,1);
     status=Bc250Dcn201PlaneBlank(&io,1);
     if (!NT_SUCCESS(status)) goto failed;
-    status=DcnFlipWriteSequence(Device,Surface->Physical,
-        Surface->Pitch,4,&format,TRUE);
+    // BD-170 r6: Resume before the unblank below (docs/design/vidpn-flip.md section 7.2). The saved surface may be the
+    // one an immediate deposit released, so a deposit is programmed in its place: Desired, in the saved mode's size.
+    // A deposit that does not fit that mode (another format, too few bytes, outside the carve-out) refuses the restore
+    // here, with the plane still blank: no unblank of a surface the OS may have released. The writer's End then
+    // decides Desired.
+    target=*Surface;
+    deposit=WddmWriterResume(Device,&desired);
+    if (deposit) {
+        ULONGLONG physical,need;
+        if (desired.PlaneFormat!=BC250_PLANE_FORMAT_ARGB8888 ||
+            !DcnTranslateCardAddress(desired.CardAddress,Device->VramMcBase,(ULONGLONG)Device->VramPhysical.QuadPart,
+                                     Device->VramLength,&physical) ||
+            !DcnSurfaceBytes(Surface->Width,Surface->Height,desired.Pitch,&need) || need>desired.Bytes ||
+            !DcnAddressFits(physical,(ULONGLONG)Device->VramPhysical.QuadPart,Device->VramLength,need))
+        { status=STATUS_DEVICE_NOT_READY; goto failed; }
+        target.Physical=physical;
+        target.Pitch=desired.Pitch;
+    }
+    status=DcnFlipWriteSequence(Device,target.Physical,
+        target.Pitch,4,&format,FALSE,TRUE);
     if (!NT_SUCCESS(status)) goto failed;
     // DCN201 selects dcn10_program_pipe (Linux dcn201_init.c:101), which
     // programs the address then unblanks HUBP (dcn10_hwseq.c:3133-3136).
@@ -1065,18 +1372,20 @@ NTSTATUS DcnLinkSurfaceRestore(BC250_DEVICE* Device, const BC250_LINK_SURFACE* S
         if (NT_SUCCESS(status)) status=MmioDcnRead(Device,BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_PITCH,&pitch);
         if (!NT_SUCCESS(status)) goto failed;
         if (!(pending&HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK) &&
-            scanned==Surface->Physical &&
-            ((pitch&HUBPREQ0_DCSURF_SURFACE_PITCH__PITCH_MASK)+1)*4==Surface->Pitch) break;
+            scanned==target.Physical &&
+            ((pitch&HUBPREQ0_DCSURF_SURFACE_PITCH__PITCH_MASK)+1)*4==target.Pitch) break;
         if (waited>=BC250_DCNFLIP_POLL_MAX_US) { status=STATUS_IO_TIMEOUT; goto failed; }
         KeStallExecutionProcessor(BC250_DCNFLIP_POLL_STEP_US);
         waited+=BC250_DCNFLIP_POLL_STEP_US;
     }
+    // The deposit is on the plane: End does not owe it again, unless a newer deposit came meanwhile.
+    if (deposit) WddmWriterDepositProgrammed(Device,desired.Sequence);
     if (Surface->Visible) {
         status=DcnSetVisibility(Device,TRUE);
         if (!NT_SUCCESS(status)) goto failed;
     }
-    Device->DcnCurrentAddress=Surface->Physical;
-    Device->DcnCurrentPitch=Surface->Pitch;
+    Device->DcnCurrentAddress=target.Physical;
+    Device->DcnCurrentPitch=target.Pitch;
     Device->DcnPlaneFormat=BC250_PLANE_FORMAT_ARGB8888;
     Device->DcnDiverged=TRUE; // saved application surface may differ from firmware
     return STATUS_SUCCESS;
@@ -1121,8 +1430,9 @@ NTSTATUS DcnStop(_Inout_ BC250_DEVICE* Device)
 // M15.14 (0.7.216.20): PlaneFormat (plane_format.h) gives the pitch's unit and, when it differs from the plane's
 // current format, the three format registers the same update writes. The plane stays in a format until a flip of
 // another one, so a run of game frames writes the format once and the desktop's next BGRA8 flip writes it back.
+// BD-170: Immediate is the request's FlipImmediate; the write sequence above says what the hardware does with it.
 NTSTATUS DcnFlipSourceAddress(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddress, ULONG Pitch, ULONG PlaneFormat,
-    ULONGLONG AllocationBytes, _Out_opt_ ULONGLONG* PhysicalOut)
+    ULONGLONG AllocationBytes, BOOLEAN Immediate, _Out_opt_ ULONGLONG* PhysicalOut, _Out_ BOOLEAN* Wrote)
 {
     ULONGLONG physical,bytes;
     NTSTATUS status;
@@ -1131,6 +1441,7 @@ NTSTATUS DcnFlipSourceAddress(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddres
     const BC250_PLANE_REGISTERS* format=NULL;
     ULONG current;
 
+    *Wrote = FALSE;
     if (Device->Mmio == NULL || !Device->VidPnFlipEnabled) return STATUS_DEVICE_NOT_READY;
     // The scaled inherited path retains the GOP viewport and surface layout.
     // A new pitch or format needs a separately admitted pipe configuration.
@@ -1178,9 +1489,12 @@ NTSTATUS DcnFlipSourceAddress(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddres
     // desktop is up - MmioDcnWrite's per-write GuardLog was sized for the escape's occasional calls, not this.
     // The outcome is still logged, once, below, capped like every other counter here (BC250_DCN_LOG_CALLS).
     InterlockedIncrement(&Device->DcnSurfaceSequence);
-    status=DcnFlipWriteSequence(Device,physical,Pitch,plane->BytesPerPixel,format,TRUE);
+    // BD-170 r6: from here on a failure is not proof that nothing was written (an MMIO failure is unknown).
+    *Wrote = TRUE;
+    status=DcnFlipWriteSequence(Device,physical,Pitch,plane->BytesPerPixel,format,Immediate,TRUE);
     if (NT_SUCCESS(status))
     {
+        if (Immediate) InterlockedIncrement(&Device->DcnImmediateFlips);
         // Publish address, pitch and format together under DcnSurfaceSequence. The
         // PASSIVE_LEVEL CPU mapper rejects a snapshot crossing this update.
         Device->DcnCurrentAddress=physical;
@@ -1201,7 +1515,8 @@ NTSTATUS DcnFlipSourceAddress(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddres
                 Device->InheritedSignal.ActiveSize.cx,Device->InheritedSignal.ActiveSize.cy,
                 Device->Modeset.InheritedSupport);
         if (current <= BC250_DCN_LOG_CALLS)
-            GuardLog("dcnflip: SetVidPnSourceAddress flip: card 0x%llX -> physical 0x%llX", CardAddress, physical);
+            GuardLog("dcnflip: SetVidPnSourceAddress %s flip: card 0x%llX -> physical 0x%llX",
+                     Immediate ? "immediate" : "vsync", CardAddress, physical);
     }
     else if (InterlockedIncrement(&Device->DcnFlipRefused) <= BC250_DCN_LOG_CALLS)
         GuardLog("dcnflip: SetVidPnSourceAddress: the flip sequence failed or its lock was not acknowledged (0x%08X)", status);

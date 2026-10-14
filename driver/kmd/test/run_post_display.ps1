@@ -1,4 +1,4 @@
-param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\m9\bd003-011\restore",[string]$Source='',[switch]$OldRuntimeOrder,[switch]$WrongSavedSurface)
+param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\m9\bd003-011\restore",[string]$Source='',[switch]$OldRuntimeOrder,[switch]$WrongSavedSurface,[switch]$DepositIgnored,[switch]$DepositProgrammedEarly)
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 if(-not $Source){$Source="$repo\driver\kmd"}
@@ -33,6 +33,26 @@ if($WrongSavedSurface) {
     $anchor='*Surface=saved;return STATUS_SUCCESS;'
     if(([regex]::Matches($text,[regex]::Escape($anchor))).Count -ne 1){throw 'Saved surface mutation anchor changed'}
     $text=$text.Replace($anchor,'saved.Physical=Device->DcnFirmwareAddress;*Surface=saved;return STATUS_SUCCESS;')
+    [IO.File]::WriteAllText($path,$text)
+}
+# BD-170 r6 mutants of DcnLinkSurfaceRestore: the deposit Resume hands out is ignored (the saved surface, which the OS
+# may have released, is unblanked instead), or reported as programmed before the poll proved it on the plane.
+if($DepositIgnored) {
+    $path="$Out\post_display_actual.c"
+    $text=[IO.File]::ReadAllText($path)
+    $anchor='deposit=WddmWriterResume(Device,&desired);'
+    if(([regex]::Matches($text,[regex]::Escape($anchor))).Count -ne 1){throw 'Deposit mutation anchor changed'}
+    $text=$text.Replace($anchor,'(void)WddmWriterResume(Device,&desired);deposit=FALSE;')
+    [IO.File]::WriteAllText($path,$text)
+}
+if($DepositProgrammedEarly) {
+    $path="$Out\post_display_actual.c"
+    $text=[IO.File]::ReadAllText($path)
+    $late='    if (deposit) WddmWriterDepositProgrammed(Device,desired.Sequence);'
+    $write='target.Pitch,4,&format,FALSE,TRUE);'
+    if(([regex]::Matches($text,[regex]::Escape($late))).Count -ne 1 -or
+       ([regex]::Matches($text,[regex]::Escape($write))).Count -ne 1){throw 'Deposit order mutation anchor changed'}
+    $text=$text.Replace($late,'').Replace($write,$write+' if (deposit) WddmWriterDepositProgrammed(Device,desired.Sequence);')
     [IO.File]::WriteAllText($path,$text)
 }
 & $cl /nologo /TC /W4 /WX /O2 /MT "/I$repo\driver\kmd" "/I$repo\third_party\linux-amdgpu" "/I$($msvc.FullName)\include" "/I$sdk\Include\10.0.26100.0\ucrt" "/Fo$Out\" "/Fe$Out\post_display_test.exe" "$Out\post_display_actual.c" "$repo\driver\kmd\dcn_translate.c" /link "/LIBPATH:$($msvc.FullName)\lib\x64" "/LIBPATH:$libs\ucrt\x64" "/LIBPATH:$libs\um\x64"

@@ -24,7 +24,7 @@ typedef struct {
  NTSTATUS(*DxgkCbSynchronizeExecution)(void*,BOOLEAN(*)(PVOID),PVOID,ULONG,BOOLEAN*);} Dxgk;
 } BC250_DEVICE;
 static int event_pending,vector_pending,synchronized,fail_sync,fail_read,fail_write;
-static unsigned acks,reports,queues,connector_calls;
+static unsigned acks,reports,queues,connector_calls,fault_dpcs;
 static BC250_DEVICE *connector_device;
 static LONG InterlockedIncrement(LONG *p){return ++*p;}
 static LONG InterlockedExchange(LONG *p,LONG v){LONG old=*p;*p=v;return old;}
@@ -45,17 +45,19 @@ static void WddmGpuFence(BC250_DEVICE*d){(void)d;}
 static void WddmGpuFencePaging(BC250_DEVICE*d){(void)d;}
 static void WddmDcnVsync(BC250_DEVICE*d){if(InterlockedExchange(&d->DcnVsyncAcked,0))reports++;}
 static void WddmDpc(BC250_DEVICE*d){(void)d;}
+/* BD-170 r6: E5's notification runs in every DPC and returns at once unless E5 queued it (wddm.c). */
+static void WddmFlipFaultDpc(BC250_DEVICE*d){(void)d;fault_dpcs++;}
 static void ConnectorDpc(BC250_DEVICE*d){connector_calls++;connector_device=d;}
 #include "vsync_dpc_actual.inc"
 static BC250_DEVICE dev;
-static void reset(void){memset(&dev,0,sizeof(dev));dev.Mmio=&dev;dev.VidPnFlipEnabled=true;dev.DcnVsyncArmed=1;dev.Dxgk.DxgkCbQueueDpc=queue;dev.Dxgk.DxgkCbSynchronizeExecution=sync_call;event_pending=vector_pending=synchronized=fail_sync=fail_read=fail_write=0;acks=reports=queues=connector_calls=0;connector_device=NULL;}
+static void reset(void){memset(&dev,0,sizeof(dev));dev.Mmio=&dev;dev.VidPnFlipEnabled=true;dev.DcnVsyncArmed=1;dev.Dxgk.DxgkCbQueueDpc=queue;dev.Dxgk.DxgkCbSynchronizeExecution=sync_call;event_pending=vector_pending=synchronized=fail_sync=fail_read=fail_write=0;acks=reports=queues=connector_calls=fault_dpcs=0;connector_device=NULL;}
 #define CHECK(x) do{if(!(x)){printf("FAIL line%d: %s\n",__LINE__,#x);return 1;}}while(0)
 int main(void){
  reset();synchronized=1;CHECK(!DcnVsyncInterrupt(&dev));synchronized=0;
  event_pending=vector_pending=1;Bc250DpcRoutine(&dev);CHECK(acks==1&&reports==1&&dev.DcnVsyncDpcAcked==1&&!event_pending);
- CHECK(connector_calls==1 && connector_device==&dev);
+ CHECK(connector_calls==1 && connector_device==&dev && fault_dpcs==1);
  Bc250DpcRoutine(&dev);CHECK(acks==1&&reports==1);
- CHECK(connector_calls==2 && connector_device==&dev);
+ CHECK(connector_calls==2 && connector_device==&dev && fault_dpcs==2);
  reset();event_pending=vector_pending=1;synchronized=1;CHECK(DcnVsyncInterrupt(&dev));synchronized=0;Bc250DpcRoutine(&dev);CHECK(acks==1&&reports==1&&dev.DcnVsyncDpcAcked==0);
  reset();event_pending=vector_pending=1;dev.DcnVsyncArmed=0;Bc250DpcRoutine(&dev);CHECK(acks==0&&reports==0);
  reset();event_pending=vector_pending=1;fail_sync=1;Bc250DpcRoutine(&dev);CHECK(acks==0&&reports==0&&dev.DcnVsyncDpcSyncFailures==1);

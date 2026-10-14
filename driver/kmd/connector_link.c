@@ -623,7 +623,7 @@ NTSTATUS ConnectorLinkDisable(BC250_DEVICE* Device,ULONG Generation)
     // .35's journal belongs to the inherited timing only. Discharge it before
     // this owner changes any clocks; otherwise stop could replay it over HDMI.
     if(!HdmiLinkStop(Device))return STATUS_DEVICE_DATA_ERROR;
-    if(!WddmPrimaryExclusiveBegin(Device,&primary))return STATUS_DEVICE_BUSY;
+    if(!WddmPrimaryExclusiveBegin(Device,BC250_WRITER_LINK_DISABLE,&primary))return STATUS_DEVICE_BUSY;
     Begin(c,Generation,TRUE);status=DisableOwned(c);End(c);
     // A detach ends the rollback scope. A later sink, even with the same mode,
     // must never receive the previous monitor's timing as error recovery.
@@ -776,7 +776,7 @@ NTSTATUS ConnectorLinkCommit(BC250_DEVICE* Device,const BC250_CONNECTOR_SNAPSHOT
     }
     // An active old link must have a complete recovery plan before mutating it.
     if(c->Active && !c->Current.Valid) {status=STATUS_NOT_SUPPORTED;goto done;}
-    if(!WddmPrimaryExclusiveBegin(Device,&primary)) {status=STATUS_DEVICE_BUSY;goto done;}
+    if(!WddmPrimaryExclusiveBegin(Device,BC250_WRITER_LINK_COMMIT,&primary)) {status=STATUS_DEVICE_BUSY;goto done;}
     exclusive=TRUE;c->Previous=c->Current;c->Previous.Valid=c->Active && c->Current.Valid;
     c->RecoveryVisible=Device->SourceVisible;c->RecoveryModeActive=Device->ModeActive;
     if(c->Previous.Valid) {
@@ -876,7 +876,7 @@ NTSTATUS ConnectorLinkSuspend(BC250_DEVICE* Device)
     if(!c)return STATUS_SUCCESS;
     DpAudioStop(Device);
     if(!DpAudioQuiesced(Device))return STATUS_DEVICE_NOT_READY;
-    if(!WddmPrimaryExclusiveBegin(Device,&generation))return STATUS_DEVICE_BUSY;
+    if(!WddmPrimaryExclusiveBegin(Device,BC250_WRITER_LINK_SUSPEND,&generation))return STATUS_DEVICE_BUSY;
     status=c->Inherited?DcnRestorePostDisplay(Device):DcnRuntimeSurface(Device,FALSE);
     if(NT_SUCCESS(status))status=DcnSetVisibility(Device,FALSE);
     if(NT_SUCCESS(status))Device->SourceVisible=FALSE;
@@ -890,7 +890,7 @@ NTSTATUS ConnectorLinkResume(BC250_DEVICE* Device,ULONG Generation)
     if(!c)return STATUS_DEVICE_NOT_READY;
     if(c->Inherited) {c->Suspended=FALSE;return STATUS_SUCCESS;}
     if(!c->Current.Valid)return STATUS_DEVICE_NOT_READY;
-    if(!WddmPrimaryExclusiveBegin(Device,&primary))return STATUS_DEVICE_BUSY;
+    if(!WddmPrimaryExclusiveBegin(Device,BC250_WRITER_LINK_RESUME,&primary))return STATUS_DEVICE_BUSY;
     Begin(c,Generation,FALSE);c->Next=c->Current;
     status=ClockSessionEnter(c);
     if(!NT_SUCCESS(status)) {End(c);WddmPrimaryExclusiveEnd(Device,primary,FALSE);return status;}
