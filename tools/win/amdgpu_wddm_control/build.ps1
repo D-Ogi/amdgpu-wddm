@@ -4,7 +4,10 @@
 # packages under -Kits. Deterministic: the same sources give the same bytes (csc /deterministic, cl/link /Brepro).
 #
 #   pwsh tools\win\amdgpu_wddm_control\build.ps1 -Kits P:\BC-250\toolchain\nuget -Out P:\BC-250\scratch\release\control-app\build\app
-#        [-StartConfirmCore <release installer's start-confirm-core.ps1>] [-Oracle <directory of the review oracles>]
+#        [-StartConfirmCore <release installer's start-confirm-core.ps1>] [-Oracle <directory of the review oracles>] [-Lab]
+#
+# -Lab builds bc250control.dll and bc250kmd_cli.exe in the lab flavour (BD-167, AMDGPU_WDDM_LAB_FLAVOUR): the CLI
+# then also has the raw diagnostic verbs, whose escapes only a lab KMD has. The application itself is the same.
 #
 # Gates, in order, each stops the build: the unit tests (test/UnitTests.cs against driver/kmd/bc250kmd_escape.h, the
 # KMD's interop, guard and DPM sources, the D3D12 shell's switch names, and with -StartConfirmCore the installer's
@@ -43,7 +46,8 @@ param(
     [string]$StartConfirmCore,
     [string]$NagiArt = (Join-Path $PSScriptRoot 'art\nagi'),   # '' embeds no art
     [string]$Oracle,
-    [switch]$NoSmoke
+    [switch]$NoSmoke,
+    [switch]$Lab
 )
 
 $ErrorActionPreference = 'Stop'
@@ -105,7 +109,8 @@ $env:INCLUDE = ''; $env:LIB = ''
 $stateFlags = @('/O2','/MT','/Brepro',"/I$($msvc.FullName)\include","/I$sdk\Include\$KitVersion\ucrt",
     "/I$sdk\Include\$KitVersion\um","/I$sdk\Include\$KitVersion\shared")
 $stateObjects = & (Join-Path $repo 'tools\state\build-objects.ps1') -Compiler $cl -Out "$obj\state" -Flags $stateFlags -Exports
-& $cl @('/nologo', '/W4', '/WX', '/O2', '/MT', '/LD', '/Brepro', '/DBC250_CONTROL_DLL', '/D_CRT_SECURE_NO_WARNINGS',
+$flavour = @(if ($Lab) { '/DAMDGPU_WDDM_LAB_FLAVOUR=1' })
+& $cl @flavour @('/nologo', '/W4', '/WX', '/O2', '/MT', '/LD', '/Brepro', '/DBC250_CONTROL_DLL', '/D_CRT_SECURE_NO_WARNINGS',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/Fo$obj\bc250control.obj", "/Fe$Out\bc250control.dll",
     (Join-Path $repo 'tools\win\bc250kmd_cli\bc250kmd_cli.c')) @stateObjects @('/link', '/Brepro', "/IMPLIB:$obj\bc250control.lib",
@@ -118,7 +123,7 @@ Remove-Item "$Out\bc250control.exp", "$Out\bc250control.lib" -ErrorAction Silent
 # 2b. bc250kmd_cli.exe from the same translation unit and the same flags, without BC250_CONTROL_DLL: the release ships
 # the CLI and the DLL of one build, so the CLI has every command the DLL's source has (tester.10 shipped a CLI of the
 # KMD branch without health, clock, telemetry, vram and sdmaib). Without arguments it prints its usage and exits 2.
-& $cl @('/nologo', '/W4', '/WX', '/O2', '/MT', '/Brepro', '/D_CRT_SECURE_NO_WARNINGS',
+& $cl @flavour @('/nologo', '/W4', '/WX', '/O2', '/MT', '/Brepro', '/D_CRT_SECURE_NO_WARNINGS',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/Fo$obj\bc250kmd_cli.obj", "/Fe$Out\bc250kmd_cli.exe",
     (Join-Path $repo 'tools\win\bc250kmd_cli\bc250kmd_cli.c')) @stateObjects @('/link', '/Brepro',
@@ -129,6 +134,9 @@ if ($LASTEXITCODE -ne 0) { throw "bc250kmd_cli.exe build failed ($LASTEXITCODE)"
 $usage = & "$Out\bc250kmd_cli.exe" 2>&1 | ForEach-Object { [string]$_ }
 if ($LASTEXITCODE -ne 2 -or -not ($usage -match '^usage: bc250kmd_cli ')) { throw "bc250kmd_cli.exe without arguments: exit $LASTEXITCODE, no usage" }
 Write-Host "  bc250kmd_cli.exe usage: $(@($usage).Count) lines"
+& (Join-Path $repo 'tools\win\bc250kmd_cli\test-flavour.ps1') -Cli "$Out\bc250kmd_cli.exe" -Flavour $(if ($Lab) { 'lab' } else { 'release' }) |
+    ForEach-Object { Write-Host "  $_" }
+if ($LASTEXITCODE -ne 0) { throw 'bc250kmd_cli.exe is not the flavour this build asked for (test-flavour.ps1)' }
 
 # 3. The application, with the string tables embedded.
 # The lists are sorted: csc writes types and resources in input order, and a directory listing comes in the order of

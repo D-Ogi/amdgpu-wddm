@@ -1775,6 +1775,12 @@ static int Budget(const WCHAR *process, const WCHAR *wantedId)
     return failed;
 }
 
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+// BD-167: the raw diagnostic verbs, from `read` to `fbdump` below, exist only in a lab build (build.ps1 -Lab, which
+// defines AMDGPU_WDDM_LAB_FLAVOUR). Their escapes exist only in a lab KMD, which answers them only with test signing
+// on and LabDiagnostics = 1 (driver/kmd/lab_gate.c). A release KMD has no handler for them, so a release CLI does
+// not offer them. Every verb that a release install uses (tools/release/cli-commands.json) stays in both builds.
+
 // `read <name>`: a register of the driver's named READ_REG list (gen_regs.py EXTRA_READS, BC250_REG_READ_NAMES), so
 // that an operator never types an offset. Accepted forms: NAME, mmNAME, IP.NAME and IP:NAME, any case. A text that
 // is a hex number (with or without 0x) is an offset, as before.
@@ -2524,6 +2530,7 @@ static int Fbdump(const WCHAR *path)
     free(frame);
     return 0;
 }
+#endif // AMDGPU_WDDM_LAB_FLAVOUR: the raw diagnostic verbs
 
 // ---- stages: the shared service state ------------------------------------------------------------------------------------
 
@@ -4386,8 +4393,9 @@ int wmain(int argc, wchar_t **argv)
                         "       bc250kmd_cli telemetry [count [interval ms]]   (DPM snapshot and segment statistics)\n"
                         "       bc250kmd_cli vram [hardware-id]           (dxgkrnl segment statistics of any adapter)\n"
                         "       bc250kmd_cli budget <pid | image.exe> [hardware-id]   (one process: budget, usage, demoted)\n"
-                        "       bc250kmd_cli read <hex offset | name> | write <hex offset> <hex value>\n"
                         "       bc250kmd_cli dpaudio [state]              (DP audio check table and record, dpaudio.c)\n"
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+                        "       bc250kmd_cli read <hex offset | name> | write <hex offset> <hex value>\n"
                         "       bc250kmd_cli memory | vread <phys|bar0> <hex offset> | vwrite <phys|bar0> <hex offset> <hex value>\n"
                         "       bc250kmd_cli vcompare <hex offset> <count>\n"
                         "       bc250kmd_cli vtable <hex offset>          (one page table page, nonzero entries)\n"
@@ -4402,6 +4410,7 @@ int wmain(int argc, wchar_t **argv)
                         "       bc250kmd_cli sdmaib [bytes]               (VMID0 indirect SDMA copy/fill control)\n"
                         "       bc250kmd_cli sdmacopy [bytes]             (SDMA copy/fill positive control, ADR 0013)\n"
                         "       bc250kmd_cli fbdump <file.bmp>            (the scanned-out surface, HUBP0, as a BMP)\n"
+#endif
                         "       bc250kmd_cli log [from] | log summary [from | only]   (only: the summary's own lines, for a poller)\n"
                         "       bc250kmd_cli dpm [count [interval ms]] | dpm confirm   (clock governor, docs/design/dpm.md)\n"
                         "       bc250kmd_cli dpm tune [<up> <target> <down> [hold ms] | reset] | dpm floor <MHz|off>\n"
@@ -4431,6 +4440,8 @@ int wmain(int argc, wchar_t **argv)
     if (!_wcsicmp(argv[1], L"list")) return ListAdapters();
     if (!_wcsicmp(argv[1], L"stages")) return Stages();
     if (!_wcsicmp(argv[1], L"confirm")) return Confirm();
+    if (!_wcsicmp(argv[1], L"dpaudio") && argc <= 3) return DpAudio(argc, argv);
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
     if (!_wcsicmp(argv[1], L"read") && argc == 3) return Register(0, argv[2], NULL);
     if (!_wcsicmp(argv[1], L"write") && argc == 4) return Register(1, argv[2], argv[3]);
     if (!_wcsicmp(argv[1], L"memory")) return Memory();
@@ -4443,7 +4454,6 @@ int wmain(int argc, wchar_t **argv)
     if (!_wcsicmp(argv[1], L"gfx") && (argc == 3 || argc == 4)) return Gfx(argv[2], argc == 4 ? argv[3] : NULL);
     if (!_wcsicmp(argv[1], L"ih") && argc == 3) return Ih(argv[2]);
     if (!_wcsicmp(argv[1], L"dcn")) return Dcn();
-    if (!_wcsicmp(argv[1], L"dpaudio") && argc <= 3) return DpAudio(argc, argv);
     if (!_wcsicmp(argv[1], L"dcnflip") && argc == 3 && !_wcsicmp(argv[2], L"restore")) return DcnFlip(NULL, NULL, NULL, 1);
     if (!_wcsicmp(argv[1], L"dcnflip") && argc == 3) return DcnFlip(argv[2], NULL, NULL, 0);
     if (!_wcsicmp(argv[1], L"dcnflip") && argc == 5) return DcnFlip(argv[2], argv[3], argv[4], 0);
@@ -4452,6 +4462,7 @@ int wmain(int argc, wchar_t **argv)
     if (!_wcsicmp(argv[1], L"sdmacopy") && argc <= 3) return SdmaCopy(argc == 3 ? argv[2] : NULL, 0);
     if (!_wcsicmp(argv[1], L"sdmaib") && argc <= 3) return SdmaCopy(argc == 3 ? argv[2] : NULL, 1);
     if (!_wcsicmp(argv[1], L"fbdump") && argc == 3) return Fbdump(argv[2]);
+#endif
     if (!_wcsicmp(argv[1], L"dpm") && argc <= 7) return Dpm(argc, argv);
     if (!_wcsicmp(argv[1], L"fan") && argc <= 5) return Fan(argc, argv);
     if (!_wcsicmp(argv[1], L"interop") && argc == 2) return Interop();

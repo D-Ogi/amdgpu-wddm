@@ -177,6 +177,20 @@ Headers and import libraries come from the SDK NuGet packages, the compiler from
 the same flow as `tools\win\bc250rd\build.ps1`, without the driver and the signing. On the target it lives in
 `C:\BC250\kmd\`.
 
+## Release and lab flavours
+
+A release build (the default) has no raw diagnostic verbs: `read`, `write`, `memory`, `vread`, `vwrite`,
+`vcompare`, `vtable`, `gart`, `psp`, `gfx`, `ih`, `fence`, `ib`, `dcn`, `dcnflip`, `sdmacopy`, `sdmaib` and
+`fbdump`. A release CLI answers each of them with `unknown command` and exit code 2. Their escapes exist only in a
+lab KMD, and a lab KMD answers them only with test signing on and `LabDiagnostics = 1` (`driver/kmd/lab_gate.c`,
+BD-167). `build.ps1 -Lab` defines `AMDGPU_WDDM_LAB_FLAVOUR` and builds the CLI and `bc250control.dll` with these
+verbs. `tools\win\amdgpu_wddm_control\build.ps1 -Lab` does the same for the copies in the control app.
+
+Both flavours keep every form that a release install calls (`tools/release/cli-commands.json`). Both build scripts
+run `test-flavour.ps1` on the CLI that they built: the usage text of each flavour has the release forms, a lab CLI
+names every raw verb, and a release CLI names none of them and refuses each one. `quick.ps1` builds the lab flavour
+as the `driver-state-cli-lab-x64` check.
+
 ## Typed clock client
 
 `clock read` returns one paired KMD MHz/VID/temperature sample; `clock set MHz mV`
