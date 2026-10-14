@@ -82,23 +82,31 @@ static partial class UnitTests
         // to be longer than is this PC starting a second managed process and draining one line of its output,
         // and that is not bounded by anything: in the full 24-worker quality suite of train b34 a 1500 ms
         // deadline twice killed the fixture before it printed, and the same two checks passed at once on the
-        // idle machine. A gate whose result the load of the machine decides is a flaky gate, not a strict one
-        // (the reason the ledger and release-provenance gates hold 600 s), so the fast deadline is tried first
-        // and a longer one follows it. What is under test is the deadline's effect, not its length: partial
-        // output is kept, the elapsed time stays near the deadline, and the worker process is really killed.
-        string output = "";
-        long elapsedMs = 0;
-        int deadlineMs = 0;
-        foreach (int tryMs in new[] { 1500, 6000, 20000 })
+        // idle machine. So the start is measured first, under its own bound of 60 s, by one start of the same
+        // fixture that this test reads and kills itself, and the deadline under test is 1500 ms or three of
+        // those starts, whichever is longer. A start that takes longer than 60 s fails here and says so; a
+        // deadline path that is slow fails the bound below, which no retry can hide. What is under test is the
+        // deadline's effect: partial output is kept, the elapsed time stays near the deadline, and the worker
+        // process is really killed.
+        string fixture = System.Reflection.Assembly.GetExecutingAssembly().Location;
+        long startMs;
+        string first = null;
+        var startClock = System.Diagnostics.Stopwatch.StartNew();
+        using (var probe = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(fixture, "--diagnostic-worker-fixture")
+            { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, StandardOutputEncoding = Encoding.UTF8 }))
         {
-            deadlineMs = tryMs;
-            var clock = System.Diagnostics.Stopwatch.StartNew();
-            output = DiagnosticWorker.Run(new System.Diagnostics.ProcessStartInfo(
-                System.Reflection.Assembly.GetExecutingAssembly().Location, "--diagnostic-worker-fixture"), tryMs);
-            elapsedMs = clock.ElapsedMilliseconds;
-            if (output.Contains("fixture-ready")) break;
-            Console.WriteLine("  worker fixture printed nothing within " + tryMs + " ms; retrying with a longer deadline");
+            var line = probe.StandardOutput.ReadLineAsync();
+            if (line.Wait(60000)) first = line.Result;
+            startMs = startClock.ElapsedMilliseconds;
+            try { probe.Kill(); } catch (InvalidOperationException) { } catch (System.ComponentModel.Win32Exception) { }
+            probe.WaitForExit(10000);
         }
+        Check(first != null && first.StartsWith("fixture-ready "), "worker fixture starts and prints within 60 s");
+        int deadlineMs = (int)Math.Max(1500, 3 * startMs);
+        if (deadlineMs > 1500) Console.WriteLine("  worker fixture start took " + startMs + " ms; deadline under test " + deadlineMs + " ms");
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        string output = DiagnosticWorker.Run(new System.Diagnostics.ProcessStartInfo(fixture, "--diagnostic-worker-fixture"), deadlineMs);
+        long elapsedMs = clock.ElapsedMilliseconds;
         Check(elapsedMs < deadlineMs * 2, "blocked provider is bounded by worker deadline");
         Check(output.Contains("fixture-ready") && output.Contains("report is partial"), "partial worker output retained on timeout");
         if (!output.Contains("fixture-ready") || !output.Contains("report is partial"))
