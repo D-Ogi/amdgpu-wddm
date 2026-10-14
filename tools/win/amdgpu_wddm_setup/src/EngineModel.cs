@@ -31,6 +31,9 @@ namespace AmdgpuWddmSetup
         public bool StartMenuShortcut = true, DesktopShortcut = true;
         // The wallpaper answer the engine would act on, on where the engine says nothing (an older engine).
         public bool Wallpaper = true;
+        // The start-screen picture the engine would act on: the answer of its own command line, or, where nobody
+        // stated one, the answer the installed driver already carries. On where the engine says nothing.
+        public bool BootLogo = true;
     }
 
     public sealed class SettingsPlan
@@ -130,7 +133,7 @@ namespace AmdgpuWddmSetup
                         SecureBoot = Json.Str(e, "secure_boot"), BitLocker = Json.Str(e, "bitlocker"),
                         SystemTuning = Json.Bool(e, "system_tuning"),
                         StartMenuShortcut = Json.BoolOr(e, "start_menu_shortcut", true), DesktopShortcut = Json.BoolOr(e, "desktop_shortcut", true),
-                        Wallpaper = Json.BoolOr(e, "wallpaper", true),
+                        Wallpaper = Json.BoolOr(e, "wallpaper", true), BootLogo = Json.BoolOr(e, "boot_logo", true),
                         CompatibilityOk = c != null && Json.Bool(c, "ok"), CompatibilityReasons = Json.Strs(c, "reasons"),
                     };
                     break;

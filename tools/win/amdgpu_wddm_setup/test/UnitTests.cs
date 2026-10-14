@@ -71,8 +71,14 @@ static partial class UnitTests
         foreach (var lang in Strings.Languages)
         {
             Check(Strings.In(lang, "ui.window-title").StartsWith("Nagi Setup", StringComparison.Ordinal), "Nagi: the window title of " + lang + " starts with Nagi Setup");
-            Check(Strings.In(lang, "shortcuts.title").Contains("Nagi Control App") && Strings.In(lang, "result.verified.body").Contains("Nagi Control App"),
-                "Nagi: " + lang + " names the control app as its shortcuts are named");
+            // The card the shortcuts live in names the product, in its title or in its note. It was the title
+            // until 2026-10-14, when the card took the wallpaper and the start-screen picture as well and was
+            // renamed for what it now holds; the name moved to the note, which is where it says what the
+            // shortcuts open. One of the two must carry it, so the name cannot fall out of the screen.
+            Check((Strings.In(lang, "shortcuts.title").Contains("Nagi Control App") ||
+                   Strings.In(lang, "shortcuts.note").Contains("Nagi Control App")) &&
+                  Strings.In(lang, "result.verified.body").Contains("Nagi Control App"),
+                "Nagi: " + lang + " names the control app on the card its shortcuts are on");
             Equal("Nagi's AMD Graphics Infrastructure", Strings.In(lang, "brand.expansion"), "Nagi: the meaning of the name is the same English phrase in " + lang);
             Check(Strings.In(lang, SetupGuide.NameTipId).Contains("{0}"), "Nagi: the name tip of " + lang + " takes the phrase as its argument");
             foreach (var t in Strings.Tables[lang].Entries.Values)
@@ -571,6 +577,28 @@ static partial class UnitTests
         foreach (var lang in Strings.Languages)
             foreach (var id in new[] { "shortcuts.wallpaper", "shortcuts.wallpaper.note" })
                 Check(Strings.In(lang, id).Trim().Length > 0 && Strings.In(lang, id).Contains("Nagi"), "wallpaper: " + lang + " " + id + " names Nagi");
+        // The picture on the start screen (owner, 2026-10-14: on by default in the installer, like the wallpaper):
+        // a fourth box of the same card, the same "not stated yet" rule, and that rule is what carries an earlier
+        // choice over a reinstall or an upgrade.
+        Check(InstallFlow.PlanOptionIds.Contains("shortcuts.boot-logo") && InstallFlow.PlanOptionsOnByDefault.Contains("shortcuts.boot-logo"),
+            "start screen: the box is a plan option, on by default");
+        Check(InstallFlow.BootLogoArguments(null).Length == 0, "start screen: an answer nobody stated passes no switch");
+        Check(InstallFlow.BootLogoArguments(true).SequenceEqual(new[] { "-BootLogo" }), "start screen: the box on states -BootLogo");
+        Check(InstallFlow.BootLogoArguments(false).SequenceEqual(new[] { "-NoBootLogo" }), "start screen: the box off states -NoBootLogo");
+        Check(!SetupArgs.Parse(new string[0]).BootLogo.HasValue, "start screen: a window started with no argument states no answer");
+        Check(SetupArgs.Parse(new[] { "--no-boot-logo" }).BootLogo == false && SetupArgs.Parse(new[] { "--no-boot-logo" }).Error == null, "start screen: --no-boot-logo clears the box");
+        Check(SetupArgs.Parse(new[] { "--boot-logo" }).BootLogo == true, "start screen: --boot-logo states the default");
+        Check(InstallFlow.BootLogoArguments(SetupArgs.Parse(new[] { "--continue" }).BootLogo).Length == 0,
+            "start screen: the run that continues after a restart states no answer, so an earlier choice stays");
+        var blOn = new EngineRun(Id);
+        blOn.Apply(Ev(1, "decision", "\"action\":\"install\""));
+        var blOff = new EngineRun(Id);
+        blOff.Apply(Ev(1, "decision", "\"action\":\"upgrade\",\"boot_logo\":false"));
+        Check(blOn.Decision != null && blOn.Decision.BootLogo && blOff.Decision != null && !blOff.Decision.BootLogo,
+            "start screen: the decision event reports the answer, on where it reports none, so an upgrade opens the box on the installed answer");
+        foreach (var lang in Strings.Languages)
+            foreach (var id in new[] { "shortcuts.boot-logo", "shortcuts.boot-logo.note" })
+                Check(Strings.In(lang, id).Trim().Length > 0 && Strings.In(lang, id).Contains("Nagi"), "start screen: " + lang + " " + id + " names Nagi");
         // The window keeps the two answers as "not stated yet" until a switch or the plan screen states one: a plain
         // bool would be true again in the run that continues the install, which would put back a shortcut that was
         // turned off.
@@ -582,6 +610,9 @@ static partial class UnitTests
         Check(Regex.IsMatch(formSource, @"bool\?\s+_wallpaper;") && Regex.IsMatch(formSource, @"_wallpaper\s*\?\?\s*\(d == null \|\| d\.Wallpaper\)") &&
               formSource.Contains("InstallFlow.WallpaperArguments(_wallpaper)"),
             "wallpaper: the box holds \"not stated yet\", opens on the engine's answer and reaches the engine");
+        Check(Regex.IsMatch(formSource, @"bool\?\s+_bootLogo;") && Regex.IsMatch(formSource, @"_bootLogo\s*\?\?\s*\(d == null \|\| d\.BootLogo\)") &&
+              formSource.Contains("InstallFlow.BootLogoArguments(_bootLogo)"),
+            "start screen: the box holds \"not stated yet\", opens on the engine's answer and reaches the engine");
         // The words of the removed controls are gone from every table, so neither can come back by itself.
         foreach (var id in InstallFlow.RemovedConsentIds)
             Check(!Strings.Has(id), "no confirmations: " + id + " is gone from the string tables");

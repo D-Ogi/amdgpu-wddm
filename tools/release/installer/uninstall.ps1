@@ -285,6 +285,14 @@ if($removalDevice) {
 }
 Invoke-Change 'pnputil /scan-devices (bind the GPU to its inbox driver now)' { [void](Invoke-Native pnputil.exe @('/scan-devices')) } | Out-Null
 $serviceKey = Split-Path $script:ParametersKey
+# The start-screen picture (owner, 2026-10-14): its value goes first and on its own. The service key below takes the
+# whole of Parameters with it, but only once the driver is unloaded, and a 0 that outlives this uninstall would turn
+# the picture off for the next install without anybody asking for that.
+if ($null -ne (Read-RegistryValues $script:ParametersKey)['BootLogo']) {
+    Invoke-Change "remove $($script:ParametersKey)\BootLogo (the start-screen choice of this release)" {
+        Remove-ItemProperty -LiteralPath $script:ParametersKey -Name BootLogo -Force -ErrorAction SilentlyContinue
+    } | Out-Null
+}
 Invoke-Change "remove the bc250kmd service entry and its settings in $serviceKey (sc.exe delete; finished at the restart if the driver is still loaded)" {
     if (Get-Service -Name $script:ServiceName -ErrorAction SilentlyContinue) { [void](Invoke-Native sc.exe @('delete', $script:ServiceName)) }
     # SCM owns S and Parameters lifetime. The verified protected final archive and

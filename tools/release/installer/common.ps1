@@ -319,12 +319,12 @@ function Get-PendingRestart($State, $Boot) {
 $script:ResumePhases = @('testsigning-pending', 'driver-pending-restart')
 # -Repair is one of them (BD-069): the run after the restart has to know that this install is a repair, or it keeps a
 # closure that the tester asked to reopen.
-$script:InstallSwitches = @('NoControlApp', 'NoReboot', 'Force', 'Repair', 'ApplySystemTuning', 'NoStartMenuShortcut', 'NoDesktopShortcut', 'NoWallpaper')
+$script:InstallSwitches = @('NoControlApp', 'NoReboot', 'Force', 'Repair', 'ApplySystemTuning', 'NoStartMenuShortcut', 'NoDesktopShortcut', 'NoWallpaper', 'NoBootLogo')
 # A switch of the list above, and the switch that clears it explicitly. A choice the setup window or a script makes
 # must be able to turn a saved choice off again, not only on: without the second switch an install that once left
 # the desktop icon out would leave it out for ever, because the state keeps the first answer over every later run.
 # The Windows tuning has had this pair from the start (-ApplySystemTuning / -SkipSystemTuning).
-$script:InstallSwitchClears = @{ ApplySystemTuning = 'SkipSystemTuning'; NoStartMenuShortcut = 'StartMenuShortcut'; NoDesktopShortcut = 'DesktopShortcut'; NoWallpaper = 'Wallpaper' }
+$script:InstallSwitchClears = @{ ApplySystemTuning = 'SkipSystemTuning'; NoStartMenuShortcut = 'StartMenuShortcut'; NoDesktopShortcut = 'DesktopShortcut'; NoWallpaper = 'Wallpaper'; NoBootLogo = 'BootLogo' }
 function Get-InstallInputs($Bound, $State, [string]$PackageVersion) {
     foreach ($pair in $script:InstallSwitchClears.GetEnumerator()) {
         if ($Bound.ContainsKey($pair.Key) -and [bool]$Bound[$pair.Key] -and $Bound.ContainsKey($pair.Value) -and [bool]$Bound[$pair.Value]) {
@@ -1542,6 +1542,62 @@ function Set-WallpaperRecord([bool]$Selected, [string]$Version) {
             New-ItemProperty -LiteralPath $k -Name WallpaperStamp -Value $rec.WallpaperStamp -PropertyType String -Force | Out-Null
         } catch { Write-Log "   wallpaper record not written: $($_.Exception.Message)" }
     } | Out-Null
+}
+
+# The picture on the start screen (owner, 2026-10-14: on by default in the installer, like the wallpaper). This one
+# is a driver setting, not a per-person one: the kernel driver draws it, and Parameters\BootLogo holds the answer.
+# An absent value is the release default, which is on, so the two answers are "remove the value" and "write 0". A
+# removed value also means that no later install writes the default over the person's choice.
+#
+# $Stated is what this run states: $true the picture is wanted, $false it is not, $null nobody stated an answer.
+# Nothing stated keeps whatever the installed driver has, which is how a reinstall or an upgrade keeps an earlier
+# choice: the setup window passes no switch for a box the person did not touch (InstallFlow.BootLogoArguments).
+# Pure: reads nothing, writes nothing.
+#   keep   nobody stated an answer, so the value stays as it is
+#   none   the value is already the stated answer
+#   remove the value goes, which turns the picture on
+#   write  BootLogo = 0, which turns it off
+function Get-BootLogoPlan($Stated, $Current) {
+    $off = ($null -ne $Current) -and ([int]$Current -eq 0)
+    if ($null -eq $Stated) { return [ordered]@{ action = 'keep'; selected = (-not $off); value = $Current } }
+    if ([bool]$Stated) {
+        if ($null -eq $Current) { return [ordered]@{ action = 'none'; selected = $true; value = $null } }
+        return [ordered]@{ action = 'remove'; selected = $true; value = $null }
+    }
+    if ($off) { return [ordered]@{ action = 'none'; selected = $false; value = 0 } }
+    return [ordered]@{ action = 'write'; selected = $false; value = 0 }
+}
+# The answer the window's box opens on, for the engine's decision event: the stated answer, or the one the installed
+# driver carries. Pure.
+function Get-BootLogoChoice($Stated, $Current) {
+    return [bool](Get-BootLogoPlan -Stated $Stated -Current $Current).selected
+}
+# Applies the plan. A failure is one line and never fails the install: the picture is an extra.
+function Set-BootLogoChoice($Stated) {
+    $current = (Read-RegistryValues $script:ParametersKey)['BootLogo']
+    $plan = Get-BootLogoPlan -Stated $Stated -Current $current
+    $words = switch ($plan.action) {
+        'remove' { 'Nagi on the start screen, by the release default (the value goes)' }
+        'write'  { 'no picture on the start screen (-NoBootLogo)' }
+        'keep'   {
+            if ($null -eq $current) { 'Nagi on the start screen, by the release default' }
+            else { "the answer of the installed driver stays: $(if ($plan.selected) { 'Nagi on the start screen' } else { 'no picture' })" }
+        }
+        default  {
+            if ($plan.selected) { 'Nagi on the start screen, by the release default' }
+            else { 'no picture on the start screen (-NoBootLogo), as the driver is already set' }
+        }
+    }
+    Write-Info "start screen: $words"
+    if ($plan.action -notin @('remove', 'write')) { return $plan }
+    Invoke-Change "$($script:ParametersKey)`: $(if ($plan.action -eq 'remove') { 'BootLogo removed' } else { 'BootLogo = 0' })" {
+        try {
+            Initialize-RegistryKey $script:ParametersKey
+            if ($plan.action -eq 'remove') { Remove-ItemProperty -LiteralPath $script:ParametersKey -Name BootLogo -Force -ErrorAction Stop }
+            else { New-ItemProperty -LiteralPath $script:ParametersKey -Name BootLogo -Value 0 -PropertyType DWord -Force | Out-Null }
+        } catch { Write-Log "   start-screen choice not written: $($_.Exception.Message)" }
+    } | Out-Null
+    return $plan
 }
 
 # ---- the Microsoft Visual C++ runtime our programs need ---------------------------------------------------------

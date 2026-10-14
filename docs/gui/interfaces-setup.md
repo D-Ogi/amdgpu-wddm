@@ -24,6 +24,7 @@ The window starts `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy By
 | `-AcceptTestSigning`, `-BitLocker HaveKey\|Suspend` | passed by every run the window starts, and accepted from a script. The window asks nobody for them (owner, 2026-10-12) |
 | `-StartMenuShortcut\|-NoStartMenuShortcut`, `-DesktopShortcut\|-NoDesktopShortcut` | the two places of the shortcut, one pair each. The window passes the switch of an answer it has. A run with no answer of its own passes neither switch, so the answer the first run saved stands. The continuation after a restart is such a run. |
 | `-Wallpaper\|-NoWallpaper` | the Nagi wallpaper box, with the same rule as the shortcut pairs (`InstallFlow.WallpaperArguments`) |
+| `-BootLogo\|-NoBootLogo` | the box for the picture on the start screen, with the same rule again (`InstallFlow.BootLogoArguments`). The answer is the driver setting `Parameters\BootLogo`, whose default is the absent value. A run with no answer of its own keeps the answer the installed driver carries |
 | `-Repair`, `-FirmwareDir <dir>`, `-Verify` | as on the command line |
 | `-DeadlineUtc <ISO 8601 UTC>` | stop at the first stop point after this time (section 10) |
 | `-HoldWindow` | command line only (the RunOnce continuation, section 4): wait for Enter before the console window closes; ignored with `-Gui` |

@@ -82,14 +82,22 @@ namespace AmdgpuWddmSetup
             return wallpaper.HasValue ? new[] { wallpaper.Value ? "-Wallpaper" : "-NoWallpaper" } : new string[0];
         }
 
+        // The picture on the start screen (owner, 2026-10-14), on in the same way. The same null rule carries the
+        // choice of an earlier install over a reinstall or an upgrade: an answer nobody stated passes no switch, and
+        // the engine then leaves the value the installed driver already has (Get-BootLogoPlan in installer\common.ps1).
+        public static string[] BootLogoArguments(bool? bootLogo)
+        {
+            return bootLogo.HasValue ? new[] { bootLogo.Value ? "-BootLogo" : "-NoBootLogo" } : new string[0];
+        }
+
         // The options the plan screen may carry, as string ids. They are choices between good outcomes, not
         // permissions: each has a default, and the Install button never waits for one (G-CONSENT allows exactly
         // these controls and no other).
-        public static readonly string[] PlanOptionIds = new[] { "tuning.opt-in", "shortcuts.start-menu", "shortcuts.desktop", "shortcuts.wallpaper" };
+        public static readonly string[] PlanOptionIds = new[] { "tuning.opt-in", "shortcuts.start-menu", "shortcuts.desktop", "shortcuts.wallpaper", "shortcuts.boot-logo" };
 
         // The options that are on when the screen opens: a person who installs the driver wants to find it
         // afterwards. The optional Windows tuning is not one of them.
-        public static readonly string[] PlanOptionsOnByDefault = new[] { "shortcuts.start-menu", "shortcuts.desktop", "shortcuts.wallpaper" };
+        public static readonly string[] PlanOptionsOnByDefault = new[] { "shortcuts.start-menu", "shortcuts.desktop", "shortcuts.wallpaper", "shortcuts.boot-logo" };
 
         // The ids of the controls the plan screen must never carry again: the test-signing check box, the two
         // BitLocker option buttons and the sentence that told the user to answer them. A table that still has words

@@ -52,6 +52,8 @@ namespace AmdgpuWddmSetup
         bool? _startMenuShortcut, _desktopShortcut;
         // The wallpaper box of the same card, with the same rule (null: nothing stated).
         bool? _wallpaper;
+        // The start-screen picture box of the same card, with the same rule (null: nothing stated).
+        bool? _bootLogo;
         // True while the plan screen shown is the one that offers an install, with its options (G-SHORTCUT).
         bool _planOffersInstall;
         bool _restartLater;
@@ -98,6 +100,7 @@ namespace AmdgpuWddmSetup
             _startMenuShortcut = args.StartMenuShortcut;
             _desktopShortcut = args.DesktopShortcut;
             _wallpaper = args.Wallpaper;
+            _bootLogo = args.BootLogo;
             _smoke = smoke;
             _ownPackage = args.Package ?? DefaultPackage();
             _package = _ownPackage;
@@ -1023,6 +1026,14 @@ namespace AmdgpuWddmSetup
             wallpaper.CheckedChanged += (s, e) => { _wallpaper = wallpaper.Checked; };
             shortcuts.Add(wallpaper);
             shortcuts.Add(Ui.Label(Strings.T("shortcuts.wallpaper.note"), Theme.Small, Theme.Dim, shortcuts.Inner));
+            // The picture on the start screen (owner, 2026-10-14: on by default in the installer, like the
+            // wallpaper). The box opens on the answer the engine reports, which for a reinstall or an upgrade is
+            // the answer the installed driver already carries.
+            var bootLogo = Ui.Check(Strings.T("shortcuts.boot-logo"), shortcuts.Inner);
+            bootLogo.Checked = _bootLogo ?? (d == null || d.BootLogo);
+            bootLogo.CheckedChanged += (s, e) => { _bootLogo = bootLogo.Checked; };
+            shortcuts.Add(bootLogo);
+            shortcuts.Add(Ui.Label(Strings.T("shortcuts.boot-logo.note"), Theme.Small, Theme.Dim, shortcuts.Inner));
 
             var tuning = Card(Strings.T("tuning.title"), Icons.Gear);
             var tune = Ui.Check(Strings.T("tuning.opt-in"), tuning.Inner);
@@ -1069,7 +1080,7 @@ namespace AmdgpuWddmSetup
             // checked, or that waits for a restart, carry no options at all.
             if (Current != Screen.Plan || !_planOffersInstall) yield break;
             var boxes = Descendants(_content).OfType<CheckBox>().ToList();
-            foreach (var id in new[] { "shortcuts.start-menu", "shortcuts.desktop", "shortcuts.wallpaper" })
+            foreach (var id in new[] { "shortcuts.start-menu", "shortcuts.desktop", "shortcuts.wallpaper", "shortcuts.boot-logo" })
             {
                 var box = boxes.FirstOrDefault(b => b.Text == Strings.T(id));
                 if (box == null) { yield return "the plan screen has no option for " + id; continue; }
@@ -1288,6 +1299,7 @@ namespace AmdgpuWddmSetup
             args.AddRange(SetupArgs.TuningArguments(_systemTuningChoice));
             args.AddRange(InstallFlow.ShortcutArguments(_startMenuShortcut, _desktopShortcut));
             args.AddRange(InstallFlow.WallpaperArguments(_wallpaper));
+            args.AddRange(InstallFlow.BootLogoArguments(_bootLogo));
             if (_flow == "repair") args.Add("-Repair");
             // Pressing Install is the consent (owner, 2026-10-12), so the switches that used to carry a user's answer
             // are given on every run. The engine of this package no longer needs them; an engine of an older release,

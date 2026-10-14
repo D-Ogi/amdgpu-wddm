@@ -120,6 +120,10 @@ Check ($r.text -notmatch 'would: (Start menu|desktop) shortcut .*amdgpu-wddm Con
 # The Nagi wallpaper (owner, 2026-10-13): on by default, recorded for Nagi Control App with a stamp of this run.
 Check ($r.text -match 'wallpaper: the Nagi wallpaper, set by Nagi Control App once for each person after the install is verified') 'phase 2 says the Nagi wallpaper is chosen'
 Check ($r.text -match 'would: HKLM:\\SOFTWARE\\amdgpu-wddm\\Release: Wallpaper = 1, WallpaperStamp = \S+ \d{8}T\d{6}Z') 'phase 2 records the wallpaper choice and its install stamp'
+# The picture on the start screen (owner, 2026-10-14): on by default, and the default writes nothing, because the
+# driver reads an absent BootLogo as on. This PC has no bc250kmd service, so the walk-through sees no value.
+Check ($r.text -match 'start screen: Nagi on the start screen, by the release default') 'phase 2 says Nagi is drawn on the start screen'
+Check ($r.text -notmatch 'BootLogo') 'the default writes no BootLogo value: an absent value is the picture'
 # The old names of an older release: this PC has none, and the run says it looked (common.ps1, Remove-LegacyControlShortcuts).
 Check ($r.text -match 'shortcuts of an older release \(amdgpu-wddm Control\): none') 'phase 2 looks for the shortcuts of an older release'
 $dwm = [int]$m.defaults.desktop_router.DwmForceCpu
@@ -149,7 +153,7 @@ Check ($r.text -match 'Microsoft Visual C\+\+ runtime: present: vcruntime140\.dl
 # print what they would do and change nothing.
 'install -DryRun with the runtime missing and no desktop icon'
 $env:AMDGPU_WDDM_TEST_VCRUNTIME = 'missing'
-try { $r2 = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard', '-NoDesktopShortcut', '-NoWallpaper') }
+try { $r2 = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard', '-NoDesktopShortcut', '-NoWallpaper', '-NoBootLogo') }
 finally { Remove-Item Env:\AMDGPU_WDDM_TEST_VCRUNTIME }
 $r2.text
 Check ($r2.code -eq 0) "walk-through without the runtime exit $($r2.code)"
@@ -162,6 +166,8 @@ Check ($iVc -ge 0 -and $iCopy -gt $iVc) "the runtime step comes before the first
 Check ($r2.text -match 'shortcuts: Start menu entry, Start menu repair entry; left out: desktop icon') 'the run asked for no desktop icon leaves it out and says so'
 Check ($r2.text -notmatch 'would: desktop shortcut') 'no desktop icon is written in that run'
 Check (($r2.text -match 'wallpaper: not set \(-NoWallpaper\)') -and ($r2.text -match 'Release: Wallpaper = 0, WallpaperStamp = ')) 'the run asked for no wallpaper records 0 and says so'
+Check ($r2.text -match 'start screen: no picture on the start screen \(-NoBootLogo\)') 'the run asked for no start-screen picture says so'
+Check ($r2.text -match 'would: HKLM:\\SYSTEM\\CurrentControlSet\\Services\\bc250kmd\\Parameters: BootLogo = 0') 'the run asked for no start-screen picture writes BootLogo = 0'
 Check ($r2.text -match 'Dry run complete' -and $r2.text -notmatch 'doing:') 'that walk-through changed nothing either'
 
 'registry defaults on upgrade (test-registry-defaults.ps1 under 5.1, HKCU scratch key)'
@@ -357,7 +363,7 @@ Check (($common -match '\$script:DriverClosures = @\{') -and ($common -match "re
 # BD-077: the graphics cores are a closure of the same kind, and they carry no legacy record. CuModeLastReason is
 # written by every start, a tester's own 24 start among them, so it would turn a chosen 24 into a closure.
 Check (($common -match "CuMode = @\{ closed = 24; record = 'CuModeClosedReason'; any_reason = \`$true") -and ($common -notmatch "legacy_record = 'CuModeLastReason'")) 'the graphics-core closure is CuMode 24 with CuModeClosedReason, and no legacy record'
-Check (($src -match "(?m)^\`$script:ReopenClosures = \[bool\]\`$Repair\s*$") -and ([regex]::Matches($src, '\$script:ReopenClosures =').Count -eq 1) -and ([regex]::Matches($src, '-Reopen:\$script:ReopenClosures').Count -eq 2) -and ($common -match "InstallSwitches = @\('NoControlApp', 'NoReboot', 'Force', 'Repair', 'ApplySystemTuning', 'NoStartMenuShortcut', 'NoDesktopShortcut', 'NoWallpaper'\)")) 'only the -Repair switch reopens a closure (the plan and the write both), and -Repair survives the restart'
+Check (($src -match "(?m)^\`$script:ReopenClosures = \[bool\]\`$Repair\s*$") -and ([regex]::Matches($src, '\$script:ReopenClosures =').Count -eq 1) -and ([regex]::Matches($src, '-Reopen:\$script:ReopenClosures').Count -eq 2) -and ($common -match "InstallSwitches = @\('NoControlApp', 'NoReboot', 'Force', 'Repair', 'ApplySystemTuning', 'NoStartMenuShortcut', 'NoDesktopShortcut', 'NoWallpaper', 'NoBootLogo'\)")) 'only the -Repair switch reopens a closure (the plan and the write both), and -Repair survives the restart'
 Check (($common -match "8 = 'smu-error'") -and ($src -match "\`$ioRemedy = '; remedy: run install\.cmd -Repair") -and ($src -notmatch "if \(\`$ioClosed\) \{ \`$ioClosed \+= '; remedy")) 'every reason the DPM guard persists is a closure (3, 4, 8), and verify names the repair only where the driver left a record'
 Check (($common -match "legacy_record = 'DpmLastReason'; any_reason = \`$true") -and ($common -match "\(\`$record -eq \`$c\.record\) -and \`$c\.any_reason")) 'a durable record takes any reason the driver writes; only the legacy record is held to the three names'
 $marker = @(foreach ($s in $scripts) { if ((@($s.text -split "`n" | Where-Object { $_ -notmatch '^\s*#' }) -join "`n") -match 'InteropSession|InteropBoot') { $s.name } })

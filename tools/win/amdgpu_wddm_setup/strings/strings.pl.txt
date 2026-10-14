@@ -135,12 +135,14 @@ plan.change.test-mode.on|rev|cf315297|Windows już działa w trybie testowym, wi
 plan.change.bitlocker|rev|f43553fa|Ochrona BitLocker zostaje wstrzymana na czas ponownych uruchomień tej instalacji i potem włącza się sama, więc Windows nie poprosi o klucz odzyskiwania.
 plan.change.bitlocker.unknown|rev|67f2277e|Instalator nie mógł odczytać stanu funkcji BitLocker na tym komputerze. Mimo to kontynuuje pracę: miej klucz odzyskiwania pod ręką, jeśli Windows poprosi o niego po ponownym uruchomieniu.
 plan.change.vcruntime|rev|65d68876|Najpierw instalowane jest środowisko uruchomieniowe Microsoft Visual C++ 2015-2022 (x64), którego potrzebują programy sterownika.
-shortcuts.title|mt|02f4d7de|Gdzie znaleźć Nagi Control App
+shortcuts.title|mt|19544092|Skróty i Nagi
 shortcuts.start-menu|rev|f7bdc16b|W menu Start
 shortcuts.desktop|rev|b1e0eb2c|Na pulpicie
-shortcuts.note|rev|dc373b0d|Menu Start dostaje też wpis do odzyskiwania. Wyłącz opcję, jeśli jej nie chcesz. Na instalację sterownika to nie wpływa.
+shortcuts.note|mt|e8f6f141|Skróty otwierają Nagi Control App. Menu Start dostaje też wpis do odzyskiwania. Wyłącz opcję, jeśli jej nie chcesz. Na instalację sterownika to nie wpływa.
 shortcuts.wallpaper|mt|ce6e26e6|Ustaw tapetę Nagi
 shortcuts.wallpaper.note|mt|14a12464|Tapeta jest ustawiana raz dla każdej osoby, która się zaloguje, po sprawdzeniu sterownika. Nagi Control App może przywrócić poprzednie tło.
+shortcuts.boot-logo|mt|c125e22c|Pokazuj Nagi podczas uruchamiania Windows
+shortcuts.boot-logo.note|mt|3c8dd869|Nagi pojawia się nad kółkiem z kropkami na ekranie uruchamiania. Nagi Control App może ją później wyłączyć.
 plan.firmware.download|rev|7051aa7f|Firmware GPU zostanie pobrany z oficjalnego archiwum firmware Linuksa i sprawdzony.
 plan.firmware.folder|rev|3afc555b|Firmware GPU pochodzi z wybranego folderu i zostanie sprawdzony.
 plan.firmware.package-folder|rev|576cf803|Firmware GPU pochodzi z przygotowanego folderu. Internet nie jest potrzebny.

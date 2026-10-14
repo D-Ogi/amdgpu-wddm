@@ -61,6 +61,9 @@ namespace AmdgpuWddmSetup
         // The Nagi wallpaper box of the same card (owner, 2026-10-13), on unless a switch or the person says no;
         // null in the same way as the two shortcut answers.
         public bool? Wallpaper;
+        // The picture on the start screen (owner, 2026-10-14: "Ustawienie Nagi domyslnie wlaczone w instalatorze
+        // (podobnie jak np. tapeta)"), the same box and the same null rule as the wallpaper.
+        public bool? BootLogo;
         public readonly List<string> EngineArgs = new List<string>();
         // smoke entries
         public string SmokeDir, Language = "en", Script = "install.ps1";
@@ -103,6 +106,8 @@ namespace AmdgpuWddmSetup
                     case "--desktop-shortcut": a.DesktopShortcut = true; break;
                     case "--no-wallpaper": a.Wallpaper = false; break;
                     case "--wallpaper": a.Wallpaper = true; break;
+                    case "--no-boot-logo": a.BootLogo = false; break;
+                    case "--boot-logo": a.BootLogo = true; break;
                     case "--continue": a.SetMode("continue"); break;
                     case "--repair": a.SetMode("repair"); break;
                     case "--prepare-offline": a.SetMode("prepare-offline"); break;

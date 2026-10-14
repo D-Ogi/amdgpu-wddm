@@ -187,7 +187,8 @@ Without internet on the BC-250:
 2. Copy them to one folder on the BC-250, for example `C:\amdgpu-wddm-firmware`.
 3. Run `install.cmd -FirmwareDir C:\amdgpu-wddm-firmware`. The installer checks the SHA256 of each file the same
    way and uses the folder also after the restarts during the installation. The same goes for `-DpmMaxMHz`,
-   `-CuMode`, `-NoControlApp`, `-NoStartMenuShortcut`, `-NoDesktopShortcut`, `-NoWallpaper` and `-NoReboot`.
+   `-CuMode`, `-NoControlApp`, `-NoStartMenuShortcut`, `-NoDesktopShortcut`, `-NoWallpaper`, `-NoBootLogo` and
+   `-NoReboot`.
 
 ## The small blue window after logon
 
@@ -272,6 +273,7 @@ longer have to run the release installer again for this.
 | Settings of the person who signs in | `HKCU\Software\amdgpu-wddm\Control` of that account (language, the switches of the control application, "Show the start check window after sign-in"). The application itself writes this key when you change a setting. The installer does not. No administrator rights, nothing for other accounts. `uninstall.cmd` removes the key of the account that runs it, and leaves the keys of other accounts |
 | Shortcuts of an earlier release | earlier releases named the shortcuts "amdgpu-wddm Control". An install over such a release and `uninstall.cmd` remove those old shortcuts when they point at the control application. A file of that name that points elsewhere stays |
 | Nagi wallpaper | for each person who signs in after the installation is checked, Nagi Control App sets the Nagi wallpaper once (position Fill). It saves the previous background of that person first. The setup window has a box for it, on by default. `install.cmd -NoWallpaper` leaves it out. In Nagi Control App, Settings, "Nagi wallpaper" sets it again or restores the previous background. A slideshow or Windows Spotlight comes back as its last picture only. `uninstall.cmd` changes nobody's background and keeps the picture in `%LOCALAPPDATA%\amdgpu-wddm\wallpaper` |
+| Nagi on the start screen | while Windows starts, the driver draws Nagi above the ring of dots. She is there for about half a second, between the ring of dots and the black screen that follows it, so you may miss her if you look away (`docs/design/boot-logo.md`). The setup window has a box for it, on by default, and `install.cmd -NoBootLogo` leaves her out. The answer is `Parameters\BootLogo` of the driver (absent is on, 0 is off), so an installation over an earlier one keeps the answer you gave it. In Nagi Control App the same switch is on the Display page. `uninstall.cmd` removes the value |
 | Installer state and logs | `C:\ProgramData\amdgpu-wddm` (the Control application keeps its setting backups and action log in its `control` folder) |
 
 If you type the `bcdedit` command yourself, keep the quotation marks around `'{current}'` in PowerShell.

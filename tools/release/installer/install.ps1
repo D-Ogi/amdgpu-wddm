@@ -59,6 +59,11 @@ param(
     # shortcut pairs do.
     [switch]$NoWallpaper,
     [switch]$Wallpaper,
+    # The picture on the start screen (owner, 2026-10-14), drawn by the driver itself. On by default; -NoBootLogo
+    # writes Parameters\BootLogo = 0 and -BootLogo removes that value, which is the release default. Neither switch
+    # keeps what the installed driver already has, so a reinstall or an upgrade keeps an earlier choice.
+    [switch]$NoBootLogo,
+    [switch]$BootLogo,
     [switch]$ApplySystemTuning,              # optional reversible Windows tuning; absent = keep Windows settings
     [switch]$SkipSystemTuning,               # explicitly clear an earlier opt-in when resuming
     [switch]$Repair,                        # install the same, already verified version again
@@ -439,6 +444,12 @@ $ApplySystemTuning = [switch](@($installInputs.switches) -contains 'ApplySystemT
 $NoStartMenuShortcut = [switch](@($installInputs.switches) -contains 'NoStartMenuShortcut')
 $NoDesktopShortcut = [switch](@($installInputs.switches) -contains 'NoDesktopShortcut')
 $NoWallpaper = [switch](@($installInputs.switches) -contains 'NoWallpaper')
+# The start-screen picture is the one answer of the three with a "nobody stated one" state of its own: the value it
+# writes is absent by default, so a run that states nothing must leave the installed driver's value alone instead of
+# writing the default over it. $null means nothing stated (Get-BootLogoPlan in common.ps1).
+$bootLogoStated = $null
+if (@($installInputs.switches) -contains 'NoBootLogo') { $bootLogoStated = $false }
+elseif ([bool]$BootLogo) { $bootLogoStated = $true }
 # BD-069: a repair that the tester asked for writes the release default again over a switch that the driver closed
 # itself (the tester asked for the release as it ships). Only the -Repair switch asks for that. Every other install
 # keeps the closure and reports it with its remedy, and so does the automatic 'repair' action of an unfinished or
@@ -1055,7 +1066,10 @@ Write-EngineEvent 'decision' ([ordered]@{ action = $action.action; message = $ac
     # install saved). The setup window opens its two boxes on them, so the run after a restart and a repair run
     # state the answer the tester gave, not the default (interfaces-setup.md A2).
     start_menu_shortcut = (-not [bool]$NoStartMenuShortcut); desktop_shortcut = (-not [bool]$NoDesktopShortcut)
-    wallpaper = (-not [bool]$NoWallpaper) })
+    wallpaper = (-not [bool]$NoWallpaper)
+    # The start-screen picture the box opens on: the stated answer, or the one the installed driver carries, so an
+    # upgrade shows the person their own earlier choice and keeps it when they leave the box alone.
+    boot_logo = (Get-BootLogoChoice -Stated $bootLogoStated -Current (Read-RegistryValues $script:ParametersKey)['BootLogo']) })
 Write-SystemTuningPlan -Selected ([bool]$ApplySystemTuning) -Manifest $script:Manifest
 if ($action.action -in @('install', 'upgrade', 'repair', 'resume')) {
     $impact = Get-InstallSettingsImpact
@@ -1701,6 +1715,13 @@ Invoke-Change 'apply release setting policy through the validated shared-state r
 # A second writer here, straight into the Parameters key, would race that one and could put a value back that a
 # later control-app choice deleted (BD-175).
 }
+
+# The picture on the start screen (owner, 2026-10-14). Not in registry-defaults.json: its default is the absent
+# value, so the installer removes the value for on and writes 0 for off, and a run that states no answer leaves the
+# installed driver's answer alone (common.ps1). The driver reads it when it starts, so the choice shows at the next
+# start of Windows. A driver setting, not a per-person one: it is applied whether or not the control application is
+# part of this package.
+[void](Set-BootLogoChoice -Stated $bootLogoStated)
 
 # DisplayPort audio, the interrupt of the GPU's HD Audio function (BD-092, common.ps1). That function keeps the inbox
 # HDAudBus driver, and the inbox INF leaves it on a line interrupt, where the stream interrupts of this board never

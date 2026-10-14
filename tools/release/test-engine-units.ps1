@@ -1083,6 +1083,35 @@ Check ((Get-WallpaperRecord -Selected $false -Version '1.2.3' -Utc ([DateTime]::
 Check ($installText -match 'Set-WallpaperRecord -Selected \(-not \[bool\]\$NoWallpaper\)') 'the install records the wallpaper answer for the control application'
 Check ($installText -match 'wallpaper = \(-not \[bool\]\$NoWallpaper\)') 'the decision event reports the wallpaper answer to the setup window'
 
+'the picture on the start screen: on by default, off on request, and an earlier choice kept (owner, 2026-10-14)'
+# Get-BootLogoPlan is pure, so the whole rule is tested here: the default is the absent value, which is why a run
+# that states no answer must write nothing instead of writing a default over the person's choice.
+Check (((Get-BootLogoPlan -Stated $true -Current $null).action -eq 'none') -and (Get-BootLogoPlan -Stated $true -Current $null).selected) 'a fresh install with the box on writes nothing: an absent value is the picture'
+Check (((Get-BootLogoPlan -Stated $null -Current $null).action -eq 'keep') -and (Get-BootLogoPlan -Stated $null -Current $null).selected) 'a fresh install that states no answer writes nothing and the picture is on'
+Check (((Get-BootLogoPlan -Stated $false -Current $null).action -eq 'write') -and ((Get-BootLogoPlan -Stated $false -Current $null).value -eq 0)) 'the box off writes BootLogo = 0'
+Check ((Get-BootLogoPlan -Stated $false -Current 0).action -eq 'none') 'the box off over a driver that is already off writes nothing again'
+$keep = Get-BootLogoPlan -Stated $null -Current 0
+Check (($keep.action -eq 'keep') -and (-not $keep.selected)) 'an upgrade whose box nobody touched keeps the 0 of the installed driver'
+Check ((Get-BootLogoPlan -Stated $true -Current 0).action -eq 'remove') 'the box turned back on removes the 0, so no later install writes a default over the answer'
+Check ((Get-BootLogoPlan -Stated $true -Current 1).action -eq 'remove') 'a 1 written by hand is removed too: the picture is the absent value'
+Check ((Get-BootLogoChoice -Stated $null -Current 0) -eq $false) 'the box of an upgrade opens on the answer the installed driver carries'
+Check ((Get-BootLogoChoice -Stated $null -Current $null) -eq $true) 'the box of a fresh install opens on'
+Check ((Get-BootLogoChoice -Stated $true -Current 0) -eq $true) 'a stated answer wins over the installed one'
+$blState = [pscustomobject]@{ phase = 'testsigning-pending'; package_version = '1.0'; install_switches = @('NoBootLogo') }
+Check (@((Get-InstallInputs -Bound @{} -State $blState -PackageVersion '1.0').switches) -contains 'NoBootLogo') 'the run after the restart leaves the picture out again'
+Check (-not (@((Get-InstallInputs -Bound @{ BootLogo = $true } -State $blState -PackageVersion '1.0').switches) -contains 'NoBootLogo')) '-BootLogo on a later run of the same install puts the picture back'
+$bad = $null
+try { [void](Get-InstallInputs -Bound @{ NoBootLogo = $true; BootLogo = $true } -State $blState -PackageVersion '1.0') } catch { $bad = $_.Exception.Message }
+Check ($bad -and $bad -match '-NoBootLogo and -BootLogo cannot be used together') "-NoBootLogo with -BootLogo is a usage error ($bad)"
+Check (($installText -match '\[switch\]\$BootLogo\b') -and ($installText -match '\[switch\]\$NoBootLogo\b')) 'install.ps1 takes -BootLogo and -NoBootLogo'
+Check (-not ($script:InstallSwitches -contains 'BootLogo')) '-BootLogo is not saved itself: it only clears the saved -NoBootLogo'
+Check ($installText -match 'Set-BootLogoChoice -Stated \$bootLogoStated') 'the install applies the start-screen answer'
+Check ($installText -match 'boot_logo = \(Get-BootLogoChoice -Stated \$bootLogoStated') 'the decision event reports the start-screen answer to the setup window'
+# The driver reads an absent BootLogo as on, so the installer must never list it among the values it writes by
+# default: a default of 1 would be written over a 0 the person chose, and a default of 0 would turn the picture off.
+Check (-not ([IO.File]::ReadAllText((Join-Path $Installer 'registry-defaults.json'))).Contains('BootLogo')) 'BootLogo is not in registry-defaults.json: its default is the absent value'
+Check (([IO.File]::ReadAllText((Join-Path $Installer 'uninstall.ps1'))) -match 'Remove-ItemProperty -LiteralPath \$script:ParametersKey -Name BootLogo') 'the uninstall removes the start-screen choice'
+
 'which Windows this driver is made for: n-2, and a line instead of a refusal (owner, 2026-10-11 and 2026-10-12)'
 # Get-WindowsSupportFindings is pure, so every version, channel and edition is tested here and none of them needs a
 # PC of its own. The severities are the whole contract: only 'fail' refuses the install.

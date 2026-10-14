@@ -133,12 +133,14 @@ plan.change.test-mode.on|mt|cf315297|Windows はすでにテスト モードで�
 plan.change.bitlocker|mt|f43553fa|BitLocker の保護はこのインストールの再起動の間だけ一時停止し、その後は自動的に再開するので、Windows が回復キーを求めることはありません。
 plan.change.bitlocker.unknown|mt|67f2277e|この PC の BitLocker の状態を読み取れませんでした。処理は続行します。再起動後に Windows が求めた場合に備えて、回復キーを用意しておいてください。
 plan.change.vcruntime|mt|65d68876|ドライバーのプログラムが必要とするため、最初に Microsoft Visual C++ 2015-2022 ランタイム (x64) をインストールします。
-shortcuts.title|mt-safe|02f4d7de|Nagi Control App の場所
+shortcuts.title|mt-safe|19544092|ショートカットと Nagi
 shortcuts.start-menu|mt-safe|f7bdc16b|スタート メニュー
 shortcuts.desktop|mt-safe|b1e0eb2c|デスクトップ
-shortcuts.note|mt|dc373b0d|スタート メニューには復旧用の項目も追加されます。不要なオプションはオフにしてください。どちらにしてもドライバーはインストールされます。
+shortcuts.note|mt|e8f6f141|ショートカットは Nagi Control App を開きます。スタート メニューには復旧用の項目も追加されます。不要なオプションはオフにしてください。どちらにしてもドライバーはインストールされます。
 shortcuts.wallpaper|mt|ce6e26e6|Nagi の壁紙を設定
 shortcuts.wallpaper.note|mt|14a12464|壁紙は、ドライバーの確認後にサインインした各ユーザーに一度だけ設定されます。以前の背景は Nagi Control App で戻せます。
+shortcuts.boot-logo|mt|c125e22c|Windows の起動中に Nagi を表示
+shortcuts.boot-logo.note|mt|3c8dd869|Nagi は起動画面の点の輪の上に表示されます。後から Nagi Control App でオフにできます。
 plan.firmware.download|mt|7051aa7f|GPU ファームウェアは Linux の公式ファームウェア アーカイブからダウンロードされ、確認されます。
 plan.firmware.folder|mt|3afc555b|GPU ファームウェアは選んだフォルダーから取得され、確認されます。
 plan.firmware.package-folder|mt|576cf803|GPU ファームウェアは準備済みのフォルダーから取得されます。インターネットは不要です。
