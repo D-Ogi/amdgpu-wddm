@@ -728,6 +728,7 @@ if($DryRun){
   $m=try{Read-SteamManifest}catch{@(-1,'')}
   Gate 'steam state' ($m[0] -eq [int]$gp.steam.require_state_flags) ('StateFlags '+$m[0]+' build '+$m[1])
   'app profile '+$(try{[string](Get-ItemProperty -LiteralPath ('HKLM:\SOFTWARE\amdgpu-wddm\D3D12\Applications\'+$appImage) -Name Experiment -ErrorAction Stop).Experiment}catch{'none'})
+  if($armed.Count){'WARNING launch through Steam: the game gets the Steam client''s environment, so these lab knobs do not apply: '+($armed -join ', ')}
  }
  foreach($image in $routerImages){
   $decision=Get-RouterDecision $image
@@ -876,6 +877,14 @@ try{
   # launcher-configuration.json).
   $result.app_profile=try{[string](Get-ItemProperty -LiteralPath ('HKLM:\SOFTWARE\amdgpu-wddm\D3D12\Applications\'+$appImage) -Name Experiment -ErrorAction Stop).Experiment}catch{''}
   Note ('app_profile '+$(if($result.app_profile){$result.app_profile}else{'none'}))
+  # BD-167: the knobs above go into this script's environment, which a game that Steam starts does not get. The
+  # result says so, so that no one reads the defaults as a measurement under a knob's name.
+  $knobs=@(@(@('config.experiment',[bool]$result.experiment),@('radv-perftest.txt',[bool]$result.radv_perftest),
+             @('shader-dump.on',(Test-Path -LiteralPath 'C:\BC250\tools\shader-dump.on')))|Where-Object{$_[1]}|ForEach-Object{$_[0]})
+  if($knobs.Count){
+   $result.launch_route='steam';$result.knobs_applied=$false;$result.knobs_not_applied=$knobs
+   Note ('WARNING launch through Steam: the game gets the Steam client''s environment, so these lab knobs do not apply: '+($knobs -join ', '))
+  }
   if(!$result.steam_processes){throw 'Steam client not running'}
   # 254: with an update pending, -applaunch starts the update (45 GB staged there) and launches the game only after
   # it, outside the trial. Launch only an app Steam reports as fully installed and current (StateFlags 4).
