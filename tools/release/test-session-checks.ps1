@@ -264,8 +264,9 @@ else {
 'BD-080: the logon tasks'
 $confirmScript = 'C:\Program Files\amdgpu-wddm\tools\start-confirm.ps1'
 $windowScript = 'C:\Program Files\amdgpu-wddm\tools\start-window.ps1'
+$windowHost = 'C:\Program Files\amdgpu-wddm\control\amdgpu_wddm_control.exe'
 $plan = $null
-if (Get-Command Get-LogonTaskPlan -ErrorAction SilentlyContinue) { $plan = @(Get-LogonTaskPlan -ConfirmScript $confirmScript -WindowScript $windowScript) }
+if (Get-Command Get-LogonTaskPlan -ErrorAction SilentlyContinue) { $plan = @(Get-LogonTaskPlan -ConfirmScript $confirmScript -WindowScript $windowScript -WindowHost $windowHost) }
 Check ($null -ne $plan) 'common.ps1 states the logon tasks as a plan (Get-LogonTaskPlan)'
 if ($plan) {
     $problems = @(Test-LogonTaskPlan $plan)
@@ -276,7 +277,23 @@ if ($plan) {
     Check ((@($plan | Where-Object { $_.trigger.kind -eq 'at-logon' -and -not $_.trigger.user }).Count) -eq $plan.Count) 'both tasks trigger at the logon of any user (no account on the trigger)'
     Check (($w.principal.id -eq 'S-1-5-32-545') -and ($w.principal.run_level -eq 'Limited')) "the window runs with the logged-on user's own rights: $($w.principal.id), $($w.principal.run_level)"
     Check (($c.arguments -match '(?i)\s-NoWindow(\s|$)') -and ($c.arguments -like "*`"$confirmScript`"*")) "the confirmation runs $($c.execute) headless over the installed script: $($c.arguments)"
-    Check (($w.arguments -like "*`"$windowScript`"*") -and ($w.arguments -notmatch '(?i)start-confirm')) "the window runs its own script: $($w.arguments)"
+    # M899: the window task runs the control application, a windows program, which starts the script with no console
+    # window. powershell.exe in the task gave the person a Windows Terminal window at sign-in.
+    Check (($w.execute -eq $windowHost) -and ($w.arguments -eq '--start-window -Seconds 120') -and ($w.script -eq $windowScript) -and (-not $w.console)) "the window runs the control application of this install, which starts its own script with no console window: $($w.execute) $($w.arguments)"
+    # An install without the control application (-NoControlApp) keeps powershell.exe, and the plan says why.
+    $plainPlan = @(Get-LogonTaskPlan -ConfirmScript $confirmScript -WindowScript $windowScript)
+    $pw = @($plainPlan | Where-Object { $_.role -eq 'window' })[0]
+    $plainProblems = @(Test-LogonTaskPlan $plainPlan)
+    Check (($plainProblems.Count -eq 0) -and ($pw.execute -eq 'powershell.exe') -and ($pw.arguments -like "*`"$windowScript`"*") -and ($pw.arguments -notmatch '(?i)start-confirm') -and [string]$pw.console) "without the control application the window runs powershell.exe over its own script and the plan says why: $($pw.console)$(if ($plainProblems.Count) { ' (' + ($plainProblems -join '; ') + ')' } else { '' })"
+    # The PE reader of the host rule: a windows program, a console program, and files that are not programs.
+    $sys = Join-Path $env:SystemRoot 'System32'
+    $txt = Join-Path $WorkRoot ('pe-subsystem-' + [guid]::NewGuid().ToString('N') + '.txt')
+    [void](New-Item -ItemType Directory -Force -Path $WorkRoot)
+    [IO.File]::WriteAllText($txt, 'MZ is not enough')
+    try {
+        $readings = @((Get-PeSubsystem (Join-Path $env:SystemRoot 'explorer.exe')), (Get-PeSubsystem (Join-Path $sys 'cmd.exe')), (Get-PeSubsystem $txt), (Get-PeSubsystem (Join-Path $sys 'no-such-file.exe')))
+    } finally { Remove-Item -LiteralPath $txt -Force -ErrorAction SilentlyContinue }
+    Check (($readings[0] -eq 2) -and ($readings[1] -eq 3) -and ($null -eq $readings[2]) -and ($null -eq $readings[3])) "Get-PeSubsystem: explorer.exe $($readings[0]), cmd.exe $($readings[1]), a text file '$($readings[2])', no file '$($readings[3])' (expected 2, 3, none, none)"
     Check ((@($plan | ForEach-Object { [string]$_.name } | Sort-Object -Unique).Count -eq 2) -and ($plan[0].name -eq $script:TaskName) -and ($plan[1].name -eq $script:WindowTaskName)) "two tasks, both named after the release: '$($plan[0].name)', '$($plan[1].name)'"
     # The negative controls: each one is the plan with one rule broken, and every one of them must be reported.
     function Copy-Plan($Source) {
@@ -300,6 +317,10 @@ if ($plan) {
         @{ name = 'a task not named after the release'; break = { param($p) $p[1].name = 'start window' }; says = "uninstaller's sweep" }
         @{ name = 'a task without a time limit'; break = { param($p) $p[0].minutes = 0 }; says = 'no execution time limit' }
         @{ name = 'only the window registered'; break = { param($p) $p[0].role = 'window' }; says = '0 confirmation tasks' }
+        @{ name = 'the window through powershell.exe with no reason (M899)'; break = { param($p) $p[1].execute = 'powershell.exe'; $p[1].arguments = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$windowScript`" -Seconds 120"; $p[1].console = $null }; says = 'console program' }
+        @{ name = 'the host not asked for the window'; break = { param($p) $p[1].arguments = '-Seconds 120' }; says = '--start-window' }
+        @{ name = 'the host of another install'; break = { param($p) $p[1].execute = 'D:\Other\amdgpu-wddm\control\amdgpu_wddm_control.exe' }; says = 'different installs' }
+        @{ name = 'a console program as the host'; break = { param($p) $p[1].execute = (Join-Path $env:SystemRoot 'System32\cmd.exe'); $p[1].script = (Join-Path $env:SystemRoot 'tools\start-window.ps1') }; says = 'PE subsystem 3' }
     )
     foreach ($ctl in $controls) {
         $broken = Copy-Plan $plan

@@ -1,6 +1,12 @@
 # The logon window of a tester PC: the scheduled task "amdgpu-wddm start window" (install.ps1 registers it from the
 # plan of common.ps1: at the logon of any user, for the Users group, limited run level) runs this once per logon.
 #
+# The task does not run powershell.exe itself. It runs Nagi Control App as `amdgpu_wddm_control.exe --start-window
+# -Seconds N`, a windows program, which starts this script through powershell.exe with no console window and gives
+# back its exit code (StartWindowHost.cs). powershell.exe as the task's own program is a console program: on the lab
+# its console was a Windows Terminal window that was still on the screen when this window closed (fact M899). Only an
+# install without the control application (-NoControlApp) runs this script through powershell.exe directly.
+#
 # It does two things in the session of the person who just signed in, and neither of them needs any rights:
 #   1. It starts the sign-in notice of Nagi Control App (--start-notice). The control application reads the
 #      driver's start itself and shows a window ONLY when the driver is not running: a start the driver's own guard
@@ -45,6 +51,8 @@
 #   0  the window was shown and closed itself, or -Seconds was below one
 #   2  the window could not be shown (no WinForms assembly, no window station, a host that is not STA)
 #   3  the person turned the window off in the application; nothing was shown and nothing is wrong
+# The control application that starts this script adds two codes of its own: 4 it stopped this script at -Seconds
+# plus 30 s, 5 it could not start this script (StartWindowHost.cs).
 # The confirmation of the same logon runs as Local System, reads that result and writes it into its own log, so a
 # window half that never ran is visible in C:\ProgramData\amdgpu-wddm\start-confirm.log. A failure here still fails
 # no logon: the confirmation's own fallback keeps the machine off Microsoft Basic Display.

@@ -2424,9 +2424,29 @@ function Get-OurScheduledTasks {
 # translates the SID on that computer and compares the result, and never compares the string 'S-1-5-32-545'.
 # The logon type of a group principal is Windows' own ('Group'); the installer states it in this plan and does not
 # pass it to New-ScheduledTaskPrincipal, which takes it with -UserId.
+#
+# What the window task runs (owner, 2026-10-14). powershell.exe is a console program: Windows gives it a console when
+# it creates the process, and -WindowStyle Hidden hides that console only after PowerShell has started. Where Windows
+# Terminal is the default terminal the console is a Terminal window, and on the lab that window was still on the
+# screen when the start window closed (fact M899). The window task therefore runs Nagi Control App, a windows-subsystem
+# program, as `--start-window -Seconds N` (-WindowHost, the installed control application). It starts this
+# install's start-window.ps1 (tools\ next to its own control\ folder) with CREATE_NO_WINDOW, so no console window
+# exists, and returns the script's exit code (StartWindowHost.cs). Only an install without the control application
+# (-NoControlApp) keeps powershell.exe for the window, and the plan says so in 'console'.
 function Get-LogonTaskPlan {
-    param([Parameter(Mandatory)][string]$ConfirmScript, [Parameter(Mandatory)][string]$WindowScript, [int]$Seconds = 120)
+    param([Parameter(Mandatory)][string]$ConfirmScript, [Parameter(Mandatory)][string]$WindowScript, [string]$WindowHost, [int]$Seconds = 120)
     $host51 = '-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File'
+    if ($WindowHost) {
+        $windowExecute = $WindowHost
+        $windowArguments = "--start-window -Seconds $Seconds"
+        $windowConsole = $null
+        $windowWhat = "$WindowHost --start-window, which runs $WindowScript with no console window"
+    } else {
+        $windowExecute = 'powershell.exe'
+        $windowArguments = "$host51 `"$WindowScript`" -Seconds $Seconds"
+        $windowConsole = 'no control application in this install (-NoControlApp): a console window can appear at sign-in'
+        $windowWhat = "$WindowScript through powershell.exe ($windowConsole)"
+    }
     return @(
         [ordered]@{
             role      = 'confirm'
@@ -2441,14 +2461,33 @@ function Get-LogonTaskPlan {
         [ordered]@{
             role      = 'window'
             name      = $script:WindowTaskName
-            execute   = 'powershell.exe'
-            arguments = "$host51 `"$WindowScript`" -Seconds $Seconds"
+            execute   = $windowExecute
+            arguments = $windowArguments
+            script    = $WindowScript
+            console   = $windowConsole
             principal = [ordered]@{ kind = 'group'; id = 'S-1-5-32-545'; logon_type = 'Group'; run_level = 'Limited' }
             trigger   = [ordered]@{ kind = 'at-logon'; user = $null }
             minutes   = 3
-            what      = "at the logon of any user, with that user's own rights (Users, S-1-5-32-545): $WindowScript"
+            what      = "at the logon of any user, with that user's own rights (Users, S-1-5-32-545): $windowWhat"
         }
     )
+}
+# The subsystem field of a PE file's optional header: 2 a windows program (no console), 3 a console program, $null for
+# a file that is not there or not a PE. Reads 4 KiB at most and never runs the file.
+function Get-PeSubsystem {
+    param([string]$Path)
+    try {
+        if (-not $Path -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+        $fs = [IO.File]::OpenRead($Path)
+        try {
+            $buf = New-Object byte[] 4096
+            $n = $fs.Read($buf, 0, $buf.Length)
+        } finally { $fs.Dispose() }
+        if ($n -lt 64 -or $buf[0] -ne 0x4D -or $buf[1] -ne 0x5A) { return $null }
+        $pe = [BitConverter]::ToInt32($buf, 0x3C)
+        if ($pe -lt 0 -or $pe + 24 + 70 -gt $n -or [BitConverter]::ToUInt32($buf, $pe) -ne 0x00004550) { return $null }
+        return [int][BitConverter]::ToUInt16($buf, $pe + 24 + 68)
+    } catch { return $null }
 }
 # The rules of the plan above, as the list of what is wrong with a plan; an empty list is a plan that holds them.
 # The host test runs it over the installer's plan and over a plan with the principal of the defect, which must fail.
@@ -2463,11 +2502,11 @@ function Test-LogonTaskPlan {
         if ($t.trigger.user) { [void]$bad.Add("task '$n' triggers at the logon of '$($t.trigger.user)' only; every logon has to run it") }
         if ([string]$t.principal.id -eq 'S-1-5-32-544') { [void]$bad.Add("task '$n' is registered for the Administrators group (S-1-5-32-544): it never runs at the logon of a standard user (BD-080)") }
         if ([int]$t.minutes -le 0) { [void]$bad.Add("task '$n' has no execution time limit") }
-        if ([string]$t.execute -ne 'powershell.exe') { [void]$bad.Add("task '$n' runs '$($t.execute)', not powershell.exe") }
     }
     $confirm = @($tasks | Where-Object { $_.role -eq 'confirm' })
     if ($confirm.Count -ne 1) { [void]$bad.Add("the plan has $($confirm.Count) confirmation tasks, not one"); return @($bad) }
     $c = $confirm[0]
+    if ([string]$c.execute -ne 'powershell.exe') { [void]$bad.Add("the confirmation runs '$($c.execute)', not powershell.exe") }
     if (([string]$c.principal.kind -ne 'user') -or ([string]$c.principal.id -ne 'S-1-5-18')) { [void]$bad.Add("the confirmation runs as $($c.principal.kind) $($c.principal.id), not as Local System (S-1-5-18)") }
     if ([string]$c.principal.logon_type -ne 'ServiceAccount') { [void]$bad.Add("the confirmation asks for logon type '$($c.principal.logon_type)', not ServiceAccount") }
     if ([string]$c.principal.run_level -ne 'Highest') { [void]$bad.Add("the confirmation asks for run level '$($c.principal.run_level)': the KMD refuses CONFIRM to a caller who is not an administrator") }
@@ -2480,6 +2519,19 @@ function Test-LogonTaskPlan {
     if (([string]$w.principal.kind -ne 'group') -or ([string]$w.principal.id -ne 'S-1-5-32-545')) { [void]$bad.Add("the window is registered for $($w.principal.kind) $($w.principal.id), not for the Users group (S-1-5-32-545) that every interactive account belongs to") }
     if ([string]$w.principal.run_level -ne 'Limited') { [void]$bad.Add("the window asks for run level '$($w.principal.run_level)': it needs no rights, and a standard user has none to give it") }
     if ([string]$w.name -eq [string]$c.name) { [void]$bad.Add('both tasks carry the same name') }
+    # The window's host (M899): a windows program that starts the window's own script with no console window. A
+    # console program is allowed only when the plan states why (an install without the control application).
+    $we = [string]$w.execute
+    if ($we -eq 'powershell.exe') {
+        if (-not [string]$w.console) { [void]$bad.Add("the window runs powershell.exe, a console program, and the plan gives no reason: Windows gives it a console window at sign-in (M899); the control application's --start-window runs the script with none") }
+        if ([string]$w.arguments -notlike "*`"$([string]$w.script)`"*") { [void]$bad.Add("the window does not run its own script ($($w.script)): $($w.arguments)") }
+    } else {
+        if ([string]$w.arguments -notmatch '^--start-window -Seconds \d+$') { [void]$bad.Add("the window's host is not asked for --start-window -Seconds N: '$($w.arguments)'") }
+        $hosted = Join-Path (Split-Path (Split-Path $we -Parent) -Parent) 'tools\start-window.ps1'
+        if ($hosted -ne [string]$w.script) { [void]$bad.Add("the window's host starts $hosted, not its own script $($w.script): the host and the script are of different installs") }
+        $sub = Get-PeSubsystem $we
+        if (($null -ne $sub) -and ($sub -ne 2)) { [void]$bad.Add("the window's host $we is a console program (PE subsystem $sub, not 2): Windows gives it a console window at sign-in (M899)") }
+    }
     return @($bad)
 }
 # Our test certificates in the two machine stores, by subject: the certificate of this release and of any older one.

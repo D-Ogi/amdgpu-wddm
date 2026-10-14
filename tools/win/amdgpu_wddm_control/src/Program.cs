@@ -14,6 +14,10 @@
 //   amdgpu_wddm_control.exe --start-notice           the sign-in notice: reads the driver's start, shows a window
 //                                                    only when the driver is not running (StartNotice.cs), else
 //                                                    exits 0 with nothing on the screen
+//   amdgpu_wddm_control.exe --start-window [-Seconds N]
+//                                                    the host of the logon window task: runs the release's
+//                                                    start-window.ps1 with no console window and returns its exit
+//                                                    code (StartWindowHost.cs)
 //   amdgpu_wddm_control.exe --smoke-notice <file>    no window: the notice built in every case, language and scale,
 //                                                    with its layout gate; findings go to <file> (BD-137)
 //   amdgpu_wddm_control.exe --recovery               the recovery view: no bc250control.dll, no driver questions
@@ -68,6 +72,7 @@ namespace AmdgpuWddmControl
             if (args.Length > 0 && args[0] == "--status") return Status(args);
             if (args.Length > 0 && args[0] == "--action") return Dispatch(args);
             if (args.Length > 0 && args[0] == "--system-tuning") return Dispatch(args);
+            if (args.Length > 0 && args[0] == StartWindowHost.Verb) return StartWindowHost.Run(args, AppDirectory);
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             if (args.Length == 2 && args[0] == "--smoke") return Smoke(args[1]);

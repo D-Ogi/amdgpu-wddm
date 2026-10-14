@@ -164,8 +164,10 @@ function Get-FallbackView {
 # The window runs as the user who logged on (start-window.ps1, the task below), where this script cannot see it: a
 # different session, and under Local System no desktop at all. What it can read is the task's own record, so the log
 # of this run says whether the window half ran and what it reported. start-window.ps1's exit codes: 0 shown and
-# closed, 2 could not be shown. 267009 is "running", and the task is absent on a machine where an older release
-# registered the single task only. This never throws and never changes the run's outcome; it is a log line.
+# closed, 2 could not be shown, 3 turned off by the person. Nagi Control App, which starts that script for the task
+# (--start-window), passes those through and adds 4 (it stopped the script at its bound) and 5 (it could not start
+# the script). 267009 is "running", and the task is absent on a machine where an older release registered the single
+# task only. This never throws and never changes the run's outcome; it is a log line.
 $windowTaskName = 'amdgpu-wddm start window'   # common.ps1 $script:WindowTaskName; test-session-checks.ps1 holds the two together
 function Format-WindowTask {
     try {

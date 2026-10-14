@@ -114,3 +114,37 @@ Exit codes: 0 every case ran, 1 a case failed or did not fit in the bound, 2 ref
 The host check of the window itself is in `tools\release\test-session-checks.ps1` ("the start window draws every
 frame in one piece"). It makes the window without showing it, and checks that `WM_ERASEBKGND` draws nothing, that
 the window looks as before pixel for pixel, and that a change of the text invalidates the window once.
+
+# A console window with the start window
+
+On the lab, the logon window task ran `powershell.exe` itself, and Windows Terminal showed a console window for it
+(fact M899). Since tester.31 the task runs Nagi Control App as `amdgpu_wddm_control.exe --start-window`. The
+control application is a windows program, and it starts `start-window.ps1` with `CREATE_NO_WINDOW`, so no console
+window exists. `console-proof.ps1` measures both forms of the task on the lab:
+
+```
+python tools\win\target.py push <build>\amdgpu_wddm_control.exe <build>\bc250control.dll tools\release\installer\common.ps1 --to C:\BC250\tmp\console-kit
+python tools\win\target.py ps tools\win\app-launch\console-proof.ps1 -Kit C:\BC250\tmp\console-kit
+```
+
+| Form | The task's program |
+|---|---|
+| `a` | `powershell.exe` runs the script: the plan without `-WindowHost`, as tester.31 rc4 and older releases register it |
+| `b` | The control application runs the script: the plan with `-WindowHost` |
+
+The script makes both forms with `Get-LogonTaskPlan` of the kit's `common.ps1` and checks them with
+`Test-LogonTaskPlan` before they run. It puts a copy of an install under its work folder: `control\` (the kit's
+application and DLL) and `tools\` (a copy of the installed `start-window.ps1`). For each form it registers one task
+for the user at the console, with the limited run level, and starts it. It records each process that Windows
+creates in the console session until the task ends (WMI `Win32_ProcessStartTrace`). A console window in Windows
+Terminal comes with an `OpenConsole.exe`, and with a `WindowsTerminal.exe` when no Terminal process runs. Form `a`
+is the positive control: if it shows neither process, the trace cannot see the console window, and the run gives no
+verdict. Form `b` passes when its task returns 0, the application starts `powershell.exe` over the copy of the
+script, and Windows creates no `OpenConsole.exe` and no `WindowsTerminal.exe`. The script also prints the default
+terminal of the console user (`HKU\<sid>\Console\%%Startup`, read only).
+
+`-Plan` prints what a run would do and stops. The script refuses to run while the logon tasks or their scripts run.
+It stops only what it started, and it removes its task on every exit path. It does not close a Terminal window of
+form `a`, because that process can hold windows that the script did not open: it reports the window. Exit codes: 0
+form `b` gave no console window and form `a` gave one, 1 form `b` gave a console window or failed, 2 refused, 3 no
+verdict.

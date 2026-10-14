@@ -205,11 +205,13 @@ confirms a start as well:
   window of its own. It reads the driver's start health and confirms the start. The driver accepts a confirmation
   only from an administrator, which is why this task does not run as the user who logs on.
 - "amdgpu-wddm start window" runs as the user who logs on, with that user's own rights (the Users group,
-  `S-1-5-32-545`, limited run level). It shows the small blue window and nothing else: it never opens the driver
-  and changes no setting. The window stays for the full two minutes, because this task does not read the
-  confirmation's progress. Earlier releases closed it as soon as the start was confirmed, usually after about one
-  minute. If it does not run, the confirmation still keeps the computer off Microsoft Basic Display, and the next
-  start runs at the fixed clock.
+  `S-1-5-32-545`, limited run level). It shows the small blue window and nothing else: it never opens the driver and
+  changes no setting. The task starts Nagi Control App with `--start-window`, and the control application starts the
+  window script without a console window. An install without the control application (`-NoControlApp`) starts the
+  script with `powershell.exe`, and then a console window can show at sign-in. The window stays for the full two
+  minutes, because this task does not read the confirmation's progress. Earlier releases closed it as soon as the
+  start was confirmed, usually after about one minute. If it does not run, the confirmation still keeps the computer
+  off Microsoft Basic Display, and the next start runs at the fixed clock.
 
 The confirmation writes its results to `C:\ProgramData\amdgpu-wddm\start-confirm.log`. Its last line of each logon
 also reports the state, the last run time and the last result of the window task, so a window that did not run or

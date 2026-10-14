@@ -1832,7 +1832,13 @@ Invoke-Change "$($script:SoftwareKey)\Release: RepairSetup = $repairSetup (when 
 # against the plan's own rules (Test-LogonTaskPlan) and then registers exactly what the plan says.
 $sc = Join-Path $InstallRoot 'tools\start-confirm.ps1'
 $sw = Join-Path $InstallRoot 'tools\start-window.ps1'
-$logonPlan = @(Get-LogonTaskPlan -ConfirmScript $sc -WindowScript $sw)
+# The window's host: the control application of this install, which starts the script with no console window
+# (common.ps1 Get-LogonTaskPlan, M899). Without it (-NoControlApp, or a package without one) the plan keeps
+# powershell.exe and says why.
+$windowHost = $null
+if ($script:Manifest -and $script:Manifest.control_app_exe -and ($dirs -contains 'control')) { $windowHost = Join-Path $InstallRoot ('control\' + $script:Manifest.control_app_exe) }
+$logonPlan = @(Get-LogonTaskPlan -ConfirmScript $sc -WindowScript $sw -WindowHost $windowHost)
+if (-not $windowHost) { Write-Info 'logon window: no control application in this install, so the window task runs powershell.exe and a console window can appear at sign-in' }
 # The rules of the plan run here, over the plan this install registers, and not only in the host test: a plan that
 # breaks them (the Administrators principal of the defect, a trigger bound to one account, a confirmation without
 # an administrator token) stops the install instead of leaving behind a task that never runs at a standard user's

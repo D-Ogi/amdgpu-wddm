@@ -811,7 +811,7 @@ static partial class UnitTests
         Check(Regex.IsMatch(files["DisplayModes.cs"], @"CdsTest") && Regex.IsMatch(files["MainForm.Display.cs"], @"KeepDisplayDialog\.Ask"), "G-SRC: a mode is tested first and kept only on the person's word");
         // BenchmarkRun.cs ends one process: the game it started itself, and only when that game could not be put
         // into the job object that would otherwise have ended it (test/BenchmarkTests.cs decides that exact shape).
-        Equal("", string.Join(",", where(@"\b(TerminateProcess|taskkill)\b|\.Kill\(", new[] { "RecoveryActions.cs", "BugReport.cs", "SystemTuningProcess.cs", "BenchmarkRun.cs", "DiagnosticWorker.cs" })), "G-SRC: no process kill outside the helper's accepted BD-060 escape, each helper's own timed-out child and the benchmark's own game");
+        Equal("", string.Join(",", where(@"\b(TerminateProcess|taskkill)\b|\.Kill\(", new[] { "RecoveryActions.cs", "BugReport.cs", "SystemTuningProcess.cs", "BenchmarkRun.cs", "DiagnosticWorker.cs", "StartWindowHost.cs" })), "G-SRC: no process kill outside the helper's accepted BD-060 escape, each helper's own timed-out child and the benchmark's own game");
         // A restart of our own graphics device is neither a disable nor an enable. The one click back from
         // Microsoft Basic Display after the driver's guard refused a start (RecoveryActions.EnableDriver) runs
         // pnputil /restart-device for that one device, the way the release installer already restarts the GPU's
