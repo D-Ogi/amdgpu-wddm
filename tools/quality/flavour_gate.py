@@ -18,16 +18,21 @@ The declaration (flavour_gate.json next to this file) holds:
   - one marker for each family of raw escapes: a format string that only the lab handler of that family logs.
     The KMD links with /OPT:REF, so the marker is in the SYS when the handler is compiled and dispatched;
   - the FORBIDDEN override names, each with what it does and the files whose lab build must still hold it
-    (lab.every), or the reason no lab file holds it (lab.none);
+    (lab.every), or the reason no lab file holds it (lab.none). An item of lab.every is a file name (every copy
+    of that file) or a payload path such as d3d11/amdgpu_wddm_radv.dll (that copy only). A file's payload path
+    is its path under the last directory named payload, else under the scanned directory, in lower case with
+    forward slashes. Paths make the list exact: a copy of a file named by path items that is not listed must
+    not hold the name, and lab.note says why those copies lack it (for example another build line);
   - the ALLOWED names, each with the reason it stays, and the OUT-OF-SCOPE names, each with the reason. Neither
     list fails a set; out-of-scope hits are recorded. A name in two lists is an error.
 
 --flavour release passes when the KMD carries the release line, not the lab line and no escape marker, and no
 scanned PE (the KMD included) carries a forbidden name as a whole word, in ASCII or UTF-16LE.
 --flavour lab passes when the KMD carries the lab line, not the release line, and every escape marker, and every
-scanned file named in a forbidden entry's lab.every carries that name, with at least one such file in the set. So a
-build that lost the lab switch, or a marker list that no longer matches the handlers, fails in the lab arm instead
-of passing in silence. --kmd-only checks the KMD alone. A lab set never passes as release and a release set never
+scanned file named in a forbidden entry's lab.every carries that name, with at least one such file in the set (for a
+path item: a file at that path), and no unlisted copy of a file named by path items carries it. So a build that
+lost the lab switch, a marker list that no longer matches the handlers, or a path list that no longer matches the
+build lines, fails in the lab arm instead of passing in silence. --kmd-only checks the KMD alone. A lab set never passes as release and a release set never
 passes as lab.
 
 The gate fails closed: no flavour, a missing file, a file that is not a PE image, no KMD, two KMD files in a
@@ -108,19 +113,33 @@ def load_declaration(path):
 
 
 def check_lab_field(e):
-    """A forbidden entry's lab field: {"every": [file names]} or {"none": reason}."""
+    """A forbidden entry's lab field: {"every": [file names or payload paths]}, with "note" when it has paths, or
+    {"none": reason}."""
     lab = e.get('lab')
-    if not isinstance(lab, dict) or len(lab) != 1 or not set(lab) <= {'every', 'none'}:
-        raise GateError('declaration: forbidden %s needs lab {"every": [...]} or {"none": reason}' % e['name'])
+    if not isinstance(lab, dict) or set(lab) not in ({'every'}, {'every', 'note'}, {'none'}):
+        raise GateError('declaration: forbidden %s needs lab {"every": [...]} (and "note" with paths) or '
+                        '{"none": reason}' % e['name'])
     if 'none' in lab:
         if not isinstance(lab['none'], str) or not lab['none'].strip():
             raise GateError('declaration: forbidden %s: lab.none needs a reason' % e['name'])
         return
     files = lab['every']
     if (not isinstance(files, list) or not files or len(set(files)) != len(files) or
-            not all(isinstance(f, str) and f == f.lower() and '/' not in f and '\\' not in f and
-                    f.endswith(PE_SUFFIXES) for f in files)):
-        raise GateError('declaration: forbidden %s: lab.every needs distinct lower-case PE file names' % e['name'])
+            not all(isinstance(f, str) and f == f.lower() and '\\' not in f and ':' not in f and
+                    all(p not in ('', '.', '..') for p in f.split('/')) and f.endswith(PE_SUFFIXES)
+                    for f in files)):
+        raise GateError('declaration: forbidden %s: lab.every needs distinct lower-case PE file names or payload '
+                        'paths (d3d11/amdgpu_wddm_radv.dll)' % e['name'])
+    paths = [f for f in files if '/' in f]
+    both = sorted({f for f in files if '/' not in f} & {p.rsplit('/', 1)[1] for p in paths})
+    if both:
+        raise GateError('declaration: forbidden %s: lab.every names %s both as a file and by path'
+                        % (e['name'], ', '.join(both)))
+    if 'note' in lab and (not isinstance(lab['note'], str) or not lab['note'].strip()):
+        raise GateError('declaration: forbidden %s: lab.note is empty' % e['name'])
+    if paths and 'note' not in lab:
+        raise GateError('declaration: forbidden %s: lab.every with paths needs lab.note, why the other copies '
+                        'lack the name' % e['name'])
 
 
 def read_pe(path):
@@ -179,9 +198,20 @@ def has_name(data, name):
     return tuple(counts)
 
 
-def collect(package, kmd, pes, kmd_name):
-    """The KMD path and the other PE paths. Fails closed on an ambiguous or empty set."""
+def slot(root, f):
+    """The payload path of a file found under a scanned directory: its path under the last directory named payload,
+    else under the scanned directory, in lower case with forward slashes."""
+    parts = [p.lower() for p in f.relative_to(root).parts]
+    if 'payload' in parts[:-1]:
+        parts = parts[len(parts) - parts[::-1].index('payload', 1):]
+    return '/'.join(parts)
+
+
+def collect(package, kmd, pes, kmd_name, slots=None):
+    """The KMD path and the other PE paths. Fails closed on an ambiguous or empty set. slots, when given, gets the
+    payload path of each file: a file named on the command line has only its file name."""
     files = []
+    slots = {} if slots is None else slots
     roots = ([package] if package else []) + list(pes or [])
     for root in roots:
         r = pathlib.Path(root)
@@ -190,14 +220,18 @@ def collect(package, kmd, pes, kmd_name):
             if not found:
                 raise GateError('%s: no PE file (%s) under it' % (r, '/'.join(PE_SUFFIXES)))
             files += found
+            for f in found:
+                slots.setdefault(f, slot(r, f))
         elif r.is_file():
             files.append(r)
+            slots.setdefault(r, r.name.lower())
         else:
             raise GateError('%s: no such file or directory' % r)
     if kmd:
         k = pathlib.Path(kmd)
         if not k.is_file():
             raise GateError('%s: KMD not found' % k)
+        slots.setdefault(k, k.name.lower())
     else:
         named = [f for f in files if f.name.lower() == kmd_name.lower()]
         if len(named) != 1:
@@ -211,8 +245,9 @@ def collect(package, kmd, pes, kmd_name):
     return k, others
 
 
-def check(decl, flavour, kmd_path, others, kmd_only=False):
-    """(failures, notes, record)."""
+def check(decl, flavour, kmd_path, others, kmd_only=False, slots=None):
+    """(failures, notes, record). slots: {path: payload path} from collect(); a path without one has only its file
+    name."""
     if flavour not in ('release', 'lab'):
         raise GateError('flavour must be release or lab, not %r' % flavour)
     if not others and not kmd_only:
@@ -236,6 +271,9 @@ def check(decl, flavour, kmd_path, others, kmd_only=False):
             failures.append('%s: lab KMD lacks the marker of %s (%r, %s): the marker list is stale or the '
                             'handler is gone' % (kmd_path, e['escapes'], e['marker'], e['source']))
 
+    slots = dict(slots or {})
+    for p in [kmd_path] + list(others):
+        slots.setdefault(p, pathlib.Path(p).name.lower())
     forbidden = [f['name'] for f in decl['forbidden']]
     out_of_scope = [f['name'] for f in decl.get('out_of_scope', [])]
     held = {}   # file -> set of forbidden names it holds
@@ -248,7 +286,7 @@ def check(decl, flavour, kmd_path, others, kmd_only=False):
                 if a or u:
                     into[name] = {'ascii': a, 'utf16': u}
         held[path] = set(hits)
-        record['files'].append({'path': str(path), 'sha256': hashlib.sha256(data).hexdigest().upper(),
+        record['files'].append({'path': str(path), 'slot': slots[path], 'sha256': hashlib.sha256(data).hexdigest().upper(),
                                 'forbidden': hits, 'out_of_scope': outside})
         if flavour == 'release':
             for name in sorted(hits):
@@ -258,19 +296,32 @@ def check(decl, flavour, kmd_path, others, kmd_only=False):
 
     if flavour == 'lab' and not kmd_only:
         # A lab build that lost the switch has none of its lab-only names: each named file must be in the set, and
-        # each copy of it must hold each name that names it.
+        # each copy of it must hold each name that names it. A path item names one copy; the other copies of that
+        # file must not hold the name, or the list (and its note) no longer matches the build lines.
         scanned = [kmd_path] + list(others)
-        for name in sorted({n for f in decl['forbidden'] for n in f['lab'].get('every', [])}):
-            if not any(pathlib.Path(p).name.lower() == name for p in scanned):
-                failures.append('lab set has no %s, which a forbidden entry names in lab.every' % name)
+
+        def copies(item):
+            return [p for p in scanned if (slots[p] if '/' in item else pathlib.Path(p).name.lower()) == item]
+
+        for item in sorted({n for f in decl['forbidden'] for n in f['lab'].get('every', [])}):
+            if not copies(item):
+                failures.append('lab set has no %s%s, which a forbidden entry names in lab.every'
+                                % ('file at ' if '/' in item else '', item))
         for f in decl['forbidden']:
             every = f['lab'].get('every')
             if not every:
                 continue
-            for p in [p for p in scanned if pathlib.Path(p).name.lower() in every]:
+            for p in [p for item in every for p in copies(item)]:
                 if f['name'] not in held[p]:
                     failures.append('%s: the lab build lacks %s (%s): it was built without the lab switch, or the '
                                     'lookup is gone and the declaration is stale' % (p, f['name'], f['where']))
+            listed = {i.rsplit('/', 1)[1] for i in every if '/' in i}
+            for p in scanned:
+                if pathlib.Path(p).name.lower() in listed and slots[p] not in every and f['name'] in held[p]:
+                    failures.append('%s (%s): holds %s, but lab.every lists only %s: the declaration is stale (%s)'
+                                    % (p, slots[p], f['name'],
+                                       ', '.join(i for i in every if i.endswith('/' + pathlib.Path(p).name.lower())),
+                                       f['lab']['note']))
     record['failures'], record['notes'] = failures, notes
     return failures, notes, record
 
@@ -289,8 +340,9 @@ def main(argv=None):
         decl = load_declaration(a.declaration)
         if not a.package and not a.kmd:
             raise GateError('pass --package or --kmd')
-        kmd, others = collect(a.package, a.kmd, a.pe, decl['kmd']['file'])
-        failures, notes, record = check(decl, a.flavour, kmd, others, a.kmd_only)
+        slots = {}
+        kmd, others = collect(a.package, a.kmd, a.pe, decl['kmd']['file'], slots)
+        failures, notes, record = check(decl, a.flavour, kmd, others, a.kmd_only, slots)
     except GateError as e:
         print('flavour gate: FAIL (closed): %s' % e)
         return 2

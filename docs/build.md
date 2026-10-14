@@ -382,7 +382,7 @@ flavour removes both at compile time. One switch names the lab flavour in every 
 | Component | Build script | Only in the lab flavour |
 |---|---|---|
 | KMD | `driver\kmd\build.ps1 -Lab` | The raw register, memory, submit and scan-out escapes. A lab KMD answers them only with test signing on and `LabDiagnostics = 1` (`driver/kmd/lab_gate.c`). |
-| Mesa, DXVK and vkd3d-proton forks | `tools\build\build-mesa.ps1`, `build-dxvk.ps1`, `build-vkd3d.ps1`, each with `-Lab` (meson option `amdgpu-wddm-lab-flavour=true`) | The lookups of the forbidden environment variables: shader replacement and dumps, debug and experiment flags, cache paths, driver traces, fault injection. |
+| Mesa, DXVK and vkd3d-proton forks | `tools\build\build-mesa.ps1`, `build-dxvk.ps1`, `build-vkd3d.ps1`, each with `-Lab` (meson option `amdgpu-wddm-lab-flavour=true`) | The lookups of the forbidden environment variables. These are shader replacement and dumps, debug and experiment flags, cache paths, driver traces, log files, software devices, fault injection and statistics. |
 | D3D11 and D3D12 shells | `tools\build\build-umd-dxvk.ps1 -Lab`, `build-umd-d3d12.ps1 -Lab` | `AMDGPU_WDDM_D3D11_EXPERIMENT` and `AMDGPU_WDDM_D3D12_EXPERIMENT` as a source of the experiment list. |
 | CLI and `bc250control.dll` | `tools\win\bc250kmd_cli\build.ps1 -Lab`, `tools\win\amdgpu_wddm_control\build.ps1 -Lab` | The raw diagnostic verbs (`tools/win/bc250kmd_cli/README.md`). |
 
@@ -390,7 +390,11 @@ flavour removes both at compile time. One switch names the lab flavour in every 
 marker in the KMD or on a forbidden name in any scanned PE file, in ASCII or UTF-16LE. A lab set fails when a
 file lost one of its lab-only names, so a build that lost the switch cannot pass. The declaration
 `tools/quality/flavour_gate.json` gives each forbidden name, what it does and the files whose lab build must
-still hold it. It also gives the allowed and the out-of-scope names, each with its reason.
+still hold it. It also gives the allowed and the out-of-scope names, each with its reason. A file is named by
+its file name (every copy) or by its payload path, for example `d3d11/amdgpu_wddm_radv.dll` (that copy only).
+The payload path is the path under the last directory named `payload`. Paths make the list exact: another
+copy of that file must not hold the name, and the entry's note says why the other copies do not have it. For
+example, `BC250_DRAW_STATS` is only in the RADV copies of the triplet build line.
 
 ```
 python tools/quality/flavour_gate.py --flavour release --package <package files directory> [--out <dir>]

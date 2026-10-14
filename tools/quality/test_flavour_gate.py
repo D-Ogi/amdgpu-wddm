@@ -6,7 +6,8 @@ Synthetic PE images: a release set must pass as release and fail as lab, a lab s
 escape marker, one forbidden name in ASCII or in UTF-16LE, or the wrong flavour line must fail the release set; a
 longer identifier that only contains a forbidden name must not, and an out-of-scope name is recorded, not failed.
 A lab set fails when one named file lacks one of its lab-only names or is missing, so a build that lost the lab
-switch cannot pass in silence. Every input the gate cannot judge must fail closed. The declaration next to the gate must load, and every KMD marker in it must still be a literal of the
+switch cannot pass in silence. An item of lab.every with a payload path names that copy only, and an unlisted copy of
+the same file that holds the name fails the lab set. Every input the gate cannot judge must fail closed. The declaration next to the gate must load, and every KMD marker in it must still be a literal of the
 driver source, so that a renamed log line fails here and not first on the lab.
 """
 import contextlib
@@ -37,13 +38,32 @@ RELEASE_KMD = (K["flavour_markers"]["release"], "kmd: something every flavour lo
 LAB_KMD = (K["flavour_markers"]["lab"],) + tuple(e["marker"] for e in K["lab_escape_markers"])
 
 
-def lab_files():
-    """{file name: [forbidden names its lab build must hold]} from the declaration's lab.every lists."""
-    files = {}
+def lab_items():
+    """{lab.every item (file name or payload path): [forbidden names that item names]}."""
+    items = {}
     for f in DECL["forbidden"]:
-        for name in f["lab"].get("every", []):
-            files.setdefault(name, []).append(f["name"])
-    return files
+        for item in f["lab"].get("every", []):
+            items.setdefault(item, []).append(f["name"])
+    return items
+
+
+def lab_slots():
+    """{payload path: [forbidden names its lab build holds]}: two copies of each file named by file name (the x64
+    and wow64 trees), one file at each payload path, each holding the names that name it."""
+    items = lab_items()
+    slots = {}
+    for i, item in enumerate(sorted(items)):
+        for s in ([item] if "/" in item else ["x64/%d/%s" % (i, item), "wow64/%d/%s" % (i, item)]):
+            slots[s] = []
+    for s in slots:
+        base = s.rsplit("/", 1)[1]
+        slots[s] = sorted({n for item, names in items.items() if item in (s, base) for n in names})
+    return slots
+
+
+def slot_of(item):
+    """The payload path in lab_slots() of one copy that an item names (the wow64 copy of a file name)."""
+    return item if "/" in item else "wow64/%d/%s" % (sorted(lab_items()).index(item), item)
 
 
 class ReleaseFlavour(unittest.TestCase):
@@ -72,16 +92,16 @@ class ReleaseFlavour(unittest.TestCase):
         self.assertEqual(self.run_gate("--flavour", "release", "--package", str(self.dir / "pkg")), 0)
         self.assertEqual(self.run_gate("--flavour", "lab", "--package", str(self.dir / "pkg")), 1)
 
-    def lab_set(self, drop_name=None, drop_file=None):
-        """A lab package: the lab KMD and every file named in a lab.every list, each holding its names, twice (the
-        x64 and wow64 trees have one copy each), less one name of one copy or one file name when asked."""
+    def lab_set(self, drop_name=None, drop_file=None, extra=None):
+        """A lab package (lab_slots() under pkg/files/payload): the lab KMD and every file a lab.every item names,
+        each holding its names, less one name of one copy ((payload path, name)) or every copy an item names when
+        asked; extra adds {payload path: names}."""
         self.write("pkg/bc250kmd.sys", pe(*LAB_KMD))
-        for i, (name, names) in enumerate(sorted(lab_files().items())):
-            if name == drop_file:
+        for s, names in sorted(dict(lab_slots(), **(extra or {})).items()):
+            if drop_file in (s, s.rsplit("/", 1)[1]):
                 continue
-            for tree in ("x64", "wow64"):
-                held = [n for n in names if drop_name != (tree, name, n)]
-                self.write("pkg/%s/%d/%s" % (tree, i, name), pe("AMDGPU_WDDM_LOG", *held))
+            held = [n for n in names if drop_name != (s, n)]
+            self.write("pkg/files/payload/%s" % s, pe("AMDGPU_WDDM_LOG", *held))
 
     def test_lab_set_passes_as_lab_only(self):
         self.lab_set()
@@ -90,18 +110,47 @@ class ReleaseFlavour(unittest.TestCase):
 
     def test_lab_file_without_one_lab_name_fails(self):
         # One build of the set lost the lab switch for one lookup (or the lookup moved): the lab arm must fail.
-        for file_name, names in sorted(lab_files().items()):
+        for item, names in sorted(lab_items().items()):
             for n in names:
-                with self.subTest(file=file_name, name=n):
+                with self.subTest(item=item, name=n):
                     self.setUp()
-                    self.lab_set(drop_name=("wow64", file_name, n))
+                    self.lab_set(drop_name=(slot_of(item), n))
                     self.assertEqual(self.run_gate("--flavour", "lab", "--package", str(self.dir / "pkg")), 1)
 
     def test_lab_set_without_a_named_file_fails(self):
-        for file_name in sorted(lab_files()):
-            with self.subTest(file=file_name):
+        for item in sorted(lab_items()):
+            with self.subTest(item=item):
                 self.setUp()
-                self.lab_set(drop_file=file_name)
+                self.lab_set(drop_file=item)
+                self.assertEqual(self.run_gate("--flavour", "lab", "--package", str(self.dir / "pkg")), 1)
+
+    def test_path_items_are_payload_paths(self):
+        # The payload directory itself as the scanned root gives the same payload paths.
+        self.assertTrue([i for i in lab_items() if "/" in i], "the declaration has no path item to test with")
+        self.lab_set()
+        self.assertEqual(self.run_gate("--flavour", "lab", "--kmd", str(self.dir / "pkg" / "bc250kmd.sys"),
+                                       "--pe", str(self.dir / "pkg" / "files" / "payload")), 0)
+        # A path item never matches a file named alone on the command line: the lab set fails closed on it.
+        item = sorted(i for i in lab_items() if "/" in i)[0]
+        self.assertEqual(self.run_gate("--flavour", "lab", "--kmd", str(self.dir / "pkg" / "bc250kmd.sys"),
+                                       "--pe", str(self.dir / "pkg" / "files" / "payload" / item)), 1)
+
+    def test_unlisted_copy_with_a_path_listed_name_fails(self):
+        # The list of paths is exact: another copy of the same file that holds the name means the build lines
+        # changed and the declaration (and its note) is stale. Without the name, that copy passes.
+        for f in DECL["forbidden"]:
+            paths = [i for i in f["lab"].get("every", []) if "/" in i]
+            if not paths:
+                continue
+            base = paths[0].rsplit("/", 1)[1]
+            other = "unlisted/" + base
+            needs = sorted({n for item, names in lab_items().items() if item == base for n in names})
+            with self.subTest(name=f["name"]):
+                self.setUp()
+                self.lab_set(extra={other: needs})
+                self.assertEqual(self.run_gate("--flavour", "lab", "--package", str(self.dir / "pkg")), 0)
+                self.setUp()
+                self.lab_set(extra={other: needs + [f["name"]]})
                 self.assertEqual(self.run_gate("--flavour", "lab", "--package", str(self.dir / "pkg")), 1)
 
     def test_lab_kmd_only_skips_the_umd_names(self):
@@ -222,7 +271,15 @@ class ReleaseFlavour(unittest.TestCase):
             "no lab field": lambda d: d["forbidden"][0].pop("lab"),
             "lab with both keys": lambda d: d["forbidden"][0].update(lab={"every": ["a.dll"], "none": "x"}),
             "lab.every empty": lambda d: d["forbidden"][0].update(lab={"every": []}),
-            "lab.every with a path": lambda d: d["forbidden"][0].update(lab={"every": ["d3d12/a.dll"]}),
+            "lab.every path without note": lambda d: d["forbidden"][0].update(lab={"every": ["d3d12/a.dll"]}),
+            "lab.every path, empty note": lambda d: d["forbidden"][0].update(lab={"every": ["d3d12/a.dll"], "note": " "}),
+            "lab.every backslash": lambda d: d["forbidden"][0].update(lab={"every": ["d3d12\\a.dll"], "note": "x"}),
+            "lab.every dot dot": lambda d: d["forbidden"][0].update(lab={"every": ["../a.dll"], "note": "x"}),
+            "lab.every leading slash": lambda d: d["forbidden"][0].update(lab={"every": ["/a.dll"], "note": "x"}),
+            "lab.every drive": lambda d: d["forbidden"][0].update(lab={"every": ["c:/a.dll"], "note": "x"}),
+            "lab.every file and path": lambda d: d["forbidden"][0].update(
+                lab={"every": ["a.dll", "d3d12/a.dll"], "note": "x"}),
+            "lab.none with note": lambda d: d["forbidden"][0].update(lab={"none": "x", "note": "x"}),
             "lab.every upper case": lambda d: d["forbidden"][0].update(lab={"every": ["A.dll"]}),
             "lab.none without reason": lambda d: d["forbidden"][0].update(lab={"none": " "}),
             "forbidden and out of scope": lambda d: d["out_of_scope"].append(
@@ -231,6 +288,8 @@ class ReleaseFlavour(unittest.TestCase):
         for name, change in cases.items():
             with self.subTest(case=name):
                 self.assertEqual(broken(change), 2)
+        # The positive control of the path cases: a path with a note loads.
+        self.assertEqual(broken(lambda d: d["forbidden"][0].update(lab={"every": ["d3d12/a.dll"], "note": "x"})), 0)
         self.assertEqual(self.run_gate("--flavour", "release", "--package", str(self.dir / "pkg"),
                                        "--declaration", str(self.write("bad.json", b"{"))), 2)
 

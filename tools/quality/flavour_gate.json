@@ -1,7 +1,7 @@
 {
  "schema": 1,
  "defect": "BD-167",
- "about": "Read by flavour_gate.py. The KMD markers are literals of driver/kmd/entry.c, display.c and lab_gate.c; test_flavour_gate.py checks that each one is still in the source. A forbidden name is one whose lookup the release flavour compiles out; its lab field names the files whose lab build must still hold it (every), or says why no lab file does (none). An allowed name stays, for the reason given. An out-of-scope name is recorded where it is found and never fails.",
+ "about": "Read by flavour_gate.py. The KMD markers are literals of driver/kmd/entry.c, display.c and lab_gate.c; test_flavour_gate.py checks that each one is still in the source. A forbidden name is one whose lookup the release flavour compiles out; its lab field names the files whose lab build must still hold it (every), or says why no lab file does (none). An item of every is a file name (every copy) or a payload path (that copy only); with paths the list is exact and note says why the other copies lack the name. An allowed name stays, for the reason given. An out-of-scope name is recorded where it is found and never fails.",
  "kmd": {
   "file": "bc250kmd.sys",
   "flavour_markers": {
@@ -345,6 +345,37 @@
      "bc250d3d_zink.dll",
      "vulkan_radeon.dll"
     ]
+   }
+  },
+  {
+   "name": "BC250_DRAW_STATS",
+   "where": "mesa-wddm src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c (triplet line); vkd3d-proton libs/vkd3d/command.c (also from C:\\BC250\\tmp\\amdgpu_wddm_radv.cfg)",
+   "does": "statistics counters: RADV counts what the application records in its command buffers and the engine counts its barriers, and both log the totals",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll",
+     "wow64/vulkan/vulkan_radeon.dll",
+     "amdgpu_wddm_vkd3d.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll (hosted line) and vulkan/vulkan_radeon.dll (system line) do not hold BC250_DRAW_STATS in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_BARRIER_TRACK",
+   "where": "mesa-wddm src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c (triplet line)",
+   "does": "0 turns off the barrier tracking with which RADV skips flushes that an application barrier without an image does not need, so that RADV flushes as upstream does; the release flavour keeps the tracking on",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll",
+     "wow64/vulkan/vulkan_radeon.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll (hosted line) and vulkan/vulkan_radeon.dll (system line) do not hold BC250_BARRIER_TRACK in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
    }
   },
   {
