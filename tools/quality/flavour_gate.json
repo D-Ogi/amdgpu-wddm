@@ -348,6 +348,96 @@
    }
   },
   {
+   "name": "RADV_TRAP_HANDLER_EXCP",
+   "where": "mesa-wddm src/amd/vulkan/radv_instance.c (RADV ICDs)",
+   "does": "selects the exceptions that the shader trap handler reports (memory violations, float division by zero, overflow, underflow)",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_radv.dll",
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
+   "name": "RADV_PROFILE_PSTATE",
+   "where": "mesa-wddm src/amd/vulkan/radv_instance.c (RADV ICDs)",
+   "does": "the power state (standard, min_sclk, min_mclk, peak) that RADV asks for while a profiler captures; the release flavour takes peak, the value of an unset variable",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_radv.dll",
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
+   "name": "RADV_QUEUE_DISABLE",
+   "where": "mesa-wddm src/amd/vulkan/radv_instance.c (RADV ICDs)",
+   "does": "hides queue families (graphics, compute, video, transfer, sparse) from the application",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_radv.dll",
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
+   "name": "RADV_FORCE_VRS_CONFIG_FILE",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (RADV ICDs)",
+   "does": "reads a forced variable shading rate from that file and follows changes to it",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_radv.dll",
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
+   "name": "RADV_BVH_STATS_FILE",
+   "where": "mesa-wddm src/amd/vulkan/radv_instance.h (radv_bvh_stats_file: radv_device.c, tools/radv_rra.c)",
+   "does": "writes statistics of every acceleration structure build to that file",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_radv.dll",
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
+   "name": "MESA_LOG_FILE",
+   "where": "mesa-wddm src/util/log.c",
+   "does": "writes the Mesa log to that file",
+   "lab": {
+    "none": "util/log.c reads it only outside Windows (#if !DETECT_OS_WINDOWS), so no Windows build holds it; the guard keeps the name out if that ever changes"
+   }
+  },
+  {
+   "name": "MESA_LOG_FILE_AUTO",
+   "where": "mesa-wddm src/util/log.c",
+   "does": "writes the Mesa log to a file of its own for each process",
+   "lab": {
+    "none": "util/log.c reads it only outside Windows (#if !DETECT_OS_WINDOWS), so no Windows build holds it; the guard keeps the name out if that ever changes"
+   }
+  },
+  {
+   "name": "GALLIUM_LOG_FILE",
+   "where": "mesa-wddm src/util/os_misc.c",
+   "does": "writes the gallium log to that file",
+   "lab": {
+    "none": "os_misc.c reads it only in a MESA_DEBUG build and every Windows recipe is a release build, so no recipe build holds it; the guard keeps the name out of a debug build of the release flavour"
+   }
+  },
+  {
+   "name": "D3D_ALWAYS_SOFTWARE",
+   "where": "mesa-wddm src/gallium/drivers/zink/zink_screen.c (zink UMD, OpenGL ICD)",
+   "does": "makes zink pick a software Vulkan device in place of the GPU; nothing in this driver sets it, and Render on CPU is the route of the router to the CPU UMD",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_gl.dll",
+     "bc250d3d_zink.dll"
+    ]
+   }
+  },
+  {
    "name": "BC250_DRAW_STATS",
    "where": "mesa-wddm src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c (triplet line); vkd3d-proton libs/vkd3d/command.c (also from C:\\BC250\\tmp\\amdgpu_wddm_radv.cfg)",
    "does": "statistics counters: RADV counts what the application records in its command buffers and the engine counts its barriers, and both log the totals",
