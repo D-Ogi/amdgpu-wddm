@@ -102,7 +102,21 @@ def authenticode_digest(path):
     certificate table are left out, in file order (tools/win/kmd-deploy/kmdcommon.py image_digest, which was
     validated against the digest signtool embeds). A signed file and its unsigned image give the same digest
     when the image needed no padding to an 8-byte boundary; signing with another key keeps the digest."""
+    return authenticode_digest_bytes(Path(path).read_bytes(), path)
+
+
+def is_signed(path):
+    """True when the PE file has a certificate table (its security directory entry is set)."""
     data = Path(path).read_bytes()
+    pe = int.from_bytes(data[0x3C:0x40], "little") if data[:2] == b"MZ" else 0
+    if not pe or data[pe:pe + 4] != b"PE\0\0":
+        return False
+    optional = pe + 24
+    security = optional + (96 if int.from_bytes(data[optional:optional + 2], "little") == 0x10B else 112) + 4 * 8
+    return int.from_bytes(data[security:security + 4], "little") != 0
+
+
+def authenticode_digest_bytes(data, path="image"):
     if data[:2] != b"MZ":
         raise ValueError(f"{path}: not a PE file")
     pe = int.from_bytes(data[0x3C:0x40], "little")

@@ -19,6 +19,7 @@
     "kd-dump-triage",
     "smartplug",
     "hostwatch",
+    "version-stamp",
     "lab-emerg",
     "lab-runner",
     "target-boot",
