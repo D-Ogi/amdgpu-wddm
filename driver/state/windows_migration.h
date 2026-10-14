@@ -5,6 +5,9 @@
 #include "transfer.h"
 unsigned int AmdgpuWindowsCaptureLegacy(const AMDGPU_TRANSFER_HEADER *metadata,
     void *buffer,unsigned int capacity,unsigned int *bytes,DWORD *error,DWORD *board_error);
+// Installer comparison only, never a runtime fallback. Public persistent root DWORDs only.
+unsigned int AmdgpuWindowsLegacyComparisonValue(const AMDGPU_STATE_SPEC *spec,
+    AMDGPU_STATE_VALUE *value,DWORD *data);
 // Identity of the validated active generation. A stale handle never returns an
 // identifier for the replacement generation; the caller must reopen and retry.
 unsigned int AmdgpuWindowsStateIdentity(AMDGPU_WINDOWS_STATE *state,

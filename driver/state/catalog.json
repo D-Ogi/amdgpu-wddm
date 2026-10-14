@@ -374,6 +374,28 @@
     },
     {
       "path": "",
+      "name": "CuModeChosen",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "cu",
+      "access": "admin",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "tools/win/amdgpu_wddm_control/src/CuMode.cs",
+        "tools/release/installer/common.ps1"
+      ]
+    },
+    {
+      "path": "",
       "name": "CuModeClosedReason",
       "kind": "record",
       "type": "dword",

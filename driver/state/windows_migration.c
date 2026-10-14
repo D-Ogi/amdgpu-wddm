@@ -45,6 +45,21 @@ static unsigned int Raw(void *context,unsigned int source,const AMDGPU_STATE_SPE
     value->type=type;value->bytes=bytes;value->os_error=error;capture->error=error;
     return Result(error);
 }
+unsigned int AmdgpuWindowsLegacyComparisonValue(const AMDGPU_STATE_SPEC *spec,
+    AMDGPU_STATE_VALUE *value,DWORD *data)
+{
+    LEGACY_CAPTURE capture={0};DWORD error;unsigned int result;
+    if(!spec || !value || !data || spec!=AmdgpuStateFind(spec->path,spec->name) ||
+       spec->path[0] || spec->kind==AMDGPU_STATE_VOLATILE || spec->type!=AMDGPU_STATE_DWORD ||
+       spec->private_read)return AMDGPU_STATE_INVALID_ARGUMENT;
+    ZeroMemory(value,sizeof(*value));*data=0;
+    error=LegacyOpen(FALSE,&capture.parameters);value->os_error=error;
+    if(error==ERROR_FILE_NOT_FOUND || error==ERROR_PATH_NOT_FOUND)return AMDGPU_STATE_INCOMPLETE;
+    if(error)return Result(error);
+    result=AmdgpuStateQuery(spec,spec->kind==AMDGPU_STATE_RECORD?AMDGPU_STATE_READ_RECORD:AMDGPU_STATE_QUERY_OVERRIDE,
+        Raw,&capture,value,data,sizeof(*data));
+    RegCloseKey(capture.parameters);return result;
+}
 static BOOL BoardSecurity(HKEY key,DWORD *error)
 {
     PSECURITY_DESCRIPTOR sd=NULL;PSID owner=NULL;PACL acl=NULL;

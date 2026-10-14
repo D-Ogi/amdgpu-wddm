@@ -123,3 +123,5 @@ Refuses {Assert-DriverStatePackageMembers -Names $members -InfText 'HKR,, Amdgpu
 Assert-DriverStatePackageMembers -Names ($members+@('amdgpu-state.bin')) -InfText 'HKR,, AmdgpuStateCatalog, 0x00000000, "%13%\amdgpu-state.bin"'
 Check $true 'new package stages its catalog'
 "state lifecycle: $script:checks checks PASS"
+# Separate script scope so its memory-only native adapter cannot leak into these tests.
+& "$PSScriptRoot\test-continuation-settings.ps1"

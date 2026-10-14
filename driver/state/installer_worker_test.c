@@ -4,10 +4,12 @@
 #include <windows.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #include "windows_migration.h"
 #include "windows_handoff.h"
 #include "installer_rollback.h"
 extern DWORD AmdgpuInstallerTestExecute(DWORD,WCHAR**);
+extern DWORD AmdgpuInstallerTestSettings(PCWSTR,DWORD*);
 static BYTE saved[AMDGPU_TRANSFER_MAX_BYTES],removed[AMDGPU_TRANSFER_MAX_BYTES];
 static UINT saved_bytes,removed_bytes,origin,failure,freeze,stop,publish,archives,captured,checks;
 static DWORD board_error,pending_error,remove_error,origin_error,device_error;static BOOL current_package;
@@ -66,6 +68,19 @@ static UINT Fetch(void *context,UINT source,const AMDGPU_STATE_SPEC *spec,AMDGPU
         memcpy(data,&one,4);v->type=4;v->bytes=4;return 0;
     }
     return AMDGPU_STATE_ABSENT;
+}
+UINT AmdgpuWindowsLegacyComparisonValue(const AMDGPU_STATE_SPEC *spec,AMDGPU_STATE_VALUE *v,DWORD *data)
+{
+    v->os_error=failure==4?ERROR_ACCESS_DENIED:0;
+    if(v->os_error)return AMDGPU_STATE_ACCESS;
+    return Fetch(NULL,0,spec,v,data,4);
+}
+UINT AmdgpuWindowsStateQuery(AMDGPU_WINDOWS_STATE *s,const char *path,const char *name,UINT mode,
+    AMDGPU_STATE_VALUE *v,void *data,UINT capacity)
+{
+    const AMDGPU_STATE_SPEC *spec=AmdgpuStateFind(path,name);
+    (void)s;(void)capacity;CHECK(mode==(UINT)(spec->kind==AMDGPU_STATE_RECORD?AMDGPU_STATE_READ_RECORD:AMDGPU_STATE_QUERY_OVERRIDE));
+    return AmdgpuWindowsLegacyComparisonValue(spec,v,(DWORD*)data);
 }
 UINT AmdgpuWindowsCaptureCurrent(AMDGPU_WINDOWS_STATE *s,const AMDGPU_TRANSFER_HEADER *h,
     void *buffer,UINT capacity,UINT *bytes,DWORD *error)
@@ -132,6 +147,20 @@ int main(void)
 {
     static const WCHAR tx[]=L"01010101010101010101010101010101";
     AMDGPU_TRANSFER_HEADER h;UINT i;
+    {DWORD *pairs=calloc(AmdgpuStateCount(),sizeof(DWORD)*2);UINT n,cpu=0;CHECK(pairs!=NULL);if(!pairs)return 1;
+     for(n=0;n<AmdgpuStateCount();n++)if(!strcmp(AmdgpuStateAt(n)->name,"CpuTune") && !AmdgpuStateAt(n)->path[0])cpu=n;
+     for(i=AMDGPU_TRANSFER_FRESH;i<=AMDGPU_TRANSFER_CURRENT;i++) {
+        Reset(i);CHECK(!AmdgpuInstallerTestSettings(L"PCI\\VEN_1002&DEV_13FE\\FIXTURE",pairs));
+        CHECK(!freeze && !stop && !publish && !archives);
+        CHECK(pairs[2*cpu]==(DWORD)(i!=AMDGPU_TRANSFER_FRESH));
+        if(i!=AMDGPU_TRANSFER_FRESH)CHECK(pairs[2*cpu+1]==1);
+        failure=4;if(i!=AMDGPU_TRANSFER_FRESH)CHECK(AmdgpuInstallerTestSettings(L"fixture",pairs)==ERROR_ACCESS_DENIED);
+     }
+     Reset(AMDGPU_TRANSFER_LEGACY);current_package=TRUE;
+     CHECK(AmdgpuInstallerTestSettings(L"fixture",pairs)==ERROR_INVALID_DATA);
+     Reset(AMDGPU_TRANSFER_CURRENT);origin_error=ERROR_ACCESS_DENIED;
+     CHECK(AmdgpuInstallerTestSettings(L"fixture",pairs)==ERROR_ACCESS_DENIED);
+     free(pairs);}
     for(i=AMDGPU_TRANSFER_FRESH;i<=AMDGPU_TRANSFER_CURRENT;i++) {
         Reset(i);CHECK(!Run(L"prepare",tx));CHECK(publish==1);CHECK(captured==1);
         CHECK(!AmdgpuTransferCheck(saved,saved_bytes,&h));CHECK(h.origin==i);

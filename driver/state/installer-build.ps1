@@ -15,8 +15,8 @@ $inputs=@('state','transfer','identity','windows','windows_lock','windows_migrat
 & "$($msvc.FullName)\bin\Hostx64\x64\cl.exe" /nologo /TC /W4 /WX /O2 /MT /Brepro /FC "/d1trimfile:$repo\" "/Fo$Out\" "/Fe$Out\amdgpu-state-installer.exe" @inputs `
     /link /Brepro '/PDBALTPATH:%_PDB%' /DYNAMICBASE /NXCOMPAT onecore.lib advapi32.lib setupapi.lib cfgmgr32.lib uuid.lib bcrypt.lib newdev.lib
 if($LASTEXITCODE){throw 'Installer state worker compile failed'}
-# Only --catalog is read-only and permitted in host gates. Every service verb
-# changes SCM and must never run on the development PC.
+# Only --catalog is permitted in host gates. --settings-snapshot reads the target
+# device and must not run on the development PC. Service verbs change SCM too.
 if($Test) {
     $testInputs=@('state','transfer','installer_rollback','installer_worker','installer_worker_test') |
         ForEach-Object {Join-Path $PSScriptRoot "$_.c"}
@@ -33,7 +33,7 @@ if($Test) {
     if($LASTEXITCODE){throw 'Installer store fixture tests failed'}
     & "$($msvc.FullName)\bin\Hostx64\x64\cl.exe" /nologo /TC /W4 /WX /O2 /MT `
         "/Fo$Out\" "/Fe$Out\installer_legacy_test.exe" "$PSScriptRoot\state.c" "$PSScriptRoot\transfer.c" `
-        "$PSScriptRoot\installer_rollback.c" "$PSScriptRoot\installer_legacy_test.c"
+        "$PSScriptRoot\installer_rollback.c" "$PSScriptRoot\installer_legacy_test.c" /link advapi32.lib
     if($LASTEXITCODE){throw 'Legacy rollback adapter fixture compile failed'}
     & "$Out\installer_legacy_test.exe"
     if($LASTEXITCODE){throw 'Legacy rollback adapter fixture tests failed'}

@@ -425,6 +425,10 @@ if ($ComponentDir) { $ModelDir = Get-ModelSourceDir $ComponentDir }
 if (-not $ModelDir) { $ModelDir = Get-PackageModelDir $package }
 if ($ModelDir -and $ModelDir -ne $ComponentDir) { Write-Info "models: the folder $ModelDir (no download for a model that is there)" }
 $commandLineParameters = $installInputs.parameters
+$freshCommandLineParameters = @($PSBoundParameters.Keys | Where-Object {
+    $_ -eq 'DpmMaxMHz' -or ($_ -eq 'CuMode' -and [int]$PSBoundParameters['CuMode'] -ne 0)
+})
+$freshRepair = $PSBoundParameters.ContainsKey('Repair') -and [bool]$PSBoundParameters['Repair']
 $NoControlApp = [switch](@($installInputs.switches) -contains 'NoControlApp')
 $NoReboot = [switch](@($installInputs.switches) -contains 'NoReboot')
 $Force = [switch](@($installInputs.switches) -contains 'Force')
@@ -1597,6 +1601,8 @@ if ($driverSetAction -eq 'stage' -or $script:DryRunMode) {
     }
     if(-not $legacyRollback) {
     Invoke-Change 'freeze state writers and publish the protected state handoff before INF staging' {
+        Save-DriverSettingsComparison -State $state -Worker $stateWorker -Device $script:Device.DeviceID `
+            -InfSha256 $driverSetSha -Save {param($s) Save-InstallState $s}
         [void](Start-DriverStateTransaction -State $state -Worker $stateWorker -Product (Get-ProductPackageQuad $script:Manifest.version) `
             -Device $script:Device.DeviceID -InfSha256 $driverSetSha -Save {param($s) Save-InstallState $s})
     } | Out-Null
@@ -1672,21 +1678,22 @@ $record = (Get-ItemProperty -LiteralPath "$($script:SoftwareKey)\Release" -Name 
 if ($record) { try { $applied = $record | ConvertFrom-Json } catch { Write-Warn2 "Release\AppliedDefaults does not parse: $($_.Exception.Message)" } }
 if (-not $applied) { $applied = $regDefaults.legacy_applied; $appliedSource = 'the defaults of tester.1 to tester.7 (no record)' }
 Write-Info "previous installer defaults: $appliedSource"
-function Invoke-RegistryDefaults([string]$Key, $Defaults, $Previous, [hashtable]$Explicit = @{}, $Owned = $null, [hashtable]$Before = $null, [string[]]$Restore = @(), [switch]$Reopen) {
+function Invoke-RegistryDefaults([string]$Key, $Defaults, $Previous, [hashtable]$Explicit = @{}, $Owned = $null) {
     $now = Read-RegistryValues $Key
-    if ($null -eq $Before) { $plan = Get-RegistryDefaultPlan -Defaults $Defaults -Previous $Previous -Current $now -Explicit $Explicit -Owned $Owned -Reopen:$Reopen }
-    else { $plan = Get-RegistryDefaultPlan -Defaults $Defaults -Previous $Previous -Current $Before -Explicit $Explicit -Owned $Owned -After $now -Restore $Restore -Reopen:$Reopen }
+    $plan = Get-RegistryDefaultPlan -Defaults $Defaults -Previous $Previous -Current $now -Explicit $Explicit -Owned $Owned
     Invoke-Change ("${Key}: " + (Format-RegistryPlan $plan)) { Write-RegistryPlan $Key $plan } | Out-Null
 }
 # Gates: the registered lab configuration (EnableFullWddm 2 opens it at every start). Clocks: load-driven DPM up to
 # DpmMaxMHz, thermal limits are the driver's own. KeepLog 0: no log files on the tester's disk. UnconfirmedStarts 0 is
-# the INF's own reset (a GPU that was not started has already counted one display-only start). Judged on the values
-# from before driver staging; the INF's other values (EnableMmioWrite, EnableHangBugcheck) get their values from before
-# staging back.
+# the INF's own reset (a GPU that was not started has already counted one display-only start).
+# BD-175: use the live shared state after migration. Never replay parameters_before_install or restore
+# values deleted by a later control-app choice. Runtime records are not installer defaults.
 if(-not $legacyRollback) {
 Invoke-Change 'apply release setting policy through the validated shared-state resolver' {
+    $before=Get-DriverSettingsComparison -State $state -Device $instance -InfSha256 $driverSetSha
     Invoke-DriverStateDefaults -Cli (Join-Path $InstallRoot 'tools\bc250kmd_cli.exe') -Defaults $regDefaults.defaults.parameters `
-        -Previous $applied.parameters -Explicit $commandLineParameters
+        -Previous $applied.parameters -Explicit $commandLineParameters -Before $before `
+        -FreshExplicit $freshCommandLineParameters -Reopen:$script:ReopenClosures -FreshReopen:$freshRepair -RecordChoices
 } | Out-Null
 }
 
@@ -2128,6 +2135,7 @@ if ($null -ne $script:ComponentsManifest -and $componentsChosen.Count) {
 }
 
 Set-StateValue $state 'parameters_before_install' $null
+Set-StateValue $state 'driver_settings_compare' $null
 Set-StateValue $state 'driver_set' $null
 Set-StateValue $state 'firmware_commit' $fw.commit
 if ($dwmSession) {

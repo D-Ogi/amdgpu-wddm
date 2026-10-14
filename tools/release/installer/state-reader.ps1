@@ -89,10 +89,10 @@ function Invoke-DriverStateCommand {
 }
 function Write-DriverStateValue {
     param([Parameter(Mandatory)][string]$Name,[Parameter(Mandatory)][uint32]$Value,[string]$Path='',
-        [string]$Cli,[scriptblock]$Runner)
+        [string]$Cli,[scriptblock]$Runner,[switch]$Record)
     $arguments=@('state','set',$Name,([string]$Value));if($Path){$arguments+=$Path}
     [void](Invoke-DriverStateCommand -Cli $Cli -Arguments $arguments -Runner $Runner)
-    $arguments=@('state','get',$Name);if($Path){$arguments+=$Path};$arguments+='--override'
+    $arguments=@('state','get',$Name);if($Path){$arguments+=$Path};if(-not $Record){$arguments+='--override'}
     $reply=Invoke-DriverStateCommand -Cli $Cli -Arguments $arguments -Runner $Runner
     if($reply.result.status -ne 'ok' -or $reply.result.type -ne 4 -or $reply.result.bytes -ne 4 -or
        [uint64]$reply.result.value -ne [uint64]$Value){throw "state readback differs for $Path/$Name"}

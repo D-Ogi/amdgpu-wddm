@@ -356,6 +356,38 @@ done:
     if(complete)HeapFree(GetProcessHeap(),0,complete);if(r)HeapFree(GetProcessHeap(),0,r);
     if(state)AmdgpuWindowsStateClose(state);return error;
 }
+typedef struct installer_setting {DWORD present,value;} INSTALLER_SETTING;
+static BOOL ComparedSetting(const AMDGPU_STATE_SPEC *spec)
+{return spec && !spec->path[0] && spec->kind!=AMDGPU_STATE_VOLATILE &&
+    spec->type==AMDGPU_STATE_DWORD && !spec->private_read;}
+// This observation only vetoes stale installer writes. It is not a migration
+// payload and grants no authority to import state. No freeze or SCM write occurs.
+static DWORD ReadSettings(PCWSTR device,INSTALLER_SETTING *values)
+{
+    AMDGPU_TRANSFER_HEADER h={0};AMDGPU_WINDOWS_STATE *state=NULL;UINT i,result;DWORD error;
+    error=Device(device,&h,FALSE);if(error)return error;
+    error=Origin(&h.origin);if(error)return error;
+    if(h.source_schema==AmdgpuStateSchema() && h.origin!=AMDGPU_TRANSFER_CURRENT)return ERROR_INVALID_DATA;
+    if(h.origin!=AMDGPU_TRANSFER_FRESH && h.origin!=AMDGPU_TRANSFER_LEGACY &&
+       h.origin!=AMDGPU_TRANSFER_CURRENT)return ERROR_INVALID_DATA;
+    if(h.origin==AMDGPU_TRANSFER_CURRENT) {
+        result=AmdgpuWindowsStateOpen(&state,0,&error);if(result)return AsError(result,error);
+    }
+    for(i=0;i<AmdgpuStateCount();i++) {
+        const AMDGPU_STATE_SPEC *spec=AmdgpuStateAt(i);AMDGPU_STATE_VALUE value={0};DWORD data=0;
+        values[i].present=values[i].value=0;if(!ComparedSetting(spec))continue;
+        if(state)result=AmdgpuWindowsStateQuery(state,spec->path,spec->name,
+            spec->kind==AMDGPU_STATE_RECORD?AMDGPU_STATE_READ_RECORD:AMDGPU_STATE_QUERY_OVERRIDE,&value,&data,4);
+        else if(h.origin==AMDGPU_TRANSFER_LEGACY)result=AmdgpuWindowsLegacyComparisonValue(spec,&value,&data);
+        else result=AMDGPU_STATE_ABSENT;
+        if(result==AMDGPU_STATE_ABSENT)continue;
+        if(result){error=AsError(result,value.os_error);break;}
+        if(value.type!=AMDGPU_STATE_DWORD || value.bytes!=4 ||
+           AmdgpuStateValidate(spec,value.type,&data,value.bytes)){error=ERROR_INVALID_DATA;break;}
+        values[i].present=1;values[i].value=data;
+    }
+    if(state)AmdgpuWindowsStateClose(state);return error;
+}
 typedef struct archive_read {void *data;UINT bytes;} ARCHIVE_READ;
 static UINT ArchiveFetch(void *context,UINT source,const AMDGPU_STATE_SPEC *spec,
     AMDGPU_STATE_VALUE *value,void *out,UINT capacity)
@@ -450,6 +482,8 @@ done:
 }
 #ifdef AMDGPU_INSTALLER_TEST
 DWORD AmdgpuInstallerTestExecute(DWORD argc,WCHAR **argv){return Execute(argc,argv);}
+DWORD AmdgpuInstallerTestSettings(PCWSTR device,DWORD *pairs)
+{return ReadSettings(device,(INSTALLER_SETTING*)pairs);}
 #else
 static DWORD WINAPI Control(DWORD control,DWORD event,void *data,void *context)
 {(void)control;(void)event;(void)data;(void)context;return ERROR_CALL_NOT_IMPLEMENTED;}
@@ -471,6 +505,18 @@ int wmain(int argc,WCHAR **argv)
     if(argc==2 && !wcscmp(argv[1],L"--catalog")) {
         printf("{\"abi\":1,\"schema\":%u,\"error\":0,\"catalog_id\":\"%s\",\"count\":%u}\n",
             AmdgpuStateSchema(),AmdgpuStateCatalogId(),AmdgpuStateCount());return 0;
+    }
+    if(argc==3 && !wcscmp(argv[1],L"--settings-snapshot")) {
+        UINT i,count=0;INSTALLER_SETTING *values=HeapAlloc(GetProcessHeap(),HEAP_ZERO_MEMORY,
+            sizeof(*values)*AmdgpuStateCount());
+        error=values?ReadSettings(argv[2],values):ERROR_NOT_ENOUGH_MEMORY;
+        printf("{\"abi\":1,\"error\":%lu,\"items\":[",error);
+        if(!error)for(i=0;i<AmdgpuStateCount();i++) {
+            const AMDGPU_STATE_SPEC *spec=AmdgpuStateAt(i);if(!ComparedSetting(spec))continue;
+            printf("%s{\"name\":\"%s\",\"present\":%s,\"value\":%lu}",count++?",":"",spec->name,
+                values[i].present?"true":"false",values[i].value);
+        }
+        puts("]}");if(values)HeapFree(GetProcessHeap(),0,values);return (int)error;
     }
     if(argc==2 && !wcscmp(argv[1],L"--service"))return StartServiceCtrlDispatcherW(table)?0:(int)GetLastError();
     if(argc!=5 && argc!=8){fwprintf(stderr,L"usage: amdgpu-state-installer verb transaction product-quad device-instance [inf-hash sys-hash manifest-hash]\n");return ERROR_INVALID_PARAMETER;}
