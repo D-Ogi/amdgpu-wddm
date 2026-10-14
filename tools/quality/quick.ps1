@@ -12,8 +12,15 @@ $Kits = $context.kits
 $context.profile = $Profile
 $icd=if($env:BC250_RADV_SOURCE){$env:BC250_RADV_SOURCE}else{Join-Path $Workspace 'scratch\m12\mesa-current-src'}
 $radvBuild=if($env:BC250_RADV_BUILD){$env:BC250_RADV_BUILD}else{Join-Path $Workspace 'scratch\m12\mesa-current-build'}
-$umdSource=if($env:BC250_UMD_SOURCE){$env:BC250_UMD_SOURCE}else{Join-Path $Workspace 'scratch\m13-native-zink-src'}
-$umdBuild=if($env:BC250_UMD_BUILD){$env:BC250_UMD_BUILD}else{Join-Path $Workspace 'scratch\m13-native-zink-build'}
+# The user-mode driver's own Mesa tree and its build database, neither of which is in this repository. The default
+# names the tree the current release is built from; BC250_UMD_SOURCE and BC250_UMD_BUILD name another one. The old
+# default (scratch\m13-native-zink-src and -build) went with the M13 work and left the three gates that read these
+# two paths failing on a missing file, or reading a build database of an older train whose include paths are gone.
+$umdSource=if($env:BC250_UMD_SOURCE){$env:BC250_UMD_SOURCE}else{Join-Path $Workspace 'scratch\train\b34-build\mesa\zinkumd'}
+$umdBuild=if($env:BC250_UMD_BUILD){$env:BC250_UMD_BUILD}else{Join-Path $Workspace 'scratch\train\b34-build\icd\zink-x64'}
+# Three host gates compile a fixture with cl.exe out of the environment. In a shell that is not a developer shell
+# there is no cl.exe, and they died on a FileNotFoundError that named no input. This is the input they need.
+$clExe=if($c=Get-Command cl.exe -ErrorAction SilentlyContinue){$c.Source}else{'cl.exe (the MSVC compiler is not in this environment)'}
 $clock=[Diagnostics.Stopwatch]::StartNew()
 New-Item -ItemType Directory -Force $Out | Out-Null
 $Out=(Resolve-Path -LiteralPath $Out).Path
@@ -51,6 +58,11 @@ try {
  Check 'status-map' { & python "$repo\tools\quality\kmd_status_profile.py" --repo $repo --profile $Profile --kits $Kits --out "$Out\status-map"; if($LASTEXITCODE -eq 0){ & python -m unittest discover -s "$repo\tools\docs" -p 'test_*.py' } }
  Check 'ledger' { & python -m unittest discover -s "$repo\tools\win\ledger" }
  # Windows PowerShell 5.1 for the app-route test, because that is the shell its ops scripts run in on the lab.
+ # Its deadline is 600 s in gate-inputs.json, not the 300 s it had: measured over the 15 full suites of the rc1 to
+ # rc5 candidates of train b34 on the development PC, this gate takes 179 s to 300 s and lost five of those runs to
+ # the deadline itself (its slowest pass was 299.9 s). The work is Python unit tests, so under the 24 workers of
+ # the full profile it competes for the same cores as every other Python gate, and that is where the spread comes
+ # from. 600 s is twice the slowest pass, so a loaded machine no longer decides the result.
  Check 'app-route-lib' { & powershell -NoProfile -ExecutionPolicy Bypass -File "$repo\tools\win\app-route\ops\tests\test-approute-lib.ps1" -Out "$Out\app-route-lib" }
  # Settings apply/restore runs against a fake system. Never change this PC's services, tasks or registry.
  Check 'system-tuning' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\tools\win\system-tuning\test-system-tuning.ps1" -Out "$Out\system-tuning" }
@@ -97,6 +109,12 @@ Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compil
  # throwaway repositories. The gate itself needs the payload files of a workspace, so the release build runs it.
  Check 'release-provenance' { $env:BC250_TEST_OUT=(New-Item -ItemType Directory -Force "$Out\release-provenance").FullName; & python -m unittest discover -s "$repo\tools\release" -p 'test_provenance.py' }
  # The driver package's own AddReg against the release defaults table (BD-091): every setting the INF writes is the
+ # Its deadline is 600 s in gate-inputs.json, not the 180 s of the manifest: the work takes 113 s to 171 s on the
+ # development PC (rc1, rc2, rc3 and two runs of rc4 of train b34), and at 180 s the load of the machine decided the
+ # result. rc4 lost a whole package build to that margin. A gate with 10 per cent of room over its own cost is a
+ # flaky gate, not a strict one. 300 s was not enough either: over the 15 full suites of rc1 to rc5 this gate ran
+ # 149 s to 266 s and still lost two of them at 300 s, so it gets the same 600 s as the ledger gate, for the same
+ # reason - both are Python unit tests among the 24 workers of the full profile.
  # released value and carries NOCLOBBER, so no install outside our installer closes a gate while another stays open.
  Check 'inf-gates' { & python "$repo\tools\quality\inf_gates.py" --inf "$repo\driver\kmd\bc250kmd.inf" --defaults "$repo\tools\release\installer\registry-defaults.json" --out "$Out\inf-gates" }
  # Upgrade defaults and explicit clock choices must survive the same registry writes as an installation.
@@ -133,7 +151,9 @@ Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compil
  # it runs wherever the tree is (BC250_RADV_BUILD names another one) and records why it did not when it is gone.
  CheckIf 'radv-contract' "$radvBuild\compile_commands.json" `
    { & python "$repo\tools\quality\prototype_gate.py" --compile-commands "$radvBuild\compile_commands.json" --out "$Out\radv-contract" }
- Check 'umd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compile-commands "$umdBuild\compile_commands.json" --match '/src/gallium/(frontends/d3d10umd|targets/d3d10umd|drivers/zink)/' --out "$Out\umd-contract" }
+ # The same case as radv-contract above: the user-mode driver's build database is not in the repository.
+ CheckIf 'umd-contract' "$umdBuild\compile_commands.json" `
+   { & python "$repo\tools\quality\prototype_gate.py" --compile-commands "$umdBuild\compile_commands.json" --match '/src/gallium/(frontends/d3d10umd|targets/d3d10umd|drivers/zink)/' --out "$Out\umd-contract" }
  Check 'vsync-vector' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_vsync_vector.ps1" -Root $Workspace -Out "$Out\vsync-vector" }
  Check 'ih-consume' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_ih_consume.ps1" -Root $Workspace -Out "$Out\ih-consume" }
  Check 'dpm' { & pwsh -NoProfile -File "$repo\driver\shim\test\run_dpm.ps1" -Out "$Out\dpm" -Kits "$Kits" }
@@ -241,9 +261,10 @@ Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compil
        -Build (Join-Path $Out 'router-front') -OutputDir (Join-Path $Out 'router-stack')
  }
  Check 'escape-abi' { & python -m unittest discover -s "$repo\tools\win\bc250kmd_cli" }
- Check 'allocation-identity' { & python "$repo\tools\quality\allocation_identity.py" --out "$Out\allocation-identity" }
- Check 'object-index' { & python "$repo\tools\quality\object_index.py" --out "$Out\object-index" }
- Check 'hang-witness' { & python "$repo\tools\quality\hang_witness.py" --out "$Out\hang-witness" }
+ # These three compile a C fixture of driver\kmd\test with cl.exe and run it. The compiler is the input.
+ CheckIf 'allocation-identity' $clExe { & python "$repo\tools\quality\allocation_identity.py" --out "$Out\allocation-identity" }
+ CheckIf 'object-index' $clExe { & python "$repo\tools\quality\object_index.py" --out "$Out\object-index" }
+ CheckIf 'hang-witness' $clExe { & python "$repo\tools\quality\hang_witness.py" --out "$Out\hang-witness" }
  Check 'ddi-error-policy' { & python "$repo\tools\quality\ddi_error_policy.py" --sources "$repo\driver\umd\dxvk" --reference "$Workspace\ref\ddi-display\d3d10umddi.md" }
  Check 'ddi-error-policy-mutants' { & python "$repo\tools\quality\ddi_error_policy_mutants.py" --sources "$repo\driver\umd\dxvk" --reference "$Workspace\ref\ddi-display\d3d10umddi.md" }
  Check 'ddi-table-versions' { & python "$repo\tools\quality\ddi_table_versions.py" --sources "$repo\driver\umd\dxvk" --kits "$Kits" }
@@ -258,9 +279,18 @@ Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compil
  Check 'blob-abi' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_umd_blob.ps1" -Out "$Out\blob-abi" -Kits "$Kits" }
  CheckIf 'blob-abi-producer' "$icd\src\amd\vulkan\winsys\wddm2\radv_wddm2_bc250.h" `
    { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_umd_blob.ps1" -Out "$Out\blob-abi-producer" -Kits "$Kits" -ProducerRoot $icd }
- Check 'surface-control' { & python "$PSScriptRoot\check_surface.py" --mesa "$umdSource" --out "$Out\surface-control" }
+ CheckIf 'surface-control' $umdSource { & python "$PSScriptRoot\check_surface.py" --mesa "$umdSource" --out "$Out\surface-control" }
+ # kmd-analysis reads the database the kmd-compile gate of this same run writes, so it has no missing-input case:
+ # a gate that ran before it in this profile either wrote the file or failed itself.
  Check 'kmd-analysis' { & python "$PSScriptRoot\msvc_analysis.py" --database "$Out\kmd\compile_commands.json" --match '/umd_blob.c$' --out "$Out\analysis-kmd" }
- Check 'umd-analysis' { & python "$PSScriptRoot\msvc_analysis.py" --database "$umdBuild\compile_commands.json" --match '/Device.cpp$' --out "$Out\analysis-umd" }
+ # The WDK headers reach the user-mode driver's own build through INCLUDE, not through a -I of its compile command
+ # (tools\build\build-mesa.ps1 puts them there). A gate that replays one of those commands needs them there too,
+ # or it dies on a missing d3d10umddi.h and says nothing about the code it was to judge, which is what it did in
+ # train b34 rc1 to rc4. The kit of this workspace is the one the build used.
+ CheckIf 'umd-analysis' "$umdBuild\compile_commands.json" `
+   { $wdk=Join-Path $Kits 'microsoft.windows.wdk.x64\c\Include\10.0.26100.0'
+     $env:INCLUDE=((@((Join-Path $wdk 'um'), (Join-Path $wdk 'shared')) + @($env:INCLUDE)) -join ';')
+     & python "$PSScriptRoot\msvc_analysis.py" --database "$umdBuild\compile_commands.json" --match '/Device.cpp$' --out "$Out\analysis-umd" }
  # Host suites (DEFECTS BD-053): the rest of driver\*\test, each building its fixture from this tree into its own
  # -Out. They do not share outputs, so they run side by side. A suite marked Fails is the runner's own negative
  # control: it must fail by a check (a FAIL line in its log), not by a build error, or the control proves nothing.

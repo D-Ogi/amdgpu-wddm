@@ -126,6 +126,96 @@
         "documents"
       ]
     },
+    "driver-state-x64": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "driver-state-x86": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "stored-fan-choice": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "driver-state-kernel": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "driver-state-infverif": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "driver-state-package": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "driver-state-installer": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "driver-state-lifecycle": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "driver-state-rollback": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "driver-state-consumer-syntax": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "driver-state-cli-x64": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "driver-state-cli-x86": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "driver-state-cumode-x64": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "driver-state-cumode-x86": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "driver-state-overlay": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "driver-state-client-x64": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "driver-state-client-x86": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "driver-state-gui-batch": {
+      "inputs": [
+        "host"
+      ]
+    },
     "doclint": {
       "inputs": [
         "documents"
@@ -1243,7 +1333,10 @@
       "timeout": 300
     },
     "ledger": {
-      "timeout": 300
+      "timeout": 600
+    },
+    "release-provenance": {
+      "timeout": 600
     },
     "link-command-import": {
       "inputs": [

@@ -98,6 +98,14 @@ class FactsGate(unittest.TestCase):
         self.write(GOOD.replace('id: M3', 'id: M1'))
         self.assertFails('duplicate id')
 
+    def test_duplicate_id_across_areas(self):
+        """Two parallel branches each take the next free id, in different areas. That is how M898 came to
+        mean both the start window's flash and the E59 conformance run in the rc5 train of tester.31."""
+        (self.data / 'sw.yaml').write_text(
+            GOOD.replace('area: hw', 'area: sw').replace('order: 1', 'order: 2')
+                .replace('"Hardware"', '"Software"'), encoding='utf-8')
+        self.assertFails('duplicate id (also in hw.yaml)')
+
     def test_dangling_edge(self):
         self.write(GOOD.replace('"to": "M1"', '"to": "M9"'))
         self.assertFails('target does not resolve')
