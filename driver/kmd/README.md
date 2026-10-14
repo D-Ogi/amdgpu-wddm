@@ -546,6 +546,12 @@ A driver built for a release takes that release's version:
 pwsh driver\kmd\build.ps1 -Kits ... -Out ... -PackageVersion 0.7.216.102-tester.31 [-Flavour lab]
 ```
 
+`-Flavour` selects the compiler flags, version resource and byte check together. Its default is `release`.
+The old `-Lab` switch is an alias for `-Flavour lab`, and `-Lab:$false` selects `release`.
+If both parameters are explicit, they must agree. A conflict stops the build before tool discovery or output
+cleanup. A lab package needs `-PackageVersion`. `-CompileOnly` and `-ExportCommandsOnly` may omit it, including
+when called with the old `-Lab` alias.
+
 The build then writes `<Out>\obj\version-stamp.h` with `tools\build\versionstamp.py rc-header`, compiles
 `driver\kmd\bc250kmd.rc` against it with the kit's `rc.exe`, and gives the compiled `bc250kmd.res` to the link.
 The driver reports `40.7.216.102` as its file version: the AMD-scheme number of the package version, mapped by
