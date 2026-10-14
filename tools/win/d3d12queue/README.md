@@ -113,6 +113,12 @@ interactive DWM, so no flip of it could be independent and the operator could no
 name stays clear of the deploy kits' competing-task pattern, the trial removes it afterwards, and it pauses
 the overlay's `log summary` poll for the length of the run (a measured ~300 ms stall every ~5.4 s).
 
+`-Experiment` names the arm, and the trial writes it as the client's application profile: the REG_SZ value
+`Experiment` of `HKLM\SOFTWARE\amdgpu-wddm\D3D12\Applications\<client file name>`, which both flavours of
+the D3D12 shell read. A release shell has no lookup of `AMDGPU_WDDM_D3D12_EXPERIMENT` (BD-167), so the
+client's wrapper clears that variable, and a lab shell reads the profile as well. The trial puts back the
+profile that was there before it, or removes the key it made, and the report names the source.
+
 One lab condition the trial cannot remove: the operator's overlay and the taskbar are top-level windows over
 the same rectangle, and a window above the client disqualifies an independent flip even when everything else
 is right. The trial pauses the overlay's summary poll but leaves its window alone, because that window is how
@@ -148,6 +154,12 @@ allocation, the compositor's own primary included, so over a minute its delta is
 2 to 5 of a heap with the queue's `UpdateTileMappings`, a pattern goes UPLOAD, reserved buffer,
 READBACK, and all 262144 bytes are compared. Only mapped tiles are written and read. The device must
 report tiled resources. The software control passes this variant (2026-09-29, exit 0).
+
+`build.ps1 -RadvExperimental` sets `RADV_EXPERIMENTAL` in the client's own process. A lab-flavour ICD reads
+it. A release ICD has no lookup of it (BD-167), so that variant runs on a lab package. Sparse binding does
+not depend on it in either flavour while the D3D12 shell chains its host policy: the policy decides that bit
+(`bc250_host_policy_sparse_bit`). The trace's `Effective RADV_EXPERIMENTAL` line says what the process set,
+not what the ICD read.
 
 `build.ps1 -RayQuery` replaces the `copy` operation with the scene of engine-ddi's `test-raytracing.cpp`
 through `ID3D12Device5` and `ID3D12GraphicsCommandList4`: a bottom level of one triangle and a top level of
@@ -352,12 +364,16 @@ stays visible. Each phase writes two trace lines (`Record bench PHASE: frames N 
 PHASE wall us: record ..., submit ..., gpu wait ..., verify ..., frame ...; cpu ms per frame: main thread ...,
 process ..., over ... ms`) and appends one row per counted frame to `recordbench-frames.csv` in the session
 directory, after the phase and never inside a measured span. The run starts with `Record bench seed ...` and ends
-with `Record bench: phases measured M of 3, frames N, words W, mismatches X, ...`; both name the
-`AMDGPU_WDDM_D3D12_EXPERIMENT` value the process saw. It succeeds only when all three phases counted a frame, every
+with `Record bench: phases measured M of 3, frames N, words W, mismatches X, ...`; both end in `experiment
+<source> <list> (profile ..., machine ..., environment ...)`: the switch list in each place the shell reads,
+and first the one a release shell takes (sessions before BD-167 name `AMDGPU_WDDM_D3D12_EXPERIMENT` instead,
+and `recordbench_compare.py` reads both). It succeeds only when all three phases counted a frame, every
 word compared equal, no list failed to record and the device was not removed. No window is made.
 
-The A/B is one binary run twice: the trial runner sets `AMDGPU_WDDM_D3D12_EXPERIMENT` from
-`BC250_TRIAL_EXPERIMENT` at Stage, `deferred-replay` for the on arm and nothing for the off arm, both with
+The A/B is one binary run twice, with the arm in the client's application profile (the REG_SZ value
+`Experiment` of `HKLM\SOFTWARE\amdgpu-wddm\D3D12\Applications\amdgpu_wddm_d3d12_queue.exe`): the switch list
+for the one arm and no value for the other, and `AMDGPU_WDDM_D3D12_EXPERIMENT` absent in both, because a
+release shell has no lookup of it (BD-167) and a lab shell would take it before the profile. Both run with
 `BC250_TRIAL_TRACE=2` or `0` (the full DDI trace writes a record per call and would dominate the figures). Then
 `python -B recordbench_compare.py <off session> <on session>` prints the table per phase with the change, from
 each session's `trace.jsonl` and `recordbench-frames.csv`, and exits 1 when either session did not pass.

@@ -10,17 +10,18 @@ HEADER = ("phase,frame,record_cycles,work_cycles,submit_cycles,api_cycles_max,ap
           "verify_us,frame_us\n")
 
 
-def write_session(root, name, experiment, api_cycles, frame_us, mismatches=0, hr="00000000"):
+def write_session(root, name, experiment, api_cycles, frame_us, mismatches=0, hr="00000000",
+                  field="AMDGPU_WDDM_D3D12_EXPERIMENT"):
     directory = Path(root) / name
     directory.mkdir()
     lines = [f"Record bench seed 0123456789abcdef, lists 4, draws per list 512, executes 2, work us per group 64, phases "
-             f"until 20000 ms, cycles per us 1000.0, AMDGPU_WDDM_D3D12_EXPERIMENT {experiment}"]
+             f"until 20000 ms, cycles per us 1000.0, {field} {experiment}"]
     for phase in compare.PHASES:
         lines.append(f"Record bench {phase} wall us: record mean 1.0 p50 1.0 p95 1.0, submit mean 1.0, gpu wait mean 1.0, "
                      f"verify mean 1.0, frame mean 1.0 p50 1.0 p95 1.0; cpu ms per frame: main thread 2.500, process 3.000, "
                      f"over 5000 ms")
     lines.append(f"Record bench: phases measured 3 of 3, frames 30, words 100, mismatches {mismatches}, mismatched draws 0, "
-                 f"removals 0, failures 0, 20000 ms, cycles per us at the end 1001.5, AMDGPU_WDDM_D3D12_EXPERIMENT {experiment}")
+                 f"removals 0, failures 0, 20000 ms, cycles per us at the end 1001.5, {field} {experiment}")
     with open(directory / "trace.jsonl", "w", encoding="utf-8") as trace:
         trace.write(json.dumps(dict(sequence=3, elapsed_ms=1, phase="after", api="copy", hr="00000000")) + "\n")
         for index, api in enumerate(lines):
@@ -52,6 +53,18 @@ class RecordBenchCompareTest(unittest.TestCase):
             self.assertIn("-75.0 %", text)
             self.assertIn("-25.0 %", text)
             self.assertNotIn("did not pass", text)
+
+    def test_profile_arm(self):
+        # BD-167: the client reports the arm from the application profile, which both shell flavours read.
+        with tempfile.TemporaryDirectory() as root:
+            on_text = "profile deferred-replay (profile deferred-replay, machine absent, environment absent)"
+            off = compare.session(write_session(root, "off", "none absent (profile absent, machine absent, environment absent)",
+                                                4_000_000, 20000.0, field="experiment"))
+            on = compare.session(write_session(root, "on", on_text, 1_000_000, 15000.0, field="experiment"))
+            self.assertEqual(on["experiment"], on_text)
+            self.assertTrue(off["experiment"].startswith("none absent"))
+            self.assertEqual(on["final"]["end_rate"], 1001.5)
+            self.assertIn("-75.0 %", compare.table(off, on))
 
     def test_failed_session_is_named(self):
         with tempfile.TemporaryDirectory() as root:

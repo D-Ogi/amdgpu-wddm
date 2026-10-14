@@ -2,7 +2,8 @@ param(
     [Parameter(Mandatory)][string]$Kits,
     [string]$Out = "$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path })\scratch\build\amdgpu_wddm_d3d12_queue",
     [string]$KitVersion = '10.0.26100.0',
-    # Diagnostic variant: value of RADV_EXPERIMENTAL the client sets in its own process.
+    # Diagnostic variant: value of RADV_EXPERIMENTAL the client sets in its own process. Lab packages only: a
+    # release ICD has no lookup of RADV_EXPERIMENTAL (BD-167), and the client's trace says which one it ran on.
     [ValidatePattern('^[a-z0-9_]*$')][string]$RadvExperimental = '',
     # Diagnostic variant: request feature level 12_1 instead of 11_0 at device creation.
     [switch]$FeatureLevel12_1,
@@ -82,7 +83,8 @@ param(
     # executes them in several ExecuteCommandLists calls, compares every word the draws wrote, and reports the
     # recording thread's CPU time per frame (QueryThreadCycleTime) in three phases: burst, interleaved with stand-in
     # application work, and one recording thread per list. For the A/B of the UMD's deferred-replay experiment: one
-    # binary, the arm set by the trial's AMDGPU_WDDM_D3D12_EXPERIMENT. No window.
+    # binary, the arm set in its application profile (HKLM\SOFTWARE\amdgpu-wddm\D3D12\Applications\
+    # amdgpu_wddm_d3d12_queue.exe, value Experiment), which both shell flavours read (BD-167). No window.
     [switch]$RecordBench,
     # -RecordBench: command lists per frame, each recorded by its own thread in the threaded phase.
     [ValidateRange(1, 8)][int]$RecordBenchLists = 4,
