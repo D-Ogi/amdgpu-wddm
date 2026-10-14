@@ -26,6 +26,24 @@ terminology, where one English term keeps one Polish word, so each line carries 
 `--recovery` opens a small recovery view that never loads `bc250control.dll`: the installed release, the symptom
 guides, Repair, Restart Windows and the support report.
 
+## Start
+
+The app shows a small loading window first: Nagi, the name of the app and one line of text (owner, 2026-10-14). The
+loading window reads nothing from the computer. When it is on the screen, the app reads the state of the computer on
+a worker thread (`src/WindowReading.cs`: the device through WMI, the driver's answers, the scheduled task, the cached
+update check, the recent launches and the benchmark's game folder) and builds the main window at the same time. The
+main window opens with that reading, and the loading window closes after it (`src/LaunchSequence.cs` holds the order,
+`src/Launch.cs` does it). A start that takes more than 8 s says so and offers to close the loading window. Before
+this change, all of that ran on the thread that draws, before the first picture: on a PC without a BC-250 about
+0.3 s from the start of the process to the loading window, against about 1.1 s to the old first window.
+
+One window per person and session (`src/SingleInstance.cs`). The first start of the window owns the named mutex
+`Local\amdgpu-wddm-control-window`. A later start finds it, sets the event `Local\amdgpu-wddm-control-window-activate`
+and exits 0 without a window. The first start then brings its window to the front: the loading window while it
+still starts, else the main window, restored when it is minimised, or the dialog that is open over it. Only the plain
+start (no arguments) takes part; `--action`, `--start-notice`, `--recovery` and the gates do not.
+`tools/win/app-launch/measure-launch.ps1` measures the time to the first window on the lab.
+
 ## How it talks to the driver
 
 Through `bc250control.dll`, built from `tools/win/bc250kmd_cli/bc250kmd_cli.c` with `BC250_CONTROL_DLL`. Only
@@ -374,7 +392,9 @@ the state BD-059 leaves behind on KMD 0.7.197, against its expected writes or re
 refused; one dry run of this PC; where the build is not elevated, one real run that must stop with exit 5 and still
 write `--out`), `--smoke-recovery <file>` (the recovery view built without a window; fails when `bc250control.dll`
 is loaded), `--smoke-perf <file>` (the window built hidden: no live timer, no ticks, no animation frame, start under
-5 s, private memory under 300 MB) and `--smoke-render <dir> <scale> [--lang xx] [--text-scale f] [--no-nagi]
+5 s, private memory under 300 MB), `--smoke-loading <file>` (the loading window in both its states, four
+languages, four scales, text at 100, 150 and 225 %, a 1024x768 and a large screen, with the checks of the sign-in
+notice) and `--smoke-render <dir> <scale> [--lang xx] [--text-scale f] [--no-nagi]
 [--switch-to xx] [--fixture <snapshot.json>] [--work-area <w>x<h>]` in 39 runs: four languages at 1, 1.25, 1.5 and 2, with
 `test/snapshot-bd059.json` and the tuning snapshots as the fixtures, text at 150 %, two runs with the guide
 character off (she is on in every other run, as she is after an install), two language

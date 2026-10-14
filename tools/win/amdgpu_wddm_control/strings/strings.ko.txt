@@ -1216,3 +1216,6 @@ settings.wallpaper.restored-partial|mt|c85e565d|이전 배경은 슬라이드 �
 settings.wallpaper.restore-failed|mt|7af0bb53|이전 배경을 되돌리지 못했습니다. 그 그림이 이 PC에 더 이상 없습니다. Windows 설정의 개인 설정 > 배경에서 배경을 고르세요.
 settings.wallpaper.nothing-saved|mt|d8f54a55|계정에 저장된 이전 배경이 없어 복원할 것이 없습니다.
 help.setting.wallpaper|mt|18d99de4|설치 프로그램은 확인된 설치 후, 상자를 끄지 않았다면 사람마다 Nagi 배경 화면을 한 번 설정하고, 그 전에 그 사람의 배경을 저장합니다. [Nagi 배경 화면 설정]은 그림을 다시 설정합니다. [이전 배경 화면 복원]은 저장된 배경을 되돌립니다. 슬라이드 쇼나 Windows 추천은 마지막 그림으로만 돌아옵니다. Windows 설정의 개인 설정 > 배경에서 다시 켜세요. 두 버튼 모두 자신의 배경만 바꾸며 관리자 권한이 필요 없습니다.
+launch.starting|mt|ff3dab00|시작하는 중입니다. 먼저 이 컴퓨터를 확인하므로 몇 초 정도 걸립니다.
+launch.slow|mt|653d44fd|Windows의 응답이 느려서 시작이 평소보다 오래 걸리고 있습니다. 응답을 받으면 앱이 열립니다. 이 창을 닫을 수도 있습니다.
+launch.close|mt|7d9eb7ac|닫기

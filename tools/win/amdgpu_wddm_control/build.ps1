@@ -14,7 +14,8 @@
 # Recovery dry runs (--action X --dry-run: nothing is written, no UAC) against test/snapshot-bd059.json and this PC,
 # the recovery view without bc250control.dll (--smoke-recovery), the hidden-window cost (--smoke-perf, G-PERF),
 # the sign-in notice in both its cases, four languages and four scales on a small and a large screen
-# (--smoke-notice: it fits the screen, overlaps nothing, names no internals, closes with Escape),
+# (--smoke-notice: it fits the screen, overlaps nothing, names no internals, closes with Escape), the loading window
+# of the start in both its states with the same checks (--smoke-loading),
 # the place a rebuilt page keeps and the place of the buttons in every state of a benchmark run (--smoke-scroll), and
 # the render gates (G-RENDER, G-NOINT, G-A11Y): --smoke-render of the 9 pages at 96, 120, 144 and 192 DPI in the four
 # languages, at text scale 150 %, with the guide character on (the default of an installed application) and two runs
@@ -67,6 +68,8 @@ $pure = 'KmdReply.cs', 'Profiles.cs', 'Redactor.cs', 'ManifestCheck.cs', 'Recove
     'LayoutRules.cs', 'UmaSetting.cs', 'BoardCapabilities.cs', 'SystemTuning.cs', 'Benchmark.cs', 'StartupDiagnosticData.cs', 'DiagnosticWorker.cs',
     'StartNotice.cs', 'Wallpaper.cs' |
     ForEach-Object { Join-Path $here "src\$_" }
+# The start of the window: the order of the loading window and the guard against a second window (Launch.cs).
+$pure += 'SingleInstance.cs', 'LaunchSequence.cs' | ForEach-Object { Join-Path $here "src\$_" }
 
 # Build the capability fixture from the actual provider and shipping shim tables, without adapter access.
 $providerOut = Join-Path $obj 'board-provider'
@@ -529,6 +532,15 @@ if (-not $NoSmoke) {
     $notice = Get-Content $file -Raw -ErrorAction SilentlyContinue
     if ($p.ExitCode -ne 0) { throw "notice smoke (exit $($p.ExitCode)): $notice" }
     Write-Host "  sign-in notice: $((($notice -split "`r?`n") | Where-Object { $_ } | Select-Object -First 1))"
+
+    # The loading window of the start (Launch.cs): both states, the same matrix as the notice, built without being
+    # shown. The same checks, and the guide's picture must be there when the exe carries it.
+    $file = Join-Path $obj 'smoke-loading.txt'
+    $p = Start-Process -FilePath "$Out\amdgpu_wddm_control.exe" -ArgumentList '--smoke-loading', "`"$file`"" -PassThru -WindowStyle Hidden
+    if (-not $p.WaitForExit(120000)) { $p.Kill(); throw 'loading smoke did not exit within 120 s' }
+    $loading = Get-Content $file -Raw -ErrorAction SilentlyContinue
+    if ($p.ExitCode -ne 0) { throw "loading smoke (exit $($p.ExitCode)): $loading" }
+    Write-Host "  loading window: $((($loading -split "`r?`n") | Where-Object { $_ }) -join ', ')"
 
     # A rebuilt page keeps the place the person scrolled to (F1 of the b23 lab round) and the card the person reads
     # keeps its place while a card above it grows (F7 of the second round): the Performance page of the recorded

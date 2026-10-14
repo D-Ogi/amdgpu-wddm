@@ -1218,3 +1218,6 @@ settings.wallpaper.restored-partial|mt|c85e565d|Poprzednim tłem był pokaz slaj
 settings.wallpaper.restore-failed|mt|7af0bb53|Nie udało się przywrócić poprzedniego tła: jego obrazu nie ma już na tym komputerze. Wybierz tło w Ustawieniach systemu Windows: Personalizacja, Tło.
 settings.wallpaper.nothing-saved|mt|d8f54a55|Dla Twojego konta nie zapisano poprzedniego tła, więc nie ma czego przywracać.
 help.setting.wallpaper|mt|18d99de4|Instalator ustawia tapetę Nagi raz dla każdej osoby po sprawdzonej instalacji, chyba że wyczyszczono jej pole, i najpierw zapisuje tło, które ta osoba miała. „Ustaw tapetę Nagi” ustawia obraz ponownie. „Przywróć moją poprzednią tapetę” przywraca zapisane tło. Pokaz slajdów lub Windows Spotlight wraca tylko jako ostatni obraz: włącz go ponownie w Ustawieniach systemu Windows: Personalizacja, Tło. Oba przyciski zmieniają tylko Twoje własne tło i nie wymagają uprawnień administratora.
+launch.starting|mt|ff3dab00|Uruchamianie. Aplikacja najpierw sprawdza ten komputer, co trwa kilka sekund.
+launch.slow|mt|653d44fd|Uruchamianie trwa dłużej niż zwykle, bo Windows odpowiada powoli. Aplikacja otworzy się, gdy dostanie odpowiedzi. Możesz też zamknąć to okno.
+launch.close|mt|7d9eb7ac|Zamknij

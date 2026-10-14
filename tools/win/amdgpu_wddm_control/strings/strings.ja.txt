@@ -1216,3 +1216,6 @@ settings.wallpaper.restored-partial|mt|c85e565d|以前の背景はスライド�
 settings.wallpaper.restore-failed|mt|7af0bb53|以前の背景に戻せませんでした。その画像はこの PC にもうありません。Windows の設定の [個人用設定] > [背景] で背景を選んでください。
 settings.wallpaper.nothing-saved|mt|d8f54a55|このアカウントには以前の背景が保存されていないため、戻すものはありません。
 help.setting.wallpaper|mt|18d99de4|インストーラーは、確認済みのインストールの後、ボックスがオフにされていない限り、各ユーザーに Nagi の壁紙を一度だけ設定し、その前にそのユーザーの背景を保存します。[Nagi の壁紙を設定] は画像をもう一度設定します。[以前の壁紙に戻す] は保存した背景に戻します。スライドショーや Windows スポットライトは最後の画像としてのみ戻ります。Windows の設定の [個人用設定] > [背景] で再びオンにしてください。どちらのボタンも自分の背景だけを変更し、管理者の権限は必要ありません。
+launch.starting|mt|ff3dab00|起動しています。最初にこのコンピューターを確認するため、数秒かかります。
+launch.slow|mt|653d44fd|Windows の応答が遅いため、起動にいつもより時間がかかっています。応答がそろうとアプリが開きます。このウィンドウを閉じることもできます。
+launch.close|mt|7d9eb7ac|閉じる

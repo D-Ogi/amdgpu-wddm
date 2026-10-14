@@ -1235,3 +1235,6 @@ settings.wallpaper.restored-partial|src|-|Your previous background was a slidesh
 settings.wallpaper.restore-failed|src|-|Your previous background could not be brought back: its picture is no longer on this PC. Choose a background in Windows Settings, Personalization, Background.
 settings.wallpaper.nothing-saved|src|-|No previous background is saved for your account, so there is nothing to restore.
 help.setting.wallpaper|src|-|The installer sets the Nagi wallpaper once for each person after a checked installation, unless its box was cleared, and saves the background that person had first. "Set the Nagi wallpaper" sets the picture again. "Restore my previous wallpaper" brings back the saved background. A slideshow or Windows Spotlight comes back as its last picture only: turn it on again in Windows Settings, Personalization, Background. Both buttons change only your own background and need no administrator rights.
+launch.starting|src|-|Starting. The app checks this computer first, which takes a few seconds.
+launch.slow|src|-|The start takes longer than usual, because Windows answers slowly. The app opens when it has the answers. You can also close this window.
+launch.close|src|-|Close

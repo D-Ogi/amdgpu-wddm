@@ -1299,6 +1299,7 @@ static partial class UnitTests
             System.Threading.Thread.Sleep(60000);
             return 0;
         }
+        if (args.Length == 2 && args[0] == "--single-instance-second") return SecondStart(args[1]);
         if (args.Length != 1 && args.Length != 2) { Console.WriteLine("usage: unit-tests <repository root> [<start-confirm-core.ps1>]"); return 2; }
         var header = File.ReadAllText(Path.Combine(args[0], @"driver\kmd\bc250kmd_escape.h"));
         Strings.Directory = Path.Combine(args[0], @"tools\win\amdgpu_wddm_control\strings");
@@ -1322,6 +1323,7 @@ static partial class UnitTests
         RecoveryRules(args[0], header, args.Length == 2 ? args[1] : null);
         PlanAdditions(args[0]);
         StartNoticeTests(args[0]);
+        LaunchTests(args[0]);
         WallpaperTests(args[0]);
         GraphicsSettingsTests();
         TdrTests(args[0]);

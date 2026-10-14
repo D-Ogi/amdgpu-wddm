@@ -1,7 +1,8 @@
 // Nagi Control App: the tester's control application for the Nagi graphics driver (amdgpu-wddm) on the ASRock
 // BC-250. The display name is Nagi (owner, 2026-10-13); the file, registry and folder names keep amdgpu-wddm.
 //
-//   amdgpu_wddm_control.exe                          the window
+//   amdgpu_wddm_control.exe                          the window: the loading window first, then the main window; a
+//                                                    second start brings the open window forward and exits 0
 //   amdgpu_wddm_control.exe --smoke <file>           no window: build the pages once, write what they show, exit
 //   amdgpu_wddm_control.exe --smoke-report <zip>    no window: a bug report without dxdiag, the capability tools and
 //                                                    the event logs, written to <zip> (the build's check of that path)
@@ -19,6 +20,8 @@
 //   amdgpu_wddm_control.exe --smoke-recovery <file>  no window: the recovery view built; fails when the DLL got loaded
 //   amdgpu_wddm_control.exe --smoke-perf <file>      no window: start time, timer and frame ticks of a hidden window,
 //                                                    memory (G-PERF)
+//   amdgpu_wddm_control.exe --smoke-loading <file>   no window: the loading window in both states, every language and
+//                                                    scale, with its layout gate; findings go to <file>
 //   amdgpu_wddm_control.exe --smoke-scroll <file> --fixture <snapshot.json>
 //                                                    no window: a rebuilt page keeps the place the person scrolled
 //                                                    to, and the buttons of a benchmark run stay where they are in
@@ -84,9 +87,59 @@ namespace AmdgpuWddmControl
                 Application.Run(new RecoveryView());
                 return 0;
             }
+            if (args.Length == 2 && args[0] == "--smoke-loading") return SmokeLoading(args[1]);
             if (args.Length != 0) { MessageBox.Show("Unknown arguments.", ProductName); return 2; }
-            Application.Run(new MainForm());
+            // One window per person and session (SingleInstance.cs): a later start brings the open window forward
+            // and ends here, before it builds anything. The first start shows the loading window first (Launch.cs).
+            using (var guard = SingleInstance.Claim())
+            {
+                if (!guard.First)
+                {
+                    WindowFront.AllowAny();
+                    guard.Signal();
+                    return 0;
+                }
+                Application.Run(new Launch(guard));
+            }
             return 0;
+        }
+
+        // The loading window (Launch.cs) in both its states, the four languages, 96 to 192 DPI, the text of Windows at
+        // 100 to 225 % and a 1024x768 and a large screen, built without being shown. An empty findings list is a pass.
+        // The first line also says how long this process took to its first loading window: the part of a start that
+        // the person waits for with nothing on the screen (the live start adds one paint to it).
+        static int SmokeLoading(string path)
+        {
+            try
+            {
+                var w = new System.Text.StringBuilder();
+                var screens = new[] { new System.Drawing.Size(1024, 728), new System.Drawing.Size(1920, 1032) };
+                int built = 0;
+                long firstMs = -1;
+                foreach (var lang in Strings.Languages)
+                    foreach (var scale in new[] { 1f, 1.25f, 1.5f, 2f })
+                        foreach (var textScale in new[] { 1f, 1.5f, 2.25f })
+                            foreach (var screen in screens)
+                                foreach (var slow in new[] { false, true })
+                                {
+                                    Strings.Language = lang;
+                                    Theme.Init(scale, textScale);
+                                    w.Append(LoadingWindow.Findings(slow, screen));
+                                    if (firstMs < 0)
+                                        using (var p = Process.GetCurrentProcess())
+                                            firstMs = (long)(DateTime.Now - p.StartTime).TotalMilliseconds;
+                                    built++;
+                                }
+                string text = w.ToString();
+                File.WriteAllText(path, (text.Length == 0 ? "no findings, " + built + " windows built" : text) +
+                    Environment.NewLine + "first-window-ms: " + firstMs + Environment.NewLine);
+                return text.Length == 0 ? 0 : 1;
+            }
+            catch (Exception e)
+            {
+                try { File.WriteAllText(path, "smoke loading failed: " + e); } catch (Exception) { }
+                return 1;
+            }
         }
 
         // ---- the sign-in notice (StartNotice.cs, NoticeForm.cs) ------------------------------------------------
