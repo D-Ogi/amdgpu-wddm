@@ -32,6 +32,7 @@ int main(int argc,char **argv) {
     }
     if (argc!=4 || (strcmp(argv[1],"--control") && strcmp(argv[1],"--inject")) || strcmp(argv[2],"--out")) return 2;
     const bool inject=!strcmp(argv[1],"--inject");
+    // BD-167: only a lab-flavour engine reads these switches; with a release engine --inject fails.
     SetEnvironmentVariableA("BC250DXVK_TEST_OOM",inject ? "1" : nullptr);
     SetEnvironmentVariableA("BC250DXVK_TEST_OOM_NOW",nullptr);
     ComPtr<IDXGIFactory1> factory;
