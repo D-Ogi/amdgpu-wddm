@@ -241,6 +241,145 @@ class StatusProfileTests(unittest.TestCase):
         self.assertIn('-Profile "%BC250_QUALITY_PROFILE%" -Kits "%BC250_QUALITY_KITS%\\."', cmd)
 
 
+class BuildFlavourTests(unittest.TestCase):
+    """Refuse conflicting input before discovery; keep the compiler and resource on one flavour.
+
+    Refusal and command export execute the real build script. To check the resource without compiling the
+    driver, a fixture executes its production prefix through rc-header, ending before the first native tool.
+    Only the script's relocated source directory is replaced. No flavour logic is copied into the test.
+    Both supported PowerShell hosts run the same controls in the existing quality-controls gate.
+    """
+    def setUp(self):
+        self.base = BASE / ("build-flavour-" + self._testMethodName)
+        self.base.mkdir(parents=True, exist_ok=True)
+        self.build = ROOT / "driver/kmd/build.ps1"
+        self.text = self.build.read_text(encoding="utf-8-sig")
+        if os.environ.get("BC250_ROOT"):
+            workspace = Path(os.environ["BC250_ROOT"])
+        else:
+            common = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "--git-common-dir"],
+                                    check=True, capture_output=True, text=True, timeout=15)
+            common_path = Path(common.stdout.strip())
+            if not common_path.is_absolute():
+                common_path = ROOT / common_path
+            workspace = common_path.resolve().parent.parent
+        self.kits = workspace / "toolchain/nuget"
+        self.assertTrue(self.kits.is_dir(), str(self.kits))
+        self.hosts = [(name, shutil.which(name)) for name in ("powershell.exe", "pwsh.exe")]
+        for name, path in self.hosts:
+            self.assertIsNotNone(path, name + " is required")
+        self.env = os.environ.copy()
+        self.env["TEMP"] = self.env["TMP"] = str(self.base)
+        self.env["PYTHONDONTWRITEBYTECODE"] = "1"
+
+    def run_build(self, host, name, tokens, build=None, existing=False, missing_tools=False):
+        case = self.base / (Path(host).stem + "-" + name)
+        case.mkdir(parents=True, exist_ok=True)
+        out = case / "output"
+        if existing:
+            for relative in ("obj/keep.obj", "obj/cl.pdb", "obj/keep.ilk", "bc250kmd.pdb", "bc250kmd.map",
+                             "package/bc250kmd.sys", "compile_commands.json"):
+                path = out / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"previous build must remain intact\n")
+        before = {p.relative_to(out): p.read_bytes() for p in out.rglob("*") if p.is_file()} if out.exists() else None
+        command = "& " + ps_quote(build or self.build) + " -Kits " + ps_quote(self.kits) + " -Out " + ps_quote(out)
+        wrapper = case / "run.ps1"
+        wrapper.write_text("$ErrorActionPreference='Stop'\n" + command + " " + tokens + "\n", encoding="utf-8-sig")
+        env = self.env.copy()
+        if missing_tools:
+            env["ProgramFiles(x86)"] = str(case / "no-tool-discovery-here")
+        run = subprocess.run([host, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(wrapper)],
+                             capture_output=True, text=True, env=env, timeout=30)
+        (case / "result.log").write_text(run.stdout + run.stderr, encoding="utf-8")
+        return run, out, before
+
+    def assert_refused(self, run, out, before, message):
+        self.assertNotEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertIn(message, run.stderr)
+        self.assertNotIn("compile", run.stdout.lower())
+        if before is None:
+            self.assertFalse(out.exists(), "refusal created the output directory")
+        else:
+            after = {p.relative_to(out): p.read_bytes() for p in out.rglob("*") if p.is_file()}
+            self.assertEqual(after, before, "refusal changed an existing build")
+
+    def test_actual_conflict_refuses_before_discovery_or_cleanup_in_all_modes(self):
+        for _, host in self.hosts:
+            for mode in ("", "-CompileOnly", "-ExportCommandsOnly"):
+                for index, pair in enumerate(("-Flavour release -Lab", "-Flavour lab -Lab:$false")):
+                    for existing in (False, True):
+                        name = (mode or "package") + str(index) + str(existing)
+                        with self.subTest(host=host, mode=mode, pair=pair, existing=existing):
+                            run, out, before = self.run_build(host, name, pair + " " + mode, existing=existing, missing_tools=True)
+                            self.assert_refused(run, out, before, "Conflicting -Flavour and -Lab")
+
+    def test_actual_lab_package_requires_version_before_discovery(self):
+        for _, host in self.hosts:
+            for index, tokens in enumerate(("-Flavour lab", "-Lab")):
+                with self.subTest(host=host, tokens=tokens):
+                    run, out, before = self.run_build(host, str(index), tokens, existing=True, missing_tools=True)
+                    self.assert_refused(run, out, before, "needs -PackageVersion for a package build")
+
+    def check_commands(self, out, expected):
+        commands = json.loads((out / "compile_commands.json").read_text(encoding="utf-8-sig"))
+        self.assertGreater(len(commands), 50)
+        for command in commands:
+            self.assertEqual(command["arguments"].count("/DAMDGPU_WDDM_LAB_FLAVOUR=1"),
+                             int(expected == "lab"), command["file"])
+
+    def test_actual_export_keeps_alias_and_flavour_compiler_flags(self):
+        variants = (("", "release"), ("-Flavour release", "release"), ("-Lab:$false", "release"),
+                    ("-Flavour lab", "lab"), ("-Lab", "lab"), ("-Flavour LAB -Lab", "lab"),
+                    ("-Flavour release -Lab:$false", "release"))
+        for _, host in self.hosts:
+            for index, (tokens, expected) in enumerate(variants):
+                with self.subTest(host=host, tokens=tokens):
+                    run, out, _ = self.run_build(host, str(index), tokens + " -ExportCommandsOnly")
+                    self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+                    self.check_commands(out, expected)
+                    self.assertFalse((out / "obj/version-stamp.h").exists())
+                    self.assertFalse((out / "package/bc250kmd.sys").exists())
+
+    def test_production_compile_prefix_keeps_version_stamp_and_flags_together(self):
+        marker = '    Invoke-Tool (Join-Path $sdk "bin\\$KitVersion\\x64\\rc.exe")'
+        self.assertEqual(self.text.count(marker), 1)
+        prefix = self.text[:self.text.index(marker)] + "}\n"
+        here = "$here = Split-Path -Parent $MyInvocation.MyCommand.Path"
+        self.assertEqual(prefix.count(here), 1)
+        prefix = prefix.replace(here, "$here = " + ps_quote(self.build.parent))
+        fixture = self.base / "production-prefix.ps1"
+        fixture.write_text(prefix, encoding="utf-8-sig")
+        variants = (("", "release"), ("-Flavour lab", "lab"), ("-Lab", "lab"),
+                    ("-Flavour lab -Lab", "lab"), ("-Lab:$false", "release"))
+        for _, host in self.hosts:
+            for index, (tokens, expected) in enumerate(variants):
+                for versioned in (False, True):
+                    with self.subTest(host=host, tokens=tokens, versioned=versioned):
+                        version = " -PackageVersion 0.7.216.102-tester.31" if versioned else ""
+                        run, out, _ = self.run_build(host, str(index) + str(versioned), tokens + " -CompileOnly" + version, build=fixture)
+                        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+                        self.check_commands(out, expected)
+                        header = out / "obj/version-stamp.h"
+                        self.assertEqual(header.exists(), versioned)
+                        if versioned:
+                            self.assertEqual("#define BC250_VER_LAB" in header.read_text(), expected == "lab")
+                        self.assertFalse((out / "package/bc250kmd.sys").exists())
+        # The post-link byte gate must consume that same canonical value, not the compatibility alias.
+        self.assertIn("'--flavour' $Flavour '--kmd'", self.text)
+        self.assertNotIn("if ($Lab) { $clFlags", self.text)
+        # The original fault must fail the same compiler-flag assertion even though rc-header still says lab.
+        legacy = self.base / "independent-lab-prefix.ps1"
+        legacy.write_text(prefix.replace("if ($Flavour -eq 'lab') { $clFlags", "if ($Lab) { $clFlags"), encoding="utf-8-sig")
+        for _, host in self.hosts:
+            run, out, _ = self.run_build(host, "negative-independent-lab", "-CompileOnly -Flavour lab "
+                                        "-PackageVersion 0.7.216.102-tester.31", build=legacy)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+            self.assertIn("#define BC250_VER_LAB", (out / "obj/version-stamp.h").read_text())
+            with self.assertRaises(AssertionError):
+                self.check_commands(out, "lab")
+
+
 class QuickCommandTests(unittest.TestCase):
     def test_actual_cmd_to_native_pwsh_argv(self):
         base = BASE / "quick-native-argv"

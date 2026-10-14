@@ -34,13 +34,25 @@ param(
     [string]$CertSubject = 'CN=BC-250 lab test signing',
     [switch]$ExportCommandsOnly,
     [switch]$CompileOnly,           # compile and link, no quality gates, no catalog, no signature (a gate)
-    [switch]$Lab,                   # BD-167: the lab flavour. Compiles in the raw memory/register/submit/scanout
-                                    # escapes (lab_gate.h), which answer only with test signing on and
-                                    # Parameters\LabDiagnostics = 1. tools\release\build-release.ps1 never sets it.
+    [switch]$Lab,                   # Compatibility alias for -Flavour lab (-Lab:$false means release).
+                                    # When both are explicit they must agree. Flavour alone controls the build.
     [string]$QualityWorkspace = ''
 )
 
 $ErrorActionPreference = 'Stop'
+# Resolve before tool discovery or output cleanup: a contradictory request must not touch an earlier build.
+# Keep -Lab-only callers, including compile/export gates, but give the compiler, resource and byte gate one value.
+if ($PSBoundParameters.ContainsKey('Lab')) {
+    $aliasFlavour = if ($Lab) { 'lab' } else { 'release' }
+    if ($PSBoundParameters.ContainsKey('Flavour') -and $Flavour -ne $aliasFlavour) {
+        throw 'Conflicting -Flavour and -Lab values; use -Flavour alone or an agreeing -Lab alias'
+    }
+    $Flavour = $aliasFlavour
+}
+$Flavour = $Flavour.ToLowerInvariant()
+if ($Flavour -eq 'lab' -and -not $PackageVersion -and -not ($CompileOnly -or $ExportCommandsOnly)) {
+    throw '-Flavour lab needs -PackageVersion for a package build; compile/export-only gates may omit it'
+}
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $wdk = Join-Path $Kits 'microsoft.windows.wdk.x64\c'
 $sdk = Join-Path $Kits 'microsoft.windows.sdk.cpp\c'
@@ -142,8 +154,8 @@ $clFlags = @('/nologo', '/c', '/kernel', '/GS-', '/W4', '/WX', '/we4013', '/we40
     "/I$sdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\um",
     "/Fo$obj\", "/Fd$obj\cl.pdb")
 # BD-167: the lab flavour adds the raw diagnostic escapes; the release flavour (the default) does not contain them.
-if ($Lab) { $clFlags += '/DAMDGPU_WDDM_LAB_FLAVOUR=1' }
-Write-Host ("flavour: {0}" -f ($(if ($Lab) { 'LAB (raw diagnostic escapes compiled in, gated by test signing + LabDiagnostics)' } else { 'RELEASE (no raw diagnostic escapes)' })))
+if ($Flavour -eq 'lab') { $clFlags += '/DAMDGPU_WDDM_LAB_FLAVOUR=1' }
+Write-Host ("flavour: {0}" -f ($(if ($Flavour -eq 'lab') { 'LAB (raw diagnostic escapes compiled in, gated by test signing + LabDiagnostics)' } else { 'RELEASE (no raw diagnostic escapes)' })))
 # Emit the exact per-file commands for targeted static analysis and build auditing.
 $commands = @()
 $groups = @(
@@ -172,7 +184,6 @@ if(-not $CompileOnly) {
     if($LASTEXITCODE -ne 0) { throw 'Fast quality gates failed; KMD package not built' }
 }
 
-if ($Flavour -eq 'lab' -and -not $PackageVersion) { throw '-Flavour lab needs -PackageVersion: a flavour of no release' }
 # BD-166: the version resource, compiled before the link because the kernel driver cannot be stamped afterwards
 # (the release pins its Authenticode digest, and a stamp after the signature would break it). versionstamp.py
 # writes version-stamp.h from the release version, the same mapping and the same strings that every user-mode
@@ -213,7 +224,7 @@ if ($LASTEXITCODE -ne 0) { throw 'stack budget: a function allocates too much st
 
 # BD-167: the linked SYS is the flavour this build names, by its own bytes (flavour line, no or every raw escape).
 Write-Host 'flavour gate'
-& python (Join-Path $repo 'tools\quality\flavour_gate.py') '--flavour' $(if ($Lab) { 'lab' } else { 'release' }) '--kmd' "$pkg\bc250kmd.sys" '--kmd-only'
+& python (Join-Path $repo 'tools\quality\flavour_gate.py') '--flavour' $Flavour '--kmd' "$pkg\bc250kmd.sys" '--kmd-only'
 if ($LASTEXITCODE -ne 0) { throw 'flavour gate: the linked SYS is not the flavour this build names (see above)' }
 
 if($CompileOnly) {
