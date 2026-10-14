@@ -679,38 +679,67 @@ static class UnitTests
             }
         }
         // Cleanup removes the version folder of the setup root and refuses anything else, whatever it is asked.
-        foreach (var outside in new[] { null, "", @"C:\Windows\System32", Path.Combine(Path.GetTempPath(), "x"), Payload.Root })
-            Payload.Cleanup(outside);
+        // The root of these checks is a folder of this test, never %ProgramData%\amdgpu-wddm\setup: a test leaves
+        // nothing of its own on the computer it runs on (BD-163, where exactly such a folder stayed behind).
+        var testRoot = Path.Combine(tmp, "setup-root");
+        foreach (var outside in new[] { null, "", @"C:\Windows\System32", Path.Combine(Path.GetTempPath(), "x"), testRoot })
+            Payload.Cleanup(outside, testRoot);
         Check(Directory.Exists(Path.GetTempPath()), "single file: Cleanup leaves a folder outside its own root alone");
-        var fake = Path.Combine(Payload.Root, "0.0.0-unit-test");
+        var fake = Path.Combine(testRoot, "0.0.0-unit-test");
         var inside = Path.Combine(fake, Payload.FilesDir);
-        bool removed;
-        try
-        {
-            Directory.CreateDirectory(inside);
-            File.WriteAllText(Path.Combine(inside, "manifest.json"), "{}");
-            Payload.Cleanup(inside);
-            removed = !Directory.Exists(fake);
-        }
-        catch (UnauthorizedAccessException) { removed = true; }   // a test that may not write there proves the rest
-        catch (IOException) { removed = true; }
-        Check(removed, "single file: Cleanup removes the version folder it unpacked");
+        Directory.CreateDirectory(inside);
+        File.WriteAllText(Path.Combine(inside, "manifest.json"), "{}");
+        Payload.Cleanup(inside, testRoot);
+        Check(!Directory.Exists(fake), "single file: Cleanup removes the version folder it unpacked");
+        // BD-163: and the folder that held it, when that version was the last. Every install from a single file
+        // takes this branch while its window is still open, and this branch alone never removed the folder: an
+        // empty %ProgramData%\amdgpu-wddm\setup stayed on the computer after every one of those installs.
+        Check(!Directory.Exists(testRoot), "single file: Cleanup removes the setup root with the last version folder");
         // The same removal by version name, which is what the window that finishes an install after the restart has
         // in its hand (the folder was unpacked by a window that is long gone). Anything that is not a plain version
         // name is left alone.
         foreach (var outside in new[] { null, "", ".", "..", @"..\..\Windows", @"x\y", "C:", @"C:\Windows" })
-            Payload.CleanupVersion(outside);
+            Payload.CleanupVersion(outside, testRoot);
         Check(Directory.Exists(Path.GetTempPath()), "single file: CleanupVersion touches nothing outside its own root");
-        try
-        {
-            Directory.CreateDirectory(inside);
-            File.WriteAllText(Path.Combine(inside, "manifest.json"), "{}");
-            Payload.CleanupVersion("0.0.0-unit-test");
-            removed = !Directory.Exists(fake);
-        }
-        catch (UnauthorizedAccessException) { removed = true; }
-        catch (IOException) { removed = true; }
-        Check(removed, "single file: CleanupVersion removes the folder of the version it is given");
+        Directory.CreateDirectory(inside);
+        File.WriteAllText(Path.Combine(inside, "manifest.json"), "{}");
+        Payload.CleanupVersion("0.0.0-unit-test", testRoot);
+        Check(!Directory.Exists(fake), "single file: CleanupVersion removes the folder of the version it is given");
+        Check(!Directory.Exists(testRoot), "single file: CleanupVersion removes the setup root with the last version folder");
+        // A root that still holds the folder of another version stays: that install is not finished, and its files
+        // are what it installs from.
+        var other = Path.Combine(testRoot, "0.0.0-other-run");
+        Directory.CreateDirectory(inside);
+        Directory.CreateDirectory(other);
+        Payload.CleanupVersion("0.0.0-unit-test", testRoot);
+        Check(!Directory.Exists(fake) && Directory.Exists(other),
+            "single file: a setup root that still holds another version stays");
+        Directory.Delete(testRoot, true);
+        // BD-163, the folder a run makes for itself, through the calls an unpacking really makes: the version folder
+        // is created inside it and both go at the cleanup that ends an install. Without the account of this run on
+        // the list of the root (Access.RootRules below) ResetFolder cannot even create the version folder here,
+        // because this test does not run elevated.
+        var ourRoot = Path.Combine(tmp, "setup-root-ours");
+        Payload.Access.PrepareRoot(ourRoot);
+        Payload.Access.ResetFolder(Path.Combine(ourRoot, "0.0.0-unit-test"));
+        Check(Directory.Exists(Path.Combine(ourRoot, "0.0.0-unit-test")), "single file: the version folder is made with its own permission list");
+        Payload.CleanupVersion("0.0.0-unit-test", ourRoot);
+        Check(!Directory.Exists(ourRoot), "single file: the root a run made for itself goes with its last version folder");
+        // The permission list of a root we create carries the account that created it, so that a run without
+        // administrator rights can remove the folder it made. The entry is not inherited: the version folders
+        // and their files stay administrators, SYSTEM and read-only Users.
+        var rootRules = Payload.Access.RootRules();
+        var rootAces = rootRules.GetAccessRules(true, false, typeof(System.Security.Principal.SecurityIdentifier))
+            .Cast<System.Security.AccessControl.FileSystemAccessRule>().ToList();
+        var mine = System.Security.Principal.WindowsIdentity.GetCurrent().User;
+        var mineAces = rootAces.Where(a => ((System.Security.Principal.SecurityIdentifier)a.IdentityReference).Equals(mine)).ToList();
+        Equal(1, mineAces.Count, "single file: the root carries the account that created it");
+        Check(mineAces[0].FileSystemRights.HasFlag(System.Security.AccessControl.FileSystemRights.Delete),
+            "single file: the account that created the root may remove it");
+        Check(mineAces[0].InheritanceFlags == System.Security.AccessControl.InheritanceFlags.None,
+            "single file: that entry does not reach the version folders");
+        Equal(3, Payload.Access.Rules().GetAccessRules(true, false, typeof(System.Security.Principal.SecurityIdentifier)).Count,
+            "single file: the version folder keeps its three entries");
         // Which package a run installs from. A layout the person prepared always wins over the payload.
         Check(Payload.Carries(true, null, false), "single file: a file with a payload and nothing beside it installs from the payload");
         Check(!Payload.Carries(false, null, false), "single file: a file without a payload installs from the folder beside it");

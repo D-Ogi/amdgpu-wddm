@@ -246,7 +246,11 @@ namespace AmdgpuWddmSetup
         // Removes the folder a single-file setup unpacked itself into. Called when the run is over; while a restart
         // of this install is pending the folder stays, because the install is not over. Never throws: a folder that
         // cannot be removed is not worth ending a finished installation for, and the next run resets it anyway.
-        public static void Cleanup(string packageRoot)
+        public static void Cleanup(string packageRoot) { Cleanup(packageRoot, Root); }
+
+        // The same with the root named, which is what the tests use: the real root is %ProgramData%, which a test
+        // must not touch.
+        public static void Cleanup(string packageRoot, string root)
         {
             try
             {
@@ -267,8 +271,12 @@ namespace AmdgpuWddmSetup
         // stayed in %ProgramData% for good, which is the one path every fresh install takes.
         //
         // A version that is not a plain name, or a folder that is not inside Root, is left alone: this is given a
+                RemoveRootIfEmpty(root);
         // version read from a manifest on the disk, and a name like ..\.. must not reach Directory.Delete.
-        public static void CleanupVersion(string version)
+        public static void CleanupVersion(string version) { CleanupVersion(version, Root); }
+
+        // The same with the root named, for the tests.
+        public static void CleanupVersion(string version, string root)
         {
             try
             {
@@ -277,10 +285,27 @@ namespace AmdgpuWddmSetup
                 var parent = Path.GetDirectoryName(dir.TrimEnd('\\'));
                 if (parent == null || !parent.TrimEnd('\\').Equals(Root.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)) return;
                 Remove(dir);
-                // The folder that held the versions goes with the last of them, so an uninstall leaves nothing of
-                // the single file behind; a folder that still holds another version stays.
-                try { if (Directory.Exists(Root) && Directory.GetFileSystemEntries(Root).Length == 0) Directory.Delete(Root, false); }
-                catch (Exception) { }
+                RemoveRootIfEmpty(root);
+            }
+            catch (Exception) { }
+        }
+
+        // The folder that held the versions goes with the last of them, so an uninstall and every finished install
+        // leave nothing of the single file behind. A folder that still holds another version stays.
+        //
+        // BD-163: this ran in CleanupVersion alone, and the install branch above (Cleanup, the window that unpacked
+        // the folder) never reached it, so every install from a single file left the empty folder in %ProgramData%.
+        // The second half of that defect is the permission list: the run that creates the folder is now on it
+        // (Access.RootRules), because Access.Rules alone left a folder that only an administrator could remove, and
+        // a run without administrator rights could not remove the folder it had made itself. A run that still may
+        // not remove the folder leaves it, as before: a finished installation is not worth ending over it.
+        static void RemoveRootIfEmpty(string root)
+        {
+            try
+            {
+                if (!Directory.Exists(root)) return;
+                if (Directory.GetFileSystemEntries(root).Length != 0) return;
+                Directory.Delete(root, false);
             }
             catch (Exception) { }
         }
@@ -467,7 +492,26 @@ namespace AmdgpuWddmSetup
                 }
                 AssertLocation(shared);
                 var info = new DirectoryInfo(root);
-                if (!info.Exists) info.Create(Rules());
+            // The rules of the folder that holds the version folders: the list above, and the account that creates
+            // the folder, so that the run which made it can remove it again (BD-163). That access rule is not
+            // inherited: the version folders and the files below them stay administrators and SYSTEM only, with
+            // read and run for Users, so nobody can plant a file where the checked package goes. The owner is
+            // Administrators where the process may set it, as before.
+            public static DirectorySecurity RootRules()
+            {
+                var s = Rules();
+                try
+                {
+                    var me = WindowsIdentity.GetCurrent().User;
+                    if (me != null)
+                        s.AddAccessRule(new FileSystemAccessRule(me, FileSystemRights.FullControl,
+                            InheritanceFlags.None, PropagationFlags.None, AccessControlType.Allow));
+                }
+                catch (Exception) { }     // a run that cannot read its own account keeps the list above
+                return s;
+            }
+
+                if (!info.Exists) info.Create(RootRules());   // BD-163: with this run's account on the list
                 else
                 {
                     AssertLocation(root);
