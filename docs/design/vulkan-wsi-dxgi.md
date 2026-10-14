@@ -217,8 +217,14 @@ D3D ICD line. One build serves the 32-bit D3D11 shell and 32-bit Vulkan, which
 therefore leaves a 32-bit Vulkan application on the CPU path. Nothing in the code is 64-bit specific. Earlier
 the system line could not build x86 at all. The b25 dispatch-table generator merge removed that, so this branch
 builds an x86 candidate with the same five gates. Whether the wow64 Vulkan slot takes it is a decision of the
-train cut, not of this note. The slot change needs its own 32-bit arm, and until that arm runs the release
-notes must say that a 32-bit Vulkan application keeps the old path.
+train cut, not of this note.
+
+**From the tester release of train b34 the slot takes it.** Both Vulkan rows of that release are the system
+line's build, so a 32-bit Vulkan application is on the same driver as a 64-bit one, and the x86 arm of the
+five gates ran on that build. One behaviour follows from the change and is in the release notes: the system
+line has no reader of `MemoryOverflow`, so a 32-bit Vulkan program ignores that setting, which is what a
+64-bit one already did. Direct3D 11 and Direct3D 12 programs still honour it, because their shells carry the
+ICD of the D3D line. The paragraph above describes the releases before that cut.
 
 Three upstream defects are fixed on the way. The device-wide `wsi_device::blit` hook took the DXGI blit for a CPU
 swapchain on a DXGI-capable device, and that blit reads a fence array which only a DXGI swapchain has. The present
