@@ -114,6 +114,36 @@ application profile's `LogDirectory` (REG_SZ next to `Experiment`) or the
 temporary directory ([replay-log.h](replay-log.h)): a game started by Steam has no
 stderr anyone reads.
 
+Asynchronous pipeline compilation is on by default as well, read once per device.
+The experiment `async-pso-off` takes it back, and
+[docs/design/per-app-graphics-settings.md](../../../docs/design/per-app-graphics-settings.md)
+says how a tester writes it for one game. On, `pfnCreatePipelineState` keeps every
+check and every refusal on the calling thread, copies all the description's bytes
+that the engine create reads, and returns `S_OK`. The engine's create, which holds
+the DXIL to SPIR-V conversion and the shader compile, runs on a process-wide pool
+of `logical processors - 1` threads (engine-ddi's `set_pso_policy`,
+[engine-ddi/README.md](engine-ddi/README.md)). A consumer of the pipeline waits for
+its compile, or makes it on its own thread when no worker has started it, so a
+pipeline created and used at once costs what it always did. A compile that fails
+after that `S_OK` is logged once with the job's number and the engine's code, and
+every use of that pipeline then fails: `SetPipelineState` does not record the bind
+and gives the code to the recording command list (`pfnSetCommandListErrorCb`,
+which is the device error when no list is entered), and a library store or
+serialize of it is refused the same way. The application never draws with a
+pipeline the engine refused, and no wrong picture is produced instead. The pool's threads
+are the same kind of engine-ddi thread as a replay worker, with the device's
+runtime domain and `HostedDispatch::WorkerScope`, because the engine's create
+allocates and uploads through the runtime callbacks. The counters of the pool
+(creates queued, creates kept synchronous, jobs run by a worker, jobs run by a
+consumer, waits with their total and longest time, failures) go to this shell's log
+at the device's destruction, every 30 seconds while the device compiles anything,
+and from `DllMain` when the DLL is unloaded, because a game can exit without ever
+destroying its device. A device that only binds pipelines it compiled long ago
+writes no periodic line. Pipelines a game stores into an
+`ID3D12PipelineLibrary` are recorded there and handed to the engine's library at
+the first `CalcSerializedLibrarySize` or `SerializeLibrary`, so a store right after
+a create does not put the serial chain back.
+
 ## Queues and fences
 
 `queue-request.h` builds the BC2C v2 context request for the supported single-node

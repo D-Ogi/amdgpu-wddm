@@ -17,12 +17,19 @@
 //   5. L57 view instancing: the locations and the flags reach VIEW_INSTANCING; a pipeline with no view instances
 //      writes no such subobject; a count the contract does not allow is refused with E_INVALIDARG and reaches no
 //      engine.
+//   7. BD-158 asynchronous compilation (set_pso_policy, pso-async.cpp): the policy is refused unless its shape is
+//      the one the boundary names; with it on, a create answers S_OK before the engine has seen the pipeline, the
+//      engine's create then arrives on a pool thread and carries the same state as the synchronous one, including
+//      the view-instance locations, which the DDI call's frame no longer holds by then; every consumer gets the
+//      pipeline (a consumer that arrives before a worker makes the create itself); a destroy before any use makes
+//      no engine create at all; a failure after the S_OK reaches the consumer as a failure and binds nothing; and
+//      none of it depends on how the creating threads interleave.
 //   6. D85-D90 pipeline libraries: the blob reaches the engine's CreatePipelineLibrary unchanged; a pipeline
 //      added at an index is stored under that index's name; a serialize is handed exactly the capacity the size
 //      query of its own thread answered, is refused when no query covers the library's current contents, and is
 //      refused rather than handed another thread's size; and a create whose LibraryReference names a library is a
-//      load of the same stream out of that library, never a new pipeline on the engine device. Every engine
-//      failure of a creation slot is clamped to a code the runtime admits.
+//      load out of that library, of the stream the create would have written, never a new pipeline on the engine
+//      device. Every engine failure of a creation slot is clamped to a code the runtime admits.
 //
 // A mesh pipeline shares put_common_state and put_view_instancing with the graphics path, so these checks hold for
 // its stream as well, except for the AS and MS subobjects: a mesh or amplification program passes the shader
@@ -30,12 +37,14 @@
 // carry. The mesh conformance client on the lab covers those two subobjects.
 #include "shader-container/shader-container.h"      // first: it selects the D3D12 tokenized program format header
 #include "internal.h"
+#include "pso-async.h"
 #include <cstdarg>
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
 #include <atomic>
 #include <io.h>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <vector>
@@ -156,13 +165,147 @@ public:
     }
 };
 
+// ---- One create's state, with no address in it -----------------------------------------------------------------
+// What the engine would read of one subobject, with no address left in it: the value's bytes, and behind every
+// pointer the value carries, the bytes it points at. Two creates of one payload answer the same digest although
+// each create's plan owns its own copies, so a digest tells "the same state arrived" apart from "from the same
+// addresses" - which is what a deep copy is for. Read inside the engine's create, where the pointers are live.
+void append_bytes(std::vector<uint8_t>& out, const void* bytes, size_t size) {
+    const auto* p = static_cast<const uint8_t*>(bytes);
+    out.insert(out.end(), p, p + size);
+}
+void append_name(std::vector<uint8_t>& out, const char* name) {
+    append_bytes(out, name ? name : "", name ? std::strlen(name) + 1 : 1);
+}
+template <class T> T value_of(const Subobject& o) {
+    T out{};
+    if (o.value.size() == sizeof(T)) std::memcpy(&out, o.value.data(), sizeof(T));
+    return out;
+}
+std::vector<uint8_t> pointer_free(const Subobject& o) {
+    std::vector<uint8_t> out;
+    switch (o.type) {
+    case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_VS:
+    case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS:
+    case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DS:
+    case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_HS:
+    case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_GS:
+    case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS:
+    case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_AS:
+    case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MS: {
+        const auto code = value_of<D3D12_SHADER_BYTECODE>(o);
+        const uint64_t length = code.BytecodeLength;
+        append_bytes(out, &length, sizeof(length));
+        if (code.pShaderBytecode) append_bytes(out, code.pShaderBytecode, code.BytecodeLength);
+        return out;
+    }
+    case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_VIEW_INSTANCING: {
+        const auto vi = value_of<D3D12_VIEW_INSTANCING_DESC>(o);
+        append_bytes(out, &vi.ViewInstanceCount, sizeof(vi.ViewInstanceCount));
+        append_bytes(out, &vi.Flags, sizeof(vi.Flags));
+        if (vi.pViewInstanceLocations)
+            append_bytes(out, vi.pViewInstanceLocations, sizeof(*vi.pViewInstanceLocations) * vi.ViewInstanceCount);
+        return out;
+    }
+    case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_INPUT_LAYOUT: {
+        const auto layout = value_of<D3D12_INPUT_LAYOUT_DESC>(o);
+        append_bytes(out, &layout.NumElements, sizeof(layout.NumElements));
+        for (UINT i = 0; layout.pInputElementDescs && i < layout.NumElements; ++i) {
+            const D3D12_INPUT_ELEMENT_DESC& e = layout.pInputElementDescs[i];
+            append_name(out, e.SemanticName);
+            append_bytes(out, &e.SemanticIndex, sizeof(e.SemanticIndex));
+            append_bytes(out, &e.Format, sizeof(e.Format));
+            append_bytes(out, &e.InputSlot, sizeof(e.InputSlot));
+            append_bytes(out, &e.AlignedByteOffset, sizeof(e.AlignedByteOffset));
+            append_bytes(out, &e.InputSlotClass, sizeof(e.InputSlotClass));
+            append_bytes(out, &e.InstanceDataStepRate, sizeof(e.InstanceDataStepRate));
+        }
+        return out;
+    }
+    case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_STREAM_OUTPUT: {
+        const auto so = value_of<D3D12_STREAM_OUTPUT_DESC>(o);
+        append_bytes(out, &so.NumEntries, sizeof(so.NumEntries));
+        append_bytes(out, &so.NumStrides, sizeof(so.NumStrides));
+        append_bytes(out, &so.RasterizedStream, sizeof(so.RasterizedStream));
+        for (UINT i = 0; so.pSODeclaration && i < so.NumEntries; ++i) {
+            const D3D12_SO_DECLARATION_ENTRY& e = so.pSODeclaration[i];
+            append_name(out, e.SemanticName);
+            append_bytes(out, &e.SemanticIndex, sizeof(e.SemanticIndex));
+            append_bytes(out, &e.StartComponent, sizeof(e.StartComponent));
+            append_bytes(out, &e.ComponentCount, sizeof(e.ComponentCount));
+            append_bytes(out, &e.OutputSlot, sizeof(e.OutputSlot));
+            append_bytes(out, &e.Stream, sizeof(e.Stream));
+        }
+        if (so.pBufferStrides) append_bytes(out, so.pBufferStrides, sizeof(*so.pBufferStrides) * so.NumStrides);
+        return out;
+    }
+    default:
+        return o.value;
+    }
+}
+
+// One engine create, as the digest of its subobjects in stream order.
+struct Digest {
+    bool read = false;                          // the stream walked end to end with no unknown or repeated type
+    bool aligned = true;
+    std::vector<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE> types;
+    std::vector<std::vector<uint8_t>> values;
+    bool operator==(const Digest& other) const {
+        return read == other.read && types == other.types && values == other.values;
+    }
+};
+Digest digest_of(const void* bytes, size_t size) {
+    Digest d;
+    if (!bytes || !size) return d;
+    d.aligned = reinterpret_cast<uintptr_t>(bytes) % sizeof(void*) == 0;
+    const auto* p = static_cast<const uint8_t*>(bytes);
+    Stream s;
+    s.parse(std::vector<uint8_t>(p, p + size));
+    d.read = s.ok;
+    for (const Subobject& o : s.objects) {
+        d.types.push_back(o.type);
+        d.values.push_back(pointer_free(o));
+    }
+    return d;
+}
+
+// Where two digests part, for the message of a check that finds two creates of one payload unequal.
+size_t mismatch_at(const std::vector<uint8_t>& a, const std::vector<uint8_t>& b) {
+    size_t i = 0;
+    while (i < a.size() && i < b.size() && a[i] == b[i]) ++i;
+    return i;
+}
+std::string difference(const Digest& a, const Digest& b) {
+    if (a.read != b.read) return "one of the two streams did not walk end to end";
+    if (a.types.size() != b.types.size())
+        return "subobject counts " + std::to_string(a.types.size()) + " and " + std::to_string(b.types.size());
+    for (size_t i = 0; i < a.types.size(); ++i) {
+        if (a.types[i] != b.types[i])
+            return "subobject " + std::to_string(i) + ": type " + std::to_string(static_cast<int>(a.types[i])) +
+                   " and type " + std::to_string(static_cast<int>(b.types[i]));
+        if (a.values[i] != b.values[i])
+            return "subobject type " + std::to_string(static_cast<int>(a.types[i])) + ": " +
+                   std::to_string(a.values[i].size()) + " and " + std::to_string(b.values[i].size()) +
+                   " bytes, parting at byte " + std::to_string(mismatch_at(a.values[i], b.values[i]));
+    }
+    return "the same state";
+}
+// The first digest that is not the first one's, as a message, for a check over many creates of one payload.
+std::string first_difference(const std::vector<Digest>& digests) {
+    for (size_t i = 1; i < digests.size(); ++i)
+        if (!(digests[i] == digests[0])) return "digest " + std::to_string(i) + ": " + difference(digests[i], digests[0]);
+    return digests.empty() ? "no digest at all" : "the same state";
+}
+
 // ---- Fake engine objects ---------------------------------------------------------------------------------------
 #pragma warning(push)
 #pragma warning(disable : 4100)                 // the fakes ignore most of their arguments
 
 template <class I> class Unknown : public I {
 public:
-    ULONG refs = 1;
+    // Atomic, because with the policy on a pool thread takes a reference to a pipeline while the DDI thread that
+    // created it has already gone on to the next create.
+    std::atomic<ULONG> refs{1};
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID, void** out) override {
         if (out) *out = nullptr;
         return E_NOINTERFACE;
@@ -202,6 +345,7 @@ public:
     std::vector<ID3D12PipelineState*> stored_pipelines;
     std::wstring last_loaded;
     std::vector<uint8_t> last_load_stream;
+    Digest last_load_digest;                    // the same stream with no address in it, read inside the load
     unsigned loads = 0, compute_loads = 0, desc_loads = 0, serializes = 0, size_queries = 0;
     SIZE_T serialized_size = 0;                 // what GetSerializedSize answers
     SIZE_T last_serialize_capacity = 0;
@@ -258,9 +402,11 @@ public:
         ++loads;
         last_loaded = name ? name : L"";
         last_load_stream.clear();
+        last_load_digest = Digest{};
         if (desc && desc->pPipelineStateSubobjectStream && desc->SizeInBytes) {
             const auto* bytes = static_cast<const uint8_t*>(desc->pPipelineStateSubobjectStream);
             last_load_stream.assign(bytes, bytes + desc->SizeInBytes);
+            last_load_digest = digest_of(desc->pPipelineStateSubobjectStream, desc->SizeInBytes);
         }
         if (FAILED(load_result)) {
             if (out) *out = nullptr;
@@ -272,7 +418,7 @@ public:
 
 // The engine device: root signatures, the stream entry of ID3D12Device2, the compute entry, and a count of the
 // older graphics entry. Anything else of ID3D12Device4 is unexpected on this path and counted.
-class FakeDevice final : public Object<ID3D12Device4> {
+class FakeDevice : public Object<ID3D12Device4> {
 public:
     FakeRootSignature root;
     FakePipeline pipeline;
@@ -283,10 +429,12 @@ public:
     SIZE_T last_library_blob_size = 0;
     HRESULT library_result = S_OK;
     std::vector<uint8_t> last_stream;
-    // The view instance locations, read while the call is live. VIEW_INSTANCING carries a pointer, and the array
-    // behind it belongs to engine-ddi's own frame for the length of the create only (pipelines.cpp,
-    // put_view_instancing), exactly as the engine's own create reads it; after the call that pointer is stale.
+    // The view instance locations, read inside the call. VIEW_INSTANCING carries a pointer, and the array behind it
+    // belongs to the plan of this create (pipelines.cpp, put_view_instancing), which the synchronous path keeps for
+    // the length of the call and the asynchronous one in the job; after the engine's create returns, that pointer
+    // is stale either way, exactly as the engine's own create reads it.
     std::vector<D3D12_VIEW_INSTANCE_LOCATION> last_locations;
+    Digest last_digest;                         // the last stream with no address in it, read inside the create
     HRESULT stream_result = S_OK;
 
     template <class T> T odd(T value) {
@@ -312,10 +460,12 @@ public:
         ++streams;
         last_stream.clear();
         last_locations.clear();
+        last_digest = Digest{};
         if (desc && desc->pPipelineStateSubobjectStream && desc->SizeInBytes) {
             const auto* bytes = static_cast<const uint8_t*>(desc->pPipelineStateSubobjectStream);
             if (reinterpret_cast<uintptr_t>(bytes) % sizeof(void*)) ++misaligned;
             last_stream.assign(bytes, bytes + desc->SizeInBytes);
+            last_digest = digest_of(desc->pPipelineStateSubobjectStream, desc->SizeInBytes);
             Stream read;
             read.parse(last_stream);
             const auto vi = read.value<D3D12_VIEW_INSTANCING_DESC>(
@@ -543,11 +693,12 @@ std::vector<UINT> program(D3D10_SB_TOKENIZED_PROGRAM_TYPE type) {
 // names. Every handle is a block of the size the matching CalcPrivate slot asks for, as the runtime's would be.
 class Fixture {
 public:
-    FakeDevice device;
+    FakeDevice own;                             // the engine device of a test that brings none of its own
+    FakeDevice& device;
     DeviceContext context;
     D3D12DDI_HDEVICE h{};
 
-    Fixture() {
+    explicit Fixture(FakeDevice* use = nullptr) : device(use ? *use : own) {
         context.hooks = {sizeof(ShellHooks), nullptr, device_error, list_error, device_lost, bind_table, nullptr,
                          nullptr};
         context.device = &device;
@@ -665,6 +816,169 @@ HRESULT create(Fixture& f, const D3D12DDIARG_CREATE_PIPELINE_STATE_0075& a, D3D1
     out.pDrvPrivate = f.storage(g_core.pfnCalcPrivatePipelineStateSize(f.h, &a));
     return g_core.pfnCreatePipelineState(f.h, &a, out, D3D12DDI_HRTPIPELINESTATE{});
 }
+
+// ---- BD-158: the asynchronous path -----------------------------------------------------------------------------
+// A gate the test shuts to hold every pool thread out of the compile it has claimed, so that a job can be seen
+// uncompiled and a consumer can reach one before any worker does. Pool threads only: a consumer that runs a job on
+// its own thread never goes through the run hook. Every wait is bounded, so a mistake here fails and never hangs.
+class Gate {
+public:
+    Gate() : event_(CreateEventW(nullptr, TRUE, TRUE, nullptr)) {}
+    ~Gate() {
+        if (event_) CloseHandle(event_);
+    }
+    Gate(const Gate&) = delete;
+    Gate& operator=(const Gate&) = delete;
+    bool ready() const noexcept { return event_ != nullptr; }
+    void shut() noexcept {
+        if (event_) ResetEvent(event_);
+    }
+    void release() noexcept {
+        if (event_) SetEvent(event_);
+    }
+    void wait() noexcept {
+        if (event_) WaitForSingleObject(event_, 10000);
+    }
+
+private:
+    HANDLE event_;
+};
+Gate g_gate;
+std::atomic<unsigned> g_runs{0};                // run hook entries: jobs handed to a pool thread
+std::atomic<unsigned> g_drains{0};              // drained hook calls, every one of them on a DDI thread
+
+void APIENTRY async_run(void*, PsoBody body, void* job) {
+    ++g_runs;
+    g_gate.wait();
+    body(job);
+}
+void APIENTRY async_drained(void*) { ++g_drains; }
+
+// The lines the policy's log hook was handed, which is the sink the shell gives engine-ddi. Written on whichever
+// thread printed the line; read by the checks below once that thread is accounted for.
+std::mutex g_log_lock;
+std::vector<std::string> g_log_lines;
+void APIENTRY async_log(void*, const char* line) {
+    std::lock_guard<std::mutex> held(g_log_lock);
+    g_log_lines.emplace_back(line ? line : "");
+}
+void clear_lines() {
+    std::lock_guard<std::mutex> held(g_log_lock);
+    g_log_lines.clear();
+}
+// Summary lines whose reason word is this one ("periodic", "process detach", "the device's destruction").
+unsigned summary_lines(const char* reason) {
+    std::lock_guard<std::mutex> held(g_log_lock);
+    unsigned found = 0;
+    for (const std::string& line : g_log_lines)
+        if (line.compare(0, 13, "pso summary (") == 0 && line.find(reason) != std::string::npos) ++found;
+    return found;
+}
+
+// The clock of the periodic line (pso-async.h), installed once before the first device of this program turns the
+// policy on. A period therefore passes because the test says it does, and no check waits for a real 30 seconds.
+std::atomic<uint64_t> g_fake_ms{1 << 20};
+uint64_t fake_clock() noexcept { return g_fake_ms.load(std::memory_order_relaxed); }
+
+// The engine device of these checks: every create of it is safe to make from several threads at once, it keeps the
+// digest of each, and it can be made to refuse. Only the two pipeline entries are overridden; every other call
+// stays the base's, which counts it as unexpected on this path.
+class AsyncDevice final : public FakeDevice {
+public:
+    std::mutex lock;
+    std::vector<Digest> digests;                // one per engine create, in the order the creates finished
+    std::atomic<unsigned> creates{0};
+    std::atomic<unsigned> computes{0};
+    std::atomic<unsigned> unaligned{0};
+    std::atomic<long> result{S_OK};             // what a create answers, as an HRESULT
+
+    HRESULT STDMETHODCALLTYPE CreatePipelineState(const D3D12_PIPELINE_STATE_STREAM_DESC* desc, REFIID riid,
+                                                 void** out) override {
+        Digest d;
+        if (desc) d = digest_of(desc->pPipelineStateSubobjectStream, desc->SizeInBytes);
+        return finish(std::move(d), riid, out);
+    }
+    HRESULT STDMETHODCALLTYPE CreateComputePipelineState(const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc, REFIID riid,
+                                                        void** out) override {
+        ++computes;
+        Digest d;
+        if (desc) {
+            d.read = true;
+            Subobject cs{D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS, {}};
+            append_bytes(cs.value, &desc->CS, sizeof(desc->CS));
+            d.types.push_back(cs.type);
+            d.values.push_back(pointer_free(cs));
+        }
+        return finish(std::move(d), riid, out);
+    }
+
+private:
+    HRESULT finish(Digest&& d, REFIID riid, void** out) {
+        if (!d.aligned) ++unaligned;
+        {
+            std::lock_guard<std::mutex> held(lock);
+            digests.push_back(std::move(d));
+        }
+        ++creates;
+        const HRESULT hr = static_cast<HRESULT>(result.load());
+        if (FAILED(hr)) {
+            if (out) *out = nullptr;
+            return hr;
+        }
+        return hand_out_pipeline(riid, out);
+    }
+};
+
+// set_pso_policy on for the length of a scope and off at its end, as the shell's open() and close() do it.
+class Async {
+public:
+    HRESULT hr = E_FAIL;
+
+    Async(DeviceContext* context, uint32_t workers, uint32_t summary_period_ms = 0) : context_(context) {
+        PsoPolicy policy{};
+        policy.size = sizeof(PsoPolicy);
+        policy.enabled = 1;
+        policy.workers = workers;
+        policy.summary_period_ms = summary_period_ms;
+        policy.run = async_run;
+        policy.drained = async_drained;
+        policy.log = async_log;
+        hr = set_pso_policy(context_, &policy);
+    }
+    ~Async() { off(); }
+    Async(const Async&) = delete;
+    Async& operator=(const Async&) = delete;
+    // The policy off, which ends every job of this device and joins the pool threads with the last device.
+    HRESULT off() noexcept {
+        PsoPolicy policy{};
+        policy.size = sizeof(PsoPolicy);
+        return set_pso_policy(context_, &policy);
+    }
+
+private:
+    DeviceContext* context_;
+};
+
+// Waits for a state another thread reaches, bounded: a check fails on a false answer, where a wait would hang.
+template <class Ready> bool until(Ready ready) {
+    for (unsigned i = 0; i < 10000 && !ready(); ++i) Sleep(1);
+    return ready();
+}
+
+// The job of a pipeline the DDI handed out, for a check that has to wait for one state of it (the records are
+// engine-ddi's own storage, which internal.h describes).
+const PsoJob* job_of(D3D12DDI_HPIPELINESTATE h) noexcept {
+    return static_cast<const PipelineRecord*>(h.pDrvPrivate)->job;
+}
+
+// Microseconds, for the one check that compares two paths by time and not by what they did.
+uint64_t now_us() noexcept {
+    LARGE_INTEGER frequency{}, counter{};
+    QueryPerformanceFrequency(&frequency);
+    QueryPerformanceCounter(&counter);
+    const uint64_t ticks = static_cast<uint64_t>(frequency.QuadPart ? frequency.QuadPart : 1);
+    return static_cast<uint64_t>(counter.QuadPart) * 1000000 / ticks;
+}
 } // namespace
 
 int main() {
@@ -672,6 +986,8 @@ int main() {
     setvbuf(stdout, nullptr, _IONBF, 0);
     _dup2(_fileno(stdout), _fileno(stderr));
     SetEnvironmentVariableA("AMDGPU_WDDM_LOG", "stderr");       // the sink is off by default (stdio-log.h)
+
+    pso_set_clock(fake_clock);              // before any device of this program turns the policy on (pso-async.h)
 
     const FillInfo fill{sizeof(FillInfo), resolve_device};
     check(fill_device_core(&g_core, sizeof(g_core), &fill) == S_OK, "core table filled");
@@ -908,7 +1224,9 @@ int main() {
         }
 
         // D34 with a LibraryReference: the same payload goes out as a load of the stream the create would have
-        // written, out of the library, and the pipeline that comes back is the library's, not the device's.
+        // written, out of the library, and the pipeline that comes back is the library's, not the device's. The
+        // two streams carry the same state and not the same bytes: every pipeline create copies the programs into
+        // a description of its own (BD-158, pso-async.h), so the addresses in the stream are its own as well.
         D3D12DDIARG_CREATE_PIPELINE_STATE_0075 load = a;
         HRESULT reopened_hr{};
         const auto reopened = f.pipeline_library(blob.data(), blob.size(), &reopened_hr);
@@ -936,13 +1254,15 @@ int main() {
         const HRESULT loaded_hr = create(f, load, loaded);
         check(loaded_hr == S_OK && f.device.library.loads == 1 && !f.device.library.desc_loads &&
                   f.device.streams == streams_before && f.device.library.last_loaded == L"0000002A" &&
-                  f.device.library.last_load_stream == f.device.last_stream &&
+                  f.device.library.last_load_stream.size() == f.device.last_stream.size() &&
+                  f.device.library.last_load_digest == f.device.last_digest &&
                   static_cast<const PipelineRecord*>(loaded.pDrvPrivate)->h.engine ==
                       static_cast<ID3D12PipelineState*>(&f.device.library.pipeline),
               "pipeline library: a create with a LibraryReference loads the index's name out of the library with "
               "the stream of the same payload, and never reaches the device's own entry (hr %08lx, loads %u, "
-              "streams %u, %zu stream bytes)", static_cast<unsigned long>(loaded_hr), f.device.library.loads,
-              f.device.streams, f.device.library.last_load_stream.size());
+              "streams %u, %zu stream bytes, %s)", static_cast<unsigned long>(loaded_hr), f.device.library.loads,
+              f.device.streams, f.device.library.last_load_stream.size(),
+              difference(f.device.library.last_load_digest, f.device.last_digest).c_str());
 
         // A compute pipeline keeps its own entry on the load path too: the engine's LoadComputePipeline.
         D3D12DDIARG_CREATE_PIPELINE_STATE_0075 compute{};
@@ -1059,6 +1379,514 @@ int main() {
               "blob included, and a size without a blob is refused before the engine (hr %08lx, %08lx, %08lx, "
               "%08lx)", static_cast<unsigned long>(mismatch), static_cast<unsigned long>(adapter),
               static_cast<unsigned long>(other), static_cast<unsigned long>(no_blob));
+    }
+
+    // 7. BD-158: asynchronous compilation on a pool of threads (set_pso_policy, pso-async.cpp).
+    // 7a. The policy's shape. Nothing starts a thread until the shape is the one the boundary names, and one
+    // device has one policy.
+    {
+        Fixture f;
+        PsoPolicy good{};
+        good.size = sizeof(PsoPolicy);
+        good.enabled = 1;
+        good.workers = 2;
+        good.run = async_run;
+        good.drained = async_drained;
+        PsoPolicy bad = good;
+        bad.size = sizeof(PsoPolicy) - sizeof(uint32_t);
+        const HRESULT wrong_size = set_pso_policy(&f.context, &bad);
+        bad = good;
+        bad.enabled = 2;
+        const HRESULT wrong_enabled = set_pso_policy(&f.context, &bad);
+        bad = good;
+        bad.workers = kMaxPsoWorkers + 1;
+        const HRESULT too_many = set_pso_policy(&f.context, &bad);
+        bad = good;
+        bad.run = nullptr;
+        const HRESULT no_run = set_pso_policy(&f.context, &bad);
+        bad = good;
+        bad.drained = nullptr;
+        const HRESULT no_drained = set_pso_policy(&f.context, &bad);
+        const HRESULT no_context = set_pso_policy(nullptr, &good);
+        const HRESULT no_policy = set_pso_policy(&f.context, nullptr);
+        check(wrong_size == E_INVALIDARG && wrong_enabled == E_INVALIDARG && too_many == E_INVALIDARG &&
+                  no_run == E_INVALIDARG && no_drained == E_INVALIDARG && no_context == E_INVALIDARG &&
+                  no_policy == E_INVALIDARG && pso_pool_workers() == 0,
+              "async policy: a wrong size, a wrong enabled, more workers than the pool takes, a missing hook, no "
+              "context and no policy are all E_INVALIDARG, and none of them starts a thread (%08lx %08lx %08lx "
+              "%08lx %08lx %08lx %08lx, %u threads)",
+              static_cast<unsigned long>(wrong_size), static_cast<unsigned long>(wrong_enabled),
+              static_cast<unsigned long>(too_many), static_cast<unsigned long>(no_run),
+              static_cast<unsigned long>(no_drained), static_cast<unsigned long>(no_context),
+              static_cast<unsigned long>(no_policy), pso_pool_workers());
+
+        const HRESULT on = set_pso_policy(&f.context, &good);
+        const uint32_t workers = pso_pool_workers();
+        const HRESULT again = set_pso_policy(&f.context, &good);
+        PsoPolicy off{};
+        off.size = sizeof(PsoPolicy);
+        const HRESULT off_hr = set_pso_policy(&f.context, &off);
+        const HRESULT off_again = set_pso_policy(&f.context, &off);
+        check(on == S_OK && workers == 2 && again == E_INVALIDARG && off_hr == S_OK && off_again == S_OK &&
+                  pso_pool_workers() == 0,
+              "async policy: two workers on, a second policy on one device refused, and the threads joined again "
+              "at off, which is also harmless twice (%08lx, %u threads, again %08lx, off %08lx %08lx, %u left)",
+              static_cast<unsigned long>(on), workers, static_cast<unsigned long>(again),
+              static_cast<unsigned long>(off_hr), static_cast<unsigned long>(off_again), pso_pool_workers());
+    }
+
+    // 7b. The create answers before the engine has seen the pipeline, and the state that arrives on the pool
+    // thread is the state the synchronous create of the same payload arrives with, view-instance locations and
+    // program bytes included - all of it read after the DDI call that named them has returned.
+    {
+        AsyncDevice device;
+        Fixture f(&device);
+        g_runs = 0;
+        g_drains = 0;
+        const D3D12DDI_VIEW_INSTANCE_LOCATION locations[3] = {{7, 1}, {0, 2}, {5, 3}};
+        D3D12DDIARG_CREATE_PIPELINE_STATE_0075 a = graphics_args(f, TRUE);
+        a.ViewInstancingDesc = {3, locations, D3D12DDI_VIEW_INSTANCING_FLAG_ENABLE_VIEW_INSTANCE_MASKING};
+
+        D3D12DDI_HPIPELINESTATE reference{};
+        const HRESULT sync_hr = create(f, a, reference);         // the path as it was before the policy existed
+        g_core.pfnDestroyPipelineState(f.h, reference);
+        const unsigned synchronous_creates = device.creates.load();
+
+        Async async(&f.context, 1);
+        g_gate.shut();                                           // the pool thread stops before it compiles
+        D3D12DDI_HPIPELINESTATE pso{};
+        const HRESULT hr = create(f, a, pso);
+        const unsigned at_return = device.creates.load() - synchronous_creates;
+        const bool handed_out = until([] { return g_runs.load() == 1; });
+        g_gate.release();
+
+        const D3D12DDI_HPIPELINELIBRARY library = f.pipeline_library(nullptr, 0);
+        const HRESULT stored = g_core.pfnAddPipelineStateToLibrary(f.h, library, pso, 0);
+        g_core.pfnCalcSerializedLibrarySize(f.h, library);           // where a deferred store is made (D89)
+        const PsoAsync* counters = f.context.pso;
+        const uint64_t queued = counters ? counters->queued.load() : 0;
+        const uint64_t by_worker = counters ? counters->by_worker.load() : 0;
+        const uint64_t by_consumer = counters ? counters->by_consumer.load() : 0;
+        const uint64_t synchronous = counters ? counters->synchronous.load() : 0;
+        check(async.hr == S_OK && sync_hr == S_OK && hr == S_OK && at_return == 0 && handed_out &&
+                  stored == S_OK && device.creates.load() == 2 && !device.unaligned.load() &&
+                  device.digests.size() == 2 && device.digests[0].read && device.digests[0] == device.digests[1],
+              "async create: S_OK with no engine create yet, then the same state on a pool thread as the "
+              "synchronous create of the payload (hr %08lx, engine creates at return %u, handed out %d, stored "
+              "%08lx, %u creates, %zu digests, %s)",
+              static_cast<unsigned long>(hr), at_return, handed_out ? 1 : 0, static_cast<unsigned long>(stored),
+              device.creates.load(), device.digests.size(), first_difference(device.digests).c_str());
+        check(queued == 1 && by_worker == 1 && by_consumer == 0 && synchronous == 0 && g_drains.load() >= 1,
+              "async create: counted as one queued job run by a pool thread, and the consumer called the drained "
+              "hook on its own thread (queued %llu, by a worker %llu, by the consumer %llu, synchronous %llu, "
+              "drains %u)", static_cast<unsigned long long>(queued), static_cast<unsigned long long>(by_worker),
+              static_cast<unsigned long long>(by_consumer), static_cast<unsigned long long>(synchronous),
+              g_drains.load());
+        g_core.pfnDestroyPipelineState(f.h, pso);
+        g_core.pfnDestroyPipelineLibrary(f.h, library);
+    }
+
+    // 7c. A game's loading thread: many creates in a row from one thread, then a consumer for each.
+    {
+        AsyncDevice device;
+        Fixture f(&device);
+        constexpr unsigned kCount = 64;
+        Async async(&f.context, 0);                              // the default: logical processors - 1
+        std::vector<D3D12DDI_HPIPELINESTATE> pipelines;
+        bool created = true;
+        for (unsigned i = 0; i < kCount; ++i) {
+            const D3D12DDIARG_CREATE_PIPELINE_STATE_0075 a = graphics_args(f, FALSE);
+            D3D12DDI_HPIPELINESTATE pso{};
+            created = create(f, a, pso) == S_OK && created;
+            pipelines.push_back(pso);
+        }
+        const D3D12DDI_HPIPELINELIBRARY library = f.pipeline_library(nullptr, 0);
+        bool consumed = true;
+        for (unsigned i = 0; i < kCount; ++i)
+            consumed = g_core.pfnAddPipelineStateToLibrary(f.h, library, pipelines[i], i) == S_OK && consumed;
+        g_core.pfnCalcSerializedLibrarySize(f.h, library);           // every deferred store, made here
+        const PsoAsync* counters = f.context.pso;
+        const uint64_t by_worker = counters ? counters->by_worker.load() : 0;
+        const uint64_t by_consumer = counters ? counters->by_consumer.load() : 0;
+        const uint64_t compile_failures = counters ? counters->failures.load() : 0;
+        bool same = device.digests.size() == kCount;
+        for (size_t i = 0; same && i < device.digests.size(); ++i)
+            same = device.digests[i].read && device.digests[i] == device.digests[0];
+        check(created && consumed && device.creates.load() == kCount && by_worker + by_consumer == kCount &&
+                  !compile_failures && same && pso_pool_workers() >= 1,
+              "async creates in a row: %u creates, %u engine creates, %llu by a worker and %llu by the consumer, "
+              "every stream the same state (created %d, consumed %d, %u pool threads, %s)",
+              kCount, device.creates.load(), static_cast<unsigned long long>(by_worker),
+              static_cast<unsigned long long>(by_consumer), created ? 1 : 0, consumed ? 1 : 0,
+              pso_pool_workers(), first_difference(device.digests).c_str());
+        for (const D3D12DDI_HPIPELINESTATE& pso : pipelines) g_core.pfnDestroyPipelineState(f.h, pso);
+        g_core.pfnDestroyPipelineLibrary(f.h, library);
+    }
+
+    // 7d. The same from four threads at once, which is the shape of a game that creates pipelines from its own
+    // worker threads. The payloads and the private storage are made first, so that the threads do nothing but
+    // call the slot.
+    {
+        AsyncDevice device;
+        Fixture f(&device);
+        struct Slot {
+            D3D12DDIARG_CREATE_PIPELINE_STATE_0075 args{};
+            D3D12DDI_HPIPELINESTATE pso{};
+            HRESULT hr = E_FAIL;
+        };
+        constexpr unsigned kThreads = 4;
+        constexpr unsigned kCount = 64;
+        std::vector<Slot> slots(kCount);
+        for (Slot& s : slots) {
+            s.args = graphics_args(f, FALSE);
+            s.pso.pDrvPrivate = f.storage(g_core.pfnCalcPrivatePipelineStateSize(f.h, &s.args));
+        }
+        Async async(&f.context, 0);
+        {
+            std::vector<std::thread> threads;
+            for (unsigned t = 0; t < kThreads; ++t)
+                threads.emplace_back([&slots, &f, t] {
+                    for (size_t i = t; i < slots.size(); i += kThreads)
+                        slots[i].hr = g_core.pfnCreatePipelineState(f.h, &slots[i].args, slots[i].pso,
+                                                                    D3D12DDI_HRTPIPELINESTATE{});
+                });
+            for (std::thread& t : threads) t.join();
+        }
+        const D3D12DDI_HPIPELINELIBRARY library = f.pipeline_library(nullptr, 0);
+        bool ok = true;
+        for (unsigned i = 0; i < kCount; ++i)
+            ok = slots[i].hr == S_OK &&
+                 g_core.pfnAddPipelineStateToLibrary(f.h, library, slots[i].pso, i) == S_OK && ok;
+        g_core.pfnCalcSerializedLibrarySize(f.h, library);
+        bool same = device.digests.size() == kCount;
+        for (size_t i = 0; same && i < device.digests.size(); ++i)
+            same = device.digests[i].read && device.digests[i] == device.digests[0];
+        check(ok && same && device.creates.load() == kCount && !device.unexpected,
+              "async creates from %u threads: %u pipelines created and consumed, %u engine creates, every stream "
+              "the same state (ok %d, unexpected %u, %s)",
+              kThreads, kCount, device.creates.load(), ok ? 1 : 0, device.unexpected,
+              first_difference(device.digests).c_str());
+        for (const Slot& s : slots) g_core.pfnDestroyPipelineState(f.h, s.pso);
+        g_core.pfnDestroyPipelineLibrary(f.h, library);
+    }
+
+    // 7e. A pipeline destroyed before anything used it: the compile that nobody waits for is not made at all.
+    {
+        AsyncDevice device;
+        Fixture f(&device);
+        g_runs = 0;
+        Async async(&f.context, 1);
+        g_gate.shut();
+        const D3D12DDIARG_CREATE_PIPELINE_STATE_0075 first_args = graphics_args(f, FALSE);
+        D3D12DDI_HPIPELINESTATE first{};
+        const HRESULT first_hr = create(f, first_args, first);
+        const bool parked = until([] { return g_runs.load() == 1; });   // the only worker holds the first job
+        const D3D12DDIARG_CREATE_PIPELINE_STATE_0075 spare_args = graphics_args(f, FALSE);
+        D3D12DDI_HPIPELINESTATE spare{};
+        const HRESULT spare_hr = create(f, spare_args, spare);
+        g_core.pfnDestroyPipelineState(f.h, spare);
+        const PsoAsync* counters = f.context.pso;
+        const uint64_t aborted = counters ? counters->aborted.load() : 0;
+        g_gate.release();
+        const D3D12DDI_HPIPELINELIBRARY library = f.pipeline_library(nullptr, 0);
+        const HRESULT stored = g_core.pfnAddPipelineStateToLibrary(f.h, library, first, 0);
+        g_core.pfnCalcSerializedLibrarySize(f.h, library);
+        check(first_hr == S_OK && spare_hr == S_OK && parked && aborted == 1 && stored == S_OK &&
+                  device.creates.load() == 1,
+              "async destroy before use: the queued job ends with no engine create, and the other pipeline is "
+              "unaffected (hr %08lx %08lx, parked %d, ended without a create %llu, stored %08lx, %u engine "
+              "creates)", static_cast<unsigned long>(first_hr), static_cast<unsigned long>(spare_hr),
+              parked ? 1 : 0, static_cast<unsigned long long>(aborted), static_cast<unsigned long>(stored),
+              device.creates.load());
+        g_core.pfnDestroyPipelineState(f.h, first);
+        g_core.pfnDestroyPipelineLibrary(f.h, library);
+    }
+
+    // 7f. A consumer that arrives before any worker took the job makes the compile on its own thread, which is
+    // what keeps a one-core machine and a busy pool from waiting for a queue.
+    {
+        AsyncDevice device;
+        Fixture f(&device);
+        g_runs = 0;
+        Async async(&f.context, 1);
+        g_gate.shut();
+        const D3D12DDIARG_CREATE_PIPELINE_STATE_0075 held_args = graphics_args(f, FALSE);
+        D3D12DDI_HPIPELINESTATE held{};
+        const HRESULT held_hr = create(f, held_args, held);
+        const bool parked = until([] { return g_runs.load() == 1; });
+        const D3D12DDIARG_CREATE_PIPELINE_STATE_0075 mine_args = graphics_args(f, FALSE);
+        D3D12DDI_HPIPELINESTATE mine{};
+        const HRESULT mine_hr = create(f, mine_args, mine);
+        const D3D12DDI_HPIPELINELIBRARY library = f.pipeline_library(nullptr, 0);
+        const HRESULT stored = g_core.pfnAddPipelineStateToLibrary(f.h, library, mine, 0);
+        g_core.pfnCalcSerializedLibrarySize(f.h, library);           // the store, and with it the compile, here
+        const unsigned creates_after = device.creates.load();
+        const PsoAsync* counters = f.context.pso;
+        const uint64_t by_consumer = counters ? counters->by_consumer.load() : 0;
+        const uint64_t waits = counters ? counters->waits.load() : 0;
+        g_gate.release();
+        check(held_hr == S_OK && mine_hr == S_OK && parked && stored == S_OK && by_consumer == 1 && !waits &&
+                  creates_after == 1 && g_runs.load() == 1,
+              "async consumer before worker: the consumer compiles the queued job itself and waits for nothing "
+              "(stored %08lx, by the consumer %llu, waits %llu, engine creates %u, run hooks %u)",
+              static_cast<unsigned long>(stored), static_cast<unsigned long long>(by_consumer),
+              static_cast<unsigned long long>(waits), creates_after, g_runs.load());
+        g_core.pfnDestroyPipelineState(f.h, mine);
+        g_core.pfnDestroyPipelineState(f.h, held);
+        g_core.pfnDestroyPipelineLibrary(f.h, library);
+    }
+
+    // 7g. A compile that fails after the create answered S_OK: every consumer gets a failure of its own, the
+    // engine is asked once, and the pipeline is never handed out.
+    {
+        AsyncDevice device;
+        Fixture f(&device);
+        device.result = E_INVALIDARG;
+        Async async(&f.context, 1);
+        const D3D12DDIARG_CREATE_PIPELINE_STATE_0075 a = graphics_args(f, FALSE);
+        D3D12DDI_HPIPELINESTATE pso{};
+        const HRESULT hr = create(f, a, pso);
+        const bool compiled = until([&] { return !pso_pending(job_of(pso)); });
+        const D3D12DDI_HPIPELINELIBRARY library = f.pipeline_library(nullptr, 0);
+        const HRESULT first = g_core.pfnAddPipelineStateToLibrary(f.h, library, pso, 0);
+        const HRESULT second = g_core.pfnAddPipelineStateToLibrary(f.h, library, pso, 1);
+        const PsoAsync* counters = f.context.pso;
+        const uint64_t compile_failures = counters ? counters->failures.load() : 0;
+        check(hr == S_OK && compiled && first == E_OUTOFMEMORY && second == E_OUTOFMEMORY &&
+                  compile_failures == 1 && device.creates.load() == 1 && device.library.stored.empty(),
+              "async failure after S_OK: the create answered S_OK, both consumers answer the code a creation slot "
+              "admits, the engine was asked once and the library stored nothing (hr %08lx, compiled %d, %08lx, "
+              "%08lx, failures %llu, %u engine creates, %zu stored)", static_cast<unsigned long>(hr),
+              compiled ? 1 : 0, static_cast<unsigned long>(first), static_cast<unsigned long>(second),
+              static_cast<unsigned long long>(compile_failures), device.creates.load(),
+              device.library.stored.size());
+        g_core.pfnDestroyPipelineState(f.h, pso);
+        g_core.pfnDestroyPipelineLibrary(f.h, library);
+    }
+
+    // 7h. The device's destruction with a job still queued: the policy off ends it without an engine create, and
+    // a consumer that comes afterwards is answered a failure rather than "no pipeline at all", which would draw
+    // with whatever the list had bound.
+    {
+        AsyncDevice device;
+        Fixture f(&device);
+        g_runs = 0;
+        Async async(&f.context, 1);
+        g_gate.shut();
+        const D3D12DDIARG_CREATE_PIPELINE_STATE_0075 held_args = graphics_args(f, FALSE);
+        D3D12DDI_HPIPELINESTATE held{};
+        const HRESULT held_hr = create(f, held_args, held);
+        const bool parked = until([] { return g_runs.load() == 1; });
+        const D3D12DDIARG_CREATE_PIPELINE_STATE_0075 stranded_args = graphics_args(f, FALSE);
+        D3D12DDI_HPIPELINESTATE stranded{};
+        const HRESULT stranded_hr = create(f, stranded_args, stranded);
+        const auto* record = static_cast<const PipelineRecord*>(stranded.pDrvPrivate);
+        // The policy off on another thread: it ends the queued job, then joins the pool thread this test holds.
+        std::thread off([&async] { (void)async.off(); });
+        const bool ended = record->job && until([record] {
+            return record->job->state.load(std::memory_order_acquire) == static_cast<uint32_t>(PsoState::Done);
+        });
+        g_gate.release();
+        off.join();
+        const D3D12DDI_HPIPELINELIBRARY library = f.pipeline_library(nullptr, 0);
+        const HRESULT stored = g_core.pfnAddPipelineStateToLibrary(f.h, library, stranded, 0);
+        check(held_hr == S_OK && stranded_hr == S_OK && parked && ended && stored == E_OUTOFMEMORY &&
+                  device.creates.load() == 1 && f.context.pso == nullptr && pso_pool_workers() == 0,
+              "async device destruction: the queued job ends with no engine create and its consumer is refused "
+              "(hr %08lx %08lx, parked %d, ended %d, stored %08lx, %u engine creates, %u pool threads)",
+              static_cast<unsigned long>(held_hr), static_cast<unsigned long>(stranded_hr), parked ? 1 : 0,
+              ended ? 1 : 0, static_cast<unsigned long>(stored), device.creates.load(), pso_pool_workers());
+        g_core.pfnDestroyPipelineState(f.h, stranded);
+        g_core.pfnDestroyPipelineState(f.h, held);
+        g_core.pfnDestroyPipelineLibrary(f.h, library);
+    }
+
+    // 7i. A store of a pipeline whose compile is still running: the store answers at once and reaches the engine
+    // when the blob is collected, and a size another thread held before it does not become a capacity.
+    {
+        AsyncDevice device;
+        Fixture f(&device);
+        device.library.serialized_size = 4096;
+        Async async(&f.context, 1);
+        g_gate.shut();                                               // no compile finishes while the gate is shut
+        const D3D12DDI_HPIPELINELIBRARY library = f.pipeline_library(nullptr, 0);
+        const SIZE_T early_size = g_core.pfnCalcSerializedLibrarySize(f.h, library);
+        const D3D12DDIARG_CREATE_PIPELINE_STATE_0075 a = graphics_args(f, FALSE);
+        D3D12DDI_HPIPELINESTATE pso{};
+        const HRESULT created = create(f, a, pso);
+        const HRESULT stored = g_core.pfnAddPipelineStateToLibrary(f.h, library, pso, 9);
+        const size_t at_store = device.library.stored.size();
+        const unsigned creates_at_store = device.creates.load();
+        std::vector<uint8_t> blob(4096, 0);
+        g_gate.release();
+        // This serialize makes the deferred store and is then refused: the size it was given before the store was
+        // deferred describes a shorter blob than the library now holds.
+        const HRESULT stale = g_core.pfnSerializeLibrary(f.h, library, blob.data());
+        const SIZE_T size = g_core.pfnCalcSerializedLibrarySize(f.h, library);
+        const HRESULT wrote = g_core.pfnSerializeLibrary(f.h, library, blob.data());
+        check(created == S_OK && stored == S_OK && !at_store && !creates_at_store && early_size == 4096 &&
+                  stale == E_OUTOFMEMORY && size == 4096 && wrote == S_OK &&
+                  device.library.stored.size() == 1 && device.library.stored[0] == L"00000009" &&
+                  device.creates.load() == 1,
+              "async deferred store: the store answers S_OK with no engine call at all, the size a thread held "
+              "before it is no capacity any more, and the collected blob carries the pipeline (created %08lx, "
+              "stored %08lx, stored at the call %zu, engine creates at the call %u, stale serialize %08lx, size "
+              "%zu, serialize %08lx, %zu stored, %u engine creates)",
+              static_cast<unsigned long>(created), static_cast<unsigned long>(stored), at_store, creates_at_store,
+              static_cast<unsigned long>(stale), static_cast<size_t>(size), static_cast<unsigned long>(wrote),
+              device.library.stored.size(), device.creates.load());
+        g_core.pfnDestroyPipelineState(f.h, pso);
+        g_core.pfnDestroyPipelineLibrary(f.h, library);
+    }
+
+    // 7j. The pipeline's destroy is the last chance of a store that still waits, and a library that is destroyed
+    // with stores waiting compiles none of them.
+    {
+        AsyncDevice device;
+        Fixture f(&device);
+        Async async(&f.context, 1);
+        g_gate.shut();
+        const D3D12DDI_HPIPELINELIBRARY kept = f.pipeline_library(nullptr, 0);
+        const D3D12DDIARG_CREATE_PIPELINE_STATE_0075 a = graphics_args(f, FALSE);
+        D3D12DDI_HPIPELINESTATE destroyed_first{};
+        const HRESULT created = create(f, a, destroyed_first);
+        const HRESULT stored = g_core.pfnAddPipelineStateToLibrary(f.h, kept, destroyed_first, 3);
+        g_gate.release();
+        g_core.pfnDestroyPipelineState(f.h, destroyed_first);        // the store is made here, with the pipeline
+        const size_t after_destroy = device.library.stored.size();
+        const unsigned creates_after_destroy = device.creates.load();
+
+        const D3D12DDI_HPIPELINELIBRARY given_up = f.pipeline_library(nullptr, 0);
+        g_gate.shut();
+        const D3D12DDIARG_CREATE_PIPELINE_STATE_0075 b = graphics_args(f, FALSE);
+        D3D12DDI_HPIPELINESTATE dropped{};
+        const HRESULT created_dropped = create(f, b, dropped);
+        const HRESULT stored_dropped = g_core.pfnAddPipelineStateToLibrary(f.h, given_up, dropped, 4);
+        g_core.pfnDestroyPipelineLibrary(f.h, given_up);              // nothing of it is ever read
+        const unsigned creates_after_library = device.creates.load();
+        g_gate.release();
+        check(created == S_OK && stored == S_OK && after_destroy == 1 && creates_after_destroy == 1 &&
+                  device.library.stored[0] == L"00000003" && created_dropped == S_OK && stored_dropped == S_OK &&
+                  creates_after_library == 1,
+              "async deferred store: a destroy of the pipeline makes the store it still owes, and a destroy of the "
+              "library drops it without a compile (stored after the destroy %zu, engine creates %u, then %u after "
+              "the library's destroy)", after_destroy, creates_after_destroy, creates_after_library);
+        g_core.pfnDestroyPipelineState(f.h, dropped);
+        g_core.pfnDestroyPipelineLibrary(f.h, kept);
+    }
+
+    // 7k. The warm path: a create whose engine answers at once, which is what the engine's own disk cache makes of
+    // it (BD-158: the warm start of Death Stranding is a cache hit for every pipeline). The pool must not make
+    // that path slower in a way a loading screen would notice. Reported, not gated: this machine is not the lab,
+    // and a time is not a contract.
+    {
+        constexpr unsigned kCount = 256;
+        uint64_t off_us = 0, on_us = 0;
+        unsigned off_creates = 0, on_creates = 0;
+        for (unsigned pass = 0; pass < 2; ++pass) {
+            AsyncDevice device;
+            Fixture f(&device);
+            std::vector<D3D12DDIARG_CREATE_PIPELINE_STATE_0075> args(kCount);
+            std::vector<D3D12DDI_HPIPELINESTATE> pipelines(kCount);
+            for (unsigned i = 0; i < kCount; ++i) {
+                args[i] = graphics_args(f, FALSE);
+                pipelines[i].pDrvPrivate = f.storage(g_core.pfnCalcPrivatePipelineStateSize(f.h, &args[i]));
+            }
+            const D3D12DDI_HPIPELINELIBRARY library = f.pipeline_library(nullptr, 0);
+            Async async(&f.context, pass ? 0u : 1u);
+            if (!pass) (void)async.off();                            // pass 0: the path as it was, on this thread
+            const uint64_t start = now_us();
+            for (unsigned i = 0; i < kCount; ++i) {
+                g_core.pfnCreatePipelineState(f.h, &args[i], pipelines[i], D3D12DDI_HRTPIPELINESTATE{});
+                g_core.pfnAddPipelineStateToLibrary(f.h, library, pipelines[i], i);
+            }
+            g_core.pfnCalcSerializedLibrarySize(f.h, library);        // every store, deferred or not, is made
+            const uint64_t spent = now_us() - start;
+            if (pass) {
+                on_us = spent;
+                on_creates = device.creates.load();
+            } else {
+                off_us = spent;
+                off_creates = device.creates.load();
+            }
+            for (const D3D12DDI_HPIPELINESTATE& pso : pipelines) g_core.pfnDestroyPipelineState(f.h, pso);
+            g_core.pfnDestroyPipelineLibrary(f.h, library);
+        }
+        check(off_creates == kCount && on_creates == kCount,
+              "warm path: %u creates and stores with the policy off in %llu us, with it on in %llu us "
+              "(%llu and %llu us each; engine creates %u and %u)", kCount,
+              static_cast<unsigned long long>(off_us), static_cast<unsigned long long>(on_us),
+              static_cast<unsigned long long>(off_us / kCount), static_cast<unsigned long long>(on_us / kCount),
+              off_creates, on_creates);
+    }
+
+    // 7l. The periodic counter line (BD-158, trials 598-600: Death Stranding never destroys its device, so the
+    // summary of the destruction is never reached in a game). One line a period while the device compiles, and
+    // nothing at all while it only binds what is already compiled.
+    {
+        AsyncDevice device;
+        Fixture f(&device);
+        constexpr uint32_t kPeriod = 1000;
+        Async async(&f.context, 1, kPeriod);
+        const D3D12DDI_HPIPELINELIBRARY library = f.pipeline_library(nullptr, 0);
+        const D3D12DDIARG_CREATE_PIPELINE_STATE_0075 a = graphics_args(f, FALSE);
+        D3D12DDI_HPIPELINESTATE first{}, second{}, third{};
+        const HRESULT first_hr = create(f, a, first);
+        const HRESULT second_hr = create(f, a, second);
+        const bool compiled = until([&] { return !pso_pending(job_of(first)) && !pso_pending(job_of(second)); });
+        clear_lines();
+        // Inside the period: a consumer of a compiled pipeline, with every compile of this device already counted.
+        g_core.pfnAddPipelineStateToLibrary(f.h, library, first, 0);
+        const unsigned inside = summary_lines("periodic");
+        // The period passes: the next consumer writes the line, which is the only one for all of this work.
+        g_fake_ms += kPeriod;
+        g_core.pfnAddPipelineStateToLibrary(f.h, library, second, 1);
+        const unsigned after_period = summary_lines("periodic");
+        // Another period with no compilation at all: a bind of what is compiled writes nothing.
+        g_fake_ms += kPeriod;
+        g_core.pfnAddPipelineStateToLibrary(f.h, library, first, 2);
+        const unsigned idle = summary_lines("periodic");
+        // New work in a period that has passed: the line comes back.
+        const HRESULT third_hr = create(f, a, third);
+        const unsigned working = summary_lines("periodic");
+        check(first_hr == S_OK && second_hr == S_OK && third_hr == S_OK && compiled && inside == 0 &&
+                  after_period == 1 && idle == 1 && working == 2,
+              "async periodic summary: no line inside the period, one when it has passed, none for a period of "
+              "binds alone, and one again when a create arrives (compiled %d, lines %u, %u, %u, %u)",
+              compiled ? 1 : 0, inside, after_period, idle, working);
+        g_core.pfnDestroyPipelineState(f.h, third);
+        g_core.pfnDestroyPipelineState(f.h, second);
+        g_core.pfnDestroyPipelineState(f.h, first);
+        g_core.pfnDestroyPipelineLibrary(f.h, library);
+    }
+
+    // 7m. The last print site: a process that unloads the DLL without destroying its device (the Death Stranding
+    // exit) still writes the counters, and the call changes nothing else - no join, no policy off, no pool thread
+    // touched - so that the shell may make it from DllMain.
+    {
+        AsyncDevice device;
+        Fixture f(&device);
+        Async async(&f.context, 1);
+        const D3D12DDIARG_CREATE_PIPELINE_STATE_0075 a = graphics_args(f, FALSE);
+        D3D12DDI_HPIPELINESTATE pso{};
+        const HRESULT hr = create(f, a, pso);
+        const bool compiled = until([&] { return !pso_pending(job_of(pso)); });
+        const uint32_t workers_before = pso_pool_workers();
+        clear_lines();
+        const uint32_t written = pso_detach_summary();                // the device is never destroyed before this
+        const unsigned lines = summary_lines("process detach");
+        const bool still_on = f.context.pso != nullptr;
+        const uint32_t workers_after = pso_pool_workers();
+        g_core.pfnDestroyPipelineState(f.h, pso);
+        const HRESULT off = async.off();
+        const uint32_t after_off = pso_detach_summary();              // nothing is left to write
+        check(hr == S_OK && compiled && written == 1 && lines == 1 && still_on && workers_before == 1 &&
+                  workers_after == 1 && off == S_OK && after_off == 0,
+              "async detach summary: one line for the device that was never destroyed, the policy and the pool "
+              "untouched, and nothing written once the policy is off (hr %08lx, compiled %d, written %u, lines %u, "
+              "still on %d, pool %u then %u, off %08lx, after the policy off %u)",
+              static_cast<unsigned long>(hr), compiled ? 1 : 0, written, lines, still_on ? 1 : 0, workers_before,
+              workers_after, static_cast<unsigned long>(off), after_off);
     }
 
     std::printf("%s\n", failures ? "FAILED" : "PASSED");

@@ -58,6 +58,8 @@ namespace AmdgpuWddmControl
                 "Submissions keep the release sequence. The default leaves it to the resource DDIs."),
             new ProfileSwitch("deferred-replay-off", "Do not record commands on worker threads",
                 "Command list calls go to the GPU driver in line. The default sends them through a queue and worker threads, which can raise the frame rate in CPU-limited games."),
+            new ProfileSwitch("async-pso-off", "Do not compile shaders on worker threads",
+                "Shaders are compiled when the game asks for them, one at a time. The default compiles them on every core, which shortens the pauses when a scene is drawn for the first time."),
             new ProfileSwitch("direct-entry-off", "Do not let the engine record value-only calls",
                 "The shell keeps its own entry for the value-only recording calls. The default gives it to the engine, which writes their queue entries itself."),
             new ProfileSwitch("release-two-phase-off", "Turn off the two-phase release (diagnostic)",

@@ -7,6 +7,7 @@
 #include <cstdint>
 #include "device-state.h"
 #include "device-engine.h"
+#include "engine-ddi/engine-ddi.h"              // pso_detach_summary, for DllMain below
 #include "native-tables.h"
 #include "adapter-caps.h"
 #include "ddi-0092-layout.h"
@@ -173,6 +174,21 @@ void APIENTRY destroy_device(D3D12DDI_HDEVICE h) {
     // These are CPU records only. OS context reclamation remains a lab acceptance gate.
     device->~Device();--adapter->devices;trace("DestroyDevice");
 }
+}
+// The shell's only DllMain. It exists for one line: the counters of the pipeline compile pool of every device that
+// still has the policy on (engine-ddi.h, pso_detach_summary), for a game that unloads this driver without
+// destroying its D3D12 device. Nothing else happens here, and nothing that can block: no join, no wait, no
+// allocation, no lock that is not free at once.
+//
+// Only on a FreeLibrary (lpReserved null). A process that is terminating gets nothing: its other threads are gone
+// already, one of them may hold the log, and a line is not worth a hang at exit. A game that exits that way leaves
+// its numbers in the periodic line instead (device-engine.cpp, kPsoSummaryPeriodMs).
+extern "C" BOOL WINAPI DllMain(HINSTANCE,DWORD reason,LPVOID reserved) {
+    if(reason==DLL_PROCESS_DETACH && !reserved){
+        const unsigned written=engine_ddi::pso_detach_summary();
+        if(written)trace("DllMain-pso-summary",written);
+    }
+    return TRUE;
 }
 extern "C" __declspec(dllexport) HRESULT APIENTRY OpenAdapter12(D3D12DDIARG_OPENADAPTER* a) {
     if(!a) return E_INVALIDARG;

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // engine-ddi: device context, resolver, table filling with fail-safes and the release sequence.
 #include "internal.h"
+#include "pso-async.h"
 #include "replay.h"
 #include <cstdarg>
 #include <cstdio>
@@ -343,6 +344,24 @@ HRESULT set_retire_policy(DeviceContext* context, const RetirePolicy* policy) no
     return S_OK;
 }
 
+// Asynchronous pipeline compilation (pso-async.h). enabled 1 only before the context is used on another thread,
+// and only once: a second one would leave the first pool membership behind. enabled 0 ends the jobs and leaves the
+// pool, which the context's destroy does anyway, so the shell may call either.
+HRESULT set_pso_policy(DeviceContext* context, const PsoPolicy* policy) noexcept {
+    if (!context || !policy || policy->size != sizeof(PsoPolicy) || policy->enabled > 1 ||
+        policy->workers > kMaxPsoWorkers || (policy->enabled && (context->pso || !policy->run || !policy->drained))) {
+        log_refusal("set_pso_policy: refused (%s)", !context ? "no context" : !policy ? "no policy" :
+                    policy->size != sizeof(PsoPolicy) ? "size" : policy->enabled > 1 ? "enabled" :
+                    policy->workers > kMaxPsoWorkers ? "workers" : context->pso ? "already on" : "hook");
+        return E_INVALIDARG;
+    }
+    if (!policy->enabled) {
+        pso_off(context);
+        return S_OK;
+    }
+    return pso_on(context, policy);
+}
+
 HRESULT set_release_policy(DeviceContext* context, const ReleasePolicy* policy) noexcept {
     if (!context || !policy || policy->size != sizeof(ReleasePolicy) || policy->two_phase > 1) {
         log_refusal("set_release_policy: refused (%s)", !context ? "no context" : !policy ? "no policy" :
@@ -363,6 +382,7 @@ template <class T> void release_ref(T*& p) noexcept {
 
 void destroy(DeviceContext* c) noexcept {
     replay_off(c);                              // the workers first: their pending calls name the engine device
+    pso_off(c);                                 // then the compile pool: every pipeline of this device is gone
     release_initialization(c);
     release_ref(c->empty_local);
     release_ref(c->device10);

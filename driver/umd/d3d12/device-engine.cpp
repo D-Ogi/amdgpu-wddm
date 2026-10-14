@@ -33,6 +33,13 @@ constexpr uint32_t kRetireAgeBoundMs=250;
 // ring. 4 MiB holds a frame of tens of thousands of small calls; a fuller ring makes its thread wait (counted).
 constexpr uint32_t kReplayRings=8;
 constexpr uint32_t kReplayRingBytes=4u<<20;
+// Asynchronous pipeline compilation (BD-158): 0 asks engine-ddi for logical processors - 1 compile threads, which
+// is what a cold shader load wants - one core stays for the thread that creates the pipelines.
+constexpr uint32_t kPsoWorkers=0;
+// The counters of the pool, written every half minute while pipelines are being made and never while the device is
+// idle. The line at the device's destruction is not enough: Death Stranding exits without destroying its D3D12
+// device at all (lab trials 598-600), so this is the line a game like it leaves behind.
+constexpr uint32_t kPsoSummaryPeriodMs=30000;
 void stage(const char* name,HRESULT result) noexcept {
     if(FAILED(result))ddi_failure_note(name,result);
     amdgpu_wddm_log::print("d3d12-engine %s result=%08lx\n",name,static_cast<unsigned long>(result));
@@ -67,6 +74,7 @@ class DeviceEngine final {
     // active_ turns false once, at close or retain, after the runtime has ended every entry.
     std::atomic<bool> active_{true};
     bool replay_{};                             // the deferred-replay policy is on (open, close)
+    bool pso_{};                                // the asynchronous pipeline-compile policy is on (open, close)
     ReplayLog replay_log_;                      // experiment replay-log: the replay lines' own file (replay-log.h)
     std::atomic<bool> binding_failed_{};
     std::atomic<UINT64> callback_sequence_{};
@@ -161,6 +169,16 @@ class DeviceEngine final {
         bc250::umd::RuntimeDomain::Scope runtime(self.domain_);
         HostedDispatch::WorkerScope worker(self.dispatch_);
         body(ring);
+    }
+    // Asynchronous pipeline compilation (engine-ddi set_pso_policy, BD-158). A compile thread needs the same scope
+    // as a replay worker: the engine's pipeline create allocates device memory and uploads shader code through the
+    // runtime callbacks of the hosted Vulkan driver, which is device-level work that HostedDispatch::worker_admits
+    // allows, and it must make no context or queue operation and no error callback of its own.
+    static void APIENTRY pso_worker(void* shell,engine_ddi::PsoBody body,void* job) {
+        auto& self=*static_cast<DeviceEngine*>(shell);
+        bc250::umd::RuntimeDomain::Scope runtime(self.domain_);
+        HostedDispatch::WorkerScope worker(self.dispatch_);
+        body(job);
     }
     static void APIENTRY replay_drained(void* shell) {static_cast<DeviceEngine*>(shell)->dispatch_.report_deferred_removal();}
     static void APIENTRY replay_log(void* shell,const char* line) {static_cast<DeviceEngine*>(shell)->replay_log_.write(line);}
@@ -370,6 +388,22 @@ public:
             replay_=true;
             ddi_mode2_note("amdgpu_wddm_d3d12 deferred-replay on\n");
         }
+        // Asynchronous pipeline compilation, on unless the experiment async-pso-off says otherwise (BD-158,
+        // engine-ddi.h set_pso_policy): pfnCreatePipelineState validates and copies on the calling thread and
+        // returns S_OK, and the engine's create runs on a process-wide pool, so a game that creates its pipelines
+        // from one thread compiles them on every core. Set before any pipeline exists. The counters go to this
+        // shell's log at the device's destruction, every kPsoSummaryPeriodMs while pipelines are being made, and
+        // from DllMain when this DLL is unloaded without a device destruction at all (adapter.cpp).
+        if(!ddi_experiment_off("async-pso")){
+            engine_ddi::PsoPolicy policy{};
+            policy.size=sizeof(policy);policy.enabled=1;policy.workers=kPsoWorkers;
+            policy.summary_period_ms=kPsoSummaryPeriodMs;
+            policy.shell=this;policy.run=pso_worker;policy.drained=replay_drained;
+            result=engine_ddi::set_pso_policy(context_,&policy);stage("AsyncPso",result);
+            if(result!=S_OK)return result;
+            pso_=true;
+            ddi_mode2_note("amdgpu_wddm_d3d12 async-pso on\n");
+        }
         auto ops=QueueEngineOps::native();ops.close=checked_close;ops.check_health=health;ops.health_cookie=this;
         queues_.reset(new(std::nothrow) QueueEngineRegistry(device_,context_,ops));
         if(!queues_)return E_OUTOFMEMORY;
@@ -386,6 +420,14 @@ public:
             HRESULT hr=engine_ddi::set_replay_policy(context_,&off);stage("DeferredReplay-off",hr);
             if(hr!=S_OK)return false;
             replay_=false;
+        }
+        // Then the compile pool: every pipeline of this device is destroyed by now, so this ends nothing but the
+        // pool membership, and writes the counters.
+        if(pso_ && context_){
+            engine_ddi::PsoPolicy off{};off.size=sizeof(off);
+            HRESULT hr=engine_ddi::set_pso_policy(context_,&off);stage("AsyncPso-off",hr);
+            if(hr!=S_OK)return false;
+            pso_=false;
         }
         if(queues_){unsigned unresolved=0;
             HRESULT hr=queues_->discard_retired_metadata(unresolved);stage("QueueMetadata",hr);

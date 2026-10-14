@@ -138,6 +138,40 @@ Nothing waits on the CPU: both phases read the queues' state words and fences at
   multithreaded recording with destroys, the worker's priority and the diagnostics through the log hook; the harness's `--deferred-replay` run repeats every harness check with
   the policy on.
 
+**Asynchronous pipeline compilation.** `set_pso_policy`, off by default. The shell turns it on unless the
+`async-pso-off` experiment says otherwise (BD-158). The ownership rules P1 to P5 are in `pso-async.h`.
+- Off, `pfnCreatePipelineState` makes the engine's pipeline on the calling thread, as before: no job, no pool.
+- On, the slot still validates, translates and refuses on the calling thread, then copies every byte the engine
+  create reads into a `PsoPlan` (the subobject stream, each program's bytecode, the input layout with its
+  semantic names, the stream-output entries and strides, the view-instance locations, and one reference on the
+  root signature), queues it and returns `S_OK`. A plan that cannot be made leaves the create synchronous.
+- One process-wide pool, `workers` threads (the shell: logical processors - 1), joined by the last device that
+  leaves. Nothing is joined in `DllMain`.
+- Every consumer of the pipeline resolves its job first: `SetPipelineState`, a library store, a destroy and the
+  device's own teardown. A job no worker has started is run on the consumer's thread. A running one is waited
+  for on a pool-global word with a bounded `WaitOnAddress`, so a lost wake is a latency and never a hang. The
+  wait is on the recording thread, not in a replay worker: a ring is in order, so a worker held inside a compile
+  would hold back every later call of its thread.
+- A compile that fails after the `S_OK` is logged once and refused at every use: no bind is recorded, and the
+  code goes to the recording list (`report_list`), so no draw runs with a pipeline the engine refused.
+- A store into a pipeline library records the pipeline and its index. The engine's `StorePipeline` is made at the
+  first `CalcSerializedLibrarySize` or `SerializeLibrary`, or at the pipeline's destroy, because only those read
+  the blob. A library load stays synchronous: its `E_INVALIDARG` on a miss is the application's own signal.
+- Counters per device, written to the shell's log: creates queued, creates kept synchronous, jobs run by a
+  worker, jobs run by a consumer, waits with their total and longest time, failures, and jobs ended without a
+  create. Three print sites, each named in the line as its reason. The first is the device's destruction. The
+  second is every `summary_period_ms` (the shell: 30 s), written by a DDI thread that passes, and only while a
+  counter moved since the last line, so a device that binds compiled pipelines alone stays quiet. The third is
+  `pso_detach_summary` from the shell's `DllMain` at a `DLL_PROCESS_DETACH` that is not a process exit, for the
+  game that never destroys its device at all (Death Stranding). That last site writes only what the counters
+  hold: it joins nothing, waits for nothing, allocates nothing and tries the pool's lock instead of taking it.
+- `pipeline-stream-test.exe` checks the policy's refusals, that an asynchronous create makes no engine call
+  before the consumer, that its subobject stream is the synchronous one byte for byte (addresses excluded), 64
+  creates from one thread and from four, a destroy before any use, a consumer that arrives before any worker, a
+  failure after the `S_OK`, a device destroyed with a job still queued, the deferred store, the cost of the
+  warm path, the periodic line against a clock the test moves itself, and the detach line of a device that is
+  never destroyed.
+
 **Shaders.**
 - The DDI payload is the bare program (DXBC tokens, or the DXIL part) with its length in DWORD 1, and
   register-only signatures. That the buffer holds exactly that many DWORDs is an inference from the SAL

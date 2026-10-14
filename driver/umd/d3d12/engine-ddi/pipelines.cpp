@@ -24,8 +24,17 @@
 // three. A mesh pipeline's stage linkage is by semantic name, so the mesh and amplification containers are named
 // from their own DXIL metadata and the pixel container is rebuilt that way for the pipeline (shader-container.h,
 // Slot). 1006 reports a mesh shader tier only when the engine does (caps.cpp).
+//
+// Asynchronous compilation (BD-158, set_pso_policy in engine-ddi.h, pso-async.h). With the compile pool on, a
+// create validates the payload and builds its plan on the calling thread exactly as the synchronous path does, and
+// then hands the plan to the pool instead of calling the engine: a game that creates its pipelines from one thread
+// compiles them on every core. Two kinds of create stay on the calling thread whatever the policy says: a load out
+// of a pipeline library, whose failure the application asked for and expects here, and any create the pool could
+// not take. The consumers of a pipeline (pfnSetPipelineState, pfnAddPipelineStateToLibrary and the destroy) go
+// through pipeline_engine below, which waits for the job or runs it on its own thread.
 #include "shader-container/shader-container.h"      // first: it selects the D3D12 tokenized program format header
 #include "internal.h"
+#include "pso-async.h"
 #include "replay.h"
 #include <cstdio>
 #include <cstring>
@@ -274,9 +283,18 @@ template <class R> const R* state_of(DeviceContext* c, void* storage, Tag tag, H
 // with every graphics pipeline; nothing has been measured).
 D3D12_BLEND_DESC default_blend() noexcept {
     D3D12_BLEND_DESC d{};
-    for (D3D12_RENDER_TARGET_BLEND_DESC& rt : d.RenderTarget)
-        rt = {FALSE, FALSE, D3D12_BLEND_ONE, D3D12_BLEND_ZERO, D3D12_BLEND_OP_ADD, D3D12_BLEND_ONE, D3D12_BLEND_ZERO,
-              D3D12_BLEND_OP_ADD, D3D12_LOGIC_OP_NOOP, static_cast<UINT8>(D3D12_COLOR_WRITE_ENABLE_ALL)};
+    // Field by field, for the reason create_blend_state (graphics.cpp) states: the three padding bytes after
+    // RenderTargetWriteMask stay zero, so one payload always ships the same bytes.
+    for (D3D12_RENDER_TARGET_BLEND_DESC& rt : d.RenderTarget) {
+        rt.SrcBlend = D3D12_BLEND_ONE;
+        rt.DestBlend = D3D12_BLEND_ZERO;
+        rt.BlendOp = D3D12_BLEND_OP_ADD;
+        rt.SrcBlendAlpha = D3D12_BLEND_ONE;
+        rt.DestBlendAlpha = D3D12_BLEND_ZERO;
+        rt.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+        rt.LogicOp = D3D12_LOGIC_OP_NOOP;
+        rt.RenderTargetWriteMask = static_cast<UINT8>(D3D12_COLOR_WRITE_ENABLE_ALL);
+    }
     return d;
 }
 D3D12_RASTERIZER_DESC default_rasterizer() noexcept {
@@ -307,73 +325,44 @@ struct LibraryTarget {
     const WCHAR* name = nullptr;                // the index's name; valid for the length of the create
 };
 
-HRESULT compute_pipeline(DeviceContext* c, const D3D12DDIARG_CREATE_PIPELINE_STATE_0075& a, ID3D12RootSignature* root,
-                         const LibraryTarget& target, ID3D12PipelineState** out) noexcept {
+// The bytecode of one stage, copied into the plan (pso-async.h, the plan rule).
+D3D12_SHADER_BYTECODE plan_code(PsoPlan& plan, uint32_t stage, const ShaderObject* s) {
+    if (!s || !s->has_program()) return {};
+    const D3D12_SHADER_BYTECODE b = s->bytecode();
+    return plan.take_code(stage, b.pShaderBytecode, b.BytecodeLength);
+}
+
+HRESULT compute_plan(DeviceContext* c, const D3D12DDIARG_CREATE_PIPELINE_STATE_0075& a, ID3D12RootSignature* root,
+                     PsoPlan& plan) noexcept try {
     HRESULT hr = S_OK;
     const ShaderObject* cs = stage_shader(c, a.hComputeShader, D3D11_SB_COMPUTE_SHADER, hr);
     if (!cs) return E_INVALIDARG;
-    D3D12_COMPUTE_PIPELINE_STATE_DESC desc{};
-    desc.pRootSignature = root;
-    desc.CS = cs->bytecode();
-    if (target.library)
-        return target.library->LoadComputePipeline(target.name, &desc, __uuidof(ID3D12PipelineState),
-                                                   reinterpret_cast<void**>(out));
-    return c->device->CreateComputePipelineState(&desc, __uuidof(ID3D12PipelineState), reinterpret_cast<void**>(out));
+    plan.compute = true;
+    plan.root = root;
+    plan.compute_desc.pRootSignature = root;
+    plan.compute_desc.CS = plan_code(plan, kPsoStageCS, cs);
+    return S_OK;
+} catch (const std::bad_alloc&) {
+    return E_OUTOFMEMORY;
 }
 
 // ---- The subobject stream ---------------------------------------------------------------------------------------
 // Every rasterizing pipeline reaches the engine through ID3D12Device2::CreatePipelineState and a subobject stream
 // (vkd3d-proton state.c, vkd3d_pipeline_state_desc_from_d3d12_stream_desc: the AS, MS, DEPTH_STENCIL1 and
-// VIEW_INSTANCING subobjects exist there and nowhere else), so engine-ddi writes that stream. The subobject layout
-// is the one the engine reads: a packed struct of the type and the value, its size rounded up to a multiple of a
-// pointer, laid out end to end (vkd3d-proton state.c, VKD3D_HANDLE_SUBOBJECT_EXPLICIT:
-// `stream_ptr += align(sizeof(*subobject), sizeof(void*))`). The stride is a multiple of `sizeof(void*)`, not of 8:
-// the 32-bit shell of a WoW64 process builds this same file, and there a pointer is 4 bytes, so an MS subobject is
-// 12 bytes and not 16. A stride of 8 there would leave our own padding where the engine reads the next type word,
-// which reads as type 0 (ROOT_SIGNATURE, already seen) and fails every pipeline creation with "Duplicate pipeline
-// subobject type". The buffer is a vector of 64-bit words, so its first byte is aligned for every value a subobject
-// carries, and every stride is a multiple of the alignment the static_assert below admits.
-//
-// A subobject the stream leaves out keeps the engine's own default (vkd3d-proton state.c,
-// d3d12_init_pipeline_state_desc), which is the D3D12 API default. put_common_state writes every state a
-// D3D12_GRAPHICS_PIPELINE_STATE_DESC used to carry, so no path depends on those defaults.
-class SubobjectStream {
-public:
-    template <class T> void put(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type, const T& value) {
-        struct Subobject {
-            D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type;
-            T data;
-        };
-        constexpr size_t kAlign = sizeof(void*);             // the engine's stride, 8 on x64 and 4 on x86
-        static_assert(std::is_trivially_copyable_v<T>, "a subobject value is copied into the stream");
-        static_assert(alignof(Subobject) <= kAlign, "the engine's pointer-sized stride aligns every subobject");
-        Subobject object{};                                  // every padding byte zero: nothing uninitialized ships
-        object.type = type;
-        object.data = value;
-        const size_t padded = (sizeof(Subobject) + kAlign - 1) / kAlign * kAlign;
-        const size_t at = size_;
-        words_.resize((at + padded + sizeof(uint64_t) - 1) / sizeof(uint64_t));
-        std::memcpy(reinterpret_cast<uint8_t*>(words_.data()) + at, &object, sizeof(object));
-        size_ = at + padded;
-    }
-    D3D12_PIPELINE_STATE_STREAM_DESC desc() noexcept {
-        return {size_, words_.empty() ? nullptr : words_.data()};
-    }
+// VIEW_INSTANCING subobjects exist there and nowhere else), so engine-ddi writes that stream. SubobjectStream and
+// its layout rules live in pso-async.h, next to the plan that holds one, because a plan outlives the create call.
 
-private:
-    std::vector<uint64_t> words_;
-    size_t size_ = 0;
-};
-
-// The last step of a rasterizing pipeline: the engine's stream entry, or a library's load of that same stream
-// (LibraryTarget above). Both read the stream the same way, and both leave the engine's answer untouched.
-HRESULT create_from_stream(DeviceContext* c, SubobjectStream& stream, const LibraryTarget& target,
-                           ID3D12PipelineState** out) noexcept {
-    const D3D12_PIPELINE_STATE_STREAM_DESC desc = stream.desc();
-    if (target.library)
-        return target.library->LoadPipeline(target.name, &desc, __uuidof(ID3D12PipelineState),
-                                            reinterpret_cast<void**>(out));
-    return c->device4->CreatePipelineState(&desc, __uuidof(ID3D12PipelineState), reinterpret_cast<void**>(out));
+// A load out of a pipeline library: the application stored this pipeline and asks the runtime for it again, so the
+// engine's answer (E_INVALIDARG for a name the library does not hold, and for a description whose compatibility
+// hash does not match the stored one) is what the application expects from its own call. This never goes to the
+// compile pool.
+HRESULT load_from_library(PsoPlan& plan, const LibraryTarget& target, ID3D12PipelineState** out) noexcept {
+    if (plan.compute)
+        return target.library->LoadComputePipeline(target.name, &plan.compute_desc, __uuidof(ID3D12PipelineState),
+                                                   reinterpret_cast<void**>(out));
+    const D3D12_PIPELINE_STATE_STREAM_DESC desc = plan.stream.desc();
+    return target.library->LoadPipeline(target.name, &desc, __uuidof(ID3D12PipelineState),
+                                        reinterpret_cast<void**>(out));
 }
 
 // The depth-stencil state as DEPTH_STENCIL1, which is DEPTH_STENCIL plus DepthBoundsTestEnable (L52). The engine
@@ -430,8 +419,7 @@ void put_common_state(SubobjectStream& stream, const D3D12DDIARG_CREATE_PIPELINE
 // is 4 and the engine refuses more, so a larger count is a broken DDI payload and is refused here; so is a count
 // without an array. 1006 reports ViewInstancingTier from the engine's own OPTIONS3 answer (caps.cpp), and the
 // command-list side is pfnSetViewInstanceMask (L57, commands.cpp).
-HRESULT put_view_instancing(SubobjectStream& stream, const D3D12DDI_VIEW_INSTANCING_DESC& in,
-                            D3D12_VIEW_INSTANCE_LOCATION (&locations)[D3D12_MAX_VIEW_INSTANCE_COUNT]) {
+HRESULT put_view_instancing(PsoPlan& plan, const D3D12DDI_VIEW_INSTANCING_DESC& in) {
     if (!in.ViewInstanceCount) return S_OK;
     if (in.ViewInstanceCount > D3D12_MAX_VIEW_INSTANCE_COUNT || !in.pViewInstanceLocations) {
         log_line("CreatePipelineState: %u view instances with %s locations, the contract allows at most %u with an "
@@ -439,14 +427,15 @@ HRESULT put_view_instancing(SubobjectStream& stream, const D3D12DDI_VIEW_INSTANC
                  static_cast<unsigned>(D3D12_MAX_VIEW_INSTANCE_COUNT));
         return E_INVALIDARG;
     }
+    plan.locations.resize(in.ViewInstanceCount);                // sized once, then written in place
     for (UINT i = 0; i < in.ViewInstanceCount; ++i)
-        locations[i] = {in.pViewInstanceLocations[i].ViewportArrayIndex,
-                        in.pViewInstanceLocations[i].RenderTargetArrayIndex};
+        plan.locations[i] = {in.pViewInstanceLocations[i].ViewportArrayIndex,
+                             in.pViewInstanceLocations[i].RenderTargetArrayIndex};
     D3D12_VIEW_INSTANCING_DESC out{};
     out.ViewInstanceCount = in.ViewInstanceCount;
-    out.pViewInstanceLocations = locations;
+    out.pViewInstanceLocations = plan.locations.data();
     out.Flags = static_cast<D3D12_VIEW_INSTANCING_FLAGS>(in.Flags);
-    stream.put(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_VIEW_INSTANCING, out);
+    plan.stream.put(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_VIEW_INSTANCING, out);
     return S_OK;
 }
 
@@ -458,12 +447,13 @@ HRESULT put_view_instancing(SubobjectStream& stream, const D3D12DDI_VIEW_INSTANC
 // Not noexcept: sc::BuildMeshLinkContainer allocates (the chunk vectors, the string of a refused program), and a
 // std::bad_alloc from it belongs to the function-try-block of mesh_pipeline, which turns it into E_OUTOFMEMORY. A
 // noexcept here would call std::terminate instead and take the application down.
-HRESULT mesh_pixel_bytecode(const ShaderObject* ps, sc::Container& rebuilt, D3D12_SHADER_BYTECODE* out) {
+HRESULT mesh_pixel_bytecode(PsoPlan& plan, const ShaderObject* ps, D3D12_SHADER_BYTECODE* out) {
     if (!ps || !ps->has_program()) return S_OK;
     if (ps->input.empty()) {
-        *out = ps->bytecode();
+        *out = plan_code(plan, kPsoStagePS, ps);
         return S_OK;
     }
+    sc::Container rebuilt;
     const sc::SignatureView input{ps->input.data(), static_cast<UINT>(ps->input.size())};
     const sc::SignatureView output{ps->container.output.data(), static_cast<UINT>(ps->container.output.size())};
     const sc::Result r = sc::BuildMeshLinkContainer(ps->container, input, output, &rebuilt);
@@ -471,12 +461,12 @@ HRESULT mesh_pixel_bytecode(const ShaderObject* ps, sc::Container& rebuilt, D3D1
         log_line("CreatePipelineState: mesh pipeline pixel program: %s", r.detail.c_str());
         return r.hresult();
     }
-    *out = {rebuilt.bytes.data(), rebuilt.bytes.size()};
+    *out = plan.take_code(kPsoStagePS, rebuilt.bytes.data(), rebuilt.bytes.size());
     return S_OK;
 }
 
-HRESULT mesh_pipeline(DeviceContext* c, const D3D12DDIARG_CREATE_PIPELINE_STATE_0075& a, ID3D12RootSignature* root,
-                      const LibraryTarget& target, ID3D12PipelineState** out) noexcept try {
+HRESULT mesh_plan(DeviceContext* c, const D3D12DDIARG_CREATE_PIPELINE_STATE_0075& a, ID3D12RootSignature* root,
+                  PsoPlan& plan) noexcept try {
     if (!c->device4) return E_NOTIMPL;                                      // no ID3D12Device2 on the engine
     if (a.NumRenderTargets > D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT) return E_INVALIDARG;
     // A mesh pipeline has no vertex-side stage at all: the runtime must pass none of them (DirectX-Specs
@@ -495,25 +485,23 @@ HRESULT mesh_pipeline(DeviceContext* c, const D3D12DDIARG_CREATE_PIPELINE_STATE_
     const auto* depth = state_of<DepthStencilStateRecord>(c, a.hDepthStencilState.pDrvPrivate, Tag::StateDepth, hr);
     if (FAILED(hr) || !ms) return E_INVALIDARG;
 
-    sc::Container ps_rebuilt;
+    plan.root = root;
     D3D12_SHADER_BYTECODE ps_bytes{};
-    if (HRESULT r = mesh_pixel_bytecode(ps, ps_rebuilt, &ps_bytes); FAILED(r)) return r;
+    if (HRESULT r = mesh_pixel_bytecode(plan, ps, &ps_bytes); FAILED(r)) return r;
 
-    SubobjectStream stream;
-    if (as) stream.put(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_AS, as->bytecode());
-    stream.put(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MS, ms->bytecode());
-    put_common_state(stream, a, root, ps_bytes, blend, raster, depth);
-    D3D12_VIEW_INSTANCE_LOCATION locations[D3D12_MAX_VIEW_INSTANCE_COUNT]{};
-    if (HRESULT r = put_view_instancing(stream, a.ViewInstancingDesc, locations); FAILED(r)) return r;
+    if (as) plan.stream.put(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_AS, plan_code(plan, kPsoStageAS, as));
+    plan.stream.put(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MS, plan_code(plan, kPsoStageMS, ms));
+    put_common_state(plan.stream, a, root, ps_bytes, blend, raster, depth);
+    if (HRESULT r = put_view_instancing(plan, a.ViewInstancingDesc); FAILED(r)) return r;
     // No INPUT_LAYOUT, IB_STRIP_CUT_VALUE or PRIMITIVE_TOPOLOGY subobject: a mesh pipeline has no vertex input
     // and names its topology in the program ([outputtopology]).
-    return create_from_stream(c, stream, target, out);
+    return S_OK;
 } catch (const std::bad_alloc&) {
     return E_OUTOFMEMORY;
 }
 
-HRESULT graphics_pipeline(DeviceContext* c, const D3D12DDIARG_CREATE_PIPELINE_STATE_0075& a, ID3D12RootSignature* root,
-                          const LibraryTarget& target, ID3D12PipelineState** out) noexcept try {
+HRESULT graphics_plan(DeviceContext* c, const D3D12DDIARG_CREATE_PIPELINE_STATE_0075& a, ID3D12RootSignature* root,
+                      PsoPlan& plan) noexcept try {
     if (!c->device4) return E_NOTIMPL;                                      // no ID3D12Device2 on the engine
     if (a.NumRenderTargets > D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT) return E_INVALIDARG;
     HRESULT hr = S_OK;
@@ -538,20 +526,23 @@ HRESULT graphics_pipeline(DeviceContext* c, const D3D12DDIARG_CREATE_PIPELINE_ST
     const auto* depth = state_of<DepthStencilStateRecord>(c, a.hDepthStencilState.pDrvPrivate, Tag::StateDepth, hr);
     if (FAILED(hr) || !vs) return E_INVALIDARG;
 
-    SubobjectStream stream;
-    stream.put(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_VS, vs->bytecode());
-    if (hs) stream.put(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_HS, hs->bytecode());
-    if (ds) stream.put(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DS, ds->bytecode());
-    if (gs && gs->is(D3D10_SB_GEOMETRY_SHADER)) stream.put(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_GS, gs->bytecode());
+    plan.root = root;
+    plan.stream.put(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_VS, plan_code(plan, kPsoStageVS, vs));
+    if (hs) plan.stream.put(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_HS, plan_code(plan, kPsoStageHS, hs));
+    if (ds) plan.stream.put(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DS, plan_code(plan, kPsoStageDS, ds));
+    if (gs && gs->is(D3D10_SB_GEOMETRY_SHADER))
+        plan.stream.put(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_GS, plan_code(plan, kPsoStageGS, gs));
 
-    // Stream output, named against the last stage before rasterization.
+    // Stream output, named against the last stage before rasterization. The entries, their semantic names and the
+    // strides go into the plan, because the engine reads them inside its create and a job outlives this call.
     std::vector<sc::StreamOutputElement> so_elements;
-    std::vector<D3D12_SO_DECLARATION_ENTRY> so;
     if (gs && gs->stream_output) {
         const sc::Container& last = gs->is(D3D10_SB_GEOMETRY_SHADER) ? gs->container : ds ? ds->container : vs->container;
         so_elements.resize(gs->so_entries.size());
-        so.resize(gs->so_entries.size());
-        for (size_t i = 0; i < so.size(); ++i) {
+        plan.so.resize(gs->so_entries.size());              // sized once, then written in place (the plan rule)
+        plan.so_names.resize(gs->so_entries.size());
+        plan.so_strides.assign(gs->so_strides.begin(), gs->so_strides.end());
+        for (size_t i = 0; i < plan.so.size(); ++i) {
             const D3D12DDIARG_STREAM_OUTPUT_DECLARATION_ENTRY& e = gs->so_entries[i];
             if (e.OutputSlot >= D3D12_SO_BUFFER_SLOT_COUNT) return E_INVALIDARG;
             const sc::Result r = sc::StreamOutputSemantic(last, e, &so_elements[i]);
@@ -567,44 +558,50 @@ HRESULT graphics_pipeline(DeviceContext* c, const D3D12DDIARG_CREATE_PIPELINE_ST
                     return E_NOTIMPL;
                 }
             }
-            so[i] = {e.Stream, el.gap ? nullptr : el.semantic.name.c_str(), el.semantic.index, el.startComponent,
-                     el.componentCount, static_cast<BYTE>(e.OutputSlot)};
+            if (!el.gap && el.semantic.name.empty()) {
+                log_line("CreatePipelineState: stream-output entry %zu has no semantic name and is not a gap", i);
+                return E_INVALIDARG;                        // an empty name is how the plan spells a gap
+            }
+            if (!el.gap) plan.so_names[i] = el.semantic.name;
+            plan.so[i] = {e.Stream, el.gap ? nullptr : plan.so_names[i].c_str(), el.semantic.index, el.startComponent,
+                          el.componentCount, static_cast<BYTE>(e.OutputSlot)};
         }
-        const D3D12_STREAM_OUTPUT_DESC out_desc{so.data(), static_cast<UINT>(so.size()), gs->so_strides.data(),
-                                                static_cast<UINT>(gs->so_strides.size()), gs->rasterized_stream};
-        stream.put(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_STREAM_OUTPUT, out_desc);
+        const D3D12_STREAM_OUTPUT_DESC out_desc{plan.so.data(), static_cast<UINT>(plan.so.size()),
+                                                plan.so_strides.empty() ? nullptr : plan.so_strides.data(),
+                                                static_cast<UINT>(plan.so_strides.size()), gs->rasterized_stream};
+        plan.stream.put(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_STREAM_OUTPUT, out_desc);
     }
 
-    put_common_state(stream, a, root, ps ? ps->bytecode() : D3D12_SHADER_BYTECODE{}, blend, raster, depth);
-    D3D12_VIEW_INSTANCE_LOCATION locations[D3D12_MAX_VIEW_INSTANCE_COUNT]{};
-    if (HRESULT r = put_view_instancing(stream, a.ViewInstancingDesc, locations); FAILED(r)) return r;
+    put_common_state(plan.stream, a, root, ps ? plan_code(plan, kPsoStagePS, ps) : D3D12_SHADER_BYTECODE{}, blend,
+                     raster, depth);
+    if (HRESULT r = put_view_instancing(plan, a.ViewInstancingDesc); FAILED(r)) return r;
 
     // Input elements: the semantic of the vertex program's rebuilt input signature entry on each element's register.
-    std::vector<sc::Semantic> names;
-    std::vector<D3D12_INPUT_ELEMENT_DESC> elements;
     if (layout && layout->count) {
-        names.resize(layout->count);
-        elements.resize(layout->count);
+        plan.elements.resize(layout->count);                // sized once, then written in place (the plan rule)
+        plan.element_names.resize(layout->count);
         const sc::SignatureView input{vs->input.data(), static_cast<UINT>(vs->input.size())};
         for (UINT i = 0; i < layout->count; ++i) {
             const D3D12DDIARG_INPUT_ELEMENT_DESC& e = layout->elements()[i];
-            const sc::Result r = sc::InputLayoutSemantic(input, e.InputRegister, &names[i]);
+            sc::Semantic name;
+            const sc::Result r = sc::InputLayoutSemantic(input, e.InputRegister, &name);
             if (!r) {
                 log_line("CreatePipelineState: input element %u: %s", i, r.detail.c_str());
                 return r.hresult();
             }
-            elements[i] = {names[i].name.c_str(), names[i].index, e.Format, e.InputSlot, e.AlignedByteOffset,
-                           static_cast<D3D12_INPUT_CLASSIFICATION>(e.InputSlotClass), e.InstanceDataStepRate};
+            plan.element_names[i] = name.name;
+            plan.elements[i] = {plan.element_names[i].c_str(), name.index, e.Format, e.InputSlot, e.AlignedByteOffset,
+                                static_cast<D3D12_INPUT_CLASSIFICATION>(e.InputSlotClass), e.InstanceDataStepRate};
         }
-        const D3D12_INPUT_LAYOUT_DESC input_layout{elements.data(), layout->count};
-        stream.put(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_INPUT_LAYOUT, input_layout);
+        const D3D12_INPUT_LAYOUT_DESC input_layout{plan.elements.data(), layout->count};
+        plan.stream.put(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_INPUT_LAYOUT, input_layout);
     }
 
-    stream.put(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_IB_STRIP_CUT_VALUE,
-               static_cast<D3D12_INDEX_BUFFER_STRIP_CUT_VALUE>(a.IBStripCutValue));
-    stream.put(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PRIMITIVE_TOPOLOGY,
-               static_cast<D3D12_PRIMITIVE_TOPOLOGY_TYPE>(a.PrimitiveTopologyType));
-    return create_from_stream(c, stream, target, out);
+    plan.stream.put(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_IB_STRIP_CUT_VALUE,
+                    static_cast<D3D12_INDEX_BUFFER_STRIP_CUT_VALUE>(a.IBStripCutValue));
+    plan.stream.put(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PRIMITIVE_TOPOLOGY,
+                    static_cast<D3D12_PRIMITIVE_TOPOLOGY_TYPE>(a.PrimitiveTopologyType));
+    return S_OK;
 } catch (const std::bad_alloc&) {
     return E_OUTOFMEMORY;
 }
@@ -634,15 +631,44 @@ HRESULT APIENTRY create_pipeline(D3D12DDI_HDEVICE device, const D3D12DDIARG_CREA
     auto* rs = record_of<RootSignatureRecord>(args->hRootSignature.pDrvPrivate, Tag::RootSignature, c);
     if (!rs) return E_INVALIDARG;
     auto* root = static_cast<ID3D12RootSignature*>(rs->h.engine);
-    ID3D12PipelineState* pso = nullptr;
-    const HRESULT hr = mesh      ? mesh_pipeline(c, *args, root, target, &pso)
-                       : graphics ? graphics_pipeline(c, *args, root, target, &pso)
-                                  : compute_pipeline(c, *args, root, target, &pso);
+    // Everything above and the plan below are this thread's work whatever the policy says: every refusal an
+    // application can get from its own create comes out of this call.
+    PsoPlan plan;
+    const HRESULT hr = mesh      ? mesh_plan(c, *args, root, plan)
+                       : graphics ? graphics_plan(c, *args, root, plan)
+                                  : compute_plan(c, *args, root, plan);
     if (FAILED(hr)) return hr;
-    new (h.pDrvPrivate) PipelineRecord{{Tag::PipelineState, 0, pso, c}, rt, !graphics};
+    ID3D12PipelineState* pso = nullptr;
+    PsoJob* job = nullptr;
+    if (!target.library && c->pso) job = pso_submit(c, std::move(plan));
+    if (!job) {
+        if (c->pso) c->pso->synchronous.fetch_add(1, std::memory_order_relaxed);
+        const HRESULT create = target.library ? load_from_library(plan, target, &pso) : pso_create_now(c, plan, &pso);
+        if (FAILED(create)) return create;
+    }
+    new (h.pDrvPrivate) PipelineRecord{{Tag::PipelineState, 0, pso, c}, rt, !graphics, job};
     c->live.fetch_add(1);
     return S_OK;
 }
+
+// The engine pipeline of a record, on a DDI thread. With a job it waits for the compile, or makes it here when no
+// pool thread has started it; hr is the engine create's result and is S_OK whenever a pipeline comes back.
+ID3D12PipelineState* pipeline_engine(PipelineRecord* r, HRESULT& hr) noexcept {
+    if (!r->job) {
+        hr = S_OK;
+        return static_cast<ID3D12PipelineState*>(r->h.engine);
+    }
+    return pso_resolve(r->job, &hr);
+}
+
+// One line for the first consumer that finds a failed compile, then the code to the runtime at every use.
+void refuse_uncreated(PipelineRecord* r, const char* slot, HRESULT hr) noexcept {
+    if (r->job && !r->job->reported.exchange(1, std::memory_order_relaxed))
+        log_refusal("%s: the engine did not create the pipeline of job %llu (hr %08lx); nothing of it runs", slot,
+                    static_cast<unsigned long long>(r->job->id), static_cast<unsigned long>(hr));
+}
+
+void flush_pending_of(PipelineRecord* p) noexcept;   // the library store this pipeline still owes (BD-158, below)
 
 void APIENTRY destroy_pipeline(D3D12DDI_HDEVICE device, D3D12DDI_HPIPELINESTATE h) {
     DeviceContext* c = resolve(device);
@@ -653,7 +679,17 @@ void APIENTRY destroy_pipeline(D3D12DDI_HDEVICE device, D3D12DDI_HPIPELINESTATE 
         return;
     }
     drain_all(c, Drain::Destroy);
-    release_engine(r->h);
+    // A library this pipeline was stored into keeps what it was given, so the store that still waits for the
+    // compile is made here, while the pipeline exists.
+    flush_pending_of(r);
+    if (r->job) {
+        // Ends the job (a queued one without a create at all) and releases the pipeline it holds, inside this
+        // destroy, exactly where release_engine releases a synchronously created one.
+        pso_destroy(r->job);
+        r->job = nullptr;
+    } else {
+        release_engine(r->h);
+    }
     poison(r->h);
     c->live.fetch_sub(1);
 }
@@ -750,6 +786,69 @@ void forget_serialized_sizes(PipelineLibraryRecord* l) noexcept {
     for (SerializedSize& s : l->sizes) s.bytes.store(0, std::memory_order_release);
 }
 
+// ---- Stores that wait for their compile (BD-158) -----------------------------------------------------------------
+// The engine's StorePipeline needs the pipeline object, but what it writes is read only when the blob is collected:
+// at pfnCalcSerializedLibrarySize, at pfnSerializeLibrary, or when the pipeline is destroyed, whichever comes
+// first. So a store whose compile is still running is remembered in the library and made at one of those three
+// points. That is what keeps a game which stores every pipeline right after creating it off the serial chain the
+// asynchronous compile exists to break; the D3D12 contract allows it, because the one failure an application can
+// see out of StorePipeline is a name it already holds, the runtime owns the names and this DDI only has indices
+// (see pfnAddPipelineStateToLibrary below), and the engine's own refusal has no caller left to answer and is kept
+// in store_failure for the next serialize.
+// One pending store per pipeline: a second store of one pipeline, which no application makes twice in a row,
+// waits for the compile instead.
+// Every list below is under the device's pending_stores lock (internal.h), which says why it is not a lock of the
+// library record: a pipeline's destroy finds its library through a pointer that the library's own destroy clears,
+// and a lock inside a record being destroyed cannot guard the thread that is still reading it.
+void link_pending(PipelineLibraryRecord* l, PipelineRecord* p, UINT index) noexcept {
+    SRWLOCK& lock = p->h.device->pending_stores;
+    AcquireSRWLockExclusive(&lock);
+    p->pending_index = index;
+    p->pending_next = l->pending_head;
+    l->pending_head = p;
+    p->pending_library.store(l, std::memory_order_release);
+    ReleaseSRWLockExclusive(&lock);
+}
+
+// Takes one pending store out of its library's list, so that exactly one thread makes it: the taker owns it. The
+// library pointer is read again under the lock, because that is where a destroy of that library clears it; the
+// read before the lock is a fast path for the pipelines that owe nothing, which is nearly all of them.
+bool take_pending(PipelineRecord* p, PipelineLibraryRecord** library, UINT* index) noexcept {
+    if (!p->pending_library.load(std::memory_order_acquire)) return false;
+    SRWLOCK& lock = p->h.device->pending_stores;
+    bool taken = false;
+    AcquireSRWLockExclusive(&lock);
+    PipelineLibraryRecord* l = p->pending_library.load(std::memory_order_relaxed);
+    if (l)
+        for (PipelineRecord** at = &l->pending_head; *at; at = &(*at)->pending_next) {
+            if (*at != p) continue;
+            *at = p->pending_next;
+            p->pending_next = nullptr;
+            p->pending_library.store(nullptr, std::memory_order_release);
+            taken = true;
+            break;
+        }
+    const UINT at_index = p->pending_index;
+    ReleaseSRWLockExclusive(&lock);
+    *library = l;
+    *index = at_index;
+    return taken;
+}
+
+PipelineRecord* take_pending_head(PipelineLibraryRecord* l, UINT* index) noexcept {
+    SRWLOCK& lock = l->h.device->pending_stores;
+    AcquireSRWLockExclusive(&lock);
+    PipelineRecord* p = l->pending_head;
+    if (p) {
+        l->pending_head = p->pending_next;
+        p->pending_next = nullptr;
+        p->pending_library.store(nullptr, std::memory_order_release);
+        *index = p->pending_index;
+    }
+    ReleaseSRWLockExclusive(&lock);
+    return p;
+}
+
 // The refusal of a pipeline library create. Every code is clamped the way a creation slot must clamp it
 // (engine-ddi.h, admitted_create_failure: an unadmitted code costs the device, BD-075), the two the public
 // contract reserves for a blob this driver cannot use included. D3D12_ERROR_DRIVER_VERSION_MISMATCH and
@@ -797,29 +896,37 @@ void APIENTRY destroy_pipeline_library(D3D12DDI_HDEVICE device, D3D12DDI_HPIPELI
         c->report(E_INVALIDARG);
         return;
     }
+    // A store this library still waits for has nowhere to go: the library it would be written into is what is
+    // being destroyed, and no blob of it will ever be read. The pipelines are let go of without their compile
+    // being waited for, which is also what makes this destroy cheap for an application that gives up on a cache.
+    UINT index = 0;
+    uint32_t dropped = 0;
+    while (take_pending_head(r, &index)) ++dropped;
+    if (dropped)
+        log_line("pipeline library: destroyed with %u store(s) that no serialize asked for", dropped);
     release_engine(r->h);
     poison(r->h);
     c->live.fetch_sub(1);
 }
 
-// D88, a creation slot, so its refusals are clamped. The engine answers E_INVALIDARG for a name it already holds
-// (vkd3d-proton cache.c, d3d12_pipeline_library_StorePipeline), which is what D3D12 shows an application that
-// stores two pipelines under one name - but the runtime owns the names and the DDI only has indices, so the
-// duplicate is the runtime's to detect and this slot never has to carry that code.
-HRESULT APIENTRY add_pipeline_to_library(D3D12DDI_HDEVICE device, D3D12DDI_HPIPELINELIBRARY hl,
-                                         D3D12DDI_HPIPELINESTATE hp, UINT index) {
-    DeviceContext* c = resolve(device);
-    if (!c) return admitted_create_failure(E_INVALIDARG);
-    PipelineLibraryRecord* l = library_of(c, hl);
-    const auto* p = record_of<PipelineRecord>(hp.pDrvPrivate, Tag::PipelineState, c);
-    if (!l || !p) return admitted_create_failure(E_INVALIDARG);
+// One store into the engine's library, on the thread that owns it: the slot's own thread for a pipeline that is
+// already compiled, or the thread that collects the blob for one that was not. The pipeline is waited for here,
+// which for the deferred store is the point of the whole exercise: the wait is paid once, by the thread that needs
+// the blob, and not by the thread that creates the pipelines.
+HRESULT store_pipeline(PipelineLibraryRecord* l, PipelineRecord* p, UINT index, const char* slot) noexcept {
+    HRESULT ready = S_OK;
+    ID3D12PipelineState* pso = pipeline_engine(p, ready);
+    if (FAILED(ready) || !pso) {
+        refuse_uncreated(p, slot, ready);
+        return FAILED(ready) ? ready : E_INVALIDARG;
+    }
     WCHAR name[kLibraryNameChars] = {};
     swprintf_s(name, L"%08X", index);
-    const HRESULT hr = engine_library(l)->StorePipeline(name, static_cast<ID3D12PipelineState*>(p->h.engine));
+    const HRESULT hr = engine_library(l)->StorePipeline(name, pso);
     if (FAILED(hr)) {
-        log_refusal("AddPipelineStateToLibrary: the engine refused the pipeline at index %u (hr %08lx)", index,
+        log_refusal("%s: the engine refused the pipeline at index %u (hr %08lx)", slot, index,
                     static_cast<unsigned long>(hr));
-        return admitted_create_failure(hr);
+        return hr;
     }
     // The blob is longer now, so no size the runtime asked for before describes it any more. Forgetting them all
     // makes a serialize before the next size query refuse instead of writing a longer blob into a shorter buffer.
@@ -828,6 +935,53 @@ HRESULT APIENTRY add_pipeline_to_library(D3D12DDI_HDEVICE device, D3D12DDI_HPIPE
     if (!(stored & (stored - 1)))                                   // at powers of two: one line per doubling
         log_line("pipeline library: %u pipelines stored (last index %u)", stored, index);
     return S_OK;
+}
+
+// Every store this library still owes, made now. The two slots that read the blob call it first; the failure of a
+// store whose caller is gone is kept for the serialize, which is the next slot with an error channel of its own.
+void flush_pending(PipelineLibraryRecord* l, const char* slot) noexcept {
+    UINT index = 0;
+    while (PipelineRecord* p = take_pending_head(l, &index)) {
+        const HRESULT hr = store_pipeline(l, p, index, slot);
+        if (FAILED(hr)) {
+            long first = S_OK;
+            l->store_failure.compare_exchange_strong(first, hr, std::memory_order_relaxed);
+        }
+    }
+}
+
+// The store a pipeline owes its library, made before the pipeline is destroyed, so that a library keeps what was
+// stored into it even when the application destroys the pipeline before it saves the blob.
+void flush_pending_of(PipelineRecord* p) noexcept {
+    PipelineLibraryRecord* l = nullptr;
+    UINT index = 0;
+    if (!take_pending(p, &l, &index)) return;
+    const HRESULT hr = store_pipeline(l, p, index, "DestroyPipelineState");
+    if (FAILED(hr)) {
+        long first = S_OK;
+        l->store_failure.compare_exchange_strong(first, hr, std::memory_order_relaxed);
+    }
+}
+
+// D88, a creation slot, so its refusals are clamped. The engine answers E_INVALIDARG for a name it already holds
+// (vkd3d-proton cache.c, d3d12_pipeline_library_StorePipeline), which is what D3D12 shows an application that
+// stores two pipelines under one name - but the runtime owns the names and the DDI only has indices, so the
+// duplicate is the runtime's to detect and this slot never has to carry that code. Everything this slot can
+// refuse is therefore decided here, on this thread; the engine's store itself waits for the compile and is
+// deferred to the blob's collection when the compile is still running (see "Stores that wait for their compile").
+HRESULT APIENTRY add_pipeline_to_library(D3D12DDI_HDEVICE device, D3D12DDI_HPIPELINELIBRARY hl,
+                                         D3D12DDI_HPIPELINESTATE hp, UINT index) {
+    DeviceContext* c = resolve(device);
+    if (!c) return admitted_create_failure(E_INVALIDARG);
+    PipelineLibraryRecord* l = library_of(c, hl);
+    auto* p = record_of<PipelineRecord>(hp.pDrvPrivate, Tag::PipelineState, c);
+    if (!l || !p) return admitted_create_failure(E_INVALIDARG);
+    if (pso_pending(p->job) && !p->pending_library.load(std::memory_order_acquire)) {
+        forget_serialized_sizes(l);                                 // the blob will be longer than any size held
+        link_pending(l, p, index);
+        return S_OK;
+    }
+    return admitted_create_failure(store_pipeline(l, p, index, "AddPipelineStateToLibrary"));
 }
 
 // D89, a size query with no error channel of its own (H:3343-3345): an unknown library answers 0 and writes one
@@ -842,6 +996,7 @@ SIZE_T APIENTRY calc_serialized_library_size(D3D12DDI_HDEVICE device, D3D12DDI_H
         log_refusal("CalcSerializedLibrarySize: not a live pipeline library of this device");
         return 0;
     }
+    flush_pending(l, "CalcSerializedLibrarySize");                   // the size covers every store, deferred or not
     const SIZE_T size = engine_library(l)->GetSerializedSize();
     remember_serialized_size(l, size);
     return size;
@@ -859,6 +1014,15 @@ HRESULT APIENTRY serialize_library(D3D12DDI_HDEVICE device, D3D12DDI_HPIPELINELI
     if (!c) return admitted_create_failure(E_INVALIDARG);
     PipelineLibraryRecord* l = library_of(c, h);
     if (!l || !blob) return admitted_create_failure(E_INVALIDARG);
+    flush_pending(l, "SerializeLibrary");           // normally nothing: the size query of this thread flushed
+    if (const HRESULT stale = static_cast<HRESULT>(l->store_failure.exchange(S_OK, std::memory_order_relaxed));
+        FAILED(stale)) {
+        // A store the engine refused after this slot's caller was gone. The blob would be missing a pipeline the
+        // application believes it stored, so the serialize is refused instead, once, with the engine's own code.
+        log_refusal("SerializeLibrary: a deferred store of this library was refused by the engine (hr %08lx)",
+                    static_cast<unsigned long>(stale));
+        return admitted_create_failure(stale);
+    }
     const uint64_t capacity = take_serialized_size(l);
     if (!capacity || capacity > SIZE_MAX) {
         log_refusal("SerializeLibrary: no size query of this thread answered %llu bytes for this library since it "
@@ -906,7 +1070,20 @@ void APIENTRY set_pipeline_state(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_HPIPELINE
         l->h.device->report_list(l->rt, E_INVALIDARG);
         return;
     }
-    ID3D12PipelineState* pso = p ? static_cast<ID3D12PipelineState*>(p->h.engine) : nullptr;
+    // The bind needs the engine pipeline, so this is where a compile is waited for. On this thread and not in the
+    // deferred replay: a ring is in order, so a worker held inside a compile would hold back every later call of
+    // its thread (engine-ddi.h, set_pso_policy).
+    ID3D12PipelineState* pso = nullptr;
+    if (p) {
+        HRESULT ready = S_OK;
+        pso = pipeline_engine(p, ready);
+        if (FAILED(ready)) {
+            // No draw may run with a pipeline the engine refused, so the bind is not recorded at all.
+            refuse_uncreated(p, "SetPipelineState", ready);
+            l->h.device->report_list(l->rt, ready);
+            return;
+        }
+    }
     record(l, [=](List* e) { e->SetPipelineState(pso); });
 }
 

@@ -205,6 +205,8 @@ HRESULT submit_locked(EngineQueue* queue, UINT count, ID3D12CommandList* const* 
 
 struct ResourceRecord;
 struct Replay;                                  // replay.h: deferred command-list replay
+struct PsoAsync;                                // pso-async.h: the pipeline compile pool's per-device state
+struct PsoJob;
 inline constexpr uint32_t kMaxReplayRings = 16;
 
 // The retire policy's decision at a submission's retirement point (set_retire_policy): true leaves the pending
@@ -325,6 +327,15 @@ public:
     // Deferred command-list replay (set_replay_policy, replay.h), null when off: written before the context is used
     // on another thread, and at teardown; read by every recording slot.
     Replay* replay = nullptr;
+    // Asynchronous pipeline compilation (set_pso_policy, pso-async.h), null when off: written by the policy call,
+    // before the context is used on another thread, and at teardown; read by the pipeline slots and by the pool.
+    PsoAsync* pso = nullptr;
+    // The library stores that wait for their compile (BD-158, pipelines.cpp): every library's list of pipelines and
+    // every pipeline's library pointer are under this one lock of the device, not under a lock of the library. A
+    // pipeline's destroy reaches its library through that pointer, and a library's destroy clears the pointers of
+    // its list, so a lock inside the library record would be read by a thread whose library another thread is
+    // destroying at that moment. Taken alone, never with another lock of this context held.
+    SRWLOCK pending_stores = SRWLOCK_INIT;
     // The direct entry (set_direct_entry): the shell admits this context; read by every direct entry.
     std::atomic<bool> direct{false};
 
@@ -594,10 +605,22 @@ struct RasterizerStateRecord {
     D3D12_RASTERIZER_DESC desc;
 };
 
+// With the compile pool off (set_pso_policy), h.engine holds the pipeline and job is null, as before the policy
+// existed. On, the pipeline belongs to the job until the job is done, h.engine stays null, and every consumer goes
+// through pipeline_engine() (pipelines.cpp), which waits for the job or runs it on its own thread.
+struct PipelineLibraryRecord;
 struct PipelineRecord {
-    RecordHeader h;                             // engine: ID3D12PipelineState
+    RecordHeader h;                             // engine: ID3D12PipelineState, null while a job holds it
     D3D12DDI_HRTPIPELINESTATE rt;
     bool compute;
+    PsoJob* job;                                // pso-async.h; null: h.engine is final
+    // A store into a pipeline library (D88) that the compile has not caught up with: the library remembers the
+    // pipeline and stores it when the blob is collected, so that a game which stores every pipeline right after
+    // creating it does not wait for each compile in turn (BD-158, pipelines.cpp). The library's list runs through
+    // pending_next; the library pointer is read without the lock first, so it is atomic. Null: nothing is owed.
+    std::atomic<PipelineLibraryRecord*> pending_library{nullptr};
+    UINT pending_index{0};                      // under DeviceContext::pending_stores, or owned by its taker
+    PipelineRecord* pending_next{nullptr};      // under DeviceContext::pending_stores
 };
 
 // What pfnCalcSerializedLibrarySize last answered to one thread, and therefore the number of bytes that thread's
@@ -620,7 +643,12 @@ inline constexpr uint32_t kSerializedSizeSlots = 8;
 struct PipelineLibraryRecord {
     RecordHeader h;                             // engine: ID3D12PipelineLibrary1
     SerializedSize sizes[kSerializedSizeSlots];
-    std::atomic<uint32_t> stored{0};            // pipelines added, for the log line only
+    std::atomic<uint32_t> stored{0};            // pipelines stored in the engine's library, for the log line only
+    // The stores that wait for their compile (PipelineRecord::pending_library), and the engine's refusal of one
+    // of them: a deferred store has no caller left to answer, so the code is kept for the next serialize. The list
+    // is under DeviceContext::pending_stores, not under a lock of this record, which says why.
+    PipelineRecord* pending_head{nullptr};
+    std::atomic<long> store_failure{S_OK};
 };
 
 struct CommandPoolRecord {

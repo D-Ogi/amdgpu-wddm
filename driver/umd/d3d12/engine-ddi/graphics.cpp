@@ -127,18 +127,23 @@ void APIENTRY create_blend(D3D12DDI_HDEVICE device, const D3D12DDI_BLEND_DESC_00
     D3D12_BLEND_DESC& d = r->desc;
     d.AlphaToCoverageEnable = in->AlphaToCoverageEnable;
     d.IndependentBlendEnable = in->IndependentBlendEnable;
+    // Field by field into the zeroed record, not from a braced temporary: RenderTargetWriteMask is one byte and
+    // three bytes of padding follow it, and the whole structure is copied into the pipeline's subobject stream
+    // later. A temporary's padding is not zero, and a trivially copyable assignment takes padding along, so a
+    // braced temporary here made two pipelines of one payload ship different bytes to the engine.
     for (UINT i = 0; i < D3D12DDI_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i) {
         const D3D12DDI_RENDER_TARGET_BLEND_DESC& s = in->RenderTarget[i];
-        d.RenderTarget[i] = {s.BlendEnable,
-                             s.LogicOpEnable,
-                             static_cast<D3D12_BLEND>(s.SrcBlend),
-                             static_cast<D3D12_BLEND>(s.DestBlend),
-                             static_cast<D3D12_BLEND_OP>(s.BlendOp),
-                             static_cast<D3D12_BLEND>(s.SrcBlendAlpha),
-                             static_cast<D3D12_BLEND>(s.DestBlendAlpha),
-                             static_cast<D3D12_BLEND_OP>(s.BlendOpAlpha),
-                             static_cast<D3D12_LOGIC_OP>(s.LogicOp),
-                             s.RenderTargetWriteMask};
+        D3D12_RENDER_TARGET_BLEND_DESC& t = d.RenderTarget[i];
+        t.BlendEnable = s.BlendEnable;
+        t.LogicOpEnable = s.LogicOpEnable;
+        t.SrcBlend = static_cast<D3D12_BLEND>(s.SrcBlend);
+        t.DestBlend = static_cast<D3D12_BLEND>(s.DestBlend);
+        t.BlendOp = static_cast<D3D12_BLEND_OP>(s.BlendOp);
+        t.SrcBlendAlpha = static_cast<D3D12_BLEND>(s.SrcBlendAlpha);
+        t.DestBlendAlpha = static_cast<D3D12_BLEND>(s.DestBlendAlpha);
+        t.BlendOpAlpha = static_cast<D3D12_BLEND_OP>(s.BlendOpAlpha);
+        t.LogicOp = static_cast<D3D12_LOGIC_OP>(s.LogicOp);
+        t.RenderTargetWriteMask = s.RenderTargetWriteMask;
     }
     r->h.flags = 0;
 }

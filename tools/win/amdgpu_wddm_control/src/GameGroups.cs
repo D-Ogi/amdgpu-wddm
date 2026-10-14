@@ -32,7 +32,9 @@ namespace AmdgpuWddmControl
         {
             new GameGroup { Id = "rt", Tokens = new[] { "raytracing-tier-off" }, Invert = true },
             new GameGroup { Id = "present", Tokens = new[] { "present-noprimary", "present-cached" } },
-            new GameGroup { Id = "cpu", Tokens = new[] { "recording-bind-off", "retire-handoff-off", "deferred-replay-off", "direct-entry-off" }, Invert = true },
+            // async-pso-off joins this group because it is the same kind of switch as deferred-replay-off: the
+            // driver's own use of the other cores, which this one box gives up as a set (BD-158).
+            new GameGroup { Id = "cpu", Tokens = new[] { "recording-bind-off", "retire-handoff-off", "deferred-replay-off", "direct-entry-off", "async-pso-off" }, Invert = true },
             new GameGroup { Id = "diag", Tokens = new[] { "release-two-phase-off", "import-progress-gate-off", "import-quarantine-off", "shared-create-retry-off", "fence-wait-accept-off", "replay-log" }, SupportOnly = true },
         };
 

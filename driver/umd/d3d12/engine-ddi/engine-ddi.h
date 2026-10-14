@@ -13,7 +13,8 @@
 // Boundary r5 (2026-10-05): shared resources (BD-075). MemoryRequestFlags grows by kMemoryShareable, allocate_memory
 // may answer the shell-internal kShareRequired for a request that carried it, and ShellHooks grows by the optional
 // adopt_memory, which takes an allocation the runtime opened instead of allocating one. The engine ABI does not
-// change: a shared surface is the same linear image the linear primary already is (1.3 V13).
+// change: a shared surface is the same linear image the linear primary already is (1.3 V13). Added within r5,
+// additively: set_pso_policy, asynchronous pipeline-state compilation on a worker pool (off unless set).
 // The shell (namespace native12) owns everything else:
 //   - the adapter, device state and FillDDITable composition;
 //   - queues and their WDDM contexts, fences and queue Signal/Wait;
@@ -371,6 +372,73 @@ struct ReplayPolicy {
     void (APIENTRY* log)(void* shell, const char* line);
 };
 HRESULT set_replay_policy(DeviceContext* context, const ReplayPolicy* policy) noexcept;
+
+// Asynchronous pipeline-state compilation (BD-158). Off (enabled 0, the default) pfnCreatePipelineState translates
+// the description and calls the engine's create on the calling thread, as before this policy existed. On, the slot
+// still validates every argument and reports every refusal on the calling thread, takes a deep copy of everything
+// the engine create reads (shader bytecode, the input layout's and stream output's semantic names, a reference on
+// the root signature, every scalar), and returns S_OK; the engine's CreateGraphicsPipelineState or
+// CreateComputePipelineState then runs on a pool thread. An application that creates its pipelines from one thread
+// therefore compiles them on all cores: Death Stranding Director's Cut spent 9 to 12 minutes on its cold first load
+// with 2.9 of 12 processors busy, one of them inside our create (BD-158).
+//
+// The pool is one per process, shared by every device that turns the policy on, because a game has one D3D12 device
+// and the cores are the process's: workers logical processors - 1, at least 1, at the process's normal priority.
+// The last device to turn it off (or to be destroyed) drains the queue and joins the threads; nothing is joined in
+// DllMain, where a join would deadlock on the loader lock.
+//   run(shell, body, job): a pool thread runs one job. The shell must call body(job) in the scope a pipeline create
+//     needs: the engine's create allocates device memory and uploads shader code through the runtime callbacks of
+//     the hosted Vulkan driver, exactly as a recording call on a replay worker does, so the scope is the one the
+//     replay worker hook sets up (hosted-dispatch.h, WorkerScope: device-level memory and CPU-side synchronization,
+//     no context, submission or queue operation).
+//   drained(shell): on a DDI thread, after a consumer waited for a job or ran one itself, with no engine-ddi lock
+//     held; the shell reports there what a pool thread could not (a device removal it saw), as the replay drain
+//     hook does.
+//   log(shell, line): optional (null: none). The policy line and every counter line, one call per line without its
+//     newline; the same lines also go where engine-ddi's other lines go.
+//   summary_period_ms: the periodic counter line, 0 for none. One line at most that often, on a DDI thread that
+//     passes anyway (a create or a consumer), and only while something happened since the last one: an idle device
+//     writes nothing. It exists because the counters at the device's destruction are not enough - Death Stranding
+//     exits without destroying its D3D12 device at all (lab trials 598-600), and the detach line below is refused
+//     while the process is terminating - so a game that never tears down still leaves its numbers in the log.
+// Who waits: the consumers of a pipeline, all of them on a DDI thread. pfnSetPipelineState waits for the job before
+// it records the bind (it runs the job on its own thread when no worker has started it, so nothing waits behind a
+// long queue), and pfnDestroyPipelineState waits for a job it cannot take over. The wait is on the recording thread
+// and not in the deferred replay on purpose: a replay ring is in order, so a worker held inside a compile would hold
+// back every later call of that thread, including the calls of other lists.
+// A failure of the engine's create after the S_OK: the job keeps its HRESULT, and the first consumer logs a refusal
+// that names the pipeline and the code and reports it to the runtime (report_list_error for a bind, which the shell
+// turns into a command-list error or a device error by its own policy). The bind is not recorded, so no draw ever
+// runs with a pipeline that was not created. The price of the policy is that an engine create failure an application
+// could expect from its own CreatePipelineState call (a description the engine refuses) reaches it later and as a
+// list or device error instead; every refusal engine-ddi makes itself still comes back from the create itself.
+// enabled 0 on a context with the policy on finishes its pending jobs and leaves the pool (the last leave stops it);
+// destroy_device_context does the same before it frees the context. Call it with enabled 1 like set_retire_policy:
+// after create_device_context, before the context is used on another thread. E_INVALIDARG, with the policy held
+// before kept, for a null argument, a size other than sizeof(PsoPolicy), enabled other than 0 or 1, enabled 1 while
+// on, workers out of range (0 asks for logical processors - 1; 1 to 64 sets the count), or a null hook.
+using PsoBody = void (APIENTRY*)(void* job);
+struct PsoPolicy {
+    uint32_t size;                              // sizeof(PsoPolicy)
+    uint32_t enabled;                           // 0: the engine create on the calling thread; 1: on the pool
+    uint32_t workers;                           // enabled 1: pool threads, or 0 for logical processors - 1
+    uint32_t summary_period_ms;                 // the periodic counter line, 0 for none (the shell: 30000)
+    void* shell;                                // passed back unchanged
+    void (APIENTRY* run)(void* shell, PsoBody body, void* job);
+    void (APIENTRY* drained)(void* shell);
+    void (APIENTRY* log)(void* shell, const char* line);
+};
+HRESULT set_pso_policy(DeviceContext* context, const PsoPolicy* policy) noexcept;
+
+// The counters of every device that still has the policy on, written to the log and to each device's log hook.
+// For the one site that must not block: the shell's DllMain at DLL_PROCESS_DETACH, and only when the process is
+// not terminating (lpReserved null, a FreeLibrary), because a terminating process may have killed the thread that
+// holds the log. It formats and writes what the counters already hold: it joins nothing, waits for nothing and
+// allocates nothing. The pool's lock is tried and never waited for - a lock that is busy means no line at all -
+// and the only lock it can hold is the log sink's own, taken for the write by running threads. Returns the
+// number of lines written. A device that is destroyed normally writes its summary at that destruction, and a
+// device that lives on writes one every summary_period_ms while it works, so this is the last resort of the three.
+uint32_t pso_detach_summary() noexcept;
 
 // ---- Direct entry and the entry path experiment ------------------------------------------------------------------
 // The direct recording entry is the default wherever the shell installs it (native-tables.cpp: unless the experiment
