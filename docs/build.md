@@ -398,12 +398,12 @@ flavour removes both at compile time. One switch names the lab flavour in every 
 The release flavour of every component that a release builds defines `NDEBUG`, so no assert is live in a shipped
 file, and the lab flavour keeps the asserts. The Mesa, DXVK and vkd3d-proton configurations do it with
 `-Db_ndebug=true` (above). The other build scripts of release rows give `/DNDEBUG` (clang: `-DNDEBUG`) to the
-compiles of the shipped objects only: the D3D11 and D3D12 shells, the H.264 transform, the CLI and
+compiles of the shipped objects only: the D3D11 and D3D12 shells, the router, the H.264 transform, the CLI and
 `bc250control.dll`, the benchmark and capability tools, the state installer, the HIP runtime, the HIP sample and
 `bc250hipblas.dll`. Their host tests compile without it in both flavours, because the D3D12 shell's tests check
 with `assert`. The KMD defines `NDEBUG` in both flavours: a kernel `ASSERT` follows `DBG`, not `NDEBUG`. The RADV
 configurations, `zink-gl-icd` and `ddi-engine-lto` also set it in both flavours, for the compile time that the RADV
-paragraph above gives. `build-umd-router.ps1` does not give it yet. The router sources have no `assert`.
+paragraph above gives.
 
 `tools/quality/flavour_gate.py` checks the built bytes, not the sources. A release set fails on a raw escape
 marker in the KMD or on a forbidden name in any scanned PE file, in ASCII or UTF-16LE. A release set also fails

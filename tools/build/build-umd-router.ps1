@@ -57,7 +57,9 @@ try {
     # gives an anonymous namespace (a hash of the source path) see only the path below the repository.
     $repro = @('/Brepro', '/FC', "/d1trimfile:$repo")
     # /GL with /LTCG at link and /arch:AVX2 on the router and its host gate: owner decision 2026-10-10 (b29).
-    $opt = @('/O2', '/GL', '/arch:AVX2')
+    # BD-167: the release flavour compiles with NDEBUG, so an assert() added later is gone from the release and
+    # live in the lab build.
+    $opt = @('/O2', '/GL', '/arch:AVX2') + @(if ($Flavour -ne 'lab') { '/DNDEBUG' })
     Push-Location $OutputDir
     try {
         $stateObjects = @(& "$repo\tools\state\build-objects.ps1" -Compiler 'cl.exe' -Out "$obj\state" -Flags ($opt + @($crt) + $repro))

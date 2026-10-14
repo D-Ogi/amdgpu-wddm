@@ -280,16 +280,14 @@ RELEASE_COMPILES = {
     'compute/hip/build-rebuilt-controls.ps1': (('compute/hip/build-rebuilt-controls.ps1', 'clang'),
                                                ('compute/hipblas/build-hipblas.ps1', 'clang')),
     'driver/kmd/build.ps1': (('driver/kmd/build.ps1', 'cl'),),
+    'tools/build/build-umd-router.ps1': (('tools/build/build-umd-router.ps1', 'cl'),),
 }
 # The recipes of release rows that compile nothing.
 NOT_COMPILED = {'tools/build/write-umd-config.py': 'writes a text settings file'}
 # The recipes that do not define NDEBUG yet, each with its compiler and reason. Their optimisation level is checked.
 # release_recipe_findings() fails one that spells the define, so its entry moves to RELEASE_COMPILES in the change
 # that adds it.
-NDEBUG_PENDING = {
-    'tools/build/build-umd-router.ps1': ('cl', 'no assert() in the router sources, and the live-assert rule covers '
-                                               'its bytes'),
-}
+NDEBUG_PENDING = {}
 # A live assert in a PE (NDEBUG above): an import of an assert function (the C runtime's, or RtlAssert of a checked
 # kernel build), an import from a debug C runtime, or the static C runtime's assert message, which the linker keeps
 # (/OPT:REF) only when some code calls assert.
