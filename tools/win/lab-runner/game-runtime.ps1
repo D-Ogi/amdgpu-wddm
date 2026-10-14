@@ -818,6 +818,104 @@ try{
  $result.steam_processes=@(Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($steamClient)) -ErrorAction SilentlyContinue).Count
  # Since 254 (M15.7): config.launch 'steam' has the running Steam client start the game; 'direct' is the executable.
  $result.launch=if($stageConfig.launch -eq 'steam'){'steam'}else{'direct'}
+ # --- per-trial environment delivery (GitHub #42 / BD-158, 2026-10-13) ------------------------------------------
+ # Everything above sets variables in THIS process. A direct launch starts the game from here, so the game inherits
+ # them. The steam route does not: "steam.exe -applaunch" only signals the running client, and the client starts the
+ # game with the environment the CLIENT was started with. Three Death Stranding trials (586, 587, 588) recorded
+ # pso_log true and produced no vkd3d-proton.ds.exe.cache.pso-log.txt at all, because the client (pid 12004) had been
+ # started before the trials. The one variable with a second route is the experiment: adapter109+ reads
+ # HKLM\SOFTWARE\amdgpu-wddm\D3D12\Applications\<image>\Experiment when the process has none (K98), and app_profile
+ # below records what the game will actually read. The rest reach a Steam-started game only if the client itself
+ # inherits them, so the runner now either starts the client itself, falls back to the direct launch, or refuses,
+ # and the result says per variable what happened instead of a bare true.
+ $envPlan=[ordered]@{}
+ if($env:AMDGPU_WDDM_D3D12_EXPERIMENT){$envPlan['AMDGPU_WDDM_D3D12_EXPERIMENT']=$env:AMDGPU_WDDM_D3D12_EXPERIMENT}
+ if($env:AMDGPU_WDDM_VKD3D_PSO_LOG){$envPlan['AMDGPU_WDDM_VKD3D_PSO_LOG']=$env:AMDGPU_WDDM_VKD3D_PSO_LOG}
+ if($env:RADV_PERFTEST){$envPlan['RADV_PERFTEST']=$env:RADV_PERFTEST}
+ if($env:MESA_SPIRV_FAIL_DUMP_PATH){$envPlan['MESA_SPIRV_FAIL_DUMP_PATH']=$env:MESA_SPIRV_FAIL_DUMP_PATH}
+ if($env:VKD3D_SHADER_DUMP_PATH){$envPlan['VKD3D_SHADER_DUMP_PATH']=$env:VKD3D_SHADER_DUMP_PATH}
+ # Armed: the operator asked for this variable in this trial and a conclusion will rest on it, so an undelivered one
+ # must stop the trial rather than produce a silent nothing. The experiment is armed through its own config field and
+ # has the registry route; the PSO log and the SPIR-V fail path are on by default and are diagnostics, so they are
+ # armed only by their own marker file. pso-log.required is the counterpart of the existing pso-log.off.
+ $envArmed=@()
+ if($result.experiment){$envArmed+='AMDGPU_WDDM_D3D12_EXPERIMENT'}
+ if($result.radv_perftest){$envArmed+='RADV_PERFTEST'}
+ if($env:VKD3D_SHADER_DUMP_PATH){$envArmed+='VKD3D_SHADER_DUMP_PATH'}
+ if($result.pso_log -and (Test-Path -LiteralPath 'C:\BC250\tools\pso-log.required')){$envArmed+='AMDGPU_WDDM_VKD3D_PSO_LOG'}
+ $result.env_requested=$envPlan
+ $result.env_armed=$envArmed
+ $result.env_delivery=[ordered]@{}
+ $result.steam_client_started_by_runner=$false
+ $result.steam_client_pid=0
+ # Written whenever this runner starts the client, so a later trial can tell its own client from a foreign one.
+ $steamEnvMarker='C:\BC250\tmp\steam-env.json'
+ function Set-EnvDelivery([string]$state){foreach($n in $envPlan.Keys){$result.env_delivery[$n]=$state}}
+ function Steam-ClientProcess{@(Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($steamClient)) -ErrorAction SilentlyContinue|Sort-Object StartTime)|Select-Object -First 1}
+ if($result.launch -ne 'steam'){
+  # The game is a child of this process: every variable above is in its environment by construction.
+  Set-EnvDelivery 'delivered-direct-launch'
+ }else{
+  $client=Steam-ClientProcess
+  if($client){$result.steam_client_pid=$client.Id}
+  $marker=if(Test-Path -LiteralPath $steamEnvMarker){try{Get-Content -LiteralPath $steamEnvMarker -Raw|ConvertFrom-Json}catch{$null}}else{$null}
+  $markerMatches=$false
+  if($client -and $marker -and [int]$marker.pid -eq $client.Id){
+   # The pid alone can be reused; the start time pins the process.
+   $started=try{$client.StartTime.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')}catch{''}
+   if($started -and $started -eq [string]$marker.started_utc){
+    $markerMatches=$true
+    foreach($n in $envPlan.Keys){if([string]$marker.vars.$n -ne [string]$envPlan[$n]){$markerMatches=$false}}
+   }
+  }
+  if(!$client){
+   # Nobody owns the client yet, so this process can be its parent and every variable reaches the game through it.
+   # Before this change the trial threw "Steam client not running" and needed a hand-started client.
+   Note ('steam client not running, starting it from the runner: '+$steamClient)
+   $null=[Diagnostics.Process]::Start($steamClient,'-silent')
+   $clientWait=if($gp.steam.client_wait_seconds){[int]$gp.steam.client_wait_seconds}else{60}
+   $clientSettle=if($gp.steam.client_settle_seconds){[int]$gp.steam.client_settle_seconds}else{15}
+   for($i=1;$i -le $clientWait -and !$client;$i++){Start-Sleep -Seconds 1;$client=Steam-ClientProcess}
+   if(!$client){throw ('Steam client did not start within '+$clientWait+' s: no launch')}
+   # The bootstrap process is up long before the client can take -applaunch; give it a settle window.
+   Start-Sleep -Seconds $clientSettle
+   $client=Steam-ClientProcess
+   if(!$client){throw 'Steam client exited while starting: no launch'}
+   $result.steam_client_pid=$client.Id
+   $result.steam_client_started_by_runner=$true
+   $result.steam_processes=@(Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($steamClient)) -ErrorAction SilentlyContinue).Count
+   $started=try{$client.StartTime.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')}catch{''}
+   $null=New-Item -ItemType Directory -Force -Path (Split-Path $steamEnvMarker -Parent)
+   [IO.File]::WriteAllText($steamEnvMarker,(([ordered]@{pid=$client.Id;started_utc=$started;vars=$envPlan;trial=(Split-Path $d -Leaf);written_utc=[DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')}|ConvertTo-Json -Depth 4)))
+   Note ('steam client pid '+$client.Id+' started by the runner at '+$started+', '+$envPlan.Count+' variables delivered')
+   Set-EnvDelivery 'delivered-runner-started-client'
+  }elseif($markerMatches){
+   Set-EnvDelivery 'delivered-client-started-by-runner'
+   Note ('steam client pid '+$client.Id+' was started by an earlier trial of this runner with the same variables')
+  }else{
+   # A client this runner did not start. It is never stopped here: another session or the owner may be using it.
+   $state=if($marker -and $client -and [int]$marker.pid -eq $client.Id){'not-delivered-value-differs'}else{'not-delivered-foreign-client'}
+   Set-EnvDelivery $state
+   # The experiment still arrives through the registry profile, which the steam branch reads into app_profile below.
+   if($envPlan.Contains('AMDGPU_WDDM_D3D12_EXPERIMENT')){$result.env_delivery['AMDGPU_WDDM_D3D12_EXPERIMENT']=$state+'-registry-route'}
+   $blocked=@($envArmed|Where-Object{$_ -ne 'AMDGPU_WDDM_D3D12_EXPERIMENT'})
+   if($blocked.Count){
+    $fallback=if($gp.steam.env_fallback){[string]$gp.steam.env_fallback}else{'refuse'}
+    if($fallback -eq 'direct'){
+     # The profile allows it: start the game executable from here instead, which delivers every variable. The route
+     # differs from the Steam one (no launch entry, no prelauncher), so the result says so and the reader can tell.
+     $result.launch='direct';$result.launch_fallback='steam-env-direct'
+     Set-EnvDelivery 'delivered-direct-launch-fallback'
+     Note ('steam env fallback: foreign client pid '+$result.steam_client_pid+' would not deliver '+($blocked -join ',')+'; launching '+$exe+' directly')
+    }else{
+     throw ('Steam environment not delivered: the running Steam client (pid '+$result.steam_client_pid+') was not started by this runner, so '+($blocked -join ',')+' would not reach the game. Close the client and let the runner start it, set steam.env_fallback to "direct" in the game profile, or clear the arming marker.')
+    }
+   }else{
+    Note ('steam client pid '+$result.steam_client_pid+' is foreign: '+(@($envPlan.Keys) -join ',')+' do not reach the game (none of them armed)')
+   }
+  }
+ }
+ Note ('env delivery '+(($result.env_delivery.Keys|ForEach-Object{$_+'='+$result.env_delivery[$_]}) -join ' '))
  $psi=New-Object Diagnostics.ProcessStartInfo
  $psi.FileName=$exe;$psi.WorkingDirectory=$game;$psi.UseShellExecute=$false
  # The profile's direct arguments plus the API's (e.g. -dx11); Witcher 3 has none.
@@ -877,14 +975,7 @@ try{
   # launcher-configuration.json).
   $result.app_profile=try{[string](Get-ItemProperty -LiteralPath ('HKLM:\SOFTWARE\amdgpu-wddm\D3D12\Applications\'+$appImage) -Name Experiment -ErrorAction Stop).Experiment}catch{''}
   Note ('app_profile '+$(if($result.app_profile){$result.app_profile}else{'none'}))
-  # BD-167: the knobs above go into this script's environment, which a game that Steam starts does not get. The
-  # result says so, so that no one reads the defaults as a measurement under a knob's name.
-  $knobs=@(@(@('config.experiment',[bool]$result.experiment),@('radv-perftest.txt',[bool]$result.radv_perftest),
-             @('shader-dump.on',(Test-Path -LiteralPath 'C:\BC250\tools\shader-dump.on')))|Where-Object{$_[1]}|ForEach-Object{$_[0]})
-  if($knobs.Count){
-   $result.launch_route='steam';$result.knobs_applied=$false;$result.knobs_not_applied=$knobs
-   Note ('WARNING launch through Steam: the game gets the Steam client''s environment, so these lab knobs do not apply: '+($knobs -join ', '))
-  }
+  # The environment-delivery step above starts the client when none runs, so by here one is always running.
   if(!$result.steam_processes){throw 'Steam client not running'}
   # 254: with an update pending, -applaunch starts the update (45 GB staged there) and launches the game only after
   # it, outside the trial. Launch only an app Steam reports as fully installed and current (StateFlags 4).
