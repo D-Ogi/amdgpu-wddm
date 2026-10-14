@@ -87,6 +87,12 @@ try {
  Check 'hostwatch' { & pwsh -NoProfile -File "$repo\tools\win\hostwatch\selftest.ps1" -Out "$Out\hostwatch" }
  # The emergency listener runs under Windows PowerShell 5.1 on the lab, so its parser is the one that must accept it.
  Check 'lab-emerg' { & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$repo\tools\win\lab-emerg\parse-check.ps1" }
+ # Its deadline is 600 s in gate-inputs.json, not the 180 s of the manifest, for the reason the ledger and
+ # release-provenance gates hold 600 s: 43 host tests of Python, which compete for the same cores as every
+ # other Python gate under the 24 workers of the full profile. Measured: 50.7 s alone, 57.6 s to 102.0 s over
+ # eight full suites, and 184 s - over the old deadline, with an empty log and no reason - in the one suite
+ # that shared the machine with another eight-way build. The work did not grow; the room over its own cost
+ # was never there. 600 s is six times its cost alone, so the load of the machine no longer decides it.
  Check 'kmd-deploy' { $env:BC250_ROOT=$Workspace; $env:BC250_KMD_DEPLOY_WORK=(New-Item -ItemType Directory -Force "$Out\kmd-deploy").FullName; & python "$repo\tools\win\kmd-deploy\check-offline.py" --quick }
  Check 'lab-runner' { & python -m unittest discover -s "$repo\tools\win\lab-runner" }
  Check 'target-boot' { & python -m unittest discover -s "$repo\tools\win" -p "test_target*.py" }

@@ -1360,6 +1360,9 @@
     "quality-controls": {
       "timeout": 300
     },
+    "kmd-deploy": {
+      "timeout": 600
+    },
     "control-app": {
       "inputs": [
         "host"
