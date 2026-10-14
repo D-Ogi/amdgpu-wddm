@@ -326,11 +326,13 @@ namespace Bc250Mon
                 else if (v.SettingPending) value += ", pending";
                 else if (otherMark) value += ", the mark on disk names another request: the next start is pending";
                 else if (v.Encoded.HasValue) value += ", the next start marks it pending";
-                // A mask holds the counted units below the mode, so a mode that equals the expectation still
-                // cannot reach it: the next start applies fewer units than the measurement assumes.
-                bool maskedBelow = v.CuDisableWgp.HasValue && v.CuDisableWgp.Value != 0;
+                // The row judges the units the setting gives, not the mode word: a mask holds 40 below the mode, so
+                // mode 40 with a mask is green only where that smaller count is the expected one (a chosen 30).
+                uint settingCus = v.SettingCus ?? setting.Value;
+                bool maskUnknown = setting.Value == CuModeSnapshot.Full && !v.CuDisableWgp.HasValue;
+                if (maskUnknown) value += ", WGP mask unavailable";
                 panel.Rows.Add(new Row("CU setting", value,
-                    setting.Value == expected && !otherMark && !maskedBelow ? Level.Good : Level.Warn));
+                    maskUnknown ? Level.Error : settingCus == expected && !otherMark ? Level.Good : Level.Warn));
             }
 
             if (v.Reason != 0)
