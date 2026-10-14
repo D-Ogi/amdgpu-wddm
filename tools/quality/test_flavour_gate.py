@@ -31,6 +31,7 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import struct
 import sys
 import tempfile
@@ -432,6 +433,66 @@ class ReleaseFlavour(unittest.TestCase):
         del planted[vkd3d]
         with self.assertRaises(g.GateError):
             g.release_without_ndebug(planted, rows)
+
+    def test_release_recipes_ndebug_and_optimised(self):
+        # Every other recipe of a release row is classified, and each file that compiles shipped objects spells the
+        # release NDEBUG define and an optimisation level for its compiler. The tables name exactly the recipes that
+        # the rows use.
+        rows = json.loads((REPO / "tools" / "release" / "release-sources.json").read_text(encoding="utf-8-sig"))["files"]
+
+        def read(path, edits=None):
+            if edits and path in edits:
+                return edits[path]
+            p = REPO / path
+            return p.read_text(encoding="utf-8-sig") if p.is_file() else None
+
+        self.assertEqual(g.release_recipe_findings(rows, read), [])
+        used = {(r.get("built_from") or {}).get("recipe") for r in rows} - {None}
+        tables = (g.RELEASE_COMPILES, g.NDEBUG_RECIPES, g.NOT_COMPILED, g.NDEBUG_PENDING)
+        self.assertEqual(set().union(*tables), used)
+        self.assertEqual(sum(len(t) for t in tables), len(used), "a recipe in two tables")
+        self.assertTrue(all(g.NOT_COMPILED.values()) and all(r for _, r in g.NDEBUG_PENDING.values()),
+                        "an entry without a reason")
+        # build-rebuilt-controls.ps1 has bc250hipblas.dll compiled by build-hipblas.ps1, so both files are checked.
+        self.assertIn(("compute/hipblas/build-hipblas.ps1", "clang"),
+                      g.RELEASE_COMPILES["compute/hip/build-rebuilt-controls.ps1"])
+        # The two shells compile with one flag set, in code and not only in a comment: the D3D11 shell built at /Od
+        # until tester.31.
+        for shell in ("tools/build/build-umd-d3d12.ps1", "tools/build/build-umd-dxvk.ps1"):
+            for flag in ("/O2", "/GL", "/arch:AVX2", "/LTCG"):
+                self.assertRegex(g.recipe_code(read(shell)), r"(?<![\w/:])%s(?![\w:])" % re.escape(flag), shell)
+        # The optimisation levels, by this test's own patterns: a gate pattern that also took /Od, /Ob1 or /OPT:REF
+        # would pass a recipe that compiles at /Od.
+        levels = {"cl": r"(?<![\w/])/O[12x](?!\w)", "clang": r"(?<![\w-])-O[123s](?!\w)"}
+        self.assertEqual(set(g.RELEASE_OPTIMISE), set(levels))
+        self.assertIsNone(g.RELEASE_OPTIMISE["cl"].search("cl /Od /Ob1 /Oi /link /OPT:REF /OPT:ICF '/Od'"))
+        self.assertIsNone(g.RELEASE_OPTIMISE["clang"].search("clang -O0 -Og -Ofast-math -fno-O2"))
+        for good in ("cl /O2 x", "@('/O1')", "/Ox"):
+            self.assertIsNotNone(g.RELEASE_OPTIMISE["cl"].search(good), good)
+        # Planted controls: a recipe that no table names; each file with its define removed, with the define only in a
+        # comment, and with its optimisation level removed; a pending recipe that spells the define, and one without
+        # its optimisation level.
+        planted = rows + [{"path": "payload/tools/new.exe", "built_from": {"recipe": "tools/build/build-new.ps1"}}]
+        self.assertEqual([r for r, _ in g.release_recipe_findings(planted, read)], ["tools/build/build-new.ps1"])
+        for recipe, files in sorted(g.RELEASE_COMPILES.items()):
+            for path, compiler in files:
+                with self.subTest(recipe=recipe, path=path):
+                    text, define = read(path), g.RELEASE_DEFINE[compiler]
+                    self.assertIn(define, text)
+                    gone = (recipe, "%s does not spell %s" % (path, define))
+                    for planted_text in (text.replace(define, "'/DNOTHING'"),
+                                         text.replace(define, "'/DNOTHING'") + "\n    # %s\n<# %s #>\n" % (define, define)):
+                        self.assertEqual(g.release_recipe_findings(rows, lambda p: read(p, {path: planted_text})), [gone])
+                    edits = {path: re.sub(levels[compiler], "", text)}
+                    self.assertEqual([w.split(" spells ")[0] for _, w in g.release_recipe_findings(
+                        rows, lambda p: read(p, edits))], [path])
+        for recipe, (compiler, _) in sorted(g.NDEBUG_PENDING.items()):
+            text = read(recipe)
+            self.assertNotIn(g.RELEASE_DEFINE[compiler], text)
+            edits = {recipe: text + "\n$x = %s\n" % g.RELEASE_DEFINE[compiler]}
+            self.assertEqual([r for r, _ in g.release_recipe_findings(rows, lambda p: read(p, edits))], [recipe])
+            edits = {recipe: re.sub(levels[compiler], "", text)}
+            self.assertEqual([r for r, _ in g.release_recipe_findings(rows, lambda p: read(p, edits))], [recipe])
 
     def test_live_assert_fails_release_only(self):
         # An image built without NDEBUG: it imports an assert function or a debug C runtime, or it links the static

@@ -33,7 +33,10 @@ param(
     [string]$HipLib = '',
     [string]$MockDir = '',
     [string]$OffloadArch = 'gfx1013',
-    [switch]$SkipMockRun
+    [switch]$SkipMockRun,
+    # BD-167: the release flavour compiles the library with NDEBUG, so an assert() added to it later is gone from the
+    # release and live in the lab build. The tests compile without NDEBUG in both flavours.
+    [ValidateSet('release', 'lab')][string]$Flavour = 'release'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -132,7 +135,7 @@ if (-not $HipLib -or -not (Test-Path (Join-Path $HipLib 'amdhip64.lib'))) {
 }
 $dll = Join-Path $Out 'bc250hipblas.dll'
 $implibFromLink = Join-Path $Out 'bc250hipblas.link.lib'
-Invoke-Clang ($common + $hipFlags + @('-DBC250_HIPBLAS_BUILD_DLL=1', '-shared',
+Invoke-Clang ($common + $hipFlags + @(if ($Flavour -ne 'lab') { '-DNDEBUG' }) + @('-DBC250_HIPBLAS_BUILD_DLL=1', '-shared',
     '-o', $dll, (Join-Path $hipblas 'src\bc250hipblas.hip'),
     "-L$HipLib", '-Xlinker', "/DEF:$def", '-Xlinker', "/IMPLIB:$implibFromLink",
     '-Xlinker', '/Brepro')) 'bc250hipblas.dll'

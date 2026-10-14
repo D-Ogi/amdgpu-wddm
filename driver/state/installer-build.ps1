@@ -17,7 +17,10 @@ $env:INCLUDE="$($msvc.FullName)\include;$sdk\Include\10.0.26100.0\ucrt;$sdk\Incl
 $env:LIB="$($msvc.FullName)\lib\x64;$libs\ucrt\x64;$libs\um\x64"
 $inputs=@('state','transfer','identity','windows','windows_lock','windows_migration','windows_handoff','installer_rollback','installer_store','installer_worker') |
     ForEach-Object { Join-Path $PSScriptRoot "$_.c" }
-& "$($msvc.FullName)\bin\Hostx64\x64\cl.exe" /nologo /TC /W4 /WX /O2 /MT /Brepro /FC "/d1trimfile:$repo\" "/Fo$Out\" "/Fe$Out\amdgpu-state-installer.exe" @inputs `
+# BD-167: the release flavour compiles the shipped program with NDEBUG, so an assert() added later is gone from the
+# release and live in the lab build.
+$releaseDefine=@(if($Flavour -ne 'lab'){'/DNDEBUG'})
+& "$($msvc.FullName)\bin\Hostx64\x64\cl.exe" /nologo /TC /W4 /WX /O2 /MT /Brepro /FC @releaseDefine "/d1trimfile:$repo\" "/Fo$Out\" "/Fe$Out\amdgpu-state-installer.exe" @inputs `
     /link /Brepro '/PDBALTPATH:%_PDB%' /DYNAMICBASE /NXCOMPAT onecore.lib advapi32.lib setupapi.lib cfgmgr32.lib uuid.lib bcrypt.lib newdev.lib
 if($LASTEXITCODE){throw 'Installer state worker compile failed'}
 # BD-166: the release ships this program (payload\tools\amdgpu-state-installer.exe) and rewrites no PE file, so

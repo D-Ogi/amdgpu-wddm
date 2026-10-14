@@ -149,10 +149,13 @@ function Invoke-Tool([string]$exe, [string[]]$toolArgs, [string]$what) {
 $core = @('h264_tables.cpp', 'h264_syntax.cpp', 'h264_cavlc.cpp', 'gpu_pipeline.cpp',
           'encoder.cpp', 'mft_h264.cpp', 'mft_register.cpp')
 $labFlag = '/DAMDGPU_WDDM_LAB_FLAVOUR=1'
+# BD-167: the release flavour compiles the shipped objects with NDEBUG, so an assert() added to them later is gone
+# from the release and live in the lab build. The host test's objects below keep their asserts.
+$releaseFlag = @(if (-not $Lab) { '/DNDEBUG' })
 $coreObjs = @()
 foreach ($c in $core) {
     $obj = Join-Path $Out ([IO.Path]::GetFileNameWithoutExtension($c) + '.obj')
-    Invoke-Tool $cl ($cflags + @(if ($Lab) { $labFlag }) + $inc + @("/Fo$obj", (Join-Path $src $c))) "cl $c"
+    Invoke-Tool $cl ($cflags + @(if ($Lab) { $labFlag }) + $releaseFlag + $inc + @("/Fo$obj", (Join-Path $src $c))) "cl $c"
     $coreObjs += $obj
 }
 # The host test's core: the lab flavour in either build (BD-167), in a directory of its own.
@@ -171,7 +174,7 @@ if (-not $Lab) {
 # ---------------------------------------------------------------- the transform DLL
 
 $dllObj = Join-Path $Out 'dllmain.obj'
-Invoke-Tool $cl ($cflags + $inc + @("/Fo$dllObj", (Join-Path $src 'dllmain.cpp'))) 'cl dllmain.cpp'
+Invoke-Tool $cl ($cflags + $releaseFlag + $inc + @("/Fo$dllObj", (Join-Path $src 'dllmain.cpp'))) 'cl dllmain.cpp'
 
 $dll = Join-Path $Out 'amdgpu_wddm_mft_h264.dll'
 if (Test-Path -LiteralPath $dll) {

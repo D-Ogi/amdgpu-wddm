@@ -137,8 +137,9 @@ Meson also leaves a `.wraplock` file there. An offline machine needs those subpr
 All four configurations are `debugoptimized`. RADV adds `b_ndebug=true`: `NDEBUG` is defined, so Mesa's
 assertions and the NIR and ACO validation after every pass are off, while the PDB stays. With meson's default
 `b_ndebug=if-release` they took at least 40 % of the ICD's pipeline compile time in a warm game run
-(Witcher 3, trial 135). The three UMD configurations keep that default, so `NDEBUG` is not defined there. A
-performance comparison with a Linux build must use the same setting or change it on both sides.
+(Witcher 3, trial 135). The desktop UMD configurations keep that default in the lab flavour, so `NDEBUG` is not
+defined there. Their release flavour adds `-Db_ndebug=true` (below). A performance comparison with a Linux build
+must use the same setting or change it on both sides.
 
 ### RADV Vulkan ICD (`-Config radv`)
 
@@ -394,6 +395,16 @@ flavour removes both at compile time. One switch names the lab flavour in every 
 | D3D11 and D3D12 shells | `tools\build\build-umd-dxvk.ps1 -Lab`, `build-umd-d3d12.ps1 -Lab` | `AMDGPU_WDDM_D3D11_EXPERIMENT` and `AMDGPU_WDDM_D3D12_EXPERIMENT` as a source of the experiment list. |
 | CLI and `bc250control.dll` | `tools\win\bc250kmd_cli\build.ps1 -Lab`, `tools\win\amdgpu_wddm_control\build.ps1 -Lab` | The raw diagnostic verbs (`tools/win/bc250kmd_cli/README.md`). |
 
+The release flavour of every component that a release builds defines `NDEBUG`, so no assert is live in a shipped
+file, and the lab flavour keeps the asserts. The Mesa, DXVK and vkd3d-proton configurations do it with
+`-Db_ndebug=true` (above). The other build scripts of release rows give `/DNDEBUG` (clang: `-DNDEBUG`) to the
+compiles of the shipped objects only: the D3D11 and D3D12 shells, the H.264 transform, the CLI and
+`bc250control.dll`, the benchmark and capability tools, the state installer, the HIP runtime, the HIP sample and
+`bc250hipblas.dll`. Their host tests compile without it in both flavours, because the D3D12 shell's tests check
+with `assert`. The KMD defines `NDEBUG` in both flavours: a kernel `ASSERT` follows `DBG`, not `NDEBUG`. The RADV
+configurations, `zink-gl-icd` and `ddi-engine-lto` also set it in both flavours, for the compile time that the RADV
+paragraph above gives. `build-umd-router.ps1` does not give it yet. The router sources have no `assert`.
+
 `tools/quality/flavour_gate.py` checks the built bytes, not the sources. A release set fails on a raw escape
 marker in the KMD or on a forbidden name in any scanned PE file, in ASCII or UTF-16LE. A release set also fails
 on a live assert in any scanned PE file. The finding is an assert import, an import from a debug C runtime, or
@@ -444,7 +455,12 @@ python -m unittest discover -s tools/quality -p test_flavour_gate.py
   lab CLI as the `driver-state-cli-lab-x64` check.
 - `test_flavour_gate.py` checks the release flavour of each Mesa, DXVK and vkd3d-proton config that a release
   row of `tools/release/release-sources.json` builds. It must define NDEBUG: the last `-Db_ndebug` of `options` and
-  `release_options` is `true`. A planted config without it fails.
+  `release_options` is `true`. A planted config without it fails. Each other build script of a release row is
+  in one table of the gate: `RELEASE_COMPILES` with the files that compile shipped objects, `NOT_COMPILED` or
+  `NDEBUG_PENDING`. Each file of `RELEASE_COMPILES` must spell the define and an optimisation level (`/O1`, `/O2`
+  or `/Ox`, for clang `-O1` to `-O3` or `-Os`). A compile line without one builds at `/Od`, as the D3D11 shell did
+  until tester.31. A flag that only a comment names does not count. A planted row with an unknown script fails. So does each file without its define or without its
+  optimisation level, and a pending script that gives the define, which then moves to `RELEASE_COMPILES`.
 - Each fork has its own host test of the names that its release flavour must not read
   (`src/util/amdgpu_wddm_release_test.py` in Mesa, `src/ddi/release_flavour_test.py` in DXVK,
   `libs/ddi/release_flavour_test.py` in vkd3d-proton).

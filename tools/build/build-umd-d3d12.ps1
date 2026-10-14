@@ -59,13 +59,16 @@ try {
  # /FC with /d1trimfile: __FILE__ and the anonymous-namespace names see the path below each tree only.
  $flags=@('/nologo','/std:c++20','/EHsc','/W4','/WX','/O2','/GL','/arch:AVX2',("/external:W" + $(if ($Arch -eq 'x86') { 1 } else { 0 })),'/MT','/DNOMINMAX','/Brepro','/Zi','/FC',"/d1trimfile:$repo","/d1trimfile:$MesaSource","/d1trimfile:$VulkanInclude","/d1trimfile:$EngineInclude","/external:I$VulkanInclude","/external:I$EngineInclude","/external:I$MesaSource\src\util","/external:I$wdk","/external:I$wdk\..\shared", "/I$repo\driver\contract\third_party", "/I$repo\driver\contract\uapi-shim")
  if($Lab){$flags+='/DAMDGPU_WDDM_LAB_FLAVOUR=1'}
+ # BD-167: the release flavour compiles the shipped DLL with NDEBUG, so an assert() added to it later is gone from the
+ # release and live in the lab build. Not in $flags: the host tests below check with assert() in both flavours.
+ $shipped=@(if(-not $Lab){'/DNDEBUG'})
  Push-Location $OutputDir
  try {
   if(Test-Path amdgpu_wddm_d3d12.dll){
    $hash=(Get-FileHash amdgpu_wddm_d3d12.dll).Hash
    Copy-Item amdgpu_wddm_d3d12.dll "retained-$hash.dll"
   }
-  & cl.exe @flags /LD /Fe:amdgpu_wddm_d3d12.dll "$repo\driver\umd\d3d12\adapter.cpp" "$repo\driver\umd\d3d12\adapter-caps.cpp" "$repo\driver\umd\d3d12\device-engine.cpp" "$repo\driver\umd\d3d12\hosted-dispatch.cpp" "$repo\driver\umd\d3d12\queue-engine.cpp" "$repo\driver\umd\d3d12\hosted-queue.cpp" "$repo\driver\umd\d3d12\heap-import.cpp" "$repo\driver\umd\d3d12\native-queue-ddi.cpp" "$repo\driver\umd\d3d12\native-residency-ddi.cpp" "$repo\driver\umd\d3d12\native-tables.cpp" $engineLib /link /Brepro /DEBUG /OPT:REF /OPT:ICF '/PDBALTPATH:%_PDB%' /LTCG /MAP:amdgpu_wddm_d3d12.map "/DEF:$repo\driver\umd\d3d12\amdgpu_wddm_d3d12.def"
+  & cl.exe @flags @shipped /LD /Fe:amdgpu_wddm_d3d12.dll "$repo\driver\umd\d3d12\adapter.cpp" "$repo\driver\umd\d3d12\adapter-caps.cpp" "$repo\driver\umd\d3d12\device-engine.cpp" "$repo\driver\umd\d3d12\hosted-dispatch.cpp" "$repo\driver\umd\d3d12\queue-engine.cpp" "$repo\driver\umd\d3d12\hosted-queue.cpp" "$repo\driver\umd\d3d12\heap-import.cpp" "$repo\driver\umd\d3d12\native-queue-ddi.cpp" "$repo\driver\umd\d3d12\native-residency-ddi.cpp" "$repo\driver\umd\d3d12\native-tables.cpp" $engineLib /link /Brepro /DEBUG /OPT:REF /OPT:ICF '/PDBALTPATH:%_PDB%' /LTCG /MAP:amdgpu_wddm_d3d12.map "/DEF:$repo\driver\umd\d3d12\amdgpu_wddm_d3d12.def"
   if($LASTEXITCODE){throw 'Adapter build failed'}
   # The runtime finds the shell by one export name, OpenAdapter12, on x64 and on x86 alike (the .def file keeps the
   # x86 stdcall decoration out of the name). The image's machine must be the one asked for.

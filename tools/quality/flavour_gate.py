@@ -71,7 +71,10 @@ NDEBUG: the release flavour of every Mesa, DXVK and vkd3d-proton build config th
 (tools/release/release-sources.json, the recipe and its -Config) must define NDEBUG, so that no assert and no
 debug-only parser is live in a shipped DLL. Its option set is "options" and then "release_options" (the recipe's
 *-configs.json, NDEBUG_RECIPES), and the last -Db_ndebug of the two must be true. release_without_ndebug() names
-every config that fails, and test_flavour_gate.py runs it on the repository's own files. --flavour release also
+every config that fails. Every other recipe of a release row compiles its shipped objects with NDEBUG in the release
+flavour and with an optimisation level: release_recipe_findings() names a recipe that no table here classifies, a
+file of RELEASE_COMPILES that does not spell its define, and a compiling file without /O1, /O2 or /Ox (clang: -O1 to
+-O3 or -Os). test_flavour_gate.py runs both on the repository's own files. --flavour release also
 fails every scanned PE with a live assert (live_asserts()): an import of _assert, _wassert or RtlAssert, an import
 from a debug C runtime, or the assert message of the static C runtime, which the linker keeps only when some code
 calls assert. A lab set keeps its asserts and only records them.
@@ -259,6 +262,34 @@ NDEBUG_RECIPES = {
     'tools/build/build-dxvk.ps1': 'tools/build/dxvk-configs.json',
     'tools/build/build-vkd3d.ps1': 'tools/build/vkd3d-configs.json',
 }
+# Every other recipe that a release row names (NDEBUG above), with the files that compile its shipped objects and
+# their compiler. Each file must spell the compiler's NDEBUG define (RELEASE_DEFINE) and an optimisation level
+# (RELEASE_OPTIMISE): a compile line without an /O flag builds at /Od, as the D3D11 shell's did until tester.31. The
+# KMD defines NDEBUG in both flavours: a kernel ASSERT follows DBG, not NDEBUG.
+RELEASE_DEFINE = {'cl': "'/DNDEBUG'", 'clang': "'-DNDEBUG'"}
+RELEASE_OPTIMISE = {'cl': re.compile(r"(?<![\w/])/O[12x](?!\w)"), 'clang': re.compile(r"(?<![\w-])-O[123s](?!\w)")}
+RELEASE_COMPILES = {
+    'tools/build/build-umd-d3d12.ps1': (('tools/build/build-umd-d3d12.ps1', 'cl'),),
+    'tools/build/build-umd-dxvk.ps1': (('tools/build/build-umd-dxvk.ps1', 'cl'),),
+    'driver/umd/mft-h264/build.ps1': (('driver/umd/mft-h264/build.ps1', 'cl'),),
+    'tools/win/amdgpu_wddm_control/build.ps1': (('tools/win/amdgpu_wddm_control/build.ps1', 'cl'),),
+    'tools/win/d3d11bench/build.ps1': (('tools/win/d3d11bench/build.ps1', 'cl'),),
+    'tools/win/d3d12caps/build.ps1': (('tools/win/d3d12caps/build.ps1', 'cl'),),
+    'driver/state/installer-build.ps1': (('driver/state/installer-build.ps1', 'cl'),),
+    'compute/hip/build-runtime.ps1': (('compute/hip/build-runtime.ps1', 'cl'),),
+    'compute/hip/build-rebuilt-controls.ps1': (('compute/hip/build-rebuilt-controls.ps1', 'clang'),
+                                               ('compute/hipblas/build-hipblas.ps1', 'clang')),
+    'driver/kmd/build.ps1': (('driver/kmd/build.ps1', 'cl'),),
+}
+# The recipes of release rows that compile nothing.
+NOT_COMPILED = {'tools/build/write-umd-config.py': 'writes a text settings file'}
+# The recipes that do not define NDEBUG yet, each with its compiler and reason. Their optimisation level is checked.
+# release_recipe_findings() fails one that spells the define, so its entry moves to RELEASE_COMPILES in the change
+# that adds it.
+NDEBUG_PENDING = {
+    'tools/build/build-umd-router.ps1': ('cl', 'no assert() in the router sources, and the live-assert rule covers '
+                                               'its bytes'),
+}
 # A live assert in a PE (NDEBUG above): an import of an assert function (the C runtime's, or RtlAssert of a checked
 # kernel build), an import from a debug C runtime, or the static C runtime's assert message, which the linker keeps
 # (/OPT:REF) only when some code calls assert.
@@ -291,6 +322,46 @@ def release_without_ndebug(configs, rows):
         if not values or values[-1] != 'true':
             missing.append((recipe, name, row.get('path')))
     return sorted(missing)
+
+
+def recipe_code(text):
+    """A PowerShell recipe without its comments (<# #> blocks and lines that start with #): a flag that only a comment
+    names compiles nothing."""
+    text = re.sub(r'<#.*?#>', '', text, flags=re.S)
+    return '\n'.join(line for line in text.splitlines() if not line.lstrip().startswith('#'))
+
+
+def release_recipe_findings(rows, read):
+    """The recipes of release rows (release-sources.json "files") that are not seen to build their release flavour
+    with NDEBUG and an optimisation level, as sorted (recipe, why) pairs: a recipe that RELEASE_COMPILES,
+    NDEBUG_RECIPES, NOT_COMPILED and NDEBUG_PENDING do not name, a file of RELEASE_COMPILES that does not spell its
+    define, a compiling file without an optimisation level, and a pending recipe that spells the define now. Comments
+    do not count (recipe_code()). The meson recipes are release_without_ndebug()'s. read(path) gives the text of a
+    repository file, or None when there is no such file."""
+    found = []
+    for recipe in sorted({(row.get('built_from') or {}).get('recipe') for row in rows} - {None}):
+        if recipe in NDEBUG_RECIPES or recipe in NOT_COMPILED:
+            continue
+        if recipe in NDEBUG_PENDING:
+            files, pending = ((recipe, NDEBUG_PENDING[recipe][0]),), True
+        elif recipe in RELEASE_COMPILES:
+            files, pending = RELEASE_COMPILES[recipe], False
+        else:
+            found.append((recipe, 'not classified (RELEASE_COMPILES, NDEBUG_RECIPES, NOT_COMPILED, NDEBUG_PENDING)'))
+            continue
+        for path, compiler in files:
+            text = read(path)
+            if text is None:
+                found.append((recipe, '%s: no such file' % path))
+                continue
+            text = recipe_code(text)
+            if not RELEASE_OPTIMISE[compiler].search(text):
+                found.append((recipe, '%s spells no optimisation level (%s)' % (path, RELEASE_OPTIMISE[compiler].pattern)))
+            if pending and RELEASE_DEFINE[compiler] in text:
+                found.append((recipe, '%s defines NDEBUG now: move it from NDEBUG_PENDING to RELEASE_COMPILES' % path))
+            elif not pending and RELEASE_DEFINE[compiler] not in text:
+                found.append((recipe, '%s does not spell %s' % (path, RELEASE_DEFINE[compiler])))
+    return sorted(found)
 
 
 def read_pe(path):

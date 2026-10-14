@@ -125,11 +125,14 @@ if ($LASTEXITCODE -ne 0) { throw 'unit tests failed' }
 $env:INCLUDE = ''; $env:LIB = ''
 # /Z7 on the state client and on both products below: the debug information rides in the objects, so the two
 # shipped native files get a PDB from /DEBUG at the link and no compiler database is written beside them.
+# BD-167: the release flavour compiles the shipped objects with NDEBUG, so an assert() added to them later is gone
+# from the release and live in the lab build.
+$releaseDefine = @(if (-not $Lab) { '/DNDEBUG' })
 $stateFlags = @('/O2','/MT','/Brepro','/Z7',"/I$($msvc.FullName)\include","/I$sdk\Include\$KitVersion\ucrt",
-    "/I$sdk\Include\$KitVersion\um","/I$sdk\Include\$KitVersion\shared")
+    "/I$sdk\Include\$KitVersion\um","/I$sdk\Include\$KitVersion\shared") + $releaseDefine
 $stateObjects = & (Join-Path $repo 'tools\state\build-objects.ps1') -Compiler $cl -Out "$obj\state" -Flags $stateFlags -Exports
-$labDefine = @(if ($Lab) { '/DAMDGPU_WDDM_LAB_FLAVOUR=1' })
-& $cl @labDefine @('/nologo', '/W4', '/WX', '/O2', '/MT', '/LD', '/Brepro', '/Z7', '/DBC250_CONTROL_DLL', '/D_CRT_SECURE_NO_WARNINGS',
+$flavourDefine = @(if ($Lab) { '/DAMDGPU_WDDM_LAB_FLAVOUR=1' }) + $releaseDefine
+& $cl @flavourDefine @('/nologo', '/W4', '/WX', '/O2', '/MT', '/LD', '/Brepro', '/Z7', '/DBC250_CONTROL_DLL', '/D_CRT_SECURE_NO_WARNINGS',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/Fo$obj\bc250control.obj", "/Fe$Out\bc250control.dll",
     (Join-Path $repo 'tools\win\bc250kmd_cli\bc250kmd_cli.c')) @stateObjects @('/link', '/Brepro', '/DEBUG',
@@ -148,7 +151,7 @@ Remove-Item "$Out\bc250control.exp", "$Out\bc250control.lib" -ErrorAction Silent
 # 2b. bc250kmd_cli.exe from the same translation unit and the same flags, without BC250_CONTROL_DLL: the release ships
 # the CLI and the DLL of one build, so the CLI has every command the DLL's source has (tester.10 shipped a CLI of the
 # KMD branch without health, clock, telemetry, vram and sdmaib). Without arguments it prints its usage and exits 2.
-& $cl @labDefine @('/nologo', '/W4', '/WX', '/O2', '/MT', '/Brepro', '/Z7', '/D_CRT_SECURE_NO_WARNINGS',
+& $cl @flavourDefine @('/nologo', '/W4', '/WX', '/O2', '/MT', '/Brepro', '/Z7', '/D_CRT_SECURE_NO_WARNINGS',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/Fo$obj\bc250kmd_cli.obj", "/Fe$Out\bc250kmd_cli.exe",
     (Join-Path $repo 'tools\win\bc250kmd_cli\bc250kmd_cli.c')) @stateObjects @('/link', '/Brepro', '/DEBUG',

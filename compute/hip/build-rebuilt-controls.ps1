@@ -61,7 +61,9 @@ try {
         # Shared sample-oracle headers define static helpers used only by their
         # separate host tests (vadd_produced); do not edit those production inputs.
         '-Wno-unused-function', "-I$PSScriptRoot/include")
-    if ($Lab) { $flags += '-DAMDGPU_WDDM_LAB_FLAVOUR=1' }
+    # BD-167: the release flavour compiles with NDEBUG, so an assert() added later is gone from the release and live
+    # in the lab build.
+    if ($Lab) { $flags += '-DAMDGPU_WDDM_LAB_FLAVOUR=1' } else { $flags += '-DNDEBUG' }
     foreach ($name in @('vadd', 'hipbench')) {
         $exe = Join-Path $Out "$name.exe"
         & $clang @flags (Join-Path $PSScriptRoot "samples/$name.hip") "-L$importDir" -o $exe
@@ -77,7 +79,7 @@ try {
         }
     }
     & (Join-Path $hipblas 'build-hipblas.ps1') -Root $Root -Out (Join-Path $Out 'hipblas') `
-        -HipLib $importDir -ClangBin $ClangBin -SkipMockRun
+        -HipLib $importDir -ClangBin $ClangBin -SkipMockRun -Flavour $Flavour
     # The called builder throws on every failing tool or CPU-test exit.
     foreach ($pin in $pins) {
         if ((Get-FileHash -LiteralPath $pin.path).Hash -ne $pin.sha256) {

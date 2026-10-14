@@ -126,9 +126,10 @@ $libpaths = @("/LIBPATH:$(Join-Path $msvc.FullName 'lib\x64')", "/LIBPATH:$sdkLi
 $libpaths = @('/Brepro') + $libpaths
 $warn = @('/nologo', '/W4', '/WX', '/O2', '/Brepro', '/D_CRT_SECURE_NO_WARNINGS', '/DBC250_HIP_BUILD_DLL')
 # BD-167: every test piece is the lab flavour ($warn below, which the tests use); the product DLL takes the flavour
-# of the build ($productWarn).
+# of the build ($productWarn), and its release flavour compiles with NDEBUG, so an assert() added later is gone from
+# the release and live in the lab build.
 $labFlag = '/DAMDGPU_WDDM_LAB_FLAVOUR=1'
-$productWarn = $warn + @(if ($Lab) { $labFlag })
+$productWarn = $warn + @(if ($Lab) { $labFlag } else { '/DNDEBUG' })
 $warn = $warn + @($labFlag)
 
 function Invoke-Cl([string[]]$Arguments, [string]$What) {

@@ -53,6 +53,9 @@ $env:INCLUDE = ''; $env:LIB = ''
 # of one commit in two directories give the same bytes (docs/design/reproducible-builds.md).
 $repro = @('/Brepro', '/FC', "/d1trimfile:$((Resolve-Path (Join-Path $here '..\..\..')).Path)")
 $variant = @(); if ($AgilitySdkVersion) { $variant = @("/DCAPS_AGILITY_SDK_VERSION=$AgilitySdkVersion") }
+# BD-167: the release flavour compiles with NDEBUG, so an assert() added later is gone from the release and live in
+# the lab build.
+if ($Flavour -ne 'lab') { $variant += '/DNDEBUG' }
 if ($Tool -eq 'd3d12sm68') {
     # The test shaders, compiled by the SDK's dxc (x64 host) into headers the client embeds; dxil.dll next to dxc.exe
     # signs them, so the runtime accepts them without a development-mode switch.
