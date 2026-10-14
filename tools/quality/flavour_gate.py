@@ -67,11 +67,14 @@ must be the declaration's package slots, each exactly once. --negative-control <
 name and an undeclared prefixed name to the scanned bytes of that one file, in memory, and the per-file check must
 report both (release) or the undeclared one (lab); a scan that does not see them fails the set.
 
-NDEBUG: the release flavour of every Mesa build config that a release row builds (tools/release/release-sources.json,
-tools/build/build-mesa.ps1 -Config) must define NDEBUG, so that no assert and no debug-only parser is live in a
-shipped DLL. Its option set is "options" and then "release_options" (tools/build/mesa-configs.json), and the last
--Db_ndebug of the two must be true. mesa_release_without_ndebug() names every config that fails, and
-test_flavour_gate.py runs it on the repository's own files.
+NDEBUG: the release flavour of every Mesa, DXVK and vkd3d-proton build config that a release row builds
+(tools/release/release-sources.json, the recipe and its -Config) must define NDEBUG, so that no assert and no
+debug-only parser is live in a shipped DLL. Its option set is "options" and then "release_options" (the recipe's
+*-configs.json, NDEBUG_RECIPES), and the last -Db_ndebug of the two must be true. release_without_ndebug() names
+every config that fails, and test_flavour_gate.py runs it on the repository's own files. --flavour release also
+fails every scanned PE with a live assert (live_asserts()): an import of _assert, _wassert or RtlAssert, an import
+from a debug C runtime, or the assert message of the static C runtime, which the linker keeps only when some code
+calls assert. A lab set keeps its asserts and only records them.
 
 The gate fails closed: no flavour, a missing file, a file with a PE suffix that is not a PE image, no KMD, two KMD
 files in a package, another kernel driver (.sys) in the set, two files with one payload path under one directory,
@@ -250,29 +253,43 @@ def driverstore_members():
     return _MEMBERS
 
 
-MESA_RECIPE = 'tools/build/build-mesa.ps1'
+# The recipes whose release flavour must define NDEBUG, each with the file of its option sets (NDEBUG above).
+NDEBUG_RECIPES = {
+    'tools/build/build-mesa.ps1': 'tools/build/mesa-configs.json',
+    'tools/build/build-dxvk.ps1': 'tools/build/dxvk-configs.json',
+    'tools/build/build-vkd3d.ps1': 'tools/build/vkd3d-configs.json',
+}
+# A live assert in a PE (NDEBUG above): an import of an assert function (the C runtime's, or RtlAssert of a checked
+# kernel build), an import from a debug C runtime, or the static C runtime's assert message, which the linker keeps
+# (/OPT:REF) only when some code calls assert.
+ASSERT_IMPORTS = ('_assert', '_wassert', 'RtlAssert')
+DEBUG_RUNTIMES = ('ucrtbased.dll', 'vcruntime140d.dll', 'vcruntime140_1d.dll', 'msvcp140d.dll')
+CRT_ASSERT_TEXT = 'Assertion failed: %Ts, file %Ts, line %d'
 
 
-def mesa_release_without_ndebug(configs, rows):
-    """The Mesa configs (mesa-configs.json "configs") that a release row (release-sources.json "files") builds with
-    build-mesa.ps1 and whose release flavour does not define NDEBUG, as sorted (config, row path) pairs. The release
-    flavour is "options" and then "release_options", which build-mesa.ps1 adds without -Lab; meson takes the last
-    -Db_ndebug. A row without -Config, or a config the file does not have, cannot be judged."""
+def release_without_ndebug(configs, rows):
+    """The build configs that a release row (release-sources.json "files") builds with a recipe of NDEBUG_RECIPES
+    and whose release flavour does not define NDEBUG, as sorted (recipe, config, row path) triples. configs maps each
+    recipe to the "configs" object of its file. The release flavour is "options" and then "release_options", which
+    the recipe adds without -Lab; meson takes the last -Db_ndebug. A row without -Config, or a config that its
+    recipe's file does not have, cannot be judged."""
     missing = []
     for row in rows:
         built = row.get('built_from') or {}
-        if built.get('recipe') != MESA_RECIPE:
+        recipe = built.get('recipe')
+        if recipe not in NDEBUG_RECIPES:
             continue
         args = list(built.get('args') or [])
         if '-Config' not in args or args.index('-Config') + 1 >= len(args):
-            raise GateError('%s: a %s row without -Config' % (row.get('path'), MESA_RECIPE))
+            raise GateError('%s: a %s row without -Config' % (row.get('path'), recipe))
         name = args[args.index('-Config') + 1]
-        if name not in configs:
-            raise GateError('%s: -Config %s is not in mesa-configs.json' % (row.get('path'), name))
-        options = list(configs[name].get('options') or []) + list(configs[name].get('release_options') or [])
+        if name not in (configs.get(recipe) or {}):
+            raise GateError('%s: -Config %s is not in %s' % (row.get('path'), name, NDEBUG_RECIPES[recipe]))
+        config = configs[recipe][name]
+        options = list(config.get('options') or []) + list(config.get('release_options') or [])
         values = [o.split('=', 1)[1] for o in options if o.startswith('-Db_ndebug=')]
         if not values or values[-1] != 'true':
-            missing.append((name, row.get('path')))
+            missing.append((recipe, name, row.get('path')))
     return sorted(missing)
 
 
@@ -288,6 +305,73 @@ def read_pe(path):
     if pe + 4 > len(data) or data[pe:pe + 4] != b'PE\0\0':
         raise GateError('%s: not a PE image (no PE signature)' % p)
     return data
+
+
+def pe_imports(data):
+    """[(dll, function)] of the import directory of a PE image (read_pe), a function by name or '#<ordinal>'. An
+    image without an optional header imports nothing. A directory that points outside the image cannot be judged."""
+    def u(at, size):
+        if at < 0 or at + size > len(data):
+            raise GateError('the import directory points outside the image (offset 0x%x)' % at)
+        return int.from_bytes(data[at:at + size], 'little')
+
+    def text(at):
+        end = data.find(b'\0', at)
+        if at >= len(data) or end < 0:
+            raise GateError('an import name outside the image (offset 0x%x)' % at)
+        return data[at:end].decode('latin-1')
+
+    coff = u(0x3c, 4) + 4
+    count, optsize = u(coff + 2, 2), u(coff + 16, 2)
+    opt = coff + 20
+    if optsize == 0:
+        return []
+    magic = u(opt, 2)
+    if magic not in (0x10b, 0x20b):
+        raise GateError('optional header magic 0x%x is neither PE32 nor PE32+' % magic)
+    wide = magic == 0x20b
+    if u(opt + (108 if wide else 92), 4) < 2:
+        return []
+    rva = u(opt + (112 if wide else 96) + 8, 4)
+    if not rva:
+        return []
+    sections = [(u(s + 12, 4), max(u(s + 8, 4), u(s + 16, 4)), u(s + 20, 4))
+                for s in range(opt + optsize, opt + optsize + 40 * count, 40)]
+
+    def at(r):
+        for va, size, raw in sections:
+            if va <= r < va + size:
+                return raw + r - va
+        raise GateError('import RVA 0x%x is in no section' % r)
+
+    found, d, step = [], at(rva), 8 if wide else 4
+    for _ in range(len(data) // 20):
+        thunks, name, first = u(d, 4), u(d + 12, 4), u(d + 16, 4)
+        if not (thunks or name or first):
+            return found
+        dll, t = text(at(name)), at(thunks or first)
+        for _ in range(len(data) // step):
+            v = u(t, step)
+            if not v:
+                break
+            found.append((dll, '#%d' % (v & 0xffff) if v >> (8 * step - 1) else text(at(v & 0x7fffffff) + 2)))
+            t += step
+        d += 20
+    raise GateError('the import directory has no terminating entry')
+
+
+def live_asserts(data):
+    """What keeps an assert live in one PE image, as texts: empty for an image built with NDEBUG."""
+    found = []
+    for dll, fn in pe_imports(data):
+        if fn in ASSERT_IMPORTS:
+            found.append('imports %s!%s' % (dll, fn))
+        if dll.lower() in DEBUG_RUNTIMES and 'imports the debug runtime ' + dll not in found:
+            found.append('imports the debug runtime ' + dll)
+    for enc, key in (('ascii', 'ascii'), ('utf-16-le', 'utf16')):
+        if CRT_ASSERT_TEXT.encode(enc) in data:
+            found.append('holds the assert message of the static C runtime (%s)' % key)
+    return found
 
 
 def starts_as_pe(path):
@@ -534,11 +618,14 @@ def check(decl, flavour, kmd_path, others, kmd_only=False, slots=None, blobs=Non
     for path in [kmd_path] + list(others):
         data = blobs[path]
         finding = scan_file(decl, data, forbidden, out_of_scope, declared)
+        asserts = live_asserts(data)
         held[path] = set(finding['forbidden'])
         record['files'].append({'path': str(path), 'slot': slots[path], 'sha256': hashlib.sha256(data).hexdigest().upper(),
                                 'forbidden': finding['forbidden'], 'out_of_scope': finding['out_of_scope'],
-                                'undeclared': finding['undeclared']})
+                                'undeclared': finding['undeclared'], 'asserts': asserts})
         failures += file_failures(decl, flavour, path, finding, data)
+        if flavour == 'release':
+            failures += ['%s: a live assert, it %s: the release flavour builds with NDEBUG' % (path, a) for a in asserts]
         for name in sorted(finding['out_of_scope']):
             notes.append('%s: %s (out of scope, recorded)' % (path, name))
 

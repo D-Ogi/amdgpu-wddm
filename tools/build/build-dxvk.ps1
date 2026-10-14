@@ -67,6 +67,11 @@ if (-not $Glslang) { $Glslang = Join-Path $root 'scratch\glslang\bin' }
 if (-not $Temp) { $Temp = Join-Path $root 'scratch\tmp' }
 $Source = [IO.Path]::GetFullPath($Source)
 $Build = [IO.Path]::GetFullPath($Build)
+# BD-167: the release flavour of a fork that declares the flavour also takes the config's release_options:
+# -Db_ndebug=true for ddi-engine, so that no assert is live in the shipped engine (DXVK's own release packages define
+# NDEBUG too). Its lab flavour keeps the asserts. A tree without the flavour option builds exactly the recorded set.
+$forkFlavour = Get-AmdgpuWddmFlavour $Source -Lab:$Lab
+if ($forkFlavour -eq 'release') { $options += @($recipeConfig.release_options | Where-Object { $_ }) }
 $options = Add-ReproducibleMesonOptions $options $Source $Build -Arch $Arch
 
 if (-not (Test-Path -LiteralPath (Join-Path $Source 'src\dxvk\dxvk_device.h'))) { throw "$Source is not a DXVK source tree" }
@@ -137,7 +142,7 @@ try {
         submodules      = Get-SubmoduleStatus $Source
         build_dir       = $Build
         meson_options   = $options
-        flavour         = Get-AmdgpuWddmFlavour $Source -Lab:$Lab
+        flavour         = $forkFlavour
         ninja_targets   = $targets
         environment     = [ordered]@{
             vs_install          = $vs

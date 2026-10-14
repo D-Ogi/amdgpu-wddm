@@ -24,6 +24,7 @@
         "-Denable_d3d10=false",
         "-Denable_ddi_engine=true"
       ],
+      "release_options": ["-Db_ndebug=true"],
       "targets": [
         "src/ddi/amdgpu_wddm_dxvk.dll",
         "src/ddi/amdgpu_wddm_dxvk_engine_test.exe"

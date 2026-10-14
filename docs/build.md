@@ -272,6 +272,10 @@ this project's commits under `src/ddi/` and small host-mode hooks in `src/dxvk/`
 published at <https://github.com/D-Ogi/dxvk/tree/amdgpu-wddm/ddi-engine>; each `recipe.json` names its commit.
 Branch commits before engine header r7 name the DLL `bc250dxvk.dll` and the test `bc250dxvk_engine_test.exe`.
 
+The release flavour of `ddi-engine` adds `-Db_ndebug=true` (`release_options` in `dxvk-configs.json`). Thus no
+assert is live in the shipped engine. DXVK's own release packages also define NDEBUG. The lab flavour keeps the
+asserts.
+
 The branch's `dxbc-spirv` submodule points at <https://github.com/D-Ogi/dxbc-spirv> (branch
 `amdgpu-wddm/ddi-engine`), which carries the geometry shader output stream decoration and the pass-through GS fix
 (253c08ce, not upstream yet). On 2026-09-30 both branches merged their upstream (DXVK 3d01f88b pins dxbc-spirv
@@ -391,7 +395,9 @@ flavour removes both at compile time. One switch names the lab flavour in every 
 | CLI and `bc250control.dll` | `tools\win\bc250kmd_cli\build.ps1 -Lab`, `tools\win\amdgpu_wddm_control\build.ps1 -Lab` | The raw diagnostic verbs (`tools/win/bc250kmd_cli/README.md`). |
 
 `tools/quality/flavour_gate.py` checks the built bytes, not the sources. A release set fails on a raw escape
-marker in the KMD or on a forbidden name in any scanned PE file, in ASCII or UTF-16LE. A lab set fails when a
+marker in the KMD or on a forbidden name in any scanned PE file, in ASCII or UTF-16LE. A release set also fails
+on a live assert in any scanned PE file. The finding is an assert import, an import from a debug C runtime, or
+the assert message of the static C runtime. A lab set keeps its asserts. A lab set fails when a
 file lost one of its lab-only names, so a build that lost the switch cannot pass. The declaration
 `tools/quality/flavour_gate.json` gives each forbidden name, what it does and the files whose lab build must
 still hold it. It also gives the allowed and the out-of-scope names, each with its reason. A file is named by
@@ -436,8 +442,8 @@ python -m unittest discover -s tools/quality -p test_flavour_gate.py
   `tools\win\bc250kmd_cli\test-flavour.ps1` on the usage text of the CLI that they built.
 - The self-test runs in the `quality-controls` check of `tools/quality/quick.ps1`, and `quick.ps1` builds the
   lab CLI as the `driver-state-cli-lab-x64` check.
-- `test_flavour_gate.py` checks the release flavour of each Mesa config that a release row of
-  `tools/release/release-sources.json` builds. It must define NDEBUG: the last `-Db_ndebug` of `options` and
+- `test_flavour_gate.py` checks the release flavour of each Mesa, DXVK and vkd3d-proton config that a release
+  row of `tools/release/release-sources.json` builds. It must define NDEBUG: the last `-Db_ndebug` of `options` and
   `release_options` is `true`. A planted config without it fails.
 - Each fork has its own host test of the names that its release flavour must not read
   (`src/util/amdgpu_wddm_release_test.py` in Mesa, `src/ddi/release_flavour_test.py` in DXVK,
