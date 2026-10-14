@@ -53,7 +53,10 @@ param(
     # TEMP and TMP for the build (default <BC250_ROOT>\scratch\tmp).
     [string]$Temp,
     # Target architecture: x86 builds the 32-bit (WoW64) DLL with vcvarsamd64_x86.bat (common.ps1).
-    [ValidateSet('x64', 'x86')][string]$Arch = 'x64'
+    [ValidateSet('x64', 'x86')][string]$Arch = 'x64',
+    # BD-167: the lab flavour (-Damdgpu-wddm-lab-flavour=true). Without it the fork builds its release flavour,
+    # which has no lookup of the override variables; the fork's own host test describes them.
+    [switch]$Lab
 )
 
 $ErrorActionPreference = 'Stop'
@@ -62,6 +65,7 @@ $ErrorActionPreference = 'Stop'
 $configsPath = Join-Path $PSScriptRoot 'vkd3d-configs.json'
 $recipeConfig = (Get-Content -LiteralPath $configsPath -Raw | ConvertFrom-Json).configs.$Config
 $options = @($recipeConfig.options)
+if ($Lab) { $options += '-Damdgpu-wddm-lab-flavour=true' }
 $targets = @($recipeConfig.targets)
 
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
@@ -152,6 +156,7 @@ try {
         submodules      = Get-SubmoduleStatus $Source
         build_dir       = $Build
         meson_options   = $options
+        flavour         = Get-AmdgpuWddmFlavour $Source -Lab:$Lab
         ninja_targets   = $targets
         environment     = [ordered]@{
             vs_install          = $vs
