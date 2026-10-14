@@ -24,9 +24,15 @@ $ErrorActionPreference = 'Stop'
 $ps51 = Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
 $fail = 0
 function Check([bool]$Ok, [string]$Text) { if ($Ok) { "  PASS $Text" } else { "  FAIL $Text"; $script:fail++ } }
+# BD-163: the folder a single-file setup unpacks itself into is read by name, not by a count. A count over the whole
+# of %ProgramData%\amdgpu-wddm moves with every file a run writes there, and once such a folder stays behind it reads
+# the same before and after, so the count went blind to the very thing it was meant to catch.
+$script:SetupRoot = Join-Path $env:ProgramData 'amdgpu-wddm\setup'
 function Get-Footprint {
     [ordered]@{
-        programdata  = @(Get-ChildItem -LiteralPath (Join-Path $env:ProgramData 'amdgpu-wddm') -Recurse -Force -ErrorAction SilentlyContinue).Count
+        programdata  = @(Get-ChildItem -LiteralPath (Join-Path $env:ProgramData 'amdgpu-wddm') -Recurse -Force -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -ne $script:SetupRoot -and -not $_.FullName.StartsWith($script:SetupRoot + '\', [StringComparison]::OrdinalIgnoreCase) }).Count
+        setuproot    = Test-Path -LiteralPath $script:SetupRoot
         software     = Test-Path -LiteralPath 'HKLM:\SOFTWARE\amdgpu-wddm'
         runonce      = [bool](Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'amdgpu-wddm-installer' -ErrorAction SilentlyContinue)
         bc250        = Test-Path -LiteralPath 'C:\BC250'
@@ -167,6 +173,15 @@ Check ($r.code -eq 2) 'a destination inside the package is refused'
 
 $after = Get-Footprint
 Check ($before -eq $after) "system footprint unchanged: $after"
+# BD-163, the folder of a single-file setup by name. No run of this gate may leave it behind. A folder that was
+# already there is named instead of failing the gate: it belongs to an earlier run of a setup exe on this computer,
+# only an administrator can remove it, and while it stands it hides this check.
+if (($before | ConvertFrom-Json).setuproot) {
+    "  note: $script:SetupRoot was already there before this run. An earlier single-file setup left it, an"
+    "  administrator removes it, and until then this check cannot see a run that leaves such a folder behind."
+} else {
+    Check (-not (Test-Path -LiteralPath $script:SetupRoot)) "no unpacked single-file setup is left behind ($script:SetupRoot)"
+}
 Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 if ($fail) { "$fail check(s) failed"; exit 1 }
 'all checks passed'

@@ -511,6 +511,25 @@ namespace AmdgpuWddmSetup
                 return s;
             }
 
+            // The rules of the folder that holds the version folders: the list above, and the account that creates
+            // the folder, so that the run which made it can remove it again (BD-163). That access rule is not
+            // inherited: the version folders and the files below them stay administrators and SYSTEM only, with
+            // read and run for Users, so nobody can plant a file where the checked package goes. The owner is
+            // Administrators where the process may set it, as before.
+            public static DirectorySecurity RootRules()
+            {
+                var s = Rules();
+                try
+                {
+                    var me = WindowsIdentity.GetCurrent().User;
+                    if (me != null)
+                        s.AddAccessRule(new FileSystemAccessRule(me, FileSystemRights.FullControl,
+                            InheritanceFlags.None, PropagationFlags.None, AccessControlType.Allow));
+                }
+                catch (Exception) { }     // a run that cannot read its own account keeps the list above
+                return s;
+            }
+
                 if (!info.Exists) info.Create(RootRules());   // BD-163: with this run's account on the list
                 else
                 {

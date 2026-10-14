@@ -262,6 +262,9 @@ namespace AmdgpuWddmSetup
         // The window lets go of everything it owns here, and not in OnFormClosing: a close that is cancelled (by
         // another handler) would otherwise leave a window whose language switch no longer rebuilds it, and a form
         // that is disposed without being closed (every form of a headless run) would never let go at all.
+        // BD-163: a run that unpacked the package itself removes what it unpacked even when it only planned or dry
+        // ran. A plan and a dry run change nothing on the computer, so the unpacked release must not stay behind
+        // either. A pending restart is the one reason to keep the folder, and it is read first for that reason.
         protected override void Dispose(bool disposing)
         {
             if (disposing)

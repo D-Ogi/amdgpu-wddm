@@ -37,8 +37,15 @@ $env:AMDGPU_WDDM_TEST_DRIVER_STORE = $inventoryFixture
 # One RunOnce argument as common.ps1 Format-CommandLine writes it (quoted unless plain path characters).
 function Format-RunOnceArg([string]$A) { if ($A -match '[^A-Za-z0-9_.:\\/=,+-]') { return '"' + $A + '"' } else { return $A } }
 function Get-Footprint {
+# BD-163: the folder a single-file setup unpacks itself into is read by name, not by a count. A count over the whole
+# of %ProgramData%\amdgpu-wddm moves with every file a run writes there, and once such a folder stays behind it reads
+# the same before and after, so the count went blind to the very thing it was meant to catch. The folder is taken out
+# of the count and named on its own. A test may point this at a folder of its own.
+$script:SetupRoot = Join-Path $env:ProgramData 'amdgpu-wddm\setup'
     [ordered]@{
-        programdata  = @(Get-ChildItem -LiteralPath (Join-Path $env:ProgramData 'amdgpu-wddm') -Recurse -Force -ErrorAction SilentlyContinue).Count
+        programdata  = @(Get-ChildItem -LiteralPath (Join-Path $env:ProgramData 'amdgpu-wddm') -Recurse -Force -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -ne $script:SetupRoot -and -not $_.FullName.StartsWith($script:SetupRoot + '\', [StringComparison]::OrdinalIgnoreCase) }).Count
+        setuproot    = Test-Path -LiteralPath $script:SetupRoot
         software     = Test-Path -LiteralPath 'HKLM:\SOFTWARE\amdgpu-wddm'
         runonce      = [bool](Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'amdgpu-wddm-installer' -ErrorAction SilentlyContinue)
         task         = [bool](Get-ScheduledTask -TaskName 'amdgpu-wddm start confirm' -ErrorAction SilentlyContinue)
@@ -727,3 +734,24 @@ Check ($before -eq $after) "system footprint unchanged: $after"
 if ($fail) { "$fail check(s) failed"; exit 1 }
 'all checks passed'
 exit 0
+# BD-163, the folder of a single-file setup by name. No run of this gate may leave it behind. A folder that was
+# already there is named instead of failing the gate: it belongs to an earlier run of a setup exe on this computer,
+# only an administrator can remove it, and while it stands it hides this check.
+if (($before | ConvertFrom-Json).setuproot) {
+    "  note: $script:SetupRoot was already there before this run. An earlier single-file setup left it, an"
+    "  administrator removes it, and until then this check cannot see a run that leaves such a folder behind."
+} else {
+    Check (-not (Test-Path -LiteralPath $script:SetupRoot)) "no unpacked single-file setup is left behind ($script:SetupRoot)"
+}
+# The reading itself, against a folder of this test: a setup folder that appears is seen, by name.
+$probe = Join-Path $WorkBase 'setuproot-probe'
+Remove-Item -LiteralPath $probe -Recurse -Force -ErrorAction SilentlyContinue
+$realRoot = $script:SetupRoot
+$script:SetupRoot = $probe
+$p0 = Get-Footprint
+[void][IO.Directory]::CreateDirectory($probe)
+$p1 = Get-Footprint
+Remove-Item -LiteralPath $probe -Recurse -Force -ErrorAction SilentlyContinue
+$script:SetupRoot = $realRoot
+Check ((-not ($p0 | ConvertFrom-Json).setuproot) -and (($p1 | ConvertFrom-Json).setuproot) -and ($p0 -ne $p1)) `
+    'the footprint reading sees a setup folder that appears, by name'
