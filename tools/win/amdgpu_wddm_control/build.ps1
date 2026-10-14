@@ -124,6 +124,11 @@ $labDefine = @(if ($Lab) { '/DAMDGPU_WDDM_LAB_FLAVOUR=1' })
 if ($LASTEXITCODE -ne 0) { throw "bc250control.dll build failed ($LASTEXITCODE)" }
 Remove-Item "$Out\bc250control.exp", "$Out\bc250control.lib" -ErrorAction SilentlyContinue
 
+# The raw diagnostic verbs of the CLI against a fake adapter, in the flavour of this build (BD-167, test-verbs.ps1):
+# a lab CLI must reach the escape of each handler, a release CLI must answer "unknown command" and open no adapter.
+& (Join-Path $repo 'tools\win\bc250kmd_cli\test-verbs.ps1') -Kits $Kits -Out (Join-Path $obj 'verbs') -KitVersion $KitVersion `
+    -Lab:$Lab | ForEach-Object { Write-Host $_ }
+
 # 2b. bc250kmd_cli.exe from the same translation unit and the same flags, without BC250_CONTROL_DLL: the release ships
 # the CLI and the DLL of one build, so the CLI has every command the DLL's source has (tester.10 shipped a CLI of the
 # KMD branch without health, clock, telemetry, vram and sdmaib). Without arguments it prints its usage and exits 2.

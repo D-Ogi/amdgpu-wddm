@@ -1,8 +1,10 @@
 # Gate: a built bc250kmd_cli.exe is the flavour its build asked for (BD-167). The raw diagnostic verbs exist only in a
-# lab build (bc250kmd_cli.c, AMDGPU_WDDM_LAB_FLAVOUR): a release CLI names none of them in its usage text and answers
-# each with "unknown command"; a lab CLI names every one. Both name every form that a release install calls
-# (tools/release/cli-commands.json). The CLI runs without arguments, and on a release CLI once per verb; neither run
-# opens an adapter. Windows PowerShell 5.1 and PowerShell 7; no window, nothing written.
+# lab build (bc250kmd_cli.c, AMDGPU_WDDM_LAB_FLAVOUR): a release CLI names none of them in its usage text, and a lab
+# CLI names every one. Both name every form that a release install calls (tools/release/cli-commands.json). The CLI
+# runs once, without arguments, which opens no adapter. No raw verb runs here: a CLI built in the wrong flavour would
+# act on it, against the PC that builds (review r1 R4). verbs_test.c (test-verbs.ps1) runs every raw verb with a
+# valid argument shape against a fake adapter instead, in the flavour of the same build: a release build must answer
+# each with "unknown command". Windows PowerShell 5.1 and PowerShell 7; no window, nothing written.
 #   pwsh -File tools\win\bc250kmd_cli\test-flavour.ps1 -Cli <dir>\bc250kmd_cli.exe -Flavour release|lab
 param([Parameter(Mandatory)][string]$Cli, [Parameter(Mandatory)][ValidateSet('release', 'lab')][string]$Flavour)
 $ErrorActionPreference = 'Stop'
@@ -34,8 +36,6 @@ if ($Flavour -eq 'lab') {
     Check ($offered.Count -eq $labVerbs.Count) "lab: every raw diagnostic verb in the usage ($($offered.Count) of $($labVerbs.Count))"
 } else {
     Check ($offered.Count -eq 0) "release: no raw diagnostic verb in the usage$(if ($offered.Count) { ': ' + ($offered -join ', ') })"
-    $answered = @($labVerbs | Where-Object { $r = Run @($_, '0'); -not ($r.Code -eq 2 -and $r.Text -match "unknown command $_") })
-    Check ($answered.Count -eq 0) "release: each raw diagnostic verb is an unknown command$(if ($answered.Count) { ': ' + ($answered -join ', ') })"
 }
 if ($fail) { "FAIL: $fail check(s), $Cli is not a $Flavour CLI"; exit 1 }
 "PASS: $Cli is a $Flavour CLI"

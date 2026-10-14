@@ -6,7 +6,8 @@
 #
 # -Lab builds the lab flavour (BD-167): AMDGPU_WDDM_LAB_FLAVOUR adds the raw diagnostic verbs (read, write, memory,
 # gart, psp, gfx, ih, fence, ib, dcn, dcnflip, sdmacopy, sdmaib, fbdump and the VRAM verbs), whose escapes only a lab
-# KMD has. Without it the CLI and the DLL are the release flavour. test-flavour.ps1 checks the built CLI either way.
+# KMD has. Without it the CLI and the DLL are the release flavour. test-verbs.ps1 runs each of those verbs against a
+# fake adapter in the flavour of the build before the CLI is compiled, and test-flavour.ps1 checks the built CLI.
 
 param(
     [Parameter(Mandatory)][string]$Kits,
@@ -71,6 +72,10 @@ if ($LASTEXITCODE -ne 0) { throw "cl failed on $source.c ($LASTEXITCODE)" }
 & "$testOut\$source.exe" 2>&1 | ForEach-Object { Write-Host "  $_" }
 if ($LASTEXITCODE -ne 0) { throw "$source.c failed" }
 }
+# verbs_test.c: each raw diagnostic verb with a valid argument shape against a fake adapter (BD-167). A lab build
+# must reach the handler's escape, and a release build must answer "unknown command" and open no adapter.
+& (Join-Path $here 'test-verbs.ps1') -Kits $Kits -Out (Join-Path $testOut 'verbs') -KitVersion $KitVersion -Arch $Arch `
+    -Lab:$Lab | ForEach-Object { Write-Host $_ }
 
 & $cl @repro @labDefine @('/nologo', '/W4', '/WX', '/O2', '/MT', '/D_CRT_SECURE_NO_WARNINGS',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",

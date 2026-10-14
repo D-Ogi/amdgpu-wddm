@@ -427,7 +427,9 @@ python -m unittest discover -s tools/quality -p test_flavour_gate.py
   the zip. The receipts are `flavour-gate-payload\flavour-gate.json` and `flavour-gate\flavour-gate.json` under
   `-Out`.
 - `driver\kmd\build.ps1` runs the gate on the linked SYS of each build (`--kmd-only`).
-- The two CLI build scripts run `tools\win\bc250kmd_cli\test-flavour.ps1` on the CLI that they built.
+- The two CLI build scripts run `tools\win\bc250kmd_cli\test-verbs.ps1` before they compile the CLI. It runs
+  every raw diagnostic verb against a fake adapter, in the flavour of the build. Then they run
+  `tools\win\bc250kmd_cli\test-flavour.ps1` on the usage text of the CLI that they built.
 - The self-test runs in the `quality-controls` check of `tools/quality/quick.ps1`, and `quick.ps1` builds the
   lab CLI as the `driver-state-cli-lab-x64` check.
 - Each fork has its own host test of the names that its release flavour must not read
