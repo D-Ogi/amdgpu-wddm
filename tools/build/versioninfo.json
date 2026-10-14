@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "note": "The FileDescription of each PE file that a release ships, by file name (tools/build/versionstamp.py, BD-166). The release gate refuses a PE file of the package that is neither here nor third_party in release-sources.json nor exempt below. 'built' names a file that carries the resource from its own build (an .rc that includes the header of versionstamp.py rc-header): the release does not stamp it, and the gate checks it like a stamped file. 'exempt' names a file that carries no resource of the release, and why.",
+  "files": {
+    "bc250kmd.sys": "amdgpu-wddm kernel-mode driver",
+    "amdgpu_wddm_control.exe": "Nagi Control App",
+    "setup.exe": "Nagi Setup",
+    "bc250control.dll": "amdgpu-wddm driver control library",
+    "bc250kmd_cli.exe": "amdgpu-wddm driver command line",
+    "bc250d3d_router.dll": "amdgpu-wddm Direct3D 10/11 user-mode driver router",
+    "bc250d3d.dll": "amdgpu-wddm Direct3D 11 CPU user-mode driver",
+    "bc250d3d_zink.dll": "amdgpu-wddm Direct3D 11 desktop user-mode driver (zink)",
+    "amdgpu_wddm_d3d11.dll": "amdgpu-wddm Direct3D 11 user-mode driver",
+    "amdgpu_wddm_dxvk.dll": "amdgpu-wddm Direct3D 11 engine (DXVK)",
+    "amdgpu_wddm_d3d12.dll": "amdgpu-wddm Direct3D 12 user-mode driver",
+    "amdgpu_wddm_vkd3d.dll": "amdgpu-wddm Direct3D 12 engine (vkd3d-proton)",
+    "amdgpu_wddm_radv.dll": "amdgpu-wddm Vulkan driver of the Direct3D and desktop drivers (RADV)",
+    "vulkan_radeon.dll": "amdgpu-wddm Vulkan driver (RADV)",
+    "amdgpu_wddm_gl.dll": "amdgpu-wddm OpenGL driver",
+    "amdgpu_wddm_mft_h264.dll": "amdgpu-wddm H.264 video encoder",
+    "amdgpu_wddm_d3d12caps.exe": "amdgpu-wddm Direct3D 12 capability report",
+    "d3d11bench.exe": "amdgpu-wddm Direct3D 11 self-test",
+    "amdhip64.dll": "amdgpu-wddm HIP runtime (experimental)",
+    "bc250hipblas.dll": "amdgpu-wddm hipBLAS subset (experimental)",
+    "vadd.exe": "amdgpu-wddm HIP self-check (experimental)"
+  },
+  "built": {
+    "bc250kmd.sys": "driver/kmd/bc250kmd.rc with version-stamp.h, compiled by driver/kmd/build.ps1: release-sources.json pins the KMD's Authenticode digest, so its resource is part of the build and a stamp after it would break the pin. The DirectX adapter record reads its DriverVersion from this file."
+  },
+  "exempt": {}
+}

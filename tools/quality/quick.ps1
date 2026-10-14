@@ -93,6 +93,9 @@ try {
  Check 'release-provenance' { $env:BC250_TEST_OUT=(New-Item -ItemType Directory -Force "$Out\release-provenance").FullName; & python -m unittest discover -s "$repo\tools\release" -p 'test_provenance.py' }
  Check 'release-driver-package' { $env:TEMP=(New-Item -ItemType Directory -Force "$Out\release-driver-package").FullName; $env:TMP=$env:TEMP; & python -m unittest discover -s "$repo\tools\release" -p 'test_driver_package.py' }
  Check 'release-flavour' { & python -m unittest discover -s "$repo\tools\release" -p 'test_release_flavour.py' }
+ # BD-166: the version resource that the release build gives every PE file of the package (tools/build/versionstamp.py),
+ # on images that the test builds itself: the stamp, its read-back through the Windows image loader, the M14C pins.
+ Check 'version-stamp' { & python -m unittest discover -s "$repo\tools\build" -p 'test_versionstamp.py' }
  # The driver package's own AddReg against the release defaults table (BD-091): every setting the INF writes is the
  # released value and carries NOCLOBBER, so no install outside our installer closes a gate while another stays open.
  Check 'inf-gates' { & python "$repo\tools\quality\inf_gates.py" --inf "$repo\driver\kmd\bc250kmd.inf" --defaults "$repo\tools\release\installer\registry-defaults.json" --out "$Out\inf-gates" }
