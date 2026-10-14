@@ -115,9 +115,10 @@ HRESULT APIENTRY caps(D3D12DDI_HADAPTER h,const D3D12DDIARG_GETCAPS* a) {
         }
         if(a->Type==D3D12DDICAPS_TYPE_SHADER && a->DataSize==sizeof(D3D12DDI_SHADER_CAPS_0084)){
             UINT words[16]{};std::memcpy(words,a->pData,sizeof(words));
-            amdgpu_wddm_log::print("d3d12-caps shader0084 words=");
-            for(auto word:words)amdgpu_wddm_log::print(" %08x",word);
-            amdgpu_wddm_log::print("\n");
+            // One print per line: the sink writes each call as one whole line (stdio-log.h emit).
+            char list[16*9+1]{};int at=0;
+            for(auto word:words)at+=std::snprintf(list+at,sizeof(list)-at," %08x",word);
+            amdgpu_wddm_log::print("d3d12-caps shader0084 words=%s\n",list);
         }
         if(a->Type==D3D12DDICAPS_TYPE_0011_SHADER_MODELS && a->DataSize==sizeof(D3D12DDI_D3D12_SHADER_MODELS_DATA_0011)){
             const auto* models=static_cast<const D3D12DDI_D3D12_SHADER_MODELS_DATA_0011*>(a->pData);

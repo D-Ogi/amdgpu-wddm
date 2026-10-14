@@ -60,6 +60,8 @@ namespace AmdgpuWddmControl
             progress("Reading the release logs");
             AddReleaseLogs();
             Add("system.txt", "Windows version, test signing, this application's version", SystemInfo());
+            progress("Reading the game logs");
+            AddGameLogs();
             if (events)
             {
                 progress("Reading the event logs");
@@ -196,8 +198,9 @@ namespace AmdgpuWddmControl
 
         public const int LogBytesLimit = 2 << 20;
 
-        // The tail of a text file, at most LogBytesLimit bytes; null when the file is absent or unreadable.
-        static string Tail(string path)
+        // The tail of a text file, at most limit bytes (LogBytesLimit by default); null when the file is absent or
+        // unreadable.
+        static string Tail(string path, long limit = LogBytesLimit)
         {
             try
             {
@@ -236,15 +239,53 @@ namespace AmdgpuWddmControl
         static string Settings()
         {
             var w = new StringBuilder();
-            foreach (var key in new[] { DpmSettings.RegistryPath })
+            // The hang record is a SUBKEY of Parameters (driver/kmd/guard.c GuardRecordHangRecovery), so reading
+            // the values of Parameters alone never showed it. A field report of a DWM crash needs it: it says
+            // whether the driver attempted a stage-1 hang recovery in this boot, and when (BD-168). How its
+            // values are printed is src/HangRecord.cs, which the unit tests compile.
+            foreach (var key in new[] { DpmSettings.RegistryPath, DpmSettings.RegistryPath + "\\" + HangRecord.SubKey })
             {
                 w.AppendLine("[HKLM\\" + key + "]");
-                try { foreach (var kv in SettingsStore.ReadAll(key).OrderBy(k => k.Key)) w.AppendLine(kv.Key + " = " + kv.Value); }
+                try
+                {
+                    var values = SettingsStore.ReadAll(key);
+                    foreach (var kv in values.OrderBy(k => k.Key)) w.AppendLine(kv.Key + " = " + HangRecord.Value(kv.Key, kv.Value));
+                    // An absent key reads as no values, and that is the answer to "did the driver ever
+                    // attempt a hang recovery here": say it, so the empty heading is not read as a failure.
+                    if (values.Count == 0) w.AppendLine("# no values: the key does not exist");
+                }
                 catch (Exception e) { w.AppendLine("unreadable: " + e.Message); }
             }
             w.AppendLine("[HKLM\\" + Profiles.RegistryPath + "]");
             try { foreach (var kv in SettingsStore.ReadProfiles()) w.AppendLine(kv.Key + " Experiment = " + kv.Value); }
             catch (Exception e) { w.AppendLine("unreadable: " + e.Message); }
+        // The game logs of the timed switch (GameLog.cs): the newest GameLog.ReportFileCount files, at most
+        // GameLog.ReportBytesLimit in total, newest first, each one redacted like every other entry. A whole log
+        // and not its tail: a cut log reads as a game that stopped where the cut is. A report of a machine that
+        // never recorded carries the note instead, so the reader knows the switch exists.
+        void AddGameLogs()
+        {
+            var folder = RecoveryProbe.GameLogFolder;
+            var files = RecoveryProbe.GameLogFiles();
+            var taken = GameLog.PlanReport(files, GameLog.ReportFileCount, GameLog.ReportBytesLimit);
+            var note = new StringBuilder();
+            note.AppendLine("The driver's game logs come from the control application's \"Record game logs\" switch (HKLM\\" +
+                GameLog.RegistryPath + " " + GameLog.ValueName + "), which records for a few minutes at a time. They are written to");
+            note.AppendLine(folder + ".");
+            note.AppendLine();
+            note.AppendLine(files.Count + " file(s) there, " + files.Sum(f => f.Bytes) + " bytes in total; this report carries the newest " +
+                taken.Count + " of them (at most " + GameLog.ReportFileCount + " files and " + (GameLog.ReportBytesLimit >> 20) + " MiB).");
+            foreach (var f in files.OrderByDescending(f => f.WrittenUtc))
+                note.AppendLine((taken.Any(t => t.Name == f.Name) ? "  in this report: " : "  left out:       ") + f.Name + "  " +
+                    f.Bytes + " bytes  " + f.WrittenUtc.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture));
+            Add("game-logs/README.txt", "What the game logs are, and which of them this report carries", note.ToString());
+            foreach (var f in taken)
+            {
+                var text = Tail(Path.Combine(folder, f.Name), GameLog.ReportBytesLimit);
+                if (text != null) Add("game-logs/" + f.Name, "A game's driver log, recorded by the \"Record game logs\" switch", text);
+            }
+        }
+
             // The graphics and Vulkan settings for games: every stored value as it is, then the value in force for all
             // games and for each game with its own key, and where it comes from (GraphicsSettings.Report).
             w.AppendLine();

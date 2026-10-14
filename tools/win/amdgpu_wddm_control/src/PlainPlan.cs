@@ -40,6 +40,9 @@ namespace AmdgpuWddmControl
                 // The waiting time for the graphics (TdrSetting.cs). The app only ever writes a number; the delete
                 // form is here for an undo of a backup taken before the value existed.
                 case TdrSetting.ValueName: return w.Delete ? "plan.line.tdr-default" : "plan.line.tdr";
+                // "Record game logs" (GameLog.cs). The value is an instant, not a length, so the sentence names no
+                // number: the card above it says how long the recording runs.
+                case GameLog.ValueName: return w.Delete ? "plan.line.gamelog-off" : "plan.line.gamelog-on";
                 default: return null;
             }
         }

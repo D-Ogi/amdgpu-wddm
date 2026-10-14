@@ -63,6 +63,14 @@ namespace AmdgpuWddmControl
         public string TdrError { get; set; }
         // The desktop compositor of the active interactive session (BD-060): what is running now, and every DWM the
         // observers saw in this session of this boot, this reading included.
+
+        // "Record game logs" (GameLog.cs): the stored instant at which recording stops, as a UTC FILETIME, or null
+        // when nothing is stored (recording is off). GameLogError names why the value could not be read.
+        public long? GameLogUntil { get; set; }
+        public string GameLogError { get; set; }
+        // How many log files the folder holds and how many bytes they are, for the window and the support report.
+        public int GameLogFiles { get; set; }
+        public long GameLogBytes { get; set; }
         public DwmReading DwmNow { get; set; }
         public DwmObservations DwmHistory { get; set; }
         // The newest DwmForceCpu write that read back (route-written.json, written by the helper after the read-back):
@@ -156,6 +164,9 @@ namespace AmdgpuWddmControl
         public string UndoOf;                  // undo: the backup file it restores
         // The CU setter's steps (section 7 S1-S6), run after Writes, never restored; CuConfirm: the CU CONFIRM escape.
         public CuSetterPlan Cu;
+        // game-log-on: the helper also prepares %ProgramData%\amdgpu-wddm\logs\games (its access list) and prunes
+        // the folder to GameLog.FolderBytesLimit. No registry value of its own, so it is a flag and not a write.
+        public bool GameLogFolder;
         public bool CuConfirm;
         // The tuning request of this plan (the voltage curve or the processor). It writes no registry value: the
         // helper sends one escape and the driver owns the trial window and the revert (docs/design/tuner.md).
@@ -221,6 +232,12 @@ namespace AmdgpuWddmControl
             if (RestartCompositor) w.AppendLine("  stop DWM in the active session; Windows starts a new one (operator escape)");
             foreach (var n in Notes) w.AppendLine("note: " + n);
             w.AppendLine("undo: " + (Undoable ? "yes (Undo last action)" : "no"));
+            if (GameLogFolder)
+            {
+                w.AppendLine("  prepare %ProgramData%\\" + GameLog.FolderBelowProgramData +
+                    " (Administrators and SYSTEM full, Users create files, the creator owns what it wrote)");
+                w.AppendLine("  then prune that folder to " + (GameLog.FolderBytesLimit >> 20) + " MiB, oldest first, never the newest file");
+            }
             return w.ToString();
         }
     }
@@ -417,7 +434,9 @@ namespace AmdgpuWddmControl
             // The graphics settings for all games (the Graphics page); a game's own ones go with game-profile.
             "graphics-defaults",
             // How long Windows waits for the graphics before it resets them (TdrSetting.cs, BD-079).
-            "tdr-delay" };
+            "tdr-delay",
+            // "Record game logs" (GameLog.cs): the timed diagnostic switch of the Help page.
+            "game-log-on", "game-log-off" };
 
         public static bool Allowed(string path, string name)
         {
@@ -427,6 +446,7 @@ namespace AmdgpuWddmControl
             return GraphicsSettings.Allowed(path, name);
         }
 
+            if (GameLog.Allowed(path, name)) return true;
         // The CU setter's set only (G-PLAN): CuMode written as 40 or as 24, and CuDisableWgp, CuModeConfirmed and
         // CuModeClosedReason removed. CuMode is never removed: the stock choice is written out (BD-077).
         public static bool CuAllowed(RegWrite w)
@@ -1166,6 +1186,22 @@ namespace AmdgpuWddmControl
             {
                 string why = "The release's logon task cannot be read from here (" + s.TaskReadError + "): it runs as Local System, which an app without administrator rights may not read.";
                 if (s.ConfirmLogRunUtc == null)
+            // "Record game logs" (GameLog.cs): whether the switch is on, and what the folder holds. A report of a
+            // machine that was recording has to say so, because the lines in it came from this switch and not from
+            // an AMDGPU_WDDM_LOG somebody set.
+            string files = s.GameLogFiles + " file" + (s.GameLogFiles == 1 ? "" : "s") + ", " + (s.GameLogBytes >> 20) + " MiB in " +
+                GameLog.FolderBelowProgramData + ".";
+            var until = GameLog.Until(s.GameLogUntil);
+            if (s.GameLogError != null)
+                add("Game logs", "The recording switch cannot be read: " + s.GameLogError + ". " + files, "warn", null, null);
+            else if (until == null)
+                add("Game logs", GameLog.ValueName + " is absent: recording is off. " + files, "ok", null, null);
+            else
+                add("Game logs", GameLog.ValueName + " " + Stamp(until) + " (" + (until.Value > DateTime.UtcNow ? "recording, " +
+                    GameLog.MinutesLeft(s.GameLogUntil, DateTime.UtcNow) + " min left" : "over") + "). " + files,
+                    until.Value > DateTime.UtcNow ? "info" : "ok", until.Value > DateTime.UtcNow ? "game-log-off" : null,
+                    until.Value > DateTime.UtcNow ? "Stop now" : null);
+
                     add("Start confirmation task", why + " Its log (start-confirm.log) records no run of it either: if the driver's start stays unconfirmed, run the release installer again.",
                         "warn", null, null);
                 else
@@ -1590,6 +1626,43 @@ namespace AmdgpuWddmControl
                     var v = t.Values.FirstOrDefault(x => GameImage(x.Path) != null && string.Equals(GameImage(x.Path), more.Image, StringComparison.OrdinalIgnoreCase) && x.Name == Profiles.ValueName);
                     if (v != null) p.GameWrites[more.Image] = v.Existed ? v.Text ?? "" : "";
                     // The game's graphics and Vulkan values of that change, and its keys left empty by the restore.
+                case "game-log-on":
+                {
+                    // "Record game logs" (GameLog.cs). The driver does not have to be running: the shells and the
+                    // engines read the switch themselves, and a person whose game does not start at all is exactly
+                    // the person who needs the log. It takes effect the next time a game starts, because a shell
+                    // reads the switch once, when it loads.
+                    p.Title = "Record game logs";
+                    p.Effect = "the next time a game starts";
+                    p.Undoable = true;
+                    if (more.Minutes == null) return Refuse(p, "No recording time given.");
+                    if (!GameLog.IsValidMinutes(more.Minutes.Value))
+                        return Refuse(p, "The recording time must be between " + GameLog.MinMinutes + " and " + GameLog.MaxMinutes + " minutes.");
+                    if (s.GameLogError != null) return Refuse(p, "The recording switch cannot be read, so it is not changed: " + s.GameLogError);
+                    // The instant is this reading's clock. The helper plans again from its own snapshot before it
+                    // writes, so the number that is written is never older than that run.
+                    var startedAt = DateTime.UtcNow;
+                    try { p.Writes.AddRange(GameLog.PlanOn(more.Minutes.Value, startedAt)); }
+                    catch (ArgumentException e) { return Refuse(p, e.Message); }
+                    p.GameLogFolder = true;
+                    p.Change = GameLog.DescribeOn(more.Minutes.Value, startedAt);
+                    p.Notes.Add("The logs name the games that run while recording is on, and they go into a folder every user of this computer can read.");
+                    break;
+                }
+
+                case "game-log-off":
+                {
+                    p.Title = "Record game logs";
+                    p.Effect = "the next time a game starts";
+                    p.Undoable = true;
+                    if (more.Minutes != null) return Refuse(p, "Stopping the recording takes no recording time.");
+                    if (s.GameLogError != null) return Refuse(p, "The recording switch cannot be read, so it is not changed: " + s.GameLogError);
+                    p.Writes.AddRange(GameLog.PlanOff(s.GameLogUntil));
+                    if (p.Writes.Count == 0) return Refuse(p, "The game logs are not being recorded.");
+                    p.Change = GameLog.DescribeOff();
+                    break;
+                }
+
                     foreach (var g in t.Values.Where(x => string.Equals(GraphicsSettings.AppImage(x.Path), more.Image, StringComparison.OrdinalIgnoreCase)))
                     {
                         if (!Allowed(g.Path, g.Name)) return Refuse(p, "The saved change names " + g.Name + ", which this app does not change.");
@@ -1668,6 +1741,8 @@ namespace AmdgpuWddmControl
             foreach (var b in list)
             {
                 if (b.Action == "game-profile") return null;
+            // game-log-on: how many minutes of game logs to record (GameLog.Choices).
+            public uint? Minutes;
                 if (b.Action == "game-undo" && !undone.Contains(b.File)) return b;
             }
             return null;

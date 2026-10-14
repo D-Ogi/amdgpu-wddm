@@ -45,6 +45,8 @@ namespace AmdgpuWddmControl
                 verb.AddRange(TunerPlan.Arguments(more));
                 verb.AddRange(FanPlan.Arguments(more));
             }
+                // How long to record the game logs (GameLog.cs), for the same reason.
+                if (more.Minutes != null) { verb.Add("--minutes"); verb.Add(more.Minutes.Value.ToString(CultureInfo.InvariantCulture)); }
             _work = GuideCause.Repairing;       // a change by the recovery helper: rank 4's repair (section 6)
             ComputeStatus();
             Result(Strings.T("action.working"), true);

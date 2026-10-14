@@ -1340,3 +1340,5 @@ static partial class UnitTests
         return _failed == 0 ? 0 : 1;
     }
 }
+        GameLogTests(args[0]);
+        HangRecordTests(args[0]);

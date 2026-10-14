@@ -292,10 +292,11 @@ succeeded; error callbacks and GPU completion must be examined separately.
 Adapter negotiation, engine startup, hosted callbacks and teardown have their
 own diagnostics.
 
-None of these lines reach the application's stdio unless `AMDGPU_WDDM_LOG` asks
-(`stdio-log.h`): unset, empty or `0` prints nothing, `stderr` prints to stderr,
-`file:<path>` appends to a shared file. The vkd3d-proton engine and the RADV ICD
-read the same switch. An application that pipes stderr and never reads it
+None of these lines reach the application's stdio unless something asks
+(`stdio-log.h`). `AMDGPU_WDDM_LOG` decides whenever the process carries it:
+empty or `0` prints nothing, `stderr` prints to stderr, `file:<path>` appends to
+a shared file. The vkd3d-proton engine reads the same sink through engine-ddi,
+and so does the DXVK shell. An application that pipes stderr and never reads it
 (3DMark's helpers, session 283) blocked once the pipe was full.
 
 DXGI table publication is not implemented. Present private data size is zero.
@@ -328,6 +329,30 @@ hosted driver's own allocations are internal ones and keep flags NONE.
 The hosted driver reserves address ranges, maps zero pages and allocations
 inside them and queues address updates through `HostedDispatch`
 (`hosted-sparse-test.cpp`). An extent has one owner, an allocation's ordinary
+Without that variable the control app's timed switch decides: `GameLogUntil` of
+`HKLM\SOFTWARE\amdgpu-wddm\Diagnostics` (REG_QWORD, a UTC FILETIME, read from
+the 64-bit view so a 32-bit game sees it). While that instant is ahead, the sink
+opens a file of its own in `%ProgramData%\amdgpu-wddm\logs\games`
+(`<image>-<pid>-<utc>.log`, `CREATE_NEW`, the leaf refused if it turns out to be
+a reparse point) and marks the process with two variables:
+`AMDGPU_WDDM_LOG=file:<path>`, so that a module loaded later writes into the
+same file, and `AMDGPU_WDDM_GAMELOG=<pid>;<the instant as 16 hex digits>`, so
+that it takes the bounds with it. A module that finds the marker and its own pid
+joins that file under those bounds and opens no second one. A module that finds
+another process's pid knows the pair was inherited from the parent that started
+this process, ignores both and reads the switch again, into a file of its own.
+Without a marker, an `AMDGPU_WDDM_LOG` is the user's own choice and has no
+bounds. Every line checks the instant, and the file stops at 64 MiB, measured on
+the file so that every module writing into it counts, with one last line saying
+so. Each line is formatted first and written with one `WriteFile` on the append
+handle, so the lines of several writers of one file arrive whole: a formatted
+print into the unbuffered stream reached the file a character at a time and tore
+every line of a two-writer probe, at 223 us a line against 2.9 us. A line longer
+than the 2 KiB buffer is cut and says `...[line cut]`. The RADV ICD is loaded by
+the Vulkan loader and not by this shell. It reads
+the same switch and answers the same marker, which is a separate change to the
+Mesa fork.
+
 mapping or a reservation, and a runtime answer that would give it two removes
 the device. What is mapped inside a reservation is not recorded. One update
 names one reservation; its backing, range, fence and context are held until

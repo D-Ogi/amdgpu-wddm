@@ -260,6 +260,8 @@ earlier, which restarted DWM).
 
 For a desktop that does not respond (no window draws, no input) when Windows cannot be restarted the normal way, an
 operator can restart the desktop compositor from an elevated prompt or over SSH:
+| `game-log-on --minutes N` | `GameLogUntil` of `HKLM\SOFTWARE\amdgpu-wddm\Diagnostics` (REG_QWORD, the UTC FILETIME at which recording stops), and the folder `%ProgramData%\amdgpu-wddm\logs\games` with its access list, pruned to 512 MiB | next game start | N is not 1-60, or the value cannot be read |
+| `game-log-off` | delete `GameLogUntil` | next game start | nothing is recording, or the value cannot be read |
 
 ```powershell
 amdgpu_wddm_control.exe --action restart-compositor --accept-bd060 --out escape.txt
@@ -272,6 +274,24 @@ terminates that same handle; any mismatch refuses and stops nothing. It then wai
 session created after the stopped one, records it for that session and logs both. Warning:
 after a DWM restart some Windows 11 apps, for example the Explorer command bar and Task Manager, can ignore mouse
 clicks until Windows restarts (BD-060). Restart Windows as soon as you can. The window never offers this action.
+
+### Record game logs
+
+The driver's diagnostic lines went to the environment variable `AMDGPU_WDDM_LOG`
+(`driver/umd/d3d12/stdio-log.h`), which nobody can set for a game that Steam or Epic starts. The Help page's
+"Record game logs" switch (`src/GameLog.cs`) replaces it: `game-log-on` stores the instant at which recording
+stops, and every game that starts before that instant writes one file of its own in
+`%ProgramData%\amdgpu-wddm\logs\games`. The first of its modules to read the switch opens the file and marks the
+process with `AMDGPU_WDDM_LOG` and `AMDGPU_WDDM_GAMELOG=<pid>;<instant>`. The other modules, and the Vulkan ICD,
+join that file under the same bounds, while a process the game starts later sees a marker that is not its own and
+records separately or not at all. The folder's access list lets any user create a file there and nobody but
+its owner change it afterwards, so a game without administrator rights can write its log and cannot touch
+anybody else's.
+
+Three bounds hold a switch somebody forgets: the instant (the sink checks it on every line), 64 MiB a file, and
+the folder pruned to 512 MiB oldest-first before each recording starts. A support report takes the newest five
+files, at most 20 MiB in total, redacted like every other entry, with a `game-logs/README.txt` that lists what it
+took and what it left out. An `AMDGPU_WDDM_LOG` a process already carries always wins over the switch.
 
 ```powershell
 amdgpu_wddm_control.exe --action reopen-gpu-path --dry-run --out plan.txt    # states and plan, nothing written, no UAC

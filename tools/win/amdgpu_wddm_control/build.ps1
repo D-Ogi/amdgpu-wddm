@@ -473,6 +473,40 @@ namespace BuildGate { public static class Wts {
         }
         # Eight observers at once on an empty record: the lock and the atomic replace leave one valid file with this
         # session's DWM and no temporary files (reviewer 911).
+    # "Record game logs" (src/GameLog.cs): the one QWORD and the folder step, the refusals of a recording time
+    # outside 1..60 minutes, and switching off with nothing recording. The recorded snapshots have no
+    # GameLogUntil, which is the state of a machine where nobody ever switched recording on. The instant written
+    # is this moment, so the gate checks the value name and its type and not the number.
+    $diagKey = 'HKLM\SOFTWARE\amdgpu-wddm\Diagnostics'
+    $gameLog = [ordered]@{
+        'on10'    = @(@('game-log-on', '--minutes', '10'), 0, "set $diagKey GameLogUntil = ", '(QWord)',
+                      'prepare %ProgramData%\amdgpu-wddm\logs\games', 'Users create files', 'prune that folder to 512 MiB',
+                      'Records the driver''s game logs for 10 minutes', 'takes effect: the next time a game starts', 'undo: yes')
+        'on1'     = @(@('game-log-on', '--minutes', '1'), 0, 'game logs for 1 minute,')
+        'on60'    = @(@('game-log-on', '--minutes', '60'), 0, 'game logs for 60 minutes,')
+        'on0'     = @(@('game-log-on', '--minutes', '0'), 3, 'refused: The recording time must be between 1 and 60 minutes.')
+        'on61'    = @(@('game-log-on', '--minutes', '61'), 3, 'refused: The recording time must be between 1 and 60 minutes.')
+        'off'     = @(@('game-log-off'), 3, 'refused: The game logs are not being recorded.')
+    }
+    foreach ($e in $gameLog.GetEnumerator()) {
+        $r = Invoke-DryRun (@('--action') + $e.Value[0] + @('--dry-run', '--snapshot', $snapshot)) "gamelog-$($e.Key)"
+        if ($r.Code -ne $e.Value[1]) { throw "dry run game log $($e.Key): exit $($r.Code), $($e.Value[1]) expected: $($r.Text)" }
+        foreach ($want in $e.Value | Select-Object -Skip 2) {
+            if (-not $r.Text.Contains($want)) { throw "dry run game log $($e.Key): '$want' missing: $($r.Text)" }
+        }
+        if (-not $r.Text.Contains('dry run: nothing was written')) { throw "dry run game log $($e.Key): no closing line" }
+    }
+    # A recording time belongs to game-log-on alone, and switching on without one is not a plan at all.
+    foreach ($bad in @(@('game-log-on'), @('game-log-on', '--minutes', 'ten'), @('game-log-on', '--minutes', '-5'),
+            @('game-log-off', '--minutes', '10'), @('tdr-delay', '--tdr', '10', '--minutes', '10'), @('reset-defaults', '--minutes', '10'))) {
+        $u = Invoke-DryRun (@('--action') + $bad + @('--dry-run', '--snapshot', $snapshot)) ('usage-gamelog-' + ($bad -join '-' -replace '[^a-zA-Z0-9-]', ''))
+        if ($u.Code -ne 2) { throw "--action $($bad -join ' ') must be refused as usage (exit $($u.Code))" }
+    }
+    # The dry run writes nothing, so the state of this PC decides whether switching off is a change or a refusal:
+    # both are a pass, a usage error is not.
+    $r = Invoke-DryRun @('--action', 'game-log-off', '--dry-run') 'gamelog-off-this-pc'
+    if ($r.Code -ne 0 -and $r.Code -ne 3) { throw "dry run of switching the game logs off on this PC (exit $($r.Code)): $($r.Text)" }
+    Write-Host "  game logs: $($gameLog.Count) plans and refusals, 6 usage errors"
         $observations = Join-Path $env:AMDGPU_WDDM_CONTROL_STATE 'dwm-observations.json'
         Remove-Item $observations
         $racers = 1..8 | ForEach-Object {

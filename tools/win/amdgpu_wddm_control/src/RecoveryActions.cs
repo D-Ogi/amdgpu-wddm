@@ -83,6 +83,7 @@ namespace AmdgpuWddmControl
             }
             var interop = Kmd.Interop();
             var health = Kmd.StartHealth();
+            ReadGameLog(s);
             var dpm = Kmd.Dpm();
             s.Interop = interop.Value; s.Health = health.Value; s.Dpm = dpm.Value;
             s.Cu = Kmd.CuMode().Value;
@@ -200,6 +201,54 @@ namespace AmdgpuWddmControl
             }
             catch (Exception e) { s.DefaultsError = "manifest.json: " + e.Message; }
         }
+        // Where the game logs go: %ProgramData%\amdgpu-wddm\logs\games (GameLog.cs). Every user may read it, so the
+        // window can show what it holds without administrator rights.
+        public static string GameLogFolder
+        {
+            get { return GameLog.Folder(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData)); }
+        }
+
+        // The log files of that folder, newest first. An unreadable folder reads as empty: the switch is still
+        // readable then, and the window says what it can say.
+        public static List<GameLog.LogFile> GameLogFiles()
+        {
+            var list = new List<GameLog.LogFile>();
+            try
+            {
+                if (!Directory.Exists(GameLogFolder)) return list;
+                foreach (var f in new DirectoryInfo(GameLogFolder).GetFiles("*.log"))
+                    try { list.Add(new GameLog.LogFile { Name = f.Name, Bytes = f.Length, WrittenUtc = f.LastWriteTimeUtc }); }
+                    catch (Exception) { }
+            }
+            catch (Exception) { }
+            return list;
+        }
+
+        // "Record game logs" (GameLog.cs): the stored instant and what the folder holds. The driver's own key is
+        // not involved, so this read works on a machine whose driver does not answer at all, which is the machine
+        // a person most wants a game log from. A value of another registry type is named in GameLogError instead
+        // of passing as absent.
+        public static void ReadGameLog(RecoverySnapshot s)
+        {
+            try
+            {
+                using (var k = SettingsStore.Machine.OpenSubKey(GameLog.RegistryPath))
+                {
+                    if (k != null)
+                    {
+                        var v = k.GetValue(GameLog.ValueName);
+                        if (v != null && k.GetValueKind(GameLog.ValueName) != RegistryValueKind.QWord)
+                            s.GameLogError = GameLog.ValueName + " has registry type " + k.GetValueKind(GameLog.ValueName);
+                        else if (v is long) s.GameLogUntil = (long)v;
+                    }
+                }
+            }
+            catch (Exception e) { s.GameLogError = e.Message; }
+            var files = GameLogFiles();
+            s.GameLogFiles = files.Count;
+            s.GameLogBytes = files.Sum(f => f.Bytes);
+        }
+
 
         [DllImport("kernel32.dll")]
         static extern ulong GetTickCount64();
@@ -768,6 +817,8 @@ namespace AmdgpuWddmControl
             int code = Execute(o);
             if (o.OutFile != null)
             {
+                Console.Error.WriteLine("       --action game-log-on --minutes " + GameLog.MinMinutes + ".." + GameLog.MaxMinutes +
+                    "   (records the games' driver logs for that long)   --action game-log-off ...");
                 _runText.AppendLine("exit " + code);
                 try { File.WriteAllText(o.OutFile, _runText.ToString()); }
                 catch (Exception e) { Console.Error.WriteLine("cannot write " + o.OutFile + ": " + e.Message); }
@@ -857,6 +908,54 @@ namespace AmdgpuWddmControl
                 var plan = Recovery.Plan(o.Action, s, o.Mode, o.Ceiling, RecoveryProbe.Backups(), o.AcceptBd060, o.More);
                 if (plan.Refused) { Log("result: refused: " + plan.Refusal); return Refused; }
                 if (plan.RestartCompositor) return StopCompositor(s);
+        // %ProgramData%\amdgpu-wddm\logs\games for the timed game-log switch (GameLog.cs). Who may do what there:
+        //   Administrators, SYSTEM   full control, so this app can prune and a report can read everything;
+        //   Users                    create files and append to what they created, and list the folder. A game
+        //                            runs as the person who started it, often without administrator rights, so it
+        //                            has to be able to make its own file; it must not be able to change or delete
+        //                            anybody else's, which is why Users get no write on existing files;
+        //   CREATOR OWNER            full control of the files it writes (inherited by files only), which is what
+        //                            lets a game append to its own log while it runs.
+        // Inheritance is not protected here on purpose: the parent %ProgramData%\amdgpu-wddm already carries the
+        // installer's entries, and the three entries above are what decides a game's access anyway.
+        public static void PrepareGameLogDirectory()
+        {
+            var users = new SecurityIdentifier(WellKnownSidType.BuiltinUsersSid, null);
+            var sec = new DirectorySecurity();
+            sec.SetAccessRuleProtection(true, false);
+            const InheritanceFlags all = InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit;
+            sec.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null), FileSystemRights.FullControl, all, PropagationFlags.None, AccessControlType.Allow));
+            sec.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), FileSystemRights.FullControl, all, PropagationFlags.None, AccessControlType.Allow));
+            // On the folder itself: list it, and create a file in it. Nothing on the files that are already there.
+            sec.AddAccessRule(new FileSystemAccessRule(users, FileSystemRights.ReadAndExecute | FileSystemRights.CreateFiles | FileSystemRights.AppendData,
+                InheritanceFlags.None, PropagationFlags.None, AccessControlType.Allow));
+            // The owner of a file it created, and only of that file.
+            sec.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(WellKnownSidType.CreatorOwnerSid, null), FileSystemRights.FullControl,
+                InheritanceFlags.ObjectInherit, PropagationFlags.InheritOnly, AccessControlType.Allow));
+            var folder = RecoveryProbe.GameLogFolder;
+            if (!Directory.Exists(folder)) Directory.CreateDirectory(folder, sec);
+            else Directory.SetAccessControl(folder, sec);
+        }
+
+        // The folder, its access list and the prune, logged. False: the switch is not written.
+        static bool PrepareGameLogs()
+        {
+            try
+            {
+                PrepareGameLogDirectory();
+                Log("game logs: " + RecoveryProbe.GameLogFolder + " is ready (Users may create files, each file belongs to the game that wrote it)");
+            }
+            catch (Exception e) { Log("game logs: cannot prepare " + RecoveryProbe.GameLogFolder + ": " + e.Message); return false; }
+            var files = RecoveryProbe.GameLogFiles();
+            var doomed = GameLog.PlanPrune(files, GameLog.FolderBytesLimit);
+            Log("game logs: " + files.Count + " file(s), " + (files.Sum(f => f.Bytes) >> 20) + " MiB; " +
+                (doomed.Count == 0 ? "nothing to prune" : doomed.Count + " of them above the " + (GameLog.FolderBytesLimit >> 20) + " MiB the folder may hold"));
+            foreach (var name in doomed)
+                try { File.Delete(Path.Combine(RecoveryProbe.GameLogFolder, name)); Log("game logs: pruned " + name); }
+                catch (Exception e) { Log("game logs: " + name + " was not pruned (" + e.Message + ")"); }
+            return true;
+        }
+
                 if (plan.EnableDriver) return EnableDriver();
                 if (plan.CuConfirm) return ConfirmCu();
                 if (plan.Tune != null) return RunTune(plan);

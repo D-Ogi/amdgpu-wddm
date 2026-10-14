@@ -20,6 +20,9 @@ namespace AmdgpuWddmControl
         // one is shown.
         uint? _tdrEdit;
 
+        // How long the next recording of game logs is to run (GameLog.cs). Nothing is stored until the person
+        // presses the button, so this is the choice of the window, not of the machine.
+        uint _gameLogMinutes = GameLog.DefaultMinutes;
         Control BuildHelp(int width)
         {
             var p = Frame("help", width);
@@ -68,6 +71,7 @@ namespace AmdgpuWddmControl
 
             p.Controls.Add(BuildTdrCard(width));
 
+            p.Controls.Add(BuildGameLogCard(width));
             var restart = new CardPanel(Strings.T("search.help.restart"), width);
             Mark("help.restart", restart);
             restart.Add(Ui.Dim(Strings.T("help.restart.text"), restart.Inner));
@@ -150,6 +154,67 @@ namespace AmdgpuWddmControl
         }
 
         void CreateReport()
+        // "Record game logs" (GameLog.cs). While it is off the card offers a length and a start button; while it
+        // runs it says how long is left, offers "Stop now" and the folder. The countdown is in the driver's own
+        // value, so every rebuild of the page reads it fresh and the window keeps no timer of its own, as the
+        // tuning cards do it.
+        CardPanel BuildGameLogCard(int width)
+        {
+            var c = new CardPanel(Strings.T("gamelog.title"), width);
+            Mark("help.gamelog", c);
+            c.Add(Ui.Dim(Strings.T("gamelog.intro"), c.Inner));
+            if (_snap.GameLogError != null)
+            {
+                c.Add(Ui.Label(Strings.T("gamelog.unreadable"), null, Theme.Warn, c.Inner));
+                return c;
+            }
+            var now = DateTime.UtcNow;
+            bool recording = GameLog.Recording(_snap.GameLogUntil, now);
+            if (!recording)
+            {
+                var items = GameLog.Items();
+                var combo = Choices(items, Strings.T("gamelog.label"), ChoiceMax(c.Inner));
+                combo.SelectedIndex = GameLog.Selected(_gameLogMinutes);
+                combo.SelectionChangeCommitted += (o, e) =>
+                {
+                    if (combo.SelectedIndex < 0) return;
+                    _gameLogMinutes = GameLog.Choices[combo.SelectedIndex];
+                };
+                Mark("help.gamelog.choice", combo);
+                c.Add(Ui.WrapRow(c.Inner, RowLabel(Strings.T("gamelog.label"), c.Inner), combo, Explain("gamelog", Strings.T("gamelog.title"))));
+            }
+            c.Add(RowDetail(GameLog.StateText(_snap.GameLogUntil, now), c.Inner));
+            c.Add(RowDetail(Strings.T("gamelog.where", GameLog.FolderBelowProgramData,
+                (_snap.GameLogBytes >> 20).ToString(CultureInfo.InvariantCulture), _snap.GameLogFiles.ToString(CultureInfo.InvariantCulture)), c.Inner));
+            var buttons = new List<Control>();
+            if (recording)
+            {
+                var stop = Ui.Button(Strings.T("gamelog.stop"), (s, e) => RunAction("game-log-off"), true);
+                stop.Enabled = _work == null;
+                buttons.Add(stop);
+            }
+            else
+            {
+                var start = Ui.Button(Strings.T("gamelog.start", GameLog.Number(_gameLogMinutes)),
+                    (s, e) => RunAction("game-log-on", new Recovery.PlanArgs { Minutes = _gameLogMinutes }), true);
+                start.Enabled = _work == null;
+                buttons.Add(start);
+            }
+            var open = Ui.Button(Strings.T("gamelog.open"), (s, e) => OpenGameLogFolder());
+            open.Enabled = _snap.GameLogFiles > 0;
+            buttons.Add(open);
+            c.Add(Ui.WrapRow(c.Inner, buttons.ToArray()));
+            return c;
+        }
+
+        // The folder in Explorer. It is below ProgramData and every user may read it, so no elevation is needed.
+        void OpenGameLogFolder()
+        {
+            if (_smoke) return;
+            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(RecoveryProbe.GameLogFolder) { UseShellExecute = true }); }
+            catch (Exception) { Result(Strings.T("gamelog.open-failed"), false); }
+        }
+
         {
             if (_smoke || _work != null || _autoReportRunning) return;
             _work = GuideCause.CreatingReport; ComputeStatus();

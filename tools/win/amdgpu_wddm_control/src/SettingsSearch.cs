@@ -54,6 +54,9 @@ namespace AmdgpuWddmControl
             // How long Windows waits for the graphics (TdrSetting.cs): on the Help page, with the other things a
             // person reaches for when the picture broke.
             E("help.tdr", "help"),
+            // "Record game logs" (GameLog.cs): on the same page, because it is what a person is asked for when
+            // they report a problem with a game.
+            E("help.gamelog", "help"),
             L("later.sharpen", "graphics"), L("later.aa", "graphics"),
             L("later.hdr", "display"), L("later.vrr", "display"),
             L("later.power", "performance"), L("later.cache-clear", "performance"),
