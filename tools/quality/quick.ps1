@@ -93,6 +93,10 @@ try {
  Check 'release-provenance' { $env:BC250_TEST_OUT=(New-Item -ItemType Directory -Force "$Out\release-provenance").FullName; & python -m unittest discover -s "$repo\tools\release" -p 'test_provenance.py' }
  Check 'release-driver-package' { $env:TEMP=(New-Item -ItemType Directory -Force "$Out\release-driver-package").FullName; $env:TMP=$env:TEMP; & python -m unittest discover -s "$repo\tools\release" -p 'test_driver_package.py' }
  Check 'release-flavour' { & python -m unittest discover -s "$repo\tools\release" -p 'test_release_flavour.py' }
+ # BD-166: the D3D11 configuration record of a staged package (tools/release/check_package_v3.py). b15 shipped a new
+ # ICD with the old record and every D3D11 device failed with ERROR_CRC, so the record is checked in the package that
+ # ships. The test stages a package of its own images: no device and no machine state.
+ Check 'release-package-v3' { $env:TEMP=(New-Item -ItemType Directory -Force "$Out\release-package-v3").FullName; $env:TMP=$env:TEMP; & python -m unittest discover -s "$repo\tools\release" -p 'test_check_package_v3.py' }
  # BD-166: the version resource that the release build gives every PE file of the package (tools/build/versionstamp.py),
  # on images that the test builds itself: the stamp, its read-back through the Windows image loader, the M14C pins.
  Check 'version-stamp' { & python -m unittest discover -s "$repo\tools\build" -p 'test_versionstamp.py' }

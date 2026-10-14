@@ -32,7 +32,7 @@ Every stamp is checked before it is written: the old sections are byte for byte 
   versionstamp.py amd-version <package version>
   versionstamp.py stamp --version <package version> --inf <bc250kmd.inf> [--flavour lab] <file>...
   versionstamp.py release --package <files dir> [--setup <setup.exe>] --version <v> --sources <release-sources.json> --inf <inf> [--flavour lab]
-  versionstamp.py check --package-top <unpacked release> --version <v> --sources <release-sources.json> --inf <inf> [--signed] [--flavour lab]
+  versionstamp.py check --package-top <unpacked release> --version <v> --sources <release-sources.json> --inf <inf> [--signed] [--flavour lab] [--workspace <root>]
   versionstamp.py rc-header --version <v> --inf <inf> --name bc250kmd.sys --out <version-stamp.h> [--flavour lab | --lab]
   versionstamp.py show <file>...
 
@@ -42,8 +42,17 @@ pair. `check` is the release gate: every PE file under the unpacked release carr
 package, read back through the Windows image loader, unless release-sources.json marks it third_party or
 versioninfo.json exempts it with a reason. The gate also checks the order of the release steps, stamp, then Inf2Cat,
 then signtool: every embedded signature still covers the shipped bytes, every file that a catalog lists has the hash
-the catalog gives it, and each M14C record pins the engine and ICD beside it. With --signed (a release that signs
-every PE file) an unsigned PE file, or no catalog entry at all, also fails, so the gate cannot run before those steps.
+the catalog gives it, and each M14C record pins the engine and the ICD it belongs to. With --signed (a release that
+signs every PE file) an unsigned PE file, or no catalog entry at all, also fails, so the gate cannot run before those
+steps.
+
+The gate runs on a package in either state. Before DriverStore staging each M14C record sits beside the lane files it
+pins by full-file SHA-256, the state `release` leaves behind. After staging the records are version 3, their pins are
+Windows catalog image identities and the DriverStore has renamed the files, so a staged member is checked under the
+name of the lane file it came from (amdgpu_wddm_radv_d3d11.dll answers for amdgpu_wddm_radv.dll) and the records
+themselves are checked by tools/release/check_package_v3.py, which owns that mapping. With --workspace, pointing at
+the root that holds the lane inputs release-sources.json pins, each staged record is also rebuilt from them, which
+checks the measured capability fields as well as the pins.
 
 A file that versioninfo.json lists under "built" (the KMD) is not stamped: its build compiles its own .rc with the
 header that `rc-header` writes from the same numbers and strings, and the gate checks it like a stamped file. The
@@ -57,7 +66,7 @@ import os
 import re
 import struct
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 AMD_SCHEME_OFFSET = 40          # BD-152: product package a.b.c.d is (a + 40).b.c.d for Windows
 FIELD_MAX = 65534               # BD-152: each field 0..65534, no wrap
@@ -823,15 +832,40 @@ def stamp_release(package, version, sources, inf, table, log=print, setup=None, 
     return rows
 
 
-def check_release(package_top, version, sources, inf, table, log=print, require_signed=False, flavour="release"):
+def release_side(name):
+    """One module of tools/release, which owns the DriverStore mapping and the image identity of a pin."""
+    directory = str(Path(__file__).resolve().parents[1] / "release")
+    if directory not in sys.path:
+        sys.path.insert(0, directory)
+    return __import__(name)
+
+
+def member_sources(sources, flavour):
+    """Each staged DriverStore member by its input slot: payload/kmd/d3d11/amdgpu_wddm_radv_d3d11.dll came
+    from payload/d3d11/amdgpu_wddm_radv.dll, so its version resource names the lane file and not the member.
+    The mapping is followed in that direction only. It is empty when release-sources.json does not describe a
+    member set of this flavour at all (the legacy pins of a release before the two flavours, and the fixtures
+    of the host tests); the package is then checked under the names it carries."""
+    data = sources if isinstance(sources, dict) else json.loads(Path(sources).read_text(encoding="utf-8-sig"))
+    driver_package = release_side("driver_package")
+    try:
+        selected = release_side("release_flavour").select_sources(data, flavour)
+        return {row["path"]: row["source"] for row in driver_package.members(selected)}
+    except ValueError:
+        return {}
+
+
+def check_release(package_top, version, sources, inf, table, log=print, require_signed=False, flavour="release",
+                  workspace=None):
     """The release gate: problems of every PE file under the unpacked release (setup.exe and files\\), in one
     flavour."""
     top = Path(package_top)
     package = top / "files"
     company = inf_provider(inf)
     third = third_party_paths(sources)
+    staged = member_sources(sources, flavour)
     problems = []
-    counts = {"carries": 0, "third-party": 0, "exempt": 0}
+    counts = {"carries": 0, "third-party": 0, "exempt": 0, "renamed": 0}
     files = [("setup.exe", top / "setup.exe")] if (top / "setup.exe").is_file() else []
     if not files:
         problems.append("setup.exe: not in the unpacked release")
@@ -840,29 +874,58 @@ def check_release(package_top, version, sources, inf, table, log=print, require_
             files.append(("files/" + p.relative_to(package).as_posix(), p))
     checked = []
     for rel, p in files:
-        if rel.startswith("files/") and rel[6:] in third:
+        # A staged member answers for its input slot: its exemptions, its description and the name in its
+        # version resource are the lane file's, not the renamed member's.
+        slot = staged.get(rel[6:]) if rel.startswith("files/") else None
+        name = PurePosixPath(slot).name if slot else p.name
+        if name != p.name:
+            counts["renamed"] += 1
+        if rel.startswith("files/") and (slot or rel[6:]) in third:
             counts["third-party"] += 1
             continue
-        if p.name in table["exempt"]:
+        if name in table["exempt"]:
             counts["exempt"] += 1
-            log(f"  exempt     {rel}: {table['exempt'][p.name]}")
+            log(f"  exempt     {rel}: {table['exempt'][name]}")
             continue
-        found = check_file(p, version, company, table, flavour=flavour)
+        found = check_file(p, version, company, table, file_name=name, flavour=flavour)
         if found:
             problems.extend(f"{rel}: {x}" for x in found)
         else:
             counts["carries"] += 1
         checked.append((rel, p))
     want = dotted(amd_version(version))
-    log(f"  {counts['carries']} PE files carry {want} / {version} ({flavour}), {counts['third-party']} third-party, {counts['exempt']} exempt")
+    log(f"  {counts['carries']} PE files carry {want} / {version} ({flavour}), {counts['third-party']} third-party, "
+        f"{counts['exempt']} exempt, {counts['renamed']} checked under their lane name")
     problems += order_problems(top, checked, log, require_signed)
-    for cfg in sorted(package.rglob(M14C_NAME)):
+    problems += record_problems(package, sources, flavour, staged, workspace, log)
+    return problems
+
+
+def record_problems(package, sources, flavour, staged, workspace, log=print):
+    """The D3D11 configuration records of the package, in whichever state the package is in.
+
+    A staged package (its DriverStore members are there, the lane inputs are gone) carries version 3 records
+    whose pins are image identities, under names the DriverStore chose: tools/release/check_package_v3.py
+    owns that check, because it is also the module that owns the mapping and the image identity. Before
+    staging the records are still the v1/v2 originals beside the lane files they pin by full-file SHA-256,
+    which is what `release` re-points after stamping, so the gate checks them that way here."""
+    if not staged:
+        log(f"  release-sources.json names no {flavour} DriverStore member set: the package is checked under "
+            f"the names it carries")
+    if any((Path(package) / member).is_file() for member in staged):
+        data = sources if isinstance(sources, dict) else json.loads(Path(sources).read_text(encoding="utf-8-sig"))
+        return release_side("check_package_v3").problems(package, data, flavour, workspace, log)
+    problems = []
+    for cfg in sorted(Path(package).rglob(M14C_NAME)):
         record = cfg.read_bytes()
         for (name, _), pin in zip(M14C_PINS, m14c_pins(record)):
             sibling = cfg.parent / name
             have = hashlib.sha256(sibling.read_bytes()).hexdigest().upper() if sibling.is_file() else "no file"
             if have != pin:
-                problems.append(f"files/{cfg.relative_to(package).as_posix()}: pins {name} {pin[:8]}, the package has {have[:8]}")
+                problems.append(f"files/{cfg.relative_to(package).as_posix()}: pins {name} {pin[:8]}, "
+                                f"the package has {have[:8]}")
+    log(f"  {len(list(Path(package).rglob(M14C_NAME)))} D3D11 configuration records before staging, "
+        f"each pinned by full-file SHA-256")
     return problems
 
 
@@ -935,6 +998,9 @@ def main(argv=None):
     c.add_argument("--signed", action="store_true",
                    help="the release signs every PE file and makes its catalog before this gate: refuse unsigned files")
     c.add_argument("--flavour", choices=FLAVOURS, default="release")
+    c.add_argument("--workspace",
+                   help="the workspace root that holds the lane inputs release-sources.json pins; with it the "
+                        "D3D11 configuration records are rebuilt, so their capability fields are checked too")
     h = sub.add_parser("rc-header")
     h.add_argument("--version", required=True)
     h.add_argument("--inf", required=True)
@@ -978,7 +1044,8 @@ def main(argv=None):
                           flavour=args.flavour)
             return 0
         problems = check_release(args.package_top, args.version, args.sources, args.inf, table,
-                                 require_signed=args.signed, flavour=args.flavour)
+                                 require_signed=args.signed, flavour=args.flavour,
+                                 workspace=args.workspace)
         for p in problems:
             print("FAIL " + p)
         print("version resources: " + ("FAIL" if problems else "PASS"))
