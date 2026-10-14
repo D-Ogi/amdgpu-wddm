@@ -40,7 +40,13 @@
 
 param(
     [Parameter(Mandatory)][string]$Out,
-    [switch]$NoSmoke
+    [switch]$NoSmoke,
+    # BD-166: the version resource this build writes into the program the release ships as setup.exe, as its last
+    # step. -Version is the package version, which the release passes to every component build it runs, and
+    # -Flavour is that release's flavour. Without -Version nothing is stamped and the build says so: a host build
+    # and a quality gate are not a release, and the release reads every resource back before it ships.
+    [string]$Version = '',
+    [ValidateSet('release', 'lab')][string]$Flavour = 'release'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -242,3 +248,9 @@ if (-not $NoSmoke) {
 Get-ChildItem $Out -File | ForEach-Object {
     '{0,9}  {1}  {2}' -f $_.Length, (Get-FileHash $_.FullName -Algorithm SHA256).Hash.Substring(0, 8), $_.Name
 }
+# BD-166: the release copies this program to the top of the package as setup.exe and rewrites no PE file, so the
+# version resource is written here, under the name it is shipped as.
+& pwsh -NoProfile -File (Join-Path $repo 'tools\build\version-stamp.ps1') -Version $Version -Flavour $Flavour `
+    -Names setup.exe "$Out\amdgpu_wddm_setup.exe"
+if ($LASTEXITCODE -ne 0) { throw 'the version stamp of the setup window failed' }
+

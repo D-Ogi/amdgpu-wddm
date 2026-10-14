@@ -1,0 +1,65 @@
+// The version resource of the kernel-mode driver (BD-166).
+//
+// A game that asks Windows which AMD driver it runs on reads a file version: Counter-Strike 2 refuses its own
+// renderer on an AMD driver older than 30.0.14023.1009, and on this driver it read 0.0.0.0, because not one of
+// our shipped files carried a version resource. Every user-mode file of the package gets one after the link
+// (tools/build/versionstamp.py). The kernel-mode driver cannot: the release pins its Authenticode digest, and a
+// stamp after the signature would change it. So the driver carries a compiled resource instead, and this is it.
+//
+// The numbers are never written here. driver/kmd/build.ps1 writes version-stamp.h with
+// `versionstamp.py rc-header`, which maps the release version to the AMD-scheme quad (product major plus 40) with
+// the same code that stamps every user-mode file and that the release gate checks against, so one mapping serves
+// every reader. Without those macros this file does not compile: a driver that reports 0.0.0.0 is the fault this
+// resource exists to close.
+
+#include <winver.h>
+#include "version-stamp.h"
+
+#if !defined(BC250_VER_FILEVERSION) || !defined(BC250_VER_FILEVERSION_STR)
+#error version-stamp.h must define BC250_VER_FILEVERSION (a,b,c,d) and BC250_VER_FILEVERSION_STR ("a.b.c.d")
+#endif
+#if !defined(BC250_VER_PRODUCTVERSION_STR) || !defined(BC250_VER_COMPANY) || !defined(BC250_VER_DESCRIPTION)
+#error version-stamp.h must define BC250_VER_PRODUCTVERSION_STR, BC250_VER_COMPANY and BC250_VER_DESCRIPTION
+#endif
+
+// Both flavours of one release carry the same FILEVERSION, because they are the same driver; the lab flavour
+// marks itself as a private build, so the control app, the overlay and a bug report can tell a lab file from a
+// release file without reading a log. version-stamp.h defines BC250_VER_LAB only under the build's lab switch.
+#ifdef BC250_VER_LAB
+#define BC250_VER_FILEFLAGS VS_FF_PRIVATEBUILD
+#else
+#define BC250_VER_FILEFLAGS 0x0L
+#endif
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION    BC250_VER_FILEVERSION
+ PRODUCTVERSION BC250_VER_FILEVERSION
+ FILEFLAGSMASK  VS_FFI_FILEFLAGSMASK
+ FILEFLAGS      BC250_VER_FILEFLAGS
+ FILEOS         VOS_NT_WINDOWS32
+ FILETYPE       VFT_DRV
+ FILESUBTYPE    VFT2_DRV_SYSTEM
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        // One language block, 040904B0 (US English, Unicode), the block the version API of a game reads first
+        // and the only one tools/build/versionstamp.py writes into the user-mode files.
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName",      BC250_VER_COMPANY
+            VALUE "FileDescription",  BC250_VER_DESCRIPTION
+            VALUE "FileVersion",      BC250_VER_FILEVERSION_STR
+            VALUE "InternalName",     "bc250kmd"
+            VALUE "OriginalFilename", "bc250kmd.sys"
+            VALUE "ProductName",      BC250_VER_COMPANY
+            VALUE "ProductVersion",   BC250_VER_PRODUCTVERSION_STR
+#ifdef BC250_VER_LAB
+            VALUE "PrivateBuild",     "lab"
+#endif
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

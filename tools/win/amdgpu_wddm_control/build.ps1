@@ -43,7 +43,14 @@ param(
     [string]$StartConfirmCore,
     [string]$NagiArt = (Join-Path $PSScriptRoot 'art\nagi'),   # '' embeds no art
     [string]$Oracle,
-    [switch]$NoSmoke
+    [switch]$NoSmoke,
+    # BD-166: the version resource this build writes into the two native files the release ships, as its last
+    # step. -Version is the package version, which the release passes to every component build it runs, and
+    # -Flavour is that release's flavour. Without -Version nothing is stamped and the build says so: a host build
+    # and a quality gate are not a release, and the release reads every resource back before it ships.
+    # amdgpu_wddm_control.exe is managed and carries its version from its own compile, so no stamp touches it.
+    [string]$Version = '',
+    [ValidateSet('release', 'lab')][string]$Flavour = 'release'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -626,3 +633,9 @@ if (-not $NoSmoke) {
 Get-ChildItem $Out -File | ForEach-Object {
     '{0,9}  {1}  {2}' -f $_.Length, (Get-FileHash $_.FullName -Algorithm SHA256).Hash.Substring(0, 8), $_.Name
 }
+# BD-166: the two native files of this build that the release ships carry their version resource from here. The
+# stamp is the last step, after every gate above has run against the images this build linked.
+& pwsh -NoProfile -File (Join-Path $repo 'tools\build\version-stamp.ps1') -Version $Version -Flavour $Flavour `
+    "$Out\bc250control.dll" "$Out\bc250kmd_cli.exe" "$Out\amdgpu_wddm_control.exe"
+if ($LASTEXITCODE -ne 0) { throw 'the version stamp of the control application files failed' }
+

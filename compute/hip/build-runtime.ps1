@@ -45,7 +45,13 @@ param(
     [switch]$DisableGpu,
     [switch]$SkipClang,
     [switch]$SkipTests,
-    [switch]$Rebuild
+    [switch]$Rebuild,
+    # BD-166: the version resource this build writes into the file it ships, as its last step. -Version is the
+    # package version, which the release passes to every component build it runs; -Flavour is that release's
+    # flavour. Without -Version nothing is stamped and the build says so: a host build and a quality
+    # gate are not a release, and the release reads every resource back before it ships.
+    [string]$Version = '',
+    [ValidateSet('release', 'lab')][string]$Flavour = 'release'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -643,6 +649,12 @@ if ($SkipClang -or -not (Test-Path $clang)) {
 # ---------------------------------------------------------------------------------------------
 # 7. What was built.
 # ---------------------------------------------------------------------------------------------
+# BD-166: the runtime the release ships carries its version resource from this build. The mock and
+# no-dispatch-packet builds of the same name are lab artifacts and stay as they were linked.
+& pwsh -NoProfile -File (Join-Path $repo 'tools\build\version-stamp.ps1') `
+    -Version $Version -Flavour $Flavour (Join-Path $Out 'amdhip64.dll')
+if ($LASTEXITCODE -ne 0) { throw 'the version stamp of amdhip64.dll failed' }
+
 Write-Host ''
 foreach ($file in @((Join-Path $Out 'mock\amdhip64.dll'), (Join-Path $Out 'amdhip64.dll'),
         (Join-Path $Out 'amdhip64.lib'), (Join-Path $Out 'test_hip_mock.exe'),

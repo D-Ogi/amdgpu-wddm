@@ -173,7 +173,10 @@ function Get-SourceIdentity([string]$Path) {
             $id.commit = $head.Out.Trim()
             $d = Invoke-Capture $git.Source ($base + @('describe', '--tags', '--always'))
             if ($d.Code -eq 0) { $id.describe = $d.Out.Trim() }
-            $st = Invoke-Capture $git.Source ($base + @('status', '--porcelain'))
+            # --ignore-submodules=none: a submodule whose own tree is modified counts as a modified entry here,
+            # because the engines carry their sources in submodules and a build from such a tree is a build from
+            # no commit. The release gate refuses a record with a modified entry (provenance.py build_records_ok).
+            $st = Invoke-Capture $git.Source ($base + @('status', '--porcelain', '--ignore-submodules=none'))
             if ($st.Code -eq 0) {
                 $lines = @($st.Out -split "`n" | Where-Object { $_.Trim() })
                 $id.untracked_entries = @($lines | Where-Object { $_.StartsWith('??') }).Count
@@ -227,6 +230,63 @@ function Add-ReproducibleMesonOptions([string[]]$Options, [string]$Source, [stri
 function Write-Recipe([string]$Path, $Recipe) {
     $json = ($Recipe | ConvertTo-Json -Depth 10) -replace "`r`n", "`n"
     [IO.File]::WriteAllText($Path, $json + "`n", [Text.UTF8Encoding]::new($false))
+}
+
+# BD-166: the version resource of a shipped user-mode file is written by the build that produced it, as that build's
+# last step, and never by the release: tools\release\build-release.ps1 reads the result back with
+# `versionstamp.py check --signed` and rewrites no PE file, because a rewrite there would change a file that
+# release-sources.json already pins. Each file this stamps is named under "built" in tools\build\versioninfo.json,
+# which is where the release gate learns that it carries its resource from its own build.
+#   -Files    the files to stamp, as this build wrote them. Unsigned: a stamp after a signature breaks it.
+#   -Names    the name each file carries in the release, in the same order, when a build output is named otherwise
+#             (Mesa writes d3d10umd.dll, the release ships bc250d3d.dll). Empty: each file's own name.
+#   -Version  the package version, for example 0.7.216.102-tester.31. It has no default: the version belongs to the
+#             release, which passes it to every component build it runs (tools\release\build-release.ps1 -Version),
+#             and no file of this repository holds it - release-sources.json's kmd_version is the kernel driver's
+#             own number, not the package's. Without it nothing is stamped and the build says so, because a host
+#             build and a quality gate are not a release; the release itself reads every resource back
+#             (versionstamp.py check --signed) and refuses a package whose files carry none.
+#   -Flavour  'release' or 'lab': the two flavours of one source line carry different file descriptions.
+# The stamp is reproducible: its bytes are a function of the file, the name, the version quad and the flavour, and
+# of nothing on this machine or this clock.
+#   -OnlyIfShipped  for a build that also produces files no release ships (the probe and test executables of the
+#             tool builds): a name that versioninfo.json does not describe is left alone, and the build says so.
+#             Without the switch such a name stops the build, which is what a shipped file wants.
+function Set-Bc250VersionStamp([string]$Repo, [string[]]$Files, [string[]]$Names = @(), [string]$Version = '',
+                               [ValidateSet('release', 'lab')][string]$Flavour = 'release', [string]$Python = '',
+                               [switch]$OnlyIfShipped) {
+    if (-not $Files -or $Files.Count -eq 0) { return }
+    if ($OnlyIfShipped) {
+        $table = Get-Content -LiteralPath (Join-Path $Repo 'tools\build\versioninfo.json') -Raw | ConvertFrom-Json
+        $keep = @()
+        for ($i = 0; $i -lt $Files.Count; $i++) {
+            $name = if ($Names.Count) { $Names[$i] } else { Split-Path -Leaf $Files[$i] }
+            if ($table.files.PSObject.Properties.Name -contains $name) { $keep += $i }
+            else { Write-Host "version stamp: no release ships $name, so it carries no version resource" }
+        }
+        if ($keep.Count -eq 0) { return }
+        $Files = @($keep | ForEach-Object { $Files[$_] })
+        if ($Names.Count) { $Names = @($keep | ForEach-Object { $Names[$_] }) }
+    }
+    if ($Names.Count -and $Names.Count -ne $Files.Count) { throw 'Set-Bc250VersionStamp: one name per file, or none' }
+    $tool = Join-Path $Repo 'tools\build\versionstamp.py'
+    $inf = Join-Path $Repo 'driver\kmd\bc250kmd.inf'
+    foreach ($p in @($tool, $inf)) { if (-not (Test-Path -LiteralPath $p)) { throw "version stamp: no $p in $Repo" } }
+    if (-not $Version) {
+        Write-Host ('version stamp: no -Version, so ' + (($Files | ForEach-Object { Split-Path -Leaf $_ }) -join ', ') +
+                    ' carries no version resource. Only a release build stamps, and the release reads the result ' +
+                    'back (versionstamp.py check --signed), which refuses a package of unstamped files.')
+        return
+    }
+    $exe = Resolve-Tool $Python 'python.exe'
+    if (-not $exe) { $exe = Resolve-Tool '' 'python' }
+    if (-not $exe) { throw 'version stamp: python is not on PATH' }
+    for ($i = 0; $i -lt $Files.Count; $i++) {
+        $file = (Resolve-Path -LiteralPath $Files[$i]).Path
+        $arguments = @($tool, 'stamp', '--version', $Version, '--inf', $inf, '--flavour', $Flavour)
+        if ($Names.Count) { $arguments += @('--name', $Names[$i]) }
+        Invoke-Checked $exe ($arguments + @($file))
+    }
 }
 
 function Invoke-Checked([string]$Exe, [string[]]$Arguments) {

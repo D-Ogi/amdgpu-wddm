@@ -1189,8 +1189,9 @@ class PackageCheck:
                    % (name, image.file_version, image.product_version))
         else:
             r.note("pe", "PE013", "%s has no version resource" % name,
-                   "driver\\kmd\\build.ps1 runs no rc.exe, so no binary in this package carries one; the "
-                   "version check below reads the BC250_KMD_VERSION immediate out of the code instead")
+                   "a release driver carries one (BD-166: driver\\kmd\\build.ps1 compiles bc250kmd.rc when it "
+                   "is given -PackageVersion), so this is a build that was given none; the version check below "
+                   "reads the BC250_KMD_VERSION immediate out of the code instead")
         if image.codeview:
             r.note("pe", "PE014", "%s debug id %s age %d" % (name, image.codeview[0], image.codeview[1]),
                    "pdb: %s" % image.codeview[2])
@@ -1408,9 +1409,10 @@ class PackageCheck:
             if self.expect_commit:
                 r.error("buildinfo", "BLD001",
                         "--expect-commit was given but this package has no BUILDINFO.json",
-                        "nothing in a bc250kmd package ties a binary to a commit today: build.ps1 runs no "
-                        "rc.exe and embeds no commit string. See tools/packagecheck/README.md for the "
-                        "three-line change to build.ps1 that would produce the sidecar")
+                        "nothing in a bc250kmd package ties a binary to a commit today: the version resource "
+                        "build.ps1 compiles (BD-166) carries the release version, not a commit, and no file "
+                        "embeds a commit string. See tools/packagecheck/README.md for the three-line change to "
+                        "build.ps1 that would produce the sidecar")
             else:
                 r.note("buildinfo", "BLD002", "no BUILDINFO.json: this package cannot be tied to a commit",
                        "the .sys carries only its PDB path and debug id (%s)"

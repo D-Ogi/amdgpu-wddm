@@ -12,7 +12,13 @@ param(
     [Parameter(Mandatory)][string]$Kits,
     [ValidateSet('x64', 'x86')][string]$Arch = 'x64',
     [string]$Out,
-    [string]$KitVersion = '10.0.26100.0'
+    [string]$KitVersion = '10.0.26100.0',
+    # BD-166: the version resource this build writes into the file it ships, as its last step. -Version is the
+    # package version, which the release passes to every component build it runs; -Flavour is that release's
+    # flavour. Without -Version nothing is stamped and the build says so: a host build and a quality
+    # gate are not a release, and the release reads every resource back before it ships.
+    [string]$Version = '',
+    [ValidateSet('release', 'lab')][string]$Flavour = 'release'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -55,10 +61,12 @@ $env:INCLUDE = ''; $env:LIB = ''
 # MSVC gives an anonymous namespace (a hash of the source path) see only the path below the repository. Two builds
 # of one commit in two directories give the same bytes (docs/design/reproducible-builds.md).
 $repro = @('/Brepro', '/FC', "/d1trimfile:$((Resolve-Path (Join-Path $here '..\..\..')).Path)")
-& $cl @repro @('/nologo', '/W4', '/we4229', '/we4440', '/WX', '/O2', '/MT', '/EHsc', '/std:c++17', '/DUNICODE', '/D_UNICODE',
+& $cl @repro @('/nologo', '/W4', '/we4229', '/we4440', '/WX', '/O2', '/MT', '/EHsc', '/std:c++17', '/Z7', '/DUNICODE', '/D_UNICODE',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\winrt", "/Fo$Out\d3d11bench.obj",
     "/Fe$Out\d3d11bench.exe", (Join-Path $here 'd3d11bench.cpp'), '/link', '/Brepro',
+    # The shipped tool gets a PDB (archived beside the candidate, named in the manifest by GUID and age).
+    '/DEBUG', '/OPT:REF', '/OPT:ICF', '/PDBALTPATH:%_PDB%',
     "/LIBPATH:$(Join-Path $msvc.FullName "lib\$Arch")", "/LIBPATH:$sdkLib\ucrt\$Arch", "/LIBPATH:$sdkLib\um\$Arch",
     'd3d11.lib', 'dxgi.lib', 'd3dcompiler.lib', 'user32.lib', 'psapi.lib', 'bcrypt.lib', 'kernel32.lib') |
     ForEach-Object { if ($_ -notmatch '^\s*$|^Microsoft|^Copyright|^\S+\.cpp$') { Write-Host "  $_" } }
@@ -72,4 +80,8 @@ $expected = if ($Arch -eq 'x64') { '8664 machine (x64)' } else { '14C machine (x
 $machine = (& $dumpbin.FullName /nologo /headers "$Out\d3d11bench.exe" | Select-String 'machine \(') -join ' '
 if (-not $machine.Contains($expected)) { throw "image is not $Arch ($machine)" }
 Write-Host "  header: $($machine.Trim())"
+# BD-166: the shipped executable carries its version resource from this build.
+& pwsh -NoProfile -File (Join-Path (Resolve-Path (Join-Path $here '..\..\..')).Path 'tools\build\version-stamp.ps1') `
+    -Version $Version -Flavour $Flavour "$Out\d3d11bench.exe"
+if ($LASTEXITCODE -ne 0) { throw 'the version stamp of d3d11bench.exe failed' }
 Get-Item "$Out\d3d11bench.exe" | ForEach-Object { '{0,9}  {1}  sha256 {2}' -f $_.Length, $_.Name, (Get-FileHash -LiteralPath $_.FullName).Hash }

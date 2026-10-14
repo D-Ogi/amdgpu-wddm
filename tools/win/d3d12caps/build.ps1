@@ -10,7 +10,13 @@ param(
     [ValidateSet('d3d12caps', 'd3d12allocprobe', 'd3d12oversub', 'd3d12sm68')][string]$Tool = 'd3d12caps',
     # x86: a 32-bit build, which a WoW64 process runs, so that the dump shows what the UserModeDriverNameWow D3D12
     # entry reports. Pass another -Out: the file name does not change.
-    [ValidateSet('x64', 'x86')][string]$Arch = 'x64'
+    [ValidateSet('x64', 'x86')][string]$Arch = 'x64',
+    # BD-166: the version resource this build writes into the file it ships, as its last step. -Version is the
+    # package version, which the release passes to every component build it runs; -Flavour is that release's
+    # flavour. Without -Version nothing is stamped and the build says so: a host build and a quality
+    # gate are not a release, and the release reads every resource back before it ships.
+    [string]$Version = '',
+    [ValidateSet('release', 'lab')][string]$Flavour = 'release'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -62,10 +68,14 @@ if ($Tool -eq 'd3d12sm68') {
 }
 # d3d12.dll and dxgi.dll are loaded at run time by name, so that an application-local runtime (the per-application
 # route) is used exactly as the game would use it; neither import library is linked.
-& $cl @repro @($variant + '/nologo', '/W4', '/we4229', '/we4440', '/WX', '/O2', '/MT', '/EHsc', '/std:c++20', '/DUNICODE', '/D_UNICODE',
+& $cl @repro @($variant + '/nologo', '/W4', '/we4229', '/we4440', '/WX', '/O2', '/MT', '/EHsc', '/std:c++20', '/Z7', '/DUNICODE', '/D_UNICODE',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\winrt", "/Fo$Out\$name.obj",
     "/Fe$Out\$name.exe", (Join-Path $here "$Tool.cpp"), '/link', '/Brepro',
+    # The shipped tool gets a PDB, which the release archives beside the candidate and the manifest names by
+    # GUID and age. /Z7 above, not /Zi: the debug information rides in the object, so no compiler database is
+    # written beside the tool and the linker still produces the program database.
+    '/DEBUG', '/OPT:REF', '/OPT:ICF', '/PDBALTPATH:%_PDB%',
     "/LIBPATH:$(Join-Path $msvc.FullName "lib\$Arch")", "/LIBPATH:$sdkLib\ucrt\$Arch", "/LIBPATH:$sdkLib\um\$Arch",
     'version.lib', 'kernel32.lib') |
     ForEach-Object { if ($_ -notmatch '^\s*$|^Microsoft|^Copyright|^\S+\.cpp$|^\s*Creating library|\.exp$') { Write-Host "  $_" } }
@@ -116,6 +126,11 @@ if ($Tool -eq 'd3d12oversub') {
     & "$Out\$name.exe" 0 --seconds 171 2>$null
     if ($LASTEXITCODE -ne 2) { throw 'a deadline above 170 s accepted' }
 }
+# BD-166: amdgpu_wddm_d3d12caps.exe is the one tool of this script that a release ships, and it carries
+# its version resource from here. The probes beside it (allocprobe, oversub, sm68) are lab tools.
+& pwsh -NoProfile -File (Join-Path (Resolve-Path (Join-Path $here '..\..\..')).Path 'tools\build\version-stamp.ps1') `
+    -Version $Version -Flavour $Flavour -OnlyIfShipped "$Out\$name.exe"
+if ($LASTEXITCODE -ne 0) { throw 'the version stamp of the shipped tool failed' }
 Get-Item "$Out\$name.exe" | ForEach-Object { '{0,9}  {1}  sha256 {2}' -f $_.Length, $_.Name, (Get-FileHash -LiteralPath $_.FullName).Hash }
 
 python -B -m unittest discover -s $here -p 'test_*.py'

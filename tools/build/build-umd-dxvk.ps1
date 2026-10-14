@@ -1,4 +1,9 @@
-param([Parameter(Mandatory)][string]$DxvkSource, [string]$OutputDir, [string]$VsInstall, [ValidateSet('x64', 'x86')][string]$Arch = 'x64', [string]$EnginePath, [string]$IcdPath)
+param([Parameter(Mandatory)][string]$DxvkSource, [string]$OutputDir, [string]$VsInstall, [ValidateSet('x64', 'x86')][string]$Arch = 'x64', [string]$EnginePath, [string]$IcdPath,
+      # BD-166: the version resource this build writes into the file it ships, as its last step. -Version is the
+      # package version (default: kmd_version of tools\release\release-sources.json), -Flavour the flavour of the
+      # release this build is for. Without -Version nothing is stamped and the
+      # build says so; the release reads every resource back before it ships.
+      [string]$Version = '', [ValidateSet('release', 'lab')][string]$Flavour = 'release')
 $ErrorActionPreference='Stop'
 . "$PSScriptRoot\common.ps1"
 $repo=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
@@ -66,4 +71,8 @@ try {
 
 
 
+# BD-166: the shipped file carries its version resource from this build, the step that knows what it produced.
+Set-Bc250VersionStamp -Repo $repo -Files @((Join-Path $OutputDir 'amdgpu_wddm_d3d11.dll')) -Names @('amdgpu_wddm_d3d11.dll') `
+    -Version $Version -Flavour $Flavour
+'{0}  amdgpu_wddm_d3d11.dll' -f (Get-FileHash -LiteralPath (Join-Path $OutputDir 'amdgpu_wddm_d3d11.dll')).Hash
 

@@ -412,6 +412,19 @@ What is deployed on the lab right now is recorded outside this repository.
 - **Firmware** is pinned by commit and hash in `tools/firmware/cyan_skillfish2.json`.
 - **The workspace's `ref\README.md`**, outside this repository, lists the local upstream checkouts with
   revisions and licences.
+- **The version resource of a shipped file is written by the build that produced it** (BD-166). The release
+  rewrites no PE file: `tools/release/build-release.ps1` only reads the resources back with
+  `tools/build/versionstamp.py check --signed`, because a rewrite there would change a file that
+  `release-sources.json` already pins. So every component build takes `-Version <package version>` and
+  `-Flavour release|lab` and stamps what it ships as its last step, through `Set-Bc250VersionStamp`
+  (`tools/build/common.ps1`) or the `tools/build/version-stamp.ps1` command for the builds outside
+  `tools/build`. The stamp is a function of the file, the name it ships as, the version quad and the flavour: the
+  same inputs give the same bytes, and stamping twice changes nothing. Which name a target ships as is in the
+  option sets (`ships` in `mesa-configs.json`, `dxvk-configs.json`, `vkd3d-configs.json`), because the resource
+  names the file it belongs to and one Mesa `vulkan_radeon.dll` ships both as `vulkan_radeon.dll` and as
+  `amdgpu_wddm_radv.dll`. Without `-Version` nothing is stamped and the build says so, so a host build or a
+  quality gate keeps its old bytes; `tools/build/versioninfo.json` lists every shipped file and what writes its
+  resource, and `tools/build/test_versionstamp.py` holds each recipe to it.
 - **Pins are the current baseline, not permanent targets.** Newer LLVM and Mesa are preferred; change a pin
   together with this page, `tools/build/` and a validated build (`CLAUDE.md`, "Toolchain and Mesa freshness").
 - **Validation (2026-09-26).** Configure-only runs of `build-llvm.ps1` and of `build-mesa.ps1` for `radv`,

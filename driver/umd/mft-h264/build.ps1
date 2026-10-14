@@ -20,7 +20,13 @@ param(
     [string]$Kits,
     [string]$Out,
     [string]$KitVersion = '10.0.26100.0',
-    [switch]$SkipSelfTest
+    [switch]$SkipSelfTest,
+    # BD-166: the version resource this build writes into the file it ships, as its last step. -Version is the
+    # package version, which the release passes to every component build it runs; -Flavour is that release's
+    # flavour. Without -Version nothing is stamped and the build says so: a host build and a quality
+    # gate are not a release, and the release reads every resource back before it ships.
+    [string]$Version = '',
+    [ValidateSet('release', 'lab')][string]$Flavour = 'release'
 )
 
 $root = if ($env:BC250_ROOT) { $env:BC250_ROOT }
@@ -110,7 +116,9 @@ $inc = @("/I$(Join-Path $msvc.FullName 'include')",
 # /Brepro removes the timestamp from the object and the image, so the same sources give the same bytes. /FC with
 # /d1trimfile: the names of anonymous namespaces hash the source path below the repository only; with the full path
 # in the hash, mfthost.exe of two trees of one commit placed two functions in another order.
-$cflags = @('/nologo', '/c', '/W4', '/WX', '/O2', '/MT', '/EHsc', '/std:c++17', '/GR-',
+# /Z7: the debug information rides in each object, so the shipped transform gets a PDB from /DEBUG at the link
+# and no compiler database is written beside the objects.
+$cflags = @('/nologo', '/c', '/W4', '/WX', '/O2', '/MT', '/EHsc', '/std:c++17', '/GR-', '/Z7',
             '/DUNICODE', '/D_UNICODE', '/DWIN32_LEAN_AND_MEAN', '/Brepro', '/Zc:inline', '/FC',
             "/d1trimfile:$((Resolve-Path (Join-Path $here '..\..\..')).Path)")
 $libpath = @("/LIBPATH:$(Join-Path $msvc.FullName 'lib\x64')",
@@ -153,7 +161,8 @@ if (Test-Path -LiteralPath $dll) {
     }
     Write-Host "  previous DLL retained as retained\amdgpu_wddm_mft_h264-$hash.dll"
 }
-Invoke-Tool $link (@('/nologo', '/DLL', '/Brepro', '/INCREMENTAL:NO', '/OPT:REF', '/OPT:ICF',
+Invoke-Tool $link (@('/nologo', '/DLL', '/Brepro', '/INCREMENTAL:NO', '/DEBUG', '/OPT:REF', '/OPT:ICF',
+                     '/PDBALTPATH:%_PDB%',
                      "/DEF:$(Join-Path $src 'amdgpu_wddm_mft_h264.def')", "/OUT:$dll",
                      "/IMPLIB:$Out\amdgpu_wddm_mft_h264.lib") +
                    $coreObjs + @($dllObj) + $libpath + $libs) 'link dll'
@@ -207,6 +216,12 @@ if (-not $SkipSelfTest) {
     & $exe --selftest
     if ($LASTEXITCODE -ne 0) { throw "mfthost --selftest failed ($LASTEXITCODE)" }
 }
+
+# BD-166: the shipped DLL carries its version resource from this build; mfthost.exe and mftreg.exe are tools of
+# the lab, which no release ships and nothing stamps.
+& pwsh -NoProfile -File (Join-Path (Resolve-Path (Join-Path $here '..\..\..')).Path 'tools\build\version-stamp.ps1') `
+    -Version $Version -Flavour $Flavour -OnlyIfShipped $dll $exe $regExe
+if ($LASTEXITCODE -ne 0) { throw 'the version stamp of the shipped transform failed' }
 
 Get-Item $dll, $exe, $regExe | ForEach-Object {
     '{0,9}  {1,-30}  sha256 {2}' -f $_.Length, $_.Name, (Get-FileHash -LiteralPath $_.FullName).Hash

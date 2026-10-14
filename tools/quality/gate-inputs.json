@@ -255,6 +255,16 @@
         "host"
       ]
     },
+    "kmd-version-rc": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "ledger-call": {
+      "inputs": [
+        "host"
+      ]
+    },
     "board-provider": {
       "inputs": [
         "host"

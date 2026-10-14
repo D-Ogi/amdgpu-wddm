@@ -4,7 +4,13 @@ param(
     [Parameter(Mandatory)][string]$Root,
     [Parameter(Mandatory)][string]$Out,
     [Parameter(Mandatory)][string]$ImportLibrary,
-    [string]$ClangBin = ''
+    [string]$ClangBin = '',
+    # BD-166: the version resource this build writes into the file it ships, as its last step. -Version is the
+    # package version, which the release passes to every component build it runs; -Flavour is that release's
+    # flavour. Without -Version nothing is stamped and the build says so: a host build and a quality
+    # gate are not a release, and the release reads every resource back before it ships.
+    [string]$Version = '',
+    [ValidateSet('release', 'lab')][string]$Flavour = 'release'
 )
 $ErrorActionPreference = 'Stop'
 if (-not $ClangBin) { $ClangBin = Join-Path $Root 'toolchain/llvm-amdgpu-22.1.8/mingw64/bin' }
@@ -73,6 +79,12 @@ try {
     }
     $outputs = @('vadd.exe', 'hipbench.exe', 'hipblas/bc250hipblas.dll',
         'hipblas/bc250hipblas.lib', 'hipblas/gemm_check.exe', 'hipblas/test_gemm_core.exe')
+    # BD-166: the two files of this build that a release ships carry their version resource from here;
+    # the samples beside them are lab artifacts, which -OnlyIfShipped leaves alone.
+    $stampTool = Join-Path (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path 'tools\build\version-stamp.ps1'
+    & pwsh -NoProfile -File $stampTool -Version $Version -Flavour $Flavour -Names @($outputs | ForEach-Object { Split-Path -Leaf $_ }) `
+        -OnlyIfShipped @($outputs | ForEach-Object { Join-Path $Out $_ })
+    if ($LASTEXITCODE -ne 0) { throw 'the version stamp of the shipped samples failed' }
     $artifacts = @($outputs | ForEach-Object {
         $path = Join-Path $Out $_
         [ordered]@{path=$path; bytes=(Get-Item -LiteralPath $path).Length; sha256=(Get-FileHash -LiteralPath $path).Hash}

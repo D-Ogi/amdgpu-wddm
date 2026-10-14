@@ -22,6 +22,15 @@ param(
     [Parameter(Mandatory)][string]$Out,
     [string]$UmdStub = '',
     [string]$KitVersion = '10.0.26100.0',
+    [string]$FirmwareDir,
+    # BD-166: the release version this driver is built for, for example 0.7.216.102-tester.31. With it the driver
+    # carries a version resource compiled from driver\kmd\bc250kmd.rc, so Windows and a game read a real file
+    # version instead of 0.0.0.0 (Counter-Strike 2 refuses an AMD driver below 30.0.14023.1009). The numbers come
+    # from tools\build\versionstamp.py, the one mapping the release gate checks against, and never from here.
+    # Without it the driver links as before and carries no resource: a gate or a bench build has no release to
+    # name, and inventing one here would be a second source of the number.
+    [string]$PackageVersion = '',
+    [ValidateSet('release', 'lab')][string]$Flavour = 'release',
     [string]$CertSubject = 'CN=BC-250 lab test signing',
     [switch]$ExportCommandsOnly,
     [switch]$CompileOnly,           # compile and link, no quality gates, no catalog, no signature (a gate)
@@ -157,6 +166,26 @@ if(-not $CompileOnly) {
 
 Invoke-Tool (Join-Path $bin 'cl.exe') ($clFlags + $shimInc + $sources + $shimSources)
 Invoke-Tool (Join-Path $bin 'cl.exe') ($clFlags + $shimInc + @("/I$repo\driver\shim", '/TC', '/wd4245') + $shimGfxSources)
+if ($Flavour -eq 'lab' -and -not $PackageVersion) { throw '-Flavour lab needs -PackageVersion: a flavour of no release' }
+# BD-166: the version resource, compiled before the link because the kernel driver cannot be stamped afterwards
+# (the release pins its Authenticode digest, and a stamp after the signature would break it). versionstamp.py
+# writes version-stamp.h from the release version, the same mapping and the same strings that every user-mode
+# file of the package gets, so `versionstamp.py check` compares the built resource against one expectation. The
+# header goes next to the objects, and bc250kmd.rc includes it by name.
+$res = ''
+if ($PackageVersion) {
+    Write-Host 'version resource'
+    $header = Join-Path $obj 'version-stamp.h'
+    & python -B (Join-Path $repo 'tools\build\versionstamp.py') rc-header --version $PackageVersion `
+        --inf (Join-Path $here 'bc250kmd.inf') --name 'bc250kmd.sys' --out $header --flavour $Flavour |
+        ForEach-Object { Write-Host "  $_" }
+    if ($LASTEXITCODE) { throw "version-stamp.h: versionstamp.py refused $PackageVersion ($Flavour)" }
+    $res = Join-Path $obj 'bc250kmd.res'
+    Remove-Item $res -Force -ErrorAction SilentlyContinue
+    Invoke-Tool (Join-Path $sdk "bin\$KitVersion\x64\rc.exe") @('/nologo', "/fo$res", "/I$obj",
+        "/I$sdk\Include\$KitVersion\um", "/I$sdk\Include\$KitVersion\shared", (Join-Path $here 'bc250kmd.rc'))
+    if (-not (Test-Path -LiteralPath $res)) { throw "rc.exe wrote no $res" }
+}
 Invoke-Tool (Join-Path $bin 'cl.exe') ($clFlags + $shimInc + @('/TC', '/wd4244', '/wd4701', '/wd4100') + $importSources)
 Write-Host 'link'
 Invoke-Tool (Join-Path $bin 'link.exe') (@('/nologo', '/DRIVER', '/SUBSYSTEM:NATIVE,10.00', '/ENTRY:DriverEntry', '/NODEFAULTLIB', '/RELEASE',
@@ -164,7 +193,8 @@ Invoke-Tool (Join-Path $bin 'link.exe') (@('/nologo', '/DRIVER', '/SUBSYSTEM:NAT
     '/Brepro', '/PDBALTPATH:%_PDB%',  # a content hash instead of a timestamp, and the PDB by name, not by path
     'aux_klib.lib', 'displib.lib', 'ntoskrnl.lib', 'hal.lib', 'bufferoverflowfastfailk.lib', 'libcntpr.lib', 'ntstrsafe.lib',
     "/OUT:$pkg\bc250kmd.sys", "/PDB:$Out\bc250kmd.pdb", "/MAP:$Out\bc250kmd.map") +
-    (Get-OrdinalBuildFiles "$obj\*.obj"))   # fixed order: /OPT:ICF folds by input order
+    (Get-OrdinalBuildFiles "$obj\*.obj") +                  # fixed order: /OPT:ICF folds by input order
+    @($res | Where-Object { $_ }))                          # the version resource, named here and never globbed
 Copy-Item "$pkg\bc250kmd.sys" (Join-Path $Out 'bc250kmd.unsigned.sys') -Force
 
 # What does the prologue of each function take off rsp? A kernel thread has 24 KB and dxgmms2 has already

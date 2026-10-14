@@ -538,6 +538,31 @@ pwsh driver\kmd\build.ps1 -Kits $env:BC250_ROOT\toolchain\nuget -Out $env:BC250_
 `<Out>\package` is run 1 and `<Out>\package-umd` is run 2; both are catalogued and test-signed, and the run 2
 catalog covers `bc250umd.dll` as well. Without `-UmdStub` nothing about the plain package changes.
 
+### The version resource (BD-166)
+
+A driver built for a release takes that release's version:
+
+```powershell
+pwsh driver\kmd\build.ps1 -Kits ... -Out ... -PackageVersion 0.7.216.102-tester.31 [-Flavour lab]
+```
+
+The build then writes `<Out>\obj\version-stamp.h` with `tools\build\versionstamp.py rc-header`, compiles
+`driver\kmd\bc250kmd.rc` against it with the kit's `rc.exe`, and gives the compiled `bc250kmd.res` to the link.
+The driver reports `40.7.216.102` as its file version: the AMD-scheme number of the package version, mapped by
+the same code that stamps every user-mode file of the package, so `versionstamp.py check` holds one expectation
+for all of them. This is why the number is never written in the recipe or in the `.rc`, and why the mapping
+refuses an already-mapped number (`versionstamp.py`, `package_version_arg`).
+
+The kernel driver cannot be stamped after the link the way the user-mode files are: the release pins its
+Authenticode digest, and a stamp after the signature would break it. Hence the compiled resource.
+
+Without `-PackageVersion` the driver links as before and carries no version resource, which is right for a
+gate or a bench build: it belongs to no release, and a number invented here would be a second source of it.
+A file with no resource reports `0.0.0.0`, and a game may act on that (Counter-Strike 2 refuses its own
+renderer on an AMD driver below `30.0.14023.1009`), so a driver that ships carries one.
+`tools\build\test_kmd_version_rc.py` (quality gate `kmd-version-rc`) compiles the resource, reads the bytes
+back and checks that this recipe still builds it in.
+
 From a git worktree, set `BC250_ROOT` (or pass `-QualityWorkspace`). Without one of the two, this build and
 the recipes under `tools\build\` take the workspace to be the repository's parent directory, which for a
 worktree is the directory that holds the worktree: the kits, the Mesa sources and the quality gates are then

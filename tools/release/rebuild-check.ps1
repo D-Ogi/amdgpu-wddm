@@ -18,8 +18,12 @@
 #   in\<n>   each pinned input: the listed paths of its commit (git archive), a work tree of its commit with the
 #            submodules when it lists no paths, or an inline JSON object as a file;
 #   out      the empty output directory.
-# Argument placeholders: {src} {out} {root} {input:<name>} {payload:<package path>} (the source file of that entry)
-# and {tool:<name>} (-Tool, then the environment variable BC250_TOOL_<NAME>, then PATH).
+# Argument placeholders: {src} {out} {root} {input:<name>} {payload:<package path>} (the source file of that entry),
+# {tool:<name>} (-Tool, then the environment variable BC250_TOOL_<NAME>, then PATH), and
+# {version} {flavour}: the release this package is, which a build that stamps the version resource of a
+# shipped file takes as an argument (BD-166). -Version and -Flavour give them; without -Version the
+# rebuild of such an entry would differ from the pinned file, so an entry that uses the placeholder and
+# was given no version is refused.
 # Outputs are compared by SHA-256; a signed file also by "unsigned_sha256" against the recipe's "unsigned_output" and
 # by its Authenticode digest. MESON_PACKAGE_CACHE_DIR points at -PackageCache, so a Meson wrap (Mesa's zlib) needs
 # no download. The work trees are removed at the end unless -Keep. The directory of a build with an entry that does
@@ -44,7 +48,10 @@ param(
     [string]$Work,
     [string[]]$Tool,
     [string]$PackageCache,
-    [string]$Report
+    [string]$Report,
+    # The release version and flavour for the {version} and {flavour} placeholders (BD-166).
+    [string]$Version = '',
+    [ValidateSet('release', 'lab')][string]$Flavour = 'release'
 )
 # Release and provenance rebuilds always execute the gates, including nested analysis.
 $env:BC250_GATE_NOCACHE = '1'
@@ -132,6 +139,7 @@ function Expand-Arg([string]$Arg, [hashtable]$Map) {
                 'input' { if (-not $Map.inputs.ContainsKey($name)) { throw "unknown input $name" }; return $Map.inputs[$name] }
                 'payload' { if (-not $sourceOf.ContainsKey($name)) { throw "unknown payload $name" }; return $sourceOf[$name] }
                 'tool' { return (Resolve-ToolPath $name) }
+                'version' { if (-not $Map.version) { throw 'this build stamps a version resource: pass -Version' }; return $Map.version }
                 default { if (-not $Map.ContainsKey($kind)) { throw "unknown placeholder {$kind}" }; return $Map[$kind] }
             }
         })

@@ -86,7 +86,12 @@ try {
  # when somebody built a package by hand. -CompileOnly writes the same file and then runs the three cl.exe calls,
  # the link and the stack budget, with no quality gates of its own (this is the list it would call).
  Check 'kmd-compile' { & pwsh -NoProfile -File "$repo\driver\kmd\build.ps1" -Kits "$Kits" -Out "$Out\kmd" -CompileOnly }
- Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compile-commands "$Out\kmd\compile_commands.json" --match '/driver/(kmd|shim)/' --out "$Out\kmd-contract" }
+ # BD-166: the kernel-mode driver carries a compiled version resource, so a game that asks Windows which AMD driver
+# it runs on does not read 0.0.0.0 (Counter-Strike 2 did). The numbers come from version-stamp.h, which the KMD
+# build writes from the quad the release builder maps; this compiles the resource with the kit's own rc.exe, reads
+# the numbers back out of the compiled bytes and holds the refusal of a resource built without them. Two seconds.
+Check 'kmd-version-rc' { & python "$repo\tools\build\test_kmd_version_rc.py" --kits "$Kits" --out "$Out\kmd-version-rc" }
+Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compile-commands "$Out\kmd\compile_commands.json" --match '/driver/(kmd|shim)/' --out "$Out\kmd-contract" }
  Check 'guardlog-width' { & python "$repo\tools\quality\guardlog_width.py" --kmd "$repo\driver\kmd" --baseline "$repo\tools\quality\guardlog_width_baseline.txt" --out "$Out\guardlog-width" }
  # The provenance gate of the release payload (tools/release/provenance.py, run by build-release.ps1): its self-test on
  # throwaway repositories. The gate itself needs the payload files of a workspace, so the release build runs it.
@@ -111,6 +116,12 @@ try {
  Check 'session-checks' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\tools\release\test-session-checks.ps1" -WorkRoot "$Out\session-checks" }
  # BD-076: the OpenGL ICD registration of the installer. The architecture list of the release, the values of each
  # architecture in it, the ICD file check, the restore plan of the uninstaller and the step of an install that
+ # BD-166: the D3D11 configuration record of a staged package (tools/release/check_package_v3.py). b15 shipped a new
+ # BD-166: the version resource that the release build gives every PE file of the package (tools/build/versionstamp.py),
+ Check 'version-stamp' { & python -m unittest discover -s "$repo\tools\build" -p 'test_versionstamp.py' }
+ # BD-166: which records a release must carry, and the refusal of a shipped PE that nothing in versioninfo.json
+ # stamps, both through the public release gate (tools/build/versionstamp.py check_release).
+ Check 'version-stamp-records' { & python -m unittest discover -s "$repo\tools\build" -p 'test_versionstamp_records.py' }
  # registers fewer architectures than the computer holds. It writes a scratch key under HKCU and a folder under
  # %TEMP% and removes both. Like session-checks above it ran only inside test-dryrun.ps1, which needs a built
  # package, so a change of the registration could reach a release before any gate read it. Windows PowerShell 5.1,

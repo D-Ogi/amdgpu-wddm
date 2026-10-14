@@ -53,7 +53,13 @@ param(
     # TEMP and TMP for the build (default <BC250_ROOT>\scratch\tmp).
     [string]$Temp,
     # Target architecture: x86 builds the 32-bit (WoW64) DLL with vcvarsamd64_x86.bat (common.ps1).
-    [ValidateSet('x64', 'x86')][string]$Arch = 'x64'
+    [ValidateSet('x64', 'x86')][string]$Arch = 'x64',
+    # BD-166: the version resource the shipped artifacts of this build carry, written by this build as its last
+    # step. -Version is the package version, which the release passes to every component build it runs, and
+    # -Flavour is that release's flavour. An artifact no release ships is not stamped, and without -Version
+    # nothing is: a host build is not a release, and the release reads every resource back before it ships.
+    [string]$Version = '',
+    [ValidateSet('release', 'lab')][string]$Flavour = 'release'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -201,6 +207,24 @@ try {
     $ninjaArgs = @('-C', $Build)
     if ($Jobs -gt 0) { $ninjaArgs += "-j$Jobs" }
     Invoke-Checked $ninjaExe ($ninjaArgs + $targets)
+
+    # BD-166: every artifact a release ships carries its version resource from this build, its last step before the
+    # receipt; the release copies the file and rewrites none of it (tools\release\build-release.ps1). The option set
+    # says which names a target ships as, because the resource names the file it belongs to.
+    $stamped = [ordered]@{}
+    foreach ($t in $targets) {
+        $names = @()
+        if ($recipeConfig.ships -and $recipeConfig.ships.PSObject.Properties.Name -contains $t) { $names = @($recipeConfig.ships.$t) }
+        if ($names.Count -eq 0) { continue }
+        $built = Join-Path $Build ($t -replace '/', '\')
+        if (-not (Test-Path -LiteralPath $built)) { throw "ninja succeeded but $built is missing" }
+        foreach ($name in $names) {
+            $copy = Join-Path (Split-Path -Parent $built) $name
+            if ($copy -ne $built) { Copy-Item -LiteralPath $built -Destination $copy -Force }
+            Set-Bc250VersionStamp -Repo $repo -Files @($copy) -Names @($name) -Version $Version -Flavour $Flavour -Python $Python
+            $stamped[((Split-Path -Parent $t) + '/' + $name)] = $copy
+        }
+    }
 
     $artifacts = [ordered]@{}
     foreach ($t in $targets) {

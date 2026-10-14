@@ -1,6 +1,11 @@
 # -Arch x86 builds the 32-bit shell for WoW64 processes (UserModeDriverNameWow) with vcvarsamd64_x86.bat (common.ps1),
 # and runs every host gate below as an x86 program.
-param([string]$OutputDir,[string]$VsInstall,[string]$MesaSource,[string]$VulkanInclude,[string]$EngineInclude,[ValidateSet('x64','x86')][string]$Arch='x64')
+param([string]$OutputDir,[string]$VsInstall,[string]$MesaSource,[string]$VulkanInclude,[string]$EngineInclude,[ValidateSet('x64','x86')][string]$Arch='x64',
+      # BD-166: the version resource this build writes into the file it ships, as its last step. -Version is the
+      # package version (default: kmd_version of tools\release\release-sources.json), -Flavour the flavour of the
+      # release this build is for. Without -Version nothing is stamped and the
+      # build says so; the release reads every resource back before it ships.
+      [string]$Version='',[ValidateSet('release','lab')][string]$Flavour='release')
 $ErrorActionPreference='Stop'
 . "$PSScriptRoot\common.ps1"
 # Windows installer detection asks for elevation (a UAC prompt on the desktop of the build PC) before it starts a
@@ -213,3 +218,7 @@ try {
  } finally {Pop-Location}
 } finally {Restore-ProcessEnvironment $saved}
 Write-Host 'Adapter caps linked; functional device tables and deployment remain separate gates.'
+# BD-166: the shipped file carries its version resource from this build, the step that knows what it produced.
+Set-Bc250VersionStamp -Repo $repo -Files @((Join-Path $OutputDir 'amdgpu_wddm_d3d12.dll')) -Names @('amdgpu_wddm_d3d12.dll') `
+    -Version $Version -Flavour $Flavour
+'{0}  amdgpu_wddm_d3d12.dll' -f (Get-FileHash -LiteralPath (Join-Path $OutputDir 'amdgpu_wddm_d3d12.dll')).Hash

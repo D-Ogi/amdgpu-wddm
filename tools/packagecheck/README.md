@@ -179,8 +179,10 @@ work by writing a `.cat`, so it is never given the package: the files are copied
 
 ## The commit, and BUILDINFO.json
 
-Nothing in a bc250kmd package ties a binary to a commit today. `driver/kmd/build.ps1` runs no `rc.exe`,
-so no binary carries a version resource, and no commit string is compiled in. The only build identity in
+Nothing in a bc250kmd package ties a binary to a commit today. Since BD-166 `driver/kmd/build.ps1` compiles
+`driver/kmd/bc250kmd.rc` whenever it is given `-PackageVersion`, so a release driver carries the release
+version in a version resource, but a release version is not a commit, and no commit string is compiled in
+either. The only build identity in
 the `.sys` is its CodeView debug id and the PDB path, which happens to hold the build directory name
 (`<BC250_ROOT>\scratch\build\bc250kmd-074\bc250kmd.pdb`) - useful, but it names a directory on this PC, not
 a commit.
