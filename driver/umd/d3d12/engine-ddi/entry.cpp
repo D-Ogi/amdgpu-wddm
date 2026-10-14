@@ -63,6 +63,9 @@ uint64_t qpc() noexcept {
 // every process on the machine; C:\BC250 lets each user make and change a directory under it, so such a file is also
 // a channel from one user to the D3D12 driver of every other. The ICD removed its own file for those reasons (mesa
 // 0bb2d1ea, host policy version 2) and this shell keeps none either.
+// BD-167: the knobs, their file and their log are a lab build's (build-umd-d3d12.ps1 -Lab). A release engine reads
+// none of them and runs as with every one unset: the direct entry, no statistics, no rows.
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
 char* read_knob_file() noexcept {
     char path[MAX_PATH];
     const DWORD n = GetEnvironmentVariableA("BC250_ENTRY_CFG", path, sizeof(path));
@@ -111,12 +114,14 @@ uint32_t knob_number(const char* file, const char* key, uint32_t fallback, uint3
     const unsigned long n = std::strtoul(value, &end, 10);
     return (end && !*end && n >= low && n <= high) ? static_cast<uint32_t>(n) : fallback;
 }
+#endif
 
 uint64_t poll_tsc() noexcept {
     return static_cast<uint64_t>(g_knobs.poll_us * g_knobs.tsc_per_qpc * static_cast<double>(g_knobs.qpf) / 1e6);
 }
 
 BOOL CALLBACK load_knobs(PINIT_ONCE, PVOID, PVOID*) {
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
     char* file = read_knob_file();
     bool from_file = false;
     char value[64];
@@ -132,13 +137,16 @@ BOOL CALLBACK load_knobs(PINIT_ONCE, PVOID, PVOID*) {
     g_knobs.pad_us = knob_number(file, "BC250_ENTRY_PAD_US", 300, 0, 100000, &from_file);
     g_knobs.poll_us = knob_number(file, "BC250_ENTRY_POLL_US", 1, 1, 1000, &from_file);
     std::free(file);
+#endif
     if (!g_knobs.arms && g_knobs.stats) {       // statistics alone: the default path (arm b) throughout
         g_knobs.path[0] = 'b';
         g_knobs.order[0] = EntryArm::Direct;
         g_knobs.arms = 1;
     }
     g_knobs.active = g_knobs.arms != 0;
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
     g_knobs.source = from_file ? "file" : g_knobs.active ? "environment" : "none";
+#endif
     if (!g_knobs.active) return TRUE;
     // TSC ticks per QPC tick, over 2 ms: the workers' poll interval of arm c is in TSC ticks.
     LARGE_INTEGER frequency{};
@@ -202,6 +210,7 @@ Presenter* g_state = nullptr;
 void open_log(Presenter& s) noexcept {
     s.opened = true;
     char path[MAX_PATH] = {};
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
     char named[MAX_PATH];
     const DWORD n = GetEnvironmentVariableA("BC250_ENTRY_LOG", named, sizeof(named));
     if (n && n < sizeof(named) && named[0]) {
@@ -217,7 +226,9 @@ void open_log(Presenter& s) noexcept {
             }
         }
         path[used < sizeof(path) ? used : sizeof(path) - 1] = 0;
-    } else {
+    } else
+#endif
+    {
         char temp[MAX_PATH];
         const DWORD t = GetTempPathA(sizeof(temp), temp);
         if (t && t < sizeof(temp))

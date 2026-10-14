@@ -12,9 +12,9 @@
 // (driver/contract/bc250_scanout_primary.h), plus the clauses that only this shell has:
 //   Off          the operator's switch is off. This shell's default is OFF until a D3D11 game is measured
 //                with the request (the train rule: a feature is on by default only after its lab
-//                measurement). AMDGPU_WDDM_D3D11_SCANOUT=1 in the environment, or the REG_DWORD
-//                ScanoutPrimary=1 under HKLM\SOFTWARE\amdgpu-wddm\D3D11 (64-bit view), asks for it;
-//                the environment wins over the machine value, and any value that is not "1" is off.
+//                measurement). AMDGPU_WDDM_D3D11_SCANOUT=1 in the environment (a lab build only, BD-167),
+//                or the REG_DWORD ScanoutPrimary=1 under HKLM\SOFTWARE\amdgpu-wddm\D3D11 (64-bit view), asks
+//                for it; the environment wins over the machine value, and any value that is not "1" is off.
 //   NotPrimary   the swap-chain buffer came without a primary descriptor (a DISPLAYABLE surface of a
 //                windowed flip-model chain, M746). The record's PRIMARY bit and the video present source
 //                come from that descriptor, and both the kernel driver's SCANOUT policy and the front's
@@ -121,12 +121,16 @@ struct ScanoutSource {
 inline ScanoutSource read_scanout_source(HANDLE adapter,PFND3DDDI_QUERYADAPTERINFOCB query) noexcept {
     ScanoutSource source{};
     source.adapter=adapter; source.query=query;
+    ScanoutPrimarySetting environment=ScanoutPrimarySetting::Absent;
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+    // BD-167: the environment is a source in a lab build only (build-umd-dxvk.ps1 -Lab). A release shell has no
+    // lookup of the name: the machine value decides, as with the variable unset.
     char text[8]{};
     SetLastError(ERROR_SUCCESS);   // an empty value also returns 0, and only "not found" is absent
     const DWORD length=GetEnvironmentVariableA("AMDGPU_WDDM_D3D11_SCANOUT",text,sizeof(text));
-    ScanoutPrimarySetting environment=ScanoutPrimarySetting::Absent;
     if (length>=sizeof(text)) environment=ScanoutPrimarySetting::Off;
     else if (length || GetLastError()!=ERROR_ENVVAR_NOT_FOUND) environment=scanout_primary_environment_setting(text);
+#endif
     LSTATUS status=ERROR_SUCCESS; DWORD type=0,bytes=0;
     DWORD value=scanout_primary_registry_dword(L"SOFTWARE\\amdgpu-wddm\\D3D11",L"ScanoutPrimary",status,type,bytes);
     source.switch_state=scanout_primary_switch(environment,scanout_primary_machine_setting(status,type,bytes,value));

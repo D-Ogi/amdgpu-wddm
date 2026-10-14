@@ -1,7 +1,8 @@
 # -Arch x86 builds the 32-bit shell for WoW64 processes (UserModeDriverNameWow) with vcvarsamd64_x86.bat (common.ps1),
 # and runs every host gate below as an x86 program.
-# -Lab builds the lab flavour (BD-167): the shell also reads AMDGPU_WDDM_D3D12_EXPERIMENT from the environment.
-# Without it the shell is the release flavour, which has no lookup of that name (ddi-trace.h).
+# -Lab builds the lab flavour (BD-167): the shell also reads AMDGPU_WDDM_D3D12_EXPERIMENT and AMDGPU_WDDM_DDI_TRACE
+# from the environment, and its engine-ddi library (build-engine-ddi.ps1 -Lab) the trace and the entry path knobs
+# BC250_ENTRY_*. Without it the shell is the release flavour, which has no lookup of those names (ddi-trace.h).
 param([string]$OutputDir,[string]$VsInstall,[string]$MesaSource,[string]$VulkanInclude,[string]$EngineInclude,[ValidateSet('x64','x86')][string]$Arch='x64',[switch]$Lab)
 $ErrorActionPreference='Stop'
 . "$PSScriptRoot\common.ps1"
@@ -28,6 +29,7 @@ $engineSource=Split-Path -Parent (Split-Path -Parent $EngineInclude)
 $engineBuild=Join-Path $OutputDir 'engine-ddi'
 $engineArgs=@('-NoProfile','-File',"$PSScriptRoot\build-engine-ddi.ps1",'-OutputDir',$engineBuild,'-EngineSource',$engineSource,'-VulkanInclude',$VulkanInclude,'-NativeOnly','-Arch',$Arch)
 if($VsInstall){$engineArgs+=@('-VsInstall',$VsInstall)}
+if($Lab){$engineArgs+='-Lab'}
 & pwsh @engineArgs
 if($LASTEXITCODE){throw 'Native engine-ddi build or host gates failed'}
 $engineLib=Join-Path $engineBuild 'engine-ddi.lib'

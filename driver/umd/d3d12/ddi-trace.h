@@ -16,14 +16,19 @@ namespace native12 {
 // AMDGPU_WDDM_DDI_TRACE: 1 is the full trace, two lines per call, on the AMDGPU_WDDM_LOG sink (stdio-log.h:
 // nothing unless that switch names one). 2 is failures only, for a process that makes millions of calls:
 // nothing on success, one debugger-output line per failed call or reported device error, and silence after the
-// budget is spent.
+// budget is spent. BD-167: a lab build's switch (build-umd-d3d12.ps1 -Lab); a release shell has no lookup of the
+// name and behaves as with it unset.
 inline int ddi_trace_mode() noexcept {
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
     static const int mode=[]() noexcept {
         char value[2]{};
         if(GetEnvironmentVariableA("AMDGPU_WDDM_DDI_TRACE",value,sizeof(value))!=1)return 0;
         return value[0]=='1'?1:value[0]=='2'?2:0;
     }();
     return mode;
+#else
+    return 0;
+#endif
 }
 inline bool ddi_trace_enabled() noexcept {return ddi_trace_mode()==1;}
 inline std::atomic<uint64_t> ddi_trace_sequence{};

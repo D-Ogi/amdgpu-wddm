@@ -37,7 +37,10 @@ param(
     # Steps 0 to 2 only: the static library the shell links, and its host tests.
     [switch]$NativeOnly,
     # Target architecture: x86 builds the library of the 32-bit (WoW64) shell with vcvarsamd64_x86.bat (common.ps1).
-    [ValidateSet('x64', 'x86')][string]$Arch = 'x64'
+    [ValidateSet('x64', 'x86')][string]$Arch = 'x64',
+    # The lab flavour (BD-167; build-umd-d3d12.ps1 -Lab passes it): the library also reads AMDGPU_WDDM_DDI_TRACE and
+    # the entry path knobs (BC250_ENTRY_*). Without it, the release flavour, which has no lookup of those names.
+    [switch]$Lab
 )
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\common.ps1"
@@ -86,6 +89,7 @@ try {
         '/Brepro', '/FC', "/d1trimfile:$repo", "/d1trimfile:$EngineSource", "/d1trimfile:$VulkanInclude",
                "/external:I$wdk", "/external:I$wdk\..\shared", "/external:I$VulkanInclude", "/external:I$EngineInclude",
                "/I$src")
+    if ($Lab) { $flags += '/DAMDGPU_WDDM_LAB_FLAVOUR=1' }
     $harnessFlag = '/DAMDGPU_WDDM_ENGINE_DDI_HARNESS'
 
     # A native step's verdict is its exit code. Windows PowerShell 5.1 turns every stderr line of a native command
