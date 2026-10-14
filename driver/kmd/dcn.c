@@ -11,6 +11,7 @@
 #include "connector_surface.h"
 #include "bc250kmd_escape.h"
 #include "regs.generated.h"
+#include "lab_gate.h"          // BD-167: DcnEscape/FbdumpEscape/DcnFlipEscape are lab-only (RUN_DCN/FBDUMP/DCNFLIP)
 #include "display_timing_snapshot.h"
 #include "dcn_2_0_1_sh_mask.h"       // field masks for the decoded summary only; every offset comes from regcalc
 #include "dcn_translate.h"           // ADR 0011 point 3 step 3: the WDDM flip's host-testable address conversion
@@ -80,6 +81,10 @@ void DcnObserve(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_DCN_OBSERVE* 
     Data->Status=NT_SUCCESS(status)?BC250_ESCAPE_STATUS_DONE:BC250_ESCAPE_STATUS_REFUSED;
 }
 
+// BD-167: RUN_DCN (a DCN register dump) and RUN_FBDUMP (a read of the scanned-out framebuffer, i.e. presented
+// pixels) are diagnostic reads with no release consumer and are compiled only into the lab flavour. DcnObserve
+// above (the named read-only OBSERVE_DCN) and the display/flip paths below stay in every build.
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
 void DcnEscape(_In_ const BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_DCN* Data)
 {
     const BC250_DCN_REG_INFO* table = NULL;
@@ -306,6 +311,7 @@ void FbdumpEscape(_In_ const BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_FBDUMP* 
     GuardLog("fbdump: hubp %u rows %u..%u of %u, pitch %u, address 0x%llX", Data->Hubp, Data->FirstRow,
              Data->FirstRow + Data->RowCount - 1, height, pitch, start);
 }
+#endif /* AMDGPU_WDDM_LAB_FLAVOUR (DcnEscape + FbdumpEscape) */
 
 // ---- DcnFlip (0.7.20, ADR 0011 point 3 step 2): one gated flip on HUBP0/OTG0 -----------------------------------
 //
@@ -319,6 +325,10 @@ void FbdumpEscape(_In_ const BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_FBDUMP* 
 #define BC250_DCNFLIP_POLL_STEP_US 100ul
 #define BC250_DCNFLIP_POLL_MAX_US 50000ul                                              // 50 ms
 
+// BD-167: Refuse, FillSurface and the PollFlipPending/DcnFlipCore/DcnFlipEscape block below belong only to the
+// lab RUN_DCNFLIP escape; the shared flip helpers (AddressAllowed, CaptureFirmwareSurface, DcnFlipWriteSequence,
+// DcnPlaneFormatRegisters) stay in every build because the WDDM flip and restore paths use them.
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
 static void Refuse(_Inout_ BC250_ESCAPE_DCNFLIP* Out, NTSTATUS Status, _In_z_ const char* Reason)
 {
     Out->NtStatus = (unsigned long)Status;
@@ -326,6 +336,7 @@ static void Refuse(_Inout_ BC250_ESCAPE_DCNFLIP* Out, NTSTATUS Status, _In_z_ co
     RtlStringCbCopyA(Out->Reason, sizeof(Out->Reason), Reason);
     GuardLog("dcnflip: refused: %s (0x%08X)", Reason, (ULONG)Status);
 }
+#endif /* AMDGPU_WDDM_LAB_FLAVOUR (DcnFlip Refuse) */
 
 // Target == the firmware's own address is always allowed (the no-op flip, and what Restore asks for); anything
 // else needs the VRAM carve-out identified (EnableVram) and the whole surface, 4 KiB aligned, inside it (facts
@@ -365,6 +376,7 @@ static NTSTATUS CaptureFirmwareSurface(_Inout_ BC250_DEVICE* Device)
 // in the inverted colour - simple on purpose, it only has to look different from the desktop at a glance.
 // Match POST aliases through the shared CPU mapping policy; otherwise retain NC.
 // One mapping covers the whole surface. This does not prove GPU coherency.
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
 static NTSTATUS FillSurface(_In_ const BC250_DEVICE* Device, ULONGLONG Physical, ULONG Pitch, ULONG FillColor)
 {
     PHYSICAL_ADDRESS phys;
@@ -399,6 +411,7 @@ static NTSTATUS FillSurface(_In_ const BC250_DEVICE* Device, ULONGLONG Physical,
     MmUnmapIoSpace((PVOID)map, (SIZE_T)bytes);
     return STATUS_SUCCESS;
 }
+#endif /* AMDGPU_WDDM_LAB_FLAVOUR (DcnFlip FillSurface) */
 
 // M15.14 (0.7.216.20): the three register values of PlaneFormat (plane_format.h), composed from the firmware's own
 // values with only the format fields replaced: SURFACE_PIXEL_FORMAT, CROSSBAR_SRC_CB_B, CROSSBAR_SRC_CR_R and
@@ -556,6 +569,7 @@ static NTSTATUS DcnFlipWriteSequence(_Inout_ BC250_DEVICE* Device, ULONGLONG Tar
 // M87's poll: HUBPREQ0_DCSURF_FLIP_CONTROL bit 0x100 (SURFACE_FLIP_PENDING), 100 us steps, up to 50 ms - the
 // budget amdgpu's own poll never got close to at 60 Hz (facts M88: 2158 reads across 360 flips). PASSIVE_LEVEL
 // only (the busy-wait): the escape's own poll, never DcnFlipSourceAddress's (see DcnFlipPending below instead).
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
 static void PollFlipPending(_In_ const BC250_DEVICE* Device, _Out_ ULONG* WaitUs, _Out_ BOOLEAN* Cleared)
 {
     ULONG waited = 0, value = 0;
@@ -699,6 +713,7 @@ void DcnFlipEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_DCNFLIP* D
     }
     DcnFlipCore(Device, Data->Physical, Data->Restore != 0, Data->Fill, Data->FillColor, Data);
 }
+#endif /* AMDGPU_WDDM_LAB_FLAVOUR (PollFlipPending + DcnFlipCore + DcnFlipEscape) */
 
 // Restore is shared by orderly stop and the bugcheck display. Only cached
 // nonpaged state, checked MMIO, interlocked counters and bounded processor stalls

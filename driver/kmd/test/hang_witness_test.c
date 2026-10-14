@@ -13,6 +13,10 @@
 #include <string.h>
 #include "ih_fault.h"
 #include "paging_identity.h"
+/* BD-167 (G3): the CP privilege/decode fault classifier is checked against the vendored AMD headers the gate
+ * already puts on the include path (third_party/linux-amdgpu), so a renumbered source id cannot pass silently. */
+#include "soc15_ih_clientid.h"
+#include "irqsrcs_gfx_10_1.h"
 
 static int failures;
 #define CHECK(c) do { if (!(c)) { printf("FAIL line %d: %s\n", __LINE__, #c); failures++; } } while (0)
@@ -90,6 +94,28 @@ static void FaultBucket(void)
     CHECK(f.Bursts == 1 && f.Total == 2);
 }
 
+static void CpPrivFaultClassify(void)
+{
+    /* BD-167 (G3): the constants ih_fault.h reproduces must equal the AMD headers' own values. */
+    CHECK(BC250_IH_GRBM_CP_CLIENT == SOC15_IH_CLIENTID_GRBM_CP);
+    CHECK(BC250_IH_CP_BAD_OPCODE == GFX_10_1__SRCID__CP_BAD_OPCODE_ERROR);
+    CHECK(BC250_IH_CP_PRIV_REG_FAULT == GFX_10_1__SRCID__CP_PRIV_REG_FAULT);
+    CHECK(BC250_IH_CP_PRIV_INSTR_FAULT == GFX_10_1__SRCID__CP_PRIV_INSTR_FAULT);
+
+    /* The three fault vectors classify as CP privilege/decode faults; benign CP vectors and other clients do not. */
+    CHECK(Bc250IhIsCpPrivFault(SOC15_IH_CLIENTID_GRBM_CP, GFX_10_1__SRCID__CP_PRIV_REG_FAULT));
+    CHECK(Bc250IhIsCpPrivFault(SOC15_IH_CLIENTID_GRBM_CP, GFX_10_1__SRCID__CP_PRIV_INSTR_FAULT));
+    CHECK(Bc250IhIsCpPrivFault(SOC15_IH_CLIENTID_GRBM_CP, GFX_10_1__SRCID__CP_BAD_OPCODE_ERROR));
+    CHECK(!Bc250IhIsCpPrivFault(SOC15_IH_CLIENTID_GRBM_CP, GFX_10_1__SRCID__CP_EOP_INTERRUPT)); /* a normal completion */
+    CHECK(!Bc250IhIsCpPrivFault(BC250_IH_UTCL2_CLIENT, GFX_10_1__SRCID__CP_PRIV_REG_FAULT));    /* right src, wrong client */
+    CHECK(!Bc250IhIsCpPrivFault(SOC15_IH_CLIENTID_GRBM_CP, 0u));
+
+    /* The witness names each fault. */
+    CHECK(strcmp(Bc250IhCpPrivFaultName(BC250_IH_CP_PRIV_REG_FAULT), "privileged register") == 0);
+    CHECK(strcmp(Bc250IhCpPrivFaultName(BC250_IH_CP_PRIV_INSTR_FAULT), "privileged instruction") == 0);
+    CHECK(strcmp(Bc250IhCpPrivFaultName(BC250_IH_CP_BAD_OPCODE), "bad opcode") == 0);
+}
+
 static void JournalKindEncoding(void)
 {
     BC250_PAGING_JOURNAL_RECORD r;
@@ -153,8 +179,9 @@ int main(void)
     FaultVectorDecode();
     FaultStatusDecode();
     FaultBucket();
+    CpPrivFaultClassify();
     JournalKindEncoding();
     if (failures != 0) { printf("FAIL: %d check(s)\n", failures); return 1; }
-    puts("PASS: fault VA and status decode, gfxhub CID names, per-second bucket, journal kind encoding");
+    puts("PASS: fault VA and status decode, gfxhub CID names, CP priv-fault classify, per-second bucket, journal kind encoding");
     return 0;
 }

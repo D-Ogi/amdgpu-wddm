@@ -11,6 +11,7 @@
 #include "display_timing_refused.h"   // BD-122: the registers of a refused inherited timing, for #38
 #include "display_modes.h"
 #include "dcn_translate.h"          // DcnPrimaryPitch: the pitch of a primary of a smaller source mode
+#include "lab_gate.h"               // BD-167: the raw diagnostic escapes below are lab-only
 
 static ULONG g_Presents;
 
@@ -141,13 +142,21 @@ NTSTATUS Bc250SetPointerShape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_SET
     return STATUS_NOT_SUPPORTED;
 }
 
-// The escape runs in the caller's context. Registers and memory are for administrators.
+// The escape runs in the caller's context, and these escapes are for administrators. BD-167 (K4): check the
+// effective caller through the subject context, which is the impersonation token when a thread impersonates a
+// client. The old form read the process primary token, so a privileged service that impersonated an
+// unprivileged client still passed. This is the same check WaveCallerIsAdmin already makes; both exist because
+// CallerIsAdmin is called before WaveEscape is defined.
 static BOOLEAN CallerIsAdmin(void)
 {
-    PACCESS_TOKEN token = PsReferencePrimaryToken(PsGetCurrentProcess());
-    BOOLEAN admin = SeTokenIsAdmin(token);
+    SECURITY_SUBJECT_CONTEXT subject;
+    BOOLEAN admin;
 
-    PsDereferencePrimaryToken(token);
+    SeCaptureSubjectContext(&subject);
+    SeLockSubjectContext(&subject);
+    admin = SeTokenIsAdmin(SeQuerySubjectContextToken(&subject));
+    SeUnlockSubjectContext(&subject);
+    SeReleaseSubjectContext(&subject);
     return admin;
 }
 
@@ -156,6 +165,9 @@ static BOOLEAN CallerIsAdmin(void)
 // observational commands are admitted. The entry dispatcher still checks sizes.
 static BOOLEAN WddmDiagnosticAllowed(const BC250_ESCAPE* Data, ULONG Bytes)
 {
+#ifndef AMDGPU_WDDM_LAB_FLAVOUR
+    (void)Bytes;   // BD-167: only the lab-only RUN_GFX/RUN_IH STATE cases below read Bytes (the dcn-observe host harness has no WDK macros)
+#endif
     switch (Data->Command) {
     case BC250_ESCAPE_RUN_START_HEALTH:
     case BC250_ESCAPE_OBSERVE_DCN:
@@ -163,12 +175,16 @@ static BOOLEAN WddmDiagnosticAllowed(const BC250_ESCAPE* Data, ULONG Bytes)
     case BC250_ESCAPE_RUN_CPU:      // the operator's own surface, like RUN_CLOCK: one mailbox sequence, bounded
     case BC250_ESCAPE_RUN_DPAUDIO:  // reads, and the INDEX selects of indirect reads; the record (BC250_ESCAPE_DPAUDIO)
     case BC250_ESCAPE_GET_INFO:
-    case BC250_ESCAPE_READ_REG:
-    case BC250_ESCAPE_GET_MEMORY:
-    case BC250_ESCAPE_VRAM_READ:
     case BC250_ESCAPE_GET_LOG:
     case BC250_ESCAPE_LOG_SUMMARY:
     case BC250_ESCAPE_GET_PAGING_JOURNAL:
+        return TRUE;
+    // BD-167: the raw diagnostic commands are not compiled into the release dispatch, so the release allow-list
+    // must not name them either. In the lab flavour they remain admissible under FullWddm.
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+    case BC250_ESCAPE_READ_REG:
+    case BC250_ESCAPE_GET_MEMORY:
+    case BC250_ESCAPE_VRAM_READ:
     case BC250_ESCAPE_RUN_DCN:
     case BC250_ESCAPE_RUN_FBDUMP:
         return TRUE;
@@ -178,6 +194,7 @@ static BOOLEAN WddmDiagnosticAllowed(const BC250_ESCAPE* Data, ULONG Bytes)
     case BC250_ESCAPE_RUN_IH:
         return Bytes>=sizeof(BC250_ESCAPE_IH) &&
             ((const BC250_ESCAPE_IH*)Data)->Op==BC250_IH_OP_STATE;
+#endif
     default:
         return FALSE;
     }
@@ -576,11 +593,18 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
             (BOOLEAN)Escape->Flags.HardwareAccess,(BOOLEAN)Escape->Flags.NoAdapterSynchronization);
         return STATUS_SUCCESS; // typed operation status is in the reply
     }
+    // BD-167: the raw memory, GART, PSP, submit/fence, interrupt-ring, scanout-dump and SDMA escapes exist only
+    // in the lab flavour, and even there only when LabDiagnosticsAllowed() is true (test signing on and
+    // Parameters\LabDiagnostics = 1). The release .sys does not contain them: the commands fall through to
+    // UNKNOWN_COMMAND below. The arms keep their original body and indentation so the hardening diff stays readable.
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+    if (LabDiagnosticsAllowed()) {
     if (data->Command >= BC250_ESCAPE_GET_MEMORY && data->Command <= BC250_ESCAPE_VRAM_WRITE)
     {
         BC250_ESCAPE_MEMORY* memory = (BC250_ESCAPE_MEMORY*)Escape->pPrivateDriverData;
 
         if (Escape->PrivateDriverDataSize < sizeof(BC250_ESCAPE_MEMORY)) return STATUS_INVALID_PARAMETER;
+        LabEscapeAdmitted(LabEscapeMemory, "raw escape GET_MEMORY/VRAM_READ/VRAM_WRITE");
         if (!CallerIsAdmin()) memory->Status = BC250_ESCAPE_STATUS_NOT_ADMIN; else VramEscape(device, memory);
         return STATUS_SUCCESS;
     }
@@ -591,6 +615,7 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
         if (Escape->PrivateDriverDataSize < sizeof(BC250_ESCAPE_GART)) return STATUS_INVALID_PARAMETER;
         gart->Flags = (device->Mmio != NULL ? BC250_ESCAPE_FLAG_MMIO_MAPPED : 0) | (device->VramEnabled ? BC250_ESCAPE_FLAG_VRAM : 0) |
                       (device->MmioGartEnabled ? BC250_ESCAPE_FLAG_GART : 0);
+        LabEscapeAdmitted(LabEscapeGart, "raw escape RUN_GART");
         if (!CallerIsAdmin()) gart->Status = BC250_ESCAPE_STATUS_NOT_ADMIN; else GartEscape(device, gart);
         return STATUS_SUCCESS;
     }
@@ -601,6 +626,7 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
         if (Escape->PrivateDriverDataSize < sizeof(BC250_ESCAPE_PSP)) return STATUS_INVALID_PARAMETER;
         psp->Flags = (device->Mmio != NULL ? BC250_ESCAPE_FLAG_MMIO_MAPPED : 0) | (device->VramEnabled ? BC250_ESCAPE_FLAG_VRAM : 0) |
                      (device->MmioGartEnabled ? BC250_ESCAPE_FLAG_GART : 0) | (device->MmioPspEnabled ? BC250_ESCAPE_FLAG_PSP : 0);
+        LabEscapeAdmitted(LabEscapePsp, "raw escape RUN_PSP");
         if (!CallerIsAdmin()) psp->Status = BC250_ESCAPE_STATUS_NOT_ADMIN; else PspEscape(device, psp);
         return STATUS_SUCCESS;
     }
@@ -612,6 +638,7 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
         gfx->Flags = (device->Mmio != NULL ? BC250_ESCAPE_FLAG_MMIO_MAPPED : 0) | (device->VramEnabled ? BC250_ESCAPE_FLAG_VRAM : 0) |
                      (device->MmioGartEnabled ? BC250_ESCAPE_FLAG_GART : 0) | (device->MmioPspEnabled ? BC250_ESCAPE_FLAG_PSP : 0) |
                      (device->MmioGfxEnabled ? BC250_ESCAPE_FLAG_GFX : 0);
+        LabEscapeAdmitted(LabEscapeGfx, "raw escape RUN_GFX");
         if (!CallerIsAdmin()) gfx->Status = BC250_ESCAPE_STATUS_NOT_ADMIN; else GfxEscape(device, gfx);
         return STATUS_SUCCESS;
     }
@@ -623,6 +650,7 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
         fence->Flags = (device->Mmio != NULL ? BC250_ESCAPE_FLAG_MMIO_MAPPED : 0) | (device->MmioGartEnabled ? BC250_ESCAPE_FLAG_GART : 0) |
                        (device->MmioPspEnabled ? BC250_ESCAPE_FLAG_PSP : 0) | (device->MmioGfxEnabled ? BC250_ESCAPE_FLAG_GFX : 0) |
                        (device->MmioIhEnabled ? BC250_ESCAPE_FLAG_IH : 0);
+        LabEscapeAdmitted(LabEscapeFence, "raw escape RUN_FENCE");
         if (!CallerIsAdmin()) fence->Status = BC250_ESCAPE_STATUS_NOT_ADMIN; else GfxFenceEscape(device, fence);
         return STATUS_SUCCESS;
     }
@@ -634,6 +662,7 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
         ih->Flags = (device->Mmio != NULL ? BC250_ESCAPE_FLAG_MMIO_MAPPED : 0) | (device->MmioGartEnabled ? BC250_ESCAPE_FLAG_GART : 0) |
                     (device->MmioPspEnabled ? BC250_ESCAPE_FLAG_PSP : 0) | (device->MmioGfxEnabled ? BC250_ESCAPE_FLAG_GFX : 0) |
                     (device->MmioIhEnabled ? BC250_ESCAPE_FLAG_IH : 0);
+        LabEscapeAdmitted(LabEscapeIh, "raw escape RUN_IH");
         if (!CallerIsAdmin()) ih->Status = BC250_ESCAPE_STATUS_NOT_ADMIN; else IhEscape(device, ih);
         return STATUS_SUCCESS;
     }
@@ -643,6 +672,7 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
 
         if (Escape->PrivateDriverDataSize < sizeof(BC250_ESCAPE_DCN)) return STATUS_INVALID_PARAMETER;
         dcn->Flags = (device->Mmio != NULL ? BC250_ESCAPE_FLAG_MMIO_MAPPED : 0);
+        LabEscapeAdmitted(LabEscapeDcn, "raw escape RUN_DCN");
         if (!CallerIsAdmin()) dcn->Status = BC250_ESCAPE_STATUS_NOT_ADMIN; else DcnEscape(device, dcn);
         return STATUS_SUCCESS;
     }
@@ -653,6 +683,7 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
         if (Escape->PrivateDriverDataSize < sizeof(BC250_ESCAPE_DCNFLIP)) return STATUS_INVALID_PARAMETER;
         flip->Flags = (device->Mmio != NULL ? BC250_ESCAPE_FLAG_MMIO_MAPPED : 0) | (device->DcnWriteEnabled ? BC250_ESCAPE_FLAG_DCN_WRITE : 0) |
                       (device->VramEnabled ? BC250_ESCAPE_FLAG_VRAM : 0) | (device->VramWriteEnabled ? BC250_ESCAPE_FLAG_VRAM_WRITE : 0);
+        LabEscapeAdmitted(LabEscapeDcnFlip, "raw escape RUN_DCNFLIP");
         if (!CallerIsAdmin()) flip->Status = BC250_ESCAPE_STATUS_NOT_ADMIN; else DcnFlipEscape(device, flip);
         return STATUS_SUCCESS;
     }
@@ -662,6 +693,7 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
 
         if (Escape->PrivateDriverDataSize < sizeof(BC250_ESCAPE_FBDUMP)) return STATUS_INVALID_PARAMETER;
         fbdump->Flags = (device->Mmio != NULL ? BC250_ESCAPE_FLAG_MMIO_MAPPED : 0) | (device->VramEnabled ? BC250_ESCAPE_FLAG_VRAM : 0);
+        LabEscapeAdmitted(LabEscapeFbdump, "raw escape RUN_FBDUMP");
         if (!CallerIsAdmin()) fbdump->Status = BC250_ESCAPE_STATUS_NOT_ADMIN; else FbdumpEscape(device, fbdump);
         return STATUS_SUCCESS;
     }
@@ -673,9 +705,12 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
         sdmacopy->Flags = (device->Mmio != NULL ? BC250_ESCAPE_FLAG_MMIO_MAPPED : 0) | (device->VramEnabled ? BC250_ESCAPE_FLAG_VRAM : 0) |
                           (device->VramWriteEnabled ? BC250_ESCAPE_FLAG_VRAM_WRITE : 0) | (device->MmioGartEnabled ? BC250_ESCAPE_FLAG_GART : 0) |
                           (device->MmioPspEnabled ? BC250_ESCAPE_FLAG_PSP : 0) | (device->MmioGfxEnabled ? BC250_ESCAPE_FLAG_GFX : 0);
+        LabEscapeAdmitted(LabEscapeSdma, "raw escape RUN_SDMACOPY/RUN_SDMAIB");
         if (!CallerIsAdmin()) sdmacopy->Status = BC250_ESCAPE_STATUS_NOT_ADMIN; else SdmaCopyEscape(device, sdmacopy);
         return STATUS_SUCCESS;
     }
+    }   /* LabDiagnosticsAllowed */
+#endif /* AMDGPU_WDDM_LAB_FLAVOUR */
     if (command == BC250_ESCAPE_GET_PAGING_JOURNAL) return PagingJournalEscape(device, Escape);
     if (command == BC250_ESCAPE_GET_LOG || command == BC250_ESCAPE_LOG_SUMMARY)
         return LogEscape(device, Escape, command == BC250_ESCAPE_LOG_SUMMARY);
@@ -690,11 +725,15 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
                   (device->FullWddm ? BC250_ESCAPE_FLAG_FULL_WDDM : 0);
     data->NtStatus = 0;
 
-    if (data->Command == BC250_ESCAPE_READ_REG || data->Command == BC250_ESCAPE_WRITE_REG)
+    // BD-167 (K2/K9): arbitrary register read/write is lab-only, like the block above. Release falls through to
+    // UNKNOWN_COMMAND. GET_INFO (the overlay's gate query) stays and is answered below.
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+    if (LabDiagnosticsAllowed() && (data->Command == BC250_ESCAPE_READ_REG || data->Command == BC250_ESCAPE_WRITE_REG))
     {
         ULONG value = 0;
         NTSTATUS status;
 
+        LabEscapeAdmitted(LabEscapeRegister, "raw escape READ_REG/WRITE_REG");
         if (!CallerIsAdmin())
         {
             data->Status = BC250_ESCAPE_STATUS_NOT_ADMIN;
@@ -715,6 +754,7 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
         data->Status = NT_SUCCESS(status) ? BC250_ESCAPE_STATUS_DONE : BC250_ESCAPE_STATUS_REFUSED;
         return STATUS_SUCCESS;
     }
+#endif /* AMDGPU_WDDM_LAB_FLAVOUR */
     if (data->Command != BC250_ESCAPE_GET_INFO)
     {
         data->Status = BC250_ESCAPE_STATUS_UNKNOWN_COMMAND;

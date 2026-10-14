@@ -209,6 +209,10 @@ typedef struct _BC250_WDDM_OBJECT {
     BOOLEAN UmdAlloc;
     BOOLEAN UmdContext;
     BOOLEAN SystemContext;
+    // BD-167 (V2): dxgkrnl's DXGK_CREATECONTEXTFLAGS.GdiContext, kept so the non-UMD submit arms admit a context
+    // by the class dxgkrnl assigned it (SystemContext for VidMm/DWM, GdiContext for the CDD) rather than only by
+    // "has no UMD private data". A UMD context is never a GDI context (CreateContext refuses that combination).
+    BOOLEAN GdiContext;
     // BD-127: this context's BC2C blob carried BC250_UMD_C_COMPUTE and it was counted into the adapter's live
     // compute-context count. The flag is what DestroyContext counts out again, so a context that was never
     // counted (a GDI context, a refused blob, a version 2 blob) cannot lower the count.
@@ -1124,6 +1128,30 @@ static void WddmFailSubmission(_Inout_ BC250_DEVICE* Device, UINT FenceId, UINT 
     // this function just set (WatchdogFaulted) closes node 0's submissions too, so waiters are woken either way.
     if (Node==BC250_WDDM_NODE_COPY) GfxRetireSignal(Device);
     if (first) GuardLog("wddm: fence %u node %u NOT dispatched; node closed, no completion, recovery required",FenceId,Node);
+}
+
+// BD-167 (G3): close the gfx node after a CP privilege/decode fault. Called from the IH DPC (ih.c) at
+// DISPATCH_LEVEL with no submission fence of its own. It marks the node faulted and wakes its waiters the same
+// way WddmFailSubmission does, so QueryEngineStatus reports the node unresponsive and dxgkrnl runs recovery and
+// removes the faulting context. It does not manufacture a DXGK_INTERRUPT_DMA_FAULTED (see the note above). The
+// gfx node (node 0) carries every gfx and compute submission, so that is the node closed.
+void WddmReportEngineFault(_In_ const BC250_DEVICE* Device, _In_z_ const char* Why)
+{
+    BC250_DEVICE* device=(BC250_DEVICE*)Device;   // the IH DPC holds a const device; the node close mutates wddm state
+    BC250_WDDM* wddm=(BC250_WDDM*)Device->Wddm;
+    const UINT node=BC250_WDDM_NODE_3D;
+    KIRQL irql;
+    BOOLEAN first;
+    if (wddm==NULL) return;
+    KeAcquireSpinLock(&wddm->Lock,&irql);
+    first=!wddm->WatchdogFaulted[node];
+    wddm->RefusalPending[node]=TRUE;
+    wddm->WatchdogFaulted[node]=TRUE;
+    wddm->DeferredValid=FALSE;
+    GfxSubmitFail(device);
+    KeReleaseSpinLock(&wddm->Lock,irql);
+    if (first) GuardLog("wddm: gfx engine fault (%s); node %u closed, QueryEngineStatus unresponsive, recovery required",
+                        Why, node);
 }
 
 // KMD193 (bsod-245 item 2): what the CP and the GCVM fault latch held when the 500 ms watchdog gave up. In 245
@@ -4171,6 +4199,7 @@ static NTSTATUS Bc250WddmCreateContext(_In_ const HANDLE hDevice, _Inout_ DXGKAR
     object->OwnerDevice = hDevice;
     object->NodeOrdinal = pCreateContext->NodeOrdinal;
     object->SystemContext = (BOOLEAN)pCreateContext->Flags.SystemContext;
+    object->GdiContext = (BOOLEAN)pCreateContext->Flags.GdiContext;   // BD-167 (V2): the context class dxgkrnl assigned
     // KMD193: every BC250_PJ_GFX_SUBMIT record of a job on this context carries this process ID, so that a
     // faulting job in a dump names the process that owns the context rather than only a pointer value.
     object->CreatorProcessId = HandleToULong(PsGetCurrentProcessId());
@@ -6286,8 +6315,12 @@ static NTSTATUS Bc250WddmSubmitCommandVirtualImpl(_In_ const HANDLE hAdapter,
 
     // Node 1 retrieves commands only from this submission's OS-owned private buffer.
     // The record headers bind addresses to byte ranges; there is no global lookup/clamping.
+    // BD-167 (V2/G2): the node-1 paging arm runs an OS-owned paging buffer at the context's root. Paging is
+    // VidMm's own work, so the context must be a SystemContext, not merely "non-UMD with empty private data";
+    // a non-system context that reaches node 1 falls through and is refused below (WddmFailSubmission).
     if (node == BC250_WDDM_NODE_COPY && wddm != NULL && wddm->NodeCount > BC250_WDDM_NODE_COPY &&
-        context != NULL && !context->UmdContext && pSubmitCommand->DmaBufferUmdPrivateDataSize == 0 &&
+        context != NULL && !context->UmdContext && context->SystemContext &&
+        pSubmitCommand->DmaBufferUmdPrivateDataSize == 0 &&
         pSubmitCommand->DmaBufferSize != 0 && KeGetCurrentIrql() <= APC_LEVEL)
     {
         // Before the submit: a submit that goes to the hardware at once stamps the sequence by this fence.
@@ -6370,7 +6403,11 @@ static NTSTATUS Bc250WddmSubmitCommandVirtualImpl(_In_ const HANDLE hAdapter,
     // device residency list, not the Present allocation list. CDD/system callers
     // must retain both surfaces there through completion. Complete the fence only
     // after all copied rows are visible.
-    if (context != NULL && !context->UmdContext && pSubmitCommand->Flags.Present &&
+    // BD-167 (V2): the software Present packet is built by this driver's own Present DDI for the CDD/DWM, so it
+    // is admitted only from the context classes dxgkrnl builds those on (SystemContext or GdiContext), not from
+    // any non-UMD context. The BC250_PRESENT_PACKET_MAGIC below still validates the record itself.
+    if (context != NULL && !context->UmdContext && (context->SystemContext || context->GdiContext) &&
+        pSubmitCommand->Flags.Present &&
         pSubmitCommand->DmaBufferUmdPrivateDataSize == 0 &&
         pSubmitCommand->pDmaBufferPrivateData != NULL &&
         pSubmitCommand->DmaBufferPrivateDataSize >= sizeof(BC250_PRESENT_PACKET))

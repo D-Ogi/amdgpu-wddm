@@ -33,6 +33,7 @@
 //
 // Registers only through g_MmioGfxAllow: what amdgpu itself read or wrote on unit A in these steps (E03 trace).
 #include "bc250kmd.h"
+#include "lab_gate.h"          // BD-167: GfxEscape/GfxFenceEscape are the lab-only user GFX/FENCE submit entries
 #include "bc250_fence_order.h"
 #include "hang_recovery.h"
 #include "vmid_pool.h"
@@ -847,10 +848,16 @@ static void GfxExecute(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_GFX* D
 }
 
 // Diagnostic commands and device startup share the same implementation.
+// BD-167: the user-reachable GFX escape entry (arbitrary RUN_GFX op) exists only in the lab flavour. GfxExecute()
+// stays in every build because GfxInitializeHardware (startup.c) drives it with driver-built state during
+// bring-up and the gfx ring test; the release removes this user-data entry, also unreachable because display.c
+// compiles out its arm.
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
 void GfxEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_GFX* Data)
 {
     GfxExecute(Device,Data,0);
 }
+#endif
 
 // Opt-in hardware control before WDDM publication, never alongside OS submissions.
 // Keep the external full-WDDM escape allow-list observational. A failure takes
@@ -1933,6 +1940,10 @@ static struct amdgpu_ring* FenceRing(_In_ struct amdgpu_device* Adev, ULONG Ring
 
 // Count fences on one ring, one after the other: emit (RELEASE_MEM, or two WRITE_DATA on the KIQ), ring the doorbell, poll
 // the slot in GTT memory for the value. Whether an interrupt came with each is ih.c's to say (`ih state`).
+// BD-167: the fence/IB_AT escape takes the caller's Vmid and RootPhysical and submits an IB on a chosen ring; it
+// is a raw submit primitive with no release consumer and no bring-up caller, so it is compiled only into the lab
+// flavour. The shared submit machinery it calls (FenceRing, GfxSubmitIb, SubmitIbLocked) stays in every build.
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
 void GfxFenceEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_FENCE* Data)
 {
     BC250_GFX* gfx;
@@ -2198,6 +2209,7 @@ void GfxFenceEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_FENCE* Da
     Data->NtStatus = (unsigned long)status;
     Data->Status = (NT_SUCCESS(status) && result == 0) ? BC250_ESCAPE_STATUS_DONE : BC250_ESCAPE_STATUS_REFUSED;
 }
+#endif /* AMDGPU_WDDM_LAB_FLAVOUR (GfxFenceEscape) */
 
 // ---- ADR 0013: the SDMA copy/fill positive control (BC250_ESCAPE_RUN_SDMACOPY) -----------------------------------------
 //

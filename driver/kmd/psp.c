@@ -30,6 +30,7 @@
 #include "bc250kmd_escape.h"
 #include "bc250_gmc.h"
 #include "bc250_psp.h"
+#include "lab_gate.h"          // BD-167: PspEscape() is the lab-only user entry to the PSP diagnostic
 #include "firmware_metadata.h"
 
 #define BC250_PSP_TAG 'pS2B'
@@ -589,10 +590,15 @@ static void PspExecute(BC250_DEVICE* Device, BC250_ESCAPE_PSP* Data)
 }
 
 // Diagnostic commands and device startup share the same implementation.
+// BD-167: the user-reachable PSP escape entry exists only in the lab flavour. PspExecute()/PspExecutePrepared()
+// stay in every build because PspInitializeHardware and PspSetPowerRetained drive them during bring-up and
+// resume; the release removes this user-data entry point (also unreachable: display.c compiles out its arm).
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
 void PspEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_PSP* Data)
 {
     PspExecute(Device,Data);
 }
+#endif
 
 // PASSIVE_LEVEL. Caller owns nonpaged report storage through this synchronous
 // call. Keep detailed partial-progress output for the eventual startup unwind.
