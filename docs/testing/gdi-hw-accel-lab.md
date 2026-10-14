@@ -1,9 +1,12 @@
 # Lab plan: kernel GDI hardware acceleration
 
 This page is the lab plan for the GDI acceleration of [docs/design/gdi-hw-accel.md](../design/gdi-hw-accel.md).
-Run it when increment 2 is in the driver and the capability bit is reported. Do not run it for
-increment 1, where `Bc250GdiKernelsPresent` returns 0 and the driver reports the same caps as the
-previous release.
+Both increments are in the driver, the kernels are in the image, and the driver reports the
+capability, so this plan applies to a build of `feat/gdi-hw-accel`. Nothing of it has run yet.
+
+Run it only on a build whose start log says `kernels 1`. On an image without the kernels
+`Bc250GdiKernelsPresent` returns 0, the driver reports the caps of the previous release, and nothing
+below tests the new code.
 
 The plan has four trials. Trial 1 and trial 2 are the HLK job on the 26200 system. Trial 3 is the
 desktop check on the 22631 system. Trial 4 is the off switch. Every trial outside the HLK job ends
@@ -15,9 +18,12 @@ inside three minutes.
 2. Check the thermal rule. Stop any trial at 87 degrees Celsius and cool the board down.
 3. Install the driver under test. Check the SHA256 of the loaded KMD against the built file.
 4. Read the guard log. Find the line `wddm: GDI hardware acceleration gate 1, kernels 1,
-   capability 1`.
-5. Check the registry value. `EnableGdiHwAccel` must be 1 under the adapter's `DefaultsV2` key.
-6. Start the thermal guard and the camera watch for the whole pass.
+   capability 1`, and the line behind it, `wddm: gdi code 6 kernels, 5120 bytes, sha256 <hash>`.
+5. Compare that hash with `BC250_GDI_CODE_SHA256` of
+   [driver/kmd/gdi_kernels.generated.h](../../driver/kmd/gdi_kernels.generated.h). A different hash
+   means the installed driver is not the build under test.
+6. Check the registry value. `EnableGdiHwAccel` must be 1 under the adapter's `DefaultsV2` key.
+7. Start the thermal guard and the camera watch for the whole pass.
 
 If the capability line says `kernels 0`, stop. The driver reports no GDI acceleration, the HLK job
 does not apply, and nothing below tests the new code.
@@ -71,8 +77,9 @@ present path as the previous release does. This trial proves the field off switc
 | An artefact on the screen | the camera, and `mon.py screenshot` | a dropped operation, a wrong rectangle or wrong arithmetic. Note the window and the operation |
 | `wddm: RenderGdi1 ...` | the guard log | the path ran. The first lines carry the command count, the byte count and the dword count |
 | `overflow1` in such a line | the guard log | one command buffer did not fit in 256 KiB. Operations were dropped. Record the counts |
-| `refused-call` above 0 | the `wddm: gdi totals` line at the stop | the driver refused a whole call. Every one of them dropped every operation of that call |
+| `call` above 0 in `wddm: gdi drops` | the stop lines | the driver refused a whole call. Every one of them dropped every operation of that call |
 | `malformed`, `outside` above 0 | the same line | the command buffer did not hold what its own sizes said. Keep the log |
+| `kernel-refused` above 0 | the `wddm: gdi overflow` line at the stop | an admitted item reached the dispatch and its argument block could not be built. The item drew nothing |
 | the refusal classes | the same line | each count names one admission rule of `bc250_gdi_refusal`. A nonzero count is a case the host tests do not cover |
 | `red-first` above 0 | the same line | a ColorFill reached a red-first destination, where the colour format of the contract is not certain |
 | The temperature | `temp.py`, and the thermal guard | stop at 87 degrees Celsius. An HLK pass runs longer than any other trial here |
@@ -88,3 +95,7 @@ accepts a small difference for each pixel. The bit exact statement comes from th
 
 Do not run trial 3 and a game in the same session. A game's present path and the GDI path share the
 graphics ring, and a timeout would then have two candidate causes.
+
+Keep the first trial of a new image short and watch the screen. This is the first run of our own
+gfx1013 machine code from a GDI DMA buffer, this part has no working GPU reset (facts M53), and a
+kernel that hangs the graphics ring costs a restart of the machine.

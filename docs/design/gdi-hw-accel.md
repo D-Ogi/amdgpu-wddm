@@ -13,16 +13,23 @@ translates a command buffer of GDI operations into one DMA buffer of GPU command
 
 ## State of this work
 
-Increment 1 is in the driver. It carries the contract layer, the reference model of every operation,
-the command stream of the two operations that the command processor performs exactly, and the host
-tests. The capability bit stays clear, because the bit promises all seven operations.
+Both increments are in the driver.
 
-Increment 2 is specified here and not written. It carries the six compute kernels for the blends,
-the stretch, the transparency and the ClearType blend. `Bc250GdiKernelsPresent` in
-[gdi_render.c](../../driver/kmd/gdi_render.c) is the one place that reports their presence. The
-capability bit, the start log line and the operator gate all read that function.
+Increment 1 carries the contract layer, the reference model of every operation, the command stream
+of the two operations that the command processor performs exactly, and the host tests.
 
-Nothing of this has run on the lab. The lab plan is
+Increment 2 carries the six compute kernels for the blends, the stretch, the transparency and the
+ClearType blend, as gfx1013 machine code inside the driver image, and the dispatch that runs them.
+`Bc250GdiKernelsPresent` in [gdi_dispatch.c](../../driver/kmd/gdi_dispatch.c) is the one place that
+reports their presence. The capability bit, the start log line and the operator gate all read that
+function, and the gate `EnableGdiHwAccel` is on when the registry says nothing.
+
+So this driver now sets `SupportKernelModeCommandBuffer`, which promises all seven operations, and
+clears `DriverSupportsCddDwmInterop`.
+
+Nothing of this has run on the lab. The host tests run the kernels' own source text on this
+processor, which proves the arithmetic and the addressing and says nothing about the instructions
+the compiler chose. The lab plan is
 [docs/testing/gdi-hw-accel-lab.md](../testing/gdi-hw-accel-lab.md).
 
 ## Two contract sentences that shape the design
@@ -152,19 +159,108 @@ Two operations map onto the command processor exactly. Both are byte operations 
 A `STRETCHBLT` whose extents are equal is the copy case as well, because the resample is then the
 identity translation.
 
-Everything else is a compute dispatch of increment 2. The arithmetic of all seven operations is
-[gdi_pixel.h](../../driver/kmd/gdi_pixel.h), which compiles both as OpenCL C and as host C. The
-kernel source will be `driver/kmd/gdi_kernels.cl`, with one entry point for each arithmetic class of
-`bc250_gdi_kernel`. The build compiles it with
-`toolchain/llvm-amdgpu-22.1.8/mingw64/bin/clang.exe` for `amdgcn-amd-amdhsa` and `-mcpu=gfx1013`,
-and records the exact revision beside the code object. The dispatch itself follows the positive
-control in [bc250_dispatch.c](../../driver/shim/bc250_dispatch.c), which programs the `COMPUTE_*`
-registers with `SET_SH_REG` and starts the grid with `DISPATCH_DIRECT`.
+Everything else is a compute dispatch. The arithmetic of all seven operations is
+[gdi_pixel.h](../../driver/kmd/gdi_pixel.h), which compiles as OpenCL C, as kernel C and as host C
+from one text. The kernels are [gdi_kernels.cl](../../driver/kmd/gdi_kernels.cl), one entry point
+for each arithmetic class of `bc250_gdi_kernel`, and they hold no arithmetic of their own: what is
+in them is which pixel a work item owns, where that pixel lies in each allocation, and the
+destination to source transform.
 
-Two measured properties of this part shape increment 2. The compute path has a working positive
-control on the lab. The part has no working GPU reset (facts M53), so a kernel that hangs the
-graphics queue costs a restart of the machine. Increment 2 therefore keeps each dispatch bounded to
-one sub-rectangle, with a grid the driver computes from the admitted rectangle.
+The work group is 8 by 8 work items, which is 64 and so two whole wavefronts of 32 lanes. The grid
+is the rectangle rounded up to whole work groups, and the last group of a row or a column drops its
+overshoot itself. That one bound is the only check in a kernel: every other bound was proved on the
+processor before the dispatch was emitted.
+
+Two measured properties of this part shape the design. The compute path has a working positive
+control on the lab (facts M49). The part has no working GPU reset (facts M53), so a kernel that
+hangs the graphics queue costs a restart of the machine. Each dispatch therefore covers one
+sub-rectangle and nothing more.
+
+### How the code gets into the driver image
+
+[tools/gpu/gdi_kernels.py](../../tools/gpu/gdi_kernels.py) compiles the kernels with clang 22.1.8 of
+`toolchain/llvm-amdgpu-22.1.8` for `amdgcn-amd-amdhsa` and `-mcpu=gfx1013`, and writes
+`driver/kmd/gdi_kernels.generated.h`. Three kinds of number are in that header, and none of them is
+typed by hand:
+
+- the code, one slice for each kernel, each slice at a 256 byte boundary because `COMPUTE_PGM_LO`
+  carries the program address shifted right by eight. 5120 bytes in all, 1280 dwords.
+- the kernel descriptor fields the dispatch programs: `COMPUTE_PGM_RSRC1` and `RSRC2`, the argument
+  block size and the work group shape, read out of the code object the compiler emitted.
+- the packet offsets of every `COMPUTE_*` register the dispatch writes, from
+  [tools/regcalc](../../tools/regcalc), and the `COMPUTE_DISPATCH_INITIATOR` bits from AMD's own
+  field masks. A `SET_SH_REG` offset is the register's dword index less
+  `PACKET3_SET_SH_REG_START`. For `mmCOMPUTE_PGM_LO` that gives 0x20C, which is the number libdrm
+  writes out as a literal. That agreement is the positive control of the whole derivation.
+
+The kernels are OpenCL C and not kernel C because the driver has no compiler at run time and the
+miniport is built with the Microsoft compiler, which has no AMDGPU target. A code object is
+therefore data, built once on this processor and carried in the image.
+
+The build is the gate as well. `--check` rebuilds the kernels and compares the whole generated
+header byte for byte, and where the device compiler is absent it still holds the recorded hash of
+the source against the source in the tree, so an edited kernel with a stale header fails on any
+machine. The gate also refuses a code object that uses scratch memory, local data share, a call or
+a flat address, that spills a register, that asks for a work group of another shape, or whose
+argument list is not the one the dispatch writes. Every one of those is a condition the dispatch
+depends on: it programs no scratch descriptor and no local data share size.
+
+### Where the code lives, and why it may live there
+
+A kernel mode GDI context owns nothing but the DMA buffer the operating system hands it. There is no
+allocation of ours to keep a shader in, no `DxgkDdiCreateAllocation` call of our own in this path,
+and the guaranteed contract model gives one buffer for one command buffer. The code therefore goes
+into the DMA buffer itself, once per buffer, as the payload of a `PACKET3_NOP` that the command
+processor skips.
+
+That is only sound if the buffer's pages are executable, and on this adapter they are:
+`WddmGpuMmuCaps` leaves `NoExecuteMemorySupported` clear, and the operating system reads it that way
+(`evidence/windows/2026-09-21-E18-run-003/kmtprobe-234530.txt:15` and the E19 runs report
+`flags 0x00000000 (ReadOnly 0, NoExecute 0, CacheCoherent 0)`). No mapping of this adapter can carry
+a no execute bit, so no page of it can refuse to run an instruction.
+
+Two placements were rejected. `InternalGpuVirtualAddressRange` is the range the operating system
+uses for its own internal resources, not a range a driver may put code in. A device context
+allocation through `DxgkCbCreateContextAllocation` would need `INIT_CONTEXT_RESOURCE` and residency
+work of its own, and would still depend on the same executable mapping.
+
+The instruction cache and the scalar cache are invalidated by the acquire at the head of the
+buffer. Its `GCR_CNTL` carries `GLI_INV` and `GLK_INV` beside the level two invalidate. The processor
+wrote the code and the arguments before the submission, and the command processor runs that acquire
+before it reaches the dispatch, so the order is the one the hardware needs.
+
+### The dispatch sequence
+
+[gdi_dispatch.c](../../driver/kmd/gdi_dispatch.c) writes, for each admitted sub-rectangle: a
+`PACKET3_NOP` whose payload is the argument block of 104 bytes, then `SET_SH_REG` writes of
+`COMPUTE_TMPRING_SIZE` (no scratch), `COMPUTE_REQ_CTRL`, the four `COMPUTE_STATIC_THREAD_MGMT_SE*`
+registers, `COMPUTE_PGM_LO` and `PGM_HI`, `COMPUTE_PGM_RSRC1` and `RSRC2`, `COMPUTE_PGM_RSRC3`, the
+three `COMPUTE_NUM_THREAD_*`, `COMPUTE_USER_DATA_0` to `5` and `COMPUTE_RESOURCE_LIMITS`, then
+`PACKET3_DISPATCH_DIRECT` with the grid and the initiator, then a `PACKET3_EVENT_WRITE` of
+`CS_PARTIAL_FLUSH`. The shader type bit of every compute packet is what makes those register writes
+name the compute space from the graphics ring.
+
+The user data registers are what the kernel descriptor asked for: `s[0:3]` a private segment buffer
+descriptor, written as zeros because the kernels have no private segment, and `s[4:5]` the pointer
+to the argument block. The flush behind the dispatch makes the waves retire before anything behind
+it reads the destination, which the next item of the same buffer or the following present may do.
+
+The sequence follows the positive control of
+[bc250_dispatch.c](../../driver/shim/bc250_dispatch.c), with three deliberate differences, because
+this is an indirect buffer on the graphics ring and not a submission of ours to a kernel owned
+compute queue:
+
+- `COMPUTE_START_X/Y/Z` is not written. The initiator carries `FORCE_START_AT_000`, which is what
+  RADV does for a grid with no offset, and a bit in our own packet cannot be left over from another
+  context.
+- `CP_COHER_START_DELAY` is not written. It is a uconfig register, which is ring wide state this
+  driver does not own in a GDI buffer, and amdgpu sets it when it brings the block up.
+- the compute unit mask goes out as an ordinary `SET_SH_REG` and not through the undocumented index
+  3 of `SET_SH_REG_INDEX`. Mesa writes those two registers the plain way.
+
+The initiator also carries `CS_W32_EN`, because the compiler built these kernels for a 32 lane
+wavefront and the build gate pins that. A dispatch of wave32 code with that bit clear would run the
+wrong program.
 
 ## How RenderGdi builds the DMA buffer
 
@@ -182,11 +278,14 @@ The steps:
    the same discipline the GPU present producer uses.
 5. It admits the operation and plans each sub-rectangle. `Bc250GdiAdmitOp` and `Bc250GdiPlanItem`
    prove that every byte the commands touch lies inside its allocation.
-6. It emits one cache operation for the whole DMA buffer, before the first copy. The CDD writes its
-   bitmaps with the processor into cache coherent aperture memory, and the acquire makes those
-   writes visible to the engine's level two cache read.
-7. It emits the packets of each admitted sub-rectangle, pads the tail to the 32 byte granule of the
-   ring with the command processor's own no operation word, and advances `pDmaBuffer`.
+6. It emits one cache operation for the whole DMA buffer, before the first copy or dispatch. The
+   CDD writes its bitmaps with the processor into cache coherent aperture memory, and the acquire
+   makes those writes visible to the engine's level two cache read, its instruction reads and its
+   scalar reads.
+7. It emits the packets of each admitted sub-rectangle. The first sub-rectangle that needs a kernel
+   also puts the code into the buffer, once, and every dispatch of that buffer runs from it.
+8. It pads the tail to the 32 byte granule of the ring with the command processor's own no operation
+   word, and advances `pDmaBuffer`.
 
 `DxgkDdiSubmitCommandVirtual` needs no new arm. A GDI DMA buffer is a non present, non user mode
 command buffer with bytes in it, which the existing stage C submits to the graphics ring. The GDI
@@ -194,8 +293,9 @@ context gets its root page table from `DxgkDdiSetRootPageTable` like any other c
 
 The DMA buffer size is the one number the guaranteed contract forces. `BC250_GDI_DMA_BYTES` is 256
 KiB, which is 65536 dwords. That holds 9362 copy rows, about eight full screen blits of 1080 rows,
-or about a thousand compute dispatches. `CreateContext` asks for it only while the capability is
-reported, so a start without the kernels allocates what it did before. `GdiRenderOverflow` counts
+or, once a buffer carries the 1280 dword code block, about 740 compute dispatches of 86 dwords
+each. `CreateContext` asks for it only while the capability is reported, so a start without the
+kernels allocates what it did before. `GdiRenderOverflow` counts
 the command buffers that still did not fit, and the lab says whether that number is ever nonzero.
 
 ## The allocation types and the caps that change
@@ -282,12 +382,13 @@ staging surface to read pixels.
 | Increment | Content | State |
 |---|---|---|
 | 1 | the contract layer, the reference model, the DMA_DATA copy and fill, the host tests, the registry gate, the DDI function, the caps arm behind `Bc250GdiKernelsPresent` | in the driver |
-| 2 | `gdi_kernels.cl` for gfx1013, its reproducible build, the dispatch emitter, the code object in the driver image, and `Bc250GdiKernelsPresent` returning 1 | specified here |
+| 2 | `gdi_kernels.cl` for gfx1013, its reproducible build, the dispatch emitter, the code object in the driver image, and `Bc250GdiKernelsPresent` returning 1 | in the driver |
 
 The registry gate is `EnableGdiHwAccel`. The release default is 1, which follows the rule that a new
 feature of a train ships on. The gate is the field off switch and the driver reads it once at a
-start. The capability follows the gate and the translator together, so increment 1 reports the
-feature exactly as the previous release did.
+start. The capability follows the gate and the kernels together: with the gate at 0, or with an
+image that lost its kernels, a start reports the feature exactly as the release before this work
+did, and `DxgkDdiRenderGdi` returns at once without touching the DMA buffer.
 
 ## Recorded contract gaps
 
@@ -340,6 +441,36 @@ modules again with the kernel flags of the driver. `tools/quality/quick.ps1` run
 The edge cases the test covers are the 1 by 1 rectangle, the largest extent the caps report, a
 clipped sub-rectangle, an overlapping source and destination, every admitted pixel format, the one
 byte lookup table surface, all 16 gamma rows and both ClearType branches.
+
+[driver/kmd/test/run_gdi_kernels.ps1](../../driver/kmd/test/run_gdi_kernels.ps1) is the second gate,
+`gdi-kernels`. It runs the code object gate above and then `gdi_kernel_test.c`, which takes one
+operation at a time through the whole path: it plans a sub-rectangle, builds the argument block,
+emits the code block and the dispatch, decodes the buffer it wrote, runs the grid that decode found,
+and compares the whole memory with a reference model.
+
+Four things make that comparison worth something:
+
+- the decode is strict. Each `SET_SH_REG` must carry the offset and the count the emitter claims,
+  the code in the buffer must equal the generated table dword for dword, the program address must
+  be the slice of the kernel being dispatched, and the grid, the initiator and the flush must be
+  the expected words. A packet with a field this driver never sets fails the test.
+- the kernels are run from their own source text, compiled as host C over the same `gdi_pixel.h`
+  arm the device compiler takes (`driver/kmd/test/gdi_kernel_host.h`). The test runs what the
+  kernel file says, not a second implementation of it.
+- the reference model addresses its pixels by its own road: it walks the destination rectangle and
+  uses `Bc250GdiSourceX/Y` of the planned item, while the kernel rebuilds the transform from the
+  extents in the argument block. A wrong field in the block, a wrong pitch or a wrong origin breaks
+  the comparison.
+- the comparison is the whole arena, so a kernel that writes one byte outside its rectangle fails.
+
+Two negative controls were run against it. Packing `Dx0` as zero instead of the sub-rectangle's
+offset inside `DstRect` failed the clipped stretch case alone, and exchanging the gamma and inverse
+gamma pointers inside the kernel failed every ClearType case. Both passed again when reverted.
+
+What the host tests do NOT prove, stated plainly: the gfx1013 machine code. They run the C and not
+the instructions the build extracted from the code object, so they say nothing about instruction
+selection, wavefront behaviour or the real caches. The code object's shape is gated by the build and
+the instructions themselves run first on the lab.
 
 ## References
 
