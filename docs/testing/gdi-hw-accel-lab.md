@@ -84,11 +84,12 @@ closes what it opened. The owner sees all of it happen on the lab's screen.
 
 1. Tell the owner through the overlay what is about to happen.
 2. Read the driver's GDI lines. The start line must say `gate 1`. Record the
-   `wddm: CreateContext: GDI dma <bytes> bytes for cmdbuf <bound>` line of the first GDI context:
-   the DMA buffer this driver asked for is about 1.9 MB, which is an order larger than the page-sized
-   buffer of every other context, and this trial is the first time dxgkrnl is asked for it. A context
-   creation that fails here, or a line that never appears, is the result, and the bound can be
-   lowered with the arithmetic of `Bc250GdiContextDmaBytes`.
+   `wddm: CreateContext: GDI dma <bytes> bytes for cmdbuf <bound>` line of the first GDI context and
+   compare the two numbers with the design: at the aperture of this lab the bound is 196608 bytes and
+   the DMA buffer is 3989504 bytes, which is three orders larger than the page-sized buffer of every
+   other context, and this trial is the first time dxgkrnl is asked for it. A context creation that
+   fails here, or a line that never appears, is the result, and the bound can be lowered with the
+   arithmetic of `Bc250GdiContextDmaBytes`.
 3. Run the workload once, bounded, and keep the record it writes: the windows it opened, and how
    many moves, resizes, scrolls and forced repaints it asked for.
 4. Take a screenshot with `mon.py screenshot` and compare it with what the camera sees. Both must
@@ -100,11 +101,18 @@ closes what it opened. The owner sees all of it happen on the lab's screen.
 6. Check the counters of that line: `item-refused`, `batch-refused` and `fallback`. The first two
    must be 0 in an ordinary desktop session.
 7. Record `wddm: gdi capacity-short<n> peak cmdlen<bytes> want<bytes>`. `peak cmdlen` is the largest
-   command buffer the CDD actually sent, and it is the number the DMA buffer size was chosen against:
-   it must stay below `BC250_GDI_CMDBUF_BOUND` (98304 bytes), and `capacity-short` must be 0. This is
-   the measurement that turns the bound from a choice into evidence - the DDI publishes no size for a
-   GDI context's command buffer. Keep it beside `peak rects`, which says how many sub-rectangles the
-   largest call carried.
+   command buffer the CDD actually sent. It is not what the bound was chosen against: the bound comes
+   from what one indirect buffer can carry (`BC250_GDI_CMDBUF_BOUND`, 196608 bytes), and this number
+   says how far the field stays below it. It must stay below the bound, `capacity-short` must be 0,
+   and the expectation from the producer measurement is that it stays at or under 65536 bytes. Keep
+   it beside `peak rects`, which says how many sub-rectangles the largest call carried.
+8. Record the two lines of rule 3 and the input scope: `wddm: gdi ib-full<n> ib-over<n>
+   dma-short<n>` and `wddm: gdi above-producer<n> scope-refused<n>`. `ib-over` and `scope-refused`
+   must be 0: the first would mean the capacity arithmetic is wrong, the second that the bound is
+   below what a supported producer sends, and either is a result that stops the trial series.
+   `dma-short` says whether dxgkrnl gave this context a smaller buffer than it asked for, and
+   `above-producer` whether anything on this system sends more than the ordinary producer's own
+   65536-byte command buffer. Both are measurements and neither is a failure by itself.
 
 ## Trial 4: the off switch
 
@@ -164,8 +172,12 @@ goes into the facts graph with this evidence.
 | `call` above 0 in `wddm: gdi drops` | the stop lines | the driver refused a whole call. Every one of them dropped every operation of that call |
 | `malformed`, `outside` above 0 | the same line | the command buffer did not hold what its own sizes said. Keep the log |
 | `item-refused` above 0 | the `wddm: gdi overflow` line at the stop | an admitted item could not be described by either emitter. The item drew nothing |
-| `batch-refused` above 0 | the `wddm: gdi batch-refused` line at the stop | one call held more sub-rectangles than its DMA buffer can guarantee, so it drew nothing. It cannot happen inside `BC250_GDI_CMDBUF_BOUND`. Read `capacity-short` and `peak cmdlen` beside it. Together they say which command buffer size the OS used, and what the bound has to grow to |
-| `capacity-short` above 0 | the `wddm: gdi capacity-short` line at the stop | the CDD sent a command buffer larger than the bound the DMA buffer was sized for. By itself it costs nothing, because the call is still translated when what is in it fits. It is the one route to `batch-refused`. It also raises the size every later GDI context asks for. Record `peak cmdlen` and raise the bound |
+| `batch-refused` above 0 | the `wddm: gdi batch-refused` line at the stop | one call held more sub-rectangles than its capacity can guarantee, so it drew nothing. It cannot happen inside `BC250_GDI_CMDBUF_BOUND`. Read `capacity-short`, `peak cmdlen` and `scope-refused` beside it. Together they say what the OS sent and whether the bound or the producer scope is what was wrong |
+| `capacity-short` above 0 | the `wddm: gdi capacity-short` line at the stop | the CDD sent a command buffer larger than the bound this context was sized for. By itself it costs nothing, because the call is still translated when what is in it fits. It is the one route to `batch-refused`. Record `peak cmdlen`. The bound cannot be raised far. One indirect buffer carries the worst case of 200 KiB and no more. A producer above that needs the compaction or multi-indirect-buffer work of the design page, not a larger number |
+| `scope-refused` above 0 | the `wddm: gdi above-producer` line at the stop | a call at or below the ordinary producer's own 65536-byte command buffer was refused whole. This is the result that stops the series: the input scope of the design is wrong. Keep the log, the length and the sub-rectangle count |
+| `ib-over` above 0 | the same line | the finished stream of a call passed what one indirect buffer can carry. The capacity arithmetic makes this unreachable, so a nonzero count is a defect of the driver and not of the input. The call drew nothing |
+| `ib-full`, `dma-short` above 0 | the same line | the OS side of the capacity: the DMA buffer was already full of earlier calls, or it was smaller than this context asked for. Record both numbers beside `peak cmdlen` |
+| `above-producer` above 0 | the same line | something on this system sends longer command buffers than the measured producer does. Not a fault. It is the signal that the producer measurement no longer covers the field |
 | `fallback` above 0 | the same line | an item gave up the per-row engine path for a dispatch, which is the capacity contract working, not a fault |
 | the refusal classes | the same line | each count names one admission rule of `bc250_gdi_refusal`. A nonzero count is a case the host tests do not cover |
 | `red-first` above 0 | the same line | a ColorFill reached a red-first destination, where the colour format of the contract is not certain |
