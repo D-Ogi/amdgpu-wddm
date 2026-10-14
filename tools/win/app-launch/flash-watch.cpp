@@ -7,8 +7,10 @@
 // layered. When duplication cannot start, the rectangles are read from the screen through GDI every 2 ms instead,
 // which DWM answers with its last composed frame.
 //
-//   flash-watch.exe <out-prefix> <deadline-ms> <powershell.exe> <window script> <seconds> [surface]
+//   flash-watch.exe <out-prefix> <deadline-ms> <powershell.exe> <window script> <seconds> [surface] [-- <argument>...]
 //   flash-watch.exe --self-test
+//
+// The arguments after `--` go to the window script after its -Seconds, each one quoted (label-window.ps1 takes -Kind).
 //
 // With "surface", a third target reads the start window's own surface through its window DC about every millisecond
 // (SurfaceLoop), so that a flash in DWM's frames can be told from a state that the window itself passed through.
@@ -815,8 +817,18 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int)
         }
         return SelfTest();
     }
-    if (argc != 6 && !(argc == 7 && !wcscmp(argv[6], L"surface"))) return 2;
-    const bool readSurface = argc == 7;
+    if (argc < 6) return 2;
+    int next = 6;
+    const bool readSurface = argc > next && !wcscmp(argv[next], L"surface");
+    if (readSurface) ++next;
+    std::wstring scriptArgs;
+    if (argc > next) {
+        if (wcscmp(argv[next], L"--")) return 2;
+        for (int i = next + 1; i < argc; ++i) {
+            if (!*argv[i] || wcschr(argv[i], L'"')) return 2;
+            scriptArgs += L" \"" + std::wstring(argv[i]) + L"\"";
+        }
+    }
     LARGE_INTEGER f;
     QueryPerformanceFrequency(&f);
     g_freq = f.QuadPart;
@@ -851,7 +863,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int)
     run.targets.emplace_back("overlay", L"bc250mon.exe");
     // The arguments of the logon task, with this script and bound (common.ps1 Get-LogonTaskPlan).
     std::wstring cmd = L"\"" + std::wstring(argv[3]) + L"\" -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File \"" +
-                       argv[4] + L"\" -Seconds " + std::to_wstring(seconds);
+                       argv[4] + L"\" -Seconds " + std::to_wstring(seconds) + scriptArgs;
     STARTUPINFOW si = {};
     si.cb = sizeof(si);
     std::vector<wchar_t> line(cmd.begin(), cmd.end());
@@ -863,7 +875,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int)
         return 1;
     }
     run.targets[0].pid = run.child.dwProcessId;
-    Log("child pid=%lu qpc=%lld", run.child.dwProcessId, (long long)before);
+    Log("child pid=%lu qpc=%lld script_args=%d", run.child.dwProcessId, (long long)before, argc > next ? argc - next - 1 : 0);
     Surface surface;
     surface.window = &run.targets[0];
     HANDLE surfaceThread = readSurface ? CreateThread(nullptr, 0, SurfaceLoop, &surface, 0, nullptr) : nullptr;

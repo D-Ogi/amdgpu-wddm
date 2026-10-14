@@ -89,6 +89,63 @@ This run does not show:
 - the surface of the fixed window (run 1 c has DWM's frames only, 44 changes)
 - the Windows build.
 
+Runs 3 to 5 below answer the first and the third item. The console window has its own page:
+[start window console](../2026-10-14-start-window-console/README.md).
+
+## Runs 3 to 5: the fixed window's surface, and the cause of the partial picture
+
+Date: 2026-10-14, 11:09:30-11:15:39Z on the development PC clock, in one lab slot after the console proof. Unit A,
+KMD rc4 of tester.31 (SYS B0E01A86, native mode, read on the lab at 11:07Z), 500 MHz in every DPM sample.
+
+The kit is `tools/win/app-launch`: `flash-watch.exe` SHA-256 E308E0BA (it gives the arguments after `--` to the window
+script), `measure-flash.ps1` with `-FixedKind` and `-FixedApp`, and the window script `label-window.ps1` as run
+(`scripts/label-window-run45.ps1`, SHA-256 00DCDA08). Every case read the window's surface (`-Surface`) as in run 2.
+
+`label-window.ps1` makes a window with the shape of rc4's window: a borderless navy form, one control with Dock Fill,
+Consolas 9 in cyan, the rc4 text and countdown, and a 250 ms timer. It draws the text as Nagi Control App does
+(visual styles, TextRenderer). SteadyLabel is a Label subclass. Its window has the WinForms class instead of STATIC
+(`scripts/SteadyLabel-run5.cs`). Run 5 loaded it from a control application build with SHA-256 DEB1BE6A, which was
+made for this test only. No release of the control application has SteadyLabel.
+
+| Run | Case | Window | Length |
+|---|---|---|---|
+| run 3 | c | the window of commit 84f35234: one form that draws each frame in one buffered piece, no child control | 150 s |
+| run 4 | c | `label-window.ps1 -Kind Label`: a WinForms Label | 60 s |
+| run 5 | c | `label-window.ps1 -Kind Steady`: a SteadyLabel | 60 s |
+
+| | run 3 | run 4 | run 5 |
+|---|---|---|---|
+| surface reads | 71,654 | 28,739 | 28,085 |
+| changes of the full text in the surface | 149 | 59 | 59 |
+| changes with the partial picture in the surface between the two texts | 0 | 46 | 55 |
+| partial pictures in DWM's frames while the window was open | 0 | 0 | 3 |
+
+1. Runs 4 and 5 have one partial picture, hash 69b00b13dfdbc8af: navy, with text only at x 7..99, y 5..22 of the
+   488x39 window, the same place as hash 4aabba0c843e6455 of runs 1 and 2 (that window drew with GDI+, these with
+   TextRenderer). It lasts about 2 ms: the read before it and the read after it are 1.96 and 1.92 ms away (median).
+2. The fixed window has no partial picture in 149 changes. This shows that the fix of commit 84f35234 works in
+   the window's own surface, not only in DWM's frames. The last read of runs 3 and 5 (hash f707b8a381a645e3) is the window at its
+   close.
+3. DWM's frames show the Terminal window's close of M899 at the close of runs 3 (8 frames) and 4 (10 frames).
+4. SteadyLabel gives the same partial picture as the Label. The window class of the control is not the cause, and the
+   inference of run 2 (the STATIC window's own repaint on `WM_SETTEXT`) is wrong.
+
+The cause, on the development PC with hidden windows (`scripts/label-bounds.ps1`, output `analysis/label-bounds.txt`):
+a subclass of the Label's window records each `WM_WINDOWPOSCHANGING`. At every change of the text of a Label with
+Dock Fill and AutoSize off, the Label first gets the size 100x23 and then its full size again (SWP flags 0x0016, so no
+move). That is `Label.AdjustSize`, which `Label.OnTextChanged` calls. With AutoSize off it sets the size that the
+program asked for. A docked control keeps the size that it had before the dock: 100x23, the default size of a Label.
+The layout of the form then docks the control again. On the screen, the form paints the area that the small Label
+uncovers with navy, without a buffer, and the small Label keeps the top left 100x23 pixels of its old text. That
+corner of the text ("Nagi start ch" and the top of "Nothing to d") is the same at every countdown value, so the
+partial picture has the same hash at every change. The next paint at the full size shows the new text. The pixels
+agree (`scripts/partial-vs-ref.py`, `analysis/partial-vs-ref.txt`): in runs 2, 4 and 5, the partial picture has the
+reference picture's pixels in all 2,300 pixels of the top left 100x23 and navy in all 16,732 other pixels.
+
+The same trace for the layout of the control application's live labels (AutoSize on, a maximum width, in a
+FlowLayoutPanel or a TableLayoutPanel cell): a text of the same size gives no window position, and a text of a new size
+gives one, which is the final size. Those labels do not go through a wrong size.
+
 ## Files
 
 | File | Content |
@@ -101,6 +158,11 @@ This run does not show:
 | `run1/*.png`, `run2/*.png` | the window's flash bitmaps (`<case>-window-<n>`), its reference (`<case>-ref`) and the first surface flash (`a-surface-0`). They are BMPs of the lab converted to PNG with the same pixels and the same base name |
 | `analysis/` | the outputs of the scripts below. `overlay-run1.txt` names a PNG path on the lab, which is `overlay-run1-difference.png` here |
 | `scripts/` | the analysis scripts as run: `run1-facts.py`, `surface-vs-dda.py`, `overlay-console.ps1`, `flash-cam.py`, `camflash.py`, `camflash-run2.py`. `surface-vs-dda.py` reads `a-surface.csv`: unpack the gzip first. `overlay-console.ps1` ran on the lab before the deletion of the overlay bitmaps |
+| `run3/`, `run4/`, `run5/` | the same files for case c of each run (`c-*`), with the surface reads as `c-surface.csv.gz`. Every surface flash of a run has the same hash, so each run keeps one surface bitmap (`c-surface-0`) |
+| `analysis/surface-runs-run345.txt`, `analysis/change-count-run345.txt` | the states of the surface between two texts (`scripts/surface-runs.py`) and the count of changes with the partial picture (`scripts/change-count.py`) |
+| `analysis/label-bounds.txt` | the window positions of a Label at a text change, in three layouts (`scripts/label-bounds.ps1`, Windows PowerShell 5.1 on the development PC, no window shown) |
+| `analysis/partial-vs-ref.txt` | the partial picture against the reference picture, pixel for pixel (`scripts/partial-vs-ref.py`) |
+| `scripts/label-window-run45.ps1`, `scripts/SteadyLabel-run5.cs` | the window script of runs 4 and 5 as run, and the source of the SteadyLabel class that run 5 loaded |
 
 Not kept: the overlay bitmaps (89 in run 1, 36 in run 2, 3.2 MB each), deleted on the lab after the analysis, and the
 camera CSVs (cell colours, 21 MB each), which stay outside the repository.

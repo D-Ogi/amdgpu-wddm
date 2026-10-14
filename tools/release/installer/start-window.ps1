@@ -117,7 +117,10 @@ function Format-StartWindowText([double]$Left) {
 # tools\win\app-launch\measure-flash.ps1, fact M898), DWM composed a frame of navy with only part of the text at 10
 # of 89 text changes of the Label window, and at none of 44 changes of this window. Reads of the Label window's own
 # surface found that partial frame at 125 of 150 changes, for about 2 ms each: the window itself held it, and DWM
-# showed it whenever it composed in those 2 ms.
+# showed it whenever it composed in those 2 ms. The surface of this window had it at none of 149 changes. The cause
+# is the Label's layout: at each new text, Label.AdjustSize gave the docked Label (AutoSize off) its requested size,
+# 100x23, and the form docked it again. In between, the form painted the uncovered area navy and the small Label
+# kept the top left corner of its text.
 # The look is the Label's, pixel for pixel: Consolas 9, cyan on navy, the text at (4, 3) through GDI+ DrawString
 # with the Label's string format, as a PowerShell host draws a Label (it never switches compatible text rendering
 # off). The window is sized to its two lines at the longest countdown, so no text is cut at any scale or font size.

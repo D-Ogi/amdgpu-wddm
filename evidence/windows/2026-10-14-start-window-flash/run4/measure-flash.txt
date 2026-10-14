@@ -1,0 +1,220 @@
+start 11:12:52Z
+utc 2026-10-14T11:13:05.3578084Z
+console user BC250-A\bc250 session 1
+overlay bc250mon runs (pid 5248)
+work C:\BC250\tmp\flash\20261014-111307
+file C:\BC250\tmp\flash\20261014-111307\flash-watch.exe sha256 E308E0BACEF271FCA998749B6F3ED940657C045187B84123F0D95E80BA475D13
+file C:\BC250\tmp\flash\20261014-111307\shipped\start-window.ps1 sha256 608DC6F5BD22B4A682735FBD9A449DB62E188AE954073721EBE2472850C026E0
+file C:\BC250\tmp\flash\20261014-111307\fixed\start-window.ps1 sha256 00DCDA08B3AD77738F741D348F00F95DD4790FF47F9FB2CB3208590359B4E940
+file C:\BC250\tmp\flash\20261014-111307\fixed\amdgpu_wddm_control.exe sha256 DEB1BE6AF51A9A98D403B2DD65C13CECF383C5146B00ECE435F93FCF02E07A16
+file C:\BC250\tmp\flash-kit\poll-repro.ps1 sha256 96D9EB5B686823972D78A3175D16EE04D6FC3B33E488DD110B25F019C3336F13
+file C:\BC250\tmp\flash-kit\dpm-sample.ps1 sha256 2187576FF718165B3DB1D09545B5C05A9869091BE1AE6676EAF448683DC3C4C5
+file C:\Program Files\amdgpu-wddm\tools\bc250kmd_cli.exe sha256 27022A363D059D4B39A7E6A30F6B225543AB8E17A9857FA6DBBDEEDBBDB0CE0F
+file C:\Program Files\amdgpu-wddm\tools\bc250control.dll sha256 150CFA0F271CD9A53E743241F579F1F3E386840048A33295A28BEEFEB54F8273
+
+case c (fixed window, poll)  mode=dda  window 8,34,488,39  overlay 988,12,920,872  frames=357 child_exit=0 window=1  polls 13, busy 1.1 s of 60 s
+  target=window found=1 analysed=72 changes=70 flashes=10 accumulated_misses=3
+  target=overlay found=1 analysed=148 changes=129 flashes=33 accumulated_misses=13
+  target=surface found=1 analysed=107 changes=107 flashes=46 accumulated_misses=0
+  surface samples=28739 slowest_ms=0.48
+  dpm: 63 samples, 500..500 MHz, a change in 0 of 62 sample intervals
+  window flash at +59.835 s  27.9 ms  not-the-window  navy 19 cyan 39 black 7926 other 11048  outside the poll, +0.988 s from poll 13 stages  bmp c-window-0.bmp
+    frame 323 (dda, present_qpc 5045358245, accumulated 1); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  window flash at +59.863 s  36.2 ms  black  navy 19 cyan 39 black 13980 other 4994  outside the poll, +1.016 s from poll 13 stages  bmp c-window-1.bmp
+    frame 324 (dda, present_qpc 5045636827, accumulated 1); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  window flash at +59.899 s  45.2 ms  black  navy 19 cyan 39 black 13980 other 4994  outside the poll, +1.053 s from poll 13 stages  bmp c-window-2.bmp
+    frame 325 (dda, present_qpc 5045999178, accumulated 1); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  window flash at +59.944 s  28.4 ms  black  navy 26 cyan 49 black 12411 other 6546  outside the poll, +1.098 s from poll 13 stages  bmp c-window-3.bmp
+    frame 328 (dda, present_qpc 5046450715, accumulated 1); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  window flash at +59.973 s  13.9 ms  black  navy 33 cyan 71 black 10843 other 8085  outside the poll, +1.126 s from poll 13 stages  bmp c-window-4.bmp
+    frame 329 (dda, present_qpc 5046734879, accumulated 2); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  window flash at +59.986 s  26.2 ms  not-the-window  navy 37 cyan 81 black 9419 other 9495  outside the poll, +1.140 s from poll 13 stages  bmp c-window-5.bmp
+    frame 330 (dda, present_qpc 5046873756, accumulated 1); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  window flash at +60.013 s  25.7 ms  not-the-window  navy 55 cyan 90 black 7059 other 11828  outside the poll, +1.166 s from poll 13 stages  bmp c-window-6.bmp
+    frame 331 (dda, present_qpc 5047135415, accumulated 2); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  window flash at +60.038 s  12.6 ms  not-the-window  navy 66 cyan 96 black 5001 other 13869  outside the poll, +1.192 s from poll 13 stages  bmp c-window-7.bmp
+    frame 332 (dda, present_qpc 5047392839, accumulated 2); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  window flash at +60.051 s  14.5 ms  not-the-window  navy 66 cyan 97 black 4758 other 14111  outside the poll, +1.205 s from poll 13 stages  bmp c-window-8.bmp
+    frame 333 (dda, present_qpc 5047519325, accumulated 1); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  window flash at +60.066 s  13.8 ms  not-the-window  navy 69 cyan 97 black 2890 other 15976  outside the poll, +1.219 s from poll 13 stages  bmp c-window-9.bmp
+    frame 334 (dda, present_qpc 5047664636, accumulated 1); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  window: 0 of 10 flashes inside a poll step; the steps take 1.8 % of the 60 s
+  window: 0 of 10 flashes in a sample interval with a DPM change; 0.0 % of the intervals hold one
+  overlay flash at +-0.655 s  20.5 ms  other-content  navy 843 cyan 0 black 78782 other 722615  outside the poll, +0.824 s from poll 1 stages  bmp c-overlay-0.bmp
+    frame 5 (dda, present_qpc 4440456591, accumulated 1); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  overlay flash at +-0.635 s  15.4 ms  other-content  navy 843 cyan 0 black 82362 other 719035  outside the poll, +0.845 s from poll 1 stages  bmp c-overlay-1.bmp
+    frame 6 (dda, present_qpc 4440661945, accumulated 2); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  overlay flash at +-0.619 s  14.0 ms  other-content  navy 843 cyan 0 black 83456 other 717941  outside the poll, +0.860 s from poll 1 stages  bmp c-overlay-2.bmp
+    frame 7 (dda, present_qpc 4440815854, accumulated 1); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  overlay flash at +-0.605 s  24.4 ms  other-content  navy 849 cyan 0 black 84684 other 716707  outside the poll, +0.874 s from poll 1 stages  bmp c-overlay-3.bmp
+    frame 8 (dda, present_qpc 4440956353, accumulated 1); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  overlay flash at +-0.581 s  13.9 ms  other-content  navy 874 cyan 0 black 85646 other 715720  outside the poll, +0.899 s from poll 1 stages  bmp c-overlay-4.bmp
+    frame 9 (dda, present_qpc 4441200406, accumulated 2); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  overlay flash at +-0.567 s  13.9 ms  other-content  navy 892 cyan 0 black 85921 other 715427  outside the poll, +0.913 s from poll 1 stages  bmp c-overlay-5.bmp
+    frame 10 (dda, present_qpc 4441339385, accumulated 1); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  overlay flash at +-0.553 s  14.7 ms  other-content  navy 910 cyan 0 black 86248 other 715082  outside the poll, +0.927 s from poll 1 stages  bmp c-overlay-6.bmp
+    frame 11 (dda, present_qpc 4441478826, accumulated 1); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  overlay flash at +-0.538 s  16.0 ms  other-content  navy 899 cyan 0 black 86333 other 715008  outside the poll, +0.941 s from poll 1 stages  bmp c-overlay-7.bmp
+    frame 12 (dda, present_qpc 4441625423, accumulated 1); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  overlay flash at +-0.522 s  28.0 ms  other-content  navy 904 cyan 0 black 86407 other 714929  outside the poll, +0.957 s from poll 1 stages  bmp c-overlay-8.bmp
+    frame 13 (dda, present_qpc 4441784993, accumulated 1); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  overlay flash at +-0.494 s  19.2 ms  other-content  navy 897 cyan 0 black 86370 other 714973  outside the poll, +0.985 s from poll 1 stages  bmp c-overlay-9.bmp
+    frame 14 (dda, present_qpc 4442065001, accumulated 2); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  overlay flash at +-0.475 s  16.3 ms  other-content  navy 889 cyan 0 black 86397 other 714954  outside the poll, +1.004 s from poll 1 stages  bmp c-overlay-10.bmp
+    frame 15 (dda, present_qpc 4442257079, accumulated 2); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  overlay flash at +-0.459 s  24.6 ms  other-content  navy 891 cyan 0 black 86356 other 714993  outside the poll, +1.021 s from poll 1 stages  bmp c-overlay-11.bmp
+    frame 16 (dda, present_qpc 4442420085, accumulated 1); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  overlay flash at +-0.434 s  17.3 ms  other-content  navy 893 cyan 0 black 86400 other 714947  outside the poll, +1.045 s from poll 1 stages  bmp c-overlay-12.bmp
+    frame 17 (dda, present_qpc 4442666325, accumulated 2); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  overlay flash at +-0.417 s  24.9 ms  other-content  navy 893 cyan 0 black 86408 other 714939  outside the poll, +1.063 s from poll 1 stages  bmp c-overlay-13.bmp
+    frame 18 (dda, present_qpc 4442839730, accumulated 1); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  overlay flash at +-0.392 s  50.2 ms  other-content  navy 893 cyan 0 black 86408 other 714939  outside the poll, +1.088 s from poll 1 stages  bmp c-overlay-14.bmp
+    frame 19 (dda, present_qpc 4443088860, accumulated 2); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  overlay flash at +-0.342 s  21.2 ms  other-content  navy 869 cyan 0 black 80854 other 720517  outside the poll, +1.138 s from poll 1 stages  bmp c-overlay-15.bmp
+    frame 22 (dda, present_qpc 4443590447, accumulated 1); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  overlay flash at +-0.321 s  45.8 ms  other-content  navy 869 cyan 0 black 80854 other 720517  outside the poll, +1.159 s from poll 1 stages  bmp c-overlay-16.bmp
+    frame 23 (dda, present_qpc 4443802136, accumulated 1); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  overlay flash at +-0.204 s  9.4 ms  other-content  navy 843 cyan 0 black 78746 other 722651  outside the poll, +1.275 s from poll 1 stages  bmp c-overlay-17.bmp
+    frame 27 (dda, present_qpc 4444967757, accumulated 1); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  overlay flash at +-0.195 s  14.6 ms  other-content  navy 904 cyan 0 black 142470 other 658866  outside the poll, +1.285 s from poll 1 stages  bmp c-overlay-18.bmp
+    frame 28 (dda, present_qpc 4445061914, accumulated 1); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  overlay flash at +-0.180 s  24.8 ms  other-content  navy 932 cyan 0 black 146943 other 654365  outside the poll, +1.300 s from poll 1 stages  bmp c-overlay-19.bmp
+    frame 29 (dda, present_qpc 4445207897, accumulated 2); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  overlay flash at +-0.155 s  15.9 ms  other-content  navy 953 cyan 0 black 155665 other 645622  outside the poll, +1.324 s from poll 1 stages  bmp c-overlay-20.bmp
+    frame 30 (dda, present_qpc 4445456314, accumulated 2); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  overlay flash at +-0.139 s  23.1 ms  other-content  navy 962 cyan 0 black 159106 other 642172  outside the poll, +1.340 s from poll 1 stages  bmp c-overlay-21.bmp
+    frame 31 (dda, present_qpc 4445615059, accumulated 1); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  overlay flash at +-0.116 s  15.7 ms  other-content  navy 967 cyan 0 black 163769 other 637504  outside the poll, +1.363 s from poll 1 stages  bmp c-overlay-22.bmp
+    frame 32 (dda, present_qpc 4445846391, accumulated 2); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  overlay flash at +-0.101 s  27.5 ms  other-content  navy 969 cyan 0 black 165073 other 636198  outside the poll, +1.379 s from poll 1 stages  bmp c-overlay-23.bmp
+    frame 33 (dda, present_qpc 4446003768, accumulated 1); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  overlay flash at +59.863 s  36.2 ms  other-content  navy 889 cyan 0 black 86420 other 714931  outside the poll, +1.016 s from poll 13 stages  bmp c-overlay-24.bmp
+    frame 324 (dda, present_qpc 5045636827, accumulated 1); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  overlay flash at +59.899 s  45.2 ms  other-content  navy 889 cyan 0 black 86420 other 714931  outside the poll, +1.053 s from poll 13 stages  bmp c-overlay-25.bmp
+    frame 325 (dda, present_qpc 5045999178, accumulated 1); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  overlay flash at +59.944 s  28.4 ms  other-content  navy 876 cyan 0 black 86050 other 715314  outside the poll, +1.098 s from poll 13 stages  bmp c-overlay-26.bmp
+    frame 328 (dda, present_qpc 5046450715, accumulated 1); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  overlay flash at +59.973 s  13.9 ms  other-content  navy 890 cyan 0 black 85548 other 715802  outside the poll, +1.126 s from poll 13 stages  bmp c-overlay-27.bmp
+    frame 329 (dda, present_qpc 5046734879, accumulated 2); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  overlay flash at +59.986 s  26.2 ms  other-content  navy 869 cyan 0 black 85079 other 716292  outside the poll, +1.140 s from poll 13 stages  bmp c-overlay-28.bmp
+    frame 330 (dda, present_qpc 5046873756, accumulated 1); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  overlay flash at +60.013 s  25.7 ms  other-content  navy 844 cyan 0 black 83968 other 717428  outside the poll, +1.166 s from poll 13 stages  bmp c-overlay-29.bmp
+    frame 331 (dda, present_qpc 5047135415, accumulated 2); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  overlay flash at +60.038 s  12.6 ms  other-content  navy 841 cyan 0 black 79506 other 721893  outside the poll, +1.192 s from poll 13 stages  bmp c-overlay-30.bmp
+    frame 332 (dda, present_qpc 5047392839, accumulated 2); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  overlay flash at +60.051 s  14.5 ms  other-content  navy 841 cyan 0 black 79051 other 722348  outside the poll, +1.205 s from poll 13 stages  bmp c-overlay-31.bmp
+    frame 333 (dda, present_qpc 5047519325, accumulated 1); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  overlay flash at +60.066 s  13.8 ms  other-content  navy 841 cyan 0 black 78866 other 722533  outside the poll, +1.219 s from poll 13 stages  bmp c-overlay-32.bmp
+    frame 334 (dda, present_qpc 5047664636, accumulated 1); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  overlay: 0 of 33 flashes inside a poll step; the steps take 1.8 % of the 60 s
+  overlay: 0 of 33 flashes in a sample interval with a DPM change; 0.0 % of the intervals hold one
+  surface flash at +0.885 s  2.0 ms  other-content  navy 18694 cyan 224 black 0 other 114  outside the poll, -2.347 s from poll 2 health  bmp c-surface-0.bmp
+    frame 51 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +1.902 s  2.0 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, -1.330 s from poll 2 health  bmp c-surface-1.bmp
+    frame 55 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +2.936 s  4.0 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, -0.296 s from poll 2 health  bmp c-surface-2.bmp
+    frame 60 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +3.741 s  2.0 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, +0.439 s from poll 2 stages  bmp c-surface-3.bmp
+    frame 65 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +5.809 s  2.0 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, -2.431 s from poll 3 health  bmp c-surface-4.bmp
+    frame 74 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +6.863 s  2.1 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, -1.378 s from poll 3 health  bmp c-surface-5.bmp
+    frame 79 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +7.902 s  2.0 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, -0.339 s from poll 3 health  bmp c-surface-6.bmp
+    frame 83 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +8.937 s  1.9 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, +0.632 s from poll 3 stages  bmp c-surface-7.bmp
+    frame 88 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +10.751 s  2.0 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, +2.446 s from poll 3 stages  bmp c-surface-8.bmp
+    frame 97 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +11.805 s  2.1 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, -1.488 s from poll 4 health  bmp c-surface-9.bmp
+    frame 103 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +13.849 s  2.0 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, +0.493 s from poll 4 stages  bmp c-surface-10.bmp
+    frame 112 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +15.908 s  1.9 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, -2.428 s from poll 5 health  bmp c-surface-11.bmp
+    frame 121 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +16.961 s  2.0 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, -1.375 s from poll 5 health  bmp c-surface-12.bmp
+    frame 126 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +17.751 s  2.1 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, -0.584 s from poll 5 health  bmp c-surface-13.bmp
+    frame 129 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +18.787 s  3.9 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, +0.386 s from poll 5 stages  bmp c-surface-14.bmp
+    frame 133 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +19.807 s  2.8 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, +1.406 s from poll 5 stages  bmp c-surface-15.bmp
+    frame 138 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +20.812 s  1.9 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, +2.411 s from poll 5 stages  bmp c-surface-16.bmp
+    frame 143 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +21.837 s  2.1 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, -1.563 s from poll 6 health  bmp c-surface-17.bmp
+    frame 148 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +23.930 s  1.9 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, +0.465 s from poll 6 stages  bmp c-surface-18.bmp
+    frame 158 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +24.937 s  2.8 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, +1.472 s from poll 6 stages  bmp c-surface-19.bmp
+    frame 162 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +25.743 s  1.9 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, +2.278 s from poll 6 stages  bmp c-surface-20.bmp
+    frame 167 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +26.777 s  1.9 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, -1.686 s from poll 7 health  bmp c-surface-21.bmp
+    frame 171 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +27.815 s  2.1 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, -0.648 s from poll 7 health  bmp c-surface-22.bmp
+    frame 176 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +28.852 s  2.0 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, +0.322 s from poll 7 stages  bmp c-surface-23.bmp
+    frame 180 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +29.875 s  2.0 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, +1.346 s from poll 7 stages  bmp c-surface-24.bmp
+    frame 184 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +30.930 s  2.0 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, +2.400 s from poll 7 stages  bmp c-surface-25.bmp
+    frame 189 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +31.966 s  4.0 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, -1.545 s from poll 8 health  bmp c-surface-26.bmp
+    frame 193 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +34.764 s  2.1 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, +1.191 s from poll 8 stages  bmp c-surface-27.bmp
+    frame 206 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +35.830 s  2.1 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, +2.257 s from poll 8 stages  bmp c-surface-28.bmp
+    frame 210 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +36.869 s  1.9 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, -1.701 s from poll 9 health  bmp c-surface-29.bmp
+    frame 215 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +37.874 s  4.1 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, -0.697 s from poll 9 health  bmp c-surface-30.bmp
+    frame 220 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +38.896 s  2.0 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, +0.264 s from poll 9 stages  bmp c-surface-31.bmp
+    frame 225 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +39.963 s  2.0 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, +1.331 s from poll 9 stages  bmp c-surface-32.bmp
+    frame 230 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +40.988 s  2.0 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, +2.356 s from poll 9 stages  bmp c-surface-33.bmp
+    frame 235 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +41.762 s  2.1 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, -1.865 s from poll 10 health  bmp c-surface-34.bmp
+    frame 239 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +43.830 s  2.0 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, +0.140 s from poll 10 stages  bmp c-surface-35.bmp
+    frame 248 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +46.943 s  2.0 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, -1.734 s from poll 11 health  bmp c-surface-36.bmp
+    frame 262 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +47.981 s  2.0 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, -0.695 s from poll 11 health  bmp c-surface-37.bmp
+    frame 267 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +48.754 s  1.9 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, +0.012 s from poll 11 stages  bmp c-surface-38.bmp
+    frame 271 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +52.871 s  4.0 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, -0.849 s from poll 12 health  bmp c-surface-39.bmp
+    frame 290 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +53.909 s  2.0 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, +0.122 s from poll 12 stages  bmp -
+    frame 295 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +54.939 s  2.0 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, +1.151 s from poll 12 stages  bmp -
+    frame 300 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +55.979 s  2.0 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, +2.192 s from poll 12 stages  bmp -
+    frame 304 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +56.753 s  2.1 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, -2.026 s from poll 13 health  bmp -
+    frame 307 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +57.774 s  4.0 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  outside the poll, -1.005 s from poll 13 health  bmp -
+    frame 312 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface flash at +58.795 s  2.0 ms  earlier-content  navy 18694 cyan 224 black 0 other 114  inside poll 13 cim (+0.015 s of 0.041 s)  bmp -
+    frame 316 (surface, present_qpc 0, accumulated 0); dpm 500 MHz (target 500, observed 500, idle entries 1); no DPM change in the case
+  surface: 1 of 46 flashes inside a poll step; the steps take 1.8 % of the 60 s
+  surface: 0 of 46 flashes in a sample interval with a DPM change; 0.0 % of the intervals hold one
+  poll 1 at +-1.799 s: health 0.179 s (status 0x00000000 flags 15), cim 0.101 s (devices 1), info 0.024 s (exit 0), stages 0.014 s (exit 0)
+  poll 2 at +3.232 s: health 0.002 s (status 0x00000000 flags 15), cim 0.039 s (devices 1), info 0.015 s (exit 0), stages 0.014 s (exit 0)
+  poll 3 at +8.241 s: health 0.001 s (status 0x00000000 flags 15), cim 0.037 s (devices 1), info 0.015 s (exit 0), stages 0.011 s (exit 0)
+  poll 4 at +13.292 s: health 0.002 s (status 0x00000000 flags 15), cim 0.035 s (devices 1), info 0.014 s (exit 0), stages 0.012 s (exit 0)
+  poll 5 at +18.335 s: health 0.001 s (status 0x00000000 flags 15), cim 0.036 s (devices 1), info 0.015 s (exit 0), stages 0.011 s (exit 0)
+  poll 6 at +23.400 s: health 0.001 s (status 0x00000000 flags 15), cim 0.038 s (devices 1), info 0.014 s (exit 0), stages 0.011 s (exit 0)
+  poll 7 at +28.463 s: health 0.001 s (status 0x00000000 flags 15), cim 0.039 s (devices 1), info 0.014 s (exit 0), stages 0.012 s (exit 0)
+  poll 8 at +33.510 s: health 0.001 s (status 0x00000000 flags 15), cim 0.035 s (devices 1), info 0.015 s (exit 0), stages 0.011 s (exit 0)
+  poll 9 at +38.570 s: health 0.001 s (status 0x00000000 flags 15), cim 0.034 s (devices 1), info 0.014 s (exit 0), stages 0.012 s (exit 0)
+  poll 10 at +43.627 s: health 0.002 s (status 0x00000000 flags 15), cim 0.035 s (devices 1), info 0.015 s (exit 0), stages 0.011 s (exit 0)
+  poll 11 at +48.677 s: health 0.001 s (status 0x00000000 flags 15), cim 0.038 s (devices 1), info 0.014 s (exit 0), stages 0.012 s (exit 0)
+  poll 12 at +53.720 s: health 0.001 s (status 0x00000000 flags 15), cim 0.041 s (devices 1), info 0.014 s (exit 0), stages 0.011 s (exit 0)
+  poll 13 at +58.779 s: health 0.001 s (status 0x00000000 flags 15), cim 0.041 s (devices 1), info 0.015 s (exit 0), stages 0.011 s (exit 0)
+elapsed 71 s
+flash: ok
+exit 0 at 11:14:06Z

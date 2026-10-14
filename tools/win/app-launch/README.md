@@ -100,6 +100,22 @@ long case is enough for this question:
 python tools\win\target.py ps tools\win\app-launch\measure-flash.ps1 -Kit C:\BC250\tmp\flash-kit -Cases a -CaseSeconds 150 -Surface
 ```
 
+The same measurement compares two label controls that show a text that a timer changes. `label-window.ps1` makes a
+window with the shape, colours, text and timer of the tester.31 rc4 start window, and draws the text as the control
+application does (visual styles and `TextRenderer`). `-Kind Label` puts a WinForms `Label` in it, which is a STATIC
+window. `-Kind Steady` puts a `SteadyLabel` in it, a Label subclass in the WinForms window class, which it loads from
+a build of `amdgpu_wddm_control.exe`. No release has that class: its source is
+`evidence/windows/2026-10-14-start-window-flash/scripts/SteadyLabel-run5.cs`. Both kinds give the partial picture of
+M898, because the cause is the layout of a docked Label with AutoSize off. Case `c` runs the script, with `-FixedKind`
+for the kind and `-FixedApp` for the application, which the script copies next to the window script:
+
+```
+python tools\win\target.py ps tools\win\app-launch\measure-flash.ps1 -Kit C:\BC250\tmp\flash-kit -Fixed C:\BC250\tmp\flash-kit\label-window.ps1 -Cases c -CaseSeconds 60 -BoundSeconds 100 -Surface -FixedKind Label -FixedApp C:\BC250\tmp\flash-kit\amdgpu_wddm_control.exe
+```
+
+flash-watch gives the arguments after `--` to the window script, after `-Seconds`. `label-window.ps1 -Check` makes
+the window without showing it and prints the type of the control, its window class and its text rendering.
+
 `-Plan` prints what a run would do (the cases, the tasks, the commands and the files) and stops. It starts, registers
 and writes nothing, so it can run on any computer.
 

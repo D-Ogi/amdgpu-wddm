@@ -15,6 +15,9 @@
 #   -Surface   flash-watch also reads the start window's own surface through its window DC, about every millisecond
 #              (target "surface"): a flash in DWM's frames that this target never shows is a state of DWM's copy of
 #              the window, not of the window itself
+#   -FixedKind  case c passes `-Kind <word>` to its window script (label-window.ps1: Label or Steady)
+#   -FixedApp   a file that case c's window script needs next to it, copied there (label-window.ps1 loads
+#              SteadyLabel from the control application, amdgpu_wddm_control.exe)
 #   -Plan      print what a run would do and exit: no task, no process, no file, on any computer
 #
 # Cases:
@@ -51,6 +54,8 @@ param(
     [string]$Work = 'C:\BC250\tmp\flash',
     [string]$TaskName = 'BC250 flash probe',
     [switch]$Surface,
+    [string]$FixedKind,
+    [string]$FixedApp,
     [switch]$Plan
 )
 $ErrorActionPreference = 'Continue'
@@ -143,6 +148,7 @@ function Invoke-Case([string]$Case) {
     $deadlineMs = ($CaseSeconds + 4) * 1000
     $argText = (@($prefix, $deadlineMs, $ps, $windowScript, $CaseSeconds) | ForEach-Object { '"' + $_ + '"' }) -join ' '
     if ($Surface) { $argText += ' surface' }
+    if ($Case -eq 'c' -and $FixedKind) { $argText += " -- -Kind $FixedKind" }
     $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
     $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Seconds ($CaseSeconds + 30)) `
         -MultipleInstances IgnoreNew -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
@@ -253,6 +259,9 @@ try {
     if ($caseList.Count * ($CaseSeconds + 5) + 10 -gt $BoundSeconds) { throw "refused: $($caseList.Count) cases of $CaseSeconds s do not fit in $BoundSeconds s" }
     $need = @($Watch, $Repro, $Sampler, $Shipped, (Join-Path $Tools 'bc250kmd_cli.exe'), (Join-Path $Tools 'bc250control.dll'), (Join-Path $Tools 'start-confirm-core.ps1'))
     if ($caseList -contains 'c') { $need += $Fixed }
+    if ($FixedKind -and $FixedKind -notmatch '^[A-Za-z]+$') { throw "refused: -FixedKind is one word, not '$FixedKind'" }
+    if (($FixedKind -or $FixedApp) -and ($caseList -notcontains 'c')) { throw 'refused: -FixedKind and -FixedApp are for case c' }
+    if ($FixedApp) { $need += $FixedApp }
     $ps = Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
     if ($Plan) {
         # What a run would do, from the same parameters, on any computer: no task, no process, no file.
@@ -265,7 +274,8 @@ try {
             $script = $(if ($c -eq 'c') { '<work>\fixed\start-window.ps1' } else { '<work>\shipped\start-window.ps1' })
             "plan: case $c, $(if ($c -eq 'c') { 'the -Fixed window' } else { 'the installed window' }), $(if ($c -ne 'b') { 'with the poll' } else { 'no poll' })"
             if ($c -ne 'b') { "plan:   poll, session 0, hidden: $ps -File $Repro -Tools $Tools -Seconds $($CaseSeconds + 1) -Out <work>\$c-polls.csv" }
-            "plan:   task '$TaskName', console user, Interactive, Limited, limit $($CaseSeconds + 30) s: <work>\flash-watch.exe <work>\$c $(($CaseSeconds + 4) * 1000) $ps $script $CaseSeconds$(if ($Surface) { ' surface' })"
+            "plan:   task '$TaskName', console user, Interactive, Limited, limit $($CaseSeconds + 30) s: <work>\flash-watch.exe <work>\$c $(($CaseSeconds + 4) * 1000) $ps $script $CaseSeconds$(if ($Surface) { ' surface' })$(if ($c -eq 'c' -and $FixedKind) { " -- -Kind $FixedKind" })"
+            if ($c -eq 'c' -and $FixedApp) { "plan:   beside the window script: <work>\fixed\$([IO.Path]::GetFileName($FixedApp)) (copy of $FixedApp)" }
             "plan:   wait at most $($CaseSeconds + 12) s, then remove the task"
         }
         'plan: nothing was started, registered or written'
@@ -298,9 +308,11 @@ try {
     $watchCopy = Join-Path $dir 'flash-watch.exe'
     Copy-Item -LiteralPath $Shipped -Destination $shippedCopy
     if ($caseList -contains 'c') { Copy-Item -LiteralPath $Fixed -Destination $fixedCopy }
+    $appCopy = $null
+    if ($FixedApp) { $appCopy = Join-Path $dir ('fixed\' + [IO.Path]::GetFileName($FixedApp)); Copy-Item -LiteralPath $FixedApp -Destination $appCopy }
     Copy-Item -LiteralPath $Watch -Destination $watchCopy
     "work $dir"
-    foreach ($f in @($watchCopy, $shippedCopy, $(if ($caseList -contains 'c') { $fixedCopy }), $Repro, $Sampler, (Join-Path $Tools 'bc250kmd_cli.exe'), (Join-Path $Tools 'bc250control.dll'))) {
+    foreach ($f in @($watchCopy, $shippedCopy, $(if ($caseList -contains 'c') { $fixedCopy }), $appCopy, $Repro, $Sampler, (Join-Path $Tools 'bc250kmd_cli.exe'), (Join-Path $Tools 'bc250control.dll'))) {
         if ($f) { "file $f sha256 $((Get-FileHash -LiteralPath $f -Algorithm SHA256).Hash)" }
     }
     # The clock for all the cases; it ends by itself inside the bound, and is stopped after the last case.
