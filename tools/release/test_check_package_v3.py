@@ -259,7 +259,7 @@ class PrestageRecordTests(unittest.TestCase):
 
     No image identity here, so these run anywhere. The controls are the ones the staged path has: both
     architectures required, a corrupt header refused, a changed image caught, a stray record named. The v1
-    pair is the regression control: its pins are at 44 and 76, and a checker that reads v3's offsets rejects
+    pair is the regression control: its pins are at 44 and 76, and a checker that reads v2's offsets rejects
     a package that is correct.
     """
     def setUp(self):

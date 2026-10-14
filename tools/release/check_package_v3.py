@@ -205,7 +205,7 @@ def original_pins(data: bytes) -> tuple[str, str]:
     """The engine and ICD pin of an original v1 or v2 record, at that version's own offsets.
 
     A v1 record is 108 bytes with eleven DWORDs and its pins at 44 and 76; a v2 record is 132 bytes with
-    seventeen and its pins at 68 and 100. Reading v3's offsets in both rejects a well-formed v1 pair, so the
+    seventeen and its pins at 68 and 100. Reading v2's offsets in both rejects a well-formed v1 pair, so the
     layout is taken from the size and the whole header is validated, exactly as
     driver_package.signing_safe_config does it for the staging step."""
     if len(data) not in (108, 132):
