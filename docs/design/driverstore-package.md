@@ -86,6 +86,26 @@ It permits only the untrusted-root chain error and changes no certificate store.
 `-ExpectedSigningRoot system` uses `signtool verify /pa`.
 The mode is explicit and has no fallback.
 
+## Release and lab packages
+
+`build-release.ps1 -Flavour release` is the default.
+`-Flavour lab` appends `-lab` to the package and installer filenames.
+The product version stays the same. A lab build refuses `-SubmissionCab`.
+Both packages retain embedded test signatures and catalog verification.
+
+Source schema 4 assigns each `files[]` row a `flavour`: `release`, `lab` or `shared`.
+Both flavours must provide every payload slot.
+PE images and loader configurations require separate rows for each flavour.
+Only data files can use `shared`. Duplicate or incomplete selections fail before staging.
+Legacy source lists are valid only for the release selection.
+The selected pins also drive the rebuild and provenance checks.
+
+Each flavour derives its v3 loader configuration from its own stamped backends.
+The manifest and DriverStore report record the selected flavour.
+This label does not prove that diagnostic code is absent.
+The component build gates must check that release images omit lab interfaces
+and that lab images contain them. HLK uses the release flavour.
+
 ## Validation
 
 Run the package, signature, router and engine-loader host gates before integration.

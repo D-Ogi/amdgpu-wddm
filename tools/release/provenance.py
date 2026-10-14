@@ -175,9 +175,18 @@ class Repositories:
         return branches
 
 
-def check(sources_path, root, repo, package=None):
+def check(sources_path, root, repo, package=None, flavour=None):
     """Returns (errors, rows, summary). rows: one dict per payload file."""
     sources = json.loads(Path(sources_path).read_text(encoding="utf-8-sig"))
+    from release_flavour import select_sources
+    try:
+        sources = select_sources(sources, flavour or sources.get('flavour', 'release'))
+    except (KeyError, TypeError, ValueError) as error:
+        return [f"{sources_path}: flavour selection: {error}"], [], {}
+    if package and (Path(package) / 'manifest.json').is_file():
+        manifest = json.loads((Path(package) / 'manifest.json').read_text(encoding='utf-8-sig'))
+        if manifest.get('flavour', 'release') != sources['flavour']:
+            return ['package and source flavours differ'], [], {}
     driver_paths = {}
     if package and (Path(package) / "installer/driver-package.json").is_file():
         # Derive the mapping from this source contract, never from an unchecked
@@ -465,6 +474,7 @@ def main():
     c.add_argument("--repo", required=True)
     c.add_argument("--package")
     c.add_argument("--json")
+    c.add_argument('--flavour', choices=('release', 'lab'))
     d = sub.add_parser("digest")
     d.add_argument("files", nargs="+")
     loc = sub.add_parser("locate")
@@ -491,7 +501,7 @@ def main():
             return 1
         print(found)
         return 0
-    errors, rows, counts = check(args.sources, args.root, args.repo, args.package)
+    errors, rows, counts = check(args.sources, args.root, args.repo, args.package, args.flavour)
     for r in rows:
         tag = {"recipe": "BUILD", "data": "DATA", "third_party": "THIRD"}.get(r["kind"], "?")
         if r.get("unverified"):

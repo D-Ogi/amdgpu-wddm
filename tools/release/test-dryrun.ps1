@@ -26,6 +26,7 @@ if (-not $PSBoundParameters.ContainsKey('WorkBase')) {
 }
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'headless.ps1')
+. (Join-Path $PSScriptRoot 'installer\driver-package.ps1')
 $ps51 = Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
 $fail = 0
 function Check([bool]$Ok, [string]$Text) { if ($Ok) { "  PASS $Text" } else { "  FAIL $Text"; $script:fail++ } }
@@ -118,8 +119,9 @@ $dwm = [int]$m.defaults.desktop_router.DwmForceCpu
 # DirectFlipFront is between them from 0.7.213.100-tester.15: the D3D11_1 front of route C is a finished
 # feature, so the installer writes it on, and the value is read from the same defaults table as DwmForceCpu.
 $front = [int]$m.defaults.desktop_router.DirectFlipFront
+$desktopEnd = if (Test-DriverStoreUmdPackage $m) { '(?:\r?\n|$)' } else { '; CpuUmdPath=' }
 Check ($r.text -match ("DesktopRouter: DwmForceCpu=$dwm \(new\); RequireKmdSwitches=1 \(new\); " +
-                       "DirectFlipFront=$front \(new\); CpuUmdPath=")) `
+                       "DirectFlipFront=$front \(new\)" + $desktopEnd)) `
       "desktop route DwmForceCpu $dwm and DirectFlipFront $front from the defaults table"
 # Allow and Deny ship empty from b20 (the Windows component rule is gone); the expected text comes from the table.
 $allow = [regex]::Escape('[' + (@($m.defaults.app_router.Allow) -join ', ') + ']')

@@ -30,6 +30,7 @@ function Get-KmdDriverStorePackages {
             Published = $published
             Version = $version
             Date = $package.Date.ToString('yyyy-MM-dd', [Globalization.CultureInfo]::InvariantCulture)
+            PackageRoot = Split-Path ([string]$package.OriginalFileName)
         }
     }
     return $ours

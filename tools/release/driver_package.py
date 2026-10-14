@@ -183,7 +183,9 @@ def signing_safe_config(data: bytes, engine: Path, icd: Path) -> bytes:
     return struct.pack('<17I32s32s', *caps, bytes.fromhex(image_digest(engine)), bytes.fromhex(image_digest(icd)))
 
 
-def stage(package: Path, sources: dict) -> dict:
+def stage(package: Path, sources: dict, flavour: str = 'release') -> dict:
+    from release_flavour import select_sources
+    sources = select_sources(sources, flavour)
     package = package.resolve(strict=True)
     rows = members(sources)
     indexed = {r["path"]: r for r in sources["files"]}
@@ -233,7 +235,7 @@ def stage(package: Path, sources: dict) -> dict:
     # into a caller's directory to remove unrecognized or foreign payloads.
     for row in rows:
         (package / row["source"]).unlink()
-    return {"schema": SCHEMA, "root": "payload/kmd", "members": rows, "registration": registrations(rows, sources)}
+    return {"schema": SCHEMA, "flavour": flavour, "root": "payload/kmd", "members": rows, "registration": registrations(rows, sources)}
 
 
 def main() -> int:
@@ -241,8 +243,9 @@ def main() -> int:
     parser.add_argument("--package", required=True, type=Path)
     parser.add_argument("--sources", required=True, type=Path)
     parser.add_argument("--report", required=True, type=Path)
+    parser.add_argument("--flavour", choices=('release', 'lab'), default='release')
     args = parser.parse_args()
-    result = stage(args.package, json.loads(args.sources.read_text(encoding="utf-8-sig")))
+    result = stage(args.package, json.loads(args.sources.read_text(encoding="utf-8-sig")), args.flavour)
     args.report.write_bytes((json.dumps(result, indent=2) + "\n").encode("utf-8"))
     print(f"DriverStore: {len(result['members'])} user-mode members, INF owns adapter registration")
     return 0

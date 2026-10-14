@@ -40,6 +40,7 @@ param(
     [string]$Out,
     [string]$DriverVer = '',                   # optional assertion of the mapped Windows INF quad; derived from Version
     [string]$Version = '0.7.216.100-tester.21',
+    [ValidateSet('release','lab')][string]$Flavour = 'release',
     [string]$KitVersion = '10.0.26100.0',
     [string]$FirmwareDir,                        # exact pinned inputs for Inf2Cat, never copied into the public ZIP
     [string]$SubmissionCab,                      # unsigned CAB for EV signing; includes the complete INF payload
@@ -58,6 +59,7 @@ param(
 # Release and provenance rebuilds always execute the gates, including nested analysis.
 $env:BC250_GATE_NOCACHE = '1'
 $ErrorActionPreference = 'Stop'
+if ($Flavour -eq 'lab' -and $SubmissionCab) { throw 'a lab package cannot be submitted for attestation' }
 if (-not $MockAttestation -and -not $NoProvenance) { throw 'release builds require mock-attestation signatures until Partner Center supplies the package' }
 . (Join-Path $PSScriptRoot 'headless.ps1')
 # The setup window is the default entry of an ordinary user, so a package without it is not a release.
@@ -66,10 +68,17 @@ if (-not (Test-Path -LiteralPath (Join-Path $SetupApp 'amdgpu_wddm_setup.exe')))
 if (-not $Out) { $Out = Join-Path $Root 'scratch\release\out' }
 $repo = Split-Path (Split-Path $PSScriptRoot)
 $name = "amdgpu-wddm-tester-$Version"
+if ($Flavour -eq 'lab') { $name += '-lab' }
 $pkgRoot = Join-Path $Out $name      # what the zip unpacks to: setup.exe and files\
 $pkg = Join-Path $pkgRoot 'files'    # the package root: manifest.json and everything the installer reads
 $zip = "$pkgRoot.zip"
-$sources = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'release-sources.json') -Raw | ConvertFrom-Json
+$pythonExe = (Get-Command python -ErrorAction Stop).Source
+[void][IO.Directory]::CreateDirectory($Out)
+$sourcesPath = Join-Path $Out ("selected-sources-$Flavour.json")
+$selection = Invoke-Headless -File $pythonExe -Arguments @((Join-Path $PSScriptRoot 'release_flavour.py'),
+    '--sources', (Join-Path $PSScriptRoot 'release-sources.json'), '--flavour', $Flavour, '--out', $sourcesPath) -TimeoutSeconds 30
+if ($selection.code -ne 0) { throw "flavour input selection: $($selection.text)" }
+$sources = Get-Content -LiteralPath $sourcesPath -Raw | ConvertFrom-Json
 foreach ($requiredStateFile in @('payload/kmd/amdgpu-state.bin','payload/tools/amdgpu-state-installer.exe')) {
     if (@($sources.files | Where-Object {$_.path -ceq $requiredStateFile}).Count -ne 1) {
         throw "release-sources.json must pin exactly one $requiredStateFile from the state migration build"
@@ -163,7 +172,7 @@ foreach ($f in $sources.files) {
 Write-Host 'provenance'
 $pythonExe = (Get-Command python -ErrorAction SilentlyContinue).Source
 if (-not $pythonExe) { throw 'python is not on PATH: the provenance gate cannot run' }
-$provenanceArgs = @((Join-Path $PSScriptRoot 'provenance.py'), 'check', '--sources', (Join-Path $PSScriptRoot 'release-sources.json'), '--root', $Root, '--repo', $repo)
+$provenanceArgs = @((Join-Path $PSScriptRoot 'provenance.py'), 'check', '--sources', $sourcesPath, '--flavour', $Flavour, '--root', $Root, '--repo', $repo)
 # A lab candidate is built from a work tree on purpose: the lab test comes before the commit (owner rule), so the
 # commit that the payload rows would name does not exist yet and no remote-tracking branch can contain it. The gate
 # is then off for this build, the reason is required, and manifest.json carries both, so a package that nobody could
@@ -184,7 +193,7 @@ if ($NoProvenance) {
 }
 if ($RebuildCheck) {
     $pwshExe = (Get-Process -Id $PID).Path
-    $r = Invoke-Headless -File $pwshExe -Arguments @('-NoProfile', '-File', (Join-Path $PSScriptRoot 'rebuild-check.ps1'), '-Root', $Root, '-Report', (Join-Path $Out 'rebuild-check.json')) -TimeoutSeconds 21600
+    $r = Invoke-Headless -File $pwshExe -Arguments @('-NoProfile', '-File', (Join-Path $PSScriptRoot 'rebuild-check.ps1'), '-Root', $Root, '-Sources', $sourcesPath, '-Report', (Join-Path $Out 'rebuild-check.json')) -TimeoutSeconds 21600
     $r.text
     if ($r.code -ne 0) { throw 'rebuild check: a payload file that claims a bit-identical rebuild did not rebuild to its bytes (see above)' }
 }
@@ -345,7 +354,7 @@ Copy-DriverStoreFirmware -Firmware $firmware -FromDir $FirmwareDir -Destination 
 # mapping records the destination of each source slot and the two ICD JSON edits.
 $driverPackageReport = Join-Path $pkg 'installer\driver-package.json'
 $r = Invoke-Headless -File $pythonExe -Arguments @((Join-Path $PSScriptRoot 'driver_package.py'), '--package', $pkg,
-    '--sources', (Join-Path $PSScriptRoot 'release-sources.json'), '--report', $driverPackageReport) -TimeoutSeconds 180
+    '--sources', $sourcesPath, '--flavour', $Flavour, '--report', $driverPackageReport) -TimeoutSeconds 180
 if ($r.code -ne 0) { throw "DriverStore staging: $($r.text)" }
 $driverPackage = Get-Content -LiteralPath $driverPackageReport -Raw | ConvertFrom-Json
 $driverMembersBySource = @{}
@@ -769,6 +778,7 @@ if ($sources.PSObject.Properties['opengl_icd']) {
 $manifest = [ordered]@{
     schema = 1
     driver_package = $driverPackage
+    flavour = $Flavour
     driver_signing = [ordered]@{
         mode = $(if ($MockAttestation) { 'mock-attestation' } else { 'candidate-no-mock' })
         verification = $ExpectedSigningRoot
@@ -822,7 +832,8 @@ Compress-Archive -Path $pkgRoot -DestinationPath $zip
 # nothing. make-setup-exe.ps1 -Check is the gate - it reads the exe back and compares every file of the payload with
 # the file of this package, byte for byte, and -ReleaseZip compares it with the entries of the zip written above, so an exe
 # whose payload is not the files of this release's archive cannot be published.
-$setupOne = Join-Path $Out "amdgpu-wddm-setup-$Version.exe"
+$setupSuffix = if ($Flavour -eq 'lab') { '-lab' } else { '' }
+$setupOne = Join-Path $Out "amdgpu-wddm-setup-$Version$setupSuffix.exe"
 & (Join-Path $PSScriptRoot 'make-setup-exe.ps1') -PackageTop $pkgRoot -Out $setupOne -Check -ReleaseZip $zip | ForEach-Object { "  $_" }
 if (-not (Test-Path -LiteralPath $setupOne -PathType Leaf)) { throw "make-setup-exe.ps1 wrote no $setupOne" }
 'single exe {0} SHA256 {1}' -f $setupOne, (Get-FileHash -LiteralPath $setupOne).Hash

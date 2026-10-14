@@ -213,6 +213,25 @@ class ProvenanceGate(unittest.TestCase):
         self.assertEqual(counts["unverified"], 0)
         self.assertTrue(all(r["branches"] == ["origin/main"] for r in rows if r["kind"] != "third_party"))
 
+    def test_flavour_selection_and_manifest_agree(self):
+        manifest = self.manifest()
+        manifest['schema'] = 4
+        manifest['files'] = [dict(row, flavour=flavour)
+                             for row in manifest['files'] for flavour in ('release', 'lab')]
+        self.ws.manifest_path.write_text(json.dumps(manifest), encoding='utf-8')
+        for flavour in ('release', 'lab'):
+            errors, rows, counts = provenance.check(self.ws.manifest_path, self.ws.root, self.ws.tool,
+                                                   flavour=flavour)
+            self.assertEqual(errors, [])
+            self.assertEqual(counts['files'], 5)
+            self.assertEqual(len(rows), 5)
+        with tempfile.TemporaryDirectory(dir=self.tmp) as temp:
+            package = Path(temp)
+            (package / 'manifest.json').write_text('{"flavour":"lab"}', encoding='utf-8')
+            errors, _, _ = provenance.check(self.ws.manifest_path, self.ws.root, self.ws.tool, package,
+                                            flavour='release')
+            self.assertEqual(errors, ['package and source flavours differ'])
+
     def test_entry_without_provenance_fails(self):
         m = self.manifest()
         del self.file(m, "payload/built.dll")["built_from"]

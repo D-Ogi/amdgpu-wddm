@@ -1,5 +1,6 @@
 """Offline package-layout tests; no device, registry or certificate changes."""
 import hashlib
+import copy
 import importlib.util
 import json
 import tempfile
@@ -18,6 +19,27 @@ REPO = Path(__file__).resolve().parents[2]
 
 
 class DriverPackageTests(unittest.TestCase):
+    def test_lab_staging_selects_its_own_pins(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            sources = self.fixture(root)
+            rows = sources['files']
+            sources['schema'] = 4
+            sources['files'] = []
+            for row in rows:
+                lab = dict(row, flavour='lab')
+                release = dict(row, flavour='release', sha256='0' * 64)
+                sources['files'].extend((release, lab))
+            original = copy.deepcopy(sources)
+            with self.assertRaises(ValueError):
+                package.stage(root, sources, 'release')
+            self.assertFalse((root / 'payload/kmd/desktop').exists())
+            with patch.object(package, 'image_digest', return_value='A' * 64):
+                report = package.stage(root, sources, 'lab')
+            self.assertEqual(report['flavour'], 'lab')
+            self.assertEqual(len(report['members']), 26)
+            self.assertEqual(sources, original)
+
     def sources(self):
         return {"opengl_icd": {"register": True, "architectures": ["x64"]},
                 "mft_h264": {"register": True}, "files": []}
