@@ -82,6 +82,7 @@ public static class LaunchWatch
     [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr hwnd);
     [DllImport("user32.dll")] static extern bool IsIconic(IntPtr hwnd);
     [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr hwnd, out Rect r);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr hwnd, StringBuilder name, int size);
     [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr hwnd, int command);
     [DllImport("user32.dll")] static extern bool PostMessage(IntPtr hwnd, uint msg, IntPtr w, IntPtr l);
     [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
@@ -104,8 +105,9 @@ public static class LaunchWatch
 
     static void Say(string line) { _out.WriteLine(line); _out.Flush(); }
 
-    // The visible top-level windows of one process, at least 32 x 32: the hidden helper windows of WinForms and the
-    // input method do not count, nor does a cloaked one.
+    // The visible top-level windows of one process, at least 32 x 32: the forms of WinForms and the message boxes of
+    // Windows. The hidden helper windows of WinForms and the input method do not count, nor does a cloaked window or
+    // the shadow window (SysShadow) that Windows may give a window with a drop shadow.
     static List<Shown> Windows(int pid)
     {
         var found = new List<Shown>();
@@ -114,6 +116,10 @@ public static class LaunchWatch
             uint owner;
             GetWindowThreadProcessId(h, out owner);
             if (owner != (uint)pid || !IsWindowVisible(h)) return true;
+            var name = new StringBuilder(64);
+            GetClassName(h, name, name.Capacity);
+            var kind = name.ToString();
+            if (!kind.StartsWith("WindowsForms10.", StringComparison.Ordinal) && kind != "#32770") return true;
             int cloaked;
             if (DwmGetWindowAttribute(h, DWMWA_CLOAKED, out cloaked, 4) == 0 && cloaked != 0) return true;
             Rect r;
@@ -156,13 +162,11 @@ public static class LaunchWatch
 
         public bool Done { get { return Alone >= 0; } }
 
-        public string Text
+        // The fields, each key with the prefix (the second-start line names the first start's fields "first-...").
+        public string Text(string p)
         {
-            get
-            {
-                return "first-ms=" + First + " main-ms=" + Main + " alone-ms=" + Alone + " windows=" + Windows +
-                    " first-size=" + FirstWidth + "x" + FirstHeight + " main-size=" + MainWidth + "x" + MainHeight;
-            }
+            return p + "first-ms=" + First + " " + p + "main-ms=" + Main + " " + p + "alone-ms=" + Alone + " " + p + "windows=" + Windows +
+                " " + p + "first-size=" + FirstWidth + "x" + FirstHeight + " " + p + "main-size=" + MainWidth + "x" + MainHeight;
         }
     }
 
@@ -198,7 +202,7 @@ public static class LaunchWatch
             {
                 var w = new Watch();
                 WatchUntil(p, w, clock, runMs, mainHeight, x => x.Done);
-                Say("run=" + i + " " + w.Text + " " + Close(p, w));
+                Say("run=" + i + " " + w.Text("") + " " + Close(p, w));
             }
             Thread.Sleep(1000);
         }
@@ -215,7 +219,7 @@ public static class LaunchWatch
             WatchUntil(first, w, clock, runMs, mainHeight, x => atLoading ? x.First >= 0 : x.Done);
             if (atLoading ? w.First < 0 : !w.Done)
             {
-                Say("second first-not-ready " + w.Text + " " + Close(first, w));
+                Say("second first-not-ready " + w.Text("") + " " + Close(first, w));
                 return 0;
             }
             if (!atLoading)
@@ -252,7 +256,7 @@ public static class LaunchWatch
             GetWindowThreadProcessId(GetForegroundWindow(), out front);
             Say("second at=" + (atLoading ? "loading" : "main") + " exit-ms=" + exitMs + " exit=" + secondExit +
                 " second-windows=" + secondWindows + " minimised=" + (minimised ? 1 : 0) + " restored-ms=" + restoredMs +
-                " front=" + (front == (uint)first.Id ? 1 : 0) + " first-" + w.Text + " " + Close(first, w));
+                " front=" + (front == (uint)first.Id ? 1 : 0) + " " + w.Text("first-") + " " + Close(first, w));
         }
         return 0;
     }
