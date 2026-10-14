@@ -4343,22 +4343,28 @@ void WddmStop(_Inout_ BC250_DEVICE* Device)
     }
     GuardLog("wddm: stop, last completed fence %ld, %lu vsync ticks, %lu objects freed at the stop",
              wddm->LastCompletedFence, (ULONG)wddm->VSyncTicks, freed);
-    // The GDI totals of this adapter's lifetime, in one line, because the per-call lines above cover
-    // only the first calls and every overflow. The refusal classes keep the order of
-    // bc250_gdi_refusal, so a reader of this line needs the header and nothing else.
-    C_ASSERT(Bc250GdiRefusals == 11);
+    // The GDI totals of this adapter's lifetime, because the per-call lines above cover only the
+    // first calls and every overflow. Three lines and a line for each refusal class that happened:
+    // the log ring's line is 160 bytes and a %lld can take 20 of them (tools\quality\guardlog_width.py).
     if (wddm->GdiRenderCalls != 0)
-        GuardLog("wddm: gdi totals calls%lld commands%lld items%lld dwords%lld refused-call%lld "
-                 "malformed%lld outside%lld empty%lld overflow%lld kernel-wanted%lld red-first%lld "
-                 "refusals %lld/%lld/%lld/%lld/%lld/%lld/%lld/%lld/%lld/%lld/%lld",
+    {
+        int klass;
+
+        GuardLog("wddm: gdi totals calls%lld commands%lld items%lld dwords%lld",
                  wddm->GdiRenderCalls, wddm->GdiRenderCommands, wddm->GdiRenderItems,
-                 wddm->GdiRenderDwords, wddm->GdiRenderRefusedCall, wddm->GdiRenderMalformed,
-                 wddm->GdiRenderOutside, wddm->GdiRenderEmpty, wddm->GdiRenderOverflow,
-                 wddm->GdiRenderKernelWanted, wddm->GdiRenderColorFillRedFirst,
-                 wddm->GdiRenderRefused[0], wddm->GdiRenderRefused[1], wddm->GdiRenderRefused[2],
-                 wddm->GdiRenderRefused[3], wddm->GdiRenderRefused[4], wddm->GdiRenderRefused[5],
-                 wddm->GdiRenderRefused[6], wddm->GdiRenderRefused[7], wddm->GdiRenderRefused[8],
-                 wddm->GdiRenderRefused[9], wddm->GdiRenderRefused[10]);
+                 wddm->GdiRenderDwords);
+        GuardLog("wddm: gdi drops call%lld malformed%lld outside%lld empty%lld",
+                 wddm->GdiRenderRefusedCall, wddm->GdiRenderMalformed, wddm->GdiRenderOutside,
+                 wddm->GdiRenderEmpty);
+        GuardLog("wddm: gdi overflow%lld kernel-wanted%lld red-first%lld", wddm->GdiRenderOverflow,
+                 wddm->GdiRenderKernelWanted, wddm->GdiRenderColorFillRedFirst);
+        // The class numbers are bc250_gdi_refusal's own order, so a reader needs the header and
+        // nothing else. A class that never happened says nothing, which keeps the stop short.
+        for (klass = 0; klass < (int)Bc250GdiRefusals; klass++)
+            if (wddm->GdiRenderRefused[klass] != 0)
+                GuardLog("wddm: gdi refusal class %d count %lld", klass,
+                         wddm->GdiRenderRefused[klass]);
+    }
     ExFreePoolWithTag(wddm->ObjectIndex.Buckets, BC250_WDDM_TAG);
     ExFreePoolWithTag(wddm, BC250_WDDM_TAG);
 }
