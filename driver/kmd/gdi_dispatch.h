@@ -47,9 +47,14 @@ typedef struct BC250_GDI_KERNARG {
  * slots; the indices in Op are the slot numbers the caller rewrote them to.
  *
  * This is also where the one per-command colour conversion of a kernel operation happens, because
- * each kernel reads Color in one channel order and only this function knows which: a COLORFILL
- * fills in the destination's own order, while the TRANSPARENTBLT key and the ClearType colours are
- * A8R8G8B8 as the DDI documents every Color field.
+ * each kernel reads Color in one channel order and only this function knows which. Every Color
+ * field of the DDI is in its surface's own format, which the WDK header states for each of them
+ * ("Color in the format of the destination surface" on DXGK_GDIARG_COLORFILL, "Foreground color in
+ * a 32-bit surface format" on DXGK_GDIARG_CLEARTYPEBLEND) and which the header's priority over a
+ * documentation page settles (CLAUDE.md, References). So a COLORFILL's colour is passed through
+ * untouched, because that kernel is bitwise in the destination's own order, while the
+ * TRANSPARENTBLT key and the two ClearType colours are converted to A8R8G8B8 once per command,
+ * because those kernels work per channel and convert their pixels the same way.
  *
  * Returns 0 and writes nothing when the item is not a kernel item, when a slot is out of range or
  * absent, or when an address would wrap. A returned 1 means every field is set.
@@ -74,6 +79,12 @@ unsigned int Bc250EmitGdiCode(unsigned int* Buffer, unsigned int CapacityDwords,
  * block, the register writes and the dispatch. The only thing that varies with the address is the
  * padding, so the answer is one of two numbers. */
 unsigned int Bc250GdiDispatchDwords(unsigned long long BufferVa);
+
+/* The largest answer the two functions above can give, for any address: what one sub-rectangle and
+ * one code block cost in the worst case. gdi_batch.c budgets a whole command buffer with these, so
+ * that the capacity of the call is settled before the first packet is written. */
+unsigned int Bc250GdiCodeDwordsMax(void);
+unsigned int Bc250GdiDispatchDwordsMax(void);
 
 /* One sub-rectangle: the whole dispatch of Item->Kernel over Arg. Code is the address
  * Bc250EmitGdiCode returned for this DMA buffer. Returns the dwords written, or 0 on invalid input

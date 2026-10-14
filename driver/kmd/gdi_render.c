@@ -291,6 +291,39 @@ static void ClassifyWork(const BC250_GDI_OP* Op, unsigned int Stretch, BC250_GDI
     }
 }
 
+/* The inverse of the two engine arms of ClassifyWork: the kernel that performs the same operation.
+ * The ROP checks are the classification's own conditions read back, so a mismatch is a refusal and
+ * not a silently different drawing. */
+int Bc250GdiItemToKernel(const BC250_GDI_OP* Op, BC250_GDI_ITEM* Item)
+{
+    unsigned int kernel;
+    if (!Op || !Item) return 0;
+    if (Item->Work == (unsigned int)Bc250GdiWorkKernel)
+        return Item->Kernel != (unsigned int)Bc250GdiKernelNone &&
+               Item->Kernel < (unsigned int)Bc250GdiKernels;
+    if (Item->Work != (unsigned int)Bc250GdiWorkCopy && Item->Work != (unsigned int)Bc250GdiWorkFill)
+        return 0;
+    switch (Op->OpCode) {
+    case BC250_GDIOP_BITBLT:
+        if (Op->Rop != BC250_GDI_ROP_SRCCOPY) return 0;
+        kernel = (unsigned int)Bc250GdiKernelBitBltRop;
+        break;
+    case BC250_GDIOP_STRETCHBLT:
+        if (Item->Stretch) return 0;            /* a stretching StretchBlt is never an engine item */
+        kernel = (unsigned int)Bc250GdiKernelStretchBlt;
+        break;
+    case BC250_GDIOP_COLORFILL:
+        if (Op->Rop != BC250_GDI_CF_PATCOPY) return 0;
+        kernel = (unsigned int)Bc250GdiKernelColorFillRop;
+        break;
+    default:
+        return 0;
+    }
+    Item->Work = (unsigned int)Bc250GdiWorkKernel;
+    Item->Kernel = kernel;
+    return 1;
+}
+
 int Bc250GdiPlanItem(const BC250_GDI_OP* Op, const BC250_GDI_SURFACE* Surfaces, unsigned int Count,
                      const BC250_GDI_RECT* SubRect, BC250_GDI_ITEM* Item)
 {

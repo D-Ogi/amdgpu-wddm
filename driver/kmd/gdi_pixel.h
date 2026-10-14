@@ -177,9 +177,11 @@ BC250_GDI_FN bc250_u32 Bc250GdiBitBltPixel(bc250_u32 Rop, bc250_u32 Src, bc250_u
 }
 
 /* ---- ColorFill ----------------------------------------------------------------------------------
- * DXGK_GDIROP_COLORFILL. Color arrives in A8R8G8B8 ("the fill color, in 32-bit ARGB"), so for a
- * red-first destination the CALLER converts the colour once per command, not per pixel; this
- * function is then bitwise in the destination's own order, like BitBlt above.
+ * DXGK_GDIROP_COLORFILL. Color arrives in the destination surface's own format ("Color in the
+ * format of the destination surface", DXGK_GDIARG_COLORFILL in the WDK's d3dkmddi.h), so the caller
+ * passes it through untouched and this function is bitwise in that order, like BitBlt above. The
+ * DDI reference page documents the field in A8R8G8B8 instead; the header wins (CLAUDE.md,
+ * References), and the two readings differ only for a red-first destination.
  */
 BC250_GDI_FN bc250_u32 Bc250GdiColorFillPixel(bc250_u32 Rop, bc250_u32 Color, bc250_u32 Dst)
 {

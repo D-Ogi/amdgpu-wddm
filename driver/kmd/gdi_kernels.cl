@@ -87,8 +87,9 @@ static inline uint GdiSrcWord(__global const uchar* src, uint srcPitch,
     GdiSrcWord(src, srcPitch, srcLeft, srcTop, dx0, dy0, x, y, ws, wd, hs, hd)
 
 /* ---- BITBLT with a raster operation -------------------------------------------------------------
- * SRCINVERT, SRCAND and SRCOR, on the surface words as they lie in memory: the three operations
- * are bitwise and need no channel order. Equal extents, so the transform is a translation.
+ * SRCINVERT, SRCAND and SRCOR, and SRCCOPY when a batch's capacity sends a copy this way instead
+ * of the engine path, on the surface words as they lie in memory: the four operations are bitwise
+ * and need no channel order. Equal extents, so the transform is a translation.
  */
 GDI_GROUP kernel void gdi_bitblt_rop(GDI_ARGS)
 {
@@ -98,8 +99,9 @@ GDI_GROUP kernel void gdi_bitblt_rop(GDI_ARGS)
 }
 
 /* ---- COLORFILL with a raster operation ----------------------------------------------------------
- * The six operations other than PATCOPY. Also bitwise, and `color` arrives in the destination's
- * own channel order because gdi_dispatch.c converts it once for the whole command.
+ * The six operations other than PATCOPY, and PATCOPY itself when a batch's capacity sends a fill
+ * this way instead of the engine path. Also bitwise, and `color` is in the destination's own
+ * channel order, which is the order the DDI gives it in.
  */
 GDI_GROUP kernel void gdi_colorfill_rop(GDI_ARGS)
 {
@@ -136,8 +138,9 @@ GDI_GROUP kernel void gdi_alphablend(GDI_ARGS)
 }
 
 /* ---- TRANSPARENTBLT -----------------------------------------------------------------------------
- * One colour key test for each pixel. `color` is the key, in A8R8G8B8 as the DDI documents every
- * Color field, so the source word is converted and the key is not.
+ * One colour key test for each pixel. `color` is the key in A8R8G8B8, which gdi_dispatch.c
+ * converted once for the whole command out of the surface order the DDI gives it in, so the source
+ * word is converted here and the key is not.
  */
 GDI_GROUP kernel void gdi_transparentblt(GDI_ARGS)
 {

@@ -125,6 +125,19 @@ unsigned int Bc250EmitGdiCode(unsigned int* buffer, unsigned int capacity,
     return total;
 }
 
+/* The worst case of the two functions above: the largest padding each can need. The code block is
+ * aligned to BC250_GDI_CODE_ALIGN and the argument block to GDI_KERNARG_ALIGN, and a dword-aligned
+ * address is at most align - 4 bytes short of a boundary. */
+unsigned int Bc250GdiCodeDwordsMax(void)
+{
+    return 1u + (BC250_GDI_CODE_ALIGN / 4u - 1u) + BC250_GDI_CODE_DWORDS;
+}
+
+unsigned int Bc250GdiDispatchDwordsMax(void)
+{
+    return GDI_DISPATCH_FIXED + (GDI_KERNARG_ALIGN / 4u - 1u);
+}
+
 unsigned int Bc250GdiDispatchDwords(unsigned long long bufferVa)
 {
     unsigned int pad, total;
@@ -309,14 +322,16 @@ int Bc250GdiKernarg(const BC250_GDI_OP* op, const BC250_GDI_SURFACE* surfaces,
     arg->Hs = item->Hs;
     arg->Hd = item->Hd;
 
-    /* The colour fields, each in the channel order its own kernel reads them in. This is the one
-     * per-command conversion of DXGK_GDIARG_COLORFILL.Color, which the DDI documents in A8R8G8B8
-     * while the fill writes the destination's own order; the TRANSPARENTBLT key and the ClearType
-     * colours stay A8R8G8B8, because those kernels convert the pixel instead. */
+    /* The colour fields, each in the channel order its own kernel reads them in. A Color of this
+     * DDI is in its surface's own format, which is what the WDK header says of each of them; the
+     * conversion below is therefore TO A8R8G8B8 for the kernels that work per channel, and none at
+     * all for the two that are bitwise in the surface's own order. The header wins over the DDI
+     * reference page, which documents all three fields in A8R8G8B8; the two readings differ only
+     * for a red-first destination, which wddm.c counts for the lab. */
     switch (item->Kernel) {
     case Bc250GdiKernelColorFillRop:
         arg->Rop = op->Rop;
-        arg->Color = Bc250GdiFromArgb(op->Color, dstRedFirst);
+        arg->Color = op->Color;
         break;
     case Bc250GdiKernelBitBltRop:
         arg->Rop = op->Rop;
@@ -326,12 +341,14 @@ int Bc250GdiKernarg(const BC250_GDI_OP* op, const BC250_GDI_SURFACE* surfaces,
         if (op->SourceHasAlpha) arg->Flags |= BC250_GDI_FLAG_SRC_HAS_ALPHA;
         break;
     case Bc250GdiKernelTransparentBlt:
-        arg->Color = op->Color;
+        /* The key is compared with source pixels, and the admission proved that the source and the
+         * destination share one channel order, so the destination's order is the key's too. */
+        arg->Color = Bc250GdiToArgb(op->Color, dstRedFirst);
         if (op->HonorAlpha) arg->Flags |= BC250_GDI_FLAG_HONOR_ALPHA;
         break;
     case Bc250GdiKernelClearTypeBlend:
-        arg->Color = op->Color;
-        arg->Color2 = op->Color2;
+        arg->Color = Bc250GdiToArgb(op->Color, dstRedFirst);
+        arg->Color2 = Bc250GdiToArgb(op->Color2, dstRedFirst);
         if (!Bc250GdiSlotVa(surfaces, vas, count, op->AlphaSurfAllocationIndex, item->AlphaOffset,
                             &arg->Alpha))
             return 0;

@@ -15,7 +15,7 @@
 #define BC250_GDI_CODE_TARGET "amdgcn-amd-amdhsa--gfx1013"
 #define BC250_GDI_CODE_COMPILER "clang version 22.1.8 (https://github.com/msys2/MINGW-packages d34feaaa1d0aff624c870910b6f2589aa40d20de)"
 #define BC250_GDI_CODE_FLAGS "-x cl -cl-std=CL1.2 -nogpulib -Xclang -finclude-default-header --target=amdgcn-amd-amdhsa -mcpu=gfx1013 -O2 -Wall -Werror -Wl,-m,elf64_amdgpu"
-#define BC250_GDI_CODE_SOURCE_SHA256 "b586a5688fd9743ae3c16cdbaf029b91971593067b3304a029e12c77f6b1af09"
+#define BC250_GDI_CODE_SOURCE_SHA256 "6527c56685c794249b1869193822d0d5d862edb6543a341d2e69a33556246aa1"
 #define BC250_GDI_CODE_SHA256 "ca4950d6ae5664dfea3e5d59b450c819327a89a03afb1fbf6411d1566dc1718b"
 
 /* The whole blob, and the alignment every slice inside it needs. */

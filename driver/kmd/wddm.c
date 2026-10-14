@@ -185,15 +185,16 @@ typedef struct _BC250_WDDM_KIND {
 #include "scanout_admit.h"           // M15.14: which allocation SetVidPnSourceAddress may scan out
 #include "gdi_emit.h"                // HLK gap G1: the GDI contract layer and its DMA_DATA stream
 #include "gdi_dispatch.h"            // HLK gap G1 increment 2: the compute dispatch of the six kernels
+#include "gdi_batch.h"               // HLK gap G1 increment 2: the capacity contract of one call
 
 #define BC250_GDI_BIND_SLOTS 4u                  // the most allocation-list entries one command names
 // One pass must hold the whole command buffer, because the guaranteed contract DMA buffer model
 // gives no second one (display/using-the-guaranteed-contract-dma-buffer-model.md; the whole rule is
-// quoted at Bc250WddmRenderGdi below). 256 KiB is 65536 dwords: 9362
-// DMA_DATA rows, about eight full-screen 1080-row blits, or - once a buffer carries the 1280-dword
-// code block of the kernels - about 740 compute dispatches, which is 740 sub-rectangles.
-// GdiRenderOverflow counts the command buffers that still did not fit, and the lab says whether
-// that number is ever nonzero.
+// quoted at gdi_batch.h). 256 KiB is 65536 dwords, and what bounds a call is the number of
+// sub-rectangles and not their area: every one of them costs at most one compute dispatch, which is
+// 87 dwords, so this buffer guarantees 736 of them beside the cache operation and the 1280-dword
+// code block. A call with more is refused whole by Bc250GdiBatchBegin and counted in
+// GdiRenderBatchRefused; GdiRenderPeakSubRects says how close the field ever came.
 #define BC250_GDI_DMA_BYTES (256u * 1024u)
 // The smallest DMA buffer that can hold one row pair beside the cache operation, as a multiple of
 // the ring's eight-dword IB granule. A buffer below it is not translated at all.
@@ -870,7 +871,14 @@ typedef struct _BC250_WDDM {
     volatile LONG64 GdiRenderRefused[Bc250GdiRefusals];
     volatile LONG64 GdiRenderKernels[Bc250GdiKernels];
     volatile LONG64 GdiRenderRefusedCall, GdiRenderMalformed, GdiRenderOutside, GdiRenderEmpty;
-    volatile LONG64 GdiRenderOverflow, GdiRenderKernelRefused, GdiRenderColorFillRedFirst;
+    volatile LONG64 GdiRenderOverflow, GdiRenderItemRefused, GdiRenderColorFillRedFirst;
+    // HLK gap G1: the batch capacity contract of gdi_batch.h. BatchRefused counts the calls whose
+    // sub-rectangles could not all be guaranteed and that were therefore translated to an empty DMA
+    // buffer; Fallback counts the items that gave up the per-row engine path for a dispatch. The two
+    // peaks are statistics and are updated without a lock: a lost sample costs a smaller maximum,
+    // which is why no decision reads them.
+    volatile LONG64 GdiRenderBatchRefused, GdiRenderFallback;
+    volatile LONG64 GdiRenderPeakSubRects, GdiRenderPeakDwords;
 } BC250_WDDM;
 
 // The gate-closed starting value of wddm->NodeCount (WddmStart) and of the DXGK_DRIVERCAPS answer before
@@ -4361,8 +4369,11 @@ void WddmStop(_Inout_ BC250_DEVICE* Device)
         GuardLog("wddm: gdi drops call%lld malformed%lld outside%lld empty%lld",
                  wddm->GdiRenderRefusedCall, wddm->GdiRenderMalformed, wddm->GdiRenderOutside,
                  wddm->GdiRenderEmpty);
-        GuardLog("wddm: gdi overflow%lld kernel-refused%lld red-first%lld", wddm->GdiRenderOverflow,
-                 wddm->GdiRenderKernelRefused, wddm->GdiRenderColorFillRedFirst);
+        GuardLog("wddm: gdi overflow%lld item-refused%lld red-first%lld", wddm->GdiRenderOverflow,
+                 wddm->GdiRenderItemRefused, wddm->GdiRenderColorFillRedFirst);
+        GuardLog("wddm: gdi batch-refused%lld fallback%lld peak rects%lld dwords%lld",
+                 wddm->GdiRenderBatchRefused, wddm->GdiRenderFallback,
+                 wddm->GdiRenderPeakSubRects, wddm->GdiRenderPeakDwords);
         // The class numbers are bc250_gdi_refusal's own order, so a reader needs the header and
         // nothing else. A class that never happened says nothing, which keeps the stop short.
         for (klass = 0; klass < (int)Bc250GdiRefusals; klass++)
@@ -8880,6 +8891,31 @@ static int WddmGdiDisjoint(ULONGLONG Ib, UINT IbBytes, ULONGLONG Va, ULONGLONG B
     return Ib <= Va ? Va - Ib >= IbBytes : Ib - Va >= Bytes;
 }
 
+// The sub-rectangles the whole command buffer holds, which is what gdi_batch.c budgets the call
+// with. The same two helpers as the translation below, in the same order, so this walk stops exactly
+// where that one will; a sub-rectangle the admission later refuses costs nothing but a larger
+// budget. The count saturates rather than wraps, and a saturated count refuses the call.
+static unsigned int WddmGdiSubRectCount(const UCHAR* Buffer, UINT Bytes, UINT* Commands)
+{
+    ULONGLONG total = 0;
+    UINT offset, index, next, subCount, minBytes;
+    const RECT* subRects;
+    BC250_GDI_OP op;
+
+    for (offset = 0, index = 0; offset + (UINT)FIELD_OFFSET(DXGK_RENDERKM_COMMAND, Command) <= Bytes;
+         index++)
+    {
+        const DXGK_RENDERKM_COMMAND* command = (const DXGK_RENDERKM_COMMAND*)(Buffer + offset);
+        if (!WddmGdiCommand(command, &op, &subRects, &subCount, &minBytes)) break;
+        if (!Bc250GdiWalkStep(Bytes, offset, command->CommandSize, minBytes, &next)) break;
+        offset = next;
+        total += subCount;
+        if (total > 0xFFFFFFFFull) { total = 0xFFFFFFFFull; break; }
+    }
+    if (Commands != NULL) *Commands = index;
+    return (unsigned int)total;
+}
+
 static DXGKDDI_RENDERGDI Bc250WddmRenderGdi;
 static NTSTATUS Bc250WddmRenderGdi(_In_ const HANDLE hContext, _Inout_ DXGKARG_RENDERGDI* pRenderGdi)
 {
@@ -8887,9 +8923,10 @@ static NTSTATUS Bc250WddmRenderGdi(_In_ const HANDLE hContext, _Inout_ DXGKARG_R
     BC250_WDDM* wddm = context != NULL ? (BC250_WDDM*)context->Device->Wddm : NULL;
     const UCHAR* buffer;
     unsigned int* out;
+    BC250_GDI_BATCH batch;
     UINT bytes, offset, index, listSize;
-    unsigned int capacity, used = 0;
-    ULONGLONG ib, codeVa = 0;
+    unsigned int capacity, used, planned, visited = 0;
+    ULONGLONG ib;
     LONG64 call;
     int overflow = 0;
 
@@ -8920,11 +8957,26 @@ static NTSTATUS Bc250WddmRenderGdi(_In_ const HANDLE hContext, _Inout_ DXGKARG_R
         return STATUS_SUCCESS;
     }
 
+    // The capacity of the whole call, settled before the first packet. The guaranteed contract gives
+    // one DMA buffer for one command buffer and no second pass, and RenderGdi has no status for a
+    // short buffer, so a call whose sub-rectangles cannot all be guaranteed is translated to an
+    // empty DMA buffer: it draws nothing, rather than drawing a prefix and dropping the rest from a
+    // call that reported success. gdi_batch.h carries the rule and the proof.
+    planned = WddmGdiSubRectCount(buffer, bytes, NULL);
+    if (planned > (unsigned int)wddm->GdiRenderPeakSubRects) wddm->GdiRenderPeakSubRects = planned;
+    if (!Bc250GdiBatchBegin(&batch, out, capacity, ib, planned))
+    {
+        InterlockedIncrement64(&wddm->GdiRenderBatchRefused);
+        GuardLog("wddm: RenderGdi%lld batch subrects%u needs%u dwords of%u", call, planned,
+                 Bc250GdiBatchDwords(planned), capacity);
+        return STATUS_SUCCESS;
+    }
+
     for (offset = 0, index = 0; offset + (UINT)FIELD_OFFSET(DXGK_RENDERKM_COMMAND, Command) <= bytes; index++)
     {
         const DXGK_RENDERKM_COMMAND* command = (const DXGK_RENDERKM_COMMAND*)(buffer + offset);
         BC250_GDI_SURFACE surfaces[BC250_GDI_BIND_SLOTS];
-        ULONGLONG vas[BC250_GDI_BIND_SLOTS], source;
+        ULONGLONG vas[BC250_GDI_BIND_SLOTS];
         BC250_GDI_OP op;
         const RECT* subRects;
         UINT subCount, minBytes, next, slots, sub, start = offset;
@@ -8984,14 +9036,14 @@ static NTSTATUS Bc250WddmRenderGdi(_In_ const HANDLE hContext, _Inout_ DXGKARG_R
             InterlockedIncrement64(&wddm->GdiRenderRefused[Bc250GdiBadSurface]);
             continue;
         }
-        source = Bc250GdiOpHasSource(op.OpCode) ? vas[op.SrcAllocationIndex] : 0;
         if (op.OpCode == BC250_GDIOP_COLORFILL)
         {
-            // The one conversion of Color, once per command: the page documents it in A8R8G8B8 and
-            // the fill writes the destination's own channel order. A red-first destination is
-            // counted, because d3dkmddi.h's trailing comment reads Color as already being in the
-            // destination's format and only that case can tell the two readings apart.
-            pattern = Bc250GdiFromArgb(op.Color, surfaces[op.DstAllocationIndex].RedFirst);
+            // Color is in the destination surface's own format (DXGK_GDIARG_COLORFILL in the WDK's
+            // d3dkmddi.h), so the fill pattern is the dword itself and nothing is converted here.
+            // The DDI reference page documents the field in A8R8G8B8 instead; the header wins, and a
+            // red-first destination - the one case where the two readings differ - is counted so the
+            // lab can say whether it ever happens.
+            pattern = op.Color;
             if (surfaces[op.DstAllocationIndex].RedFirst)
                 InterlockedIncrement64(&wddm->GdiRenderColorFillRedFirst);
         }
@@ -8999,10 +9051,9 @@ static NTSTATUS Bc250WddmRenderGdi(_In_ const HANDLE hContext, _Inout_ DXGKARG_R
         {
             BC250_GDI_ITEM item;
             BC250_GDI_RECT rect;
-            UINT rows = 0;
-            unsigned int written = 0;
             int result, status;
 
+            visited++;
             WddmGdiRect(&subRects[sub], &rect);
             status = Bc250GdiPlanItem(&op, surfaces, slots, &rect, &item);
             if (status != Bc250GdiOk)
@@ -9012,92 +9063,51 @@ static NTSTATUS Bc250WddmRenderGdi(_In_ const HANDLE hContext, _Inout_ DXGKARG_R
                 continue;
             }
             if (item.DstWidth == 0 || item.DstHeight == 0) continue;
-            if (used == 0)
-            {
-                // One cache operation per DMA buffer, before the first copy or dispatch: the CDD
-                // writes its bitmaps with the CPU into cache-coherent aperture memory, and this is
-                // what makes those writes visible to the engine's L2 read. The same sequence the
-                // Present producer emits (gfx_v10_0_emit_mem_sync). Its GCR_CNTL also carries
-                // GLI_INV and GLK_INV, which is what lets a dispatch below fetch its instructions
-                // and its arguments out of this buffer: both were written by the processor after the
-                // last time those two caches were filled.
-                unsigned int got = Bc250EmitGfxAcquire(out, capacity);
-                if (got == 0) { overflow = 1; break; }
-                used = got;
-            }
             if (item.Work == (unsigned int)Bc250GdiWorkKernel)
+                InterlockedIncrement64(&wddm->GdiRenderKernels[item.Kernel <
+                    (unsigned int)Bc250GdiKernels ? item.Kernel : 0u]);
+            // The batch owns the cache operation, the code block, the choice between the per-row
+            // engine path and a dispatch, and the capacity of both. Remaining is how many
+            // sub-rectangles may still be offered, this one included, which is what keeps a tall
+            // rectangle from spending the dwords the ones behind it are owed.
+            result = Bc250GdiBatchItem(&batch, &op, surfaces, vas, slots, &item, pattern,
+                                       planned > visited ? planned - visited + 1u : 1u);
+            if (result == BC250_GDI_BATCH_REFUSED)
             {
-                // One of the six compute kernels of gdi_kernels.cl. The code goes into this buffer
-                // once, behind a NOP, and every dispatch of the buffer runs from it.
-                BC250_GDI_KERNARG arg;
-                unsigned int got;
-                InterlockedIncrement64(&wddm->GdiRenderKernels[item.Kernel < (unsigned int)Bc250GdiKernels ?
-                    item.Kernel : 0u]);
-                if (!Bc250GdiKernarg(&op, surfaces, vas, slots, &item, &arg))
-                {
-                    // The item named a slot this call could not resolve to an address, which the
-                    // admission should have refused; counted and dropped rather than dispatched.
-                    InterlockedIncrement64(&wddm->GdiRenderKernelRefused);
-                    InterlockedIncrement64(&wddm->GdiRenderRefused[Bc250GdiBadSurface]);
-                    continue;
-                }
-                if (codeVa == 0)
-                {
-                    got = Bc250EmitGdiCode(out + used, capacity - used,
-                                           ib + (ULONGLONG)used * 4u, &codeVa);
-                    if (got == 0) { overflow = 1; break; }
-                    used += got;
-                    InterlockedAdd64(&wddm->GdiRenderDwords, (LONG64)got);
-                }
-                if (capacity - used < Bc250GdiDispatchDwords(ib + (ULONGLONG)used * 4u))
-                {
-                    overflow = 1;
-                    break;
-                }
-                got = Bc250EmitGdiDispatch(item.Kernel, &arg, codeVa, out + used, capacity - used,
-                                           ib + (ULONGLONG)used * 4u);
-                if (got == 0)
-                {
-                    InterlockedIncrement64(&wddm->GdiRenderKernelRefused);
-                    InterlockedIncrement64(&wddm->GdiRenderRefused[Bc250GdiBadSurface]);
-                    continue;
-                }
-                used += got;
-                InterlockedIncrement64(&wddm->GdiRenderItems);
-                InterlockedAdd64(&wddm->GdiRenderDwords, (LONG64)got);
-                continue;
-            }
-            result = Bc250EmitGdiItem(&item, source, vas[op.DstAllocationIndex], pattern, 0, &rows,
-                                      out + used, capacity - used, &written);
-            if (result == BC250_GDI_EMIT_NO_SPACE) { overflow = 1; break; }
-            if (result != BC250_GDI_EMIT_DONE)
-            {
-                // MORE cannot happen here: one pass always holds the tallest sub-rectangle the
-                // reported extents allow, and NO_SPACE above is the only other partial answer.
+                // An admitted item the emitters could not describe: a slot that resolved to no
+                // address, or a geometry the row emitter calls invalid. Counted and drawn by
+                // nothing, which is what the admission should have decided earlier.
+                InterlockedIncrement64(&wddm->GdiRenderItemRefused);
                 InterlockedIncrement64(&wddm->GdiRenderRefused[Bc250GdiBadSurface]);
                 continue;
             }
-            used += written;
+            if (result == BC250_GDI_BATCH_NO_SPACE)
+            {
+                // Unreachable after Bc250GdiBatchBegin said yes (the proof is in gdi_batch.c). It is
+                // still handled, because a command stream that stops is better than one that runs
+                // past the end of its buffer, and this counter is how the lab would tell us.
+                overflow = 1;
+                break;
+            }
             InterlockedIncrement64(&wddm->GdiRenderItems);
-            InterlockedAdd64(&wddm->GdiRenderDwords, (LONG64)written);
         }
         if (overflow) break;
     }
     if (overflow) InterlockedIncrement64(&wddm->GdiRenderOverflow);
+    used = Bc250GdiBatchEnd(&batch);
+    InterlockedAdd64(&wddm->GdiRenderDwords, (LONG64)batch.Dwords);
+    InterlockedAdd64(&wddm->GdiRenderFallback, (LONG64)batch.Fallbacks);
+    if ((LONG64)used > wddm->GdiRenderPeakDwords) wddm->GdiRenderPeakDwords = (LONG64)used;
 
     if (used != 0)
     {
-        // The GFX ring takes a 32-byte aligned IB, so the tail is padded with the CP's own NOP, the
-        // same word the Present IB pads with. The padding fits by construction: the acquire took
-        // eight dwords and every item was admitted against the remainder of a capacity that the
-        // entry check held at a multiple of eight above the acquire.
-        while ((used & 7u) != 0 && used < capacity) out[used++] = Bc250GfxCopyNop();
         KeMemoryBarrier();
         pRenderGdi->pDmaBuffer = (UCHAR*)pRenderGdi->pDmaBuffer + (SIZE_T)used * 4u;
     }
     if (call <= BC250_WDDM_LOG_CALLS || overflow)
-        GuardLog("wddm: RenderGdi%lld ctx%p commands%u bytes%u dwords%u list%u overflow%u",
-                 call, (void*)context, index, bytes, used, listSize, (UINT)overflow);
+        GuardLog("wddm: RenderGdi%lld ctx%p commands%u bytes%u dwords%u rects%u fall%u over%u",
+                 call, (void*)context, index, bytes, used, planned, batch.Fallbacks,
+                 (UINT)overflow);
     return STATUS_SUCCESS;
 }
 

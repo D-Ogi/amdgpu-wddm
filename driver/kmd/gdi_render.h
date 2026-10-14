@@ -77,13 +77,14 @@ typedef struct BC250_GDI_OP {
     unsigned int TmpSurfAllocationIndex, GammaSurfAllocationIndex, AlphaSurfAllocationIndex;
     unsigned int NumSubRects;
     unsigned int Rop, Rop3;                     /* BITBLT and COLORFILL */
-    /* A8R8G8B8, as the DDI reference documents all three Color fields ("in 32-bit ARGB unsigned
-     * pixel format (as defined by the D3DDDIFMT_A8R8G8B8 value)"). One contradiction is recorded
-     * and not resolved here: d3dkmddi.h's trailing comment on DXGK_GDIARG_COLORFILL.Color says
-     * "Color in the format of the destination surface" instead. The two readings differ only for a
-     * red-first destination (A8B8G8R8, X8B8G8R8), which no CDD surface seen so far is; the caller
-     * follows the page, converts Color once per command into the destination's channel order, and
-     * counts the red-first case so that the lab can say whether it ever happens. */
+    /* The surface's own format, which is what the WDK header says of each of these fields: "Color
+     * in the format of the destination surface" on DXGK_GDIARG_COLORFILL and "Foreground color in
+     * a 32-bit surface format" on the two ClearType colours. The DDI reference page documents all
+     * three in A8R8G8B8 instead ("in 32-bit ARGB unsigned pixel format"); a header of the WDK the
+     * build uses wins over a page (CLAUDE.md, References), so this driver reads them as the header
+     * does. The two readings differ only for a red-first destination (A8B8G8R8, X8B8G8R8), which no
+     * CDD surface seen so far is, and wddm.c counts that case so the lab can say whether it ever
+     * happens. Who converts what is gdi_dispatch.c's Bc250GdiKernarg. */
     unsigned int Color, Color2;
     unsigned int Gamma;                         /* row index, or BC250_GDI_INVALID_GAMMA */
     int DstToAlphaOffsetX, DstToAlphaOffsetY;
@@ -209,6 +210,22 @@ int Bc250GdiAdmitOp(const BC250_GDI_OP* Op, const BC250_GDI_SURFACE* Surfaces, u
 int Bc250GdiPlanItem(const BC250_GDI_OP* Op, const BC250_GDI_SURFACE* Surfaces, unsigned int Count,
                      const BC250_GDI_RECT* SubRect, BC250_GDI_ITEM* Item);
 
+/* Turn an engine item into the kernel item of the same operation, for the one caller that needs a
+ * bounded cost: gdi_batch.c, when the rows of a Bc250GdiWorkCopy or Bc250GdiWorkFill item would
+ * spend the capacity the sub-rectangles behind it are owed. The arithmetic is the same operation,
+ * so the choice is an optimisation and never a change of what is drawn:
+ *
+ *   - a BITBLT copy is SRCCOPY, which gdi_bitblt_rop performs ("Dst = Src");
+ *   - a 1:1 STRETCHBLT copy is the point resample of gdi_stretchblt at Ws == Wd and Hs == Hd;
+ *   - a COLORFILL fill is PATCOPY, which gdi_colorfill_rop performs ("Dst = Color").
+ *
+ * A same-surface command cannot reach here (the No*SameBitmap* caps are set and the admission
+ * refuses one anyway), so the unordered work items of a dispatch cannot race a copy's own rows.
+ * Returns 0 for anything else, leaving Item alone. An item that already is a kernel item is left
+ * as it is and answers 1.
+ */
+int Bc250GdiItemToKernel(const BC250_GDI_OP* Op, BC250_GDI_ITEM* Item);
+
 /* The contract's destination-to-source transform, exactly. Xd and Yd are absolute destination
  * coordinates. Both are total: with Ws==Wd they reduce to the translation the BITBLT Remarks give. */
 int Bc250GdiSourceX(const BC250_GDI_ITEM* Item, int Xd);
@@ -227,6 +244,13 @@ int Bc250GdiWalkStep(unsigned int BufferBytes, unsigned int Offset, unsigned int
  * bits are the index of the command being translated and the low 16 bits the number of
  * sub-rectangles of it already done. A command with more than 65535 sub-rectangles, or a buffer
  * with more than 65535 commands, cannot be resumed and is refused rather than silently truncated.
+ *
+ * NOTHING CALLS THIS TODAY, and that is deliberate. DXGKARG_RENDERGDI carries the field, but the
+ * only status that asks the operating system for another DMA buffer,
+ * STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER, is not in DxgkDdiRenderGdi's return table, where every
+ * value but STATUS_SUCCESS bugchecks. gdi_batch.h guarantees one call in one buffer instead. The
+ * packing stays because it is the resume state a multipass experiment would need, and it is
+ * host-tested either way.
  */
 #define BC250_GDI_PASS_MAX 0xFFFFu
 unsigned int Bc250GdiPackPass(unsigned int Command, unsigned int SubRect);

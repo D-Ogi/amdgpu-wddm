@@ -32,12 +32,14 @@ unsigned int Bc250EmitGdiFillSpan(unsigned int* Buffer, unsigned int CapacityDwo
  * DestinationBase are the allocations' GPU virtual addresses; Item->SrcOffset and Item->DstOffset
  * are added to them.
  *
- * Pattern is the fill dword already in the destination surface's own channel order, which is the
- * caller's one conversion of DXGK_GDIARG_COLORFILL.Color: the DDI documents Color in A8R8G8B8 and
- * a red-first destination needs it swapped once per command, never per row.
+ * Pattern is the fill dword in the destination surface's own channel order, which is the order
+ * DXGK_GDIARG_COLORFILL.Color already arrives in ("Color in the format of the destination surface",
+ * the WDK's d3dkmddi.h), so the caller converts nothing and this file repeats the dword as it is.
  *
- * Offset and Next are row ordinals, so a command that does not fit one DMA buffer resumes at a row
- * boundary and the DDI's MultipassOffset can carry it. Written is the dwords emitted.
+ * Offset and Next are row ordinals. The one caller is gdi_batch.c, which passes 0 and reads MORE as
+ * "these rows do not fit the dwords the sub-rectangles behind this one are owed" and dispatches the
+ * item instead; the ordinals are what a resumable caller would need and are host-tested as such.
+ * Written is the dwords emitted.
  */
 #define BC250_GDI_EMIT_INVALID  0
 #define BC250_GDI_EMIT_DONE     1
