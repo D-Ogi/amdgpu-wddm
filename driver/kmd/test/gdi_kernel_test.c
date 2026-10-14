@@ -32,11 +32,16 @@
 #include <stdio.h>
 #include <string.h>
 #include "../gdi_dispatch.h"
+#include "../gdi_batch.h"
+#include "../gdi_emit.h"
+#include "../gfx_copy.h"
 #include "../gdi_kernels.generated.h"
 #include "../../amdgpu-import/nvd.h"
 #include "gdi_kernel_run.h"
 
 static int g_failures, g_checks;
+/* Set around a case whose planned item is an engine item and must be run through its kernel. */
+static int g_forceKernel;
 
 #define CHECK(cond) \
     do { g_checks++; if (!(cond)) { fprintf(stderr, "FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond); g_failures++; } } while (0)
@@ -250,7 +255,10 @@ static void ReferenceKernel(const BC250_GDI_OP* op, const BC250_GDI_SURFACE* sur
                 out = Bc250GdiBitBltPixel(op->Rop, src, dst);
                 break;
             case Bc250GdiKernelColorFillRop:
-                out = Bc250GdiColorFillPixel(op->Rop, Bc250GdiFromArgb(op->Color, redFirst), dst);
+                /* The WDK header's reading of Color, written here and not taken from the driver:
+                 * the field is already in the destination surface's format, so a bitwise fill uses
+                 * the dword as it arrived whatever the channel order is. */
+                out = Bc250GdiColorFillPixel(op->Rop, op->Color, dst);
                 break;
             case Bc250GdiKernelStretchBlt:
                 out = src;
@@ -263,9 +271,12 @@ static void ReferenceKernel(const BC250_GDI_OP* op, const BC250_GDI_SURFACE* sur
                     redFirst);
                 break;
             case Bc250GdiKernelTransparentBlt:
+                /* The key is in the surface's format too, and this model works per channel, so the
+                 * key is what the source word becomes when both are read as A8R8G8B8. */
                 out = Bc250GdiFromArgb(
                     Bc250GdiTransparentPixel(Bc250GdiToArgb(src, redFirst),
-                                             Bc250GdiToArgb(dst, redFirst), op->Color,
+                                             Bc250GdiToArgb(dst, redFirst),
+                                             Bc250GdiToArgb(op->Color, redFirst),
                                              op->HonorAlpha),
                     redFirst);
                 break;
@@ -280,7 +291,9 @@ static void ReferenceKernel(const BC250_GDI_OP* op, const BC250_GDI_SURFACE* sur
                 out = Bc250GdiFromArgb(
                     Bc250GdiClearTypePixel(Bc250GdiToArgb(dst, redFirst),
                                            Bc250GdiToArgb(a, alphaRedFirst),
-                                           op->Color, op->Color2, item->GammaValid,
+                                           Bc250GdiToArgb(op->Color, redFirst),
+                                           Bc250GdiToArgb(op->Color2, redFirst),
+                                           item->GammaValid,
                                            gamma, gamma + BC250_GDI_GAMMA_ENTRIES),
                     redFirst);
                 break;
@@ -323,6 +336,8 @@ static void RunCase(const char* what, const BC250_GDI_OP* op, const BC250_GDI_SU
         g_checks++; g_failures++;
         return;
     }
+    /* An engine item taken through its kernel, which is the path gdi_batch.c falls back to. */
+    if (g_forceKernel) CHECK_EQ(Bc250GdiItemToKernel(op, &item), 1);
     if (item.Work != (unsigned int)Bc250GdiWorkKernel || item.DstWidth == 0u) {
         fprintf(stderr, "FAIL %s: not a kernel item (work %u, %ux%u)\n", what, item.Work,
                 item.DstWidth, item.DstHeight);
@@ -660,6 +675,327 @@ static void TestClearTypeBlend(void)
 }
 
 /* ================================================================================================
+ * which channel order a Color field is in
+ * ============================================================================================== */
+
+/* The reference model above encodes the WDK header's reading of the three Color fields, and the
+ * cases so far would pass under either reading as long as the driver and the model agreed. These
+ * do not: each one states what the destination must hold afterwards, in bytes, for a destination
+ * whose channel order is the one that tells the two readings apart.
+ */
+static void TestColourOrder(void)
+{
+    BC250_GDI_SURFACE s[4];
+    LAYOUT layout;
+    unsigned int redFirst;
+    /* Distinct in red and in blue, so a swap cannot hide: red 0xC0, blue 0x12. */
+    const unsigned int colour = 0x80C03412u;
+
+    for (redFirst = 0; redFirst <= 1u; redFirst++) {
+        BC250_GDI_OP op = Op(BC250_GDIOP_COLORFILL, Rect(0, 0, 0, 0), Rect(4, 4, 12, 12));
+        BC250_GDI_RECT sub = op.DstRect;
+        Scene(s, &layout, redFirst, 0);
+        op.Rop = BC250_GDI_CF_PATCOPY;
+        op.Color = colour;
+        /* PATCOPY is an engine item, so take the fill through the kernel the batch falls back to. */
+        g_forceKernel = 1;
+        RunCase("colorfill patcopy colour order", &op, s, 4, &layout, &sub);
+        g_forceKernel = 0;
+        /* "Color in the format of the destination surface": the dword lands as it arrived, for
+         * both channel orders, and never the red-blue exchange of it. */
+        CHECK_EQ(Load32(g_memory + layout.At[0] + 4u * s[0].Pitch + 4u * 4u), colour);
+        CHECK(Load32(g_memory + layout.At[0] + 4u * s[0].Pitch + 4u * 4u) !=
+              Bc250GdiSwapRb(colour));
+    }
+
+    /* The TransparentBlt key is compared with source pixels, so it is in the surface order too: on
+     * a red-first pair the key that matches is the source word itself and not its exchange. */
+    for (redFirst = 0; redFirst <= 1u; redFirst++) {
+        BC250_GDI_OP op = Op(BC250_GDIOP_TRANSPARENTBLT, Rect(0, 0, 8, 8), Rect(0, 0, 8, 8));
+        BC250_GDI_RECT sub = op.DstRect;
+        unsigned int raw;
+        Scene(s, &layout, redFirst, 0);
+        SeedMemory();
+        raw = Load32(g_memory + layout.At[1]) | 0xFF000000u;   /* the source pixel at (0,0) */
+        op.HonorAlpha = 1u;
+        /* The key as the surface holds the pixel. Under the other reading the kernel would compare
+         * an A8R8G8B8 source word with a red-first key, miss, and copy the pixel the model keeps,
+         * so the arena comparison inside RunCase is what decides between the two readings. */
+        op.Color = raw;
+        RunCase("transparentblt key order", &op, s, 4, &layout, &sub);
+        /* And the exchange of that key, which must not match. */
+        op.Color = Bc250GdiSwapRb(raw);
+        RunCase("transparentblt key order, exchanged", &op, s, 4, &layout, &sub);
+    }
+}
+
+/* ================================================================================================
+ * the capacity contract of a whole call (gdi_batch.h)
+ * ============================================================================================== */
+
+#define BATCH_BYTES (256u * 1024u)                    /* what wddm.c asks dxgkrnl for */
+#define BATCH_DWORDS (BATCH_BYTES / 4u)
+
+static unsigned int g_batch[BATCH_DWORDS];
+static unsigned int g_scratch[BATCH_DWORDS];
+
+/* A tall, narrow pair of surfaces: the shape of the counterexample that increment 1's per-item
+ * capacity lost. Columns pixels wide, one dword a pixel, no pitch padding. */
+static void TallScene(BC250_GDI_SURFACE* s, LAYOUT* layout, unsigned int columns,
+                      unsigned int height, unsigned int redFirst)
+{
+    unsigned int i;
+    memset(s, 0, 4u * sizeof(*s));
+    for (i = 0; i < 2u; i++) {
+        s[i].Width = columns;
+        s[i].Height = height;
+        s[i].Bpp = 4u;
+        s[i].Pitch = 4u * columns;
+        s[i].Bytes = (unsigned long long)s[i].Pitch * height;
+        s[i].Type = BC250_GDISURFACE_TEXTURE;
+        s[i].RedFirst = redFirst;
+        s[i].Present = 1u;
+    }
+    layout->At[0] = DST_AT;
+    layout->At[1] = SRC_AT;
+    layout->At[2] = ALPHA_AT;
+    layout->At[3] = GAMMA_AT;
+}
+
+/* What the DMA_DATA rows of an engine item do, applied to the arena: this is the engine's side of
+ * the comparison, so the kernel the batch falls back to has to agree with it pixel for pixel. */
+static void ApplyRows(const BC250_GDI_ITEM* item, const LAYOUT* layout, const BC250_GDI_OP* op,
+                      unsigned int pattern)
+{
+    unsigned int row, i;
+    for (row = 0; row < item->DstHeight; row++) {
+        unsigned char* d = g_memory + layout->At[op->DstAllocationIndex] + item->DstOffset +
+            (unsigned long long)row * item->DstPitch;
+        if (item->Work == (unsigned int)Bc250GdiWorkFill) {
+            for (i = 0; i < item->RowBytes / 4u; i++) Store32(d + 4u * i, pattern);
+        } else {
+            const unsigned char* src = g_memory + layout->At[op->SrcAllocationIndex] +
+                item->SrcOffset + (unsigned long long)row * item->SrcPitch;
+            memcpy(d, src, item->RowBytes);
+        }
+    }
+}
+
+/* Decode and run the dispatch at Buffer, which may be preceded by the code block the first time.
+ * Returns the dwords consumed, or 0 on a decode failure. */
+static unsigned int RunDispatchSpan(const unsigned int* buffer, unsigned int dwords,
+                                    unsigned long long bufferVa, unsigned int kernel,
+                                    unsigned long long* codeVa)
+{
+    DECODED decoded;
+    unsigned int at = 0, code, dispatch, gx, gy, wx, wy, unrun = 0;
+    unsigned char* dst;
+
+    if (*codeVa == 0) {
+        code = Bc250GdiCodeDwords(bufferVa);
+        if (code == 0u || code > dwords) return 0;
+        if (!DecodeCode(buffer, code, bufferVa, codeVa)) return 0;
+        at = code;
+    }
+    dispatch = Bc250GdiDispatchDwords(bufferVa + (unsigned long long)at * 4u);
+    if (dispatch == 0u || at + dispatch > dwords) return 0;
+    if (!DecodeDispatch(buffer + at, dispatch, bufferVa + (unsigned long long)at * 4u, &decoded))
+        return 0;
+    /* The routing itself: the program the dispatch names must be the kernel of this operation. */
+    if (decoded.ProgramVa != *codeVa + (unsigned long long)g_Bc250GdiCodeKernels[kernel].Offset * 4u)
+        return 0;
+    dst = ArenaAt(((unsigned long long)decoded.Block[BC250_GDI_ARG_DST + 1u] << 32) |
+                  decoded.Block[BC250_GDI_ARG_DST], 4u);
+    if (!dst) return 0;
+    for (gy = 0; gy < decoded.Groups[1]; gy++)
+        for (gx = 0; gx < decoded.Groups[0]; gx++)
+            for (wy = 0; wy < BC250_GDI_GROUP_Y; wy++)
+                for (wx = 0; wx < BC250_GDI_GROUP_X; wx++) {
+                    const unsigned char* src = 0;
+                    unsigned long long va;
+                    g_Bc250GdiWorkgroupX = gx;
+                    g_Bc250GdiWorkgroupY = gy;
+                    g_Bc250GdiWorkitemX = wx;
+                    g_Bc250GdiWorkitemY = wy;
+                    va = ((unsigned long long)decoded.Block[BC250_GDI_ARG_SRC + 1u] << 32) |
+                        decoded.Block[BC250_GDI_ARG_SRC];
+                    if (va) src = ArenaAt(va, 4u);
+                    if (!Bc250GdiRunKernel(kernel, dst, src, 0, 0,
+                                           &decoded.Block[BC250_GDI_ARG_DSTPITCH]))
+                        unrun++;
+                }
+    return unrun == 0u ? at + dispatch : 0u;
+}
+
+/* One batch: `columns` sub-rectangles of one column each, over a surface `height` rows tall, into a
+ * DMA buffer of `capacity` dwords. Every item must be drawn, by whichever path the capacity allows,
+ * and the arena must end up exactly as the reference model says. */
+static void RunBatch(const char* what, unsigned int opcode, unsigned int rop, unsigned int colour,
+                     unsigned int columns, unsigned int height, unsigned int capacity,
+                     unsigned int expectFallbacks)
+{
+    BC250_GDI_SURFACE s[4];
+    BC250_GDI_BATCH batch;
+    LAYOUT layout;
+    BC250_GDI_OP op;
+    BC250_GDI_ITEM items[8];
+    unsigned long long vas[4], codeVa = 0, ib = IB_VA;
+    unsigned int results[8], starts[8], ends[8], i, used, pattern = 0;
+
+    if (columns > 8u) { CHECK(0); return; }
+    TallScene(s, &layout, columns, height, 0);
+    for (i = 0; i < 4u; i++) vas[i] = ARENA_VA + layout.At[i];
+    op = Op(opcode, Rect(0, 0, (int)columns, (int)height), Rect(0, 0, (int)columns, (int)height));
+    op.Rop = rop;
+    op.Color = colour;
+    op.NumSubRects = columns;
+    if (opcode == BC250_GDIOP_COLORFILL) pattern = colour;
+
+    SeedMemory();
+    /* The reference: every column, through the kernel model, which is independent of the path the
+     * batch will choose. */
+    for (i = 0; i < columns; i++) {
+        BC250_GDI_RECT sub = Rect((int)i, 0, (int)i + 1, (int)height);
+        BC250_GDI_ITEM ref;
+        CHECK_EQ(Bc250GdiPlanItem(&op, s, 4, &sub, &ref), Bc250GdiOk);
+        items[i] = ref;
+        CHECK(Bc250GdiItemToKernel(&op, &ref) == 1);
+        ReferenceKernel(&op, s, &ref, &layout);
+    }
+
+    CHECK_EQ(Bc250GdiBatchBegin(&batch, g_batch, capacity, ib, columns), 1);
+    for (i = 0; i < columns; i++) {
+        /* The first item pays for the cache operation, so its own packets start behind it. */
+        starts[i] = batch.Used == 0u ? BC250_GFX_ACQUIRE_DWORDS : batch.Used;
+        results[i] = (unsigned int)Bc250GdiBatchItem(&batch, &op, s, vas, 4, &items[i], pattern,
+                                                     columns - i);
+        ends[i] = batch.Used;
+        /* The contract: after Begin said yes, no admitted sub-rectangle may be dropped. */
+        CHECK(results[i] == BC250_GDI_BATCH_ROWS || results[i] == BC250_GDI_BATCH_DISPATCH);
+        if (results[i] != BC250_GDI_BATCH_ROWS && results[i] != BC250_GDI_BATCH_DISPATCH) return;
+        CHECK(ends[i] > starts[i]);
+    }
+    used = Bc250GdiBatchEnd(&batch);
+    CHECK(used <= capacity);
+    CHECK_EQ(used % BC250_GDI_RING_GRANULE, 0u);
+    CHECK_EQ(batch.Items, columns);
+    CHECK_EQ(batch.Fallbacks, expectFallbacks);
+
+    /* The cache operation is first, and it is the production one. */
+    CHECK_EQ(Bc250EmitGfxAcquire(g_scratch, capacity), BC250_GFX_ACQUIRE_DWORDS);
+    CHECK_EQ(memcmp(g_batch, g_scratch, BC250_GFX_ACQUIRE_DWORDS * 4u), 0);
+
+    /* Each item's span, in order: either the production rows, byte for byte, or a dispatch of the
+     * kernel of this operation, which is decoded and run. */
+    for (i = 0; i < columns; i++) {
+        unsigned int span = ends[i] - starts[i];
+        unsigned int start = starts[i];
+        if (results[i] == BC250_GDI_BATCH_ROWS) {
+            unsigned int rows = 0, written = 0;
+            unsigned long long source = Bc250GdiOpHasSource(op.OpCode) ? vas[1] : 0;
+            CHECK_EQ(Bc250EmitGdiItem(&items[i], source, vas[0], pattern, 0u, &rows, g_scratch,
+                                      BATCH_DWORDS, &written), BC250_GDI_EMIT_DONE);
+            CHECK_EQ(written, span);
+            if (written == span) CHECK_EQ(memcmp(g_batch + start, g_scratch, span * 4u), 0);
+            ApplyRows(&items[i], &layout, &op, pattern);
+        } else {
+            BC250_GDI_ITEM asKernel = items[i];
+            CHECK_EQ(Bc250GdiItemToKernel(&op, &asKernel), 1);
+            CHECK_EQ(RunDispatchSpan(g_batch + start, span,
+                                     ib + (unsigned long long)start * 4u, asKernel.Kernel,
+                                     &codeVa), span);
+        }
+    }
+
+    if (memcmp(g_memory, g_expected, MEM_BYTES) != 0) {
+        unsigned int off;
+        for (off = 0; off < MEM_BYTES; off++)
+            if (g_memory[off] != g_expected[off]) break;
+        fprintf(stderr, "FAIL %s: first difference at 0x%X (got 0x%02X, want 0x%02X)\n",
+                what, off, g_memory[off], g_expected[off]);
+        g_failures++;
+    }
+    g_checks++;
+}
+
+static void TestBatchCapacity(void)
+{
+    BC250_GDI_SURFACE s[4];
+    BC250_GDI_BATCH batch;
+    LAYOUT layout;
+    unsigned int i;
+
+    /* The arithmetic of the budget, and the two bounds it is built from. */
+    CHECK(Bc250GdiDispatchDwordsMax() >= Bc250GdiDispatchDwords(IB_VA));
+    CHECK(Bc250GdiDispatchDwordsMax() >= Bc250GdiDispatchDwords(IB_VA + 4u));
+    CHECK(Bc250GdiCodeDwordsMax() >= Bc250GdiCodeDwords(IB_VA));
+    CHECK(Bc250GdiCodeDwordsMax() >= Bc250GdiCodeDwords(IB_VA + 4u));
+    CHECK_EQ(Bc250GdiBatchDwords(0), BC250_GFX_ACQUIRE_DWORDS + Bc250GdiCodeDwordsMax() +
+             BC250_GDI_RING_GRANULE - 1u);
+    CHECK_EQ(Bc250GdiBatchDwords(1u) - Bc250GdiBatchDwords(0), Bc250GdiDispatchDwordsMax());
+    /* A count that cannot be budgeted at all refuses the call rather than wrapping. */
+    CHECK_EQ(Bc250GdiBatchDwords(0xFFFFFFFFu), 0u);
+
+    /* Begin refuses a batch it cannot guarantee, and writes nothing. */
+    TallScene(s, &layout, 2u, 16u, 0);
+    memset(g_batch, 0xA5, sizeof(g_batch));
+    memset(g_scratch, 0xA5, sizeof(g_scratch));
+    CHECK_EQ(Bc250GdiBatchBegin(&batch, g_batch, BATCH_DWORDS,
+                                IB_VA, 0xFFFFFFFFu), 0);
+    CHECK_EQ(Bc250GdiBatchBegin(&batch, g_batch, BATCH_DWORDS, IB_VA,
+                                BATCH_DWORDS / Bc250GdiDispatchDwordsMax()), 0);
+    CHECK_EQ(memcmp(g_batch, g_scratch, sizeof(g_batch)), 0);
+    /* And the largest batch it does guarantee is the number the design page quotes for 256 KiB. */
+    for (i = BATCH_DWORDS / Bc250GdiDispatchDwordsMax(); i > 0u; i--)
+        if (Bc250GdiBatchDwords(i) <= BATCH_DWORDS) break;
+    CHECK_EQ(i, 792u);
+    CHECK_EQ(Bc250GdiBatchBegin(&batch, g_batch, BATCH_DWORDS, IB_VA, i), 1);
+    CHECK_EQ(Bc250GdiBatchBegin(&batch, g_batch, BATCH_DWORDS, IB_VA, i + 1u), 0);
+    /* A buffer address that is not dword aligned, and no buffer at all. */
+    CHECK_EQ(Bc250GdiBatchBegin(&batch, g_batch, BATCH_DWORDS, IB_VA + 1u, 1u), 0);
+    CHECK_EQ(Bc250GdiBatchBegin(&batch, 0, BATCH_DWORDS, IB_VA, 1u), 0);
+
+    /* The counterexample of the review, in the buffer size the driver asks for: two columns of
+     * 8192 rows. The first takes 57344 dwords of rows, which leaves the second nowhere near enough
+     * for its own, so it is dispatched instead of being lost. */
+    RunBatch("colorfill 2x8192, the lost column", BC250_GDIOP_COLORFILL, BC250_GDI_CF_PATCOPY,
+             0x80C03412u, 2u, 8192u, BATCH_DWORDS, 1u);
+    /* The same two columns in a buffer a granule short of what the engine path for the first and
+     * the bounded path for the second would need together. This is where rule 1 alone is not
+     * enough: the first column must give up its rows although they would fit, because the second
+     * column's dispatch has to fit as well. Without the reserve of rule 2 the first column takes
+     * the rows and the second has nowhere to go, which is the defect itself. */
+    {
+        unsigned int rowCost = Bc250GdiFillDwords(4u) * 8192u;
+        unsigned long long behindRows = IB_VA +
+            (unsigned long long)(BC250_GFX_ACQUIRE_DWORDS + rowCost) * 4u;
+        unsigned int bounded = Bc250GdiCodeDwords(behindRows);
+        unsigned int tight;
+        bounded += Bc250GdiDispatchDwords(behindRows + (unsigned long long)bounded * 4u);
+        tight = BC250_GFX_ACQUIRE_DWORDS + rowCost + bounded - 1u;
+        CHECK(Bc250GdiBatchDwords(2u) <= tight);
+        RunBatch("colorfill 2x8192, one dword short", BC250_GDIOP_COLORFILL, BC250_GDI_CF_PATCOPY,
+                 0x80C03412u, 2u, 8192u, tight, 2u);
+    }
+    /* The review's positive control: at 512 rows both columns fit the engine path. */
+    RunBatch("colorfill 2x512, both on the engine", BC250_GDIOP_COLORFILL, BC250_GDI_CF_PATCOPY,
+             0x80C03412u, 2u, 512u, BATCH_DWORDS, 0u);
+    /* The same for a copy and for a 1:1 stretch, which are the other two engine items. */
+    RunBatch("bitblt srccopy 2x8192", BC250_GDIOP_BITBLT, BC250_GDI_ROP_SRCCOPY, 0,
+             2u, 8192u, BATCH_DWORDS, 1u);
+    RunBatch("bitblt srccopy 2x512", BC250_GDIOP_BITBLT, BC250_GDI_ROP_SRCCOPY, 0,
+             2u, 512u, BATCH_DWORDS, 0u);
+    RunBatch("stretchblt 1:1 2x8192", BC250_GDIOP_STRETCHBLT, 0, 0, 2u, 8192u, BATCH_DWORDS, 1u);
+    /* Four columns of 4096 rows: the first two fit the engine path and the rest do not, so a batch
+     * mixes the two paths and still draws everything. */
+    RunBatch("colorfill 4x4096, mixed paths", BC250_GDIOP_COLORFILL, BC250_GDI_CF_PATCOPY,
+             0x2011AA33u, 4u, 4096u, BATCH_DWORDS, 2u);
+    /* A kernel operation needs no fallback and no engine path at all. */
+    RunBatch("bitblt srcand 2x8192, kernels only", BC250_GDIOP_BITBLT, BC250_GDI_ROP_SRCAND, 0,
+             2u, 8192u, BATCH_DWORDS, 0u);
+}
+
+/* ================================================================================================
  * what the emitters refuse, and what the image says about itself
  * ============================================================================================== */
 
@@ -777,6 +1113,8 @@ int main(void)
     TestAlphaBlend();
     TestTransparentBlt();
     TestClearTypeBlend();
+    TestColourOrder();
+    TestBatchCapacity();
     printf("gdi_kernel_test: %d checks, %d failures\n", g_checks, g_failures);
     return g_failures ? 1 : 0;
 }

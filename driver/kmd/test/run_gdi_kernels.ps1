@@ -60,6 +60,7 @@ Write-Host 'compile and link (host, no WDK header)'
 Invoke-Tool (Join-Path $bin 'cl.exe') (@('/nologo', '/TC', '/W4', '/WX', '/Od', '/Zi') + $incUser +
     @("/Fo$obj\", "/Fd$obj\cl.pdb", "/Fe$Out\gdi_kernel_test.exe") +
     @((Join-Path $kmd 'gdi_render.c'), (Join-Path $kmd 'gdi_dispatch.c'),
+      (Join-Path $kmd 'gdi_batch.c'), (Join-Path $kmd 'gdi_emit.c'), (Join-Path $kmd 'gfx_copy.c'),
       (Join-Path $here 'gdi_kernel_run.c'), (Join-Path $here 'gdi_kernel_test.c')) +
     @("/link", "/LIBPATH:$sdklib\ucrt\x64", "/LIBPATH:$sdklib\um\x64", "/LIBPATH:$($msvc.FullName)\lib\x64"))
 
@@ -71,7 +72,9 @@ Write-Host 'compile-check (kernel flags, same source, no link)'
 $kernFlags = @('/nologo', '/c', '/TC', '/kernel', '/GS-', '/W4', '/WX', '/O2', '/Zi', '/Zp8', '/GF', '/Gy',
     '/D_AMD64_', '/DAMD64', '/D_WIN64', '/DWINNT=1', '/DNTDDI_VERSION=0x0A00000C', '/D_WIN32_WINNT=0x0A00', '/DNDEBUG',
     "/I$wdk\Include\$KitVersion\km", "/I$wdk\Include\$KitVersion\km\crt", "/I$kmd", "/Fo$obj\kernel-", "/Fd$obj\clkernel.pdb")
-Invoke-Tool (Join-Path $bin 'cl.exe') ($kernFlags + @((Join-Path $kmd 'gdi_dispatch.c')))
+foreach ($one in @('gdi_dispatch.c', 'gdi_batch.c')) {
+    Invoke-Tool (Join-Path $bin 'cl.exe') ($kernFlags + @((Join-Path $kmd $one)))
+}
 
 Write-Host ''
 Write-Host "gdi_kernel_test.exe exit code $code"
