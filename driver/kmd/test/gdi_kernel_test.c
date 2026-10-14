@@ -1434,130 +1434,309 @@ static unsigned int DmaCallDwords(unsigned long long windowVa, unsigned int capa
     return Bc250GdiBatchEnd(&batch);
 }
 
-/* The tracker of rule 3: which DMA buffer a call lies in, and how many dwords of ours are ahead of
- * it. Review r4 showed that the earlier answer - the lowest address seen since the last submission
- * of the context - is not an identity: two independent buffers of one context made the second call
- * believe two million dwords lay ahead of it, and a submission of one buffer cleared the state of
- * the other. The cases below are the ones that review asked for, and the two refusals are what a
- * window nobody can place now gets instead of an assumption. */
+static void TestDmaMapLegacy(void);
+
+/* The tracker of rule 3: which DMA buffer a call lies in, how many dwords of ours are ahead of it,
+ * and who may record into its slot. Two reviews shaped these cases. Review r4 showed that the
+ * lowest address seen since the last submission is not an identity: two independent buffers of one
+ * context made the second call believe two million dwords lay ahead of it. Review r5 showed that
+ * adjacency is not an identity either, and that a reservation nobody held was no reservation: an
+ * empty buffer that began exactly where the first one ended was taken for a continuation of it, and
+ * a claim that had not published yet could have its slot taken by another call and then lose its
+ * record. A buffer is now its extent, the address and the size the DDI gives for it; a claim holds
+ * its slot until it publishes or gives it back; and the generation of the slot is what a
+ * publication is checked against. Both of the review's counterexamples are below, with its own
+ * numbers, and the refusals are what a window nobody can place gets instead of an assumption. */
 static void TestDmaMap(void)
 {
     const unsigned long long a = 0x0000000900000000ull;     /* page aligned, as a DMA buffer is */
-    const unsigned long long b = a + 8ull * 1024ull * 1024ull;
+    const unsigned long long far = a + 8ull * 1024ull * 1024ull;
+    const unsigned int extent = Bc250GdiContextDmaBytes(BC250_GDI_CMDBUF_BOUND);
     BC250_GDI_DMA_MAP map;
-    unsigned int ahead = 0xFFFFFFFFu, used, second, i;
+    BC250_GDI_DMA_CLAIM claim, other, stale;
+    unsigned int used, i, capacity, claimed = 0xFFFFFFFFu;
 
-    /* An independent buffer is not a continuation of another. This is the review's counterexample:
-     * each buffer carries the same small paint, no submission between them, and the second call
-     * must see an empty buffer and not the distance between two allocations. */
+    /* The default DMA buffer of a GDI context, which is what the review's probe used. */
+    CHECK(extent != 0u);
+    CHECK_EQ(extent, 3989504u);
+
+    /* Review r5, section 1: an empty buffer allocated immediately behind a full one. The first
+     * buffer is filled to its own size, and then the second is offered with its own full extent.
+     * It is its own buffer, nothing of ours is ahead of it, and the worst case of the ordinary
+     * producer's 64 KiB command buffer fits in it. Under the earlier map this window was an append
+     * of 997376 dwords and that whole paint was refused. */
     memset(&map, 0, sizeof(map));
-    CHECK_EQ(Bc250GdiDmaClaim(&map, a, 4096u, &ahead), BC250_GDI_DMA_FRESH);
-    CHECK_EQ(ahead, 0u);
+    CHECK_EQ(Bc250GdiDmaClaim(&map, a, extent, 4096u, &claim), BC250_GDI_DMA_FRESH);
+    CHECK_EQ(claim.Ahead, 0u);
+    CHECK_EQ(claim.Room, extent / 4u);
+    CHECK_EQ(Bc250GdiDmaPublish(&map, &claim, extent / 4u), 1);
+    /* The distant control of the same review, which the earlier map also answered correctly. */
+    CHECK_EQ(Bc250GdiDmaClaim(&map, far, extent, 4096u, &other), BC250_GDI_DMA_FRESH);
+    CHECK_EQ(other.Ahead, 0u);
+    Bc250GdiDmaAbort(&map, &other);
+    CHECK_EQ(Bc250GdiDmaClaim(&map, a + extent, extent, 4096u, &other), BC250_GDI_DMA_FRESH);
+    CHECK_EQ(other.Ahead, 0u);
+    CHECK_EQ(other.Room, extent / 4u);
+    capacity = Bc250GdiCallCapacity(other.Room, other.Ahead);
+    CHECK(Bc250GdiCallDwords(65536u) != 0u);
+    CHECK(Bc250GdiCallDwords(65536u) <= capacity);
+    /* The first buffer still holds its own length, which the second buffer did not change. */
+    Bc250GdiDmaAbort(&map, &other);
+    CHECK_EQ(Bc250GdiDmaClaim(&map, a + extent - 64u, 64u, 4096u, &other), BC250_GDI_DMA_UNKNOWN);
+
+    /* A continuation inside one buffer, which is the one case an append may be: the window is
+     * inside the extent and exactly where our output ended. The room is what the buffer has left
+     * there, under either reading of DmaSize - the window's own length, or the whole buffer. */
+    memset(&map, 0, sizeof(map));
+    CHECK_EQ(Bc250GdiDmaClaim(&map, a, extent, 4096u, &claim), BC250_GDI_DMA_FRESH);
+    used = DmaCallDwords(a, BATCH_CAP_DWORDS, 8u);
+    CHECK(used != 0u);
+    CHECK_EQ(Bc250GdiDmaPublish(&map, &claim, used), 1);
+    CHECK_EQ(Bc250GdiDmaClaim(&map, a + (unsigned long long)used * 4u, extent - used * 4u, 4096u,
+                              &claim), BC250_GDI_DMA_APPEND);
+    CHECK_EQ(claim.Ahead, used);
+    CHECK_EQ(claim.Room, extent / 4u - used);
+    Bc250GdiDmaAbort(&map, &claim);
+    CHECK_EQ(Bc250GdiDmaClaim(&map, a + (unsigned long long)used * 4u, extent, 4096u, &claim),
+             BC250_GDI_DMA_APPEND);
+    CHECK_EQ(claim.Ahead, used);
+    CHECK_EQ(claim.Room, extent / 4u - used);
+    CHECK_EQ(Bc250GdiDmaPublish(&map, &claim, claim.Room), 1);
+    CHECK_EQ((unsigned int)PACKET3_INDIRECT_BUFFER__IB_SIZE(extent / 4u), extent / 4u);
+
+    /* Review r5, section 2: the interleaving that lost a record. A claims its buffer and has not
+     * published. Every other slot may be used while it decides, and its own may not: the review's
+     * eighth buffer took A's slot, A's record was lost, and the wrapper still published its
+     * dwords. Now the context refuses the ninth buffer instead, and A's publication goes through. */
+    memset(&map, 0, sizeof(map));
+    CHECK_EQ(Bc250GdiDmaClaim(&map, a, extent, 4096u, &claim), BC250_GDI_DMA_FRESH);
+    for (i = 1; i < BC250_GDI_DMA_SLOTS; i++) {
+        unsigned long long va = a + (unsigned long long)i * 0x800000ull;
+        CHECK_EQ(Bc250GdiDmaClaim(&map, va, extent, 4096u, &other), BC250_GDI_DMA_FRESH);
+        CHECK_EQ(Bc250GdiDmaPublish(&map, &other, 8u), 1);
+    }
+    CHECK_EQ(Bc250GdiDmaClaim(&map, a + 0x10000000ull, extent, 4096u, &other), BC250_GDI_DMA_FULL);
+    CHECK_EQ(other.Slot, BC250_GDI_DMA_SLOTS);
+    CHECK_EQ(Bc250GdiDmaPublish(&map, &claim, 1024u), 1);
+    /* The reservation is over, so the same claim cannot publish twice. */
+    CHECK_EQ(Bc250GdiDmaPublish(&map, &claim, 1024u), 0);
+    /* And the buffer A was given now holds exactly what A published. */
+    CHECK_EQ(Bc250GdiDmaClaim(&map, a + 4096ull, extent - 4096u, 4096u, &other),
+             BC250_GDI_DMA_APPEND);
+    CHECK_EQ(other.Ahead, 1024u);
+    Bc250GdiDmaAbort(&map, &other);
+
+    /* Review r5, section 2 again: a claim from before a release and a reclaim of the same address.
+     * The generation of the slot is what the publication is checked against, so the claim of the
+     * call that is gone cannot add its dwords to the length of the call that holds the slot now. */
+    memset(&map, 0, sizeof(map));
+    CHECK_EQ(Bc250GdiDmaClaim(&map, a, extent, 4096u, &stale), BC250_GDI_DMA_FRESH);
+    /* A submission that names the buffer of a call in flight leaves the slot alone and says so. */
+    CHECK_EQ(Bc250GdiDmaSubmitted(&map, a, extent, &claimed), 0u);
+    CHECK_EQ(claimed, 1u);
+    Bc250GdiDmaAbort(&map, &stale);
+    CHECK_EQ(Bc250GdiDmaSubmitted(&map, a, extent, &claimed), 0u);
+    CHECK_EQ(claimed, 0u);
+    CHECK_EQ(Bc250GdiDmaClaim(&map, a, extent, 4096u, &claim), BC250_GDI_DMA_FRESH);
+    CHECK_EQ(Bc250GdiDmaPublish(&map, &stale, 1024u), 0);
+    CHECK_EQ(Bc250GdiDmaPublish(&map, &claim, 1024u), 1);
+    CHECK_EQ(Bc250GdiDmaClaim(&map, a + 4096ull, extent - 4096u, 4096u, &other),
+             BC250_GDI_DMA_APPEND);
+    CHECK_EQ(other.Ahead, 1024u);
+    Bc250GdiDmaAbort(&map, &other);
+
+    /* What a publication refuses. A caller refused here has published nothing, which is why the
+     * wrapper drops the whole call and leaves the DDI's own pointer where it was. */
+    memset(&map, 0, sizeof(map));
+    CHECK_EQ(Bc250GdiDmaClaim(&map, a, extent, 4096u, &claim), BC250_GDI_DMA_FRESH);
+    CHECK_EQ(Bc250GdiDmaPublish(&map, &claim, claim.Room + 1u), 0);
+    CHECK_EQ(Bc250GdiDmaPublish(&map, &claim, 0u), 0);
+    CHECK_EQ(Bc250GdiDmaPublish(NULL, &claim, 8u), 0);
+    CHECK_EQ(Bc250GdiDmaPublish(&map, NULL, 8u), 0);
+    {
+        BC250_GDI_DMA_CLAIM none;
+        none.Slot = BC250_GDI_DMA_SLOTS;
+        none.Generation = 0u;
+        none.Ahead = 0u;
+        none.Room = 8u;
+        CHECK_EQ(Bc250GdiDmaPublish(&map, &none, 8u), 0);
+        Bc250GdiDmaAbort(&map, &none);
+        Bc250GdiDmaAbort(NULL, &claim);
+        Bc250GdiDmaAbort(&map, NULL);
+    }
+    CHECK_EQ(Bc250GdiDmaPublish(&map, &claim, 8u), 1);
+
+    /* The hardware ceiling, in a buffer large enough to pass it: the buffer has bytes left and one
+     * indirect buffer has not, which is the ib-full drop and not an overflow of the packet. */
+    memset(&map, 0, sizeof(map));
+    CHECK_EQ(Bc250GdiDmaClaim(&map, a, BC250_GDI_DMA_BYTES_MAX, 4096u, &claim),
+             BC250_GDI_DMA_FRESH);
+    CHECK(claim.Room > BC250_GDI_IB_DWORDS_MAX);
+    CHECK_EQ(Bc250GdiDmaPublish(&map, &claim, BC250_GDI_IB_DWORDS_MAX), 1);
+    CHECK_EQ(Bc250GdiDmaClaim(&map, a + (unsigned long long)BC250_GDI_IB_DWORDS_MAX * 4u,
+                              BC250_GDI_DMA_BYTES_MAX - BC250_GDI_IB_DWORDS_MAX * 4u, 4096u,
+                              &claim), BC250_GDI_DMA_APPEND);
+    CHECK_EQ(claim.Ahead, BC250_GDI_IB_DWORDS_MAX);
+    CHECK(claim.Room != 0u);
+    CHECK_EQ(Bc250GdiCallCapacity(claim.Room, claim.Ahead), 0u);
+    CHECK_EQ(Bc250GdiDmaPublish(&map, &claim, 8u), 0);
+    {
+        unsigned int full = BC250_GDI_IB_DWORDS_MAX;
+        CHECK_EQ((unsigned int)PACKET3_INDIRECT_BUFFER__IB_SIZE(full), full);
+    }
+
+    /* The windows nobody can place. Each one drops its call instead of assuming the buffer is
+     * empty, and each one leaves the map as it was. */
+    memset(&map, 0, sizeof(map));
+    CHECK_EQ(Bc250GdiDmaClaim(&map, a, extent, 4096u, &claim), BC250_GDI_DMA_FRESH);
+    CHECK_EQ(Bc250GdiDmaPublish(&map, &claim, 64u), 1);
+    CHECK_EQ(Bc250GdiDmaClaim(&map, a + 32u, extent - 32u, 4096u, &other), BC250_GDI_DMA_UNKNOWN);
+    CHECK_EQ(other.Slot, BC250_GDI_DMA_SLOTS);
+    /* The buffer offered again from its start while we hold output in it. The record is the whole
+     * account of that output, so a window that contradicts it refuses the call: the earlier map
+     * cleared the record here, which would have let the next call fill the buffer twice. */
+    CHECK_EQ(Bc250GdiDmaClaim(&map, a, extent, 4096u, &other), BC250_GDI_DMA_UNKNOWN);
+    /* A window that is no buffer start and lies in no buffer of ours. */
+    CHECK_EQ(Bc250GdiDmaClaim(&map, far + 32u, extent, 4096u, &other), BC250_GDI_DMA_UNKNOWN);
+    /* A window that begins before a buffer of ours and reaches into it. */
+    CHECK_EQ(Bc250GdiDmaClaim(&map, a - 4096ull, extent, 4096u, &other), BC250_GDI_DMA_UNKNOWN);
+    /* No length, no window, no map, no claim. */
+    CHECK_EQ(Bc250GdiDmaClaim(&map, far, 0u, 4096u, &other), BC250_GDI_DMA_UNKNOWN);
+    CHECK_EQ(Bc250GdiDmaClaim(&map, 0ull, extent, 4096u, &other), BC250_GDI_DMA_UNKNOWN);
+    CHECK_EQ(Bc250GdiDmaClaim(NULL, a, extent, 4096u, &other), BC250_GDI_DMA_UNKNOWN);
+    CHECK_EQ(Bc250GdiDmaClaim(&map, a, extent, 4096u, NULL), BC250_GDI_DMA_UNKNOWN);
+    /* The buffer is still exactly as it was before all of them. */
+    CHECK_EQ(Bc250GdiDmaClaim(&map, a + 256ull, extent - 256u, 4096u, &other),
+             BC250_GDI_DMA_APPEND);
+    CHECK_EQ(other.Ahead, 64u);
+    /* A call that gives its claim back drew nothing, and the output of the calls before it stays. */
+    Bc250GdiDmaAbort(&map, &other);
+    CHECK_EQ(Bc250GdiDmaClaim(&map, a + 256ull, extent - 256u, 4096u, &other),
+             BC250_GDI_DMA_APPEND);
+    CHECK_EQ(other.Ahead, 64u);
+    Bc250GdiDmaAbort(&map, &other);
+
+    /* Submissions release their own buffer and nothing else, and a buffer a submission did not
+     * name keeps its length. */
+    memset(&map, 0, sizeof(map));
+    CHECK_EQ(Bc250GdiDmaClaim(&map, a, extent, 4096u, &claim), BC250_GDI_DMA_FRESH);
+    CHECK_EQ(Bc250GdiDmaPublish(&map, &claim, 16u), 1);
+    CHECK_EQ(Bc250GdiDmaClaim(&map, far, extent, 4096u, &other), BC250_GDI_DMA_FRESH);
+    CHECK_EQ(Bc250GdiDmaPublish(&map, &other, 16u), 1);
+    CHECK_EQ(Bc250GdiDmaSubmitted(&map, a, extent, &claimed), 1u);
+    CHECK_EQ(claimed, 0u);
+    CHECK_EQ(Bc250GdiDmaClaim(&map, far + 64u, extent - 64u, 4096u, &other), BC250_GDI_DMA_APPEND);
+    CHECK_EQ(other.Ahead, 16u);
+    Bc250GdiDmaAbort(&map, &other);
+    CHECK_EQ(Bc250GdiDmaClaim(&map, a, extent, 4096u, &other), BC250_GDI_DMA_FRESH);
+    Bc250GdiDmaAbort(&map, &other);
+    CHECK_EQ(Bc250GdiDmaSubmitted(&map, a + 0x40000000ull, 4096u, &claimed), 0u);
+    CHECK_EQ(Bc250GdiDmaSubmitted(&map, far, 0u, &claimed), 1u);
+    CHECK_EQ(Bc250GdiDmaSubmitted(&map, far, 0u, &claimed), 0u);
+    CHECK_EQ(Bc250GdiDmaSubmitted(NULL, far, 0u, &claimed), 0u);
+    CHECK_EQ(Bc250GdiDmaSubmitted(&map, 0ull, 4096u, &claimed), 0u);
+    TestDmaMapLegacy();
+}
+
+/* The cases of review r4, kept as they were written and carried over to the claim: two independent
+ * buffers of one context, each with its own length, and a submission that releases one of them. */
+static void TestDmaMapLegacy(void)
+{
+    const unsigned long long a = 0x0000000900000000ull;     /* page aligned, as a DMA buffer is */
+    const unsigned long long b = a + 8ull * 1024ull * 1024ull;
+    const unsigned int extent = 0x100000u;                  /* 1 MiB, as the size of one buffer */
+    BC250_GDI_DMA_MAP map;
+    BC250_GDI_DMA_CLAIM first, next;
+    unsigned int used, second, i, claimed = 0xFFFFFFFFu;
+
+    /* Two independent buffers of one context, each with its own length: the r4 counterexample.
+     * Each buffer carries the same small paint, with no submission between them. */
+    memset(&map, 0, sizeof(map));
+    CHECK_EQ(Bc250GdiDmaClaim(&map, a, extent, 4096u, &first), BC250_GDI_DMA_FRESH);
+    CHECK_EQ(first.Ahead, 0u);
     used = DmaCallDwords(a, 4096u, 1u);
     CHECK(used != 0u);
-    CHECK_EQ(Bc250GdiDmaWrote(&map, a, 0u, used), 1);
-    CHECK_EQ(Bc250GdiDmaClaim(&map, b, 4096u, &ahead), BC250_GDI_DMA_FRESH);
-    CHECK_EQ(ahead, 0u);
+    CHECK_EQ(Bc250GdiDmaPublish(&map, &first, used), 1);
+    CHECK_EQ(Bc250GdiDmaClaim(&map, b, extent, 4096u, &next), BC250_GDI_DMA_FRESH);
+    CHECK_EQ(next.Ahead, 0u);
     second = DmaCallDwords(b, 4096u, 1u);
     CHECK_EQ(second, used);
-    CHECK_EQ(Bc250GdiDmaWrote(&map, b, 0u, second), 1);
-    /* Both buffers are tracked at once, and each knows its own length. */
-    CHECK_EQ(Bc250GdiDmaClaim(&map, a + (unsigned long long)used * 4u, 4096u, &ahead),
-             BC250_GDI_DMA_APPEND);
-    CHECK_EQ(ahead, used);
-    CHECK_EQ(Bc250GdiDmaClaim(&map, b + (unsigned long long)second * 4u, 4096u, &ahead),
-             BC250_GDI_DMA_APPEND);
-    CHECK_EQ(ahead, second);
+    CHECK_EQ(Bc250GdiDmaPublish(&map, &next, second), 1);
+    /* Both are held at once, and each knows its own length. */
+    CHECK_EQ(Bc250GdiDmaClaim(&map, a + (unsigned long long)used * 4u, extent - used * 4u, 4096u,
+                              &first), BC250_GDI_DMA_APPEND);
+    CHECK_EQ(first.Ahead, used);
+    Bc250GdiDmaAbort(&map, &first);
+    CHECK_EQ(Bc250GdiDmaClaim(&map, b + (unsigned long long)second * 4u, extent - second * 4u,
+                              4096u, &next), BC250_GDI_DMA_APPEND);
+    CHECK_EQ(next.Ahead, second);
+    Bc250GdiDmaAbort(&map, &next);
 
     /* A submission of A releases A and leaves B exactly as it was. */
-    CHECK_EQ(Bc250GdiDmaSubmitted(&map, a, used * 4u), 1u);
-    CHECK_EQ(Bc250GdiDmaClaim(&map, b + (unsigned long long)second * 4u, 4096u, &ahead),
-             BC250_GDI_DMA_APPEND);
-    CHECK_EQ(ahead, second);
-    /* And A is a fresh buffer again, with nothing of ours ahead of its next call. */
-    CHECK_EQ(Bc250GdiDmaClaim(&map, a, 4096u, &ahead), BC250_GDI_DMA_FRESH);
-    CHECK_EQ(ahead, 0u);
+    CHECK_EQ(Bc250GdiDmaSubmitted(&map, a, extent, &claimed), 1u);
+    CHECK_EQ(claimed, 0u);
+    CHECK_EQ(Bc250GdiDmaClaim(&map, b + (unsigned long long)second * 4u, extent - second * 4u,
+                              4096u, &next), BC250_GDI_DMA_APPEND);
+    CHECK_EQ(next.Ahead, second);
+    Bc250GdiDmaAbort(&map, &next);
+    /* And A is a buffer this context holds nothing in again. */
+    CHECK_EQ(Bc250GdiDmaClaim(&map, a, extent, 4096u, &first), BC250_GDI_DMA_FRESH);
+    CHECK_EQ(first.Ahead, 0u);
+    Bc250GdiDmaAbort(&map, &first);
     /* A submission that names neither buffer releases nothing. */
-    CHECK_EQ(Bc250GdiDmaSubmitted(&map, a + 0x40000000ull, 4096u), 0u);
-    CHECK_EQ(Bc250GdiDmaClaim(&map, b + (unsigned long long)second * 4u, 4096u, &ahead),
-             BC250_GDI_DMA_APPEND);
-    CHECK_EQ(ahead, second);
+    CHECK_EQ(Bc250GdiDmaSubmitted(&map, a + 0x40000000ull, 4096u, &claimed), 0u);
+    CHECK_EQ(Bc250GdiDmaClaim(&map, b + (unsigned long long)second * 4u, extent - second * 4u,
+                              4096u, &next), BC250_GDI_DMA_APPEND);
+    CHECK_EQ(next.Ahead, second);
+    Bc250GdiDmaAbort(&map, &next);
 
-    /* Appends inside one buffer, at the offsets the emitter actually leaves. Three calls in a row,
-     * each one placed by the length of the ones before it, and the capacity of each taken from
-     * rule 3: the sum stays inside what one indirect buffer can carry. */
+    /* Three calls in a row inside one buffer, at the offsets the emitter actually leaves: each is
+     * placed by the length of the ones before it, each is given its capacity by rule 3, and the
+     * sum stays inside what one indirect buffer can carry. */
     memset(&map, 0, sizeof(map));
     {
         unsigned int total = 0, call;
         for (call = 0; call < 3u; call++) {
             unsigned int capacity;
-            CHECK_EQ(Bc250GdiDmaClaim(&map, a + (unsigned long long)total * 4u, 4096u, &ahead),
+            CHECK_EQ(Bc250GdiDmaClaim(&map, a + (unsigned long long)total * 4u,
+                                      extent - total * 4u, 4096u, &first),
                      call == 0u ? BC250_GDI_DMA_FRESH : BC250_GDI_DMA_APPEND);
-            CHECK_EQ(ahead, total);
-            capacity = Bc250GdiCallCapacity(BATCH_CAP_DWORDS - total, ahead);
+            CHECK_EQ(first.Ahead, total);
+            capacity = Bc250GdiCallCapacity(BATCH_CAP_DWORDS < first.Room ? BATCH_CAP_DWORDS
+                                                                         : first.Room, first.Ahead);
             used = DmaCallDwords(a + (unsigned long long)total * 4u, capacity, 8u);
             CHECK(used != 0u);
             CHECK(used <= capacity);
-            CHECK_EQ(Bc250GdiDmaWrote(&map, a + (unsigned long long)total * 4u, ahead, used), 1);
+            CHECK_EQ(Bc250GdiDmaPublish(&map, &first, used), 1);
             total += used;
             CHECK(total <= BC250_GDI_IB_DWORDS_MAX);
             CHECK_EQ((unsigned int)PACKET3_INDIRECT_BUFFER__IB_SIZE(total), total);
         }
-        /* A buffer filled to the encodable length leaves the next call no room, which is the
-         * ib-full drop and not an overflow of the packet. */
-        memset(&map, 0, sizeof(map));
-        CHECK_EQ(Bc250GdiDmaClaim(&map, a, 4096u, &ahead), BC250_GDI_DMA_FRESH);
-        CHECK_EQ(Bc250GdiDmaWrote(&map, a, 0u, BC250_GDI_IB_DWORDS_MAX), 1);
-        CHECK_EQ(Bc250GdiDmaClaim(&map, a + (unsigned long long)BC250_GDI_IB_DWORDS_MAX * 4u, 4096u,
-                                  &ahead), BC250_GDI_DMA_APPEND);
-        CHECK_EQ(ahead, BC250_GDI_IB_DWORDS_MAX);
-        CHECK_EQ(Bc250GdiCallCapacity(4096u, ahead), 0u);
-        /* And a record that would pass that length is not kept. */
-        CHECK_EQ(Bc250GdiDmaWrote(&map, a + (unsigned long long)BC250_GDI_IB_DWORDS_MAX * 4u,
-                                  BC250_GDI_IB_DWORDS_MAX, 8u), 0);
     }
 
-    /* The same buffer offered again from its start is a fill that starts again, whether or not this
-     * driver saw the submission that emptied it. */
-    memset(&map, 0, sizeof(map));
-    CHECK_EQ(Bc250GdiDmaClaim(&map, a, 4096u, &ahead), BC250_GDI_DMA_FRESH);
-    CHECK_EQ(Bc250GdiDmaWrote(&map, a, 0u, 4096u), 1);
-    CHECK_EQ(Bc250GdiDmaClaim(&map, a, 4096u, &ahead), BC250_GDI_DMA_RESTART);
-    CHECK_EQ(ahead, 0u);
-    /* And the length it had before the restart is gone: the window where its old output ended is
-     * not an append any more, because that output is not in the buffer this driver is writing now.
-     * A page boundary there would be the start of another buffer, so the window off the boundary is
-     * the one this test can ask about. */
-    CHECK_EQ(Bc250GdiDmaClaim(&map, a + 4096ull * 4u + 32u, 4096u, &ahead), BC250_GDI_DMA_UNKNOWN);
-
-    /* A window nobody can place: inside output of ours, and off the page boundary the DDI gives the
-     * start of a DMA buffer. Both drop the call instead of assuming the buffer is empty. */
-    memset(&map, 0, sizeof(map));
-    CHECK_EQ(Bc250GdiDmaClaim(&map, a, 4096u, &ahead), BC250_GDI_DMA_FRESH);
-    CHECK_EQ(Bc250GdiDmaWrote(&map, a, 0u, 64u), 1);
-    CHECK_EQ(Bc250GdiDmaClaim(&map, a + 32u, 4096u, &ahead), BC250_GDI_DMA_UNKNOWN);
-    CHECK_EQ(ahead, 0u);
-    CHECK_EQ(Bc250GdiDmaClaim(&map, b + 32u, 4096u, &ahead), BC250_GDI_DMA_UNKNOWN);
-    CHECK_EQ(Bc250GdiDmaClaim(&map, 0ull, 4096u, &ahead), BC250_GDI_DMA_UNKNOWN);
-    CHECK_EQ(Bc250GdiDmaClaim(NULL, a, 4096u, &ahead), BC250_GDI_DMA_UNKNOWN);
-    CHECK_EQ(Bc250GdiDmaClaim(&map, a, 4096u, NULL), BC250_GDI_DMA_UNKNOWN);
-
-    /* Every slot holding output of ours, and one more buffer: the call is dropped rather than a
-     * buffer this driver has written into being forgotten. A slot that holds no output of ours is
-     * free for another buffer, so a context that is merely offered many buffers never runs out. */
+    /* Eight buffers allocated back to back, which is the adjacency case over and over: each is its
+     * own buffer with its own length, and the ninth is refused rather than one of them being
+     * forgotten. A submission that covers them all releases them all, and a context merely offered
+     * many buffers never runs out, because a call that writes nothing gives its slot back. */
     memset(&map, 0, sizeof(map));
     for (i = 0; i < BC250_GDI_DMA_SLOTS; i++) {
         unsigned long long va = a + (unsigned long long)i * 0x10000ull;
-        CHECK_EQ(Bc250GdiDmaClaim(&map, va, 4096u, &ahead), BC250_GDI_DMA_FRESH);
-        CHECK_EQ(Bc250GdiDmaWrote(&map, va, 0u, 8u), 1);
+        CHECK_EQ(Bc250GdiDmaClaim(&map, va, 0x10000u, 4096u, &first), BC250_GDI_DMA_FRESH);
+        CHECK_EQ(first.Ahead, 0u);
+        CHECK_EQ(Bc250GdiDmaPublish(&map, &first, 8u), 1);
     }
-    CHECK_EQ(Bc250GdiDmaClaim(&map, b, 4096u, &ahead), BC250_GDI_DMA_FULL);
-    CHECK_EQ(Bc250GdiDmaSubmitted(&map, a, 0x10000u * BC250_GDI_DMA_SLOTS), BC250_GDI_DMA_SLOTS);
-    CHECK_EQ(Bc250GdiDmaClaim(&map, b, 4096u, &ahead), BC250_GDI_DMA_FRESH);
+    CHECK_EQ(Bc250GdiDmaClaim(&map, b, extent, 4096u, &next), BC250_GDI_DMA_FULL);
+    CHECK_EQ(Bc250GdiDmaSubmitted(&map, a, 0x10000u * BC250_GDI_DMA_SLOTS, &claimed),
+             BC250_GDI_DMA_SLOTS);
+    CHECK_EQ(claimed, 0u);
+    CHECK_EQ(Bc250GdiDmaClaim(&map, b, extent, 4096u, &next), BC250_GDI_DMA_FRESH);
+    Bc250GdiDmaAbort(&map, &next);
     memset(&map, 0, sizeof(map));
-    for (i = 0; i < BC250_GDI_DMA_SLOTS + 4u; i++)
-        CHECK_EQ(Bc250GdiDmaClaim(&map, a + (unsigned long long)i * 0x10000ull, 4096u, &ahead),
-                 BC250_GDI_DMA_FRESH);
+    for (i = 0; i < BC250_GDI_DMA_SLOTS + 4u; i++) {
+        CHECK_EQ(Bc250GdiDmaClaim(&map, a + (unsigned long long)i * 0x10000ull, 0x10000u, 4096u,
+                                  &first), BC250_GDI_DMA_FRESH);
+        Bc250GdiDmaAbort(&map, &first);
+    }
 }
 
 /* ================================================================================================

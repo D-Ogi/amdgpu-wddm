@@ -73,93 +73,146 @@ unsigned int Bc250GdiCallCapacity(unsigned int dmaDwords, unsigned int aheadDwor
     return dmaDwords < room ? dmaDwords : room;
 }
 
-/* The DMA buffers of one GDI context (rule 3 of gdi_batch.h). Three plain functions over the
+/* The DMA buffers of one GDI context (rule 3 of gdi_batch.h). Four plain functions over the
  * structure, so the host test drives every ordering of calls and submissions the DDI does not
  * exclude. The caller serialises them; nothing here reads a clock, a lock or an address order.
  *
- * A slot is free when Base is 0. A slot with Base set and Dwords == 0 is a buffer this context was
- * offered and wrote nothing into, which is a place to start from and not output to protect, so
- * another buffer may take that slot. A slot with Dwords != 0 is output of ours that no submission
- * has carried away yet, and nothing takes that slot until Bc250GdiDmaSubmitted releases it. */
-int Bc250GdiDmaClaim(BC250_GDI_DMA_MAP* map, unsigned long long windowVa, unsigned int pageBytes,
-                     unsigned int* ahead)
+ * A buffer is its extent, Base and Bytes, which is what the DDI gives for it. A slot is free when
+ * Base is 0. A slot with Claimed set belongs to a call in flight: its length is not decided, so no
+ * other claim and no submission may take it. Every other taken slot holds output of ours that no
+ * submission has carried away, and it is released only by the address range of a submission. */
+static int Bc250GdiDmaTake(BC250_GDI_DMA_MAP* map, unsigned int index, unsigned long long windowVa,
+                           unsigned int windowBytes, BC250_GDI_DMA_CLAIM* claim)
 {
-    unsigned int i, empty = BC250_GDI_DMA_SLOTS, spare = BC250_GDI_DMA_SLOTS;
+    BC250_GDI_DMA_SLOT* slot = &map->Slots[index];
 
-    if (ahead) *ahead = 0u;
-    if (!map || !ahead || windowVa == 0 || pageBytes == 0u) return BC250_GDI_DMA_UNKNOWN;
+    slot->Base = windowVa;
+    slot->Bytes = windowBytes;
+    slot->Dwords = 0u;
+    slot->Generation++;
+    slot->Claimed = 1u;
+    claim->Slot = index;
+    claim->Generation = slot->Generation;
+    claim->Ahead = 0u;
+    claim->Room = windowBytes / 4u;
+    return BC250_GDI_DMA_FRESH;
+}
+
+int Bc250GdiDmaClaim(BC250_GDI_DMA_MAP* map, unsigned long long windowVa, unsigned int windowBytes,
+                     unsigned int pageBytes, BC250_GDI_DMA_CLAIM* claim)
+{
+    unsigned int i, empty = BC250_GDI_DMA_SLOTS;
+
+    if (claim)
+    {
+        claim->Slot = BC250_GDI_DMA_SLOTS;
+        claim->Generation = 0u;
+        claim->Ahead = 0u;
+        claim->Room = 0u;
+    }
+    if (!map || !claim || windowVa == 0 || windowBytes < 4u || pageBytes == 0u)
+        return BC250_GDI_DMA_UNKNOWN;
 
     for (i = 0; i < BC250_GDI_DMA_SLOTS; i++)
     {
         BC250_GDI_DMA_SLOT* slot = &map->Slots[i];
-        unsigned long long end;
+        unsigned long long end, windowEnd;
+        unsigned int offset;
 
         if (slot->Base == 0)
         {
             if (empty == BC250_GDI_DMA_SLOTS) empty = i;
             continue;
         }
-        if (slot->Base == windowVa)
+        end = slot->Base + (unsigned long long)slot->Bytes;
+        windowEnd = windowVa + (unsigned long long)windowBytes;
+        if (windowVa < slot->Base)
         {
-            /* The same buffer from its start again. Whatever we wrote into it before is behind us:
-             * either a submission this driver did not see took it away, or dxgkrnl offers the
-             * buffer again from the start, and in both readings nothing of ours is ahead of this
-             * call. The slot starts again with it. */
-            slot->Dwords = 0u;
-            return BC250_GDI_DMA_RESTART;
+            /* A window that begins before a buffer of ours and reaches into it. One of the two
+             * extents is not what the DDI said it was, and this driver cannot tell which. */
+            if (windowEnd > slot->Base) return BC250_GDI_DMA_UNKNOWN;
+            continue;
         }
-        end = slot->Base + (unsigned long long)slot->Dwords * 4u;
-        if (slot->Dwords != 0u && windowVa == end)
-        {
-            *ahead = slot->Dwords;
-            return BC250_GDI_DMA_APPEND;
-        }
-        if (windowVa > slot->Base && windowVa < end)
-        {
-            /* A window inside output of ours that nothing has submitted. No reading of the DDI
-             * produces it, and the dwords ahead of it are not the ones we recorded, so this call
-             * is not translated at all. */
-            return BC250_GDI_DMA_UNKNOWN;
-        }
-        if (slot->Dwords == 0u && spare == BC250_GDI_DMA_SLOTS) spare = i;
+        if (windowVa >= end) continue;
+        /* The window lies inside this buffer's extent, so it is this buffer: identity, and not the
+         * distance from anything. A buffer allocated next to this one begins at `end` and is
+         * therefore not this buffer, which is the case review r5 built. */
+        if (slot->Claimed != 0u) return BC250_GDI_DMA_UNKNOWN;
+        offset = (unsigned int)(windowVa - slot->Base);
+        if ((offset & 3u) != 0u) return BC250_GDI_DMA_UNKNOWN;
+        /* The dwords ahead of this call have to be exactly the dwords we wrote into this buffer.
+         * Any other position inside it is one nothing here can explain: a window at the start of a
+         * buffer we hold output in is the same statement as a window in the middle of it, and the
+         * record is the thing that would have to be wrong. */
+        if (offset / 4u != slot->Dwords) return BC250_GDI_DMA_UNKNOWN;
+        /* The room is the smaller of what this call reports and what the buffer has left behind the
+         * window. DmaSize is "the size, in bytes, of the DMA buffer that pDmaBuffer points to", so
+         * a call that continues inside a buffer may report the whole buffer rather than the window:
+         * taking the smaller of the two is what keeps either reading inside the extent, and the
+         * extent is what this driver recorded when the buffer was first offered to it. */
+        slot->Claimed = 1u;
+        slot->Generation++;
+        claim->Slot = i;
+        claim->Generation = slot->Generation;
+        claim->Ahead = slot->Dwords;
+        claim->Room = (unsigned int)((end - windowVa) / 4u);
+        if (windowBytes / 4u < claim->Room) claim->Room = windowBytes / 4u;
+        return BC250_GDI_DMA_APPEND;
     }
-    /* No buffer of this context explains the window. The DDI gives the start of a DMA buffer as 4
-     * KB aligned, so a window on that boundary is the start of a buffer this driver has not written
-     * into, and a window off it is a position this driver cannot place. */
+    /* No buffer of this context holds this window. The DDI gives the start of a DMA buffer as 4 KB
+     * aligned, so a window on that boundary is a buffer this context holds nothing in, and a window
+     * off it is a position this driver cannot place. */
     if ((windowVa & (unsigned long long)(pageBytes - 1u)) != 0) return BC250_GDI_DMA_UNKNOWN;
-    if (empty == BC250_GDI_DMA_SLOTS) empty = spare;
     if (empty == BC250_GDI_DMA_SLOTS) return BC250_GDI_DMA_FULL;
-    map->Slots[empty].Base = windowVa;
-    map->Slots[empty].Dwords = 0u;
-    return BC250_GDI_DMA_FRESH;
+    return Bc250GdiDmaTake(map, empty, windowVa, windowBytes, claim);
 }
 
-int Bc250GdiDmaWrote(BC250_GDI_DMA_MAP* map, unsigned long long windowVa, unsigned int ahead,
-                     unsigned int dwords)
+int Bc250GdiDmaPublish(BC250_GDI_DMA_MAP* map, const BC250_GDI_DMA_CLAIM* claim,
+                       unsigned int dwords)
 {
-    unsigned int i;
+    BC250_GDI_DMA_SLOT* slot;
 
-    if (!map || windowVa == 0 || dwords == 0u) return 0;
-    for (i = 0; i < BC250_GDI_DMA_SLOTS; i++)
+    if (!map || !claim || claim->Slot >= BC250_GDI_DMA_SLOTS || dwords == 0u) return 0;
+    slot = &map->Slots[claim->Slot];
+    /* The generation is what makes this a publication of this claim and not of whatever holds the
+     * slot now. A slot released by a submission and taken again carries a generation of its own, so
+     * the earlier claim cannot write into it. */
+    if (slot->Base == 0 || slot->Claimed == 0u || slot->Generation != claim->Generation) return 0;
+    if (slot->Dwords != claim->Ahead) return 0;
+    if (dwords > claim->Room) return 0;
+    /* The length of this buffer stays inside what one indirect buffer can carry, which is what the
+     * capacity of every call into it was computed against. */
+    if ((unsigned long long)claim->Ahead + (unsigned long long)dwords > BC250_GDI_IB_DWORDS_MAX)
+        return 0;
+    slot->Dwords = claim->Ahead + dwords;
+    slot->Claimed = 0u;
+    return 1;
+}
+
+void Bc250GdiDmaAbort(BC250_GDI_DMA_MAP* map, const BC250_GDI_DMA_CLAIM* claim)
+{
+    BC250_GDI_DMA_SLOT* slot;
+
+    if (!map || !claim || claim->Slot >= BC250_GDI_DMA_SLOTS) return;
+    slot = &map->Slots[claim->Slot];
+    if (slot->Base == 0 || slot->Claimed == 0u || slot->Generation != claim->Generation) return;
+    slot->Claimed = 0u;
+    /* A buffer this context wrote nothing into is not a buffer worth holding: the slot goes back,
+     * so a context cannot fill up with calls that drew nothing. One that already held output keeps
+     * it until a submission carries it away. */
+    if (slot->Dwords == 0u)
     {
-        BC250_GDI_DMA_SLOT* slot = &map->Slots[i];
-        if (slot->Base == 0) continue;
-        if (slot->Base + (unsigned long long)ahead * 4u != windowVa) continue;
-        if (slot->Dwords != ahead) continue;
-        /* The length of this buffer stays inside what one indirect buffer can carry, which is what
-         * the capacity of every call into it was computed against. */
-        if ((unsigned long long)ahead + (unsigned long long)dwords > BC250_GDI_IB_DWORDS_MAX) return 0;
-        slot->Dwords = ahead + dwords;
-        return 1;
+        slot->Base = 0;
+        slot->Bytes = 0u;
     }
-    return 0;
 }
 
 unsigned int Bc250GdiDmaSubmitted(BC250_GDI_DMA_MAP* map, unsigned long long bufferVa,
-                                  unsigned int bytes)
+                                  unsigned int bytes, unsigned int* claimed)
 {
     unsigned int i, freed = 0;
 
+    if (claimed) *claimed = 0u;
     if (!map || bufferVa == 0) return 0u;
     for (i = 0; i < BC250_GDI_DMA_SLOTS; i++)
     {
@@ -170,7 +223,16 @@ unsigned int Bc250GdiDmaSubmitted(BC250_GDI_DMA_MAP* map, unsigned long long buf
          * whole map. */
         if (slot->Base != bufferVa &&
             !(slot->Base > bufferVa && slot->Base - bufferVa < (unsigned long long)bytes)) continue;
+        if (slot->Claimed != 0u)
+        {
+            /* A call is still deciding what it writes into this buffer. Retiring the slot under it
+             * would let its publication land in whatever took the slot next, so the slot stays and
+             * the ordering is counted. */
+            if (claimed) (*claimed)++;
+            continue;
+        }
         slot->Base = 0;
+        slot->Bytes = 0u;
         slot->Dwords = 0u;
         freed++;
     }

@@ -33,12 +33,13 @@
  *      cache operation, the code block and the ring padding do not fit. The caller then writes an
  *      empty DMA buffer, which draws nothing and leaves nothing half drawn.
  *   3. The capacity those two rules work inside is not the DMA buffer alone. It is the smallest of
- *      the space dxgkrnl reports for the call, the length one indirect buffer can carry, and that
- *      length less the dwords this driver has already written into the same DMA buffer:
- *      Bc250GdiCallCapacity. The row path of rule 1 is offered a budget inside that capacity, so a
- *      larger DMA buffer cannot grant it space the submitter is unable to encode. The third term is
- *      established for the buffer the call names, by the tracker below, and is never read off the
- *      order of addresses.
+ *      the space dxgkrnl reports for the call, the room the call's own buffer has left behind that
+ *      window, the length one indirect buffer can carry, and that length less the dwords this
+ *      driver has already written into the same DMA buffer: Bc250GdiCallCapacity over the room the
+ *      claim below answers with. The row path of rule 1 is offered a budget inside that capacity,
+ *      so a larger DMA buffer cannot grant it space the submitter is unable to encode. The last two
+ *      terms are established for the buffer the call lies in, by the tracker below, from that
+ *      buffer's recorded extent and never from the order or the distance of addresses.
  *
  * Rule 1 is what makes rule 2 a contract rather than a hope: after Begin has said yes, no admitted
  * sub-rectangle can be refused for want of space, and the host test asserts exactly that over a
@@ -54,33 +55,48 @@
  * is a bound on what may be written and not a check at the end: the dwords are never allocated.
  * The constant is held against AMD's own field definition by C_ASSERT in gdi_dispatch.c.
  *
- * The third term of rule 3 is a question about identity, and the DDI answers only part of it.
- * DXGKARG_RENDERGDI names the buffer of a call by pDmaBuffer, "a pointer to the start of the DMA
- * buffer, which is aligned on 4 KB", by DmaBufferGpuVirtualAddress, "the virtual address where the
- * DMA buffer was paged in", and by DmaSize, "the size, in bytes, of the DMA buffer that pDmaBuffer
- * points to" (ref/ddi-display/d3dkmddi.md, DXGKARG_RENDERGDI, WDK 10.0.26100). It does not promise
- * that one DMA buffer carries one call, and it does not promise any order of RenderGdi calls and
+ * The last two terms of rule 3 are a question about identity, and the DDI answers it with an
+ * address and a length. DXGKARG_RENDERGDI names the buffer of a call by pDmaBuffer, "a pointer to
+ * the start of the DMA buffer, which is aligned on 4 KB", by DmaBufferGpuVirtualAddress, "the
+ * virtual address where the DMA buffer was paged in", and by DmaSize, "the size, in bytes, of the
+ * DMA buffer that pDmaBuffer points to" (ref/ddi-display/d3dkmddi.md, DXGKARG_RENDERGDI, WDK
+ * 10.0.26100). The same two fields of DXGKARG_RENDER are declared [out] and [in] in the same file,
+ * with the driver's own obligation spelled out: "the driver should set pDmaBuffer to the next empty
+ * byte that follows the last byte that the driver wrote to". So what a call is given is a window
+ * and the extent it lies in, and that pair is the only identity on offer. It does not promise that
+ * one DMA buffer carries one call, and it does not promise any order of RenderGdi calls and
  * submissions. Neither does the general submission guide, which separates the translation from the
- * scheduler's submission. So the dwords already in a buffer are tracked for that buffer:
+ * scheduler's submission.
  *
- *   Bc250GdiDmaClaim places the window a call was given against the buffers this driver has written
- *   into and that have not been submitted since. A window that continues exactly where our own
- *   output in a buffer ended is an append, and the dwords ahead of it are the dwords we wrote into
- *   it. A window at the start of a buffer already known is that buffer offered again from its
- *   start, with nothing of ours ahead of it. A 4 KB aligned window that belongs to no buffer known
- *   is the start of a DMA buffer, by the sentence quoted above, and again nothing of ours is ahead.
- *   Any other window cannot be placed: that call is refused as a whole and counted, because a
- *   prefix nobody can establish is not a prefix anyone may assume to be zero.
+ * A buffer is therefore identified by its extent and by nothing else. Adjacency is not identity: a
+ * window that begins exactly where our output in one buffer ended is just as likely to be another
+ * buffer the memory manager placed next to it, with its own full size, and review r5 built that
+ * case. So the tracker holds the extent of every buffer this context has unsubmitted output in,
+ * with a generation each call's claim carries:
  *
- *   Bc250GdiDmaWrote records what a call wrote into the buffer it claimed, and
+ *   Bc250GdiDmaClaim places the window a call was given inside those extents. A window inside an
+ *   extent is that buffer, and then the dwords ahead of the call must be exactly the dwords we
+ *   wrote into it, or the window is a position this driver cannot explain and the call is refused
+ *   as a whole. A window inside no extent is a buffer this context holds no output in, which by the
+ *   4 KB sentence above is a buffer start, and nothing of ours is ahead of it. The claim reserves
+ *   its slot until the call publishes or gives it back, so a second call cannot take a slot whose
+ *   length is still being decided, and the room it answers with is the room that buffer has left
+ *   behind the window, which is what keeps a continuation inside the extent it belongs to.
+ *
+ *   Bc250GdiDmaPublish records what a call wrote, against the generation of the claim it holds, so
+ *   output can never be recorded into a slot that was released and taken again in between.
+ *   Bc250GdiDmaAbort gives back a claim that wrote nothing, which every refused call does.
  *   Bc250GdiDmaSubmitted releases the buffers one submission carried away, by the address range of
- *   that submission, so a submission of one buffer cannot clear the state of another.
+ *   that submission, so a submission of one buffer cannot clear the state of another, and it leaves
+ *   a reserved slot alone: a call still deciding its own length is not a buffer anyone can retire.
  *
  * Nothing but this driver writes hardware commands into a GDI context's DMA buffer, so what the
- * tracker holds is the whole of what that buffer contains, which is what makes an append exact
- * rather than estimated. The number of buffers one context can be tracked in at a time is
- * BC250_GDI_DMA_SLOTS, and a context that would need more refuses the call instead of forgetting a
- * buffer it has written into.
+ * tracker holds is the whole of what that buffer contains, which is what makes a continuation exact
+ * rather than estimated. A window nobody can place and a context with no slot left are both the
+ * whole call dropped and counted, because a prefix nobody can establish is not a prefix anyone may
+ * assume to be zero. The number of buffers one context can hold at a time is BC250_GDI_DMA_SLOTS,
+ * and a context that would need more refuses the call instead of forgetting a buffer it has written
+ * into or stealing the slot of a call in flight.
  *
  * With rule 3 in place, rule 2's refusal is unreachable for every command buffer up to a bound,
  * and the DDI gives the input bound its arithmetic:
@@ -224,56 +240,82 @@
  * submission of that context, and the surfaces it draws into live in the same segment. */
 #define BC250_GDI_DMA_APERTURE_SHARE 8u
 
-/* How many DMA buffers of one GDI context this driver can hold unsubmitted output in at a time.
- * Every buffer a call writes into takes a slot until a submission carries that buffer away, and a
- * context that would need one more refuses the call rather than forget a buffer it has written
- * into. Eight is far above what any ordering of this DDI has shown: one buffer is the only case
- * the field has produced so far, and the tracker counts the others if they ever arrive. */
+/* How many DMA buffers of one GDI context this driver can hold at a time, counting the buffer of
+ * every call in flight. Every buffer a call writes into takes a slot until a submission carries
+ * that buffer away, and a context that would need one more refuses the call rather than forget a
+ * buffer it has written into. Eight is a number this driver chose: no trial has reported any of
+ * these counters yet, so nothing here says how many buffers one context is really offered, and the
+ * ninth is counted and dropped. It is an implementation bound of this driver, not a limit of the
+ * DDI, and docs/design/gdi-hw-accel.md states it with the others. */
 #define BC250_GDI_DMA_SLOTS 8u
 
-/* Where Bc250GdiDmaClaim placed a call inside its DMA buffer. The first three are the cases the
- * call may be translated in, and the last two refuse it as a whole. */
-#define BC250_GDI_DMA_FRESH   0   /* the start of a buffer: nothing of ours is ahead of this call */
-#define BC250_GDI_DMA_APPEND  1   /* exactly where our own output in that buffer ended */
-#define BC250_GDI_DMA_RESTART 2   /* a buffer known, offered again from its start */
-#define BC250_GDI_DMA_UNKNOWN 3   /* the dwords ahead cannot be established from the DDI's own words */
-#define BC250_GDI_DMA_FULL    4   /* every slot holds a buffer with unsubmitted output of ours */
+/* Where Bc250GdiDmaClaim placed a call. The first two are the cases the call may be translated in,
+ * and the last two refuse it as a whole. */
+#define BC250_GDI_DMA_FRESH   0   /* a buffer this context holds no output in: nothing is ahead */
+#define BC250_GDI_DMA_APPEND  1   /* inside a buffer we hold output in, exactly where that output ended */
+#define BC250_GDI_DMA_UNKNOWN 2   /* the window cannot be placed in any buffer this context holds */
+#define BC250_GDI_DMA_FULL    3   /* every slot holds a buffer of ours or a claim in flight */
 
-/* One DMA buffer this context has written into. Base is the GPU virtual address our first write
- * into that buffer began at, which the DDI gives as the address the buffer was paged in at, and
- * Dwords is what this driver has written into it since. A slot with Dwords == 0 holds no output,
- * so it may be taken for another buffer. Base == 0 is a free slot. */
+/* One DMA buffer of this context. Base and Bytes are the extent the DDI gave for it, the address it
+ * was paged in at and the size of the buffer that address names, and they are the identity of the
+ * buffer: nothing here reads the distance between two buffers. Dwords is what this driver has
+ * written into it that no submission has carried away. Generation rises whenever the slot is taken,
+ * so a claim cannot record into a slot that was released and taken again. Claimed is a call in
+ * flight: its length is not decided yet, so neither another claim nor a submission may take the
+ * slot. Base == 0 is a free slot. */
 typedef struct BC250_GDI_DMA_SLOT {
     unsigned long long Base;
+    unsigned int Bytes;
     unsigned int Dwords;
+    unsigned int Generation;
+    unsigned int Claimed;
 } BC250_GDI_DMA_SLOT;
 
 /* The DMA buffers of one GDI context. Zeroed state is the whole of its initialisation. The caller
- * owns the serialisation: these three functions are plain C over the structure and take no lock. */
+ * owns the serialisation: these functions are plain C over the structure and take no lock. */
 typedef struct BC250_GDI_DMA_MAP {
     BC250_GDI_DMA_SLOT Slots[BC250_GDI_DMA_SLOTS];
 } BC250_GDI_DMA_MAP;
 
-/* Place the window a call was given, and claim a slot for it. WindowVa is
- * DXGKARG_RENDERGDI.DmaBufferGpuVirtualAddress and PageBytes the alignment the DDI gives the start
- * of a DMA buffer, which is 4096. *Ahead receives the dwords of ours that lie in that buffer before
- * this call, and is 0 for every result but BC250_GDI_DMA_APPEND. Returns one of the five results
- * above; the two refusals leave the map unchanged. */
-int Bc250GdiDmaClaim(BC250_GDI_DMA_MAP* Map, unsigned long long WindowVa, unsigned int PageBytes,
-                     unsigned int* Ahead);
+/* What one call holds between its claim and its publication: which slot, which generation of that
+ * slot, the dwords of ours ahead of the call in that buffer, and the dwords of room the buffer has
+ * left behind the window. Slot == BC250_GDI_DMA_SLOTS is no claim at all, which is what a refused
+ * claim leaves, and Bc250GdiDmaPublish and Bc250GdiDmaAbort both ignore it. */
+typedef struct BC250_GDI_DMA_CLAIM {
+    unsigned int Slot;
+    unsigned int Generation;
+    unsigned int Ahead;
+    unsigned int Room;
+} BC250_GDI_DMA_CLAIM;
 
-/* Record the dwords a claimed call wrote. WindowVa and Ahead are the ones the claim answered with.
- * Returns 0 when the slot of that window is gone, which the claim makes unreachable and which the
- * caller counts rather than ignores: a buffer whose record is lost can only be refused later. */
-int Bc250GdiDmaWrote(BC250_GDI_DMA_MAP* Map, unsigned long long WindowVa, unsigned int Ahead,
-                     unsigned int Dwords);
+/* Place the window a call was given and reserve its slot. WindowVa is
+ * DXGKARG_RENDERGDI.DmaBufferGpuVirtualAddress, WindowBytes the DmaSize of the same call, and
+ * PageBytes the alignment the DDI gives the start of a DMA buffer, which is 4096. *Claim receives
+ * the reservation, and the two refusals leave the map unchanged and *Claim empty. A reservation is
+ * ended by Bc250GdiDmaPublish or Bc250GdiDmaAbort and by nothing else. Returns one of the four
+ * results above. */
+int Bc250GdiDmaClaim(BC250_GDI_DMA_MAP* Map, unsigned long long WindowVa, unsigned int WindowBytes,
+                     unsigned int PageBytes, BC250_GDI_DMA_CLAIM* Claim);
+
+/* Record the dwords a claimed call wrote, and end the reservation. Returns 0 when the claim does
+ * not hold the slot any more, when the record moved under it, or when those dwords would take the
+ * buffer past the room of the claim or past what one indirect buffer can carry. A caller that is
+ * refused here has not published anything: it must not advance the DDI's own pointer and must count
+ * the call as dropped. */
+int Bc250GdiDmaPublish(BC250_GDI_DMA_MAP* Map, const BC250_GDI_DMA_CLAIM* Claim,
+                       unsigned int Dwords);
+
+/* Give back a reservation that wrote nothing, which every refused call does. A slot that held no
+ * output before the claim becomes free again; a slot that held output keeps it. */
+void Bc250GdiDmaAbort(BC250_GDI_DMA_MAP* Map, const BC250_GDI_DMA_CLAIM* Claim);
 
 /* Release every buffer of this context inside the address range one submission carried away, which
  * is DXGKARG_SUBMITCOMMANDVIRTUAL.DmaBufferVirtualAddress and DmaBufferSize. Returns how many slots
  * it freed, so a caller can count a submission that matched nothing. A range of zero bytes releases
- * the buffer that begins at that address and nothing else. */
+ * the buffer that begins at that address and nothing else. *Claimed, when given, receives how many
+ * buffers inside the range had a call in flight and were therefore left alone. */
 unsigned int Bc250GdiDmaSubmitted(BC250_GDI_DMA_MAP* Map, unsigned long long BufferVa,
-                                  unsigned int Bytes);
+                                  unsigned int Bytes, unsigned int* Claimed);
 
 /* What Bc250GdiBatchItem did with an item. */
 #define BC250_GDI_BATCH_REFUSED  0   /* the item is not addressable; nothing was written */
