@@ -58,11 +58,15 @@ try {
  Check 'doclint' { & python "$repo\tools\quality\doclint.py" --root $repo --out "$Out\doclint" }
  # Status maps and release tool controls run in Full (required by build-release.ps1), not KmdPackage.
  Check 'status-map' { & python "$repo\tools\quality\kmd_status_profile.py" --repo $repo --profile $Profile --kits $Kits --out "$Out\status-map"; if($LASTEXITCODE -eq 0){ & python -m unittest discover -s "$repo\tools\docs" -p 'test_*.py' } }
- # Its deadline is 600 s in gate-inputs.json, not the 300 s it had: measured over the 15 full suites of the rc1 to
- # rc5 candidates of train b34 on the development PC, this gate takes 179 s to 300 s and lost five of those runs to
- # the deadline itself (its slowest pass was 299.9 s). The work is Python unit tests, so under the 24 workers of
- # the full profile it competes for the same cores as every other Python gate, and that is where the spread comes
- # from. 600 s is twice the slowest pass, so a loaded machine no longer decides the result.
+ # Its deadline is 1200 s in gate-inputs.json. It had 300 s, lost five suites to that, and was given 600 s; 600 s
+ # was not enough either, and this is the measurement that says so. 62 Python unit tests: 109 s run alone on an
+ # idle machine, 144.8 s to 339.5 s over the 30 full suites recorded in this lane (five of the early ones died at
+ # 300 s), and the gate's own cost has more than doubled across those runs as the work ledger grew. Under the 24
+ # workers of the full profile it competes for the same cores as every other Python gate, and when another build
+ # shares the machine that competition costs a further 1.8x: measured the same evening, kmd-deploy went from 102 s
+ # to 184 s and router-front from 71 s to 129 s. 339.5 s times that factor is 625 s, which is over 600, so the
+ # old deadline would have failed suites at random on any branch. 1200 s is 11x the cost alone and 3.5x the worst
+ # suite run, which covers both the contention and the growth.
  Check 'ledger' { & python -m unittest discover -s "$repo\tools\win\ledger" }
  # Windows PowerShell 5.1 for the app-route test, because that is the shell its ops scripts run in on the lab.
  Check 'app-route-lib' { & powershell -NoProfile -ExecutionPolicy Bypass -File "$repo\tools\win\app-route\ops\tests\test-approute-lib.ps1" -Out "$Out\app-route-lib" }
@@ -92,7 +96,10 @@ try {
  # other Python gate under the 24 workers of the full profile. Measured: 50.7 s alone, 57.6 s to 102.0 s over
  # eight full suites, and 184 s - over the old deadline, with an empty log and no reason - in the one suite
  # that shared the machine with another eight-way build. The work did not grow; the room over its own cost
- # was never there. 600 s is six times its cost alone, so the load of the machine no longer decides it.
+ # was never there. 600 s is 11.8 times its cost alone and 5.9 times its worst suite run, so the load of the
+ # machine no longer decides it. (The commit that set it, ce623538, says "six times" and "twice" in its
+ # message: those two multipliers are wrong, the measurements beside them are right, and 600 s is more room
+ # than the message claimed rather than less.)
  Check 'kmd-deploy' { $env:BC250_ROOT=$Workspace; $env:BC250_KMD_DEPLOY_WORK=(New-Item -ItemType Directory -Force "$Out\kmd-deploy").FullName; & python "$repo\tools\win\kmd-deploy\check-offline.py" --quick }
  Check 'lab-runner' { & python -m unittest discover -s "$repo\tools\win\lab-runner" }
  Check 'target-boot' { & python -m unittest discover -s "$repo\tools\win" -p "test_target*.py" }
@@ -119,8 +126,10 @@ Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compil
  # development PC (rc1, rc2, rc3 and two runs of rc4 of train b34), and at 180 s the load of the machine decided the
  # result. rc4 lost a whole package build to that margin. A gate with 10 per cent of room over its own cost is a
  # flaky gate, not a strict one. 300 s was not enough either: over the 15 full suites of rc1 to rc5 this gate ran
- # 149 s to 266 s and still lost two of them at 300 s, so it gets the same 600 s as the ledger gate, for the same
- # reason - both are Python unit tests among the 24 workers of the full profile.
+ # 149 s to 266 s and still lost two of them at 300 s, so it got 600 s. It now holds 1200 s, for the same reason
+ # and from the same measurement as the ledger gate beside it: its worst recorded suite run is 329.4 s, and the
+ # 1.8x a second build on the machine costs would put that at 600 s exactly. Both are Python unit tests among the
+ # 24 workers of the full profile, so they are hit by the same load at the same time.
  Check 'release-provenance' { $env:BC250_TEST_OUT=(New-Item -ItemType Directory -Force "$Out\release-provenance").FullName; & python -m unittest discover -s "$repo\tools\release" -p 'test_provenance.py' }
  Check 'release-driver-package' { $env:TEMP=(New-Item -ItemType Directory -Force "$Out\release-driver-package").FullName; $env:TMP=$env:TEMP; & python -m unittest discover -s "$repo\tools\release" -p 'test_driver_package.py' }
  Check 'release-flavour' { & python -m unittest discover -s "$repo\tools\release" -p 'test_release_flavour.py' }

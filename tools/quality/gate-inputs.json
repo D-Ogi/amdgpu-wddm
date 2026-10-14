@@ -1380,10 +1380,10 @@
       ]
     },
     "ledger": {
-      "timeout": 600
+      "timeout": 1200
     },
     "release-provenance": {
-      "timeout": 600
+      "timeout": 1200
     },
     "link-command-import": {
       "inputs": [
