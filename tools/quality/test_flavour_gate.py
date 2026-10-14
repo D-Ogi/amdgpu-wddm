@@ -20,8 +20,10 @@ a PE header but no PE suffix are handled (fail closed, or scanned). A DriverStor
 path. A whole package bound to its manifest passes in both layouts and both flavours; a missing, extra, changed or
 unlisted PE fails it; the negative control is seen, and a scan that cannot see it fails. The package slots of the
 declaration are the PE rows of release-sources.json, and build-release.ps1 runs the gate on the payload and on the
-bound package. Every Mesa config that a release row builds defines NDEBUG in its release flavour, and a planted
-config without it fails.
+bound package. Every Mesa, DXVK and vkd3d-proton config that a release row builds defines NDEBUG in its release
+flavour, and a planted config without it fails. A PE with a live assert (an import of an assert function or from
+a debug C runtime, or the static C runtime's assert message) fails a release set and not a lab set, and the
+import directory of a real system DLL reads.
 """
 import contextlib
 import hashlib
@@ -29,6 +31,7 @@ import io
 import json
 import os
 from pathlib import Path
+import struct
 import sys
 import tempfile
 import unittest
@@ -43,11 +46,37 @@ K = DECL["kmd"]
 
 
 def pe(*strings, utf16=()):
-    """A minimal image: MZ header, e_lfanew 0x40, PE signature, then the strings, each NUL-terminated."""
+    """A minimal image: MZ header, e_lfanew 0x40, PE signature, an empty COFF header (no optional header, so no
+    imports), then the strings, each NUL-terminated."""
     head = bytearray(b"MZ" + b"\0" * 0x3a) + (0x40).to_bytes(4, "little") + b"PE\0\0"
     body = b"".join(s.encode("ascii") + b"\0" for s in strings)
     body += b"".join(s.encode("utf-16-le") + b"\0\0" for s in utf16)
-    return bytes(head) + b"\0" * 16 + body
+    return bytes(head) + b"\0" * 20 + body
+
+
+def pe_importing(*imports, strings=()):
+    """A PE32+ image whose one section holds an import directory of (dll, function) pairs, then the strings."""
+    rva, dlls = 0x1000, {}
+    for dll, fn in imports:
+        dlls.setdefault(dll, []).append(fn)
+    section, cur = bytearray(0x800), 20 * (len(dlls) + 1)
+    for i, (dll, fns) in enumerate(dlls.items()):
+        thunks, cur = cur, cur + 8 * (len(fns) + 1)
+        name, cur = cur, cur + len(dll) + 1
+        section[name:cur] = dll.encode("ascii") + b"\0"
+        for j, fn in enumerate(fns):
+            struct.pack_into("<Q", section, thunks + 8 * j, rva + cur)
+            section[cur:cur + len(fn) + 3] = b"\0\0" + fn.encode("ascii") + b"\0"
+            cur += len(fn) + 3
+        struct.pack_into("<IIIII", section, 20 * i, rva + thunks, 0, 0, rva + name, rva + thunks)
+    head = bytearray(0x200)
+    head[0:2], head[0x3c:0x40], head[0x40:0x44] = b"MZ", (0x40).to_bytes(4, "little"), b"PE\0\0"
+    struct.pack_into("<HHIIIHH", head, 0x44, 0x8664, 1, 0, 0, 0, 240, 0x2022)
+    struct.pack_into("<H", head, 0x58, 0x20b)
+    struct.pack_into("<I", head, 0x58 + 108, 16)
+    struct.pack_into("<II", head, 0x58 + 112 + 8, rva, 20 * (len(dlls) + 1))
+    struct.pack_into("<8sIIIIIIHHI", head, 0x58 + 240, b".idata", 0x800, rva, 0x800, 0x200, 0, 0, 0, 0, 0xC0000040)
+    return bytes(head) + bytes(section) + b"".join(s.encode("ascii") + b"\0" for s in strings)
 
 
 RELEASE_KMD = (K["flavour_markers"]["release"], "kmd: something every flavour logs")
@@ -365,33 +394,90 @@ class ReleaseFlavour(unittest.TestCase):
         fixed = {src.lower() for src, _ in driver_package.NATIVE + driver_package.WOW if src.endswith(g.PE_SUFFIXES)}
         self.assertLessEqual(fixed, set(DECL["package"]["slots"]))
 
-    def test_release_mesa_configs_define_ndebug(self):
-        # Every Mesa config that a release row builds defines NDEBUG in its release flavour. The CPU and Zink UMDs
-        # take it only there (release_options), so their lab flavour keeps its asserts.
-        configs = json.loads((REPO / "tools" / "build" / "mesa-configs.json").read_text(encoding="utf-8-sig"))["configs"]
+    def test_release_configs_define_ndebug(self):
+        # Every Mesa, DXVK and vkd3d-proton config that a release row builds defines NDEBUG in its release flavour.
+        # The CPU and Zink UMDs and the DXVK engine take it only there (release_options), so their lab flavour keeps
+        # its asserts, and each of the three recipes adds release_options to a release-flavour build.
+        mesa, dxvk, vkd3d = ("tools/build/build-%s.ps1" % n for n in ("mesa", "dxvk", "vkd3d"))
+        self.assertEqual(set(g.NDEBUG_RECIPES), {mesa, dxvk, vkd3d})
+        configs = {recipe: json.loads((REPO / path).read_text(encoding="utf-8-sig"))["configs"]
+                   for recipe, path in g.NDEBUG_RECIPES.items()}
         rows = json.loads((REPO / "tools" / "release" / "release-sources.json").read_text(encoding="utf-8-sig"))["files"]
-        self.assertEqual(g.mesa_release_without_ndebug(configs, rows), [])
-        built = {r["built_from"]["args"][r["built_from"]["args"].index("-Config") + 1] for r in rows
-                 if (r.get("built_from") or {}).get("recipe") == g.MESA_RECIPE}
-        self.assertLessEqual({"llvmpipe-umd", "zink-umd", "radv-mt", "radv-system", "zink-gl-icd"}, built)
-        for name in ("llvmpipe-umd", "zink-umd"):
-            self.assertNotIn("-Db_ndebug=true", configs[name]["options"], name + ": the lab flavour keeps asserts")
-            self.assertEqual(configs[name]["release_options"], ["-Db_ndebug=true"], name)
-        text = (REPO / "tools" / "build" / "build-mesa.ps1").read_text(encoding="utf-8")
-        self.assertIn("if ($forkFlavour -eq 'release') { $options += @($recipeConfig.release_options", text)
-        # Planted controls: any release config without it, or with a later false, fails; so does a config the
-        # file does not have.
-        for name in sorted(built):
+        self.assertEqual(g.release_without_ndebug(configs, rows), [])
+        built = {(r["built_from"]["recipe"], r["built_from"]["args"][r["built_from"]["args"].index("-Config") + 1])
+                 for r in rows if (r.get("built_from") or {}).get("recipe") in g.NDEBUG_RECIPES}
+        self.assertLessEqual({(mesa, "llvmpipe-umd"), (mesa, "zink-umd"), (mesa, "radv-mt"), (mesa, "radv-system"),
+                              (mesa, "zink-gl-icd"), (dxvk, "ddi-engine"), (vkd3d, "ddi-engine-lto")}, built)
+        for recipe, name in ((mesa, "llvmpipe-umd"), (mesa, "zink-umd"), (dxvk, "ddi-engine")):
+            self.assertNotIn("-Db_ndebug=true", configs[recipe][name]["options"], name + ": the lab flavour keeps asserts")
+            self.assertEqual(configs[recipe][name]["release_options"], ["-Db_ndebug=true"], name)
+        for recipe in g.NDEBUG_RECIPES:
+            text = (REPO / recipe).read_text(encoding="utf-8")
+            self.assertIn("if ($forkFlavour -eq 'release') { $options += @($recipeConfig.release_options", text, recipe)
+            self.assertIn("flavour         = $forkFlavour", text, recipe)
+        # Planted controls: any release config without it, or with a later false, fails; so does a config, or a
+        # recipe's whole file, that the gate does not have.
+        for recipe, name in sorted(built):
             planted = json.loads(json.dumps(configs))
             for key in ("options", "release_options"):
-                planted[name][key] = [o for o in planted[name].get(key, []) if not o.startswith("-Db_ndebug=")]
-            self.assertIn(name, {c for c, _ in g.mesa_release_without_ndebug(planted, rows)}, name)
+                planted[recipe][name][key] = [o for o in planted[recipe][name].get(key, []) if not o.startswith("-Db_ndebug=")]
+            self.assertIn((recipe, name), {(r, c) for r, c, _ in g.release_without_ndebug(planted, rows)}, name)
         planted = json.loads(json.dumps(configs))
-        planted["zink-umd"]["release_options"].append("-Db_ndebug=false")
-        self.assertEqual({c for c, _ in g.mesa_release_without_ndebug(planted, rows)}, {"zink-umd"})
-        del planted["zink-umd"]
+        planted[dxvk]["ddi-engine"]["release_options"].append("-Db_ndebug=false")
+        self.assertEqual({(r, c) for r, c, _ in g.release_without_ndebug(planted, rows)}, {(dxvk, "ddi-engine")})
+        del planted[mesa]["zink-umd"]
         with self.assertRaises(g.GateError):
-            g.mesa_release_without_ndebug(planted, rows)
+            g.release_without_ndebug(planted, rows)
+        planted = json.loads(json.dumps(configs))
+        del planted[vkd3d]
+        with self.assertRaises(g.GateError):
+            g.release_without_ndebug(planted, rows)
+
+    def test_live_assert_fails_release_only(self):
+        # An image built without NDEBUG: it imports an assert function or a debug C runtime, or it links the static
+        # C runtime's assert code, whose message it then holds. A release set fails on each, a lab set keeps them.
+        crt = "api-ms-win-crt-runtime-l1-1-0.dll"
+        clean = pe_importing(("KERNEL32.dll", "GetLastError"), (crt, "_initterm"), strings=LOG)
+        cases = {
+            "_wassert": pe_importing(("KERNEL32.dll", "GetLastError"), (crt, "_wassert"), strings=LOG),
+            "_assert": pe_importing((crt, "_initterm"), (crt, "_assert"), strings=LOG),
+            "RtlAssert": pe_importing(("ntoskrnl.exe", "RtlAssert"), strings=LOG),
+            "debug runtime": pe_importing(("ucrtbased.dll", "malloc"), strings=LOG),
+            "static message": pe(*LOG, g.CRT_ASSERT_TEXT + "\n"),
+            "static message utf16": pe(*LOG, utf16=(g.CRT_ASSERT_TEXT + "\n",)),
+        }
+        self.assertEqual(g.pe_imports(clean), [("KERNEL32.dll", "GetLastError"), (crt, "_initterm")])
+        kmd, dll = self.release_set(clean)
+        self.assertEqual(self.run_gate("--flavour", "release", "--package", str(self.dir / "pkg")), 0)
+        for name, umd in cases.items():
+            with self.subTest(case=name):
+                dll.write_bytes(umd)
+                self.assertTrue(g.live_asserts(umd), name)
+                out = io.StringIO()
+                with contextlib.redirect_stdout(out):
+                    self.assertEqual(g.main(["--flavour", "release", "--package", str(self.dir / "pkg")]), 1)
+                self.assertIn("a live assert", out.getvalue())
+                failures, _, record = g.check(DECL, "lab", kmd, [dll])
+                self.assertFalse([f for f in failures if "live assert" in f], name)
+                self.assertTrue([f for f in record["files"] if f["asserts"]], name + ": a lab set records it")
+
+    def test_import_directory_is_read(self):
+        # The reader against images of the real toolchain: a 64-bit and a 32-bit system DLL import by name, and none
+        # of them is built without NDEBUG. An import directory outside every section cannot be judged.
+        system = Path(os.environ.get("SystemRoot", r"C:\Windows"))
+        for p in (system / "System32" / "kernel32.dll", system / "SysWOW64" / "kernel32.dll"):
+            if not p.is_file():
+                continue
+            with self.subTest(image=str(p)):
+                data = g.read_pe(p)
+                self.assertGreater(len(g.pe_imports(data)), 100)
+                self.assertEqual(g.live_asserts(data), [])
+        broken = bytearray(pe_importing(("KERNEL32.dll", "GetLastError")))
+        struct.pack_into("<I", broken, 0x58 + 112 + 8, 0x9000)
+        with self.assertRaises(g.GateError):
+            g.pe_imports(bytes(broken))
+        self.release_set(bytes(broken))
+        self.assertEqual(self.run_gate("--flavour", "release", "--package", str(self.dir / "pkg")), 2)
 
     def test_build_release_runs_the_gate(self):
         # On the whole payload before the submission CAB, and on the package bound to manifest.json before the zip.
