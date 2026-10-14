@@ -165,7 +165,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250AddDevice",
-       "source": "driver/kmd/pnp.c:6",
+       "source": "driver/kmd/pnp.c:7",
        "done": true,
        "reason": "does work"
       },
@@ -174,7 +174,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250StartDevice",
-       "source": "driver/kmd/pnp.c:73",
+       "source": "driver/kmd/pnp.c:77",
        "done": true,
        "reason": "does work"
       },
@@ -183,7 +183,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250StopDevice",
-       "source": "driver/kmd/pnp.c:262",
+       "source": "driver/kmd/pnp.c:274",
        "done": true,
        "reason": "does work"
       },
@@ -192,7 +192,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250RemoveDevice",
-       "source": "driver/kmd/pnp.c:47",
+       "source": "driver/kmd/pnp.c:51",
        "done": true,
        "reason": "does work"
       },
@@ -201,7 +201,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250DispatchIoRequest",
-       "source": "driver/kmd/pnp.c:388",
+       "source": "driver/kmd/pnp.c:400",
        "done": false,
        "reason": "every return is a failure constant"
       },
@@ -210,7 +210,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250SetPowerState",
-       "source": "driver/kmd/pnp.c:548",
+       "source": "driver/kmd/pnp.c:564",
        "done": true,
        "reason": "does work"
       },
@@ -228,7 +228,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250ResetDevice",
-       "source": "driver/kmd/pnp.c:371",
+       "source": "driver/kmd/pnp.c:383",
        "done": true,
        "reason": "does work"
       },
@@ -237,7 +237,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250Unload",
-       "source": "driver/kmd/pnp.c:608",
+       "source": "driver/kmd/pnp.c:624",
        "done": true,
        "reason": "does work"
       },
@@ -264,7 +264,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmQueryAdapterInfo",
-       "source": "driver/kmd/wddm.c:3969",
+       "source": "driver/kmd/wddm.c:3936",
        "done": true,
        "reason": "does work",
        "partial": true
@@ -274,7 +274,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250Escape",
-       "source": "driver/kmd/display.c:436",
+       "source": "driver/kmd/display.c:451",
        "done": true,
        "reason": "does work"
       },
@@ -292,7 +292,7 @@
        "since": "WIN8",
        "targeted": true,
        "function": "Bc250StopDeviceAndReleasePostDisplayOwnership",
-       "source": "driver/kmd/pnp.c:340",
+       "source": "driver/kmd/pnp.c:352",
        "done": true,
        "reason": "does work"
       },
@@ -328,7 +328,7 @@
        "since": "WDDM2_0",
        "targeted": true,
        "function": "Bc250WddmSetStablePowerState",
-       "source": "driver/kmd/wddm.c:6862",
+       "source": "driver/kmd/wddm.c:6832",
        "done": true,
        "reason": "forwards to DpmSetStable: does work"
       }
@@ -342,7 +342,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250InterruptRoutine",
-       "source": "driver/kmd/pnp.c:426",
+       "source": "driver/kmd/pnp.c:438",
        "done": true,
        "reason": "returns the answer"
       },
@@ -351,7 +351,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250DpcRoutine",
-       "source": "driver/kmd/pnp.c:442",
+       "source": "driver/kmd/pnp.c:454",
        "done": true,
        "reason": "does work"
       },
@@ -360,7 +360,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmControlInterrupt",
-       "source": "driver/kmd/wddm.c:7855",
+       "source": "driver/kmd/wddm.c:7825",
        "done": true,
        "reason": "does work",
        "partial": true
@@ -402,7 +402,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmQueryChildRelations",
-       "source": "driver/kmd/wddm.c:8033",
+       "source": "driver/kmd/wddm.c:8003",
        "done": true,
        "reason": "forwards to Bc250QueryChildRelations: does work"
       },
@@ -411,7 +411,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmQueryChildStatus",
-       "source": "driver/kmd/wddm.c:8040",
+       "source": "driver/kmd/wddm.c:8010",
        "done": true,
        "reason": "forwards to Bc250QueryChildStatus: does work",
        "partial": true
@@ -421,7 +421,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmQueryDeviceDescriptor",
-       "source": "driver/kmd/wddm.c:8048",
+       "source": "driver/kmd/wddm.c:8018",
        "done": true,
        "reason": "forwards to Bc250QueryDeviceDescriptor: does work"
       },
@@ -457,7 +457,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmTracedIsSupportedVidPn",
-       "source": "driver/kmd/wddm.c:8068",
+       "source": "driver/kmd/wddm.c:8038",
        "done": true,
        "reason": "forwards to Bc250IsSupportedVidPn: does work"
       },
@@ -466,7 +466,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmTracedRecommendFunctionalVidPn",
-       "source": "driver/kmd/wddm.c:8069",
+       "source": "driver/kmd/wddm.c:8039",
        "done": false,
        "reason": "forwards to Bc250RecommendFunctionalVidPn: every return is a failure constant"
       },
@@ -475,7 +475,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmTracedEnumVidPnCofuncModality",
-       "source": "driver/kmd/wddm.c:8070",
+       "source": "driver/kmd/wddm.c:8040",
        "done": true,
        "reason": "forwards to Bc250EnumVidPnCofuncModality: does work"
       },
@@ -484,7 +484,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmTracedSetVidPnSourceVisibility",
-       "source": "driver/kmd/wddm.c:8071",
+       "source": "driver/kmd/wddm.c:8041",
        "done": true,
        "reason": "forwards to Bc250SetVidPnSourceVisibility: does work"
       },
@@ -493,7 +493,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmTracedCommitVidPn",
-       "source": "driver/kmd/wddm.c:8072",
+       "source": "driver/kmd/wddm.c:8042",
        "done": true,
        "reason": "forwards to Bc250CommitVidPn: does work"
       },
@@ -502,7 +502,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmTracedRecommendMonitorModes",
-       "source": "driver/kmd/wddm.c:8074",
+       "source": "driver/kmd/wddm.c:8044",
        "done": true,
        "reason": "forwards to Bc250RecommendMonitorModes: does work"
       },
@@ -520,7 +520,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmGetScanLine",
-       "source": "driver/kmd/wddm.c:7889",
+       "source": "driver/kmd/wddm.c:7859",
        "done": true,
        "reason": "does work",
        "partial": true
@@ -539,7 +539,7 @@
        "since": "WIN7",
        "targeted": true,
        "function": "Bc250WddmTracedQueryVidPnHWCapability",
-       "source": "driver/kmd/wddm.c:8075",
+       "source": "driver/kmd/wddm.c:8045",
        "done": false,
        "reason": "forwards to Bc250QueryVidPnHWCapability: only logs, counts, reads or writes zeros"
       },
@@ -548,7 +548,7 @@
        "since": "WIN8",
        "targeted": true,
        "function": "Bc250SystemDisplayEnable",
-       "source": "driver/kmd/display.c:1813",
+       "source": "driver/kmd/display.c:1860",
        "done": true,
        "reason": "does work",
        "partial": true
@@ -558,7 +558,7 @@
        "since": "WIN8",
        "targeted": true,
        "function": "Bc250SystemDisplayWrite",
-       "source": "driver/kmd/display.c:1846",
+       "source": "driver/kmd/display.c:1893",
        "done": true,
        "reason": "does work"
       },
@@ -567,7 +567,7 @@
        "since": "WIN8",
        "targeted": true,
        "function": "Bc250WddmGetChildContainerId",
-       "source": "driver/kmd/wddm.c:8054",
+       "source": "driver/kmd/wddm.c:8024",
        "done": false,
        "reason": "forwards to Bc250GetChildContainerId: every return is a failure constant"
       },
@@ -671,7 +671,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmCreateDevice",
-       "source": "driver/kmd/wddm.c:4139",
+       "source": "driver/kmd/wddm.c:4106",
        "done": true,
        "reason": "does work"
       },
@@ -680,7 +680,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmSubmitCommand",
-       "source": "driver/kmd/wddm.c:6084",
+       "source": "driver/kmd/wddm.c:6054",
        "done": true,
        "reason": "does work"
       },
@@ -689,7 +689,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmPreemptCommand",
-       "source": "driver/kmd/wddm.c:6492",
+       "source": "driver/kmd/wddm.c:6462",
        "done": true,
        "reason": "forwards to WddmPreemptFence: does work"
       },
@@ -707,7 +707,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmDestroyDevice",
-       "source": "driver/kmd/wddm.c:4155",
+       "source": "driver/kmd/wddm.c:4122",
        "done": true,
        "reason": "does work"
       },
@@ -725,7 +725,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmCreateContext",
-       "source": "driver/kmd/wddm.c:4168",
+       "source": "driver/kmd/wddm.c:4135",
        "done": true,
        "reason": "does work"
       },
@@ -734,7 +734,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmDestroyContext",
-       "source": "driver/kmd/wddm.c:4292",
+       "source": "driver/kmd/wddm.c:4259",
        "done": true,
        "reason": "does work"
       },
@@ -761,7 +761,7 @@
        "since": "WDDM1_3",
        "targeted": true,
        "function": "Bc250WddmGetNodeMetadata",
-       "source": "driver/kmd/wddm.c:4098",
+       "source": "driver/kmd/wddm.c:4065",
        "done": true,
        "reason": "does work"
       },
@@ -779,7 +779,7 @@
        "since": "WDDM1_3",
        "targeted": true,
        "function": "Bc250WddmFormatHistoryBuffer",
-       "source": "driver/kmd/wddm.c:6933",
+       "source": "driver/kmd/wddm.c:6903",
        "done": false,
        "reason": "only logs, counts, reads or writes zeros"
       },
@@ -797,7 +797,7 @@
        "since": "WDDM2_0",
        "targeted": true,
        "function": "Bc250WddmSubmitCommandVirtual",
-       "source": "driver/kmd/wddm.c:6450",
+       "source": "driver/kmd/wddm.c:6420",
        "done": true,
        "reason": "does work"
       },
@@ -806,7 +806,7 @@
        "since": "WDDM2_0",
        "targeted": true,
        "function": "Bc250WddmCreateProcess",
-       "source": "driver/kmd/wddm.c:4318",
+       "source": "driver/kmd/wddm.c:4285",
        "done": true,
        "reason": "does work"
       },
@@ -815,7 +815,7 @@
        "since": "WDDM2_0",
        "targeted": true,
        "function": "Bc250WddmDestroyProcess",
-       "source": "driver/kmd/wddm.c:4331",
+       "source": "driver/kmd/wddm.c:4298",
        "done": true,
        "reason": "forwards to WddmFreeObject: does work"
       },
@@ -1108,7 +1108,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmCreateAllocation",
-       "source": "driver/kmd/wddm.c:4797",
+       "source": "driver/kmd/wddm.c:4767",
        "done": true,
        "reason": "does work"
       },
@@ -1117,7 +1117,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmDestroyAllocation",
-       "source": "driver/kmd/wddm.c:4843",
+       "source": "driver/kmd/wddm.c:4813",
        "done": true,
        "reason": "does work"
       },
@@ -1126,7 +1126,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmDescribeAllocation",
-       "source": "driver/kmd/wddm.c:4895",
+       "source": "driver/kmd/wddm.c:4865",
        "done": true,
        "reason": "does work"
       },
@@ -1135,7 +1135,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmGetStandardAllocationDriverData",
-       "source": "driver/kmd/wddm.c:4404",
+       "source": "driver/kmd/wddm.c:4371",
        "done": true,
        "reason": "does work"
       },
@@ -1171,7 +1171,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmBuildPagingBuffer",
-       "source": "driver/kmd/wddm.c:5984",
+       "source": "driver/kmd/wddm.c:5954",
        "done": true,
        "reason": "does work"
       },
@@ -1180,7 +1180,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmOpenAllocation",
-       "source": "driver/kmd/wddm.c:4932",
+       "source": "driver/kmd/wddm.c:4902",
        "done": true,
        "reason": "does work"
       },
@@ -1189,7 +1189,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmCloseAllocation",
-       "source": "driver/kmd/wddm.c:5003",
+       "source": "driver/kmd/wddm.c:4973",
        "done": true,
        "reason": "does work"
       },
@@ -1198,7 +1198,7 @@
        "since": "WDDM2_0",
        "targeted": true,
        "function": "Bc250WddmSetRootPageTable",
-       "source": "driver/kmd/wddm.c:4358",
+       "source": "driver/kmd/wddm.c:4325",
        "done": true,
        "reason": "does work"
       },
@@ -1207,7 +1207,7 @@
        "since": "WDDM2_0",
        "targeted": true,
        "function": "Bc250WddmGetRootPageTableSize",
-       "source": "driver/kmd/wddm.c:4344",
+       "source": "driver/kmd/wddm.c:4311",
        "done": true,
        "reason": "returns the answer"
       },
@@ -1275,7 +1275,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmResetFromTimeout",
-       "source": "driver/kmd/wddm.c:6506",
+       "source": "driver/kmd/wddm.c:6476",
        "done": false,
        "reason": "every return is a failure constant"
       },
@@ -1284,7 +1284,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmRestartFromTimeout",
-       "source": "driver/kmd/wddm.c:6522",
+       "source": "driver/kmd/wddm.c:6492",
        "done": false,
        "reason": "only logs, counts, reads or writes zeros"
       },
@@ -1293,7 +1293,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmCollectDbgInfo",
-       "source": "driver/kmd/wddm.c:6845",
+       "source": "driver/kmd/wddm.c:6815",
        "done": false,
        "reason": "only logs, counts, reads or writes zeros"
       },
@@ -1302,7 +1302,7 @@
        "since": "WIN8",
        "targeted": true,
        "function": "Bc250WddmQueryDependentEngineGroup",
-       "source": "driver/kmd/wddm.c:6534",
+       "source": "driver/kmd/wddm.c:6504",
        "done": true,
        "reason": "does work"
       },
@@ -1311,7 +1311,7 @@
        "since": "WIN8",
        "targeted": true,
        "function": "Bc250WddmQueryEngineStatus",
-       "source": "driver/kmd/wddm.c:6552",
+       "source": "driver/kmd/wddm.c:6522",
        "done": true,
        "reason": "does work"
       },
@@ -1320,7 +1320,7 @@
        "since": "WIN8",
        "targeted": true,
        "function": "Bc250WddmResetEngine",
-       "source": "driver/kmd/wddm.c:6611",
+       "source": "driver/kmd/wddm.c:6581",
        "done": true,
        "reason": "does work",
        "partial": true
@@ -1416,7 +1416,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmSetVidPnSourceAddress",
-       "source": "driver/kmd/wddm.c:7651",
+       "source": "driver/kmd/wddm.c:7621",
        "done": true,
        "reason": "does work"
       },
@@ -1443,7 +1443,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250WddmPresent",
-       "source": "driver/kmd/wddm.c:7483",
+       "source": "driver/kmd/wddm.c:7453",
        "done": true,
        "reason": "does work"
       },
@@ -1911,49 +1911,49 @@
       {
        "name": "pfnCalcPrivateDeviceSize",
        "function": "device_size",
-       "source": "driver/umd/d3d12/adapter.cpp:33",
+       "source": "driver/umd/d3d12/adapter.cpp:34",
        "done": true,
        "reason": "returns the answer"
       },
       {
        "name": "pfnCreateDevice",
        "function": "create_device",
-       "source": "driver/umd/d3d12/adapter.cpp:39",
+       "source": "driver/umd/d3d12/adapter.cpp:40",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnCloseAdapter",
        "function": "close_adapter",
-       "source": "driver/umd/d3d12/adapter.cpp:74",
+       "source": "driver/umd/d3d12/adapter.cpp:75",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnGetSupportedVersions",
        "function": "versions",
-       "source": "driver/umd/d3d12/adapter.cpp:80",
+       "source": "driver/umd/d3d12/adapter.cpp:81",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnGetCaps",
        "function": "caps",
-       "source": "driver/umd/d3d12/adapter.cpp:88",
+       "source": "driver/umd/d3d12/adapter.cpp:89",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnGetOptionalDDITables",
        "function": "optional_tables",
-       "source": "driver/umd/d3d12/adapter.cpp:147",
+       "source": "driver/umd/d3d12/adapter.cpp:149",
        "done": false,
        "reason": "only logs, counts, reads or writes zeros"
       },
       {
        "name": "pfnFillDDITable",
        "function": "fill_table",
-       "source": "driver/umd/d3d12/adapter.cpp:151",
+       "source": "driver/umd/d3d12/adapter.cpp:153",
        "done": true,
        "reason": "forwards to fill_native_tables: does work",
        "partial": true
@@ -1961,7 +1961,7 @@
       {
        "name": "pfnDestroyDevice",
        "function": "destroy_device",
-       "source": "driver/umd/d3d12/adapter.cpp:157",
+       "source": "driver/umd/d3d12/adapter.cpp:159",
        "done": true,
        "reason": "does work"
       }
@@ -2642,126 +2642,126 @@
       {
        "name": "pfnDestroyBlendState",
        "function": "destroy_blend",
-       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:146",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:151",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnCalcPrivateDepthStencilStateSize",
        "function": "calc_depth_stencil",
-       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:165",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:170",
        "done": true,
        "reason": "returns the answer"
       },
       {
        "name": "pfnCreateDepthStencilState",
        "function": "create_depth_stencil",
-       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:169",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:174",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnDestroyDepthStencilState",
        "function": "destroy_depth_stencil",
-       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:199",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:204",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnCalcPrivateRasterizerStateSize",
        "function": "calc_rasterizer",
-       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:210",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:215",
        "done": true,
        "reason": "returns the answer"
       },
       {
        "name": "pfnCreateRasterizerState",
        "function": "create_rasterizer",
-       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:216",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:221",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnDestroyRasterizerState",
        "function": "destroy_rasterizer",
-       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:247",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:252",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnCalcPrivateShaderSize",
        "function": "calc_shader",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:197",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:206",
        "done": true,
        "reason": "returns the answer"
       },
       {
        "name": "pfnCreateVertexShader",
        "function": "create_vs",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:202",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:211",
        "done": true,
        "reason": "forwards to intake: does work"
       },
       {
        "name": "pfnCreatePixelShader",
        "function": "create_ps",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:205",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:214",
        "done": true,
        "reason": "forwards to intake: does work"
       },
       {
        "name": "pfnCreateGeometryShader",
        "function": "create_gs",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:208",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:217",
        "done": true,
        "reason": "forwards to intake: does work"
       },
       {
        "name": "pfnCreateComputeShader",
        "function": "create_cs",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:211",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:220",
        "done": true,
        "reason": "forwards to intake: does work"
       },
       {
        "name": "pfnCalcPrivateGeometryShaderWithStreamOutput",
        "function": "calc_gs_so",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:198",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:207",
        "done": true,
        "reason": "returns the answer"
       },
       {
        "name": "pfnCreateGeometryShaderWithStreamOutput",
        "function": "create_gs_so",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:214",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:223",
        "done": true,
        "reason": "forwards to intake: does work"
       },
       {
        "name": "pfnCalcPrivateTessellationShaderSize",
        "function": "calc_shader",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:197",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:206",
        "done": true,
        "reason": "returns the answer"
       },
       {
        "name": "pfnCreateHullShader",
        "function": "create_hs",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:218",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:227",
        "done": true,
        "reason": "forwards to intake: does work"
       },
       {
        "name": "pfnCreateDomainShader",
        "function": "create_ds",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:221",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:230",
        "done": true,
        "reason": "forwards to intake: does work"
       },
       {
        "name": "pfnDestroyShader",
        "function": "destroy_shader",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:231",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:240",
        "done": true,
        "reason": "does work"
       },
@@ -2817,21 +2817,21 @@
       {
        "name": "pfnCalcPrivatePipelineStateSize",
        "function": "calc_pipeline",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:245",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:254",
        "done": true,
        "reason": "returns the answer"
       },
       {
        "name": "pfnCreatePipelineState",
        "function": "create_pipeline",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:612",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:609",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnDestroyPipelineState",
        "function": "destroy_pipeline",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:647",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:673",
        "done": true,
        "reason": "does work"
       },
@@ -3170,7 +3170,7 @@
       {
        "name": "pfnRetrieveShaderComment",
        "function": "retrieve_shader_comment",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:884",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1048",
        "done": true,
        "reason": "does work"
       },
@@ -3184,14 +3184,14 @@
       {
        "name": "pfnCalcPrivatePipelineLibrarySize",
        "function": "calc_pipeline_library",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:683",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:719",
        "done": true,
        "reason": "returns the answer"
       },
       {
        "name": "pfnCreatePipelineLibrary",
        "function": "create_pipeline_library",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:767",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:866",
        "done": true,
        "reason": "does work",
        "partial": true
@@ -3199,28 +3199,28 @@
       {
        "name": "pfnDestroyPipelineLibrary",
        "function": "destroy_pipeline_library",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:792",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:891",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnAddPipelineStateToLibrary",
        "function": "add_pipeline_to_library",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:809",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:972",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnCalcSerializedLibrarySize",
        "function": "calc_serialized_library_size",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:837",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:991",
        "done": true,
        "reason": "returns the answer"
       },
       {
        "name": "pfnSerializeLibrary",
        "function": "serialize_library",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:857",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1012",
        "done": true,
        "reason": "does work"
       },
@@ -3284,7 +3284,7 @@
       {
        "name": "pfnEnumerateMetaCommands",
        "function": "enumerate_no_meta_commands",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:573",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:593",
        "done": false,
        "reason": "only logs, counts, reads or writes zeros"
       },
@@ -3293,35 +3293,35 @@
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:595"
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:615"
       },
       {
        "name": "pfnCalcPrivateMetaCommandSize",
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:595"
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:615"
       },
       {
        "name": "pfnCreateMetaCommand",
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:595"
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:615"
       },
       {
        "name": "pfnDestroyMetaCommand",
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:595"
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:615"
       },
       {
        "name": "pfnGetMetaCommandRequiredParameterInfo",
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:595"
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:615"
       },
       {
        "name": "pfnCalcPrivateStateObjectSize",
@@ -3354,7 +3354,7 @@
       {
        "name": "pfnCheckDriverMatchingIdentifier",
        "function": "unrecognized_identifier",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:567",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:587",
        "done": false,
        "reason": "every return is a 'not supported' answer"
       },
@@ -3412,33 +3412,33 @@
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:595"
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:615"
       },
       {
        "name": "pfnCreateAmplificationShader",
        "function": "create_as",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:224",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:233",
        "done": true,
        "reason": "forwards to intake: does work"
       },
       {
        "name": "pfnCreateMeshShader",
        "function": "create_ms",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:227",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:236",
        "done": true,
        "reason": "forwards to intake: does work"
       },
       {
        "name": "pfnCalcPrivateMeshShaderSize",
        "function": "calc_shader",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:197",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:206",
        "done": true,
        "reason": "returns the answer"
       },
       {
        "name": "pfnImplicitShaderCacheControl",
        "function": "no_implicit_shader_cache",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:587",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:607",
        "done": false,
        "reason": "only logs, counts, reads or writes zeros"
       }
@@ -3817,21 +3817,21 @@
       {
        "name": "pfnDrawInstanced",
        "function": "draw_instanced",
-       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:320",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:325",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnDrawIndexedInstanced",
        "function": "draw_indexed_instanced",
-       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:326",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:331",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnDispatch",
        "function": "dispatch",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:965",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1142",
        "done": true,
        "reason": "does work"
       },
@@ -3931,7 +3931,7 @@
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:654"
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:674"
       },
       {
        "name": "pfnPresent",
@@ -3971,42 +3971,42 @@
       {
        "name": "pfnIaSetTopology",
        "function": "ia_set_topology",
-       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:332",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:337",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnRsSetViewports",
        "function": "rs_set_viewports",
-       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:336",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:341",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnRsSetScissorRects",
        "function": "rs_set_scissor_rects",
-       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:343",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:348",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnOmSetBlendFactor",
        "function": "om_set_blend_factor",
-       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:351",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:356",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnOmSetStencilRef",
        "function": "om_set_stencil_ref",
-       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:356",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:361",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnSetPipelineState",
        "function": "set_pipeline_state",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:900",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1064",
        "done": true,
        "reason": "does work"
       },
@@ -4020,126 +4020,126 @@
       {
        "name": "pfnSetComputeRootSignature",
        "function": "set_compute_root_signature",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:913",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1090",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnSetGraphicsRootSignature",
        "function": "set_graphics_root_signature",
-       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:360",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:365",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnSetComputeRootDescriptorTable",
        "function": "set_compute_root_table",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:926",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1103",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnSetGraphicsRootDescriptorTable",
        "function": "set_graphics_root_table",
-       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:370",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:375",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnSetComputeRoot32BitConstant",
        "function": "set_compute_root_constant",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:933",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1110",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnSetGraphicsRoot32BitConstant",
        "function": "set_graphics_root_constant",
-       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:375",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:380",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnSetComputeRoot32BitConstants",
        "function": "set_compute_root_constants",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:938",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1115",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnSetGraphicsRoot32BitConstants",
        "function": "set_graphics_root_constants",
-       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:380",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:385",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnSetComputeRootConstantBufferView",
        "function": "set_compute_root_cbv",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:950",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1127",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnSetGraphicsRootConstantBufferView",
        "function": "set_graphics_root_cbv",
-       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:388",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:393",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnSetComputeRootShaderResourceView",
        "function": "set_compute_root_srv",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:955",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1132",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnSetGraphicsRootShaderResourceView",
        "function": "set_graphics_root_srv",
-       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:393",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:398",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnSetComputeRootUnorderedAccessView",
        "function": "set_compute_root_uav",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:960",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1137",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnSetGraphicsRootUnorderedAccessView",
        "function": "set_graphics_root_uav",
-       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:398",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:403",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnIASetIndexBuffer",
        "function": "ia_set_index_buffer",
-       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:403",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:408",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnIASetVertexBuffers",
        "function": "ia_set_vertex_buffers",
-       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:408",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:413",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnSOSetTargets",
        "function": "so_set_targets",
-       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:417",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:422",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnOMSetRenderTargets",
        "function": "om_set_render_targets",
-       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:429",
+       "source": "driver/umd/d3d12/engine-ddi/graphics.cpp:434",
        "done": true,
        "reason": "does work"
       },
@@ -4162,7 +4162,7 @@
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:654"
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:674"
       },
       {
        "name": "pfnOMSetDepthBounds",
@@ -4212,14 +4212,14 @@
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:654"
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:674"
       },
       {
        "name": "pfnExecuteMetaCommand",
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:654"
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:674"
       },
       {
        "name": "pfnBuildRaytracingAccelerationStructure",
