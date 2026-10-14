@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "about": "Meson option sets of the lab's Mesa builds, copied from the 'Build Options:' line of each recorded build's meson-logs/meson-log.txt, in that order. 'glslang' says whether the recorded build had glslangValidator on PATH ('required' by the configuration, 'on-path', 'not-on-path'). build-mesa.ps1 passes them verbatim and fails if the new log's line differs. docs/build.md quotes them; change both together.",
+  "about": "Meson option sets of the lab's Mesa builds, copied from the 'Build Options:' line of each recorded build's meson-logs/meson-log.txt, in that order. 'glslang' says whether the recorded build had glslangValidator on PATH ('required' by the configuration, 'on-path', 'not-on-path'). build-mesa.ps1 passes them verbatim and fails if the new log's line differs. docs/build.md quotes them; change both together. 'ships' names, per target, the file names the release ships that target as: the build writes one copy per name next to the target and stamps each with its own version resource (BD-166, tools/build/versionstamp.py), because the resource names the file it belongs to and one Mesa vulkan_radeon.dll ships both as vulkan_radeon.dll and as amdgpu_wddm_radv.dll. A target that no release ships has no entry and is not stamped.",
   "configs": {
     "radv": {
       "description": "RADV Vulkan ICD with the WDDM2 winsys, ACO only (no LLVM)",
@@ -22,6 +22,7 @@
         "-Dzstd=disabled"
       ],
       "targets": ["src/amd/vulkan/vulkan_radeon.dll"],
+      "ships": {"src/amd/vulkan/vulkan_radeon.dll": ["amdgpu_wddm_radv.dll"]},
       "recorded_script": "experiments/E27-m9-inference/radv-main/build.cmd"
     },
     "radv-mt": {
@@ -45,6 +46,7 @@
         "-Dzstd=disabled"
       ],
       "targets": ["src/amd/vulkan/vulkan_radeon.dll"],
+      "ships": {"src/amd/vulkan/vulkan_radeon.dll": ["amdgpu_wddm_radv.dll", "vulkan_radeon.dll"]},
       "recorded_script": "none yet: the radv set plus -Db_vscrt=mt, first built 2026-10-01"
     },
     "radv-system": {
@@ -67,6 +69,7 @@
         "-Dzstd=disabled"
       ],
       "targets": ["src/amd/vulkan/vulkan_radeon.dll"],
+      "ships": {"src/amd/vulkan/vulkan_radeon.dll": ["vulkan_radeon.dll"]},
       "recorded_script": "the radv set of d6176765 (experiments/E27-m9-inference/radv-main/build.cmd), which built CF3948D6 and the b23 system ICD A6562DAF"
     },
     "llvmpipe-umd": {
@@ -97,6 +100,7 @@
         "src/gallium/targets/d3d10umd/bc250_ttn_control.exe",
         "src/gallium/targets/d3d10umd/bc250_lp_test_arit.exe"
       ],
+      "ships": {"src/gallium/targets/d3d10umd/bc250d3d.dll": ["bc250d3d.dll"]},
       "recorded_script": "experiments/E26-wddm-desktop/build-mesa-main-llvm23.cmd"
     },
     "zink-umd": {
@@ -120,6 +124,7 @@
         "-Dzstd=disabled"
       ],
       "targets": ["src/gallium/targets/d3d10umd/bc250d3d_zink.dll"],
+      "ships": {"src/gallium/targets/d3d10umd/bc250d3d_zink.dll": ["bc250d3d_zink.dll"]},
       "recorded_script": "experiments/E34-native-d3d-zink/build.cmd"
     },
     "zink-gl": {
@@ -171,6 +176,7 @@
         "src/gallium/targets/wgl/amdgpu_wddm_gl.dll",
         "src/gallium/targets/libgl-gdi/opengl32.dll"
       ],
+      "ships": {"src/gallium/targets/wgl/amdgpu_wddm_gl.dll": ["amdgpu_wddm_gl.dll"]},
       "recorded_script": "none yet: first built 2026-10-12 for BD-076, x64 and x86 (scratch/bd076-gl/out/BUILD.md)"
     }
   }
