@@ -1513,19 +1513,25 @@ static BOOLEAN DcnWriterBridgeCurrent(_In_ const BC250_DEVICE* Device, ULONGLONG
         DcnPlaneFormatDecodeRegisters(config, crossbar, cnvc) == BC250_PLANE_FORMAT_ARGB8888;
 }
 
-// Writer admission runs under L while the OS still owns the old application primary. Install a driver-owned
-// bridge and prove its effective address before long writes or destruction of the previous display state. Later
-// blank/unblank operations then fetch only driver-owned storage. This helper never waits for a PASSIVE writer.
+// WriterActive and the odd generation are published under L before this call. The old application allocation
+// stays alive while the bridge is programmed, and while Retire below waits outside L for its effective address.
+// One stable already-owned surface can avoid programming, including an inherited pipe whose timing is stopped.
+// Admission and the register sequence are bounded under L; no wait for EARLIEST to catch up happens here.
 NTSTATUS DcnWriterBridge(_Inout_ BC250_DEVICE* Device, _In_ volatile LONG* Generation, ULONG ExpectedGeneration,
-    _Out_ BOOLEAN* Wrote)
+    _Out_ BOOLEAN* Wrote, _Out_ BC250_DCN_WRITER_BRIDGE* Bridge)
 {
     ULONGLONG physical, length, bytes, offset, card, programmed = 0;
-    ULONG pitch, outcome, steps;
+    ULONG pitch;
+    BOOLEAN current;
     NTSTATUS status;
-    LARGE_INTEGER start, end, now;
+    LARGE_INTEGER start, now;
 
     *Wrote = FALSE;
+    RtlZeroMemory(Bridge, sizeof(*Bridge));
     if (!Device->Mmio || !Device->VidPnFlipEnabled || !Device->VramEnabled) return STATUS_DEVICE_NOT_READY;
+    if (Device->DcnQpcFrequency <= 0) return STATUS_DEVICE_NOT_READY;
+    if ((ULONG)InterlockedCompareExchange(Generation, 0, 0) != ExpectedGeneration) return STATUS_DEVICE_BUSY;
+    start = KeQueryPerformanceCounter(NULL);
     // Firmware remains a valid owned bridge even when the preferred runtime buffer is available but has not yet
     // been latched. This covers a stopped inherited pipe without a write that would need the stopped timing.
     if (Device->Framebuffer && Device->DcnFirmwareKnown && Device->FramebufferLength &&
@@ -1534,7 +1540,17 @@ NTSTATUS DcnWriterBridge(_Inout_ BC250_DEVICE* Device, _In_ volatile LONG* Gener
         DcnSurfaceBytes(DisplaySourceWidth(Device), DisplaySourceHeight(Device), Device->DcnFirmwarePitch, &bytes) &&
         bytes <= Device->FramebufferLength &&
         DcnAddressFits(Device->DcnFirmwareAddress, (ULONGLONG)Device->VramPhysical.QuadPart, Device->VramLength, bytes) &&
-        DcnWriterBridgeCurrent(Device, Device->DcnFirmwareAddress, Device->DcnFirmwarePitch)) return STATUS_SUCCESS;
+        DcnWriterBridgeCurrent(Device, Device->DcnFirmwareAddress, Device->DcnFirmwarePitch)) {
+        now = KeQueryPerformanceCounter(NULL);
+        if (DcnQpcUs(now.QuadPart - start.QuadPart, Device->DcnQpcFrequency) >= (LONG)BC250_DCN_IMMEDIATE_OBSERVE_US)
+            return STATUS_IO_TIMEOUT;
+        if ((ULONG)InterlockedCompareExchange(Generation, 0, 0) != ExpectedGeneration) return STATUS_DEVICE_BUSY;
+        Bridge->Physical = Device->DcnFirmwareAddress;
+        Bridge->Pitch = Device->DcnFirmwarePitch;
+        Bridge->ProgramEndQpc = now.QuadPart;
+        Bridge->Retired = TRUE;
+        return STATUS_SUCCESS;
+    }
     if (Device->RuntimeFramebuffer && Device->RuntimeFramebufferLength) {
         physical = (ULONGLONG)Device->RuntimeFramebufferPhysical.QuadPart;
         length = Device->RuntimeFramebufferLength;
@@ -1552,41 +1568,69 @@ NTSTATUS DcnWriterBridge(_Inout_ BC250_DEVICE* Device, _In_ volatile LONG* Gener
         return STATUS_INVALID_PARAMETER;
     // A prior writer or firmware may already own the effective surface, including while OTG is stopped. Require
     // the exact validated bridge, stable effective address, no pending request, and matching pitch and format.
-    if (DcnWriterBridgeCurrent(Device, physical, pitch)) return STATUS_SUCCESS;
+    now = KeQueryPerformanceCounter(NULL);
+    if (DcnQpcUs(now.QuadPart - start.QuadPart, Device->DcnQpcFrequency) >= (LONG)BC250_DCN_IMMEDIATE_OBSERVE_US)
+        return STATUS_IO_TIMEOUT;
+    current = DcnWriterBridgeCurrent(Device, physical, pitch);
+    now = KeQueryPerformanceCounter(NULL);
+    if (DcnQpcUs(now.QuadPart - start.QuadPart, Device->DcnQpcFrequency) >= (LONG)BC250_DCN_IMMEDIATE_OBSERVE_US)
+        return STATUS_IO_TIMEOUT;
+    if ((ULONG)InterlockedCompareExchange(Generation, 0, 0) != ExpectedGeneration) return STATUS_DEVICE_BUSY;
+    Bridge->Physical = physical;
+    Bridge->Pitch = pitch;
+    Bridge->ProgramEndQpc = now.QuadPart;
+    if (current) {
+        Bridge->Retired = TRUE;
+        return STATUS_SUCCESS;
+    }
     offset = physical - (ULONGLONG)Device->VramPhysical.QuadPart;
     card = Device->VramMcBase + offset;
     if (card < Device->VramMcBase) return STATUS_INVALID_PARAMETER;
-    start = KeQueryPerformanceCounter(NULL);
     status = DcnFlipSourceAddress(Device, card, pitch, BC250_PLANE_FORMAT_ARGB8888, length, TRUE, &programmed, Wrote);
-    end = KeQueryPerformanceCounter(NULL);
+    now = KeQueryPerformanceCounter(NULL);
+    Bridge->ProgramEndQpc = now.QuadPart;
     if (!NT_SUCCESS(status)) return status;
-    // Flags 0 identifies an internal writer bridge, not an OS SetVidPnSourceAddress request.
-    outcome = DcnImmediateObserve(Device, card, programmed, start.QuadPart, end.QuadPart,
-                                  Generation, ExpectedGeneration, 0);
-    status = outcome == BC250_DCN_IMMEDIATE_DONE || outcome == BC250_DCN_IMMEDIATE_DONE_LATE ?
-        STATUS_SUCCESS : STATUS_IO_TIMEOUT;
-    if (!NT_SUCCESS(status)) return status;
-    // The r6 lab witnesses included Q=1 while EARLIEST_INUSE still named the old application buffer. Writer
-    // admission must retire the old scanout before long display writes, so Q alone is insufficient here. Use the
-    // remaining observation budget, never another 50 us, to prove the exact reserved surface effective with
-    // pending clear around it.
-    for (steps = 0; steps < BC250_DCN_IMMEDIATE_OBSERVE_US; steps++) {
+    if (programmed != physical) return STATUS_INVALID_DEVICE_STATE;
+    if (DcnQpcUs(now.QuadPart - start.QuadPart, Device->DcnQpcFrequency) > (LONG)BC250_DCN_IMMEDIATE_OBSERVE_US) {
+        InterlockedIncrement(&Device->DcnImmediateOverruns);
+        return STATUS_IO_TIMEOUT;
+    }
+    if ((ULONG)InterlockedCompareExchange(Generation, 0, 0) != ExpectedGeneration) return STATUS_DEVICE_BUSY;
+    return STATUS_SUCCESS;
+}
+
+// EARLIEST can follow the immediate request at the next vblank (M902). Waiting for it under L within 50 us
+// falsely faulted a normal one-frame delay. Keep the writer's exclusion gate, but wait only at PASSIVE_LEVEL.
+// Every sample must fit the original deadline, including entry delay, read time and an overscheduled sleep.
+NTSTATUS DcnWriterBridgeRetire(_Inout_ BC250_DEVICE* Device, _In_ volatile LONG* Generation,
+    ULONG ExpectedGeneration, _In_ const BC250_DCN_WRITER_BRIDGE* Bridge)
+{
+    LARGE_INTEGER now;
+    LONG elapsed;
+    ULONG steps;
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL) return STATUS_INVALID_DEVICE_STATE;
+    if (!Device->Mmio || Device->DcnQpcFrequency <= 0 || Bridge->Physical == 0 || Bridge->Pitch == 0)
+        return STATUS_DEVICE_NOT_READY;
+    if ((ULONG)InterlockedCompareExchange(Generation, 0, 0) != ExpectedGeneration) return STATUS_DEVICE_BUSY;
+    if (Bridge->Retired) return STATUS_SUCCESS;
+    for (steps = 0; steps < BC250_DCN_WRITER_RETIRE_US / 50u; steps++) {
         BOOLEAN effective;
         now = KeQueryPerformanceCounter(NULL);
-        if (DcnQpcUs(now.QuadPart - end.QuadPart, Device->DcnQpcFrequency) >= (LONG)BC250_DCN_IMMEDIATE_OBSERVE_US)
-            break;
-        if ((ULONG)InterlockedCompareExchange(Generation, 0, 0) != ExpectedGeneration) break;
-        effective = DcnWriterBridgeCurrent(Device, physical, pitch);
+        elapsed = DcnQpcUs(now.QuadPart - Bridge->ProgramEndQpc, Device->DcnQpcFrequency);
+        if (elapsed < 0 || elapsed >= (LONG)BC250_DCN_WRITER_RETIRE_US) break;
+        if ((ULONG)InterlockedCompareExchange(Generation, 0, 0) != ExpectedGeneration) return STATUS_DEVICE_BUSY;
+        effective = DcnWriterBridgeCurrent(Device, Bridge->Physical, Bridge->Pitch);
         now = KeQueryPerformanceCounter(NULL);
-        if (DcnQpcUs(now.QuadPart - end.QuadPart, Device->DcnQpcFrequency) > (LONG)BC250_DCN_IMMEDIATE_OBSERVE_US) {
-            InterlockedIncrement(&Device->DcnImmediateOverruns);
-            break;
-        }
-        if (effective && (ULONG)InterlockedCompareExchange(Generation, 0, 0) == ExpectedGeneration)
-            return STATUS_SUCCESS;
-        if (DcnQpcUs(now.QuadPart - end.QuadPart, Device->DcnQpcFrequency) >= (LONG)BC250_DCN_IMMEDIATE_OBSERVE_US)
-            break;
-        KeStallExecutionProcessor(1);
+        elapsed = DcnQpcUs(now.QuadPart - Bridge->ProgramEndQpc, Device->DcnQpcFrequency);
+        if (elapsed < 0 || elapsed > (LONG)BC250_DCN_WRITER_RETIRE_US) break;
+        if ((ULONG)InterlockedCompareExchange(Generation, 0, 0) != ExpectedGeneration) return STATUS_DEVICE_BUSY;
+        if (effective) return STATUS_SUCCESS;
+        if (elapsed >= (LONG)BC250_DCN_WRITER_RETIRE_US) break;
+        // A coarse scheduler timer can sleep from 15.6 ms to 31.2 ms and miss a one-frame retirement entirely.
+        // This rare writer acquisition instead polls at PASSIVE with short stalls and no software lock held.
+        // Interrupts/preemption remain enabled; the next sample earns its budget again after any scheduling delay.
+        KeStallExecutionProcessor((ULONG)(((LONG)BC250_DCN_WRITER_RETIRE_US - elapsed < 50) ?
+            (LONG)BC250_DCN_WRITER_RETIRE_US - elapsed : 50));
     }
     return STATUS_IO_TIMEOUT;
 }

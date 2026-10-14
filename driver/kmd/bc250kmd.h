@@ -818,8 +818,21 @@ ULONG DcnImmediateObserve(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddress, U
 // 1 or 0, and -1 when the read failed. DcnFaultBlank: one read-modify-write of HUBP0_DCHUBP_CNTL that sets HUBP_BLANK_EN and
 // HUBP_TTU_DISABLE.
 int DcnHubpDrained(_In_ const BC250_DEVICE* Device);
+#define BC250_DCN_WRITER_RETIRE_US 30000u
+typedef struct _BC250_DCN_WRITER_BRIDGE {
+    ULONGLONG Physical;
+    ULONG Pitch;
+    LONGLONG ProgramEndQpc;
+    BOOLEAN Retired;
+} BC250_DCN_WRITER_BRIDGE;
+// WriterActive and its odd Generation already belong to the caller under L. Validate and program the owned
+// bridge only; no frame-length wait inside L. Retired names a stable already-owned surface proved without a write.
 NTSTATUS DcnWriterBridge(_Inout_ BC250_DEVICE* Device, _In_ volatile LONG* Generation,
-    ULONG ExpectedGeneration, _Out_ BOOLEAN* Wrote);
+    ULONG ExpectedGeneration, _Out_ BOOLEAN* Wrote, _Out_ BC250_DCN_WRITER_BRIDGE* Bridge);
+// PASSIVE_LEVEL and outside L, with WriterActive/BUSY retained. The 30 ms budget begins at ProgramEndQpc, including
+// time spent leaving L. No caller may release the old allocation or begin long display writes until this succeeds.
+NTSTATUS DcnWriterBridgeRetire(_Inout_ BC250_DEVICE* Device, _In_ volatile LONG* Generation,
+    ULONG ExpectedGeneration, _In_ const BC250_DCN_WRITER_BRIDGE* Bridge);
 int DcnOtgRunning(_In_ const BC250_DEVICE* Device);
 NTSTATUS DcnFaultBlank(_Inout_ BC250_DEVICE* Device);
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)

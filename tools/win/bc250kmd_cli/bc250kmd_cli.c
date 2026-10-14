@@ -4382,6 +4382,29 @@ static int Bc250BoardMemoryProbeCommand(void)
     return status < 0 ? 1 : 0;
 }
 
+static int ConnectorReplug(void)
+{
+    BC250_ESCAPE_CONNECTOR_REPLUG_DATA data = {0};
+    NTSTATUS status;
+    data.Magic = BC250_ESCAPE_MAGIC;
+    data.Command = BC250_ESCAPE_CONNECTOR_REPLUG;
+    data.Status = BC250_ESCAPE_STATUS_UNKNOWN_COMMAND;
+    data.AbiVersion = BC250_CONNECTOR_REPLUG_ABI;
+    if (SendEscapeFlags(BC250_DEFAULT_HWID, &data, sizeof(data), 1, &status)) return 1;
+    if (!NT_SUCCESS(status)) { PrintStatus("connector replug", status); return 1; }
+    if (data.Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) {
+        fprintf(stderr, "connector replug requires the lab KMD, test signing and LabDiagnostics=1\n");
+        return 3;
+    }
+    printf("connector replug: %s ntstatus=0x%08lX generation=%lu dpc_queued=%lu\n",
+        data.Status == BC250_ESCAPE_STATUS_DONE ? "accepted" : "REFUSED", data.NtStatus,
+        data.Generation, data.DpcQueued);
+    if (data.Magic != BC250_ESCAPE_MAGIC || data.Command != BC250_ESCAPE_CONNECTOR_REPLUG ||
+        data.AbiVersion != BC250_CONNECTOR_REPLUG_ABI || data.Status != BC250_ESCAPE_STATUS_DONE ||
+        data.NtStatus != 0) return 3;
+    return 0; // Worker completion is recorded in the connector log, not this reply.
+}
+
 #include "waves_command.h"
 #include "state_command.h"
 
@@ -4409,6 +4432,7 @@ int wmain(int argc, wchar_t **argv)
                         "       bc250kmd_cli ih plan | init | fini | state\n"
                         "       bc250kmd_cli dcn                          (read-only dump of the DCN registers, ADR 0011)\n"
                         "       bc250kmd_cli dcnflip <phys hex> [fill <argb hex>] | dcnflip restore\n"
+                        "       bc250kmd_cli connector replug   (lab KMD only; queues real hotplug)\n"
                         "       bc250kmd_cli fence <ring> <count> [noint|test|dispatch|ib]\n"
                         "       bc250kmd_cli ib <vmid> <root phys hex> <gpu va hex> <dwords>\n"
                         "       bc250kmd_cli sdmaib [bytes]               (VMID0 indirect SDMA copy/fill control)\n"
@@ -4436,6 +4460,7 @@ int wmain(int argc, wchar_t **argv)
     if (!_wcsicmp(argv[1], L"bc250-board-memory-probe") && argc == 2) return Bc250BoardMemoryProbeCommand();
     if (!_wcsicmp(argv[1], L"board-caps") && argc == 2) return BoardCapsCommand();
     if (!_wcsicmp(argv[1], L"health")) return StartHealth(argc,argv);
+    if (!_wcsicmp(argv[1], L"connector") && argc == 3 && !_wcsicmp(argv[2], L"replug")) return ConnectorReplug();
     if (!_wcsicmp(argv[1], L"clock")) return Clock(argc,argv);
     if (!_wcsicmp(argv[1], L"telemetry") && argc <= 4) return Telemetry(argc, argv);
     if (!_wcsicmp(argv[1], L"vram") && argc <= 3) return VideoMemory(argc == 3 ? argv[2] : NULL);

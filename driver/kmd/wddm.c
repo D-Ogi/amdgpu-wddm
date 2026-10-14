@@ -667,6 +667,9 @@ typedef struct _BC250_WDDM {
     BOOLEAN WriterResumed;              // the active writer called Resume: no DRAINED readback counts any more
     BOOLEAN WriterDeposit;              // software-gate-closed Desired was deposited during the active writer
     volatile LONG WriterBusy;           // hardware flips refused while a long writer owns the pipe
+    volatile LONG WriterBusyByKind[BC250_WRITER_KINDS];
+    volatile LONG WriterBridgePrograms, WriterBridgeRetired, WriterBridgeFailures;
+    BOOLEAN WriterReady;                // bridge retirement proved outside L, then committed under L
     volatile LONG WriterRecovery;       // queued section failure; consumed only inside L
     BOOLEAN DesiredOwed;                // Desired is a next-VSync success that no CRTC_VSYNC report carried yet
     ULONG DepositSequence;              // advances at every deposit, so that a programmed deposit is the newest one
@@ -3186,6 +3189,13 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
                  Wddm->EndPrograms, Wddm->OwedInvalidated, Wddm->OwedReported, Wddm->FlipFlushes,
                  Wddm->DestroyUnsynchronized);
         GuardLog("wddm summary: flip writer-busy %ld recovery-pending %ld", Wddm->WriterBusy, Wddm->WriterRecovery);
+        {
+            ULONG kind;
+            for (kind = 0; kind < BC250_WRITER_KINDS; kind++)
+                GuardLog("wddm summary: flip writer kind %lu busy %ld", kind, Wddm->WriterBusyByKind[kind]);
+        }
+        GuardLog("wddm summary: bridge programmed %ld retired %ld failed %ld",
+                 Wddm->WriterBridgePrograms, Wddm->WriterBridgeRetired, Wddm->WriterBridgeFailures);
         GuardLog("wddm summary: flip e5 %ld faulting %ld code 0x%06lX node %u blank %08lX",
                  Wddm->FlipFaults, Wddm->Faulting, Wddm->FaultCode, Wddm->FaultNode, (ULONG)Wddm->FaultBlank);
         GuardLog("wddm summary: flip e5 notified %ld failed %ld drain %ld/%ld; exclusive refused %ld failed %ld",
@@ -8090,7 +8100,7 @@ void WddmFlipFaultDpc(_Inout_ BC250_DEVICE* Device)
 }
 
 // The writers' sections. A writer (modeset.c, connector_link.c, hdmi_link.c, the destroy restore below) runs at
-// PASSIVE_LEVEL and takes L three times, each time for a short section: Begin, Resume before any unblank, End. Its long
+// PASSIVE_LEVEL and takes L for admission, retirement commit, Resume before any unblank, and End. Its long
 // work runs outside L. Between Begin and End the generation is odd. Hardware flip requests are refused; only
 // the gate-closed software-report route deposits Desired (the historical W labels).
 typedef struct _BC250_WDDM_WRITER {
@@ -8101,6 +8111,9 @@ typedef struct _BC250_WDDM_WRITER {
     BOOLEAN Invalidate;
     NTSTATUS Status;
     ULONG Answer;
+    BOOLEAN Claimed;
+    BOOLEAN Wrote;
+    BC250_DCN_WRITER_BRIDGE Bridge;
 } BC250_WDDM_WRITER;
 
 // W-u (section 7.2), inside L: the record of a deposit that the flip transaction just made, in the next ring slot.
@@ -8265,28 +8278,57 @@ static BOOLEAN WddmWriterBeginLocked(_In_ PVOID Context)
     BC250_WDDM_WRITER* w = (BC250_WDDM_WRITER*)Context;
     BC250_WDDM* wddm = w->Wddm;
     const ULONG generation = (ULONG)wddm->PrimarySequence;
-    BOOLEAN wrote = FALSE;
-
     (void)WddmWriterRecoveryLocked(w->Device);
     w->Answer = Bc250WriterBegin(wddm->Faulting != 0 ? 1u : 0u, generation & 1u);
     if (w->Answer != BC250_WRITER_BEGIN_TAKE) return TRUE;
-    // No immediate SUCCESS can interleave with retirement of the old app
-    // buffer. Publish the writer only after the reserved bridge is proven.
-    InterlockedExchange(&wddm->PrimarySequence, (LONG)(generation + 1u));
-    w->Status = w->Device->VidPnFlipEnabled ?
-        DcnWriterBridge(w->Device, &wddm->PrimarySequence, generation + 1u, &wrote) : STATUS_SUCCESS;
-    if (!NT_SUCCESS(w->Status)) {
-        if (wrote) WddmFlipFault(w->Device, wddm, BC250_FLIP_FAULT_BRIDGE, BC250_WDDM_NODE_3D);
-        InterlockedExchange(&wddm->PrimarySequence, (LONG)generation);
-        w->Answer = wrote ? BC250_WRITER_BEGIN_FAULTING : BC250_WRITER_BEGIN_REFUSED;
-        return TRUE;
-    }
+    // Publish BUSY before programming. Keep the old application allocation
+    // retained while EARLIEST catches up outside L, possibly at the next VSync.
     w->Generation = generation;
+    w->Claimed = TRUE;
+    InterlockedExchange(&wddm->PrimarySequence, (LONG)(generation + 1u));
     wddm->WriterActive = TRUE;
+    wddm->WriterReady = FALSE;
     wddm->WriterResumed = FALSE;
     wddm->WriterDeposit = FALSE;
     wddm->WriterKind = w->Kind;
+    w->Status = w->Device->VidPnFlipEnabled ?
+        DcnWriterBridge(w->Device, &wddm->PrimarySequence, generation + 1u, &w->Wrote, &w->Bridge) : STATUS_SUCCESS;
+    if (w->Wrote) InterlockedIncrement(&wddm->WriterBridgePrograms);
+    if (!NT_SUCCESS(w->Status)) {
+        if (w->Wrote) {
+            InterlockedIncrement(&wddm->WriterBridgeFailures);
+            WddmFlipFault(w->Device, wddm, BC250_FLIP_FAULT_BRIDGE, BC250_WDDM_NODE_3D);
+        } else {
+            wddm->WriterActive = FALSE;
+            InterlockedExchange(&wddm->PrimarySequence, (LONG)generation);
+            w->Claimed = FALSE;
+        }
+        w->Answer = w->Wrote ? BC250_WRITER_BEGIN_FAULTING : BC250_WRITER_BEGIN_REFUSED;
+        return TRUE;
+    }
     wddm->PrimaryNeedsRestore = TRUE;
+    return TRUE;
+}
+
+// Commit the PASSIVE retirement proof under L. A fault or changed owner during
+// the observation cannot grant the long operation, including allocation free.
+static BOOLEAN WddmWriterRetiredLocked(_In_ PVOID Context)
+{
+    BC250_WDDM_WRITER* w = (BC250_WDDM_WRITER*)Context;
+    BC250_WDDM* wddm = w->Wddm;
+    (void)WddmWriterRecoveryLocked(w->Device);
+    if (!wddm->WriterActive || (ULONG)wddm->PrimarySequence != w->Generation + 1u) {
+        w->Status = STATUS_INVALID_DEVICE_STATE;
+        WddmFlipFault(w->Device, wddm, BC250_FLIP_FAULT_SECTION, BC250_WDDM_NODE_3D);
+    } else if (wddm->Faulting) {
+        w->Status = STATUS_DEVICE_HARDWARE_ERROR;
+    } else if (!NT_SUCCESS(w->Status)) {
+        InterlockedIncrement(&wddm->WriterBridgeFailures);
+        WddmFlipFault(w->Device, wddm, BC250_FLIP_FAULT_BRIDGE, BC250_WDDM_NODE_3D);
+    } else {
+        if (w->Device->VidPnFlipEnabled) InterlockedIncrement(&wddm->WriterBridgeRetired);
+        wddm->WriterReady = TRUE;
+    }
     return TRUE;
 }
 
@@ -8303,6 +8345,10 @@ BOOLEAN WddmPrimaryExclusiveBegin(_Inout_ BC250_DEVICE* Device, ULONG Kind, _Out
 
     *Generation = 0;
     if (wddm == NULL) return TRUE;
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL) {
+        InterlockedIncrement(&wddm->WriterHigh);
+        return FALSE;
+    }
     RtlZeroMemory(&w, sizeof(w));
     w.Device = Device;
     w.Wddm = wddm;
@@ -8312,10 +8358,23 @@ BOOLEAN WddmPrimaryExclusiveBegin(_Inout_ BC250_DEVICE* Device, ULONG Kind, _Out
         status = WddmSection(Device, WddmWriterBeginLocked, &w);
         if (!NT_SUCCESS(status))
         {
-            WddmWriterSectionFailure(Device, wddm, status);
+            // No acquired owner and no write: ordinary BEGIN_REFUSED, no E5.
+            if (w.Claimed) WddmWriterSectionFailure(Device, wddm, status);
+            else InterlockedIncrement(&wddm->WriterSyncFailed);
             return FALSE;
         }
-        if (w.Answer == BC250_WRITER_BEGIN_TAKE) { *Generation = w.Generation; return TRUE; }
+        if (w.Answer == BC250_WRITER_BEGIN_TAKE) {
+            if (Device->VidPnFlipEnabled)
+                w.Status = DcnWriterBridgeRetire(Device, &wddm->PrimarySequence, w.Generation + 1u, &w.Bridge);
+            status = WddmSection(Device, WddmWriterRetiredLocked, &w);
+            if (!NT_SUCCESS(status)) {
+                WddmWriterSectionFailure(Device, wddm, status);
+                return FALSE;
+            }
+            if (!NT_SUCCESS(w.Status)) return FALSE;
+            *Generation = w.Generation;
+            return TRUE;
+        }
         if (w.Answer == BC250_WRITER_BEGIN_REFUSED) return FALSE;
         if (w.Answer == BC250_WRITER_BEGIN_FAULTING) { InterlockedIncrement(&wddm->WriterFaulting); return FALSE; }
         KeStallExecutionProcessor(BC250_WDDM_EXCLUSIVE_STEP_US);
@@ -8330,7 +8389,7 @@ static BOOLEAN WddmWriterResumeLocked(_In_ PVOID Context)
     BC250_WDDM_WRITER* w = (BC250_WDDM_WRITER*)Context;
     (void)WddmWriterRecoveryLocked(w->Device);
     w->Status = w->Wddm->Faulting ? STATUS_DEVICE_HARDWARE_ERROR :
-        (w->Wddm->WriterActive ? STATUS_SUCCESS : STATUS_INVALID_DEVICE_STATE);
+        (w->Wddm->WriterActive && w->Wddm->WriterReady ? STATUS_SUCCESS : STATUS_INVALID_DEVICE_STATE);
     if (NT_SUCCESS(w->Status)) w->Wddm->WriterResumed = TRUE;
     return TRUE;
 }
@@ -8415,6 +8474,7 @@ static BOOLEAN WddmWriterEndLocked(_In_ PVOID Context)
     wddm->WriterDeposit = FALSE;
     wddm->WriterResumed = FALSE;
     wddm->WriterActive = FALSE;
+    wddm->WriterReady = FALSE;
     InterlockedExchange(&wddm->PrimarySequence, (LONG)(w->Generation + 2u));
     return TRUE;
 }
@@ -8470,6 +8530,7 @@ typedef struct _BC250_WDDM_DESTROY {
     ULONGLONG Serial;
     BOOLEAN Taken;
     BOOLEAN NeedWriter;
+    BOOLEAN Refused;
 } BC250_WDDM_DESTROY;
 
 static BOOLEAN WddmDestroyTakeLocked(_In_ PVOID Context)
@@ -8478,8 +8539,12 @@ static BOOLEAN WddmDestroyTakeLocked(_In_ PVOID Context)
     BC250_WDDM* wddm = d->Wddm;
     d->NeedWriter = FALSE;
     d->Taken = FALSE;
+    d->Refused = FALSE;
     if ((ULONGLONG)wddm->ScanoutObject != d->Serial) return TRUE;
     if (!wddm->WriterActive) { d->NeedWriter = TRUE; return TRUE; }
+    // Begin has published BUSY but may still be retiring the old application
+    // surface at PASSIVE. Active alone does not authorize that object's free.
+    if (!wddm->WriterReady || wddm->Faulting) { d->Refused = TRUE; return TRUE; }
     wddm->DesiredOwed = FALSE;
     wddm->WriterDeposit = FALSE;
     WddmPrimaryInvalidate(wddm);
@@ -8496,11 +8561,13 @@ static NTSTATUS WddmDestroyRestore(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_W
     d.Serial = Serial;
     d.Taken = FALSE;
     d.NeedWriter = FALSE;
+    d.Refused = FALSE;
     status = WddmSection(Device, WddmDestroyTakeLocked, &d);
     if (!NT_SUCCESS(status)) {
         WddmWriterSectionFailure(Device, Wddm, status);
         return status;
     }
+    if (d.Refused) return STATUS_DEVICE_BUSY;
     if (d.NeedWriter) {
         if (!WddmPrimaryExclusiveBegin(Device, BC250_WRITER_DESTROY, &generation)) return STATUS_DEVICE_BUSY;
         status = WddmSection(Device, WddmDestroyTakeLocked, &d);
@@ -8510,6 +8577,7 @@ static NTSTATUS WddmDestroyRestore(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_W
         }
         ended = WddmPrimaryExclusiveEnd(Device, generation, d.Taken);
         if (!NT_SUCCESS(ended)) return ended;
+        if (d.Refused) return STATUS_DEVICE_BUSY;
     }
     if (d.Taken && InterlockedIncrement(&Wddm->ScanoutTeardowns) <= BC250_WDDM_LOG_CALLS)
         GuardLog("wddm: DestroyAllocation retired scanned surface to reserved storage");
@@ -8683,6 +8751,8 @@ static BOOLEAN WddmFlipTransaction(_In_ PVOID Context)
         // Refusal preserves OS ownership and is ordinary contention, not E5.
         if (device->VidPnFlipEnabled) {
             InterlockedIncrement(&wddm->WriterBusy);
+            if (wddm->WriterKind < BC250_WRITER_KINDS)
+                InterlockedIncrement(&wddm->WriterBusyByKind[wddm->WriterKind]);
             flip->Result = STATUS_DEVICE_BUSY;
             return TRUE;
         }

@@ -29,6 +29,7 @@
 //                                                          Its registers: IH_RB_CNTL, IH_RB_RPTR, IH_RB_WPTR, nothing
 //                                                          else, and the one doorbell.
 #include "bc250kmd.h"
+#include "lab_gate.h" // BD-167: the user diagnostic entry is lab-only
 #include "bc250kmd_escape.h"
 #include "regs.generated.h"
 #include "osssys_5_0_0_sh_mask.h"    // IH_STATUS field masks for the escape's decoded summary only; every offset

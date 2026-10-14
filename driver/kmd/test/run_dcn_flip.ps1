@@ -1,4 +1,4 @@
-param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\m9\dcn-flip",[string]$Source='',[ValidateSet('','PendingOnly','AddressOnly','BoundAtStart','OverrunUncounted','PollAfterStall','PendingArmIgnored','SourceAddressLogs','BridgeProofIgnored','BridgeExtentIgnored','BridgeCurrentUnsafe')][string]$Mutation='')
+param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\m9\dcn-flip",[string]$Source='',[ValidateSet('','PendingOnly','AddressOnly','BoundAtStart','OverrunUncounted','PollAfterStall','PendingArmIgnored','SourceAddressLogs','BridgeProofIgnored','BridgeExtentIgnored','BridgeCurrentUnsafe','BridgeRetirePostStall','BridgeRetirePostDeadline','BridgeRetireAtDirql','BridgeRetireOneFrame')][string]$Mutation='')
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 if(-not $Source){$Source="$repo\driver\kmd\dcn.c"}
@@ -22,16 +22,24 @@ if($Mutation) {
     $s='if (steps != 0 && (us - record.ProgramUs >= (LONG)BC250_DCN_IMMEDIATE_OBSERVE_US ||'
     $a='!((Arm->PendingBefore | Arm->PendingAfter) & HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK)'
     $l='InterlockedIncrement(&Device->DcnFlipsHardware);'
-    $q='effective = DcnWriterBridgeCurrent(Device, physical, pitch);'
+    $q='effective = DcnWriterBridgeCurrent(Device, Bridge->Physical, Bridge->Pitch);'
     $e='|| bytes > length ||'
     $c='scanned == Physical && again == Physical && primary == Physical &&'
+    $r='if (elapsed < 0 || elapsed >= (LONG)BC250_DCN_WRITER_RETIRE_US) break;'
+    $z='if (elapsed < 0 || elapsed > (LONG)BC250_DCN_WRITER_RETIRE_US) break;'
+    $i='if (KeGetCurrentIrql() != PASSIVE_LEVEL) return STATUS_INVALID_DEVICE_STATE;'
+    $f='#define BC250_DCN_WRITER_RETIRE_US 30000u'
     $m=@{PendingOnly=@($p,'if (NT_SUCCESS(status) && !pendingSet)');AddressOnly=@($p,'if (NT_SUCCESS(status) && primary == request)')
          BoundAtStart=@($b,'if (us - record.ProgramUs >= (LONG)BC250_DCN_IMMEDIATE_OBSERVE_US ||');OverrunUncounted=@($o,'(void)0;')
          PollAfterStall=@($s,'if (steps > BC250_DCN_IMMEDIATE_OBSERVE_US && (us - record.ProgramUs >= (LONG)BC250_DCN_IMMEDIATE_OBSERVE_US ||')
          PendingArmIgnored=@($a,'TRUE');SourceAddressLogs=@($l,('GuardLog("flip source under L"); '+$l))
          BridgeProofIgnored=@($q,'effective = TRUE;')
          BridgeExtentIgnored=@($e,'|| length == 0 ||')
-         BridgeCurrentUnsafe=@($c,'Physical != 0 && scanned == again && primary == scanned &&')}[$Mutation]
+         BridgeCurrentUnsafe=@($c,'Physical != 0 && scanned == again && primary == scanned &&')
+         BridgeRetirePostStall=@($r,'if (elapsed < 0) break;')
+         BridgeRetirePostDeadline=@($z,'if (elapsed < 0) break;')
+         BridgeRetireAtDirql=@($i,'if (KeGetCurrentIrql() < PASSIVE_LEVEL) return STATUS_INVALID_DEVICE_STATE;')
+         BridgeRetireOneFrame=@($f,'#define BC250_DCN_WRITER_RETIRE_US 50u')}[$Mutation]
     $anchors=if($Mutation -eq 'OverrunUncounted'){2}else{1}
     if(([regex]::Matches($text,[regex]::Escape($m[0]))).Count -ne $anchors){throw "$Mutation mutation anchor changed"}
     [IO.File]::WriteAllText($path,$text.Replace($m[0],$m[1]))

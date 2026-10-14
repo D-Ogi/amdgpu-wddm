@@ -58,6 +58,10 @@ NTSTATUS ConnectorBufferPrepare(struct _BC250_DEVICE* Device);
 void ConnectorBufferRelease(struct _BC250_DEVICE* Device);
 BOOLEAN ConnectorInterrupt(struct _BC250_DEVICE* Device);
 void ConnectorDpc(struct _BC250_DEVICE* Device);
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+// Queue the real hotplug worker; success means accepted, not rediscovery complete.
+NTSTATUS ConnectorReplug(struct _BC250_DEVICE* Device, ULONG* Generation, BOOLEAN* DpcQueued);
+#endif
 BOOLEAN ConnectorIsEnabled(struct _BC250_DEVICE* Device);
 BOOLEAN ConnectorIsConnected(struct _BC250_DEVICE* Device);
 BOOLEAN ConnectorGenerationCurrent(struct _BC250_DEVICE* Device, ULONG Generation);

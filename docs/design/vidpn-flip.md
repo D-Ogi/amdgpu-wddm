@@ -355,9 +355,15 @@ The whole flip section has its own elapsed-time measurement, including lab witne
 
 **`Begin` and the first transition.** `WddmPrimaryExclusiveBegin` first serializes admission under L.
 Another active writer causes a bounded PASSIVE retry or refusal, never a fault for normal contention.
-Before it exposes `WriterActive`, it moves the plane to a driver-owned bridge and proves the hardware handoff.
-During this step the OS still retains the old primary, and another immediate call cannot enter L.
-A pre-write refusal leaves the writer unstarted. A failed write or an unproved hardware handoff enters explicit recovery.
+Under L it sets `WriterActive`, the odd generation and the BUSY gate before it programs a driver-owned bridge.
+Then it releases L and polls for retirement at PASSIVE_LEVEL, for at most 30 ms from the end of programming.
+The old primary remains retained during this interval. Immediate and next-VSync calls return BUSY.
+Destroy of the old primary also returns BUSY until retirement is proved.
+Short stalls outside L avoid a coarse timer wake that could skip the next VSync and the entire observation window.
+After the proof, a second section checks the owner, generation and fault state before it sets `WriterReady`.
+Only then does `Begin` authorize the long operation. Destroy cannot free the old allocation before this step.
+A pre-write refusal rolls back admission and leaves the writer unstarted, without E5.
+A failed write or a retirement timeout retains ownership and enters explicit recovery.
 
 Blanking alone is insufficient. An old address can remain latched while HUBP is drained.
 Programming a new shadow address and resuming memory reads must not expose that old application address.
@@ -375,7 +381,7 @@ With the hardware gate closed, the existing software-report route retains its se
 BUSY is a safety response, not a proved recovery mechanism for this legacy scheduler.
 M904 shows that an exclusive queue head can remain and lead to the later 0x119 assertion.
 M902 also records a BUSY head that stopped progress until a restart.
-The exact r7 artifact still needs a lab overlap trial. These risks remain open until that trial or a different completion contract resolves them.
+The exact r7b artifact still needs a lab overlap trial. These risks remain open until that trial or a different completion contract resolves them.
 
 **Resume and rollback.** `WddmWriterResume` returns an explicit status and authorizes only a reserved-buffer operation.
 It does not return Desired to a caller outside L.
@@ -416,6 +422,8 @@ With the flip gate closed, the existing software-report route remains separate f
 
 **Section failures.** A failed `DxgkCbSynchronizeExecution` call grants no ownership.
 `Begin`, `Resume`, `End` and destroy preserve conservative state and return an error.
+If a `Begin` section failed before it acquired the writer or wrote hardware, it returns BEGIN_REFUSED without a recovery request.
+An acquisition failure after ownership was established, including the retirement commit, keeps the writer owned and queues recovery.
 They never call their protected function directly after the callback refused to synchronize.
 An independent atomic recovery request can be queued from the legal caller context.
 Recovery itself must acquire L, or be consumed by the next entry that already owns L.
@@ -428,6 +436,9 @@ Returning an error from a destroy operation does not establish physical retentio
 
 **Ordinary flips.** With no writer, the transaction checks the request and programs the requested flip type.
 Next-VSync uses `SURFACE_FLIP_TYPE=0`. Immediate uses type 1 and the bounded P' observation described in section 7.1.
+Ordinary immediate flips use P': clear pending, requested PRIMARY readback and unchanged generation.
+The bridge also requires stable EARLIEST_INUSE, pitch and format before it authorizes a long writer or destroy.
+This extra retirement proof waits outside L. It is not part of the ordinary immediate DDI's 50 us observation.
 A repeated pending address is promoted with an immediate write when required.
 An immediate hardware write without a completion proof enters recovery instead of returning success or an indefinitely busy head.
 
@@ -446,7 +457,15 @@ The bounded drain observation after notification is a record, not permission to 
 No fabricated CRTC report completes the failed request.
 On this part the recorded recovery limitation can lead to bugcheck 0x116 (M53). A queued notification is not proof of successful recovery.
 
+In FAULTING, destroy of the scanned allocation can be refused. The driver retains those objects until stop,
+so memory can remain allocated during failed recovery. This is a known limit. A refusal is not permission to free a surface still in use.
+
 **Lab witnesses.** `AMDGPU_WDDM_LAB_FLAVOUR` compiles the event and EARLIEST_INUSE witnesses only into the lab binary.
+The lab-only `bc250kmd_cli connector replug` command requires test signing, `LabDiagnostics=1` and an effective administrator token.
+It increments the connector generation, sets Pending and queues the existing DPC and worker.
+The worker performs the real disconnect, discovery and reconnect sequence. The escape does not fabricate child notifications.
+The release image omits this escape and the raw diagnostic handlers. A linked-image flavour gate checks both builds.
+The summary prints one BUSY count for each `BC250_WRITER_KIND` value and the bridge program, retirement and failure counts.
 An arm is fresh only when event clearing succeeds and no older flip is pending at arm time.
 Excluded or failed arms remain counted. They cannot establish per-request agreement.
 The production reader selects the result first. Later witness reads and comparisons never change that result.

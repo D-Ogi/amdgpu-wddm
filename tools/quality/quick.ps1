@@ -49,6 +49,7 @@ try {
  Check 'kmd-order' { & python "$repo\tools\quality\test_kmd_reproducible.py" --out "$Out\kmd-order" }
  # One namespace spans all KMD headers, including optional diagnostic commands.
  Check 'escape-commands' { & python "$repo\tools\quality\escape_commands.py" --root $repo --out "$Out\escape-commands"; if($LASTEXITCODE -eq 0){ & python -m unittest discover -s "$repo\tools\quality" -p 'test_escape_commands.py' } }
+ Check 'flavour-controls' { $env:BC250_TEST_OUT=(New-Item -ItemType Directory -Force "$Out\flavour-controls").FullName; & python -B -m unittest discover -s "$repo\tools\quality" -p 'test_flavour_gate.py' }
  Check 'facts' { & python "$repo\tools\facts\gen_facts.py" --root $repo --check; if($LASTEXITCODE -eq 0){ & python -m unittest discover -s "$repo\tools\facts" } }
  # Shares, denominators and modelled labels in the facts rows: a percentage must be the share of the
  # counts next to it, and a rate normalised to another clock must say which numbers the model made.
@@ -411,6 +412,8 @@ Check 'ledger-call' { & pwsh -NoProfile -File "$repo\tools\release\test-ledger-c
  $suites=@(
   @{n='link-atom';s='driver\kmd\test\run_link_atom.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
   @{n='connector-buffer';s='driver\kmd\test\run_connector_buffer.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
+  @{n='connector-replug';s='driver\kmd\test\run_connector_replug.ps1';a=@('-Kits',$Kits)}
+  @{n='lab-gate';s='driver\kmd\test\run_lab_gate.ps1';a=@('-Kits',$Kits)}
   @{n='connector-modes';s='driver\kmd\test\run_connector_modes.ps1';a=@('-Root',$Workspace)}
   @{n='connector-link';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits)}
   @{n='connector-link-stale-generation';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitGeneration','-ExpectFailure')}
@@ -447,6 +450,10 @@ Check 'ledger-call' { & pwsh -NoProfile -File "$repo\tools\release\test-ledger-c
   @{n='dcn-flip-bridge-proof';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','BridgeProofIgnored');Fails=$true}
   @{n='dcn-flip-bridge-extent';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','BridgeExtentIgnored');Fails=$true}
   @{n='dcn-flip-bridge-current';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','BridgeCurrentUnsafe');Fails=$true}
+  @{n='dcn-flip-retire-stall';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','BridgeRetirePostStall');Fails=$true}
+  @{n='dcn-flip-retire-deadline';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','BridgeRetirePostDeadline');Fails=$true}
+  @{n='dcn-flip-retire-irql';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','BridgeRetireAtDirql');Fails=$true}
+  @{n='dcn-flip-retire-frame';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','BridgeRetireOneFrame');Fails=$true}
   @{n='flip-state';s='driver\kmd\test\run_flip_state.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
   @{n='flip-state-controls';s='driver\kmd\test\run_flip_state.ps1';a=@('-Root',$Workspace,'-Kits',$Kits,'-Mutation','all')}
   @{n='dcn-observation';s='driver\kmd\test\run_dcn_observation.ps1';a=@('-Root',$Workspace)}

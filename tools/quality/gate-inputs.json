@@ -225,6 +225,13 @@
         "host"
       ]
     },
+    "flavour-controls": { "inputs": ["host"] },
+    "connector-replug": { "inputs": ["host"] },
+    "lab-gate": { "inputs": ["host"] },
+    "dcn-flip-retire-stall": { "inputs": ["host"] },
+    "dcn-flip-retire-deadline": { "inputs": ["host"] },
+    "dcn-flip-retire-irql": { "inputs": ["host"] },
+    "dcn-flip-retire-frame": { "inputs": ["host"] },
     "kmd-order": {
       "inputs": [
         "host"

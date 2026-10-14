@@ -23,7 +23,7 @@ BOOLEAN LabDiagnosticsAllowed(void);   // PASSIVE_LEVEL; TRUE iff built -Lab AND
 // SYS as the arm's marker, and its absence from the release SYS shows that the arm is not compiled there.
 typedef enum _BC250_LAB_ESCAPE {
     LabEscapeMemory, LabEscapeRegister, LabEscapeGart, LabEscapePsp, LabEscapeGfx, LabEscapeFence, LabEscapeIh,
-    LabEscapeDcn, LabEscapeDcnFlip, LabEscapeFbdump, LabEscapeSdma, LabEscapeCount
+    LabEscapeDcn, LabEscapeDcnFlip, LabEscapeFbdump, LabEscapeSdma, LabEscapeConnectorReplug, LabEscapeCount
 } BC250_LAB_ESCAPE;
 void LabEscapeAdmitted(BC250_LAB_ESCAPE Family, const char* Marker);   // any IRQL the escape runs at
 #endif

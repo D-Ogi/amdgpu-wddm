@@ -33,6 +33,7 @@ typedef struct { LONGLONG QuadPart; } LARGE_INTEGER;
 #define TRUE 1
 #define FALSE 0
 #define DISPATCH_LEVEL 2
+#define PASSIVE_LEVEL 0
 #define TEST_DIRQL 5                /* the device's interrupt level: L, and dxgmms2's flip call (facts M904) */
 #define STATUS_SUCCESS ((NTSTATUS)0)
 #define STATUS_UNSUCCESSFUL ((NTSTATUS)0xC0000001u)
@@ -183,6 +184,9 @@ typedef struct {
     volatile LONG ImmediatePromotions, DmaFlipsRefused;     /* BD-170 */
     volatile LONG ExclusiveRefused, ExclusiveFailed;
     volatile LONG WriterBusy;
+    volatile LONG WriterBusyByKind[BC250_WRITER_KINDS];
+    volatile LONG WriterBridgePrograms, WriterBridgeRetired, WriterBridgeFailures;
+    BOOLEAN WriterReady;
     /* BD-170 r6, the flip state machine's block (wddm.c says what each field is). */
     BOOLEAN WriterActive, WriterResumed, WriterDeposit, DesiredOwed;
     volatile LONG WriterRecovery;
@@ -355,6 +359,15 @@ static NTSTATUS fault_blank_status;
 static unsigned bridge_writes;
 static NTSTATUS bridge_result;
 static BOOLEAN bridge_wrote;
+static NTSTATUS bridge_retire_result;
+static unsigned bridge_retires;
+static void (*retire_hook)(BC250_DEVICE*);
+typedef struct {
+    ULONGLONG Physical;
+    ULONG Pitch;
+    LONGLONG ProgramEndQpc;
+    BOOLEAN Retired;
+} BC250_DCN_WRITER_BRIDGE;
 static LONG InterlockedCompareExchange(volatile LONG *p,LONG value,LONG compare){LONG old=*p;if(old==compare)*p=value;return old;}
 static LONG InterlockedExchange(volatile LONG *p,LONG value){LONG old=*p;*p=value;return old;}
 static LONGLONG InterlockedCompareExchange64(volatile LONGLONG *p,LONGLONG value,LONGLONG compare){LONGLONG old=*p;if(old==compare)*p=value;return old;}
@@ -514,15 +527,28 @@ static int DcnHubpDrained(const BC250_DEVICE *d)
 }
 static int DcnOtgRunning(const BC250_DEVICE *d){(void)d;CHECK(in_lock);++otg_reads;return otg_state;}
 static NTSTATUS DcnFaultBlank(BC250_DEVICE *d){(void)d;CHECK(in_lock);++fault_blanks;return fault_blank_status;}
-/* The reserved surface is not an application allocation. This stub is the boundary of the separate actual-DCN
- * suite: success means that the immediate bridge passed P' before the old application allocation can be released. */
-static NTSTATUS DcnWriterBridge(BC250_DEVICE *d,volatile LONG *generation,ULONG expected,BOOLEAN *wrote)
+/* Programming is not retirement. The separate actual-DCN suite measures full-frame EARLIEST lag. This boundary
+ * leaves the old displayed surface until the PASSIVE retirement operation; the hook injects OS work meanwhile. */
+static NTSTATUS DcnWriterBridge(BC250_DEVICE *d,volatile LONG *generation,ULONG expected,BOOLEAN *wrote,
+                              BC250_DCN_WRITER_BRIDGE *bridge)
 {
     CHECK(in_lock && generation==&d->Wddm->PrimarySequence && (ULONG)*generation==expected && (expected&1));
-    CHECK(!d->Wddm->WriterActive);
+    CHECK(d->Wddm->WriterActive && !d->Wddm->WriterReady);
     ++bridge_writes;*wrote=NT_SUCCESS(bridge_result) || bridge_wrote;
-    if(NT_SUCCESS(bridge_result)){plane_card=displayed=(LONGLONG)BRIDGE_CARD;pending=0;}
+    memset(bridge,0,sizeof(*bridge));bridge->Physical=BRIDGE_CARD;
+    if(NT_SUCCESS(bridge_result)){plane_card=(LONGLONG)BRIDGE_CARD;pending=0;}
     return bridge_result;
+}
+static NTSTATUS DcnWriterBridgeRetire(BC250_DEVICE *d,volatile LONG *generation,ULONG expected,
+                                     const BC250_DCN_WRITER_BRIDGE *bridge)
+{
+    CHECK(!in_lock && irq==PASSIVE_LEVEL && d->Wddm->WriterActive && !d->Wddm->WriterReady);
+    CHECK(generation==&d->Wddm->PrimarySequence && (ULONG)*generation==expected);
+    CHECK(bridge->Physical==BRIDGE_CARD);
+    ++bridge_retires;
+    if(retire_hook){void (*hook)(BC250_DEVICE*)=retire_hook;retire_hook=NULL;hook(d);}
+    if(NT_SUCCESS(bridge_retire_result)) displayed=(LONGLONG)BRIDGE_CARD;
+    return bridge_retire_result;
 }
 /* BD-170: a writer the summary's copy can meet. Each copy of a record moves the slot's Version by writer_step
  * for writer_copies copies (a writer that finished one or more records meanwhile). */
@@ -570,6 +596,7 @@ static void Setup(BC250_DEVICE *d,BC250_WDDM *w,int level)
     plane_card=displayed=0x1000;programmed_pitch=programmed_format=0;expect_record=0;record_checked=0;
     hubp_state=1;otg_state=1;hubp_reads=hubp_drain_after=otg_reads=fault_blanks=0;fault_blank_status=STATUS_SUCCESS;
     bridge_writes=0;bridge_result=STATUS_SUCCESS;bridge_wrote=FALSE;
+    bridge_retire_result=STATUS_SUCCESS;bridge_retires=0;retire_hook=NULL;
     immediate_writes=observed=pending_samples=0;programmed_immediate=0;
     observe_outcome=BC250_DCN_IMMEDIATE_DONE;observed_flags=0;observed_address=0;
     ringGapVsyncs=0;begin_kind=BC250_WRITER_MODESET_COMMIT;
@@ -1456,12 +1483,12 @@ static void Writers(int level)
     }
 
     /* A refused bridge has not released the old allocation. Failure after a write is a hardware failure, not a
-     * normal writer conflict. The writer must never become active in either case. */
+     * normal writer conflict. A post-write failure must retain ownership for recovery. */
     Setup(&d,&w,level);bridge_result=STATUS_ACCESS_DENIED;
     CHECK(!Begin(&d,&generation) && !w.WriterActive && !(w.PrimarySequence&1));
     CHECK(plane_card==0x1000 && hardware==0 && !w.Faulting);
     Setup(&d,&w,level);bridge_result=STATUS_IO_TIMEOUT;bridge_wrote=TRUE;
-    CHECK(!Begin(&d,&generation) && !w.WriterActive && w.Faulting && fault_blanks==1);
+    CHECK(!Begin(&d,&generation) && w.WriterActive && (w.PrimarySequence&1) && w.Faulting && fault_blanks==1);
 
     /* A different writer owns the generation: Begin is bounded and never makes the interrupted writer progress. */
     Setup(&d,&w,level);w.PrimarySequence=5;w.WriterActive=TRUE;
@@ -1558,6 +1585,61 @@ static void DestroyWriter(void)
  * directly, publish an End, restore a surface, or free the allocation that still owns the active scan-out. Every
  * hardware stub keeps its L assertion enabled. The named-routine refusal targets a later stage without relying on
  * how many safe sections Begin uses. */
+static BC250_WDDM_OBJECT *retire_allocation;
+static void DuringBridgeRetirement(BC250_DEVICE *d)
+{
+    DXGKARG_SETVIDPNSOURCEADDRESS request={0};
+    unsigned immediate;
+    CHECK(d->Wddm->WriterActive && !d->Wddm->WriterReady && (d->Wddm->PrimarySequence&1));
+    CHECK(displayed==0x62000 && freed==0);
+    request.PrimarySegment=BC250_WDDM_SEGMENT_VRAM;request.PrimaryAddress.QuadPart=0x63000;
+    for(immediate=0;immediate<2;immediate++) {
+        request.Flags.FlipImmediate=immediate;
+        CHECK(Flip(d,&request)==STATUS_DEVICE_BUSY);
+        CHECK(d->Wddm->PrimaryAddress.QuadPart==0x62000 && displayed==0x62000);
+    }
+    CHECK(Destroy(d,retire_allocation)==STATUS_DEVICE_BUSY);
+    CHECK(freed==0 && d->Wddm->ScanoutObject==(LONGLONG)retire_allocation->Serial && !d->Wddm->Faulting);
+}
+
+static void WriterRetirement(int level)
+{
+    BC250_WDDM w;BC250_DEVICE d;
+    BC250_WDDM_OBJECT game={0};
+    DXGKARG_SETVIDPNSOURCEADDRESS request={0};
+    ULONG generation,kind;
+    game.Magic=BC250_WDDM_MAGIC_ALLOCATION;game.Serial=0xB001;game.UmdAlloc=1;game.ScanoutRequested=1;
+    game.ScanoutWidth=1366;game.ScanoutHeight=768;game.ScanoutPitch=5632;game.UmdBytes=5632ull*768;
+    game.ScanoutFormat=D3DDDIFMT_A8B8G8R8;
+    request.PrimarySegment=BC250_WDDM_SEGMENT_VRAM;request.PrimaryAddress.QuadPart=0x62000;request.hAllocation=&game;
+    for(kind=BC250_WRITER_MODESET_COMMIT;kind<BC250_WRITER_KINDS;kind++) {
+        Setup(&d,&w,level);begin_kind=kind;
+        CHECK(Flip(&d,&request)==STATUS_SUCCESS);displayed=0x62000;
+        retire_allocation=&game;retire_hook=DuringBridgeRetirement;
+        CHECK(Begin(&d,&generation) && !retire_hook && bridge_retires==1 && w.WriterReady);
+        CHECK(w.WriterBusyByKind[kind]==2 && w.WriterBridgePrograms==1 && w.WriterBridgeRetired==1);
+        CHECK(w.WriterBridgeFailures==0 && freed==0 && displayed==(LONGLONG)BRIDGE_CARD);
+        CHECK(Destroy(&d,&game)==STATUS_SUCCESS && freed==1);
+        CHECK(End(&d,generation,TRUE)==STATUS_SUCCESS && !w.WriterReady && !w.WriterActive);
+    }
+    Setup(&d,&w,level);CHECK(Flip(&d,&request)==STATUS_SUCCESS);displayed=0x62000;
+    bridge_retire_result=STATUS_IO_TIMEOUT;
+    CHECK(!Begin(&d,&generation));
+    CHECK(w.WriterActive && !w.WriterReady && (w.PrimarySequence&1) && freed==0);
+    CHECK(w.Faulting && w.FaultCode==BC250_FLIP_FAULT_BRIDGE && w.WriterBridgeFailures==1);
+    CHECK(Destroy(&d,&game)==STATUS_DEVICE_BUSY && freed==0);
+
+    Setup(&d,&w,level);CHECK(Flip(&d,&request)==STATUS_SUCCESS);displayed=0x62000;
+    sync_refuse_routine=WddmWriterRetiredLocked;
+    CHECK(!Begin(&d,&generation) && bridge_retires==1 && w.WriterRecovery && !w.WriterReady);
+    CHECK(Destroy(&d,&game)==STATUS_DEVICE_BUSY && freed==0);
+    FaultDpc(&d);CHECK(w.Faulting && w.FaultCode==BC250_FLIP_FAULT_SECTION);
+
+    Setup(&d,&w,level);CHECK(Flip(&d,&request)==STATUS_SUCCESS);displayed=0x62000;
+    bridge_retire_result=STATUS_IO_TIMEOUT;
+    CHECK(!NT_SUCCESS(Destroy(&d,&game)) && freed==0 && bridge_retires==1 && w.Faulting);
+}
+
 static void WriterSynchronizationRefusals(void)
 {
     BC250_WDDM w;BC250_DEVICE d;
@@ -1571,6 +1653,10 @@ static void WriterSynchronizationRefusals(void)
     CHECK(!Begin(&d,&generation));
     CHECK(w.WriterSyncFailed==1 && !w.WriterActive && w.PrimarySequence==0);
     CHECK(hardware==0 && fault_blanks==0 && w.PrimaryAddress.QuadPart==0x1000);
+    CHECK(!w.WriterRecovery && !w.Faulting && dpcs==0);
+    FaultDpc(&d);
+    CHECK(!w.Faulting && faults_notified==0 && fault_blanks==0);
+    CHECK(Begin(&d,&generation) && w.WriterReady);
 
     Setup(&d,&w,0);
     request.PrimarySegment=BC250_WDDM_SEGMENT_VRAM;request.PrimaryAddress.QuadPart=0x60000;
@@ -1942,6 +2028,7 @@ int main(void)
         FaultProgram(level);
         Overlap(level);
         Writers(level);
+        WriterRetirement(level);
         WriterRecovery(level);
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
         Witnesses(level);

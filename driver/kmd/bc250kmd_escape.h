@@ -1980,6 +1980,14 @@ typedef char BC250_DPAUDIO_OBS_FIT_CHECK[(BC250_DPAUDIO_OBS_COUNT <= BC250_DPAUD
 
 // Board provider ABI 1. Query only; all reserved input and output words are zero.
 #define BC250_ESCAPE_RUN_BOARD_CAPS 33u
+#define BC250_ESCAPE_CONNECTOR_REPLUG 35u // lab only; 34 is GET_WAVES in wave_snapshot.h
+#define BC250_CONNECTOR_REPLUG_ABI 1u
+typedef struct _BC250_ESCAPE_CONNECTOR_REPLUG_DATA {
+    unsigned long Magic, Command, Status, Version;
+    unsigned long AbiVersion, Generation, DpcQueued, NtStatus;
+    unsigned long Reserved[8];
+} BC250_ESCAPE_CONNECTOR_REPLUG_DATA; // 64 bytes; only AbiVersion is input beyond Magic/Command
+typedef char BC250_CONNECTOR_REPLUG_SIZE_CHECK[(sizeof(BC250_ESCAPE_CONNECTOR_REPLUG_DATA) == 64) ? 1 : -1];
 #define BC250_BOARD_CAPS_ABI 1u
 #define BC250_BOARD_CAPS_SUPPORTED 1u
 #define BC250_BOARD_CAPS_FAN 2u

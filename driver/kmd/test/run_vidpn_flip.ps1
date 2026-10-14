@@ -25,6 +25,7 @@ param(
                  'invalidate-gate-closed', 'flush-keeps-owed', 'owed-not-reported', 'fault-no-dpc', 'fault-no-reset',
                  'fault-no-blank', 'fault-notify-twice', 'node-unbounded', 'destroy-preflight-ignored',
                  'section-result-ignored', 'begin-without-bridge', 'begin-ignores-bridge-failure',
+                 'begin-refusal-faults', 'retirement-failure-ignored', 'retirement-ready-too-soon', 'destroy-before-retirement',
                  'resume-unlocked-fallback', 'recovery-without-section', 'recovery-request-dropped',
                  'exclusive-refused-success',
                  'unsafe-next-vsync-deposit', 'unsafe-immediate-deposit',
@@ -112,9 +113,21 @@ $mutations = [ordered]@{
     'begin-without-bridge' = @{ find = 'w->Status = w->Device->VidPnFlipEnabled ?'
         with = 'w->Status = w->Device->VidPnFlipEnabled && !w->Device->VidPnFlipEnabled ?'
         why = 'Begin authorizes a long writer without retiring the old application buffer' }
-    'begin-ignores-bridge-failure' = @{ find = "if (!NT_SUCCESS(w->Status)) {`n        if (wrote)"
-        with = "if (!NT_SUCCESS(w->Status) && NT_SUCCESS(w->Status)) {`n        if (wrote)"
+    'begin-ignores-bridge-failure' = @{ find = "if (!NT_SUCCESS(w->Status)) {`n        if (w->Wrote)"
+        with = "if (!NT_SUCCESS(w->Status) && NT_SUCCESS(w->Status)) {`n        if (w->Wrote)"
         why = 'Begin grants a writer after the bridge refused or failed its proof' }
+    'begin-refusal-faults' = @{ find = 'if (w.Claimed) WddmWriterSectionFailure(Device, wddm, status);'
+        with = 'if (!w.Claimed || w.Claimed) WddmWriterSectionFailure(Device, wddm, status);'
+        why = 'a refused Begin before any write enters E5 on the next DPC' }
+    'retirement-failure-ignored' = @{ find = 'else if (!NT_SUCCESS(w->Status)) {'
+        with = 'else if (!NT_SUCCESS(w->Status) && NT_SUCCESS(w->Status)) {'
+        why = 'an unretired old application surface is made available to a long writer' }
+    'retirement-ready-too-soon' = @{ find = "wddm->WriterActive = TRUE;`n    wddm->WriterReady = FALSE;"
+        with = "wddm->WriterActive = TRUE;`n    wddm->WriterReady = TRUE;"
+        why = 'the long operation is authorized before bridge programming and retirement' }
+    'destroy-before-retirement' = @{ find = 'if (!wddm->WriterReady || wddm->Faulting) { d->Refused = TRUE; return TRUE; }'
+        with = 'if (wddm->Faulting) { d->Refused = TRUE; return TRUE; }'
+        why = 'a concurrent destroy frees the application surface before retirement' }
     'resume-unlocked-fallback' = @{ find = "status = WddmSection(Device, WddmWriterResumeLocked, &w);`n    if (!NT_SUCCESS(status)) {"
         with = "status = WddmSection(Device, WddmWriterResumeLocked, &w);`n    if (!NT_SUCCESS(status)) {`n        (void)WddmWriterResumeLocked(&w);"
         why = 'a refused Resume changes writer state outside L' }

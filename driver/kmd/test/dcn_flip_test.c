@@ -17,6 +17,9 @@ typedef int64_t LONGLONG;
 typedef int64_t LONG64;
 typedef unsigned char UCHAR, *PUCHAR;
 typedef struct { LONGLONG QuadPart; } LARGE_INTEGER;
+typedef struct { ULONGLONG Physical; ULONG Pitch; LONGLONG ProgramEndQpc; BOOLEAN Retired; } BC250_DCN_WRITER_BRIDGE;
+#define BC250_DCN_WRITER_RETIRE_US 30000u
+#define PASSIVE_LEVEL 0
 typedef struct { NTSTATUS Status; ULONG InterruptBefore, InterruptCleared, PendingBefore, PendingAfter; BOOLEAN Fresh; } BC250_DCN_WITNESS_ARM;
 typedef struct { ULONG Interrupt, Low1, High1, High2, Low2; ULONGLONG Earliest1, Earliest2; BOOLEAN Event; } BC250_DCN_WITNESS_READ;
 #define FIELD_OFFSET(type, field) offsetof(type, field)
@@ -125,12 +128,15 @@ static struct {
     int witness, witness_clear_sticky;
     unsigned witness_reads, witness_writes, witness_fail_at, witness_pending_reads;
     ULONG witness_before, witness_after, witness_interrupt;
-    int capturing, bridge;
+    int capturing, bridge, retiring, irql;
+    unsigned retire_stalls, retire_samples, bridge_read_cost;
+    LONGLONG earliest_ready_qpc, delay_cost;
     LONGLONG qpc;
     ULONG frame, position, high_noise;
     ULONGLONG primary, primary_old, sample, earliest_old;
     volatile LONG generation;
 } model;
+static int KeGetCurrentIrql(void) { return model.irql; }
 static unsigned slot_copies;
 static void TestCopy(void *to, const void *from, size_t bytes)
 {
@@ -165,6 +171,8 @@ static NTSTATUS MmioDcnRead(const BC250_DEVICE *d, ULONG reg, ULONG *value)
         return STATUS_SUCCESS;
     }
     if (model.bridge && !model.locked && !model.observing) {
+        if (!model.frozen && reg == BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL)
+            model.qpc += model.bridge_read_cost;
         switch (reg) {
         case BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL: *value=model.flip; break;
         case BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE: *value=(ULONG)model.latched; break;
@@ -205,6 +213,7 @@ static NTSTATUS MmioDcnRead(const BC250_DEVICE *d, ULONG reg, ULONG *value)
         model.observe_reads++;
         if (model.supersede_at && model.observe_reads == model.supersede_at) model.generation += 2;
         if (reg == BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL) {
+            if (model.retiring) { CHECK(!protected_call && model.irql == PASSIVE_LEVEL); model.retire_samples++; }
             if (!model.frozen) model.qpc += model.read_cost;
             if (model.flip_read_fails) return STATUS_IO_TIMEOUT;
             *value = model.flip | (model.pending_reads ? HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK : 0);
@@ -224,9 +233,9 @@ static NTSTATUS MmioDcnRead(const BC250_DEVICE *d, ULONG reg, ULONG *value)
             if (model.low_fails) { if (model.low_fails != ~0u) model.low_fails--; return STATUS_IO_TIMEOUT; }
             *value = (ULONG)model.sample;
         } else if (reg == BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE_HIGH) {
-            *value = (ULONG)((model.earliest_lag ? model.earliest_old : model.latched) >> 32);
+            *value = (ULONG)(((model.earliest_lag || model.qpc < model.earliest_ready_qpc) ? model.earliest_old : model.latched) >> 32);
         } else if (reg == BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE) {
-            *value = (ULONG)(model.earliest_lag ? model.earliest_old : model.latched);
+            *value = (ULONG)((model.earliest_lag || model.qpc < model.earliest_ready_qpc) ? model.earliest_old : model.latched);
             model.earliest_reads++;
             if (model.earliest_lag && model.earliest_lag != ~0u) model.earliest_lag--;
         } else if (reg == BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_PITCH) *value=model.pitch;
@@ -251,6 +260,13 @@ static NTSTATUS MmioDcnRead(const BC250_DEVICE *d, ULONG reg, ULONG *value)
 }
 static void KeStallExecutionProcessor(ULONG us)
 {
+    if (model.retiring) {
+        CHECK(!protected_call && model.irql == PASSIVE_LEVEL && !model.locked);
+        CHECK(us != 0 && us <= 50);
+        model.retire_stalls++;
+        if (!model.frozen) model.qpc += model.delay_cost ? model.delay_cost : (LONGLONG)us * 10;
+        return;
+    }
     CHECK(us == 1);
     if (model.observing) {
         CHECK(!model.locked);
@@ -697,68 +713,132 @@ static void BridgeDevice(BC250_DEVICE *d)
     model.bridge=1;model.generation=3;model.latched=0x203000;model.earliest_old=0x203000;
     model.config=8;model.crossbar=0x00E40000;model.cnvc=8;
 }
+static NTSTATUS BridgeProgram(BC250_DEVICE *d, BOOLEAN *wrote, BC250_DCN_WRITER_BRIDGE *bridge)
+{
+    NTSTATUS status;
+    protected_call=1;model.irql=2;
+    status=DcnWriterBridge(d,&model.generation,3,wrote,bridge);
+    CHECK(model.retire_stalls==0 && model.observe_stalls==0 && protected_logs==0);
+    protected_call=0;model.irql=PASSIVE_LEVEL;
+    return status;
+}
+static NTSTATUS BridgeRetire(BC250_DEVICE *d, const BC250_DCN_WRITER_BRIDGE *bridge)
+{
+    NTSTATUS status;
+    model.retiring=1;
+    status=DcnWriterBridgeRetire(d,&model.generation,3,bridge);
+    model.retiring=0;
+    return status;
+}
 static void WriterBridge(void)
 {
     BC250_DEVICE d;
+    BC250_DCN_WRITER_BRIDGE bridge;
     BOOLEAN wrote;
-    protected_call=1;
+    unsigned n, reads;
     BridgeDevice(&d);model.pending_reads=2;
-    CHECK(DcnWriterBridge(&d,&model.generation,3,&wrote)==STATUS_SUCCESS);
-    CHECK(wrote && model.latched==0x202000 && model.triggers==1 && model.observe_stalls==2);
-    CHECK(d.DcnImmediateRecords[0].Outcome==BC250_DCN_IMMEDIATE_DONE && model.generation==3);
+    CHECK(BridgeProgram(&d,&wrote,&bridge)==STATUS_SUCCESS);
+    CHECK(wrote && !bridge.Retired && bridge.Physical==0x202000 && bridge.Pitch==256);
+    CHECK(model.latched==0x202000 && model.triggers==1 && model.observe_reads==0 && model.qpc==0);
+    CHECK(BridgeRetire(&d,&bridge)==STATUS_SUCCESS && model.retire_stalls==2 && model.qpc==1000);
+    CHECK(model.generation==3 && d.DcnImmediateRecordNext==0);
     // An already-effective owned bridge works without a write, including a stopped OTG or a blank HUBP.
-    BridgeDevice(&d);model.latched=0x202000;
-    CHECK(DcnWriterBridge(&d,&model.generation,3,&wrote)==STATUS_SUCCESS);
-    CHECK(!wrote && model.writes==0 && !model.observing);
-    BridgeDevice(&d);model.latched=d.DcnFirmwareAddress;
-    CHECK(DcnWriterBridge(&d,&model.generation,3,&wrote)==STATUS_SUCCESS);
-    CHECK(!wrote && model.writes==0 && !model.observing);
+    for(n=0;n<6;n++) {
+        BridgeDevice(&d);model.latched=n&1 ? d.DcnFirmwareAddress : 0x202000;
+        CHECK(BridgeProgram(&d,&wrote,&bridge)==STATUS_SUCCESS);
+        CHECK(!wrote && bridge.Retired && bridge.Physical==model.latched && model.writes==0 && !model.observing);
+        CHECK(BridgeRetire(&d,&bridge)==STATUS_SUCCESS && model.retire_stalls==0);
+        CHECK(BridgeProgram(&d,&wrote,&bridge)==STATUS_SUCCESS && !wrote);
+    }
     // Capacity and ownership are checked before any register write, not just membership in the VRAM aperture.
     BridgeDevice(&d);d.RuntimeFramebufferLength=4095;
-    CHECK(DcnWriterBridge(&d,&model.generation,3,&wrote)==STATUS_INVALID_PARAMETER);
+    CHECK(BridgeProgram(&d,&wrote,&bridge)==STATUS_INVALID_PARAMETER);
     CHECK(!wrote && model.writes==0);
     // Even an already-latched reserved base is unsafe when its verified extent is too short.
     BridgeDevice(&d);d.RuntimeFramebufferLength=4095;model.latched=0x202000;
-    CHECK(DcnWriterBridge(&d,&model.generation,3,&wrote)==STATUS_INVALID_PARAMETER);
+    CHECK(BridgeProgram(&d,&wrote,&bridge)==STATUS_INVALID_PARAMETER);
     CHECK(!wrote && model.writes==0);
     BridgeDevice(&d);d.RuntimeFramebuffer=NULL;d.Framebuffer=NULL;
-    CHECK(DcnWriterBridge(&d,&model.generation,3,&wrote)==STATUS_DEVICE_NOT_READY);
+    CHECK(BridgeProgram(&d,&wrote,&bridge)==STATUS_DEVICE_NOT_READY);
     CHECK(!wrote && model.writes==0);
     BridgeDevice(&d);d.RuntimeFramebufferPhysical.QuadPart=0x700000;
-    CHECK(DcnWriterBridge(&d,&model.generation,3,&wrote)==STATUS_INVALID_PARAMETER);
+    CHECK(BridgeProgram(&d,&wrote,&bridge)==STATUS_INVALID_PARAMETER);
     CHECK(!wrote && model.writes==0);
     BridgeDevice(&d);d.VramMcBase=UINT64_MAX-4095;
-    CHECK(DcnWriterBridge(&d,&model.generation,3,&wrote)==STATUS_INVALID_PARAMETER);
+    CHECK(BridgeProgram(&d,&wrote,&bridge)==STATUS_INVALID_PARAMETER);
     CHECK(!wrote && model.writes==0);
-    // A written but unproved bridge is a hardware failure for the caller, never a successful writer admission.
+    BridgeDevice(&d);d.DcnQpcFrequency=0;
+    CHECK(BridgeProgram(&d,&wrote,&bridge)==STATUS_DEVICE_NOT_READY && !wrote && model.writes==0);
+    BridgeDevice(&d);model.generation=5;
+    CHECK(BridgeProgram(&d,&wrote,&bridge)==STATUS_DEVICE_BUSY && !wrote && model.writes==0);
+    // A slow pre-write snapshot refuses admission without a write, and does not begin a second snapshot.
+    BridgeDevice(&d);model.bridge_read_cost=250;
+    CHECK(BridgeProgram(&d,&wrote,&bridge)==STATUS_IO_TIMEOUT && !wrote && model.writes==0 && model.qpc==500);
+    // A written bridge is not retirement. Pending and EARLIEST wait outside L at PASSIVE for at most 30 ms.
     BridgeDevice(&d);model.pending_reads=~0u;
-    CHECK(DcnWriterBridge(&d,&model.generation,3,&wrote)==STATUS_IO_TIMEOUT);
-    CHECK(wrote && d.DcnImmediateRecords[0].Outcome==BC250_DCN_IMMEDIATE_PENDING);
-    CHECK(model.observe_stalls==BC250_DCN_IMMEDIATE_OBSERVE_US);
+    CHECK(BridgeProgram(&d,&wrote,&bridge)==STATUS_SUCCESS && wrote);
+    CHECK(BridgeRetire(&d,&bridge)==STATUS_IO_TIMEOUT);
+    CHECK(model.retire_stalls==600 && model.retire_samples==600 && model.qpc==300000);
     BridgeDevice(&d);model.latched=0x202000;model.pending_reads=~0u;
     model.flip=HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK;
-    CHECK(DcnWriterBridge(&d,&model.generation,3,&wrote)==STATUS_IO_TIMEOUT && wrote);
-    CHECK(d.DcnImmediateRecords[0].Outcome==BC250_DCN_IMMEDIATE_PENDING);
+    CHECK(BridgeProgram(&d,&wrote,&bridge)==STATUS_SUCCESS && wrote);
+    CHECK(BridgeRetire(&d,&bridge)==STATUS_IO_TIMEOUT);
     // r6 lab counterexample: pending is clear and PRIMARY is new, but EARLIEST still names the old application.
-    // A writer cannot be admitted while the old allocation remains eligible for scanout.
+    // Programming succeeds; the writer cannot proceed while the old allocation remains eligible for scanout.
     BridgeDevice(&d);model.earliest_lag=~0u;
-    CHECK(DcnWriterBridge(&d,&model.generation,3,&wrote)==STATUS_IO_TIMEOUT && wrote);
-    CHECK(d.DcnImmediateRecords[0].Outcome==BC250_DCN_IMMEDIATE_DONE);
+    CHECK(BridgeProgram(&d,&wrote,&bridge)==STATUS_SUCCESS && wrote && model.earliest_reads==0);
+    CHECK(BridgeRetire(&d,&bridge)==STATUS_IO_TIMEOUT);
     CHECK(model.primary==0x202000 && model.earliest_old==0x203000 && model.earliest_reads>0);
-    CHECK(model.observe_stalls==BC250_DCN_IMMEDIATE_OBSERVE_US && model.qpc==500);
-    BridgeDevice(&d);model.earliest_lag=4;
-    CHECK(DcnWriterBridge(&d,&model.generation,3,&wrote)==STATUS_SUCCESS && wrote);
-    CHECK(model.earliest_reads==6 && model.observe_stalls==2);
-    // The stronger bridge observation shares the original deadline and rechecks it after a delayed stall.
-    BridgeDevice(&d);model.earliest_lag=~0u;model.read_cost=490;
-    CHECK(DcnWriterBridge(&d,&model.generation,3,&wrote)==STATUS_IO_TIMEOUT && wrote);
-    CHECK(model.earliest_reads==2 && model.observe_stalls==0);
-    BridgeDevice(&d);model.earliest_lag=~0u;model.stall_cost=600;
-    CHECK(DcnWriterBridge(&d,&model.generation,3,&wrote)==STATUS_IO_TIMEOUT && wrote);
-    CHECK(model.earliest_reads==2 && model.observe_stalls==1);
+    CHECK(model.retire_stalls==600 && model.qpc==300000);
+    // One full frame is a normal positive control, not a 50 us fault. Reads before 16.7 ms still return A.
+    BridgeDevice(&d);model.earliest_ready_qpc=167000;
+    CHECK(BridgeProgram(&d,&wrote,&bridge)==STATUS_SUCCESS && wrote && model.qpc==0);
+    CHECK(BridgeRetire(&d,&bridge)==STATUS_SUCCESS);
+    CHECK(model.qpc==167000 && model.retire_stalls==334 && model.earliest_reads==670);
+    // Q remains required as well as EARLIEST. An old primary cannot pass with an already-new effective address.
+    BridgeDevice(&d);model.primary_old=0x203000;model.primary_lag=~0u;
+    CHECK(BridgeProgram(&d,&wrote,&bridge)==STATUS_SUCCESS && wrote);
+    CHECK(BridgeRetire(&d,&bridge)==STATUS_IO_TIMEOUT);
+    // A failing MMIO path and a frozen clock both terminate. No repeated physical programming occurs.
+    BridgeDevice(&d);model.flip_read_fails=1;
+    CHECK(BridgeProgram(&d,&wrote,&bridge)==STATUS_SUCCESS && wrote);
+    CHECK(BridgeRetire(&d,&bridge)==STATUS_IO_TIMEOUT && model.retire_samples==600 && model.triggers==1);
+    BridgeDevice(&d);model.frozen=1;model.earliest_lag=~0u;
+    CHECK(BridgeProgram(&d,&wrote,&bridge)==STATUS_SUCCESS && wrote);
+    CHECK(BridgeRetire(&d,&bridge)==STATUS_IO_TIMEOUT && model.retire_stalls==600 && model.qpc==0);
+    // No MMIO starts at the deadline, even when delayed entry or preemption consumed the budget.
+    BridgeDevice(&d);
+    CHECK(BridgeProgram(&d,&wrote,&bridge)==STATUS_SUCCESS);
+    model.qpc=bridge.ProgramEndQpc+300000;
+    CHECK(BridgeRetire(&d,&bridge)==STATUS_IO_TIMEOUT && model.retire_samples==0);
+    BridgeDevice(&d);model.earliest_lag=~0u;model.delay_cost=310000;
+    CHECK(BridgeProgram(&d,&wrote,&bridge)==STATUS_SUCCESS);
+    CHECK(BridgeRetire(&d,&bridge)==STATUS_IO_TIMEOUT && model.retire_stalls==1 && model.earliest_reads==2);
+    // A sample that ends after 30 ms is not retirement, even if all its values match.
+    BridgeDevice(&d);model.read_cost=300000;
+    CHECK(BridgeProgram(&d,&wrote,&bridge)==STATUS_SUCCESS);
+    CHECK(BridgeRetire(&d,&bridge)==STATUS_IO_TIMEOUT && model.retire_samples==2 && model.retire_stalls==0);
+    BridgeDevice(&d);model.pending_reads=1;model.read_cost=299500;
+    CHECK(BridgeProgram(&d,&wrote,&bridge)==STATUS_SUCCESS);
+    CHECK(BridgeRetire(&d,&bridge)==STATUS_IO_TIMEOUT && model.retire_samples==1 && model.retire_stalls==1);
+    CHECK(model.qpc==300000 && model.earliest_reads==0);
+    // Generations are checked before and after the proof. A superseded writer cannot authorize destruction.
+    BridgeDevice(&d);
+    CHECK(BridgeProgram(&d,&wrote,&bridge)==STATUS_SUCCESS);
+    model.generation=5;
+    CHECK(BridgeRetire(&d,&bridge)==STATUS_DEVICE_BUSY && model.retire_samples==0);
+    model.generation=3;model.supersede_at=1;
+    CHECK(BridgeRetire(&d,&bridge)==STATUS_DEVICE_BUSY);
+    // A misuse from DISPATCH_LEVEL refuses before the first read/stall, including the retired shortcut.
+    BridgeDevice(&d);
+    CHECK(BridgeProgram(&d,&wrote,&bridge)==STATUS_SUCCESS);
+    reads=model.observe_reads;model.irql=2;
+    CHECK(BridgeRetire(&d,&bridge)==STATUS_INVALID_DEVICE_STATE && model.observe_reads==reads && model.retire_stalls==0);
+    bridge.Retired=TRUE;
+    CHECK(BridgeRetire(&d,&bridge)==STATUS_INVALID_DEVICE_STATE && model.observe_reads==reads);
     CHECK(protected_logs==0);
     protected_call=0;
-    model.bridge=0;model.observing=0;
+    model.bridge=0;model.observing=0;model.irql=0;
 }
 int main(void)
 {
