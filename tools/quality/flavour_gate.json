@@ -1627,6 +1627,21 @@
  ],
  "out_of_scope": [
   {
+   "name": "AMDGPU_WDDM_D3D12",
+   "where": "bc250-win tools/build/versionstamp.py resource_fields; tools/build/versioninfo.json amdgpu_wddm_d3d12.dll",
+   "reason": "The DLL version resource uses amdgpu_wddm_d3d12 as InternalName, derived from its file name. This is PE version metadata, not an environment lookup."
+  },
+  {
+   "name": "AMDGPU_WDDM_RADV",
+   "where": "bc250-win tools/build/versionstamp.py resource_fields; tools/build/versioninfo.json amdgpu_wddm_radv.dll",
+   "reason": "The DLL version resource uses amdgpu_wddm_radv as InternalName, derived from its file name. This is PE version metadata, not an environment lookup."
+  },
+  {
+   "name": "AMDGPU_WDDM_VKD3D",
+   "where": "bc250-win tools/build/versionstamp.py resource_fields; tools/build/versioninfo.json amdgpu_wddm_vkd3d.dll",
+   "reason": "The DLL version resource uses amdgpu_wddm_vkd3d as InternalName, derived from its file name. This is PE version metadata, not an environment lookup."
+  },
+  {
    "name": "VK_INSTANCE_LAYERS",
    "where": "the Vulkan loader (system component); dxvk and vkd3d-proton name it",
    "reason": "system loader behaviour for every Vulkan application, not this driver's lookup; out of BD-167 scope. Its hits are recorded, never failed"
