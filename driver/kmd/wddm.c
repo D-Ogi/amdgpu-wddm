@@ -8934,6 +8934,9 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddress(_In_ const HANDLE hAdapter,
         const NTSTATUS section = WddmSection(device, WddmFlipLocked, &flip);
         if (!NT_SUCCESS(section)) { InterlockedIncrement(&wddm->LowSyncFailed); return section; }
     }
+    // The refusal line is deliberately left as it is: its worst case is already baselined over the guard-log
+    // line's width (BD-070), and the flags of a refused flip are in the summary. BD-170 folded the logging of
+    // this DDI into the flip state machine and left this sentence behind with the block it explained.
     if (flip.LogRefusal && InterlockedIncrement(&wddm->ScanoutNotes)<=BC250_WDDM_LOG_CALLS)
         GuardLog("wddm: scan-out refused: %s (%lux%lu pitch %lu format %lu segment %lu address 0x%llX)",
                  Bc250ScanoutStatusText(flip.Admit),flip.Candidate.Width,flip.Candidate.Height,flip.Candidate.Pitch,
