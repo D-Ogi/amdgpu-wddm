@@ -84,6 +84,10 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     *NumberOfVideoPresentSources = 0;
     *NumberOfChildren = 0;
     if (!device || !AdapterOwnerIs(device->PhysicalDeviceObject)) return STATUS_DEVICE_BUSY;
+    // M455: durable admission belongs to StartDevice, not DriverEntry/AddDevice.
+    // A failed commit must leave hardware untouched and the handoff retryable.
+    status=DriverStateActivateDevice(device->PhysicalDeviceObject);
+    if(!NT_SUCCESS(status))return status;
     BoardMemoryIdentityClear(device);
     GuardStage(StageStartEnter);
     // One kept log file for this whole start, however many checkpoints it writes (guard.c GuardLogKeep). Does

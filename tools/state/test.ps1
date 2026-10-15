@@ -45,6 +45,13 @@ if ($LASTEXITCODE) { throw 'Kernel transaction mock compile failed' }
 & "$Out\transaction_test.exe"
 if ($LASTEXITCODE) { throw 'Kernel transaction tests failed' }
 & "$PSScriptRoot\test-service-root.ps1" -Out "$Out\service-root" -Kits $Kits -Arch $Arch
+& "$PSScriptRoot\test-lifecycle.ps1" -Out "$Out\lifecycle" -Kits $Kits -Arch $Arch
+& "$PSScriptRoot\test-device.ps1" -Out "$Out\device" -Kits $Kits -Arch $Arch
+if ($Arch -eq 'x64') {
+    & "$PSScriptRoot\test-lifecycle.ps1" -Out "$Out\lifecycle-flush-control" -Kits $Kits -Arch $Arch -IgnoreFirstFlushError
+    & "$PSScriptRoot\test-device.ps1" -Out "$Out\device-validation-control" -Kits $Kits -Arch $Arch -Mutation activate-during-validation
+    & "$PSScriptRoot\test-device.ps1" -Out "$Out\device-start-control" -Kits $Kits -Arch $Arch -Mutation skip-start-activation
+}
 if ($Registry) {
     & "$($msvc.FullName)\bin\Hostx64\$Arch\cl.exe" /nologo /TC /W4 /WX /O2 /MT /DAMDGPU_STATE_ADAPTER_TEST `
         "/Fo$Out\" "/Fe$Out\state_windows_test.exe" "$repo\driver\state\state.c" `

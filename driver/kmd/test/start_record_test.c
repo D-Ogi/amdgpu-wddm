@@ -312,6 +312,8 @@ typedef struct {
 static int ownedPdo;
 static void* ownerIdentity;
 static int AdapterOwnerIs(void* id) { return id && id == ownerIdentity; }
+// State activation failures are covered by the actual state-device fixture.
+static NTSTATUS DriverStateActivateDevice(void* id) { return id ? STATUS_SUCCESS : STATUS_DEVICE_BUSY; }
 static void GuardStage(ULONG stage)
 {
     char t[16];

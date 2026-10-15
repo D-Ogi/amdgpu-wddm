@@ -14,6 +14,8 @@ static BOOLEAN Initialized,HasActive;
 static volatile LONG Prepared,Ready;
 static volatile LONG InvalidGroups;
 static AMDGPU_TRANSFER_HEADER AcceptedTransfer;
+static AMDGPU_TRANSFER_HEADER FactoryReceipt;
+static BOOLEAN FactoryPrepared;
 static PVOID Candidate;
 static ULONG CandidateBytes,EntryFullWddm;
 static char ProductVersion[32];
@@ -199,7 +201,8 @@ static NTSTATUS Source(HANDLE *out)
     HANDLE root=NULL;WCHAR active[33],expected[33],owner[33],path[120];ULONG frozen=0;NTSTATUS status;
     *out=NULL;
     status=Open(Shared,L"StateV2",KEY_READ,FALSE,FALSE,&root);
-    if(status==STATUS_OBJECT_NAME_NOT_FOUND && AcceptedTransfer.origin!=AMDGPU_TRANSFER_CURRENT)status=STATUS_SUCCESS;
+    if((status==STATUS_OBJECT_NAME_NOT_FOUND || status==STATUS_OBJECT_PATH_NOT_FOUND) &&
+       AcceptedTransfer.origin!=AMDGPU_TRANSFER_CURRENT)status=STATUS_SUCCESS;
     else if(NT_SUCCESS(status)) {
         status=String(root,L"Active",active,33);
         if(AcceptedTransfer.origin==AMDGPU_TRANSFER_CURRENT) {
@@ -241,31 +244,31 @@ static NTSTATUS Factory(HANDLE parameters,HANDLE shared,PCSTR version)
 {
     KEY_FULL_INFORMATION info;ULONG needed=0,type=0,bytes=0;HANDLE root=NULL;
     NTSTATUS status;AMDGPU_TRANSFER_HEADER h;PVOID data=NULL;unsigned int used=0;
-    UNICODE_STRING name;UUID id;
+    UUID id;
     RtlZeroMemory(&h,sizeof(h));
-    status=Open(shared,L"StateV2",KEY_READ|KEY_WRITE,TRUE,FALSE,&root);if(!NT_SUCCESS(status))return status;
+    status=Open(shared,L"StateV2",KEY_READ,FALSE,FALSE,&root);
+    if(!NT_SUCCESS(status) && status!=STATUS_OBJECT_NAME_NOT_FOUND && status!=STATUS_OBJECT_PATH_NOT_FOUND)return status;
     // An accepted state is kept. DriverStateInit checks its complete generation
     // and catalog below; a damaged or obsolete generation is never factory reset.
-    status=Read(root,L"Active",&type,&id,sizeof(id),&bytes);
-    if(status!=STATUS_OBJECT_NAME_NOT_FOUND) {
-        ZwClose(root);return NT_SUCCESS(status) || status==STATUS_BUFFER_TOO_SMALL || status==STATUS_BUFFER_OVERFLOW?
-                            STATUS_SUCCESS:status;
+    if(root) {
+        status=Read(root,L"Active",&type,&id,sizeof(id),&bytes);
+        if(status!=STATUS_OBJECT_NAME_NOT_FOUND) {
+            ZwClose(root);return NT_SUCCESS(status) || status==STATUS_BUFFER_TOO_SMALL || status==STATUS_BUFFER_OVERFLOW?
+                                STATUS_SUCCESS:status;
+        }
     }
     status=ZwQueryKey(parameters,KeyFullInformation,&info,sizeof(info),&needed);
     if(!NT_SUCCESS(status))goto done;
     if(info.Values || info.SubKeys!=1) {status=STATUS_DEVICE_CONFIGURATION_ERROR;goto done;}
     // The exact child was opened/validated already. Any other retained legacy
     // state requires a protected installer snapshot, never guessed defaults.
-    status=Read(root,L"FactoryTransfer",&type,&h,sizeof(h),&bytes);
+    status=root?Read(root,L"FactoryTransfer",&type,&h,sizeof(h),&bytes):STATUS_OBJECT_NAME_NOT_FOUND;
     if(status==STATUS_OBJECT_NAME_NOT_FOUND) {
         status=ExUuidCreate(&id);if(!NT_SUCCESS(status))goto done;
         h.origin=AMDGPU_TRANSFER_FRESH;h.board_kind=AMDGPU_BOARD_UNPROVEN;
         RtlCopyMemory(h.transaction,&id,16);RtlCopyMemory(h.catalog,AmdgpuStateCatalogId(),64);
         AmdgpuStateBootToken(SharedUserData->BootId,h.source_boot);
         status=RtlStringCchCopyA(h.destination_version,32,version);if(!NT_SUCCESS(status))goto done;
-        RtlInitUnicodeString(&name,L"FactoryTransfer");
-        status=ZwSetValueKey(root,&name,0,REG_BINARY,&h,sizeof(h));
-        if(NT_SUCCESS(status))status=ZwFlushKey(root);
     } else if(NT_SUCCESS(status) && (type!=REG_BINARY || bytes!=sizeof(h) ||
                h.origin!=AMDGPU_TRANSFER_FRESH || h.board_kind!=AMDGPU_BOARD_UNPROVEN ||
                memcmp(h.destination_version,version,strlen(version)+1)))status=STATUS_DATA_ERROR;
@@ -276,9 +279,42 @@ static NTSTATUS Factory(HANDLE parameters,HANDLE shared,PCSTR version)
     if(NT_SUCCESS(status)) {
         Candidate=data;CandidateBytes=used;data=NULL;
         RtlCopyMemory(&AcceptedTransfer,Candidate,sizeof(AcceptedTransfer));
+        // Keep the original metadata format so an interrupted activation can
+        // reuse an existing FactoryTransfer from an earlier driver image.
+        FactoryReceipt=h;FactoryPrepared=TRUE;
     }
 done:
     if(data)ExFreePoolWithTag(data,STATE_TAG);
+    if(root)ZwClose(root);return status;
+}
+static NTSTATUS PersistFactory(void)
+{
+    HANDLE root=NULL;AMDGPU_TRANSFER_HEADER stored;WCHAR active[33],expected[33];
+    ULONG type=0,bytes=0;UNICODE_STRING name;NTSTATUS status;BOOLEAN published=FALSE;
+    if(!FactoryPrepared)return STATUS_SUCCESS;
+    // DriverEntry only prepares the candidate. StartDevice must persist its
+    // identity before any generation write, including on a retry after a
+    // failed flush. A conflicting receipt or Active pointer is never replaced.
+    status=Open(Shared,L"StateV2",KEY_READ|KEY_WRITE,TRUE,FALSE,&root);
+    if(!NT_SUCCESS(status))return status;
+    status=String(root,L"Active",active,33);
+    if(NT_SUCCESS(status)) {
+        Hex(FactoryReceipt.transaction,expected);
+        if(wcscmp(active,expected)){status=STATUS_REVISION_MISMATCH;goto done;}
+        published=TRUE;
+    } else if(status!=STATUS_OBJECT_NAME_NOT_FOUND)goto done;
+    status=Read(root,L"FactoryTransfer",&type,&stored,sizeof(stored),&bytes);
+    if(NT_SUCCESS(status)) {
+        if(type!=REG_BINARY || bytes!=sizeof(stored)){status=STATUS_DATA_ERROR;goto done;}
+        if(RtlCompareMemory(&stored,&FactoryReceipt,sizeof(stored))!=sizeof(stored)) {
+            status=STATUS_REVISION_MISMATCH;goto done;
+        }
+    } else if(status==STATUS_OBJECT_NAME_NOT_FOUND && !published) {
+        RtlInitUnicodeString(&name,L"FactoryTransfer");
+        status=ZwSetValueKey(root,&name,0,REG_BINARY,&FactoryReceipt,sizeof(FactoryReceipt));
+    }
+    if(NT_SUCCESS(status))status=ZwFlushKey(root);
+done:
     ZwClose(root);return status;
 }
 static NTSTATUS Bootstrap(HANDLE parameters,HANDLE shared)
@@ -369,7 +405,7 @@ NTSTATUS DriverStateInit(PDRIVER_OBJECT driver)
     status=ValidateInputs();if(!NT_SUCCESS(status))goto done;
     status=QueryUnlocked(AmdgpuStateFind("","EnableFullWddm"),AMDGPU_STATE_QUERY_EFFECTIVE,&value,&EntryFullWddm,4);
     if(!NT_SUCCESS(status))goto done;
-    // DriverEntry may read its early gate, but only AddDevice can publish/mutate.
+    // DriverEntry may read its early gate, but only StartDevice can publish/mutate.
     InterlockedExchange(&Prepared,1);status=STATUS_SUCCESS;
 done:
     if(!NT_SUCCESS(status)) DriverStateClose();
@@ -389,6 +425,7 @@ void DriverStateClose(void)
     if(Parameters)ZwClose(Parameters);Parameters=NULL;
     if(Shared)ZwClose(Shared);Shared=NULL;
     if(Candidate)ExFreePoolWithTag(Candidate,STATE_TAG);Candidate=NULL;CandidateBytes=0;
+    FactoryPrepared=FALSE;RtlZeroMemory(&FactoryReceipt,sizeof(FactoryReceipt));
     Initialized=FALSE;
     RtlZeroMemory(&AcceptedTransfer,sizeof(AcceptedTransfer));
 }
@@ -431,10 +468,12 @@ NTSTATUS DriverStateActivate(const unsigned char deviceHash[32])
     if(!NT_SUCCESS(status))goto done;
     if(full!=EntryFullWddm){status=STATUS_REVISION_MISMATCH;goto done;}
     if(Candidate) {
+        status=PersistFactory();if(!NT_SUCCESS(status))goto done;
         status=DriverStateCommitTransfer(Shared,Candidate,CandidateBytes);if(!NT_SUCCESS(status))goto done;
         // Keep the candidate through any commit failure, including a lost Active
         // flush. Commit's idempotent path will never replay current user choices.
         ExFreePoolWithTag(Candidate,STATE_TAG);Candidate=NULL;CandidateBytes=0;
+        FactoryPrepared=FALSE;
         status=LoadActive(FALSE);if(!NT_SUCCESS(status))goto done;
         status=ValidateInputs();if(!NT_SUCCESS(status))goto done;
         status=QueryUnlocked(AmdgpuStateFind("","EnableFullWddm"),AMDGPU_STATE_QUERY_EFFECTIVE,&value,&full,4);

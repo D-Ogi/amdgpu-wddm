@@ -42,6 +42,9 @@ static void* ownerIdentity;
 /* The atomic owner protocol has its own test. Admission here requires the
  * exact non-null PDO retained by AddDevice, not merely an existing device. */
 static int AdapterOwnerIs(void* identity){return identity && identity==ownerIdentity;}
+/* State activation and its failures have their own actual-source lifecycle test. */
+static NTSTATUS DriverStateActivateDevice(void* identity)
+{return identity ? STATUS_SUCCESS : STATUS_DEVICE_BUSY;}
 static int KeGetCurrentIrql(void){return PASSIVE_LEVEL;}
 static NTSTATUS OpenParameters(HANDLE* key){opens++;*key=(HANDLE)1;return openStatus;}
 static NTSTATUS ReadDword(HANDLE key,PCWSTR name,ULONG* value)
