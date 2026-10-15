@@ -164,7 +164,9 @@ static DWORD SharedRoot(REGSAM access,HKEY *shared)
     SC_HANDLE manager,service; DWORD error;
     manager=OpenSCManagerW(NULL,NULL,SC_MANAGER_CONNECT);
     if(!manager) return GetLastError();
-    service=OpenServiceW(manager,L"bc250kmd",SERVICE_QUERY_STATUS);
+    // GetSharedServiceRegistryStateKey requires a configuration-query handle;
+    // registry rights remain limited to the caller's requested access mask.
+    service=OpenServiceW(manager,L"bc250kmd",SERVICE_QUERY_CONFIG);
     if(!service) { error=GetLastError(); CloseServiceHandle(manager); return error; }
     error=GetSharedServiceRegistryStateKey(service,ServiceSharedRegistryPersistentState,access,shared);
     CloseServiceHandle(service); CloseServiceHandle(manager);

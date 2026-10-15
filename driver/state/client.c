@@ -123,7 +123,8 @@ API DWORD WINAPI AmdgpuClientLogDirectory(WCHAR *out,DWORD cch)
     out[0]=0;
     manager=OpenSCManagerW(NULL,NULL,SC_MANAGER_CONNECT);
     if(!manager)return GetLastError();
-    service=OpenServiceW(manager,L"bc250kmd",SERVICE_QUERY_STATUS);
+    // The shared-directory API queries service configuration, not its status.
+    service=OpenServiceW(manager,L"bc250kmd",SERVICE_QUERY_CONFIG);
     if(!service){error=GetLastError();CloseServiceHandle(manager);return error;}
     error=GetSharedServiceDirectory(service,ServiceSharedDirectoryPersistentState,out,cch-5,&needed);
     CloseServiceHandle(service);CloseServiceHandle(manager);

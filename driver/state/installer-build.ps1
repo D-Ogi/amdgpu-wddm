@@ -30,6 +30,7 @@ if($LASTEXITCODE){throw 'the version stamp of amdgpu-state-installer.exe failed'
 # Only --catalog is permitted in host gates. --settings-snapshot reads the target
 # device and must not run on the development PC. Service verbs change SCM too.
 if($Test) {
+    & "$repo\tools\state\test-service-root.ps1" -Out "$Out\service-root" -Kits $Kits -Arch x64
     $testInputs=@('state','transfer','installer_rollback','installer_worker','installer_worker_test') |
         ForEach-Object {Join-Path $PSScriptRoot "$_.c"}
     & "$($msvc.FullName)\bin\Hostx64\x64\cl.exe" /nologo /TC /W4 /WX /O2 /MT /DAMDGPU_INSTALLER_TEST `

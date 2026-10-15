@@ -44,6 +44,7 @@ $template=[IO.File]::ReadAllText("$repo\driver\state\transaction_test.c")
 if ($LASTEXITCODE) { throw 'Kernel transaction mock compile failed' }
 & "$Out\transaction_test.exe"
 if ($LASTEXITCODE) { throw 'Kernel transaction tests failed' }
+& "$PSScriptRoot\test-service-root.ps1" -Out "$Out\service-root" -Kits $Kits -Arch $Arch
 if ($Registry) {
     & "$($msvc.FullName)\bin\Hostx64\$Arch\cl.exe" /nologo /TC /W4 /WX /O2 /MT /DAMDGPU_STATE_ADAPTER_TEST `
         "/Fo$Out\" "/Fe$Out\state_windows_test.exe" "$repo\driver\state\state.c" `

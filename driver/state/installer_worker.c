@@ -137,7 +137,9 @@ static DWORD Origin(UINT *origin)
 {
     SC_HANDLE manager=NULL,service=NULL;HKEY shared=NULL,root=NULL;DWORD error;
     *origin=0;manager=OpenSCManagerW(NULL,NULL,SC_MANAGER_CONNECT);if(!manager)return GetLastError();
-    service=OpenServiceW(manager,L"bc250kmd",SERVICE_QUERY_STATUS);
+    // The shared-state API needs a configuration-query handle. QUERY_STATUS
+    // alone returns ACCESS_DENIED even for SYSTEM; that is not legacy absence.
+    service=OpenServiceW(manager,L"bc250kmd",SERVICE_QUERY_CONFIG);
     if(!service) {
         error=GetLastError();if(error==ERROR_SERVICE_DOES_NOT_EXIST){*origin=AMDGPU_TRANSFER_FRESH;error=0;}
         goto done;
