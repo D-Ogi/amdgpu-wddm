@@ -107,6 +107,15 @@ class RecipeConfigs(unittest.TestCase):
             for config in json.loads(self.read(configs))["configs"]:
                 for flavour in ("release", "lab"):
                     self.assertIn("%s %s %s" % (script, config, flavour), resolved)
+        # BD-180: lab warning capture must survive the LTO recipe, while every release option stays intact.
+        release = resolved["build-vkd3d.ps1 ddi-engine-lto release"]
+        lab = resolved["build-vkd3d.ps1 ddi-engine-lto lab"]
+        release_c = next(option for option in release if option.startswith("-Dc_args="))
+        lab_c = next(option for option in lab if option.startswith("-Dc_args="))
+        self.assertIn("-DVKD3D_NO_DEBUG_MESSAGES", release_c.split())
+        self.assertNotIn("-DVKD3D_NO_DEBUG_MESSAGES", lab_c.split())
+        expected_lab = [option.replace(" -DVKD3D_NO_DEBUG_MESSAGES", "") for option in release]
+        self.assertEqual(expected_lab, [option for option in lab if option != "-Damdgpu-wddm-lab-flavour=true"])
 
     def test_the_defect_this_gate_exists_for_fails(self):
         self.edit("build-vkd3d.ps1", RELEASE_GUARDED, RELEASE_UNGUARDED)

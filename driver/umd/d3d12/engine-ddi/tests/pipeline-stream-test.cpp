@@ -844,13 +844,17 @@ private:
     HANDLE event_;
 };
 Gate g_gate;
+Gate g_hook_return;                            // BD-180: hold a hook after its body, before its return
 std::atomic<unsigned> g_runs{0};                // run hook entries: jobs handed to a pool thread
+std::atomic<unsigned> g_bodies{0};              // bodies completed, whether or not the hook has returned
 std::atomic<unsigned> g_drains{0};              // drained hook calls, every one of them on a DDI thread
 
 void APIENTRY async_run(void*, PsoBody body, void* job) {
     ++g_runs;
     g_gate.wait();
     body(job);
+    ++g_bodies;
+    g_hook_return.wait();
 }
 void APIENTRY async_drained(void*) { ++g_drains; }
 
@@ -875,6 +879,14 @@ unsigned summary_lines(const char* reason) {
     return found;
 }
 
+std::vector<std::string> create_lines() {
+    std::lock_guard<std::mutex> held(g_log_lock);
+    std::vector<std::string> found;
+    for (const auto& line : g_log_lines)
+        if (line.compare(0, 12, "pso create: ") == 0) found.push_back(line);
+    return found;
+}
+
 // The clock of the periodic line (pso-async.h), installed once before the first device of this program turns the
 // policy on. A period therefore passes because the test says it does, and no check waits for a real 30 seconds.
 std::atomic<uint64_t> g_fake_ms{1 << 20};
@@ -891,6 +903,8 @@ public:
     std::atomic<unsigned> computes{0};
     std::atomic<unsigned> unaligned{0};
     std::atomic<long> result{S_OK};             // what a create answers, as an HRESULT
+    Gate* create_gate = nullptr;               // set before the test starts its consumer threads
+    std::vector<DWORD> create_threads;         // under lock, one per create
 
     HRESULT STDMETHODCALLTYPE CreatePipelineState(const D3D12_PIPELINE_STATE_STREAM_DESC* desc, REFIID riid,
                                                  void** out) override {
@@ -918,9 +932,11 @@ private:
         {
             std::lock_guard<std::mutex> held(lock);
             digests.push_back(std::move(d));
+            create_threads.push_back(GetCurrentThreadId());
         }
         ++creates;
         const HRESULT hr = static_cast<HRESULT>(result.load());
+        if (create_gate) create_gate->wait();
         if (FAILED(hr)) {
             if (out) *out = nullptr;
             return hr;
@@ -1637,7 +1653,7 @@ int main() {
     }
 
     // 7g. A compile that fails after the create answered S_OK: every consumer gets a failure of its own, the
-    // engine is asked once, and the pipeline is never handed out.
+    // engine is asked once by the worker and once by a consumer, and the pipeline is never handed out.
     {
         AsyncDevice device;
         Fixture f(&device);
@@ -1653,9 +1669,9 @@ int main() {
         const PsoAsync* counters = f.context.pso;
         const uint64_t compile_failures = counters ? counters->failures.load() : 0;
         check(hr == S_OK && compiled && first == E_OUTOFMEMORY && second == E_OUTOFMEMORY &&
-                  compile_failures == 1 && device.creates.load() == 1 && device.library.stored.empty(),
+                  compile_failures == 1 && device.creates.load() == 2 && device.library.stored.empty(),
               "async failure after S_OK: the create answered S_OK, both consumers answer the code a creation slot "
-              "admits, the engine was asked once and the library stored nothing (hr %08lx, compiled %d, %08lx, "
+              "admits, the engine was asked twice and the library stored nothing (hr %08lx, compiled %d, %08lx, "
               "%08lx, failures %llu, %u engine creates, %zu stored)", static_cast<unsigned long>(hr),
               compiled ? 1 : 0, static_cast<unsigned long>(first), static_cast<unsigned long>(second),
               static_cast<unsigned long long>(compile_failures), device.creates.load(),
@@ -1887,6 +1903,146 @@ int main() {
               "still on %d, pool %u then %u, off %08lx, after the policy off %u)",
               static_cast<unsigned long>(hr), compiled ? 1 : 0, written, lines, still_on ? 1 : 0, workers_before,
               workers_after, static_cast<unsigned long>(off), after_off);
+    }
+
+    // 8a. BD-180: the body has finished, but its shell hook still owns scopes and may still name the job.
+    // A destroy parked at that exact point must wait. No timing guess or allocator reuse is needed to expose the
+    // old early-Done bug: the old code published before g_hook_return, and the assertions below then fail.
+    {
+        AsyncDevice device;
+        Fixture f(&device);
+        Async async(&f.context, 1);
+        const auto args = graphics_args(f, FALSE);
+        const ULONG root_before = device.root.refs.load();
+        const ULONG pipeline_before = device.pipeline.refs.load();
+        const unsigned bodies_before = g_bodies.load();
+        g_hook_return.shut();
+        D3D12DDI_HPIPELINESTATE pso{};
+        const HRESULT hr = create(f, args, pso);
+        const bool body_finished = until([&] { return g_bodies.load() > bodies_before; });
+        const bool still_running = pso_pending(job_of(pso));
+        std::atomic<bool> destroyed{false};
+        std::thread destroyer([&] {
+            g_core.pfnDestroyPipelineState(f.h, pso);
+            destroyed.store(true);
+        });
+        const bool waited = until([&] { return f.context.pso->waits.load() != 0 || destroyed.load(); });
+        const bool retained = !destroyed.load() && device.root.refs.load() == root_before + 1 &&
+                              device.pipeline.refs.load() == pipeline_before + 1;
+        g_hook_return.release();
+        destroyer.join();
+        check(hr == S_OK && body_finished && still_running && waited && retained && destroyed.load() &&
+                  device.creates.load() == 1 && !f.context.pso->outstanding.load() &&
+                  device.root.refs.load() == root_before && device.pipeline.refs.load() == pipeline_before,
+              "BD-180 late worker hook: Done waits for hook return; immediate destroy waits and releases root "
+              "and pipeline once (body %d, running %d, waited %d, retained %d)",
+              body_finished ? 1 : 0, still_running ? 1 : 0, waited ? 1 : 0, retained ? 1 : 0);
+    }
+
+    // 8b. A failed worker compile is retried by exactly one of eight simultaneous consumers. Hold that retry
+    // inside the fake engine until all seven other consumers are waiting, then check both success and failure.
+    for (const HRESULT retry_result : {S_OK, E_FAIL}) {
+        AsyncDevice device;
+        Fixture f(&device);
+        Async async(&f.context, 1);
+        const auto args = graphics_args(f, FALSE);
+        const ULONG root_before = device.root.refs.load();
+        const ULONG pipeline_before = device.pipeline.refs.load();
+        clear_lines();
+        device.result = E_FAIL;
+        D3D12DDI_HPIPELINESTATE pso{};
+        const HRESULT created = create(f, args, pso);
+        const bool compiled = until([&] { return !pso_pending(job_of(pso)); });
+        auto* job = static_cast<PipelineRecord*>(pso.pDrvPrivate)->job;
+        const auto first_lines = create_lines();
+        Gate retry_gate, start;
+        retry_gate.shut();
+        start.shut();
+        device.create_gate = &retry_gate;
+        device.result = retry_result;
+        constexpr unsigned count = 8;
+        HRESULT answers[count]{};
+        ID3D12PipelineState* pipelines[count]{};
+        DWORD threads[count]{};
+        std::atomic<unsigned> ready{0};
+        std::vector<std::thread> consumers;
+        for (unsigned i = 0; i < count; ++i)
+            consumers.emplace_back([&, i] {
+                threads[i] = GetCurrentThreadId();
+                ++ready;
+                start.wait();
+                pipelines[i] = pso_resolve(job, &answers[i]);
+            });
+        const bool ready_together = until([&] { return ready.load() == count; });
+        start.release();
+        const bool one_retry = until([&] { return device.creates.load() == 2; });
+        const bool others_wait = until([&] { return f.context.pso->waits.load() >= count - 1; });
+        retry_gate.release();
+        for (auto& consumer : consumers) consumer.join();
+        device.create_gate = nullptr;
+        bool same = true, consumer_thread = false;
+        for (unsigned i = 0; i < count; ++i) {
+            same = same && answers[i] == retry_result &&
+                   pipelines[i] == (SUCCEEDED(retry_result) ? &device.pipeline : nullptr);
+            consumer_thread = consumer_thread || (device.create_threads.size() == 2 &&
+                                                   threads[i] == device.create_threads[1]);
+        }
+        HRESULT again = S_OK;
+        (void)pso_resolve(job, &again);           // the ninth use cannot create a third pipeline
+        const auto lines = create_lines();
+        const bool logged = first_lines.size() == 1 && lines.size() == 2 &&
+                            lines[0].find("attempt=worker hr=80004005 initial=80004005") != std::string::npos &&
+                            lines[0].find("kind=graphics") != std::string::npos &&
+                            lines[0].find("VS/") != std::string::npos && lines[0].find("PS/") != std::string::npos &&
+                            lines[1].find(SUCCEEDED(retry_result) ? "attempt=retry hr=00000000 initial=80004005"
+                                                               : "attempt=retry hr=80004005 initial=80004005") !=
+                                std::string::npos;
+        const bool counted = f.context.pso->failures.load() == 1 && f.context.pso->retried.load() == 1 &&
+                             f.context.pso->retry_failures.load() == (FAILED(retry_result) ? 1u : 0u);
+        const bool roots_held = device.root.refs.load() == root_before + 1;
+        g_core.pfnDestroyPipelineState(f.h, pso);
+        check(created == S_OK && compiled && ready_together && one_retry && others_wait && same && consumer_thread &&
+                  again == retry_result && device.creates.load() == 2 && logged && counted && roots_held &&
+                  device.root.refs.load() == root_before && device.pipeline.refs.load() == pipeline_before,
+              "BD-180 retry %08lx: eight consumers share one synchronous retry, both results logged, raw HRESULT "
+              "kept, root and pipeline released once (compiled %d, ready %d, retry %d, waiting %d, same %d, "
+              "consumer %d, logged %d, counted %d)", static_cast<unsigned long>(retry_result), compiled ? 1 : 0,
+              ready_together ? 1 : 0, one_retry ? 1 : 0, others_wait ? 1 : 0, same ? 1 : 0,
+              consumer_thread ? 1 : 0, logged ? 1 : 0, counted ? 1 : 0);
+    }
+
+    // 8c. A failed, unused pipeline still gets its producer record, but destroying it does not spend a retry.
+    {
+        AsyncDevice device;
+        Fixture f(&device);
+        Async async(&f.context, 1);
+        PsoPlan plan;
+        plan.compute = true;
+        plan.root = &device.root;
+        plan.compute_desc.pRootSignature = plan.root;
+        plan.compute_desc.CS = plan.take_code(kPsoStageCS, "hello", 5); // FNV-1a 64-bit known vector
+        const ULONG root_before = device.root.refs.load();
+        clear_lines();
+        device.result = E_FAIL;
+        PsoJob* job = pso_submit(&f.context, std::move(plan));
+        const uint64_t id = job ? job->id : 0;
+        const bool compiled = job && until([&] { return !pso_pending(job); });
+        if (job) pso_destroy(job);
+        const auto lines = create_lines();
+        unsigned long pid = 0, tid = 0, code = 0, initial = 0;
+        unsigned number = 0;
+        unsigned long long logged_id = 0, stamp = 0;
+        const int fields = lines.size() == 1 ? sscanf_s(lines[0].c_str(),
+            "pso create: pid=%lu dev=%u tid=%lu job=%llu qpc=%llu kind=compute attempt=worker hr=%lx initial=%lx",
+            &pid, &number, &tid, &logged_id, &stamp, &code, &initial) : 0;
+        check(job && compiled && device.creates.load() == 1 && !f.context.pso->retried.load() &&
+                  device.root.refs.load() == root_before && lines.size() == 1 &&
+                  fields == 7 && pid == GetCurrentProcessId() && number == f.context.pso->number &&
+                  tid == device.create_threads[0] && logged_id == id && stamp != 0 &&
+                  code == static_cast<unsigned long>(E_FAIL) && initial == code &&
+                  lines[0].find("CS/5/a430d84680aabd0b") != std::string::npos,
+              "BD-180 unused failed compute: one producer record with process/device/thread/job/QPC, raw HRESULT "
+              "and known stage digest, no retry at destroy");
     }
 
     std::printf("%s\n", failures ? "FAILED" : "PASSED");

@@ -33,6 +33,32 @@ void pso_log(const PsoAsync* a, _Printf_format_string_ const char* format, ...) 
     if (a && a->policy.log) a->policy.log(a->policy.shell, text);
 }
 
+// BD-180: identify the exact input of every failed create, including pipelines never consumed. FNV-1a is a
+// diagnostic fingerprint of all bytecode bytes, not a cache key or a security hash. Work is done only on failure
+// and on the one retry. One bounded record reaches the normal sink in both flavours; no shader bytes or pointers.
+void log_create(PsoJob* job, const char* attempt, HRESULT hr) noexcept {
+    static constexpr const char* names[kPsoStageCount] = {"VS", "PS", "GS", "HS", "DS", "CS", "MS", "AS"};
+    char stages[320]{};                        // eight times (two letters, two slashes, 16 + 16 hex digits, comma)
+    size_t used = 0;
+    for (uint32_t stage = 0; stage < kPsoStageCount; ++stage) {
+        const auto& bytes = job->plan.code[stage];
+        if (bytes.empty()) continue;
+        uint64_t digest = UINT64_C(14695981039346656037);
+        for (uint8_t byte : bytes) digest = (digest ^ byte) * UINT64_C(1099511628211);
+        const int wrote = snprintf(stages + used, sizeof(stages) - used, "%s%s/%zx/%016llx", used ? "," : "",
+                                   names[stage], bytes.size(), static_cast<unsigned long long>(digest));
+        if (wrote < 0 || static_cast<size_t>(wrote) >= sizeof(stages) - used) break;
+        used += static_cast<size_t>(wrote);
+    }
+    pso_log(job->context->pso,
+            "pso create: pid=%lu dev=%u tid=%lu job=%llu qpc=%llu kind=%s attempt=%s hr=%08lx initial=%08lx "
+            "stages(hexbytes/fnv1a64)=%s",
+            static_cast<unsigned long>(GetCurrentProcessId()), job->device_number,
+            static_cast<unsigned long>(GetCurrentThreadId()), static_cast<unsigned long long>(job->id),
+            static_cast<unsigned long long>(qpc()), job->plan.compute ? "compute" : "graphics", attempt,
+            static_cast<unsigned long>(hr), static_cast<unsigned long>(job->hr), used ? stages : "none");
+}
+
 // ---- The counters ------------------------------------------------------------------------------------------------
 // One writer for the three places that print them: the device's destruction, the periodic line while the device
 // works, and the shell's DLL_PROCESS_DETACH. The reason word says which one it was. Formats and writes, nothing
@@ -43,7 +69,7 @@ void write_summary(PsoAsync* a, const char* reason, uint32_t stranded) noexcept 
     const uint64_t longest_us = a->longest_wait_qpc.load(std::memory_order_relaxed) * 1000000 / a->qpf;
     pso_log(a, "pso summary (%s, device %u): %llu queued, %llu synchronous, %llu by a pool thread, "
                "%llu by the consumer, %llu waits (%llu us, longest %llu us), %llu failures, "
-               "%llu ended without a create, %u stranded, %u outstanding",
+               "%llu ended without a create, %u stranded, %u outstanding, %llu retries, %llu retry failures",
             reason, a->number,
             static_cast<unsigned long long>(a->queued.load(std::memory_order_relaxed)),
             static_cast<unsigned long long>(a->synchronous.load(std::memory_order_relaxed)),
@@ -53,7 +79,9 @@ void write_summary(PsoAsync* a, const char* reason, uint32_t stranded) noexcept 
             static_cast<unsigned long long>(longest_us),
             static_cast<unsigned long long>(a->failures.load(std::memory_order_relaxed)),
             static_cast<unsigned long long>(a->aborted.load(std::memory_order_relaxed)), stranded,
-            a->outstanding.load(std::memory_order_relaxed));
+            a->outstanding.load(std::memory_order_relaxed),
+            static_cast<unsigned long long>(a->retried.load(std::memory_order_relaxed)),
+            static_cast<unsigned long long>(a->retry_failures.load(std::memory_order_relaxed)));
 }
 
 // Work that moves a counter: a create queued, a compile finished, a consumer that waited, a job ended without a
@@ -154,20 +182,34 @@ void publish(PsoJob* job, ID3D12PipelineState* pso, HRESULT hr) noexcept {
     pool_wake();
 }
 
-// Runs one claimed job. The counters and the context are touched here, before the publish, which P4 makes safe.
-void run_claimed(PsoJob* job) noexcept {
+// The hook's body leaves the job Running. Its caller still owns the job while the hook unwinds its shell scopes.
+void create_claimed(PsoJob* job, const char* attempt) noexcept {
     DeviceContext* c = job->context;
     PsoAsync* a = c->pso;
-    ID3D12PipelineState* pso = nullptr;
-    const HRESULT hr = pso_create_now(c, job->plan, &pso);
-    if (FAILED(hr)) a->failures.fetch_add(1, std::memory_order_relaxed);
+    job->hr = pso_create_now(c, job->plan, &job->pso);
+    job->compiled = true;
+    if (FAILED(job->hr)) {
+        a->failures.fetch_add(1, std::memory_order_relaxed);
+        log_create(job, attempt, job->hr);
+    }
+}
+
+void finish_claimed(PsoJob* job, bool from_worker) noexcept {
+    PsoAsync* a = job->context->pso;
+    if (from_worker && job->compiled && FAILED(job->hr))
+        job->retry.store(static_cast<uint32_t>(PsoRetry::Available), std::memory_order_relaxed);
     bump(a);                                    // a compile finished: the next DDI thread may write the line
     a->outstanding.fetch_sub(1, std::memory_order_relaxed);
-    publish(job, pso, hr);
+    publish(job, job->pso, job->hr);              // last job/context access, also when the hook did not call its body
+}
+
+void run_claimed(PsoJob* job) noexcept {
+    create_claimed(job, "consumer");
+    finish_claimed(job, false);
 }
 
 void APIENTRY worker_body(void* job) noexcept {
-    run_claimed(static_cast<PsoJob*>(job));
+    create_claimed(static_cast<PsoJob*>(job), "worker");
 }
 
 // A claimed job on a pool thread: the shell enters the scope a pipeline create needs and calls back into
@@ -175,15 +217,17 @@ void APIENTRY worker_body(void* job) noexcept {
 void run_with_hook(PsoJob* job) noexcept {
     PsoAsync* a = job->context->pso;
     a->by_worker.fetch_add(1, std::memory_order_relaxed);
-    const PsoPolicy policy = a->policy;         // a copy: nothing of the context after the publish (P2)
+    const PsoPolicy policy = a->policy;
     policy.run(policy.shell, worker_body, job);
     // A run hook that returns without calling the body would leave the job Running for ever, and every consumer of
     // it waiting. It cannot happen with our shell; it must not hang a game if it ever does.
-    if (job->state.load(std::memory_order_acquire) != static_cast<uint32_t>(PsoState::Done)) {
+    if (!job->compiled) {
         log_refusal("pso: the run hook returned without compiling job %llu",
                     static_cast<unsigned long long>(job->id));
-        publish(job, nullptr, E_UNEXPECTED);
+        job->hr = E_UNEXPECTED;
+        a->aborted.fetch_add(1, std::memory_order_relaxed);
     }
+    finish_claimed(job, true);                  // the hook and every runner access precede Done (P2)
 }
 
 // The oldest queued job, claimed, or null when the pool stops. Under the pool's lock, which the sleep releases.
@@ -277,6 +321,7 @@ PsoJob* pso_submit(DeviceContext* context, PsoPlan&& plan) noexcept {
     PsoJob* job = make_new<PsoJob>();
     if (!job) return nullptr;
     job->context = context;
+    job->device_number = a->number;
     job->plan = std::move(plan);                // vector moves steal, so this allocates nothing and cannot throw
     job->id = context->next_id.fetch_add(1, std::memory_order_relaxed);
     job->queued_qpc = qpc();
@@ -313,6 +358,47 @@ void wait_for_done(PsoJob* job, PsoAsync* a) noexcept {
     while (ticks > longest && !a->longest_wait_qpc.compare_exchange_weak(longest, ticks, std::memory_order_relaxed)) {
     }
 }
+
+// The initial result is immutable once state == Done. A separate publication word keeps concurrent consumers
+// from reading a result while the one retry writes it. As for initial compilation, waiting uses pool memory.
+void wait_for_retry(PsoJob* job, PsoAsync* a) noexcept {
+    const uint64_t start = qpc();
+    if (a) {
+        a->waits.fetch_add(1, std::memory_order_relaxed);
+        bump(a);
+    }
+    uint32_t seen = g_pool.generation.load(std::memory_order_acquire);
+    while (job->retry.load(std::memory_order_acquire) == static_cast<uint32_t>(PsoRetry::Running)) {
+        WaitOnAddress(&g_pool.generation, &seen, sizeof(seen), 20);
+        seen = g_pool.generation.load(std::memory_order_acquire);
+    }
+    if (a) {
+        const uint64_t ticks = qpc() - start;
+        a->wait_qpc.fetch_add(ticks, std::memory_order_relaxed);
+        uint64_t longest = a->longest_wait_qpc.load(std::memory_order_relaxed);
+        while (ticks > longest && !a->longest_wait_qpc.compare_exchange_weak(longest, ticks, std::memory_order_relaxed)) {
+        }
+    }
+}
+
+void resolve_retry(PsoJob* job) noexcept {
+    uint32_t state = job->retry.load(std::memory_order_acquire);
+    if (state == static_cast<uint32_t>(PsoRetry::Available) &&
+        job->retry.compare_exchange_strong(state, static_cast<uint32_t>(PsoRetry::Running), std::memory_order_acq_rel)) {
+        PsoAsync* a = job->context->pso;
+        job->retry_hr = pso_create_now(job->context, job->plan, &job->retry_pso);
+        log_create(job, "retry", job->retry_hr);    // both outcomes, before publishing the result
+        if (a) {
+            a->retried.fetch_add(1, std::memory_order_relaxed);
+            if (FAILED(job->retry_hr)) a->retry_failures.fetch_add(1, std::memory_order_relaxed);
+            bump(a);
+        }
+        job->retry.store(static_cast<uint32_t>(PsoRetry::Done), std::memory_order_release);
+        pool_wake();                            // no job/context access after the retry's publication
+    } else if (state == static_cast<uint32_t>(PsoRetry::Running)) {
+        wait_for_retry(job, job->context->pso);
+    }
+}
 } // namespace
 
 ID3D12PipelineState* pso_resolve(PsoJob* job, HRESULT* hr) noexcept {
@@ -330,6 +416,7 @@ ID3D12PipelineState* pso_resolve(PsoJob* job, HRESULT* hr) noexcept {
             wait_for_done(job, a);
         }
     }
+    resolve_retry(job);                          // on this consumer thread, at most once for a failed pool create
     // A pool thread cannot call the runtime's error callback. This is a DDI thread with no lock held, which is
     // where the shell reports what the thread that compiled could not (the replay drain hook's contract). Outside
     // the branch above: a compile that failed while no consumer was waiting is reported by the first consumer that
@@ -341,8 +428,11 @@ ID3D12PipelineState* pso_resolve(PsoJob* job, HRESULT* hr) noexcept {
     if (PsoAsync* a = job->context->pso; a) pso_tick(a);
     // A job that ends with no pipeline and no failure is one that pso_off ended without a create, after its device
     // was already going away. A consumer must never read that as "bind no pipeline": it is a failure here.
-    if (hr) *hr = SUCCEEDED(job->hr) && !job->pso ? E_UNEXPECTED : job->hr;
-    return job->pso;
+    const bool retried = job->retry.load(std::memory_order_acquire) == static_cast<uint32_t>(PsoRetry::Done);
+    const HRESULT result = retried ? job->retry_hr : job->hr;
+    ID3D12PipelineState* pso = retried ? job->retry_pso : job->pso;
+    if (hr) *hr = SUCCEEDED(result) && !pso ? E_UNEXPECTED : result;
+    return pso;
 }
 
 void pso_destroy(PsoJob* job) noexcept {
@@ -362,11 +452,14 @@ void pso_destroy(PsoJob* job) noexcept {
             wait_for_done(job, a);
         }
     }
+    if (job->retry.load(std::memory_order_acquire) == static_cast<uint32_t>(PsoRetry::Running))
+        wait_for_retry(job, job->context->pso);
     // The destroy is a consumer like any other as far as a removal a pool thread saw is concerned (pso_resolve).
     if (PsoAsync* a = job->context->pso; a && a->policy.drained) a->policy.drained(a->policy.shell);
     if (PsoAsync* a = job->context->pso; a) pso_tick(a);
     // Past this point the job is Done and nobody else owns it (P1).
     if (job->pso) job->pso->Release();
+    if (job->retry_pso) job->retry_pso->Release();
     if (job->root_ref) job->root_ref->Release();
     delete job;
 }

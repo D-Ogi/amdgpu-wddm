@@ -2,6 +2,7 @@
 #include "device-engine.h"
 #include "device-state.h"
 #include "ddi-trace.h"
+#include "ddi-entry.h"
 #include "adapter-caps.h"
 #include "hosted-dispatch.h"
 #include "hosted-instance.h"
@@ -45,6 +46,17 @@ void stage(const char* name,HRESULT result) noexcept {
     amdgpu_wddm_log::print("d3d12-engine %s result=%08lx\n",name,static_cast<unsigned long>(result));
     amdgpu_wddm_log::flush();
 }
+// BD-180: every error callback uses the same admitted-code boundary as a create slot (BD-075).
+// Keep the engine's reason in the diagnostic; the runtime must not see an unclassified HRESULT and
+// turn a refused operation into a critical driver failure.
+HRESULT report_stage(const char* name,HRESULT raw) noexcept {
+    const HRESULT admitted=ddi_admitted_create_failure(raw);
+    if(FAILED(raw))ddi_failure_note(name,raw);
+    amdgpu_wddm_log::print("d3d12-engine %s raw=%08lx admitted=%08lx\n",name,
+        static_cast<unsigned long>(raw),static_cast<unsigned long>(admitted));
+    amdgpu_wddm_log::flush();
+    return admitted;
+}
 HRESULT vk_result(VkResult result) noexcept {
     switch(result){
     case VK_SUCCESS:return S_OK;
@@ -56,6 +68,9 @@ HRESULT vk_result(VkResult result) noexcept {
 }
 class DeviceEngine final {
     friend class DeviceEngineScope;
+#ifdef AMDGPU_WDDM_D3D12_HOST_TEST
+    friend void host_test_report_list_error(Device&,D3D12DDI_HRTCOMMANDLIST,HRESULT) noexcept;
+#endif
     Device& device_;
     Adapter& adapter_;
     AdapterEngineAccess access_;
@@ -157,9 +172,10 @@ class DeviceEngine final {
     }
     static void APIENTRY report_list_error(void* shell,D3D12DDI_HRTCOMMANDLIST list,HRESULT hr) {
         auto& device=*static_cast<Device*>(shell);
-        ddi_failure_note("list-error",hr);
-        if(device_engine_entered(device) && device.callbacks.pfnSetCommandListErrorCb)
-            device.callbacks.pfnSetCommandListErrorCb(list,hr);
+        if(device_engine_entered(device) && device.callbacks.pfnSetCommandListErrorCb) {
+            const HRESULT admitted=report_stage("list-error",hr);
+            device.callbacks.pfnSetCommandListErrorCb(list,admitted);
+        }
         else report_device_error(device,hr);
     }
     // Deferred replay (engine-ddi set_replay_policy). A worker runs in this device's runtime domain and in the
@@ -533,11 +549,12 @@ void engine_frame_gate(Device& device,uint32_t latency) noexcept {
 }
 bool device_engine_entered(Device& device) noexcept {return device.engine && device.engine->entered();}
 void report_device_error(Device& device,HRESULT hr) noexcept {
-    stage("DDI-error",hr);
+    const HRESULT admitted=report_stage("DDI-error",hr);
     if(hr==DXGI_ERROR_DEVICE_REMOVED || hr==DXGI_ERROR_DEVICE_HUNG || hr==DXGI_ERROR_DEVICE_RESET || hr==D3DDDIERR_DEVICEREMOVED)
         device.lost.store(true);
     // Reported on every failing call, also after the loss (see Device::remove).
-    if(device_engine_entered(device) && device.callbacks.pfnSetErrorCb)device.callbacks.pfnSetErrorCb(device.runtime,hr);
+    if(device_engine_entered(device) && device.callbacks.pfnSetErrorCb)
+        device.callbacks.pfnSetErrorCb(device.runtime,admitted);
 }
 // Every field this reads is either immutable while the device lives (device.engine, the domain and the
 // bootstrap) or per thread (the three scopes), so entries of one device on several threads do not wait
@@ -554,6 +571,9 @@ DeviceEngineScope::~DeviceEngineScope() noexcept {
     hosted_.reset();runtime_.reset();current_=previous_;
 }
 #ifdef AMDGPU_WDDM_D3D12_HOST_TEST
+void host_test_report_list_error(Device& device,D3D12DDI_HRTCOMMANDLIST list,HRESULT hr) noexcept {
+    DeviceEngine::report_list_error(&device,list,hr);
+}
 HRESULT host_test_open_device_engine(Device& device,PFN_vkGetInstanceProcAddr icd,VkPhysicalDevice physical,
                                      VkDevice vk_device) noexcept {
     if(device.engine || !device.adapter || !icd)return E_UNEXPECTED;

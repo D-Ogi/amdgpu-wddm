@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 #include <windows.h>
+#ifdef AMDGPU_WDDM_D3D12_HOST_TEST
+#include <d3d12umddi.h>
+#endif
 #include "../dxvk/runtime-domain.h"
 #include "hosted-instance.h"
 #include <atomic>
@@ -88,6 +91,8 @@ public:
     bool entered() const noexcept {return hosted_.entered();}
 };
 #ifdef AMDGPU_WDDM_D3D12_HOST_TEST
+// Calls the production ShellHooks list-error boundary, including its device-error fallback.
+void host_test_report_list_error(Device&,D3D12DDI_HRTCOMMANDLIST,HRESULT) noexcept;
 // Host tests only, never in the driver build: an owner of the device without the engine device. It
 // creates the hosted instance through the bootstrap's entry, from the given ICD entry, and the heap
 // imports over the given Vulkan handles; no queue registry, no engine context. The device's adapter

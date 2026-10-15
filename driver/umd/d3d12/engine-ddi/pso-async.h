@@ -9,7 +9,8 @@
 //   P1 A job is owned by exactly one party at a time: the pool queue while it is Queued, the thread that claimed it
 //      while it is Running, and the pipeline record once it is Done. Only the owner writes it.
 //   P2 The runner (a pool thread, or a consumer that claimed a queued job) touches the job and its DeviceContext
-//      only before it publishes Done. After the publish it touches pool-global memory alone, because the record
+//      only before it publishes Done. A pool thread publishes after its run hook has returned. After the publish
+//      it touches pool-global memory alone, because the record
 //      that holds the job may be destroyed, and the job freed, the moment Done is visible.
 //   P3 A consumer waits on the pool's generation word, which no device frees, and re-reads the job's state; the
 //      runner bumps that word and wakes the waiters after the publish. A bounded WaitOnAddress makes a lost wake
@@ -20,8 +21,13 @@
 //   P5 Nothing is joined in DllMain. The pool's threads are started by the first device that turns the policy on
 //      and joined by the last device that turns it off, both inside a DDI call.
 // Fields, writer -> readers:
-//   PsoJob::state: the owner (P1), seq_cst -> every consumer. PsoJob::pso and ::hr: the runner before the Done
+//   PsoJob::state: queue claims under the pool lock; Done release -> every consumer's acquire. PsoJob::pso and ::hr:
+//     the runner before the Done
 //     store (release) -> the consumers after their acquire load of state.
+//   PsoJob::retry: Available only for a failed pool create, set before Done. One consumer claims it with CAS,
+//     writes retry_pso/retry_hr, and publishes Done (release); other consumers acquire that result. The original
+//     pso/hr never change after the first Done. The runtime keeps the record alive for concurrent consumers;
+//     its destroy waits for an active retry and releases both results exactly once.
 //   PsoAsync counters: every thread, relaxed -> the summary line at the device's destruction.
 #pragma once
 #include "internal.h"
@@ -121,6 +127,7 @@ struct PsoPlan {
 };
 
 enum class PsoState : uint32_t { Queued = 0, Running = 1, Done = 2 };
+enum class PsoRetry : uint32_t { None = 0, Available = 1, Running = 2, Done = 3 };
 
 struct PsoJob {
     DeviceContext* context = nullptr;
@@ -129,6 +136,11 @@ struct PsoJob {
     std::atomic<uint32_t> state{static_cast<uint32_t>(PsoState::Queued)};
     ID3D12PipelineState* pso = nullptr;                  // the runner's result, before the Done store
     HRESULT hr = S_OK;                                   // the engine create's result, likewise
+    bool compiled = false;                              // the run hook called its body; only the runner writes
+    uint32_t device_number = 0;                         // kept for diagnostics even after the policy is off
+    std::atomic<uint32_t> retry{static_cast<uint32_t>(PsoRetry::None)};
+    ID3D12PipelineState* retry_pso = nullptr;            // separate result: the first result stays immutable
+    HRESULT retry_hr = S_OK;                            // published by retry == Done
     uint64_t queued_qpc = 0;
     uint64_t id = 0;                                     // diagnostic, from DeviceContext::next_id
     std::atomic<uint32_t> reported{0};                   // a failed create is logged once, reported at every use
@@ -158,6 +170,8 @@ struct PsoAsync {
     std::atomic<uint64_t> wait_qpc{0};                  // their waiting time together
     std::atomic<uint64_t> longest_wait_qpc{0};
     std::atomic<uint64_t> failures{0};                  // engine creates that failed after the S_OK
+    std::atomic<uint64_t> retried{0};                   // once per failed pool job, on a consumer thread
+    std::atomic<uint64_t> retry_failures{0};            // separate from failures, which counts the first creates
     std::atomic<uint64_t> aborted{0};                   // jobs pso_off ended without a create
 };
 
@@ -177,7 +191,9 @@ HRESULT pso_create_now(DeviceContext* context, PsoPlan& plan, ID3D12PipelineStat
 PsoJob* pso_submit(DeviceContext* context, PsoPlan&& plan) noexcept;
 
 // The pipeline of a job, on a DDI thread: runs the job here when no worker has started it, else waits for the
-// worker. *hr gets the engine create's result (S_OK with a pipeline, or the failure, with null). Calls the
+// worker. A failed pool create gets one synchronous retry; concurrent consumers share that result. A queued job
+// first compiled by its consumer is already synchronous and is not retried. *hr gets the final engine result
+// (S_OK with a pipeline, or the failure, with null). Calls the
 // policy's drained hook, so a device removal a pool thread saw is reported from this thread.
 ID3D12PipelineState* pso_resolve(PsoJob* job, HRESULT* hr) noexcept;
 
