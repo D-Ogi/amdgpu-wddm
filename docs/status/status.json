@@ -3086,21 +3086,21 @@
       {
        "name": "pfnCalcPrivateCommandSignatureSize",
        "function": "calc_command_signature",
-       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:500",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:508",
        "done": true,
        "reason": "returns the answer"
       },
       {
        "name": "pfnCreateCommandSignature",
        "function": "create_command_signature",
-       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:515",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:523",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnDestroyCommandSignature",
        "function": "destroy_command_signature",
-       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:588",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:596",
        "done": true,
        "reason": "does work"
       },
@@ -3347,7 +3347,7 @@
       {
        "name": "pfnGetRaytracingAccelerationStructurePrebuildInfo",
        "function": "get_prebuild_info",
-       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:883",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:891",
        "done": true,
        "reason": "does work"
       },
@@ -3810,7 +3810,7 @@
       {
        "name": "pfnResetCommandList",
        "function": "reset_list",
-       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:227",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:228",
        "done": true,
        "reason": "does work"
       },
@@ -3901,21 +3901,21 @@
       {
        "name": "pfnResourceResolveSubresource",
        "function": "resolve_subresource",
-       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:624",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:632",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnExecuteBundle",
        "function": "execute_bundle",
-       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:368",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:372",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnExecuteIndirect",
        "function": "execute_indirect",
-       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:603",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:611",
        "done": true,
        "reason": "does work"
       },
@@ -3964,7 +3964,7 @@
       {
        "name": "pfnSetPredication",
        "function": "set_predication",
-       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:273",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:277",
        "done": true,
        "reason": "does work"
       },
@@ -4146,14 +4146,14 @@
       {
        "name": "pfnSetMarker",
        "function": "set_marker",
-       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:387",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:395",
        "done": false,
        "reason": "only logs, counts, reads or writes zeros"
       },
       {
        "name": "pfnClearRootArguments",
        "function": "clear_root_arguments",
-       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:395",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:403",
        "done": true,
        "reason": "does work"
       },
@@ -4167,21 +4167,21 @@
       {
        "name": "pfnOMSetDepthBounds",
        "function": "om_set_depth_bounds",
-       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:287",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:291",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnSetSamplePositions",
        "function": "set_sample_positions",
-       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:298",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:302",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnResourceResolveSubresourceRegion",
        "function": "resolve_subresource_region",
-       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:639",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:647",
        "done": true,
        "reason": "does work",
        "partial": true
@@ -4189,21 +4189,21 @@
       {
        "name": "pfnSetProtectedResourceSession",
        "function": "set_protected_session",
-       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:442",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:450",
        "done": false,
        "reason": "refuses every call"
       },
       {
        "name": "pfnWriteBufferImmediate",
        "function": "write_buffer_immediate",
-       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:347",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:351",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnSetViewInstanceMask",
        "function": "set_view_instance_mask",
-       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:313",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:317",
        "done": true,
        "reason": "does work"
       },
@@ -4224,21 +4224,21 @@
       {
        "name": "pfnBuildRaytracingAccelerationStructure",
        "function": "build_acceleration_structure",
-       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:896",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:904",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnEmitRaytracingAccelerationStructurePostbuildInfo",
        "function": "emit_postbuild_info",
-       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:937",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:945",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnCopyRaytracingAccelerationStructure",
        "function": "copy_acceleration_structure",
-       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:963",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:971",
        "done": true,
        "reason": "does work",
        "partial": true
@@ -4246,35 +4246,35 @@
       {
        "name": "pfnSetPipelineState1",
        "function": "set_pipeline_state1",
-       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:992",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:1000",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnDispatchRays",
        "function": "dispatch_rays",
-       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:1009",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:1017",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnRSSetShadingRate",
        "function": "rs_set_shading_rate",
-       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:447",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:455",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnRSSetShadingRateImage",
        "function": "rs_set_shading_rate_image",
-       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:462",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:470",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnDispatchMesh",
        "function": "dispatch_mesh",
-       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:1027",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:1035",
        "done": true,
        "reason": "does work"
       },
@@ -4288,7 +4288,7 @@
       {
        "name": "pfnOmSetAlphaBlendFactor",
        "function": "om_set_alpha_blend_factor",
-       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:439",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:447",
        "done": false,
        "reason": "only logs, counts, reads or writes zeros"
       }
@@ -4391,14 +4391,14 @@
       {
        "name": "pfnBeginRenderPass",
        "function": "begin_render_pass",
-       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:1195",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:1203",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnEndRenderPass",
        "function": "end_render_pass",
-       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:1275",
+       "source": "driver/umd/d3d12/engine-ddi/commands.cpp:1283",
        "done": true,
        "reason": "does work"
       }
