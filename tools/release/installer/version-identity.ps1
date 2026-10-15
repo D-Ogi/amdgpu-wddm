@@ -45,6 +45,36 @@ function Get-InfDriverIdentity([string]$Text) {
     return [pscustomobject]@{ date = $dateText; quad = $quad }
 }
 
+# The product identity the INF writes, through the %token% the INF itself resolves. Windows substitutes a value
+# of [Strings] for every %name% in an AddReg row, and the shipped INF writes the product quad that way
+# (driver/kmd/bc250kmd.inf: HKR,, ProductPackageVersion, 0x00000000, %PackageProductVersion%, with the literal in
+# [Strings], which build-release.ps1 stamps per release). A reader that only accepts a quoted literal here sees no
+# product identity at all in the file Windows installs, so this resolves the token the way the OS does. A literal
+# in the row stays valid: an older package wrote one, and rollback reads those packages too.
+function Get-InfProductPackageVersion([string]$Text) {
+    $section = ''; $strings = @{}; $rows = @()
+    foreach ($line in ($Text -split "`r?`n")) {
+        $line = ($line -replace ';.*$', '').Trim()
+        if ($line -match '^\[([^\]]+)\]$') { $section = $Matches[1]; continue }
+        if ($section -ieq 'Strings' -and $line -match '^([A-Za-z0-9_.\-]+)\s*=\s*"(.*)"\s*$') {
+            $strings[$Matches[1].ToLowerInvariant()] = $Matches[2]
+            continue
+        }
+        if ($line -match '^HKR\s*,\s*,\s*ProductPackageVersion\s*,\s*0x0*0\s*,\s*(.+)$') { $rows += $Matches[1].Trim() }
+    }
+    if ($rows.Count -ne 1) { throw 'INF product identity is absent or disagrees' }
+    $value = $rows[0]
+    if ($value -match '\A%([A-Za-z0-9_.\-]+)%\z') {
+        $key = $Matches[1].ToLowerInvariant()
+        if (-not $strings.ContainsKey($key)) { throw 'INF product identity is absent or disagrees' }
+        $value = $strings[$key]
+    } elseif ($value -match '\A"(.*)"\z') {
+        $value = $Matches[1]
+    } else { throw 'INF product identity is absent or disagrees' }
+    if ($value -cnotmatch '\A[0-9.]+\z') { throw 'INF product identity is absent or disagrees' }
+    return $value
+}
+
 function New-PackageVersionIdentity {
     param([string]$Release, [string]$DriverDate, [string]$KmdBuild, [string]$KmdAbi, [string]$KmdSha256)
     $product = Get-ProductPackageQuad $Release
@@ -91,8 +121,7 @@ function Test-PackageVersionIdentity($Manifest, [string]$InfText, [string]$KmdSh
     if ($Manifest.version_identity) {
         $i = $Manifest.version_identity
         if ($inf.date -cne $i.inf.date -or $i.kmd.sha256 -ine $KmdSha256) { throw 'package date or KMD image differs from version identity' }
-        $productRows = @([regex]::Matches($InfText, '(?im)^HKR\s*,\s*,\s*ProductPackageVersion\s*,\s*0x00000000\s*,\s*"([0-9.]+)"\s*$'))
-        if ($productRows.Count -ne 1 -or $productRows[0].Groups[1].Value -cne $i.product_quad) { throw 'INF product identity is absent or disagrees' }
+        if ((Get-InfProductPackageVersion $InfText) -cne $i.product_quad) { throw 'INF product identity is absent or disagrees' }
     }
     return $inf
 }

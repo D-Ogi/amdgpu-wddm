@@ -603,6 +603,21 @@ if ($MockAttestation) {
     }
     [IO.File]::WriteAllText($driverPackageReport, ($driverPackage | ConvertTo-Json -Depth 20), [Text.UTF8Encoding]::new($false))
 }
+# BD-182: every PE file of the release is signed, which is what the version gate below reads back and what a
+# tester's Windows looks for in the control app and the tools, not only in the driver. The driver, its catalog
+# and the DriverStore members are signed above; this signs what is left, the control app and the tools and the
+# setup window, and leaves a file that already carries a signature alone, so a third-party program keeps the
+# signature of whoever made it. The stamp is already written at this point, so each signature covers the bytes
+# that ship; release-sources.json records these files by their Authenticode digest, which a signature does not
+# change, exactly as the kernel driver's entry does.
+$toSign = @(Get-ChildItem -LiteralPath $pkgRoot -Recurse -File |
+    Where-Object { $_.Extension -in '.dll', '.exe', '.sys' } |
+    Where-Object { -not (Get-AuthenticodeSignature -LiteralPath $_.FullName).SignerCertificate })
+foreach ($f in $toSign) { Invoke-Sign $f.FullName }
+'  signed {0} more PE file(s): {1}' -f $toSign.Count, (($toSign | ForEach-Object { $_.Name }) -join ', ')
+# The setup window was hashed when it was copied in, which is before its signature: manifest.json records what
+# ships, and the installer verifies the package against it.
+$setupHash = (Get-FileHash -LiteralPath $setupPkg -Algorithm SHA256).Hash
 $pass = $null
 foreach ($f in 'bc250kmd.sys', 'bc250kmd.cat') {
     $s = Get-AuthenticodeSignature -LiteralPath (Join-Path $kmd $f)
@@ -701,10 +716,11 @@ $qualityReceipt = Join-Path $qualityOut 'result.json'
 if (-not (Test-Path -LiteralPath $qualityReceipt)) { throw "the quality suite left no receipt at $qualityReceipt" }
 $qualityChecks = (Get-Content -LiteralPath $qualityReceipt -Raw | ConvertFrom-Json).checks
 $notRun = @()
-foreach ($name in $mustRun) {
-    $row = @($qualityChecks | Where-Object { $_.name -eq $name })
-    if ($row.Count -ne 1) { $notRun += "${name}: not in the receipt"; continue }
-    if ($row[0].status -ne 'PASS') { $notRun += "$name $($row[0].status): $($row[0].reason)" }
+# $gate, not $name: $name is the package's own name, and the check below reads it back against the package folder.
+foreach ($gate in $mustRun) {
+    $row = @($qualityChecks | Where-Object { $_.name -eq $gate })
+    if ($row.Count -ne 1) { $notRun += "${gate}: not in the receipt"; continue }
+    if ($row[0].status -ne 'PASS') { $notRun += "$gate $($row[0].status): $($row[0].reason)" }
 }
 if ($notRun.Count) { throw ("a release needs every gate of the user-mode sources: " + ($notRun -join '; ')) }
 
@@ -948,7 +964,7 @@ $manifest = [ordered]@{
 # The archive read back against the package that ships, the way the version stamps are read back: every PE of
 # the package has its symbol file in the archive, and that file carries the identity the PE names.
 $r = Invoke-Headless -File $pythonExe -Arguments @((Join-Path $PSScriptRoot 'symbols.py'), 'check',
-    '--package', $pkg, '--symbols', $symbolArchive) -TimeoutSeconds 600
+    '--package', $pkg, '--symbols', $symbolArchive, '--sources', $sourcesPath) -TimeoutSeconds 600
 $r.text
 if ($r.code -ne 0) { throw 'symbols: the archive does not match the package that ships (see above)' }
 $cv = Test-CompatibilityRecord -PackageRoot $pkg

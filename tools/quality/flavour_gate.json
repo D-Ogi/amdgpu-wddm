@@ -1745,6 +1745,31 @@
    "name": "BC250_QUERY_ADAPTER_CAPS",
    "where": "vkd3d-proton libs/ddi/ddi_engine.c",
    "reason": "the name of the bc250_query_adapter_caps() function of the engine's DDI entry layer, as a C string: the vkd3d debug macros take __FUNCTION__, and since BD-180 the lab engine recipe drops -DVKD3D_NO_DEBUG_MESSAGES, so those messages (and their function names) are compiled into the lab flavour. Not a lookup: no environment variable or registry value of this name is read. The release engine keeps the token and holds none of these strings, which is why only the lab engines carry them. A newly traced bc250_* function of this layer adds a name here"
+  },
+  {
+   "name": "BC250D3D_ROUTER",
+   "where": "bc250-win driver/umd/router (bc250d3d_router.dll: its BD-166 version resource)",
+   "reason": "the file's own name in lower case, bc250d3d_router, which versionstamp.py writes as InternalName and OriginalFilename; not a lookup. The build pinned by rc1 to rc4 carried no version resource at all, so the name appeared with the stamp of rc5 and not with a new setting. It is declared because Windows reads environment names in any letter case"
+  },
+  {
+   "name": "BC250D3D_ZINK",
+   "where": "mesa-amdgpu-wddm src/gallium/targets/bc250d3d_zink (bc250d3d_zink.dll: its BD-166 version resource)",
+   "reason": "the file's own name in lower case, bc250d3d_zink, which versionstamp.py writes as InternalName and OriginalFilename; not a lookup. The build pinned by rc1 to rc4 carried no version resource at all, so the name appeared with the stamp of rc5 and not with a new setting. It is declared because Windows reads environment names in any letter case"
+  },
+  {
+   "name": "AMDGPU_WDDM_D3D11",
+   "where": "bc250-win driver/umd/dxvk (amdgpu_wddm_d3d11.dll: its BD-166 version resource)",
+   "reason": "the file's own name in lower case, amdgpu_wddm_d3d11, which versionstamp.py writes as InternalName and OriginalFilename; not a lookup. The build pinned by rc1 to rc4 carried no version resource at all, so the name appeared with the stamp of rc5 and not with a new setting. It is declared because Windows reads environment names in any letter case"
+  },
+  {
+   "name": "AMDGPU_WDDM_D3D12CAPS",
+   "where": "bc250-win tools/win/d3d12caps (amdgpu_wddm_d3d12caps.exe: its BD-166 version resource)",
+   "reason": "the file's own name in lower case, amdgpu_wddm_d3d12caps, which versionstamp.py writes as InternalName and OriginalFilename; not a lookup. The build pinned by rc1 to rc4 carried no version resource at all, so the name appeared with the stamp of rc5 and not with a new setting. It is declared because Windows reads environment names in any letter case"
+  },
+  {
+   "name": "AMDGPU_WDDM_GL",
+   "where": "mesa-amdgpu-wddm src/gallium/targets/amdgpu_wddm_gl (amdgpu_wddm_gl.dll: its BD-166 version resource)",
+   "reason": "the file's own name in lower case, amdgpu_wddm_gl, which versionstamp.py writes as InternalName and OriginalFilename; not a lookup. The build pinned by rc1 to rc4 carried no version resource at all, so the name appeared with the stamp of rc5 and not with a new setting. It is declared because Windows reads environment names in any letter case"
   }
  ],
  "package": {

@@ -36,6 +36,12 @@ Refuses { Test-PackageVersionIdentity $m ($inf.Replace('10/13/2026', '10/12/2026
 Refuses { Test-PackageVersionIdentity $m ($inf.Replace('40.7.216.103', '40.7.216.64')) $hash } 'KMD build must not drive package numbering'
 Refuses { Test-PackageVersionIdentity $m $inf ('CD' * 32) } 'wrong SYS'
 Refuses { Test-PackageVersionIdentity $m ($inf.Replace('ProductPackageVersion', 'OtherValue')) $hash } 'no product HKR'
+# The shipped INF writes the product quad as the %token% Windows resolves from [Strings], not as a literal.
+$tokenInf = $inf.Replace('"0.7.216.103"', '%PackageProductVersion%') +
+    "[Strings]`r`nPackageProductVersion = `"0.7.216.103`"`r`n"
+Check ((Test-PackageVersionIdentity $m $tokenInf $hash).date -ceq '10/13/2026') 'product identity through the INF token'
+Refuses { Test-PackageVersionIdentity $m ($tokenInf.Replace("[Strings]`r`nPackageProductVersion = `"0.7.216.103`"`r`n", '')) $hash } 'token with no string'
+Refuses { Test-PackageVersionIdentity $m ($tokenInf.Replace('PackageProductVersion = "0.7.216.103"', 'PackageProductVersion = "0.7.216.64"')) $hash } 'token resolves to another quad'
 Refuses { Get-InfDriverIdentity ($inf.Replace('[Bc250_PackageIdentity]', "DriverVer=10/13/2026,40.7.216.103`n[Bc250_PackageIdentity]")) } 'duplicate DriverVer'
 $m.version_identity = $null
 Refuses { Get-ManifestDriverQuad $m } 'new identity cannot fall back to legacy alias'

@@ -2,12 +2,28 @@
   "about": "The PE files of the package for which this release archives no symbol file, each with the reason. symbols.py checks this list in both directions: a file here that the package does not contain fails the gate, and a PE with no debug information that is not here fails it as well. A reason that names work still to be done is a debt, not an excuse: when that work lands, the entry goes.",
   "files": [
     {
+      "path": "payload/d3d12/amdgpu_wddm_vkd3d.dll",
+      "reason": "its build tree was trimmed to the artifacts the release pins while the round ran, under the workspace size cap (trim-build-trees.py --in-place), and no copy of that build's amdgpu_wddm_vkd3d.pdb is left in the workspace: the ICD trees were recovered from the builds their rc5 copies came from, by CodeView identity, and this one could not be. The pins of this candidate are frozen, so the symbol file comes back when the component next moves, with the build that moves it; then this entry goes."
+    },
+    {
+      "path": "payload/opengl/amdgpu_wddm_gl.dll",
+      "reason": "its build tree was trimmed to the artifacts the release pins while the round ran, under the workspace size cap (trim-build-trees.py --in-place), and no copy of that build's amdgpu_wddm_gl.pdb is left in the workspace: the ICD trees were recovered from the builds their rc5 copies came from, by CodeView identity, and this one could not be. The pins of this candidate are frozen, so the symbol file comes back when the component next moves, with the build that moves it; then this entry goes."
+    },
+    {
       "path": "payload/redist/vc_redist.x64.exe",
       "reason": "Microsoft's Visual C++ redistributable, downloaded and carried unchanged. Its own debug directory names burn.pdb, which Microsoft does not publish with the installer."
     },
     {
-      "path": "payload/tools/vulkaninfo.exe",
-      "reason": "the Vulkan SDK's own tool, carried unchanged from the SDK package, which ships no PDB for it."
+      "path": "payload/tools/amdgpu-state-installer.exe",
+      "reason": "built with no debug information at all (driver/state/installer-build.ps1), so no symbol file for these bytes exists anywhere. It gets one when the component next moves and its build is given the debug flags the shipped components use; then this entry goes."
+    },
+    {
+      "path": "payload/tools/amdgpu_wddm_d3d12caps.exe",
+      "reason": "built with no debug information at all (tools/win/d3d12caps/build.ps1), so no symbol file for these bytes exists anywhere. It gets one when the component next moves and its build is given the debug flags the shipped components use; then this entry goes."
+    },
+    {
+      "path": "payload/tools/d3d11bench.exe",
+      "reason": "built with no debug information at all (tools/win/d3d11bench/build.ps1, and the file ships from the b24 train that built it), so no symbol file for these bytes exists anywhere. It gets one when the component next moves and its build is given the debug flags the shipped components use; then this entry goes."
     },
     {
       "path": "payload/tools/hip/amdhip64.dll",
@@ -20,6 +36,14 @@
     {
       "path": "payload/tools/hip/vadd.exe",
       "reason": "the HIP sample of the same carried build as bc250hipblas.dll, and the same debt."
+    },
+    {
+      "path": "payload/tools/vulkaninfo.exe",
+      "reason": "the Vulkan SDK's own tool, carried unchanged from the SDK package, which ships no PDB for it."
+    },
+    {
+      "path": "payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll",
+      "reason": "its build tree was trimmed to the artifacts the release pins while the round ran, under the workspace size cap (trim-build-trees.py --in-place), and no copy of that build's amdgpu_wddm_vkd3d.pdb is left in the workspace: the ICD trees were recovered from the builds their rc5 copies came from, by CodeView identity, and this one could not be. The pins of this candidate are frozen, so the symbol file comes back when the component next moves, with the build that moves it; then this entry goes."
     }
   ]
 }
