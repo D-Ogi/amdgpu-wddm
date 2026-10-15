@@ -2967,6 +2967,20 @@ function Repair-PendingFileRemovals {
         return $plan.cancelled.Count
     } finally { $transaction.Dispose() }
 }
+# The payload directories this install copies, one decision out: the DriverStore layout installs the tools only,
+# because the user-mode drivers are members of the driver package, and the older layout installs the trees that
+# used to live under Program Files. BD-183: the unary comma keeps a one-element list a list. PowerShell unrolls
+# the array result of a statement or a function once, so `$dirs = if (...) { 'tools' } else { ... }` gave the
+# string 'tools', `+=` then concatenated, and every DriverStore install built the path
+# '<package>\payload\toolssystem-tuningcontrol' and stopped at the step that keeps its files from being removed.
+# The MFT and OpenGL directories are added at the call site, after their own release switches are read.
+function Get-InstallPayloadDirs {
+    param([bool]$DriverStoreUmd, [bool]$HasSystemTuning, [bool]$HasControl)
+    $dirs = @(if ($DriverStoreUmd) { 'tools' } else { 'd3d12', 'desktop', 'd3d11', 'vulkan', 'wow64', 'tools' })
+    if ($HasSystemTuning) { $dirs += 'system-tuning' }
+    if ($HasControl) { $dirs += 'control' }
+    return ,$dirs
+}
 # Only real file sources in this run's selected trees are destinations. A disabled optional component, a stale
 # file in the install root and a file in another product's folder are never admitted by a directory prefix.
 function Get-InstallCopyDestinations {

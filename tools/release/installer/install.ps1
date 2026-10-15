@@ -1407,9 +1407,10 @@ Invoke-Change "add the release test certificate $($cert.Thumbprint) to LocalMach
 } | Out-Null
 
 # Files. Each payload directory goes to the same name under the install root; wow64 holds the x86 builds (BD-064).
-$dirs = if ($driverStoreUmd) { @('tools') } else { @('d3d12', 'desktop', 'd3d11', 'vulkan', 'wow64', 'tools') }
-if (Test-Path -LiteralPath (Join-Path $package 'payload\system-tuning')) { $dirs += 'system-tuning' }
-if (-not $NoControlApp -and (Test-Path -LiteralPath (Join-Path $package 'payload\control'))) { $dirs += 'control' }
+# One decision, in one tested function (Get-InstallPayloadDirs, BD-183): a one-element list must stay a list.
+$dirs = Get-InstallPayloadDirs -DriverStoreUmd $driverStoreUmd `
+    -HasSystemTuning (Test-Path -LiteralPath (Join-Path $package 'payload\system-tuning')) `
+    -HasControl (-not $NoControlApp -and (Test-Path -LiteralPath (Join-Path $package 'payload\control')))
 # The H.264 encoder Media Foundation transform (M15.11, driver/umd/mft-h264/INSTALL.md): the release decides whether
 # it is installed at all (manifest.json "mft_h264"). The decision is taken here, before the first change of this
 # stage, and the settings stage below writes or removes its registry keys by the same answer.

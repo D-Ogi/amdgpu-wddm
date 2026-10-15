@@ -188,6 +188,11 @@ Check 'ledger-call' { & pwsh -NoProfile -File "$repo\tools\release\test-ledger-c
  # BD-077: the installer half of the CU mode setting. The -CuMode switch must reach the registry plan, and
  # docs\testing\INSTALL.md must state the number of compute units of an install that does not use the switch.
  Check 'cu-mode-installer' { & powershell -NoProfile -File "$repo\tools\release\test-cu-mode-installer.ps1" -Repo $repo }
+ # BD-183: the payload directories an install copies. rc5 of tester.31 would not install on 26200: the DriverStore
+ # layout selects one directory, PowerShell unrolled that one-element list to a string, and the two += that follow
+ # concatenated three names into '...\payload\toolssystem-tuningcontrol'. One decision in one function now, and
+ # this holds it to a list even when it holds one name.
+ Check 'install-payload-dirs' { & powershell -NoProfile -File "$repo\tools\release\test-install-dirs.ps1" }
  # BD-122: the consumers of the KMD's start record (start-confirm and the installer's verify), with fixtures in a
  # scratch key of HKCU that it removes again. Windows PowerShell 5.1, the shell a tester's installer runs in.
  Check 'start-record-consumers' { & powershell -NoProfile -File "$repo\tools\release\test-start-record.ps1" }
