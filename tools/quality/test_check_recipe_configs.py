@@ -122,6 +122,22 @@ class RecipeConfigs(unittest.TestCase):
         self.assertNotIn("build-mesa.ps1", text)
         self.assertNotIn("build-dxvk.ps1", text)
 
+    def test_system_icd_resolves_static_crt_in_both_flavours(self):
+        # BD-178: test the real builder's resolved arguments, including its flavour logic.
+        # Omitting b_vscrt selected Meson's dynamic CRT even though default_library was static.
+        code, text, out = self.run_gate()
+        self.assertEqual(0, code, text)
+        with open(os.path.join(out, "resolved.json"), encoding="utf-8") as fh:
+            resolved = json.load(fh)
+        for config in ("radv-system", "radv-mt"):
+            for flavour in ("release", "lab"):
+                name = "build-mesa.ps1 %s %s" % (config, flavour)
+                options = resolved[name]
+                self.assertEqual(["-Db_vscrt=mt"], [x for x in options if x.startswith("-Db_vscrt=")], name)
+                self.assertIn("-Db_ndebug=true", options, name)
+        mesa = json.loads(self.read("mesa-configs.json"))["configs"]
+        self.assertEqual(["vulkan_radeon.dll"], mesa["radv-system"]["ships"]["src/amd/vulkan/vulkan_radeon.dll"])
+
     def test_the_same_trap_after_the_compile_fails(self):
         self.edit("build-dxvk.ps1", SHIPS_GUARDED, SHIPS_UNGUARDED)
         line = self.line_of("build-dxvk.ps1", SHIPS_UNGUARDED)

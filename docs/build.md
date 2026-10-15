@@ -161,16 +161,14 @@ for game processes use it. The Mesa tree needs the fork's RADV link fix (D-Ogi/m
 `amdgpu-wddm/icd-v3-0004b`, dec624fe "radv: Exclude the C runtime the build does not use, by b_vscrt"): before it,
 the port's `/NODEFAULTLIB:libcmt.lib` left every CRT symbol unresolved under `-Db_vscrt=mt` (LNK1120).
 
-`-Config radv-system` builds the system Vulkan ICD (`payload/vulkan/vulkan_radeon.dll`). It is the `radv` set,
-`-Db_ndebug=true` included. Up to b23 the set had no `-Db_ndebug=true`, because the Mesa line of the system ICD
-(`2732f9c8`, `308a5e33`) did not build with `NDEBUG`: line 714 of `src/compiler/spirv/vtn_cmat.c` declares a
-variable that only `assert` reads, and Mesa makes warning C4189 an error. Every RADV assert was therefore live
-in the shipped ICD, and a failed assert calls `abort()` in the game process: the game ends with no message.
-Mesa `a7f44c96` relaxes C4189 in MSVC `NDEBUG` builds, as the GCC branch of `meson.build` already did, so the
-set now sets `-Db_ndebug=true`. The Mesa line must carry that commit: the system line takes it on
-`amdgpu-wddm/b25-system`, over the `amdgpu-wddm/bd102-system` head that built the shipped tester.22 ICD. The
-option set is now equal to the `radv` set. The name stays, because the release scripts and the rebuild records
-name the system ICD by it.
+`-Config radv-system` builds the x64 system Vulkan ICD (`payload/vulkan/vulkan_radeon.dll`).
+It uses the `radv-mt` options, including `-Db_vscrt=mt` and `-Db_ndebug=true`.
+Both release and lab builds link the static C runtime.
+The import table must contain no `vcruntime140*.dll` or `msvcp140*.dll`.
+Keep this recipe name for the x64 system slot and its build records.
+The 32-bit system slot keeps its existing `radv-mt` recipe.
+
+The Mesa source must carry the CRT link-selection fix described above and the `NDEBUG` build fix, `a7f44c96`.
 
 #### Host gate after every pull of the Mesa fork
 
