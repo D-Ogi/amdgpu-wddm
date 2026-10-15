@@ -14,6 +14,7 @@
 // AMDGPU_WDDM_LOG, and without it the release sink, which reads the variable only beside a marker of this process
 // and joins only a file of the switch's folder. The cases that differ say which flavour they check.
 #include "stdio-log.h"
+#include "ddi-trace.h"
 
 #include <initializer_list>
 #include <string>
@@ -726,6 +727,37 @@ void print_tests() {
     CHECK(found);
     CHECK(detail::written().load(std::memory_order_relaxed)>0);   // the bytes of a bounded file are counted
 }
+// Removal diagnostics remain available with full DDI tracing off. Multiple failing threads share one
+// saturating budget; a stopped/absent sink must not create output elsewhere.
+void failure_chain_tests() {
+    CHECK(native12::ddi_trace_mode()==0);
+    native12::ddi_chain_budget.store(4);
+    std::vector<std::thread> writers;
+    for(unsigned i=0;i<8;++i)writers.emplace_back([] {
+        native12::ddi_chain_failure("chain-test",E_FAIL,35);
+    });
+    for(auto& writer:writers)writer.join();
+    native12::ddi_chain_failure("chain-after-budget",E_FAIL);
+    amdgpu_wddm_log::flush();
+    size_t records=0;
+    for(const auto& file:files_in(games_folder())){
+        const auto text=read_file(games_folder()+"\\"+file);
+        CHECK(!has(text,"site=chain-after-budget"));
+        for(size_t at=0;(at=text.find("d3d12-chain site=chain-test",at))!=std::string::npos;++at){
+            const auto line=text.substr(at,text.find('\n',at)-at);
+            CHECK(has(line,"code=80004005 op=35 pid="));
+            CHECK(has(line," thread=") && has(line," qpc="));
+            ++records;
+        }
+    }
+    CHECK(records==4 && native12::ddi_chain_budget.load()==0);
+    auto& sink=detail::sink();
+    FILE* saved=sink.file;sink.file=nullptr;
+    native12::ddi_chain_budget.store(4);
+    native12::ddi_chain_failure("chain-disabled",E_FAIL);
+    CHECK(native12::ddi_chain_budget.load()==4);
+    sink.file=saved;
+}
 } // namespace
 
 int main() {
@@ -757,6 +789,7 @@ int main() {
         joined_marker_tests();
         reparse_tests();
         print_tests();
+        failure_chain_tests();
         RegOverridePredefKey(HKEY_LOCAL_MACHINE,nullptr);
         RegCloseKey(key);
     }

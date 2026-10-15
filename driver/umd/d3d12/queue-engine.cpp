@@ -145,7 +145,10 @@ HRESULT QueueEngineRegistry::admit(const QueueEngineSlot& slot, QueueEngineOwner
     queue = q; return S_OK;
 }
 HRESULT QueueEngineRegistry::leave(QueueEngineOwner* q, HRESULT hr) noexcept {
-    if (hr == S_OK) hr = ops_.check_health(ops_.health_cookie);
+    if (hr == S_OK) {
+        hr = ops_.check_health(ops_.health_cookie);
+        if (hr != S_OK) ddi_chain_failure("queue-health",hr);
+    } else ddi_chain_failure("queue-operation",hr);
     AcquireSRWLockExclusive(&lock_); q->state = QueueEngineState::Live; q->operation_thread = 0;
     ReleaseSRWLockExclusive(&lock_);
     if (hr != S_OK) { device_.remove(); if (SUCCEEDED(hr)) hr = E_UNEXPECTED; }

@@ -58,7 +58,10 @@ struct Device {
     void remove() noexcept {
         lost.store(true);
         ddi_failure_note("device-remove",D3DDDIERR_DEVICEREMOVED);
-        if(callbacks.pfnSetErrorCb) callbacks.pfnSetErrorCb(runtime,D3DDDIERR_DEVICEREMOVED);
+        if(callbacks.pfnSetErrorCb) {
+            ddi_chain_failure("device-remove-callback",D3DDDIERR_DEVICEREMOVED);
+            callbacks.pfnSetErrorCb(runtime,D3DDDIERR_DEVICEREMOVED);
+        }
     }
 };
 // Serializes the queue operations of one device: queue creation and destruction, ExecuteCommandLists,

@@ -259,17 +259,24 @@ ProgressSource HostedDispatch::progress_source() noexcept {
 HRESULT HostedDispatch::remove_device(int site) noexcept {
     char name[48];std::snprintf(name,sizeof(name),"hosted-remove-device:%d",site);
     ddi_failure_note(name,D3DDDIERR_DEVICEREMOVED);
+    ddi_chain_failure(name,D3DDDIERR_DEVICEREMOVED);
     if(worker_==this){
         if(!lost_.exchange(true))removal_deferred_.store(true,std::memory_order_release);
         return D3DDDIERR_DEVICEREMOVED;
     }
-    if(!lost_.exchange(true) && user_.pfnSetErrorCb)user_.pfnSetErrorCb(runtime_,D3DDDIERR_DEVICEREMOVED);
+    if(!lost_.exchange(true) && user_.pfnSetErrorCb){
+        ddi_chain_failure("hosted-remove-callback",D3DDDIERR_DEVICEREMOVED);
+        user_.pfnSetErrorCb(runtime_,D3DDDIERR_DEVICEREMOVED);
+    }
     return D3DDDIERR_DEVICEREMOVED;
 }
 void HostedDispatch::report_deferred_removal() noexcept {
     if(!removal_deferred_.load(std::memory_order_acquire) || worker_==this || !removal_deferred_.exchange(false))return;
     ddi_failure_note("hosted-remove-device:deferred",D3DDDIERR_DEVICEREMOVED);
-    if(user_.pfnSetErrorCb)user_.pfnSetErrorCb(runtime_,D3DDDIERR_DEVICEREMOVED);
+    if(user_.pfnSetErrorCb){
+        ddi_chain_failure("hosted-deferred-callback",D3DDDIERR_DEVICEREMOVED);
+        user_.pfnSetErrorCb(runtime_,D3DDDIERR_DEVICEREMOVED);
+    }
 }
 // What a recording call of the engine may need on a replay worker: device-level memory and CPU-side sync work. No
 // context, submission, GPU wait or signal, progress publication or queue operation (engine-ddi replay.h, R4).
@@ -714,9 +721,14 @@ int32_t HostedDispatch::dispatch(void* userdata,uint32_t op,void* argument) noex
         char name[40];std::snprintf(name,sizeof(name),"replay-worker-op:%u",op);
         ddi_failure_note(name,E_INVALIDARG);return static_cast<int32_t>(0xc000000du);
     }
-    HRESULT hr=self->operation(op,argument);
+    return self->complete_operation(op,self->operation(op,argument));
+}
+int32_t HostedDispatch::complete_operation(uint32_t op,HRESULT hr) noexcept {
+    if(!active_.load(std::memory_order_acquire) || !runtime_.handle || !domain_.entered())
+        return static_cast<int32_t>(0xc000000du);
+    if(FAILED(hr) && hr!=E_PENDING)ddi_chain_failure("hosted-hresult",hr,op);
     if(hr==D3DDDIERR_DEVICEREMOVED || hr==DXGI_ERROR_DEVICE_REMOVED || hr==DXGI_ERROR_DEVICE_RESET || hr==DXGI_ERROR_DEVICE_HUNG){
-        self->remove_device();return static_cast<int32_t>(0xc00002b6u);}
+        remove_device();return static_cast<int32_t>(0xc00002b6u);}
     if(hr==E_PENDING && (op==BC250_HOST_MapGpuVirtualAddress || op==BC250_HOST_MakeResident))return 0x103;
     if(hr==S_OK)return 0;
     return static_cast<int32_t>(hr==E_NOTIMPL?0xc00000bbu:hr==E_INVALIDARG?0xc000000du:hr==E_OUTOFMEMORY?0xc0000017u:0xc0000001u);

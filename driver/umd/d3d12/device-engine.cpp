@@ -125,8 +125,9 @@ class DeviceEngine final {
         }
         if(heap){
             const HRESULT hr=self.imports_->dispatch(operation,argument);
-            result=hr==S_OK?0:static_cast<int32_t>(hr==E_OUTOFMEMORY?0xc0000017u:hr==E_INVALIDARG?0xc000000du:0xc0000001u);
+            result=self.dispatch_.complete_operation(operation,hr);
         } else result=HostedDispatch::dispatch(&self.dispatch_,operation,argument);
+        if(result<0)ddi_chain_failure(heap?"hosted-heap-ntstatus":"hosted-ntstatus",static_cast<HRESULT>(result),operation);
         if(!traced)return result;
         QueryPerformanceCounter(&end);
         amdgpu_wddm_log::print("{\"event\":\"hosted-callback\",\"edge\":\"end\",\"sequence\":%llu,\"op\":%u,\"qpc\":%lld,\"status\":\"%08x\"}\n",
