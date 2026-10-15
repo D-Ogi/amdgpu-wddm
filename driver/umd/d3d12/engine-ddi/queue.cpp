@@ -124,10 +124,10 @@ bool cancel_initialization(DeviceContext* c, ResourceRecord* r) noexcept {
     return recorded;
 }
 
-uint64_t flush_initializations(DeviceContext* c, EngineQueue* q) noexcept {
+HRESULT flush_initializations(DeviceContext* c, EngineQueue* q, uint64_t* value) noexcept {
     HRESULT failed = S_OK;
     AcquireSRWLockExclusive(&c->init_lock);
-    if (c->init_head && !c->init_broken) {
+    if (c->init_head && SUCCEEDED(c->init_failure)) {
         EngineQueue* target = nullptr;
         if (q->type == D3D12_COMMAND_LIST_TYPE_DIRECT) {
             target = q;
@@ -156,21 +156,21 @@ uint64_t flush_initializations(DeviceContext* c, EngineQueue* q) noexcept {
                 target->init_waited = c->init_value;
             } else {
                 // The resources stay uninitialized, and no further batch is made.
-                c->init_broken = true;
+                c->init_failure = hr;
                 failed = hr;
                 while (ResourceRecord* r = c->init_head) unlink(c, r, kInitNone);
             }
             ReleaseSRWLockExclusive(&target->submit_lock);
         }
     }
-    const uint64_t value = c->init_value;
+    *value = c->init_value;
+    const HRESULT result = c->init_failure;
     ReleaseSRWLockExclusive(&c->init_lock);
     if (FAILED(failed)) {                               // hooks are never called under a lock of engine-ddi
         log_line("initialization of committed render targets failed (hr %08lx): later ones are not initialized",
                  static_cast<unsigned long>(failed));
-        c->report(failed);
     }
-    return value;
+    return result;
 }
 
 void release_initialization(DeviceContext* c) noexcept {
@@ -307,12 +307,20 @@ HRESULT execute_command_lists(EngineQueue* q, UINT count, const D3D12DDI_HCOMMAN
             c->report(E_INVALIDARG);
             return E_INVALIDARG;
         }
-        drain_list(l, Drain::Ecl);              // its calls and its Close (close_list) have replayed after this
+        const HRESULT closed = drain_list(l, Drain::Ecl); // its calls and its Close have replayed after this
+        if (FAILED(closed)) {
+            c->report(closed);
+            return closed;
+        }
         engine.data()[i] = l->list();
     }
     // Committed render targets created since the last call are initialized first; this queue then waits for them.
-    const uint64_t init = flush_initializations(c, q);
-    HRESULT hr = S_OK;
+    uint64_t init = 0;
+    HRESULT hr = flush_initializations(c, q, &init);
+    if (FAILED(hr)) {
+        c->report(hr);
+        return hr;
+    }
     AcquireSRWLockExclusive(&q->submit_lock);
     if (init > q->init_waited) {
         hr = q->queue->Wait(c->init_fence, init);

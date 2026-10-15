@@ -645,14 +645,13 @@ void replay_snapshot(ReplayRing* r, const Snap& snap, D3D12_CPU_DESCRIPTOR_HANDL
 void replay_drain_list(Replay* rp, CommandListRecord* l, Drain kind) noexcept {
     drain_list_impl(rp, l, kind);
     if (ddi_drain(kind)) rp->policy.drained(rp->policy.shell);
-    // A failed engine Close the worker made (close_list) reaches the runtime from this drain, on its API thread. The
-    // destroy of the list drops it: the runtime's list is going away.
+    // Keep the failed Close for every consumer. The consumer reports on its current API target and refuses
+    // submission/reset; destroying the list needs no callback because the runtime's list is going away.
     if (FAILED(l->close_hr.load(std::memory_order_relaxed))) {
-        const HRESULT hr = l->close_hr.exchange(S_OK, std::memory_order_relaxed);
+        const HRESULT hr = l->close_hr.load(std::memory_order_relaxed);
         log_line("CloseCommandList: the engine Close failed on the replay worker (%08lx), %s at the list's %s",
-                 static_cast<unsigned long>(hr), kind == Drain::Destroy ? "dropped" : "reported",
+                 static_cast<unsigned long>(hr), kind == Drain::Destroy ? "dropped" : "retained",
                  kDrainNames[static_cast<size_t>(kind)]);
-        if (kind != Drain::Destroy) l->h.device->report_list(l->rt, hr);
     }
     // The ecl drain is the one a frame makes: the list's Close is the list's last replay entry and drains nothing.
     if (kind != Drain::Ecl) return;

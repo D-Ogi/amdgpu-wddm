@@ -181,6 +181,7 @@ public:
     HANDLE gate = nullptr;                                  // a manual-reset event the calls of other threads wait for
     std::atomic<DWORD> caller{0};                           // calls made on this thread count in caller_calls
     HRESULT close_result = S_OK;
+    HRESULT after_reset_close = S_OK;                       // injected internal initialization Close result
     bool ordered = false;                                   // DrawInstanced's vertex counts must run 1, 2, 3, ...
     UINT next_vertex = 1;
     std::atomic<uint64_t> calls{0}, caller_calls{0}, crossed{0}, stale{0}, unexpected{0}, disorder{0};
@@ -255,7 +256,7 @@ public:
     }
     HRESULT STDMETHODCALLTYPE Reset(ID3D12CommandAllocator* allocator, ID3D12PipelineState* state) override {
         Call(this, "Reset").u(allocator != nullptr).obj(state);
-        close_result = S_OK;
+        close_result = after_reset_close;
         return S_OK;
     }
     void STDMETHODCALLTYPE ClearState(ID3D12PipelineState*) override { odd("ClearState"); }
@@ -905,6 +906,8 @@ public:
 class FakeQueue final : public Child<ID3D12CommandQueue> {
 public:
     uint64_t calls_at_execute = UINT64_MAX;
+    uint32_t execute_calls = 0, signal_calls = 0, fail_signal_at = 0;
+    HRESULT signal_failure = E_FAIL;
     void STDMETHODCALLTYPE UpdateTileMappings(ID3D12Resource*, UINT, const D3D12_TILED_RESOURCE_COORDINATE*,
                                               const D3D12_TILE_REGION_SIZE*, ID3D12Heap*, UINT,
                                               const D3D12_TILE_RANGE_FLAGS*, const UINT*, const UINT*,
@@ -913,12 +916,16 @@ public:
                                             const D3D12_TILED_RESOURCE_COORDINATE*, const D3D12_TILE_REGION_SIZE*,
                                             D3D12_TILE_MAPPING_FLAGS) override {}
     void STDMETHODCALLTYPE ExecuteCommandLists(UINT n, ID3D12CommandList* const* lists) override {
+        ++execute_calls;
         if (n) calls_at_execute = static_cast<FakeList*>(lists[0])->calls.load();
     }
     void STDMETHODCALLTYPE SetMarker(UINT, const void*, UINT) override {}
     void STDMETHODCALLTYPE BeginEvent(UINT, const void*, UINT) override {}
     void STDMETHODCALLTYPE EndEvent() override {}
-    HRESULT STDMETHODCALLTYPE Signal(ID3D12Fence* fence, UINT64 value) override { return fence->Signal(value); }
+    HRESULT STDMETHODCALLTYPE Signal(ID3D12Fence* fence, UINT64 value) override {
+        if (++signal_calls == fail_signal_at) return signal_failure;
+        return fence->Signal(value);
+    }
     HRESULT STDMETHODCALLTYPE Wait(ID3D12Fence*, UINT64) override { return S_OK; }
     HRESULT STDMETHODCALLTYPE GetTimestampFrequency(UINT64* frequency) override {
         *frequency = 1;
@@ -951,13 +958,23 @@ public:
 struct Shell {
     std::atomic<uint32_t> device_errors{0}, list_errors{0}, started{0}, ended{0}, drained{0};
     std::atomic<HRESULT> list_error{S_OK};
+    std::atomic<HRESULT> device_error{S_OK};
+    std::atomic<DWORD> error_thread{0};
+    D3D12DDI_HRTCOMMANDLIST error_list{};
     std::mutex lines_lock;
     std::vector<std::string> lines;                         // the log hook's (section 9)
 };
-void APIENTRY device_error(void* shell, HRESULT) { ++static_cast<Shell*>(shell)->device_errors; }
-void APIENTRY list_error(void* shell, D3D12DDI_HRTCOMMANDLIST, HRESULT hr) {
+void APIENTRY device_error(void* shell, HRESULT hr) {
+    auto* s = static_cast<Shell*>(shell);
+    s->device_error = hr;
+    s->error_thread = GetCurrentThreadId();
+    ++s->device_errors;
+}
+void APIENTRY list_error(void* shell, D3D12DDI_HRTCOMMANDLIST list, HRESULT hr) {
     auto* s = static_cast<Shell*>(shell);
     s->list_error = hr;
+    s->error_thread = GetCurrentThreadId();
+    s->error_list = list;
     ++s->list_errors;
 }
 BOOL APIENTRY device_lost(void*) { return FALSE; }
@@ -1062,7 +1079,7 @@ struct Fixture {
     }
     // Close, then the list's drain, so that the checks after it read a complete list: with the policy on, the engine
     // Close is the list's last entry, made by the worker (close_list). The drain is of a kind no DDI call makes, so
-    // the drain counts the checks read stay those of the DDI calls; it reports a failed Close as the next drain would.
+    // the drain counts the checks read stay those of the DDI calls. API consumers report any failed Close.
     void close(const ListBox& l) {
         g_list.pfnCloseCommandList(l.h);
         drain_list(const_cast<CommandListRecord*>(&l.record), Drain::Teardown);
@@ -1678,11 +1695,15 @@ int main() {
         const bool at_once = a.engine.calls == 1 && !a.record.recording && f.shell.list_errors == errors;
         const bool reopened = held(f.replay(), gate, [&] { f.reset(a); });
         const std::vector<std::string> a_lines = lines_of(a.engine.log);
-        check(at_once && reopened && a.engine.calls == 29 && a_lines.size() == 29 && starts(a_lines[27], "Close(") &&
-                  starts(a_lines[28], "Reset(") && f.shell.list_errors == errors + 1 &&
-                  f.shell.list_error == E_OUTOFMEMORY && a.record.recording,
+        check(at_once && reopened && a.engine.calls == 28 && a_lines.size() == 28 && starts(a_lines[27], "Close(") &&
+                  f.shell.list_errors == errors + 1 && f.shell.list_error == E_OUTOFMEMORY &&
+                  !a.record.recording && a.record.close_hr == E_OUTOFMEMORY,
               "drains: Close returns before the list's 26 calls run, the list closed; the engine Close runs on the "
-              "worker after them, and its E_OUTOFMEMORY reaches the runtime from the Reset that drains the list");
+              "worker after them; Reset reports E_OUTOFMEMORY and never resets the failed engine list");
+        f.reset(a);
+        check(a.engine.calls == 28 && f.shell.list_errors == errors + 2 &&
+                  a.record.close_hr == E_OUTOFMEMORY && !a.record.recording,
+              "drains: repeated Reset preserves and reports the first Close failure without engine calls");
 
         // Reset of a list that is still recording.
         ListBox& r = f.list();
@@ -1716,7 +1737,7 @@ int main() {
               "%llu)",
               ull(f.calls(Drain::Bundle)), ull(f.waits(Drain::Bundle)));
 
-        // ExecuteCommandLists of a list that was not closed: the queue gets it with all its calls made.
+        // ExecuteCommandLists of a closed list: the queue gets it after all its calls and its Close.
         FakeQueue queue;
         FakeFence fence;
         EngineQueue q{};
@@ -1732,11 +1753,16 @@ int main() {
         hold(e);
         f.reset(e);
         f.draws(e, 1, 20);
+        g_list.pfnCloseCommandList(e.h);
         HRESULT executed = E_FAIL;
         const bool submitted = held(f.replay(), gate, [&] { executed = execute_command_lists(&q, 1, &e.h); });
-        check(submitted && executed == S_OK && queue.calls_at_execute == 21 && f.waits(Drain::Ecl) == 1,
-              "drains: ExecuteCommandLists submits the list after its 20 calls (the queue saw %llu engine calls)",
+        check(submitted && executed == S_OK && queue.calls_at_execute == 22 && f.waits(Drain::Ecl) == 1 &&
+                  queue.execute_calls == 1 && queue.signal_calls == 1,
+              "drains: ExecuteCommandLists submits the closed list after its 20 calls (the queue saw %llu engine calls)",
               ull(queue.calls_at_execute));
+        f.reset(e);
+        check(e.record.recording && e.record.close_hr == S_OK && e.engine.calls == 23,
+              "drains: a successful Close and execute still permit Reset");
         f.close(e);
         f.context.queues[0] = nullptr;
         f.context.queue_mask = 0;
@@ -1830,6 +1856,131 @@ int main() {
         for (const auto& l : f.lists) timeouts += l->engine.gate_timeouts;
         check(f.off() && !f.device.heaps_live && !timeouts, "drains: policy off, no call waited out its gate");
         CloseHandle(gate);
+    }
+
+    // Failed Close containment, both inline and held on a worker until the queue drain. No GPU is involved.
+    for (bool deferred : {false, true}) {
+        Fixture f;
+        if (deferred) check(f.on(), "failed Close: replay on");
+        FakeQueue queue;
+        FakeFence fence;
+        EngineQueue q{};
+        q.context = &f.context; q.queue = &queue; q.fence = &fence;
+        q.type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+        ListBox& good = f.list();
+        f.reset(good); f.close(good);
+        ListBox& bad = f.list();
+        f.reset(bad);
+        const HANDLE gate = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+        bad.engine.caller = self;
+        bad.engine.gate = gate;
+        g_list.pfnOmSetStencilRef(bad.h, FakeList::kLatchStencil);
+        g_list.pfnCloseCommandList(bad.h);
+        const D3D12DDI_HCOMMANDLIST batch[]{good.h, bad.h};
+        HRESULT hr = S_OK;
+        const auto execute = [&] { hr = execute_command_lists(&q, 2, batch); };
+        bool waited = true;
+        if (deferred) waited = held(f.replay(), gate, execute);
+        else execute();
+        check(waited && hr == E_OUTOFMEMORY && !queue.execute_calls && !queue.signal_calls &&
+                  f.shell.device_errors == 1 && f.shell.device_error == hr && f.shell.error_thread == self,
+              "failed Close (%s): entire batch refused before backend Execute/Signal; device callback on API thread",
+              deferred ? "deferred" : "inline");
+        const uint64_t calls = bad.engine.calls.load();
+        const HRESULT again = execute_command_lists(&q, 2, batch);
+        f.reset(bad);
+        g_list.pfnCloseCommandList(bad.h);
+        check(again == hr && bad.record.close_hr == hr && bad.engine.calls == calls &&
+                  !queue.execute_calls && !queue.signal_calls && f.shell.list_error == hr &&
+                  f.shell.error_thread == self && f.shell.error_list.handle == bad.record.rt.handle,
+              "failed Close (%s): Execute, Reset and Close preserve the error and never re-enter the engine list",
+              deferred ? "deferred" : "inline");
+        g_core.pfnDestroyCommandList(f.hdevice, bad.h);
+        check(bad.engine.refs == 0 && bad.record.h.tag == Tag::Poisoned,
+              "failed Close (%s): the drained list can still be destroyed exactly once",
+              deferred ? "deferred" : "inline");
+        check(f.off() && !bad.engine.gate_timeouts, "failed Close: workers joined without a gate timeout");
+        CloseHandle(gate);
+    }
+    for (bool deferred : {false, true}) {
+        Fixture f;
+        if (deferred) check(f.on(), "failed bundle: replay on");
+        ListBox& parent = f.list();
+        ListBox& bundle = f.list(D3D12_COMMAND_LIST_TYPE_BUNDLE);
+        f.reset(parent); f.reset(bundle);
+        const HANDLE gate = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+        bundle.engine.caller = self; bundle.engine.gate = gate;
+        g_list.pfnOmSetStencilRef(bundle.h, FakeList::kLatchStencil);
+        g_list.pfnCloseCommandList(bundle.h);
+        const uint64_t parent_calls = parent.engine.calls.load();
+        const uint32_t errors = f.shell.list_errors.load();
+        const auto execute = [&] { g_list.pfnExecuteBundle(parent.h, bundle.h); };
+        bool waited = true;
+        if (deferred) waited = held(f.replay(), gate, execute);
+        else execute();
+        check(waited && parent.engine.calls == parent_calls && bundle.record.close_hr == E_OUTOFMEMORY &&
+                  f.shell.list_errors == errors + 1 && f.shell.list_error == E_OUTOFMEMORY &&
+                  f.shell.error_list.handle == parent.record.rt.handle && f.shell.error_thread == self,
+              "failed bundle: no backend ExecuteBundle; the parent recording list receives the error on API thread");
+        g_list.pfnExecuteBundle(parent.h, bundle.h);
+        check(parent.engine.calls == parent_calls && f.shell.list_errors == errors + 2 &&
+                  bundle.record.close_hr == E_OUTOFMEMORY,
+              "failed bundle: repeated use remains refused");
+        check(f.off() && !bundle.engine.gate_timeouts, "failed bundle: workers joined without a gate timeout");
+        CloseHandle(gate);
+    }
+
+    // Initialization Close, retirement Signal and init-fence Signal failures all stop application submission.
+    // A successful control uses the same fake lists, fences and queue, including the initialization batch.
+    for (unsigned mode = 0; mode != 4; ++mode) {
+        Fixture f;
+        Objects objects(&f.context);
+        FakeQueue queue;
+        FakeFence fence, init_fence;
+        FakeAllocator allocator;
+        FakeList init_list;
+        init_list.caller = self;
+        if (mode == 0) init_list.after_reset_close = E_OUTOFMEMORY;
+        if (mode == 1 || mode == 2) queue.fail_signal_at = mode;
+        queue.signal_failure = mode == 1 ? E_FAIL : E_INVALIDARG;
+        EngineQueue q{};
+        q.context = &f.context; q.queue = &queue; q.fence = &fence;
+        q.type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+        f.context.queues[0] = &q; f.context.queue_mask = 1;
+        f.context.init_fence = &init_fence;
+        f.context.init_lists.push_back({&allocator, &init_list, 0});
+        ListBox& application = f.list();
+        f.reset(application); f.close(application);
+        queue_initialization(&f.context, &objects.texture);
+        const HRESULT expected = mode == 0 ? E_OUTOFMEMORY : mode == 1 ? E_FAIL : mode == 2 ? E_INVALIDARG : S_OK;
+        const HRESULT hr = execute_command_lists(&q, 1, &application.h);
+        const uint32_t executes = mode == 0 ? 0 : mode == 3 ? 2 : 1;
+        const uint32_t signals = mode == 0 ? 0 : mode == 3 ? 3 : mode;
+        check(hr == expected && queue.execute_calls == executes && queue.signal_calls == signals &&
+                  f.context.init_failure == expected &&
+                  (mode == 3 || (f.shell.device_error == expected && f.shell.error_thread == self)),
+              "initialization mode %u: HRESULT %08lx, backend executes %u and signals %u, no application work on failure",
+              mode, static_cast<unsigned long>(hr), queue.execute_calls, queue.signal_calls);
+        if (FAILED(expected)) {
+            const uint64_t state = q.state.load(), init_calls = init_list.calls.load();
+            queue.signal_failure = E_UNEXPECTED;
+            queue_initialization(&f.context, &objects.texture2);
+            const HRESULT later = execute_command_lists(&q, 1, &application.h);
+            check(later == expected && f.shell.device_errors == 2 && f.shell.device_error == expected &&
+                      queue.execute_calls == executes && queue.signal_calls == signals &&
+                      init_list.calls == init_calls && q.state == state,
+                  "initialization mode %u: later work preserves the first error, retirement state and backend counts", mode);
+            cancel_initialization(&f.context, &objects.texture2);
+        } else {
+            f.reset(application); f.close(application);
+            check(execute_command_lists(&q, 1, &application.h) == S_OK && queue.execute_calls == 3 &&
+                      queue.signal_calls == 4 && !f.shell.device_errors,
+                  "initialization control: a later valid Reset/Close/Execute still succeeds");
+        }
+        release_initialization(&f.context);
+        check(init_list.refs == 0 && allocator.refs == 0 && init_fence.refs == 0,
+              "initialization mode %u: fixture-owned internal objects released once", mode);
+        f.context.queues[0] = nullptr; f.context.queue_mask = 0;
     }
 
     // 4. Order across threads: a second thread records a list whose calls wait on the first thread's ring, held at

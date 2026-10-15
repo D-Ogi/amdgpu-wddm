@@ -46,8 +46,9 @@
 //     around and during a slow wait).
 //   CommandListRecord::replay_tail: the thread recording the list, or a drain of the list; other threads read it
 //     after the application's own ordering (a list is not free-threaded). CommandListRecord::close_hr: the worker
-//     (a failed Close), cleared by the drain that reports it. CommandPoolRecord::closing: close_list, read by the
-//     pool's reset and by Reset after the application's ordering (an allocator is not free-threaded either).
+//     (a failed Close), retained until list destruction and read after each drain. CommandPoolRecord::closing:
+//     close_list, read by the pool's reset and by Reset after the application's ordering (an allocator is not
+//     free-threaded either).
 #pragma once
 #include "entry.h"
 #include "internal.h"
@@ -224,8 +225,11 @@ inline ReplayRing* replay_ring(Replay* replay) noexcept {
 }
 
 // The list's entries replay before the caller goes on (a no-op with the policy off).
-inline void drain_list(CommandListRecord* list, Drain kind) noexcept {
+// A drain never consumes an engine Close failure. Its caller must refuse the operation and report on the
+// appropriate runtime target: the recording list for Reset/Bundle, the device for ExecuteCommandLists.
+inline HRESULT drain_list(CommandListRecord* list, Drain kind) noexcept {
     if (Replay* replay = list->h.device->replay) replay_drain_list(replay, list, kind);
+    return list->close_hr.load(std::memory_order_relaxed);
 }
 // A pool's last Close entry on each ring (CommandPoolRecord::closing) has replayed.
 inline void drain_closes(DeviceContext* context, const std::atomic<uint64_t>* closing) noexcept {

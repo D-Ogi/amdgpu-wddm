@@ -294,7 +294,7 @@ public:
     std::vector<InitList> init_lists;           // grows only while every list still has a batch in flight
     ID3D12Fence* init_fence = nullptr;          // signalled after each batch, on the queue that ran it
     uint64_t init_value = 0;                    // the last value signalled on init_fence
-    bool init_broken = false;                   // a batch failed: no further batches
+    HRESULT init_failure = S_OK;               // first batch failure; no later batch or application submission
 
     // The empty local root signature of ray tracing pipelines (state-objects.cpp): created by the first create that
     // needs it, one reference, released with the context. Guarded by empty_local_lock, which is taken alone.
@@ -541,11 +541,11 @@ inline constexpr uint32_t kInitRecorded = 2;    // named by a batch that may sti
 // Initialization of committed render targets and depth-stencil resources (queue.cpp). queue_initialization at
 // the create; cancel_initialization at the destroy, before the engine resource is released: it returns true when a
 // batch names the resource, which must then outlive the batch's retirement. flush_initializations runs at the start
-// of execute_command_lists: it submits the pending discards and returns the init_fence value the executing queue
-// must wait for (0: none).
+// of execute_command_lists: it submits the pending discards and writes the init_fence value the executing queue
+// must wait for (0: none). A failed batch returns its first HRESULT on every later execute, before application work.
 void queue_initialization(DeviceContext* context, ResourceRecord* resource) noexcept;
 bool cancel_initialization(DeviceContext* context, ResourceRecord* resource) noexcept;
-uint64_t flush_initializations(DeviceContext* context, EngineQueue* queue) noexcept;
+HRESULT flush_initializations(DeviceContext* context, EngineQueue* queue, uint64_t* value) noexcept;
 void release_initialization(DeviceContext* context) noexcept;       // context destroy: the internal objects
 
 struct DescriptorHeapRecord {
@@ -678,7 +678,7 @@ struct CommandListRecord {
     // The root signatures the Set*RootSignature slots bound since the last Reset, [0] compute and [1] graphics: the
     // runtime's handles, validated again where used. What ClearRootArguments clears (BD-046). Recording thread only.
     void* root_signatures[2]{};
-    // A failure of an engine Close the worker made, until a drain of the list reports it (close_list).
+    // A failed engine Close is permanent, including across Reset; drains observe it without consuming it.
     std::atomic<HRESULT> close_hr{S_OK};
     // BD-133: the ticket of the Present copy recorded on this list (present-copy-sync.h). Set by pfnPresent, taken by
     // the ExecuteCommandLists that submits the list (queue-engine.cpp, through present_copy_list_mark), released by

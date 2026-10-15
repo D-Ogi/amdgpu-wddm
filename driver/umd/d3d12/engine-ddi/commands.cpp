@@ -201,6 +201,8 @@ void APIENTRY destroy_list(D3D12DDI_HDEVICE device, D3D12DDI_HCOMMANDLIST h) {
 void APIENTRY close_list(D3D12DDI_HCOMMANDLIST h) {
     CommandListRecord* l = list_of(h, "CloseCommandList");
     if (!l) return;
+    const HRESULT earlier = l->close_hr.load(std::memory_order_relaxed);
+    if (FAILED(earlier)) return l->h.device->report_list(l->rt, earlier);
     record(l, [hr = &l->close_hr](ID3D12GraphicsCommandList* e) noexcept {
         const HRESULT result = e->Close();
         if (FAILED(result)) hr->store(result, std::memory_order_relaxed);
@@ -208,8 +210,7 @@ void APIENTRY close_list(D3D12DDI_HCOMMANDLIST h) {
     // With the policy off, a tail left from before it was turned off names nothing (the teardown replayed it).
     Replay* replay = l->h.device->replay;
     const uint64_t tail = replay ? l->replay_tail.load(std::memory_order_relaxed) : 0;
-    const HRESULT hr = FAILED(l->close_hr.load(std::memory_order_relaxed))
-                           ? l->close_hr.exchange(S_OK, std::memory_order_relaxed) : S_OK;
+    const HRESULT hr = l->close_hr.load(std::memory_order_relaxed);
     if (FAILED(hr)) {
         l->h.device->report_list(l->rt, hr);
         if (!tail) return;
@@ -227,7 +228,10 @@ void APIENTRY close_list(D3D12DDI_HCOMMANDLIST h) {
 void APIENTRY reset_list(D3D12DDI_HCOMMANDLIST h, const D3D12DDIARG_RESETCOMMANDLIST_0040* args) {
     CommandListRecord* l = list_of(h, "ResetCommandList");
     if (!l) return;
-    drain_list(l, Drain::Reset);
+    const HRESULT closed = drain_list(l, Drain::Reset);
+    // D3D12 Close failures permanently invalidate that list (CPUEfficiency, Runtime Validation for Reset).
+    // A successful Close still permits the normal Reset below; this is not a device-wide latch.
+    if (FAILED(closed)) return l->h.device->report_list(l->rt, closed);
     DeviceContext* c = l->h.device;
     auto* r = args ? record_of<CommandRecorderRecord>(args->hDrvCommandRecorder.pDrvPrivate, Tag::CommandRecorder, c)
                    : nullptr;
@@ -369,15 +373,19 @@ void APIENTRY execute_bundle(D3D12DDI_HCOMMANDLIST h, D3D12DDI_HCOMMANDLIST hbun
     CommandListRecord* l = list_of(h, "ExecuteBundle");
     if (!l) return;
     auto* b = record_of<CommandListRecord>(hbundle.pDrvPrivate, Tag::CommandList, l->h.device);
-    if (l->type != D3D12_COMMAND_LIST_TYPE_DIRECT || !l->recording || !b ||
-        b->type != D3D12_COMMAND_LIST_TYPE_BUNDLE || b->recording) {
+    if (l->type != D3D12_COMMAND_LIST_TYPE_DIRECT || !b || b->type != D3D12_COMMAND_LIST_TYPE_BUNDLE) {
         log_line("ExecuteBundle: refused (parent type %d recording %d, bundle %s)", static_cast<int>(l->type),
                  l->recording ? 1 : 0, !b ? "unknown" : b->recording ? "recording" : "not a bundle");
         return l->h.device->report_list(l->rt, E_INVALIDARG);
     }
     // With replay on, both lists' pending calls run first, and the engine call is made here.
-    drain_list(b, Drain::Bundle);
-    drain_list(l, Drain::Bundle);
+    const HRESULT bundle_closed = drain_list(b, Drain::Bundle);
+    const HRESULT parent_closed = drain_list(l, Drain::Bundle);
+    if (FAILED(parent_closed)) return l->h.device->report_list(l->rt, parent_closed);
+    if (FAILED(bundle_closed)) return l->h.device->report_list(l->rt, bundle_closed);
+    // An inline failed Close leaves recording=true. Report that first failure above, before state validation
+    // could replace it with E_INVALIDARG. A healthy bundle must still be closed and its parent recording.
+    if (!l->recording || b->recording) return l->h.device->report_list(l->rt, E_INVALIDARG);
     l->list()->ExecuteBundle(b->list());
 }
 
