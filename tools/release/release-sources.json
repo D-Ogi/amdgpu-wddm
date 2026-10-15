@@ -434,49 +434,54 @@
     {
       "component": "desktop-umd",
       "path": "payload/desktop/bc250d3d_router.dll",
-      "source": "scratch/train/b34-build/stamped-rc5/release/scratch/hlk/host/bd152-rebuild/build-umd-router-058523D1/a/out/bc250d3d_router.dll",
-      "sha256": "A788C5E5C0E7D7CEDAB4C7DA808139CE1150D5352587025E5D8708D7D1048EE5",
+      "source": "scratch/state-upgrade/router-x64-release-r3/bc250d3d_router.dll",
+      "sha256": "752ABA5E3FE80CD73CEC376EAD51F59C42A761C5A566606DAF64A02C7CFC85D6",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "d73aaedb09fc7298c2b83701634ae27bcfef089d",
+        "commit": "154e542b08e67bcad5897f56104472d8bc005ad5",
         "recipe": "tools/build/build-umd-router.ps1",
         "args": [
           "-OutputDir",
           "{out}",
           "-Arch",
           "x64",
+          "-Flavour",
+          "release",
           "-Version",
           "0.7.216.102-tester.31rc5"
         ],
         "output": "bc250d3d_router.dll"
       },
       "size": 108032,
-      "role": "BD-152: x64 router reads the shared driver state through the common resolver.",
-      "flavour": "release"
+      "role": "bc250d3d_router.dll, release flavour; shared service state access correction at 154e542b08e67bcad5897f56104472d8bc005ad5; package version stamped.",
+      "flavour": "release",
+      "authenticode_sha256": "91CAB5108D42EC0FF82EFFD9F6B1C126D7FC1931ECFEF5938DC46CFAFDEC2C57"
     },
     {
       "component": "desktop-umd",
       "path": "payload/desktop/bc250d3d_router.dll",
-      "source": "scratch/train/b34-build/stamped-rc5/lab/scratch/hlk/host/bd152-rebuild/build-umd-router-058523D1/a/out/bc250d3d_router.dll",
-      "sha256": "33AA3D9CB0CF4571C43E072011FA7B37714DE9EBAD84CBAC54D1EC34D6AEF86A",
+      "source": "scratch/state-upgrade/router-x64-lab-r3/bc250d3d_router.dll",
+      "sha256": "5F61C2EF032E83B31C67A19A47B5175E5C14089339947A6E43A40DBA88D8AA9B",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "d73aaedb09fc7298c2b83701634ae27bcfef089d",
+        "commit": "154e542b08e67bcad5897f56104472d8bc005ad5",
         "recipe": "tools/build/build-umd-router.ps1",
         "args": [
           "-OutputDir",
           "{out}",
           "-Arch",
           "x64",
+          "-Flavour",
+          "lab",
           "-Version",
           "0.7.216.102-tester.31rc5"
         ],
         "output": "bc250d3d_router.dll"
       },
       "size": 108032,
-      "role": "BD-152: x64 router reads the shared driver state through the common resolver.",
+      "role": "bc250d3d_router.dll, lab flavour; shared service state access correction at 154e542b08e67bcad5897f56104472d8bc005ad5; package version stamped.",
       "flavour": "lab",
-      "note": "desktop router: the declaration demands no lab-only name in it, so both flavours ship one file"
+      "authenticode_sha256": "ED38AA9AF8B93DFB55FD8E11E2392C7B25CCC4BA89F59314ADA30B373F7BCD12"
     },
     {
       "component": "desktop-umd",
@@ -1071,49 +1076,54 @@
     {
       "component": "desktop-umd-wow64",
       "path": "payload/wow64/desktop/bc250d3d_router.dll",
-      "source": "scratch/train/b34-build/stamped-rc5/release/scratch/hlk/host/bd152-rebuild/build-umd-router-3E8D0DC1/a/out/bc250d3d_router.dll",
-      "sha256": "32049E8859C61B7E97EF74148CE4183F5551FAF6470CB5B6785979F0E2D6192B",
+      "source": "scratch/state-upgrade/router-x86-release-r3/bc250d3d_router.dll",
+      "sha256": "C93EFD2D46FD5EAEC36D51C625BBDF1880611A5BED74689B540E99A895D9F0AF",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "d73aaedb09fc7298c2b83701634ae27bcfef089d",
+        "commit": "154e542b08e67bcad5897f56104472d8bc005ad5",
         "recipe": "tools/build/build-umd-router.ps1",
         "args": [
           "-OutputDir",
           "{out}",
           "-Arch",
           "x86",
+          "-Flavour",
+          "release",
           "-Version",
           "0.7.216.102-tester.31rc5"
         ],
         "output": "bc250d3d_router.dll"
       },
       "size": 202752,
-      "role": "BD-152: x86 router reads the shared driver state through the common resolver.",
-      "flavour": "release"
+      "role": "bc250d3d_router.dll, release flavour; shared service state access correction at 154e542b08e67bcad5897f56104472d8bc005ad5; package version stamped.",
+      "flavour": "release",
+      "authenticode_sha256": "BDC7822F0327C4879B6CF16F9A83202C88EF7BD5688F68BB813E4DE1D781905F"
     },
     {
       "component": "desktop-umd-wow64",
       "path": "payload/wow64/desktop/bc250d3d_router.dll",
-      "source": "scratch/train/b34-build/stamped-rc5/lab/scratch/hlk/host/bd152-rebuild/build-umd-router-3E8D0DC1/a/out/bc250d3d_router.dll",
-      "sha256": "E22A38B0CE89980104B5BF01EE340DAC83CF244B3B5E091E6882D7E61995EBD1",
+      "source": "scratch/state-upgrade/router-x86-lab-r3/bc250d3d_router.dll",
+      "sha256": "3EE8C665BC82BE0935BCE1AD737E26773DA029E81A409B44AA6397470AB8BDA3",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "d73aaedb09fc7298c2b83701634ae27bcfef089d",
+        "commit": "154e542b08e67bcad5897f56104472d8bc005ad5",
         "recipe": "tools/build/build-umd-router.ps1",
         "args": [
           "-OutputDir",
           "{out}",
           "-Arch",
           "x86",
+          "-Flavour",
+          "lab",
           "-Version",
           "0.7.216.102-tester.31rc5"
         ],
         "output": "bc250d3d_router.dll"
       },
       "size": 202752,
-      "role": "BD-152: x86 router reads the shared driver state through the common resolver.",
+      "role": "bc250d3d_router.dll, lab flavour; shared service state access correction at 154e542b08e67bcad5897f56104472d8bc005ad5; package version stamped.",
       "flavour": "lab",
-      "note": "desktop router, x86: no lab-only name"
+      "authenticode_sha256": "442193007770ADA88121856321E6BB3F7B51B2C9DFFA08F1826278C8FA0D14A2"
     },
     {
       "component": "desktop-umd-wow64",
@@ -1840,19 +1850,17 @@
     {
       "component": "tool",
       "path": "payload/tools/bc250kmd_cli.exe",
-      "source": "scratch/train/b34-build/stamped-rc5/release/scratch/train/b34-build/control-rc5-release/bc250kmd_cli.exe",
-      "sha256": "83545D62055844E5DFBB20739E3D461D4FE4C59148BE461EC3C6572DE95D0F79",
+      "source": "scratch/state-upgrade/control-release-r3/bc250kmd_cli.exe",
+      "sha256": "A8A7081FB2DD5A9E394F5BBCB9B0E1BD2471D478CE00E56587B7CD8888BAF0A6",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "1750f50535a79e49878298c6078df8745ce1068f",
+        "commit": "154e542b08e67bcad5897f56104472d8bc005ad5",
         "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
         "args": [
           "-Kits",
           "{root}/toolchain/nuget",
           "-Out",
           "{out}",
-          "-Flavour",
-          "release",
           "-NoSmoke",
           "-Version",
           "0.7.216.102-tester.31rc5"
@@ -1860,37 +1868,35 @@
         "output": "bc250kmd_cli.exe"
       },
       "size": 305152,
-      "role": "The driver's command-line tool, release flavour, from the same build as the control application (bc250-win main 1750f505, clean work tree, package version stamped). The release build is 305152 bytes against the lab build's 352768: the raw escape commands of the lab flavour are compiled out, and only the escape names that its messages print remain, which the declaration records as out of scope. The stamp also gives the file its own name in its version resource, which the declaration now records as out of scope for the same reason as the control application's assembly name.",
+      "role": "bc250kmd_cli.exe, release flavour; shared service state access correction at 154e542b08e67bcad5897f56104472d8bc005ad5; package version stamped.",
       "flavour": "release",
-      "authenticode_sha256": "FB8CEDCB891A90A4F94D6C6261E4044878DEEBC209234A110FB34721C7962263"
+      "authenticode_sha256": "599E490383EFD656460744A6ED2B1342F84DB2FAD735394602259B97EB823A37"
     },
     {
       "component": "tool",
       "path": "payload/tools/bc250kmd_cli.exe",
-      "source": "scratch/train/b34-build/stamped-rc5/lab/scratch/train/b34-build/control-rc5-lab/bc250kmd_cli.exe",
-      "sha256": "D407CEE97731D38B2D8FC5B43F66BA1659F7ED505A117A09361E5B71FBEC85AB",
+      "source": "scratch/state-upgrade/control-lab-r3/bc250kmd_cli.exe",
+      "sha256": "FF96E439D707F60A0B6946CCF45215CB90E0DA187CFB076D78CFED8BC5381CA4",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "1750f50535a79e49878298c6078df8745ce1068f",
+        "commit": "154e542b08e67bcad5897f56104472d8bc005ad5",
         "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
         "args": [
           "-Kits",
           "{root}/toolchain/nuget",
           "-Out",
           "{out}",
-          "-Flavour",
-          "lab",
           "-NoSmoke",
           "-Version",
-          "0.7.216.102-tester.31rc5"
+          "0.7.216.102-tester.31rc5",
+          "-Lab"
         ],
         "output": "bc250kmd_cli.exe"
       },
       "size": 352768,
-      "role": "The driver's command-line tool, release flavour, from the same build as the control application (bc250-win main 1750f505, clean work tree, package version stamped). The release build is 305152 bytes against the lab build's 352768: the raw escape commands of the lab flavour are compiled out, and only the escape names that its messages print remain, which the declaration records as out of scope. The stamp also gives the file its own name in its version resource, which the declaration now records as out of scope for the same reason as the control application's assembly name.",
+      "role": "bc250kmd_cli.exe, lab flavour; shared service state access correction at 154e542b08e67bcad5897f56104472d8bc005ad5; package version stamped.",
       "flavour": "lab",
-      "note": "the driver's command-line tool, lab flavour: the raw escape commands are compiled in, which the release build of the same checkout drops (352768 bytes against 305152)",
-      "authenticode_sha256": "F0AD297394AF832D5DCDCACBA96A719C816F118F95D04F11B2091AB16E527268"
+      "authenticode_sha256": "CC039E894B0B6CC7151E2CC3238F6CFBC0A1AD47B93ABBC5FDF9B311E1BE2BD7"
     },
     {
       "component": "tool",
@@ -2001,19 +2007,17 @@
     {
       "component": "control",
       "path": "payload/control/bc250control.dll",
-      "source": "scratch/train/b34-build/stamped-rc5/release/scratch/train/b34-build/control-rc5-release/bc250control.dll",
-      "sha256": "F991B67106252DED3034976B570D51EE1C56F4C02EA4B067DD8CF9C967D6F9A7",
+      "source": "scratch/state-upgrade/control-release-r3/bc250control.dll",
+      "sha256": "2072A1B6BE585F3438C1BBB42AE380334699FD40FF7453D7F11E045A78D2A85B",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "1750f50535a79e49878298c6078df8745ce1068f",
+        "commit": "154e542b08e67bcad5897f56104472d8bc005ad5",
         "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
         "args": [
           "-Kits",
           "{root}/toolchain/nuget",
           "-Out",
           "{out}",
-          "-Flavour",
-          "release",
           "-NoSmoke",
           "-Version",
           "0.7.216.102-tester.31rc5"
@@ -2021,54 +2025,50 @@
         "output": "bc250control.dll"
       },
       "size": 211968,
-      "role": "The native library of the control application, release flavour, from the same build as the application itself (bc250-win main 1750f505, clean work tree, package version stamped). It is no longer the same file in both flavours: the release build is 211968 bytes and the lab build 223232, so the lab diagnostics are compiled out of this file too, and lab-sources.json now pins the lab build instead of declaring the two flavours equal.",
+      "role": "bc250control.dll, release flavour; shared service state access correction at 154e542b08e67bcad5897f56104472d8bc005ad5; package version stamped.",
       "flavour": "release",
-      "authenticode_sha256": "09E504C99C3092050ADA1DF08699757865133FDB8D4FEDAA2D20AF090B6D9F83"
+      "authenticode_sha256": "6595A6D100BD6879D6E872A99F7ACFE1DAFAD052E304829B68829C0A4EFF4265"
     },
     {
       "component": "control",
       "path": "payload/control/bc250control.dll",
-      "source": "scratch/train/b34-build/stamped-rc5/lab/scratch/train/b34-build/control-rc5-lab/bc250control.dll",
-      "sha256": "4836EE0984A2ED392DE23F57C145C4B5B7B6E9226003E7D785D9C16E2BBCDD44",
+      "source": "scratch/state-upgrade/control-lab-r3/bc250control.dll",
+      "sha256": "962C124607F543E5172618C9564F5F40A5B2F6531C166AA328EE24ED7790CBBD",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "1750f50535a79e49878298c6078df8745ce1068f",
+        "commit": "154e542b08e67bcad5897f56104472d8bc005ad5",
         "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
         "args": [
           "-Kits",
           "{root}/toolchain/nuget",
           "-Out",
           "{out}",
-          "-Flavour",
-          "lab",
           "-NoSmoke",
           "-Version",
-          "0.7.216.102-tester.31rc5"
+          "0.7.216.102-tester.31rc5",
+          "-Lab"
         ],
         "output": "bc250control.dll"
       },
       "size": 223232,
-      "role": "The native library of the control application, release flavour, from the same build as the application itself (bc250-win main 1750f505, clean work tree, package version stamped). It is no longer the same file in both flavours: the release build is 211968 bytes and the lab build 223232, so the lab diagnostics are compiled out of this file too, and lab-sources.json now pins the lab build instead of declaring the two flavours equal.",
+      "role": "bc250control.dll, lab flavour; shared service state access correction at 154e542b08e67bcad5897f56104472d8bc005ad5; package version stamped.",
       "flavour": "lab",
-      "note": "the native library of the control application, lab flavour: the two flavours are not the same file (223232 bytes against 211968), so the earlier 'same in both flavours' line was wrong once the recipe ran twice",
-      "authenticode_sha256": "06F5B5B77344BFEC9F02E76C3E33091D258F2BAE76D7511E39AA9DC2CCD2F08D"
+      "authenticode_sha256": "9512E86C2D04FD900ABDD0E3B8CA54353306DF4A0F79D17B22DE5498B3F80B62"
     },
     {
       "component": "tool",
       "path": "payload/tools/bc250control.dll",
-      "source": "scratch/train/b34-build/stamped-rc5/release/scratch/train/b34-build/control-rc5-release/bc250control.dll",
-      "sha256": "F991B67106252DED3034976B570D51EE1C56F4C02EA4B067DD8CF9C967D6F9A7",
+      "source": "scratch/state-upgrade/control-release-r3/bc250control.dll",
+      "sha256": "2072A1B6BE585F3438C1BBB42AE380334699FD40FF7453D7F11E045A78D2A85B",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "1750f50535a79e49878298c6078df8745ce1068f",
+        "commit": "154e542b08e67bcad5897f56104472d8bc005ad5",
         "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
         "args": [
           "-Kits",
           "{root}/toolchain/nuget",
           "-Out",
           "{out}",
-          "-Flavour",
-          "release",
           "-NoSmoke",
           "-Version",
           "0.7.216.102-tester.31rc5"
@@ -2076,37 +2076,35 @@
         "output": "bc250control.dll"
       },
       "size": 211968,
-      "role": "The same native library of the control application under tools, release flavour, from the same build (bc250-win main 1750f505). The two copies are one file, as before, and both flavours now have their own.",
+      "role": "bc250control.dll, release flavour; shared service state access correction at 154e542b08e67bcad5897f56104472d8bc005ad5; package version stamped.",
       "flavour": "release",
-      "authenticode_sha256": "09E504C99C3092050ADA1DF08699757865133FDB8D4FEDAA2D20AF090B6D9F83"
+      "authenticode_sha256": "6595A6D100BD6879D6E872A99F7ACFE1DAFAD052E304829B68829C0A4EFF4265"
     },
     {
       "component": "tool",
       "path": "payload/tools/bc250control.dll",
-      "source": "scratch/train/b34-build/stamped-rc5/lab/scratch/train/b34-build/control-rc5-lab/bc250control.dll",
-      "sha256": "4836EE0984A2ED392DE23F57C145C4B5B7B6E9226003E7D785D9C16E2BBCDD44",
+      "source": "scratch/state-upgrade/control-lab-r3/bc250control.dll",
+      "sha256": "962C124607F543E5172618C9564F5F40A5B2F6531C166AA328EE24ED7790CBBD",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "1750f50535a79e49878298c6078df8745ce1068f",
+        "commit": "154e542b08e67bcad5897f56104472d8bc005ad5",
         "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
         "args": [
           "-Kits",
           "{root}/toolchain/nuget",
           "-Out",
           "{out}",
-          "-Flavour",
-          "lab",
           "-NoSmoke",
           "-Version",
-          "0.7.216.102-tester.31rc5"
+          "0.7.216.102-tester.31rc5",
+          "-Lab"
         ],
         "output": "bc250control.dll"
       },
       "size": 223232,
-      "role": "The same native library of the control application under tools, release flavour, from the same build (bc250-win main 1750f505). The two copies are one file, as before, and both flavours now have their own.",
+      "role": "bc250control.dll, lab flavour; shared service state access correction at 154e542b08e67bcad5897f56104472d8bc005ad5; package version stamped.",
       "flavour": "lab",
-      "note": "the same library under tools, lab flavour",
-      "authenticode_sha256": "06F5B5B77344BFEC9F02E76C3E33091D258F2BAE76D7511E39AA9DC2CCD2F08D"
+      "authenticode_sha256": "9512E86C2D04FD900ABDD0E3B8CA54353306DF4A0F79D17B22DE5498B3F80B62"
     },
     {
       "component": "tool",
@@ -2579,18 +2577,18 @@
     {
       "component": "tool",
       "path": "payload/tools/amdgpu-state-installer.exe",
-      "source": "scratch/train/b34-build/installer-rc5-release/amdgpu-state-installer.exe",
+      "source": "scratch/state-upgrade/worker-release/amdgpu-state-installer.exe",
       "size": 234496,
-      "sha256": "6B8D2936ECE42B2CBECF90CDF19F6ADBCE057A115C673744FED7EEE710356AB1",
+      "sha256": "9EDB4D8DBC357D26D683204EE9EA991BAB918E730A002572B747DD7ED655A2B6",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "133779d94cff0e706744c824d7ee7a96e551dafb",
+        "commit": "154e542b08e67bcad5897f56104472d8bc005ad5",
         "recipe": "driver/state/installer-build.ps1",
         "args": [
-          "-Kits",
-          "{root}/toolchain/nuget",
           "-Out",
           "{out}",
+          "-Kits",
+          "{root}/toolchain/nuget",
           "-Test",
           "-Version",
           "0.7.216.102-tester.31rc5",
@@ -2599,25 +2597,25 @@
         ],
         "output": "amdgpu-state-installer.exe"
       },
-      "role": "SYSTEM worker for bounded state capture, archive, acknowledgment and explicit compatible legacy rollback.",
+      "role": "amdgpu-state-installer.exe, release flavour; shared service state access correction at 154e542b08e67bcad5897f56104472d8bc005ad5; package version stamped.",
       "flavour": "release",
-      "authenticode_sha256": "73DA4B745B9AF324AC2BB71FFEBA9C18DF947BA32CF045DB0692D3D56FA3EAD6"
+      "authenticode_sha256": "951C513046176547EA85FF8EF6C23789CF513B8351ECB00AFD2D3895A0E38BD7"
     },
     {
       "component": "tool",
       "path": "payload/tools/amdgpu-state-installer.exe",
-      "source": "scratch/train/b34-build/installer-rc5-lab/amdgpu-state-installer.exe",
+      "source": "scratch/state-upgrade/worker-lab/amdgpu-state-installer.exe",
       "size": 234496,
-      "sha256": "04F3AEA3187A9A1932B3995D8644563E3518C808BE8F900F8B25EAC4F4D7E67A",
+      "sha256": "24FEC01DECCEF6A3295351C93F603F5B46A64804B74CA12BD93A23A362E0CBC4",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "133779d94cff0e706744c824d7ee7a96e551dafb",
+        "commit": "154e542b08e67bcad5897f56104472d8bc005ad5",
         "recipe": "driver/state/installer-build.ps1",
         "args": [
-          "-Kits",
-          "{root}/toolchain/nuget",
           "-Out",
           "{out}",
+          "-Kits",
+          "{root}/toolchain/nuget",
           "-Test",
           "-Version",
           "0.7.216.102-tester.31rc5",
@@ -2626,10 +2624,9 @@
         ],
         "output": "amdgpu-state-installer.exe"
       },
-      "role": "SYSTEM worker for bounded state capture, archive, acknowledgment and explicit compatible legacy rollback.",
+      "role": "amdgpu-state-installer.exe, lab flavour; shared service state access correction at 154e542b08e67bcad5897f56104472d8bc005ad5; package version stamped.",
       "flavour": "lab",
-      "note": "the state installer: no lab-only name",
-      "authenticode_sha256": "442AE9E6FE2B5B4EB817D5E206E96201E76A0AABC8B198055B26C5FA3FF22CF3"
+      "authenticode_sha256": "B932199D5D8067EC5D51DC50C5B618D013D806B786BBB34CE29E8ACCDD237266"
     }
   ],
   "firmware": {
