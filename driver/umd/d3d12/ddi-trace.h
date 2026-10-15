@@ -60,6 +60,19 @@ inline void ddi_failure_note(const char* name,HRESULT outcome) noexcept {
         name,static_cast<unsigned long>(outcome),now.QuadPart,GetCurrentThreadId());
     OutputDebugStringA(line);
 }
+// Failure-chain records share the configured file sink with engine and ICD messages. The trace-mode switch
+// must not hide the operation that first failed or the removal callback (BD-180). No success-path timing,
+// handles or payloads; a separate bounded counter keeps failure loops from filling a recording.
+inline std::atomic<unsigned> ddi_chain_budget{4096};
+inline void ddi_chain_failure(const char* site,HRESULT code,unsigned operation=0) noexcept {
+    if(!amdgpu_wddm_log::enabled())return;
+    unsigned left=ddi_chain_budget.load(std::memory_order_relaxed);
+    while(left && !ddi_chain_budget.compare_exchange_weak(left,left-1,std::memory_order_relaxed)){}
+    if(!left)return;
+    LARGE_INTEGER now{};QueryPerformanceCounter(&now);
+    amdgpu_wddm_log::print("d3d12-chain site=%s code=%08lx op=%u pid=%lu thread=%lu qpc=%lld\n",
+        site,static_cast<unsigned long>(code),operation,GetCurrentProcessId(),GetCurrentThreadId(),now.QuadPart);
+}
 // AMDGPU_WDDM_D3D12_EXPERIMENT names deviations from the driver's behaviour, for a measurement that needs
 // them: one name or several separated by commas. Empty, "none" or unknown names mean none. Read once per
 // process.

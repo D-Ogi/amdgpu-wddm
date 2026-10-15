@@ -235,5 +235,27 @@ int main(){
   work.report_deferred_removal();assert(errors==reported+1);
   assert(work.discard_metadata()==0 && other.discard_metadata()==0);
  }
- std::puts("PASS hosted dispatch: native allocation/paging/VA/lock, pending residency, internal full-width context token, cleanup retries, scope, loss, address reuse inside a free, replay worker scope");
+ // An imported heap routes its callback HRESULT through the same boundary as internal allocations.
+ // Device loss must not turn into STATUS_UNSUCCESSFUL, nor may a replay worker make the runtime callback.
+ for(const HRESULT hr:{D3DDDIERR_DEVICEREMOVED,DXGI_ERROR_DEVICE_REMOVED,DXGI_ERROR_DEVICE_HUNG,DXGI_ERROR_DEVICE_RESET}){
+  HostedDispatch imported(domain,{device_handle},um,kt);
+  const unsigned reported=errors;
+  {
+   HostedDispatch::WorkerScope loss_worker(imported);
+   assert(imported.complete_operation(BC250_HOST_Unlock2,hr)==static_cast<int32_t>(0xc00002b6u));
+   assert(imported.lost() && errors==reported);
+  }
+  imported.report_deferred_removal();assert(errors==reported+1);
+  assert(imported.complete_operation(BC250_HOST_Unlock2,hr)==static_cast<int32_t>(0xc00002b6u));
+  imported.report_deferred_removal();assert(errors==reported+1);
+ }
+ {
+  HostedDispatch healthy(domain,{device_handle},um,kt);
+  const unsigned reported=errors;
+  assert(healthy.complete_operation(BC250_HOST_Lock2,S_OK)==0);
+  assert(healthy.complete_operation(BC250_HOST_Lock2,E_OUTOFMEMORY)==static_cast<int32_t>(0xc0000017u));
+  assert(healthy.complete_operation(BC250_HOST_Unlock2,E_FAIL)==static_cast<int32_t>(0xc0000001u));
+  assert(!healthy.lost() && errors==reported);
+ }
+ std::puts("PASS hosted dispatch: native allocation/paging/VA/lock, pending residency, internal full-width context token, cleanup retries, scope, loss, address reuse inside a free, replay worker scope, imported-heap error propagation");
 }

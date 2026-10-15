@@ -96,6 +96,9 @@ public:
     HostedDispatch(const HostedDispatch&)=delete;
     HostedDispatch& operator=(const HostedDispatch&)=delete;
     static int32_t dispatch(void* userdata,uint32_t op,void* argument) noexcept;
+    // The HRESULT of an owned heap's Lock2/Unlock2 has the same loss, worker-callback and NTSTATUS rules
+    // as an operation above. Call while entered; this does not grant callback authority of its own.
+    int32_t complete_operation(uint32_t op,HRESULT hr) noexcept;
     // Explicit identity must equal the identity used for imports by the embedder.
     bc250_host descriptor(uint64_t adapter_luid,void* identity) noexcept;
     // The device-wide progress of every context of this device (device-progress.h): the published value of
