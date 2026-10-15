@@ -102,6 +102,15 @@ $sourcesPath = Join-Path $Out ("selected-sources-$Flavour.json")
 $selection = Invoke-Headless -File $pythonExe -Arguments @((Join-Path $PSScriptRoot 'release_flavour.py'),
     '--sources', $manifestPath, '--flavour', $Flavour, '--out', $sourcesPath) -TimeoutSeconds 30
 if ($selection.code -ne 0) { throw "flavour input selection: $($selection.text)" }
+# BD-167: the flavour gate on the files these rows pin, before anything is copied. The package scan at the end of
+# this script judges the same rule, but only after the whole build; rc1 to rc4 of tester.31 pinned lab-flavour
+# builds in nineteen release rows and nothing refused them until the pins were read by hand. This arm refuses the
+# selection itself, and names the payload slot of every row whose file carries a name of the other flavour.
+$sourceGate = Invoke-Headless -File $pythonExe -Arguments @('-I',
+    (Join-Path $repo 'tools\quality\flavour_gate.py'), '--flavour', $Flavour,
+    '--sources', $sourcesPath, '--root', $Root, '--out', (Join-Path $Out 'flavour-gate-sources')) -TimeoutSeconds 600
+if ($sourceGate.code -ne 0) { throw "flavour gate on the source pins ($Flavour): $($sourceGate.text)" }
+'  ' + @($sourceGate.text -split "`r?`n" | Where-Object { $_ -like 'flavour gate: *' })[-1]
 $sources = Get-Content -LiteralPath $sourcesPath -Raw | ConvertFrom-Json
 foreach ($requiredStateFile in @('payload/kmd/amdgpu-state.bin','payload/tools/amdgpu-state-installer.exe')) {
     if (@($sources.files | Where-Object {$_.path -ceq $requiredStateFile}).Count -ne 1) {

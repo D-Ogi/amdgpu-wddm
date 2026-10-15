@@ -5,6 +5,7 @@
                            --negative-control <payload path> [--out <dir>]
     python flavour_gate.py --flavour release --kmd <bc250kmd.sys> --pe <file|dir> [--pe ...] [--out <dir>]
     python flavour_gate.py --flavour lab --kmd <bc250kmd.sys> --kmd-only
+    python flavour_gate.py --flavour release --sources <selection.json> --root <workspace> [--out <dir>]
 
 An attestation-signed driver must not give user mode a raw read, write or submit primitive, and its user-mode
 engines must not load shader code or another driver from a path that an environment variable names. The release
@@ -60,6 +61,13 @@ list that no longer matches the handlers, or a path list that no longer matches 
 arm instead of passing in silence. --kmd-only checks the KMD alone. A lab set never passes as release and a release
 set never passes as lab.
 
+--sources judges the files a flavour selection pins, before anything is copied: each row of
+release_flavour.py's output is read from --root at its own payload path, so a release row that pins a lab build
+fails at the first gate of the release instead of at the package scan after the whole build. One build pinned by
+several rows (the triplet ICD sits in three slots) is judged once per slot; a row that pins no PE (the INF, the
+defaults catalog, a settings file) is not scanned, and a row whose file is not there fails closed. The release's
+own rows are the only input, so this arm also catches a pin that the package layout would hide.
+
 --manifest binds the scan to one package (tools/release/build-release.ps1 runs it after manifest.json is written,
 before the archive). Every PE under --package must be a row of the manifest (or its setup file) with the SHA256 of
 the bytes this run scanned, every PE row of the manifest must be scanned, and the payload paths of the scanned PEs
@@ -89,6 +97,7 @@ writes flavour-gate.json with the SHA256 of every scanned file, its payload path
 import argparse
 import hashlib
 import json
+import os
 import pathlib
 import re
 import sys
@@ -184,6 +193,12 @@ def load_declaration(path):
         raise GateError('declaration: package.slots needs the distinct lower-case payload paths of a whole package')
     if not isinstance(package.get('about'), str) or not package['about'].strip():
         raise GateError('declaration: package.about is empty')
+    # Slots that reach the package from outside release-sources.json, so no source row pins them: the arm on the
+    # source pins notes those and the package arm judges them. Every other slot must be pinned, there too.
+    not_pinned = package.get('not_pinned', [])
+    if (not isinstance(not_pinned, list) or len(set(not_pinned)) != len(not_pinned) or
+            not all(isinstance(s, str) and s in package['slots'] for s in not_pinned)):
+        raise GateError('declaration: package.not_pinned needs distinct package slots that no source row pins')
     kmd_slots = [s for s in package['slots'] if s.endswith('.sys')]
     if kmd_slots != ['kmd/' + kmd['file'].lower()]:
         raise GateError('declaration: package.slots must hold kmd/%s and no other .sys' % kmd['file'].lower())
@@ -525,13 +540,7 @@ def slot(root, f):
     """The payload path of a file found under a scanned directory: its path under the last directory named payload,
     else under the scanned directory, in lower case with forward slashes; a DriverStore member has the payload path
     of its input slot."""
-    parts = [p.lower() for p in f.relative_to(root).parts]
-    if 'payload' in parts[:-1]:
-        parts = parts[len(parts) - parts[::-1].index('payload', 1):]
-    s = '/'.join(parts)
-    if s.startswith('kmd/'):
-        return driverstore_members().get(s, s)
-    return s
+    return payload_slot('/'.join(f.relative_to(root).parts))
 
 
 def base(slots, p):
@@ -584,6 +593,55 @@ def collect(package, kmd, pes, kmd_name, slots=None):
                                 'for a second one' % (f, k))
             others.append(f)
     return k, others
+
+
+def payload_slot(path):
+    """The payload path of a release row: its path under the last directory named payload, in lower case with
+    forward slashes, and with the DriverStore mapping of slot(), so one declaration serves rows and packages."""
+    parts = [p for p in path.lower().replace('\\', '/').split('/') if p]
+    if 'payload' in parts[:-1]:
+        parts = parts[len(parts) - parts[::-1].index('payload', 1):]
+    s = '/'.join(parts)
+    if s.startswith('kmd/'):
+        return driverstore_members().get(s, s)
+    return s
+
+
+def sources_set(sources, root, kmd_name):
+    """(kmd key, other keys, slots, blobs) for the PE files one flavour selection pins.
+
+    The key of a row is its payload path, not the file it pins: one build serves several rows (the triplet ICD
+    sits in three slots), and each slot is judged, so a failure names the slot that would ship the file. The
+    bytes come from the pinned file under root. A row whose file is missing fails closed; a row that pins no PE
+    (the INF, the defaults catalog, a settings file) is not scanned.
+    """
+    rows = sources.get('files')
+    if not isinstance(rows, list) or not rows:
+        raise GateError('the flavour selection has no source rows')
+    base = pathlib.Path(root)
+    if not base.is_dir():
+        raise GateError('%s: no such workspace for the source rows' % base)
+    slots, blobs, keys = {}, {}, []
+    for row in rows:
+        path, src = row.get('path'), row.get('source')
+        if not isinstance(path, str) or not isinstance(src, str):
+            raise GateError('every source row needs a path and a source')
+        f = base / src.replace('/', os.sep)
+        if not f.is_file():
+            raise GateError('%s: the row pins %s, which is not there' % (path, src))
+        if f.suffix.lower() not in PE_SUFFIXES and not starts_as_pe(f):
+            continue
+        key = pathlib.Path(payload_slot(path))
+        if key in slots:
+            raise GateError('two rows have the payload path %s' % slots[key])
+        slots[key] = payload_slot(path)
+        blobs[key] = read_pe(f)
+        keys.append(key)
+    named = [k for k in keys if slots[k].rsplit('/', 1)[-1] == kmd_name.lower()]
+    if len(named) != 1:
+        raise GateError('%d source row(s) pin a file named %s; the gate judges one KMD' % (len(named), kmd_name))
+    kmd = named[0]
+    return kmd, [k for k in keys if k != kmd], slots, blobs
 
 
 def scan_file(decl, data, forbidden, out_of_scope, declared):
@@ -642,9 +700,13 @@ def file_failures(decl, flavour, path, finding, data):
     return failures
 
 
-def check(decl, flavour, kmd_path, others, kmd_only=False, slots=None, blobs=None):
+def check(decl, flavour, kmd_path, others, kmd_only=False, slots=None, blobs=None, pinned_only=False):
     """(failures, notes, record). slots: {path: payload path} from collect(); a path without one has only its file
-    name. blobs: {path: bytes} read already; the others are read here, once."""
+    name. blobs: {path: bytes} read already; the others are read here, once.
+    pinned_only: the set comes from the manifest's source pins, not from a built package, so a lab.every item that
+    package.not_pinned names is noted instead of failed (setup.exe reaches the package through
+    build-release.ps1 -SetupApp, not through a source row). Every other item must still be pinned, and the
+    package arm judges the unpinned ones after the build, so nothing goes unjudged."""
     if flavour not in ('release', 'lab'):
         raise GateError('flavour must be release or lab, not %r' % flavour)
     if not others and not kmd_only:
@@ -709,8 +771,13 @@ def check(decl, flavour, kmd_path, others, kmd_only=False, slots=None, blobs=Non
 
         for item in sorted({n for f in decl['forbidden'] for n in f['lab'].get('every', [])}):
             if not copies(item):
-                failures.append('lab set has no %s%s, which a forbidden entry names in lab.every'
-                                % ('file at ' if '/' in item else '', item))
+                where = '%s%s' % ('file at ' if '/' in item else '', item)
+                if pinned_only and item in (decl['package'].get('not_pinned') or []):
+                    notes.append('no source row pins %s, which a forbidden entry names in lab.every: it reaches '
+                                 'the package from outside release-sources.json and the package arm judges it '
+                                 'after the build' % where)
+                else:
+                    failures.append('lab set has no %s, which a forbidden entry names in lab.every' % where)
         for f in decl['forbidden']:
             every = f['lab'].get('every')
             if not every:
@@ -834,6 +901,8 @@ def main(argv=None):
     p.add_argument('--kmd', default='', help='the KMD .sys (default: the one file named as kmd.file in --package)')
     p.add_argument('--pe', action='append', default=[], help='a UMD/ICD PE file or a directory of them')
     p.add_argument('--kmd-only', action='store_true', help='a KMD-only set: no UMD/ICD PE is required')
+    p.add_argument('--sources', default='', help='a flavour selection (release_flavour.py --out): judge the files its rows pin')
+    p.add_argument('--root', default='', help='the workspace the --sources rows name (needs --sources)')
     p.add_argument('--manifest', default='', help="the package's manifest.json: bind the scan to it (needs --package)")
     p.add_argument('--negative-control', default='', help='payload path of one scanned file for the negative control')
     p.add_argument('--declaration', default=str(DECLARATION))
@@ -841,15 +910,33 @@ def main(argv=None):
     a = p.parse_args(argv)
     try:
         decl = load_declaration(a.declaration)
-        if not a.package and not a.kmd:
-            raise GateError('pass --package or --kmd')
+        if not a.package and not a.kmd and not a.sources:
+            raise GateError('pass --package, --kmd or --sources')
+        if a.sources and (a.package or a.kmd or a.pe or a.kmd_only or a.manifest):
+            raise GateError('--sources judges one flavour selection: pass it with --root alone')
+        if a.sources and not a.root:
+            raise GateError('--sources needs --root, the workspace its rows name')
+        if a.root and not a.sources:
+            raise GateError('--root belongs to --sources')
         if a.manifest and (not a.package or a.kmd or a.pe or a.kmd_only):
             raise GateError('--manifest judges one whole package: pass --package alone')
         if a.negative_control and a.kmd_only:
             raise GateError('--negative-control needs a UMD/ICD set, not --kmd-only')
-        slots, blobs = {}, {}
-        kmd, others = collect(a.package, a.kmd, a.pe, decl['kmd']['file'], slots)
-        failures, notes, record = check(decl, a.flavour, kmd, others, a.kmd_only, slots, blobs)
+        if a.sources:
+            try:
+                sources = json.loads(pathlib.Path(a.sources).read_text(encoding='utf-8-sig'))
+            except (OSError, ValueError) as e:
+                raise GateError('flavour selection %s unreadable: %s' % (a.sources, e))
+            if sources.get('flavour') not in (None, a.flavour):
+                raise GateError('the selection is the %s flavour, not %s' % (sources.get('flavour'), a.flavour))
+            kmd, others, slots, blobs = sources_set(sources, a.root, decl['kmd']['file'])
+        else:
+            slots, blobs = {}, {}
+            kmd, others = collect(a.package, a.kmd, a.pe, decl['kmd']['file'], slots)
+        failures, notes, record = check(decl, a.flavour, kmd, others, a.kmd_only, slots, blobs,
+                                        pinned_only=bool(a.sources))
+        if a.sources:
+            record['sources'] = str(pathlib.Path(a.sources))
         if a.manifest:
             failures += bind_manifest(decl, a.manifest, a.package, record)
             record['declaration_sha256'] = file_sha256(a.declaration)

@@ -549,13 +549,74 @@ class ReleaseFlavour(unittest.TestCase):
         cab = text.index("if ($SubmissionCab) {")
         manifest = text.index("[IO.File]::WriteAllText((Join-Path $pkg 'manifest.json')")
         archive = text.index("Compress-Archive -Path $pkgRoot")
-        self.assertEqual(text.count("'tools\\quality\\flavour_gate.py'"), 1, "one path to the gate")
+        self.assertEqual(text.count("'tools\\quality\\flavour_gate.py'"), 2,
+                         "one path to the gate in Invoke-FlavourGate and one in the source-pin run")
         runs = [i for i in range(len(text)) if text.startswith("Invoke-FlavourGate ", i)]
         self.assertEqual(len(runs), 2, "two runs of the gate")
         self.assertLess(runs[0], cab)
         self.assertTrue(manifest < runs[1] < archive)
         self.assertIn("'--negative-control', '%s'" % NEGATIVE, text)
         self.assertIn("'--manifest'", text)
+        # And on the source pins, between the flavour selection and everything the build copies.
+        selection = text.index("'release_flavour.py'")
+        pins = text.index("'--sources', $sourcesPath, '--root', $Root")
+        self.assertTrue(selection < pins < runs[0])
+
+    def selection(self, umd=pe(*LOG, "DXVK_HUD"), source="build/amdgpu_wddm_d3d11.dll"):
+        """A flavour selection of two rows, the KMD and the D3D11 shell, with the files they pin under self.dir."""
+        self.write("build/bc250kmd.sys", pe(*RELEASE_KMD))
+        self.write("build/amdgpu_wddm_d3d11.dll", umd)
+        rows = {"flavour": "release", "files": [
+            {"path": "payload/kmd/" + K["file"], "source": "build/bc250kmd.sys"},
+            {"path": "payload/d3d11/amdgpu_wddm_d3d11.dll", "source": source},
+        ]}
+        return self.write("selected.json", json.dumps(rows).encode("utf-8"))
+
+    def run_pins(self, path):
+        return self.run_gate("--flavour", "release", "--sources", str(path), "--root", str(self.dir))
+
+    def test_source_pins_are_judged_before_the_build(self):
+        # The release row of a file whose lab build holds a name must not pin a file that holds it. The planted
+        # name is one the declaration demands of the D3D11 shell's lab build, so this is the rc1-to-rc4 defect:
+        # a lab-flavour image pinned as release, which the gate on the source pins refuses.
+        planted = sorted({n for item, names in lab_items().items()
+                          for n in names if item in ("amdgpu_wddm_d3d11.dll", "d3d11/amdgpu_wddm_d3d11.dll")})
+        self.assertTrue(planted, "the declaration names no lab-only name of the D3D11 shell")
+        self.assertEqual(self.run_pins(self.selection()), 0)
+        self.assertEqual(self.run_pins(self.selection(umd=pe(*LOG, "DXVK_HUD", planted[0]))), 1)
+
+    def test_source_pins_fail_closed(self):
+        # A row whose file is not there, a selection of the other flavour, and --sources without --root.
+        self.assertEqual(self.run_pins(self.selection(source="build/not-built.dll")), 2)
+        rows = json.loads((self.selection()).read_text(encoding="utf-8"))
+        rows["flavour"] = "lab"
+        self.assertEqual(self.run_pins(self.write("selected.json", json.dumps(rows).encode("utf-8"))), 2)
+        self.assertEqual(self.run_gate("--flavour", "release", "--sources", str(self.selection())), 2)
+
+    def lab_selection(self, drop_file=None):
+        """A lab flavour selection over the whole lab_slots() set, less the copies of one file name."""
+        self.write("build/bc250kmd.sys", pe(*LAB_KMD))
+        rows = [{"path": "payload/kmd/" + K["file"], "source": "build/bc250kmd.sys"}]
+        for s, names in sorted(lab_slots().items()):
+            if drop_file in (s, s.rsplit("/", 1)[1]):
+                continue
+            self.write("build/%s" % s, pe(*LOG, *names))
+            rows.append({"path": "payload/" + s, "source": "build/" + s})
+        return self.write("selected-lab.json", json.dumps({"flavour": "lab", "files": rows}).encode("utf-8"))
+
+    def test_source_pins_note_only_what_no_row_can_pin(self):
+        # The lab arm over the source pins: setup.exe reaches the package through -SetupApp, so package.not_pinned
+        # names it and its absence from the pins is a note. Any other lab.every item missing from the pins is a
+        # dropped row, which stays a failure here and not only in the package arm.
+        self.assertEqual(DECL["package"].get("not_pinned"), ["setup.exe"])
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(g.main(["--flavour", "lab", "--sources", str(self.lab_selection(drop_file="setup.exe")),
+                                     "--root", str(self.dir)]), 0)
+        self.assertIn("no source row pins setup.exe", out.getvalue())
+        other = next(i for i in sorted(lab_items()) if "/" not in i and i != "setup.exe")
+        self.assertEqual(self.run_gate("--flavour", "lab", "--sources", str(self.lab_selection(drop_file=other)),
+                                       "--root", str(self.dir)), 1)
 
     def test_lab_set_passes_as_lab_only(self):
         self.lab_set()

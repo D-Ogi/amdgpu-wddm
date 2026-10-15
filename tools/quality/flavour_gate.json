@@ -997,8 +997,9 @@
    "does": "BD-102 diagnostic: another acceleration structure builder",
    "lab": {
     "every": [
-     "vulkan_radeon.dll"
-    ]
+     "vulkan/vulkan_radeon.dll"
+    ],
+    "note": "wow64/vulkan/vulkan_radeon.dll carries mesa's triplet line in tester.31, not the system line, so it has no lookup of this name in either flavour (release-sources.json, pair_skew of that row: the system line only started building x86 in rc5 and nothing has run on the lab with that build). That is by build line, not by flavour. When the 32-bit slot moves to the system line, this note and the path go back to the plain file name."
    }
   },
   {
@@ -1007,8 +1008,9 @@
    "does": "bisect: 0 goes back to the b27 swap chain instead of the independent flip chain",
    "lab": {
     "every": [
-     "vulkan_radeon.dll"
-    ]
+     "vulkan/vulkan_radeon.dll"
+    ],
+    "note": "wow64/vulkan/vulkan_radeon.dll carries mesa's triplet line in tester.31, not the system line, so it has no lookup of this name in either flavour (release-sources.json, pair_skew of that row: the system line only started building x86 in rc5 and nothing has run on the lab with that build). That is by build line, not by flavour. When the 32-bit slot moves to the system line, this note and the path go back to the plain file name."
    }
   },
   {
@@ -1017,8 +1019,9 @@
    "does": "bisect: turns the scaling clause of an independent flip chain off",
    "lab": {
     "every": [
-     "vulkan_radeon.dll"
-    ]
+     "vulkan/vulkan_radeon.dll"
+    ],
+    "note": "wow64/vulkan/vulkan_radeon.dll carries mesa's triplet line in tester.31, not the system line, so it has no lookup of this name in either flavour (release-sources.json, pair_skew of that row: the system line only started building x86 in rc5 and nothing has run on the lab with that build). That is by build line, not by flavour. When the 32-bit slot moves to the system line, this note and the path go back to the plain file name."
    }
   },
   {
@@ -1027,8 +1030,9 @@
    "does": "bisect: turns the tearing clause of an independent flip chain off",
    "lab": {
     "every": [
-     "vulkan_radeon.dll"
-    ]
+     "vulkan/vulkan_radeon.dll"
+    ],
+    "note": "wow64/vulkan/vulkan_radeon.dll carries mesa's triplet line in tester.31, not the system line, so it has no lookup of this name in either flavour (release-sources.json, pair_skew of that row: the system line only started building x86 in rc5 and nothing has run on the lab with that build). That is by build line, not by flavour. When the 32-bit slot moves to the system line, this note and the path go back to the plain file name."
    }
   },
   {
@@ -1037,8 +1041,9 @@
    "does": "bisect: the buffer count of an independent flip chain",
    "lab": {
     "every": [
-     "vulkan_radeon.dll"
-    ]
+     "vulkan/vulkan_radeon.dll"
+    ],
+    "note": "wow64/vulkan/vulkan_radeon.dll carries mesa's triplet line in tester.31, not the system line, so it has no lookup of this name in either flavour (release-sources.json, pair_skew of that row: the system line only started building x86 in rc5 and nothing has run on the lab with that build). That is by build line, not by flavour. When the 32-bit slot moves to the system line, this note and the path go back to the plain file name."
    }
   },
   {
@@ -1047,8 +1052,9 @@
    "does": "bisect: turns the window hook of an independent flip chain off",
    "lab": {
     "every": [
-     "vulkan_radeon.dll"
-    ]
+     "vulkan/vulkan_radeon.dll"
+    ],
+    "note": "wow64/vulkan/vulkan_radeon.dll carries mesa's triplet line in tester.31, not the system line, so it has no lookup of this name in either flavour (release-sources.json, pair_skew of that row: the system line only started building x86 in rc5 and nothing has run on the lab with that build). That is by build line, not by flavour. When the 32-bit slot moves to the system line, this note and the path go back to the plain file name."
    }
   },
   {
@@ -1057,8 +1063,9 @@
    "does": "writes a present log (CSV) to that file",
    "lab": {
     "every": [
-     "vulkan_radeon.dll"
-    ]
+     "vulkan/vulkan_radeon.dll"
+    ],
+    "note": "wow64/vulkan/vulkan_radeon.dll carries mesa's triplet line in tester.31, not the system line, so it has no lookup of this name in either flavour (release-sources.json, pair_skew of that row: the system line only started building x86 in rc5 and nothing has run on the lab with that build). That is by build line, not by flavour. When the 32-bit slot moves to the system line, this note and the path go back to the plain file name."
    }
   },
   {
@@ -1688,10 +1695,48 @@
    "name": "AMDGPU_WDDM_SETUP",
    "where": "bc250-win tools/win/amdgpu_wddm_setup (the .NET assembly name)",
    "reason": "the assembly name of the setup window in lower case, amdgpu_wddm_setup, in its metadata and its application manifest; not a lookup. It is declared because Windows reads environment names in any letter case"
+  },
+  {
+   "name": "BC250KMD_CLI",
+   "where": "bc250-win tools/win/amdgpu_wddm_control (bc250kmd_cli.exe: its BD-166 version resource and its PDB name)",
+   "reason": "the file's own name in lower case, bc250kmd_cli, which versionstamp.py writes as InternalName and the linker writes as the PDB name; not a lookup. The build pinned by rc1 to rc4 carried no version resource at all, so the name appeared with the stamp, not with a new setting. It is declared because Windows reads environment names in any letter case"
+  },
+  {
+   "name": "AMDGPU_WDDM_MFT_H264",
+   "where": "bc250-win driver/umd/mft-h264 (amdgpu_wddm_mft_h264.dll: its BD-166 version resource and its PDB name)",
+   "reason": "the file's own name in lower case, amdgpu_wddm_mft_h264, which versionstamp.py writes as InternalName and the linker writes as the PDB name; not a lookup. It is declared because Windows reads environment names in any letter case"
+  },
+  {
+   "name": "BC250_CREATE_DEVICE",
+   "where": "vkd3d-proton libs/ddi/ddi_engine.c",
+   "reason": "the name of the bc250_create_device() function of the engine's DDI entry layer, as a C string: the vkd3d debug macros take __FUNCTION__, and since BD-180 the lab engine recipe drops -DVKD3D_NO_DEBUG_MESSAGES, so those messages (and their function names) are compiled into the lab flavour. Not a lookup: no environment variable or registry value of this name is read. The release engine keeps the token and holds none of these strings, which is why only the lab engines carry them. A newly traced bc250_* function of this layer adds a name here"
+  },
+  {
+   "name": "BC250_CREATE_HEAP_FROM_MEMORY",
+   "where": "vkd3d-proton libs/ddi/ddi_engine.c",
+   "reason": "the name of the bc250_create_heap_from_memory() function of the engine's DDI entry layer, as a C string: the vkd3d debug macros take __FUNCTION__, and since BD-180 the lab engine recipe drops -DVKD3D_NO_DEBUG_MESSAGES, so those messages (and their function names) are compiled into the lab flavour. Not a lookup: no environment variable or registry value of this name is read. The release engine keeps the token and holds none of these strings, which is why only the lab engines carry them. A newly traced bc250_* function of this layer adds a name here"
+  },
+  {
+   "name": "BC250_FIND_PHYSICAL_DEVICE",
+   "where": "vkd3d-proton libs/ddi/ddi_engine.c",
+   "reason": "the name of the bc250_find_physical_device() function of the engine's DDI entry layer, as a C string: the vkd3d debug macros take __FUNCTION__, and since BD-180 the lab engine recipe drops -DVKD3D_NO_DEBUG_MESSAGES, so those messages (and their function names) are compiled into the lab flavour. Not a lookup: no environment variable or registry value of this name is read. The release engine keeps the token and holds none of these strings, which is why only the lab engines carry them. A newly traced bc250_* function of this layer adds a name here"
+  },
+  {
+   "name": "BC250_PREPARE_DEVICE",
+   "where": "vkd3d-proton libs/ddi/ddi_engine.c",
+   "reason": "the name of the bc250_prepare_device() function of the engine's DDI entry layer, as a C string: the vkd3d debug macros take __FUNCTION__, and since BD-180 the lab engine recipe drops -DVKD3D_NO_DEBUG_MESSAGES, so those messages (and their function names) are compiled into the lab flavour. Not a lookup: no environment variable or registry value of this name is read. The release engine keeps the token and holds none of these strings, which is why only the lab engines carry them. A newly traced bc250_* function of this layer adds a name here"
+  },
+  {
+   "name": "BC250_QUERY_ADAPTER_CAPS",
+   "where": "vkd3d-proton libs/ddi/ddi_engine.c",
+   "reason": "the name of the bc250_query_adapter_caps() function of the engine's DDI entry layer, as a C string: the vkd3d debug macros take __FUNCTION__, and since BD-180 the lab engine recipe drops -DVKD3D_NO_DEBUG_MESSAGES, so those messages (and their function names) are compiled into the lab flavour. Not a lookup: no environment variable or registry value of this name is read. The release engine keeps the token and holds none of these strings, which is why only the lab engines carry them. A newly traced bc250_* function of this layer adds a name here"
   }
  ],
  "package": {
-  "about": "The payload path of every PE that a whole package of either flavour holds: the PE rows of tools/release/release-sources.json without \"payload/\", and setup.exe in the top folder. A DriverStore member has the payload path of its input slot. flavour_gate.py --manifest requires each slot exactly once and no other PE; test_flavour_gate.py checks this list against release-sources.json.",
+  "about": "The payload path of every PE that a whole package of either flavour holds: the PE rows of tools/release/release-sources.json without \"payload/\", and setup.exe in the top folder. A DriverStore member has the payload path of its input slot. flavour_gate.py --manifest requires each slot exactly once and no other PE; test_flavour_gate.py checks this list against release-sources.json. not_pinned names the slots that reach the package from outside release-sources.json, so the arm on the source pins (--sources) cannot see them and notes them instead of failing; the package arm still judges them.",
+  "not_pinned": [
+   "setup.exe"
+  ],
   "slots": [
    "control/amdgpu_wddm_control.exe",
    "control/bc250control.dll",
