@@ -377,6 +377,11 @@ $rs = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-session-checks.ps1'), '-Insta
 $rs.text
 Check ($rs.code -eq 0) "driver-set staging, legacy outcomes, install inputs across a restart, DWM baseline: exit $($rs.code)"
 
+'GPU desktop verification selects the desktop from SYSTEM and interactive callers'
+$rs = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-verify-desktop-session.ps1'), '-Installer', (Join-Path $Package 'installer'))
+$rs.text
+Check ($rs.code -eq 0) "GPU desktop session selection and absent-desktop refusal: exit $($rs.code)"
+
 'unattended console (test-console.ps1 under 5.1, synthetic engine only)'
 $consoleWork = Join-Path $WorkBase ('console-' + [Guid]::NewGuid().ToString('N'))
 $r = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-console.ps1'), '-Installer', (Join-Path $Package 'installer'), '-WorkRoot', $consoleWork)

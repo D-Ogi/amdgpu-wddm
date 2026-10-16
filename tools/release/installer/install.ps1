@@ -765,12 +765,13 @@ function Invoke-Verify {
     $dwmOk = $true
     if ($forceCpu -eq 0) {
         $zink = $false
-        $mySession = (Get-Process -Id $PID).SessionId
-        foreach ($d in @(Get-Process dwm -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $mySession })) {
+        $mySession = Get-DesktopSessionId
+        foreach ($d in @(Get-Process dwm -ErrorAction SilentlyContinue | Where-Object { $mySession -gt 0 -and $_.SessionId -eq $mySession })) {
             try { if ($d.Modules | Where-Object { $_.FileName -match 'bc250d3d_zink\.dll$' }) { $zink = $true } } catch { }
         }
         $dwmOk = $zink
         $dwmNote = "DwmForceCpu 0, DWM of session $mySession has bc250d3d_zink.dll loaded: $(if ($zink) { 'yes' } else { 'no (CPU route)' })"
+        if ($mySession -le 0) { $dwmNote = 'DwmForceCpu 0, no interactive desktop session is available; GPU desktop verification failed' }
     }
     # BD-069: the driver closed the path itself, so the remedy is a repair install, not a setting the tester has to
     # find. The repair reads the driver's own record of the closure (InteropClosedReason), so only the line that
