@@ -170,8 +170,8 @@ function Invoke-DriverStateDefaults {
         if($choice.Count -ne 1 -or $choice[0].kind -notin @('record',1) -or $choice[0].type -ne 4){throw 'CuModeChosen is not a DWORD record in the state catalog'}
     }
     $plan=Get-RegistryDefaultPlan -Defaults $settings -Previous $prior -Current $now -Explicit $Explicit -Reopen:$Reopen
-    # Check all comparisons before the first write, including records that a
-    # repair clears and the mask/choice pair which describes an explicit CU mode.
+    # Check all comparisons before the first write, including the closure
+    # records and the mask/choice pair which describes an explicit CU mode.
     foreach($row in $plan) {
         if(-not $row.write){continue}
         # A remembered command is not a new request. Absence is a choice too.
@@ -187,9 +187,11 @@ function Invoke-DriverStateDefaults {
     foreach($row in $plan) {
         if(-not $row.write){continue}
         Write-DriverStateValue -Cli $Cli -Name ([string]$row.name) -Value ([uint32]$row.value) -Runner $Runner
-        if($row.PSObject.Properties['clear']) {
-            foreach($name in @($row.clear)){Clear-DriverStateValue -Cli $Cli -Name ([string]$name) -Runner $Runner}
-        }
+        # The legacy registry plan also carries closure-record deletion hints.
+        # DpmClosedReason is read-only to users. For every closure, writing the
+        # reopened setting requests recovery, and KMD initialization clears its
+        # reason. Do not require user-side deletion of these driver records.
+        # Retain those records here, including when another setting write fails.
         if($RecordChoices -and $row.name -ceq 'CuMode' -and $row.decision -eq 'command') {
             # CU-map contract: the installed mask is retained; the record stores
             # the complete request (mode | mask << 8), not just the mode number.

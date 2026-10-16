@@ -84,6 +84,49 @@ $interrupted={param($exe,$arguments)
 }
 Refuses {Invoke-DriverStateDefaults -Cli fixture.exe -Defaults @{CpuTune=1;CuMode=40} -Previous @{CpuTune=0;CuMode=24} -Runner $interrupted} 'interrupted default policy cannot report completion'
 Check ($script:batchWrites -eq 2 -and $script:batchReadbacks -eq 1) 'only an acknowledged setting receives readback before batch interruption'
+# The real shared-state API denies user mutation of DpmClosedReason. Repair
+# must request reopening through settings, including after a partial prior run.
+$catalog=Get-Content -LiteralPath "$PSScriptRoot\..\..\driver\state\catalog.json" -Raw | ConvertFrom-Json
+$reasons=@{DpmClosedReason=4;InteropClosedReason=4;CuModeClosedReason=3}
+$reasonAccess=@{DpmClosedReason='driver';InteropClosedReason='admin_clear';CuModeClosedReason='admin_clear'}
+foreach($name in $reasons.Keys) {
+    $entry=@($catalog.values | Where-Object {$_.path -ceq '' -and $_.name -ceq $name})
+    Check ($entry.Count -eq 1 -and $entry[0].kind -eq 'record' -and $entry[0].access -eq $reasonAccess[$name]) "$name retains its catalog access contract"
+}
+$openDefaults=@{DpmMode=1;EnableGpuPresentBlit=1;EnableCddDwmInterop=1;CuMode=40}
+$script:closureLive=@{DpmMode=0;EnableGpuPresentBlit=0;EnableCddDwmInterop=0;CuMode=24}
+foreach($name in $reasons.Keys){$script:closureLive[$name]=$reasons[$name]}
+$script:closureCalls=New-Object Collections.Generic.List[string]
+$script:closureFailSet=0;$script:closureSets=0
+$closureRun={param($exe,$arguments)
+    switch($arguments[1]) {
+        snapshot {
+            $rows=@(foreach($name in $script:closureLive.Keys){
+                Item $name $(if($reasons.ContainsKey($name)){'record'}else{'setting'}) ok $script:closureLive[$name]
+            })
+            return @{code=0;text=(@{abi=1;error=0;items=$rows}|ConvertTo-Json -Depth 7 -Compress)}
+        }
+        set {
+            $script:closureCalls.Add(($arguments -join ' '));$script:closureSets++
+            if($reasons.ContainsKey($arguments[2]) -or $script:closureSets -eq $script:closureFailSet){return @{code=5;text='access denied'}}
+            $script:closureLive[$arguments[2]]=[uint32]$arguments[3]
+            return @{code=0;text='{"abi":1,"error":0}'}
+        }
+        clear {$script:closureCalls.Add(($arguments -join ' '));return @{code=5;text='driver-owned record'}}
+        get {return @{code=0;text=(@{abi=1;error=0;result=@{status='ok';type=4;bytes=4;value=$script:closureLive[$arguments[2]]}}|ConvertTo-Json -Depth 5 -Compress)}}
+        default {throw 'unexpected closure fixture command'}
+    }
+}
+Invoke-DriverStateDefaults -Cli fixture.exe -Defaults $openDefaults -Previous $openDefaults -Runner $closureRun
+Check ($script:closureCalls.Count -eq 0) 'ordinary install preserves driver closures'
+$script:closureFailSet=2
+Refuses {Invoke-DriverStateDefaults -Cli fixture.exe -Defaults $openDefaults -Previous $openDefaults -Reopen -FreshReopen -Runner $closureRun} 'failed reopen setting write remains a failure'
+foreach($name in $reasons.Keys){Check ($script:closureLive[$name] -eq $reasons[$name]) "partial repair retains $name"}
+$script:closureFailSet=0
+Invoke-DriverStateDefaults -Cli fixture.exe -Defaults $openDefaults -Previous $openDefaults -Reopen -FreshReopen -Runner $closureRun
+foreach($name in $openDefaults.Keys){Check ($script:closureLive[$name] -eq $openDefaults[$name]) "repair reopens $name through its setting"}
+foreach($name in $reasons.Keys){Check ($script:closureLive[$name] -eq $reasons[$name]) "successful repair retains $name until KMD initialization"}
+Check (@($script:closureCalls | Where-Object {$_ -like 'state clear *'}).Count -eq 0) 'repair never asks the CLI to clear a driver-owned record'
 $snapshot=[pscustomobject]@{items=@((Item CpuTune setting absent $null),(Item LastStage record ok 50))}
 $values=ConvertFrom-DriverStateSnapshot -Snapshot $snapshot
 Check (-not $values.ContainsKey('CpuTune') -and $values.LastStage -eq 50) 'only explicit absence omits a value'

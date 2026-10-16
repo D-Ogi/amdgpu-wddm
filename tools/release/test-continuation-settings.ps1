@@ -64,6 +64,7 @@ function Invoke-Native([string]$Exe,[string[]]$Arguments) {
         }
         clear {
             $script:bd175Writes+=@("clear:$($Arguments[2])")
+            if($Arguments[2] -eq 'DpmClosedReason'){return @{code=5;text='driver-owned record'}}
             $script:bd175Live.Remove($Arguments[2]);return @{code=0;text='{"abi":1,"error":0}'}
         }
         get {return @{code=0;text=(@{abi=1;error=0;result=(New-Bd175Read $Arguments[2])}|ConvertTo-Json -Depth 6 -Compress)}}
@@ -184,14 +185,14 @@ $state.driver_settings_compare.items=@(foreach($n in $script:bd175Before.Keys){[
 $commandLineParameters=@{};$script:ReopenClosures=$true
 Reset-Bd175
 & $body
-Assert-Bd175 ($script:bd175Live.DpmMode -eq 1 -and -not $script:bd175Live.ContainsKey('DpmClosedReason')) 'unchanged closure reopens and its record is cleared through the state API'
+Assert-Bd175 ($script:bd175Live.DpmMode -eq 1 -and $script:bd175Live.DpmClosedReason -eq 3) 'unchanged closure requests reopening and retains the driver-owned reason'
 Reset-Bd175;$script:bd175Live.DpmClosedReason=4;$expected=$script:bd175Live.Clone()
 & $body
 Assert-Bd175 ($script:bd175Writes.Count -eq 0) 'saved repair cannot clear a newer closure'
 Assert-Bd175Live $expected
 $freshRepair=$true
 & $body
-Assert-Bd175 ($script:bd175Live.DpmMode -eq 1 -and -not $script:bd175Live.ContainsKey('DpmClosedReason')) 'fresh repair intentionally reopens the current closure'
+Assert-Bd175 ($script:bd175Live.DpmMode -eq 1 -and $script:bd175Live.DpmClosedReason -eq 4) 'fresh repair requests reopening and retains the current driver-owned reason'
 $freshRepair=$false;$script:ReopenClosures=$false
 $script:bd175Before=$originalBefore;$state.driver_settings_compare.items=$savedItems
 $regDefaults.defaults.parameters.PSObject.Properties.Remove('DpmMode');$applied.parameters.PSObject.Properties.Remove('DpmMode')
