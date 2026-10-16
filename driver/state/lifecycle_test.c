@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <sddl.h>
+#include <authz.h>
 #include "state.h"
 #include "transfer.h"
 typedef LONG NTSTATUS;
@@ -55,6 +57,21 @@ typedef GUID UUID;
 #define RtlAddAccessAllowedAceEx(a,r,f,m,s) (AddAccessAllowedAceEx(a,r,f,m,s)?0:STATUS_UNSUCCESSFUL)
 #define RtlSetDaclSecurityDescriptor(s,p,a,d) (SetSecurityDescriptorDacl(s,p,a,d)?0:STATUS_UNSUCCESSFUL)
 #define RtlSetOwnerSecurityDescriptor(s,o,d) (SetSecurityDescriptorOwner(s,o,d)?0:STATUS_UNSUCCESSFUL)
+#define RtlValidSecurityDescriptor IsValidSecurityDescriptor
+#define RtlValidAcl IsValidAcl
+#define RtlValidSid IsValidSid
+#define RtlLengthSid GetLengthSid
+#define RtlEqualSid EqualSid
+#define RtlGetAce(a,i,p) (GetAce(a,i,p)?0:STATUS_UNSUCCESSFUL)
+#define RtlGetDaclSecurityDescriptor(s,p,a,d) TestGetDacl(s,p,a,d)
+#define RtlAddAce(a,r,i,p,n) (AddAce(a,r,i,p,n)?0:STATUS_UNSUCCESSFUL)
+#ifndef MAXULONG
+#define MAXULONG 0xffffffffUL
+#endif
+static NTSTATUS TestGetDacl(PSECURITY_DESCRIPTOR s,BOOLEAN *p,PACL *a,BOOLEAN *d)
+{BOOL present,def;if(!GetSecurityDescriptorDacl(s,&present,a,&def))return STATUS_UNSUCCESSFUL;*p=(BOOLEAN)present;*d=(BOOLEAN)def;return 0;}
+static BYTE shared_security[4096];static DWORD shared_security_bytes;
+static unsigned shared_security_writes;static NTSTATUS shared_query_failure,shared_set_failure;
 static unsigned checks,failures,allocations,handoff_allocations,flush_calls,failed_flushes,ready_writes,active_writes;
 static unsigned create_calls,set_calls,delete_calls,security_calls,uuid_calls,scenarios;
 static unsigned fail_flush_at,flush_keys[64];
@@ -131,7 +148,7 @@ static NTSTATUS IoOpenDriverRegistryKey(PDRIVER_OBJECT driver,ULONG kind,ACCESS_
 {
     unsigned id=kind==DriverRegKeyParameters?1:2;(void)driver;
     CHECK(kind==DriverRegKeyParameters || kind==DriverRegKeySharedPersistentState);CHECK(flags==0);
-    CHECK(access==(ACCESS_MASK)(kind==DriverRegKeyParameters?KEY_READ:(KEY_READ|KEY_WRITE)));
+    CHECK(access==(ACCESS_MASK)(kind==DriverRegKeyParameters?KEY_READ:(KEY_READ|KEY_WRITE|WRITE_DAC)));
     ++keys[id].handles;*out=(HANDLE)(uintptr_t)id;return 0;
 }
 static NTSTATUS ZwQueryValueKey(HANDLE key,UNICODE_STRING *name,ULONG kind,PVOID data,ULONG bytes,PULONG needed)
@@ -161,14 +178,62 @@ static NTSTATUS ZwFlushKey(HANDLE key)
     }
     return 0;
 }
+static BOOL PublicAccess(PSECURITY_DESCRIPTOR sd,DWORD access)
+{
+    AUTHZ_RESOURCE_MANAGER_HANDLE rm=NULL;AUTHZ_CLIENT_CONTEXT_HANDLE base=NULL,ctx=NULL;
+    PSID user=NULL,users=NULL;SID_AND_ATTRIBUTES group;LUID id={0};BOOL allowed=FALSE;
+    AUTHZ_ACCESS_REQUEST request={0};AUTHZ_ACCESS_REPLY reply={0};DWORD granted=0,error=0;
+    CHECK(ConvertStringSidToSidW(L"S-1-5-90-0-1",&user));
+    CHECK(ConvertStringSidToSidW(L"S-1-5-32-545",&users));
+    CHECK(AuthzInitializeResourceManager(AUTHZ_RM_FLAG_NO_AUDIT,NULL,NULL,NULL,L"state ACL CPU test",&rm));
+    CHECK(AuthzInitializeContextFromSid(AUTHZ_SKIP_TOKEN_GROUPS,user,rm,NULL,id,NULL,&base));
+    group.Sid=users;group.Attributes=SE_GROUP_ENABLED|SE_GROUP_ENABLED_BY_DEFAULT|SE_GROUP_MANDATORY;
+    CHECK(AuthzAddSidsToContext(base,&group,1,NULL,0,&ctx));
+    request.DesiredAccess=access;reply.ResultListLength=1;reply.GrantedAccessMask=&granted;reply.Error=&error;
+    CHECK(AuthzAccessCheck(0,ctx,&request,NULL,sd,NULL,0,&reply,NULL));
+    allowed=error==ERROR_SUCCESS && granted==access;
+    if(ctx)AuthzFreeContext(ctx);if(base)AuthzFreeContext(base);if(rm)AuthzFreeResourceManager(rm);
+    LocalFree(users);LocalFree(user);return allowed;
+}
 static NTSTATUS ZwSetSecurityObject(HANDLE key,SECURITY_INFORMATION information,PSECURITY_DESCRIPTOR descriptor)
 {
-    unsigned id=KeyId(key);PACL acl;PSID owner;BOOL present,defaulted;++security_calls;
+    unsigned id=KeyId(key);PACL acl;PSID owner;BOOL present,defaulted;
+    if(id==2) {
+        SECURITY_DESCRIPTOR merged;PSID group;BYTE encoded[4096];DWORD size=sizeof(encoded);WORD control;DWORD revision;
+        CHECK(information==(DACL_SECURITY_INFORMATION|PROTECTED_DACL_SECURITY_INFORMATION) ||
+              information==(DACL_SECURITY_INFORMATION|UNPROTECTED_DACL_SECURITY_INFORMATION));
+        if(shared_set_failure)return shared_set_failure;
+        CHECK(InitializeSecurityDescriptor(&merged,SECURITY_DESCRIPTOR_REVISION));
+        CHECK(GetSecurityDescriptorOwner(shared_security,&owner,&defaulted));
+        CHECK(SetSecurityDescriptorOwner(&merged,owner,defaulted));
+        CHECK(GetSecurityDescriptorGroup(shared_security,&group,&defaulted));
+        CHECK(SetSecurityDescriptorGroup(&merged,group,defaulted));
+        CHECK(GetSecurityDescriptorDacl(descriptor,&present,&acl,&defaulted));
+        CHECK(SetSecurityDescriptorDacl(&merged,present,acl,defaulted));
+        CHECK(GetSecurityDescriptorControl(shared_security,&control,&revision));
+        CHECK(!!(information&PROTECTED_DACL_SECURITY_INFORMATION)==!!(control&SE_DACL_PROTECTED));
+        merged.Control|=control&SE_DACL_PROTECTED;
+        CHECK(MakeSelfRelativeSD(&merged,encoded,&size));memcpy(shared_security,encoded,size);shared_security_bytes=size;
+        ++shared_security_writes;return 0;
+    }
+    ++security_calls;
     CHECK(keys[id].handles>0);
     CHECK(information==(OWNER_SECURITY_INFORMATION|DACL_SECURITY_INFORMATION|PROTECTED_DACL_SECURITY_INFORMATION));
     CHECK(IsValidSecurityDescriptor(descriptor));CHECK(GetSecurityDescriptorOwner(descriptor,&owner,&defaulted));
     CHECK(owner && IsValidSid(owner));CHECK(GetSecurityDescriptorDacl(descriptor,&present,&acl,&defaulted));
-    CHECK(present && acl && IsValidAcl(acl));CHECK(((SECURITY_DESCRIPTOR*)descriptor)->Control&SE_DACL_PROTECTED);return 0;
+    CHECK(present && acl && IsValidAcl(acl));CHECK(((SECURITY_DESCRIPTOR*)descriptor)->Control&SE_DACL_PROTECTED);
+    if(wcsstr(keys[id].path,L"\\Migration") || wcsstr(keys[id].path,L"\\Waves")) {
+        CHECK(!PublicAccess(descriptor,KEY_READ));CHECK(!PublicAccess(descriptor,KEY_WRITE));
+    }
+    return 0;
+}
+static NTSTATUS ZwQuerySecurityObject(HANDLE key,SECURITY_INFORMATION information,
+    PSECURITY_DESCRIPTOR descriptor,ULONG capacity,PULONG needed)
+{
+    CHECK(KeyId(key)==2 && keys[2].handles>0);CHECK(information==DACL_SECURITY_INFORMATION);
+    if(shared_query_failure)return shared_query_failure;
+    *needed=shared_security_bytes;if(capacity<shared_security_bytes)return STATUS_BUFFER_TOO_SMALL;
+    memcpy(descriptor,shared_security,shared_security_bytes);return 0;
 }
 static NTSTATUS ZwQueryKey(HANDLE key,ULONG kind,PVOID data,ULONG bytes,PULONG needed)
 {
@@ -202,6 +267,13 @@ void DriverStateClose(void);
 
 static void NoLeaks(void)
 {unsigned i;CHECK(!allocations && !handoff_allocations);for(i=1;i<key_count;++i)CHECK(keys[i].handles==0);}
+static void SharedSecurity(PCWSTR sddl)
+{
+    PSECURITY_DESCRIPTOR sd=NULL;ULONG bytes=0;
+    CHECK(ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl,SDDL_REVISION_1,&sd,&bytes));
+    CHECK(bytes<=sizeof(shared_security));if(bytes>sizeof(shared_security))exit(2);
+    memcpy(shared_security,sd,bytes);shared_security_bytes=bytes;LocalFree(sd);
+}
 static void Reset(const char *name)
 {
     unsigned i,j;WCHAR wide[128];DriverStateClose();NoLeaks();test_case=name;++scenarios;
@@ -219,6 +291,9 @@ static void Reset(const char *name)
     handoff_bytes=flush_calls=failed_flushes=ready_writes=active_writes=0;
     create_calls=set_calls=delete_calls=security_calls=uuid_calls=0;
     fail_flush_at=0;memset(flush_keys,0,sizeof(flush_keys));failed_flush_path[0]=0;TestShared.BootId=124;
+    shared_security_writes=0;shared_query_failure=shared_set_failure=0;
+    SharedSecurity(L"O:SYG:SYD:P(A;OICI;KA;;;SY)(A;OICI;CCDCLCSWRPSDRC;;;BA)"
+        L"(A;OICI;KA;;;S-1-5-80-2476284245-3118694172-782969475-3399061036-443127832)");
 }
 static unsigned int CaptureLegacy(void *context,unsigned int source,const AMDGPU_STATE_SPEC *spec,
     AMDGPU_STATE_VALUE *value,void *data,unsigned int capacity)
@@ -297,12 +372,68 @@ static void FlushWas(unsigned ordinal,PCWSTR path)
     CHECK(ordinal>0 && ordinal<=flush_calls && ordinal<=64);
     if(ordinal>0 && ordinal<=flush_calls && ordinal<=64)CHECK(!wcscmp(keys[flush_keys[ordinal-1]].path,path));
 }
+static void RootAclCases(void)
+{
+    BYTE old[4096];DWORD old_bytes;PACL before,after;BOOL present,defaulted;
+    unsigned i;PSID owner_before,owner_after;PVOID a,b;unsigned writes;
+    Reset("shared root grants read only and preserves every original ACE");PrepareLegacy();
+    memcpy(old,shared_security,shared_security_bytes);old_bytes=shared_security_bytes;
+    CHECK(!PublicAccess(shared_security,KEY_READ));CHECK(!PublicAccess(shared_security,KEY_WRITE));
+    CHECK(InitReadOnly()==0);CHECK(shared_security_writes==1 && !DriverStateReady());
+    CHECK(PublicAccess(shared_security,KEY_READ));CHECK(!PublicAccess(shared_security,KEY_WRITE));
+    CHECK(!PublicAccess(shared_security,WRITE_DAC|WRITE_OWNER));CHECK(!PublicAccess(shared_security,DELETE));
+    CHECK(GetSecurityDescriptorDacl(old,&present,&before,&defaulted));
+    CHECK(GetSecurityDescriptorDacl(shared_security,&present,&after,&defaulted));
+    CHECK(after->AceCount==before->AceCount+1);
+    for(i=0;i<before->AceCount;i++) {
+        CHECK(GetAce(before,i,&a));CHECK(GetAce(after,i,&b));
+        CHECK(!memcmp(a,b,((ACE_HEADER*)a)->AceSize));
+    }
+    CHECK(GetAce(after,before->AceCount,&b));CHECK(((ACE_HEADER*)b)->AceFlags==0);
+    CHECK(((ACCESS_ALLOWED_ACE*)b)->Mask==KEY_READ);
+    CHECK(GetSecurityDescriptorOwner(old,&owner_before,&defaulted));
+    CHECK(GetSecurityDescriptorOwner(shared_security,&owner_after,&defaulted));CHECK(EqualSid(owner_before,owner_after));
+    DriverStateClose();NoLeaks();CHECK(InitReadOnly()==0 && shared_security_writes==1);
+    CHECK(old_bytes<shared_security_bytes);DriverStateClose();NoLeaks();
+
+    Reset("shared root explicit write deny retained");PrepareLegacy();
+    SharedSecurity(L"O:SYG:SYD:P(D;;0x00000006;;;BU)(A;;KA;;;SY)");
+    CHECK(InitReadOnly()==0);CHECK(PublicAccess(shared_security,KEY_READ));CHECK(!PublicAccess(shared_security,KEY_WRITE));
+    DriverStateClose();NoLeaks();
+    Reset("shared root explicit read deny is not bypassed");PrepareLegacy();
+    SharedSecurity(L"O:SYG:SYD:P(D;;KR;;;BU)(A;;KA;;;SY)");
+    CHECK(InitReadOnly()==0);CHECK(!PublicAccess(shared_security,KEY_READ));DriverStateClose();NoLeaks();
+
+    Reset("shared root explicit allow precedes inherited ACE, flags unchanged");PrepareLegacy();
+    SharedSecurity(L"O:SYG:SYD:(A;;KA;;;SY)(A;ID;KR;;;BA)");
+    CHECK(InitReadOnly()==0);CHECK(GetSecurityDescriptorDacl(shared_security,&present,&after,&defaulted));
+    CHECK(after->AceCount==3);CHECK(GetAce(after,1,&b));CHECK(((ACE_HEADER*)b)->AceFlags==0);
+    CHECK(GetAce(after,2,&b));CHECK(((ACE_HEADER*)b)->AceFlags==INHERITED_ACE);
+    CHECK(!(((SECURITY_DESCRIPTOR*)shared_security)->Control&SE_DACL_PROTECTED));DriverStateClose();NoLeaks();
+
+    Reset("shared root preexisting read ACL is not rewritten");PrepareLegacy();
+    SharedSecurity(L"O:SYG:SYD:P(A;;KA;;;SY)(A;;KR;;;BU)");
+    CHECK(InitReadOnly()==0 && shared_security_writes==0);DriverStateClose();NoLeaks();
+    Reset("shared root inherited-only allow does not grant root access");PrepareLegacy();
+    SharedSecurity(L"O:SYG:SYD:P(A;;KA;;;SY)(A;CIIO;KR;;;BU)");
+    CHECK(!PublicAccess(shared_security,KEY_READ));CHECK(InitReadOnly()==0 && shared_security_writes==1);
+    CHECK(PublicAccess(shared_security,KEY_READ));DriverStateClose();NoLeaks();
+
+    Reset("shared root query failure prevents Ready");PrepareLegacy();shared_query_failure=STATUS_ACCESS_DENIED;
+    CHECK(InitReadOnly()==STATUS_ACCESS_DENIED);CHECK(!shared_security_writes && !DriverStateReady());NoLeaks();
+    Reset("shared root security write failure prevents Ready");PrepareLegacy();shared_set_failure=STATUS_ACCESS_DENIED;
+    CHECK(InitReadOnly()==STATUS_ACCESS_DENIED);CHECK(!shared_security_writes && !DriverStateReady());NoLeaks();
+    Reset("shared root absent DACL is refused");PrepareLegacy();SharedSecurity(L"O:SYG:SY");
+    writes=shared_security_writes;CHECK(InitReadOnly()==STATUS_ACCESS_DENIED);
+    CHECK(shared_security_writes==writes && !DriverStateReady());NoLeaks();
+}
 int main(void)
 {
     BYTE good[32]={42},wrong[32]={43},unbound[32]={0},factory_id[16];
     ULONG choice=24;unsigned i,root,gen,metadata,stored,sets_before,bytes=0;
     AMDGPU_TRANSFER_HEADER raw,conflict;
     test_case="initial";key_count=value_count=1;
+    RootAclCases();
     Reset("legacy successful activation");PrepareLegacy();
     CHECK(DriverStateInit((PDRIVER_OBJECT)1)==0);CHECK(Candidate!=NULL && !flush_calls);Unpublished();
     CHECK(DriverStateActivate(wrong)==STATUS_DEVICE_CONFIGURATION_ERROR);Unpublished();

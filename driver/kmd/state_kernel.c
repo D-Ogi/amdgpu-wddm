@@ -20,6 +20,71 @@ static PVOID Candidate;
 static ULONG CandidateBytes,EntryFullWddm;
 static char ProductVersion[32];
 
+// The OS shared-service root does not grant ordinary clients KEY_READ. Its
+// public StateV2 children do, but clients must first open this root through
+// GetSharedServiceRegistryStateKey. Add the same read population here without
+// inheriting into private Migration/Waves or changing any OS ACE or owner.
+static NTSTATUS SharedRootReadAccess(HANDLE key)
+{
+    static const ULONG usersSid[]={0x00000201u,0x05000000u,32u,545u};
+    PSECURITY_DESCRIPTOR original=NULL;SECURITY_DESCRIPTOR update;
+    PACL before=NULL,after=NULL;BOOLEAN present,defaulted,inserted=FALSE;
+    ULONG needed=0,capacity,i,extra=FIELD_OFFSET(ACCESS_ALLOWED_ACE,SidStart)+sizeof(usersSid);
+    NTSTATUS status;SECURITY_INFORMATION information=DACL_SECURITY_INFORMATION;
+    status=ZwQuerySecurityObject(key,DACL_SECURITY_INFORMATION,NULL,0,&needed);
+    if(status!=STATUS_BUFFER_TOO_SMALL && status!=STATUS_BUFFER_OVERFLOW)
+        return NT_SUCCESS(status)?STATUS_DATA_ERROR:status;
+    if(needed<sizeof(SECURITY_DESCRIPTOR_RELATIVE) || needed>65536)return STATUS_INVALID_BUFFER_SIZE;
+    capacity=needed;original=ExAllocatePool2(POOL_FLAG_PAGED,capacity,STATE_TAG);
+    if(!original)return STATUS_INSUFFICIENT_RESOURCES;
+    status=ZwQuerySecurityObject(key,DACL_SECURITY_INFORMATION,original,capacity,&needed);
+    if(!NT_SUCCESS(status))goto done;
+    if(needed>capacity || !RtlValidSecurityDescriptor(original)){status=STATUS_DATA_ERROR;goto done;}
+    status=RtlGetDaclSecurityDescriptor(original,&present,&before,&defaulted);
+    if(!NT_SUCCESS(status))goto done;
+    if(!present || !before || !RtlValidAcl(before)){status=STATUS_ACCESS_DENIED;goto done;}
+    for(i=0;i<before->AceCount;i++) {
+        ACCESS_ALLOWED_ACE *ace;
+        status=RtlGetAce(before,i,(PVOID*)&ace);if(!NT_SUCCESS(status))goto done;
+        if(ace->Header.AceType==ACCESS_ALLOWED_ACE_TYPE &&
+           !(ace->Header.AceFlags&INHERIT_ONLY_ACE) &&
+           ace->Header.AceSize==extra && RtlValidSid(&ace->SidStart) &&
+           RtlLengthSid(&ace->SidStart)==sizeof(usersSid) && RtlEqualSid(&ace->SidStart,(PSID)usersSid) &&
+           (ace->Mask&KEY_READ)==KEY_READ) {status=STATUS_SUCCESS;goto done;}
+    }
+    if(before->AclSize>65535-extra){status=STATUS_INVALID_BUFFER_SIZE;goto done;}
+    capacity=before->AclSize+extra;
+    after=ExAllocatePool2(POOL_FLAG_PAGED,capacity,STATE_TAG);
+    if(!after){status=STATUS_INSUFFICIENT_RESOURCES;goto done;}
+    status=RtlCreateAcl(after,capacity,before->AclRevision);if(!NT_SUCCESS(status))goto done;
+    for(i=0;i<before->AceCount;i++) {
+        ACE_HEADER *ace;
+        status=RtlGetAce(before,i,(PVOID*)&ace);if(!NT_SUCCESS(status))goto done;
+        // Preserve the order and bytes of existing ACEs. Our explicit allow
+        // precedes inherited ACEs, after existing explicit denies/allows.
+        if(!inserted && (ace->AceFlags&INHERITED_ACE)) {
+            status=RtlAddAccessAllowedAceEx(after,before->AclRevision,0,KEY_READ,(PSID)usersSid);
+            if(!NT_SUCCESS(status))goto done;inserted=TRUE;
+        }
+        status=RtlAddAce(after,before->AclRevision,MAXULONG,ace,ace->AceSize);
+        if(!NT_SUCCESS(status))goto done;
+    }
+    if(!inserted) {
+        status=RtlAddAccessAllowedAceEx(after,before->AclRevision,0,KEY_READ,(PSID)usersSid);
+        if(!NT_SUCCESS(status))goto done;
+    }
+    status=RtlCreateSecurityDescriptor(&update,SECURITY_DESCRIPTOR_REVISION);
+    if(NT_SUCCESS(status))status=RtlSetDaclSecurityDescriptor(&update,TRUE,after,defaulted);
+    if(!NT_SUCCESS(status))goto done;
+    information|=(((SECURITY_DESCRIPTOR*)original)->Control&SE_DACL_PROTECTED)?
+                 PROTECTED_DACL_SECURITY_INFORMATION:UNPROTECTED_DACL_SECURITY_INFORMATION;
+    status=ZwSetSecurityObject(key,information,&update);
+done:
+    if(after)ExFreePoolWithTag(after,STATE_TAG);
+    if(original)ExFreePoolWithTag(original,STATE_TAG);
+    return status;
+}
+
 static NTSTATUS Open(HANDLE parent,PCWSTR child,ACCESS_MASK access,BOOLEAN create,BOOLEAN isvolatile,PHANDLE out)
 {
     UNICODE_STRING name; OBJECT_ATTRIBUTES oa;
@@ -398,7 +463,9 @@ NTSTATUS DriverStateInit(PDRIVER_OBJECT driver)
     status=String(Defaults,L"CatalogId",catalog,65);
     if(!NT_SUCCESS(status)) goto done;
     if(wcscmp(catalog,expected)) { status=STATUS_REVISION_MISMATCH; goto done; }
-    status=IoOpenDriverRegistryKey(driver,DriverRegKeySharedPersistentState,KEY_READ|KEY_WRITE,0,&Shared);
+    status=IoOpenDriverRegistryKey(driver,DriverRegKeySharedPersistentState,KEY_READ|KEY_WRITE|WRITE_DAC,0,&Shared);
+    if(!NT_SUCCESS(status)) goto done;
+    status=SharedRootReadAccess(Shared);
     if(!NT_SUCCESS(status)) goto done;
     status=Bootstrap(Parameters,Shared);
     if(!NT_SUCCESS(status)) goto done;

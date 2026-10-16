@@ -41,7 +41,7 @@ try {
     $env:LIB="$($msvc.FullName)\lib\$Arch;$libs\ucrt\$Arch;$libs\um\$Arch"
     $exe="$Out\lifecycle_test.exe"
     $arguments=@('/nologo','/TC','/W4','/WX','/O2','/MT',"/I$repo\driver\state","/Fo$Out\","/Fe$exe",
-        "$repo\driver\state\state.c","$repo\driver\state\transfer.c",$generated,'/link','advapi32.lib')
+        "$repo\driver\state\state.c","$repo\driver\state\transfer.c",$generated,'/link','advapi32.lib','authz.lib')
     $build=& "$bin\cl.exe" @arguments 2>&1
     $buildExit=$LASTEXITCODE
     $build | Set-Content -Encoding UTF8 "$Out\build.log"

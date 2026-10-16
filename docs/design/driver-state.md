@@ -13,6 +13,12 @@ It uses `DriverRegKeySharedPersistentState` for mutable state.
 User-mode clients obtain that same root through `GetSharedServiceRegistryStateKey`.
 Neither runtime adapter reconstructs a service registry path.
 
+At driver entry, the KMD adds Builtin Users read access to the shared root.
+This explicit ACE does not inherit. It preserves the OS ACEs, owner and DACL protection.
+Public child keys already allow these readers. Private migration and wave records keep their own protected ACLs.
+The repair also runs for an existing generation, before state activation. A failed repair prevents initialization.
+It grants no write access or permission to remove keys or change permissions. Explicit deny entries remain effective.
+
 `StateV2` holds an active generation, its data, and separate volatile records.
 A generation has a schema and catalog identity. Readers reject incomplete or unknown generations.
 User-mode readers check the signed package's catalog file before they consume factory defaults.
@@ -66,6 +72,7 @@ Missing, unknown or pending board state causes refusal. The device remains disab
 
 Host gates cover the resolver, malformed transfers, interrupted publication, protected files and installer continuation.
 Native x86 and x64 fixtures check generation changes, batch ownership, thread identity and migration freeze.
+The lifecycle fixture executes the root ACL repair and checks read and write access with Windows Authz.
 GUI fixtures execute backup, apply and rollback without opening a window.
 The KMD build and source INF checks are separate gates.
 
