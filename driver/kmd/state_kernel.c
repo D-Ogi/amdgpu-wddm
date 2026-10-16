@@ -39,10 +39,11 @@ static NTSTATUS SharedRootReadAccess(HANDLE key)
     if(!original)return STATUS_INSUFFICIENT_RESOURCES;
     status=ZwQuerySecurityObject(key,DACL_SECURITY_INFORMATION,original,capacity,&needed);
     if(!NT_SUCCESS(status))goto done;
-    if(needed>capacity || !RtlValidSecurityDescriptor(original)){status=STATUS_DATA_ERROR;goto done;}
+    if(needed>capacity || !RtlValidRelativeSecurityDescriptor(original,needed,DACL_SECURITY_INFORMATION))
+        {status=STATUS_DATA_ERROR;goto done;}
     status=RtlGetDaclSecurityDescriptor(original,&present,&before,&defaulted);
     if(!NT_SUCCESS(status))goto done;
-    if(!present || !before || !RtlValidAcl(before)){status=STATUS_ACCESS_DENIED;goto done;}
+    if(!present || !before){status=STATUS_ACCESS_DENIED;goto done;}
     for(i=0;i<before->AceCount;i++) {
         ACCESS_ALLOWED_ACE *ace;
         status=RtlGetAce(before,i,(PVOID*)&ace);if(!NT_SUCCESS(status))goto done;

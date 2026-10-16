@@ -15,7 +15,7 @@ $template=[IO.File]::ReadAllText("$repo\driver\state\kernel_test.c")
 $board=[regex]::Replace([IO.File]::ReadAllText("$repo\driver\kmd\state_board.c"),'(?m)^#include[^\r\n]*','')
 [IO.File]::WriteAllText("$Out\kernel_actual.c",$template.Replace('/* ACTUAL_KERNEL */',$production).Replace('/* ACTUAL_BOARD */',$board))
 & "$($msvc.FullName)\bin\Hostx64\x64\cl.exe" /nologo /TC /W4 /WX /O2 /MT "/I$repo\driver\state" "/Fo$Out\" `
-    "/Fe$Out\kernel_test.exe" "$repo\driver\state\state.c" "$repo\driver\state\transfer.c" "$Out\kernel_actual.c"
+    "/Fe$Out\kernel_test.exe" "$repo\driver\state\state.c" "$repo\driver\state\transfer.c" "$Out\kernel_actual.c" /link advapi32.lib ntdll.lib
 if($LASTEXITCODE){throw 'Kernel bootstrap fixture compile failed'}
 & "$Out\kernel_test.exe"
 if($LASTEXITCODE){throw 'Kernel bootstrap fixture failed'}

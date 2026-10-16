@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <sddl.h>
 #include "state.h"
 #include "transfer.h"
 #include "../kmd/board_memory_format.h"
@@ -49,6 +50,23 @@ typedef GUID UUID;
 #define RtlCompareMemory(a,b,n) (memcmp(a,b,n)?0:(n))
 #define RtlStringCchCopyA StringCchCopyA
 #define RtlStringCchPrintfW StringCchPrintfW
+// WDK 26100 wdm.h signature; execute the same native descriptor validator.
+__declspec(dllimport) BOOLEAN NTAPI RtlValidRelativeSecurityDescriptor(PSECURITY_DESCRIPTOR,ULONG,SECURITY_INFORMATION);
+#define RtlValidSid IsValidSid
+#define RtlLengthSid GetLengthSid
+#define RtlEqualSid EqualSid
+#define RtlGetAce(a,i,p) (GetAce(a,i,p)?0:STATUS_ACCESS_DENIED)
+#define RtlAddAce(a,r,i,p,n) (AddAce(a,r,i,p,n)?0:STATUS_ACCESS_DENIED)
+#define RtlCreateAcl(a,n,r) (InitializeAcl(a,n,r)?0:STATUS_ACCESS_DENIED)
+#define RtlAddAccessAllowedAceEx(a,r,f,m,s) (AddAccessAllowedAceEx(a,r,f,m,s)?0:STATUS_ACCESS_DENIED)
+#define RtlCreateSecurityDescriptor(s,r) (InitializeSecurityDescriptor(s,r)?0:STATUS_ACCESS_DENIED)
+#define RtlSetDaclSecurityDescriptor(s,p,a,d) (SetSecurityDescriptorDacl(s,p,a,d)?0:STATUS_ACCESS_DENIED)
+#ifndef MAXULONG
+#define MAXULONG 0xffffffffUL
+#endif
+static NTSTATUS RtlGetDaclSecurityDescriptor(PSECURITY_DESCRIPTOR s,BOOLEAN *p,PACL *a,BOOLEAN *d)
+{BOOL present,def;if(!GetSecurityDescriptorDacl(s,&present,a,&def))return STATUS_ACCESS_DENIED;*p=(BOOLEAN)present;*d=(BOOLEAN)def;return 0;}
+static BYTE shared_security[4096];static DWORD shared_security_bytes;
 static unsigned checks,failures,commits,allocations,seedFlushFail,seedFlushes,seedCalls,threadCalls;
 static PCWSTR readDenied;
 static NTSTATUS seedResult;
@@ -103,7 +121,38 @@ static NTSTATUS ZwOpenKey(PHANDLE out,ACCESS_MASK access,OBJECT_ATTRIBUTES *oa)
 {(void)access;return TestOpen(out,oa,FALSE);}
 static NTSTATUS ZwClose(HANDLE key){unsigned id=(unsigned)(uintptr_t)key;if(id==0xdead)return 0;CHECK(TestKeys[id].handles>0);TestKeys[id].handles--;return 0;}
 static NTSTATUS IoOpenDriverRegistryKey(PDRIVER_OBJECT d,ULONG kind,ACCESS_MASK access,ULONG flags,PHANDLE out)
-{unsigned id=kind==DriverRegKeyParameters?1:2;(void)d;(void)access;(void)flags;TestKeys[id].handles++;*out=(HANDLE)(uintptr_t)id;return 0;}
+{unsigned id=kind==DriverRegKeyParameters?1:2;(void)d;CHECK(flags==0);
+ CHECK(access==(ACCESS_MASK)(id==1?KEY_READ:(KEY_READ|KEY_WRITE|WRITE_DAC)));
+ TestKeys[id].handles++;*out=(HANDLE)(uintptr_t)id;return 0;}
+static NTSTATUS ZwQuerySecurityObject(HANDLE key,SECURITY_INFORMATION information,
+    PSECURITY_DESCRIPTOR descriptor,ULONG capacity,PULONG needed)
+{
+    CHECK((uintptr_t)key==2 && TestKeys[2].handles>0);CHECK(information==DACL_SECURITY_INFORMATION);
+    *needed=shared_security_bytes;if(capacity<shared_security_bytes)return STATUS_BUFFER_TOO_SMALL;
+    memcpy(descriptor,shared_security,shared_security_bytes);return 0;
+}
+static NTSTATUS ZwSetSecurityObject(HANDLE key,SECURITY_INFORMATION information,PSECURITY_DESCRIPTOR descriptor)
+{
+    SECURITY_DESCRIPTOR merged;PACL acl,before;PSID owner,group;BOOL present,defaulted;
+    BYTE encoded[4096];DWORD size=sizeof(encoded);PVOID a,b;unsigned i;
+    CHECK((uintptr_t)key==2 && TestKeys[2].handles>0);
+    CHECK(information==(DACL_SECURITY_INFORMATION|PROTECTED_DACL_SECURITY_INFORMATION));
+    CHECK(GetSecurityDescriptorDacl(shared_security,&present,&before,&defaulted));
+    CHECK(GetSecurityDescriptorDacl(descriptor,&present,&acl,&defaulted));
+    CHECK(present && acl && IsValidAcl(acl));CHECK(acl->AceCount==before->AceCount+1);
+    for(i=0;i<before->AceCount;i++) {
+        CHECK(GetAce(before,i,&a));CHECK(GetAce(acl,i,&b));CHECK(!memcmp(a,b,((ACE_HEADER*)a)->AceSize));
+    }
+    CHECK(GetAce(acl,before->AceCount,&b));CHECK(((ACE_HEADER*)b)->AceFlags==0);
+    CHECK(((ACCESS_ALLOWED_ACE*)b)->Mask==KEY_READ);
+    CHECK(InitializeSecurityDescriptor(&merged,SECURITY_DESCRIPTOR_REVISION));
+    CHECK(SetSecurityDescriptorDacl(&merged,present,acl,defaulted));
+    CHECK(GetSecurityDescriptorOwner(shared_security,&owner,&defaulted));CHECK(SetSecurityDescriptorOwner(&merged,owner,defaulted));
+    CHECK(GetSecurityDescriptorGroup(shared_security,&group,&defaulted));CHECK(SetSecurityDescriptorGroup(&merged,group,defaulted));
+    merged.Control|=SE_DACL_PROTECTED;
+    CHECK(MakeSelfRelativeSD(&merged,encoded,&size));memcpy(shared_security,encoded,size);shared_security_bytes=size;
+    return 0;
+}
 static NTSTATUS ZwQueryValueKey(HANDLE key,UNICODE_STRING *name,ULONG kind,PVOID data,ULONG bytes,PULONG needed)
 {
     unsigned v=TestValue((unsigned)(uintptr_t)key,name->Buffer,FALSE);PKEY_VALUE_PARTIAL_INFORMATION info=data;(void)kind;
@@ -168,7 +217,14 @@ static unsigned int TestEmpty(void *c,unsigned int src,const AMDGPU_STATE_SPEC *
 {(void)c;(void)src;(void)s;(void)v;(void)p;(void)cap;return AMDGPU_STATE_ABSENT;}
 static void TestReset(void)
 {
-    unsigned i;DriverStateClose();CHECK(!allocations);for(i=1;i<TestKeyCount;i++)CHECK(!TestKeys[i].handles);
+    unsigned i;PSECURITY_DESCRIPTOR sd=NULL;ULONG size=0;
+    DriverStateClose();CHECK(!allocations);for(i=1;i<TestKeyCount;i++)CHECK(!TestKeys[i].handles);
+    CHECK(ConvertStringSecurityDescriptorToSecurityDescriptorW(
+        L"O:SYG:SYD:P(A;OICI;KA;;;SY)(A;OICI;CCDCLCSWRPSDRC;;;BA)"
+        L"(A;OICI;KA;;;S-1-5-80-2476284245-3118694172-782969475-3399061036-443127832)",
+        SDDL_REVISION_1,&sd,&size));
+    CHECK(size<=sizeof(shared_security));if(size>sizeof(shared_security))exit(2);
+    memcpy(shared_security,sd,size);shared_security_bytes=size;LocalFree(sd);
     memset(TestKeys,0,sizeof(TestKeys));memset(TestValues,0,sizeof(TestValues));TestKeyCount=TestValueCount=1;
     CHECK(TestKey(L"P",TRUE)==1);CHECK(TestKey(L"S",TRUE)==2);(void)TestKey(L"P\\DefaultsV2",TRUE);
     TestNumber(3,L"Schema",AmdgpuStateSchema());{WCHAR wide[128];for(i=0;i<65;i++)wide[i]=(BYTE)AmdgpuStateCatalogId()[i];TestString(3,L"CatalogId",wide);}

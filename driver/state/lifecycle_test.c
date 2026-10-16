@@ -57,8 +57,8 @@ typedef GUID UUID;
 #define RtlAddAccessAllowedAceEx(a,r,f,m,s) (AddAccessAllowedAceEx(a,r,f,m,s)?0:STATUS_UNSUCCESSFUL)
 #define RtlSetDaclSecurityDescriptor(s,p,a,d) (SetSecurityDescriptorDacl(s,p,a,d)?0:STATUS_UNSUCCESSFUL)
 #define RtlSetOwnerSecurityDescriptor(s,o,d) (SetSecurityDescriptorOwner(s,o,d)?0:STATUS_UNSUCCESSFUL)
-#define RtlValidSecurityDescriptor IsValidSecurityDescriptor
-#define RtlValidAcl IsValidAcl
+// Same native validator as the KMD; declaration from WDK 26100 wdm.h.
+__declspec(dllimport) BOOLEAN NTAPI RtlValidRelativeSecurityDescriptor(PSECURITY_DESCRIPTOR,ULONG,SECURITY_INFORMATION);
 #define RtlValidSid IsValidSid
 #define RtlLengthSid GetLengthSid
 #define RtlEqualSid EqualSid
@@ -421,6 +421,9 @@ static void RootAclCases(void)
 
     Reset("shared root query failure prevents Ready");PrepareLegacy();shared_query_failure=STATUS_ACCESS_DENIED;
     CHECK(InitReadOnly()==STATUS_ACCESS_DENIED);CHECK(!shared_security_writes && !DriverStateReady());NoLeaks();
+    Reset("shared root DACL outside returned descriptor is refused");PrepareLegacy();
+    ((SECURITY_DESCRIPTOR_RELATIVE*)shared_security)->Dacl=shared_security_bytes+4;
+    CHECK(InitReadOnly()==STATUS_DATA_ERROR);CHECK(!shared_security_writes && !DriverStateReady());NoLeaks();
     Reset("shared root security write failure prevents Ready");PrepareLegacy();shared_set_failure=STATUS_ACCESS_DENIED;
     CHECK(InitReadOnly()==STATUS_ACCESS_DENIED);CHECK(!shared_security_writes && !DriverStateReady());NoLeaks();
     Reset("shared root absent DACL is refused");PrepareLegacy();SharedSecurity(L"O:SYG:SY");
