@@ -1361,7 +1361,13 @@ static NTSTATUS ConnectorOfferTargets(BC250_DEVICE* Device, const BC250_CONNECTO
         mode->WireFormatAndPreference.Preference = i ? D3DKMDT_MP_NOTPREFERRED : D3DKMDT_MP_PREFERRED;
         mode->WireFormatAndPreference.Rgb = D3DKMDT_BITS_PER_COMPONENT_08;
         status = set->pfnAddMode(handle, mode);
-        if (!NT_SUCCESS(status)) set->pfnReleaseModeInfo(handle, mode);
+        // A second timing with the same signal is the same mode to dxgkrnl (BD-189). edid.c keeps only the first,
+        // and a duplicate that still arrives is skipped: failing the set would leave no VidPN at all.
+        if (status == STATUS_GRAPHICS_MODE_ALREADY_IN_MODESET) {
+            set->pfnReleaseModeInfo(handle, mode);
+            status = STATUS_SUCCESS;
+        }
+        else if (!NT_SUCCESS(status)) set->pfnReleaseModeInfo(handle, mode);
         else ++offered;
     }
     if (NT_SUCCESS(status) && !offered) status = STATUS_GRAPHICS_INVALID_VIDEO_PRESENT_TARGET_MODE;

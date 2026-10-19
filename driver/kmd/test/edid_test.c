@@ -262,9 +262,25 @@ static void TestTargetTimings(void)
     static BC250_EDID_INFO info;
     static BC250_TARGET_TIMING targets[BC250_EDID_MAX_MODES];
     BC250_TARGET_TIMING malformed;
-    unsigned long i,n,seenVga=0,seen1080=0;
+    unsigned long i,j,n,seenVga=0,seen1080=0,seen1080p50=0;
     CHECK(Bc250EdidParse(g_LabEdid,sizeof(g_LabEdid),&info)==BC250_EDID_OK);
     CHECK(info.TargetCount>=6);
+    // BD-189: no two targets carry one video signal (clock, active and total size), or dxgkrnl refuses the second
+    // mode with STATUS_GRAPHICS_MODE_ALREADY_IN_MODESET and the whole target mode set with it. This EDID lists
+    // 1080p50 twice: SVD VIC 31 (HSync offset 528) and a CTA DTD (offset 16). The SVD comes first and stays.
+    for (i=0;i<info.TargetCount;++i) {
+        const BC250_TARGET_TIMING* a=&info.Targets[i];
+        for (j=i+1;j<info.TargetCount;++j) {
+            const BC250_TARGET_TIMING* b=&info.Targets[j];
+            CHECK(!(a->PixelClockKhz==b->PixelClockKhz && a->HActive==b->HActive && a->HBlank==b->HBlank &&
+                    a->VActive==b->VActive && a->VBlank==b->VBlank));
+        }
+        if (a->HActive==1920 && a->VActive==1080 && a->HBlank==720 && a->PixelClockKhz==148500) {
+            ++seen1080p50;
+            CHECK(a->HSyncOffset==528);
+        }
+    }
+    CHECK(seen1080p50==1);
     CHECK(info.Targets[0].PixelClockKhz==154000);
     CHECK(Bc250TargetRefreshMilliHz(&info.Targets[0])==59950);
     CHECK(Bc250EdidTargetList(&info,0,1920,1200,targets,48)==0);

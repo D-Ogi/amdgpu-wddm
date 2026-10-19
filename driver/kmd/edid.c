@@ -106,12 +106,23 @@ unsigned long Bc250TargetRefreshMilliHz(const BC250_TARGET_TIMING* t)
     return (unsigned long)(((unsigned long long)t->PixelClockKhz*1000000ull+total/2)/total);
 }
 
+// dxgkrnl knows a target mode only by its video signal: display.c's ConnectorSignal derives it from the clock and
+// the active and total sizes. Two timings that differ only in sync placement or polarity are one mode there, and
+// the second pfnAddMode fails with STATUS_GRAPHICS_MODE_ALREADY_IN_MODESET (BD-189: the Lenovo LT2452pwC lists VIC 31,
+// 1080p50 with HSync offset 528, and a DTD of 1080p50 with offset 16; no VidPN could be committed). The first such
+// timing stays, in the parse order: base block DTDs, then per CTA block its SVDs, then its DTDs.
+static int SameSignal(const BC250_TARGET_TIMING* a, const BC250_TARGET_TIMING* b)
+{
+    return a->PixelClockKhz==b->PixelClockKhz && a->HActive==b->HActive && a->HBlank==b->HBlank &&
+        a->VActive==b->VActive && a->VBlank==b->VBlank;
+}
+
 static void AddTarget(BC250_EDID_INFO* info, const BC250_TARGET_TIMING* t)
 {
     unsigned long i;
     if (!Bc250TargetTimingValid(t)) return;
     for (i=0;i<info->TargetCount;++i)
-        if (Bc250TargetTimingEqual(t,&info->Targets[i])) return;
+        if (SameSignal(t,&info->Targets[i])) return;
     if (info->TargetCount<BC250_EDID_MAX_MODES) info->Targets[info->TargetCount++]=*t;
 }
 
