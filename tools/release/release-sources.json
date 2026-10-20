@@ -86,7 +86,7 @@
     "flags": 1
   },
   "sources": {
-    "kmd": "bc250-win 113cd0335c2db2f62677c3f10c161cd048bab337: tester.31v2 release KMD with the BD-189 fix passed KmdPackage gates (release bc250kmd.sys; bc250kmd.inf and amdgpu-state.bin are byte-identical to tester.31). The lab KMD row stays the tester.31 lab KMD: 31v2 has no lab package.",
+    "kmd": "bc250-win 961fd198c3d45d7f8daf22a68291e4285231dd85: tester.31v2 release KMD with the BD-189 fix and the guard count reset on a driver state transfer passed KmdPackage gates (release bc250kmd.sys; bc250kmd.inf and amdgpu-state.bin are byte-identical to tester.31). The lab KMD row stays the tester.31 lab KMD: 31v2 has no lab package.",
     "d3d12_shell": "Current tester.31 payload sources. release payload/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm 31abd6690c316e476efd8628ecf6c442aec1c1f6; lab payload/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm 31abd6690c316e476efd8628ecf6c442aec1c1f6. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "d3d12_engine": "Current tester.31 payload sources. release payload/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton b69df5fb2d44858a7d5aa9e322d6a4698a8b4536; lab payload/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton b69df5fb2d44858a7d5aa9e322d6a4698a8b4536. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "d3d12_icd": "Current tester.31 payload sources. release payload/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 2dea401cee9aafaea5846c5333a26839f0bff7cb; lab payload/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 2dea401cee9aafaea5846c5333a26839f0bff7cb. File rows retain exact recipes, hashes, dependencies and validation limits.",
@@ -109,11 +109,11 @@
     {
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.inf",
-      "source": "scratch/train/b34-build/hotfix-31v2/kmd-31v2-release/package/bc250kmd.inf",
+      "source": "scratch/train/b34-build/hotfix-31v2/kmd-31v2-final-release/package/bc250kmd.inf",
       "sha256": "BA8DC6F556917D2F773D398DC820E4ED0E3484CF0B316BEFFD04377F452D2492",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "113cd0335c2db2f62677c3f10c161cd048bab337",
+        "commit": "961fd198c3d45d7f8daf22a68291e4285231dd85",
         "recipe": "driver/kmd/build.ps1",
         "args": [
           "-Kits",
@@ -137,11 +137,11 @@
     {
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.sys",
-      "source": "scratch/train/b34-build/hotfix-31v2/kmd-31v2-release/package/bc250kmd.sys",
-      "sha256": "FA4CDC3B109895AECA626B7FDF5D4C10D590AA63301C4CB79B4379217D26C4D0",
+      "source": "scratch/train/b34-build/hotfix-31v2/kmd-31v2-final-release/package/bc250kmd.sys",
+      "sha256": "9EE338E2A3C2E1344F4777AD69AB6E24E04673F09B9CBE6AFA5438EAD2F598D2",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "113cd0335c2db2f62677c3f10c161cd048bab337",
+        "commit": "961fd198c3d45d7f8daf22a68291e4285231dd85",
         "recipe": "driver/kmd/build.ps1",
         "args": [
           "-Kits",
@@ -158,9 +158,9 @@
         "output": "package/bc250kmd.sys"
       },
       "size": 1078672,
-      "role": "Tester.31v2 release KMD: tester.31 with the BD-189 fix (each EDID video signal offered once). Complete KmdPackage and binary flavour gates passed; exact clean source and package bytes are retained in source-manifest.json.",
-      "unsigned_sha256": "3252F11A242C2E213EB97FBFCACCE4D47FABA9BF434E14E8567BB1B560816477",
-      "authenticode_sha256": "6978E96502B7AB208553C1848F3D64C85A4776D640620C39F8B49E3ECDE9020F",
+      "role": "Tester.31v2 release KMD: tester.31 with the BD-189 fix (each EDID video signal offered once) and a driver state transfer that starts with no boot-loop guard count. Complete KmdPackage and binary flavour gates passed; exact clean source and package bytes are retained in source-manifest.json.",
+      "unsigned_sha256": "46AD7BCEA8165487057C441FD1B0CD154420E5D84C31AF1B13753CB3D12FC3D9",
+      "authenticode_sha256": "822785AF0C5C2D8B7462BE35774E442D860F5D307840A9AC7BF03654C56B3D7B",
       "flavour": "release"
     },
     {
@@ -2549,12 +2549,12 @@
     {
       "component": "kmd",
       "path": "payload/kmd/amdgpu-state.bin",
-      "source": "scratch/train/b34-build/hotfix-31v2/kmd-31v2-release/package/amdgpu-state.bin",
+      "source": "scratch/train/b34-build/hotfix-31v2/kmd-31v2-final-release/package/amdgpu-state.bin",
       "size": 2216,
       "sha256": "7F5ADC7E197CEFF66ECBC4B336E127551ACBD2B379317EDFF20C2311FEEB4FF7",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "113cd0335c2db2f62677c3f10c161cd048bab337",
+        "commit": "961fd198c3d45d7f8daf22a68291e4285231dd85",
         "recipe": "driver/kmd/build.ps1",
         "args": [
           "-Kits",
