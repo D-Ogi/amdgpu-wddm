@@ -87,7 +87,8 @@ try {
         actual_start_prefix_ends_after=$last;system_side_effect_imports_absent=$true;source_inputs_unchanged=$true;
         environment='Explicit system/toolchain allow-list; TEMP/TMP under output';gpu_or_lab_used=$false} |
         ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 "$Out\receipt.json"
-    $output
+    # A mutation control must fail; its FAIL lines are labelled so that nobody reads them as a defect.
+    if($Mutation -ne 'none'){$output | ForEach-Object {"expected under mutation ${Mutation}: $_"}} else {$output}
     if($testExit -ne $wanted){throw "Device fixture test exit $testExit; expected $wanted"}
     if($Mutation -eq 'activate-during-validation' -and ($output -join "`n") -notmatch 'FAIL valid validation stays read-only'){
         throw 'Mutation did not exercise side-effect-free validation assertions'
@@ -95,6 +96,7 @@ try {
     if($Mutation -eq 'skip-start-activation' -and ($output -join "`n") -notmatch 'FAIL Start activation before guard'){
         throw 'Mutation did not exercise pre-budget failure assertions'
     }
+    if($Mutation -ne 'none'){"mutation control ${Mutation}: caught (fixture exit 1, named assertion failed as required)"}
 } finally {
     foreach($name in @([Environment]::GetEnvironmentVariables('Process').Keys)){
         [Environment]::SetEnvironmentVariable($name,$null,'Process')

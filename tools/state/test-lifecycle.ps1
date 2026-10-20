@@ -69,11 +69,13 @@ try {
         test_output=($output -join "`n");real_registry_scm_imports_absent=$true;
         environment='Explicit system/toolchain allow-list; TEMP/TMP under output';gpu_or_lab_used=$false} |
         ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 "$Out\receipt.json"
-    $output
+    # A mutation control must fail; its FAIL lines are labelled so that nobody reads them as a defect.
+    if($IgnoreFirstFlushError){$output | ForEach-Object {"expected under mutation ignore-first-flush-error: $_"}} else {$output}
     if($testExit -ne $wanted){throw "Lifecycle test exit $testExit; expected $wanted"}
     if($IgnoreFirstFlushError -and ($output -join "`n") -notmatch 'DriverStateActivate\(good\)==STATUS_REGISTRY_IO_FAILED'){
         throw 'Mutation did not exercise the first-flush propagation assertion'
     }
+    if($IgnoreFirstFlushError){'mutation control ignore-first-flush-error: caught (fixture exit 1, first-flush assertion failed as required)'}
 } finally {
     foreach($name in @([Environment]::GetEnvironmentVariables('Process').Keys)){
         [Environment]::SetEnvironmentVariable($name,$null,'Process')

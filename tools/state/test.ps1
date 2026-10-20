@@ -47,6 +47,8 @@ if ($LASTEXITCODE) { throw 'Kernel transaction tests failed' }
 & "$PSScriptRoot\test-service-root.ps1" -Out "$Out\service-root" -Kits $Kits -Arch $Arch
 & "$PSScriptRoot\test-lifecycle.ps1" -Out "$Out\lifecycle" -Kits $Kits -Arch $Arch
 & "$PSScriptRoot\test-device.ps1" -Out "$Out\device" -Kits $Kits -Arch $Arch
+# Mutation controls: each run patches one production statement and must fail with a named assertion.
+# Their FAIL lines are expected and labelled; a control that passes, or a suite above that fails, throws.
 if ($Arch -eq 'x64') {
     & "$PSScriptRoot\test-lifecycle.ps1" -Out "$Out\lifecycle-flush-control" -Kits $Kits -Arch $Arch -IgnoreFirstFlushError
     & "$PSScriptRoot\test-device.ps1" -Out "$Out\device-validation-control" -Kits $Kits -Arch $Arch -Mutation activate-during-validation
