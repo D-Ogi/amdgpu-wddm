@@ -28,6 +28,7 @@ INTEROP_POLICY_H = REPO / 'driver/kmd/interop_policy.h'
 CLI = REPO / 'tools/win/bc250kmd_cli/bc250kmd_cli.c'
 WITNESS_PS1 = REPO / 'tools/release/installer/release-witness.ps1'
 REGISTRY_DEFAULTS = REPO / 'tools/release/installer/registry-defaults.json'
+STATE_CATALOG = REPO / 'driver/state/catalog.json'
 DRIVER_CS = HERE / 'src/Driver.cs'
 NAMES_CS = HERE / 'src/LabState.cs'
 POINT_CS = HERE / 'src/OperatingPointProvider.cs'
@@ -285,11 +286,16 @@ class RegistryNameTest(unittest.TestCase):
         return set(re.findall(pattern, text(path)))
 
     def test_cu_value_names(self):
+        # A CU value is written by the driver, or it is a record of the state catalog that another writer owns
+        # (CuModeChosen: the control application and the installer, docs/design/cu-mode.md).
         driver = self.found(CUMODE_C, r'L"(Cu\w+)"')
+        records = {v['name'] for v in json.loads(text(STATE_CATALOG))['values']
+                   if v['kind'] == 'record' and v['group'] == 'cu' and v['source']}
         used = self.found(POINT_CS, r'parameters\.Get\("(Cu\w+)"\)')
         self.assertTrue(used, 'the panel reads no CU value')
-        self.assertLessEqual(used, driver,
-                             'the overlay reads CU values the driver never writes: %s' % (used - driver))
+        self.assertLessEqual(used, driver | records,
+                             'the overlay reads CU values that neither the driver nor a catalog record writes: %s'
+                             % (used - driver - records))
 
     def test_interop_value_names(self):
         driver = self.found(INTEROP_C, r'L"(Interop\w+)"')
