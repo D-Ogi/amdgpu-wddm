@@ -210,8 +210,18 @@ static void PolicyTests()
     CHECK(IsCpuOnlyDialogHost(L"pickerhost.EXE"), "the built-in default Deny list is case-sensitive");
     CHECK(!IsCpuOnlyDialogHost(L"notepad.exe") && !IsCpuOnlyDialogHost(L"") && !IsCpuOnlyDialogHost(nullptr),
           "the built-in default Deny list matches an image it must not");
+    // BD-168 class: opening the Windows Security app (SecHealthUI.exe) on the application GPU UMD made DWM crash in a
+    // loop, about every 7 s (dwmcore.dll 0x8898008D), until its window closed, measured on 2026-10-20 on tester.31v2
+    // (26100); with the image in the registry Deny list it opened and worked. Users open it to turn Smart App Control
+    // off, so it joins the built-in list with the same rules as PickerHost.exe.
+    CHECK(IsCpuOnlyDialogHost(L"SecHealthUI.exe") && IsCpuOnlyDialogHost(L"sechealthui.EXE"),
+          "SecHealthUI.exe is not on the built-in default Deny list");
+    CHECK(!IsCpuOnlyDialogHost(L"SecurityHealthSystray.exe") && !IsCpuOnlyDialogHost(L"SecurityHealthHost.exe") &&
+          !IsCpuOnlyDialogHost(L"SecHealthUI"), "the built-in default Deny list matches a neighbour of SecHealthUI.exe");
     const wchar_t allowPicker[] = L"other.exe\0PICKERHOST.EXE\0";
     const wchar_t denyPicker[] = L"pickerhost.exe\0";
+    const wchar_t allowSecHealth[] = L"SECHEALTHUI.EXE\0";
+    const wchar_t denySecHealth[] = L"sechealthui.exe\0";
     struct DialogCase { const wchar_t *exe; AppMode mode; const wchar_t *allow, *deny; Component component; bool cpu;
                         AppRoute route; AppReason reason; };
     const DialogCase dialogs[] = {
@@ -235,6 +245,17 @@ static void PolicyTests()
         {L"xpickerhost.exe", Gd, nullptr, nullptr, Y, false, AppRoute::Gpu, AppReason::Default},
         {L"PickerHost.exe.exe", Gd, nullptr, nullptr, Y, false, AppRoute::Gpu, AppReason::Default},
         {L"pickerhost", Gd, nullptr, nullptr, Y, false, AppRoute::Gpu, AppReason::Default},
+        // SecHealthUI.exe (BD-168 class), a Windows component below SystemApps: the same answers as PickerHost.exe.
+        {L"SecHealthUI.exe", Gd, nullptr, nullptr, Y, false, AppRoute::Cpu, AppReason::DialogHost},
+        {L"SECHEALTHUI.EXE", Gd, allowDx, deny, U, false, AppRoute::Cpu, AppReason::DialogHost},
+        {L"SecHealthUI.exe", Al, nullptr, nullptr, Y, false, AppRoute::Cpu, AppReason::NotAllowed},
+        {L"SecHealthUI.exe", Gd, allowSecHealth, nullptr, Y, false, AppRoute::Gpu, AppReason::Default},
+        {L"SecHealthUI.exe", Al, allowSecHealth, nullptr, Y, false, AppRoute::Gpu, AppReason::Allowed},
+        {L"SecHealthUI.exe", Gd, allowSecHealth, denySecHealth, Y, false, AppRoute::Cpu, AppReason::Denied},
+        {L"SecHealthUI.exe", Gd, allowSecHealth, nullptr, Y, true, AppRoute::Cpu, AppReason::RenderOnCpu},
+        // Its neighbours of the same package family keep the GPU route.
+        {L"SecurityHealthSystray.exe", Gd, nullptr, nullptr, Y, false, AppRoute::Gpu, AppReason::Default},
+        {L"SecurityHealthHost.exe", Gd, nullptr, nullptr, Y, false, AppRoute::Gpu, AppReason::Default},
     };
     for (const DialogCase &c : dialogs) {
         AppDecision d = DecideApp({c.exe, c.mode, c.allow, c.deny, true, true, c.component, c.cpu});

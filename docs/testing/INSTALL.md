@@ -323,10 +323,12 @@ the whole description.
   `Allow` and `Deny` lists beside it are empty in a new install. These programs stay on the CPU route (software
   rendering): the processes of the logon and lock screens, a program whose image the router cannot resolve, a
   program you put in the `Deny` list, a program you set to processor rendering in Nagi Control App, and
-  `PickerHost.exe`, which the driver keeps there by itself. `PickerHost.exe` is the program behind the Windows
-  firewall notification window ("Windows Security") and behind the file open and save windows. That firewall
-  window stayed white and empty on the GPU route, so the driver sends that program to the processor. An entry in
-  the `Allow` list puts a program back on the GPU, `PickerHost.exe` included. `Mode` `allowlist` gives the
+  `PickerHost.exe` and `SecHealthUI.exe`, which the driver keeps there by itself. `PickerHost.exe` is the program
+  behind the Windows firewall notification window ("Windows Security") and behind the file open and save windows.
+  That firewall window stayed white and empty on the GPU route. `SecHealthUI.exe` is the Windows Security app. On
+  the GPU route, the desktop compositor (DWM) stopped and started again about every 7 seconds while its window was
+  open. So the driver sends these two programs to the processor. An entry in the `Allow` list puts a program back
+  on the GPU, `PickerHost.exe` and `SecHealthUI.exe` included. `Mode` `allowlist` gives the
   behaviour of the earlier releases: the CPU route for every program, and the GPU only for the programs in
   `Allow`. Use the Direct3D 12 mode of a game if it has one.
 - Direct3D 9 applications run on the GPU through D3D9On12, the Direct3D 9 layer of Windows on top of our Direct3D 12

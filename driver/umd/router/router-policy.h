@@ -134,6 +134,12 @@ inline bool IsProtectedApp(const wchar_t *exe_base)
 //    "PickerHost.exe D3D11 GPU" (BD-126). This entry changes the route and nothing else: whether that dialog
 //    paints on the CPU UMD is not measured yet, the CPU UMD offers FL 10_0 only (BD-088), so content that demands
 //    FL 11_0 gets no device there, and every window of this image moves with it, the file dialogs included.
+//  - SecHealthUI.exe, the Windows Security app. On 2026-10-20 (tester.31v2 on 26100, gpu-default) opening it made
+//    DWM crash in a loop, about every 7 s (dwmcore.dll 0x8898008D), until its window closed; with the image in the
+//    registry Deny list it opened and worked with no crash (BD-168 class). Users open it to turn Smart App Control
+//    off. Like the entry above, this one routes around a failure that is not diagnosed yet.
+// The function name and the reason app-dialog-host come from the first entry; the list holds any image measured to
+// fail on the application GPU UMD, one image per failure.
 // The route decision is taken at OpenAdapter10_2, before any device or window exists, so the process image name is
 // all the router has to go by; the entry is therefore a base name, matched exactly and case-insensitively.
 // An Allow entry names an image explicitly, which a default cannot, so Allow lifts this list: under gpu-default
@@ -142,7 +148,7 @@ inline bool IsProtectedApp(const wchar_t *exe_base)
 // allowlist, "not listed in Allow" answer before it and keep their own reasons.
 inline bool IsCpuOnlyDialogHost(const wchar_t *exe_base)
 {
-    static const wchar_t list[] = L"pickerhost.exe\0";
+    static const wchar_t list[] = L"pickerhost.exe\0sechealthui.exe\0";
     return InList(exe_base, list);
 }
 
