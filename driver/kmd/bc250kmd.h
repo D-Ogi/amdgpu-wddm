@@ -246,6 +246,9 @@ typedef struct _BC250_DEVICE {
     BC250_VISIBILITY_EVENT VisibilityHistory[BC250_VISIBILITY_HISTORY_COUNT];
     volatile LONG CommitPowerCalls;
     BOOLEAN CommitLastPowerTransition, CommitLastPoweredOff;
+    // BD-195: path power transitions answered without programming, and visible-1 calls that found a connected sink
+    // with its link off. The first 16 of each are logged.
+    volatile LONG CommitPowerOnly, VisibilityLinkOff;
 
     // The mode the firmware left. M3 offers exactly this one.
     DXGK_DISPLAY_INFORMATION Post;
@@ -687,6 +690,7 @@ ULONG GuardLogRead(ULONG From, _Out_writes_to_(Max, return) struct _BC250_LOG_LI
                    _Out_ ULONG* Next);
 void GuardLogKeep(void);                                        // the ring into a file under C:\BC250\kmdlog; PASSIVE_LEVEL
 void GuardLogKeepEpisode(_In_z_ PCWSTR Label);                  // one kept file per device start and per stop; PASSIVE_LEVEL
+BOOLEAN GuardKeepActive(void);  // BD-195: KeepLog set, PASSIVE_LEVEL and special APCs on, so a GuardLogKeep here is safe
 // Where the ring and its cursor live, for hang.c's dump pages. Static storage: no lock, any IRQL.
 void GuardLogDumpRegion(_Outptr_ const void** Ring, _Out_ SIZE_T* RingBytes, _Outptr_ const void** Cursor);
 

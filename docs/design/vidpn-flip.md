@@ -409,16 +409,16 @@ With the flip gate closed, the existing software-report route remains separate f
 
 | Writer | Protected work outside L | Final ownership and error handling |
 | --- | --- | --- |
-| Link commit and rollback, `connector_link.c:781` | Clock session, audio stop, HDMI handoff, `DisableOwned` and `Apply`. Rollback uses the reserved buffer with the previous mode's dimensions | `connector_link.c:868`: End selects current Desired. Its failure becomes the returned status and prevents audio restart |
-| Link disable, `connector_link.c:627` | AUX close, HUBP blank, stream and transmitter disable | `connector_link.c:637`: invalidating End, with its failure returned |
-| Link suspend, `connector_link.c:896` | Firmware or runtime buffer, then output visibility off | `connector_link.c:901`: invalidating End, with its failure returned |
-| Link resume, `connector_link.c:911` | Clock session, disable and mode replay, then visibility off | `connector_link.c:915` and `:930`: both early failure and normal exit call End and return its failure |
+| Link commit and rollback, `connector_link.c:783` | Clock session, audio stop, HDMI handoff, `DisableOwned` and `Apply`. Rollback uses the reserved buffer with the previous mode's dimensions | `connector_link.c:872`: End selects current Desired. Its failure becomes the returned status and prevents audio restart |
+| Link disable, `connector_link.c:627` | AUX close, HUBP blank, stream and transmitter disable | `connector_link.c:639`: invalidating End, with its failure returned |
+| Link suspend, `connector_link.c:911` | Firmware or runtime buffer, then output visibility off. A link that is off takes no writer | `connector_link.c:916`: invalidating End, with its failure returned |
+| Link resume, `connector_link.c:928` | Clock session, disable and mode replay, then visibility off. A link that is off takes no writer | `connector_link.c:932` and `:947`: both early failure and normal exit call End and return its failure |
 | HDMI start, `hdmi_link.c:141` | Prediction, ATOM programming and timing measurement while hardware uses the bridge | `hdmi_link.c:170`: failed End is logged and blocks audio start |
 | HDMI stop, `hdmi_link.c:229` | Restore the inherited register journal while hardware uses a reserved buffer | `hdmi_link.c:233`: failed End makes the operation fail |
 | Modeset commit, `modeset.c:477` | Scaler programming. Growth selects a sufficiently large firmware surface | `modeset.c:497`: End status is returned and stored in `LastStatus` |
 | Modeset D3, `modeset.c:577` | Firmware surface and native shape, without proceeding after a failed surface change | `modeset.c:582`: End failure is stored in `LastStatus` and logged |
 | Modeset D0, `modeset.c:623` | Check the inherited pipe and program the retained scaler plan | `modeset.c:639`: End failure is stored in `LastStatus` and logged |
-| Allocation destroy, `wddm.c:8483` | Retire the affected primary and invalidate Desired under L before releasing its object | A failed section prevents the free. No fallback executes the protected callback without L |
+| Allocation destroy, `wddm.c:8633` | Retire the affected primary and invalidate Desired under L before releasing its object | A failed section prevents the free. No fallback executes the protected callback without L |
 
 **Section failures.** A failed `DxgkCbSynchronizeExecution` call grants no ownership.
 `Begin`, `Resume`, `End` and destroy preserve conservative state and return an error.
@@ -433,6 +433,31 @@ The callback can fail because the interrupt is not connected yet.
 This documented case also needs an explicit error, not an assumed substitute for the missing lock.
 Void power or audio wrappers keep a visible status and rely on the same recovery request.
 Returning an error from a destroy operation does not establish physical retention by itself. The driver performs no later unsynchronized use.
+
+**The runtime surface after a detach (BD-195).** A link writer sets `RuntimeDisplayChanged` when it turns the link off.
+From then on, `DcnWriterBridge` takes the pitch of the reserved bridge from `RuntimePost`.
+Invariant I3: while `RuntimeDisplayChanged` is 1, `RuntimePost.Pitch` is not zero.
+`RuntimePost` is empty until the first `Apply`. On 31v2 the first detach set the flag over it.
+Every later `Begin` then refused the bridge at pitch 0, without a write or a log line, and the link writers returned BUSY.
+Link disable and link commit now call `DcnLinkSurfaceAdopt` right after `Begin`, before they set the flag.
+It records the reserved buffer, the source size and the bridge pitch in `RuntimePost`. It accesses no register.
+`RuntimePostValid` stays 0, so presents and the system display paths stay refused until a commit applies a mode.
+A bridge that finds the flag over a zero pitch returns `STATUS_INVALID_DEVICE_STATE`, not a size error.
+
+**Power-on commits.** A `CommitVidPn` with `PathPowerTransition` set and `PathPoweredOff` clear must program the kept path (`d3dkmddi.md:31540`).
+If the connector has a connected sink and its link is off and not suspended, the connector commit applies the mode of that path.
+If the new sink does not offer that mode, the transition still returns success and the link stays off.
+Windows then commits a full mode after `Indicate(TRUE)`. Other failures are returned.
+Power-off, an active link and the inherited route keep the power-only answer.
+The line `link: CommitVidPn power-transition only` records the first 16 of them with the link state.
+Suspend and resume of a link that is off take no writer and access no hardware (I6).
+A disable that returns BUSY makes the connector worker try the same generation again after the debounce, at most three times.
+
+**Refusal records.** `Begin` counts each refusal by writer kind and site: IRQL, section, bridge, faulting, retry or retire.
+At PASSIVE_LEVEL it logs the first 16 refusals and then every 256th, with the generation, the fault state, the runtime display flag and the `RuntimePost` pitch.
+Visibility alone never programs a link.
+A `SetVidPnSourceVisibility(TRUE)` over a connected sink whose link is off logs `display visibility: call N visible 1 with the link off and a sink connected, no commit applied`.
+If Windows answers a re-plug with that call and no commit, this line comes without a `link: CommitVidPn` line, and the summary count `visible-link-off` is above zero.
 
 **Ordinary flips.** With no writer, the transaction checks the request and programs the requested flip type.
 Next-VSync uses `SURFACE_FLIP_TYPE=0`. Immediate uses type 1 and the bounded P' observation described in section 7.1.
@@ -466,7 +491,8 @@ Its escape command is 36. Command 35 remains the shared HIP journal upload.
 It increments the connector generation, sets Pending and queues the existing DPC and worker.
 The worker performs the real disconnect, discovery and reconnect sequence. The escape does not fabricate child notifications.
 The release image omits this escape and the raw diagnostic handlers. A linked-image flavour gate checks both builds.
-The summary prints one BUSY count for each `BC250_WRITER_KIND` value and the bridge program, retirement and failure counts.
+The summary prints one BUSY count and one refusal count for each `BC250_WRITER_KIND` value, and the site and status of the last refusal.
+It also prints the bridge program, retirement and failure counts.
 An arm is fresh only when event clearing succeeds and no older flip is pending at arm time.
 Excluded or failed arms remain counted. They cannot establish per-request agreement.
 The production reader selects the result first. Later witness reads and comparisons never change that result.

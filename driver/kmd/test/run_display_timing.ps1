@@ -1,4 +1,4 @@
-param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\build\bd018",[switch]$AssumePhaseHz,[switch]$OldDescribe60,[switch]$OldPixelRateFixed)
+param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\build\bd018",[switch]$AssumePhaseHz,[switch]$OldDescribe60,[switch]$OldPixelRateFixed,[switch]$OldPowerReturn)
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $env:TEMP=Join-Path $Root 'scratch\tmp';$env:TMP=$env:TEMP
@@ -33,7 +33,15 @@ foreach($signature in @('NTSTATUS Bc250IsSupportedVidPn(','NTSTATUS Bc250EnumVid
 $first=$source.IndexOf('static NTSTATUS CommitVidPnCore(')
 $last=$source.IndexOf("`n}",$first)+3
 if($first -lt 0 -or $last -lt $first){throw 'CommitVidPnCore not found'}
-[IO.File]::WriteAllText((Join-Path $Out 'inherited_vidpn_commit_actual.inc'),$source.Substring($first,$last-$first))
+$commit=$source.Substring($first,$last-$first)
+# BD-195 mutation control: every path power transition answers power-only again, as before 0.7.216.65. The power-on
+# over a detached link with a connected sink then never reaches the connector commit, and its case must fail.
+if($OldPowerReturn){
+    $anchor='if (Commit->Flags.PathPoweredOff || !needs) {'
+    if(([regex]::Matches($commit,[regex]::Escape($anchor))).Count -ne 1){throw 'BD-195 power mutation anchor changed'}
+    $commit=$commit.Replace($anchor,'if (Commit->Flags.PathPoweredOff || !needs || needs) {')
+}
+[IO.File]::WriteAllText((Join-Path $Out 'inherited_vidpn_commit_actual.inc'),$commit)
 $modeset=Get-Content (Join-Path $repo 'driver\kmd\modeset.c') -Raw
 $first=$modeset.IndexOf('NTSTATUS ModesetPrepareInherited(')
 $last=$modeset.IndexOf('static ULONG InheritedScalingDefault(',$first)

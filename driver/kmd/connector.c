@@ -7,10 +7,42 @@
 #define CONNECTOR_TAG 'cC2B'
 #define CONNECTOR_DEBOUNCE_100NS (-500000LL) // one 50 ms settling interval
 #define CONNECTOR_DISCOVERY_US 250000ul
+#define CONNECTOR_BUSY_REARMS 3u // worker re-arms of one generation after a BUSY disable
+// BD-195: a DP sink can raise HPD before its AUX receiver answers (a monitor that wakes from standby on the plug).
+// Linux retrieve_link_cap waits for it: wake_up_aux_channel, then up to 20 DPCD reads 30 ms apart. The worker does the
+// same with whole discoveries, the operation mutex released between them, about 2 s in all.
+#define CONNECTOR_DISCOVERY_TRIES 20u
+#define CONNECTOR_DISCOVERY_RETRY_100NS (-1000000LL) // 100 ms between two discoveries of one generation
 
 static LONG ReadAtomic(volatile LONG* Value)
 {
     return InterlockedCompareExchange(Value, 0, 0);
+}
+
+// BD-195: a disable that answered BUSY (the writer refused or another writer
+// held the plane) is tried again by the same worker path after the debounce,
+// at most CONNECTOR_BUSY_REARMS times for one generation. Before this, the
+// worker stopped there and a re-plug got no Indicate until the next HPD edge.
+// A new generation starts a new count. Operation held.
+static BOOLEAN ConnectorBusyRearm(BC250_CONNECTOR* c, ULONG Generation)
+{
+    if (c->BusyGeneration != Generation) {
+        c->BusyGeneration = Generation;
+        c->BusyRearms = 0;
+    }
+    if (c->BusyRearms >= CONNECTOR_BUSY_REARMS || !ReadAtomic(&c->Running)) return FALSE;
+    c->BusyRearms++;
+    InterlockedExchange(&c->Pending, 1);
+    return TRUE;
+}
+
+// A discovery that found no answer yet is tried again: an AUX or DDC timeout, a NACK, a spent stall budget. Not a
+// failed pad cleanup (no second protocol after it), a refused register, a stale generation or a sink that answered
+// with something this driver does not drive.
+static BOOLEAN ConnectorDiscoveryRetryable(long Status, long CleanupStatus)
+{
+    return !CleanupStatus && (Status == BC250_DISP_STATUS_TIMEOUT || Status == BC250_DISP_STATUS_DEVICE ||
+        Status == BC250_DISP_STATUS_BUDGET);
 }
 
 static long ConnectorRead(void* Context, unsigned long Offset, unsigned long* Value)
@@ -247,6 +279,15 @@ static NTSTATUS SynchronizeHpd(BC250_DEVICE* Device, BOOLEAN Arm)
     return sync.Status;
 }
 
+// BD-195: with KeepLog set, the worker's steps reach the disk before they run (GuardKeepActive), so a step that
+// stops the whole machine is named by the last line of the keep file after the power cycle.
+static void WorkerKeep(const char* Step, ULONG Generation, int Sense)
+{
+    if (!GuardKeepActive()) return;
+    GuardLog("connector: keep %s generation %lu sense %d", Step, Generation, Sense);
+    GuardLogKeep();
+}
+
 static void ConnectorWorker(PDEVICE_OBJECT Object, PVOID Context)
 {
     BC250_DEVICE* device = Context;
@@ -287,8 +328,12 @@ static void ConnectorWorker(PDEVICE_OBJECT Object, PVOID Context)
     if (!NT_SUCCESS(status)) goto done;
     next = AllocateSnapshot(generation);
     if (!next) { status = STATUS_INSUFFICIENT_RESOURCES; goto done; }
+    WorkerKeep("disable", generation, sense);
     status = ConnectorLinkDisable(device, generation);
     GuardLog("connector: disable generation %lu status %08lX", generation, (ULONG)status);
+    if (status == STATUS_DEVICE_BUSY && ConnectorBusyRearm(c, generation))
+        GuardLog("connector: disable busy generation %lu re-arm %lu of %lu",
+            generation, c->BusyRearms, (ULONG)CONNECTOR_BUSY_REARMS);
     if (!NT_SUCCESS(status)) goto done;
     if (!ConnectorGenerationCurrent(device, generation)) goto stale;
     // Publish the detached state before probing another sink. A failed discovery
@@ -303,15 +348,40 @@ static void ConnectorWorker(PDEVICE_OBJECT Object, PVOID Context)
     next = AllocateSnapshot(generation);
     if (!next) { status = STATUS_INSUFFICIENT_RESOURCES; goto done; }
     if (sense) {
-        c->DiscoveryIo.StalledUs = 0;
-        InterlockedIncrement(&c->Discoveries);
-        status = Bc250SinkDiscover(&c->DiscoveryIo, &guard, 300000ul, 4096ul, 2160ul, &next->Sink);
-        GuardLog("connector: discovery generation %lu kind %u phase %u edid %lu targets %lu status %08lX cleanup %08lX",
-            generation, next->Sink.Kind, next->Sink.Phase, next->Sink.EdidLength,
-            next->Sink.TargetCount, (ULONG)status, (ULONG)next->Sink.CleanupStatus);
+        ULONG tries = 0;
+        for (;;) {
+            c->DiscoveryIo.StalledUs = 0;
+            InterlockedIncrement(&c->Discoveries);
+            WorkerKeep("discovery", generation, sense);
+            status = Bc250SinkDiscover(&c->DiscoveryIo, &guard, 300000ul, 4096ul, 2160ul, &next->Sink);
+            tries++;
+            GuardLog("connector: discovery generation %lu kind %u phase %u edid %lu targets %lu status %08lX cleanup %08lX",
+                generation, next->Sink.Kind, next->Sink.Phase, next->Sink.EdidLength,
+                next->Sink.TargetCount, (ULONG)status, (ULONG)next->Sink.CleanupStatus);
+            GuardLog("connector: discovery generation %lu try %lu aux %08lX ddc %08lX", generation, tries,
+                (ULONG)next->Sink.AuxStatus, (ULONG)next->Sink.DdcStatus);
+            if (NT_SUCCESS(status) || tries >= CONNECTOR_DISCOVERY_TRIES ||
+                !ConnectorDiscoveryRetryable(status, next->Sink.CleanupStatus)) break;
+            // Wait without the mutex, so a VidPN commit or a power transition is not held up, then start again
+            // only for the same generation with HPD still high.
+            InterlockedIncrement(&c->DiscoveryRetries);
+            ConnectorOperationRelease(device);
+            delay.QuadPart = CONNECTOR_DISCOVERY_RETRY_100NS;
+            (void)KeDelayExecutionThread(KernelMode, FALSE, &delay);
+            ConnectorOperationAcquire(device);
+            if (!ConnectorGenerationCurrent(device, generation)) goto stale;
+            status = Bc250HpdSense(&c->Hpd, &sense);
+            if (!NT_SUCCESS(status)) goto done;
+            if (!sense) {
+                GuardLog("connector: discovery generation %lu HPD low after try %lu", generation, tries);
+                goto done;
+            }
+        }
         if (!NT_SUCCESS(status)) goto done;
+        WorkerKeep("prepare", generation, sense);
         status = ConnectorLinkPrepare(device, &next->Sink, generation);
         if (!NT_SUCCESS(status)) goto done;
+        WorkerKeep("indicate", generation, sense);
     }
     connected = next->Sink.Kind != BC250_SINK_NONE;
     if (!Publish(device, next)) goto stale;
@@ -581,7 +651,8 @@ static NTSTATUS ConnectorDrain(BC250_DEVICE* Device, BOOLEAN Suspend)
         ReadAtomic(&c->Interrupts),ReadAtomic(&c->RxInterrupts),ReadAtomic(&c->Workers),
         ReadAtomic(&c->Discoveries),ReadAtomic(&c->Stale),ReadAtomic(&c->Refusals),
         ReadAtomic(&c->Notifications),ReadAtomic(&c->NotifyFailures));
-    GuardLog("connector: stop status %08lX drained", (ULONG)status);
+    GuardLog("connector: stop status %08lX drained, discovery retries %ld", (ULONG)status,
+        ReadAtomic(&c->DiscoveryRetries));
     return status;
 }
 

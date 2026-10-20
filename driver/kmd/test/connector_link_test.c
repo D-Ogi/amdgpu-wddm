@@ -151,6 +151,8 @@ static int WddmPrimaryExclusiveBegin(BC250_DEVICE* d,ULONG k,ULONG* g)
 static NTSTATUS WddmPrimaryExclusiveEnd(BC250_DEVICE* d,ULONG g,BOOLEAN changed)
 {
     CHECK(d==&device && primary_locks==1 && g==77);
+    // BD-195, invariant I3: no writer leaves the runtime display flag over an empty RuntimePost.
+    CHECK(!d->RuntimeDisplayChanged || d->RuntimePost.Pitch);
     if(primary_end_fail)return STATUS_IO_DEVICE_ERROR;
     last_invalidate=changed;if(changed)scanout_object=0;--primary_locks;++primary_exits;
     return STATUS_SUCCESS;
@@ -183,6 +185,19 @@ static void DpAudioStart(BC250_DEVICE* d) { CHECK(d==&device && !link.Owner);++a
 BOOLEAN HdmiLinkStop(BC250_DEVICE* d);
 BOOLEAN HdmiLinkStopOwned(BC250_DEVICE* d);
 static ULONG DcnPrimaryPitch(ULONG width) { return (width*4u+255u)&~255u; }
+/* BD-195: dcn.c's DcnLinkSurfaceAdopt (dcn_flip_test runs the real one). Inside the writer, before the flag, and a
+ * no-op once the flag is set. The sink's connection state for ConnectorLinkNeedsPowerOn. */
+static unsigned adopt_calls;
+static BOOLEAN sink_connected;
+void DcnLinkSurfaceAdopt(BC250_DEVICE* d)
+{
+    CHECK(d==&device && primary_locks==1);++adopt_calls;
+    if(d->RuntimeDisplayChanged || !d->RuntimeFramebuffer || !d->RuntimeFramebufferLength)return;
+    d->RuntimePost=d->Post;d->RuntimePost.Pitch=DcnPrimaryPitch(d->Post.Width);
+    d->RuntimePost.PhysicAddress=d->RuntimeFramebufferPhysical;
+    d->RuntimePost.ColorFormat=D3DDDIFMT_A8R8G8B8;d->RuntimePost.TargetId=BC250_CHILD_UID;
+}
+static BOOLEAN ConnectorIsConnected(BC250_DEVICE* d) { CHECK(d==&device && !operation_locks);return sink_connected; }
 static NTSTATUS DcnSetVisibility(BC250_DEVICE*,BOOLEAN);
 static NTSTATUS DcnRuntimeSurface(BC250_DEVICE*,BOOLEAN);
 NTSTATUS ConnectorLinkRelease(BC250_DEVICE*);
@@ -221,6 +236,10 @@ static void GuardLog(const char* format,...)
     va_start(args,format);n=vsnprintf(log_ring[log_next%64],512,format,args);va_end(args);
     CHECK(n>=0 && n<512);++log_next;++logs;
 }
+/* BD-195 breadcrumbs: KeepLog is off unless a case sets keep_active; each keep is one append of the ring. */
+static int keep_active;static unsigned keeps;
+static BOOLEAN GuardKeepActive(void) { return (BOOLEAN)keep_active; }
+static void GuardLogKeep(void) { CHECK(keep_active && !spin_locks);++keeps; }
 static unsigned cold_allocations,cold_fail_allocation,cold_capture_fail,cold_identity_fail;
 static unsigned cold_atom_fail,cold_refclk_fail,cold_live_writes;
 static unsigned policy_mode,policy_address_refused,policy_read_refused;
@@ -582,7 +601,10 @@ static void disable_suspend_resume(void)
     balanced();CHECK(!link.Active && !device.RuntimePostValid && !device.SourceVisible && !tx_enabled);
     CHECK(!link.Current.Valid && !link.Previous.Valid);
     CHECK(ConnectorLinkCurrentSignal(&device,&s)==STATUS_DEVICE_NOT_READY);
-    reset(BC250_SINK_HDMI);CHECK(ConnectorLinkSuspend(&device)==0 && link.Suspended);balanced();
+    /* A prepared inherited link is active (cold_prepare): suspend restores the firmware surface under the writer. */
+    reset(BC250_SINK_HDMI);link.Active=1;
+    CHECK(ConnectorLinkSuspend(&device)==0 && link.Suspended && primary_enters==1);balanced();
+    CHECK(event_total("original-surface")==1 && event_total("visibility-off")==1);
     CHECK(ConnectorLinkResume(&device,7)==0 && !link.Suspended);balanced();
     reset(BC250_SINK_HDMI);CHECK(commit()==0);
     /* Suspend caller owns Connector.Operation. DcnRuntimeSurface's production
@@ -597,6 +619,40 @@ static void disable_suspend_resume(void)
     reset(BC250_SINK_HDMI);audio_debt=1;CHECK(ConnectorLinkDisable(&device,7)==STATUS_DEVICE_NOT_READY && !primary_enters && !boundary_steps);balanced();
     reset(BC250_SINK_HDMI);audio_debt=1;CHECK(ConnectorLinkSuspend(&device)==STATUS_DEVICE_NOT_READY && !primary_enters && !boundary_steps);balanced();
 }
+/* BD-195, 31v2's sequence: the firmware display is inherited and no runtime mode was ever applied (RuntimePost empty,
+ * RuntimePostValid 0). The detach adopts the reserved buffer inside its writer before it sets RuntimeDisplayChanged
+ * (I3, which the fake End checks for every writer). A re-plug on DP, on HDMI, and from one to the other then commits.
+ * While the link is off, suspend and resume take no writer and touch no hardware (I6), even when Begin would refuse. */
+static void detach_before_apply(void)
+{
+    unsigned from,to,steps,enters;BOOLEAN active,connected;
+    for(from=BC250_SINK_DP;from<=BC250_SINK_HDMI;++from)for(to=BC250_SINK_DP;to<=BC250_SINK_HDMI;++to) {
+        reset(from);link.Active=1;device.RuntimePostValid=0;adopt_calls=0;
+        CHECK(ConnectorLinkDisable(&device,7)==STATUS_SUCCESS);balanced();
+        CHECK(adopt_calls==1 && device.RuntimeDisplayChanged && !device.RuntimePostValid && !link.Active);
+        CHECK(device.RuntimePost.Pitch==7680 && device.RuntimePost.PhysicAddress.QuadPart==0x100000);
+        CHECK(!device.SourceVisible && !tx_enabled && plane_blank);
+        steps=boundary_steps;enters=primary_enters;acquire_fail=1;
+        CHECK(ConnectorLinkSuspend(&device)==STATUS_SUCCESS && link.Suspended);balanced();
+        CHECK(ConnectorLinkResume(&device,7)==STATUS_SUCCESS && !link.Suspended);balanced();
+        CHECK(boundary_steps==steps && primary_enters==enters && !nested_primary);
+        acquire_fail=0;snapshot.Sink.Kind=to;
+        CHECK(commit()==STATUS_SUCCESS);balanced();
+        CHECK(adopt_calls==2 && link.Active && link.Current.Valid && device.RuntimePostValid);
+        CHECK(device.RuntimeDisplayChanged && device.RuntimePost.Pitch==7680 && device.SourceVisible);
+        CHECK(link.Protocol==(to==BC250_SINK_DP?0u:3u));
+    }
+    /* The power-on question of CommitVidPn (display.c): a connected sink with the link off and not suspended. */
+    reset(BC250_SINK_DP);sink_connected=1;
+    CHECK(ConnectorLinkNeedsPowerOn(&device,&active,&connected) && !active && connected);balanced();
+    link.Suspended=1;CHECK(!ConnectorLinkNeedsPowerOn(&device,&active,&connected) && connected);link.Suspended=0;
+    link.Active=1;CHECK(!ConnectorLinkNeedsPowerOn(&device,&active,&connected) && active && connected);link.Active=0;
+    sink_connected=0;CHECK(!ConnectorLinkNeedsPowerOn(&device,&active,&connected) && !connected);
+    sink_connected=1;device.ConnectorLink=NULL;
+    CHECK(!ConnectorLinkNeedsPowerOn(&device,&active,&connected) && !active && connected);
+    CHECK(!operation_locks && !boundary_steps && !primary_enters);
+    sink_connected=0;
+}
 static void end_failure_propagation(void)
 {
     unsigned arm,begin=checks,bad=failures;
@@ -605,7 +661,8 @@ static void end_failure_propagation(void)
     // unrelated PASSIVE locks. It must not start audio after a failed End.
     for(arm=0;arm<6;++arm) {
         reset(BC250_SINK_HDMI);
-        if(arm==3 || arm==4)CHECK(commit()==STATUS_SUCCESS);
+        // An inactive link suspends without the writer (BD-195), so the suspend arm starts from an active one.
+        if(arm==2 || arm==3 || arm==4)CHECK(commit()==STATUS_SUCCESS);
         if(arm==4)psp_wait_fail=1;
         if(arm==5) {
             device.HdmiLinkContext=&inherited_hdmi;
@@ -1103,6 +1160,18 @@ static void prepare_cleanup_preserved(void)
     CHECK(NT_SUCCESS(prepare) && ConnectorRefusalPreserved(&device,STATUS_SUCCESS,release));
     balanced();
 }
+/* BD-195: with KeepLog set, each step of one operation reaches the disk once, before it runs, also while DP
+ * training alternates TRAIN and PHY; without KeepLog, never. A detach keeps its own steps again. */
+static void keep_breadcrumbs(void)
+{
+    unsigned on;
+    reset(BC250_SINK_DP);keep_active=0;keeps=0;CHECK(commit()==0 && !keeps);
+    reset(BC250_SINK_DP);keep_active=1;keeps=0;CHECK(commit()==0);on=keeps;
+    CHECK(on>=4 && on<32);
+    reset(BC250_SINK_HDMI);link.Active=1;keeps=0;CHECK(ConnectorLinkDisable(&device,7)==STATUS_SUCCESS);balanced();
+    CHECK(keeps>=2 && keeps<32);
+    keep_active=0;
+}
 int main(void)
 {
     end_failure_propagation();
@@ -1121,6 +1190,8 @@ int main(void)
     cold_prepare();
     release_then_fresh_start();
     success();refusal();failure_sweep();rollback();cancellation_and_power();disable_suspend_resume();ownership_and_cleanup();retained_aux_journal();
+    detach_before_apply();
+    keep_breadcrumbs();
     printf("connector transaction: %u checks, %u failures (software boundary model)\n",checks,failures);
     return failures?1:0;
 }

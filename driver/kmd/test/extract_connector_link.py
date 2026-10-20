@@ -17,6 +17,7 @@ def main():
     p.add_argument("--omit-diagnostic-replay", action="store_true")
     p.add_argument("--write-requested-value", action="store_true")
     p.add_argument("--wrong-recovery-target", action="store_true")
+    p.add_argument("--omit-surface-adopt", action="store_true")
     args = p.parse_args()
     source = Path(__file__).resolve().parents[1] / "connector_link.c"
     data = source.read_text(encoding="utf-8")
@@ -25,11 +26,11 @@ def main():
         "LinkNow LinkOwned Begin End ClockSessionEnter ClockSessionLeave LinkStep SaveFailure RetainFailure PreviousTargetRecord RetainRecovery LogTarget LogFailure TargetRecord AtomAllowed AtomRead AtomWrite AtomNow LinkDelay LinkRead LinkWrite LinkStall Protocol SignalFor Plan CloseAux LogOpenDiagnostic ConnectorLinkLogOpen OpenResult OpenContext ConnectorLinkPrepare "
         "TrainRead TrainWrite TrainEnable TrainPattern TrainDrive TrainDisable "
         "DisableOwned ConnectorLinkDisable Apply ConnectorLinkCommit "
-        "ConnectorLinkCurrentSignal ConnectorLinkSuspend ConnectorLinkResume ConnectorLinkRelease"
+        "ConnectorLinkCurrentSignal ConnectorLinkNeedsPowerOn ConnectorLinkSuspend ConnectorLinkResume ConnectorLinkRelease"
     ).split()
     chunks = []
     for name in names:
-        matches = list(re.finditer(r"(?m)^(?:static )?(?:ULONGLONG|uint64_t|int|long|void|ULONG|NTSTATUS)\s+" + name + r"\([^;]*?\)\s*\{", data))
+        matches = list(re.finditer(r"(?m)^(?:static )?(?:ULONGLONG|uint64_t|int|long|void|ULONG|NTSTATUS|BOOLEAN)\s+" + name + r"\([^;]*?\)\s*\{", data))
         if len(matches) != 1:
             raise SystemExit(f"Expected one definition of {name}, found {len(matches)}")
         start = matches[0].start()
@@ -46,6 +47,12 @@ def main():
             if body.count(needle) != 1:
                 raise SystemExit("Expected one previous-plan recovery")
             body = body.replace(needle, "Apply(c,&c->Next,c->Caps,&previousSurface)")
+        if args.omit_surface_adopt and name == "ConnectorLinkDisable":
+            # BD-195: 31v2's detach, which set RuntimeDisplayChanged over an empty RuntimePost.
+            needle = "DcnLinkSurfaceAdopt(Device);"
+            if body.count(needle) != 1:
+                raise SystemExit("Surface adoption mutation anchor changed")
+            body = body.replace(needle, "(void)0;")
         if args.write_requested_value and name == "AtomWrite":
             needle = "WRITE_REGISTER_ULONG(c->Device->Mmio+Dword,effective)"
             if body.count(needle) != 1:

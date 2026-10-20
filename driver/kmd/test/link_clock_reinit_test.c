@@ -85,11 +85,21 @@ static int Write(void *p, uint32_t reg, uint32_t v)
     t->registers[reg]=v;
     return 0;
 }
+static void Seed(TRACE *t,uint32_t fill,uint32_t phy0)
+{
+    unsigned i;
+    for(i=0;i<262144;++i)t->registers[i]=fill;
+    t->registers[BC250_REG_DMU_DIG0_DIG_BE_CNTL/4]=0x00020100;
+    t->registers[BC250_REG_DMU_DIG0_DIG_BE_EN_CNTL/4]=0;
+    t->registers[BC250_REG_DMU_DIG0_DIG_FE_CNTL/4]=0x01000000;
+    t->registers[MODEL_RDPCSTX0_RDPCSTX_PHY_CNTL0]=phy0;
+    t->registers[BC250_REG_DMU_OTG0_OTG_CONTROL/4]=0x300; /* caller has disabled OTG */
+}
 static uint64_t Now(void *p) { return ++((TRACE*)p)->ticks; }
 static int Delay(void *p,uint32_t us) { ((TRACE*)p)->ticks+=us; return 0; }
 int main(int argc,char **argv)
 {
-    FILE *file;size_t length;unsigned i,mode,khz,root;
+    FILE *file;size_t length;unsigned mode,khz,root;
     uint8_t *bytes=malloc(BC250_ATOM_MAX_IMAGE+1u);
     TRACE *trace=calloc(1,sizeof(*trace));
     BC250_ATOM_PLAN *plan=calloc(1,sizeof(*plan));
@@ -105,14 +115,25 @@ int main(int argc,char **argv)
     link.Image=&image;link.Plan=plan;link.Workspace=workspace;link.WorkspaceSize=Bc250AtomContextSize();
     link.Io.Context=trace;link.Io.Owned=Owned;link.Io.Allowed=Allowed;link.Io.Read=Read;link.Io.Write=Write;link.Io.NowUs=Now;link.Io.DelayUs=Delay;
     status=Bc250LinkAtomValidate(&link);if(status)return 6;
-    for(i=0;i<262144;++i)trace->registers[i]=(uint32_t)strtoul(argv[3],NULL,0);
-    trace->registers[BC250_REG_DMU_DIG0_DIG_BE_CNTL/4]=0x00020100;
-    trace->registers[BC250_REG_DMU_DIG0_DIG_BE_EN_CNTL/4]=0;
-    trace->registers[BC250_REG_DMU_DIG0_DIG_FE_CNTL/4]=0x01000000;
-    trace->registers[MODEL_RDPCSTX0_RDPCSTX_PHY_CNTL0]=0x100;
-    trace->registers[BC250_REG_DMU_OTG0_OTG_CONTROL/4]=0x300; /* caller has disabled OTG */
+    Seed(trace,(uint32_t)strtoul(argv[3],NULL,0),0x100);
     printf("MOCK ONLY mode%u root%u clock%u seed%s\n",mode,root,khz,argv[3]);
-    if(root==112){ unsigned cycle; for(cycle=0;cycle<4;++cycle){const unsigned frequencies[]={174500,148500,74250,174500};unsigned f=frequencies[cycle];status=Bc250LinkAtomClock(&link,mode,f);printf("REPEAT %u khz%u status%u table%u offset%u\n",cycle,f,status,link.Last.Table,link.Last.Offset);if(status)break;} } else status=root==12?Bc250LinkAtomClock(&link,mode,khz):root==4?Bc250LinkAtomStream(&link,mode,khz,4,mode==0?10:0):Bc250LinkAtomTransmitter(&link,BC250_LINK_TX_ON,mode,mode==0?270000:khz,4,0,0);
+    if(root==112){ unsigned cycle; for(cycle=0;cycle<4;++cycle){const unsigned frequencies[]={174500,148500,74250,174500};unsigned f=frequencies[cycle];status=Bc250LinkAtomClock(&link,mode,f);printf("REPEAT %u khz%u status%u table%u offset%u\n",cycle,f,status,link.Last.Table,link.Last.Offset);if(status)break;} }
+    else if(root==76){
+        /* BD-195: TX ENABLE powers the PHY up through table 77 from both states the
+         * lab showed after a re-plug: HDMI mode left behind (0x100) and PHY in reset (0x1). */
+        const uint32_t phy0[]={0x100,0x1};unsigned s;
+        for(s=0;s<2;++s){
+            unsigned writes=trace->writes;
+            Seed(trace,(uint32_t)strtoul(argv[3],NULL,0),phy0[s]);
+            status=Bc250LinkAtomTransmitter(&link,BC250_LINK_TX_ON,mode,khz,4,0,0);
+            printf("TX_ON phy0=%x status%u table%u offset%u instructions%u writes%u\n",phy0[s],status,
+                link.Last.Table,link.Last.Offset,link.Last.Instructions,trace->writes-writes);
+            if(status)break;
+            /* The power-up branch is long: 46 writes before PLL_UPDATE alone. */
+            if(trace->writes-writes<100){printf("FAIL CHECK power-up branch not taken\n");status=BC250_ATOM_IO;break;}
+        }
+    }
+    else status=root==12?Bc250LinkAtomClock(&link,mode,khz):root==4?Bc250LinkAtomStream(&link,mode,khz,4,mode==0?10:0):Bc250LinkAtomTransmitter(&link,BC250_LINK_TX_ON,mode,mode==0?270000:khz,4,0,0);
     printf("status=%u instructions=%u reads=%u writes=%u table=%u offset=%u\n",status,link.Last.Instructions,link.Last.Reads,link.Last.Writes,link.Last.Table,link.Last.Offset);
     printf("last read dword=%08x value=%08x\n",trace->lastRead,trace->registers[trace->lastRead]);
     if(status || link.ClockScope)printf("FAIL CHECK complete clock tree and scope cleanup\n");

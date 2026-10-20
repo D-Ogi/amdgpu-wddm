@@ -27,7 +27,7 @@ param(
                  'section-result-ignored', 'begin-without-bridge', 'begin-ignores-bridge-failure',
                  'begin-refusal-faults', 'retirement-failure-ignored', 'retirement-ready-too-soon', 'destroy-before-retirement',
                  'resume-unlocked-fallback', 'recovery-without-section', 'recovery-request-dropped',
-                 'exclusive-refused-success',
+                 'exclusive-refused-success', 'writer-refusal-uncounted',
                  'unsafe-next-vsync-deposit', 'unsafe-immediate-deposit',
                  'witness-before-decision', 'witness-changes-answer', 'witness-stale-compared',
                  'witness-lost-uncounted')][string]$Mutation = '',
@@ -140,6 +140,9 @@ $mutations = [ordered]@{
     'exclusive-refused-success' = @{ find = 'if (exclusive && immediate) { InterlockedIncrement(&wddm->ExclusiveRefused); flip->Result = status; }'
         with = 'if (exclusive && immediate) { InterlockedIncrement(&wddm->ExclusiveRefused); flip->Result = STATUS_SUCCESS; }'
         why = 'an immediate refusal acknowledges a surface that the writer never accepted' }
+    'writer-refusal-uncounted' = @{ find = "        if (w.Answer == BC250_WRITER_BEGIN_REFUSED) {`n            WddmWriterRefused(wddm, &w, BC250_WRITER_REFUSED_BRIDGE, w.Status);"
+        with = "        if (w.Answer == BC250_WRITER_BEGIN_REFUSED) {`n            (void)BC250_WRITER_REFUSED_BRIDGE;"
+        why = 'a refused bridge admission (BD-195) leaves no count and no line, only the caller''s BUSY' }
     'unsafe-next-vsync-deposit' = @{ find = "if (device->VidPnFlipEnabled) {`n            InterlockedIncrement(&wddm->WriterBusy);"
         with = "if (device->VidPnFlipEnabled && immediate) {`n            InterlockedIncrement(&wddm->WriterBusy);"
         why = 'a next-VSync request is accepted although the active writer can miss its target retrace' }

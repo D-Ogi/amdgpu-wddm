@@ -25,8 +25,12 @@ typedef struct _BC250_CONNECTOR {
     volatile LONG Suspended, Restoring;
     LONG Queued;
     ULONG OperationGeneration;
+    // BD-195: the generation whose disable answered BUSY, and its worker re-arms
+    // (at most CONNECTOR_BUSY_REARMS). Operation held.
+    ULONG BusyGeneration, BusyRearms;
     volatile LONG Interrupts, RxInterrupts, Workers, Discoveries, Publications;
     volatile LONG Refusals, Notifications, NotifyFailures, Stale, Rearms;
+    volatile LONG DiscoveryRetries;     // BD-195: discoveries repeated for one generation (CONNECTOR_DISCOVERY_TRIES)
     NTSTATUS LastStatus;
     BC250_CONNECTOR_OPEN_DIAG FirstOpen;
     BC250_CONNECTOR_TARGET_DIAG FirstAttempt;
@@ -82,6 +86,10 @@ NTSTATUS ConnectorLinkCommit(struct _BC250_DEVICE* Device, const BC250_CONNECTOR
     const BC250_TARGET_TIMING* Timing, ULONG SourceWidth, ULONG SourceHeight,
     D3DKMDT_VIDPN_PRESENT_PATH_SCALING Scaling);
 NTSTATUS ConnectorLinkCurrentSignal(struct _BC250_DEVICE* Device, D3DKMDT_VIDEO_SIGNAL_INFO* Signal);
+// PASSIVE, Connector.Operation not held. TRUE when a connected sink is published
+// and its link is off and not suspended: a power-on CommitVidPn must program it
+// (BD-195). *Active and *Connected are for the caller's log.
+BOOLEAN ConnectorLinkNeedsPowerOn(struct _BC250_DEVICE* Device, BOOLEAN* Active, BOOLEAN* Connected);
 // Both called at PASSIVE with Connector.Operation held. Resume may access
 // hardware in retained power phase 3, before notifications reopen in phase 0.
 NTSTATUS ConnectorLinkSuspend(struct _BC250_DEVICE* Device);

@@ -25,7 +25,7 @@ typedef struct {
     BC250_WDDM* Wddm;
     void *Mmio,*Framebuffer;size_t FramebufferLength;
     BOOLEAN DcnWriteEnabled,DcnBlanked,SourceVisible,VidPnFlipEnabled;
-    volatile LONG VisibilityCalls,CommitPowerCalls;
+    volatile LONG VisibilityCalls,CommitPowerCalls,VisibilityLinkOff;
     ULONG VisibilityLastSource;
     BOOLEAN VisibilityLastRequested,CommitLastPowerTransition,CommitLastPoweredOff;
     NTSTATUS VisibilityLastStatus;
@@ -129,6 +129,12 @@ static BOOLEAN WddmFirstCalls(BC250_WDDM* wddm,BC250_WDDM_DDI ddi)
 /* BD-170: the VSync switch's history is wddm.c's evidence, host-tested in vidpn_flip_test.c. Here only its calls. */
 static unsigned controlNotes;
 static void WddmVSyncControlNote(BC250_WDDM* wddm,BOOLEAN on){(void)on;CHECK(wddm!=NULL);controlNotes++;}
+/* BD-195: the connector's answers for the visibility DDI's link-off note. A hide never asks. */
+static BOOLEAN connectorEnabled,linkNeedsPowerOn;
+static unsigned linkQueries;
+static BOOLEAN ConnectorIsEnabled(BC250_DEVICE*d){(void)d;return connectorEnabled;}
+static BOOLEAN ConnectorLinkNeedsPowerOn(BC250_DEVICE*d,BOOLEAN*active,BOOLEAN*connected)
+{(void)d;CHECK(!model.irq);linkQueries++;*active=!linkNeedsPowerOn;*connected=TRUE;return linkNeedsPowerOn;}
 /* ACTUAL_SOURCE */
 int main(void)
 {
@@ -238,6 +244,17 @@ int main(void)
      CHECK(show->Requested && show->Status==STATUS_IO_TIMEOUT && show->EndQpc-show->BeginQpc==500001);
      CHECK(!hide->Requested && hide->Status==STATUS_SUCCESS && hide->Blanked);
      CHECK(d.VisibilityFailures==4 && d.VisibilityLastTrueStatus==STATUS_IO_TIMEOUT && d.VisibilityLastStatus==STATUS_SUCCESS);}
+    // BD-195: a show over a connected sink whose link is off is counted whatever its status; a hide never asks, an
+    // active link is not counted, and the count goes on past the 32 logged calls.
+    CHECK(d.VisibilityCalls>32 && linkQueries==0 && d.VisibilityLinkOff==0);
+    connectorEnabled=TRUE;linkNeedsPowerOn=TRUE;model.hold_blank=0;
+    visible.Visible=TRUE;(void)Bc250SetVidPnSourceVisibility(&d,&visible);
+    CHECK(linkQueries==1 && d.VisibilityLinkOff==1);
+    visible.Visible=FALSE;CHECK(Bc250SetVidPnSourceVisibility(&d,&visible)==STATUS_SUCCESS);
+    CHECK(linkQueries==1 && d.VisibilityLinkOff==1);
+    linkNeedsPowerOn=FALSE;visible.Visible=TRUE;(void)Bc250SetVidPnSourceVisibility(&d,&visible);
+    CHECK(linkQueries==2 && d.VisibilityLinkOff==1);
+    connectorEnabled=FALSE;
     // The ControlInterrupt DDI on the software-timer path: the VSync switch arms the timer on enable and leaves it
     // armed on disable (the timer keeps its phase, only the report stops), the completed interrupt is accepted and
     // switches nothing, any other type is refused, and no adapter switches nothing at all.

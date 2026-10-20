@@ -668,6 +668,12 @@ typedef struct _BC250_WDDM {
     BOOLEAN WriterDeposit;              // software-gate-closed Desired was deposited during the active writer
     volatile LONG WriterBusy;           // hardware flips refused while a long writer owns the pipe
     volatile LONG WriterBusyByKind[BC250_WRITER_KINDS];
+    // BD-195: every FALSE of WddmPrimaryExclusiveBegin, by writer kind, and the last one's kind, site
+    // (BC250_WRITER_REFUSED_*), answer and status. Written outside L: diagnostics, read without L by the summary.
+    volatile LONG WriterRefused;
+    volatile LONG WriterRefusedByKind[BC250_WRITER_KINDS];
+    ULONG WriterRefusedKind, WriterRefusedSite, WriterRefusedAnswer;
+    NTSTATUS WriterRefusedStatus;
     volatile LONG WriterBridgePrograms, WriterBridgeRetired, WriterBridgeFailures;
     BOOLEAN WriterReady;                // bridge retirement proved outside L, then committed under L
     volatile LONG WriterRecovery;       // queued section failure; consumed only inside L
@@ -2675,6 +2681,13 @@ static void WddmStdAllocSummary(_In_ BC250_WDDM* Wddm)
 
 // BD-170 r6: the W-u records, copied in one section (the flip state machine's block below).
 static BOOLEAN WddmWuCopy(_In_ BC250_DEVICE* Device, _In_ BC250_WDDM* Wddm, _Out_ BC250_WDDM_WU_COPY* Copy);
+// BD-195: the name of a writer refusal's site, in the order of the BC250_WRITER_REFUSED_* values of the same block.
+// It is defined here, outside the block, because only log lines use it.
+static const char* WddmWriterRefusedSite(ULONG Site)
+{
+    static const char* const sites[] = { "irql", "section", "bridge", "faulting", "retry", "retire" };
+    return Site < RTL_NUMBER_OF(sites) ? sites[Site] : "none";
+}
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
 static BOOLEAN WddmWitnessCopy(_In_ BC250_DEVICE* Device, _In_ BC250_WDDM* Wddm, _Out_ BC250_WDDM_WITNESS_COPY* Copy);
 #endif
@@ -3119,6 +3132,8 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
     GuardLog("wddm summary: display mode %u blanked %u write %u commit calls %ld power-transition %u powered-off %u",
              Wddm->Device->ModeActive,Wddm->Device->DcnBlanked,Wddm->Device->DcnWriteEnabled,
              Wddm->Device->CommitPowerCalls,Wddm->Device->CommitLastPowerTransition,Wddm->Device->CommitLastPoweredOff);
+    GuardLog("wddm summary: display commit power-only %ld visible-link-off %ld",
+             Wddm->Device->CommitPowerOnly,Wddm->Device->VisibilityLinkOff);
     {
         LARGE_INTEGER frequency;
         ULONG count=(ULONG)Wddm->Device->VisibilityCalls;
@@ -3192,8 +3207,12 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
         {
             ULONG kind;
             for (kind = 0; kind < BC250_WRITER_KINDS; kind++)
-                GuardLog("wddm summary: flip writer kind %lu busy %ld", kind, Wddm->WriterBusyByKind[kind]);
+                GuardLog("wddm summary: flip writer kind %lu busy %ld refused %ld", kind, Wddm->WriterBusyByKind[kind],
+                         Wddm->WriterRefusedByKind[kind]);
         }
+        GuardLog("wddm summary: flip writer refused %ld last kind %lu at %s answer %lu status %08lX",
+                 Wddm->WriterRefused, Wddm->WriterRefusedKind, WddmWriterRefusedSite(Wddm->WriterRefusedSite),
+                 Wddm->WriterRefusedAnswer, (ULONG)Wddm->WriterRefusedStatus);
         GuardLog("wddm summary: bridge programmed %ld retired %ld failed %ld",
                  Wddm->WriterBridgePrograms, Wddm->WriterBridgeRetired, Wddm->WriterBridgeFailures);
         GuardLog("wddm summary: flip e5 %ld faulting %ld code 0x%06lX node %u blank %08lX",
@@ -8336,6 +8355,34 @@ static BOOLEAN WddmWriterRetiredLocked(_In_ PVOID Context)
 // generation is tried again, at most 200 tries 10 us apart (2 ms) with the stall outside L; FAULTING refuses at once.
 #define BC250_WDDM_EXCLUSIVE_TRIES 200u
 #define BC250_WDDM_EXCLUSIVE_STEP_US 10u
+
+// BD-195: where WddmPrimaryExclusiveBegin answered FALSE. 31v2's refused LINK_DISABLE (a bridge admission without a
+// write) left no counter and no line, only the caller's BUSY.
+#define BC250_WRITER_REFUSED_IRQL 0u        // above PASSIVE_LEVEL (also WriterHigh)
+#define BC250_WRITER_REFUSED_SECTION 1u     // a section failed (also WriterSyncFailed, or recovery when claimed)
+#define BC250_WRITER_REFUSED_BRIDGE 2u      // BEGIN_REFUSED: DcnWriterBridge failed before any write
+#define BC250_WRITER_REFUSED_FAULTING 3u    // BEGIN_FAULTING: FAULTING, or a bridge that failed after its write
+#define BC250_WRITER_REFUSED_RETRY 4u       // another writer held the odd generation for every try
+#define BC250_WRITER_REFUSED_RETIRE 5u      // the bridge did not retire, or the commit of its proof refused
+
+// Counted at every site. Logged at PASSIVE_LEVEL outside L, the first 16 and then every 256th, with the state the
+// bridge decided on: the runtime display flag and the RuntimePost pitch that I3 keeps nonzero.
+static void WddmWriterRefused(_Inout_ BC250_WDDM* Wddm, _In_ const BC250_WDDM_WRITER* W, ULONG Site, NTSTATUS Status)
+{
+    const LONG n = InterlockedIncrement(&Wddm->WriterRefused);
+    InterlockedIncrement(&Wddm->WriterRefusedByKind[W->Kind < BC250_WRITER_KINDS ? W->Kind : BC250_WRITER_NONE]);
+    Wddm->WriterRefusedKind = W->Kind;
+    Wddm->WriterRefusedSite = Site;
+    Wddm->WriterRefusedAnswer = W->Answer;
+    Wddm->WriterRefusedStatus = Status;
+    if (Site == BC250_WRITER_REFUSED_IRQL || (n > 16 && (n & 255) != 0)) return;
+    GuardLog("wddm: writer kind %lu refused at %s answer %lu status %08lX wrote %u",
+             W->Kind, WddmWriterRefusedSite(Site), W->Answer, (ULONG)Status, W->Wrote);
+    GuardLog("wddm: writer refused sequence %ld holder %lu faulting %ld changed %ld post-valid %ld pitch %lu",
+             Wddm->PrimarySequence, Wddm->WriterKind, Wddm->Faulting, W->Device->RuntimeDisplayChanged,
+             W->Device->RuntimePostValid, W->Device->RuntimePost.Pitch);
+}
+
 BOOLEAN WddmPrimaryExclusiveBegin(_Inout_ BC250_DEVICE* Device, ULONG Kind, _Out_ ULONG* Generation)
 {
     BC250_WDDM* wddm = WddmOf(Device);
@@ -8345,14 +8392,15 @@ BOOLEAN WddmPrimaryExclusiveBegin(_Inout_ BC250_DEVICE* Device, ULONG Kind, _Out
 
     *Generation = 0;
     if (wddm == NULL) return TRUE;
-    if (KeGetCurrentIrql() != PASSIVE_LEVEL) {
-        InterlockedIncrement(&wddm->WriterHigh);
-        return FALSE;
-    }
     RtlZeroMemory(&w, sizeof(w));
     w.Device = Device;
     w.Wddm = wddm;
     w.Kind = Kind;
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL) {
+        InterlockedIncrement(&wddm->WriterHigh);
+        WddmWriterRefused(wddm, &w, BC250_WRITER_REFUSED_IRQL, STATUS_INVALID_DEVICE_STATE);
+        return FALSE;
+    }
     for (i = 0; i < BC250_WDDM_EXCLUSIVE_TRIES; i++)
     {
         status = WddmSection(Device, WddmWriterBeginLocked, &w);
@@ -8361,6 +8409,7 @@ BOOLEAN WddmPrimaryExclusiveBegin(_Inout_ BC250_DEVICE* Device, ULONG Kind, _Out
             // No acquired owner and no write: ordinary BEGIN_REFUSED, no E5.
             if (w.Claimed) WddmWriterSectionFailure(Device, wddm, status);
             else InterlockedIncrement(&wddm->WriterSyncFailed);
+            WddmWriterRefused(wddm, &w, BC250_WRITER_REFUSED_SECTION, status);
             return FALSE;
         }
         if (w.Answer == BC250_WRITER_BEGIN_TAKE) {
@@ -8369,16 +8418,28 @@ BOOLEAN WddmPrimaryExclusiveBegin(_Inout_ BC250_DEVICE* Device, ULONG Kind, _Out
             status = WddmSection(Device, WddmWriterRetiredLocked, &w);
             if (!NT_SUCCESS(status)) {
                 WddmWriterSectionFailure(Device, wddm, status);
+                WddmWriterRefused(wddm, &w, BC250_WRITER_REFUSED_SECTION, status);
                 return FALSE;
             }
-            if (!NT_SUCCESS(w.Status)) return FALSE;
+            if (!NT_SUCCESS(w.Status)) {
+                WddmWriterRefused(wddm, &w, BC250_WRITER_REFUSED_RETIRE, w.Status);
+                return FALSE;
+            }
             *Generation = w.Generation;
             return TRUE;
         }
-        if (w.Answer == BC250_WRITER_BEGIN_REFUSED) return FALSE;
-        if (w.Answer == BC250_WRITER_BEGIN_FAULTING) { InterlockedIncrement(&wddm->WriterFaulting); return FALSE; }
+        if (w.Answer == BC250_WRITER_BEGIN_REFUSED) {
+            WddmWriterRefused(wddm, &w, BC250_WRITER_REFUSED_BRIDGE, w.Status);
+            return FALSE;
+        }
+        if (w.Answer == BC250_WRITER_BEGIN_FAULTING) {
+            InterlockedIncrement(&wddm->WriterFaulting);
+            WddmWriterRefused(wddm, &w, BC250_WRITER_REFUSED_FAULTING, w.Status);
+            return FALSE;
+        }
         KeStallExecutionProcessor(BC250_WDDM_EXCLUSIVE_STEP_US);
     }
+    WddmWriterRefused(wddm, &w, BC250_WRITER_REFUSED_RETRY, STATUS_DEVICE_BUSY);
     return FALSE;
 }
 

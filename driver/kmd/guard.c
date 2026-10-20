@@ -725,6 +725,14 @@ void GuardLogKeep(void)
     KeepStatus(status);
 }
 
+// BD-195: a hot-plug step that stops the whole machine leaves no ring to read after the power cycle. With KeepLog
+// set, the connector paths append the ring to the keep file before each new step, so the last line on the disk
+// names the step that never returned. The keep is synchronous file I/O: PASSIVE_LEVEL with special kernel APCs on.
+BOOLEAN GuardKeepActive(void)
+{
+    return KeGetCurrentIrql() == PASSIVE_LEVEL && !KeAreAllApcsDisabled() && GuardReadSetting(L"KeepLog", 0) != 0;
+}
+
 static void GuardStartConfirmed(void);
 
 // Used only after the typed health policy has accepted the live start identity.

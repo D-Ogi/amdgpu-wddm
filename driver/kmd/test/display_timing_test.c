@@ -65,6 +65,7 @@ typedef struct {BC250_INHERITED_PIPE InheritedPipe;NTSTATUS InheritedPipeStatus;
 typedef struct {void* Mmio;int FullWddm,ComposedSourceModes,DcnWriteEnabled;struct {ULONG Width,Height,Pitch;} Post;
     D3DKMDT_VIDEO_SIGNAL_INFO InheritedSignal;BOOLEAN InheritedSignalValid,InheritedTmds;BC250_MODESET Modeset;
     BOOLEAN ModeActive,CommitSeen; ULONG CommittedSourceWidth,CommittedSourceHeight,CommittedSourceFormat;
+    volatile long CommitPowerOnly;      /* BD-195: power transitions answered without programming */
     struct {ULONG StartAccepted,StartPreserved;} Connector;
     struct {NTSTATUS (*DxgkCbQueryVidPnInterface)(void*,unsigned,const struct TEST_VIDPN_INTERFACE**);
         void *DxgkCbSynchronizeExecution,*DxgkCbQueueDpc,*DxgkCbIndicateChildStatus;} Dxgk;
@@ -80,6 +81,13 @@ static NTSTATUS testConnectorStatus;
 static BOOLEAN ConnectorIsEnabled(const BC250_DEVICE* d){(void)d;return testConnectorEnabled;}
 static NTSTATUS ConnectorLinkCurrentSignal(BC250_DEVICE* d,D3DKMDT_VIDEO_SIGNAL_INFO* s)
 {(void)d;if(!testConnectorEnabled)UnexpectedConnector();*s=testConnectorSignal;return testConnectorStatus;}
+/* BD-195: the link state that a path power transition asks about, and the connector commit it may then make. */
+static BOOLEAN testLinkActive,testSinkConnected;
+static unsigned testPowerQueries,testConnectorCommits;
+static NTSTATUS testConnectorCommitStatus;
+static BOOLEAN ConnectorLinkNeedsPowerOn(BC250_DEVICE* d,BOOLEAN* active,BOOLEAN* connected)
+{(void)d;if(!testConnectorEnabled)UnexpectedConnector();testPowerQueries++;*active=testLinkActive;
+ *connected=testSinkConnected;return testSinkConnected && !testLinkActive;}
 typedef UINT D3DDDIFORMAT;
 typedef struct {struct {UINT Width,Height,Format;} Allocation;} BC250_WDDM_OBJECT;
 typedef struct {HANDLE hAllocation;UINT Width,Height;D3DDDIFORMAT Format;
@@ -396,6 +404,39 @@ int main(int argc,char** argv)
         testConnectorStatus=STATUS_DEVICE_NOT_READY;
         CHECK(Bc250WddmDescribeAllocation(&d,&description)==STATUS_DEVICE_NOT_READY);
         testConnectorEnabled=FALSE;
+    }
+    {
+        /* BD-195: a path power transition (d3dkmddi.md:31540). Power-off, the inherited route, an active link and an
+         * absent sink answer power-only, with one line that names the link state. A power-on over a connected sink
+         * whose link is off (31v2 after the detach) programs the kept path through the connector commit. A kept path
+         * that the new sink does not offer is still a successful transition, and other failures stay failures. */
+        DXGKARG_COMMITVIDPN power={0};
+        power.hFunctionalVidPn=&power;power.Flags.PathPowerTransition=1;power.Flags.PathPoweredOff=0;
+        d.CommitPowerOnly=0;testPowerQueries=testConnectorCommits=0;testConnectorCommitStatus=STATUS_SUCCESS;
+        CHECK(CommitVidPnCore(&d,&power)==STATUS_SUCCESS && d.CommitPowerOnly==1 && !testPowerQueries);
+        CHECK(!strcmp(lastGuard,"link: CommitVidPn power-transition only powered-off 0 connector 0 link-active 0 connected 0"));
+        testConnectorEnabled=TRUE;testSinkConnected=TRUE;testLinkActive=FALSE;power.Flags.PathPoweredOff=1;
+        CHECK(CommitVidPnCore(&d,&power)==STATUS_SUCCESS && d.CommitPowerOnly==2 && !testConnectorCommits);
+        CHECK(!strcmp(lastGuard,"link: CommitVidPn power-transition only powered-off 1 connector 1 link-active 0 connected 1"));
+        power.Flags.PathPoweredOff=0;testLinkActive=TRUE;
+        CHECK(CommitVidPnCore(&d,&power)==STATUS_SUCCESS && d.CommitPowerOnly==3 && !testConnectorCommits);
+        CHECK(!strcmp(lastGuard,"link: CommitVidPn power-transition only powered-off 0 connector 1 link-active 1 connected 1"));
+        testLinkActive=FALSE;testSinkConnected=FALSE;
+        CHECK(CommitVidPnCore(&d,&power)==STATUS_SUCCESS && d.CommitPowerOnly==4 && !testConnectorCommits);
+        testSinkConnected=TRUE;
+        CHECK(CommitVidPnCore(&d,&power)==STATUS_SUCCESS && d.CommitPowerOnly==4 && testConnectorCommits==1);
+        CHECK(!strcmp(lastGuard,"link: CommitVidPn affected-source 0 power-transition 1 powered-off 0"));
+        testConnectorCommitStatus=STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED;
+        CHECK(CommitVidPnCore(&d,&power)==STATUS_SUCCESS && testConnectorCommits==2);
+        testConnectorCommitStatus=STATUS_DEVICE_BUSY;
+        CHECK(CommitVidPnCore(&d,&power)==STATUS_DEVICE_BUSY && testConnectorCommits==3);
+        /* A full commit keeps its refusal; only the power-on maps the missing mode to success. */
+        power.Flags.PathPowerTransition=0;testConnectorCommitStatus=STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED;
+        CHECK(CommitVidPnCore(&d,&power)==STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED && testConnectorCommits==4);
+        /* Counted past the first 16 lines, never logged past them. */
+        power.Flags.PathPowerTransition=1;power.Flags.PathPoweredOff=1;d.CommitPowerOnly=16;before=guardLines;
+        CHECK(CommitVidPnCore(&d,&power)==STATUS_SUCCESS && d.CommitPowerOnly==17 && guardLines==before);
+        testConnectorEnabled=FALSE;testSinkConnected=FALSE;testConnectorCommitStatus=STATUS_SUCCESS;
     }
     printf("inherited timing: %u checks, %u failures\n",checks,failures);return failures?1:0;
 }

@@ -49,9 +49,26 @@ BC250_ATOM_STATUS Bc250AtomExecute(void* w,size_t n,const BC250_ATOM_IMAGE* im,u
     const BC250_ATOM_PLAN* p,const BC250_ATOM_CALLBACKS* io,const BC250_ATOM_LIMITS* limits,
     void* params,size_t bytes,BC250_ATOM_RESULT* result)
 {
+    /* SetPixelClock and DIG1TransmitterControl ENABLE may reach the PHY power-up table (BD-195). */
+    const int scoped=root==12 || (root==76 && bytes==sizeof(struct dig_transmitter_control_ps_allocation_v1_6) &&
+        ((const struct dig_transmitter_control_ps_allocation_v1_6*)params)->param.action==ATOM_TRANSMITTER_ACTION_ENABLE);
     ++runs;selected=root;CHECK(w==workspace && n==sizeof(workspace));CHECK(im==&image && p==&plan);
-    CHECK(root==12 ? io->Context!=link.Io.Context : io->Context==link.Io.Context);
-    CHECK(Bc250LinkAtomScopedRegister(&link,CLOCK_CR_ADDR,1)==(root==12));
+    CHECK(scoped ? io->Context!=link.Io.Context : io->Context==link.Io.Context);
+    CHECK(Bc250LinkAtomScopedRegister(&link,CLOCK_CR_ADDR,1)==scoped);
+    if(scope_test==2 && root==76 && scoped) {
+        uint32_t value;unsigned before=transport_writes;
+        CHECK(io->Write(io->Context,CLOCK_PSP34,0x6978)!=0);    // mailbox not seen ready
+        transport_value=0x80000000;CHECK(io->Read(io->Context,CLOCK_PSP33,&value)==0);
+        CHECK(io->Write(io->Context,CLOCK_PSP34,0)!=0);         // SetPixelClock's argument, not this call's
+        CHECK(io->Write(io->Context,CLOCK_PSP34,0x3f48)!=0);    // another link rate
+        CHECK(transport_writes==before);
+        CHECK(io->Write(io->Context,CLOCK_PSP34,0x6978)==0);    // symclk_10khz of 270000 kHz
+        CHECK(io->Write(io->Context,CLOCK_PSP33,0x50000)==0);
+        CHECK(io->Write(io->Context,CLOCK_PSP34,0x6978)!=0);    // one message per call tree
+        transport_value=0x0040f000;CHECK(io->Read(io->Context,CLOCK_CNTL,&value)==0);
+        CHECK(io->Write(io->Context,CLOCK_CNTL,0x0041f000)==0); // RDPCS_TX_FIFO_EN
+        CHECK(io->Write(io->Context,CLOCK_CNTL,0x0042f000)!=0); // RDPCS_TX_FIFO_START is not in it
+    }
     if(scope_test && root==12) {
         uint32_t value;unsigned before;
         before=transport_writes;
@@ -189,6 +206,13 @@ static void scope_contract(void)
     CHECK(!Bc250LinkAtomScopedRegister(&link,CLOCK_PSP33,1));
     CHECK(Bc250LinkAtomStream(&link,BC250_LINK_HDMI,148500,4,0)==BC250_ATOM_BUDGET);
     CHECK(!link.ClockScope);
+    /* BD-195: DP transmitter enable after a re-plug runs the same PHY power-up. */
+    run_status=BC250_ATOM_OK;scope_test=2;
+    CHECK(Bc250LinkAtomTransmitter(&link,BC250_LINK_TX_ON,BC250_LINK_DP,270000,4,0,0)==BC250_ATOM_OK);
+    CHECK(!link.ClockScope);
+    CHECK(Bc250LinkAtomTransmitter(&link,BC250_LINK_TX_OFF,BC250_LINK_DP,270000,4,0,0)==BC250_ATOM_OK);
+    CHECK(Bc250LinkAtomTransmitter(&link,BC250_LINK_TX_DRIVE,BC250_LINK_DP,270000,4,1,1)==BC250_ATOM_OK);
+    CHECK(!link.ClockScope);scope_test=0;
 }
 static void boundaries(void)
 {

@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdint.h>
 #include "bc250kmd_escape.h"
+#include "display_io.h"
 typedef unsigned char BOOLEAN;
 typedef unsigned long ULONG;
 typedef long LONG, NTSTATUS;
@@ -33,6 +34,7 @@ typedef struct {
     volatile LONG Running, Enabled, Generation, Pending, RxPending, Suspended;
     LONG Queued;
     void* WorkItem;
+    ULONG BusyGeneration, BusyRearms;   /* BD-195: ConnectorBusyRearm */
 } BC250_CONNECTOR;
 typedef struct {
     BC250_CONNECTOR Connector;
@@ -132,6 +134,32 @@ int main(void)
     CHECK(!generation && !queued && !Queues);
     Reset(&d,&p);ConnectorReplugEscape(&d,&p,flags.Value);d.Connector.Running=0;ConnectorDpc(&d);
     CHECK(Queues==1 && WorkQueues==0); // Stop wins after the request, before its DPC.
+    /* BD-195: a BUSY disable re-arms the worker at most CONNECTOR_BUSY_REARMS (3) times for one generation. A new
+     * generation starts a new count, and a stopped connector is never re-armed. The literal 3 below holds the bound. */
+    Reset(&d,&p);
+    for(i=1;i<=CONNECTOR_BUSY_REARMS;++i) {
+        d.Connector.Pending=0;
+        CHECK(ConnectorBusyRearm(&d.Connector,19) && d.Connector.Pending==1 && d.Connector.BusyRearms==i);
+    }
+    d.Connector.Pending=0;
+    CHECK(!ConnectorBusyRearm(&d.Connector,19) && !d.Connector.Pending && d.Connector.BusyRearms==3);
+    CHECK(ConnectorBusyRearm(&d.Connector,20) && d.Connector.Pending==1);
+    CHECK(d.Connector.BusyGeneration==20 && d.Connector.BusyRearms==1);
+    d.Connector.Pending=0;d.Connector.Running=0;
+    CHECK(!ConnectorBusyRearm(&d.Connector,21) && !d.Connector.Pending && d.Connector.BusyRearms==0);
+    CHECK(!Queues && !WorkQueues);
+    /* BD-195: a DP sink that does not answer AUX yet after HPD (timeout, NACK, spent budget) is discovered again.
+     * A failed pad cleanup, a refused register, a busy engine or a sink this driver does not drive is not. */
+    CHECK(ConnectorDiscoveryRetryable(BC250_DISP_STATUS_TIMEOUT,0));
+    CHECK(ConnectorDiscoveryRetryable(BC250_DISP_STATUS_DEVICE,0));
+    CHECK(ConnectorDiscoveryRetryable(BC250_DISP_STATUS_BUDGET,0));
+    CHECK(!ConnectorDiscoveryRetryable(BC250_DISP_STATUS_TIMEOUT,BC250_DISP_STATUS_DEVICE));
+    CHECK(!ConnectorDiscoveryRetryable(BC250_DISP_STATUS_SUCCESS,0));
+    CHECK(!ConnectorDiscoveryRetryable(BC250_DISP_STATUS_ACCESS_DENIED,0));
+    CHECK(!ConnectorDiscoveryRetryable(BC250_DISP_STATUS_BUSY,0));
+    CHECK(!ConnectorDiscoveryRetryable(BC250_DISP_STATUS_NOT_SUPPORTED,0));
+    CHECK(!ConnectorDiscoveryRetryable(BC250_DISP_STATUS_MISMATCH,0));
+    CHECK(!ConnectorDiscoveryRetryable(BC250_DISP_STATUS_INVALID,0));
     printf("connector replug: %u checks, %u failures\n",Checks,Failures);
     return Failures ? 1 : 0;
 }

@@ -1755,6 +1755,13 @@ static NTSTATUS SetVisibilityCore(_In_ const HANDLE hAdapter, _In_ const DXGKARG
     DisplayRetainVisibility(device,Visibility,status,begin);
     if (call<=32) GuardLog("display visibility: call %ld status 0x%08X current %u blanked %u",
         call,status,device->SourceVisible,device->DcnBlanked);
+    // BD-195: visibility alone never programs a link. A visible source over a connected sink whose link is off means
+    // that no commit has applied a mode since the plug. Logged past the 32-call bound, for the first 16 such calls.
+    if (Visibility->Visible && ConnectorIsEnabled(device)) {
+        BOOLEAN active = FALSE, connected = FALSE;
+        if (ConnectorLinkNeedsPowerOn(device,&active,&connected) && InterlockedIncrement(&device->VisibilityLinkOff)<=16)
+            GuardLog("display visibility: call %ld visible 1 with the link off and a sink connected, no commit applied",call);
+    }
     return status;
 }
 
@@ -1790,7 +1797,20 @@ static NTSTATUS CommitVidPnCore(_In_ const HANDLE hAdapter, _In_ const DXGKARG_C
 
     DisplayRetainCommitPower(device,Commit);
     if (!device->CommitSeen) { device->CommitSeen = TRUE; GuardStage(StageFirstCommitVidPn); }
-    if (Commit->Flags.PathPowerTransition) return STATUS_SUCCESS;       // no mode change, power only
+    if (Commit->Flags.PathPowerTransition) {
+        // A power-on transition must program the kept path (d3dkmddi.md:31540). After a physical detach the link is
+        // off, so with a connected sink the connector commit below applies the path's mode (BD-195). Power-off, an
+        // active link, a suspended connector and the inherited route keep the power-only answer.
+        BOOLEAN active = FALSE, connected = FALSE;
+        const BOOLEAN connector = ConnectorIsEnabled(device);
+        const BOOLEAN needs = connector && ConnectorLinkNeedsPowerOn(device, &active, &connected);
+        if (Commit->Flags.PathPoweredOff || !needs) {
+            if (InterlockedIncrement(&device->CommitPowerOnly) <= 16)
+                GuardLog("link: CommitVidPn power-transition only powered-off %u connector %u link-active %u connected %u",
+                    Commit->Flags.PathPoweredOff, connector, active, connected);
+            return STATUS_SUCCESS;                                      // no mode change, power only
+        }
+    }
     if (device->Modeset.InheritedFixed && !ConnectorIsEnabled(device)) {
         BOOLEAN supported;
         return DisplayInheritedVidPn(device, Commit->hFunctionalVidPn, NULL, TRUE, &supported);
@@ -1802,7 +1822,12 @@ static NTSTATUS CommitVidPnCore(_In_ const HANDLE hAdapter, _In_ const DXGKARG_C
             Commit->Flags.PathPowerTransition,Commit->Flags.PathPoweredOff);
         // The connector owns the whole transaction and preserves the old mode
         // on admission or recovered mutation failure.
-        return ConnectorVidPn(device, Commit->hFunctionalVidPn, NULL, TRUE, &supported);
+        status = ConnectorVidPn(device, Commit->hFunctionalVidPn, NULL, TRUE, &supported);
+        // A power-on whose kept path the new sink does not offer: the link stays off, and the transition succeeds.
+        // Windows commits a full mode for the new sink after Indicate(TRUE).
+        if (Commit->Flags.PathPowerTransition && status == STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED)
+            status = STATUS_SUCCESS;
+        return status;
     }
 
     status = device->Dxgk.DxgkCbQueryVidPnInterface(Commit->hFunctionalVidPn, DXGK_VIDPN_INTERFACE_VERSION_V1, &vidpn);

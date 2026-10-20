@@ -1513,6 +1513,33 @@ static BOOLEAN DcnWriterBridgeCurrent(_In_ const BC250_DEVICE* Device, ULONGLONG
         DcnPlaneFormatDecodeRegisters(config, crossbar, cnvc) == BC250_PLANE_FORMAT_ARGB8888;
 }
 
+// The bridge pitch of the reserved runtime buffer: the runtime mode's once a link changed the display, else the
+// pitch of the inherited or the committed source mode.
+static ULONG DcnRuntimeBridgePitch(_In_ BC250_DEVICE* Device)
+{
+    return InterlockedCompareExchange(&Device->RuntimeDisplayChanged, 0, 0) ? Device->RuntimePost.Pitch :
+        (Device->Modeset.InheritedFixed ? Device->Post.Pitch : DcnPrimaryPitch(DisplaySourceWidth(Device)));
+}
+
+// BD-195, invariant I3 (docs/design/vidpn-flip.md section 7.2): RuntimeDisplayChanged 1 needs a nonzero
+// RuntimePost.Pitch. A link writer calls this right after its Begin, before it sets RuntimeDisplayChanged. Until
+// the first Apply, RuntimePost is empty; 31v2's first detach set the flag over it, and every later bridge refused
+// pitch 0 without a write or a log. This describes the reserved buffer at the pitch Begin's bridge used for it, so
+// a later Begin finds that bridge current with HUBP blank. State only: no register access, and RuntimePostValid
+// stays as it is, so presents and the system display paths stay refused until a commit applies a mode.
+void DcnLinkSurfaceAdopt(BC250_DEVICE* Device)
+{
+    if (InterlockedCompareExchange(&Device->RuntimeDisplayChanged, 0, 0) || !Device->RuntimeFramebuffer ||
+        !Device->RuntimeFramebufferLength) return;
+    Device->RuntimePost = Device->Post;
+    Device->RuntimePost.Width = DisplaySourceWidth(Device);
+    Device->RuntimePost.Height = DisplaySourceHeight(Device);
+    Device->RuntimePost.Pitch = DcnRuntimeBridgePitch(Device);
+    Device->RuntimePost.PhysicAddress = Device->RuntimeFramebufferPhysical;
+    Device->RuntimePost.ColorFormat = D3DDDIFMT_A8R8G8B8;
+    Device->RuntimePost.TargetId = BC250_CHILD_UID;
+}
+
 // WriterActive and the odd generation are published under L before this call. The old application allocation
 // stays alive while the bridge is programmed, and while Retire below waits outside L for its effective address.
 // One stable already-owned surface can avoid programming, including an inherited pipe whose timing is stopped.
@@ -1554,8 +1581,10 @@ NTSTATUS DcnWriterBridge(_Inout_ BC250_DEVICE* Device, _In_ volatile LONG* Gener
     if (Device->RuntimeFramebuffer && Device->RuntimeFramebufferLength) {
         physical = (ULONGLONG)Device->RuntimeFramebufferPhysical.QuadPart;
         length = Device->RuntimeFramebufferLength;
-        pitch = InterlockedCompareExchange(&Device->RuntimeDisplayChanged, 0, 0) ? Device->RuntimePost.Pitch :
-            (Device->Modeset.InheritedFixed ? Device->Post.Pitch : DcnPrimaryPitch(DisplaySourceWidth(Device)));
+        pitch = DcnRuntimeBridgePitch(Device);
+        // I3 broken (no DcnLinkSurfaceAdopt before the flag): say so, never a size check's INVALID_PARAMETER.
+        if (!pitch && InterlockedCompareExchange(&Device->RuntimeDisplayChanged, 0, 0))
+            return STATUS_INVALID_DEVICE_STATE;
     } else if (Device->Framebuffer && Device->DcnFirmwareKnown && Device->FramebufferLength &&
                Device->DcnFirmwareAddress == (ULONGLONG)Device->Post.PhysicAddress.QuadPart &&
                Device->DcnFirmwarePitch == Device->Post.Pitch) {

@@ -42,17 +42,23 @@ try {
             "/LIBPATH:$($msvc.FullName)/lib/x64", "/LIBPATH:$sdklib/ucrt/x64", "/LIBPATH:$sdklib/um/x64")
         & $cl @actual
         if($LASTEXITCODE){throw 'Clock replay build failed'}
-        $replayArgs=@($Rom,'3','0','112','148500')
-        if($OldScope){$replayArgs+='old-scope'}
-        $result=& "$Out/link_clock_reinit_test.exe" @replayArgs
-        $exit=$LASTEXITCODE
-        $result | Set-Content "$Out/reinit.log"
-        $result | Write-Output
-        if($ExpectFailure) {
-            if(!$OldScope -or $exit -ne 1 -or !($result -match '^FAIL CHECK') -or
-                !($result -match 'offset50172')) {throw 'Old scoped policy did not fail the real ROM CHECK'}
-            Write-Output 'Old scope: explicit compiled CHECK failure verified'
-        } elseif($exit) {throw 'Real ROM clock replay failed'}
+        # Both callers of the PHY power-up table: HDMI SetPixelClock over four mode
+        # changes, and DP transmitter enable after a re-plug (BD-195).
+        $replays=@(@{Name='clock';Args=@($Rom,'3','0','112','148500')},
+            @{Name='dp-tx-enable';Args=@($Rom,'0','0','76','270000')})
+        foreach($replay in $replays) {
+            $replayArgs=$replay.Args
+            if($OldScope){$replayArgs+='old-scope'}
+            $result=& "$Out/link_clock_reinit_test.exe" @replayArgs
+            $exit=$LASTEXITCODE
+            $result | Set-Content "$Out/reinit-$($replay.Name).log"
+            $result | Write-Output
+            if($ExpectFailure) {
+                if(!$OldScope -or $exit -ne 1 -or !($result -match '^FAIL CHECK') -or
+                    !($result -match 'offset=?50172')) {throw "Old scoped policy did not fail the real ROM CHECK ($($replay.Name))"}
+                Write-Output "Old scope: explicit compiled CHECK failure verified ($($replay.Name))"
+            } elseif($exit) {throw "Real ROM replay failed ($($replay.Name))"}
+        }
     } elseif($OldScope -or $ExpectFailure) {throw 'Negative replay requires ROM'}
 
 } finally {

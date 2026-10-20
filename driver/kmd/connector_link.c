@@ -48,6 +48,8 @@ typedef struct CONNECTOR_LINK {
     BOOLEAN RecoveryVisible, RecoveryModeActive;
     ULONGLONG Deadline;
     BOOLEAN Cleanup, Active, Inherited, Suspended, NeedsDisable, ClockSession;
+    BOOLEAN Keep;   // BD-195: KeepLog breadcrumbs for this operation (GuardKeepActive at Begin)
+    ULONG KeptSteps;  // the steps of this operation already on the disk, one bit per BC250_CONNECTOR_STEP
     BC250_ATOM_FIRMWARE Firmware;
     BC250_LINK_ATOM Atom;
     BC250_ATOM_PLAN AtomPlan;
@@ -82,6 +84,7 @@ static void Begin(CONNECTOR_LINK* c,ULONG Generation,BOOLEAN Cleanup)
     c->Owner=KeGetCurrentThread();c->Generation=Generation;c->Cleanup=Cleanup;
     c->Deadline=LinkNow()+(Cleanup?LINK_CLEANUP_US:LINK_DEADLINE_US);
     c->Io.StalledUs=0;c->Io.BudgetUs=(ULONG)(Cleanup?LINK_CLEANUP_US:LINK_DEADLINE_US);
+    c->Keep=GuardKeepActive();c->KeptSteps=0;
 }
 static void End(CONNECTOR_LINK* c) { c->Owner=NULL;c->Cleanup=FALSE; }
 static NTSTATUS ClockSessionEnter(CONNECTOR_LINK* c)
@@ -106,6 +109,14 @@ static void LinkStep(CONNECTOR_LINK* c,ULONG Step,BOOLEAN Atom)
     c->Step=Step;c->AtomValid=Atom;c->IoOffset=0;c->IoAccess=0;c->IoStatus=STATUS_SUCCESS;
     RtlZeroMemory(&c->Atom.Last,sizeof(c->Atom.Last));
     RtlZeroMemory(&c->AtomWriteDiag,sizeof(c->AtomWriteDiag));
+    // BD-195 breadcrumb: the first entry of each step per operation goes to the disk before the step runs. Once per
+    // step, because training alternates TRAIN and PHY and a flush per AUX transfer would eat the deadline.
+    if(c->Keep && Step<32u && !(c->KeptSteps&(1ul<<Step))) {
+        c->KeptSteps|=1ul<<Step;
+        GuardLog("link: keep step %lu phase %lu generation %lu cleanup %u",Step,c->Phase,c->Generation,
+            (unsigned)c->Cleanup);
+        GuardLogKeep();
+    }
 }
 static void SaveFailure(CONNECTOR_LINK* c,NTSTATUS Status)
 {
@@ -625,6 +636,8 @@ NTSTATUS ConnectorLinkDisable(BC250_DEVICE* Device,ULONG Generation)
     // this owner changes any clocks; otherwise stop could replay it over HDMI.
     if(!HdmiLinkStop(Device))return STATUS_DEVICE_DATA_ERROR;
     if(!WddmPrimaryExclusiveBegin(Device,BC250_WRITER_LINK_DISABLE,&primary))return STATUS_DEVICE_BUSY;
+    // I3 before the flag below: later writers find this bridge current with HUBP blank.
+    DcnLinkSurfaceAdopt(Device);
     Begin(c,Generation,TRUE);status=DisableOwned(c);End(c);
     // A detach ends the rollback scope. A later sink, even with the same mode,
     // must never receive the previous monitor's timing as error recovery.
@@ -779,7 +792,9 @@ NTSTATUS ConnectorLinkCommit(BC250_DEVICE* Device,const BC250_CONNECTOR_SNAPSHOT
     // An active old link must have a complete recovery plan before mutating it.
     if(c->Active && !c->Current.Valid) {status=STATUS_NOT_SUPPORTED;goto done;}
     if(!WddmPrimaryExclusiveBegin(Device,BC250_WRITER_LINK_COMMIT,&primary)) {status=STATUS_DEVICE_BUSY;goto done;}
-    exclusive=TRUE;c->Previous=c->Current;c->Previous.Valid=c->Active && c->Current.Valid;
+    // I3 for the OS detach and a failed recovery, which leave RuntimeDisplayChanged set without an Apply.
+    exclusive=TRUE;DcnLinkSurfaceAdopt(Device);
+    c->Previous=c->Current;c->Previous.Valid=c->Active && c->Current.Valid;
     c->RecoveryVisible=Device->SourceVisible;c->RecoveryModeActive=Device->ModeActive;
     if(c->Previous.Valid) {
         BC250_LINK_SURFACE bridge={0};
@@ -887,12 +902,23 @@ NTSTATUS ConnectorLinkCurrentSignal(BC250_DEVICE* Device,D3DKMDT_VIDEO_SIGNAL_IN
     ConnectorOperationRelease(Device);return status;
 }
 
+BOOLEAN ConnectorLinkNeedsPowerOn(BC250_DEVICE* Device,BOOLEAN* Active,BOOLEAN* Connected)
+{
+    CONNECTOR_LINK* c;BOOLEAN needs=FALSE;
+    *Active=FALSE;*Connected=ConnectorIsConnected(Device);
+    ConnectorOperationAcquire(Device);c=Device->ConnectorLink;
+    if(c) {*Active=c->Active;needs=*Connected && !c->Active && !c->Suspended;}
+    ConnectorOperationRelease(Device);return needs;
+}
+
 NTSTATUS ConnectorLinkSuspend(BC250_DEVICE* Device)
 {
     CONNECTOR_LINK* c=Device->ConnectorLink;ULONG generation;NTSTATUS status,finish;
     if(!c)return STATUS_SUCCESS;
     DpAudioStop(Device);
     if(!DpAudioQuiesced(Device))return STATUS_DEVICE_NOT_READY;
+    // A detached link is off and its plane blank: nothing to take or restore (BD-195, I6).
+    if(!c->Active) {c->Suspended=TRUE;return STATUS_SUCCESS;}
     if(!WddmPrimaryExclusiveBegin(Device,BC250_WRITER_LINK_SUSPEND,&generation))return STATUS_DEVICE_BUSY;
     status=c->Inherited?DcnRestorePostDisplay(Device):DcnRuntimeSurface(Device,FALSE);
     if(NT_SUCCESS(status))status=DcnSetVisibility(Device,FALSE);
@@ -907,6 +933,8 @@ NTSTATUS ConnectorLinkResume(BC250_DEVICE* Device,ULONG Generation)
     CONNECTOR_LINK* c=Device->ConnectorLink;ULONG primary;NTSTATUS status,finish;
     if(!c)return STATUS_DEVICE_NOT_READY;
     if(c->Inherited) {c->Suspended=FALSE;return STATUS_SUCCESS;}
+    // An inactive link stays off; the next commit, full or power-on, applies a mode (BD-195, I6).
+    if(!c->Active) {c->Suspended=FALSE;return STATUS_SUCCESS;}
     if(!c->Current.Valid)return STATUS_DEVICE_NOT_READY;
     if(!WddmPrimaryExclusiveBegin(Device,BC250_WRITER_LINK_RESUME,&primary))return STATUS_DEVICE_BUSY;
     Begin(c,Generation,FALSE);c->Next=c->Current;

@@ -117,6 +117,8 @@ static NTSTATUS CommitQueryInterface(void* h,unsigned version,const DXGK_VIDPN_I
 {(void)h;(void)version;*iface=&commitInterface;return 0;}
 static void DisplayRetainCommitPower(BC250_DEVICE* d,const DXGKARG_COMMITVIDPN* args){(void)d;(void)args;}
 static void GuardStage(unsigned stage){(void)stage;}
+// Only the BD-195 power transition cases enable the connector; they count its commits and choose the answer.
 static NTSTATUS ConnectorVidPn(BC250_DEVICE* d,void* h,const void* e,BOOLEAN commit,BOOLEAN* supported)
-{(void)d;(void)h;(void)e;(void)commit;(void)supported;UnexpectedConnector();return STATUS_NOT_SUPPORTED;}
+{(void)d;(void)h;(void)e;(void)supported;if(!testConnectorEnabled || !commit){UnexpectedConnector();return STATUS_NOT_SUPPORTED;}
+    testConnectorCommits++;return testConnectorCommitStatus;}
 static ULONG DcnPrimaryPitch(ULONG width){return (width*4+255)&~255ul;}

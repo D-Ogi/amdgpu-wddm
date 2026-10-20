@@ -35,7 +35,13 @@ def main():
     covered = set(re.findall(r"case (BC250_\w+):", checks))
     if names != covered:
         raise SystemExit(f"Escape namespace check differs: missing {sorted(names-covered)}, extra {sorted(covered-names)}")
-    actual = "\n\n".join(body(connector, name) for name in ("ReadAtomic", "ConnectorDpc", "ConnectorReplug"))
+    # BD-195: the BUSY re-arm bound comes with its helper, so that the test reads the shipped value.
+    bound = re.findall(r"(?m)^#define CONNECTOR_BUSY_REARMS .*$", connector)
+    if len(bound) != 1:
+        raise SystemExit(f"Expected one CONNECTOR_BUSY_REARMS, found {len(bound)}")
+    actual = "\n\n".join([bound[0]] + [body(connector, name) for name in
+                                       ("ReadAtomic", "ConnectorBusyRearm", "ConnectorDiscoveryRetryable",
+                                        "ConnectorDpc", "ConnectorReplug")])
     actual += "\n\n" + body(display, "ConnectorReplugEscape")
     template = (here / "connector_replug_test.c").read_text(encoding="utf-8")
     if template.count("/* ACTUAL_SOURCE */") != 1:

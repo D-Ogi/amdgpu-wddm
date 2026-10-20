@@ -10,3 +10,6 @@ NTSTATUS DcnLinkSurfaceCapture(struct _BC250_DEVICE* Device, unsigned long Width
     unsigned long Height, BC250_LINK_SURFACE* Surface);
 NTSTATUS DcnLinkSurfaceRestore(struct _BC250_DEVICE* Device,
     const BC250_LINK_SURFACE* Surface);
+// Inside a link writer, right after its Begin: RuntimePost describes the
+// reserved bridge before RuntimeDisplayChanged is set (BD-195, I3). State only.
+void DcnLinkSurfaceAdopt(struct _BC250_DEVICE* Device);

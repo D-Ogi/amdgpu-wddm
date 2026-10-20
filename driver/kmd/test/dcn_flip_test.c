@@ -20,6 +20,9 @@ typedef struct { LONGLONG QuadPart; } LARGE_INTEGER;
 typedef struct { ULONGLONG Physical; ULONG Pitch; LONGLONG ProgramEndQpc; BOOLEAN Retired; } BC250_DCN_WRITER_BRIDGE;
 #define BC250_DCN_WRITER_RETIRE_US 30000u
 #define PASSIVE_LEVEL 0
+/* BD-195: DcnLinkSurfaceAdopt's values (d3dukmdt.h, bc250kmd.h). */
+#define D3DDDIFMT_A8R8G8B8 21
+#define BC250_CHILD_UID 0x250001
 typedef struct { NTSTATUS Status; ULONG InterruptBefore, InterruptCleared, PendingBefore, PendingAfter; BOOLEAN Fresh; } BC250_DCN_WITNESS_ARM;
 typedef struct { ULONG Interrupt, Low1, High1, High2, Low2; ULONGLONG Earliest1, Earliest2; BOOLEAN Event; } BC250_DCN_WITNESS_READ;
 #define FIELD_OFFSET(type, field) offsetof(type, field)
@@ -47,7 +50,7 @@ typedef struct { volatile long DcnLockTimeouts; int VidPnFlipEnabled;
     void *Mmio;
     BOOLEAN DcnWriteEnabled, VramEnabled, DcnFirmwareKnown, DcnDiverged;
     ULONG SourceWidth, SourceHeight;
-    struct { ULONG Width, Height, Pitch; LARGE_INTEGER PhysicAddress; } Post, RuntimePost;
+    struct { ULONG Width, Height, Pitch, ColorFormat, TargetId; LARGE_INTEGER PhysicAddress; } Post, RuntimePost;
     void *Framebuffer, *RuntimeFramebuffer;
     ULONGLONG RuntimeFramebufferLength;
     LARGE_INTEGER RuntimeFramebufferPhysical;
@@ -840,6 +843,44 @@ static void WriterBridge(void)
     protected_call=0;
     model.bridge=0;model.observing=0;model.irql=0;
 }
+/* BD-195 (invariant I3): a link detach before the first Apply. RuntimePost is empty until a runtime mode is applied
+ * (SourceDevice fills it, which is why WriterBridge did not see 31v2's refusal). */
+static void WriterBridgeAfterDetach(void)
+{
+    BC250_DEVICE d;
+    BC250_DCN_WRITER_BRIDGE bridge;
+    BOOLEAN wrote;
+    // The flag over an empty RuntimePost: the bridge refuses before any write, with a state status, not a size one.
+    BridgeDevice(&d);memset(&d.RuntimePost,0,sizeof(d.RuntimePost));
+    d.RuntimeDisplayChanged=1;model.latched=0x202000;
+    CHECK(BridgeProgram(&d,&wrote,&bridge)==STATUS_INVALID_DEVICE_STATE);
+    CHECK(!wrote && model.writes==0 && bridge.Physical==0);
+    // The link writer adopts the reserved buffer before it sets the flag. The next Begin then finds its own bridge
+    // current with HUBP blank and the OTG stopped: no write, retired at once, and RuntimePostValid stays 0.
+    BridgeDevice(&d);memset(&d.RuntimePost,0,sizeof(d.RuntimePost));
+    DcnLinkSurfaceAdopt(&d);
+    CHECK(d.RuntimePost.Width==64 && d.RuntimePost.Height==16 && d.RuntimePost.Pitch==256);
+    CHECK(d.RuntimePost.PhysicAddress.QuadPart==0x202000 && d.RuntimePost.ColorFormat==D3DDDIFMT_A8R8G8B8);
+    CHECK(d.RuntimePost.TargetId==BC250_CHILD_UID && !d.RuntimePostValid && model.reads==0 && model.writes==0);
+    d.RuntimeDisplayChanged=1;model.latched=0x202000;
+    CHECK(BridgeProgram(&d,&wrote,&bridge)==STATUS_SUCCESS);
+    CHECK(!wrote && bridge.Retired && bridge.Physical==0x202000 && bridge.Pitch==256 && model.writes==0);
+    CHECK(BridgeRetire(&d,&bridge)==STATUS_SUCCESS && model.retire_stalls==0);
+    // Adopted, but the plane still names another surface: no programming while the link is off (RuntimePostValid 0).
+    BridgeDevice(&d);memset(&d.RuntimePost,0,sizeof(d.RuntimePost));
+    DcnLinkSurfaceAdopt(&d);d.RuntimeDisplayChanged=1;
+    CHECK(BridgeProgram(&d,&wrote,&bridge)==STATUS_NOT_SUPPORTED);
+    CHECK(!wrote && model.writes==0);
+    // An applied runtime mode is never replaced, and without a reserved buffer nothing is adopted.
+    BridgeDevice(&d);d.RuntimeDisplayChanged=1;d.RuntimePost.Pitch=512;d.RuntimePost.PhysicAddress.QuadPart=0x204000;
+    DcnLinkSurfaceAdopt(&d);
+    CHECK(d.RuntimePost.Pitch==512 && d.RuntimePost.PhysicAddress.QuadPart==0x204000);
+    BridgeDevice(&d);memset(&d.RuntimePost,0,sizeof(d.RuntimePost));d.RuntimeFramebuffer=NULL;
+    DcnLinkSurfaceAdopt(&d);
+    CHECK(d.RuntimePost.Pitch==0 && d.RuntimePost.PhysicAddress.QuadPart==0);
+    CHECK(protected_logs==0);
+    model.bridge=0;model.observing=0;model.irql=0;
+}
 int main(void)
 {
     BC250_DEVICE device = {0};
@@ -996,6 +1037,7 @@ int main(void)
     SourceAddressNoLog();
     WitnessQualification();
     WriterBridge();
+    WriterBridgeAfterDetach();
     printf("dcn flip: %u checks, %u failures\n", checks, failures);
     return failures ? 1 : 0;
 }

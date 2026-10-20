@@ -46,7 +46,9 @@ BC250_ATOM_STATUS Bc250LinkAtomValidate(BC250_LINK_ATOM* l)
     }
     l->Ready=1;return BC250_ATOM_OK;
 }
-static BC250_ATOM_STATUS execute(BC250_LINK_ATOM* l,unsigned root,void* p,size_t n)
+// Scoped: the call may reach the PHY power-up helper (bc250_link_clock_scope.inc);
+// Mailbox is the only PSP argument that call tree may send.
+static BC250_ATOM_STATUS execute(BC250_LINK_ATOM* l,unsigned root,int Scoped,uint32_t Mailbox,void* p,size_t n)
 {
     // The outer link transition owns a separate wall deadline across commands,
     // training and recovery. This inner bound is shared by each complete call tree.
@@ -59,8 +61,8 @@ static BC250_ATOM_STATUS execute(BC250_LINK_ATOM* l,unsigned root,void* p,size_t
     if(s) {l->Last.Status=s;l->Last.Table=root;return s;}
     ++l->Commands;
     io=l->Io;
-    if(root==CLOCK_ROOT) {
-        scope.Link=l;l->ClockScope=1;
+    if(Scoped) {
+        scope.Link=l;scope.MailboxValue=Mailbox;l->ClockScope=1;
         io.Context=&scope;io.Owned=scope_owned;io.Allowed=scope_allowed;
         io.Read=scope_read;io.Write=scope_write;io.NowUs=scope_now;io.DelayUs=scope_delay;
     }
@@ -80,7 +82,7 @@ BC250_ATOM_STATUS Bc250LinkAtomClock(BC250_LINK_ATOM* l,unsigned p,unsigned khz)
     // dce112_program_pix_clk supplies reference flags only for a real PLL;
     // DP_DTO uses zero misc flags (dce_clock_source.c, Linux 7d0a66e4).
     c.miscinfo=(uint8_t)(p==BC250_LINK_DP?0:PIXEL_CLOCK_V7_MISC_REF_DIV_SRC_XTALIN);
-    return execute(l,CLOCK_ROOT,&c,sizeof(c));
+    return execute(l,CLOCK_ROOT,1,0,&c,sizeof(c));
 }
 BC250_ATOM_STATUS Bc250LinkAtomTransmitter(BC250_LINK_ATOM* l,enum bc250_link_tx_action action,
     unsigned p,unsigned khz,unsigned lanes,unsigned swing,unsigned pre)
@@ -102,7 +104,10 @@ BC250_ATOM_STATUS Bc250LinkAtomTransmitter(BC250_LINK_ATOM* l,enum bc250_link_tx
         // dpcd_training_lane layout from AMD dc_dp_types.h (not DPCD max-level flags).
         t.param.mode_laneset.dplaneset=(uint8_t)(swing|(pre<<3));
     } else t.param.mode_laneset.digmode=(uint8_t)p;
-    return execute(l,TX_ROOT,&t,sizeof(t));
+    // ENABLE powers the PHY up through table 77 when it is in reset or HDMI mode
+    // (BD-195: DP after a re-plug). That path sends PSP the symbol clock. DISABLE
+    // and SETUP_VSEMPH stay inside the global register list.
+    return execute(l,TX_ROOT,action==BC250_LINK_TX_ON,t.param.symclk_10khz,&t,sizeof(t));
 }
 BC250_ATOM_STATUS Bc250LinkAtomStream(BC250_LINK_ATOM* l,unsigned p,unsigned khz,unsigned lanes,unsigned rate)
 {
@@ -112,5 +117,5 @@ BC250_ATOM_STATUS Bc250LinkAtomStream(BC250_LINK_ATOM* l,unsigned p,unsigned khz
     e.digid=0;e.action=ATOM_ENCODER_CMD_STREAM_SETUP;e.digmode=(uint8_t)p;
     e.pclk_10khz=khz/10;e.lanenum=(uint8_t)lanes;e.bitpercolor=PANEL_8BIT_PER_COLOR;
     e.dplinkrate_270mhz=(uint8_t)rate;
-    return execute(l,STREAM_ROOT,&e,sizeof(e));
+    return execute(l,STREAM_ROOT,0,0,&e,sizeof(e));
 }

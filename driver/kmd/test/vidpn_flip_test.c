@@ -185,6 +185,11 @@ typedef struct {
     volatile LONG ExclusiveRefused, ExclusiveFailed;
     volatile LONG WriterBusy;
     volatile LONG WriterBusyByKind[BC250_WRITER_KINDS];
+    /* BD-195: every FALSE answer of WddmPrimaryExclusiveBegin, by kind, and the last one's site. */
+    volatile LONG WriterRefused;
+    volatile LONG WriterRefusedByKind[BC250_WRITER_KINDS];
+    ULONG WriterRefusedKind, WriterRefusedSite, WriterRefusedAnswer;
+    NTSTATUS WriterRefusedStatus;
     volatile LONG WriterBridgePrograms, WriterBridgeRetired, WriterBridgeFailures;
     BOOLEAN WriterReady;
     /* BD-170 r6, the flip state machine's block (wddm.c says what each field is). */
@@ -1484,19 +1489,33 @@ static void Writers(int level)
 
     /* A refused bridge has not released the old allocation. Failure after a write is a hardware failure, not a
      * normal writer conflict. A post-write failure must retain ownership for recovery. */
-    Setup(&d,&w,level);bridge_result=STATUS_ACCESS_DENIED;
+    /* BD-195: a refused bridge (31v2's LINK_DISABLE) is counted by kind and logged with its site and status, outside
+     * L and without E5; 31v2 left neither a counter nor a line. */
+    Setup(&d,&w,level);bridge_result=STATUS_ACCESS_DENIED;begin_kind=BC250_WRITER_LINK_DISABLE;
     CHECK(!Begin(&d,&generation) && !w.WriterActive && !(w.PrimarySequence&1));
     CHECK(plane_card==0x1000 && hardware==0 && !w.Faulting);
+    CHECK(w.WriterRefused==1 && w.WriterRefusedByKind[BC250_WRITER_LINK_DISABLE]==1);
+    CHECK(w.WriterRefusedKind==BC250_WRITER_LINK_DISABLE && w.WriterRefusedSite==BC250_WRITER_REFUSED_BRIDGE);
+    CHECK(w.WriterRefusedAnswer==BC250_WRITER_BEGIN_REFUSED && w.WriterRefusedStatus==STATUS_ACCESS_DENIED);
+    CHECK(logs==2 && w.FlipFaults==0 && faults_notified==0 && dpcs==0);
     Setup(&d,&w,level);bridge_result=STATUS_IO_TIMEOUT;bridge_wrote=TRUE;
     CHECK(!Begin(&d,&generation) && w.WriterActive && (w.PrimarySequence&1) && w.Faulting && fault_blanks==1);
+    CHECK(w.WriterRefused==1 && w.WriterRefusedSite==BC250_WRITER_REFUSED_FAULTING);
+    CHECK(w.WriterRefusedStatus==STATUS_IO_TIMEOUT);
 
     /* A different writer owns the generation: Begin is bounded and never makes the interrupted writer progress. */
     Setup(&d,&w,level);w.PrimarySequence=5;w.WriterActive=TRUE;
     CHECK(!Begin(&d,&generation) && syncs==200 && stalls10==200 && w.PrimarySequence==5 && bridge_writes==0);
+    CHECK(w.WriterRefused==1 && w.WriterRefusedSite==BC250_WRITER_REFUSED_RETRY && logs==2);
+    CHECK(w.WriterRefusedStatus==STATUS_DEVICE_BUSY && w.WriterRefusedAnswer==BC250_WRITER_BEGIN_RETRY);
     w.PrimarySequence=6;w.WriterActive=FALSE;w.Faulting=1;sections=syncs;
     CHECK(!Begin(&d,&generation) && syncs==sections+1 && bridge_writes==0);
+    CHECK(w.WriterRefused==2 && w.WriterRefusedSite==BC250_WRITER_REFUSED_FAULTING && logs==4);
+    /* Above PASSIVE_LEVEL the refusal is counted, never logged (GuardLog takes a spin lock). */
     w.Faulting=0;irq=TEST_DIRQL;
     CHECK(!WddmPrimaryExclusiveBegin(&d,BC250_WRITER_HDMI_START,&generation) && syncs==sections+1);
+    CHECK(w.WriterRefused==3 && w.WriterRefusedByKind[BC250_WRITER_HDMI_START]==1 && logs==4);
+    CHECK(w.WriterRefusedSite==BC250_WRITER_REFUSED_IRQL && w.WriterHigh==1);
     irq=level?TEST_DIRQL:0;
     d.Wddm=NULL;generation=9;
     CHECK(Begin(&d,&generation) && generation==0);

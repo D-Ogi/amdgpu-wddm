@@ -1,10 +1,15 @@
-/* Finite vendor SetPixelClock transaction. AMD Linux 7d0a66e4, MIT,
- * command_table2.c set_pixel_clock_v7 establishes the operation. CR selectors
- * below are firmware-defined operands, not invented public register names.
- * No raw index window or general PSP command channel is exposed. */
+/* Finite vendor PHY power-up transaction (unit A VBIOS table 77). AMD Linux
+ * 7d0a66e4, MIT: command_table2.c set_pixel_clock_v7 and transmitter_control_v1_6
+ * run these tables unfiltered. SetPixelClock reaches table 77 for an HDMI or DVI
+ * PLL. With DP the clock is ATOM_DP_DTO and DIG1TransmitterControl ENABLE reaches
+ * the same helper when the PHY is in reset or still in HDMI mode, for example
+ * after a re-plug (BD-195). CR selectors below are firmware-defined operands, not
+ * invented public register names. No raw index window or general PSP command
+ * channel is exposed: one PSP message with the argument the caller states. */
 #include "link_clock_ports.inc"
 typedef struct CLOCK_SCOPE {
     BC250_LINK_ATOM* Link;
+    uint32_t MailboxValue;   /* SetPixelClock: 0; TX ENABLE: symclk_10khz of the call */
     uint32_t Selector, LastSelector, LastData, Before2, Before4, BeforeCntl, BeforeUpdate;
     unsigned HaveSelector, HaveData, Have2, Have4, HaveCntl, HaveUpdate;
     unsigned MailboxReady, MailboxArgument, MailboxSent;
@@ -82,11 +87,14 @@ static int scope_write(void* p,uint32_t r,uint32_t value)
     else if (r==CLOCK_PLL_UPDATE) allowed=s->HaveUpdate && value==(s->BeforeUpdate|1u);
     else if (r==CLOCK_DEBUG) allowed=value==0;
     else if (r==CLOCK_TX_DEBUG) allowed=value==0x4000;
+    /* RDPCSTX_CNTL: TX_FIFO_RD_START_DELAY 4, one TX_FIFO_LANEn_EN, or
+     * TX_FIFO_EN (0x10000, set by every DP TX ENABLE) - dpcs_2_0_3_sh_mask.h. */
     else if (r==CLOCK_CNTL) allowed=s->HaveCntl &&
         (value==((s->BeforeCntl&0xff0fffffu)|0x00400000u) ||
          value==(s->BeforeCntl|0x1000u) || value==(s->BeforeCntl|0x2000u) ||
-         value==(s->BeforeCntl|0x4000u) || value==(s->BeforeCntl|0x8000u));
-    else if (r==CLOCK_PSP34) allowed=!s->MailboxSent && s->MailboxReady && value==0;
+         value==(s->BeforeCntl|0x4000u) || value==(s->BeforeCntl|0x8000u) ||
+         value==(s->BeforeCntl|0x10000u));
+    else if (r==CLOCK_PSP34) allowed=!s->MailboxSent && s->MailboxReady && value==s->MailboxValue;
     else if (r==CLOCK_PSP33) allowed=!s->MailboxSent && s->MailboxReady &&
         s->MailboxArgument && value==0x00050000;
     if (!allowed) return -1;
