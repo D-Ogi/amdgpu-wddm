@@ -41,12 +41,12 @@ and attach the support file that the installer or the control app makes.
 
 | Area | Works | Not yet |
 |---|---|---|
-| Desktop | DWM composes on the GPU. DisplayPort, and HDMI through a passive adapter | Recovery from a GPU hang: a hang stops Windows |
+| Desktop | DWM composes on the GPU. DisplayPort, and HDMI through a passive adapter. A hung game loses only its own device | Modes above 300 MHz pixel clock (144 Hz and more at 1440p). Some GPU hangs (paging engine, 3DMark Time Spy) still stop Windows. Resume from hibernation |
 | Direct3D 12 | System runtime, feature level 12_1, DXR 1.1. The Witcher 3 Remaster with ray tracing | Conformance suites |
-| Direct3D 11 | System runtime, feature level 12_1 | Direct3D 10.0 programs run on the CPU |
-| Direct3D 9 | D3D9On12 of Windows on our Direct3D 12 driver | Window picture of some games (in work) |
+| Direct3D 11 | System runtime, feature level 12_1. Direct3D 10.0 and 10.1 programs also run on the GPU | - |
+| Direct3D 9 | D3D9On12 of Windows on our Direct3D 12 driver, for 64-bit and 32-bit programs | - |
 | Vulkan | Mesa RADV with ray tracing. Quake II RTX path-traces | Full conformance (CTS) run |
-| OpenGL | - | Registered OpenGL driver (in work) |
+| OpenGL | OpenGL 4.6 on the GPU for 64-bit programs, through Zink | 32-bit programs (they get the software OpenGL of Windows) |
 | Compute and video | Vulkan compute (llama.cpp), an early HIP runtime of our own, H.264 encoding through Media Foundation | Recording by a standard Windows application, measured |
 | Clocks and cooling | Automatic GPU clock up to 2000 MHz, fan control, unlock of all 40 compute units | - |
 | Other AMD GPUs | - | The driver starts only on a BC-250 today |
