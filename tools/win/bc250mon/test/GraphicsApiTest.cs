@@ -40,6 +40,18 @@ static class GraphicsApiTest
         Check(One(r, "D3D11") == "our D3D11 shell loaded, no engine yet", "D3D11 shell alone");
         r = C("d3d11.dll", "bc250d3d_router.dll", "amdgpu_wddm_d3d11.dll", "amdgpu_wddm_dxvk.dll");
         Check(One(r, "D3D11") == "our D3D11 shell and engine loaded, no ICD yet", "D3D11 without the ICD");
+        // The DriverStore names of tester.31 and later: each shell loads its own ICD copy. A WinUI or WebView2 host
+        // maps d3d10warp.dll next to our stack (M365Copilot.exe on 2026-10-20); the full stack still wins.
+        r = C("d3d11.dll", "d3d10warp.dll", "dcomp.dll", "bc250d3d_router.dll", "amdgpu_wddm_d3d11.dll",
+              "amdgpu_wddm_dxvk.dll", "amdgpu_wddm_radv_d3d11.dll");
+        Check(One(r, "D3D11") == "GPU (amdgpu-wddm DXVK + RADV)" && r[0].Level == Level.Good, "D3D11 DriverStore ICD next to WARP");
+        r = C("d3d12.dll", "amdgpu_wddm_d3d12.dll", "amdgpu_wddm_vkd3d.dll", "amdgpu_wddm_radv_d3d12.dll");
+        Check(One(r, "D3D12") == "GPU (amdgpu-wddm vkd3d + RADV)", "D3D12 DriverStore ICD");
+        // The ICD of one API is no evidence for the other one.
+        r = C("d3d12.dll", "amdgpu_wddm_d3d12.dll", "amdgpu_wddm_vkd3d.dll", "amdgpu_wddm_radv_d3d11.dll");
+        Check(One(r, "D3D12") == "our D3D12 shell and engine loaded, no ICD yet", "the D3D11 ICD copy is no D3D12 ICD");
+        r = C("d3d11.dll", "bc250d3d_router.dll", "bc250d3d_zink.dll", "amdgpu_wddm_radv_d3d11.dll");
+        Check(One(r, "D3D11") != "GPU (zink, desktop route)", "the D3D11 ICD copy is no desktop route ICD");
         r = C("d3d11.dll", "bc250d3d_router.dll", "bc250d3d.dll");
         Check(One(r, "D3D11") == "CPU (llvmpipe, app route)" && r[0].Level == Level.Warn, "D3D11 on llvmpipe, app route");
         // The same CPU UMD without the router is not the application decision (an injected or hosted load).
@@ -75,8 +87,18 @@ static class GraphicsApiTest
               .All(a => a.Api != "OpenGL"), "no OpenGL row next to one of our GPU paths");
         Check(C("kernel32.dll", "dxgi.dll").Count == 0, "DXGI alone is no API");
 
-        // 32-bit processes: the x86 payload has the D3D11, D3D12 and desktop routes under the same file names
-        // (BD-064), so a 32-bit process gets the same rows as a 64-bit one.
+        // 32-bit processes: up to tester.30 the x86 payload used the x64 file names (BD-064); from tester.31 on the
+        // DriverStore needs a base name unique across both architectures, so the x86 files carry a "32" suffix.
+        r = GraphicsApiProvider.Classify(new[] { "d3d11.dll", "bc250d3d_router32.dll", "amdgpu_wddm_d3d1132.dll",
+                     "amdgpu_wddm_dxvk32.dll", "amdgpu_wddm_radv_d3d1132.dll" }, true);
+        Check(One(r, "D3D11") == "GPU (amdgpu-wddm DXVK + RADV)", "x86 D3D11 DriverStore names");
+        r = GraphicsApiProvider.Classify(new[] { "d3d12.dll", "amdgpu_wddm_d3d1232.dll", "amdgpu_wddm_vkd3d32.dll",
+                     "amdgpu_wddm_radv_d3d1232.dll" }, true);
+        Check(One(r, "D3D12") == "GPU (amdgpu-wddm vkd3d + RADV)", "x86 D3D12 DriverStore names");
+        r = GraphicsApiProvider.Classify(new[] { "d3d11.dll", "bc250d3d_router32.dll", "bc250d3d32.dll" }, true);
+        Check(One(r, "D3D11") == "CPU (llvmpipe, app route)", "x86 CPU UMD, app route");
+        r = GraphicsApiProvider.Classify(new[] { "vulkan-1.dll", "vulkan_radeon32.dll" }, true);
+        Check(One(r, "Vulkan") == "GPU (RADV ICD)", "x86 Vulkan ICD");
         r = GraphicsApiProvider.Classify(new[] { "d3d11.dll", "amdgpu_wddm_d3d11.dll", "amdgpu_wddm_dxvk.dll", "amdgpu_wddm_radv.dll" }, true);
         Check(One(r, "D3D11") == "GPU (amdgpu-wddm DXVK + RADV)", "x86 D3D11 uses the same module names");
         r = GraphicsApiProvider.Classify(new[] { "d3d12.dll", "amdgpu_wddm_d3d12.dll", "amdgpu_wddm_vkd3d.dll", "amdgpu_wddm_radv.dll" }, true);

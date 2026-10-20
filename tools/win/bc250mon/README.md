@@ -167,13 +167,16 @@ foreground one first, then the ones on our GPU path.
 
 A green row needs the whole user-mode stack of one render path: the shell the runtime opened, the engine
 that shell loads and the ICD the engine draws with. The module names are the ones the release installs
-(`tools/release/release-sources.json`), and the x86 payload uses the same names minus zink, which it does
-not have (`tools/release/installer/common.ps1`), so 32-bit processes are covered by the same table.
+(`tools/release/release-sources.json`, `driver/contract/amdgpu_driver_package.h`). From tester.31 on, the
+user-mode drivers run from the DriverStore: each shell loads its own ICD copy (`amdgpu_wddm_radv_d3d11.dll`,
+`amdgpu_wddm_radv_d3d12.dll`), and the x86 files carry a `32` suffix (`amdgpu_wddm_d3d1132.dll`,
+`amdgpu_wddm_dxvk32.dll`, `amdgpu_wddm_radv_d3d1132.dll` and so on). The panel knows both name sets and the names
+up to tester.30; `test_module_names.py` fails when the header names a file the panel does not know.
 
 | Loaded | Row |
 |---|---|
-| `d3d12.dll` / `d3d12core.dll` + `amdgpu_wddm_d3d12.dll` + `amdgpu_wddm_vkd3d.dll` + `amdgpu_wddm_radv.dll` | `D3D12  GPU (amdgpu-wddm vkd3d + RADV)` (green) |
-| `d3d11.dll` / `d3d10*.dll` + `amdgpu_wddm_d3d11.dll` + `amdgpu_wddm_dxvk.dll` + `amdgpu_wddm_radv.dll` | `D3D11  GPU (amdgpu-wddm DXVK + RADV)` (green) |
+| `d3d12.dll` / `d3d12core.dll` + `amdgpu_wddm_d3d12.dll` + `amdgpu_wddm_vkd3d.dll` + `amdgpu_wddm_radv_d3d12.dll` | `D3D12  GPU (amdgpu-wddm vkd3d + RADV)` (green) |
+| `d3d11.dll` / `d3d10*.dll` + `amdgpu_wddm_d3d11.dll` + `amdgpu_wddm_dxvk.dll` + `amdgpu_wddm_radv_d3d11.dll` | `D3D11  GPU (amdgpu-wddm DXVK + RADV)` (green), also when `d3d10warp.dll` is mapped next to it |
 | ... shell, or shell and engine, without the rest | `our D3D11 shell loaded, no engine yet` / `... no ICD yet` |
 | ... + `bc250d3d_zink.dll` + `amdgpu_wddm_radv.dll` / `bc250d3d.dll` | `GPU (zink, desktop route)` (green) / `CPU (llvmpipe, app route)` (amber) |
 | ... + `bc250d3d_router.dll` only | `router loaded, no backend yet` |
@@ -184,8 +187,10 @@ not have (`tools/release/installer/common.ps1`), so 32-bit processes are covered
 
 An API runtime with none of our modules gives `none of our UMDs loaded`: many D3D12 games load `d3d11.dll`
 without drawing with it, so no claim is made, and another adapter's UMD is not ours to name.
-`amdgpu_wddm_radv.dll` is the ICD our own shells load by name. The Vulkan row ignores it, because only the
-registered `vulkan_radeon.dll` proves the Vulkan loader chose RADV.
+The ICD copies our own shells load by name (`amdgpu_wddm_radv*.dll`) are no Vulkan evidence. The Vulkan row
+ignores them, because only the registered `vulkan_radeon.dll` (`vulkan_radeon32.dll` in a 32-bit process) proves
+the Vulkan loader chose RADV. A WinUI or WebView2 host (M365Copilot.exe, for example) maps `d3d10warp.dll` next to
+our complete D3D11 stack. The row is green, because the stack is complete.
 
 A shell without its engine or ICD is a device still being created, and the row is grey for the first 10
 seconds. After that it is a failed `LoadLibrary` and the row turns amber with `engine never loaded (load

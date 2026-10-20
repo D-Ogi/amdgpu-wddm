@@ -63,8 +63,27 @@ namespace Bc250Mon
                 || path.Contains("\\windows\\winsxs\\");
         }
 
+        // The file names of each part of a render path, x64 and x86 (driver/contract/amdgpu_driver_package.h for the
+        // DriverStore names; test_module_names.py checks every name of that header against these lists). Since
+        // tester.31 the user-mode drivers run from the DriverStore, where a base name is unique across both
+        // architectures, and each shell loads its own copy of the ICD: amdgpu_wddm_radv_d3d11.dll and
+        // amdgpu_wddm_radv_d3d12.dll. amdgpu_wddm_radv.dll stays the ICD of the desktop route and of the shells up
+        // to tester.30. With that one name only, the panel read every D3D11 and D3D12 application of tester.31 as
+        // "CPU (WARP)" (WinUI and WebView2 hosts map d3d10warp.dll as well) or "no ICD yet", while it drew on our
+        // GPU (M365Copilot, 2026-10-20).
+        public static readonly string[] D3d11Shells = { "amdgpu_wddm_d3d11.dll", "amdgpu_wddm_d3d1132.dll" };
+        public static readonly string[] D3d11Engines = { "amdgpu_wddm_dxvk.dll", "amdgpu_wddm_dxvk32.dll" };
+        public static readonly string[] D3d11Icds = { "amdgpu_wddm_radv_d3d11.dll", "amdgpu_wddm_radv_d3d1132.dll", "amdgpu_wddm_radv.dll" };
+        public static readonly string[] D3d12Shells = { "amdgpu_wddm_d3d12.dll", "amdgpu_wddm_d3d1232.dll" };
+        public static readonly string[] D3d12Engines = { "amdgpu_wddm_vkd3d.dll", "amdgpu_wddm_vkd3d32.dll" };
+        public static readonly string[] D3d12Icds = { "amdgpu_wddm_radv_d3d12.dll", "amdgpu_wddm_radv_d3d1232.dll", "amdgpu_wddm_radv.dll" };
+        public static readonly string[] HostedUmds = { "bc250d3d_zink.dll", "bc250d3d_zink32.dll" };
+        public static readonly string[] DesktopIcds = { "amdgpu_wddm_radv.dll" };
+        public static readonly string[] CpuUmds = { "bc250d3d.dll", "bc250d3d32.dll" };
+        public static readonly string[] Routers = { "bc250d3d_router.dll", "bc250d3d_router32.dll" };
+
         // modules: lower-case file names of every image mapped in the process. wow64: the process is 32-bit (no
-        // row depends on it today: the x86 payload uses the x64 file names for every API).
+        // row depends on it: the lists above hold the x86 names next to the x64 ones).
         // replacedRuntimes: the subset of `modules` that are Direct3D runtimes mapped from outside \Windows\.
         //
         // A GPU claim needs the whole user-mode stack of one render path: the shell the runtime opened, the
@@ -77,28 +96,27 @@ namespace Bc250Mon
                                              ICollection<string> replacedRuntimes = null)
         {
             Func<string, bool> has = modules.Contains;
+            Func<string[], bool> any = names => names.Any(modules.Contains);
             Func<string, bool> replaced = n => replacedRuntimes != null && replacedRuntimes.Contains(n);
             var result = new List<ApiPath>();
-            bool warp = has("d3d10warp.dll"), icd = has("amdgpu_wddm_radv.dll");
+            bool warp = has("d3d10warp.dll");
             if (replaced("dxgi.dll")) result.Add(Foreign("DXGI", SideLoaded));
             if (has("d3d12.dll") || has("d3d12core.dll"))
             {
-                bool shell = has("amdgpu_wddm_d3d12.dll"), engine = has("amdgpu_wddm_vkd3d.dll");
+                bool shell = any(D3d12Shells), engine = any(D3d12Engines), icd = any(D3d12Icds);
                 if (replaced("d3d12.dll")) result.Add(Foreign("D3D12", SideLoaded));
                 else if (shell && engine && icd) result.Add(Gpu("D3D12", "GPU (amdgpu-wddm vkd3d + RADV)"));
                 else if (warp) result.Add(Cpu("D3D12", "CPU (WARP)"));
                 else if (shell) result.Add(Idle("D3D12", engine ? "our D3D12 shell and engine loaded, no ICD yet"
                                                                : "our D3D12 shell loaded, no engine yet"));
-                // The x86 payload has its own D3D12 shell, engine and ICD under the same file names (BD-064),
-                // so a 32-bit process takes the same rows as a 64-bit one.
                 else result.Add(Idle("D3D12", "none of our UMDs loaded"));
             }
             bool d3d11 = has("d3d11.dll"), d3d10 = has("d3d10.dll") || has("d3d10_1.dll");
             if (d3d11 || d3d10)
             {
                 string api = d3d11 ? (d3d10 ? "D3D11+10" : "D3D11") : "D3D10";
-                bool zink = has("bc250d3d_zink.dll");
-                bool shell = has("amdgpu_wddm_d3d11.dll"), engine = has("amdgpu_wddm_dxvk.dll");
+                bool zink = any(HostedUmds), router = any(Routers);
+                bool shell = any(D3d11Shells), engine = any(D3d11Engines), icd = any(D3d11Icds), desktopIcd = any(DesktopIcds);
                 // Every runtime that contributed to this row has to be tested: one side-loaded runtime next to
                 // the application is enough, whichever of the two the row merged.
                 if (replaced("d3d11.dll") || replaced("d3d10.dll") || replaced("d3d10_1.dll") || replaced("d3d10core.dll"))
@@ -106,20 +124,19 @@ namespace Bc250Mon
                 else
                 {
                     if (shell && engine && icd) result.Add(Gpu(api, "GPU (amdgpu-wddm DXVK + RADV)"));
-                    else if (zink && icd) result.Add(Gpu(api, "GPU (zink, desktop route)"));
+                    else if (zink && desktopIcd) result.Add(Gpu(api, "GPU (zink, desktop route)"));
                     // bc250d3d.dll is the CPU UMD of both router decisions (driver/umd/router/router-policy.h).
                     // dwm is excluded from this panel, so a process that reaches here took the application
                     // decision (AppRouter Mode/Deny), not the desktop one. A HostedClients entry on the
                     // desktop CPU route maps the same two files and cannot be told apart from the modules.
-                    else if (has("bc250d3d.dll"))
-                        result.Add(Cpu(api, has("bc250d3d_router.dll") ? "CPU (llvmpipe, app route)"
-                                                                       : "CPU (llvmpipe)"));
+                    else if (any(CpuUmds))
+                        result.Add(Cpu(api, router ? "CPU (llvmpipe, app route)" : "CPU (llvmpipe)"));
                     else if (has("d3d11on12.dll")) result.Add(Idle(api, "via D3D11On12 (D3D12 path)"));
                     else if (warp) result.Add(Cpu(api, "CPU (WARP)"));
                     else if (shell) result.Add(Idle(api, engine ? "our D3D11 shell and engine loaded, no ICD yet"
                                                                 : "our D3D11 shell loaded, no engine yet"));
                     else if (zink) result.Add(Idle(api, "our zink UMD loaded, no ICD yet"));
-                    else if (has("bc250d3d_router.dll")) result.Add(Idle(api, "router loaded, no backend yet"));
+                    else if (router) result.Add(Idle(api, "router loaded, no backend yet"));
                     else result.Add(Idle(api, "none of our UMDs loaded"));
                 }
             }
@@ -128,9 +145,10 @@ namespace Bc250Mon
                     : has("d3d9on12.dll") ? Idle("D3D9", "via D3D9On12 (D3D12 path)")
                     : has("bc250umd.dll") ? Cpu("D3D9", "stub UMD, no D3D9 renderer") : Idle("D3D9", "none of our UMDs loaded"));
             if (has("vulkan-1.dll"))
-                // Only the registered system ICD counts here: amdgpu_wddm_radv.dll is the copy our D3D shells
-                // load directly, it is not reached through the Vulkan loader and says nothing about vulkan-1.
-                result.Add(has("vulkan_radeon.dll") ? Gpu("Vulkan", "GPU (RADV ICD)")
+                // Only the registered system ICD counts here (vulkan_radeon32.dll in a 32-bit process): the ICD
+                // copies our D3D shells load directly are not reached through the Vulkan loader and say nothing
+                // about vulkan-1.
+                result.Add(has("vulkan_radeon.dll") || has("vulkan_radeon32.dll") ? Gpu("Vulkan", "GPU (RADV ICD)")
                     : has("vulkan_lvp.dll") ? Cpu("Vulkan", "CPU (lavapipe)") : Idle("Vulkan", "none of our ICDs loaded"));
             // An OpenGL application maps d3d11.dll or dxgi.dll too (SDL, GLFW and most GL engines do, for the
             // display and the adapter list), so the absence of a Direct3D runtime is no condition for this row.
