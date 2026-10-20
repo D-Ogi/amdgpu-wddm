@@ -1,6 +1,7 @@
 # Host tests for display modes, stage A: the EDID parser and mode list (edid.c), the DP AUX engine sequence and
 # EDID read (dpaux.c, display_io.c) and the scaler math and register sequence (dcn_scale.c), each compiled as the
 # miniport compiles it and driven by its test (edid_test.c, dpaux_test.c, dcn_scale_test.c say what they prove).
+# mode_admit_test.c runs field and lab timings through the real EDID gate, DP rate ladder, display plan and OPTC gate.
 # The run first checks that driver\kmd\scl_filter_4tap_64p_upscale.inc is still the verbatim extraction of the
 # reference file (driver\amdgpu-import\PROVENANCE.md).
 #
@@ -52,7 +53,10 @@ $tests = [ordered]@{
     'optc_test'      = @('../shim/bc250_optc.c', 'display_io.c')
     'dp_stream_test' = @('../shim/bc250_dp_stream.c', '../shim/bc250_optc.c', 'display_io.c')
     'dcn_scale_test' = @('dcn_scale.c', 'display_io.c', 'edid.c')
+    'mode_admit_test' = @('../shim/bc250_dml201.c', '../shim/bc250_optc.c', '../shim/bc250_dp_train.c', 'display_io.c', 'edid.c')
 }
+# BD-139: the display plan builds as run_dml201.ps1 builds it, with its imported headers and strict floating point.
+$extra = @{ 'mode_admit_test' = @('/fp:precise', "/I$repo\driver\shim\dml201") }
 $failed = @()
 & python (Join-Path $repo 'tools\import\extract_display.py') --check
 if ($LASTEXITCODE -ne 0) { throw 'AMD display imports are stale' }
@@ -71,7 +75,7 @@ foreach ($t in $tests.Keys) {
     $sources = @((Join-Path $here "$t.c")) + @($tests[$t] | ForEach-Object { Join-Path $kmd $_ })
     $clArgs = @('/nologo', '/TC', '/W4', '/WX', '/O2', '/MT',
         "/I$kmd", "/I$repo\third_party\linux-amdgpu", "/I$($msvc.FullName)\include",
-        "/I$sdk\Include\$KitVersion\ucrt", "/Fo$tobj\", "/Fe$Out\$t.exe") + $sources + @(
+        "/I$sdk\Include\$KitVersion\ucrt", "/Fo$tobj\", "/Fe$Out\$t.exe") + @($extra[$t] | Where-Object { $_ }) + $sources + @(
         '/link', "/LIBPATH:$($msvc.FullName)\lib\x64", "/LIBPATH:$sdklib\ucrt\x64", "/LIBPATH:$sdklib\um\x64")
     & $cl @clArgs
     if ($LASTEXITCODE -ne 0) { throw "Host build of $t failed" }
