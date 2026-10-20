@@ -158,13 +158,20 @@ static unsigned int Store(void *context,unsigned int op,const AMDGPU_TRANSFER_HE
         if(NT_SUCCESS(status) && already) return STATE_ALREADY_APPLIED;
     } else if(op==AMDGPU_TRANSFER_PUT) {
         WCHAR path[128],name[128];HANDLE key=NULL;
+        // The boot-loop guard count belongs to the driver whose starts it counted (guard.c). A transfer is the
+        // first start of an installed driver package, so its generation starts with no count, whatever the
+        // source holds: the old generation of an update in place, the removal archive or legacy Parameters.
+        // Before this, a PC whose old driver never had a confirmed start (BD-189, count 2) gave the count to the
+        // new driver, which refused its first start (lab 22631, 2026-10-20). The guard counts again from this
+        // start on, so a new driver that fails at every start still stops at the third.
+        BOOLEAN guardCount=!spec->path[0] && !strcmp(spec->name,"UnconfirmedStarts");
         if(strlen(spec->path)>=128 || strlen(spec->name)>=128) status=STATUS_INVALID_PARAMETER;
         else {
             Wide(spec->path,path);Wide(spec->name,name);
             status=spec->private_read?PrivateChild(t->data,path,&key):Child(t->data,path,TRUE,&key);
             if(NT_SUCCESS(status)) {
                 NTSTATUS closed;
-                status=value->status==AMDGPU_STATE_ABSENT?Remove(key,name):Put(key,name,value->type,data,value->bytes);
+                status=value->status==AMDGPU_STATE_ABSENT || guardCount?Remove(key,name):Put(key,name,value->type,data,value->bytes);
                 closed=ZwClose(key);
                 if(NT_SUCCESS(status) && !NT_SUCCESS(closed)) status=closed;
             }

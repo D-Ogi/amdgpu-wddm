@@ -120,6 +120,15 @@ static NTSTATUS ZwClose(HANDLE key) {CHECK(memory.keys[Id(key)].handles);memory.
 /* ACTUAL_TRANSACTION */
 static unsigned int Empty(void *context,unsigned int source,const AMDGPU_STATE_SPEC *spec,AMDGPU_STATE_VALUE *v,void *data,unsigned int capacity)
 {(void)context;(void)source;(void)spec;(void)v;(void)data;(void)capacity;return AMDGPU_STATE_ABSENT;}
+// The source of a PC whose old driver never had a confirmed start (BD-189): the guard count 2, the start record's
+// copy of it, and one setting the tester chose.
+static unsigned int Guarded(void *context,unsigned int source,const AMDGPU_STATE_SPEC *spec,AMDGPU_STATE_VALUE *v,void *data,unsigned int capacity)
+{
+    DWORD value=!strcmp(spec->name,"CpuTune")?1:2;(void)context;(void)source;
+    if(strcmp(spec->name,"UnconfirmedStarts") && !(strcmp(spec->name,"CpuTune")==0 && !spec->path[0]))return AMDGPU_STATE_ABSENT;
+    if(capacity<4)return AMDGPU_STATE_BUFFER;
+    memcpy(data,&value,4);v->type=REG_DWORD;v->bytes=4;return AMDGPU_STATE_OK;
+}
 static void Reset(void)
 {ZeroMemory(&memory,sizeof(memory));memory.keys_count=2;memory.values_count=1;memory.keys[1].handles=1;durable=memory;call=fail_at=thaw_before_activate=fail_active_flush=0;}
 static void Crash(void)
@@ -164,6 +173,35 @@ int main(void)
     {DWORD choice=1;CHECK(Put((HANDLE)(uintptr_t)data,L"CpuTune",REG_DWORD,&choice,4)==0);}
     CHECK(DriverStateCommitTransfer((HANDLE)1,buffer,bytes)==0);NoLeaks();
     value=FindValue(data,L"CpuTune");CHECK(value && *(DWORD*)memory.values[value].data==1);
+    // A transfer gives the new driver no boot-loop guard count, from every origin, and keeps the settings and
+    // the start record (lab 22631, 2026-10-20: the count 2 of the old driver refused the new one).
+    for(i=AMDGPU_TRANSFER_LEGACY;i<=AMDGPU_TRANSFER_ARCHIVE;i++) {
+        AMDGPU_TRANSFER_HEADER g=h;unsigned int record;WCHAR id[33];
+        g.origin=i;g.board_kind=AMDGPU_BOARD_UNPROVEN;g.source_schema=i==AMDGPU_TRANSFER_LEGACY?1:AmdgpuStateSchema();
+        memset(g.source_generation,0,16);if(i!=AMDGPU_TRANSFER_LEGACY)g.source_generation[0]=1;
+        memset(g.transaction,0,16);g.transaction[0]=(unsigned char)(0x10+i);
+        swprintf_s(id,33,L"%02x000000000000000000000000000000",0x10+i);
+        Reset();
+        if(i==AMDGPU_TRANSFER_CURRENT) {
+            // The update in place: the old generation 01 is active, and this transaction froze it.
+            AMDGPU_TRANSFER_HEADER old=h;DWORD one=1;
+            old.origin=AMDGPU_TRANSFER_LEGACY;old.source_schema=1;memset(old.source_generation,0,16);
+            memset(old.transaction,0,16);old.transaction[0]=1;
+            CHECK(AmdgpuTransferCapture(&old,Empty,NULL,buffer,sizeof(buffer),&bytes)==0);
+            CHECK(DriverStateCommitTransfer((HANDLE)1,buffer,bytes)==0);
+            root=FindKey(1,L"StateV2");
+            CHECK(Put((HANDLE)(uintptr_t)root,L"Frozen",REG_DWORD,&one,4)==0);
+            CHECK(Put((HANDLE)(uintptr_t)root,L"FrozenBy",REG_SZ,id,sizeof(id))==0);
+        }
+        CHECK(AmdgpuTransferCapture(&g,Guarded,NULL,buffer,sizeof(buffer),&bytes)==0);
+        CHECK(DriverStateCommitTransfer((HANDLE)1,buffer,bytes)==0);NoLeaks();
+        root=FindKey(1,L"StateV2");gens=FindKey(root,L"Generations");gen=FindKey(gens,id);
+        data=FindKey(gen,L"Data");CHECK(data!=0);
+        CHECK(!FindValue(data,L"UnconfirmedStarts"));
+        value=FindValue(data,L"CpuTune");CHECK(value && *(DWORD*)memory.values[value].data==1);
+        record=FindKey(data,L"StartRecord");
+        value=record?FindValue(record,L"UnconfirmedStarts"):0;CHECK(value && *(DWORD*)memory.values[value].data==2);
+    }
     Reset();irql=1;CHECK(DriverStateCommitTransfer((HANDLE)1,buffer,bytes)==STATUS_INVALID_DEVICE_STATE && !call);
     irql=0;system_thread=0;CHECK(DriverStateCommitTransfer((HANDLE)1,buffer,bytes)==STATUS_INVALID_DEVICE_STATE && !call);
     system_thread=1;
