@@ -1,4 +1,4 @@
-// SST RGB8 at RBR/HBR. The caller owns the PHY and AUX for the entire call.
+// SST RGB8 at RBR, HBR, HBR2 and HBR3. The caller owns the PHY and AUX for the entire call.
 // Hardware callbacks return zero on success and must each have a finite bound.
 #pragma once
 #include "bc250_atom_types.h"
@@ -14,23 +14,37 @@ typedef struct BC250_DP_TRAIN_IO {
     int (*Read)(void *Context, uint32_t Address, uint8_t *Data, unsigned Length);
     int (*Write)(void *Context, uint32_t Address, const uint8_t *Data, unsigned Length);
     int (*Enable)(void *Context, unsigned Rate, unsigned Lanes, int Enhanced);
-    int (*Pattern)(void *Context, unsigned Pattern); // 1 TPS1, 2 TPS2, 0 normal symbols
+    int (*Pattern)(void *Context, unsigned Pattern); // 1 to 4 TPS1 to TPS4, 0 normal symbols
     int (*Drive)(void *Context, unsigned Swing, unsigned PreEmphasis);
     int (*Disable)(void *Context); // unconditional hardware cleanup, even on cancellation
     uint64_t (*NowUs)(void *Context);
     int (*DelayUs)(void *Context, unsigned Us); // passive wait for long delays
 } BC250_DP_TRAIN_IO;
 
+// One rate the training tried: its link rate (DPCD LINK_BW_SET), the EQ pattern (2 to 4), the phase it ended in
+// (1 CR, 2 EQ) and the AMD link_training_result.
+typedef struct BC250_DP_TRAIN_ATTEMPT {
+    unsigned Rate, EqPattern, Phase, AmdResult;
+} BC250_DP_TRAIN_ATTEMPT;
+
 typedef struct BC250_DP_TRAIN_RESULT {
     enum BC250_DP_TRAIN_STATUS Status;
     unsigned Rate, Lanes, Enhanced, Attempts, Phase, CrSamples, EqSamples;
     unsigned Swing, PreEmphasis, Reads, Writes, WaitUs, AmdResult;
     unsigned CleanupFailed;
+    unsigned FirstRate, EqPattern;      // the rate tried first; the EQ pattern of the last attempt
+    BC250_DP_TRAIN_ATTEMPT Tried[4];    // Attempts of them, in order; rates only go down
     uint8_t LastStatus[6];
     uint64_t ElapsedUs;
 } BC250_DP_TRAIN_RESULT;
 
+// The most any 8b/10b link carries at RGB8: HBR3 x4, 8.1 Gbps x 4 lanes x 8/10 / 24 bits. Above the 655.35 MHz an
+// EDID detailed timing can state, and under the 1200 MHz DISPCLK of dcn201_resource.c.
+#define BC250_DP_MAX_PIXEL_KHZ 1080000u
+
 // Capabilities are the first 16 DPCD bytes. No inferred EDID bandwidth or rate.
 uint32_t Bc250DpMaxPixelClock(const uint8_t Caps[16]);
+// The rate Bc250DpTrain tries first for this pixel clock, 0 when no rate of these caps carries it.
+unsigned Bc250DpFirstRate(const uint8_t Caps[16], uint32_t PixelKHz);
 enum BC250_DP_TRAIN_STATUS Bc250DpTrain(const BC250_DP_TRAIN_IO *Io,
     const uint8_t Caps[16], uint32_t PixelKHz, BC250_DP_TRAIN_RESULT *Result);

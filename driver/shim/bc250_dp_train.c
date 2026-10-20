@@ -91,7 +91,8 @@ static void dp_set_hw_training_pattern(struct dc_link *l,const struct link_resou
     (void)res;(void)offset;
     if(!current(l)) return;
     l->r->Phase=pattern==DP_TRAINING_PATTERN_SEQUENCE_1?1u:2u;
-    (void)checked(l,l->io->Pattern(l->io->Context,l->r->Phase));
+    // The PHY callback takes TPS1 to TPS4 as 1 to 4 (SEQUENCE_1 to SEQUENCE_4 are 0 to 3).
+    (void)checked(l,l->io->Pattern(l->io->Context,(unsigned)pattern+1u));
 }
 static void dp_set_hw_lane_settings(struct dc_link *l,const struct link_resource *res,
     const struct link_training_settings *s,uint32_t offset)
@@ -110,9 +111,12 @@ static void dpcd_set_lane_settings(struct dc_link *l,const struct link_training_
 static void dpcd_set_lt_pattern_and_lane_settings(struct dc_link *l,const struct link_training_settings *s,
     enum dc_dp_training_pattern pattern,uint32_t offset)
 {
+    static const uint8_t dpcd[4]={DP_TRAINING_PATTERN_1,DP_TRAINING_PATTERN_2,DP_TRAINING_PATTERN_3,
+        DP_TRAINING_PATTERN_4};
     uint8_t b[5];unsigned i;(void)offset;
-    b[0]=(uint8_t)((pattern==DP_TRAINING_PATTERN_SEQUENCE_1?DP_TRAINING_PATTERN_1:
-                   DP_TRAINING_PATTERN_2)|DP_LINK_SCRAMBLING_DISABLE);
+    // dp_training_pattern_to_dpcd_training_pattern and dp_initialize_scrambling_data_symbols: TPS1 to TPS3 go
+    // out with scrambling disabled, TPS4 scrambled. Only the four 8b/10b sequences reach this function.
+    b[0]=(uint8_t)(dpcd[(unsigned)pattern&3u]|(pattern==DP_TRAINING_PATTERN_SEQUENCE_4?0u:DP_LINK_SCRAMBLING_DISABLE));
     for(i=0;i<(unsigned)s->link_settings.lane_count;++i) b[i+1]=s->dpcd_lane_settings[i].raw;
     (void)wr(l,DP_TRAINING_PATTERN_SET,b,1+(unsigned)s->link_settings.lane_count);
 }
@@ -160,15 +164,49 @@ static unsigned maxRate(const uint8_t caps[16])
     if(lanes!=1 && lanes!=2 && lanes!=4) return 0;
     if(rate!=LINK_RATE_LOW && rate!=LINK_RATE_HIGH && rate!=LINK_RATE_HIGH2 && rate!=LINK_RATE_HIGH3) return 0;
     if((caps[DP_TRAINING_AUX_RD_INTERVAL]&DP_TRAINING_AUX_RD_MASK)>6) return 0;
-    // HBR2/3 require additional source PHY capabilities/TPS and are not exposed.
-    return rate>=LINK_RATE_HIGH?LINK_RATE_HIGH:LINK_RATE_LOW;
+    // BD-139: every 8b/10b rate the sink names. dcn201_resource.c link_enc_feature declares this encoder HBR2, HBR3,
+    // TPS3 and TPS4 capable (Linux 7d0a66e4), and DIG1TransmitterControl takes the four symbol clocks.
+    return rate;
+}
+// 27 MHz reference * rate * lanes * 8 payload bits / RGB8's 24 bits.
+static uint32_t capacity(unsigned rate,unsigned lanes) { return rate*27000u*lanes/3u; }
+static const unsigned g_Rates[4]={LINK_RATE_LOW,LINK_RATE_HIGH,LINK_RATE_HIGH2,LINK_RATE_HIGH3};
+// BD-139: every mode HBR carries starts at HBR as before (RBR when the sink has nothing faster), so the links that
+// trained before keep their rate. A mode HBR cannot carry starts at the lowest faster rate that carries it.
+static unsigned firstRate(unsigned max,unsigned lanes,uint32_t pixel)
+{
+    unsigned i=max>=LINK_RATE_HIGH?1u:0u;
+    while(i<3u && g_Rates[i]<max && pixel>capacity(g_Rates[i],lanes)) ++i;
+    return g_Rates[i];
+}
+static unsigned lowerRate(unsigned rate)
+{
+    unsigned i;
+    for(i=1;i<4u;++i) if(g_Rates[i]==rate) return g_Rates[i-1];
+    return 0;
+}
+// Linux decide_eq_training_pattern: TPS4 when the sink sets TPS4_SUPPORTED, else TPS3 when it sets TPS3_SUPPORTED,
+// else TPS2. Deviation: RBR and HBR keep TPS2, the pattern every link of this driver trained with before BD-139, so
+// a mode HBR carries trains exactly as it did. DP 1.2 makes TPS3 mandatory for an HBR2 sink.
+static enum dc_dp_training_pattern eqPattern(const uint8_t caps[16],unsigned rate)
+{
+    if(rate<LINK_RATE_HIGH2) return DP_TRAINING_PATTERN_SEQUENCE_2;
+    if(caps[DP_MAX_DOWNSPREAD]&DP_TPS4_SUPPORTED) return DP_TRAINING_PATTERN_SEQUENCE_4;
+    if(caps[DP_MAX_LANE_COUNT]&DP_TPS3_SUPPORTED) return DP_TRAINING_PATTERN_SEQUENCE_3;
+    return DP_TRAINING_PATTERN_SEQUENCE_2;
 }
 uint32_t Bc250DpMaxPixelClock(const uint8_t caps[16])
 {
     unsigned rate=maxRate(caps);
     if(!rate) return 0;
-    // 27 MHz reference * rate * lanes * 8 payload bits / RGB8's 24 bits.
-    return rate*27000u*(caps[DP_MAX_LANE_COUNT]&DP_MAX_LANE_COUNT_MASK)/3u;
+    return capacity(rate,caps[DP_MAX_LANE_COUNT]&DP_MAX_LANE_COUNT_MASK);
+}
+unsigned Bc250DpFirstRate(const uint8_t caps[16],uint32_t pixel)
+{
+    unsigned rate=maxRate(caps),lanes;
+    if(!rate || !pixel) return 0;
+    lanes=caps[DP_MAX_LANE_COUNT]&DP_MAX_LANE_COUNT_MASK;
+    return pixel>capacity(rate,lanes)?0u:firstRate(rate,lanes,pixel);
 }
 static int cleanup(struct dc_link *l)
 {
@@ -184,7 +222,8 @@ enum BC250_DP_TRAIN_STATUS Bc250DpTrain(const BC250_DP_TRAIN_IO *io,const uint8_
 {
     struct shim_dc dc={0};struct shim_ctx ctx={&dc};struct dc_link l={&ctx,io,r,0};
     struct link_resource resource={0};struct link_training_settings s;
-    enum link_training_result result;unsigned rate,interval,lanes;
+    enum link_training_result result;unsigned rate,next,interval,lanes;
+    BC250_DP_TRAIN_ATTEMPT *tried;
     uint8_t b[2];int touched=0;
     if(!r) return BC250_DP_TRAIN_ARGUMENT;
     memset(r,0,sizeof(*r));
@@ -196,11 +235,13 @@ enum BC250_DP_TRAIN_STATUS Bc250DpTrain(const BC250_DP_TRAIN_IO *io,const uint8_
     interval=caps[DP_TRAINING_AUX_RD_INTERVAL]&DP_TRAINING_AUX_RD_MASK;
     l.began=io->NowUs(io->Context);
     r->Lanes=lanes;r->Enhanced=(caps[DP_MAX_LANE_COUNT]&DP_ENHANCED_FRAME_CAP)!=0;
-    // Try HBR first. One fallback to RBR is allowed only if it carries the mode.
+    rate=firstRate(rate,lanes,pixel);r->FirstRate=rate;
+    // Rates only go down, so there are at most four attempts and each has its own record.
     for(;;) {
-        r->Rate=rate;++r->Attempts;
+        r->Rate=rate;tried=&r->Tried[r->Attempts++&3u];
         memset(&s,0,sizeof(s));s.link_settings.lane_count=(enum dc_lane_count)lanes;s.link_settings.link_rate=rate;
-        s.pattern_for_cr=DP_TRAINING_PATTERN_SEQUENCE_1;s.pattern_for_eq=DP_TRAINING_PATTERN_SEQUENCE_2;
+        s.pattern_for_cr=DP_TRAINING_PATTERN_SEQUENCE_1;s.pattern_for_eq=eqPattern(caps,rate);
+        r->EqPattern=(unsigned)s.pattern_for_eq+1u;tried->Rate=rate;tried->EqPattern=r->EqPattern;
         s.eq_pattern_time=dp_translate_training_aux_read_interval(interval);
         s.cr_pattern_time=interval?s.eq_pattern_time:100;
         // DP 1.4 CR reads use 100 us irrespective of the EQ interval.
@@ -218,7 +259,7 @@ enum BC250_DP_TRAIN_STATUS Bc250DpTrain(const BC250_DP_TRAIN_IO *io,const uint8_
         if(!wr(&l,DP_DOWNSPREAD_CTRL,b,2)) break;
         result=perform_8b_10b_clock_recovery_sequence(&l,&resource,&s,0);
         if(result==LINK_TRAINING_SUCCESS) result=perform_8b_10b_channel_equalization_sequence(&l,&resource,&s,0);
-        r->AmdResult=(unsigned)result;
+        r->AmdResult=(unsigned)result;tried->Phase=r->Phase;tried->AmdResult=r->AmdResult;
         if(!current(&l)) break;
         if(result==LINK_TRAINING_SUCCESS) {
             b[0]=DP_TRAINING_PATTERN_DISABLE;
@@ -227,7 +268,11 @@ enum BC250_DP_TRAIN_STATUS Bc250DpTrain(const BC250_DP_TRAIN_IO *io,const uint8_
         }
         if(cleanup(&l)) { r->Status=BC250_DP_TRAIN_IO_ERROR;touched=0;break; }
         touched=0;
-        if(rate==LINK_RATE_HIGH && pixel<=LINK_RATE_LOW*27000u*lanes/3u) { rate=LINK_RATE_LOW;continue; }
+        // The next lower rate is tried while it still carries the mode: HBR to RBR as before BD-139. A first rate
+        // above HBR was chosen because HBR does not carry the mode, so its failure ends here; the connector then
+        // keeps this sink below it (connector_link.c).
+        next=lowerRate(rate);
+        if(next && pixel<=capacity(next,lanes)) { rate=next;continue; }
         r->Status=r->Phase==1?BC250_DP_TRAIN_CR_FAILED:BC250_DP_TRAIN_EQ_FAILED;break;
     }
     if(touched) (void)cleanup(&l);
