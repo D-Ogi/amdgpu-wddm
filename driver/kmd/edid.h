@@ -56,6 +56,11 @@ typedef struct _BC250_TARGET_TIMING {
     unsigned long Flags;
 } BC250_TARGET_TIMING;
 
+// The fastest target timing the parser keeps: what an HBR3 x4 DisplayPort link carries at RGB8 (BD-139). The link,
+// the protocol and the sink set the real limit for each target (connector_link.c Plan); connector_link.c asserts that
+// this value equals BC250_DP_MAX_PIXEL_KHZ.
+#define BC250_TARGET_MAX_PIXEL_KHZ 1080000ul
+
 int Bc250TargetTimingValid(const BC250_TARGET_TIMING* Timing);
 int Bc250TargetTimingEqual(const BC250_TARGET_TIMING* A, const BC250_TARGET_TIMING* B);
 unsigned long Bc250TargetRefreshMilliHz(const BC250_TARGET_TIMING* Timing);

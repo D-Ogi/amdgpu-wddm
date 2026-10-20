@@ -80,7 +80,7 @@ int Bc250TargetTimingValid(const BC250_TARGET_TIMING* t)
 {
     // DCN201 progressive RGB8 scope. Restrict totals before every addition;
     // EDID is external input, including when a host client supplies a fixture.
-    return t && t->PixelClockKhz >= 25000 && t->PixelClockKhz <= 600000 &&
+    return t && t->PixelClockKhz >= 25000 && t->PixelClockKhz <= BC250_TARGET_MAX_PIXEL_KHZ &&
         t->HActive >= 640 && t->HActive <= 4096 && t->VActive >= 480 && t->VActive <= 2160 &&
         t->HBlank && t->HBlank <= 4096 && t->VBlank && t->VBlank <= 4096 &&
         t->HSyncOffset && t->HSyncOffset < t->HBlank &&

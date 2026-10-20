@@ -26,15 +26,15 @@ static void stallIo(void* context,unsigned long us)
     g->Raw->Stall(g->Raw->Context,us);
 }
 
-long Bc250SinkDiscover(BC250_DISP_IO* raw,const BC250_SINK_GUARD* guard,
-    unsigned long maxClock,unsigned long maxWidth,unsigned long maxHeight,BC250_SINK* r)
+long Bc250SinkDiscover(BC250_DISP_IO* raw,const BC250_SINK_GUARD* guard,unsigned long maxDpClock,
+    unsigned long maxTmdsClock,unsigned long maxWidth,unsigned long maxHeight,BC250_SINK* r)
 {
     BC250_AUX_SESSION aux={0};BC250_DDC_SESSION ddc={0};BC250_DISP_IO io;
-    GUARDED_IO g={raw,guard,0};long status,close;unsigned long reason;
+    GUARDED_IO g={raw,guard,0};long status,close;unsigned long reason,maxClock;
     if(!r)return BC250_DISP_STATUS_INVALID;
     memset(r,0,sizeof(*r));r->Status=BC250_DISP_STATUS_INVALID;
     if(!raw || !guard || !guard->Current || !raw->Read || !raw->Write || !raw->Stall ||
-       !maxClock || !maxWidth || !maxHeight)return r->Status;
+       !maxDpClock || !maxTmdsClock || !maxWidth || !maxHeight)return r->Status;
     io=*raw;io.Context=&g;io.Read=readIo;io.Write=writeIo;io.Stall=stallIo;
     r->AuxStatus=r->DdcStatus=BC250_DISP_STATUS_NOT_SUPPORTED;
     if(!guard->Current(guard->Context)) {status=BC250_DISP_STATUS_BUSY;goto done;}
@@ -87,6 +87,9 @@ long Bc250SinkDiscover(BC250_DISP_IO* raw,const BC250_SINK_GUARD* guard,
         status=BC250_DISP_STATUS_MISMATCH;goto done;
     }
     if(r->Kind!=BC250_SINK_DP)r->Kind=r->Info.Hdmi?BC250_SINK_HDMI:BC250_SINK_DVI;
+    // BD-139: a DP sink is bounded by its own link (Bc250DpMaxPixelClock above) and the DP ceiling, a TMDS sink by
+    // its adapter, its HDMI data block and the TMDS ceiling.
+    maxClock=r->Kind==BC250_SINK_DP?maxDpClock:maxTmdsClock;
     if(maxClock<r->MaxPixelClockKhz)r->MaxPixelClockKhz=maxClock;
     r->TargetCount=Bc250EdidTargetList(&r->Info,r->MaxPixelClockKhz,maxWidth,maxHeight,r->Targets,BC250_EDID_MAX_MODES);
     if(!r->TargetCount) {status=BC250_DISP_STATUS_NOT_SUPPORTED;goto done;}

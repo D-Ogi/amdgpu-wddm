@@ -353,7 +353,8 @@ static void ConnectorWorker(PDEVICE_OBJECT Object, PVOID Context)
             c->DiscoveryIo.StalledUs = 0;
             InterlockedIncrement(&c->Discoveries);
             WorkerKeep("discovery", generation, sense);
-            status = Bc250SinkDiscover(&c->DiscoveryIo, &guard, 300000ul, 4096ul, 2160ul, &next->Sink);
+            status = Bc250SinkDiscover(&c->DiscoveryIo, &guard, BC250_DP_MAX_PIXEL_KHZ, 300000ul, 4096ul, 2160ul,
+                &next->Sink);
             tries++;
             GuardLog("connector: discovery generation %lu kind %u phase %u edid %lu targets %lu status %08lX cleanup %08lX",
                 generation, next->Sink.Kind, next->Sink.Phase, next->Sink.EdidLength,
@@ -561,7 +562,8 @@ NTSTATUS ConnectorStart(BC250_DEVICE* Device)
     snapshot->Sink.Kind = Device->Modeset.DpcdValid ? BC250_SINK_DP :
         (Device->Modeset.Info.Hdmi ? BC250_SINK_HDMI : BC250_SINK_DVI);
     snapshot->Sink.Info = Device->Modeset.Info;
-    snapshot->Sink.MaxPixelClockKhz = 300000ul;
+    // BD-139: the route's ceiling, DP up to HBR3 x4 and TMDS 300 MHz, then the sink's own limit below.
+    snapshot->Sink.MaxPixelClockKhz = Device->Modeset.DpcdValid ? BC250_DP_MAX_PIXEL_KHZ : 300000ul;
     snapshot->Sink.Adapter = Device->Modeset.Adapter;
     snapshot->Sink.EdidLength = Device->Modeset.EdidLength;
     RtlCopyMemory(snapshot->Sink.Edid, Device->Modeset.Edid, sizeof(snapshot->Sink.Edid));
@@ -690,7 +692,7 @@ NTSTATUS ConnectorResumeDisplay(BC250_DEVICE* Device)
     next=AllocateSnapshot(generation);
     if (!next) {status=STATUS_INSUFFICIENT_RESOURCES;goto done;}
     c->DiscoveryIo.StalledUs=0;
-    status=Bc250SinkDiscover(&c->DiscoveryIo,&guard,300000ul,4096ul,2160ul,&next->Sink);
+    status=Bc250SinkDiscover(&c->DiscoveryIo,&guard,BC250_DP_MAX_PIXEL_KHZ,300000ul,4096ul,2160ul,&next->Sink);
     same=NT_SUCCESS(status) && old && old->Sink.Kind!=BC250_SINK_NONE &&
         old->Sink.Kind==next->Sink.Kind && old->Sink.EdidLength==next->Sink.EdidLength &&
         old->Sink.Adapter.type==next->Sink.Adapter.type &&

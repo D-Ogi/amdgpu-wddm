@@ -27,5 +27,7 @@ typedef struct BC250_SINK_GUARD {
 // Io is already owned by the passive operation. Restore uses that same physical
 // owner even if Current becomes false. A failed cleanup prevents a second protocol.
 // Result is caller-allocated nonpaged workspace, not a kernel stack local.
-long Bc250SinkDiscover(BC250_DISP_IO* Io,const BC250_SINK_GUARD* Guard,
-    unsigned long MaxPixelClockKhz,unsigned long MaxWidth,unsigned long MaxHeight,BC250_SINK* Result);
+// MaxDpKhz bounds a DP sink, MaxTmdsKhz an HDMI or DVI sink (behind a dual-mode adapter): each is the ceiling of
+// that protocol's route, under the sink's own limit.
+long Bc250SinkDiscover(BC250_DISP_IO* Io,const BC250_SINK_GUARD* Guard,unsigned long MaxDpKhz,
+    unsigned long MaxTmdsKhz,unsigned long MaxWidth,unsigned long MaxHeight,BC250_SINK* Result);
