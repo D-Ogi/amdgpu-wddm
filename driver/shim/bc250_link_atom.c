@@ -1,5 +1,6 @@
 // PROVENANCE: AMD DC (MIT), command_table2.c and DCE112 command helpers, Linux 7d0a66e4.
 #include "bc250_link_atom.h"
+#include "bc250_dp_train.h"
 #include <string.h>
 #include "atom_layouts.inc"
 #include "link_command_layouts.inc"
@@ -11,6 +12,16 @@
 #include "bc250_link_clock_scope.inc"
 
 static int protocol(unsigned p) {return p==BC250_LINK_DP || p==BC250_LINK_DVI || p==BC250_LINK_HDMI;}
+// The pixel clock range each protocol takes: DP up to what HBR3 x4 carries, TMDS up to the 300 MHz of the
+// HDMI 1.4 and DVI routes this driver drives.
+static int pixel(unsigned p,unsigned khz)
+{return khz>=25000 && khz<=(p==BC250_LINK_DP?BC250_DP_MAX_PIXEL_KHZ:300000u);}
+int Bc250LinkAtomDpSymbolClock(unsigned khz)
+{
+    // RBR, HBR, HBR2 and HBR3 (DPCD LINK_BW_SET 0x06, 0x0A, 0x14, 0x1E times 27 MHz). dcn201_resource.c
+    // link_enc_feature declares HBR2 and HBR3 for this encoder (Linux 7d0a66e4).
+    return khz==162000 || khz==270000 || khz==540000 || khz==810000;
+}
 BC250_ATOM_STATUS Bc250LinkAtomReferenceClock(const BC250_ATOM_IMAGE* image,unsigned* khz)
 {
     const unsigned index=(unsigned)(offsetof(struct atom_master_list_of_data_tables_v2_1,dce_info)/2);
@@ -73,7 +84,7 @@ static BC250_ATOM_STATUS execute(BC250_LINK_ATOM* l,unsigned root,int Scoped,uin
 BC250_ATOM_STATUS Bc250LinkAtomClock(BC250_LINK_ATOM* l,unsigned p,unsigned khz)
 {
     struct set_pixel_clock_parameter_v1_7 c={0};
-    if(!protocol(p) || khz<25000 || khz>300000)return BC250_ATOM_ARGUMENT;
+    if(!protocol(p) || !pixel(p,khz))return BC250_ATOM_ARGUMENT;
     c.pixclk_100hz=khz*10u;c.crtc_id=0;
     c.pll_id=(uint8_t)(p==BC250_LINK_DP?ATOM_DP_DTO:ATOM_COMBOPHY_PLL0);
     // command_table_helper: ENCODER_ID_INTERNAL_UNIPHY (object 0x1e).
@@ -89,7 +100,7 @@ BC250_ATOM_STATUS Bc250LinkAtomTransmitter(BC250_LINK_ATOM* l,enum bc250_link_tx
 {
     struct dig_transmitter_control_ps_allocation_v1_6 t={0};
     if(!protocol(p) || (lanes!=1 && lanes!=2 && lanes!=4) ||
-       (p==BC250_LINK_DP?(khz!=162000 && khz!=270000):(khz<25000 || khz>300000 || lanes!=4)) ||
+       (p==BC250_LINK_DP?!Bc250LinkAtomDpSymbolClock(khz):(!pixel(p,khz) || lanes!=4)) ||
        (action!=BC250_LINK_TX_OFF && action!=BC250_LINK_TX_ON && action!=BC250_LINK_TX_DRIVE) ||
        swing>3 || pre>3 || swing+pre>3 ||
        (action==BC250_LINK_TX_DRIVE && p!=BC250_LINK_DP))return BC250_ATOM_ARGUMENT;
@@ -112,8 +123,9 @@ BC250_ATOM_STATUS Bc250LinkAtomTransmitter(BC250_LINK_ATOM* l,enum bc250_link_tx
 BC250_ATOM_STATUS Bc250LinkAtomStream(BC250_LINK_ATOM* l,unsigned p,unsigned khz,unsigned lanes,unsigned rate)
 {
     struct dig_encoder_stream_setup_parameters_v1_5 e={0};
-    if(!protocol(p) || khz<25000 || khz>300000 || (lanes!=1 && lanes!=2 && lanes!=4) ||
-       (p==BC250_LINK_DP?(rate!=6 && rate!=10):(rate!=0 || lanes!=4)))return BC250_ATOM_ARGUMENT;
+    if(!protocol(p) || !pixel(p,khz) || (lanes!=1 && lanes!=2 && lanes!=4) ||
+       (p==BC250_LINK_DP?(rate>30u || !Bc250LinkAtomDpSymbolClock(rate*27000u)):(rate!=0 || lanes!=4)))
+        return BC250_ATOM_ARGUMENT;
     e.digid=0;e.action=ATOM_ENCODER_CMD_STREAM_SETUP;e.digmode=(uint8_t)p;
     e.pclk_10khz=khz/10;e.lanenum=(uint8_t)lanes;e.bitpercolor=PANEL_8BIT_PER_COLOR;
     e.dplinkrate_270mhz=(uint8_t)rate;

@@ -1,6 +1,7 @@
 // PROVENANCE: AMD DC (MIT), Linux 7d0a66e4, dcn10 DP stream methods used by DCN201.
 #include "bc250_dp_stream.h"
 #include "bc250_optc.h"
+#include "bc250_dp_train.h"
 #include "bc250_atom_types.h"
 #include "../kmd/regs.generated.h"
 #include "dcn_2_0_1_sh_mask.h"
@@ -118,7 +119,9 @@ long Bc250DpStreamBlank(BC250_DISP_IO* io)
 long Bc250DpStreamUnblank(BC250_DISP_IO* io,unsigned khz,unsigned rate)
 {
     struct dcn10_stream_encoder e;struct encoder_unblank_param p;
-    if(!init(&e,io) || khz<25000 || khz>300000 || (rate!=6 && rate!=10))return BC250_DISP_STATUS_INVALID;
+    // BD-139: RBR to HBR3. VID_M is pixel/(rate x 27 MHz) x 0x8000 in 64 bits (enc1_stream_encoder_dp_unblank).
+    if(!init(&e,io) || khz<25000 || khz>BC250_DP_MAX_PIXEL_KHZ || (rate!=6 && rate!=10 && rate!=20 && rate!=30))
+        return BC250_DISP_STATUS_INVALID;
     memset(&p,0,sizeof(p));p.link_settings.link_rate=rate;p.timing.pix_clk_100hz=khz*10;
     p.timing.pixel_encoding=PIXEL_ENCODING_RGB;
     enc1_stream_encoder_dp_unblank(&debugLink,&e.base,&p);return e.status;

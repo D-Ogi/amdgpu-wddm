@@ -1,5 +1,6 @@
 // PROVENANCE: AMD DC (MIT), Linux 7d0a66e4, optc1 timing and optc2 enable used by DCN201.
 #include "bc250_optc.h"
+#include "bc250_dp_train.h"
 #include "bc250_atom_types.h"
 #include "../kmd/regs.generated.h"
 #include "dcn_2_0_1_sh_mask.h"
@@ -193,7 +194,9 @@ long Bc250OptcReadTiming(BC250_DISP_IO* io,unsigned long pixelKhz,BC250_TARGET_T
     BC250_TARGET_TIMING t;const BC250_OPTC_SYNC validation={0,1,0,0};
     if(!output)return BC250_DISP_STATUS_INVALID;
     memset(output,0,sizeof(*output));memset(&t,0,sizeof(t));
-    if(!io || !io->Read || pixelKhz<25000 || pixelKhz>300000)return BC250_DISP_STATUS_INVALID;
+    // BD-139: the widest of the protocol ranges. The caller's plan applies the protocol's own ceiling, so a
+    // firmware TMDS timing above 300 MHz is still refused there, by name (connector_link.c, clock-ceiling).
+    if(!io || !io->Read || pixelKhz<25000 || pixelKhz>BC250_DP_MAX_PIXEL_KHZ)return BC250_DISP_STATUS_INVALID;
     for(pass=0;pass<2;++pass)for(i=0;i<sizeof(registers)/sizeof(registers[0]);++i) {
         status=Bc250DispRead(io,registers[i],&sample[pass][i]);if(status<0)return status;
     }
