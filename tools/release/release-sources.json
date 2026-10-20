@@ -59,7 +59,7 @@
   },
   "kmd_version": "0.7.216.64",
   "kmd_abi": "0x000700D8",
-  "driver_date": "10/21/2026",
+  "driver_date": "10/20/2026",
   "supersedes": {
     "note": "BD-150: build-release.ps1 stamps DriverVer = driver_date,<-DriverVer> and refuses a package that does not rank above this release's DriverVer, because PnP keeps the installed package on an equal date and version.",
     "release": "0.7.216.102-tester.31v2",
@@ -86,7 +86,7 @@
     "flags": 1
   },
   "sources": {
-    "kmd": "bc250-win e08e3bb0c55960e62f9da5f6cb9fcaf1004db267: tester.31v3 release KMD with the BD-195 re-plug fix passed KmdPackage gates (release bc250kmd.sys; bc250kmd.inf and amdgpu-state.bin are byte-identical to tester.31). The lab KMD row stays the tester.31 lab KMD: 31v3 has no lab package.",
+    "kmd": "bc250-win 850514e388598792355d309095a67a9102bc0375: tester.31v3 release KMD with the BD-195 re-plug fix passed KmdPackage gates (release bc250kmd.sys; bc250kmd.inf and amdgpu-state.bin are byte-identical to tester.31). The lab KMD row stays the tester.31 lab KMD: 31v3 has no lab package.",
     "d3d12_shell": "Current tester.31 payload sources. release payload/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm 31abd6690c316e476efd8628ecf6c442aec1c1f6; lab payload/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm 31abd6690c316e476efd8628ecf6c442aec1c1f6. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "d3d12_engine": "Current tester.31 payload sources. release payload/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton b69df5fb2d44858a7d5aa9e322d6a4698a8b4536; lab payload/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton b69df5fb2d44858a7d5aa9e322d6a4698a8b4536. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "d3d12_icd": "Current tester.31 payload sources. release payload/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 2dea401cee9aafaea5846c5333a26839f0bff7cb; lab payload/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 2dea401cee9aafaea5846c5333a26839f0bff7cb. File rows retain exact recipes, hashes, dependencies and validation limits.",
@@ -109,11 +109,11 @@
     {
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.inf",
-      "source": "scratch/train/b34-build/hotfix-31v3/kmd-31v3-release/package/bc250kmd.inf",
+      "source": "scratch/train/b34-build/hotfix-31v3/kmd-31v3-103-release/package/bc250kmd.inf",
       "sha256": "BA8DC6F556917D2F773D398DC820E4ED0E3484CF0B316BEFFD04377F452D2492",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "e08e3bb0c55960e62f9da5f6cb9fcaf1004db267",
+        "commit": "850514e388598792355d309095a67a9102bc0375",
         "recipe": "driver/kmd/build.ps1",
         "args": [
           "-Kits",
@@ -125,7 +125,7 @@
           "-Flavour",
           "release",
           "-PackageVersion",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "package/bc250kmd.inf"
       },
@@ -137,11 +137,11 @@
     {
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.sys",
-      "source": "scratch/train/b34-build/hotfix-31v3/kmd-31v3-release/package/bc250kmd.sys",
-      "sha256": "5C0CC4A840432E4A0D6AFAA6D30405BA6DEF38DBB22F66C91A1EC714109BC356",
+      "source": "scratch/train/b34-build/hotfix-31v3/kmd-31v3-103-release/package/bc250kmd.sys",
+      "sha256": "75F68A701A576B0C5CDB743B50A6283A9E5E1C74A7D9B9CA1960305FE7FF15C3",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "e08e3bb0c55960e62f9da5f6cb9fcaf1004db267",
+        "commit": "850514e388598792355d309095a67a9102bc0375",
         "recipe": "driver/kmd/build.ps1",
         "args": [
           "-Kits",
@@ -153,14 +153,14 @@
           "-Flavour",
           "release",
           "-PackageVersion",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "package/bc250kmd.sys"
       },
       "size": 1084816,
       "role": "Tester.31v3 release KMD: tester.31v2 with the BD-195 fix (the picture comes back after a monitor re-plug, on DisplayPort and through a passive adapter). Complete KmdPackage and binary flavour gates passed; exact clean source and package bytes are retained in source-manifest.json.",
-      "unsigned_sha256": "09B65C663992EE26C4AB0A29CD516DD4E41167F25D84B3963FA74825BE312247",
-      "authenticode_sha256": "3EBC2C150823D29EEE6401B9DAB1F0FED319DE2D2B7486486A6C28B8F2397AFA",
+      "unsigned_sha256": "9ADC1D50161580EA82FEA3F2317AD8CA1C5AA94910A4EF13C8B2F723D1ACB7B3",
+      "authenticode_sha256": "AF6F43C676986EF093640DA69746943722CDD8539733E21A43D53E80C9C469C8",
       "flavour": "release"
     },
     {
@@ -195,8 +195,8 @@
     {
       "component": "d3d12-shell",
       "path": "payload/d3d12/amdgpu_wddm_d3d12.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/release/88e8b9e4f1a85dddf840/amdgpu_wddm_d3d12.dll",
-      "sha256": "A2CBCE94515C2BA40860EA9D1B5F9271AF5C2F4DF3E8F9350D103A4678F0F932",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/release/95ed136eb7bb9f4c974d/amdgpu_wddm_d3d12.dll",
+      "sha256": "A1D978C656F09B9D14600F8131BBA418BAD3F3EC671ABEDB50DA169AFB0C7013",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "31abd6690c316e476efd8628ecf6c442aec1c1f6",
@@ -213,7 +213,7 @@
           "-Flavour",
           "release",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "amdgpu_wddm_d3d12.dll",
         "inputs": {
@@ -248,8 +248,8 @@
     {
       "component": "d3d12-shell",
       "path": "payload/d3d12/amdgpu_wddm_d3d12.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/lab/276d96a7d4ffc673b3b5/amdgpu_wddm_d3d12.dll",
-      "sha256": "70EFD3071C94063991B55D0CB93629437DE4A05D1D6B70CC0B9885C9B9E6315C",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/lab/558e34905cb5c0f59916/amdgpu_wddm_d3d12.dll",
+      "sha256": "2185BB7B1DAD292E56187B87AEA96BEA1CA95ABAE1238B6AE5444BAF15DA6C0B",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "31abd6690c316e476efd8628ecf6c442aec1c1f6",
@@ -266,7 +266,7 @@
           "-Flavour",
           "lab",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "amdgpu_wddm_d3d12.dll",
         "inputs": {
@@ -302,8 +302,8 @@
     {
       "component": "d3d12-engine",
       "path": "payload/d3d12/amdgpu_wddm_vkd3d.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/release/073dccf694ef46d7dab5/amdgpu_wddm_vkd3d.dll",
-      "sha256": "FE947F02A39228EA24827940C77972AFC2E1C460E2F4F3880F86CD8ABD5699FF",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/release/3834ef85604f4d967e4b/amdgpu_wddm_vkd3d.dll",
+      "sha256": "8262256E35FC5B8A932FCBAA10C0781B6DA859558F43EECE48C82F5749D1F266",
       "built_from": {
         "repo": "vkd3d-proton",
         "commit": "b69df5fb2d44858a7d5aa9e322d6a4698a8b4536",
@@ -323,7 +323,7 @@
           "-Flavour",
           "release",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "libs/ddi/amdgpu_wddm_vkd3d.dll"
       },
@@ -335,8 +335,8 @@
     {
       "component": "d3d12-engine",
       "path": "payload/d3d12/amdgpu_wddm_vkd3d.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/lab/4f12bf336006546b1ea0/amdgpu_wddm_vkd3d.dll",
-      "sha256": "5E82FD54EDD0BA5BC734ABFAFF6DAB172369883B75C448F60615BAA18AB702A1",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/lab/3e1fbfa017ec01324f11/amdgpu_wddm_vkd3d.dll",
+      "sha256": "1DF43D28ADD49CEB77CD85F22726A6BC5D1A634C56A207E6F131710DA1DF26DF",
       "built_from": {
         "repo": "vkd3d-proton",
         "commit": "b69df5fb2d44858a7d5aa9e322d6a4698a8b4536",
@@ -356,7 +356,7 @@
           "-Flavour",
           "lab",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "libs/ddi/amdgpu_wddm_vkd3d.dll"
       },
@@ -369,8 +369,8 @@
     {
       "component": "d3d12-icd",
       "path": "payload/d3d12/amdgpu_wddm_radv.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/release/266102ec1a831fff1fe0/amdgpu_wddm_radv.dll",
-      "sha256": "AB32205F67571D6B0CC83EB6245FD933DC32C3DED7FC5E2D4498595485DE928B",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/release/bbe0c0de4bf20935b02f/amdgpu_wddm_radv.dll",
+      "sha256": "C4B3EAB31E6800210F7B4A08B111D01715D0C3433468761BEE0A508F2C8E86C0",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "2dea401cee9aafaea5846c5333a26839f0bff7cb",
@@ -388,7 +388,7 @@
           "-Flavour",
           "release",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "src/amd/vulkan/amdgpu_wddm_radv.dll"
       },
@@ -400,8 +400,8 @@
     {
       "component": "d3d12-icd",
       "path": "payload/d3d12/amdgpu_wddm_radv.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/lab/82a5ddfa55120182f3e7/amdgpu_wddm_radv.dll",
-      "sha256": "EC44094D766F09E27DFF2B899D0845B4EDF8729CF44B837CCEFCDA5634C8C7D0",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/lab/ef52726578467162856f/amdgpu_wddm_radv.dll",
+      "sha256": "C235D28A4BE0700C9861B720141111C637327C84E9E51EDAF654B4755C1A1192",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "2dea401cee9aafaea5846c5333a26839f0bff7cb",
@@ -420,7 +420,7 @@
           "lab",
           "-Lab",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "src/amd/vulkan/amdgpu_wddm_radv.dll"
       },
@@ -433,8 +433,8 @@
     {
       "component": "desktop-umd",
       "path": "payload/desktop/bc250d3d_router.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/router-31v3/x64/bc250d3d_router.dll",
-      "sha256": "19C0E3720565C5A0AE9B57AEF6174A9D98C6F21B9DA9A67C1E5930492AFFA7D7",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/release/51ebeb85b5fca1706ad8/bc250d3d_router.dll",
+      "sha256": "5DB52B068B0C45DF767F37441ACD25EC0DA53B4DBF3F3FD99D3B7CE84872FD9A",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "eda8551ef4ef0dfdb274e0f12487ffc37c135098",
@@ -447,20 +447,20 @@
           "-Flavour",
           "release",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "bc250d3d_router.dll"
       },
       "size": 108032,
       "role": "bc250d3d_router.dll, release flavour; BD-168 mitigation (Windows Security on the CPU route) at eda8551ef4ef0dfdb274e0f12487ffc37c135098; package version stamped.",
       "flavour": "release",
-      "authenticode_sha256": "384C822EE59C0B9D87A83D54642AC25E3E985C520E232E3049EE1D5626A5F894"
+      "authenticode_sha256": "2A3982B419787E9F163BC44D784E430F8BBD2DAC11210F227326E6FC39084CD6"
     },
     {
       "component": "desktop-umd",
       "path": "payload/desktop/bc250d3d_router.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/lab/25e5f491e8d3cc0c9427/bc250d3d_router.dll",
-      "sha256": "78CBD42398DF19F9704211475B4829D56B3B25F96AF42F975232B061A33566FF",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/lab/63f62fd867ff9ef97d87/bc250d3d_router.dll",
+      "sha256": "3D078A3CFEA06856B61BB598257392EE30BE3444DD3D73FB27A74D2D4858B808",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "154e542b08e67bcad5897f56104472d8bc005ad5",
@@ -473,20 +473,20 @@
           "-Flavour",
           "lab",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "bc250d3d_router.dll"
       },
       "size": 108032,
       "role": "bc250d3d_router.dll, lab flavour; shared service state access correction at 154e542b08e67bcad5897f56104472d8bc005ad5; package version stamped.",
       "flavour": "lab",
-      "authenticode_sha256": "E6DF8BEE14D32BBC2F565A34DB7F55DA2FEF0A64C89B984D894CF342BEA34334"
+      "authenticode_sha256": "6535806573B2F6E6F8621D91341558BB92E3C4FA4FE6AA54E7D43302306B27F1"
     },
     {
       "component": "desktop-umd",
       "path": "payload/desktop/bc250d3d_zink.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/release/2ae23a7b5a501449d167/bc250d3d_zink.dll",
-      "sha256": "823C2FDE0BF9FDB46652F2BA8677A6F17CD93EFCFDB8B0059D7BCB9D934D9977",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/release/3924e70d67da010c5f70/bc250d3d_zink.dll",
+      "sha256": "78298C19D17576AF12F0C2AF6028C5BE2C9B5033F719D06004BBCA22A37A64D1",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "471a7487ee7f0404d03b7fe00834d154e2675a48",
@@ -504,7 +504,7 @@
           "-Flavour",
           "release",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "src/gallium/targets/d3d10umd/bc250d3d_zink.dll"
       },
@@ -515,8 +515,8 @@
     {
       "component": "desktop-umd",
       "path": "payload/desktop/bc250d3d_zink.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/lab/8c986b1d97fb909c78c1/bc250d3d_zink.dll",
-      "sha256": "AD5C27364DC8DDEE7E734414E6FA63EE4D60E85841CB9E308A7D7CD5B2D08AFD",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/lab/77b7863fa6c9d403d8ea/bc250d3d_zink.dll",
+      "sha256": "606E4C2B1C8C1B9113DA26A9B7FFA8A4D5357BDF2783D095F9FD7B4ADFE7F3EE",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "471a7487ee7f0404d03b7fe00834d154e2675a48",
@@ -535,7 +535,7 @@
           "lab",
           "-Lab",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "src/gallium/targets/d3d10umd/bc250d3d_zink.dll"
       },
@@ -547,8 +547,8 @@
     {
       "component": "desktop-umd",
       "path": "payload/desktop/amdgpu_wddm_radv.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/release/a751ed210d3831ffc076/amdgpu_wddm_radv.dll",
-      "sha256": "D943CFA6C3581DE8C9DB43679725840269FDCEB040013B447F7F6B1F107DA1D6",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/release/268c3b953ecb399f57bd/amdgpu_wddm_radv.dll",
+      "sha256": "3633B672F0346158932512533CAD623410DAEB65785DEF28745F10EF8096EB67",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "8c9bf720cb3a5688074e44bffba834def7e48fcd",
@@ -566,7 +566,7 @@
           "-Flavour",
           "release",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "src/amd/vulkan/amdgpu_wddm_radv.dll"
       },
@@ -578,8 +578,8 @@
     {
       "component": "desktop-umd",
       "path": "payload/desktop/amdgpu_wddm_radv.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/lab/44fa846305f37315db37/amdgpu_wddm_radv.dll",
-      "sha256": "5AA2332621705AB519C0DEEF05D449280BC5CA53E1617486D546D158A635836E",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/lab/b44235c7434ebb367f25/amdgpu_wddm_radv.dll",
+      "sha256": "1CFDFC5B36547DD817715B58F39A66188936D57B060DC90A41E34F05C83DD8A3",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "8c9bf720cb3a5688074e44bffba834def7e48fcd",
@@ -598,7 +598,7 @@
           "lab",
           "-Lab",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "src/amd/vulkan/amdgpu_wddm_radv.dll"
       },
@@ -611,8 +611,8 @@
     {
       "component": "desktop-umd",
       "path": "payload/desktop/bc250d3d.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/release/da2ef0ecd910801dccfc/bc250d3d.dll",
-      "sha256": "88547C2BE429D3003B1774E622760EF330AF4F848D6BC7D623F3B3A05DB64FDF",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/release/d98e3e3c9526badab9d3/bc250d3d.dll",
+      "sha256": "C85A7F41CE5694CF02F99B2DB0A73195B3B364C47EC866C73B742E76281BD6B4",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "fa5f386e8c93039e4cdbca607b2541e102e4e0f0",
@@ -632,7 +632,7 @@
           "-Flavour",
           "release",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "inputs": {
           "llvm": {
@@ -650,8 +650,8 @@
     {
       "component": "desktop-umd",
       "path": "payload/desktop/bc250d3d.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/lab/d50befd5ead730eed436/bc250d3d.dll",
-      "sha256": "B81C7014A975E21FC4D30793DE851C4E42ADA935AC78018EA4BC13F4E3847C89",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/lab/25953750d5c8bf15cb55/bc250d3d.dll",
+      "sha256": "68021E63BC5CDBC2ED66751B04C2EE1A731A4BCF3723301AEE5C9B299C0FC43F",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "fa5f386e8c93039e4cdbca607b2541e102e4e0f0",
@@ -672,7 +672,7 @@
           "lab",
           "-Lab",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "inputs": {
           "llvm": {
@@ -691,8 +691,8 @@
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_d3d11.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/release/43b73f1dcfa84d7536aa/amdgpu_wddm_d3d11.dll",
-      "sha256": "C5F319B8DDDABAA9DF39178B832AB154E9335DF39A09CBC935D41749506D1746",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/release/4594b90bca8f00d0f16f/amdgpu_wddm_d3d11.dll",
+      "sha256": "71A611F9402457602F0D48D099EEFC6067CBD359BF91B4B4AC251BD76BA42726",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "1750f50535a79e49878298c6078df8745ce1068f",
@@ -711,7 +711,7 @@
           "-IcdPath",
           "{payload:payload/d3d11/amdgpu_wddm_radv.dll}",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "inputs": {
           "dxvk": {
@@ -728,8 +728,8 @@
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_d3d11.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/lab/3655cd5dacfceb0567f8/amdgpu_wddm_d3d11.dll",
-      "sha256": "E28E6F880F26133466615C585282512C637EEC4AD0088A892E4F2BFD306CB667",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/lab/4860331e2a48be7d90c2/amdgpu_wddm_d3d11.dll",
+      "sha256": "2D58679565BAEF72297C5BE3A58E6C7027FA9DAB6575651D8E9C1FFA0E0323B9",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "1750f50535a79e49878298c6078df8745ce1068f",
@@ -748,7 +748,7 @@
           "-IcdPath",
           "{payload:payload/d3d11/amdgpu_wddm_radv.dll}",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "inputs": {
           "dxvk": {
@@ -869,8 +869,8 @@
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_dxvk.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/release/49af00cfa3f4de1d7c3c/amdgpu_wddm_dxvk.dll",
-      "sha256": "984529EDD631D54255C554D3470E3BA3FD49F2854EF31B74C68164802018D363",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/release/6e57ef31c5c3874c370f/amdgpu_wddm_dxvk.dll",
+      "sha256": "B8F1C8A3CC46C6966E1F887DCCF029D892A8009CCD61E7D8E8A01055CC65E898",
       "built_from": {
         "repo": "dxvk",
         "commit": "b4f080f7840a4e88110bc91cc7a833ccb9c0638f",
@@ -888,7 +888,7 @@
           "-Jobs",
           "8",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "src/ddi/amdgpu_wddm_dxvk.dll"
       },
@@ -899,8 +899,8 @@
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_dxvk.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/lab/1541abf934656f466447/amdgpu_wddm_dxvk.dll",
-      "sha256": "4EB2844155B748A9843443706598AFF38C9CD61B430EC975889D7F5DD54B2869",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/lab/2dd2d4ef4331a4763ac7/amdgpu_wddm_dxvk.dll",
+      "sha256": "ED7E49E7CCD6C8C1CCF469B2C42BEEC8B9149BDDE7F0DC8C5C15B8F69B02FB23",
       "built_from": {
         "repo": "dxvk",
         "commit": "b4f080f7840a4e88110bc91cc7a833ccb9c0638f",
@@ -921,7 +921,7 @@
           "lab",
           "-Lab",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "src/ddi/amdgpu_wddm_dxvk.dll"
       },
@@ -933,8 +933,8 @@
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_radv.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/release/266102ec1a831fff1fe0/amdgpu_wddm_radv.dll",
-      "sha256": "AB32205F67571D6B0CC83EB6245FD933DC32C3DED7FC5E2D4498595485DE928B",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/release/bbe0c0de4bf20935b02f/amdgpu_wddm_radv.dll",
+      "sha256": "C4B3EAB31E6800210F7B4A08B111D01715D0C3433468761BEE0A508F2C8E86C0",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "2dea401cee9aafaea5846c5333a26839f0bff7cb",
@@ -952,7 +952,7 @@
           "-Flavour",
           "release",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "src/amd/vulkan/amdgpu_wddm_radv.dll"
       },
@@ -964,8 +964,8 @@
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_radv.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/lab/82a5ddfa55120182f3e7/amdgpu_wddm_radv.dll",
-      "sha256": "EC44094D766F09E27DFF2B899D0845B4EDF8729CF44B837CCEFCDA5634C8C7D0",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/lab/ef52726578467162856f/amdgpu_wddm_radv.dll",
+      "sha256": "C235D28A4BE0700C9861B720141111C637327C84E9E51EDAF654B4755C1A1192",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "2dea401cee9aafaea5846c5333a26839f0bff7cb",
@@ -984,7 +984,7 @@
           "lab",
           "-Lab",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "src/amd/vulkan/amdgpu_wddm_radv.dll"
       },
@@ -997,8 +997,8 @@
     {
       "component": "vulkan-icd",
       "path": "payload/vulkan/vulkan_radeon.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/release/62790e980dd4c99e0f50/vulkan_radeon.dll",
-      "sha256": "7B8E40765A3C6B67F5438014E7A12E953D5926416916B7B2C90EE2537BB0E62F",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/release/a95b6c7d0592a6bbc8c4/vulkan_radeon.dll",
+      "sha256": "4B307F933CE003C007520D3C603A299EEA21BEC3F61482DEF6C3A09B94A302F5",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "042227dcddf2c7c6a28daebf01a8c828fdf130fa",
@@ -1016,7 +1016,7 @@
           "-Flavour",
           "release",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "src/amd/vulkan/vulkan_radeon.dll"
       },
@@ -1028,8 +1028,8 @@
     {
       "component": "vulkan-icd",
       "path": "payload/vulkan/vulkan_radeon.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/lab/72300d5bbfecab37d4b4/vulkan_radeon.dll",
-      "sha256": "51A6AF069A7FE157BC3B10F2CDC035DBFDB4C1226C0F6E4C226183C7B2522F27",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/lab/3e42a43c1ce1fa870255/vulkan_radeon.dll",
+      "sha256": "696817E4431F0490660EABC491DC7F69DAA0B5206EBEAE3E3F23641066020DD1",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "042227dcddf2c7c6a28daebf01a8c828fdf130fa",
@@ -1048,7 +1048,7 @@
           "lab",
           "-Lab",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "src/amd/vulkan/vulkan_radeon.dll"
       },
@@ -1075,8 +1075,8 @@
     {
       "component": "desktop-umd-wow64",
       "path": "payload/wow64/desktop/bc250d3d_router.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/router-31v3/x86/bc250d3d_router.dll",
-      "sha256": "B302B0EBF40BD5863B28E08AAB0719BDB1CC8F1252776FFE0406788B6B3B897D",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/release/bcbe8632ef3ab6ba6fad/bc250d3d_router.dll",
+      "sha256": "3A777AF9E3F07473CE893D64F7122EE74058A07F8FF8D0A1E0CBE0CF45675AC4",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "eda8551ef4ef0dfdb274e0f12487ffc37c135098",
@@ -1089,20 +1089,20 @@
           "-Flavour",
           "release",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "bc250d3d_router.dll"
       },
       "size": 202752,
       "role": "bc250d3d_router.dll, release flavour; BD-168 mitigation (Windows Security on the CPU route) at eda8551ef4ef0dfdb274e0f12487ffc37c135098; package version stamped.",
       "flavour": "release",
-      "authenticode_sha256": "6956B7752A2F31AE9ABD8B67D8E890E625454FAC2CF0F9AE186115C68192E67A"
+      "authenticode_sha256": "2A6CD44AC906478958174DA99D8FD9FD99C857117F7524F7A01D8825BA8F72D9"
     },
     {
       "component": "desktop-umd-wow64",
       "path": "payload/wow64/desktop/bc250d3d_router.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/lab/192bdd05c26d632bea75/bc250d3d_router.dll",
-      "sha256": "5C6509CD3F3BD0525F358AA46B6CC3A1427891AB208AFBE17A4F20C5AB70B336",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/lab/98b0b8a74d02bd9d15c5/bc250d3d_router.dll",
+      "sha256": "9D481D417B604E37CD2104224C936DD104B0C2F75F492A918D2988388E30724D",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "154e542b08e67bcad5897f56104472d8bc005ad5",
@@ -1115,20 +1115,20 @@
           "-Flavour",
           "lab",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "bc250d3d_router.dll"
       },
       "size": 202752,
       "role": "bc250d3d_router.dll, lab flavour; shared service state access correction at 154e542b08e67bcad5897f56104472d8bc005ad5; package version stamped.",
       "flavour": "lab",
-      "authenticode_sha256": "89DF1C440A31EC9F1ED05EB6EF4B774A98671F25D57ECEF3F438FA5A6001F02B"
+      "authenticode_sha256": "465014DBD26967263D834125417C84D58B46DCC177C5B50A2CBF0FC2155F7173"
     },
     {
       "component": "desktop-umd-wow64",
       "path": "payload/wow64/desktop/bc250d3d.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/release/12004998fbff0f63aadd/bc250d3d.dll",
-      "sha256": "D5AC15B79B37795D72500686FF3A119B86C864F4E172E51D679A8E42D872EEBA",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/release/08a88ff18027d3935bcc/bc250d3d.dll",
+      "sha256": "161D9EC1E2B64E20E56786DE620D7259160F4225D604576E34DCBC296ABCF458",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "fa5f386e8c93039e4cdbca607b2541e102e4e0f0",
@@ -1150,7 +1150,7 @@
           "-Flavour",
           "release",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "inputs": {
           "llvm-x86": {
@@ -1168,8 +1168,8 @@
     {
       "component": "desktop-umd-wow64",
       "path": "payload/wow64/desktop/bc250d3d.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/lab/3edcc4f5ce2a925b0e0e/bc250d3d.dll",
-      "sha256": "6D8FC96BBBBFBCA663A9DBD388C76DA61B7370FD01C8F48AFA427CB8C2F7A2C9",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/lab/081d12623ff6d617ce3d/bc250d3d.dll",
+      "sha256": "70756022B2E1A8AE59A21341CCBB5DB1CBC604466637C6E19B872A563C8C401D",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "fa5f386e8c93039e4cdbca607b2541e102e4e0f0",
@@ -1192,7 +1192,7 @@
           "lab",
           "-Lab",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "inputs": {
           "llvm-x86": {
@@ -1211,8 +1211,8 @@
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_d3d11.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/release/a4bd847ff967ef729f2b/amdgpu_wddm_d3d11.dll",
-      "sha256": "1CC48F3AE46D10098AE9E0F94ED6385C49C8908799C4AD9B2B2ACCF9DFCA83BB",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/release/4590082bb20df90f25d7/amdgpu_wddm_d3d11.dll",
+      "sha256": "BAF8895D7B010546FD7237E564868E0FF6C6EF9655A6291C120BEBA34212D99E",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "1750f50535a79e49878298c6078df8745ce1068f",
@@ -1231,7 +1231,7 @@
           "-IcdPath",
           "{payload:payload/wow64/d3d11/amdgpu_wddm_radv.dll}",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "inputs": {
           "dxvk": {
@@ -1248,8 +1248,8 @@
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_d3d11.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/lab/1122539c1d7c7915c601/amdgpu_wddm_d3d11.dll",
-      "sha256": "85F6FA4F834F427D8C1DF9FAE665854791F12A6C845AB78F23B85CE6F103D065",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/lab/86bbfd56f06cefa3a0a5/amdgpu_wddm_d3d11.dll",
+      "sha256": "4F778CD3BEC2C1D1BB0C31C1DE4BFB648CB544F30DCAEF6E5E3D7F8FEE48906E",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "1750f50535a79e49878298c6078df8745ce1068f",
@@ -1268,7 +1268,7 @@
           "-IcdPath",
           "{payload:payload/wow64/d3d11/amdgpu_wddm_radv.dll}",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "inputs": {
           "dxvk": {
@@ -1389,8 +1389,8 @@
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_dxvk.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/release/b55d75826375f2cfb07a/amdgpu_wddm_dxvk.dll",
-      "sha256": "CCF0E6929B06BB8091F69DB6885A2B623EACA80BD27542A3DB178324C7970554",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/release/01b483d00a48eba72bde/amdgpu_wddm_dxvk.dll",
+      "sha256": "FA16535559EC2B5A9D2F53A604D8D41EB4FA99DA63D460BB17E6EE356304F17D",
       "built_from": {
         "repo": "dxvk",
         "commit": "b4f080f7840a4e88110bc91cc7a833ccb9c0638f",
@@ -1408,7 +1408,7 @@
           "-Jobs",
           "8",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "src/ddi/amdgpu_wddm_dxvk.dll"
       },
@@ -1419,8 +1419,8 @@
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_dxvk.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/lab/66750c239a3498c99ce9/amdgpu_wddm_dxvk.dll",
-      "sha256": "5597F1B93574B1DA606BE6B06E6B1D80BAEDB9FA30A66785C6931982B0EDBE22",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/lab/e57907e58b577a2d809c/amdgpu_wddm_dxvk.dll",
+      "sha256": "A40D35A5D36A0B6E88F1388BD1CE9607081008694AE8A72E6C6047F286D518B1",
       "built_from": {
         "repo": "dxvk",
         "commit": "b4f080f7840a4e88110bc91cc7a833ccb9c0638f",
@@ -1441,7 +1441,7 @@
           "lab",
           "-Lab",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "src/ddi/amdgpu_wddm_dxvk.dll"
       },
@@ -1453,8 +1453,8 @@
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_radv.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/release/4ca63e1a26e7a70cdddb/amdgpu_wddm_radv.dll",
-      "sha256": "6DD79FF40BAAA814F1F07A730F6C71124D928CD8FB174E79EC6671995E430093",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/release/3a1250867b37aafb9c54/amdgpu_wddm_radv.dll",
+      "sha256": "8B6153844B79EEA9F859DD25DD2F43144910E7061B7161FACF9481F9A0DE7DD2",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "2dea401cee9aafaea5846c5333a26839f0bff7cb",
@@ -1474,7 +1474,7 @@
           "-Flavour",
           "release",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "src/amd/vulkan/amdgpu_wddm_radv.dll"
       },
@@ -1486,8 +1486,8 @@
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_radv.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/lab/cb5c4a74441590f3c7bd/amdgpu_wddm_radv.dll",
-      "sha256": "F71EAF5DFFDF547B4469A4CB857DB2BBCA6C50DD702B1430426D8F67F3CF0B4D",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/lab/5a99275882d8259da589/amdgpu_wddm_radv.dll",
+      "sha256": "A9F627BE16AD555C7774341465B9BF558A5898EA9A7847FD5EC0BBBDD52BCED7",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "2dea401cee9aafaea5846c5333a26839f0bff7cb",
@@ -1508,7 +1508,7 @@
           "lab",
           "-Lab",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "src/amd/vulkan/amdgpu_wddm_radv.dll"
       },
@@ -1521,8 +1521,8 @@
     {
       "component": "d3d12-umd-wow64",
       "path": "payload/wow64/d3d12/amdgpu_wddm_d3d12.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/release/5ced3888755c8b108726/amdgpu_wddm_d3d12.dll",
-      "sha256": "C3BF2932AD0405F941705F6E09E1A586C0F646009AF91A59229923B1B7D896AB",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/release/9cd4d3b3b27a94bf0044/amdgpu_wddm_d3d12.dll",
+      "sha256": "3776FAA89F360FA73BFC717EE0997164E22A960348302110B880A69112F5668E",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "31abd6690c316e476efd8628ecf6c442aec1c1f6",
@@ -1541,7 +1541,7 @@
           "-Flavour",
           "release",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "amdgpu_wddm_d3d12.dll",
         "inputs": {
@@ -1576,8 +1576,8 @@
     {
       "component": "d3d12-umd-wow64",
       "path": "payload/wow64/d3d12/amdgpu_wddm_d3d12.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/lab/e87896b315c738b23d31/amdgpu_wddm_d3d12.dll",
-      "sha256": "0C6DBF7B14758A08276EBC2639BED000DB6B8C883A81DC4290964667DAFC2C57",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/lab/7235c4a92bb3144ed2c8/amdgpu_wddm_d3d12.dll",
+      "sha256": "74AD93A859D020969E01D4A292AF386D9A444914CF8029F602D264CDF2FDBD4A",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "31abd6690c316e476efd8628ecf6c442aec1c1f6",
@@ -1596,7 +1596,7 @@
           "-Flavour",
           "lab",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "amdgpu_wddm_d3d12.dll",
         "inputs": {
@@ -1632,8 +1632,8 @@
     {
       "component": "d3d12-umd-wow64",
       "path": "payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/release/1a67bd4de759ad3514d4/amdgpu_wddm_vkd3d.dll",
-      "sha256": "72C3C957F887304BB94F225449BD9CEA4E8F033147FA56C0B560113862D167C9",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/release/23e02fd990ee7487692f/amdgpu_wddm_vkd3d.dll",
+      "sha256": "65C7DE4F5A66D7A1EE5043607ECA1408F8AE1C7924AB5C4135F4515F05E7D92D",
       "built_from": {
         "repo": "vkd3d-proton",
         "commit": "b69df5fb2d44858a7d5aa9e322d6a4698a8b4536",
@@ -1653,7 +1653,7 @@
           "-Flavour",
           "release",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "libs/ddi/amdgpu_wddm_vkd3d.dll"
       },
@@ -1665,8 +1665,8 @@
     {
       "component": "d3d12-umd-wow64",
       "path": "payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/lab/3cb868760d536fa867de/amdgpu_wddm_vkd3d.dll",
-      "sha256": "B305CD49582289D2020B2372F7CD1BDB39FD6D12F1A3C4D1B4BDFA3589E956C2",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/lab/f263bd6b6b8650667cd4/amdgpu_wddm_vkd3d.dll",
+      "sha256": "0F5994E7F5401E220A86D211B7EE201083FB8DE38EA613EBB5EB08040ED262DD",
       "built_from": {
         "repo": "vkd3d-proton",
         "commit": "b69df5fb2d44858a7d5aa9e322d6a4698a8b4536",
@@ -1686,7 +1686,7 @@
           "-Flavour",
           "lab",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "libs/ddi/amdgpu_wddm_vkd3d.dll"
       },
@@ -1699,8 +1699,8 @@
     {
       "component": "d3d12-umd-wow64",
       "path": "payload/wow64/d3d12/amdgpu_wddm_radv.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/release/4ca63e1a26e7a70cdddb/amdgpu_wddm_radv.dll",
-      "sha256": "6DD79FF40BAAA814F1F07A730F6C71124D928CD8FB174E79EC6671995E430093",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/release/3a1250867b37aafb9c54/amdgpu_wddm_radv.dll",
+      "sha256": "8B6153844B79EEA9F859DD25DD2F43144910E7061B7161FACF9481F9A0DE7DD2",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "2dea401cee9aafaea5846c5333a26839f0bff7cb",
@@ -1720,7 +1720,7 @@
           "-Flavour",
           "release",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "src/amd/vulkan/amdgpu_wddm_radv.dll"
       },
@@ -1732,8 +1732,8 @@
     {
       "component": "d3d12-umd-wow64",
       "path": "payload/wow64/d3d12/amdgpu_wddm_radv.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/lab/cb5c4a74441590f3c7bd/amdgpu_wddm_radv.dll",
-      "sha256": "F71EAF5DFFDF547B4469A4CB857DB2BBCA6C50DD702B1430426D8F67F3CF0B4D",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/lab/5a99275882d8259da589/amdgpu_wddm_radv.dll",
+      "sha256": "A9F627BE16AD555C7774341465B9BF558A5898EA9A7847FD5EC0BBBDD52BCED7",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "2dea401cee9aafaea5846c5333a26839f0bff7cb",
@@ -1754,7 +1754,7 @@
           "lab",
           "-Lab",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "src/amd/vulkan/amdgpu_wddm_radv.dll"
       },
@@ -1767,8 +1767,8 @@
     {
       "component": "vulkan-icd-wow64",
       "path": "payload/wow64/vulkan/vulkan_radeon.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/release/6263c4f6b764f99a1ac7/vulkan_radeon.dll",
-      "sha256": "929E3F125C9401EB2A647EB5DEE623A81DD08B3C09A5199D2A91BE73B2EEA4C3",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/release/0afeb4b1ee59985e7a9b/vulkan_radeon.dll",
+      "sha256": "DD82FA5FC2D00247C6EE548123896D00BCD678E526FDCC91838BC55A61A4290C",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "0715572c0b31a969897657b08f0cc75bd65d41f0",
@@ -1788,7 +1788,7 @@
           "-Flavour",
           "release",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "src/amd/vulkan/vulkan_radeon.dll"
       },
@@ -1800,8 +1800,8 @@
     {
       "component": "vulkan-icd-wow64",
       "path": "payload/wow64/vulkan/vulkan_radeon.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/lab/4a04bd02e3179b038b28/vulkan_radeon.dll",
-      "sha256": "E99D3B8CFBAA54D79B4995DFEA6DABE97CB495A9DE0F10E8E01D7BBC32B0E14D",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/lab/e9f6688643527a9367a8/vulkan_radeon.dll",
+      "sha256": "8118D78CB9DD0CA4C66DA1070F566F1E13A499EDB107A6AAFAECC2CFFA659A3B",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "0715572c0b31a969897657b08f0cc75bd65d41f0",
@@ -1822,7 +1822,7 @@
           "lab",
           "-Lab",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "src/amd/vulkan/vulkan_radeon.dll"
       },
@@ -1849,8 +1849,8 @@
     {
       "component": "tool",
       "path": "payload/tools/bc250kmd_cli.exe",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/release/6cd7a0929dc547d813c3/bc250kmd_cli.exe",
-      "sha256": "B858460BBDB1D9BD8E729928DA81E71065B490343C5BB5296240F8602A6506CB",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/release/5f76c0cb805bea474863/bc250kmd_cli.exe",
+      "sha256": "1A001B7705F72939FCCF352E8E0452288938FA73DD6BC44AE08131FFB971B5D8",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "154e542b08e67bcad5897f56104472d8bc005ad5",
@@ -1862,20 +1862,20 @@
           "{out}",
           "-NoSmoke",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "bc250kmd_cli.exe"
       },
       "size": 305152,
       "role": "bc250kmd_cli.exe, release flavour; shared service state access correction at 154e542b08e67bcad5897f56104472d8bc005ad5; package version stamped.",
       "flavour": "release",
-      "authenticode_sha256": "801018A8F2A188AC949937C88D76DF5B6138E63D8303A6944FDEAFA8714B95A2"
+      "authenticode_sha256": "0D79BB48CD47FC20775DDDF9782EDFFC7EEE701C39890FB3F61C060AAC4DA8ED"
     },
     {
       "component": "tool",
       "path": "payload/tools/bc250kmd_cli.exe",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/lab/74bc83445d5d6b3c6864/bc250kmd_cli.exe",
-      "sha256": "C7ADC7893EB0D107297647DFF6B018B055D4DC54924D779B72BABA4B4F98F843",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/lab/c3d3a48fa28e78fa97a7/bc250kmd_cli.exe",
+      "sha256": "E2C6DD295420C14A637ACA4DA43AD1E47C2BB9C0D13E689AEF2F72620D26AC7F",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "154e542b08e67bcad5897f56104472d8bc005ad5",
@@ -1887,7 +1887,7 @@
           "{out}",
           "-NoSmoke",
           "-Version",
-          "0.7.216.102-tester.31v3",
+          "0.7.216.103-tester.31v3",
           "-Lab"
         ],
         "output": "bc250kmd_cli.exe"
@@ -1895,13 +1895,13 @@
       "size": 352768,
       "role": "bc250kmd_cli.exe, lab flavour; shared service state access correction at 154e542b08e67bcad5897f56104472d8bc005ad5; package version stamped.",
       "flavour": "lab",
-      "authenticode_sha256": "016DC1F0AD2F4CB4AF4167C9F324F9CC93AE27B4C0EA249ACCB9CA22A6C05A4F"
+      "authenticode_sha256": "DEAB206B88082DBADF01B025BF5E00F971F5A905131DD8BF5BDA12D9781BA2E5"
     },
     {
       "component": "tool",
       "path": "payload/tools/amdgpu_wddm_d3d12caps.exe",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/release/22019ff2d5272b5e6505/amdgpu_wddm_d3d12caps.exe",
-      "sha256": "22084750CCA5BF26D93E8CA4AE805703EB7FA22AE622BBA1E665F2976EAF1A2C",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/release/fb344a0cb43b2550012b/amdgpu_wddm_d3d12caps.exe",
+      "sha256": "954E1018C3A4049EC234608CF81EE7E534E69B4C702B387037E34FB017C7EAB8",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "0d82a0597e3180ead2ab7519fef7e26be1f30ffd",
@@ -1912,7 +1912,7 @@
           "-Out",
           "{out}",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "amdgpu_wddm_d3d12caps.exe"
       },
@@ -1920,13 +1920,13 @@
       "size": 313856,
       "role": "D3D12 capability dump (tools/win/d3d12caps), used by verify",
       "flavour": "release",
-      "authenticode_sha256": "CC30EF0012B4C41CC8966AB56D8A0C343CFC92BEC32781E314DDF38BE8C641F3"
+      "authenticode_sha256": "5C29749A33742DDF4C9AB8E0D7EAC9A9F402958006CA603A6CF517EAC94252B1"
     },
     {
       "component": "tool",
       "path": "payload/tools/amdgpu_wddm_d3d12caps.exe",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/lab/1d586e682c78d3874c65/amdgpu_wddm_d3d12caps.exe",
-      "sha256": "B2BF190E3747026F3D7C673F82F32D4F92ADCACDABB5F1113D89B86068EB71F3",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/lab/58873de6822af09c6ae7/amdgpu_wddm_d3d12caps.exe",
+      "sha256": "BE03D1C078F4D2C2ECCF33C282ED6530661BB41D5419D2468FD6D4BC3F48B64E",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "0d82a0597e3180ead2ab7519fef7e26be1f30ffd",
@@ -1937,7 +1937,7 @@
           "-Out",
           "{out}",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "amdgpu_wddm_d3d12caps.exe"
       },
@@ -1946,13 +1946,13 @@
       "role": "D3D12 capability dump (tools/win/d3d12caps), used by verify",
       "flavour": "lab",
       "note": "the caps tool: no lab-only name",
-      "authenticode_sha256": "FD6B9BFEAB36DF29CE89257C150B5CAAB611B071944BBD56C2A8EAAF561D125F"
+      "authenticode_sha256": "D997E079AF6B9B8A6963EC0762204443450444D4663BF4448CE9A91E28CB59F1"
     },
     {
       "component": "control",
       "path": "payload/control/amdgpu_wddm_control.exe",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/release/eb94636a5f6534e63f73/amdgpu_wddm_control.exe",
-      "sha256": "41B629B9133D2C219805F2F463CE6D513302A7B59B4D90B3CA283CD68B0D7527",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/release/e39bbcfcd03b22a75c13/amdgpu_wddm_control.exe",
+      "sha256": "EFA6379635F2E4F19C62DFFEA89E510FC8B25E638EC96033A2842D555FCF428F",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "1750f50535a79e49878298c6078df8745ce1068f",
@@ -1966,20 +1966,20 @@
           "release",
           "-NoSmoke",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "amdgpu_wddm_control.exe"
       },
       "size": 2597376,
       "role": "The control application, release flavour, rebuilt in this lane from bc250-win main 1750f505 with a clean work tree, with the package version stamped (BD-166: file version 40.7.216.102, product 0.7.216.102-tester.31). BD-167: the image reads none of AMDGPU_WDDM_CONTROL_STATE, AMDGPU_WDDM_CONTROL_INSTALLER, AMDGPU_WDDM_CONTROL_NO_DLL and AMDGPU_WDDM_CONTROL_STRINGS, which the lab build of the same checkout reads; rc1 to rc4 pinned a build that read all four, because the recipe ran once and the one file served both flavours. The build carries everything on main since the pinned d73aaedb.",
       "flavour": "release",
-      "authenticode_sha256": "0091FB6957497FDE4A39B120F21733EEDB06EFCCD6DDB45B0B34E663E4FAF80A"
+      "authenticode_sha256": "0BDEEFE5D8F7DBD04A3438E345F38AF1079BFED6A2B98696E9AC3F9962BDAA07"
     },
     {
       "component": "control",
       "path": "payload/control/amdgpu_wddm_control.exe",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/lab/65c51e974e24afad4c69/amdgpu_wddm_control.exe",
-      "sha256": "0F3BAB4E9EBD6A0379D70FE18359E24DDDD4ECDB88A20129F41E1932D7E4CF6D",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/lab/a039574881b40d589b03/amdgpu_wddm_control.exe",
+      "sha256": "E93A0E820EE9D7F988F4C8F6C20BA61E20F30C503CB7B855A164C5BA6E7866FE",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "1750f50535a79e49878298c6078df8745ce1068f",
@@ -1993,7 +1993,7 @@
           "lab",
           "-NoSmoke",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "amdgpu_wddm_control.exe"
       },
@@ -2001,13 +2001,13 @@
       "role": "The control application, release flavour, rebuilt in this lane from bc250-win main 1750f505 with a clean work tree, with the package version stamped (BD-166: file version 40.7.216.102, product 0.7.216.102-tester.31). BD-167: the image reads none of AMDGPU_WDDM_CONTROL_STATE, AMDGPU_WDDM_CONTROL_INSTALLER, AMDGPU_WDDM_CONTROL_NO_DLL and AMDGPU_WDDM_CONTROL_STRINGS, which the lab build of the same checkout reads; rc1 to rc4 pinned a build that read all four, because the recipe ran once and the one file served both flavours. The build carries everything on main since the pinned d73aaedb.",
       "flavour": "lab",
       "note": "the control application, lab flavour: AMDGPU_WDDM_CONTROL_STATE, _INSTALLER, _NO_DLL and _STRINGS",
-      "authenticode_sha256": "1B70A16EA7D0E12A562C897715E54406C71C2723F3960FA0F500EE87994CE695"
+      "authenticode_sha256": "1F5C79C9288EFDE07620F4DC1AD3CB3C23B735E3E0A5AE4564A76F04827E9E9A"
     },
     {
       "component": "control",
       "path": "payload/control/bc250control.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/release/6cd7a0929dc547d813c3/bc250control.dll",
-      "sha256": "185D1C7998C4E61F1B877A051599A88956C91462CAAA022F5588251C51AB73AD",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/release/5f76c0cb805bea474863/bc250control.dll",
+      "sha256": "953FED57B8B3BC43260261841EDBD8C7D9317739982AD85C91A1D62F3826F57C",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "154e542b08e67bcad5897f56104472d8bc005ad5",
@@ -2019,20 +2019,20 @@
           "{out}",
           "-NoSmoke",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "bc250control.dll"
       },
       "size": 211968,
       "role": "bc250control.dll, release flavour; shared service state access correction at 154e542b08e67bcad5897f56104472d8bc005ad5; package version stamped.",
       "flavour": "release",
-      "authenticode_sha256": "778084C33C3F704560EB9E8BF07F2A1BE47E7F5C810F92CEB98BD7E5D2DF3839"
+      "authenticode_sha256": "155C169B3707A1D38F9CAAE134FFCBB16AAB06C27F057C0583D7163B80359DD1"
     },
     {
       "component": "control",
       "path": "payload/control/bc250control.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/lab/74bc83445d5d6b3c6864/bc250control.dll",
-      "sha256": "458C8FB15552CFB33E61509F2521B8CC6C7729B35DEEA68F4744853A2757B306",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/lab/c3d3a48fa28e78fa97a7/bc250control.dll",
+      "sha256": "7B11240293404A07E07875F5D959F5289FE712544F9562A7F72CE5D4D7815CE1",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "154e542b08e67bcad5897f56104472d8bc005ad5",
@@ -2044,7 +2044,7 @@
           "{out}",
           "-NoSmoke",
           "-Version",
-          "0.7.216.102-tester.31v3",
+          "0.7.216.103-tester.31v3",
           "-Lab"
         ],
         "output": "bc250control.dll"
@@ -2052,13 +2052,13 @@
       "size": 223232,
       "role": "bc250control.dll, lab flavour; shared service state access correction at 154e542b08e67bcad5897f56104472d8bc005ad5; package version stamped.",
       "flavour": "lab",
-      "authenticode_sha256": "11CDCB7D0A448CA35382B2A055AD910731A09D42DF88122E162DB31DA46D46D0"
+      "authenticode_sha256": "04BD11C9EC231FF8F5B4718D2014F409B7D47831CB0F40289D7D0888813178A6"
     },
     {
       "component": "tool",
       "path": "payload/tools/bc250control.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/release/6cd7a0929dc547d813c3/bc250control.dll",
-      "sha256": "185D1C7998C4E61F1B877A051599A88956C91462CAAA022F5588251C51AB73AD",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/release/5f76c0cb805bea474863/bc250control.dll",
+      "sha256": "953FED57B8B3BC43260261841EDBD8C7D9317739982AD85C91A1D62F3826F57C",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "154e542b08e67bcad5897f56104472d8bc005ad5",
@@ -2070,20 +2070,20 @@
           "{out}",
           "-NoSmoke",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "bc250control.dll"
       },
       "size": 211968,
       "role": "bc250control.dll, release flavour; shared service state access correction at 154e542b08e67bcad5897f56104472d8bc005ad5; package version stamped.",
       "flavour": "release",
-      "authenticode_sha256": "778084C33C3F704560EB9E8BF07F2A1BE47E7F5C810F92CEB98BD7E5D2DF3839"
+      "authenticode_sha256": "155C169B3707A1D38F9CAAE134FFCBB16AAB06C27F057C0583D7163B80359DD1"
     },
     {
       "component": "tool",
       "path": "payload/tools/bc250control.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/lab/74bc83445d5d6b3c6864/bc250control.dll",
-      "sha256": "458C8FB15552CFB33E61509F2521B8CC6C7729B35DEEA68F4744853A2757B306",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/lab/c3d3a48fa28e78fa97a7/bc250control.dll",
+      "sha256": "7B11240293404A07E07875F5D959F5289FE712544F9562A7F72CE5D4D7815CE1",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "154e542b08e67bcad5897f56104472d8bc005ad5",
@@ -2095,7 +2095,7 @@
           "{out}",
           "-NoSmoke",
           "-Version",
-          "0.7.216.102-tester.31v3",
+          "0.7.216.103-tester.31v3",
           "-Lab"
         ],
         "output": "bc250control.dll"
@@ -2103,7 +2103,7 @@
       "size": 223232,
       "role": "bc250control.dll, lab flavour; shared service state access correction at 154e542b08e67bcad5897f56104472d8bc005ad5; package version stamped.",
       "flavour": "lab",
-      "authenticode_sha256": "11CDCB7D0A448CA35382B2A055AD910731A09D42DF88122E162DB31DA46D46D0"
+      "authenticode_sha256": "04BD11C9EC231FF8F5B4718D2014F409B7D47831CB0F40289D7D0888813178A6"
     },
     {
       "component": "tool",
@@ -2141,8 +2141,8 @@
     {
       "component": "mft-h264",
       "path": "payload/mft/amdgpu_wddm_mft_h264.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/release/f4e6d5835bee5a13ba52/amdgpu_wddm_mft_h264.dll",
-      "sha256": "34307A52FE036FA3AB9EB8AC27F734118AEE989061BB2FB07BDF3CEC25DA6154",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/release/824ce0280aa0b8d9c957/amdgpu_wddm_mft_h264.dll",
+      "sha256": "D572679F43B950A6CC208F7F3FE3C767B35A94F86AE9845B64B12CD08BF200AC",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "1750f50535a79e49878298c6078df8745ce1068f",
@@ -2155,7 +2155,7 @@
           "-Flavour",
           "release",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "amdgpu_wddm_mft_h264.dll"
       },
@@ -2166,8 +2166,8 @@
     {
       "component": "mft-h264",
       "path": "payload/mft/amdgpu_wddm_mft_h264.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/lab/eaaada64ee6babef0d5f/amdgpu_wddm_mft_h264.dll",
-      "sha256": "059B4168C596CF861E219407924AB432554C9A76B9E52EC49E136E3B9F794B08",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/lab/6bd20dd19d9bc4616dc5/amdgpu_wddm_mft_h264.dll",
+      "sha256": "C5808A9610010E6796BB81ECC2EE76FEA4603777E70E7A8EBB711882F3D432CC",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "1750f50535a79e49878298c6078df8745ce1068f",
@@ -2180,7 +2180,7 @@
           "-Flavour",
           "lab",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "amdgpu_wddm_mft_h264.dll"
       },
@@ -2192,8 +2192,8 @@
     {
       "component": "tool",
       "path": "payload/tools/d3d11bench.exe",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/release/ea94aa0a78a6c9c99674/d3d11bench.exe",
-      "sha256": "A46AA9F5E373D604191FA21D9A471182CCBEC3BE317F078A0DFB3C53AE20B946",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/release/244b7e53031050993cc7/d3d11bench.exe",
+      "sha256": "0276705C2A66D0172EC57259CF899F1E90868494D4EEE438A30B5DD95C08E4D8",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "1884b33d8bb7ff98d2864d9b5fd5c6de1ffceb5b",
@@ -2204,7 +2204,7 @@
           "-Out",
           "{out}",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "d3d11bench.exe"
       },
@@ -2212,13 +2212,13 @@
       "size": 280064,
       "role": "D3D11 self-test (tools/win/d3d11bench, bc250-win 1884b33d, train/b24): the scenes draws, fill and shaders, each with an FNV-1a checksum of its last frame, so a wrong picture shows as a checksum change. The lab settings check (settings-lab.ps1) runs it. Built with /W4 /WX after the compare.py and imgdiff.py tests. Carried from 0.7.216.100-tester.21: D3D11 self-test (tools/win/d3d11bench, bc250-win 0d6b3299, train/b23): the scenes draws, fill and shaders, each with an FNV-1a checksum of its last frame, so a wrong picture shows as a checksum change. The lab settings check (settings-lab.ps1) runs it; the verify step and the support report do not run it yet. Built with /W4 /WX after the compare.py and imgdiff.py tests",
       "flavour": "release",
-      "authenticode_sha256": "9E8616807FBA05AECE0FE7FCA2C1969C4FFD2DA67802721E1F01C6602296460D"
+      "authenticode_sha256": "022CC16398D999B5228D4A0B785B911636C9DF5DB5AF7439D5F5BDFF06043B56"
     },
     {
       "component": "tool",
       "path": "payload/tools/d3d11bench.exe",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/lab/8976782aad1396468f9c/d3d11bench.exe",
-      "sha256": "C2DDFF5E2745C65C91BD2F7A8E35647643EB5750DA6AC5F56DB6A66027404DC2",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/lab/30b9a1a35a5137864d6c/d3d11bench.exe",
+      "sha256": "40F853A7F512CC0AD10A5013497A38F0A9167E9D1F1C503374D893C4FBB5A938",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "1884b33d8bb7ff98d2864d9b5fd5c6de1ffceb5b",
@@ -2229,7 +2229,7 @@
           "-Out",
           "{out}",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "d3d11bench.exe"
       },
@@ -2238,13 +2238,13 @@
       "role": "D3D11 self-test (tools/win/d3d11bench, bc250-win 1884b33d, train/b24): the scenes draws, fill and shaders, each with an FNV-1a checksum of its last frame, so a wrong picture shows as a checksum change. The lab settings check (settings-lab.ps1) runs it. Built with /W4 /WX after the compare.py and imgdiff.py tests. Carried from 0.7.216.100-tester.21: D3D11 self-test (tools/win/d3d11bench, bc250-win 0d6b3299, train/b23): the scenes draws, fill and shaders, each with an FNV-1a checksum of its last frame, so a wrong picture shows as a checksum change. The lab settings check (settings-lab.ps1) runs it; the verify step and the support report do not run it yet. Built with /W4 /WX after the compare.py and imgdiff.py tests",
       "flavour": "lab",
       "note": "our benchmark: no lab-only name",
-      "authenticode_sha256": "7F3B4DFA64132EEF1DDA47C592839B8C5F3BAACC7B905A8C89A185F1119A9EEE"
+      "authenticode_sha256": "64BFAAA7EC6CC2E759583EA500F4FF85478D9122161DAF4B14692BAC298394CD"
     },
     {
       "component": "tool",
       "path": "payload/tools/hip/amdhip64.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/release/1a8f8f54beb3d1e3207b/amdhip64.dll",
-      "sha256": "29A706E13CC19CE538B76B377AA15096501045D71828AB69147F591CB5F4B04B",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/release/418caa273dad2e0b8536/amdhip64.dll",
+      "sha256": "3277BCD02C10728A009A1B64473D85C803C1493B357E31006B1668F0C6BCAE98",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "1750f50535a79e49878298c6078df8745ce1068f",
@@ -2261,7 +2261,7 @@
           "-Flavour",
           "release",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "inputs": {
           "layer1": {
@@ -2273,13 +2273,13 @@
       "size": 289792,
       "role": "The HIP runtime (M16 layer 2), release flavour, rebuilt in this lane from bc250-win main 1750f505 with a clean work tree and the package version stamped. BD-167: the image reads none of the twelve measurement and log names the lab build of the same checkout reads (BC250_HIP_BATCH and its bounds, BC250_HIP_BARRIER, BC250_HIP_PM4_STATE_CACHE, BC250_HIP_GPU_COPY, BC250_HIP_GPU_COPY_MIN, BC250_HIP_GPU_FILL, the two wait bounds and BC250_HIP_LOG with its level); rc1 to rc4 pinned the b32 build, which read all twelve. 289792 bytes against the lab build's 304640. Layer 1 is the same static library the earlier rows pinned. The host tests of this build pass on both flavours: 735 checks of the mock runtime, 126 of the batch arm, 48 of the thread arm and 27 of the journal packing, 0 failures. Carried from the b32 rows before this repin: Experimental: our own HIP runtime for gfx1013 (compute/hip, bc250-win perf/hip-gpu-copy 1b1566bf, merged into train/b30), with GPU execution on. New: device-to-host, device-to-device copies and fills run on the command processor of a copy context, with a staging ring and the switch BC250_HIP_GPU_COPY=0 back to the processor copy; BD-123: a host buffer that starts where another ends is found (half-open ranges), so copies and hipMemset on it take the right route. The 55 exports are the tester.27 names; vadd.exe, bc250hipblas.dll and the ggml-hip.dll of the llama.cpp extra import nothing it lacks. Lab, unit A, 2026-10-11: round 2, Gemma 4 12B tg128 39.0 against 30.9 t/s (+26.1 %), TinyLlama 1.1B +28.3 %, pp512 unchanged, KLD on/off equal; round 3 (BD-123) vadd ok, bench 7/7 with 3 abutting pairs, the omit-tail fault control fails as required. Carried from 0.7.216.100-tester.27: Experimental: our own HIP runtime for gfx1013 (compute/hip, bc250-win 3737b075 on train/b29), with GPU execution on. It carries the BD-110 fix: the device header hip_runtime.h gave gridDim in work-items instead of workgroups. The dispatch journal of the kernel driver named the faulting kernel, soft_max_f32<true,512,512,float>, whose stride with the old header is 512 MiB instead of 1 MiB and reaches the first fault page exactly. The same change corrects byte selectors, atomic scopes, floating-point exchange, masked ballot, cooperative geometry, half NaN and zero behaviour, direct binary64 conversion and packed bfloat alignment (compute/hip/DEVICE-CONTRACT.md). Before each submission the runtime hands the kernel driver a journal record of the dispatch through escape command 35. The -DisableGpu build option of 9dbf860b stays in the recipe and is not used here. Lab 2026-10-11 on the journal KMD: vadd, geometry, builtins, hipBLAS, half/block and hipbench controls pass; TinyLlama 1.1B Q4_0 pp512 1868.00 t/s and tg128 122.31 t/s, one repetition, with 16 greedy tokens identical to the CPU output. A dense 12B model does not load: its single 6960120064-byte allocation is refused by CreateAllocation2 with C000000D at the 8192 MiB carve-out, cause not established (BD-117). It is installed to <install root>\\tools\\hip, which the installer appends to the machine PATH.",
       "flavour": "release",
-      "authenticode_sha256": "D86F14D10AEAA7DBBBC7EAF3F082F3A62ABA9574E4BFEC2501187C2CEEAF5E39"
+      "authenticode_sha256": "E74F2DEF2AEC73C0F0A782F85F8F5F554324ECBF78F01D36E782C97D32292B1E"
     },
     {
       "component": "tool",
       "path": "payload/tools/hip/amdhip64.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/lab/50abf4e8ca8adc2f1ddd/amdhip64.dll",
-      "sha256": "C4A6FD2F49CD9C66746E1ABEA7EC98915B26BEF48E3FD225EFE483266BFFC729",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/lab/25b2be56210c0cf5f43e/amdhip64.dll",
+      "sha256": "9FC2314203B745C22B380BFE2CE165FBB756EA65FED584057FF3EA309F98AB8D",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "1750f50535a79e49878298c6078df8745ce1068f",
@@ -2296,7 +2296,7 @@
           "-Flavour",
           "lab",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "inputs": {
           "layer1": {
@@ -2309,13 +2309,13 @@
       "role": "The HIP runtime (M16 layer 2), release flavour, rebuilt in this lane from bc250-win main 1750f505 with a clean work tree and the package version stamped. BD-167: the image reads none of the twelve measurement and log names the lab build of the same checkout reads (BC250_HIP_BATCH and its bounds, BC250_HIP_BARRIER, BC250_HIP_PM4_STATE_CACHE, BC250_HIP_GPU_COPY, BC250_HIP_GPU_COPY_MIN, BC250_HIP_GPU_FILL, the two wait bounds and BC250_HIP_LOG with its level); rc1 to rc4 pinned the b32 build, which read all twelve. 289792 bytes against the lab build's 304640. Layer 1 is the same static library the earlier rows pinned. The host tests of this build pass on both flavours: 735 checks of the mock runtime, 126 of the batch arm, 48 of the thread arm and 27 of the journal packing, 0 failures. Carried from the b32 rows before this repin: Experimental: our own HIP runtime for gfx1013 (compute/hip, bc250-win perf/hip-gpu-copy 1b1566bf, merged into train/b30), with GPU execution on. New: device-to-host, device-to-device copies and fills run on the command processor of a copy context, with a staging ring and the switch BC250_HIP_GPU_COPY=0 back to the processor copy; BD-123: a host buffer that starts where another ends is found (half-open ranges), so copies and hipMemset on it take the right route. The 55 exports are the tester.27 names; vadd.exe, bc250hipblas.dll and the ggml-hip.dll of the llama.cpp extra import nothing it lacks. Lab, unit A, 2026-10-11: round 2, Gemma 4 12B tg128 39.0 against 30.9 t/s (+26.1 %), TinyLlama 1.1B +28.3 %, pp512 unchanged, KLD on/off equal; round 3 (BD-123) vadd ok, bench 7/7 with 3 abutting pairs, the omit-tail fault control fails as required. Carried from 0.7.216.100-tester.27: Experimental: our own HIP runtime for gfx1013 (compute/hip, bc250-win 3737b075 on train/b29), with GPU execution on. It carries the BD-110 fix: the device header hip_runtime.h gave gridDim in work-items instead of workgroups. The dispatch journal of the kernel driver named the faulting kernel, soft_max_f32<true,512,512,float>, whose stride with the old header is 512 MiB instead of 1 MiB and reaches the first fault page exactly. The same change corrects byte selectors, atomic scopes, floating-point exchange, masked ballot, cooperative geometry, half NaN and zero behaviour, direct binary64 conversion and packed bfloat alignment (compute/hip/DEVICE-CONTRACT.md). Before each submission the runtime hands the kernel driver a journal record of the dispatch through escape command 35. The -DisableGpu build option of 9dbf860b stays in the recipe and is not used here. Lab 2026-10-11 on the journal KMD: vadd, geometry, builtins, hipBLAS, half/block and hipbench controls pass; TinyLlama 1.1B Q4_0 pp512 1868.00 t/s and tg128 122.31 t/s, one repetition, with 16 greedy tokens identical to the CPU output. A dense 12B model does not load: its single 6960120064-byte allocation is refused by CreateAllocation2 with C000000D at the 8192 MiB carve-out, cause not established (BD-117). It is installed to <install root>\\tools\\hip, which the installer appends to the machine PATH.",
       "flavour": "lab",
       "note": "the HIP runtime, lab flavour: the twelve BC250_HIP_ measurement and log names",
-      "authenticode_sha256": "2CC81232881A2EF5D15DB34231158BBCE70F1F2D85D3F53152020A5D6636FB37"
+      "authenticode_sha256": "9AD8C2C3268261DD10FCD124A775B3525F35C66CF95B203FF439A69A5FC8323C"
     },
     {
       "component": "tool",
       "path": "payload/tools/hip/vadd.exe",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/release/1a8f8f54beb3d1e3207b/vadd.exe",
-      "sha256": "373F5A360BBBF2AA54D6F456F2955721FA4F383C72F5A726DBD352458DF88797",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/release/418caa273dad2e0b8536/vadd.exe",
+      "sha256": "2C43DF3C0BC6203E5418A41815B89C5093A2ED6DD46B126346B3F7ABE76206D5",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "1750f50535a79e49878298c6078df8745ce1068f",
@@ -2332,7 +2332,7 @@
           "-Flavour",
           "release",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "inputs": {
           "layer1": {
@@ -2345,13 +2345,13 @@
       "size": 162304,
       "role": "The HIP vector-add sample, release flavour, from the same build as the runtime it links against (bc250-win main 1750f505): the runtime's recipe builds it and it follows the flavour of the product DLL, which is why the row's recipe is now compute/hip/build-runtime.ps1 instead of compute/hip/build-rebuilt-controls.ps1. The two cannot drift apart any more: before this, the sample came from the hip-dispatch journal and was linked against another import library of the same DLL. BD-167: the image reads no BC250_HIP_WAIT_TOTAL_MS, which the lab build reads. 161280 bytes against the lab build's 165376.",
       "flavour": "release",
-      "authenticode_sha256": "EE35FAC3CCD9FA117A045795E8D2284AF287E25CB63156A47DC853EC34B26097"
+      "authenticode_sha256": "568EBD9520EE63C4D03B7C83E81E0A5FB68E4CE84910DC3307DF7B7B353800EF"
     },
     {
       "component": "tool",
       "path": "payload/tools/hip/vadd.exe",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/lab/50abf4e8ca8adc2f1ddd/vadd.exe",
-      "sha256": "08171777F90E7E1AE6A310CAA5603F8472E844F5B262B6B94B463DC9AC0A9CEE",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/lab/25b2be56210c0cf5f43e/vadd.exe",
+      "sha256": "8244832B698B76053B19E156C74C32AD04401BB494E0B607D69FC03C57FC112D",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "1750f50535a79e49878298c6078df8745ce1068f",
@@ -2368,7 +2368,7 @@
           "-Flavour",
           "lab",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "inputs": {
           "layer1": {
@@ -2382,13 +2382,13 @@
       "role": "The HIP vector-add sample, release flavour, from the same build as the runtime it links against (bc250-win main 1750f505): the runtime's recipe builds it and it follows the flavour of the product DLL, which is why the row's recipe is now compute/hip/build-runtime.ps1 instead of compute/hip/build-rebuilt-controls.ps1. The two cannot drift apart any more: before this, the sample came from the hip-dispatch journal and was linked against another import library of the same DLL. BD-167: the image reads no BC250_HIP_WAIT_TOTAL_MS, which the lab build reads. 161280 bytes against the lab build's 165376.",
       "flavour": "lab",
       "note": "the HIP sample, lab flavour: BC250_HIP_WAIT_TOTAL_MS, from the same build as the lab runtime",
-      "authenticode_sha256": "625C2AFAA9568C0A688925E2C9B91DE9275E06CED6D26DE27142147B58F22A59"
+      "authenticode_sha256": "23817FA52EEACA6C51D732690D1EB094912D36AD7B7C146719981E6C8FB2B33F"
     },
     {
       "component": "tool",
       "path": "payload/tools/hip/bc250hipblas.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/release/652747227fd1cdeecdff/bc250hipblas.dll",
-      "sha256": "6AA287008B02F3C3F5FB705BB92F0BCE21322CCDA65ABAE244BC54DF0C85D98D",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/release/3b2ba496677df8ed2986/bc250hipblas.dll",
+      "sha256": "2052AABE69806E87531A38D55DB612B22704D672728CC665E630A47CCA49CE10",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "3737b075a607147c9937d0504ed6b8ec1cbd5865",
@@ -2401,7 +2401,7 @@
           "-ImportLibrary",
           "{input:runtime}/amdhip64.lib",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "inputs": {
           "runtime": {
@@ -2414,13 +2414,13 @@
       "size": 157696,
       "role": "Experimental: our hipBLAS subset for gfx1013 (compute/hipblas, the GEMM entry points that llama.cpp's HIP backend calls), rebuilt at 3737b075 with the corrected device headers, next to tools\\hip\\amdhip64.dll. No program of this package loads it. Lab 2026-10-11: gemm_check passes 532 checks and detects a deliberate corruption.",
       "flavour": "release",
-      "authenticode_sha256": "6F012A114B3E859C836244AFAE0172B514234C1644434DDDD8D970F5D9616997"
+      "authenticode_sha256": "A8FB89FDA05853FFA5B8D1CCC6E74B498724BD2CA47C1C2A2BF78EE5B346AB2B"
     },
     {
       "component": "tool",
       "path": "payload/tools/hip/bc250hipblas.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/lab/094062c8d43d1451f67a/bc250hipblas.dll",
-      "sha256": "8136C1ACE06FF24226DCE262B034CB7982593B290C31A9339873F861B0F47A32",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/lab/d5b65ab0a20a50c82344/bc250hipblas.dll",
+      "sha256": "DAC7261D2940FFD517EB8C3295CD06796DF5867DD98000BAFF680BF4D1C41687",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "3737b075a607147c9937d0504ed6b8ec1cbd5865",
@@ -2433,7 +2433,7 @@
           "-ImportLibrary",
           "{input:runtime}/amdhip64.lib",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "inputs": {
           "runtime": {
@@ -2447,13 +2447,13 @@
       "role": "Experimental: our hipBLAS subset for gfx1013 (compute/hipblas, the GEMM entry points that llama.cpp's HIP backend calls), rebuilt at 3737b075 with the corrected device headers, next to tools\\hip\\amdhip64.dll. No program of this package loads it. Lab 2026-10-11: gemm_check passes 532 checks and detects a deliberate corruption.",
       "flavour": "lab",
       "note": "the hipBLAS shim: no lab-only name. It is not rebuilt with the runtime either; check-hipblas-abi.py shows its eight imports are all exported by the new amdhip64.dll",
-      "authenticode_sha256": "E35C1C7A94C895ACF8585B829CF4497FBF0AE181FA3D4DD46D3348D06C3C357E"
+      "authenticode_sha256": "152B5B9080A731BAA284AA44B1921154C90E735C9F1A5428380A64EE4FA0CBC7"
     },
     {
       "component": "opengl-icd",
       "path": "payload/opengl/amdgpu_wddm_gl.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/release/5ba69bdaa423028daeb1/amdgpu_wddm_gl.dll",
-      "sha256": "10EB34E1517B1127F426E0AA8E57BD5D7E3EB010C51E42125596170021B12DD0",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/release/e53e24a18681ab55c465/amdgpu_wddm_gl.dll",
+      "sha256": "6895C3216D02A773FAB5D5C3CFA75CD0B8EB7A321D212D8B7FB6D0BF18A6EDDC",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "71b34d2c336264684e03ae9ca68d16def4875c05",
@@ -2473,7 +2473,7 @@
           "-Flavour",
           "release",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "src/gallium/targets/wgl/amdgpu_wddm_gl.dll"
       },
@@ -2485,8 +2485,8 @@
     {
       "component": "opengl-icd",
       "path": "payload/opengl/amdgpu_wddm_gl.dll",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/lab/c2853c182656c6e28f70/amdgpu_wddm_gl.dll",
-      "sha256": "CA7EC995085D4F693D8EAD1CEEEB737EA392FA6AC00177648EBD98DA10C42EB6",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/lab/18a880d74986e9f5e46c/amdgpu_wddm_gl.dll",
+      "sha256": "8F23B163339120D23A517CDE593CA6376F71D91179744E716C1402399064A633",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "71b34d2c336264684e03ae9ca68d16def4875c05",
@@ -2507,7 +2507,7 @@
           "lab",
           "-Lab",
           "-Version",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "src/gallium/targets/wgl/amdgpu_wddm_gl.dll"
       },
@@ -2549,12 +2549,12 @@
     {
       "component": "kmd",
       "path": "payload/kmd/amdgpu-state.bin",
-      "source": "scratch/train/b34-build/hotfix-31v3/kmd-31v3-release/package/amdgpu-state.bin",
+      "source": "scratch/train/b34-build/hotfix-31v3/kmd-31v3-103-release/package/amdgpu-state.bin",
       "size": 2216,
       "sha256": "7F5ADC7E197CEFF66ECBC4B336E127551ACBD2B379317EDFF20C2311FEEB4FF7",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "e08e3bb0c55960e62f9da5f6cb9fcaf1004db267",
+        "commit": "850514e388598792355d309095a67a9102bc0375",
         "recipe": "driver/kmd/build.ps1",
         "args": [
           "-Kits",
@@ -2566,7 +2566,7 @@
           "-Flavour",
           "release",
           "-PackageVersion",
-          "0.7.216.102-tester.31v3"
+          "0.7.216.103-tester.31v3"
         ],
         "output": "package/amdgpu-state.bin"
       },
@@ -2576,9 +2576,9 @@
     {
       "component": "tool",
       "path": "payload/tools/amdgpu-state-installer.exe",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/release/d502bb6630baa1160507/amdgpu-state-installer.exe",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/release/95fd74bb1c1180d05cfb/amdgpu-state-installer.exe",
       "size": 234496,
-      "sha256": "4CF2EB212CFD6EB75AC1E89A221FB83226CD7726C31507E9B4D83E372304575C",
+      "sha256": "BAD9CE11F2B5A6DDC98AB24E925E1186FD928AB149AD73DC17CE92B7A79F8587",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "154e542b08e67bcad5897f56104472d8bc005ad5",
@@ -2590,7 +2590,7 @@
           "{root}/toolchain/nuget",
           "-Test",
           "-Version",
-          "0.7.216.102-tester.31v3",
+          "0.7.216.103-tester.31v3",
           "-Flavour",
           "release"
         ],
@@ -2598,14 +2598,14 @@
       },
       "role": "amdgpu-state-installer.exe, release flavour; shared service state access correction at 154e542b08e67bcad5897f56104472d8bc005ad5; package version stamped.",
       "flavour": "release",
-      "authenticode_sha256": "87BEDB6D24D6EEFF1DC2791B60A9259D099539BB4B2BAD3EA90DA4A635A45E79"
+      "authenticode_sha256": "F9548AC294F689233424F9AE046F9CB6173A64DF4E28A0A85C74B35D3655F197"
     },
     {
       "component": "tool",
       "path": "payload/tools/amdgpu-state-installer.exe",
-      "source": "scratch/train/b34-build/hotfix-31v3/stamped/lab/e7c91f6b95dfc0bd5bf3/amdgpu-state-installer.exe",
+      "source": "scratch/train/b34-build/hotfix-31v3/stamped-103/lab/3110b99b967abcc9e637/amdgpu-state-installer.exe",
       "size": 234496,
-      "sha256": "0097A6774BA43F47D8765286B71594C23E8DD8A75410F156E1C830E8C7F81B68",
+      "sha256": "E7601752B64B1238E0327DB679EB5B54A56AC67D9F879EE756C6981C25F531C5",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "154e542b08e67bcad5897f56104472d8bc005ad5",
@@ -2617,7 +2617,7 @@
           "{root}/toolchain/nuget",
           "-Test",
           "-Version",
-          "0.7.216.102-tester.31v3",
+          "0.7.216.103-tester.31v3",
           "-Flavour",
           "lab"
         ],
@@ -2625,7 +2625,7 @@
       },
       "role": "amdgpu-state-installer.exe, lab flavour; shared service state access correction at 154e542b08e67bcad5897f56104472d8bc005ad5; package version stamped.",
       "flavour": "lab",
-      "authenticode_sha256": "DFDC199946AE43CA4AAD2FC4E3B85A4198EB0258A8B6CA80F409B9EF13669F71"
+      "authenticode_sha256": "8E2C96D401D47311FDA0924F002F7FB189E125963A1E6DAE0242A7E909A43DCF"
     }
   ],
   "firmware": {
