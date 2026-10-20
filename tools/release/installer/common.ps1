@@ -2708,6 +2708,33 @@ function Get-PeSubsystem {
         return [int][BitConverter]::ToUInt16($buf, $pe + 24 + 68)
     } catch { return $null }
 }
+# Whether a registered logon task is the one a task of the plan above describes (BD-193). Phase 2 of an installation
+# runs at the first logon after the restart, after that logon has started the tasks that phase 1 registered. To
+# register them again there ends the confirmation of that logon, and the new registration never sees the logon, so
+# the start stays unconfirmed (lab 22631 and 26100, 2026-10-20). A registration that matches the plan is kept. Every
+# field that differs or cannot be read gives $false, and the caller registers the task as before. The accounts are
+# compared by SID, never by their names, which Windows translates.
+function Test-LogonTaskRegistered {
+    param($Existing, $Task)
+    try {
+        if (-not $Existing -or -not $Task) { return $false }
+        $actions = @($Existing.Actions); $triggers = @($Existing.Triggers); $p = $Existing.Principal
+        if ($actions.Count -ne 1 -or $triggers.Count -ne 1 -or -not $p) { return $false }
+        if ([string]$actions[0].Execute -ne [string]$Task.execute -or [string]$actions[0].Arguments -ne [string]$Task.arguments) { return $false }
+        $t = $triggers[0]
+        if ([string]$t.CimClass.CimClassName -ne 'MSFT_TaskLogonTrigger' -or $t.UserId -or -not $t.Enabled) { return $false }
+        if ([string]$p.RunLevel -ne [string]$Task.principal.run_level) { return $false }
+        $account = $(if ([string]$Task.principal.kind -eq 'user') { [string]$p.UserId } else { [string]$p.GroupId })
+        if (-not $account) { return $false }
+        $sid = $account
+        if ($account -notmatch '^S-1-') { $sid = (New-Object Security.Principal.NTAccount($account)).Translate([Security.Principal.SecurityIdentifier]).Value }
+        if ($sid -ne [string]$Task.principal.id) { return $false }
+        if ([string]$Task.principal.kind -eq 'user' -and [string]$p.LogonType -ne [string]$Task.principal.logon_type) { return $false }
+        if (-not $Existing.Settings -or -not $Existing.Settings.Enabled) { return $false }
+        if ([string]$Existing.Settings.ExecutionTimeLimit -ne "PT$([int]$Task.minutes)M") { return $false }
+        return $true
+    } catch { return $false }
+}
 # The rules of the plan above, as the list of what is wrong with a plan; an empty list is a plan that holds them.
 # The host test runs it over the installer's plan and over a plan with the principal of the defect, which must fail.
 function Test-LogonTaskPlan {

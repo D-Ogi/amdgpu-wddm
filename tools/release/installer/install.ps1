@@ -2060,12 +2060,19 @@ if (-not $windowHost) { Write-Info 'logon window: no control application in this
 # logon. A dry run reaches this line as well, because nothing of it changes the computer.
 $logonPlanProblems = @(Test-LogonTaskPlan $logonPlan)
 if ($logonPlanProblems.Count) { throw "the logon task plan of common.ps1 (Get-LogonTaskPlan) breaks its own rules: $($logonPlanProblems -join '; ')" }
+$logonRegistered = @()
 foreach ($logonTask in $logonPlan) {
     # The trigger comes from the plan too, so "at the logon of any user" - the half of BD-080 that the principal
     # does not cover - cannot differ between the plan and what is registered. New-ScheduledTaskTrigger -AtLogOn
     # without -User is that trigger; any other plan is refused here rather than silently registered as this one.
     if ([string]$logonTask.trigger.kind -ne 'at-logon') { throw "scheduled task '$($logonTask.name)': the plan asks for the trigger kind '$($logonTask.trigger.kind)', and the installer registers only 'at-logon'" }
     if ($logonTask.trigger.user) { throw "scheduled task '$($logonTask.name)': the plan binds the trigger to the logon of '$($logonTask.trigger.user)'; every logon has to run it (BD-080)" }
+    # BD-193: phase 2 runs after the logon that started the tasks of phase 1. A registration that matches the plan
+    # stays, so the confirmation of this logon runs to its end.
+    if (Test-LogonTaskRegistered (Get-ScheduledTask -TaskName $logonTask.name -ErrorAction SilentlyContinue) $logonTask) {
+        Write-Info "scheduled task '$($logonTask.name)': registered as planned, kept (a new registration would miss this logon)"
+        continue
+    }
     Invoke-Change "scheduled task '$($logonTask.name)': $($logonTask.what) (at most $($logonTask.minutes) minutes)" {
         $old = Get-ScheduledTask -TaskName $logonTask.name -ErrorAction SilentlyContinue
         if ($old) { Unregister-ScheduledTask -TaskName $logonTask.name -Confirm:$false }
@@ -2076,6 +2083,20 @@ foreach ($logonTask in $logonPlan) {
         $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes $logonTask.minutes) -MultipleInstances IgnoreNew -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
         Register-ScheduledTask -TaskName $logonTask.name -Action $action -Trigger $trigger -Principal $principal -Settings $settings | Out-Null
     } | Out-Null
+    $logonRegistered += $logonTask
+}
+# BD-193: a task registered here while a user is logged on has missed the trigger of that logon. A fresh install
+# registers both tasks only now, in phase 2 after the restart, so the start of this boot would stay unconfirmed until
+# the next restart. Each such task runs once now. The window task goes first, because the confirmation needs the
+# presentation that its window keeps up. A task that does not start costs only this confirmation: the next logon
+# runs it.
+if ($logonRegistered.Count -and @(Get-CimInstance Win32_Process -Filter "Name='explorer.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -gt 0 }).Count) {
+    foreach ($logonTask in @($logonRegistered | Sort-Object { [string]$_.principal.kind -ne 'group' })) {
+        Invoke-Change "scheduled task '$($logonTask.name)': run it once now, for the logon that it missed" {
+            try { Start-ScheduledTask -TaskName $logonTask.name -ErrorAction Stop }
+            catch { Write-Info "scheduled task '$($logonTask.name)': did not start now ($($_.Exception.Message)); it runs at the next logon" }
+        } | Out-Null
+    }
 }
 
 # The control application: a Start menu entry and a desktop icon, both on unless a switch leaves one out (owner,
