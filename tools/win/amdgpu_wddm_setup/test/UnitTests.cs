@@ -38,6 +38,7 @@ static partial class UnitTests
             Notes(repo);
             Prepared();
             Guide();
+            HelpCardTests();
             Arguments();
             SmallScreens();
             NoConfirmations(repo);
@@ -234,6 +235,9 @@ static partial class UnitTests
         Check(!V("refused", 2, "result.preflight-refused", false, ",\"failed_checks\":[\"lab-install.present\"]").RetryHelps, "retry: a development installation is not fixed by a new try");
         Check(!V("refused", 2, "result.preflight-refused", false, ",\"failed_checks\":[\"gpu.missing\",\"secureboot.on\"]").RetryHelps, "retry: no BC-250 and Secure Boot on");
         Check(V("refused", 2, "result.preflight-refused", false, ",\"failed_checks\":[\"gpu.missing\",\"space.low\"]").RetryHelps, "retry: one fixable check keeps Try again the default");
+        // Smart App Control: the user turns it off in Windows Security while the window stays open, so a new try helps.
+        Check(V("refused", 2, "result.preflight-refused", false, ",\"failed_checks\":[\"smartappcontrol.on\"]").RetryHelps, "retry: Smart App Control on keeps Try again the default");
+        Check(!ResultView.RetryCannotFix.Contains("smartappcontrol.on"), "retry: smartappcontrol.on is not a check a new try cannot fix");
         Check(V("refused", 2, "result.firmware-unreachable", false, ",\"failed_checks\":[\"firmware.unreachable\"]").RetryHelps, "retry: an unreachable download can work on a new try");
         Check(V("refused", 2, "result.preflight-error", false).RetryHelps, "retry: an error without failed checks keeps Try again");
         Check(!V("refused", 2, "result.package-damaged", false).RetryHelps, "retry: damaged setup files need a new download");
@@ -427,6 +431,56 @@ static partial class UnitTests
             Check(SetupGuide.ArtBox(scale, false) > 128, "guide: the smallest slot is larger than the @128 picture at scale " + scale + ", so only the @256 art is embedded");
         }
         Equal(SetupGuide.MaxArtPixels, SetupGuide.ArtBox(4f, true), "guide: a very large screen still draws the art at 1.25 x @256");
+    }
+
+    // The help card of Smart App Control (HelpCards.cs): a card for each of its check ids, words for everything it
+    // names in the four languages, at most three pictures, the refusal before the notes, and the pictures the build
+    // embeds, printed for build.ps1 as the guide art is.
+    static void HelpCardTests()
+    {
+        foreach (var id in HelpCards.CheckIds)
+        {
+            var c = HelpCards.For(id);
+            Check(c != null && c.CheckId == id, "help: " + id + " has a card");
+            if (c == null) continue;
+            Check(Strings.Has("check." + id), "help: check." + id + " has words");
+            foreach (var s in HelpCards.StringIds(c)) Check(Strings.Has(s), "help: " + id + " names " + s + ", which has words");
+            Check(c.Images.Count() <= HelpCards.MaxImages, "help: " + id + " shows at most " + HelpCards.MaxImages + " pictures (" + c.Images.Count() + ")");
+            Check(c.Steps.Length >= 3 && c.Steps.Last().Image == null, "help: " + id + " ends with the step back to this window, without a picture");
+            Equal("windowsdefender://smartapp", c.ActionUri, "help: " + id + " opens Windows Security on its Smart App Control page");
+            Check(Strings.Has(c.ActionId) && Strings.In("en", c.ActionId) == "Open Smart App Control settings", "help: the button of " + id + " says what it opens");
+            // The steps of the measured way (26100): the page, Off, the question of Windows and the administrator
+            // prompt, the page with Off selected. The pictures are the ones of the guide.
+            Equal("help.sac.step.open help.sac.step.off help.sac.step.confirm help.sac.step.done", string.Join(" ", c.Steps.Take(4).Select(s => s.TextId)), "help: " + id + " walks the measured steps in order");
+            Equal("sac-3-settings.png sac-4-confirm.png sac-5-off.png", string.Join(" ", c.Images), "help: " + id + " shows the page, the question and the result");
+        }
+        // The words of the question and its answer are the ones Windows shows, and the note states the measured
+        // consequence without a hedge.
+        Check(Strings.In("en", "help.sac.step.confirm").Contains("\"Are you sure?\"") && Strings.In("en", "help.sac.step.confirm").Contains("\"Yes, I'm sure\""), "help: the confirm step quotes the question and the button of Windows");
+        Check(Strings.In("en", "help.sac.note").Contains("reset this PC from the Windows recovery options") && !Strings.In("en", "help.sac.note").Contains("some versions"), "help: the note states the reset of Windows without a hedge");
+        // The check line above the card says what Windows blocks; the card's body does not repeat it.
+        Check(Strings.In("en", "check.smartappcontrol.evaluation").Contains("Windows blocks the programs of the graphics driver, and the desktop and games lose the driver"), "help: evaluation says what the user loses if Windows turns it on");
+        Check(Strings.In("en", "check.smartappcontrol.on").Contains("Windows blocks this setup program and the programs of the graphics driver"), "help: on says what Windows blocks");
+        foreach (var b in new[] { "help.sac.on.body", "help.sac.evaluation.body" })
+            Check(!Strings.In("en", b).Contains("programs of the graphics driver"), "help: " + b + " does not repeat the check line");
+        // The refusal ends with Try again, the two notes with going on: the button each screen has.
+        Equal("help.sac.step.retry", HelpCards.For("smartappcontrol.on").Steps.Last().TextId, "help: the refusal's last step is Try again");
+        Check(Strings.In("en", "help.sac.step.retry").Contains(Strings.In("en", "result.retry")), "help: the refusal's last step names the Try again button by its own words");
+        Equal("help.sac.step.install", HelpCards.For("smartappcontrol.evaluation").Steps.Last().TextId, "help: evaluation's last step is to go on");
+        Equal("help.sac.step.install", HelpCards.For("smartappcontrol.unknown").Steps.Last().TextId, "help: an unread state's last step is to go on");
+        Check(Strings.In("en", "help.sac.step.open").Contains(Strings.In("en", "help.sac.open")), "help: the first step names the button by its own words");
+        Equal("smartappcontrol.on", HelpCards.ForChecks(new[] { "space.low", "smartappcontrol.unknown", "smartappcontrol.on" }).CheckId, "help: one card for a screen, the refusal first");
+        Equal("smartappcontrol.evaluation", HelpCards.ForChecks(new[] { "bitlocker.unknown", "smartappcontrol.evaluation" }).CheckId, "help: the plan screen's note has its card");
+        Check(HelpCards.ForChecks(new[] { "secureboot.on", "gpu.missing" }) == null, "help: no card for checks without one");
+        Check(HelpCards.ForChecks(null) == null && HelpCards.For("smartappcontrol.off") == null, "help: no card for nothing, or for Smart App Control off");
+        // Every picture is a PNG under the build's size limits, and the ones a card cannot do without are named.
+        Check(HelpCards.Images.All(i => Regex.IsMatch(i, @"^[a-z0-9-]+\.png$")), "help: picture names are plain PNG names");
+        Check(HelpCards.RequiredImages.All(i => HelpCards.Images.Contains(i)) && HelpCards.RequiredImages.Any(), "help: the required pictures are pictures of a card");
+        Equal("help.sac-3-settings.png", HelpCards.Resource("sac-3-settings.png"), "help: the resource name of a picture");
+        Check(HelpCards.ShotWidth * 3 / 2 <= HelpCards.ImagePixels, "help: the embedded width is enough for 150 % scaling");
+        Console.WriteLine("help images: " + string.Join(" ", HelpCards.Images));
+        Console.WriteLine("help images required: " + string.Join(" ", HelpCards.RequiredImages));
+        Console.WriteLine("help image limits: " + HelpCards.ImagePixels + " " + HelpCards.ImageBytes);
     }
 
     static void Arguments()

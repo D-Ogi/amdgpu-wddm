@@ -23,6 +23,15 @@ Close. Try again is not the default when every failed check is one a new try can
 `firmware.no-list`, `lab-install.present`, `secureboot.on`) or the setup files are damaged. The engine does not mark
 causes as transient, so the window decides by check id.
 
+When a check needs a change of a Windows setting, it gets a help card under the checks (`src/HelpCards.cs`). Today that is
+Smart App Control: `smartappcontrol.on` on the Done screen, `smartappcontrol.evaluation` and
+`smartappcontrol.unknown` on the Review screen. The card gives the steps, up to three pictures of Windows Security,
+and the button "Open Smart App Control settings", which opens the Smart App Control page of Windows Security and
+changes nothing. While Smart App Control is on, Windows blocks this test-signed exe before its window opens, so the
+`smartappcontrol.on` card is for a setup that Windows lets start. The pictures are English screenshots.
+`art/make-help-art.py` scales them for the card into `art/help` and writes the WebP pictures of
+`docs/testing/INSTALL.md` from the same files.
+
 ## Nothing is asked of the user
 
 The owner, 2026-10-12, seeing a greyed-out Install button under a consent check box: "nie mozna wymagac, ze
@@ -154,6 +163,11 @@ The smallest slot of this window is 176 device pixels at 96 DPI, larger than the
 resource could never be drawn. Her pictures are stills, and the setup window never animates her. She is on unless the control application's
 `ShowNagi` is the DWORD 0, so she is on the Welcome screen of a first install. Two render runs use `--no-nagi`, and
 every other run must draw her picture.
+
+The help card's pictures come from `art/help` (or `-HelpArt <dir>`): the build embeds each picture that
+`HelpCards.Images` names as `help.<file>`, refuses a required one that is absent, a file that is not a PNG, wider than
+720 px or larger than 160 KiB, and an exe that lacks one it embedded. An optional picture that is absent leaves its
+step as text.
 
 A small screen gets no guide panel at all. The content column then takes the width the panel would have had. The
 owner asked for this on 2026-10-12, after GitHub #38 from a tester whose 800x600 screen let the picture cover the

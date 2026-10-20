@@ -90,6 +90,10 @@ check.bitlocker.on|mt|833d9bbb|BitLocker がオンです。セットアップは
 check.bitlocker.unknown|mt|74c5d56a|BitLocker の状態を読み取れませんでした。BitLocker がオンの場合は、回復キーを用意してください。
 check.hvci.off|mt|c5375084|メモリ整合性はオフです。
 check.hvci.on|mt|038dce93|メモリ整合性がオンです。ドライバーが起動しない場合は、Windows セキュリティ (コア分離) でオフにしてください。
+check.smartappcontrol.off|mt|d0c27ee8|スマート アプリ コントロールはオフです。
+check.smartappcontrol.on|mt|78cca160|スマート アプリ コントロールがオンです。オンの間は、Windows がこのセットアップ プログラムとグラフィックス ドライバーのプログラムをブロックします。インストールの前にオフにしてください。
+check.smartappcontrol.evaluation|mt|8d341ff5|スマート アプリ コントロールは評価モードです。後で Windows がオンにすると、グラフィックス ドライバーのプログラムがブロックされ、デスクトップとゲームはドライバーを使えなくなります。今オフにしてください。
+check.smartappcontrol.unknown|mt|4ce54139|スマート アプリ コントロールがオンかどうかを読み取れませんでした。
 check.vcruntime.ok|mt|da7b7ffe|Microsoft Visual C++ ランタイムはインストールされています。
 check.vcruntime.missing|mt|e96604a7|Microsoft Visual C++ 2015-2022 ランタイム (x64) がないか、古すぎます。セットアップが同梱のファイルからインストールします。
 check.vcruntime.no-installer|mt|a1670c32|Microsoft Visual C++ 2015-2022 ランタイム (x64) をインストールする必要がありますが、この一式には Microsoft の該当プログラムが含まれていません。リリースをもう一度ダウンロードしてください。
@@ -325,3 +329,20 @@ tuning.title|mt|a1f6198e|Windows の設定調整
 tuning.opt-in|mt|d229d14d|任意の Windows 設定調整を適用する
 tuning.details|mt|36ae26fb|Windows のバックグラウンド動作を減らす推奨設定を適用します。
 tuning.restore|mt|3fb261c1|Nagi Control App で個別の設定を確認し、保存した値を復元できます。アンインストール時にもコンピューター全体の設定を復元できます。
+
+# ---- help cards (HelpCards.cs) ----
+help.sac.title|mt|abf79205|スマート アプリ コントロールをオフにする方法
+help.sac.on.body|mt|83e5ce37|スマート アプリ コントロールは、Microsoft が信頼する発行元が署名したプログラムだけを実行します。このテスト版はテスト署名です。スマート アプリ コントロールをオフにしてから、もう一度試してください。
+help.sac.evaluation.body|mt|425fde85|続行する前に、スマート アプリ コントロールをオフにしてください。オフの場合、Windows が自動的にオンにすることはありません。
+help.sac.unknown.body|mt|41f88dc0|Windows がセットアップまたはドライバーをブロックする場合は、次の手順でスマート アプリ コントロールをオフにしてください。
+help.sac.step.open|mt|53dc10bb|下の [スマート アプリ コントロールの設定を開く] を選びます。Windows セキュリティの [スマート アプリ コントロール] ページが開きます。
+help.sac.step.off|mt|1ad754d0|[オフ] を選びます。
+help.sac.step.confirm|mt|b7aa45b9|確認のメッセージが表示されたら、変更を確定するボタンを選びます。次に、管理者の確認で [はい] を選びます。
+help.sac.step.done|mt|f4dc8b8a|ページで [オフ] が選択された状態になります。[オン] と [評価] はもう選べません。
+help.sac.step.retry|mt|1751eaf5|このウィンドウに戻り、[再試行] を選びます。
+help.sac.step.install|mt|6ecd7bba|このウィンドウに戻り、続行します。
+help.sac.note|mt|39238865|スマート アプリ コントロールをオフにすると、Windows の回復オプションからこの PC をリセットしない限り、再びオンにすることも評価モードにすることもできません。Windows は変更の前にこのことを表示します。
+help.sac.open|mt|6f158fa2|スマート アプリ コントロールの設定を開く
+help.open-failed|mt|680624a8|Windows セキュリティが開きませんでした。スタート メニューから開き、[アプリとブラウザー コントロール]、[スマート アプリ コントロールの設定] の順に選んでください。
+help.picture|mt|fd7b7a5d|手順 {0} の画像
+help.pictures-english|mt|1eacacfc|画像は英語版の Windows です。

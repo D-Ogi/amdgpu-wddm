@@ -2,7 +2,7 @@
 # install on a tester's PC), with the string tables embedded. The compiler comes from the installed Visual Studio, as
 # for the control app. Deterministic: the same sources give the same bytes (csc /deterministic).
 #
-#   pwsh tools\win\amdgpu_wddm_setup\build.ps1 -Out P:\BC-250\scratch\build\gui-setup\setup-app [-NoSmoke] [-Lab]
+#   pwsh tools\win\amdgpu_wddm_setup\build.ps1 -Out <dir> [-NoSmoke] [-Lab] [-HelpArt <dir>]
 #
 # -Lab builds the lab flavour (BD-167, AMDGPU_WDDM_LAB_FLAVOUR): the window then also reads AMDGPU_WDDM_SETUP_STRINGS, a
 # directory of string tables in place of the embedded ones. A release build has no lookup of it; the unit tests are
@@ -18,7 +18,9 @@
 #      expressions this window's causes reach (SetupGuide.ArtExpressions, printed by the tests of step 1) at @256
 #      (SetupGuide.ArtPixels; the smallest slot of this window is larger than the @128 picture) from
 #      tools\win\amdgpu_wddm_control\art\nagi, under the names that application's Guide.ArtFile map gives them,
-#      with the bytes its PROVENANCE.md records, every one of them in the built image;
+#      with the bytes its PROVENANCE.md records, every one of them in the built image; and the pictures of the help
+#      cards (HelpCards.Images, printed by the same tests) from -HelpArt, default art\help: each a PNG within the
+#      card's width and byte limits, every required one present, every embedded one in the built image;
 #   3. --smoke-engine against a scripted fake engine (test/fake-engine.ps1): plan, noise, cancel, stale result, crash
 #      without a result, restart, refusal, and a verify that found a driver which did not start (its diagnostics
 #      file is named in the result and travels in the support file); the screen in four languages without internals;
@@ -57,7 +59,10 @@ param(
     # and a quality gate are not a release, and the release reads every resource back before it ships.
     [string]$Version = '',
     [ValidateSet('release', 'lab')][string]$Flavour = 'release',
-    [switch]$Lab
+    [switch]$Lab,
+    # The pictures of the help cards (src/HelpCards.cs), as art\make-help-art.py writes them. A test build can name
+    # another folder; the release takes the default.
+    [string]$HelpArt = ''
 )
 # One flavour, two names: -Lab is BD-167's and -Flavour is BD-166's, and the release passes the one it knows.
 if ($Lab) { $Flavour = 'lab' } elseif ($Flavour -eq 'lab') { $Lab = $true }
@@ -74,7 +79,7 @@ $exe = Join-Path $Out 'amdgpu_wddm_setup.exe'
 
 $refs = 'mscorlib.dll', 'System.dll', 'System.Core.dll', 'System.Drawing.dll', 'System.Windows.Forms.dll', 'System.IO.Compression.dll',
     'System.IO.Compression.FileSystem.dll', 'System.Web.Extensions.dll' | ForEach-Object { "/reference:$fx\$_" }
-$pure = 'Strings.cs', 'Json.cs', 'EngineModel.cs', 'PlanText.cs', 'SetupArgs.cs', 'NoInternals.cs', 'Redactor.cs', 'SmallScreen.cs', 'InstallFlow.cs', 'Payload.cs' | ForEach-Object { Join-Path $here "src\$_" }
+$pure = 'Strings.cs', 'Json.cs', 'EngineModel.cs', 'PlanText.cs', 'SetupArgs.cs', 'NoInternals.cs', 'Redactor.cs', 'SmallScreen.cs', 'InstallFlow.cs', 'Payload.cs', 'HelpCards.cs' | ForEach-Object { Join-Path $here "src\$_" }
 # The order of the start: the loading window before every slow step (LoadingWindow.cs).
 $pure += 'StartSequence.cs' | ForEach-Object { Join-Path $here "src\$_" }
 # What the progress screen shows, and which engine events change it in place (WorkingView.cs).
@@ -94,6 +99,15 @@ $expressionLine = @($unit | Where-Object { $_ -match '^guide art expressions: ' 
 if ($expressionLine.Count -ne 1) { throw 'the unit tests did not print the one line with the guide art expressions' }
 $setupExpressions = @(($expressionLine[0] -replace '^guide art expressions: ', '').Trim() -split '\s+' | Where-Object { $_ })
 if (-not $setupExpressions.Count) { throw 'the guide art expressions line is empty' }
+# The pictures of the help cards, from the same program: HelpCards.Images, the required ones and the size limits.
+function Get-UnitLine([string]$Name) {
+    $line = @($unit | Where-Object { $_ -match "^$([regex]::Escape($Name)): " })
+    if ($line.Count -ne 1) { throw "the unit tests did not print the one line '$Name'" }
+    return @(($line[0] -replace "^$([regex]::Escape($Name)): ", '').Trim() -split '\s+' | Where-Object { $_ })
+}
+$helpImages = Get-UnitLine 'help images'
+$helpRequired = Get-UnitLine 'help images required'
+$helpLimits = Get-UnitLine 'help image limits'
 
 # 2. The application, with the string tables embedded.
 # Both lists are sorted: csc writes types and resources in input order, and a directory listing comes in the order of
@@ -111,6 +125,29 @@ foreach ($a in & (Join-Path $repo 'tools\win\amdgpu_wddm_control\art\check-art.p
     $artResourceNames += $a.Resource
 }
 Write-Host "  guide art: $($setupExpressions.Count) expressions ($($setupExpressions -join ', ')) at @256 embedded from $artDir"
+# The help card's pictures (src/HelpCards.cs): every picture a card names that the folder holds, each a PNG within the
+# card's limits; a required one that is absent stops the build, an optional one leaves its step as text.
+if (-not $HelpArt) { $HelpArt = Join-Path $here 'art\help' }
+$helpResourceNames = @()
+$helpBytes = 0
+foreach ($name in $helpImages) {
+    $path = Join-Path $HelpArt $name
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        if ($helpRequired -contains $name) { throw "help pictures: no $path (art\make-help-art.py writes it from the screenshots)" }
+        Write-Host "  help pictures: $name is optional and absent; its step shows as text"
+        continue
+    }
+    $bytes = [IO.File]::ReadAllBytes($path)
+    $png = $bytes.Length -gt 24 -and ([BitConverter]::ToString($bytes, 0, 8) -eq '89-50-4E-47-0D-0A-1A-0A') -and ([Text.Encoding]::ASCII.GetString($bytes, 12, 4) -eq 'IHDR')
+    if (-not $png) { throw "help pictures: $path is not a PNG" }
+    $width = ([int]$bytes[16] -shl 24) -bor ([int]$bytes[17] -shl 16) -bor ([int]$bytes[18] -shl 8) -bor [int]$bytes[19]
+    if ($width -gt [int]$helpLimits[0]) { throw "help pictures: $path is $width px wide, the card takes at most $($helpLimits[0])" }
+    if ($bytes.Length -gt [int]$helpLimits[1]) { throw "help pictures: $path has $($bytes.Length) bytes, the card takes at most $($helpLimits[1])" }
+    $resources += "/resource:$path,help.$name"
+    $helpResourceNames += "help.$name"
+    $helpBytes += $bytes.Length
+}
+Write-Host "  help pictures: $($helpResourceNames.Count) of $($helpImages.Count) ($(($helpResourceNames -replace '^help\.', '') -join ', ')), $helpBytes bytes, embedded from $HelpArt"
 # The application icon (owner, 2026-10-12: "ikonke zrob z biustu Nagi"): the guide character's bust as a round badge,
 # art\icon\nagi.ico with its PROVENANCE.md, the same file the control application uses. It is the window's icon, the
 # icon of the single-file installer that carries this exe, and the icon the Start menu and desktop shortcuts show.
@@ -144,6 +181,9 @@ if ($missingArt.Count) { throw "guide art: the built exe has no resource $($miss
 if (-not $image.Contains('nagi.ico')) { throw 'application icon: the built exe has no resource nagi.ico' }
 Write-Host '  application icon: nagi.ico as the Win32 icon and as a resource with every authored size'
 Write-Host "  guide art: $($artResourceNames.Count) resources in the image"
+$missingHelp = @($helpResourceNames | Where-Object { -not $image.Contains($_) })
+if ($missingHelp.Count) { throw "help pictures: the built exe has no resource $($missingHelp -join ', ')" }
+Write-Host "  help pictures: $($helpResourceNames.Count) resources in the image"
 
 if (-not $NoSmoke) {
     # A package folder for the headless runs: the fake engine as installer\install.ps1, a manifest and the newest notes.

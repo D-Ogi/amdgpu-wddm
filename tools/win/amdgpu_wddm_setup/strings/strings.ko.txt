@@ -90,6 +90,10 @@ check.bitlocker.on|mt|833d9bbb|BitLocker가 켜져 있습니다. 설치 프로�
 check.bitlocker.unknown|mt|74c5d56a|BitLocker 상태를 읽을 수 없었습니다. BitLocker가 켜져 있다면 복구 키를 준비하세요.
 check.hvci.off|mt|c5375084|메모리 무결성이 꺼져 있습니다.
 check.hvci.on|mt|038dce93|메모리 무결성이 켜져 있습니다. 드라이버가 시작되지 않으면 Windows 보안(코어 격리)에서 끄세요.
+check.smartappcontrol.off|mt|d0c27ee8|스마트 앱 컨트롤이 꺼져 있습니다.
+check.smartappcontrol.on|mt|78cca160|스마트 앱 컨트롤이 켜져 있습니다. 켜져 있는 동안 Windows가 이 설치 프로그램과 그래픽 드라이버의 프로그램을 차단합니다. 설치하기 전에 끄세요.
+check.smartappcontrol.evaluation|mt|8d341ff5|스마트 앱 컨트롤이 평가 모드입니다. 나중에 Windows가 켜면 그래픽 드라이버의 프로그램이 차단되어 바탕 화면과 게임에서 드라이버를 사용할 수 없게 됩니다. 지금 끄세요.
+check.smartappcontrol.unknown|mt|4ce54139|스마트 앱 컨트롤이 켜져 있는지 읽을 수 없었습니다.
 check.vcruntime.ok|mt|da7b7ffe|Microsoft Visual C++ 런타임이 설치되어 있습니다.
 check.vcruntime.missing|mt|e96604a7|Microsoft Visual C++ 2015-2022 런타임(x64)이 없거나 너무 오래되었습니다. 설치 프로그램이 함께 가져온 파일로 설치합니다.
 check.vcruntime.no-installer|mt|a1670c32|Microsoft Visual C++ 2015-2022 런타임(x64)을 설치해야 하지만 이 파일 모음에는 해당 Microsoft 프로그램이 없습니다. 릴리스를 다시 다운로드하세요.
@@ -325,3 +329,20 @@ tuning.title|mt|a1f6198e|Windows 설정 조정
 tuning.opt-in|mt|d229d14d|선택적 Windows 설정 조정 적용
 tuning.details|mt|36ae26fb|Windows의 백그라운드 활동을 줄이는 권장 설정을 적용합니다.
 tuning.restore|mt|3fb261c1|Nagi Control App에서 개별 설정을 확인하고 저장된 값을 복원할 수 있습니다. 제거할 때도 컴퓨터 전체 설정을 복원할 수 있습니다.
+
+# ---- help cards (HelpCards.cs) ----
+help.sac.title|mt|abf79205|스마트 앱 컨트롤을 끄는 방법
+help.sac.on.body|mt|83e5ce37|스마트 앱 컨트롤은 Microsoft가 신뢰하는 게시자가 서명한 프로그램만 실행합니다. 이 테스트 버전은 테스트 서명을 사용합니다. 스마트 앱 컨트롤을 끈 다음 다시 시도하세요.
+help.sac.evaluation.body|mt|425fde85|계속하기 전에 스마트 앱 컨트롤을 끄세요. 꺼져 있으면 Windows가 스스로 켜지 않습니다.
+help.sac.unknown.body|mt|41f88dc0|Windows가 설치 프로그램이나 드라이버를 차단하면 다음 단계에 따라 스마트 앱 컨트롤을 끄세요.
+help.sac.step.open|mt|53dc10bb|아래의 [스마트 앱 컨트롤 설정 열기]를 선택합니다. Windows 보안이 [스마트 앱 컨트롤] 페이지를 엽니다.
+help.sac.step.off|mt|1ad754d0|[끄기]를 선택합니다.
+help.sac.step.confirm|mt|b7aa45b9|Windows가 확인을 요청하면 변경을 확인하는 단추를 선택합니다. 그런 다음 관리자 확인 창에서 [예]를 선택합니다.
+help.sac.step.done|mt|f4dc8b8a|이제 페이지에 [끄기]가 선택되어 있습니다. [켜기]와 [평가]는 더 이상 선택할 수 없습니다.
+help.sac.step.retry|mt|1751eaf5|이 창으로 돌아와 [다시 시도]를 선택합니다.
+help.sac.step.install|mt|6ecd7bba|이 창으로 돌아와 계속합니다.
+help.sac.note|mt|39238865|스마트 앱 컨트롤을 끄면 Windows 복구 옵션에서 이 PC를 초기화하기 전에는 다시 켜거나 평가 모드로 전환할 수 없습니다. Windows는 변경하기 전에 이를 알려 줍니다.
+help.sac.open|mt|6f158fa2|스마트 앱 컨트롤 설정 열기
+help.open-failed|mt|680624a8|Windows 보안이 열리지 않았습니다. 시작 메뉴에서 연 다음 [앱 및 브라우저 컨트롤], [스마트 앱 컨트롤 설정]을 차례로 선택하세요.
+help.picture|mt|fd7b7a5d|{0}단계 그림
+help.pictures-english|mt|1eacacfc|그림은 영어 Windows를 보여 줍니다.

@@ -1385,6 +1385,34 @@ function Get-MemoryIntegrityState {
     if ($v -eq 1) { return 'on' }
     return 'off'
 }
+# Smart App Control (Windows 11 22H2 and later) lets only code that Microsoft knows as signed and trusted run, so while
+# it is on Windows can stop the setup program, the installer's scripts and the test-signed driver part way through.
+# Its state is the value VerifiedAndReputablePolicyState under CI\Policy: 0 off, 1 on, 2 evaluation (Windows watches
+# the PC and can turn it on by itself). Microsoft documents no API for it: a Windows without the value has no Smart App
+# Control and reads as off. CiTool prints the state as translated text, so nothing here asks it (GitHub #35).
+# The registry reader is a parameter for the host test (test-engine-units.ps1). A dry run reads AMDGPU_WDDM_TEST_SAC
+# instead (on, evaluation, off, missing, or a number), so the host tests can walk the refusal on a PC that has it off.
+# Returns { state = on|evaluation|off|unknown; detail }.
+function Read-SmartAppControlState {
+    param([scriptblock]$ReadRegistry = { [Microsoft.Win32.Registry]::GetValue('HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\CI\Policy', 'VerifiedAndReputablePolicyState', $null) })
+    function Result([string]$State, [string]$Detail) { [pscustomobject]@{ state = $State; detail = $Detail } }
+    $name = 'CI\Policy VerifiedAndReputablePolicyState'
+    if ($script:DryRunMode -and $env:AMDGPU_WDDM_TEST_SAC) {
+        $n = 0
+        $fake = switch ([string]$env:AMDGPU_WDDM_TEST_SAC) { 'on' { 1 } 'evaluation' { 2 } 'off' { 0 } 'missing' { $null } default { if ([int]::TryParse($_, [ref]$n)) { $n } else { $_ } } }
+        $ReadRegistry = { $fake }.GetNewClosure()
+    }
+    try { $v = & $ReadRegistry }
+    catch { return (Result 'unknown' "the read of $name failed: $($_.Exception.GetType().FullName)") }
+    if ($null -eq $v) { return (Result 'off' "off (no $name value: this Windows has no Smart App Control)") }
+    if ($v -isnot [int]) { return (Result 'unknown' "$name holds a $($v.GetType().Name), a number expected") }
+    switch ($v) {
+        0 { return (Result 'off' "off (source: $name = 0)") }
+        1 { return (Result 'on' "on (source: $name = 1)") }
+        2 { return (Result 'evaluation' "evaluation (source: $name = 2)") }
+    }
+    return (Result 'unknown' "$name holds an unexpected value: $v")
+}
 # ---- the shortcuts of the control application -------------------------------------------------------------------
 # The owner's instruction of 2026-10-12: "pytajmy tez czy zrobic skrot na pulpicie (domyslnie i menu start i
 # pulpit)". The setup window offers both, both on by default, and neither of them gates the Install button. On the

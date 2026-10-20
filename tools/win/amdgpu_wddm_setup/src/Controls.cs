@@ -740,6 +740,41 @@ namespace AmdgpuWddmSetup
         }
     }
 
+    // A picture of one step in Windows (the help card): drawn at the width the card gives it, its height from the
+    // picture's own proportions, in a thin frame. It is a picture and not a control the keyboard reaches; its
+    // accessible name says which step it shows.
+    public sealed class ShotBox : Control
+    {
+        readonly Image _image;
+
+        public ShotBox(Image image, int width, string name)
+        {
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw | ControlStyles.SupportsTransparentBackColor, true);
+            SetStyle(ControlStyles.Selectable, false);
+            _image = image;
+            BackColor = Color.Transparent;
+            TabStop = false;
+            AccessibleRole = AccessibleRole.Graphic;
+            AccessibleName = name;
+            int w = Math.Max(2, width);
+            Size = new Size(w, Math.Max(2, (int)Math.Round((double)w * image.Height / image.Width)));
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            using (var b = new SolidBrush(Theme.Backdrop(this))) g.FillRectangle(b, ClientRectangle);
+            var oldMode = g.InterpolationMode;
+            var oldOffset = g.PixelOffsetMode;
+            g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+            g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+            g.DrawImage(_image, new Rectangle(1, 1, Width - 2, Height - 2));
+            g.InterpolationMode = oldMode;
+            g.PixelOffsetMode = oldOffset;
+            using (var pen = new Pen(Theme.Line)) g.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
+        }
+    }
+
     // The guide's speech bubble: the tip in a teal-outlined balloon with a tail that points at the character under it
     // (the accepted mockup). The bubble carries the words, so a screen reader reads the tip and never the picture.
     public sealed class Bubble : Panel, IBackdrop

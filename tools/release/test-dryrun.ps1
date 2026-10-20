@@ -101,6 +101,16 @@ Check ($r.text -match 'package integrity\s+\d+ files match manifest\.json') 'pac
 Check ($r.text -match 'Nothing was changed') 'refusal says nothing was changed'
 Check ($r.text -notmatch 'doing:|Administrator rights are needed') 'no change, no elevation'
 
+# Smart App Control on refuses before the first change, with the board ignored, so it is the only failed check.
+'install -DryRun -DryRunIgnoreBoard with Smart App Control on (AMDGPU_WDDM_TEST_SAC, a dry run only)'
+$env:AMDGPU_WDDM_TEST_SAC = 'on'
+try { $r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard') } finally { Remove-Item Env:\AMDGPU_WDDM_TEST_SAC }
+$r.text
+Check ($r.code -eq 2) "install with Smart App Control on exit $($r.code) (2 = preflight refusal)"
+Check ($r.text -match '\[fail\]\s+Smart App Control\s+on \(source: CI\\Policy VerifiedAndReputablePolicyState = 1\): .*Turn Smart App Control off first: open Windows Security > App & browser control > Smart App Control settings, select Off, then "Yes, I''m sure", then Yes in the administrator prompt \(see INSTALL\.md, section Smart App Control and SmartScreen\)') 'the refusal names the steps and the INSTALL.md section'
+Check ($r.text -match 'Preflight refused the installation: 1 check\(s\) failed\. Nothing was changed\.') 'Smart App Control is the one failed check, and nothing was changed'
+Check ($r.text -notmatch 'would:|doing:') 'no phase runs after the refusal'
+
 'install -DryRun -DryRunIgnoreBoard (walks phases 1 and 2, prints every change)'
 $r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard')
 $r.text
@@ -151,12 +161,14 @@ Check ($r.text -match 'Microsoft Visual C\+\+ runtime: present: vcruntime140\.dl
 # The two paths of the new steps that this PC would otherwise never walk: a PC without the Microsoft Visual C++
 # runtime (AMDGPU_WDDM_TEST_VCRUNTIME, a dry run only), and an install that was asked for no desktop icon. Both
 # print what they would do and change nothing.
-'install -DryRun with the runtime missing and no desktop icon'
+'install -DryRun with the runtime missing, no desktop icon and Smart App Control in evaluation'
 $env:AMDGPU_WDDM_TEST_VCRUNTIME = 'missing'
+$env:AMDGPU_WDDM_TEST_SAC = 'evaluation'
 try { $r2 = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard', '-NoDesktopShortcut', '-NoWallpaper', '-NoBootLogo') }
-finally { Remove-Item Env:\AMDGPU_WDDM_TEST_VCRUNTIME }
+finally { Remove-Item Env:\AMDGPU_WDDM_TEST_VCRUNTIME; Remove-Item Env:\AMDGPU_WDDM_TEST_SAC }
 $r2.text
 Check ($r2.code -eq 0) "walk-through without the runtime exit $($r2.code)"
+Check ($r2.text -match '\[warn\]\s+Smart App Control\s+evaluation \(source: CI\\Policy VerifiedAndReputablePolicyState = 2\): if Windows turns Smart App Control on later, Windows blocks the programs of the graphics driver, and the desktop and games lose the driver\. Turn it off now: open Windows Security > App & browser control > Smart App Control settings, select Off, then "Yes, I''m sure", then Yes in the administrator prompt \(see INSTALL\.md, section Smart App Control and SmartScreen\)') 'Smart App Control in evaluation is a warning that says what Windows blocks, with the steps, not a refusal'
 Check ($r2.text -match '\[warn\]\s+Visual C\+\+ runtime\s+missing in System32: vcruntime140\.dll, vcruntime140_1\.dll, msvcp140\.dll') 'the preflight states the missing runtime as a line, not a refusal'
 Check ($r2.text -match 'the installer installs 14\.44\.35211\.0 from payload\\redist\\vc_redist\.x64\.exe \(SHA256 CC0FF0EB1DC3F518, signature Valid, CN=Microsoft Corporation') 'the line names the file, its hash and its signature'
 Check ($r2.text -match 'would: install the Microsoft Visual C\+\+ 2015-2022 Redistributable \(x64\) 14\.44\.35211\.0 from payload\\redist\\vc_redist\.x64\.exe \(/install /quiet /norestart; SHA256 CC0FF0EB1DC3F518 and the Microsoft signature checked\)') 'phase 2 shows the runtime step before anything of ours is copied'

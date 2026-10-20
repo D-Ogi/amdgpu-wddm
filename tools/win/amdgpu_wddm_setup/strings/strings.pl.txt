@@ -92,6 +92,10 @@ check.bitlocker.on|rev|833d9bbb|BitLocker jest włączony. Instalator wstrzyma g
 check.bitlocker.unknown|rev|74c5d56a|Instalator nie mógł odczytać stanu funkcji BitLocker. Jeśli BitLocker jest włączony, przygotuj klucz odzyskiwania.
 check.hvci.off|rev|c5375084|Integralność pamięci jest wyłączona.
 check.hvci.on|rev|038dce93|Integralność pamięci jest włączona. Jeśli sterownik się nie uruchomi, wyłącz ją w Zabezpieczeniach Windows (Izolacja rdzenia).
+check.smartappcontrol.off|mt|d0c27ee8|Inteligentna kontrola aplikacji jest wyłączona.
+check.smartappcontrol.on|mt|78cca160|Inteligentna kontrola aplikacji jest włączona. Gdy jest włączona, Windows blokuje ten instalator i programy sterownika graficznego. Wyłącz ją przed instalacją.
+check.smartappcontrol.evaluation|mt|8d341ff5|Inteligentna kontrola aplikacji jest w trybie oceny. Jeśli Windows później ją włączy, zablokuje programy sterownika graficznego, a pulpit i gry stracą sterownik. Wyłącz ją teraz.
+check.smartappcontrol.unknown|mt|4ce54139|Instalator nie mógł odczytać, czy inteligentna kontrola aplikacji jest włączona.
 check.vcruntime.ok|rev|da7b7ffe|Środowisko uruchomieniowe Microsoft Visual C++ jest zainstalowane.
 check.vcruntime.missing|rev|e96604a7|Brakuje środowiska uruchomieniowego Microsoft Visual C++ 2015-2022 (x64) albo jest ono za stare. Instalator zainstaluje je z pliku, który ma przy sobie.
 check.vcruntime.no-installer|rev|a1670c32|Trzeba zainstalować środowisko uruchomieniowe Microsoft Visual C++ 2015-2022 (x64), a ten zestaw plików nie ma programu firmy Microsoft, który to robi. Pobierz wydanie ponownie.
@@ -327,3 +331,20 @@ tuning.title|rev|a1f6198e|Optymalizacja systemu Windows
 tuning.opt-in|rev|d229d14d|Zastosuj opcjonalną optymalizację systemu Windows
 tuning.details|rev|36ae26fb|Zastosuj zalecane ustawienia, które ograniczą aktywność systemu Windows w tle.
 tuning.restore|mt|3fb261c1|Poszczególne ustawienia przejrzysz, a zapisane wartości przywrócisz w aplikacji Nagi Control App. Odinstalowanie proponuje też przywrócenie ustawień obejmujących cały komputer.
+
+# ---- help cards (HelpCards.cs) ----
+help.sac.title|mt|abf79205|Jak wyłączyć inteligentną kontrolę aplikacji
+help.sac.on.body|mt|83e5ce37|Inteligentna kontrola aplikacji uruchamia tylko programy podpisane przez wydawcę, któremu Microsoft ufa. Ta wersja testowa ma podpis testowy. Wyłącz inteligentną kontrolę aplikacji, a potem spróbuj ponownie.
+help.sac.evaluation.body|mt|425fde85|Wyłącz inteligentną kontrolę aplikacji, zanim przejdziesz dalej. Gdy jest wyłączona, Windows nie włączy jej sam.
+help.sac.unknown.body|mt|41f88dc0|Jeśli Windows zablokuje instalator albo sterownik, wyłącz inteligentną kontrolę aplikacji według tych kroków.
+help.sac.step.open|mt|53dc10bb|Wybierz poniżej Otwórz ustawienia inteligentnej kontroli aplikacji. Zabezpieczenia Windows otworzą stronę Inteligentna kontrola aplikacji.
+help.sac.step.off|mt|1ad754d0|Wybierz Wyłączone.
+help.sac.step.confirm|mt|b7aa45b9|Windows zapyta, czy na pewno chcesz to zrobić. Potwierdź zmianę, a potem wybierz Tak w oknie uprawnień administratora.
+help.sac.step.done|mt|f4dc8b8a|Strona pokazuje teraz wybraną opcję Wyłączone. Nie możesz już wybrać opcji Włączono ani Tryb oceny.
+help.sac.step.retry|mt|1751eaf5|Wróć do tego okna i wybierz Spróbuj ponownie.
+help.sac.step.install|mt|6ecd7bba|Wróć do tego okna i kontynuuj.
+help.sac.note|mt|39238865|Po wyłączeniu inteligentnej kontroli aplikacji nie możesz jej ponownie włączyć ani wybrać trybu oceny, dopóki nie zresetujesz tego komputera z opcji odzyskiwania systemu Windows. Windows mówi o tym przed zmianą.
+help.sac.open|mt|6f158fa2|Otwórz ustawienia inteligentnej kontroli aplikacji
+help.open-failed|mt|680624a8|Zabezpieczenia Windows nie otworzyły się. Otwórz je z menu Start. Potem wybierz Kontrola aplikacji i przeglądarki, a następnie Ustawienia inteligentnej kontroli aplikacji.
+help.picture|mt|fd7b7a5d|Ilustracja kroku {0}
+help.pictures-english|mt|1eacacfc|Ilustracje pokazują Windows w języku angielskim.

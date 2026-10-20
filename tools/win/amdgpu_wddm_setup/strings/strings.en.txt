@@ -92,6 +92,10 @@ check.bitlocker.on|src|-|BitLocker is on. Setup pauses it for the restarts of th
 check.bitlocker.unknown|src|-|Setup could not read the BitLocker state. If BitLocker is on, have your recovery key ready.
 check.hvci.off|src|-|Memory integrity is off.
 check.hvci.on|src|-|Memory integrity is on. If the driver does not start, turn it off in Windows Security (Core isolation).
+check.smartappcontrol.off|src|-|Smart App Control is off.
+check.smartappcontrol.on|src|-|Smart App Control is on. While it is on, Windows blocks this setup program and the programs of the graphics driver. Turn it off before you install.
+check.smartappcontrol.evaluation|src|-|Smart App Control is in evaluation mode. If Windows turns it on later, Windows blocks the programs of the graphics driver, and the desktop and games lose the driver. Turn it off now.
+check.smartappcontrol.unknown|src|-|Setup could not read whether Smart App Control is on.
 check.vcruntime.ok|src|-|The Microsoft Visual C++ runtime is installed.
 check.vcruntime.missing|src|-|The Microsoft Visual C++ 2015-2022 runtime (x64) is missing or too old. Setup installs it from the file it brings with it.
 check.vcruntime.no-installer|src|-|The Microsoft Visual C++ 2015-2022 runtime (x64) has to be installed, and this set of files does not hold the Microsoft program that does it. Download the release again.
@@ -327,3 +331,20 @@ tuning.title|src|-|Windows tuning
 tuning.opt-in|src|-|Apply optional Windows tuning
 tuning.details|src|-|Apply recommended settings to reduce Windows background activity.
 tuning.restore|src|-|Review individual settings and restore saved values in Nagi Control App. Removal also offers restoration of machine-wide settings.
+
+# ---- help cards (HelpCards.cs): a check the user fixes in Windows, in steps ----
+help.sac.title|src|-|How to turn off Smart App Control
+help.sac.on.body|src|-|Smart App Control runs only the programs that a publisher signs and Microsoft trusts. This test version has a test signature. Turn Smart App Control off, then try again.
+help.sac.evaluation.body|src|-|Turn Smart App Control off before you continue. When it is off, Windows does not turn it on by itself.
+help.sac.unknown.body|src|-|If Windows blocks setup or the driver, turn Smart App Control off with these steps.
+help.sac.step.open|src|-|Select Open Smart App Control settings below. Windows Security opens the Smart App Control page.
+help.sac.step.off|src|-|Select Off.
+help.sac.step.confirm|src|-|Windows asks "Are you sure?". Select "Yes, I'm sure". Then select Yes in the administrator prompt.
+help.sac.step.done|src|-|The page now shows Off as the selected option. You cannot select On or Evaluation now.
+help.sac.step.retry|src|-|Go back to this window and select Try again.
+help.sac.step.install|src|-|Go back to this window and continue.
+help.sac.note|src|-|After you turn Smart App Control off, you cannot turn it on again or select evaluation mode until you reset this PC from the Windows recovery options. Windows tells you this before the change.
+help.sac.open|src|-|Open Smart App Control settings
+help.open-failed|src|-|Windows Security did not open. Open Windows Security from the Start menu. Then select App & browser control, and then Smart App Control settings.
+help.picture|src|-|Picture of step {0}
+help.pictures-english|src|-|The pictures show Windows in English.

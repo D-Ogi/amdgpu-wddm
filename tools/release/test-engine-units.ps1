@@ -18,6 +18,8 @@
 # BD-125: Secure Boot from the UEFI variable with stand-in readers (no variable = off, not built into the firmware;
 # the fallbacks answer only when the read fails), one real read of the variable on this host, and the certificate
 # step's error (store, HRESULT, certutil commands), also through the shipped step with a stand-in Import-Certificate.
+# Smart App Control: the CI\Policy value with stand-in readers (on, evaluation, off, no value, unexpected, refused),
+# the dry-run stand-in AMDGPU_WDDM_TEST_SAC and its negative control, one real read, and the preflight lines.
 # Everything is written under -WorkRoot; nothing in the registry, no driver, no restart.
 param([string]$Installer = (Join-Path $PSScriptRoot 'installer'), [string]$WorkRoot)
 # Default scratch: beside the folder the zip unpacks to, never inside it. The package root is files\ of that folder
@@ -744,6 +746,43 @@ $r = Run-CertStep -ImportRefuses @('Root') -CertUtilAdds @('Root')
 Check (($null -eq $r.error) -and (($r.held -join ',') -eq 'Root,TrustedPublisher')) "Root refuses Import-Certificate, certutil adds it, TrustedPublisher imports: both stores ($(($r.held) -join ','))"
 Set-Item Function:\Add-CertificateToStore $realAdd
 Set-Item Function:\Write-Warn2 $realWarn
+
+'Smart App Control from CI\Policy VerifiedAndReputablePolicyState (a missing value is no Smart App Control)'
+$s = Read-SmartAppControlState -ReadRegistry { 1 }
+Check (($s.state -eq 'on') -and ($s.detail -match '= 1\)')) "value 1: $($s.state), $($s.detail)"
+$s = Read-SmartAppControlState -ReadRegistry { 2 }
+Check (($s.state -eq 'evaluation') -and ($s.detail -match '= 2\)')) "value 2: $($s.state), $($s.detail)"
+$s = Read-SmartAppControlState -ReadRegistry { 0 }
+Check (($s.state -eq 'off') -and ($s.detail -match '= 0\)')) "value 0: $($s.state), $($s.detail)"
+$s = Read-SmartAppControlState -ReadRegistry { $null }
+Check (($s.state -eq 'off') -and ($s.detail -match 'no Smart App Control')) "no value: $($s.state), $($s.detail)"
+$s = Read-SmartAppControlState -ReadRegistry { 7 }
+Check (($s.state -eq 'unknown') -and ($s.detail -match 'unexpected value: 7')) "an unexpected number is unknown, never off: $($s.detail)"
+$s = Read-SmartAppControlState -ReadRegistry { 'On' }
+Check (($s.state -eq 'unknown') -and ($s.detail -match 'a number expected')) "a text value is unknown, never read as words: $($s.detail)"
+$s = Read-SmartAppControlState -ReadRegistry { throw (New-Object Security.SecurityException 'denied') }
+Check (($s.state -eq 'unknown') -and ($s.detail -match 'SecurityException')) "a refused read is unknown: $($s.detail)"
+# The dry-run stand-in, and its negative control: outside a dry run the variable changes nothing.
+$savedDry = $script:DryRunMode
+try {
+    $env:AMDGPU_WDDM_TEST_SAC = 'on'
+    $script:DryRunMode = $true
+    $s = Read-SmartAppControlState -ReadRegistry { 0 }
+    Check ($s.state -eq 'on') "dry run, AMDGPU_WDDM_TEST_SAC=on: $($s.state)"
+    $env:AMDGPU_WDDM_TEST_SAC = 'missing'
+    Check ((Read-SmartAppControlState -ReadRegistry { 1 }).state -eq 'off') 'dry run, AMDGPU_WDDM_TEST_SAC=missing: off'
+    $env:AMDGPU_WDDM_TEST_SAC = 'on'
+    $script:DryRunMode = $false
+    Check ((Read-SmartAppControlState -ReadRegistry { 0 }).state -eq 'off') 'negative control: not a dry run, AMDGPU_WDDM_TEST_SAC=on is ignored'
+} finally { $script:DryRunMode = $savedDry; Remove-Item Env:\AMDGPU_WDDM_TEST_SAC -ErrorAction SilentlyContinue }
+$live = Read-SmartAppControlState
+Check ($live.state -in 'on', 'evaluation', 'off', 'unknown') "the real read runs on this host: $($live.state), $($live.detail)"
+# The preflight lines: on refuses and names the steps and the INSTALL.md section, evaluation warns, both on one id.
+$pre = [IO.File]::ReadAllText((Join-Path $Installer 'install.ps1'))
+Check ($pre -match "Add-Check 'Smart App Control' 'fail' [^\r\n]*Turn Smart App Control off first: \`$sacSteps\.`" 'smartappcontrol\.on'") 'install.ps1: on is a failed check with the steps'
+Check ($pre -match "Add-Check 'Smart App Control' 'warn' [^\r\n]*Turn it off now: \`$sacSteps\.`" 'smartappcontrol\.evaluation'") 'install.ps1: evaluation is a warning with the steps'
+Check ($pre -match "Add-Check 'Smart App Control' 'warn' [^\r\n]*if Windows turns Smart App Control on later, Windows blocks the programs of the graphics driver, and the desktop and games lose the driver\.") 'install.ps1: the evaluation warning says what Windows blocks if it turns Smart App Control on'
+Check ($pre -match "\`$sacSteps = '(?:[^']|'')*Smart App Control settings, select Off, then `"Yes, I''m sure`", then Yes in the administrator prompt \(see INSTALL\.md, section Smart App Control and SmartScreen\)'") 'install.ps1: the steps name the settings page, the confirmation, the administrator prompt and the INSTALL.md section'
 
 '[G-STAGE] child closure: the job''s own count decides, an unreadable job is unknown (R9; last: this process joins a job)'
 Check (($null -eq [AmdgpuWddmEngine.Job]::Processes()) -and ([AmdgpuWddmEngine.Job]::ActiveProcesses() -eq -1)) 'no job: the listing is unknown (null), never an empty job'

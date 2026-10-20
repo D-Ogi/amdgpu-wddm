@@ -66,6 +66,26 @@ tested builds, as Release Preview can be, runs the version this driver is tested
 `windows.ltsc`. All three are `warn`: information on the plan screen, no question and no checkbox. A refused
 Windows gets its refusal alone.
 
+**Smart App Control.** While Smart App Control is on, Windows blocks the test-signed setup exe before its window
+opens, about 30 to 60 seconds after the start, with only "Okay" and "Get apps from the Store". Windows also refuses
+our user-mode driver DLLs (`bc250d3d.dll`, `bc250d3d_zink.dll`) in every process, DWM included (Code Integrity
+events 3033 and 3077). Both are measured on 26100 (2026-10-20). `powershell.exe` is allowed, so `install.cmd
+-Console` reaches the preflight (BD-192 is the class: a refusal that the installer could read first).
+`Read-SmartAppControlState` in `installer\common.ps1` reads `VerifiedAndReputablePolicyState` under
+`HKLM\SYSTEM\CurrentControlSet\Control\CI\Policy`: 0 off, 1 on, 2 evaluation. Microsoft documents no API for the
+value, so a Windows without it has no Smart App Control and reads as off. CiTool prints the state as translated text,
+and the installer never reads it (GitHub #35). The check ids: `smartappcontrol.on` is `fail`, so the run stops
+before its first change, and its detail names the steps and the INSTALL.md section. `smartappcontrol.evaluation`
+is `warn`: if Windows turns Smart App Control on later, the desktop and games lose the driver, so it asks to turn it
+off now. `smartappcontrol.unknown` (a read that failed, or a value other than 0, 1 or 2) is `warn`.
+`smartappcontrol.off` is `ok`. The window shows a help card for the first three (`src/HelpCards.cs`): the steps, the
+three pictures of Windows Security that the exe embeds (the page, the question "Are you sure?" and the page with Off
+selected), and a button that opens Windows Security on its Smart App Control page (`windowsdefender://smartapp`).
+The button opens a page and changes nothing. Today the window shows the `smartappcontrol.on` card only for a setup
+that Windows lets start, such as a later signed one. `smartappcontrol.on` is not in `ResultView.RetryCannotFix`,
+because the user turns it off while the window stays open, so Try again stays the default. A dry run takes `AMDGPU_WDDM_TEST_SAC` (`on`, `evaluation`,
+`off`, `missing` or a number) in place of the registry value, for the host tests.
+
 **Where to find the application afterwards** (owner, 2026-10-12: "pytajmy tez czy zrobic skrot na pulpicie
 (domyslnie i menu start i pulpit)"). The plan screen has a card with two boxes, the Start menu and the desktop,
 both on. Neither holds the Install button back. A box opens on the answer the decision event reports

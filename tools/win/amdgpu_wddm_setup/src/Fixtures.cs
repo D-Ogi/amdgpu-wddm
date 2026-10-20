@@ -48,8 +48,10 @@ namespace AmdgpuWddmSetup
         // windowsChecks: the lines the Windows support policy can add (owner, 2026-10-11 n-2, and 2026-10-12 "tylko
         // warning, nie blokada"). "ok" is the ordinary PC. "not-tested" is a Windows 11 older than 22631, an Insider
         // build and an LTSC edition at once, so one screen covers all three information lines.
+        // sac: the Smart App Control line (install.ps1): "off" is the ordinary PC, "evaluation" and "unknown" add the
+        // note and its help card to the plan screen.
         static string[] PlanEvents(string action, string installed, string consents, string firmware, bool upgradeRows,
-                                   string windowsChecks = "ok")
+                                   string windowsChecks = "ok", string sac = "off")
         {
             _seq = 0;
             var list = new List<string>
@@ -69,6 +71,7 @@ namespace AmdgpuWddmSetup
             {
                 Check("gpu.ok", "ok"), Check("secureboot.off", "ok"),
                 Check("testsigning.inactive", "ok"), Check(upgradeRows ? "bitlocker.on" : "bitlocker.unknown", "warn"), Check("hvci.off", "ok"),
+                Check("smartappcontrol." + sac, sac == "off" ? "ok" : "warn"),
                 // The Visual C++ runtime: "ok" is a PC that has it. The screen that draws the Windows lines also
                 // carries the missing runtime, so one render shows the step the install adds for it.
                 Check("vcruntime" + (windowsChecks == "ok" ? ".ok" : ".missing"), windowsChecks == "ok" ? "ok" : "warn"),
@@ -167,6 +170,12 @@ namespace AmdgpuWddmSetup
                 // three lines are information and the Install button stays on (owner, 2026-10-12).
                 new Fixture { Name = "plan-windows-not-tested", RunKind = "plan", Screen = Screen.Plan,
                     PlanEvents = PlanEvents("install", null, "", "download", false, "not-tested"), PlanResult = planned },
+                // Smart App Control in evaluation mode, and in a state setup could not read: a note each, with the
+                // help card under the checks, and the Install button stays on.
+                new Fixture { Name = "plan-sac-evaluation", RunKind = "plan", Screen = Screen.Plan,
+                    PlanEvents = PlanEvents("install", null, "", "download", false, "ok", "evaluation"), PlanResult = planned },
+                new Fixture { Name = "plan-sac-unknown", RunKind = "plan", Screen = Screen.Plan,
+                    PlanEvents = PlanEvents("install", null, "", "download", false, "ok", "unknown"), PlanResult = planned },
                 new Fixture { Name = "working", Screen = Screen.Working, Events = RunEvents("files", false, true) },
                 new Fixture { Name = "working-reinstalled", Screen = Screen.Working, Events = RunEvents("files", false, true, repaired: true) },
                 new Fixture { Name = "restart-reinstalled", Screen = Screen.Restart, Events = RunEvents("finish", false, true, repaired: true),
@@ -187,6 +196,9 @@ namespace AmdgpuWddmSetup
                 new Fixture { Name = "restart-later", Screen = Screen.Restart, RestartLater = true, Events = RunEvents("finish", false, true), Result = ResultJson("run", "restart-required", 0, "result.installed-restart", true) },
                 new Fixture { Name = "result-verified", Flow = "continue", Screen = Screen.Result, Events = RunEvents("preflight", false, false, "verify"), Result = ResultJson("verify", "verified", 0, "result.verified", false) },
                 new Fixture { Name = "result-refused", RunKind = "plan", Screen = Screen.Result, Events = PlanEvents("install", null, "", "download", false).Take(6).ToArray(), Result = ResultJson("plan", "refused", 2, "result.preflight-refused", false, ",\"failed_checks\":[\"gpu.missing\",\"secureboot.on\",\"vcruntime.no-installer\"]") },
+                // Smart App Control on: the plan is refused before any change, the help card says how to turn it off,
+                // and Try again stays the default (it is not in ResultView.RetryCannotFix).
+                new Fixture { Name = "result-refused-sac", RunKind = "plan", Screen = Screen.Result, Events = PlanEvents("install", null, "", "download", false).Take(6).ToArray(), Result = ResultJson("plan", "refused", 2, "result.preflight-refused", false, ",\"failed_checks\":[\"smartappcontrol.on\"]") },
                 // gui-L4 trials: this version installed and checked, refused because of a development installation.
                 new Fixture { Name = "result-refused-lab", RunKind = "plan", Screen = Screen.Result, Events = PlanEvents("install", null, "", "download", false).Take(6).ToArray(), Result = ResultJson("plan", "refused", 2, "result.preflight-refused", false, ",\"failed_checks\":[\"lab-install.present\"]", "already") },
                 new Fixture { Name = "result-failed", Screen = Screen.Result, Events = RunEvents("driver", false, true), Result = ResultJson("run", "failed", 6, "result.step-failed", true, ",\"step\":\"pnputil /add-driver\",\"detail\":\"exit 5\"") },

@@ -58,6 +58,8 @@ namespace AmdgpuWddmSetup
         bool _planOffersInstall;
         bool _restartLater;
         string _restartError, _supportSaved, _supportError;
+        // The help card's button could not open Windows Security: the card then says where to find the page.
+        bool _helpOpenFailed;
         string _prepDestination = "", _prepFirmware = "";
         bool _prepUseFirmware, _prepFromWelcome;
         DateTime? _runStarted;
@@ -907,6 +909,44 @@ namespace AmdgpuWddmSetup
             return id != null && Strings.Has("check." + id) ? Strings.T("check." + id) : Strings.T("check.other");
         }
 
+        // The help card of a check the user fixes in Windows (HelpCards.cs): the steps, the pictures this exe carries,
+        // and a button that opens the page in Windows Security. The button opens a page and changes nothing, so it
+        // asks the user for no permission (G-CONSENT); the user turns the setting off there, and Try again or Install
+        // reads it again.
+        void AddHelpCard(HelpCard h)
+        {
+            if (h == null) return;
+            var card = Card(Strings.T(h.TitleId), Icons.Shield);
+            card.Add(Ui.Label(Strings.T(h.BodyId), null, Theme.Text, card.Inner)).Margin = Theme.Pad(0, 0, 0, 6);
+            // The pictures start under the step text, past the icon column of the row (IconRow: icon and gap).
+            int indent = Theme.S(30);
+            bool pictures = false;
+            for (int i = 0; i < h.Steps.Length; i++)
+            {
+                var step = h.Steps[i];
+                card.Row(Icons.Chevron, Theme.Teal, (i + 1) + ". " + Strings.T(step.TextId));
+                var image = HelpArt.Load(step.Image);
+                if (image == null) continue;
+                pictures = true;
+                var shot = card.Add(new ShotBox(image, Math.Min(card.Inner - indent, Theme.S(HelpCards.ShotWidth)), Strings.T("help.picture", i + 1)));
+                shot.Margin = new Padding(indent, Theme.S(2), 0, Theme.S(8));
+            }
+            if (pictures && Strings.Language != "en") card.Row(Icons.Info, Theme.Dim, Strings.T("help.pictures-english"), null, false, Theme.Small).HeadColor = Theme.Dim;
+            if (h.NoteId != null) card.Row(Icons.Info, Theme.Dim, Strings.T(h.NoteId)).HeadColor = Theme.Dim;
+            var open = card.Add(Ui.Button(Strings.T(h.ActionId), (s, e) => OpenHelp(h)));
+            open.Margin = Theme.Pad(0, 8, 0, 2);
+            if (_helpOpenFailed) card.Row(Icons.Warning, Theme.Warn, Strings.T("help.open-failed")).HeadColor = Theme.Warn;
+        }
+
+        void OpenHelp(HelpCard h)
+        {
+            if (_smoke) return;
+            bool failed = !Native.OpenUri(h.ActionUri);
+            if (failed == _helpOpenFailed) return;
+            _helpOpenFailed = failed;
+            ShowSoon(Current);
+        }
+
         void BuildPlan()
         {
             _planOffersInstall = false;
@@ -950,6 +990,7 @@ namespace AmdgpuWddmSetup
             {
                 var checks = Card(Strings.T("plan.checks.title"), Icons.Shield);
                 foreach (var c in warn) AddCheck(checks, c);
+                AddHelpCard(HelpCards.ForChecks(warn.Select(c => c.Id)));
             }
 
             Button go = null;
@@ -1196,6 +1237,7 @@ namespace AmdgpuWddmSetup
             {
                 var card = Card(Strings.T("result.failed-checks"), Icons.Shield);
                 foreach (var id in v.FailedChecks) AddCheck(card, new CheckRow { Id = id, Result = "fail" });
+                AddHelpCard(HelpCards.ForChecks(v.FailedChecks));
             }
             if (v.NothingChanged) Status(Strings.T("result.nothing-changed"), StatusLine.State.Good);
             else if (v.ChangesUnknown) Status(Strings.T("result.changes-unknown"), StatusLine.State.Warn);

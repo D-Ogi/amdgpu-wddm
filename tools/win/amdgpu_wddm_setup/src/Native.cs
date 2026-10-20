@@ -86,6 +86,19 @@ namespace AmdgpuWddmSetup
             catch (Win32Exception) { return null; }
         }
 
+        // Opens a page of a Windows app by its protocol (the help card's page of Windows Security). False when Windows
+        // has no handler for the protocol or did not start it; the caller says so on the screen.
+        public static bool OpenUri(string uri)
+        {
+            try
+            {
+                using (Process.Start(new ProcessStartInfo(uri) { UseShellExecute = true })) { }
+                return true;
+            }
+            catch (Win32Exception) { return false; }
+            catch (InvalidOperationException) { return false; }
+        }
+
         const string ControlKey = @"Software\amdgpu-wddm\Control";
 
         // "Show Nagi" of the control app, with the control app's own rule (AppSettings.OnUnlessZero): on unless the

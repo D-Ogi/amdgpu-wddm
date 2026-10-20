@@ -255,6 +255,16 @@ function Invoke-Preflight {
     if ($hvci -eq 'on') { Add-Check 'Memory integrity' 'warn' 'on: if the driver does not start, turn off Core isolation > Memory integrity (see INSTALL.md)' 'hvci.on' }
     else { Add-Check 'Memory integrity' 'ok' $hvci 'hvci.off' }
 
+    # Smart App Control on: Windows blocks the test-signed setup exe and our user-mode driver DLLs in every process,
+    # DWM included (Code Integrity 3033/3077, measured on 26100), so the run stops here, before its first change (the
+    # class of BD-192). Evaluation can turn into on by itself: a warning that asks to turn it off now.
+    $sac = Read-SmartAppControlState
+    $sacSteps = 'open Windows Security > App & browser control > Smart App Control settings, select Off, then "Yes, I''m sure", then Yes in the administrator prompt (see INSTALL.md, section Smart App Control and SmartScreen)'
+    if ($sac.state -eq 'on') { Add-Check 'Smart App Control' 'fail' "$($sac.detail): while it is on, Windows blocks the test-signed setup program and the programs of the graphics driver, so the desktop and games cannot use the driver. Turn Smart App Control off first: $sacSteps." 'smartappcontrol.on' }
+    elseif ($sac.state -eq 'evaluation') { Add-Check 'Smart App Control' 'warn' "$($sac.detail): if Windows turns Smart App Control on later, Windows blocks the programs of the graphics driver, and the desktop and games lose the driver. Turn it off now: $sacSteps." 'smartappcontrol.evaluation' }
+    elseif ($sac.state -eq 'unknown') { Add-Check 'Smart App Control' 'warn' "state unknown: $($sac.detail). If Windows blocks the setup or the driver, $sacSteps." 'smartappcontrol.unknown' }
+    else { Add-Check 'Smart App Control' 'ok' $sac.detail 'smartappcontrol.off' }
+
     # The Microsoft Visual C++ runtime our programs need. A PC without it is no longer refused (owner, 2026-10-12:
     # "powinien byc auto-installer!!!"): the package carries Microsoft's own installer and phase 2 runs it. The only
     # refusal left is a package that does not carry that installer, or carries a changed copy of it.

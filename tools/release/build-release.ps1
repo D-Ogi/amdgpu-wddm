@@ -452,6 +452,12 @@ if ($unknown.Count) { throw "SetupGuide names the expression $($unknown -join ',
 # and the -Sizes 256 of tools\win\amdgpu_wddm_setup\build.ps1). Asking for both sizes here refused every setup
 # window ever built, this release's included. The control application above keeps both sizes: it draws the small one.
 $setupResources = @(foreach ($e in $setupExpressions) { "nagi.$e@256.png" })
+# The required pictures of the setup window's help card (src/HelpCards.cs, a step with an Image and no ImageOptional):
+# the setup build refuses an exe without them, and this gate holds the packaged copy to the same rule.
+$helpRequired = @([regex]::Matches((Get-Content -LiteralPath (Join-Path $repo 'tools\win\amdgpu_wddm_setup\src\HelpCards.cs') -Raw),
+        'Image = "(?<img>[a-z0-9-]+\.png)" \}') | ForEach-Object { "help.$($_.Groups['img'].Value)" } | Sort-Object -Unique)
+if (-not $helpRequired.Count) { throw 'HelpCards: no required help picture found in HelpCards.cs' }
+$setupResources += $helpRequired
 # The control application is a component of every package: its path comes from release-sources.json, so a renamed
 # payload path cannot make this gate match nothing. The setup window is required too (-SetupApp, checked at the start).
 $controlFiles = @($sources.files | Where-Object { $_.component -eq 'control' -and $_.path -like '*amdgpu_wddm_control.exe' })
