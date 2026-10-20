@@ -1378,6 +1378,9 @@ NTSTATUS DisplayMapFramebuffer(_Inout_ BC250_DEVICE* Device);
 void DisplayLogFramebufferSample(_In_ BC250_DEVICE* Device);
 void DisplayDrawBootLogo(_In_ BC250_DEVICE* Device);    // the boot-screen mascot (boot_logo.h), start only
 void DisplayUnmapFramebuffer(_Inout_ BC250_DEVICE* Device);
+// BD-139: OTG0's pixel rate in Hz and refresh in mHz over eight frames (display_tmds.h). PASSIVE_LEVEL, up to 0.5 s.
+NTSTATUS DisplayMeasureRefresh(_In_ const BC250_DEVICE* Device, ULONG HTotal, ULONG VTotal,
+                               _Out_ ULONG* PixelHz, _Out_ ULONG* RefreshMilliHz);
 
 // wddm.c (M7 stage A, ADR 0008). Everything here is inert while the EnableFullWddm gate is closed.
 BOOLEAN WddmFullTableSelected(void);            // pure getter, never consumes a gate

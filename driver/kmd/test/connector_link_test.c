@@ -124,6 +124,7 @@ static unsigned observed_generation, fault_triggered;
 static unsigned scanned_surface, original_surface_restores;
 static BC250_TARGET_TIMING inherited_timing;
 static unsigned inherited_timing_fail;
+static unsigned inherited_rate;     /* BD-139: the LINK_BW_SET the firmware's link reads back with */
 static unsigned psp_locks,psp_wait_fail,psp_cancel_on_wait,psp_waits,psp_releases;
 static LONGLONG psp_last_timeout;
 static unsigned trace_recovery,clock_failures,clock_argument_count,timing_argument_count;
@@ -216,7 +217,7 @@ static BC250_LINK_SURFACE last_restored;
 static ULONG captured_visible;
 NTSTATUS DcnLinkSurfaceCapture(BC250_DEVICE* d,ULONG w,ULONG h,BC250_LINK_SURFACE* surface) {
     long status=boundary_step(d->ConnectorLink,"capture-surface",0);
-    CHECK(primary_locks && scanned_surface==2 && w==1920 && h==1080);
+    CHECK(primary_locks && scanned_surface==2 && ((w==1920 && h==1080) || (w==2560 && h==1440)));
     if(!status) {
         captured_visible=!otg_blank && !plane_blank;
         // Only Visible is consumed. The deliberately different address and
@@ -323,6 +324,31 @@ static BC250_CONNECTOR_SNAPSHOT* ConnectorSnapshotAcquire(BC250_DEVICE* d)
 { CHECK(d==&device && !operation_locks);if(snapshot_given)++snapshot_refs;return snapshot_given; }
 static void ConnectorSnapshotRelease(BC250_CONNECTOR_SNAPSHOT* s)
 { if(!s)return;CHECK(s==snapshot_given && snapshot_refs);--snapshot_refs; }
+/* BD-139: dp_train_test.c runs the real rate ladder against its caps; this is the same ladder for the fixture's
+ * caps, so the plan and the training model agree on the rate a timing starts at. */
+unsigned Bc250DpFirstRate(const uint8_t caps[16],uint32_t khz)
+{
+    static const unsigned rates[4]={6,10,20,30};
+    unsigned lanes=caps[DP_MAX_LANE_COUNT]&DP_MAX_LANE_COUNT_MASK,max=caps[DP_MAX_LINK_RATE],i;
+    if(!khz || (lanes!=1 && lanes!=2 && lanes!=4) || (max!=6 && max!=10 && max!=20 && max!=30))return 0;
+    for(i=max>=10?1u:0u;i<4u && rates[i]<=max;++i)if(khz<=rates[i]*27000u*lanes/3u)return rates[i];
+    return 0;
+}
+int Bc250LinkAtomDpSymbolClock(unsigned khz) { return khz==162000 || khz==270000 || khz==540000 || khz==810000; }
+/* BD-139: the eight-frame OTG measurement (display_tmds.h, display_timing_test.c runs the real one). The fixture
+ * answers measure_hz, or fails measure_fail times first. */
+static unsigned measure_calls,measure_fail,measure_expire;
+static ULONG measure_hz;
+static NTSTATUS DisplayMeasureRefresh(const BC250_DEVICE* d,ULONG ht,ULONG vt,ULONG* hz,ULONG* milli)
+{
+    /* Before the mode is visible: the OTG runs and the plane is still blank. */
+    CHECK(d==&device && crtc_enabled && plane_blank && ht && vt && primary_locks && !spin_locks);++measure_calls;
+    *hz=*milli=0;
+    /* A try that used the rest of the transaction's deadline without seeing a frame. */
+    if(measure_expire) {measure_expire=0;clock_us=link.Deadline+1;return STATUS_DEVICE_DATA_ERROR;}
+    if(measure_fail) {--measure_fail;return STATUS_DEVICE_DATA_ERROR;}
+    *hz=measure_hz;*milli=(ULONG)((ULONGLONG)measure_hz*1000u/((ULONGLONG)ht*vt));return STATUS_SUCCESS;
+}
 static ULONG Protocol(const BC250_SINK* Sink);
 #include "connector_link_bodies.inc"
 /* BD-169 review: connector.c's own decision about a refused start, unchanged. */
@@ -361,7 +387,7 @@ size_t Bc250Dml201WorkspaceSize(void) { return sizeof(workspace); }
 int Bc250Dml201Plan(const BC250_DML201_INPUT* in,void* w,size_t size,BC250_DML201_PLAN* p)
 {
     ++plan_calls;CHECK(fp_saved==1 && w==workspace && size==sizeof(workspace));
-    CHECK(in->HActive==1920 && in->PitchPixels==1920);
+    CHECK((in->HActive==1920 || in->HActive==2560) && in->PitchPixels==in->HActive);
     CHECK(in->DchubRefClockKhz==48000 && in->DentistVcoKhz==3000000);
     CHECK(in->CursorWidth==0 && in->AudioSampleRateKhz==192);
     CHECK(in->Output==(unsigned)(snapshot.Sink.Kind==BC250_SINK_DP?BC250_DML201_DP:BC250_DML201_HDMI));
@@ -390,7 +416,7 @@ long Bc250ScalerPlan(unsigned long sw,unsigned long sh,unsigned long tw,unsigned
 long Bc250Dcn201ReadClocks(BC250_DISP_IO* io,unsigned crystal,BC250_DCN201_CLOCKS* c)
 {
     long s=io_step(io,"clocks");++clock_reads;if(s)return s;CHECK(crystal==27000);
-    memset(c,0,sizeof(*c));c->CrystalClockKhz=crystal;c->DchubRefClockKhz=48000;
+    memset(c,0,sizeof(*c));c->CrystalClockKhz=crystal;c->DchubRefClockKhz=48000;c->DpRefClockKhz=600000;
     c->DentistVcoKhz=(bad_clocks && clock_reads==2)?2999000:3000000;return 0;
 }
 long Bc250Dcn201PlaneBlank(BC250_DISP_IO* io,int blank)
@@ -471,29 +497,42 @@ long Bc250AuxOpenForDetection(BC250_AUX_SESSION* a,BC250_DISP_IO* io)
 long Bc250AuxClose(BC250_AUX_SESSION* a)
 { long s;if(!a->Open)return 0;s=io_step(a->Io,"aux-close");if(persistent_aux_fail)s=STATUS_IO_DEVICE_ERROR;a->CleanupStatus=s;if(!s) {a->Open=0;aux_open=0;}return s; }
 long Bc250AuxDpcdRead(BC250_AUX_SESSION* a,unsigned long address,unsigned char* data,unsigned long length)
-{ CHECK(aux_open && address && length);memset(data,0,length);if(address==DP_LINK_BW_SET && length==2){data[0]=10;data[1]=4;}return io_step(a->Io,"aux-read"); }
+{ CHECK(aux_open && address && length);memset(data,0,length);if(address==DP_LINK_BW_SET && length==2){data[0]=(unsigned char)inherited_rate;data[1]=4;}return io_step(a->Io,"aux-read"); }
 long Bc250AuxTransfer(BC250_AUX_SESSION* a,unsigned long action,unsigned long address,unsigned char* data,unsigned long length,unsigned long* got)
 { CHECK(aux_open && action==BC250_AUX_DP_WRITE && address && data && length);*got=length;return io_step(a->Io,"aux-write"); }
 long Bc250DpPhyConfigure(BC250_DISP_IO* io,unsigned lanes,int enhanced)
 { CHECK(lanes==4 && enhanced==1);return io_step(io,"phy"); }
 long Bc250DpPhyPattern(BC250_DISP_IO* io,unsigned pattern,int enhanced)
-{ CHECK(pattern<=2 && enhanced==1);return io_step(io,"pattern"); }
+{ CHECK(pattern<=4 && enhanced==1);return io_step(io,"pattern"); }
 long Bc250DpPhyDisableTraining(BC250_DISP_IO* io) { return io_step(io,"phy-off"); }
+/* BD-139: the model trains at the rate the plan's ladder picks, with TPS3 above HBR; train_fail one-shot ends the
+ * next training in a clock recovery failure, as a sink that does not lock at that rate. */
+static unsigned train_fail,trained_caps_rate;
 enum BC250_DP_TRAIN_STATUS Bc250DpTrain(const BC250_DP_TRAIN_IO* io,const uint8_t caps[16],uint32_t khz,BC250_DP_TRAIN_RESULT* r)
 {
-    unsigned char data[6]={0};
-    CHECK(aux_open && caps[DP_MAX_LANE_COUNT]==4 && khz);
-    memset(r,0,sizeof(*r));r->Rate=10;r->Lanes=4;r->Enhanced=1;
-    if(!io->Current(io->Context) || io->Enable(io->Context,10,4,1) ||
+    unsigned char data[6]={0};unsigned rate=Bc250DpFirstRate(caps,khz);
+    CHECK(aux_open && (caps[DP_MAX_LANE_COUNT]&DP_MAX_LANE_COUNT_MASK)==4 && khz && rate);
+    trained_caps_rate=caps[DP_MAX_LINK_RATE];
+    memset(r,0,sizeof(*r));r->Rate=r->FirstRate=rate;r->Lanes=4;r->Enhanced=1;r->Attempts=1;
+    r->EqPattern=rate>=20?3u:2u;r->Tried[0].Rate=rate;r->Tried[0].EqPattern=r->EqPattern;r->Tried[0].Phase=2;
+    if(!io->Current(io->Context) || io->Enable(io->Context,rate,4,1) ||
        io->Write(io->Context,DP_LINK_BW_SET,data,2) || io->Pattern(io->Context,1) ||
        io->Drive(io->Context,0,0) || io->DelayUs(io->Context,400) ||
-       io->Read(io->Context,DP_LANE0_1_STATUS,data,6) || io->Pattern(io->Context,0)) {
+       io->Read(io->Context,DP_LANE0_1_STATUS,data,6)) {
         (void)io->Disable(io->Context);r->Status=BC250_DP_TRAIN_IO_ERROR;return r->Status;
     }
-    return BC250_DP_TRAIN_OK;
+    if(train_fail) {
+        --train_fail;(void)io->Disable(io->Context);
+        r->Phase=r->Tried[0].Phase=1;r->AmdResult=r->Tried[0].AmdResult=1;r->Status=BC250_DP_TRAIN_CR_FAILED;
+        return r->Status;
+    }
+    if(io->Pattern(io->Context,r->EqPattern) || io->Pattern(io->Context,0)) {
+        (void)io->Disable(io->Context);r->Status=BC250_DP_TRAIN_IO_ERROR;return r->Status;
+    }
+    r->Phase=3;return BC250_DP_TRAIN_OK;
 }
 BC250_ATOM_STATUS Bc250LinkAtomStream(BC250_LINK_ATOM* a,unsigned protocol,unsigned khz,unsigned lanes,unsigned rate)
-{ CHECK(khz && lanes==4 && (protocol==0?rate==10:rate==0));return step(a->Io.Context,"atom-stream")?BC250_ATOM_IO:BC250_ATOM_OK; }
+{ CHECK(khz && lanes==4 && (protocol==0?(rate==6 || rate==10 || rate==20 || rate==30):rate==0));return step(a->Io.Context,"atom-stream")?BC250_ATOM_IO:BC250_ATOM_OK; }
 int Bc250HdmiStreamProgram(BC250_HDMI_LINK* h,const BC250_ATOM_CALLBACKS* io,uint32_t khz,unsigned w,unsigned height,unsigned ht,unsigned vt)
 { long s;h->Io=*io;h->Dirty=1;CHECK(khz && w<ht && height<vt && !tx_enabled && !crtc_enabled);s=step(io->Context,"hdmi-program");return s?1:0; }
 long Bc250OptcEnable(BC250_DISP_IO* io)
@@ -511,7 +550,7 @@ static NTSTATUS DcnRestorePostDisplay(BC250_DEVICE* d)
     return status;
 }
 long Bc250DpStreamUnblank(BC250_DISP_IO* io,unsigned khz,unsigned rate)
-{ CHECK(crtc_enabled && !plane_blank && khz && rate==10);return io_step(io,"dp-unblank"); }
+{ CHECK(crtc_enabled && !plane_blank && khz && rate==link.Training.Rate && (rate==10 || rate==20 || rate==30));return io_step(io,"dp-unblank"); }
 long Bc250Dcn201OutputBlank(BC250_DISP_IO* io,unsigned w,unsigned h,int blank)
 { long s=io_step(io,"output-video");CHECK(w && h && crtc_enabled && !plane_blank);if(!s)output_black=(unsigned)blank;return s; }
 int Bc250HdmiStreamMute(BC250_HDMI_LINK* h,int mute)
@@ -534,6 +573,8 @@ static void reset(unsigned kind)
     link.PixelKhz=148500;link.Rate=10;link.Lanes=4;link.NeedsDisable=1;
     snapshot.Generation=7;snapshot.Sink.Kind=kind;snapshot.Sink.MaxPixelClockKhz=300000;
     snapshot.Sink.TargetCount=1;snapshot.Sink.Targets[0]=t;snapshot.Sink.Dpcd[DP_MAX_LANE_COUNT]=4;
+    snapshot.Sink.Dpcd[DP_MAX_LINK_RATE]=10;inherited_rate=10;
+    train_fail=trained_caps_rate=measure_calls=measure_fail=measure_expire=0;measure_hz=0;
     device.InheritedSignalValid=1;device.Modeset.InheritedSupport=1;
     device.InheritedSignal.PixelRate=148500000;
     device.InheritedSignal.ActiveSize.cx=1920;device.InheritedSignal.ActiveSize.cy=1080;
@@ -1357,6 +1398,178 @@ static void release_handoff(void)
     printf("Post-display handoff: %u checks, %u failures; detached mode, first target, refusals\n",checks-begin,failures-bad);
     reset(BC250_SINK_HDMI);
 }
+/* BD-139: the HP X32 of the field report (2560x1440, 165 Hz by its maker, on DP directly). The 75 Hz entry is that tester's firmware timing
+ * (total 2720x1492, 304.25 MHz); 120, 144 and 165 Hz are reduced-blanking reconstructions, not that monitor's EDID. */
+static const BC250_TARGET_TIMING hpx32[4]={
+    {304250,2560,160,48,32,1440,52,3,5,0x1a},{497750,2560,160,48,32,1440,85,3,5,0x1a},
+    {586600,2560,80,8,32,1440,103,3,8,0x1a},{645100,2560,80,8,32,1440,41,3,8,0x1a}};
+/* Model caps for that sink (no DPCD dump of it exists): DPCD 1.2, HBR2, four lanes, TPS3, enhanced framing. */
+static void hbr2_sink(unsigned kind)
+{
+    reset(kind);snapshot.Sink.Dpcd[DP_MAX_LINK_RATE]=0x14;snapshot.Sink.Dpcd[DP_MAX_LANE_COUNT]=0xc4;
+    snapshot.Sink.MaxPixelClockKhz=kind==BC250_SINK_DP?720000:300000;
+    device.RuntimeFramebufferLength=10240ull*1440u;
+}
+static NTSTATUS commit_timing(const BC250_TARGET_TIMING* t)
+{
+    snapshot.Sink.Targets[0]=*t;snapshot.Sink.TargetCount=1;
+    return ConnectorLinkCommit(&device,&snapshot,t,t->HActive,t->VActive,D3DKMDT_VPPS_IDENTITY);
+}
+static void hbr2_admission(void)
+{
+    LINK_MODE mode;LINK_PLAN_REFUSAL refusal;BC250_TARGET_TIMING timing;unsigned i,kind;
+    static const unsigned rates[4]={10,20,20,20};
+    CHECK(BC250_TARGET_MAX_PIXEL_KHZ==BC250_DP_MAX_PIXEL_KHZ);
+    hbr2_sink(BC250_SINK_DP);Begin(&link,snapshot.Generation,FALSE);
+    for(i=0;i<4;++i) {
+        CHECK(Plan(&link,&snapshot.Sink,&hpx32[i],&mode,&refusal)==STATUS_SUCCESS && mode.Valid);
+        CHECK(refusal.Check==LINK_PLAN_OK && mode.Lanes==4 && mode.Protocol==BC250_LINK_DP);
+        CHECK(Bc250DpFirstRate(snapshot.Sink.Dpcd,hpx32[i].PixelClockKhz)==rates[i]);
+    }
+    /* An HBR x4 sink (the Lenovo's caps) keeps 360 MHz: 75 Hz fits, 120 Hz and up are the sink's own refusal. */
+    snapshot.Sink.Dpcd[DP_MAX_LINK_RATE]=10;snapshot.Sink.MaxPixelClockKhz=360000;
+    CHECK(Plan(&link,&snapshot.Sink,&hpx32[0],&mode,&refusal)==STATUS_SUCCESS);
+    for(i=1;i<4;++i)
+        CHECK(Plan(&link,&snapshot.Sink,&hpx32[i],&mode,&refusal)==STATUS_NOT_SUPPORTED && refusal.Check==LINK_PLAN_CLOCK_SINK);
+    /* The DP ceiling is HBR3 x4 at RGB8, whatever a sink claims. */
+    snapshot.Sink.Dpcd[DP_MAX_LINK_RATE]=0x1e;snapshot.Sink.MaxPixelClockKhz=1200000;timing=hpx32[3];
+    timing.PixelClockKhz=1080001;
+    CHECK(Plan(&link,&snapshot.Sink,&timing,&mode,&refusal)==STATUS_NOT_SUPPORTED && refusal.Check==LINK_PLAN_CLOCK_CEILING);
+    timing.PixelClockKhz=1080000;
+    CHECK(Plan(&link,&snapshot.Sink,&timing,&mode,&refusal)==STATUS_SUCCESS && mode.Valid);
+    End(&link);balanced();
+    /* TMDS keeps the 300 MHz of its route, also when an adapter claims more (the LG behind the passive adapter). */
+    for(kind=BC250_SINK_HDMI;kind<=BC250_SINK_DVI;++kind) {
+        hbr2_sink(kind);snapshot.Sink.MaxPixelClockKhz=720000;Begin(&link,snapshot.Generation,FALSE);
+        for(i=0;i<4;++i)
+            CHECK(Plan(&link,&snapshot.Sink,&hpx32[i],&mode,&refusal)==STATUS_NOT_SUPPORTED && refusal.Check==LINK_PLAN_CLOCK_CEILING);
+        End(&link);balanced();
+    }
+    /* A discovery of all four names each timing above 300 MHz with its rate, and the fastest. */
+    hbr2_sink(BC250_SINK_DP);
+    for(i=0;i<4;++i)snapshot.Sink.Targets[i]=hpx32[i];
+    snapshot.Sink.TargetCount=4;memset(log_ring,0,sizeof(log_ring));
+    CHECK(ConnectorLinkPrepare(&device,&snapshot.Sink,7)==STATUS_SUCCESS && snapshot.Sink.TargetCount==4);
+    CHECK(logged("connector-link: target 2560x1440 304250 kHz offered rate 10 lanes 4"));
+    CHECK(logged("connector-link: target 2560x1440 497750 kHz offered rate 20 lanes 4"));
+    CHECK(logged("connector-link: target 2560x1440 645100 kHz offered rate 20 lanes 4"));
+    CHECK(logged("connector-link: offered 4 of 4 targets fastest 2560x1440 645100 kHz rate 20"));
+    balanced();
+}
+static void hbr2_commit(void)
+{
+    hbr2_sink(BC250_SINK_DP);CHECK(commit()==STATUS_SUCCESS);balanced();
+    CHECK(link.Current.Rate==10 && link.Training.EqPattern==2 && !measure_calls && trained_caps_rate==0x14);
+    memset(log_ring,0,sizeof(log_ring));measure_hz=645100000;
+    CHECK(commit_timing(&hpx32[3])==STATUS_SUCCESS);balanced();
+    CHECK(link.Active && link.Current.Rate==20 && link.Current.Lanes==4 && link.Training.EqPattern==3);
+    CHECK(measure_calls==1 && device.SourceVisible && !plane_blank);
+    CHECK(logged("connector-link: dp trained 645100 kHz first 20 rate 20 lanes 4 tps 3 attempts 1 status 0"));
+    CHECK(logged("connector-link: dto check 645100 kHz ref 600000 kHz measured 645100000 Hz"));
+    CHECK(logged("connector-link: enabled generation 7 protocol 0 2560x1440 pitch 10240 pixel 645100 kHz lanes 4 rate 20"));
+    /* 144 Hz is under the DTO reference, so nothing is measured; 75 Hz trains at HBR with TPS2 as before. */
+    measure_calls=0;
+    CHECK(commit_timing(&hpx32[2])==STATUS_SUCCESS && !measure_calls && link.Current.Rate==20);balanced();
+    CHECK(commit_timing(&hpx32[0])==STATUS_SUCCESS && link.Current.Rate==10 && link.Training.EqPattern==2);balanced();
+}
+static void hbr2_training_fallback(void)
+{
+    BC250_TARGET_TIMING previous;unsigned steps;
+    hbr2_sink(BC250_SINK_DP);CHECK(commit()==STATUS_SUCCESS);previous=link.Current.Timing;
+    memset(log_ring,0,sizeof(log_ring));train_fail=1;
+    CHECK(commit_timing(&hpx32[3])==STATUS_IO_DEVICE_ERROR);balanced();
+    /* The previous mode is back at HBR, and this attachment stays below HBR2. */
+    CHECK(link.Active && device.RuntimePostValid && Bc250TargetTimingEqual(&link.Current.Timing,&previous));
+    CHECK(link.Current.Rate==10 && link.RateLimit==10 && !train_fail && !link.PixelLimitKhz);
+    CHECK(logged("connector-link: dp train try 1 rate 20 lanes 4 tps 3 phase 1 result 1"));
+    CHECK(logged("connector-link: dp trained 645100 kHz first 20 rate 20 lanes 4 tps 3 attempts 1 status 6"));
+    CHECK(logged("connector-link: dp rate 20 failed for 645100 kHz; this sink trains at rate 10 or below until replugged"));
+    /* Asked again, the HBR2 timings are refused before any hardware step, and the line names the check. */
+    memset(log_ring,0,sizeof(log_ring));steps=boundary_steps;
+    CHECK(commit_timing(&hpx32[3])==STATUS_NOT_SUPPORTED && boundary_steps==steps);balanced();
+    CHECK(logged("connector-link: commit 2560x1440 645100 kHz refused C00000BB check link-rate"));
+    CHECK(commit_timing(&hpx32[1])==STATUS_NOT_SUPPORTED && boundary_steps==steps);balanced();
+    /* What HBR carries still sets, and trains with the lowered caps. */
+    CHECK(commit_timing(&hpx32[0])==STATUS_SUCCESS && link.Current.Rate==10 && trained_caps_rate==10);balanced();
+    /* A new discovery is a new attachment: the ceiling goes and the HBR2 timings are offered again. */
+    snapshot.Sink.Targets[0]=hpx32[3];snapshot.Sink.Targets[1]=hpx32[0];snapshot.Sink.TargetCount=2;
+    CHECK(ConnectorLinkPrepare(&device,&snapshot.Sink,7)==STATUS_SUCCESS && snapshot.Sink.TargetCount==2);
+    CHECK(!link.RateLimit && !link.PixelLimitKhz);balanced();
+    /* A failure at HBR leaves no ceiling, as before: the training itself already tried RBR where RBR carries. */
+    reset(BC250_SINK_DP);train_fail=1;
+    CHECK(commit()==STATUS_IO_DEVICE_ERROR && !link.RateLimit && link.Training.FirstRate==10);balanced();
+}
+static void dto_check(void)
+{
+    BC250_TARGET_TIMING previous;unsigned steps;
+    hbr2_sink(BC250_SINK_DP);CHECK(commit()==STATUS_SUCCESS);previous=link.Current.Timing;
+    /* A DTO that stops at its reference shows 165 Hz as 153 Hz. */
+    memset(log_ring,0,sizeof(log_ring));measure_hz=600000000;
+    CHECK(commit_timing(&hpx32[3])==STATUS_DEVICE_DATA_ERROR);balanced();
+    CHECK(link.Active && Bc250TargetTimingEqual(&link.Current.Timing,&previous) && link.PixelLimitKhz==600000);
+    CHECK(measure_calls==1 && !link.RateLimit);
+    CHECK(logged("connector-link: dto check 645100 kHz ref 600000 kHz measured 600000000 Hz"));
+    CHECK(logged("tries 1 status C000009C"));
+    CHECK(logged("connector-link: dp pixel clock above 600000 kHz refused for this sink until replugged"));
+    memset(log_ring,0,sizeof(log_ring));steps=boundary_steps;
+    CHECK(commit_timing(&hpx32[3])==STATUS_NOT_SUPPORTED && boundary_steps==steps);balanced();
+    CHECK(logged("connector-link: commit 2560x1440 645100 kHz refused C00000BB check dto-ref"));
+    /* Everything at or under the reference still sets: 144 Hz is 586.6 MHz. */
+    CHECK(commit_timing(&hpx32[2])==STATUS_SUCCESS && link.Current.Rate==20);balanced();
+    /* No measurement in three tries fails closed too; one within 1% passes after two failed tries. */
+    hbr2_sink(BC250_SINK_DP);CHECK(commit()==STATUS_SUCCESS);measure_fail=3;measure_hz=645100000;
+    CHECK(commit_timing(&hpx32[3])==STATUS_DEVICE_DATA_ERROR && measure_calls==3 && link.PixelLimitKhz==600000);balanced();
+    hbr2_sink(BC250_SINK_DP);CHECK(commit()==STATUS_SUCCESS);measure_fail=2;measure_hz=648000000;
+    CHECK(commit_timing(&hpx32[3])==STATUS_SUCCESS && measure_calls==3 && !link.PixelLimitKhz);balanced();
+    /* A failed try that ends the transaction's time still counts: the ceiling is set, the old mode recovered. */
+    hbr2_sink(BC250_SINK_DP);CHECK(commit()==STATUS_SUCCESS);previous=link.Current.Timing;
+    memset(log_ring,0,sizeof(log_ring));measure_expire=1;measure_hz=645100000;
+    CHECK(commit_timing(&hpx32[3])==STATUS_DEVICE_DATA_ERROR && measure_calls==1 && link.PixelLimitKhz==600000);
+    CHECK(link.Active && Bc250TargetTimingEqual(&link.Current.Timing,&previous));
+    CHECK(logged("measured 0 Hz 0 mHz tries 1 status C000009C"));balanced();
+}
+static void inherited_cold(unsigned kind,unsigned rate,const BC250_TARGET_TIMING* listed)
+{
+    hbr2_sink(kind);device.ConnectorLink=NULL;inherited_rate=rate;inherited_timing=hpx32[0];
+    /* The sink's own caps stay valid; only the rate the firmware's link reads back with varies. */
+    snapshot.Sink.Dpcd[DP_MAX_LINK_RATE]=(unsigned char)(rate==0x1e?0x1e:0x14);
+    device.InheritedSignal.PixelRate=304250000;
+    device.InheritedSignal.ActiveSize.cx=2560;device.InheritedSignal.ActiveSize.cy=1440;
+    device.InheritedSignal.TotalSize.cx=2720;device.InheritedSignal.TotalSize.cy=1492;
+    device.Post.Width=2560;device.Post.Height=1440;device.Post.Pitch=10240;
+    if(listed) {snapshot.Sink.Targets[0]=*listed;snapshot.Sink.TargetCount=1;}
+    memset(log_ring,0,sizeof(log_ring));
+}
+static void inherited_hbr2(void)
+{
+    BC250_TARGET_TIMING near=hpx32[0];
+    /* BD-122: the tester's firmware timing on an HBR2 link. The connector owns it, and offers it next to the EDID. */
+    inherited_cold(BC250_SINK_DP,0x14,&hpx32[3]);
+    CHECK(ConnectorLinkPrepare(&device,&snapshot.Sink,7)==STATUS_SUCCESS);
+    CHECK(link.Current.Valid && link.Current.Inherited && link.Rate==0x14 && link.Current.Rate==0x14 && link.Lanes==4);
+    CHECK(snapshot.Sink.TargetCount==2 && Bc250TargetTimingEqual(&snapshot.Sink.Targets[1],&hpx32[0]));
+    CHECK(logged("connector-link: inherited 2560x1440 304250 kHz total 2720x1492 offered, the EDID does not list it"));
+    CHECK(ConnectorLinkRelease(&device)==STATUS_SUCCESS);balanced();
+    /* The EDID lists it already, here 10 kHz apart: nothing is added. */
+    near.PixelClockKhz=304260;inherited_cold(BC250_SINK_DP,0x14,&near);
+    CHECK(ConnectorLinkPrepare(&device,&snapshot.Sink,7)==STATUS_SUCCESS && snapshot.Sink.TargetCount==1);
+    CHECK(!logged("offered, the EDID does not list it"));
+    CHECK(ConnectorLinkRelease(&device)==STATUS_SUCCESS);balanced();
+    /* An HBR3 link is admitted as well; a rate the transmitter table does not take is refused by name. */
+    inherited_cold(BC250_SINK_DP,0x1e,&hpx32[3]);
+    CHECK(ConnectorLinkPrepare(&device,&snapshot.Sink,7)==STATUS_SUCCESS && link.Rate==0x1e);
+    CHECK(ConnectorLinkRelease(&device)==STATUS_SUCCESS);balanced();
+    inherited_cold(BC250_SINK_DP,0x15,&hpx32[3]);
+    CHECK(ConnectorLinkPrepare(&device,&snapshot.Sink,7)==STATUS_NOT_SUPPORTED && !device.ConnectorLink);
+    CHECK(logged("connector-link: inherited link rate 21 lanes 4 refused check link-settings"));
+    balanced();
+    /* On TMDS the 304.25 MHz timing stays above the route: the plan names the check, and the start keeps the
+     * static inherited path (connector.c), which presents it as tester.30 did. */
+    inherited_cold(BC250_SINK_HDMI,0x14,NULL);snapshot.Sink.MaxPixelClockKhz=600000;
+    CHECK(ConnectorLinkPrepare(&device,&snapshot.Sink,7)==STATUS_NOT_SUPPORTED && !device.ConnectorLink);
+    CHECK(logged("connector-link: inherited 2560x1440 304250 kHz refused C00000BB check clock-ceiling"));
+    balanced();
+}
 int main(void)
 {
     end_failure_propagation();
@@ -1387,6 +1600,7 @@ int main(void)
     detach_before_apply();
     keep_breadcrumbs();
     release_handoff();
+    hbr2_admission();hbr2_commit();hbr2_training_fallback();dto_check();inherited_hbr2();
     printf("connector transaction: %u checks, %u failures (software boundary model)\n",checks,failures);
     return failures?1:0;
 }

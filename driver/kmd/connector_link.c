@@ -18,6 +18,9 @@
 #include "../shim/bc250_dp_stream.h"
 #include "../shim/dpcd_constants.inc"
 
+// BD-139: the EDID parser keeps exactly the timings the fastest DP route can carry.
+C_ASSERT(BC250_TARGET_MAX_PIXEL_KHZ==BC250_DP_MAX_PIXEL_KHZ);
+
 #define LINK_TAG 'kL2B'
 #define LINK_WORK_TAG 'wL2B'
 #define LINK_DEADLINE_US 2000000ull
@@ -39,7 +42,9 @@ enum link_plan_check {
     LINK_PLAN_DML_CALL,         // Bc250Dml201Plan returned a failure
     LINK_PLAN_DML_INVALID,      // it returned without a valid plan
     LINK_PLAN_OPTC,             // the OPTC admission gate (bc250_optc.h names the term)
-    LINK_PLAN_SCALER            // the identity transform was refused
+    LINK_PLAN_SCALER,           // the identity transform was refused
+    LINK_PLAN_LINK_RATE,        // BD-139: no DP rate under this sink's ceiling carries it (a faster training failed)
+    LINK_PLAN_DTO               // BD-139: above the DP DTO reference, after a measured refresh there disagreed
 };
 // Which call of the plan refused. The log line spells it out, so the three sites are told apart in the ring.
 #define LINK_SITE_TARGET    0u      // a target of the monitor's own list
@@ -67,6 +72,10 @@ typedef struct CONNECTOR_LINK {
     unsigned CrystalKhz;
     ULONG Attempts, Completed, Refused, Phase, Step, AtomValid;
     ULONG IoOffset, IoAccess;
+    // BD-139: what this attachment of the sink admits, 0 for no limit. A failed training at a rate above HBR lowers
+    // RateLimit (DPCD LINK_BW_SET), a disagreeing refresh measurement above the DTO reference sets PixelLimitKhz.
+    // Each discovery (ConnectorLinkPrepare) starts without either.
+    ULONG RateLimit, PixelLimitKhz;
     NTSTATUS IoStatus;
     BC250_SCALER_RESULT ScalerResult;
     BC250_CONNECTOR_TARGET_DIAG Target;
@@ -365,6 +374,22 @@ static void SignalFor(const BC250_TARGET_TIMING* t,D3DKMDT_VIDEO_SIGNAL_INFO* s)
     s->TotalSize.cx=ht;s->TotalSize.cy=vt;s->VideoStandard=D3DKMDT_VSS_OTHER;
     s->ScanLineOrdering=D3DDDI_VSSLO_PROGRESSIVE;
 }
+// BD-139: the DPCD caps this attachment trains with, the sink's own with MAX_LINK_RATE lowered to the ceiling a
+// failed faster training left.
+static void LinkCaps(const CONNECTOR_LINK* c,const UCHAR* Dpcd,UCHAR* Caps)
+{
+    RtlCopyMemory(Caps,Dpcd,16);
+    if(c->RateLimit && Caps[DP_MAX_LINK_RATE]>c->RateLimit)Caps[DP_MAX_LINK_RATE]=(UCHAR)c->RateLimit;
+}
+// The next slower rate a mode above HBR can fall back to, 0 at HBR and below.
+static ULONG LowerRate(ULONG Rate)
+{ return Rate==DP_LINK_BW_8_1?DP_LINK_BW_5_4:Rate==DP_LINK_BW_5_4?DP_LINK_BW_2_7:0; }
+// A link the firmware left running: one of the four 8b/10b symbol clocks the transmitter table takes, on 1, 2 or 4 lanes.
+static BOOLEAN LinkSettingsValid(ULONG Rate,ULONG Lanes)
+{
+    return Rate<=DP_LINK_BW_8_1 && Bc250LinkAtomDpSymbolClock((unsigned)Rate*27000u) &&
+        (Lanes==1 || Lanes==2 || Lanes==4);
+}
 
 // BD-177: Refusal is optional and says which check refused, so one log line can name it. Nothing else about the
 // admission changes: every check, its order and its status are the ones this function already answered.
@@ -372,7 +397,7 @@ static NTSTATUS Plan(CONNECTOR_LINK* c,const BC250_SINK* Sink,const BC250_TARGET
     LINK_PLAN_REFUSAL* Refusal)
 {
     BC250_DML201_INPUT input={0};XSTATE_SAVE state;NTSTATUS status;int result;
-    BC250_OPTC_SYNC sync;LINK_PLAN_REFUSAL local;
+    BC250_OPTC_SYNC sync;LINK_PLAN_REFUSAL local;ULONG protocol;UCHAR caps[16];
     if(!Refusal)Refusal=&local;
     RtlZeroMemory(Refusal,sizeof(*Refusal));
     RtlZeroMemory(m,sizeof(*m));
@@ -380,9 +405,20 @@ static NTSTATUS Plan(CONNECTOR_LINK* c,const BC250_SINK* Sink,const BC250_TARGET
     if(!Bc250TargetTimingValid(t)) {Refusal->Check=LINK_PLAN_TIMING;return STATUS_NOT_SUPPORTED;}
     if(t->PixelClockKhz<25000) {Refusal->Check=LINK_PLAN_CLOCK_FLOOR;return STATUS_NOT_SUPPORTED;}
     if(t->PixelClockKhz>Sink->MaxPixelClockKhz) {Refusal->Check=LINK_PLAN_CLOCK_SINK;return STATUS_NOT_SUPPORTED;}
-    if(t->PixelClockKhz>300000) {Refusal->Check=LINK_PLAN_CLOCK_CEILING;return STATUS_NOT_SUPPORTED;}
+    // BD-139: DP up to HBR3 x4 at RGB8, TMDS up to the 300 MHz of the HDMI 1.4 and DVI routes this driver drives.
+    protocol=Protocol(Sink);
+    if(t->PixelClockKhz>(protocol==BC250_LINK_DP?BC250_DP_MAX_PIXEL_KHZ:300000ul)) {
+        Refusal->Check=LINK_PLAN_CLOCK_CEILING;return STATUS_NOT_SUPPORTED;
+    }
+    if(protocol==BC250_LINK_DP) {
+        LinkCaps(c,Sink->Dpcd,caps);
+        if(!Bc250DpFirstRate(caps,t->PixelClockKhz)) {Refusal->Check=LINK_PLAN_LINK_RATE;return STATUS_NOT_SUPPORTED;}
+        if(c->PixelLimitKhz && t->PixelClockKhz>c->PixelLimitKhz) {
+            Refusal->Check=LINK_PLAN_DTO;return STATUS_NOT_SUPPORTED;
+        }
+    }
     if(t->HActive>4096 || t->VActive>2160) {Refusal->Check=LINK_PLAN_EXTENT;return STATUS_NOT_SUPPORTED;}
-    m->Timing=*t;m->Pitch=DcnPrimaryPitch(t->HActive);m->Protocol=Protocol(Sink);
+    m->Timing=*t;m->Pitch=DcnPrimaryPitch(t->HActive);m->Protocol=protocol;
     m->Lanes=m->Protocol==BC250_LINK_DP?(Sink->Dpcd[DP_MAX_LANE_COUNT]&DP_MAX_LANE_COUNT_MASK):4u;
     if(!m->Pitch || (ULONGLONG)m->Pitch*t->VActive>c->Device->RuntimeFramebufferLength) {
         Refusal->Check=LINK_PLAN_PITCH;return STATUS_GRAPHICS_INVALID_STRIDE;
@@ -423,7 +459,7 @@ static NTSTATUS Plan(CONNECTOR_LINK* c,const BC250_SINK* Sink,const BC250_TARGET
 static void LogPlanRefusal(ULONG Site,const BC250_TARGET_TIMING* t,NTSTATUS Status,const LINK_PLAN_REFUSAL* r)
 {
     static const char* const planChecks[]={"none","timing","clock-floor","clock-sink","clock-ceiling","extent",
-        "pitch","clocks","xstate","dml-call","dml-invalid","optc","scaler"};
+        "pitch","clocks","xstate","dml-call","dml-invalid","optc","scaler","link-rate","dto-ref"};
     const char* check=r->Check==LINK_PLAN_OPTC?Bc250OptcReasonName((int)r->Optc):
         (r->Check<RTL_NUMBER_OF(planChecks)?planChecks[r->Check]:"invalid");
     switch(Site) {
@@ -542,9 +578,31 @@ failed:
     ExFreePoolWithTag(c,LINK_TAG);return OpenResult(Device,Generation,step,status,reason);
 }
 
+// BD-122 and BD-139: the timing the firmware left running stays on the offered list once this driver owns the link,
+// also when the EDID does not state it in the same form (a block this parser does not read, or a pixel clock that
+// differs by its rounding). An EDID timing of the same sizes within 0.5% of its pixel clock is that timing already.
+static void InheritedTarget(BC250_SINK* Sink,const BC250_TARGET_TIMING* t)
+{
+    ULONG i;ULONGLONG difference;
+    for(i=0;i<Sink->TargetCount;++i) {
+        const BC250_TARGET_TIMING* s=&Sink->Targets[i];
+        if(s->HActive!=t->HActive || s->VActive!=t->VActive || s->HBlank!=t->HBlank || s->VBlank!=t->VBlank)continue;
+        difference=s->PixelClockKhz>t->PixelClockKhz?s->PixelClockKhz-t->PixelClockKhz:t->PixelClockKhz-s->PixelClockKhz;
+        if(difference*200u<=t->PixelClockKhz)return;
+    }
+    if(Sink->TargetCount>=BC250_EDID_MAX_MODES) {
+        GuardLog("connector-link: inherited %lux%lu %lu kHz not offered, the target list is full",
+            t->HActive,t->VActive,t->PixelClockKhz);
+        return;
+    }
+    Sink->Targets[Sink->TargetCount++]=*t;
+    GuardLog("connector-link: inherited %lux%lu %lu kHz total %lux%lu offered, the EDID does not list it",
+        t->HActive,t->VActive,t->PixelClockKhz,t->HActive+t->HBlank,t->VActive+t->VBlank);
+}
+
 NTSTATUS ConnectorLinkPrepare(BC250_DEVICE* Device,BC250_SINK* Sink,ULONG Generation)
 {
-    CONNECTOR_LINK* c=Device->ConnectorLink;NTSTATUS status=STATUS_SUCCESS;ULONG i,count=0;
+    CONNECTOR_LINK* c=Device->ConnectorLink;NTSTATUS status=STATUS_SUCCESS;ULONG i,count=0,fastest=0;
     BOOLEAN created=c==NULL;
     if(!Sink || Sink->Kind==BC250_SINK_NONE || Sink->TargetCount>BC250_EDID_MAX_MODES)
         return STATUS_INVALID_PARAMETER;
@@ -557,13 +615,30 @@ NTSTATUS ConnectorLinkPrepare(BC250_DEVICE* Device,BC250_SINK* Sink,ULONG Genera
         (ULONG)Sink->Adapter.max_tmds_khz,(ULONG)Sink->MaxPixelClockKhz);
     if(!c) {status=OpenContext(Device,Generation,&c);if(!NT_SUCCESS(status))return status;Device->ConnectorLink=c;}
     Begin(c,Generation,FALSE);
+    // BD-139: a new discovery is a new attachment; what a failed training or measurement left does not carry over.
+    c->RateLimit=0;c->PixelLimitKhz=0;
     if(c->Aux.Open) {status=CloseAux(c);if(!NT_SUCCESS(status))goto done;}
     for(i=0;i<Sink->TargetCount;++i) {
         LINK_PLAN_REFUSAL refusal;
         status=Plan(c,Sink,&Sink->Targets[i],&c->Next,&refusal);
-        if(NT_SUCCESS(status))Sink->Targets[count++]=Sink->Targets[i];
+        if(NT_SUCCESS(status)) {
+            const BC250_TARGET_TIMING* t=&Sink->Targets[i];
+            // BD-139: each timing above the old 300 MHz ceiling says what it was offered with, the others only
+            // count in the summary below, so a 48-timing EDID does not fill the ring.
+            if(t->PixelClockKhz>300000ul)
+                GuardLog("connector-link: target %lux%lu %lu kHz offered rate %lu lanes %lu",t->HActive,t->VActive,
+                    t->PixelClockKhz,(ULONG)Bc250DpFirstRate(Sink->Dpcd,t->PixelClockKhz),c->Next.Lanes);
+            if(!count || t->PixelClockKhz>Sink->Targets[fastest].PixelClockKhz)fastest=count;
+            Sink->Targets[count++]=*t;
+        }
         else LogPlanRefusal(LINK_SITE_TARGET,&Sink->Targets[i],status,&refusal);
         if(!LinkOwned(c)) {status=STATUS_RETRY;goto done;}
+    }
+    if(count) {
+        const BC250_TARGET_TIMING* t=&Sink->Targets[fastest];
+        GuardLog("connector-link: offered %lu of %lu targets fastest %lux%lu %lu kHz rate %lu",count,
+            Sink->TargetCount,t->HActive,t->VActive,t->PixelClockKhz,
+            Protocol(Sink)==BC250_LINK_DP?(ULONG)Bc250DpFirstRate(Sink->Dpcd,t->PixelClockKhz):0ul);
     }
     Sink->TargetCount=count;if(!count) {status=STATUS_NOT_SUPPORTED;goto done;}
     if(created) {
@@ -588,6 +663,7 @@ NTSTATUS ConnectorLinkPrepare(BC250_DEVICE* Device,BC250_SINK* Sink,ULONG Genera
             status=Plan(c,Sink,&inherited,&c->Current,&refusal);
             if(!NT_SUCCESS(status)) {LogPlanRefusal(LINK_SITE_INHERITED,&inherited,status,&refusal);goto done;}
         }
+        InheritedTarget(Sink,&inherited);count=Sink->TargetCount;
         c->Current.Inherited=TRUE;
         c->Protocol=Protocol(Sink);c->PixelKhz=(ULONG)(Device->InheritedSignal.PixelRate/1000);
         c->Lanes=4;c->Signal=Device->InheritedSignal;
@@ -598,7 +674,9 @@ NTSTATUS ConnectorLinkPrepare(BC250_DEVICE* Device,BC250_SINK* Sink,ULONG Genera
             close=CloseAux(c);if(NT_SUCCESS(status))status=close;
             if(!NT_SUCCESS(status))goto done;
             c->Rate=settings[0];c->Lanes=settings[1]&DP_MAX_LANE_COUNT_MASK;
-            if((c->Rate!=6 && c->Rate!=10) || (c->Lanes!=1 && c->Lanes!=2 && c->Lanes!=4)) {
+            // BD-139: HBR2 and HBR3 as well. A 304.25 MHz firmware timing (BD-122) runs on an HBR2 link.
+            if(!LinkSettingsValid(c->Rate,c->Lanes)) {
+                GuardLog("connector-link: inherited link rate %lu lanes %lu refused check link-settings",c->Rate,c->Lanes);
                 status=STATUS_NOT_SUPPORTED;goto done;
             }
         }
@@ -750,6 +828,61 @@ NTSTATUS ConnectorLinkCheck(BC250_DEVICE* Device,const BC250_SINK* Sink,ULONG Ge
     return (link[2]&DP_INTERLANE_ALIGN_DONE)?STATUS_SUCCESS:STATUS_RETRY;
 }
 
+// BD-139: one line per failed rate and one for the result, so the ring says which rate trained with which pattern.
+// A clock recovery or equalization failure at a rate above HBR keeps this attachment below that rate: Plan then
+// refuses the modes that need it with check link-rate, before any hardware is touched, and every mode a slower rate
+// carries stays as it was. The commit itself fails and recovers the previous mode.
+static void TrainingResult(CONNECTOR_LINK* c,ULONG PixelKhz)
+{
+    const BC250_DP_TRAIN_RESULT* r=&c->Training;ULONG i,lower;
+    for(i=0;i<r->Attempts && i<RTL_NUMBER_OF(r->Tried);++i) {
+        const BC250_DP_TRAIN_ATTEMPT* a=&r->Tried[i];
+        if(i+1u==r->Attempts && r->Status==BC250_DP_TRAIN_OK)break;
+        GuardLog("connector-link: dp train try %lu rate %lu lanes %lu tps %lu phase %lu result %lu",
+            i+1u,(ULONG)a->Rate,(ULONG)r->Lanes,(ULONG)a->EqPattern,(ULONG)a->Phase,(ULONG)a->AmdResult);
+    }
+    GuardLog("connector-link: dp trained %lu kHz first %lu rate %lu lanes %lu tps %lu attempts %lu status %lu",
+        PixelKhz,(ULONG)r->FirstRate,(ULONG)r->Rate,(ULONG)r->Lanes,(ULONG)r->EqPattern,(ULONG)r->Attempts,
+        (ULONG)r->Status);
+    if(r->Status!=BC250_DP_TRAIN_CR_FAILED && r->Status!=BC250_DP_TRAIN_EQ_FAILED)return;
+    lower=LowerRate(r->FirstRate);
+    if(!lower || (c->RateLimit && c->RateLimit<=lower))return;
+    c->RateLimit=lower;
+    GuardLog("connector-link: dp rate %lu failed for %lu kHz; this sink trains at rate %lu or below until replugged",
+        (ULONG)r->FirstRate,PixelKhz,lower);
+}
+
+// BD-139: above the DP reference clock (DPREFCLK, 600 MHz on unit A) the unit A VBIOS asks DP_DTO for a phase larger
+// than its modulo, as Linux does on this part (dce112_program_pix_clk). No measurement on this part shows yet that
+// the output then runs at the pixel rate, so the OTG frame rate is measured before the mode becomes visible: the
+// eight-frame method of the inherited TMDS start (display_tmds.h). A rate more than 1% away, or no measurement in
+// three tries, fails the commit and keeps this attachment at or under the reference (Plan check dto-ref).
+static NTSTATUS MeasureDto(CONNECTOR_LINK* c,const LINK_MODE* m)
+{
+    const BC250_TARGET_TIMING* t=&m->Timing;
+    ULONG ht=t->HActive+t->HBlank,vt=t->VActive+t->VBlank,hz=0,milli=0,tries=0;
+    ULONGLONG want=(ULONGLONG)t->PixelClockKhz*1000u,difference;
+    NTSTATUS status=STATUS_DEVICE_DATA_ERROR;
+    // Each try waits up to 0.5 s. When the transaction ends after a failed try (its 2 s deadline, a new
+    // generation), that try still counts: a new discovery clears the ceiling, and a pipe that showed no frame
+    // must not be retried on every commit.
+    while(tries<3u && !NT_SUCCESS(status) && LinkOwned(c)) {
+        ++tries;status=DisplayMeasureRefresh(c->Device,ht,vt,&hz,&milli);
+    }
+    if(!tries)return STATUS_RETRY;
+    if(NT_SUCCESS(status)) {
+        difference=hz>want?hz-want:want-hz;
+        if(difference*100u>want)status=STATUS_DEVICE_DATA_ERROR;
+    }
+    GuardLog("connector-link: dto check %lu kHz ref %lu kHz measured %lu Hz %lu mHz tries %lu status %08lX",
+        t->PixelClockKhz,(ULONG)m->Clocks.DpRefClockKhz,hz,milli,tries,(ULONG)status);
+    if(!NT_SUCCESS(status)) {
+        c->PixelLimitKhz=m->Clocks.DpRefClockKhz;
+        GuardLog("connector-link: dp pixel clock above %lu kHz refused for this sink until replugged",c->PixelLimitKhz);
+    }
+    return status;
+}
+
 static NTSTATUS Apply(CONNECTOR_LINK* c,LINK_MODE* m,const UCHAR* Caps,const BC250_LINK_SURFACE* Restore)
 {
     NTSTATUS status,close;BC250_OPTC_SYNC sync;
@@ -783,12 +916,14 @@ static NTSTATUS Apply(CONNECTOR_LINK* c,LINK_MODE* m,const UCHAR* Caps,const BC2
         LinkStep(c,BC250_LINK_AUX_OPEN,FALSE);
         status=Bc250AuxOpenForDetection(&c->Aux,&c->Io);
         if(!NT_SUCCESS(status))SaveFailure(c,status);
-        if(NT_SUCCESS(status) && Bc250DpTrain(&train,Caps,m->Timing.PixelClockKhz,&c->Training)!=BC250_DP_TRAIN_OK)
-        {
-            status=STATUS_IO_DEVICE_ERROR;
-            // Training may already have saved a failed I/O before disabling
-            // the PHY. A training timeout has no ATOM failure provenance.
-            LinkStep(c,BC250_LINK_TRAIN,FALSE);SaveFailure(c,status);
+        if(NT_SUCCESS(status)) {
+            if(Bc250DpTrain(&train,Caps,m->Timing.PixelClockKhz,&c->Training)!=BC250_DP_TRAIN_OK) {
+                status=STATUS_IO_DEVICE_ERROR;
+                // Training may already have saved a failed I/O before disabling
+                // the PHY. A training timeout has no ATOM failure provenance.
+                LinkStep(c,BC250_LINK_TRAIN,FALSE);SaveFailure(c,status);
+            }
+            TrainingResult(c,m->Timing.PixelClockKhz);
         }
         if(NT_SUCCESS(status))RtlZeroMemory(&c->Failure,sizeof(c->Failure));
         else LogFailure(&c->TrainingCleanup,"training-cleanup");
@@ -810,6 +945,9 @@ static NTSTATUS Apply(CONNECTOR_LINK* c,LINK_MODE* m,const UCHAR* Caps,const BC2
     }
     c->Phase=5;
     LINK_CALL(c,BC250_LINK_OTG_ENABLE,Bc250OptcEnable(&c->Io));
+    if(m->Protocol==BC250_LINK_DP && m->Timing.PixelClockKhz>m->Clocks.DpRefClockKhz) {
+        LINK_CALL(c,BC250_LINK_OTG_ENABLE,MeasureDto(c,m));
+    }
     d->RuntimePost=d->Post;d->RuntimePost.Width=m->Timing.HActive;d->RuntimePost.Height=m->Timing.VActive;
     d->RuntimePost.Pitch=m->Pitch;d->RuntimePost.ColorFormat=D3DDDIFMT_A8R8G8B8;
     d->RuntimePost.PhysicAddress=d->RuntimeFramebufferPhysical;d->RuntimePost.TargetId=BC250_CHILD_UID;
@@ -912,7 +1050,11 @@ NTSTATUS ConnectorLinkCommit(BC250_DEVICE* Device,const BC250_CONNECTOR_SNAPSHOT
     if(!HdmiLinkStopOwned(Device)) {status=STATUS_DEVICE_DATA_ERROR;goto recover;}
     InterlockedExchange(&Device->RuntimeDisplayChanged,1);InterlockedExchange(&Device->RuntimePostValid,0);
     status=DisableOwned(c);
-    if(NT_SUCCESS(status) && Timing)status=Apply(c,&c->Next,Snapshot->Sink.Dpcd,NULL);
+    if(NT_SUCCESS(status) && Timing) {
+        UCHAR caps[16];
+        // BD-139: Plan admitted this timing under the same ceiling, so a training never tries a rate it refused.
+        LinkCaps(c,Snapshot->Sink.Dpcd,caps);status=Apply(c,&c->Next,caps,NULL);
+    }
     else if(NT_SUCCESS(status)) {
         // An OS detach is a fallible transaction too. Do not discard its old
         // plan until hardware disable succeeds. Physical HPD detach uses the
