@@ -104,23 +104,45 @@ static int init(struct optc* o,BC250_DISP_IO* io)
     return io && io->Read && io->Write && io->Stall;
 }
 
-int Bc250OptcTimingValid(const BC250_TARGET_TIMING* t,const BC250_OPTC_SYNC* s)
+// BD-177: the same gate as before, term by term, so the caller can name what refused. The terms are OR-ed,
+// as they were in the single condition this replaces, so the order below decides only which name a timing that
+// breaks several terms gets, never whether it is admitted.
+int Bc250OptcTimingReason(const BC250_TARGET_TIMING* t,const BC250_OPTC_SYNC* s)
 {
     unsigned long ht,vt;
     if(!t || !s || !t->PixelClockKhz || !t->HActive || !t->VActive ||
-       t->HActive>8192 || t->VActive>8192 || t->HBlank>8192 || t->VBlank>8192 ||
-       (t->Flags&0x98)!=0x18 || t->HSyncWidth<8 || t->VSyncWidth<1 ||
+       t->HActive>8192 || t->VActive>8192 || t->HBlank>8192 || t->VBlank>8192)return BC250_OPTC_REASON_EXTENT;
+    if((t->Flags&0x98)!=0x18)return BC250_OPTC_REASON_FLAGS;
+    if(t->HSyncWidth<8 || t->VSyncWidth<1 ||
        t->HBlank<32 || t->VBlank<3 || !t->HSyncOffset || !t->VSyncOffset ||
        t->HSyncOffset>=t->HBlank || t->HSyncWidth>t->HBlank-t->HSyncOffset ||
-       t->VSyncOffset>=t->VBlank || t->VSyncWidth>t->VBlank-t->VSyncOffset)return 0;
+       t->VSyncOffset>=t->VBlank || t->VSyncWidth>t->VBlank-t->VSyncOffset)return BC250_OPTC_REASON_SYNC;
     ht=t->HActive+t->HBlank;vt=t->VActive+t->VBlank;
-    if(ht>OTG0_OTG_H_TOTAL__OTG_H_TOTAL_MASK+1ul || vt>OTG0_OTG_V_TOTAL__OTG_V_TOTAL_MASK+1ul ||
-       !s->VStartup || s->VStartup>=t->VBlank ||
-       s->VStartup>Bc250DispGet(OTG0_OTG_VSTARTUP_PARAM__VSTARTUP_START_MASK,OTG0_OTG_VSTARTUP_PARAM__VSTARTUP_START_MASK) ||
-       s->VReady>Bc250DispGet(OTG0_OTG_VREADY_PARAM__VREADY_OFFSET_MASK,OTG0_OTG_VREADY_PARAM__VREADY_OFFSET_MASK) ||
-       s->VUpdateOffset>Bc250DispGet(OTG0_OTG_VUPDATE_PARAM__VUPDATE_OFFSET_MASK,OTG0_OTG_VUPDATE_PARAM__VUPDATE_OFFSET_MASK) ||
-       s->VUpdateWidth>Bc250DispGet(OTG0_OTG_VUPDATE_PARAM__VUPDATE_WIDTH_MASK,OTG0_OTG_VUPDATE_PARAM__VUPDATE_WIDTH_MASK))return 0;
-    return 1;
+    if(ht>OTG0_OTG_H_TOTAL__OTG_H_TOTAL_MASK+1ul ||
+       vt>OTG0_OTG_V_TOTAL__OTG_V_TOTAL_MASK+1ul)return BC250_OPTC_REASON_TOTAL;
+    if(!s->VStartup || s->VStartup>=t->VBlank)return BC250_OPTC_REASON_VSTARTUP_BLANK;
+    if(s->VStartup>Bc250DispGet(OTG0_OTG_VSTARTUP_PARAM__VSTARTUP_START_MASK,OTG0_OTG_VSTARTUP_PARAM__VSTARTUP_START_MASK))
+        return BC250_OPTC_REASON_VSTARTUP_FIELD;
+    if(s->VReady>Bc250DispGet(OTG0_OTG_VREADY_PARAM__VREADY_OFFSET_MASK,OTG0_OTG_VREADY_PARAM__VREADY_OFFSET_MASK))
+        return BC250_OPTC_REASON_VREADY_FIELD;
+    if(s->VUpdateOffset>Bc250DispGet(OTG0_OTG_VUPDATE_PARAM__VUPDATE_OFFSET_MASK,OTG0_OTG_VUPDATE_PARAM__VUPDATE_OFFSET_MASK))
+        return BC250_OPTC_REASON_VUPDATE_OFFSET_FIELD;
+    if(s->VUpdateWidth>Bc250DispGet(OTG0_OTG_VUPDATE_PARAM__VUPDATE_WIDTH_MASK,OTG0_OTG_VUPDATE_PARAM__VUPDATE_WIDTH_MASK))
+        return BC250_OPTC_REASON_VUPDATE_WIDTH_FIELD;
+    return BC250_OPTC_REASON_OK;
+}
+int Bc250OptcTimingValid(const BC250_TARGET_TIMING* t,const BC250_OPTC_SYNC* s)
+{ return Bc250OptcTimingReason(t,s)==BC250_OPTC_REASON_OK; }
+const char* Bc250OptcReasonName(int reason)
+{
+    // One hyphenated word per term, each naming this gate, so a caller can print it as the whole reason a
+    // timing was refused and a reader can grep "optc-" for the gate. The longest is 25 characters, inside the
+    // 32 that tools/quality/guardlog_width.py charges a %s in a driver log line.
+    static const char* const names[]={"optc-ok","optc-extent","optc-flags","optc-sync","optc-total",
+        "optc-vstartup-blank","optc-vstartup-field","optc-vready-field","optc-vupdate-offset-field",
+        "optc-vupdate-width-field"};
+    if(reason<0 || (unsigned)reason>=sizeof(names)/sizeof(names[0]))return "optc-invalid";
+    return names[reason];
 }
 long Bc250OptcDisable(BC250_DISP_IO* io)
 {

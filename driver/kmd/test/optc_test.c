@@ -132,6 +132,33 @@ int main(void)
     bad=hd;bad.HActive=0xffffffff;CHECK(!Bc250OptcTimingValid(&bad,&sync));
     bs=sync;bs.VStartup=0;CHECK(!Bc250OptcTimingValid(&hd,&bs));
     bs=sync;bs.VStartup=hd.VBlank;CHECK(!Bc250OptcTimingValid(&hd,&bs));
+    // BD-177: the same gate, asked which term refused, and the name that goes into the log line.
+    CHECK(Bc250OptcTimingReason(&hd,&sync)==BC250_OPTC_REASON_OK);
+    CHECK(Bc250OptcTimingValid(&hd,&sync));
+    CHECK(Bc250OptcTimingReason(NULL,&sync)==BC250_OPTC_REASON_EXTENT);
+    CHECK(Bc250OptcTimingReason(&hd,NULL)==BC250_OPTC_REASON_EXTENT);
+    bad=hd;bad.HActive=0xffffffff;CHECK(Bc250OptcTimingReason(&bad,&sync)==BC250_OPTC_REASON_EXTENT);
+    bad=hd;bad.Flags|=0x80;CHECK(Bc250OptcTimingReason(&bad,&sync)==BC250_OPTC_REASON_FLAGS);
+    bad=hd;bad.HSyncWidth=7;CHECK(Bc250OptcTimingReason(&bad,&sync)==BC250_OPTC_REASON_SYNC);
+    bad=hd;bad.VSyncOffset=0;CHECK(Bc250OptcTimingReason(&bad,&sync)==BC250_OPTC_REASON_SYNC);
+    // The reduced-blanking case of BD-177: the prefetch does not fit in the mode's vertical blanking.
+    bs=sync;bs.VStartup=hd.VBlank;CHECK(Bc250OptcTimingReason(&hd,&bs)==BC250_OPTC_REASON_VSTARTUP_BLANK);
+    bs=sync;bs.VStartup=0;CHECK(Bc250OptcTimingReason(&hd,&bs)==BC250_OPTC_REASON_VSTARTUP_BLANK);
+    bs=sync;bs.VReady=0xffffffff;CHECK(Bc250OptcTimingReason(&hd,&bs)==BC250_OPTC_REASON_VREADY_FIELD);
+    bs=sync;bs.VUpdateOffset=0xffffffff;
+    CHECK(Bc250OptcTimingReason(&hd,&bs)==BC250_OPTC_REASON_VUPDATE_OFFSET_FIELD);
+    bs=sync;bs.VUpdateWidth=0xffffffff;
+    CHECK(Bc250OptcTimingReason(&hd,&bs)==BC250_OPTC_REASON_VUPDATE_WIDTH_FIELD);
+    CHECK(!strcmp(Bc250OptcReasonName(BC250_OPTC_REASON_OK),"optc-ok"));
+    CHECK(!strcmp(Bc250OptcReasonName(BC250_OPTC_REASON_VSTARTUP_BLANK),"optc-vstartup-blank"));
+    CHECK(!strcmp(Bc250OptcReasonName(BC250_OPTC_REASON_VUPDATE_WIDTH_FIELD),"optc-vupdate-width-field"));
+    CHECK(!strcmp(Bc250OptcReasonName(-1),"optc-invalid"));
+    CHECK(!strcmp(Bc250OptcReasonName(BC250_OPTC_REASON_VUPDATE_WIDTH_FIELD+1),"optc-invalid"));
+    for(n=0;n<=(unsigned)BC250_OPTC_REASON_VUPDATE_WIDTH_FIELD;++n) {
+        const char* name=Bc250OptcReasonName((int)n);
+        // 32 is what a %s costs a driver log line (tools/quality/guardlog_width.py), so no term may reach it.
+        CHECK(name && *name && strcmp(name,"optc-invalid") && strlen(name)<32);
+    }
     CHECK(Bc250OptcProgram(&io,&bad,&sync,0)==BC250_DISP_STATUS_INVALID && !model.access);
     CHECK(Bc250OptcProgram(&io,&hd,&sync,2)==BC250_DISP_STATUS_INVALID && !model.access);
     printf("optc_test: %u checks, %u failures\n",checks,failures);

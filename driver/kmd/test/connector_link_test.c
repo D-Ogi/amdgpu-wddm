@@ -17,6 +17,8 @@
 #include "../../shim/bc250_hdmi_link.h"
 #include "../../shim/bc250_dcn201_pipe.h"
 #include "../../shim/bc250_optc.h"
+/* BD-177: BC250_LOG_TEXT, so the refusal line is proved to fit the ring instead of assuming it. */
+#include "../bc250kmd_escape.h"
 #include "../../shim/bc250_dp_train.h"
 #include "../../shim/bc250_dp_phy.h"
 #include "../../shim/bc250_dp_stream.h"
@@ -112,6 +114,8 @@ static char log_ring[64][512];
 static unsigned log_next,diag_locks;
 static unsigned char diag_snapshot[sizeof(((BC250_DEVICE*)0)->Connector)];
 static unsigned test_irql, acquire_fail, hdmi_stop_fail, save_fail, plan_fail, bad_clocks, clock_reads;
+/* BD-177: a display plan that returns no valid plan, and the term the OPTC gate answers with. */
+static unsigned plan_invalid, optc_reason;
 static unsigned apply_count, tx_enabled, plane_blank, otg_blank, crtc_enabled, output_black, aux_open;
 static unsigned pipe_programs, pipe_plans;   /* BD-197: successful pipe steps, and their recorded plans */
 static unsigned persistent_aux_fail, firmware_frees, pool_frees, audio_debt;
@@ -362,12 +366,25 @@ int Bc250Dml201Plan(const BC250_DML201_INPUT* in,void* w,size_t size,BC250_DML20
     CHECK(in->CursorWidth==0 && in->AudioSampleRateKhz==192);
     CHECK(in->Output==(unsigned)(snapshot.Sink.Kind==BC250_SINK_DP?BC250_DML201_DP:BC250_DML201_HDMI));
     memset(p,0,sizeof(*p));if(plan_fail)return -1;
+    if(plan_invalid)return 0;        /* BD-177: a plan that returns without a valid one is its own refusal. */
     p->Valid=1;p->VReady=340;p->VStartup=20;p->VUpdateOffset=550;p->VUpdateWidth=255;
     p->Rq.plane1_base_address=0x2A5;   /* BD-197: what the pipe step programs and the surface writes keep */
     return 0;
 }
+/* BD-177: the plan asks the gate for a term now. optc_reason is the term this fixture answers with. */
+int Bc250OptcTimingReason(const BC250_TARGET_TIMING* t,const BC250_OPTC_SYNC* s)
+{ CHECK(t!=NULL && s->VStartup==20);return (int)optc_reason; }
 int Bc250OptcTimingValid(const BC250_TARGET_TIMING* t,const BC250_OPTC_SYNC* s)
-{ CHECK(t!=NULL && s->VStartup==20);return 1; }
+{ return Bc250OptcTimingReason(t,s)==BC250_OPTC_REASON_OK; }
+const char* Bc250OptcReasonName(int reason)
+{
+    /* The spelling is bc250_optc.c's; optc_test.c holds it against the real table. */
+    static const char* const names[]={"optc-ok","optc-extent","optc-flags","optc-sync","optc-total",
+        "optc-vstartup-blank","optc-vstartup-field","optc-vready-field","optc-vupdate-offset-field",
+        "optc-vupdate-width-field"};
+    if(reason<0 || (unsigned)reason>=sizeof(names)/sizeof(names[0]))return "optc-invalid";
+    return names[reason];
+}
 long Bc250ScalerPlan(unsigned long sw,unsigned long sh,unsigned long tw,unsigned long th,unsigned long scaling,BC250_SCALER_PLAN* p)
 { CHECK(sw==tw && sh==th && scaling==BC250_SCALING_IDENTITY);memset(p,0,sizeof(*p));p->SourceWidth=sw;p->SourceHeight=sh;return 0; }
 long Bc250Dcn201ReadClocks(BC250_DISP_IO* io,unsigned crystal,BC250_DCN201_CLOCKS* c)
@@ -533,6 +550,7 @@ static void reset(unsigned kind)
     primary_enters=primary_exits=audio_starts=audio_stops=plan_calls=logs=0;
     primary_end_fail=0;
     test_irql=acquire_fail=hdmi_stop_fail=save_fail=plan_fail=bad_clocks=clock_reads=0;
+    plan_invalid=optc_reason=0;
     apply_count=plane_blank=otg_blank=output_black=aux_open=event_count=fault_triggered=0;
     pipe_programs=pipe_plans=0;
     persistent_aux_fail=firmware_frees=pool_frees=audio_debt=0;
@@ -1141,17 +1159,84 @@ static void psp_session_controls(void)
 }
 static void programmed_clock_bound(void)
 {
-    LINK_MODE mode;BC250_TARGET_TIMING timing;
+    LINK_MODE mode;BC250_TARGET_TIMING timing;LINK_PLAN_REFUSAL refusal;
     reset(BC250_SINK_HDMI);snapshot.Sink.MaxPixelClockKhz=600000;
     Begin(&link,snapshot.Generation,FALSE);
     timing=snapshot.Sink.Targets[0];timing.PixelClockKhz=304250;
-    CHECK(Plan(&link,&snapshot.Sink,&timing,&mode)==STATUS_NOT_SUPPORTED);
+    CHECK(Plan(&link,&snapshot.Sink,&timing,&mode,&refusal)==STATUS_NOT_SUPPORTED);
     CHECK(!mode.Valid && !plan_calls && !clock_reads);
+    // BD-177: the bound of this driver, not of the sink, and the line says which of the two refused.
+    CHECK(refusal.Check==LINK_PLAN_CLOCK_CEILING && refusal.Optc==0);
     timing.PixelClockKhz=300001;
-    CHECK(Plan(&link,&snapshot.Sink,&timing,&mode)==STATUS_NOT_SUPPORTED);
+    CHECK(Plan(&link,&snapshot.Sink,&timing,&mode,&refusal)==STATUS_NOT_SUPPORTED);
     CHECK(!mode.Valid && !plan_calls && !clock_reads);
+    CHECK(refusal.Check==LINK_PLAN_CLOCK_CEILING);
     timing.PixelClockKhz=300000;
-    CHECK(Plan(&link,&snapshot.Sink,&timing,&mode)==STATUS_SUCCESS && mode.Valid);
+    CHECK(Plan(&link,&snapshot.Sink,&timing,&mode,&refusal)==STATUS_SUCCESS && mode.Valid);
+    CHECK(refusal.Check==LINK_PLAN_OK);
+    // A plan with no refusal record at all is still admitted the same way.
+    CHECK(Plan(&link,&snapshot.Sink,&timing,&mode,NULL)==STATUS_SUCCESS && mode.Valid);
+    End(&link);balanced();
+}
+// BD-177: every check of the plan that answers STATUS_NOT_SUPPORTED names itself, the OPTC term is carried
+// through, and the one log line stays inside the ring's text budget. The lab monitor's refused preferred mode
+// is the last case: 1920x1080 at 228800 kHz, 20 lines of vertical blanking, prefetch 20.
+static void plan_refusal_named(void)
+{
+    LINK_MODE mode;BC250_TARGET_TIMING timing;LINK_PLAN_REFUSAL refusal;unsigned i;
+    static const struct { unsigned long clock; unsigned long width, height; unsigned check; } cases[]={
+        {24999,1920,1080,LINK_PLAN_CLOCK_FLOOR},
+        {250000,1920,1080,LINK_PLAN_CLOCK_SINK},
+        {150000,4097,1080,LINK_PLAN_EXTENT},
+        {150000,1920,2161,LINK_PLAN_EXTENT}
+    };
+    reset(BC250_SINK_HDMI);snapshot.Sink.MaxPixelClockKhz=240000;
+    Begin(&link,snapshot.Generation,FALSE);
+    for(i=0;i<RTL_NUMBER_OF(cases);++i) {
+        timing=snapshot.Sink.Targets[0];
+        timing.PixelClockKhz=cases[i].clock;timing.HActive=cases[i].width;timing.VActive=cases[i].height;
+        CHECK(Plan(&link,&snapshot.Sink,&timing,&mode,&refusal)==STATUS_NOT_SUPPORTED);
+        CHECK(refusal.Check==cases[i].check && !mode.Valid && !plan_calls);
+    }
+    // A descriptor the EDID gate itself refuses, before any clock term.
+    timing=snapshot.Sink.Targets[0];timing.VSyncWidth=0;
+    CHECK(Plan(&link,&snapshot.Sink,&timing,&mode,&refusal)==STATUS_NOT_SUPPORTED);
+    CHECK(refusal.Check==LINK_PLAN_TIMING && refusal.VBlank==snapshot.Sink.Targets[0].VBlank);
+    // The two display-plan refusals are told apart.
+    snapshot.Sink.MaxPixelClockKhz=300000;timing=snapshot.Sink.Targets[0];
+    plan_fail=1;
+    CHECK(Plan(&link,&snapshot.Sink,&timing,&mode,&refusal)==STATUS_NOT_SUPPORTED);
+    CHECK(refusal.Check==LINK_PLAN_DML_CALL && refusal.VStartup==0);
+    plan_fail=0;plan_invalid=1;
+    CHECK(Plan(&link,&snapshot.Sink,&timing,&mode,&refusal)==STATUS_NOT_SUPPORTED);
+    CHECK(refusal.Check==LINK_PLAN_DML_INVALID && refusal.VStartup==0);
+    plan_invalid=0;
+    // The OPTC gate: the term and the two numbers it compared travel to the line.
+    optc_reason=BC250_OPTC_REASON_VSTARTUP_BLANK;
+    timing.VBlank=20;
+    CHECK(Plan(&link,&snapshot.Sink,&timing,&mode,&refusal)==STATUS_NOT_SUPPORTED);
+    CHECK(refusal.Check==LINK_PLAN_OPTC && refusal.Optc==BC250_OPTC_REASON_VSTARTUP_BLANK);
+    CHECK(refusal.VStartup==20 && refusal.VBlank==20);
+    memset(log_ring,0,sizeof(log_ring));
+    timing.PixelClockKhz=228800;timing.HActive=1920;timing.VActive=1080;
+    LogPlanRefusal(LINK_SITE_TARGET,&timing,STATUS_NOT_SUPPORTED,&refusal);
+    CHECK(logged("connector-link: target 1920x1080 228800 kHz refused C00000BB "
+                 "check optc-vstartup-blank vstartup 20 vblank 20"));
+    // The three sites are told apart, and a check outside the OPTC gate names itself.
+    memset(log_ring,0,sizeof(log_ring));
+    refusal.Check=LINK_PLAN_DML_INVALID;refusal.Optc=0;
+    LogPlanRefusal(LINK_SITE_COMMIT,&timing,STATUS_NOT_SUPPORTED,&refusal);
+    CHECK(logged("connector-link: commit 1920x1080 228800 kHz refused C00000BB check dml-invalid"));
+    // The widest line this form can produce still fits BC250_LOG_TEXT, so the ring never truncates a refusal.
+    memset(log_ring,0,sizeof(log_ring));
+    refusal.Check=LINK_PLAN_OPTC;refusal.Optc=BC250_OPTC_REASON_VUPDATE_OFFSET_FIELD;
+    refusal.VStartup=4095;refusal.VBlank=4095;
+    timing.PixelClockKhz=300000;timing.HActive=4096;timing.VActive=2160;
+    LogPlanRefusal(LINK_SITE_INHERITED,&timing,STATUS_NOT_SUPPORTED,&refusal);
+    CHECK(logged("connector-link: inherited 4096x2160 300000 kHz refused C00000BB "
+                 "check optc-vupdate-offset-field vstartup 4095 vblank 4095"));
+    CHECK(strlen(log_ring[(log_next-1)%64])<BC250_LOG_TEXT);
+    optc_reason=BC250_OPTC_REASON_OK;
     End(&link);balanced();
 }
 // BD-169 review: a cold prepare that fails releases its own context, and that
@@ -1285,6 +1370,7 @@ int main(void)
     }}
     prepare_cleanup_preserved();
     programmed_clock_bound();
+    plan_refusal_named();
     psp_session_controls();
     distinct_recovery_target();
     atom_write_decisions();

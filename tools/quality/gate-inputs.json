@@ -807,6 +807,11 @@
         "host"
       ]
     },
+    "connector-link-optc-term": {
+      "inputs": [
+        "host"
+      ]
+    },
     "dml201": {
       "inputs": [
         "host"

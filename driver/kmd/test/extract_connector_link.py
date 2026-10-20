@@ -19,12 +19,13 @@ def main():
     p.add_argument("--wrong-recovery-target", action="store_true")
     p.add_argument("--omit-surface-adopt", action="store_true")
     p.add_argument("--omit-detached-mode", action="store_true")
+    p.add_argument("--drop-optc-term", action="store_true")
     args = p.parse_args()
     source = Path(__file__).resolve().parents[1] / "connector_link.c"
     data = source.read_text(encoding="utf-8")
     types = data[data.index("#define LINK_TAG"):data.index("static ULONGLONG LinkNow")]
     names = (
-        "LinkNow LinkOwned Begin End ClockSessionEnter ClockSessionLeave LinkStep SaveFailure RetainFailure PreviousTargetRecord RetainRecovery LogTarget LogFailure TargetRecord AtomAllowed AtomRead AtomWrite AtomNow LinkDelay LinkRead LinkWrite LinkStall Protocol SignalFor Plan CloseAux LogOpenDiagnostic ConnectorLinkLogOpen OpenResult OpenContext ConnectorLinkPrepare "
+        "LinkNow LinkOwned Begin End ClockSessionEnter ClockSessionLeave LinkStep SaveFailure RetainFailure PreviousTargetRecord RetainRecovery LogTarget LogFailure TargetRecord AtomAllowed AtomRead AtomWrite AtomNow LinkDelay LinkRead LinkWrite LinkStall Protocol SignalFor Plan LogPlanRefusal CloseAux LogOpenDiagnostic ConnectorLinkLogOpen OpenResult OpenContext ConnectorLinkPrepare "
         "TrainRead TrainWrite TrainEnable TrainPattern TrainDrive TrainDisable "
         "DisableOwned ConnectorLinkDisable Apply ConnectorLinkCommit "
         "ConnectorLinkCurrentSignal ConnectorLinkNeedsPowerOn ConnectorLinkSuspend ConnectorLinkResume "
@@ -61,6 +62,13 @@ def main():
             if body.count(needle) != 1:
                 raise SystemExit("Detached mode mutation anchor changed")
             body = body.replace(needle, "(void)0;")
+        # BD-177: a refusal line that keeps the check but loses the term of the OPTC gate is the mutant that
+        # proves the term is read from the gate and not invented by the log.
+        if args.drop_optc_term and name == "Plan":
+            needle = "Refusal->Check=LINK_PLAN_OPTC;Refusal->Optc=(ULONG)result;"
+            if body.count(needle) != 1:
+                raise SystemExit("OPTC term mutation anchor changed")
+            body = body.replace(needle, "Refusal->Check=LINK_PLAN_OPTC;")
         if args.write_requested_value and name == "AtomWrite":
             needle = "WRITE_REGISTER_ULONG(c->Device->Mmio+Dword,effective)"
             if body.count(needle) != 1:

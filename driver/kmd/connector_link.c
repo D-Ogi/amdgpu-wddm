@@ -23,6 +23,34 @@
 #define LINK_DEADLINE_US 2000000ull
 #define LINK_CLEANUP_US 300000ull
 
+// BD-177: which check of the plan refused a target. Six of them answer the same STATUS_NOT_SUPPORTED, and the
+// ring budget is one line per refused target, so the line has to name the check instead of leaving the reader to
+// guess. LINK_PLAN_OPTC carries the term of the OPTC gate and the two numbers it compared.
+enum link_plan_check {
+    LINK_PLAN_OK = 0,
+    LINK_PLAN_TIMING,           // the descriptor itself (Bc250TargetTimingValid)
+    LINK_PLAN_CLOCK_FLOOR,      // pixel clock under 25 MHz
+    LINK_PLAN_CLOCK_SINK,       // above what this sink says it takes
+    LINK_PLAN_CLOCK_CEILING,    // above the validated output range of this driver
+    LINK_PLAN_EXTENT,           // active size outside 4096 by 2160
+    LINK_PLAN_PITCH,            // no pitch, or the primary would not fit the framebuffer
+    LINK_PLAN_CLOCKS,           // the DCN201 clock read failed
+    LINK_PLAN_XSTATE,           // the floating-point state could not be saved for DML
+    LINK_PLAN_DML_CALL,         // Bc250Dml201Plan returned a failure
+    LINK_PLAN_DML_INVALID,      // it returned without a valid plan
+    LINK_PLAN_OPTC,             // the OPTC admission gate (bc250_optc.h names the term)
+    LINK_PLAN_SCALER            // the identity transform was refused
+};
+// Which call of the plan refused. The log line spells it out, so the three sites are told apart in the ring.
+#define LINK_SITE_TARGET    0u      // a target of the monitor's own list
+#define LINK_SITE_INHERITED 1u      // the timing the firmware left running
+#define LINK_SITE_COMMIT    2u      // a timing the operating system asked to commit
+typedef struct LINK_PLAN_REFUSAL {
+    ULONG Check;                // enum link_plan_check
+    ULONG Optc;                 // enum bc250_optc_reason, 0 unless Check is LINK_PLAN_OPTC
+    ULONG VStartup, VBlank;     // what the OPTC gate compared; VStartup is 0 when DML produced none
+} LINK_PLAN_REFUSAL;
+
 typedef struct LINK_MODE {
     BC250_TARGET_TIMING Timing;
     BC250_DML201_PLAN Dml;
@@ -338,18 +366,29 @@ static void SignalFor(const BC250_TARGET_TIMING* t,D3DKMDT_VIDEO_SIGNAL_INFO* s)
     s->ScanLineOrdering=D3DDDI_VSSLO_PROGRESSIVE;
 }
 
-static NTSTATUS Plan(CONNECTOR_LINK* c,const BC250_SINK* Sink,const BC250_TARGET_TIMING* t,LINK_MODE* m)
+// BD-177: Refusal is optional and says which check refused, so one log line can name it. Nothing else about the
+// admission changes: every check, its order and its status are the ones this function already answered.
+static NTSTATUS Plan(CONNECTOR_LINK* c,const BC250_SINK* Sink,const BC250_TARGET_TIMING* t,LINK_MODE* m,
+    LINK_PLAN_REFUSAL* Refusal)
 {
     BC250_DML201_INPUT input={0};XSTATE_SAVE state;NTSTATUS status;int result;
-    BC250_OPTC_SYNC sync;
+    BC250_OPTC_SYNC sync;LINK_PLAN_REFUSAL local;
+    if(!Refusal)Refusal=&local;
+    RtlZeroMemory(Refusal,sizeof(*Refusal));
     RtlZeroMemory(m,sizeof(*m));
-    if(!Bc250TargetTimingValid(t) || t->PixelClockKhz<25000 || t->PixelClockKhz>Sink->MaxPixelClockKhz ||
-       t->PixelClockKhz>300000 || t->HActive>4096 || t->VActive>2160)return STATUS_NOT_SUPPORTED;
+    Refusal->VBlank=t?t->VBlank:0;
+    if(!Bc250TargetTimingValid(t)) {Refusal->Check=LINK_PLAN_TIMING;return STATUS_NOT_SUPPORTED;}
+    if(t->PixelClockKhz<25000) {Refusal->Check=LINK_PLAN_CLOCK_FLOOR;return STATUS_NOT_SUPPORTED;}
+    if(t->PixelClockKhz>Sink->MaxPixelClockKhz) {Refusal->Check=LINK_PLAN_CLOCK_SINK;return STATUS_NOT_SUPPORTED;}
+    if(t->PixelClockKhz>300000) {Refusal->Check=LINK_PLAN_CLOCK_CEILING;return STATUS_NOT_SUPPORTED;}
+    if(t->HActive>4096 || t->VActive>2160) {Refusal->Check=LINK_PLAN_EXTENT;return STATUS_NOT_SUPPORTED;}
     m->Timing=*t;m->Pitch=DcnPrimaryPitch(t->HActive);m->Protocol=Protocol(Sink);
     m->Lanes=m->Protocol==BC250_LINK_DP?(Sink->Dpcd[DP_MAX_LANE_COUNT]&DP_MAX_LANE_COUNT_MASK):4u;
-    if(!m->Pitch || (ULONGLONG)m->Pitch*t->VActive>c->Device->RuntimeFramebufferLength)
-        return STATUS_GRAPHICS_INVALID_STRIDE;
-    status=Bc250Dcn201ReadClocks(&c->Io,c->CrystalKhz,&m->Clocks);if(!NT_SUCCESS(status))return status;
+    if(!m->Pitch || (ULONGLONG)m->Pitch*t->VActive>c->Device->RuntimeFramebufferLength) {
+        Refusal->Check=LINK_PLAN_PITCH;return STATUS_GRAPHICS_INVALID_STRIDE;
+    }
+    status=Bc250Dcn201ReadClocks(&c->Io,c->CrystalKhz,&m->Clocks);
+    if(!NT_SUCCESS(status)) {Refusal->Check=LINK_PLAN_CLOCKS;return status;}
     input.HActive=t->HActive;input.HTotal=t->HActive+t->HBlank;
     input.HFrontPorch=t->HSyncOffset;input.HSyncWidth=t->HSyncWidth;
     input.VActive=t->VActive;input.VTotal=t->VActive+t->VBlank;
@@ -359,15 +398,45 @@ static NTSTATUS Plan(CONNECTOR_LINK* c,const BC250_SINK* Sink,const BC250_TARGET
     input.DpLanes=m->Lanes;input.CursorWidth=0; // WDDM advertises no hardware pointer.
     input.AudioSampleRateKhz=192; // maximum admitted endpoint rate, not a guessed active stream.
     input.DchubRefClockKhz=m->Clocks.DchubRefClockKhz;input.DentistVcoKhz=m->Clocks.DentistVcoKhz;
-    status=KeSaveExtendedProcessorState(XSTATE_MASK_LEGACY,&state);if(!NT_SUCCESS(status))return status;
+    status=KeSaveExtendedProcessorState(XSTATE_MASK_LEGACY,&state);
+    if(!NT_SUCCESS(status)) {Refusal->Check=LINK_PLAN_XSTATE;return status;}
     result=Bc250Dml201Plan(&input,c->DmlWorkspace,Bc250Dml201WorkspaceSize(),&m->Dml);
     KeRestoreExtendedProcessorState(&state);
-    if(result || !m->Dml.Valid)return STATUS_NOT_SUPPORTED;
+    if(result) {Refusal->Check=LINK_PLAN_DML_CALL;return STATUS_NOT_SUPPORTED;}
+    if(!m->Dml.Valid) {Refusal->Check=LINK_PLAN_DML_INVALID;return STATUS_NOT_SUPPORTED;}
     sync.VReady=m->Dml.VReady;sync.VStartup=m->Dml.VStartup;
     sync.VUpdateOffset=m->Dml.VUpdateOffset;sync.VUpdateWidth=m->Dml.VUpdateWidth;
-    if(!Bc250OptcTimingValid(t,&sync))return STATUS_NOT_SUPPORTED;
+    Refusal->VStartup=sync.VStartup;
+    result=Bc250OptcTimingReason(t,&sync);
+    if(result!=BC250_OPTC_REASON_OK) {
+        Refusal->Check=LINK_PLAN_OPTC;Refusal->Optc=(ULONG)result;return STATUS_NOT_SUPPORTED;
+    }
     status=Bc250ScalerPlan(t->HActive,t->VActive,t->HActive,t->VActive,BC250_SCALING_IDENTITY,&m->Scaler);
-    if(NT_SUCCESS(status))m->Valid=TRUE;return status;
+    if(!NT_SUCCESS(status)) {Refusal->Check=LINK_PLAN_SCALER;return status;}
+    m->Valid=TRUE;return status;
+}
+// The refusal in one greppable line. Every field is always present: the check that refused (the OPTC gate
+// names its own term, so "check optc-vstartup-blank" is the whole reason), the status the caller sees, the
+// prefetch the display plan asked for (0 when none was produced) and the target's own vertical blanking.
+// The site is a literal of the format and not a %s, because a %s costs this line 32 characters of the ring's
+// 159 and three of them do not fit (tools/quality/guardlog_width.py). Keep all three formats the same shape.
+static void LogPlanRefusal(ULONG Site,const BC250_TARGET_TIMING* t,NTSTATUS Status,const LINK_PLAN_REFUSAL* r)
+{
+    static const char* const planChecks[]={"none","timing","clock-floor","clock-sink","clock-ceiling","extent",
+        "pitch","clocks","xstate","dml-call","dml-invalid","optc","scaler"};
+    const char* check=r->Check==LINK_PLAN_OPTC?Bc250OptcReasonName((int)r->Optc):
+        (r->Check<RTL_NUMBER_OF(planChecks)?planChecks[r->Check]:"invalid");
+    switch(Site) {
+    case LINK_SITE_INHERITED:
+        GuardLog("connector-link: inherited %lux%lu %lu kHz refused %08lX check %s vstartup %lu vblank %lu",
+            t->HActive,t->VActive,t->PixelClockKhz,(ULONG)Status,check,r->VStartup,r->VBlank);break;
+    case LINK_SITE_COMMIT:
+        GuardLog("connector-link: commit %lux%lu %lu kHz refused %08lX check %s vstartup %lu vblank %lu",
+            t->HActive,t->VActive,t->PixelClockKhz,(ULONG)Status,check,r->VStartup,r->VBlank);break;
+    default:
+        GuardLog("connector-link: target %lux%lu %lu kHz refused %08lX check %s vstartup %lu vblank %lu",
+            t->HActive,t->VActive,t->PixelClockKhz,(ULONG)Status,check,r->VStartup,r->VBlank);break;
+    }
 }
 
 static void LogOpenDiagnostic(const BC250_CONNECTOR_OPEN_DIAG* d,const char* When)
@@ -490,10 +559,10 @@ NTSTATUS ConnectorLinkPrepare(BC250_DEVICE* Device,BC250_SINK* Sink,ULONG Genera
     Begin(c,Generation,FALSE);
     if(c->Aux.Open) {status=CloseAux(c);if(!NT_SUCCESS(status))goto done;}
     for(i=0;i<Sink->TargetCount;++i) {
-        status=Plan(c,Sink,&Sink->Targets[i],&c->Next);
+        LINK_PLAN_REFUSAL refusal;
+        status=Plan(c,Sink,&Sink->Targets[i],&c->Next,&refusal);
         if(NT_SUCCESS(status))Sink->Targets[count++]=Sink->Targets[i];
-        else GuardLog("connector-link: target %lux%lu %lu kHz refused %08lX",Sink->Targets[i].HActive,
-            Sink->Targets[i].VActive,Sink->Targets[i].PixelClockKhz,(ULONG)status);
+        else LogPlanRefusal(LINK_SITE_TARGET,&Sink->Targets[i],status,&refusal);
         if(!LinkOwned(c)) {status=STATUS_RETRY;goto done;}
     }
     Sink->TargetCount=count;if(!count) {status=STATUS_NOT_SUPPORTED;goto done;}
@@ -512,7 +581,13 @@ NTSTATUS ConnectorLinkPrepare(BC250_DEVICE* Device,BC250_SINK* Sink,ULONG Genera
            Device->Post.Pitch!=DcnPrimaryPitch(inherited.HActive)) {
             status=STATUS_NOT_SUPPORTED;goto done;
         }
-        status=Plan(c,Sink,&inherited,&c->Current);if(!NT_SUCCESS(status))goto done;
+        // BD-177: the inherited timing is the one refusal a start cannot explain from anywhere else, so it
+        // says which check refused it. One line, written only when it refuses.
+        {
+            LINK_PLAN_REFUSAL refusal;
+            status=Plan(c,Sink,&inherited,&c->Current,&refusal);
+            if(!NT_SUCCESS(status)) {LogPlanRefusal(LINK_SITE_INHERITED,&inherited,status,&refusal);goto done;}
+        }
         c->Current.Inherited=TRUE;
         c->Protocol=Protocol(Sink);c->PixelKhz=(ULONG)(Device->InheritedSignal.PixelRate/1000);
         c->Lanes=4;c->Signal=Device->InheritedSignal;
@@ -796,7 +871,11 @@ NTSTATUS ConnectorLinkCommit(BC250_DEVICE* Device,const BC250_CONNECTOR_SNAPSHOT
             status=STATUS_SUCCESS;goto done;
         }
         LinkStep(c,BC250_LINK_PLAN,FALSE);
-        status=Plan(c,&Snapshot->Sink,Timing,&c->Next);if(!NT_SUCCESS(status))goto done;
+        {
+            LINK_PLAN_REFUSAL refusal;
+            status=Plan(c,&Snapshot->Sink,Timing,&c->Next,&refusal);
+            if(!NT_SUCCESS(status)) {LogPlanRefusal(LINK_SITE_COMMIT,Timing,status,&refusal);goto done;}
+        }
     }
     // An active old link must have a complete recovery plan before mutating it.
     if(c->Active && !c->Current.Valid) {status=STATUS_NOT_SUPPORTED;goto done;}

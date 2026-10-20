@@ -8,8 +8,28 @@ typedef struct BC250_OPTC_SYNC {
     unsigned long VReady, VStartup, VUpdateOffset, VUpdateWidth;
 } BC250_OPTC_SYNC;
 
+// Which term of the admission gate refused a timing (BD-177). Several terms answer the same
+// STATUS_NOT_SUPPORTED to the caller, and one log line per target is the whole ring budget, so
+// the term has to be nameable. BC250_OPTC_REASON_VSTARTUP_BLANK is the one a reduced-blanking
+// mode hits: the prefetch the display plan asks for does not fit in the mode's vertical blanking.
+enum bc250_optc_reason {
+    BC250_OPTC_REASON_OK = 0,
+    BC250_OPTC_REASON_EXTENT,               // missing argument, zero or oversize active/blanking
+    BC250_OPTC_REASON_FLAGS,                // not progressive digital separate sync
+    BC250_OPTC_REASON_SYNC,                 // sync width or offset outside its blanking
+    BC250_OPTC_REASON_TOTAL,                // a total above the OTG register field
+    BC250_OPTC_REASON_VSTARTUP_BLANK,       // no prefetch, or it does not fit the vertical blanking
+    BC250_OPTC_REASON_VSTARTUP_FIELD,       // prefetch above the VSTARTUP register field
+    BC250_OPTC_REASON_VREADY_FIELD,
+    BC250_OPTC_REASON_VUPDATE_OFFSET_FIELD,
+    BC250_OPTC_REASON_VUPDATE_WIDTH_FIELD
+};
 // Admission only; no register access. RGB8 progressive, one OPP, no stereo/DSC.
+// Reason returns enum bc250_optc_reason, Valid is the same gate as a predicate.
+int Bc250OptcTimingReason(const BC250_TARGET_TIMING* Timing,const BC250_OPTC_SYNC* Sync);
 int Bc250OptcTimingValid(const BC250_TARGET_TIMING* Timing,const BC250_OPTC_SYNC* Sync);
+// The short name of a reason for a log line, never NULL, no allocation, any IRQL.
+const char* Bc250OptcReasonName(int Reason);
 // These return the FIRST I/O failure; AMD's void helpers cannot hide a failed
 // register access. A failure after any write requires a full old-mode replay.
 long Bc250OptcDisable(BC250_DISP_IO* Io);
