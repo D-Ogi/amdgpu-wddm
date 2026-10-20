@@ -56,7 +56,9 @@ def generate(ref):
            'DP_TRAINING_PATTERN_2','DP_LINK_SCRAMBLING_DISABLE','DP_DOWNSPREAD_CTRL',
            'DP_MAIN_LINK_CHANNEL_CODING_SET','DP_SET_ANSI_8B10B', 'DP_LANE0_1_STATUS',
            'DP_SET_POWER','DP_SET_POWER_D0','DP_SET_POWER_D3',
-           'DP_LANE_CR_DONE','DP_LANE_CHANNEL_EQ_DONE','DP_LANE_SYMBOL_LOCKED','DP_INTERLANE_ALIGN_DONE']
+           'DP_LANE_CR_DONE','DP_LANE_CHANNEL_EQ_DONE','DP_LANE_SYMBOL_LOCKED','DP_INTERLANE_ALIGN_DONE',
+           'DP_TPS3_SUPPORTED','DP_MAX_DOWNSPREAD','DP_TPS4_SUPPORTED','DP_TRAINING_PATTERN_3',
+           'DP_TRAINING_PATTERN_4','DP_LINK_BW_1_62','DP_LINK_BW_2_7','DP_LINK_BW_5_4','DP_LINK_BW_8_1']
     for name in names:
         m=re.findall(r'^#\s*define\s+'+name+r'\s+[^\n]+',protocol,re.M)
         if len(m)!=1: raise ValueError('DPCD constant '+name)

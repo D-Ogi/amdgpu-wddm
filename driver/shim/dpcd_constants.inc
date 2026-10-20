@@ -83,3 +83,21 @@
 # define DP_LANE_SYMBOL_LOCKED		    (1 << 2)
 
 #define  DP_INTERLANE_ALIGN_DONE                        (1 << 0)
+
+# define DP_TPS3_SUPPORTED		    (1 << 6) /* 1.2 */
+
+#define DP_MAX_DOWNSPREAD                   0x003
+
+# define DP_TPS4_SUPPORTED                  (1 << 7)
+
+# define DP_TRAINING_PATTERN_3		    3	    /* 1.2 */
+
+# define DP_TRAINING_PATTERN_4              7       /* 1.4 */
+
+# define DP_LINK_BW_1_62		    0x06
+
+# define DP_LINK_BW_2_7			    0x0a
+
+# define DP_LINK_BW_5_4			    0x14    /* 1.2 */
+
+# define DP_LINK_BW_8_1			    0x1e    /* 1.4 */

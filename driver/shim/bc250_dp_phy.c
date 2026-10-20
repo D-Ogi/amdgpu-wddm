@@ -67,7 +67,8 @@ long Bc250DpPhyConfigure(BC250_DISP_IO *io,unsigned lanes,int enhanced)
 long Bc250DpPhyPattern(BC250_DISP_IO *io,unsigned pattern,int enhanced)
 {
     struct dcn10_link_encoder e={{io,0}};
-    if(!io || !io->Read || !io->Write || pattern>2 || (enhanced!=0 && enhanced!=1))return BC250_DISP_STATUS_INVALID;
+    if(!io || !io->Read || !io->Write || pattern>4 || (enhanced!=0 && enhanced!=1))return BC250_DISP_STATUS_INVALID;
+    // TPS1 to TPS4 select index 0 to 3, as dcn10_link_encoder_dp_set_phy_pattern does (BD-139: TPS3/TPS4 for HBR2/HBR3).
     if(pattern) dcn10_link_encoder_set_dp_phy_pattern_training_pattern(&e.base,pattern-1);
     else {
         set_dp_phy_pattern_passthrough_mode(&e,DP_PANEL_MODE_DEFAULT);
