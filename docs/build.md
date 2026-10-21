@@ -360,12 +360,21 @@ runtime resolves.
 
 PROVENANCE: DXVK, zlib.
 
-`tools/build/build-dxvk.ps1 -Config <name> -Source <tree> -Build <dir>` works like the Mesa script. The option
-sets are in [`tools/build/dxvk-configs.json`](../tools/build/dxvk-configs.json), and the same `Build Options:`
-gate applies. `recipe.json` also records the submodule commits: DXVK's shader compiler lives in the
-`dxbc-spirv` submodule. `-Reconfigure` re-runs meson on a configured build directory. DXVK needs no WDK headers,
-only `vcvars64.bat`, meson, ninja and glslangValidator. The tree must have its submodules initialized
+`tools/build/build-dxvk.ps1 -Config <name> -Compiler msvc|clang-cl -Source <tree> -Build <dir>` works like the
+Mesa script. The option sets are in [`tools/build/dxvk-configs.json`](../tools/build/dxvk-configs.json), and the
+same `Build Options:` gate applies. `recipe.json` also records the submodule commits: DXVK's shader compiler lives
+in the `dxbc-spirv` submodule. `-Reconfigure` re-runs meson on a configured build directory. DXVK needs no WDK
+headers, only `vcvars64.bat`, meson, ninja and glslangValidator. The tree must have its submodules initialized
 (`git submodule update --init --recursive`).
+
+`-Compiler` has no default. `msvc` is the compiler of every engine up to tester.31v3, and the recipe change that
+added the switch gives the same bytes with it: b4f080f7 built by recipe 5f4cfc0f and by this script with
+`-Compiler msvc` is one image (1BE91BE3 before the version stamp, BD-214). `clang-cl` takes clang-cl, lld-link
+and llvm-lib from `-ClangToolchain` (default LLVM 23.1.4) and adds the arguments of the `compilers` entry of the
+configs file. clang-cl builds x64 only, so the WoW64 engine stays an msvc build. DXVK's version string comes from
+`git describe`, whose length grows with the object count of the repository: a build from a large shared
+repository can name the commit with one hex digit more than the release clone did, which moves every address
+after that string.
 
 | Config | Source | Targets |
 |---|---|---|

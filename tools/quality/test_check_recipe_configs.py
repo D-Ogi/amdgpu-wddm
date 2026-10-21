@@ -103,15 +103,16 @@ class RecipeConfigs(unittest.TestCase):
                 self.assertNotIn(option, lab, config)
             self.assertIn("-Damdgpu-wddm-lab-flavour=true", lab)
             self.assertNotIn("-Damdgpu-wddm-lab-flavour=true", release)
-        # every config of every configs file, in both flavours; build-mesa.ps1 with each compiler, which has no default
+        # every config of every configs file, in both flavours; build-mesa.ps1 and build-dxvk.ps1 with each compiler,
+        # which has no default
         for script, configs, compilers in (("build-mesa.ps1", "mesa-configs.json", (" msvc", " clang-cl")),
-                                           ("build-dxvk.ps1", "dxvk-configs.json", ("",)),
+                                           ("build-dxvk.ps1", "dxvk-configs.json", (" msvc", " clang-cl")),
                                            ("build-vkd3d.ps1", "vkd3d-configs.json", ("",))):
             for config in json.loads(self.read(configs))["configs"]:
                 for flavour in ("release", "lab"):
                     for compiler in compilers:
                         self.assertIn("%s %s %s%s" % (script, config, flavour, compiler), resolved)
-                    if script == "build-mesa.ps1":
+                    if script in ("build-mesa.ps1", "build-dxvk.ps1"):
                         self.assertNotIn("%s %s %s" % (script, config, flavour), resolved)
         # BD-180: lab warning capture must survive the LTO recipe, while every release option stays intact.
         release = resolved["build-vkd3d.ps1 ddi-engine-lto release"]
@@ -287,8 +288,9 @@ class RecipeConfigs(unittest.TestCase):
         self.write("dxvk-configs.json", json.dumps(data, indent=2))
         code, text, _ = self.run_gate()
         self.assertEqual(1, code, text)
-        self.assertIn("build-dxvk.ps1: -Config extra (release) does not resolve: Cannot validate argument on parameter "
-                      "'Config'", text)
+        for compiler in ("msvc", "clang-cl"):
+            self.assertIn("build-dxvk.ps1: -Config extra (release, %s) does not resolve: Cannot validate argument on "
+                          "parameter 'Config'" % compiler, text)
 
     def test_a_config_name_without_a_config_fails(self):
         data = json.loads(self.read("vkd3d-configs.json"))

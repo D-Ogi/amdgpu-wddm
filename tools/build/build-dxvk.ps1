@@ -11,17 +11,28 @@ Configures and builds DXVK with a recorded meson option set (dxvk-configs.json).
   ddi-engine  amdgpu_wddm_dxvk.dll, the engine behind the M14 system D3D10/11 DDI UMD; needs a checkout of
               the amdgpu-wddm/ddi-engine DXVK branch (enable_ddi_engine does not exist upstream)
 
-The build is a native MSVC build, as the M12 E33 per-application packages were: vcvars64.bat, meson from
-PYTHONPATH, ninja and glslangValidator on PATH. DXVK needs no WDK headers. After configure the script compares
-the new log's "Build Options:" line with the option set and stops on any difference. The set the script
-passes is the configured set plus the reproducible-build switches of Add-ReproducibleMesonOptions
-(common.ps1): /Brepro, /FC, /d1trimfile and /PDBALTPATH:%_PDB%.
+The build is a native Windows build in the Visual Studio developer environment, as the M12 E33 per-application
+packages were: vcvars64.bat, meson from PYTHONPATH, ninja and glslangValidator on PATH. DXVK needs no WDK
+headers. After configure the script compares the new log's "Build Options:" line with the option set and stops
+on any difference. The set the script passes is the configured set plus the reproducible-build switches of
+Add-ReproducibleMesonOptions (common.ps1): /Brepro, /FC, /d1trimfile and /PDBALTPATH:%_PDB%.
+
+-Compiler has no default (owner, 2026-10-21: no build falls back to cl.exe without a word). msvc builds with cl,
+link and lib of the Visual Studio environment, as every engine up to tester.31v3 was built. clang-cl builds the
+same set with clang-cl, lld-link and llvm-lib from -ClangToolchain (default LLVM 23.1.4), in the same Visual
+Studio environment, and adds the arguments of its 'compilers' entry in dxvk-configs.json. Its PDB keeps the full
+CodeView types (DXVK's /Z7), which dump analysis of the engine needs. The script prints the path and version of
+the compiler and the linker, and stops when one of them is missing. clang-cl builds x64 only: the x86 policy of
+Add-ReproducibleMesonOptions has no clang-cl equivalent yet, so the WoW64 engine stays an msvc build.
 
 The source tree must be a DXVK checkout with its submodules initialized (git submodule update --init
 --recursive); this script patches nothing and fetches nothing.
 
 .EXAMPLE
-pwsh tools\build\build-dxvk.ps1 -Config per-app -Source P:\BC-250\scratch\m14\dxvk -Build P:\BC-250\scratch\m14\dxvk-per-app
+pwsh tools\build\build-dxvk.ps1 -Config per-app -Compiler msvc -Source P:\BC-250\scratch\m14\dxvk -Build P:\BC-250\scratch\m14\dxvk-per-app
+
+.EXAMPLE
+pwsh tools\build\build-dxvk.ps1 -Config ddi-engine -Compiler clang-cl -Source <DXVK fork tree> -Build <dir>
 #>
 [CmdletBinding()]
 param(
@@ -54,7 +65,13 @@ param(
     [ValidateSet('release', 'lab')][string]$Flavour = 'release',
     # BD-167: the lab flavour (-Damdgpu-wddm-lab-flavour=true). Without it the fork builds its release flavour,
     # which has no lookup of the override variables; the fork's own host test describes them.
-    [switch]$Lab
+    [switch]$Lab,
+    # The C and C++ compiler, which every caller names: msvc (cl, link, lib) or clang-cl (clang-cl, lld-link,
+    # llvm-lib of -ClangToolchain).
+    [Parameter(Mandatory)][ValidateSet('msvc', 'clang-cl')][string]$Compiler,
+    # -Compiler clang-cl: the LLVM Windows toolchain whose bin\ holds clang-cl.exe, lld-link.exe and llvm-lib.exe
+    # (default <BC250_ROOT>\toolchain\llvm-23.1.4-win64).
+    [string]$ClangToolchain
 )
 # One flavour, two names: -Lab is BD-167's and -Flavour is BD-166's, and the release passes the one it knows.
 # Without this line a caller that passes one knob alone ships a release-flavour binary stamped lab, or the reverse.
@@ -64,7 +81,8 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'common.ps1')
 
 $configsPath = Join-Path $PSScriptRoot 'dxvk-configs.json'
-$recipeConfig = (Get-Content -LiteralPath $configsPath -Raw | ConvertFrom-Json).configs.$Config
+$configsFile = Get-Content -LiteralPath $configsPath -Raw | ConvertFrom-Json
+$recipeConfig = $configsFile.configs.$Config
 $options = @($recipeConfig.options)
 if ($Lab) { $options += '-Damdgpu-wddm-lab-flavour=true' }
 $targets = @($recipeConfig.targets)
@@ -86,7 +104,21 @@ $forkFlavour = Get-AmdgpuWddmFlavour $Source -Lab:$Lab
 if ($forkFlavour -eq 'release' -and $recipeConfig.PSObject.Properties['release_options']) {
   $options += @($recipeConfig.release_options | Where-Object { $_ })
 }
-$options = Add-ReproducibleMesonOptions $options $Source $Build -Arch $Arch
+# The compiler's own arguments: additions that leave the recorded set as it is.
+$options = Add-MesonVariants $options $configsFile $Compiler
+$options = Add-ReproducibleMesonOptions $options $Source $Build -Arch $Arch -Compiler $Compiler
+$clangTools = $null
+if ($Compiler -eq 'clang-cl') {
+    if (-not $ClangToolchain) { $ClangToolchain = Join-Path $root 'toolchain\llvm-23.1.4-win64' }
+    $ClangToolchain = [IO.Path]::GetFullPath($ClangToolchain)
+    if ($ClangToolchain -match '\s') { throw "-ClangToolchain $ClangToolchain contains white space: meson splits CC at white space" }
+    $clangTools = [ordered]@{}
+    foreach ($t in 'clang-cl', 'lld-link', 'llvm-lib') {
+        $exe = Join-Path $ClangToolchain "bin\$t.exe"
+        if (-not (Test-Path -LiteralPath $exe)) { throw "$exe does not exist: -ClangToolchain takes an LLVM Windows toolchain directory" }
+        $clangTools[$t] = $exe
+    }
+}
 
 if (-not (Test-Path -LiteralPath (Join-Path $Source 'src\dxvk\dxvk_device.h'))) { throw "$Source is not a DXVK source tree" }
 # An uninitialized submodule is an empty directory; meson would fail much later with a less useful message.
@@ -126,6 +158,29 @@ try {
     if ($Ninja) { $pathFront += (Split-Path -Parent (Resolve-Tool $Ninja 'ninja')) }
     Add-PathFront $pathFront
     $env:PYTHONPATH = $PythonPath
+    # meson takes the compilers, their linker and the static linker from these variables. Without them it would take
+    # the first compiler it finds, and a missing cl.exe would give a build with another compiler. -Compiler msvc
+    # names the tools of the Visual Studio environment as meson's own search finds them. -Compiler clang-cl names
+    # the tools of -ClangToolchain, inside the same Visual Studio environment, whose INCLUDE and LIB clang-cl and
+    # lld-link read, and whose rc.exe compiles DXVK's version resources.
+    if ($clangTools) {
+        $env:CC = $clangTools['clang-cl']
+        $env:CXX = $clangTools['clang-cl']
+        $env:CC_LD = $clangTools['lld-link']
+        $env:CXX_LD = $clangTools['lld-link']
+        $env:AR = $clangTools['llvm-lib']
+    } else {
+        foreach ($t in 'cl', 'link', 'lib') {
+            if (-not (Get-Command "$t.exe" -CommandType Application -ErrorAction SilentlyContinue)) {
+                throw "-Compiler msvc: $t.exe is not on PATH after the Visual Studio environment ($vs)"
+            }
+        }
+        $env:CC = 'cl'
+        $env:CXX = 'cl'
+        $env:CC_LD = 'link'
+        $env:CXX_LD = 'link'
+        $env:AR = 'lib'
+    }
 
     $pythonExe = Resolve-Tool $Python 'python'
     if (-not $pythonExe) { throw 'python not found: put it on PATH or pass -Python' }
@@ -156,6 +211,7 @@ try {
         submodules      = Get-SubmoduleStatus $Source
         build_dir       = $Build
         meson_options   = $options
+        compiler        = $Compiler
         flavour         = $forkFlavour
         ninja_targets   = $targets
         environment     = [ordered]@{
@@ -171,12 +227,23 @@ try {
             python           = [ordered]@{ path = $pythonExe; version = Get-ToolVersion $pythonExe }
             meson            = $mesonVersion
             ninja            = [ordered]@{ path = $ninjaExe; version = Get-ToolVersion $ninjaExe }
-            cl               = [ordered]@{ path = (Get-Command cl.exe).Source; version = Get-ClVersion }
+            cl               = if ($clangTools) { $null } else { [ordered]@{ path = (Get-Command cl.exe).Source; version = Get-ClVersion } }
+            link             = if ($clangTools) { $null } else { [ordered]@{ path = (Get-Command link.exe).Source; version = Get-LinkVersion } }
+            clang_cl         = if ($clangTools) { [ordered]@{ path = $clangTools['clang-cl']; version = Get-ToolVersion $clangTools['clang-cl'] } } else { $null }
+            lld_link         = if ($clangTools) { [ordered]@{ path = $clangTools['lld-link']; version = Get-ToolVersion $clangTools['lld-link'] } } else { $null }
+            llvm_lib         = if ($clangTools) { [ordered]@{ path = $clangTools['llvm-lib'] } } else { $null }
             glslangValidator = [ordered]@{ path = $glslangExe; version = Get-ToolVersion $glslangExe }
         }
         gate            = $null
     }
     Write-Recipe $recipePath $recipe
+    if ($clangTools) {
+        Write-Host "compiler: clang-cl, $($recipe.tools.clang_cl.version) ($($clangTools['clang-cl']))"
+        Write-Host "linker: $($recipe.tools.lld_link.version) ($($clangTools['lld-link'])), archiver $($clangTools['llvm-lib'])"
+    } else {
+        Write-Host "compiler: msvc, cl $($recipe.tools.cl.version) ($($recipe.tools.cl.path))"
+        Write-Host "linker: link $($recipe.tools.link.version) ($($recipe.tools.link.path))"
+    }
 
     Invoke-Checked $pythonExe $mesonArgs
 
