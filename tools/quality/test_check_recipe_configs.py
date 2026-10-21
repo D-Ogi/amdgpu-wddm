@@ -13,12 +13,12 @@ ran. The second is the same trap after the compile, in the version stamp's read 
 build reached only after ninja: the resolve part of the gate cannot reach that line and the reads part must. The
 others are the ways the gate could pass without having checked anything: a config the script's -Config set
 refuses, a -Config name with no config, a release flavour that never took its release path, a script whose option
-resolution has no end the gate knows, a configs file that no script reads, and a compilers entry whose replacement
-matches no option of the set it changes.
+resolution has no end the gate knows, a configs file that no script reads, a variant with a misspelt key, and a
+variant without an entry for one compiler.
 
-The positive controls are the tree as it is, with the resolved option sets read back, the maximum-optimisation
-options of every Mesa config for each compiler of build-mesa.ps1, and two other ways to look a key up before it is
-read.
+The positive controls are the tree as it is, with the resolved option sets read back; the Mesa sets as recorded for
+each compiler of build-mesa.ps1, and its variants, which add to the sets and change nothing else; and two other ways
+to look a key up before it is read.
 """
 import json
 import os
@@ -96,19 +96,23 @@ class RecipeConfigs(unittest.TestCase):
         for config in ("llvmpipe-umd", "zink-umd"):
             extra = mesa[config]["release_options"]
             self.assertTrue(extra, config)
-            release = resolved["build-mesa.ps1 %s release" % config]
-            lab = resolved["build-mesa.ps1 %s lab" % config]
+            release = resolved["build-mesa.ps1 %s release msvc" % config]
+            lab = resolved["build-mesa.ps1 %s lab msvc" % config]
             for option in extra:
                 self.assertIn(option, release, config)
                 self.assertNotIn(option, lab, config)
             self.assertIn("-Damdgpu-wddm-lab-flavour=true", lab)
             self.assertNotIn("-Damdgpu-wddm-lab-flavour=true", release)
-        # every config of every configs file, in both flavours
-        for script, configs in (("build-mesa.ps1", "mesa-configs.json"), ("build-dxvk.ps1", "dxvk-configs.json"),
-                                ("build-vkd3d.ps1", "vkd3d-configs.json")):
+        # every config of every configs file, in both flavours; build-mesa.ps1 with each compiler, which has no default
+        for script, configs, compilers in (("build-mesa.ps1", "mesa-configs.json", (" msvc", " clang-cl")),
+                                           ("build-dxvk.ps1", "dxvk-configs.json", ("",)),
+                                           ("build-vkd3d.ps1", "vkd3d-configs.json", ("",))):
             for config in json.loads(self.read(configs))["configs"]:
                 for flavour in ("release", "lab"):
-                    self.assertIn("%s %s %s" % (script, config, flavour), resolved)
+                    for compiler in compilers:
+                        self.assertIn("%s %s %s%s" % (script, config, flavour, compiler), resolved)
+                    if script == "build-mesa.ps1":
+                        self.assertNotIn("%s %s %s" % (script, config, flavour), resolved)
         # BD-180: lab warning capture must survive the LTO recipe, while every release option stays intact.
         release = resolved["build-vkd3d.ps1 ddi-engine-lto release"]
         lab = resolved["build-vkd3d.ps1 ddi-engine-lto lab"]
@@ -142,50 +146,53 @@ class RecipeConfigs(unittest.TestCase):
             resolved = json.load(fh)
         for config in ("radv-system", "radv-mt"):
             for flavour in ("release", "lab"):
-                name = "build-mesa.ps1 %s %s" % (config, flavour)
-                options = resolved[name]
-                self.assertEqual(["-Db_vscrt=mt"], [x for x in options if x.startswith("-Db_vscrt=")], name)
-                self.assertIn("-Db_ndebug=true", options, name)
+                for compiler in ("msvc", "clang-cl"):
+                    for variants in ("", " +release+lto+isa"):
+                        name = "build-mesa.ps1 %s %s %s%s" % (config, flavour, compiler, variants)
+                        options = resolved[name]
+                        self.assertEqual(["-Db_vscrt=mt"], [x for x in options if x.startswith("-Db_vscrt=")], name)
+                        self.assertIn("-Db_ndebug=true", options, name)
         mesa = json.loads(self.read("mesa-configs.json"))["configs"]
         self.assertEqual(["vulkan_radeon.dll"], mesa["radv-system"]["ships"]["src/amd/vulkan/vulkan_radeon.dll"])
 
-    def test_every_mesa_config_resolves_to_the_maximum_optimisation(self):
-        # Owner 2026-10-10: release, NDEBUG, LTO and AVX2 in every shipped component. With MSVC: /GL and /LTCG and
-        # /arch:AVX2; with clang-cl: ThinLTO and x86-64-v3, and no MSVC-only switch left in the set.
+    def test_the_mesa_sets_resolve_as_recorded_and_variants_only_add(self):
+        # Owner 2026-10-21: the shipped sets stay as recorded; -Compiler names the compiler and -Variant adds named
+        # changes. No variant may touch an option it does not name.
         code, text, out = self.run_gate()
         self.assertEqual(0, code, text)
         with open(os.path.join(out, "resolved.json"), encoding="utf-8") as fh:
             resolved = json.load(fh)
+        mesa = json.loads(self.read("mesa-configs.json"))
+        arguments = ("-Dc_args=", "-Dcpp_args=", "-Dc_link_args=", "-Dcpp_link_args=")
+
+        def plain(options):
+            return [x for x in options if not x.startswith(arguments)]
 
         def value(options, key):
             found = [x.split("=", 1)[1] for x in options if x.startswith("-D%s=" % key)]
-            self.assertTrue(found, key)
-            return found[-1]
+            self.assertEqual(1, len(found), key)
+            return found[0]
 
-        for config in json.loads(self.read("mesa-configs.json"))["configs"]:
+        def get(config, flavour, compiler, variants=""):
+            return resolved["build-mesa.ps1 %s %s %s%s" % (config, flavour, compiler, variants)]
+
+        for config, entry in mesa["configs"].items():
             for flavour in ("release", "lab"):
-                msvc = resolved["build-mesa.ps1 %s %s" % (config, flavour)]
-                clang = resolved["build-mesa.ps1 %s %s clang-cl" % (config, flavour)]
-                for options in (msvc, clang):
-                    self.assertEqual("release", value(options, "buildtype"), config)
-                    self.assertEqual("true", value(options, "debug"), config)
-                    self.assertEqual("true", value(options, "b_lto"), config)
-                    # Mesa's meson.build refuses LTO without this switch.
-                    self.assertEqual("true", value(options, "allow-broken-lto"), config)
-                    if flavour == "release":
-                        self.assertEqual("true", value(options, "b_ndebug"), config)
-                self.assertEqual("default", value(msvc, "b_lto_mode"), config)
-                self.assertEqual("thin", value(clang, "b_lto_mode"), config)
+                recorded = list(entry["options"])
+                if flavour == "lab":
+                    recorded.append("-Damdgpu-wddm-lab-flavour=true")
+                recorded += entry.get("%s_options" % flavour, [])
+                msvc = get(config, flavour, "msvc")
+                clang = get(config, flavour, "clang-cl")
+                # no variant: the recorded set, with either compiler
+                self.assertEqual(recorded, plain(msvc), config)
+                self.assertEqual(recorded, plain(clang), config)
                 for key in ("c_args", "cpp_args"):
-                    self.assertIn("/arch:AVX2", value(msvc, key).split(), config)
-                    self.assertIn("/d1trimfile:", value(msvc, key), config)
+                    self.assertTrue(value(msvc, key).startswith("/Brepro /FC /d1trimfile:"), config)
                     words = value(clang, key).split()
-                    self.assertNotIn("/arch:AVX2", words, config)
+                    self.assertEqual(["/clang:-ffp-contract=off", "-gline-tables-only", "/Brepro"], words[:3], config)
                     self.assertNotIn("/FC", words, config)
                     self.assertFalse([w for w in words if w.startswith("/d1trimfile:")], config)
-                    for word in ("-march=x86-64-v3", "-mtune=znver2", "/clang:-ffp-contract=off", "-gline-tables-only",
-                                 "/Brepro"):
-                        self.assertIn(word, words, config)
                     self.assertTrue([w for w in words if w.startswith("/clang:-fmacro-prefix-map=")], config)
                     # lld-link hashes the PDB into the GUID: the PDB must not name the build directory
                     self.assertTrue([w for w in words if w.startswith("/clang:-fdebug-prefix-map=")], config)
@@ -193,24 +200,66 @@ class RecipeConfigs(unittest.TestCase):
                 for key in ("c_link_args", "cpp_link_args"):
                     self.assertEqual("/Brepro /PDBALTPATH:%_PDB%", value(msvc, key), config)
                     self.assertEqual("/Brepro -pdbaltpath:%_PDB% -pdbsourcepath:X:\\mesa-build", value(clang, key), config)
-                # the other options are the same in both sets
-                differ = ("-Dc_args=", "-Dcpp_args=", "-Db_lto_mode=", "-Dc_link_args=", "-Dcpp_link_args=")
-                self.assertEqual([x for x in msvc if not x.startswith(differ)],
-                                 [x for x in clang if not x.startswith(differ)])
-        # The lab flavour of the two desktop UMDs keeps its asserts (docs/build.md, BD-167): a release buildtype
-        # alone would define NDEBUG through b_ndebug=if-release.
+                # each variant alone changes its own options and nothing else
+                for compiler, base in (("msvc", msvc), ("clang-cl", clang)):
+                    isa = get(config, flavour, compiler, " +isa")
+                    self.assertEqual(plain(base), plain(isa), config)
+                    lto = get(config, flavour, compiler, " +lto")
+                    self.assertEqual(plain(base), [x for x in plain(lto) if not x.startswith(
+                        ("-Db_lto=", "-Dallow-broken-lto=", "-Db_lto_mode="))], config)
+                    release = get(config, flavour, compiler, " +release")
+                    self.assertEqual("-Dbuildtype=release", release[0], config)
+                    self.assertEqual(plain(base)[1:], [x for x in plain(release)[1:] if x not in (
+                        "-Ddebug=true", "-Db_ndebug=false")], config)
+                # all variants: release with the PDB, LTO and the x86-64-v3 level, in each compiler's spelling
+                m = get(config, flavour, "msvc", " +release+lto+isa")
+                c = get(config, flavour, "clang-cl", " +release+lto+isa")
+                for options in (m, c):
+                    self.assertEqual("release", value(options, "buildtype"), config)
+                    self.assertEqual("true", value(options, "debug"), config)
+                    self.assertEqual("true", value(options, "b_lto"), config)
+                    # Mesa's meson.build refuses LTO without this switch.
+                    self.assertEqual("true", value(options, "allow-broken-lto"), config)
+                    if "-Db_ndebug=true" in recorded:
+                        self.assertEqual("true", value(options, "b_ndebug"), config)
+                    else:
+                        # debugoptimized left NDEBUG undefined; a release buildtype alone would define it
+                        self.assertEqual("false", value(options, "b_ndebug"), config)
+                self.assertEqual("default", value(m, "b_lto_mode"), config)
+                self.assertEqual("thin", value(c, "b_lto_mode"), config)
+                self.assertEqual([x for x in plain(m) if not x.startswith("-Db_lto_mode=")],
+                                 [x for x in plain(c) if not x.startswith("-Db_lto_mode=")], config)
+                for key in ("c_args", "cpp_args"):
+                    self.assertEqual(["/arch:AVX2", "/Brepro"], value(m, key).split()[:2], config)
+                    words = value(c, key).split()
+                    self.assertEqual(["/clang:-ffp-contract=off", "-gline-tables-only", "-march=x86-64-v3",
+                                      "-mtune=znver2", "/Brepro"], words[:5], config)
+                    self.assertFalse([w for w in words if w.startswith(("-march=znver", "-march=native"))], config)
+        # The lab flavour of the two desktop UMDs keeps its asserts (docs/build.md, BD-167).
         for config in ("llvmpipe-umd", "zink-umd"):
-            self.assertEqual("false", value(resolved["build-mesa.ps1 %s lab" % config], "b_ndebug"), config)
+            self.assertEqual("false", value(get(config, "lab", "msvc", " +release"), "b_ndebug"), config)
+            self.assertEqual("true", value(get(config, "release", "msvc", " +release"), "b_ndebug"), config)
 
-    def test_a_compiler_replacement_that_matches_nothing_fails(self):
+    def test_a_misspelt_variant_key_fails(self):
         data = json.loads(self.read("mesa-configs.json"))
-        data["compilers"]["clang-cl"]["argument_replacements"]["/arch:AVX512"] = "-march=x86-64-v4"
+        data["variants"]["isa"]["msvc"]["cargs"] = data["variants"]["isa"]["msvc"].pop("c_args")
         self.write("mesa-configs.json", json.dumps(data, indent=2))
         code, text, _ = self.run_gate()
         self.assertEqual(1, code, text)
-        self.assertIn("-Config radv-system (release, clang-cl) does not resolve in common.ps1:", text)
-        self.assertIn("the compilers entry replaces what the option set does not hold: /arch:AVX512", text)
-        self.assertNotIn("(release) does not resolve", text)
+        self.assertIn("-Config radv-system (release, msvc, +isa) does not resolve in common.ps1:", text)
+        self.assertIn("variants.isa.msvc: unknown key 'cargs'", text)
+        self.assertNotIn("(release, clang-cl, +isa) does not resolve", text)
+        self.assertNotIn("(release, msvc) does not resolve", text)
+
+    def test_a_variant_without_an_entry_for_one_compiler_fails(self):
+        data = json.loads(self.read("mesa-configs.json"))
+        del data["variants"]["lto"]["clang-cl"]
+        self.write("mesa-configs.json", json.dumps(data, indent=2))
+        code, text, _ = self.run_gate()
+        self.assertEqual(1, code, text)
+        self.assertIn("-Config radv-system (release, clang-cl, +lto) does not resolve in common.ps1:", text)
+        self.assertIn("variants.lto has no entry for -Compiler clang-cl (it has msvc)", text)
+        self.assertNotIn("(release, msvc, +lto) does not resolve", text)
 
     def test_the_same_trap_after_the_compile_fails(self):
         self.edit("build-dxvk.ps1", SHIPS_GUARDED, SHIPS_UNGUARDED)

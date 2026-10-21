@@ -21,12 +21,18 @@ script compares the new log's "Build Options:" line with the option set and stop
 The set the script passes is the configured set plus the reproducible-build switches of
 Add-ReproducibleMesonOptions (common.ps1): /Brepro, /FC, /d1trimfile and /PDBALTPATH:%_PDB%.
 
--Compiler clang-cl builds the same set with clang-cl, lld-link and llvm-lib from -ClangToolchain, in the same
-Visual Studio environment. The 'compilers' entry of mesa-configs.json changes the set for it: ThinLTO in place of
-/GL and /LTCG, and -march=x86-64-v3 -mtune=znver2 -ffp-contract=off -gline-tables-only in place of /arch:AVX2
-(docs/build.md says why the clang-cl PDB has no types). The reproducible-build switches are /Brepro,
--fmacro-prefix-map and -fdebug-prefix-map in place of /FC and /d1trimfile, and the link switches /Brepro,
--pdbaltpath:%_PDB% and -pdbsourcepath (Add-ReproducibleMesonOptions).
+-Compiler has no default (owner, 2026-10-21: no build falls back to cl.exe without a word). msvc builds with cl,
+link and lib of the Visual Studio environment, as every recorded and shipped set was built. clang-cl builds the same
+set with clang-cl, lld-link and llvm-lib from -ClangToolchain (default LLVM 23.1.4), in the same Visual Studio
+environment, and adds the arguments of its 'compilers' entry in mesa-configs.json: -ffp-contract=off and
+-gline-tables-only (docs/build.md says why the clang-cl PDB has no types). The script prints the path and version
+of the compiler and the linker, and stops when one of them is missing. The reproducible-build switches of clang-cl
+are /Brepro, -fmacro-prefix-map and -fdebug-prefix-map in place of /FC and /d1trimfile, and the link switches
+/Brepro, -pdbaltpath:%_PDB% and -pdbsourcepath (Add-ReproducibleMesonOptions).
+
+-Variant adds named changes from the 'variants' of mesa-configs.json to the set, for the selected compiler, without
+a change to the recorded set: release (buildtype release, /O2 /Gw), lto (/GL and /LTCG, or ThinLTO) and isa
+(/arch:AVX2, or -march=x86-64-v3 -mtune=znver2). Without -Variant the set builds as recorded.
 
 A config with -Db_vscrt=mt links the static C runtime: after the build, each target that imports a C or C++
 runtime DLL (msvcp*, vcruntime*, concrt*, ucrtbase, api-ms-win-crt-*) stops the script.
@@ -35,13 +41,13 @@ The source tree must already carry the component's patches (the companion Mesa r
 upstream checkout with the experiment's patch applied); this script does not patch anything.
 
 .EXAMPLE
-pwsh tools\build\build-mesa.ps1 -Config radv -Source P:\BC-250\mesa-wddm -Build P:\BC-250\scratch\radv-build
+pwsh tools\build\build-mesa.ps1 -Config radv -Compiler msvc -Source P:\BC-250\mesa-wddm -Build P:\BC-250\scratch\radv-build
 
 .EXAMPLE
-pwsh tools\build\build-mesa.ps1 -Config llvmpipe-umd -Source <tree> -Build <dir> -Llvm P:\BC-250\scratch\llvm2312-build
+pwsh tools\build\build-mesa.ps1 -Config llvmpipe-umd -Compiler msvc -Source <tree> -Build <dir> -Llvm P:\BC-250\scratch\llvm2312-build
 
 .EXAMPLE
-pwsh tools\build\build-mesa.ps1 -Config radv-system -Source <tree> -Build <dir> -Compiler clang-cl
+pwsh tools\build\build-mesa.ps1 -Config radv-system -Compiler clang-cl -Variant release,lto,isa -Source <tree> -Build <dir>
 #>
 [CmdletBinding()]
 param(
@@ -82,11 +88,14 @@ param(
     # BD-167: the lab flavour (-Damdgpu-wddm-lab-flavour=true). Without it the fork builds its release flavour,
     # which has no lookup of the override variables; the fork's own host test describes them.
     [switch]$Lab,
-    # The C and C++ compiler: msvc (cl, link, lib) or clang-cl (clang-cl, lld-link, llvm-lib of -ClangToolchain).
-    [ValidateSet('msvc', 'clang-cl')][string]$Compiler = 'msvc',
+    # The C and C++ compiler, which every caller names: msvc (cl, link, lib) or clang-cl (clang-cl, lld-link,
+    # llvm-lib of -ClangToolchain).
+    [Parameter(Mandatory)][ValidateSet('msvc', 'clang-cl')][string]$Compiler,
     # -Compiler clang-cl: the LLVM Windows toolchain whose bin\ holds clang-cl.exe, lld-link.exe and llvm-lib.exe
-    # (default <BC250_ROOT>\toolchain\llvm-23.1.2-win64).
-    [string]$ClangToolchain
+    # (default <BC250_ROOT>\toolchain\llvm-23.1.4-win64).
+    [string]$ClangToolchain,
+    # Named changes from the 'variants' of mesa-configs.json, added to the option set (Add-MesonVariants, common.ps1).
+    [string[]]$Variant = @()
 )
 # One flavour, two names: -Lab is BD-167's and -Flavour is BD-166's, and the release passes the one it knows.
 # Without this line a caller that passes one knob alone ships a release-flavour binary stamped lab, or the reverse.
@@ -125,8 +134,9 @@ if ($forkFlavour -eq 'release' -and $recipeConfig.PSObject.Properties['release_o
 if ($forkFlavour -eq 'lab' -and $recipeConfig.PSObject.Properties['lab_options']) {
   $options += @($recipeConfig.lab_options | Where-Object { $_ })
 }
-# The option sets are written for MSVC; another compiler takes the replacements of its 'compilers' entry.
-if ($Compiler -ne 'msvc') { $options = Convert-MesonOptionsForCompiler $options $configsFile.compilers.$Compiler }
+# The compiler's own arguments and the variants, if any: additions that leave the recorded set as it is.
+$Variant = @($Variant | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+$options = Add-MesonVariants $options $configsFile $Compiler $Variant
 $options = Add-ReproducibleMesonOptions $options $Source $Build -Arch $Arch -Compiler $Compiler
 
 if (-not (Test-Path -LiteralPath (Join-Path $Source 'meson.build'))) { throw "$Source is not a Mesa source tree (no meson.build)" }
@@ -141,7 +151,7 @@ if ($Llvm) {
 }
 $clangTools = $null
 if ($Compiler -eq 'clang-cl') {
-    if (-not $ClangToolchain) { $ClangToolchain = Join-Path $root 'toolchain\llvm-23.1.2-win64' }
+    if (-not $ClangToolchain) { $ClangToolchain = Join-Path $root 'toolchain\llvm-23.1.4-win64' }
     $ClangToolchain = [IO.Path]::GetFullPath($ClangToolchain)
     if ($ClangToolchain -match '\s') { throw "-ClangToolchain $ClangToolchain contains white space: meson splits CC at white space" }
     $clangTools = [ordered]@{}
@@ -199,15 +209,29 @@ try {
     $env:INCLUDE = ($includeFront + @($env:INCLUDE)) -join ';'
     $env:PYTHONPATH = $PythonPath
     if ($llvmConfig) { $env:LLVM_CONFIG = $llvmConfig }
-    # -Compiler clang-cl: meson takes the compilers, their linker and the static linker from these variables, inside
-    # the Visual Studio environment above, whose INCLUDE and LIB clang-cl and lld-link read. llvm-lib and not lib.exe,
-    # because the objects of a ThinLTO build are LLVM bitcode. x64 only (Add-ReproducibleMesonOptions).
+    # meson takes the compilers, their linker and the static linker from these variables. Without them it would take
+    # the first compiler it finds, and a missing cl.exe would give a build with another compiler. -Compiler msvc
+    # names the tools of the Visual Studio environment as meson's own search finds them, so its build.ninja is the
+    # one of a build without the variables. -Compiler clang-cl names the tools of -ClangToolchain, inside the same
+    # Visual Studio environment, whose INCLUDE and LIB clang-cl and lld-link read. llvm-lib and not lib.exe, because
+    # the objects of a ThinLTO build are LLVM bitcode. x64 only (Add-ReproducibleMesonOptions).
     if ($clangTools) {
         $env:CC = $clangTools['clang-cl']
         $env:CXX = $clangTools['clang-cl']
         $env:CC_LD = $clangTools['lld-link']
         $env:CXX_LD = $clangTools['lld-link']
         $env:AR = $clangTools['llvm-lib']
+    } else {
+        foreach ($t in 'cl', 'link', 'lib') {
+            if (-not (Get-Command "$t.exe" -CommandType Application -ErrorAction SilentlyContinue)) {
+                throw "-Compiler msvc: $t.exe is not on PATH after the Visual Studio environment ($vs)"
+            }
+        }
+        $env:CC = 'cl'
+        $env:CXX = 'cl'
+        $env:CC_LD = 'link'
+        $env:CXX_LD = 'link'
+        $env:AR = 'lib'
     }
 
     $pythonExe = Resolve-Tool $Python 'python'
@@ -241,6 +265,7 @@ try {
         build_dir       = $Build
         meson_options   = $options
         compiler        = $Compiler
+        variants        = $Variant
         flavour         = $forkFlavour
         ninja_targets   = $targets
         environment     = [ordered]@{
@@ -267,16 +292,20 @@ try {
             clang_cl        = if ($clangTools) { [ordered]@{ path = $clangTools['clang-cl']; version = Get-ToolVersion $clangTools['clang-cl'] } } else { $null }
             lld_link        = if ($clangTools) { [ordered]@{ path = $clangTools['lld-link']; version = Get-ToolVersion $clangTools['lld-link'] } } else { $null }
             llvm_lib        = if ($clangTools) { [ordered]@{ path = $clangTools['llvm-lib'] } } else { $null }
+            link            = if ($clangTools) { $null } else { [ordered]@{ path = (Get-Command link.exe).Source; version = Get-LinkVersion } }
         }
         gate            = $null
         probes          = $null
     }
     Write-Recipe $recipePath $recipe
     if ($clangTools) {
-        Write-Host "compiler: clang-cl $($recipe.tools.clang_cl.version), lld-link $($recipe.tools.lld_link.version) ($ClangToolchain)"
+        Write-Host "compiler: clang-cl, $($recipe.tools.clang_cl.version) ($($clangTools['clang-cl']))"
+        Write-Host "linker: $($recipe.tools.lld_link.version) ($($clangTools['lld-link'])), archiver $($clangTools['llvm-lib'])"
     } else {
-        Write-Host "compiler: msvc cl $($recipe.tools.cl.version) ($($recipe.tools.cl.path))"
+        Write-Host "compiler: msvc, cl $($recipe.tools.cl.version) ($($recipe.tools.cl.path))"
+        Write-Host "linker: link $($recipe.tools.link.version) ($($recipe.tools.link.path))"
     }
+    Write-Host "variants: $(if ($Variant.Count) { $Variant -join ', ' } else { 'none (the recorded set)' })"
 
     Invoke-Checked $pythonExe $mesonArgs
 
@@ -301,7 +330,9 @@ try {
 
     if ($ConfigureOnly) { Write-Host "configured only: $Build (recipe: $recipePath)"; return }
 
-    $ninjaArgs = @('-C', $Build)
+    # -d keeprsp: the response file of each link step stays in the build directory, as the record of what the link
+    # read. ninja deletes it after a link that succeeds; the outputs are the same with and without it.
+    $ninjaArgs = @('-C', $Build, '-d', 'keeprsp')
     if ($Jobs -gt 0) { $ninjaArgs += "-j$Jobs" }
     Invoke-Checked $ninjaExe ($ninjaArgs + $targets)
 

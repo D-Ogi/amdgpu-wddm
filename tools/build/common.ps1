@@ -139,6 +139,15 @@ function Get-ClVersion {
     return $null
 }
 
+# link.exe prints its banner on stdout, localized like cl's.
+function Get-LinkVersion {
+    $link = Get-Command link.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $link) { return $null }
+    $r = Invoke-Capture $link.Source @()
+    if (($r.Out + $r.Err) -match '(\d+\.\d+\.\d+(\.\d+)?)') { return $Matches[1] }
+    return $null
+}
+
 function Resolve-Tool([string]$Explicit, [string]$Name) {
     if ($Explicit) {
         if (-not (Test-Path -LiteralPath $Explicit)) { throw "$Name not found at $Explicit" }
@@ -204,36 +213,80 @@ function Get-RecipeIdentity([string]$Repo, [string[]]$Files) {
     return [ordered]@{ repository_commit = $commit; files_sha256 = $hashes }
 }
 
-# An option set written for MSVC, for another compiler: the 'compilers' entry of a configs file names whole options
-# to replace (option_replacements) and single compiler arguments inside -Dc_args and -Dcpp_args (argument_replacements,
-# one argument to one or more). A replacement that matches nothing in the set is an error, so that a renamed option
-# cannot leave an MSVC switch in a clang-cl build without a word.
-function Convert-MesonOptionsForCompiler([string[]]$Options, $Entry) {
-    if (-not $Entry) { throw 'no compilers entry for this compiler in the configs file' }
-    $optionMap = @{}
-    $argumentMap = @{}
-    if ($Entry.PSObject.Properties['option_replacements']) {
-        foreach ($p in $Entry.option_replacements.PSObject.Properties) { $optionMap[$p.Name] = [string]$p.Value }
+# Arguments at the end of a meson option that holds a list of them (-Dc_args=...), or that option after the set when
+# the set does not have it. A second -D for the same option would replace the first.
+function Add-MesonArguments([Collections.Generic.List[string]]$Merged, [string]$Name, [string]$Words) {
+    $i = 0
+    while ($i -lt $Merged.Count -and -not $Merged[$i].StartsWith("-D$Name=")) { $i++ }
+    if ($i -lt $Merged.Count) { $Merged[$i] = "$($Merged[$i]) $Words" } else { $Merged.Add("-D$Name=$Words") }
+}
+
+# One change of an option set: a variant, or the part of a variant or the 'compilers' entry for one compiler. Keys:
+#   options          -Dname=value options. Each replaces the option of the same name in its place, or comes after
+#                    the set when the set does not have it.
+#   default_options  the same, for a name that the set does not have. A set that has the name keeps its value.
+#   c_args           arguments at the end of -Dc_args and -Dcpp_args.
+#   link_args        arguments at the end of -Dc_link_args and -Dcpp_link_args.
+# Any other key, except 'description' and the names in $Skip, is an error: a misspelt key must not drop a change
+# without a word. The argument options go in c_args and link_args only, because 'options' would replace them.
+function Add-MesonOptionChange([string[]]$Options, $Change, [string]$What, [string[]]$Skip = @()) {
+    $merged = [Collections.Generic.List[string]]::new()
+    foreach ($o in $Options) { $merged.Add($o) }
+    foreach ($p in $Change.PSObject.Properties) {
+        if ($p.Name -eq 'description' -or $p.Name -in $Skip) { continue }
+        if ($p.Name -notin 'options', 'default_options', 'c_args', 'link_args') { throw "${What}: unknown key '$($p.Name)'" }
     }
-    if ($Entry.PSObject.Properties['argument_replacements']) {
-        foreach ($p in $Entry.argument_replacements.PSObject.Properties) { $argumentMap[$p.Name] = [string]$p.Value }
-    }
-    $used = @{}
-    $converted = foreach ($o in $Options) {
-        if ($optionMap.ContainsKey($o)) { $used[$o] = $true; $optionMap[$o]; continue }
-        if ($o -match '^(-Dc(pp)?_args=)(.*)$') {
-            $prefix = $Matches[1]
-            $words = foreach ($w in ($Matches[3] -split '\s+' | Where-Object { $_ })) {
-                if ($argumentMap.ContainsKey($w)) { $used[$w] = $true; $argumentMap[$w] } else { $w }
-            }
-            $prefix + ($words -join ' ')
-            continue
+    foreach ($key in 'options', 'default_options') {
+        if (-not $Change.PSObject.Properties[$key]) { continue }
+        foreach ($o in @($Change.$key)) {
+            if ($o -notmatch '^-D([^=]+)=') { throw "${What}: $key holds '$o', not a -Dname=value option" }
+            $name = $Matches[1]
+            if ($name -in 'c_args', 'cpp_args', 'c_link_args', 'cpp_link_args') { throw "${What}: $o goes in c_args or link_args" }
+            $i = 0
+            while ($i -lt $merged.Count -and -not $merged[$i].StartsWith("-D$name=")) { $i++ }
+            if ($i -lt $merged.Count) { if ($key -eq 'options') { $merged[$i] = $o } } else { $merged.Add($o) }
         }
-        $o
     }
-    $unused = @(@($optionMap.Keys) + @($argumentMap.Keys) | Where-Object { -not $used.ContainsKey($_) })
-    if ($unused.Count) { throw "the compilers entry replaces what the option set does not hold: $($unused -join ', ')" }
-    return @($converted)
+    foreach ($key in 'c_args', 'link_args') {
+        if (-not $Change.PSObject.Properties[$key]) { continue }
+        $words = @($Change.$key) -join ' '
+        if (-not $words) { continue }
+        $names = if ($key -eq 'c_args') { 'c_args', 'cpp_args' } else { 'c_link_args', 'cpp_link_args' }
+        foreach ($name in $names) { Add-MesonArguments $merged $name $words }
+    }
+    return @($merged)
+}
+
+# The compiler's own arguments and the named variants of a set, from the 'compilers' and 'variants' of a configs
+# file: additions to a recorded set that leave the set as recorded. Variants apply in the order of the file, not of
+# the command line, so that one choice of variants gives one option set. A variant holds the keys of
+# Add-MesonOptionChange for every compiler, and the same keys under a compiler's name for that compiler only. A
+# variant with an entry for some compilers and none for this one is an error: it would build something else than
+# its name says.
+function Add-MesonVariants([string[]]$Options, $ConfigsFile, [string]$Compiler, [string[]]$Variants = @()) {
+    if (-not $ConfigsFile.PSObject.Properties['compilers'] -or -not $ConfigsFile.compilers.PSObject.Properties[$Compiler]) {
+        throw "the configs file has no compilers entry for -Compiler $Compiler"
+    }
+    $compilerNames = @($ConfigsFile.compilers.PSObject.Properties.Name)
+    $Options = Add-MesonOptionChange $Options $ConfigsFile.compilers.$Compiler "compilers.$Compiler"
+    $Variants = @($Variants | Where-Object { $_ })
+    if (-not $Variants.Count) { return @($Options) }
+    $file = if ($ConfigsFile.PSObject.Properties['variants']) { $ConfigsFile.variants } else { [pscustomobject]@{} }
+    $known = @($file.PSObject.Properties.Name)
+    $unknown = @($Variants | Where-Object { $_ -notin $known })
+    if ($unknown.Count) { throw "-Variant $($unknown -join ', '): no such variant (the configs file has: $($known -join ', '))" }
+    $twice = @($Variants | Group-Object | Where-Object Count -gt 1 | ForEach-Object Name)
+    if ($twice.Count) { throw "-Variant $($twice -join ', ') named more than once" }
+    foreach ($name in $known) {
+        if ($name -notin $Variants) { continue }
+        $entry = $file.$name
+        $Options = Add-MesonOptionChange $Options $entry "variants.$name" $compilerNames
+        $own = @($entry.PSObject.Properties.Name | Where-Object { $_ -in $compilerNames })
+        if (-not $own.Count) { continue }
+        if ($own -notcontains $Compiler) { throw "variants.$name has no entry for -Compiler $Compiler (it has $($own -join ', '))" }
+        $Options = Add-MesonOptionChange $Options $entry.$Compiler "variants.$name.$Compiler"
+    }
+    return @($Options)
 }
 
 # The MSVC switches that make a meson build give the same bytes from the same commit in another directory
@@ -278,11 +331,7 @@ function Add-ReproducibleMesonOptions([string[]]$Options, [string]$Source, [stri
     $add = [ordered]@{ c_args = $compile; cpp_args = $compile; c_link_args = $link; cpp_link_args = $link }
     $merged = [Collections.Generic.List[string]]::new()
     foreach ($o in $Options) { $merged.Add($o) }
-    foreach ($name in $add.Keys) {
-        $i = 0
-        while ($i -lt $merged.Count -and -not $merged[$i].StartsWith("-D$name=")) { $i++ }
-        if ($i -lt $merged.Count) { $merged[$i] = "$($merged[$i]) $($add[$name])" } else { $merged.Add("-D$name=$($add[$name])") }
-    }
+    foreach ($name in $add.Keys) { Add-MesonArguments $merged $name $add[$name] }
     return @($merged)
 }
 

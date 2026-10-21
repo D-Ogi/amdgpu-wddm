@@ -102,8 +102,8 @@ ninja -C <build> llvm-config install
 
 PROVENANCE: Mesa, MIT.
 
-`tools/build/build-mesa.ps1 -Config <name> -Source <tree> -Build <dir>` configures and, unless
-`-ConfigureOnly` is given, builds one component. The option sets live in
+`tools/build/build-mesa.ps1 -Config <name> -Compiler msvc|clang-cl -Source <tree> -Build <dir>` configures
+and, unless `-ConfigureOnly` is given, builds one component. The option sets live in
 [`tools/build/mesa-configs.json`](../tools/build/mesa-configs.json); the script stops if the new
 `meson-logs\meson-log.txt` records a different `Build Options:` line. It does not patch: the tree must already
 carry the component's patches.
@@ -134,62 +134,75 @@ subprojects into its `subprojects\` directory: zlib 1.3.1 for every configuratio
 SHA-256, forced by `force_fallback_for=zlib`) and DirectX-Headers v1.619.1 for RADV (wrap-git from GitHub).
 Meson also leaves a `.wraplock` file there. An offline machine needs those subprojects populated in advance.
 
-### Optimisation and CPU baseline
+All four configurations are `debugoptimized`. RADV adds `b_ndebug=true`: `NDEBUG` is defined, so Mesa's
+assertions and the NIR and ACO validation after every pass are off, while the PDB stays. With meson's default
+`b_ndebug=if-release` they took at least 40 % of the ICD's pipeline compile time in a warm game run
+(Witcher 3, trial 135). The desktop UMD configurations keep that default in the lab flavour, so `NDEBUG` is not
+defined there. Their release flavour adds `-Db_ndebug=true` (below). A performance comparison with a Linux build
+must use the same setting or change it on both sides.
 
-Every configuration builds at the maximum optimisation (owner, 2026-10-10). After the recorded options, each set
-has these options:
+### Compiler and variants
 
-```
--Db_lto=true -Dallow-broken-lto=true -Db_lto_mode=default -Dc_args=/arch:AVX2 -Dcpp_args=/arch:AVX2 -Ddebug=true
-```
+`-Compiler` has no default: each caller names `msvc` or `clang-cl` (owner, 2026-10-21: no build uses `cl.exe`
+without a word). Every recorded set, and every Mesa file that a release ships, is an MSVC build. The script prints
+the path and the version of the compiler and of the linker, and `recipe.json` records them. If a tool is missing,
+the script stops. The script also sets `CC`, `CXX`, `CC_LD`, `CXX_LD` and `AR` for meson. Thus meson cannot use
+another compiler that it finds on `PATH`.
 
-Its first option is `-Dbuildtype=release`. With MSVC, the options give these switches:
+`-Variant` adds named changes from the `variants` of `mesa-configs.json` to the option set. The recorded sets do not
+change, and no shipped build uses a variant. A variant has options for all compilers, and options under the name of
+a compiler for that compiler only. The variants apply in the order of the file, so one choice of variants gives one
+option set.
 
-- `-Dbuildtype=release`: optimisation level 3, which is `/O2 /Gw` at compile time and `/OPT:REF` at link time.
-- `-Ddebug=true`: the PDB, with `/Z7` at compile time and `/DEBUG` at link time.
-- `-Db_lto=true -Db_lto_mode=default`: whole-program optimisation, with `/GL` and `/LTCG`.
-- `-Dallow-broken-lto=true`: without it, Mesa's `meson.build` refuses `b_lto`. Upstream Mesa rejects bug reports
-  from LTO builds. The switch also adds `-lto` to the Mesa version string, for example in `driverInfo`.
-- `/arch:AVX2`: MSVC can use AVX2 and BMI2 instructions in all Mesa code.
+| Variant | MSVC | clang-cl |
+|---|---|---|
+| `release` | `-Dbuildtype=release -Ddebug=true`: `/O2 /Gw`, with the PDB | the same |
+| `lto` | `-Db_lto=true -Dallow-broken-lto=true -Db_lto_mode=default`: `/GL` and `/LTCG` | the same with `-Db_lto_mode=thin`: ThinLTO in `lld-link` |
+| `isa` | `/arch:AVX2` in `c_args` and `cpp_args` | `-march=x86-64-v3 -mtune=znver2` |
 
-Until 2026-10-21 every set was `debugoptimized`. That is `/O2` with a PDB, without `/Gw`, `/OPT:REF` and `/GL`,
-and with SSE2 as the instruction set.
+- An option of a variant replaces the option of the same name in its place. For example, `release` changes
+  `-Dbuildtype=debugoptimized` to `-Dbuildtype=release`.
+- `release` adds `-Db_ndebug=false` to a set that has no `b_ndebug`. That is the `NDEBUG` state of
+  `debugoptimized`. In a `release` buildtype, the meson default `b_ndebug=if-release` defines `NDEBUG`.
+- Without `-Dallow-broken-lto=true`, Mesa's `meson.build` refuses `b_lto`. The option also adds `-lto` to the Mesa
+  version string.
+- x86-64-v3 is AVX, AVX2, BMI1, BMI2, F16C, FMA, LZCNT and MOVBE: the CPU requirement of the project (owner,
+  2026-10-21). Do not use `-march=znver2`: it adds SSE4a, which Intel CPUs do not have. Do not use `-march=native`:
+  that is the CPU of the build machine.
 
-`NDEBUG` turns off Mesa's assertions and the NIR and ACO validation after every pass. With them, NIR and ACO used
-at least 40 % of the ICD's pipeline compile time in a warm game run (Witcher 3, trial 135). The RADV and OpenGL
-configurations set `-Db_ndebug=true` in both flavours. The two desktop UMD configurations set it in the release
-flavour only (`release_options`). Their lab flavour keeps the asserts with `-Db_ndebug=false` (`lab_options`).
-The explicit `false` is necessary: in a `release` buildtype, the meson default `b_ndebug=if-release` defines
-`NDEBUG`. A performance comparison with a Linux build must use the same setting or change it on both sides.
+`/arch:AVX2` and x86-64-v3 are not the same. A probe of the two compilers (MSVC 14.44 and clang-cl 23.1.4, `/O2`)
+gives these results:
 
-**CPU baseline.** The Mesa files of this project need a CPU with AVX2, BMI1, BMI2, FMA and LZCNT. That is Intel
-Haswell or AMD Zen 1, or newer. On an older CPU, the first AVX2 instruction stops the process with an
-illegal-instruction exception. The D3D11 and D3D12 shells, the router and the vkd3d-proton engine have the same
-baseline (`/arch:AVX2`). The CPU of the BC-250 (Zen 2) has all of these instructions.
+- Both compilers use AVX2 for vector loops, BMI1 (`andn`, `blsr`, `blsi`), BMI2 (`shlx`, `sarx`, `bzhi`), `lzcnt`
+  and `tzcnt` for `std::countl_zero` and `std::countr_zero`, `popcnt` and `vroundss`.
+- Only clang-cl uses `movbe`, `rorx` and `mulx`, and `lzcnt` and `tzcnt` for `_BitScanReverse` and
+  `_BitScanForward`. It also copies memory blocks with 256-bit moves.
+- MSVC defines only `__AVX__` and `__AVX2__`. clang-cl also defines `__FMA__`, `__F16C__`, `__BMI__`, `__BMI2__`,
+  `__LZCNT__`, `__POPCNT__`, `__MOVBE__` and `__SSE4_1__`. Mesa code that tests these macros takes another path
+  with each compiler, for example `util_is_power_of_two_nonzero` (`__POPCNT__`) and `_mesa_roundevenf`
+  (`__SSE4_1__`).
+- Neither compiler fuses a multiply and an add into an FMA instruction: MSVC because of `/fp:precise`, clang-cl
+  because of `-ffp-contract=off`. MSVC fuses them only with `/fp:contract`.
 
 ### clang-cl (`-Compiler clang-cl`)
 
-PROVENANCE: LLVM 23.1.2 for Windows x64, the official release archive
-`clang+llvm-23.1.2-x86_64-pc-windows-msvc.tar.zst`, Apache-2.0 with LLVM exception.
+PROVENANCE: LLVM 23.1.4 for Windows x64, the official release archive
+`clang+llvm-23.1.4-x86_64-pc-windows-msvc.tar.zst`, Apache-2.0 with LLVM exception.
 
-`-Compiler clang-cl` builds the same option set with `clang-cl`, `lld-link` and `llvm-lib`. The default is
-`-Compiler msvc` until a lab comparison with the shipped build supports a change. The script prints the compiler
-and its version, and `recipe.json` records them. `-ClangToolchain` names the LLVM directory. The default is
-`<BC250_ROOT>\toolchain\llvm-23.1.2-win64`. The Visual Studio environment stays, for the headers, the libraries
-and `rc.exe`. The `compilers` entry of `mesa-configs.json` makes four changes in each set:
+`-Compiler clang-cl` builds the option set with `clang-cl`, `lld-link` and `llvm-lib`. `-ClangToolchain` names the
+LLVM directory. The default is `<BC250_ROOT>\toolchain\llvm-23.1.4-win64`. The Visual Studio environment stays, for
+the headers, the libraries and `rc.exe`. The `compilers` entry of `mesa-configs.json` adds two arguments to
+`c_args` and `cpp_args` of each set:
 
-- `-Db_lto_mode=thin` replaces `default`. ThinLTO runs in `lld-link`, on all cores. Only `link.exe` reads the
-  `/GL` objects of MSVC.
-- `-march=x86-64-v3 -mtune=znver2` replaces `/arch:AVX2`. The x86-64-v3 level is AVX, AVX2, BMI1, BMI2, F16C,
-  FMA, LZCNT and MOVBE. Do not use `-march=znver2`. It adds SSE4a, which Intel CPUs do not have.
-- `/clang:-ffp-contract=off` is added. Without it, clang fuses a multiply and an add into one FMA, which rounds
-  one time. MSVC rounds two times. With the switch, NIR constant folding gives the values of the MSVC build.
-- `-gline-tables-only` is added. The PDB has the functions and the source lines, but no types and no local
-  variables. The code is the same as with full debug information.
+- `/clang:-ffp-contract=off`. Without it, clang fuses a multiply and an add into one FMA when the instruction set
+  has FMA (variant `isa`). An FMA rounds one time, MSVC rounds two times. With the switch, NIR constant folding
+  gives the values of the MSVC build.
+- `-gline-tables-only`. The PDB has the functions and the source lines, but no types and no local variables. The
+  code is the same as with full debug information.
 
 **Why no types in the clang-cl PDB.** With full CodeView types and ThinLTO, the PDB step of `lld-link` does not
 end. We stopped it after 35 minutes. Without `/DEBUG`, the same link takes 12 seconds. The cause is a defect in
-LLVM 23.1.2:
+LLVM 23.1.2 and 23.1.4:
 
 1. ThinLTO imports functions from other modules, with their debug information. C types have no ODR name, so a
    module can then hold two copies of one type. In `radv_rra_layer.c`, `VkStructureType` has two copies.
@@ -198,12 +211,13 @@ LLVM 23.1.2:
 3. `GlobalTypeTableBuilder::insertRecord` gives these records their indexes before it removes duplicates. At the
    second copy of the enum, one record is a duplicate. The builder then gives the other record the index that its
    own `LF_INDEX` points to (in that object: `0x2D9E -> 0x2D9E`).
-4. The type merge of `lld-link` does not stop at this loop. With only this object, a link takes more than 25
-   seconds. Without its `.debug$T` section, the link takes 0.02 seconds. `lld-link` 23.1.4 and `/DEBUG:NOGHASH`
-   give the same result.
+4. The type merge of `lld-link` does not stop at this loop.
 
-A build without LTO has one copy of each type and no loop. Remove `-gline-tables-only` from the `compilers` entry
-when a fixed LLVM release builds `radv-system` with full types in a normal link time.
+A reproducer with two C files and one enum of 2500 members shows the loop with both LLVM releases. One file
+includes the enum's header with another path (`../big.h`), so the two copies of the type stay apart, and ThinLTO
+imports a function of that file into the other module. The `lld-link` step does not end in 60 seconds. A build
+without LTO has one copy of each type and no loop. Remove `-gline-tables-only` from the `compilers` entry when a
+fixed LLVM release links the reproducer in a normal time.
 
 The reproducible-build switches are `/Brepro`, `-fmacro-prefix-map` and `-fdebug-prefix-map`. clang-cl ignores
 `/FC` and has no `/d1trimfile`.
@@ -234,10 +248,9 @@ gives a warning where MSVC stops.
 ### RADV Vulkan ICD (`-Config radv`)
 
 ```
--Dbuildtype=release -Db_ndebug=true -Dforce_fallback_for=zlib -Dllvm=disabled -Damd-use-llvm=false
+-Dbuildtype=debugoptimized -Db_ndebug=true -Dforce_fallback_for=zlib -Dllvm=disabled -Damd-use-llvm=false
 -Dvulkan-drivers=amd -Dgallium-drivers=[] -Ddefault_library=static -Dplatforms=windows -Dvideo-codecs=[]
--Degl=disabled -Dglx=disabled -Dzstd=disabled -Db_lto=true -Dallow-broken-lto=true -Db_lto_mode=default
--Dc_args=/arch:AVX2 -Dcpp_args=/arch:AVX2 -Ddebug=true
+-Degl=disabled -Dglx=disabled -Dzstd=disabled
 ```
 
 Target `src/amd/vulkan/vulkan_radeon.dll`: ACO only, no LLVM, and glslangValidator is required. It links the
@@ -282,39 +295,36 @@ loses either patch shows up here instead of in a game. Last recorded run of the 
 ### Desktop D3D10 UMD on llvmpipe (`-Config llvmpipe-umd -Llvm <LLVM build>`)
 
 ```
--Dbuildtype=release -Dforce_fallback_for=zlib -Dllvm=enabled -Dshared-llvm=disabled -Damd-use-llvm=false
+-Dbuildtype=debugoptimized -Dforce_fallback_for=zlib -Dllvm=enabled -Dshared-llvm=disabled -Damd-use-llvm=false
 -Dvulkan-drivers=[] -Dgallium-drivers=llvmpipe,softpipe -Dgallium-d3d10umd=true -Dopengl=false -Db_vscrt=mt
 -Ddefault_library=static -Dplatforms=windows -Dvideo-codecs=[] -Degl=disabled -Dglx=disabled -Dzstd=disabled
--Dgallium-d3d10-dll-name=bc250d3d -Db_lto=true -Dallow-broken-lto=true -Db_lto_mode=default -Dc_args=/arch:AVX2
--Dcpp_args=/arch:AVX2 -Ddebug=true
+-Dgallium-d3d10-dll-name=bc250d3d
 ```
 
 Target `src/gallium/targets/d3d10umd/bc250d3d.dll`, plus the patch's test programs `bc250_ttn_control.exe`
 and `bc250_lp_test_arit.exe`. `b_vscrt=mt` matches LLVM's `/MT`, so the DLL imports no C runtime DLL.
 The release flavour adds `-Db_ndebug=true` (`release_options` in `mesa-configs.json`). Thus no assert and no
-debug-only parser is live in the shipped DLL. The lab flavour adds `-Db_ndebug=false` (`lab_options`) and keeps
-the asserts. A tree without the flavour option builds the set above.
+debug-only parser is live in the shipped DLL. The lab flavour keeps the asserts. A tree without the flavour
+option builds the set above, as recorded.
 
 ### Native D3D10 UMD on Zink (`-Config zink-umd`)
 
 ```
--Dbuildtype=release -Dforce_fallback_for=zlib -Dllvm=disabled -Damd-use-llvm=false -Dvulkan-drivers=[]
+-Dbuildtype=debugoptimized -Dforce_fallback_for=zlib -Dllvm=disabled -Damd-use-llvm=false -Dvulkan-drivers=[]
 -Dgallium-drivers=zink -Dgallium-d3d10umd=true -Dgallium-d3d10-dll-name=bc250d3d_zink -Ddefault_library=static
--Dplatforms=windows -Dvideo-codecs=[] -Degl=disabled -Dglx=disabled -Dzstd=disabled -Db_lto=true
--Dallow-broken-lto=true -Db_lto_mode=default -Dc_args=/arch:AVX2 -Dcpp_args=/arch:AVX2 -Ddebug=true
+-Dplatforms=windows -Dvideo-codecs=[] -Degl=disabled -Dglx=disabled -Dzstd=disabled
 ```
 
 Target `src/gallium/targets/d3d10umd/bc250d3d_zink.dll`, linked against the DLL C runtime. Upstream
 `meson.build` refuses d3d10umd without softpipe or llvmpipe; the patched tree accepts Zink. The release flavour
-adds `-Db_ndebug=true`, as for `llvmpipe-umd`. The lab flavour adds `-Db_ndebug=false` and keeps the asserts.
+adds `-Db_ndebug=true`, as for `llvmpipe-umd`, and the lab flavour keeps the asserts.
 
 ### OpenGL on Zink (`-Config zink-gl`)
 
 ```
--Dbuildtype=release -Db_ndebug=true -Dforce_fallback_for=zlib -Dllvm=disabled -Damd-use-llvm=false
--Dvulkan-drivers=[] -Dgallium-drivers=zink -Ddefault_library=static -Dplatforms=windows -Dvideo-codecs=[]
--Degl=disabled -Dglx=disabled -Dzstd=disabled -Db_lto=true -Dallow-broken-lto=true -Db_lto_mode=default
--Dc_args=/arch:AVX2 -Dcpp_args=/arch:AVX2 -Ddebug=true
+-Dbuildtype=debugoptimized -Dforce_fallback_for=zlib -Dllvm=disabled -Damd-use-llvm=false -Dvulkan-drivers=[]
+-Dgallium-drivers=zink -Ddefault_library=static -Dplatforms=windows -Dvideo-codecs=[] -Degl=disabled -Dglx=disabled
+-Dzstd=disabled
 ```
 
 Targets `src/gallium/targets/wgl/libgallium_wgl.dll` and `src/gallium/targets/libgl-gdi/opengl32.dll`, both on
@@ -324,11 +334,9 @@ files in `experiments/E33-m12-applications/`.
 ### System OpenGL ICD on Zink (`-Config zink-gl-icd`)
 
 ```
--Dbuildtype=release -Db_ndebug=true -Dforce_fallback_for=zlib -Dllvm=disabled -Damd-use-llvm=false
+-Dbuildtype=debugoptimized -Db_ndebug=true -Dforce_fallback_for=zlib -Dllvm=disabled -Damd-use-llvm=false
 -Dvulkan-drivers=[] -Dgallium-drivers=zink -Db_vscrt=mt -Ddefault_library=static -Dplatforms=windows
 -Dvideo-codecs=[] -Degl=disabled -Dglx=disabled -Dzstd=disabled -Dgallium-wgl-dll-name=amdgpu_wddm_gl
--Db_lto=true -Dallow-broken-lto=true -Db_lto_mode=default -Dc_args=/arch:AVX2 -Dcpp_args=/arch:AVX2
--Ddebug=true
 ```
 
 Targets `src/gallium/targets/wgl/amdgpu_wddm_gl.dll` and `src/gallium/targets/libgl-gdi/opengl32.dll`.
@@ -342,7 +350,7 @@ The set is `zink-gl` plus three options. `-Db_ndebug=true` keeps NDEBUG defined,
 that loads into every OpenGL application. `-Db_vscrt=mt` links the static C runtime for the same reason: an
 application that ships its own `msvcp140.dll` beside its exe hands it to every DLL that imports that name.
 `-Dgallium-wgl-dll-name` renames the WGL target, because the registered ICD must carry this project's name.
-The optimisation options are the options of every Mesa configuration here (above).
+`buildtype` stays `debugoptimized`, as in every shipped Mesa component here: `/O2` with NDEBUG and a PDB.
 
 `-Arch x86` builds the 32-bit ICD for `OpenGLDriverNameWow`. The generated module definition file carries
 undecorated names on MSVC for both architectures (`bin/gen_vs_module_defs.py`), which is what the OpenGL
@@ -529,7 +537,7 @@ example, `BC250_DRAW_STATS` is only in the RADV copies of the triplet build line
 `kmd/wow64/d3d12/amdgpu_wddm_vkd3d32.dll` is `wow64/d3d12/amdgpu_wddm_vkd3d.dll`. Thus one declaration
 serves both package layouts.
 
-Asserts are live in the lab flavour of three components only, and that is a decision, not an oversight (lead, 2026-10-14). The lab build keeps them where the config leaves `NDEBUG` undefined: `llvmpipe-umd` and `zink-umd` (`lab_options`, `b_ndebug=false`) and the DXVK engine (`b_ndebug=false`). Until 2026-10-21 the two UMDs got this from `b_ndebug=if-release` in a `debugoptimized` build. The RADV and Zink GL ICD configs and the vkd3d engine define `NDEBUG` in both flavours, as they did before the flavour split. An assert in those arms is compiled out in the lab flavour as well. An assert that fires therefore fires in three of the ten shipped build arms. This is why the gate judges a release file by its own bytes and never by a difference from its lab twin.
+Asserts are live in the lab flavour of three components only, and that is a decision, not an oversight (lead, 2026-10-14). The lab build keeps them where the config leaves `NDEBUG` undefined: `llvmpipe-umd` and `zink-umd` (`b_ndebug=if-release` in a `debugoptimized` build, which resolves to false) and the DXVK engine (`b_ndebug=false`). The RADV and Zink GL ICD configs and the vkd3d engine define `NDEBUG` in both flavours, as they did before the flavour split. An assert in those arms is compiled out in the lab flavour as well. An assert that fires therefore fires in three of the ten shipped build arms. This is why the gate judges a release file by its own bytes and never by a difference from its lab twin.
 
 Windows reads environment names in any letter case. Thus a forbidden name also counts as a whole C string in
 another case, for example `radv_debug`. Inside a longer text, it does not count. The coverage rule also applies

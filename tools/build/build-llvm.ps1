@@ -5,7 +5,7 @@ Configures, builds and installs LLVM the way the lab's LLVM 23.1.2 toolchain was
 
 .DESCRIPTION
 Static, Release, /MT, X86 target only, no tools except llvm-config, no tests. This is the LLVM that the
-llvmpipe desktop UMD links (build-mesa.ps1 -Config llvmpipe-umd -Llvm <this -Build directory>).
+llvmpipe desktop UMD links (build-mesa.ps1 -Config llvmpipe-umd -Compiler msvc -Llvm <this -Build directory>).
 
 The recorded configuration is evidence/windows/2026-09-24-E26-desktop-resume/llvm23/build-llvm23.cmd, and its
 result was checked against that build's CMakeCache.txt. The option table below is the single copy of it in
