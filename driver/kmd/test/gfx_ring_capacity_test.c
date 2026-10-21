@@ -50,6 +50,28 @@ int main(void)
         read=(u32)ring.wptr;
     }
     CHECK(ring.wptr>0x100000000ull);
+    // A consumer that lags while the producer crosses 2^32 (the lap loop above lets the reader catch up
+    // after every submit). The reader stays at 0xfffffe00: seven slots and no more, the eighth is refused
+    // with the ring and the memory as they were, and one retired slot admits the next job. The writes
+    // start at ring index 1536 and wrap the index after the second job.
+    ring.wptr=0xfffffe00ull; read=0xfffffe00u;
+    for (i=0; i<7; ++i) {
+        CHECK(amdgpu_ring_alloc(&ring,25)==0);
+        amdgpu_ring_write(&ring,0x400+i); amdgpu_ring_commit(&ring);
+    }
+    CHECK(ring.wptr==0x100000500ull && writeback==0x100000500ull);
+    CHECK(memory[1536]==0x400 && memory[1792]==0x401 && memory[0]==0x402 && memory[1024]==0x406);
+    memcpy(before,memory,sizeof(memory));
+    CHECK(amdgpu_ring_alloc(&ring,25)!=0);
+    CHECK(ring.wptr==0x100000500ull && !memcmp(before,memory,sizeof(memory)));
+    read+=256u;
+    CHECK(amdgpu_ring_alloc(&ring,25)==0);
+    amdgpu_ring_undo(&ring);
+    CHECK(ring.wptr==0x100000500ull);
+    // The reader crosses 2^32 as well and catches up: seven slots are free again, and an eighth never fits
+    // beside the guard dword.
+    read=0x00000500u;
+    CHECK(bc250_ring_has_space(&ring,1792) && !bc250_ring_has_space(&ring,1793));
     CHECK(amdgpu_ring_alloc(&ring,~0u)!=0);
     CHECK(!bc250_ring_has_space(&ring,2048)); // guard dword, even when empty
     CHECK(bc250_fence_reached(2,1)); CHECK(bc250_fence_reached(2,2));
