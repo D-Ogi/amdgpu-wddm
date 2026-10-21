@@ -3,6 +3,7 @@
 #include "../shim/bc250_sink.h"
 #include "../shim/bc250_hpd.h"
 #include "connector_diag.h"
+#include "connector_handoff.h"
 
 struct _BC250_DEVICE;
 typedef struct _BC250_CONNECTOR_SNAPSHOT {

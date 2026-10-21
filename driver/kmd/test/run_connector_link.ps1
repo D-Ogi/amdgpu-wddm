@@ -1,6 +1,6 @@
 param([Parameter(Mandatory)][string]$Out,[Parameter(Mandatory)][string]$Kits,
       [switch]$OmitGeneration,[switch]$OmitOpenCleanup,[switch]$OmitColdRecovery,[switch]$OmitPrepareCleanup,
-      [switch]$OmitFirstFailure,[switch]$NestedHdmiStop,[switch]$OmitDiagnosticReplay,[switch]$WriteRequestedValue,[switch]$WrongRecoveryTarget,[switch]$OmitSurfaceAdopt,[switch]$ExpectFailure)
+      [switch]$OmitFirstFailure,[switch]$NestedHdmiStop,[switch]$OmitDiagnosticReplay,[switch]$WriteRequestedValue,[switch]$WrongRecoveryTarget,[switch]$OmitSurfaceAdopt,[switch]$OmitDetachedMode,[switch]$ExpectFailure)
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path "$PSScriptRoot/../../..").Path
 New-Item -ItemType Directory -Force $Out | Out-Null
@@ -18,6 +18,7 @@ try {
     if($WriteRequestedValue){$extract+='--write-requested-value'}
     if($WrongRecoveryTarget){$extract+='--wrong-recovery-target'}
     if($OmitSurfaceAdopt){$extract+='--omit-surface-adopt'}
+    if($OmitDetachedMode){$extract+='--omit-detached-mode'}
     & python @extract
     if($LASTEXITCODE){throw 'Connector transaction extraction failed'}
     $vs=& "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe" -latest -products * -property installationPath
@@ -34,7 +35,7 @@ try {
     $result | Set-Content -Encoding UTF8 "$Out/result.log"
     $result | Write-Output
     if($ExpectFailure) {
-        if((!$OmitGeneration -and !$OmitOpenCleanup -and !$OmitColdRecovery -and !$OmitPrepareCleanup -and !$OmitFirstFailure -and !$NestedHdmiStop -and !$OmitDiagnosticReplay -and !$WriteRequestedValue -and !$WrongRecoveryTarget -and !$OmitSurfaceAdopt) -or $code -ne 1 -or !($result -match '^FAIL line ')){throw 'Negative control did not execute an assertion failure'}
+        if((!$OmitGeneration -and !$OmitOpenCleanup -and !$OmitColdRecovery -and !$OmitPrepareCleanup -and !$OmitFirstFailure -and !$NestedHdmiStop -and !$OmitDiagnosticReplay -and !$WriteRequestedValue -and !$WrongRecoveryTarget -and !$OmitSurfaceAdopt -and !$OmitDetachedMode) -or $code -ne 1 -or !($result -match '^FAIL line ')){throw 'Negative control did not execute an assertion failure'}
         Write-Output 'Connector transaction negative control: expected assertion failure'
     } elseif($code){throw 'Connector transaction assertions failed'}
 } finally {$env:TEMP=$oldTemp;$env:TMP=$oldTmp}

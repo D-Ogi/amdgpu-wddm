@@ -444,6 +444,7 @@ Check 'ledger-call' { & pwsh -NoProfile -File "$repo\tools\release\test-ledger-c
   @{n='connector-link-write-requested';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-WriteRequestedValue','-ExpectFailure')}
   @{n='connector-link-recovery-target';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-WrongRecoveryTarget','-ExpectFailure')}
   @{n='connector-link-surface-adopt';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitSurfaceAdopt','-ExpectFailure')}
+  @{n='connector-link-detached-mode';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitDetachedMode','-ExpectFailure')}
   @{n='dml201';s='driver\shim\test\run_dml201.ps1';a=@('-Kits',$Kits)}
   @{n='dcn201-pipe';s='driver\shim\test\run_dcn201_pipe.ps1';a=@('-Kits',$Kits)}
   @{n='dpaudio-start-debt';s='driver\kmd\test\run_dpaudio_debt.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
@@ -452,12 +453,17 @@ Check 'ledger-call' { & pwsh -NoProfile -File "$repo\tools\release\test-ledger-c
   @{n='wave-recovery-delete-control';s='driver\kmd\test\run_wave_recovery.ps1';a=@('-Kits',$Kits,'-AdminReadOnly');Fails=$true}
   @{n='display-visibility';s='driver\kmd\test\run_display_visibility.ps1';a=@('-Root',$Workspace)}
   @{n='post-display-stop';s='driver\kmd\test\run_post_display_stop.ps1';a=@('-Root',$Workspace)}
+  @{n='post-display-stop-no-handoff';s='driver\kmd\test\run_post_display_stop.ps1';a=@('-Root',$Workspace,'-SkipHandoff');Fails=$true}
   @{n='scanout-geometry';s='driver\kmd\test\run_scanout_geometry.ps1';a=@('-Root',$Workspace)}
   @{n='post-display';s='driver\kmd\test\run_post_display.ps1';a=@('-Root',$Workspace)}
   @{n='post-display-old-runtime-order';s='driver\kmd\test\run_post_display.ps1';a=@('-Root',$Workspace,'-OldRuntimeOrder');Fails=$true}
   @{n='post-display-wrong-saved-surface';s='driver\kmd\test\run_post_display.ps1';a=@('-Root',$Workspace,'-WrongSavedSurface');Fails=$true}
   @{n='post-display-resume-refusal';s='driver\kmd\test\run_post_display.ps1';a=@('-Root',$Workspace,'-ResumeRefusalIgnored');Fails=$true}
   @{n='post-display-application-surface';s='driver\kmd\test\run_post_display.ps1';a=@('-Root',$Workspace,'-SavedApplicationSurface');Fails=$true}
+  # BD-090 (31 line): the firmware's HUBP_TTU_DISABLE is not a blank of this driver's own, and no DCN write names a
+  # register that MmioDcnWriteEx refuses (the write-site check runs its own positive and negative controls first).
+  @{n='post-display-ttu-means-blank';s='driver\kmd\test\run_post_display.ps1';a=@('-Root',$Workspace,'-TtuMeansBlank');Fails=$true}
+  @{n='dcn-write-sites';s='driver\kmd\test\run_dcn_write_sites.ps1';a=@('-Root',$Workspace)}
   @{n='dcn-flip';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace)}
   @{n='dcn-flip-pending-only';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','PendingOnly');Fails=$true}
   @{n='dcn-flip-address-only';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','AddressOnly');Fails=$true}

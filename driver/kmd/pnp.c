@@ -92,7 +92,8 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     BoardMemoryIdentityClear(device);
     GuardStage(StageStartEnter);
     // One kept log file for this whole start, however many checkpoints it writes (guard.c GuardLogKeep). Does
-    // nothing unless Parameters\KeepLog is set.
+    // nothing unless KeepLog is 1 in the active state generation; the file goes to the Logs child of the driver's
+    // shared state directory, which `bc250kmd_cli state paths` prints.
     GuardLogKeepEpisode(L"start");
     // BD-122: from here on the registry record belongs to THIS attempt, whatever an earlier boot left behind, and
     // every exit below that does not reach a started device writes its reason into it (guard.c, StartRecord). The
@@ -150,6 +151,11 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     // Its own step: the firmware answered, and what it answered has no display in it. That is a BIOS or
     // seamless-boot question, not a driver one, and the two must not read the same in the record.
     GuardStartStep(L"PostDisplayGeometry");
+    // BD-090: what Windows handed over, logged before the check, so that the record of a refused start names it.
+    // After a PnP stop this is what the release below returned (pnputil /restart-device), or zeros after it failed.
+    GuardLog("post display acquired %ux%u pitch %u format %u address %llX target %u", device->Post.Width,
+             device->Post.Height, device->Post.Pitch, (ULONG)device->Post.ColorFormat,
+             (ULONGLONG)device->Post.PhysicAddress.QuadPart, device->Post.TargetId);
     if (device->Post.Width == 0 || device->Post.Height == 0 || device->Post.PhysicAddress.QuadPart == 0)
     {
         status = STATUS_GRAPHICS_NO_VIDEO_MEMORY;       // honest: no firmware display to take over
@@ -351,8 +357,16 @@ NTSTATUS Bc250StopDevice(_In_ const PVOID MiniportDeviceContext)
         device->PostDisplayStopStatus=DcnStop(device);
         device->PostDisplayStopAttempted=TRUE;
     }
-    if (!NT_SUCCESS(HdmiLinkRelease(device))) device->PostDisplayStopStatus=STATUS_DEVICE_DATA_ERROR;
-    if (!NT_SUCCESS(connectorStatus)) device->PostDisplayStopStatus=connectorStatus;
+    {
+        NTSTATUS displayRestore, encoderRestore;
+        displayRestore=device->PostDisplayStopStatus;
+        encoderRestore=HdmiLinkRelease(device);
+        if (!NT_SUCCESS(encoderRestore)) device->PostDisplayStopStatus=STATUS_DEVICE_DATA_ERROR;
+        if (!NT_SUCCESS(connectorStatus)) device->PostDisplayStopStatus=connectorStatus;
+        // BD-090: the three results that decide the display handoff, in one line of the stop's kept file.
+        GuardLog("stop: display handoff restore %08lX hdmi %08lX connector %08lX result %08lX", (ULONG)displayRestore,
+                 (ULONG)encoderRestore, (ULONG)connectorStatus, (ULONG)device->PostDisplayStopStatus);
+    }
     IhStop(device);         // no interrupt of ours from here on
     GfxPrepareStop(device); // halt engines, retain storage through firmware/translation retirement
     PspStop(device);
@@ -370,24 +384,43 @@ NTSTATUS Bc250StopDevice(_In_ const PVOID MiniportDeviceContext)
     if (wasStarted) GuardReleaseStart();
     GuardStage(StageStopDone);
     GuardRecordStopDone();
-    // Last, so that the file holds the stop as well. Does nothing unless Parameters\KeepLog is set: dxgkrnl may
-    // end a full WDDM start by itself and unload the driver after, ring and all (E16 run 1).
+    // Last, so that the file holds the stop as well. Does nothing unless KeepLog is 1 (Data key of the active state
+    // generation): dxgkrnl may end a full WDDM start by itself and unload the driver after, ring and all (E16 run 1).
     GuardLogKeep();
     return STATUS_SUCCESS;
 }
 
 // PnP stop with the screen kept: report the mode we leave behind so that the next owner (Basic Display on a
-// rollback) can continue on the same framebuffer.
+// rollback, this driver again after pnputil /restart-device) can continue on the same framebuffer.
 NTSTATUS Bc250StopDeviceAndReleasePostDisplayOwnership(_In_ PVOID MiniportDeviceContext,
                                                        _In_ D3DDDI_VIDEO_PRESENT_TARGET_ID TargetId,
                                                        _Out_ PDXGK_DISPLAY_INFORMATION DisplayInfo)
 {
+    static const char* const linkAction[BC250_LINK_HANDOFF_ACTIONS]={"static","active","no-sink","suspended",
+                                                                      "no-target","enabled","enable-failed"};
     BC250_DEVICE* device = (BC250_DEVICE*)MiniportDeviceContext;
-
+    BC250_LINK_HANDOFF handoff;
     NTSTATUS status;
-    UNREFERENCED_PARAMETER(TargetId); // one active output; return its actual id below
+
+    // TargetId: one active output; the actual id is returned below.
     RtlZeroMemory(DisplayInfo,sizeof(*DisplayInfo));
     if (!device || !AdapterOwnerIs(device->PhysicalDeviceObject)) return STATUS_DEVICE_NOT_READY;
+    // BD-090: the release's own lines, in the ring and so in the stop's kept file. After a pnputil restart that
+    // leaves a black screen, the first question is whether dxgkrnl called this function at all.
+    GuardLog("post-display release: target %lu started %u runtime changed %ld valid %ld", (ULONG)TargetId,
+             (UINT)device->Started, InterlockedCompareExchange(&device->RuntimeDisplayChanged,0,0),
+             InterlockedCompareExchange(&device->RuntimePostValid,0,0));
+    // The next owner needs a visible handoff: the startup hold (BD-179) ends here, before the target below.
+    InterlockedExchange(&device->StartVisibilityPending,0);
+    // dispmprt.md, required steps 2, 5 and 6 (connector_link.c, ConnectorLinkHandoff): a target with no display
+    // connected answers STATUS_NOT_SUPPORTED, and a link that an OS or a physical detach turned off gets a target
+    // again, black, on the reserved buffer. Before the teardown, which takes the writer and BAR5 away.
+    StartHealthEnter(device);
+    (void)ConnectorLinkHandoff(device,&handoff);
+    StartHealthLeave(device);
+    GuardLog("post-display release: link %s detached-mode %lu timing %lux%lu %lu kHz status %08lX",
+             handoff.Action<BC250_LINK_HANDOFF_ACTIONS?linkAction[handoff.Action]:"?",handoff.Detached,
+             handoff.Width,handoff.Height,handoff.PixelKhz,(ULONG)handoff.Status);
     // WDDM 1.2 (plug-and-play--pnp--start-and-stop-cases.md): the surface the pipe scans out when this call returns
     // must be filled with black before source visibility goes TRUE. That surface is the POST framebuffer
     // (DcnRestorePostDisplay below puts the scanout back on it), which the memory segment is carved clear of
@@ -402,11 +435,24 @@ NTSTATUS Bc250StopDeviceAndReleasePostDisplayOwnership(_In_ PVOID MiniportDevice
     // Never publish a framebuffer that DCN failed to latch. Ordinary StopDevice
     // still finishes teardown and returns its own completion result.
     status=Bc250StopDevice(MiniportDeviceContext);
-    if (!NT_SUCCESS(status)) return status;
-    if (!NT_SUCCESS(device->PostDisplayStopStatus)) return device->PostDisplayStopStatus;
-    *DisplayInfo = device->RuntimePostValid ? device->RuntimePost : device->Post;
-    DisplayInfo->TargetId = BC250_CHILD_UID;
-    return STATUS_SUCCESS;
+    if (NT_SUCCESS(status) && handoff.Action==BC250_LINK_HANDOFF_NO_SINK) status=STATUS_NOT_SUPPORTED;
+    else if (NT_SUCCESS(status)) status=device->PostDisplayStopStatus;
+    if (NT_SUCCESS(status)) {
+        *DisplayInfo = device->RuntimePostValid ? device->RuntimePost : device->Post;
+        DisplayInfo->TargetId = BC250_CHILD_UID;
+        // BD-090, the self-check: what Windows keeps for the next owner. The next start logs the same numbers as
+        // "post display acquired", or zeros when Windows kept nothing.
+        GuardLog("post-display release: handed back %s %ux%u pitch %u address %llX target %u",
+                 device->RuntimePostValid?"runtime":"firmware",DisplayInfo->Width,DisplayInfo->Height,
+                 DisplayInfo->Pitch,(ULONGLONG)DisplayInfo->PhysicAddress.QuadPart,DisplayInfo->TargetId);
+    }
+    else GuardLog("post-display release: handed back nothing, status %08lX: %s",(ULONG)status,
+                  handoff.Action==BC250_LINK_HANDOFF_NO_SINK?"no display connected":
+                  handoff.Action==BC250_LINK_HANDOFF_FAILED?"the target enable failed":
+                  "the display restore failed, see stop: display handoff");
+    // A second keep of the same stop episode: it appends these lines to the file that the stop above wrote.
+    GuardLogKeep();
+    return status;
 }
 
 void Bc250ResetDevice(_In_ const PVOID MiniportDeviceContext)

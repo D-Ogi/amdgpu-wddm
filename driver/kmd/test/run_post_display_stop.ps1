@@ -1,4 +1,4 @@
-param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\m9\bd003-011\stop",[string]$Source='')
+param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\m9\bd003-011\stop",[string]$Source='',[switch]$SkipHandoff)
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 if(-not $Source){$Source="$repo\driver\kmd"}
@@ -9,7 +9,9 @@ $sdk="$Root\toolchain\nuget\microsoft.windows.sdk.cpp\c"
 $libs="$Root\toolchain\nuget\microsoft.windows.sdk.cpp.x64\c"
 New-Item -ItemType Directory -Force $Out | Out-Null
 $env:TEMP="$Root\scratch\tmp"; $env:TMP=$env:TEMP
-& python "$PSScriptRoot\generate_post_display_stop_test.py" --source $Source --out "$Out\post_display_stop_actual.c"
+$generate=@("$PSScriptRoot\generate_post_display_stop_test.py",'--source',$Source,'--out',"$Out\post_display_stop_actual.c")
+if($SkipHandoff){$generate+='--skip-handoff'}  # BD-090 negative control: must fail by a check
+& python @generate
 if($LASTEXITCODE -ne 0){throw 'Source extraction failed'}
 & $cl /nologo /TC /W4 /WX /O2 /MT "/I$repo\driver\kmd" "/I$repo\third_party\linux-amdgpu" "/I$($msvc.FullName)\include" "/I$sdk\Include\10.0.26100.0\ucrt" "/Fo$Out\" "/Fe$Out\post_display_stop_test.exe" "$Out\post_display_stop_actual.c" "$repo\driver\kmd\dcn_translate.c" /link "/LIBPATH:$($msvc.FullName)\lib\x64" "/LIBPATH:$libs\ucrt\x64" "/LIBPATH:$libs\um\x64"
 if($LASTEXITCODE -ne 0){throw 'Host build failed'}

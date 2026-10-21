@@ -66,6 +66,7 @@ typedef struct _BC250_DEVICE {
     struct { unsigned Lock; ULONG PortId, OsManufacturer, OsProduct; } DpAudio;
 } BC250_DEVICE;
 #include "../connector_surface.h"
+#include "../connector_handoff.h"
 typedef struct { volatile LONG References; ULONG Generation; BC250_SINK Sink; } BC250_CONNECTOR_SNAPSHOT;
 #define TRUE 1
 #define FALSE 0
@@ -308,6 +309,16 @@ static void ExFreePoolWithTag(void* p,ULONG tag)
     CHECK((p==&link && tag==LINK_TAG) || ((p==workspace || p==atom_workspace) && tag==LINK_WORK_TAG));++pool_frees;
 }
 #include "hdmi_stop_bodies.inc"
+/* BD-090: connector.c's owner and snapshot, for the post-display release's handoff. Neither is taken under
+ * Connector.Operation, and every snapshot reference taken is given back. */
+static int connector_enabled;
+static unsigned snapshot_refs;
+static BC250_CONNECTOR_SNAPSHOT* snapshot_given;
+static BOOLEAN ConnectorIsEnabled(BC250_DEVICE* d) { CHECK(d==&device && !operation_locks);return (BOOLEAN)connector_enabled; }
+static BC250_CONNECTOR_SNAPSHOT* ConnectorSnapshotAcquire(BC250_DEVICE* d)
+{ CHECK(d==&device && !operation_locks);if(snapshot_given)++snapshot_refs;return snapshot_given; }
+static void ConnectorSnapshotRelease(BC250_CONNECTOR_SNAPSHOT* s)
+{ if(!s)return;CHECK(s==snapshot_given && snapshot_refs);--snapshot_refs; }
 static ULONG Protocol(const BC250_SINK* Sink);
 #include "connector_link_bodies.inc"
 /* BD-169 review: connector.c's own decision about a refused start, unchanged. */
@@ -527,6 +538,7 @@ static void reset(unsigned kind)
     persistent_aux_fail=firmware_frees=pool_frees=audio_debt=0;
     scanned_surface=1;original_surface_restores=0;
     tx_enabled=crtc_enabled=1;observed_generation=7;clock_us=100;thread=(PKTHREAD)(uintptr_t)1;
+    connector_enabled=1;snapshot_given=&snapshot;snapshot_refs=0;
 }
 static NTSTATUS commit(void)
 { const BC250_TARGET_TIMING* t=&snapshot.Sink.Targets[0];return ConnectorLinkCommit(&device,&snapshot,t,t->HActive,t->VActive,D3DKMDT_VPPS_IDENTITY); }
@@ -1192,6 +1204,74 @@ static void keep_breadcrumbs(void)
     CHECK(keeps>=2 && keeps<32);
     keep_active=0;
 }
+/* BD-090: DxgkDdiStopDeviceAndReleasePostDisplayOwnership on a link that is off (ConnectorLinkHandoff; dispmprt.md,
+ * required steps 2, 5 and 6). The stop restores only a link that scans a surface: after an OS detach (an empty-topology
+ * commit) or a physical one, the release enables a target first. The mode that the OS detach took down comes first,
+ * while the same sink generation offers it; else the first offered timing of at least 800x600. */
+static NTSTATUS commit_second(void)
+{ const BC250_TARGET_TIMING* t=&snapshot.Sink.Targets[1];return ConnectorLinkCommit(&device,&snapshot,t,t->HActive,t->VActive,D3DKMDT_VPPS_IDENTITY); }
+static void two_targets(unsigned kind)
+{ reset(kind);snapshot.Sink.TargetCount=2;snapshot.Sink.Targets[1]=snapshot.Sink.Targets[0];snapshot.Sink.Targets[1].PixelClockKhz=148510; }
+static NTSTATUS os_detach(void) { return ConnectorLinkCommit(&device,&snapshot,NULL,0,0,D3DKMDT_VPPS_IDENTITY); }
+static void release_handoff(void)
+{
+    BC250_LINK_HANDOFF h;unsigned kind,steps,begin=checks,bad=failures;
+    BC250_TARGET_TIMING small={25175,640,160,16,96,480,45,10,2,0};
+    for(kind=BC250_SINK_DP;kind<=BC250_SINK_DVI;++kind) {
+        /* The OS detach, then the release: the detached mode again, on the reserved buffer, black and visible. */
+        two_targets(kind);CHECK(commit_second()==STATUS_SUCCESS);CHECK(os_detach()==STATUS_SUCCESS);balanced();
+        CHECK(!link.Active && device.RuntimeDisplayChanged && !device.RuntimePostValid && !device.SourceVisible);
+        framebuffer[0]=0xcd;framebuffer[sizeof(framebuffer)-1]=0xcd;
+        CHECK(ConnectorLinkHandoff(&device,&h)==STATUS_SUCCESS);balanced();
+        CHECK(h.Action==BC250_LINK_HANDOFF_ENABLED && h.Status==STATUS_SUCCESS && h.Detached==1);
+        CHECK(h.Width==1920 && h.Height==1080 && h.PixelKhz==148510);
+        CHECK(link.Active && link.Current.Valid && link.Current.Timing.PixelClockKhz==148510 && link.Completed==3);
+        CHECK(device.RuntimePostValid && device.RuntimeDisplayChanged && device.SourceVisible && !otg_blank && !plane_blank);
+        CHECK(device.RuntimePost.Width==1920 && device.RuntimePost.Height==1080 && device.RuntimePost.Pitch==7680);
+        CHECK(device.RuntimePost.PhysicAddress.QuadPart==device.RuntimeFramebufferPhysical.QuadPart);
+        CHECK(!framebuffer[0] && !framebuffer[sizeof(framebuffer)-1] && !snapshot_refs);
+        /* A link that is on: the stop restores what it scans, and nothing is programmed. */
+        steps=boundary_steps;CHECK(ConnectorLinkHandoff(&device,&h)==STATUS_SUCCESS);balanced();
+        CHECK(h.Action==BC250_LINK_HANDOFF_ACTIVE && !h.Width && boundary_steps==steps && link.Completed==3 && !snapshot_refs);
+        /* A physical detach forgets the mode: a sink offered again before the OS commits gets its first target. */
+        two_targets(kind);CHECK(commit_second()==STATUS_SUCCESS);CHECK(ConnectorLinkDisable(&device,7)==STATUS_SUCCESS);
+        CHECK(ConnectorLinkHandoff(&device,&h)==STATUS_SUCCESS);balanced();
+        CHECK(h.Action==BC250_LINK_HANDOFF_ENABLED && !h.Detached && h.PixelKhz==148500 && link.Active && device.RuntimePostValid);
+        /* An OS detach in an older sink generation: its mode is not offered to the new one. */
+        two_targets(kind);CHECK(commit_second()==STATUS_SUCCESS);CHECK(os_detach()==STATUS_SUCCESS);
+        snapshot.Generation=8;observed_generation=8;
+        CHECK(ConnectorLinkHandoff(&device,&h)==STATUS_SUCCESS);balanced();
+        CHECK(h.Action==BC250_LINK_HANDOFF_ENABLED && !h.Detached && h.PixelKhz==148500 && link.Active);
+        /* The enable fails: the link stays off, and the release fails as before, with this reason. */
+        two_targets(kind);CHECK(commit_second()==STATUS_SUCCESS);CHECK(os_detach()==STATUS_SUCCESS);
+        fail_step=boundary_steps+1;fault_triggered=0;
+        CHECK(!NT_SUCCESS(ConnectorLinkHandoff(&device,&h)));balanced();CHECK(fault_triggered);
+        CHECK(h.Action==BC250_LINK_HANDOFF_FAILED && !NT_SUCCESS(h.Status) && h.Detached==1 && h.PixelKhz==148510);
+        CHECK(!link.Active && !device.RuntimePostValid && !snapshot_refs);
+    }
+    /* Required step 2: no display connected. */
+    reset(BC250_SINK_DP);snapshot.Sink.Kind=BC250_SINK_NONE;
+    CHECK(ConnectorLinkHandoff(&device,&h)==STATUS_NOT_SUPPORTED);balanced();
+    CHECK(h.Action==BC250_LINK_HANDOFF_NO_SINK && !boundary_steps && !primary_enters && !snapshot_refs);
+    reset(BC250_SINK_DP);snapshot_given=NULL;
+    CHECK(ConnectorLinkHandoff(&device,&h)==STATUS_NOT_SUPPORTED && h.Action==BC250_LINK_HANDOFF_NO_SINK);balanced();
+    /* Required step 5: no offered timing of at least 800x600, so nothing to enable. */
+    reset(BC250_SINK_DP);snapshot.Sink.Targets[0]=small;
+    CHECK(ConnectorLinkHandoff(&device,&h)==STATUS_NOT_SUPPORTED);balanced();
+    CHECK(h.Action==BC250_LINK_HANDOFF_NO_TARGET && !boundary_steps && !primary_enters && !snapshot_refs);
+    /* Suspended, or no link owner: nothing is programmed. */
+    reset(BC250_SINK_DP);link.Suspended=1;
+    CHECK(ConnectorLinkHandoff(&device,&h)==STATUS_DEVICE_NOT_READY);balanced();
+    CHECK(h.Action==BC250_LINK_HANDOFF_SUSPENDED && !boundary_steps && !snapshot_refs);
+    reset(BC250_SINK_DP);device.ConnectorLink=NULL;
+    CHECK(ConnectorLinkHandoff(&device,&h)==STATUS_DEVICE_NOT_READY && h.Action==BC250_LINK_HANDOFF_SUSPENDED && !snapshot_refs);
+    /* The static inherited route (BD-155): no connector owner, and the firmware stream stays as it is. */
+    reset(BC250_SINK_DP);connector_enabled=0;
+    CHECK(ConnectorLinkHandoff(&device,&h)==STATUS_SUCCESS);balanced();
+    CHECK(h.Action==BC250_LINK_HANDOFF_STATIC && !boundary_steps && !primary_enters && !snapshot_refs);
+    printf("Post-display handoff: %u checks, %u failures; detached mode, first target, refusals\n",checks-begin,failures-bad);
+    reset(BC250_SINK_HDMI);
+}
 int main(void)
 {
     end_failure_propagation();
@@ -1220,6 +1300,7 @@ int main(void)
     success();refusal();failure_sweep();rollback();cancellation_and_power();disable_suspend_resume();ownership_and_cleanup();retained_aux_journal();
     detach_before_apply();
     keep_breadcrumbs();
+    release_handoff();
     printf("connector transaction: %u checks, %u failures (software boundary model)\n",checks,failures);
     return failures?1:0;
 }

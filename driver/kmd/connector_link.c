@@ -58,6 +58,10 @@ typedef struct CONNECTOR_LINK {
     BC250_HDMI_LINK Hdmi;
     BC250_DP_TRAIN_RESULT Training;
     LINK_MODE Current, Next, Previous;
+    // BD-090: the mode that an OS detach (a commit of an empty topology) took down, and the sink generation it
+    // belonged to. The post-display release enables it again (ConnectorLinkHandoff); a physical detach forgets it.
+    LINK_MODE Detached;
+    ULONG DetachedGeneration;
     D3DKMDT_VIDEO_SIGNAL_INFO Signal;
     UCHAR Caps[16];
     void *AtomWorkspace, *DmlWorkspace;
@@ -641,7 +645,7 @@ NTSTATUS ConnectorLinkDisable(BC250_DEVICE* Device,ULONG Generation)
     Begin(c,Generation,TRUE);status=DisableOwned(c);End(c);
     // A detach ends the rollback scope. A later sink, even with the same mode,
     // must never receive the previous monitor's timing as error recovery.
-    c->Current.Valid=FALSE;c->Previous.Valid=FALSE;
+    c->Current.Valid=FALSE;c->Previous.Valid=FALSE;c->Detached.Valid=FALSE;
     InterlockedExchange(&Device->RuntimeDisplayChanged,1);
     InterlockedExchange(&Device->RuntimePostValid,0);Device->SourceVisible=FALSE;Device->ModeActive=FALSE;
     KeAcquireSpinLock(&Device->DpAudio.Lock,&irql);
@@ -834,6 +838,8 @@ NTSTATUS ConnectorLinkCommit(BC250_DEVICE* Device,const BC250_CONNECTOR_SNAPSHOT
         // An OS detach is a fallible transaction too. Do not discard its old
         // plan until hardware disable succeeds. Physical HPD detach uses the
         // separate ConnectorLinkDisable path and cannot restore an absent sink.
+        // The same sink is still there: the post-display release may need this mode (BD-090).
+        if(c->Previous.Valid) {c->Detached=c->Previous;c->DetachedGeneration=Snapshot->Generation;}
         c->Current.Valid=FALSE;c->Previous.Valid=FALSE;
         Device->SourceVisible=FALSE;Device->ModeActive=FALSE;
         KeAcquireSpinLock(&Device->DpAudio.Lock,&irql);
@@ -962,6 +968,62 @@ NTSTATUS ConnectorLinkResume(BC250_DEVICE* Device,ULONG Generation)
     }
     ClockSessionLeave(c);End(c);finish=WddmPrimaryExclusiveEnd(Device,primary,TRUE);
     return NT_SUCCESS(finish)?status:finish;
+}
+
+// BD-090. dispmprt.md, DxgkDdiStopDeviceAndReleasePostDisplayOwnership, required steps 2, 5 and 6: a target with no
+// display connected answers STATUS_NOT_SUPPORTED; with no target active the driver should enable one, at the current
+// resolution if it can, else at the native or another mode of at least 800x600. An OS detach (ConnectorLinkCommit
+// with no timing) and a physical one turn this link off and clear RuntimePostValid. A stop after them has no surface
+// to hand over: DcnRuntimeSurfaceAuthorized answers STATUS_DEVICE_NOT_READY, the release fails, and Windows has no
+// POST display for the next start (Code 43, the zero-size check in pnp.c). First choice: the mode that an OS detach
+// of this same sink took down, while the sink still offers it. Second: the first offered timing of at least 800x600,
+// the base block's first detailed timing when it fits (edid.c, AddTarget order).
+static LONG HandoffTarget(const CONNECTOR_LINK* c,const BC250_CONNECTOR_SNAPSHOT* Snapshot,BOOLEAN* Detached)
+{
+    ULONG i;
+    *Detached=FALSE;
+    if(c->Detached.Valid && c->DetachedGeneration==Snapshot->Generation)
+        for(i=0;i<Snapshot->Sink.TargetCount;++i)
+            if(Bc250TargetTimingEqual(&c->Detached.Timing,&Snapshot->Sink.Targets[i])) {*Detached=TRUE;return (LONG)i;}
+    for(i=0;i<Snapshot->Sink.TargetCount;++i)
+        if(Snapshot->Sink.Targets[i].HActive>=800 && Snapshot->Sink.Targets[i].VActive>=600)return (LONG)i;
+    return -1;
+}
+
+NTSTATUS ConnectorLinkHandoff(BC250_DEVICE* Device,BC250_LINK_HANDOFF* Handoff)
+{
+    BC250_CONNECTOR_SNAPSHOT* snap;CONNECTOR_LINK* c;BC250_TARGET_TIMING timing;
+    LONG index=-1;BOOLEAN detached=FALSE;
+    RtlZeroMemory(Handoff,sizeof(*Handoff));
+    if(!ConnectorIsEnabled(Device)) {Handoff->Action=BC250_LINK_HANDOFF_STATIC;return Handoff->Status=STATUS_SUCCESS;}
+    snap=ConnectorSnapshotAcquire(Device);
+    if(!snap || snap->Sink.Kind==BC250_SINK_NONE || snap->Sink.TargetCount>BC250_EDID_MAX_MODES) {
+        ConnectorSnapshotRelease(snap);
+        Handoff->Action=BC250_LINK_HANDOFF_NO_SINK;return Handoff->Status=STATUS_NOT_SUPPORTED;
+    }
+    ConnectorOperationAcquire(Device);c=Device->ConnectorLink;
+    if(!c || c->Suspended) {Handoff->Action=BC250_LINK_HANDOFF_SUSPENDED;Handoff->Status=STATUS_DEVICE_NOT_READY;}
+    else if(c->Active) {Handoff->Action=BC250_LINK_HANDOFF_ACTIVE;Handoff->Status=STATUS_SUCCESS;}
+    else {
+        index=HandoffTarget(c,snap,&detached);
+        if(index<0) {Handoff->Action=BC250_LINK_HANDOFF_NO_TARGET;Handoff->Status=STATUS_NOT_SUPPORTED;}
+    }
+    ConnectorOperationRelease(Device);
+    if(index>=0) {
+        timing=snap->Sink.Targets[index];
+        Handoff->Detached=detached;Handoff->Width=timing.HActive;Handoff->Height=timing.VActive;
+        Handoff->PixelKhz=timing.PixelClockKhz;
+        // The plane is blank while the link is off, so the fill shows nothing. The commit below scans this buffer
+        // out, and the next owner starts on black (WDDM 1.2, the PnP stop case).
+        if(Device->RuntimeFramebuffer && Device->RuntimeFramebufferLength)
+            RtlZeroMemory(Device->RuntimeFramebuffer,Device->RuntimeFramebufferLength);
+        // An ordinary commit of an offered timing: the same plan, writer and recovery as a VidPN commit. A sink
+        // generation that changed in between makes it answer STATUS_RETRY, and the release then fails as before.
+        Handoff->Status=ConnectorLinkCommit(Device,snap,&timing,timing.HActive,timing.VActive,D3DKMDT_VPPS_IDENTITY);
+        Handoff->Action=NT_SUCCESS(Handoff->Status)?BC250_LINK_HANDOFF_ENABLED:BC250_LINK_HANDOFF_FAILED;
+    }
+    ConnectorSnapshotRelease(snap);
+    return Handoff->Status;
 }
 
 NTSTATUS ConnectorLinkRelease(BC250_DEVICE* Device)

@@ -214,7 +214,7 @@ The diagnostic flip escape uses the firmware's size. It refuses while a smaller 
 
 | Event | What the driver does |
 | --- | --- |
-| Stop (`DcnStop`) | The firmware surface, then the native 1:1 shape. One log line |
+| Stop (`DcnStop`) | The firmware surface, then the native 1:1 shape. Three log lines: the branch, the inputs of the restore with `HUBP0_DCHUBP_CNTL`, and the result |
 | Bugcheck (`SystemDisplayEnable`) | The firmware surface, then the native shape. No lock, no log |
 | `ResetDevice` | The same as the bugcheck, if pipe 0 has a smaller mode |
 | D3 | The firmware surface and the native shape. The committed mode stays in the state |
@@ -222,6 +222,12 @@ The diagnostic flip escape uses the firmware's size. It refuses while a smaller 
 | A failed D3 transition | The same as D0 |
 
 The native shape is the one amdgpu programs for 1:1: `DSCL_MODE` 0, the full viewport, recout and `MPC_SIZE`.
+
+Every restore to the firmware surface keeps `HUBP0_DCHUBP_CNTL` as the firmware set it. The firmware sets
+`HUBP_TTU_DISABLE` to 1 and `HUBP_BLANK_EN` to 0 (facts M86). Only `HUBP_BLANK_EN` 1 means a blank of this driver.
+Then the restore clears `HUBP_BLANK_EN` and `HUBP_TTU_DISABLE` through the allow list of the pipe, as
+`hubp1_set_blank(false)` does. The flip write list (`g_MmioDcnWriteAllow`) does not hold this register.
+`driver/kmd/test/check_dcn_write_sites.py` refuses a write site that names a register outside that list (BD-090).
 
 ### DP audio step 4
 

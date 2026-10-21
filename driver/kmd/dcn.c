@@ -1157,16 +1157,27 @@ NTSTATUS DcnSetSourceVisibility(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible)
 }
 
 static NTSTATUS DcnRuntimeSurfaceAuthorized(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible, BOOLEAN Serialized);
+static long RuntimeRead(void* Context, unsigned long Offset, unsigned long* Value);
+static long RuntimeWrite(void* Context, unsigned long Offset, unsigned long Value);
 
+// Undoes this driver's own blank of HUBP0 before a firmware-surface restore shows it. This driver blanks the plane in
+// two places, Bc250Dcn201PlaneBlank(1) (AMD's hubp1_set_blank) and DcnFaultBlank, and both set HUBP_BLANK_EN and
+// HUBP_TTU_DISABLE together. The firmware's lit pipe has HUBP_TTU_DISABLE 1 and HUBP_BLANK_EN 0 (facts M86, 0x000F1002,
+// and the "display inherited: ... hubp" line of every start), so only HUBP_BLANK_EN says that the fetch is stopped, and a
+// pipe this driver never blanked keeps the register exactly as the firmware left it. The resume clears both fields, as
+// hubp1_set_blank(false) does, through the pipe's own allow list (RuntimeWrite), the inverse of DcnFaultBlank.
+// BD-090 (31 line): f50880f4 tested either field and wrote through MmioDcnWriteEx, whose list (g_MmioDcnWriteAllow, the
+// flip registers of M87) does not hold DCHUBP_CNTL. Every restore to the firmware surface wrote, every write was
+// refused with STATUS_ACCESS_DENIED, and the PnP stop handed Windows no POST display.
 static NTSTATUS DcnResumeOwnedFetch(_Inout_ BC250_DEVICE* Device)
 {
     ULONG value = 0;
-    NTSTATUS status = MmioDcnRead(Device, BC250_REG_DMU_HUBP0_DCHUBP_CNTL, &value);
-    if (NT_SUCCESS(status) && (value & (HUBP0_DCHUBP_CNTL__HUBP_BLANK_EN_MASK | HUBP0_DCHUBP_CNTL__HUBP_TTU_DISABLE_MASK)))
-        status = MmioDcnWriteEx(Device, BC250_REG_DMU_HUBP0_DCHUBP_CNTL,
-            value & ~(HUBP0_DCHUBP_CNTL__HUBP_BLANK_EN_MASK | HUBP0_DCHUBP_CNTL__HUBP_TTU_DISABLE_MASK), TRUE);
-    if (NT_SUCCESS(status)) InterlockedExchange(&Device->RuntimePlaneBlank, 0);
-    return status;
+    long status = RuntimeRead(Device, BC250_REG_DMU_HUBP0_DCHUBP_CNTL, &value);
+    if (status >= 0 && (value & HUBP0_DCHUBP_CNTL__HUBP_BLANK_EN_MASK))
+        status = RuntimeWrite(Device, BC250_REG_DMU_HUBP0_DCHUBP_CNTL,
+            value & ~(HUBP0_DCHUBP_CNTL__HUBP_BLANK_EN_MASK | HUBP0_DCHUBP_CNTL__HUBP_TTU_DISABLE_MASK));
+    if (status >= 0) InterlockedExchange(&Device->RuntimePlaneBlank, 0);
+    return (NTSTATUS)status;
 }
 
 static NTSTATUS DcnFirmwareSurfaceCore(_Inout_ BC250_DEVICE* Device, BOOLEAN Unblank, BOOLEAN Serialized)
@@ -1536,7 +1547,20 @@ NTSTATUS DcnLinkSurfaceRestore(BC250_DEVICE* Device, const BC250_LINK_SURFACE* S
 NTSTATUS DcnStop(_Inout_ BC250_DEVICE* Device)
 {
     NTSTATUS status;
+    LONG changed=InterlockedCompareExchange(&Device->RuntimeDisplayChanged,0,0);
+    ULONG hubp=0;
     DcnUnmapScanout(Device);
+    // BD-090: the inputs of the restore below, so that a failed display handoff names its branch and the reason:
+    // the runtime branch needs a valid RuntimePost on the reserved buffer, the firmware branch the captured surface.
+    // hubp is HUBP0_DCHUBP_CNTL before the restore: HUBP_BLANK_EN (bit 0) set means this driver's blank, which the
+    // restore undoes (DcnResumeOwnedFetch); the firmware's own value is 000F1002 (facts M86).
+    (void)MmioDcnRead(Device,BC250_REG_DMU_HUBP0_DCHUBP_CNTL,&hubp);
+    GuardLog("dcnflip: stop: %s surface changed %ld valid %ld runtime %llX reserved %llX",changed?"runtime":"firmware",
+        changed,InterlockedCompareExchange(&Device->RuntimePostValid,0,0),
+        (ULONGLONG)Device->RuntimePost.PhysicAddress.QuadPart,(ULONGLONG)Device->RuntimeFramebufferPhysical.QuadPart);
+    GuardLog("dcnflip: stop: firmware known %u diverged %u address %llX pitch %lu post pitch %lu hubp %08lX",
+        (UINT)Device->DcnFirmwareKnown,(UINT)Device->DcnDiverged,Device->DcnFirmwareAddress,
+        (ULONG)Device->DcnFirmwarePitch,(ULONG)Device->Post.Pitch,hubp);
     status=DcnRestorePostDisplaySerialized(Device);
     GuardLog("dcnflip: stop: verified firmware scanout status 0x%08X",status);
     // After the firmware surface is back: the native viewport and scaler shape for the next owner (modeset.c). It

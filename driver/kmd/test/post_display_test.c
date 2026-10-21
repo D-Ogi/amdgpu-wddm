@@ -1,8 +1,15 @@
 // Actual-source restore plus CPU writes. Does not trigger a bugcheck or prove
 // hardware idle/reset; models the already-running single DCN pipe only.
 #include <stdio.h>
+#include <stdarg.h>
 #include <stdint.h>
 #include <string.h>
+/* The generated allow lists, as mmio.c and display_io.c compile them: the register stubs below refuse what the real
+ * accessors refuse (BD-090: a write the flip list does not hold failed every firmware restore on the lab and passed
+ * here). Their block also holds the DCN name table, whose type is bc250kmd.h's (a kernel header): the same two fields. */
+typedef struct _BC250_DCN_REG_INFO { const char* Name; unsigned long Offset; } BC250_DCN_REG_INFO;
+#define BC250_REGS_WITH_TABLES
+#define BC250_REGS_WITH_DISPLAY_TABLES
 #include "regs.generated.h"
 #include "dcn_2_0_1_sh_mask.h"
 #include "plane_format.h"
@@ -10,6 +17,7 @@
 #include "dcn_translate.h"
 typedef int32_t NTSTATUS;
 typedef unsigned long ULONG;
+typedef long LONG;
 typedef unsigned UINT;
 typedef uint64_t ULONGLONG;
 typedef size_t SIZE_T;
@@ -53,6 +61,7 @@ typedef struct _BC250_DEVICE {
 #define STATUS_IO_TIMEOUT ((NTSTATUS)0xC00000B5u)
 #define STATUS_NOT_SUPPORTED ((NTSTATUS)0xC00000BBu)
 #define STATUS_DEVICE_DATA_ERROR ((NTSTATUS)0xC000009Cu)
+#define STATUS_ACCESS_DENIED ((NTSTATUS)0xC0000022u)
 #define NT_SUCCESS(s) ((s)>=0)
 #define BC250_CHILD_UID 0x250001
 #define D3DDDI_ID_UNINITIALIZED 0xffffffffu
@@ -80,9 +89,19 @@ static int plane_is_blank;
 static long InterlockedIncrement(volatile long *v){return ++*v;}
 static long InterlockedCompareExchange(volatile long* v,long n,long old){long r=*v;if(r==old)*v=n;return r;}
 static long InterlockedExchange(volatile long* v,long n){long r=*v;*v=n;return r;}
-static NTSTATUS MmioDcnRead(const BC250_DEVICE*d,ULONG reg,ULONG*out)
+/* The firmware's lit HUBP0 (facts M86, and "display inherited: ... hubp 000F1002" on unit A): NO_OUTSTANDING_REQ,
+ * TTU_DISABLE and XRQ_NO_OUTSTANDING_REQ set, HUBP_BLANK_EN clear. Every case starts from it. */
+#define FIRMWARE_HUBP (HUBP0_DCHUBP_CNTL__HUBP_NO_OUTSTANDING_REQ_MASK|HUBP0_DCHUBP_CNTL__HUBP_TTU_DISABLE_MASK| \
+                       HUBP0_DCHUBP_CNTL__HUBP_XRQ_NO_OUTSTANDING_REQ_MASK)
+static unsigned denied_writes,hubp_writes;
+static int listed(const unsigned long* table,unsigned long count,ULONG reg)
 {
-    if(!d->Mmio)return STATUS_DEVICE_NOT_READY;
+    unsigned long i;
+    for(i=0;i<count;i++)if(table[i]==reg)return 1;
+    return 0;
+}
+static NTSTATUS ModelRead(const BC250_DEVICE*d,ULONG reg,ULONG*out)
+{
     switch(reg){
     case BC250_REG_DMU_OTG0_OTG_BLANK_CONTROL:
         *out=model.blank;
@@ -107,14 +126,20 @@ static NTSTATUS MmioDcnRead(const BC250_DEVICE*d,ULONG reg,ULONG*out)
     default:CHECK(0);return STATUS_INVALID_PARAMETER;
     }return STATUS_SUCCESS;
 }
-static NTSTATUS MmioDcnWriteEx(const BC250_DEVICE*d,ULONG reg,ULONG value,BOOLEAN quiet)
+/* mmio.c MmioDcnRead: g_MmioDcnAllow. */
+static NTSTATUS MmioDcnRead(const BC250_DEVICE*d,ULONG reg,ULONG*out)
 {
-    CHECK(quiet); // No logging/kernel-lock path is reachable from bugcheck.
-    if(!d->Mmio || !d->DcnWriteEnabled)return STATUS_DEVICE_NOT_READY;
+    *out=0;
+    if(!d->Mmio)return STATUS_DEVICE_NOT_READY;
+    if(!listed(g_MmioDcnAllow,BC250_MMIO_DCN_ALLOW_COUNT,reg))return STATUS_ACCESS_DENIED;
+    return ModelRead(d,reg,out);
+}
+static NTSTATUS ModelWrite(const BC250_DEVICE*d,ULONG reg,ULONG value)
+{
     model.writes++;
     switch(reg){
     case BC250_REG_DMU_HUBP0_DCHUBP_CNTL:
-        model.hubp=value;plane_is_blank=(value&HUBP0_DCHUBP_CNTL__HUBP_BLANK_EN_MASK)!=0;break;
+        hubp_writes++;model.hubp=value;plane_is_blank=(value&HUBP0_DCHUBP_CNTL__HUBP_BLANK_EN_MASK)!=0;break;
     case BC250_REG_DMU_OTG0_OTG_BLANK_CONTROL:
         model.blank=value&~OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK;
         if(value&OTG0_OTG_BLANK_CONTROL__OTG_BLANK_DATA_EN_MASK)model.blank|=OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK;
@@ -136,10 +161,41 @@ static NTSTATUS MmioDcnWriteEx(const BC250_DEVICE*d,ULONG reg,ULONG value,BOOLEA
     default:CHECK(0);return STATUS_INVALID_PARAMETER;
     }return STATUS_SUCCESS;
 }
+/* mmio.c MmioDcnWriteEx: the flip list, g_MmioDcnWriteAllow (M87), and nothing else. */
+static NTSTATUS MmioDcnWriteEx(const BC250_DEVICE*d,ULONG reg,ULONG value,BOOLEAN quiet)
+{
+    CHECK(quiet); // No logging/kernel-lock path is reachable from bugcheck.
+    if(!d->Mmio || !d->DcnWriteEnabled)return STATUS_DEVICE_NOT_READY;
+    if(!listed(g_MmioDcnWriteAllow,BC250_MMIO_DCN_WRITE_ALLOW_COUNT,reg)){denied_writes++;return STATUS_ACCESS_DENIED;}
+    return ModelWrite(d,reg,value);
+}
 /* Display modes (modeset.c): after the firmware surface is back, the bugcheck screen gets the native viewport.
  * Counted here; the modeset host suite tests what it writes. It must run only after a successful restore. */
 static unsigned modeset_restores;
 static void ModesetRestoreQuiet(BC250_DEVICE*d){CHECK(!d->DcnDiverged);++modeset_restores;}
+/* DcnStop (BD-090): the PnP stop's restore with its self-check lines. ModesetStop and DcnUnmapScanout are counted;
+ * GuardLog keeps the lines as the ring gets them. */
+static unsigned modeset_stops,scanout_unmaps;
+static void ModesetStop(BC250_DEVICE*d){(void)d;++modeset_stops;}
+static void DcnUnmapScanout(BC250_DEVICE*d){(void)d;++scanout_unmaps;}
+static char guard_lines[8][192];
+static unsigned guard_count;
+static void GuardLog(const char* format,...)
+{
+    va_list args;
+    va_start(args,format);
+    vsnprintf(guard_lines[guard_count%8],sizeof(guard_lines[0]),format,args);
+    va_end(args);
+    guard_count++;
+}
+static int logged(const char* line)
+{
+    unsigned i;
+    for(i=0;i<guard_count && i<8;i++)if(!strcmp(guard_lines[i],line))return 1;
+    printf("missing line: %s\n",line);
+    for(i=0;i<guard_count && i<8;i++)printf("    have: %s\n",guard_lines[i]);
+    return 0;
+}
 static void KeStallExecutionProcessor(ULONG us)
 {
     CHECK(us==1 || us==100);model.elapsed+=us;
@@ -149,8 +205,22 @@ static void KeStallExecutionProcessor(ULONG us)
         if(!model.never_latch && model.elapsed>=model.latch_delay)model.scanned=model.requested;
     }
 }
-static long RuntimeRead(void* c,unsigned long o,unsigned long* v){return MmioDcnRead(c,o,v);}
-static long RuntimeWrite(void* c,unsigned long o,unsigned long v){return MmioDcnWriteEx(c,o,v,TRUE);}
+/* dcn.c RuntimeRead and RuntimeWrite: the pipe's own lists, g_MmioDisplayAllow and g_MmioDisplayWriteAllow. */
+static long RuntimeRead(void* c,unsigned long o,unsigned long* v)
+{
+    const BC250_DEVICE* d=c;
+    *v=0;
+    if(!d->Mmio)return STATUS_DEVICE_NOT_READY;
+    if(!listed(g_MmioDisplayAllow,BC250_MMIO_DISPLAY_ALLOW_COUNT,o))return STATUS_ACCESS_DENIED;
+    return ModelRead(d,o,v);
+}
+static long RuntimeWrite(void* c,unsigned long o,unsigned long v)
+{
+    const BC250_DEVICE* d=c;
+    if(!d->Mmio || !d->DcnWriteEnabled)return STATUS_DEVICE_NOT_READY;
+    if(!listed(g_MmioDisplayWriteAllow,BC250_MMIO_DISPLAY_WRITE_ALLOW_COUNT,o)){denied_writes++;return STATUS_ACCESS_DENIED;}
+    return ModelWrite(d,o,v);
+}
 static void RuntimeStall(void* c,unsigned long us){(void)c;KeStallExecutionProcessor(us);}
 static unsigned plane_blanks,plane_unblanks;
 static long Bc250Dcn201PlaneBlank(BC250_DISP_IO* io,int blank)
@@ -179,6 +249,7 @@ static void init(BC250_DEVICE*d,ULONG*fb)
 {
     memset(d,0,sizeof(*d));memset(&model,0,sizeof(model));memset(fb,0,96);
     memset(&writer,0,sizeof(writer));plane_is_blank=0;
+    model.hubp=FIRMWARE_HUBP;denied_writes=hubp_writes=0;guard_count=0;modeset_stops=scanout_unmaps=0;
     d->Mmio=&model;d->Framebuffer=fb;d->FramebufferLength=96;
     d->VramEnabled=TRUE;d->VramPhysical.QuadPart=0x400000000ll;d->VramLength=0x100000000ull;
     d->Post.Width=4;d->Post.Height=3;d->Post.Pitch=32;d->Post.ColorFormat=D3DDDIFMT_X8R8G8B8;
@@ -395,7 +466,58 @@ int main(void)
             CHECK(model.config==0x308 && model.cnvc==8 && model.crossbar==restored && model.format_writes==3);
             CHECK(d.DcnPlaneFormat==BC250_PLANE_FORMAT_ARGB8888);
             CHECK(writer.resumes==(serialized?0u:1u));   /* only the serialized OS callbacks skip the writer gate */
+            if(!runtime)CHECK(model.hubp==FIRMWARE_HUBP && !hubp_writes && !denied_writes);   /* the firmware's HUBP0 */
         }
+    }
+    // BD-090 (31 line; unit A 2026-10-21 18:44Z native, 18:48Z 800x600): the PnP stop of a desktop whose flips left
+    // the plane on another surface, with no runtime mode (changed 0, valid 0) and the OS's visibility off. DcnStop puts
+    // the firmware surface back, shows it, and leaves HUBP0 as the firmware lit it. f50880f4 took the firmware's
+    // HUBP_TTU_DISABLE for a blank of its own and wrote DCHUBP_CNTL through the flip list, so every such stop ended
+    // "verified firmware scanout status 0xC0000022" and Windows got no POST display. The scaled firmware mode (BD-155)
+    // takes the same branch with another pitch.
+    {
+        static const struct { UINT width,height,pitch; } modes[2]={{4,3,32},{2,3,16}};
+        char line[192];
+        unsigned i;
+        init(&d,fb);
+        // The stubs hold the real lists: the flip list refuses DCHUBP_CNTL, the pipe's own list takes it.
+        CHECK(MmioDcnWriteEx(&d,BC250_REG_DMU_HUBP0_DCHUBP_CNTL,FIRMWARE_HUBP,TRUE)==STATUS_ACCESS_DENIED);
+        CHECK(RuntimeWrite(&d,BC250_REG_DMU_HUBP0_DCHUBP_CNTL,FIRMWARE_HUBP)==STATUS_SUCCESS && model.hubp==FIRMWARE_HUBP);
+        for(i=0;i<2;i++){
+            init(&d,fb);
+            d.Post.Width=modes[i].width;d.Post.Height=modes[i].height;d.Post.Pitch=modes[i].pitch;
+            d.DcnFirmwarePitch=modes[i].pitch;d.RuntimeFramebufferPhysical.QuadPart=0x490000000ll;
+            d.DcnBlanked=TRUE;
+            model.blank=OTG0_OTG_BLANK_CONTROL__OTG_BLANK_DATA_EN_MASK|OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK;
+            CHECK(DcnStop(&d)==STATUS_SUCCESS);
+            CHECK(model.scanned==d.DcnFirmwareAddress &&
+                  ((model.pitch&HUBPREQ0_DCSURF_SURFACE_PITCH__PITCH_MASK)+1)*4==modes[i].pitch);
+            CHECK(!d.DcnDiverged && d.DcnCurrentAddress==d.DcnFirmwareAddress && d.DcnCurrentPitch==modes[i].pitch);
+            CHECK(!d.DcnBlanked && !(model.blank&OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK));
+            CHECK(model.hubp==FIRMWARE_HUBP && !hubp_writes && !denied_writes);
+            CHECK(scanout_unmaps==1 && modeset_stops==1 && writer.resumes==0);
+            CHECK(logged("dcnflip: stop: firmware surface changed 0 valid 0 runtime 0 reserved 490000000"));
+            snprintf(line,sizeof(line),
+                "dcnflip: stop: firmware known 1 diverged 1 address 470000000 pitch %u post pitch %u hubp 000F1002",
+                modes[i].pitch,modes[i].pitch);
+            CHECK(logged(line));
+            CHECK(logged("dcnflip: stop: verified firmware scanout status 0x00000000"));
+        }
+        // The scan-out is the firmware surface already: verified by reads, the register untouched, the source shown.
+        init(&d,fb);d.DcnDiverged=FALSE;model.scanned=d.DcnFirmwareAddress;model.pitch=d.DcnFirmwarePitch/4-1;
+        d.DcnBlanked=TRUE;
+        model.blank=OTG0_OTG_BLANK_CONTROL__OTG_BLANK_DATA_EN_MASK|OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK;
+        CHECK(DcnStop(&d)==STATUS_SUCCESS && !model.triggered);
+        CHECK(model.hubp==FIRMWARE_HUBP && !hubp_writes && !denied_writes && !d.DcnBlanked);
+        CHECK(logged("dcnflip: stop: verified firmware scanout status 0x00000000"));
+        // This driver's own blank (a detach or a fault: HUBP_BLANK_EN with HUBP_TTU_DISABLE) is undone through the
+        // pipe's list, as hubp1_set_blank(false) does, and the address latches once the plane fetches again.
+        init(&d,fb);model.hubp=FIRMWARE_HUBP|HUBP0_DCHUBP_CNTL__HUBP_BLANK_EN_MASK;plane_is_blank=1;d.RuntimePlaneBlank=1;
+        CHECK(DcnStop(&d)==STATUS_SUCCESS && model.scanned==d.DcnFirmwareAddress);
+        CHECK(model.hubp==(FIRMWARE_HUBP&~HUBP0_DCHUBP_CNTL__HUBP_TTU_DISABLE_MASK) && hubp_writes==1 && !denied_writes);
+        CHECK(!plane_is_blank && !d.RuntimePlaneBlank && !d.DcnDiverged);
+        CHECK(logged("dcnflip: stop: firmware known 1 diverged 1 address 470000000 pitch 32 post pitch 32 hubp 000F1003"));
+        CHECK(logged("dcnflip: stop: verified firmware scanout status 0x00000000"));
     }
     // Ordinary restore cannot bypass startup blanking, but a validated crash
     // display is an explicit ownership transfer and must remain available.
