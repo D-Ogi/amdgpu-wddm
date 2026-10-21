@@ -120,8 +120,9 @@ namespace AmdgpuWddmControl
             // The graphics settings at their widest: a frame rate limit and the compatibility route for all games, an
             // overlay value outside the contract (drawn as not valid), witcher3 with values of its own (one not
             // valid), a changed shader model, and one edit in each scope. A fixture with keys of its own keeps them.
-            // The two Vulkan values stay in the fixture although their rows wait for the ICD (GraphicsSettings.AwaitingIcd):
-            // a computer can hold them from a hand edit, and the pages must draw without them.
+            // The Vulkan route for all games is the stored rollback (gdi, Compatible). MemoryOverflow stays in the fixture
+            // although its row waits for the ICD (GraphicsSettings.AwaitingIcd): a computer can hold it from a hand
+            // edit, and the pages must draw without it.
             if (_snap.GfxKeys == null)
             {
                 _snap.GfxKeys = new List<GfxKey>();

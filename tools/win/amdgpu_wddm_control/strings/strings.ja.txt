@@ -914,7 +914,7 @@ search.graphics.latency|mt-safe|f3bcef3c|低遅延
 search.graphics.latency.terms|mt|5b07cf0e|遅延|入力遅延|インプットラグ|先行フレーム|レンダー キュー|Anti-Lag|Reflex
 search.graphics.overlay|mt-safe|37d49e6c|パフォーマンス オーバーレイ
 search.graphics.vk-present|mt-safe|cdee9cc4|Vulkan の表示方式
-search.graphics.vk-present.terms|mt|93c9bf20|Vulkan|表示|黒い画面|画面が止まる|互換性
+search.graphics.vk-present.terms|mt|f2d57cd4|Vulkan|表示|黒い画面|画面が止まる|互換性|互換|高速|フリップ
 search.graphics.vk-memory|mt-safe|542ed595|ビデオ メモリが一杯のとき
 search.graphics.vk-memory.terms|mt|f744c892|VRAM|ビデオ メモリ|メモリ不足|システム メモリ|DirectX 11|DirectX 12
 search.games.sm|mt-safe|0dbc5bc7|最高シェーダー モデル
@@ -924,7 +924,7 @@ search.games.cpu-render.terms|mt|927301e2|CPU レンダリング|ソフトウェ
 search.display.scaling|mt-safe|22b1cb79|GPU スケーリング
 help.setting.latency|mt|a684f1ab|プロセッサーがグラフィックス チップより先に準備できるフレーム数です。少ないほどマウスやキーボードへの反応が速くなりますが、フレーム レートが下がることがあります。DirectX 11 と DirectX 12 のゲームで動作します。すでに先行フレーム数が少ないゲームはそのままです。
 help.setting.overlay|mt|78ee0e43|ゲームの隅にフレーム レートとフレーム時間を表示します。現在は DirectX 11 のゲームでのみ動作します。
-help.setting.vk-present|mt|68591c06|Vulkan ゲームがフレームを表示する方法です。すべてのゲームに適用されます。既定は互換性です。モダンはまだテスト中で、Vulkan ゲームの画面が黒い、または止まったままになることがあります。その場合は互換性を選んでください。
+help.setting.vk-present|mt|31f80141|Vulkan ゲームがフレームを表示する方法です。すべてのゲームに適用されます。既定は高速 (フリップ) です。グラフィックスカードが各フレームをコピーし、全画面のゲームはそのまま画面に表示されます。互換は各フレームをプロセッサーでコピーします。遅くなりますが、高速 (フリップ) が動かない場合でも動作します。Vulkan ゲームの画面が黒い、または止まったままのときは、互換を選んでください。
 help.setting.vk-memory|mt|50303e03|ビデオ メモリが一杯になったときに DirectX 11 または DirectX 12 のゲームに返す内容です。ゲームごと、またはすべてのゲームに設定できます。Vulkan ゲームには適用されません。「システムメモリを使う」ではゲームは動作を続けますが遅くなります。「メモリ不足を報告する」ではゲームに知らせ、ゲームが設定を下げられるようにします。
 help.setting.sm|mt|f3b2ff18|ドライバーが DirectX 12 ゲームに報告する最高のシェーダー モデルです。既定は 6.8 です。新しいシェーダー モデルで動作しないゲームがあります。そのようなゲームでは 6.7 または 6.6 を選んでください。
 help.setting.cpu-render|mt|0d418439|このゲームの DirectX 11 を、グラフィックス チップではなくプロセッサーで実行します。大幅に遅く、DirectX 11 のすべての機能は使えないため、2012 年以降に発売されたほとんどのゲーム (Counter-Strike 2 など) はこの設定では起動しません。グラフィックス チップで動作しない古いゲームの最後の手段としてだけ使ってください。
@@ -944,9 +944,9 @@ gfx.choice.latency-1|mt-safe|4928c007|1 フレーム先行 (最小の遅延)
 gfx.choice.latency|mt-safe|ae07b17c|{0} フレーム先行
 gfx.choice.on|mt-safe|13001175|オン
 gfx.choice.off|mt-safe|ca7981b4|オフ
-gfx.choice.modern|mt-safe|eef6c7f6|モダン
-gfx.choice.compat|mt-safe|b37ddf1f|互換性
-gfx.choice.compat-default|mt-safe|f4b472e3|互換性 (既定)
+gfx.choice.compat|mt-safe|04c72ef3|互換
+gfx.choice.flip|mt-safe|6b5641fa|高速 (フリップ)
+gfx.choice.flip-default|mt-safe|1737ef17|高速 (フリップ) (既定)
 gfx.choice.sysmem|mt|c50a771a|システムメモリを使う (遅くなるが動作を続ける)
 gfx.choice.sysmem-default|mt|5c867377|システムメモリを使う (既定、遅くなるが動作を続ける)
 gfx.choice.oom|mt|2cd3164e|メモリ不足を報告する (ゲームが設定を下げられる)
@@ -958,7 +958,7 @@ gfx.origin.stored|mt-safe|2b5c4aeb|すべてのゲーム用に保存済み。
 gfx.origin.global|mt|6617fcee|すべてのゲームの設定から: {0}。
 gfx.note.overlay|mt|a4263f23|現在は DirectX 11 のゲームでのみ動作します。
 gfx.note.cpu-render|mt|b48a21b3|大幅に遅くなり、2012 年以降に発売されたほとんどのゲームはこの設定では起動しません。グラフィックス チップで動作しない古い DirectX 11 ゲームの最後の手段です。
-gfx.note.vk-present|mt|a0dd8873|モダンはまだテスト中です。Vulkan ゲームの画面が黒い、または止まったままのときは、互換性を選んでください。
+gfx.note.vk-present|mt|87500394|Vulkan ゲームの画面が黒い、または止まったままのときは、互換を選んでください。高速 (フリップ) が動かないゲームは、自動で互換を使います。
 gfx.note.sm|mt|3efcfd20|新しいシェーダー モデルで動作しないゲームがあります。そのようなゲームにだけ低いものを選んでください。
 gfx.global.title|mt-safe|c750f458|すべてのゲームの設定
 gfx.global.intro|mt|20a33c5c|すべてのゲームに適用されます。「ゲーム」ページのゲームごとの設定が優先されます。変更は次にゲームを起動したときに適用されます。

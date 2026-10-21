@@ -464,9 +464,11 @@ if (-not $NoSmoke) {
     Write-Host "  tuning dry runs: $($tune.Count) plans, 4 refusals, 10 usage errors"
     # The graphics settings for games (src/GraphicsSettings.cs): a setting for all games, a value stored already, a
     # value removed, one game's value removed together with its key left empty, a game value next to its switches,
-    # and a reading without the keys (the BD-059 snapshot has none); then the usage errors. The Vulkan names
-    # (GraphicsSettings.AwaitingIcd) are not offered in this release, so --gfx refuses them as usage errors.
+    # the Vulkan rollback for all games (a stored gdi), and a reading without the keys (the BD-059 snapshot has none);
+    # then the usage errors. WsiRoute takes its two presets only, and MemoryOverflow (GraphicsSettings.AwaitingIcd) is
+    # not offered in this release, so --gfx refuses another route and that name as usage errors.
     $graphicsKey = 'HKLM\SOFTWARE\amdgpu-wddm\Graphics'
+    $vulkanKey = 'HKLM\SOFTWARE\amdgpu-wddm\Vulkan'
     $w3Graphics = 'HKLM\SOFTWARE\amdgpu-wddm\Graphics\Applications\witcher3.exe'
     $gfx = [ordered]@{
         'all-vsync'  = @(@('graphics-defaults', '--gfx', 'VSync=1,Anisotropy=16'), $tuned, 0, "set $graphicsKey VSync = 1 (DWord)", "set $graphicsKey Anisotropy = 16 (DWord)",
@@ -477,6 +479,7 @@ if (-not $NoSmoke) {
                          'takes effect: the next time witcher3.exe starts')
         'game-both'  = @(@('game-profile', '--image', 'witcher3.exe', '--value', 'shader-model-68-off', '--gfx', 'FrameRateLimit=144'), $tuned, 0,
                          "set $w3Graphics FrameRateLimit = 144 (DWord)", 'shader-model-68-off')
+        'all-vk-gdi' = @(@('graphics-defaults', '--gfx', 'WsiRoute=gdi'), $tuned, 0, "set $vulkanKey WsiRoute = `"gdi`" (String)")
         'unreadable' = @(@('graphics-defaults', '--gfx', 'VSync=1'), $snapshot, 3, 'refused: The graphics settings cannot be read')
     }
     foreach ($e in $gfx.GetEnumerator()) {
@@ -487,7 +490,7 @@ if (-not $NoSmoke) {
         }
     }
     foreach ($bad in @(@('graphics-defaults'), @('graphics-defaults', '--gfx', 'VSync=2'), @('graphics-defaults', '--gfx', 'Bogus=1'), @('graphics-defaults', '--gfx', 'VSync=1,VSync=0'),
-            @('graphics-defaults', '--gfx', 'WsiRoute=gdi'), @('game-profile', '--image', 'witcher3.exe', '--gfx', 'MemoryOverflow=strict'),
+            @('graphics-defaults', '--gfx', 'WsiRoute=dxgi-composition'), @('game-profile', '--image', 'witcher3.exe', '--gfx', 'MemoryOverflow=strict'),
             @('graphics-defaults', '--image', 'witcher3.exe', '--gfx', 'VSync=1'), @('reset-defaults', '--gfx', 'VSync=1'),
             @('game-profile', '--image', 'witcher3.exe'), @('game-undo', '--image', 'witcher3.exe', '--gfx', 'VSync=1'))) {
         $u = Invoke-DryRun (@('--action') + $bad + @('--dry-run', '--snapshot', $tuned)) ('usage-gfx-' + ($bad -join '-' -replace '[^a-zA-Z0-9-]', ''))

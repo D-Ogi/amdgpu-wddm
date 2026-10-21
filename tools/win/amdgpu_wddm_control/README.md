@@ -86,16 +86,19 @@ only these names, only under these keys, and only values inside the contract:
 | | `MaxFrameLatency` | DWORD | 1-3 | Low latency: frames ahead |
 | | `PerformanceOverlay` | DWORD | 1 on, 0 off | Performance overlay (DirectX 11 games for now) |
 | | `RenderOnCpu` | DWORD | 1 on, 0 off | Run DirectX 11 on the processor, a last resort. On the Games page. The card for all games shows it only when it is stored |
-| `Vulkan` | `WsiRoute` | REG_SZ | `gdi` (default since BD-105), `dxgi` | Vulkan presentation for all games: Compatibility, Modern (not shown now, see below). The ICD reads no `WsiRoute` of `Vulkan\Applications\<exe>` |
+| `Vulkan` | `WsiRoute` | REG_SZ | `dxgi` (default, BD-197), `gdi` | Vulkan presentation for all games: Fast (flip) or Compatible. The ICD reads no `WsiRoute` of `Vulkan\Applications\<exe>`, so the Games page has no such row |
 | `Vulkan`, `Vulkan\Applications\<exe>` | `MemoryOverflow` | REG_SZ | `allow` (default), `strict` | When the VRAM is full (DirectX 11 and 12 games only): use system memory, or report out of memory (not shown now, see below) |
 
-The two Vulkan values are not offered (`GraphicsSettings.AwaitingIcd`). The system Vulkan ICD (64-bit, and 32-bit from
-tester.31) reads `WsiRoute` for all games only. Beside the default `gdi`, the values it takes (`dxgi`,
-`dxgi-composition`) select the DXGI route, which presents no frame on the lab (BD-105). The system Vulkan ICD does not
-read `MemoryOverflow`: only the RADV inside the D3D11 and D3D12 drivers reads it. A control that does nothing, or that
-works only for some programs, is not shown. So the window has no Vulkan rows, the search has no Vulkan entries, and
-`--gfx` refuses both names. The support report still lists their stored values. Each row comes back when its ICD makes
-it a control that works for every program.
+The system Vulkan ICD (64-bit, and 32-bit from tester.31) reads `WsiRoute` for all games only. When the value is
+absent, it presents through DXGI (`dxgi`, "Fast (flip)"). That is the owner's decision of 2026-10-07, and it is
+the default again since BD-197, after the route presented on the lab (Quake II RTX and vkcube). `gdi`
+("Compatible") is the rollback that a person stores, and a stored `gdi` stays `gdi`. A DXGI swapchain that fails,
+or that does not present its first frame in time, goes to GDI by itself, for that swapchain only
+(docs/design/vulkan-wsi-dxgi.md, "The switch and the fallback").
+`MemoryOverflow` is not offered (`GraphicsSettings.AwaitingIcd`): the system Vulkan ICD does not read it, only the RADV
+inside the D3D11 and D3D12 drivers reads it. A control that does nothing, or that works only for some programs, is not
+shown. So the window has no row and the search no entry for it, and `--gfx` refuses its name. The support report
+still lists its stored values. The row comes back when its ICD makes it a control that works for every program.
 
 An absent value is "Application decides" or the default that the window names. A game's own value wins over the value
 for all games. The settings rule applies. "Application decides" and "Same as all games" write nothing and remove a

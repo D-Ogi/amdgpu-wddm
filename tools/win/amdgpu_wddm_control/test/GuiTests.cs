@@ -317,7 +317,10 @@ static partial class UnitTests
         Equal("games.sm", first("shader model", "en"), "the shader model is a game setting");
         Equal("display.scaling", first("GPU scaling", "en"), "GPU scaling is on the Display page");
         Equal("display.resolution", first("refresh rate", "en"), "the refresh rate is the resolution setting");
-        Check(!SettingsSearch.Index.Any(x => x.Id.StartsWith("graphics.vk-", StringComparison.Ordinal)), "no search entry for a Vulkan setting that waits for its ICD");
+        Check(!SettingsSearch.Index.Any(x => x.Id == "graphics.vk-memory"), "no search entry for MemoryOverflow, which waits for its ICD");
+        Equal("graphics.vk-present", first("flip", "en"), "flip leads to the Vulkan presentation setting");
+        Equal("graphics.vk-present", first("Vulkan", "en"), "Vulkan leads to the Vulkan presentation setting");
+        Equal("graphics.vk-present", first("zgodny", "pl"), "the Polish Compatible leads to it too");
         foreach (var e in SettingsSearch.Index.Where(x => x.Id.StartsWith("later.", StringComparison.Ordinal)))
             Check(!new[] { "vsync", "fps", "af", "scaling", "mode", "fps-counter" }.Contains(e.Id.Substring(6)), "no Coming-later row for a setting that exists: " + e.Id);
         Equal(SettingsSearch.Normalize("カタカナ"), SettingsSearch.Normalize("かたかな"), "hiragana folds to katakana");
@@ -697,7 +700,7 @@ static partial class UnitTests
             { "cu-mode", new Recovery.PlanArgs { Cu = 40 } }, { "reset-defaults", new Recovery.PlanArgs { Games = "reset" } },
             { "game-profile", new Recovery.PlanArgs { Image = "witcher3.exe", Value = "raytracing-tier-off,deferred-replay-off,shader-model-67-off", Gfx = "VSync=unset,Anisotropy=8,FrameRateLimit=144" } },
             { "tdr-delay", new Recovery.PlanArgs { Tdr = TdrSetting.ReleaseDefault } },
-            { "graphics-defaults", new Recovery.PlanArgs { Gfx = "FrameRateLimit=unset,MaxFrameLatency=1,PerformanceOverlay=1,VSync=0" } },
+            { "graphics-defaults", new Recovery.PlanArgs { Gfx = "FrameRateLimit=unset,MaxFrameLatency=1,PerformanceOverlay=1,VSync=0,WsiRoute=unset" } },
         };
         foreach (var s in fixtures)
             foreach (var a in Recovery.Actions)
