@@ -8,7 +8,7 @@ HRESULT convert_rtv(const D3D10DDIARG_CREATERENDERTARGETVIEW &s,UINT layers,UINT
     switch(s.ResourceDimension) {
     case D3D10DDIRESOURCE_BUFFER: case D3D11DDIRESOURCE_BUFFEREX:
         d.ViewDimension=D3D11_RTV_DIMENSION_BUFFER;
-        d.Buffer={s.Buffer.FirstElement,s.Buffer.NumElements}; break;
+        d.Buffer.FirstElement=s.Buffer.FirstElement; d.Buffer.NumElements=s.Buffer.NumElements; break;
     case D3D10DDIRESOURCE_TEXTURE1D: {
         const auto &v=s.Tex1D;
         if (!v.ArraySize || v.FirstArraySlice>=layers || v.ArraySize>layers-v.FirstArraySlice) return E_INVALIDARG;
@@ -39,7 +39,8 @@ HRESULT convert_rtv(const D3D10DDIARG_CREATERENDERTARGETVIEW &s,UINT layers,UINT
 void demote_rtv(const D3D11_RENDER_TARGET_VIEW_DESC1 &s,D3D11_RENDER_TARGET_VIEW_DESC &out) {
     D3D11_RENDER_TARGET_VIEW_DESC d{}; d.Format=s.Format; d.ViewDimension=s.ViewDimension;
     switch(s.ViewDimension) {
-    case D3D11_RTV_DIMENSION_BUFFER: d.Buffer={s.Buffer.FirstElement,s.Buffer.NumElements}; break;
+    case D3D11_RTV_DIMENSION_BUFFER:
+        d.Buffer.FirstElement=s.Buffer.FirstElement; d.Buffer.NumElements=s.Buffer.NumElements; break;
     case D3D11_RTV_DIMENSION_TEXTURE1D: d.Texture1D.MipSlice=s.Texture1D.MipSlice; break;
     case D3D11_RTV_DIMENSION_TEXTURE1DARRAY:
         d.Texture1DArray={s.Texture1DArray.MipSlice,s.Texture1DArray.FirstArraySlice,s.Texture1DArray.ArraySize}; break;

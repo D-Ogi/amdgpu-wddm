@@ -13,7 +13,8 @@ HRESULT convert_srv(const D3D11DDIARG_CREATESHADERRESOURCEVIEW &s,UINT layers,UI
     D3D11_SHADER_RESOURCE_VIEW_DESC1 d{}; d.Format=s.Format;
     switch(s.ResourceDimension) {
     case D3D10DDIRESOURCE_BUFFER:
-        d.ViewDimension=D3D11_SRV_DIMENSION_BUFFER; d.Buffer={s.Buffer.FirstElement,s.Buffer.NumElements}; break;
+        d.ViewDimension=D3D11_SRV_DIMENSION_BUFFER;
+        d.Buffer.FirstElement=s.Buffer.FirstElement; d.Buffer.NumElements=s.Buffer.NumElements; break;
     case D3D11DDIRESOURCE_BUFFEREX:
         if (s.BufferEx.Flags & ~UINT(D3D11_DDI_BUFFEREX_SRV_FLAG_RAW)) return E_INVALIDARG;
         d.ViewDimension=D3D11_SRV_DIMENSION_BUFFEREX;
@@ -55,7 +56,8 @@ HRESULT convert_srv(const D3D11DDIARG_CREATESHADERRESOURCEVIEW &s,UINT layers,UI
 void demote_srv(const D3D11_SHADER_RESOURCE_VIEW_DESC1 &s,D3D11_SHADER_RESOURCE_VIEW_DESC &out) {
     D3D11_SHADER_RESOURCE_VIEW_DESC d{}; d.Format=s.Format; d.ViewDimension=s.ViewDimension;
     switch(s.ViewDimension) {
-    case D3D11_SRV_DIMENSION_BUFFER: d.Buffer={s.Buffer.FirstElement,s.Buffer.NumElements}; break;
+    case D3D11_SRV_DIMENSION_BUFFER:
+        d.Buffer.FirstElement=s.Buffer.FirstElement; d.Buffer.NumElements=s.Buffer.NumElements; break;
     case D3D11_SRV_DIMENSION_BUFFEREX: d.BufferEx={s.BufferEx.FirstElement,s.BufferEx.NumElements,s.BufferEx.Flags}; break;
     case D3D11_SRV_DIMENSION_TEXTURE1D: d.Texture1D={s.Texture1D.MostDetailedMip,s.Texture1D.MipLevels}; break;
     case D3D11_SRV_DIMENSION_TEXTURE1DARRAY:

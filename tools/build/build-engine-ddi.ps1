@@ -46,13 +46,16 @@ param(
     [ValidateSet('release', 'lab')][string]$Flavour = 'release',
     # The lab flavour (BD-167; build-umd-d3d12.ps1 -Lab passes it): the library also reads AMDGPU_WDDM_DDI_TRACE and
     # the entry path knobs (BC250_ENTRY_*). Without it, the release flavour, which has no lookup of those names.
-    [switch]$Lab
+    [switch]$Lab,
+    [ValidateSet('clang-cl','msvc')][string]$Compiler='clang-cl',
+    [string]$MsvcReason=''
 )
 # One flavour, two names: -Lab is BD-167's and -Flavour is BD-166's, and the release passes the one it knows.
 # Without this line a caller that passes one knob alone ships a release-flavour binary stamped lab, or the reverse.
 if ($Lab) { $Flavour = 'lab' } elseif ($Flavour -eq 'lab') { $Lab = $true }
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\common.ps1"
+. "$PSScriptRoot\umd-compiler.ps1"
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $root = Get-Bc250Root $repo
 $src = Join-Path $repo 'driver\umd\d3d12\engine-ddi'
@@ -93,6 +96,7 @@ $saved = Save-ProcessEnvironment
 try {
     $env:TEMP = $OutputDir; $env:TMP = $OutputDir
     $null = Import-VsDevEnvironment -VsInstall $VsInstall -TempDir $OutputDir -Arch $Arch
+    $compilerExe=Resolve-Bc250UmdCompiler $root $Compiler $MsvcReason $OutputDir $Arch
     $wdk = Join-Path $root 'toolchain\nuget\microsoft.windows.wdk.x64\c\Include\10.0.26100.0\um'
     # /O2: the library holds the hot per-draw DDIs (draw, submit, descriptor copy, barriers) and compiled at the
     # default /Od until now, while the shell around it was already optimised. No /GL here: the harness-symbol
@@ -103,6 +107,8 @@ try {
                "/external:I$wdk", "/external:I$wdk\..\shared", "/external:I$VulkanInclude", "/external:I$EngineInclude",
                "/I$src")
     if ($Lab) { $flags += '/DAMDGPU_WDDM_LAB_FLAVOUR=1' }
+    $nativeFlags=$flags
+    if($Compiler -eq 'clang-cl'){$nativeFlags=ConvertTo-Bc250ClangFlags $flags $Arch @($repo,$EngineSource,$VulkanInclude)}
     $harnessFlag = '/DAMDGPU_WDDM_ENGINE_DDI_HARNESS'
 
     # A native step's verdict is its exit code. Windows PowerShell 5.1 turns every stderr line of a native command
@@ -125,13 +131,15 @@ try {
 
     Push-Location $OutputDir
     try {
-        foreach ($d in @('native', 'harness')) { New-Item -ItemType Directory -Force (Join-Path $OutputDir $d) | Out-Null }
+        foreach ($d in @('native', 'harness', 'analysis')) { New-Item -ItemType Directory -Force (Join-Path $OutputDir $d) | Out-Null }
 
         Invoke-Step 'header gate build' { & cl.exe @flags /Fo:native\ /Fd:native\ /Fe:engine-ddi-header-test.exe (Join-Path $src 'engine-ddi-header-test.cpp') }
         Invoke-Step 'header gate' { & .\engine-ddi-header-test.exe }
 
         # Native build. /analyze runs with the same /WX, so a finding fails the build.
-        Invoke-Step 'native library (/analyze)' { & cl.exe @flags /analyze /analyze:external- /c /Fo:native\ /Fd:native\engine-ddi.pdb @libSources }
+        # MSVC is a static-analysis control; its objects are never linked into the shipped library.
+        Invoke-Step 'native library MSVC static-analysis control' { & cl.exe @flags /analyze /analyze:external- /c /Fo:analysis\ /Fd:analysis\engine-ddi.pdb @libSources }
+        Invoke-Step 'native library explicit compiler' { & $compilerExe @nativeFlags /c /Fo:native\ /Fd:native\engine-ddi.pdb @libSources }
         $nativeObjs = @($libSources | ForEach-Object { Join-Path 'native' ([IO.Path]::ChangeExtension((Split-Path -Leaf $_), '.obj')) })
         Invoke-Step 'native library link' { & lib.exe /nologo /Brepro /OUT:engine-ddi.lib @nativeObjs }
         $symbols = & dumpbin.exe /nologo /symbols engine-ddi.lib

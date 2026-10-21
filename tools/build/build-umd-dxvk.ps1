@@ -5,7 +5,8 @@ param([Parameter(Mandatory)][string]$DxvkSource, [string]$OutputDir, [string]$Vs
       # package version (default: kmd_version of tools\release\release-sources.json), -Flavour the flavour of the
       # release this build is for. Without -Version nothing is stamped and the
       # build says so; the release reads every resource back before it ships.
-      [string]$Version = '', [ValidateSet('release', 'lab')][string]$Flavour = 'release', [switch]$Lab)
+      [string]$Version = '', [ValidateSet('release', 'lab')][string]$Flavour = 'release', [switch]$Lab,
+      [ValidateSet('clang-cl','msvc')][string]$Compiler='clang-cl',[string]$MsvcReason='')
 # One flavour, two names: -Lab is BD-167's and -Flavour is BD-166's, and the release passes the one it knows.
 if ($Lab) { $Flavour = 'lab' } elseif ($Flavour -eq 'lab') { $Lab = $true }
 # BD-167: the release flavour compiles the shell with NDEBUG, so an assert() added to it later is gone from the
@@ -13,12 +14,14 @@ if ($Lab) { $Flavour = 'lab' } elseif ($Flavour -eq 'lab') { $Lab = $true }
 $flavourDefine=@(if ($Lab) { '/DAMDGPU_WDDM_LAB_FLAVOUR=1' } else { '/DNDEBUG' })
 $ErrorActionPreference='Stop'
 . "$PSScriptRoot\common.ps1"
+. "$PSScriptRoot\umd-compiler.ps1"
 $repo=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $root=Get-Bc250Root $repo
 $DxvkSource=[IO.Path]::GetFullPath($DxvkSource)
 if (-not $OutputDir) { $OutputDir=Join-Path $root 'scratch\build\umd-dxvk' }
 $OutputDir=[IO.Path]::GetFullPath($OutputDir)
 New-Item -ItemType Directory -Force $OutputDir | Out-Null
+$env:TEMP=$OutputDir; $env:TMP=$OutputDir
 if ([bool]$EnginePath -ne [bool]$IcdPath) { throw 'Supply both EnginePath and IcdPath for pair admission' }
 if ($EnginePath) {
     & "$PSScriptRoot\test-umd-engine-pair.ps1" -DxvkSource $DxvkSource -OutputDir (Join-Path $OutputDir 'quality\engine-pair') -VsInstall $VsInstall -Arch $Arch -EnginePath $EnginePath -IcdPath $IcdPath
@@ -50,6 +53,10 @@ $saved=Save-ProcessEnvironment
 try {
     $env:TEMP=$OutputDir; $env:TMP=$OutputDir
     $null=Import-VsDevEnvironment -VsInstall $VsInstall -TempDir $OutputDir -Arch $Arch
+    $compilerExe=Resolve-Bc250UmdCompiler $root $Compiler $MsvcReason $OutputDir $Arch
+    $dllFlags=@('/nologo','/std:c++20','/EHsc','/W4','/WX','/O2','/GL','/arch:AVX2','/external:W0','/MT','/Brepro','/Zi','/FC',"/d1trimfile:$repo","/d1trimfile:$DxvkSource",'/DNOMINMAX','/DWIN32_LEAN_AND_MEAN','/DVK_USE_PLATFORM_WIN32_KHR')
+    if($Compiler -eq 'clang-cl'){$dllFlags=ConvertTo-Bc250ClangFlags $dllFlags $Arch @($repo,$DxvkSource)}
+    $ltoLink=@(if($Compiler -eq 'msvc'){'/LTCG'})
     $wdk=Join-Path $root 'toolchain\nuget\microsoft.windows.wdk.x64\c\Include\10.0.26100.0\um'
     $includes=@("/external:I$wdk", "/external:I$wdk\..\shared", "/external:I$DxvkSource\src", "/external:I$DxvkSource\include\vulkan\include", "/external:I$DxvkSource\include\spirv\include", "/external:I$DxvkSource\subprojects\dxbc-spirv")
     Push-Location $OutputDir
@@ -67,7 +74,7 @@ try {
         # /O flag, so cl.exe compiled every DDI handler of the shell at /Od (tester.31rc4: 3.15 home-space spills of
         # the first argument per KiB of code, the D3D12 shell 0.09). The D3D12 shell had the same gap until
         # 2026-09-30, when trial 164 put 4.3 ms per frame on its scope bookkeeping alone.
-        & cl.exe /nologo /std:c++20 /EHsc /W4 /WX /O2 /GL /arch:AVX2 /external:W0 /MT /Brepro /Zi /FC "/d1trimfile:$repo" "/d1trimfile:$DxvkSource" /DNOMINMAX /DWIN32_LEAN_AND_MEAN /DVK_USE_PLATFORM_WIN32_KHR @flavourDefine @includes /LD /Fe:amdgpu_wddm_d3d11.dll "$repo\driver\umd\dxvk\engine-session.cpp" "$repo\driver\umd\dxvk\engine-modules.cpp" "$repo\driver\umd\dxvk\ddi-adapter.cpp" "$repo\driver\umd\dxvk\hosted-instance.cpp" "$repo\driver\umd\dxvk\runtime-bridge.cpp" "$repo\driver\umd\dxvk\device-owner.cpp" "$repo\driver\umd\dxvk\runtime-surface.cpp" "$repo\driver\umd\dxvk\runtime-surface-allocation.cpp" "$repo\driver\umd\dxvk\runtime-texture.cpp" "$repo\driver\umd\dxvk\runtime-image-memory.cpp" "/Tp$repo\driver\kmd\dcn_translate.c" "$repo\driver\umd\dxvk\ddi-draw.cpp" "$repo\driver\umd\dxvk\ddi-raster.cpp" "$repo\driver\umd\dxvk\ddi-shader.cpp" "$repo\driver\umd\dxvk\ddi-sampler.cpp" "$repo\driver\umd\dxvk\ddi-fixed-state.cpp" "$repo\driver\umd\dxvk\ddi-blend.cpp" "$repo\driver\umd\dxvk\ddi-resource.cpp" "$repo\driver\umd\dxvk\ddi-buffer-binding.cpp" "$repo\driver\umd\dxvk\ddi-transfer.cpp" "$repo\driver\umd\dxvk\ddi-map.cpp" "$repo\driver\umd\dxvk\ddi-rtv.cpp" "$repo\driver\umd\dxvk\ddi-dsv.cpp" "$repo\driver\umd\dxvk\ddi-uav.cpp" "$repo\driver\umd\dxvk\ddi-output.cpp" "$repo\driver\umd\dxvk\ddi-srv.cpp" "$repo\driver\umd\dxvk\ddi-flush.cpp" "$repo\driver\umd\dxvk\ddi-table.cpp" "$repo\driver\umd\dxvk\ddi-wddm2.cpp" "$repo\driver\umd\dxvk\ddi-wddm22.cpp" "$repo\driver\umd\dxvk\ddi-present.cpp" "$repo\driver\umd\dxvk\ddi-dxgi-resources.cpp" "$repo\driver\umd\dxvk\ddi-blt.cpp" "$repo\driver\umd\dxvk\ddi-clear-view.cpp" "$repo\driver\umd\dxvk\ddi-device-create.cpp" "$repo\driver\umd\dxvk\ddi-query.cpp" "$repo\driver\umd\dxvk\ddi-lifecycle.cpp" "$repo\driver\umd\dxvk\ddi-format.cpp" "$repo\driver\umd\dxvk\ddi-resource-status.cpp" "$repo\driver\umd\dxvk\ddi-input-layout.cpp" "$repo\driver\umd\dxvk\input-layout.cpp" "$repo\driver\umd\dxvk\engine-input-layout.cpp" "$repo\driver\umd\dxvk\umd-entry.cpp" /link /Brepro /DEBUG /OPT:REF /OPT:ICF /LTCG '/PDBALTPATH:%_PDB%' "/DEF:$repo\driver\umd\dxvk\amdgpu_wddm_d3d11.def"
+        & $compilerExe @dllFlags @flavourDefine @includes /LD /Fe:amdgpu_wddm_d3d11.dll "$repo\driver\umd\dxvk\engine-session.cpp" "$repo\driver\umd\dxvk\engine-modules.cpp" "$repo\driver\umd\dxvk\ddi-adapter.cpp" "$repo\driver\umd\dxvk\hosted-instance.cpp" "$repo\driver\umd\dxvk\runtime-bridge.cpp" "$repo\driver\umd\dxvk\device-owner.cpp" "$repo\driver\umd\dxvk\runtime-surface.cpp" "$repo\driver\umd\dxvk\runtime-surface-allocation.cpp" "$repo\driver\umd\dxvk\runtime-texture.cpp" "$repo\driver\umd\dxvk\runtime-image-memory.cpp" "/Tp$repo\driver\kmd\dcn_translate.c" "$repo\driver\umd\dxvk\ddi-draw.cpp" "$repo\driver\umd\dxvk\ddi-raster.cpp" "$repo\driver\umd\dxvk\ddi-shader.cpp" "$repo\driver\umd\dxvk\ddi-sampler.cpp" "$repo\driver\umd\dxvk\ddi-fixed-state.cpp" "$repo\driver\umd\dxvk\ddi-blend.cpp" "$repo\driver\umd\dxvk\ddi-resource.cpp" "$repo\driver\umd\dxvk\ddi-buffer-binding.cpp" "$repo\driver\umd\dxvk\ddi-transfer.cpp" "$repo\driver\umd\dxvk\ddi-map.cpp" "$repo\driver\umd\dxvk\ddi-rtv.cpp" "$repo\driver\umd\dxvk\ddi-dsv.cpp" "$repo\driver\umd\dxvk\ddi-uav.cpp" "$repo\driver\umd\dxvk\ddi-output.cpp" "$repo\driver\umd\dxvk\ddi-srv.cpp" "$repo\driver\umd\dxvk\ddi-flush.cpp" "$repo\driver\umd\dxvk\ddi-table.cpp" "$repo\driver\umd\dxvk\ddi-wddm2.cpp" "$repo\driver\umd\dxvk\ddi-wddm22.cpp" "$repo\driver\umd\dxvk\ddi-present.cpp" "$repo\driver\umd\dxvk\ddi-dxgi-resources.cpp" "$repo\driver\umd\dxvk\ddi-blt.cpp" "$repo\driver\umd\dxvk\ddi-clear-view.cpp" "$repo\driver\umd\dxvk\ddi-device-create.cpp" "$repo\driver\umd\dxvk\ddi-query.cpp" "$repo\driver\umd\dxvk\ddi-lifecycle.cpp" "$repo\driver\umd\dxvk\ddi-format.cpp" "$repo\driver\umd\dxvk\ddi-resource-status.cpp" "$repo\driver\umd\dxvk\ddi-input-layout.cpp" "$repo\driver\umd\dxvk\input-layout.cpp" "$repo\driver\umd\dxvk\engine-input-layout.cpp" "$repo\driver\umd\dxvk\umd-entry.cpp" /link /Brepro /DEBUG /OPT:REF /OPT:ICF @ltoLink '/PDBALTPATH:%_PDB%' "/DEF:$repo\driver\umd\dxvk\amdgpu_wddm_d3d11.def"
         if ($LASTEXITCODE -ne 0) { throw 'UMD compilation failed' }
         & dumpbin.exe /nologo /exports .\amdgpu_wddm_d3d11.dll
         if ($LASTEXITCODE -ne 0) { throw 'UMD export inspection failed' }

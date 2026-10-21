@@ -8,12 +8,14 @@ param([string]$OutputDir,[string]$VsInstall,[string]$MesaSource,[string]$VulkanI
       # package version (default: kmd_version of tools\release\release-sources.json), -Flavour the flavour of the
       # release this build is for. Without -Version nothing is stamped and the
       # build says so; the release reads every resource back before it ships.
-      [string]$Version='',[ValidateSet('release','lab')][string]$Flavour='release',[switch]$Lab)
+      [string]$Version='',[ValidateSet('release','lab')][string]$Flavour='release',[switch]$Lab,
+      [ValidateSet('clang-cl','msvc')][string]$Compiler='clang-cl',[string]$MsvcReason='')
 # One flavour, two names: -Lab is BD-167's and -Flavour is BD-166's, and the release passes the one it knows.
 # Without this line a caller that passes one knob alone ships a release-flavour binary stamped lab, or the reverse.
 if ($Lab) { $Flavour = 'lab' } elseif ($Flavour -eq 'lab') { $Lab = $true }
 $ErrorActionPreference='Stop'
 . "$PSScriptRoot\common.ps1"
+. "$PSScriptRoot\umd-compiler.ps1"
 # Windows installer detection asks for elevation (a UAC prompt on the desktop of the build PC) before it starts a
 # 32-bit exe without a manifest whose name holds "patch", "setup", "install" or "update". hosted-dispatch-test.exe
 # below is one ("dis-patch"): the -Arch x86 build waited on two prompts on 2026-10-08. No host gate here needs
@@ -33,9 +35,12 @@ if(!$OutputDir){$OutputDir=Join-Path $root 'scratch\build\d3d12-adapter'}
 $MesaSource=[IO.Path]::GetFullPath($MesaSource);$VulkanInclude=[IO.Path]::GetFullPath($VulkanInclude);$EngineInclude=[IO.Path]::GetFullPath($EngineInclude)
 $OutputDir=[IO.Path]::GetFullPath($OutputDir)
 New-Item -ItemType Directory -Force $OutputDir|Out-Null
+$env:TEMP=$OutputDir;$env:TMP=$OutputDir
 $engineSource=Split-Path -Parent (Split-Path -Parent $EngineInclude)
 $engineBuild=Join-Path $OutputDir 'engine-ddi'
 $engineArgs=@('-NoProfile','-File',"$PSScriptRoot\build-engine-ddi.ps1",'-OutputDir',$engineBuild,'-EngineSource',$engineSource,'-VulkanInclude',$VulkanInclude,'-NativeOnly','-Arch',$Arch)
+$engineArgs+=@('-Compiler',$Compiler)
+if($MsvcReason){$engineArgs+=@('-MsvcReason',$MsvcReason)}
 if($VsInstall){$engineArgs+=@('-VsInstall',$VsInstall)}
 if($Lab){$engineArgs+='-Lab'}
 & pwsh @engineArgs
@@ -52,6 +57,7 @@ $saved=Save-ProcessEnvironment
 try {
  $env:TEMP=$OutputDir;$env:TMP=$OutputDir
  $null=Import-VsDevEnvironment -VsInstall $VsInstall -TempDir $OutputDir -Arch $Arch
+  $compilerExe=Resolve-Bc250UmdCompiler $root $Compiler $MsvcReason $OutputDir $Arch
  $wdk=Join-Path $root 'toolchain\nuget\microsoft.windows.wdk.x64\c\Include\10.0.26100.0\um'
  # /O2: the DLL and its host gates are optimised builds (until 2026-09-30 the line had no /O flag, so cl.exe
  # compiled at /Od; trial 164 attributed 4.3 ms/frame to scope bookkeeping alone).
@@ -59,6 +65,9 @@ try {
  # /FC with /d1trimfile: __FILE__ and the anonymous-namespace names see the path below each tree only.
  $flags=@('/nologo','/std:c++20','/EHsc','/W4','/WX','/O2','/GL','/arch:AVX2',("/external:W" + $(if ($Arch -eq 'x86') { 1 } else { 0 })),'/MT','/DNOMINMAX','/Brepro','/Zi','/FC',"/d1trimfile:$repo","/d1trimfile:$MesaSource","/d1trimfile:$VulkanInclude","/d1trimfile:$EngineInclude","/external:I$VulkanInclude","/external:I$EngineInclude","/external:I$MesaSource\src\util","/external:I$wdk","/external:I$wdk\..\shared", "/I$repo\driver\contract\third_party", "/I$repo\driver\contract\uapi-shim")
  if($Lab){$flags+='/DAMDGPU_WDDM_LAB_FLAVOUR=1'}
+  $dllFlags=$flags
+  if($Compiler -eq 'clang-cl'){$dllFlags=ConvertTo-Bc250ClangFlags $flags $Arch @($repo,$MesaSource,$VulkanInclude,$EngineInclude)}
+  $ltoLink=@(if($Compiler -eq 'msvc'){'/LTCG'})
  # BD-167: the release flavour compiles the shipped DLL with NDEBUG, so an assert() added to it later is gone from the
  # release and live in the lab build. Not in $flags: the host tests below check with assert() in both flavours.
  $shipped=@(if(-not $Lab){'/DNDEBUG'})
@@ -68,7 +77,7 @@ try {
    $hash=(Get-FileHash amdgpu_wddm_d3d12.dll).Hash
    Copy-Item amdgpu_wddm_d3d12.dll "retained-$hash.dll"
   }
-  & cl.exe @flags @shipped /LD /Fe:amdgpu_wddm_d3d12.dll "$repo\driver\umd\d3d12\adapter.cpp" "$repo\driver\umd\d3d12\adapter-caps.cpp" "$repo\driver\umd\d3d12\device-engine.cpp" "$repo\driver\umd\d3d12\hosted-dispatch.cpp" "$repo\driver\umd\d3d12\queue-engine.cpp" "$repo\driver\umd\d3d12\hosted-queue.cpp" "$repo\driver\umd\d3d12\heap-import.cpp" "$repo\driver\umd\d3d12\native-queue-ddi.cpp" "$repo\driver\umd\d3d12\native-residency-ddi.cpp" "$repo\driver\umd\d3d12\native-tables.cpp" $engineLib /link /Brepro /DEBUG /OPT:REF /OPT:ICF '/PDBALTPATH:%_PDB%' /LTCG /MAP:amdgpu_wddm_d3d12.map "/DEF:$repo\driver\umd\d3d12\amdgpu_wddm_d3d12.def"
+  & $compilerExe @dllFlags @shipped /LD /Fe:amdgpu_wddm_d3d12.dll "$repo\driver\umd\d3d12\adapter.cpp" "$repo\driver\umd\d3d12\adapter-caps.cpp" "$repo\driver\umd\d3d12\device-engine.cpp" "$repo\driver\umd\d3d12\hosted-dispatch.cpp" "$repo\driver\umd\d3d12\queue-engine.cpp" "$repo\driver\umd\d3d12\hosted-queue.cpp" "$repo\driver\umd\d3d12\heap-import.cpp" "$repo\driver\umd\d3d12\native-queue-ddi.cpp" "$repo\driver\umd\d3d12\native-residency-ddi.cpp" "$repo\driver\umd\d3d12\native-tables.cpp" $engineLib /link /Brepro /DEBUG /OPT:REF /OPT:ICF '/PDBALTPATH:%_PDB%' @ltoLink /MAP:amdgpu_wddm_d3d12.map "/DEF:$repo\driver\umd\d3d12\amdgpu_wddm_d3d12.def"
   if($LASTEXITCODE){throw 'Adapter build failed'}
   # The runtime finds the shell by one export name, OpenAdapter12, on x64 and on x86 alike (the .def file keeps the
   # x86 stdcall decoration out of the name). The image's machine must be the one asked for.
