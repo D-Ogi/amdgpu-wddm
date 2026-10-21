@@ -477,8 +477,8 @@ the whole description.
 - After an installation, `verify.cmd` fails `GPU desktop path` with `closed by the driver` or `last boot died in a
   session`, and the desktop runs on the CPU route: run `install.cmd -Repair`. It sets the switches of the release back
   and restarts Windows. You can also open Nagi Control App: its home page shows the notice about this state, and
-  "Turn it all back on" there opens the same things as the repair (the GPU desktop path and the automatic clock;
-  the driver removes its own record of the clock at the next start). "Reopen the GPU desktop path" in "Support: actions" on the Recovery page opens
+  "Turn it all back on" there opens the same things as the repair: the GPU desktop path and the automatic clock.
+  The driver removes its own record of the clock at the next start. "Reopen the GPU desktop path" in "Support: actions" on the Recovery page opens
   the path alone, and "Reopen what the driver closed" there is the same action as the button on the home page.
   Restart Windows afterwards. A normal installation, an upgrade and a plain re-run of `install.cmd` keep the closed path
   and name it in the report, because the driver closed it for a reason. If the driver closes the path again, make a

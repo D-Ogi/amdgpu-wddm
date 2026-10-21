@@ -139,12 +139,12 @@
 1	driver/umd/dxvk/error-contract.md
 11	driver/umd/mft-h264/README.md
 10	driver/umd/router/README.md
-6	tools/build/README.md
+4	tools/build/README.md
 16	tools/diagusb/README.md
 3	tools/firmware/README.md
 4	tools/fwinfo/README.md
 15	tools/packagecheck/README.md
-48	tools/release/README.md
+47	tools/release/README.md
 18	tools/runcompare/README.md
 25	tools/win/README.md
 60	tools/win/amdgpu_wddm_control/README.md
@@ -152,7 +152,7 @@
 14	tools/win/bc250kmd_cli/README.md
 39	tools/win/bc250mon/README.md
 9	tools/win/bc250rd/README.md
-4	tools/win/cumode/README.md
+3	tools/win/cumode/README.md
 20	tools/win/d3d11bench/README.md
 3	tools/win/d3d11errors/README.md
 2	tools/win/d3d11mt/README.md
