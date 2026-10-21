@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
-/* guard_keep_prune.h - which of the kept log ring files under C:\BC250\kmdlog may stay (guard.c GuardLogKeep).
+/* guard_keep_prune.h - which of the kept log ring files in the shared Logs directory may stay (guard.c GuardLogKeep).
  *
  * KeepLog writes the ring into a file, and until 0.7.216.10 every call of GuardLogKeep made a new one. A start with
  * the tracing gates open calls it about fifteen times (startup.c at each stage, gfx.c at each CP step and RLC

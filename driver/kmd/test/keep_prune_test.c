@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 /* Host test of driver/kmd/guard_keep_prune.h, the selection behind KeepLog's bounded directory.
  *
- * The property: after every name in C:\BC250\kmdlog has been offered, in any order, the files that stay are exactly
+ * The property: after every name in the Logs directory has been offered, in any order, the files that stay are exactly
  * the BC250_KEEP_FILES newest ring files of ours, and nothing that is not a ring file of ours is ever named for
  * deletion. The order the file system enumerates in is not ours to choose, so the model offers the same set
  * ascending, descending and shuffled with a seeded generator, and checks the answer against the set it generated.

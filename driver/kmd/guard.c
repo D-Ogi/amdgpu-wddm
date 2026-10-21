@@ -460,15 +460,18 @@ ULONG GuardLogRead(ULONG From, _Out_writes_to_(Max, return) BC250_LOG_LINE* Line
 // (CM_PROB_FAILED_POST_START, problem status 0). Kto nie ma w głowie, ten ma w nogach (what the head forgets,
 // the legs pay for): the ring can now be written out at the end of a stop.
 //
-// Behind its own gate, Parameters\KeepLog (REG_DWORD, 0 by default, preserved across upgrades, read here at the
-// stop): a synchronous file write has no timeout, and a stop during a shutdown or over a wedged volume is no
+// Behind its own gate, the KeepLog setting (0 by default, read here at each keep) in the Data key of the active
+// state generation (driver/state/catalog.json; since 6282d18d, not Parameters\KeepLog, which no longer has an
+// effect): a synchronous file write has no timeout, and a stop during a shutdown or over a wedged volume is no
 // place for one on a board without a BMC. An experiment that expects dxgkrnl to end the start opens it.
 //
-// ONE text file per episode under the OS shared driver directory's Logs child. An episode is a device start or stop
+// ONE text file per episode under the OS shared driver directory's Logs child (IoGetDriverDirectory,
+// DriverDirectorySharedData; user mode finds the same directory with GetSharedServiceDirectory, which
+// `bc250kmd_cli state paths` prints; not C:\BC250\kmdlog since 6282d18d). An episode is a device start or stop
 // (GuardLogKeepEpisode, called by pnp.c). The file is named by the UTC time of the first keep of that episode, to
 // the millisecond, and by the episode's label, in the format bc250kmd_cli log prints. The directory is created if
-// it is missing. What became of the attempt is written to Parameters\KeepStatus (the NTSTATUS of the create, or of
-// the last write), because a line in the ring saying that the ring was not kept would be read by nobody.
+// it is missing. What became of the attempt is written to KeepStatus in the same Data key (the NTSTATUS of the
+// create, or of the last write), because a line in the ring saying that the ring was not kept would be read by nobody.
 // PASSIVE_LEVEL only: DxgkDdiStopDevice is, and everything here (Zw file and registry calls, paged pool) needs it.
 //
 // Up to 0.7.216.3 every call made its own file, and a start with the tracing gates open calls this about fifteen

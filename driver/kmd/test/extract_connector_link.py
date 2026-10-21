@@ -18,6 +18,7 @@ def main():
     p.add_argument("--write-requested-value", action="store_true")
     p.add_argument("--wrong-recovery-target", action="store_true")
     p.add_argument("--omit-surface-adopt", action="store_true")
+    p.add_argument("--omit-detached-mode", action="store_true")
     args = p.parse_args()
     source = Path(__file__).resolve().parents[1] / "connector_link.c"
     data = source.read_text(encoding="utf-8")
@@ -26,11 +27,12 @@ def main():
         "LinkNow LinkOwned Begin End ClockSessionEnter ClockSessionLeave LinkStep SaveFailure RetainFailure PreviousTargetRecord RetainRecovery LogTarget LogFailure TargetRecord AtomAllowed AtomRead AtomWrite AtomNow LinkDelay LinkRead LinkWrite LinkStall Protocol SignalFor Plan CloseAux LogOpenDiagnostic ConnectorLinkLogOpen OpenResult OpenContext ConnectorLinkPrepare "
         "TrainRead TrainWrite TrainEnable TrainPattern TrainDrive TrainDisable "
         "DisableOwned ConnectorLinkDisable Apply ConnectorLinkCommit "
-        "ConnectorLinkCurrentSignal ConnectorLinkNeedsPowerOn ConnectorLinkSuspend ConnectorLinkResume ConnectorLinkRelease"
+        "ConnectorLinkCurrentSignal ConnectorLinkNeedsPowerOn ConnectorLinkSuspend ConnectorLinkResume "
+        "HandoffTarget ConnectorLinkHandoff ConnectorLinkRelease"
     ).split()
     chunks = []
     for name in names:
-        matches = list(re.finditer(r"(?m)^(?:static )?(?:ULONGLONG|uint64_t|int|long|void|ULONG|NTSTATUS|BOOLEAN)\s+" + name + r"\([^;]*?\)\s*\{", data))
+        matches = list(re.finditer(r"(?m)^(?:static )?(?:ULONGLONG|uint64_t|int|long|void|ULONG|LONG|NTSTATUS|BOOLEAN)\s+" + name + r"\([^;]*?\)\s*\{", data))
         if len(matches) != 1:
             raise SystemExit(f"Expected one definition of {name}, found {len(matches)}")
         start = matches[0].start()
@@ -52,6 +54,12 @@ def main():
             needle = "DcnLinkSurfaceAdopt(Device);"
             if body.count(needle) != 1:
                 raise SystemExit("Surface adoption mutation anchor changed")
+            body = body.replace(needle, "(void)0;")
+        if args.omit_detached_mode and name == "ConnectorLinkCommit":
+            # BD-090: an OS detach that forgets the mode it took down, so the release falls back to the first target.
+            needle = "if(c->Previous.Valid) {c->Detached=c->Previous;c->DetachedGeneration=Snapshot->Generation;}"
+            if body.count(needle) != 1:
+                raise SystemExit("Detached mode mutation anchor changed")
             body = body.replace(needle, "(void)0;")
         if args.write_requested_value and name == "AtomWrite":
             needle = "WRITE_REGISTER_ULONG(c->Device->Mmio+Dword,effective)"

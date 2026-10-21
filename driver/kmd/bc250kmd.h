@@ -697,7 +697,7 @@ ULONG GuardLogSummaryBase(void);
 void GuardLogStats(_Out_ ULONG* Total, _Out_ ULONG* Lost, _Out_ ULONG* Above);
 ULONG GuardLogRead(ULONG From, _Out_writes_to_(Max, return) struct _BC250_LOG_LINE* Lines, ULONG Max,
                    _Out_ ULONG* Next);
-void GuardLogKeep(void);                                        // the ring into a file under C:\BC250\kmdlog; PASSIVE_LEVEL
+void GuardLogKeep(void);                                        // the ring into a file under the shared Logs directory; PASSIVE_LEVEL
 void GuardLogKeepEpisode(_In_z_ PCWSTR Label);                  // one kept file per device start and per stop; PASSIVE_LEVEL
 BOOLEAN GuardKeepActive(void);  // BD-195: KeepLog set, PASSIVE_LEVEL and special APCs on, so a GuardLogKeep here is safe
 // Where the ring and its cursor live, for hang.c's dump pages. Static storage: no lock, any IRQL.

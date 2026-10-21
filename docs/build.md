@@ -492,7 +492,7 @@ ssh. The target's working directory is `C:\BC250\`, scratch `C:\BC250\tmp\`.
 | Zink OpenGL (`opengl32.dll`, `libgallium_wgl.dll`) | next to the application | app-local, no system registration |
 | MSVC runtime for RADV and Zink | System32 | Microsoft Visual C++ x64 redistributable (the lab has 14.51.36247.0) |
 | Lab tools | `C:\BC250\kmd\`, `C:\BC250\mon\`, `C:\BC250\bc250rd\` | the READMEs under `tools/win/` |
-| KMD log files | `C:\BC250\kmdlog\` | written by the driver (`driver/kmd/guard.c`) |
+| KMD log files | the `Logs` child of the driver's shared state directory (`bc250kmd_cli state paths` prints it) | written by the driver when `KeepLog` is 1 in the active state generation (`driver/kmd/guard.c`). `C:\BC250\kmdlog\` holds only files of drivers before tester.31 |
 
 What is deployed on the lab right now is recorded outside this repository.
 

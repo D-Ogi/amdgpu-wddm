@@ -1,15 +1,18 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include <string.h>
 typedef int32_t NTSTATUS;
 typedef unsigned long ULONG;
+typedef unsigned UINT;
+typedef unsigned long long ULONGLONG;
 typedef int BOOLEAN;
 typedef void* PVOID;
 typedef int KIRQL;
 typedef struct {int64_t QuadPart;} LARGE_INTEGER;
 typedef unsigned D3DDDI_VIDEO_PRESENT_TARGET_ID;
-typedef struct {unsigned Width,Height,Pitch,TargetId;uint64_t PhysicAddress;} DXGK_DISPLAY_INFORMATION,*PDXGK_DISPLAY_INFORMATION;
+typedef struct {unsigned Width,Height,Pitch,ColorFormat,TargetId;LARGE_INTEGER PhysicAddress;} DXGK_DISPLAY_INFORMATION,*PDXGK_DISPLAY_INFORMATION;
 typedef struct LIST_ENTRY {struct LIST_ENTRY *Flink,*Blink;} LIST_ENTRY;
 typedef struct BC250_PAGING_JOB {struct BC250_PAGING_JOB*Next;} BC250_PAGING_JOB;
 typedef struct {LIST_ENTRY Link;} BC250_WDDM_OBJECT;
@@ -22,7 +25,7 @@ typedef struct {
     LIST_ENTRY Objects;
     struct {void *Buckets;} ObjectIndex;
 } BC250_WDDM;
-typedef struct {
+typedef struct _BC250_DEVICE {
     BC250_WDDM *Wddm;
     void* PhysicalDeviceObject;
     BOARD_BLOCK Smu,Hwmon;
@@ -37,10 +40,12 @@ typedef struct {
     size_t FramebufferLength;
     DXGK_DISPLAY_INFORMATION Post;
     DXGK_DISPLAY_INFORMATION RuntimePost;
-    BOOLEAN RuntimePostValid;
+    volatile long RuntimePostValid, RuntimeDisplayChanged;
     void* RuntimeFramebuffer;
     size_t RuntimeFramebufferLength;
+    LARGE_INTEGER RuntimeFramebufferPhysical;
 } BC250_DEVICE;
+#include "connector_handoff.h"
 #define UNREFERENCED_PARAMETER(x) ((void)(x))
 #define TRUE 1
 #define FALSE 0
@@ -48,6 +53,8 @@ typedef struct {
 #define STATUS_DEVICE_NOT_READY ((NTSTATUS)0xC00000A3u)
 #define STATUS_IO_TIMEOUT ((NTSTATUS)0xC00000B5u)
 #define STATUS_DEVICE_DATA_ERROR ((NTSTATUS)0xC000009Cu)
+#define STATUS_NOT_SUPPORTED ((NTSTATUS)0xC00000BBu)
+#define STATUS_IO_DEVICE_ERROR ((NTSTATUS)0xC0000185u)
 #define NT_SUCCESS(s) ((s)>=0)
 #define BC250_CHILD_UID 0x250001u
 #define D3DDDI_ID_UNINITIALIZED 0xffffffffu
@@ -56,11 +63,17 @@ typedef struct {
 #define KernelMode 0
 #define StageStopEnter 70
 #define StageStopDone 79
-#define GuardLog(...) ((void)0)
 #define RtlZeroMemory(p,n) memset(p,0,n)
 #define CONTAINING_RECORD(p,t,f) ((t*)((char*)(p)-offsetof(t,f)))
 static unsigned checks,failures;
 #define CHECK(x) do {++checks;if(!(x)){++failures;printf("FAIL %d: %s\n",__LINE__,#x);}}while(0)
+/* BD-090: the lines the stop and the release write, as the ring holds them, so that the self-check is tested too. */
+static char logLines[128][256];
+static unsigned logCount,keptThrough;
+static void GuardLog(const char* format,...)
+{ va_list a;va_start(a,format);vsnprintf(logLines[logCount%128],sizeof(logLines[0]),format,a);va_end(a);logCount++; }
+static int logged(const char* line)
+{ unsigned i;for(i=0;i<logCount && i<128;i++)if(strcmp(logLines[i],line)==0)return 1;return 0; }
 static int ownedPdo,foreignPdo;
 static void* ownerIdentity;
 static int AdapterOwnerIs(void* identity){return identity && identity==ownerIdentity;}
@@ -74,11 +87,41 @@ static void KeReleaseSpinLock(int*l,KIRQL i){(void)l;(void)i;}
 static void KeCancelTimer(int*t){(void)t;}
 static void KeRemoveQueueDpc(int*d){(void)d;}
 static long InterlockedExchange(volatile long*p,long v){long old=*p;*p=v;return old;}
+/* Not static: the release of 8869edf5 (the base peel) calls none of these, and a static one it never calls would not
+   build under /W4 /WX. */
+long InterlockedCompareExchange(volatile long*p,long v,long c){long old=*p;if(old==c)*p=v;return old;}
+static unsigned healthLocks;
+void StartHealthEnter(BC250_DEVICE*d){(void)d;CHECK(!healthLocks);healthLocks++;}
+void StartHealthLeave(BC250_DEVICE*d){(void)d;CHECK(healthLocks==1);healthLocks--;}
 static void InterlockedExchangePointer(BC250_WDDM**p,void*v){*p=v;}
 static NTSTATUS DcnVsyncEnable(BC250_DEVICE*d,BOOLEAN on){(void)d;CHECK(!on);return STATUS_SUCCESS;}
 static void KeFlushQueuedDpcs(void){model.joined++;}
+/* dcn.c's DcnRestorePostDisplaySerialized: once a detach or a runtime mode set RuntimeDisplayChanged, only a valid
+   RuntimePost on the reserved buffer can be restored (DcnRuntimeSurfaceAuthorized). */
 static NTSTATUS DcnStop(BC250_DEVICE*d)
-{ CHECK(d->StartVisibilityPending==0);CHECK(model.smu && d->Framebuffer);CHECK(!d->Smu.BoardAllowed && !d->Hwmon.BoardAllowed);CHECK(model.objects==0 && model.vidmm==0);model.restores++;return model.result; }
+{
+    CHECK(d->StartVisibilityPending==0);CHECK(model.smu && d->Framebuffer);CHECK(!d->Smu.BoardAllowed && !d->Hwmon.BoardAllowed);CHECK(model.objects==0 && model.vidmm==0);model.restores++;
+    if(d->RuntimeDisplayChanged && (!d->RuntimePostValid || d->RuntimePost.PhysicAddress.QuadPart!=d->RuntimeFramebufferPhysical.QuadPart))
+        return STATUS_DEVICE_NOT_READY;
+    return model.result;
+}
+/* connector_link.c's ConnectorLinkHandoff (connector_link_test runs the real one). The model gives its answer; an
+   ENABLED answer leaves what a successful commit onto the reserved buffer leaves (Apply). */
+static struct {unsigned calls;ULONG action;NTSTATUS status;} handoffModel;
+NTSTATUS ConnectorLinkHandoff(BC250_DEVICE*d,BC250_LINK_HANDOFF*h)
+{
+    CHECK(healthLocks==1 && d->StartVisibilityPending==0);
+    CHECK(model.smu==0 && model.restores==0 && model.dpm==0 && model.unmaps==0);   /* before any teardown */
+    memset(h,0,sizeof(*h));handoffModel.calls++;h->Action=handoffModel.action;h->Status=handoffModel.status;
+    if(h->Action==BC250_LINK_HANDOFF_ENABLED || h->Action==BC250_LINK_HANDOFF_FAILED) {
+        h->Detached=1;h->Width=1920;h->Height=1200;h->PixelKhz=154000;
+    }
+    if(h->Action==BC250_LINK_HANDOFF_ENABLED) {
+        d->RuntimePost=d->Post;d->RuntimePost.Pitch=7680;d->RuntimePost.PhysicAddress=d->RuntimeFramebufferPhysical;
+        d->RuntimePostValid=1;d->RuntimeDisplayChanged=1;
+    }
+    return h->Status;
+}
 static void VidMmStop(void){CHECK(model.joined && model.restores==1);model.vidmm++;}
 static void WddmSummaryOf(BC250_WDDM*w){(void)w;}
 static int IsListEmpty(LIST_ENTRY*h){return h->Flink==h;}
@@ -97,7 +140,7 @@ static NTSTATUS ConnectorStop(BC250_DEVICE*d){CHECK(d->StartVisibilityPending==0
 static void ConnectorBufferRelease(BC250_DEVICE*d){CHECK(model.restores==1);d->RuntimeFramebuffer=NULL;}
 static void BoardMemoryIdentityClear(BC250_DEVICE*d){CHECK(!d->Smu.BoardAllowed && !d->Hwmon.BoardAllowed);}
 static void GuardStage(int s){(void)s;}
-static void GuardLogKeep(void){}
+static void GuardLogKeep(void){keptThrough=logCount;}
 /* BD-090: the give-back runs once per stop of a started device, after the last block is down. */
 static unsigned releases;
 static void GuardReleaseStart(void){CHECK(model.unmaps==1);releases++;}
@@ -161,10 +204,12 @@ static void init(BC250_DEVICE*d,BC250_WDDM*w,BC250_WDDM_OBJECT*o)
 {
     memset(d,0,sizeof(*d));memset(w,0,sizeof(*w));memset(o,0,sizeof(*o));memset(&model,0,sizeof(model));retireSignals=0;cpuStopped=0;
     memset(freedOrder,0,sizeof(freedOrder));w->ObjectIndex.Buckets=buckets;releases=0;memset(post,0xab,sizeof(post));
+    memset(&handoffModel,0,sizeof(handoffModel));memset(logLines,0,sizeof(logLines));logCount=keptThrough=healthLocks=0;
     d->Wddm=w;d->Framebuffer=post;d->FramebufferLength=sizeof(post);d->FullWddm=1;d->DcnVsyncArmed=1;w->VSyncArmed=1;d->Started=1;
     d->StartVisibilityPending=1;
     ownerIdentity=&ownedPdo;d->PhysicalDeviceObject=&ownedPdo;d->Smu.BoardAllowed=d->Hwmon.BoardAllowed=TRUE;
-    d->Post.Width=1920;d->Post.Height=1200;d->Post.Pitch=7680;d->Post.PhysicAddress=0x470000000ull;
+    d->Post.Width=1920;d->Post.Height=1200;d->Post.Pitch=7680;d->Post.PhysicAddress.QuadPart=0x470000000ll;
+    d->RuntimeFramebufferPhysical.QuadPart=0x480000000ll;
     w->Objects.Flink=w->Objects.Blink=&o->Link;o->Link.Flink=o->Link.Blink=&w->Objects;
 }
 int main(void)
@@ -179,13 +224,23 @@ int main(void)
        of them, the adapter state last of all (WddmStop's drain). */
     CHECK(freedOrder[0]==&o && freedOrder[1]==buckets && freedOrder[2]==&w);
     CHECK(retireSignals==1);
-    CHECK(info.Width==1920 && info.Height==1200 && info.Pitch==7680 && info.PhysicAddress==d.Post.PhysicAddress && info.TargetId==BC250_CHILD_UID);
+    CHECK(info.Width==1920 && info.Height==1200 && info.Pitch==7680 && info.PhysicAddress.QuadPart==d.Post.PhysicAddress.QuadPart && info.TargetId==BC250_CHILD_UID);
     CHECK(d.PostDisplayStopAttempted && d.PostDisplayStopStatus==STATUS_SUCCESS);
     CHECK(postIs(0) && releases==1 && d.StopDone);  /* WDDM 1.2: black before the visible handover; BD-090 give-back */
+    /* BD-090, the self-check: the release names what it handed back, and the stop keeps that line too. */
+    CHECK(handoffModel.calls==1 && healthLocks==0);
+    CHECK(logged("post-display release: target 2424833 started 1 runtime changed 0 valid 0"));
+    CHECK(logged("post-display release: link static detached-mode 0 timing 0x0 0 kHz status 00000000"));
+    CHECK(logged("stop: display handoff restore 00000000 hdmi 00000000 connector 00000000 result 00000000"));
+    CHECK(logged("post-display release: handed back firmware 1920x1200 pitch 7680 address 470000000 target 2424833"));
+    CHECK(keptThrough==logCount);
     init(&d,&w,&o);model.result=STATUS_IO_TIMEOUT;memset(&info,0xcc,sizeof(info));
     CHECK(Bc250StopDeviceAndReleasePostDisplayOwnership(&d,BC250_CHILD_UID,&info)==STATUS_IO_TIMEOUT);
-    CHECK(info.Width==0 && info.Height==0 && info.Pitch==0 && info.PhysicAddress==0);
+    CHECK(info.Width==0 && info.Height==0 && info.Pitch==0 && info.PhysicAddress.QuadPart==0);
     CHECK(model.restores==1 && model.unmaps==1 && d.PostDisplayStopStatus==STATUS_IO_TIMEOUT);
+    CHECK(logged("stop: display handoff restore C00000B5 hdmi 00000000 connector 00000000 result C00000B5"));
+    CHECK(logged("post-display release: handed back nothing, status C00000B5: the display restore failed, see stop: display handoff"));
+    CHECK(keptThrough==logCount);
     /* BD-090: dxgkrnl follows a failed release with StopDevice. The teardown already ran: nothing runs twice. */
     {unsigned cpu=cpuStops,dpm=dpmStops,interop=interopStops,fan=fanStops,audio=dpaudioStops;
      CHECK(Bc250StopDevice(&d)==STATUS_SUCCESS);
@@ -219,25 +274,66 @@ int main(void)
         CHECK(Bc250StopDeviceAndReleasePostDisplayOwnership(i==3?NULL:&d,BC250_CHILD_UID,&info)==STATUS_DEVICE_NOT_READY);
         CHECK(model.smu==0 && model.joined==0 && model.restores==0 && model.unmaps==0 && model.objects==0 && model.hdmiStops==0);
         CHECK(d.Started && !d.StopDone && d.StartVisibilityPending==1 && d.Smu.BoardAllowed && d.Hwmon.BoardAllowed && postIs(0xab));
-        CHECK(info.Width==0 && info.Height==0 && info.Pitch==0 && info.PhysicAddress==0 && stopEpisodes==5);
+        CHECK(info.Width==0 && info.Height==0 && info.Pitch==0 && info.PhysicAddress.QuadPart==0 && stopEpisodes==5);
+        CHECK(handoffModel.calls==0 && logCount==0);   /* not this driver's device: no link touched, no line */
     }}
     // A final failed encoder restore cannot be reported as a successful handoff.
     init(&d,&w,&o);model.hdmiResult=STATUS_DEVICE_DATA_ERROR;memset(&info,0xcc,sizeof(info));
     CHECK(Bc250StopDeviceAndReleasePostDisplayOwnership(&d,BC250_CHILD_UID,&info)==STATUS_DEVICE_DATA_ERROR);
-    CHECK(info.Width==0 && info.Height==0 && info.Pitch==0 && info.PhysicAddress==0);
+    CHECK(info.Width==0 && info.Height==0 && info.Pitch==0 && info.PhysicAddress.QuadPart==0);
     CHECK(model.unmaps==1 && d.PostDisplayStopStatus==STATUS_DEVICE_DATA_ERROR);
+    CHECK(logged("stop: display handoff restore 00000000 hdmi C000009C connector 00000000 result C000009C"));
     // The active handoff surface is distinct from GOP and must be black before
     // release, while its returned geometry survives the CPU mapping teardown.
     {
         unsigned char runtime[48];unsigned i;
         init(&d,&w,&o);memset(runtime,0xcd,sizeof(runtime));
         d.RuntimePost=d.Post;d.RuntimePost.Width=1280;d.RuntimePost.Height=720;
-        d.RuntimePost.Pitch=5120;d.RuntimePost.PhysicAddress=0x480000000ull;
+        d.RuntimePost.Pitch=5120;d.RuntimePost.PhysicAddress.QuadPart=0x480000000ll;
         d.RuntimePostValid=TRUE;d.RuntimeFramebuffer=runtime;d.RuntimeFramebufferLength=sizeof(runtime);
         CHECK(Bc250StopDeviceAndReleasePostDisplayOwnership(&d,BC250_CHILD_UID,&info)==STATUS_SUCCESS);
-        CHECK(info.Width==1280 && info.Height==720 && info.Pitch==5120 && info.PhysicAddress==0x480000000ull);
+        CHECK(info.Width==1280 && info.Height==720 && info.Pitch==5120 && info.PhysicAddress.QuadPart==0x480000000ll);
         CHECK(d.RuntimeFramebuffer==NULL && d.RuntimePostValid && postIs(0));
         for(i=0;i<sizeof(runtime);++i)CHECK(runtime[i]==0);
+        CHECK(logged("post-display release: handed back runtime 1280x720 pitch 5120 address 480000000 target 2424833"));
     }
+    /* BD-090 regression (31 line, 6de376e5 and f50880f4): an OS detach (an empty-topology commit) or a physical one
+       turned the DP link off before the release, so RuntimeDisplayChanged is 1 and RuntimePostValid 0. The restore
+       had nothing to put back, the release failed, and the next start got a POST display of zero size (Code 43).
+       The release enables a target again (dispmprt.md, required steps 5 and 6) and hands that mode back. */
+    {
+        unsigned char runtime[48];unsigned i;
+        init(&d,&w,&o);memset(runtime,0xcd,sizeof(runtime));
+        d.RuntimeDisplayChanged=1;d.RuntimePostValid=0;d.RuntimeFramebuffer=runtime;d.RuntimeFramebufferLength=sizeof(runtime);
+        d.RuntimePost=d.Post;d.RuntimePost.PhysicAddress=d.RuntimeFramebufferPhysical;   /* DcnLinkSurfaceAdopt */
+        handoffModel.action=BC250_LINK_HANDOFF_ENABLED;memset(&info,0xcc,sizeof(info));
+        CHECK(Bc250StopDeviceAndReleasePostDisplayOwnership(&d,BC250_CHILD_UID,&info)==STATUS_SUCCESS);
+        CHECK(info.Width==1920 && info.Height==1200 && info.Pitch==7680);
+        CHECK(info.PhysicAddress.QuadPart==0x480000000ll && info.TargetId==BC250_CHILD_UID);
+        CHECK(handoffModel.calls==1 && model.restores==1 && model.unmaps==1 && d.StopDone && releases==1);
+        for(i=0;i<sizeof(runtime);++i)CHECK(runtime[i]==0);
+        CHECK(logged("post-display release: target 2424833 started 1 runtime changed 1 valid 0"));
+        CHECK(logged("post-display release: link enabled detached-mode 1 timing 1920x1200 154000 kHz status 00000000"));
+        CHECK(logged("post-display release: handed back runtime 1920x1200 pitch 7680 address 480000000 target 2424833"));
+        CHECK(keptThrough==logCount);
+    }
+    /* The same detach with the enable refused: the release fails as before, and its line says why. */
+    init(&d,&w,&o);d.RuntimeDisplayChanged=1;d.RuntimePostValid=0;
+    handoffModel.action=BC250_LINK_HANDOFF_FAILED;handoffModel.status=STATUS_IO_DEVICE_ERROR;memset(&info,0xcc,sizeof(info));
+    CHECK(Bc250StopDeviceAndReleasePostDisplayOwnership(&d,BC250_CHILD_UID,&info)==STATUS_DEVICE_NOT_READY);
+    CHECK(info.Width==0 && info.Height==0 && info.Pitch==0 && info.PhysicAddress.QuadPart==0);
+    CHECK(model.unmaps==1 && d.StopDone);
+    CHECK(logged("post-display release: link enable-failed detached-mode 1 timing 1920x1200 154000 kHz status C0000185"));
+    CHECK(logged("stop: display handoff restore C00000A3 hdmi 00000000 connector 00000000 result C00000A3"));
+    CHECK(logged("post-display release: handed back nothing, status C00000A3: the target enable failed"));
+    /* dispmprt.md, required step 2: no display connected. The stop still completes; the answer is
+       STATUS_NOT_SUPPORTED, and dxgkrnl's StopDevice after it finds the teardown done. */
+    init(&d,&w,&o);handoffModel.action=BC250_LINK_HANDOFF_NO_SINK;handoffModel.status=STATUS_NOT_SUPPORTED;memset(&info,0xcc,sizeof(info));
+    CHECK(Bc250StopDeviceAndReleasePostDisplayOwnership(&d,BC250_CHILD_UID,&info)==STATUS_NOT_SUPPORTED);
+    CHECK(info.Width==0 && info.Height==0 && info.Pitch==0 && info.PhysicAddress.QuadPart==0);
+    CHECK(model.restores==1 && model.unmaps==1 && d.StopDone && releases==1);
+    CHECK(logged("post-display release: link no-sink detached-mode 0 timing 0x0 0 kHz status C00000BB"));
+    CHECK(logged("post-display release: handed back nothing, status C00000BB: no display connected"));
+    CHECK(Bc250StopDevice(&d)==STATUS_SUCCESS && model.restores==1 && releases==1);
     printf("post display stop: %u checks, %u failures\n",checks,failures);return failures?1:0;
 }

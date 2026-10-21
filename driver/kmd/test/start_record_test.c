@@ -34,6 +34,7 @@ typedef void* PVOID;
 typedef ULONG* PULONG;
 typedef size_t SIZE_T;
 typedef long long LONGLONG;
+typedef unsigned long long ULONGLONG;
 
 #define TRUE 1
 #define FALSE 0
