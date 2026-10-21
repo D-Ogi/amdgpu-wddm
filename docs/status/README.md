@@ -16,4 +16,4 @@ Tables at DDI build 0092: `D3D12DDI_ADAPTERFUNCS`, `D3D12DDI_DEVICE_FUNCS_CORE_0
 
 ## Counting rule
 
-A slot is done when its function can return success and does work. Logs, counters, error reports, zero writes and a failure constant on every path are not work. 6 kernel-mode and 8 user-mode done slots refuse some inputs. The script reads the source and does not run the driver: done means that the code exists, not that a test passed. `status.json` gives each slot with its function, source line and reason.
+A slot is done when its function can return success and does work. Logs, counters, error reports, zero writes and a failure constant on every path are not work. 7 kernel-mode and 8 user-mode done slots refuse some inputs. The script reads the source and does not run the driver: done means that the code exists, not that a test passed. `status.json` gives each slot with its function, source line and reason.

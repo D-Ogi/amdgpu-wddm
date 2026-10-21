@@ -9,11 +9,14 @@ using namespace bc250::umd;
 namespace {
 void check(bool b) { if (!b) std::abort(); }
 int deviceIdentity; unsigned allocates=0,deallocates=0;
-BC250_WDDM_ALLOCATION_PRIVATE seenSurface{}; BC250_SURFACE_RESOURCE_PRIVATE seenTexture{}; HANDLE seenResource=&deviceIdentity;
+BC250_WDDM_ALLOCATION_PRIVATE seenSurface{}; BC250_SURFACE_GPU_ONLY_RECORD seenGroup{}; HANDLE seenResource=&deviceIdentity;
 HRESULT APIENTRY allocate(HANDLE h,D3DDDICB_ALLOCATE *a) {
-    ++allocates; check(h==&deviceIdentity && a->NumAllocations==1 && a->PrivateDriverDataSize==sizeof(seenTexture));
+    ++allocates; check(h==&deviceIdentity && a->NumAllocations==1 && a->PrivateDriverDataSize==sizeof(seenGroup));
     seenResource=a->hResource;
-    std::memcpy(&seenTexture,a->pPrivateDriverData,sizeof(seenTexture));
+    std::memcpy(&seenGroup,a->pPrivateDriverData,sizeof(seenGroup));
+    BC250_GDI_ALLOCATION_POLICY policy{};
+    check(Bc250SurfaceResourceNoCpuAccess(&seenGroup,sizeof(seenGroup)) &&
+          WddmGdiRecordPolicy(&seenGroup,sizeof(seenGroup),&policy) && !policy.CpuVisible && !policy.Cached);
     std::memcpy(&seenSurface,a->pAllocationInfo2[0].pPrivateDriverData,sizeof(seenSurface));
     check(!a->pAllocationInfo2[0].Flags.Primary);
     a->pAllocationInfo2[0].hAllocation=51; a->hKMResource=0; return S_OK;
@@ -43,7 +46,8 @@ int main() {
     check(present_shadow_request(1920,1200,DXGI_FORMAT_B8G8R8A8_UNORM,request,desc)==S_OK);
     check(request.surface.Format==D3DDDIFMT_A8R8G8B8 && request.surface.Pitch==7680 && request.surface.Size==9216000 &&
           request.surface.Width==1920 && request.surface.Height==1200);
-    check(!request.runtime_resource && !request.primary && !request.shared && !request.displayable && !request.cpu_read);
+    check(!request.runtime_resource && !request.primary && !request.shared && !request.displayable && !request.cpu_read &&
+          request.no_cpu_access);
     check(desc.Format==DXGI_FORMAT_B8G8R8A8_UNORM && desc.BindFlags==(D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE) &&
           desc.Usage==D3D11_USAGE_DEFAULT && desc.MipLevels==1 && desc.ArraySize==1 && desc.SampleDesc.Count==1);
     check(request.texture.Format==UINT(DXGI_FORMAT_B8G8R8A8_UNORM) && request.texture.Shared==0 && request.texture.Access==0);
@@ -64,8 +68,21 @@ int main() {
         RuntimeDomain::Scope scope(device.domain);
         check(allocate_runtime_surface(device,request,allocation)==S_OK && allocates==1);
         check(!seenResource && allocation.allocation==51 && !allocation.runtime_resource);
-        check(seenSurface.Format==D3DDDIFMT_A8R8G8B8 && seenSurface.Pitch==7680 && seenTexture.Width==1920);
+        check(seenSurface.Format==D3DDDIFMT_A8R8G8B8 && seenSurface.Pitch==7680 && seenGroup.Shared==0);
         check(deallocate_runtime_surface(device,allocation)==S_OK && deallocates==1 && !allocation.allocation);
+        // Opt-in cannot accidentally follow a shared, CPU, runtime-owned or displayable request.
+        auto bad=request;bad.shared=true;
+        check(allocate_runtime_surface(device,bad,allocation)==E_INVALIDARG && allocates==1);
+        bad=request;bad.primary=true;
+        check(allocate_runtime_surface(device,bad,allocation)==E_INVALIDARG && allocates==1);
+        bad=request;bad.cpu_read=true;
+        check(allocate_runtime_surface(device,bad,allocation)==E_INVALIDARG && allocates==1);
+        bad=request;bad.runtime_resource=&deviceIdentity;
+        check(allocate_runtime_surface(device,bad,allocation)==E_INVALIDARG && allocates==1);
+        bad=request;bad.displayable=true;
+        check(allocate_runtime_surface(device,bad,allocation)==E_INVALIDARG && allocates==1);
+        bad=request;bad.texture.CpuAccessFlags=D3D11_CPU_ACCESS_READ;
+        check(allocate_runtime_surface(device,bad,allocation)==E_INVALIDARG && allocates==1);
     }
     std::cout << "PASS present shadow: blt-model RGBA buffers only, BGRA LB7A request admitted\n";
     return 0;

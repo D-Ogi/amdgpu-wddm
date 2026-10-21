@@ -2,10 +2,29 @@
 #ifndef BC250_SURFACE_RESOURCE_PRIVATE_H
 #define BC250_SURFACE_RESOURCE_PRIVATE_H
 // E26R resource-group contract. Windows ULONG fields, no pointers or compiler
-// enums on the wire. v1=12 bytes, v2=16 bytes, v3=64 bytes. Allocation LB7A
+// enums on the wire. v1=12 bytes, v2=16 bytes, v3=64 bytes, v4=16 bytes. Allocation LB7A
 // metadata remains separate and unchanged. v3 requires a KMD admitting it.
 #define BC250_SURFACE_RESOURCE_MAGIC 0x52363245ul
 #define BC250_SURFACE_RESOURCE_TEXTURE_VERSION 3ul
+// BD-210: v4 is a 16-byte private GPU-only group, not an openable v3 texture.
+// The creator promises no handle-based CPU view or Lock/Lock2 of any allocation of this group.
+// Kernel transfers through OS MDLs or physical mappings do not use such a view.
+// Shared retains its placement meaning; it does not weaken that promise.
+#define BC250_SURFACE_RESOURCE_GPU_ONLY_VERSION 4ul
+#define BC250_SURFACE_RESOURCE_NO_CPU_ACCESS 0x8ul
+typedef struct _BC250_SURFACE_GPU_ONLY_RECORD {
+    unsigned long Magic, Version, Shared, Access;
+} BC250_SURFACE_GPU_ONLY_RECORD;
+static __inline int Bc250SurfaceGpuOnlyRecordInit(BC250_SURFACE_GPU_ONLY_RECORD* Record,
+                                                unsigned long Shared)
+{
+    if (!Record || Shared>1) return 0;
+    Record->Magic=BC250_SURFACE_RESOURCE_MAGIC;
+    Record->Version=BC250_SURFACE_RESOURCE_GPU_ONLY_VERSION;
+    Record->Shared=Shared;
+    Record->Access=BC250_SURFACE_RESOURCE_NO_CPU_ACCESS;
+    return 1;
+}
 // Access intent bits. PRIMARY and CPU_READ are v2's; SCANOUT is M15.14's and means the resource's
 // allocations are meant to reach SetVidPnSourceAddress, so they belong in the local segment the
 // DirectFlip descriptor names rather than in the shared aperture. It implies PRIMARY and excludes
@@ -36,6 +55,14 @@ static __inline int Bc250SurfaceResourcePolicy(const void* Data, unsigned int By
     if (!Data || Bytes<sizeof(unsigned long) || words[0]!=BC250_SURFACE_RESOURCE_MAGIC) return 1;
     if (Bytes<3*sizeof(unsigned long) || words[2]>1) return 0;
     if (words[1]==1 && Bytes==3*sizeof(unsigned long)) { *SharedCpu=(int)words[2]; return 1; }
+    // Only the new, exact record can remove CPU access. Old versions cannot acquire the new bit.
+    // No PRIMARY, CPU_READ or SCANOUT combination is admitted in this private group.
+    if (words[1]==BC250_SURFACE_RESOURCE_GPU_ONLY_VERSION) {
+        if (Bytes!=sizeof(BC250_SURFACE_GPU_ONLY_RECORD) || words[3]!=BC250_SURFACE_RESOURCE_NO_CPU_ACCESS)
+            return 0;
+        *SharedCpu=(int)words[2];
+        return 1;
+    }
     if (!((words[1]==2 && Bytes==4*sizeof(unsigned long)) ||
         (words[1]==BC250_SURFACE_RESOURCE_TEXTURE_VERSION && Bytes==sizeof(BC250_SURFACE_RESOURCE_PRIVATE)))) return 0;
     if (words[3]&~BC250_SURFACE_RESOURCE_ACCESS_MASK) return 0;
@@ -48,6 +75,17 @@ static __inline int Bc250SurfaceResourcePolicy(const void* Data, unsigned int By
     *CachedCpu=*SharedCpu && (words[3]&BC250_SURFACE_RESOURCE_CPU_READ)!=0 &&
         (words[3]&BC250_SURFACE_RESOURCE_PRIMARY)==0;
     return 1;
+}
+
+// Invalid, opaque and legacy records never opt out of their existing CPU view.
+static __inline int Bc250SurfaceResourceNoCpuAccess(const void* Data, unsigned int Bytes)
+{
+    const unsigned long* words=(const unsigned long*)Data;
+    int shared=0,cached=0;
+    if (!Data || Bytes!=sizeof(BC250_SURFACE_GPU_ONLY_RECORD) ||
+        !Bc250SurfaceResourcePolicy(Data,Bytes,&shared,&cached)) return 0;
+    return words[0]==BC250_SURFACE_RESOURCE_MAGIC && words[1]==BC250_SURFACE_RESOURCE_GPU_ONLY_VERSION &&
+        words[3]==BC250_SURFACE_RESOURCE_NO_CPU_ACCESS;
 }
 
 // M15.14: whether this resource record asks for scan-out. Shape only, and only for a record this

@@ -17,6 +17,8 @@ struct RuntimeSurfaceRequest {
     // allocation Flags.Primary and a VidPnSourceId. scanout (M15.14): the v3
     // record carries SCANOUT, which only a primary without cpu_read may ask.
     bool primary=false,shared=false,cpu_read=false,displayable=false,scanout=false;
+    // BD-210: device-owned Present shadow only, never an application or displayable surface.
+    bool no_cpu_access=false;
 };
 HRESULT allocate_runtime_surface(RuntimeDevice &,const RuntimeSurfaceRequest &,RuntimeSurfaceAllocation &);
 // Caller must retire engine/Present use and destroy image wrappers first.

@@ -92,6 +92,9 @@ static __inline int WddmGdiRecordPolicy(const void* Record, unsigned int Bytes,
     int shared = 0, cached = 0;
     if (!Bc250SurfaceResourcePolicy(Record, Bytes, &shared, &cached)) return 0;
     if (!WddmGdiAllocationPolicy(0, shared, cached, Policy)) return 0;
+    // Explicit v4 private-group promise, never Access=0 or Shared=0 inference.
+    // Placement, physical access and scan-out keep the same derivation.
+    if (Bc250SurfaceResourceNoCpuAccess(Record,Bytes)) Policy->CpuVisible=0;
     if (Bc250SurfaceResourceScanout(Record, Bytes)) WddmGdiScanoutPolicy(Policy);
     return 1;
 }

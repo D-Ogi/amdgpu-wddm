@@ -664,6 +664,50 @@ static void ShadowBacking(int LegacyControl)
     }
 }
 
+// BD-210: only the new explicit private-group promise removes a type-0 CPU view.
+static void PrivateGpuOnlyPolicy(void)
+{
+    BC250_SURFACE_GPU_ONLY_RECORD r;
+    BC250_GDI_ALLOCATION_POLICY p, old;
+    unsigned long shared, access, version;
+    const unsigned int bytes=(unsigned int)sizeof(r);
+    CHECK(bytes==16);
+    CHECK(!Bc250SurfaceGpuOnlyRecordInit(NULL,0));
+    CHECK(!Bc250SurfaceGpuOnlyRecordInit(&r,2));
+    for(shared=0;shared<=1;shared++) {
+        CHECK(Bc250SurfaceGpuOnlyRecordInit(&r,shared));
+        CHECK(Bc250SurfaceResourceNoCpuAccess(&r,bytes));
+        CHECK(WddmGdiRecordPolicy(&r,bytes,&p));
+        CHECK(WddmGdiAllocationPolicy(0,(int)shared,0,&old));
+        CHECK(!p.CpuVisible && !p.Cached && p.Aperture==old.Aperture &&
+              p.AccessedPhysically==old.AccessedPhysically && WddmGdiScannable(&p)==WddmGdiScannable(&old));
+        CHECK(!Bc250SurfaceResourceScanout(&r,bytes));
+        CHECK(!WddmGdiCreatedScannable(&r,bytes) && !WddmGdiRecordScannable(&r,bytes));
+        CHECK(Bc250SurfaceResourceIntent(&r,bytes,&version,&access) && version==4 && access==8);
+        // Short, long, missing promise, conflicting intents and unknown bits all fail before policy use.
+        CHECK(!WddmGdiRecordPolicy(&r,bytes-1,&p) && !Bc250SurfaceResourceNoCpuAccess(&r,bytes-1));
+        CHECK(!WddmGdiRecordPolicy(&r,bytes+1,&p) && !Bc250SurfaceResourceNoCpuAccess(&r,bytes+1));
+        for(access=0;access<32;access++) {
+            r.Access=access;
+            CHECK(WddmGdiRecordPolicy(&r,bytes,&p)==(access==BC250_SURFACE_RESOURCE_NO_CPU_ACCESS));
+        }
+        r.Access=BC250_SURFACE_RESOURCE_NO_CPU_ACCESS;r.Shared=2;
+        CHECK(!WddmGdiRecordPolicy(&r,bytes,&p));
+        r.Shared=shared;r.Version=2;
+        CHECK(!WddmGdiRecordPolicy(&r,bytes,&p)); // The new bit is never accepted as a legacy hint.
+        r.Access=0;
+        CHECK(WddmGdiRecordPolicy(&r,bytes,&p) && p.CpuVisible);
+        r.Version=1;
+        CHECK(WddmGdiRecordPolicy(&r,12,&p) && p.CpuVisible);
+        r.Version=5;
+        CHECK(!WddmGdiRecordPolicy(&r,bytes,&p) && !Bc250SurfaceResourceNoCpuAccess(&r,bytes));
+        r.Magic=0;
+        CHECK(WddmGdiRecordPolicy(&r,bytes,&p) && p.CpuVisible); // Opaque legacy record.
+    }
+    CHECK(WddmGdiRecordPolicy(NULL,0,&p) && p.CpuVisible);
+    CHECK(WddmGdiAllocationPolicy(2,0,0,&p) && p.CpuVisible && p.Cached && p.Aperture);
+}
+
 int main(int argc, char** argv)
 {
     if (argc == 2 && strcmp(argv[1], "--legacy-shadow-control") == 0) {
@@ -678,6 +722,7 @@ int main(int argc, char** argv)
     SameAsBefore();
     ScanoutPlacement();
     RecordDerivation();
+    PrivateGpuOnlyPolicy();
     RefusalsCounted();
     ReceivedBlobs();
     CreateRollback();

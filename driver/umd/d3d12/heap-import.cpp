@@ -71,6 +71,7 @@ struct RuntimeHeapImports::Record {
     // carried no rt_owner). Its release names no owner, so it goes by handle like any other allocation of ours;
     // see release_owned.
     bool driver_surface{};
+    bool no_cpu_access{};                      // v4 private GPU group, never forwarded to Lock2
     bool adopted{};                             // BD-075: opened by the runtime, borrowed, never deallocated here
     DWORD authority{};                          // the thread whose runtime resource DDI runs (0: none)
     bool destroyed{};                           // that DDI destroys the resource
@@ -620,12 +621,12 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
                 request->resource->Height,request->surface_row_pitch,unsigned(request->resource->Format),
                 request->byte_size,shared_bind,request->rt_owner.handle);
         else if(shared_surface)
-            // BD-133: the shared form of the copy surface of a B8G8R8X8 source - what the runtime sees of the shared
-            // form (no PRIMARY flag, video present source 0, no runtime resource) under the record the source has. The
-            // kernel driver places a v1 record with Shared 1 exactly as a v3 record with Shared 1 and Access 0
-            // (driver\kmd\surface_resource_private.h, Bc250SurfaceResourcePolicy), and no opener ever reads it.
+            // BD-133: the shared form of the copy surface of a B8G8R8X8 source has no PRIMARY flag or runtime
+            // resource and names video present source 0. No process opens this private copy as a shared resource.
+            // The v4 record keeps Shared 1 placement but removes its handle-based CPU view. Only this
+            // private GPU-copy destination makes that promise; no opener ever reads its resource record.
             hr=allocation.prepare_surface(static_cast<uint32_t>(request->resource->Width),request->resource->Height,
-                request->surface_row_pitch,surface_format,request->byte_size,nullptr,false,false,false,true);
+                 request->surface_row_pitch,surface_format,request->byte_size,nullptr,false,false,false,true,true);
         else
             hr=allocation.prepare_surface(static_cast<uint32_t>(request->resource->Width),request->resource->Height,
                 request->surface_row_pitch,surface_format,request->byte_size,request->rt_owner.handle,
@@ -662,6 +663,8 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     }
     auto record=new(std::nothrow) Record(runtime_,callbacks_);if(!record)return E_OUTOFMEMORY;
     record->busy=true;record->surface=surface;
+    record->no_cpu_access=Bc250SurfaceResourceNoCpuAccess(allocation.args.pPrivateDriverData,
+                                                        allocation.args.PrivateDriverDataSize)!=0;
     // BD-133: the driver's own surface (above) takes no authority from an owner scope it happens to run inside,
     // because its release never asks for one.
     record->driver_surface=driver_surface;
@@ -889,7 +892,7 @@ HRESULT RuntimeHeapImports::dispatch(uint32_t op,void* argument) noexcept {
         {
             Exclusive held(lock_);
             record=find(a.hAllocation);
-            if(!record || record->busy || record->locked || (record->releasing && record->releasing!=self) ||
+            if(!record || record->no_cpu_access || record->busy || record->locked || (record->releasing && record->releasing!=self) ||
                !kernel_.pfnLock2Cb)return E_INVALIDARG;
             record->busy=true;
         }

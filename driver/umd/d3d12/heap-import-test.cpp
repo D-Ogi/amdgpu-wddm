@@ -131,14 +131,15 @@ static HRESULT APIENTRY allocate_cb(D3D12DDI_HRTDEVICE d,D3D12DDICB_ALLOCATE_002
   assert(r[9]==1 && !r[10] && !r[11] && r[12]==shared_bind && !r[13] && !r[14] && !r[15]);
   ++shared_created;events+='A';a->pAllocationInfo->hAllocation=++next_allocation;return S_OK;
  }
- if(a->pAllocationInfo->PrivateDriverDataSize==32 && a->PrivateDriverDataSize==12 &&
+ if(a->pAllocationInfo->PrivateDriverDataSize==32 && a->PrivateDriverDataSize==16 &&
     a->pAllocationInfo->Flags==D3D12DDI_ALLOCATION_INFO_FLAGS_0022_NONE){
-  // BD-133, the shared form of the driver's own copy surface: the LB7A v1 description under the 12-byte
-  // E26R v1 record with shared 1, without PRIMARY, on video present source 0 - what the runtime sees of the shared
-  // surface, under the record the format has - and only ever with no runtime resource.
+  // BD-210: the private GPU-copy form explicitly promises no CPU reader, keeping its aperture placement.
   assert(driver_surface_request && a->pPrivateDriverData && !a->pAllocationInfo->VidPnSourceId);
-  uint32_t e[3];std::memcpy(e,a->pPrivateDriverData,sizeof(e));
-  assert(e[0]==0x52363245u && e[1]==1 && e[2]==1);
+  uint32_t e[4];std::memcpy(e,a->pPrivateDriverData,sizeof(e));
+  assert(e[0]==0x52363245u && e[1]==4 && e[2]==1 && e[3]==BC250_SURFACE_RESOURCE_NO_CPU_ACCESS);
+  BC250_GDI_ALLOCATION_POLICY policy{};
+  assert(WddmGdiRecordPolicy(a->pPrivateDriverData,a->PrivateDriverDataSize,&policy) &&
+         !policy.CpuVisible && !policy.Cached && policy.Aperture && !policy.AccessedPhysically);
   uint32_t w[8];std::memcpy(w,a->pAllocationInfo->pPrivateDriverData,sizeof(w));
   assert(w[0]==0x4137424Cu && w[1]==1 && w[2]==shared_width && w[3]==shared_height && w[4]==shared_pitch);
   assert(w[5]==surface_format && w[6]==uint32_t(shared_size) && !w[7]);
@@ -616,7 +617,7 @@ int main(){
   // view the creator asked for. This gate was the storage column alone, and s12to11-srgb died here with
   // "shared surface format" after engine-ddi had already admitted the description and retried (lab 03:06Z).
   // The other COMPOSED rows have no sRGB sibling, so there is nothing more to admit.
-  for(const auto row:{std::tuple<DXGI_FORMAT,DXGI_FORMAT,unsigned long>
+  for(const auto& row:{std::tuple<DXGI_FORMAT,DXGI_FORMAT,unsigned long>
                       {DXGI_FORMAT_B8G8R8A8_UNORM_SRGB,DXGI_FORMAT_B8G8R8A8_UNORM_SRGB,D3DDDIFMT_A8R8G8B8},
                       {DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,D3DDDIFMT_A8B8G8R8}}){
    target.Format=std::get<0>(row);shared_dxgi=std::get<1>(row);surface_format=std::get<2>(row);
@@ -687,6 +688,8 @@ int main(){
     assert(owner.allocate(&own,&memory)==S_OK && events=="AMZI");
     assert(own_shared_surfaces==before_own+1 && shared_created==before_wire);
     assert(owner.owns_allocation(memory.allocation));
+    D3DKMT_LOCK2 forbidden{};forbidden.hAllocation=memory.allocation;
+    assert(owner.dispatch(BC250_HOST_Lock2,&forbidden)==E_INVALIDARG && events=="AMZI");
     assert(owner.free(&memory)==S_OK && events=="AMZIVEUD");
     assert(owner.last_free_report().driver_surface && owner.last_free_report().surface &&
            owner.last_free_report().stage==FreeStage::Done);

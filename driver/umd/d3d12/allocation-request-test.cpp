@@ -336,6 +336,17 @@ int main() {
         CHECK(Bc250SurfaceResourcePolicy(wire.args.pPrivateDriverData,wire.args.PrivateDriverDataSize,&wire_shared,
                                          &wire_cached));
         CHECK(wire_shared==shared && wire_cached==cached && shared==1 && !cached);
+        // BD-210: the private GPU-copy form explicitly opts out; no other surface changes by inference.
+        CHECK(own.prepare_surface(width,height,pitch,D3DDDIFMT_X8R8G8B8,size,nullptr,false,false,false,true,true)==S_OK);
+        CHECK(own.args.PrivateDriverDataSize==sizeof(BC250_SURFACE_GPU_ONLY_RECORD) &&
+              Bc250SurfaceResourceNoCpuAccess(own.args.pPrivateDriverData,own.args.PrivateDriverDataSize));
+        BC250_GDI_ALLOCATION_POLICY gpu_only{};
+        CHECK(WddmGdiRecordPolicy(own.args.pPrivateDriverData,own.args.PrivateDriverDataSize,&gpu_only) &&
+              !gpu_only.CpuVisible && !gpu_only.Cached && gpu_only.Aperture && !gpu_only.AccessedPhysically);
+        CHECK(own.prepare_surface(width,height,pitch,D3DDDIFMT_X8R8G8B8,size,nullptr,false,true,false,true,true)==E_INVALIDARG);
+        CHECK(own.prepare_surface(width,height,pitch,D3DDDIFMT_A8R8G8B8,size,nullptr,false,false,false,false,true)==E_INVALIDARG);
+        CHECK(own.prepare_surface(width,height,pitch,D3DDDIFMT_A8R8G8B8,size,owner,false,false,false,true,true)==E_INVALIDARG);
+        CHECK(own.prepare_surface(width,height,pitch,D3DDDIFMT_A8R8G8B8,size,nullptr,true,false,false,true,true)==E_INVALIDARG);
         // A surface of the driver's own is never scanned out and names no runtime resource.
         CHECK(own.prepare_surface(width,height,pitch,D3DDDIFMT_X8R8G8B8,size,nullptr,false,true,true,true)==E_INVALIDARG);
         CHECK(own.prepare_surface(width,height,pitch,D3DDDIFMT_X8R8G8B8,size,owner,false,true,false,true)==E_INVALIDARG);

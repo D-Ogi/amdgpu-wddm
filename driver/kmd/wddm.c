@@ -344,9 +344,9 @@ typedef struct _BC250_PAGING_JOB {
 C_ASSERT(sizeof(BC250_PAGING_JOB)<=PAGING_PRIVATE_JOB_BYTES);
 
 // M15.14 increment 2: the E26R resource record a CreateAllocation arrived with, as a counter index.
-// Bc250SurfaceResourcePolicy admits version 1, 2 and 3 only, and reports version 0 for a call that
-// carried no record at all - which is every standard allocation, the compositor's own primary included.
-// OTHER exists so that the index stays in bounds whatever the parser one day admits.
+// Version 0 is a call with no record, including standard allocations and the compositor's own primary.
+// Versions 1 to 3 keep their original buckets. The v4 private GPU-only group uses OTHER; the separate
+// lb7a cpu view summary counts that explicit intent without changing the scan-out table's shape.
 #define BC250_WDDM_RECORD_NONE 0u
 #define BC250_WDDM_RECORD_V3 3u
 #define BC250_WDDM_RECORD_OTHER 4u
@@ -545,6 +545,9 @@ typedef struct _BC250_WDDM {
     volatile LONG UmdAllocsGpuOnly;
     volatile LONG64 UmdGpuOnlyBytes;
     volatile LONG64 UmdCpuVisibleBytes;
+    // BD-210: cumulative type-0 create-step counters, separate from BC2A and standard GDI types.
+    volatile LONG Lb7aAllocs, Lb7aAllocsGpuOnly, Lb7aNoCpuAccess;
+    volatile LONG64 Lb7aGpuOnlyBytes, Lb7aCpuVisibleBytes;
     volatile LONG UmdContexts;
     volatile LONG ContextsLogged;       // KMD193: the capped "context %p pid ..." identity line, every kind
     volatile LONG FaultSnapshots;       // KMD193: HARDWARE FENCE TIMEOUT register snapshots taken
@@ -2824,6 +2827,10 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
     GuardLog("wddm summary: umd cpu view: gpu-only %ld (%lld MiB), cpu-visible %ld (%lld MiB)",
              Wddm->UmdAllocsGpuOnly, (long long)(Wddm->UmdGpuOnlyBytes >> 20),
              Wddm->UmdAllocs - Wddm->UmdAllocsGpuOnly, (long long)(Wddm->UmdCpuVisibleBytes >> 20));
+    GuardLog("wddm summary: lb7a cpu view: gpu-only %ld (%lld MiB), cpu-visible %ld (%lld MiB), private %ld",
+             Wddm->Lb7aAllocsGpuOnly, (long long)(Wddm->Lb7aGpuOnlyBytes >> 20),
+             Wddm->Lb7aAllocs-Wddm->Lb7aAllocsGpuOnly, (long long)(Wddm->Lb7aCpuVisibleBytes >> 20),
+             Wddm->Lb7aNoCpuAccess);
     // ADR 0008 stage D (docs/design/paging-node.md section 7): node 1 exists in this line whether or not the
     // gate is open - every counter stays 0 with it closed, same as every other stage-behind-a-gate counter here.
     GuardLog("wddm profile: umd calls %ld, elapsed ticks %lld, QPC frequency %lld",
@@ -5163,6 +5170,13 @@ static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Sl
     // this create was part of a resource group, which is what separates a shell resource from a bare
     // standard allocation. Its budget is the create lines' own.
     if (!gdiType && wddm != NULL) {
+        InterlockedIncrement(&wddm->Lb7aAllocs);
+        if (!policy.CpuVisible) {
+            InterlockedIncrement(&wddm->Lb7aAllocsGpuOnly);
+            InterlockedAdd64(&wddm->Lb7aGpuOnlyBytes,(LONG64)info->Size);
+        } else InterlockedAdd64(&wddm->Lb7aCpuVisibleBytes,(LONG64)info->Size);
+        if (call->RecordVersion==BC250_SURFACE_RESOURCE_GPU_ONLY_VERSION)
+            InterlockedIncrement(&wddm->Lb7aNoCpuAccess);
         const BOOLEAN primary = (BOOLEAN)((call->RecordAccess & BC250_SURFACE_RESOURCE_PRIMARY) != 0);
         InterlockedIncrement(&wddm->ScanoutCreates[WddmRecordKind(call->RecordVersion)]
                                                   [object->ScanoutRequested ? 0 : 1]);

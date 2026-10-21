@@ -176,7 +176,8 @@ struct AllocationRequest final {
     // is unchanged by it, and every other caller passes false and gets exactly the rule it had.
     HRESULT prepare_surface(uint32_t width,uint32_t height,uint32_t pitch,D3DDDIFORMAT format,
                             uint64_t size,HANDLE runtimeOwner=nullptr,bool cpuRead=false,
-                            bool primary=true,bool scanout=false,bool driverSurface=false) noexcept {
+                            bool primary=true,bool scanout=false,bool driverSurface=false,
+                            bool noCpuAccess=false) noexcept {
         blob={};surface={};resource={};texture={};info={};args={};held=0;
         constexpr uint32_t edge=8192;
         // Scan-out needs the SCANOUT_PRIMARY policy bit (BGRA8, RGBA8 and RGB10A2 today; the caller has
@@ -187,6 +188,8 @@ struct AllocationRequest final {
         // A surface of the driver's own has no runtime resource and is never scanned out; a request that says
         // otherwise is two contracts at once.
         if(driverSurface && (scanout || runtimeOwner))return E_INVALIDARG;
+        // Only the driver's private, non-primary GPU-copy form may make the v4 promise.
+        if(noCpuAccess && (!driverSurface || runtimeOwner || cpuRead || primary || scanout))return E_INVALIDARG;
         const auto* row=amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_d3dddi(uint32_t(format)),
                                                   scanout?AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY
                                                          :AMDGPU_WDDM_SURFACE_COMPOSED);
@@ -238,6 +241,13 @@ struct AllocationRequest final {
         }
         args.pPrivateDriverData=&resource;
         args.PrivateDriverDataSize=e26r_bytes(version);
+        if(noCpuAccess){
+            BC250_SURFACE_GPU_ONLY_RECORD gpuOnly{};
+            if(!Bc250SurfaceGpuOnlyRecordInit(&gpuOnly,1))return E_INVALIDARG;
+            static_assert(sizeof(gpuOnly)==16);
+            std::memcpy(&resource,&gpuOnly,sizeof(gpuOnly));
+            args.PrivateDriverDataSize=sizeof(gpuOnly);
+        }
         args.hResource=runtimeOwner;args.NumAllocations=1;args.pAllocationInfo=&info;
         held=size;
         return S_OK;

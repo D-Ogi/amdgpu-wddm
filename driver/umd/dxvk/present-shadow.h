@@ -43,6 +43,7 @@ inline HRESULT present_shadow_request(UINT width,UINT height,DXGI_FORMAT format,
     D3D11_TEXTURE2D_DESC1 d{width,height,1,1,format,{1,0},D3D11_USAGE_DEFAULT,
         D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE,0,0,D3D11_TEXTURE_LAYOUT_UNDEFINED};
     RuntimeSurfaceRequest r{};
+    r.no_cpu_access=true; // Private GPU Blt destination and kernel Present source, no CPU or opener.
     r.surface={BC250_WDDM_ALLOCATION_PRIVATE_MAGIC,1,width,height,pitch,row->d3dddi,bytes};
     r.texture={BC250_SURFACE_RESOURCE_MAGIC,BC250_SURFACE_RESOURCE_TEXTURE_VERSION,0u,0u,
         d.Width,d.Height,d.MipLevels,d.ArraySize,UINT(d.Format),d.SampleDesc.Count,d.SampleDesc.Quality,

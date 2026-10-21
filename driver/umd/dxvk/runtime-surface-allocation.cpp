@@ -18,6 +18,9 @@ HRESULT allocate_runtime_surface(RuntimeDevice &device,const RuntimeSurfaceReque
     if (!runtime_surface_geometry(request.surface,row->bytes_per_pixel)) return E_INVALIDARG;
     auto texture=request.texture;
     const bool extended=texture.Magic!=0;
+    if (request.no_cpu_access && (request.runtime_resource || request.primary || request.shared ||
+        request.cpu_read || request.displayable || request.scanout || !extended || texture.CpuAccessFlags))
+        return E_INVALIDARG;
     // Only the v3 record has the SCANOUT bit (the v2 group below carries PRIMARY and CPU_READ alone).
     if (request.scanout && !extended) return E_INVALIDARG;
     // The E26R v3 texture format is what an opener reads back; it must be the LB7A row's.
@@ -33,12 +36,18 @@ HRESULT allocate_runtime_surface(RuntimeDevice &device,const RuntimeSurfaceReque
     ResourcePrivate group{0x52363245u,2,request.shared ? 1u : 0u,
         (request.primary ? 1u : 0u) | (request.cpu_read ? 2u : 0u)};
     D3DDDI_ALLOCATIONINFO2 info{};
+    BC250_SURFACE_GPU_ONLY_RECORD gpuOnly{};
+    if (request.no_cpu_access && !Bc250SurfaceGpuOnlyRecordInit(&gpuOnly,0)) return E_INVALIDARG;
     info.pPrivateDriverData=&surface; info.PrivateDriverDataSize=sizeof(surface);
     info.Flags.Primary=request.primary; info.VidPnSourceId=request.vidpn_source;
     D3DDDICB_ALLOCATE allocate{};
     allocate.hResource=request.runtime_resource;
     allocate.pPrivateDriverData=extended ? static_cast<void *>(&texture) : &group;
     allocate.PrivateDriverDataSize=extended ? sizeof(texture) : sizeof(group);
+    if (request.no_cpu_access) {
+        allocate.pPrivateDriverData=&gpuOnly;
+        allocate.PrivateDriverDataSize=sizeof(gpuOnly);
+    }
     allocate.NumAllocations=1; allocate.pAllocationInfo2=&info;
     HRESULT hr=device.KTCallbacks.pfnAllocateCb(device.hDevice,&allocate);
     if (FAILED(hr)) return hr;
