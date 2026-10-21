@@ -65,7 +65,8 @@
 #define BC250_RING_SIZE		(BC250_RING_MAX_DW * 4u * 2u)
 
 /* amdgpu_ring.h: the align mask and NOP of the GFX10 ring function tables (gfx_v10_0.c:9829,
- * :9887, :9927). All three CP ring types pad to 8 dwords with PACKET2 NOPs. */
+ * :9887, :9927). All three CP ring types pad to 256 dwords (align mask 0xff) with
+ * PACKET3(PACKET3_NOP, 0x3FFF). */
 #define BC250_CP_ALIGN_MASK	0xffu
 #define BC250_CP_NOP		0xffff1000u
 

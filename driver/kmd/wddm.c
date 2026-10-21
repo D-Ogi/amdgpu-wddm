@@ -4152,10 +4152,15 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
     // 002 (that was the missing UMD name, facts M64), but the lab's dxgkrnl does test DirectFlip further down
     // DXGADAPTER::Initialize when its enforcement switch is on, and an answer that differs from every known-good
     // driver in three mandatory members is a poor place to save three lines.
-    //  - PerEngineTDR: the three DDIs are in the table; ResetEngine refuses, as the part has no reset (M53).
+    //  - PerEngineTDR: the three DDIs are in the table. ResetEngine soft-recovers node 0 under HangRecoveryMode
+    //    (M15.12 stage 1, M835, M836) and refuses every other case. ResetFromTimeout always fails, because the
+    //    part has no proven reset (M53).
     //  - SmoothRotation: "must support updating path rotation in UpdateActiveVidPnPresentPath"; ours does, and
     //    the only rotation it offers is identity.
-    //  - DirectFlip: a promise about shared primaries that an adapter nobody can render on is never held to.
+    //  - DirectFlip: held while the DirectFlip handshake is on (M15.14 increment 2, EnableDirectFlipHandshake
+    //    and the scan-out gate). The compositor's user-mode driver answers CheckDirectFlipSupport from the
+    //    scan-out caps trailer, and SetVidPnSourceAddress scans out a primary that Bc250ScanoutAdmit admits
+    //    (M844). With the handshake off no client is offered a flip.
     caps->SupportSmoothRotation = TRUE;
     caps->SupportPerEngineTDR = TRUE;
     caps->SupportDirectFlip = TRUE;
@@ -4163,8 +4168,10 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
     caps->InterruptMessageNumber = 0;                   // the INF asks for one MSI message, so it is message 0 (M38)
 
     // Kernel-mode GDI acceleration: every one of these is a "cannot", and they have to be said out loud, because a
-    // zeroed DXGK_PRESENTATIONCAPS claims the driver *can* do all of them. Stage A has no engine and its Present
-    // writes no DMA, so a blt dxgkrnl believed in would be silently dropped and show as corruption on screen.
+    // zeroed DXGK_PRESENTATIONCAPS claims the driver *can* do all of them. Present builds work only for a plain
+    // Blt (no present flag but Blt): a GPU IB behind EnableGpuPresentBlit (WddmBuildGpuPresent), or the diagnostic
+    // CPU blit packet behind EnablePresentBlit. With neither switch on, a Present writes no DMA and returns
+    // success, so a blt dxgkrnl believed in would be silently dropped and show as corruption on screen.
     caps->PresentationCaps.NoScreenToScreenBlt = 1;
     caps->PresentationCaps.NoOverlapScreenBlt = 1;
     caps->PresentationCaps.NoSameBitmapBitBlt = 1;
@@ -6532,8 +6539,9 @@ static NTSTATUS WddmSubmitUmdImpl(_Inout_ BC250_DEVICE* Device, _In_opt_ BC250_W
                                    Submit->SubmissionFenceId, ib.ib_bytes, &hipId);
     if (!NT_SUCCESS(journalStatus)) return journalStatus;
 
-    // One IB is already the ring's whole capacity (gfx.c). A second UMD submit that arrives before
-    // that fence - a present, or dxgkrnl pipelining two packets - must not be retired here: dxgkrnl
+    // The ring holds seven jobs (driver/shim/bc250_ring.c, bc250_ring_has_space) and the completion
+    // queue BC250_GFX_PENDING_MAX. A UMD submit that arrives while either one is full - behind presents,
+    // or with dxgkrnl pipelining packets - must not be retired here: dxgkrnl
     // would signal the monitored fence for an IB the GPU never fetched. This DDI is PASSIVE_LEVEL,
     // so wait the same bound the watchdog uses, on the retirement event, and try again. Anything else
     // (gate closed, ring abandoned, a bad blob) does not get that wait.
