@@ -1,9 +1,12 @@
 // DriverEntry: the gate of ADR 0008 point 1. One binary, two DDI tables.
 //
-//   <service key>\Parameters
-//     EnableFullWddm  REG_DWORD  0 (default, and what every install writes) = the display-only table of M3,
-//                                DxgkInitializeDisplayOnlyDriver, the driver that runs the owner's display today.
-//                                1 = the full WDDM table of M7 stage A, DxgkInitialize (wddm.c).
+//   EnableFullWddm, a REG_DWORD setting of the driver state catalog (driver/state/catalog.json)
+//     0 = the display-only table of M3, DxgkInitializeDisplayOnlyDriver. An absent value reads as 0 too
+//         (wddm.c WddmGateOpen), so a store without its defaults falls back to this table.
+//     1 = the full WDDM table of M7 stage A, DxgkInitialize (wddm.c), for this load only: GuardConsumeSetting
+//         writes 0 back before the table is handed over.
+//     2 = the full table at every load. The package writes 2, the catalog's factory value
+//         (Parameters\DefaultsV2 in bc250kmd.inf).
 //
 // The gate is read before anything else is done with the driver object, so that at 0 not a line of M7's code runs.
 // Both paths are counted by the same start budget (guard.c), because both can cost a boot.

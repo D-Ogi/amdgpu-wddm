@@ -163,14 +163,17 @@ no code from Microsoft's MS-PL sample.
 
 ## The DDI table gate (M7 stage A, ADR 0008)
 
-`Services\bc250kmd\Parameters\EnableFullWddm`, a `REG_DWORD` that the INF writes as 0, like every other gate in
-this driver. The lab's install scripts open the gates they need afterwards; the current lab deployment runs the
-full table (M727 reports health flags 15, of which flag 1 is full WDDM, see `tools/win/bc250kmd_cli/README.md`):
+`EnableFullWddm` is a `REG_DWORD` setting of the driver state catalog (`driver/state/catalog.json`). The INF
+writes its factory value 2 under `Parameters\DefaultsV2`, so an installed driver runs the full table at every load.
+An absent value reads as 0, the display-only table, which is the fail-safe for a store without its defaults. The
+current lab deployment runs the full table (M727 reports health flags 15, of which flag 1 is full WDDM, see
+`tools/win/bc250kmd_cli/README.md`):
 
 | Value | `DriverEntry` calls | Table |
 |---|---|---|
-| 0 (INF default) | `DxgkInitializeDisplayOnlyDriver` | the display-only table of M3 |
-| 1 | `DxgkInitialize` | `wddm.c`: the full graphics miniport table |
+| 0, or no value | `DxgkInitializeDisplayOnlyDriver` | the display-only table of M3 |
+| 1 | `DxgkInitialize` | `wddm.c`: the full graphics miniport table, for this load only (the driver writes 0 back before it hands over the table) |
+| 2 (INF factory value) | `DxgkInitialize` | `wddm.c`: the full graphics miniport table, at every load |
 
 The gate is read once, in `DriverEntry`, before the driver object is touched, so at 0 not a line of `wddm.c` runs.
 Both paths are counted by the same start budget, because both can cost a boot.

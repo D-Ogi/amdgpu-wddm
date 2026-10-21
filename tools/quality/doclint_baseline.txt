@@ -123,7 +123,7 @@
 3	driver/icd/README-rt-node-address.md
 9	driver/icd/README.md
 23	driver/icd/mesa-wddm2-runtime-queues/README.md
-46	driver/kmd/README.md
+44	driver/kmd/README.md
 1	driver/kmd/gfx-copy-provenance.md
 6	driver/kmd/test/ih_consume_test.md
 1	driver/kmd/test/vsync_vector_test.md
