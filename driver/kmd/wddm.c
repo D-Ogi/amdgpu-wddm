@@ -540,6 +540,11 @@ typedef struct _BC250_WDDM {
     volatile LONG UmdAllocsLocalOnly;
     volatile LONG UmdAllocsShared;
     volatile LONG UmdAllocsAperture;
+    // BD-210: the UMD allocations created without a CPU view (UmdBlobAllocCpuVisible 0), and the bytes
+    // created on each side. Created, not live: the summary says how much a session asked for of each.
+    volatile LONG UmdAllocsGpuOnly;
+    volatile LONG64 UmdGpuOnlyBytes;
+    volatile LONG64 UmdCpuVisibleBytes;
     volatile LONG UmdContexts;
     volatile LONG ContextsLogged;       // KMD193: the capped "context %p pid ..." identity line, every kind
     volatile LONG FaultSnapshots;       // KMD193: HARDWARE FENCE TIMEOUT register snapshots taken
@@ -2815,6 +2820,10 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
     GuardLog("wddm summary: umd placement (shared residency %s): local %ld, local+aperture %ld, aperture %ld",
              Wddm->SharedResidency ? "on" : "off", Wddm->UmdAllocsLocalOnly, Wddm->UmdAllocsShared,
              Wddm->UmdAllocsAperture);
+    // BD-210, a line of its own for the same reason.
+    GuardLog("wddm summary: umd cpu view: gpu-only %ld (%lld MiB), cpu-visible %ld (%lld MiB)",
+             Wddm->UmdAllocsGpuOnly, (long long)(Wddm->UmdGpuOnlyBytes >> 20),
+             Wddm->UmdAllocs - Wddm->UmdAllocsGpuOnly, (long long)(Wddm->UmdCpuVisibleBytes >> 20));
     // ADR 0008 stage D (docs/design/paging-node.md section 7): node 1 exists in this line whether or not the
     // gate is open - every counter stays 0 with it closed, same as every other stage-behind-a-gate counter here.
     GuardLog("wddm profile: umd calls %ld, elapsed ticks %lld, QPC frequency %lld",
@@ -5049,14 +5058,24 @@ static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Sl
         info->EvictionSegmentSet = 0;
         info->PhysicalAdapterIndex = 0;
         WddmCpuVisibleAllocationFlags(&info->FlagsWddm2);
+        // BD-210: no CPU view for an allocation whose creator said it never maps it (umd_blob.c). Before
+        // this, VidMm gave every DXVK device-local chunk a write-combined view in the creating process,
+        // and a 32-bit game ran out of address space on views nothing ever mapped.
+        info->FlagsWddm2.CpuVisible = (UINT)UmdBlobAllocCpuVisible(&view);
         // RADV's CPU_GTT_USWC requests write-combined storage; without it,
         // CPU-accessible GTT requires cached backing store. VidMm supplies
         // CacheCoherent PTEs, which the encoder maps to AMDGPU_PTE_SNOOPED.
         info->FlagsWddm2.Cached = (UINT)UmdBlobAllocCpuCached(&view);
         info->AllocationPriority = D3DDDI_ALLOCATIONPRIORITY_NORMAL;
+        if (wddm != NULL && !info->FlagsWddm2.CpuVisible) {
+            InterlockedIncrement(&wddm->UmdAllocsGpuOnly);
+            InterlockedAdd64(&wddm->UmdGpuOnlyBytes, (LONG64)info->Size);
+        } else if (wddm != NULL)
+            InterlockedAdd64(&wddm->UmdCpuVisibleBytes, (LONG64)info->Size);
         if (wddm != NULL && InterlockedIncrement(&wddm->UmdAllocs) <= BC250_WDDM_LOG_CALLS)
-            GuardLog("wddm: umd alloc %llu bytes heap 0x%lX align %u va 0x%llX gem 0x%llX cached %u", view.bytes, view.heap, align,
-                     view.requested_va,view.gem_flags,info->FlagsWddm2.Cached);
+            GuardLog("wddm: umd alloc %llu heap 0x%lX align %u va 0x%llX gem 0x%llX cached %u cpu %u", view.bytes,
+                     view.heap, align, view.requested_va, view.gem_flags, info->FlagsWddm2.Cached,
+                     info->FlagsWddm2.CpuVisible);
         return BC250_CREATE_STEP_ADMITTED;
     }
 

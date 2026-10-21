@@ -125,6 +125,11 @@ struct umd_submit_view {
 // VRAM and command-buffer USWC allocations retain write-combined backing store.
 int UmdBlobAllocCpuCached(const struct umd_alloc_view* allocation);
 
+// BD-210: DXGK_ALLOCATIONINFOFLAGS.CpuVisible. 0 only for a blob of version 2 or later (the version that
+// made the GEM flags intent, as for the cache policy above) that says NO_CPU_ACCESS and asks for no scan-out.
+// Everything else stays CPU-visible, as before. UmdBlobAllocCpuCached is never 1 where this is 0.
+int UmdBlobAllocCpuVisible(const struct umd_alloc_view* allocation);
+
 // On any refusal *out is zeroed when out is not NULL. bytes may be NULL.
 int UmdBlobParseAlloc(const void* bytes, unsigned len, struct umd_alloc_view* out);
 

@@ -160,6 +160,22 @@ int UmdBlobAllocCpuCached(const struct umd_alloc_view* allocation)
         (allocation->gem_flags & (UMD_BLOB_GEM_NO_CPU_ACCESS | UMD_BLOB_GEM_GTT_USWC)) == 0;
 }
 
+// BD-210: VidMm gives every CpuVisible allocation a view of its whole backing store in the creating
+// process, write-combined unless Cached, committed, and kept as a pool after the allocation is destroyed
+// (unit A, 0.7.216.103-tester.31v3, 2026-10-21: one 248 MiB DEFAULT texture, which no CPU map ever asked
+// for, added a 248 MiB PAGE_WRITECOMBINE range that stayed after the texture was released).
+// A 32-bit process runs out of address space on views of device memory that nothing maps. The creator
+// says whether it maps (AMDGPU_GEM_CREATE_NO_CPU_ACCESS): RADV refuses to map such a BO
+// (radv_wddm2_bo_map), the D3D12 shell marks only GpuOnly heaps so, and HIP only memory it never maps.
+// pfnLockCb "returns an error" on an allocation without the flag (d3dkmddi.h DXGK_ALLOCATIONINFOFLAGS),
+// which is the answer such a creator already gets from its own code. A scan-out request keeps the flag,
+// so the flip path sees the allocation it saw before. A version 1 blob's GEM word was never intent.
+int UmdBlobAllocCpuVisible(const struct umd_alloc_view* allocation)
+{
+    return allocation == 0 || !allocation->cache_policy_valid || allocation->scanout ||
+        (allocation->gem_flags & UMD_BLOB_GEM_NO_CPU_ACCESS) == 0;
+}
+
 int UmdBlobPlacement(const struct umd_alloc_view* allocation, unsigned long vram, unsigned long aperture,
                      int shared, struct umd_placement* out)
 {

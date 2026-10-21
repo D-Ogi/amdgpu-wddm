@@ -159,14 +159,20 @@ int main(void)
             CHECK(av.gem_flags==alloc.gem_flags);
             cached=!heap && !(flags&(AMDGPU_GEM_CREATE_NO_CPU_ACCESS|AMDGPU_GEM_CREATE_CPU_GTT_USWC));
             CHECK(av.cache_policy_valid && UmdBlobAllocCpuCached(&av)==cached);
+            // BD-210: no CPU view only where the creator said NO_CPU_ACCESS; Cached never without one.
+            CHECK(UmdBlobAllocCpuVisible(&av)==!(flags&AMDGPU_GEM_CREATE_NO_CPU_ACCESS));
+            CHECK(!cached || UmdBlobAllocCpuVisible(&av));
             alloc.version=BC250_UMD_ALLOC_VERSION;
             memcpy(wire+offset,&alloc,sizeof(alloc));
             CHECK(UmdBlobParseAlloc(wire+offset,sizeof(alloc),&av)==UMD_BLOB_OK);
             CHECK(!av.cache_policy_valid && !UmdBlobAllocCpuCached(&av));
+            // A version 1 GEM word is not intent: the view stays.
+            CHECK(UmdBlobAllocCpuVisible(&av));
         }
         CHECK(UmdBlobParseAlloc(wire,sizeof(alloc)-1,&av)==UMD_BLOB_TOO_SMALL);
         CHECK(!av.gem_flags && !av.cache_policy_valid && !UmdBlobAllocCpuCached(&av));
         CHECK(!UmdBlobAllocCpuCached(NULL));
+        CHECK(UmdBlobAllocCpuVisible(NULL));
         printf("cache policy:4096 heap/flag/alignment cases passed if final verdict passes\n");
     }
 
@@ -459,7 +465,15 @@ int main(void)
         alloc.scanout_format = 87;
         CHECK(UmdBlobParseAlloc(&alloc, sizeof(alloc), &av) == UMD_BLOB_OK && av.scanout == 1);
         CHECK(UmdBlobPlacement(&av, 1, 2, 1, &pl) == 0 && pl.supported == 0x1 && pl.preferred[1] == 0);
+        // BD-210: a scan-out request keeps its CPU view even when it says NO_CPU_ACCESS; the same
+        // blob without the request has none.
+        alloc.gem_flags = AMDGPU_GEM_CREATE_NO_CPU_ACCESS;
+        CHECK(UmdBlobParseAlloc(&alloc, sizeof(alloc), &av) == UMD_BLOB_OK && av.scanout == 1);
+        CHECK(UmdBlobAllocCpuVisible(&av) && !UmdBlobAllocCpuCached(&av));
         alloc.flags = 0;
+        CHECK(UmdBlobParseAlloc(&alloc, sizeof(alloc), &av) == UMD_BLOB_OK && av.scanout == 0);
+        CHECK(!UmdBlobAllocCpuVisible(&av));
+        alloc.gem_flags = 0;
         CHECK(UmdBlobParseAlloc(&alloc, sizeof(alloc), &av) == UMD_BLOB_OK && av.scanout == 0);
         CHECK(UmdBlobPlacement(&av, 1, 2, 1, &pl) == 1 && pl.supported == 0x3 && pl.preferred[1] == 2);
         // No view: the local segment only. Ids this driver does not have: nothing at all.
