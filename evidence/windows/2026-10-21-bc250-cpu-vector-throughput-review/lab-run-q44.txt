@@ -1,0 +1,301 @@
+# lab-run-q44.txt: unit A, 2026-10-21. Below the line of dashes is the output of run-q44.ps1, byte for byte
+# as the development PC received it over SSH (one push of the binaries and the script, then one run).
+# SHA-256 of that part alone: 13EDBD08AAFA4D30F39BE43495E000CC8B5AAE78467C6DE6FCA8F2FFE9505967.
+# The lab clock was about 48 s ahead of the development PC that day: the run took 04:47:57 to 04:48:31 UTC
+# by the development PC. "STATE.md" in the first line is the local lab notebook, not part of this repository.
+# cpubench-clang-E663.exe is the cpubench-clang.exe of evidence/windows/2026-10-21-bc250-cpu-vector-throughput.
+# ----------------------------------------------------------------------------------------------------------
+utc 2026-10-21T04:48:45.1174279Z (lab clock; about 48 s fast per STATE.md 2026-10-21)
+cpu AMD BC-250 cores 6 logical 12 max 3194 MHz current 3194 MHz
+processes (162): audiodg,bc250mon,conhost,csrss,ctfmon,DefenderSessionHelper,dllhost,dwm,explorer,fontdrvhost,GameBar,GameBarFTServer,GameInputRedistService,Idle,lsass,M365Copilot,MpDefenderCoreService,msedge,msedgewebview2,MsMpEng,NisSrv,OneDrive,PhoneExperienceHost,powershell,Registry,RuntimeBroker,SearchHost,SecurityHealthService,SecurityHealthSystray,services,ShellExperienceHost,sihost,smartscreen,smss,sshd,sshd-session,StartMenuExperienceHost,steam,steamservice,steamwebhelper,svchost,System,SystemSettingsBroker,taskhostw,Widgets,WidgetService,wininit,winlogon,WmiPrvSE,WUDFHost,XboxGameBarWidgets,XboxPcAppFT
+top cpu-seconds: MsMpEng=57 System=25 bc250mon=17 dwm=11 steamwebhelper=8 explorer=5 steamwebhelper=5 svchost=4
+cpu busy before: 0 %
+disk busy before: 0 %
+=== q44bench-clang.exe  sha256 4771DF7F476B6C67D74672035AE315034DABE705273B891063C41ED218500F05 utc 2026-10-21T04:48:52.7258188Z
+q44bench compiler clang 23.1.4 (https://github.com/llvm/llvm-project 7a941dfb2877a0b8cf30323fefa85ad019e0b0f5) qpf 10000000
+topology core 0 group 0 mask 0x3 smt 1 efficiency 0
+topology core 1 group 0 mask 0xc smt 1 efficiency 0
+topology core 2 group 0 mask 0x30 smt 1 efficiency 0
+topology core 3 group 0 mask 0xc0 smt 1 efficiency 0
+topology core 4 group 0 mask 0x300 smt 1 efficiency 0
+topology core 5 group 0 mask 0xc00 smt 1 efficiency 0
+tsc rate 3.1942 GHz
+buffers src&4095 128 dst&4095 128 ref&4095 128 bytes 9216000
+clock start      dependent add chain ns/add min 0.28625 med 0.28650 max 0.28806 -> 3.490 GHz (spread 3.472-3.493)
+frame row_bytes        ms min 1.060 med 1.070 max 1.090 | image GB/s 8.69 | est traffic x3 GB/s 26.08 | dst&4095  128 | match
+frame row_words        ms min 1.052 med 1.060 max 1.085 | image GB/s 8.76 | est traffic x3 GB/s 26.29 | dst&4095  128 | match
+frame row_ssse3        ms min 0.898 med 0.901 max 0.927 | image GB/s 10.26 | est traffic x3 GB/s 30.79 | dst&4095  128 | match
+frame row_avx2         ms min 1.045 med 1.051 max 1.090 | image GB/s 8.82 | est traffic x3 GB/s 26.47 | dst&4095  128 | match
+frame row_memcpy       ms min 1.059 med 1.068 max 1.117 | image GB/s 8.70 | est traffic x3 GB/s 26.11 | dst&4095  128 | match
+frame mesa_gdi_loop    ms min 3.014 med 3.019 max 3.280 | image GB/s 3.06 | est traffic x3 GB/s 9.17 | dst&4095  128 | match
+frame mesa_gdi_hoisted ms min 1.066 med 1.068 max 1.095 | image GB/s 8.65 | est traffic x3 GB/s 25.94 | dst&4095  128 | match
+frame asm_copy_x1      ms min 0.835 med 0.845 max 0.906 | image GB/s 11.04 | est traffic x3 GB/s 33.12 | dst&4095  128 | match
+frame asm_copy_x4      ms min 0.896 med 0.901 max 0.932 | image GB/s 10.28 | est traffic x3 GB/s 30.85 | dst&4095  128 | match
+frame asm_copy_y1      ms min 0.953 med 0.960 max 0.989 | image GB/s 9.67 | est traffic x3 GB/s 29.00 | dst&4095  128 | match
+frame asm_copy_y4      ms min 1.049 med 1.055 max 1.084 | image GB/s 8.79 | est traffic x3 GB/s 26.36 | dst&4095  128 | match
+frame asm_shuf_x1      ms min 0.871 med 0.875 max 0.884 | image GB/s 10.58 | est traffic x3 GB/s 31.73 | dst&4095  128 | match
+frame asm_shuf_y1      ms min 0.996 med 1.001 max 1.039 | image GB/s 9.25 | est traffic x3 GB/s 27.76 | dst&4095  128 | match
+frame asm_shuf_y4      ms min 1.051 med 1.054 max 1.083 | image GB/s 8.77 | est traffic x3 GB/s 26.31 | dst&4095  128 | match
+frame asm_copy_y1_pad7 ms min 0.898 med 0.902 max 0.929 | image GB/s 10.27 | est traffic x3 GB/s 30.81 | dst&4095  128 | match
+frame asm_copy_nt_y4   ms min 0.619 med 0.626 max 0.654 | image GB/s 14.90 | est traffic x2 GB/s 29.80 | dst&4095  128 | match
+frame rep_movsb        ms min 1.296 med 1.302 max 1.326 | image GB/s 7.11 | est traffic x3 GB/s 21.33 | dst&4095  128 | match
+frame memcpy_frame     ms min 0.624 med 0.630 max 0.635 | image GB/s 14.76 | est traffic x2 GB/s 29.52 | dst&4095  128 | match
+frame asm_read_x4      ms min 0.541 med 0.542 max 0.549 | image GB/s 17.04 | est traffic x1 GB/s 17.04 | dst&4095  128 | n/a
+frame asm_read_y4      ms min 0.548 med 0.555 max 0.579 | image GB/s 16.81 | est traffic x1 GB/s 16.81 | dst&4095  128 | n/a
+frame asm_write_x4     ms min 0.566 med 0.574 max 0.591 | image GB/s 16.29 | est traffic x2 GB/s 32.59 | dst&4095  128 | n/a
+frame asm_write_y4     ms min 0.636 med 0.642 max 0.654 | image GB/s 14.50 | est traffic x2 GB/s 28.99 | dst&4095  128 | n/a
+frame asm_write_nt_y4  ms min 0.241 med 0.242 max 0.264 | image GB/s 38.30 | est traffic x1 GB/s 38.30 | dst&4095  128 | n/a
+frame pass dst page offset src+2048
+frame asm_copy_x1      ms min 0.817 med 0.822 max 0.829 | image GB/s 11.28 | est traffic x3 GB/s 33.84 | dst&4095 2176 | match
+frame asm_copy_x4      ms min 0.777 med 0.779 max 0.784 | image GB/s 11.85 | est traffic x3 GB/s 35.56 | dst&4095 2176 | match
+frame asm_copy_y1      ms min 0.894 med 0.901 max 0.952 | image GB/s 10.31 | est traffic x3 GB/s 30.94 | dst&4095 2176 | match
+frame asm_copy_y4      ms min 1.044 med 1.051 max 1.082 | image GB/s 8.83 | est traffic x3 GB/s 26.49 | dst&4095 2176 | match
+frame asm_shuf_x1      ms min 0.800 med 0.802 max 0.806 | image GB/s 11.53 | est traffic x3 GB/s 34.58 | dst&4095 2176 | match
+frame asm_shuf_y1      ms min 0.970 med 0.974 max 0.985 | image GB/s 9.50 | est traffic x3 GB/s 28.49 | dst&4095 2176 | match
+frame asm_shuf_y4      ms min 1.039 med 1.046 max 1.074 | image GB/s 8.87 | est traffic x3 GB/s 26.62 | dst&4095 2176 | match
+frame asm_copy_y1_pad7 ms min 0.877 med 0.878 max 0.905 | image GB/s 10.51 | est traffic x3 GB/s 31.54 | dst&4095 2176 | match
+frame asm_copy_nt_y4   ms min 0.620 med 0.624 max 0.628 | image GB/s 14.87 | est traffic x2 GB/s 29.73 | dst&4095 2176 | match
+frame rep_movsb        ms min 1.405 med 1.410 max 1.419 | image GB/s 6.56 | est traffic x3 GB/s 19.68 | dst&4095 2176 | match
+frame memcpy_frame     ms min 0.621 med 0.628 max 0.659 | image GB/s 14.85 | est traffic x2 GB/s 29.69 | dst&4095 2176 | match
+csweep c_fma256_k1      ns/insn min 1.4324 med 1.4327 max 1.4335 | lane0 sum 142.444 finite 1
+csweep c_fma256_k4      ns/insn min 0.3581 med 0.3582 max 0.3585 | lane0 sum 85.1476 finite 1
+csweep c_fma256_k6      ns/insn min 0.2864 med 0.2865 max 0.2868 | lane0 sum 107.328 finite 1
+csweep c_fma256_k8      ns/insn min 0.2865 med 0.2867 max 0.2869 | lane0 sum 136.152 finite 1
+csweep c_fma256_k10     ns/insn min 0.2868 med 0.2869 max 0.4298 | lane0 sum 172.48 finite 1
+csweep c_fma256_k12     ns/insn min 0.2866 med 0.2866 max 0.3582 | lane0 sum 220.807 finite 1
+csweep c_fmaone256_k12  ns/insn min 0.2865 med 0.2867 max 0.3152 | lane0 sum 68.0648 finite 1
+reg fma128_c1                   w128 insns/iter  24 iters     873362 | ns/insn min 1.4323 med 1.4333 max 1.4340 | cyc/insn 5.003 | insn/cyc 0.200 | values finite 1 min 0 max 11 | tsc/insn 4.576
+reg fma128_c2                   w128 insns/iter  24 iters    1734104 | ns/insn min 0.7162 med 0.7163 max 0.7166 | cyc/insn 2.500 | insn/cyc 0.400 | values finite 1 min 0 max 18.4661 | tsc/insn 2.288
+reg fma128_c4                   w128 insns/iter  24 iters    3488372 | ns/insn min 0.3582 med 0.3582 max 0.3584 | cyc/insn 1.250 | insn/cyc 0.800 | values finite 1 min 0 max 37.7145 | tsc/insn 1.144
+reg fma128_c5                   w128 insns/iter  25 iters    4166666 | ns/insn min 0.2865 med 0.2866 max 0.2867 | cyc/insn 1.000 | insn/cyc 1.000 | values finite 1 min 0 max 45.3449 | tsc/insn 0.915
+reg fma128_c6                   w128 insns/iter  24 iters    4316546 | ns/insn min 0.2865 med 0.2866 max 0.2867 | cyc/insn 1.000 | insn/cyc 1.000 | values finite 1 min 0 max 39.7373 | tsc/insn 0.915
+reg fma128_c8                   w128 insns/iter  24 iters    2816901 | ns/insn min 0.2865 med 0.2870 max 0.2873 | cyc/insn 1.002 | insn/cyc 0.998 | values finite 1 min 0 max 18.9573 | tsc/insn 0.918
+reg fma128_c10                  w128 insns/iter  30 iters    3488372 | ns/insn min 0.2865 med 0.2868 max 0.2868 | cyc/insn 1.001 | insn/cyc 0.999 | values finite 1 min 0 max 30.4378 | tsc/insn 0.916
+reg fma128_c12                  w128 insns/iter  24 iters    4347826 | ns/insn min 0.2866 med 0.2866 max 0.2883 | cyc/insn 1.001 | insn/cyc 0.999 | values finite 1 min 0 max 31.6879 | tsc/insn 0.915
+reg fma256_c1                   w256 insns/iter  24 iters     872093 | ns/insn min 1.4323 med 1.4328 max 1.4331 | cyc/insn 5.001 | insn/cyc 0.200 | values finite 1 min 1 max 11 | tsc/insn 4.577
+reg fma256_c2                   w256 insns/iter  24 iters    1744186 | ns/insn min 0.7160 med 0.7163 max 0.7181 | cyc/insn 2.500 | insn/cyc 0.400 | values finite 1 min 2 max 18.6969 | tsc/insn 2.287
+reg fma256_c4                   w256 insns/iter  24 iters    3370786 | ns/insn min 0.3581 med 0.3582 max 0.3584 | cyc/insn 1.250 | insn/cyc 0.800 | values finite 1 min 4 max 35.0232 | tsc/insn 1.144
+reg fma256_c5                   w256 insns/iter  25 iters    2816901 | ns/insn min 0.2865 med 0.2867 max 0.2867 | cyc/insn 1.001 | insn/cyc 0.999 | values finite 1 min 3.63387 max 21.3806 | tsc/insn 0.915
+reg fma256_c6                   w256 insns/iter  24 iters    4347826 | ns/insn min 0.2865 med 0.2866 max 0.2868 | cyc/insn 1.000 | insn/cyc 1.000 | values finite 1 min 5.26021 max 40.2146 | tsc/insn 0.916
+reg fma256_c8                   w256 insns/iter  24 iters    4316546 | ns/insn min 0.2866 med 0.2867 max 0.2870 | cyc/insn 1.001 | insn/cyc 0.999 | values finite 1 min 3.09272 max 31.9155 | tsc/insn 0.917
+reg fma256_c10                  w256 insns/iter  30 iters    3488372 | ns/insn min 0.2865 med 0.2866 max 0.2867 | cyc/insn 1.000 | insn/cyc 1.000 | values finite 1 min 2.03457 max 30.4378 | tsc/insn 0.915
+reg fma256_c12                  w256 insns/iter  24 iters    4347826 | ns/insn min 0.2864 med 0.2866 max 0.2866 | cyc/insn 1.000 | insn/cyc 1.000 | values finite 1 min 1.49975 max 31.6879 | tsc/insn 0.915
+reg fadd128_c1                  w128 insns/iter  24 iters    1452784 | ns/insn min 0.8595 med 0.8598 max 0.8600 | cyc/insn 3.001 | insn/cyc 0.333 | values finite 1 min 0 max 11 | tsc/insn 2.746
+reg fadd128_c2                  w128 insns/iter  24 iters    2912621 | ns/insn min 0.4297 med 0.4298 max 0.4299 | cyc/insn 1.500 | insn/cyc 0.667 | values finite 1 min 0 max 11 | tsc/insn 1.373
+reg fadd128_c4                  w128 insns/iter  24 iters    2666666 | ns/insn min 0.2864 med 0.2866 max 0.2867 | cyc/insn 1.000 | insn/cyc 1.000 | values finite 1 min 0 max 11 | tsc/insn 0.915
+reg fadd128_c5                  w128 insns/iter  25 iters    4166666 | ns/insn min 0.2865 med 0.2866 max 0.2867 | cyc/insn 1.000 | insn/cyc 1.000 | values finite 1 min 0 max 11 | tsc/insn 0.915
+reg fadd128_c6                  w128 insns/iter  24 iters    4347826 | ns/insn min 0.2865 med 0.2866 max 0.2869 | cyc/insn 1.000 | insn/cyc 1.000 | values finite 1 min 0 max 11 | tsc/insn 0.916
+reg fadd128_c8                  w128 insns/iter  24 iters    4347826 | ns/insn min 0.2866 med 0.2866 max 0.2867 | cyc/insn 1.000 | insn/cyc 1.000 | values finite 1 min 0 max 11 | tsc/insn 0.915
+reg fadd128_c10                 w128 insns/iter  30 iters    3488372 | ns/insn min 0.2865 med 0.2866 max 0.2867 | cyc/insn 1.000 | insn/cyc 1.000 | values finite 1 min 0 max 11 | tsc/insn 0.915
+reg fadd128_c12                 w128 insns/iter  24 iters    4316546 | ns/insn min 0.2865 med 0.2866 max 0.2866 | cyc/insn 1.000 | insn/cyc 1.000 | values finite 1 min 0 max 11 | tsc/insn 0.915
+reg fadd256_c1                  w256 insns/iter  24 iters    1452784 | ns/insn min 0.8593 med 0.8594 max 0.8598 | cyc/insn 3.000 | insn/cyc 0.333 | values finite 1 min 1 max 11 | tsc/insn 2.745
+reg fadd256_c2                  w256 insns/iter  24 iters    1857585 | ns/insn min 0.4296 med 0.4296 max 0.4298 | cyc/insn 1.500 | insn/cyc 0.667 | values finite 1 min 2 max 11 | tsc/insn 1.372
+reg fadd256_c4                  w256 insns/iter  24 iters    4347826 | ns/insn min 0.2864 med 0.2865 max 0.2867 | cyc/insn 1.000 | insn/cyc 1.000 | values finite 1 min 2 max 11 | tsc/insn 0.915
+reg fadd256_c5                  w256 insns/iter  25 iters    4166666 | ns/insn min 0.2865 med 0.2866 max 0.2867 | cyc/insn 1.000 | insn/cyc 1.000 | values finite 1 min 2 max 11 | tsc/insn 0.916
+reg fadd256_c6                  w256 insns/iter  24 iters    4379562 | ns/insn min 0.2864 med 0.2865 max 0.2867 | cyc/insn 1.000 | insn/cyc 1.000 | values finite 1 min 1.96101 max 11 | tsc/insn 0.915
+reg fadd256_c8                  w256 insns/iter  24 iters    4347826 | ns/insn min 0.2865 med 0.2865 max 0.2866 | cyc/insn 1.000 | insn/cyc 1.000 | values finite 1 min 1.42758 max 11 | tsc/insn 0.915
+reg fadd256_c10                 w256 insns/iter  30 iters    3488372 | ns/insn min 0.2864 med 0.2865 max 0.2866 | cyc/insn 1.000 | insn/cyc 1.000 | values finite 1 min 1.12021 max 11 | tsc/insn 0.915
+reg fadd256_c12                 w256 insns/iter  24 iters    3296703 | ns/insn min 0.2866 med 0.2867 max 0.2868 | cyc/insn 1.001 | insn/cyc 0.999 | values finite 1 min 0.65867 max 11 | tsc/insn 0.916
+reg fmul128_c1                  w128 insns/iter  24 iters    1456310 | ns/insn min 0.8596 med 0.8599 max 0.8658 | cyc/insn 3.002 | insn/cyc 0.333 | values finite 1 min 0 max 11 | tsc/insn 2.765
+reg fmul128_c2                  w128 insns/iter  24 iters    2898550 | ns/insn min 0.4297 med 0.4299 max 0.4300 | cyc/insn 1.500 | insn/cyc 0.666 | values finite 1 min 0 max 44.6851 | tsc/insn 1.373
+reg fmul128_c4                  w128 insns/iter  24 iters    4285714 | ns/insn min 0.2864 med 0.2865 max 0.2868 | cyc/insn 1.000 | insn/cyc 1.000 | values finite 1 min 0 max 52.1844 | tsc/insn 0.916
+reg fmul128_c5                  w128 insns/iter  25 iters    4166666 | ns/insn min 0.2864 med 0.2865 max 0.2870 | cyc/insn 1.000 | insn/cyc 1.000 | values finite 1 min 0 max 39.4728 | tsc/insn 0.917
+reg fmul128_c6                  w128 insns/iter  24 iters    4316546 | ns/insn min 0.2864 med 0.2865 max 0.2867 | cyc/insn 1.000 | insn/cyc 1.000 | values finite 1 min 0 max 33.8653 | tsc/insn 0.915
+reg fmul128_c8                  w128 insns/iter  24 iters    4347826 | ns/insn min 0.2864 med 0.2865 max 0.2866 | cyc/insn 1.000 | insn/cyc 1.000 | values finite 1 min 0 max 29.7569 | tsc/insn 0.915
+reg fmul128_c10                 w128 insns/iter  30 iters    2255639 | ns/insn min 0.2864 med 0.2865 max 0.2868 | cyc/insn 1.000 | insn/cyc 1.000 | values finite 1 min 0 max 18.9069 | tsc/insn 0.915
+reg fmul128_c12                 w128 insns/iter  24 iters    4316546 | ns/insn min 0.2865 med 0.2865 max 0.2866 | cyc/insn 1.000 | insn/cyc 1.000 | values finite 1 min 0 max 28.9326 | tsc/insn 0.915
+reg fmul256_c1                  w256 insns/iter  24 iters    1452784 | ns/insn min 0.8592 med 0.8595 max 0.8603 | cyc/insn 3.000 | insn/cyc 0.333 | values finite 1 min 0 max 11 | tsc/insn 2.748
+reg fmul256_c2                  w256 insns/iter  24 iters    2898550 | ns/insn min 0.4298 med 0.4299 max 0.4302 | cyc/insn 1.501 | insn/cyc 0.666 | values finite 1 min 0 max 44.6851 | tsc/insn 1.374
+reg fmul256_c4                  w256 insns/iter  24 iters    4316546 | ns/insn min 0.2865 med 0.2867 max 0.2867 | cyc/insn 1.001 | insn/cyc 0.999 | values finite 1 min 0 max 53.5958 | tsc/insn 0.915
+reg fmul256_c5                  w256 insns/iter  25 iters    4166666 | ns/insn min 0.2865 med 0.2866 max 0.2866 | cyc/insn 1.000 | insn/cyc 1.000 | values finite 1 min 0 max 39.4728 | tsc/insn 0.915
+reg fmul256_c6                  w256 insns/iter  24 iters    4379562 | ns/insn min 0.2864 med 0.2866 max 0.2867 | cyc/insn 1.000 | insn/cyc 1.000 | values finite 1 min 0 max 34.8268 | tsc/insn 0.915
+reg fmul256_c8                  w256 insns/iter  24 iters    2884615 | ns/insn min 0.2864 med 0.2866 max 0.2867 | cyc/insn 1.001 | insn/cyc 0.999 | values finite 1 min 0 max 18.5059 | tsc/insn 0.916
+reg fmul256_c10                 w256 insns/iter  30 iters    3488372 | ns/insn min 0.2864 med 0.2866 max 0.2866 | cyc/insn 1.000 | insn/cyc 1.000 | values finite 1 min 0 max 27.9212 | tsc/insn 0.915
+reg fmul256_c12                 w256 insns/iter  24 iters    4316546 | ns/insn min 0.2864 med 0.2865 max 0.2866 | cyc/insn 1.000 | insn/cyc 1.000 | values finite 1 min 0 max 28.9326 | tsc/insn 0.916
+reg fmaone128_c12               w128 insns/iter  24 iters    4347826 | ns/insn min 0.2865 med 0.2866 max 0.2866 | cyc/insn 1.000 | insn/cyc 1.000 | values finite 1 min 0 max 11 | tsc/insn 0.915
+reg fmaone256_c12               w256 insns/iter  24 iters    4379562 | ns/insn min 0.2865 med 0.2865 max 0.2867 | cyc/insn 1.000 | insn/cyc 1.000 | values finite 1 min 0.916844 max 11 | tsc/insn 0.915
+clock middle     dependent add chain ns/add min 0.28631 med 0.28660 max 0.28705 -> 3.489 GHz (spread 3.484-3.493)
+reg mix_fadd_fmaone128          w128 insns/iter  24 iters    5999999 | ns/insn min 0.1433 med 0.1433 max 0.1434 | cyc/insn 0.500 | insn/cyc 2.000 | values finite 1 min 0 max 11 | tsc/insn 0.458
+reg mix_fadd_fmaone256          w256 insns/iter  24 iters    3260869 | ns/insn min 0.1432 med 0.1433 max 0.1434 | cyc/insn 0.500 | insn/cyc 2.000 | values finite 1 min 0.650126 max 11 | tsc/insn 0.457
+reg mix_fadd_fma128             w128 insns/iter  24 iters    5999999 | ns/insn min 0.1432 med 0.1432 max 0.1433 | cyc/insn 0.500 | insn/cyc 2.001 | values finite 1 min 0 max 44.2929 | tsc/insn 0.457
+reg mix_fadd_fma256             w256 insns/iter  24 iters    5999999 | ns/insn min 0.1432 med 0.1432 max 0.1434 | cyc/insn 0.500 | insn/cyc 2.001 | values finite 1 min 1.30319 max 44.2929 | tsc/insn 0.458
+reg mix_fadd_fmul128            w128 insns/iter  24 iters    5999999 | ns/insn min 0.1432 med 0.1432 max 0.1434 | cyc/insn 0.500 | insn/cyc 2.001 | values finite 1 min 0 max 41.7764 | tsc/insn 0.458
+reg mix_fadd_fmul256            w256 insns/iter  24 iters    5999999 | ns/insn min 0.1432 med 0.1433 max 0.1434 | cyc/insn 0.500 | insn/cyc 2.000 | values finite 1 min 1.30319 max 41.7764 | tsc/insn 0.457
+reg mix_fma_fmul128             w128 insns/iter  24 iters    4347826 | ns/insn min 0.2865 med 0.2865 max 0.2866 | cyc/insn 1.000 | insn/cyc 1.000 | values finite 1 min 0 max 29.1713 | tsc/insn 0.915
+reg mix_fma_fmul256             w256 insns/iter  24 iters    4347826 | ns/insn min 0.2865 med 0.2866 max 0.2866 | cyc/insn 1.000 | insn/cyc 1.000 | values finite 1 min 1.49975 max 29.1713 | tsc/insn 0.915
+reg mix_fma_pshufb128           w128 insns/iter  24 iters    3529411 | ns/insn min 0.1432 med 0.1433 max 0.1435 | cyc/insn 0.500 | insn/cyc 2.000 | tsc/insn 0.458
+reg mix_fma_pshufb256           w256 insns/iter  24 iters    5999999 | ns/insn min 0.1432 med 0.1433 max 0.1433 | cyc/insn 0.500 | insn/cyc 2.000 | tsc/insn 0.458
+reg mix_fadd_pshufb128          w128 insns/iter  24 iters    5999999 | ns/insn min 0.1432 med 0.1433 max 0.1433 | cyc/insn 0.500 | insn/cyc 2.000 | tsc/insn 0.458
+reg mix_fadd_pshufb256          w256 insns/iter  24 iters    5999999 | ns/insn min 0.1432 med 0.1433 max 0.1434 | cyc/insn 0.500 | insn/cyc 2.000 | tsc/insn 0.458
+reg mix_fma_vpaddd128           w128 insns/iter  24 iters    5999999 | ns/insn min 0.1432 med 0.1433 max 0.1433 | cyc/insn 0.500 | insn/cyc 2.000 | tsc/insn 0.458
+reg mix_fma_vpaddd256           w256 insns/iter  24 iters    5999999 | ns/insn min 0.1432 med 0.1432 max 0.1434 | cyc/insn 0.500 | insn/cyc 2.001 | tsc/insn 0.458
+reg mix_fadd_vpaddd128          w128 insns/iter  24 iters    3773584 | ns/insn min 0.1432 med 0.1433 max 0.1434 | cyc/insn 0.500 | insn/cyc 2.000 | tsc/insn 0.458
+reg mix_fadd_vpaddd256          w256 insns/iter  24 iters    5999999 | ns/insn min 0.1432 med 0.1432 max 0.1434 | cyc/insn 0.500 | insn/cyc 2.001 | tsc/insn 0.458
+reg mix_pshufb_vpaddd128        w128 insns/iter  24 iters    5999999 | ns/insn min 0.1432 med 0.1432 max 0.1434 | cyc/insn 0.500 | insn/cyc 2.001 | tsc/insn 0.457
+reg mix_pshufb_vpaddd256        w256 insns/iter  24 iters    5999999 | ns/insn min 0.1432 med 0.1433 max 0.1434 | cyc/insn 0.500 | insn/cyc 2.000 | tsc/insn 0.458
+reg mix_fmul_pshufb128          w128 insns/iter  24 iters    5999999 | ns/insn min 0.1432 med 0.1433 max 0.1434 | cyc/insn 0.500 | insn/cyc 2.000 | tsc/insn 0.458
+reg mix_fmul_pshufb256          w256 insns/iter  24 iters    5999999 | ns/insn min 0.1433 med 0.1433 max 0.1433 | cyc/insn 0.500 | insn/cyc 2.000 | tsc/insn 0.458
+reg pshufb128_c12               w128 insns/iter  24 iters    5999999 | ns/insn min 0.1432 med 0.1433 max 0.1434 | cyc/insn 0.500 | insn/cyc 2.000 | tsc/insn 0.458
+reg pshufb128_c12          rot  w128 insns/iter  24 iters    5999999 | ns/insn min 0.1432 med 0.1433 max 0.1434 | cyc/insn 0.500 | insn/cyc 2.000 | tsc/insn 0.458
+reg pshufb128_c1                w128 insns/iter  24 iters    2439024 | ns/insn min 0.2864 med 0.2866 max 0.2868 | cyc/insn 1.000 | insn/cyc 1.000 | tsc/insn 0.915
+reg pshufb128_c1           rot  w128 insns/iter  24 iters    4347826 | ns/insn min 0.2864 med 0.2865 max 0.2866 | cyc/insn 1.000 | insn/cyc 1.000 | tsc/insn 0.915
+reg pshufb256_c12               w256 insns/iter  24 iters    5999999 | ns/insn min 0.1432 med 0.1432 max 0.1434 | cyc/insn 0.500 | insn/cyc 2.001 | tsc/insn 0.457
+reg pshufb256_c12          rot  w256 insns/iter  24 iters    5999999 | ns/insn min 0.1432 med 0.1432 max 0.1433 | cyc/insn 0.500 | insn/cyc 2.001 | tsc/insn 0.457
+reg pshufb256_c1                w256 insns/iter  24 iters    4347826 | ns/insn min 0.2865 med 0.2866 max 0.2868 | cyc/insn 1.000 | insn/cyc 1.000 | tsc/insn 0.916
+reg pshufb256_c1           rot  w256 insns/iter  24 iters    4347826 | ns/insn min 0.2865 med 0.2865 max 0.2866 | cyc/insn 1.000 | insn/cyc 1.000 | tsc/insn 0.915
+reg vpaddd128_c12               w128 insns/iter  24 iters    5999999 | ns/insn min 0.1433 med 0.1433 max 0.1434 | cyc/insn 0.500 | insn/cyc 2.000 | tsc/insn 0.458
+reg vpaddd128_c1                w128 insns/iter  24 iters    4316546 | ns/insn min 0.2865 med 0.2866 max 0.2867 | cyc/insn 1.000 | insn/cyc 1.000 | tsc/insn 0.915
+reg vpaddd256_c12               w256 insns/iter  24 iters    5999999 | ns/insn min 0.1432 med 0.1433 max 0.1434 | cyc/insn 0.500 | insn/cyc 2.000 | tsc/insn 0.458
+reg vpaddd256_c1                w256 insns/iter  24 iters    4347826 | ns/insn min 0.2865 med 0.2866 max 0.2867 | cyc/insn 1.000 | insn/cyc 1.000 | tsc/insn 0.915
+reg vpmulld128_c12              w128 insns/iter  24 iters    1546391 | ns/insn min 0.5728 med 0.5731 max 0.5732 | cyc/insn 2.000 | insn/cyc 0.500 | tsc/insn 1.831
+reg vpmulld128_c1               w128 insns/iter  24 iters    1088929 | ns/insn min 1.1462 med 1.1462 max 1.1465 | cyc/insn 3.999 | insn/cyc 0.250 | tsc/insn 3.661
+reg vpmulld256_c12              w256 insns/iter  24 iters    2166064 | ns/insn min 0.5729 med 0.5731 max 0.5734 | cyc/insn 2.000 | insn/cyc 0.500 | tsc/insn 1.831
+reg vpmulld256_c1               w256 insns/iter  24 iters    1090909 | ns/insn min 1.1462 med 1.1462 max 1.1467 | cyc/insn 3.999 | insn/cyc 0.250 | tsc/insn 3.661
+reg vpermd256_c12               w256 insns/iter  24 iters    2181818 | ns/insn min 0.5729 med 0.5731 max 0.5732 | cyc/insn 2.000 | insn/cyc 0.500 | tsc/insn 1.830
+reg vpermd256_c1                w256 insns/iter  24 iters     545950 | ns/insn min 2.2915 med 2.2925 max 2.2949 | cyc/insn 7.999 | insn/cyc 0.125 | tsc/insn 7.330
+reg vpermq256_c12               w256 insns/iter  24 iters    3296703 | ns/insn min 0.3666 med 0.3668 max 0.3710 | cyc/insn 1.280 | insn/cyc 0.781 | tsc/insn 1.182
+reg vpermq256_c1                w256 insns/iter  24 iters     728155 | ns/insn min 1.7188 med 1.7189 max 1.7205 | cyc/insn 5.997 | insn/cyc 0.167 | tsc/insn 5.490
+reg vperm2i128256_c12           w256 insns/iter  24 iters    4316546 | ns/insn min 0.2865 med 0.2866 max 0.2866 | cyc/insn 1.000 | insn/cyc 1.000 | tsc/insn 0.915
+reg vperm2i128256_c1            w256 insns/iter  24 iters    1449275 | ns/insn min 0.8594 med 0.8596 max 0.8611 | cyc/insn 2.999 | insn/cyc 0.333 | tsc/insn 2.745
+reg scalar_add_c8               w64  insns/iter  24 iters    5999999 | ns/insn min 0.0776 med 0.0776 max 0.0777 | cyc/insn 0.271 | insn/cyc 3.692 | tsc/insn 0.248
+reg mem_chain10_128             w128 insns/iter  10 iters    3296703 | ns/insn min 0.3724 med 0.3728 max 0.3860 | cyc/insn 1.301 | insn/cyc 0.769 | values finite 1 min 0 max 17.1268 | tsc/insn 1.190
+reg mem_nodep10_128             w128 insns/iter  10 iters    5999999 | ns/insn min 0.2865 med 0.2866 max 0.2869 | cyc/insn 1.000 | insn/cyc 1.000 | values finite 1 min 0 max 15 | tsc/insn 0.916
+reg mem_chain1_128              w128 insns/iter   8 iters    1006711 | ns/insn min 3.7240 med 3.7244 max 3.7260 | cyc/insn 12.995 | insn/cyc 0.077 | values finite 1 min 0 max 15 | tsc/insn 11.896
+reg mem_chain2_reg8_128         w128 insns/iter  10 iters    5999999 | ns/insn min 0.3724 med 0.3725 max 0.3728 | cyc/insn 1.300 | insn/cyc 0.769 | values finite 1 min 0 max 22.283 | tsc/insn 1.189
+reg mem_chain10_256             w256 insns/iter  10 iters    5999999 | ns/insn min 0.4016 med 0.4120 max 0.4446 | cyc/insn 1.437 | insn/cyc 0.696 | values finite 1 min 0 max 29.727 | tsc/insn 1.348
+reg mem_nodep10_256             w256 insns/iter  10 iters    5999999 | ns/insn min 0.2865 med 0.2867 max 0.2869 | cyc/insn 1.000 | insn/cyc 1.000 | values finite 1 min 0 max 15 | tsc/insn 0.915
+reg mem_chain1_256              w256 insns/iter   8 iters     934579 | ns/insn min 4.0103 med 4.0114 max 4.0151 | cyc/insn 13.996 | insn/cyc 0.071 | values finite 1 min 0 max 17.0994 | tsc/insn 12.825
+reg mem_chain2_reg8_256         w256 insns/iter  10 iters    5999999 | ns/insn min 0.4012 med 0.4014 max 0.4018 | cyc/insn 1.400 | insn/cyc 0.714 | values finite 1 min 0 max 29.727 | tsc/insn 1.282
+reg clk_imul_chain              w64  insns/iter 100 iters     348837 | ns/insn min 0.8597 med 0.8598 max 0.8599 | cyc/insn 3.000 | insn/cyc 0.333 | tsc/insn 2.747
+reg clk_add48_fma4_256          w64  insns/iter  48 iters    2181818 | ns/insn min 0.2865 med 0.2866 max 0.2867 | cyc/insn 1.000 | insn/cyc 1.000 | tsc/insn 0.915
+q24 fadd256 vs fmaone256 after 100001 iterations x 2 ops per chain: bit-identical (lane0 chain1 1.0238421 vs 1.0238421)
+q27 mask swap  iters 1000 shuffles/chain 2000: result == expected; result == initial
+q27 mask swap  iters 1001 shuffles/chain 2002: result == expected; result == initial
+q27 mask swap  iters 1002 shuffles/chain 2004: result == expected; result == initial
+q27 mask swap  iters 1003 shuffles/chain 2006: result == expected; result == initial
+q27 mask rot16 iters 1000 shuffles/chain 2000: result == expected; result == initial
+q27 mask rot16 iters 1001 shuffles/chain 2002: result == expected; result != initial
+q27 mask rot16 iters 1002 shuffles/chain 2004: result == expected; result != initial
+q27 mask rot16 iters 1003 shuffles/chain 2006: result == expected; result != initial
+clock pre-smt    dependent add chain ns/add min 0.28629 med 0.28655 max 0.28697 -> 3.490 GHz (spread 3.485-3.493)
+smt fma256_c1        one thread LP2               threads 1 masks 0x4 0x0 | ns/insn per thread 1.4323 0.0000 | total insn/ns 0.698
+smt fma256_c1        two threads LP2+LP3 (SMT?)   threads 2 masks 0x4 0x8 | ns/insn per thread 1.4320 1.4326 | total insn/ns 1.396
+smt fma256_c1        two threads LP2+LP4 (cores)  threads 2 masks 0x4 0x10 | ns/insn per thread 1.4321 1.4329 | total insn/ns 1.396
+smt fma256_c12       one thread LP2               threads 1 masks 0x4 0x0 | ns/insn per thread 0.2866 0.0000 | total insn/ns 3.490
+smt fma256_c12       two threads LP2+LP3 (SMT?)   threads 2 masks 0x4 0x8 | ns/insn per thread 0.5723 0.5726 | total insn/ns 3.494
+smt fma256_c12       two threads LP2+LP4 (cores)  threads 2 masks 0x4 0x10 | ns/insn per thread 0.2864 0.2865 | total insn/ns 6.982
+smt fadd256_c12      one thread LP2               threads 1 masks 0x4 0x0 | ns/insn per thread 0.2866 0.0000 | total insn/ns 3.489
+smt fadd256_c12      two threads LP2+LP3 (SMT?)   threads 2 masks 0x4 0x8 | ns/insn per thread 0.5723 0.5727 | total insn/ns 3.493
+smt fadd256_c12      two threads LP2+LP4 (cores)  threads 2 masks 0x4 0x10 | ns/insn per thread 0.2865 0.2867 | total insn/ns 6.979
+smt scalar_add_c8    one thread LP2               threads 1 masks 0x4 0x0 | ns/insn per thread 0.0777 0.0000 | total insn/ns 12.878
+smt scalar_add_c8    two threads LP2+LP3 (SMT?)   threads 2 masks 0x4 0x8 | ns/insn per thread 0.1551 0.1552 | total insn/ns 12.893
+smt scalar_add_c8    two threads LP2+LP4 (cores)  threads 2 masks 0x4 0x10 | ns/insn per thread 0.0776 0.0776 | total insn/ns 25.764
+clock end        dependent add chain ns/add min 0.28631 med 0.28660 max 0.28714 -> 3.489 GHz (spread 3.483-3.493)
+done
+exit 0 elapsed_s 19.66
+=== q44bench-msvc.exe  sha256 00F5D33663FFDCDF24ACBA0DE4BBCB323DDAD104A09848A16E6BDBEC20E4F3FA utc 2026-10-21T04:49:12.4521389Z
+q44bench compiler msvc qpf 10000000
+topology core 0 group 0 mask 0x3 smt 1 efficiency 0
+topology core 1 group 0 mask 0xc smt 1 efficiency 0
+topology core 2 group 0 mask 0x30 smt 1 efficiency 0
+topology core 3 group 0 mask 0xc0 smt 1 efficiency 0
+topology core 4 group 0 mask 0x300 smt 1 efficiency 0
+topology core 5 group 0 mask 0xc00 smt 1 efficiency 0
+tsc rate 3.1941 GHz
+buffers src&4095 128 dst&4095 128 ref&4095 128 bytes 9216000
+frame row_bytes        ms min 2.766 med 2.771 max 2.792 | image GB/s 3.33 | est traffic x3 GB/s 9.99 | dst&4095  128 | match
+frame row_words        ms min 0.878 med 0.881 max 0.933 | image GB/s 10.50 | est traffic x3 GB/s 31.49 | dst&4095  128 | match
+frame row_ssse3        ms min 0.823 med 0.830 max 0.836 | image GB/s 11.19 | est traffic x3 GB/s 33.58 | dst&4095  128 | match
+frame row_avx2         ms min 0.982 med 0.990 max 1.016 | image GB/s 9.38 | est traffic x3 GB/s 28.15 | dst&4095  128 | match
+frame row_memcpy       ms min 1.067 med 1.070 max 1.099 | image GB/s 8.64 | est traffic x3 GB/s 25.91 | dst&4095  128 | match
+frame mesa_gdi_loop    ms min 2.894 med 2.900 max 2.932 | image GB/s 3.18 | est traffic x3 GB/s 9.55 | dst&4095  128 | match
+frame mesa_gdi_hoisted ms min 2.763 med 2.769 max 2.815 | image GB/s 3.34 | est traffic x3 GB/s 10.01 | dst&4095  128 | match
+csweep c_fma256_k1      ns/insn min 1.4335 med 1.4336 max 1.4341 | lane0 sum 142.444 finite 1
+csweep c_fma256_k4      ns/insn min 0.3581 med 0.3581 max 0.3583 | lane0 sum 85.1476 finite 1
+csweep c_fma256_k6      ns/insn min 0.2866 med 0.2867 max 0.2867 | lane0 sum 107.328 finite 1
+csweep c_fma256_k8      ns/insn min 0.2865 med 0.2866 max 0.2867 | lane0 sum 136.152 finite 1
+csweep c_fma256_k10     ns/insn min 0.2865 med 0.2865 max 0.2867 | lane0 sum 172.48 finite 1
+csweep c_fma256_k12     ns/insn min 0.2864 med 0.2865 max 0.2867 | lane0 sum 220.807 finite 1
+csweep c_fmaone256_k12  ns/insn min 0.2865 med 0.2866 max 0.2867 | lane0 sum 68.0648 finite 1
+done
+exit 0 elapsed_s 1.58
+=== cpubench-clang-E663.exe 15 sha256 E6639816960C743E3AF841F799A20D308BBAAFB21260FCBEAA5465DDBDA4FA29 utc 2026-10-21T04:49:14.0365257Z
+brand AMD BC-250
+family-model-stepping eax=0x00840F70
+cpuid sse2=1 sse3=1 ssse3=1 sse4.1=1 sse4.2=1 popcnt=1 aes=1 pclmulqdq=1 avx=1 fma3=1 f16c=1 rdrand=1 avx2=1 bmi1=1 bmi2=1 adx=1 sha=1 rdseed=1 clflushopt=1 clwb=1 avx512f=0 vaes=0 vpclmulqdq=0 rdpid=1 fsrm=0 sse4a=1 lzcnt=1 fma4=0 xop=0
+xcr0 0x7
+frame bytes 1920x1200 1.064 ms 8.66 GB/s match
+frame words 1920x1200 1.045 ms 8.82 GB/s match
+frame ssse3 1920x1200 0.823 ms 11.20 GB/s match
+frame avx2 1920x1200 0.922 ms 10.00 GB/s match
+frame memcpy 1920x1200 1.060 ms 8.69 GB/s match
+l1 bytes 0.0095 ns/byte 104.96 GB/s
+l1 words 0.0094 ns/byte 105.94 GB/s
+l1 ssse3 0.0182 ns/byte 54.88 GB/s
+l1 avx2 0.0094 ns/byte 106.32 GB/s
+l1 memcpy 0.0094 ns/byte 106.53 GB/s
+reg shuf128 0.1433 ns/insn
+reg shuf256 0.1433 ns/insn
+reg fma128 0.2865 ns/insn
+reg fma256 0.2866 ns/insn
+reg add128 0.2867 ns/insn
+reg add256 0.2866 ns/insn
+reg mul128 0.2866 ns/insn
+reg mul256 0.2865 ns/insn
+lat fma256 1.4327 ns/insn
+exit 0 elapsed_s 1.45
+=== cpubench-clang-E663.exe 15 sha256 E6639816960C743E3AF841F799A20D308BBAAFB21260FCBEAA5465DDBDA4FA29 utc 2026-10-21T04:49:15.4936108Z
+brand AMD BC-250
+family-model-stepping eax=0x00840F70
+cpuid sse2=1 sse3=1 ssse3=1 sse4.1=1 sse4.2=1 popcnt=1 aes=1 pclmulqdq=1 avx=1 fma3=1 f16c=1 rdrand=1 avx2=1 bmi1=1 bmi2=1 adx=1 sha=1 rdseed=1 clflushopt=1 clwb=1 avx512f=0 vaes=0 vpclmulqdq=0 rdpid=1 fsrm=0 sse4a=1 lzcnt=1 fma4=0 xop=0
+xcr0 0x7
+frame bytes 1920x1200 1.062 ms 8.67 GB/s match
+frame words 1920x1200 1.045 ms 8.81 GB/s match
+frame ssse3 1920x1200 0.821 ms 11.23 GB/s match
+frame avx2 1920x1200 0.920 ms 10.02 GB/s match
+frame memcpy 1920x1200 1.060 ms 8.69 GB/s match
+l1 bytes 0.0095 ns/byte 104.89 GB/s
+l1 words 0.0094 ns/byte 105.87 GB/s
+l1 ssse3 0.0182 ns/byte 54.88 GB/s
+l1 avx2 0.0094 ns/byte 106.29 GB/s
+l1 memcpy 0.0094 ns/byte 106.42 GB/s
+reg shuf128 0.1433 ns/insn
+reg shuf256 0.1433 ns/insn
+reg fma128 0.2866 ns/insn
+reg fma256 0.2865 ns/insn
+reg add128 0.2866 ns/insn
+reg add256 0.2865 ns/insn
+reg mul128 0.2866 ns/insn
+reg mul256 0.2866 ns/insn
+lat fma256 1.4327 ns/insn
+exit 0 elapsed_s 1.41
+=== cpubench-clang-E663.exe 15 sha256 E6639816960C743E3AF841F799A20D308BBAAFB21260FCBEAA5465DDBDA4FA29 utc 2026-10-21T04:49:16.9062640Z
+brand AMD BC-250
+family-model-stepping eax=0x00840F70
+cpuid sse2=1 sse3=1 ssse3=1 sse4.1=1 sse4.2=1 popcnt=1 aes=1 pclmulqdq=1 avx=1 fma3=1 f16c=1 rdrand=1 avx2=1 bmi1=1 bmi2=1 adx=1 sha=1 rdseed=1 clflushopt=1 clwb=1 avx512f=0 vaes=0 vpclmulqdq=0 rdpid=1 fsrm=0 sse4a=1 lzcnt=1 fma4=0 xop=0
+xcr0 0x7
+frame bytes 1920x1200 1.070 ms 8.61 GB/s match
+frame words 1920x1200 1.048 ms 8.79 GB/s match
+frame ssse3 1920x1200 0.821 ms 11.23 GB/s match
+frame avx2 1920x1200 0.928 ms 9.94 GB/s match
+frame memcpy 1920x1200 1.058 ms 8.71 GB/s match
+l1 bytes 0.0095 ns/byte 104.82 GB/s
+l1 words 0.0094 ns/byte 105.87 GB/s
+l1 ssse3 0.0182 ns/byte 54.88 GB/s
+l1 avx2 0.0094 ns/byte 106.25 GB/s
+l1 memcpy 0.0094 ns/byte 106.25 GB/s
+reg shuf128 0.1432 ns/insn
+reg shuf256 0.1433 ns/insn
+reg fma128 0.2866 ns/insn
+reg fma256 0.2865 ns/insn
+reg add128 0.2866 ns/insn
+reg add256 0.2866 ns/insn
+reg mul128 0.2865 ns/insn
+reg mul256 0.2865 ns/insn
+lat fma256 1.4326 ns/insn
+exit 0 elapsed_s 1.41
+cpu busy after: 1 %
+disk busy after: 0 %
+utc end 2026-10-21T04:49:18.8841164Z
+
+--- ssh exit 0 ---

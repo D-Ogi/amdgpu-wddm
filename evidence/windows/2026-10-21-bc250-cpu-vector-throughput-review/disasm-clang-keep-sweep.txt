@@ -1,0 +1,243 @@
+What: the code of the C + KEEP chain sweep of q44bench.c (the kernels.inc style: _mm256_fmadd_ps and
+__asm__ volatile("" : "+x"(v))) in q44bench-clang.exe, the binary of lab-run-q44.txt. Each CK function is called
+three times from main, and clang inlines the three copies. (1) KEEP does not prevent spills: in the third copy of
+c_fma256_k10 one accumulator lives in a stack slot (loop 0x1400051f0), and in the third copy of c_fma256_k12 two
+do (loop 0x1400056e0), with a load-fma-store per iteration. The first two copies keep every chain in registers
+(0x140005020 and 0x140005100 for k10, 0x1400054c0 and 0x1400055d0 for k12). (2) _mm256_fmadd_ps(x, set1(1.0f), c)
+becomes vaddps in all three copies of c_fmaone256_k12 (loops 0x1400059e0, 0x140005ae0, 0x140005be0; the third also
+spills two chains), so an FMA(a, 1, c) written in C measures FADD, not FMA.
+Inputs: q44bench-clang.exe SHA-256 4771DF7F476B6C67D74672035AE315034DABE705273B891063C41ED218500F05, built by
+build.ps1 (clang-cl 23.1.4 /O2 /MT -mavx2 -mfma -fuse-ld=lld) from q44bench.c (as built, SHA-256
+54ABDEFF8F0B2A6340CF458CEDEDBF11B0D69AD28AA30E24B3DB26B7DA85BC42; the copy here differs in its header comment).
+Command: llvm-objdump 23.1.4 -d --no-show-raw-insn -M intel q44bench-clang.exe > q44bench-clang.dis.txt;
+python loops.py q44bench-clang.dis.txt --vec --max 40 --ctx 3
+UTC: 2026-10-21T04:15:54Z
+
+## source (src/q44bench.c, the CK sweep)
+/* ---------------------------------------------------------------- C+KEEP chain sweep (as kernels.inc) */
+#ifdef __clang__
+#define KEEP(v) __asm__ volatile("" : "+x"(v))
+#else
+#define KEEP(v) (void)0
+#endif
+#define CK(name, K, ...)                                                                                     \
+   static double name(long n, double *chk)                                                                   \
+   {                                                                                                         \
+      const __m256 gb = _mm256_set1_ps(1.0000001f), gc = _mm256_set1_ps(1e-7f);                              \
+      __m256 a[12];                                                                                          \
+      for (int i = 0; i < 12; i++) a[i] = _mm256_set1_ps((float)i);                                          \
+      __m256 a0 = a[0], a1 = a[1], a2 = a[2], a3 = a[3], a4 = a[4], a5 = a[5], a6 = a[6], a7 = a[7];          \
+      __m256 a8 = a[8], a9 = a[9], a10 = a[10], a11 = a[11];                                                 \
+      double t0 = now_s();                                                                                   \
+      for (long k = 0; k < n; k++) { __VA_ARGS__ }                                                           \
+      double t = now_s() - t0;                                                                               \
+      *chk = _mm256_cvtss_f32(a0) + _mm256_cvtss_f32(a1) + _mm256_cvtss_f32(a2) + _mm256_cvtss_f32(a3) +      \
+             _mm256_cvtss_f32(a4) + _mm256_cvtss_f32(a5) + _mm256_cvtss_f32(a6) + _mm256_cvtss_f32(a7) +      \
+             _mm256_cvtss_f32(a8) + _mm256_cvtss_f32(a9) + _mm256_cvtss_f32(a10) + _mm256_cvtss_f32(a11);    \
+      return t * 1e9 / ((double)n * K);                                                                      \
+   }
+#define F(x) x = _mm256_fmadd_ps(x, gb, gc); KEEP(x);
+CK(c_fma256_k1, 4, F(a0) F(a0) F(a0) F(a0))
+CK(c_fma256_k4, 4, F(a0) F(a1) F(a2) F(a3))
+CK(c_fma256_k6, 6, F(a0) F(a1) F(a2) F(a3) F(a4) F(a5))
+CK(c_fma256_k8, 8, F(a0) F(a1) F(a2) F(a3) F(a4) F(a5) F(a6) F(a7))
+CK(c_fma256_k10, 10, F(a0) F(a1) F(a2) F(a3) F(a4) F(a5) F(a6) F(a7) F(a8) F(a9))
+CK(c_fma256_k12, 12, F(a0) F(a1) F(a2) F(a3) F(a4) F(a5) F(a6) F(a7) F(a8) F(a9) F(a10) F(a11))
+/* Q24 in C: FMA with a constant 1.0 multiplier. The disassembly says whether it stays an FMA. */
+#define G(x) x = _mm256_fmadd_ps(x, _mm256_set1_ps(1.0f), gc); KEEP(x);
+CK(c_fmaone256_k12, 12, G(a0) G(a1) G(a2) G(a3) G(a4) G(a5) G(a6) G(a7) G(a8) G(a9) G(a10) G(a11))
+
+## loops
+=== loop 0x140005020-0x140005054: 12 insns, 10 with xmm/ymm, 0 with a memory operand
+   . 140005010: vxorpd xmm10, xmm10, xmm10
+   . 140005015: mov eax, r14d
+   . 140005018: nop dword ptr [rax + rax]
+     140005020: vfmadd213ps ymm10, ymm12, ymm11 # ymm10 = (ymm12 * ymm10) + ymm11
+     140005025: vfmadd213ps ymm9, ymm12, ymm11 # ymm9 = (ymm12 * ymm9) + ymm11
+     14000502a: vfmadd213ps ymm6, ymm12, ymm11 # ymm6 = (ymm12 * ymm6) + ymm11
+     14000502f: vfmadd213ps ymm0, ymm12, ymm11 # ymm0 = (ymm12 * ymm0) + ymm11
+     140005034: vfmadd213ps ymm1, ymm12, ymm11 # ymm1 = (ymm12 * ymm1) + ymm11
+     140005039: vfmadd213ps ymm2, ymm12, ymm11 # ymm2 = (ymm12 * ymm2) + ymm11
+     14000503e: vfmadd213ps ymm3, ymm12, ymm11 # ymm3 = (ymm12 * ymm3) + ymm11
+     140005043: vfmadd213ps ymm4, ymm12, ymm11 # ymm4 = (ymm12 * ymm4) + ymm11
+     140005048: vfmadd213ps ymm5, ymm12, ymm11 # ymm5 = (ymm12 * ymm5) + ymm11
+     14000504d: vfmadd213ps ymm8, ymm12, ymm11 # ymm8 = (ymm12 * ymm8) + ymm11
+     140005052: dec eax
+     140005054: jne 0x140005020 <.text+0x4020>
+   . 140005056: lea rcx, [rsp + 0x4a0]
+   . 14000505e: vzeroupper 
+   . 140005061: call r13
+=== loop 0x140005100-0x140005134: 12 insns, 10 with xmm/ymm, 0 with a memory operand
+   . 1400050f2: vxorps xmm12, xmm12, xmm12
+   . 1400050f7: mov rax, qword ptr [rsp + 0x90]
+   . 1400050ff: nop 
+     140005100: vfmadd213ps ymm12, ymm14, ymm13 # ymm12 = (ymm14 * ymm12) + ymm13
+     140005105: vfmadd213ps ymm11, ymm14, ymm13 # ymm11 = (ymm14 * ymm11) + ymm13
+     14000510a: vfmadd213ps ymm6, ymm14, ymm13 # ymm6 = (ymm14 * ymm6) + ymm13
+     14000510f: vfmadd213ps ymm0, ymm14, ymm13 # ymm0 = (ymm14 * ymm0) + ymm13
+     140005114: vfmadd213ps ymm1, ymm14, ymm13 # ymm1 = (ymm14 * ymm1) + ymm13
+     140005119: vfmadd213ps ymm2, ymm14, ymm13 # ymm2 = (ymm14 * ymm2) + ymm13
+     14000511e: vfmadd213ps ymm3, ymm14, ymm13 # ymm3 = (ymm14 * ymm3) + ymm13
+     140005123: vfmadd213ps ymm4, ymm14, ymm13 # ymm4 = (ymm14 * ymm4) + ymm13
+     140005128: vfmadd213ps ymm5, ymm14, ymm13 # ymm5 = (ymm14 * ymm5) + ymm13
+     14000512d: vfmadd213ps ymm10, ymm14, ymm13 # ymm10 = (ymm14 * ymm10) + ymm13
+     140005132: dec eax
+     140005134: jne 0x140005100 <.text+0x4100>
+   . 140005136: lea rcx, [rsp + 0x4a0]
+   . 14000513e: vzeroupper 
+   . 140005141: call r13
+=== loop 0x1400051f0-0x140005230: 14 insns, 12 with xmm/ymm, 2 with a memory operand
+   . 1400051d6: vmovupd ymmword ptr [rsp + 0x50], ymm7
+   . 1400051dc: mov rax, qword ptr [rsp + 0x90]
+   . 1400051e4: nop word ptr cs:[rax + rax]
+     1400051f0: vmovups ymm7, ymmword ptr [rsp + 0x50]
+     1400051f6: vfmadd213ps ymm7, ymm1, ymm0 # ymm7 = (ymm1 * ymm7) + ymm0
+     1400051fb: vmovupd ymmword ptr [rsp + 0x50], ymm7
+     140005201: vfmadd213ps ymm15, ymm1, ymm0 # ymm15 = (ymm1 * ymm15) + ymm0
+     140005206: vfmadd213ps ymm14, ymm1, ymm0 # ymm14 = (ymm1 * ymm14) + ymm0
+     14000520b: vfmadd213ps ymm13, ymm1, ymm0 # ymm13 = (ymm1 * ymm13) + ymm0
+     140005210: vfmadd213ps ymm12, ymm1, ymm0 # ymm12 = (ymm1 * ymm12) + ymm0
+     140005215: vfmadd213ps ymm6, ymm1, ymm0 # ymm6 = (ymm1 * ymm6) + ymm0
+     14000521a: vfmadd213ps ymm5, ymm1, ymm0 # ymm5 = (ymm1 * ymm5) + ymm0
+     14000521f: vfmadd213ps ymm4, ymm1, ymm0 # ymm4 = (ymm1 * ymm4) + ymm0
+     140005224: vfmadd213ps ymm3, ymm1, ymm0 # ymm3 = (ymm1 * ymm3) + ymm0
+     140005229: vfmadd213ps ymm2, ymm1, ymm0 # ymm2 = (ymm1 * ymm2) + ymm0
+     14000522e: dec eax
+     140005230: jne 0x1400051f0 <.text+0x41f0>
+   . 140005232: vcvtsi2sd xmm0, xmm8, rbx
+   . 140005237: vcvtsi2sd xmm1, xmm8, r14
+   . 14000523c: lea eax, [rdi + 4*rdi]
+=== loop 0x1400054c0-0x1400054fe: 14 insns, 12 with xmm/ymm, 0 with a memory operand
+   . 1400054ae: vxorpd xmm13, xmm13, xmm13
+   . 1400054b3: mov rax, qword ptr [rsp + 0x90]
+   . 1400054bb: nop dword ptr [rax + rax]
+     1400054c0: vfmadd213ps ymm13, ymm14, ymm6 # ymm13 = (ymm14 * ymm13) + ymm6
+     1400054c5: vfmadd213ps ymm0, ymm14, ymm6 # ymm0 = (ymm14 * ymm0) + ymm6
+     1400054ca: vfmadd213ps ymm1, ymm14, ymm6 # ymm1 = (ymm14 * ymm1) + ymm6
+     1400054cf: vfmadd213ps ymm2, ymm14, ymm6 # ymm2 = (ymm14 * ymm2) + ymm6
+     1400054d4: vfmadd213ps ymm3, ymm14, ymm6 # ymm3 = (ymm14 * ymm3) + ymm6
+     1400054d9: vfmadd213ps ymm4, ymm14, ymm6 # ymm4 = (ymm14 * ymm4) + ymm6
+     1400054de: vfmadd213ps ymm5, ymm14, ymm6 # ymm5 = (ymm14 * ymm5) + ymm6
+     1400054e3: vfmadd213ps ymm7, ymm14, ymm6 # ymm7 = (ymm14 * ymm7) + ymm6
+     1400054e8: vfmadd213ps ymm9, ymm14, ymm6 # ymm9 = (ymm14 * ymm9) + ymm6
+     1400054ed: vfmadd213ps ymm10, ymm14, ymm6 # ymm10 = (ymm14 * ymm10) + ymm6
+     1400054f2: vfmadd213ps ymm11, ymm14, ymm6 # ymm11 = (ymm14 * ymm11) + ymm6
+     1400054f7: vfmadd213ps ymm12, ymm14, ymm6 # ymm12 = (ymm14 * ymm12) + ymm6
+     1400054fc: dec eax
+     1400054fe: jne 0x1400054c0 <.text+0x44c0>
+   . 140005500: lea rcx, [rsp + 0x4a0]
+   . 140005508: vzeroupper 
+   . 14000550b: call r13
+=== loop 0x1400055d0-0x14000560e: 14 insns, 12 with xmm/ymm, 0 with a memory operand
+   . 1400055bb: mov ebp, dword ptr [rsp + 0xe0]
+   . 1400055c2: vbroadcastss ymm8, dword ptr [rip + 0x2bc19] # 0x1400311e4
+   . 1400055cb: nop dword ptr [rax + rax]
+     1400055d0: vfmadd213ps ymm15, ymm8, ymm6 # ymm15 = (ymm8 * ymm15) + ymm6
+     1400055d5: vfmadd213ps ymm0, ymm8, ymm6 # ymm0 = (ymm8 * ymm0) + ymm6
+     1400055da: vfmadd213ps ymm1, ymm8, ymm6 # ymm1 = (ymm8 * ymm1) + ymm6
+     1400055df: vfmadd213ps ymm2, ymm8, ymm6 # ymm2 = (ymm8 * ymm2) + ymm6
+     1400055e4: vfmadd213ps ymm3, ymm8, ymm6 # ymm3 = (ymm8 * ymm3) + ymm6
+     1400055e9: vfmadd213ps ymm4, ymm8, ymm6 # ymm4 = (ymm8 * ymm4) + ymm6
+     1400055ee: vfmadd213ps ymm5, ymm8, ymm6 # ymm5 = (ymm8 * ymm5) + ymm6
+     1400055f3: vfmadd213ps ymm7, ymm8, ymm6 # ymm7 = (ymm8 * ymm7) + ymm6
+     1400055f8: vfmadd213ps ymm11, ymm8, ymm6 # ymm11 = (ymm8 * ymm11) + ymm6
+     1400055fd: vfmadd213ps ymm12, ymm8, ymm6 # ymm12 = (ymm8 * ymm12) + ymm6
+     140005602: vfmadd213ps ymm13, ymm8, ymm6 # ymm13 = (ymm8 * ymm13) + ymm6
+     140005607: vfmadd213ps ymm14, ymm8, ymm6 # ymm14 = (ymm8 * ymm14) + ymm6
+     14000560c: dec eax
+     14000560e: jne 0x1400055d0 <.text+0x45d0>
+   . 140005610: lea rcx, [rsp + 0x4a0]
+   . 140005618: vzeroupper 
+   . 14000561b: call r13
+=== loop 0x1400056e0-0x140005736: 18 insns, 16 with xmm/ymm, 4 with a memory operand
+   . 1400056c4: vbroadcastss ymm0, dword ptr [rip + 0x2bb13] # 0x1400311e0
+   . 1400056cd: vbroadcastss ymm1, dword ptr [rip + 0x2bb0e] # 0x1400311e4
+   . 1400056d6: nop word ptr cs:[rax + rax]
+     1400056e0: vmovups ymm9, ymmword ptr [rsp + 0x70]
+     1400056e6: vfmadd213ps ymm9, ymm1, ymm0 # ymm9 = (ymm1 * ymm9) + ymm0
+     1400056eb: vmovups ymmword ptr [rsp + 0x70], ymm9
+     1400056f1: vmovups ymm9, ymmword ptr [rsp + 0x50]
+     1400056f7: vfmadd213ps ymm9, ymm1, ymm0 # ymm9 = (ymm1 * ymm9) + ymm0
+     1400056fc: vmovupd ymmword ptr [rsp + 0x50], ymm9
+     140005702: vfmadd213ps ymm15, ymm1, ymm0 # ymm15 = (ymm1 * ymm15) + ymm0
+     140005707: vfmadd213ps ymm14, ymm1, ymm0 # ymm14 = (ymm1 * ymm14) + ymm0
+     14000570c: vfmadd213ps ymm13, ymm1, ymm0 # ymm13 = (ymm1 * ymm13) + ymm0
+     140005711: vfmadd213ps ymm8, ymm1, ymm0 # ymm8 = (ymm1 * ymm8) + ymm0
+     140005716: vfmadd213ps ymm7, ymm1, ymm0 # ymm7 = (ymm1 * ymm7) + ymm0
+     14000571b: vfmadd213ps ymm6, ymm1, ymm0 # ymm6 = (ymm1 * ymm6) + ymm0
+     140005720: vfmadd213ps ymm5, ymm1, ymm0 # ymm5 = (ymm1 * ymm5) + ymm0
+     140005725: vfmadd213ps ymm4, ymm1, ymm0 # ymm4 = (ymm1 * ymm4) + ymm0
+     14000572a: vfmadd213ps ymm3, ymm1, ymm0 # ymm3 = (ymm1 * ymm3) + ymm0
+     14000572f: vfmadd213ps ymm2, ymm1, ymm0 # ymm2 = (ymm1 * ymm2) + ymm0
+     140005734: dec eax
+     140005736: jne 0x1400056e0 <.text+0x46e0>
+   . 140005738: vcvtsi2sd xmm0, xmm10, rdi
+   . 14000573d: vcvtsi2sd xmm1, xmm10, rbx
+   . 140005742: lea eax, [rsi + 2*rsi]
+=== loop 0x1400059e0-0x140005a17: 14 insns, 12 with xmm/ymm, 0 with a memory operand
+   . 1400059c8: vxorps xmm6, xmm6, xmm6
+   . 1400059cc: mov rax, qword ptr [rsp + 0x90]
+   . 1400059d4: nop word ptr cs:[rax + rax]
+     1400059e0: vaddps ymm6, ymm9, ymm6
+     1400059e4: vaddps ymm0, ymm9, ymm0
+     1400059e8: vaddps ymm1, ymm9, ymm1
+     1400059ec: vaddps ymm2, ymm9, ymm2
+     1400059f0: vaddps ymm3, ymm9, ymm3
+     1400059f4: vaddps ymm4, ymm9, ymm4
+     1400059f8: vaddps ymm5, ymm9, ymm5
+     1400059fc: vaddps ymm10, ymm10, ymm9
+     140005a01: vaddps ymm11, ymm11, ymm9
+     140005a06: vaddps ymm12, ymm12, ymm9
+     140005a0b: vaddps ymm13, ymm13, ymm9
+     140005a10: vaddps ymm14, ymm14, ymm9
+     140005a15: dec eax
+     140005a17: jne 0x1400059e0 <.text+0x49e0>
+   . 140005a19: lea rcx, [rsp + 0x4a0]
+   . 140005a21: vzeroupper 
+   . 140005a24: call r13
+=== loop 0x140005ae0-0x140005b17: 14 insns, 12 with xmm/ymm, 0 with a memory operand
+   . 140005ac3: mov rax, qword ptr [rsp + 0x90]
+   . 140005acb: vbroadcastss ymm8, dword ptr [rip + 0x2b70c] # 0x1400311e0
+   . 140005ad4: nop word ptr cs:[rax + rax]
+     140005ae0: vaddps ymm9, ymm9, ymm8
+     140005ae5: vaddps ymm0, ymm8, ymm0
+     140005ae9: vaddps ymm1, ymm8, ymm1
+     140005aed: vaddps ymm2, ymm8, ymm2
+     140005af1: vaddps ymm3, ymm8, ymm3
+     140005af5: vaddps ymm4, ymm8, ymm4
+     140005af9: vaddps ymm5, ymm8, ymm5
+     140005afd: vaddps ymm12, ymm12, ymm8
+     140005b02: vaddps ymm13, ymm13, ymm8
+     140005b07: vaddps ymm14, ymm14, ymm8
+     140005b0c: vaddps ymm15, ymm15, ymm8
+     140005b11: vaddps ymm6, ymm8, ymm6
+     140005b15: dec eax
+     140005b17: jne 0x140005ae0 <.text+0x4ae0>
+   . 140005b19: lea rcx, [rsp + 0x4a0]
+   . 140005b21: vzeroupper 
+   . 140005b24: call r13
+=== loop 0x140005be0-0x140005c2a: 18 insns, 16 with xmm/ymm, 4 with a memory operand
+   . 140005bc5: mov rax, qword ptr [rsp + 0x90]
+   . 140005bcd: vbroadcastss ymm0, dword ptr [rip + 0x2b60a] # 0x1400311e0
+   . 140005bd6: nop word ptr cs:[rax + rax]
+     140005be0: vmovups ymm10, ymmword ptr [rsp + 0x70]
+     140005be6: vaddps ymm10, ymm10, ymm0
+     140005bea: vmovups ymmword ptr [rsp + 0x70], ymm10
+     140005bf0: vmovups ymm10, ymmword ptr [rsp + 0x50]
+     140005bf6: vaddps ymm10, ymm10, ymm0
+     140005bfa: vmovupd ymmword ptr [rsp + 0x50], ymm10
+     140005c00: vaddps ymm15, ymm15, ymm0
+     140005c04: vaddps ymm14, ymm14, ymm0
+     140005c08: vaddps ymm9, ymm9, ymm0
+     140005c0c: vaddps ymm8, ymm8, ymm0
+     140005c10: vaddps ymm6, ymm6, ymm0
+     140005c14: vaddps ymm5, ymm5, ymm0
+     140005c18: vaddps ymm4, ymm4, ymm0
+     140005c1c: vaddps ymm3, ymm3, ymm0
+     140005c20: vaddps ymm2, ymm2, ymm0
+     140005c24: vaddps ymm1, ymm1, ymm0
+     140005c28: dec eax
+     140005c2a: jne 0x140005be0 <.text+0x4be0>
+   . 140005c2c: vcvtsi2sd xmm0, xmm7, rsi
+   . 140005c31: vmovups ymmword ptr [rsp + 0x90], ymm1
+   . 140005c3a: vcvtsi2sd xmm1, xmm7, rdi

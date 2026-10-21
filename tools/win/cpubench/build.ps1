@@ -9,8 +9,9 @@ param(
 # Three builds of one source (README.md):
 #   cpubench.exe        MSVC /O2, no /arch: SSE intrinsics legacy-encoded, AVX intrinsics VEX-encoded.
 #   cpubench-avx2.exe   MSVC /O2 /arch:AVX2: everything VEX-encoded.
-#   cpubench-clang.exe  clang-cl /O2 -mavx2 -mfma: the only build whose reg and lat lines are valid, because MSVC
-#                       keeps the ten 256-bit chains of kernels.inc on the stack and clang keeps them in registers.
+#   cpubench-clang.exe  clang-cl /O2 -mavx2 -mfma: the only build whose reg and lat lines are valid by
+#                       construction. MSVC 19.44 keeps the fma chains of kernels.inc on the stack, and clang keeps
+#                       them in registers.
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $sdk = Join-Path $Kits 'microsoft.windows.sdk.cpp\c'

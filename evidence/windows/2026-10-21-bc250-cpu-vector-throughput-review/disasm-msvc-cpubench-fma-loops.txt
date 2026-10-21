@@ -1,0 +1,276 @@
+What: the fma128, fma256, mul256 and lat loops of the two MSVC builds of
+evidence/windows/2026-10-21-bc250-cpu-vector-throughput (cpubench.exe /O2, cpubench-avx2.exe /O2 /arch:AVX2).
+fma128 keeps 8 of its 10 accumulators in registers and 2 in stack slots. fma256 keeps all 10 in stack slots
+([rbp+0x20..0x140], fma128 [rsp+0x20], [rsp+0x30]): each iteration is load-fma-store per chain, loop-carried through
+memory. mul256 and the one-chain lat loop have no memory operand.
+Inputs: cpubench.exe SHA-256 F521259E97707065BABB37CCCD5CB8964EA6BA45377B7FE8E80974F00EDB02FD, cpubench-avx2.exe
+43AD563A34DBE088428E418A1F1E1BD5349BE5E8DA2A81FBC50AB49A6C196AC5, built from cpubench-as-measured.c and
+kernels-as-measured.inc of that directory.
+Command: llvm-objdump 23.1.4 -d --no-show-raw-insn -M intel <exe>; python loops.py <listing> --vec --max 40 --ctx 6
+UTC: 2026-10-21T03:44:03Z (the fma and mul256 loops), 2026-10-21T05:20Z (the lat loops)
+
+##### cpubench-avx2.exe
+=== loop 0x140001bf0-0x140001c3e: 16 insns, 14 with xmm/ymm, 4 with a memory operand
+   . 140001bd2: vmovsd qword ptr [rsp + 0x100], xmm0
+   . 140001bdb: test ebx, ebx
+   . 140001bdd: jle 0x140001c40 <.text+0xc40>
+   . 140001bdf: mov rdx, rbx
+   . 140001be2: nop dword ptr [rax]
+   . 140001be6: nop word ptr [rax + rax]
+     140001bf0: vmovups xmm0, xmm7
+     140001bf4: vfmadd231ps xmm0, xmm6, xmmword ptr [rsp + 0x20] # xmm0 = (xmm6 * mem) + xmm0
+     140001bfb: vmovups xmm1, xmm7
+     140001bff: vfmadd231ps xmm1, xmm6, xmmword ptr [rsp + 0x30] # xmm1 = (xmm6 * mem) + xmm1
+     140001c06: vmovups xmmword ptr [rsp + 0x20], xmm0
+     140001c0c: vmovups xmmword ptr [rsp + 0x30], xmm1
+     140001c12: vfmadd132ps xmm8, xmm7, xmm6 # xmm8 = (xmm8 * xmm6) + xmm7
+     140001c17: vfmadd132ps xmm9, xmm7, xmm6 # xmm9 = (xmm9 * xmm6) + xmm7
+     140001c1c: vfmadd132ps xmm10, xmm7, xmm6 # xmm10 = (xmm10 * xmm6) + xmm7
+     140001c21: vfmadd132ps xmm11, xmm7, xmm6 # xmm11 = (xmm11 * xmm6) + xmm7
+     140001c26: vfmadd132ps xmm12, xmm7, xmm6 # xmm12 = (xmm12 * xmm6) + xmm7
+     140001c2b: vfmadd132ps xmm13, xmm7, xmm6 # xmm13 = (xmm13 * xmm6) + xmm7
+     140001c30: vfmadd132ps xmm14, xmm7, xmm6 # xmm14 = (xmm14 * xmm6) + xmm7
+     140001c35: vfmadd132ps xmm15, xmm7, xmm6 # xmm15 = (xmm15 * xmm6) + xmm7
+     140001c3a: sub rdx, 0x1
+     140001c3e: jne 0x140001bf0 <.text+0xbf0>
+   . 140001c40: test rax, rax
+   . 140001c43: jne 0x140001c52 <.text+0xc52>
+   . 140001c45: lea rcx, [rip + 0x25ed4]    # 0x140027b20
+   . 140001c4c: call qword ptr [rip + 0x193b6] # 0x14001b008
+   . 140001c52: lea rcx, [rsp + 0xf8]
+   . 140001c5a: call qword ptr [rip + 0x193a0] # 0x14001b000
+=== loop 0x140001e90-0x140001f54: 32 insns, 30 with xmm/ymm, 20 with a memory operand
+   . 140001e6b: jle 0x140001f5a <.text+0xf5a>
+   . 140001e71: vmovdqu ymm2, ymmword ptr [rip + 0x19ba7] # 0x14001ba20
+   . 140001e79: vmovdqu ymm3, ymmword ptr [rip + 0x19b5f] # 0x14001b9e0
+   . 140001e81: mov rdx, rbx
+   . 140001e84: nop dword ptr [rax]
+   . 140001e88: nop dword ptr [rax + rax]
+     140001e90: vmovups ymm0, ymm3
+     140001e94: vfmadd231ps ymm0, ymm2, ymmword ptr [rbp + 0x40] # ymm0 = (ymm2 * mem) + ymm0
+     140001e9a: vmovups ymmword ptr [rbp + 0x40], ymm0
+     140001e9f: vmovups ymm1, ymm3
+     140001ea3: vfmadd231ps ymm1, ymm2, ymmword ptr [rbp + 0x20] # ymm1 = (ymm2 * mem) + ymm1
+     140001ea9: vmovups ymmword ptr [rbp + 0x20], ymm1
+     140001eae: vmovups ymm0, ymm3
+     140001eb2: vfmadd231ps ymm0, ymm2, ymmword ptr [rbp + 0x60] # ymm0 = (ymm2 * mem) + ymm0
+     140001eb8: vmovups ymmword ptr [rbp + 0x60], ymm0
+     140001ebd: vmovups ymm1, ymm3
+     140001ec1: vfmadd231ps ymm1, ymm2, ymmword ptr [rbp + 0x80] # ymm1 = (ymm2 * mem) + ymm1
+     140001eca: vmovups ymmword ptr [rbp + 0x80], ymm1
+     140001ed2: vmovups ymm0, ymm3
+     140001ed6: vfmadd231ps ymm0, ymm2, ymmword ptr [rbp + 0xa0] # ymm0 = (ymm2 * mem) + ymm0
+     140001edf: vmovups ymmword ptr [rbp + 0xa0], ymm0
+     140001ee7: vmovups ymm1, ymm3
+     140001eeb: vfmadd231ps ymm1, ymm2, ymmword ptr [rbp + 0xc0] # ymm1 = (ymm2 * mem) + ymm1
+     140001ef4: vmovups ymmword ptr [rbp + 0xc0], ymm1
+     140001efc: vmovups ymm0, ymm3
+     140001f00: vfmadd231ps ymm0, ymm2, ymmword ptr [rbp + 0xe0] # ymm0 = (ymm2 * mem) + ymm0
+     140001f09: vmovups ymmword ptr [rbp + 0xe0], ymm0
+     140001f11: vmovups ymm1, ymm3
+     140001f15: vfmadd231ps ymm1, ymm2, ymmword ptr [rbp + 0x100] # ymm1 = (ymm2 * mem) + ymm1
+     140001f1e: vmovups ymmword ptr [rbp + 0x100], ymm1
+     140001f26: vmovups ymm0, ymm3
+     140001f2a: vfmadd231ps ymm0, ymm2, ymmword ptr [rbp + 0x120] # ymm0 = (ymm2 * mem) + ymm0
+     140001f33: vmovups ymm1, ymm3
+     140001f37: vfmadd231ps ymm1, ymm2, ymmword ptr [rbp + 0x140] # ymm1 = (ymm2 * mem) + ymm1
+     140001f40: vmovups ymmword ptr [rbp + 0x120], ymm0
+     140001f48: vmovups ymmword ptr [rbp + 0x140], ymm1
+     140001f50: sub rdx, 0x1
+     140001f54: jne 0x140001e90 <.text+0xe90>
+   . 140001f5a: test rax, rax
+   . 140001f5d: jne 0x140001f6f <.text+0xf6f>
+   . 140001f5f: lea rcx, [rip + 0x25bba]    # 0x140027b20
+   . 140001f66: vzeroupper 
+   . 140001f69: call qword ptr [rip + 0x19099] # 0x14001b008
+   . 140001f6f: lea rcx, [rbp]
+
+##### cpubench.exe
+=== loop 0x140001be2-0x140001c2c: 16 insns, 14 with xmm/ymm, 4 with a memory operand
+   . 140001bc3: divsd xmm8, xmm0
+   . 140001bc8: movsd qword ptr [rsp + 0x108], xmm8
+   . 140001bd2: test ebx, ebx
+   . 140001bd4: jle 0x140001c3e <.text+0xc3e>
+   . 140001bd6: movdqa xmm8, xmmword ptr [rip + 0x19c31] # 0x14001b810
+   . 140001bdf: mov rdx, rbx
+     140001be2: movaps xmm0, xmm7
+     140001be5: movaps xmm1, xmm7
+     140001be8: vfmadd231ps xmm0, xmm6, xmmword ptr [rsp + 0x20] # xmm0 = (xmm6 * mem) + xmm0
+     140001bef: movaps xmmword ptr [rsp + 0x20], xmm0
+     140001bf4: vfmadd231ps xmm1, xmm6, xmmword ptr [rsp + 0x30] # xmm1 = (xmm6 * mem) + xmm1
+     140001bfb: movaps xmmword ptr [rsp + 0x30], xmm1
+     140001c00: vfmadd132ps xmm9, xmm7, xmm6 # xmm9 = (xmm9 * xmm6) + xmm7
+     140001c05: vfmadd132ps xmm10, xmm7, xmm6 # xmm10 = (xmm10 * xmm6) + xmm7
+     140001c0a: vfmadd132ps xmm11, xmm7, xmm6 # xmm11 = (xmm11 * xmm6) + xmm7
+     140001c0f: vfmadd132ps xmm12, xmm7, xmm6 # xmm12 = (xmm12 * xmm6) + xmm7
+     140001c14: vfmadd132ps xmm13, xmm7, xmm6 # xmm13 = (xmm13 * xmm6) + xmm7
+     140001c19: vfmadd132ps xmm14, xmm7, xmm6 # xmm14 = (xmm14 * xmm6) + xmm7
+     140001c1e: vfmadd132ps xmm15, xmm7, xmm6 # xmm15 = (xmm15 * xmm6) + xmm7
+     140001c23: vfmadd132ps xmm8, xmm7, xmm6 # xmm8 = (xmm8 * xmm6) + xmm7
+     140001c28: sub rdx, 0x1
+     140001c2c: jne 0x140001be2 <.text+0xbe2>
+   . 140001c2e: movaps xmmword ptr [rsp + 0x40], xmm8
+   . 140001c34: movsd xmm8, qword ptr [rsp + 0x108]
+   . 140001c3e: test rax, rax
+   . 140001c41: jne 0x140001c50 <.text+0xc50>
+   . 140001c43: lea rcx, [rip + 0x25ed6]    # 0x140027b20
+   . 140001c4a: call qword ptr [rip + 0x193b8] # 0x14001b008
+=== loop 0x140001e90-0x140001f54: 32 insns, 30 with xmm/ymm, 20 with a memory operand
+   . 140001e71: divsd xmm7, xmm0
+   . 140001e75: test ebx, ebx
+   . 140001e77: jle 0x140001f5d <.text+0xf5d>
+   . 140001e7d: vmovups ymm2, ymmword ptr [rip + 0x19b5b] # 0x14001b9e0
+   . 140001e85: vmovups ymm3, ymmword ptr [rip + 0x19b13] # 0x14001b9a0
+   . 140001e8d: mov rdx, rbx
+     140001e90: vmovups ymm0, ymm3
+     140001e94: vfmadd231ps ymm0, ymm2, ymmword ptr [rbp + 0x40] # ymm0 = (ymm2 * mem) + ymm0
+     140001e9a: vmovups ymmword ptr [rbp + 0x40], ymm0
+     140001e9f: vmovups ymm1, ymm3
+     140001ea3: vfmadd231ps ymm1, ymm2, ymmword ptr [rbp + 0x20] # ymm1 = (ymm2 * mem) + ymm1
+     140001ea9: vmovups ymmword ptr [rbp + 0x20], ymm1
+     140001eae: vmovups ymm0, ymm3
+     140001eb2: vfmadd231ps ymm0, ymm2, ymmword ptr [rbp + 0x60] # ymm0 = (ymm2 * mem) + ymm0
+     140001eb8: vmovups ymmword ptr [rbp + 0x60], ymm0
+     140001ebd: vmovups ymm1, ymm3
+     140001ec1: vfmadd231ps ymm1, ymm2, ymmword ptr [rbp + 0x80] # ymm1 = (ymm2 * mem) + ymm1
+     140001eca: vmovups ymmword ptr [rbp + 0x80], ymm1
+     140001ed2: vmovups ymm0, ymm3
+     140001ed6: vfmadd231ps ymm0, ymm2, ymmword ptr [rbp + 0xa0] # ymm0 = (ymm2 * mem) + ymm0
+     140001edf: vmovups ymmword ptr [rbp + 0xa0], ymm0
+     140001ee7: vmovups ymm1, ymm3
+     140001eeb: vfmadd231ps ymm1, ymm2, ymmword ptr [rbp + 0xc0] # ymm1 = (ymm2 * mem) + ymm1
+     140001ef4: vmovups ymmword ptr [rbp + 0xc0], ymm1
+     140001efc: vmovups ymm0, ymm3
+     140001f00: vfmadd231ps ymm0, ymm2, ymmword ptr [rbp + 0xe0] # ymm0 = (ymm2 * mem) + ymm0
+     140001f09: vmovups ymmword ptr [rbp + 0xe0], ymm0
+     140001f11: vmovups ymm1, ymm3
+     140001f15: vfmadd231ps ymm1, ymm2, ymmword ptr [rbp + 0x100] # ymm1 = (ymm2 * mem) + ymm1
+     140001f1e: vmovups ymmword ptr [rbp + 0x100], ymm1
+     140001f26: vmovups ymm0, ymm3
+     140001f2a: vfmadd231ps ymm0, ymm2, ymmword ptr [rbp + 0x120] # ymm0 = (ymm2 * mem) + ymm0
+     140001f33: vmovups ymm1, ymm3
+     140001f37: vfmadd231ps ymm1, ymm2, ymmword ptr [rbp + 0x140] # ymm1 = (ymm2 * mem) + ymm1
+     140001f40: vmovups ymmword ptr [rbp + 0x120], ymm0
+     140001f48: vmovups ymmword ptr [rbp + 0x140], ymm1
+     140001f50: sub rdx, 0x1
+     140001f54: jne 0x140001e90 <.text+0xe90>
+   . 140001f5a: vzeroupper 
+   . 140001f5d: test rax, rax
+   . 140001f60: jne 0x140001f6f <.text+0xf6f>
+   . 140001f62: lea rcx, [rip + 0x25bb7]    # 0x140027b20
+   . 140001f69: call qword ptr [rip + 0x19099] # 0x14001b008
+   . 140001f6f: lea rcx, [rbp]
+
+##### Same build (cpubench-avx2.exe), mul256 against fma256: the accumulators live across the same two now_s() calls in both.
+# mul256: initial values loaded into ymm1..ymm10 AFTER the start QPC call, loop in registers (0x140002d90, 0 memory operands), stored to [rbp+...] after the loop, before the end QPC call.
+140002d38:     	vmovdqu	ymm0, ymmword ptr [rip + 0x18ce0] # 0x14001ba20
+140002d40:     	vmovdqu	ymm2, ymmword ptr [rip + 0x18cb8] # 0x14001ba00
+140002d48:     	vmovdqu	ymm3, ymmword ptr [rip + 0x18cf0] # 0x14001ba40
+140002d50:     	vmovdqu	ymm4, ymmword ptr [rip + 0x18d08] # 0x14001ba60
+140002d58:     	vmovdqu	ymm5, ymmword ptr [rip + 0x18d20] # 0x14001ba80
+140002d60:     	vmovdqu	ymm6, ymmword ptr [rip + 0x18d38] # 0x14001baa0
+140002d68:     	vmovdqu	ymm7, ymmword ptr [rip + 0x18d50] # 0x14001bac0
+140002d70:     	vmovdqu	ymm8, ymmword ptr [rip + 0x18d68] # 0x14001bae0
+140002d78:     	vmovdqu	ymm9, ymmword ptr [rip + 0x18d80] # 0x14001bb00
+140002d80:     	vmovdqu	ymm10, ymmword ptr [rip + 0x18d98] # 0x14001bb20
+140002d88:     	mov	rdx, rbx
+140002d8b:     	vxorps	xmm1, xmm1, xmm1
+140002d8f:     	nop
+140002d90:     	vmulps	ymm1, ymm1, ymm0
+   ... loop 0x140002d90-0x140002dbc: vmulps ymm1..ymm10, ymm0 ...
+140002dbe:     	vmovups	ymmword ptr [rbp + 0x140], ymm10
+140002dc6:     	vmovups	ymmword ptr [rbp + 0x120], ymm9
+140002dce:     	vmovups	ymmword ptr [rbp + 0x100], ymm8
+140002dd6:     	vmovups	ymmword ptr [rbp + 0xe0], ymm7
+140002dde:     	vmovups	ymmword ptr [rbp + 0xc0], ymm6
+140002de6:     	vmovups	ymmword ptr [rbp + 0xa0], ymm5
+140002dee:     	vmovups	ymmword ptr [rbp + 0x80], ymm4
+140002df6:     	vmovups	ymmword ptr [rbp + 0x60], ymm3
+140002dfb:     	vmovups	ymmword ptr [rbp + 0x20], ymm2
+140002e00:     	vmovups	ymmword ptr [rbp + 0x40], ymm1
+140002e05:     	test	rax, rax
+140002e08:     	jne	0x140002e1a <.text+0x1e1a>
+140002e0a:     	lea	rcx, [rip + 0x24d0f]    # 0x140027b20
+140002e11:     	vzeroupper
+140002e14:     	call	qword ptr [rip + 0x181ee] # 0x14001b008
+140002e1a:     	lea	rcx, [rbp]
+140002e1e:     	vzeroupper
+140002e21:     	call	qword ptr [rip + 0x181d9] # 0x14001b000
+# fma256: initial values STORED to [rbp+0x20..0x140] BEFORE the start QPC call; the loop then works on those stack homes (load-fma-store per chain, above).
+140001d97:     	vxorps	xmm0, xmm0, xmm0
+140001d9b:     	vmovups	ymmword ptr [rbp + 0x40], ymm0
+140001da0:     	vmovdqu	ymm0, ymmword ptr [rip + 0x19c58] # 0x14001ba00
+140001da8:     	vmovups	ymmword ptr [rbp + 0x20], ymm0
+140001dad:     	vmovdqu	ymm0, ymmword ptr [rip + 0x19c8b] # 0x14001ba40
+140001db5:     	vmovups	ymmword ptr [rbp + 0x60], ymm0
+140001dba:     	vmovdqu	ymm0, ymmword ptr [rip + 0x19c9e] # 0x14001ba60
+140001dc2:     	vmovups	ymmword ptr [rbp + 0x80], ymm0
+140001dca:     	vmovdqu	ymm0, ymmword ptr [rip + 0x19cae] # 0x14001ba80
+140001dd2:     	vmovups	ymmword ptr [rbp + 0xa0], ymm0
+140001dda:     	vmovdqu	ymm0, ymmword ptr [rip + 0x19cbe] # 0x14001baa0
+140001de2:     	vmovups	ymmword ptr [rbp + 0xc0], ymm0
+140001dea:     	vmovdqu	ymm0, ymmword ptr [rip + 0x19cce] # 0x14001bac0
+140001df2:     	vmovups	ymmword ptr [rbp + 0xe0], ymm0
+140001dfa:     	vmovdqu	ymm0, ymmword ptr [rip + 0x19cde] # 0x14001bae0
+140001e02:     	vmovups	ymmword ptr [rbp + 0x100], ymm0
+140001e0a:     	vmovdqu	ymm0, ymmword ptr [rip + 0x19cee] # 0x14001bb00
+140001e12:     	vmovups	ymmword ptr [rbp + 0x120], ymm0
+140001e1a:     	vmovdqu	ymm0, ymmword ptr [rip + 0x19cfe] # 0x14001bb20
+140001e22:     	vmovups	ymmword ptr [rbp + 0x140], ymm0
+140001e2a:     	mov	ebx, ecx
+140001e2c:     	jne	0x140001e3e <.text+0xe3e>
+140001e2e:     	lea	rcx, [rip + 0x25ceb]    # 0x140027b20
+140001e35:     	vzeroupper
+140001e38:     	call	qword ptr [rip + 0x191ca] # 0x14001b008
+140001e3e:     	lea	rcx, [rbp]
+140001e42:     	vzeroupper
+140001e45:     	call	qword ptr [rip + 0x191b5] # 0x14001b000
+140001e4b:     	mov	rax, qword ptr [rip + 0x25cce] # 0x140027b20
+140001e52:     	vxorps	xmm1, xmm1, xmm1
+140001e56:     	vcvtsi2sd	xmm1, xmm1, qword ptr [rbp]
+140001e5c:     	vxorps	xmm0, xmm0, xmm0
+140001e60:     	vcvtsi2sd	xmm0, xmm0, rax
+140001e65:     	vdivsd	xmm6, xmm1, xmm0
+140001e69:     	test	ebx, ebx
+140001e6b:     	jle	0x140001f5a <.text+0xf5a>
+# Reading: the stack homes of fma256 are a decision of MSVC 19.44's allocator for this FMA kernel (it selects vfmadd231ps with the accumulator as the memory operand); register count (10 chains + 2 constants + 2 temporaries = 14 of 16 ymm) and the Win64 ABI (the same 10 ymm values survive the same calls in mul256) do not force it. fma128 keeps exactly 8 chains in xmm8-15: xmm6-15 are the 10 callee-saved registers (low 128 bits), b and c take xmm6 and xmm7, and the 2 chains that do not fit there get stack homes.
+
+##### Both builds, lat fma256: one chain, unrolled by MSVC to 8 FMAs per iteration, no memory operand
+# cpubench-avx2.exe, loop 0x140002880-0x1400028cc
+140002880:     	vmovups	ymm0, ymm4
+140002884:     	vfmadd231ps	ymm0, ymm1, ymm3 # ymm0 = (ymm1 * ymm3) + ymm0
+140002889:     	vmovups	ymm1, ymm4
+14000288d:     	vfmadd231ps	ymm1, ymm0, ymm3 # ymm1 = (ymm0 * ymm3) + ymm1
+140002892:     	vmovups	ymm2, ymm4
+140002896:     	vfmadd231ps	ymm2, ymm1, ymm3 # ymm2 = (ymm1 * ymm3) + ymm2
+14000289b:     	vmovups	ymm0, ymm4
+14000289f:     	vfmadd231ps	ymm0, ymm2, ymm3 # ymm0 = (ymm2 * ymm3) + ymm0
+1400028a4:     	vmovups	ymm1, ymm4
+1400028a8:     	vfmadd231ps	ymm1, ymm0, ymm3 # ymm1 = (ymm0 * ymm3) + ymm1
+1400028ad:     	vmovups	ymm2, ymm4
+1400028b1:     	vfmadd231ps	ymm2, ymm1, ymm3 # ymm2 = (ymm1 * ymm3) + ymm2
+1400028b6:     	vmovups	ymm0, ymm4
+1400028ba:     	vfmadd231ps	ymm0, ymm2, ymm3 # ymm0 = (ymm2 * ymm3) + ymm0
+1400028bf:     	vmovups	ymm1, ymm4
+1400028c3:     	vfmadd231ps	ymm1, ymm0, ymm3 # ymm1 = (ymm0 * ymm3) + ymm1
+1400028c8:     	sub	rdx, 0x1
+1400028cc:     	jne	0x140002880 <.text+0x1880>
+# cpubench.exe, loop 0x140002860-0x1400028ac
+140002860:     	vmovups	ymm0, ymm4
+140002864:     	vfmadd231ps	ymm0, ymm1, ymm3 # ymm0 = (ymm1 * ymm3) + ymm0
+140002869:     	vmovups	ymm1, ymm4
+14000286d:     	vfmadd231ps	ymm1, ymm0, ymm3 # ymm1 = (ymm0 * ymm3) + ymm1
+140002872:     	vmovups	ymm2, ymm4
+140002876:     	vfmadd231ps	ymm2, ymm1, ymm3 # ymm2 = (ymm1 * ymm3) + ymm2
+14000287b:     	vmovups	ymm0, ymm4
+14000287f:     	vfmadd231ps	ymm0, ymm2, ymm3 # ymm0 = (ymm2 * ymm3) + ymm0
+140002884:     	vmovups	ymm1, ymm4
+140002888:     	vfmadd231ps	ymm1, ymm0, ymm3 # ymm1 = (ymm0 * ymm3) + ymm1
+14000288d:     	vmovups	ymm2, ymm4
+140002891:     	vfmadd231ps	ymm2, ymm1, ymm3 # ymm2 = (ymm1 * ymm3) + ymm2
+140002896:     	vmovups	ymm0, ymm4
+14000289a:     	vfmadd231ps	ymm0, ymm2, ymm3 # ymm0 = (ymm2 * ymm3) + ymm0
+14000289f:     	vmovups	ymm1, ymm4
+1400028a3:     	vfmadd231ps	ymm1, ymm0, ymm3 # ymm1 = (ymm0 * ymm3) + ymm1
+1400028a8:     	sub	rdx, 0x1
+1400028ac:     	jne	0x140002860 <.text+0x1860>

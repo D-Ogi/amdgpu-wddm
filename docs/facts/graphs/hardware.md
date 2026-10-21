@@ -39,6 +39,8 @@ flowchart LR
   M870["M870<br/>kmd"]
   M880["M880<br/>kmd"]
   M896["M896"]
+  M907["M907"]
+  M910["M910"]
   S1["S1"]
   S2["S2"]
   S3["S3"]
@@ -61,6 +63,7 @@ flowchart LR
   M812 ==>|supports| M19
   M813 ==>|supports| M6
   M896 ==>|supports| M880
+  M910 ==>|supports| M907
   M870 ==>|supports| M13
   M870 ==>|supports| M14
   M5 -.->|refutes| S3
@@ -135,6 +138,7 @@ flowchart LR
   M906["M906"]
   M907["M907"]
   M908["M908"]
+  M910["M910"]
   M2 --> M1
   M3 --> M4
   M18 --> M4
@@ -175,7 +179,9 @@ flowchart LR
   M884 --> M812
   M896 --> M887
   M907 --> M906
+  M907 --> M910
   M908 --> M906
+  M910 --> M906
   M37 --> M33
   M37 --> M39
   M81 --> M30

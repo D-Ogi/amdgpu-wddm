@@ -1,0 +1,117 @@
+What: the path that the static C runtime memcpy (MSVC 14.44 toolset, /MT) takes for each size, read from
+q44bench-msvc.exe. cpubench links the same library (cpubench.exe and q44bench-msvc.exe are both cl 19.44.35221
+/MT). Per size: n <= 32, small copies; [rip+0xdda0] (__isa_available) >= 3, the AVX path; 8 KiB < n <= 1.5 MiB
+with bit 2 of __favor (ERMS), rep movsb at 0x140019100; other n <= 1.5 MiB, 256 bytes per iteration, 8 x vmovdqu
+ymm load + vmovdqa ymm store (temporal, the destination first aligned to 32 bytes); n > 0x180000 (1.5 MiB), the
+same loop with vmovntdq (non-temporal stores).
+For cpubench: its memcpy line calls memcpy once per row (7680 bytes), so it takes the temporal 256-bit loop and
+never the non-temporal path. q44bench memcpy_frame copies the 9.2 MB frame in one call, which takes the
+non-temporal path.
+Input: q44bench-msvc.exe SHA-256 00F5D33663FFDCDF24ACBA0DE4BBCB323DDAD104A09848A16E6BDBEC20E4F3FA
+Command: llvm-objdump 23.1.4 -d --no-show-raw-insn -M intel q44bench-msvc.exe; lines from 0x140019110 (memcpy
+entry, the call target in mesa_gdi_copy) and 0x140019230 on
+UTC: 2026-10-21T04:00:09Z
+
+140019110:     	mov	rax, rcx
+140019113:     	lea	r10, [rip - 0x1911a]    # 0x140000000
+14001911a:     	cmp	r8, 0xf
+14001911e:     	ja	0x140019230 <.text+0x18230>
+140019124:     	nop	word ptr [rax + rax]
+140019130:     	mov	r9d, dword ptr [r10 + 4*r8 + 0x23c00]
+   ... (small-size jump table)
+140019230:     	cmp	r8, 0x20
+140019234:     	ja	0x14001924d <.text+0x1824d>
+140019236:     	movdqu	xmm1, xmmword ptr [rdx]
+14001923a:     	movdqu	xmm2, xmmword ptr [rdx + r8 - 0x10]
+140019241:     	movdqu	xmmword ptr [rcx], xmm1
+140019245:     	movdqu	xmmword ptr [rcx + r8 - 0x10], xmm2
+14001924c:     	ret
+14001924d:     	lea	r9, [rdx + r8]
+140019251:     	cmp	rcx, rdx
+140019254:     	cmovbe	r9, rcx
+140019258:     	cmp	rcx, r9
+14001925b:     	jb	0x1400196a0 <.text+0x186a0>
+140019261:     	cmp	dword ptr [rip + 0xdda0], 0x3 # 0x140027008
+140019268:     	jb	0x140019550 <.text+0x18550>
+14001926e:     	cmp	r8, 0x2000
+140019275:     	jbe	0x14001928d <.text+0x1828d>
+140019277:     	cmp	r8, 0x180000
+14001927e:     	ja	0x14001928d <.text+0x1828d>
+140019280:     	test	byte ptr [rip + 0xec81], 0x2 # 0x140027f08
+140019287:     	jne	0x140019100 <.text+0x18100>
+14001928d:     	vmovdqu	ymm0, ymmword ptr [rdx]
+140019291:     	vmovdqu	ymm5, ymmword ptr [rdx + r8 - 0x20]
+140019298:     	cmp	r8, 0x100
+14001929f:     	jbe	0x140019368 <.text+0x18368>
+1400192a5:     	mov	r9, rcx
+1400192a8:     	and	r9, 0x1f
+1400192ac:     	sub	r9, 0x20
+1400192b0:     	sub	rcx, r9
+1400192b3:     	sub	rdx, r9
+1400192b6:     	add	r8, r9
+1400192b9:     	cmp	r8, 0x100
+1400192c0:     	jbe	0x140019368 <.text+0x18368>
+1400192c6:     	cmp	r8, 0x180000
+1400192cd:     	ja	0x140019410 <.text+0x18410>
+1400192d3:     	nop	word ptr [rax + rax]
+1400192e0:     	vmovdqu	ymm1, ymmword ptr [rdx]
+1400192e4:     	vmovdqu	ymm2, ymmword ptr [rdx + 0x20]
+1400192e9:     	vmovdqu	ymm3, ymmword ptr [rdx + 0x40]
+1400192ee:     	vmovdqu	ymm4, ymmword ptr [rdx + 0x60]
+1400192f3:     	vmovdqa	ymmword ptr [rcx], ymm1
+1400192f7:     	vmovdqa	ymmword ptr [rcx + 0x20], ymm2
+1400192fc:     	vmovdqa	ymmword ptr [rcx + 0x40], ymm3
+140019301:     	vmovdqa	ymmword ptr [rcx + 0x60], ymm4
+140019306:     	vmovdqu	ymm1, ymmword ptr [rdx + 0x80]
+14001930e:     	vmovdqu	ymm2, ymmword ptr [rdx + 0xa0]
+140019316:     	vmovdqu	ymm3, ymmword ptr [rdx + 0xc0]
+14001931e:     	vmovdqu	ymm4, ymmword ptr [rdx + 0xe0]
+140019326:     	vmovdqa	ymmword ptr [rcx + 0x80], ymm1
+14001932e:     	vmovdqa	ymmword ptr [rcx + 0xa0], ymm2
+140019336:     	vmovdqa	ymmword ptr [rcx + 0xc0], ymm3
+14001933e:     	vmovdqa	ymmword ptr [rcx + 0xe0], ymm4
+140019346:     	add	rcx, 0x100
+14001934d:     	add	rdx, 0x100
+140019354:     	sub	r8, 0x100
+14001935b:     	cmp	r8, 0x100
+140019362:     	jae	0x1400192e0 <.text+0x182e0>
+140019368:     	lea	r9, [r8 + 0x1f]
+14001936c:     	and	r9, -0x20
+140019370:     	mov	r11, r9
+140019373:     	shr	r11, 0x5
+140019377:     	mov	r11d, dword ptr [r10 + 4*r11 + 0x23c40]
+14001937f:     	add	r11, r10
+140019382:     	jmp	r11
+140019385:     	vmovdqu	ymm1, ymmword ptr [rdx + r9 - 0x100]
+14001938f:     	vmovdqu	ymmword ptr [rcx + r9 - 0x100], ymm1
+140019399:     	vmovdqu	ymm1, ymmword ptr [rdx + r9 - 0xe0]
+1400193a3:     	vmovdqu	ymmword ptr [rcx + r9 - 0xe0], ymm1
+1400193ad:     	vmovdqu	ymm1, ymmword ptr [rdx + r9 - 0xc0]
+1400193b7:     	vmovdqu	ymmword ptr [rcx + r9 - 0xc0], ymm1
+1400193c1:     	vmovdqu	ymm1, ymmword ptr [rdx + r9 - 0xa0]
+1400193cb:     	vmovdqu	ymmword ptr [rcx + r9 - 0xa0], ymm1
+1400193d5:     	vmovdqu	ymm1, ymmword ptr [rdx + r9 - 0x80]
+1400193dc:     	vmovdqu	ymmword ptr [rcx + r9 - 0x80], ymm1
+1400193e3:     	vmovdqu	ymm1, ymmword ptr [rdx + r9 - 0x60]
+1400193ea:     	vmovdqu	ymmword ptr [rcx + r9 - 0x60], ymm1
+1400193f1:     	vmovdqu	ymm1, ymmword ptr [rdx + r9 - 0x40]
+1400193f8:     	vmovdqu	ymmword ptr [rcx + r9 - 0x40], ymm1
+1400193ff:     	vmovdqu	ymmword ptr [rcx + r8 - 0x20], ymm5
+140019406:     	vmovdqu	ymmword ptr [rax], ymm0
+14001940a:     	vzeroupper
+14001940d:     	ret
+14001940e:     	nop
+140019410:     	vmovdqu	ymm1, ymmword ptr [rdx]
+140019414:     	vmovdqu	ymm2, ymmword ptr [rdx + 0x20]
+140019419:     	vmovdqu	ymm3, ymmword ptr [rdx + 0x40]
+14001941e:     	vmovdqu	ymm4, ymmword ptr [rdx + 0x60]
+140019423:     	vmovntdq	ymmword ptr [rcx], ymm1
+140019427:     	vmovntdq	ymmword ptr [rcx + 0x20], ymm2
+14001942c:     	vmovntdq	ymmword ptr [rcx + 0x40], ymm3
+140019431:     	vmovntdq	ymmword ptr [rcx + 0x60], ymm4
+140019436:     	vmovdqu	ymm1, ymmword ptr [rdx + 0x80]
+14001943e:     	vmovdqu	ymm2, ymmword ptr [rdx + 0xa0]
+140019446:     	vmovdqu	ymm3, ymmword ptr [rdx + 0xc0]
+14001944e:     	vmovdqu	ymm4, ymmword ptr [rdx + 0xe0]
+140019456:     	vmovntdq	ymmword ptr [rcx + 0x80], ymm1
+14001945e:     	vmovntdq	ymmword ptr [rcx + 0xa0], ymm2

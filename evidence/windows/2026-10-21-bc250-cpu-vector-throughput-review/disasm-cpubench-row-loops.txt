@@ -1,0 +1,203 @@
+What: the row loops of tools/win/cpubench as compiled in the three builds of
+evidence/windows/2026-10-21-bc250-cpu-vector-throughput (frame copy, RGBA8 to BGRA8). MSVC /O2 (SSE2 only)
+vectorizes row_words: 4 x (movdqu load, 2 movdqa, 3 andps, psrld, pslld, 2 orps, movdqu store) = 16 pixels per
+iteration, with a scalar remainder loop. It does not vectorize row_bytes (4 movzx byte loads + 4 byte stores per
+pixel). row_ssse3 and row_avx2 are 1 load + 1 pshufb + 1 store per 16 or 32 bytes, not unrolled. clang-cl 23.1.2
+turns row_bytes and row_words into vpshufb ymm, unrolled 4 times (128 bytes per iteration).
+Inputs: cpubench.exe SHA-256 F521259E97707065BABB37CCCD5CB8964EA6BA45377B7FE8E80974F00EDB02FD, cpubench-avx2.exe
+43AD563A34DBE088428E418A1F1E1BD5349BE5E8DA2A81FBC50AB49A6C196AC5, cpubench-clang.exe
+E6639816960C743E3AF841F799A20D308BBAAFB21260FCBEAA5465DDBDA4FA29; source tools/win/cpubench/cpubench.c:88-133 at
+adcc95db (row_bytes, row_words, row_ssse3, row_avx2, row_memcpy).
+Command: llvm-objdump 23.1.4 -d --no-show-raw-insn -M intel <exe>; python loops.py <listing> --max 60 --ctx 0
+(selected loops)
+UTC: 2026-10-21T04:02:56Z
+
+##### cpubench.exe (MSVC 19.44 /O2); the row_words loop occurs three times (0x140003011, 0x140003270, 0x1400033e0: the function and its inlined copies in the tails of row_ssse3 and row_avx2), one is shown; the loops are identified by their instructions
+# row_words, vectorized SSE2, and its scalar remainder:
+=== loop 0x140003011-0x1400030d9: 51 insns, 44 with xmm/ymm, 8 with a memory operand
+     140003011: movdqu xmm1, xmmword ptr [r9 + 4*rbx]
+     140003017: lea eax, [r8 - 0x4]
+     14000301b: movdqa xmm2, xmm1
+     14000301f: movdqa xmm0, xmm1
+     140003023: andps xmm2, xmm3
+     140003026: psrld xmm0, 0x10
+     14000302b: pslld xmm2, 0x10
+     140003030: andps xmm0, xmm3
+     140003033: orps xmm2, xmm0
+     140003036: andps xmm1, xmm4
+     140003039: orps xmm2, xmm1
+     14000303c: movdqu xmm1, xmmword ptr [r9 + 4*rax]
+     140003042: movdqu xmmword ptr [r10 + 4*rbx], xmm2
+     140003048: add ebx, 0x10
+     14000304b: movdqa xmm2, xmm1
+     14000304f: movdqa xmm0, xmm1
+     140003053: andps xmm2, xmm3
+     140003056: psrld xmm0, 0x10
+     14000305b: pslld xmm2, 0x10
+     140003060: andps xmm0, xmm3
+     140003063: orps xmm2, xmm0
+     140003066: andps xmm1, xmm4
+     140003069: orps xmm2, xmm1
+     14000306c: movdqu xmmword ptr [r10 + 4*rax], xmm2
+     140003072: mov eax, r8d
+     140003075: movdqu xmm1, xmmword ptr [r9 + 4*rax]
+     14000307b: movdqa xmm2, xmm1
+     14000307f: movdqa xmm0, xmm1
+     140003083: andps xmm2, xmm3
+     140003086: psrld xmm0, 0x10
+     14000308b: pslld xmm2, 0x10
+     140003090: andps xmm0, xmm3
+     140003093: orps xmm2, xmm0
+     140003096: andps xmm1, xmm4
+     140003099: orps xmm2, xmm1
+     14000309c: movdqu xmmword ptr [r10 + 4*rax], xmm2
+     1400030a2: lea eax, [r8 + 0x4]
+     1400030a6: add r8d, 0x10
+     1400030aa: movdqu xmm1, xmmword ptr [r9 + 4*rax]
+     1400030b0: movdqa xmm2, xmm1
+     1400030b4: movdqa xmm0, xmm1
+     1400030b8: psrld xmm0, 0x10
+     1400030bd: andps xmm2, xmm3
+     1400030c0: pslld xmm2, 0x10
+     1400030c5: andps xmm0, xmm3
+     1400030c8: orps xmm2, xmm0
+     1400030cb: andps xmm1, xmm4
+     1400030ce: orps xmm2, xmm1
+     1400030d1: movdqu xmmword ptr [r10 + 4*rax], xmm2
+     1400030d7: cmp ebx, edx
+     1400030d9: jb 0x140003011 <.text+0x2011>
+=== loop 0x140003100-0x140003128: 13 insns, 0 with xmm/ymm, 2 with a memory operand
+     140003100: mov edx, dword ptr [r9 + r8]
+     140003104: lea r8, [r8 + 0x4]
+     140003108: mov eax, edx
+     14000310a: shr eax, 0x10
+     14000310d: movzx ecx, al
+     140003110: movzx eax, dl
+     140003113: and edx, 0xff00ff00
+     140003119: shl eax, 0x10
+     14000311c: or ecx, eax
+     14000311e: or ecx, edx
+     140003120: mov dword ptr [r8 - 0x4], ecx
+     140003124: sub r10, 0x1
+     140003128: jne 0x140003100 <.text+0x2100>
+# row_bytes (the Mesa loop shape):
+=== loop 0x140003160-0x1400031a1: 18 insns, 0 with xmm/ymm, 8 with a memory operand
+     140003160: lea r10d, [4*rbx]
+     140003168: inc ebx
+     14000316a: lea eax, [r10 + 0x2]
+     14000316e: mov r9d, eax
+     140003171: movzx eax, byte ptr [rax + rdx]
+     140003175: mov byte ptr [r10 + r11], al
+     140003179: lea eax, [r10 + 0x1]
+     14000317d: mov ecx, eax
+     14000317f: movzx eax, byte ptr [rax + rdx]
+     140003183: mov byte ptr [rcx + r11], al
+     140003187: movzx eax, byte ptr [r10 + rdx]
+     14000318c: mov byte ptr [r9 + r11], al
+     140003190: lea eax, [r10 + 0x3]
+     140003194: mov ecx, eax
+     140003196: movzx eax, byte ptr [rax + rdx]
+     14000319a: mov byte ptr [rcx + r11], al
+     14000319e: cmp ebx, r8d
+     1400031a1: jb 0x140003160 <.text+0x2160>
+# row_ssse3 and row_avx2:
+=== loop 0x140002f92-0x140002fb4: 8 insns, 3 with xmm/ymm, 2 with a memory operand
+     140002f92: lea r9d, [4*rax]
+     140002f9a: add eax, 0x8
+     140002f9d: vmovdqu ymm0, ymmword ptr [r9 + rdx]
+     140002fa3: vpshufb ymm1, ymm0, ymm2
+     140002fa8: vmovdqu ymmword ptr [r9 + rdi], ymm1
+     140002fae: lea ecx, [rax + 0x8]
+     140002fb1: cmp ecx, r11d
+     140002fb4: jbe 0x140002f92 <.text+0x1f92>
+=== loop 0x1400031f0-0x140003210: 8 insns, 3 with xmm/ymm, 2 with a memory operand
+     1400031f0: lea edx, [4*rax]
+     1400031f7: add eax, 0x4
+     1400031fa: movdqu xmm0, xmmword ptr [rdx + r8]
+     140003200: pshufb xmm0, xmm1
+     140003205: lea ecx, [rax + 0x4]
+     140003208: movdqu xmmword ptr [rdx + rbx], xmm0
+     14000320d: cmp ecx, r9d
+     140003210: jbe 0x1400031f0 <.text+0x21f0>
+
+##### cpubench-avx2.exe (MSVC 19.44 /O2 /arch:AVX2): row_words loop
+=== loop 0x140003060-0x140003117: 43 insns, 36 with xmm/ymm, 8 with a memory operand
+     140003060: vmovdqu ymm1, ymmword ptr [r10 + 4*r11]
+     140003066: vpand ymm4, ymm1, ymm6
+     14000306a: vpsrld ymm0, ymm1, 0x10
+     14000306f: vpand ymm3, ymm0, ymm5
+     140003073: vpand ymm1, ymm1, ymm5
+     140003077: vpslld ymm2, ymm1, 0x10
+     14000307c: vpor ymm0, ymm2, ymm3
+     140003080: vpor ymm3, ymm0, ymm4
+     140003084: vmovdqu ymmword ptr [rdx + 4*r11], ymm3
+     14000308a: lea eax, [rbx - 0x8]
+     14000308d: add r11d, 0x20
+     140003091: vmovdqu ymm1, ymmword ptr [r10 + 4*rax]
+     140003097: vpand ymm4, ymm1, ymm6
+     14000309b: vpsrld ymm0, ymm1, 0x10
+     1400030a0: vpand ymm3, ymm0, ymm5
+     1400030a4: vpand ymm1, ymm1, ymm5
+     1400030a8: vpslld ymm2, ymm1, 0x10
+     1400030ad: vpor ymm0, ymm2, ymm3
+     1400030b1: vpor ymm3, ymm0, ymm4
+     1400030b5: vmovdqu ymmword ptr [rdx + 4*rax], ymm3
+     1400030ba: mov eax, ebx
+     1400030bc: vmovdqu ymm1, ymmword ptr [r10 + 4*rax]
+     1400030c2: vpand ymm4, ymm1, ymm6
+     1400030c6: vpsrld ymm0, ymm1, 0x10
+     1400030cb: vpand ymm3, ymm0, ymm5
+     1400030cf: vpand ymm1, ymm1, ymm5
+     1400030d3: vpslld ymm2, ymm1, 0x10
+     1400030d8: vpor ymm0, ymm2, ymm3
+     1400030dc: vpor ymm3, ymm0, ymm4
+     1400030e0: vmovdqu ymmword ptr [rdx + 4*rax], ymm3
+     1400030e5: lea eax, [rbx + 0x8]
+     1400030e8: add ebx, 0x20
+     1400030eb: vmovdqu ymm1, ymmword ptr [r10 + 4*rax]
+     1400030f1: vpsrld ymm0, ymm1, 0x10
+     1400030f6: vpand ymm4, ymm1, ymm6
+     1400030fa: vpand ymm3, ymm0, ymm5
+     1400030fe: vpand ymm1, ymm1, ymm5
+     140003102: vpslld ymm2, ymm1, 0x10
+     140003107: vpor ymm0, ymm2, ymm3
+     14000310b: vpor ymm3, ymm0, ymm4
+     14000310f: vmovdqu ymmword ptr [rdx + 4*rax], ymm3
+     140003114: cmp r11d, r8d
+     140003117: jb 0x140003060 <.text+0x2060>
+##### cpubench-clang.exe (clang-cl 23.1.2 /O2 -mavx2 -mfma)
+# the impl table in main (0x1400018e5..0x140001969) names the row functions: row_bytes 0x140003760, row_words 0x1400038f0, row_ssse3 0x140003a90, row_avx2 0x140003c80; the loop at 0x140001840 just before it is row_bytes inlined into main to build the reference frame.
+# row_bytes (0x140003760), main loop:
+=== loop 0x140003820-0x140003871: 15 insns, 12 with xmm/ymm, 8 with a memory operand
+     140003820: vmovdqu ymm1, ymmword ptr [rdx + r10]
+     140003826: vmovdqu ymm2, ymmword ptr [rdx + r10 + 0x20]
+     14000382d: vmovdqu ymm3, ymmword ptr [rdx + r10 + 0x40]
+     140003834: vmovdqu ymm4, ymmword ptr [rdx + r10 + 0x60]
+     14000383b: vpshufb ymm2, ymm2, ymm0
+     140003840: vpshufb ymm1, ymm1, ymm0
+     140003845: vpshufb ymm4, ymm4, ymm0
+     14000384a: vpshufb ymm3, ymm3, ymm0
+     14000384f: vmovdqu ymmword ptr [rcx + r10 + 0x40], ymm3
+     140003856: vmovdqu ymmword ptr [rcx + r10 + 0x60], ymm4
+     14000385d: vmovdqu ymmword ptr [rcx + r10], ymm1
+     140003863: vmovdqu ymmword ptr [rcx + r10 + 0x20], ymm2
+     14000386a: sub r10, -0x80
+     14000386e: cmp r9, r10
+     140003871: jne 0x140003820 <.text+0x2820>
+# row_words (0x1400038f0), main loop: also vpshufb (clang recognises the mask-shift-or as a byte shuffle):
+=== loop 0x140003950-0x1400039a1: 15 insns, 12 with xmm/ymm, 8 with a memory operand
+     140003950: vmovdqu ymm1, ymmword ptr [rdx + r10]
+     140003956: vmovdqu ymm2, ymmword ptr [rdx + r10 + 0x20]
+     14000395d: vmovdqu ymm3, ymmword ptr [rdx + r10 + 0x40]
+     140003964: vmovdqu ymm4, ymmword ptr [rdx + r10 + 0x60]
+     14000396b: vpshufb ymm1, ymm1, ymm0
+     140003970: vpshufb ymm2, ymm2, ymm0
+     140003975: vpshufb ymm3, ymm3, ymm0
+     14000397a: vpshufb ymm4, ymm4, ymm0
+     14000397f: vmovdqu ymmword ptr [rcx + r10], ymm1
+     140003985: vmovdqu ymmword ptr [rcx + r10 + 0x20], ymm2
+     14000398c: vmovdqu ymmword ptr [rcx + r10 + 0x40], ymm3
+     140003993: vmovdqu ymmword ptr [rcx + r10 + 0x60], ymm4
+     14000399a: sub r10, -0x80
+     14000399e: cmp r9, r10
+     1400039a1: jne 0x140003950 <.text+0x2950>

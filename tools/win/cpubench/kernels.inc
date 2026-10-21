@@ -1,7 +1,10 @@
 /* In-register throughput: 10 independent dependency chains in named locals (an array may live on the stack and
- * then measures store forwarding). Zen 2: FMA latency 5 on 2 pipes needs 10 chains in flight. ns per instruction. */
+ * then measures store forwarding). Chains needed = latency x instructions per cycle: 10 for desktop Zen 2 FMA
+ * (5 x 2), 5 on the BC-250 (1 per cycle). ns per instruction. */
 /* KEEP: an empty asm that takes and returns the whole register, so clang cannot narrow a chain to its lane 0 (vaddss
- * for vaddps) or compose two constant shuffles into one. MSVC has no such barrier; its reg lines are not valid anyway. */
+ * for vaddps) or compose two constant shuffles into one. MSVC has no such barrier, and MSVC 19.44 keeps the fma
+ * chains on the stack. KEEP does not prevent spills or the fold of FMA(a, 1, c) into an add: check the listing of
+ * every new build. */
 #ifdef __clang__
 #define KEEP(v) __asm__ volatile("" : "+x"(v))
 #else

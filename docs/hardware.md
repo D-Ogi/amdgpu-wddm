@@ -16,11 +16,16 @@ Things marked TBD are filled in from the first diagnostic run (E01). Community k
   minimum and maximum, which GFX10 leaves empty and GFX10.1 reassigned on paper
   ([M866](facts/hardware.md#M866)).
 - CPU: a Zen 2 core (family 17h, model 47h) with the x86-64-v3 feature set. It has AVX2, FMA3, BMI2, MOVBE and SSE4a,
-  and no AVX-512, VAES or VPCLMULQDQ ([M906](facts/hardware.md#m906)). The floating-point unit is half as wide in
-  issue as desktop Zen 2: FMA, FADD and FMUL each issue once per cycle, at 256 bits as fast as at 128 bits, and
-  `pshufb` twice per cycle ([M907](facts/hardware.md#m907)). One thread copies at 8.7 GB/s, about a third of a
-  current desktop CPU ([M908](facts/hardware.md#m908)). A build for this CPU uses `-march=x86-64-v3 -mtune=znver2`.
-  Do not use `-march=znver2`, because SSE4a is absent on Intel CPUs. `tools/win/cpubench` measures all three.
+  and no AVX-512, VAES or VPCLMULQDQ ([M906](facts/hardware.md#m906)). The floating-point unit of each core has two
+  pipes, each 256 bits wide ([M910](facts/hardware.md#m910)). FMA and FMUL share one pipe, and FADD uses the other.
+  Both pipes take `pshufb` and `vpaddd`. FMA, FADD and FMUL thus each issue once per cycle, at 256 bits as fast as at
+  128 bits, and `pshufb` twice per cycle ([M907](facts/hardware.md#m907)). That is half the issue rate per core of
+  desktop Zen 2, for which AMD documents two of each per cycle. For the six cores, the FP32 FMA peak at an equal
+  clock is 6 x 16 / (8 x 32) = 37.5 % of an eight-core desktop Zen 2. This is the FMA peak, not general CPU
+  performance. One thread reads memory at 17 GB/s and copies a frame at 14.9 GB/s with non-temporal stores. The C
+  runtime `memcpy`, called for each row, reaches 8.7 GB/s ([M908](facts/hardware.md#m908)). A build for this CPU
+  uses `-march=x86-64-v3 -mtune=znver2`. Do not use `-march=znver2`, because SSE4a is absent on Intel CPUs.
+  `tools/win/cpubench` measures M906 to M908, and the evidence of M910 holds its own kernels.
 - Our unit: board revision TBD, BIOS version TBD, VRAM carve-out TBD.
 
 ## Platform setup (community consensus)

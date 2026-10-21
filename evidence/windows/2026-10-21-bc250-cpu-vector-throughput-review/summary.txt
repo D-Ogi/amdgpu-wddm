@@ -1,0 +1,187 @@
+clock start    ns/add min 0.28625 med 0.28650 max 0.28806 -> 3.490 GHz
+clock middle   ns/add min 0.28631 med 0.28660 max 0.28705 -> 3.489 GHz
+clock pre-smt  ns/add min 0.28629 med 0.28655 max 0.28697 -> 3.490 GHz
+clock end      ns/add min 0.28631 med 0.28660 max 0.28714 -> 3.489 GHz
+GHz used for cycles: 3.4930 (mean of 1/min ns per dependent add, or --ghz)
+
+== chain sweep: cycles per instruction (min, med) and instructions per cycle (from min)
+fma128  k1:5.003/5.006(0.20) k2:2.502/2.502(0.40) k4:1.251/1.251(0.80) k5:1.001/1.001(1.00) k6:1.001/1.001(1.00) k8:1.001/1.002(1.00) k10:1.001/1.002(1.00) k12:1.001/1.001(1.00)
+fma256  k1:5.003/5.005(0.20) k2:2.501/2.502(0.40) k4:1.251/1.251(0.80) k5:1.001/1.001(1.00) k6:1.001/1.001(1.00) k8:1.001/1.001(1.00) k10:1.001/1.001(1.00) k12:1.000/1.001(1.00)
+   fma latency (k1, 256): 5.003 cycles; 128: 5.003
+fadd128  k1:3.002/3.003(0.33) k2:1.501/1.501(0.67) k4:1.000/1.001(1.00) k5:1.001/1.001(1.00) k6:1.001/1.001(1.00) k8:1.001/1.001(1.00) k10:1.001/1.001(1.00) k12:1.001/1.001(1.00)
+fadd256  k1:3.002/3.002(0.33) k2:1.501/1.501(0.67) k4:1.000/1.001(1.00) k5:1.001/1.001(1.00) k6:1.000/1.001(1.00) k8:1.001/1.001(1.00) k10:1.000/1.001(1.00) k12:1.001/1.001(1.00)
+   fadd latency (k1, 256): 3.002 cycles; 128: 3.002
+fmul128  k1:3.003/3.004(0.33) k2:1.501/1.502(0.67) k4:1.000/1.001(1.00) k5:1.000/1.001(1.00) k6:1.000/1.001(1.00) k8:1.000/1.001(1.00) k10:1.000/1.001(1.00) k12:1.001/1.001(1.00)
+fmul256  k1:3.001/3.002(0.33) k2:1.501/1.502(0.67) k4:1.001/1.001(1.00) k5:1.001/1.001(1.00) k6:1.000/1.001(1.00) k8:1.000/1.001(1.00) k10:1.000/1.001(1.00) k12:1.000/1.001(1.00)
+   fmul latency (k1, 256): 3.001 cycles; 128: 3.003
+
+== other register kernels: name, cyc/insn min, med, max-spread %, insn/cyc, elements(FP32/int32) per ns
+fmaone128_c12                cyc 1.001 med 1.001 spread   0.0% ipc 0.999 elem/ns 13.96
+fmaone256_c12                cyc 1.001 med 1.001 spread   0.1% ipc 0.999 elem/ns 27.92
+mix_fadd_fmaone128           cyc 0.501 med 0.501 spread   0.1% ipc 1.998 elem/ns 27.91
+mix_fadd_fmaone256           cyc 0.500 med 0.501 spread   0.1% ipc 1.999 elem/ns 55.87
+mix_fadd_fma128              cyc 0.500 med 0.500 spread   0.1% ipc 1.999 elem/ns 27.93
+mix_fadd_fma256              cyc 0.500 med 0.500 spread   0.1% ipc 1.999 elem/ns 55.87
+mix_fadd_fmul128             cyc 0.500 med 0.500 spread   0.1% ipc 1.999 elem/ns 27.93
+mix_fadd_fmul256             cyc 0.500 med 0.501 spread   0.1% ipc 1.999 elem/ns 55.87
+mix_fma_fmul128              cyc 1.001 med 1.001 spread   0.0% ipc 0.999 elem/ns 13.96
+mix_fma_fmul256              cyc 1.001 med 1.001 spread   0.0% ipc 0.999 elem/ns 27.92
+mix_fma_pshufb128            cyc 0.500 med 0.501 spread   0.2% ipc 1.999 elem/ns 27.93
+mix_fma_pshufb256            cyc 0.500 med 0.501 spread   0.1% ipc 1.999 elem/ns 55.87
+mix_fadd_pshufb128           cyc 0.500 med 0.501 spread   0.1% ipc 1.999 elem/ns 27.93
+mix_fadd_pshufb256           cyc 0.500 med 0.501 spread   0.1% ipc 1.999 elem/ns 55.87
+mix_fma_vpaddd128            cyc 0.500 med 0.501 spread   0.1% ipc 1.999 elem/ns 27.93
+mix_fma_vpaddd256            cyc 0.500 med 0.500 spread   0.1% ipc 1.999 elem/ns 55.87
+mix_fadd_vpaddd128           cyc 0.500 med 0.501 spread   0.1% ipc 1.999 elem/ns 27.93
+mix_fadd_vpaddd256           cyc 0.500 med 0.500 spread   0.1% ipc 1.999 elem/ns 55.87
+mix_pshufb_vpaddd128         cyc 0.500 med 0.500 spread   0.1% ipc 1.999 elem/ns 27.93
+mix_pshufb_vpaddd256         cyc 0.500 med 0.501 spread   0.1% ipc 1.999 elem/ns 55.87
+mix_fmul_pshufb128           cyc 0.500 med 0.501 spread   0.1% ipc 1.999 elem/ns 27.93
+mix_fmul_pshufb256           cyc 0.501 med 0.501 spread   0.0% ipc 1.998 elem/ns 55.83
+pshufb128_c12                cyc 0.500 med 0.501 spread   0.1% ipc 1.999 elem/ns 27.93
+pshufb128_c1                 cyc 1.000 med 1.001 spread   0.1% ipc 1.000 elem/ns 13.97
+pshufb256_c12                cyc 0.500 med 0.500 spread   0.1% ipc 1.999 elem/ns 55.87
+pshufb256_c1                 cyc 1.001 med 1.001 spread   0.1% ipc 0.999 elem/ns 27.92
+vpaddd128_c12                cyc 0.501 med 0.501 spread   0.1% ipc 1.998 elem/ns 27.91
+vpaddd128_c1                 cyc 1.001 med 1.001 spread   0.1% ipc 0.999 elem/ns 13.96
+vpaddd256_c12                cyc 0.500 med 0.501 spread   0.1% ipc 1.999 elem/ns 55.87
+vpaddd256_c1                 cyc 1.001 med 1.001 spread   0.1% ipc 0.999 elem/ns 27.92
+vpmulld128_c12               cyc 2.001 med 2.002 spread   0.1% ipc 0.500 elem/ns 6.98
+vpmulld128_c1                cyc 4.004 med 4.004 spread   0.0% ipc 0.250 elem/ns 3.49
+vpmulld256_c12               cyc 2.001 med 2.002 spread   0.1% ipc 0.500 elem/ns 13.96
+vpmulld256_c1                cyc 4.004 med 4.004 spread   0.0% ipc 0.250 elem/ns 6.98
+vpermd256_c12                cyc 2.001 med 2.002 spread   0.1% ipc 0.500 elem/ns 13.96
+vpermd256_c1                 cyc 8.004 med 8.008 spread   0.1% ipc 0.125 elem/ns 3.49
+vpermq256_c12                cyc 1.281 med 1.281 spread   1.2% ipc 0.781 elem/ns 21.82
+vpermq256_c1                 cyc 6.004 med 6.004 spread   0.1% ipc 0.167 elem/ns 4.65
+vperm2i128256_c12            cyc 1.001 med 1.001 spread   0.0% ipc 0.999 elem/ns 27.92
+vperm2i128256_c1             cyc 3.002 med 3.003 spread   0.2% ipc 0.333 elem/ns 9.31
+scalar_add_c8                cyc 0.271 med 0.271 spread   0.1% ipc 3.689 elem/ns 12.89
+mem_chain10_128              cyc 1.301 med 1.302 spread   3.7% ipc 0.769 elem/ns 10.74
+mem_nodep10_128              cyc 1.001 med 1.001 spread   0.1% ipc 0.999 elem/ns 13.96
+mem_chain1_128               cyc 13.008 med 13.009 spread   0.1% ipc 0.077 elem/ns 1.07
+mem_chain2_reg8_128          cyc 1.301 med 1.301 spread   0.1% ipc 0.769 elem/ns 10.74
+mem_chain10_256              cyc 1.403 med 1.439 spread  10.7% ipc 0.713 elem/ns 19.92
+mem_nodep10_256              cyc 1.001 med 1.001 spread   0.1% ipc 0.999 elem/ns 27.92
+mem_chain1_256               cyc 14.008 med 14.012 spread   0.1% ipc 0.071 elem/ns 1.99
+mem_chain2_reg8_256          cyc 1.401 med 1.402 spread   0.1% ipc 0.714 elem/ns 19.94
+clk_imul_chain               cyc 3.003 med 3.003 spread   0.0% ipc 0.333 elem/ns 1.16
+clk_add48_fma4_256           cyc 1.001 med 1.001 spread   0.1% ipc 0.999 elem/ns 3.49
+
+== elements per ns, 128 vs 256 at 12 chains
+fma      128: 13.96/ns  256: 27.93/ns  ratio 2.00
+fadd     128: 13.96/ns  256: 27.91/ns  ratio 2.00
+fmul     128: 13.96/ns  256: 27.93/ns  ratio 2.00
+pshufb   128: 27.93/ns  256: 55.87/ns  ratio 2.00
+vpaddd   128: 27.91/ns  256: 55.87/ns  ratio 2.00
+vpmulld  128: 6.98/ns  256: 13.96/ns  ratio 2.00
+q44bench compiler clang 23.1.4 (https://github.com/llvm/llvm-project 7a941dfb2877a0b8cf30323fefa85ad019e0b0f5) qpf 10000000
+topology core 0 group 0 mask 0x3 smt 1 efficiency 0
+topology core 1 group 0 mask 0xc smt 1 efficiency 0
+topology core 2 group 0 mask 0x30 smt 1 efficiency 0
+topology core 3 group 0 mask 0xc0 smt 1 efficiency 0
+topology core 4 group 0 mask 0x300 smt 1 efficiency 0
+topology core 5 group 0 mask 0xc00 smt 1 efficiency 0
+tsc rate 3.1942 GHz
+buffers src&4095 128 dst&4095 128 ref&4095 128 bytes 9216000
+frame row_bytes        ms min 1.060 med 1.070 max 1.090 | image GB/s 8.69 | est traffic x3 GB/s 26.08 | dst&4095  128 | match
+frame row_words        ms min 1.052 med 1.060 max 1.085 | image GB/s 8.76 | est traffic x3 GB/s 26.29 | dst&4095  128 | match
+frame row_ssse3        ms min 0.898 med 0.901 max 0.927 | image GB/s 10.26 | est traffic x3 GB/s 30.79 | dst&4095  128 | match
+frame row_avx2         ms min 1.045 med 1.051 max 1.090 | image GB/s 8.82 | est traffic x3 GB/s 26.47 | dst&4095  128 | match
+frame row_memcpy       ms min 1.059 med 1.068 max 1.117 | image GB/s 8.70 | est traffic x3 GB/s 26.11 | dst&4095  128 | match
+frame mesa_gdi_loop    ms min 3.014 med 3.019 max 3.280 | image GB/s 3.06 | est traffic x3 GB/s 9.17 | dst&4095  128 | match
+frame mesa_gdi_hoisted ms min 1.066 med 1.068 max 1.095 | image GB/s 8.65 | est traffic x3 GB/s 25.94 | dst&4095  128 | match
+frame asm_copy_x1      ms min 0.835 med 0.845 max 0.906 | image GB/s 11.04 | est traffic x3 GB/s 33.12 | dst&4095  128 | match
+frame asm_copy_x4      ms min 0.896 med 0.901 max 0.932 | image GB/s 10.28 | est traffic x3 GB/s 30.85 | dst&4095  128 | match
+frame asm_copy_y1      ms min 0.953 med 0.960 max 0.989 | image GB/s 9.67 | est traffic x3 GB/s 29.00 | dst&4095  128 | match
+frame asm_copy_y4      ms min 1.049 med 1.055 max 1.084 | image GB/s 8.79 | est traffic x3 GB/s 26.36 | dst&4095  128 | match
+frame asm_shuf_x1      ms min 0.871 med 0.875 max 0.884 | image GB/s 10.58 | est traffic x3 GB/s 31.73 | dst&4095  128 | match
+frame asm_shuf_y1      ms min 0.996 med 1.001 max 1.039 | image GB/s 9.25 | est traffic x3 GB/s 27.76 | dst&4095  128 | match
+frame asm_shuf_y4      ms min 1.051 med 1.054 max 1.083 | image GB/s 8.77 | est traffic x3 GB/s 26.31 | dst&4095  128 | match
+frame asm_copy_y1_pad7 ms min 0.898 med 0.902 max 0.929 | image GB/s 10.27 | est traffic x3 GB/s 30.81 | dst&4095  128 | match
+frame asm_copy_nt_y4   ms min 0.619 med 0.626 max 0.654 | image GB/s 14.90 | est traffic x2 GB/s 29.80 | dst&4095  128 | match
+frame rep_movsb        ms min 1.296 med 1.302 max 1.326 | image GB/s 7.11 | est traffic x3 GB/s 21.33 | dst&4095  128 | match
+frame memcpy_frame     ms min 0.624 med 0.630 max 0.635 | image GB/s 14.76 | est traffic x2 GB/s 29.52 | dst&4095  128 | match
+frame asm_read_x4      ms min 0.541 med 0.542 max 0.549 | image GB/s 17.04 | est traffic x1 GB/s 17.04 | dst&4095  128 | n/a
+frame asm_read_y4      ms min 0.548 med 0.555 max 0.579 | image GB/s 16.81 | est traffic x1 GB/s 16.81 | dst&4095  128 | n/a
+frame asm_write_x4     ms min 0.566 med 0.574 max 0.591 | image GB/s 16.29 | est traffic x2 GB/s 32.59 | dst&4095  128 | n/a
+frame asm_write_y4     ms min 0.636 med 0.642 max 0.654 | image GB/s 14.50 | est traffic x2 GB/s 28.99 | dst&4095  128 | n/a
+frame asm_write_nt_y4  ms min 0.241 med 0.242 max 0.264 | image GB/s 38.30 | est traffic x1 GB/s 38.30 | dst&4095  128 | n/a
+frame pass dst page offset src+2048
+frame asm_copy_x1      ms min 0.817 med 0.822 max 0.829 | image GB/s 11.28 | est traffic x3 GB/s 33.84 | dst&4095 2176 | match
+frame asm_copy_x4      ms min 0.777 med 0.779 max 0.784 | image GB/s 11.85 | est traffic x3 GB/s 35.56 | dst&4095 2176 | match
+frame asm_copy_y1      ms min 0.894 med 0.901 max 0.952 | image GB/s 10.31 | est traffic x3 GB/s 30.94 | dst&4095 2176 | match
+frame asm_copy_y4      ms min 1.044 med 1.051 max 1.082 | image GB/s 8.83 | est traffic x3 GB/s 26.49 | dst&4095 2176 | match
+frame asm_shuf_x1      ms min 0.800 med 0.802 max 0.806 | image GB/s 11.53 | est traffic x3 GB/s 34.58 | dst&4095 2176 | match
+frame asm_shuf_y1      ms min 0.970 med 0.974 max 0.985 | image GB/s 9.50 | est traffic x3 GB/s 28.49 | dst&4095 2176 | match
+frame asm_shuf_y4      ms min 1.039 med 1.046 max 1.074 | image GB/s 8.87 | est traffic x3 GB/s 26.62 | dst&4095 2176 | match
+frame asm_copy_y1_pad7 ms min 0.877 med 0.878 max 0.905 | image GB/s 10.51 | est traffic x3 GB/s 31.54 | dst&4095 2176 | match
+frame asm_copy_nt_y4   ms min 0.620 med 0.624 max 0.628 | image GB/s 14.87 | est traffic x2 GB/s 29.73 | dst&4095 2176 | match
+frame rep_movsb        ms min 1.405 med 1.410 max 1.419 | image GB/s 6.56 | est traffic x3 GB/s 19.68 | dst&4095 2176 | match
+frame memcpy_frame     ms min 0.621 med 0.628 max 0.659 | image GB/s 14.85 | est traffic x2 GB/s 29.69 | dst&4095 2176 | match
+csweep c_fma256_k1      ns/insn min 1.4324 med 1.4327 max 1.4335 | lane0 sum 142.444 finite 1
+csweep c_fma256_k4      ns/insn min 0.3581 med 0.3582 max 0.3585 | lane0 sum 85.1476 finite 1
+csweep c_fma256_k6      ns/insn min 0.2864 med 0.2865 max 0.2868 | lane0 sum 107.328 finite 1
+csweep c_fma256_k8      ns/insn min 0.2865 med 0.2867 max 0.2869 | lane0 sum 136.152 finite 1
+csweep c_fma256_k10     ns/insn min 0.2868 med 0.2869 max 0.4298 | lane0 sum 172.48 finite 1
+csweep c_fma256_k12     ns/insn min 0.2866 med 0.2866 max 0.3582 | lane0 sum 220.807 finite 1
+csweep c_fmaone256_k12  ns/insn min 0.2865 med 0.2867 max 0.3152 | lane0 sum 68.0648 finite 1
+q24 fadd256 vs fmaone256 after 100001 iterations x 2 ops per chain: bit-identical (lane0 chain1 1.0238421 vs 1.0238421)
+q27 mask swap  iters 1000 shuffles/chain 2000: result == expected; result == initial
+q27 mask swap  iters 1001 shuffles/chain 2002: result == expected; result == initial
+q27 mask swap  iters 1002 shuffles/chain 2004: result == expected; result == initial
+q27 mask swap  iters 1003 shuffles/chain 2006: result == expected; result == initial
+q27 mask rot16 iters 1000 shuffles/chain 2000: result == expected; result == initial
+q27 mask rot16 iters 1001 shuffles/chain 2002: result == expected; result != initial
+q27 mask rot16 iters 1002 shuffles/chain 2004: result == expected; result != initial
+q27 mask rot16 iters 1003 shuffles/chain 2006: result == expected; result != initial
+smt fma256_c1        one thread LP2               threads 1 masks 0x4 0x0 | ns/insn per thread 1.4323 0.0000 | total insn/ns 0.698
+smt fma256_c1        two threads LP2+LP3 (SMT?)   threads 2 masks 0x4 0x8 | ns/insn per thread 1.4320 1.4326 | total insn/ns 1.396
+smt fma256_c1        two threads LP2+LP4 (cores)  threads 2 masks 0x4 0x10 | ns/insn per thread 1.4321 1.4329 | total insn/ns 1.396
+smt fma256_c12       one thread LP2               threads 1 masks 0x4 0x0 | ns/insn per thread 0.2866 0.0000 | total insn/ns 3.490
+smt fma256_c12       two threads LP2+LP3 (SMT?)   threads 2 masks 0x4 0x8 | ns/insn per thread 0.5723 0.5726 | total insn/ns 3.494
+smt fma256_c12       two threads LP2+LP4 (cores)  threads 2 masks 0x4 0x10 | ns/insn per thread 0.2864 0.2865 | total insn/ns 6.982
+smt fadd256_c12      one thread LP2               threads 1 masks 0x4 0x0 | ns/insn per thread 0.2866 0.0000 | total insn/ns 3.489
+smt fadd256_c12      two threads LP2+LP3 (SMT?)   threads 2 masks 0x4 0x8 | ns/insn per thread 0.5723 0.5727 | total insn/ns 3.493
+smt fadd256_c12      two threads LP2+LP4 (cores)  threads 2 masks 0x4 0x10 | ns/insn per thread 0.2865 0.2867 | total insn/ns 6.979
+smt scalar_add_c8    one thread LP2               threads 1 masks 0x4 0x0 | ns/insn per thread 0.0777 0.0000 | total insn/ns 12.878
+smt scalar_add_c8    two threads LP2+LP3 (SMT?)   threads 2 masks 0x4 0x8 | ns/insn per thread 0.1551 0.1552 | total insn/ns 12.893
+smt scalar_add_c8    two threads LP2+LP4 (cores)  threads 2 masks 0x4 0x10 | ns/insn per thread 0.0776 0.0776 | total insn/ns 25.764
+q44bench compiler msvc qpf 10000000
+topology core 0 group 0 mask 0x3 smt 1 efficiency 0
+topology core 1 group 0 mask 0xc smt 1 efficiency 0
+topology core 2 group 0 mask 0x30 smt 1 efficiency 0
+topology core 3 group 0 mask 0xc0 smt 1 efficiency 0
+topology core 4 group 0 mask 0x300 smt 1 efficiency 0
+topology core 5 group 0 mask 0xc00 smt 1 efficiency 0
+tsc rate 3.1941 GHz
+buffers src&4095 128 dst&4095 128 ref&4095 128 bytes 9216000
+frame row_bytes        ms min 2.766 med 2.771 max 2.792 | image GB/s 3.33 | est traffic x3 GB/s 9.99 | dst&4095  128 | match
+frame row_words        ms min 0.878 med 0.881 max 0.933 | image GB/s 10.50 | est traffic x3 GB/s 31.49 | dst&4095  128 | match
+frame row_ssse3        ms min 0.823 med 0.830 max 0.836 | image GB/s 11.19 | est traffic x3 GB/s 33.58 | dst&4095  128 | match
+frame row_avx2         ms min 0.982 med 0.990 max 1.016 | image GB/s 9.38 | est traffic x3 GB/s 28.15 | dst&4095  128 | match
+frame row_memcpy       ms min 1.067 med 1.070 max 1.099 | image GB/s 8.64 | est traffic x3 GB/s 25.91 | dst&4095  128 | match
+frame mesa_gdi_loop    ms min 2.894 med 2.900 max 2.932 | image GB/s 3.18 | est traffic x3 GB/s 9.55 | dst&4095  128 | match
+frame mesa_gdi_hoisted ms min 2.763 med 2.769 max 2.815 | image GB/s 3.34 | est traffic x3 GB/s 10.01 | dst&4095  128 | match
+csweep c_fma256_k1      ns/insn min 1.4335 med 1.4336 max 1.4341 | lane0 sum 142.444 finite 1
+csweep c_fma256_k4      ns/insn min 0.3581 med 0.3581 max 0.3583 | lane0 sum 85.1476 finite 1
+csweep c_fma256_k6      ns/insn min 0.2866 med 0.2867 max 0.2867 | lane0 sum 107.328 finite 1
+csweep c_fma256_k8      ns/insn min 0.2865 med 0.2866 max 0.2867 | lane0 sum 136.152 finite 1
+csweep c_fma256_k10     ns/insn min 0.2865 med 0.2865 max 0.2867 | lane0 sum 172.48 finite 1
+csweep c_fma256_k12     ns/insn min 0.2864 med 0.2865 max 0.2867 | lane0 sum 220.807 finite 1
+csweep c_fmaone256_k12  ns/insn min 0.2865 med 0.2866 max 0.2867 | lane0 sum 68.0648 finite 1
+frame bytes 1920x1200 1.064 ms 8.66 GB/s match
+frame words 1920x1200 1.045 ms 8.82 GB/s match
+frame ssse3 1920x1200 0.823 ms 11.20 GB/s match
+frame avx2 1920x1200 0.922 ms 10.00 GB/s match
+frame memcpy 1920x1200 1.060 ms 8.69 GB/s match
+frame bytes 1920x1200 1.062 ms 8.67 GB/s match
+frame words 1920x1200 1.045 ms 8.81 GB/s match
+frame ssse3 1920x1200 0.821 ms 11.23 GB/s match
+frame avx2 1920x1200 0.920 ms 10.02 GB/s match
+frame memcpy 1920x1200 1.060 ms 8.69 GB/s match
+frame bytes 1920x1200 1.070 ms 8.61 GB/s match
+frame words 1920x1200 1.048 ms 8.79 GB/s match
+frame ssse3 1920x1200 0.821 ms 11.23 GB/s match
+frame avx2 1920x1200 0.928 ms 9.94 GB/s match
+frame memcpy 1920x1200 1.058 ms 8.71 GB/s match

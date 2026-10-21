@@ -1,0 +1,343 @@
+What: the RGBA8 to BGRA8 copy of Mesa's GDI present (wsi_win32_queue_present) as written, as compiled in the
+shipped Vulkan ICD, and as rebuilt in the replica mesa_gdi.cpp by MSVC 19.44 and clang-cl 23.1.4, with the width
+read through the chain pointer (as shipped) and with the width read once per row into a local. The shipped code
+reloads [chain+0x39c] (extent.width) after the stores of every pixel and runs 4 byte loads and 4 byte stores per
+pixel. clang-cl gives the same scalar loop for the same source. With the width in a local, clang-cl emits 4 x vpshufb
+ymm, but only with AVX2; MSVC /O2 keeps the scalar byte loop and only the reload goes. That the uint8_t stores, which
+may alias the chain, force the reload is an inference from the C aliasing rules and these listings, not a compiler
+remark. Part 2 reads an MSVC /arch:AVX2 + LTO build of the same Mesa source: it has the same byte loop with the
+reload per pixel.
+Inputs:
+  Mesa src/vulkan/wsi/wsi_common_win32.cpp at 042227dcddf2c7c6a28daebf01a8c828fdf130fa (mesa-amdgpu-wddm), lines
+  2299-2313 (the build tree had a 3-line change elsewhere in the file, the present-log getenv of BD-167).
+  Shipped ICD: payload/vulkan/vulkan_radeon.dll of 0.7.216.103-tester.31v3, SHA-256
+  4B307F933CE003C007520D3C603A299EEA21BEC3F61482DEF6C3A09B94A302F5 (tools/release/release-sources.json), symbol
+  wsi_win32_queue_present at RVA 0x23FBA0, size 1064 (llvm-pdbutil on its PDB). Compile flags of
+  wsi_common_win32.cpp in that build: cl /MT /O2 /Z7 /W2 /EHsc /std:c++17 /permissive- -DUSE_SSE41, no /arch.
+  Comparison build (not shipped): vulkan_radeon.dll SHA-256
+  90ED4E739152116652AFC5A8B3CCED1910EA5B7FF546DAA46CBBEE02AB2F5303, MSVC, -Dcpp_args=/arch:AVX2, -Db_lto=true, Mesa
+  042227dc, built 2026-10-21T03:01Z. A clang-cl build of the ICD did not build, so no clang ICD was read.
+  Replica: mesa_gdi.cpp SHA-256 30CEB7B0553EC685FD6561127A8516336403303F21B23DD0AEF2A5AEEF06CB9A, in
+  q44bench-msvc.exe 00F5D33663FFDCDF24ACBA0DE4BBCB323DDAD104A09848A16E6BDBEC20E4F3FA and q44bench-clang.exe
+  4771DF7F476B6C67D74672035AE315034DABE705273B891063C41ED218500F05.
+Commands: llvm-objdump 23.1.4 -d --no-show-raw-insn -M intel --start-address=0x18023fba0
+--stop-address=0x18023ffc8 vulkan_radeon.dll; llvm-objdump -d ... q44bench-*.exe; clang-cl /nologo /O2 /MT
+/std:c++17 /EHsc [none|-msse4.2|-mavx|-mavx2|-march=znver2] /c mesa_gdi.cpp; for the comparison build,
+llvm-objdump ... | grep '+ 0x39c]' and then --start-address=0x180205c00 --stop-address=0x180205d20. The development
+PC timings at the end are an Intel Core i7-13700KF, not the BC-250.
+UTC: 2026-10-21T03:49:36Z (part 1), 2026-10-21T04:25:34Z (part 2)
+
+#################### part 1
+## Mesa source, src/vulkan/wsi/wsi_common_win32.cpp:2299-2313
+   const uint8_t *ptr = (const uint8_t *)image->base.cpu_map;
+   uint8_t *dptr = (uint8_t *)image->sw.ppvBits;
+   for (unsigned h = 0; h < chain->extent.height; h++) {
+      if (chain->format == VK_FORMAT_R8G8B8A8_UNORM) {
+         for (unsigned x = 0; x < chain->extent.width; x++) {
+            dptr[x * 4 + 0] = ptr[x * 4 + 2];
+            dptr[x * 4 + 1] = ptr[x * 4 + 1];
+            dptr[x * 4 + 2] = ptr[x * 4 + 0];
+            dptr[x * 4 + 3] = ptr[x * 4 + 3];
+         }
+      } else {
+         memcpy(dptr, ptr, chain->extent.width * 4);
+      }
+      dptr += image->sw.bmp_row_pitch;
+      ptr += image->base.row_pitches[0];
+
+## shipped DLL, the per-row and per-pixel loop (rbx = chain; [rbx+0x3b0] format == 0x25 = VK_FORMAT_R8G8B8A8_UNORM; [rbx+0x39c] extent.width; [rbx+0x3a0] extent.height)
+18023fd01:     	sub	eax, dword ptr [rsp + 0x74]
+18023fd05:     	mov	edx, dword ptr [rbx + 0x3a0]
+18023fd0b:     	cmp	eax, edx
+18023fd0d:     	jne	0x18023ff80 <vk_icdGetInstanceProcAddr+0xbbdc0>
+18023fd13:     	mov	rdi, qword ptr [r15 + 0xb0]
+18023fd1a:     	mov	r14d, ebp
+18023fd1d:     	mov	rsi, qword ptr [r15 + 0x138]
+18023fd24:     	test	edx, edx
+18023fd26:     	je	0x18023fdc7 <vk_icdGetInstanceProcAddr+0xbbc07>
+18023fd2c:     	nop	dword ptr [rax]
+18023fd30:     	cmp	dword ptr [rbx + 0x3b0], 0x25
+18023fd37:     	jne	0x18023fd8a <vk_icdGetInstanceProcAddr+0xbbbca>
+18023fd39:     	mov	r10d, ebp
+18023fd3c:     	test	ecx, ecx
+18023fd3e:     	je	0x18023fda3 <vk_icdGetInstanceProcAddr+0xbbbe3>
+18023fd40:     	lea	r9d, [4*r10]
+18023fd48:     	inc	r10d
+18023fd4b:     	lea	eax, [r9 + 0x2]
+18023fd4f:     	mov	r8d, eax
+18023fd52:     	movzx	eax, byte ptr [rax + rdi]
+18023fd56:     	mov	byte ptr [r9 + rsi], al
+18023fd5a:     	lea	eax, [r9 + 0x1]
+18023fd5e:     	mov	ecx, eax
+18023fd60:     	movzx	eax, byte ptr [rax + rdi]
+18023fd64:     	mov	byte ptr [rcx + rsi], al
+18023fd67:     	movzx	eax, byte ptr [r9 + rdi]
+18023fd6c:     	mov	byte ptr [r8 + rsi], al
+18023fd70:     	lea	eax, [r9 + 0x3]
+18023fd74:     	mov	ecx, eax
+18023fd76:     	movzx	eax, byte ptr [rax + rdi]
+18023fd7a:     	mov	byte ptr [rcx + rsi], al
+18023fd7d:     	mov	ecx, dword ptr [rbx + 0x39c]
+18023fd83:     	cmp	r10d, ecx
+18023fd86:     	jb	0x18023fd40 <vk_icdGetInstanceProcAddr+0xbbb80>
+18023fd88:     	jmp	0x18023fda3 <vk_icdGetInstanceProcAddr+0xbbbe3>
+18023fd8a:     	lea	r8d, [4*rcx]
+18023fd92:     	mov	rdx, rdi
+18023fd95:     	mov	rcx, rsi
+18023fd98:     	call	0x180962f90 <vk_icdNegotiateLoaderICDInterfaceVersion+0x637dc0>
+18023fd9d:     	mov	ecx, dword ptr [rbx + 0x39c]
+18023fda3:     	movsxd	rax, dword ptr [r15 + 0x130]
+18023fdaa:     	inc	r14d
+18023fdad:     	add	rsi, rax
+18023fdb0:     	mov	eax, dword ptr [r15 + 0x9c]
+18023fdb7:     	add	rdi, rax
+18023fdba:     	cmp	r14d, dword ptr [rbx + 0x3a0]
+
+## replica, MSVC 19.44 /O2 (no /arch): mesa_gdi_copy (as shipped: width reloaded per pixel)
+140003951:     	mov	rbx, rdx
+140003954:     	mov	rsi, rcx
+140003957:     	cmp	dword ptr [rcx + 0x3a0], ebp
+14000395d:     	jbe	0x140003a19 <.text+0x2a19>
+140003963:     	mov	qword ptr [rsp + 0x40], r14
+140003968:     	mov	qword ptr [rsp + 0x48], r15
+14000396d:     	mov	r15d, dword ptr [rsp + 0x60]
+140003972:     	movsxd	r14, r9d
+140003975:     	nop	word ptr [rax + rax]
+140003980:     	cmp	dword ptr [rsi + 0x3b0], 0x25
+140003987:     	mov	eax, dword ptr [rsi + 0x39c]
+14000398d:     	jne	0x1400039e8 <.text+0x29e8>
+14000398f:     	xor	r10d, r10d
+140003992:     	test	eax, eax
+140003994:     	je	0x1400039fb <.text+0x29fb>
+140003996:     	nop	word ptr [rax + rax]
+1400039a0:     	lea	r9d, [4*r10]
+1400039a8:     	inc	r10d
+1400039ab:     	lea	eax, [r9 + 0x2]
+1400039af:     	mov	r8d, eax
+1400039b2:     	movzx	eax, byte ptr [rax + rdi]
+1400039b6:     	mov	byte ptr [r9 + rbx], al
+1400039ba:     	lea	eax, [r9 + 0x1]
+1400039be:     	mov	ecx, eax
+1400039c0:     	movzx	eax, byte ptr [rax + rdi]
+1400039c4:     	mov	byte ptr [rcx + rbx], al
+1400039c7:     	movzx	eax, byte ptr [r9 + rdi]
+1400039cc:     	mov	byte ptr [r8 + rbx], al
+1400039d0:     	lea	eax, [r9 + 0x3]
+1400039d4:     	mov	ecx, eax
+1400039d6:     	movzx	eax, byte ptr [rax + rdi]
+1400039da:     	mov	byte ptr [rcx + rbx], al
+1400039dd:     	cmp	r10d, dword ptr [rsi + 0x39c]
+1400039e4:     	jb	0x1400039a0 <.text+0x29a0>
+1400039e6:     	jmp	0x1400039fb <.text+0x29fb>
+1400039e8:     	lea	r8d, [4*rax]
+1400039f0:     	mov	rdx, rdi
+1400039f3:     	mov	rcx, rbx
+1400039f6:     	call	0x140019110 <.text+0x18110>
+1400039fb:     	add	rbx, r14
+1400039fe:     	add	rdi, r15
+
+## replica, MSVC 19.44 /O2: mesa_gdi_copy_hoisted (width in r11d, still one byte at a time)
+140003a70:     	cmp	dword ptr [rbp + 0x3b0], 0x25
+140003a77:     	mov	r11d, dword ptr [rbp + 0x39c]
+140003a7e:     	jne	0x140003ad4 <.text+0x2ad4>
+140003a80:     	xor	r10d, r10d
+140003a83:     	test	r11d, r11d
+140003a86:     	je	0x140003ae7 <.text+0x2ae7>
+140003a88:     	nop	dword ptr [rax + rax]
+140003a90:     	lea	r9d, [4*r10]
+140003a98:     	inc	r10d
+140003a9b:     	lea	eax, [r9 + 0x2]
+140003a9f:     	mov	r8d, eax
+140003aa2:     	movzx	eax, byte ptr [rax + rdi]
+140003aa6:     	mov	byte ptr [r9 + rbx], al
+140003aaa:     	lea	eax, [r9 + 0x1]
+140003aae:     	mov	ecx, eax
+140003ab0:     	movzx	eax, byte ptr [rdi + rax]
+140003ab4:     	mov	byte ptr [rbx + rcx], al
+140003ab7:     	movzx	eax, byte ptr [rdi + r9]
+140003abc:     	mov	byte ptr [rbx + r8], al
+140003ac0:     	lea	eax, [r9 + 0x3]
+140003ac4:     	mov	ecx, eax
+140003ac6:     	movzx	eax, byte ptr [rdi + rax]
+140003aca:     	mov	byte ptr [rbx + rcx], al
+140003acd:     	cmp	r10d, r11d
+140003ad0:     	jb	0x140003a90 <.text+0x2a90>
+140003ad2:     	jmp	0x140003ae7 <.text+0x2ae7>
+140003ad4:     	lea	r8d, [4*r11]
+140003adc:     	mov	rdx, rdi
+
+## replica, clang-cl 23.1.4 /O2 -mavx2: mesa_gdi_copy (same source: scalar, width reloaded per pixel)
+140017a1f:     	add	rdi, r14
+140017a22:     	add	rsi, r15
+140017a25:     	inc	ebp
+140017a27:     	cmp	ebp, dword ptr [rbx + 0x3a0]
+140017a2d:     	jae	0x140017a94 <.text+0x16a94>
+140017a2f:     	mov	r8d, dword ptr [rbx + 0x39c]
+140017a36:     	cmp	dword ptr [rbx + 0x3b0], 0x25
+140017a3d:     	jne	0x140017a10 <.text+0x16a10>
+140017a3f:     	test	r8d, r8d
+140017a42:     	je	0x140017a1f <.text+0x16a1f>
+140017a44:     	xor	eax, eax
+140017a46:     	xor	ecx, ecx
+140017a48:     	nop	dword ptr [rax + rax]
+140017a50:     	lea	edx, [rcx + 0x2]
+140017a53:     	movzx	r8d, byte ptr [rsi + rdx]
+140017a58:     	mov	r9d, ecx
+140017a5b:     	mov	byte ptr [rdi + r9], r8b
+140017a5f:     	lea	r8d, [rcx + 0x1]
+140017a63:     	movzx	r10d, byte ptr [rsi + r8]
+140017a68:     	mov	byte ptr [rdi + r8], r10b
+140017a6c:     	movzx	r8d, byte ptr [rsi + r9]
+140017a71:     	mov	byte ptr [rdi + rdx], r8b
+140017a75:     	lea	edx, [rcx + 0x3]
+140017a78:     	movzx	r8d, byte ptr [rsi + rdx]
+140017a7d:     	mov	byte ptr [rdi + rdx], r8b
+140017a81:     	inc	rax
+140017a84:     	mov	edx, dword ptr [rbx + 0x39c]
+140017a8a:     	add	ecx, 0x4
+140017a8d:     	cmp	rax, rdx
+140017a90:     	jb	0x140017a50 <.text+0x16a50>
+140017a92:     	jmp	0x140017a1f <.text+0x16a1f>
+140017a94:     	add	rsp, 0x28
+
+## replica, clang-cl 23.1.4 /O2 -mavx2: mesa_gdi_copy_hoisted (overlap check, then vpshufb ymm x4)
+140017b30:     	mov	r8d, dword ptr [rbx + 0x39c]
+140017b37:     	cmp	dword ptr [rbx + 0x3b0], 0x25
+140017b3e:     	jne	0x140017b00 <.text+0x16b00>
+140017b40:     	test	r8, r8
+140017b43:     	je	0x140017b1a <.text+0x16b1a>
+140017b45:     	lea	eax, [r8 - 0x4]
+140017b49:     	cmp	eax, 0x3ffffffc
+140017b4e:     	ja	0x140017b68 <.text+0x16b68>
+140017b50:     	lea	rax, [rdi + 4*r8]
+140017b54:     	lea	rcx, [rsi + 4*r8]
+140017b58:     	cmp	rdi, rcx
+140017b5b:     	setb	cl
+140017b5e:     	cmp	rsi, rax
+140017b61:     	setb	al
+140017b64:     	test	cl, al
+140017b66:     	je	0x140017bb9 <.text+0x16bb9>
+140017b68:     	xor	eax, eax
+140017b6a:     	lea	ecx, [4*rax]
+140017b71:     	sub	r8, rax
+140017b74:     	nop	word ptr cs:[rax + rax]
+140017b80:     	lea	eax, [rcx + 0x2]
+140017b83:     	movzx	edx, byte ptr [rsi + rax]
+140017b87:     	mov	r9d, ecx
+140017b8a:     	mov	byte ptr [rdi + r9], dl
+140017b8e:     	lea	edx, [rcx + 0x1]
+140017b91:     	movzx	r10d, byte ptr [rsi + rdx]
+140017b96:     	mov	byte ptr [rdi + rdx], r10b
+140017b9a:     	movzx	edx, byte ptr [rsi + r9]
+140017b9f:     	mov	byte ptr [rdi + rax], dl
+140017ba2:     	lea	eax, [rcx + 0x3]
+140017ba5:     	movzx	edx, byte ptr [rsi + rax]
+140017ba9:     	mov	byte ptr [rdi + rax], dl
+140017bac:     	add	ecx, 0x4
+140017baf:     	dec	r8
+140017bb2:     	jne	0x140017b80 <.text+0x16b80>
+140017bb4:     	jmp	0x140017b1a <.text+0x16b1a>
+140017bb9:     	cmp	r8d, 0x20
+140017bbd:     	jae	0x140017bc3 <.text+0x16bc3>
+140017bbf:     	xor	eax, eax
+140017bc1:     	jmp	0x140017c3e <.text+0x16c3e>
+140017bc3:     	mov	eax, r8d
+140017bc6:     	and	eax, 0x7fffffe0
+140017bcb:     	mov	ecx, r8d
+140017bce:     	shr	ecx, 0x5
+140017bd1:     	and	ecx, 0x3ffffff
+140017bd7:     	shl	rcx, 0x7
+140017bdb:     	xor	edx, edx
+140017bdd:     	nop	dword ptr [rax]
+140017be0:     	vmovdqu	ymm0, ymmword ptr [rsi + rdx]
+140017be5:     	vmovdqu	ymm1, ymmword ptr [rsi + rdx + 0x20]
+140017beb:     	vmovdqu	ymm2, ymmword ptr [rsi + rdx + 0x40]
+140017bf1:     	vmovdqu	ymm3, ymmword ptr [rsi + rdx + 0x60]
+140017bf7:     	vpshufb	ymm1, ymm1, ymm4
+140017bfc:     	vpshufb	ymm0, ymm0, ymm4
+140017c01:     	vpshufb	ymm3, ymm3, ymm4
+140017c06:     	vpshufb	ymm2, ymm2, ymm4
+140017c0b:     	vmovdqu	ymmword ptr [rdi + rdx + 0x40], ymm2
+140017c11:     	vmovdqu	ymmword ptr [rdi + rdx + 0x60], ymm3
+140017c17:     	vmovdqu	ymmword ptr [rdi + rdx], ymm0
+140017c1c:     	vmovdqu	ymmword ptr [rdi + rdx + 0x20], ymm1
+140017c22:     	sub	rdx, -0x80
+140017c26:     	cmp	rcx, rdx
+140017c29:     	jne	0x140017be0 <.text+0x16be0>
+140017c2b:     	cmp	eax, r8d
+140017c2e:     	je	0x140017b1a <.text+0x16b1a>
+140017c34:     	test	r8b, 0x1c
+
+## dev PC timings (i7-13700KF, NOT the BC-250), ms per 1920x1200 frame
+msvc:  mesa_gdi_loop min 1.395 med 1.452 | mesa_gdi_hoisted min 1.414 med 1.514
+clang: mesa_gdi_loop min 1.324 med 1.326 | mesa_gdi_hoisted min 0.357 med 0.373 (row_ssse3 0.446, row_memcpy 0.346)
+
+#################### part 2
+## replica, per ISA target: pshufb count per function (mesa_gdi_copy = as shipped, mesa_gdi_copy_hoisted = width in a local)
+none            mesa_gdi_copy: pshufb 0, loads of [chain+0x39c] 2 | mesa_gdi_copy_hoisted: pshufb 0
+-msse4.2        mesa_gdi_copy: pshufb 0, loads of [chain+0x39c] 2 | mesa_gdi_copy_hoisted: pshufb 0
+-mavx           mesa_gdi_copy: pshufb 0, loads of [chain+0x39c] 2 | mesa_gdi_copy_hoisted: pshufb 0
+-mavx2          mesa_gdi_copy: pshufb 0, loads of [chain+0x39c] 2 | mesa_gdi_copy_hoisted: pshufb 5
+-march=znver2   mesa_gdi_copy: pshufb 0, loads of [chain+0x39c] 2 | mesa_gdi_copy_hoisted: pshufb 5
+(mesa_gdi_copy has 2 loads of [chain+0x39c] at every target: one per row before the loop and one per pixel inside it.)
+
+## replica, clang-cl -mavx2: mesa_gdi_copy inner loop (scalar, width reloaded per pixel)
+      80:      	lea	edx, [rcx + 0x2]
+      83:      	movzx	r8d, byte ptr [rsi + rdx]
+      88:      	mov	r9d, ecx
+      8b:      	mov	byte ptr [rdi + r9], r8b
+      8f:      	lea	r8d, [rcx + 0x1]
+      93:      	movzx	r10d, byte ptr [rsi + r8]
+      98:      	mov	byte ptr [rdi + r8], r10b
+      9c:      	movzx	r8d, byte ptr [rsi + r9]
+      a1:      	mov	byte ptr [rdi + rdx], r8b
+      a5:      	lea	edx, [rcx + 0x3]
+      a8:      	movzx	r8d, byte ptr [rsi + rdx]
+      ad:      	mov	byte ptr [rdi + rdx], r8b
+      b1:      	inc	rax
+      b4:      	mov	edx, dword ptr [rbx + 0x39c]
+      ba:      	add	ecx, 0x4
+      bd:      	cmp	rax, rdx
+      c0:      	jb	0x80 <mesa_gdi_copy+0x80>
+
+## build-B (MSVC /arch:AVX2 + LTO) vulkan_radeon.dll: the copy (format 0x25 = 37 test, inner loop 0x180205c90-0x180205cd6, memcpy branch 0x180205cda)
+180205c77:     	test	edx, edx
+180205c79:     	je	0x180205d17 
+180205c7f:     	nop
+180205c80:     	cmp	dword ptr [rbx + 0x3b0], 0x25
+180205c87:     	jne	0x180205cda 
+180205c89:     	mov	r10d, ebp
+180205c8c:     	test	ecx, ecx
+180205c8e:     	je	0x180205cf3 
+180205c90:     	lea	r9d, [4*r10]
+180205c98:     	inc	r10d
+180205c9b:     	lea	eax, [r9 + 0x2]
+180205c9f:     	mov	r8d, eax
+180205ca2:     	movzx	eax, byte ptr [rax + rdi]
+180205ca6:     	mov	byte ptr [r9 + rsi], al
+180205caa:     	lea	eax, [r9 + 0x1]
+180205cae:     	mov	ecx, eax
+180205cb0:     	movzx	eax, byte ptr [rax + rdi]
+180205cb4:     	mov	byte ptr [rcx + rsi], al
+180205cb7:     	movzx	eax, byte ptr [r9 + rdi]
+180205cbc:     	mov	byte ptr [r8 + rsi], al
+180205cc0:     	lea	eax, [r9 + 0x3]
+180205cc4:     	mov	ecx, eax
+180205cc6:     	movzx	eax, byte ptr [rax + rdi]
+180205cca:     	mov	byte ptr [rcx + rsi], al
+180205ccd:     	mov	ecx, dword ptr [rbx + 0x39c]
+180205cd3:     	cmp	r10d, ecx
+180205cd6:     	jb	0x180205c90 
+180205cd8:     	jmp	0x180205cf3 
+180205cda:     	lea	r8d, [4*rcx]
+180205ce2:     	mov	rdx, rdi
+180205ce5:     	mov	rcx, rsi
+180205ce8:     	call	0x180663a70 
+180205ced:     	mov	ecx, dword ptr [rbx + 0x39c]
+180205cf3:     	movsxd	rax, dword ptr [r15 + 0x130]
+180205cfa:     	inc	r14d
+180205cfd:     	add	rsi, rax
+180205d00:     	mov	eax, dword ptr [r15 + 0x9c]
+180205d07:     	add	rdi, rax
+180205d0a:     	cmp	r14d, dword ptr [rbx + 0x3a0]
+180205d11:     	jb	0x180205c80 
