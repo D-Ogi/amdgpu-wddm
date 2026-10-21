@@ -684,6 +684,16 @@ HRESULT HostedDispatch::operation(uint32_t op,void* argument) noexcept {
         record->busy=record->freeing=true;held.release();
         HRESULT hr=KT_CALL(FreeGpuVirtualAddress,&b);
         held.acquire();record->busy=record->freeing=false;
+        // A failed free keeps the extent owned, which a failed destroy does not (BD-201). The requests are
+        // not alike: this callback does one thing, free this exact extent, so its failure says that the one
+        // thing did not happen, while a destroy releases the allocation and the range goes with it, so its
+        // failure leaves the range in doubt. The answer to a failure here is also a retry of the free of
+        // that same extent, which a lost range would forbid for ever, because the bridge never frees a lost
+        // range; the answer to a failed destroy is a retry of the destroy, which asks for no address.
+        // Nothing is stranded either way: a destroy now releases the range with its allocation. The risk
+        // that remains is recorded in the design: were the runtime to free the range and then report a
+        // failure, a map of that address by another thread would be a false overlap here.
+        // The reservation path above follows the same rule, for the same reason.
         if(hr==S_OK){record->va=record->bytes=0;}return hr;
     }
     case BC250_HOST_Lock2:{
