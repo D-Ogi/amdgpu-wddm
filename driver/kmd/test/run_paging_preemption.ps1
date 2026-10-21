@@ -1,11 +1,14 @@
-param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\build\paging-preemption",[ValidateSet('','--old-drain')][string]$Mutation='',[switch]$AnyRootNative,[switch]$AnyAlignNative,[switch]$ExpectFailure)
+param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\build\paging-preemption",[ValidateSet('','--old-drain','--early-reject')][string]$Mutation='',[switch]$AnyRootNative,[switch]$AnyAlignNative,[switch]$ExpectFailure)
 # The paging DMA-boundary preemption host test (experiments/E27-m9-inference/generate-paging-preemption-test.py)
 # against this tree: the queue harness plus the actual WddmPreemptFence, WddmReportDpcPublish and
 # WddmReportDpcRoutine, with the real private-record parser and the real hang-recovery gate (hang_recovery.h).
+# The node-0 rejected-fence case adds the actual Bc250WddmSubmitCommandVirtual wrapper around a stand-in body.
 # The negative controls each must fail by a CHECK and never by a build error, which this script enforces by
 # requiring a FAIL line in the output, not merely a non-zero exit code:
 #   --old-drain      the pre-fix dispatch: WddmGpuFencePaging starts the next queued buffer although preemption
 #                    is pending, so the engine never reaches the DMA boundary.
+#   --early-reject   F-q44-mem-4: the report pass completes a rejected node-0 fence (SubmitCommandVirtual's
+#                    STATUS_INVALID_PARAMETER) before the packets ahead of it have finished.
 #   -AnyRootNative   BD-085: RootUsable admits any native root at all. That is what this fixture assumed until
 #                    BD-085, and the rootless-submit check must catch it.
 #   -AnyAlignNative  BD-085: RootUsable keeps the zero check and drops only the 4 KiB alignment check. The

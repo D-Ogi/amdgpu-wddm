@@ -166,6 +166,14 @@ static void Blobs(void)
     EQ("submit single ib", sv.single_ib, 1);
     EQ("submit ib va", sv.ib_va, 0x0000000004200040ull);
     EQ("submit ib bytes", sv.ib_bytes, 32);
+
+    // --oversize-ib: refused by the KMD's own reader, and one dword less is the longest IB it takes.
+    EQ("oversize ib is one dword over IB_SIZE", MF_OVERSIZE_IB_BYTES, (UMD_BLOB_IB_MAX_DWORDS + 1ul) * 4ul);
+    size = mf_build_submit_blob(&s, 0x0000000004200040ull, MF_OVERSIZE_IB_BYTES, 0, 0);
+    EQ("oversize submit refused", UmdBlobParseSubmit(&s, size, &sv), UMD_BLOB_BAD_IB);
+    size = mf_build_submit_blob(&s, 0x0000000004200040ull, MF_OVERSIZE_IB_BYTES - 4u, 0, 0);
+    EQ("longest submit accepted", UmdBlobParseSubmit(&s, size, &sv), UMD_BLOB_OK);
+    EQ("longest submit ib bytes", sv.ib_bytes, MF_OVERSIZE_IB_BYTES - 4u);
 }
 
 static void Values(void)
@@ -199,7 +207,7 @@ static void Codes(void)
         MF_EXIT_PASS, MF_EXIT_ARGS, MF_EXIT_SETUP, MF_EXIT_WATCHDOG, MF_EXIT_NO_GPU_VA, MF_EXIT_PACKET_CONTROL,
         MF_EXIT_READ_CONTROL, MF_EXIT_A_VALUE, MF_EXIT_B_WAKE, MF_EXIT_C_ORDER, MF_EXIT_C_RELEASE,
         MF_EXIT_UNEXPECTED_VALUE, MF_EXIT_LATENCY, MF_EXIT_MT_CONTROL, MF_EXIT_MT_A, MF_EXIT_MT_B, MF_EXIT_MT_C_ORDER,
-        MF_EXIT_MT_C_RELEASE, MF_EXIT_MT_SYNC, MF_EXIT_MT_UNEXPECTED, MF_EXIT_RESCUE };
+        MF_EXIT_MT_C_RELEASE, MF_EXIT_MT_SYNC, MF_EXIT_MT_UNEXPECTED, MF_EXIT_RESCUE, MF_EXIT_OVERSIZE };
     unsigned i, j;
     int distinct = 1, no_one = 1;
 

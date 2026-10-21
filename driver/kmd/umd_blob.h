@@ -27,6 +27,13 @@
 #define UMD_BLOB_SUBMIT_PREFIX  40u           // bytes before ib[0]
 #define UMD_BLOB_IB_BYTES       32u
 #define UMD_BLOB_SUBMIT_MAX_IBS 16u
+// The longest IB the gfx ring can run. The INDIRECT_BUFFER packet carries the length in dwords in its
+// 20-bit IB_SIZE field (driver/amdgpu-import/nvd.h, PACKET3_INDIRECT_BUFFER__IB_SIZE), and the shim
+// refuses a longer one at the ring (bc250_gfx.c, bc250_ib_length_fits). The parser refuses it first:
+// the submit DDI then answers STATUS_INVALID_PARAMETER for the calling device only, and the IB never
+// reaches the ring refusal, which closes node 0 for every process (wddm.c, WddmFailSubmission).
+// umd_blob_test.c holds this number to the macro.
+#define UMD_BLOB_IB_MAX_DWORDS  0xFFFFFul
 
 #define UMD_BLOB_HEAP_GTT       0x2u          // AMDGPU_GEM_DOMAIN_GTT
 #define UMD_BLOB_HEAP_VRAM      0x4u          // AMDGPU_GEM_DOMAIN_VRAM

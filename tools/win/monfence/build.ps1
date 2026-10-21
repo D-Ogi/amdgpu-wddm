@@ -2,7 +2,7 @@
 # SDK NuGet packages under -Kits, the compiler from the installed Visual Studio (as tools\win\kmtprobe\build.ps1).
 # Then runs everything that can run on the development PC: the host test (packets against nvd.h / navi10_enum.h /
 # the KMD's fence packet and Linux's ring words, blobs through the KMD's own reader), the client's --selftest and
-# --help, a parse of run-lab.ps1, and the constant checks below. Prints the SHA256 of what it built.
+# --help, a parse of run-lab.ps1 and run-oversize-ib.ps1, and the constant checks below. Prints the SHA256 of what it built.
 #
 #   pwsh bc250-win\tools\win\monfence\build.ps1
 #   pwsh bc250-win\tools\win\monfence\build.ps1 -Kits P:\bc-250\toolchain\nuget -Out P:\bc-250\scratch\build\monfence
@@ -46,16 +46,20 @@ function Assert-Same($SourcePath, $SourcePattern, $ToolPath, $ToolPattern, $Name
 }
 $packets = Join-Path $here 'monfence_packets.h'
 $runner = Join-Path $here 'run-lab.ps1'
+$oversizeRunner = Join-Path $here 'run-oversize-ib.ps1'
 $clientIds = Join-Path $repo 'third_party\linux-amdgpu\soc15_ih_clientid.h'
 Assert-Same (Join-Path $repo 'driver\shim\bc250_gfx.c') '#define\s+BC250_CP_NOP\s+(0x[0-9A-Fa-f]+u?)' $packets '#define\s+MF_CP_NOP\s+(0x[0-9A-Fa-f]+u?)' 'CP NOP pad'
 Assert-Same $clientIds 'SOC15_IH_CLIENTID_UTCL2\s*=\s*(0x[0-9A-Fa-f]+)' $runner '^\$UtcL2Client\s*=\s*(\d+)' 'UTCL2 client id (run-lab.ps1)'
 Assert-Same $clientIds 'SOC15_IH_CLIENTID_VMC\s*=\s*(0x[0-9A-Fa-f]+)' $runner '^\$VmcClient\s*=\s*(\d+)' 'VMC client id (run-lab.ps1)'
+Assert-Same (Join-Path $repo 'driver\kmd\umd_blob.h') '#define\s+UMD_BLOB_BAD_IB\s+(\d+)' $oversizeRunner '^\$BadIbCode\s*=\s*(\d+)' 'UMD_BLOB_BAD_IB (run-oversize-ib.ps1)'
 
-# run-lab.ps1 runs under Windows PowerShell 5.1 on the lab: it must at least parse.
-$tokens = $null; $errors = $null
-[void][System.Management.Automation.Language.Parser]::ParseFile($runner, [ref]$tokens, [ref]$errors)
-if ($errors.Count -gt 0) { $errors | ForEach-Object { Write-Host "  $_" }; throw 'run-lab.ps1 does not parse' }
-Write-Host '  run-lab.ps1 parses'
+# The runners run under Windows PowerShell 5.1 on the lab: they must at least parse.
+foreach ($script in @($runner, $oversizeRunner)) {
+    $tokens = $null; $errors = $null
+    [void][System.Management.Automation.Language.Parser]::ParseFile($script, [ref]$tokens, [ref]$errors)
+    if ($errors.Count -gt 0) { $errors | ForEach-Object { Write-Host "  $_" }; throw "$(Split-Path -Leaf $script) does not parse" }
+    Write-Host "  $(Split-Path -Leaf $script) parses"
+}
 
 $common = @('/nologo', '/W4', '/WX', '/O2', '/MT', '/D_CRT_SECURE_NO_WARNINGS',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",

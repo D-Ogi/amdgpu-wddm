@@ -1,11 +1,13 @@
 // Host test for driver/kmd/umd_blob.c. The reader does not include the contract header (that header
 // pulls the Linux UAPI, which the kernel build must not pick up by accident from libdrm). This file
 // includes both and checks that every constant and offset the reader hardcodes is the contract's.
+// It includes nvd.h too, for the one bound the packet sets rather than the contract: the IB length.
 #include <stdio.h>
 #include <string.h>
 
 #include "../umd_blob.h"
 #include "../../contract/bc250_umd_submit.h"
+#include "../../amdgpu-import/nvd.h"
 
 static int g_failures;
 
@@ -65,6 +67,10 @@ static void CheckContract(void)
     CHECK(sizeof(struct bc250_umd_alloc_private) == UMD_BLOB_ALLOC_BYTES);
     CHECK(sizeof(struct bc250_umd_context_private) == UMD_BLOB_CONTEXT_BYTES);
     CHECK(sizeof(struct bc250_umd_submit_private) == UMD_BLOB_SUBMIT_BYTES);
+    // The IB length bound is the IB_SIZE field of the packet the ring writes: the bound survives the
+    // field's own mask, and one dword more does not.
+    CHECK(PACKET3_INDIRECT_BUFFER__IB_SIZE(UMD_BLOB_IB_MAX_DWORDS) == UMD_BLOB_IB_MAX_DWORDS);
+    CHECK(PACKET3_INDIRECT_BUFFER__IB_SIZE(UMD_BLOB_IB_MAX_DWORDS + 1ul) != UMD_BLOB_IB_MAX_DWORDS + 1ul);
 }
 
 static void FillAlloc(struct bc250_umd_alloc_private* a, unsigned heap)
@@ -360,6 +366,43 @@ int main(void)
     FillSubmit(&submit, 1);
     submit.ib[0].ib_bytes = 0;
     CHECK(UmdBlobParseSubmit(&submit, sizeof(submit), &sv) == UMD_BLOB_BAD_IB);
+    // F-q44-mem-4: the longest IB the INDIRECT_BUFFER packet can carry is runnable, one dword more is
+    // malformed private data, in any IB of the blob. Before the bound the second one parsed as OK, and the
+    // ring's refusal of it closed node 0 for every process.
+    FillSubmit(&submit, 1);
+    submit.ib[0].ib_bytes = (unsigned)(UMD_BLOB_IB_MAX_DWORDS * 4ul);
+    CHECK(UmdBlobParseSubmit(&submit, sizeof(submit), &sv) == UMD_BLOB_OK);
+    CHECK(sv.ib_bytes == UMD_BLOB_IB_MAX_DWORDS * 4ul);
+    FillSubmit(&submit, 1);
+    submit.ib[0].ib_bytes = (unsigned)(UMD_BLOB_IB_MAX_DWORDS * 4ul + 4ul);
+    CHECK(UmdBlobParseSubmit(&submit, sizeof(submit), &sv) == UMD_BLOB_BAD_IB);
+    CHECK(sv.ib_bytes == 0 && sv.single_ib == 0);
+    FillSubmit(&submit, 1);
+    submit.ib[0].ib_bytes = 0xFFFFFFFCu;
+    CHECK(UmdBlobParseSubmit(&submit, sizeof(submit), &sv) == UMD_BLOB_BAD_IB);
+    FillSubmit(&submit, 2);
+    submit.ib[1].ib_bytes = (unsigned)(UMD_BLOB_IB_MAX_DWORDS * 4ul + 4ul);
+    CHECK(UmdBlobParseSubmit(&submit, sizeof(submit), &sv) == UMD_BLOB_BAD_IB);
+    // The arithmetic of the path. The largest value of the 32-bit size field. A length whose dword count
+    // passes the 20-bit mask as 1 (0x100001 & 0xFFFFF): a packet built from it would run a one-dword IB.
+    // An IB count whose product with the entry size wraps 32 bits to the size of a one-IB blob
+    // (0x08000001 * 32 = 2^32 + 32): only the count bound, checked before the product, refuses it.
+    FillSubmit(&submit, 1);
+    submit.ib[0].ib_bytes = 0xFFFFFFFFu;
+    CHECK(UmdBlobParseSubmit(&submit, sizeof(submit), &sv) == UMD_BLOB_BAD_IB);
+    CHECK(sv.ib_bytes == 0 && sv.ib_va == 0);
+    FillSubmit(&submit, 1);
+    submit.ib[0].ib_bytes = (unsigned)((UMD_BLOB_IB_MAX_DWORDS + 2ul) * 4ul);
+    CHECK(PACKET3_INDIRECT_BUFFER__IB_SIZE((UMD_BLOB_IB_MAX_DWORDS + 2ul)) == 1u);
+    CHECK(UmdBlobParseSubmit(&submit, sizeof(submit), &sv) == UMD_BLOB_BAD_IB);
+    FillSubmit(&submit, 1);
+    submit.num_ibs = 0x08000001u;
+    CHECK((unsigned)(UMD_BLOB_SUBMIT_PREFIX + submit.num_ibs * UMD_BLOB_IB_BYTES) == SubmitWire(1));
+    CHECK(UmdBlobParseSubmit(&submit, sizeof(submit), &sv) == UMD_BLOB_BAD_SIZE);
+    CHECK(sv.num_ibs == 0 && sv.ib_va == 0);
+    FillSubmit(&submit, 1);
+    submit.num_ibs = 0xFFFFFFFFu;
+    CHECK(UmdBlobParseSubmit(&submit, sizeof(submit), &sv) == UMD_BLOB_BAD_SIZE);
     FillSubmit(&submit, 1);
     submit.ib[0].ip_type = AMDGPU_HW_IP_COMPUTE;
     CHECK(UmdBlobParseSubmit(&submit, sizeof(submit), &sv) == UMD_BLOB_BAD_IB);

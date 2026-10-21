@@ -5322,10 +5322,12 @@ static NTSTATUS Bc250WddmOpenAllocation(_In_ const HANDLE hDevice, _In_ const DX
 {
     BC250_WDDM_OBJECT* parent = WddmObject(hDevice, BC250_WDDM_MAGIC_DEVICE);
     BC250_WDDM* wddm;
-    UINT i;
+    LONG opens[BC250_GDI_SLOTS][2];     // this call's LB7A outcomes, added to StdAlloc.GdiOpened only when it succeeds
+    UINT i, slot;
 
     if (parent == NULL) return STATUS_INVALID_PARAMETER;
     wddm = (BC250_WDDM*)parent->Device->Wddm;
+    RtlZeroMemory(opens, sizeof(opens));
     // Opened handles are carried back in Present entries. Historical GetHandleData
     // returned NULL for both CDD LB7A and user BC2A opens; this is not a proven
     // CDD-specific restriction. Acquire/Release now establishes backing identity;
@@ -5335,6 +5337,7 @@ static NTSTATUS Bc250WddmOpenAllocation(_In_ const HANDLE hDevice, _In_ const DX
         DXGK_OPENALLOCATIONINFO* info = &pOpenAllocation->pOpenAllocation[i];
         const BC250_WDDM_ALLOCATION_PRIVATE* private = (const BC250_WDDM_ALLOCATION_PRIVATE*)info->pPrivateDriverData;
         BC250_WDDM_OBJECT* opened = NULL;
+        BOOLEAN admitted = FALSE;
         ULONG gdiType=0;
         BC250_GDI_ALLOCATION_POLICY policy;
 
@@ -5346,6 +5349,7 @@ static NTSTATUS Bc250WddmOpenAllocation(_In_ const HANDLE hDevice, _In_ const DX
             // GDI blob does, rather than failing the open: dxgkrnl opened what it created.
             if (UmdBlobParseAlloc(info->pPrivateDriverData, info->PrivateDriverDataSize, &view) == UMD_BLOB_OK)
             {
+                admitted = TRUE;
                 opened = WddmNewObject(parent->Device, BC250_WDDM_MAGIC_OPENED);
                 if (opened != NULL)
                 {
@@ -5362,17 +5366,35 @@ static NTSTATUS Bc250WddmOpenAllocation(_In_ const HANDLE hDevice, _In_ const DX
                                            &gdiType, &policy);
             if (admission == BC250_LB7A_ADMITTED)
             {
+                admitted = TRUE;
                 opened = WddmNewObject(parent->Device, BC250_WDDM_MAGIC_OPENED);
                 if (opened != NULL) {
                     opened->Allocation = *private;
                     opened->GdiType=gdiType;
                 }
             }
-            // BD-060: a refused LB7A open leaves a NULL handle and still returns success; count it here.
-            if (wddm != NULL)
-                BC250_ADMISSION_COUNT(&wddm->StdAlloc.GdiOpened[admission != BC250_LB7A_UNREAD ?
-                                                                Bc250GdiSlot(gdiType) : BC250_GDI_SLOTS - 1]
-                                                               [opened != NULL ? 0 : 1]);
+            // BD-060: a refused LB7A open leaves a NULL handle and still returns success; counted with the call.
+            opens[admission != BC250_LB7A_UNREAD ? Bc250GdiSlot(gdiType) : BC250_GDI_SLOTS - 1][opened != NULL ? 0 : 1]++;
+        }
+        // DxgkDdiOpenAllocation: STATUS_SUCCESS promises a non-NULL hDeviceSpecificAllocation for every allocation
+        // (d3dkmddi.md). A blob this driver does not admit keeps the BD-060 NULL handle above. An admitted blob
+        // whose object could not be allocated fails the whole call with STATUS_NO_MEMORY, a listed return. The
+        // objects this call already opened are freed first, and their handles cleared: none was published yet.
+        // The call's counts are dropped with them, so an allocation that failed for memory is never counted as a
+        // refused open.
+        if (admitted && opened == NULL)
+        {
+            UINT j;
+            for (j = 0; j < i; j++)
+            {
+                WddmFreeObject(WddmObject(pOpenAllocation->pOpenAllocation[j].hDeviceSpecificAllocation,
+                                          BC250_WDDM_MAGIC_OPENED));
+                pOpenAllocation->pOpenAllocation[j].hDeviceSpecificAllocation = NULL;
+            }
+            info->hDeviceSpecificAllocation = NULL;
+            GuardLog("wddm: OpenAllocation [%u] of %u: no object for an admitted blob, call failed (no memory)",
+                     i, pOpenAllocation->NumAllocations);
+            return STATUS_NO_MEMORY;
         }
         if (opened != NULL) {
             opened->OwnerDevice = hDevice;
@@ -5383,6 +5405,12 @@ static NTSTATUS Bc250WddmOpenAllocation(_In_ const HANDLE hDevice, _In_ const DX
             GuardLog("wddm: OpenAllocation [%u] handle 0x%08X private %u bytes -> %p", i, (ULONG)info->hAllocation,
                      info->PrivateDriverDataSize, (void*)opened);
     }
+    if (wddm != NULL)
+        for (slot = 0; slot < BC250_GDI_SLOTS; slot++)
+        {
+            if (opens[slot][0] != 0) InterlockedAdd(&wddm->StdAlloc.GdiOpened[slot][0], opens[slot][0]);
+            if (opens[slot][1] != 0) InterlockedAdd(&wddm->StdAlloc.GdiOpened[slot][1], opens[slot][1]);
+        }
     if (WddmFirstCalls((BC250_WDDM*)parent->Device->Wddm, WddmDdiOpenAllocation))
         GuardLog("wddm: OpenAllocation %u allocations flags 0x%08X", pOpenAllocation->NumAllocations, pOpenAllocation->Flags.Value);
     return STATUS_SUCCESS;
@@ -6537,7 +6565,15 @@ static NTSTATUS WddmSubmitUmdImpl(_Inout_ BC250_DEVICE* Device, _In_opt_ BC250_W
     if (Context == NULL) return STATUS_INVALID_PARAMETER;
     journalStatus = HipJournalBind(&Context->HipJournalOwner, ib.ib_va, ib.fence_va, ib.fence_value,
                                    Submit->SubmissionFenceId, ib.ib_bytes, &hipId);
-    if (!NT_SUCCESS(journalStatus)) return journalStatus;
+    // HipJournalBind also answers STATUS_INVALID_DEVICE_STATE (an owner no longer registered), and this DDI may
+    // fail with STATUS_INVALID_PARAMETER only: any other failure is a bugcheck. Both mean this device's submission
+    // is refused, so it gets the malformed blob's answer (tools/quality/ddi_returns.py checks the chain).
+    if (!NT_SUCCESS(journalStatus))
+    {
+        GuardLog("wddm: virtual UMD submission fence %u refused by the HIP journal (0x%08X)",
+                 Submit->SubmissionFenceId, journalStatus);
+        return STATUS_INVALID_PARAMETER;
+    }
 
     // The ring holds seven jobs (driver/shim/bc250_ring.c, bc250_ring_has_space) and the completion
     // queue BC250_GFX_PENDING_MAX. A UMD submit that arrives while either one is full - behind presents,

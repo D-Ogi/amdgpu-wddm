@@ -57,6 +57,7 @@ $ExitMeaning = @{
     26 = '(d) thread barrier timeout or thread did not finish'
     27 = '(d) torn value or a foreign fence changed'
     30 = 'queued GPU waits could not be released by a CPU signal'
+    31 = '--oversize-ib: the device stayed active after the oversized IB, or was reset (run-oversize-ib.ps1 is the full probe)'
 }
 
 function Assert-UnderTmp([string]$Path) {

@@ -123,6 +123,9 @@ try {
 Check 'kmd-version-rc' { & python "$repo\tools\build\test_kmd_version_rc.py" --kits "$Kits" --out "$Out\kmd-version-rc" }
 Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compile-commands "$Out\kmd\compile_commands.json" --match '/driver/(kmd|shim)/' --out "$Out\kmd-contract" }
  Check 'guardlog-width' { & python "$repo\tools\quality\guardlog_width.py" --kmd "$repo\driver\kmd" --baseline "$repo\tools\quality\guardlog_width_baseline.txt" --out "$Out\guardlog-width" }
+ # The failure statuses a KMD DDI can return, against its return table: SubmitCommandVirtual may fail with
+ # STATUS_INVALID_PARAMETER only, any other failure is a bugcheck. --self-test also holds two mutants to a failure.
+ Check 'ddi-returns' { & python "$repo\tools\quality\ddi_returns.py" --kmd "$repo\driver\kmd" --self-test }
  # The provenance gate of the release payload (tools/release/provenance.py, run by build-release.ps1): its self-test on
  # throwaway repositories. The gate itself needs the payload files of a workspace, so the release build runs it.
  # Its deadline is 600 s in gate-inputs.json, not the 180 s of the manifest: the work takes 113 s to 171 s on the
@@ -302,8 +305,16 @@ Check 'ledger-call' { & pwsh -NoProfile -File "$repo\tools\release\test-ledger-c
  # One control per half of the native root gate: dropping only the 4 KiB alignment check left the whole suite
  # green until the misaligned-root check was added (BD-085 review finding 2).
  Check 'paging-preemption-any-align' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_preemption.ps1" -Root $Workspace -Out "$Out\paging-preemption-any-align" -AnyAlignNative -ExpectFailure }
+ # F-q44-mem-4: a rejected node-0 submit (STATUS_INVALID_PARAMETER) completes only after the packets ahead of it.
+ Check 'paging-preemption-early-reject' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_preemption.ps1" -Root $Workspace -Out "$Out\paging-preemption-early-reject" -Mutation '--early-reject' -ExpectFailure }
  Check 'surface-layout' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_dcn_translate.ps1" -Root $Workspace -Out "$Out\surface-layout" -Kits "$Kits" }
  Check 'gdi-admission' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_gdi_admission.ps1" -Root $Workspace -Out "$Out\gdi-admission" -Kits "$Kits" }
+ # F-q44-mem-3: the actual OpenAllocation with the pool failed at the first, a middle and the last allocation, and
+ # one control per property: the NO_MEMORY answer, the freeing of the earlier objects, the per-call counts.
+ Check 'open-allocation' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_open_allocation.ps1" -Root $Workspace -Out "$Out\open-allocation" -Kits "$Kits" }
+ Check 'open-allocation-success-null' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_open_allocation.ps1" -Root $Workspace -Out "$Out\open-allocation-success-null" -Kits "$Kits" -Mutation '--success-null' -ExpectFailure }
+ Check 'open-allocation-keep-earlier' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_open_allocation.ps1" -Root $Workspace -Out "$Out\open-allocation-keep-earlier" -Kits "$Kits" -Mutation '--keep-earlier' -ExpectFailure }
+ Check 'open-allocation-count-at-once' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_open_allocation.ps1" -Root $Workspace -Out "$Out\open-allocation-count-at-once" -Kits "$Kits" -Mutation '--count-at-once' -ExpectFailure }
  Check 'display-modes' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_display_modes.ps1" -Root $Workspace -Out "$Out\display-modes" -Kits "$Kits" }
  Check 'vidpn-flip' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_vidpn_flip.ps1" -Root $Workspace -Out "$Out\vidpn-flip" }
  # BD-170 r6: each rule of wddm.c's flip state machine broken in a copy of the extracted source; every one must fail.

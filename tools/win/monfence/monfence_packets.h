@@ -152,3 +152,8 @@ static inline uint64_t mf_value(unsigned fence, unsigned step)
 #define MF_EXIT_MT_SYNC           26   // (d) a thread barrier timed out or a thread did not finish
 #define MF_EXIT_MT_UNEXPECTED     27   // (d) torn value or a foreign fence changed
 #define MF_EXIT_RESCUE            30   // queued GPU waits could not be released by a CPU signal (no other failure)
+#define MF_EXIT_OVERSIZE          31   // --oversize-ib: the device stayed active after the oversized IB, or was reset
+
+// --oversize-ib: one dword more than the INDIRECT_BUFFER packet's 20-bit IB_SIZE field holds. The KMD's blob reader
+// refuses it (driver/kmd/umd_blob.h, UMD_BLOB_IB_MAX_DWORDS; monfence_host_test.c holds the two to each other).
+#define MF_OVERSIZE_IB_BYTES      0x400000u

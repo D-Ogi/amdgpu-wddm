@@ -12,6 +12,8 @@
 //       (thread t's second context also waits for thread t+1's fence).
 // Then, for stage A2's decision, a latency series: GPU-written fence (INT_SEL 0 and 3) against the kernel path the
 // ICD uses today (SubmitCommand + SignalSynchronizationObjectFromGpu), with the CPU time of each call.
+// --oversize-ib runs none of that: one IB longer than the ring can run, which the KMD must refuse for this device
+// alone (F-q44-mem-4; RunOversize, and run-oversize-ib.ps1 for the rest of the GPU).
 //
 // Safety design (see the run report for the KMD analysis):
 //   - packet control first: the same RELEASE_MEM into an allocation of our own, a mapping this project has used for
@@ -39,7 +41,7 @@
 #include "monfence_blobs.h"
 #include "monfence_packets.h"
 
-#define MF_VERSION            1
+#define MF_VERSION            2                // 2: --oversize-ib
 #define MF_MAX_WORKERS        4u
 #define MF_MAX_ROUNDS         16u
 #define MF_MAX_ITERS          100u
@@ -99,6 +101,7 @@ typedef struct _MF_OPT {
     unsigned Affinity;      // EngineAffinity for the fences under test
     DWORD WatchdogMs;
     BOOL SkipMt, SkipLatency, SelfTest;
+    BOOL OversizeIb;        // phase O in place of S, M and L
 } MF_OPT;
 
 typedef struct _MF_FENCE {
@@ -196,7 +199,10 @@ static unsigned ValueOwner(UINT64 v)
 
 // ---- D3DKMT wrappers (no printing on the hot path; the caller prints the line) -------------------------------
 
-static NTSTATUS SubmitIb(D3DKMT_HANDLE Ctx, UINT64 Va, UINT32 Bytes, UINT64 FenceVa, UINT64 FenceValue, UINT64* CallUs)
+// BlobBytes is the IB length the private blob names; Bytes is the command buffer dxgkrnl is given. They differ only
+// in --oversize-ib, where dxgkrnl sees a valid 32-byte buffer and only the KMD's blob reader can refuse the IB.
+static NTSTATUS SubmitIbBlob(D3DKMT_HANDLE Ctx, UINT64 Va, UINT32 Bytes, UINT32 BlobBytes, UINT64 FenceVa,
+                             UINT64 FenceValue, UINT64* CallUs)
 {
     struct bc250_umd_submit_private blob;
     D3DKMT_SUBMITCOMMAND submit;
@@ -204,7 +210,7 @@ static NTSTATUS SubmitIb(D3DKMT_HANDLE Ctx, UINT64 Va, UINT32 Bytes, UINT64 Fenc
     NTSTATUS status;
 
     ZeroMemory(&submit, sizeof(submit));
-    submit.PrivateDriverDataSize = mf_build_submit_blob(&blob, Va, Bytes, FenceVa, FenceValue);
+    submit.PrivateDriverDataSize = mf_build_submit_blob(&blob, Va, BlobBytes, FenceVa, FenceValue);
     submit.Commands = Va;
     submit.CommandLength = Bytes;
     submit.BroadcastContextCount = 1;
@@ -214,6 +220,11 @@ static NTSTATUS SubmitIb(D3DKMT_HANDLE Ctx, UINT64 Va, UINT32 Bytes, UINT64 Fenc
     status = D3DKMTSubmitCommand(&submit);
     if (CallUs) *CallUs = NowUs() - t0;
     return status;
+}
+
+static NTSTATUS SubmitIb(D3DKMT_HANDLE Ctx, UINT64 Va, UINT32 Bytes, UINT64 FenceVa, UINT64 FenceValue, UINT64* CallUs)
+{
+    return SubmitIbBlob(Ctx, Va, Bytes, Bytes, FenceVa, FenceValue, CallUs);
 }
 
 static NTSTATUS SubmitSlot(const MF_WORKER* w, D3DKMT_HANDLE Ctx, unsigned Slot, UINT64 FenceVa, UINT64 FenceValue,
@@ -968,6 +979,82 @@ static int RunLatency(MF_WORKER* w)
     return code;
 }
 
+// ---- --oversize-ib (F-q44-mem-4): one IB the gfx ring cannot run, refused for this device only -------------------
+
+static const char* ExecutionName(D3DKMT_DEVICEEXECUTION_STATE s)
+{
+    switch (s)
+    {
+    case D3DKMT_DEVICEEXECUTION_ACTIVE: return "active";
+    case D3DKMT_DEVICEEXECUTION_RESET: return "reset";
+    case D3DKMT_DEVICEEXECUTION_HUNG: return "hung";
+    case D3DKMT_DEVICEEXECUTION_STOPPED: return "stopped";
+    case D3DKMT_DEVICEEXECUTION_ERROR_OUTOFMEMORY: return "error-out-of-memory";
+    case D3DKMT_DEVICEEXECUTION_ERROR_DMAFAULT: return "error-dma-fault";
+    case D3DKMT_DEVICEEXECUTION_ERROR_DMAPAGEFAULT: return "error-dma-page-fault";
+    default: return "unknown";
+    }
+}
+
+static D3DKMT_DEVICEEXECUTION_STATE DeviceExecution(NTSTATUS* Status)
+{
+    D3DKMT_GETDEVICESTATE s;
+    ZeroMemory(&s, sizeof(s));
+    s.hDevice = g_P.hDevice;
+    s.StateType = D3DKMT_DEVICESTATE_EXECUTION;
+    *Status = D3DKMTGetDeviceState(&s);
+    return s.ExecutionState;
+}
+
+// O.good proves this device and node 0 run work first, so a node that was already closed is never read as the
+// refusal. O.submit is one submission whose blob names MF_OVERSIZE_IB_BYTES at a NOP slot. SubmitCommandVirtual may
+// refuse a malformed blob only with STATUS_INVALID_PARAMETER, and the OS then puts the calling device, and nothing
+// else, in an error state (d3dkmddi.md, DxgkDdiSubmitCommandVirtual return values). O.refused waits for that state.
+// A reset or hung state is a failure: the adapter was recovered, which is what the refusal exists to prevent.
+// That node 0 still runs other processes' work is the runner's part (run-oversize-ib.ps1).
+static int RunOversize(MF_WORKER* w)
+{
+    UINT64 X = mf_value(IDX_PACKET_VALUE, 1 + w->Id);
+    UINT64 submitUs = 0, doneUs = 0, got, t0, stateMs;
+    NTSTATUS st = STATUS_SUCCESS, progress, ds;
+    D3DKMT_DEVICEEXECUTION_STATE before, after;
+    BOOL refused;
+    int r, waited;
+
+    r = RunSlot(w, w->CtxA, &w->PA, SLOT_PACKET_S, &submitUs, &doneUs, &st);
+    got = RbRead(w, RB_PACKET_S);
+    before = DeviceExecution(&ds);
+    Line("CHECK O.good %s ctx=A expect=0x%016llX got=0x%016llX status=0x%08lX done=%s device=%s state_status=0x%08lX done_us=%llu",
+         Verdict(r == 1 && got == X && NT_SUCCESS(ds) && before == D3DKMT_DEVICEEXECUTION_ACTIVE), X, got,
+         (unsigned long)st, r == 1 ? "yes" : r == 0 ? "timeout" : "call-failed", ExecutionName(before),
+         (unsigned long)ds, doneUs);
+    if (r != 1 || got != X || !NT_SUCCESS(ds) || before != D3DKMT_DEVICEEXECUTION_ACTIVE) return MF_EXIT_PACKET_CONTROL;
+
+    st = SubmitIbBlob(w->CtxA, IbVa(w, SLOT_NOP), MF_IB_DWORDS * 4u, MF_OVERSIZE_IB_BYTES, 0, 0, &submitUs);
+    progress = NT_SUCCESS(st) ? QueueProgress(w->CtxA, &w->PA) : st;
+    Line("NOTE O.submit ib=0x%016llX blob_ib_bytes=0x%X command_bytes=%u submit=0x%08lX progress=0x%08lX submit_us=%llu",
+         IbVa(w, SLOT_NOP), MF_OVERSIZE_IB_BYTES, MF_IB_DWORDS * 4u, (unsigned long)st, (unsigned long)progress,
+         submitUs);
+    // The progress signal queued behind the refused packet: whether dxgkrnl still signals it on a faulted device is
+    // not part of the contract, so it is reported, not judged.
+    waited = NT_SUCCESS(progress) ? AwaitProgress(&w->PA, g_Opt.BoundMs, NULL) : -1;
+    t0 = NowUs();
+    for (;;)
+    {
+        after = DeviceExecution(&ds);
+        if (!NT_SUCCESS(ds) || after != D3DKMT_DEVICEEXECUTION_ACTIVE) break;
+        if (NowUs() - t0 > (UINT64)g_Opt.BoundMs * 1000ull) break;
+        Sleep(10);
+    }
+    stateMs = (NowUs() - t0) / 1000ull;
+    refused = NT_SUCCESS(ds) && after != D3DKMT_DEVICEEXECUTION_ACTIVE && after != D3DKMT_DEVICEEXECUTION_RESET &&
+              after != D3DKMT_DEVICEEXECUTION_HUNG;
+    Line("CHECK O.refused %s device=%s (%d) state_status=0x%08lX progress=%s state_after_ms=%llu",
+         Verdict(refused), ExecutionName(after), (int)after, (unsigned long)ds,
+         waited == 1 ? "signalled" : waited == 0 ? "not-signalled" : "call-failed", stateMs);
+    return refused ? 0 : MF_EXIT_OVERSIZE;
+}
+
 // ---- self-test (development PC, no D3DKMT call) -------------------------------------------------------------------
 
 static int SelfTest(void)
@@ -1017,11 +1104,14 @@ static void MfUsage(void)
         "  --iterations <n>      latency iterations per mode, 0..100 (default 32)\n"
         "  --fence-affinity <n>  EngineAffinity of the fences under test (default 1, as the ICD)\n"
         "  --skip-mt, --skip-latency\n"
+        "  --oversize-ib         in place of (a)-(d) and the series: one IB one dword over IB_SIZE, which the KMD\n"
+        "                        must refuse for this device only (run-oversize-ib.ps1 checks the rest of the GPU)\n"
         "  --watchdog-s <s>      process watchdog, 10..85 (default 55; exit 4)\n"
         "  --selftest            packet and value checks only, no D3DKMT call (development PC)\n"
         "\n"
         "Exit: 0 pass, 2 args, 3 setup, 4 watchdog, 5 no fence GPU VA, 10 packet control, 11 read control,\n"
-        "12 (a), 13 (b), 14 (c) order, 15 (c) release, 16 torn/foreign value, 17 latency, 21-27 (d), 30 rescue.\n");
+        "12 (a), 13 (b), 14 (c) order, 15 (c) release, 16 torn/foreign value, 17 latency, 21-27 (d), 30 rescue,\n"
+        "31 oversized IB not refused (device still active, or reset).\n");
 }
 
 static BOOL ParseRange(const char* Text, UINT64 Lo, UINT64 Hi, UINT64* Out)
@@ -1050,6 +1140,7 @@ static BOOL MfParseArgs(int argc, char** argv)
         if (!strcmp(a, "--skip-mt")) g_Opt.SkipMt = TRUE;
         else if (!strcmp(a, "--skip-latency")) g_Opt.SkipLatency = TRUE;
         else if (!strcmp(a, "--selftest")) g_Opt.SelfTest = TRUE;
+        else if (!strcmp(a, "--oversize-ib")) g_Opt.OversizeIb = TRUE;
         else if (next == NULL) return FALSE;
         else if (!strcmp(a, "--match")) { g_Opt.Match = next; i++; }
         else if (!strcmp(a, "--int-sel") && ParseU64(next, &v) && (v == 0 || v == 3)) { g_Opt.IntSel = (unsigned)v; i++; }
@@ -1145,6 +1236,13 @@ int main(int argc, char** argv)
     }
     Line("PAGINGFENCE cpu=%p value=%llu", (void*)g_P.PagingFence, g_P.PagingFence ? *g_P.PagingFence : 0ull);
 
+    if (g_Opt.OversizeIb)
+    {
+        Line("PHASE O worker=0 context=A");
+        code = RunOversize(&g_W[0]);
+        if (code) first = "O";
+        goto done;
+    }
     Line("PHASE S worker=0 contexts=A,B");
     code = RunCore(&g_W[0]);
     if (code) { first = "S"; goto done; }

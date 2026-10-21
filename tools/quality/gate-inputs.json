@@ -296,6 +296,11 @@
         "blob-reader"
       ]
     },
+    "ddi-returns": {
+      "inputs": [
+        "host"
+      ]
+    },
     "inf-gates": {
       "inputs": [
         "host"
@@ -497,12 +502,37 @@
         "host"
       ]
     },
+    "paging-preemption-early-reject": {
+      "inputs": [
+        "host"
+      ]
+    },
     "surface-layout": {
       "inputs": [
         "host"
       ]
     },
     "gdi-admission": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "open-allocation": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "open-allocation-success-null": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "open-allocation-keep-earlier": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "open-allocation-count-at-once": {
       "inputs": [
         "host"
       ]

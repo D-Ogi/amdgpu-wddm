@@ -253,7 +253,7 @@ int UmdBlobParseSubmit(const void* bytes, unsigned len, struct umd_submit_view* 
         unsigned long ring = Rd32(ib + 20);
 
         if (va == 0 || (va & 3ull) != 0) return UMD_BLOB_BAD_IB;
-        if (bytesIb == 0 || (bytesIb & 3ul) != 0) return UMD_BLOB_BAD_IB;
+        if (bytesIb == 0 || (bytesIb & 3ul) != 0 || bytesIb / 4ul > UMD_BLOB_IB_MAX_DWORDS) return UMD_BLOB_BAD_IB;
         if (ipIb != UMD_BLOB_IP_GFX || instance != 0 || ring != 0) return UMD_BLOB_BAD_IB;
         if (i == 0) { firstVa = va; firstBytes = bytesIb; }
     }
